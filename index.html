@@ -1,95 +1,1869 @@
 <!DOCTYPE html>
-<html lang="es" data-palette="azul" data-mode="dark">
+<html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>App Académica</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/design-system.css">
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+<title>Team Peaches Hub 🍑</title>
+<link id="favicon" rel="icon" type="image/jpeg" href="https://raw.githubusercontent.com/TeamPeachesOff/TeamPeachesHub/main/Logos/PeachesLogo.jpeg">
+<script>
+/*
+****************************************************************************
+****************************************************************************
+****************************************************************************
+****************************************************************************
+****************************************************************************
+****************************************************************************
+**********************************************+===+*************************
+**************************+--:--=*******:             .*********************
+*********************:                      =*******:    :******************
+******************:    .+******+         :*************.   -****************
+***************+.    +************:     +****************.   ***************
+**************:    +***************=  .*******************=   +*************
+************+    .***************+:      .=****************+   +************
+************    .**************=            :***************=  .************
+***********     **************:               +**************:  -***********
+**********.    =*************+                 +**************   ***********
+*********=     **************                  .**************.  +**********
+*********:    :*************+                   +*************-  -**********
+*********     -*************=                   -*************=  :**********
+*********     =*************+                   :*************-  -**********
+*********     :**************                   -*************.  =**********
+*********      **************+                  **************   +**********
+*********.     =**************-                :*************-  :***********
+*********-      ***************:               *************+   ************
+**********      .***************=             +*************   +************
+**********+      .****************           =*************   =*************
+***********+       ****************:        =************+   =**************
+************+       =****************      +************=   +***************
+**************:       =***************+   *************    *****************
+****************:       =***************+************-   =******************
+******************-       :************************=   :********************
+*********************:       -*******************-   .**********************
+************************-       .**************.   .************************
+****************************:       .+******-    =**************************
+********************************=.            .*****************************
+*************************************+-.   :********************************
+****************************************************************************
+****************************************************************************
+****************************************************************************
+****************************************************************************
+****************************************************************************                                                                                                                             
+                    
+
+    ...            ..........                                            ....     ..          ..     ..........           ..     
+ +*********:      ***********.               -*.                     =*******=   -****      ****-   -**********=      =*******=  
+ +**********+     ***********.              -***.                  +*********=   :****      ****-   -**********+    :*****+***   
+ +***   .****=    ****=                    :*+.**.               -****+          :****      ****-   -****           ****         
+ +***    :****    ****:                   :**  .**              .****:           :***+      ****-   -****           ****         
+ +***    :****    ****-                  :**    .**             ****-            :***+      ****-   =****           +***+        
+ +***    =***+    ***********           :**  .*  :**            ****             :****++++++****-   =**********:     =****+.     
+ +***. :+****.    ***********          :*+  .***  .**          .****             :**************-   =**********:       +*****.   
+ +*********+      ****-               :**  .*****  :**          ****             -****++++++****-   =****                +****+  
+ +***+--.        .****-              :**  .*******  :**         ****-            -****      +***:   =****                  +***+ 
+ +***             ****:             .**. .**         :**        -****:           -****      +***:   =****                   ****:
+ +***            .****-            .**. .****************        +****=          -****      +***:   =****.                  ****: 
+ +***             ***********.    .**.                 -**        -**********+   -****      +***:   =**********=    ***=:-+****+ 
+ +***             ***********.   .**++++++++++++++++++++***         .+*******=   -****      +***-   -**********=   -**********:  
+ .:::                            :::::::::::::::::::::::::::                      ...       ....                      .:::.                                                       
+
+*/
+</script>
+<style>
+  :root{
+    --peach-1:#ff8fb1; --peach-2:#EF0870; --bg:#1a1020; --card-bg:#2a1830; --card-bg-2:#33203a;
+    --text:#fbeaf2; --text-dim:#c9a8bb; --green:#2ecc71; --yellow:#f1c40f; --red:#e74c3c; --gold:#ffd700; --radius:16px;
+  }
+  *{box-sizing:border-box;}
+  @media (min-width:768px) and (pointer:fine){
+    ::-webkit-scrollbar{width:6px;height:6px;}
+    ::-webkit-scrollbar-track{background:transparent;}
+    ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15);border-radius:99px;}
+    ::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.35);}
+  }
+  /* El scroll de la página principal (html) no engancha de forma confiable el estilo custom
+     en Edge, así que en vez de pelear con eso lo ocultamos por completo: sigue scrolleando
+     igual con mouse/touch/teclado, solo ya no se dibuja ninguna barra (ni la fea default). */
+  html{overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none;}
+  html::-webkit-scrollbar{display:none;width:0;height:0;}
+  body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:linear-gradient(160deg,var(--bg),#241228 60%,#170b1c);color:var(--text);min-height:100vh;}
+  a{color:inherit;text-decoration:none;}
+  button{font-family:inherit;cursor:pointer;border:none;}
+  img{max-width:100%;display:block;}
+
+  #loadingOverlay{position:fixed;inset:0;background:rgba(15,8,20,0.72);backdrop-filter:blur(3px);z-index:500;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;}
+  #loadingOverlay.show{display:flex;}
+  .peach-loader{display:flex;gap:12px;}
+  .peach-loader span{font-size:34px;display:inline-block;animation:peachBounce 1.1s infinite ease-in-out;}
+  .peach-loader span:nth-child(2){animation-delay:0.15s;}
+  .peach-loader span:nth-child(3){animation-delay:0.3s;}
+  @keyframes peachBounce{ 0%,80%,100%{transform:translateY(0);} 40%{transform:translateY(-16px);} }
+  .loading-text{color:var(--text-dim);font-size:13px;font-weight:600;}
+
+  header{position:sticky;top:0;z-index:50;background:rgba(26,16,32,0.92);backdrop-filter:blur(8px);border-bottom:1px solid rgba(239,8,112,0.25);}
+  .header-inner{max-width:640px;margin:0 auto;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;}
+  .header-left{display:flex;align-items:center;gap:12px;}
+  #hamburgerBtn{background:none;font-size:26px;color:var(--peach-1);padding:4px 8px;border-radius:8px;}
+  #hamburgerBtn:hover{background:rgba(239,8,112,0.15);}
+  .logo{font-weight:800;font-size:19px;letter-spacing:0.5px;background:linear-gradient(90deg,var(--peach-2),#ffffff);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .tabs{display:flex;gap:6px;background:var(--card-bg);padding:4px;border-radius:999px;}
+  .tab-btn{padding:8px 16px;border-radius:999px;background:none;color:var(--text-dim);font-weight:600;font-size:14px;}
+  .tab-btn.active{background:linear-gradient(90deg,var(--peach-2),var(--peach-1));color:#fff;}
+
+  #drawerOverlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99;display:none;}
+  #drawer{position:fixed;top:0;left:0;height:100%;width:280px;max-width:82vw;background:var(--card-bg);z-index:100;transform:translateX(-100%);transition:transform .25s ease;display:flex;flex-direction:column;padding:20px 16px;gap:18px;box-shadow:4px 0 20px rgba(0,0,0,0.4);overflow-y:auto;-webkit-overflow-scrolling:touch;
+    /* Fallback para zoom >200%: a ese nivel Edge a veces descalibra el thumb ::-webkit-scrollbar
+       y cae al nativo blanco. scrollbar-width/color es el estándar que cubre ese caso extremo. */
+    scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.2) transparent;}
+  #drawer.open{transform:translateX(0);}
+  .drawer-title{font-weight:800;font-size:18px;color:var(--peach-2);margin-bottom:4px;}
+  .social-row{display:flex;flex-direction:column;gap:10px;}
+  .social-link{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;background:var(--card-bg-2);transition:background .15s;}
+  .social-link:hover{background:rgba(239,8,112,0.18);}
+  .social-link img{width:28px;height:28px;object-fit:contain;border-radius:6px;}
+  .social-link span{font-weight:600;font-size:14px;}
+  .drawer-divider{height:1px;background:rgba(255,255,255,0.08);}
+  .drawer-nav-btn{display:flex;align-items:center;gap:10px;padding:12px;border-radius:12px;background:var(--card-bg-2);font-weight:700;font-size:15px;color:var(--text);justify-content:flex-start;}
+  .drawer-nav-group{display:flex;flex-direction:column;gap:10px;}
+  .drawer-nav-btn:hover{background:rgba(239,8,112,0.18);}
+  .drawer-nav-btn img{width:26px;height:26px;border-radius:50%;object-fit:cover;}
+  #staffDrawerBtn{background:linear-gradient(90deg,#6a3d8f,#a45fc7);color:#fff;}
+  .staff-bottom-group{margin-top:auto;display:flex;flex-direction:column;gap:10px;}
+
+  main{max-width:640px;margin:0 auto;padding:16px 12px 60px;}
+  .hidden{display:none !important;}
+
+  #addActBtn{display:block;width:100%;margin-bottom:14px;padding:12px;border-radius:14px;background:linear-gradient(90deg,var(--peach-2),#ffffff);color:#3d1f2a;font-weight:800;font-size:15px;}
+
+  .filter-pills{display:flex;gap:8px;margin-bottom:16px;}
+  .pill-toggle{flex:1;padding:9px;border-radius:999px;background:var(--card-bg-2);color:var(--text-dim);font-weight:700;font-size:13px;text-align:center;transition:all .15s;}
+  .pill-toggle.on{background:linear-gradient(90deg,var(--peach-2),var(--peach-1));color:#fff;}
+
+  .switch-pill{display:flex;background:var(--card-bg-2);border-radius:999px;padding:4px;gap:4px;flex-wrap:wrap;}
+  .switch-pill button{flex:1;min-width:80px;padding:9px 6px;border-radius:999px;background:none;color:var(--text-dim);font-weight:700;font-size:12.5px;text-align:center;}
+  .switch-pill button.sel{background:linear-gradient(90deg,var(--peach-2),var(--peach-1));color:#fff;}
+
+  .card{background:var(--card-bg);border-radius:var(--radius);margin-bottom:18px;overflow:hidden;border:1px solid rgba(255,255,255,0.06);}
+  .card-top{display:flex;gap:0;padding:14px;}
+  @media (max-width:480px){.card-top{flex-direction:column;}}
+  .card-img-wrap{position:relative;flex:0 0 120px;width:120px;aspect-ratio:1/1;border-radius:12px;overflow:hidden;background:var(--card-bg-2);}
+  @media (max-width:480px){.card-img-wrap{width:100%;flex-basis:auto;}}
+  .card-img-wrap img{width:100%;height:100%;object-fit:contain;}
+  .card-info{flex:1;padding-left:14px;display:flex;flex-direction:column;gap:6px;min-width:0;}
+  @media (max-width:480px){.card-info{padding-left:0;padding-top:10px;}}
+  .card-title{font-weight:800;font-size:16px;line-height:1.25;}
+  .card-dates{font-size:12.5px;color:var(--text-dim);}
+  .badge-row{display:flex;gap:6px;flex-wrap:wrap;}
+  .status-tag,.part-tag,.cat-tag{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;width:fit-content;}
+  .status-green{background:rgba(46,204,113,0.18);color:var(--green);}
+  .status-yellow{background:rgba(241,196,15,0.18);color:var(--yellow);}
+  .status-red{background:rgba(231,76,60,0.18);color:var(--red);}
+  .part-opcional{background:rgba(93,173,226,0.18);color:#5dade2;}
+  .part-obligatoria{background:rgba(241,196,15,0.18);color:var(--yellow);}
+  .part-purga{background:rgba(231,76,60,0.22);color:var(--red);}
+  .cat-tag{background:rgba(164,95,199,0.2);color:#d9b6f5;}
+  .card-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;}
+  .btn-small{padding:6px 12px;border-radius:10px;font-size:12.5px;font-weight:700;}
+  .btn-primary{background:linear-gradient(90deg,var(--peach-2),var(--peach-1));color:#fff;}
+  .btn-family{background:linear-gradient(90deg,rgba(239,8,112,0.55),rgba(255,143,177,0.55));color:#fff;border:1px solid rgba(239,8,112,0.5);}
+  .btn-admin{background:rgba(164,95,199,0.25);color:#d9b6f5;}
+  .btn-danger{background:rgba(231,76,60,0.22);color:var(--red);}
+  /* Misma "calidad" visual que btn-family (degradado + borde), pero con su propio color para
+     distinguir de un vistazo cada botón de la sección Miembros. */
+  .btn-update{background:linear-gradient(90deg,rgba(46,204,113,0.55),rgba(120,224,143,0.5));color:#fff;border:1px solid rgba(46,204,113,0.55);}
+  .btn-cumple{background:linear-gradient(90deg,rgba(255,215,0,0.5),rgba(255,193,7,0.35));color:#fff;border:1px solid rgba(255,215,0,0.6);}
+  .btn-seguridad{background:linear-gradient(90deg,rgba(231,76,60,0.55),rgba(255,143,143,0.4));color:#fff;border:1px solid rgba(231,76,60,0.55);}
+  .btn-bell{background:rgba(255,215,0,0.18);color:var(--gold);}
+  button:disabled{opacity:0.5;cursor:not-allowed;}
+
+  .accordion{border-top:1px solid rgba(255,255,255,0.07);}
+  .accordion-toggle{width:100%;text-align:left;padding:12px 14px;background:none;color:var(--peach-2);font-weight:700;font-size:13.5px;display:flex;justify-content:space-between;align-items:center;}
+  .accordion-body{padding:0 14px 14px;font-size:13.5px;color:var(--text-dim);line-height:1.5;display:none;}
+  .desc-text{white-space:pre-wrap;}
+  .accordion-body.open{display:block;}
+  .wishlist-block{margin-top:8px;padding:8px 10px;background:var(--card-bg-2);border-radius:10px;white-space:pre-wrap;}
+  .stream-block{background:linear-gradient(135deg,rgba(239,8,112,0.18),rgba(255,143,177,0.08));border:1px solid rgba(239,8,112,0.35);border-radius:14px;padding:12px;margin-bottom:12px;}
+  .stream-title{font-weight:800;color:var(--text);font-size:14px;margin-bottom:4px;}
+  .stream-time{font-size:12.5px;color:var(--text-dim);margin-bottom:10px;}
+  .stream-actions{display:flex;gap:8px;flex-wrap:wrap;}
+
+  table.entregas-table{width:100%;border-collapse:collapse;font-size:13px;}
+  table.entregas-table th{text-align:left;color:var(--peach-2);padding:6px 4px;border-bottom:1px solid rgba(255,255,255,0.1);}
+  table.entregas-table td{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:middle;}
+  table.entregas-table a{color:var(--peach-1);text-decoration:underline;}
+  .anuario-mini-btn{background:rgba(255,215,0,0.18);color:var(--gold);padding:5px 8px;border-radius:8px;font-size:11px;font-weight:700;white-space:nowrap;}
+  .entregas-toolbar{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+
+  /* ===== ANUARIO: años / meses / bloques ===== */
+  .anuario-year-group{position:relative;}
+  .anuario-year-label{position:sticky;top:62px;z-index:15;text-align:center;font-size:30px;font-weight:900;color:var(--gold);
+    padding:16px 0 16px;text-shadow:0 2px 10px rgba(0,0,0,0.5);}
+  .anuario-month-label{text-align:center;font-weight:800;color:var(--peach-2);font-size:15px;margin:10px 0 12px;text-transform:capitalize;}
+  .anuario-date-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:22px;}
+  .anuario-block{width:250px;max-width:44vw;background:var(--card-bg);border-radius:16px;overflow:hidden;border:1px solid var(--gold);box-shadow:0 0 14px rgba(255,215,0,0.12);cursor:pointer;}
+  @media (max-width:420px){.anuario-block{max-width:100%;width:100%;}}
+  .anuario-block img{width:100%;aspect-ratio:1/1;object-fit:contain;background:var(--card-bg-2);}
+  .anuario-block .ab-cat{text-align:center;padding:8px 8px 0;}
+  .anuario-block .ab-title{padding:10px;font-weight:800;font-size:13.5px;text-align:center;}
+
+  #searchMiembros{width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:var(--card-bg-2);color:var(--text);font-size:14px;margin-bottom:14px;display:block;}
+  .section-label{font-weight:800;color:var(--peach-2);margin:16px 0 10px;font-size:14px;text-align:center;}
+  .avatar-row{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;justify-content:center;flex-wrap:wrap;}
+  .member-avatar-item{flex:0 0 auto;width:78px;text-align:center;cursor:pointer;}
+  .member-avatar-item img{width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--peach-2);margin:0 auto;}
+  .member-avatar-item.reina img{border-color:var(--gold);}
+  .member-avatar-item .m-name{font-size:11px;margin-top:6px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+  #miembrosList{display:flex;flex-direction:column;gap:10px;}
+  .member-row{display:flex;align-items:center;gap:12px;background:var(--card-bg);padding:10px 12px;border-radius:14px;cursor:pointer;}
+  .member-row img{width:46px;height:46px;border-radius:50%;object-fit:cover;}
+  .member-row .m-info{flex:1;min-width:0;}
+  .member-row .m-name{font-weight:700;font-size:14px;}
+  .badges-row{display:flex;gap:6px;margin-top:3px;flex-wrap:wrap;}
+  .badge{padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:700;}
+  .badge-staff{background:rgba(164,95,199,0.25);color:#d9b6f5;}
+  .badge-canto{background:rgba(155,66,193,0.22);color:#c77dff;}
+  .badge-doblaje{background:rgba(52,152,219,0.2);color:#5dade2;}
+  .badge-reina{background:rgba(255,215,0,0.22);color:var(--gold);}
+  .badge-conserje{background:rgba(217,119,6,0.18);color:#e0a458;}
+  .badge-inactivo{background:rgba(160,160,170,0.18);color:#a0a0aa;}
+
+  .center-screen{max-width:340px;margin:60px auto;text-align:center;padding:0 16px;}
+  #pinInput, #memberPinInput{width:100%;text-align:center;font-size:24px;letter-spacing:8px;padding:14px;border-radius:12px;border:1px solid rgba(255,255,255,0.15);background:var(--card-bg-2);color:var(--text);margin:16px 0;}
+  #pinMsg{font-size:13px;color:var(--red);min-height:18px;}
+  #staffStatusBadge{display:none;position:fixed;bottom:14px;right:14px;background:linear-gradient(90deg,#6a3d8f,#a45fc7);color:#fff;padding:8px 14px;border-radius:999px;font-size:12.5px;font-weight:700;z-index:60;box-shadow:0 4px 14px rgba(0,0,0,0.4);cursor:pointer;}
+  /* Discreto a propósito: modo Miembro es solo lectura, no necesita tanta prominencia como Staff.
+     Es solo el emoji, sin texto, para que pase desapercibido. */
+  #memberStatusBadge{display:none;position:fixed;bottom:14px;left:14px;width:38px;height:38px;background:rgba(239,8,112,0.35);color:#fff;border-radius:50%;font-size:18px;z-index:60;box-shadow:0 4px 14px rgba(0,0,0,0.4);cursor:pointer;align-items:center;justify-content:center;}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;display:none;align-items:flex-start;justify-content:center;padding:30px 12px;overflow-y:auto;}
+  .modal-overlay.open{display:flex;}
+  .modal-box{position:relative;background:var(--card-bg);border-radius:18px;padding:20px;width:100%;max-width:440px;max-height:85vh;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  .modal-box h3{margin-top:0;color:var(--peach-2);}
+  .modal-close{position:absolute;top:14px;right:16px;background:rgba(255,255,255,0.08);color:var(--text-dim);font-size:18px;width:30px;height:30px;border-radius:50%;z-index:10;}
+  .form-group{margin-bottom:12px;}
+  .form-group label{display:block;font-size:12.5px;color:var(--text-dim);margin-bottom:5px;font-weight:600;}
+  .form-group input, .form-group textarea, .form-group select{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);background:var(--card-bg-2);color:var(--text);font-family:inherit;font-size:13.5px;}
+  .form-group textarea{min-height:120px;resize:none;overflow:hidden;}
+  .modal-actions{display:flex;gap:10px;margin-top:16px;}
+  .modal-actions button{flex:1;padding:12px;border-radius:12px;font-weight:800;}
+  .upload-status{font-size:12px;color:var(--text-dim);margin-top:4px;}
+  .js-check-entrega{appearance:none;-webkit-appearance:none;width:20px;height:20px;border-radius:6px;border:2px solid var(--peach-1);background:var(--card-bg-2);cursor:pointer;position:relative;}
+  .js-check-entrega:checked{background:linear-gradient(90deg,var(--peach-2),var(--peach-1));border-color:var(--peach-2);}
+  .js-check-entrega:checked::after{content:"✓";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;}
+  .regalito-btn{display:block;width:100%;margin-bottom:8px;background:linear-gradient(90deg,rgba(239,8,112,0.55),rgba(255,143,177,0.55));color:#fff;border:1px solid rgba(239,8,112,0.5);}
+  .custom-btn-row{background:var(--card-bg-2);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:10px;margin-bottom:8px;}
+  .custom-btn-row input{width:100%;margin-bottom:6px;}
+
+  .member-modal-header{display:flex;flex-direction:column;align-items:center;text-align:center;padding-top:6px;}
+  .member-modal-header img{width:90px;height:90px;border-radius:50%;object-fit:cover;margin-bottom:10px;border:3px solid var(--peach-2);}
+  .member-modal-header .mm-name-row{display:flex;align-items:center;gap:8px;}
+  .edit-pencil{background:rgba(164,95,199,0.25);color:#d9b6f5;padding:5px 9px;border-radius:10px;font-size:12px;font-weight:700;}
+  .expelled-banner{background:var(--red);color:#fff;padding:8px;border-radius:10px;font-weight:800;text-align:center;margin-bottom:12px;font-size:13px;}
+  .info-table{width:100%;margin-top:14px;font-size:13.5px;}
+  .info-table td{padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06);}
+  .info-table td:first-child{color:var(--text-dim);width:50%;}
+  .platform-row{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;}
+  .platform-btn{flex:1;min-width:70px;display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px;background:var(--card-bg-2);border-radius:12px;}
+  .platform-btn img{width:28px;height:28px;object-fit:contain;}
+  .platform-btn span{font-size:11px;color:var(--text-dim);}
+  .castigos-box{margin-top:16px;background:var(--card-bg-2);border-radius:12px;padding:12px;}
+  .castigos-box .ct-title{font-weight:800;color:var(--peach-2);margin-bottom:8px;font-size:13px;}
+  .castigos-box .ct-row{display:flex;justify-content:space-between;font-size:13.5px;padding:3px 0;}
+  .admin-strike-btns{display:flex;gap:6px;margin-top:12px;}
+  .admin-strike-btns button{flex:1;padding:8px 4px;border-radius:10px;font-weight:700;font-size:11px;text-align:center;line-height:1.3;}
+  .btn-falta{background:rgba(241,196,15,0.2);color:var(--yellow);}
+  .btn-strike{background:rgba(231,76,60,0.2);color:var(--red);}
+  .btn-strike-permanente{background:rgba(120,20,20,0.4);color:#ff6b6b;border:1px solid rgba(255,107,107,0.4);}
+  .btn-reset-castigos{width:100%;margin-top:8px;padding:9px;border-radius:10px;font-weight:700;font-size:12.5px;background:rgba(255,255,255,0.08);color:var(--text-dim);}
+
+  .winners-block{background:var(--card-bg-2);border-radius:12px;padding:14px;margin-top:10px;}
+  .win-group{margin-bottom:14px;}
+  .win-group:last-child{margin-bottom:0;}
+  .win-group-title{font-weight:800;color:var(--peach-2);font-size:13px;margin-bottom:6px;}
+  .win-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:8px 10px;font-size:13.5px;border-radius:10px;margin-bottom:6px;}
+  .win-row-text{line-height:1.5;}
+  .win-row:last-child{margin-bottom:0;}
+  .win-row.win-cancion{background:linear-gradient(90deg,rgba(239,8,112,0.22),rgba(255,143,177,0.12));border:1px solid rgba(239,8,112,0.35);}
+  .win-row.win-doblaje{background:linear-gradient(90deg,rgba(93,173,226,0.22),rgba(93,173,226,0.1));border:1px solid rgba(93,173,226,0.35);}
+  .win-row.win-mencion{background:rgba(255,215,0,0.12);border:1px solid rgba(255,215,0,0.3);}
+  .win-listen{background:var(--gold);color:#3d1f2a;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:800;white-space:nowrap;box-shadow:0 2px 8px rgba(255,215,0,0.3);flex-shrink:0;margin-top:2px;}
+  .anuario-pill-group{display:flex;gap:8px;margin:10px 0;}
+  .anuario-pill{flex:1;padding:10px;border-radius:999px;background:var(--card-bg-2);color:var(--text-dim);font-weight:700;font-size:13px;text-align:center;}
+  .anuario-pill.selected{background:linear-gradient(90deg,var(--peach-2),var(--peach-1));color:#fff;}
+  .anuario-dest-btns{display:flex;flex-direction:column;gap:8px;margin-top:12px;}
+  .anuario-dest-btns button{padding:12px;border-radius:12px;font-weight:800;background:var(--card-bg-2);color:var(--text);}
+  .anuario-dest-btns button:hover:not(:disabled){background:rgba(255,215,0,0.15);color:var(--gold);}
+
+  .toast{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 18px;border-radius:999px;font-size:13px;z-index:300;opacity:0;transition:opacity .25s;text-align:center;max-width:85vw;}
+  .toast.show{opacity:1;}
+  .empty-state{text-align:center;color:var(--text-dim);padding:40px 10px;font-size:14px;}
+</style>
 </head>
 <body>
 
-<!-- ============================ PANTALLA DE LOGIN ============================ -->
-<div id="pantalla-login" class="stack" style="min-height:100vh; align-items:center; justify-content:center; padding:24px;">
-  <div class="glass-card stack" style="max-width:420px; width:100%; text-align:center;">
-    <h1 style="font-size:1.6rem;">🎓 App Académica</h1>
-    <p>Tu plan de estudios, notas, horario y agenda en un solo lugar — sincronizado en tu propio Google Drive.</p>
-    <button id="btn-login-google" class="btn btn-primary btn-block">Iniciar sesión con Google</button>
-    <p class="muted">Solo se guarda un archivo dentro de tu Drive. Nadie más que tú (y esta app) puede leerlo.</p>
+<div id="loadingOverlay"><div class="peach-loader"><span>🍑</span><span>🍑</span><span>🍑</span></div><div class="loading-text">Cargando...</div></div>
+
+<header>
+  <div class="header-inner">
+    <div class="header-left"><button id="hamburgerBtn">☰</button><div class="logo">🍑 Peaches Hub</div></div>
+    <div class="tabs"><button class="tab-btn active" data-tab="actividades">Actividades</button><button class="tab-btn" data-tab="anuario">Anuario</button></div>
+  </div>
+</header>
+
+<div id="drawerOverlay"></div>
+<div id="drawer">
+  <div class="drawer-title">Team Peaches</div>
+  <div class="social-row">
+    <a class="social-link" target="_blank" href="https://rigodemianrobledo.my.canva.site/peaches/#menuprincipal">
+      <img src="https://raw.githubusercontent.com/TeamPeachesOff/TeamPeachesHub/main/Logos/PeachesLogo.jpeg" onerror="this.onerror=null;this.src='https://i.imgur.com/wusLyff.jpeg';" alt="Peaches"><span>Peaches</span>
+    </a>
+    <a class="social-link" target="_blank" href="https://youtube.com/@teampeachesoff">
+      <img src="https://raw.githubusercontent.com/TeamPeachesOff/TeamPeachesHub/main/Logos/YoutubeLogo.png" onerror="this.onerror=null;this.src='https://pngimg.com/uploads/youtube/youtube_PNG102352.png';" alt="YouTube"><span>YouTube</span>
+    </a>
+    <a class="social-link" target="_blank" href="https://www.instagram.com/team_peaches_off/">
+      <img src="https://raw.githubusercontent.com/TeamPeachesOff/TeamPeachesHub/main/Logos/InstagramLogo.png" onerror="this.onerror=null;this.src='https://pngimg.com/uploads/instagram/instagram_PNG10.png';" alt="Instagram"><span>Instagram</span>
+    </a>
+    <a class="social-link" target="_blank" href="https://www.tiktok.com/@team_peaches_off">
+      <img src="https://raw.githubusercontent.com/TeamPeachesOff/TeamPeachesHub/main/Logos/TikTokLogo.png" onerror="this.onerror=null;this.src='https://static.vecteezy.com/system/resources/previews/016/716/450/original/tiktok-icon-free-png.png';" alt="TikTok"><span>TikTok</span>
+    </a>
+    <a class="social-link" target="_blank" href="https://www.smule.com/groups/1934104?utm_source=web&utm_campaign=share&utm_medium=copylink">
+      <img src="https://raw.githubusercontent.com/TeamPeachesOff/TeamPeachesHub/main/Logos/SmuleLogo.png" onerror="this.onerror=null;this.src='https://blog.smule.com/wp-content/uploads/smule-icon.png';" alt="Smule"><span>Smule</span>
+    </a>
+  </div>
+  <div class="drawer-divider"></div>
+  <div class="drawer-nav-group">
+    <button class="drawer-nav-btn" id="miembrosDrawerBtn">👥 Miembros</button>
+    <button class="drawer-nav-btn" id="buzonDrawerBtn">📮 Buzón Anónimo</button>
+    <button class="drawer-nav-btn" id="reporteDrawerBtn">🐞 Reportar Error</button>
+  </div>
+  <div class="staff-bottom-group">
+    <button class="drawer-nav-btn" id="staffDrawerBtn">🛠️ Staff</button>
   </div>
 </div>
 
-<!-- ============================== APP SHELL ============================== -->
-<div id="app-shell" class="oculto">
-  <div style="display:flex; min-height:100vh;">
+<main>
+  <section id="viewActividades">
+    <button id="addActBtn" class="hidden">(+) Añadir Actividad</button>
+    <a class="hidden pill-toggle regalito-btn" id="regalitoBtn" target="_blank" rel="noopener" href="https://forms.gle/FgSeqD33wE1R8Y8r6">🎁 Enviar regalito</a>
+    <div class="filter-pills">
+      <button class="pill-toggle on" id="filterCanto">🎤 Canto</button>
+      <button class="pill-toggle on" id="filterDoblaje">🎙️ Doblaje</button>
+    </div>
+    <div id="actividadesFeed"></div>
+  </section>
 
-    <!-- Drawer lateral -->
-    <nav class="glass-panel" style="width:230px; padding:20px 14px; display:flex; flex-direction:column; gap:6px; flex-shrink:0;">
-      <h3 style="margin-bottom:18px;">🎓 App Académica</h3>
-      <button class="btn btn-secondary btn-block" style="text-align:left;" disabled>🏠 Panorámica</button>
-      <button class="btn btn-secondary btn-block" style="text-align:left;" disabled>📚 Plan de Estudios</button>
-      <button class="btn btn-secondary btn-block" style="text-align:left;" disabled>📅 Semestres</button>
-      <button class="btn btn-secondary btn-block" style="text-align:left;" disabled>🗓️ Horario</button>
-      <button class="btn btn-secondary btn-block" style="text-align:left;" disabled>👨‍🏫 Profesores</button>
-      <button class="btn btn-secondary btn-block" style="text-align:left;" disabled>📖 Agenda</button>
-      <button class="btn btn-primary btn-block" style="text-align:left;">⚙️ Configuración</button>
-      <div style="flex:1;"></div>
-      <span id="indicador-sync" class="badge badge-success">Todo sincronizado</span>
-      <button id="btn-logout" class="btn btn-danger btn-block" style="margin-top:10px;">Cerrar sesión</button>
-    </nav>
+  <section id="viewAnuario" class="hidden"><div id="anuarioGrid"></div></section>
 
-    <!-- Contenido principal -->
-    <main style="flex:1; padding:28px; display:flex; flex-direction:column; gap:20px; max-width:760px;">
+  <section id="viewMiembros" class="hidden">
+    <input type="text" id="searchMiembros" placeholder="🔍 Buscar por nombre, rol, rango vocal, generación o mes de cumpleaños...">
+    <div class="hidden" id="memberToolsRow1" style="margin-bottom:10px;">
+      <button id="addMemberBtn" class="btn-small btn-family" style="width:100%;">➕ Añadir Miembro</button>
+    </div>
+    <div class="hidden" id="memberToolsRow2" style="display:flex;gap:10px;margin-bottom:14px;">
+      <button class="btn-small btn-update" id="refreshPhotosBtn" style="flex:1;">🔄 Actualizar pfp</button>
+      <button class="btn-small btn-seguridad" id="resetStrikesGlobalBtn" style="flex:1;">🔄 Eliminar strikes</button>
+    </div>
+    <div class="section-label">👑 Reinas Peachy</div>
+    <div class="avatar-row" id="reinasCarousel"></div>
+    <div class="section-label">💎 Staff</div>
+    <div class="avatar-row" id="staffCarousel"></div>
+    <div class="section-label">🍑 Miembros</div>
+    <div id="miembrosList"></div>
+  </section>
 
-      <section class="glass-card stack">
-        <h2>Plan de Estudios activo</h2>
-        <div id="selector-plan"></div>
-      </section>
+  <section id="viewStaffPin" class="hidden">
+    <div class="center-screen">
+      <div style="font-size:40px;">🍑🔒</div>
+      <h3>Introduce el PIN de Staff</h3>
+      <input type="password" id="pinInput" maxlength="6" inputmode="numeric">
+      <div id="pinMsg"></div>
+      <button class="btn-primary" style="width:100%;padding:12px;border-radius:12px;font-weight:800;" id="pinSubmitBtn">Desbloquear</button>
+    </div>
+  </section>
 
-      <section class="glass-card stack">
-        <h2>Ajustes generales</h2>
+  <section id="viewMemberPin" class="hidden">
+    <div class="center-screen">
+      <div style="font-size:40px;">🍑🔒</div>
+      <h3>Introduce la clave de Miembro</h3>
+      <input type="password" id="memberPinInput">
+      <div id="memberPinMsg"></div>
+      <button class="btn-primary" style="width:100%;padding:12px;border-radius:12px;font-weight:800;" id="memberPinSubmitBtn">Desbloquear</button>
+    </div>
+  </section>
+    </div>
+  </section>
+</main>
 
-        <div class="row-between">
-          <span>Modo oscuro / claro</span>
-          <label class="switch">
-            <input type="checkbox" id="switch-modo">
-            <span class="track"><span class="thumb"></span></span>
-          </label>
-        </div>
+<div id="staffStatusBadge">🛠️ Modo Staff activo</div>
+<div id="memberStatusBadge" title="Modo Miembro (solo lectura)">🍑</div>
+<div class="toast" id="toast"></div>
 
-        <div>
-          <span class="form-label">Escala de notas por defecto</span>
-          <div class="pill-group" id="pill-escala-notas">
-            <button type="button" class="pill-item" data-valor="10">1 – 10</button>
-            <button type="button" class="pill-item" data-valor="100">1 – 100</button>
-          </div>
-        </div>
-
-        <div>
-          <span class="form-label">Paleta de color</span>
-          <div class="palette-grid" id="grid-paletas"></div>
-        </div>
-      </section>
-
-      <section class="glass-card stack">
-        <div class="row-between">
-          <h2 style="margin:0;">Enlaces rápidos</h2>
-          <button id="btn-agregar-enlace" class="btn btn-primary">+ Añadir enlace</button>
-        </div>
-        <p class="muted">Hasta 20 accesos directos (matrícula, TEC Digital, pagos, lo que necesites).</p>
-        <div id="lista-enlaces" class="stack"></div>
-      </section>
-
-    </main>
+<div class="modal-overlay" id="confirmDialog" style="z-index:400;">
+  <div class="modal-box" style="max-width:340px;text-align:center;">
+    <div id="confirmDialogMsg" style="font-size:15px;font-weight:600;margin-bottom:20px;line-height:1.5;"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn-small" id="confirmDialogNo" style="flex:1;padding:10px;background:rgba(255,255,255,0.1);color:var(--text);border-radius:12px;font-weight:700;">Cancelar</button>
+      <button class="btn-small btn-danger" id="confirmDialogYes" style="flex:1;padding:10px;border-radius:12px;font-weight:700;">Sí, continuar</button>
+    </div>
   </div>
 </div>
 
-<style>.oculto { display: none !important; }</style>
+<div class="modal-overlay" id="memberModal"><div class="modal-box"><button class="modal-close" data-close="memberModal">✕</button><div id="memberModalContent"></div></div></div>
 
-<script src="js/schema.js"></script>
-<script src="js/auth.js"></script>
-<script src="js/app.js"></script>
+<div class="modal-overlay" id="memberEditModal">
+  <div class="modal-box"><button class="modal-close" data-close="memberEditModal">✕</button>
+    <h3 id="memberEditTitle">Editar miembro</h3>
+    <form id="memberEditForm">
+      <input type="hidden" id="me_id">
+      <div class="form-group"><label>Nombre</label><input type="text" id="me_nombre" required></div>
+      <div class="form-group"><label>Avatar (URL)</label><input type="text" id="me_avatarUrl"></div>
+      <div class="form-group">
+        <label>O sube una foto</label>
+        <input type="file" id="me_avatarFile" accept=".jpg,.jpeg,.png,image/jpeg,image/png">
+        <div class="upload-status" id="me_uploadStatus"></div>
+      </div>
+      <div class="form-group"><label>Usuario Smule (exacto, sin @ ni link)</label><input type="text" id="me_smule" placeholder="Ingresa solo tu usuario (ej: TuUsuario)"></div>
+      <button type="button" class="btn-small btn-family" id="me_fetchSmuleBtn" style="width:100%;margin:-4px 0 12px;">🔄 Actualizar foto desde Smule</button>
+      <div class="form-group"><label>Usuario Discord</label><input type="text" id="me_discord"></div>
+      <div class="form-group"><label>Usuario BandLab (exacto, sin @ ni link)</label><input type="text" id="me_bandlab" placeholder="usuario exacto"></div>
+      <div class="form-group"><label>Teléfono (WhatsApp, ej: 50688888888)</label><input type="text" id="me_telefono"></div>
+      <div class="form-group"><label>Rango vocal</label><input type="text" id="me_rango"></div>
+      <div class="form-group"><label>Cumpleaños</label><input type="date" id="me_cumple"></div>
+      <div class="form-group"><label>Miembro desde</label><input type="date" id="me_ingreso"></div>
+      <div class="form-group"><label>¿Número de generación? (ej: 3)</label><input type="number" id="me_generacion" min="1" step="1" placeholder="3"></div>
+      <!-- 3 grupos independientes de multi-selección (cada uno usa bindToggleGroup/setToggleGroup/getToggleGroupValues por su cuenta):
+           Roles = canto/doblaje | Rango = fundadora/lider/staff | Especial = conserje/inactivo -->
+      <div class="form-group">
+        <label>Roles (podés elegir varios)</label>
+        <div class="switch-pill" id="me_rolesToggle">
+          <button type="button" data-val="canto">🎤 Canto</button>
+          <button type="button" data-val="doblaje">🎙️ Doblaje</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Rango</label>
+        <div class="switch-pill" id="me_rangoToggle">
+          <button type="button" data-val="fundadora">👑 Fundadora</button>
+          <button type="button" data-val="lider">👑 Líder</button>
+          <button type="button" data-val="staff">💎 Staff</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Especial</label>
+        <div class="switch-pill" id="me_especialToggle">
+          <button type="button" data-val="conserje">🧹 Conserje</button>
+          <button type="button" data-val="inactivo">😴 Inactivo</button>
+        </div>
+      </div>
+      <!-- OJO: no agregar/quitar cierres de div sueltos acá, ya rompió el botón Guardar una vez.
+           Cada .form-group de arriba se abre y se cierra solo, este bloque de abajo va afuera de todos ellos. -->
+      <div class="modal-actions"><button type="submit" class="btn-primary">Guardar</button></div>
+      <button type="button" class="btn-small btn-danger" style="width:100%;margin-top:10px;" id="me_deleteBtn">🗑️ Borrar miembro</button>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="activityFormModal">
+  <div class="modal-box"><button class="modal-close" data-close="activityFormModal">✕</button>
+    <h3 id="activityFormTitle">Nueva actividad</h3>
+    <form id="activityForm">
+      <input type="hidden" id="af_id">
+      <div class="form-group"><label>Título</label><input type="text" id="af_titulo" required></div>
+      <div class="form-group"><label>Imagen (URL)</label><input type="text" id="af_imagenUrl"></div>
+      <div class="form-group">
+        <label>O sube una imagen</label>
+        <input type="file" id="af_imagenFile" accept=".jpg,.jpeg,.png,image/jpeg,image/png">
+        <div class="upload-status" id="af_uploadStatus"></div>
+      </div>
+      <div class="form-group"><label>Descripción</label><textarea id="af_descripcion"></textarea></div>
+      <div class="form-group" style="background:var(--card-bg-2);padding:10px;border-radius:12px;">
+        <label style="color:var(--peach-2);">📺 Stream (opcional, déjalo vacío si no aplica)</label>
+        <input type="text" id="af_streamNombre" placeholder="Nombre del stream" style="margin-bottom:8px;">
+        <input type="date" id="af_streamFecha" style="margin-bottom:8px;">
+        <input type="time" id="af_streamHora" placeholder="Hora (GMT-6, México/CR)">
+      </div>
+      <div class="form-group"><label>Wishlist (ideas, una por línea)</label><textarea id="af_wishlist"></textarea></div>
+      <div class="form-group"><label>Fecha inicio</label><input type="date" id="af_fechaInicio"></div>
+      <div class="form-group"><label>Fecha fin</label><input type="date" id="af_fechaFin"></div>
+      <div class="form-group"><label>Link de entrega (Forms)</label><input type="text" id="af_linkForms"></div>
+      <div class="form-group"><label>Link para unirse (Smule, si es grupal)</label><input type="text" id="af_linkUnirse"></div>
+      <div class="form-group">
+        <label>Script/Letra (PDF, si es grupal)</label>
+        <input type="text" id="af_linkScript" placeholder="Link al PDF (o subilo abajo)">
+        <input type="file" id="af_scriptFile" accept="application/pdf" style="margin-top:6px;">
+        <div class="upload-status" id="af_scriptStatus"></div>
+      </div>
+      <div class="form-group">
+        <label>Botones personalizados (máx. 3)</label>
+        <div id="af_customButtons"></div>
+        <button type="button" class="btn-small btn-family" id="af_addCustomBtn" style="width:100%;">➕ Añadir botón personalizado</button>
+      </div>
+      <div class="form-group">
+        <label>Categoría</label>
+        <div class="switch-pill" id="af_categoriaSwitch">
+          <button type="button" data-val="canto">🎤 Canto</button>
+          <button type="button" data-val="doblaje">🎙️ Doblaje</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Tipo de participación</label>
+        <div class="switch-pill" id="af_participacionSwitch">
+          <button type="button" data-val="opcional">✅ Opcional</button>
+          <button type="button" data-val="obligatoria">⚠️ Obligatoria</button>
+          <button type="button" data-val="purga">☠️ Purga</button>
+        </div>
+      </div>
+      <div id="af_anuarioFields" class="hidden">
+        <div class="section-label" style="text-align:left;">👑 Datos del Anuario (esta actividad ya está en el Anuario)</div>
+        <div class="form-group"><label>🥇 Mejor Canto (una entrada por línea, se van acumulando)</label><textarea id="af_ganadorCanto"></textarea></div>
+        <div class="form-group"><label>🎙️ Mejor Doblaje</label><textarea id="af_ganadorDoblaje"></textarea></div>
+        <div class="form-group"><label>✨ Menciones Honoríficas</label><textarea id="af_menciones"></textarea></div>
+      </div>
+      <div class="modal-actions"><button type="submit" class="btn-primary">Guardar</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="entregaFormModal">
+  <div class="modal-box"><button class="modal-close" data-close="entregaFormModal">✕</button>
+    <h3>Registrar entrega</h3>
+    <form id="entregaForm">
+      <input type="hidden" id="en_idActividad">
+      <div class="form-group"><label>Nombre(s)</label><input type="text" id="en_nombre" placeholder="Si es grupal, poné a todos juntos (ej: Ana, Luis y Karla)" required></div>
+      <div class="form-group"><label>Canción / Escena</label><input type="text" id="en_detalle" required></div>
+      <div class="form-group"><label>Enlace</label><input type="text" id="en_link"></div>
+      <div class="modal-actions"><button type="submit" class="btn-primary">Guardar</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="anuarioModal">
+  <div class="modal-box"><button class="modal-close" data-close="anuarioModal">✕</button>
+    <h3>👑 Añadir al Anuario</h3>
+    <div id="anuarioModalInfo" style="font-size:13.5px;color:var(--text-dim);margin-bottom:10px;"></div>
+    <div class="anuario-dest-btns">
+      <button type="button" data-dest="cancion">🥇 Mejor Canción</button>
+      <button type="button" data-dest="doblaje">🎙️ Mejor Doblaje</button>
+      <button type="button" data-dest="mencion">✨ Mención Honorífica</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Si el navegador restaura esta página desde su caché de "atrás/adelante" (bfcache), el DOM puede
+// quedar congelado a mitad de una actualización (ej. justo cuando un innerHTML se estaba
+// reescribiendo) y se ve "crudo"/sin estilo. Para evitarlo, si detectamos que la página viene de
+// bfcache (event.persisted), forzamos una recarga limpia desde cero.
+window.addEventListener("pageshow", function(e){
+  if (e.persisted) location.reload();
+});
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwcnPM10DeRLE6ReNX_AqeViRfKkHjpflT-QCw05oW_L8n5ohrDhfR_iPuzTqYNrG8H4A/exec";
+const LOGO_DEFAULT = "https://raw.githubusercontent.com/TeamPeachesOff/TeamPeachesHub/main/Logos/PeachesLogo.jpeg";
+const LOGO_FALLBACK = "https://i.imgur.com/wusLyff.jpeg";
+const MESES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+const MESES_LARGO = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+let DB = { actividades: [], entregas: [], miembros: [] };
+
+// ---------- Ocultar de verdad para lectores accesibles (Ticket: fuga en Modo Lectura de Edge) ----------
+// El "Modo Lectura" de Edge (y lectores de pantalla similares) extraen el texto de TODO el DOM sin
+// respetar el CSS (display:none via la clase .hidden), así que mostraban el contenido de las
+// pantallas ocultas (PIN de Staff, formulario de Miembro, etc.) aunque nunca se vieran en pantalla.
+// El atributo NATIVO `hidden` de HTML sí es respetado por esas herramientas, así que lo mantenemos
+// sincronizado automáticamente con la clase .hidden en cualquier elemento del sitio, sin tener que
+// tocar cada uno de los toggles de "hidden" que ya existen en el código.
+function syncNativeHidden(el){ if(el && el.classList) el.hidden = el.classList.contains("hidden"); }
+document.querySelectorAll(".hidden").forEach(syncNativeHidden);
+new MutationObserver(muts=>{
+  muts.forEach(m=>syncNativeHidden(m.target));
+}).observe(document.body, {attributes:true, attributeFilter:["class"], subtree:true});
+// El PIN se guarda en localStorage solo para autocompletar el campo la próxima vez,
+// pero el modo Staff NO se auto-activa al recargar: siempre se abre en modo normal
+// y hay que apretar el botón Staff + confirmar el PIN cada vez, a propósito.
+let staffPin = null;
+// Modo Miembro: misma idea que staffPin (autocompleta pero no se auto-activa al recargar).
+let memberPin = null;
+// Enlaces privados (Sheets, GitHub, Cronograma, Editar Anuario, Editar Info): SOLO viven en esta
+// variable en memoria, y SOLO se rellenan después de validar el PIN de Staff contra el servidor
+// (ver obtenerEnlacesStaff en Code.gs). Nunca se escriben en el HTML ni en localStorage, así que
+// aunque alguien abra F12 sin PIN, no hay ningún href ni string con esas URLs para encontrar.
+let enlacesStaff = null;
+let nivel = "publico"; // "staff" | "miembro" | "publico" -- lo manda el backend en cada carga
+let filtroCanto = true, filtroDoblaje = true;
+let modoEliminarEntregas = {};
+let anuarioCtx = null;
+let loadingCount = 0;
+
+/* ---------- loading overlay ---------- */
+function showLoading(msg){
+  loadingCount++;
+  document.querySelector("#loadingOverlay .loading-text").textContent = msg || "Cargando...";
+  document.getElementById("loadingOverlay").classList.add("show");
+}
+function hideLoading(){
+  loadingCount = Math.max(0, loadingCount - 1);
+  if(loadingCount === 0) document.getElementById("loadingOverlay").classList.remove("show");
+}
+
+/* ---------- utilidades ---------- */
+function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2200); }
+function estadoActividad(fechaFinStr){
+  if(!fechaFinStr) return {clase:"status-green", texto:"🟢 Actividad Activa"};
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const fin=new Date(fechaFinStr); fin.setHours(0,0,0,0);
+  const diffDias=Math.round((fin-hoy)/(1000*60*60*24));
+  if(diffDias<0) return {clase:"status-red", texto:"🔴 Actividad Finalizada"};
+  if(diffDias<=2) return {clase:"status-yellow", texto:"🟡 Últimos Días"};
+  return {clase:"status-green", texto:"🟢 Actividad Activa"};
+}
+function participacionTag(p){
+  if(p==="obligatoria") return `<span class="part-tag part-obligatoria">⚠️ Obligatoria</span>`;
+  if(p==="purga") return `<span class="part-tag part-purga">☠️ Purga</span>`;
+  return `<span class="part-tag part-opcional">✅ Opcional</span>`;
+}
+function categoriaTag(c){
+  if(c==="canto") return `<span class="cat-tag">🎤 Canto</span>`;
+  if(c==="doblaje") return `<span class="cat-tag">🎙️ Doblaje</span>`;
+  return "";
+}
+function fmtFecha(f){
+  if(!f) return "";
+  const s=String(f);
+  // BUG DE UN DÍA MENOS: construir un Date() y leer getDate()/getMonth() en el navegador
+  // aplica el timezone LOCAL sobre una fecha guardada en UTC, y eso corre el día hacia atrás.
+  // Igual que se resolvió antes para streamHora/cumpleaños: se extraen año/mes/día como texto
+  // directo del string, sin pasar nunca por un objeto Date.
+  const iso=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(iso) return parseInt(iso[3],10)+" "+MESES[parseInt(iso[2],10)-1]+" "+iso[1];
+  const partes=s.split("/");
+  if(partes.length>=2){
+    const dd=parseInt(partes[0],10), mm=parseInt(partes[1],10), yyyy=partes[2]?partes[2].slice(0,4):"";
+    if(!isNaN(dd)&&!isNaN(mm)&&mm>=1&&mm<=12) return dd+" "+MESES[mm-1]+(yyyy?" "+yyyy:"");
+  }
+  return s;
+}
+function fmtCumple(v){
+  if(!v) return "";
+  const s=String(v);
+  const iso=s.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+  if(iso) return parseInt(iso[3],10)+" "+MESES[parseInt(iso[2],10)-1];
+  const partes=s.split("/");
+  if(partes.length>=2){
+    const dd=parseInt(partes[0],10), mm=parseInt(partes[1],10);
+    if(!isNaN(dd)&&!isNaN(mm)&&mm>=1&&mm<=12) return dd+" "+MESES[mm-1];
+  }
+  return s;
+}
+function toDateInputCumple(v){
+  if(!v) return "";
+  const s=String(v);
+  const iso=s.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+  if(iso) return iso[1]+"-"+iso[2]+"-"+iso[3];
+  const partes=s.split("/");
+  if(partes.length>=2){
+    const dd=partes[0].padStart(2,"0"), mm=partes[1].padStart(2,"0");
+    const yyyy=partes[2]?partes[2].slice(0,4):"2000";
+    return yyyy+"-"+mm+"-"+dd;
+  }
+  return "";
+}
+function toDateInput(v){
+  if(!v) return "";
+  const s=String(v);
+  const iso=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(iso) return iso[1]+"-"+iso[2]+"-"+iso[3];
+  const partes=s.split("/");
+  if(partes.length>=2){
+    const dd=partes[0].padStart(2,"0"), mm=partes[1].padStart(2,"0");
+    const yyyy=partes[2]?partes[2].slice(0,4):"2000";
+    return yyyy+"-"+mm+"-"+dd;
+  }
+  return "";
+}
+function fmtGeneracion(n){
+  const num=parseInt(n,10);
+  if(isNaN(num)) return "—";
+  return num+"° Generación";
+}
+const ORDINALES_GENERACION = ["primera","segunda","tercera","cuarta","quinta","sexta","séptima","octava","novena","décima","undécima","duodécima"];
+function palabraGeneracion(n){
+  const num=parseInt(n,10);
+  if(isNaN(num)||num<1) return "";
+  return ORDINALES_GENERACION[num-1]||"";
+}
+function mesDeCumple(v){
+  if(!v) return "";
+  const s=String(v);
+  const iso=s.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+  if(iso) return MESES_LARGO[parseInt(iso[2],10)-1]||"";
+  const partes=s.split("/");
+  if(partes.length>=2){
+    const mm=parseInt(partes[1],10);
+    if(!isNaN(mm)&&mm>=1&&mm<=12) return MESES_LARGO[mm-1];
+  }
+  return "";
+}
+function esTrue(v){ return v===true||v==="TRUE"||v==="true"||v===1; }
+function normalizar(s){ return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase(); }
+// ===== Usuarios de Smule/BandLab =====
+// El staff solo debe escribir el username (sin @, sin link). Estas funciones son robustas:
+// si alguien pega el link completo o le pone @ por error, lo limpian solo y devuelven el username puro.
+// Eso es lo que se guarda en Sheets. Los links (toSmuleUrl/toBandlabUrl) siempre se arman con formato fijo a partir de ese username.
+function limpiarUsuarioSmule(raw){
+  if(!raw) return "";
+  let v=String(raw).trim();
+  v=v.replace(/^https?:\/\/(www\.)?smule\.com\//i,"");
+  v=v.replace(/^@/,"");
+  v=v.split(/[?#/]/)[0];
+  return v.trim();
+}
+function limpiarUsuarioBandlab(raw){
+  if(!raw) return "";
+  let v=String(raw).trim();
+  v=v.replace(/^https?:\/\/(www\.)?bandlab\.com\//i,"");
+  v=v.replace(/^@/,"");
+  v=v.split(/[?#/]/)[0];
+  return v.trim();
+}
+function toSmuleUrl(raw){
+  const v=limpiarUsuarioSmule(raw);
+  return v?"https://www.smule.com/"+v:"";
+}
+function toBandlabUrl(raw){
+  const v=limpiarUsuarioBandlab(raw);
+  return v?"https://www.bandlab.com/"+v:"";
+}
+function limpiarTelefono(raw){ return String(raw||"").replace(/\D/g,""); }
+function rankCategoria(c){ return c==="canto"?0:c==="doblaje"?1:2; }
+function compararFechaCantoFirst(a,b,campo){
+  const da=new Date(a[campo]||0).getTime(), db=new Date(b[campo]||0).getTime();
+  if(db!==da) return db-da;
+  return rankCategoria(a.categoria)-rankCategoria(b.categoria);
+}
+function parseWinnerLines(text){
+  if(!text) return [];
+  return String(text).split("\n").filter(l=>l.trim()!=="").map(line=>{
+    const idx=line.indexOf("::");
+    const main=idx>=0?line.slice(0,idx):line;
+    const link=idx>=0?line.slice(idx+2):"";
+    // formato guardado: "nombreUsuario - detalle" -> separamos por el primer " - "
+    const sepIdx=main.indexOf(" - ");
+    const nombre=sepIdx>=0?main.slice(0,sepIdx):main;
+    const detalle=sepIdx>=0?main.slice(sepIdx+3):"";
+    return {nombre, detalle, link};
+  });
+}
+function botonesPersonalizadosDe(a){
+  try { const botones=JSON.parse(a.botonesPersonalizados||"[]"); return Array.isArray(botones)?botones.filter(b=>b&&b.texto&&b.url).slice(0,3):[]; }
+  catch(e) { return []; }
+}
+// Todas las líneas dentro de una misma celda (ganadorCanto/ganadorDoblaje/mencionesHonorificas)
+// pertenecen SIEMPRE a la misma actividad (así las junta el backend al guardarlas), así que ya
+// no tiene sentido agruparlas por el "detalle" que cada quien escribió a mano — eso es justo lo
+// que se rompía cuando alguien lo dejaba vacío o lo tipeaba distinto. Ahora es un solo bloque
+// siempre, usando el título real de la actividad como encabezado.
+function winnersGroupHTML(emoji,label,text,tipo,tituloActividad){
+  const entries=parseWinnerLines(text);
+  if(!entries.length) return "";
+  const link=entries.find(e=>e.link)?.link||"";
+  const titulo=tituloActividad||entries.find(e=>e.detalle)?.detalle||"(sin título)";
+  const rowClass = tipo==="cancion" ? "win-cancion" : tipo==="doblaje" ? "win-doblaje" : tipo==="mencion" ? "win-mencion" : "";
+  return `<div class="win-group">
+    <div class="win-group-title">${emoji} ${label}</div>
+    <div class="win-row ${rowClass}">
+      <div class="win-row-text"><strong>${escHtml(titulo)}</strong>${entries.map(e=>`<br>${escHtml(String(e.nombre||"").replace(/@/g,""))}`).join("")}</div>
+      ${link?`<a class="win-listen" target="_blank" href="${escAttr(link)}" title="Escuchar">🔗▶️</a>`:""}
+    </div>
+  </div>`;
+}
+
+async function apiGet(){
+  showLoading("Cargando datos...");
+  // Si hay modo staff o modo miembro activo en esta sesión, se manda la clave correspondiente
+  // para que el servidor devuelva los datos completos; si no, el servidor ya filtra solo lo
+  // mostrable al público. Staff tiene prioridad si por algún motivo ambos estuvieran seteados.
+  const clave = staffPin || memberPin || "";
+  try{ const url=APPS_SCRIPT_URL+(clave?("?clave="+encodeURIComponent(clave)):""); const res=await fetch(url); return await res.json(); }
+  finally{ hideLoading(); }
+}
+async function apiPost(payload, msg){
+  showLoading(msg||"Guardando...");
+  try{
+    payload.pin=staffPin||"";
+    const res=await fetch(APPS_SCRIPT_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
+    return await res.json();
+  } finally{ hideLoading(); }
+}
+// Se llama SOLO justo después de que el servidor confirmó que el PIN de Staff es correcto.
+// Si esto falla, enlacesStaff queda null y los botones simplemente avisan "no se pudo cargar".
+async function cargarEnlacesStaff(){
+  const r = await apiPost({action:"obtenerEnlacesStaff"});
+  enlacesStaff = (r && r.ok) ? r.enlaces : null;
+  if(!enlacesStaff) toast("No se pudieron cargar los enlaces de Staff");
+}
+function abrirEnlacePrivado(clave){
+  if(!enlacesStaff || !enlacesStaff[clave]){ toast("Enlace no disponible todavía, intenta de nuevo"); return; }
+  window.open(enlacesStaff[clave], "_blank", "noopener");
+}
+function abrirModalEnlaces(){
+  if(!enlacesStaff){ toast("Enlaces no disponibles, reintentando..."); cargarEnlacesStaff(); return; }
+  const campos = [
+    {clave:"CFG_REGALITO_LINK", label:"🎁 Regalito (público)"},
+    {clave:"CFG_ANUARIO_PUBLICO_LINK", label:"📺 Anuario público (público)"},
+    {clave:"CFG_CRONOGRAMA_LINK", label:"🗓️ Cronograma (staff)"},
+    {clave:"CFG_EDITAR_ANUARIO_LINK", label:"✏️ Editar Anuario (staff)"},
+    {clave:"CFG_EDITAR_INFO_LINK", label:"🖋️ Editar página de Info (staff)"},
+    {clave:"CFG_SHEETS_LINK", label:"🗂️ Base de Datos (staff)"},
+    {clave:"CFG_GITHUB_LINK", label:"💻 GitHub (staff)"}
+  ];
+  document.getElementById("memberModalContent").innerHTML = `
+    <h3>⚙️ Editar Enlaces</h3>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      ${campos.map(c=>`<div class="form-group"><label>${c.label}</label><input type="text" id="enl_${c.clave}" value="${escAttr(enlacesStaff[c.clave]||"")}"></div>`).join("")}
+    </div>
+    <div style="display:flex;gap:10px;margin-top:14px;">
+      <button class="btn-small btn-admin" id="enlacesVolverBtn">⬅️ Volver</button>
+      <button class="btn-small btn-primary" id="enlacesGuardarBtn">Guardar</button>
+    </div>`;
+  document.getElementById("enlacesVolverBtn").onclick = abrirStaffHub;
+  document.getElementById("enlacesGuardarBtn").onclick = async ()=>{
+    const enlaces = {};
+    campos.forEach(c=>{ enlaces[c.clave] = document.getElementById("enl_"+c.clave).value.trim(); });
+    const r = await apiPost({action:"guardarEnlacesStaff", enlaces}, "Guardando enlaces...");
+    if(r.ok){
+      enlacesStaff = r.enlaces;
+      toast("Enlaces actualizados ✅");
+      await cargarDatos(); // refresca DB.enlacesPublicos para que Regalito/Anuario público tomen el cambio
+      abrirStaffHub();
+    } else toast("Error: "+(r.error||""));
+  };
+}
+async function downloadImage(url, filename){
+  try{
+    const res=await fetch(url,{mode:"cors"}); const blob=await res.blob();
+    const blobUrl=URL.createObjectURL(blob);
+    const a=document.createElement("a"); a.href=blobUrl; a.download=filename||"imagen-peaches.jpg";
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(blobUrl);
+    toast("Imagen descargada en el dispositivo ✅");
+  }catch(err){ toast("No se pudo descargar la imagen ❌"); }
+}
+function enableLongPress(img, filename){
+  if(!img||img.dataset.longPressBound) return; img.dataset.longPressBound="1";
+  let timer=null;
+  const start=()=>{ timer=setTimeout(()=>downloadImage(img.src,filename),550); };
+  const cancel=()=>{ if(timer){clearTimeout(timer);timer=null;} };
+  img.addEventListener("touchstart",start,{passive:true}); img.addEventListener("touchend",cancel); img.addEventListener("touchmove",cancel);
+  img.addEventListener("mousedown",start); img.addEventListener("mouseup",cancel); img.addEventListener("mouseleave",cancel);
+  img.addEventListener("contextmenu",(e)=>{e.preventDefault();downloadImage(img.src,filename);});
+}
+function avatarImgTag(m){ return `<img class="js-avatar" src="${escAttr(m.avatarUrl||LOGO_DEFAULT)}" alt="">`; }
+function bindAvatarFallbacks(){
+  document.querySelectorAll("img.js-avatar").forEach(img=>{
+    if(img.dataset.fbBound) return; img.dataset.fbBound="1";
+    img.addEventListener("error", function(){
+      if(!img.dataset.fbStage){ img.dataset.fbStage="1"; img.src=LOGO_DEFAULT; }
+      else if(img.dataset.fbStage==="1"){ img.dataset.fbStage="2"; img.src=LOGO_FALLBACK; }
+    });
+  });
+}
+function fileToBase64(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>resolve(reader.result.split(",")[1]);
+    reader.onerror=reject; reader.readAsDataURL(file);
+  });
+}
+
+function toTimeHHMM(v){
+  if(!v) return "";
+  const s=String(v);
+  const directo=s.match(/^(\d{2}):(\d{2})/);
+  if(directo) return directo[1]+":"+directo[2];
+  // Si Sheets convirtió la hora en una fecha/hora serializada (como pasa con cumpleanos),
+  // viene en UTC; la reconvertimos a GMT-6 (hora del Team) para recuperar el valor original.
+  const iso=s.match(/T(\d{2}):(\d{2})/);
+  if(iso){
+    let h=parseInt(iso[1],10)-6;
+    if(h<0) h+=24;
+    return String(h).padStart(2,"0")+":"+iso[2];
+  }
+  return "";
+}
+function fmt12Hora(d){
+  let h=d.getHours(); const m=d.getMinutes();
+  const ampm=h>=12?"PM":"AM";
+  h=h%12; if(h===0) h=12;
+  return h+":"+String(m).padStart(2,"0")+" "+ampm;
+}
+function streamBlockHTML(a){
+  if(!a.streamNombre || !a.streamFecha || !a.streamHora) return "";
+  const fechaStr=toDateInput(a.streamFecha);
+  if(!fechaStr) return "";
+  const horaStr=toTimeHHMM(a.streamHora);
+  if(!horaStr) return "";
+  const d=new Date(fechaStr+"T"+horaStr+":00-06:00");
+  if(isNaN(d)) return "";
+  const endD=new Date(d.getTime()+4*60*60*1000); // los streams duran 4h por defecto
+  const opcionesFecha={weekday:"long",day:"numeric",month:"long"};
+  let fechaLarga; try{ fechaLarga=d.toLocaleDateString("es-ES",opcionesFecha); }catch(e){ fechaLarga=d.toDateString(); }
+  const localStr=fechaLarga+", "+fmt12Hora(d);
+  const tz=Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const isoStart=d.toISOString().replace(/[-:]/g,"").split(".")[0]+"Z";
+  const isoEnd=endD.toISOString().replace(/[-:]/g,"").split(".")[0]+"Z";
+  // Botón 1: link directo a Google Calendar (funciona igual en PC y celular, no descarga nada, solo abre Google Calendar con el evento precargado)
+  const gcalUrl="https://calendar.google.com/calendar/render?action=TEMPLATE"
+    +"&text="+encodeURIComponent(a.streamNombre)
+    +"&dates="+isoStart+"/"+isoEnd
+    +"&details="+encodeURIComponent(a.descripcion||"")
+    +"&location="+encodeURIComponent("Server de Peaches");
+  // Botón 2: descarga un archivo .ics (sirve para Apple Calendar, Outlook, Samsung, etc. — en celular normalmente se agrega con un tap)
+  return `<div class="stream-block"><div class="stream-title">📺 ${escHtml(a.streamNombre)}</div><div class="stream-time">🗓️ ${localStr}<br><span style="opacity:0.75;">(convertido a tu zona horaria: ${tz})</span></div><div class="stream-actions"><a class="btn-small btn-primary" target="_blank" href="${escAttr(gcalUrl)}">📅 Google Calendar</a><button class="btn-small btn-family" data-ics data-ics-nombre="${escAttr(a.streamNombre)}" data-ics-start="${isoStart}" data-ics-end="${isoEnd}" data-ics-desc="${escAttr(a.descripcion||'')}">📅 Agregar a Calendario</button></div></div>`;
+}
+function escIcs(s){ return String(s||"").replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\n/g,"\\n"); }
+function descargarICS(nombre,isoStart,isoEnd,descripcion){
+  const ics="BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:"+escIcs(nombre)+"\nDTSTART:"+isoStart+"\nDTEND:"+isoEnd+"\nLOCATION:Server de Peaches\nDESCRIPTION:"+escIcs(descripcion)+"\nBEGIN:VALARM\nACTION:DISPLAY\nDESCRIPTION:Recordatorio\nTRIGGER:-PT30M\nEND:VALARM\nEND:VEVENT\nEND:VCALENDAR";
+  const blob=new Blob([ics],{type:"text/calendar"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a"); a.href=url; a.download=nombre.replace(/[^a-z0-9]/gi,"_")+".ics";
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  toast("Evento descargado ✅ (ábrelo para agregarlo a tu calendario)");
+}
+
+/* ---------- carga ---------- */
+async function cargarDatos(){
+  try{
+    DB=await apiGet();
+    if(!DB || typeof DB!=="object" || !Array.isArray(DB.actividades) || !Array.isArray(DB.anuario)) throw new Error("Respuesta inesperada del servidor: "+JSON.stringify(DB).slice(0,200));
+    nivel = DB.nivel || (staffPin ? "staff" : (memberPin ? "miembro" : "publico"));
+    aplicarEnlacesPublicos();
+    renderActividades(); renderAnuario(); renderMiembros();
+  }
+  catch(err){
+    console.error("Error cargando datos:", err);
+    document.getElementById("actividadesFeed").innerHTML=`<div class="empty-state">No se pudo conectar con la base de datos.<br><span style="font-size:11px;opacity:0.6;">${escHtml(err.message||String(err))}</span></div>`;
+  }
+}
+
+// Los enlaces públicos (Regalito, Anuario público) llegan en CADA carga de datos (enlacesPublicos,
+// visible sin PIN a propósito) y se aplican acá, así el panel "Actualizar Enlaces" realmente
+// cambia el comportamiento de la página sin tener que editar el HTML.
+function aplicarEnlacesPublicos(){
+  const ep = DB.enlacesPublicos || {};
+  const regalito = ep.CFG_REGALITO_LINK;
+  const btnRegalito = document.getElementById("regalitoBtn");
+  if(regalito) btnRegalito.href = regalito;
+  // Oculto para visitantes sin clave; visible para Miembro y Staff.
+  btnRegalito.classList.toggle("hidden", nivel==="publico");
+}
+
+/* ---------- actividades ---------- */
+document.getElementById("filterCanto").onclick=()=>{ filtroCanto=!filtroCanto; syncFilterPills(); renderActividades(); };
+document.getElementById("filterDoblaje").onclick=()=>{ filtroDoblaje=!filtroDoblaje; syncFilterPills(); renderActividades(); };
+function syncFilterPills(){
+  document.getElementById("filterCanto").classList.toggle("on",filtroCanto);
+  document.getElementById("filterDoblaje").classList.toggle("on",filtroDoblaje);
+}
+
+function renderActividades(){
+  const feed=document.getElementById("actividadesFeed");
+  let activas=DB.actividades;
+  activas=activas.filter(a=>{
+    if(a.categoria==="canto") return filtroCanto;
+    if(a.categoria==="doblaje") return filtroDoblaje;
+    return true;
+  });
+  activas=activas.slice().sort((a,b)=>compararFechaCantoFirst(a,b,"fechaFin"));
+  if(activas.length===0){ feed.innerHTML=`<div class="empty-state">No hay actividades con este filtro. ${staffPin?'¡Agrega una!':''}</div>`; return; }
+  feed.innerHTML=activas.map(a=>cardHTML(a)).join("");
+  attachCardEvents(); bindAvatarFallbacks();
+}
+
+function cardHTML(a){
+  const estado=estadoActividad(a.fechaFin);
+  const entregasDeEsta=DB.entregas.filter(e=>String(e.idActividad)===String(a.id));
+  const fechasTxt=`${fmtFecha(a.fechaInicio)} → ${fmtFecha(a.fechaFin)}`;
+  return `
+  <div class="card" data-id="${a.id}">
+    <div class="card-top">
+      <div class="card-img-wrap">${a.imagenUrl?`<img class="js-longpress" data-filename="${escAttr((a.titulo||'actividad')+'.jpg')}" src="${escAttr(a.imagenUrl)}" alt="">`:""}</div>
+      <div class="card-info">
+        <div class="card-title">${escHtml(a.titulo||"")}</div>
+        <div class="card-dates">${fechasTxt}</div>
+        <div class="badge-row">
+          <span class="status-tag ${estado.clase}">${estado.texto}</span>
+          ${categoriaTag(a.categoria)}
+          ${participacionTag(a.participacion)}
+        </div>
+        ${(a.linkForms||a.linkUnirse||a.linkScript||botonesPersonalizadosDe(a).length)?`<div class="card-actions">
+          ${a.linkForms?`<a class="btn-small btn-primary" target="_blank" href="${escAttr(a.linkForms)}">🎙️ Entregar</a>`:""}
+          ${a.linkUnirse?`<a class="btn-small btn-family" target="_blank" href="${escAttr(a.linkUnirse)}">🤝 Unirse</a>`:""}
+          ${a.linkScript?`<a class="btn-small btn-family" target="_blank" href="${escAttr(a.linkScript)}">📄 Script</a>`:""}
+          ${botonesPersonalizadosDe(a).map(b=>`<a class="btn-small btn-family" target="_blank" href="${escAttr(b.url)}">${escHtml(b.texto)}</a>`).join("")}
+        </div>`:""}
+        ${staffPin?`<div class="card-actions">
+          <button class="btn-small btn-bell" data-bell="${a.id}">🔔</button>
+          <button class="btn-small btn-admin" data-edit="${a.id}">✏️ Editar</button>
+          <button class="btn-small btn-danger" data-delete="${a.id}">🗑️ Borrar</button>
+        </div>`:""}
+      </div>
+    </div>
+    ${(a.descripcion||a.wishlist||a.streamNombre)?`
+    <div class="accordion">
+      <button class="accordion-toggle" data-toggle="info-${a.id}">▼ Más Info & Wishlist</button>
+      <div class="accordion-body" id="info-${a.id}"></div>
+    </div>`:""}
+    <div class="accordion">
+      <button class="accordion-toggle" data-toggle="entregas-${a.id}">▼ Ver Actividades Entregadas (${entregasDeEsta.length})</button>
+      <div class="accordion-body" id="entregas-${a.id}">
+        ${entregasDeEsta.length?`
+        <table class="entregas-table" id="tabla-${a.id}">
+          <tr><th></th><th>Persona</th><th>Canción/Escena</th><th>Enlace</th>${staffPin?"<th></th>":""}</tr>
+          ${entregasDeEsta.map(e=>`<tr data-entrega-row="${e.id}">
+            <td><input type="checkbox" class="js-check-entrega hidden" data-id="${e.id}" data-act="${a.id}"></td>
+            <td>${escHtml(e.nombreUsuario||"")}</td>
+            <td>${escHtml(e.detalleEntrega||"")}</td>
+            <td>${e.linkGrabacion?`<a href="${escAttr(e.linkGrabacion)}" target="_blank">🔗 Escuchar</a>`:""}</td>
+            ${staffPin?`<td><button class="anuario-mini-btn" data-anuario-entrega="${a.id}" data-titulo="${escAttr(a.titulo||"")}" data-nombre="${escAttr(e.nombreUsuario||"")}" data-detalle="${escAttr(e.detalleEntrega||"")}" data-link="${escAttr(e.linkGrabacion||"")}">👑</button></td>`:""}
+          </tr>`).join("")}
+        </table>`:`<div style="color:var(--text-dim);">Todavía no hay entregas registradas.</div>`}
+        ${staffPin?`
+        <div class="entregas-toolbar">
+          <button class="btn-small btn-admin" data-add-entrega="${a.id}">(+) Registrar Entrega</button>
+          <button class="btn-small btn-family" data-import-entregas="${a.id}">📥 Importar Entregas</button>
+          ${entregasDeEsta.length?`<button class="btn-small btn-danger" data-toggle-borrar="${a.id}">🗑️ Eliminar</button>`:""}
+        </div>
+        <div class="entregas-toolbar hidden" id="borrar-toolbar-${a.id}">
+          <button class="btn-small btn-danger" data-confirm-borrar="${a.id}">Borrar seleccionadas (0)</button>
+          <button class="btn-small" data-cancel-borrar="${a.id}" style="background:var(--card-bg-2);color:var(--text);">Cancelar</button>
+        </div>`:""}
+      </div>
+    </div>
+  </div>`;
+}
+
+function attachCardEvents(){
+  document.querySelectorAll("[data-toggle]").forEach(btn=>{
+    btn.onclick=()=>{
+      const body=document.getElementById(btn.dataset.toggle);
+      const opening=!body.classList.contains("open");
+      body.classList.toggle("open");
+      btn.textContent=btn.textContent.replace(/^./, body.classList.contains("open")?"▲":"▼");
+      if(opening && body.id.startsWith("info-") && !body.dataset.filled){
+        const id=body.id.replace("info-","");
+        const a=DB.actividades.find(x=>String(x.id)===String(id));
+        let html=streamBlockHTML(a);
+        html+=`<div class="desc-text">${escHtml(a.descripcion||"Sin descripción.")}</div>`;
+        if(a.wishlist) html+=`<div class="wishlist-block"><strong>🎵 Wishlist:</strong><br>${escHtml(a.wishlist)}</div>`;
+        body.innerHTML=html; body.dataset.filled="1";
+        const icsBtn=body.querySelector("[data-ics]");
+        if(icsBtn) icsBtn.onclick=()=>descargarICS(icsBtn.dataset.icsNombre, icsBtn.dataset.icsStart, icsBtn.dataset.icsEnd, icsBtn.dataset.icsDesc);
+      }
+    };
+  });
+  document.querySelectorAll("[data-edit]").forEach(btn=>btn.onclick=()=>openActivityForm(btn.dataset.edit, false));
+  document.querySelectorAll("[data-delete]").forEach(btn=>btn.onclick=()=>borrarActividad(btn.dataset.delete));
+  document.querySelectorAll("[data-bell]").forEach(btn=>btn.onclick=()=>probarRecordatorio(btn.dataset.bell));
+  document.querySelectorAll("[data-add-entrega]").forEach(btn=>btn.onclick=()=>openEntregaForm(btn.dataset.addEntrega));
+  document.querySelectorAll("[data-import-entregas]").forEach(btn=>btn.onclick=()=>importarEntregas(btn.dataset.importEntregas));
+  document.querySelectorAll("[data-anuario-entrega]").forEach(btn=>btn.onclick=()=>abrirModalAnuario(btn.dataset.anuarioEntrega,btn.dataset.titulo,btn.dataset.nombre,btn.dataset.detalle,btn.dataset.link));
+  document.querySelectorAll("[data-toggle-borrar]").forEach(btn=>btn.onclick=()=>toggleModoBorrarEntregas(btn.dataset.toggleBorrar,true));
+  document.querySelectorAll("[data-cancel-borrar]").forEach(btn=>btn.onclick=()=>toggleModoBorrarEntregas(btn.dataset.cancelBorrar,false));
+  document.querySelectorAll("[data-confirm-borrar]").forEach(btn=>btn.onclick=()=>confirmarBorrarEntregas(btn.dataset.confirmBorrar));
+  document.querySelectorAll(".js-check-entrega").forEach(chk=>{
+    chk.onchange=()=>{
+      const actId=chk.dataset.act;
+      if(!modoEliminarEntregas[actId]) modoEliminarEntregas[actId]=new Set();
+      if(chk.checked) modoEliminarEntregas[actId].add(chk.dataset.id); else modoEliminarEntregas[actId].delete(chk.dataset.id);
+      const btn=document.querySelector(`[data-confirm-borrar="${actId}"]`);
+      if(btn) btn.textContent=`Borrar seleccionadas (${modoEliminarEntregas[actId].size})`;
+    };
+  });
+  document.querySelectorAll(".card-img-wrap img.js-longpress").forEach(img=>enableLongPress(img,img.dataset.filename));
+}
+
+async function probarRecordatorio(idActividad){
+  const r=await apiPost({action:"testRecordatorio", idActividad},"Enviando aviso de prueba...");
+  if(r.ok) toast("Mensaje de prueba enviado a Discord 🔔"); else toast("Error: "+(r.error||""));
+}
+async function importarEntregas(idActividad){
+  if(!await confirmarAccion("¿Importar todas las entregas de la hoja 'Importar' a esta actividad? Se vaciará esa hoja después.")) return;
+  const r=await apiPost({action:"importarEntregas", idActividad},"Importando entregas...");
+  if(r.ok){ toast(`Se importaron ${r.count} entregas ✅`); await cargarDatos(); } else toast("Error: "+(r.error||""));
+}
+function toggleModoBorrarEntregas(actId,on){
+  const tabla=document.getElementById("tabla-"+actId), toolbar=document.getElementById("borrar-toolbar-"+actId);
+  if(tabla) tabla.querySelectorAll(".js-check-entrega").forEach(c=>{ c.classList.toggle("hidden",!on); if(!on) c.checked=false; });
+  if(toolbar) toolbar.classList.toggle("hidden",!on);
+  if(!on) modoEliminarEntregas[actId]=new Set();
+}
+async function confirmarBorrarEntregas(actId){
+  const set=modoEliminarEntregas[actId];
+  if(!set||set.size===0){ toast("No seleccionaste ninguna"); return; }
+  if(!await confirmarAccion(`¿Borrar ${set.size} entrega(s) seleccionada(s)?`)) return;
+  const r=await apiPost({action:"deleteEntregas", ids:[...set]});
+  if(r.ok){ toast("Entregas borradas 🗑️"); await cargarDatos(); } else toast("Error: "+(r.error||""));
+}
+async function borrarActividad(id){
+  if(!await confirmarAccion("¿Seguro que quieres borrar esta actividad? Esto también borra sus entregas.")) return;
+  const r=await apiPost({action:"deleteActividad", id});
+  if(r.ok){ toast("Actividad borrada 🗑️"); await cargarDatos(); } else toast("Error: "+(r.error||""));
+}
+
+/* ---------- modal anuario ---------- */
+function abrirModalAnuario(idActividad,titulo,nombreUsuario,detalle,link){
+  anuarioCtx={idActividad,nombreUsuario,detalle,link};
+  document.getElementById("anuarioModalInfo").innerHTML=`Actividad: <strong>${escHtml(titulo)}</strong><br>Entrega: <strong>${escHtml(nombreUsuario)}</strong> — ${escHtml(detalle)}`;
+  document.querySelectorAll("#anuarioModal [data-dest]").forEach(b=>b.disabled=false);
+  openModal("anuarioModal");
+}
+document.querySelectorAll("[data-dest]").forEach(btn=>{
+  btn.onclick=async()=>{
+    if(!anuarioCtx) return;
+    document.querySelectorAll("#anuarioModal [data-dest]").forEach(b=>b.disabled=true);
+    const r=await apiPost({action:"addToAnuario", idActividad:anuarioCtx.idActividad, destino:btn.dataset.dest, nombreUsuario:anuarioCtx.nombreUsuario, detalle:anuarioCtx.detalle, link:anuarioCtx.link},"Agregando al Anuario...");
+    if(r.ok){ toast("Agregado al Anuario 👑"); closeModal("anuarioModal"); await cargarDatos(); }
+    else{ toast("Error: "+(r.error||"")); document.querySelectorAll("#anuarioModal [data-dest]").forEach(b=>b.disabled=false); }
+  };
+});
+
+/* ---------- anuario: años > meses > fechas ---------- */
+function renderAnuario(){
+  const grid=document.getElementById("anuarioGrid");
+  const items=DB.anuario.filter(a=>a.fechaInicio);
+  if(items.length===0){ grid.innerHTML=`<div class="empty-state">Aún no hay ediciones en el Anuario.</div>`; return; }
+
+  const porAnio={};
+  items.forEach(a=>{
+    const d=new Date(a.fechaInicio); if(isNaN(d)) return;
+    const anio=d.getFullYear(), mes=d.getMonth(), key=d.toISOString().slice(0,10);
+    porAnio[anio]=porAnio[anio]||{};
+    porAnio[anio][mes]=porAnio[anio][mes]||{};
+    porAnio[anio][mes][key]=porAnio[anio][mes][key]||[];
+    porAnio[anio][mes][key].push(a);
+  });
+
+  const anios=Object.keys(porAnio).map(Number).sort((a,b)=>b-a);
+  let html="";
+  anios.forEach(anio=>{
+    html+=`<div class="anuario-year-group"><div class="anuario-year-label">${anio}</div>`;
+    const meses=Object.keys(porAnio[anio]).map(Number).sort((a,b)=>b-a);
+    meses.forEach(mes=>{
+      html+=`<div class="anuario-month-label">${MESES_LARGO[mes]}</div>`;
+      const fechas=Object.keys(porAnio[anio][mes]).sort((a,b)=>b.localeCompare(a));
+      fechas.forEach(fecha=>{
+        const bloques=porAnio[anio][mes][fecha].slice().sort((a,b)=>rankCategoria(a.categoria)-rankCategoria(b.categoria));
+        html+=`<div class="anuario-date-row">${bloques.map(a=>anuarioBlockHTML(a)).join("")}</div>`;
+      });
+    });
+    html+=`</div>`;
+  });
+  grid.innerHTML=html;
+  document.querySelectorAll("[data-anuario]").forEach(tile=>tile.onclick=()=>openAnuarioDetail(tile.dataset.anuario));
+  document.querySelectorAll(".anuario-block img.js-longpress").forEach(img=>enableLongPress(img,img.dataset.filename));
+}
+function anuarioBlockHTML(a){
+  return `<div class="anuario-block" data-anuario="${a.id}">
+    ${a.imagenUrl?`<img class="js-longpress" data-filename="${escAttr((a.titulo||'anuario')+'.jpg')}" src="${escAttr(a.imagenUrl)}" alt="">`:`<div style="aspect-ratio:1/1;background:var(--card-bg-2);"></div>`}
+    <div class="ab-title">👑 ${escHtml(a.titulo||"")}</div>
+  </div>`;
+}
+function openAnuarioDetail(id){
+  const a=DB.anuario.find(x=>String(x.id)===String(id));
+  if(!a) return;
+  document.getElementById("memberModalContent").innerHTML=`
+    <h3>👑 ${escHtml(a.titulo||"")}</h3>
+    ${a.imagenUrl?`<img id="anuarioDetailImg" data-filename="${escAttr((a.titulo||'anuario')+'.jpg')}" src="${escAttr(a.imagenUrl)}" style="border-radius:12px;width:100%;aspect-ratio:1/1;object-fit:contain;background:var(--card-bg-2);margin-bottom:10px;">`:""}
+    <div class="winners-block">
+      ${winnersGroupHTML("🥇","Mejor Canto", a.ganadorCanto, "cancion", a.titulo)}
+      ${winnersGroupHTML("🎙️","Mejor Doblaje", a.ganadorDoblaje, "doblaje", a.titulo)}
+      ${winnersGroupHTML("✨","Menciones Honoríficas", a.mencionesHonorificas, "mencion", a.titulo)}
+      ${(!a.ganadorCanto&&!a.ganadorDoblaje&&!a.mencionesHonorificas)?`<div style="color:var(--text-dim);">Todavía sin ganadores asignados.</div>`:""}
+    </div>
+    ${staffPin?`<div style="display:flex;gap:8px;margin-top:12px;">
+      <button class="btn-small btn-admin" style="flex:1;" data-edit-anuario="${a.id}">✏️ Editar</button>
+      <button class="btn-small btn-danger" style="flex:1;" data-delete-anuario="${a.id}">🗑️ Borrar tarjeta</button>
+    </div>`:""}`;
+  openModal("memberModal");
+  const img=document.getElementById("anuarioDetailImg"); if(img) enableLongPress(img,img.dataset.filename);
+  const editBtn=document.querySelector("[data-edit-anuario]"); if(editBtn) editBtn.onclick=()=>{ closeModal("memberModal"); openActivityForm(a.id, true); };
+  const delBtn=document.querySelector("[data-delete-anuario]");
+  if(delBtn) delBtn.onclick=async()=>{
+    if(!await confirmarAccion("¿Seguro que quieres borrar esta tarjeta completa del Anuario?")) return;
+    const r=await apiPost({action:"deleteAnuario", id:a.id});
+    if(r.ok){ toast("Borrado 🗑️"); closeModal("memberModal"); await cargarDatos(); } else toast("Error: "+(r.error||""));
+  };
+}
+
+/* ---------- miembros ---------- */
+document.getElementById("refreshPhotosBtn").onclick=async()=>{
+  if(!await confirmarAccion("¿Actualizar automáticamente las fotos de todos los miembros con Smule? Puede tardar un momento.")) return;
+  const r=await apiPost({action:"actualizarTodasLasFotos"},"Actualizando fotos desde Smule...");
+  if(r.ok){ toast(`Fotos actualizadas: ${r.actualizados}/${r.revisados}`); await cargarDatos(); }
+  else toast("Error: "+(r.error||""));
+};
+document.getElementById("resetStrikesGlobalBtn").onclick=async()=>{
+  if(!await confirmarAccion("¿Poner Faltas y Strikes en 0 de TODO el equipo? (Los Strikes Permanentes de cada quien NO se tocan). Esta acción no se puede deshacer.")) return;
+  const r=await apiPost({action:"resetStrikesGlobal"},"Reiniciando faltas y strikes de todo el equipo...");
+  if(r.ok){ toast(`Reiniciado: ${r.afectados} miembro(s) ✅`); await cargarDatos(); }
+  else toast("Error: "+(r.error||""));
+};
+
+function renderMiembros(filtro=""){
+  const f=normalizar(filtro.trim());
+  const conNombre=m=>m.nombre && String(m.nombre).trim()!=="";
+  const filtrar=m=>conNombre(m) && (!f || normalizar([
+    m.nombre, m.rangoVocal,
+    esTrue(m.staff)?"staff":"", esTrue(m.canto)?"canto":"", esTrue(m.doblaje)?"doblaje":"",
+    m.generacionNum||"", palabraGeneracion(m.generacionNum),
+    mesDeCumple(m.cumpleanos)
+  ].join(" ")).includes(f));
+
+  const reinas=DB.miembros.filter(m=>(esTrue(m.fundadora)||esTrue(m.lider)) && filtrar(m));
+  document.getElementById("reinasCarousel").innerHTML=reinas.length?reinas.map(m=>`<div class="member-avatar-item reina" data-member="${m.id}">${avatarImgTag(m)}<div class="m-name">${escHtml(m.nombre||"")}</div></div>`).join(""):`<div style="color:var(--text-dim);font-size:13px;">Sin resultados.</div>`;
+
+  const staffList=DB.miembros.filter(m=>esTrue(m.staff) && !esTrue(m.fundadora) && !esTrue(m.lider) && filtrar(m));
+  document.getElementById("staffCarousel").innerHTML=staffList.length?staffList.map(m=>`<div class="member-avatar-item" data-member="${m.id}">${avatarImgTag(m)}<div class="m-name">${escHtml(m.nombre||"")}</div></div>`).join(""):`<div style="color:var(--text-dim);font-size:13px;">Sin resultados.</div>`;
+
+  const resto=DB.miembros.filter(m=>!esTrue(m.staff) && !esTrue(m.fundadora) && !esTrue(m.lider) && filtrar(m)).slice().sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||""));
+  document.getElementById("miembrosList").innerHTML=resto.length?resto.map(m=>`
+    <div class="member-row" data-member="${m.id}">
+      ${avatarImgTag(m)}
+      <div class="m-info">
+        <div class="m-name">${escHtml(m.nombre||"")}</div>
+        <div class="badges-row">
+          ${esTrue(m.canto)?`<span class="badge badge-canto">🎤 Canto</span>`:""}
+          ${esTrue(m.doblaje)?`<span class="badge badge-doblaje">🎙️ Doblaje</span>`:""}
+          ${esTrue(m.conserje)?`<span class="badge badge-conserje">🧹 Conserje</span>`:""}
+          ${esTrue(m.inactivo)?`<span class="badge badge-inactivo">😴 Inactivo</span>`:""}
+        </div>
+      </div>
+    </div>`).join(""):`<div class="empty-state">Sin resultados.</div>`;
+
+  document.querySelectorAll("[data-member]").forEach(el=>el.onclick=()=>openMemberModal(el.dataset.member));
+  bindAvatarFallbacks();
+}
+
+function openMemberModal(id){
+  const m=DB.miembros.find(x=>String(x.id)===String(id));
+  if(!m) return;
+  const strikes=Number(m.strikes)||0, faltas=Number(m.faltas)||0, strikesPermanentes=Number(m.strikesPermanentes)||0;
+  document.getElementById("memberModalContent").innerHTML=`
+    <div class="member-modal-header">
+      <img id="memberDetailAvatar" class="js-avatar" data-filename="${escAttr((m.nombre||'miembro')+'.jpg')}" src="${escAttr(m.avatarUrl||LOGO_DEFAULT)}">
+      <div class="mm-name-row">
+        <div style="font-weight:800;font-size:17px;">${escHtml(m.nombre||"")}</div>
+        ${staffPin?`<button class="edit-pencil" data-edit-member="${m.id}">✏️</button>`:""}
+      </div>
+      <div class="badges-row" style="justify-content:center;">
+        ${esTrue(m.fundadora)?`<span class="badge badge-reina">👑 Fundadora</span>`:""}
+        ${esTrue(m.lider)?`<span class="badge badge-reina">👑 Líder</span>`:""}
+        ${esTrue(m.staff)?`<span class="badge badge-staff">💎 Staff</span>`:""}
+        ${esTrue(m.canto)?`<span class="badge badge-canto">🎤 Canto</span>`:""}
+        ${esTrue(m.doblaje)?`<span class="badge badge-doblaje">🎙️ Doblaje</span>`:""}
+        ${esTrue(m.conserje)?`<span class="badge badge-conserje">🧹 Conserje</span>`:""}
+        ${esTrue(m.inactivo)?`<span class="badge badge-inactivo">😴 Inactivo</span>`:""}
+      </div>
+    </div>
+    ${(strikes+strikesPermanentes)>=3?`<div class="expelled-banner">🛑 EXPULSADO / FUERA DEL TEAM</div>`:""}
+    <table class="info-table">
+      <tr><td>🎵 Rango Vocal</td><td>${escHtml(m.rangoVocal||"—")}</td></tr>
+      <tr><td>🎂 Cumpleaños</td><td>${fmtCumple(m.cumpleanos)||"—"}</td></tr>
+      <tr><td>📅 Miembro desde</td><td>${fmtFecha(m.fechaIngreso)||"—"}</td></tr>
+      ${m.generacionNum?`<tr><td>🌱 Generación</td><td>${fmtGeneracion(m.generacionNum)}</td></tr>`:""}
+    </table>
+    <div class="platform-row">
+      ${m.usuarioSmule?`<a class="platform-btn" target="_blank" href="${escAttr(toSmuleUrl(m.usuarioSmule))}">
+        <img src="https://raw.githubusercontent.com/TeamPeachesOff/TeamPeachesHub/main/Logos/SmuleLogo.png" onerror="this.onerror=null;this.src='https://blog.smule.com/wp-content/uploads/smule-icon.png';"><span>Smule</span></a>`:""}
+      ${m.usuarioBandlab?`<a class="platform-btn" target="_blank" href="${escAttr(toBandlabUrl(m.usuarioBandlab))}">
+        <img src="https://raw.githubusercontent.com/TeamPeachesOff/TeamPeachesHub/main/Logos/BandLabLogo.png" onerror="this.onerror=null;this.src='https://onbukei.com/wp-content/uploads/2021/10/bandlab-music-making-studio.png';"><span>BandLab</span></a>`:""}
+      ${m.usuarioDiscord?`<button class="platform-btn" data-copy-discord="${escAttr(m.usuarioDiscord)}">
+        <img src="https://raw.githubusercontent.com/TeamPeachesOff/TeamPeachesHub/main/Logos/DiscordLogo.webp" onerror="this.onerror=null;this.src='https://freelogopng.com/images/all_img/1691730767discord-logo-transparent.png';"><span>Copiar Discord</span></button>`:""}
+      ${m.telefono?`<a class="platform-btn" target="_blank" href="https://wa.me/${escAttr(limpiarTelefono(m.telefono))}">
+        <img src="https://raw.githubusercontent.com/TeamPeachesOff/TeamPeachesHub/main/Logos/WhatsAppLogo.png" onerror="this.onerror=null;this.src='https://upload.wikimedia.org/wikipedia/commons/5/5e/WhatsApp_icon.png';"><span>WhatsApp</span></a>`:""}
+    </div>
+    <div class="castigos-box">
+      <div class="ct-title">Castigos</div>
+      <div class="ct-row"><span>☠️ Strike permanente</span><strong>${strikesPermanentes}</strong></div>
+      <div class="ct-row"><span>⚠️ Strikes</span><strong>${strikes}</strong></div>
+      <div class="ct-row"><span>📉 Faltas</span><strong>${faltas}</strong></div>
+      ${staffPin?`<div class="admin-strike-btns"><button class="btn-falta" data-falta="${m.id}">+ Falta</button><button class="btn-strike" data-strike="${m.id}">+ Strike</button><button class="btn-strike-permanente" data-strike-permanente="${m.id}">+ Strike Permanente</button></div>
+      <button class="btn-reset-castigos" data-reset="${m.id}">🔄 Borrar Castigos</button>`:""}
+    </div>`;
+  openModal("memberModal"); bindAvatarFallbacks();
+  const copyBtn=document.querySelector("[data-copy-discord]"); if(copyBtn) copyBtn.onclick=()=>{navigator.clipboard.writeText(copyBtn.dataset.copyDiscord); toast("Discord copiado ✅");};
+  const faltaBtn=document.querySelector("[data-falta]"); if(faltaBtn) faltaBtn.onclick=()=>registrarFalta(m.id);
+  const strikeBtn=document.querySelector("[data-strike]"); if(strikeBtn) strikeBtn.onclick=()=>registrarStrike(m.id);
+  const strikePermBtn=document.querySelector("[data-strike-permanente]"); if(strikePermBtn) strikePermBtn.onclick=()=>registrarStrikePermanente(m.id);
+  const resetBtn=document.querySelector("[data-reset]"); if(resetBtn) resetBtn.onclick=()=>borrarCastigos(m.id);
+  const editBtn=document.querySelector("[data-edit-member]"); if(editBtn) editBtn.onclick=()=>{ closeModal("memberModal"); openMemberEditForm(m.id); };
+}
+async function registrarFalta(idMiembro){ const r=await apiPost({action:"addFalta", idMiembro}); if(r.ok){toast("Falta registrada"); await cargarDatos(); openMemberModal(idMiembro);} else toast("Error: "+(r.error||"")); }
+async function registrarStrike(idMiembro){ const r=await apiPost({action:"addStrike", idMiembro}); if(r.ok){toast("Strike registrado"); await cargarDatos(); openMemberModal(idMiembro);} else toast("Error: "+(r.error||"")); }
+async function registrarStrikePermanente(idMiembro){
+  if(!await confirmarAccion("¿Registrar un Strike Permanente? Solo se puede quitar con \"Borrar Castigos\" en la tarjeta del miembro (el reinicio anual global NO lo toca).")) return;
+  const r=await apiPost({action:"addStrikePermanente", idMiembro});
+  if(r.ok){toast("Strike Permanente registrado ☠️"); await cargarDatos(); openMemberModal(idMiembro);} else toast("Error: "+(r.error||""));
+}
+async function borrarCastigos(idMiembro){ if(!await confirmarAccion("¿Poner faltas y strikes en 0? (Esto también borra los Strikes Permanentes de este miembro)")) return; const r=await apiPost({action:"resetCastigos", idMiembro}); if(r.ok){toast("Reiniciado ✅"); await cargarDatos(); openMemberModal(idMiembro);} else toast("Error: "+(r.error||"")); }
+
+/* ---------- toggles multi-select (roles / reina) ---------- */
+function bindToggleGroup(containerId){
+  document.getElementById(containerId).querySelectorAll("button").forEach(btn=>{ btn.onclick=()=>btn.classList.toggle("sel"); });
+}
+function setToggleGroup(containerId, activos){ document.getElementById(containerId).querySelectorAll("button").forEach(b=>b.classList.toggle("sel", activos.includes(b.dataset.val))); }
+function getToggleGroupValues(containerId){ return [...document.getElementById(containerId).querySelectorAll("button.sel")].map(b=>b.dataset.val); }
+bindToggleGroup("me_rolesToggle");
+bindToggleGroup("me_rangoToggle");
+bindToggleGroup("me_especialToggle");
+
+/* ---------- editar / añadir miembro ---------- */
+document.getElementById("addMemberBtn").onclick=()=>openMemberEditForm(null);
+function openMemberEditForm(id){
+  const m=id?DB.miembros.find(x=>String(x.id)===String(id)):null;
+  document.getElementById("memberEditTitle").textContent=m?"Editar miembro":"Añadir miembro";
+  document.getElementById("me_id").value=m?m.id:"";
+  document.getElementById("me_nombre").value=m?m.nombre||"":"";
+  document.getElementById("me_avatarUrl").value=m?m.avatarUrl||"":"";
+  document.getElementById("me_avatarFile").value=""; document.getElementById("me_uploadStatus").textContent="";
+  document.getElementById("me_smule").value=m?m.usuarioSmule||"":"";
+  document.getElementById("me_discord").value=m?m.usuarioDiscord||"":"";
+  document.getElementById("me_bandlab").value=m?m.usuarioBandlab||"":"";
+  document.getElementById("me_telefono").value=m?m.telefono||"":"";
+  document.getElementById("me_rango").value=m?m.rangoVocal||"":"";
+  document.getElementById("me_cumple").value=m?toDateInputCumple(m.cumpleanos):"";
+  document.getElementById("me_ingreso").value=m?toDateInput(m.fechaIngreso):"";
+  document.getElementById("me_generacion").value=m?(m.generacionNum||""):"";
+  const roles=[]; if(m&&esTrue(m.canto)) roles.push("canto"); if(m&&esTrue(m.doblaje)) roles.push("doblaje");
+  setToggleGroup("me_rolesToggle", roles);
+  const rango=[]; if(m&&esTrue(m.fundadora)) rango.push("fundadora"); if(m&&esTrue(m.lider)) rango.push("lider"); if(m&&esTrue(m.staff)) rango.push("staff");
+  setToggleGroup("me_rangoToggle", rango);
+  const especial=[]; if(m&&esTrue(m.conserje)) especial.push("conserje"); if(m&&esTrue(m.inactivo)) especial.push("inactivo");
+  setToggleGroup("me_especialToggle", especial);
+  document.getElementById("me_deleteBtn").classList.toggle("hidden", !m);
+  openModal("memberEditModal");
+}
+document.getElementById("me_avatarFile").addEventListener("change", async(e)=>{
+  const file=e.target.files[0]; if(!file) return;
+  const st=document.getElementById("me_uploadStatus"); st.textContent="Subiendo imagen...";
+  try{ const base64Data=await fileToBase64(file); const r=await apiPost({action:"uploadImage", filename:file.name, base64Data},"Subiendo imagen...");
+    if(r.ok){ document.getElementById("me_avatarUrl").value=r.url; st.textContent="Imagen subida ✅"; } else st.textContent="Error: "+(r.error||"");
+  }catch(err){ st.textContent="Error al leer la imagen"; }
+});
+document.getElementById("me_fetchSmuleBtn").onclick=async()=>{
+  const smuleVal=document.getElementById("me_smule").value;
+  if(!smuleVal){ toast("Primero poné el usuario de Smule"); return; }
+  const st=document.getElementById("me_uploadStatus"); st.textContent="Buscando foto en Smule...";
+  const r=await apiPost({action:"fetchSmulePhoto", smuleUrl:toSmuleUrl(smuleVal)},"Buscando foto en Smule...");
+  if(r.ok){ document.getElementById("me_avatarUrl").value=r.url; st.textContent="Foto encontrada ✅"; }
+  else st.textContent="Error: "+(r.error||"no se encontró foto");
+};
+document.getElementById("memberEditForm").addEventListener("submit", async(e)=>{
+  e.preventDefault();
+  const btn=e.target.querySelector('button[type="submit"]'); btn.disabled=true;
+  const roles=getToggleGroupValues("me_rolesToggle");
+  const rango=getToggleGroupValues("me_rangoToggle");
+  const especial=getToggleGroupValues("me_especialToggle");
+  const id=document.getElementById("me_id").value;
+  const data={
+    nombre: document.getElementById("me_nombre").value,
+    avatarUrl: document.getElementById("me_avatarUrl").value,
+    usuarioSmule: limpiarUsuarioSmule(document.getElementById("me_smule").value),
+    usuarioDiscord: document.getElementById("me_discord").value,
+    usuarioBandlab: limpiarUsuarioBandlab(document.getElementById("me_bandlab").value),
+    telefono: document.getElementById("me_telefono").value,
+    rangoVocal: document.getElementById("me_rango").value,
+    cumpleanos: document.getElementById("me_cumple").value,
+    fechaIngreso: document.getElementById("me_ingreso").value,
+    generacionNum: document.getElementById("me_generacion").value,
+    staff: rango.includes("staff")?"TRUE":"FALSE",
+    canto: roles.includes("canto")?"TRUE":"FALSE",
+    doblaje: roles.includes("doblaje")?"TRUE":"FALSE",
+    fundadora: rango.includes("fundadora")?"TRUE":"FALSE",
+    lider: rango.includes("lider")?"TRUE":"FALSE",
+    conserje: especial.includes("conserje")?"TRUE":"FALSE",
+    inactivo: especial.includes("inactivo")?"TRUE":"FALSE"
+  };
+  if(!id){ data.faltas=0; data.strikes=0; data.strikesPermanentes=0; } // solo al crear; al editar NO se tocan (bug corregido)
+  let r;
+  if(id){ data.id=id; r=await apiPost({action:"editMiembro", data},"Guardando miembro..."); }
+  else{ data.id="MIEM-"+Date.now(); r=await apiPost({action:"addMiembro", data},"Añadiendo miembro..."); }
+  btn.disabled=false;
+  if(r.ok){ toast("Miembro guardado ✅"); closeModal("memberEditModal"); await cargarDatos(); } else toast("Error: "+(r.error||""));
+});
+document.getElementById("me_deleteBtn").onclick=async()=>{
+  const id=document.getElementById("me_id").value;
+  if(!id) return;
+  if(!await confirmarAccion("¿Seguro que quieres borrar a este miembro?")) return;
+  const r=await apiPost({action:"deleteMiembro", id});
+  if(r.ok){ toast("Miembro borrado 🗑️"); closeModal("memberEditModal"); await cargarDatos(); } else toast("Error: "+(r.error||""));
+};
+
+/* ---------- confirmación personalizada (reemplaza confirm() nativo) ---------- */
+function confirmarAccion(mensaje){
+  return new Promise(resolve=>{
+    document.getElementById("confirmDialogMsg").textContent=mensaje;
+    document.getElementById("confirmDialog").classList.add("open");
+    const yes=document.getElementById("confirmDialogYes");
+    const no=document.getElementById("confirmDialogNo");
+    function limpiar(v){
+      document.getElementById("confirmDialog").classList.remove("open");
+      yes.onclick=null; no.onclick=null;
+      resolve(v);
+    }
+    yes.onclick=()=>limpiar(true);
+    no.onclick=()=>limpiar(false);
+  });
+}
+document.getElementById("confirmDialog").addEventListener("click", e=>{
+  if(e.target.id==="confirmDialog") document.getElementById("confirmDialogNo").click();
+});
+
+/* ---------- modales genéricos ---------- */
+// Estos modales tienen formulario real (se puede perder info si se cierran sin querer):
+// no se cierran tocando afuera, y avisan si hay cambios sin guardar al presionar la X.
+const FORM_MODALS=["memberEditModal","activityFormModal","entregaFormModal","anuarioModal"];
+let modalSnapshots={};
+function serializeForm(form){
+  const parts=[];
+  form.querySelectorAll("input,textarea,select").forEach(el=>{
+    if(el.type==="file") return; // los archivos no se comparan
+    if(el.type==="checkbox"||el.type==="radio") parts.push(el.id+":"+el.checked);
+    else parts.push(el.id+":"+el.value);
+  });
+  form.querySelectorAll(".switch-pill").forEach(sp=>{
+    const sel=sp.querySelector("button.sel");
+    parts.push(sp.id+":"+(sel?sel.dataset.val:""));
+  });
+  return parts.join("|");
+}
+function snapshotModalForm(id){
+  const form=document.querySelector("#"+id+" form");
+  modalSnapshots[id]=form?serializeForm(form):null;
+}
+function formTieneCambios(id){
+  const form=document.querySelector("#"+id+" form");
+  if(!form) return false;
+  return serializeForm(form)!==modalSnapshots[id];
+}
+function openModal(id){
+  document.getElementById(id).classList.add("open");
+  if(FORM_MODALS.includes(id)) snapshotModalForm(id); // snapshot al abrir, ya con los datos cargados
+}
+function closeModal(id){ document.getElementById(id).classList.remove("open"); }
+document.querySelectorAll("[data-close]").forEach(btn=>btn.onclick=async()=>{
+  const id=btn.dataset.close;
+  if(FORM_MODALS.includes(id) && formTieneCambios(id)){
+    if(!await confirmarAccion("Tenés cambios sin guardar. ¿Deseas cerrar sin guardar?")) return;
+  }
+  closeModal(id);
+});
+document.querySelectorAll(".modal-overlay").forEach(ov=>{
+  if(ov.id==="confirmDialog") return; // este tiene su propio manejo de click afuera
+  ov.addEventListener("click", e=>{
+    if(e.target!==ov) return;
+    if(FORM_MODALS.includes(ov.id)) return; // formulario real: solo se cierra con la X, a propósito
+    ov.classList.remove("open");
+  });
+});
+
+/* ---------- pill switches (categoría / participación) ---------- */
+function bindSwitchPill(containerId){
+  const box=document.getElementById(containerId);
+  box.querySelectorAll("button").forEach(btn=>{ btn.onclick=()=>{ box.querySelectorAll("button").forEach(b=>b.classList.remove("sel")); btn.classList.add("sel"); }; });
+}
+function setSwitchPill(containerId, val){ document.getElementById(containerId).querySelectorAll("button").forEach(b=>b.classList.toggle("sel", b.dataset.val===val)); }
+function getSwitchPillValue(containerId){ const sel=document.querySelector(`#${containerId} button.sel`); return sel?sel.dataset.val:""; }
+bindSwitchPill("af_categoriaSwitch");
+bindSwitchPill("af_participacionSwitch");
+
+/* ---------- textarea auto-ajustable (Ticket 1) ---------- */
+// Crece con el contenido en vez de mostrar scrollbar interna. Se aplica a TODOS los
+// textareas del sitio (no solo los de Actividades), y se re-dispara cada vez que se
+// asigna .value por JS (abrir para editar), no solo cuando el usuario escribe/pega.
+function autoExpandTextarea(el){
+  if(!el) return;
+  el.style.height="auto";
+  el.style.height=Math.max(el.scrollHeight, 120)+"px";
+}
+document.querySelectorAll("textarea").forEach(t=>{
+  t.addEventListener("input", ()=>autoExpandTextarea(t));
+  t.addEventListener("paste", ()=>setTimeout(()=>autoExpandTextarea(t), 0));
+});
+
+/* ---------- form actividad ---------- */
+document.getElementById("addActBtn").onclick=()=>openActivityForm(null, false);
+
+function openActivityForm(id, esAnuarioItem){
+  const a=id?(esAnuarioItem?DB.anuario:DB.actividades).find(x=>String(x.id)===String(id)):null;
+  document.getElementById("activityFormTitle").textContent=a?"Editar actividad":"Nueva actividad";
+  document.getElementById("af_id").value=a?a.id:"";
+  document.getElementById("af_titulo").value=a?a.titulo||"":"";
+  document.getElementById("af_imagenUrl").value=a?a.imagenUrl||"":"";
+  document.getElementById("af_imagenFile").value=""; document.getElementById("af_uploadStatus").textContent="";
+  document.getElementById("af_descripcion").value=a?a.descripcion||"":"";
+  document.getElementById("af_streamNombre").value=a?a.streamNombre||"":"";
+  document.getElementById("af_streamFecha").value=a?toDateInput(a.streamFecha):"";
+  document.getElementById("af_streamHora").value=a?toTimeHHMM(a.streamHora):"";
+  document.getElementById("af_wishlist").value=a?a.wishlist||"":"";
+  document.getElementById("af_fechaInicio").value=a?toDateInput(a.fechaInicio):"";
+  document.getElementById("af_fechaFin").value=a?toDateInput(a.fechaFin):"";
+  document.getElementById("af_linkForms").value=a?a.linkForms||"":"";
+  document.getElementById("af_linkUnirse").value=a?a.linkUnirse||"":"";
+  document.getElementById("af_linkScript").value=a?a.linkScript||"":"";
+  document.getElementById("af_scriptFile").value=""; document.getElementById("af_scriptStatus").textContent="";
+  document.getElementById("af_customButtons").innerHTML="";
+  botonesPersonalizadosDe(a||{}).forEach(agregarFilaBotonPersonalizado);
+  setSwitchPill("af_categoriaSwitch", a?(a.categoria||""):"");
+  setSwitchPill("af_participacionSwitch", a?(a.participacion||"opcional"):"opcional");
+  const esAnuarioActual=!!esAnuarioItem;
+  document.getElementById("activityForm").dataset.modoAnuario=esAnuarioActual?"1":"0";
+  document.getElementById("af_anuarioFields").classList.toggle("hidden", !esAnuarioActual);
+  document.getElementById("af_ganadorCanto").value=a?a.ganadorCanto||"":"";
+  document.getElementById("af_ganadorDoblaje").value=a?a.ganadorDoblaje||"":"";
+  document.getElementById("af_menciones").value=a?a.mencionesHonorificas||"":"";
+  openModal("activityFormModal");
+  // Los valores se asignaron por JS, no por tipeo, así que el 'input' event no se dispara solo:
+  // hay que forzar el ajuste de altura acá para que abra ya con el tamaño correcto.
+  document.querySelectorAll("#activityFormModal textarea").forEach(autoExpandTextarea);
+}
+document.getElementById("af_imagenFile").addEventListener("change", async(e)=>{
+  const file=e.target.files[0]; if(!file) return;
+  const st=document.getElementById("af_uploadStatus"); st.textContent="Subiendo imagen...";
+  try{ const base64Data=await fileToBase64(file); const r=await apiPost({action:"uploadImage", filename:file.name, base64Data},"Subiendo imagen...");
+    if(r.ok){ document.getElementById("af_imagenUrl").value=r.url; st.textContent="Imagen subida ✅"; } else st.textContent="Error: "+(r.error||"");
+  }catch(err){ st.textContent="Error al leer la imagen"; }
+});
+document.getElementById("af_scriptFile").addEventListener("change", async(e)=>{
+  const file=e.target.files[0]; if(!file) return;
+  const st=document.getElementById("af_scriptStatus"); st.textContent="Subiendo PDF...";
+  try{ const base64Data=await fileToBase64(file); const r=await apiPost({action:"uploadScript", filename:file.name, base64Data},"Subiendo PDF...");
+    if(r.ok){ document.getElementById("af_linkScript").value=r.url; st.textContent="PDF subido ✅"; } else st.textContent="Error: "+(r.error||"");
+  }catch(err){ st.textContent="Error al leer el archivo"; }
+});
+function agregarFilaBotonPersonalizado(datos){
+  const contenedor=document.getElementById("af_customButtons");
+  if(contenedor.children.length>=3) return;
+  const fila=document.createElement("div"); fila.className="custom-btn-row";
+  const texto=document.createElement("input"); texto.className="cb-texto"; texto.placeholder="Texto del botón"; texto.value=(datos&&datos.texto)||"";
+  const url=document.createElement("input"); url.className="cb-url"; url.placeholder="https://..."; url.value=(datos&&datos.url)||"";
+  const quitar=document.createElement("button"); quitar.type="button"; quitar.className="btn-small btn-danger"; quitar.style.width="100%"; quitar.textContent="Quitar"; quitar.onclick=()=>fila.remove();
+  fila.append(texto,url,quitar); contenedor.appendChild(fila);
+}
+document.getElementById("af_addCustomBtn").onclick=()=>agregarFilaBotonPersonalizado();
+function leerBotonesPersonalizados(){
+  return Array.from(document.querySelectorAll("#af_customButtons .custom-btn-row")).map(fila=>({texto:fila.querySelector(".cb-texto").value.trim(),url:fila.querySelector(".cb-url").value.trim()})).filter(b=>b.texto&&b.url).slice(0,3);
+}
+document.getElementById("activityForm").addEventListener("submit", async(e)=>{
+  e.preventDefault();
+  const categoria=getSwitchPillValue("af_categoriaSwitch");
+  if(!categoria){ toast("Elegí una categoría: Canto o Doblaje ❌"); return; }
+  const btn=e.target.querySelector('button[type="submit"]'); btn.disabled=true;
+  const id=document.getElementById("af_id").value;
+  const data={
+    titulo: document.getElementById("af_titulo").value,
+    imagenUrl: document.getElementById("af_imagenUrl").value,
+    descripcion: document.getElementById("af_descripcion").value,
+    streamNombre: document.getElementById("af_streamNombre").value,
+    streamFecha: document.getElementById("af_streamFecha").value,
+    streamHora: document.getElementById("af_streamHora").value,
+    wishlist: document.getElementById("af_wishlist").value,
+    fechaInicio: document.getElementById("af_fechaInicio").value,
+    fechaFin: document.getElementById("af_fechaFin").value,
+    linkForms: document.getElementById("af_linkForms").value,
+    linkUnirse: document.getElementById("af_linkUnirse").value,
+    linkScript: document.getElementById("af_linkScript").value,
+    categoria: categoria,
+    participacion: getSwitchPillValue("af_participacionSwitch")||"opcional",
+    ganadorCanto: document.getElementById("af_ganadorCanto").value,
+    ganadorDoblaje: document.getElementById("af_ganadorDoblaje").value,
+    mencionesHonorificas: document.getElementById("af_menciones").value,
+    botonesPersonalizados: JSON.stringify(leerBotonesPersonalizados()),
+  };
+  const esModoAnuario=document.getElementById("activityForm").dataset.modoAnuario==="1";
+  let r;
+  if(esModoAnuario){ data.id=id; r=await apiPost({action:"editAnuario", data},"Guardando tarjeta del Anuario..."); }
+  else if(id){ data.id=id; r=await apiPost({action:"editActividad", data},"Guardando actividad..."); }
+  else{ data.id="ACT-"+Date.now(); r=await apiPost({action:"addActividad", data},"Guardando actividad..."); }
+  btn.disabled=false;
+  if(r.ok){ toast("Guardado ✅"); closeModal("activityFormModal"); await cargarDatos(); } else toast("Error: "+(r.error||""));
+});
+
+/* ---------- form entrega ---------- */
+function openEntregaForm(idActividad){
+  document.getElementById("en_idActividad").value=idActividad;
+  document.getElementById("en_nombre").value=""; document.getElementById("en_detalle").value=""; document.getElementById("en_link").value="";
+  openModal("entregaFormModal");
+}
+document.getElementById("entregaForm").addEventListener("submit", async(e)=>{
+  e.preventDefault();
+  const btn=e.target.querySelector('button[type="submit"]'); btn.disabled=true;
+  const idActividad=document.getElementById("en_idActividad").value;
+  const actividad=DB.actividades.find(a=>String(a.id)===String(idActividad));
+  const data={ id:"ENT-"+Date.now(), idActividad:idActividad, tituloActividad:actividad?(actividad.titulo||""):"",
+    nombreUsuario:document.getElementById("en_nombre").value, detalleEntrega:document.getElementById("en_detalle").value,
+    linkGrabacion:document.getElementById("en_link").value };
+  const r=await apiPost({action:"addEntrega", data},"Registrando entrega..."); btn.disabled=false;
+  if(r.ok){ toast("Entrega registrada ✅"); closeModal("entregaFormModal"); await cargarDatos(); } else toast("Error: "+(r.error||""));
+});
+
+/* ---------- Fase 4: Buzón de Quejas / Recomendaciones (público, sin PIN) ---------- */
+function openBuzonForm(){
+  document.getElementById("memberModalContent").innerHTML=`
+    <h3>📮 Buzón de Quejas y Recomendaciones</h3>
+    <div class="form-group"><label>Nombre (opcional)</label><input type="text" id="bz_nombre" placeholder="Podés dejarlo vacío si preferís ser anónimo"></div>
+    <div class="switch-pill" id="bz_tipoSwitch" style="margin-bottom:12px;">
+      <button type="button" data-val="Queja">😤 Queja</button>
+      <button type="button" data-val="Recomendación">💡 Recomendación</button>
+    </div>
+    <div class="form-group"><label>Detalles</label><textarea id="bz_detalle" rows="4"></textarea></div>
+    <div class="form-group"><label>Archivos adjuntos (opcional)</label>
+      <input type="file" id="bz_adjuntoInput" accept="image/*,.pdf,.doc,.docx" multiple>
+      <div id="bz_adjuntoStatus" style="font-size:12px;color:var(--text-dim);margin-top:4px;"></div>
+    </div>
+    <button class="btn-primary" style="width:100%;padding:12px;border-radius:12px;font-weight:800;margin-top:8px;" id="bz_submitBtn">Enviar</button>`;
+  openModal("memberModal");
+  bindSwitchPill("bz_tipoSwitch"); setSwitchPill("bz_tipoSwitch","Queja");
+  document.getElementById("bz_submitBtn").onclick=enviarQueja;
+}
+async function subirAdjuntos(inputEl, statusEl){
+  const files=Array.from(inputEl.files||[]);
+  if(!files.length) return "";
+  const urls=[];
+  for(const file of files){
+    statusEl.textContent=`Subiendo ${file.name}...`;
+    try{
+      const base64Data=await fileToBase64(file);
+      const r=await apiPost({action:"uploadAdjunto", filename:file.name, base64Data},"Subiendo adjunto...");
+      if(r.ok) urls.push(r.url); else { statusEl.textContent="Error subiendo "+file.name+": "+(r.error||""); }
+    }catch(err){ statusEl.textContent="Error al leer "+file.name; }
+  }
+  statusEl.textContent=urls.length?`${urls.length} archivo(s) subido(s) ✅`:"";
+  return urls.join(", ");
+}
+async function enviarQueja(){
+  const tipo=getSwitchPillValue("bz_tipoSwitch")||"Queja";
+  const nombre=document.getElementById("bz_nombre").value.trim();
+  const detalle=document.getElementById("bz_detalle").value.trim();
+  if(!detalle){ toast("Escribe los detalles antes de enviar"); return; }
+  const statusEl=document.getElementById("bz_adjuntoStatus");
+  const adjuntoUrl=await subirAdjuntos(document.getElementById("bz_adjuntoInput"), statusEl);
+  const r=await apiPost({action:"addQueja", data:{nombre, tipo, detalle, adjuntoUrl}},"Enviando...");
+  if(r.ok){ toast("¡Enviado, gracias! 🍑"); closeModal("memberModal"); } else toast("Error: "+(r.error||""));
+}
+
+/* ---------- Fase 4: Reportar Error (público, sin PIN) ---------- */
+function openReporteForm(){
+  document.getElementById("memberModalContent").innerHTML=`
+    <h3>🐞 Reportar un Error</h3>
+    <div class="form-group"><label>Título breve</label><input type="text" id="rp_titulo" placeholder="Ej: El botón de Escuchar no abre el link"></div>
+    <div class="form-group"><label>¿En qué sección pasó?</label>
+      <select id="rp_seccion">
+        <option value="Actividades">Actividades</option>
+        <option value="Anuario">Anuario</option>
+        <option value="Miembros">Miembros</option>
+        <option value="Otro">Otro</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Descripción del error</label><textarea id="rp_descripcion" rows="4" placeholder="Contanos qué pasó y en qué momento"></textarea></div>
+    <div class="form-group"><label>Captura o archivo (opcional)</label>
+      <input type="file" id="rp_adjuntoInput" accept="image/*,.pdf" multiple>
+      <div id="rp_adjuntoStatus" style="font-size:12px;color:var(--text-dim);margin-top:4px;"></div>
+    </div>
+    <button class="btn-primary" style="width:100%;padding:12px;border-radius:12px;font-weight:800;margin-top:8px;" id="rp_submitBtn">Enviar reporte</button>`;
+  openModal("memberModal");
+  document.getElementById("rp_submitBtn").onclick=enviarReporte;
+}
+async function enviarReporte(){
+  const titulo=document.getElementById("rp_titulo").value.trim();
+  const seccion=document.getElementById("rp_seccion").value;
+  const descripcion=document.getElementById("rp_descripcion").value.trim();
+  if(!descripcion){ toast("Describe el error antes de enviar"); return; }
+  const statusEl=document.getElementById("rp_adjuntoStatus");
+  const adjuntoUrl=await subirAdjuntos(document.getElementById("rp_adjuntoInput"), statusEl);
+  const r=await apiPost({action:"addReporte", data:{titulo, seccion, descripcion, adjuntoUrl}},"Enviando...");
+  if(r.ok){ toast("¡Reporte enviado, gracias! 🐞"); closeModal("memberModal"); } else toast("Error: "+(r.error||""));
+}
+document.getElementById("buzonDrawerBtn").onclick=()=>{ closeDrawer(); openBuzonForm(); };
+document.getElementById("reporteDrawerBtn").onclick=()=>{ closeDrawer(); openReporteForm(); };
+
+/* ---------- navegación ---------- */
+const URL_ANUARIO_PUBLICO_DEFAULT="https://youtu.be/dQw4w9WgXcQ"; // solo se usa si el backend todavía no mandó el valor configurado
+document.querySelectorAll(".tab-btn").forEach(btn=>btn.onclick=()=>{
+  if(btn.dataset.tab==="anuario"){ window.open((DB.enlacesPublicos&&DB.enlacesPublicos.CFG_ANUARIO_PUBLICO_LINK)||URL_ANUARIO_PUBLICO_DEFAULT,"_blank","noopener"); return; }
+  switchTab(btn.dataset.tab);
+});
+function switchTab(tab){
+  document.querySelectorAll(".tab-btn").forEach(b=>b.classList.toggle("active",b.dataset.tab===tab));
+  document.getElementById("viewActividades").classList.toggle("hidden",tab!=="actividades");
+  document.getElementById("viewAnuario").classList.toggle("hidden",tab!=="anuario");
+  document.getElementById("viewMiembros").classList.add("hidden");
+  document.getElementById("viewStaffPin").classList.add("hidden");
+  document.getElementById("viewMemberPin").classList.add("hidden");
+}
+document.getElementById("hamburgerBtn").onclick=()=>{ document.getElementById("drawer").classList.add("open"); document.getElementById("drawerOverlay").style.display="block"; };
+document.getElementById("drawerOverlay").onclick=closeDrawer;
+function closeDrawer(){ document.getElementById("drawer").classList.remove("open"); document.getElementById("drawerOverlay").style.display="none"; }
+function abrirStaffHub(){
+  if(!staffPin){ toast("Activa el modo Staff primero"); return; }
+  closeDrawer();
+  document.getElementById("memberModalContent").innerHTML=`
+    <h3>🔗 Panel de Staff</h3>
+    <div class="section-label" style="text-align:left;">📣 Pruebas de Discord</div>
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:16px;">
+      <button class="btn-small btn-cumple" id="hubCumple">🎂 Cumpleaños</button>
+      <button class="btn-small btn-seguridad" id="hubSeguridad">🔒 Seguridad</button>
+      <button class="btn-small btn-bell" id="hubRecordatorio">🔔 Recordatorios</button>
+    </div>
+    <div class="section-label" style="text-align:left;">🗂️ Página Web</div>
+    <div style="display:flex;gap:10px;margin-bottom:8px;">
+      <button class="drawer-nav-btn" id="hubSheets" style="justify-content:center;flex:1;padding:10px;">
+        <img src="https://raw.githubusercontent.com/TeamPeachesOff/TeamPeachesHub/main/Logos/SheetsLogo.png" style="width:24px;height:24px;border-radius:0;" alt="Sheets"><span>Datos</span>
+      </button>
+      <button class="drawer-nav-btn" id="hubGithub" style="justify-content:center;flex:1;padding:10px;">
+        <img src="https://raw.githubusercontent.com/TeamPeachesOff/TeamPeachesHub/main/Logos/GithubLogo.png" style="width:24px;height:24px;border-radius:0;" alt="GitHub"><span>GitHub</span>
+      </button>
+    </div>
+    <button class="drawer-nav-btn" id="hubAnuario" style="justify-content:center;width:100%;margin-bottom:16px;">📖 AnuarioHub</button>
+    <div class="section-label" style="text-align:left;">🔗 Accesos</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
+      <button class="drawer-nav-btn" id="hubCronograma" style="text-align:left;">🗓️ Cronograma de actividades</button>
+      <button class="drawer-nav-btn" id="hubEditarInfo" style="text-align:left;">🖋️ Editar página de info</button>
+      <button class="drawer-nav-btn" id="hubEditarAnuario" style="text-align:left;">✏️ Editar anuario</button>
+      <button class="btn-small btn-family" id="hubLimpiar">🧹 Limpiar nombres BD (quitar @)</button>
+    </div>
+    <button class="btn-small btn-admin" id="hubEnlaces" style="width:100%;">⚙️ Editar Enlaces</button>`;
+  openModal("memberModal");
+  document.getElementById("hubCumple").onclick=()=>probarHub("testCumpleanos","Cumpleaños");
+  document.getElementById("hubSeguridad").onclick=()=>probarHub("testSeguridad","Seguridad");
+  document.getElementById("hubRecordatorio").onclick=()=>{ const a=DB.actividades[0]; if(!a){toast("No hay actividad para probar");return;} probarHub("testRecordatorio","Recordatorio",a.id); };
+  document.getElementById("hubAnuario").onclick=()=>{ closeModal("memberModal"); switchTab("anuario"); };
+  document.getElementById("hubLimpiar").onclick=async()=>{ if(!await confirmarAccion("¿Quitar @ de los nombres históricos?")) return; const r=await apiPost({action:"limpiarNombresBD"},"Limpiando..."); if(r.ok){toast((r.actualizados||0)+" registro(s) limpiados ✅"); await cargarDatos();} else toast("Error: "+(r.error||"")); };
+  document.getElementById("hubSheets").onclick=()=>abrirEnlacePrivado("CFG_SHEETS_LINK");
+  document.getElementById("hubGithub").onclick=()=>abrirEnlacePrivado("CFG_GITHUB_LINK");
+  document.getElementById("hubCronograma").onclick=()=>abrirEnlacePrivado("CFG_CRONOGRAMA_LINK");
+  document.getElementById("hubEditarAnuario").onclick=()=>abrirEnlacePrivado("CFG_EDITAR_ANUARIO_LINK");
+  document.getElementById("hubEditarInfo").onclick=()=>abrirEnlacePrivado("CFG_EDITAR_INFO_LINK");
+  document.getElementById("hubEnlaces").onclick=abrirModalEnlaces;
+}
+async function probarHub(action,nombre,idActividad){ const r=await apiPost({action:action,idActividad:idActividad},"Enviando prueba..."); toast(r.ok?nombre+" enviado ✅":"Error: "+(r.error||"")); }
+document.getElementById("miembrosDrawerBtn").onclick=()=>{
+  closeDrawer();
+  if(staffPin||memberPin){ mostrarViewMiembros(); return; }
+  // Sin acceso todavía: no tiene sentido mostrar la jerarquía de Miembros vacía,
+  // así que primero se pide la clave (la misma del Modo Miembro).
+  document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+  document.getElementById("viewActividades").classList.add("hidden"); document.getElementById("viewAnuario").classList.add("hidden"); document.getElementById("viewStaffPin").classList.add("hidden"); document.getElementById("viewMiembros").classList.add("hidden");
+  document.getElementById("viewMemberPin").classList.remove("hidden");
+  document.getElementById("memberPinInput").value=localStorage.getItem("tph_member_clave")||""; // autocompleta, pero no activa solo
+  despuesDeClaveMiembro="miembros";
+};
+function mostrarViewMiembros(){
+  document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+  document.getElementById("viewActividades").classList.add("hidden"); document.getElementById("viewAnuario").classList.add("hidden"); document.getElementById("viewStaffPin").classList.add("hidden"); document.getElementById("viewMemberPin").classList.add("hidden");
+  document.getElementById("viewMiembros").classList.remove("hidden");
+  document.getElementById("memberToolsRow1").classList.toggle("hidden", !staffPin);
+  document.getElementById("memberToolsRow2").classList.toggle("hidden", !staffPin);
+  renderMiembros();
+}
+document.getElementById("staffDrawerBtn").onclick=()=>{
+  closeDrawer();
+  if(staffPin){ abrirStaffHub(); return; }
+  document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+  document.getElementById("viewActividades").classList.add("hidden"); document.getElementById("viewAnuario").classList.add("hidden"); document.getElementById("viewMiembros").classList.add("hidden"); document.getElementById("viewMemberPin").classList.add("hidden");
+  document.getElementById("viewStaffPin").classList.remove("hidden");
+  document.getElementById("pinInput").value=localStorage.getItem("tph_pin")||""; // autocompleta, pero no activa solo
+};
+document.getElementById("searchMiembros").addEventListener("input", e=>renderMiembros(e.target.value));
+
+document.getElementById("pinSubmitBtn").onclick=verificarPin;
+document.getElementById("pinInput").addEventListener("keydown", e=>{ if(e.key==="Enter") verificarPin(); });
+// Bloqueo silencioso local: a los 20 intentos fallidos EN ESTA CARGA de la página, deja de mandar
+// el PIN al servidor y siempre dice "PIN incorrecto", sin avisar que está bloqueado.
+// Se resetea solo al recargar la página (no se guarda en localStorage a propósito).
+let pinIntentosFallidos=0;
+async function verificarPin(){
+  const val=document.getElementById("pinInput").value.trim();
+  if(!val){ document.getElementById("pinMsg").textContent="Escribe un PIN."; return; }
+  if(pinIntentosFallidos>=20){ document.getElementById("pinMsg").textContent="PIN incorrecto ❌"; return; }
+  staffPin=val;
+  const r=await apiPost({action:"validarPin"},"Verificando PIN...");
+  if(r.ok){
+    localStorage.setItem("tph_pin",val);
+    document.getElementById("pinMsg").textContent="";
+    toast("Modo Staff activado 🛠️");
+    document.getElementById("staffStatusBadge").style.display="block";
+    document.getElementById("addActBtn").classList.remove("hidden");
+    switchTab("actividades");
+    await cargarDatos(); // vuelve a pedir los datos, ahora con el PIN, para traer todo completo
+    await cargarEnlacesStaff(); // recién ahora, con el PIN ya validado en servidor, se piden los enlaces privados
+  } else { staffPin=null; pinIntentosFallidos++; document.getElementById("pinMsg").textContent="PIN incorrecto ❌"; }
+}
+document.getElementById("staffStatusBadge").onclick=async()=>{
+  if(await confirmarAccion("¿Deseas salir del modo staff?")){
+    staffPin=null; localStorage.removeItem("tph_pin");
+    enlacesStaff=null; // se borran de memoria: sin PIN activo, no deben quedar accesibles ni un momento más
+    document.getElementById("staffStatusBadge").style.display="none";
+    document.getElementById("addActBtn").classList.add("hidden");
+    document.getElementById("memberToolsRow1").classList.add("hidden");
+    document.getElementById("memberToolsRow2").classList.add("hidden");
+    toast("Saliste del modo staff");
+    cargarDatos(); // vuelve a pedir los datos sin PIN, así el servidor manda la versión pública
+  }
+};
+
+/* ---------- modo miembro (Fase 3): lectura completa, sin edición ---------- */
+document.getElementById("memberPinSubmitBtn").onclick=verificarClaveMiembro;
+document.getElementById("memberPinInput").addEventListener("keydown", e=>{ if(e.key==="Enter") verificarClaveMiembro(); });
+// Mismo candado silencioso que el PIN de Staff: a los 20 intentos fallidos EN ESTA CARGA de la
+// página, deja de mandar la clave al servidor y siempre dice "Clave incorrecta", hasta recargar.
+let memberIntentosFallidos=0;
+// Si la clave se pidió porque apretaron "Miembros" sin acceso todavía, al validar hay que
+// llevarlos directo a esa vista en vez de a Actividades.
+let despuesDeClaveMiembro=null;
+async function verificarClaveMiembro(silencioso){
+  const val=document.getElementById("memberPinInput").value.trim();
+  if(!val){ if(!silencioso) document.getElementById("memberPinMsg").textContent="Escribe la clave."; return; }
+  if(memberIntentosFallidos>=20){ document.getElementById("memberPinMsg").textContent="Clave incorrecta ❌"; return; }
+  const r=await apiPost({action:"validarClaveMiembro", clave:val},"Verificando clave...");
+  if(r.ok){
+    memberPin=val;
+    localStorage.setItem("tph_member_clave",val);
+    document.getElementById("memberPinMsg").textContent="";
+    document.getElementById("memberStatusBadge").style.display="flex";
+    if(!silencioso) toast("Modo Miembro activado 🍑");
+    if(despuesDeClaveMiembro==="miembros"){ despuesDeClaveMiembro=null; mostrarViewMiembros(); } else switchTab("actividades");
+    await cargarDatos(); // vuelve a pedir los datos, ahora con la clave, para traer todo completo
+  } else {
+    memberIntentosFallidos++;
+    localStorage.removeItem("tph_member_clave");
+    if(!silencioso) document.getElementById("memberPinMsg").textContent="Clave incorrecta ❌";
+  }
+}
+document.getElementById("memberStatusBadge").onclick=async()=>{
+  if(await confirmarAccion("¿Deseas salir del modo miembro?")){
+    memberPin=null; localStorage.removeItem("tph_member_clave");
+    document.getElementById("memberStatusBadge").style.display="none";
+    toast("Saliste del modo miembro");
+    cargarDatos(); // vuelve a pedir los datos sin clave, así el servidor manda la versión pública
+  }
+};
+
+function escHtml(str){ return String(str).replace(/[&<>"']/g, s=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[s])); }
+function escAttr(str){ return escHtml(str); }
+
+// A diferencia de Staff (que a propósito NUNCA se auto-activa), el modo Miembro es de solo
+// lectura y de bajo riesgo, así que si ya lo validaste antes, no hace falta pedirlo de nuevo
+// cada vez que recargás la página.
+(async function restaurarModoMiembro(){
+  const claveGuardada = localStorage.getItem("tph_member_clave");
+  if (claveGuardada) {
+    document.getElementById("memberPinInput").value = claveGuardada;
+    await verificarClaveMiembro(true); // silencioso: sin toasts ni mensajes de error si ya no sirve; ya recarga los datos si sigue siendo válida
+    if (!memberPin) await cargarDatos(); // la clave guardada ya no sirve: cargar igual la versión pública
+  } else {
+    await cargarDatos();
+  }
+})();
+</script>
 </body>
 </html>
