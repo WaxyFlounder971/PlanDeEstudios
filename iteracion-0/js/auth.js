@@ -10,7 +10,7 @@
    sección "Cómo crear tu Client ID de Google").
    ========================================================================= */
 
-const CLIENT_ID = "TU_CLIENT_ID_DE_GOOGLE.apps.googleusercontent.com";
+const CLIENT_ID = "906522073616-7ofa7i3emqocojhlkh9ot9i0itljmd50.apps.googleusercontent.com";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const NOMBRE_ARCHIVO_DATOS = "app_academica_datos.json";
 
