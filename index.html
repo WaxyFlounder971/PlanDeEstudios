@@ -61,7 +61,10 @@
           <button id="btn-logout-popover" class="btn btn-danger btn-block">Cerrar sesión</button>
         </div>
         <div class="perfil-fila">
-          <img id="perfil-foto" class="perfil-foto" src="" alt="Foto de perfil" referrerpolicy="no-referrer">
+          <div class="perfil-foto-wrap">
+            <img id="perfil-foto" class="perfil-foto oculto" src="" alt="Foto de perfil" referrerpolicy="no-referrer">
+            <div id="perfil-foto-fallback" class="perfil-foto perfil-foto-fallback"></div>
+          </div>
           <span id="perfil-nombre" class="perfil-nombre perfil-datos"></span>
           <button id="btn-logout" class="btn btn-danger perfil-datos" style="padding:8px 14px; flex-shrink:0;">Salir</button>
         </div>

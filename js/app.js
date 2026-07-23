@@ -43,12 +43,35 @@ const estado = {
 
 window.addEventListener("DOMContentLoaded", () => {
   aplicarTemaGuardadoLocalmente(); // para que no haya "flash" de color al cargar
-  inicializarGoogleAuth({ alObtenerToken: onLoginExitoso });
+
+  const btnLogin = document.getElementById("btn-login-google");
+  const textoOriginalBtnLogin = btnLogin.textContent;
+
+  // Mientras el script de Google no esté listo, el botón queda deshabilitado
+  // en vez de fallar en silencio al hacer click (esta espera es la causa
+  // raíz de que antes el login fallara "al azar").
+  btnLogin.disabled = true;
+  btnLogin.textContent = "Cargando inicio de sesión…";
+
+  inicializarGoogleAuth({
+    alObtenerToken: onLoginExitoso,
+    alListo: () => {
+      btnLogin.disabled = false;
+      btnLogin.textContent = textoOriginalBtnLogin;
+    },
+    alFallar: () => {
+      btnLogin.textContent = textoOriginalBtnLogin;
+      btnLogin.disabled = false; // se reactiva para permitir reintentar
+      const aviso = document.getElementById("aviso-login-bloqueado");
+      aviso.textContent =
+        "No se pudo cargar el inicio de sesión de Google. Revisa tu conexión a internet, desactiva bloqueadores de anuncios/VPN para este sitio, y recarga la página.";
+      aviso.classList.remove("oculto");
+    },
+  });
 
   // Punto 8: el click debe llamar iniciarSesionConGoogle() de forma directa
   // e inmediata (sin async/await de por medio) para no romper el gesto de
   // usuario en navegadores móviles.
-  const btnLogin = document.getElementById("btn-login-google");
   btnLogin.addEventListener("click", () => {
     ocultarAvisoLoginBloqueado();
     iniciarSesionConGoogle();
@@ -404,23 +427,50 @@ function convertirArchivoABase64(archivo) {
 function renderizarPerfil() {
   const perfil = estado.datos.perfil;
   const foto = document.getElementById("perfil-foto");
+  const fallback = document.getElementById("perfil-foto-fallback");
+  const wrap = foto.closest(".perfil-foto-wrap");
   const nombre = document.getElementById("perfil-nombre");
   const popoverNombre = document.getElementById("perfil-popover-nombre");
   const popoverCorreo = document.getElementById("perfil-popover-correo");
 
-  foto.src = perfil.foto_url || "";
-  foto.alt = perfil.nombre || "Foto de perfil";
   nombre.textContent = perfil.nombre || "";
   popoverNombre.textContent = perfil.nombre || "";
   popoverCorreo.textContent = perfil.correo || "";
+  fallback.textContent = obtenerIniciales(perfil.nombre || perfil.correo || "?");
 
-  foto.onclick = () => {
+  // Empezamos mostrando el respaldo (iniciales); si la foto real carga bien,
+  // la mostramos encima. Así nunca se ve un ícono de imagen rota.
+  foto.classList.add("oculto");
+  fallback.classList.remove("oculto");
+
+  if (perfil.foto_url) {
+    foto.onload = () => {
+      foto.classList.remove("oculto");
+      fallback.classList.add("oculto");
+    };
+    foto.onerror = () => {
+      foto.classList.add("oculto");
+      fallback.classList.remove("oculto");
+    };
+    foto.src = perfil.foto_url;
+    foto.alt = perfil.nombre || "Foto de perfil";
+  }
+
+  wrap.onclick = () => {
     // El popover con confirmación solo tiene sentido cuando el sidebar está
     // colapsado (en expandido ya se ve el botón "Salir" directo).
     if (document.getElementById("app-sidebar").classList.contains("colapsada")) {
       togglePerfilPopover();
     }
   };
+}
+
+function obtenerIniciales(texto) {
+  const partes = texto.trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return "?";
+  const primera = partes[0][0] || "";
+  const segunda = partes.length > 1 ? partes[1][0] || "" : "";
+  return (primera + segunda).toUpperCase();
 }
 
 function togglePerfilPopover(forzarCerrado) {
@@ -434,9 +484,9 @@ function togglePerfilPopover(forzarCerrado) {
 
 document.addEventListener("click", (e) => {
   const popover = document.getElementById("perfil-popover");
-  const foto = document.getElementById("perfil-foto");
+  const wrap = document.querySelector(".perfil-foto-wrap");
   if (!popover || popover.classList.contains("oculto")) return;
-  if (e.target === foto || popover.contains(e.target)) return;
+  if ((wrap && wrap.contains(e.target)) || popover.contains(e.target)) return;
   popover.classList.add("oculto");
 });
 

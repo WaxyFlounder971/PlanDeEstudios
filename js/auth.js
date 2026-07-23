@@ -13,12 +13,50 @@
 const CLIENT_ID = "906522073616-7ofa7i3emqocojhlkh9ot9i0itljmd50.apps.googleusercontent.com";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const NOMBRE_ARCHIVO_DATOS = "app_academica_datos.json";
+const CLAVE_YA_AUTORIZADO = "google_ya_autorizado";
 
 let tokenClient = null;
 let accessToken = null;
 
-/** Se llama una vez cuando la página carga (ver app.js). */
-function inicializarGoogleAuth({ alObtenerToken }) {
+/**
+ * El <script> de Google se carga con async/defer, así que puede no estar
+ * listo todavía cuando corre DOMContentLoaded (esto era la causa de que el
+ * login fallara "al azar" y hubiera que recargar varias veces). Aquí
+ * esperamos activamente (polling corto) a que exista window.google.accounts
+ * antes de crear el tokenClient.
+ */
+function esperarGsiListo(timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    const inicio = Date.now();
+    (function revisar() {
+      if (window.google && google.accounts && google.accounts.oauth2) {
+        resolve();
+        return;
+      }
+      if (Date.now() - inicio > timeoutMs) {
+        reject(new Error("Google Identity Services no cargó a tiempo"));
+        return;
+      }
+      setTimeout(revisar, 100);
+    })();
+  });
+}
+
+/**
+ * Se llama una vez cuando la página carga (ver app.js).
+ * Ahora es async: primero espera a que el script de Google esté listo, y
+ * solo entonces crea el tokenClient. Llama a `alListo()` cuando el botón de
+ * login ya puede usarse, o a `alFallar()` si el script nunca cargó.
+ */
+async function inicializarGoogleAuth({ alObtenerToken, alListo, alFallar }) {
+  try {
+    await esperarGsiListo();
+  } catch (e) {
+    console.error(e);
+    if (alFallar) alFallar();
+    return;
+  }
+
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
     scope: DRIVE_SCOPE,
@@ -28,14 +66,25 @@ function inicializarGoogleAuth({ alObtenerToken }) {
         return;
       }
       accessToken = respuesta.access_token;
+      localStorage.setItem(CLAVE_YA_AUTORIZADO, "1");
       alObtenerToken(accessToken);
     },
   });
+
+  if (alListo) alListo();
 }
 
-/** Dispara la ventana de login/consentimiento de Google. */
+/**
+ * Dispara la ventana de login/consentimiento de Google.
+ * Se llama de forma DIRECTA desde el click (sin async antes) para no
+ * romper el gesto de usuario en navegadores móviles.
+ * Punto 3 del reporte: solo se fuerza la pantalla completa de "consent" la
+ * PRIMERA vez; en logins siguientes se usa un prompt más liviano para que
+ * cerrar sesión y volver a entrar sea rápido.
+ */
 function iniciarSesionConGoogle() {
-  tokenClient.requestAccessToken({ prompt: "consent" });
+  const yaAutorizado = localStorage.getItem(CLAVE_YA_AUTORIZADO) === "1";
+  tokenClient.requestAccessToken({ prompt: yaAutorizado ? "" : "consent" });
 }
 
 /**

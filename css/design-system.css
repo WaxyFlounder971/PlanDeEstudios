@@ -540,8 +540,23 @@ a { color: var(--accent-1); }
   object-fit: cover;
   flex-shrink: 0;
   border: 1px solid var(--border-glass);
-  cursor: pointer;
   background: var(--bg-panel);
+}
+.perfil-foto-wrap {
+  position: relative;
+  width: 34px; height: 34px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.perfil-foto-wrap .perfil-foto { position: absolute; inset: 0; }
+.perfil-foto-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gradient-accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  font-size: 0.85rem;
 }
 .perfil-nombre {
   font-size: 0.85rem;
