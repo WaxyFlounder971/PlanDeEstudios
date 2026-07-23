@@ -16,14 +16,19 @@ const CLAVE_SIDEBAR_COLAPSADA = "sidebar_colapsada";
 const COLORES_PREVIEW_PALETA = {
   blanco:    ["#94A3B8", "#F1F5F9"],
   gris:      ["#4B5563", "#9CA3AF"],
-  azul:      ["#2563EB", "#38BDF8"],
+  negro:     ["#18181B", "#000000"],
+  rojo:      ["#B91C1C", "#F87171"],
+  dorado:    ["#92400E", "#FBBF24"],
+  amarillo:  ["#A16207", "#FDE047"],
   verde:     ["#15803D", "#4ADE80"],
   cyan:      ["#0E7490", "#22D3EE"],
+  azul:      ["#2563EB", "#38BDF8"],
+  indigo:    ["#4338CA", "#818CF8"],
   morado:    ["#6D28D9", "#C084FC"],
   rosado:    ["#BE185D", "#F472B6"],
-  indigo:    ["#4338CA", "#818CF8"],
-  amarillo:  ["#A16207", "#FDE047"],
-  dorado:    ["#92400E", "#FBBF24"],
+  // "arcoiris": varios tonos curados (no todo el espectro a saturación
+  // máxima) para que combinen entre sí en vez de verse desordenados.
+  arcoiris:  ["#FF6A6A", "#FFB86B", "#4BD9A0", "#3FA9F5", "#8B6DF2"],
 };
 
 /** Color de texto legible sobre el degradado de cada paleta (mismo criterio
@@ -252,10 +257,10 @@ function renderizarAjustes() {
   const grid = document.getElementById("grid-paletas");
   grid.innerHTML = "";
   PALETAS_DISPONIBLES.forEach((paleta) => {
-    const [c1, c2] = COLORES_PREVIEW_PALETA[paleta];
+    const tonos = COLORES_PREVIEW_PALETA[paleta]; // 2 tonos normalmente; "arcoiris" usa varios
     const sw = document.createElement("div");
     sw.className = "palette-swatch" + (paleta === estado.datos.configuracion.paleta ? " selected" : "");
-    sw.style.background = `linear-gradient(135deg, ${c1}, ${c2})`;
+    sw.style.background = `linear-gradient(135deg, ${tonos.join(", ")})`;
     sw.style.color = TEXTO_PREVIEW_PALETA[paleta] || "#ffffff";
     sw.setAttribute("data-palette-preview", paleta);
     sw.textContent = paleta;

@@ -122,7 +122,12 @@ function crearEnlaceRapido({ nombre, url, icono_tipo, icono_valor }) {
 }
 
 const LIMITE_ENLACES_RAPIDOS = 20;
+/* Orden "arcoiris": neutros primero (blanco → gris → negro) y luego el
+ * espectro cromático completo (rojo → dorado → amarillo → verde → cyan →
+ * azul → índigo → morado → rosado), cerrando con "arcoiris" (combinación
+ * de varios colores) como pieza destacada al final. */
 const PALETAS_DISPONIBLES = [
-  "blanco", "gris", "azul", "verde", "cyan",
-  "morado", "rosado", "indigo", "amarillo", "dorado",
+  "blanco", "gris", "negro",
+  "rojo", "dorado", "amarillo", "verde", "cyan", "azul", "indigo", "morado", "rosado",
+  "arcoiris",
 ];
