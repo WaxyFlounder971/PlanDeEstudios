@@ -1,5 +1,11 @@
 # Iteración 0 — Cimientos
 
+> Nota: esta versión incluye la ronda de ajustes finales de la Iteración 0
+> (responsive móvil, sidebar colapsable, foto de perfil de Google, modal de
+> enlaces, corrección de contraste en la paleta "Blanco" y fix del login en
+> móvil). Si ya tienes tu Client ID pegado en `js/auth.js`, no necesitas
+> repetir el Paso 2 ni el Paso 3 — solo vuelve a subir los archivos.
+
 Esto es lo primero que vamos a poner a funcionar: iniciar sesión con Google, guardar tus datos en tu propio Drive, elegir paleta de color y modo claro/oscuro, y ajustar la escala de notas. Las secciones del menú (Plan de Estudios, Semestres, Horario, etc.) aparecen deshabilitadas — se activan en las próximas iteraciones.
 
 Sigue estos pasos **en orden**. No necesitas saber programar, solo copiar y pegar donde se indica.
