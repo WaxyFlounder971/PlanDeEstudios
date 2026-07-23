@@ -1,12 +1,36 @@
 /* =========================================================================
    APP.JS — Cimientos (Iteración 0)
    Encargado de: pantalla de login, cargar/guardar datos (offline-first +
-   Google Drive), selector de plan activo, ajustes generales, cerrar sesión.
+   Google Drive), selector de plan activo, ajustes generales, cerrar sesión,
+   layout responsivo (sidebar/drawer), perfil de Google y modal de enlaces.
    Las demás secciones del menú (Plan de Estudios, Semestres, etc.) quedan
    como "próximamente" — se construyen en las siguientes iteraciones.
    ========================================================================= */
 
 const CLAVE_CACHE_LOCAL = "app_academica_cache";
+const CLAVE_SIDEBAR_COLAPSADA = "sidebar_colapsada";
+
+/** Colores reales de cada paleta (modo oscuro), tomados de design-system.css.
+ *  Se usan para pintar cada cuadro del selector con SU propio color, sin
+ *  importar cuál paleta esté activa en <html> (punto 3 del prompt). */
+const COLORES_PREVIEW_PALETA = {
+  blanco:    ["#94A3B8", "#F1F5F9"],
+  gris:      ["#4B5563", "#9CA3AF"],
+  azul:      ["#2563EB", "#38BDF8"],
+  verde:     ["#15803D", "#4ADE80"],
+  cyan:      ["#0E7490", "#22D3EE"],
+  morado:    ["#6D28D9", "#C084FC"],
+  rosado:    ["#BE185D", "#F472B6"],
+  indigo:    ["#4338CA", "#818CF8"],
+  amarillo:  ["#A16207", "#FDE047"],
+  dorado:    ["#92400E", "#FBBF24"],
+};
+
+/** Color de texto legible sobre el degradado de cada paleta (mismo criterio
+ *  que --on-accent en el CSS: "blanco" necesita texto oscuro). */
+const TEXTO_PREVIEW_PALETA = {
+  blanco: "#1E293B",
+};
 
 const estado = {
   token: null,
@@ -21,10 +45,23 @@ window.addEventListener("DOMContentLoaded", () => {
   aplicarTemaGuardadoLocalmente(); // para que no haya "flash" de color al cargar
   inicializarGoogleAuth({ alObtenerToken: onLoginExitoso });
 
-  document.getElementById("btn-login-google").addEventListener("click", iniciarSesionConGoogle);
+  // Punto 8: el click debe llamar iniciarSesionConGoogle() de forma directa
+  // e inmediata (sin async/await de por medio) para no romper el gesto de
+  // usuario en navegadores móviles.
+  const btnLogin = document.getElementById("btn-login-google");
+  btnLogin.addEventListener("click", () => {
+    ocultarAvisoLoginBloqueado();
+    iniciarSesionConGoogle();
+    programarAvisoLoginBloqueado();
+  });
+
   document.getElementById("btn-logout").addEventListener("click", cerrarSesion);
+  document.getElementById("btn-logout-popover").addEventListener("click", cerrarSesion);
 
   window.addEventListener("online", intentarSincronizar);
+
+  inicializarLayoutResponsivo();
+  inicializarModalEnlace();
 
   const cache = leerCacheLocal();
   if (cache && cache.datos) {
@@ -40,11 +77,40 @@ window.addEventListener("DOMContentLoaded", () => {
 
 /* ------------------------------ Login ------------------------------ */
 
+let temporizadorAvisoLogin = null;
+
+function programarAvisoLoginBloqueado() {
+  clearTimeout(temporizadorAvisoLogin);
+  temporizadorAvisoLogin = setTimeout(() => {
+    const aviso = document.getElementById("aviso-login-bloqueado");
+    if (!aviso) return;
+    aviso.textContent =
+      "No se pudo abrir el inicio de sesión. Si usas VPN, un bloqueador de anuncios o una extensión de privacidad, desactívalo para este sitio e intenta de nuevo.";
+    aviso.classList.remove("oculto");
+  }, 6000);
+}
+
+function ocultarAvisoLoginBloqueado() {
+  clearTimeout(temporizadorAvisoLogin);
+  const aviso = document.getElementById("aviso-login-bloqueado");
+  if (aviso) aviso.classList.add("oculto");
+}
+
 async function onLoginExitoso(token) {
+  ocultarAvisoLoginBloqueado();
   estado.token = token;
   const { fileId, datos } = await buscarOCrearArchivoDatos(token);
   estado.fileId = fileId;
   estado.datos = datos;
+
+  // Punto 6: nombre + foto de perfil de Google.
+  const perfilGoogle = await obtenerPerfilGoogle(token);
+  if (perfilGoogle) {
+    estado.datos.perfil.nombre = perfilGoogle.nombre;
+    estado.datos.perfil.foto_url = perfilGoogle.foto_url;
+    estado.datos.perfil.correo = perfilGoogle.correo || estado.datos.perfil.correo;
+  }
+
   guardarCacheLocal();
   mostrarApp();
 }
@@ -56,6 +122,8 @@ function mostrarApp() {
   renderizarSelectorPlan();
   renderizarAjustes();
   renderizarEnlacesRapidos();
+  renderizarPerfil();
+  restaurarEstadoSidebar();
 }
 
 /* --------------------------- Cerrar sesión --------------------------- */
@@ -157,13 +225,15 @@ function renderizarSelectorPlan() {
 /* ------------------------------ Ajustes ------------------------------ */
 
 function renderizarAjustes() {
-  // Paletas
+  // Paletas — cada cuadro muestra su propio color real (punto 3)
   const grid = document.getElementById("grid-paletas");
   grid.innerHTML = "";
   PALETAS_DISPONIBLES.forEach((paleta) => {
+    const [c1, c2] = COLORES_PREVIEW_PALETA[paleta];
     const sw = document.createElement("div");
     sw.className = "palette-swatch" + (paleta === estado.datos.configuracion.paleta ? " selected" : "");
-    sw.style.background = `linear-gradient(135deg, var(--accent-1), var(--accent-2))`;
+    sw.style.background = `linear-gradient(135deg, ${c1}, ${c2})`;
+    sw.style.color = TEXTO_PREVIEW_PALETA[paleta] || "#ffffff";
     sw.setAttribute("data-palette-preview", paleta);
     sw.textContent = paleta;
     sw.addEventListener("click", () => {
@@ -222,16 +292,193 @@ function renderizarEnlacesRapidos() {
 
   const btnAgregar = document.getElementById("btn-agregar-enlace");
   btnAgregar.disabled = enlaces.length >= LIMITE_ENLACES_RAPIDOS;
-  btnAgregar.onclick = () => {
-    const nombre = prompt("Nombre del enlace (ej. Sistema de Matrícula):");
-    if (!nombre) return;
-    const url = prompt("URL completa (https://...):");
-    if (!url) return;
-    const icono = prompt("Pon un emoji para el icono (ej. 🎓):", "🔗");
-    estado.datos.configuracion.enlaces_rapidos.push(
-      crearEnlaceRapido({ nombre, url, icono_tipo: "emoji", icono_valor: icono || "🔗" })
-    );
-    marcarCambioPendiente();
-    renderizarEnlacesRapidos();
+  btnAgregar.onclick = () => abrirModalEnlace();
+}
+
+/* ===================== Modal "Añadir enlace" (punto 7) ===================== */
+
+function inicializarModalEnlace() {
+  const modal = document.getElementById("modal-enlace");
+  const pillTipo = document.getElementById("pill-tipo-icono");
+  const bloqueEmoji = document.getElementById("bloque-icono-emoji");
+  const bloqueImagen = document.getElementById("bloque-icono-imagen");
+
+  pillTipo.querySelectorAll(".pill-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      pillTipo.querySelectorAll(".pill-item").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const esEmoji = btn.dataset.tipo === "emoji";
+      bloqueEmoji.classList.toggle("oculto", !esEmoji);
+      bloqueImagen.classList.toggle("oculto", esEmoji);
+    });
+  });
+
+  document.getElementById("btn-cancelar-enlace").addEventListener("click", cerrarModalEnlace);
+  document.getElementById("btn-guardar-enlace").addEventListener("click", guardarEnlaceDesdeModal);
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) cerrarModalEnlace();
+  });
+}
+
+function abrirModalEnlace() {
+  document.getElementById("input-enlace-nombre").value = "";
+  document.getElementById("input-enlace-url").value = "";
+  document.getElementById("input-enlace-emoji").value = "🔗";
+  document.getElementById("input-enlace-imagen").value = "";
+  document.getElementById("error-modal-enlace").classList.add("oculto");
+
+  const pillTipo = document.getElementById("pill-tipo-icono");
+  pillTipo.querySelectorAll(".pill-item").forEach((b) => b.classList.remove("active"));
+  pillTipo.querySelector('[data-tipo="emoji"]').classList.add("active");
+  document.getElementById("bloque-icono-emoji").classList.remove("oculto");
+  document.getElementById("bloque-icono-imagen").classList.add("oculto");
+
+  document.getElementById("modal-enlace").classList.remove("oculto");
+}
+
+function cerrarModalEnlace() {
+  document.getElementById("modal-enlace").classList.add("oculto");
+}
+
+function mostrarErrorModalEnlace(mensaje) {
+  const el = document.getElementById("error-modal-enlace");
+  el.textContent = mensaje;
+  el.classList.remove("oculto");
+}
+
+async function guardarEnlaceDesdeModal() {
+  const nombre = document.getElementById("input-enlace-nombre").value.trim();
+  const url = document.getElementById("input-enlace-url").value.trim();
+  const tipoActivo = document.getElementById("pill-tipo-icono").querySelector(".pill-item.active").dataset.tipo;
+
+  if (!nombre || !url) {
+    mostrarErrorModalEnlace("El nombre y la URL son obligatorios.");
+    return;
+  }
+
+  if (estado.datos.configuracion.enlaces_rapidos.length >= LIMITE_ENLACES_RAPIDOS) {
+    mostrarErrorModalEnlace(`Ya tienes el máximo de ${LIMITE_ENLACES_RAPIDOS} enlaces.`);
+    return;
+  }
+
+  let icono_tipo = "emoji";
+  let icono_valor = "🔗";
+
+  if (tipoActivo === "emoji") {
+    icono_tipo = "emoji";
+    icono_valor = document.getElementById("input-enlace-emoji").value.trim() || "🔗";
+  } else {
+    const archivo = document.getElementById("input-enlace-imagen").files[0];
+    if (!archivo) {
+      mostrarErrorModalEnlace("Selecciona una imagen.");
+      return;
+    }
+    try {
+      icono_valor = await convertirArchivoABase64(archivo);
+      icono_tipo = "imagen";
+    } catch (e) {
+      mostrarErrorModalEnlace("No se pudo leer la imagen, intenta con otra.");
+      return;
+    }
+  }
+
+  estado.datos.configuracion.enlaces_rapidos.push(
+    crearEnlaceRapido({ nombre, url, icono_tipo, icono_valor })
+  );
+  marcarCambioPendiente();
+  renderizarEnlacesRapidos();
+  cerrarModalEnlace();
+}
+
+function convertirArchivoABase64(archivo) {
+  return new Promise((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onload = () => resolve(lector.result);
+    lector.onerror = () => reject(new Error("No se pudo leer el archivo"));
+    lector.readAsDataURL(archivo);
+  });
+}
+
+/* ===================== Perfil de Google (punto 6) ===================== */
+
+function renderizarPerfil() {
+  const perfil = estado.datos.perfil;
+  const foto = document.getElementById("perfil-foto");
+  const nombre = document.getElementById("perfil-nombre");
+  const popoverNombre = document.getElementById("perfil-popover-nombre");
+  const popoverCorreo = document.getElementById("perfil-popover-correo");
+
+  foto.src = perfil.foto_url || "";
+  foto.alt = perfil.nombre || "Foto de perfil";
+  nombre.textContent = perfil.nombre || "";
+  popoverNombre.textContent = perfil.nombre || "";
+  popoverCorreo.textContent = perfil.correo || "";
+
+  foto.onclick = () => {
+    // El popover con confirmación solo tiene sentido cuando el sidebar está
+    // colapsado (en expandido ya se ve el botón "Salir" directo).
+    if (document.getElementById("app-sidebar").classList.contains("colapsada")) {
+      togglePerfilPopover();
+    }
   };
+}
+
+function togglePerfilPopover(forzarCerrado) {
+  const popover = document.getElementById("perfil-popover");
+  if (forzarCerrado) {
+    popover.classList.add("oculto");
+    return;
+  }
+  popover.classList.toggle("oculto");
+}
+
+document.addEventListener("click", (e) => {
+  const popover = document.getElementById("perfil-popover");
+  const foto = document.getElementById("perfil-foto");
+  if (!popover || popover.classList.contains("oculto")) return;
+  if (e.target === foto || popover.contains(e.target)) return;
+  popover.classList.add("oculto");
+});
+
+/* ===================== Layout responsivo (puntos 1 y 5) ===================== */
+
+function inicializarLayoutResponsivo() {
+  const sidebar = document.getElementById("app-sidebar");
+  const overlay = document.getElementById("sidebar-overlay");
+  const btnHamburguesa = document.getElementById("btn-hamburguesa");
+  const btnColapsar = document.getElementById("btn-colapsar-sidebar");
+
+  btnHamburguesa.addEventListener("click", () => {
+    sidebar.classList.add("abierta");
+    overlay.classList.add("abierta");
+  });
+
+  overlay.addEventListener("click", cerrarSidebarMovil);
+
+  // Cerrar el drawer móvil al usar cualquier botón de navegación/config.
+  sidebar.addEventListener("click", (e) => {
+    if (window.innerWidth < 900 && e.target.closest(".btn-nav")) {
+      cerrarSidebarMovil();
+    }
+  });
+
+  btnColapsar.addEventListener("click", () => {
+    const colapsada = sidebar.classList.toggle("colapsada");
+    localStorage.setItem(CLAVE_SIDEBAR_COLAPSADA, colapsada ? "1" : "0");
+    togglePerfilPopover(true);
+  });
+
+  window.addEventListener("resize", () => {
+    if (window.innerWidth >= 900) cerrarSidebarMovil();
+  });
+}
+
+function cerrarSidebarMovil() {
+  document.getElementById("app-sidebar").classList.remove("abierta");
+  document.getElementById("sidebar-overlay").classList.remove("abierta");
+}
+
+function restaurarEstadoSidebar() {
+  const colapsada = localStorage.getItem(CLAVE_SIDEBAR_COLAPSADA) === "1";
+  document.getElementById("app-sidebar").classList.toggle("colapsada", colapsada);
 }

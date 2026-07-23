@@ -10,7 +10,7 @@
    sección "Cómo crear tu Client ID de Google").
    ========================================================================= */
 
-const CLIENT_ID = "906522073616-7ofa7i3emqocojhlkh9ot9i0itljmd50.apps.googleusercontent.com";
+const CLIENT_ID = "TU_CLIENT_ID_DE_GOOGLE.apps.googleusercontent.com";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const NOMBRE_ARCHIVO_DATOS = "app_academica_datos.json";
 
@@ -36,6 +36,25 @@ function inicializarGoogleAuth({ alObtenerToken }) {
 /** Dispara la ventana de login/consentimiento de Google. */
 function iniciarSesionConGoogle() {
   tokenClient.requestAccessToken({ prompt: "consent" });
+}
+
+/**
+ * Pide nombre y foto de perfil a Google (endpoint userinfo), usando el
+ * access_token ya obtenido. Se llama justo después del login exitoso.
+ * Devuelve { nombre, foto_url } o null si algo falla (no es crítico).
+ */
+async function obtenerPerfilGoogle(token) {
+  try {
+    const respuesta = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!respuesta.ok) return null;
+    const datos = await respuesta.json();
+    return { nombre: datos.name || null, foto_url: datos.picture || null, correo: datos.email || null };
+  } catch (e) {
+    console.warn("No se pudo obtener el perfil de Google:", e);
+    return null;
+  }
 }
 
 /** Revoca el token en memoria (el borrado de datos locales lo hace app.js). */

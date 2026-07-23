@@ -18,6 +18,7 @@ function crearDatosUsuarioNuevo() {
     perfil: {
       nombre: null,          // viene de la cuenta de Google
       correo: null,          // viene de la cuenta de Google
+      foto_url: null,        // viene de la cuenta de Google (userinfo picture)
       carnet: null,          // dato opcional de perfil, ya NO se usa para iniciar sesión
     },
 
