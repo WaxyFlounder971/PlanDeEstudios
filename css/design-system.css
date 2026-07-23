@@ -224,20 +224,22 @@ a { color: var(--accent-1); }
 }
 
 /* ---- Paleta swatch selector ----
-   Flex en vez de grid: así, si el número de paletas no es múltiplo de 6,
-   la última fila incompleta queda centrada (no pegada a la izquierda).
-   6 columnas en pantallas amplias; se adapta a menos columnas en pantallas
-   angostas para que cada cuadro no quede minúsculo. */
+   Flex en vez de grid: así la última fila (incompleta) queda centrada.
+   13 paletas / 7 columnas fijas = 2 líneas exactas (7 arriba, 6 abajo, la
+   fila de arriba con más elementos que la de abajo). El número de columnas
+   NO cambia con el tamaño de pantalla — lo que se adapta es el tamaño de
+   cada cuadro (siempre cuadrado, gracias a aspect-ratio), así nunca hay
+   más de 2 líneas. */
 .palette-grid {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 10px;
-  max-width: 480px;
+  max-width: 560px;
   margin: 0 auto;
 }
 .palette-swatch {
-  flex: 0 0 calc((100% - 5 * 10px) / 6); /* 6 por fila */
+  flex: 0 0 calc((100% - 6 * 10px) / 7); /* 7 por fila, siempre */
   max-width: 64px;
   aspect-ratio: 1;
   border-radius: var(--radius-md);
@@ -251,7 +253,10 @@ a { color: var(--accent-1); }
   transition: transform var(--transition-fast), border-color var(--transition-fast);
 }
 @media (max-width: 420px) {
-  .palette-swatch { flex-basis: calc((100% - 3 * 10px) / 4); } /* 4 por fila en móvil angosto */
+  /* Sigue habiendo 7 por fila; solo se reduce el espaciado y el tope de
+     tamaño para que quepan cómodas en pantallas angostas. */
+  .palette-grid { gap: 6px; }
+  .palette-swatch { flex-basis: calc((100% - 6 * 6px) / 7); max-width: 42px; }
 }
 .palette-swatch:hover { transform: translateY(-2px); }
 .palette-swatch.selected { border-color: var(--text-primary); }
@@ -459,14 +464,19 @@ a { color: var(--accent-1); }
 }
 
 /* ---------- ARCOIRIS ----------
-   Combina varios tonos en un solo degradado curado (coral → ámbar → menta →
-   celeste → violeta), en vez de un arcoíris a saturación máxima, para que
-   se vea armónico y no recargado. */
+   En vez de bandas de color en línea recta (que se ve como la bandera del
+   arcoíris), varias manchas radiales dispersas que se funden entre sí:
+   un efecto más de "acuarela"/artístico que de arcoíris literal. */
 [data-palette="arcoiris"][data-mode="dark"] {
   --bg-canvas: #0B0B14; --bg-card: rgba(255,255,255,0.05); --bg-panel: rgba(255,255,255,0.03);
   --border-glass: rgba(255,255,255,0.10); --text-primary:#F5F5FA; --text-secondary:#C6C6D8; --text-muted:#8C8CA0;
   --accent-1:#6D5DF6; --accent-2:#F97066;
-  --gradient-accent: linear-gradient(135deg,#FF6A6A,#FFB86B,#4BD9A0,#3FA9F5,#8B6DF2);
+  --gradient-accent:
+    radial-gradient(120% 120% at 12% 20%, #FF6A6A 0%, transparent 42%),
+    radial-gradient(120% 120% at 88% 10%, #8B6DF2 0%, transparent 42%),
+    radial-gradient(120% 120% at 18% 90%, #3FA9F5 0%, transparent 42%),
+    radial-gradient(120% 120% at 85% 85%, #4BD9A0 0%, transparent 42%),
+    linear-gradient(135deg, #FFB86B, #6D5DF6);
   --accent-glow-1: rgba(109,93,246,0.28); --accent-glow-2: rgba(249,112,102,0.18);
   --accent-1-10: rgba(109,93,246,0.12); --accent-1-20: rgba(109,93,246,0.28); --color-danger:#f87171; --on-accent:#ffffff;
 }
@@ -474,7 +484,12 @@ a { color: var(--accent-1); }
   --bg-canvas: #FBF8FE; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
   --border-glass: rgba(109,93,246,0.10); --text-primary:#241B3D; --text-secondary:#564A7A; --text-muted:#8B7FA8;
   --accent-1:#6D5DF6; --accent-2:#F2555B;
-  --gradient-accent: linear-gradient(135deg,#FF6A6A,#FFB86B,#4BD9A0,#3FA9F5,#8B6DF2);
+  --gradient-accent:
+    radial-gradient(120% 120% at 12% 20%, #FF6A6A 0%, transparent 42%),
+    radial-gradient(120% 120% at 88% 10%, #8B6DF2 0%, transparent 42%),
+    radial-gradient(120% 120% at 18% 90%, #3FA9F5 0%, transparent 42%),
+    radial-gradient(120% 120% at 85% 85%, #4BD9A0 0%, transparent 42%),
+    linear-gradient(135deg, #FFB86B, #6D5DF6);
   --accent-glow-1: rgba(109,93,246,0.12); --accent-glow-2: rgba(242,85,91,0.10);
   --accent-1-10: rgba(109,93,246,0.10); --accent-1-20: rgba(109,93,246,0.22); --color-danger:#dc2626; --on-accent:#ffffff;
 }

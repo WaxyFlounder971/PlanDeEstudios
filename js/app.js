@@ -26,10 +26,19 @@ const COLORES_PREVIEW_PALETA = {
   indigo:    ["#4338CA", "#818CF8"],
   morado:    ["#6D28D9", "#C084FC"],
   rosado:    ["#BE185D", "#F472B6"],
-  // "arcoiris": varios tonos curados (no todo el espectro a saturación
-  // máxima) para que combinen entre sí en vez de verse desordenados.
-  arcoiris:  ["#FF6A6A", "#FFB86B", "#4BD9A0", "#3FA9F5", "#8B6DF2"],
+  // "arcoiris" no usa este formato [c1, c2]: tiene su propio fondo disperso
+  // (ver FONDO_PREVIEW_ARCOIRIS), igual que --gradient-accent en el CSS.
 };
+
+/** Fondo tipo "mancha de color" disperso para el swatch de arcoiris (mismas
+ *  manchas radiales que --gradient-accent de [data-palette="arcoiris"] en
+ *  design-system.css), en vez de una banda de colores en línea recta. */
+const FONDO_PREVIEW_ARCOIRIS =
+  "radial-gradient(120% 120% at 12% 20%, #FF6A6A 0%, transparent 42%)," +
+  "radial-gradient(120% 120% at 88% 10%, #8B6DF2 0%, transparent 42%)," +
+  "radial-gradient(120% 120% at 18% 90%, #3FA9F5 0%, transparent 42%)," +
+  "radial-gradient(120% 120% at 85% 85%, #4BD9A0 0%, transparent 42%)," +
+  "linear-gradient(135deg, #FFB86B, #6D5DF6)";
 
 /** Color de texto legible sobre el degradado de cada paleta (mismo criterio
  *  que --on-accent en el CSS: "blanco" necesita texto oscuro). */
@@ -257,10 +266,11 @@ function renderizarAjustes() {
   const grid = document.getElementById("grid-paletas");
   grid.innerHTML = "";
   PALETAS_DISPONIBLES.forEach((paleta) => {
-    const tonos = COLORES_PREVIEW_PALETA[paleta]; // 2 tonos normalmente; "arcoiris" usa varios
     const sw = document.createElement("div");
     sw.className = "palette-swatch" + (paleta === estado.datos.configuracion.paleta ? " selected" : "");
-    sw.style.background = `linear-gradient(135deg, ${tonos.join(", ")})`;
+    sw.style.background = paleta === "arcoiris"
+      ? FONDO_PREVIEW_ARCOIRIS
+      : `linear-gradient(135deg, ${COLORES_PREVIEW_PALETA[paleta].join(", ")})`;
     sw.style.color = TEXTO_PREVIEW_PALETA[paleta] || "#ffffff";
     sw.setAttribute("data-palette-preview", paleta);
     sw.textContent = paleta;
