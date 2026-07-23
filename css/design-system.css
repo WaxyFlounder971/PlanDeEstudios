@@ -245,6 +245,11 @@ a { color: var(--accent-1); }
   border-radius: var(--radius-md);
   cursor: pointer;
   border: 2px solid transparent;
+  overflow: hidden; /* el degradado nunca se sale de la esquina redondeada */
+  /* Fuerza a Safari/iOS a recortar bien las esquinas redondeadas incluso
+     al aplicar `transform` en :hover (bug conocido donde, sin esto, las
+     esquinas se ven "cuadradas" al mover el elemento). */
+  -webkit-mask-image: -webkit-radial-gradient(circle, #fff 100%, #000 100%);
   display: flex; align-items: flex-end; justify-content: center;
   padding-bottom: 6px;
   font-size: 0.65rem;
@@ -470,25 +475,27 @@ a { color: var(--accent-1); }
    haya variedad de un botón a otro sin que ninguno se vea "sucio". El
    swatch del selector de temas sí conserva el efecto disperso/artístico
    (ver FONDO_PREVIEW_ARCOIRIS en app.js), ya que ahí solo es una muestra. */
+/* Recoloreado a tonos pastel FRÍOS (rosa → fucsia → violeta → azul → cyan),
+   sin verde ni amarillo, para que se vea más suave y menos "bandera". */
 [data-palette="arcoiris"][data-mode="dark"] {
-  --bg-canvas: #0B0B14; --bg-card: rgba(255,255,255,0.05); --bg-panel: rgba(255,255,255,0.03);
-  --border-glass: rgba(255,255,255,0.10); --text-primary:#F5F5FA; --text-secondary:#C6C6D8; --text-muted:#8C8CA0;
-  --accent-1:#6D5DF6; --accent-2:#F97066;
-  --gradient-accent: linear-gradient(90deg, #FF6A6A, #8B6DF2);      /* coral → violeta */
-  --gradient-accent-alt: linear-gradient(90deg, #FFB86B, #3FA9F5);  /* ámbar → celeste */
-  --gradient-accent-alt2: linear-gradient(90deg, #4BD9A0, #F97066); /* menta → coral */
-  --accent-glow-1: rgba(109,93,246,0.28); --accent-glow-2: rgba(249,112,102,0.18);
-  --accent-1-10: rgba(109,93,246,0.12); --accent-1-20: rgba(109,93,246,0.28); --color-danger:#f87171; --on-accent:#ffffff;
+  --bg-canvas: #100E1C; --bg-card: rgba(255,255,255,0.05); --bg-panel: rgba(255,255,255,0.03);
+  --border-glass: rgba(255,255,255,0.10); --text-primary:#F6F1FB; --text-secondary:#CBC0DE; --text-muted:#8F84A8;
+  --accent-1:#C599E8; --accent-2:#7DD3DB;
+  --gradient-accent: linear-gradient(90deg, #F5A9D0, #B8A6F0);      /* rosa → violeta */
+  --gradient-accent-alt: linear-gradient(90deg, #C599E8, #9DC0F5);  /* fucsia → azul */
+  --gradient-accent-alt2: linear-gradient(90deg, #9DC0F5, #8FE3EA); /* azul → cyan */
+  --accent-glow-1: rgba(184,166,240,0.28); --accent-glow-2: rgba(245,169,208,0.18);
+  --accent-1-10: rgba(184,166,240,0.12); --accent-1-20: rgba(184,166,240,0.28); --color-danger:#f87171; --on-accent:#2A1E38;
 }
 [data-palette="arcoiris"][data-mode="light"] {
-  --bg-canvas: #FBF8FE; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
-  --border-glass: rgba(109,93,246,0.10); --text-primary:#241B3D; --text-secondary:#564A7A; --text-muted:#8B7FA8;
-  --accent-1:#6D5DF6; --accent-2:#F2555B;
-  --gradient-accent: linear-gradient(90deg, #FF6A6A, #8B6DF2);      /* coral → violeta */
-  --gradient-accent-alt: linear-gradient(90deg, #FFB86B, #3FA9F5);  /* ámbar → celeste */
-  --gradient-accent-alt2: linear-gradient(90deg, #4BD9A0, #F97066); /* menta → coral */
-  --accent-glow-1: rgba(109,93,246,0.12); --accent-glow-2: rgba(242,85,91,0.10);
-  --accent-1-10: rgba(109,93,246,0.10); --accent-1-20: rgba(109,93,246,0.22); --color-danger:#dc2626; --on-accent:#ffffff;
+  --bg-canvas: #FBF7FD; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
+  --border-glass: rgba(184,166,240,0.12); --text-primary:#2A1E38; --text-secondary:#5C4A72; --text-muted:#8D7BA0;
+  --accent-1:#A876D9; --accent-2:#4BB8C4;
+  --gradient-accent: linear-gradient(90deg, #F0A0CC, #B091EA);      /* rosa → violeta */
+  --gradient-accent-alt: linear-gradient(90deg, #B091EA, #7FAEEE);  /* violeta → azul */
+  --gradient-accent-alt2: linear-gradient(90deg, #7FAEEE, #6ED7DF); /* azul → cyan */
+  --accent-glow-1: rgba(168,118,217,0.14); --accent-glow-2: rgba(240,160,204,0.12);
+  --accent-1-10: rgba(168,118,217,0.10); --accent-1-20: rgba(168,118,217,0.22); --color-danger:#dc2626; --on-accent:#2A1E38;
 }
 
 /* =========================================================================

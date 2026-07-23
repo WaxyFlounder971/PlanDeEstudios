@@ -32,13 +32,13 @@ const COLORES_PREVIEW_PALETA = {
 
 /** Fondo tipo "mancha de color" disperso para el swatch de arcoiris (mismas
  *  manchas radiales que --gradient-accent de [data-palette="arcoiris"] en
- *  design-system.css), en vez de una banda de colores en línea recta. */
+ *  design-system.css): pastel frío de rosa a cyan, sin verde ni amarillo. */
 const FONDO_PREVIEW_ARCOIRIS =
-  "radial-gradient(120% 120% at 12% 20%, #FF6A6A 0%, transparent 42%)," +
-  "radial-gradient(120% 120% at 88% 10%, #8B6DF2 0%, transparent 42%)," +
-  "radial-gradient(120% 120% at 18% 90%, #3FA9F5 0%, transparent 42%)," +
-  "radial-gradient(120% 120% at 85% 85%, #4BD9A0 0%, transparent 42%)," +
-  "linear-gradient(135deg, #FFB86B, #6D5DF6)";
+  "radial-gradient(120% 120% at 12% 20%, #F5A9D0 0%, transparent 42%)," +
+  "radial-gradient(120% 120% at 88% 10%, #C599E8 0%, transparent 42%)," +
+  "radial-gradient(120% 120% at 18% 90%, #9DC0F5 0%, transparent 42%)," +
+  "radial-gradient(120% 120% at 85% 85%, #8FE3EA 0%, transparent 42%)," +
+  "linear-gradient(135deg, #E0A0E8, #9DC0F5)";
 
 /** Color de texto legible sobre el degradado de cada paleta (mismo criterio
  *  que --on-accent en el CSS: "blanco" necesita texto oscuro). */
