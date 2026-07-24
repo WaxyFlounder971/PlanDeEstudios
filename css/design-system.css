@@ -751,11 +751,34 @@ img, svg { max-width: 100%; }
    ITERACIÓN 1 — PARTE 2: Vista del Plan de Estudios
    ========================================================================= */
 
-/* ---- Candado (disponible / bloqueada) ----
-   Nunca color fijo en hex "porque sí": bloqueada usa el semántico de peligro
-   de la paleta activa; disponible usa el mismo verde que .badge-success. */
-.candado-bloqueado { color: var(--color-danger); }
-.candado-disponible { color: #34d399; }
+/* ---- Ajuste v4 #3: candado -> indicador de "luz" ----
+   Nunca color fijo en hex "porque sí": bloqueada usa var(--text-muted) sin
+   glow (apagada); disponible usa el acento de la paleta activa con un glow
+   sutil (encendida). Se reutiliza tanto para disponibilidad (no clickeable)
+   como para el ícono de "Desbloquea" (clickeable, ver .luz-boton). */
+.luz-punto {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.luz-punto.disponible {
+  background: var(--accent-2, #34d399);
+  box-shadow: 0 0 6px var(--accent-2, #34d399);
+}
+.luz-punto.bloqueada {
+  background: var(--text-muted);
+  opacity: 0.5;
+}
+.luz-boton {
+  border: none;
+  background: transparent;
+  padding: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 
 /* ---- Tarjeta de materia (fila principal) ---- */
 .materia-card { padding: 12px 14px; }
@@ -765,6 +788,7 @@ img, svg { max-width: 100%; }
   gap: 10px;
   cursor: pointer;
   user-select: none;
+  flex-wrap: wrap;
 }
 .materia-codigo {
   width: 90px;
@@ -778,28 +802,38 @@ img, svg { max-width: 100%; }
 }
 .materia-nombre {
   flex: 1;
-  min-width: 0;
+  min-width: 120px;
   font-family: var(--font-display);
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Ajuste v4 #4: Horas + Créditos + Estado se mueven al centro de la
+ * tarjeta, aprovechando el ancho disponible en vez de apilar todo. */
+.materia-centro {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+.materia-horas-centro { color: var(--text-muted); font-size: 0.8rem; white-space: nowrap; }
 .materia-derecha {
-  width: 170px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 4px;
 }
 .materia-expandir { flex-shrink: 0; opacity: 0.7; }
 .materia-cuerpo { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-glass); }
-.materia-req-linea { text-align: right; color: var(--text-muted); font-size: 0.82rem; margin: 0; }
+.materia-req-linea { text-align: left; color: var(--text-muted); font-size: 0.82rem; margin: 0; }
 
 @media (max-width: 640px) {
   .materia-codigo { width: 62px; font-size: 0.72rem; }
-  .materia-derecha { width: 128px; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+  .materia-horas-centro { display: none; } /* en móvil se prioriza créditos/estado, las horas quedan solo en el modal/expandida */
 }
 
 /* ---- Bloques como tarjetas colapsables independientes ---- */
@@ -827,7 +861,7 @@ img, svg { max-width: 100%; }
 #modal-categoria-materias .modal-card { width: min(640px, calc(100vw - 32px)); }
 
 /* ---- Créditos/estado en tarjeta de materia: más compactos en móvil ---- */
-.materia-derecha .badge { font-size: 0.72rem; padding: 3px 9px; }
+.materia-centro .badge, .materia-derecha .badge { font-size: 0.72rem; padding: 3px 9px; }
 
 /* ---- Carrusel de planes ---- */
 .carrusel-planes { display: flex; align-items: center; gap: 10px; }

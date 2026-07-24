@@ -82,6 +82,14 @@ window.addEventListener("DOMContentLoaded", () => {
         "No se pudo cargar el inicio de sesión de Google. Revisa tu conexión a internet, desactiva bloqueadores de anuncios/VPN para este sitio, y recarga la página.";
       aviso.classList.remove("oculto");
     },
+    alRechazarPermiso: () => {
+      btnLogin.textContent = textoOriginalBtnLogin;
+      btnLogin.disabled = false;
+      const aviso = document.getElementById("aviso-permiso-rechazado");
+      aviso.textContent =
+        "No se completó el inicio de sesión: para usar la app necesitas aceptar el permiso de Google Drive. Vuelve a intentarlo y acepta el permiso cuando Google te lo pida.";
+      aviso.classList.remove("oculto");
+    },
   });
 
   // Punto 8: el click debe llamar iniciarSesionConGoogle() de forma directa
@@ -95,7 +103,9 @@ window.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("btn-logout").addEventListener("click", pedirConfirmacionCerrarSesion);
   document.getElementById("btn-logout-popover").addEventListener("click", pedirConfirmacionCerrarSesion);
-  document.getElementById("btn-forzar-sync").addEventListener("click", forzarSincronizacion);
+  // Ajuste 1: ya no hay botón separado de sincronizar; el propio indicador
+  // reacciona a mantener-presionado (~500ms) o clic derecho.
+  agregarLongPress(document.getElementById("indicador-sync"), forzarSincronizacion);
 
   window.addEventListener("online", intentarSincronizar);
 
@@ -119,7 +129,7 @@ window.addEventListener("DOMContentLoaded", () => {
     // y de fondo, si hay token, se podría refrescar. Para la Iteración 0
     // mantenemos esto simple: si no hay token en memoria, se pide login igual
     // para poder seguir sincronizando con Drive.
-    estado.datos = cache.datos;
+    estado.datos = migrarDatosAntiguos(cache.datos);
     estado.fileId = cache.fileId;
     mostrarApp();
   }
@@ -144,6 +154,8 @@ function ocultarAvisoLoginBloqueado() {
   clearTimeout(temporizadorAvisoLogin);
   const aviso = document.getElementById("aviso-login-bloqueado");
   if (aviso) aviso.classList.add("oculto");
+  const avisoPermiso = document.getElementById("aviso-permiso-rechazado");
+  if (avisoPermiso) avisoPermiso.classList.add("oculto");
 }
 
 async function onLoginExitoso(token) {
@@ -151,7 +163,7 @@ async function onLoginExitoso(token) {
   estado.token = token;
   const { fileId, datos } = await buscarOCrearArchivoDatos(token);
   estado.fileId = fileId;
-  estado.datos = datos;
+  estado.datos = migrarDatosAntiguos(datos);
 
   // Punto 6: nombre + foto de perfil de Google.
   const perfilGoogle = await obtenerPerfilGoogle(token);
@@ -176,6 +188,10 @@ function mostrarApp() {
   renderizarPerfil();
   restaurarEstadoSidebar();
   if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
+  // Bug 3: antes mostrarSeccion() solo se llamaba desde clics del nav, así que
+  // tras un refresh la sección de Plan de Estudios se quedaba con la clase
+  // "oculto" del HTML aunque su contenido sí se hubiera renderizado.
+  mostrarSeccion(localStorage.getItem(CLAVE_SECCION_ACTIVA) || "plan-estudios");
 }
 
 /* --------------------------- Cerrar sesión --------------------------- */
@@ -218,6 +234,26 @@ function guardarCacheLocal() {
 function leerCacheLocal() {
   const crudo = localStorage.getItem(CLAVE_CACHE_LOCAL);
   return crudo ? JSON.parse(crudo) : null;
+}
+
+/**
+ * Helper reutilizable: ejecuta `callback` cuando el elemento se mantiene
+ * presionado (~500ms) o se hace clic derecho sobre él. Usado por el
+ * indicador de sync (Ajuste 1) y por el badge de categoría de una materia
+ * individual (Ajuste 7).
+ */
+function agregarLongPress(el, callback, duracionMs = 500) {
+  if (!el) return;
+  let timer = null;
+  el.addEventListener("pointerdown", () => {
+    timer = setTimeout(callback, duracionMs);
+  });
+  el.addEventListener("pointerup", () => clearTimeout(timer));
+  el.addEventListener("pointerleave", () => clearTimeout(timer));
+  el.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    callback();
+  });
 }
 
 /** Se llama cada vez que se modifica algo en `estado.datos`. */
@@ -413,6 +449,8 @@ function renderizarModoHardcore() {
 
 /* --------------------------- Navegación entre secciones --------------------------- */
 
+const CLAVE_SECCION_ACTIVA = "seccion_activa_v1";
+
 function inicializarNavegacionSecciones() {
   document.querySelectorAll(".btn-nav[data-seccion]").forEach((btn) => {
     btn.addEventListener("click", () => mostrarSeccion(btn.dataset.seccion));
@@ -430,6 +468,7 @@ function mostrarSeccion(nombre) {
     btn.classList.toggle("btn-primary", activo);
     btn.classList.toggle("btn-secondary", !activo);
   });
+  localStorage.setItem(CLAVE_SECCION_ACTIVA, nombre);
 }
 
 /* --------------------------- Enlaces rápidos --------------------------- */

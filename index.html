@@ -17,7 +17,9 @@
     <h1 style="font-size:1.6rem;">🎓 App Académica</h1>
     <p>Tu plan de estudios, notas, horario y agenda en un solo lugar — sincronizado en tu propio Google Drive.</p>
     <button id="btn-login-google" class="btn btn-primary btn-block">Iniciar sesión con Google</button>
+    <p class="muted" style="color:var(--color-warning, #f59e0b);">⚠️ Debes aceptar el permiso de Google Drive para poder usar la app — sin él, no se puede guardar ningún cambio.</p>
     <p id="aviso-login-bloqueado" class="aviso-login-bloqueado oculto"></p>
+    <p id="aviso-permiso-rechazado" class="aviso-login-bloqueado oculto"></p>
     <p class="muted">Solo se guarda un archivo dentro de tu Drive. Nadie más que tú (y esta app) puede leerlo.</p>
   </div>
 </div>
@@ -51,8 +53,7 @@
         <button id="nav-configuracion" class="btn btn-primary btn-block btn-nav" data-seccion="configuracion" title="Configuración">⚙️ <span class="texto-nav">Configuración</span></button>
         <div style="flex:1;"></div>
         <div class="row" style="justify-content:space-between;">
-          <span id="indicador-sync" class="badge badge-success">Todo sincronizado</span>
-          <button id="btn-forzar-sync" class="btn-colapsar" title="Forzar sincronización">🔄</button>
+          <span id="indicador-sync" class="badge badge-success" title="Mantén presionado (o clic derecho) para sincronizar ahora">Todo sincronizado</span>
         </div>
       </div>
 
@@ -253,11 +254,13 @@
 <!-- ===================== MODAL: Requisito / Correquisito ===================== -->
 <div id="modal-requisito" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
-    <h2 style="margin:0;" id="requisito-titulo">Materia</h2>
-    <p><strong>Bloque:</strong> <span id="requisito-bloque"></span></p>
-    <p><strong>Código:</strong> <span id="requisito-codigo"></span></p>
-    <p><strong>Nombre:</strong> <span id="requisito-nombre"></span></p>
-    <p><strong>Créditos:</strong> <span id="requisito-creditos"></span></p>
+    <h2 style="margin:0; display:flex; align-items:center;" id="requisito-titulo">Materia</h2>
+    <div class="row" style="flex-wrap:wrap; gap:6px;">
+      <span class="badge badge-neutral">Bloque <span id="requisito-bloque"></span></span>
+      <span class="badge badge-neutral" style="font-family:var(--font-mono, monospace);" id="requisito-codigo"></span>
+      <span class="badge badge-accent">Créditos: <span id="requisito-creditos"></span></span>
+    </div>
+    <span id="requisito-nombre" class="oculto"></span>
     <div class="row" style="justify-content:flex-end;">
       <button id="btn-cerrar-requisito" class="btn btn-primary">Cerrar</button>
     </div>

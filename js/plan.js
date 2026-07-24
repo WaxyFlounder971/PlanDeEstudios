@@ -27,6 +27,18 @@ function construirEncabezadoCSV(tiposHoras) {
 }
 
 /**
+ * Línea compacta de horas para mostrar en tarjeta/modal, iterando las
+ * llaves REALES de materia.horas (nunca nombres fijos como teoria/practica).
+ * Una sola llave -> "Horas: N". Varias llaves -> "Tipo1 N · Tipo2 N · …".
+ */
+function formatearHoras(materia) {
+  const entradas = Object.entries(materia.horas || {});
+  if (entradas.length === 0) return "Horas: 0";
+  if (entradas.length === 1) return `Horas: ${entradas[0][1]}`;
+  return entradas.map(([tipo, valor]) => `${tipo} ${valor}`).join(" · ");
+}
+
+/**
  * Prompt oficial y único del proyecto para pedirle a una IA externa (Claude o
  * ChatGPT) que estructure el plan de estudios en CSV. `modo` cambia solo el
  * párrafo de instrucción de entrada; las reglas de formato CSV son las
@@ -176,8 +188,23 @@ function estiloBadgeCategoria(hex) {
 
 /* ===================== Parser de grupos de requisitos ("," = Y, "/" = O) ===================== */
 
+/**
+ * Normaliza separadores "sueltos" que a veces llegan en la celda en vez de
+ * la coma/diagonal oficial: " - " o " y " (con espacios) como separador de
+ * GRUPOS distintos (equivalente a ","), y " o " como separador de
+ * ALTERNATIVAS dentro de un grupo (equivalente a "/"). Solo se normaliza
+ * cuando el separador está rodeado de espacios — así un código como
+ * "MA-1001" (guion pegado, sin espacios) nunca se parte por error.
+ */
+function normalizarSeparadoresRequisitos(texto) {
+  return texto
+    .replace(/\s+-\s+/g, ",")
+    .replace(/\s+y\s+/gi, ",")
+    .replace(/\s+o\s+/gi, "/");
+}
+
 function parsearGrupoRequisitos(texto) {
-  const limpio = (texto || "").trim();
+  const limpio = normalizarSeparadoresRequisitos((texto || "").trim());
   if (!limpio || limpio.toLowerCase() === "ninguno") return [];
   return limpio
     .split(",")
@@ -386,6 +413,8 @@ function construirPanelImportacion() {
   textarea.placeholder = "Pega aquí el CSV que te devolvió la IA…";
   sec.appendChild(textarea);
 
+  sec.appendChild(construirInputArchivoCSV(textarea));
+
   const errores = document.createElement("div");
   errores.id = "errores-importacion-csv";
   errores.className = "stack oculto";
@@ -398,6 +427,36 @@ function construirPanelImportacion() {
   sec.appendChild(btnImportar);
 
   return sec;
+}
+
+/** Ajuste v4 #8: además de pegar el CSV como texto, se puede subir un
+ *  archivo .csv — se lee su contenido y se coloca en el textarea indicado,
+ *  para que se procese exactamente igual que si se hubiera pegado a mano. */
+function construirInputArchivoCSV(textareaDestino) {
+  const wrap = document.createElement("div");
+  wrap.className = "stack";
+  wrap.style.gap = "4px";
+
+  const etiqueta = document.createElement("span");
+  etiqueta.className = "muted";
+  etiqueta.textContent = "…o sube directamente el archivo .csv:";
+  wrap.appendChild(etiqueta);
+
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".csv";
+  input.className = "form-input";
+  input.addEventListener("change", () => {
+    const archivo = input.files && input.files[0];
+    if (!archivo) return;
+    const lector = new FileReader();
+    lector.onload = () => { textareaDestino.value = String(lector.result || ""); };
+    lector.onerror = () => { mostrarErroresImportacion(["No se pudo leer el archivo. Intenta pegar el CSV como texto."]); };
+    lector.readAsText(archivo);
+  });
+  wrap.appendChild(input);
+
+  return wrap;
 }
 
 async function copiarPromptImportacion(texto) {
@@ -795,6 +854,25 @@ function construirMiniPanelImportacion(plan) {
   sec.className = "glass-card stack";
   sec.style.padding = "14px";
 
+  const filaTitulo = document.createElement("div");
+  filaTitulo.className = "row-between";
+  const tituloMini = document.createElement("strong");
+  tituloMini.textContent = "Actualizar malla";
+  const btnCerrarMini = document.createElement("button");
+  btnCerrarMini.type = "button";
+  btnCerrarMini.className = "btn-colapsar";
+  btnCerrarMini.title = "Cerrar";
+  btnCerrarMini.textContent = "✕";
+  // Independiente de si la importación terminó bien, mal, o ni se intentó:
+  // este botón siempre cierra el mini-panel.
+  btnCerrarMini.addEventListener("click", () => {
+    estado.planGestionImportandoId = null;
+    renderizarListaGestionPlanes();
+  });
+  filaTitulo.appendChild(tituloMini);
+  filaTitulo.appendChild(btnCerrarMini);
+  sec.appendChild(filaTitulo);
+
   // Aquí el plan ya existe, así que las columnas de horas se toman
   // directamente de su tipos_horas — no hace falta preguntarlas de nuevo.
   const grupoModo = document.createElement("div");
@@ -863,6 +941,7 @@ function construirMiniPanelImportacion(plan) {
   textarea.rows = 6;
   textarea.placeholder = "Pega aquí el CSV…";
   sec.appendChild(textarea);
+  sec.appendChild(construirInputArchivoCSV(textarea));
 
   const resultado = document.createElement("div");
   resultado.className = "stack";
@@ -914,11 +993,17 @@ function eliminarPlanEstudio(planId) {
 }
 
 function inicializarModalGestionPlanes() {
-  document.getElementById("btn-cerrar-gestion-planes").addEventListener("click", () => {
+  const cerrarModalGestionPlanes = () => {
     document.getElementById("modal-gestion-planes").classList.add("oculto");
-  });
+    // El cierre nunca debe depender de si una importación terminó bien o mal;
+    // además se resetea el mini-panel abierto para que la próxima vez que se
+    // abra la gestión de planes no aparezca "atascada" en modo importación.
+    estado.planGestionImportandoId = null;
+  };
+
+  document.getElementById("btn-cerrar-gestion-planes").addEventListener("click", cerrarModalGestionPlanes);
   document.getElementById("modal-gestion-planes").addEventListener("click", (e) => {
-    if (e.target.id === "modal-gestion-planes") e.target.classList.add("oculto");
+    if (e.target.id === "modal-gestion-planes") cerrarModalGestionPlanes();
   });
   document.getElementById("btn-agregar-plan-gestion").addEventListener("click", () => {
     document.getElementById("modal-gestion-planes").classList.add("oculto");
@@ -1177,17 +1262,39 @@ function construirBarraAcciones() {
   filaBotones.className = "row";
   filaBotones.style.flexWrap = "wrap";
 
-  const btnContraer = document.createElement("button");
-  btnContraer.className = "btn btn-secondary";
-  btnContraer.textContent = "Contraer todo";
-  btnContraer.addEventListener("click", contraerTodo);
-  filaBotones.appendChild(btnContraer);
+  const grupoBloques = document.createElement("div");
+  grupoBloques.className = "pill-group";
+  grupoBloques.title = "Bloques";
+  const btnBloquesContraer = document.createElement("button");
+  btnBloquesContraer.type = "button";
+  btnBloquesContraer.className = "pill-item";
+  btnBloquesContraer.textContent = "Bloques ▲";
+  btnBloquesContraer.addEventListener("click", contraerTodosLosBloques);
+  const btnBloquesExpandir = document.createElement("button");
+  btnBloquesExpandir.type = "button";
+  btnBloquesExpandir.className = "pill-item";
+  btnBloquesExpandir.textContent = "Bloques ▼";
+  btnBloquesExpandir.addEventListener("click", expandirTodosLosBloques);
+  grupoBloques.appendChild(btnBloquesContraer);
+  grupoBloques.appendChild(btnBloquesExpandir);
+  filaBotones.appendChild(grupoBloques);
 
-  const btnExpandir = document.createElement("button");
-  btnExpandir.className = "btn btn-secondary";
-  btnExpandir.textContent = "Expandir todo";
-  btnExpandir.addEventListener("click", expandirTodo);
-  filaBotones.appendChild(btnExpandir);
+  const grupoMaterias = document.createElement("div");
+  grupoMaterias.className = "pill-group";
+  grupoMaterias.title = "Materias";
+  const btnMateriasContraer = document.createElement("button");
+  btnMateriasContraer.type = "button";
+  btnMateriasContraer.className = "pill-item";
+  btnMateriasContraer.textContent = "Materias ▲";
+  btnMateriasContraer.addEventListener("click", contraerTodasLasMaterias);
+  const btnMateriasExpandir = document.createElement("button");
+  btnMateriasExpandir.type = "button";
+  btnMateriasExpandir.className = "pill-item";
+  btnMateriasExpandir.textContent = "Materias ▼";
+  btnMateriasExpandir.addEventListener("click", expandirTodasLasMaterias);
+  grupoMaterias.appendChild(btnMateriasContraer);
+  grupoMaterias.appendChild(btnMateriasExpandir);
+  filaBotones.appendChild(grupoMaterias);
 
   const btnExportar = document.createElement("button");
   btnExportar.className = "btn btn-primary";
@@ -1207,15 +1314,26 @@ function obtenerClavesAgrupacionActuales() {
   return claves;
 }
 
-function contraerTodo() {
-  obtenerMateriasVisibles().forEach((f) => estado.materiasExpandidas.set(f.materia.codigo, false));
+/* Ajuste 2: Bloques y Materias se contraen/expanden de forma INDEPENDIENTE
+ * (antes era un solo par "Contraer todo"/"Expandir todo" que movía ambos
+ * niveles a la vez). */
+function contraerTodosLosBloques() {
   estado.bloquesColapsados = obtenerClavesAgrupacionActuales();
   renderizarPlanEstudios();
 }
 
-function expandirTodo() {
-  obtenerMateriasVisibles().forEach((f) => estado.materiasExpandidas.set(f.materia.codigo, true));
+function expandirTodosLosBloques() {
   estado.bloquesColapsados = new Set();
+  renderizarPlanEstudios();
+}
+
+function contraerTodasLasMaterias() {
+  obtenerMateriasVisibles().forEach((f) => estado.materiasExpandidas.set(f.materia.codigo, false));
+  renderizarPlanEstudios();
+}
+
+function expandirTodasLasMaterias() {
+  obtenerMateriasVisibles().forEach((f) => estado.materiasExpandidas.set(f.materia.codigo, true));
   renderizarPlanEstudios();
 }
 
@@ -1651,10 +1769,11 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
     renderizarPlanEstudios();
   });
 
-  const candado = document.createElement("span");
-  candado.className = disponible ? "candado-disponible" : "candado-bloqueado";
-  candado.textContent = disponible ? "🔓" : "🔒";
-  filaPrincipal.appendChild(candado);
+  // Ajuste v4 #3: candado -> "luz" (encendida = disponible, apagada = bloqueada).
+  const luzDisponibilidad = document.createElement("span");
+  luzDisponibilidad.className = "luz-punto " + (disponible ? "disponible" : "bloqueada");
+  luzDisponibilidad.title = disponible ? "Disponible" : "Bloqueada";
+  filaPrincipal.appendChild(luzDisponibilidad);
 
   const spanCodigo = document.createElement("span");
   spanCodigo.className = "materia-codigo";
@@ -1666,10 +1785,54 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
   spanNombre.textContent = materia.nombre;
   filaPrincipal.appendChild(spanNombre);
 
+  // Ajuste v4 #4: Créditos + Estado + Horas se mueven al centro, aprovechando
+  // el ancho de la tarjeta en vez de apilar todo verticalmente.
+  const centro = document.createElement("span");
+  centro.className = "materia-centro";
+  centro.innerHTML =
+    `<span class="badge badge-accent">Créditos: ${materia.creditos}</span>` +
+    `<span class="badge ${infoEstado.badge}">${infoEstado.texto}</span>` +
+    `<span class="materia-horas-centro">${formatearHoras(materia)}</span>`;
+  filaPrincipal.appendChild(centro);
+
+  // Ajuste v4 #4/#5: lado derecho = badge de Categoría (sin cambios) + ícono
+  // de luz clickeable que reemplaza al botón grande "Desbloquea". Además,
+  // Ajuste v4 #7: mantener presionado (o clic derecho) el badge de categoría
+  // reasigna la categoría de ESTA materia en particular.
   const derecha = document.createElement("span");
   derecha.className = "materia-derecha";
-  derecha.innerHTML = `<span class="badge badge-accent">${materia.creditos} cr.</span><span class="badge ${infoEstado.badge}">${infoEstado.texto}</span>`;
+
+  if (categoria) {
+    const badgeCat = document.createElement("span");
+    badgeCat.className = "badge";
+    badgeCat.style.cssText = estiloBadgeCategoria(categoria.color) + "cursor:pointer;";
+    badgeCat.textContent = categoria.nombre;
+    badgeCat.title = "Mantén presionado (o clic derecho) para cambiar la categoría de esta materia";
+    badgeCat.addEventListener("click", (ev) => ev.stopPropagation());
+    agregarLongPress(badgeCat, () => abrirMenuRapidoCategoria(materia, plan, badgeCat));
+    derecha.appendChild(badgeCat);
+  }
+
+  const luzDesbloquea = document.createElement("button");
+  luzDesbloquea.type = "button";
+  luzDesbloquea.className = "luz-boton";
+  luzDesbloquea.title = "Ver qué materias desbloquea ésta";
+  luzDesbloquea.innerHTML = `<span class="luz-punto disponible"></span>`;
+  luzDesbloquea.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    abrirModalDesbloquea(materia, plan);
+  });
+  derecha.appendChild(luzDesbloquea);
+
   filaPrincipal.appendChild(derecha);
+
+  if (mostrarOrigen) {
+    const badgeOrigen = document.createElement("span");
+    badgeOrigen.className = "badge badge-neutral";
+    badgeOrigen.style.fontSize = "0.68rem";
+    badgeOrigen.textContent = fila.origen === "principal" ? "Principal" : "Secundario";
+    filaPrincipal.appendChild(badgeOrigen);
+  }
 
   const iconoExpandir = document.createElement("span");
   iconoExpandir.className = "materia-expandir";
@@ -1682,37 +1845,10 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
     const cuerpo = document.createElement("div");
     cuerpo.className = "materia-cuerpo stack";
 
-    const filaBadgesExtra = document.createElement("div");
-    filaBadgesExtra.className = "row";
-    filaBadgesExtra.style.justifyContent = "flex-end";
-    filaBadgesExtra.style.flexWrap = "wrap";
-    if (mostrarOrigen) {
-      const badgeOrigen = document.createElement("span");
-      badgeOrigen.className = "badge badge-neutral";
-      badgeOrigen.textContent = fila.origen === "principal" ? "Plan principal" : "Plan secundario";
-      filaBadgesExtra.appendChild(badgeOrigen);
-    }
-    if (categoria) {
-      const badgeCat = document.createElement("span");
-      badgeCat.className = "badge";
-      badgeCat.style.cssText = estiloBadgeCategoria(categoria.color);
-      badgeCat.textContent = categoria.nombre;
-      filaBadgesExtra.appendChild(badgeCat);
-    }
-    if (filaBadgesExtra.children.length > 0) cuerpo.appendChild(filaBadgesExtra);
-
+    // Ajuste v4 #4: Requisitos/Correquisitos ya no van a la derecha — quedan
+    // alineados a la izquierda (bajo el nombre), ver .materia-req-linea.
     cuerpo.appendChild(construirBloqueRequisitos("Requisitos", materia.requisitos));
     cuerpo.appendChild(construirBloqueRequisitos("Correquisitos", materia.correquisitos));
-
-    const horas = document.createElement("p");
-    horas.className = "materia-req-linea";
-    if (plan.parametros_universidad.horas_detalladas) {
-      horas.textContent = `Horas — T ${materia.horas.teoria} · P ${materia.horas.practica} · L ${materia.horas.laboratorio} · TP ${materia.horas.teoria_practica}`;
-    } else {
-      const total = materia.horas.teoria + materia.horas.practica + materia.horas.laboratorio + materia.horas.teoria_practica;
-      horas.textContent = `Horas: ${total}`;
-    }
-    cuerpo.appendChild(horas);
 
     const grupoEstado = document.createElement("div");
     grupoEstado.className = "pill-group";
@@ -1731,20 +1867,50 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
     });
     cuerpo.appendChild(grupoEstado);
 
-    const btnDesbloquea = document.createElement("button");
-    btnDesbloquea.className = "btn btn-secondary";
-    btnDesbloquea.style.alignSelf = "flex-start";
-    btnDesbloquea.textContent = "🔓 Desbloquea";
-    btnDesbloquea.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      abrirModalDesbloquea(materia, plan);
-    });
-    cuerpo.appendChild(btnDesbloquea);
-
     card.appendChild(cuerpo);
   }
 
   return card;
+}
+
+/** Ajuste v4 #7: menú rápido (lista de categorías del plan) para reasignar
+ *  la categoría de una materia puntual, sin entrar al flujo completo de
+ *  edición de categoría. Se muestra como un pequeño popover junto al badge. */
+function abrirMenuRapidoCategoria(materia, plan, anclaEl) {
+  document.querySelectorAll(".popover-categoria-rapida").forEach((el) => el.remove());
+
+  const pop = document.createElement("div");
+  pop.className = "glass-card stack popover-categoria-rapida";
+  pop.style.cssText = "position:fixed; z-index:200; padding:8px; min-width:160px;";
+  const rect = anclaEl.getBoundingClientRect();
+  pop.style.top = `${rect.bottom + 6}px`;
+  pop.style.left = `${Math.max(8, rect.left)}px`;
+
+  const opciones = [{ id: null, nombre: "Sin categoría" }, ...plan.categorias];
+  opciones.forEach((cat) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "btn btn-secondary btn-block";
+    item.style.cssText = "text-align:left; padding:6px 10px; font-size:0.85rem;";
+    item.textContent = cat.nombre;
+    item.addEventListener("click", () => {
+      materia.categoria_id = cat.id;
+      marcarCambioPendiente();
+      pop.remove();
+      renderizarPlanEstudios();
+    });
+    pop.appendChild(item);
+  });
+
+  document.body.appendChild(pop);
+  setTimeout(() => {
+    document.addEventListener("click", function cerrar(e) {
+      if (!pop.contains(e.target)) {
+        pop.remove();
+        document.removeEventListener("click", cerrar);
+      }
+    });
+  }, 0);
 }
 
 /** Requisitos/correquisitos agrupados: "o" dentro de un grupo, grupos en líneas separadas ("y" implícito). */
@@ -1811,7 +1977,13 @@ function abrirModalRequisito(codigo) {
     franja.style.background = categoria ? categoria.color : "var(--gradient-accent)";
     modalCard.insertBefore(franja, modalCard.firstChild);
 
-    document.getElementById("requisito-titulo").textContent = `${disponible ? "🔓" : "🔒"} ${materia.nombre}`;
+    const luzTitulo = document.createElement("span");
+    luzTitulo.className = "luz-punto " + (disponible ? "disponible" : "bloqueada");
+    luzTitulo.style.marginRight = "8px";
+    const tituloEl = document.getElementById("requisito-titulo");
+    tituloEl.textContent = "";
+    tituloEl.appendChild(luzTitulo);
+    tituloEl.appendChild(document.createTextNode(materia.nombre));
     document.getElementById("requisito-bloque").textContent = `${plan.parametros_universidad.nombre_bloque} ${materia.bloque}`;
     document.getElementById("requisito-codigo").textContent = materia.codigo;
     document.getElementById("requisito-nombre").textContent = materia.nombre;
@@ -1823,10 +1995,15 @@ function abrirModalRequisito(codigo) {
     extra.appendChild(construirBloqueRequisitos("Requisitos", materia.requisitos));
     extra.appendChild(construirBloqueRequisitos("Correquisitos", materia.correquisitos));
 
+    const horas = document.createElement("p");
+    horas.className = "materia-req-linea";
+    horas.textContent = formatearHoras(materia);
+    extra.appendChild(horas);
+
     const btnDesbloquea = document.createElement("button");
     btnDesbloquea.className = "btn btn-secondary";
     btnDesbloquea.style.alignSelf = "flex-start";
-    btnDesbloquea.textContent = "🔓 Desbloquea";
+    btnDesbloquea.innerHTML = `<span class="luz-punto disponible" style="margin-right:6px;"></span>Desbloquea`;
     btnDesbloquea.addEventListener("click", () => abrirModalDesbloquea(materia, plan));
     extra.appendChild(btnDesbloquea);
 

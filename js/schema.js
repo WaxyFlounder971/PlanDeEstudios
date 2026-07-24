@@ -60,7 +60,9 @@ function crearDatosUsuarioNuevo() {
             codigo: "MA1102",
             nombre: "Cálculo Diferencial e Integral",
             creditos: 4,
-            horas: { teoria: 5, practica: 0, laboratorio: 0, teoria_practica: 0 },
+            // Llaves EXACTAS de tipos_horas de este plan (ver parametros_universidad).
+            // Ej. TEC: { "Horas": 5 } — UCR: { "Teoría": 5, "Práctica": 0, "Laboratorio": 0, "Teoría-Práctica": 0 }
+            horas: { "Horas": 5 },
             bloque: 1,                      // bloque/nivel original del plan
             requisitos: ["MA0101"],         // códigos
             correquisitos: [],
@@ -139,10 +141,22 @@ const PALETAS_DISPONIBLES = [
 
 /* ===================== Plan de Estudios / Materias / Categorías ===================== */
 
-/** Valores por defecto sugeridos según universidad (editables por el usuario). */
+/** Valores por defecto sugeridos según universidad (editables por el usuario).
+ *  `tipos_horas`: llaves EXACTAS que va a tener materia.horas para planes de esa
+ *  universidad. TEC solo maneja un total; UCR desglosa en 4 tipos. Para
+ *  cualquier otra universidad, el usuario escribe su propia lista (ver
+ *  PRESETS_TIPOS_HORAS y el modal "Nuevo Plan" en js/plan.js). */
 const PARAMETROS_UNIVERSIDAD_DEFAULT = {
-  TEC: { nombre_bloque: "Semestre", semanas_por_bloque: 16, horario_inicio_default: "07:30", horario_duracion_bloque_min: 50 },
-  UCR: { nombre_bloque: "Semestre", semanas_por_bloque: 16, horario_inicio_default: "07:00", horario_duracion_bloque_min: 50 },
+  TEC: { nombre_bloque: "Semestre", semanas_por_bloque: 16, horario_inicio_default: "07:30", horario_duracion_bloque_min: 50, tipos_horas: ["Horas"] },
+  UCR: { nombre_bloque: "Semestre", semanas_por_bloque: 16, horario_inicio_default: "07:00", horario_duracion_bloque_min: 50, tipos_horas: ["Teoría", "Práctica", "Laboratorio", "Teoría-Práctica"] },
+};
+
+/** Presets rápidos de tipos_horas, usados tanto por el modal "Nuevo Plan" como
+ *  por el selector de universidad que aparece en el panel de importación
+ *  (antes de que el plan exista) — ver js/plan.js. */
+const PRESETS_TIPOS_HORAS = {
+  TEC: ["Horas"],
+  UCR: ["Teoría", "Práctica", "Laboratorio", "Teoría-Práctica"],
 };
 
 function crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, parametros_universidad }) {
@@ -158,6 +172,7 @@ function crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, parametros
       formula_ponderado: "creditos",
       horario_inicio_default: "07:30",
       horario_duracion_bloque_min: 50,
+      tipos_horas: ["Horas"], // se sobrescribe abajo con lo que traiga parametros_universidad
       ...(parametros_universidad || {}),
     },
     categorias: [],
@@ -169,19 +184,27 @@ function crearCategoria({ nombre, color }) {
   return { id: "cat_" + crypto.randomUUID(), nombre, color };
 }
 
-/** Crea una materia a partir de una fila ya parseada del CSV (ver js/plan.js). */
-function crearMateria({ codigo, nombre, creditos, horas, bloque, requisitos, correquisitos }) {
+/**
+ * Crea una materia a partir de una fila ya parseada del CSV o del formulario
+ * manual (ver js/plan.js). `horas` debe venir como un objeto con EXACTAMENTE
+ * las llaves de `tiposHoras` (mismo orden no importa, solo las llaves);
+ * cualquier llave ausente se rellena en 0 y cualquier llave que no esté en
+ * `tiposHoras` se descarta — así materia.horas nunca tiene campos de más ni
+ * de menos respecto al plan al que pertenece.
+ */
+function crearMateria({ codigo, nombre, creditos, horas, tiposHoras, bloque, requisitos, correquisitos }) {
+  const tipos = tiposHoras && tiposHoras.length ? tiposHoras : ["Horas"];
+  const horasFinal = {};
+  tipos.forEach((tipo) => {
+    horasFinal[tipo] = Number((horas || {})[tipo]) || 0;
+  });
+
   return {
     id: codigo, // el código funciona como id único dentro del plan
     codigo,
     nombre,
     creditos,
-    horas: {
-      teoria: horas.teoria || 0,
-      practica: horas.practica || 0,
-      laboratorio: horas.laboratorio || 0,
-      teoria_practica: horas.teoria_practica || 0,
-    },
+    horas: horasFinal,
     bloque,
     requisitos: requisitos || [],
     correquisitos: correquisitos || [],
@@ -189,4 +212,67 @@ function crearMateria({ codigo, nombre, creditos, horas, bloque, requisitos, cor
     estado: "pendiente",
     escala_notas_override: null,
   };
+}
+
+/**
+ * Migración del modelo viejo de horas ({teoria,practica,laboratorio,
+ * teoria_practica} fijo + horas_detalladas boolean) al modelo dinámico
+ * (tipos_horas + materia.horas con esas llaves exactas). Se llama una sola
+ * vez, apenas se cargan los datos del usuario (cache local o Drive), antes
+ * de renderizar nada. Es segura de llamar siempre: si los datos ya están en
+ * el formato nuevo, no hace nada.
+ */
+const MAPEO_HORAS_VIEJO_A_NUEVO = {
+  teoria: "Teoría",
+  practica: "Práctica",
+  laboratorio: "Laboratorio",
+  teoria_practica: "Teoría-Práctica",
+};
+
+function migrarDatosAntiguos(datos) {
+  if (!datos || !Array.isArray(datos.planes_estudio)) return datos;
+
+  datos.planes_estudio.forEach((plan) => {
+    const params = plan.parametros_universidad || (plan.parametros_universidad = {});
+    const esFormatoViejo = typeof params.horas_detalladas === "boolean" && !Array.isArray(params.tipos_horas);
+
+    if (esFormatoViejo) {
+      params.tipos_horas = params.horas_detalladas
+        ? ["Teoría", "Práctica", "Laboratorio", "Teoría-Práctica"]
+        : ["Horas"];
+      delete params.horas_detalladas;
+    } else if (!Array.isArray(params.tipos_horas)) {
+      // Por si acaso: plan sin tipos_horas y sin el booleano viejo tampoco.
+      params.tipos_horas = ["Horas"];
+    }
+
+    (plan.materias || []).forEach((materia) => {
+      const horasViejas = materia.horas || {};
+      const esObjetoViejo = "teoria" in horasViejas || "practica" in horasViejas ||
+        "laboratorio" in horasViejas || "teoria_practica" in horasViejas;
+
+      if (esObjetoViejo) {
+        const nuevasHoras = {};
+        params.tipos_horas.forEach((tipo) => {
+          // Busca la llave vieja equivalente a este tipo nuevo (si tipos_horas
+          // es el desglose UCR estándar); si no hay equivalencia, deja 0.
+          const llaveVieja = Object.keys(MAPEO_HORAS_VIEJO_A_NUEVO).find(
+            (k) => MAPEO_HORAS_VIEJO_A_NUEVO[k] === tipo
+          );
+          nuevasHoras[tipo] = Number(llaveVieja ? horasViejas[llaveVieja] : horasViejas[tipo]) || 0;
+        });
+        materia.horas = nuevasHoras;
+      } else {
+        // Ya está en formato "nuevo" pero puede que le falten/sobren llaves
+        // respecto a tipos_horas actual del plan (ej. cambiaron el preset).
+        const normalizado = {};
+        params.tipos_horas.forEach((tipo) => {
+          normalizado[tipo] = Number(horasViejas[tipo]) || 0;
+        });
+        materia.horas = normalizado;
+      }
+    });
+  });
+
+  return datos;
 }

@@ -51,7 +51,7 @@ function esperarGsiListo(timeoutMs = 10000) {
  * solo entonces crea el tokenClient. Llama a `alListo()` cuando el botón de
  * login ya puede usarse, o a `alFallar()` si el script nunca cargó.
  */
-async function inicializarGoogleAuth({ alObtenerToken, alListo, alFallar }) {
+async function inicializarGoogleAuth({ alObtenerToken, alListo, alFallar, alRechazarPermiso }) {
   try {
     await esperarGsiListo();
   } catch (e) {
@@ -66,6 +66,11 @@ async function inicializarGoogleAuth({ alObtenerToken, alListo, alFallar }) {
     callback: (respuesta) => {
       if (respuesta.error) {
         console.error("Error de autenticación:", respuesta);
+        // El caso más común: el usuario cerró la ventana de consentimiento o
+        // rechazó el permiso de Drive. Sin ese permiso la app no puede
+        // guardar nada, así que se lo hacemos explícito en vez de dejarla en
+        // un estado ambiguo (botón que "no hizo nada").
+        if (alRechazarPermiso) alRechazarPermiso(respuesta.error);
         return;
       }
       accessToken = respuesta.access_token;
