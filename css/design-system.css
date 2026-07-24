@@ -27,7 +27,7 @@
 html, body {
   margin: 0;
   padding: 0;
-  height: 100%;
+  min-height: 100%;
   font-family: var(--font-body);
   background: var(--bg-canvas);
   color: var(--text-primary);
@@ -468,16 +468,16 @@ a { color: var(--accent-1); }
   --accent-1-10: rgba(146,64,14,0.10); --accent-1-20: rgba(146,64,14,0.22); --color-danger:#dc2626; --on-accent:#ffffff;
 }
 
-/* ---------- ARCOIRIS ----------
+/* ---------- AZUCARADO ----------
    Los botones/elementos NO mezclan todos los colores en una sola mancha:
    cada uno usa un degradado horizontal de solo 2 tonos, pero se turnan
    distintas parejas de colores (--gradient-accent / -alt / -alt2) para que
    haya variedad de un botón a otro sin que ninguno se vea "sucio". El
    swatch del selector de temas sí conserva el efecto disperso/artístico
-   (ver FONDO_PREVIEW_ARCOIRIS en app.js), ya que ahí solo es una muestra. */
+   (ver FONDO_PREVIEW_AZUCARADO en app.js), ya que ahí solo es una muestra. */
 /* Recoloreado a tonos pastel FRÍOS (rosa → fucsia → violeta → azul → cyan),
    sin verde ni amarillo, para que se vea más suave y menos "bandera". */
-[data-palette="arcoiris"][data-mode="dark"] {
+[data-palette="azucarado"][data-mode="dark"] {
   --bg-canvas: #100E1C; --bg-card: rgba(255,255,255,0.05); --bg-panel: rgba(255,255,255,0.03);
   --border-glass: rgba(255,255,255,0.10); --text-primary:#F6F1FB; --text-secondary:#CBC0DE; --text-muted:#8F84A8;
   --accent-1:#C599E8; --accent-2:#7DD3DB;
@@ -487,7 +487,7 @@ a { color: var(--accent-1); }
   --accent-glow-1: rgba(184,166,240,0.28); --accent-glow-2: rgba(245,169,208,0.18);
   --accent-1-10: rgba(184,166,240,0.12); --accent-1-20: rgba(184,166,240,0.28); --color-danger:#f87171; --on-accent:#2A1E38;
 }
-[data-palette="arcoiris"][data-mode="light"] {
+[data-palette="azucarado"][data-mode="light"] {
   --bg-canvas: #FBF7FD; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
   --border-glass: rgba(184,166,240,0.12); --text-primary:#2A1E38; --text-secondary:#5C4A72; --text-muted:#8D7BA0;
   --accent-1:#A876D9; --accent-2:#4BB8C4;
@@ -638,6 +638,12 @@ a { color: var(--accent-1); }
   flex-shrink: 0;
   border: 1px solid var(--border-glass);
   background: var(--bg-panel);
+  /* Mismo recorte a prueba de WebKit que .palette-swatch: sin esto, el
+     borde translúcido sobre un fondo degradado puede dejar "puntitos"
+     claros asomando en las esquinas del cuadro que envuelve el círculo,
+     visibles sobre todo en modo oscuro (se pierden en modo claro). */
+  overflow: hidden;
+  -webkit-mask-image: -webkit-radial-gradient(circle, #fff 100%, #000 100%);
 }
 .perfil-foto-wrap {
   position: relative;
