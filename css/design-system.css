@@ -47,6 +47,13 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 700; margin: 0 0
 p { margin: 0 0 12px; color: var(--text-secondary); }
 a { color: var(--accent-1); }
 
+/* Enlaces rápidos: el texto del nombre usa --text-primary (calibrado para
+   contraste en las 13 paletas) en vez de --accent-1, que en paletas oscuras
+   como Deep Black casi se pierde contra el fondo. El acento queda solo
+   como estado hover. */
+#lista-enlaces a { color: var(--text-primary); }
+#lista-enlaces a:hover { color: var(--accent-2); }
+
 /* ---- Tarjeta de vidrio (glassmorphism) ---- */
 .glass-card {
   background: var(--bg-card);
