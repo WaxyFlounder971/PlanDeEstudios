@@ -26,14 +26,14 @@ const COLORES_PREVIEW_PALETA = {
   indigo:    ["#4338CA", "#818CF8"],
   morado:    ["#6D28D9", "#C084FC"],
   rosado:    ["#BE185D", "#F472B6"],
-  // "arcoiris" no usa este formato [c1, c2]: tiene su propio fondo disperso
-  // (ver FONDO_PREVIEW_ARCOIRIS), igual que --gradient-accent en el CSS.
+  // "azucarado" no usa este formato [c1, c2]: tiene su propio fondo disperso
+  // (ver FONDO_PREVIEW_AZUCARADO), igual que --gradient-accent en el CSS.
 };
 
-/** Fondo tipo "mancha de color" disperso para el swatch de arcoiris (mismas
- *  manchas radiales que --gradient-accent de [data-palette="arcoiris"] en
+/** Fondo tipo "mancha de color" disperso para el swatch de azucarado (mismas
+ *  manchas radiales que --gradient-accent de [data-palette="azucarado"] en
  *  design-system.css): pastel frío de rosa a cyan, sin verde ni amarillo. */
-const FONDO_PREVIEW_ARCOIRIS =
+const FONDO_PREVIEW_AZUCARADO =
   "radial-gradient(120% 120% at 12% 20%, #F5A9D0 0%, transparent 42%)," +
   "radial-gradient(120% 120% at 88% 10%, #C599E8 0%, transparent 42%)," +
   "radial-gradient(120% 120% at 18% 90%, #9DC0F5 0%, transparent 42%)," +
@@ -51,6 +51,7 @@ const estado = {
   fileId: null,
   datos: null,
   pendienteSync: false,
+  enlaceEditandoId: null,
 };
 
 /* ---------------------------- Arranque ---------------------------- */
@@ -99,6 +100,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   inicializarLayoutResponsivo();
   inicializarModalEnlace();
+  inicializarNavegacionSecciones();
 
   const cache = leerCacheLocal();
   if (cache && cache.datos) {
@@ -158,9 +160,11 @@ function mostrarApp() {
   aplicarPaleta(estado.datos.configuracion.paleta, estado.datos.configuracion.modo);
   renderizarSelectorPlan();
   renderizarAjustes();
+  renderizarModoHardcore();
   renderizarEnlacesRapidos();
   renderizarPerfil();
   restaurarEstadoSidebar();
+  if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
 }
 
 /* --------------------------- Cerrar sesión --------------------------- */
@@ -268,8 +272,8 @@ function renderizarAjustes() {
   PALETAS_DISPONIBLES.forEach((paleta) => {
     const sw = document.createElement("div");
     sw.className = "palette-swatch" + (paleta === estado.datos.configuracion.paleta ? " selected" : "");
-    sw.style.background = paleta === "arcoiris"
-      ? FONDO_PREVIEW_ARCOIRIS
+    sw.style.background = paleta === "azucarado"
+      ? FONDO_PREVIEW_AZUCARADO
       : `linear-gradient(135deg, ${COLORES_PREVIEW_PALETA[paleta].join(", ")})`;
     sw.style.color = TEXTO_PREVIEW_PALETA[paleta] || "#ffffff";
     sw.setAttribute("data-palette-preview", paleta);
@@ -307,6 +311,75 @@ function renderizarAjustes() {
   actualizarIndicadorSync();
 }
 
+/* --------------------------- Modo Hardcore 💀 --------------------------- */
+
+function renderizarModoHardcore() {
+  const cfg = estado.datos.configuracion;
+  const chk = document.getElementById("switch-modo-hardcore");
+  const bloque = document.getElementById("bloque-plan-secundario");
+
+  chk.checked = !!cfg.modo_hardcore;
+  bloque.classList.toggle("oculto", !cfg.modo_hardcore);
+
+  chk.onchange = () => {
+    cfg.modo_hardcore = chk.checked;
+    if (!cfg.modo_hardcore) {
+      // No se borran datos, solo se deja de combinar/mostrar el segundo plan.
+      bloque.classList.add("oculto");
+    } else {
+      bloque.classList.remove("oculto");
+    }
+    marcarCambioPendiente();
+    if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
+  };
+
+  const cont = document.getElementById("selector-plan-secundario");
+  const planes = estado.datos.planes_estudio.filter((p) => p.id !== cfg.plan_activo_id);
+  cont.innerHTML = "";
+
+  if (planes.length === 0) {
+    cont.innerHTML = `<p class="muted">Necesitas al menos un segundo Plan de Estudios importado para usar el Modo Hardcore.</p>`;
+    return;
+  }
+
+  const grupo = document.createElement("div");
+  grupo.className = "pill-group";
+  planes.forEach((plan) => {
+    const btn = document.createElement("button");
+    btn.className = "pill-item" + (plan.id === cfg.plan_activo_secundario_id ? " active" : "");
+    btn.textContent = `${plan.universidad} · ${plan.nombre_carrera}`;
+    btn.addEventListener("click", () => {
+      cfg.plan_activo_secundario_id = plan.id;
+      marcarCambioPendiente();
+      renderizarModoHardcore();
+      if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
+    });
+    grupo.appendChild(btn);
+  });
+  cont.appendChild(grupo);
+}
+
+/* --------------------------- Navegación entre secciones --------------------------- */
+
+function inicializarNavegacionSecciones() {
+  document.querySelectorAll(".btn-nav[data-seccion]").forEach((btn) => {
+    btn.addEventListener("click", () => mostrarSeccion(btn.dataset.seccion));
+  });
+}
+
+function mostrarSeccion(nombre) {
+  const secciones = { configuracion: "seccion-configuracion", "plan-estudios": "seccion-plan-estudios" };
+  Object.entries(secciones).forEach(([clave, idEl]) => {
+    const el = document.getElementById(idEl);
+    if (el) el.classList.toggle("oculto", clave !== nombre);
+  });
+  document.querySelectorAll(".btn-nav[data-seccion]").forEach((btn) => {
+    const activo = btn.dataset.seccion === nombre;
+    btn.classList.toggle("btn-primary", activo);
+    btn.classList.toggle("btn-secondary", !activo);
+  });
+}
+
 /* --------------------------- Enlaces rápidos --------------------------- */
 
 function renderizarEnlacesRapidos() {
@@ -314,17 +387,36 @@ function renderizarEnlacesRapidos() {
   const enlaces = estado.datos.configuracion.enlaces_rapidos;
   cont.innerHTML = "";
 
+  if (enlaces.length === 0) {
+    cont.innerHTML = `<p class="muted">Todavía no has añadido ningún enlace.</p>`;
+  }
+
   enlaces.forEach((enlace) => {
-    const item = document.createElement("a");
-    item.href = enlace.url;
-    item.target = "_blank";
-    item.rel = "noopener";
-    item.className = "glass-panel row";
+    const item = document.createElement("div");
+    item.className = "glass-panel row-between";
     item.style.padding = "10px 14px";
-    item.style.textDecoration = "none";
-    item.innerHTML = `<span style="font-size:1.3rem">${
+
+    const enlaceAbrir = document.createElement("a");
+    enlaceAbrir.href = enlace.url;
+    enlaceAbrir.target = "_blank";
+    enlaceAbrir.rel = "noopener";
+    enlaceAbrir.className = "row";
+    enlaceAbrir.style.textDecoration = "none";
+    enlaceAbrir.style.flex = "1";
+    enlaceAbrir.style.minWidth = "0";
+    enlaceAbrir.innerHTML = `<span style="font-size:1.3rem">${
       enlace.icono_tipo === "emoji" ? enlace.icono_valor : `<img src="${enlace.icono_valor}" style="width:24px;height:24px;border-radius:6px">`
-    }</span><span>${enlace.nombre}</span>`;
+    }</span><span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${enlace.nombre}</span>`;
+
+    const btnEditar = document.createElement("button");
+    btnEditar.className = "btn btn-secondary";
+    btnEditar.title = "Editar enlace";
+    btnEditar.textContent = "✏️";
+    btnEditar.style.flexShrink = "0";
+    btnEditar.addEventListener("click", () => abrirModalEnlace(enlace.id));
+
+    item.appendChild(enlaceAbrir);
+    item.appendChild(btnEditar);
     cont.appendChild(item);
   });
 
@@ -353,29 +445,52 @@ function inicializarModalEnlace() {
 
   document.getElementById("btn-cancelar-enlace").addEventListener("click", cerrarModalEnlace);
   document.getElementById("btn-guardar-enlace").addEventListener("click", guardarEnlaceDesdeModal);
+  document.getElementById("btn-eliminar-enlace").addEventListener("click", eliminarEnlaceDesdeModal);
   modal.addEventListener("click", (e) => {
     if (e.target === modal) cerrarModalEnlace();
   });
 }
 
-function abrirModalEnlace() {
-  document.getElementById("input-enlace-nombre").value = "";
-  document.getElementById("input-enlace-url").value = "";
-  document.getElementById("input-enlace-emoji").value = "🔗";
+/** Si se pasa `enlaceId`, abre el modal en modo edición precargando sus datos. */
+function abrirModalEnlace(enlaceId) {
+  const enlace = enlaceId
+    ? estado.datos.configuracion.enlaces_rapidos.find((e) => e.id === enlaceId)
+    : null;
+
+  estado.enlaceEditandoId = enlace ? enlace.id : null;
+
+  document.getElementById("titulo-modal-enlace").textContent = enlace ? "Editar enlace" : "Añadir enlace";
+  document.getElementById("btn-eliminar-enlace").classList.toggle("oculto", !enlace);
+
+  document.getElementById("input-enlace-nombre").value = enlace ? enlace.nombre : "";
+  document.getElementById("input-enlace-url").value = enlace ? enlace.url : "";
+  document.getElementById("input-enlace-emoji").value = enlace && enlace.icono_tipo === "emoji" ? enlace.icono_valor : "🔗";
   document.getElementById("input-enlace-imagen").value = "";
   document.getElementById("error-modal-enlace").classList.add("oculto");
 
+  const esImagen = enlace && enlace.icono_tipo === "imagen";
   const pillTipo = document.getElementById("pill-tipo-icono");
   pillTipo.querySelectorAll(".pill-item").forEach((b) => b.classList.remove("active"));
-  pillTipo.querySelector('[data-tipo="emoji"]').classList.add("active");
-  document.getElementById("bloque-icono-emoji").classList.remove("oculto");
-  document.getElementById("bloque-icono-imagen").classList.add("oculto");
+  pillTipo.querySelector(`[data-tipo="${esImagen ? "imagen" : "emoji"}"]`).classList.add("active");
+  document.getElementById("bloque-icono-emoji").classList.toggle("oculto", esImagen);
+  document.getElementById("bloque-icono-imagen").classList.toggle("oculto", !esImagen);
 
   document.getElementById("modal-enlace").classList.remove("oculto");
 }
 
 function cerrarModalEnlace() {
   document.getElementById("modal-enlace").classList.add("oculto");
+  estado.enlaceEditandoId = null;
+}
+
+function eliminarEnlaceDesdeModal() {
+  if (!estado.enlaceEditandoId) return;
+  estado.datos.configuracion.enlaces_rapidos = estado.datos.configuracion.enlaces_rapidos.filter(
+    (e) => e.id !== estado.enlaceEditandoId
+  );
+  marcarCambioPendiente();
+  renderizarEnlacesRapidos();
+  cerrarModalEnlace();
 }
 
 function mostrarErrorModalEnlace(mensaje) {
@@ -394,7 +509,11 @@ async function guardarEnlaceDesdeModal() {
     return;
   }
 
-  if (estado.datos.configuracion.enlaces_rapidos.length >= LIMITE_ENLACES_RAPIDOS) {
+  const enlaceExistente = estado.enlaceEditandoId
+    ? estado.datos.configuracion.enlaces_rapidos.find((e) => e.id === estado.enlaceEditandoId)
+    : null;
+
+  if (!enlaceExistente && estado.datos.configuracion.enlaces_rapidos.length >= LIMITE_ENLACES_RAPIDOS) {
     mostrarErrorModalEnlace(`Ya tienes el máximo de ${LIMITE_ENLACES_RAPIDOS} enlaces.`);
     return;
   }
@@ -407,22 +526,36 @@ async function guardarEnlaceDesdeModal() {
     icono_valor = document.getElementById("input-enlace-emoji").value.trim() || "🔗";
   } else {
     const archivo = document.getElementById("input-enlace-imagen").files[0];
-    if (!archivo) {
+    if (!archivo && !(enlaceExistente && enlaceExistente.icono_tipo === "imagen")) {
       mostrarErrorModalEnlace("Selecciona una imagen.");
       return;
     }
-    try {
-      icono_valor = await convertirArchivoABase64(archivo);
+    if (archivo) {
+      try {
+        icono_valor = await convertirArchivoABase64(archivo);
+        icono_tipo = "imagen";
+      } catch (e) {
+        mostrarErrorModalEnlace("No se pudo leer la imagen, intenta con otra.");
+        return;
+      }
+    } else {
+      // Se está editando y no se subió una imagen nueva: conserva la anterior.
       icono_tipo = "imagen";
-    } catch (e) {
-      mostrarErrorModalEnlace("No se pudo leer la imagen, intenta con otra.");
-      return;
+      icono_valor = enlaceExistente.icono_valor;
     }
   }
 
-  estado.datos.configuracion.enlaces_rapidos.push(
-    crearEnlaceRapido({ nombre, url, icono_tipo, icono_valor })
-  );
+  if (enlaceExistente) {
+    enlaceExistente.nombre = nombre;
+    enlaceExistente.url = url;
+    enlaceExistente.icono_tipo = icono_tipo;
+    enlaceExistente.icono_valor = icono_valor;
+  } else {
+    estado.datos.configuracion.enlaces_rapidos.push(
+      crearEnlaceRapido({ nombre, url, icono_tipo, icono_valor })
+    );
+  }
+
   marcarCambioPendiente();
   renderizarEnlacesRapidos();
   cerrarModalEnlace();

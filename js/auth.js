@@ -11,7 +11,10 @@
    ========================================================================= */
 
 const CLIENT_ID = "906522073616-7ofa7i3emqocojhlkh9ot9i0itljmd50.apps.googleusercontent.com";
-const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+// El scope de Drive por sí solo NO alcanza para que /oauth2/v3/userinfo
+// devuelva "name"/"picture": hace falta pedir también identidad básica
+// (openid/email/profile) junto con el permiso mínimo de archivo de Drive.
+const DRIVE_SCOPE = "openid email profile https://www.googleapis.com/auth/drive.file";
 const NOMBRE_ARCHIVO_DATOS = "app_academica_datos.json";
 const CLAVE_YA_AUTORIZADO = "google_ya_autorizado";
 

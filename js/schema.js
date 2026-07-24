@@ -28,6 +28,10 @@ function crearDatosUsuarioNuevo() {
       escala_notas_global: 100,     // 10 o 100 (1-10 ó 1-100)
       plan_activo_id: null,         // id del Plan de Estudios seleccionado como activo
       enlaces_rapidos: [],          // ver estructura de "enlace" abajo (máx. 20)
+
+      // --- Modo Hardcore 💀 (doble carrera) ---
+      modo_hardcore: false,          // si está activo, se combina un plan principal + uno secundario
+      plan_activo_secundario_id: null, // id del segundo Plan de Estudios (solo relevante si modo_hardcore = true)
     },
 
     // Un usuario puede tener más de un Plan de Estudios (ej. cambio de carrera/universidad).
@@ -82,6 +86,7 @@ function crearDatosUsuarioNuevo() {
         materias_matriculadas: [
           {
             materia_id: "MA1102",
+            plan_estudio_id: "plan_001", // de cuál de los dos planes viene (relevante en Modo Hardcore)
             profesor_id: null,
             criterios: [
               // { id, nombre, valor_total_porcentaje }
@@ -122,12 +127,66 @@ function crearEnlaceRapido({ nombre, url, icono_tipo, icono_valor }) {
 }
 
 const LIMITE_ENLACES_RAPIDOS = 20;
-/* Orden "arcoiris": neutros primero (blanco → gris → negro) y luego el
+/* Orden "azucarado": neutros primero (blanco → gris → negro) y luego el
  * espectro cromático completo (rojo → dorado → amarillo → verde → cyan →
- * azul → índigo → morado → rosado), cerrando con "arcoiris" (combinación
- * de varios colores) como pieza destacada al final. */
+ * azul → índigo → morado → rosado), cerrando con "azucarado" (combinación
+ * de varios colores pastel) como pieza destacada al final. */
 const PALETAS_DISPONIBLES = [
   "blanco", "gris", "negro",
   "rojo", "dorado", "amarillo", "verde", "cyan", "azul", "indigo", "morado", "rosado",
-  "arcoiris",
+  "azucarado",
 ];
+
+/* ===================== Plan de Estudios / Materias / Categorías ===================== */
+
+/** Valores por defecto sugeridos según universidad (editables por el usuario). */
+const PARAMETROS_UNIVERSIDAD_DEFAULT = {
+  TEC: { nombre_bloque: "Semestre", semanas_por_bloque: 16, horario_inicio_default: "07:30", horario_duracion_bloque_min: 50 },
+  UCR: { nombre_bloque: "Semestre", semanas_por_bloque: 16, horario_inicio_default: "07:00", horario_duracion_bloque_min: 50 },
+};
+
+function crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, parametros_universidad }) {
+  return {
+    id: "plan_" + crypto.randomUUID(),
+    nombre_carrera,
+    universidad,
+    codigo_plan: codigo_plan || null,
+    parametros_universidad: {
+      nombre_bloque: "Semestre",
+      semanas_por_bloque: 16,
+      escala_notas: 100,
+      formula_ponderado: "creditos",
+      horario_inicio_default: "07:30",
+      horario_duracion_bloque_min: 50,
+      ...(parametros_universidad || {}),
+    },
+    categorias: [],
+    materias: [],
+  };
+}
+
+function crearCategoria({ nombre, color }) {
+  return { id: "cat_" + crypto.randomUUID(), nombre, color };
+}
+
+/** Crea una materia a partir de una fila ya parseada del CSV (ver js/plan.js). */
+function crearMateria({ codigo, nombre, creditos, horas, bloque, requisitos, correquisitos }) {
+  return {
+    id: codigo, // el código funciona como id único dentro del plan
+    codigo,
+    nombre,
+    creditos,
+    horas: {
+      teoria: horas.teoria || 0,
+      practica: horas.practica || 0,
+      laboratorio: horas.laboratorio || 0,
+      teoria_practica: horas.teoria_practica || 0,
+    },
+    bloque,
+    requisitos: requisitos || [],
+    correquisitos: correquisitos || [],
+    categoria_id: null,
+    estado: "pendiente",
+    escala_notas_override: null,
+  };
+}
