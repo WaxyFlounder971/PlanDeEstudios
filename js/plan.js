@@ -10,30 +10,59 @@
    marcarCambioPendiente, mostrarSeccion, abrirConfirmacion, etc.).
    ========================================================================= */
 
-/** Texto EXACTO que se copia al portapapeles con "Enviar a Claude"/"Enviar a ChatGPT". */
-const PROMPT_IMPORTACION_PLAN = `Actúa como un estructurador de datos académicos. Te voy a adjuntar el plan de estudios de mi carrera. Puede llegarte en cualquiera de estos formatos — trátalos todos igual, tu tarea es la misma sin importar cuál sea:
-- Una o varias fotos/capturas de pantalla sueltas (léelas todas como una sola malla curricular continua, uniendo la información entre todas, sin perder ninguna materia).
-- Un PDF armado de capturas o páginas escaneadas (imágenes, sin texto seleccionable).
-- Un PDF con tablas de texto real.
-- Un archivo de Excel o de hoja de cálculo.
-- Cualquier otro formato de documento o imagen que reciba.
+/**
+ * Arma la lista de columnas de horas para el encabezado del CSV, según los
+ * tipos_horas del plan (dinámico — TEC trae 1 columna, UCR trae 4, una
+ * universidad personalizada trae las que el usuario haya definido).
+ * Ej.: ["Horas"] -> "Horas_Horas" ; ["Teoría","Práctica"] -> "Horas_Teoría,Horas_Práctica"
+ */
+function construirColumnasHoras(tiposHoras) {
+  return (tiposHoras && tiposHoras.length ? tiposHoras : ["Horas"])
+    .map((t) => `Horas_${t.replace(/\s+/g, "")}`)
+    .join(",");
+}
 
-Si son varias imágenes o páginas, únelas mentalmente en un solo plan de estudios continuo antes de generar el resultado — nunca generes un CSV por imagen ni por página suelta.
+function construirEncabezadoCSV(tiposHoras) {
+  return `Bloque,Codigo,Nombre,Creditos,${construirColumnasHoras(tiposHoras)},Requisitos,Correquisitos`;
+}
+
+/**
+ * Prompt oficial y único del proyecto para pedirle a una IA externa (Claude o
+ * ChatGPT) que estructure el plan de estudios en CSV. `modo` cambia solo el
+ * párrafo de instrucción de entrada; las reglas de formato CSV son las
+ * mismas siempre. `columnasHoras` ya viene armado por construirColumnasHoras().
+ * Cualquier flujo del proyecto que necesite este texto (import inicial,
+ * re-importar/actualizar malla desde gestión de planes) debe reutilizar esta
+ * función — nunca generar un texto distinto a mano.
+ */
+function construirPromptImportacion(modo, link, columnasHoras) {
+  let instruccionEntrada = "";
+
+  if (modo === "link") {
+    instruccionEntrada = `Visita esta página pública y extrae el plan de estudios completo desde su contenido: ${link}
+Es una página institucional sin inicio de sesión. Si la página organiza las materias en pestañas o bloques mediante controles de navegador (JavaScript) que no se reflejen con claridad en el contenido que puedas leer, y no puedes determinar con certeza a qué Bloque pertenece cada materia, escribe "REVISAR" en la columna Bloque de esa fila en vez de adivinar.`;
+  } else if (modo === "pdf") {
+    instruccionEntrada = `Te voy a adjuntar el plan de estudios de mi carrera en un archivo PDF (puede tener tablas de texto real, o ser páginas escaneadas como imágenes — trátalo igual en ambos casos).`;
+  } else if (modo === "capturas") {
+    instruccionEntrada = `Te voy a adjuntar una o varias fotos/capturas de pantalla de mi plan de estudios. Léelas todas como una sola malla curricular continua, uniendo la información entre todas, sin perder ninguna materia, sin importar el orden en que las adjunte.`;
+  }
+
+  return `Actúa como un estructurador de datos académicos. ${instruccionEntrada}
 
 Devuélveme ÚNICAMENTE un bloque de código plano en formato CSV, sin texto adicional antes o después, con esta estructura EXACTA:
 
-Bloque,Codigo,Nombre,Creditos,Horas_Teoria,Horas_Practica,Horas_Laboratorio,Horas_TeoriaPractica,Requisitos,Correquisitos
+Bloque,Codigo,Nombre,Creditos,${columnasHoras},Requisitos,Correquisitos
 
 Reglas:
-- Bloque: número de nivel/semestre/cuatrimestre tal como aparece en el documento. Si usa nombres en vez de números, conviértelo al número secuencial correspondiente.
+- Bloque: número de nivel/semestre/cuatrimestre tal como aparece en el documento/página. Si usa nombres en vez de números, conviértelo al número secuencial correspondiente. Si no puedes determinarlo con certeza, escribe "REVISAR".
 - Codigo: la sigla tal como aparece; si no tiene, genera uno corto y consistente a partir del nombre.
 - Horas: usa 0 si el documento no maneja esa categoría — nunca las dejes vacías.
-- Requisitos y Correquisitos: usa coma (,) para separar requisitos distintos que se necesitan TODOS ("Y"), y diagonal (/) para separar materias equivalentes/alternativas dentro de un mismo requisito ("O", cuando el plan dice "o"). Ejemplo: MA-1001,FS-0210/FS-0227/FS-0250 significa MA-1001 Y (una de las tres alternativas). Si no hay requisitos, usa "Ninguno".
-- No agregues columna de categoría ni ninguna otra fuera de las 10 indicadas.
+- Requisitos y Correquisitos: usa coma "," para separar requisitos distintos que se necesitan TODOS ("Y"), y diagonal "/" para separar materias equivalentes/alternativas dentro de un mismo requisito ("O"). Ejemplo: "MA-1001,FS-0210/FS-0227/FS-0250" significa MA-1001 Y (una de las tres alternativas). Si no hay requisitos, usa "Ninguno".
+- No agregues columna de categoría ni ninguna otra fuera de las columnas indicadas.
 - No omitas ninguna materia, incluidas optativas/electivas.
-- Si una celda es ilegible o ambigua, escribe "REVISAR" en vez de inventar un dato.`;
+- Si una celda es ilegible, ambigua, o no puedes confirmarla con certeza, escribe "REVISAR" en vez de inventar un dato.`;
+}
 
-const COLUMNAS_CSV_IMPORTACION = 10; // Bloque..Correquisitos
 const LIMITE_PLANES_ESTUDIO = 3;
 
 /* Estado propio de esta sección, colgado del `estado` global de app.js. */
@@ -51,6 +80,18 @@ estado.planGestionImportandoId = null;     // qué fila del panel de gestión ti
 estado.reabrirGestionPlanesTrasCrear = false;
 estado.busquedaCategoriaMaterias = "";
 estado.ordenCategoriaMaterias = "bloque";
+
+/* ---- B.2: flujo de importación de 3 modos (Link / PDF / Capturas) ----
+ * Estas llaves viven en `estado` (no en los datos del usuario) porque son
+ * solo del momento de importar, antes de que exista el plan. */
+estado.modoImportacion = "capturas";       // "link" | "pdf" | "capturas"
+estado.linkImportacion = "";               // URL pegada en el modo "link"
+// Universidad/tipos_horas elegidos ANTES de que el plan exista (para poder
+// construir el prompt con las columnas de horas correctas). Se resuelven acá
+// primero y se copian al crear el plan real en abrirModalCrearPlan/confirmar.
+estado.universidadImportacion = "TEC";
+estado.tiposHorasImportacion = PRESETS_TIPOS_HORAS.TEC.slice();
+estado.tiposHorasPersonalizadoTexto = "";  // texto crudo cuando universidadImportacion === "Otra"
 
 /* ===================== Utilidades de acceso a los planes ===================== */
 
@@ -171,6 +212,13 @@ function renderizarPlanEstudios() {
 
 /* ===================== B.2 — Panel de importación (solo cuando no hay plan) ===================== */
 
+/** Textos de instrucción breve, uno por modo de importación (sección B.2). */
+const INSTRUCCIONES_POR_MODO_IMPORTACION = {
+  link: '1) Pega el link de tu plan de estudios arriba. 2) Copia el prompt con el botón de la IA que prefieras (asegúrate de tener su navegación web activada). 3) Copia el CSV que te devuelva y pégalo abajo.',
+  pdf: "1) Copia el prompt con el botón de la IA que prefieras. 2) Adjunta ahí tu PDF. 3) Copia el CSV que te devuelva y pégalo abajo.",
+  capturas: "1) Copia el prompt con el botón de la IA que prefieras. 2) Adjunta ahí tus fotos o capturas de pantalla. 3) Copia el CSV que te devuelva y pégalo abajo.",
+};
+
 function construirPanelImportacion() {
   const cfg = estado.datos.configuracion;
   const sec = document.createElement("section");
@@ -207,6 +255,100 @@ function construirPanelImportacion() {
     estado.planImportandoId = "principal";
   }
 
+  // ---- Universidad / tipos de horas (necesario ANTES de generar el prompt,
+  // porque las columnas de horas del CSV dependen de esto). ----
+  const etiquetaUni = document.createElement("span");
+  etiquetaUni.className = "form-label";
+  etiquetaUni.textContent = "¿De qué universidad es este plan?";
+  sec.appendChild(etiquetaUni);
+
+  const grupoUni = document.createElement("div");
+  grupoUni.className = "pill-group";
+  [
+    { valor: "TEC", texto: "TEC" },
+    { valor: "UCR", texto: "UCR" },
+    { valor: "Otra", texto: "Otra / Personalizada" },
+  ].forEach((op) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pill-item" + (estado.universidadImportacion === op.valor ? " active" : "");
+    btn.textContent = op.texto;
+    btn.addEventListener("click", () => {
+      estado.universidadImportacion = op.valor;
+      if (op.valor !== "Otra") {
+        estado.tiposHorasImportacion = PRESETS_TIPOS_HORAS[op.valor].slice();
+      }
+      renderizarPlanEstudios();
+    });
+    grupoUni.appendChild(btn);
+  });
+  sec.appendChild(grupoUni);
+
+  if (estado.universidadImportacion === "Otra") {
+    const inputTipos = document.createElement("input");
+    inputTipos.type = "text";
+    inputTipos.className = "form-input";
+    inputTipos.placeholder = "Tipos de horas separados por coma, ej. Teoría, Laboratorio";
+    inputTipos.value = estado.tiposHorasPersonalizadoTexto;
+    inputTipos.addEventListener("input", () => {
+      estado.tiposHorasPersonalizadoTexto = inputTipos.value;
+      estado.tiposHorasImportacion = inputTipos.value.split(",").map((t) => t.trim()).filter(Boolean);
+    });
+    sec.appendChild(inputTipos);
+  }
+
+  // ---- Modo de importación: Link / PDF / Capturas ----
+  const etiquetaModo = document.createElement("span");
+  etiquetaModo.className = "form-label";
+  etiquetaModo.textContent = "¿Cómo quieres traer tu plan de estudios?";
+  sec.appendChild(etiquetaModo);
+
+  const grupoModo = document.createElement("div");
+  grupoModo.className = "pill-group";
+  [
+    { valor: "link", texto: "Pegar link" },
+    { valor: "pdf", texto: "Adjuntar PDF" },
+    { valor: "capturas", texto: "Tomar capturas" },
+  ].forEach((op) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pill-item" + (estado.modoImportacion === op.valor ? " active" : "");
+    btn.textContent = op.texto;
+    btn.addEventListener("click", () => {
+      estado.modoImportacion = op.valor;
+      renderizarPlanEstudios();
+    });
+    grupoModo.appendChild(btn);
+  });
+  sec.appendChild(grupoModo);
+
+  if (estado.modoImportacion === "link") {
+    const inputLink = document.createElement("input");
+    inputLink.type = "text";
+    inputLink.className = "form-input";
+    inputLink.placeholder = "https://tu-universidad.ac.cr/tu-plan-de-estudios";
+    inputLink.value = estado.linkImportacion;
+    inputLink.addEventListener("input", () => {
+      estado.linkImportacion = inputLink.value;
+    });
+    sec.appendChild(inputLink);
+
+    const avisoNavegacion = document.createElement("p");
+    avisoNavegacion.className = "muted";
+    avisoNavegacion.textContent = "Este modo requiere que tu IA tenga activada la navegación web.";
+    sec.appendChild(avisoNavegacion);
+  } else if (estado.modoImportacion === "pdf") {
+    const nota = document.createElement("p");
+    nota.className = "muted";
+    nota.textContent = "Vas a adjuntar tu PDF directamente en la ventana de Claude o ChatGPT que se abra.";
+    sec.appendChild(nota);
+  } else if (estado.modoImportacion === "capturas") {
+    const nota = document.createElement("p");
+    nota.className = "muted";
+    nota.textContent = "Vas a adjuntar una o varias fotos/capturas directamente en la ventana de Claude o ChatGPT que se abra.";
+    sec.appendChild(nota);
+  }
+
   const filaBotones = document.createElement("div");
   filaBotones.className = "row";
 
@@ -214,22 +356,27 @@ function construirPanelImportacion() {
   btnClaude.className = "btn btn-primary";
   btnClaude.style.flex = "1";
   btnClaude.textContent = "Enviar a Claude";
-  btnClaude.addEventListener("click", enviarPromptAClaude);
+  btnClaude.addEventListener("click", () => {
+    const columnasHoras = construirColumnasHoras(estado.tiposHorasImportacion);
+    enviarPromptAClaude(construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras));
+  });
   filaBotones.appendChild(btnClaude);
 
   const btnChatGPT = document.createElement("button");
   btnChatGPT.className = "btn btn-secondary";
   btnChatGPT.style.flex = "1";
   btnChatGPT.textContent = "Enviar a ChatGPT";
-  btnChatGPT.addEventListener("click", enviarPromptAChatGPT);
+  btnChatGPT.addEventListener("click", () => {
+    const columnasHoras = construirColumnasHoras(estado.tiposHorasImportacion);
+    enviarPromptAChatGPT(construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras));
+  });
   filaBotones.appendChild(btnChatGPT);
 
   sec.appendChild(filaBotones);
 
   const instrucciones = document.createElement("p");
   instrucciones.className = "muted";
-  instrucciones.textContent =
-    "1) Copia el prompt con el botón de la IA que prefieras. 2) Adjunta ahí tu foto, PDF o Excel. 3) Copia el CSV que te devuelva y pégalo abajo.";
+  instrucciones.textContent = INSTRUCCIONES_POR_MODO_IMPORTACION[estado.modoImportacion];
   sec.appendChild(instrucciones);
 
   const textarea = document.createElement("textarea");
@@ -253,21 +400,21 @@ function construirPanelImportacion() {
   return sec;
 }
 
-async function copiarPromptImportacion() {
+async function copiarPromptImportacion(texto) {
   try {
-    await navigator.clipboard.writeText(PROMPT_IMPORTACION_PLAN);
+    await navigator.clipboard.writeText(texto);
   } catch (e) {
     console.warn("No se pudo copiar automáticamente, el usuario deberá copiarlo a mano.", e);
   }
 }
 
-async function enviarPromptAClaude() {
-  await copiarPromptImportacion();
+async function enviarPromptAClaude(texto) {
+  await copiarPromptImportacion(texto);
   window.open("https://claude.ai/new", "_blank", "noopener");
 }
 
-async function enviarPromptAChatGPT() {
-  await copiarPromptImportacion();
+async function enviarPromptAChatGPT(texto) {
+  await copiarPromptImportacion(texto);
   window.open("https://chatgpt.com/", "_blank", "noopener");
 }
 
@@ -294,10 +441,21 @@ function parsearLineaCSV(linea) {
 }
 
 /**
- * Parsea el CSV completo. Devuelve { materias: [...], errores: ["fila 3: ..."] }.
- * Nunca lanza excepción: una fila mala se reporta y se salta, sin romper el resto.
+ * Parsea el CSV completo para un plan con estos `tiposHoras` (array de
+ * llaves, ej. ["Horas"] para TEC o ["Teoría","Práctica","Laboratorio",
+ * "Teoría-Práctica"] para UCR). Devuelve { materias: [...], errores: [...] }.
+ * Nunca lanza excepción: una fila mala se reporta y se salta, sin romper el
+ * resto del import.
+ *
+ * Las columnas de horas se leen dinámicamente: primero se busca en el
+ * encabezado pegado cuántas columnas empiezan con "Horas_" y en qué
+ * posición están; si por algún motivo la IA no las nombró así, se cae de
+ * vuelta a la posición fija esperada (justo después de Creditos, tantas
+ * como tiposHoras.length) para no romper el import.
  */
-function parsearCSVPlanEstudios(textoCrudo) {
+function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
+  const tipos = tiposHoras && tiposHoras.length ? tiposHoras : ["Horas"];
+
   const lineas = textoCrudo
     .replace(/```[a-zA-Z]*\n?/g, "") // por si el usuario pegó el bloque con los ``` incluidos
     .split(/\r?\n/)
@@ -305,6 +463,16 @@ function parsearCSVPlanEstudios(textoCrudo) {
     .filter((l) => l.length > 0);
 
   if (lineas.length === 0) return { materias: [], errores: ["El CSV está vacío."] };
+
+  const encabezado = parsearLineaCSV(lineas[0]);
+  const indicesHoras = [];
+  encabezado.forEach((col, i) => {
+    if (/^Horas_/i.test(col)) indicesHoras.push(i);
+  });
+
+  const idxHorasInicio = indicesHoras.length > 0 ? indicesHoras[0] : 4;
+  const cantidadHoras = indicesHoras.length > 0 ? indicesHoras.length : tipos.length;
+  const columnasEsperadas = 4 + cantidadHoras + 2; // Bloque,Codigo,Nombre,Creditos + horas + Requisitos,Correquisitos
 
   // La primera fila se asume encabezado y se descarta.
   const filas = lineas.slice(1);
@@ -315,29 +483,36 @@ function parsearCSVPlanEstudios(textoCrudo) {
     const numeroFila = indice + 2; // +2 = +1 por el encabezado, +1 por ser 1-indexado
     const columnas = parsearLineaCSV(linea);
 
-    if (columnas.length !== COLUMNAS_CSV_IMPORTACION) {
-      errores.push(`Fila ${numeroFila}: se esperaban ${COLUMNAS_CSV_IMPORTACION} columnas y se encontraron ${columnas.length}. Contenido: "${linea}"`);
+    if (columnas.length !== columnasEsperadas) {
+      errores.push(`Fila ${numeroFila}: se esperaban ${columnasEsperadas} columnas y se encontraron ${columnas.length}. Contenido: "${linea}"`);
       return;
     }
 
-    const [bloque, codigo, nombre, creditos, hTeoria, hPractica, hLab, hTeoPrac, requisitos, correquisitos] = columnas;
+    const bloque = columnas[0];
+    const codigo = columnas[1];
+    const nombre = columnas[2];
+    const creditos = columnas[3];
+    const columnasHorasFila = columnas.slice(idxHorasInicio, idxHorasInicio + cantidadHoras);
+    const requisitos = columnas[idxHorasInicio + cantidadHoras];
+    const correquisitos = columnas[idxHorasInicio + cantidadHoras + 1];
 
     if (!codigo || !nombre) {
       errores.push(`Fila ${numeroFila}: falta Código o Nombre.`);
       return;
     }
 
+    const horas = {};
+    tipos.forEach((tipo, i) => {
+      horas[tipo] = Number(columnasHorasFila[i]) || 0;
+    });
+
     materias.push(
       crearMateria({
         codigo,
         nombre,
         creditos: Number(creditos) || 0,
-        horas: {
-          teoria: Number(hTeoria) || 0,
-          practica: Number(hPractica) || 0,
-          laboratorio: Number(hLab) || 0,
-          teoria_practica: Number(hTeoPrac) || 0,
-        },
+        horas,
+        tiposHoras: tipos,
         bloque: Number(bloque) || bloque,
         requisitos: parsearGrupoRequisitos(requisitos),
         correquisitos: parsearGrupoRequisitos(correquisitos),
@@ -370,7 +545,7 @@ function manejarClickImportar(textoCSV) {
 }
 
 function importarCSVEnPlan(textoCSV, planDestino) {
-  const { materias, errores } = parsearCSVPlanEstudios(textoCSV);
+  const { materias, errores } = parsearCSVPlanEstudios(textoCSV, planDestino.parametros_universidad.tipos_horas);
 
   // Se combina por código: si ya existía, se actualiza; si es nueva, se agrega.
   materias.forEach((nueva) => {
@@ -409,10 +584,24 @@ function abrirModalCrearPlan(paraSecundario) {
   document.getElementById("input-plan-codigo").value = "";
   document.getElementById("error-modal-crear-plan").classList.add("oculto");
 
+  // Se preselecciona con lo que el usuario ya haya elegido en el selector de
+  // universidad/tipos de horas del panel de importación (estado.universidadImportacion),
+  // así no se le vuelve a preguntar dos veces lo mismo.
+  const universidadInicial = estado.universidadImportacion || "TEC";
   const pillUni = document.getElementById("pill-plan-universidad");
   pillUni.querySelectorAll(".pill-item").forEach((b) => b.classList.remove("active"));
-  pillUni.querySelector('[data-valor="TEC"]').classList.add("active");
-  aplicarDefaultsUniversidad("TEC");
+  const btnInicial = pillUni.querySelector(`[data-valor="${universidadInicial}"]`) || pillUni.querySelector('[data-valor="TEC"]');
+  btnInicial.classList.add("active");
+
+  const inputPersonalizado = document.getElementById("input-tipos-horas-personalizados");
+  const bloquePersonalizado = document.getElementById("bloque-tipos-horas-personalizados");
+  if (btnInicial.dataset.valor === "Otra") {
+    bloquePersonalizado.classList.remove("oculto");
+    inputPersonalizado.value = estado.tiposHorasPersonalizadoTexto || "";
+  } else {
+    bloquePersonalizado.classList.add("oculto");
+    aplicarDefaultsUniversidad(btnInicial.dataset.valor);
+  }
 
   document.getElementById("modal-crear-plan").classList.remove("oculto");
 }
@@ -425,14 +614,30 @@ function aplicarDefaultsUniversidad(universidad) {
   document.getElementById("input-plan-duracion").value = defaults.horario_duracion_bloque_min;
 }
 
+/** Lee la lista de tipos de horas seleccionada en el modal en este momento
+ *  (según el pill de universidad activo), sin importar si es TEC/UCR/Personalizada. */
+function leerTiposHorasDelModalCrearPlan() {
+  const universidad = document.getElementById("pill-plan-universidad").querySelector(".pill-item.active").dataset.valor;
+  if (universidad === "Otra") {
+    const texto = document.getElementById("input-tipos-horas-personalizados").value;
+    const tipos = texto.split(",").map((t) => t.trim()).filter(Boolean);
+    return tipos.length ? tipos : ["Horas"];
+  }
+  return (PRESETS_TIPOS_HORAS[universidad] || PRESETS_TIPOS_HORAS.TEC).slice();
+}
+
 function inicializarModalCrearPlan() {
   const pillUni = document.getElementById("pill-plan-universidad");
   pillUni.querySelectorAll(".pill-item").forEach((btn) => {
     btn.addEventListener("click", () => {
       pillUni.querySelectorAll(".pill-item").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
+      const bloquePersonalizado = document.getElementById("bloque-tipos-horas-personalizados");
       if (btn.dataset.valor === "TEC" || btn.dataset.valor === "UCR") {
+        bloquePersonalizado.classList.add("oculto");
         aplicarDefaultsUniversidad(btn.dataset.valor);
+      } else {
+        bloquePersonalizado.classList.remove("oculto");
       }
     });
   });
@@ -461,6 +666,11 @@ function inicializarModalCrearPlan() {
       return;
     }
     const universidad = document.getElementById("pill-plan-universidad").querySelector(".pill-item.active").dataset.valor;
+    const tiposHoras = leerTiposHorasDelModalCrearPlan();
+    if (universidad === "Otra") {
+      // Se recuerda el texto crudo para la próxima vez que abran este modal.
+      estado.tiposHorasPersonalizadoTexto = document.getElementById("input-tipos-horas-personalizados").value;
+    }
     const codigoPlan = document.getElementById("input-plan-codigo").value.trim();
 
     const nuevoPlan = crearPlanEstudio({
@@ -472,7 +682,7 @@ function inicializarModalCrearPlan() {
         semanas_por_bloque: Number(document.getElementById("input-plan-semanas").value) || 16,
         horario_inicio_default: document.getElementById("input-plan-hora-inicio").value || "07:30",
         horario_duracion_bloque_min: Number(document.getElementById("input-plan-duracion").value) || 50,
-        horas_detalladas: universidad === "UCR",
+        tipos_horas: tiposHoras,
       },
     });
 
@@ -585,25 +795,67 @@ function construirMiniPanelImportacion(plan) {
   sec.className = "glass-card stack";
   sec.style.padding = "14px";
 
+  // Aquí el plan ya existe, así que las columnas de horas se toman
+  // directamente de su tipos_horas — no hace falta preguntarlas de nuevo.
+  const grupoModo = document.createElement("div");
+  grupoModo.className = "pill-group";
+  [
+    { valor: "link", texto: "Pegar link" },
+    { valor: "pdf", texto: "Adjuntar PDF" },
+    { valor: "capturas", texto: "Tomar capturas" },
+  ].forEach((op) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pill-item" + (estado.modoImportacion === op.valor ? " active" : "");
+    btn.textContent = op.texto;
+    btn.addEventListener("click", () => {
+      estado.modoImportacion = op.valor;
+      renderizarListaGestionPlanes();
+    });
+    grupoModo.appendChild(btn);
+  });
+  sec.appendChild(grupoModo);
+
+  if (estado.modoImportacion === "link") {
+    const inputLink = document.createElement("input");
+    inputLink.type = "text";
+    inputLink.className = "form-input";
+    inputLink.placeholder = "https://tu-universidad.ac.cr/tu-plan-de-estudios";
+    inputLink.value = estado.linkImportacion;
+    inputLink.addEventListener("input", () => { estado.linkImportacion = inputLink.value; });
+    sec.appendChild(inputLink);
+
+    const avisoNavegacion = document.createElement("p");
+    avisoNavegacion.className = "muted";
+    avisoNavegacion.textContent = "Este modo requiere que tu IA tenga activada la navegación web.";
+    sec.appendChild(avisoNavegacion);
+  }
+
   const filaBotones = document.createElement("div");
   filaBotones.className = "row";
   const btnClaude = document.createElement("button");
   btnClaude.className = "btn btn-primary";
   btnClaude.style.flex = "1";
   btnClaude.textContent = "Enviar a Claude";
-  btnClaude.addEventListener("click", enviarPromptAClaude);
+  btnClaude.addEventListener("click", () => {
+    const columnasHoras = construirColumnasHoras(plan.parametros_universidad.tipos_horas);
+    enviarPromptAClaude(construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras));
+  });
   const btnChatGPT = document.createElement("button");
   btnChatGPT.className = "btn btn-secondary";
   btnChatGPT.style.flex = "1";
   btnChatGPT.textContent = "Enviar a ChatGPT";
-  btnChatGPT.addEventListener("click", enviarPromptAChatGPT);
+  btnChatGPT.addEventListener("click", () => {
+    const columnasHoras = construirColumnasHoras(plan.parametros_universidad.tipos_horas);
+    enviarPromptAChatGPT(construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras));
+  });
   filaBotones.appendChild(btnClaude);
   filaBotones.appendChild(btnChatGPT);
   sec.appendChild(filaBotones);
 
   const instrucciones = document.createElement("p");
   instrucciones.className = "muted";
-  instrucciones.textContent = "1) Copia el prompt. 2) Adjunta tu archivo ahí. 3) Pega el CSV que te devuelva abajo.";
+  instrucciones.textContent = INSTRUCCIONES_POR_MODO_IMPORTACION[estado.modoImportacion];
   sec.appendChild(instrucciones);
 
   const textarea = document.createElement("textarea");
@@ -624,7 +876,7 @@ function construirMiniPanelImportacion(plan) {
       resultado.innerHTML = `<p class="muted" style="color:var(--color-danger);">Pega primero el CSV.</p>`;
       return;
     }
-    const { materias, errores } = parsearCSVPlanEstudios(textarea.value);
+    const { materias, errores } = parsearCSVPlanEstudios(textarea.value, plan.parametros_universidad.tipos_horas);
     materias.forEach((nueva) => {
       const existente = plan.materias.find((m) => m.codigo === nueva.codigo);
       if (existente) Object.assign(existente, nueva, { categoria_id: existente.categoria_id, estado: existente.estado });
@@ -710,8 +962,7 @@ function abrirModalMateriaManual() {
   }
 
   ["input-materia-codigo", "input-materia-nombre", "input-materia-creditos", "input-materia-bloque",
-   "input-materia-horas-simple", "input-materia-horas-teoria", "input-materia-horas-practica",
-   "input-materia-horas-lab", "input-materia-horas-tp", "input-materia-requisitos", "input-materia-correquisitos"
+   "input-materia-requisitos", "input-materia-correquisitos"
   ].forEach((id) => { document.getElementById(id).value = ""; });
   document.getElementById("error-modal-materia-manual").classList.add("oculto");
 
@@ -719,11 +970,34 @@ function abrirModalMateriaManual() {
   document.getElementById("modal-materia-manual").classList.remove("oculto");
 }
 
+/**
+ * Genera un <input type="number"> por cada tipo de hora definido en el plan
+ * elegido (1 si es TEC, 4 si es UCR, o los que tenga una universidad
+ * personalizada) — nunca asume nombres de campos fijos. Cada input queda
+ * con id `input-materia-horas-<índice>` y su tipo guardado en un data-attr
+ * para poder leerlo de vuelta al guardar.
+ */
 function actualizarFormatoHorasMateriaManual() {
   const plan = estado.datos.planes_estudio.find((p) => p.id === estado.materiaManualPlanId);
-  const detalladas = plan ? !!plan.parametros_universidad.horas_detalladas : false;
-  document.getElementById("bloque-horas-simple").classList.toggle("oculto", detalladas);
-  document.getElementById("bloque-horas-detalladas").classList.toggle("oculto", !detalladas);
+  const tipos = plan && plan.parametros_universidad.tipos_horas && plan.parametros_universidad.tipos_horas.length
+    ? plan.parametros_universidad.tipos_horas
+    : ["Horas"];
+
+  const cont = document.getElementById("bloque-horas-dinamico");
+  cont.innerHTML = "";
+  tipos.forEach((tipo, i) => {
+    const wrap = document.createElement("div");
+    wrap.style.flex = "1";
+    wrap.innerHTML = `<span class="form-label">${tipo}</span>`;
+    const input = document.createElement("input");
+    input.type = "number";
+    input.className = "form-input";
+    input.id = `input-materia-horas-${i}`;
+    input.dataset.tipoHora = tipo;
+    wrap.appendChild(input);
+    cont.appendChild(wrap);
+  });
+
   document.getElementById("label-materia-bloque").textContent = plan ? plan.parametros_universidad.nombre_bloque : "Bloque";
 }
 
@@ -754,17 +1028,13 @@ function inicializarModalMateriaManual() {
       return;
     }
 
-    let horas;
-    if (plan.parametros_universidad.horas_detalladas) {
-      horas = {
-        teoria: Number(document.getElementById("input-materia-horas-teoria").value) || 0,
-        practica: Number(document.getElementById("input-materia-horas-practica").value) || 0,
-        laboratorio: Number(document.getElementById("input-materia-horas-lab").value) || 0,
-        teoria_practica: Number(document.getElementById("input-materia-horas-tp").value) || 0,
-      };
-    } else {
-      horas = { teoria: Number(document.getElementById("input-materia-horas-simple").value) || 0, practica: 0, laboratorio: 0, teoria_practica: 0 };
-    }
+    const tiposHoras = plan.parametros_universidad.tipos_horas && plan.parametros_universidad.tipos_horas.length
+      ? plan.parametros_universidad.tipos_horas
+      : ["Horas"];
+    const horas = {};
+    document.querySelectorAll("#bloque-horas-dinamico [data-tipo-hora]").forEach((input) => {
+      horas[input.dataset.tipoHora] = Number(input.value) || 0;
+    });
 
     const nuevaMateria = crearMateria({
       codigo,
@@ -772,6 +1042,7 @@ function inicializarModalMateriaManual() {
       creditos,
       bloque,
       horas,
+      tiposHoras,
       requisitos: parsearGrupoRequisitos(document.getElementById("input-materia-requisitos").value),
       correquisitos: parsearGrupoRequisitos(document.getElementById("input-materia-correquisitos").value),
     });
@@ -952,17 +1223,19 @@ function exportarPlanACSV() {
   const principal = obtenerPlanActivo();
   if (!principal) return;
 
-  const encabezado = "Bloque,Codigo,Nombre,Creditos,Horas_Teoria,Horas_Practica,Horas_Laboratorio,Horas_TeoriaPractica,Requisitos,Correquisitos,Estado,CategoriaId";
+  const tipos = principal.parametros_universidad.tipos_horas && principal.parametros_universidad.tipos_horas.length
+    ? principal.parametros_universidad.tipos_horas
+    : ["Horas"];
+
+  const encabezado = `${construirEncabezadoCSV(tipos)},Estado,CategoriaId`;
   const filas = principal.materias.map((m) => {
+    const columnasHoras = tipos.map((tipo) => (m.horas || {})[tipo] || 0);
     const campos = [
       m.bloque,
       m.codigo,
       `"${(m.nombre || "").replace(/"/g, '""')}"`,
       m.creditos,
-      m.horas.teoria,
-      m.horas.practica,
-      m.horas.laboratorio,
-      m.horas.teoria_practica,
+      ...columnasHoras,
       serializarGrupoRequisitos(m.requisitos),
       serializarGrupoRequisitos(m.correquisitos),
       m.estado,
