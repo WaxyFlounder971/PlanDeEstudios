@@ -93,13 +93,24 @@ window.addEventListener("DOMContentLoaded", () => {
     programarAvisoLoginBloqueado();
   });
 
-  document.getElementById("btn-logout").addEventListener("click", cerrarSesion);
-  document.getElementById("btn-logout-popover").addEventListener("click", cerrarSesion);
+  document.getElementById("btn-logout").addEventListener("click", pedirConfirmacionCerrarSesion);
+  document.getElementById("btn-logout-popover").addEventListener("click", pedirConfirmacionCerrarSesion);
+  document.getElementById("btn-forzar-sync").addEventListener("click", forzarSincronizacion);
 
   window.addEventListener("online", intentarSincronizar);
 
+  // Aviso NATIVO del navegador (no personalizable, restricción de seguridad)
+  // si se intenta recargar/cerrar la pestaña con cambios sin sincronizar.
+  window.addEventListener("beforeunload", (e) => {
+    if (estado.pendienteSync) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+  });
+
   inicializarLayoutResponsivo();
   inicializarModalEnlace();
+  inicializarModalConfirmacion();
   inicializarNavegacionSecciones();
 
   const cache = leerCacheLocal();
@@ -169,6 +180,22 @@ function mostrarApp() {
 
 /* --------------------------- Cerrar sesión --------------------------- */
 
+/** Punto 9 (Parte 2): si hay cambios sin sincronizar, se advierte antes de
+ *  cerrar sesión — perderlos del dispositivo sería irreversible. */
+function pedirConfirmacionCerrarSesion() {
+  togglePerfilPopover(true);
+  if (!estado.pendienteSync) {
+    cerrarSesion();
+    return;
+  }
+  abrirConfirmacion({
+    titulo: "⚠️ Cambios sin sincronizar",
+    mensaje: "Tienes cambios sin sincronizar. Si cierras sesión ahora, se perderán del dispositivo. ¿Deseas continuar?",
+    textoConfirmar: "Cerrar sesión de todas formas",
+    onConfirmar: cerrarSesion,
+  });
+}
+
 function cerrarSesion() {
   cerrarSesionGoogle();
   localStorage.removeItem(CLAVE_CACHE_LOCAL);
@@ -209,6 +236,31 @@ async function intentarSincronizar() {
     actualizarIndicadorSync();
   } catch (e) {
     console.warn("No se pudo sincronizar todavía, se reintentará más tarde.", e);
+  }
+}
+
+/** Botón 🔄: fuerza el intento de sincronización YA, sin esperar el evento
+ *  "online" del navegador (útil si la conexión volvió pero el evento no
+ *  disparó, o si se quiere forzar un guardado inmediato). */
+async function forzarSincronizacion() {
+  const el = document.getElementById("indicador-sync");
+  if (!estado.pendienteSync) {
+    if (el) {
+      el.textContent = "Ya estaba sincronizado";
+      setTimeout(actualizarIndicadorSync, 1500);
+    }
+    return;
+  }
+  if (el) {
+    el.textContent = "Sincronizando…";
+    el.className = "badge badge-neutral";
+  }
+  await intentarSincronizar();
+  if (estado.pendienteSync && el) {
+    // Seguía pendiente: no había conexión o falló el guardado en Drive.
+    el.textContent = "No se pudo sincronizar, se reintentará";
+    el.className = "badge badge-danger";
+    setTimeout(actualizarIndicadorSync, 2500);
   }
 }
 
@@ -567,6 +619,44 @@ function convertirArchivoABase64(archivo) {
     lector.onload = () => resolve(lector.result);
     lector.onerror = () => reject(new Error("No se pudo leer el archivo"));
     lector.readAsDataURL(archivo);
+  });
+}
+
+/* ===================== Confirmación genérica (reemplaza confirm() nativo) ===================== */
+
+let callbackConfirmacionActual = null;
+
+/**
+ * Abre el modal de confirmación reutilizable. Uso:
+ *   abrirConfirmacion({ titulo, mensaje, textoConfirmar, claseConfirmar, onConfirmar })
+ * `claseConfirmar` es opcional (por defecto "btn-danger"; usa "btn-primary"
+ * para acciones no destructivas).
+ */
+function abrirConfirmacion({ titulo, mensaje, textoConfirmar, claseConfirmar, onConfirmar }) {
+  document.getElementById("titulo-modal-confirmacion").textContent = titulo || "¿Estás seguro?";
+  document.getElementById("mensaje-modal-confirmacion").textContent = mensaje || "";
+  const btn = document.getElementById("btn-aceptar-confirmacion");
+  btn.textContent = textoConfirmar || "Confirmar";
+  btn.className = "btn " + (claseConfirmar || "btn-danger");
+  callbackConfirmacionActual = onConfirmar || null;
+  document.getElementById("modal-confirmacion").classList.remove("oculto");
+}
+
+function cerrarConfirmacion() {
+  document.getElementById("modal-confirmacion").classList.add("oculto");
+  callbackConfirmacionActual = null;
+}
+
+function inicializarModalConfirmacion() {
+  const modal = document.getElementById("modal-confirmacion");
+  document.getElementById("btn-cancelar-confirmacion").addEventListener("click", cerrarConfirmacion);
+  document.getElementById("btn-aceptar-confirmacion").addEventListener("click", () => {
+    const cb = callbackConfirmacionActual;
+    cerrarConfirmacion();
+    if (cb) cb();
+  });
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) cerrarConfirmacion();
   });
 }
 
