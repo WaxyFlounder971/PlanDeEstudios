@@ -205,8 +205,14 @@
       <div class="pill-group" id="pill-plan-universidad">
         <button type="button" class="pill-item active" data-valor="TEC">TEC</button>
         <button type="button" class="pill-item" data-valor="UCR">UCR</button>
-        <button type="button" class="pill-item" data-valor="Otra">Otra</button>
+        <button type="button" class="pill-item" data-valor="Otra">Otra / Personalizada</button>
       </div>
+    </div>
+
+    <div id="bloque-tipos-horas-personalizados" class="oculto">
+      <span class="form-label">Tipos de horas de tu universidad</span>
+      <input type="text" id="input-tipos-horas-personalizados" class="form-input" placeholder="Ej. Teoría, Laboratorio">
+      <p class="muted" style="margin:4px 0 0;">Sepáralos con comas. Ej. si tu universidad solo maneja Teoría y Laboratorio, escribe exactamente eso.</p>
     </div>
 
     <div>
@@ -339,16 +345,7 @@
       </div>
     </div>
 
-    <div id="bloque-horas-simple">
-      <span class="form-label">Horas</span>
-      <input type="number" id="input-materia-horas-simple" class="form-input">
-    </div>
-    <div id="bloque-horas-detalladas" class="row oculto">
-      <div style="flex:1;"><span class="form-label">Teoría</span><input type="number" id="input-materia-horas-teoria" class="form-input"></div>
-      <div style="flex:1;"><span class="form-label">Práctica</span><input type="number" id="input-materia-horas-practica" class="form-input"></div>
-      <div style="flex:1;"><span class="form-label">Lab.</span><input type="number" id="input-materia-horas-lab" class="form-input"></div>
-      <div style="flex:1;"><span class="form-label">Teo-Prác.</span><input type="number" id="input-materia-horas-tp" class="form-input"></div>
-    </div>
+    <div id="bloque-horas-dinamico" class="row"></div>
 
     <div>
       <span class="form-label">Requisitos</span>
