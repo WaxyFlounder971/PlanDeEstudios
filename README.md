@@ -1,81 +1,192 @@
-# Iteración 0 — Cimientos
+/* =========================================================================
+   ESQUEMA DE DATOS — App Académica
+   Este archivo NO valida nada por ahora, solo documenta y crea la
+   estructura inicial ("de fábrica") de los datos de un usuario nuevo.
+   Todo el proyecto (iteraciones 1-7) va a ir llenando estas mismas llaves,
+   así que este archivo es el mapa de referencia de todo el modelo.
+   ========================================================================= */
 
-> Nota: esta versión incluye la ronda de ajustes finales de la Iteración 0
-> (responsive móvil, sidebar colapsable, foto de perfil de Google, modal de
-> enlaces, corrección de contraste en la paleta "Blanco" y fix del login en
-> móvil). Si ya tienes tu Client ID pegado en `js/auth.js`, no necesitas
-> repetir el Paso 2 ni el Paso 3 — solo vuelve a subir los archivos.
+/**
+ * Devuelve el objeto de datos "vacío" para un usuario que recién inicia
+ * sesión por primera vez. Esto es lo que se guarda como el archivo JSON
+ * único dentro de su Google Drive (ver js/auth.js).
+ */
+function crearDatosUsuarioNuevo() {
+  return {
+    version_esquema: 1,
 
-Esto es lo primero que vamos a poner a funcionar: iniciar sesión con Google, guardar tus datos en tu propio Drive, elegir paleta de color y modo claro/oscuro, y ajustar la escala de notas. Las secciones del menú (Plan de Estudios, Semestres, Horario, etc.) aparecen deshabilitadas — se activan en las próximas iteraciones.
+    perfil: {
+      nombre: null,          // viene de la cuenta de Google
+      correo: null,          // viene de la cuenta de Google
+      foto_url: null,        // viene de la cuenta de Google (userinfo picture)
+      carnet: null,          // dato opcional de perfil, ya NO se usa para iniciar sesión
+    },
 
-Sigue estos pasos **en orden**. No necesitas saber programar, solo copiar y pegar donde se indica.
+    configuracion: {
+      paleta: "azul",              // una de las 10 paletas
+      modo: "dark",                 // "dark" | "light"
+      escala_notas_global: 100,     // 10 o 100 (1-10 ó 1-100)
+      plan_activo_id: null,         // id del Plan de Estudios seleccionado como activo
+      enlaces_rapidos: [],          // ver estructura de "enlace" abajo (máx. 20)
 
----
+      // --- Modo Hardcore 💀 (doble carrera) ---
+      modo_hardcore: false,          // si está activo, se combina un plan principal + uno secundario
+      plan_activo_secundario_id: null, // id del segundo Plan de Estudios (solo relevante si modo_hardcore = true)
+    },
 
-## Paso 1 — Sube estos archivos a tu repositorio de GitHub
+    // Un usuario puede tener más de un Plan de Estudios (ej. cambio de carrera/universidad).
+    planes_estudio: [
+      /*
+      {
+        id: "plan_001",
+        nombre_carrera: "Ingeniería en Tecnologías de Información",
+        universidad: "TEC",              // "TEC" | "UCR" | otra
+        codigo_plan: "420501, plan 01",  // texto libre, tal cual lo trae la universidad
+        parametros_universidad: {
+          nombre_bloque: "Semestre",     // "Semestre" | "Cuatrimestre" | "Trimestre"
+          semanas_por_bloque: 16,        // 16, 18 o 20
+          escala_notas: 100,             // puede ser distinta al global si se necesita
+          formula_ponderado: "creditos", // "creditos" = Σ(nota*creditos)/Σcreditos
+          horario_inicio_default: "07:30",
+          horario_duracion_bloque_min: 50,
+        },
+        categorias: [
+          // { id, nombre, color } — 100% creadas por el usuario, nunca precargadas
+        ],
+        materias: [
+          /*
+          {
+            id: "MA1102",
+            codigo: "MA1102",
+            nombre: "Cálculo Diferencial e Integral",
+            creditos: 4,
+            horas: { teoria: 5, practica: 0, laboratorio: 0, teoria_practica: 0 },
+            bloque: 1,                      // bloque/nivel original del plan
+            requisitos: ["MA0101"],         // códigos
+            correquisitos: [],
+            categoria_id: null,             // se asigna luego manualmente
+            estado: "pendiente",            // "pendiente" | "cursando" | "aprobado" | "reprobado"
+            escala_notas_override: null,    // null = usa la global/universidad
+          }
+          *//*
+        ],
+      }
+      */
+    ],
 
-1. Entra a tu cuenta de GitHub y crea un repositorio nuevo (puede ser público o privado). Ejemplo de nombre: `app-academica`.
-2. Sube TODOS estos archivos manteniendo la misma carpeta:
-   ```
-   index.html
-   css/design-system.css
-   js/schema.js
-   js/auth.js
-   js/app.js
-   README.md
-   ```
-   (En GitHub: botón "Add file" → "Upload files", arrastras la carpeta completa).
-3. Ve a **Settings → Pages** de tu repositorio → en "Branch" selecciona `main` y guarda. GitHub te va a dar una URL parecida a:
-   `https://tu-usuario.github.io/app-academica/`
-   Anota esa URL exacta, la vas a necesitar en el paso 2.
+    // Historial de semestres cursados, de cualquiera de los planes de estudio.
+    semestres: [
+      /*
+      {
+        id: "sem_001",
+        plan_estudio_id: "plan_001",
+        nombre: "I Semestre",          // o "Verano 2025", etc.
+        fecha_inicio: "2026-01-12",
+        semanas_totales: 16,
+        materias_matriculadas: [
+          {
+            materia_id: "MA1102",
+            plan_estudio_id: "plan_001", // de cuál de los dos planes viene (relevante en Modo Hardcore)
+            profesor_id: null,
+            criterios: [
+              // { id, nombre, valor_total_porcentaje }
+            ],
+            asignaciones: [
+              // { id, criterio_id, nombre, nota, agregado_a_agenda: true/false, agenda_evento_id }
+            ],
+            nota_final: null,           // calculada en JS local, redondeada al 5
+            calificacion_profesor: null // 1-10, evaluación subjetiva del usuario al profesor
+          }
+        ],
+        horario: [
+          // { materia_id, dia: "L"|"K"|"M"|"J"|"V"|"S"|"D", hora_inicio, hora_fin, aula, modalidad, color }
+        ],
+      }
+      */
+    ],
 
----
+    profesores: [
+      /*
+      { id, nombre, materias_impartidas: [{ materia_id, semestre_id, nota_obtenida, calificacion_dada }] }
+      */
+    ],
 
-## Paso 2 — Crea tu "Client ID" de Google (gratis, sin tarjeta)
+    agenda: [
+      /*
+      { id, tipo: "tarea"|"examen"|"recordatorio", titulo, fecha, hora, materia_id, semestre_id,
+        completado: false, archivado: false, notas: "" }
+      */
+    ],
+  };
+}
 
-Esto es lo que permite que TU app (y solo la tuya) le pida permiso a cada usuario para guardar su archivo de datos en su propio Drive.
+/** Estructura de referencia de un "enlace rápido" (máx. 20 por usuario). */
+function crearEnlaceRapido({ nombre, url, icono_tipo, icono_valor }) {
+  // icono_tipo: "emoji" | "imagen" ; icono_valor: el emoji o la URL/base64 de la imagen
+  return { id: crypto.randomUUID(), nombre, url, icono_tipo, icono_valor };
+}
 
-1. Ve a [console.cloud.google.com](https://console.cloud.google.com) e inicia sesión con cualquier cuenta de Google.
-2. Arriba a la izquierda, crea un proyecto nuevo (ej. nómbralo "App Academica").
-3. En el buscador de arriba escribe **"Google Drive API"**, entra y presiona **Habilitar**.
-4. Ve a **"APIs y servicios" → "Pantalla de consentimiento de OAuth"**:
-   - Tipo de usuario: **Externo**.
-   - Nombre de la app: lo que quieras (ej. "App Académica").
-   - Correo de soporte: el tuyo.
-   - En "Usuarios de prueba" (Test users) agrega los correos de Google de las personas de tu círculo cercano que van a usar la app (mientras no publiques la app oficialmente, solo estos correos podrán iniciar sesión — esto es normal y no cuesta nada).
-5. Ve a **"APIs y servicios" → "Credenciales" → "Crear credenciales" → "ID de cliente de OAuth"**:
-   - Tipo de aplicación: **Aplicación web**.
-   - En **"Orígenes de JavaScript autorizados"** pega la URL de tu GitHub Pages del Paso 1 (ej. `https://tu-usuario.github.io`).
-   - Guarda. Te va a mostrar un **Client ID** parecido a `123456789-abc.apps.googleusercontent.com`. Cópialo.
+const LIMITE_ENLACES_RAPIDOS = 20;
+/* Orden "azucarado": neutros primero (blanco → gris → negro) y luego el
+ * espectro cromático completo (rojo → dorado → amarillo → verde → cyan →
+ * azul → índigo → morado → rosado), cerrando con "azucarado" (combinación
+ * de varios colores pastel) como pieza destacada al final. */
+const PALETAS_DISPONIBLES = [
+  "blanco", "gris", "negro",
+  "rojo", "dorado", "amarillo", "verde", "cyan", "azul", "indigo", "morado", "rosado",
+  "azucarado",
+];
 
----
+/* ===================== Plan de Estudios / Materias / Categorías ===================== */
 
-## Paso 3 — Pega tu Client ID en el código
+/** Valores por defecto sugeridos según universidad (editables por el usuario). */
+const PARAMETROS_UNIVERSIDAD_DEFAULT = {
+  TEC: { nombre_bloque: "Semestre", semanas_por_bloque: 16, horario_inicio_default: "07:30", horario_duracion_bloque_min: 50 },
+  UCR: { nombre_bloque: "Semestre", semanas_por_bloque: 16, horario_inicio_default: "07:00", horario_duracion_bloque_min: 50 },
+};
 
-1. Abre el archivo `js/auth.js`.
-2. Busca esta línea casi al inicio:
-   ```js
-   const CLIENT_ID = "TU_CLIENT_ID_DE_GOOGLE.apps.googleusercontent.com";
-   ```
-3. Reemplaza el texto entre comillas por el Client ID que copiaste en el Paso 2.
-4. Sube el archivo de nuevo a GitHub (reemplazando el anterior).
+function crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, parametros_universidad }) {
+  return {
+    id: "plan_" + crypto.randomUUID(),
+    nombre_carrera,
+    universidad,
+    codigo_plan: codigo_plan || null,
+    parametros_universidad: {
+      nombre_bloque: "Semestre",
+      semanas_por_bloque: 16,
+      escala_notas: 100,
+      formula_ponderado: "creditos",
+      horario_inicio_default: "07:30",
+      horario_duracion_bloque_min: 50,
+      ...(parametros_universidad || {}),
+    },
+    categorias: [],
+    materias: [],
+  };
+}
 
----
+function crearCategoria({ nombre, color }) {
+  return { id: "cat_" + crypto.randomUUID(), nombre, color };
+}
 
-## Paso 4 — Prueba
-
-1. Abre la URL de tu GitHub Pages en el navegador (celular o computadora).
-2. Presiona "Iniciar sesión con Google" e inicia con una de las cuentas que agregaste como "usuario de prueba".
-3. Google te va a mostrar una pantalla pidiendo permiso para "ver y administrar únicamente los archivos que creaste con esta app" — es normal, acéptalo.
-4. Deberías ver la app con el menú lateral, el selector de paleta, el switch de modo claro/oscuro y el apartado de escala de notas.
-5. Cambia de paleta o de modo y recarga la página — debe recordar tu elección.
-6. Prueba "Añadir enlace" y agrega uno de prueba.
-7. Ve a tu Google Drive (drive.google.com) — vas a ver un archivo nuevo llamado `app_academica_datos.json`. Ese es tu archivo de datos personal.
-
-Si algo de esto no funciona, cuéntame exactamente en qué paso se atoró y seguimos desde ahí.
-
----
-
-## ¿Qué sigue?
-
-Con esto ya tenemos el terreno listo. La **Iteración 1** agrega el Plan de Estudios de verdad: importar tu malla curricular (con el prompt hacia una IA que ya tienes armado), verla por bloques, categorizarla a tu manera, y marcar materias como aprobadas.
+/** Crea una materia a partir de una fila ya parseada del CSV (ver js/plan.js). */
+function crearMateria({ codigo, nombre, creditos, horas, bloque, requisitos, correquisitos }) {
+  return {
+    id: codigo, // el código funciona como id único dentro del plan
+    codigo,
+    nombre,
+    creditos,
+    horas: {
+      teoria: horas.teoria || 0,
+      practica: horas.practica || 0,
+      laboratorio: horas.laboratorio || 0,
+      teoria_practica: horas.teoria_practica || 0,
+    },
+    bloque,
+    requisitos: requisitos || [],
+    correquisitos: correquisitos || [],
+    categoria_id: null,
+    estado: "pendiente",
+    escala_notas_override: null,
+  };
+}

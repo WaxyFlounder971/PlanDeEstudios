@@ -1,0 +1,748 @@
+/* =========================================================================
+   SISTEMA DE DISEÑO — App Académica
+   Base visual: glassmorphism + degradados + pills + badges + switches.
+   10 paletas x 2 modos (claro/oscuro) controladas por atributos en <html>:
+     <html data-palette="azul" data-mode="dark">
+   ========================================================================= */
+
+:root {
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-pill: 999px;
+
+  --font-display: 'Sora', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Inter', 'Segoe UI', system-ui, sans-serif;
+
+  --shadow-glass: 0 20px 40px rgba(0, 0, 0, 0.35);
+  --shadow-float: 0 8px 20px rgba(0, 0, 0, 0.4);
+
+  --transition-fast: 0.18s ease;
+  --transition-med: 0.28s ease;
+}
+
+/* ---- Estructura base (independiente de paleta) ---- */
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  font-family: var(--font-body);
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  transition: background var(--transition-med), color var(--transition-med);
+}
+
+body {
+  background-image:
+    radial-gradient(circle at 15% 10%, var(--accent-glow-1) 0%, transparent 45%),
+    radial-gradient(circle at 85% 0%, var(--accent-glow-2) 0%, transparent 40%),
+    radial-gradient(circle at 50% 100%, var(--accent-glow-1) 0%, transparent 55%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 700; margin: 0 0 8px; }
+p { margin: 0 0 12px; color: var(--text-secondary); }
+a { color: var(--accent-1); }
+
+/* ---- Tarjeta de vidrio (glassmorphism) ---- */
+.glass-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-glass);
+  padding: 24px;
+}
+
+.glass-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* ---- Botón primario con degradado ---- */
+.btn {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.95rem;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+  padding: 12px 22px;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
+}
+.btn:active { transform: scale(0.97); }
+.btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+
+.btn-primary {
+  background: var(--gradient-accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-float);
+}
+.btn-primary:hover { box-shadow: 0 10px 26px var(--accent-glow-1); }
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  border: 1px solid var(--border-glass);
+}
+.btn-secondary:hover { background: rgba(255, 255, 255, 0.1); }
+
+.btn-danger {
+  background: transparent;
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger);
+}
+
+.btn-block { width: 100%; }
+
+/* ---- Grupo de botones "pill" (selección exclusiva) ---- */
+.pill-group {
+  display: flex;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.18);
+  padding: 4px;
+  border-radius: var(--radius-pill);
+}
+[data-mode="light"] .pill-group { background: rgba(0, 0, 0, 0.05); }
+
+.pill-item {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+.pill-item.active {
+  background: var(--gradient-accent-alt, var(--gradient-accent));
+  color: var(--on-accent);
+  box-shadow: var(--shadow-float);
+}
+
+/* ---- Badges semánticos ---- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+}
+.badge-success { background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #34d399; }
+.badge-warning { background: rgba(245, 158, 11, 0.15); border-color: #f59e0b; color: #fbbf24; }
+.badge-danger  { background: rgba(239, 68, 68, 0.15);  border-color: #ef4444; color: #f87171; }
+.badge-neutral { background: rgba(148, 163, 184, 0.15); border-color: #94a3b8; color: #cbd5e1; }
+.badge-accent  { background: var(--accent-1-10); border-color: var(--accent-1); color: var(--accent-2); }
+
+/* ---- Switch (toggle on/off) ---- */
+.switch { position: relative; display: inline-block; width: 46px; height: 26px; flex-shrink: 0; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch .track {
+  position: absolute; inset: 0; cursor: pointer;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-pill);
+  transition: background var(--transition-fast);
+}
+.switch .thumb {
+  position: absolute; height: 20px; width: 20px; left: 3px; top: 3px;
+  background: #fff; border-radius: 50%;
+  transition: transform var(--transition-fast);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+.switch input:checked + .track { background: var(--gradient-accent-alt2, var(--gradient-accent)); }
+.switch input:checked + .track .thumb { transform: translateX(20px); }
+.switch input:focus-visible + .track { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+
+/* ---- Checkbox custom ---- */
+.checkbox { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
+.checkbox input { display: none; }
+.checkbox .box {
+  width: 22px; height: 22px; border-radius: 7px;
+  border: 1.5px solid var(--border-glass);
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--transition-fast);
+  background: rgba(0,0,0,0.15);
+}
+.checkbox input:checked + .box {
+  background: var(--gradient-accent);
+  border-color: transparent;
+}
+.checkbox input:checked + .box::after {
+  content: "✓"; color: #fff; font-size: 14px; font-weight: 700;
+}
+
+/* ---- Inputs ---- */
+.form-input, .form-select, .form-textarea {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 12px 14px;
+  font-size: 0.95rem;
+  font-family: var(--font-body);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+[data-mode="light"] .form-input,
+[data-mode="light"] .form-select,
+[data-mode="light"] .form-textarea { background: rgba(0,0,0,0.04); }
+
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  outline: none;
+  border-color: var(--accent-1);
+  box-shadow: 0 0 0 3px var(--accent-1-20);
+}
+.form-label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
+
+/* ---- Modal ---- */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+.modal-card {
+  width: min(440px, 100%);
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+/* ---- Paleta swatch selector ----
+   Flex en vez de grid: así la última fila (incompleta) queda centrada.
+   13 paletas / 7 columnas fijas = 2 líneas exactas (7 arriba, 6 abajo, la
+   fila de arriba con más elementos que la de abajo). El número de columnas
+   NO cambia con el tamaño de pantalla — lo que se adapta es el tamaño de
+   cada cuadro (siempre cuadrado, gracias a aspect-ratio), así nunca hay
+   más de 2 líneas. */
+.palette-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+.palette-swatch {
+  flex: 0 0 calc((100% - 6 * 10px) / 7); /* 7 por fila, siempre */
+  max-width: 64px;
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  border: 2px solid transparent;
+  overflow: hidden; /* el degradado nunca se sale de la esquina redondeada */
+  /* Fuerza a Safari/iOS a recortar bien las esquinas redondeadas incluso
+     al aplicar `transform` en :hover (bug conocido donde, sin esto, las
+     esquinas se ven "cuadradas" al mover el elemento). */
+  -webkit-mask-image: -webkit-radial-gradient(circle, #fff 100%, #000 100%);
+  display: flex; align-items: flex-end; justify-content: center;
+  padding-bottom: 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.35);
+  transition: transform var(--transition-fast), border-color var(--transition-fast);
+}
+@media (max-width: 420px) {
+  /* Sigue habiendo 7 por fila; solo se reduce el espaciado y el tope de
+     tamaño para que quepan cómodas en pantallas angostas. */
+  .palette-grid { gap: 6px; }
+  .palette-swatch { flex-basis: calc((100% - 6 * 6px) / 7); max-width: 42px; }
+}
+.palette-swatch:hover { transform: translateY(-2px); }
+.palette-swatch.selected { border-color: var(--text-primary); }
+
+/* ---- Utilidades de layout ---- */
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.row { display: flex; align-items: center; gap: 10px; }
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.muted { color: var(--text-muted); font-size: 0.85rem; }
+
+/* =========================================================================
+   PALETAS — cada una define acentos y fondos para modo oscuro y claro.
+   ========================================================================= */
+
+/* ---------- BLANCO (neutro/plata) ---------- */
+[data-palette="blanco"][data-mode="dark"] {
+  --bg-canvas: #101114; --bg-card: rgba(255,255,255,0.05); --bg-panel: rgba(255,255,255,0.03);
+  --border-glass: rgba(255,255,255,0.10); --text-primary:#F1F2F4; --text-secondary:#B7BAC1; --text-muted:#888C94;
+  --accent-1:#CBD5E1; --accent-2:#F8FAFC; --gradient-accent: linear-gradient(90deg,#94A3B8,#F1F5F9);
+  --accent-glow-1: rgba(203,213,225,0.18); --accent-glow-2: rgba(248,250,252,0.10);
+  --accent-1-10: rgba(203,213,225,0.10); --accent-1-20: rgba(203,213,225,0.25); --color-danger:#f87171; --on-accent:#1E293B;
+}
+[data-palette="blanco"][data-mode="light"] {
+  --bg-canvas: #F7F8FA; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
+  --border-glass: rgba(15,23,42,0.08); --text-primary:#0F172A; --text-secondary:#475569; --text-muted:#7B8697;
+  --accent-1:#64748B; --accent-2:#334155; --gradient-accent: linear-gradient(90deg,#94A3B8,#475569);
+  --accent-glow-1: rgba(100,116,139,0.10); --accent-glow-2: rgba(51,65,85,0.06);
+  --accent-1-10: rgba(100,116,139,0.10); --accent-1-20: rgba(100,116,139,0.25); --color-danger:#dc2626; --on-accent:#1E293B;
+}
+
+/* ---------- NEGRO (deep black) ---------- */
+[data-palette="negro"][data-mode="dark"] {
+  --bg-canvas: #000000; --bg-card: rgba(255,255,255,0.04); --bg-panel: rgba(255,255,255,0.02);
+  --border-glass: rgba(255,255,255,0.08); --text-primary:#FFFFFF; --text-secondary:#A3A3A3; --text-muted:#707070;
+  --accent-1:#3F3F46; --accent-2:#71717A; --gradient-accent: linear-gradient(90deg,#18181B,#52525B);
+  --accent-glow-1: rgba(63,63,70,0.30); --accent-glow-2: rgba(113,113,122,0.15);
+  --accent-1-10: rgba(63,63,70,0.14); --accent-1-20: rgba(63,63,70,0.30); --color-danger:#f87171; --on-accent:#ffffff;
+}
+[data-palette="negro"][data-mode="light"] {
+  --bg-canvas: #FAFAFA; --bg-card: rgba(255,255,255,0.8); --bg-panel: rgba(255,255,255,0.65);
+  --border-glass: rgba(0,0,0,0.08); --text-primary:#000000; --text-secondary:#3F3F46; --text-muted:#71717A;
+  --accent-1:#18181B; --accent-2:#000000; --gradient-accent: linear-gradient(90deg,#27272A,#000000);
+  --accent-glow-1: rgba(0,0,0,0.10); --accent-glow-2: rgba(0,0,0,0.06);
+  --accent-1-10: rgba(0,0,0,0.08); --accent-1-20: rgba(0,0,0,0.18); --color-danger:#dc2626; --on-accent:#ffffff;
+}
+
+/* ---------- ROJO ---------- */
+[data-palette="rojo"][data-mode="dark"] {
+  --bg-canvas: #170808; --bg-card: rgba(220,38,38,0.08); --bg-panel: rgba(220,38,38,0.04);
+  --border-glass: rgba(255,255,255,0.10); --text-primary:#FDEEEE; --text-secondary:#E3AFAF; --text-muted:#AC7D7D;
+  --accent-1:#DC2626; --accent-2:#F87171; --gradient-accent: linear-gradient(90deg,#B91C1C,#F87171);
+  --accent-glow-1: rgba(220,38,38,0.28); --accent-glow-2: rgba(248,113,113,0.18);
+  --accent-1-10: rgba(220,38,38,0.12); --accent-1-20: rgba(220,38,38,0.28); --color-danger:#fb923c; --on-accent:#ffffff;
+}
+[data-palette="rojo"][data-mode="light"] {
+  --bg-canvas: #FEF2F2; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
+  --border-glass: rgba(185,28,28,0.10); --text-primary:#450A0A; --text-secondary:#7F1D1D; --text-muted:#A66A6A;
+  --accent-1:#B91C1C; --accent-2:#DC2626; --gradient-accent: linear-gradient(90deg,#B91C1C,#EF4444);
+  --accent-glow-1: rgba(185,28,28,0.12); --accent-glow-2: rgba(239,68,68,0.10);
+  --accent-1-10: rgba(185,28,28,0.10); --accent-1-20: rgba(185,28,28,0.22); --color-danger:#c2410c; --on-accent:#ffffff;
+}
+
+/* ---------- GRIS ---------- */
+[data-palette="gris"][data-mode="dark"] {
+  --bg-canvas: #121316; --bg-card: rgba(255,255,255,0.05); --bg-panel: rgba(255,255,255,0.03);
+  --border-glass: rgba(255,255,255,0.10); --text-primary:#F1F1F2; --text-secondary:#B4B5B9; --text-muted:#84858C;
+  --accent-1:#6B7280; --accent-2:#9CA3AF; --gradient-accent: linear-gradient(90deg,#4B5563,#9CA3AF);
+  --accent-glow-1: rgba(107,114,128,0.20); --accent-glow-2: rgba(156,163,175,0.12);
+  --accent-1-10: rgba(107,114,128,0.12); --accent-1-20: rgba(107,114,128,0.28); --color-danger:#f87171; --on-accent:#ffffff;
+}
+[data-palette="gris"][data-mode="light"] {
+  --bg-canvas: #F4F4F5; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
+  --border-glass: rgba(15,23,42,0.08); --text-primary:#18181B; --text-secondary:#52525B; --text-muted:#8B8B93;
+  --accent-1:#52525B; --accent-2:#27272A; --gradient-accent: linear-gradient(90deg,#71717A,#3F3F46);
+  --accent-glow-1: rgba(82,82,91,0.10); --accent-glow-2: rgba(39,39,42,0.06);
+  --accent-1-10: rgba(82,82,91,0.10); --accent-1-20: rgba(82,82,91,0.25); --color-danger:#dc2626; --on-accent:#ffffff;
+}
+
+/* ---------- AZUL ---------- */
+[data-palette="azul"][data-mode="dark"] {
+  --bg-canvas: #0A0E17; --bg-card: rgba(37,99,235,0.07); --bg-panel: rgba(37,99,235,0.04);
+  --border-glass: rgba(255,255,255,0.10); --text-primary:#F1F5FE; --text-secondary:#AEC0DD; --text-muted:#7C8CA8;
+  --accent-1:#2563EB; --accent-2:#38BDF8; --gradient-accent: linear-gradient(90deg,#2563EB,#38BDF8);
+  --accent-glow-1: rgba(37,99,235,0.28); --accent-glow-2: rgba(56,189,248,0.18);
+  --accent-1-10: rgba(37,99,235,0.12); --accent-1-20: rgba(37,99,235,0.28); --color-danger:#f87171; --on-accent:#ffffff;
+}
+[data-palette="azul"][data-mode="light"] {
+  --bg-canvas: #F2F6FE; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
+  --border-glass: rgba(37,99,235,0.10); --text-primary:#0B1B3B; --text-secondary:#33487A; --text-muted:#7284AC;
+  --accent-1:#2563EB; --accent-2:#0EA5E9; --gradient-accent: linear-gradient(90deg,#2563EB,#0EA5E9);
+  --accent-glow-1: rgba(37,99,235,0.12); --accent-glow-2: rgba(14,165,233,0.10);
+  --accent-1-10: rgba(37,99,235,0.10); --accent-1-20: rgba(37,99,235,0.22); --color-danger:#dc2626; --on-accent:#ffffff;
+}
+
+/* ---------- VERDE ---------- */
+[data-palette="verde"][data-mode="dark"] {
+  --bg-canvas: #08120D; --bg-card: rgba(22,163,74,0.07); --bg-panel: rgba(22,163,74,0.04);
+  --border-glass: rgba(255,255,255,0.10); --text-primary:#EFFDF4; --text-secondary:#AFD8BE; --text-muted:#7DA48D;
+  --accent-1:#16A34A; --accent-2:#4ADE80; --gradient-accent: linear-gradient(90deg,#15803D,#4ADE80);
+  --accent-glow-1: rgba(22,163,74,0.28); --accent-glow-2: rgba(74,222,128,0.16);
+  --accent-1-10: rgba(22,163,74,0.12); --accent-1-20: rgba(22,163,74,0.28); --color-danger:#f87171; --on-accent:#ffffff;
+}
+[data-palette="verde"][data-mode="light"] {
+  --bg-canvas: #F1FAF3; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
+  --border-glass: rgba(21,128,61,0.10); --text-primary:#052E16; --text-secondary:#2B5D3F; --text-muted:#6C8F79;
+  --accent-1:#15803D; --accent-2:#059669; --gradient-accent: linear-gradient(90deg,#15803D,#059669);
+  --accent-glow-1: rgba(21,128,61,0.12); --accent-glow-2: rgba(5,150,105,0.10);
+  --accent-1-10: rgba(21,128,61,0.10); --accent-1-20: rgba(21,128,61,0.22); --color-danger:#dc2626; --on-accent:#ffffff;
+}
+
+/* ---------- CYAN ---------- */
+[data-palette="cyan"][data-mode="dark"] {
+  --bg-canvas: #06141A; --bg-card: rgba(8,145,178,0.08); --bg-panel: rgba(8,145,178,0.04);
+  --border-glass: rgba(255,255,255,0.10); --text-primary:#EAFCFD; --text-secondary:#A6D9DF; --text-muted:#75A6AD;
+  --accent-1:#0891B2; --accent-2:#22D3EE; --gradient-accent: linear-gradient(90deg,#0E7490,#22D3EE);
+  --accent-glow-1: rgba(8,145,178,0.28); --accent-glow-2: rgba(34,211,238,0.18);
+  --accent-1-10: rgba(8,145,178,0.12); --accent-1-20: rgba(8,145,178,0.28); --color-danger:#f87171; --on-accent:#ffffff;
+}
+[data-palette="cyan"][data-mode="light"] {
+  --bg-canvas: #EEFBFD; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
+  --border-glass: rgba(14,116,144,0.10); --text-primary:#053442; --text-secondary:#2C6270; --text-muted:#6D949C;
+  --accent-1:#0E7490; --accent-2:#0891B2; --gradient-accent: linear-gradient(90deg,#0E7490,#06B6D4);
+  --accent-glow-1: rgba(14,116,144,0.12); --accent-glow-2: rgba(6,182,212,0.10);
+  --accent-1-10: rgba(14,116,144,0.10); --accent-1-20: rgba(14,116,144,0.22); --color-danger:#dc2626; --on-accent:#ffffff;
+}
+
+/* ---------- MORADO ---------- */
+[data-palette="morado"][data-mode="dark"] {
+  --bg-canvas: #100B1A; --bg-card: rgba(124,58,237,0.08); --bg-panel: rgba(124,58,237,0.04);
+  --border-glass: rgba(255,255,255,0.10); --text-primary:#F5EEFE; --text-secondary:#CBB3E8; --text-muted:#9A82B8;
+  --accent-1:#7C3AED; --accent-2:#C084FC; --gradient-accent: linear-gradient(90deg,#6D28D9,#C084FC);
+  --accent-glow-1: rgba(124,58,237,0.28); --accent-glow-2: rgba(192,132,252,0.18);
+  --accent-1-10: rgba(124,58,237,0.12); --accent-1-20: rgba(124,58,237,0.28); --color-danger:#f87171; --on-accent:#ffffff;
+}
+[data-palette="morado"][data-mode="light"] {
+  --bg-canvas: #F7F2FE; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
+  --border-glass: rgba(109,40,217,0.10); --text-primary:#2B0A54; --text-secondary:#5B3A8A; --text-muted:#8874A8;
+  --accent-1:#6D28D9; --accent-2:#9333EA; --gradient-accent: linear-gradient(90deg,#6D28D9,#A855F7);
+  --accent-glow-1: rgba(109,40,217,0.12); --accent-glow-2: rgba(168,85,247,0.10);
+  --accent-1-10: rgba(109,40,217,0.10); --accent-1-20: rgba(109,40,217,0.22); --color-danger:#dc2626; --on-accent:#ffffff;
+}
+
+/* ---------- ROSADO ---------- */
+[data-palette="rosado"][data-mode="dark"] {
+  --bg-canvas: #170B12; --bg-card: rgba(219,39,119,0.08); --bg-panel: rgba(219,39,119,0.04);
+  --border-glass: rgba(255,255,255,0.10); --text-primary:#FDF0F6; --text-secondary:#E7B3CE; --text-muted:#B482A0;
+  --accent-1:#DB2777; --accent-2:#F472B6; --gradient-accent: linear-gradient(90deg,#BE185D,#F472B6);
+  --accent-glow-1: rgba(219,39,119,0.28); --accent-glow-2: rgba(244,114,182,0.18);
+  --accent-1-10: rgba(219,39,119,0.12); --accent-1-20: rgba(219,39,119,0.28); --color-danger:#f87171; --on-accent:#ffffff;
+}
+[data-palette="rosado"][data-mode="light"] {
+  --bg-canvas: #FDF1F7; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
+  --border-glass: rgba(190,24,93,0.10); --text-primary:#4A0523; --text-secondary:#87285A; --text-muted:#AD7692;
+  --accent-1:#BE185D; --accent-2:#DB2777; --gradient-accent: linear-gradient(90deg,#BE185D,#EC4899);
+  --accent-glow-1: rgba(190,24,93,0.12); --accent-glow-2: rgba(236,72,153,0.10);
+  --accent-1-10: rgba(190,24,93,0.10); --accent-1-20: rgba(190,24,93,0.22); --color-danger:#dc2626; --on-accent:#ffffff;
+}
+
+/* ---------- ÍNDIGO ---------- */
+[data-palette="indigo"][data-mode="dark"] {
+  --bg-canvas: #0B0C1E; --bg-card: rgba(79,70,229,0.08); --bg-panel: rgba(79,70,229,0.04);
+  --border-glass: rgba(255,255,255,0.10); --text-primary:#EFEEFE; --text-secondary:#BFBBEB; --text-muted:#8B87BE;
+  --accent-1:#4F46E5; --accent-2:#818CF8; --gradient-accent: linear-gradient(90deg,#4338CA,#818CF8);
+  --accent-glow-1: rgba(79,70,229,0.28); --accent-glow-2: rgba(129,140,248,0.18);
+  --accent-1-10: rgba(79,70,229,0.12); --accent-1-20: rgba(79,70,229,0.28); --color-danger:#f87171; --on-accent:#ffffff;
+}
+[data-palette="indigo"][data-mode="light"] {
+  --bg-canvas: #F1F1FD; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
+  --border-glass: rgba(67,56,202,0.10); --text-primary:#1B1650; --text-secondary:#413A8C; --text-muted:#7C77AB;
+  --accent-1:#4338CA; --accent-2:#4F46E5; --gradient-accent: linear-gradient(90deg,#4338CA,#6366F1);
+  --accent-glow-1: rgba(67,56,202,0.12); --accent-glow-2: rgba(99,102,241,0.10);
+  --accent-1-10: rgba(67,56,202,0.10); --accent-1-20: rgba(67,56,202,0.22); --color-danger:#dc2626; --on-accent:#ffffff;
+}
+
+/* ---------- AMARILLO ---------- */
+[data-palette="amarillo"][data-mode="dark"] {
+  --bg-canvas: #16130A; --bg-card: rgba(202,138,4,0.08); --bg-panel: rgba(202,138,4,0.04);
+  --border-glass: rgba(255,255,255,0.10); --text-primary:#FDF9EC; --text-secondary:#E3D19D; --text-muted:#AC9C6C;
+  --accent-1:#CA8A04; --accent-2:#FDE047; --gradient-accent: linear-gradient(90deg,#A16207,#FDE047);
+  --accent-glow-1: rgba(202,138,4,0.26); --accent-glow-2: rgba(253,224,71,0.16);
+  --accent-1-10: rgba(202,138,4,0.12); --accent-1-20: rgba(202,138,4,0.28); --color-danger:#f87171; --on-accent:#ffffff;
+}
+[data-palette="amarillo"][data-mode="light"] {
+  --bg-canvas: #FEFBEB; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
+  --border-glass: rgba(161,98,7,0.10); --text-primary:#422C05; --text-secondary:#78571A; --text-muted:#A2895C;
+  --accent-1:#A16207; --accent-2:#CA8A04; --gradient-accent: linear-gradient(90deg,#A16207,#EAB308);
+  --accent-glow-1: rgba(161,98,7,0.12); --accent-glow-2: rgba(234,179,8,0.10);
+  --accent-1-10: rgba(161,98,7,0.10); --accent-1-20: rgba(161,98,7,0.22); --color-danger:#dc2626; --on-accent:#ffffff;
+}
+
+/* ---------- DORADO ---------- */
+[data-palette="dorado"][data-mode="dark"] {
+  --bg-canvas: #170F08; --bg-card: rgba(180,83,9,0.09); --bg-panel: rgba(180,83,9,0.05);
+  --border-glass: rgba(255,255,255,0.10); --text-primary:#FDF3E4; --text-secondary:#E3C296; --text-muted:#AF9066;
+  --accent-1:#B45309; --accent-2:#FBBF24; --gradient-accent: linear-gradient(90deg,#92400E,#FBBF24);
+  --accent-glow-1: rgba(180,83,9,0.28); --accent-glow-2: rgba(251,191,36,0.18);
+  --accent-1-10: rgba(180,83,9,0.12); --accent-1-20: rgba(180,83,9,0.28); --color-danger:#f87171; --on-accent:#ffffff;
+}
+[data-palette="dorado"][data-mode="light"] {
+  --bg-canvas: #FDF6EB; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
+  --border-glass: rgba(146,64,14,0.10); --text-primary:#3A1E04; --text-secondary:#6E4718; --text-muted:#9C7B4F;
+  --accent-1:#92400E; --accent-2:#B45309; --gradient-accent: linear-gradient(90deg,#92400E,#D97706);
+  --accent-glow-1: rgba(146,64,14,0.12); --accent-glow-2: rgba(217,119,6,0.10);
+  --accent-1-10: rgba(146,64,14,0.10); --accent-1-20: rgba(146,64,14,0.22); --color-danger:#dc2626; --on-accent:#ffffff;
+}
+
+/* ---------- AZUCARADO ----------
+   Los botones/elementos NO mezclan todos los colores en una sola mancha:
+   cada uno usa un degradado horizontal de solo 2 tonos, pero se turnan
+   distintas parejas de colores (--gradient-accent / -alt / -alt2) para que
+   haya variedad de un botón a otro sin que ninguno se vea "sucio". El
+   swatch del selector de temas sí conserva el efecto disperso/artístico
+   (ver FONDO_PREVIEW_AZUCARADO en app.js), ya que ahí solo es una muestra. */
+/* Recoloreado a tonos pastel FRÍOS (rosa → fucsia → violeta → azul → cyan),
+   sin verde ni amarillo, para que se vea más suave y menos "bandera". */
+[data-palette="azucarado"][data-mode="dark"] {
+  --bg-canvas: #100E1C; --bg-card: rgba(255,255,255,0.05); --bg-panel: rgba(255,255,255,0.03);
+  --border-glass: rgba(255,255,255,0.10); --text-primary:#F6F1FB; --text-secondary:#CBC0DE; --text-muted:#8F84A8;
+  --accent-1:#C599E8; --accent-2:#7DD3DB;
+  --gradient-accent: linear-gradient(90deg, #F5A9D0, #B8A6F0);      /* rosa → violeta */
+  --gradient-accent-alt: linear-gradient(90deg, #C599E8, #9DC0F5);  /* fucsia → azul */
+  --gradient-accent-alt2: linear-gradient(90deg, #9DC0F5, #8FE3EA); /* azul → cyan */
+  --accent-glow-1: rgba(184,166,240,0.28); --accent-glow-2: rgba(245,169,208,0.18);
+  --accent-1-10: rgba(184,166,240,0.12); --accent-1-20: rgba(184,166,240,0.28); --color-danger:#f87171; --on-accent:#2A1E38;
+}
+[data-palette="azucarado"][data-mode="light"] {
+  --bg-canvas: #FBF7FD; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
+  --border-glass: rgba(184,166,240,0.12); --text-primary:#2A1E38; --text-secondary:#5C4A72; --text-muted:#8D7BA0;
+  --accent-1:#A876D9; --accent-2:#4BB8C4;
+  --gradient-accent: linear-gradient(90deg, #F0A0CC, #B091EA);      /* rosa → violeta */
+  --gradient-accent-alt: linear-gradient(90deg, #B091EA, #7FAEEE);  /* violeta → azul */
+  --gradient-accent-alt2: linear-gradient(90deg, #7FAEEE, #6ED7DF); /* azul → cyan */
+  --accent-glow-1: rgba(168,118,217,0.14); --accent-glow-2: rgba(240,160,204,0.12);
+  --accent-1-10: rgba(168,118,217,0.10); --accent-1-20: rgba(168,118,217,0.22); --color-danger:#dc2626; --on-accent:#2A1E38;
+}
+
+/* =========================================================================
+   LAYOUT DE LA APP (shell + sidebar) — responsivo real
+   Nada aquí depende del ancho de pantalla para decidir colores/paleta;
+   data-palette y data-mode siempre se leen desde <html> sin importar el
+   viewport (ver punto 2 del prompt de ajustes).
+   ========================================================================= */
+
+#app-shell, #app-shell * { box-sizing: border-box; }
+
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* ---- Barra superior solo-móvil (hamburguesa) ---- */
+.mobile-topbar {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.mobile-topbar .btn-hamburguesa {
+  background: transparent;
+  border: 1px solid var(--border-glass);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  width: 42px; height: 42px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.mobile-topbar h3 { margin: 0; font-size: 1rem; }
+
+/* ---- Overlay para el drawer móvil ---- */
+.sidebar-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 49;
+}
+
+/* ---- Sidebar (nav) ---- */
+.app-sidebar {
+  width: 230px;
+  max-width: 230px;
+  flex-shrink: 0;
+  padding: 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: width var(--transition-med), max-width var(--transition-med), transform var(--transition-med);
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  overflow: hidden;
+}
+/* Un poco menos transparente que el resto de tarjetas de vidrio: se suma
+   una capa neutra (oscura en modo oscuro, clara en modo claro) encima del
+   fondo translúcido normal, solo para la barra lateral. */
+[data-mode="dark"] #app-sidebar {
+  background: linear-gradient(rgba(0,0,0,0.16), rgba(0,0,0,0.16)), var(--bg-panel);
+}
+[data-mode="light"] #app-sidebar {
+  background: linear-gradient(rgba(255,255,255,0.16), rgba(255,255,255,0.16)), var(--bg-panel);
+}
+.app-sidebar .sidebar-scroll {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+.app-sidebar .sidebar-titulo { margin-bottom: 18px; white-space: nowrap; overflow: hidden; }
+.app-sidebar .btn-nav {
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-sidebar .btn-colapsar {
+  background: transparent;
+  border: 1px solid var(--border-glass);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  cursor: pointer;
+  align-self: flex-end;
+  margin-bottom: 8px;
+}
+
+/* Sidebar colapsada (solo desktop) */
+.app-sidebar.colapsada {
+  width: 72px;
+  max-width: 72px;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+.app-sidebar.colapsada .texto-nav,
+.app-sidebar.colapsada .sidebar-titulo span.texto,
+.app-sidebar.colapsada #indicador-sync,
+.app-sidebar.colapsada .perfil-datos {
+  display: none;
+}
+.app-sidebar.colapsada .btn-nav,
+.app-sidebar.colapsada .btn-colapsar { align-self: center; }
+.app-sidebar.colapsada .btn-colapsar { transform: rotate(180deg); }
+
+/* ---- Zona de perfil, fija abajo (sin scroll), punto 6 ---- */
+.perfil-sidebar {
+  position: sticky;
+  bottom: 0;
+  padding-top: 12px;
+  margin-top: 8px;
+  border-top: 1px solid var(--border-glass);
+  background: inherit;
+  flex-shrink: 0;
+}
+.perfil-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.perfil-foto {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--border-glass);
+  background: var(--bg-panel);
+  /* Mismo recorte a prueba de WebKit que .palette-swatch: sin esto, el
+     borde translúcido sobre un fondo degradado puede dejar "puntitos"
+     claros asomando en las esquinas del cuadro que envuelve el círculo,
+     visibles sobre todo en modo oscuro (se pierden en modo claro). */
+  overflow: hidden;
+  -webkit-mask-image: -webkit-radial-gradient(circle, #fff 100%, #000 100%);
+}
+.perfil-foto-wrap {
+  position: relative;
+  width: 34px; height: 34px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.perfil-foto-wrap .perfil-foto { position: absolute; inset: 0; }
+.perfil-foto-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gradient-accent);
+  color: var(--on-accent);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.perfil-nombre {
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+.app-sidebar.colapsada .perfil-fila { justify-content: center; }
+
+.perfil-popover {
+  position: absolute;
+  bottom: 100%;
+  left: 8px;
+  margin-bottom: 8px;
+  min-width: 200px;
+  padding: 14px;
+  z-index: 60;
+}
+.perfil-popover.oculto { display: none; }
+
+/* ---- Contenido principal ---- */
+.app-contenido {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.app-contenido > * { max-width: 760px; width: 100%; }
+
+/* =========================================================================
+   BREAKPOINT: < 900px → sidebar se convierte en drawer superior
+   ========================================================================= */
+@media (max-width: 899.98px) {
+  .mobile-topbar { display: flex; }
+
+  .app-sidebar {
+    position: fixed;
+    top: 0; left: 0;
+    height: 100vh;
+    width: min(280px, 82vw);
+    max-width: min(280px, 82vw);
+    z-index: 50;
+    transform: translateX(-100%);
+    box-shadow: var(--shadow-glass);
+  }
+  .app-sidebar.abierta { transform: translateX(0); }
+  .app-sidebar.colapsada { width: min(280px, 82vw); max-width: min(280px, 82vw); padding-left:14px; padding-right:14px; }
+  .app-sidebar.colapsada .texto-nav,
+  .app-sidebar.colapsada .sidebar-titulo span.texto,
+  .app-sidebar.colapsada #indicador-sync,
+  .app-sidebar.colapsada .perfil-datos { display: revert; }
+  .app-sidebar .btn-colapsar { display: none; } /* el colapsado de escritorio no aplica en móvil */
+
+  .sidebar-overlay.abierta { display: block; }
+
+  .app-contenido { padding: 16px; }
+  .app-contenido > * { max-width: 100%; }
+}
+
+@media (min-width: 900px) {
+  .sidebar-cerrar-movil { display: none; }
+}
+
+/* ---- Modal "Añadir enlace" (punto 7), responsivo también en 375px ---- */
+.modal-card { width: min(440px, calc(100vw - 32px)); }
+.modal-card .form-input[type="file"] { padding: 8px; }
+
+/* ---- Aviso de login bloqueado (punto 8) ---- */
+.aviso-login-bloqueado {
+  font-size: 0.82rem;
+  color: var(--color-danger);
+  margin-top: 4px;
+}
+
+/* ---- Utilidad genérica: nada debe forzar overflow horizontal ---- */
+img, svg { max-width: 100%; }
+
+/* ---- Responsive base ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
