@@ -47,13 +47,6 @@ h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 700; margin: 0 0
 p { margin: 0 0 12px; color: var(--text-secondary); }
 a { color: var(--accent-1); }
 
-/* Enlaces rápidos: el texto del nombre usa --text-primary (calibrado para
-   contraste en las 13 paletas) en vez de --accent-1, que en paletas oscuras
-   como Deep Black casi se pierde contra el fondo. El acento queda solo
-   como estado hover. */
-#lista-enlaces a { color: var(--text-primary); }
-#lista-enlaces a:hover { color: var(--accent-2); }
-
 /* ---- Tarjeta de vidrio (glassmorphism) ---- */
 .glass-card {
   background: var(--bg-card);
@@ -753,3 +746,89 @@ img, svg { max-width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+
+/* =========================================================================
+   ITERACIÓN 1 — PARTE 2: Vista del Plan de Estudios
+   ========================================================================= */
+
+/* ---- Candado (disponible / bloqueada) ----
+   Nunca color fijo en hex "porque sí": bloqueada usa el semántico de peligro
+   de la paleta activa; disponible usa el mismo verde que .badge-success. */
+.candado-bloqueado { color: var(--color-danger); }
+.candado-disponible { color: #34d399; }
+
+/* ---- Tarjeta de materia (fila principal) ---- */
+.materia-card { padding: 12px 14px; }
+.materia-fila-principal {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.materia-codigo {
+  width: 90px;
+  flex-shrink: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.materia-nombre {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.materia-derecha {
+  width: 170px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.materia-expandir { flex-shrink: 0; opacity: 0.7; }
+.materia-cuerpo { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-glass); }
+.materia-req-linea { text-align: right; color: var(--text-muted); font-size: 0.82rem; margin: 0; }
+
+@media (max-width: 640px) {
+  .materia-codigo { width: 62px; font-size: 0.72rem; }
+  .materia-derecha { width: 128px; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+}
+
+/* ---- Bloques como tarjetas colapsables independientes ---- */
+.bloque-card { margin-bottom: 4px; }
+.bloque-encabezado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+.bloque-encabezado h3 { margin: 0; }
+
+/* ---- Chips de código clickeables en requisitos/correquisitos ---- */
+.chip-codigo {
+  color: var(--accent-2);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ---- Franja superior de color de categoría en el modal de requisito ---- */
+.franja-categoria { height: 8px; border-radius: var(--radius-sm) var(--radius-sm) 0 0; margin: -24px -24px 16px; }
+
+/* ---- Modal de asignación de materias a categoría: más ancho (sección 7.2) ---- */
+#modal-categoria-materias .modal-card { width: min(640px, calc(100vw - 32px)); }
+
+/* ---- Créditos/estado en tarjeta de materia: más compactos en móvil ---- */
+.materia-derecha .badge { font-size: 0.72rem; padding: 3px 9px; }
+
+/* ---- Carrusel de planes ---- */
+.carrusel-planes { display: flex; align-items: center; gap: 10px; }
+.carrusel-planes button { flex-shrink: 0; }
