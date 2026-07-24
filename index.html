@@ -50,7 +50,10 @@
         <button class="btn btn-secondary btn-block btn-nav" title="Agenda" disabled>📖 <span class="texto-nav">Agenda</span></button>
         <button id="nav-configuracion" class="btn btn-primary btn-block btn-nav" data-seccion="configuracion" title="Configuración">⚙️ <span class="texto-nav">Configuración</span></button>
         <div style="flex:1;"></div>
-        <span id="indicador-sync" class="badge badge-success">Todo sincronizado</span>
+        <div class="row" style="justify-content:space-between;">
+          <span id="indicador-sync" class="badge badge-success">Todo sincronizado</span>
+          <button id="btn-forzar-sync" class="btn-colapsar" title="Forzar sincronización">🔄</button>
+        </div>
       </div>
 
       <!-- Zona de perfil, siempre visible sin scroll (punto 6) -->
@@ -287,6 +290,103 @@
     <div class="row" style="justify-content:flex-end;">
       <button id="btn-cancelar-categoria-materias" class="btn btn-secondary">Cancelar</button>
       <button id="btn-confirmar-categoria-materias" class="btn btn-primary">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Gestión de Planes de Estudio ===================== -->
+<div id="modal-gestion-planes" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;">Tus Planes de Estudio</h2>
+    <div id="lista-gestion-planes" class="stack"></div>
+    <p id="aviso-limite-planes" class="muted oculto">Límite de 3 planes alcanzado.</p>
+    <button id="btn-agregar-plan-gestion" class="btn btn-primary btn-block">+ Nuevo Plan</button>
+    <div class="row" style="justify-content:flex-end;">
+      <button id="btn-cerrar-gestion-planes" class="btn btn-secondary">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Añadir materia manualmente (B.5) ===================== -->
+<div id="modal-materia-manual" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;">+ Añadir materia</h2>
+
+    <div id="bloque-materia-manual-plan" class="oculto">
+      <span class="form-label">¿A cuál Plan de Estudios pertenece?</span>
+      <div class="pill-group" id="pill-materia-manual-plan"></div>
+    </div>
+
+    <div class="row">
+      <div style="flex:1;">
+        <span class="form-label">Código</span>
+        <input type="text" id="input-materia-codigo" class="form-input" placeholder="MA-1001">
+      </div>
+      <div style="flex:2;">
+        <span class="form-label">Nombre</span>
+        <input type="text" id="input-materia-nombre" class="form-input">
+      </div>
+    </div>
+
+    <div class="row">
+      <div style="flex:1;">
+        <span class="form-label">Créditos</span>
+        <input type="number" id="input-materia-creditos" class="form-input">
+      </div>
+      <div style="flex:1;">
+        <span class="form-label" id="label-materia-bloque">Bloque</span>
+        <input type="number" id="input-materia-bloque" class="form-input">
+      </div>
+    </div>
+
+    <div id="bloque-horas-simple">
+      <span class="form-label">Horas</span>
+      <input type="number" id="input-materia-horas-simple" class="form-input">
+    </div>
+    <div id="bloque-horas-detalladas" class="row oculto">
+      <div style="flex:1;"><span class="form-label">Teoría</span><input type="number" id="input-materia-horas-teoria" class="form-input"></div>
+      <div style="flex:1;"><span class="form-label">Práctica</span><input type="number" id="input-materia-horas-practica" class="form-input"></div>
+      <div style="flex:1;"><span class="form-label">Lab.</span><input type="number" id="input-materia-horas-lab" class="form-input"></div>
+      <div style="flex:1;"><span class="form-label">Teo-Prác.</span><input type="number" id="input-materia-horas-tp" class="form-input"></div>
+    </div>
+
+    <div>
+      <span class="form-label">Requisitos</span>
+      <input type="text" id="input-materia-requisitos" class="form-input" placeholder="MA-1001,FS-0210/FS-0227 (o &quot;Ninguno&quot;)">
+    </div>
+    <div>
+      <span class="form-label">Correquisitos</span>
+      <input type="text" id="input-materia-correquisitos" class="form-input" placeholder="Ninguno">
+    </div>
+
+    <p id="error-modal-materia-manual" class="muted oculto" style="color:var(--color-danger);"></p>
+
+    <div class="row" style="justify-content:flex-end;">
+      <button id="btn-cancelar-materia-manual" class="btn btn-secondary">Cancelar</button>
+      <button id="btn-guardar-materia-manual" class="btn btn-primary">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Desbloquea (búsqueda inversa) ===================== -->
+<div id="modal-desbloquea" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;" id="titulo-modal-desbloquea">Desbloquea:</h2>
+    <div id="lista-modal-desbloquea" class="stack"></div>
+    <div class="row" style="justify-content:flex-end;">
+      <button id="btn-cerrar-desbloquea" class="btn btn-primary">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Confirmación genérica (reemplaza confirm() nativo) ===================== -->
+<div id="modal-confirmacion" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;" id="titulo-modal-confirmacion">¿Estás seguro?</h2>
+    <p id="mensaje-modal-confirmacion" class="muted"></p>
+    <div class="row" style="justify-content:flex-end;">
+      <button id="btn-cancelar-confirmacion" class="btn btn-secondary">Cancelar</button>
+      <button id="btn-aceptar-confirmacion" class="btn btn-danger">Confirmar</button>
     </div>
   </div>
 </div>
