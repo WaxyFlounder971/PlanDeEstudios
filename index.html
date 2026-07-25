@@ -44,7 +44,7 @@
       <h3 class="sidebar-titulo">🎓 <span class="texto">App Académica</span></h3>
 
       <div class="sidebar-scroll">
-        <button class="btn btn-secondary btn-block btn-nav" title="Panorámica" disabled>🏠 <span class="texto-nav">Panorámica</span></button>
+        <button class="btn btn-secondary btn-block btn-nav" title="Resumen" disabled>🏠 <span class="texto-nav">Resumen</span></button>
         <button id="nav-plan-estudios" class="btn btn-secondary btn-block btn-nav" data-seccion="plan-estudios" title="Plan de Estudios">📚 <span class="texto-nav">Plan de Estudios</span></button>
         <button class="btn btn-secondary btn-block btn-nav" title="Semestres" disabled>📅 <span class="texto-nav">Semestres</span></button>
         <button class="btn btn-secondary btn-block btn-nav" title="Horario" disabled>🗓️ <span class="texto-nav">Horario</span></button>
@@ -91,7 +91,7 @@
 
           <div class="row-between">
             <span>Modo oscuro / claro</span>
-            <label class="switch">
+            <label class="switch switch-tema">
               <input type="checkbox" id="switch-modo">
               <span class="track"><span class="thumb"></span></span>
             </label>
@@ -109,20 +109,14 @@
             <span class="form-label">Paleta de color</span>
             <div class="palette-grid" id="grid-paletas"></div>
           </div>
-        </section>
 
-        <section class="glass-card stack">
-          <div class="row-between">
-            <span style="font-weight:700;">Modo Hardcore 💀</span>
-            <label class="switch">
-              <input type="checkbox" id="switch-modo-hardcore">
-              <span class="track"><span class="thumb"></span></span>
-            </label>
-          </div>
-          <p class="muted">Para quienes llevan dos carreras a la vez: activa un segundo Plan de Estudios en paralelo. Al desactivarlo no se borra nada, solo se deja de combinar.</p>
-          <div id="bloque-plan-secundario" class="oculto">
-            <span class="form-label">Plan de Estudios secundario</span>
-            <div id="selector-plan-secundario"></div>
+          <div>
+            <span class="form-label">Formato de nombres de materias y carrera</span>
+            <div class="pill-group" id="pill-formato-texto">
+              <button type="button" class="pill-item" data-valor="titulo">Cada Palabra</button>
+              <button type="button" class="pill-item" data-valor="mayusculas">MAYÚSCULAS</button>
+              <button type="button" class="pill-item" data-valor="oracion">Solo la primera</button>
+            </div>
           </div>
         </section>
 
@@ -141,6 +135,12 @@
       <div id="seccion-plan-estudios" class="stack oculto"></div>
 
     </main>
+
+    <!-- Enlaces Rápidos fijos, solo visibles con espacio libre a la derecha (v5 #2) -->
+    <aside id="panel-enlaces-lateral" class="glass-panel enlaces-lateral">
+      <h3 style="margin:0 0 10px;">Enlaces rápidos</h3>
+      <div id="lista-enlaces-lateral" class="stack" style="gap:8px;"></div>
+    </aside>
   </div>
 </div>
 
@@ -186,6 +186,18 @@
         <button id="btn-cancelar-enlace" class="btn btn-secondary">Cancelar</button>
         <button id="btn-guardar-enlace" class="btn btn-primary">Guardar</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Instrucciones antes de enviar a la IA (v6) ===================== -->
+<div id="modal-instrucciones-importacion" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;" id="titulo-modal-instrucciones-importacion">Antes de continuar…</h2>
+    <p class="muted" id="cuerpo-modal-instrucciones-importacion" style="white-space:pre-line;"></p>
+    <div class="row" style="justify-content:flex-end; gap:10px;">
+      <button type="button" id="btn-cancelar-instrucciones-importacion" class="btn btn-secondary">Cancelar</button>
+      <button type="button" id="btn-aceptar-instrucciones-importacion" class="btn btn-primary">Aceptar</button>
     </div>
   </div>
 </div>
@@ -254,6 +266,9 @@
 <!-- ===================== MODAL: Requisito / Correquisito ===================== -->
 <div id="modal-requisito" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
+    <div class="row-between">
+      <button type="button" id="btn-es-requisito" class="link-plano">Es requisito</button>
+    </div>
     <h2 style="margin:0; display:flex; align-items:center;" id="requisito-titulo">Materia</h2>
     <div class="row" style="flex-wrap:wrap; gap:6px;">
       <span class="badge badge-neutral">Bloque <span id="requisito-bloque"></span></span>
@@ -305,11 +320,26 @@
 
 <!-- ===================== MODAL: Gestión de Planes de Estudio ===================== -->
 <div id="modal-gestion-planes" class="modal-overlay oculto">
-  <div class="glass-card modal-card stack">
-    <h2 style="margin:0;">Tus Planes de Estudio</h2>
+  <div class="glass-card modal-card modal-card-ancha stack">
+    <h2 style="margin:0;">Gestionar Planes de Estudio</h2>
+    <p class="muted">Arrastra para reordenar — el primero es tu plan favorito/principal.</p>
     <div id="lista-gestion-planes" class="stack"></div>
     <p id="aviso-limite-planes" class="muted oculto">Límite de 3 planes alcanzado.</p>
     <button id="btn-agregar-plan-gestion" class="btn btn-primary btn-block">+ Nuevo Plan</button>
+
+    <div class="row-between" style="border-top:1px solid var(--border-glass); padding-top:14px;">
+      <span style="font-weight:700;">Modo Hardcore 💀</span>
+      <label class="switch switch-tema">
+        <input type="checkbox" id="switch-modo-hardcore">
+        <span class="track"><span class="thumb"></span></span>
+      </label>
+    </div>
+    <p class="muted">Para quienes llevan dos carreras a la vez: activa un segundo Plan de Estudios en paralelo. Al desactivarlo no se borra nada, solo se deja de combinar.</p>
+    <div id="bloque-plan-secundario" class="oculto">
+      <span class="form-label">Plan de Estudios secundario</span>
+      <div id="selector-plan-secundario"></div>
+    </div>
+
     <div class="row" style="justify-content:flex-end;">
       <button id="btn-cerrar-gestion-planes" class="btn btn-secondary">Cerrar</button>
     </div>
@@ -371,7 +401,7 @@
 <!-- ===================== MODAL: Desbloquea (búsqueda inversa) ===================== -->
 <div id="modal-desbloquea" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
-    <h2 style="margin:0;" id="titulo-modal-desbloquea">Desbloquea:</h2>
+    <h2 style="margin:0;" id="titulo-modal-desbloquea">es requisito para:</h2>
     <div id="lista-modal-desbloquea" class="stack"></div>
     <div class="row" style="justify-content:flex-end;">
       <button id="btn-cerrar-desbloquea" class="btn btn-primary">Cerrar</button>
