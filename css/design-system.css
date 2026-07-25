@@ -167,6 +167,14 @@ a { color: var(--accent-1); }
 .switch input:checked + .track .thumb { transform: translateX(20px); }
 .switch input:focus-visible + .track { outline: 2px solid var(--accent-2); outline-offset: 2px; }
 
+/* ---- Switch de tema: pill con sol/luna en cada extremo (v5 #2) ---- */
+.switch-tema { width: 58px; height: 28px; }
+.switch-tema .track { display: flex; align-items: center; justify-content: space-between; padding: 0 5px; }
+.switch-tema .track::before { content: "☀️"; font-size: 11px; line-height: 1; }
+.switch-tema .track::after { content: "🌙"; font-size: 11px; line-height: 1; }
+.switch-tema .thumb { width: 22px; height: 22px; top: 3px; left: 3px; z-index: 1; }
+.switch-tema input:checked + .track .thumb { transform: translateX(28px); }
+
 /* ---- Checkbox custom ---- */
 .checkbox { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
 .checkbox input { display: none; }
@@ -218,10 +226,57 @@ a { color: var(--accent-1); }
   padding: 16px;
 }
 .modal-card {
-  width: min(440px, 100%);
+  /* v5 #2: usa el ancho disponible en vez de quedar angosta "porque sí" */
+  width: min(560px, calc(100vw - 32px));
   max-height: 85vh;
   overflow-y: auto;
+  position: relative;
 }
+.modal-card-ancha { width: min(760px, calc(100vw - 32px)); }
+
+/* ---- Botón de cerrar (X) propio del sistema de diseño, en TODOS los modales ---- */
+.modal-x-close {
+  position: absolute;
+  top: 14px; right: 14px;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-glass);
+  background: rgba(255,255,255,0.06);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  z-index: 5;
+}
+.modal-x-close:hover { background: var(--accent-1-10); color: var(--text-primary); }
+.modal-x-close:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+
+/* ---- Link de solo-texto (sin forma de botón), ej. "Es requisito" ---- */
+.link-plano {
+  background: none; border: none; padding: 0; margin: 0;
+  color: var(--accent-2);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+/* ---- Scrollbars propias de la app, con la estética de la paleta activa ---- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-1) var(--bg-panel);
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg-panel); border-radius: var(--radius-pill); }
+::-webkit-scrollbar-thumb {
+  background: var(--gradient-accent-alt, var(--gradient-accent));
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--bg-panel);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--gradient-accent); }
 
 /* ---- Paleta swatch selector ----
    Flex en vez de grid: así la última fila (incompleta) queda centrada.
@@ -582,6 +637,8 @@ a { color: var(--accent-1); }
   min-height: 0;
 }
 .app-sidebar .sidebar-titulo { margin-bottom: 18px; white-space: nowrap; overflow: hidden; }
+.app-sidebar .sidebar-scroll .row-between { width: 100%; }
+.app-sidebar .sidebar-scroll .row-between #indicador-sync { width: 100%; justify-content: center; text-align: center; }
 .app-sidebar .btn-nav {
   text-align: left;
   white-space: nowrap;
@@ -691,8 +748,32 @@ a { color: var(--accent-1); }
   display: flex;
   flex-direction: column;
   gap: 20px;
+  align-items: center;
 }
 .app-contenido > * { max-width: 760px; width: 100%; }
+
+/* v5 #2: en pantallas grandes el contenido aprovecha más ancho, centrado
+   respecto al espacio libre que deja la barra lateral. */
+@media (min-width: 1200px) {
+  .app-contenido { align-items: center; }
+  .app-contenido > * { max-width: 920px; }
+}
+
+/* ---- Enlaces Rápidos laterales: solo con espacio de sobra a la derecha ---- */
+.enlaces-lateral {
+  display: none;
+  width: 260px;
+  flex-shrink: 0;
+  padding: 20px;
+  align-self: flex-start;
+  position: sticky;
+  top: 20px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
+@media (min-width: 1500px) {
+  .enlaces-lateral { display: block; }
+}
 
 /* =========================================================================
    BREAKPOINT: < 900px → sidebar se convierte en drawer superior
@@ -764,11 +845,19 @@ img, svg { max-width: 100%; }
 }
 .luz-punto.disponible {
   background: var(--accent-2, #34d399);
-  box-shadow: 0 0 6px var(--accent-2, #34d399);
+  box-shadow: 0 0 9px var(--accent-2, #34d399), 0 0 3px var(--accent-2, #34d399);
 }
 .luz-punto.bloqueada {
   background: var(--text-muted);
   opacity: 0.5;
+}
+/* v5 #4: en modo oscuro la diferencia encendida/apagada no se notaba lo
+   suficiente — se oscurece más la apagada y se le quita todo glow. En modo
+   claro no se toca (ya se veía bien). */
+[data-mode="dark"] .luz-punto.bloqueada {
+  background: #3f4552;
+  opacity: 1;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25);
 }
 .luz-boton {
   border: none;
@@ -780,60 +869,148 @@ img, svg { max-width: 100%; }
   justify-content: center;
 }
 
-/* ---- Tarjeta de materia (fila principal) ---- */
+/* ---- Tarjeta de materia — encabezado FINAL de 2 líneas (v5 #4/#5) ----
+   Línea 1: Luz · Código · Nombre (con flecha de expandir al final).
+   Línea 2: Estado (pegado a la izquierda) · Créditos (pegado a la derecha).
+   La Categoría NO aparece en el encabezado (solo la franja lateral). */
 .materia-card { padding: 12px 14px; }
 .materia-fila-principal {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 6px;
   cursor: pointer;
   user-select: none;
-  flex-wrap: wrap;
+}
+.materia-linea1 {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
 }
 .materia-codigo {
-  width: 90px;
   flex-shrink: 0;
   font-family: var(--font-mono, monospace);
   font-size: 0.82rem;
   color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  align-self: center;
 }
+/* Prefijo (luz+código) de ancho fijo: la columna del nombre siempre arranca
+   en la misma posición horizontal, tanto colapsada como al hacer wrap en
+   expandida (indentación colgante, v5 #5). */
+.materia-prefijo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  width: 104px;
+}
+.materia-nombre-col { flex: 1; min-width: 0; }
 .materia-nombre {
-  flex: 1;
-  min-width: 120px;
   font-family: var(--font-display);
   font-weight: 700;
+  display: block;
+}
+/* Colapsada: trunca con "…" (sin cambios). */
+.materia-nombre.truncada {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Ajuste v4 #4: Horas + Créditos + Estado se mueven al centro de la
- * tarjeta, aprovechando el ancho disponible en vez de apilar todo. */
-.materia-centro {
+/* Expandida: nombre completo, pudiendo hacer wrap; la 2da línea queda
+   alineada bajo la 1ra gracias al padding-left = ancho del prefijo, con
+   text-indent negativo para que la 1ra línea empiece pegada a la izquierda. */
+.materia-nombre.completa {
+  white-space: normal;
+  padding-left: 112px;
+  text-indent: -112px;
+}
+.materia-expandir { flex-shrink: 0; opacity: 0.7; align-self: center; }
+
+.materia-linea2 {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  flex-shrink: 0;
+  justify-content: space-between;
+  gap: 8px;
 }
-.materia-horas-centro { color: var(--text-muted); font-size: 0.8rem; white-space: nowrap; }
-.materia-derecha {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-}
-.materia-expandir { flex-shrink: 0; opacity: 0.7; }
+
 .materia-cuerpo { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-glass); }
 .materia-req-linea { text-align: left; color: var(--text-muted); font-size: 0.82rem; margin: 0; }
+.materia-horas-detalle { color: var(--text-muted); font-size: 0.85rem; }
+
+/* ---- Fila de requisito/correquisito de 3 columnas (v5 #6) ----
+   1) Código-Nombre (flexible, trunca con "…" si invade Horas)
+   2) Horas (ancho fijo, centradas estrictamente)
+   3) "Ir a materia" (link de texto, ancho fijo) */
+.requisito-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 0.82rem;
+}
+.requisito-col-nombre {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  text-align: left;
+}
+.requisito-col-horas {
+  flex-shrink: 0;
+  width: 52px;
+  text-align: center;
+  color: var(--text-muted);
+}
+.requisito-col-ir {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+}
+.requisito-divisor-o {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-style: italic;
+  margin: 0;
+}
 
 @media (max-width: 640px) {
-  .materia-codigo { width: 62px; font-size: 0.72rem; }
-  .materia-horas-centro { display: none; } /* en móvil se prioriza créditos/estado, las horas quedan solo en el modal/expandida */
+  .materia-prefijo { width: 78px; }
+  .materia-nombre.completa { padding-left: 86px; text-indent: -86px; }
+  .materia-codigo { font-size: 0.72rem; }
+}
+
+/* ---- Filas de Requisitos/Correquisitos (v5 #6): 3 columnas ---- */
+.requisito-fila {
+  display: grid;
+  grid-template-columns: 1fr 64px auto;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+.requisito-fila-codigo-nombre {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+.requisito-fila-horas {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.requisito-fila-link {
+  background: none; border: none; padding: 0;
+  color: var(--accent-2);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 /* ---- Bloques como tarjetas colapsables independientes ---- */
@@ -863,6 +1040,71 @@ img, svg { max-width: 100%; }
 /* ---- Créditos/estado en tarjeta de materia: más compactos en móvil ---- */
 .materia-centro .badge, .materia-derecha .badge { font-size: 0.72rem; padding: 3px 9px; }
 
-/* ---- Carrusel de planes ---- */
+/* ---- Estadísticas colapsables con donuts (v5 #3) ---- */
+.estadisticas-encabezado {
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; user-select: none;
+}
+.estadisticas-cuerpo {
+  display: flex; flex-wrap: wrap; gap: 28px; justify-content: center;
+  margin-top: 14px;
+}
+.donut-bloque { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.donut-bloque svg { display: block; }
+.donut-etiqueta { font-size: 0.85rem; color: var(--text-secondary); text-align: center; font-weight: 600; }
+.donut-subetiqueta { font-size: 0.75rem; color: var(--text-muted); text-align: center; }
+
+/* ---- Toast breve (feedback "copiado") ---- */
+.toast-app {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: var(--gradient-accent); color: var(--on-accent);
+  padding: 10px 20px; border-radius: var(--radius-pill);
+  font-weight: 600; font-size: 0.88rem;
+  box-shadow: var(--shadow-float);
+  z-index: 300;
+  animation: toast-in-out 2.4s ease forwards;
+}
+@keyframes toast-in-out {
+  0% { opacity: 0; transform: translate(-50%, 10px); }
+  12%, 82% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, 10px); }
+}
+
+/* ---- Tarjetas arrastrables en "Gestionar plan" (v5 #1.4) ---- */
+.plan-gestion-fila {
+  cursor: grab;
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+.plan-gestion-fila.arrastrando { opacity: 0.4; }
+.plan-gestion-fila.sobre-drop { box-shadow: 0 0 0 2px var(--accent-2) inset; }
+.plan-gestion-estrella { color: var(--accent-2); font-size: 1.1rem; flex-shrink: 0; }
+
+/* ---- Carrusel de planes (v5 #1.1): flechas grandes/gruesas SIN fondo de
+   botón — solo el glyph, para que se lea interactivo sin ocupar espacio. ---- */
 .carrusel-planes { display: flex; align-items: center; gap: 10px; }
 .carrusel-planes button { flex-shrink: 0; }
+
+.encabezado-plan-titulo { display: flex; flex-direction: column; gap: 2px; }
+.encabezado-plan-linea1 { display: flex; align-items: center; gap: 8px; }
+.flecha-plan {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0 2px;
+  color: var(--accent-2);
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  width: 22px;
+  text-align: center;
+}
+.flecha-plan:hover { color: var(--text-primary); }
+.flecha-plan:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; border-radius: 4px; }
+/* Línea 2 (Universidad · Código) queda indentada exactamente bajo la
+   primera letra del nombre de la carrera de la línea 1: mismo ancho que
+   una flecha (22px) + el gap (8px) entre flecha y título. */
+.encabezado-plan-linea2 { margin: 0; padding-left: 30px; }
+.encabezado-plan-linea2.sin-flechas { padding-left: 0; }
+
+/* ---- Bloques colapsables independientes ---- */
