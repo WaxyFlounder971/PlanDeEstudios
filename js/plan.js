@@ -85,6 +85,8 @@ Reglas:
 - Codigo: la sigla tal como aparece; si no tiene, genera uno corto y consistente a partir del nombre.
 - Horas: usa 0 si el documento no maneja esa categoría — nunca las dejes vacías.
 - Requisitos y Correquisitos: usa punto y coma ";" para separar requisitos distintos que se necesitan TODOS ("Y"), y diagonal "/" para separar materias equivalentes/alternativas dentro de un mismo requisito ("O"). NUNCA uses coma "," dentro de esta celda — la coma ya se usa para separar las columnas del CSV y mezclarla aquí rompe el archivo. Ejemplo: "MA-1001;FS-0210/FS-0227/FS-0250" significa MA-1001 Y (una de las tres alternativas). Si no hay requisitos, usa "Ninguno".
+- IMPORTANTE — Nombre: varios nombres de materias reales incluyen una coma (ej. "Ética, Persona y Sociedad"). Si el Nombre de una materia trae una coma real, envuelve ESA CELDA completa entre comillas dobles, así: "Ética, Persona y Sociedad". Esto aplica a cualquier otra columna que también pueda traer una coma real. Si tienes dudas, mejor usar comillas de más que de menos.
+- No dejes ninguna columna vacía sin su coma correspondiente: si Correquisitos (o cualquier otra columna) no aplica, escribe igual "Ninguno" — nunca cortes la línea antes de completar todas las columnas del encabezado.
 - No agregues columna de categoría ni ninguna otra fuera de las columnas indicadas.
 - No omitas ninguna materia, incluidas optativas/electivas.
 - Si una celda es ilegible, ambigua, o no puedes confirmarla con certeza, escribe "REVISAR" en vez de inventar un dato.`;
@@ -448,7 +450,7 @@ function construirPanelImportacion() {
     btn.addEventListener("click", () => {
       estado.universidadImportacion = op.valor;
       if (op.valor !== "Otra") {
-        estado.tiposHorasImportacion = PRESETS_TIPOS_HORAS[op.valor].slice();
+        estado.tiposHorasImportacion = estado.horasNoAplicaImportacion ? [] : PRESETS_TIPOS_HORAS[op.valor].slice();
       }
       renderizarPlanEstudios();
     });
@@ -457,17 +459,46 @@ function construirPanelImportacion() {
   sec.appendChild(grupoUni);
 
   if (estado.universidadImportacion === "Otra") {
+    const inputNombreUni = document.createElement("input");
+    inputNombreUni.type = "text";
+    inputNombreUni.className = "form-input";
+    inputNombreUni.style.marginBottom = "10px";
+    inputNombreUni.placeholder = "Nombre de tu universidad (ej. Universidad Nacional)";
+    inputNombreUni.value = estado.nombreUniversidadImportacion || "";
+    inputNombreUni.addEventListener("input", () => {
+      estado.nombreUniversidadImportacion = inputNombreUni.value;
+    });
+    sec.appendChild(inputNombreUni);
+
     const inputTipos = document.createElement("input");
     inputTipos.type = "text";
     inputTipos.className = "form-input";
     inputTipos.placeholder = "Tipos de horas separados por coma, ej. Teoría, Laboratorio";
     inputTipos.value = estado.tiposHorasPersonalizadoTexto;
+    inputTipos.disabled = !!estado.horasNoAplicaImportacion;
     inputTipos.addEventListener("input", () => {
       estado.tiposHorasPersonalizadoTexto = inputTipos.value;
       estado.tiposHorasImportacion = inputTipos.value.split(",").map((t) => t.trim()).filter(Boolean);
     });
     sec.appendChild(inputTipos);
   }
+
+  // v7.1: "No aplica" para Horas, independiente de la universidad elegida.
+  const labelNoAplica = document.createElement("label");
+  labelNoAplica.className = "checkbox";
+  labelNoAplica.innerHTML = `<input type="checkbox" id="checkbox-horas-no-aplica-importacion" ${estado.horasNoAplicaImportacion ? "checked" : ""}><span class="box"></span><span>No aplica — este plan no maneja Horas</span>`;
+  labelNoAplica.querySelector("input").addEventListener("change", (e) => {
+    estado.horasNoAplicaImportacion = e.target.checked;
+    if (e.target.checked) {
+      estado.tiposHorasImportacion = [];
+    } else {
+      estado.tiposHorasImportacion = estado.universidadImportacion === "Otra"
+        ? estado.tiposHorasPersonalizadoTexto.split(",").map((t) => t.trim()).filter(Boolean)
+        : PRESETS_TIPOS_HORAS[estado.universidadImportacion].slice();
+    }
+    renderizarPlanEstudios();
+  });
+  sec.appendChild(labelNoAplica);
 
   // ---- Modo de importación: Link / PDF / Capturas ----
   const etiquetaModo = document.createElement("span");
@@ -705,7 +736,14 @@ function parsearLineaCSV(linea) {
  * como tiposHoras.length) para no romper el import.
  */
 function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
-  const tipos = tiposHoras && tiposHoras.length ? tiposHoras : ["Horas"];
+  // v7.1: un arreglo vacío es "No aplica" a propósito (ver crearMateria en
+  // schema.js) — solo se usa el default ["Horas"] cuando tiposHoras
+  // realmente no vino (undefined/null), nunca cuando vino vacío queriendo
+  // decir "este plan no maneja horas". El chequeo anterior (`&& .length`)
+  // convertía silenciosamente [] de vuelta a ["Horas"], lo que rompía el
+  // cálculo de columnasEsperadas para planes "No aplica" (esperaba una
+  // columna de Horas que el CSV real, generado sin esa columna, nunca trae).
+  const tipos = tiposHoras !== undefined && tiposHoras !== null ? tiposHoras : ["Horas"];
 
   const lineas = textoCrudo
     .replace(/```[a-zA-Z]*\n?/g, "") // por si el usuario pegó el bloque con los ``` incluidos
@@ -732,10 +770,42 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
 
   filas.forEach((linea, indice) => {
     const numeroFila = indice + 2; // +2 = +1 por el encabezado, +1 por ser 1-indexado
-    const columnas = parsearLineaCSV(linea);
+    let columnas = parsearLineaCSV(linea);
+
+    // v7.1 (causa raíz real de "faltan materias"): aunque el prompt le pide a
+    // la IA nunca usar comas sueltas, en la práctica el campo Nombre trae
+    // comas reales con bastante frecuencia (ej. "Ética, Persona y Sociedad")
+    // y la IA externa no siempre las envuelve en comillas. Antes, cualquier
+    // desajuste de columnas descartaba la fila entera sin más. Ahora se
+    // intenta reparar automáticamente antes de darse por vencido:
+    if (columnas.length > columnasEsperadas) {
+      // Sobran columnas: lo más probable es que el Nombre (índice 2) se haya
+      // partido en varios pedazos por comas internas sin comillas. Se vuelven
+      // a unir esos pedazos de más, asumiendo que el resto de columnas
+      // (Bloque, Codigo, Creditos, horas, Requisitos, Correquisitos) están
+      // en su lugar correcto contando desde el final de la fila.
+      const sobran = columnas.length - columnasEsperadas;
+      const nombreReconstruido = columnas.slice(2, 2 + sobran + 1).join(", ");
+      columnas = [
+        columnas[0],
+        columnas[1],
+        nombreReconstruido,
+        ...columnas.slice(2 + sobran + 1),
+      ];
+    } else if (columnas.length < columnasEsperadas) {
+      // Faltan columnas: normalmente porque la IA omitió campos vacíos al
+      // final de la línea (Correquisitos, a veces también Requisitos) en vez
+      // de dejar la coma. Se rellenan con "" al final en vez de perder toda
+      // la fila — como máximo 2 columnas de diferencia, si falta más que eso
+      // ya es un error real que sí hay que reportar.
+      const faltan = columnasEsperadas - columnas.length;
+      if (faltan <= 2) {
+        columnas = [...columnas, ...Array(faltan).fill("")];
+      }
+    }
 
     if (columnas.length !== columnasEsperadas) {
-      errores.push(`Fila ${numeroFila}: se esperaban ${columnasEsperadas} columnas y se encontraron ${columnas.length}. Contenido: "${linea}"`);
+      errores.push(`Fila ${numeroFila}: se esperaban ${columnasEsperadas} columnas y se encontraron ${parsearLineaCSV(linea).length} (no se pudo reparar automáticamente). Contenido: "${linea}"`);
       return;
     }
 
@@ -882,11 +952,26 @@ function abrirModalCrearPlan(paraSecundario, metadatosDetectados) {
 
   const inputPersonalizado = document.getElementById("input-tipos-horas-personalizados");
   const bloquePersonalizado = document.getElementById("bloque-tipos-horas-personalizados");
+  const bloqueUniOtraNombre = document.getElementById("bloque-universidad-otra-nombre");
+  const inputUniOtraNombre = document.getElementById("input-universidad-otra-nombre");
+  const checkboxNoAplica = document.getElementById("checkbox-horas-no-aplica");
+  // v7.1: continúa desde lo elegido en el panel de importación (universidad
+  // libre y "No aplica"), en vez de reiniciar ambos campos siempre.
+  checkboxNoAplica.checked = !!estado.horasNoAplicaImportacion;
+  inputPersonalizado.disabled = checkboxNoAplica.checked;
+  inputUniOtraNombre.value = estado.nombreUniversidadImportacion || "";
   if (btnInicial.dataset.valor === "Otra") {
     bloquePersonalizado.classList.remove("oculto");
+    bloqueUniOtraNombre.classList.remove("oculto");
     inputPersonalizado.value = estado.tiposHorasPersonalizadoTexto || "";
+    // v7.1: si vino detectada por la IA (metadatos.universidad) y no coincidió
+    // con TEC/UCR, se precarga como valor real editable (nunca genérico).
+    if (metadatos.universidad && !["TEC", "UCR"].includes(mapearUniversidadDetectada(metadatos.universidad))) {
+      inputUniOtraNombre.value = metadatos.universidad;
+    }
   } else {
     bloquePersonalizado.classList.add("oculto");
+    bloqueUniOtraNombre.classList.add("oculto");
     aplicarDefaultsUniversidad(btnInicial.dataset.valor);
   }
 
@@ -902,8 +987,12 @@ function aplicarDefaultsUniversidad(universidad) {
 }
 
 /** Lee la lista de tipos de horas seleccionada en el modal en este momento
- *  (según el pill de universidad activo), sin importar si es TEC/UCR/Personalizada. */
+ *  (según el pill de universidad activo), sin importar si es TEC/UCR/Personalizada.
+ *  v7.1: el checkbox "No aplica" tiene prioridad sobre cualquier preset —
+ *  el usuario puede marcar que este plan no maneja horas sin importar la
+ *  universidad elegida. */
 function leerTiposHorasDelModalCrearPlan() {
+  if (document.getElementById("checkbox-horas-no-aplica").checked) return [];
   const universidad = document.getElementById("pill-plan-universidad").querySelector(".pill-item.active").dataset.valor;
   if (universidad === "Otra") {
     const texto = document.getElementById("input-tipos-horas-personalizados").value;
@@ -921,13 +1010,23 @@ function inicializarModalCrearPlan() {
       btn.classList.add("active");
       aplicarPlaceholdersAleatoriosPlan(btn.dataset.valor);
       const bloquePersonalizado = document.getElementById("bloque-tipos-horas-personalizados");
+      const bloqueUniOtraNombre = document.getElementById("bloque-universidad-otra-nombre");
       if (btn.dataset.valor === "TEC" || btn.dataset.valor === "UCR") {
         bloquePersonalizado.classList.add("oculto");
+        bloqueUniOtraNombre.classList.add("oculto");
         aplicarDefaultsUniversidad(btn.dataset.valor);
       } else {
         bloquePersonalizado.classList.remove("oculto");
+        bloqueUniOtraNombre.classList.remove("oculto");
       }
     });
+  });
+
+  // v7.1: marcar/desmarcar "No aplica" solo deshabilita visualmente el campo
+  // de tipos de horas personalizados (si está visible) para dejar claro que
+  // no se va a usar, sin perder lo que el usuario ya había escrito ahí.
+  document.getElementById("checkbox-horas-no-aplica").addEventListener("change", (e) => {
+    document.getElementById("input-tipos-horas-personalizados").disabled = e.target.checked;
   });
 
   document.getElementById("btn-cancelar-crear-plan").addEventListener("click", () => {
@@ -953,9 +1052,15 @@ function inicializarModalCrearPlan() {
       err.classList.remove("oculto");
       return;
     }
-    const universidad = document.getElementById("pill-plan-universidad").querySelector(".pill-item.active").dataset.valor;
+    const universidadPill = document.getElementById("pill-plan-universidad").querySelector(".pill-item.active").dataset.valor;
+    // v7.1: si el pill activo es "Otra", se guarda el nombre real que el
+    // usuario escribió (nunca la palabra genérica "Otra"); si lo dejó
+    // vacío, se cae de vuelta a "Otra" para no guardar un campo vacío.
+    const universidad = universidadPill === "Otra"
+      ? (document.getElementById("input-universidad-otra-nombre").value.trim() || "Otra")
+      : universidadPill;
     const tiposHoras = leerTiposHorasDelModalCrearPlan();
-    if (universidad === "Otra") {
+    if (universidadPill === "Otra") {
       // Se recuerda el texto crudo para la próxima vez que abran este modal.
       estado.tiposHorasPersonalizadoTexto = document.getElementById("input-tipos-horas-personalizados").value;
     }
@@ -1339,7 +1444,7 @@ function abrirModalMateriaManual() {
  */
 function actualizarFormatoHorasMateriaManual() {
   const plan = estado.datos.planes_estudio.find((p) => p.id === estado.materiaManualPlanId);
-  const tipos = plan && plan.parametros_universidad.tipos_horas && plan.parametros_universidad.tipos_horas.length
+  const tipos = plan && Array.isArray(plan.parametros_universidad.tipos_horas)
     ? plan.parametros_universidad.tipos_horas
     : ["Horas"];
 
@@ -1388,7 +1493,7 @@ function inicializarModalMateriaManual() {
       return;
     }
 
-    const tiposHoras = plan.parametros_universidad.tipos_horas && plan.parametros_universidad.tipos_horas.length
+    const tiposHoras = Array.isArray(plan.parametros_universidad.tipos_horas)
       ? plan.parametros_universidad.tipos_horas
       : ["Horas"];
     const horas = {};
@@ -1634,7 +1739,7 @@ function exportarPlanACSV() {
   const principal = obtenerPlanActivo();
   if (!principal) return;
 
-  const tipos = principal.parametros_universidad.tipos_horas && principal.parametros_universidad.tipos_horas.length
+  const tipos = Array.isArray(principal.parametros_universidad.tipos_horas)
     ? principal.parametros_universidad.tipos_horas
     : ["Horas"];
 

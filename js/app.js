@@ -549,7 +549,7 @@ function renderizarListaEnlacesEn(contenedorId, enlaces, conEditar) {
     enlaceAbrir.style.minWidth = "0";
     enlaceAbrir.innerHTML = `<span style="font-size:1.3rem">${
       enlace.icono_tipo === "emoji" ? enlace.icono_valor : `<img src="${enlace.icono_valor}" style="width:24px;height:24px;border-radius:6px">`
-    }</span><span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${enlace.nombre}</span>`;
+    }</span><span class="enlace-rapido-nombre" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${enlace.nombre}</span>`;
 
     item.appendChild(enlaceAbrir);
 
