@@ -441,7 +441,11 @@ function construirPanelImportacion() {
   btnClaude.textContent = "Enviar a Claude";
   btnClaude.addEventListener("click", () => {
     const columnasHoras = construirColumnasHoras(estado.tiposHorasImportacion);
-    enviarPromptAClaude(construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras));
+    abrirModalInstruccionesImportacion(
+      estado.modoImportacion,
+      "claude",
+      construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras)
+    );
   });
   filaBotones.appendChild(btnClaude);
 
@@ -451,16 +455,15 @@ function construirPanelImportacion() {
   btnChatGPT.textContent = "Enviar a ChatGPT";
   btnChatGPT.addEventListener("click", () => {
     const columnasHoras = construirColumnasHoras(estado.tiposHorasImportacion);
-    enviarPromptAChatGPT(construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras));
+    abrirModalInstruccionesImportacion(
+      estado.modoImportacion,
+      "chatgpt",
+      construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras)
+    );
   });
   filaBotones.appendChild(btnChatGPT);
 
   sec.appendChild(filaBotones);
-
-  const instrucciones = document.createElement("p");
-  instrucciones.className = "muted";
-  instrucciones.textContent = INSTRUCCIONES_POR_MODO_IMPORTACION[estado.modoImportacion];
-  sec.appendChild(instrucciones);
 
   const textarea = document.createElement("textarea");
   textarea.className = "form-textarea";
@@ -532,6 +535,49 @@ async function enviarPromptAClaude(texto) {
 async function enviarPromptAChatGPT(texto) {
   await copiarPromptImportacion(texto);
   window.open("https://chatgpt.com/", "_blank", "noopener");
+}
+
+/* ===================== Modal de instrucciones antes de enviar (v6) ===================== */
+
+/** Guarda qué acción ejecutar si el usuario presiona "Aceptar" en el modal
+ *  de instrucciones — null mientras el modal está cerrado. */
+let instruccionesImportacionPendiente = null;
+
+const NOMBRE_IA = { claude: "Claude", chatgpt: "ChatGPT" };
+
+/**
+ * v6 nuevo: en vez de copiar y redirigir de inmediato al presionar "Enviar a
+ * Claude/ChatGPT", primero se muestra este modal con las instrucciones
+ * completas (adaptadas al modo Link/PDF/Capturas). Solo al presionar
+ * "Aceptar" se ejecuta la acción real (copiar + abrir la IA en pestaña nueva).
+ */
+function abrirModalInstruccionesImportacion(modo, destino, textoPrompt) {
+  instruccionesImportacionPendiente = { destino, textoPrompt };
+  document.getElementById("titulo-modal-instrucciones-importacion").textContent =
+    `Antes de ir a ${NOMBRE_IA[destino] || "la IA"}…`;
+  document.getElementById("cuerpo-modal-instrucciones-importacion").textContent =
+    INSTRUCCIONES_POR_MODO_IMPORTACION[modo] || INSTRUCCIONES_POR_MODO_IMPORTACION.link;
+  document.getElementById("modal-instrucciones-importacion").classList.remove("oculto");
+}
+
+function cerrarModalInstruccionesImportacion() {
+  instruccionesImportacionPendiente = null;
+  document.getElementById("modal-instrucciones-importacion").classList.add("oculto");
+}
+
+function inicializarModalInstruccionesImportacion() {
+  document.getElementById("btn-cancelar-instrucciones-importacion").addEventListener("click", cerrarModalInstruccionesImportacion);
+  document.getElementById("modal-instrucciones-importacion").addEventListener("click", (e) => {
+    if (e.target.id === "modal-instrucciones-importacion") cerrarModalInstruccionesImportacion();
+  });
+  document.getElementById("btn-aceptar-instrucciones-importacion").addEventListener("click", () => {
+    if (!instruccionesImportacionPendiente) return;
+    const { destino, textoPrompt } = instruccionesImportacionPendiente;
+    document.getElementById("modal-instrucciones-importacion").classList.add("oculto");
+    instruccionesImportacionPendiente = null;
+    if (destino === "chatgpt") enviarPromptAChatGPT(textoPrompt);
+    else enviarPromptAClaude(textoPrompt);
+  });
 }
 
 /* ===================== Parser de CSV ===================== */
@@ -651,9 +697,13 @@ function manejarClickImportar(textoCSV) {
   const planDestino = estado.datos.planes_estudio.find((p) => p.id === planDestinoId);
 
   if (!planDestino) {
-    // No existe el plan todavía: se pide crearlo primero y se guarda el CSV en espera.
-    estado.csvPendienteDeImportar = textoCSV;
-    abrirModalCrearPlan(destinoEsSecundario);
+    // No existe el plan todavía: se lee CARRERA:/CODIGO_PLAN:/UNIVERSIDAD: si
+    // la IA los detectó (v6 #3), se guarda el CSV YA LIMPIO de esas líneas
+    // (si no, parsearCSVPlanEstudios las confundiría con el encabezado del
+    // CSV) y se pide crear el plan primero, prellenado con lo detectado.
+    const { metadatos, csv } = extraerMetadatosImportacion(textoCSV);
+    estado.csvPendienteDeImportar = csv;
+    abrirModalCrearPlan(destinoEsSecundario, metadatos);
     return;
   }
 
@@ -694,20 +744,52 @@ function mostrarErroresImportacion(lista) {
 
 /* ===================== Modal: crear Plan de Estudios ===================== */
 
-function abrirModalCrearPlan(paraSecundario) {
+/** v6 #2: aplica un ejemplo al azar (de EJEMPLOS_PLACEHOLDER_PLAN, ya
+ *  definido más arriba) como placeholder de Carrera/Código — nunca como
+ *  valor real precargado. Antes existía elegirPlaceholderPlan() pero nunca
+ *  se llamaba desde ningún lado; esto es lo que faltaba conectar. */
+function aplicarPlaceholdersAleatoriosPlan(universidad) {
+  const ejemplo = elegirPlaceholderPlan(universidad);
+  document.getElementById("input-plan-nombre-carrera").placeholder = `Ej. ${ejemplo.carrera}`;
+  document.getElementById("input-plan-codigo").placeholder = `Ej. ${ejemplo.codigo}`;
+}
+
+/** Intenta mapear el texto libre de UNIVERSIDAD: (ej. "Tecnológico de Costa
+ *  Rica", "TEC", "Universidad de Costa Rica") a uno de los pills conocidos.
+ *  Si no reconoce nada, cae en "Otra" (nunca revienta, nunca inventa). */
+function mapearUniversidadDetectada(texto) {
+  const t = (texto || "").toUpperCase();
+  if (t.includes("TEC") || t.includes("TECNOLÓGICO") || t.includes("TECNOLOGICO")) return "TEC";
+  if (t.includes("UCR") || t.includes("COSTA RICA")) return "UCR";
+  return "Otra";
+}
+
+function abrirModalCrearPlan(paraSecundario, metadatosDetectados) {
   estado.planCrearParaSecundario = !!paraSecundario;
-  document.getElementById("input-plan-nombre-carrera").value = "";
-  document.getElementById("input-plan-codigo").value = "";
+  const inputCarrera = document.getElementById("input-plan-nombre-carrera");
+  const inputCodigo = document.getElementById("input-plan-codigo");
+  inputCarrera.value = "";
+  inputCodigo.value = "";
   document.getElementById("error-modal-crear-plan").classList.add("oculto");
 
-  // Se preselecciona con lo que el usuario ya haya elegido en el selector de
-  // universidad/tipos de horas del panel de importación (estado.universidadImportacion),
-  // así no se le vuelve a preguntar dos veces lo mismo.
-  const universidadInicial = estado.universidadImportacion || "TEC";
+  // v6 #3: si la IA logró identificar carrera/código/universidad, se
+  // prellenan aquí como VALOR real (editable), no como placeholder.
+  const metadatos = metadatosDetectados || {};
+  if (metadatos.carrera) inputCarrera.value = metadatos.carrera;
+  if (metadatos.codigo_plan) inputCodigo.value = metadatos.codigo_plan;
+
+  // Se preselecciona con la universidad detectada por la IA si vino; si no,
+  // con lo que el usuario ya haya elegido en el selector del panel de
+  // importación (estado.universidadImportacion), así no se le vuelve a
+  // preguntar dos veces lo mismo.
+  const universidadInicial = metadatos.universidad
+    ? mapearUniversidadDetectada(metadatos.universidad)
+    : (estado.universidadImportacion || "TEC");
   const pillUni = document.getElementById("pill-plan-universidad");
   pillUni.querySelectorAll(".pill-item").forEach((b) => b.classList.remove("active"));
   const btnInicial = pillUni.querySelector(`[data-valor="${universidadInicial}"]`) || pillUni.querySelector('[data-valor="TEC"]');
   btnInicial.classList.add("active");
+  aplicarPlaceholdersAleatoriosPlan(btnInicial.dataset.valor);
 
   const inputPersonalizado = document.getElementById("input-tipos-horas-personalizados");
   const bloquePersonalizado = document.getElementById("bloque-tipos-horas-personalizados");
@@ -748,6 +830,7 @@ function inicializarModalCrearPlan() {
     btn.addEventListener("click", () => {
       pillUni.querySelectorAll(".pill-item").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
+      aplicarPlaceholdersAleatoriosPlan(btn.dataset.valor);
       const bloquePersonalizado = document.getElementById("bloque-tipos-horas-personalizados");
       if (btn.dataset.valor === "TEC" || btn.dataset.valor === "UCR") {
         bloquePersonalizado.classList.add("oculto");
@@ -997,7 +1080,11 @@ function construirMiniPanelImportacion(plan) {
   btnClaude.textContent = "Enviar a Claude";
   btnClaude.addEventListener("click", () => {
     const columnasHoras = construirColumnasHoras(plan.parametros_universidad.tipos_horas);
-    enviarPromptAClaude(construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras));
+    abrirModalInstruccionesImportacion(
+      estado.modoImportacion,
+      "claude",
+      construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras)
+    );
   });
   const btnChatGPT = document.createElement("button");
   btnChatGPT.id = "btn-enviar-import-chatgpt";
@@ -1006,17 +1093,15 @@ function construirMiniPanelImportacion(plan) {
   btnChatGPT.textContent = "Enviar a ChatGPT";
   btnChatGPT.addEventListener("click", () => {
     const columnasHoras = construirColumnasHoras(plan.parametros_universidad.tipos_horas);
-    enviarPromptAChatGPT(construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras));
+    abrirModalInstruccionesImportacion(
+      estado.modoImportacion,
+      "chatgpt",
+      construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras)
+    );
   });
   filaBotones.appendChild(btnClaude);
   filaBotones.appendChild(btnChatGPT);
   sec.appendChild(filaBotones);
-
-  const instrucciones = document.createElement("p");
-  instrucciones.className = "muted";
-  instrucciones.style.whiteSpace = "pre-line";
-  instrucciones.textContent = INSTRUCCIONES_POR_MODO_IMPORTACION[estado.modoImportacion];
-  sec.appendChild(instrucciones);
 
   const textarea = document.createElement("textarea");
   textarea.className = "form-textarea";
@@ -2387,6 +2472,7 @@ window.addEventListener("DOMContentLoaded", () => {
   inicializarModalMateriaManual();
   inicializarModalGestionPlanes();
   inicializarModalDesbloquea();
+  inicializarModalInstruccionesImportacion();
 
   document.getElementById("btn-cerrar-requisito").addEventListener("click", () => {
     document.getElementById("modal-requisito").classList.add("oculto");
