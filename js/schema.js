@@ -194,7 +194,10 @@ function crearCategoria({ nombre, color }) {
  * de menos respecto al plan al que pertenece.
  */
 function crearMateria({ codigo, nombre, creditos, horas, tiposHoras, bloque, requisitos, correquisitos }) {
-  const tipos = tiposHoras && tiposHoras.length ? tiposHoras : ["Horas"];
+  // v7 #1: un arreglo vacío es una elección válida ("No aplica" — el plan no
+  // maneja horas). Solo se usa el default ["Horas"] cuando tiposHoras
+  // realmente no vino (undefined/null), nunca cuando vino vacío a propósito.
+  const tipos = tiposHoras || ["Horas"];
   const horasFinal = {};
   tipos.forEach((tipo) => {
     horasFinal[tipo] = Number((horas || {})[tipo]) || 0;

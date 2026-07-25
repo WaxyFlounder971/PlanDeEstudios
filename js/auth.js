@@ -173,12 +173,28 @@ async function leerDatos(token, fileId) {
     `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Drive respondió ${respuesta.status} al leer el archivo de datos: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
   return respuesta.json();
 }
 
-/** Sobrescribe el archivo de datos en Drive con el objeto completo. */
+/**
+ * Sobrescribe el archivo de datos en Drive con el objeto completo.
+ * v7 (Bug 2): antes esta función no revisaba `respuesta.ok`, así que un
+ * error real de la API (token expirado, fileId inválido, cuerpo mal
+ * formado, etc.) quedaba en completo silencio — ni se reportaba en consola
+ * ni se reintentaba correctamente, porque intentarSincronizar() creía que
+ * todo había salido bien. Ahora se revisa el status y, si falla, se lanza
+ * un error con el código HTTP y el cuerpo de la respuesta de Drive para
+ * poder diagnosticarlo de verdad.
+ */
 async function guardarDatos(token, fileId, datos) {
-  await fetch(
+  const respuesta = await fetch(
     `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
     {
       method: "PATCH",
@@ -189,4 +205,39 @@ async function guardarDatos(token, fileId, datos) {
       body: JSON.stringify(datos),
     }
   );
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Drive respondió ${respuesta.status} al guardar: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+}
+
+/**
+ * v7 (Bug 2): pide un access_token nuevo de forma silenciosa (prompt vacío),
+ * usado para refrescar automáticamente la sesión cuando una llamada a Drive
+ * devuelve 401 — los tokens de Google duran ~1 hora y no se refrescan solos.
+ * Devuelve una Promise que resuelve con el nuevo token, o rechaza si el
+ * refresco también falla (ej. el usuario revocó el acceso desde su cuenta).
+ * No pisa el callback normal de login: lo restaura apenas responde.
+ */
+function refrescarAccessTokenGoogle() {
+  return new Promise((resolve, reject) => {
+    if (!tokenClient) {
+      reject(new Error("No se puede refrescar: tokenClient no está inicializado."));
+      return;
+    }
+    const callbackOriginal = tokenClient.callback;
+    tokenClient.callback = (respuesta) => {
+      tokenClient.callback = callbackOriginal;
+      if (respuesta.error) {
+        reject(new Error("No se pudo refrescar el token de Google: " + respuesta.error));
+        return;
+      }
+      accessToken = respuesta.access_token;
+      resolve(accessToken);
+    };
+    tokenClient.requestAccessToken({ prompt: "" });
+  });
 }

@@ -272,7 +272,29 @@ async function intentarSincronizar() {
     estado.pendienteSync = false;
     actualizarIndicadorSync();
   } catch (e) {
-    console.warn("No se pudo sincronizar todavía, se reintentará más tarde.", e);
+    // v7 (Bug 2): antes solo se logueaba un mensaje genérico. Ahora se
+    // imprime el detalle real (status HTTP + cuerpo de la respuesta de
+    // Drive, si vino) para poder diagnosticar la causa de verdad.
+    console.warn(
+      `No se pudo sincronizar (status: ${e.status ?? "desconocido"}). Se reintentará más tarde.`,
+      e.body || e.message || e
+    );
+
+    if (e.status === 401) {
+      // Token expirado (duran ~1h y no se refrescan solos): se pide uno
+      // nuevo en silencio y, si se obtiene, se reintenta esta misma
+      // sincronización de inmediato.
+      try {
+        const nuevoToken = await refrescarAccessTokenGoogle();
+        estado.token = nuevoToken;
+        await guardarDatos(estado.token, estado.fileId, estado.datos);
+        estado.pendienteSync = false;
+        actualizarIndicadorSync();
+        return;
+      } catch (errorRefresco) {
+        console.warn("No se pudo refrescar el token de Google automáticamente:", errorRefresco);
+      }
+    }
   }
 }
 

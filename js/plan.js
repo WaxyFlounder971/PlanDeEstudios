@@ -17,23 +17,30 @@
  * Ej.: ["Horas"] -> "Horas_Horas" ; ["Teoría","Práctica"] -> "Horas_Teoría,Horas_Práctica"
  */
 function construirColumnasHoras(tiposHoras) {
-  return (tiposHoras && tiposHoras.length ? tiposHoras : ["Horas"])
-    .map((t) => `Horas_${t.replace(/\s+/g, "")}`)
-    .join(",");
+  const tipos = tiposHoras || ["Horas"];
+  if (tipos.length === 0) return ""; // v7 #1: "No aplica" -> sin columnas de horas en el CSV
+  return tipos.map((t) => `Horas_${t.replace(/\s+/g, "")}`).join(",");
 }
 
 function construirEncabezadoCSV(tiposHoras) {
-  return `Bloque,Codigo,Nombre,Creditos,${construirColumnasHoras(tiposHoras)},Requisitos,Correquisitos`;
+  const columnasHoras = construirColumnasHoras(tiposHoras);
+  const partes = ["Bloque", "Codigo", "Nombre", "Creditos"];
+  if (columnasHoras) partes.push(columnasHoras);
+  partes.push("Requisitos", "Correquisitos");
+  return partes.join(",");
 }
 
 /**
  * Línea compacta de horas para mostrar en tarjeta/modal, iterando las
  * llaves REALES de materia.horas (nunca nombres fijos como teoria/practica).
  * Una sola llave -> "Horas: N". Varias llaves -> "Tipo1 N · Tipo2 N · …".
+ * v7 #1: si el plan es "No aplica" para horas, materia.horas queda vacío y
+ * no hay nada que mostrar — se devuelve "" para que el llamador simplemente
+ * no pinte esa línea.
  */
 function formatearHoras(materia) {
   const entradas = Object.entries(materia.horas || {});
-  if (entradas.length === 0) return "Horas: 0";
+  if (entradas.length === 0) return "";
   if (entradas.length === 1) return `Horas: ${entradas[0][1]}`;
   return entradas.map(([tipo, valor]) => `${tipo} ${valor}`).join(" · ");
 }
@@ -77,7 +84,7 @@ Reglas:
 - Bloque: número de nivel/semestre/cuatrimestre tal como aparece en el documento/página. Si usa nombres en vez de números, conviértelo al número secuencial correspondiente. Si no puedes determinarlo con certeza, escribe "REVISAR".
 - Codigo: la sigla tal como aparece; si no tiene, genera uno corto y consistente a partir del nombre.
 - Horas: usa 0 si el documento no maneja esa categoría — nunca las dejes vacías.
-- Requisitos y Correquisitos: usa coma "," para separar requisitos distintos que se necesitan TODOS ("Y"), y diagonal "/" para separar materias equivalentes/alternativas dentro de un mismo requisito ("O"). Ejemplo: "MA-1001,FS-0210/FS-0227/FS-0250" significa MA-1001 Y (una de las tres alternativas). Si no hay requisitos, usa "Ninguno".
+- Requisitos y Correquisitos: usa punto y coma ";" para separar requisitos distintos que se necesitan TODOS ("Y"), y diagonal "/" para separar materias equivalentes/alternativas dentro de un mismo requisito ("O"). NUNCA uses coma "," dentro de esta celda — la coma ya se usa para separar las columnas del CSV y mezclarla aquí rompe el archivo. Ejemplo: "MA-1001;FS-0210/FS-0227/FS-0250" significa MA-1001 Y (una de las tres alternativas). Si no hay requisitos, usa "Ninguno".
 - No agregues columna de categoría ni ninguna otra fuera de las columnas indicadas.
 - No omitas ninguna materia, incluidas optativas/electivas.
 - Si una celda es ilegible, ambigua, o no puedes confirmarla con certeza, escribe "REVISAR" en vez de inventar un dato.`;
@@ -271,35 +278,47 @@ function estiloBadgeCategoria(hex) {
   return `background:${hexARgba(hex, 0.15)}; border-color:${hex}; color:${hex};`;
 }
 
-/* ===================== Parser de grupos de requisitos ("," = Y, "/" = O) ===================== */
+/* ===================== Parser de grupos de requisitos (";" = Y, "/" = O) ===================== */
 
 /**
- * Normaliza separadores "sueltos" que a veces llegan en la celda en vez de
- * la coma/diagonal oficial: " - " o " y " (con espacios) como separador de
- * GRUPOS distintos (equivalente a ","), y " o " como separador de
+ * Normaliza separadores "sueltos" que a veces llegan en la celda en vez del
+ * punto y coma/diagonal oficial: " - " o " y " (con espacios) como separador
+ * de GRUPOS distintos (equivalente a ";"), y " o " como separador de
  * ALTERNATIVAS dentro de un grupo (equivalente a "/"). Solo se normaliza
  * cuando el separador está rodeado de espacios — así un código como
  * "MA-1001" (guion pegado, sin espacios) nunca se parte por error.
+ *
+ * v7: el separador de "Y" se cambió de coma "," a punto y coma ";" porque la
+ * coma choca con el separador de columnas del propio CSV — si una materia
+ * tenía más de un requisito (ej. "MA0101,MA1403"), esa celda no quedaba
+ * envuelta en comillas por la IA externa y la fila terminaba con más
+ * columnas de las esperadas, causando que el parser la descartara. Esta era
+ * la causa raíz de que se perdieran materias al importar.
  */
 function normalizarSeparadoresRequisitos(texto) {
   return texto
-    .replace(/\s+-\s+/g, ",")
-    .replace(/\s+y\s+/gi, ",")
-    .replace(/\s+o\s+/gi, "/");
+    .replace(/\s+-\s+/g, ";")
+    .replace(/\s+y\s+/gi, ";")
+    .replace(/\s+o\s+/gi, "/")
+    // Compatibilidad con datos/plantillas viejas que aún usan coma como "Y":
+    // si después de todo lo anterior sigue habiendo una coma dentro de la
+    // celda (que ya no debería tener columnas mezcladas, porque esto se usa
+    // fila por fila sobre una celda ya aislada), se trata como "Y" también.
+    .replace(/\s*,\s*/g, ";");
 }
 
 function parsearGrupoRequisitos(texto) {
   const limpio = normalizarSeparadoresRequisitos((texto || "").trim());
   if (!limpio || limpio.toLowerCase() === "ninguno") return [];
   return limpio
-    .split(",")
+    .split(";")
     .map((grupo) => grupo.split("/").map((c) => c.trim()).filter(Boolean))
     .filter((g) => g.length > 0);
 }
 
 function serializarGrupoRequisitos(grupos) {
   if (!grupos || grupos.length === 0) return "Ninguno";
-  return grupos.map((g) => g.join("/")).join(",");
+  return grupos.map((g) => g.join("/")).join(";");
 }
 
 /* ===================== Render principal de la sección ===================== */
@@ -357,12 +376,20 @@ function renderizarPlanEstudios() {
 
 /* ===================== B.2 — Panel de importación (solo cuando no hay plan) ===================== */
 
-/** Textos de instrucción breve, uno por modo de importación (sección B.2). */
-const INSTRUCCIONES_POR_MODO_IMPORTACION = {
-  link: '1) Pega el link de tu plan de estudios arriba. 2) Copia el prompt con el botón de la IA que prefieras (asegúrate de tener su navegación web activada). 3) Copia el CSV que te devuelva y pégalo abajo.',
-  pdf: "1) Copia el prompt con el botón de la IA que prefieras. 2) Adjunta ahí tu PDF. 3) Copia el CSV que te devuelva y pégalo abajo.",
-  capturas: "1) Copia el prompt con el botón de la IA que prefieras. 2) Adjunta ahí tus fotos o capturas de pantalla. 3) Copia el CSV que te devuelva y pégalo abajo.",
-};
+/**
+ * v7 #3: texto final de la ventana "Antes de ir a la IA", con un salto de
+ * línea entre cada instrucción. Es el mismo para los 3 modos (Link/PDF/
+ * Capturas) — ya no varía por modo, solo por la IA elegida.
+ */
+function construirTextoInstruccionesImportacion(destino) {
+  const nombreIA = NOMBRE_IA[destino] || "la IA seleccionada";
+  return [
+    `Cuando presiones Aceptar, se te enviará a ${nombreIA}.`,
+    "Cuando estés en el chat, pega el prompt que se guardó en tu portapapeles.",
+    "Adjunta el tipo de archivo que habías elegido.",
+    "Guarda bien la respuesta que te entregue la IA para traerla de vuelta a esta página.",
+  ].join("\n\n");
+}
 
 function construirPanelImportacion() {
   const cfg = estado.datos.configuracion;
@@ -618,7 +645,7 @@ function abrirModalInstruccionesImportacion(modo, destino, textoPrompt) {
   document.getElementById("titulo-modal-instrucciones-importacion").textContent =
     `Antes de ir a ${NOMBRE_IA[destino] || "la IA"}…`;
   document.getElementById("cuerpo-modal-instrucciones-importacion").textContent =
-    INSTRUCCIONES_POR_MODO_IMPORTACION[modo] || INSTRUCCIONES_POR_MODO_IMPORTACION.link;
+    construirTextoInstruccionesImportacion(destino);
   document.getElementById("modal-instrucciones-importacion").classList.remove("oculto");
 }
 
@@ -2175,7 +2202,7 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
 
   const card = document.createElement("div");
   card.className = "glass-panel materia-card";
-  if (categoria) card.style.borderLeft = `3px solid ${categoria.color}`;
+  if (categoria) card.style.borderLeft = `6px solid ${categoria.color}`;
 
   const filaPrincipal = document.createElement("div");
   filaPrincipal.className = "materia-fila-principal";
@@ -2203,6 +2230,8 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
   const spanCodigo = document.createElement("span");
   spanCodigo.className = "materia-codigo";
   spanCodigo.textContent = materia.codigo;
+  spanCodigo.title = "Mantén presionado (o clic derecho) para cambiar la categoría de esta materia";
+  agregarLongPress(spanCodigo, () => abrirMenuRapidoCategoria(materia, plan, spanCodigo));
   prefijo.appendChild(spanCodigo);
 
   linea1.appendChild(prefijo);
@@ -2246,27 +2275,20 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
     const cuerpo = document.createElement("div");
     cuerpo.className = "materia-cuerpo stack";
 
-    // Ajuste v4 #4: Requisitos/Correquisitos alineados a la izquierda.
-    cuerpo.appendChild(construirBloqueRequisitos("Requisitos", materia.requisitos));
-    cuerpo.appendChild(construirBloqueRequisitos("Correquisitos", materia.correquisitos));
+    // v7 #4/#5: Requisitos + Correquisitos ahora comparten un solo bloque de
+    // 3 columnas; la Categoría ya no se muestra como texto plano aquí (se
+    // movió a un badge real en la columna 3, solo si existe — ver
+    // construirFilaExtras). La capacidad de asignar/cambiar categoría por
+    // mantener-presionado sigue disponible siempre desde el código de la
+    // materia en el encabezado (spanCodigo, línea 1 de la tarjeta), incluso
+    // cuando todavía no tiene ninguna asignada.
+    cuerpo.appendChild(construirBloqueCompletoRequisitos(materia, plan));
 
     // v5 #4: las horas ya no van en el encabezado — viven aquí, en el detalle.
     const horasLinea = document.createElement("p");
     horasLinea.className = "materia-horas-detalle";
     horasLinea.textContent = formatearHoras(materia);
     cuerpo.appendChild(horasLinea);
-
-    // La categoría ya no se muestra en el encabezado (v5 #4), pero se
-    // conserva aquí en el detalle expandido para no perder la función de
-    // reasignarla con mantener-presionado / clic derecho (Ajuste v4 #7).
-    const filaCategoria = document.createElement("p");
-    filaCategoria.className = "materia-req-linea";
-    filaCategoria.style.cursor = "pointer";
-    filaCategoria.innerHTML = `<strong>Categoría:</strong> ${categoria ? categoria.nombre : "Sin categoría"}`;
-    filaCategoria.title = "Mantén presionado (o clic derecho) para cambiar la categoría de esta materia";
-    filaCategoria.addEventListener("click", (ev) => ev.stopPropagation());
-    agregarLongPress(filaCategoria, () => abrirMenuRapidoCategoria(materia, plan, filaCategoria));
-    cuerpo.appendChild(filaCategoria);
 
     const grupoEstado = document.createElement("div");
     grupoEstado.className = "pill-group";
@@ -2342,23 +2364,34 @@ function formatearHorasCompacto(materia) {
 }
 
 /**
- * Fila de 3 columnas para un código de requisito/correquisito (v5 #6):
- * 1) Código - Nombre (trunca con "…" si invade la columna de Horas)
- * 2) Horas, centradas estrictamente
- * 3) "Ir a materia" (link de texto, navega la cadena de una a otra)
+ * Fila de 3 columnas para un código de requisito/correquisito (v7 rediseño):
+ * 1) Código - Nombre: el texto mismo ES el link, abre la tarjeta/modal de esa
+ *    materia (ya NO hay un link "Ir a materia" aparte).
+ * 2) Horas, centradas.
+ * 3) `extraEl` opcional: elemento que llega desde afuera (badge de Categoría,
+ *    link "Es requisito" o link "Historial" — son propiedades de la materia
+ *    ACTUAL, no de este requisito puntual; se acomodan aquí por conveniencia
+ *    de espacio, una por fila disponible — ver construirBloqueCompletoRequisitos).
  */
-function construirFilaRequisito(codigo) {
+function construirFilaRequisito(codigo, extraEl) {
   const fila = document.createElement("div");
   fila.className = "requisito-fila";
 
   const encontrada = buscarMateriaPorCodigoEnPlanes(codigo);
 
-  const colNombre = document.createElement("span");
-  colNombre.className = "requisito-col-nombre";
-  colNombre.title = encontrada ? `${codigo} - ${aplicarFormatoTexto(encontrada.materia.nombre)}` : codigo;
-  colNombre.textContent = encontrada
+  const colNombre = document.createElement("a");
+  colNombre.href = "#";
+  colNombre.className = "requisito-col-nombre link-plano";
+  const textoNombre = encontrada
     ? `${codigo} - ${aplicarFormatoTexto(encontrada.materia.nombre)}`
     : `${codigo} - (no encontrada en ningún plan visible)`;
+  colNombre.title = textoNombre;
+  colNombre.textContent = textoNombre;
+  colNombre.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    abrirModalRequisito(codigo);
+  });
   fila.appendChild(colNombre);
 
   const colHoras = document.createElement("span");
@@ -2366,27 +2399,85 @@ function construirFilaRequisito(codigo) {
   colHoras.textContent = encontrada ? formatearHorasCompacto(encontrada.materia) : "—";
   fila.appendChild(colHoras);
 
-  const colIr = document.createElement("a");
-  colIr.href = "#";
-  colIr.className = "requisito-col-ir link-plano";
-  colIr.textContent = "Ir a materia";
-  colIr.addEventListener("click", (ev) => {
-    ev.preventDefault();
-    ev.stopPropagation();
-    abrirModalRequisito(codigo);
-  });
-  fila.appendChild(colIr);
+  const colExtra = document.createElement("span");
+  colExtra.className = "requisito-col-extra";
+  if (extraEl) colExtra.appendChild(extraEl);
+  fila.appendChild(colExtra);
 
   return fila;
 }
 
-function construirBloqueRequisitos(etiqueta, grupos) {
+/** Fila "vacía" en columnas 1-2 (sin código de requisito que mostrar), usada
+ *  solo para poder alojar un elemento de la columna 3 (extra) cuando ya no
+ *  quedan filas de datos reales — así Categoría/Es requisito/Historial
+ *  nunca quedan fuera del layout aunque la materia no tenga requisitos ni
+ *  correquisitos. */
+function construirFilaSoloExtra(extraEl) {
+  const fila = document.createElement("div");
+  fila.className = "requisito-fila";
+  fila.appendChild(document.createElement("span")).className = "requisito-col-nombre";
+  fila.appendChild(document.createElement("span")).className = "requisito-col-horas";
+  const colExtra = document.createElement("span");
+  colExtra.className = "requisito-col-extra";
+  colExtra.appendChild(extraEl);
+  fila.appendChild(colExtra);
+  return fila;
+}
+
+/**
+ * Arma, en orden, los elementos que van a ir en la columna 3 (v7 #4/#5):
+ * badge de Categoría (SOLO si la materia tiene una asignada — nunca un
+ * texto "Sin categoría"), link "Es requisito" y link "Historial".
+ */
+function construirFilaExtras(materia, plan) {
+  const extras = [];
+  const categoria = plan.categorias.find((c) => c.id === materia.categoria_id);
+
+  if (categoria) {
+    const badge = document.createElement("span");
+    badge.className = "badge";
+    badge.style.cssText = estiloBadgeCategoria(categoria.color) + " cursor:pointer;";
+    badge.textContent = categoria.nombre;
+    badge.title = "Mantén presionado (o clic derecho) para cambiar la categoría";
+    agregarLongPress(badge, () => abrirMenuRapidoCategoria(materia, plan, badge));
+    extras.push(badge);
+  }
+
+  const linkEsRequisito = document.createElement("a");
+  linkEsRequisito.href = "#";
+  linkEsRequisito.className = "requisito-fila-link link-plano";
+  linkEsRequisito.textContent = "Es requisito";
+  linkEsRequisito.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    abrirModalDesbloquea(materia, plan);
+  });
+  extras.push(linkEsRequisito);
+
+  const linkHistorial = document.createElement("a");
+  linkHistorial.href = "#";
+  linkHistorial.className = "requisito-fila-link link-plano";
+  linkHistorial.textContent = "Historial";
+  linkHistorial.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    abrirModalHistorial(materia);
+  });
+  extras.push(linkHistorial);
+
+  return extras;
+}
+
+function construirBloqueRequisitos(etiqueta, grupos, extrasQueue) {
   const cont = document.createElement("div");
   const sinItems = !grupos || grupos.length === 0;
 
-  // v5 #6: "Correquisitos" se omite POR COMPLETO si la materia no tiene
-  // ninguno (nada de "Correquisitos: Ninguno"). "Requisitos" sí conserva el
-  // texto "Ninguno" cuando está vacío, porque ahí siempre aplica.
+  // v5 #6 / v7 Bug 3: "Correquisitos" se omite POR COMPLETO si la materia no
+  // tiene ninguno (nada de "Correquisitos: Ninguno"). La condición es
+  // exactamente `grupos.length === 0` — nunca se compara contra "" ni contra
+  // ningún otro tipo de dato, así que solo se oculta cuando de verdad está
+  // vacío. "Requisitos" sí conserva el texto "Ninguno" cuando está vacío,
+  // porque ahí siempre aplica.
   if (sinItems) {
     if (etiqueta === "Correquisitos") return cont;
     const p = document.createElement("p");
@@ -2404,7 +2495,8 @@ function construirBloqueRequisitos(etiqueta, grupos) {
 
   grupos.forEach((grupo) => {
     (grupo || []).forEach((codigo, i) => {
-      cont.appendChild(construirFilaRequisito(codigo));
+      const extra = extrasQueue && extrasQueue.length ? extrasQueue.shift() : null;
+      cont.appendChild(construirFilaRequisito(codigo, extra));
       // Alternativas dentro del mismo grupo ("O"): un separador entre filas.
       // Entre grupos distintos no hay separador (el "Y" queda implícito).
       if (i < grupo.length - 1) {
@@ -2415,6 +2507,30 @@ function construirBloqueRequisitos(etiqueta, grupos) {
       }
     });
   });
+
+  return cont;
+}
+
+/**
+ * v7 #4: arma el bloque completo de Requisitos + Correquisitos de una
+ * materia, compartiendo una sola cola de "extras" (badge de Categoría, link
+ * "Es requisito", link "Historial") entre ambas secciones, para que se
+ * repartan en las filas de datos disponibles en orden. Si sobran extras sin
+ * fila real donde ir (ej. una materia sin requisitos ni correquisitos), se
+ * agregan filas vacías solo para alojarlos — así nunca quedan fuera del
+ * layout.
+ */
+function construirBloqueCompletoRequisitos(materia, plan) {
+  const cont = document.createElement("div");
+  cont.className = "stack";
+  const extrasQueue = construirFilaExtras(materia, plan);
+
+  cont.appendChild(construirBloqueRequisitos("Requisitos", materia.requisitos, extrasQueue));
+  cont.appendChild(construirBloqueRequisitos("Correquisitos", materia.correquisitos, extrasQueue));
+
+  while (extrasQueue.length) {
+    cont.appendChild(construirFilaSoloExtra(extrasQueue.shift()));
+  }
 
   return cont;
 }
@@ -2461,8 +2577,7 @@ function abrirModalRequisito(codigo) {
     const extra = document.createElement("div");
     extra.id = "requisito-extra";
     extra.className = "stack";
-    extra.appendChild(construirBloqueRequisitos("Requisitos", materia.requisitos));
-    extra.appendChild(construirBloqueRequisitos("Correquisitos", materia.correquisitos));
+    extra.appendChild(construirBloqueCompletoRequisitos(materia, plan));
 
     const horas = document.createElement("p");
     horas.className = "materia-req-linea";
@@ -2516,6 +2631,20 @@ function abrirModalDesbloquea(materia, plan) {
   document.getElementById("modal-desbloquea").classList.remove("oculto");
 }
 
+/**
+ * v7 #4: muestra el registro de todas las veces que se ha cursado esta
+ * materia (reprobada semestre X, aprobada semestre Y, etc.). El módulo de
+ * Semestres todavía no existe, así que por ahora siempre muestra el estado
+ * vacío — queda listo para conectarse en cuanto exista esa información, sin
+ * dejar el botón "Historial" fuera del layout mientras tanto.
+ */
+function abrirModalHistorial(materia) {
+  document.getElementById("titulo-modal-historial").textContent = `Historial — ${aplicarFormatoTexto(materia.nombre)}`;
+  const cont = document.getElementById("cuerpo-modal-historial");
+  cont.innerHTML = `<p class="muted">Aún no tienes semestres registrados.</p>`;
+  document.getElementById("modal-historial").classList.remove("oculto");
+}
+
 function inicializarModalDesbloquea() {
   document.getElementById("btn-cerrar-desbloquea").addEventListener("click", () => {
     document.getElementById("modal-desbloquea").classList.add("oculto");
@@ -2538,6 +2667,13 @@ window.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("btn-cerrar-requisito").addEventListener("click", () => {
     document.getElementById("modal-requisito").classList.add("oculto");
+  });
+
+  document.getElementById("btn-cerrar-historial").addEventListener("click", () => {
+    document.getElementById("modal-historial").classList.add("oculto");
+  });
+  document.getElementById("modal-historial").addEventListener("click", (e) => {
+    if (e.target.id === "modal-historial") e.target.classList.add("oculto");
   });
 
   // v5 #7: "Es requisito" — link de solo texto que abre la búsqueda inversa
