@@ -45,11 +45,11 @@
 
       <div class="sidebar-scroll">
         <button class="btn btn-secondary btn-block btn-nav" title="Resumen" disabled>🏠 <span class="texto-nav">Resumen</span></button>
-        <button id="nav-plan-estudios" class="btn btn-secondary btn-block btn-nav" data-seccion="plan-estudios" title="Plan de Estudios">📚 <span class="texto-nav">Plan de Estudios</span></button>
-        <button class="btn btn-secondary btn-block btn-nav" title="Semestres" disabled>📅 <span class="texto-nav">Semestres</span></button>
-        <button class="btn btn-secondary btn-block btn-nav" title="Horario" disabled>🗓️ <span class="texto-nav">Horario</span></button>
-        <button class="btn btn-secondary btn-block btn-nav" title="Profesores" disabled>👨‍🏫 <span class="texto-nav">Profesores</span></button>
         <button class="btn btn-secondary btn-block btn-nav" title="Agenda" disabled>📖 <span class="texto-nav">Agenda</span></button>
+        <button class="btn btn-secondary btn-block btn-nav" title="Horario" disabled>🗓️ <span class="texto-nav">Horario</span></button>
+        <button class="btn btn-secondary btn-block btn-nav" title="Semestres" disabled>📅 <span class="texto-nav">Semestres</span></button>
+        <button class="btn btn-secondary btn-block btn-nav" title="Profesores" disabled>👨‍🏫 <span class="texto-nav">Profesores</span></button>
+        <button id="nav-plan-estudios" class="btn btn-secondary btn-block btn-nav" data-seccion="plan-estudios" title="Plan de Estudios">📚 <span class="texto-nav">Plan de Estudios</span></button>
         <button id="nav-configuracion" class="btn btn-primary btn-block btn-nav" data-seccion="configuracion" title="Configuración">⚙️ <span class="texto-nav">Configuración</span></button>
         <div style="flex:1;"></div>
         <div class="row" style="justify-content:space-between;">
@@ -282,6 +282,17 @@
   </div>
 </div>
 
+<!-- ===================== MODAL: Historial de la materia ===================== -->
+<div id="modal-historial" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;" id="titulo-modal-historial">Historial</h2>
+    <div id="cuerpo-modal-historial" class="stack"></div>
+    <div class="row" style="justify-content:flex-end;">
+      <button id="btn-cerrar-historial" class="btn btn-primary">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===================== MODAL: Categoría (nombre + color) ===================== -->
 <div id="modal-categoria" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
@@ -382,7 +393,7 @@
 
     <div>
       <span class="form-label">Requisitos</span>
-      <input type="text" id="input-materia-requisitos" class="form-input" placeholder="MA-1001,FS-0210/FS-0227 (o &quot;Ninguno&quot;)">
+      <input type="text" id="input-materia-requisitos" class="form-input" placeholder="MA-1001;FS-0210/FS-0227 (o &quot;Ninguno&quot;)">
     </div>
     <div>
       <span class="form-label">Correquisitos</span>
