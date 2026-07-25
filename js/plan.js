@@ -157,6 +157,39 @@ estado.universidadImportacion = "TEC";
 estado.tiposHorasImportacion = PRESETS_TIPOS_HORAS.TEC.slice();
 estado.tiposHorasPersonalizadoTexto = "";  // texto crudo cuando universidadImportacion === "Otra"
 
+/**
+ * v5 #9: aplica el formato de nombres elegido en Configuración
+ * (`configuracion.formato_texto_nombres`: "titulo" | "mayusculas" | "oracion")
+ * a un texto de materia/carrera. Esta función faltaba por completo — se
+ * llamaba desde 6 lugares distintos de este archivo pero nunca se definió,
+ * lo cual provocaba un ReferenceError en cuanto se intentaba pintar el
+ * encabezado del plan (construirEncabezadoPlan). Como ese error ocurre
+ * DESPUÉS de que renderizarPlanEstudios() ya había limpiado el contenedor
+ * (cont.innerHTML = ""), el resultado era una sección de Plan de Estudios
+ * completamente vacía, sin ningún mensaje de error visible — esta era la
+ * causa raíz del Bug 1 (crítico).
+ *
+ * Nunca revienta: si `texto` es null/undefined, devuelve "" en vez de tirar.
+ */
+function aplicarFormatoTexto(texto) {
+  const original = texto || "";
+  const formato = (estado.datos && estado.datos.configuracion && estado.datos.configuracion.formato_texto_nombres) || "titulo";
+
+  if (formato === "mayusculas") return original.toUpperCase();
+
+  if (formato === "oracion") {
+    const t = original.toLowerCase();
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+
+  // "titulo" (default): Cada Palabra Capitalizada.
+  return original
+    .toLowerCase()
+    .split(" ")
+    .map((palabra) => (palabra ? palabra.charAt(0).toUpperCase() + palabra.slice(1) : palabra))
+    .join(" ");
+}
+
 /* ===================== Utilidades de acceso a los planes ===================== */
 
 function obtenerPlanActivo() {
@@ -278,19 +311,48 @@ function renderizarPlanEstudios() {
   const principal = obtenerPlanActivo();
   cont.innerHTML = "";
 
-  if (!principal) {
-    cont.appendChild(construirPanelImportacion());
-    return;
-  }
+  try {
+    if (!principal) {
+      cont.appendChild(construirPanelImportacion());
+      return;
+    }
 
-  cont.appendChild(construirEncabezadoPlan(principal));
-  if (estado.panelImportacionAbierto) {
-    cont.appendChild(construirMiniPanelImportacion(principal));
+    cont.appendChild(construirEncabezadoPlan(principal));
+    if (estado.panelImportacionAbierto) {
+      cont.appendChild(construirMiniPanelImportacion(principal));
+    }
+    cont.appendChild(construirPanelEstadisticas(principal));
+    cont.appendChild(construirBarraAcciones());
+    cont.appendChild(construirPanelCategorias());
+    cont.appendChild(construirContenidoBloques());
+  } catch (e) {
+    // Bug 1 (v6): antes, un error aquí dejaba la sección completamente vacía
+    // y sin ningún indicio de qué pasó (el error solo se veía en la consola
+    // del navegador). Ahora se le muestra al usuario un mensaje visible y se
+    // reporta el detalle en consola para diagnóstico.
+    console.error("Error al renderizar el Plan de Estudios:", e);
+    cont.innerHTML = "";
+    const aviso = document.createElement("section");
+    aviso.className = "glass-card stack";
+    const titulo = document.createElement("h2");
+    titulo.style.margin = "0";
+    titulo.style.color = "var(--color-danger)";
+    titulo.textContent = "⚠️ No se pudo mostrar el Plan de Estudios";
+    const detalle = document.createElement("p");
+    detalle.className = "muted";
+    detalle.textContent =
+      "Ocurrió un error inesperado al dibujar esta sección. Tus datos siguen guardados; " +
+      "intenta recargar la página. Si el problema persiste, revisa la consola del navegador (F12) para más detalle.";
+    const tecnico = document.createElement("p");
+    tecnico.className = "muted";
+    tecnico.style.fontFamily = "monospace";
+    tecnico.style.fontSize = "0.8rem";
+    tecnico.textContent = e && e.message ? e.message : String(e);
+    aviso.appendChild(titulo);
+    aviso.appendChild(detalle);
+    aviso.appendChild(tecnico);
+    cont.appendChild(aviso);
   }
-  cont.appendChild(construirPanelEstadisticas(principal));
-  cont.appendChild(construirBarraAcciones());
-  cont.appendChild(construirPanelCategorias());
-  cont.appendChild(construirContenidoBloques());
 }
 
 /* ===================== B.2 — Panel de importación (solo cuando no hay plan) ===================== */
