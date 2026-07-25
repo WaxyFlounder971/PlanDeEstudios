@@ -49,8 +49,14 @@ function formatearHoras(materia) {
  */
 function construirPromptImportacion(modo, link, columnasHoras) {
   let instruccionEntrada = "";
+  let avisoNavegacion = "";
 
   if (modo === "link") {
+    // v5 1.3: el aviso de navegación web se refuerza DENTRO del propio texto
+    // del prompt (no solo en la UI), como primera línea — en pruebas reales
+    // la IA a veces respondía "es imposible" sin aclarar que el problema era
+    // que su navegación no estaba activada.
+    avisoNavegacion = `Si no tienes activada la navegación/búsqueda web y no puedes visitar este link, dímelo y usaré otro método en su lugar — no asumas que es imposible sin intentarlo primero.\n\n`;
     instruccionEntrada = `Visita esta página pública y extrae el plan de estudios completo desde su contenido: ${link}
 Es una página institucional sin inicio de sesión. Si la página organiza las materias en pestañas o bloques mediante controles de navegador (JavaScript) que no se reflejen con claridad en el contenido que puedas leer, y no puedes determinar con certeza a qué Bloque pertenece cada materia, escribe "REVISAR" en la columna Bloque de esa fila en vez de adivinar.`;
   } else if (modo === "pdf") {
@@ -59,9 +65,11 @@ Es una página institucional sin inicio de sesión. Si la página organiza las m
     instruccionEntrada = `Te voy a adjuntar una o varias fotos/capturas de pantalla de mi plan de estudios. Léelas todas como una sola malla curricular continua, uniendo la información entre todas, sin perder ninguna materia, sin importar el orden en que las adjunte.`;
   }
 
-  return `Actúa como un estructurador de datos académicos. ${instruccionEntrada}
+  return `${avisoNavegacion}Actúa como un estructurador de datos académicos. ${instruccionEntrada}
 
-Devuélveme ÚNICAMENTE un bloque de código plano en formato CSV, sin texto adicional antes o después, con esta estructura EXACTA:
+Si logras identificar el nombre de la carrera, su código de plan, y la universidad, inclúyelos en las primeras 3 líneas así: CARRERA: ..., CODIGO_PLAN: ..., UNIVERSIDAD: ... (una por línea, antes del CSV). Si no puedes identificar alguno con certeza, omite esa línea.
+
+Devuélveme ÚNICAMENTE un bloque de código plano en formato CSV (con esas líneas de metadatos antes, si las tienes), sin texto adicional antes o después, con esta estructura EXACTA:
 
 Bloque,Codigo,Nombre,Creditos,${columnasHoras},Requisitos,Correquisitos
 
@@ -73,6 +81,47 @@ Reglas:
 - No agregues columna de categoría ni ninguna otra fuera de las columnas indicadas.
 - No omitas ninguna materia, incluidas optativas/electivas.
 - Si una celda es ilegible, ambigua, o no puedes confirmarla con certeza, escribe "REVISAR" en vez de inventar un dato.`;
+}
+
+/** Lee las líneas opcionales CARRERA:/CODIGO_PLAN:/UNIVERSIDAD: al inicio de
+ *  la respuesta de la IA (v5 1.3), sin romperse si no existen. Devuelve
+ *  { metadatos: {...}, csv: "texto sin esas líneas" }. */
+function extraerMetadatosImportacion(textoCrudo) {
+  const lineas = textoCrudo.replace(/```[a-zA-Z]*\n?/g, "").split(/\r?\n/);
+  const metadatos = {};
+  let i = 0;
+  const patrones = { carrera: /^CARRERA:\s*(.+)$/i, codigo_plan: /^CODIGO_PLAN:\s*(.+)$/i, universidad: /^UNIVERSIDAD:\s*(.+)$/i };
+  while (i < lineas.length) {
+    const linea = lineas[i].trim();
+    if (!linea) { i++; continue; }
+    let coincidio = false;
+    for (const [clave, patron] of Object.entries(patrones)) {
+      const m = linea.match(patron);
+      if (m) { metadatos[clave] = m[1].trim(); coincidio = true; break; }
+    }
+    if (!coincidio) break;
+    i++;
+  }
+  return { metadatos, csv: lineas.slice(i).join("\n") };
+}
+
+/** Placeholders variados de Carrera/Código según universidad (v5 1.3). */
+const EJEMPLOS_PLACEHOLDER_PLAN = {
+  TEC: [
+    { carrera: "Administración de Tecnologías de Información", codigo: "2053" },
+    { carrera: "Ingeniería en Computadores", codigo: "2103" },
+  ],
+  UCR: [
+    { carrera: "Ingeniería Química", codigo: "420501, plan 01" },
+    { carrera: "Física", codigo: "210201, plan 03" },
+    { carrera: "Enfermería", codigo: "510109" },
+    { carrera: "Educación Primaria", codigo: "320242, plan 02" },
+  ],
+};
+
+function elegirPlaceholderPlan(universidad) {
+  const lista = EJEMPLOS_PLACEHOLDER_PLAN[universidad] || EJEMPLOS_PLACEHOLDER_PLAN.TEC;
+  return lista[Math.floor(Math.random() * lista.length)];
 }
 
 const LIMITE_PLANES_ESTUDIO = 3;
@@ -92,6 +141,9 @@ estado.planGestionImportandoId = null;     // qué fila del panel de gestión ti
 estado.reabrirGestionPlanesTrasCrear = false;
 estado.busquedaCategoriaMaterias = "";
 estado.ordenCategoriaMaterias = "bloque";
+estado.panelImportacionAbierto = false;   // v5 1.2/1.3: import/actualizar malla, siempre inline
+estado.estadisticasAbiertas = false;      // v5 #3: colapsada por defecto
+estado.arrastrandoPlanId = null;          // v5 1.4: drag-and-drop en Gestionar plan
 
 /* ---- B.2: flujo de importación de 3 modos (Link / PDF / Capturas) ----
  * Estas llaves viven en `estado` (no en los datos del usuario) porque son
@@ -232,6 +284,10 @@ function renderizarPlanEstudios() {
   }
 
   cont.appendChild(construirEncabezadoPlan(principal));
+  if (estado.panelImportacionAbierto) {
+    cont.appendChild(construirMiniPanelImportacion(principal));
+  }
+  cont.appendChild(construirPanelEstadisticas(principal));
   cont.appendChild(construirBarraAcciones());
   cont.appendChild(construirPanelCategorias());
   cont.appendChild(construirContenidoBloques());
@@ -462,6 +518,7 @@ function construirInputArchivoCSV(textareaDestino) {
 async function copiarPromptImportacion(texto) {
   try {
     await navigator.clipboard.writeText(texto);
+    mostrarToast("✓ Prompt copiado en el portapapeles");
   } catch (e) {
     console.warn("No se pudo copiar automáticamente, el usuario deberá copiarlo a mano.", e);
   }
@@ -775,9 +832,15 @@ function inicializarModalCrearPlan() {
 
 function abrirModalGestionPlanes() {
   renderizarListaGestionPlanes();
+  renderizarModoHardcore();
   document.getElementById("modal-gestion-planes").classList.remove("oculto");
 }
 
+/** v5 1.4: tarjetas arrastrables para reordenar los planes — la primera del
+ *  orden es automáticamente la favorita/principal (estrella a la derecha,
+ *  sin botón de estrella aparte). Reordenar NO cambia cuál es plan_activo_id
+ *  (eso lo sigue controlando el carrusel del encabezado); solo cambia el
+ *  orden de la lista y por lo tanto cuál queda marcada como favorita. */
 function renderizarListaGestionPlanes() {
   const cont = document.getElementById("lista-gestion-planes");
   cont.innerHTML = "";
@@ -787,35 +850,24 @@ function renderizarListaGestionPlanes() {
     cont.innerHTML = `<p class="muted">Todavía no tienes ningún plan.</p>`;
   }
 
-  planes.forEach((plan) => {
-    const wrap = document.createElement("div");
-    wrap.className = "stack";
-
+  planes.forEach((plan, indice) => {
     const fila = document.createElement("div");
-    fila.className = "glass-panel row-between";
+    fila.className = "glass-panel row-between plan-gestion-fila";
     fila.style.padding = "10px 14px";
     fila.style.flexWrap = "wrap";
     fila.style.gap = "8px";
+    fila.draggable = true;
+    fila.dataset.planId = plan.id;
 
     const info = document.createElement("span");
     info.textContent =
-      `${plan.universidad} · ${plan.nombre_carrera}` +
+      `${plan.universidad} · ${aplicarFormatoTexto(plan.nombre_carrera)}` +
       (plan.codigo_plan ? ` (${plan.codigo_plan})` : "") +
       (plan.materias.length === 0 ? " — sin materias" : ` — ${plan.materias.length} materias`);
     fila.appendChild(info);
 
-    const botones = document.createElement("div");
-    botones.className = "row";
-
-    const btnImportar = document.createElement("button");
-    btnImportar.className = "btn btn-secondary";
-    const importAbierto = estado.planGestionImportandoId === plan.id;
-    btnImportar.textContent = importAbierto ? "Cerrar" : plan.materias.length === 0 ? "Importar malla" : "Actualizar malla";
-    btnImportar.addEventListener("click", () => {
-      estado.planGestionImportandoId = importAbierto ? null : plan.id;
-      renderizarListaGestionPlanes();
-    });
-    botones.appendChild(btnImportar);
+    const derecha = document.createElement("div");
+    derecha.className = "row";
 
     const btnEliminar = document.createElement("button");
     btnEliminar.className = "btn btn-danger";
@@ -828,16 +880,48 @@ function renderizarListaGestionPlanes() {
         onConfirmar: () => eliminarPlanEstudio(plan.id),
       });
     });
-    botones.appendChild(btnEliminar);
+    derecha.appendChild(btnEliminar);
 
-    fila.appendChild(botones);
-    wrap.appendChild(fila);
-
-    if (importAbierto) {
-      wrap.appendChild(construirMiniPanelImportacion(plan));
+    if (indice === 0) {
+      const estrella = document.createElement("span");
+      estrella.className = "plan-gestion-estrella";
+      estrella.title = "Plan favorito/principal";
+      estrella.textContent = "★";
+      derecha.appendChild(estrella);
     }
 
-    cont.appendChild(wrap);
+    fila.appendChild(derecha);
+
+    // ---- Drag and drop para reordenar ----
+    fila.addEventListener("dragstart", () => {
+      estado.arrastrandoPlanId = plan.id;
+      fila.classList.add("arrastrando");
+    });
+    fila.addEventListener("dragend", () => {
+      fila.classList.remove("arrastrando");
+      estado.arrastrandoPlanId = null;
+      document.querySelectorAll(".plan-gestion-fila.sobre-drop").forEach((el) => el.classList.remove("sobre-drop"));
+    });
+    fila.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      if (estado.arrastrandoPlanId && estado.arrastrandoPlanId !== plan.id) fila.classList.add("sobre-drop");
+    });
+    fila.addEventListener("dragleave", () => fila.classList.remove("sobre-drop"));
+    fila.addEventListener("drop", (e) => {
+      e.preventDefault();
+      fila.classList.remove("sobre-drop");
+      const origenId = estado.arrastrandoPlanId;
+      if (!origenId || origenId === plan.id) return;
+      const idxOrigen = estado.datos.planes_estudio.findIndex((p) => p.id === origenId);
+      const idxDestino = estado.datos.planes_estudio.findIndex((p) => p.id === plan.id);
+      if (idxOrigen === -1 || idxDestino === -1) return;
+      const [movido] = estado.datos.planes_estudio.splice(idxOrigen, 1);
+      estado.datos.planes_estudio.splice(idxDestino, 0, movido);
+      marcarCambioPendiente();
+      renderizarListaGestionPlanes();
+    });
+
+    cont.appendChild(fila);
   });
 
   const btnAgregar = document.getElementById("btn-agregar-plan-gestion");
@@ -847,31 +931,20 @@ function renderizarListaGestionPlanes() {
   aviso.classList.toggle("oculto", !alcanzoLimite);
 }
 
-/** Mini panel de importación reutilizable, apuntando a un plan específico
- *  desde la lista de gestión (en vez del flujo principal/secundario). */
+/**
+ * Componente de importación/actualización, SIEMPRE inline (v5 1.1/1.3):
+ * exactamente el mismo componente visual se usa para el primer import de un
+ * plan (ver construirPanelImportacion, antes de que el plan exista) y para
+ * actualizar la malla de un plan ya existente — nunca en una ventana flotante.
+ */
 function construirMiniPanelImportacion(plan) {
-  const sec = document.createElement("div");
+  const sec = document.createElement("section");
   sec.className = "glass-card stack";
-  sec.style.padding = "14px";
 
-  const filaTitulo = document.createElement("div");
-  filaTitulo.className = "row-between";
-  const tituloMini = document.createElement("strong");
-  tituloMini.textContent = "Actualizar malla";
-  const btnCerrarMini = document.createElement("button");
-  btnCerrarMini.type = "button";
-  btnCerrarMini.className = "btn-colapsar";
-  btnCerrarMini.title = "Cerrar";
-  btnCerrarMini.textContent = "✕";
-  // Independiente de si la importación terminó bien, mal, o ni se intentó:
-  // este botón siempre cierra el mini-panel.
-  btnCerrarMini.addEventListener("click", () => {
-    estado.planGestionImportandoId = null;
-    renderizarListaGestionPlanes();
-  });
-  filaTitulo.appendChild(tituloMini);
-  filaTitulo.appendChild(btnCerrarMini);
-  sec.appendChild(filaTitulo);
+  const titulo = document.createElement("h2");
+  titulo.style.margin = "0";
+  titulo.textContent = plan.materias.length === 0 ? "Importar malla" : "Actualizar malla";
+  sec.appendChild(titulo);
 
   // Aquí el plan ya existe, así que las columnas de horas se toman
   // directamente de su tipos_horas — no hace falta preguntarlas de nuevo.
@@ -888,19 +961,23 @@ function construirMiniPanelImportacion(plan) {
     btn.textContent = op.texto;
     btn.addEventListener("click", () => {
       estado.modoImportacion = op.valor;
-      renderizarListaGestionPlanes();
+      renderizarPlanEstudios();
     });
     grupoModo.appendChild(btn);
   });
   sec.appendChild(grupoModo);
 
+  let inputLink = null;
   if (estado.modoImportacion === "link") {
-    const inputLink = document.createElement("input");
+    inputLink = document.createElement("input");
     inputLink.type = "text";
     inputLink.className = "form-input";
     inputLink.placeholder = "https://tu-universidad.ac.cr/tu-plan-de-estudios";
     inputLink.value = estado.linkImportacion;
-    inputLink.addEventListener("input", () => { estado.linkImportacion = inputLink.value; });
+    inputLink.addEventListener("input", () => {
+      estado.linkImportacion = inputLink.value;
+      actualizarEstadoBotonesEnvioImportacion();
+    });
     sec.appendChild(inputLink);
 
     const avisoNavegacion = document.createElement("p");
@@ -909,9 +986,12 @@ function construirMiniPanelImportacion(plan) {
     sec.appendChild(avisoNavegacion);
   }
 
+  // v5 1.3: selector de IA destino + botón de envío deshabilitado si el
+  // modo es "link" y el campo está vacío.
   const filaBotones = document.createElement("div");
   filaBotones.className = "row";
   const btnClaude = document.createElement("button");
+  btnClaude.id = "btn-enviar-import-claude";
   btnClaude.className = "btn btn-primary";
   btnClaude.style.flex = "1";
   btnClaude.textContent = "Enviar a Claude";
@@ -920,6 +1000,7 @@ function construirMiniPanelImportacion(plan) {
     enviarPromptAClaude(construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras));
   });
   const btnChatGPT = document.createElement("button");
+  btnChatGPT.id = "btn-enviar-import-chatgpt";
   btnChatGPT.className = "btn btn-secondary";
   btnChatGPT.style.flex = "1";
   btnChatGPT.textContent = "Enviar a ChatGPT";
@@ -933,13 +1014,14 @@ function construirMiniPanelImportacion(plan) {
 
   const instrucciones = document.createElement("p");
   instrucciones.className = "muted";
+  instrucciones.style.whiteSpace = "pre-line";
   instrucciones.textContent = INSTRUCCIONES_POR_MODO_IMPORTACION[estado.modoImportacion];
   sec.appendChild(instrucciones);
 
   const textarea = document.createElement("textarea");
   textarea.className = "form-textarea";
   textarea.rows = 6;
-  textarea.placeholder = "Pega aquí el CSV…";
+  textarea.placeholder = "Pega aquí el CSV que te devolvió la IA…";
   sec.appendChild(textarea);
   sec.appendChild(construirInputArchivoCSV(textarea));
 
@@ -955,7 +1037,14 @@ function construirMiniPanelImportacion(plan) {
       resultado.innerHTML = `<p class="muted" style="color:var(--color-danger);">Pega primero el CSV.</p>`;
       return;
     }
-    const { materias, errores } = parsearCSVPlanEstudios(textarea.value, plan.parametros_universidad.tipos_horas);
+    // v5 1.3: si la IA detectó carrera/código/universidad, se leen aquí
+    // (sin romperse si no vienen) — solo se usan para actualizar los datos
+    // de encabezado del plan si el usuario los dejó vacíos originalmente.
+    const { metadatos, csv } = extraerMetadatosImportacion(textarea.value);
+    if (metadatos.carrera && !plan.nombre_carrera) plan.nombre_carrera = metadatos.carrera;
+    if (metadatos.codigo_plan && !plan.codigo_plan) plan.codigo_plan = metadatos.codigo_plan;
+
+    const { materias, errores } = parsearCSVPlanEstudios(csv, plan.parametros_universidad.tipos_horas);
     materias.forEach((nueva) => {
       const existente = plan.materias.find((m) => m.codigo === nueva.codigo);
       if (existente) Object.assign(existente, nueva, { categoria_id: existente.categoria_id, estado: existente.estado });
@@ -966,14 +1055,26 @@ function construirMiniPanelImportacion(plan) {
       ? `<p class="muted" style="color:var(--color-danger);">Algunas filas no se pudieron importar:</p>` +
         errores.map((e) => `<p class="muted" style="color:var(--color-danger);">• ${e}</p>`).join("")
       : `<p class="muted" style="color:#34d399;">¡Listo! ${materias.length} materias procesadas.</p>`;
-    renderizarListaGestionPlanes();
-    if (plan.id === estado.datos.configuracion.plan_activo_id || plan.id === estado.datos.configuracion.plan_activo_secundario_id) {
-      renderizarPlanEstudios();
-    }
+    estado.panelImportacionAbierto = false;
+    renderizarPlanEstudios();
   });
   sec.appendChild(btnImportar);
 
+  setTimeout(actualizarEstadoBotonesEnvioImportacion, 0);
   return sec;
+}
+
+/** Deshabilita "Enviar a Claude/ChatGPT" si el modo es "link" y el campo
+ *  está vacío (v5 1.3). Se llama tras cada render del panel de importación. */
+function actualizarEstadoBotonesEnvioImportacion() {
+  const btnClaude = document.getElementById("btn-enviar-import-claude");
+  const btnChatGPT = document.getElementById("btn-enviar-import-chatgpt");
+  if (!btnClaude || !btnChatGPT) return;
+  const bloqueado = estado.modoImportacion === "link" && !estado.linkImportacion.trim();
+  btnClaude.disabled = bloqueado;
+  btnChatGPT.disabled = bloqueado;
+  btnClaude.style.opacity = bloqueado ? "0.5" : "";
+  btnChatGPT.style.opacity = bloqueado ? "0.5" : "";
 }
 
 function eliminarPlanEstudio(planId) {
@@ -1150,41 +1251,49 @@ function construirEncabezadoPlan(planPrincipal) {
   filaTitulo.style.flexWrap = "wrap";
   filaTitulo.style.gap = "10px";
 
+  // v5 1.1: título de 2 líneas, la 2da alineada bajo la 1ra letra de la 1ra.
   const tituloWrap = document.createElement("div");
-  if (estado.datos.planes_estudio.length > 1) {
-    const carrusel = document.createElement("div");
-    carrusel.className = "carrusel-planes";
+  tituloWrap.className = "encabezado-plan-titulo";
+
+  const hayCarrusel = estado.datos.planes_estudio.length > 1;
+  const linea1 = document.createElement("div");
+  linea1.className = "encabezado-plan-linea1";
+
+  if (hayCarrusel) {
     const btnPrev = document.createElement("button");
-    btnPrev.className = "btn btn-secondary";
+    btnPrev.className = "flecha-plan";
+    btnPrev.type = "button";
     btnPrev.textContent = "‹";
     btnPrev.title = "Plan anterior";
     btnPrev.addEventListener("click", () => navegarPlanCarrusel(-1));
-    const h2 = document.createElement("h2");
-    h2.style.margin = "0";
-    h2.textContent = planPrincipal.nombre_carrera;
+    linea1.appendChild(btnPrev);
+  }
+
+  const h2 = document.createElement("h2");
+  h2.style.margin = "0";
+  h2.textContent = aplicarFormatoTexto(planPrincipal.nombre_carrera);
+  linea1.appendChild(h2);
+
+  if (hayCarrusel) {
     const btnNext = document.createElement("button");
-    btnNext.className = "btn btn-secondary";
+    btnNext.className = "flecha-plan";
+    btnNext.type = "button";
     btnNext.textContent = "›";
     btnNext.title = "Plan siguiente";
     btnNext.addEventListener("click", () => navegarPlanCarrusel(1));
-    carrusel.appendChild(btnPrev);
-    carrusel.appendChild(h2);
-    carrusel.appendChild(btnNext);
-    tituloWrap.appendChild(carrusel);
-  } else {
-    const h2 = document.createElement("h2");
-    h2.style.margin = "0";
-    h2.textContent = planPrincipal.nombre_carrera;
-    tituloWrap.appendChild(h2);
+    linea1.appendChild(btnNext);
   }
+  tituloWrap.appendChild(linea1);
 
   const sub = document.createElement("p");
-  sub.className = "muted";
+  sub.className = "muted encabezado-plan-linea2" + (hayCarrusel ? "" : " sin-flechas");
   sub.style.margin = "0";
   sub.textContent = `${planPrincipal.universidad}` + (planPrincipal.codigo_plan ? ` · ${planPrincipal.codigo_plan}` : "");
   tituloWrap.appendChild(sub);
   filaTitulo.appendChild(tituloWrap);
+  sec.appendChild(filaTitulo);
 
+  // v5 1.2: fila de botones — Añadir materia / Importar-Actualizar malla (inline) / Gestionar plan.
   const botones = document.createElement("div");
   botones.className = "row";
   botones.style.flexWrap = "wrap";
@@ -1195,14 +1304,24 @@ function construirEncabezadoPlan(planPrincipal) {
   btnMateria.addEventListener("click", abrirModalMateriaManual);
   botones.appendChild(btnMateria);
 
+  const btnImportar = document.createElement("button");
+  btnImportar.className = "btn btn-secondary";
+  btnImportar.textContent = estado.panelImportacionAbierto
+    ? "Cerrar importación"
+    : (planPrincipal.materias.length === 0 ? "Importar malla" : "Actualizar malla");
+  btnImportar.addEventListener("click", () => {
+    estado.panelImportacionAbierto = !estado.panelImportacionAbierto;
+    renderizarPlanEstudios();
+  });
+  botones.appendChild(btnImportar);
+
   const btnPlanes = document.createElement("button");
   btnPlanes.className = "btn btn-primary";
-  btnPlanes.textContent = "+ Nuevo Plan";
+  btnPlanes.textContent = "Gestionar plan";
   btnPlanes.addEventListener("click", abrirModalGestionPlanes);
   botones.appendChild(btnPlanes);
 
-  filaTitulo.appendChild(botones);
-  sec.appendChild(filaTitulo);
+  sec.appendChild(botones);
   return sec;
 }
 
@@ -1372,6 +1491,144 @@ function exportarPlanACSV() {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+/* ===================== Estadísticas colapsables (donuts) — v5 #3 ===================== */
+
+/**
+ * Construye un anillo tipo "Instagram story ring" (donut sin centro) usando
+ * dos <circle> superpuestos con stroke-dasharray: uno de fondo (track) y
+ * uno de progreso. `porcentaje` va de 0 a 100.
+ */
+function construirAnilloDonut(porcentaje, colorProgreso) {
+  const radio = 46;
+  const circunferencia = 2 * Math.PI * radio;
+  const pct = Math.max(0, Math.min(100, porcentaje));
+  const offset = circunferencia * (1 - pct / 100);
+
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 120 120");
+  svg.setAttribute("width", "120");
+  svg.setAttribute("height", "120");
+
+  const track = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  track.setAttribute("cx", "60");
+  track.setAttribute("cy", "60");
+  track.setAttribute("r", String(radio));
+  track.setAttribute("fill", "none");
+  track.setAttribute("stroke", "var(--accent-1-10)");
+  track.setAttribute("stroke-width", "12");
+
+  const progreso = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  progreso.setAttribute("cx", "60");
+  progreso.setAttribute("cy", "60");
+  progreso.setAttribute("r", String(radio));
+  progreso.setAttribute("fill", "none");
+  progreso.setAttribute("stroke", colorProgreso);
+  progreso.setAttribute("stroke-width", "12");
+  progreso.setAttribute("stroke-linecap", "round");
+  progreso.setAttribute("stroke-dasharray", `${circunferencia}`);
+  progreso.setAttribute("stroke-dashoffset", `${offset}`);
+  progreso.setAttribute("transform", "rotate(-90 60 60)");
+
+  const texto = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  texto.setAttribute("x", "60");
+  texto.setAttribute("y", "60");
+  texto.setAttribute("text-anchor", "middle");
+  texto.setAttribute("dominant-baseline", "central");
+  texto.setAttribute("fill", "var(--text-primary)");
+  texto.setAttribute("font-size", "22");
+  texto.setAttribute("font-weight", "700");
+  texto.textContent = `${Math.round(pct)}%`;
+
+  svg.appendChild(track);
+  svg.appendChild(progreso);
+  svg.appendChild(texto);
+  return svg;
+}
+
+/**
+ * Sección colapsable "Estadísticas" (v5 #3): colapsada por defecto. Muestra
+ * dos donuts — avance de Materias y avance de Créditos — comparando
+ * aprobado vs. pendiente. Se coloca entre el encabezado del plan y el
+ * buscador/categorías (ver orden en renderizarPlanEstudios).
+ */
+function construirPanelEstadisticas(plan) {
+  const materias = plan.materias || [];
+  const totalMaterias = materias.length;
+  const materiasAprobadas = materias.filter((m) => m.estado === "aprobado").length;
+  const totalCreditos = materias.reduce((sum, m) => sum + (Number(m.creditos) || 0), 0);
+  const creditosAprobados = materias
+    .filter((m) => m.estado === "aprobado")
+    .reduce((sum, m) => sum + (Number(m.creditos) || 0), 0);
+
+  const pctMaterias = totalMaterias ? (materiasAprobadas / totalMaterias) * 100 : 0;
+  const pctCreditos = totalCreditos ? (creditosAprobados / totalCreditos) * 100 : 0;
+
+  const sec = document.createElement("section");
+  sec.className = "glass-card stack";
+
+  const encabezado = document.createElement("div");
+  encabezado.className = "estadisticas-encabezado";
+  encabezado.addEventListener("click", () => {
+    estado.estadisticasAbiertas = !estado.estadisticasAbiertas;
+    renderizarPlanEstudios();
+  });
+
+  const h3 = document.createElement("h2");
+  h3.style.margin = "0";
+  h3.textContent = "Estadísticas";
+  encabezado.appendChild(h3);
+
+  const icono = document.createElement("span");
+  icono.className = "materia-expandir";
+  icono.textContent = estado.estadisticasAbiertas ? "▲" : "▼";
+  encabezado.appendChild(icono);
+
+  sec.appendChild(encabezado);
+
+  if (estado.estadisticasAbiertas) {
+    const cuerpo = document.createElement("div");
+    cuerpo.className = "estadisticas-cuerpo";
+
+    if (totalMaterias === 0) {
+      const p = document.createElement("p");
+      p.className = "muted";
+      p.textContent = "Todavía no hay materias importadas para calcular el avance.";
+      cuerpo.appendChild(p);
+    } else {
+      const bloqueMaterias = document.createElement("div");
+      bloqueMaterias.className = "donut-bloque";
+      bloqueMaterias.appendChild(construirAnilloDonut(pctMaterias, "#10b981"));
+      const etiquetaM = document.createElement("span");
+      etiquetaM.className = "donut-etiqueta";
+      etiquetaM.textContent = "Materias";
+      const subEtiquetaM = document.createElement("span");
+      subEtiquetaM.className = "donut-subetiqueta";
+      subEtiquetaM.textContent = `${materiasAprobadas} de ${totalMaterias} aprobadas`;
+      bloqueMaterias.appendChild(etiquetaM);
+      bloqueMaterias.appendChild(subEtiquetaM);
+
+      const bloqueCreditos = document.createElement("div");
+      bloqueCreditos.className = "donut-bloque";
+      bloqueCreditos.appendChild(construirAnilloDonut(pctCreditos, "#10b981"));
+      const etiquetaC = document.createElement("span");
+      etiquetaC.className = "donut-etiqueta";
+      etiquetaC.textContent = "Créditos";
+      const subEtiquetaC = document.createElement("span");
+      subEtiquetaC.className = "donut-subetiqueta";
+      subEtiquetaC.textContent = `${creditosAprobados} de ${totalCreditos} aprobados`;
+      bloqueCreditos.appendChild(etiquetaC);
+      bloqueCreditos.appendChild(subEtiquetaC);
+
+      cuerpo.appendChild(bloqueMaterias);
+      cuerpo.appendChild(bloqueCreditos);
+    }
+
+    sec.appendChild(cuerpo);
+  }
+
+  return sec;
 }
 
 /* ===================== Categorías: crear / filtrar / editar ===================== */
@@ -1751,6 +2008,17 @@ function estaExpandida(codigo, esEscritorio) {
   return esEscritorio;
 }
 
+/**
+ * Encabezado FINAL de 2 líneas (v5 #4/#5) — reemplaza el diseño v4 de una
+ * sola fila con badge de Categoría visible.
+ * Línea 1: Luz · Código · Nombre (con flecha de expandir/colapsar al final).
+ * Línea 2: Estado (pegado a la izquierda) · Créditos (pegado a la derecha).
+ * La Categoría NO aparece en ningún lado del encabezado — solo la franja
+ * lateral de color (card.style.borderLeft) la indica. Luz y horas ya no van
+ * sueltas/a la derecha: la luz vive en la línea 1, las horas se movieron al
+ * detalle expandido (junto con la categoría en texto, para no perder la
+ * función de reasignar categoría con mantener-presionado).
+ */
 function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
   const { materia, plan } = fila;
   const infoEstado = ESTADOS_MATERIA.find((e) => e.valor === materia.estado) || ESTADOS_MATERIA[0];
@@ -1769,75 +2037,61 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
     renderizarPlanEstudios();
   });
 
-  // Ajuste v4 #3: candado -> "luz" (encendida = disponible, apagada = bloqueada).
+  // ---- Línea 1: luz · código · nombre (prefijo de ancho fijo para la
+  // indentación colgante, ver .materia-prefijo / .materia-nombre-col) ----
+  const linea1 = document.createElement("div");
+  linea1.className = "materia-linea1";
+
+  const prefijo = document.createElement("span");
+  prefijo.className = "materia-prefijo";
+
+  // Ajuste v4 #3 / v5 #4: candado -> "luz" (encendida = disponible, apagada
+  // = bloqueada). +50% de glow y fix de contraste en modo oscuro ya están
+  // en design-system.css (.luz-punto.disponible / [data-mode="dark"] .luz-punto.bloqueada).
   const luzDisponibilidad = document.createElement("span");
   luzDisponibilidad.className = "luz-punto " + (disponible ? "disponible" : "bloqueada");
   luzDisponibilidad.title = disponible ? "Disponible" : "Bloqueada";
-  filaPrincipal.appendChild(luzDisponibilidad);
+  prefijo.appendChild(luzDisponibilidad);
 
   const spanCodigo = document.createElement("span");
   spanCodigo.className = "materia-codigo";
   spanCodigo.textContent = materia.codigo;
-  filaPrincipal.appendChild(spanCodigo);
+  prefijo.appendChild(spanCodigo);
 
+  linea1.appendChild(prefijo);
+
+  const nombreCol = document.createElement("span");
+  nombreCol.className = "materia-nombre-col";
   const spanNombre = document.createElement("span");
-  spanNombre.className = "materia-nombre";
-  spanNombre.textContent = materia.nombre;
-  filaPrincipal.appendChild(spanNombre);
+  // Colapsada: trunca con "…". Expandida: nombre completo con indentación
+  // colgante (v5 #5) — mismo truco de columna de ancho fijo que 1.1.
+  spanNombre.className = "materia-nombre " + (expandida ? "completa" : "truncada");
+  spanNombre.textContent = aplicarFormatoTexto(materia.nombre);
+  nombreCol.appendChild(spanNombre);
+  linea1.appendChild(nombreCol);
 
-  // Ajuste v4 #4: Créditos + Estado + Horas se mueven al centro, aprovechando
-  // el ancho de la tarjeta en vez de apilar todo verticalmente.
-  const centro = document.createElement("span");
-  centro.className = "materia-centro";
-  centro.innerHTML =
-    `<span class="badge badge-accent">Créditos: ${materia.creditos}</span>` +
+  const iconoExpandir = document.createElement("span");
+  iconoExpandir.className = "materia-expandir";
+  iconoExpandir.textContent = expandida ? "▲" : "▼";
+  linea1.appendChild(iconoExpandir);
+
+  filaPrincipal.appendChild(linea1);
+
+  // ---- Línea 2: estado (izquierda) · créditos (derecha) ----
+  const linea2 = document.createElement("div");
+  linea2.className = "materia-linea2";
+  linea2.innerHTML =
     `<span class="badge ${infoEstado.badge}">${infoEstado.texto}</span>` +
-    `<span class="materia-horas-centro">${formatearHoras(materia)}</span>`;
-  filaPrincipal.appendChild(centro);
-
-  // Ajuste v4 #4/#5: lado derecho = badge de Categoría (sin cambios) + ícono
-  // de luz clickeable que reemplaza al botón grande "Desbloquea". Además,
-  // Ajuste v4 #7: mantener presionado (o clic derecho) el badge de categoría
-  // reasigna la categoría de ESTA materia en particular.
-  const derecha = document.createElement("span");
-  derecha.className = "materia-derecha";
-
-  if (categoria) {
-    const badgeCat = document.createElement("span");
-    badgeCat.className = "badge";
-    badgeCat.style.cssText = estiloBadgeCategoria(categoria.color) + "cursor:pointer;";
-    badgeCat.textContent = categoria.nombre;
-    badgeCat.title = "Mantén presionado (o clic derecho) para cambiar la categoría de esta materia";
-    badgeCat.addEventListener("click", (ev) => ev.stopPropagation());
-    agregarLongPress(badgeCat, () => abrirMenuRapidoCategoria(materia, plan, badgeCat));
-    derecha.appendChild(badgeCat);
-  }
-
-  const luzDesbloquea = document.createElement("button");
-  luzDesbloquea.type = "button";
-  luzDesbloquea.className = "luz-boton";
-  luzDesbloquea.title = "Ver qué materias desbloquea ésta";
-  luzDesbloquea.innerHTML = `<span class="luz-punto disponible"></span>`;
-  luzDesbloquea.addEventListener("click", (ev) => {
-    ev.stopPropagation();
-    abrirModalDesbloquea(materia, plan);
-  });
-  derecha.appendChild(luzDesbloquea);
-
-  filaPrincipal.appendChild(derecha);
+    `<span class="badge badge-accent">Créditos: ${materia.creditos}</span>`;
+  filaPrincipal.appendChild(linea2);
 
   if (mostrarOrigen) {
     const badgeOrigen = document.createElement("span");
     badgeOrigen.className = "badge badge-neutral";
     badgeOrigen.style.fontSize = "0.68rem";
     badgeOrigen.textContent = fila.origen === "principal" ? "Principal" : "Secundario";
-    filaPrincipal.appendChild(badgeOrigen);
+    linea2.appendChild(badgeOrigen);
   }
-
-  const iconoExpandir = document.createElement("span");
-  iconoExpandir.className = "materia-expandir";
-  iconoExpandir.textContent = expandida ? "▲" : "▼";
-  filaPrincipal.appendChild(iconoExpandir);
 
   card.appendChild(filaPrincipal);
 
@@ -1845,10 +2099,27 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
     const cuerpo = document.createElement("div");
     cuerpo.className = "materia-cuerpo stack";
 
-    // Ajuste v4 #4: Requisitos/Correquisitos ya no van a la derecha — quedan
-    // alineados a la izquierda (bajo el nombre), ver .materia-req-linea.
+    // Ajuste v4 #4: Requisitos/Correquisitos alineados a la izquierda.
     cuerpo.appendChild(construirBloqueRequisitos("Requisitos", materia.requisitos));
     cuerpo.appendChild(construirBloqueRequisitos("Correquisitos", materia.correquisitos));
+
+    // v5 #4: las horas ya no van en el encabezado — viven aquí, en el detalle.
+    const horasLinea = document.createElement("p");
+    horasLinea.className = "materia-horas-detalle";
+    horasLinea.textContent = formatearHoras(materia);
+    cuerpo.appendChild(horasLinea);
+
+    // La categoría ya no se muestra en el encabezado (v5 #4), pero se
+    // conserva aquí en el detalle expandido para no perder la función de
+    // reasignarla con mantener-presionado / clic derecho (Ajuste v4 #7).
+    const filaCategoria = document.createElement("p");
+    filaCategoria.className = "materia-req-linea";
+    filaCategoria.style.cursor = "pointer";
+    filaCategoria.innerHTML = `<strong>Categoría:</strong> ${categoria ? categoria.nombre : "Sin categoría"}`;
+    filaCategoria.title = "Mantén presionado (o clic derecho) para cambiar la categoría de esta materia";
+    filaCategoria.addEventListener("click", (ev) => ev.stopPropagation());
+    agregarLongPress(filaCategoria, () => abrirMenuRapidoCategoria(materia, plan, filaCategoria));
+    cuerpo.appendChild(filaCategoria);
 
     const grupoEstado = document.createElement("div");
     grupoEstado.className = "pill-group";
@@ -1914,10 +2185,63 @@ function abrirMenuRapidoCategoria(materia, plan, anclaEl) {
 }
 
 /** Requisitos/correquisitos agrupados: "o" dentro de un grupo, grupos en líneas separadas ("y" implícito). */
+/** Versión compacta de formatearHoras (sin la etiqueta "Horas:"), pensada
+ *  para una columna angosta y centrada. Un solo tipo -> solo el número;
+ *  varios tipos -> valores unidos con "/" en el mismo orden del plan. */
+function formatearHorasCompacto(materia) {
+  const valores = Object.values(materia.horas || {});
+  if (valores.length === 0) return "—";
+  return valores.join("/");
+}
+
+/**
+ * Fila de 3 columnas para un código de requisito/correquisito (v5 #6):
+ * 1) Código - Nombre (trunca con "…" si invade la columna de Horas)
+ * 2) Horas, centradas estrictamente
+ * 3) "Ir a materia" (link de texto, navega la cadena de una a otra)
+ */
+function construirFilaRequisito(codigo) {
+  const fila = document.createElement("div");
+  fila.className = "requisito-fila";
+
+  const encontrada = buscarMateriaPorCodigoEnPlanes(codigo);
+
+  const colNombre = document.createElement("span");
+  colNombre.className = "requisito-col-nombre";
+  colNombre.title = encontrada ? `${codigo} - ${aplicarFormatoTexto(encontrada.materia.nombre)}` : codigo;
+  colNombre.textContent = encontrada
+    ? `${codigo} - ${aplicarFormatoTexto(encontrada.materia.nombre)}`
+    : `${codigo} - (no encontrada en ningún plan visible)`;
+  fila.appendChild(colNombre);
+
+  const colHoras = document.createElement("span");
+  colHoras.className = "requisito-col-horas";
+  colHoras.textContent = encontrada ? formatearHorasCompacto(encontrada.materia) : "—";
+  fila.appendChild(colHoras);
+
+  const colIr = document.createElement("a");
+  colIr.href = "#";
+  colIr.className = "requisito-col-ir link-plano";
+  colIr.textContent = "Ir a materia";
+  colIr.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    abrirModalRequisito(codigo);
+  });
+  fila.appendChild(colIr);
+
+  return fila;
+}
+
 function construirBloqueRequisitos(etiqueta, grupos) {
   const cont = document.createElement("div");
+  const sinItems = !grupos || grupos.length === 0;
 
-  if (!grupos || grupos.length === 0) {
+  // v5 #6: "Correquisitos" se omite POR COMPLETO si la materia no tiene
+  // ninguno (nada de "Correquisitos: Ninguno"). "Requisitos" sí conserva el
+  // texto "Ninguno" cuando está vacío, porque ahí siempre aplica.
+  if (sinItems) {
+    if (etiqueta === "Correquisitos") return cont;
     const p = document.createElement("p");
     p.className = "materia-req-linea";
     p.innerHTML = `<strong>${etiqueta}:</strong> Ninguno`;
@@ -1927,24 +2251,22 @@ function construirBloqueRequisitos(etiqueta, grupos) {
 
   const tituloLinea = document.createElement("p");
   tituloLinea.className = "materia-req-linea";
+  tituloLinea.style.marginBottom = "2px";
   tituloLinea.innerHTML = `<strong>${etiqueta}:</strong>`;
   cont.appendChild(tituloLinea);
 
   grupos.forEach((grupo) => {
-    const p = document.createElement("p");
-    p.className = "materia-req-linea";
     (grupo || []).forEach((codigo, i) => {
-      const chip = document.createElement("span");
-      chip.className = "chip-codigo";
-      chip.textContent = codigo;
-      chip.addEventListener("click", (e) => {
-        e.stopPropagation();
-        abrirModalRequisito(codigo);
-      });
-      p.appendChild(chip);
-      if (i < grupo.length - 1) p.appendChild(document.createTextNode(" o "));
+      cont.appendChild(construirFilaRequisito(codigo));
+      // Alternativas dentro del mismo grupo ("O"): un separador entre filas.
+      // Entre grupos distintos no hay separador (el "Y" queda implícito).
+      if (i < grupo.length - 1) {
+        const divisorO = document.createElement("div");
+        divisorO.className = "requisito-divisor-o";
+        divisorO.textContent = "o";
+        cont.appendChild(divisorO);
+      }
     });
-    cont.appendChild(p);
   });
 
   return cont;
@@ -2000,22 +2322,25 @@ function abrirModalRequisito(codigo) {
     horas.textContent = formatearHoras(materia);
     extra.appendChild(horas);
 
-    const btnDesbloquea = document.createElement("button");
-    btnDesbloquea.className = "btn btn-secondary";
-    btnDesbloquea.style.alignSelf = "flex-start";
-    btnDesbloquea.innerHTML = `<span class="luz-punto disponible" style="margin-right:6px;"></span>Desbloquea`;
-    btnDesbloquea.addEventListener("click", () => abrirModalDesbloquea(materia, plan));
-    extra.appendChild(btnDesbloquea);
-
     document.getElementById("btn-cerrar-requisito").parentElement.insertAdjacentElement("beforebegin", extra);
+
+    // v5 #7: el botón "Desbloquea" de aquí abajo se reemplaza por el link de
+    // solo-texto "Es requisito" en la fila superior del modal (junto a
+    // cerrar). Guardamos el contexto para que ese link sepa qué materia abrir.
+    materiaModalRequisitoActual = { materia, plan };
   }
+  if (!encontrada) materiaModalRequisitoActual = null;
   document.getElementById("modal-requisito").classList.remove("oculto");
 }
+
+/** Contexto de la materia que está mostrando #modal-requisito ahora mismo,
+ *  usado por el link "Es requisito" (v5 #7) para saber qué abrir. */
+let materiaModalRequisitoActual = null;
 
 /* ===================== Modal "Desbloquea" (búsqueda inversa) ===================== */
 
 function abrirModalDesbloquea(materia, plan) {
-  document.getElementById("titulo-modal-desbloquea").textContent = `${materia.nombre} desbloquea:`;
+  document.getElementById("titulo-modal-desbloquea").textContent = `${aplicarFormatoTexto(materia.nombre)} es requisito para:`;
   const cont = document.getElementById("lista-modal-desbloquea");
   cont.innerHTML = "";
 
@@ -2066,6 +2391,19 @@ window.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btn-cerrar-requisito").addEventListener("click", () => {
     document.getElementById("modal-requisito").classList.add("oculto");
   });
+
+  // v5 #7: "Es requisito" — link de solo texto que abre la búsqueda inversa
+  // ("[materia] es requisito para:") para la materia que el modal está
+  // mostrando en este momento.
+  const btnEsRequisito = document.getElementById("btn-es-requisito");
+  if (btnEsRequisito) {
+    btnEsRequisito.addEventListener("click", () => {
+      if (!materiaModalRequisitoActual) return;
+      const { materia, plan } = materiaModalRequisitoActual;
+      document.getElementById("modal-requisito").classList.add("oculto");
+      abrirModalDesbloquea(materia, plan);
+    });
+  }
   document.getElementById("modal-requisito").addEventListener("click", (e) => {
     if (e.target.id === "modal-requisito") e.target.classList.add("oculto");
   });

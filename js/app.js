@@ -122,6 +122,7 @@ window.addEventListener("DOMContentLoaded", () => {
   inicializarModalEnlace();
   inicializarModalConfirmacion();
   inicializarNavegacionSecciones();
+  inicializarBotonesCerrarModal();
 
   const cache = leerCacheLocal();
   if (cache && cache.datos) {
@@ -396,6 +397,20 @@ function renderizarAjustes() {
     };
   });
 
+  // Formato de texto de nombres de materias/carrera (v5 #9)
+  const grupoFormato = document.getElementById("pill-formato-texto");
+  if (grupoFormato) {
+    grupoFormato.querySelectorAll(".pill-item").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.valor === (estado.datos.configuracion.formato_texto_nombres || "titulo"));
+      btn.onclick = () => {
+        estado.datos.configuracion.formato_texto_nombres = btn.dataset.valor;
+        marcarCambioPendiente();
+        renderizarAjustes();
+        if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
+      };
+    });
+  }
+
   actualizarIndicadorSync();
 }
 
@@ -474,12 +489,27 @@ function mostrarSeccion(nombre) {
 /* --------------------------- Enlaces rápidos --------------------------- */
 
 function renderizarEnlacesRapidos() {
-  const cont = document.getElementById("lista-enlaces");
   const enlaces = estado.datos.configuracion.enlaces_rapidos;
+
+  renderizarListaEnlacesEn("lista-enlaces", enlaces, true);
+  renderizarListaEnlacesEn("lista-enlaces-lateral", enlaces, false);
+
+  const btnAgregar = document.getElementById("btn-agregar-enlace");
+  btnAgregar.disabled = enlaces.length >= LIMITE_ENLACES_RAPIDOS;
+  btnAgregar.onclick = () => abrirModalEnlace();
+}
+
+/** Dibuja la lista de enlaces rápidos dentro de `contenedorId`. `conEditar`
+ *  controla si aparece el lápiz de edición (sí en Configuración, no en el
+ *  panel lateral fijo, que es solo de acceso rápido — v5 #2). */
+function renderizarListaEnlacesEn(contenedorId, enlaces, conEditar) {
+  const cont = document.getElementById(contenedorId);
+  if (!cont) return;
   cont.innerHTML = "";
 
   if (enlaces.length === 0) {
     cont.innerHTML = `<p class="muted">Todavía no has añadido ningún enlace.</p>`;
+    return;
   }
 
   enlaces.forEach((enlace) => {
@@ -499,21 +529,20 @@ function renderizarEnlacesRapidos() {
       enlace.icono_tipo === "emoji" ? enlace.icono_valor : `<img src="${enlace.icono_valor}" style="width:24px;height:24px;border-radius:6px">`
     }</span><span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${enlace.nombre}</span>`;
 
-    const btnEditar = document.createElement("button");
-    btnEditar.className = "btn btn-secondary";
-    btnEditar.title = "Editar enlace";
-    btnEditar.textContent = "✏️";
-    btnEditar.style.flexShrink = "0";
-    btnEditar.addEventListener("click", () => abrirModalEnlace(enlace.id));
-
     item.appendChild(enlaceAbrir);
-    item.appendChild(btnEditar);
+
+    if (conEditar) {
+      const btnEditar = document.createElement("button");
+      btnEditar.className = "btn btn-secondary";
+      btnEditar.title = "Editar enlace";
+      btnEditar.textContent = "✏️";
+      btnEditar.style.flexShrink = "0";
+      btnEditar.addEventListener("click", () => abrirModalEnlace(enlace.id));
+      item.appendChild(btnEditar);
+    }
+
     cont.appendChild(item);
   });
-
-  const btnAgregar = document.getElementById("btn-agregar-enlace");
-  btnAgregar.disabled = enlaces.length >= LIMITE_ENLACES_RAPIDOS;
-  btnAgregar.onclick = () => abrirModalEnlace();
 }
 
 /* ===================== Modal "Añadir enlace" (punto 7) ===================== */
@@ -808,4 +837,41 @@ function cerrarSidebarMovil() {
 function restaurarEstadoSidebar() {
   const colapsada = localStorage.getItem(CLAVE_SIDEBAR_COLAPSADA) === "1";
   document.getElementById("app-sidebar").classList.toggle("colapsada", colapsada);
+}
+
+/* ===================== Botón "X" propio en todos los modales (v5 #2) ===================== */
+
+/**
+ * Algunos modales tienen lógica extra al cerrarse (ej. limpiar un CSV en
+ * espera). Para no duplicar esa lógica, el botón X simplemente dispara un
+ * click sintético sobre el propio overlay del modal — reutilizando los
+ * listeners de "clic afuera cierra" que cada modal ya tiene registrados
+ * (todos comparan `e.target === modal`/`e.target.id === "..."`).
+ */
+function inicializarBotonesCerrarModal() {
+  document.querySelectorAll(".modal-overlay").forEach((overlay) => {
+    const card = overlay.querySelector(".modal-card");
+    if (!card || card.querySelector(".modal-x-close")) return;
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "modal-x-close";
+    btn.setAttribute("aria-label", "Cerrar");
+    btn.textContent = "✕";
+    btn.addEventListener("click", () => {
+      overlay.classList.add("oculto");
+      overlay.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    card.prepend(btn);
+  });
+}
+
+/** Toast breve reutilizable (ej. "✓ Prompt copiado en el portapapeles", v5 #1.3). */
+function mostrarToast(mensaje) {
+  document.querySelectorAll(".toast-app").forEach((el) => el.remove());
+  const toast = document.createElement("div");
+  toast.className = "toast-app";
+  toast.textContent = mensaje;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 2400);
 }
