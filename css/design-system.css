@@ -105,6 +105,7 @@ a { color: var(--accent-1); }
 /* ---- Grupo de botones "pill" (selección exclusiva) ---- */
 .pill-group {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   background: rgba(0, 0, 0, 0.18);
   padding: 4px;
@@ -112,8 +113,24 @@ a { color: var(--accent-1); }
 }
 [data-mode="light"] .pill-group { background: rgba(0, 0, 0, 0.05); }
 
+/* Bug 5: el selector de "Plan activo" en Configuración normalmente tiene
+   1-2 pills nada más (a diferencia de los pill-group de ajustes, que
+   siempre tienen varias opciones fijas) — sin este centrado explícito, un
+   solo pill queda pegado a la izquierda dentro de todo el ancho de la
+   tarjeta, viéndose "torcido". */
+#selector-plan .pill-group,
+#selector-plan-secundario .pill-group { justify-content: center; }
+
 .pill-item {
-  flex: 1;
+  /* v7.1 (Bug 5): antes era `flex: 1` (ancho forzado igual entre pills),
+     así que en pantallas angostas un texto largo como "Solo la primera" no
+     cabía en su tercio del ancho y, como .app-layout tiene
+     `overflow-x: hidden`, el sobrante se recortaba en vez de verse
+     completo (se veía cortado en "Solo la primera[m]"). Ahora cada pill
+     crece según su propio contenido y, si no caben todos en una fila,
+     .pill-group los pasa a la siguiente línea (flex-wrap) en vez de
+     recortarlos. */
+  flex: 0 1 auto;
   border: none;
   background: transparent;
   color: var(--text-muted);
@@ -147,6 +164,17 @@ a { color: var(--accent-1); }
 .badge-danger  { background: rgba(239, 68, 68, 0.15);  border-color: #ef4444; color: #f87171; }
 .badge-neutral { background: rgba(148, 163, 184, 0.15); border-color: #94a3b8; color: #cbd5e1; }
 .badge-accent  { background: var(--accent-1-10); border-color: var(--accent-1); color: var(--accent-2); }
+
+/* ---- Bug 4 (v7.1): las 4 badges de arriba usaban colores de texto pastel
+   pensados solo para fondo oscuro (contraste ~9-12:1 en dark, pero apenas
+   1.4-2.6:1 en claro — badge-neutral era casi invisible). Como esto no
+   depende de paleta (son colores fijos), se corrige una sola vez para
+   modo claro con tonos más oscuros y saturados del mismo color base,
+   verificados por encima de 4.5:1 contra su propio fondo translúcido. */
+[data-mode="light"] .badge-success { color: #047857; }
+[data-mode="light"] .badge-warning { color: #92400e; }
+[data-mode="light"] .badge-danger  { color: #991b1b; }
+[data-mode="light"] .badge-neutral { color: #334155; }
 
 /* ---- Switch (toggle on/off) ---- */
 .switch { position: relative; display: inline-block; width: 46px; height: 26px; flex-shrink: 0; }
@@ -225,6 +253,15 @@ a { color: var(--accent-1); }
   z-index: 100;
   padding: 16px;
 }
+/* v7.1: en modo claro, el mismo overlay negro al 65% se filtra a través del
+   glass-card translúcido (su backdrop-filter "ve" ese fondo casi negro), así
+   que la tarjeta terminaba con un tinte gris apagado en vez de verse fresca
+   y luminosa como en modo oscuro. Se usa un overlay más claro y con menos
+   opacidad — sigue oscureciendo el fondo lo suficiente para dar foco al
+   modal, pero deja que el glass-card se vea blanco/brillante de verdad. */
+[data-mode="light"] .modal-overlay {
+  background: rgba(30, 41, 59, 0.22);
+}
 .modal-card {
   /* v5 #2: usa el ancho disponible en vez de quedar angosta "porque sí" */
   width: min(560px, calc(100vw - 32px));
@@ -300,11 +337,17 @@ a { color: var(--accent-1); }
   border-radius: var(--radius-md);
   cursor: pointer;
   border: 2px solid transparent;
+  background-clip: padding-box; /* el borde nunca "come" el degradado de la esquina */
   overflow: hidden; /* el degradado nunca se sale de la esquina redondeada */
-  /* Fuerza a Safari/iOS a recortar bien las esquinas redondeadas incluso
-     al aplicar `transform` en :hover (bug conocido donde, sin esto, las
-     esquinas se ven "cuadradas" al mover el elemento). */
-  -webkit-mask-image: -webkit-radial-gradient(circle, #fff 100%, #000 100%);
+  /* v7.1 (Bug 5, sigue roto de antes): el hack anterior con
+     -webkit-mask-image (radial-gradient con dos stops en 100%) generaba una
+     transición filo-de-navaja justo en las esquinas GEOMÉTRICAS de la caja,
+     que el navegador puede rasterizar de forma inconsistente ahí mismo —
+     exactamente donde se nota el corte cuadrado. Se reemplaza por la forma
+     estándar de forzar que Safari le dé su propia capa compuesta al
+     elemento (sin tocar la geometría del borde redondeado): */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
   display: flex; align-items: flex-end; justify-content: center;
   padding-bottom: 6px;
   font-size: 0.65rem;
@@ -317,8 +360,11 @@ a { color: var(--accent-1); }
      tamaño para que quepan cómodas en pantallas angostas. */
   .palette-grid { gap: 6px; }
   .palette-swatch { flex-basis: calc((100% - 6 * 6px) / 7); max-width: 42px; }
+  /* Bug 5: un poco más compactos para que quepan más pills por fila antes
+     de tener que pasar a la siguiente línea. */
+  .pill-item { padding: 7px 12px; font-size: 0.8rem; }
 }
-.palette-swatch:hover { transform: translateY(-2px); }
+.palette-swatch:hover { transform: translateY(-2px) translateZ(0); }
 .palette-swatch.selected { border-color: var(--text-primary); }
 
 /* ---- Utilidades de layout ---- */
@@ -329,6 +375,16 @@ a { color: var(--accent-1); }
 
 /* =========================================================================
    PALETAS — cada una define acentos y fondos para modo oscuro y claro.
+
+   Bug 4 (v7.1, auditoría de contraste): --accent-2 se usa como color de
+   TEXTO en varios lugares (badge-accent, "Es requisito", "Historial",
+   estrella de plan activo, etc. — ver grep de "color: var(--accent-2)").
+   En 7 paletas, el --accent-2 de modo claro era una versión CLARA del
+   acento (pensada para lucir bien como highlight, no como texto legible),
+   dando contraste tan bajo como 2.21:1 contra el fondo (azucarado) — muy
+   por debajo del mínimo WCAG AA de 4.5:1 para texto. Se oscureció
+   --accent-2 en esas 7 paletas (rojo, azul, verde, cyan, rosado, amarillo,
+   azucarado) manteniendo el mismo matiz, todas verificadas ≥4.5:1.
    ========================================================================= */
 
 /* ---------- BLANCO (neutro/plata) ---------- */
@@ -374,7 +430,7 @@ a { color: var(--accent-1); }
 [data-palette="rojo"][data-mode="light"] {
   --bg-canvas: #FEF2F2; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
   --border-glass: rgba(185,28,28,0.10); --text-primary:#450A0A; --text-secondary:#7F1D1D; --text-muted:#A66A6A;
-  --accent-1:#B91C1C; --accent-2:#DC2626; --gradient-accent: linear-gradient(90deg,#B91C1C,#EF4444);
+  --accent-1:#B91C1C; --accent-2:#991B1B; --gradient-accent: linear-gradient(90deg,#B91C1C,#EF4444);
   --accent-glow-1: rgba(185,28,28,0.12); --accent-glow-2: rgba(239,68,68,0.10);
   --accent-1-10: rgba(185,28,28,0.10); --accent-1-20: rgba(185,28,28,0.22); --color-danger:#c2410c; --on-accent:#ffffff;
 }
@@ -406,7 +462,7 @@ a { color: var(--accent-1); }
 [data-palette="azul"][data-mode="light"] {
   --bg-canvas: #F2F6FE; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
   --border-glass: rgba(37,99,235,0.10); --text-primary:#0B1B3B; --text-secondary:#33487A; --text-muted:#7284AC;
-  --accent-1:#2563EB; --accent-2:#0EA5E9; --gradient-accent: linear-gradient(90deg,#2563EB,#0EA5E9);
+  --accent-1:#2563EB; --accent-2:#0369A1; --gradient-accent: linear-gradient(90deg,#2563EB,#0EA5E9);
   --accent-glow-1: rgba(37,99,235,0.12); --accent-glow-2: rgba(14,165,233,0.10);
   --accent-1-10: rgba(37,99,235,0.10); --accent-1-20: rgba(37,99,235,0.22); --color-danger:#dc2626; --on-accent:#ffffff;
 }
@@ -422,7 +478,7 @@ a { color: var(--accent-1); }
 [data-palette="verde"][data-mode="light"] {
   --bg-canvas: #F1FAF3; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
   --border-glass: rgba(21,128,61,0.10); --text-primary:#052E16; --text-secondary:#2B5D3F; --text-muted:#6C8F79;
-  --accent-1:#15803D; --accent-2:#059669; --gradient-accent: linear-gradient(90deg,#15803D,#059669);
+  --accent-1:#15803D; --accent-2:#047857; --gradient-accent: linear-gradient(90deg,#15803D,#059669);
   --accent-glow-1: rgba(21,128,61,0.12); --accent-glow-2: rgba(5,150,105,0.10);
   --accent-1-10: rgba(21,128,61,0.10); --accent-1-20: rgba(21,128,61,0.22); --color-danger:#dc2626; --on-accent:#ffffff;
 }
@@ -438,7 +494,7 @@ a { color: var(--accent-1); }
 [data-palette="cyan"][data-mode="light"] {
   --bg-canvas: #EEFBFD; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
   --border-glass: rgba(14,116,144,0.10); --text-primary:#053442; --text-secondary:#2C6270; --text-muted:#6D949C;
-  --accent-1:#0E7490; --accent-2:#0891B2; --gradient-accent: linear-gradient(90deg,#0E7490,#06B6D4);
+  --accent-1:#0E7490; --accent-2:#155E75; --gradient-accent: linear-gradient(90deg,#0E7490,#06B6D4);
   --accent-glow-1: rgba(14,116,144,0.12); --accent-glow-2: rgba(6,182,212,0.10);
   --accent-1-10: rgba(14,116,144,0.10); --accent-1-20: rgba(14,116,144,0.22); --color-danger:#dc2626; --on-accent:#ffffff;
 }
@@ -470,7 +526,7 @@ a { color: var(--accent-1); }
 [data-palette="rosado"][data-mode="light"] {
   --bg-canvas: #FDF1F7; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
   --border-glass: rgba(190,24,93,0.10); --text-primary:#4A0523; --text-secondary:#87285A; --text-muted:#AD7692;
-  --accent-1:#BE185D; --accent-2:#DB2777; --gradient-accent: linear-gradient(90deg,#BE185D,#EC4899);
+  --accent-1:#BE185D; --accent-2:#9D174D; --gradient-accent: linear-gradient(90deg,#BE185D,#EC4899);
   --accent-glow-1: rgba(190,24,93,0.12); --accent-glow-2: rgba(236,72,153,0.10);
   --accent-1-10: rgba(190,24,93,0.10); --accent-1-20: rgba(190,24,93,0.22); --color-danger:#dc2626; --on-accent:#ffffff;
 }
@@ -502,7 +558,7 @@ a { color: var(--accent-1); }
 [data-palette="amarillo"][data-mode="light"] {
   --bg-canvas: #FEFBEB; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
   --border-glass: rgba(161,98,7,0.10); --text-primary:#422C05; --text-secondary:#78571A; --text-muted:#A2895C;
-  --accent-1:#A16207; --accent-2:#CA8A04; --gradient-accent: linear-gradient(90deg,#A16207,#EAB308);
+  --accent-1:#A16207; --accent-2:#854D0E; --gradient-accent: linear-gradient(90deg,#A16207,#EAB308);
   --accent-glow-1: rgba(161,98,7,0.12); --accent-glow-2: rgba(234,179,8,0.10);
   --accent-1-10: rgba(161,98,7,0.10); --accent-1-20: rgba(161,98,7,0.22); --color-danger:#dc2626; --on-accent:#ffffff;
 }
@@ -545,7 +601,7 @@ a { color: var(--accent-1); }
 [data-palette="azucarado"][data-mode="light"] {
   --bg-canvas: #FBF7FD; --bg-card: rgba(255,255,255,0.75); --bg-panel: rgba(255,255,255,0.6);
   --border-glass: rgba(184,166,240,0.12); --text-primary:#2A1E38; --text-secondary:#5C4A72; --text-muted:#8D7BA0;
-  --accent-1:#A876D9; --accent-2:#4BB8C4;
+  --accent-1:#A876D9; --accent-2:#1E7A85;
   --gradient-accent: linear-gradient(90deg, #F0A0CC, #B091EA);      /* rosa → violeta */
   --gradient-accent-alt: linear-gradient(90deg, #B091EA, #7FAEEE);  /* violeta → azul */
   --gradient-accent-alt2: linear-gradient(90deg, #7FAEEE, #6ED7DF); /* azul → cyan */
@@ -759,6 +815,21 @@ a { color: var(--accent-1); }
   .app-contenido > * { max-width: 920px; }
 }
 
+/* ---- v7.1: el nombre del enlace rápido usaba var(--accent-1) heredado del
+   <a> global (`a { color: var(--accent-1); }`), y en varias paletas ese
+   acento tiene muy poco contraste contra el fondo detrás (ej. paleta negro
+   en modo oscuro: acento #3F3F46 sobre fondo #000000 ≈ contraste 2:1, casi
+   invisible). Se fija a --text-primary (diseñado para contraste garantizado
+   en las 14 paletas) y el acento queda solo como detalle sutil al pasar el
+   mouse, nunca como color base del texto. ---- */
+.enlace-rapido-nombre {
+  color: var(--text-primary);
+  transition: color var(--transition-fast);
+}
+a:hover .enlace-rapido-nombre {
+  color: var(--accent-2);
+}
+
 /* ---- Enlaces Rápidos laterales: solo con espacio de sobra a la derecha ---- */
 .enlaces-lateral {
   display: none;
@@ -937,35 +1008,41 @@ img, svg { max-width: 100%; }
 .materia-req-linea { text-align: left; color: var(--text-muted); font-size: 0.82rem; margin: 0; }
 .materia-horas-detalle { color: var(--text-muted); font-size: 0.85rem; }
 
-/* ---- Fila de requisito/correquisito de 3 columnas (v5 #6) ----
-   1) Código-Nombre (flexible, trunca con "…" si invade Horas)
+/* ---- Fila de requisito/correquisito de 3 columnas (v7 rediseño) ----
+   1) Código-Nombre (flexible, es el link en sí, trunca con "…")
    2) Horas (ancho fijo, centradas estrictamente)
-   3) "Ir a materia" (link de texto, ancho fijo) */
+   3) Extra: badge de Categoría / link "Es requisito" / link "Historial"
+      (propiedades de la materia actual, una por fila disponible) */
 .requisito-fila {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 52px auto;
   align-items: center;
   gap: 10px;
   padding: 4px 0;
   font-size: 0.82rem;
 }
 .requisito-col-nombre {
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-secondary);
   text-align: left;
+  text-decoration: none;
+  cursor: pointer;
 }
+.requisito-col-nombre:hover { text-decoration: underline; }
 .requisito-col-horas {
   flex-shrink: 0;
-  width: 52px;
   text-align: center;
   color: var(--text-muted);
 }
-.requisito-col-ir {
+.requisito-col-extra {
   flex-shrink: 0;
-  font-size: 0.78rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 1em;
 }
 .requisito-divisor-o {
   text-align: center;
@@ -981,32 +1058,10 @@ img, svg { max-width: 100%; }
   .materia-codigo { font-size: 0.72rem; }
 }
 
-/* ---- Filas de Requisitos/Correquisitos (v5 #6): 3 columnas ---- */
-.requisito-fila {
-  display: grid;
-  grid-template-columns: 1fr 64px auto;
-  align-items: center;
-  gap: 10px;
-  padding: 4px 0;
-}
-.requisito-fila-codigo-nombre {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-}
-.requisito-fila-horas {
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 0.8rem;
-  white-space: nowrap;
-}
 .requisito-fila-link {
   background: none; border: none; padding: 0;
   color: var(--accent-2);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 600;
   text-decoration: underline;
   cursor: pointer;
