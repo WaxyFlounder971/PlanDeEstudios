@@ -55,12 +55,16 @@ function formatearHoras(materia) {
  * disponible, y se ocultan solas al llegar a cada extremo. Se reutiliza
  * también en Ajuste 3 (scroll horizontal del mapa curricular).
  */
-function envolverConFlechasScroll(elementoScroll, distanciaScroll = 140) {
+function envolverConFlechasScroll(elementoScroll) {
   const wrapper = document.createElement("div");
   wrapper.className = "scroll-con-flechas";
   elementoScroll.parentNode.insertBefore(wrapper, elementoScroll);
 
-  const crearFlecha = (simbolo, dx, etiqueta) => {
+  // B.2 (v9): en vez de un scrollBy() de distancia fija (que dejaba el
+  // siguiente elemento a medio mostrar), se calcula cuál es el próximo
+  // elemento realmente oculto en esa dirección y se desliza hasta que
+  // quede completamente visible (scrollIntoView), nunca a medias.
+  const crearFlecha = (simbolo, direccion, etiqueta) => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "flecha-plan flecha-scroll";
@@ -68,12 +72,22 @@ function envolverConFlechasScroll(elementoScroll, distanciaScroll = 140) {
     btn.setAttribute("aria-label", etiqueta);
     btn.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      elementoScroll.scrollBy({ left: dx, behavior: "smooth" });
+      const hijos = Array.from(elementoScroll.children);
+      if (hijos.length === 0) return;
+      const scrollActual = elementoScroll.scrollLeft;
+      const anchoVisible = elementoScroll.clientWidth;
+      if (direccion > 0) {
+        const objetivo = hijos.find((h) => h.offsetLeft + h.offsetWidth > scrollActual + anchoVisible + 1);
+        if (objetivo) objetivo.scrollIntoView({ behavior: "smooth", inline: "end", block: "nearest" });
+      } else {
+        const objetivo = hijos.slice().reverse().find((h) => h.offsetLeft < scrollActual - 1);
+        if (objetivo) objetivo.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
+      }
     });
     return btn;
   };
-  const btnPrev = crearFlecha("‹", -distanciaScroll, "Desplazar hacia la izquierda");
-  const btnNext = crearFlecha("›", distanciaScroll, "Desplazar hacia la derecha");
+  const btnPrev = crearFlecha("‹", -1, "Desplazar hacia la izquierda");
+  const btnNext = crearFlecha("›", 1, "Desplazar hacia la derecha");
 
   wrapper.appendChild(btnPrev);
   wrapper.appendChild(elementoScroll);
@@ -191,7 +205,7 @@ function elegirPlaceholderPlan(universidad) {
 const LIMITE_PLANES_ESTUDIO = 3;
 
 /* Estado propio de esta sección, colgado del `estado` global de app.js. */
-estado.ordenPlanEstudios = "bloque";       // "bloque" | "categoria"
+estado.ordenPlanEstudios = "bloque";       // "bloque" | "categoria" | "estado"
 estado.planImportandoId = null;            // "principal" | "secundario", elegido antes de importar (primer plan)
 estado.csvPendienteDeImportar = null;      // texto CSV en espera mientras se crea el plan
 estado.categoriaEditandoId = null;
@@ -208,6 +222,7 @@ estado.ordenCategoriaMaterias = "bloque";
 estado.panelImportacionAbierto = false;   // v5 1.2/1.3: import/actualizar malla, siempre inline
 estado.estadisticasAbiertas = false;      // v5 #3: colapsada por defecto
 estado.arrastrandoPlanId = null;          // v5 1.4: drag-and-drop en Gestionar plan
+estado.modoActualizarMalla = "agregar";   // C.5 (v9): "agregar" | "reemplazar" — al reimportar CSV sobre un plan existente
 
 /* ---- B.2: flujo de importación de 3 modos (Link / PDF / Capturas) ----
  * Estas llaves viven en `estado` (no en los datos del usuario) porque son
@@ -235,22 +250,48 @@ estado.tiposHorasPersonalizadoTexto = "";  // texto crudo cuando universidadImpo
  *
  * Nunca revienta: si `texto` es null/undefined, devuelve "" en vez de tirar.
  */
-function aplicarFormatoTexto(texto) {
-  const original = texto || "";
-  const formato = (estado.datos && estado.datos.configuracion && estado.datos.configuracion.formato_texto_nombres) || "titulo";
+/**
+ * B.2 (v9)/Bug 9 (v8): valida si un token es un número romano válido
+ * (I, II, III, IV, ..., XII, etc.), sin importar mayúsculas/minúsculas de
+ * origen. Se usa para que "Inglés II" nunca se convierta en "Inglés Ii" al
+ * aplicar el formato de nombres — el token romano se deja siempre en
+ * mayúsculas completas, sin importar cuál de las 3 opciones esté activa.
+ */
+function esTokenNumeroRomano(token) {
+  if (!token) return false;
+  if (!/^[IVXLCDM]+$/i.test(token)) return false;
+  return /^(M{0,3})(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$/i.test(token);
+}
 
-  if (formato === "mayusculas") return original.toUpperCase();
+/**
+ * Aplica la transformación de UNA palabra según el formato elegido, dejando
+ * los números romanos siempre en mayúsculas completas sin importar el
+ * formato ni su posición en la frase.
+ */
+function transformarPalabraFormato(palabra, formato, esPrimeraPalabra) {
+  if (!palabra) return palabra;
+  if (esTokenNumeroRomano(palabra)) return palabra.toUpperCase();
+
+  if (formato === "mayusculas") return palabra.toUpperCase();
 
   if (formato === "oracion") {
-    const t = original.toLowerCase();
-    return t.charAt(0).toUpperCase() + t.slice(1);
+    const p = palabra.toLowerCase();
+    return esPrimeraPalabra ? p.charAt(0).toUpperCase() + p.slice(1) : p;
   }
 
   // "titulo" (default): Cada Palabra Capitalizada.
+  const p = palabra.toLowerCase();
+  return p.charAt(0).toUpperCase() + p.slice(1);
+}
+
+function aplicarFormatoTexto(texto) {
+  const original = texto || "";
+  if (!original) return "";
+  const formato = (estado.datos && estado.datos.configuracion && estado.datos.configuracion.formato_texto_nombres) || "titulo";
+
   return original
-    .toLowerCase()
     .split(" ")
-    .map((palabra) => (palabra ? palabra.charAt(0).toUpperCase() + palabra.slice(1) : palabra))
+    .map((palabra, i) => transformarPalabraFormato(palabra, formato, i === 0))
     .join(" ");
 }
 
@@ -397,9 +438,17 @@ function renderizarPlanEstudios() {
     if (estado.panelImportacionAbierto) {
       cont.appendChild(construirMiniPanelImportacion(principal));
     }
-    cont.appendChild(construirPanelEstadisticas(principal));
-    cont.appendChild(construirBarraAcciones());
-    cont.appendChild(construirPanelCategorias());
+    // C.3 (v9): si el plan activo no tiene ninguna materia todavía, no tiene
+    // sentido mostrar Estadísticas/Buscador/Categorías (no hay nada que
+    // medir, buscar ni categorizar) — se ocultan hasta que exista al menos
+    // una. (La tarjeta de Semestres todavía no existe dentro de esta
+    // sección — queda pendiente para cuando se construya esa parte.)
+    const hayMaterias = obtenerMateriasVisibles().length > 0;
+    if (hayMaterias) {
+      cont.appendChild(construirPanelEstadisticas(principal));
+      cont.appendChild(construirBarraAcciones());
+      cont.appendChild(construirPanelCategorias());
+    }
     cont.appendChild(construirContenidoBloques());
   } catch (e) {
     // Bug 1 (v6): antes, un error aquí dejaba la sección completamente vacía
@@ -505,7 +554,10 @@ function construirPanelImportacion() {
     btn.addEventListener("click", () => {
       estado.universidadImportacion = op.valor;
       if (op.valor !== "Otra") {
-        estado.tiposHorasImportacion = estado.horasNoAplicaImportacion ? [] : PRESETS_TIPOS_HORAS[op.valor].slice();
+        // B.2 (v9): "No aplica" ahora es un concepto exclusivo de universidad
+        // "Otra" — al elegir TEC/UCR se usa siempre su preset completo.
+        estado.horasNoAplicaImportacion = false;
+        estado.tiposHorasImportacion = PRESETS_TIPOS_HORAS[op.valor].slice();
       }
       renderizarPlanEstudios();
     });
@@ -536,24 +588,23 @@ function construirPanelImportacion() {
       estado.tiposHorasImportacion = inputTipos.value.split(",").map((t) => t.trim()).filter(Boolean);
     });
     sec.appendChild(inputTipos);
-  }
 
-  // v7.1: "No aplica" para Horas, independiente de la universidad elegida.
-  const labelNoAplica = document.createElement("label");
-  labelNoAplica.className = "checkbox";
-  labelNoAplica.innerHTML = `<input type="checkbox" id="checkbox-horas-no-aplica-importacion" ${estado.horasNoAplicaImportacion ? "checked" : ""}><span class="box"></span><span>No aplica — este plan no maneja Horas</span>`;
-  labelNoAplica.querySelector("input").addEventListener("change", (e) => {
-    estado.horasNoAplicaImportacion = e.target.checked;
-    if (e.target.checked) {
-      estado.tiposHorasImportacion = [];
-    } else {
-      estado.tiposHorasImportacion = estado.universidadImportacion === "Otra"
-        ? estado.tiposHorasPersonalizadoTexto.split(",").map((t) => t.trim()).filter(Boolean)
-        : PRESETS_TIPOS_HORAS[estado.universidadImportacion].slice();
-    }
-    renderizarPlanEstudios();
-  });
-  sec.appendChild(labelNoAplica);
+    // B.2 (v9): "No aplica" solo tiene sentido para universidad "Otra" — TEC y
+    // UCR siempre manejan Horas con su preset fijo, así que el checkbox ya
+    // no se muestra para ellas (antes aparecía siempre, contradiciendo lo
+    // pedido — comentario "v7.1: independiente de la universidad elegida").
+    const labelNoAplica = document.createElement("label");
+    labelNoAplica.className = "checkbox";
+    labelNoAplica.innerHTML = `<input type="checkbox" id="checkbox-horas-no-aplica-importacion" ${estado.horasNoAplicaImportacion ? "checked" : ""}><span class="box"></span><span>No aplica — este plan no maneja Horas</span>`;
+    labelNoAplica.querySelector("input").addEventListener("change", (e) => {
+      estado.horasNoAplicaImportacion = e.target.checked;
+      estado.tiposHorasImportacion = e.target.checked
+        ? []
+        : estado.tiposHorasPersonalizadoTexto.split(",").map((t) => t.trim()).filter(Boolean);
+      renderizarPlanEstudios();
+    });
+    sec.appendChild(labelNoAplica);
+  }
 
   // ---- Modo de importación: Link / PDF / Capturas ----
   const etiquetaModo = document.createElement("span");
@@ -1032,16 +1083,18 @@ function abrirModalCrearPlan(paraSecundario, metadatosDetectados) {
   const bloquePersonalizado = document.getElementById("bloque-tipos-horas-personalizados");
   const bloqueUniOtraNombre = document.getElementById("bloque-universidad-otra-nombre");
   const inputUniOtraNombre = document.getElementById("input-universidad-otra-nombre");
+  const bloqueNoAplica = document.getElementById("bloque-horas-no-aplica-plan");
   const checkboxNoAplica = document.getElementById("checkbox-horas-no-aplica");
-  // v7.1: continúa desde lo elegido en el panel de importación (universidad
-  // libre y "No aplica"), en vez de reiniciar ambos campos siempre.
-  checkboxNoAplica.checked = !!estado.horasNoAplicaImportacion;
-  inputPersonalizado.disabled = checkboxNoAplica.checked;
   inputUniOtraNombre.value = estado.nombreUniversidadImportacion || "";
   if (btnInicial.dataset.valor === "Otra") {
     bloquePersonalizado.classList.remove("oculto");
     bloqueUniOtraNombre.classList.remove("oculto");
+    bloqueNoAplica.classList.remove("oculto");
     inputPersonalizado.value = estado.tiposHorasPersonalizadoTexto || "";
+    // v7.1: continúa desde lo elegido en el panel de importación (universidad
+    // libre y "No aplica"), en vez de reiniciar ambos campos siempre.
+    checkboxNoAplica.checked = !!estado.horasNoAplicaImportacion;
+    inputPersonalizado.disabled = checkboxNoAplica.checked;
     // v7.1: si vino detectada por la IA (metadatos.universidad) y no coincidió
     // con TEC/UCR, se precarga como valor real editable (nunca genérico).
     if (metadatos.universidad && !["TEC", "UCR"].includes(mapearUniversidadDetectada(metadatos.universidad))) {
@@ -1050,6 +1103,11 @@ function abrirModalCrearPlan(paraSecundario, metadatosDetectados) {
   } else {
     bloquePersonalizado.classList.add("oculto");
     bloqueUniOtraNombre.classList.add("oculto");
+    bloqueNoAplica.classList.add("oculto");
+    // B.2 (v9): "No aplica" solo existe para "Otra" — para TEC/UCR queda
+    // siempre desmarcado, así el plan usa el preset de horas completo.
+    checkboxNoAplica.checked = false;
+    inputPersonalizado.disabled = false;
     aplicarDefaultsUniversidad(btnInicial.dataset.valor);
   }
 
@@ -1089,13 +1147,22 @@ function inicializarModalCrearPlan() {
       aplicarPlaceholdersAleatoriosPlan(btn.dataset.valor);
       const bloquePersonalizado = document.getElementById("bloque-tipos-horas-personalizados");
       const bloqueUniOtraNombre = document.getElementById("bloque-universidad-otra-nombre");
+      const bloqueNoAplica = document.getElementById("bloque-horas-no-aplica-plan");
+      const checkboxNoAplica = document.getElementById("checkbox-horas-no-aplica");
+      const inputPersonalizado = document.getElementById("input-tipos-horas-personalizados");
       if (btn.dataset.valor === "TEC" || btn.dataset.valor === "UCR") {
         bloquePersonalizado.classList.add("oculto");
         bloqueUniOtraNombre.classList.add("oculto");
+        bloqueNoAplica.classList.add("oculto");
+        // B.2 (v9): al salir de "Otra" se desmarca "No aplica" — para TEC/UCR
+        // el plan siempre usa el preset de horas completo.
+        checkboxNoAplica.checked = false;
+        inputPersonalizado.disabled = false;
         aplicarDefaultsUniversidad(btn.dataset.valor);
       } else {
         bloquePersonalizado.classList.remove("oculto");
         bloqueUniOtraNombre.classList.remove("oculto");
+        bloqueNoAplica.classList.remove("oculto");
       }
     });
   });
@@ -1322,6 +1389,44 @@ function construirMiniPanelImportacion(plan) {
   });
   sec.appendChild(grupoModo);
 
+  // C.5 (v9): por defecto se AGREGA/actualiza sobre lo que ya existe (nunca
+  // se pierden estados, notas ni categorías); "Reemplazar" es una elección
+  // explícita, con confirmación antes de ejecutarla porque sí borra datos.
+  // Solo tiene sentido mostrar el switch si ya hay algo que agregar-o-
+  // reemplazar; con el plan vacío, "Agregar" y "Reemplazar" son lo mismo.
+  if (plan.materias.length > 0) {
+    const etiquetaModoActualizar = document.createElement("span");
+    etiquetaModoActualizar.className = "form-label";
+    etiquetaModoActualizar.textContent = "Al importar este CSV:";
+    sec.appendChild(etiquetaModoActualizar);
+
+    const grupoModoActualizar = document.createElement("div");
+    grupoModoActualizar.className = "pill-group";
+    [
+      { valor: "agregar", texto: "Agregar" },
+      { valor: "reemplazar", texto: "Reemplazar" },
+    ].forEach((op) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pill-item" + (estado.modoActualizarMalla === op.valor ? " active" : "");
+      btn.textContent = op.texto;
+      btn.addEventListener("click", () => {
+        estado.modoActualizarMalla = op.valor;
+        renderizarPlanEstudios();
+      });
+      grupoModoActualizar.appendChild(btn);
+    });
+    sec.appendChild(grupoModoActualizar);
+
+    const notaModoActualizar = document.createElement("p");
+    notaModoActualizar.className = "muted";
+    notaModoActualizar.style.color = estado.modoActualizarMalla === "reemplazar" ? "var(--color-danger)" : "";
+    notaModoActualizar.textContent = estado.modoActualizarMalla === "reemplazar"
+      ? "⚠️ Esto borrará todas las materias actuales de este plan (estados, notas y categorías incluidas) y las sustituirá por completo con lo que traiga este CSV."
+      : "Se agregan las materias nuevas y se actualizan las existentes por código — nada de lo que ya tienes (estados, notas, categorías) se pierde.";
+    sec.appendChild(notaModoActualizar);
+  }
+
   let inputLink = null;
   if (estado.modoImportacion === "link") {
     inputLink = document.createElement("input");
@@ -1389,17 +1494,19 @@ function construirMiniPanelImportacion(plan) {
   const btnImportar = document.createElement("button");
   btnImportar.className = "btn btn-primary btn-block";
   btnImportar.textContent = "Importar";
-  btnImportar.addEventListener("click", () => {
-    if (!textarea.value.trim()) {
-      resultado.innerHTML = `<p class="muted" style="color:var(--color-danger);">Pega primero el CSV.</p>`;
-      return;
-    }
+  const ejecutarImportacionMalla = () => {
     // v5 1.3: si la IA detectó carrera/código/universidad, se leen aquí
     // (sin romperse si no vienen) — solo se usan para actualizar los datos
     // de encabezado del plan si el usuario los dejó vacíos originalmente.
     const { metadatos, csv } = extraerMetadatosImportacion(textarea.value);
     if (metadatos.carrera && !plan.nombre_carrera) plan.nombre_carrera = metadatos.carrera;
     if (metadatos.codigo_plan && !plan.codigo_plan) plan.codigo_plan = metadatos.codigo_plan;
+
+    // C.5 (v9): "Reemplazar" borra lo que había ANTES de aplicar el CSV
+    // nuevo; "Agregar" (default) combina por código como ya se hacía.
+    if (estado.modoActualizarMalla === "reemplazar") {
+      plan.materias = [];
+    }
 
     const { materias, errores } = parsearCSVPlanEstudios(csv, plan.parametros_universidad.tipos_horas);
     materias.forEach((nueva) => {
@@ -1414,6 +1521,24 @@ function construirMiniPanelImportacion(plan) {
       : `<p class="muted" style="color:#34d399;">¡Listo! ${materias.length} materias procesadas.</p>`;
     estado.panelImportacionAbierto = false;
     renderizarPlanEstudios();
+  };
+
+  btnImportar.addEventListener("click", () => {
+    if (!textarea.value.trim()) {
+      resultado.innerHTML = `<p class="muted" style="color:var(--color-danger);">Pega primero el CSV.</p>`;
+      return;
+    }
+    if (estado.modoActualizarMalla === "reemplazar" && plan.materias.length > 0) {
+      abrirConfirmacion({
+        titulo: "¿Reemplazar toda la malla?",
+        mensaje: "Vas a borrar todas las materias actuales de este plan (estados, notas y categorías incluidas) y sustituirlas por completo con el nuevo CSV. Esta acción no se puede deshacer.",
+        textoConfirmar: "Sí, reemplazar",
+        claseConfirmar: "btn-danger",
+        onConfirmar: ejecutarImportacionMalla,
+      });
+    } else {
+      ejecutarImportacionMalla();
+    }
   });
   sec.appendChild(btnImportar);
 
@@ -1668,6 +1793,10 @@ function construirEncabezadoPlan(planPrincipal) {
     : (planPrincipal.materias.length === 0 ? "Importar malla" : "Actualizar malla");
   btnImportar.addEventListener("click", () => {
     estado.panelImportacionAbierto = !estado.panelImportacionAbierto;
+    // C.5 (v9): siempre arranca en "Agregar" (el modo seguro/no-destructivo)
+    // cada vez que se abre el panel, para no arrastrar "Reemplazar" elegido
+    // en una sesión anterior sin que el usuario lo note.
+    estado.modoActualizarMalla = "agregar";
     renderizarPlanEstudios();
   });
   botones.appendChild(btnImportar);
@@ -1703,6 +1832,7 @@ function construirBarraAcciones() {
   [
     { valor: "bloque", texto: "Ordenar por bloque" },
     { valor: "categoria", texto: "Ordenar por categoría" },
+    { valor: "estado", texto: "Ordenar por estado" },
   ].forEach((op) => {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -2304,6 +2434,10 @@ function construirContenidoBloques() {
       clave = fila.materia.categoria_id || "sin_categoria";
       const cat = fila.plan.categorias.find((c) => c.id === fila.materia.categoria_id);
       nombre = cat ? cat.nombre : "Sin categoría";
+    } else if (estado.ordenPlanEstudios === "estado") {
+      clave = fila.materia.estado;
+      const infoEstado = ESTADOS_MATERIA.find((e) => e.valor === fila.materia.estado);
+      nombre = infoEstado ? infoEstado.texto : fila.materia.estado;
     } else {
       clave = String(fila.materia.bloque);
       nombre = `${fila.plan.parametros_universidad.nombre_bloque} ${fila.materia.bloque}`;
@@ -2314,6 +2448,12 @@ function construirContenidoBloques() {
   });
 
   const clavesOrdenadas = Array.from(grupos.keys()).sort((a, b) => {
+    if (estado.ordenPlanEstudios === "estado") {
+      // Orden lógico (Pendiente → Cursando → Aprobada → Reprobada), no alfabético.
+      const ia = ESTADOS_MATERIA.findIndex((e) => e.valor === a);
+      const ib = ESTADOS_MATERIA.findIndex((e) => e.valor === b);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    }
     const na = Number(a), nb = Number(b);
     if (!isNaN(na) && !isNaN(nb)) return na - nb;
     return String(nombreGrupo.get(a)).localeCompare(String(nombreGrupo.get(b)));

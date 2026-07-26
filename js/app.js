@@ -1519,6 +1519,13 @@ function inicializarLayoutResponsivo() {
   btnHamburguesa.addEventListener("click", () => {
     sidebar.classList.add("abierta");
     overlay.classList.add("abierta");
+    // C.6 (v9): con el drawer abierto en móvil, se bloquea el scroll de la
+    // página de fondo — sin esto, aunque el drawer en sí queda con
+    // `position: fixed` (anclado a la pantalla), la página detrás se sigue
+    // pudiendo desplazar con el dedo, lo cual en la práctica se siente como
+    // que "todo se mueve" y rompe la sensación de panel anclado, igual que
+    // pasa con el panel de Enlaces Rápidos.
+    document.body.classList.add("scroll-bloqueado");
   });
 
   overlay.addEventListener("click", cerrarSidebarMovil);
@@ -1544,6 +1551,7 @@ function inicializarLayoutResponsivo() {
 function cerrarSidebarMovil() {
   document.getElementById("app-sidebar").classList.remove("abierta");
   document.getElementById("sidebar-overlay").classList.remove("abierta");
+  document.body.classList.remove("scroll-bloqueado");
 }
 
 function restaurarEstadoSidebar() {
