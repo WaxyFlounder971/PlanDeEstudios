@@ -105,12 +105,23 @@ a { color: var(--accent-1); }
 /* ---- Grupo de botones "pill" (selección exclusiva) ---- */
 .pill-group {
   display: flex;
-  flex-wrap: wrap;
+  /* Bug 3 (v8): antes usaba flex-wrap para pasar los pills que no cabían a
+     una segunda línea (ej. los 4 pills de Estado en pantallas angostas),
+     pero eso se ve mal y el prompt pide explícitamente que NUNCA ocupen más
+     de una línea. Ahora nunca envuelve: si no caben todos, el propio grupo
+     se vuelve scrolleable horizontalmente (deslizable al tacto de forma
+     nativa) y, cuando además desborda, se puede envolver con flechitas via
+     envolverConFlechasScroll() — ver plan.js. */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox: oculta la barra mientras sigue siendo scrolleable */
+  -webkit-overflow-scrolling: touch;
   gap: 6px;
   background: rgba(0, 0, 0, 0.18);
   padding: 4px;
   border-radius: var(--radius-pill);
 }
+.pill-group::-webkit-scrollbar { display: none; } /* Chrome/Safari/Edge */
 [data-mode="light"] .pill-group { background: rgba(0, 0, 0, 0.05); }
 
 /* Bug 5: el selector de "Plan activo" en Configuración normalmente tiene
@@ -127,10 +138,9 @@ a { color: var(--accent-1); }
      cabía en su tercio del ancho y, como .app-layout tiene
      `overflow-x: hidden`, el sobrante se recortaba en vez de verse
      completo (se veía cortado en "Solo la primera[m]"). Ahora cada pill
-     crece según su propio contenido y, si no caben todos en una fila,
-     .pill-group los pasa a la siguiente línea (flex-wrap) en vez de
-     recortarlos. */
-  flex: 0 1 auto;
+     crece según su propio contenido; si no caben todos, .pill-group ya no
+     los envuelve (Bug 3 v8) sino que se desplaza horizontalmente. */
+  flex: 0 0 auto;
   border: none;
   background: transparent;
   color: var(--text-muted);
@@ -147,6 +157,27 @@ a { color: var(--accent-1); }
   color: var(--on-accent);
   box-shadow: var(--shadow-float);
 }
+
+/* Bug 3 (v8) / reutilizado por Ajuste 3 (mapa): envoltorio genérico para
+   cualquier fila scrolleable horizontal con flechitas "‹ ›" de solo símbolo
+   (sin fondo de botón), como pide el prompt "igual que en Planes de
+   Estudio" — reutiliza el mismo estilo visual que .flecha-plan. Las
+   flechas se ocultan solas (clase .oculto) cuando no hace falta desplazar,
+   o cuando ya se llegó al extremo correspondiente. */
+.scroll-con-flechas {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.scroll-con-flechas > .pill-group,
+.scroll-con-flechas > .scroll-contenido {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.flecha-scroll { flex-shrink: 0; }
+
+
 
 /* ---- Badges semánticos ---- */
 .badge {
@@ -891,6 +922,27 @@ a:hover .enlace-rapido-nombre {
   margin-top: 4px;
 }
 
+/* ---- Bug 1 (v8): aviso de reconexión de sesión con Drive ---- */
+.aviso-reconexion {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  background: rgba(245, 158, 11, 0.18);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid #f59e0b;
+  color: #fde68a;
+  font-size: 0.85rem;
+  text-align: center;
+}
+[data-mode="light"] .aviso-reconexion { color: #92400e; }
+.aviso-reconexion .btn { padding: 6px 14px; font-size: 0.8rem; flex-shrink: 0; }
+
 /* ---- Utilidad genérica: nada debe forzar overflow horizontal ---- */
 img, svg { max-width: 100%; }
 
@@ -953,49 +1005,62 @@ img, svg { max-width: 100%; }
   user-select: none;
 }
 .materia-linea1 {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
+  /* Bug 4 (v8): antes esto era un flex row con .materia-prefijo y
+     .materia-nombre-col como columnas separadas, y ADEMÁS .materia-nombre
+     tenía su propio padding-left/text-indent "de indentación colgante" —
+     pero como el prefijo ya era una columna flex aparte (no texto en el
+     mismo flujo), ese padding-left se sumaba de más y la 2da línea del
+     nombre quedaba desalineada (mucho más metida hacia la derecha que la
+     1ra). La indentación colgante real necesita que el prefijo flote
+     (float) dentro del MISMO flujo de texto que el nombre, no que viva en
+     una columna flex separada. */
+  display: block;
   min-width: 0;
+  cursor: pointer;
 }
 .materia-codigo {
   flex-shrink: 0;
   font-family: var(--font-mono, monospace);
   font-size: 0.82rem;
   color: var(--text-secondary);
-  align-self: center;
 }
-/* Prefijo (luz+código) de ancho fijo: la columna del nombre siempre arranca
-   en la misma posición horizontal, tanto colapsada como al hacer wrap en
-   expandida (indentación colgante, v5 #5). */
+/* Prefijo (luz+código) de ancho FIJO, flotando a la izquierda del mismo
+   flujo de texto que el nombre — así la 2da línea del nombre (que ya no
+   tiene ningún float a su lado) se alinea exactamente bajo la 1ra gracias
+   al padding-left/text-indent de .materia-nombre.completa, calculado con
+   ese mismo ancho fijo (indentación colgante real, v8 Bug 4). */
 .materia-prefijo {
+  float: left;
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
   width: 104px;
+  height: 24px; /* altura de una línea de nombre, para que el float no "atrape" más de una línea */
 }
-.materia-nombre-col { flex: 1; min-width: 0; }
+.materia-expandir { float: right; margin-left: 8px; opacity: 0.7; }
 .materia-nombre {
   font-family: var(--font-display);
   font-weight: 700;
   display: block;
 }
-/* Colapsada: trunca con "…" (sin cambios). */
+/* Colapsada: trunca con "…" (el float del prefijo ya reserva su espacio,
+   el texto lo rodea de forma nativa — sin necesidad de padding-left). */
 .materia-nombre.truncada {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Expandida: nombre completo, pudiendo hacer wrap; la 2da línea queda
-   alineada bajo la 1ra gracias al padding-left = ancho del prefijo, con
-   text-indent negativo para que la 1ra línea empiece pegada a la izquierda. */
+/* Expandida: nombre completo, puede hacer wrap a varias líneas. La 1ra
+   línea fluye junto al float (sin indentación extra); las líneas
+   siguientes, al no tener ya el float al lado, usan el padding-left para
+   alinearse bajo la 1ra — el text-indent negativo evita que ESA 1ra línea
+   reciba ese mismo padding dos veces. 104px (ancho del prefijo) + 10px
+   (separación) = 114px. */
 .materia-nombre.completa {
   white-space: normal;
-  padding-left: 112px;
-  text-indent: -112px;
+  padding-left: 114px;
+  text-indent: -114px;
 }
-.materia-expandir { flex-shrink: 0; opacity: 0.7; align-self: center; }
 
 .materia-linea2 {
   display: flex;
@@ -1054,7 +1119,7 @@ img, svg { max-width: 100%; }
 
 @media (max-width: 640px) {
   .materia-prefijo { width: 78px; }
-  .materia-nombre.completa { padding-left: 86px; text-indent: -86px; }
+  .materia-nombre.completa { padding-left: 88px; text-indent: -88px; }
   .materia-codigo { font-size: 0.72rem; }
 }
 
