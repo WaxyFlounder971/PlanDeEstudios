@@ -83,7 +83,10 @@ window.addEventListener("DOMContentLoaded", () => {
       // tanto iniciarSesionConGoogle() nunca se llama — sin esto, estado.token
       // se quedaba en null para siempre y la sincronización con Drive jamás
       // se intentaba (fallaba en silencio, sin ningún error en consola).
-      if (habiaCacheAlCargar) intentarReconexionSilenciosa();
+      if (habiaCacheAlCargar) {
+        intentarReconexionSilenciosa();
+        activarReconexionPorGesto();
+      }
     },
     alFallar: () => {
       btnLogin.textContent = textoOriginalBtnLogin;
@@ -138,6 +141,7 @@ window.addEventListener("DOMContentLoaded", () => {
   inicializarModalConfirmacion();
   inicializarNavegacionSecciones();
   inicializarBotonesCerrarModal();
+  inicializarPullToRefresh();
 
   const cache = leerCacheLocal();
   if (cache && cache.datos) {
@@ -148,6 +152,9 @@ window.addEventListener("DOMContentLoaded", () => {
     habiaCacheAlCargar = true;
     estado.datos = migrarDatosAntiguos(cache.datos);
     estado.fileId = cache.fileId;
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist().catch(() => {});
+    }
     mostrarApp();
   }
 
@@ -250,6 +257,169 @@ function ocultarAvisoReconexion() {
   if (aviso) aviso.classList.add("oculto");
 }
 
+/**
+ * v8.3 (reporte "cada que reinicio me pide iniciar sesión"): la sesión en
+ * caché SIEMPRE deja entrar a la app de inmediato (esto ya funcionaba) —
+ * lo que el usuario percibía como "pedir login de nuevo" era en realidad el
+ * banner de "Reconectar" apareciendo seguido, porque el refresco 100%
+ * automático (sin ningún gesto de usuario de por medio) es el que más
+ * bloquean los navegadores móviles. Este helper arma UN solo reintento
+ * extra, atado al primer toque/click real que el usuario haga en la
+ * página — un gesto real basta para que el navegador deje pasar cosas que
+ * bloquea si vienen de puro JS. Con esto, en la mayoría de los casos el
+ * usuario ni se entera de que hubo que reconectar.
+ */
+function activarReconexionPorGesto() {
+  const reintentar = () => {
+    document.removeEventListener("pointerdown", reintentar, true);
+    document.removeEventListener("keydown", reintentar, true);
+    if (!estado.token) intentarReconexionSilenciosa();
+  };
+  document.addEventListener("pointerdown", reintentar, true);
+  document.addEventListener("keydown", reintentar, true);
+}
+
+/* --------------------- Overlay de carga (3 puntitos) --------------------- */
+
+let contadorCargando = 0; // soporta llamados anidados/simultáneos sin ocultarse de más
+function mostrarCargando() {
+  contadorCargando++;
+  const overlay = document.getElementById("overlay-cargando");
+  if (overlay) overlay.classList.remove("oculto");
+}
+function ocultarCargando() {
+  contadorCargando = Math.max(0, contadorCargando - 1);
+  if (contadorCargando > 0) return;
+  const overlay = document.getElementById("overlay-cargando");
+  if (overlay) overlay.classList.add("oculto");
+}
+
+/* ------------------- Deslizar hacia abajo para sincronizar ------------------- */
+
+/**
+ * v8.3: gesto tipo "pull-to-refresh" nativo, pero en vez de recargar la
+ * página entera, sincroniza los DATOS (sube lo pendiente, baja lo último
+ * que haya en Drive, y repinta la UI en el sitio). Funciona con dedo
+ * (móvil) y con mouse (compu) porque usa Pointer Events, que unifican
+ * ambos. Solo se activa si el gesto arranca con la página ya en el tope
+ * (scrollY === 0) — así nunca interfiere con scroll normal ni con clics.
+ */
+function inicializarPullToRefresh() {
+  const indicador = document.getElementById("pull-refresh-indicador");
+  if (!indicador) return;
+
+  const UMBRAL_PX = 78;
+  const MAX_ARRASTRE_PX = 120;
+  let arrastreInicioY = null;
+  let arrastrando = false;
+  let listoParaSoltar = false;
+  let sincronizando = false;
+
+  function posicion(distancia) {
+    // Recorrido con resistencia (como el pull-to-refresh nativo): se mueve
+    // más rápido al principio y se frena cerca del máximo.
+    const limitada = Math.min(distancia, MAX_ARRASTRE_PX);
+    return -60 + limitada * 0.9;
+  }
+
+  window.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (sincronizando || window.scrollY > 0) return;
+      // Ignora clics normales sobre controles interactivos.
+      if (e.target.closest("button, a, input, textarea, select")) return;
+      arrastreInicioY = e.clientY;
+      arrastrando = true;
+      indicador.classList.add("arrastrando");
+    },
+    { passive: true }
+  );
+
+  window.addEventListener(
+    "pointermove",
+    (e) => {
+      if (!arrastrando || arrastreInicioY === null) return;
+      const distancia = e.clientY - arrastreInicioY;
+      if (distancia <= 0) {
+        indicador.classList.remove("visible", "listo");
+        return;
+      }
+      listoParaSoltar = distancia >= UMBRAL_PX;
+      indicador.classList.add("visible");
+      indicador.classList.toggle("listo", listoParaSoltar);
+      indicador.style.transform = `translate(-50%, ${posicion(distancia)}px)`;
+    },
+    { passive: true }
+  );
+
+  async function soltar() {
+    if (!arrastrando) return;
+    arrastrando = false;
+    indicador.classList.remove("arrastrando");
+    arrastreInicioY = null;
+
+    if (!listoParaSoltar) {
+      indicador.classList.remove("visible", "listo");
+      indicador.style.transform = "";
+      return;
+    }
+
+    listoParaSoltar = false;
+    sincronizando = true;
+    indicador.classList.add("sincronizando");
+    indicador.style.transform = "translate(-50%, 6px)";
+    try {
+      await sincronizarAhora();
+    } finally {
+      sincronizando = false;
+      indicador.classList.remove("visible", "listo", "sincronizando");
+      indicador.style.transform = "";
+    }
+  }
+
+  window.addEventListener("pointerup", soltar);
+  window.addEventListener("pointercancel", soltar);
+}
+
+/**
+ * v8.3: sincronización completa "en el sitio" — sube cambios pendientes
+ * primero (nunca se pisa trabajo local sin subir), luego baja la última
+ * versión de Drive, y repinta toda la UI ya renderizada sin recargar la
+ * página ni tocar la pantalla de login. La usa tanto el gesto de deslizar
+ * como (más adelante) el sondeo automático multi-dispositivo.
+ */
+async function sincronizarAhora() {
+  mostrarCargando();
+  try {
+    if (!estado.token) {
+      await intentarReconexionSilenciosa();
+    }
+    if (estado.pendienteSync) {
+      await intentarSincronizar(); // sube lo local primero, nunca se pierde
+    }
+    if (!estado.token || !estado.fileId) {
+      mostrarToast("No se pudo actualizar: falta conexión con Drive");
+      return;
+    }
+    const datosFrescos = await leerDatos(estado.token, estado.fileId);
+    estado.datos = migrarDatosAntiguos(datosFrescos);
+    guardarCacheLocal();
+    aplicarPaleta(estado.datos.configuracion.paleta, estado.datos.configuracion.modo);
+    renderizarSelectorPlan();
+    renderizarAjustes();
+    renderizarModoHardcore();
+    renderizarEnlacesRapidos();
+    renderizarPerfil();
+    if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
+    mostrarToast("✓ Datos actualizados");
+  } catch (e) {
+    console.warn("No se pudo actualizar los datos:", e);
+    mostrarToast("No se pudo actualizar. Intenta de nuevo.");
+  } finally {
+    ocultarCargando();
+  }
+}
+
 /* ------------------------------ Login ------------------------------ */
 
 let temporizadorAvisoLogin = null;
@@ -277,20 +447,32 @@ async function onLoginExitoso(token, expiresIn) {
   ocultarAvisoLoginBloqueado();
   estado.token = token;
   programarRefrescoProactivo(expiresIn);
-  const { fileId, datos } = await buscarOCrearArchivoDatos(token);
-  estado.fileId = fileId;
-  estado.datos = migrarDatosAntiguos(datos);
-
-  // Punto 6: nombre + foto de perfil de Google.
-  const perfilGoogle = await obtenerPerfilGoogle(token);
-  if (perfilGoogle) {
-    estado.datos.perfil.nombre = perfilGoogle.nombre;
-    estado.datos.perfil.foto_url = perfilGoogle.foto_url;
-    estado.datos.perfil.correo = perfilGoogle.correo || estado.datos.perfil.correo;
+  mostrarCargando();
+  // v8.3: le pide al navegador que este sitio quede en la lista de
+  // almacenamiento "persistente" (no elegible para borrado automático por
+  // presión de espacio) — reduce el riesgo de que un móvil borre la sesión
+  // en caché sin que el usuario haya cerrado sesión a propósito.
+  if (navigator.storage && navigator.storage.persist) {
+    navigator.storage.persist().catch(() => {});
   }
+  try {
+    const { fileId, datos } = await buscarOCrearArchivoDatos(token);
+    estado.fileId = fileId;
+    estado.datos = migrarDatosAntiguos(datos);
 
-  guardarCacheLocal();
-  mostrarApp();
+    // Punto 6: nombre + foto de perfil de Google.
+    const perfilGoogle = await obtenerPerfilGoogle(token);
+    if (perfilGoogle) {
+      estado.datos.perfil.nombre = perfilGoogle.nombre;
+      estado.datos.perfil.foto_url = perfilGoogle.foto_url;
+      estado.datos.perfil.correo = perfilGoogle.correo || estado.datos.perfil.correo;
+    }
+
+    guardarCacheLocal();
+    mostrarApp();
+  } finally {
+    ocultarCargando();
+  }
 }
 
 function mostrarApp() {
