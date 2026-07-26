@@ -178,6 +178,13 @@ function crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, parametros
     },
     categorias: [],
     materias: [],
+    // C.4 (v9): electivas/optativas detectadas al importar pero que el
+    // usuario todavía NO agregó formalmente a la malla — mismo formato que
+    // un objeto de materia (ver crearMateria), pero viven fuera de
+    // `materias` a propósito, así nunca cuentan en ningún total mientras
+    // estén aquí. Se mueven a `materias` (con es_optativa:true) al hacer
+    // clic en "Agregar al plan de estudios".
+    optativas_disponibles: [],
   };
 }
 
@@ -193,7 +200,7 @@ function crearCategoria({ nombre, color }) {
  * `tiposHoras` se descarta — así materia.horas nunca tiene campos de más ni
  * de menos respecto al plan al que pertenece.
  */
-function crearMateria({ codigo, nombre, creditos, horas, tiposHoras, bloque, requisitos, correquisitos }) {
+function crearMateria({ codigo, nombre, creditos, horas, tiposHoras, bloque, requisitos, correquisitos, esOptativa }) {
   // v7 #1: un arreglo vacío es una elección válida ("No aplica" — el plan no
   // maneja horas). Solo se usa el default ["Horas"] cuando tiposHoras
   // realmente no vino (undefined/null), nunca cuando vino vacío a propósito.
@@ -215,6 +222,11 @@ function crearMateria({ codigo, nombre, creditos, horas, tiposHoras, bloque, req
     categoria_id: null,
     estado: "pendiente",
     escala_notas_override: null,
+    // C.4 (v9): true si esta materia se detectó como electiva/optativa al
+    // importar. No cambia cómo se calcula nada por sí sola — lo que decide
+    // si cuenta en los totales es si vive en `plan.materias` (cuenta) o en
+    // `plan.optativas_disponibles` (no cuenta, ver js/plan.js).
+    es_optativa: !!esOptativa,
   };
 }
 
@@ -237,6 +249,10 @@ function migrarDatosAntiguos(datos) {
   if (!datos || !Array.isArray(datos.planes_estudio)) return datos;
 
   datos.planes_estudio.forEach((plan) => {
+    // C.4 (v9): planes creados antes de esta versión no tienen este arreglo
+    // — se rellena vacío para que push()/filter() nunca truene con undefined.
+    if (!Array.isArray(plan.optativas_disponibles)) plan.optativas_disponibles = [];
+
     const params = plan.parametros_universidad || (plan.parametros_universidad = {});
     const esFormatoViejo = typeof params.horas_detalladas === "boolean" && !Array.isArray(params.tipos_horas);
 

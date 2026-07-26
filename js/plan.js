@@ -45,6 +45,25 @@ function formatearHoras(materia) {
   return entradas.map(([tipo, valor]) => `${tipo} ${valor}`).join(" · ");
 }
 
+/**
+ * B (v9)/v8 punto 2: versión compacta de formatearHoras para la tarjeta
+ * COLAPSADA — con más de un tipo de horas, muestra solo la inicial de cada
+ * uno (ej. "T4 P0 L0 TP0" para Teoría/Práctica/Laboratorio/Teoría-Práctica).
+ * Con un solo tipo (ej. TEC: "Horas"), mantiene la etiqueta completa porque
+ * ahí no hay ambigüedad que evitar ni espacio que ahorrar.
+ */
+function formatearHorasCompactoIniciales(materia) {
+  const entradas = Object.entries(materia.horas || {});
+  if (entradas.length === 0) return "";
+  if (entradas.length === 1) return `${entradas[0][0]}: ${entradas[0][1]}`;
+  return entradas
+    .map(([tipo, valor]) => {
+      const inicial = tipo.split(/[\s-]+/).map((palabra) => palabra.charAt(0) || "").join("").toUpperCase();
+      return `${inicial}${valor}`;
+    })
+    .join(" ");
+}
+
 /* ===================== Flechas de scroll horizontal reutilizables ===================== */
 
 /**
@@ -150,14 +169,14 @@ Devuélveme ÚNICAMENTE un bloque de código plano en formato CSV (con esas lín
 Bloque,Codigo,Nombre,Creditos,${columnasHoras},Requisitos,Correquisitos
 
 Reglas:
-- Bloque: número de nivel/semestre/cuatrimestre tal como aparece en el documento/página. Si usa nombres en vez de números, conviértelo al número secuencial correspondiente. Si no puedes determinarlo con certeza, escribe "REVISAR".
+- Bloque: número de nivel/semestre/cuatrimestre tal como aparece en el documento/página. Si usa nombres en vez de números, conviértelo al número secuencial correspondiente. Si no puedes determinarlo con certeza, escribe "REVISAR". Si la materia es una OPTATIVA/ELECTIVA (de las que el estudiante elige entre varias, no una materia fija de un bloque específico), escribe "ELECTIVA" en esta columna en vez de un número — esto aplica sin importar en qué bloque/nivel del documento original aparezca listada.
 - Codigo: la sigla tal como aparece; si no tiene, genera uno corto y consistente a partir del nombre.
 - Horas: usa 0 si el documento no maneja esa categoría — nunca las dejes vacías.
 - Requisitos y Correquisitos: usa punto y coma ";" para separar requisitos distintos que se necesitan TODOS ("Y"), y diagonal "/" para separar materias equivalentes/alternativas dentro de un mismo requisito ("O"). NUNCA uses coma "," dentro de esta celda — la coma ya se usa para separar las columnas del CSV y mezclarla aquí rompe el archivo. Ejemplo: "MA-1001;FS-0210/FS-0227/FS-0250" significa MA-1001 Y (una de las tres alternativas). Si no hay requisitos, usa "Ninguno".
 - IMPORTANTE — Nombre: varios nombres de materias reales incluyen una coma (ej. "Ética, Persona y Sociedad"). Si el Nombre de una materia trae una coma real, envuelve ESA CELDA completa entre comillas dobles, así: "Ética, Persona y Sociedad". Esto aplica a cualquier otra columna que también pueda traer una coma real. Si tienes dudas, mejor usar comillas de más que de menos.
 - No dejes ninguna columna vacía sin su coma correspondiente: si Correquisitos (o cualquier otra columna) no aplica, escribe igual "Ninguno" — nunca cortes la línea antes de completar todas las columnas del encabezado.
 - No agregues columna de categoría ni ninguna otra fuera de las columnas indicadas.
-- No omitas ninguna materia, incluidas optativas/electivas.
+- No omitas ninguna materia, incluidas optativas/electivas (usa "ELECTIVA" en Bloque para esas, como se explicó arriba — no las omitas ni las mezcles con las demás).
 - Si una celda es ilegible, ambigua, o no puedes confirmarla con certeza, escribe "REVISAR" en vez de inventar un dato.`;
 }
 
@@ -223,6 +242,13 @@ estado.panelImportacionAbierto = false;   // v5 1.2/1.3: import/actualizar malla
 estado.estadisticasAbiertas = false;      // v5 #3: colapsada por defecto
 estado.arrastrandoPlanId = null;          // v5 1.4: drag-and-drop en Gestionar plan
 estado.modoActualizarMalla = "agregar";   // C.5 (v9): "agregar" | "reemplazar" — al reimportar CSV sobre un plan existente
+
+/* ---- B.3 (v8/v9): Vista de Mapa interactivo del Plan de Estudios ---- */
+estado.vistaPlanEstudios = "lista";        // "lista" | "mapa"
+estado.colorMapaPor = "simbologia";        // "simbologia" (por Estado) | "categoria"
+estado.zoomMapa = 1;                       // 0.5 a 2
+estado.materiaSeleccionadaMapa = null;     // código de la materia con camino de desbloqueo dibujado
+estado._refsMapaActual = null;             // referencias DOM del mapa ya renderizado (para zoom/recolorear sin re-render completo)
 
 /* ---- B.2: flujo de importación de 3 modos (Link / PDF / Capturas) ----
  * Estas llaves viven en `estado` (no en los datos del usuario) porque son
@@ -446,10 +472,18 @@ function renderizarPlanEstudios() {
     const hayMaterias = obtenerMateriasVisibles().length > 0;
     if (hayMaterias) {
       cont.appendChild(construirPanelEstadisticas(principal));
-      cont.appendChild(construirBarraAcciones());
-      cont.appendChild(construirPanelCategorias());
+      // B.3 (v8/v9): tarjeta "Vista" (switch Lista/Mapa) — en modo Mapa,
+      // Buscador/Categorías se ocultan y el mapa reemplaza el listado de
+      // bloques (vive dentro de esta misma tarjeta, expandida).
+      cont.appendChild(construirTarjetaVista(principal));
+      if (estado.vistaPlanEstudios !== "mapa") {
+        cont.appendChild(construirBarraAcciones());
+        cont.appendChild(construirPanelCategorias());
+      }
     }
-    cont.appendChild(construirContenidoBloques());
+    if (!hayMaterias || estado.vistaPlanEstudios !== "mapa") {
+      cont.appendChild(construirContenidoBloques());
+    }
   } catch (e) {
     // Bug 1 (v6): antes, un error aquí dejaba la sección completamente vacía
     // y sin ningún indicio de qué pasó (el error solo se veía en la consola
@@ -880,7 +914,7 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
 
-  if (lineas.length === 0) return { materias: [], errores: ["El CSV está vacío."] };
+  if (lineas.length === 0) return { materias: [], electivas: [], errores: ["El CSV está vacío."] };
 
   const encabezado = parsearLineaCSV(lineas[0]);
   const indicesHoras = [];
@@ -895,6 +929,7 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
   // La primera fila se asume encabezado y se descarta.
   const filas = lineas.slice(1);
   const materias = [];
+  const electivas = [];
   const errores = [];
 
   filas.forEach((linea, indice) => {
@@ -956,21 +991,28 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
       horas[tipo] = Number(columnasHorasFila[i]) || 0;
     });
 
-    materias.push(
-      crearMateria({
-        codigo,
-        nombre,
-        creditos: Number(creditos) || 0,
-        horas,
-        tiposHoras: tipos,
-        bloque: Number(bloque) || bloque,
-        requisitos: parsearGrupoRequisitos(requisitos),
-        correquisitos: parsearGrupoRequisitos(correquisitos),
-      })
-    );
+    // C.4 (v9): "ELECTIVA"/"OPTATIVA" en la columna Bloque (en vez de un
+    // número) marca esta materia como electiva/optativa — se detecta como
+    // tal y se enruta al arreglo separado en vez de al de materias fijas.
+    const esOptativa = /^(ELECTIVA|OPTATIVA)S?$/i.test(String(bloque).trim());
+
+    const materiaCreada = crearMateria({
+      codigo,
+      nombre,
+      creditos: Number(creditos) || 0,
+      horas,
+      tiposHoras: tipos,
+      bloque: esOptativa ? null : (Number(bloque) || bloque),
+      requisitos: parsearGrupoRequisitos(requisitos),
+      correquisitos: parsearGrupoRequisitos(correquisitos),
+      esOptativa,
+    });
+
+    if (esOptativa) electivas.push(materiaCreada);
+    else materias.push(materiaCreada);
   });
 
-  return { materias, errores };
+  return { materias, electivas, errores };
 }
 
 function manejarClickImportar(textoCSV) {
@@ -999,7 +1041,7 @@ function manejarClickImportar(textoCSV) {
 }
 
 function importarCSVEnPlan(textoCSV, planDestino) {
-  const { materias, errores } = parsearCSVPlanEstudios(textoCSV, planDestino.parametros_universidad.tipos_horas);
+  const { materias, electivas, errores } = parsearCSVPlanEstudios(textoCSV, planDestino.parametros_universidad.tipos_horas);
 
   // Se combina por código: si ya existía, se actualiza; si es nueva, se agrega.
   materias.forEach((nueva) => {
@@ -1008,6 +1050,22 @@ function importarCSVEnPlan(textoCSV, planDestino) {
       Object.assign(existente, nueva, { categoria_id: existente.categoria_id, estado: existente.estado });
     } else {
       planDestino.materias.push(nueva);
+    }
+  });
+
+  // C.4 (v9): las electivas detectadas se combinan por código contra lo que
+  // YA exista (formalmente agregado en `materias`, o todavía "disponible"
+  // en `optativas_disponibles`) — si ya está en cualquiera de los dos
+  // lados, no se duplica; si es nueva, se agrega como disponible.
+  if (!Array.isArray(planDestino.optativas_disponibles)) planDestino.optativas_disponibles = [];
+  electivas.forEach((nueva) => {
+    const yaAgregada = planDestino.materias.some((m) => m.codigo === nueva.codigo);
+    if (yaAgregada) return;
+    const existenteDisponible = planDestino.optativas_disponibles.find((m) => m.codigo === nueva.codigo);
+    if (existenteDisponible) {
+      Object.assign(existenteDisponible, nueva);
+    } else {
+      planDestino.optativas_disponibles.push(nueva);
     }
   });
 
@@ -1504,21 +1562,37 @@ function construirMiniPanelImportacion(plan) {
 
     // C.5 (v9): "Reemplazar" borra lo que había ANTES de aplicar el CSV
     // nuevo; "Agregar" (default) combina por código como ya se hacía.
+    // C.4 (v9): "Reemplazar" también limpia las optativas disponibles
+    // pendientes — es un reinicio completo del plan a partir del CSV nuevo.
     if (estado.modoActualizarMalla === "reemplazar") {
       plan.materias = [];
+      plan.optativas_disponibles = [];
     }
 
-    const { materias, errores } = parsearCSVPlanEstudios(csv, plan.parametros_universidad.tipos_horas);
+    const { materias, electivas, errores } = parsearCSVPlanEstudios(csv, plan.parametros_universidad.tipos_horas);
     materias.forEach((nueva) => {
       const existente = plan.materias.find((m) => m.codigo === nueva.codigo);
       if (existente) Object.assign(existente, nueva, { categoria_id: existente.categoria_id, estado: existente.estado });
       else plan.materias.push(nueva);
     });
+
+    // C.4 (v9): igual que en importarCSVEnPlan — una electiva nueva se
+    // agrega a "disponibles"; si ya estaba agregada formalmente o ya estaba
+    // en disponibles, se actualiza en su lugar en vez de duplicarse.
+    if (!Array.isArray(plan.optativas_disponibles)) plan.optativas_disponibles = [];
+    electivas.forEach((nueva) => {
+      const yaAgregada = plan.materias.some((m) => m.codigo === nueva.codigo);
+      if (yaAgregada) return;
+      const existenteDisponible = plan.optativas_disponibles.find((m) => m.codigo === nueva.codigo);
+      if (existenteDisponible) Object.assign(existenteDisponible, nueva);
+      else plan.optativas_disponibles.push(nueva);
+    });
+
     marcarCambioPendiente();
     resultado.innerHTML = errores.length
       ? `<p class="muted" style="color:var(--color-danger);">Algunas filas no se pudieron importar:</p>` +
         errores.map((e) => `<p class="muted" style="color:var(--color-danger);">• ${e}</p>`).join("")
-      : `<p class="muted" style="color:#34d399;">¡Listo! ${materias.length} materias procesadas.</p>`;
+      : `<p class="muted" style="color:#34d399;">¡Listo! ${materias.length + electivas.length} materias procesadas.</p>`;
     estado.panelImportacionAbierto = false;
     renderizarPlanEstudios();
   };
@@ -1914,9 +1988,15 @@ function construirBarraAcciones() {
 
 function obtenerClavesAgrupacionActuales() {
   const claves = new Set();
+  let hayOptativasAgregadas = false;
   obtenerMateriasVisibles().forEach((f) => {
+    // C.4 (v9): las optativas ya agregadas no tienen un Bloque numérico
+    // real (materia.bloque queda null) — no participan de esta agrupación,
+    // se cuentan aparte para agregar la clave del bloque especial abajo.
+    if (f.materia.es_optativa) { hayOptativasAgregadas = true; return; }
     claves.add(estado.ordenPlanEstudios === "categoria" ? f.materia.categoria_id || "sin_categoria" : String(f.materia.bloque));
   });
+  if (hayOptativasAgregadas || obtenerOptativasDisponibles().length > 0) claves.add("__optativas__");
   return claves;
 }
 
@@ -1955,7 +2035,7 @@ function exportarPlanACSV() {
   const filas = principal.materias.map((m) => {
     const columnasHoras = tipos.map((tipo) => (m.horas || {})[tipo] || 0);
     const campos = [
-      m.bloque,
+      m.es_optativa ? "ELECTIVA" : m.bloque,
       m.codigo,
       `"${(m.nombre || "").replace(/"/g, '""')}"`,
       m.creditos,
@@ -2353,7 +2433,7 @@ function renderizarListaMateriasCheckbox(plan, categoria) {
 
   materiasRelevantes = materiasRelevantes
     .slice()
-    .sort((a, b) => (estado.ordenCategoriaMaterias === "bloque" ? a.bloque - b.bloque : a.codigo.localeCompare(b.codigo)));
+    .sort((a, b) => (estado.ordenCategoriaMaterias === "bloque" ? (a.bloque ?? 999) - (b.bloque ?? 999) : a.codigo.localeCompare(b.codigo)));
 
   if (materiasRelevantes.length === 0) {
     cont.innerHTML = `<p class="muted">No hay materias que coincidan.</p>`;
@@ -2402,12 +2482,25 @@ function inicializarModalCategoriaMaterias() {
 
 /* ===================== Bloques colapsables + tarjetas de materia ===================== */
 
+/** C.4 (v9): todas las electivas/optativas detectadas pero NO agregadas
+ *  formalmente todavía (staging, fuera de plan.materias — por eso nunca
+ *  cuentan en ningún total, ver obtenerMateriasVisibles). */
+function obtenerOptativasDisponibles() {
+  const principal = obtenerPlanActivo();
+  const secundario = obtenerPlanSecundario();
+  const filas = [];
+  if (principal) (principal.optativas_disponibles || []).forEach((m) => filas.push({ materia: m, plan: principal, origen: "principal" }));
+  if (secundario) (secundario.optativas_disponibles || []).forEach((m) => filas.push({ materia: m, plan: secundario, origen: "secundario" }));
+  return filas;
+}
+
 function construirContenidoBloques() {
   const contenedor = document.createElement("div");
   contenedor.className = "stack";
 
   const todasLasFilas = obtenerMateriasVisibles();
-  if (todasLasFilas.length === 0) {
+  const todasOptativasDisponibles = obtenerOptativasDisponibles();
+  if (todasLasFilas.length === 0 && todasOptativasDisponibles.length === 0) {
     const sec = document.createElement("section");
     sec.className = "glass-card";
     sec.innerHTML = `<p class="muted">Este plan todavía no tiene materias. Impórtalas o añádelas manualmente desde el panel de arriba.</p>`;
@@ -2415,8 +2508,25 @@ function construirContenidoBloques() {
     return contenedor;
   }
 
-  const filas = filasFiltradas();
-  if (filas.length === 0) {
+  // C.4 (v9): las optativas YA agregadas nunca entran en la agrupación
+  // normal por bloque/categoría/estado — siempre viven en su propio bloque
+  // "Optativas" al final (ver más abajo), sin importar el orden activo.
+  const filas = filasFiltradas().filter((f) => !f.materia.es_optativa);
+  const filasOptativasAgregadas = filasFiltradas().filter((f) => f.materia.es_optativa);
+
+  // El filtro de búsqueda de texto también aplica a las disponibles; el de
+  // Categoría no (todavía no tienen ninguna asignada, así que un filtro de
+  // categoría activo las oculta por completo — es el comportamiento
+  // esperado, no un descuido).
+  let disponibles = estado.filtroCategoriaId ? [] : todasOptativasDisponibles;
+  const q = (estado.busquedaPlanEstudios || "").trim().toLowerCase();
+  if (q) {
+    disponibles = disponibles.filter(
+      (f) => f.materia.nombre.toLowerCase().includes(q) || f.materia.codigo.toLowerCase().includes(q)
+    );
+  }
+
+  if (filas.length === 0 && filasOptativasAgregadas.length === 0 && disponibles.length === 0) {
     const sec = document.createElement("section");
     sec.className = "glass-card";
     sec.innerHTML = `<p class="muted">Ninguna materia coincide con la búsqueda o el filtro actual.</p>`;
@@ -2425,72 +2535,204 @@ function construirContenidoBloques() {
   }
 
   const cfg = estado.datos.configuracion;
-  const grupos = new Map();
-  const nombreGrupo = new Map();
-
-  filas.forEach((fila) => {
-    let clave, nombre;
-    if (estado.ordenPlanEstudios === "categoria") {
-      clave = fila.materia.categoria_id || "sin_categoria";
-      const cat = fila.plan.categorias.find((c) => c.id === fila.materia.categoria_id);
-      nombre = cat ? cat.nombre : "Sin categoría";
-    } else if (estado.ordenPlanEstudios === "estado") {
-      clave = fila.materia.estado;
-      const infoEstado = ESTADOS_MATERIA.find((e) => e.valor === fila.materia.estado);
-      nombre = infoEstado ? infoEstado.texto : fila.materia.estado;
-    } else {
-      clave = String(fila.materia.bloque);
-      nombre = `${fila.plan.parametros_universidad.nombre_bloque} ${fila.materia.bloque}`;
-    }
-    if (!grupos.has(clave)) grupos.set(clave, []);
-    grupos.get(clave).push(fila);
-    nombreGrupo.set(clave, nombre);
-  });
-
-  const clavesOrdenadas = Array.from(grupos.keys()).sort((a, b) => {
-    if (estado.ordenPlanEstudios === "estado") {
-      // Orden lógico (Pendiente → Cursando → Aprobada → Reprobada), no alfabético.
-      const ia = ESTADOS_MATERIA.findIndex((e) => e.valor === a);
-      const ib = ESTADOS_MATERIA.findIndex((e) => e.valor === b);
-      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-    }
-    const na = Number(a), nb = Number(b);
-    if (!isNaN(na) && !isNaN(nb)) return na - nb;
-    return String(nombreGrupo.get(a)).localeCompare(String(nombreGrupo.get(b)));
-  });
-
   const esEscritorio = window.innerWidth >= 900;
 
-  clavesOrdenadas.forEach((clave) => {
-    const bloqueCard = document.createElement("section");
-    bloqueCard.className = "glass-card bloque-card";
+  if (filas.length > 0) {
+    const grupos = new Map();
+    const nombreGrupo = new Map();
 
-    const colapsado = estado.bloquesColapsados.has(clave);
-
-    const encabezado = document.createElement("div");
-    encabezado.className = "bloque-encabezado";
-    encabezado.innerHTML = `<h3>${nombreGrupo.get(clave)}</h3><span style="opacity:0.7;">${colapsado ? "▼" : "▲"}</span>`;
-    encabezado.addEventListener("click", () => {
-      if (estado.bloquesColapsados.has(clave)) estado.bloquesColapsados.delete(clave);
-      else estado.bloquesColapsados.add(clave);
-      renderizarPlanEstudios();
+    filas.forEach((fila) => {
+      let clave, nombre;
+      if (estado.ordenPlanEstudios === "categoria") {
+        clave = fila.materia.categoria_id || "sin_categoria";
+        const cat = fila.plan.categorias.find((c) => c.id === fila.materia.categoria_id);
+        nombre = cat ? cat.nombre : "Sin categoría";
+      } else if (estado.ordenPlanEstudios === "estado") {
+        clave = fila.materia.estado;
+        const infoEstado = ESTADOS_MATERIA.find((e) => e.valor === fila.materia.estado);
+        nombre = infoEstado ? infoEstado.texto : fila.materia.estado;
+      } else {
+        clave = String(fila.materia.bloque);
+        nombre = `${fila.plan.parametros_universidad.nombre_bloque} ${fila.materia.bloque}`;
+      }
+      if (!grupos.has(clave)) grupos.set(clave, []);
+      grupos.get(clave).push(fila);
+      nombreGrupo.set(clave, nombre);
     });
-    bloqueCard.appendChild(encabezado);
 
-    if (!colapsado) {
-      const cuerpoBloque = document.createElement("div");
-      cuerpoBloque.className = "stack";
-      cuerpoBloque.style.marginTop = "12px";
-      grupos.get(clave).forEach((fila) => {
-        cuerpoBloque.appendChild(construirTarjetaMateria(fila, esEscritorio, cfg.modo_hardcore));
+    const clavesOrdenadas = Array.from(grupos.keys()).sort((a, b) => {
+      if (estado.ordenPlanEstudios === "estado") {
+        // Orden lógico (Pendiente → Cursando → Aprobada → Reprobada), no alfabético.
+        const ia = ESTADOS_MATERIA.findIndex((e) => e.valor === a);
+        const ib = ESTADOS_MATERIA.findIndex((e) => e.valor === b);
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+      }
+      const na = Number(a), nb = Number(b);
+      if (!isNaN(na) && !isNaN(nb)) return na - nb;
+      return String(nombreGrupo.get(a)).localeCompare(String(nombreGrupo.get(b)));
+    });
+
+    clavesOrdenadas.forEach((clave) => {
+      const bloqueCard = document.createElement("section");
+      bloqueCard.className = "glass-card bloque-card";
+
+      const colapsado = estado.bloquesColapsados.has(clave);
+
+      const encabezado = document.createElement("div");
+      encabezado.className = "bloque-encabezado";
+      encabezado.innerHTML = `<h3>${nombreGrupo.get(clave)}</h3><span style="opacity:0.7;">${colapsado ? "▼" : "▲"}</span>`;
+      encabezado.addEventListener("click", () => {
+        if (estado.bloquesColapsados.has(clave)) estado.bloquesColapsados.delete(clave);
+        else estado.bloquesColapsados.add(clave);
+        renderizarPlanEstudios();
       });
-      bloqueCard.appendChild(cuerpoBloque);
-    }
+      bloqueCard.appendChild(encabezado);
 
-    contenedor.appendChild(bloqueCard);
-  });
+      if (!colapsado) {
+        const cuerpoBloque = document.createElement("div");
+        cuerpoBloque.className = "stack";
+        cuerpoBloque.style.marginTop = "12px";
+        grupos.get(clave).forEach((fila) => {
+          cuerpoBloque.appendChild(construirTarjetaMateria(fila, esEscritorio, cfg.modo_hardcore));
+        });
+        bloqueCard.appendChild(cuerpoBloque);
+      }
+
+      contenedor.appendChild(bloqueCard);
+    });
+  }
+
+  // C.4 (v9): bloque "Optativas", siempre al final, sin importar el orden
+  // activo — combina las ya agregadas formalmente (tarjeta completa) con
+  // las detectadas y aún no agregadas (tarjeta simplificada + botón).
+  if (filasOptativasAgregadas.length > 0 || disponibles.length > 0) {
+    contenedor.appendChild(construirBloqueOptativas(filasOptativasAgregadas, disponibles, esEscritorio, cfg.modo_hardcore));
+  }
 
   return contenedor;
+}
+
+/**
+ * C.4 (v9): bloque especial "Optativas" — nunca participa del orden por
+ * bloque/categoría/estado, siempre se dibuja al final. Muestra primero la
+ * etiqueta "Electivas u optativas disponibles: N" + las tarjetas
+ * simplificadas con botón "Agregar al plan de estudios", y debajo las que
+ * ya fueron agregadas formalmente (tarjeta completa, igual que cualquier
+ * otra materia — ya cuentan en los totales).
+ */
+function construirBloqueOptativas(filasAgregadas, filasDisponibles, esEscritorio, mostrarOrigen) {
+  const bloqueCard = document.createElement("section");
+  bloqueCard.className = "glass-card bloque-card";
+
+  const clave = "__optativas__";
+  const colapsado = estado.bloquesColapsados.has(clave);
+
+  const encabezado = document.createElement("div");
+  encabezado.className = "bloque-encabezado";
+  encabezado.innerHTML = `<h3>Optativas</h3><span style="opacity:0.7;">${colapsado ? "▼" : "▲"}</span>`;
+  encabezado.addEventListener("click", () => {
+    if (estado.bloquesColapsados.has(clave)) estado.bloquesColapsados.delete(clave);
+    else estado.bloquesColapsados.add(clave);
+    renderizarPlanEstudios();
+  });
+  bloqueCard.appendChild(encabezado);
+
+  if (!colapsado) {
+    const cuerpoBloque = document.createElement("div");
+    cuerpoBloque.className = "stack";
+    cuerpoBloque.style.marginTop = "12px";
+
+    if (filasDisponibles.length > 0) {
+      const etiquetaDisponibles = document.createElement("p");
+      etiquetaDisponibles.className = "muted";
+      etiquetaDisponibles.textContent = `Electivas u optativas disponibles: ${filasDisponibles.length}`;
+      cuerpoBloque.appendChild(etiquetaDisponibles);
+
+      filasDisponibles.forEach((fila) => {
+        cuerpoBloque.appendChild(construirTarjetaOptativaDisponible(fila.materia, fila.plan));
+      });
+    }
+
+    filasAgregadas.forEach((fila) => {
+      cuerpoBloque.appendChild(construirTarjetaMateria(fila, esEscritorio, mostrarOrigen));
+    });
+
+    bloqueCard.appendChild(cuerpoBloque);
+  }
+
+  return bloqueCard;
+}
+
+/**
+ * C.4 (v9): tarjeta simplificada de solo-lectura para una electiva
+ * detectada pero todavía NO agregada al plan — nombre, código, créditos,
+ * horas y requisitos/correquisitos (informativos), más el botón "+ Agregar
+ * al plan de estudios". Mientras esté aquí no cuenta en ningún total (ver
+ * obtenerOptativasDisponibles/obtenerMateriasVisibles).
+ */
+function construirTarjetaOptativaDisponible(materiaTemplate, plan) {
+  const card = document.createElement("div");
+  card.className = "glass-panel materia-card";
+
+  const linea1 = document.createElement("div");
+  linea1.className = "materia-linea1";
+  linea1.style.cursor = "default";
+
+  const prefijo = document.createElement("span");
+  prefijo.className = "materia-prefijo";
+  const spanCodigo = document.createElement("span");
+  spanCodigo.className = "materia-codigo";
+  spanCodigo.style.cursor = "default";
+  spanCodigo.textContent = materiaTemplate.codigo;
+  prefijo.appendChild(spanCodigo);
+  linea1.appendChild(prefijo);
+
+  const spanNombre = document.createElement("span");
+  spanNombre.className = "materia-nombre completa";
+  spanNombre.textContent = aplicarFormatoTexto(materiaTemplate.nombre);
+  linea1.appendChild(spanNombre);
+  card.appendChild(linea1);
+
+  const linea2 = document.createElement("div");
+  linea2.className = "materia-linea2";
+  const spanHoras = document.createElement("span");
+  spanHoras.className = "materia-linea2-horas";
+  spanHoras.textContent = formatearHoras(materiaTemplate);
+  linea2.appendChild(spanHoras);
+  const badgeCreditos = document.createElement("span");
+  badgeCreditos.className = "badge badge-accent";
+  badgeCreditos.textContent = `Créditos: ${materiaTemplate.creditos}`;
+  linea2.appendChild(badgeCreditos);
+  card.appendChild(linea2);
+
+  const cuerpo = document.createElement("div");
+  cuerpo.className = "materia-cuerpo stack";
+  cuerpo.appendChild(construirBloqueCompletoRequisitos(materiaTemplate, plan));
+
+  const btnAgregar = document.createElement("button");
+  btnAgregar.type = "button";
+  btnAgregar.className = "btn btn-secondary btn-block";
+  btnAgregar.textContent = "+ Agregar al plan de estudios";
+  btnAgregar.addEventListener("click", () => agregarOptativaAlPlan(materiaTemplate, plan));
+  cuerpo.appendChild(btnAgregar);
+
+  card.appendChild(cuerpo);
+  return card;
+}
+
+/**
+ * C.4 (v9): mueve una electiva de la lista "disponible" (staging, fuera de
+ * plan.materias) a la malla formal — desde este momento SÍ cuenta en los
+ * totales globales y se comporta como cualquier otra materia (con estado
+ * editable, etc.), pero sigue viviendo dentro del bloque especial
+ * "Optativas" (nunca se le asigna un Bloque numérico).
+ */
+function agregarOptativaAlPlan(materiaTemplate, plan) {
+  plan.optativas_disponibles = (plan.optativas_disponibles || []).filter((m) => m.codigo !== materiaTemplate.codigo);
+  materiaTemplate.es_optativa = true;
+  plan.materias.push(materiaTemplate);
+  marcarCambioPendiente();
+  renderizarPlanEstudios();
 }
 
 const ESTADOS_MATERIA = [
@@ -2518,7 +2760,6 @@ function estaExpandida(codigo, esEscritorio) {
  */
 function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
   const { materia, plan } = fila;
-  const infoEstado = ESTADOS_MATERIA.find((e) => e.valor === materia.estado) || ESTADOS_MATERIA[0];
   const categoria = plan.categorias.find((c) => c.id === materia.categoria_id);
   const disponible = materiaDisponible(materia, plan.materias);
   const expandida = estaExpandida(materia.codigo, esEscritorio);
@@ -2553,7 +2794,13 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
   const spanCodigo = document.createElement("span");
   spanCodigo.className = "materia-codigo";
   spanCodigo.textContent = materia.codigo;
-  spanCodigo.title = "Mantén presionado (o clic derecho) para cambiar la categoría de esta materia";
+  spanCodigo.title = "Clic: ver detalle · Mantén presionado (o clic derecho): cambiar categoría";
+  // v8 punto 2 / B (v9): clic en el Código abre la ventana de detalle
+  // unificada de esta materia — igual que al hacer clic en un requisito.
+  spanCodigo.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    abrirModalRequisito(materia.codigo);
+  });
   agregarLongPress(spanCodigo, () => abrirMenuRapidoCategoria(materia, plan, spanCodigo));
   prefijo.appendChild(spanCodigo);
 
@@ -2576,12 +2823,9 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
 
   filaPrincipal.appendChild(linea1);
 
-  // ---- Línea 2: estado (izquierda) · créditos (derecha) ----
-  const linea2 = document.createElement("div");
-  linea2.className = "materia-linea2";
-  linea2.innerHTML =
-    `<span class="badge ${infoEstado.badge}">${infoEstado.texto}</span>` +
-    `<span class="badge badge-accent">Créditos: ${materia.creditos}</span>`;
+  // ---- Línea 2 (v8 punto 2): Estado (izq) · Horas (centro) · Créditos (der).
+  // Colapsada usa iniciales compactas de horas; expandida, palabra completa.
+  const linea2 = construirLinea2Materia(materia, !expandida);
   filaPrincipal.appendChild(linea2);
 
   if (mostrarOrigen) {
@@ -2598,20 +2842,12 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
     const cuerpo = document.createElement("div");
     cuerpo.className = "materia-cuerpo stack";
 
-    // v7 #4/#5: Requisitos + Correquisitos ahora comparten un solo bloque de
-    // 3 columnas; la Categoría ya no se muestra como texto plano aquí (se
-    // movió a un badge real en la columna 3, solo si existe — ver
-    // construirFilaExtras). La capacidad de asignar/cambiar categoría por
-    // mantener-presionado sigue disponible siempre desde el código de la
-    // materia en el encabezado (spanCodigo, línea 1 de la tarjeta), incluso
-    // cuando todavía no tiene ninguna asignada.
-    cuerpo.appendChild(construirBloqueCompletoRequisitos(materia, plan));
-
-    // v5 #4: las horas ya no van en el encabezado — viven aquí, en el detalle.
-    const horasLinea = document.createElement("p");
-    horasLinea.className = "materia-horas-detalle";
-    horasLinea.textContent = formatearHoras(materia);
-    cuerpo.appendChild(horasLinea);
+    // v8 punto 2 / B (v9): mismo detalle unificado que usa el modal —
+    // Bloque·Código, Categoría (si tiene), Requisitos, Correquisitos y la
+    // fila final de botones ("Es requisito"/"Historial"; sin "Cerrar" aquí,
+    // eso es exclusivo del modal). Las horas ya no van sueltas en el cuerpo:
+    // viven en la Línea 2 del encabezado, arriba.
+    cuerpo.appendChild(construirCuerpoDetalleMateria(materia, plan, { esModal: false }));
 
     const grupoEstado = document.createElement("div");
     grupoEstado.className = "pill-group";
@@ -2681,26 +2917,127 @@ function abrirMenuRapidoCategoria(materia, plan, anclaEl) {
 }
 
 /** Requisitos/correquisitos agrupados: "o" dentro de un grupo, grupos en líneas separadas ("y" implícito). */
-/** Versión compacta de formatearHoras (sin la etiqueta "Horas:"), pensada
- *  para una columna angosta y centrada. Un solo tipo -> solo el número;
- *  varios tipos -> valores unidos con "/" en el mismo orden del plan. */
-function formatearHorasCompacto(materia) {
-  const valores = Object.values(materia.horas || {});
-  if (valores.length === 0) return "—";
-  return valores.join("/");
+
+/**
+ * B (v9)/v8 punto 2: Línea 2 del encabezado, compartida entre la tarjeta
+ * (colapsada y expandida) y el modal — Estado a la izquierda, Horas al
+ * centro, Créditos a la derecha. `compacto=true` usa las iniciales de cada
+ * tipo de hora (tarjeta colapsada); `compacto=false` usa la palabra
+ * completa (tarjeta expandida y modal, que siempre se consideran "el
+ * detalle completo").
+ */
+function construirLinea2Materia(materia, compacto) {
+  const infoEstado = ESTADOS_MATERIA.find((e) => e.valor === materia.estado) || ESTADOS_MATERIA[0];
+
+  const linea2 = document.createElement("div");
+  linea2.className = "materia-linea2";
+
+  const badgeEstado = document.createElement("span");
+  badgeEstado.className = `badge ${infoEstado.badge}`;
+  badgeEstado.textContent = infoEstado.texto;
+  linea2.appendChild(badgeEstado);
+
+  const spanHoras = document.createElement("span");
+  spanHoras.className = "materia-linea2-horas";
+  spanHoras.textContent = compacto ? formatearHorasCompactoIniciales(materia) : formatearHoras(materia);
+  linea2.appendChild(spanHoras);
+
+  const badgeCreditos = document.createElement("span");
+  badgeCreditos.className = "badge badge-accent";
+  badgeCreditos.textContent = `Créditos: ${materia.creditos}`;
+  linea2.appendChild(badgeCreditos);
+
+  return linea2;
+}
+
+/** B (v9)/v8 punto 2: línea pequeña "Bloque X · Código", texto plano (no
+ *  badge), al 75% del tamaño del nombre — va justo debajo del encabezado,
+ *  antes de "Requisitos:". C.4 (v9): una materia electiva/optativa no
+ *  pertenece a un Bloque numérico fijo, así que aquí se muestra "Optativa"
+ *  en su lugar. */
+function construirMetaLineaMateria(materia, plan) {
+  const p = document.createElement("p");
+  p.className = "materia-meta-linea";
+  const etiquetaBloque = materia.es_optativa ? "Optativa" : `${plan.parametros_universidad.nombre_bloque} ${materia.bloque}`;
+  p.textContent = `${etiquetaBloque} · ${materia.codigo}`;
+  return p;
+}
+
+/** B (v9)/v8 punto 2: badge de Categoría pegado a la derecha — se omite POR
+ *  COMPLETO (devuelve null) si la materia no tiene ninguna asignada. */
+function construirLineaCategoriaMateria(materia, plan) {
+  const categoria = plan.categorias.find((c) => c.id === materia.categoria_id);
+  if (!categoria) return null;
+
+  const fila = document.createElement("div");
+  fila.className = "materia-categoria-linea";
+
+  const badge = document.createElement("span");
+  badge.className = "badge";
+  badge.style.cssText = estiloBadgeCategoria(categoria.color) + " cursor:pointer;";
+  badge.textContent = categoria.nombre;
+  badge.title = "Mantén presionado (o clic derecho) para cambiar la categoría";
+  agregarLongPress(badge, () => abrirMenuRapidoCategoria(materia, plan, badge));
+  fila.appendChild(badge);
+
+  return fila;
 }
 
 /**
- * Fila de 3 columnas para un código de requisito/correquisito (v7 rediseño):
- * 1) Código - Nombre: el texto mismo ES el link, abre la tarjeta/modal de esa
- *    materia (ya NO hay un link "Ir a materia" aparte).
- * 2) Horas, centradas.
- * 3) `extraEl` opcional: elemento que llega desde afuera (badge de Categoría,
- *    link "Es requisito" o link "Historial" — son propiedades de la materia
- *    ACTUAL, no de este requisito puntual; se acomodan aquí por conveniencia
- *    de espacio, una por fila disponible — ver construirBloqueCompletoRequisitos).
+ * B (v9)/v8 punto 2: fila final del bloque de detalle, con "Es requisito" y
+ * "Historial" siempre juntos — y "Cerrar" solo cuando es el modal (en la
+ * tarjeta expandida, cerrar es simplemente volver a hacer clic en la fila
+ * para colapsarla, así que ese botón no aplica ahí).
  */
-function construirFilaRequisito(codigo, extraEl) {
+function construirBotonesFinalesDetalle(materia, plan, opciones) {
+  const esModal = !!(opciones && opciones.esModal);
+
+  const fila = document.createElement("div");
+  fila.className = "row detalle-botones-finales";
+
+  const btnEsRequisito = document.createElement("button");
+  btnEsRequisito.type = "button";
+  btnEsRequisito.className = "link-plano";
+  btnEsRequisito.textContent = "Es requisito";
+  btnEsRequisito.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    abrirModalDesbloquea(materia, plan);
+  });
+  fila.appendChild(btnEsRequisito);
+
+  const btnHistorial = document.createElement("button");
+  btnHistorial.type = "button";
+  btnHistorial.className = "link-plano";
+  btnHistorial.textContent = "Historial";
+  btnHistorial.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    abrirModalHistorial(materia);
+  });
+  fila.appendChild(btnHistorial);
+
+  if (esModal) {
+    const btnCerrar = document.createElement("button");
+    btnCerrar.type = "button";
+    btnCerrar.className = "btn btn-primary";
+    btnCerrar.textContent = "Cerrar";
+    btnCerrar.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      document.getElementById("modal-requisito").classList.add("oculto");
+    });
+    fila.appendChild(btnCerrar);
+  }
+
+  return fila;
+}
+
+/**
+ * Fila de 2 columnas para un código de requisito/correquisito (v8 punto 2 —
+ * reemplaza el diseño de 3 columnas de v7):
+ * 1) Código - Nombre: el texto mismo ES el link, abre el detalle de esa
+ *    materia (ya NO hay un link "Ir a materia" aparte).
+ * 2) Créditos, alineados estrictamente a la derecha de la fila.
+ */
+function construirFilaRequisito(codigo) {
   const fila = document.createElement("div");
   fila.className = "requisito-fila";
 
@@ -2721,81 +3058,15 @@ function construirFilaRequisito(codigo, extraEl) {
   });
   fila.appendChild(colNombre);
 
-  const colHoras = document.createElement("span");
-  colHoras.className = "requisito-col-horas";
-  colHoras.textContent = encontrada ? formatearHorasCompacto(encontrada.materia) : "—";
-  fila.appendChild(colHoras);
-
-  const colExtra = document.createElement("span");
-  colExtra.className = "requisito-col-extra";
-  if (extraEl) colExtra.appendChild(extraEl);
-  fila.appendChild(colExtra);
+  const colCreditos = document.createElement("span");
+  colCreditos.className = "requisito-col-creditos";
+  colCreditos.textContent = encontrada ? String(encontrada.materia.creditos) : "—";
+  fila.appendChild(colCreditos);
 
   return fila;
 }
 
-/** Fila "vacía" en columnas 1-2 (sin código de requisito que mostrar), usada
- *  solo para poder alojar un elemento de la columna 3 (extra) cuando ya no
- *  quedan filas de datos reales — así Categoría/Es requisito/Historial
- *  nunca quedan fuera del layout aunque la materia no tenga requisitos ni
- *  correquisitos. */
-function construirFilaSoloExtra(extraEl) {
-  const fila = document.createElement("div");
-  fila.className = "requisito-fila";
-  fila.appendChild(document.createElement("span")).className = "requisito-col-nombre";
-  fila.appendChild(document.createElement("span")).className = "requisito-col-horas";
-  const colExtra = document.createElement("span");
-  colExtra.className = "requisito-col-extra";
-  colExtra.appendChild(extraEl);
-  fila.appendChild(colExtra);
-  return fila;
-}
-
-/**
- * Arma, en orden, los elementos que van a ir en la columna 3 (v7 #4/#5):
- * badge de Categoría (SOLO si la materia tiene una asignada — nunca un
- * texto "Sin categoría"), link "Es requisito" y link "Historial".
- */
-function construirFilaExtras(materia, plan) {
-  const extras = [];
-  const categoria = plan.categorias.find((c) => c.id === materia.categoria_id);
-
-  if (categoria) {
-    const badge = document.createElement("span");
-    badge.className = "badge";
-    badge.style.cssText = estiloBadgeCategoria(categoria.color) + " cursor:pointer;";
-    badge.textContent = categoria.nombre;
-    badge.title = "Mantén presionado (o clic derecho) para cambiar la categoría";
-    agregarLongPress(badge, () => abrirMenuRapidoCategoria(materia, plan, badge));
-    extras.push(badge);
-  }
-
-  const linkEsRequisito = document.createElement("a");
-  linkEsRequisito.href = "#";
-  linkEsRequisito.className = "requisito-fila-link link-plano";
-  linkEsRequisito.textContent = "Es requisito";
-  linkEsRequisito.addEventListener("click", (ev) => {
-    ev.preventDefault();
-    ev.stopPropagation();
-    abrirModalDesbloquea(materia, plan);
-  });
-  extras.push(linkEsRequisito);
-
-  const linkHistorial = document.createElement("a");
-  linkHistorial.href = "#";
-  linkHistorial.className = "requisito-fila-link link-plano";
-  linkHistorial.textContent = "Historial";
-  linkHistorial.addEventListener("click", (ev) => {
-    ev.preventDefault();
-    ev.stopPropagation();
-    abrirModalHistorial(materia);
-  });
-  extras.push(linkHistorial);
-
-  return extras;
-}
-
-function construirBloqueRequisitos(etiqueta, grupos, extrasQueue) {
+function construirBloqueRequisitos(etiqueta, grupos) {
   const cont = document.createElement("div");
   const sinItems = !grupos || grupos.length === 0;
 
@@ -2822,8 +3093,7 @@ function construirBloqueRequisitos(etiqueta, grupos, extrasQueue) {
 
   grupos.forEach((grupo) => {
     (grupo || []).forEach((codigo, i) => {
-      const extra = extrasQueue && extrasQueue.length ? extrasQueue.shift() : null;
-      cont.appendChild(construirFilaRequisito(codigo, extra));
+      cont.appendChild(construirFilaRequisito(codigo));
       // Alternativas dentro del mismo grupo ("O"): un separador entre filas.
       // Entre grupos distintos no hay separador (el "Y" queda implícito).
       if (i < grupo.length - 1) {
@@ -2838,26 +3108,32 @@ function construirBloqueRequisitos(etiqueta, grupos, extrasQueue) {
   return cont;
 }
 
-/**
- * v7 #4: arma el bloque completo de Requisitos + Correquisitos de una
- * materia, compartiendo una sola cola de "extras" (badge de Categoría, link
- * "Es requisito", link "Historial") entre ambas secciones, para que se
- * repartan en las filas de datos disponibles en orden. Si sobran extras sin
- * fila real donde ir (ej. una materia sin requisitos ni correquisitos), se
- * agregan filas vacías solo para alojarlos — así nunca quedan fuera del
- * layout.
- */
 function construirBloqueCompletoRequisitos(materia, plan) {
   const cont = document.createElement("div");
   cont.className = "stack";
-  const extrasQueue = construirFilaExtras(materia, plan);
+  cont.appendChild(construirBloqueRequisitos("Requisitos", materia.requisitos));
+  cont.appendChild(construirBloqueRequisitos("Correquisitos", materia.correquisitos));
+  return cont;
+}
 
-  cont.appendChild(construirBloqueRequisitos("Requisitos", materia.requisitos, extrasQueue));
-  cont.appendChild(construirBloqueRequisitos("Correquisitos", materia.correquisitos, extrasQueue));
+/**
+ * B (v9)/v8 punto 2: arma TODO lo que va debajo del encabezado de 2 líneas,
+ * en el mismo orden y con el mismo diseño tanto en la tarjeta expandida
+ * como en el modal — Bloque·Código → Categoría (si tiene) → Requisitos →
+ * Correquisitos → fila final de botones. `opciones.esModal` solo cambia si
+ * se agrega "Cerrar" al final (ver construirBotonesFinalesDetalle).
+ */
+function construirCuerpoDetalleMateria(materia, plan, opciones) {
+  const cont = document.createElement("div");
+  cont.className = "stack";
 
-  while (extrasQueue.length) {
-    cont.appendChild(construirFilaSoloExtra(extrasQueue.shift()));
-  }
+  cont.appendChild(construirMetaLineaMateria(materia, plan));
+
+  const lineaCategoria = construirLineaCategoriaMateria(materia, plan);
+  if (lineaCategoria) cont.appendChild(lineaCategoria);
+
+  cont.appendChild(construirBloqueCompletoRequisitos(materia, plan));
+  cont.appendChild(construirBotonesFinalesDetalle(materia, plan, opciones));
 
   return cont;
 }
@@ -2868,17 +3144,30 @@ function abrirModalRequisito(codigo) {
   const modalCard = document.querySelector("#modal-requisito .modal-card");
   const franjaVieja = modalCard.querySelector(".franja-categoria");
   if (franjaVieja) franjaVieja.remove();
-  const extraViejo = modalCard.querySelector("#requisito-extra");
-  if (extraViejo) extraViejo.remove();
+
+  const contenedorFinal = document.getElementById("requisito-contenedor-final");
+  contenedorFinal.innerHTML = "";
 
   const encontrada = buscarMateriaPorCodigoEnPlanes(codigo);
 
   if (!encontrada) {
     document.getElementById("requisito-titulo").textContent = "Materia no encontrada";
-    document.getElementById("requisito-bloque").textContent = "—";
-    document.getElementById("requisito-codigo").textContent = codigo;
-    document.getElementById("requisito-nombre").textContent = "No está importada en ningún plan visible todavía.";
-    document.getElementById("requisito-creditos").textContent = "—";
+
+    const p = document.createElement("p");
+    p.className = "materia-req-linea";
+    p.textContent = `${codigo} — no está importada en ningún plan visible todavía.`;
+    contenedorFinal.appendChild(p);
+
+    const filaCerrar = document.createElement("div");
+    filaCerrar.className = "row";
+    filaCerrar.style.justifyContent = "flex-end";
+    const btnCerrar = document.createElement("button");
+    btnCerrar.type = "button";
+    btnCerrar.className = "btn btn-primary";
+    btnCerrar.textContent = "Cerrar";
+    btnCerrar.addEventListener("click", () => document.getElementById("modal-requisito").classList.add("oculto"));
+    filaCerrar.appendChild(btnCerrar);
+    contenedorFinal.appendChild(filaCerrar);
   } else {
     const { materia, plan } = encontrada;
     const categoria = plan.categorias.find((c) => c.id === materia.categoria_id);
@@ -2889,42 +3178,26 @@ function abrirModalRequisito(codigo) {
     franja.style.background = categoria ? categoria.color : "var(--gradient-accent)";
     modalCard.insertBefore(franja, modalCard.firstChild);
 
+    // ---- Encabezado de 2 líneas (B/v8 punto 2), igual que en la tarjeta ----
     const luzTitulo = document.createElement("span");
     luzTitulo.className = "luz-punto " + (disponible ? "disponible" : "bloqueada");
     luzTitulo.style.marginRight = "8px";
     const tituloEl = document.getElementById("requisito-titulo");
     tituloEl.textContent = "";
     tituloEl.appendChild(luzTitulo);
-    tituloEl.appendChild(document.createTextNode(materia.nombre));
-    document.getElementById("requisito-bloque").textContent = `${plan.parametros_universidad.nombre_bloque} ${materia.bloque}`;
-    document.getElementById("requisito-codigo").textContent = materia.codigo;
-    document.getElementById("requisito-nombre").textContent = materia.nombre;
-    document.getElementById("requisito-creditos").textContent = materia.creditos;
+    tituloEl.appendChild(document.createTextNode(aplicarFormatoTexto(materia.nombre)));
 
-    const extra = document.createElement("div");
-    extra.id = "requisito-extra";
-    extra.className = "stack";
-    extra.appendChild(construirBloqueCompletoRequisitos(materia, plan));
+    // Línea 2: el modal siempre muestra el detalle completo (nunca compacto).
+    contenedorFinal.appendChild(construirLinea2Materia(materia, false));
 
-    const horas = document.createElement("p");
-    horas.className = "materia-req-linea";
-    horas.textContent = formatearHoras(materia);
-    extra.appendChild(horas);
-
-    document.getElementById("btn-cerrar-requisito").parentElement.insertAdjacentElement("beforebegin", extra);
-
-    // v5 #7: el botón "Desbloquea" de aquí abajo se reemplaza por el link de
-    // solo-texto "Es requisito" en la fila superior del modal (junto a
-    // cerrar). Guardamos el contexto para que ese link sepa qué materia abrir.
-    materiaModalRequisitoActual = { materia, plan };
+    // Bloque·Código, Categoría, Requisitos, Correquisitos y la fila final de
+    // botones ("Es requisito"/"Historial"/"Cerrar") — mismo bloque que usa
+    // la tarjeta expandida.
+    contenedorFinal.appendChild(construirCuerpoDetalleMateria(materia, plan, { esModal: true }));
   }
-  if (!encontrada) materiaModalRequisitoActual = null;
+
   document.getElementById("modal-requisito").classList.remove("oculto");
 }
-
-/** Contexto de la materia que está mostrando #modal-requisito ahora mismo,
- *  usado por el link "Es requisito" (v5 #7) para saber qué abrir. */
-let materiaModalRequisitoActual = null;
 
 /* ===================== Modal "Desbloquea" (búsqueda inversa) ===================== */
 
@@ -2981,6 +3254,489 @@ function inicializarModalDesbloquea() {
   });
 }
 
+/* ===================== B.3 (v8/v9) — Vista de Mapa interactivo ===================== */
+
+/** Colores fijos de los 5 estados de Simbología (mismos que usan los badges). */
+const COLOR_ESTADO_MAPA = {
+  pendiente: "#94a3b8",
+  cursando: "#f59e0b",
+  aprobado: "#10b981",
+  reprobado: "#ef4444",
+  retirado: "#a855f7", // reservado: el esquema actual no tiene este 5º estado todavía
+};
+
+/** Tarjeta "Vista" — switch Lista/Mapa; en modo Mapa se expande con el mapa completo. */
+function construirTarjetaVista(plan) {
+  const card = document.createElement("section");
+  card.className = "glass-card stack vista-card";
+
+  const encabezado = document.createElement("div");
+  encabezado.className = "vista-encabezado";
+  const titulo = document.createElement("h3");
+  titulo.style.margin = "0";
+  titulo.textContent = "Vista";
+  encabezado.appendChild(titulo);
+
+  const switchVista = document.createElement("div");
+  switchVista.className = "pill-group";
+  [
+    { valor: "lista", texto: "Lista" },
+    { valor: "mapa", texto: "Mapa" },
+  ].forEach((op) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pill-item" + (estado.vistaPlanEstudios === op.valor ? " active" : "");
+    btn.textContent = op.texto;
+    btn.addEventListener("click", () => {
+      if (estado.vistaPlanEstudios === op.valor) return;
+      estado.vistaPlanEstudios = op.valor;
+      estado.materiaSeleccionadaMapa = null;
+      renderizarPlanEstudios();
+    });
+    switchVista.appendChild(btn);
+  });
+  encabezado.appendChild(switchVista);
+  card.appendChild(encabezado);
+
+  if (estado.vistaPlanEstudios === "mapa") {
+    const controles = document.createElement("div");
+    controles.className = "vista-controles";
+
+    const switchColor = document.createElement("div");
+    switchColor.className = "pill-group";
+    [
+      { valor: "simbologia", texto: "Colorear por Simbología" },
+      { valor: "categoria", texto: "Colorear por Categoría" },
+    ].forEach((op) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pill-item" + (estado.colorMapaPor === op.valor ? " active" : "");
+      btn.textContent = op.texto;
+      btn.addEventListener("click", () => {
+        if (estado.colorMapaPor === op.valor) return;
+        estado.colorMapaPor = op.valor;
+        switchColor.querySelectorAll(".pill-item").forEach((p) => p.classList.remove("active"));
+        btn.classList.add("active");
+        recolorearNodosMapa(plan);
+      });
+      switchColor.appendChild(btn);
+    });
+    controles.appendChild(switchColor);
+
+    const zoomGrupo = document.createElement("div");
+    zoomGrupo.className = "mapa-zoom-controles";
+    const btnMenos = document.createElement("button");
+    btnMenos.type = "button";
+    btnMenos.className = "btn btn-secondary mapa-zoom-btn";
+    btnMenos.textContent = "−";
+    btnMenos.setAttribute("aria-label", "Alejar mapa");
+    const etiquetaZoom = document.createElement("span");
+    etiquetaZoom.className = "muted mapa-zoom-etiqueta";
+    etiquetaZoom.textContent = Math.round(estado.zoomMapa * 100) + "%";
+    const btnMas = document.createElement("button");
+    btnMas.type = "button";
+    btnMas.className = "btn btn-secondary mapa-zoom-btn";
+    btnMas.textContent = "+";
+    btnMas.setAttribute("aria-label", "Acercar mapa");
+    btnMenos.addEventListener("click", () => ajustarZoomMapa(-0.15, etiquetaZoom));
+    btnMas.addEventListener("click", () => ajustarZoomMapa(0.15, etiquetaZoom));
+    zoomGrupo.appendChild(btnMenos);
+    zoomGrupo.appendChild(etiquetaZoom);
+    zoomGrupo.appendChild(btnMas);
+    controles.appendChild(zoomGrupo);
+
+    const btnDescargar = document.createElement("button");
+    btnDescargar.type = "button";
+    btnDescargar.className = "btn btn-secondary";
+    btnDescargar.textContent = "⬇ Descargar mapa como PNG";
+    btnDescargar.addEventListener("click", () => abrirSelectorDescargaMapa());
+    controles.appendChild(btnDescargar);
+
+    card.appendChild(controles);
+    card.appendChild(construirMapaInteractivo(plan));
+  }
+
+  return card;
+}
+
+/** Color del nodo según el switch activo (Simbología por Estado, o Categoría). */
+function colorNodoMapa(materia, plan) {
+  if (estado.colorMapaPor === "categoria") {
+    const cat = (plan.categorias || []).find((c) => c.id === materia.categoria_id);
+    return cat ? cat.color : "#64748b";
+  }
+  return COLOR_ESTADO_MAPA[materia.estado] || "#94a3b8";
+}
+
+/** Recolorea los nodos ya renderizados sin reconstruir el mapa (conserva zoom/scroll/camino). */
+function recolorearNodosMapa(plan) {
+  const refs = estado._refsMapaActual;
+  if (!refs) return;
+  refs.nodosPorCodigo.forEach((nodo, codigo) => {
+    const materia = plan.materias.find((m) => m.codigo === codigo);
+    if (materia) nodo.style.setProperty("--nodo-color", colorNodoMapa(materia, plan));
+  });
+}
+
+/** Construye el contenedor completo del mapa: columnas por bloque + overlay SVG de caminos. */
+function construirMapaInteractivo(plan) {
+  const materias = plan.materias.slice();
+  const grupos = new Map();
+  materias.forEach((m) => {
+    const clave = m.es_optativa ? "__optativas__" : (m.bloque === null || m.bloque === undefined ? "__sin_bloque__" : String(m.bloque));
+    if (!grupos.has(clave)) grupos.set(clave, []);
+    grupos.get(clave).push(m);
+  });
+  const clavesNumericas = Array.from(grupos.keys())
+    .filter((k) => k !== "__optativas__" && k !== "__sin_bloque__")
+    .sort((a, b) => Number(a) - Number(b));
+  const clavesFinal = [...clavesNumericas];
+  if (grupos.has("__sin_bloque__")) clavesFinal.push("__sin_bloque__");
+  if (grupos.has("__optativas__")) clavesFinal.push("__optativas__");
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "mapa-wrapper";
+
+  const scroll = document.createElement("div");
+  scroll.className = "mapa-scroll";
+  scroll.tabIndex = 0;
+
+  const sizer = document.createElement("div");
+  sizer.className = "mapa-sizer";
+
+  const track = document.createElement("div");
+  track.className = "mapa-track";
+
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("class", "mapa-caminos");
+  track.appendChild(svg);
+
+  const columnasEl = document.createElement("div");
+  columnasEl.className = "mapa-columnas";
+
+  const nodosPorCodigo = new Map();
+
+  clavesFinal.forEach((clave) => {
+    const columna = document.createElement("div");
+    columna.className = "mapa-columna";
+    const tituloCol = document.createElement("div");
+    tituloCol.className = "mapa-columna-titulo";
+    tituloCol.textContent =
+      clave === "__optativas__" ? "Optativas" : clave === "__sin_bloque__" ? "Sin bloque" : `${plan.parametros_universidad.nombre_bloque} ${clave}`;
+    columna.appendChild(tituloCol);
+
+    grupos.get(clave).forEach((materia) => {
+      const nodo = construirNodoMapa(materia, plan);
+      nodosPorCodigo.set(materia.codigo, nodo);
+      columna.appendChild(nodo);
+    });
+    columnasEl.appendChild(columna);
+  });
+
+  track.appendChild(columnasEl);
+  sizer.appendChild(track);
+  scroll.appendChild(sizer);
+
+  const btnPrev = document.createElement("button");
+  btnPrev.type = "button";
+  btnPrev.className = "flecha-plan flecha-scroll";
+  btnPrev.textContent = "‹";
+  btnPrev.setAttribute("aria-label", "Desplazar mapa a la izquierda");
+  const btnNext = document.createElement("button");
+  btnNext.type = "button";
+  btnNext.className = "flecha-plan flecha-scroll";
+  btnNext.textContent = "›";
+  btnNext.setAttribute("aria-label", "Desplazar mapa a la derecha");
+  btnPrev.addEventListener("click", () => scroll.scrollBy({ left: -scroll.clientWidth * 0.8, behavior: "smooth" }));
+  btnNext.addEventListener("click", () => scroll.scrollBy({ left: scroll.clientWidth * 0.8, behavior: "smooth" }));
+
+  wrapper.appendChild(btnPrev);
+  wrapper.appendChild(scroll);
+  wrapper.appendChild(btnNext);
+
+  // Flechas del teclado (cuando el mapa tiene foco) — scroll exclusivo del mapa.
+  scroll.addEventListener("keydown", (ev) => {
+    if (ev.key === "ArrowRight") { scroll.scrollBy({ left: 140, behavior: "smooth" }); ev.preventDefault(); }
+    else if (ev.key === "ArrowLeft") { scroll.scrollBy({ left: -140, behavior: "smooth" }); ev.preventDefault(); }
+  });
+
+  // Ctrl + rueda del mouse = zoom (sin Ctrl, la rueda hace scroll normal).
+  scroll.addEventListener(
+    "wheel",
+    (ev) => {
+      if (!ev.ctrlKey) return;
+      ev.preventDefault();
+      ajustarZoomMapa(ev.deltaY < 0 ? 0.1 : -0.1, wrapper.querySelector(".mapa-zoom-etiqueta"));
+    },
+    { passive: false }
+  );
+
+  // Pellizco táctil = zoom.
+  let distanciaInicialToque = null;
+  let zoomInicialToque = 1;
+  const distanciaEntreToques = (toques) => Math.hypot(toques[0].clientX - toques[1].clientX, toques[0].clientY - toques[1].clientY);
+  scroll.addEventListener(
+    "touchstart",
+    (ev) => {
+      if (ev.touches.length === 2) {
+        distanciaInicialToque = distanciaEntreToques(ev.touches);
+        zoomInicialToque = estado.zoomMapa;
+      }
+    },
+    { passive: true }
+  );
+  scroll.addEventListener(
+    "touchmove",
+    (ev) => {
+      if (ev.touches.length === 2 && distanciaInicialToque) {
+        ev.preventDefault();
+        const factor = distanciaEntreToques(ev.touches) / distanciaInicialToque;
+        estado.zoomMapa = Math.min(2, Math.max(0.5, zoomInicialToque * factor));
+        aplicarZoomMapa();
+        const etiqueta = wrapper.querySelector(".mapa-zoom-etiqueta");
+        if (etiqueta) etiqueta.textContent = Math.round(estado.zoomMapa * 100) + "%";
+      }
+    },
+    { passive: false }
+  );
+  scroll.addEventListener("touchend", (ev) => { if (ev.touches.length < 2) distanciaInicialToque = null; });
+
+  estado._refsMapaActual = { scroll, sizer, track, svg, columnasEl, nodosPorCodigo, plan };
+
+  requestAnimationFrame(() => {
+    aplicarZoomMapa();
+    dibujarCaminoDesbloqueo(plan);
+  });
+  if (window.ResizeObserver) new ResizeObserver(() => aplicarZoomMapa()).observe(columnasEl);
+
+  return wrapper;
+}
+
+/** Recalcula el tamaño real del track y aplica el zoom actual (transform: scale). */
+function aplicarZoomMapa() {
+  const refs = estado._refsMapaActual;
+  if (!refs) return;
+  const { sizer, track, svg, columnasEl } = refs;
+  track.style.transform = "none";
+  const anchoNatural = columnasEl.scrollWidth;
+  const altoNatural = columnasEl.scrollHeight;
+  track.style.width = anchoNatural + "px";
+  track.style.height = altoNatural + "px";
+  const zoom = estado.zoomMapa || 1;
+  track.style.transform = `scale(${zoom})`;
+  sizer.style.width = anchoNatural * zoom + "px";
+  sizer.style.height = altoNatural * zoom + "px";
+  svg.setAttribute("viewBox", `0 0 ${anchoNatural} ${altoNatural}`);
+}
+
+/** Botones +/- de zoom (no re-renderiza nada, conserva scroll y camino dibujado). */
+function ajustarZoomMapa(delta, etiquetaEl) {
+  estado.zoomMapa = Math.min(2, Math.max(0.5, Math.round((estado.zoomMapa + delta) * 100) / 100));
+  aplicarZoomMapa();
+  if (etiquetaEl) etiquetaEl.textContent = Math.round(estado.zoomMapa * 100) + "%";
+}
+
+/** Tarjeta compacta de una materia dentro del mapa: tap = camino; mantener presionada = detalle. */
+function construirNodoMapa(materia, plan) {
+  const nodo = document.createElement("div");
+  nodo.className = "mapa-nodo";
+  nodo.style.setProperty("--nodo-color", colorNodoMapa(materia, plan));
+
+  const spanCodigo = document.createElement("span");
+  spanCodigo.className = "mapa-nodo-codigo";
+  spanCodigo.textContent = materia.codigo;
+  const spanNombre = document.createElement("span");
+  spanNombre.className = "mapa-nodo-nombre";
+  spanNombre.textContent = aplicarFormatoTexto(materia.nombre);
+  nodo.appendChild(spanCodigo);
+  nodo.appendChild(spanNombre);
+
+  let temporizador = null;
+  let fueLongPress = false;
+  const iniciar = () => {
+    fueLongPress = false;
+    temporizador = setTimeout(() => {
+      fueLongPress = true;
+      abrirModalRequisito(materia.codigo);
+    }, 500);
+  };
+  const cancelar = () => clearTimeout(temporizador);
+  nodo.addEventListener("mousedown", iniciar);
+  nodo.addEventListener("touchstart", iniciar, { passive: true });
+  ["mouseup", "mouseleave", "touchend", "touchcancel", "touchmove"].forEach((ev) => nodo.addEventListener(ev, cancelar));
+  nodo.addEventListener("click", () => {
+    if (fueLongPress) { fueLongPress = false; return; }
+    estado.materiaSeleccionadaMapa = estado.materiaSeleccionadaMapa === materia.codigo ? null : materia.codigo;
+    dibujarCaminoDesbloqueo(plan);
+  });
+
+  return nodo;
+}
+
+/**
+ * Dibuja (o borra) el "camino" de desbloqueo detrás de las tarjetas: la
+ * cadena completa de materias que la seleccionada desbloquea, transitiva
+ * (reutiliza obtenerMateriasQueDesbloquea() nivel por nivel). Coordenadas en
+ * el espacio local NO escalado del track (offsetLeft/offsetTop no se ven
+ * afectados por el transform: scale, así que el mismo dibujo sirve para
+ * cualquier nivel de zoom sin tener que recalcular nada al hacer zoom).
+ */
+function dibujarCaminoDesbloqueo(plan) {
+  const refs = estado._refsMapaActual;
+  if (!refs) return;
+  const { svg, nodosPorCodigo } = refs;
+  svg.innerHTML = "";
+  refs.nodosPorCodigo.forEach((nodo) => nodo.classList.remove("mapa-nodo-en-camino"));
+
+  const codigoInicial = estado.materiaSeleccionadaMapa;
+  if (!codigoInicial) return;
+  const materiaInicial = plan.materias.find((m) => m.codigo === codigoInicial);
+  if (!materiaInicial) return;
+
+  const visitados = new Set([codigoInicial]);
+  const aristas = [];
+  let frontera = [materiaInicial];
+  while (frontera.length) {
+    const siguiente = [];
+    frontera.forEach((m) => {
+      obtenerMateriasQueDesbloquea(m, plan).forEach((d) => {
+        aristas.push([m.codigo, d.codigo]);
+        if (!visitados.has(d.codigo)) {
+          visitados.add(d.codigo);
+          siguiente.push(d);
+        }
+      });
+    });
+    frontera = siguiente;
+  }
+
+  const centroDe = (codigo) => {
+    const nodo = nodosPorCodigo.get(codigo);
+    if (!nodo) return null;
+    return { x: nodo.offsetLeft + nodo.offsetWidth / 2, y: nodo.offsetTop + nodo.offsetHeight / 2 };
+  };
+
+  aristas.forEach(([desde, hasta]) => {
+    const c1 = centroDe(desde);
+    const c2 = centroDe(hasta);
+    if (!c1 || !c2) return;
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    const medioX = (c1.x + c2.x) / 2;
+    path.setAttribute("d", `M ${c1.x} ${c1.y} C ${medioX} ${c1.y}, ${medioX} ${c2.y}, ${c2.x} ${c2.y}`);
+    path.setAttribute("class", "mapa-camino-linea");
+    svg.appendChild(path);
+  });
+
+  visitados.forEach((codigo) => {
+    const nodo = nodosPorCodigo.get(codigo);
+    if (nodo) nodo.classList.add("mapa-nodo-en-camino");
+  });
+}
+
+/** Modal chico (100% construido en JS) para elegir cómo exportar el PNG del mapa. */
+function abrirSelectorDescargaMapa() {
+  document.querySelectorAll(".modal-descarga-mapa").forEach((el) => el.remove());
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay modal-descarga-mapa";
+
+  const caja = document.createElement("div");
+  caja.className = "glass-card modal-card stack";
+
+  const titulo = document.createElement("h3");
+  titulo.style.margin = "0";
+  titulo.textContent = "Descargar mapa como imagen";
+  caja.appendChild(titulo);
+
+  const texto = document.createElement("p");
+  texto.className = "muted";
+  texto.textContent = "¿Cómo quieres exportar la imagen?";
+  caja.appendChild(texto);
+
+  const cerrar = () => overlay.remove();
+
+  [
+    { texto: "Con mi tema actual", valor: "actual" },
+    { texto: "Modo claro, fondo transparente", valor: "claro_transparente" },
+  ].forEach((op) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-secondary btn-block";
+    btn.textContent = op.texto;
+    btn.addEventListener("click", () => {
+      cerrar();
+      exportarMapaComoPNG(op.valor);
+    });
+    caja.appendChild(btn);
+  });
+
+  const btnCancelar = document.createElement("button");
+  btnCancelar.type = "button";
+  btnCancelar.className = "btn btn-secondary btn-block";
+  btnCancelar.textContent = "Cancelar";
+  btnCancelar.addEventListener("click", cerrar);
+  caja.appendChild(btnCancelar);
+
+  overlay.appendChild(caja);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) cerrar(); });
+  document.body.appendChild(overlay);
+}
+
+/**
+ * Exporta el mapa COMPLETO (no solo lo visible por el scroll) a PNG, usando
+ * html2canvas (cargado por CDN en index.html). "Con mi tema actual" captura
+ * tal cual se ve; "Modo claro, fondo transparente" cambia momentáneamente
+ * data-mode a "light" en <html> (de donde salen todas las variables CSS de
+ * color) solo mientras dura la captura, y pide fondo transparente a
+ * html2canvas — se restaura el modo real apenas termina.
+ */
+function exportarMapaComoPNG(opcion) {
+  const refs = estado._refsMapaActual;
+  if (!refs || typeof html2canvas === "undefined") {
+    console.error("No se pudo exportar el mapa: html2canvas no está disponible o el mapa no está renderizado.");
+    return;
+  }
+  const { scroll, sizer, track } = refs;
+
+  // Estilos originales a restaurar tras la captura.
+  const estiloOriginalScroll = { overflow: scroll.style.overflow, width: scroll.style.width };
+  const modoOriginal = document.documentElement.dataset.mode;
+
+  const restaurar = () => {
+    scroll.style.overflow = estiloOriginalScroll.overflow;
+    scroll.style.width = estiloOriginalScroll.width;
+    if (opcion === "claro_transparente") document.documentElement.dataset.mode = modoOriginal;
+  };
+
+  // Se muestra el sizer completo (sin recorte por overflow) para capturar
+  // el mapa entero, incluso la parte que hoy está fuera del scroll visible.
+  scroll.style.overflow = "visible";
+  scroll.style.width = sizer.style.width;
+  if (opcion === "claro_transparente") document.documentElement.dataset.mode = "light";
+
+  const colorFondoActual = getComputedStyle(document.documentElement).getPropertyValue("--bg-canvas").trim() || "#101114";
+
+  requestAnimationFrame(() => {
+    html2canvas(sizer, {
+      backgroundColor: opcion === "claro_transparente" ? null : colorFondoActual,
+      scale: 2,
+      useCORS: true,
+    })
+      .then((canvas) => {
+        restaurar();
+        const enlace = document.createElement("a");
+        enlace.download = "mapa-plan-de-estudios.png";
+        enlace.href = canvas.toDataURL("image/png");
+        enlace.click();
+      })
+      .catch((e) => {
+        restaurar();
+        console.error("Error al generar la imagen del mapa:", e);
+      });
+  });
+}
+
 /* ===================== Arranque de este módulo ===================== */
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -2992,10 +3748,6 @@ window.addEventListener("DOMContentLoaded", () => {
   inicializarModalDesbloquea();
   inicializarModalInstruccionesImportacion();
 
-  document.getElementById("btn-cerrar-requisito").addEventListener("click", () => {
-    document.getElementById("modal-requisito").classList.add("oculto");
-  });
-
   document.getElementById("btn-cerrar-historial").addEventListener("click", () => {
     document.getElementById("modal-historial").classList.add("oculto");
   });
@@ -3003,18 +3755,10 @@ window.addEventListener("DOMContentLoaded", () => {
     if (e.target.id === "modal-historial") e.target.classList.add("oculto");
   });
 
-  // v5 #7: "Es requisito" — link de solo texto que abre la búsqueda inversa
-  // ("[materia] es requisito para:") para la materia que el modal está
-  // mostrando en este momento.
-  const btnEsRequisito = document.getElementById("btn-es-requisito");
-  if (btnEsRequisito) {
-    btnEsRequisito.addEventListener("click", () => {
-      if (!materiaModalRequisitoActual) return;
-      const { materia, plan } = materiaModalRequisitoActual;
-      document.getElementById("modal-requisito").classList.add("oculto");
-      abrirModalDesbloquea(materia, plan);
-    });
-  }
+  // v8 punto 2 / B (v9): "Es requisito", "Historial" y "Cerrar" ahora se
+  // arman dinámicamente dentro de #requisito-contenedor-final cada vez que
+  // se abre el modal (ver construirBotonesFinalesDetalle/abrirModalRequisito)
+  // — agrupados juntos al final del bloque, ya no como botones estáticos.
   document.getElementById("modal-requisito").addEventListener("click", (e) => {
     if (e.target.id === "modal-requisito") e.target.classList.add("oculto");
   });

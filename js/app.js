@@ -1570,6 +1570,10 @@ function restaurarEstadoSidebar() {
  */
 function inicializarBotonesCerrarModal() {
   document.querySelectorAll(".modal-overlay").forEach((overlay) => {
+    // v8 punto 2 / B (v9): #modal-requisito ya trae su propio botón "Cerrar"
+    // agrupado al final del bloque de detalle — el "X" de la esquina se
+    // elimina ahí para no duplicar la acción.
+    if (overlay.id === "modal-requisito") return;
     const card = overlay.querySelector(".modal-card");
     if (!card || card.querySelector(".modal-x-close")) return;
 
