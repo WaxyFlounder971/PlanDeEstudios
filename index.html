@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="es" data-palette="azul" data-mode="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>App Académica</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/design-system.css">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+</head>
+<body>
+
+<!-- ============================ PANTALLA DE LOGIN ============================ -->
+<div id="pantalla-login" class="stack" style="min-height:100vh; align-items:center; justify-content:center; padding:24px;">
+  <div class="glass-card stack" style="max-width:420px; width:100%; text-align:center;">
+    <h1 style="font-size:1.6rem;">🎓 App Académica</h1>
+    <p>Tu plan de estudios, notas, horario y agenda en un solo lugar — sincronizado en tu propio Google Drive.</p>
+    <button id="btn-login-google" class="btn btn-primary btn-block">Iniciar sesión con Google</button>
+    <p class="muted" style="color:var(--color-warning, #f59e0b);">⚠️ Debes aceptar el permiso de Google Drive para poder usar la app — sin él, no se puede guardar ningún cambio.</p>
+    <p id="aviso-login-bloqueado" class="aviso-login-bloqueado oculto"></p>
+    <p id="aviso-permiso-rechazado" class="aviso-login-bloqueado oculto"></p>
+    <p class="muted">Solo se guarda un archivo dentro de tu Drive. Nadie más que tú (y esta app) puede leerlo.</p>
+  </div>
+</div>
+
+<!-- ============================== APP SHELL ============================== -->
+<div id="app-shell" class="oculto">
+
+  <!-- v8.3: indicador de "desliza/arrastra hacia abajo para sincronizar".
+       Vive fuera del flujo normal (position: fixed), se activa desde JS
+       (app.js) mientras el usuario arrastra desde arriba del todo de la
+       página, tanto con dedo (móvil) como con mouse (compu). -->
+  <div id="pull-refresh-indicador" class="pull-refresh-indicador" aria-hidden="true">
+    <span class="pull-refresh-flecha">↓</span>
+  </div>
+
+  <!-- v8.3: overlay de carga reutilizable — 3 puntitos rebotando en cadena
+       (efecto "ola"), centrados en pantalla. Se muestra/oculta desde JS con
+       mostrarCargando()/ocultarCargando() en cualquier espera de la app
+       (sincronizar al deslizar, cargar datos al iniciar sesión, etc.). -->
+  <div id="overlay-cargando" class="overlay-cargando oculto" aria-hidden="true">
+    <div class="puntitos-carga">
+      <span></span><span></span><span></span>
+    </div>
+  </div>
+
+  <!-- Bug 1 (v8): aviso de reconexión — aparece cuando la sesión con Google
+       Drive se venció o el refresco automático/silencioso falló. El botón
+       "Reconectar" se dispara desde un click real para evitar el bloqueo de
+       popups que sí puede afectar al refresco silencioso automático. -->
+  <div id="aviso-reconexion" class="aviso-reconexion oculto" role="alert">
+    <span>⚠️ Se perdió la conexión con tu Google Drive. Tus cambios se están guardando localmente, pero no se sincronizarán hasta reconectar.</span>
+    <button id="btn-reconectar-sesion" class="btn btn-primary">Reconectar</button>
+  </div>
+
+  <!-- Barra superior solo-móvil -->
+  <div class="mobile-topbar">
+    <button id="btn-hamburguesa" class="btn-hamburguesa" aria-label="Abrir menú">☰</button>
+    <h3>🎓 App Académica</h3>
+  </div>
+
+  <!-- Overlay para cerrar el drawer móvil tocando fuera -->
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="app-layout">
+
+    <!-- Sidebar -->
+    <nav id="app-sidebar" class="glass-panel app-sidebar">
+      <button id="btn-colapsar-sidebar" class="btn-colapsar sidebar-cerrar-movil" title="Colapsar menú">⟨⟨</button>
+      <h3 class="sidebar-titulo">🎓 <span class="texto">App Académica</span></h3>
+
+      <div class="sidebar-scroll">
+        <button class="btn btn-secondary btn-block btn-nav" title="Resumen" disabled>🏠 <span class="texto-nav">Resumen</span></button>
+        <button class="btn btn-secondary btn-block btn-nav" title="Agenda" disabled>📖 <span class="texto-nav">Agenda</span></button>
+        <button class="btn btn-secondary btn-block btn-nav" title="Horario" disabled>🗓️ <span class="texto-nav">Horario</span></button>
+        <button class="btn btn-secondary btn-block btn-nav" title="Semestres" disabled>📅 <span class="texto-nav">Semestres</span></button>
+        <button class="btn btn-secondary btn-block btn-nav" title="Profesores" disabled>👨‍🏫 <span class="texto-nav">Profesores</span></button>
+        <button id="nav-plan-estudios" class="btn btn-secondary btn-block btn-nav" data-seccion="plan-estudios" title="Plan de Estudios">📚 <span class="texto-nav">Plan de Estudios</span></button>
+        <button id="nav-configuracion" class="btn btn-primary btn-block btn-nav" data-seccion="configuracion" title="Configuración">⚙️ <span class="texto-nav">Configuración</span></button>
+        <div style="flex:1;"></div>
+        <div class="row" style="justify-content:space-between;">
+          <span id="indicador-sync" class="badge badge-success" title="Mantén presionado (o clic derecho) para sincronizar ahora">Todo sincronizado</span>
+        </div>
+      </div>
+
+      <!-- Zona de perfil, siempre visible sin scroll (punto 6) -->
+      <div class="perfil-sidebar">
+        <div id="perfil-popover" class="glass-panel perfil-popover oculto">
+          <p id="perfil-popover-nombre" style="font-weight:700; margin-bottom:2px;"></p>
+          <p id="perfil-popover-correo" class="muted" style="margin-bottom:12px;"></p>
+          <button id="btn-logout-popover" class="btn btn-danger btn-block">Cerrar sesión</button>
+        </div>
+        <div class="perfil-fila">
+          <div class="perfil-foto-wrap">
+            <img id="perfil-foto" class="perfil-foto oculto" src="" alt="Foto de perfil" referrerpolicy="no-referrer">
+            <div id="perfil-foto-fallback" class="perfil-foto perfil-foto-fallback"></div>
+          </div>
+          <span id="perfil-nombre" class="perfil-nombre perfil-datos"></span>
+          <button id="btn-logout" class="btn btn-danger perfil-datos" style="padding:8px 14px; flex-shrink:0;">Salir</button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Contenido principal -->
+    <main class="app-contenido">
+
+      <!-- ===================== SECCIÓN: Configuración ===================== -->
+      <div id="seccion-configuracion" class="stack">
+
+        <section class="glass-card stack">
+          <h2>Plan de Estudios activo</h2>
+          <div id="selector-plan"></div>
+        </section>
+
+        <section class="glass-card stack">
+          <h2>Ajustes generales</h2>
+
+          <div class="row-between">
+            <span>Modo oscuro / claro</span>
+            <label class="switch switch-tema">
+              <input type="checkbox" id="switch-modo">
+              <span class="track"><span class="thumb"></span></span>
+            </label>
+          </div>
+
+          <div>
+            <span class="form-label">Escala de notas por defecto</span>
+            <div class="pill-group" id="pill-escala-notas">
+              <button type="button" class="pill-item" data-valor="10">1 – 10</button>
+              <button type="button" class="pill-item" data-valor="100">1 – 100</button>
+            </div>
+          </div>
+
+          <div>
+            <span class="form-label">Paleta de color</span>
+            <div class="palette-grid" id="grid-paletas"></div>
+          </div>
+
+          <div>
+            <span class="form-label">Formato de nombres de materias y carrera</span>
+            <div class="pill-group" id="pill-formato-texto">
+              <button type="button" class="pill-item" data-valor="titulo">Cada Palabra</button>
+              <button type="button" class="pill-item" data-valor="mayusculas">MAYÚSCULAS</button>
+              <button type="button" class="pill-item" data-valor="oracion">Solo la primera</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="glass-card stack">
+          <div class="row-between">
+            <h2 style="margin:0;">Enlaces rápidos</h2>
+            <button id="btn-agregar-enlace" class="btn btn-primary">+ Añadir enlace</button>
+          </div>
+          <p class="muted">Hasta 20 accesos directos (matrícula, TEC Digital, pagos, lo que necesites).</p>
+          <div id="lista-enlaces" class="stack"></div>
+        </section>
+
+      </div>
+
+      <!-- ===================== SECCIÓN: Plan de Estudios ===================== -->
+      <div id="seccion-plan-estudios" class="stack oculto"></div>
+
+    </main>
+
+    <!-- Enlaces Rápidos fijos, solo visibles con espacio libre a la derecha (v5 #2) -->
+    <aside id="panel-enlaces-lateral" class="glass-panel enlaces-lateral">
+      <h3 style="margin:0 0 10px;">Enlaces rápidos</h3>
+      <div id="lista-enlaces-lateral" class="stack" style="gap:8px;"></div>
+    </aside>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Añadir enlace rápido (punto 7) ===================== -->
+<div id="modal-enlace" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;" id="titulo-modal-enlace">Añadir enlace</h2>
+
+    <div>
+      <span class="form-label">Nombre</span>
+      <input type="text" id="input-enlace-nombre" class="form-input" placeholder="Ej. Sistema de Matrícula" maxlength="40">
+    </div>
+
+    <div>
+      <span class="form-label">URL</span>
+      <input type="url" id="input-enlace-url" class="form-input" placeholder="https://...">
+    </div>
+
+    <div>
+      <span class="form-label">Tipo de ícono</span>
+      <div class="pill-group" id="pill-tipo-icono">
+        <button type="button" class="pill-item active" data-tipo="emoji">Emoji</button>
+        <button type="button" class="pill-item" data-tipo="imagen">Imagen</button>
+      </div>
+    </div>
+
+    <div id="bloque-icono-emoji">
+      <span class="form-label">Emoji</span>
+      <input type="text" id="input-enlace-emoji" class="form-input" placeholder="🔗" maxlength="8">
+      <p class="muted">En Windows puedes presionar <strong>Win + .</strong> (punto) para abrir el selector de emojis. En Mac es <strong>Cmd + Ctrl + Espacio</strong>.</p>
+    </div>
+
+    <div id="bloque-icono-imagen" class="oculto">
+      <span class="form-label">Imagen</span>
+      <input type="file" id="input-enlace-imagen" class="form-input" accept="image/*">
+    </div>
+
+    <p id="error-modal-enlace" class="muted oculto" style="color:var(--color-danger);"></p>
+
+    <div class="row" style="justify-content:space-between;">
+      <button id="btn-eliminar-enlace" class="btn btn-danger oculto">Eliminar</button>
+      <div class="row" style="justify-content:flex-end; flex:1;">
+        <button id="btn-cancelar-enlace" class="btn btn-secondary">Cancelar</button>
+        <button id="btn-guardar-enlace" class="btn btn-primary">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Instrucciones antes de enviar a la IA (v6) ===================== -->
+<div id="modal-instrucciones-importacion" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;" id="titulo-modal-instrucciones-importacion">Antes de continuar…</h2>
+    <p class="muted" id="cuerpo-modal-instrucciones-importacion" style="white-space:pre-line;"></p>
+    <div class="row" style="justify-content:flex-end; gap:10px;">
+      <button type="button" id="btn-cancelar-instrucciones-importacion" class="btn btn-secondary">Cancelar</button>
+      <button type="button" id="btn-aceptar-instrucciones-importacion" class="btn btn-primary">Aceptar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Crear Plan de Estudios (al importar) ===================== -->
+<div id="modal-crear-plan" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;">Nuevo Plan de Estudios</h2>
+    <p class="muted">Antes de importar el CSV, contanos de qué carrera se trata.</p>
+
+    <div>
+      <span class="form-label">Nombre de la carrera</span>
+      <input type="text" id="input-plan-nombre-carrera" class="form-input" placeholder="Ej. Ingeniería en Tecnologías de Información">
+    </div>
+
+    <div>
+      <span class="form-label">Universidad</span>
+      <div class="pill-group" id="pill-plan-universidad">
+        <button type="button" class="pill-item active" data-valor="TEC">TEC</button>
+        <button type="button" class="pill-item" data-valor="UCR">UCR</button>
+        <button type="button" class="pill-item" data-valor="Otra">Otra / Personalizada</button>
+      </div>
+    </div>
+
+    <div id="bloque-universidad-otra-nombre" class="oculto">
+      <span class="form-label">Nombre de tu universidad</span>
+      <input type="text" id="input-universidad-otra-nombre" class="form-input" placeholder="Ej. Universidad Nacional">
+    </div>
+
+    <div id="bloque-tipos-horas-personalizados" class="oculto">
+      <span class="form-label">Tipos de horas de tu universidad</span>
+      <input type="text" id="input-tipos-horas-personalizados" class="form-input" placeholder="Ej. Teoría, Laboratorio">
+      <p class="muted" style="margin:4px 0 0;">Sepáralos con comas. Ej. si tu universidad solo maneja Teoría y Laboratorio, escribe exactamente eso.</p>
+    </div>
+
+    <div id="bloque-horas-no-aplica-plan" class="oculto">
+      <label class="checkbox">
+        <input type="checkbox" id="checkbox-horas-no-aplica">
+        <span class="box"></span>
+        <span>No aplica — este plan no maneja Horas</span>
+      </label>
+    </div>
+
+    <div>
+      <span class="form-label">Código del plan (opcional)</span>
+      <input type="text" id="input-plan-codigo" class="form-input" placeholder="Ej. 420501, plan 01">
+    </div>
+
+    <div class="row">
+      <div style="flex:1;">
+        <span class="form-label" id="label-plan-nombre-bloque">Nombre del bloque</span>
+        <input type="text" id="input-plan-nombre-bloque" class="form-input" value="Semestre">
+      </div>
+      <div style="flex:1;">
+        <span class="form-label">Semanas por bloque</span>
+        <input type="number" id="input-plan-semanas" class="form-input" value="16">
+      </div>
+    </div>
+    <div class="row">
+      <div style="flex:1;">
+        <span class="form-label">Hora de inicio por defecto</span>
+        <input type="time" id="input-plan-hora-inicio" class="form-input" value="07:30">
+      </div>
+      <div style="flex:1;">
+        <span class="form-label">Duración de bloque (min)</span>
+        <input type="number" id="input-plan-duracion" class="form-input" value="50">
+      </div>
+    </div>
+
+    <p id="error-modal-crear-plan" class="muted oculto" style="color:var(--color-danger);"></p>
+
+    <div class="row" style="justify-content:flex-end;">
+      <button id="btn-cancelar-crear-plan" class="btn btn-secondary">Cancelar</button>
+      <button id="btn-confirmar-crear-plan" class="btn btn-primary">Continuar e importar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Requisito / Correquisito (detalle unificado, v8 punto 2) ===================== -->
+<div id="modal-requisito" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0; display:flex; align-items:center;" id="requisito-titulo">Materia</h2>
+    <!-- Línea 2 (Estado · Horas · Créditos) y todo lo demás (Bloque·Código,
+         Categoría, Requisitos, Correquisitos, botones finales) se arman
+         dinámicamente en plan.js -- construirLinea2Materia()/construirCuerpoDetalleMateria()
+         -- para compartir exactamente el mismo diseño que la tarjeta. -->
+    <div id="requisito-contenedor-final"></div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Historial de la materia ===================== -->
+<div id="modal-historial" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;" id="titulo-modal-historial">Historial</h2>
+    <div id="cuerpo-modal-historial" class="stack"></div>
+    <div class="row" style="justify-content:flex-end;">
+      <button id="btn-cerrar-historial" class="btn btn-primary">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Categoría (nombre + color) ===================== -->
+<div id="modal-categoria" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;" id="titulo-modal-categoria">Nueva categoría</h2>
+    <div>
+      <span class="form-label">Nombre</span>
+      <input type="text" id="input-categoria-nombre" class="form-input" placeholder="Ej. Matemáticas" maxlength="40">
+    </div>
+    <div>
+      <span class="form-label">Color</span>
+      <input type="color" id="input-categoria-color" class="form-input" value="#38BDF8" style="height:44px; padding:4px;">
+    </div>
+    <p id="error-modal-categoria" class="muted oculto" style="color:var(--color-danger);"></p>
+    <div class="row" style="justify-content:space-between;">
+      <button id="btn-eliminar-categoria" class="btn btn-danger oculto">Eliminar categoría</button>
+      <div class="row" style="justify-content:flex-end; flex:1;">
+        <button id="btn-cancelar-categoria" class="btn btn-secondary">Cancelar</button>
+        <button id="btn-guardar-categoria" class="btn btn-primary">Continuar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Asignar materias a categoría ===================== -->
+<div id="modal-categoria-materias" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;">Materias de <span id="nombre-categoria-materias"></span></h2>
+    <p class="muted">Marca las materias que pertenecen a esta categoría.</p>
+    <div id="lista-categoria-materias" class="stack" style="max-height:340px; overflow-y:auto;"></div>
+    <div class="row" style="justify-content:flex-end;">
+      <button id="btn-cancelar-categoria-materias" class="btn btn-secondary">Cancelar</button>
+      <button id="btn-confirmar-categoria-materias" class="btn btn-primary">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Gestión de Planes de Estudio ===================== -->
+<div id="modal-gestion-planes" class="modal-overlay oculto">
+  <div class="glass-card modal-card modal-card-ancha stack">
+    <h2 style="margin:0;">Gestionar Planes de Estudio</h2>
+    <p class="muted">Arrastra para reordenar — el primero es tu plan favorito/principal.</p>
+    <div id="lista-gestion-planes" class="stack"></div>
+    <p id="aviso-limite-planes" class="muted oculto">Límite de 3 planes alcanzado.</p>
+    <button id="btn-agregar-plan-gestion" class="btn btn-primary btn-block">+ Nuevo Plan</button>
+
+    <div class="row-between" style="border-top:1px solid var(--border-glass); padding-top:14px;">
+      <span style="font-weight:700;">Modo Hardcore 💀</span>
+      <label class="switch switch-tema">
+        <input type="checkbox" id="switch-modo-hardcore">
+        <span class="track"><span class="thumb"></span></span>
+      </label>
+    </div>
+    <p class="muted">Para quienes llevan dos carreras a la vez: activa un segundo Plan de Estudios en paralelo. Al desactivarlo no se borra nada, solo se deja de combinar.</p>
+    <div id="bloque-plan-secundario" class="oculto">
+      <span class="form-label">Plan de Estudios secundario</span>
+      <div id="selector-plan-secundario"></div>
+    </div>
+
+    <div class="row" style="justify-content:flex-end;">
+      <button id="btn-cerrar-gestion-planes" class="btn btn-secondary">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Añadir materia manualmente (B.5) ===================== -->
+<div id="modal-materia-manual" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;">+ Añadir materia</h2>
+
+    <div id="bloque-materia-manual-plan" class="oculto">
+      <span class="form-label">¿A cuál Plan de Estudios pertenece?</span>
+      <div class="pill-group" id="pill-materia-manual-plan"></div>
+    </div>
+
+    <div class="row">
+      <div style="flex:1;">
+        <span class="form-label">Código</span>
+        <input type="text" id="input-materia-codigo" class="form-input" placeholder="MA-1001">
+      </div>
+      <div style="flex:2;">
+        <span class="form-label">Nombre</span>
+        <input type="text" id="input-materia-nombre" class="form-input">
+      </div>
+    </div>
+
+    <div class="row">
+      <div style="flex:1;">
+        <span class="form-label">Créditos</span>
+        <input type="number" id="input-materia-creditos" class="form-input">
+      </div>
+      <div style="flex:1;">
+        <span class="form-label" id="label-materia-bloque">Bloque</span>
+        <input type="number" id="input-materia-bloque" class="form-input">
+      </div>
+    </div>
+
+    <div id="bloque-horas-dinamico" class="row"></div>
+
+    <div>
+      <span class="form-label">Requisitos</span>
+      <input type="text" id="input-materia-requisitos" class="form-input" placeholder="MA-1001;FS-0210/FS-0227 (o &quot;Ninguno&quot;)">
+    </div>
+    <div>
+      <span class="form-label">Correquisitos</span>
+      <input type="text" id="input-materia-correquisitos" class="form-input" placeholder="Ninguno">
+    </div>
+
+    <p id="error-modal-materia-manual" class="muted oculto" style="color:var(--color-danger);"></p>
+
+    <div class="row" style="justify-content:flex-end;">
+      <button id="btn-cancelar-materia-manual" class="btn btn-secondary">Cancelar</button>
+      <button id="btn-guardar-materia-manual" class="btn btn-primary">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Desbloquea (búsqueda inversa) ===================== -->
+<div id="modal-desbloquea" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;" id="titulo-modal-desbloquea">es requisito para:</h2>
+    <div id="lista-modal-desbloquea" class="stack"></div>
+    <div class="row" style="justify-content:flex-end;">
+      <button id="btn-cerrar-desbloquea" class="btn btn-primary">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Confirmación genérica (reemplaza confirm() nativo) ===================== -->
+<div id="modal-confirmacion" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;" id="titulo-modal-confirmacion">¿Estás seguro?</h2>
+    <p id="mensaje-modal-confirmacion" class="muted"></p>
+    <div class="row" style="justify-content:flex-end;">
+      <button id="btn-cancelar-confirmacion" class="btn btn-secondary">Cancelar</button>
+      <button id="btn-aceptar-confirmacion" class="btn btn-danger">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<style>.oculto { display: none !important; }</style>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
