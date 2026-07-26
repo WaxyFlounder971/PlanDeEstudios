@@ -73,6 +73,26 @@ async function inicializarGoogleAuth({ alObtenerToken, alListo, alFallar, alRech
         if (alRechazarPermiso) alRechazarPermiso(respuesta.error);
         return;
       }
+
+      // Ajuste (v8): Google NO reporta respuesta.error cuando el usuario
+      // destilda específicamente la casilla de Drive en la pantalla de
+      // consentimiento pero acepta el resto (perfil/email) — llega un token
+      // "válido" que simplemente no sirve para guardar nada en Drive. Sin
+      // esta revisión, un usuario distraído podía entrar, llenar toda su
+      // información, y enterarse recién al final de que nunca se pudo
+      // guardar. Se verifica explícitamente que el scope de Drive esté
+      // dentro de lo realmente otorgado (respuesta.scope) antes de dejarlo
+      // entrar a la app.
+      const scopesOtorgados = (respuesta.scope || "").split(" ");
+      if (!scopesOtorgados.includes("https://www.googleapis.com/auth/drive.file")) {
+        console.warn("Login sin permiso de Drive (scopes otorgados):", respuesta.scope);
+        // No se guarda CLAVE_YA_AUTORIZADO: así el próximo intento vuelve a
+        // forzar la pantalla completa de consentimiento (prompt "consent"),
+        // en vez de un prompt liviano que podría repetir el mismo problema.
+        if (alRechazarPermiso) alRechazarPermiso("permiso_drive_no_otorgado");
+        return;
+      }
+
       accessToken = respuesta.access_token;
       localStorage.setItem(CLAVE_YA_AUTORIZADO, "1");
       alObtenerToken(accessToken);

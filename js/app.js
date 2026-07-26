@@ -61,6 +61,11 @@ window.addEventListener("DOMContentLoaded", () => {
 
   const btnLogin = document.getElementById("btn-login-google");
   const textoOriginalBtnLogin = btnLogin.textContent;
+  // Bug 1 (v8): se define aquí arriba porque alListo (más abajo) la lee, pero
+  // su valor real se fija después de leer la caché — como es una closure
+  // sobre la variable (no una copia), para cuando alListo se dispare (async,
+  // tras cargar el script de Google) ya va a tener el valor correcto.
+  let habiaCacheAlCargar = false;
 
   // Mientras el script de Google no esté listo, el botón queda deshabilitado
   // en vez de fallar en silencio al hacer click (esta espera es la causa
@@ -73,6 +78,12 @@ window.addEventListener("DOMContentLoaded", () => {
     alListo: () => {
       btnLogin.disabled = false;
       btnLogin.textContent = textoOriginalBtnLogin;
+      // Bug 1 (v8): si esta carga viene de una sesión guardada en caché
+      // (usuario recurrente), la pantalla de login nunca se muestra y por lo
+      // tanto iniciarSesionConGoogle() nunca se llama — sin esto, estado.token
+      // se quedaba en null para siempre y la sincronización con Drive jamás
+      // se intentaba (fallaba en silencio, sin ningún error en consola).
+      if (habiaCacheAlCargar) intentarReconexionSilenciosa();
     },
     alFallar: () => {
       btnLogin.textContent = textoOriginalBtnLogin;
@@ -82,12 +93,16 @@ window.addEventListener("DOMContentLoaded", () => {
         "No se pudo cargar el inicio de sesión de Google. Revisa tu conexión a internet, desactiva bloqueadores de anuncios/VPN para este sitio, y recarga la página.";
       aviso.classList.remove("oculto");
     },
-    alRechazarPermiso: () => {
+    alRechazarPermiso: (motivo) => {
       btnLogin.textContent = textoOriginalBtnLogin;
       btnLogin.disabled = false;
       const aviso = document.getElementById("aviso-permiso-rechazado");
+      // Ajuste (v8): mensaje específico cuando sí se completó el login pero
+      // sin la casilla de Drive marcada, para que quede claro qué faltó.
       aviso.textContent =
-        "No se completó el inicio de sesión: para usar la app necesitas aceptar el permiso de Google Drive. Vuelve a intentarlo y acepta el permiso cuando Google te lo pida.";
+        motivo === "permiso_drive_no_otorgado"
+          ? "No se completó el inicio de sesión: aceptaste tu cuenta de Google pero no marcaste el permiso de Google Drive, que es obligatorio para poder guardar tus datos. Vuelve a intentarlo y esta vez acepta también el permiso de Drive."
+          : "No se completó el inicio de sesión: para usar la app necesitas aceptar el permiso de Google Drive. Vuelve a intentarlo y acepta el permiso cuando Google te lo pida.";
       aviso.classList.remove("oculto");
     },
   });
@@ -126,15 +141,90 @@ window.addEventListener("DOMContentLoaded", () => {
 
   const cache = leerCacheLocal();
   if (cache && cache.datos) {
-    // Ya había una sesión local: mostramos la app de inmediato (offline-first)
-    // y de fondo, si hay token, se podría refrescar. Para la Iteración 0
-    // mantenemos esto simple: si no hay token en memoria, se pide login igual
-    // para poder seguir sincronizando con Drive.
+    // Ya había una sesión local: mostramos la app de inmediato (offline-first).
+    // estado.token queda en null aquí a propósito — se obtiene en segundo
+    // plano en alListo() de arriba, vía intentarReconexionSilenciosa(), sin
+    // bloquear el primer render de la app.
+    habiaCacheAlCargar = true;
     estado.datos = migrarDatosAntiguos(cache.datos);
     estado.fileId = cache.fileId;
     mostrarApp();
   }
+
+  document.getElementById("btn-reconectar-sesion").addEventListener("click", () => {
+    // Se llama de forma DIRECTA (sin async antes), igual que
+    // iniciarSesionConGoogle(), para no romper el gesto de usuario en
+    // navegadores móviles — necesario porque un click real evita el bloqueo
+    // de popups que sí puede afectar al refresco silencioso automático.
+    ocultarAvisoReconexion();
+    refrescarAccessTokenGoogle()
+      .then((token) => {
+        estado.token = token;
+        if (estado.pendienteSync) intentarSincronizar();
+      })
+      .catch((e) => {
+        console.warn("No se pudo reconectar la sesión de Google:", e);
+        mostrarAvisoReconexion();
+      });
+  });
+
+  // Bug 1 (v8): reintento periódico — antes, si un intento de sincronización
+  // fallaba (token vencido, red inestable, etc.), no volvía a intentarse
+  // hasta el próximo cambio del usuario o el próximo evento "online". Esto
+  // cubre el caso de que la app se quede abierta sin que el usuario edite
+  // nada más, pero con cambios (o una reconexión) todavía pendientes.
+  setInterval(() => {
+    if (estado.pendienteSync || !estado.token) intentarSincronizar();
+  }, 45000);
 });
+
+/**
+ * Bug 1 (v8): pide un access_token nuevo de forma silenciosa apenas carga la
+ * app (caso de sesión recuperada de caché, ver DOMContentLoaded arriba) o
+ * cuando intentarSincronizar() se encuentra sin token. Tiene un timeout
+ * propio porque el refresco silencioso de Google puede quedarse colgado sin
+ * error ni resolución si el navegador bloquea el mecanismo (ej. "Tracking
+ * Prevention" de Edge/Chrome bloqueando el almacenamiento de terceros que
+ * usa Google para el flujo silencioso) — sin el timeout, ese cuelgue nunca
+ * se reportaba ni se le daba al usuario una forma de reconectar a mano.
+ */
+let reconexionEnCurso = null;
+function intentarReconexionSilenciosa() {
+  if (reconexionEnCurso) return reconexionEnCurso; // evita refrescos duplicados en paralelo
+  const timeoutMs = 8000;
+  reconexionEnCurso = Promise.race([
+    refrescarAccessTokenGoogle(),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Tiempo de espera agotado al refrescar el token de Google (posible bloqueo del navegador).")), timeoutMs)
+    ),
+  ])
+    .then((token) => {
+      estado.token = token;
+      ocultarAvisoReconexion();
+      if (estado.pendienteSync) intentarSincronizar();
+    })
+    .catch((e) => {
+      console.warn("No se pudo reconectar la sesión de Google en silencio:", e);
+      // Solo se muestra el aviso si de verdad hace falta sincronizar algo —
+      // no queremos asustar al usuario apenas abre la app si todavía no ha
+      // cambiado nada.
+      if (estado.pendienteSync) mostrarAvisoReconexion();
+    })
+    .finally(() => {
+      reconexionEnCurso = null;
+    });
+  return reconexionEnCurso;
+}
+
+function mostrarAvisoReconexion() {
+  const aviso = document.getElementById("aviso-reconexion");
+  if (aviso) aviso.classList.remove("oculto");
+}
+
+function ocultarAvisoReconexion() {
+  const aviso = document.getElementById("aviso-reconexion");
+  if (aviso) aviso.classList.add("oculto");
+}
 
 /* ------------------------------ Login ------------------------------ */
 
@@ -266,10 +356,22 @@ function marcarCambioPendiente() {
 }
 
 async function intentarSincronizar() {
-  if (!estado.pendienteSync || !estado.token || !estado.fileId) return;
+  if (!estado.pendienteSync || !estado.fileId) return;
+
+  // Bug 1 (v8): antes, si no había token (ej. sesión recuperada de caché sin
+  // reconexión todavía), esta función se salía aquí mismo sin intentar nada
+  // ni avisar — la causa raíz de que la sincronización pareciera "rota"
+  // permanentemente en visitas de retorno. Ahora se intenta reconectar en
+  // silencio primero.
+  if (!estado.token) {
+    await intentarReconexionSilenciosa();
+    if (!estado.token) return; // seguimos sin token: ya se mostró el aviso si aplicaba
+  }
+
   try {
     await guardarDatos(estado.token, estado.fileId, estado.datos);
     estado.pendienteSync = false;
+    ocultarAvisoReconexion();
     actualizarIndicadorSync();
   } catch (e) {
     // v7 (Bug 2): antes solo se logueaba un mensaje genérico. Ahora se
@@ -284,15 +386,18 @@ async function intentarSincronizar() {
       // Token expirado (duran ~1h y no se refrescan solos): se pide uno
       // nuevo en silencio y, si se obtiene, se reintenta esta misma
       // sincronización de inmediato.
+      estado.token = null; // fuerza que el próximo intento pase por la reconexión de arriba
       try {
         const nuevoToken = await refrescarAccessTokenGoogle();
         estado.token = nuevoToken;
         await guardarDatos(estado.token, estado.fileId, estado.datos);
         estado.pendienteSync = false;
+        ocultarAvisoReconexion();
         actualizarIndicadorSync();
         return;
       } catch (errorRefresco) {
         console.warn("No se pudo refrescar el token de Google automáticamente:", errorRefresco);
+        mostrarAvisoReconexion();
       }
     }
   }

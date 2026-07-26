@@ -45,6 +45,61 @@ function formatearHoras(materia) {
   return entradas.map(([tipo, valor]) => `${tipo} ${valor}`).join(" · ");
 }
 
+/* ===================== Flechas de scroll horizontal reutilizables ===================== */
+
+/**
+ * Bug 3 (v8): envuelve `elementoScroll` (cualquier contenedor con
+ * `overflow-x` scrolleable, ej. un .pill-group) con flechitas "‹ ›" de solo
+ * símbolo (mismo estilo que la navegación entre Planes de Estudio), que
+ * solo se muestran cuando el contenido realmente desborda el ancho
+ * disponible, y se ocultan solas al llegar a cada extremo. Se reutiliza
+ * también en Ajuste 3 (scroll horizontal del mapa curricular).
+ */
+function envolverConFlechasScroll(elementoScroll, distanciaScroll = 140) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "scroll-con-flechas";
+  elementoScroll.parentNode.insertBefore(wrapper, elementoScroll);
+
+  const crearFlecha = (simbolo, dx, etiqueta) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "flecha-plan flecha-scroll";
+    btn.textContent = simbolo;
+    btn.setAttribute("aria-label", etiqueta);
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      elementoScroll.scrollBy({ left: dx, behavior: "smooth" });
+    });
+    return btn;
+  };
+  const btnPrev = crearFlecha("‹", -distanciaScroll, "Desplazar hacia la izquierda");
+  const btnNext = crearFlecha("›", distanciaScroll, "Desplazar hacia la derecha");
+
+  wrapper.appendChild(btnPrev);
+  wrapper.appendChild(elementoScroll);
+  wrapper.appendChild(btnNext);
+
+  const actualizarFlechas = () => {
+    const desborda = elementoScroll.scrollWidth > elementoScroll.clientWidth + 1;
+    btnPrev.classList.toggle("oculto", !desborda || elementoScroll.scrollLeft <= 1);
+    btnNext.classList.toggle(
+      "oculto",
+      !desborda || elementoScroll.scrollLeft + elementoScroll.clientWidth >= elementoScroll.scrollWidth - 1
+    );
+  };
+  elementoScroll.addEventListener("scroll", actualizarFlechas);
+  // ResizeObserver (no un listener en window) para que, si esta tarjeta se
+  // vuelve a renderizar y se descarta, el observer no siga acumulándose
+  // indefinidamente: al perder toda referencia al nodo desconectado, tanto
+  // el observer como su callback quedan libres para recolectarse.
+  if (window.ResizeObserver) {
+    new ResizeObserver(actualizarFlechas).observe(elementoScroll);
+  }
+  requestAnimationFrame(actualizarFlechas);
+
+  return wrapper;
+}
+
 /**
  * Prompt oficial y único del proyecto para pedirle a una IA externa (Claude o
  * ChatGPT) que estructure el plan de estudios en CSV. `modo` cambia solo el
@@ -2316,8 +2371,8 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
     renderizarPlanEstudios();
   });
 
-  // ---- Línea 1: luz · código · nombre (prefijo de ancho fijo para la
-  // indentación colgante, ver .materia-prefijo / .materia-nombre-col) ----
+  // ---- Línea 1: luz · código · nombre (prefijo de ancho fijo, flotante,
+  // para la indentación colgante real — ver .materia-prefijo / .materia-nombre.completa) ----
   const linea1 = document.createElement("div");
   linea1.className = "materia-linea1";
 
@@ -2341,15 +2396,15 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
 
   linea1.appendChild(prefijo);
 
-  const nombreCol = document.createElement("span");
-  nombreCol.className = "materia-nombre-col";
   const spanNombre = document.createElement("span");
   // Colapsada: trunca con "…". Expandida: nombre completo con indentación
-  // colgante (v5 #5) — mismo truco de columna de ancho fijo que 1.1.
+  // colgante REAL (Bug 4 v8) — .materia-prefijo flota a la izquierda dentro
+  // del mismo flujo de texto que este span, así que el navegador ya
+  // resuelve el ajuste de línea 1 alrededor del float de forma nativa, y
+  // padding-left/text-indent (en CSS) alinean las líneas siguientes.
   spanNombre.className = "materia-nombre " + (expandida ? "completa" : "truncada");
   spanNombre.textContent = aplicarFormatoTexto(materia.nombre);
-  nombreCol.appendChild(spanNombre);
-  linea1.appendChild(nombreCol);
+  linea1.appendChild(spanNombre);
 
   const iconoExpandir = document.createElement("span");
   iconoExpandir.className = "materia-expandir";
@@ -2411,6 +2466,10 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
       grupoEstado.appendChild(btn);
     });
     cuerpo.appendChild(grupoEstado);
+    // Bug 3 (v8): respaldo de scroll horizontal + flechitas si los 4 pills
+    // de Estado no caben en una fila (pantallas muy angostas) — nunca se
+    // acomodan en 2 líneas ni en grid 2x2.
+    envolverConFlechasScroll(grupoEstado);
 
     card.appendChild(cuerpo);
   }
