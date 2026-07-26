@@ -701,6 +701,14 @@ a { color: var(--accent-1); }
   z-index: 49;
 }
 
+/* C.6 (v9): se aplica a <body> mientras el drawer móvil está abierto, para
+   que la página de fondo no se pueda desplazar y el drawer se sienta
+   realmente anclado a la pantalla (igual que el panel de Enlaces Rápidos). */
+body.scroll-bloqueado {
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
 /* ---- Sidebar (nav) ---- */
 .app-sidebar {
   width: 230px;
@@ -897,6 +905,12 @@ a:hover .enlace-rapido-nombre {
     position: fixed;
     top: 0; left: 0;
     height: 100vh;
+    height: 100dvh; /* C.6 (v9): en móvil real, 100vh puede incluir el
+      espacio de la barra de navegador que se oculta/muestra al hacer
+      scroll, dejando el fondo del drawer "cortado" o con un salto visual
+      al abrir. 100dvh usa la altura visible real en cada momento; se
+      declara DESPUÉS de 100vh (nunca antes) para que actúe como mejora
+      progresiva y no rompa nada en navegadores que no soportan dvh. */
     width: min(280px, 82vw);
     max-width: min(280px, 82vw);
     z-index: 50;
