@@ -1228,3 +1228,78 @@ img, svg { max-width: 100%; }
 .encabezado-plan-linea2.sin-flechas { padding-left: 0; }
 
 /* ---- Bloques colapsables independientes ---- */
+
+/* ---- v8.3: indicador de "desliza para sincronizar" ----
+   Vive fijo arriba del todo, centrado, oculto (translateY negativo) hasta
+   que app.js lo va acercando en tiempo real según cuánto arrastra el
+   usuario (móvil con el dedo, compu con el mouse) desde el tope de la
+   página. Al soltar pasado el umbral, queda fijo en su posición "activa" y
+   la flecha gira 180° mientras se sincroniza (luego se oculta sola). */
+.pull-refresh-indicador {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translate(-50%, -60px);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gradient-accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-float);
+  z-index: 500;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+.pull-refresh-indicador.visible { opacity: 1; }
+/* Mientras se arrastra, JS controla el translateY directo (inline style)
+   para que siga el dedo/mouse en tiempo real — sin transición, para que se
+   sienta 1:1 con el gesto. */
+.pull-refresh-indicador.arrastrando { transition: none; }
+.pull-refresh-flecha {
+  font-size: 1.2rem;
+  line-height: 1;
+  transition: transform var(--transition-fast);
+}
+.pull-refresh-indicador.listo .pull-refresh-flecha { transform: rotate(180deg); }
+.pull-refresh-indicador.sincronizando .pull-refresh-flecha { animation: pull-refresh-girar 0.9s linear infinite; }
+@keyframes pull-refresh-girar {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ---- v8.3: overlay de carga reutilizable — 3 puntitos en ola ---- */
+.overlay-cargando {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--bg-canvas) 55%, transparent);
+  backdrop-filter: blur(2px);
+  z-index: 700;
+  transition: opacity var(--transition-fast);
+}
+.overlay-cargando.oculto { display: none; }
+.puntitos-carga {
+  display: flex;
+  gap: 10px;
+}
+.puntitos-carga span {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--gradient-accent);
+  box-shadow: var(--shadow-float);
+  animation: puntito-rebote 1.1s ease-in-out infinite;
+}
+.puntitos-carga span:nth-child(1) { animation-delay: 0s; }
+.puntitos-carga span:nth-child(2) { animation-delay: 0.15s; }
+.puntitos-carga span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes puntito-rebote {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.6; }
+  30% { transform: translateY(-16px); opacity: 1; }
+}
