@@ -47,6 +47,10 @@
     </div>
   </div>
 
+  <!-- Punto 6 (v1.9.6): badge fijo que confirma que el Modo Edición del Plan
+       de Estudios está activo. Se muestra/oculta desde plan-modo-edicion.js. -->
+  <div id="badge-modo-edicion" class="badge-modo-edicion-fijo oculto" aria-hidden="true">✏️ Modo edición</div>
+
   <!-- Bug 1 (v8): aviso de reconexión — aparece cuando la sesión con Google
        Drive se venció o el refresco automático/silencioso falló. El botón
        "Reconectar" se dispara desde un click real para evitar el bloqueo de
@@ -395,7 +399,7 @@
 <!-- ===================== MODAL: Añadir materia manualmente (B.5) ===================== -->
 <div id="modal-materia-manual" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
-    <h2 style="margin:0;">+ Añadir materia</h2>
+    <h2 style="margin:0;" id="titulo-modal-materia-manual">+ Añadir materia</h2>
 
     <div id="bloque-materia-manual-plan" class="oculto">
       <span class="form-label">¿A cuál Plan de Estudios pertenece?</span>
