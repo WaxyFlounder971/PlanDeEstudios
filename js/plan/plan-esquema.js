@@ -60,6 +60,30 @@ function obtenerMateriasVisibles() {
   return filas;
 }
 
+/**
+ * C.4 (v9): equivalente a obtenerMateriasVisibles() pero para las electivas
+ * detectadas al importar que todavía NO se agregaron formalmente a la malla
+ * (viven en plan.optativas_disponibles, nunca en plan.materias — así nunca
+ * cuentan en ningún total mientras estén aquí). La consume el bloque
+ * especial "Optativas" en plan-vista-lista-tarjetas.js.
+ *
+ * FIX (v1.9.6): esta función faltaba por completo — se importaba desde
+ * plan-vista-lista-tarjetas.js pero nunca se definió ni exportó acá, lo cual
+ * es un import roto en ES modules: al no poder resolverse, el navegador
+ * rechaza cargar el módulo main.js completo, así que NINGÚN JavaScript de
+ * la app llegaba a ejecutarse (ni siquiera el listener del botón de login)
+ * — esta era la causa raíz de "toco el botón y no pasa nada".
+ */
+
+function obtenerOptativasDisponibles() {
+  const principal = obtenerPlanActivo();
+  const secundario = obtenerPlanSecundario();
+  const filas = [];
+  if (principal) (principal.optativas_disponibles || []).forEach((m) => filas.push({ materia: m, plan: principal, origen: "principal" }));
+  if (secundario) (secundario.optativas_disponibles || []).forEach((m) => filas.push({ materia: m, plan: secundario, origen: "secundario" }));
+  return filas;
+}
+
 function buscarMateriaPorCodigoEnPlanes(codigo) {
   const filas = obtenerMateriasVisibles();
   const encontrada = filas.find((f) => f.materia.codigo === codigo);
@@ -444,6 +468,7 @@ export {
   leerTiposHorasDelModalCrearPlan,
   mapearUniversidadDetectada,
   obtenerMateriasVisibles,
+  obtenerOptativasDisponibles,
   obtenerPlanActivo,
   obtenerPlanSecundario,
 };
