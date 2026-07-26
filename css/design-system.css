@@ -143,14 +143,18 @@ a { color: var(--accent-1); }
 #selector-plan-secundario .pill-group { justify-content: center; }
 
 .pill-item {
-  /* v7.1 (Bug 5): antes era `flex: 1` (ancho forzado igual entre pills),
-     así que en pantallas angostas un texto largo como "Solo la primera" no
-     cabía en su tercio del ancho y, como .app-layout tiene
-     `overflow-x: hidden`, el sobrante se recortaba en vez de verse
-     completo (se veía cortado en "Solo la primera[m]"). Ahora cada pill
-     crece según su propio contenido; si no caben todos, .pill-group ya no
-     los envuelve (Bug 3 v8) sino que se desplaza horizontalmente. */
-  flex: 0 0 auto;
+  /* v1.9.6: `flex: 0 0 auto` (v7.1) arreglaba el corte de texto pero rompía
+     el reparto equitativo pedido (los pills volvían a quedar más angostos
+     que el ancho disponible). `flex: 1 1 0` + `min-width: 0` reparte el
+     ancho por igual entre todos los pills del grupo Y permite que, si aun
+     así el texto no cabe, trunque prolijamente con "…" en vez de
+     desbordarse o encogerse de forma desigual (ver overflow/text-overflow
+     abajo) — resuelve los dos problemas a la vez sin reintroducir el bug
+     original de "Solo la primera[m]" cortado a lo bruto. */
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   border: none;
   background: transparent;
   color: var(--text-muted);
@@ -160,6 +164,15 @@ a { color: var(--accent-1); }
   font-size: 0.85rem;
   cursor: pointer;
   transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+/* La mayoría de los pill-item del proyecto tienen el texto directo dentro
+   del <button> (sin span interno) — la regla de arriba ya los cubre. Esta
+   regla adicional es para los pocos casos que sí envuelven el texto en un
+   span (ej. `.texto`), para que el truncado funcione igual ahí. */
+.pill-item span, .pill-item .texto {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 .pill-item.active {
