@@ -307,6 +307,9 @@
 <!-- ===================== MODAL: Requisito / Correquisito (detalle unificado, v8 punto 2) ===================== -->
 <div id="modal-requisito" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
+    <!-- Línea 1 (v10): Bloque·Código + Categoría, se arma dinámicamente en
+         plan.js (abrirModalRequisito) -- va antes del título/encabezado. -->
+    <div id="requisito-linea-meta" class="requisito-linea-meta-cat"></div>
     <h2 style="margin:0; display:flex; align-items:center;" id="requisito-titulo">Materia</h2>
     <!-- Línea 2 (Estado · Horas · Créditos) y todo lo demás (Bloque·Código,
          Categoría, Requisitos, Correquisitos, botones finales) se arman
