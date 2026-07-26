@@ -208,6 +208,28 @@ async function leerDatos(token, fileId) {
 }
 
 /**
+ * v8.3 (sincronización multi-dispositivo casi en tiempo real): pide
+ * ÚNICAMENTE el campo modifiedTime del archivo — una llamada barata que NO
+ * descarga el archivo completo. Se usa para sondear cada pocos segundos si
+ * otro dispositivo/sesión guardó algo nuevo, sin gastar cuota de la API
+ * innecesariamente en archivos que pueden pesar bastante con el tiempo.
+ */
+async function obtenerMetadatosArchivo(token, fileId) {
+  const respuesta = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}?fields=modifiedTime`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Drive respondió ${respuesta.status} al leer metadatos: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+  return respuesta.json(); // { modifiedTime: "..." }
+}
+
+/**
  * Sobrescribe el archivo de datos en Drive con el objeto completo.
  * v7 (Bug 2): antes esta función no revisaba `respuesta.ok`, así que un
  * error real de la API (token expirado, fileId inválido, cuerpo mal

@@ -85,7 +85,6 @@ window.addEventListener("DOMContentLoaded", () => {
       // se intentaba (fallaba en silencio, sin ningún error en consola).
       if (habiaCacheAlCargar) {
         intentarReconexionSilenciosa();
-        activarReconexionPorGesto();
       }
     },
     alFallar: () => {
@@ -258,26 +257,19 @@ function ocultarAvisoReconexion() {
 }
 
 /**
- * v8.3 (reporte "cada que reinicio me pide iniciar sesión"): la sesión en
- * caché SIEMPRE deja entrar a la app de inmediato (esto ya funcionaba) —
- * lo que el usuario percibía como "pedir login de nuevo" era en realidad el
- * banner de "Reconectar" apareciendo seguido, porque el refresco 100%
- * automático (sin ningún gesto de usuario de por medio) es el que más
- * bloquean los navegadores móviles. Este helper arma UN solo reintento
- * extra, atado al primer toque/click real que el usuario haga en la
- * página — un gesto real basta para que el navegador deje pasar cosas que
- * bloquea si vienen de puro JS. Con esto, en la mayoría de los casos el
- * usuario ni se entera de que hubo que reconectar.
+ * v8.3 (prioridad máxima, reporte "cada vez que actualizo se abre la
+ * página de Google"): ESTA función existía antes y disparaba una
+ * reconexión real en el primer toque/click de CUALQUIER parte de la
+ * página. En compu eso es casi invisible (Google abre y cierra un popup
+ * pequeño en una fracción de segundo), pero en móvil ese mismo popup se
+ * abre como página completa — así que cada vez que el usuario tocaba la
+ * pantalla (incluyendo el propio gesto de deslizar para sincronizar) se
+ * disparaba una navegación real a Google. Se elimina ese gatillo genérico:
+ * ahora la reconexión automática solo se intenta UNA vez al cargar la app
+ * (ver DOMContentLoaded); cualquier intento adicional queda ligado a una
+ * acción explícita de sincronizar (deslizar hacia abajo, forzar sync, o el
+ * botón "Reconectar" del banner), nunca a un toque cualquiera.
  */
-function activarReconexionPorGesto() {
-  const reintentar = () => {
-    document.removeEventListener("pointerdown", reintentar, true);
-    document.removeEventListener("keydown", reintentar, true);
-    if (!estado.token) intentarReconexionSilenciosa();
-  };
-  document.addEventListener("pointerdown", reintentar, true);
-  document.addEventListener("keydown", reintentar, true);
-}
 
 /* --------------------- Overlay de carga (3 puntitos) --------------------- */
 
@@ -335,21 +327,39 @@ function inicializarPullToRefresh() {
     { passive: true }
   );
 
+  // v8.3 (fix móvil): este listener YA NO es pasivo — necesita poder llamar
+  // preventDefault() para bloquear el "pull-to-refresh" NATIVO del
+  // navegador (que recarga la página completa) mientras dura nuestro
+  // propio gesto. Sin esto, en Chrome/Safari de teléfono el navegador se
+  // quedaba con el gesto antes que nuestro JS, y el custom nunca se veía.
   window.addEventListener(
     "pointermove",
     (e) => {
       if (!arrastrando || arrastreInicioY === null) return;
+      // Si a mitad de gesto la página ya no está en el tope (el usuario
+      // terminó soltando en scroll normal), se cancela el gesto sin tocar
+      // nada más.
+      if (window.scrollY > 0) {
+        arrastrando = false;
+        indicador.classList.remove("visible", "listo", "arrastrando");
+        indicador.style.transform = "";
+        return;
+      }
       const distancia = e.clientY - arrastreInicioY;
       if (distancia <= 0) {
         indicador.classList.remove("visible", "listo");
         return;
       }
+      // A partir de aquí sí es un arrastre hacia abajo con la página en el
+      // tope: se bloquea el comportamiento nativo del navegador (rebote de
+      // scroll / pull-to-refresh nativo) para que no compita con el gesto.
+      e.preventDefault();
       listoParaSoltar = distancia >= UMBRAL_PX;
       indicador.classList.add("visible");
       indicador.classList.toggle("listo", listoParaSoltar);
       indicador.style.transform = `translate(-50%, ${posicion(distancia)}px)`;
     },
-    { passive: true }
+    { passive: false }
   );
 
   async function soltar() {
@@ -395,7 +405,19 @@ async function sincronizarAhora() {
       await intentarReconexionSilenciosa();
     }
     if (estado.pendienteSync) {
-      await intentarSincronizar(); // sube lo local primero, nunca se pierde
+      await intentarSincronizar(); // sube lo local primero
+      // v8.3 (FIX crítico de pérdida de datos): antes, si este envío
+      // fallaba (sin conexión, token vencido de nuevo, error de Drive),
+      // igual se seguía de largo y se sobrescribía estado.datos con lo
+      // último que hubiera en Drive — borrando en el momento los cambios
+      // locales que todavía no se habían guardado. Ahora, si sigue
+      // pendiente después de intentarlo, se aborta ANTES de tocar
+      // estado.datos: tus cambios locales quedan intactos (siguen en caché
+      // y marcados como pendientes) y se reintentará más adelante.
+      if (estado.pendienteSync) {
+        mostrarToast("⚠️ No se pudo enviar tus cambios todavía, se reintentará. No se actualizó nada para no perderlos.");
+        return;
+      }
     }
     if (!estado.token || !estado.fileId) {
       mostrarToast("No se pudo actualizar: falta conexión con Drive");
@@ -411,6 +433,7 @@ async function sincronizarAhora() {
     renderizarEnlacesRapidos();
     renderizarPerfil();
     if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
+    marcarUltimaSincronizacionConfirmada();
     mostrarToast("✓ Datos actualizados");
   } catch (e) {
     console.warn("No se pudo actualizar los datos:", e);
