@@ -98,6 +98,16 @@ const TEXTO_PREVIEW_PALETA = {
   blanco: "#1E293B",
 };
 
+/**
+ * v9.2: correo ya conocido del perfil (si lo hay), para pasarlo como
+ * login_hint en los refrescos silenciosos y reducir la posibilidad de que
+ * Google muestre un selector de cuenta por ambigüedad (ver comentario en
+ * refrescarAccessTokenGoogle en auth.js).
+ */
+function correoConocido() {
+  return (estado.datos && estado.datos.perfil && estado.datos.perfil.correo) || undefined;
+}
+
 const estado = {
   token: null,
   fileId: null,
@@ -129,6 +139,26 @@ const authListo = new Promise((resolve) => {
 /* ---------------------------- Arranque ---------------------------- */
 
 window.addEventListener("DOMContentLoaded", () => {
+  // v9.2 (ajuste v1.8.7, punto 6 — pull-to-refresh no funciona en teléfono
+  // real aunque sí funciona arrastrando con mouse en compu): esto es
+  // consecuencia de un mecanismo del NAVEGADOR que compite con el gesto
+  // propio de la app y que las herramientas de emulación táctil de
+  // escritorio no reproducen fielmente — el "rebote"/recarga nativa que
+  // Chrome/Safari de teléfono activan al arrastrar hacia abajo estando ya
+  // en el tope de la página, ANTES incluso de que nuestro pointermove
+  // pueda hacer nada. `overscroll-behavior` es la propiedad hecha
+  // específicamente para apagar ESE mecanismo del navegador (no tiene
+  // relación con touch-action ni con nuestro preventDefault propio, así
+  // que no debería competir con el gesto ya arreglado — a diferencia de un
+  // intento anterior, el umbral de compromiso de 12px ya está en su lugar,
+  // que es lo que de verdad evitaba que este ajuste conviviera bien con la
+  // selección de texto). Si el gesto real sigue sin activarse en un
+  // teléfono después de esto, lo más probable es que haya un
+  // touch-action conflictivo en css/design-system.css — no tengo ese
+  // archivo, así que no puedo revisarlo directamente.
+  document.documentElement.style.overscrollBehaviorY = "contain";
+  document.body.style.overscrollBehaviorY = "contain";
+
   aplicarTemaGuardadoLocalmente(); // para que no haya "flash" de color al cargar
 
   const btnLogin = document.getElementById("btn-login-google");
@@ -262,7 +292,7 @@ window.addEventListener("DOMContentLoaded", () => {
     // navegadores móviles — necesario porque un click real evita el bloqueo
     // de popups que sí puede afectar al refresco silencioso automático.
     document.getElementById("aviso-reconexion").classList.add("oculto"); // ocultamiento visual inmediato, optimista
-    refrescarAccessTokenGoogle()
+    refrescarAccessTokenGoogle(correoConocido())
       .then(({ token, expiresIn }) => {
         establecerTokenActivo(token, expiresIn);
         if (estado.pendienteSync) intentarSincronizar();
@@ -318,7 +348,7 @@ function intentarReconexionSilenciosa() {
   if (reconexionEnCurso) return reconexionEnCurso; // evita refrescos duplicados en paralelo
   const timeoutMs = 8000;
   reconexionEnCurso = Promise.race([
-    refrescarAccessTokenGoogle(),
+    refrescarAccessTokenGoogle(correoConocido()),
     new Promise((_, reject) =>
       setTimeout(() => reject(new Error("Tiempo de espera agotado al refrescar el token de Google (posible bloqueo del navegador).")), timeoutMs)
     ),
@@ -585,7 +615,7 @@ async function conReintentoSi401(operacion) {
     estado.token = null; // fuerza que cualquier otro intento pase por reconexión
     let nuevoToken, expiresIn;
     try {
-      ({ token: nuevoToken, expiresIn } = await refrescarAccessTokenGoogle());
+      ({ token: nuevoToken, expiresIn } = await refrescarAccessTokenGoogle(correoConocido()));
     } catch (errorRefresco) {
       console.warn("No se pudo refrescar el token de Google automáticamente:", errorRefresco);
       const error = new Error("No se pudo renovar la sesión con Drive.");

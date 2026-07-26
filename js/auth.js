@@ -273,8 +273,21 @@ async function guardarDatos(token, fileId, datos) {
  * Devuelve una Promise que resuelve con el nuevo token, o rechaza si el
  * refresco también falla (ej. el usuario revocó el acceso desde su cuenta).
  * No pisa el callback normal de login: lo restaura apenas responde.
+ *
+ * v9.2 (ajuste v1.8.7 — picker de cuenta apareciendo dentro de la app):
+ * acepta un `correoConocido` opcional. Sin login_hint, un `prompt: ""`
+ * "silencioso" en Google Identity Services NO garantiza que nunca aparezca
+ * UI: si Google no puede resolver con certeza absoluta a qué cuenta/sesión
+ * te refieres (común en Chrome/Safari de teléfono con protecciones de
+ * cookies de terceros activas, o con más de una cuenta de Google en el
+ * navegador), en vez de fallar en silencio muestra un selector liviano.
+ * Eso es una decisión del lado de Google, no algo que este código dispare
+ * a propósito — pero pasarle el correo ya conocido (login_hint) le quita a
+ * Google la ambigüedad que lo lleva a mostrar ese selector, así que reduce
+ * mucho la frecuencia real, aunque no la elimina al 100%: sigue siendo un
+ * límite de la plataforma, no algo que se pueda forzar a funcionar siempre.
  */
-function refrescarAccessTokenGoogle() {
+function refrescarAccessTokenGoogle(correoConocido) {
   return new Promise((resolve, reject) => {
     if (!tokenClient) {
       reject(new Error("No se puede refrescar: tokenClient no está inicializado."));
@@ -293,6 +306,8 @@ function refrescarAccessTokenGoogle() {
       // con el expires_in real de ESTA renovación.
       resolve({ token: accessToken, expiresIn: respuesta.expires_in });
     };
-    tokenClient.requestAccessToken({ prompt: "" });
+    const opciones = { prompt: "" };
+    if (correoConocido) opciones.hint = correoConocido;
+    tokenClient.requestAccessToken(opciones);
   });
 }
