@@ -9,6 +9,58 @@
 
 const CLAVE_CACHE_LOCAL = "app_academica_cache";
 const CLAVE_SIDEBAR_COLAPSADA = "sidebar_colapsada";
+const CLAVE_TOKEN_CACHE = "google_token_cache";
+
+/**
+ * v9 (punto 2 — cachear el token con su expiración, no pedirlo de cero en
+ * cada carga): guarda { token, expiraEn } en localStorage cada vez que se
+ * obtiene un access_token nuevo (login, refresco silencioso, refresco
+ * manual o refresco tras 401).
+ */
+function guardarTokenCache(token, expiresInSegundos) {
+  const segundos = Number(expiresInSegundos) || 3600;
+  const expiraEn = Date.now() + segundos * 1000;
+  localStorage.setItem(CLAVE_TOKEN_CACHE, JSON.stringify({ token, expiraEn }));
+}
+
+/**
+ * Devuelve { token, expiraEn } SOLO si hay un token cacheado y todavía le
+ * quedan más de 5 minutos de vida (el mismo margen que usa el refresco
+ * proactivo) — si le queda menos, se trata como inválido a propósito para
+ * no arriesgarse a usarlo y toparse con un 401 a mitad de una operación.
+ * Si no hay nada usable, devuelve null y quien llama debe recurrir al
+ * refresco silencioso normal.
+ */
+function leerTokenCacheValido() {
+  try {
+    const crudo = localStorage.getItem(CLAVE_TOKEN_CACHE);
+    if (!crudo) return null;
+    const { token, expiraEn } = JSON.parse(crudo);
+    if (!token || !expiraEn || Date.now() >= expiraEn - 5 * 60 * 1000) return null;
+    return { token, expiraEn };
+  } catch (e) {
+    return null;
+  }
+}
+
+function borrarTokenCache() {
+  localStorage.removeItem(CLAVE_TOKEN_CACHE);
+}
+
+/**
+ * Punto único por el que la app debe pasar cada vez que obtiene un token
+ * válido (login, reconexión silenciosa, reconexión manual, refresco tras
+ * 401): guarda el token en memoria, lo cachea con su expiración, programa
+ * el siguiente refresco proactivo, y refleja "conexión OK" tanto en el
+ * banner de reconexión como en el indicador de sincronización (punto 4).
+ */
+function establecerTokenActivo(token, expiresInSegundos) {
+  estado.token = token;
+  guardarTokenCache(token, expiresInSegundos);
+  programarRefrescoProactivo(expiresInSegundos);
+  estado.conexionDrive = "ok";
+  ocultarAvisoReconexion();
+}
 
 /** Colores reales de cada paleta (modo oscuro), tomados de design-system.css.
  *  Se usan para pintar cada cuadro del selector con SU propio color, sin
@@ -52,7 +104,27 @@ const estado = {
   datos: null,
   pendienteSync: false,
   enlaceEditandoId: null,
+  // "ok" | "desconectado" — refleja el 3er estado real del indicador de
+  // sincronización (punto 4): no hay forma de renovar el token solo.
+  conexionDrive: "ok",
+  // Última modifiedTime de Drive que la app conoce (propia o ajena) — la usa
+  // el sondeo periódico (punto 5) para detectar cambios hechos desde otro
+  // dispositivo sin descargar el archivo completo en cada revisión.
+  ultimoModifiedTimeConocido: null,
 };
+
+/**
+ * v9 (punto 5 — condición de carrera en el arranque): promesa que se
+ * resuelve una sola vez, cuando ya se supo si hay o no un token de Drive
+ * utilizable (venga de caché válida o de un intento de reconexión que haya
+ * terminado, con éxito o sin él). intentarSincronizar() y el sondeo
+ * multi-dispositivo esperan esta promesa antes de tocar estado.token, para
+ * que ningún intento se dispare a mitad de la inicialización de auth.
+ */
+let resolverAuthListo;
+const authListo = new Promise((resolve) => {
+  resolverAuthListo = resolve;
+});
 
 /* ---------------------------- Arranque ---------------------------- */
 
@@ -84,7 +156,27 @@ window.addEventListener("DOMContentLoaded", () => {
       // se quedaba en null para siempre y la sincronización con Drive jamás
       // se intentaba (fallaba en silencio, sin ningún error en consola).
       if (habiaCacheAlCargar) {
-        intentarReconexionSilenciosa();
+        // v9 (punto 2): antes de pedirle nada a Google, se revisa si ya
+        // había un access_token cacheado que todavía no expiró. Si lo hay,
+        // se usa directamente — CERO llamadas a Google en esta carga. Esto
+        // es lo que corrige "cada vez que recargo se abre la pantalla de
+        // Google": antes se pedía un token nuevo (aunque fuera en silencio)
+        // en cada carga sin revisar primero si el que ya se tenía servía.
+        const tokenCache = leerTokenCacheValido();
+        if (tokenCache) {
+          estado.token = tokenCache.token;
+          estado.conexionDrive = "ok";
+          programarRefrescoProactivo(Math.round((tokenCache.expiraEn - Date.now()) / 1000));
+          resolverAuthListo();
+          if (estado.pendienteSync) intentarSincronizar();
+        } else {
+          intentarReconexionSilenciosa().finally(resolverAuthListo);
+        }
+      } else {
+        // No había sesión en caché (se muestra la pantalla de login): no hay
+        // nada que sincronizar todavía, así que la "inicialización de auth"
+        // se da por terminada de inmediato.
+        resolverAuthListo();
       }
     },
     alFallar: () => {
@@ -94,6 +186,13 @@ window.addEventListener("DOMContentLoaded", () => {
       aviso.textContent =
         "No se pudo cargar el inicio de sesión de Google. Revisa tu conexión a internet, desactiva bloqueadores de anuncios/VPN para este sitio, y recarga la página.";
       aviso.classList.remove("oculto");
+      // Sin esto, si el script de Google nunca carga, authListo se queda
+      // pendiente para siempre y cualquier intento de sync/sondeo quedaría
+      // esperando indefinidamente en vez de simplemente no tener nada que
+      // hacer sin token.
+      estado.conexionDrive = habiaCacheAlCargar ? "desconectado" : "ok";
+      actualizarIndicadorSync();
+      resolverAuthListo();
     },
     alRechazarPermiso: (motivo) => {
       btnLogin.textContent = textoOriginalBtnLogin;
@@ -162,17 +261,26 @@ window.addEventListener("DOMContentLoaded", () => {
     // iniciarSesionConGoogle(), para no romper el gesto de usuario en
     // navegadores móviles — necesario porque un click real evita el bloqueo
     // de popups que sí puede afectar al refresco silencioso automático.
-    ocultarAvisoReconexion();
+    document.getElementById("aviso-reconexion").classList.add("oculto"); // ocultamiento visual inmediato, optimista
     refrescarAccessTokenGoogle()
       .then(({ token, expiresIn }) => {
-        estado.token = token;
-        programarRefrescoProactivo(expiresIn);
+        establecerTokenActivo(token, expiresIn);
         if (estado.pendienteSync) intentarSincronizar();
+        else if (estado.ultimoModifiedTimeConocido) sondearCambiosRemotos();
       })
       .catch((e) => {
         console.warn("No se pudo reconectar la sesión de Google:", e);
         mostrarAvisoReconexion();
       });
+  });
+
+  // Punto 4: el indicador mismo también sirve de botón de reconexión cuando
+  // está en el 3er estado ("Sin conexión con Drive — toca para reconectar"),
+  // sin depender únicamente del banner separado.
+  document.getElementById("indicador-sync").addEventListener("click", () => {
+    if (estado.conexionDrive === "desconectado") {
+      document.getElementById("btn-reconectar-sesion").click();
+    }
   });
 
   // Bug 1 (v8): reintento periódico — antes, si un intento de sincronización
@@ -183,6 +291,16 @@ window.addEventListener("DOMContentLoaded", () => {
   setInterval(() => {
     if (estado.pendienteSync || !estado.token) intentarSincronizar();
   }, 45000);
+
+  // v9 (punto 5 — sondeo multi-dispositivo): cada ~9s revisa SOLO el
+  // modifiedTime del archivo en Drive (llamada barata, ver
+  // obtenerMetadatosArchivo en auth.js) para detectar cambios guardados
+  // desde otro dispositivo/pestaña. Se registra aquí, en el arranque, sin
+  // depender de ningún gesto del usuario (a diferencia del pull-to-refresh,
+  // que es un mecanismo aparte). Antes esta función existía en auth.js pero
+  // nunca se llamaba desde ningún lado — por eso los cambios de un
+  // dispositivo nunca llegaban al otro.
+  setInterval(sondearCambiosRemotos, 9000);
 });
 
 /**
@@ -206,9 +324,7 @@ function intentarReconexionSilenciosa() {
     ),
   ])
     .then(({ token, expiresIn }) => {
-      estado.token = token;
-      programarRefrescoProactivo(expiresIn);
-      ocultarAvisoReconexion();
+      establecerTokenActivo(token, expiresIn);
       if (estado.pendienteSync) intentarSincronizar();
     })
     .catch((e) => {
@@ -247,13 +363,17 @@ function programarRefrescoProactivo(expiresInSegundos) {
 }
 
 function mostrarAvisoReconexion() {
+  estado.conexionDrive = "desconectado";
   const aviso = document.getElementById("aviso-reconexion");
   if (aviso) aviso.classList.remove("oculto");
+  actualizarIndicadorSync();
 }
 
 function ocultarAvisoReconexion() {
+  estado.conexionDrive = "ok";
   const aviso = document.getElementById("aviso-reconexion");
   if (aviso) aviso.classList.add("oculto");
+  actualizarIndicadorSync();
 }
 
 /**
@@ -300,6 +420,19 @@ function inicializarPullToRefresh() {
   const indicador = document.getElementById("pull-refresh-indicador");
   if (!indicador) return;
 
+  // v9 (punto 6, fix real): en Chrome/Safari de móvil el pull-to-refresh
+  // NATIVO del navegador puede ganarle al gesto propio incluso con
+  // preventDefault() en pointermove, porque el navegador decide si va a
+  // interceptar el gesto ANTES de que ese evento no-pasivo se procese. La
+  // forma correcta de cederle el control al JS es declarar
+  // "overscroll-behavior-y: contain" en el elemento que hace scroll (html y
+  // body) — así el navegador nunca activa su propio refresco/rebote nativo
+  // ahí, y el gesto queda enteramente en manos de este código. No se toca
+  // css/design-system.css (no está disponible en este contexto) porque esta
+  // propiedad es segura de fijar por JS y no depende del resto de estilos.
+  document.documentElement.style.overscrollBehaviorY = "contain";
+  document.body.style.overscrollBehaviorY = "contain";
+
   const UMBRAL_PX = 78;
   const MAX_ARRASTRE_PX = 120;
   let arrastreInicioY = null;
@@ -317,12 +450,21 @@ function inicializarPullToRefresh() {
   window.addEventListener(
     "pointerdown",
     (e) => {
-      if (sincronizando || window.scrollY > 0) return;
+      // v9 (punto 6): antes exigía scrollY === 0 exacto — en móvil (rebote
+      // elástico, redondeo de subpíxeles, barra de direcciones
+      // colapsándose) el valor real casi nunca es exactamente 0 aunque la
+      // página esté visualmente en el tope, así que el gesto nunca llegaba
+      // a iniciar. Se da un pequeño margen de tolerancia.
+      if (sincronizando || window.scrollY > 4) return;
       // Ignora clics normales sobre controles interactivos.
       if (e.target.closest("button, a, input, textarea, select")) return;
       arrastreInicioY = e.clientY;
       arrastrando = true;
       indicador.classList.add("arrastrando");
+      // Punto 6: si el arrastre se hace con mouse en escritorio (sin dedo),
+      // evita que se seleccione texto de la página por accidente mientras
+      // dura el gesto.
+      document.body.style.userSelect = "none";
     },
     { passive: true }
   );
@@ -339,7 +481,7 @@ function inicializarPullToRefresh() {
       // Si a mitad de gesto la página ya no está en el tope (el usuario
       // terminó soltando en scroll normal), se cancela el gesto sin tocar
       // nada más.
-      if (window.scrollY > 0) {
+      if (window.scrollY > 4) {
         arrastrando = false;
         indicador.classList.remove("visible", "listo", "arrastrando");
         indicador.style.transform = "";
@@ -367,6 +509,7 @@ function inicializarPullToRefresh() {
     arrastrando = false;
     indicador.classList.remove("arrastrando");
     arrastreInicioY = null;
+    document.body.style.userSelect = ""; // punto 6: restaura la selección normal de texto
 
     if (!listoParaSoltar) {
       indicador.classList.remove("visible", "listo");
@@ -424,22 +567,92 @@ async function sincronizarAhora() {
       return;
     }
     const datosFrescos = await leerDatos(estado.token, estado.fileId);
-    estado.datos = migrarDatosAntiguos(datosFrescos);
-    guardarCacheLocal();
-    aplicarPaleta(estado.datos.configuracion.paleta, estado.datos.configuracion.modo);
-    renderizarSelectorPlan();
-    renderizarAjustes();
-    renderizarModoHardcore();
-    renderizarEnlacesRapidos();
-    renderizarPerfil();
-    if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
-    marcarUltimaSincronizacionConfirmada();
+    aplicarDatosRemotosFrescos(datosFrescos);
+    try {
+      const meta = await obtenerMetadatosArchivo(estado.token, estado.fileId);
+      estado.ultimoModifiedTimeConocido = meta.modifiedTime;
+    } catch (e) {
+      // No crítico: si falla, el próximo ciclo de sondeo simplemente
+      // establece la base de comparación de nuevo.
+    }
     mostrarToast("✓ Datos actualizados");
   } catch (e) {
     console.warn("No se pudo actualizar los datos:", e);
     mostrarToast("No se pudo actualizar. Intenta de nuevo.");
   } finally {
     ocultarCargando();
+  }
+}
+
+/**
+ * v9: bloque compartido que aplica datos ya descargados de Drive — repinta
+ * toda la UI en el sitio, sin recargar la página. Lo usan tanto
+ * sincronizarAhora() (pull-to-refresh manual, con overlay y toast) como
+ * sondearCambiosRemotos() (en segundo plano, en silencio).
+ */
+function aplicarDatosRemotosFrescos(datosFrescos) {
+  estado.datos = migrarDatosAntiguos(datosFrescos);
+  guardarCacheLocal();
+  aplicarPaleta(estado.datos.configuracion.paleta, estado.datos.configuracion.modo);
+  renderizarSelectorPlan();
+  renderizarAjustes();
+  renderizarModoHardcore();
+  renderizarEnlacesRapidos();
+  renderizarPerfil();
+  if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
+  marcarUltimaSincronizacionConfirmada();
+}
+
+/**
+ * v9 (bug real encontrado — no venía en el reporte original): esta función
+ * se llamaba desde sincronizarAhora() pero NUNCA estaba definida en ningún
+ * archivo. Eso significa que cada pull-to-refresh (y cada sondeo) reventaba
+ * con un ReferenceError silencioso, atrapado por el catch de
+ * sincronizarAhora, que mostraba "No se pudo actualizar" aunque los datos
+ * sí se hubieran traído bien — un falso negativo que hacía parecer rota la
+ * sincronización cuando en realidad había funcionado.
+ */
+function marcarUltimaSincronizacionConfirmada() {
+  estado.ultimaSincronizacionConfirmadaEn = Date.now();
+  actualizarIndicadorSync();
+}
+
+/**
+ * v9 (punto 5 — sondeo periódico multi-dispositivo): revisa cada ~9s (ver
+ * setInterval en DOMContentLoaded) si el archivo cambió en Drive desde otro
+ * dispositivo/pestaña, usando SOLO su modifiedTime (llamada barata, no
+ * descarga el archivo). Antes, obtenerMetadatosArchivo() existía en
+ * auth.js pero no se llamaba desde ningún lado — por eso los cambios de un
+ * dispositivo nunca llegaban al otro. Corre en silencio: sin overlay ni
+ * toast, para no interrumpir al usuario con algo que no pidió.
+ */
+async function sondearCambiosRemotos() {
+  await authListo; // nunca sondear antes de saber si hay token (punto 5, condición de carrera)
+  if (document.hidden) return; // ahorra cuota de la API si la pestaña no está visible
+  if (!estado.token || !estado.fileId) return;
+  // Si hay cambios locales sin subir todavía, se deja que intentarSincronizar()
+  // (el reintento cada 45s, o el próximo cambio del usuario) suba eso primero —
+  // pisar aquí con lo remoto arriesgaría perder esos cambios locales.
+  if (estado.pendienteSync) return;
+
+  try {
+    const meta = await obtenerMetadatosArchivo(estado.token, estado.fileId);
+    if (!estado.ultimoModifiedTimeConocido) {
+      estado.ultimoModifiedTimeConocido = meta.modifiedTime; // primera vez: solo fija la base de comparación
+      return;
+    }
+    if (meta.modifiedTime === estado.ultimoModifiedTimeConocido) return; // sin cambios desde el último sondeo
+
+    estado.ultimoModifiedTimeConocido = meta.modifiedTime;
+    const datosFrescos = await leerDatos(estado.token, estado.fileId);
+    aplicarDatosRemotosFrescos(datosFrescos);
+  } catch (e) {
+    if (e.status === 401) {
+      // El token venció justo entre sondeos: se limpia para que el próximo
+      // ciclo (o el próximo guardado) dispare la reconexión normal.
+      estado.token = null;
+    }
+    console.warn("No se pudo sondear cambios remotos de Drive:", e);
   }
 }
 
@@ -468,8 +681,11 @@ function ocultarAvisoLoginBloqueado() {
 
 async function onLoginExitoso(token, expiresIn) {
   ocultarAvisoLoginBloqueado();
-  estado.token = token;
-  programarRefrescoProactivo(expiresIn);
+  establecerTokenActivo(token, expiresIn);
+  // Este login es la primera vez que la app sabe si hay token o no en esta
+  // carga (no venía de una sesión en caché) — resuelve authListo aquí por
+  // si algún sondeo/sincronización quedó esperándola.
+  resolverAuthListo();
   mostrarCargando();
   // v8.3: le pide al navegador que este sitio quede en la lista de
   // almacenamiento "persistente" (no elegible para borrado automático por
@@ -492,6 +708,15 @@ async function onLoginExitoso(token, expiresIn) {
     }
 
     guardarCacheLocal();
+    // Punto 5: fija la base de comparación del sondeo multi-dispositivo con
+    // la versión que se acaba de leer/crear, para no confundirla luego con
+    // un cambio hecho desde otro dispositivo.
+    try {
+      const meta = await obtenerMetadatosArchivo(token, fileId);
+      estado.ultimoModifiedTimeConocido = meta.modifiedTime;
+    } catch (e) {
+      // No crítico: si falla, el primer sondeo simplemente fija la base.
+    }
     mostrarApp();
   } finally {
     ocultarCargando();
@@ -537,9 +762,12 @@ function cerrarSesion() {
   clearTimeout(temporizadorRefrescoProactivo);
   cerrarSesionGoogle();
   localStorage.removeItem(CLAVE_CACHE_LOCAL);
+  borrarTokenCache();
   estado.token = null;
   estado.fileId = null;
   estado.datos = null;
+  estado.conexionDrive = "ok";
+  estado.ultimoModifiedTimeConocido = null;
   document.getElementById("app-shell").classList.add("oculto");
   document.getElementById("pantalla-login").classList.remove("oculto");
 }
@@ -589,6 +817,12 @@ function marcarCambioPendiente() {
 async function intentarSincronizar() {
   if (!estado.pendienteSync || !estado.fileId) return;
 
+  // v9 (punto 5 — condición de carrera): nunca intentar nada antes de saber
+  // si esta carga terminó de resolver si hay o no un token de Drive. Antes
+  // era posible que un intento se disparara (ej. desde el setInterval de
+  // reintento) a mitad de la inicialización de auth.
+  await authListo;
+
   // Bug 1 (v8): antes, si no había token (ej. sesión recuperada de caché sin
   // reconexión todavía), esta función se salía aquí mismo sin intentar nada
   // ni avisar — la causa raíz de que la sincronización pareciera "rota"
@@ -600,8 +834,9 @@ async function intentarSincronizar() {
   }
 
   try {
-    await guardarDatos(estado.token, estado.fileId, estado.datos);
+    const meta = await guardarDatos(estado.token, estado.fileId, estado.datos);
     estado.pendienteSync = false;
+    if (meta && meta.modifiedTime) estado.ultimoModifiedTimeConocido = meta.modifiedTime;
     ocultarAvisoReconexion();
     actualizarIndicadorSync();
   } catch (e) {
@@ -620,11 +855,10 @@ async function intentarSincronizar() {
       estado.token = null; // fuerza que el próximo intento pase por la reconexión de arriba
       try {
         const { token: nuevoToken, expiresIn } = await refrescarAccessTokenGoogle();
-        estado.token = nuevoToken;
-        programarRefrescoProactivo(expiresIn);
-        await guardarDatos(estado.token, estado.fileId, estado.datos);
+        establecerTokenActivo(nuevoToken, expiresIn);
+        const meta = await guardarDatos(estado.token, estado.fileId, estado.datos);
         estado.pendienteSync = false;
-        ocultarAvisoReconexion();
+        if (meta && meta.modifiedTime) estado.ultimoModifiedTimeConocido = meta.modifiedTime;
         actualizarIndicadorSync();
         return;
       } catch (errorRefresco) {
@@ -660,11 +894,29 @@ async function forzarSincronizacion() {
   }
 }
 
+/**
+ * Punto 4 del prompt: el indicador debe tener 3 estados reales y nunca
+ * mentir. Se prioriza "sin conexión" sobre "cambios sin sincronizar" —
+ * si el token no se pudo renovar, eso es lo más importante que el usuario
+ * necesita saber, tenga o no cambios pendientes en ese momento.
+ */
 function actualizarIndicadorSync() {
   const el = document.getElementById("indicador-sync");
   if (!el) return;
-  el.textContent = estado.pendienteSync ? "Cambios sin sincronizar" : "Todo sincronizado";
-  el.className = "badge " + (estado.pendienteSync ? "badge-warning" : "badge-success");
+
+  if (estado.conexionDrive === "desconectado") {
+    el.textContent = "Sin conexión con Drive — toca para reconectar";
+    el.className = "badge badge-danger";
+    el.style.cursor = "pointer";
+  } else if (estado.pendienteSync) {
+    el.textContent = "Cambios sin sincronizar";
+    el.className = "badge badge-warning";
+    el.style.cursor = "";
+  } else {
+    el.textContent = "Todo sincronizado";
+    el.className = "badge badge-success";
+    el.style.cursor = "";
+  }
 }
 
 /* ------------------------------ Tema ------------------------------ */

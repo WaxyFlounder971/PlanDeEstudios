@@ -241,7 +241,12 @@ async function obtenerMetadatosArchivo(token, fileId) {
  */
 async function guardarDatos(token, fileId, datos) {
   const respuesta = await fetch(
-    `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
+    // v9 (sondeo multi-dispositivo): se pide `fields=modifiedTime` en la
+    // respuesta del PATCH para que quien llama pueda anotar de inmediato
+    // "esta es la última versión que YO subí" — así el sondeo periódico no
+    // confunde el propio guardado con un cambio hecho desde otro dispositivo
+    // y no dispara una recarga innecesaria de lo que la app acaba de enviar.
+    `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&fields=modifiedTime`,
     {
       method: "PATCH",
       headers: {
@@ -258,6 +263,7 @@ async function guardarDatos(token, fileId, datos) {
     error.body = cuerpo;
     throw error;
   }
+  return respuesta.json(); // { modifiedTime: "..." }
 }
 
 /**
