@@ -2963,41 +2963,61 @@ function construirMetaLineaMateria(materia, plan) {
   return p;
 }
 
-/** B (v9)/v8 punto 2: badge de Categoría pegado a la derecha — se omite POR
- *  COMPLETO (devuelve null) si la materia no tiene ninguna asignada. */
-function construirLineaCategoriaMateria(materia, plan) {
+/** v10 (reemplaza construirLineaCategoriaMateria): badge de Categoría
+ *  reutilizable — a diferencia de la versión anterior, ahora SIEMPRE se
+ *  muestra (con "Sin categoría" en gris si no tiene ninguna asignada), ya
+ *  que es el primer elemento fijo de la columna derecha del detalle de la
+ *  tarjeta y de la línea 1 del modal, y esos layouts necesitan que siempre
+ *  esté presente. */
+function construirBadgeCategoria(materia, plan) {
   const categoria = plan.categorias.find((c) => c.id === materia.categoria_id);
-  if (!categoria) return null;
-
-  const fila = document.createElement("div");
-  fila.className = "materia-categoria-linea";
 
   const badge = document.createElement("span");
   badge.className = "badge";
-  badge.style.cssText = estiloBadgeCategoria(categoria.color) + " cursor:pointer;";
-  badge.textContent = categoria.nombre;
+  if (categoria) {
+    badge.style.cssText = estiloBadgeCategoria(categoria.color) + " cursor:pointer;";
+    badge.textContent = categoria.nombre;
+  } else {
+    badge.classList.add("badge-neutral");
+    badge.style.cursor = "pointer";
+    badge.textContent = "Sin categoría";
+  }
   badge.title = "Mantén presionado (o clic derecho) para cambiar la categoría";
   agregarLongPress(badge, () => abrirMenuRapidoCategoria(materia, plan, badge));
-  fila.appendChild(badge);
 
-  return fila;
+  return badge;
+}
+
+/** v10: botón real (no un link de texto) para "Es requisito"/"Historial" en
+ *  la columna derecha del detalle de la tarjeta expandida — mismo
+ *  ancho/alto que el badge de Categoría (ver .detalle-col-derecha en
+ *  design-system.css). */
+function construirBotonPillLateral(texto, onClick) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "btn-lateral";
+  btn.textContent = texto;
+  btn.addEventListener("click", onClick);
+  return btn;
 }
 
 /**
- * B (v9)/v8 punto 2: fila final del bloque de detalle, con "Es requisito" y
- * "Historial" siempre juntos — y "Cerrar" solo cuando es el modal (en la
- * tarjeta expandida, cerrar es simplemente volver a hacer clic en la fila
- * para colapsarla, así que ese botón no aplica ahí).
+ * v10 (reemplaza la versión v8/v9): fila final EXCLUSIVA del modal —
+ * "Es requisito" / "Historial" / "Cerrar", los 3 como botones REALES del
+ * mismo estilo (antes solo "Cerrar" era un botón real y los otros 2 eran
+ * enlaces de texto plano). En la tarjeta expandida esos mismos 2 botones ya
+ * no viven aquí: se movieron a la columna derecha del detalle, junto al
+ * badge de Categoría (ver construirCuerpoDetalleMateria/
+ * construirBotonPillLateral) — ahí "cerrar" no aplica porque colapsar es
+ * simplemente volver a hacer clic en la fila.
  */
-function construirBotonesFinalesDetalle(materia, plan, opciones) {
-  const esModal = !!(opciones && opciones.esModal);
-
+function construirBotonesFinalesDetalle(materia, plan) {
   const fila = document.createElement("div");
   fila.className = "row detalle-botones-finales";
 
   const btnEsRequisito = document.createElement("button");
   btnEsRequisito.type = "button";
-  btnEsRequisito.className = "link-plano";
+  btnEsRequisito.className = "btn btn-primary";
   btnEsRequisito.textContent = "Es requisito";
   btnEsRequisito.addEventListener("click", (ev) => {
     ev.stopPropagation();
@@ -3007,7 +3027,7 @@ function construirBotonesFinalesDetalle(materia, plan, opciones) {
 
   const btnHistorial = document.createElement("button");
   btnHistorial.type = "button";
-  btnHistorial.className = "link-plano";
+  btnHistorial.className = "btn btn-primary";
   btnHistorial.textContent = "Historial";
   btnHistorial.addEventListener("click", (ev) => {
     ev.stopPropagation();
@@ -3015,17 +3035,15 @@ function construirBotonesFinalesDetalle(materia, plan, opciones) {
   });
   fila.appendChild(btnHistorial);
 
-  if (esModal) {
-    const btnCerrar = document.createElement("button");
-    btnCerrar.type = "button";
-    btnCerrar.className = "btn btn-primary";
-    btnCerrar.textContent = "Cerrar";
-    btnCerrar.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      document.getElementById("modal-requisito").classList.add("oculto");
-    });
-    fila.appendChild(btnCerrar);
-  }
+  const btnCerrar = document.createElement("button");
+  btnCerrar.type = "button";
+  btnCerrar.className = "btn btn-primary";
+  btnCerrar.textContent = "Cerrar";
+  btnCerrar.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    document.getElementById("modal-requisito").classList.add("oculto");
+  });
+  fila.appendChild(btnCerrar);
 
   return fila;
 }
@@ -3037,9 +3055,15 @@ function construirBotonesFinalesDetalle(materia, plan, opciones) {
  *    materia (ya NO hay un link "Ir a materia" aparte).
  * 2) Créditos, alineados estrictamente a la derecha de la fila.
  */
-function construirFilaRequisito(codigo) {
+function construirFilaRequisito(codigo, opciones) {
+  // v10: `mostrarCreditos` es true por defecto (modal, y cualquier otro uso
+  // existente que no pase opciones) — la tarjeta expandida del plan la pasa
+  // en false explícitamente, para no repetir los créditos de la MATERIA
+  // requisito/correquisito en esa columna (ver construirCuerpoDetalleMateria).
+  const mostrarCreditos = !opciones || opciones.mostrarCreditos !== false;
+
   const fila = document.createElement("div");
-  fila.className = "requisito-fila";
+  fila.className = "requisito-fila" + (mostrarCreditos ? "" : " sin-creditos");
 
   const encontrada = buscarMateriaPorCodigoEnPlanes(codigo);
 
@@ -3058,15 +3082,17 @@ function construirFilaRequisito(codigo) {
   });
   fila.appendChild(colNombre);
 
-  const colCreditos = document.createElement("span");
-  colCreditos.className = "requisito-col-creditos";
-  colCreditos.textContent = encontrada ? String(encontrada.materia.creditos) : "—";
-  fila.appendChild(colCreditos);
+  if (mostrarCreditos) {
+    const colCreditos = document.createElement("span");
+    colCreditos.className = "requisito-col-creditos";
+    colCreditos.textContent = encontrada ? String(encontrada.materia.creditos) : "—";
+    fila.appendChild(colCreditos);
+  }
 
   return fila;
 }
 
-function construirBloqueRequisitos(etiqueta, grupos) {
+function construirBloqueRequisitos(etiqueta, grupos, opcionesFila) {
   const cont = document.createElement("div");
   const sinItems = !grupos || grupos.length === 0;
 
@@ -3093,7 +3119,7 @@ function construirBloqueRequisitos(etiqueta, grupos) {
 
   grupos.forEach((grupo) => {
     (grupo || []).forEach((codigo, i) => {
-      cont.appendChild(construirFilaRequisito(codigo));
+      cont.appendChild(construirFilaRequisito(codigo, opcionesFila));
       // Alternativas dentro del mismo grupo ("O"): un separador entre filas.
       // Entre grupos distintos no hay separador (el "Y" queda implícito).
       if (i < grupo.length - 1) {
@@ -3108,32 +3134,60 @@ function construirBloqueRequisitos(etiqueta, grupos) {
   return cont;
 }
 
-function construirBloqueCompletoRequisitos(materia, plan) {
+function construirBloqueCompletoRequisitos(materia, plan, opcionesFila) {
   const cont = document.createElement("div");
   cont.className = "stack";
-  cont.appendChild(construirBloqueRequisitos("Requisitos", materia.requisitos));
-  cont.appendChild(construirBloqueRequisitos("Correquisitos", materia.correquisitos));
+  cont.appendChild(construirBloqueRequisitos("Requisitos", materia.requisitos, opcionesFila));
+  cont.appendChild(construirBloqueRequisitos("Correquisitos", materia.correquisitos, opcionesFila));
   return cont;
 }
 
 /**
- * B (v9)/v8 punto 2: arma TODO lo que va debajo del encabezado de 2 líneas,
- * en el mismo orden y con el mismo diseño tanto en la tarjeta expandida
- * como en el modal — Bloque·Código → Categoría (si tiene) → Requisitos →
- * Correquisitos → fila final de botones. `opciones.esModal` solo cambia si
- * se agrega "Cerrar" al final (ver construirBotonesFinalesDetalle).
+ * v10 (reemplaza la versión v8/v9 que compartía un único diseño lineal
+ * entre tarjeta y modal): ahora cada contexto tiene su propio layout.
+ *
+ * - Modal (`opciones.esModal`): Bloque·Código y Categoría ya NO se arman
+ *   aquí — se muestran arriba, en su propia línea 1, antes del título (ver
+ *   abrirModalRequisito). Aquí solo van Requisitos/Correquisitos (con
+ *   créditos, como siempre) y la fila final de 3 botones reales.
+ * - Tarjeta expandida (`esModal: false`): ya NO se muestra Bloque·Código
+ *   (es redundante, el Código ya está visible en el encabezado). El cuerpo
+ *   es un grid de 2 columnas totalmente independientes: izquierda =
+ *   Requisitos/Correquisitos (sin créditos); derecha = badge de Categoría +
+ *   botones "Es requisito"/"Historial", ancladas arriba a la derecha.
  */
 function construirCuerpoDetalleMateria(materia, plan, opciones) {
+  const esModal = !!(opciones && opciones.esModal);
   const cont = document.createElement("div");
   cont.className = "stack";
 
-  cont.appendChild(construirMetaLineaMateria(materia, plan));
+  if (esModal) {
+    cont.appendChild(construirBloqueCompletoRequisitos(materia, plan, { mostrarCreditos: true }));
+    cont.appendChild(construirBotonesFinalesDetalle(materia, plan));
+  } else {
+    const grid = document.createElement("div");
+    grid.className = "detalle-grid";
 
-  const lineaCategoria = construirLineaCategoriaMateria(materia, plan);
-  if (lineaCategoria) cont.appendChild(lineaCategoria);
+    const colIzq = document.createElement("div");
+    colIzq.className = "detalle-col-izquierda";
+    colIzq.appendChild(construirBloqueCompletoRequisitos(materia, plan, { mostrarCreditos: false }));
 
-  cont.appendChild(construirBloqueCompletoRequisitos(materia, plan));
-  cont.appendChild(construirBotonesFinalesDetalle(materia, plan, opciones));
+    const colDer = document.createElement("div");
+    colDer.className = "detalle-col-derecha";
+    colDer.appendChild(construirBadgeCategoria(materia, plan));
+    colDer.appendChild(construirBotonPillLateral("Es requisito", (ev) => {
+      ev.stopPropagation();
+      abrirModalDesbloquea(materia, plan);
+    }));
+    colDer.appendChild(construirBotonPillLateral("Historial", (ev) => {
+      ev.stopPropagation();
+      abrirModalHistorial(materia);
+    }));
+
+    grid.appendChild(colIzq);
+    grid.appendChild(colDer);
+    cont.appendChild(grid);
+  }
 
   return cont;
 }
@@ -3147,6 +3201,11 @@ function abrirModalRequisito(codigo) {
 
   const contenedorFinal = document.getElementById("requisito-contenedor-final");
   contenedorFinal.innerHTML = "";
+
+  // v10: línea 1 nueva (Bloque·Código + Categoría), antes del título — se
+  // limpia siempre y solo se rellena cuando sí se encontró la materia.
+  const contenedorMeta = document.getElementById("requisito-linea-meta");
+  contenedorMeta.innerHTML = "";
 
   const encontrada = buscarMateriaPorCodigoEnPlanes(codigo);
 
@@ -3178,7 +3237,12 @@ function abrirModalRequisito(codigo) {
     franja.style.background = categoria ? categoria.color : "var(--gradient-accent)";
     modalCard.insertBefore(franja, modalCard.firstChild);
 
-    // ---- Encabezado de 2 líneas (B/v8 punto 2), igual que en la tarjeta ----
+    // ---- Línea 1 (v10): Bloque·Código (izq) + Categoría (der), al mismo
+    // nivel vertical entre sí. Va ANTES del título/encabezado. ----
+    contenedorMeta.appendChild(construirMetaLineaMateria(materia, plan));
+    contenedorMeta.appendChild(construirBadgeCategoria(materia, plan));
+
+    // ---- Línea 2: luz + nombre (encabezado/título), igual que antes ----
     const luzTitulo = document.createElement("span");
     luzTitulo.className = "luz-punto " + (disponible ? "disponible" : "bloqueada");
     luzTitulo.style.marginRight = "8px";
