@@ -1016,10 +1016,11 @@ img, svg { max-width: 100%; }
   justify-content: center;
 }
 
-/* ---- Tarjeta de materia — encabezado FINAL de 2 líneas (v5 #4/#5) ----
-   Línea 1: Luz · Código · Nombre (con flecha de expandir al final).
-   Línea 2: Estado (pegado a la izquierda) · Créditos (pegado a la derecha).
-   La Categoría NO aparece en el encabezado (solo la franja lateral). */
+/* ---- Tarjeta de materia — encabezado FINAL de 2 líneas (v8 punto 2 / B v9) ----
+   Línea 1: Luz · Código · Nombre (con flecha de expandir al final; el
+   Código en sí es clickeable y abre el detalle unificado de la materia).
+   Línea 2: Estado (izquierda) · Horas (centro) · Créditos (derecha) — igual
+   en la tarjeta colapsada, expandida, y en el modal. */
 .materia-card { padding: 12px 14px; }
 .materia-fila-principal {
   display: flex;
@@ -1047,12 +1048,15 @@ img, svg { max-width: 100%; }
   font-family: var(--font-mono, monospace);
   font-size: 0.82rem;
   color: var(--text-secondary);
+  cursor: pointer; /* v8 punto 2 / B (v9): clic abre el detalle unificado */
 }
+.materia-codigo:hover { text-decoration: underline; }
 /* Prefijo (luz+código) de ancho FIJO, flotando a la izquierda del mismo
    flujo de texto que el nombre — así la 2da línea del nombre (que ya no
    tiene ningún float a su lado) se alinea exactamente bajo la 1ra gracias
    al padding-left/text-indent de .materia-nombre.completa, calculado con
-   ese mismo ancho fijo (indentación colgante real, v8 Bug 4). */
+   ese mismo ancho fijo (indentación colgante real, v8 Bug 4). `align-items:
+   center` centra el Código verticalmente respecto a la Luz (ajuste v9). */
 .materia-prefijo {
   float: left;
   display: flex;
@@ -1086,25 +1090,58 @@ img, svg { max-width: 100%; }
   text-indent: -114px;
 }
 
+/* Línea 2: 3 zonas — Estado a la izquierda, Horas al centro (ocupa el
+   espacio flexible restante y se centra dentro de él), Créditos a la
+   derecha. Si Horas desborda su ancho, hace wrap a 2 líneas mantenidas
+   centradas (tanto horizontal como verticalmente respecto a Estado/
+   Créditos) gracias a align-items:center en la fila y text-align:center
+   en el propio span. */
 .materia-linea2 {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
+.materia-linea2-horas {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
 
 .materia-cuerpo { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-glass); }
 .materia-req-linea { text-align: left; color: var(--text-muted); font-size: 0.82rem; margin: 0; }
-.materia-horas-detalle { color: var(--text-muted); font-size: 0.85rem; }
 
-/* ---- Fila de requisito/correquisito de 3 columnas (v7 rediseño) ----
+/* B (v9)/v8 punto 2: "Bloque X · Código", texto plano al 75% del tamaño
+   del nombre de la materia (que usa font-size heredado del body, ~1rem). */
+.materia-meta-linea {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+/* Línea de Categoría, pegada a la derecha — se omite del DOM por completo
+   (ver construirLineaCategoriaMateria) si la materia no tiene ninguna. */
+.materia-categoria-linea {
+  display: flex;
+  justify-content: flex-end;
+}
+/* Fila final del bloque de detalle: "Es requisito" · "Historial" · (solo
+   en el modal) "Cerrar" — siempre agrupados juntos, nunca dispersos. */
+.detalle-botones-finales {
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+/* ---- Fila de requisito/correquisito de 2 columnas (v8 punto 2) ----
    1) Código-Nombre (flexible, es el link en sí, trunca con "…")
-   2) Horas (ancho fijo, centradas estrictamente)
-   3) Extra: badge de Categoría / link "Es requisito" / link "Historial"
-      (propiedades de la materia actual, una por fila disponible) */
+   2) Créditos, alineados estrictamente a la derecha de la fila. */
 .requisito-fila {
   display: grid;
-  grid-template-columns: 1fr 52px auto;
+  grid-template-columns: 1fr auto;
   align-items: center;
   gap: 10px;
   padding: 4px 0;
@@ -1121,17 +1158,10 @@ img, svg { max-width: 100%; }
   cursor: pointer;
 }
 .requisito-col-nombre:hover { text-decoration: underline; }
-.requisito-col-horas {
+.requisito-col-creditos {
   flex-shrink: 0;
-  text-align: center;
+  text-align: right;
   color: var(--text-muted);
-}
-.requisito-col-extra {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  min-height: 1em;
 }
 .requisito-divisor-o {
   text-align: center;
@@ -1326,4 +1356,159 @@ img, svg { max-width: 100%; }
 @keyframes puntito-rebote {
   0%, 60%, 100% { transform: translateY(0); opacity: 0.6; }
   30% { transform: translateY(-16px); opacity: 1; }
+}
+
+/* =========================================================================
+   B.3 (v8/v9) — Vista de Mapa interactivo del Plan de Estudios
+   ========================================================================= */
+
+.vista-encabezado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.vista-controles {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.mapa-zoom-controles {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mapa-zoom-btn {
+  padding: 6px 14px;
+  min-width: 40px;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+.mapa-zoom-etiqueta {
+  min-width: 44px;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+/* ---- Contenedor con flechas ‹ › (mismo patrón visual que .scroll-con-flechas) ---- */
+.mapa-wrapper {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  margin-top: 16px;
+}
+.mapa-scroll {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.mapa-scroll:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+
+.mapa-sizer { position: relative; }
+.mapa-track {
+  position: relative;
+  transform-origin: top left;
+  will-change: transform;
+}
+.mapa-caminos {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.mapa-columnas {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+  padding: 4px 8px 16px;
+}
+.mapa-columna {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 190px;
+  flex-shrink: 0;
+}
+.mapa-columna-titulo {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-align: center;
+  color: var(--text-secondary);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-glass);
+  margin-bottom: 2px;
+}
+
+.mapa-nodo {
+  --nodo-color: #94a3b8;
+  background: var(--bg-panel);
+  border: 1.5px solid var(--nodo-color);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  position: relative;
+}
+.mapa-nodo::before {
+  content: "";
+  position: absolute;
+  top: 6px; left: 6px;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--nodo-color);
+}
+.mapa-nodo:hover { transform: translateY(-2px); box-shadow: var(--shadow-float); }
+.mapa-nodo-codigo {
+  font-family: monospace;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  padding-left: 14px;
+}
+.mapa-nodo-nombre {
+  font-size: 0.78rem;
+  line-height: 1.25;
+  color: var(--text-primary);
+  padding-left: 14px;
+}
+.mapa-nodo-en-camino {
+  box-shadow: 0 0 0 2px var(--nodo-color), 0 0 14px var(--nodo-color);
+  transform: translateY(-1px);
+}
+
+/* ---- Efecto neón del camino de desbloqueo ---- */
+.mapa-camino-linea {
+  fill: none;
+  stroke: var(--accent-1);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 3px var(--accent-1)) drop-shadow(0 0 8px var(--accent-1));
+  opacity: 0.9;
+}
+[data-mode="light"] .mapa-camino-linea {
+  stroke: var(--accent-2);
+  stroke-width: 3;
+  filter: drop-shadow(0 0 2px var(--accent-2)) drop-shadow(0 0 6px var(--accent-2));
+  opacity: 0.85;
+}
+
+@media (max-width: 640px) {
+  .mapa-columna { width: 150px; }
+  .mapa-nodo-nombre { font-size: 0.72rem; }
 }
