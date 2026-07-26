@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/design-system.css">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
 </head>
 <body>
 
@@ -303,22 +304,15 @@
   </div>
 </div>
 
-<!-- ===================== MODAL: Requisito / Correquisito ===================== -->
+<!-- ===================== MODAL: Requisito / Correquisito (detalle unificado, v8 punto 2) ===================== -->
 <div id="modal-requisito" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
-    <div class="row-between">
-      <button type="button" id="btn-es-requisito" class="link-plano">Es requisito</button>
-    </div>
     <h2 style="margin:0; display:flex; align-items:center;" id="requisito-titulo">Materia</h2>
-    <div class="row" style="flex-wrap:wrap; gap:6px;">
-      <span class="badge badge-neutral">Bloque <span id="requisito-bloque"></span></span>
-      <span class="badge badge-neutral" style="font-family:var(--font-mono, monospace);" id="requisito-codigo"></span>
-      <span class="badge badge-accent">Créditos: <span id="requisito-creditos"></span></span>
-    </div>
-    <span id="requisito-nombre" class="oculto"></span>
-    <div class="row" style="justify-content:flex-end;">
-      <button id="btn-cerrar-requisito" class="btn btn-primary">Cerrar</button>
-    </div>
+    <!-- Línea 2 (Estado · Horas · Créditos) y todo lo demás (Bloque·Código,
+         Categoría, Requisitos, Correquisitos, botones finales) se arman
+         dinámicamente en plan.js -- construirLinea2Materia()/construirCuerpoDetalleMateria()
+         -- para compartir exactamente el mismo diseño que la tarjeta. -->
+    <div id="requisito-contenedor-final"></div>
   </div>
 </div>
 
