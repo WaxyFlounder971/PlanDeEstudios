@@ -1,4 +1,4 @@
-# Arquitectura de TeamPeachesHub — mapa de módulos
+# Arquitectura de App Académica — mapa de módulos
 
 Este documento es para que **cualquier IA (o Wagner) que entre a una sesión nueva**
 entienda, sin tener que leer los 22 archivos completos, qué hace cada uno y a qué
@@ -157,7 +157,7 @@ construya esa sección. No lo llenes de código de otra cosa por error.
 `tipos_horas`), añadir materias manualmente, y los **getters básicos** de acceso a
 planes/materias que casi todo el resto de `plan/` usa.
 **Exporta:**
-- `abrirModalCrearPlan()`, `aplicarDefaultsUniversidad()`, `leerTiposHorasDelModalCrearPlan()`, `inicializarModalCrearPlan()`, `aplicarPlaceholdersAleatoriosPlan()`, `mapearUniversidadDetectada()`, `EJEMPLOS_PLACEHOLDER_PLAN`, `LIMITE_PLANES_ESTUDIO`.
+- `abrirModalCrearPlan()`, `aplicarDefaultsUniversidad()`, `leerTiposHorasDelModalCrearPlan()`, `inicializarModalCrearPlan()`, `aplicarPlaceholdersAleatoriosPlan()`, `mapearUniversidadDetectada()`, `elegirPlaceholderPlan()`, `EJEMPLOS_PLACEHOLDER_PLAN`, `LIMITE_PLANES_ESTUDIO`.
 - `abrirModalMateriaManual()`, `actualizarFormatoHorasMateriaManual()`, `inicializarModalMateriaManual()`.
 - **Getters usados por todo `plan/`:** `obtenerPlanActivo()`, `obtenerPlanSecundario()`, `obtenerMateriasVisibles()`, `obtenerOptativasDisponibles()`, `buscarMateriaPorCodigoEnPlanes()`, `filasFiltradas()`.
 **Depende de:** `schema.js`, `storage.js`, `storage-sync.js`, `utils.js`, `plan-gestionar.js`, `plan-importacion-csv.js`, `plan-vista-lista.js`.
