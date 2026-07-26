@@ -95,7 +95,11 @@ async function inicializarGoogleAuth({ alObtenerToken, alListo, alFallar, alRech
 
       accessToken = respuesta.access_token;
       localStorage.setItem(CLAVE_YA_AUTORIZADO, "1");
-      alObtenerToken(accessToken);
+      // v8.3 (Bug 3): se pasa también expires_in (segundos que Google dice
+      // que dura el token, normalmente 3600) para que app.js pueda programar
+      // un refresco silencioso proactivo ANTES de que expire, en vez de
+      // enterarse recién cuando un guardado falla con 401.
+      alObtenerToken(accessToken, respuesta.expires_in);
     },
   });
 
@@ -256,7 +260,10 @@ function refrescarAccessTokenGoogle() {
         return;
       }
       accessToken = respuesta.access_token;
-      resolve(accessToken);
+      // v8.3 (Bug 3): se resuelve con un objeto (no solo el string del token)
+      // para que quien llama pueda reprogramar el próximo refresco proactivo
+      // con el expires_in real de ESTA renovación.
+      resolve({ token: accessToken, expiresIn: respuesta.expires_in });
     };
     tokenClient.requestAccessToken({ prompt: "" });
   });

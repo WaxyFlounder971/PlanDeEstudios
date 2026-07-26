@@ -702,14 +702,37 @@ async function copiarPromptImportacion(texto) {
   }
 }
 
-async function enviarPromptAClaude(texto) {
-  await copiarPromptImportacion(texto);
-  window.open("https://claude.ai/new", "_blank", "noopener");
+/**
+ * Bug 1 (v8.3, LETAL): en móvil, `window.open()` llamado DESPUÉS de un
+ * `await` (como el `await navigator.clipboard.writeText()` de antes) ya no
+ * cuenta como parte del gesto síncrono del click original — los navegadores
+ * móviles lo bloquean como pop-up la mayoría de las veces. La técnica
+ * confiable es crear un <a target="_blank" rel="noopener"> real y disparar
+ * `.click()` sobre él de forma síncrona, en el mismo tick del evento.
+ */
+function abrirVentanaNueva(url) {
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  enlace.target = "_blank";
+  enlace.rel = "noopener";
+  enlace.style.display = "none";
+  document.body.appendChild(enlace);
+  enlace.click();
+  document.body.removeChild(enlace);
 }
 
-async function enviarPromptAChatGPT(texto) {
-  await copiarPromptImportacion(texto);
-  window.open("https://chatgpt.com/", "_blank", "noopener");
+/** Ya NO son async: la apertura de la ventana ocurre primero y de forma
+ *  síncrona (mismo tick del click); copiar al portapapeles es asíncrono
+ *  pero ya no bloquea ni retrasa la apertura, así que el orden entre ambas
+ *  cosas ya no importa para el bloqueador de pop-ups. */
+function enviarPromptAClaude(texto) {
+  abrirVentanaNueva("https://claude.ai/new");
+  copiarPromptImportacion(texto);
+}
+
+function enviarPromptAChatGPT(texto) {
+  abrirVentanaNueva("https://chatgpt.com/");
+  copiarPromptImportacion(texto);
 }
 
 /* ===================== Modal de instrucciones antes de enviar (v6) ===================== */

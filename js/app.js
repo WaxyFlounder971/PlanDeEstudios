@@ -158,8 +158,9 @@ window.addEventListener("DOMContentLoaded", () => {
     // de popups que sí puede afectar al refresco silencioso automático.
     ocultarAvisoReconexion();
     refrescarAccessTokenGoogle()
-      .then((token) => {
+      .then(({ token, expiresIn }) => {
         estado.token = token;
+        programarRefrescoProactivo(expiresIn);
         if (estado.pendienteSync) intentarSincronizar();
       })
       .catch((e) => {
@@ -198,8 +199,9 @@ function intentarReconexionSilenciosa() {
       setTimeout(() => reject(new Error("Tiempo de espera agotado al refrescar el token de Google (posible bloqueo del navegador).")), timeoutMs)
     ),
   ])
-    .then((token) => {
+    .then(({ token, expiresIn }) => {
       estado.token = token;
+      programarRefrescoProactivo(expiresIn);
       ocultarAvisoReconexion();
       if (estado.pendienteSync) intentarSincronizar();
     })
@@ -214,6 +216,28 @@ function intentarReconexionSilenciosa() {
       reconexionEnCurso = null;
     });
   return reconexionEnCurso;
+}
+
+/**
+ * v8.3 (Bug 3): antes el token SOLO se refrescaba de forma reactiva (al
+ * recibir un 401 de Drive, o al recuperar una sesión de caché). En la
+ * práctica, con la pestaña abierta más de ~1h sin disparar ningún guardado,
+ * el token quedaba vencido y el usuario se topaba con el aviso de
+ * reconexión (o la pantalla de login) "de la nada" — sentía que la sesión
+ * pedía volver a iniciar sesión todo el tiempo. Ahora, cada vez que se
+ * obtiene un token (login, reconexión silenciosa, reconexión manual, o
+ * refresco tras 401) se programa el SIGUIENTE refresco silencioso 5 minutos
+ * antes de que ese token expire, para que mientras la pestaña siga abierta
+ * la sesión nunca llegue a vencerse de verdad.
+ */
+let temporizadorRefrescoProactivo = null;
+function programarRefrescoProactivo(expiresInSegundos) {
+  clearTimeout(temporizadorRefrescoProactivo);
+  const segundos = Number(expiresInSegundos) || 3600; // Google normalmente da 3600 (1h)
+  const esperaMs = Math.max((segundos - 300) * 1000, 10000); // 5 min antes, mínimo 10s de espera
+  temporizadorRefrescoProactivo = setTimeout(() => {
+    intentarReconexionSilenciosa();
+  }, esperaMs);
 }
 
 function mostrarAvisoReconexion() {
@@ -249,9 +273,10 @@ function ocultarAvisoLoginBloqueado() {
   if (avisoPermiso) avisoPermiso.classList.add("oculto");
 }
 
-async function onLoginExitoso(token) {
+async function onLoginExitoso(token, expiresIn) {
   ocultarAvisoLoginBloqueado();
   estado.token = token;
+  programarRefrescoProactivo(expiresIn);
   const { fileId, datos } = await buscarOCrearArchivoDatos(token);
   estado.fileId = fileId;
   estado.datos = migrarDatosAntiguos(datos);
@@ -304,6 +329,7 @@ function pedirConfirmacionCerrarSesion() {
 }
 
 function cerrarSesion() {
+  clearTimeout(temporizadorRefrescoProactivo);
   cerrarSesionGoogle();
   localStorage.removeItem(CLAVE_CACHE_LOCAL);
   estado.token = null;
@@ -388,8 +414,9 @@ async function intentarSincronizar() {
       // sincronización de inmediato.
       estado.token = null; // fuerza que el próximo intento pase por la reconexión de arriba
       try {
-        const nuevoToken = await refrescarAccessTokenGoogle();
+        const { token: nuevoToken, expiresIn } = await refrescarAccessTokenGoogle();
         estado.token = nuevoToken;
+        programarRefrescoProactivo(expiresIn);
         await guardarDatos(estado.token, estado.fileId, estado.datos);
         estado.pendienteSync = false;
         ocultarAvisoReconexion();
