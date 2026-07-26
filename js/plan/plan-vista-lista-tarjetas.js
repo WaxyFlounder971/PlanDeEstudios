@@ -9,7 +9,7 @@ import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto, formatearHoras } from "../core/utils.js";
 import { agregarLongPress, envolverConFlechasScroll } from "../ui/componentes.js";
 import { abrirModalRequisito, construirBloqueCompletoRequisitos, construirCuerpoDetalleMateria, construirLinea2Materia } from "./plan-detalle.js";
-import { filasFiltradas, obtenerMateriasVisibles, obtenerOptativasDisponibles } from "./plan-esquema.js";
+import { abrirModalMateriaManual, filasFiltradas, obtenerMateriasVisibles, obtenerOptativasDisponibles } from "./plan-esquema.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
 
 /* ===================== Sección 2 — Candado (lógica de grupos) ===================== */
@@ -311,8 +311,22 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
   const expandida = estaExpandida(materia.codigo, esEscritorio);
 
   const card = document.createElement("div");
-  card.className = "glass-panel materia-card";
+  card.className = "glass-panel materia-card" + (estado.modoEdicionPlan ? " modo-edicion-activa" : "");
   if (categoria) card.style.borderLeft = `6px solid ${categoria.color}`;
+
+  // Punto 6 (v1.9.6): lápiz de edición — la visibilidad la controla el CSS
+  // (.modo-edicion-activa .materia-editar-lapiz), así que solo hace falta
+  // crearlo siempre; nunca queda huérfano al alternar el modo porque toda
+  // la sección se vuelve a renderizar en alternarModoEdicionPlan().
+  const lapizEditar = document.createElement("span");
+  lapizEditar.className = "materia-editar-lapiz";
+  lapizEditar.textContent = "✏️";
+  lapizEditar.title = "Editar esta materia";
+  lapizEditar.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    abrirModalMateriaManual(materia, plan);
+  });
+  card.appendChild(lapizEditar);
 
   const filaPrincipal = document.createElement("div");
   filaPrincipal.className = "materia-fila-principal";

@@ -10,6 +10,7 @@ import { aplicarFormatoTexto, serializarGrupoRequisitos } from "../core/utils.js
 import { construirPanelCategorias } from "./plan-categorias.js";
 import { abrirModalMateriaManual, obtenerMateriasVisibles, obtenerPlanActivo } from "./plan-esquema.js";
 import { abrirModalGestionPlanes, renderizarSelectorPlan } from "./plan-gestionar.js";
+import { alternarModoEdicionPlan } from "./plan-modo-edicion.js";
 import { construirMiniPanelImportacion } from "./plan-importacion-csv.js";
 import { construirEncabezadoCSV, construirPanelImportacion } from "./plan-importacion.js";
 import { construirContenidoBloques } from "./plan-vista-lista-tarjetas.js";
@@ -156,6 +157,14 @@ function construirEncabezadoPlan(planPrincipal) {
   btnPlanes.addEventListener("click", abrirModalGestionPlanes);
   botones.appendChild(btnPlanes);
 
+  // Punto 6 (v1.9.6): Modo Edición — activo, se ve resaltado (btn-primary);
+  // inactivo, como el resto de botones secundarios del encabezado.
+  const btnModoEdicion = document.createElement("button");
+  btnModoEdicion.className = "btn " + (estado.modoEdicionPlan ? "btn-primary" : "btn-secondary");
+  btnModoEdicion.textContent = estado.modoEdicionPlan ? "✓ Salir de edición" : "✏️ Editar plan";
+  btnModoEdicion.addEventListener("click", alternarModoEdicionPlan);
+  botones.appendChild(btnModoEdicion);
+
   sec.appendChild(botones);
   return sec;
 }
@@ -216,51 +225,48 @@ function construirBarraAcciones() {
   filaBotones.className = "row";
   filaBotones.style.flexWrap = "wrap";
 
-  // v1.9.6 (pendiente de ronda anterior): antes eran dos pills separadas
-  // ("Bloques ▲▼" y "Materias ▲▼" en dos .pill-group distintos) — ahora es
-  // una sola, con los 4 controles juntos (cada uno con su propia flecha) y
-  // un separador visual "·" en medio, sin mezclar su función.
-  const grupoColapsar = document.createElement("div");
-  grupoColapsar.className = "pill-group";
-  grupoColapsar.title = "Bloques · Materias";
+  // Punto 4 (pendiente de una ronda anterior): "Bloques ▲▼" y "Materias ▲▼"
+  // viven en una sola pill, cada una con su propio par de flechas, separadas
+  // por "·" — en vez de dos pills sueltas.
+  const grupoColapso = document.createElement("div");
+  grupoColapso.className = "pill-group";
+  grupoColapso.title = "Bloques · Materias";
 
   const btnBloquesContraer = document.createElement("button");
   btnBloquesContraer.type = "button";
   btnBloquesContraer.className = "pill-item";
   btnBloquesContraer.textContent = "Bloques ▲";
-  btnBloquesContraer.title = "Contraer todos los bloques";
   btnBloquesContraer.addEventListener("click", contraerTodosLosBloques);
+  grupoColapso.appendChild(btnBloquesContraer);
+
   const btnBloquesExpandir = document.createElement("button");
   btnBloquesExpandir.type = "button";
   btnBloquesExpandir.className = "pill-item";
   btnBloquesExpandir.textContent = "Bloques ▼";
-  btnBloquesExpandir.title = "Expandir todos los bloques";
   btnBloquesExpandir.addEventListener("click", expandirTodosLosBloques);
+  grupoColapso.appendChild(btnBloquesExpandir);
 
   const separador = document.createElement("span");
+  separador.className = "pill-separador";
   separador.textContent = "·";
   separador.setAttribute("aria-hidden", "true");
-  separador.style.cssText = "flex:0 0 auto; opacity:0.4; padding:0 2px; align-self:center;";
+  grupoColapso.appendChild(separador);
 
   const btnMateriasContraer = document.createElement("button");
   btnMateriasContraer.type = "button";
   btnMateriasContraer.className = "pill-item";
   btnMateriasContraer.textContent = "Materias ▲";
-  btnMateriasContraer.title = "Contraer todas las materias";
   btnMateriasContraer.addEventListener("click", contraerTodasLasMaterias);
+  grupoColapso.appendChild(btnMateriasContraer);
+
   const btnMateriasExpandir = document.createElement("button");
   btnMateriasExpandir.type = "button";
   btnMateriasExpandir.className = "pill-item";
   btnMateriasExpandir.textContent = "Materias ▼";
-  btnMateriasExpandir.title = "Expandir todas las materias";
   btnMateriasExpandir.addEventListener("click", expandirTodasLasMaterias);
+  grupoColapso.appendChild(btnMateriasExpandir);
 
-  grupoColapsar.appendChild(btnBloquesContraer);
-  grupoColapsar.appendChild(btnBloquesExpandir);
-  grupoColapsar.appendChild(separador);
-  grupoColapsar.appendChild(btnMateriasContraer);
-  grupoColapsar.appendChild(btnMateriasExpandir);
-  filaBotones.appendChild(grupoColapsar);
+  filaBotones.appendChild(grupoColapso);
 
   const btnExportar = document.createElement("button");
   btnExportar.className = "btn btn-primary";

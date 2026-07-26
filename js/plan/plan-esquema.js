@@ -8,7 +8,7 @@
 import { PARAMETROS_UNIVERSIDAD_DEFAULT, PRESETS_TIPOS_HORAS, crearMateria, crearPlanEstudio } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
-import { parsearGrupoRequisitos } from "../core/utils.js";
+import { parsearGrupoRequisitos, serializarGrupoRequisitos } from "../core/utils.js";
 import { abrirModalGestionPlanes, renderizarModoHardcore, renderizarSelectorPlan } from "./plan-gestionar.js";
 import { importarCSVEnPlan } from "./plan-importacion-csv.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
@@ -35,6 +35,7 @@ function elegirPlaceholderPlan(universidad) {
 
 const LIMITE_PLANES_ESTUDIO = 3;
 estado.materiaManualPlanId = null;         // a qué plan se le está añadiendo materia manual
+estado.materiaManualEditando = null;       // punto 6 (v1.9.6): { planId, codigoOriginal } si el modal está editando una materia existente, null si es "+ Añadir materia"
 
 /* ===================== Utilidades de acceso a los planes ===================== */
 
@@ -327,19 +328,37 @@ function inicializarModalCrearPlan() {
 
 /* ===================== B.5 — Añadir materia manualmente ===================== */
 
-function abrirModalMateriaManual() {
+/**
+ * Punto 6 (v1.9.6) — Modo Edición: si se pasan `materiaExistente` y
+ * `planDeLaMateria`, el modal se abre en modo edición — precargado con los
+ * datos de esa materia y, al guardar, actualiza la materia en vez de crear
+ * una nueva (ver inicializarModalMateriaManual). Sin argumentos, funciona
+ * exactamente igual que antes ("+ Añadir materia").
+ */
+
+function abrirModalMateriaManual(materiaExistente = null, planDeLaMateria = null) {
+  const editando = !!(materiaExistente && planDeLaMateria);
   const principal = obtenerPlanActivo();
-  if (!principal) return;
+  if (!editando && !principal) return;
+
   const secundario = obtenerPlanSecundario();
   const planesDisponibles = [principal, secundario].filter(Boolean);
 
-  estado.materiaManualPlanId = principal.id;
+  estado.materiaManualEditando = editando
+    ? { planId: planDeLaMateria.id, codigoOriginal: materiaExistente.codigo }
+    : null;
+  estado.materiaManualPlanId = editando ? planDeLaMateria.id : principal.id;
+
+  document.getElementById("titulo-modal-materia-manual").textContent = editando ? "✏️ Editar materia" : "+ Añadir materia";
+  document.getElementById("btn-guardar-materia-manual").textContent = editando ? "Guardar cambios" : "Guardar";
 
   const bloquePlan = document.getElementById("bloque-materia-manual-plan");
   const pillPlan = document.getElementById("pill-materia-manual-plan");
   pillPlan.innerHTML = "";
 
-  if (planesDisponibles.length > 1) {
+  // Editando: la materia ya pertenece a un plan fijo, no tiene sentido
+  // ofrecer el selector de "¿a cuál plan pertenece?".
+  if (!editando && planesDisponibles.length > 1) {
     bloquePlan.classList.remove("oculto");
     planesDisponibles.forEach((plan) => {
       const btn = document.createElement("button");
@@ -358,12 +377,33 @@ function abrirModalMateriaManual() {
     bloquePlan.classList.add("oculto");
   }
 
-  ["input-materia-codigo", "input-materia-nombre", "input-materia-creditos", "input-materia-bloque",
-   "input-materia-requisitos", "input-materia-correquisitos"
-  ].forEach((id) => { document.getElementById(id).value = ""; });
+  if (editando) {
+    document.getElementById("input-materia-codigo").value = materiaExistente.codigo;
+    document.getElementById("input-materia-nombre").value = materiaExistente.nombre;
+    document.getElementById("input-materia-creditos").value = materiaExistente.creditos;
+    document.getElementById("input-materia-bloque").value = materiaExistente.bloque;
+    document.getElementById("input-materia-requisitos").value = serializarGrupoRequisitos(materiaExistente.requisitos);
+    document.getElementById("input-materia-correquisitos").value = serializarGrupoRequisitos(materiaExistente.correquisitos);
+  } else {
+    ["input-materia-codigo", "input-materia-nombre", "input-materia-creditos", "input-materia-bloque",
+     "input-materia-requisitos", "input-materia-correquisitos"
+    ].forEach((id) => { document.getElementById(id).value = ""; });
+  }
   document.getElementById("error-modal-materia-manual").classList.add("oculto");
 
+  // Genera los inputs de horas según el plan correspondiente y, si se está
+  // editando, los precarga con los valores ya guardados en la materia.
   actualizarFormatoHorasMateriaManual();
+  if (editando) {
+    const tipos = Array.isArray(planDeLaMateria.parametros_universidad.tipos_horas)
+      ? planDeLaMateria.parametros_universidad.tipos_horas
+      : ["Horas"];
+    tipos.forEach((tipo, i) => {
+      const input = document.getElementById(`input-materia-horas-${i}`);
+      if (input) input.value = (materiaExistente.horas || {})[tipo] ?? "";
+    });
+  }
+
   document.getElementById("modal-materia-manual").classList.remove("oculto");
 }
 
@@ -402,9 +442,13 @@ function actualizarFormatoHorasMateriaManual() {
 function inicializarModalMateriaManual() {
   document.getElementById("btn-cancelar-materia-manual").addEventListener("click", () => {
     document.getElementById("modal-materia-manual").classList.add("oculto");
+    estado.materiaManualEditando = null;
   });
   document.getElementById("modal-materia-manual").addEventListener("click", (e) => {
-    if (e.target.id === "modal-materia-manual") e.target.classList.add("oculto");
+    if (e.target.id === "modal-materia-manual") {
+      e.target.classList.add("oculto");
+      estado.materiaManualEditando = null;
+    }
   });
 
   document.getElementById("btn-guardar-materia-manual").addEventListener("click", () => {
@@ -420,7 +464,14 @@ function inicializarModalMateriaManual() {
       err.classList.remove("oculto");
       return;
     }
-    if (plan.materias.some((m) => m.codigo === codigo)) {
+
+    const editando = estado.materiaManualEditando;
+    const materiaExistente = editando ? plan.materias.find((m) => m.codigo === editando.codigoOriginal) : null;
+
+    // Se permite guardar con el mismo código que ya tenía (editando), pero
+    // no reusar el código de OTRA materia del mismo plan.
+    const choqueDeCodigo = plan.materias.some((m) => m.codigo === codigo && m !== materiaExistente);
+    if (choqueDeCodigo) {
       err.textContent = "Ya existe una materia con ese código en este plan.";
       err.classList.remove("oculto");
       return;
@@ -433,19 +484,27 @@ function inicializarModalMateriaManual() {
     document.querySelectorAll("#bloque-horas-dinamico [data-tipo-hora]").forEach((input) => {
       horas[input.dataset.tipoHora] = Number(input.value) || 0;
     });
+    const requisitos = parsearGrupoRequisitos(document.getElementById("input-materia-requisitos").value);
+    const correquisitos = parsearGrupoRequisitos(document.getElementById("input-materia-correquisitos").value);
 
-    const nuevaMateria = crearMateria({
-      codigo,
-      nombre,
-      creditos,
-      bloque,
-      horas,
-      tiposHoras,
-      requisitos: parsearGrupoRequisitos(document.getElementById("input-materia-requisitos").value),
-      correquisitos: parsearGrupoRequisitos(document.getElementById("input-materia-correquisitos").value),
-    });
+    if (materiaExistente) {
+      // Modo edición: se actualizan los campos in-place para no perder la
+      // identidad del objeto (estado, categoria_id, etc. se conservan tal cual).
+      materiaExistente.codigo = codigo;
+      materiaExistente.nombre = nombre;
+      materiaExistente.creditos = creditos;
+      materiaExistente.bloque = bloque;
+      materiaExistente.horas = horas;
+      materiaExistente.requisitos = requisitos;
+      materiaExistente.correquisitos = correquisitos;
+    } else {
+      const nuevaMateria = crearMateria({
+        codigo, nombre, creditos, bloque, horas, tiposHoras, requisitos, correquisitos,
+      });
+      plan.materias.push(nuevaMateria);
+    }
 
-    plan.materias.push(nuevaMateria);
+    estado.materiaManualEditando = null;
     marcarCambioPendiente();
     document.getElementById("modal-materia-manual").classList.add("oculto");
     renderizarPlanEstudios();
