@@ -27,6 +27,24 @@
 <!-- ============================== APP SHELL ============================== -->
 <div id="app-shell" class="oculto">
 
+  <!-- v8.3: indicador de "desliza/arrastra hacia abajo para sincronizar".
+       Vive fuera del flujo normal (position: fixed), se activa desde JS
+       (app.js) mientras el usuario arrastra desde arriba del todo de la
+       página, tanto con dedo (móvil) como con mouse (compu). -->
+  <div id="pull-refresh-indicador" class="pull-refresh-indicador" aria-hidden="true">
+    <span class="pull-refresh-flecha">↓</span>
+  </div>
+
+  <!-- v8.3: overlay de carga reutilizable — 3 puntitos rebotando en cadena
+       (efecto "ola"), centrados en pantalla. Se muestra/oculta desde JS con
+       mostrarCargando()/ocultarCargando() en cualquier espera de la app
+       (sincronizar al deslizar, cargar datos al iniciar sesión, etc.). -->
+  <div id="overlay-cargando" class="overlay-cargando oculto" aria-hidden="true">
+    <div class="puntitos-carga">
+      <span></span><span></span><span></span>
+    </div>
+  </div>
+
   <!-- Bug 1 (v8): aviso de reconexión — aparece cuando la sesión con Google
        Drive se venció o el refresco automático/silencioso falló. El botón
        "Reconectar" se dispara desde un click real para evitar el bloqueo de
