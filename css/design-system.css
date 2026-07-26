@@ -32,6 +32,16 @@ html, body {
   background: var(--bg-canvas);
   color: var(--text-primary);
   transition: background var(--transition-med), color var(--transition-med);
+  /* v8.3 (prioridad máxima): sin esto, el gesto nativo de "deslizar hacia
+     abajo para refrescar" de los navegadores móviles (Chrome/Safari en
+     Android/iOS) puede disparar una RECARGA COMPLETA de la página real,
+     compitiendo con nuestro gesto personalizado de sincronizar — eso
+     además forzaba a que toda la app (login incluido) se reinicializara
+     de cero en cada deslizón, lo cual explicaba tanto que el gesto no
+     funcionara bien en teléfono como que pareciera "abrirse Google" de la
+     nada. overscroll-behavior-y: contain apaga el gesto nativo del
+     navegador para que solo mande el nuestro. */
+  overscroll-behavior-y: contain;
 }
 
 body {
