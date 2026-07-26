@@ -27,6 +27,15 @@
 <!-- ============================== APP SHELL ============================== -->
 <div id="app-shell" class="oculto">
 
+  <!-- Bug 1 (v8): aviso de reconexión — aparece cuando la sesión con Google
+       Drive se venció o el refresco automático/silencioso falló. El botón
+       "Reconectar" se dispara desde un click real para evitar el bloqueo de
+       popups que sí puede afectar al refresco silencioso automático. -->
+  <div id="aviso-reconexion" class="aviso-reconexion oculto" role="alert">
+    <span>⚠️ Se perdió la conexión con tu Google Drive. Tus cambios se están guardando localmente, pero no se sincronizarán hasta reconectar.</span>
+    <button id="btn-reconectar-sesion" class="btn btn-primary">Reconectar</button>
+  </div>
+
   <!-- Barra superior solo-móvil -->
   <div class="mobile-topbar">
     <button id="btn-hamburguesa" class="btn-hamburguesa" aria-label="Abrir menú">☰</button>
