@@ -15,6 +15,16 @@ estado.categoriaEditandoId = null;
 estado.planCategoriaEditandoId = null;     // a qué plan pertenece la categoría que se edita
 estado.busquedaCategoriaMaterias = "";
 estado.ordenCategoriaMaterias = "bloque";
+// FIX (v1.9.6, bug "el buscador borra la selección"): fuente de verdad de
+// qué materias están marcadas MIENTRAS se arma la asignación — antes el
+// checked de cada checkbox se derivaba en cada re-render de
+// `materia.categoria_id === categoria.id`, pero categoria_id recién se
+// actualiza al confirmar. Como el buscador (y el cambio de orden) volvían a
+// dibujar la lista completa desde cero en cada tecla, cualquier marca hecha
+// en la sesión actual (todavía no guardada) se perdía. Ahora el checked se
+// lee de este Set, que persiste durante todo el flujo del modal sin
+// importar cuántas veces se re-renderice la lista.
+estado.materiasCategoriaSeleccionadas = new Set();
 
 /* ===================== Categorías: crear / filtrar / editar ===================== */
 
@@ -193,6 +203,9 @@ function inicializarModalCategoria() {
 function abrirModalCategoriaMaterias(plan, categoria) {
   estado.busquedaCategoriaMaterias = "";
   estado.ordenCategoriaMaterias = "bloque";
+  estado.materiasCategoriaSeleccionadas = new Set(
+    plan.materias.filter((m) => m.categoria_id === categoria.id).map((m) => m.codigo)
+  );
   document.getElementById("nombre-categoria-materias").textContent = categoria.nombre;
   document.getElementById("modal-categoria-materias").dataset.planId = plan.id;
   document.getElementById("modal-categoria-materias").dataset.categoriaId = categoria.id;
@@ -268,10 +281,17 @@ function renderizarListaMateriasCheckbox(plan, categoria) {
     const label = document.createElement("label");
     label.className = "checkbox";
     label.innerHTML = `
-      <input type="checkbox" value="${materia.codigo}" ${materia.categoria_id === categoria.id ? "checked" : ""}>
+      <input type="checkbox" value="${materia.codigo}" ${estado.materiasCategoriaSeleccionadas.has(materia.codigo) ? "checked" : ""}>
       <span class="box"></span>
       <span>${materia.codigo} — ${materia.nombre}</span>
     `;
+    // FIX (v1.9.6): cada cambio se refleja de inmediato en el Set, así que
+    // sobrevive a que el buscador o el cambio de orden vuelvan a dibujar
+    // esta lista desde cero.
+    label.querySelector('input[type="checkbox"]').addEventListener("change", (e) => {
+      if (e.target.checked) estado.materiasCategoriaSeleccionadas.add(materia.codigo);
+      else estado.materiasCategoriaSeleccionadas.delete(materia.codigo);
+    });
     cont.appendChild(label);
   });
 }
@@ -286,9 +306,7 @@ function inicializarModalCategoriaMaterias() {
     const modal = document.getElementById("modal-categoria-materias");
     const plan = estado.datos.planes_estudio.find((p) => p.id === modal.dataset.planId);
     const categoriaId = modal.dataset.categoriaId;
-    const marcados = new Set(
-      Array.from(modal.querySelectorAll('input[type="checkbox"]:checked')).map((el) => el.value)
-    );
+    const marcados = estado.materiasCategoriaSeleccionadas;
 
     plan.materias.forEach((m) => {
       if (m.categoria_id === categoriaId && !marcados.has(m.codigo)) {

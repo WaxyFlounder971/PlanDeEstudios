@@ -216,39 +216,51 @@ function construirBarraAcciones() {
   filaBotones.className = "row";
   filaBotones.style.flexWrap = "wrap";
 
-  const grupoBloques = document.createElement("div");
-  grupoBloques.className = "pill-group";
-  grupoBloques.title = "Bloques";
+  // v1.9.6 (pendiente de ronda anterior): antes eran dos pills separadas
+  // ("Bloques ▲▼" y "Materias ▲▼" en dos .pill-group distintos) — ahora es
+  // una sola, con los 4 controles juntos (cada uno con su propia flecha) y
+  // un separador visual "·" en medio, sin mezclar su función.
+  const grupoColapsar = document.createElement("div");
+  grupoColapsar.className = "pill-group";
+  grupoColapsar.title = "Bloques · Materias";
+
   const btnBloquesContraer = document.createElement("button");
   btnBloquesContraer.type = "button";
   btnBloquesContraer.className = "pill-item";
   btnBloquesContraer.textContent = "Bloques ▲";
+  btnBloquesContraer.title = "Contraer todos los bloques";
   btnBloquesContraer.addEventListener("click", contraerTodosLosBloques);
   const btnBloquesExpandir = document.createElement("button");
   btnBloquesExpandir.type = "button";
   btnBloquesExpandir.className = "pill-item";
   btnBloquesExpandir.textContent = "Bloques ▼";
+  btnBloquesExpandir.title = "Expandir todos los bloques";
   btnBloquesExpandir.addEventListener("click", expandirTodosLosBloques);
-  grupoBloques.appendChild(btnBloquesContraer);
-  grupoBloques.appendChild(btnBloquesExpandir);
-  filaBotones.appendChild(grupoBloques);
 
-  const grupoMaterias = document.createElement("div");
-  grupoMaterias.className = "pill-group";
-  grupoMaterias.title = "Materias";
+  const separador = document.createElement("span");
+  separador.textContent = "·";
+  separador.setAttribute("aria-hidden", "true");
+  separador.style.cssText = "flex:0 0 auto; opacity:0.4; padding:0 2px; align-self:center;";
+
   const btnMateriasContraer = document.createElement("button");
   btnMateriasContraer.type = "button";
   btnMateriasContraer.className = "pill-item";
   btnMateriasContraer.textContent = "Materias ▲";
+  btnMateriasContraer.title = "Contraer todas las materias";
   btnMateriasContraer.addEventListener("click", contraerTodasLasMaterias);
   const btnMateriasExpandir = document.createElement("button");
   btnMateriasExpandir.type = "button";
   btnMateriasExpandir.className = "pill-item";
   btnMateriasExpandir.textContent = "Materias ▼";
+  btnMateriasExpandir.title = "Expandir todas las materias";
   btnMateriasExpandir.addEventListener("click", expandirTodasLasMaterias);
-  grupoMaterias.appendChild(btnMateriasContraer);
-  grupoMaterias.appendChild(btnMateriasExpandir);
-  filaBotones.appendChild(grupoMaterias);
+
+  grupoColapsar.appendChild(btnBloquesContraer);
+  grupoColapsar.appendChild(btnBloquesExpandir);
+  grupoColapsar.appendChild(separador);
+  grupoColapsar.appendChild(btnMateriasContraer);
+  grupoColapsar.appendChild(btnMateriasExpandir);
+  filaBotones.appendChild(grupoColapsar);
 
   const btnExportar = document.createElement("button");
   btnExportar.className = "btn btn-primary";
