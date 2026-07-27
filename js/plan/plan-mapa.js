@@ -6,7 +6,7 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
-import { aplicarFormatoTexto } from "../core/utils.js";
+import { aplicarFormatoTexto, hexARgba } from "../core/utils.js";
 import { abrirModalRequisito } from "./plan-detalle.js";
 import { obtenerMateriasQueDesbloquea } from "./plan-vista-lista-tarjetas.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
@@ -20,6 +20,12 @@ estado._refsMapaActual = null;             // referencias DOM del mapa ya render
 // V10: cómo se dibuja el camino de desbloqueo — "libre" (curva Bézier, como
 // siempre) o "recta" (tramos ortogonales rectos a través del gap entre bloques).
 estado.trazadoMapaPor = "libre";           // "libre" | "recta"
+// V1.10: tamaño horizontal de cada tarjeta del mapa.
+estado.tamanioTarjetaMapa = "normal";      // "compacto" | "normal" | "extendido"
+// V1.10: tema SOLO del interior de las tarjetas (independiente del tema
+// general de la app). null = todavía no se ha elegido, se usa el modo
+// actual de la app como punto de partida.
+estado.temaTarjetaMapa = null;             // "clara" | "oscura" | null
 
 /* ===================== B.3 (v8/v9) — Vista de Mapa interactivo ===================== */
 
@@ -35,85 +41,143 @@ const COLOR_ESTADO_MAPA = {
 
 /** Tarjeta "Vista" — switch Lista/Mapa; en modo Mapa se expande con el mapa completo. */
 
+/** Construye un pill-group de selección exclusiva. Los pill-item de estos
+ *  grupos NUNCA truncan su texto (ver .pill-group-vista en el CSS): si no
+ *  caben a tamaño legible, el propio grupo se vuelve scrolleable en vez de
+ *  cortar las letras con "…". */
+function construirPillGroupVista(opciones, valorActual, onSeleccionar) {
+  const grupo = document.createElement("div");
+  grupo.className = "pill-group pill-group-vista";
+  opciones.forEach((op) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pill-item" + (valorActual === op.valor ? " active" : "");
+    btn.textContent = op.texto;
+    btn.addEventListener("click", () => onSeleccionar(op.valor, btn, grupo));
+    grupo.appendChild(btn);
+  });
+  return grupo;
+}
+
 function construirTarjetaVista(plan) {
   const card = document.createElement("section");
   card.className = "glass-card stack vista-card";
 
+  /* ---- Línea 1: título "Vista" (izq.) + switch Lista/Mapa (der.) ---- */
   const encabezado = document.createElement("div");
   encabezado.className = "vista-encabezado";
-  const titulo = document.createElement("h3");
+  const titulo = document.createElement("h2");
   titulo.style.margin = "0";
   titulo.textContent = "Vista";
   encabezado.appendChild(titulo);
 
-  const switchVista = document.createElement("div");
-  switchVista.className = "pill-group";
-  [
-    { valor: "lista", texto: "Lista" },
-    { valor: "mapa", texto: "Mapa" },
-  ].forEach((op) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "pill-item" + (estado.vistaPlanEstudios === op.valor ? " active" : "");
-    btn.textContent = op.texto;
-    btn.addEventListener("click", () => {
-      if (estado.vistaPlanEstudios === op.valor) return;
-      estado.vistaPlanEstudios = op.valor;
+  const switchVista = construirPillGroupVista(
+    [
+      { valor: "lista", texto: "Lista" },
+      { valor: "mapa", texto: "Mapa" },
+    ],
+    estado.vistaPlanEstudios,
+    (valor) => {
+      if (estado.vistaPlanEstudios === valor) return;
+      estado.vistaPlanEstudios = valor;
       estado.materiaSeleccionadaMapa = null;
       renderizarPlanEstudios();
-    });
-    switchVista.appendChild(btn);
-  });
+    }
+  );
   encabezado.appendChild(switchVista);
   card.appendChild(encabezado);
 
   if (estado.vistaPlanEstudios === "mapa") {
-    const controles = document.createElement("div");
-    controles.className = "vista-controles";
+    /* ---- Línea 2: Colorear por (izq.) | Líneas libres/rectas (der.) ---- */
+    const fila2 = document.createElement("div");
+    fila2.className = "vista-fila";
 
-    const switchColor = document.createElement("div");
-    switchColor.className = "pill-group";
-    [
-      { valor: "simbologia", texto: "Colorear por Simbología" },
-      { valor: "categoria", texto: "Colorear por Categoría" },
-    ].forEach((op) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "pill-item" + (estado.colorMapaPor === op.valor ? " active" : "");
-      btn.textContent = op.texto;
-      btn.addEventListener("click", () => {
-        if (estado.colorMapaPor === op.valor) return;
-        estado.colorMapaPor = op.valor;
-        switchColor.querySelectorAll(".pill-item").forEach((p) => p.classList.remove("active"));
+    const switchColor = construirPillGroupVista(
+      [
+        { valor: "simbologia", texto: "Colorear por Simbología" },
+        { valor: "categoria", texto: "Colorear por Categoría" },
+      ],
+      estado.colorMapaPor,
+      (valor, btn, grupo) => {
+        if (estado.colorMapaPor === valor) return;
+        estado.colorMapaPor = valor;
+        grupo.querySelectorAll(".pill-item").forEach((p) => p.classList.remove("active"));
         btn.classList.add("active");
         recolorearNodosMapa(plan);
-      });
-      switchColor.appendChild(btn);
-    });
-    controles.appendChild(switchColor);
+      }
+    );
+    fila2.appendChild(switchColor);
 
     // V10: switch de trazado del camino — líneas libres (curva) o rectas
     // (tramos ortogonales por el centro del gap entre bloques).
-    const switchTrazado = document.createElement("div");
-    switchTrazado.className = "pill-group";
-    [
-      { valor: "libre", texto: "Líneas libres" },
-      { valor: "recta", texto: "Líneas rectas" },
-    ].forEach((op) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "pill-item" + (estado.trazadoMapaPor === op.valor ? " active" : "");
-      btn.textContent = op.texto;
-      btn.addEventListener("click", () => {
-        if (estado.trazadoMapaPor === op.valor) return;
-        estado.trazadoMapaPor = op.valor;
-        switchTrazado.querySelectorAll(".pill-item").forEach((p) => p.classList.remove("active"));
+    const switchTrazado = construirPillGroupVista(
+      [
+        { valor: "libre", texto: "Líneas libres" },
+        { valor: "recta", texto: "Líneas rectas" },
+      ],
+      estado.trazadoMapaPor,
+      (valor, btn, grupo) => {
+        if (estado.trazadoMapaPor === valor) return;
+        estado.trazadoMapaPor = valor;
+        grupo.querySelectorAll(".pill-item").forEach((p) => p.classList.remove("active"));
         btn.classList.add("active");
         dibujarCaminoDesbloqueo(plan);
-      });
-      switchTrazado.appendChild(btn);
-    });
-    controles.appendChild(switchTrazado);
+      }
+    );
+    fila2.appendChild(switchTrazado);
+    card.appendChild(fila2);
+
+    /* ---- Línea 3: tamaño de tarjeta (izq.) | tema de tarjeta (der.) ---- */
+    const fila3 = document.createElement("div");
+    fila3.className = "vista-fila";
+
+    // V1.10: tamaño horizontal de cada tarjeta del mapa. Cambia la
+    // estructura interna en modo "extendido", así que se reconstruye todo
+    // el mapa (no basta con recolorear/redibujar el camino).
+    const switchTamanio = construirPillGroupVista(
+      [
+        { valor: "compacto", texto: "Compacto" },
+        { valor: "normal", texto: "Normal" },
+        { valor: "extendido", texto: "Extendido" },
+      ],
+      estado.tamanioTarjetaMapa,
+      (valor) => {
+        if (estado.tamanioTarjetaMapa === valor) return;
+        estado.tamanioTarjetaMapa = valor;
+        renderizarPlanEstudios();
+      }
+    );
+    fila3.appendChild(switchTamanio);
+
+    // V1.10: tema SOLO del interior de las tarjetas. Si todavía no se ha
+    // elegido, arranca igual al modo actual de la app (claro/oscuro).
+    const temaTarjetaActual =
+      estado.temaTarjetaMapa || (document.documentElement.dataset.mode === "light" ? "clara" : "oscura");
+    const switchTemaTarjeta = construirPillGroupVista(
+      [
+        { valor: "clara", texto: "Tarjeta clara" },
+        { valor: "oscura", texto: "Tarjeta oscura" },
+      ],
+      temaTarjetaActual,
+      (valor) => {
+        if (estado.temaTarjetaMapa === valor) return;
+        estado.temaTarjetaMapa = valor;
+        renderizarPlanEstudios();
+      }
+    );
+    fila3.appendChild(switchTemaTarjeta);
+    card.appendChild(fila3);
+
+    /* ---- Línea 4: Descargar (izq.) | Control de zoom (der.) ---- */
+    const fila4 = document.createElement("div");
+    fila4.className = "vista-fila";
+
+    const btnDescargar = document.createElement("button");
+    btnDescargar.type = "button";
+    btnDescargar.className = "btn btn-secondary";
+    btnDescargar.textContent = "Descargar";
+    btnDescargar.addEventListener("click", () => abrirSelectorDescargaMapa());
+    fila4.appendChild(btnDescargar);
 
     const zoomGrupo = document.createElement("div");
     zoomGrupo.className = "mapa-zoom-controles";
@@ -135,16 +199,9 @@ function construirTarjetaVista(plan) {
     zoomGrupo.appendChild(btnMenos);
     zoomGrupo.appendChild(etiquetaZoom);
     zoomGrupo.appendChild(btnMas);
-    controles.appendChild(zoomGrupo);
+    fila4.appendChild(zoomGrupo);
 
-    const btnDescargar = document.createElement("button");
-    btnDescargar.type = "button";
-    btnDescargar.className = "btn btn-secondary";
-    btnDescargar.textContent = "⬇ Descargar mapa como PNG";
-    btnDescargar.addEventListener("click", () => abrirSelectorDescargaMapa());
-    controles.appendChild(btnDescargar);
-
-    card.appendChild(controles);
+    card.appendChild(fila4);
     card.appendChild(construirMapaInteractivo(plan));
   }
 
@@ -168,7 +225,12 @@ function recolorearNodosMapa(plan) {
   if (!refs) return;
   refs.nodosPorCodigo.forEach((nodo, codigo) => {
     const materia = plan.materias.find((m) => m.codigo === codigo);
-    if (materia) nodo.style.setProperty("--nodo-color", colorNodoMapa(materia, plan));
+    if (!materia) return;
+    const color = colorNodoMapa(materia, plan);
+    nodo.style.setProperty("--nodo-color", color);
+    // Última instrucción V1.10: sombra sutil de cada tarjeta, tintada según
+    // el color de su borde activo (mismo color, baja opacidad).
+    nodo.style.setProperty("--nodo-color-sombra", hexARgba(color, 0.35));
   });
 }
 
@@ -191,6 +253,12 @@ function construirMapaInteractivo(plan) {
 
   const wrapper = document.createElement("div");
   wrapper.className = "mapa-wrapper";
+  // V1.10: tamaño de tarjeta (compacto/normal/extendido) y tema SOLO del
+  // interior de las tarjetas (clara/oscura) — ver reglas [data-tamanio]/
+  // [data-tema-tarjeta] en design-system.css.
+  wrapper.dataset.tamanio = estado.tamanioTarjetaMapa || "normal";
+  wrapper.dataset.temaTarjeta =
+    estado.temaTarjetaMapa || (document.documentElement.dataset.mode === "light" ? "clara" : "oscura");
 
   const scroll = document.createElement("div");
   scroll.className = "mapa-scroll";
@@ -344,15 +412,30 @@ function ajustarZoomMapa(delta, etiquetaEl) {
 function construirNodoMapa(materia, plan) {
   const nodo = document.createElement("div");
   nodo.className = "mapa-nodo";
-  nodo.style.setProperty("--nodo-color", colorNodoMapa(materia, plan));
+  const color = colorNodoMapa(materia, plan);
+  nodo.style.setProperty("--nodo-color", color);
+  // Última instrucción V1.10: sombra sutil tintada según el color de borde activo.
+  nodo.style.setProperty("--nodo-color-sombra", hexARgba(color, 0.35));
 
+  // V1.10: línea 1 = luz (::before, igual que siempre) + código + créditos.
+  // En modo normal/compacto, "fila1" es invisible como contenedor (display:
+  // contents) y el código se ve exactamente igual que antes; los créditos
+  // solo se muestran en modo "extendido" (ver design-system.css).
+  const fila1 = document.createElement("div");
+  fila1.className = "mapa-nodo-fila1";
   const spanCodigo = document.createElement("span");
   spanCodigo.className = "mapa-nodo-codigo";
   spanCodigo.textContent = materia.codigo;
+  const spanCreditos = document.createElement("span");
+  spanCreditos.className = "mapa-nodo-creditos";
+  spanCreditos.textContent = `${materia.creditos} cr.`;
+  fila1.appendChild(spanCodigo);
+  fila1.appendChild(spanCreditos);
+
   const spanNombre = document.createElement("span");
   spanNombre.className = "mapa-nodo-nombre";
   spanNombre.textContent = aplicarFormatoTexto(materia.nombre);
-  nodo.appendChild(spanCodigo);
+  nodo.appendChild(fila1);
   nodo.appendChild(spanNombre);
 
   let temporizador = null;
@@ -469,8 +552,21 @@ function dibujarCaminoDesbloqueo(plan) {
 
 /** Modal chico (100% construido en JS) para elegir cómo exportar el PNG del mapa. */
 
+/**
+ * V1.10: selector de descarga completo — "Descargar como imagen" con 3
+ * switches independientes (Modo claro/oscuro, Tema default/actual, Fondo/Sin
+ * fondo) y un botón de confirmación. Usa los colores/trazado que estén
+ * visibles en el mapa en el momento de presionar "Descargar".
+ */
 function abrirSelectorDescargaMapa() {
   document.querySelectorAll(".modal-descarga-mapa").forEach((el) => el.remove());
+
+  // Punto de partida de cada switch: sigue el modo/tema actuales de la app.
+  const opciones = {
+    modo: document.documentElement.dataset.mode === "light" ? "claro" : "oscuro",
+    tema: "actual",
+    fondo: "con",
+  };
 
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay modal-descarga-mapa";
@@ -480,30 +576,57 @@ function abrirSelectorDescargaMapa() {
 
   const titulo = document.createElement("h3");
   titulo.style.margin = "0";
-  titulo.textContent = "Descargar mapa como imagen";
+  titulo.textContent = "Descargar como imagen";
   caja.appendChild(titulo);
 
   const texto = document.createElement("p");
   texto.className = "muted";
-  texto.textContent = "¿Cómo quieres exportar la imagen?";
+  texto.style.margin = "0";
+  texto.textContent = "¿Cómo quieres descargarlo?";
   caja.appendChild(texto);
+
+  const agregarSwitch = (opcionesPill, clave) => {
+    const grupo = construirPillGroupVista(opcionesPill, opciones[clave], (valor, btn, g) => {
+      opciones[clave] = valor;
+      g.querySelectorAll(".pill-item").forEach((p) => p.classList.remove("active"));
+      btn.classList.add("active");
+    });
+    caja.appendChild(grupo);
+  };
+
+  agregarSwitch(
+    [
+      { valor: "claro", texto: "Modo claro" },
+      { valor: "oscuro", texto: "Modo oscuro" },
+    ],
+    "modo"
+  );
+  agregarSwitch(
+    [
+      { valor: "default", texto: "Tema default" },
+      { valor: "actual", texto: "Tema actual" },
+    ],
+    "tema"
+  );
+  agregarSwitch(
+    [
+      { valor: "con", texto: "Fondo" },
+      { valor: "sin", texto: "Sin fondo" },
+    ],
+    "fondo"
+  );
 
   const cerrar = () => overlay.remove();
 
-  [
-    { texto: "Con mi tema actual", valor: "actual" },
-    { texto: "Modo claro, fondo transparente", valor: "claro_transparente" },
-  ].forEach((op) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "btn btn-secondary btn-block";
-    btn.textContent = op.texto;
-    btn.addEventListener("click", () => {
-      cerrar();
-      exportarMapaComoPNG(op.valor);
-    });
-    caja.appendChild(btn);
+  const btnDescargar = document.createElement("button");
+  btnDescargar.type = "button";
+  btnDescargar.className = "btn btn-primary btn-block";
+  btnDescargar.textContent = "Descargar";
+  btnDescargar.addEventListener("click", () => {
+    cerrar();
+    exportarMapaComoPNG(opciones);
   });
+  caja.appendChild(btnDescargar);
 
   const btnCancelar = document.createElement("button");
   btnCancelar.type = "button";
@@ -526,35 +649,54 @@ function abrirSelectorDescargaMapa() {
  * html2canvas — se restaura el modo real apenas termina.
  */
 
-function exportarMapaComoPNG(opcion) {
+/**
+ * V1.10: `opciones` = { modo: "claro"|"oscuro", tema: "default"|"actual",
+ * fondo: "con"|"sin" }.
+ * - modo: fuerza data-mode="light"/"dark" solo durante la captura.
+ * - tema "actual": conserva la paleta de colores real de la app (solo
+ *   cambia claro/oscuro). tema "default": además pisa temporalmente las
+ *   variables de color por una paleta neutra (blanco+grises en claro,
+ *   negro+grises en oscuro) vía la clase .exportar-tema-default en <html>.
+ * - fondo: "con" exporta con el color de fondo correspondiente; "sin"
+ *   exporta con fondo transparente.
+ * Los colores de nodo (por Simbología/Categoría) y el tipo de trazado del
+ * camino son los que estén visibles en el mapa en ese momento — no se tocan
+ * aquí, html2canvas simplemente captura el DOM tal cual se ve.
+ */
+function exportarMapaComoPNG(opciones) {
+  const { modo, tema, fondo } = opciones || {};
   const refs = estado._refsMapaActual;
   if (!refs || typeof html2canvas === "undefined") {
     console.error("No se pudo exportar el mapa: html2canvas no está disponible o el mapa no está renderizado.");
     return;
   }
-  const { scroll, sizer, track } = refs;
+  const { scroll, sizer } = refs;
 
-  // Estilos originales a restaurar tras la captura.
+  // Estilos/atributos originales a restaurar tras la captura.
   const estiloOriginalScroll = { overflow: scroll.style.overflow, width: scroll.style.width };
   const modoOriginal = document.documentElement.dataset.mode;
 
   const restaurar = () => {
     scroll.style.overflow = estiloOriginalScroll.overflow;
     scroll.style.width = estiloOriginalScroll.width;
-    if (opcion === "claro_transparente") document.documentElement.dataset.mode = modoOriginal;
+    document.documentElement.dataset.mode = modoOriginal;
+    document.documentElement.classList.remove("exportar-tema-default");
   };
 
   // Se muestra el sizer completo (sin recorte por overflow) para capturar
   // el mapa entero, incluso la parte que hoy está fuera del scroll visible.
   scroll.style.overflow = "visible";
   scroll.style.width = sizer.style.width;
-  if (opcion === "claro_transparente") document.documentElement.dataset.mode = "light";
-
-  const colorFondoActual = getComputedStyle(document.documentElement).getPropertyValue("--bg-canvas").trim() || "#101114";
+  document.documentElement.dataset.mode = modo === "claro" ? "light" : "dark";
+  if (tema === "default") document.documentElement.classList.add("exportar-tema-default");
 
   requestAnimationFrame(() => {
+    const colorFondoActual =
+      getComputedStyle(document.documentElement).getPropertyValue("--bg-canvas").trim() ||
+      (modo === "claro" ? "#ffffff" : "#101114");
+
     html2canvas(sizer, {
-      backgroundColor: opcion === "claro_transparente" ? null : colorFondoActual,
+      backgroundColor: fondo === "sin" ? null : colorFondoActual,
       scale: 2,
       useCORS: true,
     })
