@@ -72,60 +72,145 @@ function construirPanelCategorias() {
     p.textContent = "Todavía no has creado ninguna categoría (son 100% manuales).";
     sec.appendChild(p);
   } else {
-    const cont = document.createElement("div");
-    cont.className = "row";
-    cont.style.flexWrap = "wrap";
-    principal.categorias.forEach((cat) => {
-      const item = document.createElement("div");
-      item.className = "row";
-      item.style.gap = "4px";
+    const items = principal.categorias.map((cat) => construirChipCategoria(cat, principal));
 
-      const chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "badge";
-      chip.style.cssText = estiloBadgeCategoria(cat.color) + "cursor:pointer;" +
-        (estado.filtroCategoriaId === cat.id ? "box-shadow:0 0 0 2px var(--text-primary);" : "");
-      chip.textContent = cat.nombre;
+    // v1.9.8: en vez de un solo flex-wrap (donde el corte cae donde el
+    // navegador alcance, ej. 6 items → 5+1), se arman filas explícitas con
+    // reparto parejo (6 → 3+3, 9 → 5+4, etc.). Para eso hace falta el ancho
+    // real de cada chip, así que primero se montan todos juntos en una fila
+    // con flex-wrap (para que el layout les dé su ancho real) y luego, ya
+    // con eso medido, se redistribuyen — ver distribuirCategoriasEnFilas().
+    const contFilas = document.createElement("div");
+    contFilas.className = "stack";
+    contFilas.style.gap = "6px";
 
-      // Click corto = filtra. Mantener presionado (~500ms) o click derecho = editar.
-      let timerLongPress = null;
-      let disparoLargo = false;
-      chip.addEventListener("pointerdown", () => {
-        disparoLargo = false;
-        timerLongPress = setTimeout(() => {
-          disparoLargo = true;
-          abrirModalCategoria(cat, principal);
-        }, 500);
-      });
-      chip.addEventListener("pointerup", () => {
-        clearTimeout(timerLongPress);
-        if (!disparoLargo) {
-          estado.filtroCategoriaId = estado.filtroCategoriaId === cat.id ? null : cat.id;
-          renderizarPlanEstudios();
-        }
-      });
-      chip.addEventListener("pointerleave", () => clearTimeout(timerLongPress));
-      chip.addEventListener("contextmenu", (e) => {
-        e.preventDefault();
-        abrirModalCategoria(cat, principal);
-      });
+    const filaMedicion = document.createElement("div");
+    filaMedicion.className = "row";
+    filaMedicion.style.flexWrap = "wrap";
+    filaMedicion.style.gap = "8px";
+    items.forEach((item) => filaMedicion.appendChild(item));
+    contFilas.appendChild(filaMedicion);
+    sec.appendChild(contFilas);
 
-      const btnEditar = document.createElement("button");
-      btnEditar.type = "button";
-      btnEditar.className = "btn btn-secondary";
-      btnEditar.style.cssText = "padding:2px 8px; font-size:0.75rem;";
-      btnEditar.title = "Editar categoría";
-      btnEditar.textContent = "⚙️";
-      btnEditar.addEventListener("click", () => abrirModalCategoria(cat, principal));
-
-      item.appendChild(chip);
-      item.appendChild(btnEditar);
-      cont.appendChild(item);
+    // ResizeObserver dispara una vez con el tamaño inicial apenas se llama
+    // observe(), así que no hace falta un requestAnimationFrame aparte para
+    // la primera medición. Se desconecta solo cuando el panel deja de estar
+    // en el DOM (se re-renderiza en cada renderizarPlanEstudios()).
+    const resizeObserver = new ResizeObserver(() => {
+      if (!contFilas.isConnected) {
+        resizeObserver.disconnect();
+        return;
+      }
+      distribuirCategoriasEnFilas(contFilas, items);
     });
-    sec.appendChild(cont);
+    resizeObserver.observe(sec);
   }
 
   return sec;
+}
+
+/** Construye un chip de categoría (badge + botón editar) con sus listeners. */
+function construirChipCategoria(cat, principal) {
+  const item = document.createElement("div");
+  item.className = "row";
+  item.style.gap = "4px";
+  item.style.flex = "0 0 auto";
+
+  const chip = document.createElement("button");
+  chip.type = "button";
+  chip.className = "badge";
+  chip.style.cssText = estiloBadgeCategoria(cat.color) + "cursor:pointer;" +
+    (estado.filtroCategoriaId === cat.id ? "box-shadow:0 0 0 2px var(--text-primary);" : "");
+  chip.textContent = cat.nombre;
+
+  // Click corto = filtra. Mantener presionado (~500ms) o click derecho = editar.
+  let timerLongPress = null;
+  let disparoLargo = false;
+  chip.addEventListener("pointerdown", () => {
+    disparoLargo = false;
+    timerLongPress = setTimeout(() => {
+      disparoLargo = true;
+      abrirModalCategoria(cat, principal);
+    }, 500);
+  });
+  chip.addEventListener("pointerup", () => {
+    clearTimeout(timerLongPress);
+    if (!disparoLargo) {
+      estado.filtroCategoriaId = estado.filtroCategoriaId === cat.id ? null : cat.id;
+      renderizarPlanEstudios();
+    }
+  });
+  chip.addEventListener("pointerleave", () => clearTimeout(timerLongPress));
+  chip.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    abrirModalCategoria(cat, principal);
+  });
+
+  const btnEditar = document.createElement("button");
+  btnEditar.type = "button";
+  btnEditar.className = "btn btn-secondary";
+  btnEditar.style.cssText = "padding:2px 8px; font-size:0.75rem;";
+  btnEditar.title = "Editar categoría";
+  btnEditar.textContent = "⚙️";
+  btnEditar.addEventListener("click", () => abrirModalCategoria(cat, principal));
+
+  item.appendChild(chip);
+  item.appendChild(btnEditar);
+  return item;
+}
+
+/**
+ * Reparte `items` (elementos ya construidos, con sus listeners intactos) en
+ * filas explícitas dentro de `contFilas`, balanceando la cantidad por fila.
+ *
+ * Paso 1 — mide cuántas filas resultan "naturalmente" al ancho actual:
+ * empaquetado voraz de izquierda a derecha usando el ancho real de cada
+ * item (ya montado y con layout real, por eso hace falta medir después de
+ * que el navegador les dio tamaño, no antes).
+ * Paso 2 — con ese número de filas N, reparte los items lo más parejo
+ * posible: total/N con resto, dando el sobrante a las primeras filas
+ * (6 → 3+3, 9 → 5+4, 7 en 2 filas → 4+3, etc.).
+ */
+function distribuirCategoriasEnFilas(contFilas, items) {
+  if (!contFilas.isConnected || items.length === 0) return;
+
+  const GAP = 8; // debe calzar con el gap usado en cada fila más abajo
+  const anchoDisponible = contFilas.clientWidth;
+  if (!anchoDisponible) return;
+
+  const anchos = items.map((el) => el.getBoundingClientRect().width || el.offsetWidth);
+
+  let filasNaturales = 1;
+  let anchoAcumulado = 0;
+  anchos.forEach((w) => {
+    const anchoConGap = anchoAcumulado === 0 ? w : anchoAcumulado + GAP + w;
+    if (anchoConGap > anchoDisponible && anchoAcumulado > 0) {
+      filasNaturales++;
+      anchoAcumulado = w;
+    } else {
+      anchoAcumulado = anchoConGap;
+    }
+  });
+
+  const N = Math.max(1, filasNaturales);
+  const total = items.length;
+  const base = Math.floor(total / N);
+  const resto = total % N;
+
+  contFilas.innerHTML = "";
+  let indice = 0;
+  for (let f = 0; f < N; f++) {
+    const cantidadEnEstaFila = base + (f < resto ? 1 : 0);
+    if (cantidadEnEstaFila === 0) continue;
+    const filaEl = document.createElement("div");
+    filaEl.className = "row";
+    filaEl.style.gap = `${GAP}px`;
+    for (let j = 0; j < cantidadEnEstaFila; j++) {
+      filaEl.appendChild(items[indice]);
+      indice++;
+    }
+    contFilas.appendChild(filaEl);
+  }
 }
 
 function abrirModalCategoria(categoria, plan) {
@@ -331,3 +416,6 @@ export {
   renderizarControlesCategoriaMaterias,
   renderizarListaMateriasCheckbox,
 };
+
+// No exportadas (uso interno del panel de categorías):
+// construirChipCategoria, distribuirCategoriasEnFilas

@@ -402,12 +402,12 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
     const cuerpo = document.createElement("div");
     cuerpo.className = "materia-cuerpo stack";
 
-    // v8 punto 2 / B (v9): mismo detalle unificado que usa el modal —
-    // Bloque·Código, Categoría (si tiene), Requisitos, Correquisitos y la
-    // fila final de botones ("Es requisito"/"Historial"; sin "Cerrar" aquí,
-    // eso es exclusivo del modal). Las horas ya no van sueltas en el cuerpo:
-    // viven en la Línea 2 del encabezado, arriba.
-    cuerpo.appendChild(construirCuerpoDetalleMateria(materia, plan, { esModal: false }));
+    // v1.9.8: desde acá se arma el diseño EXCLUSIVO de la tarjeta de lista
+    // (grid de 2 columnas: Requisitos/Correquisitos a la izquierda,
+    // Categoría + "Es requisito" + "Historial" a la derecha) — ya no es el
+    // mismo layout que usa el modal (ver plan-detalle.js). Las horas ya no
+    // van sueltas en el cuerpo: viven en la Línea 2 del encabezado, arriba.
+    cuerpo.appendChild(construirCuerpoDetalleMateria(materia, plan, { modo: "tarjeta" }));
 
     const grupoEstado = document.createElement("div");
     grupoEstado.className = "pill-group";

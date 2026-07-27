@@ -9,7 +9,7 @@ import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { abrirConfirmacion } from "../ui/componentes.js";
 import { LIMITE_PLANES_ESTUDIO, abrirModalCrearPlan } from "./plan-esquema.js";
-import { renderizarPlanEstudios } from "./plan-vista-lista.js";
+import { exportarPlanACSV, renderizarPlanEstudios } from "./plan-vista-lista.js";
 
 /* --------------------------- Selector de plan --------------------------- */
 
@@ -144,6 +144,15 @@ function renderizarListaGestionPlanes() {
       });
     });
     derecha.appendChild(btnEliminar);
+
+    // v1.9.8: exporta este plan puntual (no necesariamente el activo) —
+    // exportarPlanACSV ya soporta recibir un plan explícito para este caso.
+    const btnExportar = document.createElement("button");
+    btnExportar.className = "btn btn-secondary";
+    btnExportar.textContent = "Exportar CSV";
+    btnExportar.title = `Exportar "${plan.nombre_carrera}" a CSV`;
+    btnExportar.addEventListener("click", () => exportarPlanACSV(plan));
+    derecha.appendChild(btnExportar);
 
     if (indice === 0) {
       const estrella = document.createElement("span");

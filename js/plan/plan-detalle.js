@@ -1,7 +1,18 @@
 /* =========================================================================
-   PLAN DE ESTUDIOS — MODAL DE DETALLE UNIFICADO
+   PLAN DE ESTUDIOS — DETALLE DE MATERIA (tarjeta de lista + modal)
    Modal de requisito navegable, búsqueda inversa ("Desbloquea"), e
    historial.
+
+   v1.9.8: hasta v1.9.7 el cuerpo de detalle (Bloque·Código, Categoría,
+   Requisitos, Correquisitos, botones finales) era EXACTAMENTE el mismo
+   diseño para la tarjeta expandida (en la lista) y para el modal flotante.
+   Desde v1.9.8 son diseños DISTINTOS: la tarjeta usa un grid de 2 columnas
+   propio (construirCuerpoDetalleTarjeta) y el modal conserva el layout de
+   1 columna de siempre (construirCuerpoDetalleModal). Ambas siguen
+   compartiendo construirLinea2Materia y construirBloqueRequisitos (esta
+   última parametrizada con `modo`), pero ya no una única función de cuerpo
+   completo — ver construirCuerpoDetalleMateria como punto de entrada que
+   decide cuál armar.
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
@@ -136,9 +147,71 @@ function construirBotonesFinalesDetalle(materia, plan, opciones) {
  * 2) Créditos, alineados estrictamente a la derecha de la fila.
  */
 
-function construirFilaRequisito(codigo) {
+/**
+ * v1.9.8: mide texto sin forzar reflow del DOM (Canvas 2D en vez de leer
+ * .scrollWidth de elementos reales) — se reusa un único contexto para todas
+ * las mediciones. El font se copia del propio elemento destino para que la
+ * medición sea exacta a lo que en verdad se va a renderizar.
+ */
+let ctxMedicionTexto = null;
+function medirAnchoTexto(texto, elReferenciaEstilo) {
+  if (!ctxMedicionTexto) ctxMedicionTexto = document.createElement("canvas").getContext("2d");
+  const estilo = getComputedStyle(elReferenciaEstilo);
+  ctxMedicionTexto.font = `${estilo.fontWeight} ${estilo.fontSize} ${estilo.fontFamily}`;
+  return ctxMedicionTexto.measureText(texto).width;
+}
+
+/**
+ * v1.9.8: en la tarjeta de lista (modo "tarjeta") el nombre de un requisito
+ * nunca se corta con "…" (eso es exclusivo del nombre de la materia en el
+ * encabezado — ver design-system.css). Si el ancho disponible no alcanza
+ * NI PARA UNA PALABRA del nombre, se reemplaza el texto por solo el código;
+ * si alcanza al menos una palabra, se deja el texto completo tal cual (el
+ * `text-overflow:clip` del CSS lo recorta de forma limpia si aun así
+ * desborda, sin puntos suspensivos). Se mide después de que la fila ya está
+ * en el DOM real (requestAnimationFrame), para tener un ancho disponible
+ * confiable.
+ */
+function programarAjusteAnchoRequisito(colNombreEl, codigo, textoCompleto) {
+  requestAnimationFrame(() => {
+    if (!colNombreEl.isConnected) return;
+    const disponible = colNombreEl.clientWidth;
+    if (disponible <= 0) return;
+
+    const anchoCompleto = medirAnchoTexto(textoCompleto, colNombreEl);
+    if (anchoCompleto <= disponible) {
+      colNombreEl.textContent = textoCompleto; // cabe entero (ej. tras un resize que agrandó la pantalla)
+      return;
+    }
+
+    const primeraPalabra = textoCompleto.split(" - ")[1]?.split(" ")[0] || "";
+    const textoMinimo = primeraPalabra ? `${codigo} - ${primeraPalabra}` : codigo;
+    const anchoMinimo = medirAnchoTexto(textoMinimo, colNombreEl);
+    colNombreEl.textContent = anchoMinimo > disponible ? codigo : textoCompleto;
+  });
+}
+
+// v1.9.8: reprocesa los nombres de requisito de las tarjetas visibles cuando
+// cambia el ancho de pantalla (ej. rotar el teléfono), para que el ajuste de
+// arriba nunca quede "pegado" a la medición original.
+let resizeTimeoutRequisitos = null;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimeoutRequisitos);
+  resizeTimeoutRequisitos = setTimeout(() => {
+    document.querySelectorAll(".requisito-fila-tarjeta .requisito-col-nombre").forEach((el) => {
+      const codigo = el.dataset.codigo;
+      if (!codigo) return;
+      programarAjusteAnchoRequisito(el, codigo, el.title);
+    });
+  }, 150);
+});
+
+function construirFilaRequisito(codigo, opciones) {
+  const modo = (opciones && opciones.modo) || "modal";
+  const esTarjeta = modo === "tarjeta";
+
   const fila = document.createElement("div");
-  fila.className = "requisito-fila";
+  fila.className = "requisito-fila" + (esTarjeta ? " requisito-fila-tarjeta" : "");
 
   const encontrada = buscarMateriaPorCodigoEnPlanes(codigo);
 
@@ -157,15 +230,23 @@ function construirFilaRequisito(codigo) {
   });
   fila.appendChild(colNombre);
 
-  const colCreditos = document.createElement("span");
-  colCreditos.className = "requisito-col-creditos";
-  colCreditos.textContent = encontrada ? String(encontrada.materia.creditos) : "—";
-  fila.appendChild(colCreditos);
+  if (esTarjeta) {
+    // v1.9.8: en la tarjeta de lista no va columna de créditos por
+    // requisito (simplificación pedida en el prompt) — en su lugar se
+    // programa el ajuste de ancho sin ellipsis descrito arriba.
+    colNombre.dataset.codigo = codigo;
+    programarAjusteAnchoRequisito(colNombre, codigo, textoNombre);
+  } else {
+    const colCreditos = document.createElement("span");
+    colCreditos.className = "requisito-col-creditos";
+    colCreditos.textContent = encontrada ? String(encontrada.materia.creditos) : "—";
+    fila.appendChild(colCreditos);
+  }
 
   return fila;
 }
 
-function construirBloqueRequisitos(etiqueta, grupos) {
+function construirBloqueRequisitos(etiqueta, grupos, modo) {
   const cont = document.createElement("div");
   const sinItems = !grupos || grupos.length === 0;
 
@@ -192,7 +273,7 @@ function construirBloqueRequisitos(etiqueta, grupos) {
 
   grupos.forEach((grupo) => {
     (grupo || []).forEach((codigo, i) => {
-      cont.appendChild(construirFilaRequisito(codigo));
+      cont.appendChild(construirFilaRequisito(codigo, { modo }));
       // Alternativas dentro del mismo grupo ("O"): un separador entre filas.
       // Entre grupos distintos no hay separador (el "Y" queda implícito).
       if (i < grupo.length - 1) {
@@ -216,14 +297,15 @@ function construirBloqueCompletoRequisitos(materia, plan) {
 }
 
 /**
- * B (v9)/v8 punto 2: arma TODO lo que va debajo del encabezado de 2 líneas,
- * en el mismo orden y con el mismo diseño tanto en la tarjeta expandida
- * como en el modal — Bloque·Código → Categoría (si tiene) → Requisitos →
- * Correquisitos → fila final de botones. `opciones.esModal` solo cambia si
- * se agrega "Cerrar" al final (ver construirBotonesFinalesDetalle).
+ * B (v9)/v8 punto 2 — SOLO MODAL: arma todo lo que va debajo del encabezado
+ * de 2 líneas — Bloque·Código → Categoría (si tiene) → Requisitos →
+ * Correquisitos → fila final de botones ("Es requisito"/"Historial" como
+ * links de texto + "Cerrar"). Desde v1.9.8 este layout ya NO lo comparte la
+ * tarjeta de lista (ver construirCuerpoDetalleTarjeta, más abajo) — quedó
+ * exclusivo del modal.
  */
 
-function construirCuerpoDetalleMateria(materia, plan, opciones) {
+function construirCuerpoDetalleModal(materia, plan) {
   const cont = document.createElement("div");
   cont.className = "stack";
 
@@ -233,9 +315,107 @@ function construirCuerpoDetalleMateria(materia, plan, opciones) {
   if (lineaCategoria) cont.appendChild(lineaCategoria);
 
   cont.appendChild(construirBloqueCompletoRequisitos(materia, plan));
-  cont.appendChild(construirBotonesFinalesDetalle(materia, plan, opciones));
+  cont.appendChild(construirBotonesFinalesDetalle(materia, plan, { esModal: true }));
 
   return cont;
+}
+
+/**
+ * v1.9.8: columna derecha del cuerpo de la tarjeta de lista — exactamente 3
+ * elementos en una hilera vertical (Categoría → "Es requisito" → "Historial"),
+ * anclados arriba a la derecha del interior de la tarjeta, totalmente
+ * independientes del contenido de la columna de Requisitos/Correquisitos
+ * (ver .materia-cuerpo-grid en design-system.css). A diferencia del modal:
+ * - El badge de Categoría SIEMPRE aparece, incluso sin categoría asignada
+ *   ("Sin categoría") — el modal en cambio la omite por completo si no tiene.
+ * - "Es requisito"/"Historial" son botones reales del sistema (btn
+ *   btn-secondary), nunca links de texto — y no incluye "Cerrar" (eso sigue
+ *   siendo exclusivo del modal).
+ */
+
+function construirColumnaAccionesTarjeta(materia, plan) {
+  const columna = document.createElement("div");
+  columna.className = "materia-cuerpo-acciones";
+
+  const categoria = plan.categorias.find((c) => c.id === materia.categoria_id);
+  const badge = document.createElement("span");
+  if (categoria) {
+    badge.className = "badge";
+    badge.style.cssText = estiloBadgeCategoria(categoria.color) + " cursor:pointer;";
+    badge.textContent = categoria.nombre;
+  } else {
+    badge.className = "badge badge-neutral";
+    badge.style.cursor = "pointer";
+    badge.textContent = "Sin categoría";
+  }
+  badge.title = "Mantén presionado (o clic derecho) para cambiar la categoría";
+  agregarLongPress(badge, () => abrirMenuRapidoCategoria(materia, plan, badge));
+  columna.appendChild(badge);
+
+  const botones = document.createElement("div");
+  botones.className = "materia-acciones-botones";
+
+  const btnEsRequisito = document.createElement("button");
+  btnEsRequisito.type = "button";
+  btnEsRequisito.className = "btn btn-secondary";
+  btnEsRequisito.textContent = "Es requisito";
+  btnEsRequisito.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    abrirModalDesbloquea(materia, plan);
+  });
+  botones.appendChild(btnEsRequisito);
+
+  const btnHistorial = document.createElement("button");
+  btnHistorial.type = "button";
+  btnHistorial.className = "btn btn-secondary";
+  btnHistorial.textContent = "Historial";
+  btnHistorial.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    abrirModalHistorial(materia);
+  });
+  botones.appendChild(btnHistorial);
+
+  columna.appendChild(botones);
+
+  return columna;
+}
+
+/**
+ * v1.9.8: cuerpo de la tarjeta de lista — grid de 2 columnas. Columna 1:
+ * Requisitos/Correquisitos (sin créditos, sin "Bloque X · Código", que se
+ * quita por completo aquí). Columna 2: construirColumnaAccionesTarjeta.
+ * Ya NO comparte código de armado con el modal (construirCuerpoDetalleModal)
+ * más allá de construirBloqueRequisitos, que sí siguen usando ambos con su
+ * propio `modo`.
+ */
+
+function construirCuerpoDetalleTarjeta(materia, plan) {
+  const grid = document.createElement("div");
+  grid.className = "materia-cuerpo-grid";
+
+  const colRequisitos = document.createElement("div");
+  colRequisitos.className = "materia-cuerpo-requisitos stack";
+  colRequisitos.appendChild(construirBloqueRequisitos("Requisitos", materia.requisitos, "tarjeta"));
+  colRequisitos.appendChild(construirBloqueRequisitos("Correquisitos", materia.correquisitos, "tarjeta"));
+  grid.appendChild(colRequisitos);
+
+  grid.appendChild(construirColumnaAccionesTarjeta(materia, plan));
+
+  return grid;
+}
+
+/**
+ * v1.9.8: punto de entrada único que decide cuál de los dos diseños armar
+ * según `opciones.modo` ("tarjeta" | "modal") — ya NO arma un layout
+ * compartido como antes (ver nota grande al inicio del archivo). Se
+ * mantiene compatibilidad con el llamado viejo `{ esModal: false }` →
+ * "tarjeta" / `{ esModal: true }` → "modal" por si queda algún otro
+ * llamador de este archivo que aún no se haya actualizado.
+ */
+
+function construirCuerpoDetalleMateria(materia, plan, opciones) {
+  const modo = (opciones && opciones.modo) || (opciones && opciones.esModal === false ? "tarjeta" : "modal");
+  return modo === "tarjeta" ? construirCuerpoDetalleTarjeta(materia, plan) : construirCuerpoDetalleModal(materia, plan);
 }
 
 /* ===================== Modal de requisito (navegable) ===================== */
@@ -291,9 +471,9 @@ function abrirModalRequisito(codigo) {
     contenedorFinal.appendChild(construirLinea2Materia(materia, false));
 
     // Bloque·Código, Categoría, Requisitos, Correquisitos y la fila final de
-    // botones ("Es requisito"/"Historial"/"Cerrar") — mismo bloque que usa
-    // la tarjeta expandida.
-    contenedorFinal.appendChild(construirCuerpoDetalleMateria(materia, plan, { esModal: true }));
+    // botones ("Es requisito"/"Historial"/"Cerrar") — diseño exclusivo del
+    // modal desde v1.9.8 (ver construirCuerpoDetalleModal).
+    contenedorFinal.appendChild(construirCuerpoDetalleMateria(materia, plan, { modo: "modal" }));
   }
 
   document.getElementById("modal-requisito").classList.remove("oculto");
@@ -388,7 +568,10 @@ export {
   construirBloqueCompletoRequisitos,
   construirBloqueRequisitos,
   construirBotonesFinalesDetalle,
+  construirColumnaAccionesTarjeta,
   construirCuerpoDetalleMateria,
+  construirCuerpoDetalleModal,
+  construirCuerpoDetalleTarjeta,
   construirFilaRequisito,
   construirLinea2Materia,
   construirLineaCategoriaMateria,

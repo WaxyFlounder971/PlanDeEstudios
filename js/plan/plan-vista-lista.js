@@ -129,16 +129,21 @@ function construirEncabezadoPlan(planPrincipal) {
   filaTitulo.appendChild(tituloWrap);
   sec.appendChild(filaTitulo);
 
-  // v5 1.2: fila de botones — Añadir materia / Importar-Actualizar malla (inline) / Gestionar plan.
+  // v1.9.8: el encabezado principal ahora solo tiene 2 botones, en este
+  // orden — "Gestionar plan" primero, "Actualizar malla" (o "Importar
+  // malla"/"Cerrar importación" según el estado) segundo. "+ Añadir
+  // materia" y "Editar Materias" se mudaron a la barra de acciones (ver
+  // construirBarraAcciones) — Añadir materia ahora solo aparece ahí y solo
+  // mientras el modo edición está activo.
   const botones = document.createElement("div");
   botones.className = "row";
   botones.style.flexWrap = "wrap";
 
-  const btnMateria = document.createElement("button");
-  btnMateria.className = "btn btn-secondary";
-  btnMateria.textContent = "+ Añadir materia";
-  btnMateria.addEventListener("click", abrirModalMateriaManual);
-  botones.appendChild(btnMateria);
+  const btnPlanes = document.createElement("button");
+  btnPlanes.className = "btn btn-primary";
+  btnPlanes.textContent = "Gestionar plan";
+  btnPlanes.addEventListener("click", abrirModalGestionPlanes);
+  botones.appendChild(btnPlanes);
 
   const btnImportar = document.createElement("button");
   btnImportar.className = "btn btn-secondary";
@@ -150,20 +155,6 @@ function construirEncabezadoPlan(planPrincipal) {
     renderizarPlanEstudios();
   });
   botones.appendChild(btnImportar);
-
-  const btnPlanes = document.createElement("button");
-  btnPlanes.className = "btn btn-primary";
-  btnPlanes.textContent = "Gestionar plan";
-  btnPlanes.addEventListener("click", abrirModalGestionPlanes);
-  botones.appendChild(btnPlanes);
-
-  // Punto 6 (v1.9.6): Modo Edición — activo, se ve resaltado (btn-primary);
-  // inactivo, como el resto de botones secundarios del encabezado.
-  const btnModoEdicion = document.createElement("button");
-  btnModoEdicion.className = "btn " + (estado.modoEdicionPlan ? "btn-primary" : "btn-secondary");
-  btnModoEdicion.textContent = estado.modoEdicionPlan ? "✓ Salir de edición" : "✏️ Editar plan";
-  btnModoEdicion.addEventListener("click", alternarModoEdicionPlan);
-  botones.appendChild(btnModoEdicion);
 
   sec.appendChild(botones);
   return sec;
@@ -225,57 +216,92 @@ function construirBarraAcciones() {
   filaBotones.className = "row";
   filaBotones.style.flexWrap = "wrap";
 
-  // Punto 4 (pendiente de una ronda anterior): "Bloques ▲▼" y "Materias ▲▼"
-  // viven en una sola pill, cada una con su propio par de flechas, separadas
-  // por "·" — en vez de dos pills sueltas.
-  const grupoColapso = document.createElement("div");
-  grupoColapso.className = "pill-group";
-  grupoColapso.title = "Bloques · Materias";
+  // v1.9.8: Bloques y Materias van en 2 pills SEPARADAS (antes vivían juntas
+  // en una sola pill con "·" de separador — eso era lo que se rompía en PC).
+  const grupoBloques = document.createElement("div");
+  grupoBloques.className = "pill-group";
+  grupoBloques.title = "Bloques";
 
   const btnBloquesContraer = document.createElement("button");
   btnBloquesContraer.type = "button";
   btnBloquesContraer.className = "pill-item";
   btnBloquesContraer.textContent = "Bloques ▲";
   btnBloquesContraer.addEventListener("click", contraerTodosLosBloques);
-  grupoColapso.appendChild(btnBloquesContraer);
+  grupoBloques.appendChild(btnBloquesContraer);
 
   const btnBloquesExpandir = document.createElement("button");
   btnBloquesExpandir.type = "button";
   btnBloquesExpandir.className = "pill-item";
   btnBloquesExpandir.textContent = "Bloques ▼";
   btnBloquesExpandir.addEventListener("click", expandirTodosLosBloques);
-  grupoColapso.appendChild(btnBloquesExpandir);
+  grupoBloques.appendChild(btnBloquesExpandir);
 
-  const separador = document.createElement("span");
-  separador.className = "pill-separador";
-  separador.textContent = "·";
-  separador.setAttribute("aria-hidden", "true");
-  grupoColapso.appendChild(separador);
+  filaBotones.appendChild(grupoBloques);
+
+  const grupoMaterias = document.createElement("div");
+  grupoMaterias.className = "pill-group";
+  grupoMaterias.title = "Materias";
 
   const btnMateriasContraer = document.createElement("button");
   btnMateriasContraer.type = "button";
   btnMateriasContraer.className = "pill-item";
   btnMateriasContraer.textContent = "Materias ▲";
   btnMateriasContraer.addEventListener("click", contraerTodasLasMaterias);
-  grupoColapso.appendChild(btnMateriasContraer);
+  grupoMaterias.appendChild(btnMateriasContraer);
 
   const btnMateriasExpandir = document.createElement("button");
   btnMateriasExpandir.type = "button";
   btnMateriasExpandir.className = "pill-item";
   btnMateriasExpandir.textContent = "Materias ▼";
   btnMateriasExpandir.addEventListener("click", expandirTodasLasMaterias);
-  grupoColapso.appendChild(btnMateriasExpandir);
+  grupoMaterias.appendChild(btnMateriasExpandir);
 
-  filaBotones.appendChild(grupoColapso);
+  filaBotones.appendChild(grupoMaterias);
 
-  const btnExportar = document.createElement("button");
-  btnExportar.className = "btn btn-primary";
-  btnExportar.textContent = "Exportar CSV";
-  btnExportar.addEventListener("click", exportarPlanACSV);
-  filaBotones.appendChild(btnExportar);
+  // v1.9.8: "Exportar CSV" se mudó adentro del modal "Gestionar plan" (justo
+  // después del botón de eliminar de cada plan — ver plan-gestionar.js).
+  // Aquí, donde antes vivía ese botón, ahora va "Editar Materias" (antes
+  // vivía en el encabezado como "Editar plan") y, SOLO mientras el modo
+  // edición está activo, "+ Añadir materia" aparece justo al lado — con el
+  // mismo color (btn-secondary los dos) y exactamente el mismo ancho
+  // (igualarAnchoBotones mide el más ancho de los dos tras el layout real y
+  // fuerza ese mismo ancho en ambos; ver más abajo).
+  const grupoEdicion = document.createElement("div");
+  grupoEdicion.className = "botones-editar-grupo";
+
+  const btnModoEdicion = document.createElement("button");
+  btnModoEdicion.className = "btn btn-secondary";
+  btnModoEdicion.textContent = estado.modoEdicionPlan ? "✓ Salir de edición" : "✏️ Editar Materias";
+  btnModoEdicion.addEventListener("click", alternarModoEdicionPlan);
+  grupoEdicion.appendChild(btnModoEdicion);
+
+  if (estado.modoEdicionPlan) {
+    const btnMateria = document.createElement("button");
+    btnMateria.className = "btn btn-secondary";
+    btnMateria.textContent = "+ Añadir materia";
+    btnMateria.addEventListener("click", abrirModalMateriaManual);
+    grupoEdicion.appendChild(btnMateria);
+    igualarAnchoBotones(btnModoEdicion, btnMateria);
+  }
+
+  filaBotones.appendChild(grupoEdicion);
 
   sec.appendChild(filaBotones);
   return sec;
+}
+
+/**
+ * v1.9.8: fuerza que 2+ botones midan EXACTAMENTE el mismo ancho — el del
+ * más ancho de todos, medido ya con layout real (getBoundingClientRect
+ * tras requestAnimationFrame). Se usa para "Editar Materias" + "Añadir materia"
+ * en la barra de acciones, que tienen textos de largo distinto.
+ */
+
+function igualarAnchoBotones(...botones) {
+  requestAnimationFrame(() => {
+    const anchoMax = Math.max(...botones.map((b) => b.getBoundingClientRect().width));
+    botones.forEach((b) => { b.style.width = `${Math.ceil(anchoMax)}px`; });
+  });
 }
 
 function obtenerClavesAgrupacionActuales() {
@@ -310,8 +336,16 @@ function expandirTodasLasMaterias() {
   renderizarPlanEstudios();
 }
 
-function exportarPlanACSV() {
-  const principal = obtenerPlanActivo();
+/**
+ * v1.9.8: ahora acepta un plan específico como parámetro — lo necesita el
+ * botón "Exportar" que va dentro del modal "Gestionar plan" (justo después
+ * de "Eliminar" en cada fila de plan, ver plan-gestionar.js), que exporta
+ * ESE plan puntual y no necesariamente el activo. Sin argumento, sigue
+ * exportando el plan activo (compatibilidad con el llamado de siempre).
+ */
+
+function exportarPlanACSV(planParam) {
+  const principal = planParam || obtenerPlanActivo();
   if (!principal) return;
 
   const tipos = Array.isArray(principal.parametros_universidad.tipos_horas)
