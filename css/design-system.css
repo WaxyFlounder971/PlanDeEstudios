@@ -1227,18 +1227,51 @@ img, svg { max-width: 100%; }
   text-align: center;
 }
 
-/* B (v9)/v8 punto 2: "Bloque X · Código", texto plano al 75% del tamaño
-   del nombre de la materia (que usa font-size heredado del body, ~1rem). */
+/* B (v9)/v8 punto 2: "Bloque X · Código", texto plano — exclusivo del modal
+   desde v1.11 (ver .requisito-linea1, abajo). v1.11: tamaño 50% más grande
+   que el valor anterior (0.75rem → 1.125em), en `em` en vez de un rem fijo
+   para que se mantenga proporcional al tamaño del nombre de la materia
+   (ambos heredan el mismo font-size base) sin importar dónde cambie ese
+   base a futuro. */
 .materia-meta-linea {
-  font-size: 0.75rem;
+  font-size: 1.125em;
   color: var(--text-muted);
   margin: 0;
 }
-/* Línea de Categoría, pegada a la derecha — se omite del DOM por completo
-   (ver construirLineaCategoriaMateria) si la materia no tiene ninguna. */
+/* Badge de Categoría — se omite del DOM por completo (ver
+   construirLineaCategoriaMateria) si la materia no tiene ninguna. Ya no es
+   una fila propia de ancho completo (era .materia-categoria-linea con
+   justify-content:flex-end): desde v1.11 es un hijo más dentro de
+   .requisito-linea1, así que solo ocupa su ancho natural. */
 .materia-categoria-linea {
   display: flex;
   justify-content: flex-end;
+}
+
+/* v1.11 — SOLO MODAL: Línea 1, Bloque·Código (izquierda) + badge de
+   Categoría (derecha), en la MISMA fila y centrados verticalmente entre
+   sí (antes salían en 2 líneas separadas por bug). Va antes del título en
+   el DOM — ver #requisito-linea1 en index.html y construirLinea1Materia. */
+.requisito-linea1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* v1.11: #requisito-contenedor-final agrupa la Línea 3 (Estado/Horas/
+   Créditos) y el cuerpo (Requisitos/Correquisitos + botones finales), pero
+   no es un .stack — sus 2 hijos quedaban sin espacio propio entre ellos.
+   Se fija aquí, de forma EXPLÍCITA (no heredando el `gap` genérico de
+   `.stack`, que se comparte con otras vistas y podría cambiar por una
+   razón ajena a esto), el mismo valor que ya separa el título (Línea 2) de
+   este contenedor vía el `gap: 14px` de `.modal-card.stack` — así el
+   espacio Línea 3 → Requisitos queda exactamente igual al espacio
+   Nombre → Línea 3, tal como pide el diseño. */
+#requisito-contenedor-final {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 /* Fila final del bloque de detalle: "Es requisito" · "Historial" · (solo
    en el modal) "Cerrar" — siempre agrupados juntos, nunca dispersos. */
