@@ -33,10 +33,19 @@ import { renderizarPlanEstudios } from "./plan-vista-lista.js";
  * Ej.: ["Horas"] -> "Horas_Horas" ; ["Teoría","Práctica"] -> "Horas_Teoría,Horas_Práctica"
  */
 
+/**
+ * v1.12: ya NO antepone "Horas_" a cada columna — el prompt de importación
+ * universal (ver construirPromptImportacion) le pide a la IA que use el
+ * código de HORAS_COLUMNAS tal cual como nombre de columna (ej. "T","P","L"),
+ * y el parser (plan-importacion-csv.js) las detecta por POSICIÓN, no por
+ * nombre. Se mantiene esta función (en vez de inlinear tipos.join(",")) para
+ * que exportarPlanACSV (plan-vista-lista.js, Parte G) siga usando un único
+ * punto de verdad para el formato del encabezado de horas.
+ */
 function construirColumnasHoras(tiposHoras) {
   const tipos = tiposHoras || ["Horas"];
   if (tipos.length === 0) return ""; // v7 #1: "No aplica" -> sin columnas de horas en el CSV
-  return tipos.map((t) => `Horas_${t.replace(/\s+/g, "")}`).join(",");
+  return tipos.join(",");
 }
 
 function construirEncabezadoCSV(tiposHoras) {
