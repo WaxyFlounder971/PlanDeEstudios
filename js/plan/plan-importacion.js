@@ -6,6 +6,7 @@
    ========================================================================= */
 
 import { PRESETS_TIPOS_HORAS } from "../core/schema.js";
+import { mostrarCargando, ocultarCargando } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { manejarClickImportar, mostrarErroresImportacion } from "./plan-importacion-csv.js";
@@ -121,7 +122,7 @@ estado.panelImportacionAbierto = false;   // v5 1.2/1.3: import/actualizar malla
 /* ---- B.2: flujo de importación de 3 modos (Link / PDF / Capturas) ----
  * Estas llaves viven en `estado` (no en los datos del usuario) porque son
  * solo del momento de importar, antes de que exista el plan. */
-estado.modoImportacion = "capturas";       // "link" | "pdf" | "capturas"
+estado.modoImportacion = null;             // null (sin selección) | "link" | "pdf" | "capturas"
 estado.linkImportacion = "";               // URL pegada en el modo "link"
 // Universidad/tipos_horas elegidos ANTES de que el plan exista (para poder
 // construir el prompt con las columnas de horas correctas). Se resuelven acá
@@ -273,7 +274,10 @@ function construirPanelImportacion() {
     btn.className = "pill-item" + (estado.modoImportacion === op.valor ? " active" : "");
     btn.textContent = op.texto;
     btn.addEventListener("click", () => {
-      estado.modoImportacion = op.valor;
+      // v1.10.1 (punto 4): presionar el modo ya activo lo desactiva y vuelve
+      // al estado "sin selección" — así el usuario puede llegar ahí también
+      // manualmente, no solo al abrir el panel por primera vez.
+      estado.modoImportacion = estado.modoImportacion === op.valor ? null : op.valor;
       renderizarPlanEstudios();
     });
     grupoModo.appendChild(btn);
@@ -295,72 +299,97 @@ function construirPanelImportacion() {
     avisoNavegacion.className = "muted";
     avisoNavegacion.textContent = "Este modo requiere que tu IA tenga activada la navegación web.";
     sec.appendChild(avisoNavegacion);
+
+    // Punto 6 (v1.10.1): aviso de compatibilidad — este modo depende de que
+    // la IA pueda navegar y leer bien la página, lo cual no siempre funciona
+    // igual de bien en todas las universidades/plataformas.
+    const avisoCompatibilidad = document.createElement("p");
+    avisoCompatibilidad.className = "muted";
+    avisoCompatibilidad.style.color = "var(--color-warning, #f59e0b)";
+    avisoCompatibilidad.textContent = "⚠️ Esta opción podría no ser compatible con algunos planes de estudios. Recomendamos usar la opción de PDF o la de adjuntar capturas de pantalla o imágenes.";
+    sec.appendChild(avisoCompatibilidad);
   } else if (estado.modoImportacion === "pdf") {
     const nota = document.createElement("p");
     nota.className = "muted";
     nota.textContent = "Vas a adjuntar tu PDF directamente en la ventana de Claude o ChatGPT que se abra.";
     sec.appendChild(nota);
   } else if (estado.modoImportacion === "capturas") {
+    // v1.10.1 (puntos 3/5): ya no se muestra el input de imágenes ni el botón
+    // de convertir aquí en el panel — ahora solo se muestra el botón que abre
+    // la ventana flotante (modal-capturas-pdf), donde vive todo ese flujo.
     const nota = document.createElement("p");
     nota.className = "muted";
-    nota.textContent = '1) Selecciona tus fotos/capturas abajo y presiona "Convertir a PDF" — se va a descargar un archivo a tu dispositivo. 2) Cuando abras Claude/ChatGPT, adjunta ESE archivo PDF descargado (no las fotos sueltas).';
+    nota.textContent = "Primero hay que convertir tus capturas en un solo PDF antes de enviarlas a la IA.";
     sec.appendChild(nota);
 
-    sec.appendChild(construirInputCapturasAPDF());
+    const btnAbrirConversion = document.createElement("button");
+    btnAbrirConversion.type = "button";
+    btnAbrirConversion.className = "btn btn-secondary btn-block";
+    btnAbrirConversion.textContent = "Convertir imágenes a PDF";
+    btnAbrirConversion.addEventListener("click", abrirModalCapturasPDF);
+    sec.appendChild(btnAbrirConversion);
   }
 
-  const filaBotones = document.createElement("div");
-  filaBotones.className = "row";
+  // Punto 4 (v1.10.1): sin modo elegido, o en modo "capturas" (donde primero
+  // hay que terminar la conversión — al terminar, se autoselecciona "pdf" y
+  // esto se vuelve a evaluar), no tiene sentido mostrar los botones de
+  // enviar a la IA, el textarea del CSV, subir archivo, ni Importar.
+  const mostrarBloqueEnvioYCsv = estado.modoImportacion === "link" || estado.modoImportacion === "pdf";
 
-  const btnClaude = document.createElement("button");
-  btnClaude.className = "btn btn-primary";
-  btnClaude.style.flex = "1";
-  btnClaude.textContent = "Enviar a Claude";
-  btnClaude.addEventListener("click", () => {
-    const columnasHoras = construirColumnasHoras(estado.tiposHorasImportacion);
-    abrirModalInstruccionesImportacion(
-      estado.modoImportacion,
-      "claude",
-      construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras)
-    );
-  });
-  filaBotones.appendChild(btnClaude);
+  if (mostrarBloqueEnvioYCsv) {
+    const filaBotones = document.createElement("div");
+    filaBotones.className = "row";
 
-  const btnChatGPT = document.createElement("button");
-  btnChatGPT.className = "btn btn-secondary";
-  btnChatGPT.style.flex = "1";
-  btnChatGPT.textContent = "Enviar a ChatGPT";
-  btnChatGPT.addEventListener("click", () => {
-    const columnasHoras = construirColumnasHoras(estado.tiposHorasImportacion);
-    abrirModalInstruccionesImportacion(
-      estado.modoImportacion,
-      "chatgpt",
-      construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras)
-    );
-  });
-  filaBotones.appendChild(btnChatGPT);
+    const btnClaude = document.createElement("button");
+    btnClaude.className = "btn btn-primary";
+    btnClaude.style.flex = "1";
+    btnClaude.textContent = "Enviar a Claude";
+    btnClaude.addEventListener("click", () => {
+      const columnasHoras = construirColumnasHoras(estado.tiposHorasImportacion);
+      abrirModalInstruccionesImportacion(
+        estado.modoImportacion,
+        "claude",
+        construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras)
+      );
+    });
+    filaBotones.appendChild(btnClaude);
 
-  sec.appendChild(filaBotones);
+    const btnChatGPT = document.createElement("button");
+    btnChatGPT.className = "btn btn-secondary";
+    btnChatGPT.style.flex = "1";
+    btnChatGPT.textContent = "Enviar a ChatGPT";
+    btnChatGPT.addEventListener("click", () => {
+      const columnasHoras = construirColumnasHoras(estado.tiposHorasImportacion);
+      abrirModalInstruccionesImportacion(
+        estado.modoImportacion,
+        "chatgpt",
+        construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras)
+      );
+    });
+    filaBotones.appendChild(btnChatGPT);
 
-  const textarea = document.createElement("textarea");
-  textarea.className = "form-textarea";
-  textarea.id = "textarea-csv-importar";
-  textarea.rows = 8;
-  textarea.placeholder = "Pega aquí el CSV que te devolvió la IA…";
-  sec.appendChild(textarea);
+    sec.appendChild(filaBotones);
 
-  sec.appendChild(construirInputArchivoCSV(textarea));
+    const textarea = document.createElement("textarea");
+    textarea.className = "form-textarea";
+    textarea.id = "textarea-csv-importar";
+    textarea.rows = 8;
+    textarea.placeholder = "Pega aquí el CSV que te devolvió la IA…";
+    sec.appendChild(textarea);
 
-  const errores = document.createElement("div");
-  errores.id = "errores-importacion-csv";
-  errores.className = "stack oculto";
-  sec.appendChild(errores);
+    sec.appendChild(construirInputArchivoCSV(textarea));
 
-  const btnImportar = document.createElement("button");
-  btnImportar.className = "btn btn-secondary btn-block";
-  btnImportar.textContent = "Importar";
-  btnImportar.addEventListener("click", () => manejarClickImportar(textarea.value));
-  sec.appendChild(btnImportar);
+    const errores = document.createElement("div");
+    errores.id = "errores-importacion-csv";
+    errores.className = "stack oculto";
+    sec.appendChild(errores);
+
+    const btnImportar = document.createElement("button");
+    btnImportar.className = "btn btn-secondary btn-block";
+    btnImportar.textContent = "Importar";
+    btnImportar.addEventListener("click", () => manejarClickImportar(textarea.value));
+    sec.appendChild(btnImportar);
+  }
 
   return sec;
 }
@@ -447,48 +476,60 @@ async function convertirCapturasAPDF(archivos) {
   doc.save("plan-de-estudios-capturas.pdf");
 }
 
-/** Input de imágenes + botón "Convertir a PDF" del modo "capturas": lee las
- *  capturas seleccionadas, las junta en un solo PDF con convertirCapturasAPDF()
- *  y dispara la descarga automática al dispositivo del usuario. */
+/* ===================== v1.10.1 — Ventana flotante: capturas -> PDF ===================== *
+ * Reemplaza el input inline que vivía en el panel. Ahora el botón "Convertir
+ * imágenes a PDF" del panel abre este modal aparte; al convertir con éxito
+ * usa el overlay de carga global (mostrarCargando/ocultarCargando, las
+ * mismas bolitas que ya existen para el resto de la app) y, al terminar,
+ * autoselecciona el modo "Adjuntar PDF" para que el usuario siga el flujo
+ * normal desde ahí (adjuntar el PDF recién descargado). */
 
-function construirInputCapturasAPDF() {
-  const wrap = document.createElement("div");
-  wrap.className = "stack";
-  wrap.style.gap = "8px";
+function abrirModalCapturasPDF() {
+  const input = document.getElementById("input-capturas-pdf");
+  if (input) input.value = ""; // limpia cualquier selección de una vez anterior
+  document.getElementById("error-modal-capturas-pdf").classList.add("oculto");
+  document.getElementById("modal-capturas-pdf").classList.remove("oculto");
+}
 
-  const inputImagenes = document.createElement("input");
-  inputImagenes.type = "file";
-  inputImagenes.accept = "image/*";
-  inputImagenes.multiple = true;
-  inputImagenes.className = "form-input";
-  wrap.appendChild(inputImagenes);
+function cerrarModalCapturasPDF() {
+  document.getElementById("modal-capturas-pdf").classList.add("oculto");
+}
 
-  const btnConvertir = document.createElement("button");
-  btnConvertir.type = "button";
-  btnConvertir.className = "btn btn-secondary btn-block";
-  btnConvertir.textContent = "Convertir a PDF";
-  btnConvertir.addEventListener("click", async () => {
-    const archivos = inputImagenes.files;
+function inicializarModalCapturasPDF() {
+  document.getElementById("btn-cancelar-capturas-pdf").addEventListener("click", cerrarModalCapturasPDF);
+  document.getElementById("modal-capturas-pdf").addEventListener("click", (e) => {
+    if (e.target.id === "modal-capturas-pdf") cerrarModalCapturasPDF();
+  });
+
+  document.getElementById("btn-convertir-capturas-pdf").addEventListener("click", async () => {
+    const input = document.getElementById("input-capturas-pdf");
+    const archivos = input.files;
+    const err = document.getElementById("error-modal-capturas-pdf");
+    err.classList.add("oculto");
+
     if (!archivos || archivos.length === 0) {
-      mostrarToast("Primero selecciona una o varias fotos/capturas.");
+      err.textContent = "Primero selecciona una o varias fotos/capturas.";
+      err.classList.remove("oculto");
       return;
     }
-    btnConvertir.disabled = true;
-    btnConvertir.textContent = "Convirtiendo…";
+
+    cerrarModalCapturasPDF();
+    mostrarCargando();
     try {
       await convertirCapturasAPDF(archivos);
-      mostrarToast("✓ PDF descargado — adjúntalo en la IA en vez de las fotos sueltas");
+      // Puntos 3/5: autoselecciona "Adjuntar PDF" — el usuario ya tiene el
+      // PDF descargado y solo falta que lo adjunte en la IA.
+      estado.modoImportacion = "pdf";
+      renderizarPlanEstudios();
+      mostrarToast('✓ PDF descargado — se seleccionó "Adjuntar PDF", adjúntalo ahí');
     } catch (e) {
       console.warn("No se pudo convertir las capturas a PDF.", e);
       mostrarToast("No se pudo crear el PDF. Intenta de nuevo.");
+      abrirModalCapturasPDF(); // deja al usuario reintentar sin perder el flujo
     } finally {
-      btnConvertir.disabled = false;
-      btnConvertir.textContent = "Convertir a PDF";
+      ocultarCargando();
     }
   });
-  wrap.appendChild(btnConvertir);
-
-  return wrap;
 }
 
 /** Ajuste v4 #8: además de pegar el CSV como texto, se puede subir un
@@ -613,13 +654,14 @@ function inicializarModalInstruccionesImportacion() {
 
 export {
   NOMBRE_IA,
+  abrirModalCapturasPDF,
   abrirModalInstruccionesImportacion,
   abrirVentanaNueva,
+  cerrarModalCapturasPDF,
   cerrarModalInstruccionesImportacion,
   construirColumnasHoras,
   construirEncabezadoCSV,
   construirInputArchivoCSV,
-  construirInputCapturasAPDF,
   construirPanelImportacion,
   construirPromptImportacion,
   construirTextoInstruccionesImportacion,
@@ -628,6 +670,7 @@ export {
   enviarPromptAChatGPT,
   enviarPromptAClaude,
   extraerMetadatosImportacion,
+  inicializarModalCapturasPDF,
   inicializarModalInstruccionesImportacion,
   instruccionesImportacionPendiente,
 };
