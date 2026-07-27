@@ -432,13 +432,21 @@ function leerImagenComoDataURL(archivo) {
 }
 
 /** Carga una Data URL en un elemento <img> real, solo para poder leer sus
- *  dimensiones naturales (ancho/alto) antes de insertarla en el PDF. */
+ *  dimensiones naturales (ancho/alto) antes de insertarla en el PDF.
+ *  Incluye un timeout de seguridad: en algunos navegadores, si el archivo no
+ *  es una imagen decodificable (formato no soportado, archivo corrupto),
+ *  ni onload ni onerror llegan a dispararse — sin este timeout, la
+ *  conversión completa se quedaba esperando para siempre, sin error visible
+ *  y sin que el overlay de carga terminara nunca. */
 
 function cargarDimensionesImagen(dataUrl) {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("No se pudo procesar la imagen."));
+    const limite = setTimeout(() => {
+      reject(new Error("La imagen tardó demasiado en procesarse (puede no ser un formato soportado)."));
+    }, 15000);
+    img.onload = () => { clearTimeout(limite); resolve(img); };
+    img.onerror = () => { clearTimeout(limite); reject(new Error("No se pudo procesar la imagen.")); };
     img.src = dataUrl;
   });
 }
@@ -468,7 +476,10 @@ async function convertirCapturasAPDF(archivos) {
   const MARGEN_MM = 10;
   let doc = null;
 
+  console.log(`[capturas→PDF] Iniciando conversión de ${archivos.length} imagen(es)…`);
+
   for (let i = 0; i < archivos.length; i++) {
+    console.log(`[capturas→PDF] Procesando imagen ${i + 1}/${archivos.length}: "${archivos[i].name}" (${archivos[i].type || "tipo desconocido"}, ${Math.round(archivos[i].size / 1024)} KB)`);
     const dataUrl = await leerImagenComoDataURL(archivos[i]);
     const img = await cargarDimensionesImagen(dataUrl);
     const horizontal = img.width >= img.height;
@@ -490,9 +501,12 @@ async function convertirCapturasAPDF(archivos) {
     const y = (altoPagina - altoFinal) / 2;
 
     doc.addImage(dataUrl, detectarFormatoImagen(dataUrl), x, y, anchoFinal, altoFinal);
+    console.log(`[capturas→PDF] Imagen ${i + 1}/${archivos.length} agregada al PDF.`);
   }
 
+  console.log("[capturas→PDF] Todas las imágenes procesadas — descargando PDF…");
   doc.save("plan-de-estudios-capturas.pdf");
+  console.log("[capturas→PDF] doc.save() ejecutado.");
 }
 
 /* ===================== v1.10.1 — Ventana flotante: capturas -> PDF ===================== *
@@ -521,17 +535,20 @@ function inicializarModalCapturasPDF() {
   });
 
   document.getElementById("btn-convertir-capturas-pdf").addEventListener("click", async () => {
+    console.log("[capturas→PDF] Clic en 'Convertir a PDF' detectado.");
     const input = document.getElementById("input-capturas-pdf");
     const archivos = input.files;
     const err = document.getElementById("error-modal-capturas-pdf");
     err.classList.add("oculto");
 
     if (!archivos || archivos.length === 0) {
+      console.log("[capturas→PDF] No hay archivos seleccionados — se muestra el aviso inline.");
       err.textContent = "Primero selecciona una o varias fotos/capturas.";
       err.classList.remove("oculto");
       return;
     }
 
+    console.log(`[capturas→PDF] ${archivos.length} archivo(s) seleccionado(s), cerrando modal y mostrando loading…`);
     cerrarModalCapturasPDF();
     mostrarCargando();
     try {
