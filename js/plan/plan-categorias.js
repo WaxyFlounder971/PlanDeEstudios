@@ -74,39 +74,106 @@ function construirPanelCategorias() {
   } else {
     const items = principal.categorias.map((cat) => construirChipCategoria(cat, principal));
 
-    // v1.12: reemplaza el reparto en filas por JS (distribuirCategoriasEnFilas,
-    // v1.9.8) por un CSS Grid real — se alinean solas en "columnas
-    // invisibles" sea cual sea la cantidad, sin recalcular filas a mano y
-    // sin depender del tamaño relativo entre ellas. El ancho de columna se
-    // mide una sola vez (el chip más ancho) y se fija como mínimo de
-    // columna; cada chip conserva su tamaño natural (no se estira).
+    // v1.13: v1.12 alineaba en columnas con `auto-fit`, pero eso reparte
+    // por cuántas caben según el ancho disponible — no por cantidad total,
+    // así que 6 chips podían salir 4+2 en vez de 3+3. Esta versión vuelve
+    // al reparto EQUITATIVO por filas de v1.9.8 (nunca una fila casi vacía:
+    // 6→3+3, 11→4+4+3, el sobrante siempre a las primeras filas) y además
+    // los alinea en columnas reales — ver distribuirCategoriasEnGrid().
     const gridCategorias = document.createElement("div");
     gridCategorias.className = "categorias-grid";
     items.forEach((item) => gridCategorias.appendChild(item));
     sec.appendChild(gridCategorias);
 
-    // ResizeObserver dispara una vez con el tamaño inicial apenas se llama
-    // observe(), así que no hace falta un requestAnimationFrame aparte para
-    // la primera medición — hace falta esperar a que `sec` esté en el DOM
-    // real (con tamaño) para que getBoundingClientRect() de los chips no dé
-    // 0. El ancho de columna es un valor intrínseco del contenido (no del
-    // ancho del contenedor), así que una sola medición alcanza: se
-    // desconecta apenas logra medir algo mayor a 0.
+    // A diferencia de v1.12 (que medía una sola vez y desconectaba), aquí
+    // SÍ hace falta recalcular en cada resize: cuántas filas "caben
+    // naturalmente" depende del ancho disponible del contenedor, igual que
+    // en v1.9.8.
     const resizeObserver = new ResizeObserver(() => {
       if (!gridCategorias.isConnected) {
         resizeObserver.disconnect();
         return;
       }
-      const anchoMax = Math.max(...items.map((el) => el.getBoundingClientRect().width || el.offsetWidth));
-      if (anchoMax > 0) {
-        gridCategorias.style.gridTemplateColumns = `repeat(auto-fit, minmax(${Math.ceil(anchoMax)}px, max-content))`;
-        resizeObserver.disconnect();
-      }
+      distribuirCategoriasEnGrid(gridCategorias, items);
     });
     resizeObserver.observe(sec);
   }
 
   return sec;
+}
+
+/**
+ * v1.13: reparte `items` (elementos ya construidos, con sus listeners
+ * intactos) en filas EQUITATIVAS dentro de un único CSS Grid compartido,
+ * de forma que las filas completas queden alineadas en columnas de
+ * verdad (a diferencia de v1.9.8, que armaba <div class="row"> sueltos por
+ * fila, sin alinear columna a columna entre sí).
+ *
+ * Paso 1 (igual que v1.9.8) — mide cuántas filas resultan "naturalmente"
+ * al ancho actual: empaquetado voraz de izquierda a derecha usando el
+ * ancho REAL de cada item (no un ancho uniforme — por eso hace falta medir
+ * después de que el navegador les dio tamaño, no antes).
+ * Paso 2 (igual que v1.9.8) — con ese número de filas N, reparte los items
+ * lo más parejo posible: total/N con resto, dando el sobrante a las
+ * PRIMERAS filas (6 → 3+3, 11 → 4+4+3, 7 en 2 filas → 4+3, etc.).
+ * Paso 3 (nuevo) — en vez de crear una fila <div> por cada grupo, se arma
+ * UN solo grid con tantas columnas como la fila más larga, y cada item se
+ * ubica de forma EXPLÍCITA (grid-row/grid-column) según ese reparto. Así,
+ * mientras todas las filas tengan la misma cantidad, quedan perfectamente
+ * alineadas en columnas; si el total no es múltiplo exacto del número de
+ * filas, solo la última fila queda más corta y sin alinear su último
+ * puesto — comportamiento aceptado.
+ */
+function distribuirCategoriasEnGrid(gridCategorias, items) {
+  if (!gridCategorias.isConnected || items.length === 0) return;
+
+  const GAP = 8; // debe calzar con el gap del CSS (.categorias-grid)
+  const anchoDisponible = gridCategorias.clientWidth;
+  if (!anchoDisponible) return;
+
+  const anchos = items.map((el) => el.getBoundingClientRect().width || el.offsetWidth);
+  const anchoMax = Math.max(...anchos);
+  if (!anchoMax) return;
+
+  // Paso 1: filas naturales por empaquetado voraz con el ancho real de cada item.
+  let filasNaturales = 1;
+  let anchoAcumulado = 0;
+  anchos.forEach((w) => {
+    const anchoConGap = anchoAcumulado === 0 ? w : anchoAcumulado + GAP + w;
+    if (anchoConGap > anchoDisponible && anchoAcumulado > 0) {
+      filasNaturales++;
+      anchoAcumulado = w;
+    } else {
+      anchoAcumulado = anchoConGap;
+    }
+  });
+
+  // Paso 2: cantidad de items por fila — las primeras `resto` filas llevan 1 de más.
+  const N = Math.max(1, filasNaturales);
+  const total = items.length;
+  const base = Math.floor(total / N);
+  const resto = total % N;
+  const columnasPorFila = [];
+  for (let f = 0; f < N; f++) {
+    const cantidad = base + (f < resto ? 1 : 0);
+    if (cantidad > 0) columnasPorFila.push(cantidad);
+  }
+  const maxColumnas = Math.max(...columnasPorFila);
+
+  // Paso 3: un solo grid, tantas columnas como la fila más larga, cada item
+  // ubicado explícitamente para que el reparto equitativo del Paso 2 se
+  // respete al pie de la letra (no el llenado secuencial por defecto del
+  // grid, que no siempre coincide con "el sobrante a las primeras filas").
+  gridCategorias.style.gridTemplateColumns = `repeat(${maxColumnas}, minmax(${Math.ceil(anchoMax)}px, max-content))`;
+  let indice = 0;
+  columnasPorFila.forEach((cantidad, filaIdx) => {
+    for (let col = 0; col < cantidad; col++) {
+      const item = items[indice];
+      item.style.gridRow = String(filaIdx + 1);
+      item.style.gridColumn = String(col + 1);
+      indice++;
+    }
+  });
 }
 
 /** Construye un chip de categoría (badge + botón editar) con sus listeners. */
@@ -364,4 +431,4 @@ export {
 };
 
 // No exportadas (uso interno del panel de categorías):
-// construirChipCategoria
+// construirChipCategoria, distribuirCategoriasEnGrid
