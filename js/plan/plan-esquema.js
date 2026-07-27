@@ -351,6 +351,8 @@ function abrirModalMateriaManual(materiaExistente = null, planDeLaMateria = null
 
   document.getElementById("titulo-modal-materia-manual").textContent = editando ? "✏️ Editar materia" : "+ Añadir materia";
   document.getElementById("btn-guardar-materia-manual").textContent = editando ? "Guardar cambios" : "Guardar";
+  // v1.12: "Borrar materia" solo tiene sentido si ya existe una materia que borrar.
+  document.getElementById("btn-borrar-materia-manual").classList.toggle("oculto", !editando);
 
   const bloquePlan = document.getElementById("bloque-materia-manual-plan");
   const pillPlan = document.getElementById("pill-materia-manual-plan");
@@ -449,6 +451,36 @@ function inicializarModalMateriaManual() {
       e.target.classList.add("oculto");
       estado.materiaManualEditando = null;
     }
+  });
+
+  /**
+   * v1.12: "Borrar materia" — solo existe estando en modo edición
+   * (estado.materiaManualEditando ya trae planId + codigoOriginal, ver
+   * abrirModalMateriaManual). Pide confirmación con el `confirm()` nativo
+   * del navegador antes de borrar — no usa el modal de confirmación propio
+   * del sistema de diseño (`abrirConfirmacion()` de ui/componentes.js)
+   * porque ese archivo no está disponible en esta sesión; si lo compartís
+   * se puede cambiar por ese, para que se vea igual al resto de la app.
+   * No hace falta limpiar referencias sueltas en Requisitos/Correquisitos
+   * de otras materias: plan-detalle.js ya maneja con gracia un código que
+   * no se encuentra ("no encontrada en ningún plan visible").
+   */
+  document.getElementById("btn-borrar-materia-manual").addEventListener("click", () => {
+    const editando = estado.materiaManualEditando;
+    if (!editando) return;
+    const plan = estado.datos.planes_estudio.find((p) => p.id === editando.planId);
+    const materia = plan && plan.materias.find((m) => m.codigo === editando.codigoOriginal);
+    if (!plan || !materia) return;
+
+    const confirmado = window.confirm(`¿Borrar la materia "${materia.codigo} - ${materia.nombre}"? Esta acción no se puede deshacer.`);
+    if (!confirmado) return;
+
+    plan.materias = plan.materias.filter((m) => m !== materia);
+    estado.materiasExpandidas.delete(materia.codigo);
+    estado.materiaManualEditando = null;
+    marcarCambioPendiente();
+    document.getElementById("modal-materia-manual").classList.add("oculto");
+    renderizarPlanEstudios();
   });
 
   document.getElementById("btn-guardar-materia-manual").addEventListener("click", () => {

@@ -74,34 +74,34 @@ function construirPanelCategorias() {
   } else {
     const items = principal.categorias.map((cat) => construirChipCategoria(cat, principal));
 
-    // v1.9.8: en vez de un solo flex-wrap (donde el corte cae donde el
-    // navegador alcance, ej. 6 items → 5+1), se arman filas explícitas con
-    // reparto parejo (6 → 3+3, 9 → 5+4, etc.). Para eso hace falta el ancho
-    // real de cada chip, así que primero se montan todos juntos en una fila
-    // con flex-wrap (para que el layout les dé su ancho real) y luego, ya
-    // con eso medido, se redistribuyen — ver distribuirCategoriasEnFilas().
-    const contFilas = document.createElement("div");
-    contFilas.className = "stack";
-    contFilas.style.gap = "6px";
-
-    const filaMedicion = document.createElement("div");
-    filaMedicion.className = "row";
-    filaMedicion.style.flexWrap = "wrap";
-    filaMedicion.style.gap = "8px";
-    items.forEach((item) => filaMedicion.appendChild(item));
-    contFilas.appendChild(filaMedicion);
-    sec.appendChild(contFilas);
+    // v1.12: reemplaza el reparto en filas por JS (distribuirCategoriasEnFilas,
+    // v1.9.8) por un CSS Grid real — se alinean solas en "columnas
+    // invisibles" sea cual sea la cantidad, sin recalcular filas a mano y
+    // sin depender del tamaño relativo entre ellas. El ancho de columna se
+    // mide una sola vez (el chip más ancho) y se fija como mínimo de
+    // columna; cada chip conserva su tamaño natural (no se estira).
+    const gridCategorias = document.createElement("div");
+    gridCategorias.className = "categorias-grid";
+    items.forEach((item) => gridCategorias.appendChild(item));
+    sec.appendChild(gridCategorias);
 
     // ResizeObserver dispara una vez con el tamaño inicial apenas se llama
     // observe(), así que no hace falta un requestAnimationFrame aparte para
-    // la primera medición. Se desconecta solo cuando el panel deja de estar
-    // en el DOM (se re-renderiza en cada renderizarPlanEstudios()).
+    // la primera medición — hace falta esperar a que `sec` esté en el DOM
+    // real (con tamaño) para que getBoundingClientRect() de los chips no dé
+    // 0. El ancho de columna es un valor intrínseco del contenido (no del
+    // ancho del contenedor), así que una sola medición alcanza: se
+    // desconecta apenas logra medir algo mayor a 0.
     const resizeObserver = new ResizeObserver(() => {
-      if (!contFilas.isConnected) {
+      if (!gridCategorias.isConnected) {
         resizeObserver.disconnect();
         return;
       }
-      distribuirCategoriasEnFilas(contFilas, items);
+      const anchoMax = Math.max(...items.map((el) => el.getBoundingClientRect().width || el.offsetWidth));
+      if (anchoMax > 0) {
+        gridCategorias.style.gridTemplateColumns = `repeat(auto-fit, minmax(${Math.ceil(anchoMax)}px, max-content))`;
+        resizeObserver.disconnect();
+      }
     });
     resizeObserver.observe(sec);
   }
@@ -157,60 +157,6 @@ function construirChipCategoria(cat, principal) {
   item.appendChild(chip);
   item.appendChild(btnEditar);
   return item;
-}
-
-/**
- * Reparte `items` (elementos ya construidos, con sus listeners intactos) en
- * filas explícitas dentro de `contFilas`, balanceando la cantidad por fila.
- *
- * Paso 1 — mide cuántas filas resultan "naturalmente" al ancho actual:
- * empaquetado voraz de izquierda a derecha usando el ancho real de cada
- * item (ya montado y con layout real, por eso hace falta medir después de
- * que el navegador les dio tamaño, no antes).
- * Paso 2 — con ese número de filas N, reparte los items lo más parejo
- * posible: total/N con resto, dando el sobrante a las primeras filas
- * (6 → 3+3, 9 → 5+4, 7 en 2 filas → 4+3, etc.).
- */
-function distribuirCategoriasEnFilas(contFilas, items) {
-  if (!contFilas.isConnected || items.length === 0) return;
-
-  const GAP = 8; // debe calzar con el gap usado en cada fila más abajo
-  const anchoDisponible = contFilas.clientWidth;
-  if (!anchoDisponible) return;
-
-  const anchos = items.map((el) => el.getBoundingClientRect().width || el.offsetWidth);
-
-  let filasNaturales = 1;
-  let anchoAcumulado = 0;
-  anchos.forEach((w) => {
-    const anchoConGap = anchoAcumulado === 0 ? w : anchoAcumulado + GAP + w;
-    if (anchoConGap > anchoDisponible && anchoAcumulado > 0) {
-      filasNaturales++;
-      anchoAcumulado = w;
-    } else {
-      anchoAcumulado = anchoConGap;
-    }
-  });
-
-  const N = Math.max(1, filasNaturales);
-  const total = items.length;
-  const base = Math.floor(total / N);
-  const resto = total % N;
-
-  contFilas.innerHTML = "";
-  let indice = 0;
-  for (let f = 0; f < N; f++) {
-    const cantidadEnEstaFila = base + (f < resto ? 1 : 0);
-    if (cantidadEnEstaFila === 0) continue;
-    const filaEl = document.createElement("div");
-    filaEl.className = "row";
-    filaEl.style.gap = `${GAP}px`;
-    for (let j = 0; j < cantidadEnEstaFila; j++) {
-      filaEl.appendChild(items[indice]);
-      indice++;
-    }
-    contFilas.appendChild(filaEl);
-  }
 }
 
 function abrirModalCategoria(categoria, plan) {
@@ -418,4 +364,4 @@ export {
 };
 
 // No exportadas (uso interno del panel de categorías):
-// construirChipCategoria, distribuirCategoriasEnFilas
+// construirChipCategoria
