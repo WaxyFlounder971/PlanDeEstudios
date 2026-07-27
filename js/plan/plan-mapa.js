@@ -17,6 +17,9 @@ estado.colorMapaPor = "simbologia";        // "simbologia" (por Estado) | "categ
 estado.zoomMapa = 1;                       // 0.5 a 2
 estado.materiaSeleccionadaMapa = null;     // código de la materia con camino de desbloqueo dibujado
 estado._refsMapaActual = null;             // referencias DOM del mapa ya renderizado (para zoom/recolorear sin re-render completo)
+// V10: cómo se dibuja el camino de desbloqueo — "libre" (curva Bézier, como
+// siempre) o "recta" (tramos ortogonales rectos a través del gap entre bloques).
+estado.trazadoMapaPor = "libre";           // "libre" | "recta"
 
 /* ===================== B.3 (v8/v9) — Vista de Mapa interactivo ===================== */
 
@@ -88,6 +91,29 @@ function construirTarjetaVista(plan) {
       switchColor.appendChild(btn);
     });
     controles.appendChild(switchColor);
+
+    // V10: switch de trazado del camino — líneas libres (curva) o rectas
+    // (tramos ortogonales por el centro del gap entre bloques).
+    const switchTrazado = document.createElement("div");
+    switchTrazado.className = "pill-group";
+    [
+      { valor: "libre", texto: "Líneas libres" },
+      { valor: "recta", texto: "Líneas rectas" },
+    ].forEach((op) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pill-item" + (estado.trazadoMapaPor === op.valor ? " active" : "");
+      btn.textContent = op.texto;
+      btn.addEventListener("click", () => {
+        if (estado.trazadoMapaPor === op.valor) return;
+        estado.trazadoMapaPor = op.valor;
+        switchTrazado.querySelectorAll(".pill-item").forEach((p) => p.classList.remove("active"));
+        btn.classList.add("active");
+        dibujarCaminoDesbloqueo(plan);
+      });
+      switchTrazado.appendChild(btn);
+    });
+    controles.appendChild(switchTrazado);
 
     const zoomGrupo = document.createElement("div");
     zoomGrupo.className = "mapa-zoom-controles";
@@ -271,7 +297,12 @@ function construirMapaInteractivo(plan) {
   );
   scroll.addEventListener("touchend", (ev) => { if (ev.touches.length < 2) distanciaInicialToque = null; });
 
-  estado._refsMapaActual = { scroll, sizer, track, svg, columnasEl, nodosPorCodigo, plan };
+  // V10: se mide el gap REAL (CSS `.mapa-columnas { gap: 28px }`) en vez de
+  // hardcodearlo, para que el trazado recto nunca quede desincronizado si el
+  // valor del CSS cambia más adelante.
+  const gapColumnas = parseFloat(getComputedStyle(columnasEl).columnGap) || 28;
+
+  estado._refsMapaActual = { scroll, sizer, track, svg, columnasEl, nodosPorCodigo, plan, gapColumnas };
 
   requestAnimationFrame(() => {
     aplicarZoomMapa();
@@ -355,10 +386,24 @@ function construirNodoMapa(materia, plan) {
  * cualquier nivel de zoom sin tener que recalcular nada al hacer zoom).
  */
 
+/**
+ * V10: punto de anclaje INVISIBLE de un nodo — ya no el centro de la
+ * tarjeta (eso generaba líneas raras que cruzaban el texto), sino el centro
+ * vertical del lado lateral pedido: "izquierda" (input — "se desbloqueó
+ * con") o "derecha" (output — "es requisito de"). Mismo espacio local NO
+ * escalado que offsetLeft/offsetTop (ver nota de la función que sigue).
+ */
+
+function puntoAnclajeLateral(nodo, lado) {
+  const y = nodo.offsetTop + nodo.offsetHeight / 2;
+  const x = lado === "izquierda" ? nodo.offsetLeft : nodo.offsetLeft + nodo.offsetWidth;
+  return { x, y };
+}
+
 function dibujarCaminoDesbloqueo(plan) {
   const refs = estado._refsMapaActual;
   if (!refs) return;
-  const { svg, nodosPorCodigo } = refs;
+  const { svg, nodosPorCodigo, gapColumnas } = refs;
   svg.innerHTML = "";
   refs.nodosPorCodigo.forEach((nodo) => nodo.classList.remove("mapa-nodo-en-camino"));
 
@@ -384,20 +429,35 @@ function dibujarCaminoDesbloqueo(plan) {
     frontera = siguiente;
   }
 
-  const centroDe = (codigo) => {
-    const nodo = nodosPorCodigo.get(codigo);
-    if (!nodo) return null;
-    return { x: nodo.offsetLeft + nodo.offsetWidth / 2, y: nodo.offsetTop + nodo.offsetHeight / 2 };
-  };
-
   aristas.forEach(([desde, hasta]) => {
-    const c1 = centroDe(desde);
-    const c2 = centroDe(hasta);
-    if (!c1 || !c2) return;
+    const nodoDesde = nodosPorCodigo.get(desde);
+    const nodoHasta = nodosPorCodigo.get(hasta);
+    if (!nodoDesde || !nodoHasta) return;
+
+    // ¿Hacia dónde queda el destino? Decide qué lado de cada tarjeta se usa
+    // como anclaje: salida (output) del lado que mira hacia el destino,
+    // entrada (input) del lado de la tarjeta destino que mira hacia el origen.
+    const centroDesdeX = nodoDesde.offsetLeft + nodoDesde.offsetWidth / 2;
+    const centroHastaX = nodoHasta.offsetLeft + nodoHasta.offsetWidth / 2;
+    const vaHaciaLaDerecha = centroHastaX >= centroDesdeX;
+
+    const p1 = puntoAnclajeLateral(nodoDesde, vaHaciaLaDerecha ? "derecha" : "izquierda");
+    const p2 = puntoAnclajeLateral(nodoHasta, vaHaciaLaDerecha ? "izquierda" : "derecha");
+
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    const medioX = (c1.x + c2.x) / 2;
-    path.setAttribute("d", `M ${c1.x} ${c1.y} C ${medioX} ${c1.y}, ${medioX} ${c2.y}, ${c2.x} ${c2.y}`);
     path.setAttribute("class", "mapa-camino-linea");
+
+    if (estado.trazadoMapaPor === "recta") {
+      // V10: tramos ortogonales rectos — sale del anclaje, viaja en línea
+      // recta vertical por el centro del gap que YA existe entre bloques
+      // (no se separan más las columnas), y entra al anclaje del destino.
+      const mitadGap = (gapColumnas || 28) / 2;
+      const xGap = vaHaciaLaDerecha ? p1.x + mitadGap : p1.x - mitadGap;
+      path.setAttribute("d", `M ${p1.x} ${p1.y} L ${xGap} ${p1.y} L ${xGap} ${p2.y} L ${p2.x} ${p2.y}`);
+    } else {
+      const medioX = (p1.x + p2.x) / 2;
+      path.setAttribute("d", `M ${p1.x} ${p1.y} C ${medioX} ${p1.y}, ${medioX} ${p2.y}, ${p2.x} ${p2.y}`);
+    }
     svg.appendChild(path);
   });
 

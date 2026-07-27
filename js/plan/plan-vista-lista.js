@@ -13,6 +13,7 @@ import { abrirModalGestionPlanes, renderizarSelectorPlan } from "./plan-gestiona
 import { alternarModoEdicionPlan } from "./plan-modo-edicion.js";
 import { construirMiniPanelImportacion } from "./plan-importacion-csv.js";
 import { construirEncabezadoCSV, construirPanelImportacion } from "./plan-importacion.js";
+import { construirTarjetaVista } from "./plan-mapa.js";
 import { construirContenidoBloques } from "./plan-vista-lista-tarjetas.js";
 
 /* Estado propio de esta sección, colgado del `estado` global de app.js. */
@@ -42,10 +43,27 @@ function renderizarPlanEstudios() {
     if (estado.panelImportacionAbierto) {
       cont.appendChild(construirMiniPanelImportacion(principal));
     }
-    cont.appendChild(construirPanelEstadisticas(principal));
-    cont.appendChild(construirBarraAcciones());
-    cont.appendChild(construirPanelCategorias());
-    cont.appendChild(construirContenidoBloques());
+    // C.3 (v9): si el plan activo no tiene ninguna materia todavía, no tiene
+    // sentido mostrar Estadísticas/Vista/Buscador/Categorías (no hay nada que
+    // medir, mapear, buscar ni categorizar) — se ocultan hasta que exista al
+    // menos una.
+    const hayMaterias = obtenerMateriasVisibles().length > 0;
+    if (hayMaterias) {
+      cont.appendChild(construirPanelEstadisticas(principal));
+      // B.3 (v8/v9): tarjeta "Vista" (switch Lista/Mapa) — en modo Mapa, el
+      // buscador/categorías se ocultan y el mapa reemplaza el listado de
+      // bloques (vive dentro de esta misma tarjeta, expandida). Este bloque
+      // se había perdido en la migración a módulos — plan-mapa.js ya existía
+      // completo, pero nunca se importaba ni se llamaba desde acá.
+      cont.appendChild(construirTarjetaVista(principal));
+      if (estado.vistaPlanEstudios !== "mapa") {
+        cont.appendChild(construirBarraAcciones());
+        cont.appendChild(construirPanelCategorias());
+      }
+    }
+    if (!hayMaterias || estado.vistaPlanEstudios !== "mapa") {
+      cont.appendChild(construirContenidoBloques());
+    }
   } catch (e) {
     // Bug 1 (v6): antes, un error aquí dejaba la sección completamente vacía
     // y sin ningún indicio de qué pasó (el error solo se veía en la consola
