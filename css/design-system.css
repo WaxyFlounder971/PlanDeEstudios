@@ -1228,13 +1228,12 @@ img, svg { max-width: 100%; }
 }
 
 /* B (v9)/v8 punto 2: "Bloque X · Código", texto plano — exclusivo del modal
-   desde v1.11 (ver .requisito-linea1, abajo). v1.11: tamaño 50% más grande
-   que el valor anterior (0.75rem → 1.125em), en `em` en vez de un rem fijo
-   para que se mantenga proporcional al tamaño del nombre de la materia
-   (ambos heredan el mismo font-size base) sin importar dónde cambie ese
-   base a futuro. */
+   desde v1.11 (ver .requisito-linea1, abajo). v1.11 lo subió 50% (0.75rem →
+   1.125em). v1.12: se sintió muy grande, se le baja 25% sobre ESE valor
+   (1.125em × 0.75 = 0.84375em) — sigue en `em` (no rem fijo) para quedar
+   proporcional al tamaño del nombre de la materia. */
 .materia-meta-linea {
-  font-size: 1.125em;
+  font-size: 0.84375em;
   color: var(--text-muted);
   margin: 0;
 }
@@ -1366,8 +1365,14 @@ img, svg { max-width: 100%; }
   cursor: pointer;
 }
 
-/* ---- Franja superior de color de categoría en el modal de requisito ---- */
-.franja-categoria { height: 8px; border-radius: var(--radius-sm) var(--radius-sm) 0 0; margin: -24px -24px 16px; }
+/* ---- Franja superior de color de categoría en el modal de requisito ----
+   v1.12: el espacio visible hasta Línea 1 (Bloque·Código/Categoría) es la
+   suma de este margin-bottom + el `gap:14px` de `.modal-card.stack` (franja
+   y Línea 1 son ambos hijos flex directos de .modal-card) — antes 16+14=30px,
+   pedido reducirlo a la mitad (15px), así que el margin-bottom baja a 1px
+   (1+14=15). Exclusiva de este modal (.franja-categoria no se usa en
+   ningún otro), así que no afecta a nada más. */
+.franja-categoria { height: 8px; border-radius: var(--radius-sm) var(--radius-sm) 0 0; margin: -24px -24px 1px; }
 
 /* ---- Modal de asignación de materias a categoría: más ancho (sección 7.2) ---- */
 #modal-categoria-materias .modal-card { width: min(640px, calc(100vw - 32px)); }
