@@ -277,17 +277,65 @@ function construirFilaRequisito(codigo, opciones) {
   return fila;
 }
 
-function construirBloqueRequisitos(etiqueta, grupos, modo) {
+/**
+ * v1.12 (Parte E): renderiza recursivamente UN nodo del árbol Y/O de
+ * requisitos (hoja, o operador con hijos) — reemplaza el recorrido plano de
+ * "grupos de alternativas". `profundidad` > 0 indica que este nodo es un
+ * SUB-grupo anidado dentro de otro operador (el caso UCR: "(A;B)/(C;D)") —
+ * se le agrega una sangría/borde sutil para dejar claro que es un bloque
+ * combinado, no una alternativa suelta más.
+ */
+
+function construirNodoRequisito(nodo, modo, profundidad) {
+  if (!nodo) return document.createDocumentFragment();
+
+  if (nodo.tipo === "codigo") {
+    return construirFilaRequisito(nodo.valor, { modo });
+  }
+
   const cont = document.createElement("div");
-  const sinItems = !grupos || grupos.length === 0;
+  cont.className = "requisito-grupo";
+  if (profundidad > 0) {
+    // Sangría/borde sutil para un sub-grupo Y/O anidado dentro de otro
+    // operador — no hay clase de diseño previa para esto, así que se marca
+    // inline (mismo patrón que ya usa el resto del archivo para detalles
+    // puntuales, ej. abrirModalDesbloquea).
+    cont.style.borderLeft = "2px solid var(--separator, rgba(148,163,184,.35))";
+    cont.style.paddingLeft = "10px";
+    cont.style.marginLeft = "2px";
+  }
+
+  if (nodo.tipo === "O") {
+    const etiqueta = document.createElement("p");
+    etiqueta.className = "materia-req-linea";
+    etiqueta.style.marginBottom = "2px";
+    etiqueta.innerHTML = `<em>Uno de estos:</em>`;
+    cont.appendChild(etiqueta);
+  }
+
+  nodo.hijos.forEach((hijo, i) => {
+    cont.appendChild(construirNodoRequisito(hijo, modo, profundidad + 1));
+    // Divisor visual solo entre alternativas ("O") — entre requisitos
+    // distintos ("Y") no hace falta, ya quedan implícitos al ir cada uno
+    // en su propia línea/bloque, igual que siempre en este proyecto.
+    if (nodo.tipo === "O" && i < nodo.hijos.length - 1) {
+      const divisorO = document.createElement("div");
+      divisorO.className = "requisito-divisor-o";
+      divisorO.textContent = "o";
+      cont.appendChild(divisorO);
+    }
+  });
+
+  return cont;
+}
+
+function construirBloqueRequisitos(etiqueta, nodoRaiz, modo) {
+  const cont = document.createElement("div");
 
   // v5 #6 / v7 Bug 3: "Correquisitos" se omite POR COMPLETO si la materia no
-  // tiene ninguno (nada de "Correquisitos: Ninguno"). La condición es
-  // exactamente `grupos.length === 0` — nunca se compara contra "" ni contra
-  // ningún otro tipo de dato, así que solo se oculta cuando de verdad está
-  // vacío. "Requisitos" sí conserva el texto "Ninguno" cuando está vacío,
-  // porque ahí siempre aplica.
-  if (sinItems) {
+  // tiene ninguno (nada de "Correquisitos: Ninguno"). "Requisitos" sí
+  // conserva el texto "Ninguno" cuando está vacío, porque ahí siempre aplica.
+  if (!nodoRaiz) {
     if (etiqueta === "Correquisitos") return cont;
     const p = document.createElement("p");
     p.className = "materia-req-linea";
@@ -302,19 +350,7 @@ function construirBloqueRequisitos(etiqueta, grupos, modo) {
   tituloLinea.innerHTML = `<strong>${etiqueta}:</strong>`;
   cont.appendChild(tituloLinea);
 
-  grupos.forEach((grupo) => {
-    (grupo || []).forEach((codigo, i) => {
-      cont.appendChild(construirFilaRequisito(codigo, { modo }));
-      // Alternativas dentro del mismo grupo ("O"): un separador entre filas.
-      // Entre grupos distintos no hay separador (el "Y" queda implícito).
-      if (i < grupo.length - 1) {
-        const divisorO = document.createElement("div");
-        divisorO.className = "requisito-divisor-o";
-        divisorO.textContent = "o";
-        cont.appendChild(divisorO);
-      }
-    });
-  });
+  cont.appendChild(construirNodoRequisito(nodoRaiz, modo, 0));
 
   return cont;
 }
@@ -614,6 +650,7 @@ export {
   construirLinea2Materia,
   construirLineaCategoriaMateria,
   construirMetaLineaMateria,
+  construirNodoRequisito,
   inicializarModalDesbloquea,
   inicializarModalHistorial,
   inicializarModalRequisito,

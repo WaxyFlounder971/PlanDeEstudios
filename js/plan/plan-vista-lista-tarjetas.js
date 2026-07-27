@@ -4,6 +4,7 @@
    completa (encabezado, requisitos, menú rápido de categoría).
    ========================================================================= */
 
+import { arbolContieneCodigo, evaluarNodoRequisito } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto, formatearHoras } from "../core/utils.js";
@@ -14,26 +15,27 @@ import { renderizarPlanEstudios } from "./plan-vista-lista.js";
 
 /* ===================== Sección 2 — Candado (lógica de grupos) ===================== */
 
-/** Disponible si no tiene requisitos, o si de CADA grupo hay al menos un código aprobado. */
+/** v1.12 (Parte D): disponible si no tiene requisitos, o si el árbol Y/O
+ *  completo evalúa a verdadero (ver evaluarNodoRequisito en core/schema.js —
+ *  hoja "codigo" cumple si esa materia está "aprobado" en el plan; "Y"
+ *  requiere todos sus hijos; "O" requiere al menos uno, sin importar la
+ *  profundidad de anidamiento). */
 
 function materiaDisponible(materia, materiasDelPlan) {
-  if (!materia.requisitos || materia.requisitos.length === 0) return true;
-  return materia.requisitos.every((grupo) =>
-    (grupo || []).some((codigo) => {
-      const req = materiasDelPlan.find((m) => m.codigo === codigo);
-      return req && req.estado === "aprobado";
-    })
-  );
+  return evaluarNodoRequisito(materia.requisitos, (codigo) => {
+    const req = materiasDelPlan.find((m) => m.codigo === codigo);
+    return !!req && req.estado === "aprobado";
+  });
 }
 
-/** Sección 5 — búsqueda inversa: qué materias tienen a `materia` en algún grupo de requisitos/correquisitos. */
+/** Sección 5 — búsqueda inversa (Parte F, v1.12): qué materias tienen a
+ *  `materia` en CUALQUIER nivel de profundidad de su árbol de requisitos o
+ *  correquisitos (antes solo miraba un arreglo plano de grupos). */
 
 function obtenerMateriasQueDesbloquea(materia, plan) {
-  return plan.materias.filter((m) => {
-    const enReq = (m.requisitos || []).some((grupo) => (grupo || []).includes(materia.codigo));
-    const enCorreq = (m.correquisitos || []).some((grupo) => (grupo || []).includes(materia.codigo));
-    return enReq || enCorreq;
-  });
+  return plan.materias.filter((m) =>
+    arbolContieneCodigo(m.requisitos, materia.codigo) || arbolContieneCodigo(m.correquisitos, materia.codigo)
+  );
 }
 
 function construirContenidoBloques() {

@@ -1,7 +1,8 @@
 /* =========================================================================
    PLAN DE ESTUDIOS — IMPORTACIÓN (prompt + panel)
-   Construcción del prompt oficial para la IA, el panel de importación
-   (Universidad / modo Link-PDF-Capturas), y el modal de instrucciones
+   Construcción del prompt oficial para la IA (v1.12: universal, detecta
+   HORAS_COLUMNAS automáticamente en vez de preguntar la universidad), el
+   panel de importación (modo Link-PDF-Capturas), y el modal de instrucciones
    antes de enviar.
    ========================================================================= */
 
@@ -50,13 +51,20 @@ function construirEncabezadoCSV(tiposHoras) {
  * Prompt oficial y único del proyecto para pedirle a una IA externa (Claude o
  * ChatGPT) que estructure el plan de estudios en CSV. `modo` cambia solo el
  * párrafo de instrucción de entrada; las reglas de formato CSV son las
- * mismas siempre. `columnasHoras` ya viene armado por construirColumnasHoras().
- * Cualquier flujo del proyecto que necesite este texto (import inicial,
- * re-importar/actualizar malla desde gestión de planes) debe reutilizar esta
- * función — nunca generar un texto distinto a mano.
+ * mismas siempre. Cualquier flujo del proyecto que necesite este texto
+ * (import inicial, re-importar/actualizar malla desde gestión de planes)
+ * debe reutilizar esta función — nunca generar un texto distinto a mano.
+ *
+ * v1.12: ya NO recibe `columnasHoras` — el documento a importar puede ser de
+ * cualquier universidad y ya no se le pregunta al usuario por adelantado qué
+ * tipos de hora usa (eso obligaba a preseleccionar TEC/UCR/Otra antes de
+ * poder generar el prompt). En su lugar, el propio prompt le pide a la IA
+ * que DETECTE los tipos de hora leyendo el documento (línea HORAS_COLUMNAS:
+ * en los metadatos) y arme el CSV con las columnas correspondientes. El
+ * parser (plan-importacion-csv.js) deriva `tipos_horas` de esa línea.
  */
 
-function construirPromptImportacion(modo, link, columnasHoras) {
+function construirPromptImportacion(modo, link) {
   let instruccionEntrada = "";
   let avisoNavegacion = "";
 
@@ -74,35 +82,100 @@ Es una página institucional sin inicio de sesión. Si la página organiza las m
     instruccionEntrada = `Te voy a adjuntar un PDF armado a partir de varias capturas de pantalla de mi plan de estudios (una captura por página). Trátalo igual que si fuera un PDF real de mi plan de estudios: lee todas las páginas como una sola malla curricular continua, uniendo la información entre todas, sin perder ninguna materia, sin importar el orden de las páginas.`;
   }
 
-  return `${avisoNavegacion}Actúa como un estructurador de datos académicos. ${instruccionEntrada}
+  return `${avisoNavegacion}Actúa como un estructurador de datos académicos UNIVERSAL, capaz de procesar mallas curriculares
+de cualquier universidad (ejemplos de referencia: UCR, UNA, TEC, Universidad Tecnológica del Perú,
+UNAM, y cualquier otra con formato distinto), sin importar si vienen en tabla, en cuadrícula gráfica
+tipo diagrama de flujo, o en listado por bloques/ciclos/niveles/años/semestres.
 
-Si logras identificar el nombre de la carrera, su código de plan, y la universidad, inclúyelos en las primeras 3 líneas así: CARRERA: ..., CODIGO_PLAN: ..., UNIVERSIDAD: ... (una por línea, antes del CSV). Si no puedes identificar alguno con certeza, omite esa línea.
+${instruccionEntrada}
 
-Devuélveme ÚNICAMENTE un bloque de código plano en formato CSV (con esas líneas de metadatos antes, si las tienes), sin texto adicional antes o después, con esta estructura EXACTA:
+=== PASO 1: METADATOS (antes del CSV, una línea por dato, solo si hay certeza) ===
+CARRERA: ...
+CODIGO_PLAN: ...
+UNIVERSIDAD: ...
+TIPO_TITULO: ... (Diplomado/Bachillerato/Licenciatura/Maestría/Doctorado, si se identifica)
+HORAS_COLUMNAS: lista separada por comas de los tipos de hora que usa ESTE documento específico,
+  usando las siglas tal como aparecen (ej: T,P,L,EI,HT,HD  o  T,P,L,TP  o  Horas  o  T,P).
+  Si el documento no maneja el concepto de horas en absoluto, escribe: HORAS_COLUMNAS: Ninguna
 
-Bloque,Codigo,Nombre,Creditos,${columnasHoras},Requisitos,Correquisitos
+Detecta estas columnas leyendo el propio documento — NO asumas que todas las universidades usan
+T/P/L/TP. Si un documento no distingue tipos de hora y solo da un total, usa una sola columna "Horas".
 
-Reglas:
-- Bloque: número de nivel/semestre/cuatrimestre tal como aparece en el documento/página. Si usa nombres en vez de números, conviértelo al número secuencial correspondiente. Si no puedes determinarlo con certeza, escribe "REVISAR".
-- Codigo: la sigla tal como aparece; si no tiene, genera uno corto y consistente a partir del nombre.
-- Horas: usa 0 si el documento no maneja esa categoría — nunca las dejes vacías.
-- Requisitos y Correquisitos: usa punto y coma ";" para separar requisitos distintos que se necesitan TODOS ("Y"), y diagonal "/" para separar materias equivalentes/alternativas dentro de un mismo requisito ("O"). NUNCA uses coma "," dentro de esta celda — la coma ya se usa para separar las columnas del CSV y mezclarla aquí rompe el archivo. Ejemplo: "MA-1001;FS-0210/FS-0227/FS-0250" significa MA-1001 Y (una de las tres alternativas). Si no hay requisitos, usa "Ninguno".
-- IMPORTANTE — Nombre: varios nombres de materias reales incluyen una coma (ej. "Ética, Persona y Sociedad"). Si el Nombre de una materia trae una coma real, envuelve ESA CELDA completa entre comillas dobles, así: "Ética, Persona y Sociedad". Esto aplica a cualquier otra columna que también pueda traer una coma real. Si tienes dudas, mejor usar comillas de más que de menos.
-- No dejes ninguna columna vacía sin su coma correspondiente: si Correquisitos (o cualquier otra columna) no aplica, escribe igual "Ninguno" — nunca cortes la línea antes de completar todas las columnas del encabezado.
-- No agregues columna de categoría ni ninguna otra fuera de las columnas indicadas.
-- No omitas ninguna materia, incluidas optativas/electivas.
-- Si una celda es ilegible, ambigua, o no puedes confirmarla con certeza, escribe "REVISAR" en vez de inventar un dato.`;
+=== PASO 2: CSV ===
+Devuélveme ÚNICAMENTE un bloque de código plano en formato CSV (con las líneas de metadatos antes,
+si las tienes), sin texto adicional antes o después, con esta estructura EXACTA:
+
+Bloque,Codigo,Nombre,Creditos,[una columna por cada valor listado en HORAS_COLUMNAS],Requisitos,Correquisitos
+
+(Si HORAS_COLUMNAS es "Ninguna", omite esas columnas del encabezado y de cada fila.)
+
+REGLAS:
+
+1. BLOQUE: número de nivel/ciclo/año/semestre/cuatrimestre convertido a un ENTERO SECUENCIAL único
+   y creciente según el orden real en que se cursan (ej: si el documento organiza por "Año" y dentro
+   por "Ciclo I/II", o por "Verano", cada uno de esos sub-bloques cronológicos es un número distinto:
+   1, 2, 3, 4... no reinicies el conteo al cambiar de año). Si el documento usa nombres en vez de
+   números, conviértelo al secuencial correspondiente. Si no puedes determinarlo con certeza,
+   escribe "REVISAR".
+
+2. CODIGO: la sigla/código tal como aparece en el documento. Si la materia no tiene código propio
+   (ej: "Optativa", "Electivo 1", "Idioma Intensivo"), genera uno corto y consistente a partir del
+   nombre y el bloque (ej: OPT-B7, ELEC-B9), para que no se dupliquen entre bloques distintos.
+
+3. HORAS: usa 0 si el documento no reporta ese tipo de hora para esa materia puntual — nunca dejes
+   la celda vacía. Si el documento presenta las horas dentro de una cuadrícula gráfica (cajas de
+   colores, diagramas tipo escalera, etc.) en vez de una tabla, extrae el mismo dato de cada caja
+   como si fuera una fila de tabla.
+
+4. REQUISITOS y CORREQUISITOS — sintaxis para relaciones lógicas, SIN usar nunca coma "," dentro
+   de la celda (la coma rompe el CSV):
+   - ";" separa requisitos que se necesitan TODOS (Y / AND).
+   - "/" separa alternativas equivalentes dentro de un mismo requisito, incluyendo tanto
+     disyunciones explícitas ("Materia A o Materia B") como equivalencias declaradas
+     ("Equiv.: MateriaB", "PS-0002 o PS-0128").
+   - Si hay que combinar Y/O en la misma celda, usa paréntesis para agrupar y evitar ambigüedad:
+     "(A;B)/(C;D)" significa (A Y B) O (C Y D).
+     Ejemplo real: "QU-0102, QU-0103 o (QU-0114, QU-0115)" → "(QU-0102;QU-0103)/(QU-0114;QU-0115)"
+   - Si no hay requisitos o correquisitos, escribe "Ninguno" (nunca dejes la celda vacía ni cortes
+     la fila antes de completar todas las columnas del encabezado).
+   - Si el documento no maneja el concepto de "correquisitos" en absoluto, escribe igual "Ninguno"
+     en esa columna para todas las filas (mantén la columna por consistencia del esquema).
+
+5. NOMBRE (y cualquier otra columna): si el nombre real de la materia trae una coma
+   (ej. "Ética, Persona y Sociedad"), envuelve ESA CELDA completa entre comillas dobles.
+   Ante la duda, usa comillas de más y no de menos.
+
+6. No agregues columnas de categoría, área, color, ni ninguna otra fuera de las indicadas.
+7. No omitas ninguna materia, incluidas optativas, electivas, idiomas, seminarios, prácticas,
+   trabajos finales de graduación y cursos de nivelación/precálculo (aunque tengan 0 créditos).
+8. Si el documento incluye tablas separadas de "cursos optativos" o "electivas disponibles" fuera
+   de la malla principal, inclúyelas también, usando como Bloque el ciclo donde se indica que se
+   puede cursar esa optativa (o "REVISAR" si no se especifica).
+9. Si una celda es ilegible, ambigua, o no puedes confirmarla con certeza, escribe "REVISAR" en
+   vez de inventar un dato — nunca inventes códigos, créditos u horas que no estén en el documento.
+10. Ignora tablas resumen de totales generales (ej. "Créditos totales de la carrera: 448") — esas
+    no son filas de materias, son metadatos de resumen y no van en el CSV.`;
 }
 
-/** Lee las líneas opcionales CARRERA:/CODIGO_PLAN:/UNIVERSIDAD: al inicio de
- *  la respuesta de la IA (v5 1.3), sin romperse si no existen. Devuelve
- *  { metadatos: {...}, csv: "texto sin esas líneas" }. */
+/** Lee las líneas opcionales CARRERA:/CODIGO_PLAN:/UNIVERSIDAD:/TIPO_TITULO:/
+ *  HORAS_COLUMNAS: al inicio de la respuesta de la IA (v5 1.3, ampliado en
+ *  v1.12 con los últimos dos), sin romperse si no existen. Devuelve
+ *  { metadatos: {...}, csv: "texto sin esas líneas" }.
+ *  `metadatos.horas_columnas` viaja como el string crudo tal cual lo mandó la
+ *  IA (ej. "T,P,L,EI" o "Ninguna") — quien la consuma (plan-importacion-csv.js
+ *  / plan-esquema.js) es quien la convierte a arreglo `tipos_horas`. */
 
 function extraerMetadatosImportacion(textoCrudo) {
   const lineas = textoCrudo.replace(/```[a-zA-Z]*\n?/g, "").split(/\r?\n/);
   const metadatos = {};
   let i = 0;
-  const patrones = { carrera: /^CARRERA:\s*(.+)$/i, codigo_plan: /^CODIGO_PLAN:\s*(.+)$/i, universidad: /^UNIVERSIDAD:\s*(.+)$/i };
+  const patrones = {
+    carrera: /^CARRERA:\s*(.+)$/i,
+    codigo_plan: /^CODIGO_PLAN:\s*(.+)$/i,
+    universidad: /^UNIVERSIDAD:\s*(.+)$/i,
+    tipo_titulo: /^TIPO_TITULO:\s*(.+)$/i,
+    horas_columnas: /^HORAS_COLUMNAS:\s*(.+)$/i,
+  };
   while (i < lineas.length) {
     const linea = lineas[i].trim();
     if (!linea) { i++; continue; }
@@ -204,76 +277,14 @@ function construirPanelImportacion() {
     estado.planImportandoId = "principal";
   }
 
-  // ---- Universidad / tipos de horas (necesario ANTES de generar el prompt,
-  // porque las columnas de horas del CSV dependen de esto). ----
-  const etiquetaUni = document.createElement("span");
-  etiquetaUni.className = "form-label";
-  etiquetaUni.textContent = "¿De qué universidad es este plan?";
-  sec.appendChild(etiquetaUni);
-
-  const grupoUni = document.createElement("div");
-  grupoUni.className = "pill-group";
-  [
-    { valor: "TEC", texto: "TEC" },
-    { valor: "UCR", texto: "UCR" },
-    { valor: "Otra", texto: "Otra / Personalizada" },
-  ].forEach((op) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "pill-item" + (estado.universidadImportacion === op.valor ? " active" : "");
-    btn.textContent = op.texto;
-    btn.addEventListener("click", () => {
-      estado.universidadImportacion = op.valor;
-      if (op.valor !== "Otra") {
-        estado.tiposHorasImportacion = estado.horasNoAplicaImportacion ? [] : PRESETS_TIPOS_HORAS[op.valor].slice();
-      }
-      renderizarPlanEstudios();
-    });
-    grupoUni.appendChild(btn);
-  });
-  sec.appendChild(grupoUni);
-
-  if (estado.universidadImportacion === "Otra") {
-    const inputNombreUni = document.createElement("input");
-    inputNombreUni.type = "text";
-    inputNombreUni.className = "form-input";
-    inputNombreUni.style.marginBottom = "10px";
-    inputNombreUni.placeholder = "Nombre de tu universidad (ej. Universidad Nacional)";
-    inputNombreUni.value = estado.nombreUniversidadImportacion || "";
-    inputNombreUni.addEventListener("input", () => {
-      estado.nombreUniversidadImportacion = inputNombreUni.value;
-    });
-    sec.appendChild(inputNombreUni);
-
-    const inputTipos = document.createElement("input");
-    inputTipos.type = "text";
-    inputTipos.className = "form-input";
-    inputTipos.placeholder = "Tipos de horas separados por coma, ej. Teoría, Laboratorio";
-    inputTipos.value = estado.tiposHorasPersonalizadoTexto;
-    inputTipos.disabled = !!estado.horasNoAplicaImportacion;
-    inputTipos.addEventListener("input", () => {
-      estado.tiposHorasPersonalizadoTexto = inputTipos.value;
-      estado.tiposHorasImportacion = inputTipos.value.split(",").map((t) => t.trim()).filter(Boolean);
-    });
-    sec.appendChild(inputTipos);
-  }
-
-  // v7.1: "No aplica" para Horas, independiente de la universidad elegida.
-  const labelNoAplica = document.createElement("label");
-  labelNoAplica.className = "checkbox";
-  labelNoAplica.innerHTML = `<input type="checkbox" id="checkbox-horas-no-aplica-importacion" ${estado.horasNoAplicaImportacion ? "checked" : ""}><span class="box"></span><span>No aplica — este plan no maneja Horas</span>`;
-  labelNoAplica.querySelector("input").addEventListener("change", (e) => {
-    estado.horasNoAplicaImportacion = e.target.checked;
-    if (e.target.checked) {
-      estado.tiposHorasImportacion = [];
-    } else {
-      estado.tiposHorasImportacion = estado.universidadImportacion === "Otra"
-        ? estado.tiposHorasPersonalizadoTexto.split(",").map((t) => t.trim()).filter(Boolean)
-        : PRESETS_TIPOS_HORAS[estado.universidadImportacion].slice();
-    }
-    renderizarPlanEstudios();
-  });
-  sec.appendChild(labelNoAplica);
+  // v1.12: ya NO se pregunta universidad ni tipos de horas por adelantado —
+  // el nuevo prompt universal (construirPromptImportacion) le pide a la IA
+  // que detecte HORAS_COLUMNAS leyendo el propio documento, y el parser
+  // (plan-importacion-csv.js, extraerMetadatosImportacion + parsearCSVPlanEstudios)
+  // deriva tipos_horas de esa línea al procesar la respuesta. Los campos
+  // estado.universidadImportacion/tiposHorasImportacion/etc. quedan como
+  // legado hasta terminar de limpiar su uso en plan-esquema.js (el modal
+  // "Nuevo Plan" que crea el plan tras pegar el CSV).
 
   // ---- Modo de importación: Link / PDF / Capturas ----
   const etiquetaModo = document.createElement("span");
@@ -364,11 +375,10 @@ function construirPanelImportacion() {
     btnClaude.style.flex = "1";
     btnClaude.textContent = "Enviar a Claude";
     btnClaude.addEventListener("click", () => {
-      const columnasHoras = construirColumnasHoras(estado.tiposHorasImportacion);
       abrirModalInstruccionesImportacion(
         estado.modoImportacion,
         "claude",
-        construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras)
+        construirPromptImportacion(estado.modoImportacion, estado.linkImportacion)
       );
     });
     filaBotones.appendChild(btnClaude);
@@ -378,11 +388,10 @@ function construirPanelImportacion() {
     btnChatGPT.style.flex = "1";
     btnChatGPT.textContent = "Enviar a ChatGPT";
     btnChatGPT.addEventListener("click", () => {
-      const columnasHoras = construirColumnasHoras(estado.tiposHorasImportacion);
       abrirModalInstruccionesImportacion(
         estado.modoImportacion,
         "chatgpt",
-        construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras)
+        construirPromptImportacion(estado.modoImportacion, estado.linkImportacion)
       );
     });
     filaBotones.appendChild(btnChatGPT);

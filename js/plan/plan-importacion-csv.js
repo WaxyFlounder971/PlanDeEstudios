@@ -4,13 +4,12 @@
    (crear o actualizar), y el mini-panel de reimportación desde Gestionar planes.
    ========================================================================= */
 
-import { crearMateria } from "../core/schema.js";
+import { crearMateria, crearNodoCodigo, crearNodoO, crearNodoY } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
-import { parsearGrupoRequisitos } from "../core/utils.js";
 import { abrirConfirmacion } from "../ui/componentes.js";
 import { abrirModalCrearPlan } from "./plan-esquema.js";
-import { abrirModalCapturasPDF, abrirModalInstruccionesImportacion, construirColumnasHoras, construirInputArchivoCSV, construirPromptImportacion, extraerMetadatosImportacion } from "./plan-importacion.js";
+import { abrirModalCapturasPDF, abrirModalInstruccionesImportacion, construirInputArchivoCSV, construirPromptImportacion, extraerMetadatosImportacion } from "./plan-importacion.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
 
 estado.modoActualizarMalla = "agregar";   // C.5 (v9): "agregar" | "reemplazar" — al reimportar CSV sobre un plan existente
@@ -39,19 +38,144 @@ function parsearLineaCSV(linea) {
 }
 
 /**
- * Parsea el CSV completo para un plan con estos `tiposHoras` (array de
- * llaves, ej. ["Horas"] para TEC o ["Teoría","Práctica","Laboratorio",
- * "Teoría-Práctica"] para UCR). Devuelve { materias: [...], errores: [...] }.
- * Nunca lanza excepción: una fila mala se reporta y se salta, sin romper el
- * resto del import.
+ * v1.12 (Parte C): parser recursivo de Requisitos/Correquisitos — entiende
+ * paréntesis anidados de cualquier profundidad y produce directamente un
+ * nodo del árbol Y/O de schema.js (o `null`). Reemplaza al viejo
+ * `parsearGrupoRequisitos` (plano, sin soporte de anidamiento) de
+ * `core/utils.js`.
  *
- * Las columnas de horas se leen dinámicamente: primero se busca en el
- * encabezado pegado cuántas columnas empiezan con "Horas_" y en qué
- * posición están; si por algún motivo la IA no las nombró así, se cae de
- * vuelta a la posición fija esperada (justo después de Creditos, tantas
- * como tiposHoras.length) para no romper el import.
+ * Reglas (las mismas que le pedimos a la IA en el prompt de importación):
+ *  - Celda vacía o "Ninguno" (sin importar mayúsculas) -> null.
+ *  - ";" en un nivel (fuera de paréntesis) -> nodo "Y" en ese nivel.
+ *  - "/" en un nivel (fuera de paréntesis) -> nodo "O" en ese nivel.
+ *  - Los paréntesis agrupan un sub-árbol que se resuelve primero, de forma
+ *    recursiva, antes de aplicar el operador del nivel exterior.
+ *  - Un código suelto sin separadores ni paréntesis -> nodo hoja.
  */
 
+function parsearRequisitoArbol(celdaCruda) {
+  const texto = (celdaCruda || "").trim();
+  if (!texto || /^ninguno$/i.test(texto)) return null;
+
+  // Separa `str` por `separador` respetando el nivel de anidamiento: nunca
+  // corta dentro de un grupo `(...)` todavía sin resolver.
+  function partirNivelSuperior(str, separador) {
+    const partes = [];
+    let actual = "";
+    let profundidad = 0;
+    for (const c of str) {
+      if (c === "(") profundidad++;
+      else if (c === ")") profundidad--;
+      if (c === separador && profundidad === 0) {
+        partes.push(actual);
+        actual = "";
+      } else {
+        actual += c;
+      }
+    }
+    partes.push(actual);
+    return partes.map((p) => p.trim()).filter((p) => p.length > 0);
+  }
+
+  // ¿El paréntesis que abre en la posición 0 es el mismo que cierra en la
+  // última posición? (y no un grupo interno que solo coincide por casualidad
+  // con el inicio/fin del string, ej. "(A;B)/(C;D)").
+  function envuelveTodo(str) {
+    if (!str.startsWith("(") || !str.endsWith(")")) return false;
+    let profundidad = 0;
+    for (let i = 0; i < str.length; i++) {
+      if (str[i] === "(") profundidad++;
+      else if (str[i] === ")") {
+        profundidad--;
+        if (profundidad === 0) return i === str.length - 1;
+      }
+    }
+    return false;
+  }
+
+  function resolver(strOriginal) {
+    let s = strOriginal.trim();
+    while (envuelveTodo(s)) s = s.slice(1, -1).trim();
+    if (!s) return null;
+
+    // ";" es el separador de nivel EXTERIOR (agrupa "requisitos distintos,
+    // todos necesarios"); "/" es el de nivel INTERIOR (alternativas dentro
+    // de un mismo requisito) — así "A;B/C/D" sin paréntesis se interpreta
+    // como A Y (B O C O D), igual que en el prompt/documentación del proyecto.
+    const partesY = partirNivelSuperior(s, ";");
+    if (partesY.length > 1) return crearNodoY(partesY.map(resolver));
+
+    const partesO = partirNivelSuperior(s, "/");
+    if (partesO.length > 1) return crearNodoO(partesO.map(resolver));
+
+    return crearNodoCodigo(s);
+  }
+
+  return resolver(texto);
+}
+
+/**
+ * v1.12 (Parte G, adelantada): inversa exacta del parser de arriba — dado un
+ * nodo del árbol (o null), genera el string ";"/"/"/paréntesis equivalente,
+ * para que el CSV exportado (o el textarea de "Requisitos" del modal de
+ * materia manual en plan-esquema.js) se pueda volver a importar sin pérdida.
+ * Un hijo se envuelve entre paréntesis solo si es un operador DISTINTO al de
+ * su padre (Y dentro de O, u O dentro de Y) — un hijo del mismo tipo no lo
+ * necesita, porque ";" y "/" son cada uno asociativos entre sí.
+ */
+
+function serializarRequisitoArbol(nodo) {
+  if (!nodo) return "Ninguno";
+
+  function serializar(n) {
+    if (n.tipo === "codigo") return n.valor;
+    const separador = n.tipo === "Y" ? ";" : "/";
+    return n.hijos
+      .map((hijo) => {
+        const texto = serializar(hijo);
+        const necesitaParentesis = (hijo.tipo === "Y" || hijo.tipo === "O") && hijo.tipo !== n.tipo;
+        return necesitaParentesis ? `(${texto})` : texto;
+      })
+      .join(separador);
+  }
+
+  return serializar(nodo);
+}
+
+/**
+ * v1.12 (Parte C): convierte el string crudo de HORAS_COLUMNAS que devolvió
+ * la IA (ej. "T,P,L,EI" o "Ninguna") en el arreglo `tipos_horas` que espera
+ * el resto de la app. Raíz común usada tanto al crear un plan nuevo a partir
+ * de un import (plan-esquema.js) como al derivar el encabezado esperado del
+ * CSV acá mismo.
+ */
+
+function derivarTiposHorasDeHorasColumnas(horasColumnasCrudo) {
+  const texto = (horasColumnasCrudo || "").trim();
+  if (!texto || /^ninguna$/i.test(texto)) return [];
+  return texto.split(",").map((t) => t.trim()).filter(Boolean);
+}
+
+
+
+/**
+ * Parsea el CSV completo para un plan con estos `tiposHoras` (array de
+ * llaves ya fijado en `plan.parametros_universidad.tipos_horas`, derivado a
+ * su vez de HORAS_COLUMNAS al crear el plan — ver derivarTiposHorasDeHorasColumnas).
+ * Devuelve { materias: [...], electivas: [...], errores: [...] }. Nunca
+ * lanza excepción: una fila mala se reporta y se salta, sin romper el resto
+ * del import.
+ *
+ * v1.12: las columnas de horas ya NO tienen un prefijo fijo "Horas_" — el
+ * nuevo prompt universal le pide a la IA que use los mismos códigos de
+ * HORAS_COLUMNAS tal cual como nombre de columna (ej. "T","P","L"), y ese
+ * conteo puede variar según la universidad. Se detectan por POSICIÓN: todo
+ * lo que quede entre "Creditos" (columna 4) y las 2 columnas fijas finales
+ * (Requisitos, Correquisitos) son las columnas de horas — se sigue usando
+ * `tiposHoras.length` como la cantidad esperada (ya fijada al crear el
+ * plan), y si el encabezado real trae una cantidad distinta se agrega un
+ * aviso no-fatal a `errores` en vez de fallar en silencio.
+ */
 function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
   // v7.1: un arreglo vacío es "No aplica" a propósito (ver crearMateria en
   // schema.js) — solo se usa el default ["Horas"] cuando tiposHoras
@@ -71,20 +195,32 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
   if (lineas.length === 0) return { materias: [], electivas: [], errores: ["El CSV está vacío."] };
 
   const encabezado = parsearLineaCSV(lineas[0]);
-  const indicesHoras = [];
-  encabezado.forEach((col, i) => {
-    if (/^Horas_/i.test(col)) indicesHoras.push(i);
-  });
 
-  const idxHorasInicio = indicesHoras.length > 0 ? indicesHoras[0] : 4;
-  const cantidadHoras = indicesHoras.length > 0 ? indicesHoras.length : tipos.length;
+  // v1.12: ya no se busca un prefijo "Horas_" (el nuevo prompt le pide a la
+  // IA usar los códigos de HORAS_COLUMNAS tal cual, ej. "T","P","L") — las
+  // columnas de horas se ubican por POSICIÓN: justo después de Creditos
+  // (índice 4), tantas como tiposHoras.length ya fijado para este plan.
+  const idxHorasInicio = 4;
+  const cantidadHoras = tipos.length;
   const columnasEsperadas = 4 + cantidadHoras + 2; // Bloque,Codigo,Nombre,Creditos + horas + Requisitos,Correquisitos
+
+  const errores = [];
+  // Aviso no-fatal (Parte C, punto 3): si el encabezado real trae una
+  // cantidad de columnas de horas distinta a la esperada, no se falla en
+  // silencio — se avisa y se sigue intentando parsear con lo que hay.
+  const cantidadHorasEnEncabezado = Math.max(0, encabezado.length - 6);
+  if (cantidadHorasEnEncabezado !== cantidadHoras) {
+    errores.push(
+      `Aviso: se esperaban ${cantidadHoras} columna(s) de horas (${tipos.join(", ") || "ninguna"}) ` +
+      `pero el encabezado del CSV trae ${cantidadHorasEnEncabezado}. Revisa que HORAS_COLUMNAS haya ` +
+      `coincidido con las columnas reales — se intentó parsear igual con lo que hay.`
+    );
+  }
 
   // La primera fila se asume encabezado y se descarta.
   const filas = lineas.slice(1);
   const materias = [];
   const electivas = [];
-  const errores = [];
 
   filas.forEach((linea, indice) => {
     const numeroFila = indice + 2; // +2 = +1 por el encabezado, +1 por ser 1-indexado
@@ -157,8 +293,8 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
       horas,
       tiposHoras: tipos,
       bloque: esOptativa ? null : (Number(bloque) || bloque),
-      requisitos: parsearGrupoRequisitos(requisitos),
-      correquisitos: parsearGrupoRequisitos(correquisitos),
+      requisitos: parsearRequisitoArbol(requisitos),
+      correquisitos: parsearRequisitoArbol(correquisitos),
       esOptativa,
     });
 
@@ -202,7 +338,25 @@ function manejarClickImportar(textoCSV) {
 }
 
 function importarCSVEnPlan(textoCSV, planDestino) {
-  const { materias, electivas, errores } = parsearCSVPlanEstudios(textoCSV, planDestino.parametros_universidad.tipos_horas);
+  // v1.12: se extraen (y descartan) las líneas de metadatos acá también —
+  // este entry point recibe el texto CRUDO tal cual lo pegó el usuario
+  // (a diferencia del flujo de "plan nuevo", que ya llega limpio vía
+  // estado.csvPendienteDeImportar), así que sin este paso HORAS_COLUMNAS:
+  // y compañía se colarían como si fueran el encabezado del CSV.
+  const { metadatos, csv } = extraerMetadatosImportacion(textoCSV);
+
+  // Si el plan destino todavía está vacío (recién creado, sin materias ni
+  // optativas) y esta respuesta trae HORAS_COLUMNAS, se fija tipos_horas
+  // ahora mismo — así el plan queda con el esquema de horas correcto desde
+  // su primer import real, sin habérselo preguntado antes al usuario. Si el
+  // plan YA tiene materias, no se toca (cambiarlo a mitad de camino
+  // corrompería las llaves de materia.horas ya guardadas).
+  const planVacio = planDestino.materias.length === 0 && (planDestino.optativas_disponibles || []).length === 0;
+  if (planVacio && metadatos.horas_columnas) {
+    planDestino.parametros_universidad.tipos_horas = derivarTiposHorasDeHorasColumnas(metadatos.horas_columnas);
+  }
+
+  const { materias, electivas, errores } = parsearCSVPlanEstudios(csv, planDestino.parametros_universidad.tipos_horas);
 
   // Se combina por código: si ya existía, se actualiza; si es nueva, se agrega.
   materias.forEach((nueva) => {
@@ -392,11 +546,10 @@ function construirMiniPanelImportacion(plan) {
     btnClaude.style.flex = "1";
     btnClaude.textContent = "Enviar a Claude";
     btnClaude.addEventListener("click", () => {
-      const columnasHoras = construirColumnasHoras(plan.parametros_universidad.tipos_horas);
       abrirModalInstruccionesImportacion(
         estado.modoImportacion,
         "claude",
-        construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras)
+        construirPromptImportacion(estado.modoImportacion, estado.linkImportacion)
       );
     });
     const btnChatGPT = document.createElement("button");
@@ -405,11 +558,10 @@ function construirMiniPanelImportacion(plan) {
     btnChatGPT.style.flex = "1";
     btnChatGPT.textContent = "Enviar a ChatGPT";
     btnChatGPT.addEventListener("click", () => {
-      const columnasHoras = construirColumnasHoras(plan.parametros_universidad.tipos_horas);
       abrirModalInstruccionesImportacion(
         estado.modoImportacion,
         "chatgpt",
-        construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras)
+        construirPromptImportacion(estado.modoImportacion, estado.linkImportacion)
       );
     });
     filaBotones.appendChild(btnClaude);
@@ -445,6 +597,16 @@ function construirMiniPanelImportacion(plan) {
       if (estado.modoActualizarMalla === "reemplazar") {
         plan.materias = [];
         plan.optativas_disponibles = [];
+      }
+
+      // v1.12: igual que en importarCSVEnPlan — si el plan queda vacío (ya
+      // sea porque nunca tuvo materias, o porque "Reemplazar" lo acaba de
+      // vaciar) y esta respuesta trae HORAS_COLUMNAS, se actualiza
+      // tipos_horas antes de parsear. Si el plan ya tiene materias (modo
+      // "Agregar" sobre un plan con contenido), se respeta lo que ya estaba.
+      const planVacio = plan.materias.length === 0 && (plan.optativas_disponibles || []).length === 0;
+      if (planVacio && metadatos.horas_columnas) {
+        plan.parametros_universidad.tipos_horas = derivarTiposHorasDeHorasColumnas(metadatos.horas_columnas);
       }
 
       const { materias, electivas, errores } = parsearCSVPlanEstudios(csv, plan.parametros_universidad.tipos_horas);
@@ -516,9 +678,12 @@ function actualizarEstadoBotonesEnvioImportacion() {
 export {
   actualizarEstadoBotonesEnvioImportacion,
   construirMiniPanelImportacion,
+  derivarTiposHorasDeHorasColumnas,
   importarCSVEnPlan,
   manejarClickImportar,
   mostrarErroresImportacion,
   parsearCSVPlanEstudios,
   parsearLineaCSV,
+  parsearRequisitoArbol,
+  serializarRequisitoArbol,
 };

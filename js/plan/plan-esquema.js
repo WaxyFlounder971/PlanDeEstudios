@@ -5,12 +5,11 @@
    acceso a los planes/materias visibles.
    ========================================================================= */
 
-import { PARAMETROS_UNIVERSIDAD_DEFAULT, PRESETS_TIPOS_HORAS, crearMateria, crearPlanEstudio } from "../core/schema.js";
+import { PARAMETROS_UNIVERSIDAD_DEFAULT, crearMateria, crearPlanEstudio } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
-import { parsearGrupoRequisitos, serializarGrupoRequisitos } from "../core/utils.js";
 import { abrirModalGestionPlanes, renderizarModoHardcore, renderizarSelectorPlan } from "./plan-gestionar.js";
-import { importarCSVEnPlan } from "./plan-importacion-csv.js";
+import { derivarTiposHorasDeHorasColumnas, importarCSVEnPlan, parsearRequisitoArbol, serializarRequisitoArbol } from "./plan-importacion-csv.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
 
 /** Placeholders variados de Carrera/Código según universidad (v5 1.3). */
@@ -145,6 +144,11 @@ function abrirModalCrearPlan(paraSecundario, metadatosDetectados) {
   if (metadatos.carrera) inputCarrera.value = metadatos.carrera;
   if (metadatos.codigo_plan) inputCodigo.value = metadatos.codigo_plan;
 
+  // v1.12: se guarda el HORAS_COLUMNAS crudo detectado por la IA (si vino)
+  // para que btn-confirmar-crear-plan lo use al armar tipos_horas — ya no
+  // se le pregunta al usuario por adelantado (ver PARTE B/C).
+  estado.horasColumnasDetectadasPlan = metadatos.horas_columnas || null;
+
   // Se preselecciona con la universidad detectada por la IA si vino; si no,
   // con lo que el usuario ya haya elegido en el selector del panel de
   // importación (estado.universidadImportacion), así no se le vuelve a
@@ -158,27 +162,20 @@ function abrirModalCrearPlan(paraSecundario, metadatosDetectados) {
   btnInicial.classList.add("active");
   aplicarPlaceholdersAleatoriosPlan(btnInicial.dataset.valor);
 
-  const inputPersonalizado = document.getElementById("input-tipos-horas-personalizados");
-  const bloquePersonalizado = document.getElementById("bloque-tipos-horas-personalizados");
+  // v1.12: el bloque "Tipos de horas personalizados"/"No aplica" del modal
+  // ya no existe en index.html (se eliminó junto con este selector manual).
+
   const bloqueUniOtraNombre = document.getElementById("bloque-universidad-otra-nombre");
   const inputUniOtraNombre = document.getElementById("input-universidad-otra-nombre");
-  const checkboxNoAplica = document.getElementById("checkbox-horas-no-aplica");
-  // v7.1: continúa desde lo elegido en el panel de importación (universidad
-  // libre y "No aplica"), en vez de reiniciar ambos campos siempre.
-  checkboxNoAplica.checked = !!estado.horasNoAplicaImportacion;
-  inputPersonalizado.disabled = checkboxNoAplica.checked;
   inputUniOtraNombre.value = estado.nombreUniversidadImportacion || "";
   if (btnInicial.dataset.valor === "Otra") {
-    bloquePersonalizado.classList.remove("oculto");
     bloqueUniOtraNombre.classList.remove("oculto");
-    inputPersonalizado.value = estado.tiposHorasPersonalizadoTexto || "";
     // v7.1: si vino detectada por la IA (metadatos.universidad) y no coincidió
     // con TEC/UCR, se precarga como valor real editable (nunca genérico).
     if (metadatos.universidad && !["TEC", "UCR"].includes(mapearUniversidadDetectada(metadatos.universidad))) {
       inputUniOtraNombre.value = metadatos.universidad;
     }
   } else {
-    bloquePersonalizado.classList.add("oculto");
     bloqueUniOtraNombre.classList.add("oculto");
     aplicarDefaultsUniversidad(btnInicial.dataset.valor);
   }
@@ -194,22 +191,10 @@ function aplicarDefaultsUniversidad(universidad) {
   document.getElementById("input-plan-duracion").value = defaults.horario_duracion_bloque_min;
 }
 
-/** Lee la lista de tipos de horas seleccionada en el modal en este momento
- *  (según el pill de universidad activo), sin importar si es TEC/UCR/Personalizada.
- *  v7.1: el checkbox "No aplica" tiene prioridad sobre cualquier preset —
- *  el usuario puede marcar que este plan no maneja horas sin importar la
- *  universidad elegida. */
-
-function leerTiposHorasDelModalCrearPlan() {
-  if (document.getElementById("checkbox-horas-no-aplica").checked) return [];
-  const universidad = document.getElementById("pill-plan-universidad").querySelector(".pill-item.active").dataset.valor;
-  if (universidad === "Otra") {
-    const texto = document.getElementById("input-tipos-horas-personalizados").value;
-    const tipos = texto.split(",").map((t) => t.trim()).filter(Boolean);
-    return tipos.length ? tipos : ["Horas"];
-  }
-  return (PRESETS_TIPOS_HORAS[universidad] || PRESETS_TIPOS_HORAS.TEC).slice();
-}
+/* v1.12: leerTiposHorasDelModalCrearPlan() fue eliminada — tipos_horas ya
+ * no se lee de un selector manual (TEC/UCR/Otra + "No aplica"), se deriva de
+ * estado.horasColumnasDetectadasPlan (ver abrirModalCrearPlan más arriba y
+ * el handler de btn-confirmar-crear-plan más abajo). */
 
 function inicializarModalCrearPlan() {
   const pillUni = document.getElementById("pill-plan-universidad");
@@ -218,28 +203,19 @@ function inicializarModalCrearPlan() {
       pillUni.querySelectorAll(".pill-item").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       aplicarPlaceholdersAleatoriosPlan(btn.dataset.valor);
-      const bloquePersonalizado = document.getElementById("bloque-tipos-horas-personalizados");
       const bloqueUniOtraNombre = document.getElementById("bloque-universidad-otra-nombre");
       if (btn.dataset.valor === "TEC" || btn.dataset.valor === "UCR") {
-        bloquePersonalizado.classList.add("oculto");
         bloqueUniOtraNombre.classList.add("oculto");
         aplicarDefaultsUniversidad(btn.dataset.valor);
       } else {
-        bloquePersonalizado.classList.remove("oculto");
         bloqueUniOtraNombre.classList.remove("oculto");
       }
     });
   });
 
-  // v7.1: marcar/desmarcar "No aplica" solo deshabilita visualmente el campo
-  // de tipos de horas personalizados (si está visible) para dejar claro que
-  // no se va a usar, sin perder lo que el usuario ya había escrito ahí.
-  document.getElementById("checkbox-horas-no-aplica").addEventListener("change", (e) => {
-    document.getElementById("input-tipos-horas-personalizados").disabled = e.target.checked;
-  });
-
   document.getElementById("btn-cancelar-crear-plan").addEventListener("click", () => {
     estado.csvPendienteDeImportar = null;
+    estado.horasColumnasDetectadasPlan = null;
     document.getElementById("modal-crear-plan").classList.add("oculto");
     if (estado.reabrirGestionPlanesTrasCrear) {
       estado.reabrirGestionPlanesTrasCrear = false;
@@ -268,11 +244,14 @@ function inicializarModalCrearPlan() {
     const universidad = universidadPill === "Otra"
       ? (document.getElementById("input-universidad-otra-nombre").value.trim() || "Otra")
       : universidadPill;
-    const tiposHoras = leerTiposHorasDelModalCrearPlan();
-    if (universidadPill === "Otra") {
-      // Se recuerda el texto crudo para la próxima vez que abran este modal.
-      estado.tiposHorasPersonalizadoTexto = document.getElementById("input-tipos-horas-personalizados").value;
-    }
+    // v1.12: tipos_horas ya no se lee de un selector manual — se deriva de
+    // lo que la IA haya detectado en HORAS_COLUMNAS (guardado en
+    // abrirModalCrearPlan). Si no hay nada detectado (ej. "+ Nuevo Plan" sin
+    // pasar por un import), se usa ["Horas"] como default genérico editable
+    // más adelante, en vez de asumir "no aplica" sin que el usuario lo pidiera.
+    const tiposHoras = estado.horasColumnasDetectadasPlan
+      ? derivarTiposHorasDeHorasColumnas(estado.horasColumnasDetectadasPlan)
+      : ["Horas"];
     const codigoPlan = document.getElementById("input-plan-codigo").value.trim();
 
     const nuevoPlan = crearPlanEstudio({
@@ -288,6 +267,7 @@ function inicializarModalCrearPlan() {
       },
     });
 
+    estado.horasColumnasDetectadasPlan = null;
     estado.datos.planes_estudio.push(nuevoPlan);
     if (estado.planCrearParaSecundario) {
       estado.datos.configuracion.plan_activo_secundario_id = nuevoPlan.id;
@@ -317,6 +297,7 @@ function inicializarModalCrearPlan() {
   document.getElementById("modal-crear-plan").addEventListener("click", (e) => {
     if (e.target.id === "modal-crear-plan") {
       estado.csvPendienteDeImportar = null;
+      estado.horasColumnasDetectadasPlan = null;
       e.target.classList.add("oculto");
       if (estado.reabrirGestionPlanesTrasCrear) {
         estado.reabrirGestionPlanesTrasCrear = false;
@@ -384,8 +365,8 @@ function abrirModalMateriaManual(materiaExistente = null, planDeLaMateria = null
     document.getElementById("input-materia-nombre").value = materiaExistente.nombre;
     document.getElementById("input-materia-creditos").value = materiaExistente.creditos;
     document.getElementById("input-materia-bloque").value = materiaExistente.bloque;
-    document.getElementById("input-materia-requisitos").value = serializarGrupoRequisitos(materiaExistente.requisitos);
-    document.getElementById("input-materia-correquisitos").value = serializarGrupoRequisitos(materiaExistente.correquisitos);
+    document.getElementById("input-materia-requisitos").value = serializarRequisitoArbol(materiaExistente.requisitos);
+    document.getElementById("input-materia-correquisitos").value = serializarRequisitoArbol(materiaExistente.correquisitos);
   } else {
     ["input-materia-codigo", "input-materia-nombre", "input-materia-creditos", "input-materia-bloque",
      "input-materia-requisitos", "input-materia-correquisitos"
@@ -516,8 +497,8 @@ function inicializarModalMateriaManual() {
     document.querySelectorAll("#bloque-horas-dinamico [data-tipo-hora]").forEach((input) => {
       horas[input.dataset.tipoHora] = Number(input.value) || 0;
     });
-    const requisitos = parsearGrupoRequisitos(document.getElementById("input-materia-requisitos").value);
-    const correquisitos = parsearGrupoRequisitos(document.getElementById("input-materia-correquisitos").value);
+    const requisitos = parsearRequisitoArbol(document.getElementById("input-materia-requisitos").value);
+    const correquisitos = parsearRequisitoArbol(document.getElementById("input-materia-correquisitos").value);
 
     if (materiaExistente) {
       // Modo edición: se actualizan los campos in-place para no perder la
@@ -556,7 +537,6 @@ export {
   filasFiltradas,
   inicializarModalCrearPlan,
   inicializarModalMateriaManual,
-  leerTiposHorasDelModalCrearPlan,
   mapearUniversidadDetectada,
   obtenerMateriasVisibles,
   obtenerOptativasDisponibles,
