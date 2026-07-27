@@ -1601,7 +1601,10 @@ img, svg { max-width: 100%; }
 
 .mapa-nodo {
   --nodo-color: #94a3b8;
-  background: var(--bg-panel);
+  /* V10: fondo SÓLIDO (no --bg-panel, que es semitransparente en todas las
+     paletas) para que el camino de desbloqueo nunca se vea "opacado" de
+     forma rara al pasar detrás de una tarjeta. */
+  background: var(--bg-canvas);
   border: 1.5px solid var(--nodo-color);
   border-radius: var(--radius-sm);
   padding: 8px 10px;
