@@ -6,12 +6,12 @@
 
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
-import { aplicarFormatoTexto, serializarGrupoRequisitos } from "../core/utils.js";
+import { aplicarFormatoTexto } from "../core/utils.js";
 import { construirPanelCategorias } from "./plan-categorias.js";
 import { abrirModalMateriaManual, obtenerMateriasVisibles, obtenerPlanActivo } from "./plan-esquema.js";
 import { abrirModalGestionPlanes, renderizarSelectorPlan } from "./plan-gestionar.js";
 import { alternarModoEdicionPlan } from "./plan-modo-edicion.js";
-import { construirMiniPanelImportacion } from "./plan-importacion-csv.js";
+import { construirMiniPanelImportacion, serializarRequisitoArbol } from "./plan-importacion-csv.js";
 import { construirEncabezadoCSV, construirPanelImportacion } from "./plan-importacion.js";
 import { construirTarjetaVista } from "./plan-mapa.js";
 import { construirContenidoBloques } from "./plan-vista-lista-tarjetas.js";
@@ -385,8 +385,8 @@ function exportarPlanACSV(planParam) {
       `"${(m.nombre || "").replace(/"/g, '""')}"`,
       m.creditos,
       ...columnasHoras,
-      serializarGrupoRequisitos(m.requisitos),
-      serializarGrupoRequisitos(m.correquisitos),
+      serializarRequisitoArbol(m.requisitos),
+      serializarRequisitoArbol(m.correquisitos),
       m.estado,
       m.categoria_id || "",
     ];
