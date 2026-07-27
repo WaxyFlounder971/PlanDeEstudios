@@ -472,6 +472,20 @@
   </div>
 </div>
 
+<!-- ===================== MODAL: Convertir capturas a PDF (v1.10.1) ===================== -->
+<div id="modal-capturas-pdf" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;">Convertir capturas a PDF</h2>
+    <p class="muted">Sube todas las imágenes que muestren tu plan de estudios — el orden en que las selecciones será el orden de las páginas del PDF.</p>
+    <input type="file" id="input-capturas-pdf" accept="image/*" multiple class="form-input">
+    <p id="error-modal-capturas-pdf" class="muted oculto" style="color:var(--color-danger);"></p>
+    <div class="row" style="justify-content:flex-end;">
+      <button id="btn-cancelar-capturas-pdf" class="btn btn-secondary">Cancelar</button>
+      <button id="btn-convertir-capturas-pdf" class="btn btn-primary">Convertir a PDF</button>
+    </div>
+  </div>
+</div>
+
 <style>.oculto { display: none !important; }</style>
 
 <script type="module" src="js/main.js"></script>
