@@ -9,6 +9,7 @@ import { PRESETS_TIPOS_HORAS } from "../core/schema.js";
 import { mostrarCargando, ocultarCargando } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { mostrarToast } from "../ui/componentes.js";
+import { abrirModalGestionPlanes } from "./plan-gestionar.js";
 import { manejarClickImportar, mostrarErroresImportacion } from "./plan-importacion-csv.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
 
@@ -158,6 +159,24 @@ function construirPanelImportacion() {
   titulo.style.margin = "0";
   titulo.textContent = "Importar tu Plan de Estudios";
   sec.appendChild(titulo);
+
+  // v1.10.1 (punto 1): cuando este panel se muestra para agregar un plan
+  // ADICIONAL (ya existe al menos uno activo), se ofrece volver atrás sin
+  // crear nada — cuando es el primer plan de todos, no hay a dónde volver.
+  if (estado.mostrarPanelImportacionNuevoPlan) {
+    const btnCancelar = document.createElement("button");
+    btnCancelar.type = "button";
+    btnCancelar.className = "btn btn-secondary";
+    btnCancelar.textContent = "← Cancelar";
+    btnCancelar.addEventListener("click", () => {
+      estado.mostrarPanelImportacionNuevoPlan = false;
+      const reabrirGestion = estado.reabrirGestionPlanesTrasCrear;
+      estado.reabrirGestionPlanesTrasCrear = false;
+      renderizarPlanEstudios();
+      if (reabrirGestion) abrirModalGestionPlanes();
+    });
+    sec.appendChild(btnCancelar);
+  }
 
   if (cfg.modo_hardcore) {
     const etiqueta = document.createElement("span");

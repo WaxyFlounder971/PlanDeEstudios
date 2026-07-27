@@ -178,7 +178,13 @@ function manejarClickImportar(textoCSV) {
   const cfg = estado.datos.configuracion;
   const destinoEsSecundario = cfg.modo_hardcore && estado.planImportandoId === "secundario";
   const planDestinoId = destinoEsSecundario ? cfg.plan_activo_secundario_id : cfg.plan_activo_id;
-  const planDestino = estado.datos.planes_estudio.find((p) => p.id === planDestinoId);
+  // v1.10.1 (punto 1): si se llegó aquí desde "+ Nuevo Plan" (Gestionar
+  // Planes), se fuerza a tratar esto como "todavía no hay plan destino" —
+  // sin esto, planDestinoId resolvería al plan YA activo y este CSV se
+  // mezclaría ahí en vez de crear el plan nuevo que el usuario pidió.
+  const planDestino = estado.mostrarPanelImportacionNuevoPlan
+    ? null
+    : estado.datos.planes_estudio.find((p) => p.id === planDestinoId);
 
   if (!planDestino) {
     // No existe el plan todavía: se lee CARRERA:/CODIGO_PLAN:/UNIVERSIDAD: si
@@ -187,6 +193,7 @@ function manejarClickImportar(textoCSV) {
     // CSV) y se pide crear el plan primero, prellenado con lo detectado.
     const { metadatos, csv } = extraerMetadatosImportacion(textoCSV);
     estado.csvPendienteDeImportar = csv;
+    estado.mostrarPanelImportacionNuevoPlan = false; // ya cumplió su propósito
     abrirModalCrearPlan(destinoEsSecundario, metadatos);
     return;
   }

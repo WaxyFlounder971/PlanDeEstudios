@@ -8,7 +8,7 @@ import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { abrirConfirmacion } from "../ui/componentes.js";
-import { LIMITE_PLANES_ESTUDIO, abrirModalCrearPlan } from "./plan-esquema.js";
+import { LIMITE_PLANES_ESTUDIO } from "./plan-esquema.js";
 import { exportarPlanACSV, renderizarPlanEstudios } from "./plan-vista-lista.js";
 
 /* --------------------------- Selector de plan --------------------------- */
@@ -236,7 +236,13 @@ function inicializarModalGestionPlanes() {
     document.getElementById("modal-gestion-planes").classList.add("oculto");
     estado.csvPendienteDeImportar = null;
     estado.reabrirGestionPlanesTrasCrear = true;
-    abrirModalCrearPlan(false);
+    // v1.10.1 (punto 1): ya no se abre abrirModalCrearPlan() directo — primero
+    // se fuerza el panel de importación (construirPanelImportacion, el mismo
+    // que ve un usuario nuevo). El modal de carrera/universidad/código recién
+    // se abre después, dentro de manejarClickImportar, una vez que ya se
+    // pegó/subió el CSV — igual que en el flujo del primer plan.
+    estado.mostrarPanelImportacionNuevoPlan = true;
+    renderizarPlanEstudios();
   });
 }
 

@@ -23,6 +23,7 @@ estado.busquedaPlanEstudios = "";          // texto del buscador general
 estado.materiasExpandidas = new Map();     // codigo -> bool (override manual del expand/collapse)
 estado.bloquesColapsados = new Set();      // claves de bloque/categoría colapsadas
 estado.estadisticasAbiertas = false;      // v5 #3: colapsada por defecto
+estado.mostrarPanelImportacionNuevoPlan = false;  // v1.10.1 (punto 1): fuerza el panel de importación al agregar un plan adicional
 
 /* ===================== Render principal de la sección ===================== */
 
@@ -34,7 +35,12 @@ function renderizarPlanEstudios() {
   cont.innerHTML = "";
 
   try {
-    if (!principal) {
+    // v1.10.1 (punto 1): al agregar un plan ADICIONAL desde "+ Nuevo Plan"
+    // (Gestionar Planes), se fuerza este mismo panel aunque ya exista un
+    // plan activo — así el flujo queda igual para el primer plan y para
+    // cualquiera después: primero se importa, y solo al final (dentro de
+    // manejarClickImportar, si no hay destino) se piden los datos del plan.
+    if (!principal || estado.mostrarPanelImportacionNuevoPlan) {
       cont.appendChild(construirPanelImportacion());
       return;
     }
