@@ -467,6 +467,13 @@ function abrirMenuRapidoCategoria(materia, plan, anclaEl) {
   });
 
   document.body.appendChild(pop);
+  // v1.12: antes el listener de "clic afuera cierra" se enganchaba con
+  // setTimeout(0) — en móvil, el propio gesto de mantener presionado suele
+  // terminar en un "click fantasma" (touchend -> click) que dispara
+  // prácticamente en el mismo tick, así que el popover se cerraba solo
+  // antes de que a la persona le diera tiempo de tocar una opción. 300ms es
+  // más que suficiente para dejar pasar ese click fantasma sin que la
+  // apertura del popover se sienta lenta.
   setTimeout(() => {
     document.addEventListener("click", function cerrar(e) {
       if (!pop.contains(e.target)) {
@@ -474,7 +481,7 @@ function abrirMenuRapidoCategoria(materia, plan, anclaEl) {
         document.removeEventListener("click", cerrar);
       }
     });
-  }, 0);
+  }, 300);
 }
 
 export {
