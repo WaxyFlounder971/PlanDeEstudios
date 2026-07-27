@@ -137,49 +137,15 @@ function estiloBadgeCategoria(hex) {
   return `background:${hexARgba(hex, 0.15)}; border-color:${hex}; color:${hex};`;
 }
 
-/* ===================== Parser de grupos de requisitos (";" = Y, "/" = O) ===================== */
-
-/**
- * Normaliza separadores "sueltos" que a veces llegan en la celda en vez del
- * punto y coma/diagonal oficial: " - " o " y " (con espacios) como separador
- * de GRUPOS distintos (equivalente a ";"), y " o " como separador de
- * ALTERNATIVAS dentro de un grupo (equivalente a "/"). Solo se normaliza
- * cuando el separador está rodeado de espacios — así un código como
- * "MA-1001" (guion pegado, sin espacios) nunca se parte por error.
- *
- * v7: el separador de "Y" se cambió de coma "," a punto y coma ";" porque la
- * coma choca con el separador de columnas del propio CSV — si una materia
- * tenía más de un requisito (ej. "MA0101,MA1403"), esa celda no quedaba
- * envuelta en comillas por la IA externa y la fila terminaba con más
- * columnas de las esperadas, causando que el parser la descartara. Esta era
- * la causa raíz de que se perdieran materias al importar.
- */
-
-function normalizarSeparadoresRequisitos(texto) {
-  return texto
-    .replace(/\s+-\s+/g, ";")
-    .replace(/\s+y\s+/gi, ";")
-    .replace(/\s+o\s+/gi, "/")
-    // Compatibilidad con datos/plantillas viejas que aún usan coma como "Y":
-    // si después de todo lo anterior sigue habiendo una coma dentro de la
-    // celda (que ya no debería tener columnas mezcladas, porque esto se usa
-    // fila por fila sobre una celda ya aislada), se trata como "Y" también.
-    .replace(/\s*,\s*/g, ";");
-}
-
-function parsearGrupoRequisitos(texto) {
-  const limpio = normalizarSeparadoresRequisitos((texto || "").trim());
-  if (!limpio || limpio.toLowerCase() === "ninguno") return [];
-  return limpio
-    .split(";")
-    .map((grupo) => grupo.split("/").map((c) => c.trim()).filter(Boolean))
-    .filter((g) => g.length > 0);
-}
-
-function serializarGrupoRequisitos(grupos) {
-  if (!grupos || grupos.length === 0) return "Ninguno";
-  return grupos.map((g) => g.join("/")).join(";");
-}
+/* ===================== (v1.12) Parser de requisitos removido de aquí =====================
+   parsearGrupoRequisitos/serializarGrupoRequisitos/normalizarSeparadoresRequisitos
+   vivían acá — se reemplazaron por completo por el parser/serializador de
+   árbol Y/O (parsearRequisitoArbol/serializarRequisitoArbol), que ahora
+   viven en js/plan/plan-importacion-csv.js junto con el resto de la lógica
+   de importación de la que forman parte (ver PARTE A/C/G del rediseño de
+   requisitos). Ningún otro archivo del proyecto debería seguir importando
+   los nombres viejos — si alguno lo hace, es una referencia rota pendiente
+   de actualizar. */
 
 export {
   aplicarFormatoTexto,
@@ -189,9 +155,6 @@ export {
   formatearHoras,
   formatearHorasCompactoIniciales,
   hexARgba,
-  normalizarSeparadoresRequisitos,
   obtenerIniciales,
-  parsearGrupoRequisitos,
-  serializarGrupoRequisitos,
   transformarPalabraFormato,
 };

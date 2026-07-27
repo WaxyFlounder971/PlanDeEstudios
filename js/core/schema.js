@@ -65,8 +65,15 @@ function crearDatosUsuarioNuevo() {
             // Ej. TEC: { "Horas": 5 } — UCR: { "Teoría": 5, "Práctica": 0, "Laboratorio": 0, "Teoría-Práctica": 0 }
             horas: { "Horas": 5 },
             bloque: 1,                      // bloque/nivel original del plan
-            requisitos: ["MA0101"],         // códigos
-            correquisitos: [],
+            // v1.12: árbol de expresión Y/O (ver ARBOL_REQUISITOS más abajo).
+            // null = sin requisitos. Puede ser una hoja simple o un árbol
+            // anidado de cualquier profundidad. Ejemplo con anidamiento:
+            // { tipo:"O", hijos:[
+            //     { tipo:"Y", hijos:[{tipo:"codigo",valor:"QU-0102"},{tipo:"codigo",valor:"QU-0103"}] },
+            //     { tipo:"Y", hijos:[{tipo:"codigo",valor:"QU-0114"},{tipo:"codigo",valor:"QU-0115"}] },
+            // ]}
+            requisitos: { tipo: "codigo", valor: "MA0101" },
+            correquisitos: null,
             categoria_id: null,             // se asigna luego manualmente
             estado: "pendiente",            // "pendiente" | "cursando" | "aprobado" | "reprobado"
             escala_notas_override: null,    // null = usa la global/universidad
@@ -139,6 +146,106 @@ const PALETAS_DISPONIBLES = [
   "rojo", "dorado", "amarillo", "verde", "cyan", "azul", "indigo", "morado", "rosado",
   "azucarado",
 ];
+
+/* ===================== Árbol de expresión Y/O (requisitos/correquisitos) =====================
+   v1.12: reemplaza el modelo plano de "grupos de alternativas". Cada nodo es
+   uno de dos tipos: hoja ({tipo:"codigo", valor}) o operador ({tipo:"Y"|"O",
+   hijos:[...]}). `materia.requisitos` / `materia.correquisitos` son `null`
+   (sin requisitos) o un único nodo raíz. Estas funciones son la ÚNICA forma
+   de construir/evaluar/recorrer nodos — el parser (Parte C), la evaluación
+   de disponibilidad (Parte D), la UI (Parte E), la búsqueda inversa (Parte F)
+   y el exportador (Parte G) deben reutilizarlas en vez de reimplementar la
+   lógica de árbol cada uno por su lado. */
+
+function crearNodoCodigo(valor) {
+  return { tipo: "codigo", valor };
+}
+
+/** hijos: arreglo de 2+ nodos. Si solo llega 1 hijo, lo retorna tal cual
+ *  (un operador de un solo hijo es redundante y complica la UI/migración). */
+function crearNodoY(hijos) {
+  const lista = (hijos || []).filter(Boolean);
+  if (lista.length === 1) return lista[0];
+  return { tipo: "Y", hijos: lista };
+}
+
+function crearNodoO(hijos) {
+  const lista = (hijos || []).filter(Boolean);
+  if (lista.length === 1) return lista[0];
+  return { tipo: "O", hijos: lista };
+}
+
+/** Recorre el árbol completo y ejecuta `callback(nodoHoja)` por cada hoja
+ *  encontrada, sin importar la profundidad. Usada por Parte F (búsqueda
+ *  inversa "Es requisito de") y por Parte G (exportar) para no reescribir
+ *  el recorrido recursivo en cada lugar que lo necesita. */
+function recorrerHojasArbol(nodo, callback) {
+  if (!nodo) return;
+  if (nodo.tipo === "codigo") {
+    callback(nodo);
+    return;
+  }
+  if (nodo.tipo === "Y" || nodo.tipo === "O") {
+    (nodo.hijos || []).forEach((hijo) => recorrerHojasArbol(hijo, callback));
+  }
+}
+
+/** true/false: ¿existe en algún nivel del árbol una hoja con este código?
+ *  Base de la Parte F — funciona sin importar la profundidad de anidamiento. */
+function arbolContieneCodigo(nodo, codigo) {
+  let encontrado = false;
+  recorrerHojasArbol(nodo, (hoja) => {
+    if (hoja.valor === codigo) encontrado = true;
+  });
+  return encontrado;
+}
+
+/** Evaluación recursiva de disponibilidad (candado/luz) — Parte D.
+ *  `estaAprobada(codigo)` es un callback que decide si un código puntual
+ *  cuenta como cumplido (normalmente: buscar la materia en el plan y
+ *  chequear materia.estado === "aprobado"). */
+function evaluarNodoRequisito(nodo, estaAprobada) {
+  if (!nodo) return true; // sin requisitos
+  if (nodo.tipo === "codigo") return !!estaAprobada(nodo.valor);
+  if (nodo.tipo === "Y") return (nodo.hijos || []).every((h) => evaluarNodoRequisito(h, estaAprobada));
+  if (nodo.tipo === "O") return (nodo.hijos || []).some((h) => evaluarNodoRequisito(h, estaAprobada));
+  return false;
+}
+
+/** Migra el formato viejo de requisitos/correquisitos al árbol nuevo.
+ *  Detecta dos formatos viejos posibles y hace lo mejor posible con cada uno
+ *  (los datos viejos no tienen por qué ser perfectos — lo que importa es que
+ *  de aquí en adelante todo lo nuevo se genere ya como árbol):
+ *   - Arreglo plano de strings (ej. ["MA0101", "CE1101"]): se asume que cada
+ *     código es un requisito independiente y TODOS son necesarios → nodo "Y".
+ *   - Arreglo de arreglos (ej. [["MA0101"], ["MA0102","MA0103"]]) — el viejo
+ *     modelo de "grupos de alternativas": cada grupo se vuelve un nodo "O" de
+ *     sus códigos, y si hay más de un grupo, se combinan bajo un nodo "Y" raíz.
+ *  Si el valor ya es un nodo del árbol nuevo (tiene `tipo`), se retorna intacto.
+ */
+function migrarRequisitoAArbol(valorViejo) {
+  if (valorViejo === null || valorViejo === undefined) return null;
+
+  // Ya es un nodo nuevo (hoja u operador) — nada que migrar.
+  if (!Array.isArray(valorViejo) && typeof valorViejo === "object" && valorViejo.tipo) {
+    return valorViejo;
+  }
+
+  if (!Array.isArray(valorViejo)) return null;
+  if (valorViejo.length === 0) return null;
+
+  const esArregloDeArreglos = valorViejo.every((el) => Array.isArray(el));
+  if (esArregloDeArreglos) {
+    const gruposO = valorViejo
+      .map((grupo) => crearNodoO(grupo.filter((c) => typeof c === "string" && c).map(crearNodoCodigo)))
+      .filter(Boolean);
+    return crearNodoY(gruposO);
+  }
+
+  // Arreglo plano de strings: todos requeridos.
+  const codigos = valorViejo.filter((c) => typeof c === "string" && c);
+  return crearNodoY(codigos.map(crearNodoCodigo));
+}
 
 /* ===================== Plan de Estudios / Materias / Categorías ===================== */
 
@@ -217,8 +324,11 @@ function crearMateria({ codigo, nombre, creditos, horas, tiposHoras, bloque, req
     creditos,
     horas: horasFinal,
     bloque,
-    requisitos: requisitos || [],
-    correquisitos: correquisitos || [],
+    // v1.12: null (sin requisitos) o un único nodo raíz del árbol Y/O.
+    // No se migra aquí — quien llama a crearMateria (parser CSV, formulario
+    // manual) ya debe entregar el nodo construido o null.
+    requisitos: requisitos || null,
+    correquisitos: correquisitos || null,
     categoria_id: null,
     estado: "pendiente",
     escala_notas_override: null,
@@ -291,6 +401,12 @@ function migrarDatosAntiguos(datos) {
         });
         materia.horas = normalizado;
       }
+
+      // v1.12: requisitos/correquisitos de arreglo(s) plano(s) → árbol Y/O.
+      // Seguro de llamar siempre: si ya es un nodo del árbol nuevo (o null),
+      // migrarRequisitoAArbol lo retorna intacto sin tocarlo.
+      materia.requisitos = migrarRequisitoAArbol(materia.requisitos);
+      materia.correquisitos = migrarRequisitoAArbol(materia.correquisitos);
     });
   });
 
@@ -303,10 +419,17 @@ export {
   PALETAS_DISPONIBLES,
   PARAMETROS_UNIVERSIDAD_DEFAULT,
   PRESETS_TIPOS_HORAS,
+  arbolContieneCodigo,
   crearCategoria,
   crearDatosUsuarioNuevo,
   crearEnlaceRapido,
   crearMateria,
+  crearNodoCodigo,
+  crearNodoO,
+  crearNodoY,
   crearPlanEstudio,
+  evaluarNodoRequisito,
   migrarDatosAntiguos,
+  migrarRequisitoAArbol,
+  recorrerHojasArbol,
 };
