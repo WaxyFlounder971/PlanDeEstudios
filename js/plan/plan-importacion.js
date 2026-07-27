@@ -69,7 +69,7 @@ Es una página institucional sin inicio de sesión. Si la página organiza las m
   } else if (modo === "pdf") {
     instruccionEntrada = `Te voy a adjuntar el plan de estudios de mi carrera en un archivo PDF (puede tener tablas de texto real, o ser páginas escaneadas como imágenes — trátalo igual en ambos casos).`;
   } else if (modo === "capturas") {
-    instruccionEntrada = `Te voy a adjuntar una o varias fotos/capturas de pantalla de mi plan de estudios. Léelas todas como una sola malla curricular continua, uniendo la información entre todas, sin perder ninguna materia, sin importar el orden en que las adjunte.`;
+    instruccionEntrada = `Te voy a adjuntar un PDF armado a partir de varias capturas de pantalla de mi plan de estudios (una captura por página). Trátalo igual que si fuera un PDF real de mi plan de estudios: lee todas las páginas como una sola malla curricular continua, uniendo la información entre todas, sin perder ninguna materia, sin importar el orden de las páginas.`;
   }
 
   return `${avisoNavegacion}Actúa como un estructurador de datos académicos. ${instruccionEntrada}
@@ -303,8 +303,10 @@ function construirPanelImportacion() {
   } else if (estado.modoImportacion === "capturas") {
     const nota = document.createElement("p");
     nota.className = "muted";
-    nota.textContent = "Vas a adjuntar una o varias fotos/capturas directamente en la ventana de Claude o ChatGPT que se abra.";
+    nota.textContent = '1) Selecciona tus fotos/capturas abajo y presiona "Convertir a PDF" — se va a descargar un archivo a tu dispositivo. 2) Cuando abras Claude/ChatGPT, adjunta ESE archivo PDF descargado (no las fotos sueltas).';
     sec.appendChild(nota);
+
+    sec.appendChild(construirInputCapturasAPDF());
   }
 
   const filaBotones = document.createElement("div");
@@ -361,6 +363,132 @@ function construirPanelImportacion() {
   sec.appendChild(btnImportar);
 
   return sec;
+}
+
+/* ===================== v1.10.0 — Capturas -> un solo PDF (modo "capturas") =====================
+ * Antes de esto, el usuario adjuntaba cada foto/captura suelta directamente
+ * en Claude/ChatGPT. Ahora, en el modo "Tomar capturas", primero se arma UN
+ * SOLO PDF (una imagen por página, sin backend, 100% en el navegador con
+ * jsPDF vía CDN) y ESE PDF es lo que se adjunta en la IA. */
+
+/** Lee un archivo de imagen como Data URL (para poder cargarlo en un <img>
+ *  y luego insertarlo en el PDF). */
+
+function leerImagenComoDataURL(archivo) {
+  return new Promise((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onload = () => resolve(String(lector.result || ""));
+    lector.onerror = () => reject(new Error("No se pudo leer la imagen."));
+    lector.readAsDataURL(archivo);
+  });
+}
+
+/** Carga una Data URL en un elemento <img> real, solo para poder leer sus
+ *  dimensiones naturales (ancho/alto) antes de insertarla en el PDF. */
+
+function cargarDimensionesImagen(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("No se pudo procesar la imagen."));
+    img.src = dataUrl;
+  });
+}
+
+/** jsPDF necesita saber el formato real de la imagen para insertarla bien;
+ *  se detecta a partir del prefijo de la Data URL en vez de asumir JPEG. */
+
+function detectarFormatoImagen(dataUrl) {
+  if (dataUrl.startsWith("data:image/png")) return "PNG";
+  if (dataUrl.startsWith("data:image/webp")) return "WEBP";
+  return "JPEG";
+}
+
+/**
+ * Arma un solo PDF a partir de las capturas seleccionadas: una página por
+ * imagen, tamaño A4, con la imagen centrada y ajustada al espacio disponible
+ * MANTENIENDO su proporción original (nunca se deforma). La orientación de
+ * cada página (vertical/horizontal) se elige según la proporción de esa
+ * imagen. Descarga el resultado como "plan-de-estudios-capturas.pdf".
+ */
+
+async function convertirCapturasAPDF(archivos) {
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    throw new Error("La librería jsPDF no está disponible todavía.");
+  }
+  const { jsPDF } = window.jspdf;
+  const MARGEN_MM = 10;
+  let doc = null;
+
+  for (let i = 0; i < archivos.length; i++) {
+    const dataUrl = await leerImagenComoDataURL(archivos[i]);
+    const img = await cargarDimensionesImagen(dataUrl);
+    const horizontal = img.width >= img.height;
+    const anchoPagina = horizontal ? 297 : 210; // A4 en mm
+    const altoPagina = horizontal ? 210 : 297;
+
+    if (!doc) {
+      doc = new jsPDF({ orientation: horizontal ? "landscape" : "portrait", unit: "mm", format: "a4" });
+    } else {
+      doc.addPage("a4", horizontal ? "landscape" : "portrait");
+    }
+
+    const anchoDisponible = anchoPagina - MARGEN_MM * 2;
+    const altoDisponible = altoPagina - MARGEN_MM * 2;
+    const proporcion = Math.min(anchoDisponible / img.width, altoDisponible / img.height);
+    const anchoFinal = img.width * proporcion;
+    const altoFinal = img.height * proporcion;
+    const x = (anchoPagina - anchoFinal) / 2;
+    const y = (altoPagina - altoFinal) / 2;
+
+    doc.addImage(dataUrl, detectarFormatoImagen(dataUrl), x, y, anchoFinal, altoFinal);
+  }
+
+  doc.save("plan-de-estudios-capturas.pdf");
+}
+
+/** Input de imágenes + botón "Convertir a PDF" del modo "capturas": lee las
+ *  capturas seleccionadas, las junta en un solo PDF con convertirCapturasAPDF()
+ *  y dispara la descarga automática al dispositivo del usuario. */
+
+function construirInputCapturasAPDF() {
+  const wrap = document.createElement("div");
+  wrap.className = "stack";
+  wrap.style.gap = "8px";
+
+  const inputImagenes = document.createElement("input");
+  inputImagenes.type = "file";
+  inputImagenes.accept = "image/*";
+  inputImagenes.multiple = true;
+  inputImagenes.className = "form-input";
+  wrap.appendChild(inputImagenes);
+
+  const btnConvertir = document.createElement("button");
+  btnConvertir.type = "button";
+  btnConvertir.className = "btn btn-secondary btn-block";
+  btnConvertir.textContent = "Convertir a PDF";
+  btnConvertir.addEventListener("click", async () => {
+    const archivos = inputImagenes.files;
+    if (!archivos || archivos.length === 0) {
+      mostrarToast("Primero selecciona una o varias fotos/capturas.");
+      return;
+    }
+    btnConvertir.disabled = true;
+    btnConvertir.textContent = "Convirtiendo…";
+    try {
+      await convertirCapturasAPDF(archivos);
+      mostrarToast("✓ PDF descargado — adjúntalo en la IA en vez de las fotos sueltas");
+    } catch (e) {
+      console.warn("No se pudo convertir las capturas a PDF.", e);
+      mostrarToast("No se pudo crear el PDF. Intenta de nuevo.");
+    } finally {
+      btnConvertir.disabled = false;
+      btnConvertir.textContent = "Convertir a PDF";
+    }
+  });
+  wrap.appendChild(btnConvertir);
+
+  return wrap;
 }
 
 /** Ajuste v4 #8: además de pegar el CSV como texto, se puede subir un
@@ -491,9 +619,11 @@ export {
   construirColumnasHoras,
   construirEncabezadoCSV,
   construirInputArchivoCSV,
+  construirInputCapturasAPDF,
   construirPanelImportacion,
   construirPromptImportacion,
   construirTextoInstruccionesImportacion,
+  convertirCapturasAPDF,
   copiarPromptImportacion,
   enviarPromptAChatGPT,
   enviarPromptAClaude,
