@@ -439,14 +439,14 @@ a { color: var(--accent-1); }
 .row { display: flex; align-items: center; gap: 10px; }
 .row-between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 
-/* v1.12: chips de Categorías — CSS Grid en vez del reparto en filas por JS
-   de v1.9.8. `grid-template-columns` se fija dinámicamente desde
-   plan-categorias.js (construirPanelCategorias) tras medir el chip más
-   ancho, así las columnas quedan parejas ("invisibles") sin importar
-   cuántos chips haya ni el tamaño relativo entre ellos — cada chip
-   conserva su ancho natural, nunca se estira. `justify-content:center`
-   centra la cuadrícula completa dentro de la tarjeta de Categorías cuando
-   no llena todo el ancho disponible. */
+/* v1.13: chips de Categorías — CSS Grid con reparto equitativo por filas
+   (nunca una fila casi vacía: 6→3+3, 11→4+4+3) y posición explícita de
+   cada chip (grid-row/grid-column, ver distribuirCategoriasEnGrid en
+   plan-categorias.js) para que las filas completas queden alineadas en
+   columnas de verdad — el ancho de cada columna es el del chip más ancho,
+   así ningún chip se estira. `grid-template-columns` se recalcula en
+   cada resize (depende de cuántos caben por fila). `justify-content:center`
+   centra la cuadrícula completa dentro de la tarjeta de Categorías. */
 .categorias-grid {
   display: grid;
   gap: 8px;
@@ -1155,6 +1155,19 @@ img, svg { max-width: 100%; }
   display: block;
   flex: 1 1 auto;
   min-width: 0; /* imprescindible para que el ellipsis funcione dentro de un flex item */
+  /* v1.13: el código (monoespaciado, 0.82rem) queda perfectamente centrado
+     con la luz porque ambos viven dentro de .materia-prefijo, que se
+     centra internamente (align-items:center). El nombre es una fuente
+     distinta (font-display, 700, más grande) y vive FUERA de ese prefijo,
+     como hijo directo de .materia-linea1 (align-items:flex-start) — con
+     métricas de línea distintas, su primera línea de texto queda un poco
+     más abajo que el centro real de la luz/código. `position:relative` con
+     un offset vertical no mueve nada horizontalmente ni afecta el layout
+     de sus hermanos (a diferencia de un margin-top, que sí lo haría), así
+     que es un ajuste puramente visual, parejo en todas las líneas si el
+     nombre se expande a varias. */
+  position: relative;
+  top: -3px;
 }
 /* Colapsada: trunca con "…" — este es el ÚNICO lugar del diseño de la
    tarjeta donde se usa recorte con puntos suspensivos (v1.9.8); en ningún
