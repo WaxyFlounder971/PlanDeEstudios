@@ -13,6 +13,13 @@
    última parametrizada con `modo`), pero ya no una única función de cuerpo
    completo — ver construirCuerpoDetalleMateria como punto de entrada que
    decide cuál armar.
+
+   v1.11 (SOLO modal): Bloque·Código y Categoría se separaron del "cuerpo"
+   (construirCuerpoDetalleModal) hacia una Línea 1 propia (construirLinea1Materia),
+   que ahora vive ANTES del título/Nombre en el DOM (#requisito-linea1 en
+   index.html, ver abrirModalRequisito) — antes quedaban después de la
+   Línea 3 (Estado/Horas/Créditos) y encima en 2 líneas separadas por bug.
+   Este cambio es exclusivo del modal; la tarjeta de lista no se toca.
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
@@ -92,6 +99,28 @@ function construirLineaCategoriaMateria(materia, plan) {
 }
 
 /**
+ * v1.11 — SOLO MODAL: Línea 1 del modal, "Bloque X · Código" (izquierda) y
+ * el badge de Categoría (derecha), ambos en la MISMA fila y centrados
+ * verticalmente entre sí (antes quedaban en 2 líneas separadas por bug).
+ * Si la materia no tiene categoría, construirLineaCategoriaMateria
+ * devuelve null y esta línea muestra solo el Bloque·Código, pegado a la
+ * izquierda (gracias a justify-content:space-between con un solo hijo).
+ * Exclusiva del modal: la tarjeta de lista no muestra esta línea.
+ */
+
+function construirLinea1Materia(materia, plan) {
+  const fila = document.createElement("div");
+  fila.className = "requisito-linea1";
+
+  fila.appendChild(construirMetaLineaMateria(materia, plan));
+
+  const lineaCategoria = construirLineaCategoriaMateria(materia, plan);
+  if (lineaCategoria) fila.appendChild(lineaCategoria);
+
+  return fila;
+}
+
+/**
  * B (v9)/v8 punto 2: fila final del bloque de detalle, con "Es requisito" y
  * "Historial" siempre juntos — y "Cerrar" solo cuando es el modal (en la
  * tarjeta expandida, cerrar es simplemente volver a hacer clic en la fila
@@ -106,7 +135,8 @@ function construirBotonesFinalesDetalle(materia, plan, opciones) {
 
   const btnEsRequisito = document.createElement("button");
   btnEsRequisito.type = "button";
-  btnEsRequisito.className = "link-plano";
+  // v1.11: mismo estilo que "Cerrar" (btn btn-primary) — ya no link de texto plano.
+  btnEsRequisito.className = "btn btn-primary";
   btnEsRequisito.textContent = "Es requisito";
   btnEsRequisito.addEventListener("click", (ev) => {
     ev.stopPropagation();
@@ -116,7 +146,8 @@ function construirBotonesFinalesDetalle(materia, plan, opciones) {
 
   const btnHistorial = document.createElement("button");
   btnHistorial.type = "button";
-  btnHistorial.className = "link-plano";
+  // v1.11: mismo estilo que "Cerrar" (btn btn-primary) — ya no link de texto plano.
+  btnHistorial.className = "btn btn-primary";
   btnHistorial.textContent = "Historial";
   btnHistorial.addEventListener("click", (ev) => {
     ev.stopPropagation();
@@ -297,10 +328,12 @@ function construirBloqueCompletoRequisitos(materia, plan) {
 }
 
 /**
- * B (v9)/v8 punto 2 — SOLO MODAL: arma todo lo que va debajo del encabezado
- * de 2 líneas — Bloque·Código → Categoría (si tiene) → Requisitos →
- * Correquisitos → fila final de botones ("Es requisito"/"Historial" como
- * links de texto + "Cerrar"). Desde v1.9.8 este layout ya NO lo comparte la
+ * B (v9)/v8 punto 2 — SOLO MODAL: arma lo que va debajo de la Línea 3
+ * (Estado/Horas/Créditos) — Requisitos → Correquisitos → fila final de
+ * botones ("Es requisito"/"Historial"/"Cerrar", los 3 como btn btn-primary).
+ * v1.11: Bloque·Código y Categoría ya NO se arman aquí — se movieron a su
+ * propia Línea 1, antes del título (ver construirLinea1Materia y
+ * abrirModalRequisito). Desde v1.9.8 este layout ya NO lo comparte la
  * tarjeta de lista (ver construirCuerpoDetalleTarjeta, más abajo) — quedó
  * exclusivo del modal.
  */
@@ -308,11 +341,6 @@ function construirBloqueCompletoRequisitos(materia, plan) {
 function construirCuerpoDetalleModal(materia, plan) {
   const cont = document.createElement("div");
   cont.className = "stack";
-
-  cont.appendChild(construirMetaLineaMateria(materia, plan));
-
-  const lineaCategoria = construirLineaCategoriaMateria(materia, plan);
-  if (lineaCategoria) cont.appendChild(lineaCategoria);
 
   cont.appendChild(construirBloqueCompletoRequisitos(materia, plan));
   cont.appendChild(construirBotonesFinalesDetalle(materia, plan, { esModal: true }));
@@ -428,6 +456,11 @@ function abrirModalRequisito(codigo) {
   const contenedorFinal = document.getElementById("requisito-contenedor-final");
   contenedorFinal.innerHTML = "";
 
+  // v1.11: Línea 1 (Bloque·Código + Categoría) vive fuera de contenedorFinal,
+  // antes del título — se limpia/rearma en cada apertura del modal.
+  const linea1Cont = document.getElementById("requisito-linea1");
+  linea1Cont.innerHTML = "";
+
   const encontrada = buscarMateriaPorCodigoEnPlanes(codigo);
 
   if (!encontrada) {
@@ -458,6 +491,9 @@ function abrirModalRequisito(codigo) {
     franja.style.background = categoria ? categoria.color : "var(--gradient-accent)";
     modalCard.insertBefore(franja, modalCard.firstChild);
 
+    // v1.11: Línea 1 (Bloque·Código + Categoría), antes del título.
+    linea1Cont.appendChild(construirLinea1Materia(materia, plan));
+
     // ---- Encabezado de 2 líneas (B/v8 punto 2), igual que en la tarjeta ----
     const luzTitulo = document.createElement("span");
     luzTitulo.className = "luz-punto " + (disponible ? "disponible" : "bloqueada");
@@ -470,9 +506,10 @@ function abrirModalRequisito(codigo) {
     // Línea 2: el modal siempre muestra el detalle completo (nunca compacto).
     contenedorFinal.appendChild(construirLinea2Materia(materia, false));
 
-    // Bloque·Código, Categoría, Requisitos, Correquisitos y la fila final de
-    // botones ("Es requisito"/"Historial"/"Cerrar") — diseño exclusivo del
-    // modal desde v1.9.8 (ver construirCuerpoDetalleModal).
+    // Requisitos, Correquisitos y la fila final de botones ("Es requisito"/
+    // "Historial"/"Cerrar") — diseño exclusivo del modal desde v1.9.8 (ver
+    // construirCuerpoDetalleModal). Bloque·Código/Categoría van aparte,
+    // en Línea 1 (ver arriba, construirLinea1Materia).
     contenedorFinal.appendChild(construirCuerpoDetalleMateria(materia, plan, { modo: "modal" }));
   }
 
@@ -573,6 +610,7 @@ export {
   construirCuerpoDetalleModal,
   construirCuerpoDetalleTarjeta,
   construirFilaRequisito,
+  construirLinea1Materia,
   construirLinea2Materia,
   construirLineaCategoriaMateria,
   construirMetaLineaMateria,
