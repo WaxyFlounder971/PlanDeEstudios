@@ -10,7 +10,7 @@ import { estado } from "../core/storage.js";
 import { parsearGrupoRequisitos } from "../core/utils.js";
 import { abrirConfirmacion } from "../ui/componentes.js";
 import { abrirModalCrearPlan } from "./plan-esquema.js";
-import { abrirModalInstruccionesImportacion, construirColumnasHoras, construirInputArchivoCSV, construirPromptImportacion, extraerMetadatosImportacion } from "./plan-importacion.js";
+import { abrirModalCapturasPDF, abrirModalInstruccionesImportacion, construirColumnasHoras, construirInputArchivoCSV, construirPromptImportacion, extraerMetadatosImportacion } from "./plan-importacion.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
 
 estado.modoActualizarMalla = "agregar";   // C.5 (v9): "agregar" | "reemplazar" — al reimportar CSV sobre un plan existente
@@ -279,7 +279,9 @@ function construirMiniPanelImportacion(plan) {
     btn.className = "pill-item" + (estado.modoImportacion === op.valor ? " active" : "");
     btn.textContent = op.texto;
     btn.addEventListener("click", () => {
-      estado.modoImportacion = op.valor;
+      // v1.10.1 (punto 4): igual que en el panel de importación inicial —
+      // presionar el modo ya activo lo desactiva y vuelve a "sin selección".
+      estado.modoImportacion = estado.modoImportacion === op.valor ? null : op.valor;
       renderizarPlanEstudios();
     });
     grupoModo.appendChild(btn);
@@ -324,9 +326,10 @@ function construirMiniPanelImportacion(plan) {
     sec.appendChild(notaModoActualizar);
   }
 
-  let inputLink = null;
+  // v1.10.1 (puntos 2/3/5/6): mismas notas/comportamiento por modo que el
+  // panel de importación inicial (construirPanelImportacion).
   if (estado.modoImportacion === "link") {
-    inputLink = document.createElement("input");
+    const inputLink = document.createElement("input");
     inputLink.type = "text";
     inputLink.className = "form-input";
     inputLink.placeholder = "https://tu-universidad.ac.cr/tu-plan-de-estudios";
@@ -341,119 +344,156 @@ function construirMiniPanelImportacion(plan) {
     avisoNavegacion.className = "muted";
     avisoNavegacion.textContent = "Este modo requiere que tu IA tenga activada la navegación web.";
     sec.appendChild(avisoNavegacion);
+
+    // Punto 6 (v1.10.1): mismo aviso de compatibilidad que en el panel de
+    // importación inicial — este modo no siempre funciona bien en todas las
+    // universidades/plataformas.
+    const avisoCompatibilidad = document.createElement("p");
+    avisoCompatibilidad.className = "muted";
+    avisoCompatibilidad.style.color = "var(--color-warning, #f59e0b)";
+    avisoCompatibilidad.textContent = "⚠️ Esta opción podría no ser compatible con algunos planes de estudios. Recomendamos usar la opción de PDF o la de adjuntar capturas de pantalla o imágenes.";
+    sec.appendChild(avisoCompatibilidad);
+  } else if (estado.modoImportacion === "pdf") {
+    const nota = document.createElement("p");
+    nota.className = "muted";
+    nota.textContent = "Vas a adjuntar tu PDF directamente en la ventana de Claude o ChatGPT que se abra.";
+    sec.appendChild(nota);
+  } else if (estado.modoImportacion === "capturas") {
+    // Puntos 3/5 (v1.10.1): igual que en el panel inicial — solo se ofrece
+    // el botón que abre la ventana flotante de conversión; al terminar, esa
+    // ventana autoselecciona "Adjuntar PDF" y este panel se vuelve a
+    // renderizar ya en ese modo.
+    const nota = document.createElement("p");
+    nota.className = "muted";
+    nota.textContent = "Primero hay que convertir tus capturas en un solo PDF antes de enviarlas a la IA.";
+    sec.appendChild(nota);
+
+    const btnAbrirConversion = document.createElement("button");
+    btnAbrirConversion.type = "button";
+    btnAbrirConversion.className = "btn btn-secondary btn-block";
+    btnAbrirConversion.textContent = "Convertir imágenes a PDF";
+    btnAbrirConversion.addEventListener("click", abrirModalCapturasPDF);
+    sec.appendChild(btnAbrirConversion);
   }
 
-  // v5 1.3: selector de IA destino + botón de envío deshabilitado si el
-  // modo es "link" y el campo está vacío.
-  const filaBotones = document.createElement("div");
-  filaBotones.className = "row";
-  const btnClaude = document.createElement("button");
-  btnClaude.id = "btn-enviar-import-claude";
-  btnClaude.className = "btn btn-primary";
-  btnClaude.style.flex = "1";
-  btnClaude.textContent = "Enviar a Claude";
-  btnClaude.addEventListener("click", () => {
-    const columnasHoras = construirColumnasHoras(plan.parametros_universidad.tipos_horas);
-    abrirModalInstruccionesImportacion(
-      estado.modoImportacion,
-      "claude",
-      construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras)
-    );
-  });
-  const btnChatGPT = document.createElement("button");
-  btnChatGPT.id = "btn-enviar-import-chatgpt";
-  btnChatGPT.className = "btn btn-secondary";
-  btnChatGPT.style.flex = "1";
-  btnChatGPT.textContent = "Enviar a ChatGPT";
-  btnChatGPT.addEventListener("click", () => {
-    const columnasHoras = construirColumnasHoras(plan.parametros_universidad.tipos_horas);
-    abrirModalInstruccionesImportacion(
-      estado.modoImportacion,
-      "chatgpt",
-      construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras)
-    );
-  });
-  filaBotones.appendChild(btnClaude);
-  filaBotones.appendChild(btnChatGPT);
-  sec.appendChild(filaBotones);
+  // Punto 4 (v1.10.1): sin modo elegido, o en modo "capturas" (donde primero
+  // hay que terminar la conversión), no tiene sentido mostrar los botones de
+  // enviar a la IA, el textarea del CSV, subir archivo, ni Importar.
+  const mostrarBloqueEnvioYCsv = estado.modoImportacion === "link" || estado.modoImportacion === "pdf";
 
-  const textarea = document.createElement("textarea");
-  textarea.className = "form-textarea";
-  textarea.rows = 6;
-  textarea.placeholder = "Pega aquí el CSV que te devolvió la IA…";
-  sec.appendChild(textarea);
-  sec.appendChild(construirInputArchivoCSV(textarea));
-
-  const resultado = document.createElement("div");
-  resultado.className = "stack";
-  sec.appendChild(resultado);
-
-  const btnImportar = document.createElement("button");
-  btnImportar.className = "btn btn-primary btn-block";
-  btnImportar.textContent = "Importar";
-  const ejecutarImportacionMalla = () => {
-    // v5 1.3: si la IA detectó carrera/código/universidad, se leen aquí
-    // (sin romperse si no vienen) — solo se usan para actualizar los datos
-    // de encabezado del plan si el usuario los dejó vacíos originalmente.
-    const { metadatos, csv } = extraerMetadatosImportacion(textarea.value);
-    if (metadatos.carrera && !plan.nombre_carrera) plan.nombre_carrera = metadatos.carrera;
-    if (metadatos.codigo_plan && !plan.codigo_plan) plan.codigo_plan = metadatos.codigo_plan;
-
-    // C.5 (v9): "Reemplazar" borra lo que había ANTES de aplicar el CSV
-    // nuevo; "Agregar" (default) combina por código como ya se hacía.
-    // C.4 (v9): "Reemplazar" también limpia las optativas disponibles
-    // pendientes — es un reinicio completo del plan a partir del CSV nuevo.
-    if (estado.modoActualizarMalla === "reemplazar") {
-      plan.materias = [];
-      plan.optativas_disponibles = [];
-    }
-
-    const { materias, electivas, errores } = parsearCSVPlanEstudios(csv, plan.parametros_universidad.tipos_horas);
-    materias.forEach((nueva) => {
-      const existente = plan.materias.find((m) => m.codigo === nueva.codigo);
-      if (existente) Object.assign(existente, nueva, { categoria_id: existente.categoria_id, estado: existente.estado });
-      else plan.materias.push(nueva);
+  if (mostrarBloqueEnvioYCsv) {
+    // v5 1.3: selector de IA destino + botón de envío deshabilitado si el
+    // modo es "link" y el campo está vacío.
+    const filaBotones = document.createElement("div");
+    filaBotones.className = "row";
+    const btnClaude = document.createElement("button");
+    btnClaude.id = "btn-enviar-import-claude";
+    btnClaude.className = "btn btn-primary";
+    btnClaude.style.flex = "1";
+    btnClaude.textContent = "Enviar a Claude";
+    btnClaude.addEventListener("click", () => {
+      const columnasHoras = construirColumnasHoras(plan.parametros_universidad.tipos_horas);
+      abrirModalInstruccionesImportacion(
+        estado.modoImportacion,
+        "claude",
+        construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras)
+      );
     });
-
-    // C.4 (v9): igual que en importarCSVEnPlan — una electiva nueva se
-    // agrega a "disponibles"; si ya estaba agregada formalmente o ya estaba
-    // en disponibles, se actualiza en su lugar en vez de duplicarse.
-    if (!Array.isArray(plan.optativas_disponibles)) plan.optativas_disponibles = [];
-    electivas.forEach((nueva) => {
-      const yaAgregada = plan.materias.some((m) => m.codigo === nueva.codigo);
-      if (yaAgregada) return;
-      const existenteDisponible = plan.optativas_disponibles.find((m) => m.codigo === nueva.codigo);
-      if (existenteDisponible) Object.assign(existenteDisponible, nueva);
-      else plan.optativas_disponibles.push(nueva);
+    const btnChatGPT = document.createElement("button");
+    btnChatGPT.id = "btn-enviar-import-chatgpt";
+    btnChatGPT.className = "btn btn-secondary";
+    btnChatGPT.style.flex = "1";
+    btnChatGPT.textContent = "Enviar a ChatGPT";
+    btnChatGPT.addEventListener("click", () => {
+      const columnasHoras = construirColumnasHoras(plan.parametros_universidad.tipos_horas);
+      abrirModalInstruccionesImportacion(
+        estado.modoImportacion,
+        "chatgpt",
+        construirPromptImportacion(estado.modoImportacion, estado.linkImportacion, columnasHoras)
+      );
     });
+    filaBotones.appendChild(btnClaude);
+    filaBotones.appendChild(btnChatGPT);
+    sec.appendChild(filaBotones);
 
-    marcarCambioPendiente();
-    resultado.innerHTML = errores.length
-      ? `<p class="muted" style="color:var(--color-danger);">Algunas filas no se pudieron importar:</p>` +
-        errores.map((e) => `<p class="muted" style="color:var(--color-danger);">• ${e}</p>`).join("")
-      : `<p class="muted" style="color:#34d399;">¡Listo! ${materias.length + electivas.length} materias procesadas.</p>`;
-    estado.panelImportacionAbierto = false;
-    renderizarPlanEstudios();
-  };
+    const textarea = document.createElement("textarea");
+    textarea.className = "form-textarea";
+    textarea.rows = 6;
+    textarea.placeholder = "Pega aquí el CSV que te devolvió la IA…";
+    sec.appendChild(textarea);
+    sec.appendChild(construirInputArchivoCSV(textarea));
 
-  btnImportar.addEventListener("click", () => {
-    if (!textarea.value.trim()) {
-      resultado.innerHTML = `<p class="muted" style="color:var(--color-danger);">Pega primero el CSV.</p>`;
-      return;
-    }
-    if (estado.modoActualizarMalla === "reemplazar" && plan.materias.length > 0) {
-      abrirConfirmacion({
-        titulo: "¿Reemplazar toda la malla?",
-        mensaje: "Vas a borrar todas las materias actuales de este plan (estados, notas y categorías incluidas) y sustituirlas por completo con el nuevo CSV. Esta acción no se puede deshacer.",
-        textoConfirmar: "Sí, reemplazar",
-        claseConfirmar: "btn-danger",
-        onConfirmar: ejecutarImportacionMalla,
+    const resultado = document.createElement("div");
+    resultado.className = "stack";
+    sec.appendChild(resultado);
+
+    const btnImportar = document.createElement("button");
+    btnImportar.className = "btn btn-primary btn-block";
+    btnImportar.textContent = "Importar";
+    const ejecutarImportacionMalla = () => {
+      // v5 1.3: si la IA detectó carrera/código/universidad, se leen aquí
+      // (sin romperse si no vienen) — solo se usan para actualizar los datos
+      // de encabezado del plan si el usuario los dejó vacíos originalmente.
+      const { metadatos, csv } = extraerMetadatosImportacion(textarea.value);
+      if (metadatos.carrera && !plan.nombre_carrera) plan.nombre_carrera = metadatos.carrera;
+      if (metadatos.codigo_plan && !plan.codigo_plan) plan.codigo_plan = metadatos.codigo_plan;
+
+      // C.5 (v9): "Reemplazar" borra lo que había ANTES de aplicar el CSV
+      // nuevo; "Agregar" (default) combina por código como ya se hacía.
+      // C.4 (v9): "Reemplazar" también limpia las optativas disponibles
+      // pendientes — es un reinicio completo del plan a partir del CSV nuevo.
+      if (estado.modoActualizarMalla === "reemplazar") {
+        plan.materias = [];
+        plan.optativas_disponibles = [];
+      }
+
+      const { materias, electivas, errores } = parsearCSVPlanEstudios(csv, plan.parametros_universidad.tipos_horas);
+      materias.forEach((nueva) => {
+        const existente = plan.materias.find((m) => m.codigo === nueva.codigo);
+        if (existente) Object.assign(existente, nueva, { categoria_id: existente.categoria_id, estado: existente.estado });
+        else plan.materias.push(nueva);
       });
-    } else {
-      ejecutarImportacionMalla();
-    }
-  });
-  sec.appendChild(btnImportar);
+
+      // C.4 (v9): igual que en importarCSVEnPlan — una electiva nueva se
+      // agrega a "disponibles"; si ya estaba agregada formalmente o ya estaba
+      // en disponibles, se actualiza en su lugar en vez de duplicarse.
+      if (!Array.isArray(plan.optativas_disponibles)) plan.optativas_disponibles = [];
+      electivas.forEach((nueva) => {
+        const yaAgregada = plan.materias.some((m) => m.codigo === nueva.codigo);
+        if (yaAgregada) return;
+        const existenteDisponible = plan.optativas_disponibles.find((m) => m.codigo === nueva.codigo);
+        if (existenteDisponible) Object.assign(existenteDisponible, nueva);
+        else plan.optativas_disponibles.push(nueva);
+      });
+
+      marcarCambioPendiente();
+      resultado.innerHTML = errores.length
+        ? `<p class="muted" style="color:var(--color-danger);">Algunas filas no se pudieron importar:</p>` +
+          errores.map((e) => `<p class="muted" style="color:var(--color-danger);">• ${e}</p>`).join("")
+        : `<p class="muted" style="color:#34d399;">¡Listo! ${materias.length + electivas.length} materias procesadas.</p>`;
+      estado.panelImportacionAbierto = false;
+      renderizarPlanEstudios();
+    };
+
+    btnImportar.addEventListener("click", () => {
+      if (!textarea.value.trim()) {
+        resultado.innerHTML = `<p class="muted" style="color:var(--color-danger);">Pega primero el CSV.</p>`;
+        return;
+      }
+      if (estado.modoActualizarMalla === "reemplazar" && plan.materias.length > 0) {
+        abrirConfirmacion({
+          titulo: "¿Reemplazar toda la malla?",
+          mensaje: "Vas a borrar todas las materias actuales de este plan (estados, notas y categorías incluidas) y sustituirlas por completo con el nuevo CSV. Esta acción no se puede deshacer.",
+          textoConfirmar: "Sí, reemplazar",
+          claseConfirmar: "btn-danger",
+          onConfirmar: ejecutarImportacionMalla,
+        });
+      } else {
+        ejecutarImportacionMalla();
+      }
+    });
+    sec.appendChild(btnImportar);
+  }
 
   setTimeout(actualizarEstadoBotonesEnvioImportacion, 0);
   return sec;
