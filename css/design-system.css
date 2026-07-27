@@ -438,6 +438,12 @@ a { color: var(--accent-1); }
 .stack { display: flex; flex-direction: column; gap: 14px; }
 .row { display: flex; align-items: center; gap: 10px; }
 .row-between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+/* v1.9.8: "Editar plan" + "Añadir materia" (barra de acciones del Plan de
+   Estudios) — el ancho idéntico entre ambos lo fuerza JS
+   (igualarAnchoBotones en plan-vista-lista.js) tras medir el layout real;
+   esta clase solo define el acomodo en fila. */
+.botones-editar-grupo { display: inline-flex; gap: 10px; flex-wrap: wrap; }
 .muted { color: var(--text-muted); font-size: 0.85rem; }
 
 /* =========================================================================
@@ -1083,17 +1089,25 @@ img, svg { max-width: 100%; }
   cursor: pointer;
   user-select: none;
 }
+/* v1.9.8 (reemplaza el enfoque de floats de v8/v9): la causa raíz del bug de
+   la flecha era que .materia-nombre (con overflow:hidden) creaba su propio
+   contexto de formato y "gastaba" todo el ancho disponible antes de que el
+   navegador supiera que la flecha (float:right, declarada después en el
+   DOM) iba a necesitar espacio — la empujaba a una 2da línea. Con flexbox
+   real, los 3 hijos (prefijo, nombre, flecha) reservan su espacio desde el
+   primer cálculo de layout: la flecha con ancho fijo según su contenido, el
+   nombre (flex:1) recibe exactamente lo que sobra. Esto también vuelve
+   innecesario el hack de padding-left/text-indent que usaba
+   .materia-nombre.completa (ver esa clase, más abajo): al ser el nombre su
+   PROPIA columna flex (no texto compartiendo flujo con un float), sus
+   líneas 2+ ya se alinean solas bajo la 1ra sin ningún cálculo manual ni
+   medido en JS. align-items:flex-start (no center) para que la flecha quede
+   anclada arriba, al nivel de la 1ra línea del nombre, sin importar a
+   cuántas líneas se expanda éste. */
 .materia-linea1 {
-  /* Bug 4 (v8): antes esto era un flex row con .materia-prefijo y
-     .materia-nombre-col como columnas separadas, y ADEMÁS .materia-nombre
-     tenía su propio padding-left/text-indent "de indentación colgante" —
-     pero como el prefijo ya era una columna flex aparte (no texto en el
-     mismo flujo), ese padding-left se sumaba de más y la 2da línea del
-     nombre quedaba desalineada (mucho más metida hacia la derecha que la
-     1ra). La indentación colgante real necesita que el prefijo flote
-     (float) dentro del MISMO flujo de texto que el nombre, no que viva en
-     una columna flex separada. */
-  display: block;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   min-width: 0;
   cursor: pointer;
 }
@@ -1105,43 +1119,47 @@ img, svg { max-width: 100%; }
   cursor: pointer; /* v8 punto 2 / B (v9): clic abre el detalle unificado */
 }
 .materia-codigo:hover { text-decoration: underline; }
-/* Prefijo (luz+código) de ancho FIJO, flotando a la izquierda del mismo
-   flujo de texto que el nombre — así la 2da línea del nombre (que ya no
-   tiene ningún float a su lado) se alinea exactamente bajo la 1ra gracias
-   al padding-left/text-indent de .materia-nombre.completa, calculado con
-   ese mismo ancho fijo (indentación colgante real, v8 Bug 4). `align-items:
-   center` centra el Código verticalmente respecto a la Luz (ajuste v9). */
+/* v1.9.8: ya no flota ni tiene un ancho fijo "a mano" (104px/78px según
+   breakpoint) — esa era justo la causa del desajuste que describía el punto
+   2 del prompt anterior. Ahora es un hijo flex más de .materia-linea1, con
+   flex-shrink:0 para que nunca se comprima, y su ancho lo decide el propio
+   navegador según su contenido real (luz + código), sin importar el ancho
+   de pantalla ni el tamaño de fuente — nunca vuelve a descalzar. */
 .materia-prefijo {
-  float: left;
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 104px;
-  height: 24px; /* altura de una línea de nombre, para que el float no "atrape" más de una línea */
+  flex-shrink: 0;
 }
-.materia-expandir { float: right; margin-left: 8px; opacity: 0.7; }
+/* v1.9.8: ya no flota — hijo flex de ancho fijo (según su propio contenido)
+   dentro de .materia-linea1, lo que evita que empuje el nombre a una 2da
+   línea (ver comentario de .materia-linea1). */
+.materia-expandir { flex-shrink: 0; opacity: 0.7; }
 .materia-nombre {
   font-family: var(--font-display);
   font-weight: 700;
   display: block;
+  flex: 1 1 auto;
+  min-width: 0; /* imprescindible para que el ellipsis funcione dentro de un flex item */
 }
-/* Colapsada: trunca con "…" (el float del prefijo ya reserva su espacio,
-   el texto lo rodea de forma nativa — sin necesidad de padding-left). */
+/* Colapsada: trunca con "…" — este es el ÚNICO lugar del diseño de la
+   tarjeta donde se usa recorte con puntos suspensivos (v1.9.8); en ningún
+   otro elemento nuevo de este rediseño (botones, nombres de requisito) se
+   usa "…". Al ser el nombre su propia columna flex con ancho ya resuelto
+   de antemano (ver .materia-linea1), el recorte siempre calza justo antes
+   de llegar a la flecha, sin importar el ancho de pantalla. */
 .materia-nombre.truncada {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Expandida: nombre completo, puede hacer wrap a varias líneas. La 1ra
-   línea fluye junto al float (sin indentación extra); las líneas
-   siguientes, al no tener ya el float al lado, usan el padding-left para
-   alinearse bajo la 1ra — el text-indent negativo evita que ESA 1ra línea
-   reciba ese mismo padding dos veces. 104px (ancho del prefijo) + 10px
-   (separación) = 114px. */
+/* v1.9.8: expandida, nombre completo con wrap normal a varias líneas — ya
+   NO necesita padding-left/text-indent "de indentación colgante" (ese hack
+   solo hacía falta cuando el prefijo compartía el mismo flujo de texto vía
+   float). Ahora el nombre es su propia columna flex, separada del prefijo,
+   así que sus líneas 2+ ya nacen alineadas bajo la 1ra de forma nativa. */
 .materia-nombre.completa {
   white-space: normal;
-  padding-left: 114px;
-  text-indent: -114px;
 }
 
 /* Línea 2: 3 zonas — Estado a la izquierda, Horas al centro (ocupa el
@@ -1166,6 +1184,48 @@ img, svg { max-width: 100%; }
 
 .materia-cuerpo { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-glass); }
 .materia-req-linea { text-align: left; color: var(--text-muted); font-size: 0.82rem; margin: 0; }
+
+/* ---- v1.9.8: cuerpo de la tarjeta de lista, exclusivo de este diseño (el
+   modal NO usa esto — sigue con su propio layout de 1 columna, ver
+   construirCuerpoDetalleModal en plan-detalle.js). Columna 1 (Requisitos/
+   Correquisitos) flexible; columna 2 (Categoría + 2 botones) de ancho fijo
+   según su propio contenido (`auto`) y anclada arriba a la derecha — nunca
+   cambia de tamaño ni posición sin importar cuánto contenido tenga la
+   columna 1, incluso en pantallas angostas (nunca se apilan). */
+.materia-cuerpo-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: start;
+}
+.materia-cuerpo-requisitos { min-width: 0; }
+.materia-cuerpo-acciones {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+/* "Es requisito"/"Historial": nunca se truncan con "…" (a diferencia del
+   nombre de la materia) — en vez de eso, display:inline-grid con
+   justify-items:stretch hace que ambos botones midan exactamente el ancho
+   del más largo entre los dos, sin JS: la única columna implícita del grid
+   se dimensiona al contenido más ancho (el propio inline-grid se encoge a
+   ese mismo ancho), y "stretch" hace que el más corto ocupe ese ancho
+   completo también. No tienen por qué medir igual que el badge de
+   Categoría (ese sigue su propio ancho natural) — solo un tamaño similar,
+   por eso comparten padding/font-size parecidos pero no idénticos al badge. */
+.materia-acciones-botones {
+  display: inline-grid;
+  justify-items: stretch;
+  gap: 6px;
+}
+.materia-acciones-botones .btn {
+  padding: 7px 14px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  text-align: center;
+}
 
 /* B (v9)/v8 punto 2: "Bloque X · Código", texto plano al 75% del tamaño
    del nombre de la materia (que usa font-size heredado del body, ~1rem). */
@@ -1212,6 +1272,14 @@ img, svg { max-width: 100%; }
   cursor: pointer;
 }
 .requisito-col-nombre:hover { text-decoration: underline; }
+/* v1.9.8: en la tarjeta de lista (no en el modal) el nombre del requisito
+   NUNCA se corta con "…" — el recorte con puntos suspensivos queda
+   reservado exclusivamente para el nombre de la materia en el encabezado.
+   Aquí, si no cabe ni una palabra del nombre, plan-detalle.js reemplaza el
+   texto por solo el código (ver programarAjusteAnchoRequisito); si cabe al
+   menos una palabra, se deja el texto normal y este text-overflow:clip
+   simplemente lo recorta de forma limpia, sin puntos, si aun así desborda. */
+.requisito-fila-tarjeta .requisito-col-nombre { text-overflow: clip; }
 .requisito-col-creditos {
   flex-shrink: 0;
   text-align: right;
@@ -1226,9 +1294,15 @@ img, svg { max-width: 100%; }
 }
 
 @media (max-width: 640px) {
-  .materia-prefijo { width: 78px; }
-  .materia-nombre.completa { padding-left: 88px; text-indent: -88px; }
   .materia-codigo { font-size: 0.72rem; }
+}
+
+@media (max-width: 480px) {
+  /* v1.9.8: en pantallas muy angostas la columna de acciones se mantiene
+     siempre a la derecha (nunca se apila) — solo se reduce un poco su
+     tamaño para dejarle más aire a la columna de Requisitos. */
+  .materia-cuerpo-grid { gap: 10px; }
+  .materia-acciones-botones .btn { font-size: 0.76rem; padding: 6px 10px; }
 }
 
 .requisito-fila-link {
