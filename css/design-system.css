@@ -1526,6 +1526,38 @@ img, svg { max-width: 100%; }
   margin-top: 4px;
 }
 
+/* ---- V1.10: filas de la tarjeta "Vista" ----
+   Cada línea (2, 3, 4) tiene hasta 2 elementos: uno anclado a la izquierda,
+   otro a la derecha. Juntos deben ocupar TODO el ancho disponible; si no
+   caben cómodos uno junto al otro, se pasan a 2 líneas (flex-wrap). */
+.vista-fila {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
+}
+.vista-fila > * { flex: 1 1 260px; min-width: 0; }
+/* El botón "Descargar" y el control de zoom no necesitan crecer tanto como
+   un pill-group completo — se quedan a su tamaño natural. */
+.vista-fila > .mapa-zoom-controles,
+.vista-fila > .btn { flex: 0 1 auto; }
+
+/* ---- V1.10: pill-group que NUNCA corta texto con "…" ----
+   A diferencia del .pill-item genérico (que trunca si no cabe), estos
+   botones conservan su ancho natural; si el conjunto no cabe en el grupo,
+   el propio .pill-group (ya es overflow-x:auto) se vuelve scrolleable en
+   vez de cortar las letras. Cuando SÍ hay espacio de sobra, los botones
+   crecen parejo para repartirse todo el ancho del grupo. */
+.pill-group-vista .pill-item {
+  flex: 1 1 0;
+  min-width: max-content;
+  overflow: visible;
+  text-overflow: unset;
+  white-space: nowrap;
+}
+
 .mapa-zoom-controles {
   display: flex;
   align-items: center;
@@ -1601,6 +1633,7 @@ img, svg { max-width: 100%; }
 
 .mapa-nodo {
   --nodo-color: #94a3b8;
+  --nodo-color-sombra: transparent;
   /* V10: fondo SÓLIDO (no --bg-panel, que es semitransparente en todas las
      paletas) para que el camino de desbloqueo nunca se vea "opacado" de
      forma rara al pasar detrás de una tarjeta. */
@@ -1616,6 +1649,8 @@ img, svg { max-width: 100%; }
   -webkit-user-select: none;
   transition: transform var(--transition-fast), box-shadow var(--transition-fast);
   position: relative;
+  /* Última instrucción V1.10: sombra sutil tintada según el color de borde activo. */
+  box-shadow: 0 4px 12px -4px var(--nodo-color-sombra);
 }
 .mapa-nodo::before {
   content: "";
@@ -1625,13 +1660,21 @@ img, svg { max-width: 100%; }
   border-radius: 50%;
   background: var(--nodo-color);
 }
-.mapa-nodo:hover { transform: translateY(-2px); box-shadow: var(--shadow-float); }
+.mapa-nodo:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px -4px var(--nodo-color-sombra), var(--shadow-float);
+}
+/* V1.10: línea 1 = luz (::before) + código + créditos. En modo normal/
+   compacto es un wrapper "invisible" (display:contents) y el código se ve
+   exactamente igual que antes; los créditos solo aparecen en "extendido". */
+.mapa-nodo-fila1 { display: contents; }
 .mapa-nodo-codigo {
   font-family: monospace;
   font-size: 0.7rem;
   color: var(--text-muted);
   padding-left: 14px;
 }
+.mapa-nodo-creditos { display: none; }
 .mapa-nodo-nombre {
   font-size: 0.78rem;
   line-height: 1.25;
@@ -1641,6 +1684,61 @@ img, svg { max-width: 100%; }
 .mapa-nodo-en-camino {
   box-shadow: 0 0 0 2px var(--nodo-color), 0 0 14px var(--nodo-color);
   transform: translateY(-1px);
+}
+
+/* ---- V1.10: tamaño de tarjeta (Compacto / Normal / Extendido) ---- */
+.mapa-wrapper[data-tamanio="compacto"] .mapa-columna { width: 133px; } /* 190px - 30% */
+.mapa-wrapper[data-tamanio="extendido"] .mapa-columna { width: 285px; } /* 190px + 50% */
+.mapa-wrapper[data-tamanio="extendido"] .mapa-nodo-fila1 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-left: 14px;
+}
+.mapa-wrapper[data-tamanio="extendido"] .mapa-nodo-fila1 .mapa-nodo-codigo { padding-left: 0; }
+.mapa-wrapper[data-tamanio="extendido"] .mapa-nodo-creditos {
+  display: inline;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ---- V1.10: tema SOLO del interior de las tarjetas del mapa (independiente
+   del tema general de la app) — muy simple, blanco+grises / negro+grises. ---- */
+.mapa-wrapper[data-tema-tarjeta="clara"] .mapa-nodo { background: #ffffff; }
+.mapa-wrapper[data-tema-tarjeta="clara"] .mapa-nodo-nombre { color: #18181b; }
+.mapa-wrapper[data-tema-tarjeta="clara"] .mapa-nodo-codigo,
+.mapa-wrapper[data-tema-tarjeta="clara"] .mapa-nodo-creditos { color: #52525b; }
+
+.mapa-wrapper[data-tema-tarjeta="oscura"] .mapa-nodo { background: #0b0b0d; }
+.mapa-wrapper[data-tema-tarjeta="oscura"] .mapa-nodo-nombre { color: #fafafa; }
+.mapa-wrapper[data-tema-tarjeta="oscura"] .mapa-nodo-codigo,
+.mapa-wrapper[data-tema-tarjeta="oscura"] .mapa-nodo-creditos { color: #a1a1aa; }
+
+/* ---- V1.10: "Tema default" al exportar el mapa como imagen — paleta
+   neutra temporal (blanco+grises en claro, negro+grises en oscuro), pisando
+   momentáneamente las variables de color mientras dura la captura. ---- */
+html.exportar-tema-default[data-mode="light"] {
+  --bg-canvas: #ffffff;
+  --bg-panel: #f4f4f5;
+  --border-glass: #d4d4d8;
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --text-muted: #71717a;
+  --accent-1: #71717a;
+  --accent-2: #52525b;
+}
+html.exportar-tema-default[data-mode="dark"] {
+  --bg-canvas: #000000;
+  --bg-panel: #18181b;
+  --border-glass: #3f3f46;
+  --text-primary: #fafafa;
+  --text-secondary: #d4d4d8;
+  --text-muted: #a1a1aa;
+  --accent-1: #a1a1aa;
+  --accent-2: #71717a;
 }
 
 /* ---- Efecto neón del camino de desbloqueo ---- */
