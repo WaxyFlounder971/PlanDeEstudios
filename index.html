@@ -313,11 +313,14 @@
 <!-- ===================== MODAL: Requisito / Correquisito (detalle unificado, v8 punto 2) ===================== -->
 <div id="modal-requisito" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
+    <!-- v1.11: Línea 1 (Bloque·Código + Categoría, en una sola fila) — va
+         ANTES del título/Nombre. Contenedor vacío, se llena dinámicamente
+         en plan-detalle.js (construirLinea1Materia). -->
+    <div id="requisito-linea1"></div>
     <h2 style="margin:0; display:flex; align-items:center;" id="requisito-titulo">Materia</h2>
-    <!-- Línea 2 (Estado · Horas · Créditos) y todo lo demás (Bloque·Código,
-         Categoría, Requisitos, Correquisitos, botones finales) se arman
-         dinámicamente en plan.js -- construirLinea2Materia()/construirCuerpoDetalleMateria()
-         -- para compartir exactamente el mismo diseño que la tarjeta. -->
+    <!-- Línea 3 (Estado · Horas · Créditos) y el cuerpo (Requisitos,
+         Correquisitos, botones finales) se arman dinámicamente en
+         plan-detalle.js -- construirLinea2Materia()/construirCuerpoDetalleMateria(). -->
     <div id="requisito-contenedor-final"></div>
   </div>
 </div>
