@@ -445,9 +445,13 @@
 
     <p id="error-modal-materia-manual" class="muted oculto" style="color:var(--color-danger);"></p>
 
-    <div class="row" style="justify-content:flex-end;">
-      <button id="btn-cancelar-materia-manual" class="btn btn-secondary">Cancelar</button>
-      <button id="btn-guardar-materia-manual" class="btn btn-primary">Guardar</button>
+    <div class="row-between">
+      <!-- v1.12: solo visible en modo edición (ver abrirModalMateriaManual) — al "+ Añadir materia" no hay nada que borrar todavía. -->
+      <button id="btn-borrar-materia-manual" class="btn btn-danger oculto">Borrar materia</button>
+      <div class="row" style="justify-content:flex-end;">
+        <button id="btn-cancelar-materia-manual" class="btn btn-secondary">Cancelar</button>
+        <button id="btn-guardar-materia-manual" class="btn btn-primary">Guardar</button>
+      </div>
     </div>
   </div>
 </div>
