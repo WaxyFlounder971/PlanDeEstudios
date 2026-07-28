@@ -242,25 +242,17 @@ function construirBarraAcciones() {
 
   // v1.9.8: Bloques y Materias van en 2 pills SEPARADAS (antes vivían juntas
   // en una sola pill con "·" de separador — eso era lo que se rompía en PC).
-  // v1.12.14: cada grupo va envuelto en un .toggle-envoltura, que agrega una
-  // etiqueta ("Bloques"/"Materias") CENTRADA por encima de su pill — esa
-  // etiqueta está oculta por defecto (así en PC/pantallas anchas no cambia
-  // nada) y solo se muestra cuando el propio texto de adentro del botón se
-  // esconde (ver el <style> en index.html, mismo breakpoint que ya
-  // ocultaba .pill-texto). Los botones en sí SIEMPRE muestran solo la
-  // flecha (▲/▼) en ese caso — es la etiqueta de arriba la que da el
-  // contexto de qué botones son esos, no el texto repetido dentro de cada
-  // uno (evita el problema de "no sé qué toco" sin duplicar la palabra).
+  // v1.12.13: ambas van dentro de un contenedor propio (.grupo-toggles-
+  // bloques-materias) para poder tratarlas como una unidad responsiva aparte
+  // de "Editar Materias" (grupoEdicion, más abajo) — ver el <style> en
+  // index.html: en pantallas angostas donde "Bloques ▲Bloques ▼ Materias
+  // ▲Materias ▼" ya no entra en una sola línea, primero se esconde SOLO la
+  // palabra (queda "▲ ▼") para ahorrar espacio sin romper el orden; si ni
+  // así entra, recién ahí se fuerza el salto de línea con cada grupo
+  // ocupando el 100% del ancho. En computadora (donde sí entra todo) esto
+  // no cambia nada — se ve exactamente igual que antes.
   const contenedorBloquesMaterias = document.createElement("div");
   contenedorBloquesMaterias.className = "grupo-toggles-bloques-materias";
-
-  const envolturaBloques = document.createElement("div");
-  envolturaBloques.className = "toggle-envoltura";
-
-  const etiquetaBloques = document.createElement("span");
-  etiquetaBloques.className = "toggle-etiqueta";
-  etiquetaBloques.textContent = "Bloques";
-  envolturaBloques.appendChild(etiquetaBloques);
 
   const grupoBloques = document.createElement("div");
   grupoBloques.className = "pill-group";
@@ -270,7 +262,6 @@ function construirBarraAcciones() {
   btnBloquesContraer.type = "button";
   btnBloquesContraer.className = "pill-item";
   btnBloquesContraer.innerHTML = `<span class="pill-texto">Bloques</span> ▲`;
-  btnBloquesContraer.title = "Contraer bloques";
   btnBloquesContraer.addEventListener("click", contraerTodosLosBloques);
   grupoBloques.appendChild(btnBloquesContraer);
 
@@ -278,20 +269,10 @@ function construirBarraAcciones() {
   btnBloquesExpandir.type = "button";
   btnBloquesExpandir.className = "pill-item";
   btnBloquesExpandir.innerHTML = `<span class="pill-texto">Bloques</span> ▼`;
-  btnBloquesExpandir.title = "Expandir bloques";
   btnBloquesExpandir.addEventListener("click", expandirTodosLosBloques);
   grupoBloques.appendChild(btnBloquesExpandir);
 
-  envolturaBloques.appendChild(grupoBloques);
-  contenedorBloquesMaterias.appendChild(envolturaBloques);
-
-  const envolturaMaterias = document.createElement("div");
-  envolturaMaterias.className = "toggle-envoltura";
-
-  const etiquetaMaterias = document.createElement("span");
-  etiquetaMaterias.className = "toggle-etiqueta";
-  etiquetaMaterias.textContent = "Materias";
-  envolturaMaterias.appendChild(etiquetaMaterias);
+  contenedorBloquesMaterias.appendChild(grupoBloques);
 
   const grupoMaterias = document.createElement("div");
   grupoMaterias.className = "pill-group";
@@ -301,7 +282,6 @@ function construirBarraAcciones() {
   btnMateriasContraer.type = "button";
   btnMateriasContraer.className = "pill-item";
   btnMateriasContraer.innerHTML = `<span class="pill-texto">Materias</span> ▲`;
-  btnMateriasContraer.title = "Contraer materias";
   btnMateriasContraer.addEventListener("click", contraerTodasLasMaterias);
   grupoMaterias.appendChild(btnMateriasContraer);
 
@@ -309,12 +289,10 @@ function construirBarraAcciones() {
   btnMateriasExpandir.type = "button";
   btnMateriasExpandir.className = "pill-item";
   btnMateriasExpandir.innerHTML = `<span class="pill-texto">Materias</span> ▼`;
-  btnMateriasExpandir.title = "Expandir materias";
   btnMateriasExpandir.addEventListener("click", expandirTodasLasMaterias);
   grupoMaterias.appendChild(btnMateriasExpandir);
 
-  envolturaMaterias.appendChild(grupoMaterias);
-  contenedorBloquesMaterias.appendChild(envolturaMaterias);
+  contenedorBloquesMaterias.appendChild(grupoMaterias);
 
   filaBotones.appendChild(contenedorBloquesMaterias);
 
