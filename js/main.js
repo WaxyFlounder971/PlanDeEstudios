@@ -14,7 +14,7 @@ import { obtenerIniciales } from "./core/utils.js";
 import { inicializarModalCategoria, inicializarModalCategoriaMaterias } from "./plan/plan-categorias.js";
 import { inicializarModalDesbloquea, inicializarModalHistorial, inicializarModalRequisito } from "./plan/plan-detalle.js";
 import { inicializarModalCrearPlan, inicializarModalMateriaManual, inicializarModalVincularOptativa } from "./plan/plan-esquema.js";
-import { inicializarModalGestionPlanes, renderizarModoHardcore, renderizarSelectorPlan } from "./plan/plan-gestionar.js";
+import { inicializarModalEditarPlanInfo, inicializarModalGestionPlanes, renderizarModoHardcore, renderizarSelectorPlan } from "./plan/plan-gestionar.js";
 import { inicializarModalCapturasPDF, inicializarModalInstruccionesImportacion } from "./plan/plan-importacion.js";
 import { inicializarResponsivoListaPlan, renderizarPlanEstudios } from "./plan/plan-vista-lista.js";
 import { abrirConfirmacion, agregarLongPress, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, restaurarEstadoSidebar } from "./ui/componentes.js";
@@ -224,18 +224,33 @@ window.addEventListener("DOMContentLoaded", () => {
  * con el de arriba) para no arriesgar el orden/las dependencias del
  * arranque de login mientras se migraba la estructura de archivos. */
 window.addEventListener("DOMContentLoaded", () => {
-  inicializarModalCrearPlan();
-  inicializarModalCategoria();
-  inicializarModalCategoriaMaterias();
-  inicializarModalMateriaManual();
-  inicializarModalVincularOptativa();
-  inicializarModalGestionPlanes();
-  inicializarModalDesbloquea();
-  inicializarModalInstruccionesImportacion();
-  inicializarModalCapturasPDF();
-  inicializarModalRequisito();
-  inicializarModalHistorial();
-  inicializarResponsivoListaPlan();
+  // v1.14.2: cada inicialización va en su propio try/catch — antes, un solo
+  // error en cualquiera de estas (ej. un id que no existe en el HTML) hacía
+  // que TODAS las que venían después de esa línea nunca se ejecutaran (un
+  // throw sin capturar corta el resto del bloque), rompiendo "la mayoría de
+  // los botones" por un solo bug puntual. Ahora, si una falla, se avisa en
+  // consola con su nombre y las demás igual se inicializan con normalidad.
+  [
+    inicializarModalCrearPlan,
+    inicializarModalCategoria,
+    inicializarModalCategoriaMaterias,
+    inicializarModalMateriaManual,
+    inicializarModalVincularOptativa,
+    inicializarModalGestionPlanes,
+    inicializarModalEditarPlanInfo,
+    inicializarModalDesbloquea,
+    inicializarModalInstruccionesImportacion,
+    inicializarModalCapturasPDF,
+    inicializarModalRequisito,
+    inicializarModalHistorial,
+    inicializarResponsivoListaPlan,
+  ].forEach((fn) => {
+    try {
+      fn();
+    } catch (e) {
+      console.error(`[main.js] Falló ${fn.name}() al inicializar — el resto de los modales se inicializó igual:`, e);
+    }
+  });
 });
 
 /* ------------------------------ Login ------------------------------ */
