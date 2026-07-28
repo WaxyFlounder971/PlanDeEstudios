@@ -245,20 +245,31 @@ function construirFilaRequisito(codigo, opciones) {
   fila.className = "requisito-fila" + (esTarjeta ? " requisito-fila-tarjeta" : "");
 
   const encontrada = buscarMateriaPorCodigoEnPlanes(codigo);
+  // v1.14.1: un requisito de texto libre (ej. "Bloque 9 completo", "90
+  // créditos aprobados" — ver regla 4a del prompt de importación) nunca es
+  // un código de materia real, así que buscarMateriaPorCodigoEnPlanes nunca
+  // lo va a encontrar — eso no es un error de datos, así que el mensaje no
+  // debe sonar como uno. Heurística simple: un código de materia real casi
+  // nunca trae espacios (ej. "CE-1234"); un requisito de texto libre sí.
+  const pareceTextoLibre = /\s/.test(codigo);
 
-  const colNombre = document.createElement("a");
-  colNombre.href = "#";
-  colNombre.className = "requisito-col-nombre link-plano";
+  const colNombre = document.createElement(pareceTextoLibre ? "span" : "a");
+  if (!pareceTextoLibre) colNombre.href = "#";
+  colNombre.className = "requisito-col-nombre" + (pareceTextoLibre ? "" : " link-plano");
   const textoNombre = encontrada
     ? `${codigo} - ${aplicarFormatoTexto(encontrada.materia.nombre)}`
+    : pareceTextoLibre
+    ? codigo
     : `${codigo} - (no encontrada en ningún plan visible)`;
   colNombre.title = textoNombre;
   colNombre.textContent = textoNombre;
-  colNombre.addEventListener("click", (ev) => {
-    ev.preventDefault();
-    ev.stopPropagation();
-    abrirModalRequisito(codigo);
-  });
+  if (!pareceTextoLibre) {
+    colNombre.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      abrirModalRequisito(codigo);
+    });
+  }
   fila.appendChild(colNombre);
 
   if (esTarjeta) {

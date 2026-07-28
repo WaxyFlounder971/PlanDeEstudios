@@ -143,47 +143,26 @@ function serializarRequisitoArbol(nodo) {
 }
 
 /**
- * v1.12.5: patrón de código autogenerado que el prompt de importación le pide
- * a la IA usar para cualquier espacio de electiva/optativa sin materia real
- * todavía (ej. "Electivo 1" dentro de un bloque numerado, o una fila de una
- * tabla aparte de "cursos optativos") — SIEMPRE con uno de estos dos prefijos
- * fijos, sin importar en qué idioma o con qué palabra lo llame el documento
- * original (ver la regla correspondiente en construirPromptImportacion,
- * plan-importacion.js). Es la única fuente de verdad para detectar estos
- * "espacios reservados", tanto en el texto crudo de una fila de CSV como en
- * una materia ya creada.
- */
-const PATRON_CODIGO_OPTATIVO = /^(OPT|ELEC)-/i;
-
-/** true si el string de Código (crudo, tal como viene en la fila del CSV,
- *  antes de crear la materia) parece un espacio reservado de electiva/
- *  optativa autogenerado por la IA. */
-function esFilaOptativa(codigoCrudo) {
-  return PATRON_CODIGO_OPTATIVO.test(String(codigoCrudo || "").trim());
-}
-
-/**
- * true si una materia YA creada (de un import, o ya viviendo en un bloque
- * numerado del plan) parece un espacio reservado de electiva/optativa sin
- * llenar todavía — mismo criterio que esFilaOptativa(), aplicado sobre
- * materia.codigo. La reutiliza plan-esquema.js (flujo "Vincular Optativa/
- * Electiva al plan") para listar los cupos existentes dentro de los bloques
- * numerados, en vez de duplicar la lógica de detección.
+ * true si una materia (de un import, o ya viviendo en un bloque numerado del
+ * plan) es un espacio reservado de electiva/optativa sin llenar todavía —
+ * v1.14.1: se basa ÚNICAMENTE en materia.sin_definir (columna SinDefinir del
+ * CSV), nunca en adivinar por el código. Antes se detectaba por un prefijo
+ * de código (OPT-/ELEC-) que la IA tenía que inventar incluso cuando el
+ * documento sí traía un código real para ese espacio — eso manipulaba datos
+ * reales de la fuente. Ahora el Código/Nombre nunca se tocan para esto; la
+ * reutiliza plan-esquema.js (flujo "Vincular Optativa/Electiva al plan").
  */
 function materiaPareceOptativa(materia) {
-  return !!materia && esFilaOptativa(materia.codigo);
+  return !!(materia && materia.sin_definir);
 }
 
 /**
- * v1.12.5: palabra ("electiva" u "optativa") que mejor describe este cupo,
- * derivada del prefijo de su código autogenerado (o, en su defecto, de su
- * nombre) — para que los textos de la UI usen la misma palabra que ya usa
- * el propio plan del usuario, en vez de hablar de "cupos" en genérico.
+ * v1.14.1: palabra ("electiva" u "optativa") que mejor describe este cupo,
+ * derivada SOLO del nombre (nunca del código, que ahora es siempre el dato
+ * real intacto) — puramente cosmético para la UI, nunca afecta datos. Si el
+ * nombre no da ninguna pista, cae en "optativa" por defecto.
  */
 function obtenerPalabraOptativa(materia) {
-  const codigo = String((materia && materia.codigo) || "").toUpperCase();
-  if (codigo.startsWith("ELEC-")) return "electiva";
-  if (codigo.startsWith("OPT-")) return "optativa";
   const nombre = String((materia && materia.nombre) || "").toLowerCase();
   if (/electiv/.test(nombre)) return "electiva";
   return "optativa";
@@ -249,13 +228,16 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
   // (índice 4), tantas como tiposHoras.length ya fijado para este plan.
   const idxHorasInicio = 4;
   const cantidadHoras = tipos.length;
-  const columnasEsperadas = 4 + cantidadHoras + 2; // Bloque,Codigo,Nombre,Creditos + horas + Requisitos,Correquisitos
+  // v1.14.1: +1 al final por la nueva columna SinDefinir (ver rule/columna
+  // nueva en construirEncabezadoCSV, plan-importacion.js) — reemplaza la
+  // detección por prefijo de código que existía antes.
+  const columnasEsperadas = 4 + cantidadHoras + 2 + 1; // Bloque,Codigo,Nombre,Creditos + horas + Requisitos,Correquisitos + SinDefinir
 
   const errores = [];
   // Aviso no-fatal (Parte C, punto 3): si el encabezado real trae una
   // cantidad de columnas de horas distinta a la esperada, no se falla en
   // silencio — se avisa y se sigue intentando parsear con lo que hay.
-  const cantidadHorasEnEncabezado = Math.max(0, encabezado.length - 6);
+  const cantidadHorasEnEncabezado = Math.max(0, encabezado.length - 7);
   if (cantidadHorasEnEncabezado !== cantidadHoras) {
     errores.push(
       `Aviso: se esperaban ${cantidadHoras} columna(s) de horas (${tipos.join(", ") || "ninguna"}) ` +
@@ -317,6 +299,9 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
     const columnasHorasFila = columnas.slice(idxHorasInicio, idxHorasInicio + cantidadHoras);
     const requisitos = columnas[idxHorasInicio + cantidadHoras];
     const correquisitos = columnas[idxHorasInicio + cantidadHoras + 1];
+    // v1.14.1: última columna — reemplaza la detección por prefijo de código.
+    const sinDefinirCruda = columnas[idxHorasInicio + cantidadHoras + 2];
+    const sinDefinir = /^\s*true\s*$/i.test(String(sinDefinirCruda || ""));
 
     if (!codigo || !nombre) {
       errores.push(`Fila ${numeroFila}: falta Código o Nombre.`);
@@ -343,6 +328,7 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
       requisitos: parsearRequisitoArbol(requisitos),
       correquisitos: parsearRequisitoArbol(correquisitos),
       esOptativa,
+      sinDefinir,
     });
 
     if (esOptativa) electivas.push(materiaCreada);
@@ -726,7 +712,6 @@ export {
   actualizarEstadoBotonesEnvioImportacion,
   construirMiniPanelImportacion,
   derivarTiposHorasDeHorasColumnas,
-  esFilaOptativa,
   importarCSVEnPlan,
   manejarClickImportar,
   materiaPareceOptativa,

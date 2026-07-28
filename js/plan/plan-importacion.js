@@ -53,7 +53,7 @@ function construirEncabezadoCSV(tiposHoras) {
   const columnasHoras = construirColumnasHoras(tiposHoras);
   const partes = ["Bloque", "Codigo", "Nombre", "Creditos"];
   if (columnasHoras) partes.push(columnasHoras);
-  partes.push("Requisitos", "Correquisitos");
+  partes.push("Requisitos", "Correquisitos", "SinDefinir");
   return partes.join(",");
 }
 
@@ -99,7 +99,16 @@ tipo diagrama de flujo, o en listado por bloques/ciclos/niveles/años/semestres.
 
 ${instruccionEntrada}
 
-=== PASO 1: METADATOS (antes del CSV, una línea por dato, solo si hay certeza) ===
+=== QUÉ DEVOLVER ===
+Todo tu resultado va DENTRO DE UN ÚNICO bloque de código plano (formato CSV) — nada de esto es
+opcional ni es un paso aparte: si algo queda fuera de ese bloque de código, se pierde por completo,
+porque de tu respuesta solo se copia el bloque de código, nunca el texto que pongas antes o después.
+No devuelvas texto explicativo antes o después del bloque (salvo el aviso de "hay más partes" de la
+regla 11, si aplica).
+
+Las PRIMERAS líneas de ese mismo bloque de código (nunca antes, nunca en un bloque separado) son los
+metadatos, una línea por dato, SOLO si tienes certeza de cada uno (si no estás seguro de alguno,
+simplemente omite esa línea puntual — nunca inventes un valor para rellenarla):
 CARRERA: ...
 CODIGO_PLAN: ...
 UNIVERSIDAD: ...
@@ -107,65 +116,44 @@ TIPO_TITULO: ... (Diplomado/Bachillerato/Licenciatura/Maestría/Doctorado, si se
 HORAS_COLUMNAS: lista separada por comas de los tipos de hora que usa ESTE documento específico,
   usando las siglas tal como aparecen (ej: T,P,L,EI,HT,HD  o  T,P,L,TP  o  Horas  o  T,P).
   Si el documento no maneja el concepto de horas en absoluto, escribe: HORAS_COLUMNAS: Ninguna
+  (detéctalas leyendo el propio documento — NO asumas que todas las universidades usan T/P/L/TP;
+  si no distingue tipos de hora y solo da un total, usa una sola columna "Horas")
 
-Detecta estas columnas leyendo el propio documento — NO asumas que todas las universidades usan
-T/P/L/TP. Si un documento no distingue tipos de hora y solo da un total, usa una sola columna "Horas".
+Inmediatamente después, EN EL MISMO BLOQUE DE CÓDIGO (sin línea en blanco de más ni separador), el
+encabezado y las filas de la malla, con esta estructura EXACTA:
 
-=== PASO 2: CSV ===
-IMPORTANTE — FORMATO DE TU RESPUESTA (esto rompe la app si no se sigue al pie de la letra):
-Tu respuesta completa debe ser SOLO el bloque de código (metadatos + CSV), y nada más — ni antes
-ni después. Esta app toma tu respuesta completa y la pega tal cual en un cuadro de texto para
-procesarla automáticamente: cualquier palabra fuera del bloque de código rompe la importación.
+Bloque,Codigo,Nombre,Creditos,[una columna por cada valor listado en HORAS_COLUMNAS],Requisitos,Correquisitos,SinDefinir
 
-PROHIBIDO en tu respuesta:
-- Frases de introducción como "Aquí está tu CSV:", "Claro, aquí tienes:", "He procesado el documento
-  y esto es lo que encontré:", o cualquier variante — arranca DIRECTO con el bloque de código.
-- Resúmenes, explicaciones, notas, advertencias o comentarios DESPUÉS del bloque de código (ej. nada
-  de "Nota: la materia X no tenía código así que...", "Espero que esto te sirva", etc.).
-- Texto fuera del bloque de código, en cualquier punto de la respuesta — ni una sola línea.
-- Preguntas de vuelta ("¿Quieres que revise algo más?") — si tenés dudas sobre un dato puntual,
-  resuélvelas usando "REVISAR" en la celda correspondiente (regla 9), nunca preguntando aparte.
-
-Devuélveme el bloque de código plano en formato CSV (con las líneas de metadatos antes, si las
-tienes) con esta estructura EXACTA:
-
-Bloque,Codigo,Nombre,Creditos,[una columna por cada valor listado en HORAS_COLUMNAS],Requisitos,Correquisitos
-
-(Si HORAS_COLUMNAS es "Ninguna", omite esas columnas del encabezado y de cada fila.)
+(Si HORAS_COLUMNAS es "Ninguna", omite esas columnas del encabezado y de cada fila. El resto de
+columnas, incluida SinDefinir al final, van SIEMPRE, sin excepción.)
 
 REGLAS:
 
 1. BLOQUE: número de nivel/ciclo/año/semestre/cuatrimestre convertido a un ENTERO SECUENCIAL único
    y creciente según el orden real en que se cursan (ej: si el documento organiza por "Año" y dentro
    por "Ciclo I/II", o por "Verano", cada uno de esos sub-bloques cronológicos es un número distinto:
-   no reinicies el conteo al cambiar de año). Si el documento usa nombres en vez de números,
-   conviértelo al secuencial correspondiente. Si no puedes determinarlo con certeza, escribe
-   "REVISAR".
-   - La secuencia normalmente arranca en 1, PERO si el documento mismo ya trae un "Bloque 0" /
-     "Nivel 0" / "Ciclo 0" real (típico de cursos de nivelación/propedéutico/precálculo antes del
-     primer semestre oficial), respeta ese 0 tal cual — NO lo renumeres a 1 ni corras el resto de
-     la secuencia para "empezar en 1". El 0 es un número de bloque válido en esta app.
+   1, 2, 3, 4... no reinicies el conteo al cambiar de año). Si el documento usa nombres en vez de
+   números, conviértelo al secuencial correspondiente. Si no puedes determinarlo con certeza,
+   escribe "REVISAR".
 
-2. CODIGO: la sigla/código tal como aparece en el documento. Si la materia es un espacio reservado
-   para una electiva/optativa sin materia real definida todavía (sin importar cómo la llame el
-   documento en su propio idioma: "Optativa", "Electivo 1", "Elective", "Wahlfach", "Cours au choix",
-   "Idioma Intensivo", etc.), genera SIEMPRE el código usando uno de estos dos prefijos fijos, nunca
-   otro, sin importar el idioma del documento:
-   - "ELEC-" + el número de Bloque, si el término original se acerca más a "electiva/elective" (ej: ELEC-B9)
-   - "OPT-" + el número de Bloque, si se acerca más a "optativa/optional" (ej: OPT-B7)
-   Si no puedes distinguir cuál de los dos aplica, usa "OPT-" por defecto. Esta regla existe para que
-   la app pueda reconocer estos espacios reservados de forma consistente sin importar el idioma o la
-   palabra exacta que use la universidad — el NOMBRE real que trae el documento (en su propio idioma,
-   ej. "Electivo 1", "Optional Course 1") se conserva tal cual en la columna Nombre; solo el CÓDIGO
-   sigue esta regla fija. Para cualquier otra materia con código real propio, usa ese código tal como
-   aparece, sin inventarlo ni traducirlo.
+2. CODIGO: SIEMPRE el código EXACTO tal como aparece en el documento — SIN EXCEPCIÓN, incluso si la
+   materia es un espacio reservado para una electiva/optativa sin contenido definido todavía (sin
+   importar cómo la llame el documento en su propio idioma: "Optativa", "Electivo 1", "Elective",
+   "Wahlfach", "Cours au choix", "Idioma Intensivo", etc.). NUNCA reemplaces, inventes, ni normalices
+   un código real que el documento sí trae — aunque sea el código de un espacio todavía sin materia
+   elegida — eso sería fabricar datos que no existen en la fuente. Marca estos espacios reservados
+   con la columna SinDefinir (regla 4b más abajo); el CÓDIGO real queda intacto siempre.
+   Solo si el documento genuinamente NO da ningún código para esa fila (ni siquiera uno administrativo/
+   interno), y necesitas escribir algo porque la columna no puede quedar vacía, usa "SD-B" + el número
+   de Bloque (ej: SD-B7) — ÚNICAMENTE en este caso de "no hay ningún código que preservar", nunca
+   cuando el documento sí trae uno, así sea genérico.
 
 3. HORAS: usa 0 si el documento no reporta ese tipo de hora para esa materia puntual — nunca dejes
    la celda vacía. Si el documento presenta las horas dentro de una cuadrícula gráfica (cajas de
    colores, diagramas tipo escalera, etc.) en vez de una tabla, extrae el mismo dato de cada caja
    como si fuera una fila de tabla.
 
-4. REQUISITOS y CORREQUISITOS — sintaxis para relaciones lógicas, SIN usar nunca coma "," dentro
+4a. REQUISITOS y CORREQUISITOS — sintaxis para relaciones lógicas, SIN usar nunca coma "," dentro
    de la celda (la coma rompe el CSV):
    - ";" separa requisitos que se necesitan TODOS (Y / AND).
    - "/" separa alternativas equivalentes dentro de un mismo requisito, incluyendo tanto
@@ -178,17 +166,16 @@ REGLAS:
      la fila antes de completar todas las columnas del encabezado).
    - Si el documento no maneja el concepto de "correquisitos" en absoluto, escribe igual "Ninguno"
      en esa columna para todas las filas (mantén la columna por consistencia del esquema).
-   - CASO ESPECIAL — requisito de BLOQUE/NIVEL/CICLO/AÑO completo, no de materias puntuales (ej.:
-     "Haber aprobado todas las materias del Bloque 9", "Requisito: Nivel III completo", "Requisitos:
-     Ver todos", "Correquisito: Semestre anterior aprobado"): esto NUNCA se deja como "REVISAR" ni se
-     escribe el nombre del bloque como si fuera un código — SIEMPRE se expande a la lista real de
-     TODOS los códigos de materias que vos mismo ubicaste en ese Bloque en este mismo CSV, unidos con
-     ";" (Y), exactamente como si el documento hubiera listado cada una por separado. Como generás el
-     CSV completo antes de responder, ya conocés todos los códigos de cualquier Bloque, sin importar
-     en qué orden aparezcan las filas. Ejemplo: si el Bloque 9 terminó con los códigos TI8902, TI8904,
-     TI8905, TI9805, TI9905 y una materia del Bloque 10 exige "todo el Bloque 9 aprobado", esa celda
-     de Requisitos debe quedar como "TI8902;TI8904;TI8905;TI9805;TI9905" — nunca como "Bloque 9",
-     "REVISAR", ni un texto descriptivo.
+   - Si un requisito/correquisito no es un código de materia sino una condición de nivel/bloque (ej.
+     "haber aprobado todo el Bloque 9", "tener 90 créditos aprobados"), escríbelo tal cual como texto
+     plano dentro de la celda (ej. "Bloque 9 completo", "90 créditos aprobados") — no inventes un
+     código de materia falso para representarlo, y no lo fuerces dentro de la sintaxis de códigos de
+     arriba; un texto libre como único contenido de la celda es válido.
+
+4b. SINDEFINIR (última columna, SIEMPRE presente): escribe exactamente "true" si esta fila es un
+   espacio reservado de electiva/optativa sin materia real elegida todavía (sin importar si tiene
+   código real o no — ver regla 2), o "false" para cualquier materia ya confirmada por el documento
+   (incluidas las electivas ya definidas de listados aparte, regla 8). Nunca dejes esta celda vacía.
 
 5. NOMBRE (y cualquier otra columna): si el nombre real de la materia trae una coma
    (ej. "Ética, Persona y Sociedad"), envuelve ESA CELDA completa entre comillas dobles.
@@ -199,11 +186,10 @@ REGLAS:
    trabajos finales de graduación y cursos de nivelación/precálculo (aunque tengan 0 créditos).
 8. Si el documento incluye tablas separadas de "cursos optativos" o "electivas disponibles" fuera
    de la malla principal, inclúyelas también, usando como Bloque el ciclo donde se indica que se
-   puede cursar esa optativa (o "REVISAR" si no se especifica).
+   puede cursar esa optativa (o "REVISAR" si no se especifica). Estas ya son materias reales y
+   definidas (tienen código y nombre propios) — van con SinDefinir=false.
 9. Si una celda es ilegible, ambigua, o no puedes confirmarla con certeza, escribe "REVISAR" en
    vez de inventar un dato — nunca inventes códigos, créditos u horas que no estén en el documento.
-   Excepción: un requisito/correquisito que referencia un Bloque/Nivel/Ciclo completo NO es un caso
-   de "REVISAR" — se expande siempre a la lista de códigos, según la regla 4.
 10. Ignora tablas resumen de totales generales (ej. "Créditos totales de la carrera: 448") — esas
     no son filas de materias, son metadatos de resumen y no van en el CSV.
 11. Si el plan es tan grande que no te cabe en una sola respuesta, divídelo en varias respuestas
@@ -212,14 +198,7 @@ REGLAS:
     datos, en el mismo orden del plan, SIN repetir el encabezado ni los metadatos — esta app arma el
     CSV final pegando las partes una tras otra en el mismo cuadro de texto, en orden, así que un
     encabezado repetido en medio se leería como si fuera una materia más (rompe la importación).
-    Esta es la ÚNICA excepción a la regla de "nada de texto fuera del bloque de código": podés avisar
-    que faltan más partes, pero ese aviso va DESPUÉS de cerrar el bloque de código de esa respuesta
-    (nunca mezclado adentro), en una frase corta y clara (ej. "Esto fue la parte 1 de 3, decime
-    'continuá' y te mando el resto"), para que el usuario sepa qué copiar (solo lo de adentro del
-    bloque de código) y qué esperar después.
-
-RECORDATORIO FINAL: tu respuesta es SOLO el bloque de código (metadatos + CSV) — sin saludo, sin
-introducción, sin resumen al final. Nada de texto fuera del bloque de código.`;
+    Avisa igual entre una parte y otra que hay más por venir, para que el usuario sepa que faltan.`;
 }
 
 /** Lee las líneas opcionales CARRERA:/CODIGO_PLAN:/UNIVERSIDAD:/TIPO_TITULO:/
@@ -285,7 +264,6 @@ function construirTextoInstruccionesImportacion(destino) {
     "Cuando estés en el chat, pega el prompt que se guardó en tu portapapeles.",
     "Adjunta el tipo de archivo que habías elegido.",
     "Guarda bien la respuesta que te entregue la IA para traerla de vuelta a esta página.",
-    "⚠️ Las IAs pueden cometer errores al leer tu plan — cuando termines de importar, revisá que no falte ninguna materia y que los requisitos estén bien.",
   ].join("\n\n");
 }
 
@@ -294,13 +272,10 @@ function construirPanelImportacion() {
   const sec = document.createElement("section");
   sec.className = "glass-card stack";
 
-  // v1.14.2: antes había un único flujo lineal (pill universidad → separador
-  // → "Empezar en blanco" → separador → modo de importación). Ahora son 2
-  // grupos claramente separados: "Crear plan de cero" (arriba, con el botón
-  // a todo el ancho) e "Importar tu Plan de Estudios" (abajo, tal cual
-  // funcionaba antes — mismo título, mismos pills, mismo flujo). El selector
-  // Principal/Secundario (modo hardcore) queda arriba de ambos porque aplica
-  // a los dos por igual.
+  const titulo = document.createElement("h2");
+  titulo.style.margin = "0";
+  titulo.textContent = "Importar tu Plan de Estudios";
+  sec.appendChild(titulo);
 
   // v1.10.1 (punto 1): cuando este panel se muestra para agregar un plan
   // ADICIONAL (ya existe al menos uno activo), se ofrece volver atrás sin
@@ -355,55 +330,24 @@ function construirPanelImportacion() {
   // legado hasta terminar de limpiar su uso en plan-esquema.js (el modal
   // "Nuevo Plan" que crea el plan tras pegar el CSV).
 
-  // v1.14.1/v1.14.2: antes, la ÚNICA forma de crear un plan era importando un
-  // CSV (abrirModalCrearPlan solo se llamaba desde manejarClickImportar, tras
+  // v1.14.1: antes, la ÚNICA forma de crear un plan era importando un CSV
+  // (abrirModalCrearPlan solo se llamaba desde manejarClickImportar, tras
   // pegar/procesar un CSV). Ahora también se puede saltar la importación por
-  // completo y arrancar con un plan vacío, para armarlo materia por materia.
-  // Este es su propio grupo, separado del de importar: primero se pide el
-  // nombre/universidad del plan (modal-crear-plan, sin cambios), y apenas se
-  // confirma ese modal se abre DE UNA VEZ el modal de "+ Añadir materia"
-  // (estado.abrirAgregarMateriaTrasCrearPlan, ver plan-esquema.js) — así el
-  // usuario no tiene que ir a buscar el botón afuera para la primera materia.
-  const tituloCrear = document.createElement("h2");
-  tituloCrear.style.margin = "0";
-  tituloCrear.textContent = "Crear plan de cero";
-  sec.appendChild(tituloCrear);
-
-  const btnAgregarMateria = document.createElement("button");
-  btnAgregarMateria.type = "button";
-  btnAgregarMateria.className = "btn btn-secondary btn-block";
-  btnAgregarMateria.textContent = "+ Añadir materia";
-  btnAgregarMateria.addEventListener("click", () => {
-    estado.abrirAgregarMateriaTrasCrearPlan = true;
+  // completo y arrancar con un plan vacío, para armarlo materia por materia
+  // con "+ Agregar materia" (abrirModalMateriaManual, ver plan-esquema.js).
+  const btnEmpezarEnBlanco = document.createElement("button");
+  btnEmpezarEnBlanco.type = "button";
+  btnEmpezarEnBlanco.className = "btn btn-secondary btn-block";
+  btnEmpezarEnBlanco.textContent = "✏️ Empezar en blanco (agregar materias a mano)";
+  btnEmpezarEnBlanco.addEventListener("click", () => {
     abrirModalCrearPlan(estado.planImportandoId === "secundario", null);
   });
-  sec.appendChild(btnAgregarMateria);
+  sec.appendChild(btnEmpezarEnBlanco);
 
-  const separadorGrupos = document.createElement("p");
-  separadorGrupos.className = "muted";
-  separadorGrupos.textContent = "— o, si ya tenés tu plan armado —";
-  sec.appendChild(separadorGrupos);
-
-  // ---- Grupo: Importar tu Plan de Estudios (sin cambios de contenido/flujo,
-  // solo ahora es su propio grupo con encabezado propio en vez de compartir
-  // el título general del panel) ----
-  const tituloImportar = document.createElement("h2");
-  tituloImportar.style.margin = "0";
-  tituloImportar.textContent = "Importar tu Plan de Estudios";
-  sec.appendChild(tituloImportar);
-
-  // v1.14.3: aviso siempre visible (no depende del modo elegido) — una IA
-  // puede cometer errores al leer el documento (materias salteadas,
-  // requisitos mal detectados, etc.), así que se le avisa al usuario desde
-  // el principio que revise el resultado, en vez de asumir que quedó 100%
-  // correcto solo porque "lo hizo la IA".
-  const avisoErroresIA = document.createElement("p");
-  avisoErroresIA.className = "muted";
-  avisoErroresIA.style.color = "var(--color-warning, #f59e0b)";
-  avisoErroresIA.textContent =
-    "⚠️ Importar con IA está sujeto a errores (materias faltantes, requisitos mal detectados, etc.). " +
-    "Te recomendamos revisar que el plan haya quedado completo una vez importado.";
-  sec.appendChild(avisoErroresIA);
+  const separador = document.createElement("p");
+  separador.className = "muted";
+  separador.textContent = "— o, si preferís, traé tu plan ya hecho —";
+  sec.appendChild(separador);
 
   // ---- Modo de importación: Link / PDF / Capturas ----
   const etiquetaModo = document.createElement("span");
@@ -415,7 +359,7 @@ function construirPanelImportacion() {
   grupoModo.className = "pill-group";
   [
     { valor: "link", texto: "Pegar link" },
-    { valor: "pdf", texto: "Adjuntar PDF" },
+    { valor: "pdf", texto: "Adjuntar PDF/Imagen" },
     { valor: "capturas", texto: "Tomar capturas" },
   ].forEach((op) => {
     const btn = document.createElement("button");
@@ -455,12 +399,12 @@ function construirPanelImportacion() {
     const avisoCompatibilidad = document.createElement("p");
     avisoCompatibilidad.className = "muted";
     avisoCompatibilidad.style.color = "var(--color-warning, #f59e0b)";
-    avisoCompatibilidad.textContent = "⚠️ Esta opción podría no ser compatible con algunos planes de estudios. Recomendamos usar la opción de PDF o la de adjuntar capturas de pantalla o imágenes.";
+    avisoCompatibilidad.textContent = "⚠️ Esta es la opción MÁS FRÁGIL de las tres — rara vez funciona bien, porque depende de que la IA pueda navegar y leer la página tal cual la ves vos. Si no te funciona (o el resultado sale incompleto/mal), no insistas: probá con \"Adjuntar PDF/Imagen\" o \"Tomar capturas\" en su lugar — casi siempre resuelven lo que el link no pudo.";
     sec.appendChild(avisoCompatibilidad);
   } else if (estado.modoImportacion === "pdf") {
     const nota = document.createElement("p");
     nota.className = "muted";
-    nota.textContent = "Vas a adjuntar tu PDF directamente en la ventana de Claude o ChatGPT que se abra.";
+    nota.textContent = "Vas a adjuntar tu PDF o imagen (todo el plan completo, en máximo 4 imágenes) directamente en la ventana de Claude o ChatGPT que se abra.";
     sec.appendChild(nota);
   } else if (estado.modoImportacion === "capturas") {
     // v1.10.1 (puntos 3/5): ya no se muestra el input de imágenes ni el botón
@@ -470,18 +414,6 @@ function construirPanelImportacion() {
     nota.className = "muted";
     nota.textContent = "Primero hay que convertir tus capturas en un solo PDF antes de enviarlas a la IA.";
     sec.appendChild(nota);
-
-    // v1.14.3: las capturas tomadas desde PC (recorte de pantalla, tecla
-    // "Imprimir pantalla", etc.) suelen salir en baja resolución y la IA
-    // termina leyendo mal números y códigos pequeños — un celular normal
-    // saca fotos/capturas de mucha más calidad para este uso.
-    const avisoCalidadCapturas = document.createElement("p");
-    avisoCalidadCapturas.className = "muted";
-    avisoCalidadCapturas.style.color = "var(--color-warning, #f59e0b)";
-    avisoCalidadCapturas.textContent =
-      "📱 Se recomienda tomar las capturas desde el celular — las capturas hechas desde PC suelen " +
-      "salir en baja calidad y eso hace que la IA lea mal los datos.";
-    sec.appendChild(avisoCalidadCapturas);
 
     const btnAbrirConversion = document.createElement("button");
     btnAbrirConversion.type = "button";
@@ -674,7 +606,7 @@ async function convertirCapturasAPDF(archivos) {
  * imágenes a PDF" del panel abre este modal aparte; al convertir con éxito
  * usa el overlay de carga global (mostrarCargando/ocultarCargando, las
  * mismas bolitas que ya existen para el resto de la app) y, al terminar,
- * autoselecciona el modo "Adjuntar PDF" para que el usuario siga el flujo
+ * autoselecciona el modo "Adjuntar PDF/Imagen" para que el usuario siga el flujo
  * normal desde ahí (adjuntar el PDF recién descargado). */
 
 function abrirModalCapturasPDF() {
@@ -713,7 +645,7 @@ function inicializarModalCapturasPDF() {
     mostrarCargando();
     try {
       const { imagenesBajaResolucion } = await convertirCapturasAPDF(archivos);
-      // Puntos 3/5: autoselecciona "Adjuntar PDF" — el usuario ya tiene el
+      // Puntos 3/5: autoselecciona "Adjuntar PDF/Imagen" — el usuario ya tiene el
       // PDF descargado y solo falta que lo adjunte en la IA.
       estado.modoImportacion = "pdf";
       renderizarPlanEstudios();
@@ -724,7 +656,7 @@ function inicializarModalCapturasPDF() {
         // el PDF, mencionando cuáles, para que las vuelva a tomar mejor.
         mostrarToast(`✓ PDF descargado — ojo: ${imagenesBajaResolucion.length === 1 ? `"${imagenesBajaResolucion[0]}" quedó` : `${imagenesBajaResolucion.length} imágenes quedaron`} en baja resolución, puede costar leerlas bien`);
       } else {
-        mostrarToast('✓ PDF descargado — se seleccionó "Adjuntar PDF", adjúntalo ahí');
+        mostrarToast('✓ PDF descargado — se seleccionó "Adjuntar PDF/Imagen", adjúntalo ahí');
       }
     } catch (e) {
       console.warn("No se pudo convertir las capturas a PDF.", e);
