@@ -132,6 +132,16 @@ function renderizarListaGestionPlanes() {
     const derecha = document.createElement("div");
     derecha.className = "row";
 
+    // v1.14.1: editar nombre de carrera/universidad/código/tipo de título de
+    // este plan puntual — no cambia su estructura académica (bloques, tipos
+    // de horas), solo los datos de cabecera. Ver abrirModalEditarPlanInfo.
+    const btnEditarInfo = document.createElement("button");
+    btnEditarInfo.className = "btn btn-secondary";
+    btnEditarInfo.title = "Editar nombre de la carrera, universidad, etc.";
+    btnEditarInfo.textContent = "✏️";
+    btnEditarInfo.addEventListener("click", () => abrirModalEditarPlanInfo(plan));
+    derecha.appendChild(btnEditarInfo);
+
     const btnEliminar = document.createElement("button");
     btnEliminar.className = "btn btn-danger";
     btnEliminar.textContent = "Eliminar";
@@ -246,9 +256,73 @@ function inicializarModalGestionPlanes() {
   });
 }
 
+/* ===================== v1.14.1 — Editar info de la carrera ===================== *
+ * Lapicito por fila en Gestionar Planes: edita SOLO los datos de cabecera
+ * (nombre_carrera, universidad, codigo_plan, tipo_titulo) de un plan que ya
+ * existe — nunca su estructura académica (bloques, tipos de horas, etc.),
+ * eso sigue viviendo en Crear Plan / la importación. */
+
+estado.editarPlanInfoId = null; // qué plan.id está abierto en este modal
+
+function abrirModalEditarPlanInfo(plan) {
+  estado.editarPlanInfoId = plan.id;
+  document.getElementById("input-editar-plan-nombre-carrera").value = plan.nombre_carrera || "";
+  document.getElementById("input-editar-plan-universidad").value = plan.universidad || "";
+  document.getElementById("input-editar-plan-codigo").value = plan.codigo_plan || "";
+  document.getElementById("input-editar-plan-tipo-titulo").value = plan.tipo_titulo || "";
+  document.getElementById("error-editar-plan-info").classList.add("oculto");
+  document.getElementById("modal-editar-plan-info").classList.remove("oculto");
+}
+
+function cerrarModalEditarPlanInfo() {
+  estado.editarPlanInfoId = null;
+  document.getElementById("modal-editar-plan-info").classList.add("oculto");
+}
+
+function inicializarModalEditarPlanInfo() {
+  document.getElementById("btn-cancelar-editar-plan-info").addEventListener("click", cerrarModalEditarPlanInfo);
+  document.getElementById("modal-editar-plan-info").addEventListener("click", (e) => {
+    if (e.target.id === "modal-editar-plan-info") cerrarModalEditarPlanInfo();
+  });
+
+  document.getElementById("btn-guardar-editar-plan-info").addEventListener("click", () => {
+    const plan = estado.datos.planes_estudio.find((p) => p.id === estado.editarPlanInfoId);
+    const error = document.getElementById("error-editar-plan-info");
+    if (!plan) {
+      cerrarModalEditarPlanInfo();
+      return;
+    }
+
+    const nombreCarrera = document.getElementById("input-editar-plan-nombre-carrera").value.trim();
+    const universidad = document.getElementById("input-editar-plan-universidad").value.trim();
+    const codigoPlan = document.getElementById("input-editar-plan-codigo").value.trim();
+    const tipoTitulo = document.getElementById("input-editar-plan-tipo-titulo").value.trim();
+
+    if (!nombreCarrera || !universidad) {
+      error.textContent = "El nombre de la carrera y la universidad son obligatorios.";
+      error.classList.remove("oculto");
+      return;
+    }
+
+    plan.nombre_carrera = nombreCarrera;
+    plan.universidad = universidad;
+    plan.codigo_plan = codigoPlan || null;
+    plan.tipo_titulo = tipoTitulo || null;
+
+    marcarCambioPendiente();
+    cerrarModalEditarPlanInfo();
+    renderizarListaGestionPlanes();
+    renderizarSelectorPlan();
+    renderizarModoHardcore();
+    renderizarPlanEstudios();
+  });
+}
+
 export {
+  abrirModalEditarPlanInfo,
   abrirModalGestionPlanes,
   eliminarPlanEstudio,
+  inicializarModalEditarPlanInfo,
   inicializarModalGestionPlanes,
   renderizarListaGestionPlanes,
   renderizarModoHardcore,
