@@ -297,6 +297,14 @@ function crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, tipo_titul
     // estén aquí. Se mueven a `materias` (con es_optativa:true) al hacer
     // clic en "Agregar al plan de estudios".
     optativas_disponibles: [],
+    // v1.12.15: mismo mecanismo que optativas_disponibles, pero para
+    // materias que el import NO pudo ubicar en un bloque numérico claro Y
+    // que tampoco parecen optativa/electiva (bloque "REVISAR" que la IA
+    // escribe cuando no tiene certeza) — viven fuera de `materias` a
+    // propósito, así tampoco cuentan en ningún total mientras estén aquí.
+    // Se mueven a `materias` (con un bloque numerado real) al vincularlas
+    // desde el bloque especial "Revisar" (ver plan-esquema.js).
+    materias_revisar: [],
   };
 }
 
@@ -377,6 +385,9 @@ function migrarDatosAntiguos(datos) {
     // C.4 (v9): planes creados antes de esta versión no tienen este arreglo
     // — se rellena vacío para que push()/filter() nunca truene con undefined.
     if (!Array.isArray(plan.optativas_disponibles)) plan.optativas_disponibles = [];
+    // v1.12.15: mismo relleno defensivo para planes creados antes de que
+    // existiera el bloque especial "Revisar".
+    if (!Array.isArray(plan.materias_revisar)) plan.materias_revisar = [];
 
     const params = plan.parametros_universidad || (plan.parametros_universidad = {});
     const esFormatoViejo = typeof params.horas_detalladas === "boolean" && !Array.isArray(params.tipos_horas);
