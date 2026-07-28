@@ -572,28 +572,51 @@
    ancho), disparando las dos reglas A LA VEZ y rompiendo el orden (Materias
    se apilaba encima de Bloques en vez de quedar a su derecha). Se reemplaza
    por un wrap NATURAL de flexbox (flex-basis con crecimiento) — sin ningún
-   breakpoint fijo: cada .pill-group (Bloques / Materias) pide un mínimo
-   razonable y crece para repartirse el ancho; si ambos entran en la fila,
-   quedan lado a lado (Bloques primero, Materias a su derecha); si no entran
-   ambos, el navegador solo pasa a Materias a la fila siguiente, y como ahí
-   queda solo, su flex-grow lo estira a ocupar todo el ancho disponible —
-   esto se ajusta solo a CUALQUIER ancho real de pantalla, sin adivinar un
-   pixel exacto de corte. La palabra ("Bloques"/"Materias") se esconde por
-   separado en pantallas angostas para dejarle más margen a que quepan
-   lado a lado antes de necesitar el salto de línea. */
+   breakpoint fijo: cada .toggle-envoltura (Bloques / Materias) pide un
+   mínimo razonable y crece para repartirse el ancho; si ambos entran en la
+   fila, quedan lado a lado (Bloques primero, Materias a su derecha); si no
+   entran ambos, el navegador solo pasa a Materias a la fila siguiente, y
+   como ahí queda solo, su flex-grow lo estira a ocupar todo el ancho
+   disponible — esto se ajusta solo a CUALQUIER ancho real de pantalla, sin
+   adivinar un pixel exacto de corte.
+
+   v1.12.15 (opción B del prompt): cada .toggle-envoltura ahora es
+   etiqueta + pill juntas como una sola unidad que crece/envuelve (antes
+   solo era el .pill-group). La etiqueta ("Bloques"/"Materias") va CENTRADA
+   por encima de su pill y está OCULTA por defecto — en PC/pantallas con
+   espacio de sobra no se ve nada nuevo. Solo cuando el propio texto de
+   adentro del botón se esconde (mismo breakpoint que ya ocultaba
+   .pill-texto) aparece la etiqueta, y ahí los botones quedan con nada más
+   que la flecha (▲/▼) — la etiqueta de arriba da el contexto de qué son
+   esos botones, en vez de repetir la palabra adentro de cada uno. */
 .grupo-toggles-bloques-materias {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   width: 100%;
 }
-.grupo-toggles-bloques-materias .pill-group {
+.grupo-toggles-bloques-materias .toggle-envoltura {
   flex: 1 1 132px;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.grupo-toggles-bloques-materias .toggle-envoltura .pill-group {
+  width: 100%;
+}
+.grupo-toggles-bloques-materias .toggle-etiqueta {
+  display: none;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: center;
 }
 @media (max-width: 480px) {
   .grupo-toggles-bloques-materias .pill-texto { display: none; }
-  .grupo-toggles-bloques-materias .pill-group { flex-basis: 96px; }
+  .grupo-toggles-bloques-materias .toggle-envoltura { flex-basis: 96px; }
+  .grupo-toggles-bloques-materias .toggle-etiqueta { display: block; }
 }
 </style>
 
