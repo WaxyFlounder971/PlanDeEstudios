@@ -274,7 +274,7 @@
     <div class="row">
       <div style="flex:1;">
         <span class="form-label" id="label-plan-nombre-bloque">Nombre del bloque</span>
-        <input type="text" id="input-plan-nombre-bloque" class="form-input" value="Semestre">
+        <input type="text" id="input-plan-nombre-bloque" class="form-input" value="Bloque">
       </div>
       <div style="flex:1;">
         <span class="form-label">Semanas por bloque</span>
@@ -491,6 +491,44 @@
     <div>
       <span class="form-label">Tipo de título (opcional)</span>
       <input type="text" id="input-editar-plan-tipo-titulo" class="form-input" placeholder="Ej. Bachillerato, Licenciatura...">
+    </div>
+
+    <!-- v1.14.4: antes este modal solo editaba nombre_carrera/universidad/
+         codigo_plan/tipo_titulo — parametros_universidad (nombre del bloque,
+         semanas, horario, tipos de horas) solo se podía fijar al crear el
+         plan o al importar. Ahora también se edita acá, para que "editar
+         plan" cubra TODOS los datos y metadatos del plan, no solo la
+         cabecera. Ver inicializarModalEditarPlanInfo en plan-gestionar.js. -->
+    <div class="row">
+      <div style="flex:1;">
+        <span class="form-label">Nombre del bloque</span>
+        <input type="text" id="input-editar-plan-nombre-bloque" class="form-input" placeholder="Ej. Semestre, Ciclo, Cuatrimestre...">
+      </div>
+      <div style="flex:1;">
+        <span class="form-label">Semanas por bloque</span>
+        <input type="number" id="input-editar-plan-semanas" class="form-input">
+      </div>
+    </div>
+
+    <div class="row">
+      <div style="flex:1;">
+        <span class="form-label">Hora de inicio por defecto</span>
+        <input type="time" id="input-editar-plan-hora-inicio" class="form-input">
+      </div>
+      <div style="flex:1;">
+        <span class="form-label">Duración de bloque (min)</span>
+        <input type="number" id="input-editar-plan-duracion" class="form-input">
+      </div>
+    </div>
+
+    <div>
+      <span class="form-label">Tipos de horas (separados por coma)</span>
+      <input type="text" id="input-editar-plan-tipos-horas" class="form-input" placeholder="Ej. T,P,L  o  Horas">
+      <p class="muted" style="margin:4px 0 0;font-size:0.8rem;">
+        Si cambiás la cantidad o el orden, las horas ya cargadas en las materias de este plan se
+        reacomodan por posición (la 1ª columna vieja pasa a la 1ª nueva, etc.) — las columnas nuevas
+        que no existían antes arrancan en 0.
+      </p>
     </div>
 
     <p id="error-editar-plan-info" class="muted oculto" style="color:var(--color-danger);"></p>
