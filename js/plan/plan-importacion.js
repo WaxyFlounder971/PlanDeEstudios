@@ -255,10 +255,13 @@ function construirPanelImportacion() {
   const sec = document.createElement("section");
   sec.className = "glass-card stack";
 
-  const titulo = document.createElement("h2");
-  titulo.style.margin = "0";
-  titulo.textContent = "Importar tu Plan de Estudios";
-  sec.appendChild(titulo);
+  // v1.14.2: antes había un único flujo lineal (pill universidad → separador
+  // → "Empezar en blanco" → separador → modo de importación). Ahora son 2
+  // grupos claramente separados: "Crear plan de cero" (arriba, con el botón
+  // a todo el ancho) e "Importar tu Plan de Estudios" (abajo, tal cual
+  // funcionaba antes — mismo título, mismos pills, mismo flujo). El selector
+  // Principal/Secundario (modo hardcore) queda arriba de ambos porque aplica
+  // a los dos por igual.
 
   // v1.10.1 (punto 1): cuando este panel se muestra para agregar un plan
   // ADICIONAL (ya existe al menos uno activo), se ofrece volver atrás sin
@@ -313,24 +316,42 @@ function construirPanelImportacion() {
   // legado hasta terminar de limpiar su uso en plan-esquema.js (el modal
   // "Nuevo Plan" que crea el plan tras pegar el CSV).
 
-  // v1.14.1: antes, la ÚNICA forma de crear un plan era importando un CSV
-  // (abrirModalCrearPlan solo se llamaba desde manejarClickImportar, tras
+  // v1.14.1/v1.14.2: antes, la ÚNICA forma de crear un plan era importando un
+  // CSV (abrirModalCrearPlan solo se llamaba desde manejarClickImportar, tras
   // pegar/procesar un CSV). Ahora también se puede saltar la importación por
-  // completo y arrancar con un plan vacío, para armarlo materia por materia
-  // con "+ Agregar materia" (abrirModalMateriaManual, ver plan-esquema.js).
-  const btnEmpezarEnBlanco = document.createElement("button");
-  btnEmpezarEnBlanco.type = "button";
-  btnEmpezarEnBlanco.className = "btn btn-secondary btn-block";
-  btnEmpezarEnBlanco.textContent = "✏️ Empezar en blanco (agregar materias a mano)";
-  btnEmpezarEnBlanco.addEventListener("click", () => {
+  // completo y arrancar con un plan vacío, para armarlo materia por materia.
+  // Este es su propio grupo, separado del de importar: primero se pide el
+  // nombre/universidad del plan (modal-crear-plan, sin cambios), y apenas se
+  // confirma ese modal se abre DE UNA VEZ el modal de "+ Añadir materia"
+  // (estado.abrirAgregarMateriaTrasCrearPlan, ver plan-esquema.js) — así el
+  // usuario no tiene que ir a buscar el botón afuera para la primera materia.
+  const tituloCrear = document.createElement("h2");
+  tituloCrear.style.margin = "0";
+  tituloCrear.textContent = "Crear plan de cero";
+  sec.appendChild(tituloCrear);
+
+  const btnAgregarMateria = document.createElement("button");
+  btnAgregarMateria.type = "button";
+  btnAgregarMateria.className = "btn btn-secondary btn-block";
+  btnAgregarMateria.textContent = "+ Añadir materia";
+  btnAgregarMateria.addEventListener("click", () => {
+    estado.abrirAgregarMateriaTrasCrearPlan = true;
     abrirModalCrearPlan(estado.planImportandoId === "secundario", null);
   });
-  sec.appendChild(btnEmpezarEnBlanco);
+  sec.appendChild(btnAgregarMateria);
 
-  const separador = document.createElement("p");
-  separador.className = "muted";
-  separador.textContent = "— o, si preferís, traé tu plan ya hecho —";
-  sec.appendChild(separador);
+  const separadorGrupos = document.createElement("p");
+  separadorGrupos.className = "muted";
+  separadorGrupos.textContent = "— o, si ya tenés tu plan armado —";
+  sec.appendChild(separadorGrupos);
+
+  // ---- Grupo: Importar tu Plan de Estudios (sin cambios de contenido/flujo,
+  // solo ahora es su propio grupo con encabezado propio en vez de compartir
+  // el título general del panel) ----
+  const tituloImportar = document.createElement("h2");
+  tituloImportar.style.margin = "0";
+  tituloImportar.textContent = "Importar tu Plan de Estudios";
+  sec.appendChild(tituloImportar);
 
   // ---- Modo de importación: Link / PDF / Capturas ----
   const etiquetaModo = document.createElement("span");

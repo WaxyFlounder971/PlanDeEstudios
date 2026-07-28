@@ -221,6 +221,7 @@ function inicializarModalCrearPlan() {
     estado.csvPendienteDeImportar = null;
     estado.horasColumnasDetectadasPlan = null;
     estado.tipoTituloDetectadoPlan = null;
+    estado.abrirAgregarMateriaTrasCrearPlan = false;
     document.getElementById("modal-crear-plan").classList.add("oculto");
     if (estado.reabrirGestionPlanesTrasCrear) {
       estado.reabrirGestionPlanesTrasCrear = false;
@@ -292,6 +293,14 @@ function inicializarModalCrearPlan() {
       renderizarSelectorPlan();
       renderizarModoHardcore();
       renderizarPlanEstudios();
+      // v1.14.2: si el plan se creó desde "Crear plan de cero" (grupo del
+      // panel de importación), se salta directo al modal de "+ Añadir
+      // materia" — no tiene sentido dejar al usuario en un plan vacío
+      // teniendo que buscar el botón aparte.
+      if (estado.abrirAgregarMateriaTrasCrearPlan) {
+        estado.abrirAgregarMateriaTrasCrearPlan = false;
+        abrirModalMateriaManual();
+      }
     }
 
     if (estado.reabrirGestionPlanesTrasCrear) {
@@ -306,6 +315,7 @@ function inicializarModalCrearPlan() {
       estado.csvPendienteDeImportar = null;
       estado.horasColumnasDetectadasPlan = null;
       estado.tipoTituloDetectadoPlan = null;
+      estado.abrirAgregarMateriaTrasCrearPlan = false;
       e.target.classList.add("oculto");
       if (estado.reabrirGestionPlanesTrasCrear) {
         estado.reabrirGestionPlanesTrasCrear = false;
@@ -325,6 +335,21 @@ function inicializarModalCrearPlan() {
  * exactamente igual que antes ("+ Añadir materia").
  */
 
+/**
+ * v1.14.2: vacía los campos del formulario de "+ Añadir materia" (código,
+ * nombre, créditos, bloque, requisitos, correquisitos) — se usa tanto al
+ * abrir el modal para agregar una materia nueva como, ahora, al presionar
+ * "+ Añadir otra materia" para seguir cargando sin cerrar el modal. NO toca
+ * el selector de plan (pill-materia-manual-plan) ni las horas dinámicas,
+ * porque esos se mantienen igual entre una materia y la siguiente.
+ */
+function limpiarFormularioMateriaManual() {
+  ["input-materia-codigo", "input-materia-nombre", "input-materia-creditos", "input-materia-bloque",
+   "input-materia-requisitos", "input-materia-correquisitos"
+  ].forEach((id) => { document.getElementById(id).value = ""; });
+  document.querySelectorAll("#bloque-horas-dinamico [data-tipo-hora]").forEach((input) => { input.value = ""; });
+}
+
 function abrirModalMateriaManual(materiaExistente = null, planDeLaMateria = null) {
   const editando = !!(materiaExistente && planDeLaMateria);
   const principal = obtenerPlanActivo();
@@ -342,6 +367,10 @@ function abrirModalMateriaManual(materiaExistente = null, planDeLaMateria = null
   document.getElementById("btn-guardar-materia-manual").textContent = editando ? "Guardar cambios" : "Guardar";
   // v1.12: "Borrar materia" solo tiene sentido si ya existe una materia que borrar.
   document.getElementById("btn-borrar-materia-manual").classList.toggle("oculto", !editando);
+  // v1.14.2: "+ Añadir otra materia" solo tiene sentido al AGREGAR (no al
+  // editar una materia puntual) — deja el modal abierto y limpio para
+  // seguir cargando materias una tras otra sin salir a buscar el botón afuera.
+  document.getElementById("btn-guardar-y-agregar-otra-materia").classList.toggle("oculto", editando);
 
   const bloquePlan = document.getElementById("bloque-materia-manual-plan");
   const pillPlan = document.getElementById("pill-materia-manual-plan");
@@ -376,9 +405,7 @@ function abrirModalMateriaManual(materiaExistente = null, planDeLaMateria = null
     document.getElementById("input-materia-requisitos").value = serializarRequisitoArbol(materiaExistente.requisitos);
     document.getElementById("input-materia-correquisitos").value = serializarRequisitoArbol(materiaExistente.correquisitos);
   } else {
-    ["input-materia-codigo", "input-materia-nombre", "input-materia-creditos", "input-materia-bloque",
-     "input-materia-requisitos", "input-materia-correquisitos"
-    ].forEach((id) => { document.getElementById(id).value = ""; });
+    limpiarFormularioMateriaManual();
   }
   document.getElementById("error-modal-materia-manual").classList.add("oculto");
 
@@ -472,7 +499,14 @@ function inicializarModalMateriaManual() {
     renderizarPlanEstudios();
   });
 
-  document.getElementById("btn-guardar-materia-manual").addEventListener("click", () => {
+  /**
+   * v1.14.2: antes esta validación/guardado vivía inline dentro del listener
+   * de "Guardar". Se extrae a función propia porque ahora "+ Añadir otra
+   * materia" necesita EXACTAMENTE la misma lógica, pero sin cerrar el modal
+   * después. Retorna `true` si guardó con éxito, `false` si hubo un error de
+   * validación (ya mostrado en pantalla) y no se guardó nada.
+   */
+  function guardarMateriaManualDesdeFormulario() {
     const plan = estado.datos.planes_estudio.find((p) => p.id === estado.materiaManualPlanId);
     const err = document.getElementById("error-modal-materia-manual");
     const codigo = document.getElementById("input-materia-codigo").value.trim();
@@ -483,7 +517,7 @@ function inicializarModalMateriaManual() {
     if (!plan || !codigo || !nombre) {
       err.textContent = "Código y nombre son obligatorios.";
       err.classList.remove("oculto");
-      return;
+      return false;
     }
 
     const editando = estado.materiaManualEditando;
@@ -495,7 +529,7 @@ function inicializarModalMateriaManual() {
     if (choqueDeCodigo) {
       err.textContent = "Ya existe una materia con ese código en este plan.";
       err.classList.remove("oculto");
-      return;
+      return false;
     }
 
     const tiposHoras = Array.isArray(plan.parametros_universidad.tipos_horas)
@@ -527,8 +561,28 @@ function inicializarModalMateriaManual() {
 
     estado.materiaManualEditando = null;
     marcarCambioPendiente();
+    err.classList.add("oculto");
+    return true;
+  }
+
+  document.getElementById("btn-guardar-materia-manual").addEventListener("click", () => {
+    if (!guardarMateriaManualDesdeFormulario()) return;
     document.getElementById("modal-materia-manual").classList.add("oculto");
     renderizarPlanEstudios();
+  });
+
+  /**
+   * v1.14.2: guarda la materia actual SIN cerrar el modal — limpia el
+   * formulario (mismo plan seleccionado, mismas horas dinámicas visibles) y
+   * deja el foco en "Código" para poder seguir cargando materias en cadena.
+   * Solo visible cuando NO se está editando (ver abrirModalMateriaManual).
+   */
+  document.getElementById("btn-guardar-y-agregar-otra-materia").addEventListener("click", () => {
+    if (!guardarMateriaManualDesdeFormulario()) return;
+    renderizarPlanEstudios();
+    limpiarFormularioMateriaManual();
+    const inputCodigo = document.getElementById("input-materia-codigo");
+    if (inputCodigo) inputCodigo.focus();
   });
 }
 

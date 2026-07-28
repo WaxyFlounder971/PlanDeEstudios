@@ -180,6 +180,20 @@ function construirEncabezadoPlan(planPrincipal) {
   });
   botones.appendChild(btnImportar);
 
+  // v1.14.2: si el plan todavía no tiene NINGUNA materia, construirBarraAcciones
+  // no se renderiza (hayMaterias === false en renderizarPlanEstudios), así que
+  // "+ Añadir materia" no vive ahí todavía. Se ofrece acá como red de
+  // seguridad — por ejemplo si el usuario canceló el modal que se abre solo
+  // tras "Crear plan de cero" — para que nunca quede un plan vacío sin forma
+  // de agregar materias a mano.
+  if (planPrincipal.materias.length === 0) {
+    const btnAgregarMateria = document.createElement("button");
+    btnAgregarMateria.className = "btn btn-secondary";
+    btnAgregarMateria.textContent = "+ Añadir materia";
+    btnAgregarMateria.addEventListener("click", () => abrirModalMateriaManual());
+    botones.appendChild(btnAgregarMateria);
+  }
+
   sec.appendChild(botones);
   return sec;
 }
