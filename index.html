@@ -448,6 +448,24 @@
 </div>
 
 <!-- ===================== MODAL: Desbloquea (búsqueda inversa) ===================== -->
+<!-- ===================== MODAL: Vincular Optativa/Electiva al plan (v1.12.5) ===================== -->
+<div id="modal-vincular-optativa" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;">Vincular "<span id="nombre-vincular-optativa"></span>" al plan</h2>
+    <div class="pill-group" id="pill-vincular-optativa-modo">
+      <button type="button" class="pill-item" data-valor="cupo">Reemplazar espacio del plan</button>
+      <button type="button" class="pill-item" data-valor="aparte">Agregar en un bloque aparte</button>
+      <button type="button" class="pill-item" data-valor="bloque">Elegir un bloque específico</button>
+    </div>
+    <p id="explicacion-vincular-optativa" class="muted"></p>
+    <div id="contenido-vincular-optativa" class="stack"></div>
+    <p id="error-vincular-optativa" class="muted oculto" style="color:var(--color-danger);"></p>
+    <div class="row" style="justify-content:flex-end;">
+      <button id="btn-cancelar-vincular-optativa" class="btn btn-secondary">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <div id="modal-desbloquea" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
     <h2 style="margin:0;" id="titulo-modal-desbloquea">es requisito para:</h2>
