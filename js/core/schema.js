@@ -267,12 +267,17 @@ const PRESETS_TIPOS_HORAS = {
   UCR: ["Teoría", "Práctica", "Laboratorio", "Teoría-Práctica"],
 };
 
-function crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, parametros_universidad }) {
+function crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, tipo_titulo, parametros_universidad }) {
   return {
     id: "plan_" + crypto.randomUUID(),
     nombre_carrera,
     universidad,
     codigo_plan: codigo_plan || null,
+    // v1.12.5: detectado por la IA al importar (línea TIPO_TITULO:, ver
+    // extraerMetadatosImportacion) — antes se leía y se descartaba sin
+    // guardarse en ningún lado; ahora viaja con el plan para que la
+    // exportación CSV de fidelidad completa pueda incluirlo de vuelta.
+    tipo_titulo: tipo_titulo || null,
     parametros_universidad: {
       nombre_bloque: "Semestre",
       semanas_por_bloque: 16,
