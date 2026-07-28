@@ -173,7 +173,14 @@ REGLAS:
 9. Si una celda es ilegible, ambigua, o no puedes confirmarla con certeza, escribe "REVISAR" en
    vez de inventar un dato — nunca inventes códigos, créditos u horas que no estén en el documento.
 10. Ignora tablas resumen de totales generales (ej. "Créditos totales de la carrera: 448") — esas
-    no son filas de materias, son metadatos de resumen y no van en el CSV.`;
+    no son filas de materias, son metadatos de resumen y no van en el CSV.
+11. Si el plan es tan grande que no te cabe en una sola respuesta, divídelo en varias respuestas
+    consecutivas, pero SOLO la PRIMERA lleva las líneas de metadatos (CARRERA/CODIGO_PLAN/etc.) y el
+    encabezado (Bloque,Codigo,Nombre,...); las respuestas siguientes deben traer ÚNICAMENTE filas de
+    datos, en el mismo orden del plan, SIN repetir el encabezado ni los metadatos — esta app arma el
+    CSV final pegando las partes una tras otra en el mismo cuadro de texto, en orden, así que un
+    encabezado repetido en medio se leería como si fuera una materia más (rompe la importación).
+    Avisa igual entre una parte y otra que hay más por venir, para que el usuario sepa que faltan.`;
 }
 
 /** Lee las líneas opcionales CARRERA:/CODIGO_PLAN:/UNIVERSIDAD:/TIPO_TITULO:/
@@ -502,7 +509,13 @@ async function convertirCapturasAPDF(archivos) {
   }
   const { jsPDF } = window.jspdf;
   const MARGEN_MM = 10;
+  // v1.12.6: por debajo de esto, el texto de una captura de plan de estudios
+  // ya no se lee con confianza (ni por una persona haciendo zoom, ni por la
+  // IA al importarlo) — se usa solo para armar la advertencia al usuario,
+  // nunca para bloquear la conversión.
+  const ANCHO_MINIMO_RECOMENDADO_PX = 1200;
   let doc = null;
+  const imagenesBajaResolucion = [];
 
   console.log(`[capturas→PDF] Iniciando conversión de ${archivos.length} imagen(es)…`);
 
@@ -522,11 +535,23 @@ async function convertirCapturasAPDF(archivos) {
 
     const anchoDisponible = anchoPagina - MARGEN_MM * 2;
     const altoDisponible = altoPagina - MARGEN_MM * 2;
-    const proporcion = Math.min(anchoDisponible / img.width, altoDisponible / img.height);
+    // v1.12.6: el "1" al final es el fix de calidad — antes, una imagen más
+    // chica que el espacio disponible (típico de una captura de pantalla de
+    // PC, a diferencia de una foto de celular) se ESTIRABA para llenar la
+    // hoja, agrandando los píxeles existentes en vez de agregar detalle
+    // (se veía borrosa/pixelada). Ahora nunca se agranda más allá de su
+    // tamaño real: si es más chica que la hoja, se centra en su tamaño
+    // nativo en vez de estirarse.
+    const proporcion = Math.min(anchoDisponible / img.width, altoDisponible / img.height, 1);
     const anchoFinal = img.width * proporcion;
     const altoFinal = img.height * proporcion;
     const x = (anchoPagina - anchoFinal) / 2;
     const y = (altoPagina - altoFinal) / 2;
+
+    if (img.width < ANCHO_MINIMO_RECOMENDADO_PX) {
+      imagenesBajaResolucion.push(archivos[i].name);
+      console.warn(`[capturas→PDF] "${archivos[i].name}" tiene resolución baja (${img.width}×${img.height}px) — puede costar leerla bien.`);
+    }
 
     doc.addImage(dataUrl, detectarFormatoImagen(dataUrl), x, y, anchoFinal, altoFinal);
     console.log(`[capturas→PDF] Imagen ${i + 1}/${archivos.length} agregada al PDF.`);
@@ -535,6 +560,8 @@ async function convertirCapturasAPDF(archivos) {
   console.log("[capturas→PDF] Todas las imágenes procesadas — descargando PDF…");
   doc.save("plan-de-estudios-capturas.pdf");
   console.log("[capturas→PDF] doc.save() ejecutado.");
+
+  return { imagenesBajaResolucion };
 }
 
 /* ===================== v1.10.1 — Ventana flotante: capturas -> PDF ===================== *
@@ -580,12 +607,20 @@ function inicializarModalCapturasPDF() {
     cerrarModalCapturasPDF();
     mostrarCargando();
     try {
-      await convertirCapturasAPDF(archivos);
+      const { imagenesBajaResolucion } = await convertirCapturasAPDF(archivos);
       // Puntos 3/5: autoselecciona "Adjuntar PDF" — el usuario ya tiene el
       // PDF descargado y solo falta que lo adjunte en la IA.
       estado.modoImportacion = "pdf";
       renderizarPlanEstudios();
-      mostrarToast('✓ PDF descargado — se seleccionó "Adjuntar PDF", adjúntalo ahí');
+      if (imagenesBajaResolucion.length > 0) {
+        // v1.12.6: en vez de dejar que el usuario descubra hasta el final
+        // (cuando la IA no puede leer bien el plan) que una o varias
+        // capturas quedaron en baja resolución, se avisa apenas se genera
+        // el PDF, mencionando cuáles, para que las vuelva a tomar mejor.
+        mostrarToast(`✓ PDF descargado — ojo: ${imagenesBajaResolucion.length === 1 ? `"${imagenesBajaResolucion[0]}" quedó` : `${imagenesBajaResolucion.length} imágenes quedaron`} en baja resolución, puede costar leerlas bien`);
+      } else {
+        mostrarToast('✓ PDF descargado — se seleccionó "Adjuntar PDF", adjúntalo ahí');
+      }
     } catch (e) {
       console.warn("No se pudo convertir las capturas a PDF.", e);
       mostrarToast("No se pudo crear el PDF. Intenta de nuevo.");
