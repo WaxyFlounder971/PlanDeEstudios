@@ -335,7 +335,43 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
     else materias.push(materiaCreada);
   });
 
+  // v1.12.12: "Bloque N" como requisito/correquisito (texto libre, ver regla
+  // 4a del prompt) se expande acá a TODAS las materias reales de ese bloque,
+  // combinadas con Y — "aprobar el Bloque 9" funcionalmente significa
+  // "aprobar cada materia del Bloque 9". Se hace en la app (no confiando en
+  // que la IA enumere bien los códigos a mano en una sola celda, sin comas)
+  // porque acá ya tenemos la lista real y exacta de qué materias quedaron en
+  // cada bloque de ESTE mismo CSV. Nunca incluye cupos sin_definir (todavía
+  // no son una materia real que se pueda "aprobar").
+  materias.forEach((m) => {
+    m.requisitos = expandirRequisitoBloque(m.requisitos, materias);
+    m.correquisitos = expandirRequisitoBloque(m.correquisitos, materias);
+  });
+
   return { materias, electivas, errores };
+}
+
+/**
+ * Recorre un nodo del árbol Y/O de requisitos y reemplaza cualquier hoja de
+ * texto libre "Bloque N..." (ej. "Bloque 9 completo", "Bloque 9 aprobado")
+ * por un nodo Y con el código de cada materia real (sin_definir=false) de
+ * ese bloque. Si no encuentra ninguna materia en ese bloque, deja el nodo
+ * de texto tal cual (mejor mostrar el texto original que perder el dato).
+ */
+function expandirRequisitoBloque(nodo, materiasDelPlan) {
+  if (!nodo) return nodo;
+  if (nodo.tipo === "codigo") {
+    const match = /^bloque\s+(\d+)\b/i.exec(String(nodo.valor).trim());
+    if (!match) return nodo;
+    const bloqueN = Number(match[1]);
+    const codigosBloque = materiasDelPlan.filter((m) => !m.sin_definir && Number(m.bloque) === bloqueN).map((m) => m.codigo);
+    if (codigosBloque.length === 0) return nodo;
+    return crearNodoY(codigosBloque.map(crearNodoCodigo));
+  }
+  if (nodo.tipo === "Y" || nodo.tipo === "O") {
+    return { tipo: nodo.tipo, hijos: nodo.hijos.map((h) => expandirRequisitoBloque(h, materiasDelPlan)) };
+  }
+  return nodo;
 }
 
 /**

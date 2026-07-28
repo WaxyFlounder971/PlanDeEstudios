@@ -114,7 +114,15 @@ CODIGO_PLAN: ...
 UNIVERSIDAD: ...
 TIPO_TITULO: ... (Diplomado/Bachillerato/Licenciatura/Maestría/Doctorado, si se identifica)
 HORAS_COLUMNAS: lista separada por comas de los tipos de hora que usa ESTE documento específico,
-  usando las siglas tal como aparecen (ej: T,P,L,EI,HT,HD  o  T,P,L,TP  o  Horas  o  T,P).
+  usando la PALABRA COMPLETA de cada tipo (nunca su sigla/abreviatura) tal como la nombra el
+  documento — ej: Teoría,Práctica,Laboratorio,Teoría-Práctica  o  Horas  o  Teórico,Práctico
+  (si el documento SOLO trae siglas como "T"/"P"/"L" sin decir en ningún lado qué significan,
+  escribe la palabra completa más probable para esa sigla en el contexto académico: T→Teoría,
+  P→Práctica, L→Laboratorio, TP→Teoría-Práctica, EI→Estudio Independiente, HT→Horas Teóricas,
+  HD→Horas de Docencia — nunca dejes la sigla sola). Esto es importante: la app usa esta palabra
+  completa tal cual para mostrarla en pantalla cuando hay espacio (ej. "Práctica: 4"), y deriva ella
+  sola las iniciales para cuando no hay espacio (ej. "P4") — si acá se manda la sigla, después no hay
+  forma de recuperar la palabra completa para mostrarla.
   Si el documento no maneja el concepto de horas en absoluto, escribe: HORAS_COLUMNAS: Ninguna
   (detéctalas leyendo el propio documento — NO asumas que todas las universidades usan T/P/L/TP;
   si no distingue tipos de hora y solo da un total, usa una sola columna "Horas")
@@ -166,11 +174,17 @@ REGLAS:
      la fila antes de completar todas las columnas del encabezado).
    - Si el documento no maneja el concepto de "correquisitos" en absoluto, escribe igual "Ninguno"
      en esa columna para todas las filas (mantén la columna por consistencia del esquema).
-   - Si un requisito/correquisito no es un código de materia sino una condición de nivel/bloque (ej.
-     "haber aprobado todo el Bloque 9", "tener 90 créditos aprobados"), escríbelo tal cual como texto
-     plano dentro de la celda (ej. "Bloque 9 completo", "90 créditos aprobados") — no inventes un
-     código de materia falso para representarlo, y no lo fuerces dentro de la sintaxis de códigos de
-     arriba; un texto libre como único contenido de la celda es válido.
+   - Si un requisito/correquisito es "haber aprobado/cursado TODO un bloque/nivel/ciclo/año/semestre
+     completo" (nunca una condición de créditos u otra cosa, solo esta), escríbelo EXACTAMENTE como
+     "Bloque N" seguido opcionalmente de una palabra más (ej. "Bloque 9", "Bloque 9 completo",
+     "Bloque 9 aprobado") — usando el mismo número secuencial de Bloque de la regla 1, no el nombre
+     original del documento (ej. no "Año 3" ni "Nivel III", el número ya convertido). La app
+     reemplaza esto automáticamente por TODAS las materias reales de ese bloque como requisitos — no
+     hace falta (ni se debe) que vos enumeres los códigos a mano.
+   - Para cualquier OTRA condición que no sea un código de materia ni "Bloque N" (ej. "tener 90
+     créditos aprobados", "ser estudiante regular"), escríbela tal cual como texto plano dentro de la
+     celda — no inventes un código de materia falso para representarla, y no la fuerces dentro de la
+     sintaxis de códigos de arriba; un texto libre como único contenido de la celda es válido.
 
 4b. SINDEFINIR (última columna, SIEMPRE presente): escribe exactamente "true" si esta fila es un
    espacio reservado de electiva/optativa sin materia real elegida todavía (sin importar si tiene
@@ -355,6 +369,16 @@ function construirPanelImportacion() {
   etiquetaModo.textContent = "¿Cómo quieres traer tu plan de estudios?";
   sec.appendChild(etiquetaModo);
 
+  // v1.12.12: recomendación general (no solo para "Tomar capturas") — con
+  // varios modos, Claude viene presentando menos fallos/negativas que
+  // ChatGPT al procesar el documento. No sacamos ChatGPT de las opciones
+  // (cada quien puede tener su propia cuenta/preferencia), pero sí avisamos
+  // para ahorrar reintentos.
+  const recomendacionClaude = document.createElement("p");
+  recomendacionClaude.className = "muted";
+  recomendacionClaude.textContent = "💡 Se recomienda usar Claude IA — suele presentar menos fallos que ChatGPT importando planes de estudio.";
+  sec.appendChild(recomendacionClaude);
+
   const grupoModo = document.createElement("div");
   grupoModo.className = "pill-group";
   [
@@ -414,17 +438,6 @@ function construirPanelImportacion() {
     nota.className = "muted";
     nota.textContent = "Primero hay que convertir tus capturas en un solo PDF antes de enviarlas a la IA.";
     sec.appendChild(nota);
-
-    // v1.12.11: reportado — ChatGPT suele negarse a leer capturas de
-    // pantalla (las trata como contenido protegido/sensible), mientras que
-    // Claude las procesa sin problema. No es algo que podamos arreglar
-    // desde acá (es una política del otro lado), así que se avisa para que
-    // no se pierda tiempo reintentando con la IA que no funciona para esto.
-    const avisoClaude = document.createElement("p");
-    avisoClaude.className = "muted";
-    avisoClaude.style.color = "var(--color-warning, #f59e0b)";
-    avisoClaude.textContent = "⚠️ ChatGPT suele negarse a leer capturas de pantalla convertidas a PDF. Si te pasa eso, probá con Claude — con capturas le funciona bien.";
-    sec.appendChild(avisoClaude);
 
     const btnAbrirConversion = document.createElement("button");
     btnAbrirConversion.type = "button";
