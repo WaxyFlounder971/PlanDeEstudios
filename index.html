@@ -473,22 +473,22 @@
 
     <div>
       <span class="form-label">Nombre de la carrera</span>
-      <input type="text" id="input-editar-plan-nombre-carrera" class="form-input" placeholder="Ej. Ingeniería en Tecnologías de Información">
+      <input type="text" id="input-editar-plan-nombre-carrera" class="form-input" autocomplete="off" placeholder="Ej. Ingeniería en Tecnologías de Información">
     </div>
 
     <div>
       <span class="form-label">Universidad</span>
-      <input type="text" id="input-editar-plan-universidad" class="form-input" placeholder="Ej. Tecnológico de Costa Rica">
+      <input type="text" id="input-editar-plan-universidad" class="form-input" autocomplete="off" placeholder="Ej. Tecnológico de Costa Rica">
     </div>
 
     <div>
       <span class="form-label">Código del plan (opcional)</span>
-      <input type="text" id="input-editar-plan-codigo" class="form-input" placeholder="Ej. 420501, plan 01">
+      <input type="text" id="input-editar-plan-codigo" class="form-input" autocomplete="off" placeholder="Ej. 420501, plan 01">
     </div>
 
     <div>
       <span class="form-label">Tipo de título (opcional)</span>
-      <input type="text" id="input-editar-plan-tipo-titulo" class="form-input" placeholder="Ej. Bachillerato, Licenciatura...">
+      <input type="text" id="input-editar-plan-tipo-titulo" class="form-input" autocomplete="off" placeholder="Ej. Bachillerato, Licenciatura...">
     </div>
 
     <!-- v1.14.1: parámetros académicos del plan (antes solo se fijaban una
@@ -499,7 +499,7 @@
     <div class="row" style="flex-wrap:wrap;">
       <div style="flex:1; min-width:160px;">
         <span class="form-label">Nombre de bloque</span>
-        <input type="text" id="input-editar-plan-nombre-bloque" class="form-input" placeholder="Ej. Semestre, Cuatrimestre...">
+        <input type="text" id="input-editar-plan-nombre-bloque" class="form-input" autocomplete="off" placeholder="Ej. Semestre, Cuatrimestre...">
       </div>
       <div style="flex:1; min-width:120px;">
         <span class="form-label">Semanas por bloque</span>
@@ -562,7 +562,36 @@
   </div>
 </div>
 
-<style>.oculto { display: none !important; }</style>
+<style>
+.oculto { display: none !important; }
+
+/* v1.12.13: pills "Bloques ▲▼" / "Materias ▲▼" del buscador — en PC se ven
+   completas de siempre (no cambia nada ahí). Degradación en 2 etapas SOLO
+   para pantallas angostas:
+   1) ≤480px: se esconde nada más la palabra (queda "▲ ▼"), para intentar
+      seguir cabiendo los 2 grupos en una sola línea.
+   2) ≤360px (o si con el punto 1 igual no entra en una línea): se fuerza el
+      salto de línea, y cada grupo pasa a ocupar el 100% del ancho
+      disponible, con sus 2 botones repartiéndose ese ancho por igual. */
+.grupo-toggles-bloques-materias {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+@media (max-width: 480px) {
+  .grupo-toggles-bloques-materias .pill-texto { display: none; }
+}
+@media (max-width: 360px) {
+  .grupo-toggles-bloques-materias .pill-group {
+    flex: 1 1 100%;
+    display: flex;
+  }
+  .grupo-toggles-bloques-materias .pill-group .pill-item {
+    flex: 1;
+    text-align: center;
+  }
+}
+</style>
 
 <script type="module" src="js/main.js"></script>
 </body>
