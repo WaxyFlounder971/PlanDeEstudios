@@ -565,31 +565,35 @@
 <style>
 .oculto { display: none !important; }
 
-/* v1.12.13: pills "Bloques ▲▼" / "Materias ▲▼" del buscador — en PC se ven
-   completas de siempre (no cambia nada ahí). Degradación en 2 etapas SOLO
-   para pantallas angostas:
-   1) ≤480px: se esconde nada más la palabra (queda "▲ ▼"), para intentar
-      seguir cabiendo los 2 grupos en una sola línea.
-   2) ≤360px (o si con el punto 1 igual no entra en una línea): se fuerza el
-      salto de línea, y cada grupo pasa a ocupar el 100% del ancho
-      disponible, con sus 2 botones repartiéndose ese ancho por igual. */
+/* v1.12.14: pills "Bloques ▲▼" / "Materias ▲▼" del buscador — en PC se ven
+   completas de siempre (no cambia nada ahí, hay espacio de sobra).
+   v1.12.13 usaba 2 media queries con breakpoints fijos (480px / 360px) y en
+   la práctica se superponían en celulares angostos comunes (~360px de
+   ancho), disparando las dos reglas A LA VEZ y rompiendo el orden (Materias
+   se apilaba encima de Bloques en vez de quedar a su derecha). Se reemplaza
+   por un wrap NATURAL de flexbox (flex-basis con crecimiento) — sin ningún
+   breakpoint fijo: cada .pill-group (Bloques / Materias) pide un mínimo
+   razonable y crece para repartirse el ancho; si ambos entran en la fila,
+   quedan lado a lado (Bloques primero, Materias a su derecha); si no entran
+   ambos, el navegador solo pasa a Materias a la fila siguiente, y como ahí
+   queda solo, su flex-grow lo estira a ocupar todo el ancho disponible —
+   esto se ajusta solo a CUALQUIER ancho real de pantalla, sin adivinar un
+   pixel exacto de corte. La palabra ("Bloques"/"Materias") se esconde por
+   separado en pantallas angostas para dejarle más margen a que quepan
+   lado a lado antes de necesitar el salto de línea. */
 .grupo-toggles-bloques-materias {
   display: flex;
-  gap: 8px;
   flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+.grupo-toggles-bloques-materias .pill-group {
+  flex: 1 1 132px;
+  min-width: 0;
 }
 @media (max-width: 480px) {
   .grupo-toggles-bloques-materias .pill-texto { display: none; }
-}
-@media (max-width: 360px) {
-  .grupo-toggles-bloques-materias .pill-group {
-    flex: 1 1 100%;
-    display: flex;
-  }
-  .grupo-toggles-bloques-materias .pill-group .pill-item {
-    flex: 1;
-    text-align: center;
-  }
+  .grupo-toggles-bloques-materias .pill-group { flex-basis: 96px; }
 }
 </style>
 
