@@ -10,7 +10,7 @@ import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto, formatearHoras } from "../core/utils.js";
 import { agregarLongPress, envolverConFlechasScroll } from "../ui/componentes.js";
 import { abrirModalRequisito, construirBloqueCompletoRequisitos, construirCuerpoDetalleMateria, construirLinea2Materia } from "./plan-detalle.js";
-import { abrirModalMateriaManual, abrirModalVincularOptativa, filasFiltradas, obtenerMateriasVisibles, obtenerOptativasDisponibles } from "./plan-esquema.js";
+import { abrirModalMateriaManual, abrirModalVincularOptativa, filasFiltradas, obtenerMateriasRevisar, obtenerMateriasVisibles, obtenerOptativasDisponibles } from "./plan-esquema.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
 
 /* ===================== Sección 2 — Candado (lógica de grupos) ===================== */
@@ -44,7 +44,8 @@ function construirContenidoBloques() {
 
   const todasLasFilas = obtenerMateriasVisibles();
   const todasOptativasDisponibles = obtenerOptativasDisponibles();
-  if (todasLasFilas.length === 0 && todasOptativasDisponibles.length === 0) {
+  const todasParaRevisar = obtenerMateriasRevisar();
+  if (todasLasFilas.length === 0 && todasOptativasDisponibles.length === 0 && todasParaRevisar.length === 0) {
     const sec = document.createElement("section");
     sec.className = "glass-card";
     sec.innerHTML = `<p class="muted">Este plan todavía no tiene materias. Impórtalas o añádelas manualmente desde el panel de arriba.</p>`;
@@ -58,19 +59,23 @@ function construirContenidoBloques() {
   const filas = filasFiltradas().filter((f) => !f.materia.es_optativa);
   const filasOptativasAgregadas = filasFiltradas().filter((f) => f.materia.es_optativa);
 
-  // El filtro de búsqueda de texto también aplica a las disponibles; el de
-  // Categoría no (todavía no tienen ninguna asignada, así que un filtro de
-  // categoría activo las oculta por completo — es el comportamiento
-  // esperado, no un descuido).
+  // El filtro de búsqueda de texto también aplica a las disponibles/por
+  // revisar; el de Categoría no (todavía no tienen ninguna asignada, así
+  // que un filtro de categoría activo las oculta por completo — es el
+  // comportamiento esperado, no un descuido).
   let disponibles = estado.filtroCategoriaId ? [] : todasOptativasDisponibles;
+  let paraRevisar = estado.filtroCategoriaId ? [] : todasParaRevisar;
   const q = (estado.busquedaPlanEstudios || "").trim().toLowerCase();
   if (q) {
     disponibles = disponibles.filter(
       (f) => f.materia.nombre.toLowerCase().includes(q) || f.materia.codigo.toLowerCase().includes(q)
     );
+    paraRevisar = paraRevisar.filter(
+      (f) => f.materia.nombre.toLowerCase().includes(q) || f.materia.codigo.toLowerCase().includes(q)
+    );
   }
 
-  if (filas.length === 0 && filasOptativasAgregadas.length === 0 && disponibles.length === 0) {
+  if (filas.length === 0 && filasOptativasAgregadas.length === 0 && disponibles.length === 0 && paraRevisar.length === 0) {
     const sec = document.createElement("section");
     sec.className = "glass-card";
     sec.innerHTML = `<p class="muted">Ninguna materia coincide con la búsqueda o el filtro actual.</p>`;
@@ -146,11 +151,20 @@ function construirContenidoBloques() {
     });
   }
 
-  // C.4 (v9): bloque "Optativas", siempre al final, sin importar el orden
-  // activo — combina las ya agregadas formalmente (tarjeta completa) con
-  // las detectadas y aún no agregadas (tarjeta simplificada + botón).
+  // v1.12.15: "Optativas" y "Revisar" son 2 bloques especiales DISTINTOS —
+  // ambos siempre al final, sin importar el orden activo, y SIN mezclarse
+  // entre sí: primero la tarjeta de "Optativas", después la de "Revisar"
+  // (punto 4 del prompt). "Optativas" combina las ya agregadas formalmente
+  // (tarjeta completa, dato heredado de versiones anteriores) con las
+  // detectadas y aún no agregadas (tarjeta simplificada + botón). "Revisar"
+  // solo tiene detectadas-y-aún-no-agregadas (nunca hay una versión
+  // "agregada formalmente" para Revisar: al vincularla, siempre pasa a un
+  // bloque numerado real).
   if (filasOptativasAgregadas.length > 0 || disponibles.length > 0) {
     contenedor.appendChild(construirBloqueOptativas(filasOptativasAgregadas, disponibles, esEscritorio, cfg.modo_hardcore));
+  }
+  if (paraRevisar.length > 0) {
+    contenedor.appendChild(construirBloqueRevisar(paraRevisar));
   }
 
   return contenedor;
@@ -258,11 +272,114 @@ function construirTarjetaOptativaDisponible(materiaTemplate, plan) {
   const btnAgregar = document.createElement("button");
   btnAgregar.type = "button";
   btnAgregar.className = "btn btn-secondary btn-block";
-  btnAgregar.textContent = "+ Añadir al plan";
-  // v1.12.5: ya no se agrega directo (siempre "aparte") — abre el modal de
-  // 3 formas (reemplazar un espacio del plan / bloque aparte / bloque
-  // específico). Ver abrirModalVincularOptativa en plan-esquema.js.
-  btnAgregar.addEventListener("click", () => abrirModalVincularOptativa(materiaTemplate, plan));
+  // v1.12.15 (punto 5 del prompt): un solo botón, sin pill de Estado — abre
+  // el modal de 2 formas (agregar a bloque / reemplazar por otra materia).
+  // Ver abrirModalVincularOptativa en plan-esquema.js.
+  btnAgregar.textContent = "Agregar al plan de estudios";
+  btnAgregar.addEventListener("click", () => abrirModalVincularOptativa(materiaTemplate, plan, "optativa"));
+  cuerpo.appendChild(btnAgregar);
+
+  card.appendChild(cuerpo);
+  return card;
+}
+
+/**
+ * v1.12.15: bloque especial "Revisar" — materias que el import no pudo
+ * ubicar en un bloque numérico claro y que tampoco parecen electiva/
+ * optativa (ver plan-importacion-csv.js). Nunca se dibuja en el Mapa
+ * (plan-mapa.js) ni cuenta en totales/estadísticas mientras esté aquí (vive
+ * en plan.materias_revisar, nunca en plan.materias). Siempre se muestra
+ * DESPUÉS de "Optativas" en la Vista de Lista (punto 4 del prompt).
+ */
+
+function construirBloqueRevisar(filasParaRevisar) {
+  const bloqueCard = document.createElement("section");
+  bloqueCard.className = "glass-card bloque-card";
+
+  const clave = "__revisar__";
+  const colapsado = estado.bloquesColapsados.has(clave);
+
+  const encabezado = document.createElement("div");
+  encabezado.className = "bloque-encabezado";
+  encabezado.innerHTML = `<h3>Revisar</h3><span style="opacity:0.7;">${colapsado ? "▼" : "▲"}</span>`;
+  encabezado.addEventListener("click", () => {
+    if (estado.bloquesColapsados.has(clave)) estado.bloquesColapsados.delete(clave);
+    else estado.bloquesColapsados.add(clave);
+    renderizarPlanEstudios();
+  });
+  bloqueCard.appendChild(encabezado);
+
+  if (!colapsado) {
+    const cuerpoBloque = document.createElement("div");
+    cuerpoBloque.className = "stack";
+    cuerpoBloque.style.marginTop = "12px";
+
+    const etiqueta = document.createElement("p");
+    etiqueta.className = "muted";
+    etiqueta.textContent = `Materias sin bloque claro, pendientes de revisar: ${filasParaRevisar.length}`;
+    cuerpoBloque.appendChild(etiqueta);
+
+    filasParaRevisar.forEach((fila) => {
+      cuerpoBloque.appendChild(construirTarjetaParaRevisar(fila.materia, fila.plan));
+    });
+
+    bloqueCard.appendChild(cuerpoBloque);
+  }
+
+  return bloqueCard;
+}
+
+/**
+ * v1.12.15: tarjeta simplificada de solo-lectura para una materia dentro del
+ * bloque especial "Revisar" — mismo formato que
+ * construirTarjetaOptativaDisponible (sin pill de Estado, un solo botón
+ * "Agregar al plan de estudios", punto 5 del prompt).
+ */
+
+function construirTarjetaParaRevisar(materiaTemplate, plan) {
+  const card = document.createElement("div");
+  card.className = "glass-panel materia-card";
+
+  const linea1 = document.createElement("div");
+  linea1.className = "materia-linea1";
+  linea1.style.cursor = "default";
+
+  const prefijo = document.createElement("span");
+  prefijo.className = "materia-prefijo";
+  const spanCodigo = document.createElement("span");
+  spanCodigo.className = "materia-codigo";
+  spanCodigo.style.cursor = "default";
+  spanCodigo.textContent = materiaTemplate.codigo;
+  prefijo.appendChild(spanCodigo);
+  linea1.appendChild(prefijo);
+
+  const spanNombre = document.createElement("span");
+  spanNombre.className = "materia-nombre completa";
+  spanNombre.textContent = aplicarFormatoTexto(materiaTemplate.nombre);
+  linea1.appendChild(spanNombre);
+  card.appendChild(linea1);
+
+  const linea2 = document.createElement("div");
+  linea2.className = "materia-linea2";
+  const spanHoras = document.createElement("span");
+  spanHoras.className = "materia-linea2-horas";
+  spanHoras.textContent = formatearHoras(materiaTemplate);
+  linea2.appendChild(spanHoras);
+  const badgeCreditos = document.createElement("span");
+  badgeCreditos.className = "badge badge-accent";
+  badgeCreditos.textContent = `Créditos: ${materiaTemplate.creditos}`;
+  linea2.appendChild(badgeCreditos);
+  card.appendChild(linea2);
+
+  const cuerpo = document.createElement("div");
+  cuerpo.className = "materia-cuerpo stack";
+  cuerpo.appendChild(construirBloqueCompletoRequisitos(materiaTemplate, plan));
+
+  const btnAgregar = document.createElement("button");
+  btnAgregar.type = "button";
+  btnAgregar.className = "btn btn-secondary btn-block";
+  btnAgregar.textContent = "Agregar al plan de estudios";
+  btnAgregar.addEventListener("click", () => abrirModalVincularOptativa(materiaTemplate, plan, "revisar"));
   cuerpo.appendChild(btnAgregar);
 
   card.appendChild(cuerpo);

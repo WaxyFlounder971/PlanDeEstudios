@@ -84,6 +84,24 @@ function obtenerOptativasDisponibles() {
   return filas;
 }
 
+/**
+ * v1.12.15: equivalente a obtenerOptativasDisponibles() pero para el bloque
+ * especial "Revisar" — materias que el import no pudo ubicar en un bloque
+ * numérico claro y que tampoco parecen optativa/electiva (viven en
+ * plan.materias_revisar, nunca en plan.materias, así nunca cuentan en
+ * ningún total mientras estén aquí). La consume el bloque especial
+ * "Revisar" en plan-vista-lista-tarjetas.js.
+ */
+
+function obtenerMateriasRevisar() {
+  const principal = obtenerPlanActivo();
+  const secundario = obtenerPlanSecundario();
+  const filas = [];
+  if (principal) (principal.materias_revisar || []).forEach((m) => filas.push({ materia: m, plan: principal, origen: "principal" }));
+  if (secundario) (secundario.materias_revisar || []).forEach((m) => filas.push({ materia: m, plan: secundario, origen: "secundario" }));
+  return filas;
+}
+
 function buscarMateriaPorCodigoEnPlanes(codigo) {
   const filas = obtenerMateriasVisibles();
   const encontrada = filas.find((f) => f.materia.codigo === codigo);
@@ -532,27 +550,28 @@ function inicializarModalMateriaManual() {
   });
 }
 
-/* ===================== v1.12.5 — Vincular Optativa/Electiva al plan =====================
- * Antes, presionar "Añadir al plan" sobre una materia de la sección aislada
- * "Optativas" la agregaba directo (siempre como bloque aparte). Ahora abre
- * este modal con 3 formas explicadas con claridad (pensadas para alguien sin
- * experiencia técnica):
- *   1. "cupo"   — reemplaza un espacio de electiva/optativa que ya existe
- *                 dentro de un bloque numerado del plan (ver
- *                 obtenerCuposOptativaEnPlan / materiaPareceOptativa).
- *   2. "aparte" — se agrega a un bloque especial, aparte de los bloques
- *                 oficiales (comportamiento idéntico al que ya existía).
- *   3. "bloque" — el usuario elige a mano a cuál bloque numerado pertenece.
- * En los 3 casos, la materia sale de `optativas_disponibles` al vincularse. */
+/* ===================== v1.12.15 — Agregar al plan de estudios =====================
+ * Antes (v1.12.5), presionar "Añadir al plan" sobre una materia de "Optativas"
+ * abría un modal con 3 formas (reemplazar cupo / bloque aparte / bloque
+ * específico). v1.12.15 lo simplifica a 2 opciones, siempre visibles a la vez
+ * (sin selector de modo previo), y lo reutiliza tal cual desde los DOS
+ * bloques especiales — "Optativas" y "Revisar" — con el mismo botón único
+ * "Agregar al plan de estudios" (ver plan-vista-lista-tarjetas.js):
+ *   1. "Agregar a bloque"            — el usuario elige a mano a cuál bloque
+ *                                       numerado ya existente pertenece;
+ *                                       queda pendiente, como cualquier otra
+ *                                       materia formal de ese bloque.
+ *   2. "Reemplazar por otra materia" — reemplaza un espacio de electiva/
+ *                                       optativa que ya existe dentro de un
+ *                                       bloque numerado del plan (ver
+ *                                       obtenerCuposOptativaEnPlan /
+ *                                       materiaPareceOptativa), con
+ *                                       confirmación explícita.
+ * En ambos casos, la materia sale de su arreglo especial de origen
+ * (`optativas_disponibles` o `materias_revisar`, según `origen` — ver
+ * abrirModalVincularOptativa) al vincularse, y ya no vuelve a él. */
 
-const EXPLICACIONES_VINCULAR_OPTATIVA = {
-  cupo: "Tu plan tiene espacios reservados para electivas u optativas dentro de algunos bloques, sin materia definida todavía. Elige cuál vas a llenar con esta.",
-  aparte: "Se agrega como una materia extra que estás llevando, sin ocupar el lugar de un espacio específico del plan.",
-  bloque: "Indica tú mismo en qué bloque quieres que aparezca esta materia.",
-};
-
-estado.vincularOptativaContexto = null; // { materiaTemplate, plan } mientras el modal está abierto
-estado.vincularOptativaModo = "cupo";   // "cupo" | "aparte" | "bloque"
+estado.vincularOptativaContexto = null; // { materiaTemplate, plan, origen } mientras el modal está abierto — origen: "optativa" | "revisar"
 
 /** Cupos = materias que YA están dentro de un bloque numerado del plan
  *  (nunca en optativas_disponibles) marcadas como sin_definir=true — un
@@ -577,16 +596,26 @@ function obtenerBloquesEnPlan(plan) {
   });
 }
 
-function abrirModalVincularOptativa(materiaTemplate, plan) {
-  estado.vincularOptativaContexto = { materiaTemplate, plan };
-  estado.vincularOptativaModo = obtenerCuposOptativaEnPlan(plan).length > 0 ? "cupo" : "aparte";
+/**
+ * `origen` indica de cuál arreglo especial viene la materia — "optativa"
+ * (plan.optativas_disponibles, bloque "Optativas") o "revisar"
+ * (plan.materias_revisar, bloque "Revisar") — así, al vincularla, se quita
+ * del arreglo correcto (ver quitarDeOrigenEspecialOptativa más abajo).
+ */
+function abrirModalVincularOptativa(materiaTemplate, plan, origen = "optativa") {
+  estado.vincularOptativaContexto = { materiaTemplate, plan, origen };
 
   document.getElementById("nombre-vincular-optativa").textContent = materiaTemplate.nombre;
   document.getElementById("error-vincular-optativa").classList.add("oculto");
+  document.getElementById("explicacion-vincular-optativa").textContent =
+    "Elige una de estas dos formas de sumar esta materia a tu plan de estudios.";
 
-  document.getElementById("pill-vincular-optativa-modo").querySelectorAll(".pill-item").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.valor === estado.vincularOptativaModo);
-  });
+  // v1.12.15: el selector de modo (3 pills) del diseño anterior ya no se usa
+  // — las 2 opciones se muestran siempre juntas dentro del modal (ver
+  // renderizarContenidoVincularOptativa). Se oculta por si el HTML todavía
+  // lo trae, sin depender de tocar index.html para este cambio.
+  const pillModo = document.getElementById("pill-vincular-optativa-modo");
+  if (pillModo) pillModo.classList.add("oculto");
 
   renderizarContenidoVincularOptativa();
   document.getElementById("modal-vincular-optativa").classList.remove("oculto");
@@ -597,45 +626,36 @@ function cerrarModalVincularOptativa() {
   document.getElementById("modal-vincular-optativa").classList.add("oculto");
 }
 
+/** Quita `materiaTemplate` del arreglo especial del que vino (según
+ *  ctx.origen), para que deje de aparecer ahí una vez vinculada. */
+function quitarDeOrigenEspecialOptativa(plan, materiaTemplate, origen) {
+  if (origen === "revisar") {
+    plan.materias_revisar = (plan.materias_revisar || []).filter((m) => m.codigo !== materiaTemplate.codigo);
+  } else {
+    plan.optativas_disponibles = (plan.optativas_disponibles || []).filter((m) => m.codigo !== materiaTemplate.codigo);
+  }
+}
+
 function renderizarContenidoVincularOptativa() {
   const ctx = estado.vincularOptativaContexto;
   if (!ctx) return;
   const { materiaTemplate, plan } = ctx;
-  const modo = estado.vincularOptativaModo;
-
-  document.getElementById("explicacion-vincular-optativa").textContent = EXPLICACIONES_VINCULAR_OPTATIVA[modo];
 
   const cont = document.getElementById("contenido-vincular-optativa");
   cont.innerHTML = "";
 
-  if (modo === "cupo") {
-    const cupos = obtenerCuposOptativaEnPlan(plan);
-    if (cupos.length === 0) {
-      cont.innerHTML = `<p class="muted">Este plan no tiene espacios de electiva/optativa pendientes dentro de sus bloques.</p>`;
-      return;
-    }
-    cupos.forEach((cupo) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "btn btn-secondary btn-block";
-      btn.style.textAlign = "left";
-      btn.textContent = `${plan.parametros_universidad.nombre_bloque} ${cupo.bloque} — reemplazar ${obtenerPalabraOptativa(cupo)}: "${cupo.nombre}"`;
-      btn.addEventListener("click", () => reemplazarCupoOptativa(materiaTemplate, plan, cupo));
-      cont.appendChild(btn);
-    });
-  } else if (modo === "aparte") {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "btn btn-primary btn-block";
-    btn.textContent = "Agregar como materia aparte";
-    btn.addEventListener("click", () => agregarOptativaEnBloqueAparte(materiaTemplate, plan));
-    cont.appendChild(btn);
-  } else if (modo === "bloque") {
-    const bloques = obtenerBloquesEnPlan(plan);
-    if (bloques.length === 0) {
-      cont.innerHTML = `<p class="muted">Este plan todavía no tiene bloques con materias — usa "Agregar en un bloque aparte" en su lugar.</p>`;
-      return;
-    }
+  // ---- Opción 1: Agregar a bloque ----
+  const seccionBloque = document.createElement("div");
+  seccionBloque.className = "stack";
+  seccionBloque.innerHTML = `<p style="margin:0;"><strong>1. Agregar a bloque</strong></p><p class="muted" style="margin-top:2px;">Elige a cuál ${plan.parametros_universidad.nombre_bloque.toLowerCase()} numerado pertenece — quedará como una materia pendiente más de ese bloque.</p>`;
+
+  const bloques = obtenerBloquesEnPlan(plan);
+  if (bloques.length === 0) {
+    const p = document.createElement("p");
+    p.className = "muted";
+    p.textContent = "Este plan todavía no tiene bloques numerados con materias.";
+    seccionBloque.appendChild(p);
+  } else {
     const grupo = document.createElement("div");
     grupo.className = "pill-group";
     bloques.forEach((bloque) => {
@@ -646,12 +666,46 @@ function renderizarContenidoVincularOptativa() {
       btn.addEventListener("click", () => asignarOptativaABloqueEspecifico(materiaTemplate, plan, bloque));
       grupo.appendChild(btn);
     });
-    cont.appendChild(grupo);
+    seccionBloque.appendChild(grupo);
   }
+  cont.appendChild(seccionBloque);
+
+  const separador = document.createElement("hr");
+  separador.style.cssText = "opacity:0.15; margin:16px 0; border:none; border-top:1px solid currentColor;";
+  cont.appendChild(separador);
+
+  // ---- Opción 2: Reemplazar por otra materia ----
+  const seccionCupo = document.createElement("div");
+  seccionCupo.className = "stack";
+  seccionCupo.innerHTML = `<p style="margin:0;"><strong>2. Reemplazar por otra materia</strong></p><p class="muted" style="margin-top:2px;">Ocupa el lugar de un espacio de electiva/optativa genérico que ya existe dentro de un bloque del plan.</p>`;
+
+  const cupos = obtenerCuposOptativaEnPlan(plan);
+  if (cupos.length === 0) {
+    const p = document.createElement("p");
+    p.className = "muted";
+    p.textContent = "Este plan no tiene espacios de electiva/optativa pendientes dentro de sus bloques.";
+    seccionCupo.appendChild(p);
+  } else {
+    cupos.forEach((cupo) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-secondary btn-block";
+      btn.style.textAlign = "left";
+      btn.textContent = `${plan.parametros_universidad.nombre_bloque} ${cupo.bloque} — reemplazar ${obtenerPalabraOptativa(cupo)}: "${cupo.nombre}"`;
+      btn.addEventListener("click", () => {
+        const confirmado = window.confirm(
+          `¿Quieres poner "${materiaTemplate.nombre}" dentro del plan, reemplazando a "${cupo.nombre}"?`
+        );
+        if (confirmado) reemplazarCupoOptativa(materiaTemplate, plan, cupo);
+      });
+      seccionCupo.appendChild(btn);
+    });
+  }
+  cont.appendChild(seccionCupo);
 }
 
 /**
- * Opción 1 ("cupo"): la entrada genérica del cupo (ej. OPT-B7/ELEC-B9) se
+ * Opción 2 ("Reemplazar por otra materia"): la entrada genérica del cupo (ej. OPT-B7/ELEC-B9) se
  * sustituye por los datos reales de la materia elegida (código, nombre,
  * créditos, horas, requisitos, correquisitos), pero conserva el `bloque` del
  * cupo que reemplazó, además de su `categoria_id` y `estado` ya asignados —
@@ -660,8 +714,9 @@ function renderizarContenidoVincularOptativa() {
  * duplicada).
  */
 function reemplazarCupoOptativa(materiaTemplate, plan, cupo) {
+  const ctx = estado.vincularOptativaContexto;
   const codigoAnterior = cupo.codigo;
-  plan.optativas_disponibles = (plan.optativas_disponibles || []).filter((m) => m.codigo !== materiaTemplate.codigo);
+  quitarDeOrigenEspecialOptativa(plan, materiaTemplate, ctx ? ctx.origen : "optativa");
 
   cupo.codigo = materiaTemplate.codigo;
   cupo.id = materiaTemplate.codigo;
@@ -680,24 +735,13 @@ function reemplazarCupoOptativa(materiaTemplate, plan, cupo) {
   renderizarPlanEstudios();
 }
 
-/** Opción 2 ("aparte"): exactamente el mismo comportamiento que ya existía
- *  para "Añadir al plan" en la sección aislada de Optativas — se agrega como
- *  materia formal, sin Bloque numérico, dentro del bloque especial
- *  "Optativas" (ver construirBloqueOptativas en plan-vista-lista-tarjetas.js). */
-function agregarOptativaEnBloqueAparte(materiaTemplate, plan) {
-  plan.optativas_disponibles = (plan.optativas_disponibles || []).filter((m) => m.codigo !== materiaTemplate.codigo);
-  materiaTemplate.es_optativa = true;
-  plan.materias.push(materiaTemplate);
-  marcarCambioPendiente();
-  cerrarModalVincularOptativa();
-  renderizarPlanEstudios();
-}
-
-/** Opción 3 ("bloque"): se asigna manualmente a un bloque numérico ya
- *  existente del plan — se agrega como una materia formal más de ese
- *  bloque (no queda marcada es_optativa, igual que si reemplazara un cupo). */
+/** Opción 1 ("Agregar a bloque"): se asigna manualmente a un bloque numérico
+ *  ya existente del plan — se agrega como una materia formal más de ese
+ *  bloque (no queda marcada es_optativa, igual que si reemplazara un cupo;
+ *  estado inicial "pendiente", ya el default de crearMateria). */
 function asignarOptativaABloqueEspecifico(materiaTemplate, plan, bloque) {
-  plan.optativas_disponibles = (plan.optativas_disponibles || []).filter((m) => m.codigo !== materiaTemplate.codigo);
+  const ctx = estado.vincularOptativaContexto;
+  quitarDeOrigenEspecialOptativa(plan, materiaTemplate, ctx ? ctx.origen : "optativa");
   materiaTemplate.es_optativa = false;
   materiaTemplate.bloque = bloque;
   plan.materias.push(materiaTemplate);
@@ -707,14 +751,8 @@ function asignarOptativaABloqueEspecifico(materiaTemplate, plan, bloque) {
 }
 
 function inicializarModalVincularOptativa() {
-  document.getElementById("pill-vincular-optativa-modo").querySelectorAll(".pill-item").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      estado.vincularOptativaModo = btn.dataset.valor;
-      document.getElementById("pill-vincular-optativa-modo").querySelectorAll(".pill-item").forEach((b) => b.classList.toggle("active", b === btn));
-      renderizarContenidoVincularOptativa();
-    });
-  });
-
+  // v1.12.15: ya no hay pills de modo que inicializar — el modal siempre
+  // muestra las 2 opciones juntas (ver renderizarContenidoVincularOptativa).
   document.getElementById("btn-cancelar-vincular-optativa").addEventListener("click", cerrarModalVincularOptativa);
   document.getElementById("modal-vincular-optativa").addEventListener("click", (e) => {
     if (e.target.id === "modal-vincular-optativa") cerrarModalVincularOptativa();
@@ -737,6 +775,7 @@ export {
   inicializarModalMateriaManual,
   inicializarModalVincularOptativa,
   mapearUniversidadDetectada,
+  obtenerMateriasRevisar,
   obtenerMateriasVisibles,
   obtenerOptativasDisponibles,
   obtenerPlanActivo,

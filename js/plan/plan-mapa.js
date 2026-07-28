@@ -237,19 +237,26 @@ function recolorearNodosMapa(plan) {
 /** Construye el contenedor completo del mapa: columnas por bloque + overlay SVG de caminos. */
 
 function construirMapaInteractivo(plan) {
-  const materias = plan.materias.slice();
+  // v1.12.15 (punto 3 del prompt): la Vista de Mapa dibuja ÚNICAMENTE los
+  // bloques numerados reales del plan — ni "Optativas" ni "Revisar" se
+  // dibujan aquí. "Revisar" nunca llega a plan.materias (vive en
+  // plan.materias_revisar, igual que optativas_disponibles — ver
+  // plan-importacion-csv.js/plan-esquema.js), así que se excluye solo con
+  // que este mapa siga leyendo plan.materias; "Optativas" (es_optativa:true)
+  // sí puede llegar a existir en plan.materias por datos de versiones
+  // anteriores, así que se filtra explícitamente acá.
+  const materias = plan.materias.filter((m) => !m.es_optativa);
   const grupos = new Map();
   materias.forEach((m) => {
-    const clave = m.es_optativa ? "__optativas__" : (m.bloque === null || m.bloque === undefined ? "__sin_bloque__" : String(m.bloque));
+    const clave = m.bloque === null || m.bloque === undefined ? "__sin_bloque__" : String(m.bloque);
     if (!grupos.has(clave)) grupos.set(clave, []);
     grupos.get(clave).push(m);
   });
   const clavesNumericas = Array.from(grupos.keys())
-    .filter((k) => k !== "__optativas__" && k !== "__sin_bloque__")
+    .filter((k) => k !== "__sin_bloque__")
     .sort((a, b) => Number(a) - Number(b));
   const clavesFinal = [...clavesNumericas];
   if (grupos.has("__sin_bloque__")) clavesFinal.push("__sin_bloque__");
-  if (grupos.has("__optativas__")) clavesFinal.push("__optativas__");
 
   const wrapper = document.createElement("div");
   wrapper.className = "mapa-wrapper";
@@ -286,7 +293,7 @@ function construirMapaInteractivo(plan) {
     const tituloCol = document.createElement("div");
     tituloCol.className = "mapa-columna-titulo";
     tituloCol.textContent =
-      clave === "__optativas__" ? "Optativas" : clave === "__sin_bloque__" ? "Sin bloque" : `${plan.parametros_universidad.nombre_bloque} ${clave}`;
+      clave === "__sin_bloque__" ? "Sin bloque" : `${plan.parametros_universidad.nombre_bloque} ${clave}`;
     columna.appendChild(tituloCol);
 
     grupos.get(clave).forEach((materia) => {

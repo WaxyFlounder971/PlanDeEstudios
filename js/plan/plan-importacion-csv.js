@@ -188,9 +188,20 @@ function derivarTiposHorasDeHorasColumnas(horasColumnasCrudo) {
  * Parsea el CSV completo para un plan con estos `tiposHoras` (array de
  * llaves ya fijado en `plan.parametros_universidad.tipos_horas`, derivado a
  * su vez de HORAS_COLUMNAS al crear el plan — ver derivarTiposHorasDeHorasColumnas).
- * Devuelve { materias: [...], electivas: [...], errores: [...] }. Nunca
- * lanza excepción: una fila mala se reporta y se salta, sin romper el resto
- * del import.
+ * Devuelve { materias: [...], electivas: [...], paraRevisar: [...],
+ * errores: [...] }. Nunca lanza excepción: una fila mala se reporta y se
+ * salta, sin romper el resto del import.
+ *
+ * v1.12.15: enrutamiento de cada fila, en orden — 1) si la columna Bloque
+ * trae un número real, va a `materias` con ese bloque normal (aunque el
+ * nombre/código también parezca electiva: eso es un cupo sin_definir dentro
+ * de un bloque real, ver materiaPareceOptativa). 2) si NO hay bloque
+ * numérico claro pero la columna Bloque dice ELECTIVA/OPTATIVA, va a
+ * `electivas` (bloque especial "Optativas"). 3) si no hay bloque numérico
+ * claro y tampoco es electiva/optativa (ej. la IA escribió "REVISAR" porque
+ * no tuvo certeza), va a `paraRevisar` (bloque especial "Revisar"). Antes,
+ * el paso 3 cae bajo `Number(bloque) || bloque`, dejando "REVISAR" como si
+ * fuera un bloque numerado más, mezclado con los reales.
  *
  * v1.12: las columnas de horas ya NO tienen un prefijo fijo "Horas_" — el
  * nuevo prompt universal le pide a la IA que use los mismos códigos de
@@ -218,7 +229,7 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
 
-  if (lineas.length === 0) return { materias: [], electivas: [], errores: ["El CSV está vacío."] };
+  if (lineas.length === 0) return { materias: [], electivas: [], paraRevisar: [], errores: ["El CSV está vacío."] };
 
   const encabezado = parsearLineaCSV(lineas[0]);
 
@@ -250,6 +261,7 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
   const filas = lineas.slice(1);
   const materias = [];
   const electivas = [];
+  const paraRevisar = [];
 
   filas.forEach((linea, indice) => {
     const numeroFila = indice + 2; // +2 = +1 por el encabezado, +1 por ser 1-indexado
@@ -316,7 +328,15 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
     // C.4 (v9): "ELECTIVA"/"OPTATIVA" en la columna Bloque (en vez de un
     // número) marca esta materia como electiva/optativa — se detecta como
     // tal y se enruta al arreglo separado en vez de al de materias fijas.
-    const esOptativa = /^(ELECTIVA|OPTATIVA)S?$/i.test(String(bloque).trim());
+    const bloqueTexto = String(bloque).trim();
+    const esOptativa = /^(ELECTIVA|OPTATIVA)S?$/i.test(bloqueTexto);
+    // v1.12.15: un bloque "claro" es un número real y no vacío — así "" (o
+    // cualquier texto no numérico que no sea ELECTIVA/OPTATIVA, típicamente
+    // "REVISAR") nunca cae en Number(bloque) || bloque, que antes lo dejaba
+    // como si fuera un bloque más (ver JSDoc de esta función).
+    const numeroBloque = Number(bloqueTexto);
+    const tieneBloqueClaro = !esOptativa && bloqueTexto !== "" && !isNaN(numeroBloque);
+    const esParaRevisar = !esOptativa && !tieneBloqueClaro;
 
     const materiaCreada = crearMateria({
       codigo,
@@ -324,7 +344,7 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
       creditos: Number(creditos) || 0,
       horas,
       tiposHoras: tipos,
-      bloque: esOptativa ? null : (Number(bloque) || bloque),
+      bloque: tieneBloqueClaro ? numeroBloque : null,
       requisitos: parsearRequisitoArbol(requisitos),
       correquisitos: parsearRequisitoArbol(correquisitos),
       esOptativa,
@@ -332,6 +352,7 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
     });
 
     if (esOptativa) electivas.push(materiaCreada);
+    else if (esParaRevisar) paraRevisar.push(materiaCreada);
     else materias.push(materiaCreada);
   });
 
@@ -348,7 +369,7 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
     m.correquisitos = expandirRequisitoBloque(m.correquisitos, materias);
   });
 
-  return { materias, electivas, errores };
+  return { materias, electivas, paraRevisar, errores };
 }
 
 /**
@@ -448,7 +469,7 @@ function importarCSVEnPlan(textoCSV, planDestino) {
     planDestino.parametros_universidad.tipos_horas = derivarTiposHorasDeHorasColumnas(metadatos.horas_columnas);
   }
 
-  const { materias, electivas, errores } = parsearCSVPlanEstudios(csv, planDestino.parametros_universidad.tipos_horas);
+  const { materias, electivas, paraRevisar, errores } = parsearCSVPlanEstudios(csv, planDestino.parametros_universidad.tipos_horas);
 
   // Se combina por código: si ya existía, se actualiza; si es nueva, se agrega.
   materias.forEach((nueva) => {
@@ -473,6 +494,21 @@ function importarCSVEnPlan(textoCSV, planDestino) {
       Object.assign(existenteDisponible, nueva);
     } else {
       planDestino.optativas_disponibles.push(nueva);
+    }
+  });
+
+  // v1.12.15: mismo patrón para las materias sin bloque claro y sin pinta de
+  // electiva/optativa — van a "materias_revisar" (bloque especial
+  // "Revisar"), nunca a `materias` directamente.
+  if (!Array.isArray(planDestino.materias_revisar)) planDestino.materias_revisar = [];
+  paraRevisar.forEach((nueva) => {
+    const yaAgregada = planDestino.materias.some((m) => m.codigo === nueva.codigo);
+    if (yaAgregada) return;
+    const existenteEnRevisar = planDestino.materias_revisar.find((m) => m.codigo === nueva.codigo);
+    if (existenteEnRevisar) {
+      Object.assign(existenteEnRevisar, nueva);
+    } else {
+      planDestino.materias_revisar.push(nueva);
     }
   });
 
@@ -689,6 +725,7 @@ function construirMiniPanelImportacion(plan) {
       if (estado.modoActualizarMalla === "reemplazar") {
         plan.materias = [];
         plan.optativas_disponibles = [];
+        plan.materias_revisar = [];
       }
 
       // v1.12: igual que en importarCSVEnPlan — si el plan queda vacío (ya
@@ -701,7 +738,7 @@ function construirMiniPanelImportacion(plan) {
         plan.parametros_universidad.tipos_horas = derivarTiposHorasDeHorasColumnas(metadatos.horas_columnas);
       }
 
-      const { materias, electivas, errores } = parsearCSVPlanEstudios(csv, plan.parametros_universidad.tipos_horas);
+      const { materias, electivas, paraRevisar, errores } = parsearCSVPlanEstudios(csv, plan.parametros_universidad.tipos_horas);
       materias.forEach((nueva) => {
         const existente = plan.materias.find((m) => m.codigo === nueva.codigo);
         if (existente) Object.assign(existente, nueva, { categoria_id: existente.categoria_id, estado: existente.estado });
@@ -720,11 +757,21 @@ function construirMiniPanelImportacion(plan) {
         else plan.optativas_disponibles.push(nueva);
       });
 
+      // v1.12.15: mismo patrón para "materias_revisar" (bloque especial "Revisar").
+      if (!Array.isArray(plan.materias_revisar)) plan.materias_revisar = [];
+      paraRevisar.forEach((nueva) => {
+        const yaAgregada = plan.materias.some((m) => m.codigo === nueva.codigo);
+        if (yaAgregada) return;
+        const existenteEnRevisar = plan.materias_revisar.find((m) => m.codigo === nueva.codigo);
+        if (existenteEnRevisar) Object.assign(existenteEnRevisar, nueva);
+        else plan.materias_revisar.push(nueva);
+      });
+
       marcarCambioPendiente();
       resultado.innerHTML = errores.length
         ? `<p class="muted" style="color:var(--color-danger);">Algunas filas no se pudieron importar:</p>` +
           errores.map((e) => `<p class="muted" style="color:var(--color-danger);">• ${e}</p>`).join("")
-        : `<p class="muted" style="color:#34d399;">¡Listo! ${materias.length + electivas.length} materias procesadas.</p>`;
+        : `<p class="muted" style="color:#34d399;">¡Listo! ${materias.length + electivas.length + paraRevisar.length} materias procesadas.</p>`;
       estado.panelImportacionAbierto = false;
       renderizarPlanEstudios();
     };
