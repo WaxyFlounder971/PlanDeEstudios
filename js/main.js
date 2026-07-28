@@ -13,9 +13,9 @@ import { CLAVE_CACHE_LOCAL, borrarTokenCache, correoConocido, establecerTokenAct
 import { obtenerIniciales } from "./core/utils.js";
 import { inicializarModalCategoria, inicializarModalCategoriaMaterias } from "./plan/plan-categorias.js";
 import { inicializarModalDesbloquea, inicializarModalHistorial, inicializarModalRequisito } from "./plan/plan-detalle.js";
-import { inicializarModalCrearPlan, inicializarModalMateriaManual } from "./plan/plan-esquema.js";
+import { inicializarModalCrearPlan, inicializarModalMateriaManual, inicializarModalVincularOptativa } from "./plan/plan-esquema.js";
 import { inicializarModalGestionPlanes, renderizarModoHardcore, renderizarSelectorPlan } from "./plan/plan-gestionar.js";
-import { inicializarModalInstruccionesImportacion } from "./plan/plan-importacion.js";
+import { inicializarModalCapturasPDF, inicializarModalInstruccionesImportacion } from "./plan/plan-importacion.js";
 import { inicializarResponsivoListaPlan, renderizarPlanEstudios } from "./plan/plan-vista-lista.js";
 import { abrirConfirmacion, agregarLongPress, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, restaurarEstadoSidebar } from "./ui/componentes.js";
 import { aplicarPaleta, aplicarTemaGuardadoLocalmente } from "./ui/tema.js";
@@ -228,9 +228,11 @@ window.addEventListener("DOMContentLoaded", () => {
   inicializarModalCategoria();
   inicializarModalCategoriaMaterias();
   inicializarModalMateriaManual();
+  inicializarModalVincularOptativa();
   inicializarModalGestionPlanes();
   inicializarModalDesbloquea();
   inicializarModalInstruccionesImportacion();
+  inicializarModalCapturasPDF();
   inicializarModalRequisito();
   inicializarModalHistorial();
   inicializarResponsivoListaPlan();
