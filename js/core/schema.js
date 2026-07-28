@@ -312,7 +312,7 @@ function crearCategoria({ nombre, color }) {
  * `tiposHoras` se descarta — así materia.horas nunca tiene campos de más ni
  * de menos respecto al plan al que pertenece.
  */
-function crearMateria({ codigo, nombre, creditos, horas, tiposHoras, bloque, requisitos, correquisitos, esOptativa }) {
+function crearMateria({ codigo, nombre, creditos, horas, tiposHoras, bloque, requisitos, correquisitos, esOptativa, sinDefinir }) {
   // v7 #1: un arreglo vacío es una elección válida ("No aplica" — el plan no
   // maneja horas). Solo se usa el default ["Horas"] cuando tiposHoras
   // realmente no vino (undefined/null), nunca cuando vino vacío a propósito.
@@ -342,6 +342,16 @@ function crearMateria({ codigo, nombre, creditos, horas, tiposHoras, bloque, req
     // si cuenta en los totales es si vive en `plan.materias` (cuenta) o en
     // `plan.optativas_disponibles` (no cuenta, ver js/plan.js).
     es_optativa: !!esOptativa,
+    // v1.14.1: reemplaza por completo la detección por prefijo de código
+    // (OPT-/ELEC-) que existía antes — aquella obligaba a la IA a inventar o
+    // sobrescribir el código real de un espacio de electiva/optativa dentro
+    // de un bloque numerado solo para poder detectarlo después, lo cual
+    // manipulaba datos reales de la fuente. Ahora es un campo independiente:
+    // true = esta fila todavía no representa una materia real elegida (es un
+    // espacio reservado dentro de un bloque, ej. "Electivo 1"), sin importar
+    // qué diga su Código o Nombre — el Código/Nombre reales del documento
+    // NUNCA se tocan ni se inventan para marcar esto.
+    sin_definir: !!sinDefinir,
   };
 }
 
@@ -412,6 +422,18 @@ function migrarDatosAntiguos(datos) {
       // migrarRequisitoAArbol lo retorna intacto sin tocarlo.
       materia.requisitos = migrarRequisitoAArbol(materia.requisitos);
       materia.correquisitos = migrarRequisitoAArbol(materia.correquisitos);
+
+      // v1.14.1: migración de una sola vez para planes importados ANTES de
+      // este campo, cuando la detección de "espacio reservado de electiva/
+      // optativa" todavía dependía de que el CÓDIGO llevara el prefijo
+      // OPT-/ELEC- (esquema viejo, ya no se usa más para esto — ver
+      // crearMateria). Si el plan ya trae `sin_definir` no se toca nada; si
+      // no lo trae, se infiere UNA VEZ de ese prefijo viejo para no perder
+      // los cupos ya detectados con planes existentes, y de ahí en adelante
+      // el campo vive independiente del código (que nunca más se inventa).
+      if (materia.sin_definir === undefined) {
+        materia.sin_definir = /^(OPT|ELEC)-/i.test(String(materia.codigo || "").trim());
+      }
     });
   });
 
