@@ -138,9 +138,13 @@ REGLAS:
 1. BLOQUE: número de nivel/ciclo/año/semestre/cuatrimestre convertido a un ENTERO SECUENCIAL único
    y creciente según el orden real en que se cursan (ej: si el documento organiza por "Año" y dentro
    por "Ciclo I/II", o por "Verano", cada uno de esos sub-bloques cronológicos es un número distinto:
-   1, 2, 3, 4... no reinicies el conteo al cambiar de año). Si el documento usa nombres en vez de
-   números, conviértelo al secuencial correspondiente. Si no puedes determinarlo con certeza,
-   escribe "REVISAR".
+   no reinicies el conteo al cambiar de año). Si el documento usa nombres en vez de números,
+   conviértelo al secuencial correspondiente. Si no puedes determinarlo con certeza, escribe
+   "REVISAR".
+   - La secuencia normalmente arranca en 1, PERO si el documento mismo ya trae un "Bloque 0" /
+     "Nivel 0" / "Ciclo 0" real (típico de cursos de nivelación/propedéutico/precálculo antes del
+     primer semestre oficial), respeta ese 0 tal cual — NO lo renumeres a 1 ni corras el resto de
+     la secuencia para "empezar en 1". El 0 es un número de bloque válido en esta app.
 
 2. CODIGO: la sigla/código tal como aparece en el documento. Si la materia es un espacio reservado
    para una electiva/optativa sin materia real definida todavía (sin importar cómo la llame el

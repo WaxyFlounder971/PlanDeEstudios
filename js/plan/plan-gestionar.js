@@ -256,11 +256,13 @@ function inicializarModalGestionPlanes() {
   });
 }
 
-/* ===================== v1.14.1 — Editar info de la carrera ===================== *
- * Lapicito por fila en Gestionar Planes: edita SOLO los datos de cabecera
- * (nombre_carrera, universidad, codigo_plan, tipo_titulo) de un plan que ya
- * existe — nunca su estructura académica (bloques, tipos de horas, etc.),
- * eso sigue viviendo en Crear Plan / la importación. */
+/* ===================== v1.14.1/v1.14.4 — Editar info de la carrera ===================== *
+ * Lapicito por fila en Gestionar Planes: edita los datos de cabecera
+ * (nombre_carrera, universidad, codigo_plan, tipo_titulo) Y los parámetros
+ * académicos del plan (nombre_bloque, semanas_por_bloque,
+ * horario_inicio_default, horario_duracion_bloque_min, tipos_horas) de un
+ * plan que ya existe. NO toca las materias en sí (eso sigue siendo el
+ * lapicito de cada fila en la vista de lista / "+ Añadir materia"). */
 
 estado.editarPlanInfoId = null; // qué plan.id está abierto en este modal
 
@@ -270,6 +272,18 @@ function abrirModalEditarPlanInfo(plan) {
   document.getElementById("input-editar-plan-universidad").value = plan.universidad || "";
   document.getElementById("input-editar-plan-codigo").value = plan.codigo_plan || "";
   document.getElementById("input-editar-plan-tipo-titulo").value = plan.tipo_titulo || "";
+
+  // v1.14.4: parametros_universidad — mismos datos que antes solo se podían
+  // fijar en Crear Plan / la importación, precargados con lo que ya tiene
+  // este plan puntual (nunca con defaults genéricos de otra universidad).
+  const params = plan.parametros_universidad || {};
+  document.getElementById("input-editar-plan-nombre-bloque").value = params.nombre_bloque || "Bloque";
+  document.getElementById("input-editar-plan-semanas").value = params.semanas_por_bloque || 16;
+  document.getElementById("input-editar-plan-hora-inicio").value = params.horario_inicio_default || "07:30";
+  document.getElementById("input-editar-plan-duracion").value = params.horario_duracion_bloque_min || 50;
+  const tiposHoras = Array.isArray(params.tipos_horas) ? params.tipos_horas : ["Horas"];
+  document.getElementById("input-editar-plan-tipos-horas").value = tiposHoras.join(",");
+
   document.getElementById("error-editar-plan-info").classList.add("oculto");
   document.getElementById("modal-editar-plan-info").classList.remove("oculto");
 }
@@ -298,8 +312,29 @@ function inicializarModalEditarPlanInfo() {
     const codigoPlan = document.getElementById("input-editar-plan-codigo").value.trim();
     const tipoTitulo = document.getElementById("input-editar-plan-tipo-titulo").value.trim();
 
+    const nombreBloque = document.getElementById("input-editar-plan-nombre-bloque").value.trim();
+    const semanasPorBloque = Number(document.getElementById("input-editar-plan-semanas").value);
+    const horarioInicio = document.getElementById("input-editar-plan-hora-inicio").value.trim();
+    const duracionBloque = Number(document.getElementById("input-editar-plan-duracion").value);
+    // v1.14.4: "Horas" (sin comas) también es válido — no forzar a que el
+    // usuario escriba una coma para tener un solo tipo de hora.
+    const tiposHorasNuevos = document.getElementById("input-editar-plan-tipos-horas").value
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+
     if (!nombreCarrera || !universidad) {
       error.textContent = "El nombre de la carrera y la universidad son obligatorios.";
+      error.classList.remove("oculto");
+      return;
+    }
+    if (!nombreBloque) {
+      error.textContent = "El nombre del bloque es obligatorio (ej. Semestre, Ciclo, Bloque).";
+      error.classList.remove("oculto");
+      return;
+    }
+    if (tiposHorasNuevos.length === 0) {
+      error.textContent = "Tenés que indicar al menos un tipo de hora (ej. Horas, o T,P,L).";
       error.classList.remove("oculto");
       return;
     }
@@ -308,6 +343,40 @@ function inicializarModalEditarPlanInfo() {
     plan.universidad = universidad;
     plan.codigo_plan = codigoPlan || null;
     plan.tipo_titulo = tipoTitulo || null;
+
+    const tiposHorasViejos = Array.isArray(plan.parametros_universidad.tipos_horas)
+      ? plan.parametros_universidad.tipos_horas
+      : ["Horas"];
+
+    plan.parametros_universidad.nombre_bloque = nombreBloque;
+    plan.parametros_universidad.semanas_por_bloque = semanasPorBloque || 16;
+    plan.parametros_universidad.horario_inicio_default = horarioInicio || "07:30";
+    plan.parametros_universidad.horario_duracion_bloque_min = duracionBloque || 50;
+    plan.parametros_universidad.tipos_horas = tiposHorasNuevos;
+
+    // v1.14.4: si la lista de tipos de horas cambió (nombre, cantidad u
+    // orden), las horas YA CARGADAS en cada materia de este plan se
+    // reacomodan por POSICIÓN — la 1ª columna vieja pasa a ser la 1ª nueva,
+    // etc. — en vez de perderse. Columnas nuevas que no tenían equivalente
+    // arrancan en 0; columnas viejas que se eliminaron simplemente se
+    // descartan. Si la lista es idéntica, esto no cambia nada (se reescribe
+    // igual, sin efecto).
+    const cambiaronTiposHoras =
+      tiposHorasViejos.length !== tiposHorasNuevos.length ||
+      tiposHorasViejos.some((t, i) => t !== tiposHorasNuevos[i]);
+    if (cambiaronTiposHoras) {
+      plan.materias.forEach((materia) => {
+        const horasViejas = materia.horas || {};
+        const horasNuevas = {};
+        tiposHorasNuevos.forEach((tipoNuevo, i) => {
+          const tipoViejoEnEsaPosicion = tiposHorasViejos[i];
+          horasNuevas[tipoNuevo] = tipoViejoEnEsaPosicion !== undefined
+            ? (horasViejas[tipoViejoEnEsaPosicion] ?? 0)
+            : 0;
+        });
+        materia.horas = horasNuevas;
+      });
+    }
 
     marcarCambioPendiente();
     cerrarModalEditarPlanInfo();

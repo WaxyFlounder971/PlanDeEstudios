@@ -266,7 +266,7 @@ function inicializarModalCrearPlan() {
       codigo_plan: codigoPlan,
       tipo_titulo: estado.tipoTituloDetectadoPlan,
       parametros_universidad: {
-        nombre_bloque: document.getElementById("input-plan-nombre-bloque").value.trim() || "Semestre",
+        nombre_bloque: document.getElementById("input-plan-nombre-bloque").value.trim() || "Bloque",
         semanas_por_bloque: Number(document.getElementById("input-plan-semanas").value) || 16,
         horario_inicio_default: document.getElementById("input-plan-hora-inicio").value || "07:30",
         horario_duracion_bloque_min: Number(document.getElementById("input-plan-duracion").value) || 50,
