@@ -466,6 +466,40 @@
   </div>
 </div>
 
+<!-- ===================== MODAL: Editar info de la carrera (v1.14.1) ===================== -->
+<div id="modal-editar-plan-info" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;">Editar información de la carrera</h2>
+
+    <div>
+      <span class="form-label">Nombre de la carrera</span>
+      <input type="text" id="input-editar-plan-nombre-carrera" class="form-input" placeholder="Ej. Ingeniería en Tecnologías de Información">
+    </div>
+
+    <div>
+      <span class="form-label">Universidad</span>
+      <input type="text" id="input-editar-plan-universidad" class="form-input" placeholder="Ej. Tecnológico de Costa Rica">
+    </div>
+
+    <div>
+      <span class="form-label">Código del plan (opcional)</span>
+      <input type="text" id="input-editar-plan-codigo" class="form-input" placeholder="Ej. 420501, plan 01">
+    </div>
+
+    <div>
+      <span class="form-label">Tipo de título (opcional)</span>
+      <input type="text" id="input-editar-plan-tipo-titulo" class="form-input" placeholder="Ej. Bachillerato, Licenciatura...">
+    </div>
+
+    <p id="error-editar-plan-info" class="muted oculto" style="color:var(--color-danger);"></p>
+
+    <div class="row" style="justify-content:flex-end;">
+      <button id="btn-cancelar-editar-plan-info" class="btn btn-secondary">Cancelar</button>
+      <button id="btn-guardar-editar-plan-info" class="btn btn-primary">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <div id="modal-desbloquea" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
     <h2 style="margin:0;" id="titulo-modal-desbloquea">es requisito para:</h2>
