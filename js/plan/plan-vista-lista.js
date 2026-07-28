@@ -242,6 +242,18 @@ function construirBarraAcciones() {
 
   // v1.9.8: Bloques y Materias van en 2 pills SEPARADAS (antes vivían juntas
   // en una sola pill con "·" de separador — eso era lo que se rompía en PC).
+  // v1.12.13: ambas van dentro de un contenedor propio (.grupo-toggles-
+  // bloques-materias) para poder tratarlas como una unidad responsiva aparte
+  // de "Editar Materias" (grupoEdicion, más abajo) — ver el <style> en
+  // index.html: en pantallas angostas donde "Bloques ▲Bloques ▼ Materias
+  // ▲Materias ▼" ya no entra en una sola línea, primero se esconde SOLO la
+  // palabra (queda "▲ ▼") para ahorrar espacio sin romper el orden; si ni
+  // así entra, recién ahí se fuerza el salto de línea con cada grupo
+  // ocupando el 100% del ancho. En computadora (donde sí entra todo) esto
+  // no cambia nada — se ve exactamente igual que antes.
+  const contenedorBloquesMaterias = document.createElement("div");
+  contenedorBloquesMaterias.className = "grupo-toggles-bloques-materias";
+
   const grupoBloques = document.createElement("div");
   grupoBloques.className = "pill-group";
   grupoBloques.title = "Bloques";
@@ -249,18 +261,18 @@ function construirBarraAcciones() {
   const btnBloquesContraer = document.createElement("button");
   btnBloquesContraer.type = "button";
   btnBloquesContraer.className = "pill-item";
-  btnBloquesContraer.textContent = "Bloques ▲";
+  btnBloquesContraer.innerHTML = `<span class="pill-texto">Bloques</span> ▲`;
   btnBloquesContraer.addEventListener("click", contraerTodosLosBloques);
   grupoBloques.appendChild(btnBloquesContraer);
 
   const btnBloquesExpandir = document.createElement("button");
   btnBloquesExpandir.type = "button";
   btnBloquesExpandir.className = "pill-item";
-  btnBloquesExpandir.textContent = "Bloques ▼";
+  btnBloquesExpandir.innerHTML = `<span class="pill-texto">Bloques</span> ▼`;
   btnBloquesExpandir.addEventListener("click", expandirTodosLosBloques);
   grupoBloques.appendChild(btnBloquesExpandir);
 
-  filaBotones.appendChild(grupoBloques);
+  contenedorBloquesMaterias.appendChild(grupoBloques);
 
   const grupoMaterias = document.createElement("div");
   grupoMaterias.className = "pill-group";
@@ -269,18 +281,20 @@ function construirBarraAcciones() {
   const btnMateriasContraer = document.createElement("button");
   btnMateriasContraer.type = "button";
   btnMateriasContraer.className = "pill-item";
-  btnMateriasContraer.textContent = "Materias ▲";
+  btnMateriasContraer.innerHTML = `<span class="pill-texto">Materias</span> ▲`;
   btnMateriasContraer.addEventListener("click", contraerTodasLasMaterias);
   grupoMaterias.appendChild(btnMateriasContraer);
 
   const btnMateriasExpandir = document.createElement("button");
   btnMateriasExpandir.type = "button";
   btnMateriasExpandir.className = "pill-item";
-  btnMateriasExpandir.textContent = "Materias ▼";
+  btnMateriasExpandir.innerHTML = `<span class="pill-texto">Materias</span> ▼`;
   btnMateriasExpandir.addEventListener("click", expandirTodasLasMaterias);
   grupoMaterias.appendChild(btnMateriasExpandir);
 
-  filaBotones.appendChild(grupoMaterias);
+  contenedorBloquesMaterias.appendChild(grupoMaterias);
+
+  filaBotones.appendChild(contenedorBloquesMaterias);
 
   // v1.9.8: "Exportar CSV" se mudó adentro del modal "Gestionar plan" (justo
   // después del botón de eliminar de cada plan — ver plan-gestionar.js).
