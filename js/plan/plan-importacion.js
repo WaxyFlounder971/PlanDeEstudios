@@ -10,6 +10,7 @@ import { PRESETS_TIPOS_HORAS } from "../core/schema.js";
 import { mostrarCargando, ocultarCargando } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { mostrarToast } from "../ui/componentes.js";
+import { abrirModalCrearPlan } from "./plan-esquema.js";
 import { abrirModalGestionPlanes } from "./plan-gestionar.js";
 import { manejarClickImportar, mostrarErroresImportacion } from "./plan-importacion-csv.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
@@ -311,6 +312,25 @@ function construirPanelImportacion() {
   // estado.universidadImportacion/tiposHorasImportacion/etc. quedan como
   // legado hasta terminar de limpiar su uso en plan-esquema.js (el modal
   // "Nuevo Plan" que crea el plan tras pegar el CSV).
+
+  // v1.14.1: antes, la ÚNICA forma de crear un plan era importando un CSV
+  // (abrirModalCrearPlan solo se llamaba desde manejarClickImportar, tras
+  // pegar/procesar un CSV). Ahora también se puede saltar la importación por
+  // completo y arrancar con un plan vacío, para armarlo materia por materia
+  // con "+ Agregar materia" (abrirModalMateriaManual, ver plan-esquema.js).
+  const btnEmpezarEnBlanco = document.createElement("button");
+  btnEmpezarEnBlanco.type = "button";
+  btnEmpezarEnBlanco.className = "btn btn-secondary btn-block";
+  btnEmpezarEnBlanco.textContent = "✏️ Empezar en blanco (agregar materias a mano)";
+  btnEmpezarEnBlanco.addEventListener("click", () => {
+    abrirModalCrearPlan(estado.planImportandoId === "secundario", null);
+  });
+  sec.appendChild(btnEmpezarEnBlanco);
+
+  const separador = document.createElement("p");
+  separador.className = "muted";
+  separador.textContent = "— o, si preferís, traé tu plan ya hecho —";
+  sec.appendChild(separador);
 
   // ---- Modo de importación: Link / PDF / Capturas ----
   const etiquetaModo = document.createElement("span");
