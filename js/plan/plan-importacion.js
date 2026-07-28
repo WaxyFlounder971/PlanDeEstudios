@@ -415,6 +415,17 @@ function construirPanelImportacion() {
     nota.textContent = "Primero hay que convertir tus capturas en un solo PDF antes de enviarlas a la IA.";
     sec.appendChild(nota);
 
+    // v1.12.11: reportado — ChatGPT suele negarse a leer capturas de
+    // pantalla (las trata como contenido protegido/sensible), mientras que
+    // Claude las procesa sin problema. No es algo que podamos arreglar
+    // desde acá (es una política del otro lado), así que se avisa para que
+    // no se pierda tiempo reintentando con la IA que no funciona para esto.
+    const avisoClaude = document.createElement("p");
+    avisoClaude.className = "muted";
+    avisoClaude.style.color = "var(--color-warning, #f59e0b)";
+    avisoClaude.textContent = "⚠️ ChatGPT suele negarse a leer capturas de pantalla convertidas a PDF. Si te pasa eso, probá con Claude — con capturas le funciona bien.";
+    sec.appendChild(avisoClaude);
+
     const btnAbrirConversion = document.createElement("button");
     btnAbrirConversion.type = "button";
     btnAbrirConversion.className = "btn btn-secondary btn-block";

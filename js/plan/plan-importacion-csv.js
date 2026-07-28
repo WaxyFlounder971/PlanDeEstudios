@@ -338,11 +338,34 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
   return { materias, electivas, errores };
 }
 
+/**
+ * v1.12.11: si el usuario le da "copiar" al MENSAJE completo de la IA (en
+ * vez de al botón puntual de "copiar código"), el texto trae las marcas de
+ * bloque de código de Markdown (``` o ```csv al inicio, ``` al final) — sin
+ * esto, esa línea de más rompía la detección de metadatos (ya no calzaba
+ * con ningún patrón CARRERA:/CODIGO_PLAN:/etc.) y la línea de cierre se
+ * leía como si fuera una fila de materia más. Se quita CUALQUIER línea que
+ * sea únicamente una marca de bloque de código, en cualquier posición del
+ * texto (no solo la primera/última) — esto también cubre el caso de pegar
+ * varias partes consecutivas (regla 11 del prompt) si cada una trae sus
+ * propias marcas. Una fila real de CSV nunca empieza con "```", así que
+ * esto es seguro de aplicar siempre, sin excepción.
+ */
+function limpiarBloqueDeCodigoCSV(texto) {
+  return texto
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .filter((linea) => !/^\s*```/.test(linea))
+    .join("\n");
+}
+
 function manejarClickImportar(textoCSV) {
   if (!textoCSV || !textoCSV.trim()) {
     mostrarErroresImportacion(["Pega primero el CSV que te devolvió la IA."]);
     return;
   }
+
+  textoCSV = limpiarBloqueDeCodigoCSV(textoCSV);
 
   const cfg = estado.datos.configuracion;
   const destinoEsSecundario = cfg.modo_hardcore && estado.planImportandoId === "secundario";
