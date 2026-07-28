@@ -112,8 +112,22 @@ Detecta estas columnas leyendo el propio documento — NO asumas que todas las u
 T/P/L/TP. Si un documento no distingue tipos de hora y solo da un total, usa una sola columna "Horas".
 
 === PASO 2: CSV ===
-Devuélveme ÚNICAMENTE un bloque de código plano en formato CSV (con las líneas de metadatos antes,
-si las tienes), sin texto adicional antes o después, con esta estructura EXACTA:
+IMPORTANTE — FORMATO DE TU RESPUESTA (esto rompe la app si no se sigue al pie de la letra):
+Tu respuesta completa debe ser SOLO el bloque de código (metadatos + CSV), y nada más — ni antes
+ni después. Esta app toma tu respuesta completa y la pega tal cual en un cuadro de texto para
+procesarla automáticamente: cualquier palabra fuera del bloque de código rompe la importación.
+
+PROHIBIDO en tu respuesta:
+- Frases de introducción como "Aquí está tu CSV:", "Claro, aquí tienes:", "He procesado el documento
+  y esto es lo que encontré:", o cualquier variante — arranca DIRECTO con el bloque de código.
+- Resúmenes, explicaciones, notas, advertencias o comentarios DESPUÉS del bloque de código (ej. nada
+  de "Nota: la materia X no tenía código así que...", "Espero que esto te sirva", etc.).
+- Texto fuera del bloque de código, en cualquier punto de la respuesta — ni una sola línea.
+- Preguntas de vuelta ("¿Quieres que revise algo más?") — si tenés dudas sobre un dato puntual,
+  resuélvelas usando "REVISAR" en la celda correspondiente (regla 9), nunca preguntando aparte.
+
+Devuélveme el bloque de código plano en formato CSV (con las líneas de metadatos antes, si las
+tienes) con esta estructura EXACTA:
 
 Bloque,Codigo,Nombre,Creditos,[una columna por cada valor listado en HORAS_COLUMNAS],Requisitos,Correquisitos
 
@@ -160,6 +174,17 @@ REGLAS:
      la fila antes de completar todas las columnas del encabezado).
    - Si el documento no maneja el concepto de "correquisitos" en absoluto, escribe igual "Ninguno"
      en esa columna para todas las filas (mantén la columna por consistencia del esquema).
+   - CASO ESPECIAL — requisito de BLOQUE/NIVEL/CICLO/AÑO completo, no de materias puntuales (ej.:
+     "Haber aprobado todas las materias del Bloque 9", "Requisito: Nivel III completo", "Requisitos:
+     Ver todos", "Correquisito: Semestre anterior aprobado"): esto NUNCA se deja como "REVISAR" ni se
+     escribe el nombre del bloque como si fuera un código — SIEMPRE se expande a la lista real de
+     TODOS los códigos de materias que vos mismo ubicaste en ese Bloque en este mismo CSV, unidos con
+     ";" (Y), exactamente como si el documento hubiera listado cada una por separado. Como generás el
+     CSV completo antes de responder, ya conocés todos los códigos de cualquier Bloque, sin importar
+     en qué orden aparezcan las filas. Ejemplo: si el Bloque 9 terminó con los códigos TI8902, TI8904,
+     TI8905, TI9805, TI9905 y una materia del Bloque 10 exige "todo el Bloque 9 aprobado", esa celda
+     de Requisitos debe quedar como "TI8902;TI8904;TI8905;TI9805;TI9905" — nunca como "Bloque 9",
+     "REVISAR", ni un texto descriptivo.
 
 5. NOMBRE (y cualquier otra columna): si el nombre real de la materia trae una coma
    (ej. "Ética, Persona y Sociedad"), envuelve ESA CELDA completa entre comillas dobles.
@@ -173,6 +198,8 @@ REGLAS:
    puede cursar esa optativa (o "REVISAR" si no se especifica).
 9. Si una celda es ilegible, ambigua, o no puedes confirmarla con certeza, escribe "REVISAR" en
    vez de inventar un dato — nunca inventes códigos, créditos u horas que no estén en el documento.
+   Excepción: un requisito/correquisito que referencia un Bloque/Nivel/Ciclo completo NO es un caso
+   de "REVISAR" — se expande siempre a la lista de códigos, según la regla 4.
 10. Ignora tablas resumen de totales generales (ej. "Créditos totales de la carrera: 448") — esas
     no son filas de materias, son metadatos de resumen y no van en el CSV.
 11. Si el plan es tan grande que no te cabe en una sola respuesta, divídelo en varias respuestas
@@ -181,7 +208,14 @@ REGLAS:
     datos, en el mismo orden del plan, SIN repetir el encabezado ni los metadatos — esta app arma el
     CSV final pegando las partes una tras otra en el mismo cuadro de texto, en orden, así que un
     encabezado repetido en medio se leería como si fuera una materia más (rompe la importación).
-    Avisa igual entre una parte y otra que hay más por venir, para que el usuario sepa que faltan.`;
+    Esta es la ÚNICA excepción a la regla de "nada de texto fuera del bloque de código": podés avisar
+    que faltan más partes, pero ese aviso va DESPUÉS de cerrar el bloque de código de esa respuesta
+    (nunca mezclado adentro), en una frase corta y clara (ej. "Esto fue la parte 1 de 3, decime
+    'continuá' y te mando el resto"), para que el usuario sepa qué copiar (solo lo de adentro del
+    bloque de código) y qué esperar después.
+
+RECORDATORIO FINAL: tu respuesta es SOLO el bloque de código (metadatos + CSV) — sin saludo, sin
+introducción, sin resumen al final. Nada de texto fuera del bloque de código.`;
 }
 
 /** Lee las líneas opcionales CARRERA:/CODIGO_PLAN:/UNIVERSIDAD:/TIPO_TITULO:/
@@ -247,6 +281,7 @@ function construirTextoInstruccionesImportacion(destino) {
     "Cuando estés en el chat, pega el prompt que se guardó en tu portapapeles.",
     "Adjunta el tipo de archivo que habías elegido.",
     "Guarda bien la respuesta que te entregue la IA para traerla de vuelta a esta página.",
+    "⚠️ Las IAs pueden cometer errores al leer tu plan — cuando termines de importar, revisá que no falte ninguna materia y que los requisitos estén bien.",
   ].join("\n\n");
 }
 
@@ -353,6 +388,19 @@ function construirPanelImportacion() {
   tituloImportar.textContent = "Importar tu Plan de Estudios";
   sec.appendChild(tituloImportar);
 
+  // v1.14.3: aviso siempre visible (no depende del modo elegido) — una IA
+  // puede cometer errores al leer el documento (materias salteadas,
+  // requisitos mal detectados, etc.), así que se le avisa al usuario desde
+  // el principio que revise el resultado, en vez de asumir que quedó 100%
+  // correcto solo porque "lo hizo la IA".
+  const avisoErroresIA = document.createElement("p");
+  avisoErroresIA.className = "muted";
+  avisoErroresIA.style.color = "var(--color-warning, #f59e0b)";
+  avisoErroresIA.textContent =
+    "⚠️ Importar con IA está sujeto a errores (materias faltantes, requisitos mal detectados, etc.). " +
+    "Te recomendamos revisar que el plan haya quedado completo una vez importado.";
+  sec.appendChild(avisoErroresIA);
+
   // ---- Modo de importación: Link / PDF / Capturas ----
   const etiquetaModo = document.createElement("span");
   etiquetaModo.className = "form-label";
@@ -418,6 +466,18 @@ function construirPanelImportacion() {
     nota.className = "muted";
     nota.textContent = "Primero hay que convertir tus capturas en un solo PDF antes de enviarlas a la IA.";
     sec.appendChild(nota);
+
+    // v1.14.3: las capturas tomadas desde PC (recorte de pantalla, tecla
+    // "Imprimir pantalla", etc.) suelen salir en baja resolución y la IA
+    // termina leyendo mal números y códigos pequeños — un celular normal
+    // saca fotos/capturas de mucha más calidad para este uso.
+    const avisoCalidadCapturas = document.createElement("p");
+    avisoCalidadCapturas.className = "muted";
+    avisoCalidadCapturas.style.color = "var(--color-warning, #f59e0b)";
+    avisoCalidadCapturas.textContent =
+      "📱 Se recomienda tomar las capturas desde el celular — las capturas hechas desde PC suelen " +
+      "salir en baja calidad y eso hace que la IA lea mal los datos.";
+    sec.appendChild(avisoCalidadCapturas);
 
     const btnAbrirConversion = document.createElement("button");
     btnAbrirConversion.type = "button";
