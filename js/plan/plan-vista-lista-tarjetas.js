@@ -10,7 +10,7 @@ import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto, formatearHoras } from "../core/utils.js";
 import { agregarLongPress, envolverConFlechasScroll } from "../ui/componentes.js";
 import { abrirModalRequisito, construirBloqueCompletoRequisitos, construirCuerpoDetalleMateria, construirLinea2Materia } from "./plan-detalle.js";
-import { abrirModalMateriaManual, filasFiltradas, obtenerMateriasVisibles, obtenerOptativasDisponibles } from "./plan-esquema.js";
+import { abrirModalMateriaManual, abrirModalVincularOptativa, filasFiltradas, obtenerMateriasVisibles, obtenerOptativasDisponibles } from "./plan-esquema.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
 
 /* ===================== Sección 2 — Candado (lógica de grupos) ===================== */
@@ -258,28 +258,15 @@ function construirTarjetaOptativaDisponible(materiaTemplate, plan) {
   const btnAgregar = document.createElement("button");
   btnAgregar.type = "button";
   btnAgregar.className = "btn btn-secondary btn-block";
-  btnAgregar.textContent = "+ Agregar al plan de estudios";
-  btnAgregar.addEventListener("click", () => agregarOptativaAlPlan(materiaTemplate, plan));
+  btnAgregar.textContent = "+ Añadir al plan";
+  // v1.12.5: ya no se agrega directo (siempre "aparte") — abre el modal de
+  // 3 formas (reemplazar un espacio del plan / bloque aparte / bloque
+  // específico). Ver abrirModalVincularOptativa en plan-esquema.js.
+  btnAgregar.addEventListener("click", () => abrirModalVincularOptativa(materiaTemplate, plan));
   cuerpo.appendChild(btnAgregar);
 
   card.appendChild(cuerpo);
   return card;
-}
-
-/**
- * C.4 (v9): mueve una electiva de la lista "disponible" (staging, fuera de
- * plan.materias) a la malla formal — desde este momento SÍ cuenta en los
- * totales globales y se comporta como cualquier otra materia (con estado
- * editable, etc.), pero sigue viviendo dentro del bloque especial
- * "Optativas" (nunca se le asigna un Bloque numérico).
- */
-
-function agregarOptativaAlPlan(materiaTemplate, plan) {
-  plan.optativas_disponibles = (plan.optativas_disponibles || []).filter((m) => m.codigo !== materiaTemplate.codigo);
-  materiaTemplate.es_optativa = true;
-  plan.materias.push(materiaTemplate);
-  marcarCambioPendiente();
-  renderizarPlanEstudios();
 }
 
 const ESTADOS_MATERIA = [
@@ -489,7 +476,6 @@ function abrirMenuRapidoCategoria(materia, plan, anclaEl) {
 export {
   ESTADOS_MATERIA,
   abrirMenuRapidoCategoria,
-  agregarOptativaAlPlan,
   construirBloqueOptativas,
   construirContenidoBloques,
   construirTarjetaMateria,

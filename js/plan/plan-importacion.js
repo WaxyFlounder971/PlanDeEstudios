@@ -127,9 +127,19 @@ REGLAS:
    números, conviértelo al secuencial correspondiente. Si no puedes determinarlo con certeza,
    escribe "REVISAR".
 
-2. CODIGO: la sigla/código tal como aparece en el documento. Si la materia no tiene código propio
-   (ej: "Optativa", "Electivo 1", "Idioma Intensivo"), genera uno corto y consistente a partir del
-   nombre y el bloque (ej: OPT-B7, ELEC-B9), para que no se dupliquen entre bloques distintos.
+2. CODIGO: la sigla/código tal como aparece en el documento. Si la materia es un espacio reservado
+   para una electiva/optativa sin materia real definida todavía (sin importar cómo la llame el
+   documento en su propio idioma: "Optativa", "Electivo 1", "Elective", "Wahlfach", "Cours au choix",
+   "Idioma Intensivo", etc.), genera SIEMPRE el código usando uno de estos dos prefijos fijos, nunca
+   otro, sin importar el idioma del documento:
+   - "ELEC-" + el número de Bloque, si el término original se acerca más a "electiva/elective" (ej: ELEC-B9)
+   - "OPT-" + el número de Bloque, si se acerca más a "optativa/optional" (ej: OPT-B7)
+   Si no puedes distinguir cuál de los dos aplica, usa "OPT-" por defecto. Esta regla existe para que
+   la app pueda reconocer estos espacios reservados de forma consistente sin importar el idioma o la
+   palabra exacta que use la universidad — el NOMBRE real que trae el documento (en su propio idioma,
+   ej. "Electivo 1", "Optional Course 1") se conserva tal cual en la columna Nombre; solo el CÓDIGO
+   sigue esta regla fija. Para cualquier otra materia con código real propio, usa ese código tal como
+   aparece, sin inventarlo ni traducirlo.
 
 3. HORAS: usa 0 si el documento no reporta ese tipo de hora para esa materia puntual — nunca dejes
    la celda vacía. Si el documento presenta las horas dentro de una cuadrícula gráfica (cajas de

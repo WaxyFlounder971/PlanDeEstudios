@@ -11,7 +11,7 @@ import { construirPanelCategorias } from "./plan-categorias.js";
 import { abrirModalMateriaManual, obtenerMateriasVisibles, obtenerPlanActivo } from "./plan-esquema.js";
 import { abrirModalGestionPlanes, renderizarSelectorPlan } from "./plan-gestionar.js";
 import { alternarModoEdicionPlan } from "./plan-modo-edicion.js";
-import { construirMiniPanelImportacion, serializarRequisitoArbol } from "./plan-importacion-csv.js";
+import { construirMiniPanelImportacion, obtenerPalabraOptativa, serializarRequisitoArbol } from "./plan-importacion-csv.js";
 import { construirEncabezadoCSV, construirPanelImportacion } from "./plan-importacion.js";
 import { construirTarjetaVista } from "./plan-mapa.js";
 import { construirContenidoBloques } from "./plan-vista-lista-tarjetas.js";
@@ -368,6 +368,42 @@ function expandirTodasLasMaterias() {
  * exportando el plan activo (compatibilidad con el llamado de siempre).
  */
 
+/**
+ * v1.12.5: arma una fila de CSV con el mismo formato/orden de columnas que
+ * espera el importador (Bloque,Codigo,Nombre,Creditos,[horas...],
+ * Requisitos,Correquisitos,Estado,CategoriaId) para UNA materia puntual.
+ * `bloqueOverride` permite forzar el valor de la columna Bloque (se usa para
+ * las optativas todavía sin vincular, ver exportarPlanACSV) sin tocar
+ * `materia.bloque` real.
+ */
+function construirFilaCSVMateria(materia, tipos, bloqueOverride) {
+  const columnasHoras = tipos.map((tipo) => (materia.horas || {})[tipo] || 0);
+  const campos = [
+    bloqueOverride !== undefined ? bloqueOverride : materia.bloque,
+    materia.codigo,
+    `"${(materia.nombre || "").replace(/"/g, '""')}"`,
+    materia.creditos,
+    ...columnasHoras,
+    serializarRequisitoArbol(materia.requisitos),
+    serializarRequisitoArbol(materia.correquisitos),
+    materia.estado,
+    materia.categoria_id || "",
+  ];
+  return campos.join(",");
+}
+
+/**
+ * v1.12.5 (fidelidad completa, Parte 2 del prompt): antepone las líneas de
+ * metadatos (mismo formato que espera el importador — ver
+ * extraerMetadatosImportacion en plan-importacion.js) e incluye TODAS las
+ * materias del plan: las de los bloques numerados (incluidos los cupos de
+ * electiva/optativa ya vinculados por cualquiera de las 3 formas) y las que
+ * sigan en `optativas_disponibles` sin vincular todavía — estas últimas se
+ * exportan con Bloque="ELECTIVA"/"OPTATIVA" (según corresponda, ver
+ * obtenerPalabraOptativa) para que el importador las reconozca y las
+ * regrese a `optativas_disponibles` tal cual estaban al reimportar este
+ * mismo archivo.
+ */
 function exportarPlanACSV(planParam) {
   const principal = planParam || obtenerPlanActivo();
   if (!principal) return;
@@ -376,24 +412,23 @@ function exportarPlanACSV(planParam) {
     ? principal.parametros_universidad.tipos_horas
     : ["Horas"];
 
+  const metadatos = [];
+  if (principal.nombre_carrera) metadatos.push(`CARRERA: ${principal.nombre_carrera}`);
+  if (principal.codigo_plan) metadatos.push(`CODIGO_PLAN: ${principal.codigo_plan}`);
+  if (principal.universidad) metadatos.push(`UNIVERSIDAD: ${principal.universidad}`);
+  if (principal.tipo_titulo) metadatos.push(`TIPO_TITULO: ${principal.tipo_titulo}`);
+  metadatos.push(`HORAS_COLUMNAS: ${tipos.length ? tipos.join(",") : "Ninguna"}`);
+
   const encabezado = `${construirEncabezadoCSV(tipos)},Estado,CategoriaId`;
-  const filas = principal.materias.map((m) => {
-    const columnasHoras = tipos.map((tipo) => (m.horas || {})[tipo] || 0);
-    const campos = [
-      m.bloque,
-      m.codigo,
-      `"${(m.nombre || "").replace(/"/g, '""')}"`,
-      m.creditos,
-      ...columnasHoras,
-      serializarRequisitoArbol(m.requisitos),
-      serializarRequisitoArbol(m.correquisitos),
-      m.estado,
-      m.categoria_id || "",
-    ];
-    return campos.join(",");
+
+  const filas = principal.materias.map((m) => construirFilaCSVMateria(m, tipos));
+
+  const filasOptativasDisponibles = (principal.optativas_disponibles || []).map((m) => {
+    const palabra = obtenerPalabraOptativa(m) === "electiva" ? "ELECTIVA" : "OPTATIVA";
+    return construirFilaCSVMateria(m, tipos, palabra);
   });
 
-  const csv = [encabezado, ...filas].join("\n");
+  const csv = [...metadatos, encabezado, ...filas, ...filasOptativasDisponibles].join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

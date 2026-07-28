@@ -143,6 +143,53 @@ function serializarRequisitoArbol(nodo) {
 }
 
 /**
+ * v1.12.5: patrón de código autogenerado que el prompt de importación le pide
+ * a la IA usar para cualquier espacio de electiva/optativa sin materia real
+ * todavía (ej. "Electivo 1" dentro de un bloque numerado, o una fila de una
+ * tabla aparte de "cursos optativos") — SIEMPRE con uno de estos dos prefijos
+ * fijos, sin importar en qué idioma o con qué palabra lo llame el documento
+ * original (ver la regla correspondiente en construirPromptImportacion,
+ * plan-importacion.js). Es la única fuente de verdad para detectar estos
+ * "espacios reservados", tanto en el texto crudo de una fila de CSV como en
+ * una materia ya creada.
+ */
+const PATRON_CODIGO_OPTATIVO = /^(OPT|ELEC)-/i;
+
+/** true si el string de Código (crudo, tal como viene en la fila del CSV,
+ *  antes de crear la materia) parece un espacio reservado de electiva/
+ *  optativa autogenerado por la IA. */
+function esFilaOptativa(codigoCrudo) {
+  return PATRON_CODIGO_OPTATIVO.test(String(codigoCrudo || "").trim());
+}
+
+/**
+ * true si una materia YA creada (de un import, o ya viviendo en un bloque
+ * numerado del plan) parece un espacio reservado de electiva/optativa sin
+ * llenar todavía — mismo criterio que esFilaOptativa(), aplicado sobre
+ * materia.codigo. La reutiliza plan-esquema.js (flujo "Vincular Optativa/
+ * Electiva al plan") para listar los cupos existentes dentro de los bloques
+ * numerados, en vez de duplicar la lógica de detección.
+ */
+function materiaPareceOptativa(materia) {
+  return !!materia && esFilaOptativa(materia.codigo);
+}
+
+/**
+ * v1.12.5: palabra ("electiva" u "optativa") que mejor describe este cupo,
+ * derivada del prefijo de su código autogenerado (o, en su defecto, de su
+ * nombre) — para que los textos de la UI usen la misma palabra que ya usa
+ * el propio plan del usuario, en vez de hablar de "cupos" en genérico.
+ */
+function obtenerPalabraOptativa(materia) {
+  const codigo = String((materia && materia.codigo) || "").toUpperCase();
+  if (codigo.startsWith("ELEC-")) return "electiva";
+  if (codigo.startsWith("OPT-")) return "optativa";
+  const nombre = String((materia && materia.nombre) || "").toLowerCase();
+  if (/electiv/.test(nombre)) return "electiva";
+  return "optativa";
+}
+
+/**
  * v1.12 (Parte C): convierte el string crudo de HORAS_COLUMNAS que devolvió
  * la IA (ej. "T,P,L,EI" o "Ninguna") en el arreglo `tipos_horas` que espera
  * el resto de la app. Raíz común usada tanto al crear un plan nuevo a partir
@@ -679,9 +726,12 @@ export {
   actualizarEstadoBotonesEnvioImportacion,
   construirMiniPanelImportacion,
   derivarTiposHorasDeHorasColumnas,
+  esFilaOptativa,
   importarCSVEnPlan,
   manejarClickImportar,
+  materiaPareceOptativa,
   mostrarErroresImportacion,
+  obtenerPalabraOptativa,
   parsearCSVPlanEstudios,
   parsearLineaCSV,
   parsearRequisitoArbol,
