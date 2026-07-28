@@ -274,7 +274,7 @@
     <div class="row">
       <div style="flex:1;">
         <span class="form-label" id="label-plan-nombre-bloque">Nombre del bloque</span>
-        <input type="text" id="input-plan-nombre-bloque" class="form-input" value="Bloque">
+        <input type="text" id="input-plan-nombre-bloque" class="form-input" value="Semestre">
       </div>
       <div style="flex:1;">
         <span class="form-label">Semanas por bloque</span>
@@ -441,8 +441,6 @@
       <button id="btn-borrar-materia-manual" class="btn btn-danger oculto">Borrar materia</button>
       <div class="row" style="justify-content:flex-end;">
         <button id="btn-cancelar-materia-manual" class="btn btn-secondary">Cancelar</button>
-        <!-- v1.14.2: solo visible al AGREGAR (no al editar) — ver abrirModalMateriaManual en plan-esquema.js -->
-        <button id="btn-guardar-y-agregar-otra-materia" class="btn btn-secondary oculto">+ Añadir otra materia</button>
         <button id="btn-guardar-materia-manual" class="btn btn-primary">Guardar</button>
       </div>
     </div>
@@ -470,7 +468,7 @@
 
 <!-- ===================== MODAL: Editar info de la carrera (v1.14.1) ===================== -->
 <div id="modal-editar-plan-info" class="modal-overlay oculto">
-  <div class="glass-card modal-card stack">
+  <div class="glass-card modal-card stack" style="position:relative; z-index:1;">
     <h2 style="margin:0;">Editar información de la carrera</h2>
 
     <div>
@@ -493,42 +491,30 @@
       <input type="text" id="input-editar-plan-tipo-titulo" class="form-input" placeholder="Ej. Bachillerato, Licenciatura...">
     </div>
 
-    <!-- v1.14.4: antes este modal solo editaba nombre_carrera/universidad/
-         codigo_plan/tipo_titulo — parametros_universidad (nombre del bloque,
-         semanas, horario, tipos de horas) solo se podía fijar al crear el
-         plan o al importar. Ahora también se edita acá, para que "editar
-         plan" cubra TODOS los datos y metadatos del plan, no solo la
-         cabecera. Ver inicializarModalEditarPlanInfo en plan-gestionar.js. -->
-    <div class="row">
-      <div style="flex:1;">
-        <span class="form-label">Nombre del bloque</span>
-        <input type="text" id="input-editar-plan-nombre-bloque" class="form-input" placeholder="Ej. Semestre, Ciclo, Cuatrimestre...">
+    <!-- v1.14.1: parámetros académicos del plan (antes solo se fijaban una
+         vez al crearlo, sin forma de corregirlos después). NO incluye los
+         tipos de horas (Teoría/Práctica/etc.) — cambiar eso con materias ya
+         guardadas rompería las llaves de materia.horas existentes; si hace
+         falta, es un flujo aparte con su propia migración. -->
+    <div class="row" style="flex-wrap:wrap;">
+      <div style="flex:1; min-width:160px;">
+        <span class="form-label">Nombre de bloque</span>
+        <input type="text" id="input-editar-plan-nombre-bloque" class="form-input" placeholder="Ej. Semestre, Cuatrimestre...">
       </div>
-      <div style="flex:1;">
+      <div style="flex:1; min-width:120px;">
         <span class="form-label">Semanas por bloque</span>
-        <input type="number" id="input-editar-plan-semanas" class="form-input">
+        <input type="number" id="input-editar-plan-semanas" class="form-input" min="1">
       </div>
     </div>
-
-    <div class="row">
-      <div style="flex:1;">
+    <div class="row" style="flex-wrap:wrap;">
+      <div style="flex:1; min-width:160px;">
         <span class="form-label">Hora de inicio por defecto</span>
         <input type="time" id="input-editar-plan-hora-inicio" class="form-input">
       </div>
-      <div style="flex:1;">
+      <div style="flex:1; min-width:120px;">
         <span class="form-label">Duración de bloque (min)</span>
-        <input type="number" id="input-editar-plan-duracion" class="form-input">
+        <input type="number" id="input-editar-plan-duracion" class="form-input" min="1">
       </div>
-    </div>
-
-    <div>
-      <span class="form-label">Tipos de horas (separados por coma)</span>
-      <input type="text" id="input-editar-plan-tipos-horas" class="form-input" placeholder="Ej. T,P,L  o  Horas">
-      <p class="muted" style="margin:4px 0 0;font-size:0.8rem;">
-        Si cambiás la cantidad o el orden, las horas ya cargadas en las materias de este plan se
-        reacomodan por posición (la 1ª columna vieja pasa a la 1ª nueva, etc.) — las columnas nuevas
-        que no existían antes arrancan en 0.
-      </p>
     </div>
 
     <p id="error-editar-plan-info" class="muted oculto" style="color:var(--color-danger);"></p>
