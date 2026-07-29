@@ -377,7 +377,7 @@ function crearCategoria({ nombre, color }) {
  * `tiposHoras` se descarta — así materia.horas nunca tiene campos de más ni
  * de menos respecto al plan al que pertenece.
  */
-function crearMateria({ codigo, nombre, creditos, horas, tiposHoras, bloque, requisitos, correquisitos, esOptativa, sinDefinir }) {
+function crearMateria({ codigo, nombre, creditos, horas, tiposHoras, bloque, requisitos, correquisitos, esOptativa, sinDefinir, estado, categoriaId }) {
   // v7 #1: un arreglo vacío es una elección válida ("No aplica" — el plan no
   // maneja horas). Solo se usa el default ["Horas"] cuando tiposHoras
   // realmente no vino (undefined/null), nunca cuando vino vacío a propósito.
@@ -399,8 +399,15 @@ function crearMateria({ codigo, nombre, creditos, horas, tiposHoras, bloque, req
     // manual) ya debe entregar el nodo construido o null.
     requisitos: requisitos || null,
     correquisitos: correquisitos || null,
-    categoria_id: null,
-    estado: "pendiente",
+    // v1.17: antes se forzaba SIEMPRE a null/"pendiente", ignorando lo que
+    // le mandara quien llama — así el parser de CSV (que sí detecta estado/
+    // categoriaId reales en el formato extendido de export/backup) nunca
+    // lograba restaurarlos: cada reimport borraba el progreso guardado. Ahora
+    // se usa lo recibido y solo cae al default de siempre cuando no viene
+    // nada (import desde la IA, formulario manual, formato viejo sin estas
+    // columnas).
+    categoria_id: categoriaId || null,
+    estado: estado || "pendiente",
     escala_notas_override: null,
     // C.4 (v9): true si esta materia se detectó como electiva/optativa al
     // importar. No cambia cómo se calcula nada por sí sola — lo que decide
