@@ -691,29 +691,43 @@ function renderizarContenidoVincularOptativa() {
     // completo de cada bloque y escala bien aunque haya muchos.
     const selectBloque = document.createElement("select");
     selectBloque.className = "form-select";
-    // v1.16 (fix bug crítico de contraste): sin esto, el <select> cerrado
-    // respeta el tema oscuro de la app (CSS normal), pero el DESPLEGABLE de
-    // opciones lo pinta el navegador con su render nativo del sistema
-    // operativo — típicamente fondo blanco — sin tocar el color del texto,
-    // que sigue siendo claro (letras blancas sobre fondo blanco = invisible).
-    // Esto no se puede arreglar solo con CSS de la app porque el popup nativo
-    // de <option> ignora background-color/color en la mayoría de navegadores;
-    // `color-scheme` es la única propiedad que sí respetan para dibujar ese
-    // popup en su variante oscura. Se deriva del modo actual (no se fija
-    // "dark" a fuego) para no romper el modo claro.
-    selectBloque.style.colorScheme = estado.datos.configuracion.modo === "light" ? "light" : "dark";
+    // v1.16.1 (fix bug crítico de contraste, sigue): `color-scheme` por sí
+    // solo no bastó — varios navegadores solo respetan esa propiedad para
+    // dibujar el popup nativo en oscuro si además el <select>/<option> no
+    // tiene ya un fondo/texto propio "claro" heredado del CSS de la app
+    // (`.form-select` probablemente define background/color pensados para el
+    // combo CERRADO, y ese mismo estilo se filtra al popup, pisando lo que
+    // `color-scheme` intentaba corregir). Se fuerzan colores explícitos e
+    // inline (máxima prioridad, sin depender de variables CSS que no tengo a
+    // la vista) tanto en el <select> como en CADA <option> — el navegador
+    // solo respeta el fondo/texto de un <option> si viene puesto en el
+    // propio <option>, no alcanza con ponerlo únicamente en el <select>.
+    const esModoClaro = estado.datos.configuracion.modo === "light";
+    const colorSchemeActual = esModoClaro ? "light" : "dark";
+    const fondoSelect = esModoClaro ? "#ffffff" : "#1e1e2a";
+    const textoSelect = esModoClaro ? "#1a1a1a" : "#f2f2f5";
+    selectBloque.style.colorScheme = colorSchemeActual;
+    selectBloque.style.backgroundColor = fondoSelect;
+    selectBloque.style.color = textoSelect;
+
+    const aplicarColoresOption = (opt) => {
+      opt.style.backgroundColor = fondoSelect;
+      opt.style.color = textoSelect;
+    };
 
     const optPlaceholder = document.createElement("option");
     optPlaceholder.value = "";
     optPlaceholder.textContent = "Selecciona un bloque…";
     optPlaceholder.disabled = true;
     optPlaceholder.selected = true;
+    aplicarColoresOption(optPlaceholder);
     selectBloque.appendChild(optPlaceholder);
 
     bloques.forEach((bloque) => {
       const opt = document.createElement("option");
       opt.value = String(bloque);
       opt.textContent = `${plan.parametros_universidad.nombre_bloque} ${bloque}`;
+      aplicarColoresOption(opt);
       selectBloque.appendChild(opt);
     });
 
