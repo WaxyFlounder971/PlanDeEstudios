@@ -149,7 +149,22 @@ function cerrarSesionGoogle() {
 /**
  * Busca el archivo de datos de esta app en el Drive del usuario.
  * Si no existe, lo crea con los datos "de fábrica" (crearDatosUsuarioNuevo()).
- * Devuelve { fileId, datos }.
+ * Devuelve { fileId, datos, esArchivoNuevo }.
+ *
+ * v1.15 (FIX bug crítico "se me borró todo lo de PC al abrir en el
+ * teléfono"): se agrega `esArchivoNuevo` al resultado. Quien llama a esta
+ * función (típicamente el flujo de login en main.js) YA NO debe hacer
+ * `estado.datos = resultado.datos` directo — debe fusionar `resultado.datos`
+ * con lo que ya hubiera en la caché local del dispositivo (ver
+ * fusionarDatos en storage-merge.js), exactamente igual que hace ahora
+ * aplicarDatosRemotosFrescos() en storage-sync.js para el pull-to-refresh y
+ * el sondeo. Antes, un login en un dispositivo con caché local vieja (ej.
+ * el teléfono, sin abrirse en semanas) simplemente devolvía lo de Drive, y
+ * si esa caché vieja se llegaba a marcar como pendiente de subir antes de
+ * completarse el login, terminaba pisando el archivo remoto con datos
+ * viejos. `esArchivoNuevo` permite a quien llama distinguir el caso "recién
+ * se crea el archivo" (no hay nada que fundir, es la primera vez) del caso
+ * "ya existía y se acaba de leer" (sí hay que fundir contra la caché local).
  */
 async function buscarOCrearArchivoDatos(token) {
   const busqueda = await fetch(
@@ -160,13 +175,13 @@ async function buscarOCrearArchivoDatos(token) {
   if (busqueda.files && busqueda.files.length > 0) {
     const fileId = busqueda.files[0].id;
     const datos = await leerDatos(token, fileId);
-    return { fileId, datos };
+    return { fileId, datos, esArchivoNuevo: false };
   }
 
   // No existe: se crea con los datos por defecto.
   const datosIniciales = crearDatosUsuarioNuevo();
   const fileId = await crearArchivoDatos(token, datosIniciales);
-  return { fileId, datos: datosIniciales };
+  return { fileId, datos: datosIniciales, esArchivoNuevo: true };
 }
 
 async function crearArchivoDatos(token, datos) {
