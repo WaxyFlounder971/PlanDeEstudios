@@ -25,6 +25,7 @@ function crearDatosUsuarioNuevo() {
     configuracion: {
       paleta: "azul",              // una de las 10 paletas
       modo: "dark",                 // "dark" | "light"
+      paleta_personalizada: null,   // v1.13: { basadaEn, colores: { fondoCanvas, fondoCard, borde, accent1, accent2, luz } }
       escala_notas_global: 100,     // 10 o 100 (1-10 ó 1-100)
       formato_texto_nombres: "titulo", // "titulo" | "mayusculas" | "oracion" (v5 #9)
       plan_activo_id: null,         // id del Plan de Estudios seleccionado como activo
