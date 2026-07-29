@@ -14,6 +14,7 @@ import { mostrarToast } from "../ui/componentes.js";
 import { aplicarPaleta } from "../ui/tema.js";
 import { guardarDatos, leerDatos, obtenerMetadatosArchivo, refrescarAccessTokenGoogle } from "./auth.js";
 import { migrarDatosAntiguos } from "./schema.js";
+import { fusionarDatos } from "./storage-merge.js";
 import { authListo, correoConocido, establecerTokenActivo, estado, guardarCacheLocal } from "./storage.js";
 
 /**
@@ -320,10 +321,11 @@ async function conReintentoSi401(operacion) {
 
 /**
  * v8.3: sincronización completa "en el sitio" — sube cambios pendientes
- * primero (nunca se pisa trabajo local sin subir), luego baja la última
- * versión de Drive, y repinta toda la UI ya renderizada sin recargar la
- * página ni tocar la pantalla de login. La usa tanto el gesto de deslizar
- * como (más adelante) el sondeo automático multi-dispositivo.
+ * primero (nunca se pisa trabajo local sin subir), luego FUNDE la última
+ * versión de Drive con lo que ya había localmente (ver v1.15 más abajo), y
+ * repinta toda la UI ya renderizada sin recargar la página ni tocar la
+ * pantalla de login. La usa tanto el gesto de deslizar como (más adelante)
+ * el sondeo automático multi-dispositivo.
  */
 
 async function sincronizarAhora() {
@@ -384,10 +386,23 @@ async function sincronizarAhora() {
  * toda la UI en el sitio, sin recargar la página. Lo usan tanto
  * sincronizarAhora() (pull-to-refresh manual, con overlay y toast) como
  * sondearCambiosRemotos() (en segundo plano, en silencio).
+ *
+ * v1.15 (FIX bug crítico "se me borró todo lo de PC al abrir en el
+ * teléfono"): antes esta función hacía `estado.datos = migrarDatosAntiguos
+ * (datosFrescos)` — un reemplazo TOTAL del árbol de datos con lo que
+ * viniera de Drive, sin comparar absolutamente nada contra lo que ya había
+ * en memoria/caché local. Si el teléfono tenía en su caché local una
+ * sesión vieja (ej. no se había abierto la app en semanas) y esa caché
+ * vieja llegaba a marcarse como "pendiente de subir" antes de bajar lo de
+ * Drive, esos datos viejos terminaban pisando el trabajo reciente hecho en
+ * PC. Ahora se FUNDE la versión remota con estado.datos actual, entidad por
+ * entidad y por su `_actualizadoEn` real (ver storage-merge.js) — nunca se
+ * pierde una entidad completa solo por "quién llegó último a escribir".
  */
 
 function aplicarDatosRemotosFrescos(datosFrescos) {
-  estado.datos = migrarDatosAntiguos(datosFrescos);
+  const remotoMigrado = migrarDatosAntiguos(datosFrescos);
+  estado.datos = estado.datos ? fusionarDatos(estado.datos, remotoMigrado) : remotoMigrado;
   guardarCacheLocal();
   aplicarPaleta(estado.datos.configuracion.paleta, estado.datos.configuracion.modo);
   renderizarSelectorPlan();
@@ -428,9 +443,16 @@ async function sondearCambiosRemotos() {
   await authListo; // nunca sondear antes de saber si hay token (punto 5, condición de carrera)
   if (document.hidden) return; // ahorra cuota de la API si la pestaña no está visible
   if (!estado.token || !estado.fileId) return;
-  // Si hay cambios locales sin subir todavía, se deja que intentarSincronizar()
-  // (el reintento cada 45s, o el próximo cambio del usuario) suba eso primero —
-  // pisar aquí con lo remoto arriesgaría perder esos cambios locales.
+  // v1.15: antes, si había cambios locales sin subir, se abortaba el sondeo
+  // por completo — razonable cuando la única alternativa era "pisar todo",
+  // pero ya no hace falta ser tan conservador: aplicarDatosRemotosFrescos
+  // ahora FUNDE en vez de sobrescribir, así que traer lo remoto acá no
+  // arriesga los cambios locales pendientes (siguen marcados como
+  // pendientes y se suben en su momento igual). Se deja el mismo criterio
+  // de todos modos, a propósito: mientras haya algo sin subir, se prioriza
+  // que intentarSincronizar() suba primero esos cambios, y el sondeo los
+  // recogerá fundidos en su próximo ciclo (cada ~9s) sin necesidad de bajar
+  // nada a medio camino de una subida en curso.
   if (estado.pendienteSync) return;
 
   try {
