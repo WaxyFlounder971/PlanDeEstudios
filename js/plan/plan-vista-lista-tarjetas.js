@@ -207,6 +207,17 @@ function construirBloqueOptativas(filasAgregadas, filasDisponibles, esEscritorio
       etiquetaDisponibles.textContent = `Electivas u optativas disponibles: ${filasDisponibles.length}`;
       cuerpoBloque.appendChild(etiquetaDisponibles);
 
+      // v1.16 (fix bug de distinción visual): sin esta aclaración, esta
+      // tarjeta se veía y actuaba exactamente igual que la de "Revisar" —
+      // mismo layout, mismo botón — sin transmitir que aquí NO es obligatorio
+      // agregar nada: son opciones que existen en el plan, elegís las que
+      // querés cursar (podés no agregar ninguna).
+      const aclaracionOpcional = document.createElement("p");
+      aclaracionOpcional.className = "muted";
+      aclaracionOpcional.style.fontSize = "0.85em";
+      aclaracionOpcional.textContent = "Son opcionales: elegí las que vayas a cursar, no hace falta agregarlas todas.";
+      cuerpoBloque.appendChild(aclaracionOpcional);
+
       filasDisponibles.forEach((fila) => {
         cuerpoBloque.appendChild(construirTarjetaOptativaDisponible(fila.materia, fila.plan));
       });
@@ -259,6 +270,11 @@ function construirTarjetaOptativaDisponible(materiaTemplate, plan) {
   spanHoras.className = "materia-linea2-horas";
   spanHoras.textContent = formatearHoras(materiaTemplate);
   linea2.appendChild(spanHoras);
+  const badgeTipo = document.createElement("span");
+  badgeTipo.className = "badge badge-accent";
+  badgeTipo.style.opacity = "0.85";
+  badgeTipo.textContent = "Opcional";
+  linea2.appendChild(badgeTipo);
   const badgeCreditos = document.createElement("span");
   badgeCreditos.className = "badge badge-accent";
   badgeCreditos.textContent = `Créditos: ${materiaTemplate.creditos}`;
@@ -275,7 +291,10 @@ function construirTarjetaOptativaDisponible(materiaTemplate, plan) {
   // v1.12.15 (punto 5 del prompt): un solo botón, sin pill de Estado — abre
   // el modal de 2 formas (agregar a bloque / reemplazar por otra materia).
   // Ver abrirModalVincularOptativa en plan-esquema.js.
-  btnAgregar.textContent = "Agregar al plan de estudios";
+  // v1.16: texto propio ("Elegir") en vez de "Agregar al plan de estudios" —
+  // antes era idéntico al botón de "Revisar", lo que hacía que ambos bloques
+  // se sintieran como si fueran lo mismo.
+  btnAgregar.textContent = "Elegir esta optativa";
   btnAgregar.addEventListener("click", () => abrirModalVincularOptativa(materiaTemplate, plan, "optativa"));
   cuerpo.appendChild(btnAgregar);
 
@@ -318,6 +337,18 @@ function construirBloqueRevisar(filasParaRevisar) {
     etiqueta.className = "muted";
     etiqueta.textContent = `Materias sin bloque claro, pendientes de revisar: ${filasParaRevisar.length}`;
     cuerpoBloque.appendChild(etiqueta);
+
+    // v1.16 (fix bug de distinción visual): a diferencia de "Optativas", esto
+    // NO es opcional — son materias que el import detectó como parte real
+    // del plan, solo que no se pudo determinar en qué bloque van. Sin esta
+    // aclaración, la tarjeta se veía y actuaba idéntica a una optativa
+    // opcional.
+    const aclaracionObligatorio = document.createElement("p");
+    aclaracionObligatorio.className = "muted";
+    aclaracionObligatorio.style.fontSize = "0.85em";
+    aclaracionObligatorio.style.color = "var(--color-warning, #f59e0b)";
+    aclaracionObligatorio.textContent = "Estas SÍ son parte de tu plan — solo falta ubicarlas en el bloque correcto para que cuenten en tus totales.";
+    cuerpoBloque.appendChild(aclaracionObligatorio);
 
     filasParaRevisar.forEach((fila) => {
       cuerpoBloque.appendChild(construirTarjetaParaRevisar(fila.materia, fila.plan));
@@ -365,6 +396,12 @@ function construirTarjetaParaRevisar(materiaTemplate, plan) {
   spanHoras.className = "materia-linea2-horas";
   spanHoras.textContent = formatearHoras(materiaTemplate);
   linea2.appendChild(spanHoras);
+  const badgeTipo = document.createElement("span");
+  badgeTipo.className = "badge";
+  badgeTipo.style.background = "var(--color-warning, #f59e0b)";
+  badgeTipo.style.color = "#1a1a1a";
+  badgeTipo.textContent = "Revisar";
+  linea2.appendChild(badgeTipo);
   const badgeCreditos = document.createElement("span");
   badgeCreditos.className = "badge badge-accent";
   badgeCreditos.textContent = `Créditos: ${materiaTemplate.creditos}`;
@@ -378,7 +415,11 @@ function construirTarjetaParaRevisar(materiaTemplate, plan) {
   const btnAgregar = document.createElement("button");
   btnAgregar.type = "button";
   btnAgregar.className = "btn btn-secondary btn-block";
-  btnAgregar.textContent = "Agregar al plan de estudios";
+  // v1.16: texto propio ("Ubicar en mi plan") en vez de "Agregar al plan de
+  // estudios" — antes era idéntico al botón de "Optativas", lo que hacía que
+  // ambos bloques se sintieran como si fueran lo mismo (una opción para
+  // elegir), cuando en realidad esta materia ya es parte confirmada del plan.
+  btnAgregar.textContent = "Ubicar en mi plan";
   btnAgregar.addEventListener("click", () => abrirModalVincularOptativa(materiaTemplate, plan, "revisar"));
   cuerpo.appendChild(btnAgregar);
 

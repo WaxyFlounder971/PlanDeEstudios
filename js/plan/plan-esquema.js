@@ -621,8 +621,14 @@ function abrirModalVincularOptativa(materiaTemplate, plan, origen = "optativa") 
 
   document.getElementById("nombre-vincular-optativa").textContent = materiaTemplate.nombre;
   document.getElementById("error-vincular-optativa").classList.add("oculto");
+  // v1.16 (fix bug de distinción Optativas/Revisar): el texto ya no es
+  // idéntico para los dos orígenes — "optativa" deja claro que es una
+  // elección voluntaria, "revisar" deja claro que la materia ya es parte
+  // confirmada del plan y solo falta decidir su ubicación.
   document.getElementById("explicacion-vincular-optativa").textContent =
-    "Elige una de estas dos formas de sumar esta materia a tu plan de estudios.";
+    origen === "revisar"
+      ? "Esta materia ya es parte confirmada de tu plan — el import no pudo determinar en qué bloque va. Elige una de estas dos formas de ubicarla."
+      : "Esta es una materia opcional. Si vas a cursarla, elige una de estas dos formas de sumarla a tu plan de estudios.";
 
   // v1.12.15: el selector de modo (3 pills) del diseño anterior ya no se usa
   // — las 2 opciones se muestran siempre juntas dentro del modal (ver
