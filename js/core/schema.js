@@ -7,6 +7,53 @@
    ========================================================================= */
 
 /**
+ * v1.15 (fusión entre dispositivos): identificador estable de ESTE
+ * navegador/dispositivo, generado una sola vez y guardado en localStorage.
+ * Se usa como desempate determinista cuando dos ediciones caen en el mismo
+ * milisegundo exacto (ver esMasReciente en storage-merge.js) — no identifica
+ * a la persona, solo a la instancia del navegador.
+ */
+const CLAVE_DISPOSITIVO_ID = "app_academica_dispositivo_id";
+
+function obtenerDispositivoId() {
+  let id = localStorage.getItem(CLAVE_DISPOSITIVO_ID);
+  if (!id) {
+    id = "disp_" + crypto.randomUUID();
+    localStorage.setItem(CLAVE_DISPOSITIVO_ID, id);
+  }
+  return id;
+}
+
+/**
+ * v1.15: sella (in-place) una entidad con su timestamp de última
+ * modificación y el id del dispositivo que hizo el cambio. TODA función que
+ * cree o modifique una materia/semestre/plan/enlace/profesor/evento de
+ * agenda/categoría — o el bloque de configuración/perfil — debe llamar esto
+ * justo antes de marcarCambioPendiente(), para que el motor de fusión
+ * (storage-merge.js) sepa cuál versión es más nueva cuando dos dispositivos
+ * editaron lo mismo estando cada uno desconectado del otro.
+ */
+function sellarTimestamp(entidad) {
+  entidad._actualizadoEn = Date.now();
+  entidad._dispositivoId = obtenerDispositivoId();
+  return entidad;
+}
+
+/**
+ * v1.15: registra un borrado explícito. Sin esto, "borrar" una entidad solo
+ * significaría "dejar de mandarla" — y la próxima fusión con un dispositivo
+ * que todavía tiene la copia vieja la volvería a traer de welcome ("resucitar"
+ * algo que el usuario borró a propósito). `coleccionTumbas` es el arreglo
+ * donde se registra (ej. datos._eliminados_planes, plan._eliminados_materias,
+ * configuracion._eliminados_enlaces — ver storage-merge.js para la lista
+ * completa de cuáles existen).
+ */
+function registrarEliminado(coleccionTumbas, id) {
+  coleccionTumbas.push({ id, eliminadoEn: Date.now() });
+  return coleccionTumbas;
+}
+
+/**
  * Devuelve el objeto de datos "vacío" para un usuario que recién inicia
  * sesión por primera vez. Esto es lo que se guarda como el archivo JSON
  * único dentro de su Google Drive (ver js/auth.js).
@@ -15,14 +62,14 @@ function crearDatosUsuarioNuevo() {
   return {
     version_esquema: 1,
 
-    perfil: {
+    perfil: sellarTimestamp({
       nombre: null,          // viene de la cuenta de Google
       correo: null,          // viene de la cuenta de Google
       foto_url: null,        // viene de la cuenta de Google (userinfo picture)
       carnet: null,          // dato opcional de perfil, ya NO se usa para iniciar sesión
-    },
+    }),
 
-    configuracion: {
+    configuracion: sellarTimestamp({
       paleta: "azul",              // una de las 10 paletas
       modo: "dark",                 // "dark" | "light"
       paleta_personalizada: null,   // v1.13: { basadaEn, colores: { fondoCanvas, fondoCard, borde, accent1, accent2, luz } }
@@ -30,11 +77,12 @@ function crearDatosUsuarioNuevo() {
       formato_texto_nombres: "titulo", // "titulo" | "mayusculas" | "oracion" (v5 #9)
       plan_activo_id: null,         // id del Plan de Estudios seleccionado como activo
       enlaces_rapidos: [],          // ver estructura de "enlace" abajo (máx. 20)
+      _eliminados_enlaces: [],      // v1.15: tumbas de enlaces rápidos borrados
 
       // --- Modo Hardcore 💀 (doble carrera) ---
       modo_hardcore: false,          // si está activo, se combina un plan principal + uno secundario
       plan_activo_secundario_id: null, // id del segundo Plan de Estudios (solo relevante si modo_hardcore = true)
-    },
+    }),
 
     // Un usuario puede tener más de un Plan de Estudios (ej. cambio de carrera/universidad).
     planes_estudio: [
@@ -128,13 +176,20 @@ function crearDatosUsuarioNuevo() {
         completado: false, archivado: false, notas: "" }
       */
     ],
+
+    // v1.15 (fusión entre dispositivos): tumbas de borrados explícitos de
+    // nivel superior — ver registrarEliminado() más arriba.
+    _eliminados_planes: [],
+    _eliminados_semestres: [],
+    _eliminados_profesores: [],
+    _eliminados_agenda: [],
   };
 }
 
 /** Estructura de referencia de un "enlace rápido" (máx. 20 por usuario). */
 function crearEnlaceRapido({ nombre, url, icono_tipo, icono_valor }) {
   // icono_tipo: "emoji" | "imagen" ; icono_valor: el emoji o la URL/base64 de la imagen
-  return { id: crypto.randomUUID(), nombre, url, icono_tipo, icono_valor };
+  return sellarTimestamp({ id: crypto.randomUUID(), nombre, url, icono_tipo, icono_valor });
 }
 
 const LIMITE_ENLACES_RAPIDOS = 20;
@@ -269,7 +324,7 @@ const PRESETS_TIPOS_HORAS = {
 };
 
 function crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, tipo_titulo, parametros_universidad }) {
-  return {
+  return sellarTimestamp({
     id: "plan_" + crypto.randomUUID(),
     nombre_carrera,
     universidad,
@@ -306,11 +361,12 @@ function crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, tipo_titul
     // Se mueven a `materias` (con un bloque numerado real) al vincularlas
     // desde el bloque especial "Revisar" (ver plan-esquema.js).
     materias_revisar: [],
-  };
+    _eliminados_materias: [], // v1.15: tumbas de materias borradas de este plan
+  });
 }
 
 function crearCategoria({ nombre, color }) {
-  return { id: "cat_" + crypto.randomUUID(), nombre, color };
+  return sellarTimestamp({ id: "cat_" + crypto.randomUUID(), nombre, color });
 }
 
 /**
@@ -331,7 +387,7 @@ function crearMateria({ codigo, nombre, creditos, horas, tiposHoras, bloque, req
     horasFinal[tipo] = Number((horas || {})[tipo]) || 0;
   });
 
-  return {
+  return sellarTimestamp({
     id: codigo, // el código funciona como id único dentro del plan
     codigo,
     nombre,
@@ -367,7 +423,7 @@ function crearMateria({ codigo, nombre, creditos, horas, tiposHoras, bloque, req
     // "Repertorio", "Optativa") — null si esta materia nunca fue un cupo
     // genérico reemplazado. Se muestra en su tarjeta, debajo de Requisitos.
     cupo_generico_original: null,
-  };
+  });
 }
 
 /**
@@ -388,7 +444,30 @@ const MAPEO_HORAS_VIEJO_A_NUEVO = {
 function migrarDatosAntiguos(datos) {
   if (!datos || !Array.isArray(datos.planes_estudio)) return datos;
 
+  // v1.15 (fusión entre dispositivos): datos de antes de este cambio no
+  // tienen timestamps ni tumbas — se sellan con "ahora" para que a partir de
+  // este momento sí puedan compararse. No se puede saber retroactivamente
+  // cuándo se editaron de verdad, así que se asume que la carga actual es la
+  // más reciente que se conoce (razonable: es literalmente lo último que se
+  // guardó).
+  if (!datos._actualizadoEn) sellarTimestamp(datos);
+  if (!Array.isArray(datos._eliminados_planes)) datos._eliminados_planes = [];
+  if (!Array.isArray(datos._eliminados_semestres)) datos._eliminados_semestres = [];
+  if (!Array.isArray(datos._eliminados_profesores)) datos._eliminados_profesores = [];
+  if (!Array.isArray(datos._eliminados_agenda)) datos._eliminados_agenda = [];
+  if (datos.perfil && !datos.perfil._actualizadoEn) sellarTimestamp(datos.perfil);
+  if (datos.configuracion) {
+    if (!datos.configuracion._actualizadoEn) sellarTimestamp(datos.configuracion);
+    if (!Array.isArray(datos.configuracion._eliminados_enlaces)) datos.configuracion._eliminados_enlaces = [];
+    (datos.configuracion.enlaces_rapidos || []).forEach((enlace) => {
+      if (!enlace._actualizadoEn) sellarTimestamp(enlace);
+    });
+  }
+
   datos.planes_estudio.forEach((plan) => {
+    if (!plan._actualizadoEn) sellarTimestamp(plan);
+    if (!Array.isArray(plan._eliminados_materias)) plan._eliminados_materias = [];
+
     // C.4 (v9): planes creados antes de esta versión no tienen este arreglo
     // — se rellena vacío para que push()/filter() nunca truene con undefined.
     if (!Array.isArray(plan.optativas_disponibles)) plan.optativas_disponibles = [];
@@ -410,6 +489,8 @@ function migrarDatosAntiguos(datos) {
     }
 
     (plan.materias || []).forEach((materia) => {
+      if (!materia._actualizadoEn) sellarTimestamp(materia);
+
       const horasViejas = materia.horas || {};
       const esObjetoViejo = "teoria" in horasViejas || "practica" in horasViejas ||
         "laboratorio" in horasViejas || "teoria_practica" in horasViejas;
@@ -480,5 +561,8 @@ export {
   evaluarNodoRequisito,
   migrarDatosAntiguos,
   migrarRequisitoAArbol,
+  obtenerDispositivoId,
   recorrerHojasArbol,
+  registrarEliminado,
+  sellarTimestamp,
 };
