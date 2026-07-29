@@ -262,13 +262,10 @@ a { color: var(--accent-1); }
 .switch input:checked + .track .thumb { transform: translateX(20px); }
 .switch input:focus-visible + .track { outline: 2px solid var(--accent-2); outline-offset: 2px; }
 
-/* ---- Switch de tema: pill con sol/luna en cada extremo (v5 #2) ---- */
-.switch-tema { width: 58px; height: 28px; }
-.switch-tema .track { display: flex; align-items: center; justify-content: space-between; padding: 0 5px; }
-.switch-tema .track::before { content: "☀️"; font-size: 11px; line-height: 1; }
-.switch-tema .track::after { content: "🌙"; font-size: 11px; line-height: 1; }
-.switch-tema .thumb { width: 22px; height: 22px; top: 3px; left: 3px; z-index: 1; }
-.switch-tema input:checked + .track .thumb { transform: translateX(28px); }
+/* ---- Switch de tema: mismo estilo que el switch base, sin iconos ---- */
+.switch-tema { width: 46px; height: 26px; }
+.switch-tema .thumb { width: 20px; height: 20px; top: 3px; left: 3px; }
+.switch-tema input:checked + .track .thumb { transform: translateX(20px); }
 
 /* ---- Checkbox custom ---- */
 .checkbox { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
