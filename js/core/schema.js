@@ -25,13 +25,11 @@ function crearDatosUsuarioNuevo() {
     configuracion: {
       paleta: "azul",              // una de las 10 paletas
       modo: "dark",                 // "dark" | "light"
-      paleta_personalizada: null,   // v1.13: { basadaEn, colores: { fondoCanvas, fondoCard, borde, accent1, accent2, luz } }
       escala_notas_global: 100,     // 10 o 100 (1-10 ó 1-100)
       formato_texto_nombres: "titulo", // "titulo" | "mayusculas" | "oracion" (v5 #9)
       plan_activo_id: null,         // id del Plan de Estudios seleccionado como activo
       enlaces_rapidos: [],          // ver estructura de "enlace" abajo (máx. 20)
 
-       
       // --- Modo Hardcore 💀 (doble carrera) ---
       modo_hardcore: false,          // si está activo, se combina un plan principal + uno secundario
       plan_activo_secundario_id: null, // id del segundo Plan de Estudios (solo relevante si modo_hardcore = true)
@@ -362,6 +360,12 @@ function crearMateria({ codigo, nombre, creditos, horas, tiposHoras, bloque, req
     // qué diga su Código o Nombre — el Código/Nombre reales del documento
     // NUNCA se tocan ni se inventan para marcar esto.
     sin_definir: !!sinDefinir,
+    // v1.12.16 (Ajuste 2): si esta materia reemplazó a un cupo genérico de
+    // electiva/optativa (ver reemplazarCupoOptativa en plan-esquema.js),
+    // guarda acá el nombre que tenía el cupo antes de reemplazarse (ej.
+    // "Repertorio", "Optativa") — null si esta materia nunca fue un cupo
+    // genérico reemplazado. Se muestra en su tarjeta, debajo de Requisitos.
+    cupo_generico_original: null,
   };
 }
 
@@ -447,6 +451,10 @@ function migrarDatosAntiguos(datos) {
       if (materia.sin_definir === undefined) {
         materia.sin_definir = /^(OPT|ELEC)-/i.test(String(materia.codigo || "").trim());
       }
+
+      // v1.12.16: relleno defensivo para materias de planes creados antes de
+      // que existiera este campo.
+      if (materia.cupo_generico_original === undefined) materia.cupo_generico_original = null;
     });
   });
 
