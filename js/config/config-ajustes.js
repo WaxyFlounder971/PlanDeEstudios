@@ -12,6 +12,16 @@ import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
 
 /* ------------------------------ Ajustes ------------------------------ */
 
+/**
+ * v1.14.1: aplica (o quita) el atributo data-rendimiento en <html>, mismo
+ * patrón que data-palette/data-mode. Se exporta para poder llamarla también
+ * al iniciar la app (antes de que el usuario entre a Ajustes), leyendo
+ * estado.datos.configuracion.modo_rendimiento ya cargado.
+ */
+function aplicarModoRendimiento(activo) {
+  document.documentElement.setAttribute("data-rendimiento", activo ? "reducido" : "normal");
+}
+
 function renderizarAjustes() {
   // Paletas — cada cuadro muestra su propio color real (punto 3)
   const grid = document.getElementById("grid-paletas");
@@ -74,6 +84,17 @@ function renderizarAjustes() {
     grid.appendChild(btnEditar);
   }
 
+  // v1.14.1: Modo de rendimiento (reduce blur/sombras/animaciones)
+  const chkRendimiento = document.getElementById("switch-rendimiento");
+  if (chkRendimiento) {
+    chkRendimiento.checked = !!estado.datos.configuracion.modo_rendimiento;
+    chkRendimiento.onchange = () => {
+      estado.datos.configuracion.modo_rendimiento = chkRendimiento.checked;
+      aplicarModoRendimiento(chkRendimiento.checked);
+      marcarCambioPendiente();
+    };
+  }
+
   // Modo claro/oscuro
   const chkModo = document.getElementById("switch-modo");
   chkModo.checked = estado.datos.configuracion.modo === "light";
@@ -118,4 +139,5 @@ function renderizarAjustes() {
 
 export {
   renderizarAjustes,
+  aplicarModoRendimiento,
 };
