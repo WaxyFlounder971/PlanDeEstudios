@@ -1826,3 +1826,153 @@ html.exportar-tema-default[data-mode="dark"] {
   .mapa-columna { width: 150px; }
   .mapa-nodo-nombre { font-size: 0.72rem; }
 }
+
+
+/* =========================================================================
+   v1.13: PANEL "CREAR MI PALETA"
+   Agregar esto al final de css/design-system.css. Reutiliza las variables
+   del sistema (--radius, --shadow, --font, etc.) para que el panel se vea
+   consistente con la paleta que esté activa en ese momento.
+   ========================================================================= */
+
+.ppz-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.ppz-panel {
+  width: 100%;
+  max-width: 460px;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ppz-titulo { margin: 0; }
+.ppz-subtitulo { font-size: 0.85rem; margin: 0; }
+
+/* ---- Paso 1: elegir paleta base ---- */
+.ppz-grid-base {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 10px;
+}
+.ppz-swatch-base {
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  padding: 14px 8px;
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  min-height: 52px;
+}
+.ppz-cancelar-base { align-self: center; }
+
+/* ---- Paso 2: los 5 selectores ---- */
+.ppz-campos {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.ppz-grupo { display: flex; flex-direction: column; gap: 8px; }
+.ppz-grupo-label { font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); }
+
+.ppz-fila-slider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ppz-swatch-vivo {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 2px solid var(--border-glass);
+  box-shadow: var(--shadow-float);
+}
+
+.ppz-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  outline: none;
+  cursor: pointer;
+}
+.ppz-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-float);
+  cursor: pointer;
+}
+.ppz-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-float);
+  cursor: pointer;
+}
+
+/* Barra tipo espectro/arcoíris: recorre todo el círculo de tono (hue) */
+.ppz-slider-hue {
+  background: linear-gradient(
+    to right,
+    hsl(0, 100%, 50%), hsl(60, 100%, 50%), hsl(120, 100%, 50%),
+    hsl(180, 100%, 50%), hsl(240, 100%, 50%), hsl(300, 100%, 50%), hsl(360, 100%, 50%)
+  );
+}
+
+/* Barra secundaria de claridad: negro → tono actual → blanco */
+.ppz-slider-luz {
+  background: linear-gradient(to right, #000000, var(--ppz-hue-actual, #888888), #ffffff);
+}
+
+/* ---- Vista previa en vivo ---- */
+.ppz-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-card);
+  border-color: var(--border-glass);
+  color: var(--text-primary);
+}
+.ppz-preview-titulo { color: var(--text-primary); }
+.ppz-preview-texto { color: var(--text-secondary); margin: 0; }
+.ppz-preview-btn { align-self: flex-start; }
+
+/* ---- Botones inferiores ---- */
+.ppz-fila-botones {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* ---- 15ª opción del grid principal ---- */
+.ppz-swatch-crear {
+  cursor: pointer;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  font-size: 0.72rem;
+}
+.ppz-btn-editar {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+}
