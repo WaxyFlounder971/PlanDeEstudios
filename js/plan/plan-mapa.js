@@ -194,8 +194,8 @@ function construirTarjetaVista(plan) {
     btnMas.className = "btn btn-secondary mapa-zoom-btn";
     btnMas.textContent = "+";
     btnMas.setAttribute("aria-label", "Acercar mapa");
-    btnMenos.addEventListener("click", () => ajustarZoomMapa(-0.15, etiquetaZoom));
-    btnMas.addEventListener("click", () => ajustarZoomMapa(0.15, etiquetaZoom));
+    btnMenos.addEventListener("click", () => ajustarZoomMapa(-0.1, etiquetaZoom));
+    btnMas.addEventListener("click", () => ajustarZoomMapa(0.1, etiquetaZoom));
     zoomGrupo.appendChild(btnMenos);
     zoomGrupo.appendChild(etiquetaZoom);
     zoomGrupo.appendChild(btnMas);
