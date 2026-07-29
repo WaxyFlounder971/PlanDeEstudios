@@ -229,7 +229,7 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
 
-  if (lineas.length === 0) return { materias: [], electivas: [], paraRevisar: [], errores: ["El CSV está vacío."] };
+  if (lineas.length === 0) return { materias: [], electivas: [], paraRevisar: [], errores: ["El CSV está vacío."], tieneEstadoCategoria: false };
 
   const encabezado = parsearLineaCSV(lineas[0]);
 
@@ -242,13 +242,31 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
   // v1.14.1: +1 al final por la nueva columna SinDefinir (ver rule/columna
   // nueva en construirEncabezadoCSV, plan-importacion.js) — reemplaza la
   // detección por prefijo de código que existía antes.
-  const columnasEsperadas = 4 + cantidadHoras + 2 + 1; // Bloque,Codigo,Nombre,Creditos + horas + Requisitos,Correquisitos + SinDefinir
+  //
+  // v1.17 (fix bug crítico "export propio no se puede reimportar"): el CSV
+  // que la IA genera SIEMPRE termina en SinDefinir (8 columnas fijas), pero
+  // el CSV que exporta la propia app (plan-vista-lista.js, para respaldo/
+  // restauración) le agrega 2 columnas más al final: Estado y CategoriaId
+  // (datos que la IA jamás podría conocer). Sin detectar esto, esas 2
+  // columnas de más se leían como si fueran parte del Nombre partido por
+  // comas sin comillas (mismo mecanismo de "reparación automática" de más
+  // abajo, pensado para nombres reales con comas) — corrompía Nombre,
+  // Creditos y Horas, y perdía Estado/Categoria por completo. Se detecta
+  // mirando los nombres reales de las 2 últimas columnas del encabezado
+  // (no solo la cantidad), para no confundirse con un CSV de la IA que por
+  // casualidad tuviera 2 columnas de horas de más.
+  const ultimasDosEncabezado = encabezado.slice(-2).map((c) => c.trim().toLowerCase());
+  const tieneEstadoCategoria =
+    encabezado.length >= 2 &&
+    ultimasDosEncabezado[0] === "estado" &&
+    /^categoria ?id$/.test(ultimasDosEncabezado[1].replace(/_/g, " "));
+  const columnasEsperadas = 4 + cantidadHoras + 2 + 1 + (tieneEstadoCategoria ? 2 : 0); // Bloque,Codigo,Nombre,Creditos + horas + Requisitos,Correquisitos + SinDefinir [+ Estado,CategoriaId]
 
   const errores = [];
   // Aviso no-fatal (Parte C, punto 3): si el encabezado real trae una
   // cantidad de columnas de horas distinta a la esperada, no se falla en
   // silencio — se avisa y se sigue intentando parsear con lo que hay.
-  const cantidadHorasEnEncabezado = Math.max(0, encabezado.length - 7);
+  const cantidadHorasEnEncabezado = Math.max(0, encabezado.length - 7 - (tieneEstadoCategoria ? 2 : 0));
   if (cantidadHorasEnEncabezado !== cantidadHoras) {
     errores.push(
       `Aviso: se esperaban ${cantidadHoras} columna(s) de horas (${tipos.join(", ") || "ninguna"}) ` +
@@ -262,6 +280,7 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
   const materias = [];
   const electivas = [];
   const paraRevisar = [];
+
 
   filas.forEach((linea, indice) => {
     const numeroFila = indice + 2; // +2 = +1 por el encabezado, +1 por ser 1-indexado
@@ -311,9 +330,29 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
     const columnasHorasFila = columnas.slice(idxHorasInicio, idxHorasInicio + cantidadHoras);
     const requisitos = columnas[idxHorasInicio + cantidadHoras];
     const correquisitos = columnas[idxHorasInicio + cantidadHoras + 1];
-    // v1.14.1: última columna — reemplaza la detección por prefijo de código.
+    // v1.14.1: última columna del formato base — reemplaza la detección por
+    // prefijo de código.
     const sinDefinirCruda = columnas[idxHorasInicio + cantidadHoras + 2];
     const sinDefinir = /^\s*true\s*$/i.test(String(sinDefinirCruda || ""));
+
+    // v1.17: solo presentes en el formato extendido de export/backup propio
+    // de la app (ver tieneEstadoCategoria más arriba) — nunca en el CSV que
+    // genera la IA.
+    let estadoValidado;
+    let categoriaId;
+    if (tieneEstadoCategoria) {
+      const estadoCrudo = String(columnas[idxHorasInicio + cantidadHoras + 3] || "").trim().toLowerCase();
+      // Solo se acepta un estado de la lista real de la app (ver
+      // ESTADOS_MATERIA en plan-vista-lista-tarjetas.js) — cualquier otra
+      // cosa (celda vacía, dato corrupto) cae al default "pendiente" de
+      // crearMateria en vez de guardar basura.
+      estadoValidado = /^(pendiente|cursando|aprobado|reprobado)$/.test(estadoCrudo) ? estadoCrudo : undefined;
+      const categoriaIdCrudo = String(columnas[idxHorasInicio + cantidadHoras + 4] || "").trim();
+      // No se valida contra plan.categorias acá (este parser no recibe el
+      // plan) — si el id no existe más en este plan, la UI ya sabe mostrar
+      // "Sin categoría" sin romperse; es un caso normal, no un error.
+      categoriaId = categoriaIdCrudo || undefined;
+    }
 
     if (!codigo || !nombre) {
       errores.push(`Fila ${numeroFila}: falta Código o Nombre.`);
@@ -349,6 +388,8 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
       correquisitos: parsearRequisitoArbol(correquisitos),
       esOptativa,
       sinDefinir,
+      estado: estadoValidado,
+      categoriaId,
     });
 
     if (esOptativa) electivas.push(materiaCreada);
@@ -369,7 +410,7 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
     m.correquisitos = expandirRequisitoBloque(m.correquisitos, materias);
   });
 
-  return { materias, electivas, paraRevisar, errores };
+  return { materias, electivas, paraRevisar, errores, tieneEstadoCategoria };
 }
 
 /**
@@ -469,7 +510,7 @@ function importarCSVEnPlan(textoCSV, planDestino) {
     planDestino.parametros_universidad.tipos_horas = derivarTiposHorasDeHorasColumnas(metadatos.horas_columnas);
   }
 
-  const { materias, electivas, paraRevisar, errores } = parsearCSVPlanEstudios(csv, planDestino.parametros_universidad.tipos_horas);
+  const { materias, electivas, paraRevisar, errores, tieneEstadoCategoria } = parsearCSVPlanEstudios(csv, planDestino.parametros_universidad.tipos_horas);
 
   // Se combina por código: si ya existía, se actualiza; si es nueva, se agrega.
   // v1.16 (fix bug crítico "solo toma la última"): los cupos genéricos
@@ -483,6 +524,13 @@ function importarCSVEnPlan(textoCSV, planDestino) {
   // materias ya confirmadas (sin_definir=false) siguen actualizándose por
   // código, que es donde sí tiene sentido (reimportar y actualizar sin
   // duplicar).
+  //
+  // v1.17: si el CSV es del formato extendido de export/backup (trae Estado
+  // y CategoriaId reales, ver tieneEstadoCategoria en parsearCSVPlanEstudios),
+  // se usa el estado/categoría que trae el CSV — es justo lo que se quiere
+  // al restaurar un respaldo. Si es el CSV normal de la IA (nunca trae esos
+  // datos), se sigue protegiendo el progreso ya guardado del usuario, igual
+  // que siempre.
   materias.forEach((nueva) => {
     if (nueva.sin_definir) {
       planDestino.materias.push(nueva);
@@ -490,7 +538,11 @@ function importarCSVEnPlan(textoCSV, planDestino) {
     }
     const existente = planDestino.materias.find((m) => !m.sin_definir && m.codigo === nueva.codigo);
     if (existente) {
-      Object.assign(existente, nueva, { categoria_id: existente.categoria_id, estado: existente.estado });
+      if (tieneEstadoCategoria) {
+        Object.assign(existente, nueva);
+      } else {
+        Object.assign(existente, nueva, { categoria_id: existente.categoria_id, estado: existente.estado });
+      }
     } else {
       planDestino.materias.push(nueva);
     }
@@ -765,18 +817,31 @@ function construirMiniPanelImportacion(plan) {
         plan.parametros_universidad.tipos_horas = derivarTiposHorasDeHorasColumnas(metadatos.horas_columnas);
       }
 
-      const { materias, electivas, paraRevisar, errores } = parsearCSVPlanEstudios(csv, plan.parametros_universidad.tipos_horas);
+      const { materias, electivas, paraRevisar, errores, tieneEstadoCategoria } = parsearCSVPlanEstudios(csv, plan.parametros_universidad.tipos_horas);
       // v1.16: mismo fix que importarCSVEnPlan — los cupos genéricos
       // (sin_definir=true) nunca se fusionan por código, siempre se agregan
       // como fila nueva (ver comentario completo en importarCSVEnPlan).
+      // v1.17: mismo fix que importarCSVEnPlan — esta era la segunda copia de
+      // esta lógica de fusión (la del mini-panel "Actualizar malla" dentro de
+      // un plan ya abierto) y se había quedado sin el fix de tieneEstadoCategoria:
+      // pisaba SIEMPRE estado/categoria_id con los que ya tenía la materia,
+      // incluso cuando el CSV era el formato extendido de export/backup propio
+      // (que sí trae estado/categoría reales y se está restaurando a propósito).
       materias.forEach((nueva) => {
         if (nueva.sin_definir) {
           plan.materias.push(nueva);
           return;
         }
         const existente = plan.materias.find((m) => !m.sin_definir && m.codigo === nueva.codigo);
-        if (existente) Object.assign(existente, nueva, { categoria_id: existente.categoria_id, estado: existente.estado });
-        else plan.materias.push(nueva);
+        if (existente) {
+          if (tieneEstadoCategoria) {
+            Object.assign(existente, nueva);
+          } else {
+            Object.assign(existente, nueva, { categoria_id: existente.categoria_id, estado: existente.estado });
+          }
+        } else {
+          plan.materias.push(nueva);
+        }
       });
 
       // C.4 (v9): igual que en importarCSVEnPlan — una electiva nueva se
