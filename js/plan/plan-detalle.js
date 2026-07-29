@@ -366,11 +366,31 @@ function construirBloqueRequisitos(etiqueta, nodoRaiz, modo) {
   return cont;
 }
 
+/**
+ * v1.12.16 (Ajuste 2): si esta materia reemplazó un cupo genérico de
+ * electiva/optativa (ver reemplazarCupoOptativa en plan-esquema.js), esta
+ * línea pequeña y aparte recuerda de cuál cupo venía (ej. "Cupo original:
+ * Repertorio") — null si nunca fue un cupo reemplazado. Se usa tanto en el
+ * modal/tarjeta normal (construirBloqueCompletoRequisitos) como en la
+ * tarjeta normal de lista (construirCuerpoDetalleTarjeta), siempre justo
+ * debajo de Requisitos/Correquisitos, nunca mezclada con ellos.
+ */
+function construirEtiquetaCupoOriginal(materia) {
+  if (!materia.cupo_generico_original) return null;
+  const p = document.createElement("p");
+  p.className = "muted";
+  p.style.cssText = "margin-top:4px; font-size:0.85em;";
+  p.textContent = `Cupo original: ${materia.cupo_generico_original}`;
+  return p;
+}
+
 function construirBloqueCompletoRequisitos(materia, plan) {
   const cont = document.createElement("div");
   cont.className = "stack";
   cont.appendChild(construirBloqueRequisitos("Requisitos", materia.requisitos));
   cont.appendChild(construirBloqueRequisitos("Correquisitos", materia.correquisitos));
+  const etiquetaCupo = construirEtiquetaCupoOriginal(materia);
+  if (etiquetaCupo) cont.appendChild(etiquetaCupo);
   return cont;
 }
 
@@ -472,6 +492,8 @@ function construirCuerpoDetalleTarjeta(materia, plan) {
   colRequisitos.className = "materia-cuerpo-requisitos stack";
   colRequisitos.appendChild(construirBloqueRequisitos("Requisitos", materia.requisitos, "tarjeta"));
   colRequisitos.appendChild(construirBloqueRequisitos("Correquisitos", materia.correquisitos, "tarjeta"));
+  const etiquetaCupo = construirEtiquetaCupoOriginal(materia);
+  if (etiquetaCupo) colRequisitos.appendChild(etiquetaCupo);
   grid.appendChild(colRequisitos);
 
   grid.appendChild(construirColumnaAccionesTarjeta(materia, plan));

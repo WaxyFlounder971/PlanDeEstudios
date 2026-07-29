@@ -577,9 +577,23 @@ estado.vincularOptativaContexto = null; // { materiaTemplate, plan, origen } mie
  *  (nunca en optativas_disponibles) marcadas como sin_definir=true — un
  *  espacio reservado de electiva/optativa sin materia real elegida todavía
  *  (ver materiaPareceOptativa, reutilizado tal cual desde
- *  plan-importacion-csv.js — nunca se detecta adivinando por el código). */
+ *  plan-importacion-csv.js — nunca se detecta adivinando por el código).
+ *
+ * v1.12.16 (fix bug crítico): devuelve `{ materia, indice }` — `indice` es
+ * la posición real dentro de `plan.materias`, la única identidad que nunca
+ * se puede repetir entre dos cupos distintos. Antes se pasaba solo el
+ * objeto `materia`; en la práctica, varios cupos genéricos sin definir
+ * comparten el mismo nombre (y a veces hasta el mismo código, ya que
+ * "código real" para un espacio sin definir suele venir vacío o repetido
+ * desde el documento fuente) — al identificarlos por esos campos en vez de
+ * por su posición, "Reemplazar" terminaba operando sobre el cupo
+ * equivocado, o afectando a varios cupos de distintos bloques a la vez. */
 function obtenerCuposOptativaEnPlan(plan) {
-  return (plan.materias || []).filter((m) => !m.es_optativa && materiaPareceOptativa(m));
+  const cupos = [];
+  (plan.materias || []).forEach((m, indice) => {
+    if (!m.es_optativa && materiaPareceOptativa(m)) cupos.push({ materia: m, indice });
+  });
+  return cupos;
 }
 
 /** Bloques numéricos que ya existen en el plan (materias formales; nunca las
@@ -656,17 +670,36 @@ function renderizarContenidoVincularOptativa() {
     p.textContent = "Este plan todavía no tiene bloques numerados con materias.";
     seccionBloque.appendChild(p);
   } else {
-    const grupo = document.createElement("div");
-    grupo.className = "pill-group";
+    // v1.12.16 (Ajuste 1): antes era un pill-group horizontal que truncaba
+    // cada opción a "C." y no dejaba distinguir un bloque de otro — se
+    // reemplaza por un <select> normal, que siempre muestra el nombre
+    // completo de cada bloque y escala bien aunque haya muchos.
+    const selectBloque = document.createElement("select");
+    selectBloque.className = "form-select";
+
+    const optPlaceholder = document.createElement("option");
+    optPlaceholder.value = "";
+    optPlaceholder.textContent = "Selecciona un bloque…";
+    optPlaceholder.disabled = true;
+    optPlaceholder.selected = true;
+    selectBloque.appendChild(optPlaceholder);
+
     bloques.forEach((bloque) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "pill-item";
-      btn.textContent = `${plan.parametros_universidad.nombre_bloque} ${bloque}`;
-      btn.addEventListener("click", () => asignarOptativaABloqueEspecifico(materiaTemplate, plan, bloque));
-      grupo.appendChild(btn);
+      const opt = document.createElement("option");
+      opt.value = String(bloque);
+      opt.textContent = `${plan.parametros_universidad.nombre_bloque} ${bloque}`;
+      selectBloque.appendChild(opt);
     });
-    seccionBloque.appendChild(grupo);
+
+    selectBloque.addEventListener("change", () => {
+      if (!selectBloque.value) return;
+      // los bloques pueden ser numéricos o texto — se recupera el valor
+      // original (no el string del <option>) para no perder su tipo.
+      const bloqueElegido = bloques.find((b) => String(b) === selectBloque.value);
+      asignarOptativaABloqueEspecifico(materiaTemplate, plan, bloqueElegido);
+    });
+
+    seccionBloque.appendChild(selectBloque);
   }
   cont.appendChild(seccionBloque);
 
@@ -686,17 +719,23 @@ function renderizarContenidoVincularOptativa() {
     p.textContent = "Este plan no tiene espacios de electiva/optativa pendientes dentro de sus bloques.";
     seccionCupo.appendChild(p);
   } else {
-    cupos.forEach((cupo) => {
+    cupos.forEach((cupoRef) => {
+      const { materia: cupoMateria, indice } = cupoRef;
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "btn btn-secondary btn-block";
       btn.style.textAlign = "left";
-      btn.textContent = `${plan.parametros_universidad.nombre_bloque} ${cupo.bloque} — reemplazar ${obtenerPalabraOptativa(cupo)}: "${cupo.nombre}"`;
+      btn.textContent = `${plan.parametros_universidad.nombre_bloque} ${cupoMateria.bloque} — reemplazar ${obtenerPalabraOptativa(cupoMateria)}: "${cupoMateria.nombre}"`;
       btn.addEventListener("click", () => {
         const confirmado = window.confirm(
-          `¿Quieres poner "${materiaTemplate.nombre}" dentro del plan, reemplazando a "${cupo.nombre}"?`
+          `¿Quieres poner "${materiaTemplate.nombre}" dentro del plan, reemplazando a "${cupoMateria.nombre}" del ${plan.parametros_universidad.nombre_bloque.toLowerCase()} ${cupoMateria.bloque}?`
         );
-        if (confirmado) reemplazarCupoOptativa(materiaTemplate, plan, cupo);
+        // v1.12.16: se identifica al cupo por su índice real dentro de
+        // plan.materias (indice), nunca por nombre/código — así, si hay
+        // varios cupos con el mismo nombre genérico en distintos bloques
+        // (ej. "Repertorio" en el Bloque 8, 9 y 10), reemplazar uno nunca
+        // toca a los otros.
+        if (confirmado) reemplazarCupoOptativa(materiaTemplate, plan, indice);
       });
       seccionCupo.appendChild(btn);
     });
@@ -712,11 +751,23 @@ function renderizarContenidoVincularOptativa() {
  * nunca se pierde su posición. El objeto `cupo` se muta in-place: nunca se
  * agrega una fila nueva a plan.materias para esto (y la fila vieja no queda
  * duplicada).
+ *
+ * v1.12.16: `indiceCupo` es la posición del cupo dentro de `plan.materias`
+ * (ver obtenerCuposOptativaEnPlan) — se resuelve el objeto real en ese
+ * índice al momento del clic, nunca por nombre/código, así reemplazar un
+ * cupo nunca afecta a otro cupo con el mismo nombre genérico en otro bloque.
  */
-function reemplazarCupoOptativa(materiaTemplate, plan, cupo) {
+function reemplazarCupoOptativa(materiaTemplate, plan, indiceCupo) {
   const ctx = estado.vincularOptativaContexto;
+  const cupo = (plan.materias || [])[indiceCupo];
+  if (!cupo) return; // seguridad: el índice ya no corresponde a nada (no debería pasar)
   const codigoAnterior = cupo.codigo;
   quitarDeOrigenEspecialOptativa(plan, materiaTemplate, ctx ? ctx.origen : "optativa");
+
+  // Ajuste 2 (v1.12.16): antes de perder el nombre genérico del cupo, se
+  // guarda — se muestra luego en la tarjeta de la materia real, debajo de
+  // Requisitos (ver construirBloqueCompletoRequisitos en plan-detalle.js).
+  cupo.cupo_generico_original = cupo.nombre;
 
   cupo.codigo = materiaTemplate.codigo;
   cupo.id = materiaTemplate.codigo;
