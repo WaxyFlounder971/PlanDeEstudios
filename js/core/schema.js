@@ -31,6 +31,7 @@ function crearDatosUsuarioNuevo() {
       plan_activo_id: null,         // id del Plan de Estudios seleccionado como activo
       enlaces_rapidos: [],          // ver estructura de "enlace" abajo (máx. 20)
 
+       
       // --- Modo Hardcore 💀 (doble carrera) ---
       modo_hardcore: false,          // si está activo, se combina un plan principal + uno secundario
       plan_activo_secundario_id: null, // id del segundo Plan de Estudios (solo relevante si modo_hardcore = true)
