@@ -8,6 +8,7 @@ import { renderizarAjustes } from "./config/config-ajustes.js";
 import { inicializarModalEnlace, renderizarEnlacesRapidos } from "./config/config-enlaces.js";
 import { buscarOCrearArchivoDatos, cerrarSesionGoogle, inicializarGoogleAuth, iniciarSesionConGoogle, obtenerMetadatosArchivo, obtenerPerfilGoogle, refrescarAccessTokenGoogle } from "./core/auth.js";
 import { migrarDatosAntiguos } from "./core/schema.js";
+import { fusionarDatos } from "./core/storage-merge.js";
 import { actualizarIndicadorSync, forzarSincronizacion, inicializarPullToRefresh, intentarReconexionSilenciosa, intentarSincronizar, mostrarAvisoReconexion, mostrarCargando, ocultarCargando, programarRefrescoProactivo, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
 import { CLAVE_CACHE_LOCAL, borrarTokenCache, correoConocido, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
 import { obtenerIniciales } from "./core/utils.js";
@@ -292,9 +293,29 @@ async function onLoginExitoso(token, expiresIn) {
     navigator.storage.persist().catch(() => {});
   }
   try {
-    const { fileId, datos } = await buscarOCrearArchivoDatos(token);
+    const { fileId, datos, esArchivoNuevo } = await buscarOCrearArchivoDatos(token);
     estado.fileId = fileId;
-    estado.datos = migrarDatosAntiguos(datos);
+    const remotoMigrado = migrarDatosAntiguos(datos);
+
+    // v1.15 (FIX bug crítico "se me borró todo lo de PC al abrir en el
+    // teléfono"): antes esta línea era `estado.datos = migrarDatosAntiguos
+    // (datos)` — un reemplazo TOTAL, sin comparar nada. Si este dispositivo
+    // ya traía algo cargado en estado.datos (offline-first: el bloque de
+    // "const cache = leerCacheLocal()" de más arriba ya corrió mostrarApp()
+    // con la caché local ANTES de que este login terminara), ese reemplazo
+    // ciego pisaba lo local con lo remoto sin importar cuál era más nuevo.
+    // Ahora, si ya había algo cargado (offline-first) Y el archivo de Drive
+    // ya existía de antes (no se acaba de crear ahora mismo), se FUNDE por
+    // entidad — cada materia/semestre/plan gana según su propio
+    // `_actualizadoEn` real (ver storage-merge.js), nunca por "quién llegó
+    // último a escribir". Si es la primera vez que este usuario entra
+    // (archivo recién creado) o este dispositivo no tenía nada cargado
+    // todavía, no hay nada con qué fundir y se usa lo remoto tal cual.
+    if (estado.datos && !esArchivoNuevo) {
+      estado.datos = fusionarDatos(estado.datos, remotoMigrado);
+    } else {
+      estado.datos = remotoMigrado;
+    }
 
     // Punto 6: nombre + foto de perfil de Google.
     const perfilGoogle = await obtenerPerfilGoogle(token);
@@ -305,6 +326,15 @@ async function onLoginExitoso(token, expiresIn) {
     }
 
     guardarCacheLocal();
+    // v1.15: si la fusión de arriba encontró entidades locales más
+    // recientes que las de Drive (ej. cambios hechos offline en este mismo
+    // dispositivo antes de este login), esas entidades quedaron en
+    // estado.datos pero Drive todavía no las tiene — hay que subirlas. Sin
+    // esto, quedarían fundidas solo en memoria/caché local y nunca
+    // llegarían a Drive ni a los demás dispositivos.
+    estado.pendienteSync = true;
+    intentarSincronizar();
+
     // Punto 5: fija la base de comparación del sondeo multi-dispositivo con
     // la versión que se acaba de leer/crear, para no confundirla luego con
     // un cambio hecho desde otro dispositivo.
