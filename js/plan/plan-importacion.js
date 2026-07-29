@@ -154,7 +154,12 @@ REGLAS:
    Solo si el documento genuinamente NO da ningún código para esa fila (ni siquiera uno administrativo/
    interno), y necesitas escribir algo porque la columna no puede quedar vacía, usa "SD-B" + el número
    de Bloque (ej: SD-B7) — ÚNICAMENTE en este caso de "no hay ningún código que preservar", nunca
-   cuando el documento sí trae uno, así sea genérico.
+   cuando el documento sí trae uno, así sea genérico. IMPORTANTE: si en ESE MISMO Bloque hay más de
+   una fila sin código (ej. varias materias de un mismo cuatrimestre que el documento solo nombra, sin
+   código alguno), agrégale a cada una un consecutivo distinto empezando en 1, en el mismo orden en que
+   aparecen: "SD-B7-1", "SD-B7-2", "SD-B7-3"... — nunca repitas "SD-B7" solo para dos filas de ese
+   bloque, porque la app identifica cada materia por su código y dos filas con el mismo código se
+   pisarían entre sí, perdiendo todas menos la última.
 
 3. HORAS: usa 0 si el documento no reporta ese tipo de hora para esa materia puntual — nunca dejes
    la celda vacía. Si el documento presenta las horas dentro de una cuadrícula gráfica (cajas de

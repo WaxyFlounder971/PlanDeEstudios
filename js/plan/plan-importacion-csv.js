@@ -472,8 +472,23 @@ function importarCSVEnPlan(textoCSV, planDestino) {
   const { materias, electivas, paraRevisar, errores } = parsearCSVPlanEstudios(csv, planDestino.parametros_universidad.tipos_horas);
 
   // Se combina por código: si ya existía, se actualiza; si es nueva, se agrega.
+  // v1.16 (fix bug crítico "solo toma la última"): los cupos genéricos
+  // (sin_definir=true) NUNCA se fusionan por código — un cupo vacío no es
+  // "el mismo" que otro cupo vacío solo porque el documento fuente reutiliza
+  // el mismo código real para varios cupos (ej. optativas repetidas entre
+  // ciclos), o porque el fallback SD-B{bloque} de materias sin código
+  // colisionó entre sí (ver construirPromptImportacion). Fusionarlos por
+  // código pisaba cada fila nueva sobre la anterior, dejando solo la última
+  // detectada. Los cupos siempre se agregan como fila nueva; solo las
+  // materias ya confirmadas (sin_definir=false) siguen actualizándose por
+  // código, que es donde sí tiene sentido (reimportar y actualizar sin
+  // duplicar).
   materias.forEach((nueva) => {
-    const existente = planDestino.materias.find((m) => m.codigo === nueva.codigo);
+    if (nueva.sin_definir) {
+      planDestino.materias.push(nueva);
+      return;
+    }
+    const existente = planDestino.materias.find((m) => !m.sin_definir && m.codigo === nueva.codigo);
     if (existente) {
       Object.assign(existente, nueva, { categoria_id: existente.categoria_id, estado: existente.estado });
     } else {
@@ -489,7 +504,13 @@ function importarCSVEnPlan(textoCSV, planDestino) {
   electivas.forEach((nueva) => {
     const yaAgregada = planDestino.materias.some((m) => m.codigo === nueva.codigo);
     if (yaAgregada) return;
-    const existenteDisponible = planDestino.optativas_disponibles.find((m) => m.codigo === nueva.codigo);
+    // v1.16: mismo fix — un cupo genérico (sin_definir=true) nunca se fusiona
+    // por código, siempre se agrega como fila nueva.
+    if (nueva.sin_definir) {
+      planDestino.optativas_disponibles.push(nueva);
+      return;
+    }
+    const existenteDisponible = planDestino.optativas_disponibles.find((m) => !m.sin_definir && m.codigo === nueva.codigo);
     if (existenteDisponible) {
       Object.assign(existenteDisponible, nueva);
     } else {
@@ -504,7 +525,13 @@ function importarCSVEnPlan(textoCSV, planDestino) {
   paraRevisar.forEach((nueva) => {
     const yaAgregada = planDestino.materias.some((m) => m.codigo === nueva.codigo);
     if (yaAgregada) return;
-    const existenteEnRevisar = planDestino.materias_revisar.find((m) => m.codigo === nueva.codigo);
+    // v1.16: mismo fix — un cupo genérico (sin_definir=true) nunca se fusiona
+    // por código, siempre se agrega como fila nueva.
+    if (nueva.sin_definir) {
+      planDestino.materias_revisar.push(nueva);
+      return;
+    }
+    const existenteEnRevisar = planDestino.materias_revisar.find((m) => !m.sin_definir && m.codigo === nueva.codigo);
     if (existenteEnRevisar) {
       Object.assign(existenteEnRevisar, nueva);
     } else {
@@ -739,8 +766,15 @@ function construirMiniPanelImportacion(plan) {
       }
 
       const { materias, electivas, paraRevisar, errores } = parsearCSVPlanEstudios(csv, plan.parametros_universidad.tipos_horas);
+      // v1.16: mismo fix que importarCSVEnPlan — los cupos genéricos
+      // (sin_definir=true) nunca se fusionan por código, siempre se agregan
+      // como fila nueva (ver comentario completo en importarCSVEnPlan).
       materias.forEach((nueva) => {
-        const existente = plan.materias.find((m) => m.codigo === nueva.codigo);
+        if (nueva.sin_definir) {
+          plan.materias.push(nueva);
+          return;
+        }
+        const existente = plan.materias.find((m) => !m.sin_definir && m.codigo === nueva.codigo);
         if (existente) Object.assign(existente, nueva, { categoria_id: existente.categoria_id, estado: existente.estado });
         else plan.materias.push(nueva);
       });
@@ -752,7 +786,9 @@ function construirMiniPanelImportacion(plan) {
       electivas.forEach((nueva) => {
         const yaAgregada = plan.materias.some((m) => m.codigo === nueva.codigo);
         if (yaAgregada) return;
-        const existenteDisponible = plan.optativas_disponibles.find((m) => m.codigo === nueva.codigo);
+        // v1.16: cupo genérico -> siempre fila nueva, nunca fusionar por código.
+        if (nueva.sin_definir) { plan.optativas_disponibles.push(nueva); return; }
+        const existenteDisponible = plan.optativas_disponibles.find((m) => !m.sin_definir && m.codigo === nueva.codigo);
         if (existenteDisponible) Object.assign(existenteDisponible, nueva);
         else plan.optativas_disponibles.push(nueva);
       });
@@ -762,7 +798,9 @@ function construirMiniPanelImportacion(plan) {
       paraRevisar.forEach((nueva) => {
         const yaAgregada = plan.materias.some((m) => m.codigo === nueva.codigo);
         if (yaAgregada) return;
-        const existenteEnRevisar = plan.materias_revisar.find((m) => m.codigo === nueva.codigo);
+        // v1.16: cupo genérico -> siempre fila nueva, nunca fusionar por código.
+        if (nueva.sin_definir) { plan.materias_revisar.push(nueva); return; }
+        const existenteEnRevisar = plan.materias_revisar.find((m) => !m.sin_definir && m.codigo === nueva.codigo);
         if (existenteEnRevisar) Object.assign(existenteEnRevisar, nueva);
         else plan.materias_revisar.push(nueva);
       });

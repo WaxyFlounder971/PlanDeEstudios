@@ -235,7 +235,16 @@ function inicializarModalCrearPlan() {
     });
   });
 
-  document.getElementById("btn-cancelar-crear-plan").addEventListener("click", cancelarModalCrearPlan);
+  document.getElementById("btn-cancelar-crear-plan").addEventListener("click", () => {
+    estado.csvPendienteDeImportar = null;
+    estado.horasColumnasDetectadasPlan = null;
+    estado.tipoTituloDetectadoPlan = null;
+    document.getElementById("modal-crear-plan").classList.add("oculto");
+    if (estado.reabrirGestionPlanesTrasCrear) {
+      estado.reabrirGestionPlanesTrasCrear = false;
+      abrirModalGestionPlanes();
+    }
+  });
 
   document.getElementById("btn-confirmar-crear-plan").addEventListener("click", () => {
     const nombreCarrera = document.getElementById("input-plan-nombre-carrera").value.trim();
@@ -308,33 +317,20 @@ function inicializarModalCrearPlan() {
       abrirModalGestionPlanes();
     }
   });
-}
 
-/**
- * v1.13.3 (parche urgente): antes, este modal se podía cerrar sin querer
- * con un clic fuera de la ventana (ej. mientras se escribe el nombre de la
- * carrera) — al hacerlo, se perdía silenciosamente la señal de "esto es un
- * plan nuevo" (estado.mostrarPanelImportacionNuevoPlan, que
- * manejarClickImportar ya había apagado ANTES de abrir este modal, ver
- * plan-importacion-csv.js). Si el usuario reintentaba importar después de
- * ese cierre accidental, la app ya no volvía a preguntar por un plan nuevo
- * — mezclaba todo directo en el plan que estuviera activo en ese momento.
- * Ahora: 1) el modal SOLO se cierra con el botón "Cancelar" (nunca con un
- * clic al fondo — inicializarModalCrearPlan ya no registra ese listener),
- * y 2) cancelar con una importación pendiente restaura esa señal, así que
- * la importación completa queda cancelada de verdad: un reintento vuelve a
- * preguntar por un plan nuevo en vez de mezclarse en el activo.
- */
-function cancelarModalCrearPlan() {
-  if (estado.csvPendienteDeImportar) estado.mostrarPanelImportacionNuevoPlan = true;
-  estado.csvPendienteDeImportar = null;
-  estado.horasColumnasDetectadasPlan = null;
-  estado.tipoTituloDetectadoPlan = null;
-  document.getElementById("modal-crear-plan").classList.add("oculto");
-  if (estado.reabrirGestionPlanesTrasCrear) {
-    estado.reabrirGestionPlanesTrasCrear = false;
-    abrirModalGestionPlanes();
-  }
+  // v11 (migración a módulos): antes suelto en el DOMContentLoaded de plan.js.
+  document.getElementById("modal-crear-plan").addEventListener("click", (e) => {
+    if (e.target.id === "modal-crear-plan") {
+      estado.csvPendienteDeImportar = null;
+      estado.horasColumnasDetectadasPlan = null;
+      estado.tipoTituloDetectadoPlan = null;
+      e.target.classList.add("oculto");
+      if (estado.reabrirGestionPlanesTrasCrear) {
+        estado.reabrirGestionPlanesTrasCrear = false;
+        abrirModalGestionPlanes();
+      }
+    }
+  });
 }
 
 /* ===================== B.5 — Añadir materia manualmente ===================== */
@@ -645,12 +641,21 @@ function cerrarModalVincularOptativa() {
 }
 
 /** Quita `materiaTemplate` del arreglo especial del que vino (según
- *  ctx.origen), para que deje de aparecer ahí una vez vinculada. */
+ *  ctx.origen), para que deje de aparecer ahí una vez vinculada.
+ *
+ * v1.16 (fix bug crítico): antes filtraba por `m.codigo !== materiaTemplate.codigo`
+ * — como ahora el import SÍ deja convivir varias optativas/revisar con el
+ * mismo código (ver fix de importarCSVEnPlan en plan-importacion-csv.js, que
+ * ya no las fusiona), filtrar por código borraba TODAS las que compartieran
+ * ese código de un solo golpe al vincular solo una. `materiaTemplate` es
+ * siempre el objeto real dentro del arreglo (viene de
+ * obtenerOptativasDisponibles/obtenerMateriasRevisar), así que comparar por
+ * referencia identifica exactamente esa fila y ninguna otra. */
 function quitarDeOrigenEspecialOptativa(plan, materiaTemplate, origen) {
   if (origen === "revisar") {
-    plan.materias_revisar = (plan.materias_revisar || []).filter((m) => m.codigo !== materiaTemplate.codigo);
+    plan.materias_revisar = (plan.materias_revisar || []).filter((m) => m !== materiaTemplate);
   } else {
-    plan.optativas_disponibles = (plan.optativas_disponibles || []).filter((m) => m.codigo !== materiaTemplate.codigo);
+    plan.optativas_disponibles = (plan.optativas_disponibles || []).filter((m) => m !== materiaTemplate);
   }
 }
 
@@ -674,26 +679,36 @@ function renderizarContenidoVincularOptativa() {
     p.textContent = "Este plan todavía no tiene bloques numerados con materias.";
     seccionBloque.appendChild(p);
   } else {
-    // v1.13.3 (ajuste de estilo): el <select> nativo de v1.12.16 arregló la
-    // legibilidad, pero sus <option> son del navegador — no se pueden
-    // re-estilizar con el sistema de diseño de la app (de ahí el gris feo).
-    // Se reemplaza por una lista vertical de botones reales, con las mismas
-    // clases (btn btn-secondary btn-block) que ya usa el resto del modal
-    // (ver la sección "Reemplazar por otra materia" más abajo) — así se ve
-    // consistente y sigue mostrando el nombre completo de cada bloque, sin
-    // cortar.
-    const listaBloques = document.createElement("div");
-    listaBloques.className = "stack";
+    // v1.12.16 (Ajuste 1): antes era un pill-group horizontal que truncaba
+    // cada opción a "C." y no dejaba distinguir un bloque de otro — se
+    // reemplaza por un <select> normal, que siempre muestra el nombre
+    // completo de cada bloque y escala bien aunque haya muchos.
+    const selectBloque = document.createElement("select");
+    selectBloque.className = "form-select";
+
+    const optPlaceholder = document.createElement("option");
+    optPlaceholder.value = "";
+    optPlaceholder.textContent = "Selecciona un bloque…";
+    optPlaceholder.disabled = true;
+    optPlaceholder.selected = true;
+    selectBloque.appendChild(optPlaceholder);
+
     bloques.forEach((bloque) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "btn btn-secondary btn-block";
-      btn.style.textAlign = "left";
-      btn.textContent = `${plan.parametros_universidad.nombre_bloque} ${bloque}`;
-      btn.addEventListener("click", () => asignarOptativaABloqueEspecifico(materiaTemplate, plan, bloque));
-      listaBloques.appendChild(btn);
+      const opt = document.createElement("option");
+      opt.value = String(bloque);
+      opt.textContent = `${plan.parametros_universidad.nombre_bloque} ${bloque}`;
+      selectBloque.appendChild(opt);
     });
-    seccionBloque.appendChild(listaBloques);
+
+    selectBloque.addEventListener("change", () => {
+      if (!selectBloque.value) return;
+      // los bloques pueden ser numéricos o texto — se recupera el valor
+      // original (no el string del <option>) para no perder su tipo.
+      const bloqueElegido = bloques.find((b) => String(b) === selectBloque.value);
+      asignarOptativaABloqueEspecifico(materiaTemplate, plan, bloqueElegido);
+    });
+
+    seccionBloque.appendChild(selectBloque);
   }
   cont.appendChild(seccionBloque);
 
