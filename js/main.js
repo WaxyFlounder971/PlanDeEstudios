@@ -4,7 +4,7 @@
    todos los demás módulos.
    ========================================================================= */
 
-import { renderizarAjustes } from "./config/config-ajustes.js";
+import { renderizarAjustes, aplicarModoRendimiento } from "./config/config-ajustes.js";
 import { inicializarModalEnlace, renderizarEnlacesRapidos } from "./config/config-enlaces.js";
 import { buscarOCrearArchivoDatos, cerrarSesionGoogle, inicializarGoogleAuth, iniciarSesionConGoogle, obtenerMetadatosArchivo, obtenerPerfilGoogle, refrescarAccessTokenGoogle } from "./core/auth.js";
 import { migrarDatosAntiguos } from "./core/schema.js";
@@ -354,6 +354,7 @@ function mostrarApp() {
   document.getElementById("pantalla-login").classList.add("oculto");
   document.getElementById("app-shell").classList.remove("oculto");
   aplicarPaleta(estado.datos.configuracion.paleta, estado.datos.configuracion.modo);
+  aplicarModoRendimiento(estado.datos.configuracion.modo_rendimiento);
   renderizarSelectorPlan();
   renderizarAjustes();
   renderizarModoHardcore();
