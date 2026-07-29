@@ -691,6 +691,17 @@ function renderizarContenidoVincularOptativa() {
     // completo de cada bloque y escala bien aunque haya muchos.
     const selectBloque = document.createElement("select");
     selectBloque.className = "form-select";
+    // v1.16 (fix bug crítico de contraste): sin esto, el <select> cerrado
+    // respeta el tema oscuro de la app (CSS normal), pero el DESPLEGABLE de
+    // opciones lo pinta el navegador con su render nativo del sistema
+    // operativo — típicamente fondo blanco — sin tocar el color del texto,
+    // que sigue siendo claro (letras blancas sobre fondo blanco = invisible).
+    // Esto no se puede arreglar solo con CSS de la app porque el popup nativo
+    // de <option> ignora background-color/color en la mayoría de navegadores;
+    // `color-scheme` es la única propiedad que sí respetan para dibujar ese
+    // popup en su variante oscura. Se deriva del modo actual (no se fija
+    // "dark" a fuego) para no romper el modo claro.
+    selectBloque.style.colorScheme = estado.datos.configuracion.modo === "light" ? "light" : "dark";
 
     const optPlaceholder = document.createElement("option");
     optPlaceholder.value = "";
