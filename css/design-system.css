@@ -1827,6 +1827,79 @@ html.exportar-tema-default[data-mode="dark"] {
   .mapa-nodo-nombre { font-size: 0.72rem; }
 }
 
+/* =========================================================================
+   v1.14.1: MODO DE RENDIMIENTO (reduce carga de GPU en equipos con
+   gráficos integrados). Se activa con [data-rendimiento="reducido"] en
+   <html>, igual patrón que data-palette / data-mode. No se toca ningún
+   estilo por defecto — todo vive dentro de estas reglas.
+   ========================================================================= */
+
+/* 2. y 3. — --shadow-glass/--shadow-float y --transition-fast/--transition-med
+   se reutilizan en TODO el sistema (tarjetas, botones, pills, modales,
+   nodos del mapa, toasts, etc.), así que sobreescribirlas aquí ya reduce
+   sombras grandes y anima casi instantáneo en un solo golpe, sin tener
+   que tocar cada selector uno por uno. */
+[data-rendimiento="reducido"] {
+  --shadow-glass: 0 2px 6px rgba(0, 0, 0, 0.28);
+  --shadow-float: 0 2px 6px rgba(0, 0, 0, 0.3);
+  --transition-fast: 0.05s linear;
+  --transition-med: 0.05s linear;
+}
+
+/* 1. backdrop-filter: blur(...) fuera; el mismo tono de fondo sube de
+   opacidad (color-mix con el canvas) para que la tarjeta se siga viendo
+   diferenciada del fondo, sin el costo de GPU del difuminado. */
+[data-rendimiento="reducido"] .glass-card {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: color-mix(in srgb, var(--bg-card) 55%, var(--bg-canvas) 45%);
+}
+[data-rendimiento="reducido"] .glass-panel {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: color-mix(in srgb, var(--bg-panel) 55%, var(--bg-canvas) 45%);
+}
+[data-rendimiento="reducido"] .mobile-topbar {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: color-mix(in srgb, var(--bg-panel) 55%, var(--bg-canvas) 45%);
+}
+[data-rendimiento="reducido"] .modal-overlay {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: rgba(0, 0, 0, 0.8);
+}
+[data-mode="light"][data-rendimiento="reducido"] .modal-overlay {
+  background: rgba(30, 41, 59, 0.34);
+}
+[data-rendimiento="reducido"] .aviso-reconexion {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: rgba(245, 158, 11, 0.34);
+}
+[data-rendimiento="reducido"] .overlay-cargando {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: color-mix(in srgb, var(--bg-canvas) 88%, transparent);
+}
+
+/* 2. Glow del botón primario en hover y de la "luz" de disponibilidad:
+   se mantiene el color que comunica el estado, sin el brillo expandido. */
+[data-rendimiento="reducido"] .btn-primary:hover {
+  box-shadow: 0 2px 6px var(--accent-glow-1);
+}
+[data-rendimiento="reducido"] .luz-punto.disponible {
+  box-shadow: 0 0 0 2px var(--accent-2, #34d399);
+}
+
+/* 5. Camino de desbloqueo del mapa: línea sólida, sin el glow neón. */
+[data-rendimiento="reducido"] .mapa-camino-linea {
+  filter: none;
+}
+
+/* 4. Los degradados de fondo del body ya son estáticos (sin keyframes
+   asociados), así que no requieren ningún cambio adicional aquí. */
+
 
 /* =========================================================================
    v1.13: PANEL "CREAR MI PALETA"
