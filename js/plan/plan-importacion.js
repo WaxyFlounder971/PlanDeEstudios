@@ -137,12 +137,32 @@ columnas, incluida SinDefinir al final, van SIEMPRE, sin excepción.)
 
 REGLAS:
 
-1. BLOQUE: número de nivel/ciclo/año/semestre/cuatrimestre convertido a un ENTERO SECUENCIAL único
-   y creciente según el orden real en que se cursan (ej: si el documento organiza por "Año" y dentro
-   por "Ciclo I/II", o por "Verano", cada uno de esos sub-bloques cronológicos es un número distinto:
-   1, 2, 3, 4... no reinicies el conteo al cambiar de año). Si el documento usa nombres en vez de
-   números, conviértelo al secuencial correspondiente. Si no puedes determinarlo con certeza,
-   escribe "REVISAR".
+1. BLOQUE: tiene TRES valores posibles — un ENTERO SECUENCIAL, la palabra "OPTATIVA" (o "ELECTIVA"),
+   o la palabra "REVISAR". Decide entre los tres usando tu propio criterio, así:
+
+   a) ENTERO SECUENCIAL — cuando la materia (o el espacio reservado de electiva/optativa dentro de un
+      bloque, ver regla 2) está atada a un nivel/ciclo/año/semestre/cuatrimestre concreto y obligatorio
+      del plan: aunque el CONTENIDO sea optativo (el estudiante elige cuál cursar), la UBICACIÓN no lo
+      es (hay que cursar algo ahí, en ese punto específico de la carrera). Conviértelo a un entero único
+      y creciente según el orden real en que se cursan (ej: si el documento organiza por "Año" y dentro
+      por "Ciclo I/II", o por "Verano", cada uno de esos sub-bloques cronológicos es un número distinto:
+      1, 2, 3, 4... no reinicies el conteo al cambiar de año). Si el documento usa nombres en vez de
+      números, conviértelo al secuencial correspondiente.
+
+   b) "OPTATIVA" (o "ELECTIVA") — cuando la materia es genuinamente opcional y NO está atada a un punto
+      fijo obligatorio de la carrera: un curso de un banco/listado general de electivas que el
+      estudiante puede tomar (o no) en varios momentos posibles, sin que el documento la exija en un
+      ciclo específico. Esto es un juicio de contenido, no de dónde aparece impresa en el documento —
+      si el propio documento sugiere un ciclo "recomendado" para cursarla pero deja claro que es
+      flexible/opcional (a diferencia de una asignación fija de la malla), sigue siendo "OPTATIVA", no
+      un número. Ver regla 8 para más detalle de este caso.
+
+   c) "REVISAR" — ÚNICAMENTE cuando genuinamente no puedes determinar ninguna de las dos anteriores con
+      certeza (ni a qué ciclo pertenece, ni si es opcional o no) — nunca lo uses como cajón de sastre
+      para "esto es opcional" (para eso está (b)); resérvalo solo para ambigüedad real de ubicación/
+      naturaleza de la fila. Confundir (b) y (c) hace que el estudiante no pueda distinguir "esto es una
+      opción real para elegir" de "esto necesito revisarlo a mano porque no se entendió bien" — son
+      cosas completamente distintas para la app que procesa este CSV, así que la distinción importa.
 
 2. CODIGO: SIEMPRE el código EXACTO tal como aparece en el documento — SIN EXCEPCIÓN, incluso si la
    materia es un espacio reservado para una electiva/optativa sin contenido definido todavía (sin
@@ -204,9 +224,11 @@ REGLAS:
 7. No omitas ninguna materia, incluidas optativas, electivas, idiomas, seminarios, prácticas,
    trabajos finales de graduación y cursos de nivelación/precálculo (aunque tengan 0 créditos).
 8. Si el documento incluye tablas separadas de "cursos optativos" o "electivas disponibles" fuera
-   de la malla principal, inclúyelas también, usando como Bloque el ciclo donde se indica que se
-   puede cursar esa optativa (o "REVISAR" si no se especifica). Estas ya son materias reales y
-   definidas (tienen código y nombre propios) — van con SinDefinir=false.
+   de la malla principal, inclúyelas también, usando "OPTATIVA" (o "ELECTIVA") como Bloque — ver
+   regla 1b: son cursos opcionales de un banco/listado general, no están atadas a un ciclo
+   obligatorio de la malla, así que NUNCA les pongas el número de ciclo "recomendado" ni "REVISAR"
+   solo porque el documento no menciona uno (eso sería confundir 1b con 1a o con 1c). Estas ya son
+   materias reales y definidas (tienen código y nombre propios) — van con SinDefinir=false.
 9. Si una celda es ilegible, ambigua, o no puedes confirmarla con certeza, escribe "REVISAR" en
    vez de inventar un dato — nunca inventes códigos, créditos u horas que no estén en el documento.
 10. Ignora tablas resumen de totales generales (ej. "Créditos totales de la carrera: 448") — esas
