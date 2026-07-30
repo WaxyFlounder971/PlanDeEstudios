@@ -334,15 +334,42 @@ function crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, tipo_titul
  * sus campos.
  */
 
+/**
+ * REVISIÓN 2 (reloj lógico — reemplaza Date.now() como base del orden):
+ * `_actualizadoEn` empezó como Date.now() (milisegundos de pared). Eso
+ * funciona mientras los relojes de los dispositivos estén bien puestos y
+ * sincronizados, pero en la práctica NUNCA hay garantía de eso — un
+ * teléfono con la hora mal puesta, una zona horaria distinta, o un simple
+ * desvío de NTP puede hacer que una edición genuinamente MÁS NUEVA en el
+ * tiempo real cargue un timestamp MÁS CHICO que una edición vieja del otro
+ * dispositivo, y pierda la comparación sin que nadie se entere. Es un bug
+ * de raíz distinto (y más traicionero) que el de "nunca se llamaba
+ * sellarTimestamp": ese al menos era consistente (siempre 0); este fallaría
+ * de forma silenciosa y solo en el peor momento (relojes desincronizados).
+ *
+ * La solución estándar para esto (Git, CRDTs, Lamport clocks) es dejar de
+ * usar tiempo de PARED y usar un CONTADOR LÓGICO: un entero que cada
+ * dispositivo solo sube, nunca baja, y que además se ajusta hacia arriba
+ * cada vez que el dispositivo VE un contador más alto que el propio
+ * (viniendo de otro dispositivo, al fusionar). Esto garantiza que el orden
+ * relativo entre dos ediciones que un mismo dispositivo pudo haber visto
+ * una después de otra SIEMPRE se refleje correctamente, sin depender de
+ * ningún reloj de pared. Nunca hay ambigüedad de "mi reloj está adelantado"
+ * porque no hay reloj — solo hay un contador que nunca miente sobre el
+ * orden causal que el dispositivo mismo observó.
+ */
+
 const CLAVE_DISPOSITIVO_ID = "app_academica_dispositivo_id";
+const CLAVE_RELOJ_LOGICO = "app_academica_reloj_logico";
 
 /**
  * Id único y estable de ESTE navegador/dispositivo (no de la persona — la
  * misma persona en PC y en teléfono tiene dos ids distintos, cada uno
- * generado una sola vez y guardado en localStorage). Solo se usa como
- * desempate determinista en sellarTimestamp() para el caso rarísimo de dos
- * ediciones con el mismo _actualizadoEn exacto (choque de milisegundo) —
- * el caso normal ya se resuelve solo con el timestamp real.
+ * generado una sola vez y guardado en localStorage). Se usa como desempate
+ * determinista en sellarTimestamp() para el caso rarísimo de dos ediciones
+ * con el mismo contador lógico exacto, y como identificador de "quién
+ * escribió esto" para el detector de conflictos reales (ver
+ * marcarConflictoSiCorresponde en storage-merge.js).
  */
 function obtenerDispositivoId() {
   try {
@@ -357,8 +384,79 @@ function obtenerDispositivoId() {
   }
 }
 
+/**
+ * Lee el reloj lógico actual de ESTE dispositivo (0 si nunca se usó).
+ * Nunca revienta si localStorage no está disponible (ej. modo privado con
+ * restricciones) — en ese caso el contador simplemente vive solo en memoria
+ * durante la sesión, degradando con seguridad en vez de tronar la app.
+ */
+let _relojLogicoMemoria = 0;
+
+function leerRelojLogico() {
+  try {
+    const crudo = localStorage.getItem(CLAVE_RELOJ_LOGICO);
+    const n = Number(crudo);
+    return Number.isFinite(n) && n > 0 ? n : _relojLogicoMemoria;
+  } catch (e) {
+    return _relojLogicoMemoria;
+  }
+}
+
+function guardarRelojLogico(valor) {
+  _relojLogicoMemoria = valor;
+  try {
+    localStorage.setItem(CLAVE_RELOJ_LOGICO, String(valor));
+  } catch (e) {
+    // Sin localStorage disponible: el contador sigue funcionando en memoria
+    // para el resto de esta sesión (degradación segura, nunca un throw).
+  }
+}
+
+/**
+ * Sube el reloj lógico de este dispositivo en 1 y devuelve el nuevo valor.
+ * Se usa cada vez que se sella una entidad NUEVA o EDITADA localmente.
+ */
+function avanzarRelojLogico() {
+  const nuevo = leerRelojLogico() + 1;
+  guardarRelojLogico(nuevo);
+  return nuevo;
+}
+
+/**
+ * Regla estándar de reloj de Lamport: cada vez que este dispositivo VE un
+ * contador ajeno (viniendo de una entidad remota, al fusionar), su propio
+ * reloj se adelanta para quedar siempre por delante de cualquier cosa que
+ * ya haya visto. Así, la PRÓXIMA vez que este dispositivo edite algo, su
+ * contador es garantizado más alto que cualquier edición ajena que ya
+ * conoce — el orden causal nunca se pierde. Se expone para que
+ * storage-merge.js la llame al procesar cada entidad remota.
+ */
+function observarRelojLogico(valorAjeno) {
+  const ajeno = Number(valorAjeno) || 0;
+  const propio = leerRelojLogico();
+  if (ajeno > propio) guardarRelojLogico(ajeno);
+}
+
+/**
+ * Sella una entidad con el contador lógico (reemplaza Date.now()),
+ * el id de dispositivo (desempate) y `_version_base`: el contador que
+ * tenía la entidad ANTES de este sellado (su "padre" causal). Esa base es
+ * la pieza clave que permite a storage-merge.js distinguir dos casos que
+ * antes se trataban igual pero son muy distintos:
+ *   - Edición secuencial real: alguien editó la versión que YA conocía del
+ *     otro dispositivo → hay una línea causal continua, no hay conflicto.
+ *   - Edición concurrente real (tu caso: mismo campo cambiado en ambos
+ *     dispositivos sin que ninguno supiera del otro) → ambas ediciones
+ *     parten de la MISMA base pero terminan en valores distintos → eso SÍ
+ *     es un choque real, y en vez de que uno se pierda en silencio, se
+ *     marca `_conflicto: true` (ver marcarConflictoSiCorresponde).
+ * `entidad._actualizadoEn` (si ya existía, ej. una edición sobre algo que
+ * vino de sync) es la base; si es una creación nueva, la base es 0.
+ */
 function sellarTimestamp(entidad) {
-  entidad._actualizadoEn = Date.now();
+  const baseAnterior = Number(entidad._actualizadoEn) || 0;
+  entidad._version_base = baseAnterior;
+  entidad._actualizadoEn = avanzarRelojLogico();
   entidad._dispositivoId = obtenerDispositivoId();
   return entidad;
 }
@@ -547,6 +645,7 @@ export {
   migrarDatosAntiguos,
   migrarRequisitoAArbol,
   obtenerDispositivoId,
+  observarRelojLogico,
   recorrerHojasArbol,
   sellarTimestamp,
 };

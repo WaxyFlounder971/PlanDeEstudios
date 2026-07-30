@@ -30,12 +30,15 @@
       a nivel de objeto completo (ver fusionarBloqueUnico).
    ========================================================================= */
 
+import { observarRelojLogico } from "./schema.js";
+
 /**
- * Compara dos entidades por su timestamp de última modificación.
- * Nunca debería haber timestamps iguales entre dispositivos distintos (el
- * _dispositivoId desempata como último recurso, de forma determinista y
- * arbitraria, solo para que el resultado sea estable y no dependa del
- * orden de fusión).
+ * Compara dos entidades por su contador lógico de última modificación
+ * (_actualizadoEn — ver REVISIÓN 2 en schema.js: ya NO es Date.now(), es un
+ * reloj de Lamport). Nunca debería haber contadores iguales entre
+ * dispositivos distintos (el _dispositivoId desempata como último recurso,
+ * de forma determinista y arbitraria, solo para que el resultado sea
+ * estable y no dependa del orden de fusión).
  */
 function esMasReciente(a, b) {
   const ta = Number(a && a._actualizadoEn) || 0;
@@ -44,6 +47,135 @@ function esMasReciente(a, b) {
   const da = String((a && a._dispositivoId) || "");
   const db = String((b && b._dispositivoId) || "");
   return da > db; // desempate arbitrario pero determinista
+}
+
+/**
+ * REVISIÓN 2 (detección de conflicto real — caso "cambié el estado a Y en
+ * el teléfono y a Z en la PC casi al mismo tiempo, offline"): esMasReciente
+ * decide un ganador SIEMPRE, incluso cuando en la realidad ninguna edición
+ * "vino después" de la otra — fueron dos ediciones concurrentes genuinas,
+ * hechas cada una sin saber de la otra. Adivinar un ganador ahí (por
+ * timestamp o por dispositivo) es descartar en silencio un cambio real que
+ * el usuario hizo a propósito.
+ *
+ * La forma de distinguir "A es una evolución real de B" de "A y B son dos
+ * ramas distintas que parten del mismo punto" es comparar `_version_base`
+ * (ver sellarTimestamp en schema.js): cada entidad guarda de qué contador
+ * partió al editarse. Si local.base === remoto.base pero
+ * local._actualizadoEn !== remoto._actualizadoEn, ambas ediciones partieron
+ * EXACTAMENTE del mismo punto y terminaron distinto — eso es un choque real
+ * (el equivalente a un merge conflict de Git), no una simple carrera de
+ * timestamps. En ese caso no se elige ganador: se conserva la versión "base"
+ * (la que ya estaba, para no romper nada en la UI que no sabe de conflictos)
+ * y se adjunta la otra en `_version_alterna` + `_conflicto: true`, para que
+ * la UI se lo muestre al usuario y él decida — nunca se pierde el dato.
+ *
+ * Si las bases son distintas (el caso normal: una edición sí partió de una
+ * versión más nueva que la otra, aunque sea por segundos), no hay conflicto
+ * real — es una línea causal continua y esMasReciente() decide bien.
+ */
+function hayConflictoReal(local, remoto) {
+  if (!local || !remoto) return false;
+
+  // Guarda 1: si el contenido es idéntico (misma foto, distinta instancia
+  // de objeto — típico de perfil/configuracion, que viajan enteros en cada
+  // sync aunque no hayan cambiado), no hay NADA que resolver, sin importar
+  // qué digan los metadatos de versión. Evita marcar "conflicto" en algo
+  // que ni siquiera es una edición real.
+  try {
+    if (JSON.stringify(local) === JSON.stringify(remoto)) return false;
+  } catch (e) {
+    // Objeto no serializable (raro) — se sigue con la comparación normal.
+  }
+
+  // Guarda 2: _version_base solo tiene sentido para entidades que SÍ pasan
+  // por sellarTimestamp() (materias, categorías, planes). Objetos que nunca
+  // se sellan (ej. perfil/configuracion en archivos que no gestionan este
+  // proyecto todavía) tendrían _version_base undefined en ambos lados, y
+  // `Number(undefined) || 0` colapsaría ambos a 0 — marcando conflicto en
+  // CUALQUIER par de objetos distintos sin sellar, incluso sin que haya
+  // habido nunca una edición doble real. Sin metadata real de sellado en
+  // ninguno de los dos lados, no hay forma honesta de detectar conflicto:
+  // se cae al comportamiento anterior (gana el más "reciente" por
+  // esMasReciente, o si tampoco hay eso, es indistinguible y se deja como
+  // estaba). Mejor un desempate arbitrario ocasional que un falso conflicto
+  // permanente en cada sync.
+  const localTieneVersion = local._version_base !== undefined;
+  const remotoTieneVersion = remoto._version_base !== undefined;
+  if (!localTieneVersion || !remotoTieneVersion) return false;
+
+  const baseLocal = Number(local._version_base) || 0;
+  const baseRemota = Number(remoto._version_base) || 0;
+  // Mismo punto de partida = ambas son ediciones directas de la MISMA
+  // versión previa, hechas sin que ninguna conociera a la otra. Esto es
+  // cierto sin importar en qué contador haya terminado cada una — incluso
+  // si por coincidencia ambos dispositivos avanzaron su reloj lógico al
+  // mismo número exacto (caso límite: dos dispositivos que nunca se habían
+  // sincronizado antes, cada uno partiendo de "0 ediciones vistas"), eso NO
+  // los vuelve la misma edición — son dos ediciones distintas de contenido
+  // que casualmente comparten número de contador. La única señal confiable
+  // de "es la misma edición, no hay nada que resolver" es que sean
+  // literalmente el mismo objeto (ver el `existente === item` en
+  // fusionarColeccion, que ya se revisa ANTES de llegar aquí) o tener
+  // contenido idéntico (Guarda 1, arriba).
+  return baseLocal === baseRemota;
+}
+
+/**
+ * Construye la entidad resultante cuando hay un conflicto real: conserva
+ * los campos de `base` tal cual (para que nada que no sepa de conflictos —
+ * cálculos, filtros, exportación — se rompa por un campo inesperado) y le
+ * agrega la marca de conflicto + la alternativa completa para que la UI
+ * decida qué mostrar. `_conflicto` nunca se sincroniza como "resuelto"
+ * solo — se limpia explícitamente cuando el usuario elige (ver
+ * resolverConflicto más abajo).
+ */
+function marcarConflictoSiCorresponde(entidadLocal, entidadRemota, etiqueta) {
+  if (!hayConflictoReal(entidadLocal, entidadRemota)) return null;
+  console.warn(
+    `[conflicto real] ${etiqueta} id="${entidadLocal.id}": se editó de forma distinta en dos ` +
+      `dispositivos a partir de la misma versión (base=${entidadLocal._version_base}). ` +
+      `Se necesita que el usuario elija cuál dejar.`,
+    { local: entidadLocal, remoto: entidadRemota }
+  );
+  return {
+    ...entidadLocal,
+    _conflicto: true,
+    _version_alterna: { ...entidadRemota },
+  };
+}
+
+/**
+ * Se llama sobre CUALQUIER entidad remota que se procese al fusionar
+ * (gane o pierda la comparación) — mantiene el reloj lógico de este
+ * dispositivo siempre por delante de todo lo que ya vio, que es la regla
+ * que hace que un reloj de Lamport funcione (ver observarRelojLogico en
+ * schema.js). Sin esto, el reloj local podría quedar "atrás" del remoto y
+ * la próxima edición local terminaría con un contador más bajo que algo
+ * que este mismo dispositivo ya sabía que existía.
+ */
+function observarEntidadRemota(entidad) {
+  if (entidad && entidad._actualizadoEn !== undefined) {
+    observarRelojLogico(entidad._actualizadoEn);
+  }
+}
+
+/**
+ * Resuelve un conflicto marcado por el usuario: aplica la versión elegida
+ * (local o alterna) y la re-sella como una edición nueva y limpia (sin
+ * _conflicto ni _version_alterna), para que en el próximo sync esta
+ * resolución se propague como cualquier otra edición normal — nunca queda
+ * "medio resuelta" ni puede volver a chocar contra la misma base vieja.
+ * `entidad` es la que tiene `_conflicto: true`; `cual` es "local" o
+ * "alterna". Requiere `sellarTimestamp` de schema.js — se recibe como
+ * parámetro para no crear un import circular entre este archivo y schema.js.
+ */
+function resolverConflicto(entidadConConflicto, cual, sellarTimestampFn) {
+  const elegida = cual === "alterna" ? entidadConConflicto._version_alterna : entidadConConflicto;
+  const limpia = { ...elegida };
+  delete limpia._conflicto;
+  delete limpia._version_alterna;
+  return sellarTimestampFn(limpia);
 }
 
 /**
@@ -64,29 +196,48 @@ function fusionarColeccion(coleccionLocal, coleccionRemota, tumbas, etiqueta) {
 
   remota.forEach((item) => {
     if (!item || item.id === undefined) return;
+    // Regla de Lamport: este dispositivo acaba de VER el contador de una
+    // entidad remota — su propio reloj se adelanta si hace falta, sin
+    // importar si esta entidad en particular gana, pierde o entra en
+    // conflicto. Necesario para que la próxima edición LOCAL nunca quede
+    // con un contador más bajo que algo que este dispositivo ya conoce.
+    observarEntidadRemota(item);
+
     const existente = porId.get(item.id);
     if (!existente) {
       porId.set(item.id, item);
       return;
     }
     if (existente === item) return; // mismo objeto, nada que decidir
+
+    // REVISIÓN 2: antes de dejar que esMasReciente() elija un ganador a
+    // ciegas, se revisa si esto es un conflicto REAL (ambas ediciones
+    // parten de la misma base — ver hayConflictoReal). Si lo es, no se
+    // adivina: se conserva marcado con ambas versiones para que el usuario
+    // decida (ver marcarConflictoSiCorresponde).
+    const conConflicto = marcarConflictoSiCorresponde(existente, item, etiqueta);
+    if (conConflicto) {
+      porId.set(item.id, conConflicto);
+      return;
+    }
+
     if (esMasReciente(item, existente)) {
       console.warn(
         `[fusión] Conflicto en ${etiqueta} id="${item.id}": se descarta la versión local ` +
-          `(actualizada ${new Date(Number(existente._actualizadoEn) || 0).toISOString()}) ` +
-          `a favor de la remota (actualizada ${new Date(Number(item._actualizadoEn) || 0).toISOString()}).`,
+          `(contador ${Number(existente._actualizadoEn) || 0}) ` +
+          `a favor de la remota (contador ${Number(item._actualizadoEn) || 0}).`,
         { local: existente, remota: item }
       );
       porId.set(item.id, item);
     } else if (esMasReciente(existente, item)) {
       console.warn(
         `[fusión] Conflicto en ${etiqueta} id="${item.id}": se conserva la versión local ` +
-          `(actualizada ${new Date(Number(existente._actualizadoEn) || 0).toISOString()}) ` +
-          `sobre la remota (actualizada ${new Date(Number(item._actualizadoEn) || 0).toISOString()}).`,
+          `(contador ${Number(existente._actualizadoEn) || 0}) ` +
+          `sobre la remota (contador ${Number(item._actualizadoEn) || 0}).`,
         { local: existente, remota: item }
       );
     }
-    // Si ninguna es "más reciente" (timestamps y dispositivo iguales), se
+    // Si ninguna es "más reciente" (contador y dispositivo iguales), se
     // asume que son la misma edición vista desde los dos lados: no hay nada
     // que resolver, se deja la que ya está.
   });
@@ -264,4 +415,12 @@ function fusionarDatos(datosLocal, datosRemoto) {
   };
 }
 
-export { esMasReciente, fusionarColeccion, fusionarDatos, fusionarPlan, fusionarTumbas };
+export {
+  esMasReciente,
+  fusionarColeccion,
+  fusionarDatos,
+  fusionarPlan,
+  fusionarTumbas,
+  hayConflictoReal,
+  resolverConflicto,
+};
