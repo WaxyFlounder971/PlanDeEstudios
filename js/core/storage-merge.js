@@ -264,6 +264,21 @@ function fusionarColeccion(coleccionLocal, coleccionRemota, tumbas, etiqueta) {
 function fusionarBloqueUnico(local, remoto, etiqueta) {
   if (!local) return remoto;
   if (!remoto) return local;
+
+  observarEntidadRemota(remoto);
+
+  // FIX sync (paridad con fusionarColeccion): antes esta función solo
+  // llamaba a esMasReciente() a ciegas, nunca a marcarConflictoSiCorresponde
+  // — un cambio de config real y concurrente en dos dispositivos (ej. modo
+  // oscuro en uno, paleta nueva en el otro, ambos sin haber visto el cambio
+  // del otro) se resolvía adivinando un ganador y el otro cambio se perdía
+  // en silencio, igual que le pasaba a materias antes del fix. Por ahora
+  // esto queda sin efecto práctico mientras nada llame a sellarTimestamp()
+  // sobre configuracion/perfil (ver Guarda 2 en hayConflictoReal), pero deja
+  // el motor listo para el día que sí se selle (ver config-ajustes.js).
+  const conConflicto = marcarConflictoSiCorresponde(local, remoto, etiqueta);
+  if (conConflicto) return conConflicto;
+
   if (esMasReciente(remoto, local)) {
     console.warn(
       `[fusión] "${etiqueta}": se usa la versión remota (más reciente).`,
