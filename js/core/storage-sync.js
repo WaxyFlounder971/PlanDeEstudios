@@ -473,6 +473,65 @@ async function sondearCambiosRemotos() {
   }
 }
 
+/**
+ * v1.15.2 (bug real encontrado — no venía en el reporte original):
+ * main.js ya importaba y llamaba a sincronizarAlIniciar() en los dos
+ * caminos de sesión recuperada de caché (token cacheado válido y
+ * reconexión silenciosa), con el comentario explícito de que reemplazaba
+ * el viejo `if (estado.pendienteSync) intentarSincronizar()` porque ese
+ * viejo código solo SUBÍA cambios locales pendientes y nunca bajaba lo
+ * que ya hubiera de nuevo en Drive desde otro dispositivo. Pero la función
+ * nunca se llegó a definir aquí — el import fallaba con un SyntaxError que
+ * rompía la carga completa del módulo (y por lo tanto de toda la app).
+ *
+ * Hace el pull real de lo que haya en Drive en este momento (a diferencia
+ * de sondearCambiosRemotos, que en su primera pasada solo fija la base de
+ * comparación sin traer nada) y, una vez resuelto eso, sube lo pendiente
+ * si corresponde — igual que describe el comentario de main.js.
+ */
+
+async function sincronizarAlIniciar() {
+  await authListo; // punto 5, misma condición de carrera que el resto del módulo
+  if (!estado.token || !estado.fileId) return;
+
+  try {
+    const meta = await conReintentoSi401(() => obtenerMetadatosArchivo(estado.token, estado.fileId));
+    estado.ultimoModifiedTimeConocido = meta.modifiedTime;
+    const datosFrescos = await conReintentoSi401(() => leerDatos(estado.token, estado.fileId));
+    aplicarDatosRemotosFrescos(datosFrescos);
+  } catch (e) {
+    if (e.reconexionFallida) {
+      mostrarAvisoReconexion();
+    }
+    console.warn("No se pudo hacer el pull inicial desde Drive:", e);
+  } finally {
+    // Se sube lo pendiente después del pull (y no antes), para no pisar en
+    // Drive un cambio remoto más reciente con datos locales desactualizados.
+    if (estado.pendienteSync) intentarSincronizar();
+  }
+}
+
+/**
+ * v9.3: fuerza un sondeo inmediato apenas la pestaña/app vuelve a primer
+ * plano (visibilitychange), en vez de esperar hasta 9s (el próximo tick del
+ * setInterval en main.js) a que sondearCambiosRemotos() se entere de algo
+ * que cambió en otro dispositivo mientras esta pestaña estaba minimizada o
+ * en segundo plano. sondearCambiosRemotos ya se protege sola contra
+ * pestañas ocultas (`if (document.hidden) return`) y contra sondeos
+ * redundantes (compara modifiedTime), así que aquí basta con dispararla sin
+ * lógica adicional.
+ */
+
+let sondeoAlVolverRegistrado = false;
+
+function inicializarSondeoAlVolver() {
+  if (sondeoAlVolverRegistrado) return; // se llama una sola vez desde DOMContentLoaded en main.js
+  sondeoAlVolverRegistrado = true;
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) sondearCambiosRemotos();
+  });
+}
+
 /** Se llama cada vez que se modifica algo en `estado.datos`. */
 
 function marcarCambioPendiente() {
@@ -598,6 +657,7 @@ export {
   contadorCargando,
   forzarSincronizacion,
   inicializarPullToRefresh,
+  inicializarSondeoAlVolver,
   intentarReconexionSilenciosa,
   intentarSincronizar,
   marcarCambioPendiente,
@@ -609,6 +669,7 @@ export {
   programarRefrescoProactivo,
   reconexionEnCurso,
   sincronizarAhora,
+  sincronizarAlIniciar,
   sondearCambiosRemotos,
   temporizadorRefrescoProactivo,
 };
