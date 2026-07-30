@@ -98,6 +98,12 @@ const estado = {
   // el sondeo periódico (punto 5) para detectar cambios hechos desde otro
   // dispositivo sin descargar el archivo completo en cada revisión.
   ultimoModifiedTimeConocido: null,
+  // null (aún no comprobado) | "otorgado" | "denegado" | "desconocido" —
+  // resultado de comprobarPermisoPortapapelesAlIniciar() (core/clipboard.js),
+  // que se llama justo después de un login exitoso. Lo usa el flujo de
+  // importación ("Enviar a Claude/ChatGPT") para saber de antemano si vale
+  // la pena intentar la copia automática o mostrar directo el modal manual.
+  permisoPortapapeles: null,
 };
 
 /**
@@ -117,20 +123,10 @@ const authListo = new Promise((resolve) => {
 
 /* ------------------------- Cache local (offline) ------------------------- */
 
-/**
- * v1.15 (fix bug crítico de pérdida de datos entre dispositivos): antes se
- * guardaba solo { fileId, datos }, sin ningún timestamp de la caché en sí.
- * Esto no cambia mucho por sí solo (los timestamps reales viven DENTRO de
- * cada entidad de estado.datos — ver sellarTimestamp en schema.js), pero se
- * deja registrado `guardadoEn` a nivel de caché completa para poder
- * diagnosticar en consola cuándo fue el último guardado local si hace falta
- * investigar un caso raro más adelante.
- */
-
 function guardarCacheLocal() {
   localStorage.setItem(
     CLAVE_CACHE_LOCAL,
-    JSON.stringify({ fileId: estado.fileId, datos: estado.datos, guardadoEn: Date.now() })
+    JSON.stringify({ fileId: estado.fileId, datos: estado.datos })
   );
 }
 
