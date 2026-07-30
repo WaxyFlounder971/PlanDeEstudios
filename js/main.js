@@ -118,6 +118,18 @@ window.addEventListener("DOMContentLoaded", () => {
       resolverAuthListo();
     },
     alRechazarPermiso: (motivo) => {
+      // FIX (bug reportado: "no le da permisos la primera vez y se rompe el
+      // inicio de sesión"): el temporizador arrancado por
+      // programarAvisoLoginBloqueado() en el click seguía corriendo en
+      // segundo plano aunque Google SÍ hubiera respondido (con un rechazo
+      // de permiso). Si el usuario tardaba más de 6s en cerrar el popup de
+      // consentimiento, ese temporizador disparaba después y pisaba este
+      // aviso —el correcto, "te faltó aceptar Drive"— con el mensaje
+      // genérico de "VPN/bloqueador de anuncios", que no tenía nada que
+      // ver con lo que en verdad pasó. Se cancela aquí explícitamente,
+      // igual que ya hacía ocultarAvisoLoginBloqueado() en el camino de
+      // éxito.
+      clearTimeout(temporizadorAvisoLogin);
       btnLogin.textContent = textoOriginalBtnLogin;
       btnLogin.disabled = false;
       const aviso = document.getElementById("aviso-permiso-rechazado");
