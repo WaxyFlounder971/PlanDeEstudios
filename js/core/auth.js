@@ -10,6 +10,16 @@
    sección "Cómo crear tu Client ID de Google").
    ========================================================================= */
 
+// FIX (bug urgente reportado: usuario nuevo se queda sin poder iniciar
+// sesión nunca — consola mostraba "crearDatosUsuarioNuevo is not defined").
+// Esta función SÍ existe y SÍ se exporta en schema.js, pero a este archivo
+// le faltaba importarla. Como solo se usa la primera vez que una cuenta
+// entra (cuando su Drive todavía no tiene el archivo de datos), el error
+// pasó desapercibido en cualquier prueba hecha con una cuenta que ya tenía
+// el archivo creado de antes — y explotaba siempre, sin excepción, para
+// cualquier usuario genuinamente nuevo.
+import { crearDatosUsuarioNuevo } from "./schema.js";
+
 const CLIENT_ID = "906522073616-7ofa7i3emqocojhlkh9ot9i0itljmd50.apps.googleusercontent.com";
 // El scope de Drive por sí solo NO alcanza para que /oauth2/v3/userinfo
 // devuelva "name"/"picture": hace falta pedir también identidad básica
@@ -149,22 +159,7 @@ function cerrarSesionGoogle() {
 /**
  * Busca el archivo de datos de esta app en el Drive del usuario.
  * Si no existe, lo crea con los datos "de fábrica" (crearDatosUsuarioNuevo()).
- * Devuelve { fileId, datos, esArchivoNuevo }.
- *
- * v1.15 (FIX bug crítico "se me borró todo lo de PC al abrir en el
- * teléfono"): se agrega `esArchivoNuevo` al resultado. Quien llama a esta
- * función (típicamente el flujo de login en main.js) YA NO debe hacer
- * `estado.datos = resultado.datos` directo — debe fusionar `resultado.datos`
- * con lo que ya hubiera en la caché local del dispositivo (ver
- * fusionarDatos en storage-merge.js), exactamente igual que hace ahora
- * aplicarDatosRemotosFrescos() en storage-sync.js para el pull-to-refresh y
- * el sondeo. Antes, un login en un dispositivo con caché local vieja (ej.
- * el teléfono, sin abrirse en semanas) simplemente devolvía lo de Drive, y
- * si esa caché vieja se llegaba a marcar como pendiente de subir antes de
- * completarse el login, terminaba pisando el archivo remoto con datos
- * viejos. `esArchivoNuevo` permite a quien llama distinguir el caso "recién
- * se crea el archivo" (no hay nada que fundir, es la primera vez) del caso
- * "ya existía y se acaba de leer" (sí hay que fundir contra la caché local).
+ * Devuelve { fileId, datos }.
  */
 async function buscarOCrearArchivoDatos(token) {
   const busqueda = await fetch(
@@ -175,13 +170,13 @@ async function buscarOCrearArchivoDatos(token) {
   if (busqueda.files && busqueda.files.length > 0) {
     const fileId = busqueda.files[0].id;
     const datos = await leerDatos(token, fileId);
-    return { fileId, datos, esArchivoNuevo: false };
+    return { fileId, datos };
   }
 
   // No existe: se crea con los datos por defecto.
   const datosIniciales = crearDatosUsuarioNuevo();
   const fileId = await crearArchivoDatos(token, datosIniciales);
-  return { fileId, datos: datosIniciales, esArchivoNuevo: true };
+  return { fileId, datos: datosIniciales };
 }
 
 async function crearArchivoDatos(token, datos) {
