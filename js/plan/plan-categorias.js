@@ -3,7 +3,7 @@
    CRUD de categorías y el modal de asignación masiva a materias.
    ========================================================================= */
 
-import { crearCategoria } from "../core/schema.js";
+import { crearCategoria, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { estiloBadgeCategoria } from "../core/utils.js";
@@ -257,6 +257,15 @@ function inicializarModalCategoria() {
         plan.materias.forEach((m) => {
           if (m.categoria_id === catId) m.categoria_id = null;
         });
+        // FIX sync (bug real encontrado en esta ronda de auditoría): antes
+        // el borrado solo filtraba el arreglo local, sin dejar ningún
+        // rastro explícito ("tumba"). Si el otro dispositivo todavía no
+        // había bajado este borrado y mandaba su copia vieja de la
+        // categoría, storage-merge.js no tenía forma de saber que debía
+        // excluirla — la categoría "resucitaba" en el próximo sync. Mismo
+        // patrón que ya usa la tumba de materias (_eliminados_materias).
+        if (!Array.isArray(plan._eliminados_categorias)) plan._eliminados_categorias = [];
+        plan._eliminados_categorias.push({ id: catId, eliminadoEn: Date.now() });
         if (estado.filtroCategoriaId === catId) estado.filtroCategoriaId = null;
         marcarCambioPendiente();
         renderizarPlanEstudios();
@@ -281,8 +290,13 @@ function inicializarModalCategoria() {
       categoria = plan.categorias.find((c) => c.id === estado.categoriaEditandoId);
       categoria.nombre = nombre;
       categoria.color = color;
+      // FIX sync: re-sella timestamp al editar una categoría existente,
+      // mismo patrón que ya se aplicó a la edición manual de materias en
+      // plan-esquema.js. Sin esto, una categoría editada seguía teniendo
+      // el _actualizadoEn de cuando se CREÓ, no de la edición real.
+      sellarTimestamp(categoria);
     } else {
-      categoria = crearCategoria({ nombre, color });
+      categoria = crearCategoria({ nombre, color }); // ya sella timestamp internamente
       plan.categorias.push(categoria);
     }
     marcarCambioPendiente();
@@ -409,8 +423,10 @@ function inicializarModalCategoriaMaterias() {
     plan.materias.forEach((m) => {
       if (m.categoria_id === categoriaId && !marcados.has(m.codigo)) {
         m.categoria_id = null; // se desmarcó
+        sellarTimestamp(m);
       } else if (marcados.has(m.codigo)) {
         m.categoria_id = categoriaId;
+        sellarTimestamp(m);
       }
     });
 
