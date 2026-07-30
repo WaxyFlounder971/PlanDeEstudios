@@ -216,6 +216,17 @@ function renderizarListaGestionPlanes() {
 function eliminarPlanEstudio(planId) {
   const cfg = estado.datos.configuracion;
   estado.datos.planes_estudio = estado.datos.planes_estudio.filter((p) => p.id !== planId);
+  // FIX crítico (v1.17 — borrados que "resucitaban" al fundir con otro
+  // dispositivo, en bucle infinito): antes esta función solo quitaba el
+  // plan del arreglo local. fusionarDatos() (storage-merge.js) NUNCA se
+  // enteraba de que hubo un borrado — para la fusión, un plan que "ya no
+  // está" es indistinguible de uno que nunca cambió, así que la regla "lo
+  // que existe en un lado se conserva" lo traía de vuelta desde Drive (o
+  // desde el otro dispositivo) en cuanto llegaba su copia vieja. Ahora se
+  // registra la tumba ANTES de marcar el cambio pendiente, igual que ya
+  // hacen semestres/profesores/agenda/enlaces.
+  estado.datos._eliminados_planes = estado.datos._eliminados_planes || [];
+  estado.datos._eliminados_planes.push({ id: planId, eliminadoEn: Date.now() });
   if (cfg.plan_activo_id === planId) {
     cfg.plan_activo_id = estado.datos.planes_estudio[0] ? estado.datos.planes_estudio[0].id : null;
   }

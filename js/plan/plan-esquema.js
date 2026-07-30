@@ -483,6 +483,15 @@ function inicializarModalMateriaManual() {
     if (!confirmado) return;
 
     plan.materias = plan.materias.filter((m) => m !== materia);
+    // FIX crítico (mismo bug que en eliminarPlanEstudio, plan-gestionar.js):
+    // borrar una materia solo del arreglo local no la registra como
+    // borrada ante fusionarDatos()/fusionarPlan() — la fusión la trae de
+    // vuelta en cuanto llega la copia vieja desde otro dispositivo. Se usa
+    // materia.id si existe (crearMateria en schema.js) y si no, cae en
+    // .codigo, que es como se identifica esta materia en el resto de este
+    // mismo archivo.
+    plan._eliminados_materias = plan._eliminados_materias || [];
+    plan._eliminados_materias.push({ id: materia.id || materia.codigo, eliminadoEn: Date.now() });
     estado.materiasExpandidas.delete(materia.codigo);
     estado.materiaManualEditando = null;
     marcarCambioPendiente();
