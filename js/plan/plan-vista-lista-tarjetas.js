@@ -4,7 +4,7 @@
    completa (encabezado, requisitos, menú rápido de categoría).
    ========================================================================= */
 
-import { arbolContieneCodigo, evaluarNodoRequisito } from "../core/schema.js";
+import { arbolContieneCodigo, evaluarNodoRequisito, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto, formatearHoras } from "../core/utils.js";
@@ -566,6 +566,12 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
       btn.addEventListener("click", (ev) => {
         ev.stopPropagation();
         materia.estado = e.valor; // siempre manual, nunca automático
+        // FIX CRÍTICO: sin esto, esta edición nunca tenía un _actualizadoEn
+        // real (ver comentario en sellarTimestamp, core/schema.js) y la
+        // fusión con el otro dispositivo nunca detectaba que este cambio
+        // era el más reciente — por eso no llegaba de un dispositivo al
+        // otro sin importar cuánto se esperara.
+        sellarTimestamp(materia);
         marcarCambioPendiente();
         renderizarPlanEstudios();
       });
@@ -606,6 +612,7 @@ function abrirMenuRapidoCategoria(materia, plan, anclaEl) {
     item.textContent = cat.nombre;
     item.addEventListener("click", () => {
       materia.categoria_id = cat.id;
+      sellarTimestamp(materia);
       marcarCambioPendiente();
       pop.remove();
       renderizarPlanEstudios();

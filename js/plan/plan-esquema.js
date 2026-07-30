@@ -5,7 +5,7 @@
    acceso a los planes/materias visibles.
    ========================================================================= */
 
-import { PARAMETROS_UNIVERSIDAD_DEFAULT, crearMateria, crearPlanEstudio } from "../core/schema.js";
+import { PARAMETROS_UNIVERSIDAD_DEFAULT, crearMateria, crearPlanEstudio, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { abrirModalGestionPlanes, renderizarModoHardcore, renderizarSelectorPlan } from "./plan-gestionar.js";
@@ -545,6 +545,7 @@ function inicializarModalMateriaManual() {
       materiaExistente.horas = horas;
       materiaExistente.requisitos = requisitos;
       materiaExistente.correquisitos = correquisitos;
+      sellarTimestamp(materiaExistente);
     } else {
       const nuevaMateria = crearMateria({
         codigo, nombre, creditos, bloque, horas, tiposHoras, requisitos, correquisitos,
