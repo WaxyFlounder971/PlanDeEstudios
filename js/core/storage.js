@@ -131,8 +131,21 @@ function guardarCacheLocal() {
 }
 
 function leerCacheLocal() {
-  const crudo = localStorage.getItem(CLAVE_CACHE_LOCAL);
-  return crudo ? JSON.parse(crudo) : null;
+  try {
+    const crudo = localStorage.getItem(CLAVE_CACHE_LOCAL);
+    return crudo ? JSON.parse(crudo) : null;
+  } catch (e) {
+    // Caché corrupta (JSON a medio escribir, típico si el navegador cerró la
+    // app o se quedó sin espacio a mitad de guardarCacheLocal()). Sin este
+    // try/catch, esta excepción revienta el arranque completo de la app en
+    // ese dispositivo — es el bug que dejaba a Wagner sin poder entrar en el
+    // teléfono mientras en PC todo seguía normal (cada dispositivo tiene su
+    // propio localStorage). Se descarta la caché rota para no quedar
+    // atascado intentando leer lo mismo roto en cada carga.
+    console.warn("Caché local corrupta, se descarta:", e);
+    localStorage.removeItem(CLAVE_CACHE_LOCAL);
+    return null;
+  }
 }
 
 export {
