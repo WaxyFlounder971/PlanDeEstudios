@@ -7,6 +7,7 @@
 import { renderizarAjustes } from "./config/config-ajustes.js";
 import { inicializarModalEnlace, renderizarEnlacesRapidos } from "./config/config-enlaces.js";
 import { buscarOCrearArchivoDatos, cerrarSesionGoogle, inicializarGoogleAuth, iniciarSesionConGoogle, obtenerMetadatosArchivo, obtenerPerfilGoogle, refrescarAccessTokenGoogle } from "./core/auth.js";
+import { comprobarPermisoPortapapelesAlIniciar } from "./core/clipboard.js";
 import { migrarDatosAntiguos } from "./core/schema.js";
 import { fusionarDatos } from "./core/storage-merge.js";
 import { actualizarIndicadorSync, forzarSincronizacion, inicializarPullToRefresh, inicializarSondeoAlVolver, intentarReconexionSilenciosa, intentarSincronizar, mostrarAvisoReconexion, mostrarCargando, ocultarCargando, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
@@ -83,6 +84,11 @@ window.addEventListener("DOMContentLoaded", () => {
           estado.conexionDrive = "ok";
           programarRefrescoProactivo(Math.round((tokenCache.expiraEn - Date.now()) / 1000));
           resolverAuthListo();
+          // Blindaje de portapapeles: este es el camino de la MAYORÍA de las
+          // sesiones (usuario recurrente, no pasa por onLoginExitoso), así
+          // que sin esta línea permisoPortapapeles se quedaría en null para
+          // siempre en el caso más común.
+          comprobarPermisoPortapapelesAlIniciar();
           // v1.15.2: antes esto era `if (estado.pendienteSync)
           // intentarSincronizar();` — solo SUBÍA cambios locales
           // pendientes, nunca bajaba lo que ya hubiera de nuevo en Drive
@@ -92,6 +98,7 @@ window.addEventListener("DOMContentLoaded", () => {
         } else {
           intentarReconexionSilenciosa().finally(() => {
             resolverAuthListo();
+            comprobarPermisoPortapapelesAlIniciar();
             sincronizarAlIniciar();
           });
         }
@@ -310,6 +317,12 @@ async function onLoginExitoso(token, expiresIn) {
   // carga (no venía de una sesión en caché) — resuelve authListo aquí por
   // si algún sondeo/sincronización quedó esperándola.
   resolverAuthListo();
+  // Blindaje del flujo "Enviar a Claude/ChatGPT" (portapapeles): se
+  // comprueba aquí, apenas hay login, para que el resultado ya esté listo
+  // mucho antes de que el usuario llegue a importar un plan (que puede ser
+  // mucho después, o nunca). No lleva await ni bloquea nada de lo que sigue
+  // — es enteramente informativo.
+  comprobarPermisoPortapapelesAlIniciar();
   mostrarCargando();
   // v8.3: le pide al navegador que este sitio quede en la lista de
   // almacenamiento "persistente" (no elegible para borrado automático por
