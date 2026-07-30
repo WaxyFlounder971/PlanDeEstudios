@@ -307,6 +307,9 @@ function crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, tipo_titul
     // Se mueven a `materias` (con un bloque numerado real) al vincularlas
     // desde el bloque especial "Revisar" (ver plan-esquema.js).
     materias_revisar: [],
+    // FIX sync (categorías): tumba de categorías eliminadas, mismo patrón
+    // que _eliminados_materias — ver storage-merge.js / plan-categorias.js.
+    _eliminados_categorias: [],
   });
 }
 
@@ -360,8 +363,17 @@ function sellarTimestamp(entidad) {
   return entidad;
 }
 
+/**
+ * FIX sync (bug real encontrado en esta ronda de auditoría): a diferencia
+ * de crearMateria y crearPlanEstudio, esta función NUNCA llamaba a
+ * sellarTimestamp() — toda categoría nacía sin _actualizadoEn real. En
+ * storage-merge.js, fusionarColeccion() para categorías queda igual de
+ * ciego que estaba materias antes del fix: con ambos lados en 0/undefined,
+ * un conflicto de categorías con el mismo id siempre se resolvía a favor
+ * de la local, sin importar cuál se editó de verdad más tarde.
+ */
 function crearCategoria({ nombre, color }) {
-  return { id: "cat_" + crypto.randomUUID(), nombre, color };
+  return sellarTimestamp({ id: "cat_" + crypto.randomUUID(), nombre, color });
 }
 
 /**
@@ -446,6 +458,9 @@ function migrarDatosAntiguos(datos) {
     // v1.12.15: mismo relleno defensivo para planes creados antes de que
     // existiera el bloque especial "Revisar".
     if (!Array.isArray(plan.materias_revisar)) plan.materias_revisar = [];
+    // FIX sync (categorías): mismo relleno defensivo para planes creados
+    // antes de que existiera la tumba de categorías.
+    if (!Array.isArray(plan._eliminados_categorias)) plan._eliminados_categorias = [];
 
     const params = plan.parametros_universidad || (plan.parametros_universidad = {});
     const esFormatoViejo = typeof params.horas_detalladas === "boolean" && !Array.isArray(params.tipos_horas);

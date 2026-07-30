@@ -159,11 +159,20 @@ function fusionarPlan(planLocal, planRemoto) {
   }
 
   const tumbasMaterias = fusionarTumbas(planLocal._eliminados_materias, planRemoto._eliminados_materias);
+  // FIX sync (bug real encontrado en esta ronda de auditoría): antes las
+  // categorías se fundían con `fusionarColeccion(..., [], "categoría")` —
+  // un tercer argumento vacío en duro, a diferencia de materias/optativas
+  // que sí usan su propia tumba. Sin tumba real, borrar una categoría en un
+  // dispositivo no dejaba ningún rastro explícito: en el próximo sync, si
+  // el otro dispositivo todavía traía esa categoría en su copia (porque no
+  // había bajado el borrado todavía), fusionarColeccion no tenía forma de
+  // saber que debía excluirla — la categoría "resucitaba".
+  const tumbasCategorias = fusionarTumbas(planLocal._eliminados_categorias, planRemoto._eliminados_categorias);
 
   return {
     ...base,
     materias: fusionarColeccion(planLocal.materias, planRemoto.materias, tumbasMaterias, "materia"),
-    categorias: fusionarColeccion(planLocal.categorias, planRemoto.categorias, [], "categoría"),
+    categorias: fusionarColeccion(planLocal.categorias, planRemoto.categorias, tumbasCategorias, "categoría"),
     optativas_disponibles: fusionarColeccion(
       planLocal.optativas_disponibles,
       planRemoto.optativas_disponibles,
@@ -177,6 +186,7 @@ function fusionarPlan(planLocal, planRemoto) {
       "materia por revisar"
     ),
     _eliminados_materias: tumbasMaterias,
+    _eliminados_categorias: tumbasCategorias,
   };
 }
 
