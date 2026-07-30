@@ -185,6 +185,28 @@ function derivarTiposHorasDeHorasColumnas(horasColumnasCrudo) {
 
 
 /**
+ * v1.18 (blindaje — reporte Ivanna "importo solo 2 optativas, no las 3"):
+ * cuando dos filas del MISMO CSV comparten código (sin ser cupos genéricos
+ * sin_definir, que ya están exentos de fusionarse por código), el paso de
+ * aplicar al plan las combina en una sola fila con Object.assign — la
+ * segunda pisa a la primera sin dejar ningún rastro visible. Esta función
+ * detecta esos códigos repetidos DENTRO de un mismo lote (electivas,
+ * materias o paraRevisar de UN solo import) para poder avisarlo en
+ * `errores` en vez de dejar que desaparezca en silencio. No decide qué
+ * hacer con la colisión — solo la hace visible.
+ */
+function codigosDuplicadosEnLote(lista) {
+  const conteo = new Map();
+  lista.forEach((m) => {
+    if (!m || m.sin_definir || !m.codigo) return; // los cupos genéricos nunca colisionan por código
+    conteo.set(m.codigo, (conteo.get(m.codigo) || 0) + 1);
+  });
+  const duplicados = [];
+  conteo.forEach((n, codigo) => { if (n > 1) duplicados.push(codigo); });
+  return duplicados;
+}
+
+/**
  * Parsea el CSV completo para un plan con estos `tiposHoras` (array de
  * llaves ya fijado en `plan.parametros_universidad.tipos_horas`, derivado a
  * su vez de HORAS_COLUMNAS al crear el plan — ver derivarTiposHorasDeHorasColumnas).
@@ -377,24 +399,35 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
     const tieneBloqueClaro = !esOptativa && bloqueTexto !== "" && !isNaN(numeroBloque);
     const esParaRevisar = !esOptativa && !tieneBloqueClaro;
 
-    const materiaCreada = crearMateria({
-      codigo,
-      nombre,
-      creditos: Number(creditos) || 0,
-      horas,
-      tiposHoras: tipos,
-      bloque: tieneBloqueClaro ? numeroBloque : null,
-      requisitos: parsearRequisitoArbol(requisitos),
-      correquisitos: parsearRequisitoArbol(correquisitos),
-      esOptativa,
-      sinDefinir,
-      estado: estadoValidado,
-      categoriaId,
-    });
+    // v1.18 (blindaje "que no se rompa con NADA"): antes, si crearMateria
+    // lanzaba una excepción con esta fila (dato inesperado que no se validó
+    // arriba), el error se propagaba fuera del forEach y abortaba TODO el
+    // parseo — las filas siguientes ni se intentaban, y el import completo
+    // fallaba en silencio (nunca se llegaba a mostrarErroresImportacion).
+    // Ahora cada fila se procesa de forma aislada: una fila mala se reporta
+    // como error puntual y se salta, sin afectar al resto.
+    try {
+      const materiaCreada = crearMateria({
+        codigo,
+        nombre,
+        creditos: Number(creditos) || 0,
+        horas,
+        tiposHoras: tipos,
+        bloque: tieneBloqueClaro ? numeroBloque : null,
+        requisitos: parsearRequisitoArbol(requisitos),
+        correquisitos: parsearRequisitoArbol(correquisitos),
+        esOptativa,
+        sinDefinir,
+        estado: estadoValidado,
+        categoriaId,
+      });
 
-    if (esOptativa) electivas.push(materiaCreada);
-    else if (esParaRevisar) paraRevisar.push(materiaCreada);
-    else materias.push(materiaCreada);
+      if (esOptativa) electivas.push(materiaCreada);
+      else if (esParaRevisar) paraRevisar.push(materiaCreada);
+      else materias.push(materiaCreada);
+    } catch (err) {
+      errores.push(`Fila ${numeroFila}: no se pudo procesar (${err && err.message ? err.message : "error inesperado"}). Se omitió esta fila para no interrumpir el resto del import.`);
+    }
   });
 
   // v1.12.12: "Bloque N" como requisito/correquisito (texto libre, ver regla
@@ -511,6 +544,25 @@ function importarCSVEnPlan(textoCSV, planDestino) {
   }
 
   const { materias, electivas, paraRevisar, errores, tieneEstadoCategoria } = parsearCSVPlanEstudios(csv, planDestino.parametros_universidad.tipos_horas);
+
+  // v1.18 (blindaje): antes de aplicar nada al plan, se avisa si el propio
+  // CSV trae el mismo código repetido en más de una fila — sin esto, el
+  // merge por código de abajo las combina en una sola sin dejar ningún
+  // rastro de que había más de una.
+  [
+    { lista: materias, etiqueta: "materias" },
+    { lista: electivas, etiqueta: "optativas" },
+    { lista: paraRevisar, etiqueta: "materias por revisar" },
+  ].forEach(({ lista, etiqueta }) => {
+    const duplicados = codigosDuplicadosEnLote(lista);
+    if (duplicados.length > 0) {
+      errores.push(
+        `Advertencia: el CSV trae el mismo código repetido en más de una fila de ${etiqueta} ` +
+        `(${duplicados.join(", ")}) — solo se conservó una fila por código. Si en realidad son ` +
+        `materias distintas, revisa que cada una tenga un código único en el documento fuente.`
+      );
+    }
+  });
 
   // Se combina por código: si ya existía, se actualiza; si es nueva, se agrega.
   // v1.16 (fix bug crítico "solo toma la última"): los cupos genéricos
@@ -818,6 +870,21 @@ function construirMiniPanelImportacion(plan) {
       }
 
       const { materias, electivas, paraRevisar, errores, tieneEstadoCategoria } = parsearCSVPlanEstudios(csv, plan.parametros_universidad.tipos_horas);
+      // v1.18 (blindaje): mismo aviso que importarCSVEnPlan — ver comentario ahí.
+      [
+        { lista: materias, etiqueta: "materias" },
+        { lista: electivas, etiqueta: "optativas" },
+        { lista: paraRevisar, etiqueta: "materias por revisar" },
+      ].forEach(({ lista, etiqueta }) => {
+        const duplicados = codigosDuplicadosEnLote(lista);
+        if (duplicados.length > 0) {
+          errores.push(
+            `Advertencia: el CSV trae el mismo código repetido en más de una fila de ${etiqueta} ` +
+            `(${duplicados.join(", ")}) — solo se conservó una fila por código. Si en realidad son ` +
+            `materias distintas, revisa que cada una tenga un código único en el documento fuente.`
+          );
+        }
+      });
       // v1.16: mismo fix que importarCSVEnPlan — los cupos genéricos
       // (sin_definir=true) nunca se fusionan por código, siempre se agregan
       // como fila nueva (ver comentario completo en importarCSVEnPlan).
