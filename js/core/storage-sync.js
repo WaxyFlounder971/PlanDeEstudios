@@ -14,8 +14,38 @@ import { mostrarToast } from "../ui/componentes.js";
 import { aplicarPaleta } from "../ui/tema.js";
 import { guardarDatos, leerDatos, obtenerMetadatosArchivo, refrescarAccessTokenGoogle } from "./auth.js";
 import { migrarDatosAntiguos } from "./schema.js";
-import { fusionarDatos } from "./storage-merge.js";
 import { authListo, correoConocido, establecerTokenActivo, estado, guardarCacheLocal } from "./storage.js";
+
+/**
+ * v9.3 (fix real del reporte "hice mucho en PC, me pasé al teléfono, y se
+ * guardó solo lo del teléfono porque ya tenía la página abierta pero
+ * minimizada"): sondearCambiosRemotos() se salta a sí misma a propósito
+ * mientras `document.hidden` es true (para no gastar cuota de la API con
+ * la pestaña oculta) — pero eso significa que mientras esa pestaña está
+ * minimizada, NUNCA se entera de que otro dispositivo guardó algo nuevo.
+ * Al volver a esa pestaña, nada forzaba una lectura inmediata: quedaba
+ * esperando el próximo tick del setInterval de 9s, y los navegadores
+ * frenan mucho esos timers en pestañas que estuvieron en segundo plano
+ * (pueden tardar bastante más de 9s reales en dispararse de nuevo). Si el
+ * usuario alcanzaba a tocar algo antes de ese tick, sus datos viejos en
+ * memoria pisaban lo último guardado en Drive.
+ *
+ * Esta función registra que, apenas la pestaña vuelve a estar visible (o
+ * la ventana recupera el foco — cubre el caso de dos monitores/alt-tab,
+ * que a veces no dispara visibilitychange), se fuerza un sondeo YA MISMO,
+ * sin esperar el próximo tick. sondearCambiosRemotos() ya trae su propia
+ * protección (no pisa nada si hay cambios locales sin subir todavía), así
+ * que es seguro llamarla de más.
+ */
+
+function inicializarSondeoAlVolver() {
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) sondearCambiosRemotos();
+  });
+  window.addEventListener("focus", () => {
+    sondearCambiosRemotos();
+  });
+}
 
 /**
  * Bug 1 (v8): pide un access_token nuevo de forma silenciosa apenas carga la
@@ -321,11 +351,10 @@ async function conReintentoSi401(operacion) {
 
 /**
  * v8.3: sincronización completa "en el sitio" — sube cambios pendientes
- * primero (nunca se pisa trabajo local sin subir), luego FUNDE la última
- * versión de Drive con lo que ya había localmente (ver v1.15 más abajo), y
- * repinta toda la UI ya renderizada sin recargar la página ni tocar la
- * pantalla de login. La usa tanto el gesto de deslizar como (más adelante)
- * el sondeo automático multi-dispositivo.
+ * primero (nunca se pisa trabajo local sin subir), luego baja la última
+ * versión de Drive, y repinta toda la UI ya renderizada sin recargar la
+ * página ni tocar la pantalla de login. La usa tanto el gesto de deslizar
+ * como (más adelante) el sondeo automático multi-dispositivo.
  */
 
 async function sincronizarAhora() {
@@ -386,23 +415,10 @@ async function sincronizarAhora() {
  * toda la UI en el sitio, sin recargar la página. Lo usan tanto
  * sincronizarAhora() (pull-to-refresh manual, con overlay y toast) como
  * sondearCambiosRemotos() (en segundo plano, en silencio).
- *
- * v1.15 (FIX bug crítico "se me borró todo lo de PC al abrir en el
- * teléfono"): antes esta función hacía `estado.datos = migrarDatosAntiguos
- * (datosFrescos)` — un reemplazo TOTAL del árbol de datos con lo que
- * viniera de Drive, sin comparar absolutamente nada contra lo que ya había
- * en memoria/caché local. Si el teléfono tenía en su caché local una
- * sesión vieja (ej. no se había abierto la app en semanas) y esa caché
- * vieja llegaba a marcarse como "pendiente de subir" antes de bajar lo de
- * Drive, esos datos viejos terminaban pisando el trabajo reciente hecho en
- * PC. Ahora se FUNDE la versión remota con estado.datos actual, entidad por
- * entidad y por su `_actualizadoEn` real (ver storage-merge.js) — nunca se
- * pierde una entidad completa solo por "quién llegó último a escribir".
  */
 
 function aplicarDatosRemotosFrescos(datosFrescos) {
-  const remotoMigrado = migrarDatosAntiguos(datosFrescos);
-  estado.datos = estado.datos ? fusionarDatos(estado.datos, remotoMigrado) : remotoMigrado;
+  estado.datos = migrarDatosAntiguos(datosFrescos);
   guardarCacheLocal();
   aplicarPaleta(estado.datos.configuracion.paleta, estado.datos.configuracion.modo);
   renderizarSelectorPlan();
@@ -443,16 +459,9 @@ async function sondearCambiosRemotos() {
   await authListo; // nunca sondear antes de saber si hay token (punto 5, condición de carrera)
   if (document.hidden) return; // ahorra cuota de la API si la pestaña no está visible
   if (!estado.token || !estado.fileId) return;
-  // v1.15: antes, si había cambios locales sin subir, se abortaba el sondeo
-  // por completo — razonable cuando la única alternativa era "pisar todo",
-  // pero ya no hace falta ser tan conservador: aplicarDatosRemotosFrescos
-  // ahora FUNDE en vez de sobrescribir, así que traer lo remoto acá no
-  // arriesga los cambios locales pendientes (siguen marcados como
-  // pendientes y se suben en su momento igual). Se deja el mismo criterio
-  // de todos modos, a propósito: mientras haya algo sin subir, se prioriza
-  // que intentarSincronizar() suba primero esos cambios, y el sondeo los
-  // recogerá fundidos en su próximo ciclo (cada ~9s) sin necesidad de bajar
-  // nada a medio camino de una subida en curso.
+  // Si hay cambios locales sin subir todavía, se deja que intentarSincronizar()
+  // (el reintento cada 45s, o el próximo cambio del usuario) suba eso primero —
+  // pisar aquí con lo remoto arriesgaría perder esos cambios locales.
   if (estado.pendienteSync) return;
 
   try {
@@ -597,6 +606,7 @@ export {
   contadorCargando,
   forzarSincronizacion,
   inicializarPullToRefresh,
+  inicializarSondeoAlVolver,
   intentarReconexionSilenciosa,
   intentarSincronizar,
   marcarCambioPendiente,
