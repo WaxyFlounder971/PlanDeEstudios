@@ -6,6 +6,7 @@
    antes de enviar.
    ========================================================================= */
 
+import { abrirModalCopiaManualPortapapeles, copiarPromptConAviso } from "../core/clipboard.js";
 import { PRESETS_TIPOS_HORAS } from "../core/schema.js";
 import { mostrarCargando, ocultarCargando } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
@@ -750,15 +751,6 @@ function construirInputArchivoCSV(textareaDestino) {
   return wrap;
 }
 
-async function copiarPromptImportacion(texto) {
-  try {
-    await navigator.clipboard.writeText(texto);
-    mostrarToast("✓ Prompt copiado en el portapapeles");
-  } catch (e) {
-    console.warn("No se pudo copiar automáticamente, el usuario deberá copiarlo a mano.", e);
-  }
-}
-
 /**
  * Bug 1 (v8.3, LETAL): en móvil, `window.open()` llamado DESPUÉS de un
  * `await` (como el `await navigator.clipboard.writeText()` de antes) ya no
@@ -784,14 +776,29 @@ function abrirVentanaNueva(url) {
  *  pero ya no bloquea ni retrasa la apertura, así que el orden entre ambas
  *  cosas ya no importa para el bloqueador de pop-ups. */
 
+/** Copia blindada del prompt: si ya se sabe (por
+ *  comprobarPermisoPortapapelesAlIniciar, en main.js) que el permiso está
+ *  denegado, ni siquiera se intenta la copia automática — se ahorra el
+ *  intento fallido y se va directo al modal de copia manual. En cualquier
+ *  otro caso ("otorgado" o "desconocido"), copiarPromptConAviso hace el
+ *  intento real y decide sola si mostrar el toast de éxito o el modal. */
+
+function copiarPromptImportacionBlindado(texto) {
+  if (estado.permisoPortapapeles === "denegado") {
+    abrirModalCopiaManualPortapapeles(texto);
+    return;
+  }
+  copiarPromptConAviso(texto);
+}
+
 function enviarPromptAClaude(texto) {
   abrirVentanaNueva("https://claude.ai/new");
-  copiarPromptImportacion(texto);
+  copiarPromptImportacionBlindado(texto);
 }
 
 function enviarPromptAChatGPT(texto) {
   abrirVentanaNueva("https://chatgpt.com/");
-  copiarPromptImportacion(texto);
+  copiarPromptImportacionBlindado(texto);
 }
 
 /* ===================== Modal de instrucciones antes de enviar (v6) ===================== */
@@ -853,7 +860,6 @@ export {
   construirPromptImportacion,
   construirTextoInstruccionesImportacion,
   convertirCapturasAPDF,
-  copiarPromptImportacion,
   enviarPromptAChatGPT,
   enviarPromptAClaude,
   extraerMetadatosImportacion,
