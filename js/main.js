@@ -9,7 +9,7 @@ import { inicializarModalEnlace, renderizarEnlacesRapidos } from "./config/confi
 import { buscarOCrearArchivoDatos, cerrarSesionGoogle, inicializarGoogleAuth, iniciarSesionConGoogle, obtenerMetadatosArchivo, obtenerPerfilGoogle, refrescarAccessTokenGoogle } from "./core/auth.js";
 import { migrarDatosAntiguos } from "./core/schema.js";
 import { fusionarDatos } from "./core/storage-merge.js";
-import { actualizarIndicadorSync, forzarSincronizacion, inicializarPullToRefresh, inicializarSondeoAlVolver, intentarReconexionSilenciosa, intentarSincronizar, mostrarAvisoReconexion, mostrarCargando, ocultarCargando, programarRefrescoProactivo, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
+import { actualizarIndicadorSync, forzarSincronizacion, inicializarPullToRefresh, inicializarSondeoAlVolver, intentarReconexionSilenciosa, intentarSincronizar, mostrarAvisoReconexion, mostrarCargando, ocultarCargando, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
 import { CLAVE_CACHE_LOCAL, borrarTokenCache, correoConocido, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
 import { obtenerIniciales } from "./core/utils.js";
 import { inicializarModalCategoria, inicializarModalCategoriaMaterias } from "./plan/plan-categorias.js";
@@ -83,9 +83,17 @@ window.addEventListener("DOMContentLoaded", () => {
           estado.conexionDrive = "ok";
           programarRefrescoProactivo(Math.round((tokenCache.expiraEn - Date.now()) / 1000));
           resolverAuthListo();
-          if (estado.pendienteSync) intentarSincronizar();
+          // v1.15.2: antes esto era `if (estado.pendienteSync)
+          // intentarSincronizar();` — solo SUBÍA cambios locales
+          // pendientes, nunca bajaba lo que ya hubiera de nuevo en Drive
+          // desde otro dispositivo. sincronizarAlIniciar() hace el pull real
+          // (y sigue subiendo lo pendiente después, si corresponde).
+          sincronizarAlIniciar();
         } else {
-          intentarReconexionSilenciosa().finally(resolverAuthListo);
+          intentarReconexionSilenciosa().finally(() => {
+            resolverAuthListo();
+            sincronizarAlIniciar();
+          });
         }
       } else {
         // No había sesión en caché (se muestra la pantalla de login): no hay
