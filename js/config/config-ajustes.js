@@ -3,7 +3,7 @@
    Paletas, modo claro/oscuro, escala de notas, formato de texto.
    ========================================================================= */
 
-import { PALETAS_DISPONIBLES } from "../core/schema.js";
+import { PALETAS_DISPONIBLES, sellarTimestamp } from "../core/schema.js";
 import { actualizarIndicadorSync, marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
@@ -38,6 +38,7 @@ function renderizarAjustes() {
     sw.addEventListener("click", () => {
       estado.datos.configuracion.paleta = paleta;
       aplicarPaleta(paleta, estado.datos.configuracion.modo);
+      sellarTimestamp(estado.datos.configuracion);
       marcarCambioPendiente();
       renderizarAjustes();
     });
@@ -63,6 +64,7 @@ function renderizarAjustes() {
       // se vuelve a entrar por el flujo completo con el botón de abajo.
       estado.datos.configuracion.paleta = "personalizada";
       aplicarPaleta("personalizada", estado.datos.configuracion.modo, personalizada.colores);
+      sellarTimestamp(estado.datos.configuracion);
       marcarCambioPendiente();
       renderizarAjustes();
     } else {
@@ -91,6 +93,7 @@ function renderizarAjustes() {
     chkRendimiento.onchange = () => {
       estado.datos.configuracion.modo_rendimiento = chkRendimiento.checked;
       aplicarModoRendimiento(chkRendimiento.checked);
+      sellarTimestamp(estado.datos.configuracion);
       marcarCambioPendiente();
     };
   }
@@ -106,6 +109,7 @@ function renderizarAjustes() {
       nuevoModo,
       estado.datos.configuracion.paleta === "personalizada" ? personalizada.colores : undefined
     );
+    sellarTimestamp(estado.datos.configuracion);
     marcarCambioPendiente();
   };
 
@@ -115,6 +119,7 @@ function renderizarAjustes() {
     btn.classList.toggle("active", Number(btn.dataset.valor) === estado.datos.configuracion.escala_notas_global);
     btn.onclick = () => {
       estado.datos.configuracion.escala_notas_global = Number(btn.dataset.valor);
+      sellarTimestamp(estado.datos.configuracion);
       marcarCambioPendiente();
       renderizarAjustes();
     };
@@ -127,6 +132,7 @@ function renderizarAjustes() {
       btn.classList.toggle("active", btn.dataset.valor === (estado.datos.configuracion.formato_texto_nombres || "titulo"));
       btn.onclick = () => {
         estado.datos.configuracion.formato_texto_nombres = btn.dataset.valor;
+        sellarTimestamp(estado.datos.configuracion);
         marcarCambioPendiente();
         renderizarAjustes();
         if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
