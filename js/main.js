@@ -4,12 +4,12 @@
    todos los demás módulos.
    ========================================================================= */
 
-import { renderizarAjustes, aplicarModoRendimiento } from "./config/config-ajustes.js";
+import { renderizarAjustes } from "./config/config-ajustes.js";
 import { inicializarModalEnlace, renderizarEnlacesRapidos } from "./config/config-enlaces.js";
 import { buscarOCrearArchivoDatos, cerrarSesionGoogle, inicializarGoogleAuth, iniciarSesionConGoogle, obtenerMetadatosArchivo, obtenerPerfilGoogle, refrescarAccessTokenGoogle } from "./core/auth.js";
 import { migrarDatosAntiguos } from "./core/schema.js";
 import { fusionarDatos } from "./core/storage-merge.js";
-import { actualizarIndicadorSync, forzarSincronizacion, inicializarPullToRefresh, intentarReconexionSilenciosa, intentarSincronizar, mostrarAvisoReconexion, mostrarCargando, ocultarCargando, programarRefrescoProactivo, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
+import { actualizarIndicadorSync, forzarSincronizacion, inicializarPullToRefresh, inicializarSondeoAlVolver, intentarReconexionSilenciosa, intentarSincronizar, mostrarAvisoReconexion, mostrarCargando, ocultarCargando, programarRefrescoProactivo, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
 import { CLAVE_CACHE_LOCAL, borrarTokenCache, correoConocido, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
 import { obtenerIniciales } from "./core/utils.js";
 import { inicializarModalCategoria, inicializarModalCategoriaMaterias } from "./plan/plan-categorias.js";
@@ -216,6 +216,12 @@ window.addEventListener("DOMContentLoaded", () => {
   // nunca se llamaba desde ningún lado — por eso los cambios de un
   // dispositivo nunca llegaban al otro.
   setInterval(sondearCambiosRemotos, 9000);
+
+  // v9.3: fuerza un sondeo inmediato al volver a esta pestaña (ver
+  // comentario en inicializarSondeoAlVolver, storage-sync.js) — es lo que
+  // evita que datos viejos en memoria pisen lo último guardado desde otro
+  // dispositivo mientras esta pestaña estuvo minimizada/en segundo plano.
+  inicializarSondeoAlVolver();
 });
 
 /* ============== Arranque de los módulos del Plan de Estudios ==============
@@ -345,6 +351,29 @@ async function onLoginExitoso(token, expiresIn) {
       // No crítico: si falla, el primer sondeo simplemente fija la base.
     }
     mostrarApp();
+  } catch (e) {
+    // v1.15.1 (fix real del reporte "inicio sesión y como que no inicia,
+    // tengo que recargar y volver a intentar"): antes este try no tenía
+    // catch. Si buscarOCrearArchivoDatos (o cualquier llamada a Drive de
+    // aquí adentro) fallaba por una red inestable o un error pasajero de
+    // Google, el error quedaba como un rechazo de promesa sin atrapar:
+    // mostrarApp() nunca se llegaba a llamar (está más abajo en el mismo
+    // try), así que la pantalla de login se quedaba ahí sin ningún aviso,
+    // y el botón de login no se reactivaba. La única forma de recuperarse
+    // era recargar toda la página y volver a intentar — y como casi
+    // siempre era un fallo pasajero, el segundo intento sí funcionaba,
+    // dando la falsa impresión de que "se arregló solo". Ahora se avisa
+    // explícitamente qué pasó y se deja el botón listo para reintentar
+    // de inmediato, sin recargar nada.
+    console.error("No se pudo completar el inicio de sesión (falló la conexión con Drive):", e);
+    const btnLoginEl = document.getElementById("btn-login-google");
+    if (btnLoginEl) btnLoginEl.disabled = false;
+    const aviso = document.getElementById("aviso-login-bloqueado");
+    if (aviso) {
+      aviso.textContent =
+        "No se pudo completar el inicio de sesión: falló la conexión con Google Drive. Revisa tu internet e intenta de nuevo (no hace falta recargar la página).";
+      aviso.classList.remove("oculto");
+    }
   } finally {
     ocultarCargando();
   }
@@ -354,7 +383,6 @@ function mostrarApp() {
   document.getElementById("pantalla-login").classList.add("oculto");
   document.getElementById("app-shell").classList.remove("oculto");
   aplicarPaleta(estado.datos.configuracion.paleta, estado.datos.configuracion.modo);
-  aplicarModoRendimiento(estado.datos.configuracion.modo_rendimiento);
   renderizarSelectorPlan();
   renderizarAjustes();
   renderizarModoHardcore();
