@@ -5,6 +5,7 @@
    ========================================================================= */
 
 import { arbolContieneCodigo, evaluarNodoRequisito, sellarTimestamp } from "../core/schema.js";
+import { resolverConflicto } from "../core/storage-merge.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto, formatearHoras } from "../core/utils.js";
@@ -543,6 +544,28 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
     linea2.appendChild(badgeOrigen);
   }
 
+  // FIX sync (conflicto real sin resolver): si esta materia se editó de
+  // forma distinta en dos dispositivos a partir de la misma versión
+  // (ver hayConflictoReal en storage-merge.js), queda marcada con
+  // materia._conflicto — pero eso solo vivía en los datos, nunca se le
+  // mostraba a la persona. Sin este badge, el conflicto se re-marcaba en
+  // cada sync sin que nadie pudiera resolverlo (ni reiniciando la app, ver
+  // conversación 2026-07-30), porque solo resolverConflicto() vuelve a
+  // sellar la entidad con una base limpia y rompe el ciclo. Se muestra
+  // SIEMPRE (tarjeta colapsada o no) para que no pase desapercibido.
+  if (materia._conflicto) {
+    const badgeConflicto = document.createElement("span");
+    badgeConflicto.className = "badge badge-danger";
+    badgeConflicto.style.fontSize = "0.68rem";
+    badgeConflicto.textContent = "⚠️ Editado en 2 dispositivos";
+    badgeConflicto.title = "Se cambió de forma distinta en dos dispositivos. Toca para elegir cuál dejar.";
+    badgeConflicto.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      abrirModalResolverConflicto(materia, plan);
+    });
+    linea2.appendChild(badgeConflicto);
+  }
+
   card.appendChild(filaPrincipal);
 
   if (expandida) {
@@ -587,6 +610,142 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
   }
 
   return card;
+}
+
+/* ===================== Resolución de conflictos reales ===================== */
+
+/** Etiqueta humana de un campo de materia para mostrar en el comparador de
+ *  conflicto — solo traduce lo que realmente puede diferir entre las dos
+ *  versiones en pantalla (estado, categoría, nota/override); cualquier otro
+ *  campo se muestra tal cual con su nombre técnico como respaldo. */
+function etiquetaCampoConflicto(campo, valor, plan) {
+  if (campo === "estado") {
+    const info = ESTADOS_MATERIA.find((e) => e.valor === valor);
+    return info ? info.texto : String(valor);
+  }
+  if (campo === "categoria_id") {
+    if (!valor) return "Sin categoría";
+    const cat = plan.categorias.find((c) => c.id === valor);
+    return cat ? cat.nombre : valor;
+  }
+  if (valor === null || valor === undefined) return "—";
+  if (typeof valor === "object") {
+    try { return JSON.stringify(valor); } catch (e) { return String(valor); }
+  }
+  return String(valor);
+}
+
+const CAMPOS_META_CONFLICTO = new Set([
+  "_conflicto", "_version_alterna", "_actualizadoEn", "_version_base", "_dispositivoId",
+]);
+
+/** Arma la lista de campos que realmente difieren entre las dos versiones en
+ *  conflicto (para no mostrarle a la persona un comparador con 15 campos
+ *  idénticos cuando solo cambió, por ejemplo, el Estado). */
+function camposEnConflicto(local, alterna) {
+  const llaves = new Set([...Object.keys(local), ...Object.keys(alterna)]);
+  const diferentes = [];
+  llaves.forEach((campo) => {
+    if (CAMPOS_META_CONFLICTO.has(campo)) return;
+    const a = JSON.stringify(local[campo]);
+    const b = JSON.stringify(alterna[campo]);
+    if (a !== b) diferentes.push(campo);
+  });
+  return diferentes;
+}
+
+/**
+ * Modal de resolución de conflicto real (ver hayConflictoReal en
+ * storage-merge.js). Se construye 100% en JS (sin depender de markup nuevo
+ * en index.html, igual que abrirMenuRapidoCategoria) porque es la única
+ * pieza que faltaba para que un conflicto real deje de quedar atascado para
+ * siempre: hasta que la persona elige una versión, cada sync lo vuelve a
+ * marcar contra la misma base vieja sin avanzar (ni un reinicio lo arregla
+ * solo). Elegir acá llama a resolverConflicto(), que resella la entidad con
+ * un _version_base limpio — eso es lo que rompe el ciclo.
+ */
+function abrirModalResolverConflicto(materia, plan) {
+  document.querySelectorAll(".overlay-resolver-conflicto").forEach((el) => el.remove());
+
+  const alterna = materia._version_alterna || {};
+  const diferentes = camposEnConflicto(materia, alterna);
+
+  const overlay = document.createElement("div");
+  overlay.className = "overlay-resolver-conflicto";
+  overlay.style.cssText =
+    "position:fixed; inset:0; z-index:300; background:rgba(0,0,0,0.55); " +
+    "display:flex; align-items:center; justify-content:center; padding:16px;";
+
+  const caja = document.createElement("div");
+  caja.className = "glass-card stack";
+  caja.style.cssText = "max-width:420px; width:100%; padding:18px; max-height:80vh; overflow-y:auto;";
+  caja.addEventListener("click", (ev) => ev.stopPropagation());
+
+  const titulo = document.createElement("h3");
+  titulo.style.cssText = "margin:0 0 4px;";
+  titulo.textContent = "⚠️ Edición en dos dispositivos";
+  caja.appendChild(titulo);
+
+  const explicacion = document.createElement("p");
+  explicacion.style.cssText = "font-size:0.85rem; opacity:0.85; margin:0 0 12px;";
+  explicacion.textContent =
+    `"${aplicarFormatoTexto(materia.nombre)}" (${materia.codigo}) se editó de forma distinta en dos ` +
+    "dispositivos antes de que sincronizaran entre sí. Elegí cuál versión dejar — la otra se descarta.";
+  caja.appendChild(explicacion);
+
+  if (diferentes.length === 0) {
+    const sinDiferencias = document.createElement("p");
+    sinDiferencias.style.cssText = "font-size:0.85rem; opacity:0.7;";
+    sinDiferencias.textContent = "No se detectaron diferencias visibles — es seguro dejar cualquiera de las dos.";
+    caja.appendChild(sinDiferencias);
+  } else {
+    const tabla = document.createElement("div");
+    tabla.className = "stack";
+    tabla.style.cssText = "font-size:0.82rem; margin-bottom:14px;";
+    diferentes.forEach((campo) => {
+      const fila = document.createElement("div");
+      fila.style.cssText = "display:flex; justify-content:space-between; gap:10px; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.08);";
+      const nombreCampo = document.createElement("span");
+      nombreCampo.style.cssText = "opacity:0.65; text-transform:capitalize;";
+      nombreCampo.textContent = campo.replace(/_/g, " ");
+      const valores = document.createElement("span");
+      valores.style.cssText = "text-align:right;";
+      valores.textContent =
+        `${etiquetaCampoConflicto(campo, materia[campo], plan)} → ${etiquetaCampoConflicto(campo, alterna[campo], plan)}`;
+      fila.appendChild(nombreCampo);
+      fila.appendChild(valores);
+      tabla.appendChild(fila);
+    });
+    caja.appendChild(tabla);
+  }
+
+  const elegir = (cual) => {
+    const resuelta = resolverConflicto(materia, cual, sellarTimestamp);
+    Object.keys(materia).forEach((k) => delete materia[k]);
+    Object.assign(materia, resuelta);
+    marcarCambioPendiente();
+    overlay.remove();
+    renderizarPlanEstudios();
+  };
+
+  const btnLocal = document.createElement("button");
+  btnLocal.type = "button";
+  btnLocal.className = "btn btn-secondary btn-block";
+  btnLocal.textContent = "Dejar esta versión";
+  btnLocal.addEventListener("click", () => elegir("local"));
+  caja.appendChild(btnLocal);
+
+  const btnAlterna = document.createElement("button");
+  btnAlterna.type = "button";
+  btnAlterna.className = "btn btn-secondary btn-block";
+  btnAlterna.style.marginTop = "6px";
+  btnAlterna.textContent = "Usar la otra versión";
+  btnAlterna.addEventListener("click", () => elegir("alterna"));
+  caja.appendChild(btnAlterna);
+
+  overlay.appendChild(caja);
+  overlay.addEventListener("click", () => overlay.remove());
+  document.body.appendChild(overlay);
 }
 
 /** Ajuste v4 #7: menú rápido (lista de categorías del plan) para reasignar
@@ -641,6 +800,7 @@ function abrirMenuRapidoCategoria(materia, plan, anclaEl) {
 export {
   ESTADOS_MATERIA,
   abrirMenuRapidoCategoria,
+  abrirModalResolverConflicto,
   construirBloqueOptativas,
   construirContenidoBloques,
   construirTarjetaMateria,
