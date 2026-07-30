@@ -8,7 +8,7 @@
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto, hexARgba } from "../core/utils.js";
 import { abrirModalRequisito } from "./plan-detalle.js";
-import { obtenerMateriasQueDesbloquea } from "./plan-vista-lista-tarjetas.js";
+import { abrirModalResolverConflicto, obtenerMateriasQueDesbloquea } from "./plan-vista-lista-tarjetas.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
 
 /* ---- B.3 (v8/v9): Vista de Mapa interactivo del Plan de Estudios ---- */
@@ -423,6 +423,34 @@ function construirNodoMapa(materia, plan) {
   nodo.style.setProperty("--nodo-color", color);
   // Última instrucción V1.10: sombra sutil tintada según el color de borde activo.
   nodo.style.setProperty("--nodo-color-sombra", hexARgba(color, 0.35));
+
+  // FIX sync (conflicto real invisible en Mapa): a diferencia de la tarjeta
+  // de la vista Lista (ver construirTarjetaMateria en
+  // plan-vista-lista-tarjetas.js), esta función nunca revisaba
+  // materia._conflicto — un choque real (ver hayConflictoReal en
+  // storage-merge.js) quedaba marcado en los datos pero completamente
+  // invisible mientras la persona estuviera en la vista Mapa, sin ninguna
+  // forma de notarlo ni resolverlo desde acá. Se agrega el mismo indicador,
+  // como una esquina de aviso sobre el nodo (position:relative propio, para
+  // no depender de que el CSS del proyecto ya tenga ese ajuste hecho).
+  if (materia._conflicto) {
+    nodo.style.position = "relative";
+    const avisoConflicto = document.createElement("span");
+    avisoConflicto.className = "mapa-nodo-aviso-conflicto";
+    avisoConflicto.style.cssText =
+      "position:absolute; top:-8px; right:-8px; width:20px; height:20px; border-radius:50%; " +
+      "background:#ef4444; color:#fff; font-size:12px; line-height:20px; text-align:center; " +
+      "cursor:pointer; z-index:5; box-shadow:0 0 0 2px var(--bg-canvas, #101114);";
+    avisoConflicto.textContent = "⚠";
+    avisoConflicto.title = "Se editó de forma distinta en dos dispositivos. Toca para elegir cuál dejar.";
+    avisoConflicto.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      abrirModalResolverConflicto(materia, plan);
+    });
+    avisoConflicto.addEventListener("mousedown", (ev) => ev.stopPropagation());
+    avisoConflicto.addEventListener("touchstart", (ev) => ev.stopPropagation(), { passive: true });
+    nodo.appendChild(avisoConflicto);
+  }
 
   // V1.10: línea 1 = luz (::before, igual que siempre) + código + créditos.
   // En modo normal/compacto, "fila1" es invisible como contenedor (display:
