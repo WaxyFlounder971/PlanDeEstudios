@@ -270,7 +270,7 @@ const PRESETS_TIPOS_HORAS = {
 };
 
 function crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, tipo_titulo, parametros_universidad }) {
-  return {
+  return sellarTimestamp({
     id: "plan_" + crypto.randomUUID(),
     nombre_carrera,
     universidad,
@@ -307,7 +307,57 @@ function crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, tipo_titul
     // Se mueven a `materias` (con un bloque numerado real) al vincularlas
     // desde el bloque especial "Revisar" (ver plan-esquema.js).
     materias_revisar: [],
-  };
+  });
+}
+
+/**
+ * FIX CRÍTICO — bug real encontrado, no venía en el reporte original:
+ * storage-merge.js y main.js tienen comentarios que describen esta función
+ * ("ver sellarTimestamp en schema.js") como la pieza que sella
+ * `_actualizadoEn`/`_dispositivoId` en cada entidad al crearla o editarla —
+ * pero nunca se había escrito. En la práctica, NINGUNA materia, plan, etc.
+ * tenía jamás un `_actualizadoEn` real: siempre quedaba en 0/undefined.
+ * Con ambos lados en 0, esMasReciente() (storage-merge.js) nunca detecta un
+ * "más reciente" real en ningún conflicto — el resultado neto es que la
+ * fusión siempre conservaba la versión LOCAL y descartaba la REMOTA sin
+ * importar cuál se editó de verdad más tarde, así que un cambio hecho en
+ * el teléfono nunca llegaba a imponerse en la PC (ni viceversa), sin
+ * importar cuánto se esperara — no era un problema de "cada cuánto
+ * sincroniza", era que el desempate nunca tuvo datos reales con qué decidir.
+ *
+ * Debe llamarse sobre cualquier entidad (materia, plan, semestre, profesor,
+ * evento de agenda, enlace, categoría, etc.) justo antes de
+ * marcarCambioPendiente(), tanto al crearla como al editar cualquiera de
+ * sus campos.
+ */
+
+const CLAVE_DISPOSITIVO_ID = "app_academica_dispositivo_id";
+
+/**
+ * Id único y estable de ESTE navegador/dispositivo (no de la persona — la
+ * misma persona en PC y en teléfono tiene dos ids distintos, cada uno
+ * generado una sola vez y guardado en localStorage). Solo se usa como
+ * desempate determinista en sellarTimestamp() para el caso rarísimo de dos
+ * ediciones con el mismo _actualizadoEn exacto (choque de milisegundo) —
+ * el caso normal ya se resuelve solo con el timestamp real.
+ */
+function obtenerDispositivoId() {
+  try {
+    let id = localStorage.getItem(CLAVE_DISPOSITIVO_ID);
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem(CLAVE_DISPOSITIVO_ID, id);
+    }
+    return id;
+  } catch (e) {
+    return "desconocido";
+  }
+}
+
+function sellarTimestamp(entidad) {
+  entidad._actualizadoEn = Date.now();
+  entidad._dispositivoId = obtenerDispositivoId();
+  return entidad;
 }
 
 function crearCategoria({ nombre, color }) {
@@ -332,7 +382,7 @@ function crearMateria({ codigo, nombre, creditos, horas, tiposHoras, bloque, req
     horasFinal[tipo] = Number((horas || {})[tipo]) || 0;
   });
 
-  return {
+  return sellarTimestamp({
     id: codigo, // el código funciona como id único dentro del plan
     codigo,
     nombre,
@@ -368,7 +418,7 @@ function crearMateria({ codigo, nombre, creditos, horas, tiposHoras, bloque, req
     // "Repertorio", "Optativa") — null si esta materia nunca fue un cupo
     // genérico reemplazado. Se muestra en su tarjeta, debajo de Requisitos.
     cupo_generico_original: null,
-  };
+  });
 }
 
 /**
@@ -481,5 +531,7 @@ export {
   evaluarNodoRequisito,
   migrarDatosAntiguos,
   migrarRequisitoAArbol,
+  obtenerDispositivoId,
   recorrerHojasArbol,
+  sellarTimestamp,
 };
