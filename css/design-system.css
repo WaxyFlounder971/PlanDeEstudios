@@ -2005,14 +2005,19 @@ html.exportar-tema-default[data-mode="dark"] {
   border-radius: var(--radius-pill);
   outline: none;
   cursor: pointer;
+  border: 1px solid var(--border-glass);
 }
+/* Thumb: mismo lenguaje que la perilla de la rueda de ángulo (círculo
+   tintado con el color elegido del degradado + anillo blanco), en vez del
+   círculo blanco genérico de navegador que no combinaba con nada más del
+   panel. */
 .ppz-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #ffffff;
-  border: 2px solid rgba(0, 0, 0, 0.25);
+  background: var(--ppz-intensidad-thumb, var(--accent-1));
+  border: 2px solid #ffffff;
   box-shadow: var(--shadow-float);
   cursor: pointer;
 }
@@ -2020,11 +2025,12 @@ html.exportar-tema-default[data-mode="dark"] {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #ffffff;
-  border: 2px solid rgba(0, 0, 0, 0.25);
+  background: var(--ppz-intensidad-thumb, var(--accent-1));
+  border: 2px solid #ffffff;
   box-shadow: var(--shadow-float);
   cursor: pointer;
 }
+.ppz-slider::-moz-range-track { border: none; background: transparent; }
 
 /* ---- Vista previa en vivo (v1.15.3: 2 capas, lienzo + tarjeta) ---- */
 .ppz-preview {
@@ -2124,10 +2130,10 @@ html.exportar-tema-default[data-mode="dark"] {
    mismo lenguaje de transiciones que ya usa el resto de la app.
    ========================================================================= */
 
-/* v1.15.6: bloque único a ancho completo — va debajo de .ppz-campos-
-   columnas (después de Borde) y arriba de la vista previa, ver
-   abrirPanelDeEdicion. Separado con una línea sutil arriba para que se lea
-   como su propia sección, no como una continuación de las columnas. */
+/* v1.15.7: bloque de ancho completo con el toggle + rueda + intensidad —
+   va debajo de .ppz-campos-columnas (después de Borde) y arriba de la
+   vista previa, ver abrirPanelDeEdicion. El color del degradado vive
+   aparte, dentro de la columna 2 (ver .ppz-degradado-color-inline). */
 .ppz-degradado-bloque {
   display: flex;
   flex-direction: column;
@@ -2143,11 +2149,10 @@ html.exportar-tema-default[data-mode="dark"] {
 }
 .ppz-degradado-toggle-fila .ppz-grupo-label { margin: 0; }
 
-/* v1.15.6: un solo contenedor plegable con TODO adentro (color + rueda +
-   intensidad) — una sola bandera de visibilidad, ver crearSeccionDegradado.
-   Antes el color vivía en un elemento hermano aparte con su propio
-   .oculto, y esa doble sincronización es justo lo que hacía que a veces
-   quedara uno visible y el otro no. */
+/* Cuerpo plegable de abajo: rueda + intensidad. El campo de color tiene su
+   propio .oculto aparte (ver más abajo) porque vive en otro contenedor
+   (columna 2) — ambos se togglean juntos desde la misma función en JS
+   (sincronizarVisibilidad), así nunca quedan desincronizados. */
 .ppz-degradado-contenido {
   display: flex;
   flex-direction: column;
@@ -2171,15 +2176,15 @@ html.exportar-tema-default[data-mode="dark"] {
   margin-top: -4px;
 }
 
-/* Campo de color del degradado: mismo look que Fondo/Tarjeta/etc
-   (.ppz-grupo), pero angosto — en el bloque ancho completo no hace falta
-   que ocupe todo el ancho. */
-.ppz-degradado-color-inline {
-  max-width: 220px;
+/* Campo de color del degradado: vive DENTRO de la columna 2, mismo look
+   que Detalles/Luz (.ppz-grupo). Se oculta con display:none simple — es
+   un solo campo, no necesita animación de plegado como el bloque grande. */
+.ppz-degradado-color-inline.oculto {
+  display: none;
 }
 
 /* Rueda de ángulo + intensidad vertical, centradas en el bloque ancho
-   completo, debajo del campo de color. */
+   completo de abajo. */
 .ppz-degradado-controles-derecha {
   display: flex;
   align-items: flex-start;
@@ -2226,9 +2231,12 @@ html.exportar-tema-default[data-mode="dark"] {
 .ppz-intensidad-vertical-pista {
   height: 112px;
   width: 34px;
+  border-radius: var(--radius-pill);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.25);
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 .ppz-slider-vertical {
   /* Estándar moderno para <input type="range"> vertical (Chrome/Edge 121+,
