@@ -26,6 +26,7 @@ function crearDatosUsuarioNuevo() {
       paleta: "azul",              // una de las 10 paletas
       modo: "dark",                 // "dark" | "light"
       paleta_personalizada: null,   // v1.13: { basadaEn, colores: { fondoCanvas, fondoCard, borde, accent1, accent2, luz } }
+                                     // v1.15: colores también incluye degradado: { activo, color, intensidad (0-100, % del stop medio), angulo (0-360) }
       escala_notas_global: 100,     // 10 o 100 (1-10 ó 1-100)
       formato_texto_nombres: "titulo", // "titulo" | "mayusculas" | "oracion" (v5 #9)
       modo_rendimiento: false,      // v1.14.1: reduce blur/sombras/animaciones para laptops con GPU integrada
@@ -547,7 +548,24 @@ const MAPEO_HORAS_VIEJO_A_NUEVO = {
 };
 
 function migrarDatosAntiguos(datos) {
-  if (!datos || !Array.isArray(datos.planes_estudio)) return datos;
+  if (!datos) return datos;
+
+  // v1.15 (Parte 2): relleno defensivo para paletas personalizadas creadas
+  // antes de que existiera el degradado configurable — quedan con
+  // degradado.activo=false (blanco sólido, el mismo comportamiento de
+  // siempre) hasta que el usuario entre al editor y lo active a propósito.
+  // Nunca se cambia nada más de sus colores existentes.
+  const paletaPersonalizada = datos.configuracion && datos.configuracion.paleta_personalizada;
+  if (paletaPersonalizada && paletaPersonalizada.colores && !paletaPersonalizada.colores.degradado) {
+    paletaPersonalizada.colores.degradado = {
+      activo: false,
+      color: paletaPersonalizada.colores.accent2 || null,
+      intensidad: 50,
+      angulo: 90,
+    };
+  }
+
+  if (!Array.isArray(datos.planes_estudio)) return datos;
 
   datos.planes_estudio.forEach((plan) => {
     // C.4 (v9): planes creados antes de esta versión no tienen este arreglo
