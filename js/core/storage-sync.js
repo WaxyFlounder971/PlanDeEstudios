@@ -13,9 +13,40 @@ import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { aplicarPaleta } from "../ui/tema.js";
 import { guardarDatos, leerDatos, obtenerMetadatosArchivo, refrescarAccessTokenGoogle } from "./auth.js";
-import { migrarDatosAntiguos } from "./schema.js";
 import { fusionarDatos } from "./storage-merge.js";
+import { migrarDatosAntiguos } from "./schema.js";
 import { authListo, correoConocido, establecerTokenActivo, estado, guardarCacheLocal } from "./storage.js";
+
+/**
+ * v9.3 (fix real del reporte "hice mucho en PC, me pasé al teléfono, y se
+ * guardó solo lo del teléfono porque ya tenía la página abierta pero
+ * minimizada"): sondearCambiosRemotos() se salta a sí misma a propósito
+ * mientras `document.hidden` es true (para no gastar cuota de la API con
+ * la pestaña oculta) — pero eso significa que mientras esa pestaña está
+ * minimizada, NUNCA se entera de que otro dispositivo guardó algo nuevo.
+ * Al volver a esa pestaña, nada forzaba una lectura inmediata: quedaba
+ * esperando el próximo tick del setInterval de 9s, y los navegadores
+ * frenan mucho esos timers en pestañas que estuvieron en segundo plano
+ * (pueden tardar bastante más de 9s reales en dispararse de nuevo). Si el
+ * usuario alcanzaba a tocar algo antes de ese tick, sus datos viejos en
+ * memoria pisaban lo último guardado en Drive.
+ *
+ * Esta función registra que, apenas la pestaña vuelve a estar visible (o
+ * la ventana recupera el foco — cubre el caso de dos monitores/alt-tab,
+ * que a veces no dispara visibilitychange), se fuerza un sondeo YA MISMO,
+ * sin esperar el próximo tick. sondearCambiosRemotos() ya trae su propia
+ * protección (no pisa nada si hay cambios locales sin subir todavía), así
+ * que es seguro llamarla de más.
+ */
+
+function inicializarSondeoAlVolver() {
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) sondearCambiosRemotos();
+  });
+  window.addEventListener("focus", () => {
+    sondearCambiosRemotos();
+  });
+}
 
 /**
  * Bug 1 (v8): pide un access_token nuevo de forma silenciosa apenas carga la
@@ -280,6 +311,26 @@ function inicializarPullToRefresh() {
 
   window.addEventListener("pointerup", soltar);
   window.addEventListener("pointercancel", soltar);
+
+  // v1.15.2 (fix real de "el pull-to-refresh solo funciona con mouse en
+  // compu, en teléfono no pasa nada"): toda la lógica de arriba corre bien
+  // con Pointer Events, pero hay una limitación conocida de Safari/iOS (y
+  // algunos Android): llamar preventDefault() dentro de un evento
+  // *pointermove* no siempre alcanza a bloquear el scroll nativo del
+  // navegador — el motor de touch ya "decidió" hacer scroll antes de que
+  // el hilo de JS llegue a frenarlo. Hace falta interceptar también el
+  // evento *touch* real (no solo el pointer) para que el preventDefault
+  // realmente tenga efecto. Este listener no duplica el cálculo del
+  // arrastre (eso ya lo hacen los listeners de pointer de arriba, que sí
+  // se disparan igual en touch); solo actúa como respaldo para bloquear el
+  // scroll nativo mientras el gesto ya está "comprometido".
+  window.addEventListener(
+    "touchmove",
+    (e) => {
+      if (comprometido) e.preventDefault();
+    },
+    { passive: false }
+  );
 }
 
 /**
@@ -388,20 +439,34 @@ async function sincronizarAhora() {
  */
 
 function aplicarDatosRemotosFrescos(datosFrescos) {
+  // v1.15.2 (fix "se sumaron planes rompiendo el límite" + pérdida de datos
+  // por sobrescritura): antes esta función hacía
+  // `estado.datos = migrarDatosAntiguos(datosFrescos)` — un reemplazo TOTAL
+  // y ciego, igual que el bug que ya se había arreglado en el login (ver
+  // fusionarDatos en onLoginExitoso, main.js), pero ese arreglo NUNCA se
+  // aplicó aquí. Como sondearCambiosRemotos() y sincronizarAhora() (el
+  // pull-to-refresh) llaman a esta función, cualquier cambio detectado
+  // desde otro dispositivo pisaba entidades locales sin comparar fechas.
+  // Ahora se funde por entidad, igual que en el login: nunca se pierde por
+  // omisión, y el más reciente por `_actualizadoEn` gana campo por campo.
   const remotoMigrado = migrarDatosAntiguos(datosFrescos);
-  // v1.16 (FIX CRÍTICO — reporte Ivanna, "se sobrepone lo de un dispositivo
-  // sobre el otro" / "categorías creadas pero no en cada materia"): antes
-  // esta línea era `estado.datos = migrarDatosAntiguos(datosFrescos)` — un
-  // reemplazo TOTAL de estado.datos con lo que viniera de Drive, sin pasar
-  // por fusionarDatos (que hasta ahora solo se usaba una vez, en el
-  // login). Cualquier sondeo (cada 9s) o pull-to-refresh pisaba entero lo
-  // que hubiera en memoria, incluidas asignaciones materia→categoría u
-  // otras ediciones que el otro dispositivo no conociera todavía. Ahora se
-  // funde por entidad, con la misma función y las mismas reglas que ya usa
-  // el login (nada se pierde por omisión; gana el más reciente por id).
-  estado.datos = fusionarDatos(estado.datos, remotoMigrado);
+  estado.datos = estado.datos ? fusionarDatos(estado.datos, remotoMigrado) : remotoMigrado;
   guardarCacheLocal();
-  aplicarPaleta(estado.datos.configuracion.paleta, estado.datos.configuracion.modo);
+  // BUG FIX v1.15.4 (causa raíz real de "funcionó, se aplicó la paleta...
+  // pero a los segundos se fue"): faltaba el 3er argumento acá también.
+  // Esta función corre después de CUALQUIER sync — el sondeo automático
+  // cada 9s (sondearCambiosRemotos), el pull-to-refresh, y el sync al
+  // iniciar la app — así que aunque el guardado y la fusión de datos
+  // fueran perfectos, la paleta personalizada se borraba visualmente
+  // (aplicarPaleta cae en la rama de "limpiar" cuando no recibe colores,
+  // ver tema.js) en el próximo ciclo de sync después de guardarla. Por
+  // eso parecía que "a veces sí, a veces no" — dependía de si un sync
+  // alcanzaba a correr entre que guardabas y que mirabas la pantalla.
+  aplicarPaleta(
+    estado.datos.configuracion.paleta,
+    estado.datos.configuracion.modo,
+    estado.datos.configuracion.paleta === "personalizada" ? estado.datos.configuracion.paleta_personalizada?.colores : undefined
+  );
   renderizarSelectorPlan();
   renderizarAjustes();
   renderizarModoHardcore();
@@ -474,62 +539,48 @@ async function sondearCambiosRemotos() {
 }
 
 /**
- * v1.15.2 (bug real encontrado — no venía en el reporte original):
- * main.js ya importaba y llamaba a sincronizarAlIniciar() en los dos
- * caminos de sesión recuperada de caché (token cacheado válido y
- * reconexión silenciosa), con el comentario explícito de que reemplazaba
- * el viejo `if (estado.pendienteSync) intentarSincronizar()` porque ese
- * viejo código solo SUBÍA cambios locales pendientes y nunca bajaba lo
- * que ya hubiera de nuevo en Drive desde otro dispositivo. Pero la función
- * nunca se llegó a definir aquí — el import fallaba con un SyntaxError que
- * rompía la carga completa del módulo (y por lo tanto de toda la app).
+ * v1.15.2 (fix real del reporte "actualicé en PC y ni recargando se
+ * actualiza el teléfono"): hasta ahora, la ÚNICA vez que la app pedía los
+ * datos actuales de Drive y los fusionaba de verdad era en un login
+ * completo desde cero (onLoginExitoso, main.js). Una recarga normal con
+ * sesión ya en caché (el caso de todos los días) nunca pedía nada a
+ * Drive — solo renovaba el token y, si había cambios locales pendientes,
+ * los SUBÍA (nunca bajaba). El sondeo de 9s tampoco lo resolvía: como
+ * `estado.ultimoModifiedTimeConocido` vive solo en memoria (se reinicia en
+ * null en cada carga), la primera vez que sondearCambiosRemotos() corría
+ * después de abrir la app SOLO fijaba esa base de comparación sin bajar
+ * nada — así que si Drive ya tenía algo más nuevo desde ANTES de abrir la
+ * app (ej. lo que acabas de guardar en PC), el teléfono lo ignoraba por
+ * completo hasta que Drive cambiara DE NUEVO mientras la pestaña ya
+ * estaba abierta. Recargar, entonces, no servía de nada.
  *
- * Hace el pull real de lo que haya en Drive en este momento (a diferencia
- * de sondearCambiosRemotos, que en su primera pasada solo fija la base de
- * comparación sin traer nada) y, una vez resuelto eso, sube lo pendiente
- * si corresponde — igual que describe el comentario de main.js.
+ * Esta función se llama una única vez, apenas hay token+fileId
+ * disponibles en una carga que partió de caché local (no de un login
+ * nuevo) — hace un pull real contra Drive y lo funde con lo local vía
+ * aplicarDatosRemotosFrescos (que ahora fusiona, no pisa).
  */
 
 async function sincronizarAlIniciar() {
-  await authListo; // punto 5, misma condición de carrera que el resto del módulo
   if (!estado.token || !estado.fileId) return;
-
   try {
-    const meta = await conReintentoSi401(() => obtenerMetadatosArchivo(estado.token, estado.fileId));
-    estado.ultimoModifiedTimeConocido = meta.modifiedTime;
     const datosFrescos = await conReintentoSi401(() => leerDatos(estado.token, estado.fileId));
     aplicarDatosRemotosFrescos(datosFrescos);
+    try {
+      const meta = await conReintentoSi401(() => obtenerMetadatosArchivo(estado.token, estado.fileId));
+      estado.ultimoModifiedTimeConocido = meta.modifiedTime;
+    } catch (e) {
+      // No crítico: si falla, el primer sondeo simplemente fija la base.
+    }
+    // Si la fusión encontró entidades locales más nuevas que Drive todavía
+    // no tenía (ej. cambios hechos offline antes de esta carga), hay que
+    // subirlas — sin esto quedarían fundidas solo en memoria/caché local.
+    if (estado.pendienteSync) intentarSincronizar();
   } catch (e) {
     if (e.reconexionFallida) {
       mostrarAvisoReconexion();
     }
-    console.warn("No se pudo hacer el pull inicial desde Drive:", e);
-  } finally {
-    // Se sube lo pendiente después del pull (y no antes), para no pisar en
-    // Drive un cambio remoto más reciente con datos locales desactualizados.
-    if (estado.pendienteSync) intentarSincronizar();
+    console.warn("No se pudo sincronizar los datos al iniciar la app:", e);
   }
-}
-
-/**
- * v9.3: fuerza un sondeo inmediato apenas la pestaña/app vuelve a primer
- * plano (visibilitychange), en vez de esperar hasta 9s (el próximo tick del
- * setInterval en main.js) a que sondearCambiosRemotos() se entere de algo
- * que cambió en otro dispositivo mientras esta pestaña estaba minimizada o
- * en segundo plano. sondearCambiosRemotos ya se protege sola contra
- * pestañas ocultas (`if (document.hidden) return`) y contra sondeos
- * redundantes (compara modifiedTime), así que aquí basta con dispararla sin
- * lógica adicional.
- */
-
-let sondeoAlVolverRegistrado = false;
-
-function inicializarSondeoAlVolver() {
-  if (sondeoAlVolverRegistrado) return; // se llama una sola vez desde DOMContentLoaded en main.js
-  sondeoAlVolverRegistrado = true;
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) sondearCambiosRemotos();
-  });
 }
 
 /** Se llama cada vez que se modifica algo en `estado.datos`. */
@@ -561,17 +612,6 @@ async function intentarSincronizar() {
   }
 
   try {
-    // v1.16 (FIX CRÍTICO — reporte Ivanna, "se actualiza lo del teléfono y
-    // se sobrepone a lo de PC"): antes esta función subía estado.datos TAL
-    // CUAL con guardarDatos, sin bajar primero la última versión de Drive.
-    // Si el otro dispositivo había subido algo mientras tanto, esta subida
-    // lo pisaba entero — "quien suba último, gana el archivo completo".
-    // Ahora SIEMPRE se baja lo último de Drive y se funde por entidad
-    // (aplicarDatosRemotosFrescos, la misma fusión que ya usa el login y
-    // el pull-to-refresh) ANTES de subir, para que lo que se suba sea el
-    // resultado ya fusionado — nunca un reemplazo total.
-    const remoto = await conReintentoSi401(() => leerDatos(estado.token, estado.fileId));
-    aplicarDatosRemotosFrescos(remoto); // funde con estado.datos + re-renderiza + guarda caché local
     // v9.1: reutiliza el mismo envoltorio de reintento-tras-401 que ahora
     // usan las lecturas (leerDatos/obtenerMetadatosArchivo en
     // sincronizarAhora y sondearCambiosRemotos), en vez de duplicar aquí a
