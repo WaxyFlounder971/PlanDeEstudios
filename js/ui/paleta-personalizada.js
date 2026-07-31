@@ -18,6 +18,7 @@ import {
   compositarSobreFondo,
   hexAHsl,
   hslAHex,
+  mezclarHex,
 } from "./tema.js";
 
 /* ------------------------------ Construcción de UI ------------------------------ */
@@ -108,10 +109,19 @@ function crearBarraIntensidad({ valor, onCambio }) {
 }
 
 function pintarFondoIntensidad(input, { accent1, accent2, color }) {
-  // BUG FIX v1.15.4: la barra pasó de horizontal a vertical (pedido del
-  // usuario) — el degradado de fondo tenía que seguir la misma dirección,
-  // si no quedaba "de costado" respecto al thumb que sí se mueve vertical.
-  input.style.background = `linear-gradient(to top, ${accent1}, ${color}, ${accent2})`;
+  // BUG FIX v1.15.5 ("se veía como ...iiiIIIIIIiiiii... el centro parecía
+  // el máximo en vez del final de la barra"): la versión anterior pintaba
+  // 3 colores en paradas fijas (0%, 50%, 100% = accent1, color, accent2)
+  // SIN importar el valor real de intensidad — el color elegido siempre
+  // caía "en el medio" visualmente, así que la barra se veía como un pico
+  // en el centro en vez de una progresión hacia un extremo. Ahora son
+  // solo 2 paradas: un tono NEUTRO (mezcla de accent1/accent2, representa
+  // "0% de intensidad" — como si el degradado no se hubiera tocado) abajo,
+  // y el color elegido PURO arriba (100% de intensidad) — la barra vertical
+  // ahora sí se lee como "más color a medida que subís", igual que hace el
+  // thumb al moverse hacia arriba.
+  const neutro = mezclarHex(accent1, accent2, 0.5);
+  input.style.background = `linear-gradient(to top, ${neutro}, ${color})`;
 }
 
 /**
@@ -201,12 +211,24 @@ function crearRuedaAngulo({ valorInicial, onCambio }) {
 }
 
 /**
- * Sección completa del degradado: toggle (va en la grilla de 2 columnas)
- * + contenido expandible (color libre + rueda de ángulo + intensidad
- * vertical, a ancho completo — ver abrirPanelDeEdicion). Muta
- * `colores.degradado` in-place y llama `refrescarPreview()`/`marcarTocado()`
- * en cada cambio. `colores.degradado` ya debe venir inicializado (ver
- * abrirPanelDeEdicion).
+ * v1.15.5 (pedido: "el botón de degradado ponlo después de los colores,
+ * cuando se active se pone el color degradado justo donde queda un campo
+ * adicional"): la sección ahora se parte en 3 piezas en vez de 2 —
+ *   1. toggleElemento: el switch, va en la columna 2 después de los demás
+ *      campos de color (Detalles, Luz).
+ *   2. colorInlineElemento: el color libre del degradado, con el MISMO
+ *      aspecto que cualquier otro campo (.ppz-grupo, swatch redondo +
+ *      input nativo) — vive también en la columna 2, PEGADO justo debajo
+ *      del toggle, y solo aparece cuando degradado.activo=true (se ve
+ *      literalmente como "un campo adicional" que se agrega a la columna,
+ *      en vez de un bloque aparte).
+ *   3. contenidoElemento: ángulo (rueda) + intensidad (barra vertical) —
+ *      estos sí necesitan más espacio del que da una columna angosta, así
+ *      que se quedan a ancho completo debajo de las 2 columnas (ver
+ *      abrirPanelDeEdicion), plegándose igual que antes.
+ * Muta `colores.degradado` in-place y llama `refrescarPreview()`/
+ * `marcarTocado()` en cada cambio. `colores.degradado` ya debe venir
+ * inicializado (ver abrirPanelDeEdicion).
  */
 function crearSeccionDegradado({ colores, refrescarPreview, marcarTocado }) {
   const wrapToggle = document.createElement("div");
@@ -230,12 +252,14 @@ function crearSeccionDegradado({ colores, refrescarPreview, marcarTocado }) {
     rueda.pintarColorAguja(colores.degradado.color);
   };
 
-  // ---- Color libre del degradado (izquierda) ----
-  const colColor = document.createElement("div");
-  colColor.className = "ppz-degradado-color-col";
+  // ---- Color libre del degradado — ahora es un campo suelto, mismo
+  // aspecto que Fondo/Tarjeta/Borde/Detalles/Luz (ppz-grupo completo, no
+  // una "subsección" dentro del bloque de abajo) ----
+  const campoColor = document.createElement("div");
+  campoColor.className = "ppz-grupo ppz-degradado-color-inline";
   const etiquetaColor = document.createElement("label");
-  etiquetaColor.className = "ppz-grupo-label ppz-subetiqueta";
-  etiquetaColor.textContent = "Color";
+  etiquetaColor.className = "ppz-grupo-label";
+  etiquetaColor.textContent = "Color del degradado";
   const filaColor = document.createElement("div");
   filaColor.className = "ppz-fila-slider";
   const swatchColor = document.createElement("div");
@@ -254,11 +278,12 @@ function crearSeccionDegradado({ colores, refrescarPreview, marcarTocado }) {
   });
   filaColor.appendChild(swatchColor);
   filaColor.appendChild(inputColor);
-  colColor.appendChild(etiquetaColor);
-  colColor.appendChild(filaColor);
+  campoColor.appendChild(etiquetaColor);
+  campoColor.appendChild(filaColor);
 
   // ---- Ángulo (rueda circular) + Intensidad (barra vertical), agrupadas
-  // juntas a la derecha, como pediste ----
+  // juntas — se quedan en el bloque de ancho completo, no entran cómodas
+  // en una columna angosta ----
   const controlesDerecha = document.createElement("div");
   controlesDerecha.className = "ppz-degradado-controles-derecha";
 
@@ -294,16 +319,17 @@ function crearSeccionDegradado({ colores, refrescarPreview, marcarTocado }) {
   controlesDerecha.appendChild(rueda.elemento);
   controlesDerecha.appendChild(colIntensidad);
 
-  const filaPrincipal = document.createElement("div");
-  filaPrincipal.className = "ppz-degradado-fila-principal";
-  filaPrincipal.appendChild(colColor);
-  filaPrincipal.appendChild(controlesDerecha);
-
-  contenido.appendChild(filaPrincipal);
+  contenido.appendChild(controlesDerecha);
   actualizarFondosVivos();
 
   const sincronizarVisibilidad = () => {
+    // BUG FIX v1.15.5: antes solo se ocultaba/mostraba `contenido` — el
+    // campo de color, al vivir DENTRO de `contenido`, en teoría seguía la
+    // misma regla. Ahora que el color es un elemento hermano aparte
+    // (campoColor), hay que sincronizar los 2 explícitamente para que no
+    // quede uno mostrado y el otro no.
     contenido.classList.toggle("oculto", !colores.degradado.activo);
+    campoColor.classList.toggle("oculto", !colores.degradado.activo);
   };
   sincronizarVisibilidad();
 
@@ -319,7 +345,7 @@ function crearSeccionDegradado({ colores, refrescarPreview, marcarTocado }) {
   filaToggle.appendChild(toggle);
   wrapToggle.appendChild(filaToggle);
 
-  return { toggleElemento: wrapToggle, contenidoElemento: contenido, actualizarFondosVivos };
+  return { toggleElemento: wrapToggle, colorInlineElemento: campoColor, contenidoElemento: contenido, actualizarFondosVivos };
 }
 
 /* ------------------------------ Vista previa en vivo ------------------------------ */
@@ -573,6 +599,7 @@ function abrirPanelDeEdicion(overlay, panel, paletaBase, alGuardar) {
   columna2.appendChild(gAcento.elemento);
   columna2.appendChild(gLuz.elemento);
   columna2.appendChild(seccionDegradado.toggleElemento);
+  columna2.appendChild(seccionDegradado.colorInlineElemento);
   columnas.appendChild(columna1);
   columnas.appendChild(columna2);
 
