@@ -6,7 +6,7 @@
    falta ninguna marca nueva en el HTML para que esto funcione.
    ========================================================================= */
 
-import { PALETAS_DISPONIBLES } from "../core/schema.js";
+import { PALETAS_DISPONIBLES, sellarTimestamp } from "../core/schema.js";
 import { actualizarIndicadorSync, marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import {
@@ -20,52 +20,20 @@ import {
   hslAHex,
 } from "./tema.js";
 
-/* ------------------------- Estado interno del panel ------------------------- */
-
-// Saturación de cada campo: se toma UNA vez del color inicial y se mantiene
-// fija mientras el usuario mueve los sliders — así el control secundario
-// (claridad) queda simple, tal como pide el prompt, sin agregar un tercer
-// slider de saturación por campo.
-function crearCampoColor(hexInicial) {
-  const { h, s, l } = hexAHsl(hexInicial);
-  return { h, s, l };
-}
-
 /* ------------------------------ Construcción de UI ------------------------------ */
 
-function crearBarraArcoiris({ valor, onCambio }) {
-  const input = document.createElement("input");
-  input.type = "range";
-  input.min = "0";
-  input.max = "360";
-  input.step = "1";
-  input.value = String(Math.round(valor));
-  input.className = "ppz-slider ppz-slider-hue";
-  input.addEventListener("input", () => onCambio(Number(input.value)));
-  return input;
-}
-
-function crearBarraClaridad({ valor, hue, sat, onCambio }) {
-  const input = document.createElement("input");
-  input.type = "range";
-  input.min = "5";
-  input.max = "95";
-  input.step = "1";
-  input.value = String(Math.round(valor));
-  input.className = "ppz-slider ppz-slider-luz";
-  input.style.setProperty("--ppz-hue-actual", `hsl(${hue}, ${sat}%, 50%)`);
-  input.addEventListener("input", () => onCambio(Number(input.value)));
-  return input;
-}
-
 /**
- * Crea un grupo completo (etiqueta + barra de tono + barra de claridad) para
- * un campo de color. `onCambio(hex)` se dispara cada vez que el usuario
- * mueve cualquiera de las 2 barras, con el color resultante ya en hex.
+ * BUG FIX v1.15.3 (bug 4): antes cada campo eran 2 sliders (tono +
+ * claridad) con la saturación fijada UNA vez al abrir el editor — eso
+ * dejaba colores enteros fuera de alcance (blancos/negros/grises puros,
+ * o cualquier saturación distinta a la del color inicial). Se reemplaza
+ * por un selector de color nativo (mismo control que ya se usa para el
+ * degradado): acceso a cualquier color, sin restricciones ni superficie
+ * nueva que mantener.
+ *
+ * `onCambio(hex)` se dispara con el color resultante ya en hex.
  */
 function crearGrupoColor({ etiqueta, hexInicial, onCambio }) {
-  const campo = crearCampoColor(hexInicial);
-
   const wrap = document.createElement("div");
   wrap.className = "ppz-grupo";
 
@@ -74,45 +42,27 @@ function crearGrupoColor({ etiqueta, hexInicial, onCambio }) {
   label.textContent = etiqueta;
   wrap.appendChild(label);
 
-  const filaHue = document.createElement("div");
-  filaHue.className = "ppz-fila-slider";
+  const fila = document.createElement("div");
+  fila.className = "ppz-fila-slider";
 
   const swatch = document.createElement("div");
   swatch.className = "ppz-swatch-vivo";
-  const actualizarSwatch = () => {
-    swatch.style.background = hslAHex(campo.h, campo.s, campo.l);
-  };
-  actualizarSwatch();
+  swatch.style.background = hexInicial;
 
-  const emitir = () => onCambio(hslAHex(campo.h, campo.s, campo.l));
-
-  const sliderHue = crearBarraArcoiris({
-    valor: campo.h,
-    onCambio: (h) => {
-      campo.h = h;
-      actualizarSwatch();
-      sliderLuz.style.setProperty("--ppz-hue-actual", `hsl(${campo.h}, ${campo.s}%, 50%)`);
-      emitir();
-    },
+  const input = document.createElement("input");
+  input.type = "color";
+  input.className = "ppz-color-nativo";
+  input.value = colorAHex(hexInicial);
+  input.addEventListener("input", () => {
+    swatch.style.background = input.value;
+    onCambio(input.value);
   });
 
-  filaHue.appendChild(swatch);
-  filaHue.appendChild(sliderHue);
-  wrap.appendChild(filaHue);
+  fila.appendChild(swatch);
+  fila.appendChild(input);
+  wrap.appendChild(fila);
 
-  const sliderLuz = crearBarraClaridad({
-    valor: campo.l,
-    hue: campo.h,
-    sat: campo.s,
-    onCambio: (l) => {
-      campo.l = l;
-      actualizarSwatch();
-      emitir();
-    },
-  });
-  wrap.appendChild(sliderLuz);
-
-  return { elemento: wrap, campo };
+  return { elemento: wrap };
 }
 
 /* ------------------------------ v1.15 (Parte 2): Degradado configurable ------------------------------ */
@@ -348,21 +298,46 @@ function crearSeccionDegradado({ colores, refrescarPreview }) {
 
 /* ------------------------------ Vista previa en vivo ------------------------------ */
 
+/**
+ * BUG FIX v1.15.3 (bug 3): la vista previa anterior era un solo
+ * .glass-card — mostraba nada más el color de fondo de la tarjeta, sin
+ * distinguirse de nada. Ahora son 2 capas, igual que en la app real: un
+ * "lienzo" (representa el <body>, con el mismo glow radial de fondo) y una
+ * tarjeta flotando encima (representa .glass-card) — así se ve de un
+ * vistazo cuál es el fondo, cuál la tarjeta, el borde, los 3 tonos de
+ * texto, el panel interno, el botón con el degradado y hasta el color de
+ * alerta, todo en la misma vista previa.
+ */
 function crearVistaPrevia() {
   const contenedor = document.createElement("div");
-  contenedor.className = "ppz-preview glass-card";
+  contenedor.className = "ppz-preview";
   contenedor.innerHTML = `
     <h3 class="ppz-preview-titulo">Vista previa</h3>
     <p class="ppz-preview-texto">Así se va a ver tu paleta en toda la app.</p>
-    <button type="button" class="btn btn-primary ppz-preview-btn">Botón de ejemplo</button>
+    <div class="ppz-preview-lienzo">
+      <div class="ppz-preview-card glass-card">
+        <h4 class="ppz-preview-card-titulo">Tarjeta de ejemplo</h4>
+        <p class="ppz-preview-card-texto">Texto secundario, para leer con calma.</p>
+        <div class="ppz-preview-panel">Panel interno — texto muted</div>
+        <div class="ppz-preview-fila">
+          <button type="button" class="btn btn-primary ppz-preview-btn">Botón</button>
+          <span class="ppz-preview-badge">Insignia</span>
+        </div>
+        <p class="ppz-preview-danger">Ejemplo de alerta</p>
+      </div>
+    </div>
   `;
   return contenedor;
 }
 
 function pintarVistaPrevia(contenedor, colores) {
+  const lienzo = contenedor.querySelector(".ppz-preview-lienzo");
   const derivadas = calcularVariablesDerivadas(colores);
+  // Las variables se setean en el lienzo (representa :root/body) y bajan
+  // por herencia de custom properties a la tarjeta de adentro — mismo
+  // mecanismo que usa la app real entre <html> y cualquier .glass-card.
   Object.entries(derivadas).forEach(([variable, valor]) => {
-    contenedor.style.setProperty(variable, valor);
+    lienzo.style.setProperty(variable, valor);
   });
 }
 
@@ -412,11 +387,18 @@ function construirOverlay() {
   panel.className = "ppz-panel glass-card";
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
+  // BUG FIX v1.15.3 (Parte 1): sin esto, arrastrar la rueda de ángulo o
+  // simplemente scrollear el panel en móvil dejaba pasar el gesto al body
+  // de fondo — al llegar arriba del todo, el navegador lo interpretaba
+  // como "pull to refresh" y recargaba la página a mitad de la edición.
+  // Mismo mecanismo que ya usa el drawer del sidebar (componentes.js).
+  document.body.classList.add("scroll-bloqueado");
   return { overlay, panel };
 }
 
 function cerrarOverlay(overlay) {
   overlay.remove();
+  document.body.classList.remove("scroll-bloqueado");
 }
 
 /** Restaura en pantalla la paleta que el usuario tenía guardada antes de
@@ -527,6 +509,12 @@ function abrirPanelDeEdicion(overlay, panel, paletaBase, alGuardar) {
     };
     estado.datos.configuracion.paleta = "personalizada";
     aplicarPaleta("personalizada", estado.datos.configuracion.modo, colores);
+    // BUG FIX v1.15.3 (Parte 1): faltaba sellarTimestamp() acá — sin sellar,
+    // este cambio queda con _actualizadoEn desactualizado y el próximo merge
+    // de sync puede pisarlo con lo que traiga Drive, dando la sensación de
+    // "la paleta no se queda activa, vuelve a blanco". Mismo patrón que ya
+    // usa config-ajustes.js en cada cambio de configuracion.
+    sellarTimestamp(estado.datos.configuracion);
     marcarCambioPendiente();
     actualizarIndicadorSync();
     cerrarOverlay(overlay);

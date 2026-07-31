@@ -224,18 +224,22 @@ function esColorClaro(color) {
    ========================================================================= */
 
 /**
- * v1.15 (Parte 2): dado un degradado configurable ({activo, color,
- * intensidad, angulo}), genera las 3 variantes que la app ya espera
- * (--gradient-accent / -alt / -alt2 — ver botón primario, switch y
- * scrollbar en design-system.css), siguiendo el mismo patrón que
- * "azucarado" ya usa en el CSS: 3 gradientes relacionados pero con
- * distinta rotación/orden, para que haya variedad de un elemento a otro
- * sin pedirle al usuario más controles que los 3 que ya tiene (color,
- * intensidad = dónde cae el stop del medio, ángulo = dirección).
+ * v1.15 (Parte 2) — reescrito en v1.15.3: dado un degradado configurable
+ * ({activo, color, intensidad, angulo}), genera las 3 variantes que la app
+ * ya espera (--gradient-accent / -alt / -alt2).
  *
- * Si `activo` es false (default de toda paleta clonada/nueva), devuelve
- * SOLO --gradient-accent con el mismo degradado de 2 colores a 90° que ya
- * usan las 13 paletas fijas hoy — cero cambio de comportamiento.
+ * BUG FIX v1.15.3: la primera versión insertaba `color` como un 3er stop
+ * fijo en medio de accent1/accent2 (`accent1 0%, color X%, accent2 100%`).
+ * Con colores muy distintos entre sí eso se ve como una raya/pico en el
+ * centro — y como los extremos seguían siendo accent1/accent2 intactos, el
+ * degradado "de siempre" (a veces bien pálido, ej. paletas claras) seguía
+ * asomando en una punta sin importar qué color se eligiera.
+ *
+ * Ahora SIEMPRE hay solo 2 stops (nunca un pico interno): `color` se
+ * MEZCLA hacia dentro de cada extremo según `intensidad` — 0% = extremo
+ * original puro (como si el degradado no existiera), 100% = color elegido
+ * puro. Así el color del usuario realmente desplaza al gradiente
+ * original en vez de convivir con él.
  */
 function calcularGradientesAcento({ accent1, accent2, degradado }) {
   if (!degradado || !degradado.activo || !degradado.color) {
@@ -243,16 +247,16 @@ function calcularGradientesAcento({ accent1, accent2, degradado }) {
   }
 
   const angulo = ((Number(degradado.angulo) || 0) % 360 + 360) % 360;
-  const intensidad = Math.max(0, Math.min(100, Number(degradado.intensidad)));
+  const factor = Math.max(0, Math.min(100, Number(degradado.intensidad))) / 100;
   const color = degradado.color;
 
-  const gradienteConStop = (grados, stopMedio, orden) =>
-    `linear-gradient(${((grados % 360) + 360) % 360}deg, ${orden[0]} 0%, ${color} ${stopMedio}%, ${orden[1]} 100%)`;
+  const anguloAlt = (angulo + 30) % 360;
+  const anguloAlt2 = ((angulo - 30) % 360 + 360) % 360;
 
   return {
-    "--gradient-accent": gradienteConStop(angulo, intensidad, [accent1, accent2]),
-    "--gradient-accent-alt": gradienteConStop(angulo + 25, Math.max(0, intensidad - 15), [color, accent1]),
-    "--gradient-accent-alt2": gradienteConStop(angulo - 25, Math.min(100, intensidad + 15), [accent2, accent1]),
+    "--gradient-accent": `linear-gradient(${angulo}deg, ${accent1}, ${mezclarHex(accent2, color, factor)})`,
+    "--gradient-accent-alt": `linear-gradient(${anguloAlt}deg, ${mezclarHex(accent1, color, factor)}, ${accent2})`,
+    "--gradient-accent-alt2": `linear-gradient(${anguloAlt2}deg, ${accent2}, ${mezclarHex(accent1, color, factor)})`,
   };
 }
 
