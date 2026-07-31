@@ -122,6 +122,11 @@ function pintarFondoIntensidad(input, { accent1, accent2, color }) {
   // thumb al moverse hacia arriba.
   const neutro = mezclarHex(accent1, accent2, 0.5);
   input.style.background = `linear-gradient(to top, ${neutro}, ${color})`;
+  // Mismo mecanismo que pintarColorAguja en la rueda: el thumb del slider
+  // se tiñe con el color elegido del degradado, para que ambos controles
+  // se sientan parte de un mismo lenguaje visual en vez de un slider
+  // genérico del navegador.
+  input.style.setProperty("--ppz-intensidad-thumb", color);
 }
 
 /**
@@ -234,8 +239,8 @@ function crearRuedaAngulo({ valorInicial, onCambio }) {
  * inicializado (ver abrirPanelDeEdicion).
  */
 function crearSeccionDegradado({ colores, refrescarPreview, marcarTocado }) {
-  const bloque = document.createElement("div");
-  bloque.className = "ppz-degradado-bloque";
+  const bloqueInferior = document.createElement("div");
+  bloqueInferior.className = "ppz-degradado-bloque";
 
   const filaToggle = document.createElement("div");
   filaToggle.className = "ppz-degradado-toggle-fila";
@@ -256,9 +261,9 @@ function crearSeccionDegradado({ colores, refrescarPreview, marcarTocado }) {
     rueda.pintarColorAguja(colores.degradado.color);
   };
 
-  // ---- Color libre del degradado — mismo aspecto que Fondo/Tarjeta/
-  // Borde/Detalles/Luz (ppz-grupo), ahora DENTRO del cuerpo plegable junto
-  // con la rueda y la intensidad — un solo bloque que se pliega entero. ----
+  // ---- Color libre del degradado — pedido: vive DENTRO de la columna 2
+  // (mismo aspecto que Detalles/Luz, .ppz-grupo), no en el bloque de abajo.
+  // El toggle y la rueda+intensidad sí se quedan abajo. ----
   const campoColor = document.createElement("div");
   campoColor.className = "ppz-grupo ppz-degradado-color-inline";
   const etiquetaColor = document.createElement("label");
@@ -323,14 +328,18 @@ function crearSeccionDegradado({ colores, refrescarPreview, marcarTocado }) {
   controlesDerecha.appendChild(rueda.elemento);
   controlesDerecha.appendChild(colIntensidad);
 
-  // Un solo cuerpo plegable: color + rueda + intensidad, todos adentro.
-  cuerpo.appendChild(campoColor);
+  // Cuerpo plegable de abajo: solo rueda + intensidad (el color ya no vive
+  // acá, ver campoColor arriba).
   cuerpo.appendChild(controlesDerecha);
   actualizarFondosVivos();
 
-  // Única bandera de visibilidad — ya no hay 2 elementos que sincronizar.
+  // Sigue siendo UNA sola función la que decide visibilidad — toca 2
+  // elementos (cuerpo abajo + campoColor en la columna 2), pero desde el
+  // mismo lugar y en el mismo tick, así nunca quedan desincronizados.
   const sincronizarVisibilidad = () => {
-    cuerpo.classList.toggle("oculto", !colores.degradado.activo);
+    const oculto = !colores.degradado.activo;
+    cuerpo.classList.toggle("oculto", oculto);
+    campoColor.classList.toggle("oculto", oculto);
   };
   sincronizarVisibilidad();
 
@@ -344,10 +353,10 @@ function crearSeccionDegradado({ colores, refrescarPreview, marcarTocado }) {
     },
   });
   filaToggle.appendChild(toggle);
-  bloque.appendChild(filaToggle);
-  bloque.appendChild(cuerpo);
+  bloqueInferior.appendChild(filaToggle);
+  bloqueInferior.appendChild(cuerpo);
 
-  return { elemento: bloque, actualizarFondosVivos };
+  return { colorElemento: campoColor, bloqueInferior, actualizarFondosVivos };
 }
 
 /* ------------------------------ Vista previa en vivo ------------------------------ */
@@ -653,14 +662,14 @@ function abrirPanelDeEdicion(overlay, panel, paletaBase, alGuardar, coloresExist
   columna1.appendChild(gBorde.elemento);
   columna2.appendChild(gAcento.elemento);
   columna2.appendChild(gLuz.elemento);
+  columna2.appendChild(seccionDegradado.colorElemento);
   columnas.appendChild(columna1);
   columnas.appendChild(columna2);
 
   panel.appendChild(columnas);
-  // Pedido: el bloque de Degradado va DEBAJO de las 2 columnas completas
-  // (debajo de Borde) y justo arriba de la vista previa — no dentro de la
-  // columna 2 — así el nuevo color aparece en el espacio que queda libre.
-  panel.appendChild(seccionDegradado.elemento);
+  // Toggle + rueda + intensidad van debajo de las 2 columnas, arriba de la
+  // vista previa. El color del degradado (arriba) va DENTRO de la columna 2.
+  panel.appendChild(seccionDegradado.bloqueInferior);
   panel.appendChild(vistaPrevia);
   refrescarPreview();
 
