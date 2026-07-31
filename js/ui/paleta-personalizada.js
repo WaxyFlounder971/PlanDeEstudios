@@ -406,6 +406,25 @@ function crearSwatchBase(paleta, onClick) {
   return sw;
 }
 
+/**
+ * Botón "Editar actual" — solo se crea si ya existe una paleta personalizada
+ * guardada (ver abrirPasoElegirBase). Pedido explícito del usuario: al
+ * entrar a este flujo, la opción de retomar la paleta que ya tenía debe
+ * convivir en el MISMO paso 1 que las paletas base, no reemplazarlo ni
+ * llevar a una pantalla aparte.
+ */
+function crearSwatchEditarActual(paletaPersonalizada, onClick) {
+  const sw = document.createElement("div");
+  sw.className = "palette-swatch ppz-swatch-base ppz-swatch-editar-actual";
+  const colores = paletaPersonalizada.colores;
+  sw.style.background = colores.degradado && colores.degradado.activo
+    ? `linear-gradient(135deg, ${colores.accent1}, ${colores.degradado.color})`
+    : `linear-gradient(135deg, ${colores.accent1}, ${colores.accent2})`;
+  sw.textContent = "✏️ Editar actual";
+  sw.addEventListener("click", () => onClick());
+  return sw;
+}
+
 /** Lista completa de variables derivadas que cualquier paleta (fija o
  *  personalizada) necesita para verse completa. Se usa para snapshotear la
  *  paleta base tal cual (BUG FIX v1.15.4) y para limpiar overrides inline. */
@@ -494,35 +513,63 @@ function restaurarPaletaGuardada() {
   aplicarPaleta(cfg.paleta, cfg.modo, cfg.paleta_personalizada ? cfg.paleta_personalizada.colores : undefined);
 }
 
-function abrirPanelDeEdicion(overlay, panel, paletaBase, alGuardar) {
+/**
+ * `coloresExistentes` (nuevo): cuando viene con datos (flujo "Editar
+ * actual"), el panel arranca con ESOS colores en vez de leer la paleta
+ * base desde el CSS — así lo que el usuario ya tenía nunca se borra ni se
+ * reemplaza por la paleta de referencia. En ese caso `tocado` arranca en
+ * `true` de entrada: si el usuario abre para editar y le da "Guardar" sin
+ * tocar nada, debe conservar exactamente lo que ya tenía (nunca debe caer
+ * en la rama de "no se tocó nada, usar la paleta fija tal cual" — eso
+ * borraría justo lo que se quiere conservar). `paletaBase` sigue guardándose
+ * como referencia informativa ("basada en"), no como fuente de los colores.
+ */
+function abrirPanelDeEdicion(overlay, panel, paletaBase, alGuardar, coloresExistentes) {
   panel.innerHTML = "";
+
+  const editandoExistente = !!coloresExistentes;
 
   const titulo = document.createElement("h2");
   titulo.className = "ppz-titulo";
-  titulo.textContent = "Crear mi paleta";
+  titulo.textContent = editandoExistente ? "Editar mi paleta" : "Crear mi paleta";
   panel.appendChild(titulo);
 
   const subtitulo = document.createElement("p");
   subtitulo.className = "ppz-subtitulo";
-  subtitulo.textContent = `Basada en "${paletaBase}" — ajustá lo que quieras, los colores de texto se calculan solos.`;
+  subtitulo.textContent = editandoExistente
+    ? "Estás editando tu paleta guardada — los cambios se aplican sobre lo que ya tenías."
+    : `Basada en "${paletaBase}" — ajustá lo que quieras, los colores de texto se calculan solos.`;
   panel.appendChild(subtitulo);
 
-  const base = leerColoresBaseDesdeCSS();
-  const colorLuzInicial = base.accent2; // "si no existe todavía como propia, sepárala de --accent-2"
+  const base = editandoExistente ? null : leerColoresBaseDesdeCSS();
+  const colorLuzInicial = editandoExistente ? coloresExistentes.luz : base.accent2; // "si no existe todavía como propia, sepárala de --accent-2"
 
   // BUG FIX v1.15.4: `colores` guarda solo los 5 campos editables + luz +
   // degradado — NUNCA se le mezcla `base.derivadosBase` (eso se consulta
   // aparte, ver `tocado` más abajo), para no guardar basura en lo que se
   // persiste al final.
-  const colores = {
-    fondoCanvas: base.fondoCanvas,
-    fondoCard: base.fondoCard,
-    borde: base.borde,
-    accent1: base.accent1,
-    accent2: base.accent2,
-    luz: colorLuzInicial,
-    degradado: { activo: false, color: base.accent2, intensidad: 50, angulo: 90 },
-  };
+  // Editar actual: se clona coloresExistentes (incluido degradado) en vez
+  // de leer la paleta base — así lo guardado antes queda intacto como
+  // punto de partida real, no una aproximación desde CSS.
+  const colores = editandoExistente
+    ? {
+        fondoCanvas: coloresExistentes.fondoCanvas,
+        fondoCard: coloresExistentes.fondoCard,
+        borde: coloresExistentes.borde,
+        accent1: coloresExistentes.accent1,
+        accent2: coloresExistentes.accent2,
+        luz: colorLuzInicial,
+        degradado: { ...coloresExistentes.degradado },
+      }
+    : {
+        fondoCanvas: base.fondoCanvas,
+        fondoCard: base.fondoCard,
+        borde: base.borde,
+        accent1: base.accent1,
+        accent2: base.accent2,
+        luz: colorLuzInicial,
+        degradado: { activo: false, color: base.accent2, intensidad: 50, angulo: 90 },
+      };
 
   // BUG FIX v1.15.4 (bug crítico — "se aplica 1 segundo y vuelve a blanco"):
   // cada paleta fija afina a mano text-primary, gradient-accent, el panel,
@@ -532,7 +579,13 @@ function abrirPanelDeEdicion(overlay, panel, paletaBase, alGuardar) {
   // control, `tocado` pasa a true y ahí sí entra la fórmula de siempre
   // (calcularVariablesDerivadas), que es una aproximación esperada y
   // aceptada una vez que el usuario está genuinamente personalizando.
-  let tocado = false;
+  //
+  // Editar actual: arranca en `true` directamente — no hay "paleta fija de
+  // referencia" de la cual partir en este flujo, así que la rama de
+  // "no tocado" (que reemplazaría todo por una paleta base) nunca debe
+  // dispararse aquí; lo que ya existía se guarda tal cual si no se cambia
+  // nada.
+  let tocado = editandoExistente;
   const marcarTocado = () => { tocado = true; };
 
   const vistaPrevia = crearVistaPrevia();
@@ -557,17 +610,17 @@ function abrirPanelDeEdicion(overlay, panel, paletaBase, alGuardar) {
 
   const gFondo = crearGrupoColor({
     etiqueta: "Fondo",
-    hexInicial: base.fondoCanvas,
+    hexInicial: colores.fondoCanvas,
     onCambio: (hex) => { colores.fondoCanvas = hex; marcarTocado(); refrescarPreview(); },
   });
   const gTarjetas = crearGrupoColor({
     etiqueta: "Tarjeta",
-    hexInicial: base.fondoCard,
+    hexInicial: colores.fondoCard,
     onCambio: (hex) => { colores.fondoCard = hex; marcarTocado(); refrescarPreview(); },
   });
   const gBorde = crearGrupoColor({
     etiqueta: "Borde",
-    hexInicial: base.borde,
+    hexInicial: colores.borde,
     onCambio: (hex) => { colores.borde = hex; marcarTocado(); refrescarPreview(); },
   });
   // Un solo selector de "acento" controla accent-1 y accent-2 (los 2 extremos
@@ -575,7 +628,7 @@ function abrirPanelDeEdicion(overlay, panel, paletaBase, alGuardar) {
   // saturado, para que el degradado siga viéndose vivo con un solo control.
   const gAcento = crearGrupoColor({
     etiqueta: "Detalles",
-    hexInicial: base.accent1,
+    hexInicial: colores.accent1,
     onCambio: (hex) => {
       colores.accent1 = hex;
       const { h, s, l } = hexAHsl(hex);
@@ -629,7 +682,8 @@ function abrirPanelDeEdicion(overlay, panel, paletaBase, alGuardar) {
       // BUG FIX v1.15.4: no se tocó nada — usar la paleta fija real tal
       // cual (100% fiel por definición, sale directo del CSS) en vez de
       // fabricar una "personalizada" aproximada que termina viéndose
-      // distinta sin ninguna razón para el usuario.
+      // distinta sin ninguna razón para el usuario. (Esta rama nunca se
+      // alcanza en el flujo "Editar actual", ver `tocado` más arriba.)
       estado.datos.configuracion.paleta = paletaBase;
       aplicarPaleta(paletaBase, estado.datos.configuracion.modo);
     } else {
@@ -671,6 +725,26 @@ function abrirPasoElegirBase(overlay, panel, alGuardar) {
 
   const grid = document.createElement("div");
   grid.className = "ppz-grid-base";
+
+  // Pedido del usuario: si ya existe una paleta personalizada guardada, se
+  // agrega "Editar actual" DENTRO de este mismo paso 1 (mismo grid que las
+  // paletas base) — nunca reemplaza esta pantalla ni lleva a una aparte.
+  // Abre el editor directo con los colores YA GUARDADOS, sin pasar por
+  // leerColoresBaseDesdeCSS ni por ninguna paleta base — así lo que el
+  // usuario ya tenía no se toca hasta que él mismo cambie algo.
+  const paletaPersonalizadaGuardada = estado.datos.configuracion.paleta_personalizada;
+  if (paletaPersonalizadaGuardada) {
+    grid.appendChild(crearSwatchEditarActual(paletaPersonalizadaGuardada, () => {
+      abrirPanelDeEdicion(
+        overlay,
+        panel,
+        paletaPersonalizadaGuardada.basadaEn,
+        alGuardar,
+        paletaPersonalizadaGuardada.colores
+      );
+    }));
+  }
+
   PALETAS_DISPONIBLES.forEach((paleta) => {
     grid.appendChild(crearSwatchBase(paleta, (paletaElegida) => {
       aplicarPaleta(paletaElegida, estado.datos.configuracion.modo);
