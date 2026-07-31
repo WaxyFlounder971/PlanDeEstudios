@@ -108,7 +108,10 @@ function crearBarraIntensidad({ valor, onCambio }) {
 }
 
 function pintarFondoIntensidad(input, { accent1, accent2, color }) {
-  input.style.background = `linear-gradient(to right, ${accent1}, ${color}, ${accent2})`;
+  // BUG FIX v1.15.4: la barra pasó de horizontal a vertical (pedido del
+  // usuario) — el degradado de fondo tenía que seguir la misma dirección,
+  // si no quedaba "de costado" respecto al thumb que sí se mueve vertical.
+  input.style.background = `linear-gradient(to top, ${accent1}, ${color}, ${accent2})`;
 }
 
 /**
@@ -198,20 +201,21 @@ function crearRuedaAngulo({ valorInicial, onCambio }) {
 }
 
 /**
- * Sección completa del degradado: toggle + (si está activo) color libre +
- * intensidad + rueda de ángulo. Muta `colores.degradado` in-place y llama
- * `refrescarPreview()` en cada cambio — mismo patrón que crearGrupoColor.
- * `colores.degradado` ya debe venir inicializado (ver abrirPanelDeEdicion).
+ * Sección completa del degradado: toggle (va en la grilla de 2 columnas)
+ * + contenido expandible (color libre + rueda de ángulo + intensidad
+ * vertical, a ancho completo — ver abrirPanelDeEdicion). Muta
+ * `colores.degradado` in-place y llama `refrescarPreview()`/`marcarTocado()`
+ * en cada cambio. `colores.degradado` ya debe venir inicializado (ver
+ * abrirPanelDeEdicion).
  */
-function crearSeccionDegradado({ colores, refrescarPreview }) {
-  const wrap = document.createElement("div");
-  wrap.className = "ppz-grupo ppz-degradado";
-
+function crearSeccionDegradado({ colores, refrescarPreview, marcarTocado }) {
+  const wrapToggle = document.createElement("div");
+  wrapToggle.className = "ppz-grupo";
   const filaToggle = document.createElement("div");
   filaToggle.className = "ppz-degradado-toggle-fila";
   const label = document.createElement("label");
   label.className = "ppz-grupo-label";
-  label.textContent = "¿Desea degradado?";
+  label.textContent = "Degradado";
   filaToggle.appendChild(label);
 
   const contenido = document.createElement("div");
@@ -226,7 +230,12 @@ function crearSeccionDegradado({ colores, refrescarPreview }) {
     rueda.pintarColorAguja(colores.degradado.color);
   };
 
-  // ---- Color libre del degradado ----
+  // ---- Color libre del degradado (izquierda) ----
+  const colColor = document.createElement("div");
+  colColor.className = "ppz-degradado-color-col";
+  const etiquetaColor = document.createElement("label");
+  etiquetaColor.className = "ppz-grupo-label ppz-subetiqueta";
+  etiquetaColor.textContent = "Color";
   const filaColor = document.createElement("div");
   filaColor.className = "ppz-fila-slider";
   const swatchColor = document.createElement("div");
@@ -240,12 +249,30 @@ function crearSeccionDegradado({ colores, refrescarPreview }) {
     colores.degradado.color = inputColor.value;
     swatchColor.style.background = inputColor.value;
     actualizarFondosVivos();
+    marcarTocado();
     refrescarPreview();
   });
   filaColor.appendChild(swatchColor);
   filaColor.appendChild(inputColor);
+  colColor.appendChild(etiquetaColor);
+  colColor.appendChild(filaColor);
 
-  // ---- Intensidad (dónde cae el stop del color del medio) ----
+  // ---- Ángulo (rueda circular) + Intensidad (barra vertical), agrupadas
+  // juntas a la derecha, como pediste ----
+  const controlesDerecha = document.createElement("div");
+  controlesDerecha.className = "ppz-degradado-controles-derecha";
+
+  const rueda = crearRuedaAngulo({
+    valorInicial: colores.degradado.angulo,
+    onCambio: (v) => {
+      colores.degradado.angulo = v;
+      marcarTocado();
+      refrescarPreview();
+    },
+  });
+
+  const colIntensidad = document.createElement("div");
+  colIntensidad.className = "ppz-intensidad-vertical-wrap";
   const etiquetaIntensidad = document.createElement("label");
   etiquetaIntensidad.className = "ppz-grupo-label ppz-subetiqueta";
   etiquetaIntensidad.textContent = "Intensidad";
@@ -253,27 +280,26 @@ function crearSeccionDegradado({ colores, refrescarPreview }) {
     valor: colores.degradado.intensidad,
     onCambio: (v) => {
       colores.degradado.intensidad = v;
+      marcarTocado();
       refrescarPreview();
     },
   });
+  sliderIntensidad.classList.add("ppz-slider-vertical");
+  const pistaVertical = document.createElement("div");
+  pistaVertical.className = "ppz-intensidad-vertical-pista";
+  pistaVertical.appendChild(sliderIntensidad);
+  colIntensidad.appendChild(etiquetaIntensidad);
+  colIntensidad.appendChild(pistaVertical);
 
-  // ---- Ángulo (dirección, rueda circular) ----
-  const etiquetaAngulo = document.createElement("label");
-  etiquetaAngulo.className = "ppz-grupo-label ppz-subetiqueta";
-  etiquetaAngulo.textContent = "Dirección";
-  const rueda = crearRuedaAngulo({
-    valorInicial: colores.degradado.angulo,
-    onCambio: (v) => {
-      colores.degradado.angulo = v;
-      refrescarPreview();
-    },
-  });
+  controlesDerecha.appendChild(rueda.elemento);
+  controlesDerecha.appendChild(colIntensidad);
 
-  contenido.appendChild(filaColor);
-  contenido.appendChild(etiquetaIntensidad);
-  contenido.appendChild(sliderIntensidad);
-  contenido.appendChild(etiquetaAngulo);
-  contenido.appendChild(rueda.elemento);
+  const filaPrincipal = document.createElement("div");
+  filaPrincipal.className = "ppz-degradado-fila-principal";
+  filaPrincipal.appendChild(colColor);
+  filaPrincipal.appendChild(controlesDerecha);
+
+  contenido.appendChild(filaPrincipal);
   actualizarFondosVivos();
 
   const sincronizarVisibilidad = () => {
@@ -286,14 +312,14 @@ function crearSeccionDegradado({ colores, refrescarPreview }) {
     onCambio: (activo) => {
       colores.degradado.activo = activo;
       sincronizarVisibilidad();
+      marcarTocado();
       refrescarPreview();
     },
   });
   filaToggle.appendChild(toggle);
+  wrapToggle.appendChild(filaToggle);
 
-  wrap.appendChild(filaToggle);
-  wrap.appendChild(contenido);
-  return { elemento: wrap, actualizarFondosVivos };
+  return { toggleElemento: wrapToggle, contenidoElemento: contenido, actualizarFondosVivos };
 }
 
 /* ------------------------------ Vista previa en vivo ------------------------------ */
@@ -354,16 +380,45 @@ function crearSwatchBase(paleta, onClick) {
   return sw;
 }
 
+/** Lista completa de variables derivadas que cualquier paleta (fija o
+ *  personalizada) necesita para verse completa. Se usa para snapshotear la
+ *  paleta base tal cual (BUG FIX v1.15.4) y para limpiar overrides inline. */
+const VARIABLES_DERIVADAS = [
+  "--bg-canvas", "--bg-card", "--bg-panel", "--border-glass",
+  "--text-primary", "--text-secondary", "--text-muted",
+  "--accent-1", "--accent-2",
+  "--gradient-accent", "--gradient-accent-alt", "--gradient-accent-alt2",
+  "--on-accent", "--accent-glow-1", "--accent-glow-2",
+  "--accent-1-10", "--accent-1-20", "--color-danger",
+];
+
 /**
  * Lee los valores REALES ya aplicados en :root para una paleta (los toma tal
  * cual están en design-system.css vía getComputedStyle) — así el punto de
  * partida de los 5 selectores siempre es fiel al CSS actual, sin duplicar la
  * tabla de colores acá en JS.
+ *
+ * BUG FIX v1.15.4: cada paleta fija afina a mano --text-primary, --gradient-
+ * accent(-alt/-alt2), --bg-panel, los glow, etc. — NO son una fórmula sobre
+ * accent1/accent2 (ej. azucarado: accent-1:#C599E8 pero gradient-accent usa
+ * #F5A9D0/#B8A6F0, colores completamente distintos). La fórmula genérica de
+ * calcularVariablesDerivadas() es una BUENA APROXIMACIÓN una vez el usuario
+ * empieza a tocar colores, pero mientras no toque nada no hay razón para
+ * aproximar: acá se guarda el snapshot COMPLETO y literal (`derivadosBase`)
+ * para poder reproducir la paleta base sin un solo píxel de diferencia
+ * hasta que el usuario decida cambiar algo.
  */
 function leerColoresBaseDesdeCSS() {
   const estilos = getComputedStyle(document.documentElement);
   const leer = (variable) => estilos.getPropertyValue(variable).trim();
   const fondoCanvas = colorAHex(leer("--bg-canvas"));
+
+  const derivadosBase = {};
+  VARIABLES_DERIVADAS.forEach((variable) => {
+    const valor = leer(variable);
+    if (valor) derivadosBase[variable] = valor;
+  });
+
   return {
     fondoCanvas,
     // FIX v1.15 (Parte 1): --bg-card y --border-glass son rgba() de baja
@@ -371,10 +426,14 @@ function leerColoresBaseDesdeCSS() {
     // colorAHex a secas tira el alfa y los vuelve sólidos/saturados —
     // compositarSobreFondo los pinta tal cual se ven de verdad sobre
     // --bg-canvas, así el punto de partida del editor es fiel al pixel.
+    // (Esto sigue haciendo falta para los 5 selectores editables en sí;
+    // derivadosBase de arriba guarda el rgba() ORIGINAL sin tocar, que es
+    // aún más fiel cuando no hay edición.)
     fondoCard: compositarSobreFondo(leer("--bg-card"), fondoCanvas),
     borde: compositarSobreFondo(leer("--border-glass"), fondoCanvas),
     accent1: colorAHex(leer("--accent-1")),
     accent2: colorAHex(leer("--accent-2")),
+    derivadosBase,
   };
 }
 
@@ -425,64 +484,100 @@ function abrirPanelDeEdicion(overlay, panel, paletaBase, alGuardar) {
   const base = leerColoresBaseDesdeCSS();
   const colorLuzInicial = base.accent2; // "si no existe todavía como propia, sepárala de --accent-2"
 
-  // v1.15 (Parte 2): siempre arranca desactivado ("blanco sólido", igual que
-  // hoy) — este panel siempre construye una paleta NUEVA a partir de una
-  // fija (nunca reabre una personalizada ya guardada), así que no hay un
-  // degradado previo que recuperar. El color por defecto (si el usuario
-  // activa el switch sin tocar nada más) es accent2, para que el degradado
-  // arranque coherente con el acento ya elegido.
+  // BUG FIX v1.15.4: `colores` guarda solo los 5 campos editables + luz +
+  // degradado — NUNCA se le mezcla `base.derivadosBase` (eso se consulta
+  // aparte, ver `tocado` más abajo), para no guardar basura en lo que se
+  // persiste al final.
   const colores = {
-    ...base,
+    fondoCanvas: base.fondoCanvas,
+    fondoCard: base.fondoCard,
+    borde: base.borde,
+    accent1: base.accent1,
+    accent2: base.accent2,
     luz: colorLuzInicial,
     degradado: { activo: false, color: base.accent2, intensidad: 50, angulo: 90 },
   };
+
+  // BUG FIX v1.15.4 (bug crítico — "se aplica 1 segundo y vuelve a blanco"):
+  // cada paleta fija afina a mano text-primary, gradient-accent, el panel,
+  // el glow, etc. — no son una fórmula sobre accent1/accent2. Mientras el
+  // usuario no toque NADA, no hay razón para aproximar nada: se muestra y
+  // se guarda la paleta base real, literal. En cuanto toca cualquier
+  // control, `tocado` pasa a true y ahí sí entra la fórmula de siempre
+  // (calcularVariablesDerivadas), que es una aproximación esperada y
+  // aceptada una vez que el usuario está genuinamente personalizando.
+  let tocado = false;
+  const marcarTocado = () => { tocado = true; };
+
   const vistaPrevia = crearVistaPrevia();
+  const lienzoPrevia = vistaPrevia.querySelector(".ppz-preview-lienzo");
 
-  const refrescarPreview = () => pintarVistaPrevia(vistaPrevia, colores);
+  const refrescarPreview = () => {
+    if (!tocado) {
+      Object.entries(base.derivadosBase).forEach(([variable, valor]) => {
+        lienzoPrevia.style.setProperty(variable, valor);
+      });
+    } else {
+      pintarVistaPrevia(vistaPrevia, colores);
+    }
+  };
 
-  const camposWrap = document.createElement("div");
-  camposWrap.className = "ppz-campos";
+  const columnas = document.createElement("div");
+  columnas.className = "ppz-campos-columnas";
+  const columna1 = document.createElement("div");
+  columna1.className = "ppz-columna";
+  const columna2 = document.createElement("div");
+  columna2.className = "ppz-columna";
 
   const gFondo = crearGrupoColor({
-    etiqueta: "Color de fondo",
+    etiqueta: "Fondo",
     hexInicial: base.fondoCanvas,
-    onCambio: (hex) => { colores.fondoCanvas = hex; refrescarPreview(); },
+    onCambio: (hex) => { colores.fondoCanvas = hex; marcarTocado(); refrescarPreview(); },
   });
   const gTarjetas = crearGrupoColor({
-    etiqueta: "Color de tarjetas/objetos",
+    etiqueta: "Tarjeta",
     hexInicial: base.fondoCard,
-    onCambio: (hex) => { colores.fondoCard = hex; refrescarPreview(); },
+    onCambio: (hex) => { colores.fondoCard = hex; marcarTocado(); refrescarPreview(); },
   });
   const gBorde = crearGrupoColor({
-    etiqueta: "Color de borde",
+    etiqueta: "Borde",
     hexInicial: base.borde,
-    onCambio: (hex) => { colores.borde = hex; refrescarPreview(); },
+    onCambio: (hex) => { colores.borde = hex; marcarTocado(); refrescarPreview(); },
   });
   // Un solo selector de "acento" controla accent-1 y accent-2 (los 2 extremos
   // del degradado): accent-2 se deriva del mismo tono, un poco más claro y
   // saturado, para que el degradado siga viéndose vivo con un solo control.
   const gAcento = crearGrupoColor({
-    etiqueta: "Color de detalles/acento",
+    etiqueta: "Detalles",
     hexInicial: base.accent1,
     onCambio: (hex) => {
       colores.accent1 = hex;
       const { h, s, l } = hexAHsl(hex);
       colores.accent2 = hslAHex(h, Math.min(100, s + 5), Math.min(90, l + 16));
+      marcarTocado();
       seccionDegradado.actualizarFondosVivos();
       refrescarPreview();
     },
   });
   const gLuz = crearGrupoColor({
-    etiqueta: "Color de la luz",
+    etiqueta: "Luz",
     hexInicial: colorLuzInicial,
-    onCambio: (hex) => { colores.luz = hex; refrescarPreview(); },
+    onCambio: (hex) => { colores.luz = hex; marcarTocado(); refrescarPreview(); },
   });
 
-  const seccionDegradado = crearSeccionDegradado({ colores, refrescarPreview });
+  const seccionDegradado = crearSeccionDegradado({ colores, refrescarPreview, marcarTocado });
 
-  [gFondo, gTarjetas, gBorde, gAcento, gLuz].forEach((g) => camposWrap.appendChild(g.elemento));
-  panel.appendChild(camposWrap);
-  panel.appendChild(seccionDegradado.elemento);
+  columna1.appendChild(gFondo.elemento);
+  columna1.appendChild(gTarjetas.elemento);
+  columna1.appendChild(gBorde.elemento);
+  columna2.appendChild(gAcento.elemento);
+  columna2.appendChild(gLuz.elemento);
+  columna2.appendChild(seccionDegradado.toggleElemento);
+  columnas.appendChild(columna1);
+  columnas.appendChild(columna2);
+
+  panel.appendChild(columnas);
+  panel.appendChild(seccionDegradado.contenidoElemento);
   panel.appendChild(vistaPrevia);
   refrescarPreview();
 
@@ -503,17 +598,25 @@ function abrirPanelDeEdicion(overlay, panel, paletaBase, alGuardar) {
   btnGuardar.className = "btn btn-primary";
   btnGuardar.textContent = "Guardar mi paleta";
   btnGuardar.addEventListener("click", () => {
-    estado.datos.configuracion.paleta_personalizada = {
-      basadaEn: paletaBase,
-      colores: { ...colores },
-    };
-    estado.datos.configuracion.paleta = "personalizada";
-    aplicarPaleta("personalizada", estado.datos.configuracion.modo, colores);
+    if (!tocado) {
+      // BUG FIX v1.15.4: no se tocó nada — usar la paleta fija real tal
+      // cual (100% fiel por definición, sale directo del CSS) en vez de
+      // fabricar una "personalizada" aproximada que termina viéndose
+      // distinta sin ninguna razón para el usuario.
+      estado.datos.configuracion.paleta = paletaBase;
+      aplicarPaleta(paletaBase, estado.datos.configuracion.modo);
+    } else {
+      estado.datos.configuracion.paleta_personalizada = {
+        basadaEn: paletaBase,
+        colores: { ...colores },
+      };
+      estado.datos.configuracion.paleta = "personalizada";
+      aplicarPaleta("personalizada", estado.datos.configuracion.modo, colores);
+    }
     // BUG FIX v1.15.3 (Parte 1): faltaba sellarTimestamp() acá — sin sellar,
     // este cambio queda con _actualizadoEn desactualizado y el próximo merge
-    // de sync puede pisarlo con lo que traiga Drive, dando la sensación de
-    // "la paleta no se queda activa, vuelve a blanco". Mismo patrón que ya
-    // usa config-ajustes.js en cada cambio de configuracion.
+    // de sync puede pisarlo con lo que traiga Drive. Mismo patrón que ya usa
+    // config-ajustes.js en cada cambio de configuracion.
     sellarTimestamp(estado.datos.configuracion);
     marcarCambioPendiente();
     actualizarIndicadorSync();
