@@ -123,17 +123,39 @@ const authListo = new Promise((resolve) => {
 
 /* ------------------------- Cache local (offline) ------------------------- */
 
+/**
+ * BUG FIX (encontrado en esta ronda — "guardo la paleta y en algún momento
+ * ya no está"): esta función guardaba `{ fileId, datos }` pero NUNCA
+ * `estado.pendienteSync`. Si el usuario recarga la página (o la cierra)
+ * ANTES de que la subida en segundo plano a Drive termine — algo muy fácil
+ * de hacer sin querer, ej. probando "¿de verdad quedó guardado?" con un
+ * F5 casi inmediato — la próxima carga arranca con `pendienteSync: false`
+ * (el valor inicial de `estado`, ver más abajo) aunque ese cambio JAMÁS
+ * llegó a subirse a Drive. Nada vuelve a intentar esa subida hasta que el
+ * usuario edite otra cosa sin relación (lo cual sí dispara un
+ * marcarCambioPendiente() nuevo que arrastra el cambio viejo de paso) — en
+ * la práctica, el cambio puede quedar viviendo SOLO en este dispositivo
+ * indefinidamente, sin que el indicador de sync avise nada raro (porque
+ * ese indicador también lee de `estado.pendienteSync`, que ya está en
+ * `false`). Ahora se guarda y se restaura también ese flag.
+ */
 function guardarCacheLocal() {
   localStorage.setItem(
     CLAVE_CACHE_LOCAL,
-    JSON.stringify({ fileId: estado.fileId, datos: estado.datos })
+    JSON.stringify({ fileId: estado.fileId, datos: estado.datos, pendienteSync: estado.pendienteSync })
   );
 }
 
 function leerCacheLocal() {
   try {
     const crudo = localStorage.getItem(CLAVE_CACHE_LOCAL);
-    return crudo ? JSON.parse(crudo) : null;
+    if (!crudo) return null;
+    const cache = JSON.parse(crudo);
+    // Quien llama (main.js) es responsable de aplicar cache.pendienteSync a
+    // estado.pendienteSync después de esto — se devuelve tal cual, sin
+    // tocar estado acá, para no romper el resto del flujo de carga que ya
+    // asigna estado.fileId/estado.datos por su cuenta desde el resultado.
+    return cache;
   } catch (e) {
     // Caché corrupta (JSON a medio escribir, típico si el navegador cerró la
     // app o se quedó sin espacio a mitad de guardarCacheLocal()). Sin este
