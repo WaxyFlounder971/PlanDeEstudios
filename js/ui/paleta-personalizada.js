@@ -15,6 +15,7 @@ import {
   aplicarPaleta,
   calcularVariablesDerivadas,
   colorAHex,
+  compositarSobreFondo,
   hexAHsl,
   hslAHex,
 } from "./tema.js";
@@ -156,10 +157,16 @@ function crearSwatchBase(paleta, onClick) {
 function leerColoresBaseDesdeCSS() {
   const estilos = getComputedStyle(document.documentElement);
   const leer = (variable) => estilos.getPropertyValue(variable).trim();
+  const fondoCanvas = colorAHex(leer("--bg-canvas"));
   return {
-    fondoCanvas: colorAHex(leer("--bg-canvas")),
-    fondoCard: colorAHex(leer("--bg-card")),
-    borde: colorAHex(leer("--border-glass")),
+    fondoCanvas,
+    // FIX v1.15 (Parte 1): --bg-card y --border-glass son rgba() de baja
+    // opacidad (glassmorphism) en casi todas las paletas. Leerlos con
+    // colorAHex a secas tira el alfa y los vuelve sólidos/saturados —
+    // compositarSobreFondo los pinta tal cual se ven de verdad sobre
+    // --bg-canvas, así el punto de partida del editor es fiel al pixel.
+    fondoCard: compositarSobreFondo(leer("--bg-card"), fondoCanvas),
+    borde: compositarSobreFondo(leer("--border-glass"), fondoCanvas),
     accent1: colorAHex(leer("--accent-1")),
     accent2: colorAHex(leer("--accent-2")),
   };
