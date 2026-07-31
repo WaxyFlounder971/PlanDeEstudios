@@ -1960,6 +1960,26 @@ html.exportar-tema-default[data-mode="dark"] {
   flex-direction: column;
   gap: 18px;
 }
+
+/* v1.15.4: reemplaza a .ppz-campos — 2 columnas (Fondo/Tarjeta/Borde a la
+   izquierda, Detalles/Luz/Degradado a la derecha) para ahorrar espacio
+   vertical en el panel. En pantallas muy angostas colapsa a 1 columna. */
+.ppz-campos-columnas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 14px;
+}
+.ppz-columna {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+@media (max-width: 380px) {
+  .ppz-campos-columnas {
+    grid-template-columns: 1fr;
+  }
+}
+
 .ppz-grupo { display: flex; flex-direction: column; gap: 8px; }
 .ppz-grupo-label { font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); }
 
@@ -2135,6 +2155,29 @@ html.exportar-tema-default[data-mode="dark"] {
   margin-top: -4px;
 }
 
+/* v1.15.4: color libre a la izquierda; rueda de ángulo + intensidad
+   vertical agrupadas juntas a la derecha, pegadas entre sí. */
+.ppz-degradado-fila-principal {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.ppz-degradado-color-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 140px;
+}
+.ppz-degradado-controles-derecha {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
 /* ---- Color libre del degradado (input nativo, mismo swatch redondo que
    ya usan los otros 5 campos, para que se sienta el mismo control) ---- */
 .ppz-color-nativo {
@@ -2161,6 +2204,39 @@ html.exportar-tema-default[data-mode="dark"] {
    los 3 colores reales del degradado — así el usuario ve dónde va a caer
    el color del medio antes de soltar el slider. */
 .ppz-slider-intensidad { background: var(--bg-panel); }
+
+/* v1.15.4: intensidad como barra VERTICAL, misma altura que la rueda
+   (112px) para que ambas se vean como un solo bloque de controles. */
+.ppz-intensidad-vertical-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+.ppz-intensidad-vertical-pista {
+  height: 112px;
+  width: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ppz-slider-vertical {
+  /* Estándar moderno para <input type="range"> vertical (Chrome/Edge 121+,
+     Firefox, Safari recientes) — rota el eje del control sin transform,
+     así el thumb y el track de .ppz-slider se comportan igual que en la
+     versión horizontal, solo que en el otro eje. */
+  writing-mode: vertical-lr;
+  direction: rtl;
+  flex: none; /* .ppz-slider trae flex:1 (pensado para el layout horizontal) */
+  width: 14px;
+  height: 100%;
+  /* Fallback WebKit/Blink más viejos que no soportan writing-mode en
+     inputs todavía: -webkit-appearance: slider-vertical logra el mismo
+     resultado por otra vía. No hace daño combinarlo con lo de arriba. */
+  -webkit-appearance: slider-vertical;
+  appearance: slider-vertical;
+}
 
 /* ---- Rueda de ángulo (arrastre libre + snapping de 5°) ---- */
 .ppz-rueda-wrap {
