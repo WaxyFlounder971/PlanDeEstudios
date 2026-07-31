@@ -2124,6 +2124,17 @@ html.exportar-tema-default[data-mode="dark"] {
    mismo lenguaje de transiciones que ya usa el resto de la app.
    ========================================================================= */
 
+/* v1.15.6: bloque único a ancho completo — va debajo de .ppz-campos-
+   columnas (después de Borde) y arriba de la vista previa, ver
+   abrirPanelDeEdicion. Separado con una línea sutil arriba para que se lea
+   como su propia sección, no como una continuación de las columnas. */
+.ppz-degradado-bloque {
+  display: flex;
+  flex-direction: column;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-glass);
+}
+
 .ppz-degradado-toggle-fila {
   display: flex;
   align-items: center;
@@ -2132,11 +2143,16 @@ html.exportar-tema-default[data-mode="dark"] {
 }
 .ppz-degradado-toggle-fila .ppz-grupo-label { margin: 0; }
 
+/* v1.15.6: un solo contenedor plegable con TODO adentro (color + rueda +
+   intensidad) — una sola bandera de visibilidad, ver crearSeccionDegradado.
+   Antes el color vivía en un elemento hermano aparte con su propio
+   .oculto, y esa doble sincronización es justo lo que hacía que a veces
+   quedara uno visible y el otro no. */
 .ppz-degradado-contenido {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin-top: 12px;
+  gap: 16px;
+  margin-top: 14px;
   max-height: 600px;
   opacity: 1;
   overflow: hidden;
@@ -2155,18 +2171,15 @@ html.exportar-tema-default[data-mode="dark"] {
   margin-top: -4px;
 }
 
-/* v1.15.5: el color del degradado ahora es un campo suelto dentro de la
-   columna 2 (mismo look que Fondo/Tarjeta/etc, ver .ppz-grupo) — aparece
-   justo debajo del toggle y se oculta con display:none simple (a
-   diferencia de .ppz-degradado-contenido, no necesita animación de
-   plegado: es un solo campo, no un bloque grande). */
-.ppz-degradado-color-inline.oculto {
-  display: none;
+/* Campo de color del degradado: mismo look que Fondo/Tarjeta/etc
+   (.ppz-grupo), pero angosto — en el bloque ancho completo no hace falta
+   que ocupe todo el ancho. */
+.ppz-degradado-color-inline {
+  max-width: 220px;
 }
 
-/* Rueda de ángulo + intensidad vertical, agrupadas y centradas en el
-   bloque de ancho completo (ya no comparten fila con el color, que se
-   movió a la columna). */
+/* Rueda de ángulo + intensidad vertical, centradas en el bloque ancho
+   completo, debajo del campo de color. */
 .ppz-degradado-controles-derecha {
   display: flex;
   align-items: flex-start;
