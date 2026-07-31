@@ -1915,6 +1915,10 @@ html.exportar-tema-default[data-mode="dark"] {
   justify-content: center;
   padding: 20px;
   overflow-y: auto;
+  /* BUG FIX v1.15.3: sin esto, el rebote de scroll al tope del overlay se
+     encadenaba hacia el body y el navegador lo tomaba como gesto de "pull
+     to refresh" — recargando la página a mitad de la edición de paleta. */
+  overscroll-behavior: contain;
 }
 
 .ppz-panel {
@@ -1925,6 +1929,7 @@ html.exportar-tema-default[data-mode="dark"] {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overscroll-behavior: contain;
 }
 
 .ppz-titulo { margin: 0; }
@@ -2001,32 +2006,76 @@ html.exportar-tema-default[data-mode="dark"] {
   cursor: pointer;
 }
 
-/* Barra tipo espectro/arcoíris: recorre todo el círculo de tono (hue) */
-.ppz-slider-hue {
-  background: linear-gradient(
-    to right,
-    hsl(0, 100%, 50%), hsl(60, 100%, 50%), hsl(120, 100%, 50%),
-    hsl(180, 100%, 50%), hsl(240, 100%, 50%), hsl(300, 100%, 50%), hsl(360, 100%, 50%)
-  );
-}
-
-/* Barra secundaria de claridad: negro → tono actual → blanco */
-.ppz-slider-luz {
-  background: linear-gradient(to right, #000000, var(--ppz-hue-actual, #888888), #ffffff);
-}
-
-/* ---- Vista previa en vivo ---- */
+/* ---- Vista previa en vivo (v1.15.3: 2 capas, lienzo + tarjeta) ---- */
 .ppz-preview {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: var(--bg-card);
-  border-color: var(--border-glass);
-  color: var(--text-primary);
 }
-.ppz-preview-titulo { color: var(--text-primary); }
-.ppz-preview-texto { color: var(--text-secondary); margin: 0; }
-.ppz-preview-btn { align-self: flex-start; }
+.ppz-preview-titulo { color: var(--text-primary); margin: 0; }
+.ppz-preview-texto { color: var(--text-secondary); margin: 0 0 4px; }
+
+/* "Lienzo": representa el <body> real — mismo fondo sólido + mismo glow
+   radial que design-system.css ya aplica sobre body, así el usuario ve el
+   fondo de la app tal cual, no solo un rectángulo plano. */
+.ppz-preview-lienzo {
+  position: relative;
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  overflow: hidden;
+  background: var(--bg-canvas);
+  background-image:
+    radial-gradient(circle at 15% 10%, var(--accent-glow-1) 0%, transparent 45%),
+    radial-gradient(circle at 85% 0%, var(--accent-glow-2) 0%, transparent 40%),
+    radial-gradient(circle at 50% 100%, var(--accent-glow-1) 0%, transparent 55%);
+  transition: background-color var(--transition-med);
+}
+
+/* "Tarjeta": la misma .glass-card real, flotando sobre el lienzo — así se
+   distingue de un vistazo fondo vs. tarjeta, que es justo lo que antes no
+   se notaba. */
+.ppz-preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+}
+.ppz-preview-card-titulo { color: var(--text-primary); margin: 0; font-size: 1rem; }
+.ppz-preview-card-texto { color: var(--text-secondary); margin: 0; font-size: 0.85rem; }
+
+.ppz-preview-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.ppz-preview-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ppz-preview-btn { align-self: auto; }
+
+.ppz-preview-badge {
+  background: var(--accent-1-10);
+  color: var(--accent-1);
+  border: 1px solid var(--accent-1-20);
+  border-radius: var(--radius-pill);
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.ppz-preview-danger {
+  color: var(--color-danger);
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
 
 /* ---- Botones inferiores ---- */
 .ppz-fila-botones {
