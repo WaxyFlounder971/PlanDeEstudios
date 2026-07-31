@@ -2155,27 +2155,23 @@ html.exportar-tema-default[data-mode="dark"] {
   margin-top: -4px;
 }
 
-/* v1.15.4: color libre a la izquierda; rueda de ángulo + intensidad
-   vertical agrupadas juntas a la derecha, pegadas entre sí. */
-.ppz-degradado-fila-principal {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
+/* v1.15.5: el color del degradado ahora es un campo suelto dentro de la
+   columna 2 (mismo look que Fondo/Tarjeta/etc, ver .ppz-grupo) — aparece
+   justo debajo del toggle y se oculta con display:none simple (a
+   diferencia de .ppz-degradado-contenido, no necesita animación de
+   plegado: es un solo campo, no un bloque grande). */
+.ppz-degradado-color-inline.oculto {
+  display: none;
 }
-.ppz-degradado-color-col {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 1;
-  min-width: 140px;
-}
+
+/* Rueda de ángulo + intensidad vertical, agrupadas y centradas en el
+   bloque de ancho completo (ya no comparten fila con el color, que se
+   movió a la columna). */
 .ppz-degradado-controles-derecha {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  flex-shrink: 0;
+  justify-content: center;
+  gap: 20px;
 }
 
 /* ---- Color libre del degradado (input nativo, mismo swatch redondo que
