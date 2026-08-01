@@ -2239,20 +2239,29 @@ html.exportar-tema-default[data-mode="dark"] {
   overflow: hidden;
 }
 .ppz-slider-vertical {
-  /* Estándar moderno para <input type="range"> vertical (Chrome/Edge 121+,
-     Firefox, Safari recientes) — rota el eje del control sin transform,
-     así el thumb y el track de .ppz-slider se comportan igual que en la
-     versión horizontal, solo que en el otro eje. */
+  /* Estándar moderno para <input type="range"> vertical (Chrome/Edge 89+,
+     Firefox, Safari 16.4+) — rota el eje del control sin transform, así el
+     thumb y el track de .ppz-slider se comportan igual que en la versión
+     horizontal, solo que en el otro eje. */
   writing-mode: vertical-lr;
   direction: rtl;
   flex: none; /* .ppz-slider trae flex:1 (pensado para el layout horizontal) */
-  width: 14px;
+  /* BUG FIX (reportado: "es una pill pero tiene un slider default adentro"):
+     acá abajo había además `-webkit-appearance: slider-vertical` como
+     "fallback" — pero esa propiedad NO es un fallback inofensivo, es una
+     segunda declaración de la MISMA propiedad que `appearance: none` de
+     `.ppz-slider`. Al venir después en la hoja de estilos, gana ella y
+     REVIERTE el `none`: el navegador vuelve a dibujar su control nativo
+     (surco gris + thumb redondo del sistema) ENCIMA del fondo degradado y
+     el thumb personalizado que se seteaban en este mismo elemento — de ahí
+     el "slider default" flotando dentro de la pill. Se quita del todo:
+     writing-mode ya cubre a todos los navegadores que de verdad importan
+     hoy, y con appearance:none heredado de .ppz-slider el control se ve
+     100% con nuestro estilo. */
+  /* Barra completa: ocupa casi todo el ancho de la pill (34px), no una
+     tira angosta centrada con huecos de la sombra interior a los lados. */
+  width: 30px;
   height: 100%;
-  /* Fallback WebKit/Blink más viejos que no soportan writing-mode en
-     inputs todavía: -webkit-appearance: slider-vertical logra el mismo
-     resultado por otra vía. No hace daño combinarlo con lo de arriba. */
-  -webkit-appearance: slider-vertical;
-  appearance: slider-vertical;
 }
 
 /* ---- Rueda de ángulo (arrastre libre + snapping de 5°) ---- */
