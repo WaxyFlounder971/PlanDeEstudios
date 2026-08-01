@@ -108,20 +108,14 @@ function crearBarraIntensidad({ valor, onCambio }) {
   return input;
 }
 
-function pintarFondoIntensidad(input, { accent1, accent2, color }) {
-  // BUG FIX v1.15.5 ("se veía como ...iiiIIIIIIiiiii... el centro parecía
-  // el máximo en vez del final de la barra"): la versión anterior pintaba
-  // 3 colores en paradas fijas (0%, 50%, 100% = accent1, color, accent2)
-  // SIN importar el valor real de intensidad — el color elegido siempre
-  // caía "en el medio" visualmente, así que la barra se veía como un pico
-  // en el centro en vez de una progresión hacia un extremo. Ahora son
-  // solo 2 paradas: un tono NEUTRO (mezcla de accent1/accent2, representa
-  // "0% de intensidad" — como si el degradado no se hubiera tocado) abajo,
-  // y el color elegido PURO arriba (100% de intensidad) — la barra vertical
-  // ahora sí se lee como "más color a medida que subís", igual que hace el
-  // thumb al moverse hacia arriba.
-  const neutro = mezclarHex(accent1, accent2, 0.5);
-  input.style.background = `linear-gradient(to top, ${neutro}, ${color})`;
+function pintarFondoIntensidad(input, { accent1, color }) {
+  // v1.15.8 (pedido explícito): abajo (0%) va el color de "Detalles"
+  // (accent1) tal cual, sin mezclar con accent2 — y arriba (100%) el color
+  // del degradado elegido, puro. Antes iba una mezcla accent1/accent2 como
+  // "neutro" abajo; ahora la barra muestra directamente los 2 colores
+  // reales entre los que se mueve el degradado, para que sea obvio de un
+  // vistazo qué representa cada extremo.
+  input.style.background = `linear-gradient(to top, ${accent1}, ${color})`;
   // Mismo mecanismo que pintarColorAguja en la rueda: el thumb del slider
   // se tiñe con el color elegido del degradado, para que ambos controles
   // se sientan parte de un mismo lenguaje visual en vez de un slider
@@ -157,11 +151,16 @@ function crearRuedaAngulo({ valorInicial, onCambio }) {
   perilla.className = "ppz-rueda-perilla";
   aguja.appendChild(perilla);
   rueda.appendChild(aguja);
-  contenedor.appendChild(rueda);
-
   const lectura = document.createElement("span");
   lectura.className = "ppz-rueda-lectura";
+  // v1.15.8 (pedido: "grados e intensidad en la misma línea, no grados
+  // abajo e intensidad arriba"): antes esta lectura se agregaba DESPUÉS de
+  // `rueda` (quedaba debajo del círculo), mientras que la etiqueta
+  // "Intensidad" del control vecino va ARRIBA de su barra — así quedaban
+  // a distinta altura. Ahora se agrega ANTES, para que ambas etiquetas
+  // queden en la misma línea superior.
   contenedor.appendChild(lectura);
+  contenedor.appendChild(rueda);
 
   const actualizarVisual = () => {
     aguja.style.transform = `rotate(${angulo}deg)`;

@@ -253,10 +253,20 @@ function calcularGradientesAcento({ accent1, accent2, degradado }) {
   const anguloAlt = (angulo + 30) % 360;
   const anguloAlt2 = ((angulo - 30) % 360 + 360) % 360;
 
+  // v1.15.8 (pedido: "al máximo se siente muy poquito"): antes, en cada uno
+  // de los 3 gradientes, UN extremo se quedaba siempre 100% con su accent
+  // original — sin importar qué tan arriba subiera la intensidad, solo el
+  // OTRO extremo se movía hacia `color`. Con la barra al 100%, la mitad de
+  // cada degradado literalmente no se inmutaba, así que el máximo posible
+  // se sentía débil pasara lo que pasara. Ahora el extremo "fijo" también
+  // se mueve hacia `color` (a un ritmo más suave — factor*0.4 en vez de
+  // factor completo), así se sigue viendo variedad/dirección entre los 3
+  // gradientes, pero al máximo TODO el degradado se nota, no solo la
+  // mitad.
   return {
-    "--gradient-accent": `linear-gradient(${angulo}deg, ${accent1}, ${mezclarHex(accent2, color, factor)})`,
-    "--gradient-accent-alt": `linear-gradient(${anguloAlt}deg, ${mezclarHex(accent1, color, factor)}, ${accent2})`,
-    "--gradient-accent-alt2": `linear-gradient(${anguloAlt2}deg, ${accent2}, ${mezclarHex(accent1, color, factor)})`,
+    "--gradient-accent": `linear-gradient(${angulo}deg, ${mezclarHex(accent1, color, factor * 0.4)}, ${mezclarHex(accent2, color, factor)})`,
+    "--gradient-accent-alt": `linear-gradient(${anguloAlt}deg, ${mezclarHex(accent1, color, factor)}, ${mezclarHex(accent2, color, factor * 0.4)})`,
+    "--gradient-accent-alt2": `linear-gradient(${anguloAlt2}deg, ${mezclarHex(accent2, color, factor * 0.4)}, ${mezclarHex(accent1, color, factor)})`,
   };
 }
 
