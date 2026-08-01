@@ -2005,16 +2005,15 @@ html.exportar-tema-default[data-mode="dark"] {
   border-radius: var(--radius-pill);
   outline: none;
   cursor: pointer;
-  border: 1px solid var(--border-glass);
 }
-/* Thumb: mismo lenguaje que la perilla de la rueda de ángulo (círculo
-   tintado con el color elegido del degradado + anillo blanco), en vez del
-   círculo blanco genérico de navegador que no combinaba con nada más del
-   panel. */
+/* Thumb: EXACTO mismo lenguaje que .ppz-rueda-perilla (círculo de 18px
+   tintado con el color elegido del degradado, anillo blanco de 2px,
+   shadow-float) — antes era un círculo blanco genérico de navegador que
+   desentonaba con el resto del panel. */
 .ppz-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: var(--ppz-intensidad-thumb, var(--accent-1));
   border: 2px solid #ffffff;
@@ -2022,8 +2021,8 @@ html.exportar-tema-default[data-mode="dark"] {
   cursor: pointer;
 }
 .ppz-slider::-moz-range-thumb {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: var(--ppz-intensidad-thumb, var(--accent-1));
   border: 2px solid #ffffff;
@@ -2232,6 +2231,7 @@ html.exportar-tema-default[data-mode="dark"] {
   height: 112px;
   width: 34px;
   border-radius: var(--radius-pill);
+  border: 1px solid var(--border-glass);
   box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.25);
   display: flex;
   align-items: center;
