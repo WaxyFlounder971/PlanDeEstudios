@@ -33,9 +33,10 @@ function crearDatosUsuarioNuevo() {
       plan_activo_id: null,         // id del Plan de Estudios seleccionado como activo
       enlaces_rapidos: [],          // ver estructura de "enlace" abajo (máx. 20)
 
-      // --- Modo Hardcore 💀 (doble carrera) ---
-      modo_hardcore: false,          // si está activo, se combina un plan principal + uno secundario
-      plan_activo_secundario_id: null, // id del segundo Plan de Estudios (solo relevante si modo_hardcore = true)
+      // --- Modo Hardcore 💀 (hasta 3 carreras simultáneas) ---
+      modo_hardcore: false,             // si está activo, se combinan hasta 3 Planes de Estudio a la vez
+      plan_activo_secundario_id: null,  // 2do Plan de Estudios (solo relevante si modo_hardcore = true)
+      plan_activo_terciario_id: null,   // 3er Plan de Estudios (solo relevante si modo_hardcore = true)
     },
 
     // Un usuario puede tener más de un Plan de Estudios (ej. cambio de carrera/universidad).
@@ -139,6 +140,12 @@ function crearEnlaceRapido({ nombre, url, icono_tipo, icono_valor }) {
   return { id: crypto.randomUUID(), nombre, url, icono_tipo, icono_valor };
 }
 
+// Semestres y Notas — Fase 1: tope real de un semestre. Los programas duran
+// como máximo ~20 semanas; se deja un margen de 5 semanas de holgura (clases
+// que arrancan tarde, prórrogas, etc.) antes de que la app lo dé por
+// terminado sola. Se usa tanto para capar duracion_semanas en el formulario
+// de alta como para el auto-cierre por fecha (ver obtenerEstadoEfectivoSemestre).
+const LIMITE_SEMANAS_SEMESTRE = 25;
 const LIMITE_ENLACES_RAPIDOS = 20;
 /* Orden "azucarado": neutros primero (blanco → gris → negro) y luego el
  * espectro cromático completo (rojo → dorado → amarillo → verde → cyan →
@@ -463,6 +470,104 @@ function sellarTimestamp(entidad) {
 }
 
 /**
+ * Semestres y Notas — Fase 1: devuelve, en orden, los ids de los planes que
+ * cuentan como "activos" ahora mismo según Modo Hardcore. Con Hardcore
+ * apagado siempre es un solo id (o vacío si todavía no hay plan activo).
+ * Único punto de verdad para "cuáles planes participan" — lo reutilizan
+ * tanto el selector de materias al dar de alta un semestre como cualquier
+ * otro lugar que necesite saber "en qué carreras estoy ahora".
+ */
+function obtenerPlanesActivos(configuracion) {
+  if (!configuracion) return [];
+  if (!configuracion.modo_hardcore) {
+    return configuracion.plan_activo_id ? [configuracion.plan_activo_id] : [];
+  }
+  return [
+    configuracion.plan_activo_id,
+    configuracion.plan_activo_secundario_id,
+    configuracion.plan_activo_terciario_id,
+  ].filter(Boolean);
+}
+
+/**
+ * Semestres y Notas — Fase 1: crea un Semestre nuevo, sellado igual que
+ * cualquier otra entidad (ver sellarTimestamp). `planesEstudioIds` siempre
+ * se guarda como arreglo — incluso con Hardcore apagado y un solo plan —
+ * para no tener dos formatos distintos (valor suelto vs. arreglo) según el
+ * modo; así cualquier código que lo consuma después solo tiene que manejar
+ * un caso.
+ *
+ * NO incluye todavía: horario, criterios/asignaciones de nota, ni el botón
+ * "Terminar semestre" (mover a historial + revisión pasó/no-pasó por
+ * materia, con sugerencia según la nota) — todo eso depende del motor de
+ * notas de la Fase 6 y queda fuera de esta entrega a propósito.
+ */
+function crearSemestre({ nombre, fecha_inicio, duracion_semanas, planesEstudioIds }) {
+  const semanas = Math.min(Number(duracion_semanas) || 16, LIMITE_SEMANAS_SEMESTRE);
+  const planes = Array.isArray(planesEstudioIds) ? planesEstudioIds.filter(Boolean) : [planesEstudioIds].filter(Boolean);
+
+  return sellarTimestamp({
+    id: "sem_" + crypto.randomUUID(),
+    plan_estudio_id: planes,
+    nombre,
+    fecha_inicio, // "YYYY-MM-DD"
+    duracion_semanas: semanas,
+    // null = calcular "actual"/"pasado" por fecha (ver obtenerEstadoEfectivoSemestre).
+    // "actual" | "pasado" = el usuario lo forzó a mano porque la detección
+    // automática le falló (ej. fecha de inicio mal puesta).
+    estado_manual: null,
+    materias_matriculadas: [],
+    // Semestres y Notas — Fase 1 (regla obligatoria de sincronización): tumba
+    // propia para materias matriculadas borradas, igual que
+    // plan._eliminados_materias — ver fusionarSemestre en storage-merge.js.
+    _eliminados_materias_matriculadas: [],
+  });
+}
+
+/**
+ * Semestres y Notas — Fase 1: estado EFECTIVO de un semestre — nunca se lee
+ * semestre.estado directamente porque ese campo no existe (a propósito, ver
+ * comentario en crearSemestre): se calcula siempre en el momento, así nunca
+ * queda desactualizado por no haberse re-guardado.
+ *
+ * Auto-cierre: sin el botón "Terminar semestre" todavía (Fase 6, depende de
+ * notas), este cálculo por fecha es la ÚNICA forma en que un semestre pasa a
+ * "pasado" en esta fase — al llegar a LIMITE_SEMANAS_SEMESTRE desde
+ * fecha_inicio, se cierra solo, sin preguntarle nada al usuario (no hay
+ * review de materias todavía). Cuando se construya "Terminar semestre", ese
+ * botón va a poder cerrar el semestre ANTES de este límite; este cálculo
+ * sigue funcionando igual como red de seguridad para quien nunca lo aprieta.
+ */
+function obtenerEstadoEfectivoSemestre(semestre) {
+  if (semestre.estado_manual === "actual" || semestre.estado_manual === "pasado") {
+    return semestre.estado_manual;
+  }
+  const inicio = new Date(semestre.fecha_inicio);
+  if (isNaN(inicio.getTime())) return "actual"; // fecha inválida: no se puede calcular, no se fuerza a "pasado"
+  const semanasTranscurridas = (Date.now() - inicio.getTime()) / (7 * 24 * 60 * 60 * 1000);
+  return semanasTranscurridas >= LIMITE_SEMANAS_SEMESTRE ? "pasado" : "actual";
+}
+
+/**
+ * Semestres y Notas — Fase 1: matricula una materia real del Plan dentro de
+ * un semestre. Deliberadamente mínima — sin criterios/asignaciones/
+ * nota_final (Fase 6) — porque su "estado" nunca vive acá: se lee siempre en
+ * vivo desde la materia real en plan.materias por materia_id (ver punto de
+ * sincronía en semestres.js). Repetir una materia "Aprobada": está permitido
+ * a propósito (no hay ninguna validación que lo bloquee) — matricularla
+ * vuelve a poner esa materia en "cursando" en el Plan (mismo mecanismo que
+ * cualquier cambio de estado manual), así que mientras se está repitiendo
+ * deja de contar como aprobada en los totales, igual que decidiste.
+ */
+function crearMateriaMatriculada({ materiaId, planEstudioId }) {
+  return sellarTimestamp({
+    id: "mm_" + crypto.randomUUID(),
+    materia_id: materiaId,
+    plan_estudio_id: planEstudioId, // de cuál de los planes activos viene (relevante en Hardcore)
+  });
+}
+
+/**
  * FIX sync (bug real encontrado en esta ronda de auditoría): a diferencia
  * de crearMateria y crearPlanEstudio, esta función NUNCA llamaba a
  * sellarTimestamp() — toda categoría nacía sin _actualizadoEn real. En
@@ -563,6 +668,15 @@ function migrarDatosAntiguos(datos) {
       intensidad: 50,
       angulo: 90,
     };
+  }
+
+  // Semestres y Notas — Fase 1: relleno defensivo para cuentas creadas antes
+  // de que Hardcore soportara un 3er plan — sin esto, un usuario viejo con
+  // Hardcore activo tendría plan_activo_terciario_id === undefined en vez de
+  // null, lo cual rompería obtenerPlanesActivos() (undefined no es "vacío" de
+  // forma consistente en todos lados) y confundiría al selector de 3 botones.
+  if (datos.configuracion && datos.configuracion.plan_activo_terciario_id === undefined) {
+    datos.configuracion.plan_activo_terciario_id = null;
   }
 
   if (!Array.isArray(datos.planes_estudio)) return datos;
@@ -666,4 +780,9 @@ export {
   observarRelojLogico,
   recorrerHojasArbol,
   sellarTimestamp,
+  crearMateriaMatriculada,
+  crearSemestre,
+  LIMITE_SEMANAS_SEMESTRE,
+  obtenerEstadoEfectivoSemestre,
+  obtenerPlanesActivos,
 };

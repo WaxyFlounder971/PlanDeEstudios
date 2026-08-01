@@ -380,6 +380,65 @@ function fusionarPlanesEstudio(local, remoto, tumbas) {
   return resultado;
 }
 
+
+/**
+ * Semestres y Notas — Fase 1: mismo patrón que fusionarPlan (arriba) pero
+ * para un Semestre — su única colección anidada por ahora es
+ * materias_matriculadas, con su propia tumba
+ * (_eliminados_materias_matriculadas, ver crearSemestre en schema.js). Se
+ * reutiliza el mismo mecanismo probado en vez de inventar uno aparte, tal
+ * como pide la regla obligatoria de este prompt.
+ */
+function fusionarSemestre(semestreLocal, semestreRemoto) {
+  if (!semestreLocal) return semestreRemoto;
+  if (!semestreRemoto) return semestreLocal;
+
+  const base = esMasReciente(semestreRemoto, semestreLocal) ? semestreRemoto : semestreLocal;
+
+  const tumbasMatriculadas = fusionarTumbas(
+    semestreLocal._eliminados_materias_matriculadas,
+    semestreRemoto._eliminados_materias_matriculadas
+  );
+
+  return {
+    ...base,
+    materias_matriculadas: fusionarColeccion(
+      semestreLocal.materias_matriculadas,
+      semestreRemoto.materias_matriculadas,
+      tumbasMatriculadas,
+      "materia matriculada"
+    ),
+    _eliminados_materias_matriculadas: tumbasMatriculadas,
+  };
+}
+
+/**
+ * Semestres y Notas — Fase 1: equivalente de fusionarPlanesEstudio (arriba)
+ * pero para la colección de nivel superior `semestres` — cada semestre se
+ * identifica por su `id` y, si existe en ambos lados, se funde con
+ * fusionarSemestre() en vez de que gane uno completo sobre el otro.
+ */
+function fusionarSemestres(local, remoto, tumbas) {
+  const listaLocal = Array.isArray(local) ? local : [];
+  const listaRemota = Array.isArray(remoto) ? remoto : [];
+  const idsEliminados = new Set(tumbas.map((t) => t.id));
+
+  const porId = new Map();
+  listaLocal.forEach((s) => porId.set(s.id, s));
+  listaRemota.forEach((s) => {
+    const existente = porId.get(s.id);
+    porId.set(s.id, existente ? fusionarSemestre(existente, s) : s);
+  });
+
+  const resultado = [];
+  porId.forEach((semestre, id) => {
+    if (!idsEliminados.has(id)) resultado.push(semestre);
+  });
+  return resultado;
+}
+
+
+
 /**
  * Punto de entrada principal. Sustituye cualquier `estado.datos = X`
  * directo desde una fuente remota o de caché — a partir de ahora, TODA
@@ -420,7 +479,9 @@ function fusionarDatos(datosLocal, datosRemoto) {
     perfil: fusionarBloqueUnico(datosLocal.perfil, datosRemoto.perfil, "perfil"),
     configuracion: configuracionFundida,
     planes_estudio: fusionarPlanesEstudio(datosLocal.planes_estudio, datosRemoto.planes_estudio, tumbasPlanes),
-    semestres: fusionarColeccion(datosLocal.semestres, datosRemoto.semestres, tumbasSemestres, "semestre"),
+    // Semestres y Notas — Fase 1: ya no es una colección plana — cada
+    // semestre funde su propia matrícula por separado (ver fusionarSemestre).
+    semestres: fusionarSemestres(datosLocal.semestres, datosRemoto.semestres, tumbasSemestres),
     profesores: fusionarColeccion(datosLocal.profesores, datosRemoto.profesores, tumbasProfesores, "profesor"),
     agenda: fusionarColeccion(datosLocal.agenda, datosRemoto.agenda, tumbasAgenda, "evento de agenda"),
     _eliminados_planes: tumbasPlanes,
@@ -438,4 +499,6 @@ export {
   fusionarTumbas,
   hayConflictoReal,
   resolverConflicto,
+  fusionarSemestre,
+  fusionarSemestres,
 };
