@@ -18,6 +18,7 @@ import { inicializarModalCrearPlan, inicializarModalMateriaManual, inicializarMo
 import { inicializarModalEditarPlanInfo, inicializarModalGestionPlanes, renderizarModoHardcore, renderizarSelectorPlan } from "./plan/plan-gestionar.js";
 import { inicializarModalCapturasPDF, inicializarModalInstruccionesImportacion } from "./plan/plan-importacion.js";
 import { inicializarResponsivoListaPlan, renderizarPlanEstudios } from "./plan/plan-vista-lista.js";
+import { renderizarSemestres } from "./semestres/semestres.js";
 import { abrirConfirmacion, agregarLongPress, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, restaurarEstadoSidebar } from "./ui/componentes.js";
 import { aplicarPaleta, aplicarTemaGuardadoLocalmente } from "./ui/tema.js";
 
@@ -419,6 +420,7 @@ function mostrarApp() {
   renderizarPerfil();
   restaurarEstadoSidebar();
   if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
+  if (typeof renderizarSemestres === "function") renderizarSemestres();
   // Bug 3: antes mostrarSeccion() solo se llamaba desde clics del nav, así que
   // tras un refresh la sección de Plan de Estudios se quedaba con la clase
   // "oculto" del HTML aunque su contenido sí se hubiera renderizado.
@@ -469,7 +471,7 @@ function inicializarNavegacionSecciones() {
 }
 
 function mostrarSeccion(nombre) {
-  const secciones = { configuracion: "seccion-configuracion", "plan-estudios": "seccion-plan-estudios" };
+  const secciones = { configuracion: "seccion-configuracion", "plan-estudios": "seccion-plan-estudios", semestres: "seccion-semestres" };
   Object.entries(secciones).forEach(([clave, idEl]) => {
     const el = document.getElementById(idEl);
     if (el) el.classList.toggle("oculto", clave !== nombre);
