@@ -133,8 +133,53 @@ function hexARgba(hex, alpha) {
 
 /** Mismo patrón visual que los badges semánticos: fondo en baja opacidad + borde + texto del color. */
 
+/**
+ * BUG FIX (reportado: "puse un rosita y no se ve absolutamente nada"):
+ * estiloBadgeCategoria ponía `color: hex` — el texto del badge era
+ * LITERALMENTE el mismo color que su fondo (el fondo solo está a 15% de
+ * opacidad, ver hexARgba arriba). Con cualquier tono pastel/claro, texto y
+ * fondo terminan siendo el mismo matiz — cero contraste, sin importar qué
+ * tan claro u oscuro sea el color elegido. No era un caso límite: pasaba
+ * con CUALQUIER color de categoría.
+ *
+ * luminanciaRelativa/contrasteWCAG calculan el contraste real (fórmula
+ * WCAG) del color de fondo contra las 2 opciones de texto que YA usa el
+ * resto de la app para texto-sobre-acento (#0F172A / #ffffff — ver
+ * textoSobreAccent en ui/tema.js) y eligen la que más contraste da. Así el
+ * texto SIEMPRE se lee, sin importar el color elegido — no es una mejora
+ * cosmética, es la diferencia entre "se ve" y "no se ve absolutamente
+ * nada".
+ */
+function luminanciaRelativa(hex) {
+  const limpio = (hex || "#000000").replace("#", "");
+  const completo = limpio.length === 3 ? limpio.split("").map((c) => c + c).join("") : limpio;
+  const num = parseInt(completo, 16) || 0;
+  const r = (num >> 16) & 255, g = (num >> 8) & 255, b = num & 255;
+  const canal = (v) => {
+    v /= 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * canal(r) + 0.7152 * canal(g) + 0.0722 * canal(b);
+}
+
+function contrasteWCAG(l1, l2) {
+  const claro = Math.max(l1, l2), oscuro = Math.min(l1, l2);
+  return (claro + 0.05) / (oscuro + 0.05);
+}
+
+/** Entre el "negro" (#0F172A, no negro puro — mismo tono que usa el resto
+ *  de la app) y blanco puro, devuelve el que se lea mejor sobre `hex`. */
+function colorTextoLegible(hex) {
+  const NEGRO_APP = "#0F172A";
+  const BLANCO_APP = "#ffffff";
+  const lFondo = luminanciaRelativa(hex);
+  const contrasteNegro = contrasteWCAG(lFondo, luminanciaRelativa(NEGRO_APP));
+  const contrasteBlanco = contrasteWCAG(lFondo, luminanciaRelativa(BLANCO_APP));
+  return contrasteBlanco >= contrasteNegro ? BLANCO_APP : NEGRO_APP;
+}
+
 function estiloBadgeCategoria(hex) {
-  return `background:${hexARgba(hex, 0.15)}; border-color:${hex}; color:${hex};`;
+  return `background:${hexARgba(hex, 0.15)}; border-color:${hex}; color:${colorTextoLegible(hex)};`;
 }
 
 /* ===================== (v1.12) Parser de requisitos removido de aquí =====================
