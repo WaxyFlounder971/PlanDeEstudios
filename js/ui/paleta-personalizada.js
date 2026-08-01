@@ -548,11 +548,21 @@ function abrirPanelDeEdicion(overlay, panel, paletaBase, alGuardar, coloresExist
   subtitulo.className = "ppz-subtitulo";
   subtitulo.textContent = editandoExistente
     ? "Estás editando tu paleta guardada — los cambios se aplican sobre lo que ya tenías."
-    : `Basada en "${paletaBase}" — ajustá lo que quieras, los colores de texto se calculan solos.`;
+    : `Basada en "${paletaBase}" — ajustá lo que quieras, incluido el color de la fuente.`;
   panel.appendChild(subtitulo);
 
   const base = editandoExistente ? null : leerColoresBaseDesdeCSS();
   const colorLuzInicial = editandoExistente ? coloresExistentes.luz : base.accent2; // "si no existe todavía como propia, sepárala de --accent-2"
+  // v1.15.9 (pedido: selector manual de "Fuente"): punto de partida del
+  // color de texto. Para "Editar actual" sobre una paleta guardada ANTES
+  // de que existiera este campo, coloresExistentes.fuente no existe — se
+  // usa el --text-primary real que está aplicado en pantalla en este mismo
+  // instante (la paleta vieja sigue activa mientras se abre el editor), así
+  // no hay salto visual al abrir. Para paleta nueva, igual: el --text-
+  // primary ya calculado de la paleta base de referencia.
+  const colorFuenteInicial = editandoExistente
+    ? coloresExistentes.fuente || colorAHex(getComputedStyle(document.documentElement).getPropertyValue("--text-primary"))
+    : colorAHex(base.derivadosBase["--text-primary"] || getComputedStyle(document.documentElement).getPropertyValue("--text-primary"));
 
   // BUG FIX v1.15.4: `colores` guarda solo los 5 campos editables + luz +
   // degradado — NUNCA se le mezcla `base.derivadosBase` (eso se consulta
@@ -569,6 +579,7 @@ function abrirPanelDeEdicion(overlay, panel, paletaBase, alGuardar, coloresExist
         accent1: coloresExistentes.accent1,
         accent2: coloresExistentes.accent2,
         luz: colorLuzInicial,
+        fuente: colorFuenteInicial,
         degradado: { ...coloresExistentes.degradado },
       }
     : {
@@ -578,6 +589,7 @@ function abrirPanelDeEdicion(overlay, panel, paletaBase, alGuardar, coloresExist
         accent1: base.accent1,
         accent2: base.accent2,
         luz: colorLuzInicial,
+        fuente: colorFuenteInicial,
         degradado: { activo: false, color: base.accent2, intensidad: 50, angulo: 90 },
       };
 
@@ -653,14 +665,28 @@ function abrirPanelDeEdicion(overlay, panel, paletaBase, alGuardar, coloresExist
     hexInicial: colorLuzInicial,
     onCambio: (hex) => { colores.luz = hex; marcarTocado(); refrescarPreview(); },
   });
+  // v1.15.9 (pedido: "agregar en el menú de paleta para que la gente pueda
+  // elegir el color de fuente"): selector manual del color de texto
+  // principal de toda la app (--text-primary — ver calcularVariablesDerivadas
+  // en tema.js, que ahora usa esto si viene definido, y si no cae al cálculo
+  // automático de siempre para no romper las paletas fijas ni las
+  // personalizadas creadas antes de que existiera este campo).
+  const gFuente = crearGrupoColor({
+    etiqueta: "Fuente",
+    hexInicial: colores.fuente,
+    onCambio: (hex) => { colores.fuente = hex; marcarTocado(); refrescarPreview(); },
+  });
 
   const seccionDegradado = crearSeccionDegradado({ colores, refrescarPreview, marcarTocado });
 
+  // Orden pedido — columna izquierda: Fondo, Tarjeta, Bordes, Detalles.
+  // Columna derecha: Luz, Fuente, (color del) Degradado.
   columna1.appendChild(gFondo.elemento);
   columna1.appendChild(gTarjetas.elemento);
   columna1.appendChild(gBorde.elemento);
-  columna2.appendChild(gAcento.elemento);
+  columna1.appendChild(gAcento.elemento);
   columna2.appendChild(gLuz.elemento);
+  columna2.appendChild(gFuente.elemento);
   columna2.appendChild(seccionDegradado.colorElemento);
   columnas.appendChild(columna1);
   columnas.appendChild(columna2);
