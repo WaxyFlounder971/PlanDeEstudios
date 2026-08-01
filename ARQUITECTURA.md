@@ -1,7 +1,7 @@
 # Arquitectura de App Académica — mapa de módulos
 
 Este documento es para que **cualquier IA (o Wagner) que entre a una sesión nueva**
-entienda, sin tener que leer los 22 archivos completos, qué hace cada uno y a qué
+entienda, sin tener que leer los 24 archivos completos, qué hace cada uno y a qué
 archivo hay que ir para pedir un cambio. Todo el proyecto usa **módulos ES nativos**
 (`import`/`export`, sin build step). El único `<script>` en `index.html` es:
 
@@ -26,17 +26,21 @@ evita que la IA adivine mal o toque 5 archivos cuando solo necesitaba tocar 1.
 ## Capas del proyecto (de más base a más arriba)
 
 ```
-js/core/        →  datos, sesión, sincronización — no saben nada de la UI
-js/ui/          →  componentes de interfaz genéricos y reutilizables
-js/config/      →  secciones de Configuración (ajustes, enlaces, baneados)
-js/plan/        →  todo el Plan de Estudios (la sección más grande de la app)
-js/main.js      →  arranque: login, navegación, conecta todo lo demás
+js/core/ → datos, sesión, sincronización — no saben nada de la UI
+js/ui/ → componentes de interfaz genéricos y reutilizables
+js/config/ → secciones de Configuración (ajustes, enlaces, baneados)
+js/plan/ → todo el Plan de Estudios (la sección más grande de la app)
+js/semestres/ → Semestres y matrícula (Fase 1 de "Semestres y Notas")
+js/main.js → arranque: login, navegación, conecta todo lo demás
 ```
 
-`js/plan/*` es, con diferencia, la carpeta más grande — es el módulo de negocio
-principal de la app hoy. `js/core/*` es la única capa que **no depende de nada más**
-(salvo `storage.js` ↔ `storage-sync.js`, que se necesitan mutuamente a propósito, ver
-más abajo). Todo lo demás depende, directa o indirectamente, de `core/`.
+`js/plan/*` sigue siendo, con diferencia, la carpeta más grande — es el módulo de
+negocio principal de la app. `js/core/*` es la única capa que **no depende de nada
+más** (salvo `storage.js` ↔ `storage-sync.js`, que se necesitan mutuamente a
+propósito, ver más abajo). Todo lo demás depende, directa o indirectamente, de
+`core/`. `js/semestres/` depende de `core/` y reutiliza piezas de `js/plan/`
+(`plan-detalle.js`, `plan-vista-lista-tarjetas.js`) en vez de duplicarlas — ver esa
+sección para el detalle exacto de qué toma prestado.
 
 > **Nota sobre imports circulares:** vas a ver algunos módulos que se importan entre
 > sí en ambas direcciones (ej. `storage.js` ↔ `storage-sync.js`, `plan-esquema.js` ↔
@@ -57,10 +61,14 @@ DOM.
 **Exporta:**
 - `crearDatosUsuarioNuevo()` — objeto "de fábrica" para un usuario que recién entra.
 - `crearPlanEstudio()`, `crearCategoria()`, `crearMateria()`, `crearEnlaceRapido()` — fábricas de cada entidad.
-- `migrarDatosAntiguos(datos)` — migración silenciosa de versiones viejas del esquema (hoy: rellena `optativas_disponibles`, normaliza `horas`).
-- `PALETAS_DISPONIBLES`, `PARAMETROS_UNIVERSIDAD_DEFAULT`, `PRESETS_TIPOS_HORAS`, `LIMITE_ENLACES_RAPIDOS`, `MAPEO_HORAS_VIEJO_A_NUEVO` — constantes de referencia.
+- `crearSemestre()`, `crearMateriaMatriculada()` — fábricas de Semestre y Materia-matriculada (Fase 1, ver `js/semestres/`).
+- `sellarTimestamp()` — reloj lógico de Lamport (`_actualizadoEn` por dispositivo) + `_version_base`, punto único por el que debe pasar CUALQUIER entidad al crearse o editarse. No inventes un sellado propio en otro archivo — siempre este.
+- `obtenerPlanesActivos(configuracion)` — ids de los planes "activos" ahora mismo según Modo Hardcore (hasta 3).
+- `obtenerEstadoEfectivoSemestre(semestre)` — "actual"/"pasado" calculado por fecha + `LIMITE_SEMANAS_SEMESTRE`, respetando `estado_manual` si el usuario lo forzó.
+- `migrarDatosAntiguos(datos)` — migración silenciosa de versiones viejas del esquema (rellena `optativas_disponibles`, normaliza `horas`, rellena `plan_activo_terciario_id`).
+- `PALETAS_DISPONIBLES`, `PARAMETROS_UNIVERSIDAD_DEFAULT`, `PRESETS_TIPOS_HORAS`, `LIMITE_ENLACES_RAPIDOS`, `LIMITE_SEMANAS_SEMESTRE`, `MAPEO_HORAS_VIEJO_A_NUEVO` — constantes de referencia.
 **Depende de:** nada.
-**Lo usan:** casi todos los módulos de `config/` y `plan/`, más `storage-sync.js` y `main.js`.
+**Lo usan:** casi todos los módulos de `config/`, `plan/` y `semestres/`, más `storage-sync.js`, `storage-merge.js` y `main.js`.
 **Si vas a agregar una llave nueva al modelo de datos (JSON de Drive), es acá.**
 
 ### `core/auth.js`
@@ -74,13 +82,13 @@ datos, refrescar el token).
 
 ### `core/storage.js`
 **Qué hace:** el objeto `estado` (todo el estado en memoria de la sesión del
-navegador — token, datos del usuario, filtros activos, etc.) + caché offline en
-`localStorage` + guardar/leer/borrar el token de Google en caché.
+navegador — token, datos del usuario, filtros activos, qué materias/semestres están
+expandidos, etc.) + caché offline en `localStorage` + guardar/leer/borrar el token de
+Google en caché.
 **Exporta:** `estado`, `authListo`/`resolverAuthListo` (promesa que resuelve cuando ya
 se sabe si hay sesión), `guardarCacheLocal()`, `leerCacheLocal()`, `correoConocido()`, `establecerTokenActivo()`, `guardarTokenCache()`, `leerTokenCacheValido()`, `borrarTokenCache()`.
 **Depende de:** `storage-sync.js` (solo para el refresco proactivo de token dentro de `establecerTokenActivo`).
-**Lo usan:** literalmente casi todos los módulos de `plan/` y `config/`, porque casi
-todo lee o escribe `estado`.
+**Lo usan:** literalmente casi todos los módulos de `plan/`, `config/` y `semestres/`, porque casi todo lee o escribe `estado`.
 **Si necesitás una llave nueva de `estado` (memoria de sesión, NO el JSON de Drive), es acá.**
 
 ### `core/storage-sync.js`
@@ -89,11 +97,25 @@ proactivo del token antes de que expire, reintento automático tras un 401, sond
 periódico multi-dispositivo, pull-to-refresh, y aplicar datos remotos frescos sobre la
 UI.
 **Exporta:** `intentarSincronizar()`, `sincronizarAhora()`, `forzarSincronizacion()`, `conReintentoSi401()`, `sondearCambiosRemotos()`, `aplicarDatosRemotosFrescos()`, `marcarCambioPendiente()`, `marcarUltimaSincronizacionConfirmada()`, `actualizarIndicadorSync()`, `mostrarCargando()/ocultarCargando()`, `inicializarPullToRefresh()`, `intentarReconexionSilenciosa()`, `programarRefrescoProactivo()`, `mostrarAvisoReconexion()/ocultarAvisoReconexion()`.
-**Depende de:** `auth.js`, `schema.js`, `storage.js`, y (para refrescar la UI tras
-sincronizar) `config-ajustes.js`, `config-enlaces.js`, `plan-gestionar.js`,
-`plan-vista-lista.js`, `ui/tema.js`, `ui/componentes.js`, `main.js`.
+**Depende de:** `auth.js`, `schema.js`, `storage.js`, `storage-merge.js` (para fundir datos remotos con locales), y (para refrescar la UI tras sincronizar) `config-ajustes.js`, `config-enlaces.js`, `plan-gestionar.js`, `plan-vista-lista.js`, `semestres.js`, `ui/tema.js`, `ui/componentes.js`, `main.js`.
 **Si el bug es "no sincroniza", "se pierden cambios", o "el spinner de carga no
 aparece/no desaparece", es acá.**
+
+### `core/storage-merge.js`
+**Qué hace:** el motor de **fusión** (merge) entre los datos locales y los que llegan
+de Drive — decide, entidad por entidad, cuál versión gana usando el reloj lógico de
+Lamport + `_version_base` (ver `sellarTimestamp`, `schema.js`), y detecta **conflicto
+real** (`hayConflictoReal`) cuando dos dispositivos editaron la misma entidad de
+formas distintas a partir de la misma base, marcándola con `_conflicto: true` en vez
+de perder silenciosamente una de las dos ediciones.
+**Exporta:** `fusionarDatos()` (punto de entrada, arma el objeto completo fusionado), `fusionarColeccion()` (colecciones planas: agenda, profesores, enlaces, categorías/materias dentro de un plan), `fusionarPlanesEstudio()`/`fusionarPlan()` (fusión anidada de un Plan: materias + categorías, cada una con su propia tumba), `fusionarSemestres()`/`fusionarSemestre()` (fusión anidada de un Semestre: `materias_matriculadas` con su propia tumba `_eliminados_materias_matriculadas` — mismo patrón que `fusionarPlan`), `fusionarTumbas()`, `hayConflictoReal()`, `marcarConflictoSiCorresponde()`, `esMasReciente()`.
+**Depende de:** `schema.js` (`sellarTimestamp` y las constantes de reloj lógico).
+**Lo usan:** `storage-sync.js` (único punto que llama a `fusionarDatos()`, al aplicar
+datos remotos).
+**Si el bug es "se resucitó algo que borré", "perdí una edición al sincronizar desde
+otro dispositivo", o "el badge de conflicto no aparece/no se resuelve", es acá. Si
+agregás una entidad nueva con su propia colección anidada borrable, tiene que pasar
+por este mismo patrón (tumba propia + fusión anidada) — no inventes uno aparte.**
 
 ### `core/utils.js`
 **Qué hace:** helpers genéricos sin estado propio — no dependen de `estado`, no tocan
@@ -105,7 +127,7 @@ el DOM (salvo `convertirArchivoABase64`).
 - `normalizarSeparadoresRequisitos()`, `parsearGrupoRequisitos()`, `serializarGrupoRequisitos()` — texto ↔ arreglo de grupos de requisitos (`;` = Y, `/` = O).
 - `obtenerIniciales()`, `convertirArchivoABase64()`.
 **Depende de:** `storage.js` (algunas funciones leen `estado.datos.configuracion` para saber el formato activo).
-**Lo usan:** casi todos los módulos de `plan/` y `config/`.
+**Lo usan:** casi todos los módulos de `plan/`, `config/` y `semestres/`.
 **Si vas a registrar `compararNombresMateria()` (pendiente, C.1 del prompt v9) o cualquier otro helper reutilizable nuevo, es acá.**
 
 ---
@@ -118,7 +140,7 @@ ni de Configuración: modal de confirmación genérico, toasts, long-press, flec
 scroll horizontal (`‹ ›`), y el layout responsivo del sidebar/drawer móvil.
 **Exporta:** `abrirConfirmacion()`, `cerrarConfirmacion()`, `inicializarModalConfirmacion()`, `mostrarToast()`, `agregarLongPress()`, `envolverConFlechasScroll()`, `inicializarLayoutResponsivo()`, `cerrarSidebarMovil()`, `restaurarEstadoSidebar()`, `inicializarBotonesCerrarModal()`.
 **Depende de:** `main.js` (solo `renderizarPerfil`, para reaccionar a cambios de layout).
-**Lo usan:** casi todos los módulos de `plan/`, más `storage-sync.js` y `main.js`.
+**Lo usan:** casi todos los módulos de `plan/` y `semestres/`, más `storage-sync.js` y `main.js`.
 **Si el bug es "el drawer no ancla en móvil", "las flechas ‹ › no llegan al final", o
 "el modal de confirmación se ve raro", es acá.**
 
@@ -163,6 +185,10 @@ planes/materias que casi todo el resto de `plan/` usa.
 **Depende de:** `schema.js`, `storage.js`, `storage-sync.js`, `utils.js`, `plan-gestionar.js`, `plan-importacion-csv.js`, `plan-vista-lista.js`.
 **Si necesitás leer "cuál es el plan activo" o "qué materias están visibles ahora
 mismo" desde un archivo nuevo, importalo de acá.**
+**Deuda conocida:** con Modo Hardcore ahora a 3 planes (ver `plan-gestionar.js`),
+falta un `obtenerPlanTerciario()` equivalente a `obtenerPlanSecundario()` si algún
+módulo llega a necesitarlo suelto — hoy `js/semestres/` no lo necesita porque usa
+`obtenerPlanesActivos()` de `schema.js` directamente.
 
 ### `plan/plan-importacion.js`
 **Qué hace:** construir el **prompt oficial** que se copia a la IA, y el panel de
@@ -200,21 +226,28 @@ materia en sí (colapsada/expandida).
 **Depende de:** `storage.js`, `storage-sync.js`, `utils.js`, `componentes.js`,
 `plan-esquema.js`, `plan-vista-lista.js`, y **`plan-detalle.js`** (para el encabezado
 de 2 líneas y el cuerpo de detalle, que la tarjeta reutiliza tal cual del modal).
+**Lo usan** además `plan-detalle.js` (importa `ESTADOS_MATERIA`, `materiaDisponible`, etc.) y **`js/semestres/semestres-tarjetas.js`** (importa `ESTADOS_MATERIA` para el badge de Estado de cada materia matriculada — misma fuente de verdad, no una copia).
 **Si el pedido es sobre el diseño de la tarjeta (colapsada o expandida) o sobre el
 bloque de Optativas, es acá.**
 
 ### `plan/plan-detalle.js`
 **Qué hace:** el **"detalle unificado" de una materia** — el mismo diseño se usa
-tanto dentro de la tarjeta expandida como en el modal de requisito. Es el módulo con
-más peso visual del rediseño de v8/v9.
+tanto dentro de la tarjeta expandida del Plan como en el modal de requisito, **y
+ahora también dentro de la tarjeta de materia matriculada de un semestre** (ver
+`js/semestres/semestres-tarjetas.js`).
 **Exporta:**
-- Piezas compartidas por tarjeta y modal: `construirLinea2Materia()` (Estado·Horas·Créditos), `construirMetaLineaMateria()` (Bloque·Código), `construirLineaCategoriaMateria()`, `construirBotonesFinalesDetalle()` ("Es requisito"/"Historial"/"Cerrar" agrupados), `construirFilaRequisito()`, `construirBloqueRequisitos()`, `construirBloqueCompletoRequisitos()`, `construirCuerpoDetalleMateria()` (junta todo lo anterior).
+- Piezas compartidas: `construirLinea2Materia()` (Estado·Horas·Créditos), `construirMetaLineaMateria()` (Bloque·Código), `construirLineaCategoriaMateria()`, `construirBotonesFinalesDetalle()` ("Es requisito"/"Historial"/"Cerrar" agrupados), `construirFilaRequisito()`, `construirBloqueRequisitos()`, `construirBloqueCompletoRequisitos()`, `construirCuerpoDetalleMateria()` (junta todo lo anterior).
 - Modales: `abrirModalRequisito()`, `abrirModalDesbloquea()`, `abrirModalHistorial()`, `inicializarModalDesbloquea()/inicializarModalRequisito()/inicializarModalHistorial()`.
 **Depende de:** `storage.js`, `utils.js`, `componentes.js`, `plan-esquema.js`, `plan-vista-lista-tarjetas.js` (para el candado/getters de materia).
+**Lo usan** además de la tarjeta/modal del Plan: **`js/semestres/semestres-tarjetas.js`** (importa `construirLineaCategoriaMateria()` y `construirBotonesFinalesDetalle()` para la fila "Categoría / Es requisito de… / Historial" dentro de un semestre expandido).
 **Si el pedido es sobre el diseño del encabezado de 2 líneas, la ventana de detalle,
-"Es requisito"/Historial, o el orden de los botones finales, es acá — y como la
-tarjeta y el modal comparten estas funciones, un cambio acá se ve en los dos lugares
-a la vez.**
+"Es requisito"/Historial, o el orden de los botones finales, es acá — y como se
+comparte en 3 lugares (tarjeta del Plan, modal, tarjeta de matrícula), un cambio acá
+se ve en los tres a la vez.**
+**Pendiente (Fase 6):** `abrirModalHistorial()` hoy avisa que el módulo de Semestres
+"todavía no existe" — ya existe (`js/semestres/`), pero mostrar ahí el historial real
+de en qué semestres se cursó una materia sigue pendiente porque tiene más sentido una
+vez que haya notas que mostrar junto a cada intento. Ver el prompt de Fase 6.
 
 ### `plan/plan-categorias.js`
 **Qué hace:** CRUD de categorías + el modal de asignación masiva de materias a una
@@ -223,8 +256,9 @@ categoría.
 **Depende de:** `schema.js`, `storage.js`, `storage-sync.js`, `utils.js`, `componentes.js`, `plan-esquema.js`, `plan-vista-lista.js`.
 
 ### `plan/plan-gestionar.js`
-**Qué hace:** selector de plan activo (arriba de todo), Modo Hardcore (doble
-carrera), y el modal "Gestionar Planes" (reordenar, eliminar, favorito).
+**Qué hace:** selector de plan activo (arriba de todo), Modo Hardcore (**hasta 3
+carreras simultáneas** — principal + secundaria + terciaria, ver `obtenerPlanesActivos`
+en `schema.js`), y el modal "Gestionar Planes" (reordenar, eliminar, favorito).
 **Exporta:** `renderizarSelectorPlan()`, `renderizarModoHardcore()`, `abrirModalGestionPlanes()`, `renderizarListaGestionPlanes()`, `eliminarPlanEstudio()`, `inicializarModalGestionPlanes()`.
 **Depende de:** `storage.js`, `storage-sync.js`, `utils.js`, `componentes.js`, `plan-esquema.js`, `plan-vista-lista.js`.
 
@@ -238,8 +272,46 @@ claro transparente, vía `html2canvas`).
 **Depende de:** `storage.js`, `utils.js`, `plan-detalle.js` (para abrir el detalle al
 mantener presionada una materia), `plan-vista-lista-tarjetas.js` (candado/getters), `plan-vista-lista.js`.
 **Simplificación conocida y pendiente de confirmar con Wagner:** hoy el mapa muestra
-solo el plan **principal** (no combina Modo Hardcore), y la Simbología usa 4 estados
-reales (no existe un 5º estado "Retirada" en `ESTADOS_MATERIA`).
+solo el plan **principal** (no combina Modo Hardcore, que ahora además soporta hasta
+3 planes — la brecha creció, no se achicó), y la Simbología usa 4 estados reales (no
+existe un 5º estado "Retirada" en `ESTADOS_MATERIA`).
+
+---
+
+## `js/semestres/` — Semestres y matrícula (Fase 1 de "Semestres y Notas")
+
+### `semestres/semestres.js`
+**Qué hace:** el formulario de alta de semestre (nombre, fecha, duración, selector de
+plan(es) si Hardcore está activo, checklist de materias por bloque), la **sincronía
+Matrícula → Plan** (matricular pasa la materia real a "Cursando"), y el listado de
+semestres (actuales + pasados).
+**Exporta:** `abrirModalAltaSemestre()`, `obtenerSemestresActuales()`, `obtenerSemestresPasados()`, `renderizarSemestres()`.
+**Depende de:** `schema.js` (`crearSemestre`, `crearMateriaMatriculada`, `obtenerPlanesActivos`, `obtenerEstadoEfectivoSemestre`, `LIMITE_SEMANAS_SEMESTRE`, `sellarTimestamp`), `storage.js`, `storage-sync.js`, `utils.js`, `semestres-tarjetas.js` (`construirTarjetaSemestre`).
+**Si el pedido es sobre el formulario de alta, "puedo matricular de más de un plan a
+la vez", o "matricular no pasó la materia a Cursando en el Plan", es acá.**
+**Pendiente (Fase 6):** el botón "Terminar semestre" (mover a historial + revisión
+pasó/no-pasó por materia, sugerida según nota) no existe todavía — hoy un semestre
+solo pasa a "pasado" automáticamente al llegar a `LIMITE_SEMANAS_SEMESTRE` desde su
+`fecha_inicio`, o si el usuario lo fuerza a mano (ver `semestres-tarjetas.js`). Ver el
+prompt de Fase 6.
+
+### `semestres/semestres-tarjetas.js`
+**Qué hace:** la tarjeta de semestre (colapsada: nombre—fecha—créditos; expandida:
+sus materias matriculadas en el orden del Plan de origen de cada una), el badge de
+estado actual/pasado con override manual (mantener presionado), y la tarjeta de cada
+materia matriculada (badge de universidad + código + nombre, badge Estado + badge
+universidad + badge créditos, Categoría/Es requisito de/Historial reutilizados de
+`plan-detalle.js`, y el placeholder vacío para el cuadro de notas de la Fase 6).
+**Exporta:** `construirTarjetaSemestre()`.
+**Depende de:** `schema.js` (`obtenerEstadoEfectivoSemestre`, `sellarTimestamp`), `storage.js`, `storage-sync.js`, `utils.js`, `componentes.js` (`agregarLongPress`, `mostrarToast`), `plan-vista-lista-tarjetas.js` (`ESTADOS_MATERIA`), `plan-detalle.js` (`construirLineaCategoriaMateria`, `construirBotonesFinalesDetalle`).
+**Si el pedido es sobre el diseño de la tarjeta de semestre o de materia matriculada,
+o sobre "el estado actual/pasado se detectó mal y necesito forzarlo a mano", es acá.**
+**Pendiente (Fase 6):** el badge de conflicto de una materia matriculada hoy solo
+muestra un aviso genérico (`mostrarToast`) en vez de un resolver real, porque la
+entidad todavía no tiene campos mutables interesantes que comparar (ver
+`crearMateriaMatriculada`, `schema.js`). Una vez que tenga `criterios`/`nota_final`,
+esto necesita su propio modal, con el mismo patrón que `abrirModalResolverConflicto`
+en `plan-vista-lista-tarjetas.js`. Ver el prompt de Fase 6.
 
 ---
 
@@ -247,9 +319,9 @@ reales (no existe un 5º estado "Retirada" en `ESTADOS_MATERIA`).
 
 **Qué hace:** todo lo que pasa una sola vez al cargar la página — decide si hay
 sesión guardada o hay que mostrar el botón de login, pinta el perfil de Google,
-maneja la navegación entre secciones del sidebar, y llama a **todas** las funciones
-`inicializarX()` de los demás módulos (son las que enganchan los listeners de cada
-modal la primera vez).
+maneja la navegación entre secciones del sidebar (ahora incluye "semestres"), y llama
+a **todas** las funciones `inicializarX()` de los demás módulos (son las que enganchan
+los listeners de cada modal la primera vez).
 **Exporta:** `onLoginExitoso()`, `mostrarApp()`, `cerrarSesion()`, `pedirConfirmacionCerrarSesion()`, `mostrarSeccion()`, `inicializarNavegacionSecciones()`, `renderizarPerfil()`, `togglePerfilPopover()`, `CLAVE_SECCION_ACTIVA`.
 **Depende de:** de casi todo — es el único archivo que puede darse ese lujo, porque
 nada más depende de él salvo `storage-sync.js` (necesita `renderizarPerfil` tras
@@ -268,6 +340,7 @@ Estudios.
 | Cambiar una llave del JSON que se guarda en Drive | `core/schema.js` |
 | Un bug de login / sesión que no inicia | `core/auth.js`, `main.js` |
 | "No sincroniza" / "se pierden cambios" / spinner de carga | `core/storage-sync.js` |
+| "Se resucitó algo que borré" / conflicto entre 2 dispositivos | `core/storage-merge.js` |
 | Agregar una llave nueva a `estado` (memoria de sesión) | `core/storage.js` |
 | Un helper genérico de texto/color/fecha reutilizable | `core/utils.js` |
 | Modal de confirmación, toast, drawer móvil, flechas `‹ ›` | `ui/componentes.js` |
@@ -281,8 +354,10 @@ Estudios.
 | Diseño de la tarjeta de materia, bloque de Optativas | `plan/plan-vista-lista-tarjetas.js` |
 | Encabezado de 2 líneas, modal de detalle, "Es requisito"/Historial | `plan/plan-detalle.js` |
 | Categorías (CRUD) | `plan/plan-categorias.js` |
-| Selector de plan, Modo Hardcore, Gestionar Planes | `plan/plan-gestionar.js` |
+| Selector de plan, Modo Hardcore (3 planes), Gestionar Planes | `plan/plan-gestionar.js` |
 | Vista de Mapa interactivo | `plan/plan-mapa.js` |
+| Alta de semestre, matricular materias, sincronía con el Plan | `semestres/semestres.js` |
+| Tarjeta de semestre/materia matriculada, estado actual/pasado manual | `semestres/semestres-tarjetas.js` |
 | Navegación del sidebar, qué sección se muestra al entrar | `main.js` |
 
 **Regla general para una IA nueva:** antes de tocar código, hacé `grep` del nombre de
@@ -290,3 +365,11 @@ la función que creés que hay que cambiar sobre toda la carpeta `js/` — el no
 archivo real siempre está en el `export {}` al final de cada archivo, así que un
 `grep -rn "nombreDeLaFuncion" js/` te confirma en 1 paso si la sospecha de esta tabla
 es correcta antes de editar.
+
+---
+
+## Deuda pendiente conocida (para no perderla de vista)
+
+- **Fase 6 — motor de notas:** ver `PROMPT-FASE-6-NOTAS.md`. Cubre `criterios`/`nota_final` en Materia-matriculada, el botón "Terminar semestre", el resolver de conflicto real de matrícula, y el historial real por materia.
+- **`plan-mapa.js` no combina Modo Hardcore** (solo muestra el plan principal) — ya existía antes de esta fase, y con Hardcore ahora a 3 planes la brecha es más notoria. No bloqueante, pendiente de confirmar prioridad con Wagner.
+- **`plan/plan-esquema.js` no tiene `obtenerPlanTerciario()`** — no hizo falta para Semestres (usa `obtenerPlanesActivos()` de `schema.js`), pero si otro módulo necesita el plan terciario suelto, falta ese getter.

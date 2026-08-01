@@ -81,7 +81,9 @@
         <button class="btn btn-secondary btn-block btn-nav" title="Resumen" disabled>🏠 <span class="texto-nav">Resumen</span></button>
         <button class="btn btn-secondary btn-block btn-nav" title="Agenda" disabled>📖 <span class="texto-nav">Agenda</span></button>
         <button class="btn btn-secondary btn-block btn-nav" title="Horario" disabled>🗓️ <span class="texto-nav">Horario</span></button>
-        <button class="btn btn-secondary btn-block btn-nav" title="Semestres" disabled>📅 <span class="texto-nav">Semestres</span></button>
+        
+        <button id="nav-semestres" class="btn btn-secondary btn-block btn-nav" data-seccion="semestres" title="Semestres">📅 <span class="texto-nav">Semestres</span></button>
+
         <button class="btn btn-secondary btn-block btn-nav" title="Profesores" disabled>👨‍🏫 <span class="texto-nav">Profesores</span></button>
         <button id="nav-plan-estudios" class="btn btn-secondary btn-block btn-nav" data-seccion="plan-estudios" title="Plan de Estudios">📚 <span class="texto-nav">Plan de Estudios</span></button>
         <button id="nav-configuracion" class="btn btn-primary btn-block btn-nav" data-seccion="configuracion" title="Configuración">⚙️ <span class="texto-nav">Configuración</span></button>
@@ -175,6 +177,9 @@
 
       <!-- ===================== SECCIÓN: Plan de Estudios ===================== -->
       <div id="seccion-plan-estudios" class="stack oculto"></div>
+
+      <!-- ===================== SECCIÓN: Semestres ===================== -->
+      <div id="seccion-semestres" class="stack oculto"></div>
 
     </main>
 
@@ -387,11 +392,20 @@
         <span class="track"><span class="thumb"></span></span>
       </label>
     </div>
-    <p class="muted">Para quienes llevan dos carreras a la vez: activa un segundo Plan de Estudios en paralelo. Al desactivarlo no se borra nada, solo se deja de combinar.</p>
+
+
+    <!-- Semestres y Notas — Fase 1: Hardcore pasó de 2 a hasta 3 planes
+         simultáneos (principal + secundario + terciario). -->
+    <p class="muted">Para quienes llevan varias carreras a la vez: activa hasta 2 Planes de Estudio más en paralelo. Al desactivarlo no se borra nada, solo se deja de combinar.</p>
     <div id="bloque-plan-secundario" class="oculto">
       <span class="form-label">Plan de Estudios secundario</span>
       <div id="selector-plan-secundario"></div>
     </div>
+    <div id="bloque-plan-terciario" class="oculto">
+      <span class="form-label">Plan de Estudios terciario</span>
+      <div id="selector-plan-terciario"></div>
+    </div>
+
 
     <div class="row" style="justify-content:flex-end;">
       <button id="btn-cerrar-gestion-planes" class="btn btn-secondary">Cerrar</button>
