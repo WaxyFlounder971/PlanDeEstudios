@@ -78,8 +78,22 @@ function creditosTotalesSemestre(semestre) {
  * abrirModalHistorial en plan-detalle.js) una vez que exista el módulo de
  * Semestres completo con notas (Fase 6).
  */
-function marcarMateriaCursando(materia) {
-  if (materia.estado === "cursando") return; // ya está, no reselles sin necesidad
+/**
+ * v2.1.2 — CAMBIO DE COMPORTAMIENTO (reemplaza la regla documentada en la
+ * Fase 1): antes matricular SIEMPRE pasaba la materia a "cursando", incluso
+ * si ya estaba "Aprobada" (asumiendo que repetirla debía sacarla de
+ * aprobada). Wagner reportó el efecto real: registrar un semestre —
+ * incluso uno viejo, solo para tener historial cargado — terminaba
+ * marcando "cursando" materias que en el Plan ya estaban aprobadas, lo cual
+ * no tiene sentido. Ahora se prioriza lo que YA hay cargado en el Plan de
+ * Estudios (lo más probable es que se registre ahí primero):
+ * - "aprobado" -> se queda igual. Matricular NO la toca.
+ * - "reprobado" / "pendiente" -> sí pasa a "cursando" (es la primera vez o
+ *   se está repitiendo de verdad).
+ * - "cursando" -> no-op, ya está.
+ */
+function sincronizarEstadoAlMatricular(materia) {
+  if (materia.estado === "aprobado" || materia.estado === "cursando") return;
   materia.estado = "cursando";
   sellarTimestamp(materia);
 }
@@ -91,6 +105,8 @@ function marcarMateriaCursando(materia) {
 // transitorio del formulario, no un dato persistido.
 let seleccionPorPlan = new Map();
 let planVisibleEnSelector = null;
+let busquedaAltaSemestre = "";
+let estadosOcultosAltaSemestre = new Set(); // "aprobado" | "reprobado" -> oculto del checklist
 
 function planPorDefectoParaDuracion() {
   return obtenerPlanPorId(estado.datos.configuracion.plan_activo_id);
@@ -99,6 +115,8 @@ function planPorDefectoParaDuracion() {
 function resetearFormularioAlta() {
   seleccionPorPlan = new Map();
   planVisibleEnSelector = estado.datos.configuracion.plan_activo_id;
+  busquedaAltaSemestre = "";
+  estadosOcultosAltaSemestre = new Set(); // por defecto ambos "activos" (nada oculto)
 }
 
 /** Botones apilados (uno por plan activo, hasta 3 — ver obtenerPlanesActivos)
@@ -126,7 +144,117 @@ function construirSelectorPlanesHardcore(contenedor, planesIds, onCambiarVisible
   contenedor.appendChild(grupo);
 }
 
-/** Checkboxes agrupado por bloque — punto 2 del prompt. */
+/** v2.1.2: buscador reutilizando el mismo patrón que ya usa
+ *  renderizarControlesCategoriaMaterias (plan-categorias.js). */
+function construirBuscadorAltaSemestre(contenedor, onCambiar) {
+  contenedor.innerHTML = "";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "form-input";
+  input.placeholder = "Buscar por nombre o código…";
+  input.value = busquedaAltaSemestre;
+  input.addEventListener("input", () => {
+    busquedaAltaSemestre = input.value;
+    onCambiar();
+  });
+  contenedor.appendChild(input);
+}
+
+/** v2.1.2: "Mostrar: Aprobados | Reprobados" — a diferencia de un pill-group
+ *  de selección única (ej. pillOrden en plan-categorias.js), acá los 2
+ *  botones son independientes entre sí: cada uno empieza "activo" (=
+ *  visible) y clickearlo lo OCULTA del checklist, no selecciona nada. */
+function construirPillsFiltroEstado(contenedor, onCambiar) {
+  contenedor.innerHTML = "";
+  const fila = document.createElement("div");
+  fila.className = "row";
+  fila.style.alignItems = "center";
+
+  const etiqueta = document.createElement("span");
+  etiqueta.className = "muted";
+  etiqueta.textContent = "Mostrar:";
+  fila.appendChild(etiqueta);
+
+  const grupo = document.createElement("div");
+  grupo.className = "pill-group";
+  [
+    { valor: "aprobado", texto: "Aprobados" },
+    { valor: "reprobado", texto: "Reprobados" },
+  ].forEach(({ valor, texto }) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pill-item" + (estadosOcultosAltaSemestre.has(valor) ? "" : " active");
+    btn.textContent = texto;
+    btn.addEventListener("click", () => {
+      if (estadosOcultosAltaSemestre.has(valor)) estadosOcultosAltaSemestre.delete(valor);
+      else estadosOcultosAltaSemestre.add(valor);
+      onCambiar();
+    });
+    grupo.appendChild(btn);
+  });
+  fila.appendChild(grupo);
+  contenedor.appendChild(fila);
+}
+
+/** v2.1.2: buscador reutilizando el mismo patrón que ya usa
+ *  renderizarControlesCategoriaMaterias (plan-categorias.js). */
+function construirBuscadorAltaSemestre(contenedor, onCambiar) {
+  contenedor.innerHTML = "";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "form-input";
+  input.placeholder = "Buscar por nombre o código…";
+  input.value = busquedaAltaSemestre;
+  input.addEventListener("input", () => {
+    busquedaAltaSemestre = input.value;
+    onCambiar();
+  });
+  contenedor.appendChild(input);
+}
+
+/** v2.1.2: "Mostrar: Aprobados | Reprobados" — a diferencia de un pill-group
+ *  de selección única (ej. pillOrden en plan-categorias.js), acá los 2
+ *  botones son independientes entre sí: cada uno empieza "activo" (=
+ *  visible) y clickearlo lo OCULTA del checklist, no selecciona nada. */
+function construirPillsFiltroEstado(contenedor, onCambiar) {
+  contenedor.innerHTML = "";
+  const fila = document.createElement("div");
+  fila.className = "row";
+  fila.style.alignItems = "center";
+
+  const etiqueta = document.createElement("span");
+  etiqueta.className = "muted";
+  etiqueta.textContent = "Mostrar:";
+  fila.appendChild(etiqueta);
+
+  const grupo = document.createElement("div");
+  grupo.className = "pill-group";
+  [
+    { valor: "aprobado", texto: "Aprobados" },
+    { valor: "reprobado", texto: "Reprobados" },
+  ].forEach(({ valor, texto }) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pill-item" + (estadosOcultosAltaSemestre.has(valor) ? "" : " active");
+    btn.textContent = texto;
+    btn.addEventListener("click", () => {
+      if (estadosOcultosAltaSemestre.has(valor)) estadosOcultosAltaSemestre.delete(valor);
+      else estadosOcultosAltaSemestre.add(valor);
+      onCambiar();
+    });
+    grupo.appendChild(btn);
+  });
+  fila.appendChild(grupo);
+  contenedor.appendChild(fila);
+}
+
+/** Checkboxes agrupado por bloque — punto 2 del prompt original, más
+ *  buscador y filtro por estado (v2.1.2). Checkbox custom (`.checkbox`/`.box`
+ *  de design-system.css — mismo markup que ya usa
+ *  renderizarListaMateriasCheckbox en plan-categorias.js, nunca el checkbox
+ *  default del navegador). Código en columna de ancho fijo (monoespaciado)
+ *  para que el nombre arranque siempre en la misma posición, sin importar
+ *  cuántos caracteres tenga el código. */
 function construirChecklistMaterias(contenedor, plan) {
   contenedor.innerHTML = "";
   if (!plan) {
@@ -141,8 +269,17 @@ function construirChecklistMaterias(contenedor, plan) {
   const seleccion = seleccionPorPlan.get(plan.id) || new Set();
   seleccionPorPlan.set(plan.id, seleccion);
 
+  let materias = plan.materias.filter((m) => !estadosOcultosAltaSemestre.has(m.estado));
+  const q = busquedaAltaSemestre.trim().toLowerCase();
+  if (q) materias = materias.filter((m) => m.nombre.toLowerCase().includes(q) || m.codigo.toLowerCase().includes(q));
+
+  if (materias.length === 0) {
+    contenedor.innerHTML = `<p class="muted">No hay materias que coincidan con el filtro.</p>`;
+    return;
+  }
+
   const porBloque = new Map();
-  plan.materias.forEach((m) => {
+  materias.forEach((m) => {
     if (!porBloque.has(m.bloque)) porBloque.set(m.bloque, []);
     porBloque.get(m.bloque).push(m);
   });
@@ -160,24 +297,21 @@ function construirChecklistMaterias(contenedor, plan) {
       bloqueCard.appendChild(titulo);
 
       porBloque.get(bloque).forEach((materia) => {
-        const fila = document.createElement("label");
-        fila.className = "row";
-        fila.style.cssText = "gap:8px; align-items:center; cursor:pointer;";
-
-        const chk = document.createElement("input");
-        chk.type = "checkbox";
-        chk.checked = seleccion.has(materia.codigo);
-        chk.addEventListener("change", () => {
-          if (chk.checked) seleccion.add(materia.codigo);
+        const label = document.createElement("label");
+        label.className = "checkbox";
+        label.innerHTML = `
+          <input type="checkbox" ${seleccion.has(materia.codigo) ? "checked" : ""}>
+          <span class="box"></span>
+          <span style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">
+            <span style="min-width:64px; flex-shrink:0; font-family:monospace; font-size:0.85rem;">${materia.codigo}</span>
+            <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${aplicarFormatoTexto(materia.nombre)}</span>
+          </span>
+        `;
+        label.querySelector('input[type="checkbox"]').addEventListener("change", (e) => {
+          if (e.target.checked) seleccion.add(materia.codigo);
           else seleccion.delete(materia.codigo);
         });
-        fila.appendChild(chk);
-
-        const texto = document.createElement("span");
-        texto.textContent = `${materia.codigo} — ${aplicarFormatoTexto(materia.nombre)}`;
-        fila.appendChild(texto);
-
-        bloqueCard.appendChild(fila);
+        bloqueCard.appendChild(label);
       });
 
       contenedor.appendChild(bloqueCard);
@@ -255,6 +389,28 @@ function abrirModalAltaSemestre() {
     avisoHardcore.textContent = "Modo Hardcore activo: elegí de cuál plan sacar materias (podés marcar de más de uno).";
     caja.appendChild(avisoHardcore);
   }
+
+
+  const contenedorBuscador = document.createElement("div");
+  const contenedorFiltroEstado = document.createElement("div");
+  caja.appendChild(contenedorBuscador);
+  caja.appendChild(contenedorFiltroEstado);
+  caja.appendChild(contenedorSelectorPlanes);
+  caja.appendChild(contenedorChecklist);
+
+  const refrescarChecklist = () => construirChecklistMaterias(contenedorChecklist, obtenerPlanPorId(planVisibleEnSelector));
+  const refrescarSelectorYChecklist = () => {
+    construirSelectorPlanesHardcore(contenedorSelectorPlanes, planesActivos, (planId) => {
+      planVisibleEnSelector = planId;
+      refrescarSelectorYChecklist();
+    });
+    refrescarChecklist();
+  };
+  construirBuscadorAltaSemestre(contenedorBuscador, refrescarChecklist);
+  construirPillsFiltroEstado(contenedorFiltroEstado, refrescarChecklist);
+  refrescarSelectorYChecklist();
+
+
   caja.appendChild(contenedorSelectorPlanes);
   caja.appendChild(contenedorChecklist);
 
@@ -321,7 +477,7 @@ function abrirModalAltaSemestre() {
         const materia = plan.materias.find((m) => m.codigo === codigo);
         if (!materia) return;
         semestre.materias_matriculadas.push(crearMateriaMatriculada({ materiaId: materia.id, planEstudioId: planId }));
-        marcarMateriaCursando(materia);
+        sincronizarEstadoAlMatricular(materia);
       });
     });
 

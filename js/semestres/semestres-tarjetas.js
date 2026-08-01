@@ -11,7 +11,8 @@ import { agregarLongPress, mostrarToast } from "../ui/componentes.js";
 import { obtenerEstadoEfectivoSemestre, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { ESTADOS_MATERIA } from "../plan/plan-vista-lista-tarjetas.js";
-import { construirBotonesFinalesDetalle, construirLineaCategoriaMateria } from "../plan/plan-detalle.js";
+import { construirColumnaAccionesTarjeta } from "../plan/plan-detalle.js";
+import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 
 // Transitorio (no persistido) — igual que estado.materiasExpandidas en
 // plan-vista-lista-tarjetas.js: qué semestres están expandidos en esta sesión.
@@ -33,6 +34,16 @@ function textoBadgeUniversidad(universidad) {
   return universidad.length > 14 ? obtenerIniciales(universidad) : universidad;
 }
 
+const MESES_LARGOS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+/** v2.1.2: "3 de agosto del 2026" — parseo manual (no `new Date()`) para no
+ *  arriesgarse a que el navegador interprete el ISO en UTC y corra el día. */
+function formatearFechaLarga(fechaISO) {
+  const [anio, mes, dia] = String(fechaISO).split("-").map(Number);
+  if (!anio || !mes || !dia) return fechaISO;
+  return `${dia} de ${MESES_LARGOS[mes - 1]} del ${anio}`;
+}
+
 /**
  * Semestres y Notas — Fase 1: la materia-matriculada en sí no guarda casi
  * nada mutable todavía (ver crearMateriaMatriculada, schema.js) — no tiene
@@ -47,6 +58,47 @@ function textoBadgeUniversidad(universidad) {
  */
 function manejarClickConflictoMatricula() {
   mostrarToast("Esta matrícula se registró en 2 dispositivos. Con los datos actuales no hay nada que elegir — se resuelve solo en el próximo sync.");
+}
+
+/** v2.1.2: mismo patrón exacto que abrirMenuRapidoCategoria
+ *  (plan-vista-lista-tarjetas.js) pero para elegir Estado — mantener
+ *  presionado (o clic derecho) el badge de Estado abre este popover. */
+function abrirMenuRapidoEstadoMatricula(materia, anclaEl, onCambiar) {
+  document.querySelectorAll(".popover-estado-rapido").forEach((el) => el.remove());
+
+  const pop = document.createElement("div");
+  pop.className = "glass-card stack popover-estado-rapido";
+  pop.style.cssText = "position:fixed; z-index:200; padding:8px; min-width:160px;";
+  const rect = anclaEl.getBoundingClientRect();
+  pop.style.top = `${rect.bottom + 6}px`;
+  pop.style.left = `${Math.max(8, rect.left)}px`;
+
+  ESTADOS_MATERIA.forEach((opcion) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "btn btn-secondary btn-block";
+    item.style.cssText = "text-align:left; padding:6px 10px; font-size:0.85rem;";
+    item.textContent = opcion.texto;
+    item.addEventListener("click", () => {
+      materia.estado = opcion.valor;
+      sellarTimestamp(materia);
+      marcarCambioPendiente();
+      pop.remove();
+      onCambiar();
+      if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
+    });
+    pop.appendChild(item);
+  });
+
+  document.body.appendChild(pop);
+  setTimeout(() => {
+    document.addEventListener("click", function cerrar(e) {
+      if (!pop.contains(e.target)) {
+        pop.remove();
+        document.removeEventListener("click", cerrar);
+      }
+    });
+  }, 300);
 }
 
 /**
@@ -72,20 +124,14 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, onCambiar) {
     onCambiar();
   });
 
-  // ---- Línea 1: badge universidad · código · nombre · flecha expandir ----
+  // ---- Línea 1: código · nombre · flecha expandir (v2.1.2: sin badge de
+  // universidad acá — quedaba duplicado con el de línea 2; ver ese). ----
   const linea1 = document.createElement("div");
   linea1.className = "materia-linea1";
+  linea1.style.alignItems = "center"; // v2.1.2: código y nombre centrados en el mismo eje vertical
 
   const prefijo = document.createElement("span");
   prefijo.className = "materia-prefijo";
-
-  const badgeUniLinea1 = document.createElement("span");
-  badgeUniLinea1.className = "badge badge-neutral";
-  badgeUniLinea1.style.fontSize = "0.68rem";
-  badgeUniLinea1.textContent = textoBadgeUniversidad(plan.universidad);
-  badgeUniLinea1.title = plan.universidad;
-  prefijo.appendChild(badgeUniLinea1);
-
   const spanCodigo = document.createElement("span");
   spanCodigo.className = "materia-codigo";
   spanCodigo.textContent = materia.codigo;
@@ -104,29 +150,29 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, onCambiar) {
 
   filaPrincipal.appendChild(linea1);
 
-  // ---- Línea 2: badge Estado · badge universidad · badge créditos ----
+  // ---- Línea 2: badge Estado (clickeable) · badge universidad · badge créditos ----
   const linea2 = document.createElement("div");
   linea2.className = "materia-linea2";
 
   const badgeEstado = document.createElement("span");
   badgeEstado.className = `badge ${infoEstado.badge}`;
   badgeEstado.textContent = infoEstado.texto;
+  badgeEstado.style.cursor = "pointer";
+  badgeEstado.title = "Mantén presionado (o clic derecho) para cambiar el estado";
+  agregarLongPress(badgeEstado, () => abrirMenuRapidoEstadoMatricula(materia, badgeEstado, onCambiar));
   linea2.appendChild(badgeEstado);
 
-  const badgeUniLinea2 = document.createElement("span");
-  badgeUniLinea2.className = "badge badge-neutral";
-  badgeUniLinea2.textContent = textoBadgeUniversidad(plan.universidad);
-  badgeUniLinea2.title = plan.universidad;
-  linea2.appendChild(badgeUniLinea2);
+  const badgeUniversidad = document.createElement("span");
+  badgeUniversidad.className = "badge badge-neutral";
+  badgeUniversidad.textContent = textoBadgeUniversidad(plan.universidad);
+  badgeUniversidad.title = plan.universidad;
+  linea2.appendChild(badgeUniversidad);
 
   const badgeCreditos = document.createElement("span");
   badgeCreditos.className = "badge badge-accent";
   badgeCreditos.textContent = `Créditos: ${materia.creditos}`;
   linea2.appendChild(badgeCreditos);
 
-  // Punto 4 del prompt: badge de conflicto de la MATRÍCULA (mm._conflicto),
-  // no de la materia — es el mismo patrón visual que ya existe en
-  // plan-vista-lista-tarjetas.js/plan-mapa.js, no un aviso nuevo aparte.
   if (mm._conflicto) {
     const badgeConflicto = document.createElement("span");
     badgeConflicto.className = "badge badge-danger";
@@ -142,18 +188,14 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, onCambiar) {
   filaPrincipal.appendChild(linea2);
   card.appendChild(filaPrincipal);
 
-  // ---- Expandida: Categoría / Es requisito de... / Historial, repartidos
-  // en todo el ancho — mismas piezas que ya usa la tarjeta del Plan, sin
-  // reinventar el layout (punto 5). + placeholder vacío para notas (Fase 6). ----
+  // ---- Expandida: Categoría + "Es requisito"/"Historial" — v2.1.2: ahora
+  // reutiliza construirColumnaAccionesTarjeta TAL CUAL la usa la tarjeta de
+  // materia del Plan de Estudios (mismo .materia-acciones-botones,
+  // btn-secondary) en vez de un armado propio — así los botones quedan
+  // EXACTAMENTE del mismo tamaño que en la lista del Plan, no los grandes
+  // btn-primary del modal. + placeholder vacío para notas (Fase 6). ----
   if (expandida) {
-    const cuerpo = document.createElement("div");
-    cuerpo.className = "row-between";
-    cuerpo.style.flexWrap = "wrap";
-
-    const lineaCategoria = construirLineaCategoriaMateria(materia, plan);
-    cuerpo.appendChild(lineaCategoria || document.createElement("span")); // spacer si no tiene categoría
-    cuerpo.appendChild(construirBotonesFinalesDetalle(materia, plan, { esModal: false }));
-    card.appendChild(cuerpo);
+    card.appendChild(construirColumnaAccionesTarjeta(materia, plan));
 
     const placeholderNotas = document.createElement("div");
     placeholderNotas.className = "placeholder-notas-materia";
@@ -211,28 +253,47 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar) {
   card.className = "glass-card stack";
 
   const encabezado = document.createElement("div");
-  encabezado.className = "row-between";
-  encabezado.style.cursor = "pointer";
+  encabezado.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px; cursor:pointer;";
   encabezado.addEventListener("click", () => {
     estado.semestresExpandidos.set(semestre.id, !expandido);
     onCambiar();
   });
 
-  const info = document.createElement("span");
-  info.style.fontWeight = "700";
-  info.textContent = `${semestre.nombre} — ${semestre.fecha_inicio} — ${creditosTotalesSemestre(semestre, obtenerPlanPorId)} créditos`;
-  encabezado.appendChild(info);
+  // ---- Izquierda: título + fecha (solo si está expandido) ----
+  const izquierda = document.createElement("div");
+  izquierda.className = "stack";
+  izquierda.style.gap = "2px";
 
+  const titulo = document.createElement("h3");
+  titulo.style.cssText = "margin:0; font-size:1.05rem; font-weight:800;";
+  titulo.textContent = semestre.nombre;
+  izquierda.appendChild(titulo);
+
+  if (expandido) {
+    const fecha = document.createElement("span");
+    fecha.className = "muted";
+    fecha.style.fontSize = "0.85rem";
+    fecha.textContent = formatearFechaLarga(semestre.fecha_inicio);
+    izquierda.appendChild(fecha);
+  }
+  encabezado.appendChild(izquierda);
+
+  // ---- Centro: badge Actual/Pasado (con override manual) ----
+  const centro = document.createElement("div");
+  centro.style.justifySelf = "center";
+  centro.appendChild(construirBadgeEstadoSemestre(semestre, onCambiar));
+  encabezado.appendChild(centro);
+
+  // ---- Derecha: badge de créditos (+ conflicto si hay) + flecha ----
   const derecha = document.createElement("div");
-  derecha.appendChild(construirBadgeEstadoSemestre(semestre, onCambiar));
-
-  // Semestre en sí también pasa por sellarTimestamp (regla obligatoria) —
   derecha.className = "row";
-  derecha.style.alignItems = "center";
-  derecha.style.gap = "8px";
+  derecha.style.cssText = "justify-self:end; align-items:center; gap:8px;";
 
-  // Semestre en sí también pasa por sellarTimestamp (regla obligatoria) —
-  // mismo badge de conflicto que las materias, no uno nuevo.
+  const badgeCreditos = document.createElement("span");
+  badgeCreditos.className = "badge badge-accent";
+  badgeCreditos.textContent = `Créditos: ${creditosTotalesSemestre(semestre, obtenerPlanPorId)}`;
+  derecha.appendChild(badgeCreditos);
+
   if (semestre._conflicto) {
     const badgeConflicto = document.createElement("span");
     badgeConflicto.className = "badge badge-danger";
@@ -252,9 +313,6 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar) {
   card.appendChild(encabezado);
 
   if (expandido) {
-    // Orden del Plan de Estudios de origen — cada materia matriculada busca
-    // su propia posición en el plan del que dice venir (mm.plan_estudio_id),
-    // así que funciona igual con materias mezcladas de varios planes (Hardcore).
     const filas = (semestre.materias_matriculadas || [])
       .map((mm) => {
         const plan = obtenerPlanPorId(mm.plan_estudio_id);
