@@ -44,48 +44,76 @@ function renderizarSelectorPlan() {
 function renderizarModoHardcore() {
   const cfg = estado.datos.configuracion;
   const chk = document.getElementById("switch-modo-hardcore");
-  const bloque = document.getElementById("bloque-plan-secundario");
+  const bloqueSecundario = document.getElementById("bloque-plan-secundario");
+  const bloqueTerciario = document.getElementById("bloque-plan-terciario");
 
   chk.checked = !!cfg.modo_hardcore;
-  bloque.classList.toggle("oculto", !cfg.modo_hardcore);
+  bloqueSecundario.classList.toggle("oculto", !cfg.modo_hardcore);
+  bloqueTerciario.classList.toggle("oculto", !cfg.modo_hardcore);
 
   chk.onchange = () => {
     cfg.modo_hardcore = chk.checked;
-    if (!cfg.modo_hardcore) {
-      // No se borran datos, solo se deja de combinar/mostrar el segundo plan.
-      bloque.classList.add("oculto");
-    } else {
-      bloque.classList.remove("oculto");
-    }
+    // No se borran datos, solo se deja de combinar/mostrar el 2do y 3er plan.
+    bloqueSecundario.classList.toggle("oculto", !cfg.modo_hardcore);
+    bloqueTerciario.classList.toggle("oculto", !cfg.modo_hardcore);
     marcarCambioPendiente();
     if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
   };
 
-  const cont = document.getElementById("selector-plan-secundario");
-  const planes = estado.datos.planes_estudio.filter((p) => p.id !== cfg.plan_activo_id);
-  cont.innerHTML = "";
+  // Semestres y Notas — Fase 1: helper compartido entre el selector
+  // secundario y el terciario — cada uno arma su propia lista de candidatos
+  // (todos los planes MENOS los que ya están ocupados en los otros 2 slots,
+  // para que no se pueda elegir el mismo plan dos veces) y su propio
+  // pill-group. `idSeleccionado`/`onElegir` son lo único que cambia entre
+  // los dos, así se reutiliza exactamente el mismo patrón que ya usaba el
+  // selector secundario en vez de duplicar el bloque completo.
+  const renderizarSelectorHardcore = (contenedorId, idsOcupados, idSeleccionado, onElegir) => {
+    const cont = document.getElementById(contenedorId);
+    const planes = estado.datos.planes_estudio.filter((p) => !idsOcupados.includes(p.id));
+    cont.innerHTML = "";
 
-  if (planes.length === 0) {
-    cont.innerHTML = `<p class="muted">Necesitas al menos un segundo Plan de Estudios importado para usar el Modo Hardcore.</p>`;
-    return;
-  }
+    if (planes.length === 0) {
+      cont.innerHTML = `<p class="muted">No hay otro Plan de Estudios disponible para este slot.</p>`;
+      return;
+    }
 
-  const grupo = document.createElement("div");
-  grupo.className = "pill-group";
-  planes.forEach((plan) => {
-    const btn = document.createElement("button");
-    btn.className = "pill-item" + (plan.id === cfg.plan_activo_secundario_id ? " active" : "");
-    btn.textContent = `${plan.universidad} · ${plan.nombre_carrera}`;
-    btn.addEventListener("click", () => {
-      cfg.plan_activo_secundario_id = plan.id;
+    const grupo = document.createElement("div");
+    grupo.className = "pill-group";
+    planes.forEach((plan) => {
+      const btn = document.createElement("button");
+      btn.className = "pill-item" + (plan.id === idSeleccionado ? " active" : "");
+      btn.textContent = `${plan.universidad} · ${plan.nombre_carrera}`;
+      btn.addEventListener("click", () => onElegir(plan.id));
+      grupo.appendChild(btn);
+    });
+    cont.appendChild(grupo);
+  };
+
+  renderizarSelectorHardcore(
+    "selector-plan-secundario",
+    [cfg.plan_activo_id, cfg.plan_activo_terciario_id].filter(Boolean),
+    cfg.plan_activo_secundario_id,
+    (planId) => {
+      cfg.plan_activo_secundario_id = planId;
       marcarCambioPendiente();
       renderizarModoHardcore();
       if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
-    });
-    grupo.appendChild(btn);
-  });
-  cont.appendChild(grupo);
+    }
+  );
+
+  renderizarSelectorHardcore(
+    "selector-plan-terciario",
+    [cfg.plan_activo_id, cfg.plan_activo_secundario_id].filter(Boolean),
+    cfg.plan_activo_terciario_id,
+    (planId) => {
+      cfg.plan_activo_terciario_id = planId;
+      marcarCambioPendiente();
+      renderizarModoHardcore();
+      if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
+    }
+  );
 }
+
 estado.planGestionImportandoId = null;     // qué fila del panel de gestión tiene el mini-import abierto
 estado.reabrirGestionPlanesTrasCrear = false;
 estado.arrastrandoPlanId = null;          // v5 1.4: drag-and-drop en Gestionar plan
@@ -233,6 +261,10 @@ function eliminarPlanEstudio(planId) {
   if (cfg.plan_activo_secundario_id === planId) {
     cfg.plan_activo_secundario_id = null;
   }
+  if (cfg.plan_activo_terciario_id === planId) {
+    cfg.plan_activo_terciario_id = null;
+  }
+
   marcarCambioPendiente();
   renderizarListaGestionPlanes();
   renderizarSelectorPlan();
