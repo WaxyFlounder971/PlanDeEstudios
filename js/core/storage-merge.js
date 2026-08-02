@@ -409,7 +409,28 @@ function fusionarSemestre(semestreLocal, semestreRemoto) {
   // ganador a ciegas con esMasReciente, sin pasar nunca por
   // marcarConflictoSiCorresponde, así que semestre._conflicto jamás se
   // llegaba a marcar. Ahora sigue el mismo patrón que fusionarColeccion.
-  const conConflicto = marcarConflictoSiCorresponde(semestreLocal, semestreRemoto, "semestre");
+  //
+  // FIX sync (2026-08-02 — "todos los semestres salen como editados en dos
+  // dispositivos" cuando en realidad no había choque): marcarConflictoSiCorresponde
+  // recibía el semestre COMPLETO, materias_matriculadas incluido. Esa
+  // colección ya se funde aparte arriba (fusionarMateriasMatriculadas, con
+  // su propio detector de conflicto por mm) y cambia todo el tiempo por
+  // razones legítimas — pero editar una mm nunca sella el timestamp del
+  // semestre contenedor (eso solo pasa si se toca semestre.estado_manual).
+  // Resultado: dos semestres con ediciones de mm distintas en cada
+  // dispositivo llegaban con el MISMO _version_base a nivel semestre pero
+  // contenido distinto (por la mm) — hayConflictoReal lo leía como choque
+  // real (misma base, resultado distinto) aunque las mm no chocaran entre
+  // sí en absoluto. Se compara solo la "foto plana" del semestre (sin
+  // materias_matriculadas ni su tumba) para que este chequeo represente de
+  // verdad lo que pertenece a ESTE nivel (nombre, fechas, estado_manual,
+  // etc.), y no lo que ya se resuelve por separado un nivel más abajo.
+  const { materias_matriculadas: _mmLocal, _eliminados_materias_matriculadas: _tumbaLocal, ...semestreLocalPlano } =
+    semestreLocal;
+  const { materias_matriculadas: _mmRemoto, _eliminados_materias_matriculadas: _tumbaRemoto, ...semestreRemotoPlano } =
+    semestreRemoto;
+
+  const conConflicto = marcarConflictoSiCorresponde(semestreLocalPlano, semestreRemotoPlano, "semestre");
   const base = conConflicto || (esMasReciente(semestreRemoto, semestreLocal) ? semestreRemoto : semestreLocal);
 
   return {
@@ -447,7 +468,19 @@ function fusionarCriterio(criterioLocal, criterioRemoto) {
   // nombre en un dispositivo y el valor_total en el otro, ambas partiendo
   // de la misma base) se resolvían adivinando en vez de marcarse para que
   // la persona elija, igual que ya pasa con materias/categorías.
-  const conConflicto = marcarConflictoSiCorresponde(criterioLocal, criterioRemoto, "criterio");
+  //
+  // FIX sync (2026-08-02, mismo patrón que fusionarSemestre/
+  // fusionarMateriaMatriculada): criterio se resella en CADA edición de una
+  // asignación (agregar, editar, borrar — ver semestres-tarjetas.js), así
+  // que dos dispositivos tocando asignaciones DISTINTAS del mismo criterio
+  // sin conocerse entre sí terminan con el mismo _version_base y contenido
+  // distinto. asignacionesFundidas ya las combinó bien arriba; comparar de
+  // nuevo el arreglo completo acá solo duplica un conflicto que no existe
+  // en realidad.
+  const { asignaciones: _aLocal, _eliminados_asignaciones: _taLocal, ...criterioLocalPlano } = criterioLocal;
+  const { asignaciones: _aRemoto, _eliminados_asignaciones: _taRemoto, ...criterioRemotoPlano } = criterioRemoto;
+
+  const conConflicto = marcarConflictoSiCorresponde(criterioLocalPlano, criterioRemotoPlano, "criterio");
   const base = conConflicto || (esMasReciente(criterioRemoto, criterioLocal) ? criterioRemoto : criterioLocal);
 
   return {
@@ -503,7 +536,19 @@ function fusionarMateriaMatriculada(mmLocal, mmRemoto) {
   const tumbasCriterios = fusionarTumbas(mmLocal._eliminados_criterios, mmRemoto._eliminados_criterios);
   const criteriosFundidos = fusionarCriterios(mmLocal.criterios, mmRemoto.criterios, tumbasCriterios);
 
-  const conConflicto = marcarConflictoSiCorresponde(mmLocal, mmRemoto, "materia matriculada");
+  // FIX sync (2026-08-02, mismo patrón que fusionarSemestre): mm se resella
+  // en CADA edición de un criterio (ver persistirCambioMateria en
+  // semestres-tarjetas.js), así que dos dispositivos agregando/editando
+  // criterios DISTINTOS a la misma mm sin conocerse entre sí terminan con
+  // el mismo _version_base y contenido distinto — hayConflictoReal lo lee
+  // como choque real aunque criteriosFundidos ya los combinó bien arriba,
+  // sin problema, elemento por elemento. Se compara solo la foto plana de
+  // la mm (sin criterios ni su tumba) para no duplicar acá un conflicto que
+  // ya se resuelve, correctamente, un nivel más abajo.
+  const { criterios: _cLocal, _eliminados_criterios: _tcLocal, ...mmLocalPlano } = mmLocal;
+  const { criterios: _cRemoto, _eliminados_criterios: _tcRemoto, ...mmRemotoPlano } = mmRemoto;
+
+  const conConflicto = marcarConflictoSiCorresponde(mmLocalPlano, mmRemotoPlano, "materia matriculada");
   const base = conConflicto || (esMasReciente(mmRemoto, mmLocal) ? mmRemoto : mmLocal);
 
   return {
