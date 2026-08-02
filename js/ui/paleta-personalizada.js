@@ -548,7 +548,7 @@ function abrirPanelDeEdicion(overlay, panel, paletaBase, alGuardar, coloresExist
   subtitulo.className = "ppz-subtitulo";
   subtitulo.textContent = editandoExistente
     ? "Estás editando tu paleta guardada — los cambios se aplican sobre lo que ya tenías."
-    : `Basada en "${paletaBase}" — ajustá lo que quieras, incluido el color de la fuente.`;
+    : `Basada en "${paletaBase}" — ajustá lo que quieras, los colores de texto se calculan solos.`;
   panel.appendChild(subtitulo);
 
   const base = editandoExistente ? null : leerColoresBaseDesdeCSS();

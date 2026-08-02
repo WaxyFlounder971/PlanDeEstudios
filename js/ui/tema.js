@@ -271,28 +271,22 @@ function calcularGradientesAcento({ accent1, accent2, degradado }) {
 }
 
 function calcularVariablesDerivadas(colores) {
-  const { fondoCanvas, fondoCard, borde, accent1, accent2, luz, fuente, degradado } = colores;
+  const { fondoCanvas, fondoCard, borde, accent1, accent2, luz, degradado, fuente } = colores;
   const canvasClaro = esColorClaro(fondoCanvas);
   const accent1Claro = esColorClaro(accent1);
 
-  // v1.15.9 BUG FIX: `fuente` (selector manual agregado en paleta-
-  // personalizada.js) se guardaba pero nunca se leía acá — esta función
-  // seguía calculando el color de texto SIEMPRE desde fondoCanvas, así que
-  // el campo "Fuente" no tenía ningún efecto visible. Ahora, si `fuente`
-  // viene definido, es la base real del texto primario, y secundario/muted
-  // se derivan mezclándolo hacia fondoCanvas (se desvanecen hacia el fondo,
-  // mismo criterio de jerarquía que la versión automática). Si `fuente` no
-  // viene (paletas fijas, o paletas personalizadas guardadas antes de que
-  // existiera este campo), se conserva el cálculo automático de siempre.
-  const textoPrimario   = fuente
-    ? fuente
-    : mezclarHex(fondoCanvas, canvasClaro ? "#000000" : "#ffffff", canvasClaro ? 0.85 : 0.90);
-  const textoSecundario = fuente
-    ? mezclarHex(fondoCanvas, fuente, 0.70)
-    : mezclarHex(fondoCanvas, canvasClaro ? "#000000" : "#ffffff", canvasClaro ? 0.62 : 0.70);
-  const textoMuted      = fuente
-    ? mezclarHex(fondoCanvas, fuente, 0.50)
-    : mezclarHex(fondoCanvas, canvasClaro ? "#000000" : "#ffffff", canvasClaro ? 0.45 : 0.52);
+  // v1.15.9 (selector manual de "Fuente" en la paleta personalizada): si el
+  // usuario eligió un color de texto a mano, --text-primary es ESE color
+  // tal cual (sin mezclar — es justo lo que pidió), y --text-secondary/
+  // --text-muted se derivan atenuando ESE MISMO color hacia fondoCanvas
+  // (en vez de negro/blanco genérico), para que toda la jerarquía de texto
+  // comparta un solo tinte coherente. Si no vino definido (las 13 paletas
+  // fijas, o paletas personalizadas creadas antes de que este campo
+  // existiera), se cae exactamente al cálculo automático de siempre.
+  const colorTextoBase = fuente || (canvasClaro ? "#000000" : "#ffffff");
+  const textoPrimario   = fuente || mezclarHex(fondoCanvas, colorTextoBase, canvasClaro ? 0.85 : 0.90);
+  const textoSecundario = mezclarHex(fondoCanvas, colorTextoBase, canvasClaro ? 0.62 : 0.70);
+  const textoMuted      = mezclarHex(fondoCanvas, colorTextoBase, canvasClaro ? 0.45 : 0.52);
 
   // Panel: más sutil que la tarjeta (bg-card), recede más hacia el canvas.
   const fondoPanel = mezclarHex(fondoCard, fondoCanvas, 0.45);
