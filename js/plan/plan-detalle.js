@@ -22,6 +22,7 @@
    Este cambio es exclusivo del modal; la tarjeta de lista no se toca.
    ========================================================================= */
 
+import { obtenerEstadoEfectivoMateria } from "../core/schema.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto, estiloBadgeCategoria, formatearHoras, formatearHorasCompactoIniciales } from "../core/utils.js";
 import { agregarLongPress } from "../ui/componentes.js";
@@ -39,8 +40,11 @@ import { ESTADOS_MATERIA, abrirMenuRapidoCategoria, materiaDisponible, obtenerMa
  * detalle completo").
  */
 
-function construirLinea2Materia(materia, compacto) {
-  const infoEstado = ESTADOS_MATERIA.find((e) => e.valor === materia.estado) || ESTADOS_MATERIA[0];
+function construirLinea2Materia(materia, compacto, plan) {
+  // D/E/F: badge de Estado con el valor EFECTIVO (deriva "Cursando"), no
+  // materia.estado crudo — ver obtenerEstadoEfectivoMateria en schema.js.
+  const efectivo = obtenerEstadoEfectivoMateria(materia, plan.id, estado.datos);
+  const infoEstado = ESTADOS_MATERIA.find((e) => e.valor === efectivo) || ESTADOS_MATERIA[0];
 
   const linea2 = document.createElement("div");
   linea2.className = "materia-linea2";
@@ -573,7 +577,7 @@ function abrirModalRequisito(codigo) {
     tituloEl.appendChild(document.createTextNode(aplicarFormatoTexto(materia.nombre)));
 
     // Línea 2: el modal siempre muestra el detalle completo (nunca compacto).
-    contenedorFinal.appendChild(construirLinea2Materia(materia, false));
+    contenedorFinal.appendChild(construirLinea2Materia(materia, false, plan));
 
     // Requisitos, Correquisitos y la fila final de botones ("Es requisito"/
     // "Historial"/"Cerrar") — diseño exclusivo del modal desde v1.9.8 (ver
