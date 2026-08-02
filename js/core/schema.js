@@ -295,6 +295,8 @@ function crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, tipo_titul
       formula_ponderado: "creditos",
       horario_inicio_default: "07:30",
       horario_duracion_bloque_min: 50,
+      nota_aprobacion: 70,           // por universidad/plan, editable en Ajustes
+      umbral_pasar_raspando: 70,     // umbral real para "pasar raspando" (ej. 67.5)
       tipos_horas: ["Horas"], // se sobrescribe abajo con lo que traiga parametros_universidad
       ...(parametros_universidad || {}),
     },
@@ -563,8 +565,112 @@ function crearMateriaMatriculada({ materiaId, planEstudioId }) {
   return sellarTimestamp({
     id: "mm_" + crypto.randomUUID(),
     materia_id: materiaId,
-    plan_estudio_id: planEstudioId, // de cuál de los planes activos viene (relevante en Hardcore)
+    plan_estudio_id: planEstudioId,
+    // Fase 6 (motor de notas): criterios de ESTA matrícula puntual (nunca
+    // de la materia del plan) — cada criterio trae su propio array de
+    // asignaciones anidado (ver crearCriterio).
+    criterios: [],
+    // Calculado en vivo por calcularNotaFinalMateria; solo se asigna a
+    // mano vía el override de abajo.
+    nota_final: null,
+    // true = override manual activo (caso excepcional). Mientras esté en
+    // true, calcularNotaFinalMateria no debe pisar el valor — la UI debe
+    // mostrar la marca "editado a mano" (badge-warning) y ofrecer volver
+    // a modo automático.
+    nota_final_manual: false,
+    // Tumba de criterios borrados de esta matrícula (regla obligatoria de
+    // sincronización) — ver fusionarMateriaMatriculada en storage-merge.js.
+    _eliminados_criterios: [],
   });
+}
+
+/**
+ * Fase 6: un criterio de evaluación dentro de una materia matriculada (ej.
+ * "Exámenes", 75% de la materia). `valorTotal` es el peso del criterio
+ * DENTRO de la materia (0-100). Trae su propio array de asignaciones y su
+ * propia tumba, igual que cualquier otra colección anidada del proyecto.
+ */
+function crearCriterio({ nombre, valorTotal }) {
+  return sellarTimestamp({
+    id: "crit_" + crypto.randomUUID(),
+    nombre,
+    valor_total: Number(valorTotal) || 0,
+    asignaciones: [],
+    _eliminados_asignaciones: [],
+  });
+}
+
+/**
+ * Una asignación puntual dentro de un criterio (ej. "Examen I", 15% de la
+ * materia). `valor` está expresado en los MISMOS puntos que valor_total
+ * del criterio (no relativo al criterio) — así una tarea de 5% y un
+ * examen de 15% se suman directo sin conversión. `nota` queda en null
+ * hasta que el usuario la registra (según la escala activa).
+ */
+function crearAsignacion({ nombre, valor }) {
+  return sellarTimestamp({
+    id: "asig_" + crypto.randomUUID(),
+    nombre,
+    valor: Number(valor) || 0,
+    nota: null,
+  });
+}
+
+/**
+ * Reparto equitativo (decisión confirmada): al añadir una asignación
+ * nueva, se recalcula el valor de TODAS las asignaciones de ese criterio
+ * a partes iguales — pisando pesos editados a mano previamente. Sella
+ * cada asignación tocada para que se propague en la próxima sincronización.
+ */
+function repartirEquitativoCriterio(criterio) {
+  const n = criterio.asignaciones.length;
+  if (n === 0) return;
+  const partePlana = criterio.valor_total / n;
+  criterio.asignaciones.forEach((asig) => {
+    asig.valor = partePlana;
+    sellarTimestamp(asig);
+  });
+}
+
+/**
+ * Escala de notas activa (10 o 100) para una materia matriculada: override
+ * propio > escala del plan/universidad > escala global. Único punto de
+ * verdad — reutilizar en vez de leer los 3 campos por separado.
+ */
+function obtenerEscalaNotasMateria(materia, plan, configuracion) {
+  return (
+    (materia && materia.escala_notas_override) ||
+    (plan && plan.parametros_universidad && plan.parametros_universidad.escala_notas) ||
+    (configuracion && configuracion.escala_notas_global) ||
+    100
+  );
+}
+
+/**
+ * Motor de cálculo (punto 3): puntos ponderados reales que aporta una
+ * asignación calificada, normalizados a escala 0-100. Sin nota todavía
+ * (null) no aporta puntos — se trata como pendiente, nunca como un cero.
+ */
+function calcularPuntosAsignacion(asignacion, escalaActiva) {
+  if (asignacion.nota === null || asignacion.nota === undefined) return 0;
+  return (Number(asignacion.nota) / escalaActiva) * asignacion.valor;
+}
+
+/**
+ * nota_final de una materia matriculada (0-100): suma de los puntos de
+ * TODAS las asignaciones calificadas de TODOS sus criterios. Si
+ * nota_final_manual está activo, esta función NO debe llamarse para pisar
+ * el valor — la UI debe respetar el override hasta que el usuario lo
+ * desactive explícitamente.
+ */
+function calcularNotaFinalMateria(materiaMatriculada, escalaActiva) {
+  let total = 0;
+  (materiaMatriculada.criterios || []).forEach((criterio) => {
+    (criterio.asignaciones || []).forEach((asig) => {
+      total += calcularPuntosAsignacion(asig, escalaActiva);
+    });
+  });
+  return total;
 }
 
 /**
@@ -705,6 +811,9 @@ function migrarDatosAntiguos(datos) {
       params.tipos_horas = ["Horas"];
     }
 
+    if (params.nota_aprobacion === undefined) params.nota_aprobacion = 70;
+    if (params.umbral_pasar_raspando === undefined) params.umbral_pasar_raspando = params.nota_aprobacion;
+
     (plan.materias || []).forEach((materia) => {
       const horasViejas = materia.horas || {};
       const esObjetoViejo = "teoria" in horasViejas || "practica" in horasViejas ||
@@ -785,4 +894,10 @@ export {
   LIMITE_SEMANAS_SEMESTRE,
   obtenerEstadoEfectivoSemestre,
   obtenerPlanesActivos,
+  crearCriterio,
+  crearAsignacion,
+  repartirEquitativoCriterio,
+  obtenerEscalaNotasMateria,
+  calcularPuntosAsignacion,
+  calcularNotaFinalMateria,
 };

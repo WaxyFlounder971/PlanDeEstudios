@@ -402,15 +402,102 @@ function fusionarSemestre(semestreLocal, semestreRemoto) {
 
   return {
     ...base,
-    materias_matriculadas: fusionarColeccion(
+    materias_matriculadas: fusionarMateriasMatriculadas(
       semestreLocal.materias_matriculadas,
       semestreRemoto.materias_matriculadas,
-      tumbasMatriculadas,
-      "materia matriculada"
+      tumbasMatriculadas
     ),
     _eliminados_materias_matriculadas: tumbasMatriculadas,
   };
 }
+
+
+/**
+ * Fase 6: mismo patrón que fusionarCriterio/fusionarPlan — funde un
+ * criterio individual junto con su colección anidada de asignaciones y su
+ * propia tumba (_eliminados_asignaciones, ver crearCriterio en schema.js).
+ */
+function fusionarCriterio(criterioLocal, criterioRemoto) {
+  if (!criterioLocal) return criterioRemoto;
+  if (!criterioRemoto) return criterioLocal;
+
+  const base = esMasReciente(criterioRemoto, criterioLocal) ? criterioRemoto : criterioLocal;
+  const tumbasAsignaciones = fusionarTumbas(
+    criterioLocal._eliminados_asignaciones,
+    criterioRemoto._eliminados_asignaciones
+  );
+
+  return {
+    ...base,
+    asignaciones: fusionarColeccion(
+      criterioLocal.asignaciones,
+      criterioRemoto.asignaciones,
+      tumbasAsignaciones,
+      "asignación"
+    ),
+    _eliminados_asignaciones: tumbasAsignaciones,
+  };
+}
+
+/** Equivalente de fusionarPlanesEstudio pero para la colección `criterios`. */
+function fusionarCriterios(local, remoto, tumbas) {
+  const listaLocal = Array.isArray(local) ? local : [];
+  const listaRemota = Array.isArray(remoto) ? remoto : [];
+  const idsEliminados = new Set(tumbas.map((t) => t.id));
+
+  const porId = new Map();
+  listaLocal.forEach((c) => porId.set(c.id, c));
+  listaRemota.forEach((c) => {
+    const existente = porId.get(c.id);
+    porId.set(c.id, existente ? fusionarCriterio(existente, c) : c);
+  });
+
+  const resultado = [];
+  porId.forEach((criterio, id) => {
+    if (!idsEliminados.has(id)) resultado.push(criterio);
+  });
+  return resultado;
+}
+
+/**
+ * Fase 6: funde una materia matriculada individual — sus criterios se
+ * funden por separado (con sus propias tumbas), igual que fusionarPlan
+ * hace con materias/categorías.
+ */
+function fusionarMateriaMatriculada(mmLocal, mmRemoto) {
+  if (!mmLocal) return mmRemoto;
+  if (!mmRemoto) return mmLocal;
+
+  const base = esMasReciente(mmRemoto, mmLocal) ? mmRemoto : mmLocal;
+  const tumbasCriterios = fusionarTumbas(mmLocal._eliminados_criterios, mmRemoto._eliminados_criterios);
+
+  return {
+    ...base,
+    criterios: fusionarCriterios(mmLocal.criterios, mmRemoto.criterios, tumbasCriterios),
+    _eliminados_criterios: tumbasCriterios,
+  };
+}
+
+/** Equivalente de fusionarSemestres pero para `materias_matriculadas`. */
+function fusionarMateriasMatriculadas(local, remoto, tumbas) {
+  const listaLocal = Array.isArray(local) ? local : [];
+  const listaRemota = Array.isArray(remoto) ? remoto : [];
+  const idsEliminados = new Set(tumbas.map((t) => t.id));
+
+  const porId = new Map();
+  listaLocal.forEach((m) => porId.set(m.id, m));
+  listaRemota.forEach((m) => {
+    const existente = porId.get(m.id);
+    porId.set(m.id, existente ? fusionarMateriaMatriculada(existente, m) : m);
+  });
+
+  const resultado = [];
+  porId.forEach((mm, id) => {
+    if (!idsEliminados.has(id)) resultado.push(mm);
+  });
+  return resultado;
+}
+
 
 /**
  * Semestres y Notas — Fase 1: equivalente de fusionarPlanesEstudio (arriba)
@@ -501,4 +588,8 @@ export {
   resolverConflicto,
   fusionarSemestre,
   fusionarSemestres,
+  fusionarMateriaMatriculada,
+  fusionarMateriasMatriculadas,
+  fusionarCriterio,
+  fusionarCriterios,
 };
