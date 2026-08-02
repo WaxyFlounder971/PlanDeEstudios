@@ -59,15 +59,15 @@ function formatearNumero(n) {
 }
 
 /**
- * ASUNCIÓN (a confirmar contra plan-categorias.js/plan-gestionar.js, que no
- * tengo en esta conversación): mismo mecanismo de reloj lógico que
- * sellarTimestamp, aplicado a un objeto descartable para obtener solo el
- * contador — es la única vía pública que expone schema.js para avanzar el
- * reloj lógico (avanzarRelojLogico no está exportado). Si el patrón real
- * de tumba usado ahí es distinto, avisame y lo alineo.
+ * Mismo patrón real confirmado en plan-gestionar.js (eliminarPlanEstudio):
+ * la tumba usa Date.now() de pared, NO el reloj lógico de sellarTimestamp
+ * — fusionarTumbas (storage-merge.js) solo necesita que "más reciente"
+ * tenga sentido entre dos borrados del MISMO id, y ese desempate sí puede
+ * vivir en tiempo de pared porque nunca compite contra una edición viva
+ * (que sí usa el reloj lógico) dentro de la misma comparación.
  */
 function crearEntradaTumba(id) {
-  return { id, eliminadoEn: sellarTimestamp({})._actualizadoEn };
+  return { id, eliminadoEn: Date.now() };
 }
 
 function sumaValorTotalCriterios(mm, excluirId) {
