@@ -551,6 +551,33 @@ function obtenerEstadoEfectivoSemestre(semestre) {
 }
 
 /**
+ * D/E/F (Semestres y Notas): estado EFECTIVO de una materia del Plan — igual
+ * que obtenerEstadoEfectivoSemestre, nunca se lee materia.estado solo cuando
+ * importa mostrar "Cursando": ese valor YA NO se guarda en ningún lado (a
+ * propósito, decisión confirmada 2026-08-02), se calcula siempre en el
+ * momento. materia.estado queda 100% manual/sticky y solo puede valer
+ * "pendiente" | "aprobado" | "reprobado" (ver el pill group de 3 opciones en
+ * plan-vista-lista-tarjetas.js) — es la fuente de verdad de "¿ya la pasé
+ * alguna vez?", y por eso nunca se pisa sola al matricular o repetir.
+ * "Cursando" gana SIEMPRE que haya una mm real matriculando esta materia
+ * (mismo materia_id + mismo plan_estudio_id, para no cruzar materias con
+ * códigos coincidentes entre dos planes distintos en Modo Hardcore) dentro
+ * de un semestre cuyo estado efectivo sea "actual" — sin importar qué diga
+ * materia.estado debajo: es la forma en que repetir una "Aprobada" deja de
+ * contar como aprobada mientras se está cursando de nuevo (decisión ya
+ * confirmada), sin necesidad de tocar el campo sticky para lograrlo.
+ */
+function obtenerEstadoEfectivoMateria(materia, planEstudioId, datos) {
+  const estaCursandoAhora = (datos.semestres || []).some((semestre) => {
+    if (obtenerEstadoEfectivoSemestre(semestre) !== "actual") return false;
+    return (semestre.materias_matriculadas || []).some(
+      (mm) => mm.materia_id === materia.id && mm.plan_estudio_id === planEstudioId
+    );
+  });
+  return estaCursandoAhora ? "cursando" : materia.estado;
+}
+
+/**
  * Semestres y Notas — Fase 1: matricula una materia real del Plan dentro de
  * un semestre. Deliberadamente mínima — sin criterios/asignaciones/
  * nota_final (Fase 6) — porque su "estado" nunca vive acá: se lee siempre en
@@ -578,6 +605,14 @@ function crearMateriaMatriculada({ materiaId, planEstudioId }) {
     // mostrar la marca "editado a mano" (badge-warning) y ofrecer volver
     // a modo automático.
     nota_final_manual: false,
+    // D/E/F (Semestres y Notas): resultado REAL de este intento puntual —
+    // independiente de materia.estado (que vive en el Plan y es 100%
+    // manual/sticky, ver ESTADOS_MATERIA en plan-vista-lista-tarjetas.js).
+    // Solo lo escribe "Terminar semestre" (semestres-tarjetas.js), comparando
+    // nota_final contra el umbral del plan — nunca se toca a mano ni se
+    // deriva en el render. null = todavía no se cerró el semestre, o se
+    // cerró con notas incompletas (no se adivina, decisión ya confirmada).
+    resultado: null,
     // Tumba de criterios borrados de esta matrícula (regla obligatoria de
     // sincronización) — ver fusionarMateriaMatriculada en storage-merge.js.
     _eliminados_criterios: [],
@@ -827,6 +862,12 @@ function migrarDatosAntiguos(datos) {
         if (!Array.isArray(mm._eliminados_criterios)) mm._eliminados_criterios = [];
         if (mm.nota_final === undefined) mm.nota_final = null;
         if (mm.nota_final_manual === undefined) mm.nota_final_manual = false;
+        // D/E/F (2026-08-02): mismo relleno defensivo para mm creadas antes
+        // de que existiera resultado — sin esto, una mm vieja sin este campo
+        // se ve "distinta" de su copia remota en cuanto un dispositivo la
+        // toca, disparando el mismo tipo de conflicto falso que ya se
+        // documentó arriba para criterios/nota_final.
+        if (mm.resultado === undefined) mm.resultado = null;
         // Fase 6.1 (2026-08-02): asignaciones creadas antes del switch
         // Automático/Personalizado y Nota/Puntos se tratan como
         // "automatico" + "nota" — es exactamente el comportamiento que ya
@@ -925,6 +966,29 @@ function migrarDatosAntiguos(datos) {
     });
   });
 
+  // 2026-08-02 ("marca el segundo y tercero aunque uno no existe"): si
+  // plan_activo_secundario_id/terciario_id (o incluso plan_activo_id) quedan
+  // apuntando a un plan que ya no está en datos.planes_estudio — por un
+  // borrado que no pasó por eliminarPlan (plan-gestionar.js), o por un
+  // choque de sincronización que trajo una config vieja — obtenerPlanesActivos
+  // los sigue devolviendo igual (solo filtra "vacío", no "existe de verdad"),
+  // así que ARMAN de más el conteo de planes activos con ids fantasma. Se
+  // limpian acá, en la migración, para que la config nunca quede así de aquí
+  // en adelante.
+  const cfgLimpieza = datos.configuracion;
+  if (cfgLimpieza) {
+    const idsReales = new Set(datos.planes_estudio.map((p) => p.id));
+    if (cfgLimpieza.plan_activo_id && !idsReales.has(cfgLimpieza.plan_activo_id)) {
+      cfgLimpieza.plan_activo_id = datos.planes_estudio[0] ? datos.planes_estudio[0].id : null;
+    }
+    if (cfgLimpieza.plan_activo_secundario_id && !idsReales.has(cfgLimpieza.plan_activo_secundario_id)) {
+      cfgLimpieza.plan_activo_secundario_id = null;
+    }
+    if (cfgLimpieza.plan_activo_terciario_id && !idsReales.has(cfgLimpieza.plan_activo_terciario_id)) {
+      cfgLimpieza.plan_activo_terciario_id = null;
+    }
+  }
+
   return datos;
 }
 
@@ -961,4 +1025,5 @@ export {
   obtenerEscalaNotasMateria,
   calcularPuntosAsignacion,
   calcularNotaFinalMateria,
+  obtenerEstadoEfectivoMateria,
 };
