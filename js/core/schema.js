@@ -785,6 +785,33 @@ function migrarDatosAntiguos(datos) {
     datos.configuracion.plan_activo_terciario_id = null;
   }
 
+  // FIX sync (2026-08-02): materias matriculadas creadas antes del motor de
+  // notas (Fase 6) no tienen criterios/_eliminados_criterios/nota_final/
+  // nota_final_manual — ni siquiera como arreglo vacío o null explícito, el
+  // campo directamente no existe en el objeto guardado. Sin este relleno,
+  // en cuanto UN dispositivo abre esa materia y la re-renderiza, termina con
+  // estos campos poblados en memoria mientras la copia remota (guardada por
+  // el otro dispositivo, que nunca la tocó) sigue sin ellos — contenido
+  // distinto con la MISMA _version_base, que storage-merge.js interpreta
+  // como un conflicto real cuando no lo es. Esto pasaba con CUALQUIER
+  // materia vieja, por eso salía "de la nada" en todas a la vez. Se aplica
+  // siempre a los dos lados antes de comparar (ver fusionarDatos en
+  // storage-merge.js), así ambos arrancan del mismo default y no hay nada
+  // que comparar como "distinto" en materias que nadie editó de verdad.
+  if (Array.isArray(datos.semestres)) {
+    datos.semestres.forEach((semestre) => {
+      if (!Array.isArray(semestre._eliminados_materias_matriculadas)) {
+        semestre._eliminados_materias_matriculadas = [];
+      }
+      (semestre.materias_matriculadas || []).forEach((mm) => {
+        if (!Array.isArray(mm.criterios)) mm.criterios = [];
+        if (!Array.isArray(mm._eliminados_criterios)) mm._eliminados_criterios = [];
+        if (mm.nota_final === undefined) mm.nota_final = null;
+        if (mm.nota_final_manual === undefined) mm.nota_final_manual = false;
+      });
+    });
+  }
+
   if (!Array.isArray(datos.planes_estudio)) return datos;
 
   datos.planes_estudio.forEach((plan) => {

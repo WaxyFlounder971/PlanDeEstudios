@@ -30,7 +30,7 @@
       a nivel de objeto completo (ver fusionarBloqueUnico).
    ========================================================================= */
 
-import { observarRelojLogico } from "./schema.js";
+import { observarRelojLogico, migrarDatosAntiguos } from "./schema.js";
 
 /**
  * Compara dos entidades por su contador lógico de última modificación
@@ -574,6 +574,18 @@ function fusionarSemestres(local, remoto, tumbas) {
 function fusionarDatos(datosLocal, datosRemoto) {
   if (!datosLocal) return datosRemoto;
   if (!datosRemoto) return datosLocal;
+
+  // FIX sync (2026-08-02): se normalizan los dos lados con la MISMA
+  // migración antes de comparar nada, sin confiar en que quien haya cargado
+  // datosLocal/datosRemoto ya lo hizo. Si uno de los dos lados todavía trae
+  // el formato viejo (ej. remoto recién bajado de Drive, guardado por una
+  // sesión que nunca renderizó esa materia), sin esto los defaults que un
+  // lado sí tiene y el otro no se veían como una edición real y disparaban
+  // un conflicto falso en hayConflictoReal — pasaba con cualquier materia
+  // matriculada creada antes del motor de notas. migrarDatosAntiguos es
+  // seguro de llamar más de una vez: no toca nada que ya esté migrado.
+  migrarDatosAntiguos(datosLocal);
+  migrarDatosAntiguos(datosRemoto);
 
   const tumbasPlanes = fusionarTumbas(datosLocal._eliminados_planes, datosRemoto._eliminados_planes);
   const tumbasSemestres = fusionarTumbas(datosLocal._eliminados_semestres, datosRemoto._eliminados_semestres);
