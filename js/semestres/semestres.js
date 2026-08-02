@@ -515,7 +515,9 @@ function abrirModalAltaSemestre(semestreExistente = null) {
   });
   caja.appendChild(chkFechaAproximada);
 
-  const planesIds = Array.from(new Set([...obtenerPlanesActivos(cfg), ...(esEdicion ? semestreExistente.plan_estudio_id : [])]));
+  const planesIds = Array.from(
+    new Set([...obtenerPlanesActivos(cfg), ...(esEdicion ? semestreExistente.plan_estudio_id : [])])
+  ).filter((id) => obtenerPlanPorId(id));
 
   if (planesIds.length > 1) {
     const aviso = document.createElement("p");
