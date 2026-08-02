@@ -13,10 +13,11 @@ import {
   crearAsignacion,
   repartirEquitativoCriterio,
   obtenerEscalaNotasMateria,
+  calcularPuntosAsignacion,
   calcularNotaFinalMateria,
 } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { ESTADOS_MATERIA, abrirMenuRapidoCategoria, abrirModalResolverConflictoGenerico } from "../plan/plan-vista-lista-tarjetas.js";
+import { ESTADOS_MATERIA, abrirMenuRapidoCategoria, abrirModalResolverConflictoGenerico, agregarIndicadorConflicto } from "../plan/plan-vista-lista-tarjetas.js";
 import { abrirModalDesbloquea, abrirModalHistorial } from "../plan/plan-detalle.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 
@@ -662,18 +663,42 @@ function construirFilaAsignacion(asignacion, criterio, mm, materia, plan, escala
   izq.textContent = `${asignacion.nombre} · ${formatearNumero(asignacion.valor)} pts${sufijoModo}`;
   fila.appendChild(izq);
 
-  const der = document.createElement("span");
+  // Ajuste (2026-08-02): antes esto era UNA pill que, según el modo, ya
+  // mostraba "nota/escala" o (si modo_calificacion==="puntos") en realidad
+  // el puntaje directo — el puntaje REAL obtenido hacia el criterio (en las
+  // mismas unidades que asignacion.valor) nunca se veía en el modo "nota".
+  // Ahora son dos pills fijas, mismo tamaño siempre, para que la fila no
+  // "salte" de ancho/alto entre asignaciones: la nota tal cual se calificó,
+  // y al lado el puntaje que esa nota representa dentro del criterio.
+  const PILL_ESTILO = "display:inline-flex; align-items:center; justify-content:center; min-width:64px; height:24px; text-align:center; white-space:nowrap;";
+
+  const contDer = document.createElement("div");
+  contDer.className = "row";
+  contDer.style.cssText = "gap:6px; flex-wrap:nowrap;";
+
+  const pillNota = document.createElement("span");
+  pillNota.style.cssText = PILL_ESTILO;
   if (asignacion.nota === null || asignacion.nota === undefined) {
-    der.className = "badge badge-neutral";
-    der.textContent = "Pendiente";
+    pillNota.className = "badge badge-neutral";
+    pillNota.textContent = "Pendiente";
   } else if (asignacion.modo_calificacion === "puntos") {
-    der.className = "badge badge-success";
-    der.textContent = `${formatearNumero(asignacion.nota)}/${formatearNumero(asignacion.valor)} pts`;
+    pillNota.className = "badge badge-success";
+    pillNota.textContent = `${formatearNumero(asignacion.nota)}/${formatearNumero(asignacion.valor)}`;
   } else {
-    der.className = "badge badge-success";
-    der.textContent = `${formatearNumero(asignacion.nota)}/${escalaActiva}`;
+    pillNota.className = "badge badge-success";
+    pillNota.textContent = `${formatearNumero(asignacion.nota)}/${escalaActiva}`;
   }
-  fila.appendChild(der);
+  contDer.appendChild(pillNota);
+
+  const pillPuntos = document.createElement("span");
+  pillPuntos.className = "badge badge-accent";
+  pillPuntos.style.cssText = PILL_ESTILO;
+  const puntosObtenidos = calcularPuntosAsignacion(asignacion, escalaActiva);
+  const textoPuntos = asignacion.nota === null || asignacion.nota === undefined ? "—" : formatearNumero(puntosObtenidos);
+  pillPuntos.textContent = `${textoPuntos}/${formatearNumero(asignacion.valor)} pts`;
+  contDer.appendChild(pillPuntos);
+
+  fila.appendChild(contDer);
 
   return fila;
 }
@@ -701,16 +726,7 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
   encabezado.appendChild(badgeValor);
 
   if (criterio._conflicto) {
-    const badgeConflicto = document.createElement("span");
-    badgeConflicto.className = "badge badge-danger";
-    badgeConflicto.style.fontSize = "0.68rem";
-    badgeConflicto.textContent = "⚠️ 2 dispositivos";
-    badgeConflicto.title = "Este criterio se cambió de forma distinta en dos dispositivos. Toca para elegir cuál dejar.";
-    badgeConflicto.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      abrirModalResolverConflictoCriterio(criterio, mm, materia, plan, onCambiar);
-    });
-    encabezado.appendChild(badgeConflicto);
+    agregarIndicadorConflicto(cont, () => abrirModalResolverConflictoCriterio(criterio, mm, materia, plan, onCambiar));
   }
 
   cont.appendChild(encabezado);
@@ -733,16 +749,44 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
   return cont;
 }
 
+/**
+ * Aplica el redondeo real de "pasar raspando" (parametros_universidad del
+ * plan de la materia): si la nota cruda cae por debajo de nota_aprobacion
+ * pero llega al umbral_pasar_raspando, se redondea hacia arriba hasta
+ * nota_aprobacion. Fuera de ese rango angosto, la nota queda tal cual. Si
+ * el plan no tiene ambos valores definidos, no hay redondeo que aplicar.
+ */
+function aplicarRedondeoRaspando(nota, plan) {
+  if (nota === null || nota === undefined) return nota;
+  const params = plan.parametros_universidad || {};
+  const aprobacion = Number(params.nota_aprobacion);
+  const umbral = Number(params.umbral_pasar_raspando);
+  if (!Number.isFinite(aprobacion) || !Number.isFinite(umbral)) return nota;
+  if (nota >= umbral && nota < aprobacion) return aprobacion;
+  return nota;
+}
+
 function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, onCambiar) {
-  const fila = document.createElement("div");
-  fila.className = "row";
-  fila.style.cssText = "justify-content:space-between; align-items:center; gap:8px;";
+  const cont = document.createElement("div");
+  cont.className = "stack";
+  cont.style.cssText = "gap:6px;";
+
+  const notaRedondeada = aplicarRedondeoRaspando(notaFinalVigente, plan);
+  const textoNota = notaFinalVigente === null || notaFinalVigente === undefined ? "—" : formatearNumero(notaFinalVigente);
+  const textoNotaFinal = notaRedondeada === null || notaRedondeada === undefined ? "—" : formatearNumero(notaRedondeada);
+
+  const lineaNota = document.createElement("span");
+  lineaNota.textContent = `Nota: ${textoNota}`;
+  cont.appendChild(lineaNota);
+
+  const filaNotaFinal = document.createElement("div");
+  filaNotaFinal.className = "row";
+  filaNotaFinal.style.cssText = "justify-content:space-between; align-items:center; gap:8px;";
 
   const izq = document.createElement("span");
   izq.style.fontWeight = "700";
-  const valor = notaFinalVigente === null || notaFinalVigente === undefined ? "—" : formatearNumero(notaFinalVigente);
-  izq.textContent = `Nota final: ${valor}`;
-  fila.appendChild(izq);
+  izq.textContent = `Nota final: ${textoNotaFinal}`;
+  filaNotaFinal.appendChild(izq);
 
   if (mm.nota_final_manual) {
     const badge = document.createElement("span");
@@ -756,7 +800,7 @@ function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, onCam
       persistirCambioMateria(mm, materia, plan, onCambiar);
       mostrarToast("La nota final vuelve a calcularse automáticamente");
     });
-    fila.appendChild(badge);
+    filaNotaFinal.appendChild(badge);
   } else {
     const btnManual = document.createElement("button");
     btnManual.type = "button";
@@ -767,10 +811,11 @@ function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, onCam
       ev.stopPropagation();
       abrirModalNotaManual({ mm, materia, plan, notaFinalVigente, onGuardado: onCambiar });
     });
-    fila.appendChild(btnManual);
+    filaNotaFinal.appendChild(btnManual);
   }
 
-  return fila;
+  cont.appendChild(filaNotaFinal);
+  return cont;
 }
 
 function construirSeccionNotas(mm, materia, plan, onCambiar) {
@@ -787,8 +832,6 @@ function construirSeccionNotas(mm, materia, plan, onCambiar) {
   cont.className = "stack";
   cont.style.cssText = "gap:10px; margin-top:6px;";
 
-  cont.appendChild(construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, onCambiar));
-
   const criterios = mm.criterios || [];
   if (criterios.length === 0) {
     const vacio = document.createElement("p");
@@ -801,6 +844,11 @@ function construirSeccionNotas(mm, materia, plan, onCambiar) {
       cont.appendChild(construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onCambiar));
     });
   }
+
+  // Ajuste (2026-08-02): la nota final y "Editar a mano" ahora van AL FINAL
+  // de los criterios (antes iban primero) — para que el flujo de lectura
+  // sea "acá están los criterios, y este es el resultado", no al revés.
+  cont.appendChild(construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, onCambiar));
 
   const btnNuevoCriterio = document.createElement("button");
   btnNuevoCriterio.type = "button";
@@ -980,9 +1028,26 @@ function construirFilaAccionesMatricula(materia, plan) {
   return fila;
 }
 
-function construirTarjetaMateriaMatriculada(mm, materia, plan, onCambiar) {
+function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambiar) {
   const expandida = estado.semestresExpandidos.get(mm.id) || false;
-  const infoEstado = ESTADOS_MATERIA.find((e) => e.valor === materia.estado) || ESTADOS_MATERIA[0];
+
+  // D/E/F: acá adentro (la tarjeta de UN semestre concreto) el badge no
+  // muestra materia.estado del Plan — muestra lo que corresponde a ESTE
+  // intento puntual. Si el semestre sigue actual, siempre es "Cursando"
+  // (esta mm es justo la razón por la que se deriva así — ver
+  // obtenerEstadoEfectivoMateria en schema.js). Si el semestre ya terminó,
+  // se muestra mm.resultado — el resultado real de ESE intento, que puede
+  // no coincidir con el materia.estado actual del Plan si se repitió
+  // después (por diseño: repetir no reescribe el historial de intentos
+  // anteriores).
+  const semestreActual = obtenerEstadoEfectivoSemestre(semestre) === "actual";
+  const infoEstado = semestreActual
+    ? ESTADOS_MATERIA.find((e) => e.valor === "cursando")
+    : mm.resultado === "aprobada"
+    ? { texto: "Aprobada", badge: "badge-success" }
+    : mm.resultado === "reprobada"
+    ? { texto: "Reprobada", badge: "badge-danger" }
+    : { texto: "Sin resultado", badge: "badge-neutral" };
 
   const card = document.createElement("div");
   card.className = "glass-panel materia-card";
@@ -1033,7 +1098,9 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, onCambiar) {
   badgeEstado.className = `badge ${infoEstado.badge}`;
   badgeEstado.textContent = infoEstado.texto;
   badgeEstado.style.cursor = "pointer";
-  badgeEstado.title = "Mantén presionado (o clic derecho) para cambiar el estado";
+  badgeEstado.title = semestreActual
+    ? "Mantén presionado (o clic derecho) para cambiar el estado de la materia en el Plan"
+    : "Esto es el resultado de este intento. Mantén presionado para cambiar el estado de la materia en el Plan";
   agregarLongPress(badgeEstado, () => abrirMenuRapidoEstadoMatricula(materia, badgeEstado, onCambiar));
   colEstado.appendChild(badgeEstado);
   linea2.appendChild(colEstado);
@@ -1055,16 +1122,7 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, onCambiar) {
   colDerecha.appendChild(badgeCreditos);
 
   if (mm._conflicto) {
-    const badgeConflicto = document.createElement("span");
-    badgeConflicto.className = "badge badge-danger";
-    badgeConflicto.style.fontSize = "0.68rem";
-    badgeConflicto.textContent = "⚠️ Editado en 2 dispositivos";
-    badgeConflicto.title = "Se cambió de forma distinta en dos dispositivos. Toca para elegir cuál dejar.";
-    badgeConflicto.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      abrirModalResolverConflictoMatricula(mm, materia, plan, onCambiar);
-    });
-    colDerecha.appendChild(badgeConflicto);
+    agregarIndicadorConflicto(card, () => abrirModalResolverConflictoMatricula(mm, materia, plan, onCambiar));
   }
   linea2.appendChild(colDerecha);
 
@@ -1128,15 +1186,7 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEdita
   derecha.appendChild(badgeCreditos);
 
   if (semestre._conflicto) {
-    const badgeConflicto = document.createElement("span");
-    badgeConflicto.className = "badge badge-danger";
-    badgeConflicto.textContent = "⚠️ Editado en 2 dispositivos";
-    badgeConflicto.title = "Se cambió de forma distinta en dos dispositivos. Toca para elegir cuál dejar.";
-    badgeConflicto.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      abrirModalResolverConflictoSemestre(semestre, onCambiar);
-    });
-    derecha.appendChild(badgeConflicto);
+    agregarIndicadorConflicto(card, () => abrirModalResolverConflictoSemestre(semestre, onCambiar));
   }
 
   if (estado.modoEdicionSemestres) {
@@ -1186,7 +1236,7 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEdita
     } else {
       filas.forEach(({ mm, plan }) => {
         const materia = plan.materias.find((m) => m.id === mm.materia_id);
-        card.appendChild(construirTarjetaMateriaMatriculada(mm, materia, plan, onCambiar));
+        card.appendChild(construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambiar));
       });
     }
   }
