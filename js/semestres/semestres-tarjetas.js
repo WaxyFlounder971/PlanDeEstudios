@@ -117,11 +117,32 @@ function sumaValorAsignaciones(criterio, excluirId) {
   return (criterio.asignaciones || []).reduce((total, a) => total + (a.id === excluirId ? 0 : Number(a.valor) || 0), 0);
 }
 
-/** Recalcula mm.nota_final en vivo — nunca pisa un override manual activo. */
+/**
+ * Calcula el valor vigente de nota_final SIN mutar mm — para mostrar en
+ * pantalla en cada render. Si hay override manual activo, es simplemente
+ * mm.nota_final tal cual (no se recalcula).
+ */
+function calcularNotaFinalVigente(mm, materia, plan) {
+  if (mm.nota_final_manual) return mm.nota_final;
+  const escala = obtenerEscalaNotasMateria(materia, plan, estado.datos.configuracion);
+  return calcularNotaFinalMateria(mm, escala);
+}
+
+/**
+ * Recalcula Y PERSISTE mm.nota_final — nunca pisa un override manual activo.
+ * FIX sync (2026-08-02): antes esto se llamaba también directamente desde
+ * el render de la tarjeta (fuera de un flujo de edición real), lo que
+ * mutaba mm.nota_final en el objeto sincronizable SIN pasar por
+ * sellarTimestamp() — quedaba contenido nuevo con un _version_base viejo.
+ * Contra una copia remota que nunca había tocado ese campo (materias
+ * creadas antes del motor de notas), eso se veía como un conflicto real
+ * en cada sync. Ahora esta función SOLO se llama desde
+ * persistirCambioMateria, que sella el timestamp en el mismo paso; el
+ * render usa calcularNotaFinalVigente (arriba), que no muta nada.
+ */
 function recalcularNotaFinal(mm, materia, plan) {
   if (mm.nota_final_manual) return;
-  const escala = obtenerEscalaNotasMateria(materia, plan, estado.datos.configuracion);
-  mm.nota_final = calcularNotaFinalMateria(mm, escala);
+  mm.nota_final = calcularNotaFinalVigente(mm, materia, plan);
 }
 
 /** Punto único de persistencia tras cualquier cambio de criterios/asignaciones. */
@@ -370,7 +391,7 @@ function agregarAsignacionRapida(criterio, mm, materia, plan, onCambiar) {
 
 /* ===================== Modal: override manual de nota_final ===================== */
 
-function abrirModalNotaManual({ mm, materia, plan, onGuardado }) {
+function abrirModalNotaManual({ mm, materia, plan, notaFinalVigente, onGuardado }) {
   const { overlay, card } = crearModalDinamico({ titulo: "Editar nota final a mano" });
 
   const aviso = document.createElement("p");
@@ -384,7 +405,7 @@ function abrirModalNotaManual({ mm, materia, plan, onGuardado }) {
   const inputNota = agregarCampoModal(card, {
     etiqueta: "Nota final (0-100)",
     tipo: "number",
-    valor: mm.nota_final !== null && mm.nota_final !== undefined ? mm.nota_final : "",
+    valor: notaFinalVigente !== null && notaFinalVigente !== undefined ? notaFinalVigente : "",
     paso: "0.1",
   });
 
@@ -566,14 +587,14 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
   return cont;
 }
 
-function construirEncabezadoNotaFinal(mm, materia, plan, onCambiar) {
+function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, onCambiar) {
   const fila = document.createElement("div");
   fila.className = "row";
   fila.style.cssText = "justify-content:space-between; align-items:center; gap:8px;";
 
   const izq = document.createElement("span");
   izq.style.fontWeight = "700";
-  const valor = mm.nota_final === null || mm.nota_final === undefined ? "—" : formatearNumero(mm.nota_final);
+  const valor = notaFinalVigente === null || notaFinalVigente === undefined ? "—" : formatearNumero(notaFinalVigente);
   izq.textContent = `Nota final: ${valor}`;
   fila.appendChild(izq);
 
@@ -598,7 +619,7 @@ function construirEncabezadoNotaFinal(mm, materia, plan, onCambiar) {
     btnManual.textContent = "Editar a mano";
     btnManual.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      abrirModalNotaManual({ mm, materia, plan, onGuardado: onCambiar });
+      abrirModalNotaManual({ mm, materia, plan, notaFinalVigente, onGuardado: onCambiar });
     });
     fila.appendChild(btnManual);
   }
@@ -608,15 +629,19 @@ function construirEncabezadoNotaFinal(mm, materia, plan, onCambiar) {
 
 function construirSeccionNotas(mm, materia, plan, onCambiar) {
   const escalaActiva = obtenerEscalaNotasMateria(materia, plan, estado.datos.configuracion);
-  // Refresca el valor mostrado en cada render (ej. tras un merge de sync);
-  // no marca cambio pendiente por sí solo, solo lee/recalcula en memoria.
-  recalcularNotaFinal(mm, materia, plan);
+  // FIX sync (2026-08-02): antes esto llamaba a recalcularNotaFinal(), que
+  // MUTABA mm.nota_final en cada render sin sellar timestamp — eso es lo
+  // que disparaba conflictos falsos entre dispositivos (ver comentario en
+  // recalcularNotaFinal). Ahora solo se calcula el valor a mostrar, sin
+  // tocar mm; la persistencia real solo ocurre dentro de un flujo de
+  // edición (persistirCambioMateria / abrirModalNotaManual).
+  const notaFinalVigente = calcularNotaFinalVigente(mm, materia, plan);
 
   const cont = document.createElement("div");
   cont.className = "stack";
   cont.style.cssText = "gap:10px; margin-top:6px;";
 
-  cont.appendChild(construirEncabezadoNotaFinal(mm, materia, plan, onCambiar));
+  cont.appendChild(construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, onCambiar));
 
   const criterios = mm.criterios || [];
   if (criterios.length === 0) {
