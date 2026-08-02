@@ -4,7 +4,7 @@
    completa (encabezado, requisitos, menú rápido de categoría).
    ========================================================================= */
 
-import { arbolContieneCodigo, evaluarNodoRequisito, sellarTimestamp } from "../core/schema.js";
+import { arbolContieneCodigo, evaluarNodoRequisito, obtenerEstadoEfectivoMateria, sellarTimestamp } from "../core/schema.js";
 import { resolverConflicto } from "../core/storage-merge.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
@@ -98,9 +98,13 @@ function construirContenidoBloques() {
         const cat = fila.plan.categorias.find((c) => c.id === fila.materia.categoria_id);
         nombre = cat ? cat.nombre : "Sin categoría";
       } else if (estado.ordenPlanEstudios === "estado") {
-        clave = fila.materia.estado;
-        const infoEstado = ESTADOS_MATERIA.find((e) => e.valor === fila.materia.estado);
-        nombre = infoEstado ? infoEstado.texto : fila.materia.estado;
+        // D/E/F: estado EFECTIVO, no el campo crudo — si no se usa esto,
+        // una materia repetida (matriculada de nuevo tras estar "Aprobada")
+        // se seguiría agrupando bajo "Aprobada" en vez de "Cursando".
+        const efectivo = obtenerEstadoEfectivoMateria(fila.materia, fila.plan.id, estado.datos);
+        clave = efectivo;
+        const infoEstado = ESTADOS_MATERIA.find((e) => e.valor === efectivo);
+        nombre = infoEstado ? infoEstado.texto : efectivo;
       } else {
         clave = String(fila.materia.bloque);
         nombre = `${fila.plan.parametros_universidad.nombre_bloque} ${fila.materia.bloque}`;
@@ -428,12 +432,63 @@ function construirTarjetaParaRevisar(materiaTemplate, plan) {
   return card;
 }
 
+/**
+ * Ajuste (2026-08-02 — "para evitar que el usuario haga más cambios cuando
+ * hay choque de versiones, y que en el teléfono no se rompa"): antes cada
+ * entidad en conflicto mostraba un badge de TEXTO "⚠️ Editado en 2
+ * dispositivos" metido en la fila — competía por espacio con el resto del
+ * contenido y en pantallas angostas rompía el layout. Ahora se monta un
+ * overlay invisible sobre TODA la tarjeta (position:absolute, inset:0 — no
+ * empuja ni mueve nada de lo que ya está dibujado debajo) con un solo ⚠️
+ * centrado flotando encima. El overlay intercepta CUALQUIER clic dentro de
+ * la tarjeta y abre el modal de resolución — a propósito: mientras hay un
+ * choque sin resolver, no tiene sentido dejar seguir editando esa entidad,
+ * podría perderse la versión alterna sin que la persona llegara a verla.
+ * `cardEl` debe ser el contenedor de la tarjeta completa; si no tiene ya
+ * position relative/absolute/fixed, se lo fuerza a "relative" para que el
+ * overlay quede centrado respecto a la tarjeta y no respecto a la página.
+ */
+function agregarIndicadorConflicto(cardEl, onResolver) {
+  if (getComputedStyle(cardEl).position === "static") cardEl.style.position = "relative";
+
+  const overlay = document.createElement("div");
+  overlay.className = "overlay-indicador-conflicto";
+  overlay.style.cssText =
+    "position:absolute; inset:0; display:flex; align-items:center; justify-content:center; " +
+    "cursor:pointer; z-index:5; border-radius:inherit;";
+  overlay.title = "Se cambió de forma distinta en dos dispositivos. Toca para elegir cuál dejar.";
+
+  const emoji = document.createElement("span");
+  emoji.textContent = "⚠️";
+  emoji.style.cssText = "font-size:1.4rem; filter:drop-shadow(0 1px 4px rgba(0,0,0,0.6));";
+  overlay.appendChild(emoji);
+
+  overlay.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    ev.preventDefault();
+    onResolver();
+  });
+
+  cardEl.appendChild(overlay);
+}
+
 const ESTADOS_MATERIA = [
   { valor: "pendiente", texto: "Pendiente", badge: "badge-neutral" },
   { valor: "cursando", texto: "Cursando", badge: "badge-warning" },
   { valor: "aprobado", texto: "Aprobada", badge: "badge-success" },
   { valor: "reprobado", texto: "Reprobada", badge: "badge-danger" },
 ];
+
+/**
+ * D/E/F (2026-08-02): "Cursando" salió de las opciones que la persona puede
+ * elegir a mano — ahora se deriva solo (ver obtenerEstadoEfectivoMateria en
+ * schema.js) de si la materia está matriculada en un semestre actual, así
+ * que nunca puede quedar manualmente marcada como "Cursando" sin estarlo de
+ * verdad. El pill group de la tarjeta del Plan usa esta lista recortada;
+ * ESTADOS_MATERIA completo se sigue usando para los badges/agrupaciones que
+ * sí necesitan mostrar las 4 opciones (incluida la derivada).
+ */
+const ESTADOS_MATERIA_MANUALES = ESTADOS_MATERIA.filter((e) => e.valor !== "cursando");
 
 function estaExpandida(codigo, esEscritorio) {
   if (estado.materiasExpandidas.has(codigo)) return estado.materiasExpandidas.get(codigo);
@@ -533,7 +588,7 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
 
   // ---- Línea 2 (v8 punto 2): Estado (izq) · Horas (centro) · Créditos (der).
   // Colapsada usa iniciales compactas de horas; expandida, palabra completa.
-  const linea2 = construirLinea2Materia(materia, !expandida);
+  const linea2 = construirLinea2Materia(materia, !expandida, plan);
   filaPrincipal.appendChild(linea2);
 
   if (mostrarOrigen) {
@@ -554,16 +609,7 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
   // sellar la entidad con una base limpia y rompe el ciclo. Se muestra
   // SIEMPRE (tarjeta colapsada o no) para que no pase desapercibido.
   if (materia._conflicto) {
-    const badgeConflicto = document.createElement("span");
-    badgeConflicto.className = "badge badge-danger";
-    badgeConflicto.style.fontSize = "0.68rem";
-    badgeConflicto.textContent = "⚠️ Editado en 2 dispositivos";
-    badgeConflicto.title = "Se cambió de forma distinta en dos dispositivos. Toca para elegir cuál dejar.";
-    badgeConflicto.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      abrirModalResolverConflicto(materia, plan);
-    });
-    linea2.appendChild(badgeConflicto);
+    agregarIndicadorConflicto(card, () => abrirModalResolverConflicto(materia, plan));
   }
 
   card.appendChild(filaPrincipal);
@@ -581,7 +627,7 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
 
     const grupoEstado = document.createElement("div");
     grupoEstado.className = "pill-group";
-    ESTADOS_MATERIA.forEach((e) => {
+    ESTADOS_MATERIA_MANUALES.forEach((e) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "pill-item" + (materia.estado === e.valor ? " active" : "");
@@ -726,22 +772,38 @@ function abrirModalResolverConflictoGenerico({ entidad, plan, titulo, explicacio
     sinDiferencias.textContent = "No se detectaron diferencias visibles — es seguro dejar cualquiera de las dos.";
     caja.appendChild(sinDiferencias);
   } else {
+    // Ajuste (2026-08-02 — "necesito que haya una versión más accesible
+    // para que el usuario sepa cuál es cuál"): antes cada campo distinto se
+    // veía comprimido en una sola línea "valorLocal → valorAlterna", sin
+    // etiqueta de cuál lado era cuál hasta cruzar mentalmente contra los
+    // botones de abajo. Ahora cada campo es su propio bloque, con las DOS
+    // versiones en líneas separadas y etiquetadas — mismas etiquetas que
+    // usan los botones de elegir, para que no haga falta adivinar.
     const tabla = document.createElement("div");
     tabla.className = "stack";
-    tabla.style.cssText = "font-size:0.82rem; margin-bottom:14px;";
+    tabla.style.cssText = "font-size:0.82rem; margin-bottom:14px; gap:10px;";
     diferentes.forEach((campo) => {
-      const fila = document.createElement("div");
-      fila.style.cssText = "display:flex; justify-content:space-between; gap:10px; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.08);";
-      const nombreCampo = document.createElement("span");
-      nombreCampo.style.cssText = "opacity:0.65; text-transform:capitalize;";
+      const bloque = document.createElement("div");
+      bloque.style.cssText = "padding-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.08);";
+
+      const nombreCampo = document.createElement("div");
+      nombreCampo.style.cssText = "opacity:0.65; text-transform:capitalize; margin-bottom:4px;";
       nombreCampo.textContent = campo.replace(/_/g, " ");
-      const valores = document.createElement("span");
-      valores.style.cssText = "text-align:right;";
-      valores.textContent =
-        `${etiquetaCampoConflicto(campo, entidad[campo], plan)} → ${etiquetaCampoConflicto(campo, alterna[campo], plan)}`;
-      fila.appendChild(nombreCampo);
-      fila.appendChild(valores);
-      tabla.appendChild(fila);
+      bloque.appendChild(nombreCampo);
+
+      const filaLocal = document.createElement("div");
+      filaLocal.style.cssText = "display:flex; justify-content:space-between; gap:10px; padding:2px 0;";
+      filaLocal.innerHTML = `<span style="opacity:0.7;">📍 Este dispositivo</span><span style="font-weight:600;"></span>`;
+      filaLocal.lastElementChild.textContent = etiquetaCampoConflicto(campo, entidad[campo], plan);
+      bloque.appendChild(filaLocal);
+
+      const filaAlterna = document.createElement("div");
+      filaAlterna.style.cssText = "display:flex; justify-content:space-between; gap:10px; padding:2px 0;";
+      filaAlterna.innerHTML = `<span style="opacity:0.7;">📱 El otro dispositivo</span><span style="font-weight:600;"></span>`;
+      filaAlterna.lastElementChild.textContent = etiquetaCampoConflicto(campo, alterna[campo], plan);
+      bloque.appendChild(filaAlterna);
+
+      tabla.appendChild(bloque);
     });
     caja.appendChild(tabla);
   }
@@ -758,7 +820,7 @@ function abrirModalResolverConflictoGenerico({ entidad, plan, titulo, explicacio
   const btnLocal = document.createElement("button");
   btnLocal.type = "button";
   btnLocal.className = "btn btn-secondary btn-block";
-  btnLocal.textContent = "Dejar esta versión";
+  btnLocal.textContent = "📍 Usar este dispositivo";
   btnLocal.addEventListener("click", () => elegir("local"));
   caja.appendChild(btnLocal);
 
@@ -766,7 +828,7 @@ function abrirModalResolverConflictoGenerico({ entidad, plan, titulo, explicacio
   btnAlterna.type = "button";
   btnAlterna.className = "btn btn-secondary btn-block";
   btnAlterna.style.marginTop = "6px";
-  btnAlterna.textContent = "Usar la otra versión";
+  btnAlterna.textContent = "📱 Usar el otro dispositivo";
   btnAlterna.addEventListener("click", () => elegir("alterna"));
   caja.appendChild(btnAlterna);
 
@@ -842,6 +904,7 @@ export {
   abrirMenuRapidoCategoria,
   abrirModalResolverConflicto,
   abrirModalResolverConflictoGenerico,
+  agregarIndicadorConflicto,
   construirBloqueOptativas,
   construirContenidoBloques,
   construirTarjetaMateria,
