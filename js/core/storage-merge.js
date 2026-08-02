@@ -392,21 +392,29 @@ function fusionarPlanesEstudio(local, remoto, tumbas) {
 function fusionarSemestre(semestreLocal, semestreRemoto) {
   if (!semestreLocal) return semestreRemoto;
   if (!semestreRemoto) return semestreLocal;
-
-  const base = esMasReciente(semestreRemoto, semestreLocal) ? semestreRemoto : semestreLocal;
+  if (semestreLocal === semestreRemoto) return semestreLocal;
 
   const tumbasMatriculadas = fusionarTumbas(
     semestreLocal._eliminados_materias_matriculadas,
     semestreRemoto._eliminados_materias_matriculadas
   );
+  const matriculadasFundidas = fusionarMateriasMatriculadas(
+    semestreLocal.materias_matriculadas,
+    semestreRemoto.materias_matriculadas,
+    tumbasMatriculadas
+  );
+
+  // FIX sync (Entrega 3 — el badge de conflicto de semestre existía en la
+  // UI desde la Fase 1 pero nunca podía dispararse: esta función elegía un
+  // ganador a ciegas con esMasReciente, sin pasar nunca por
+  // marcarConflictoSiCorresponde, así que semestre._conflicto jamás se
+  // llegaba a marcar. Ahora sigue el mismo patrón que fusionarColeccion.
+  const conConflicto = marcarConflictoSiCorresponde(semestreLocal, semestreRemoto, "semestre");
+  const base = conConflicto || (esMasReciente(semestreRemoto, semestreLocal) ? semestreRemoto : semestreLocal);
 
   return {
     ...base,
-    materias_matriculadas: fusionarMateriasMatriculadas(
-      semestreLocal.materias_matriculadas,
-      semestreRemoto.materias_matriculadas,
-      tumbasMatriculadas
-    ),
+    materias_matriculadas: matriculadasFundidas,
     _eliminados_materias_matriculadas: tumbasMatriculadas,
   };
 }
@@ -420,21 +428,31 @@ function fusionarSemestre(semestreLocal, semestreRemoto) {
 function fusionarCriterio(criterioLocal, criterioRemoto) {
   if (!criterioLocal) return criterioRemoto;
   if (!criterioRemoto) return criterioLocal;
+  if (criterioLocal === criterioRemoto) return criterioLocal;
 
-  const base = esMasReciente(criterioRemoto, criterioLocal) ? criterioRemoto : criterioLocal;
   const tumbasAsignaciones = fusionarTumbas(
     criterioLocal._eliminados_asignaciones,
     criterioRemoto._eliminados_asignaciones
   );
+  const asignacionesFundidas = fusionarColeccion(
+    criterioLocal.asignaciones,
+    criterioRemoto.asignaciones,
+    tumbasAsignaciones,
+    "asignación"
+  );
+
+  // Entrega 3: antes esta función elegía un ganador a ciegas con
+  // esMasReciente, sin pasar por marcarConflictoSiCorresponde — dos
+  // ediciones concurrentes reales del mismo criterio (ej. cambiar el
+  // nombre en un dispositivo y el valor_total en el otro, ambas partiendo
+  // de la misma base) se resolvían adivinando en vez de marcarse para que
+  // la persona elija, igual que ya pasa con materias/categorías.
+  const conConflicto = marcarConflictoSiCorresponde(criterioLocal, criterioRemoto, "criterio");
+  const base = conConflicto || (esMasReciente(criterioRemoto, criterioLocal) ? criterioRemoto : criterioLocal);
 
   return {
     ...base,
-    asignaciones: fusionarColeccion(
-      criterioLocal.asignaciones,
-      criterioRemoto.asignaciones,
-      tumbasAsignaciones,
-      "asignación"
-    ),
+    asignaciones: asignacionesFundidas,
     _eliminados_asignaciones: tumbasAsignaciones,
   };
 }
@@ -448,6 +466,7 @@ function fusionarCriterios(local, remoto, tumbas) {
   const porId = new Map();
   listaLocal.forEach((c) => porId.set(c.id, c));
   listaRemota.forEach((c) => {
+    observarEntidadRemota(c);
     const existente = porId.get(c.id);
     porId.set(c.id, existente ? fusionarCriterio(existente, c) : c);
   });
@@ -460,20 +479,36 @@ function fusionarCriterios(local, remoto, tumbas) {
 }
 
 /**
- * Fase 6: funde una materia matriculada individual — sus criterios se
- * funden por separado (con sus propias tumbas), igual que fusionarPlan
- * hace con materias/categorías.
+ * Fase 6 / Entrega 3: funde una materia matriculada individual — sus
+ * criterios se funden por separado (con sus propias tumbas), igual que
+ * fusionarPlan hace con materias/categorías.
+ *
+ * FIX sync (el hueco que dejaba pendiente la Entrega 2): mientras mm no
+ * tenía campos mutables reales (solo materia_id/profesor_id), elegir un
+ * ganador a ciegas con esMasReciente no perdía nada importante. Ahora que
+ * criterios/nota_final/nota_final_manual son editables de verdad, dos
+ * ediciones concurrentes en dos dispositivos (ej. activar el override
+ * manual en uno y agregar un criterio en el otro, ambas sin conocer la
+ * edición del otro) deben poder marcarse como conflicto real — antes se
+ * perdía una en silencio. Esto es lo que conecta abrirModalResolverConflicto
+ * (mismo patrón reutilizado, ver semestres-tarjetas.js) con datos reales
+ * para comparar; antes de esto solo mostraba un toast genérico porque
+ * mm._conflicto nunca se llegaba a marcar.
  */
 function fusionarMateriaMatriculada(mmLocal, mmRemoto) {
   if (!mmLocal) return mmRemoto;
   if (!mmRemoto) return mmLocal;
+  if (mmLocal === mmRemoto) return mmLocal;
 
-  const base = esMasReciente(mmRemoto, mmLocal) ? mmRemoto : mmLocal;
   const tumbasCriterios = fusionarTumbas(mmLocal._eliminados_criterios, mmRemoto._eliminados_criterios);
+  const criteriosFundidos = fusionarCriterios(mmLocal.criterios, mmRemoto.criterios, tumbasCriterios);
+
+  const conConflicto = marcarConflictoSiCorresponde(mmLocal, mmRemoto, "materia matriculada");
+  const base = conConflicto || (esMasReciente(mmRemoto, mmLocal) ? mmRemoto : mmLocal);
 
   return {
     ...base,
-    criterios: fusionarCriterios(mmLocal.criterios, mmRemoto.criterios, tumbasCriterios),
+    criterios: criteriosFundidos,
     _eliminados_criterios: tumbasCriterios,
   };
 }
@@ -487,6 +522,7 @@ function fusionarMateriasMatriculadas(local, remoto, tumbas) {
   const porId = new Map();
   listaLocal.forEach((m) => porId.set(m.id, m));
   listaRemota.forEach((m) => {
+    observarEntidadRemota(m);
     const existente = porId.get(m.id);
     porId.set(m.id, existente ? fusionarMateriaMatriculada(existente, m) : m);
   });
@@ -513,6 +549,7 @@ function fusionarSemestres(local, remoto, tumbas) {
   const porId = new Map();
   listaLocal.forEach((s) => porId.set(s.id, s));
   listaRemota.forEach((s) => {
+    observarEntidadRemota(s);
     const existente = porId.get(s.id);
     porId.set(s.id, existente ? fusionarSemestre(existente, s) : s);
   });
