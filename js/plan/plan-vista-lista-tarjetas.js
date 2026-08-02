@@ -637,6 +637,23 @@ function etiquetaCampoConflicto(campo, valor, plan) {
 
 const CAMPOS_META_CONFLICTO = new Set([
   "_conflicto", "_version_alterna", "_actualizadoEn", "_version_base", "_dispositivoId",
+  // FIX sync (2026-08-02 — JSON ilegible en el modal de conflicto de
+  // semestre): este modal genérico se reutiliza para materia, mm, criterio
+  // y semestre — cada uno puede traer UNA colección anidada propia
+  // (materias_matriculadas en semestre, criterios en mm, asignaciones en
+  // criterio) que YA se funde aparte con su propio detector de conflicto
+  // por elemento (ver storage-merge.js). Compararla acá, a nivel plano,
+  // solo puede dar dos resultados igual de malos: mostrar un
+  // JSON.stringify() completo e ilegible del array (lo que reportó el
+  // usuario), o marcarla como "distinta" por simple ausencia en una de las
+  // dos versiones (ver fusionarSemestre) cuando en realidad nunca hubo
+  // choque en esos elementos. Ninguna de las entidades que usan este modal
+  // necesita mostrar su colección anidada acá: si esa colección SÍ tiene un
+  // conflicto real propio, se resuelve con su propio modal (uno por mm o
+  // por criterio), no con el de su padre.
+  "materias_matriculadas", "_eliminados_materias_matriculadas",
+  "criterios", "_eliminados_criterios",
+  "asignaciones", "_eliminados_asignaciones",
 ]);
 
 /** Arma la lista de campos que realmente difieren entre las dos versiones en
