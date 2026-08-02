@@ -210,6 +210,52 @@ function agregarCampoModal(card, { etiqueta, tipo, valor, paso }) {
   return input;
 }
 
+/**
+ * Switch de dos opciones (ej. Automático/Personalizado, Nota/Puntos) — dos
+ * botones exclusivos, mismo patrón visual btn-primary/btn-secondary que ya
+ * se usa en el resto del proyecto. Devuelve { obtenerValor } para leer la
+ * opción activa al momento de guardar.
+ */
+function agregarSwitchDosOpciones(card, { etiqueta, opciones, valorInicial, onCambiar }) {
+  const wrap = document.createElement("div");
+  if (etiqueta) {
+    const label = document.createElement("label");
+    label.className = "form-label";
+    label.textContent = etiqueta;
+    wrap.appendChild(label);
+  }
+
+  const fila = document.createElement("div");
+  fila.className = "row";
+  fila.style.cssText = "gap:8px;";
+
+  let valorActual = valorInicial;
+  const botones = {};
+
+  opciones.forEach((op) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn " + (op.valor === valorActual ? "btn-primary" : "btn-secondary");
+    btn.style.flex = "1";
+    btn.textContent = op.texto;
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (valorActual === op.valor) return;
+      valorActual = op.valor;
+      Object.keys(botones).forEach((v) => {
+        botones[v].className = "btn " + (v === valorActual ? "btn-primary" : "btn-secondary");
+      });
+      if (onCambiar) onCambiar(valorActual);
+    });
+    botones[op.valor] = btn;
+    fila.appendChild(btn);
+  });
+
+  wrap.appendChild(fila);
+  card.appendChild(wrap);
+  return { obtenerValor: () => valorActual };
+}
+
 /* ===================== Modal: crear/editar criterio ===================== */
 
 function abrirModalCriterio({ mm, materia, plan, criterioExistente, onGuardado }) {
@@ -290,6 +336,18 @@ function eliminarCriterio(mm, materia, plan, criterio, onCambiar) {
 
 /* ===================== Modal: registrar/editar asignación ===================== */
 
+/** Estima cuánto le tocaría a esta asignación si quedara en modo "automático", sin mutar nada — solo para mostrar en el modal antes de guardar. Sigue la misma regla que repartirEquitativoCriterio (schema.js): reparte lo que sobra tras restar las "personalizado". */
+function calcularValorEquitativoEstimado(criterio, excluirId) {
+  const sumaPersonalizadas = (criterio.asignaciones || [])
+    .filter((a) => a.modo_valor === "personalizado" && a.id !== excluirId)
+    .reduce((total, a) => total + (Number(a.valor) || 0), 0);
+  const automaticasExistentes = (criterio.asignaciones || []).filter(
+    (a) => a.modo_valor !== "personalizado" && a.id !== excluirId
+  ).length;
+  const restante = Math.max(criterio.valor_total - sumaPersonalizadas, 0);
+  return restante / (automaticasExistentes + 1); // +1: esta misma asignación, nueva o recién pasada a automático
+}
+
 function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asignacionExistente, onGuardado }) {
   const esEdicion = !!asignacionExistente;
   const { overlay, card } = crearModalDinamico({ titulo: esEdicion ? "Editar asignación" : "Nueva asignación" });
@@ -299,18 +357,82 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
     tipo: "text",
     valor: esEdicion ? asignacionExistente.nombre : "",
   });
-  const inputNota = agregarCampoModal(card, {
-    etiqueta: `¿Qué nota te sacaste? (escala 0-${escalaActiva}, dejalo vacío si aún no la tenés)`,
+
+  /* ---------- Valor de la asignación ---------- */
+  const tituloValor = document.createElement("p");
+  tituloValor.style.cssText = "font-weight:700; margin:8px 0 0; font-size:0.9rem;";
+  tituloValor.textContent = "Valor de la asignación";
+  card.appendChild(tituloValor);
+
+  const modoValorInicial = esEdicion && asignacionExistente.modo_valor === "personalizado" ? "personalizado" : "automatico";
+  const equitativoEstimado = calcularValorEquitativoEstimado(criterio, esEdicion ? asignacionExistente.id : undefined);
+
+  const switchValor = agregarSwitchDosOpciones(card, {
+    opciones: [
+      { valor: "automatico", texto: "Automático" },
+      { valor: "personalizado", texto: "Personalizado" },
+    ],
+    valorInicial: modoValorInicial,
+    onCambiar: (modo) => {
+      actualizarCampoValor(modo);
+      actualizarEtiquetaCalif(switchCalif.obtenerValor());
+    },
+  });
+
+  const inputValor = agregarCampoModal(card, {
+    etiqueta: "Puntos del criterio",
+    tipo: "number",
+    valor: esEdicion && asignacionExistente.modo_valor === "personalizado" ? asignacionExistente.valor : "",
+    paso: "0.1",
+  });
+
+  function actualizarCampoValor(modo) {
+    if (modo === "automatico") {
+      inputValor.value = formatearNumero(equitativoEstimado);
+      inputValor.disabled = true;
+    } else {
+      inputValor.disabled = false;
+      inputValor.value = esEdicion && asignacionExistente.modo_valor === "personalizado" ? asignacionExistente.valor : "";
+    }
+  }
+
+  /* ---------- Calificación ---------- */
+  const tituloCalif = document.createElement("p");
+  tituloCalif.style.cssText = "font-weight:700; margin:10px 0 0; font-size:0.9rem;";
+  tituloCalif.textContent = "Calificación";
+  card.appendChild(tituloCalif);
+
+  const modoCalifInicial = esEdicion && asignacionExistente.modo_calificacion === "puntos" ? "puntos" : "nota";
+  const switchCalif = agregarSwitchDosOpciones(card, {
+    opciones: [
+      { valor: "nota", texto: "Nota" },
+      { valor: "puntos", texto: "Puntos" },
+    ],
+    valorInicial: modoCalifInicial,
+    onCambiar: (modo) => actualizarEtiquetaCalif(modo),
+  });
+
+  const inputCalif = agregarCampoModal(card, {
+    etiqueta: "",
     tipo: "number",
     valor: esEdicion && asignacionExistente.nota !== null && asignacionExistente.nota !== undefined ? asignacionExistente.nota : "",
     paso: "0.1",
   });
-  const inputValor = agregarCampoModal(card, {
-    etiqueta: "¿Cuánto valía? (puntos de la materia)",
-    tipo: "number",
-    valor: esEdicion ? asignacionExistente.valor : "",
-    paso: "0.1",
-  });
+  const labelCalif = inputCalif.parentElement.querySelector("label");
+
+  function valorVigenteParaTope() {
+    return switchValor.obtenerValor() === "automatico" ? equitativoEstimado : Number(inputValor.value) || 0;
+  }
+
+  function actualizarEtiquetaCalif(modo) {
+    labelCalif.textContent =
+      modo === "puntos"
+        ? `¿Cuántos puntos te dieron? (0-${formatearNumero(valorVigenteParaTope())}, dejalo vacío si aún no la tenés)`
+        : `¿Qué nota te sacaste? (escala 0-${escalaActiva}, dejalo vacío si aún no la tenés)`;
+  }
+
+  actualizarCampoValor(modoValorInicial);
+  actualizarEtiquetaCalif(modoCalifInicial);
 
   const disponible = criterio.valor_total - sumaValorAsignaciones(criterio, esEdicion ? asignacionExistente.id : undefined);
   const ayuda = document.createElement("p");
@@ -326,38 +448,58 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
   btnGuardar.textContent = "Guardar";
   btnGuardar.addEventListener("click", () => {
     const nombre = inputNombre.value.trim();
-    const valorNum = Number(inputValor.value);
-    const notaTexto = inputNota.value;
-    const notaNum = notaTexto === "" ? null : Number(notaTexto);
+    const modoValor = switchValor.obtenerValor();
+    const modoCalif = switchCalif.obtenerValor();
+    const valorNum = modoValor === "automatico" ? equitativoEstimado : Number(inputValor.value);
+    const califTexto = inputCalif.value;
+    const califNum = califTexto === "" ? null : Number(califTexto);
 
     if (!nombre) {
       mostrarToast("Ponele un nombre a la asignación");
       return;
     }
-    if (!Number.isFinite(valorNum) || valorNum <= 0) {
-      mostrarToast("El valor debe ser un número mayor a 0");
-      return;
+    if (modoValor === "personalizado") {
+      if (!Number.isFinite(valorNum) || valorNum <= 0) {
+        mostrarToast("El valor debe ser un número mayor a 0");
+        return;
+      }
+      if (valorNum > disponible + 0.001) {
+        mostrarToast(`Ese valor supera los ${formatearNumero(disponible)} puntos disponibles en el criterio`);
+        return;
+      }
     }
-    if (valorNum > disponible + 0.001) {
-      mostrarToast(`Ese valor supera los ${formatearNumero(disponible)} puntos disponibles en el criterio`);
-      return;
-    }
-    if (notaNum !== null && (!Number.isFinite(notaNum) || notaNum < 0 || notaNum > escalaActiva)) {
-      mostrarToast(`La nota debe estar entre 0 y ${escalaActiva}`);
-      return;
+    if (califNum !== null) {
+      if (modoCalif === "puntos") {
+        if (!Number.isFinite(califNum) || califNum < 0 || califNum > valorNum + 0.001) {
+          mostrarToast(`Los puntos deben estar entre 0 y ${formatearNumero(valorNum)}`);
+          return;
+        }
+      } else if (!Number.isFinite(califNum) || califNum < 0 || califNum > escalaActiva) {
+        mostrarToast(`La nota debe estar entre 0 y ${escalaActiva}`);
+        return;
+      }
     }
 
     if (esEdicion) {
       asignacionExistente.nombre = nombre;
-      asignacionExistente.valor = valorNum;
-      asignacionExistente.nota = notaNum;
+      asignacionExistente.modo_valor = modoValor;
+      asignacionExistente.modo_calificacion = modoCalif;
+      asignacionExistente.nota = califNum;
+      if (modoValor === "personalizado") asignacionExistente.valor = valorNum;
       sellarTimestamp(asignacionExistente);
     } else {
       const nueva = crearAsignacion({ nombre, valor: valorNum });
-      nueva.nota = notaNum;
+      nueva.modo_valor = modoValor;
+      nueva.modo_calificacion = modoCalif;
+      nueva.nota = califNum;
       criterio.asignaciones.push(nueva);
-      sellarTimestamp(criterio);
     }
+    // Reparte lo que sobra entre las "automatico" con el total ya
+    // actualizado (nueva asignación agregada, o esta pasó a
+    // automático/personalizado, o cambió su valor fijo) — decisión
+    // confirmada 2026-08-02.
+    repartirEquitativoCriterio(criterio);
+    sellarTimestamp(criterio);
 
     persistirCambioMateria(mm, materia, plan, onGuardado);
     overlay.remove();
@@ -380,11 +522,11 @@ function eliminarAsignacion(criterio, mm, materia, plan, asignacion, onCambiar) 
   });
 }
 
-/** Añade una asignación instantánea (sin modal) con reparto equitativo — decisión confirmada. */
+/** Añade una asignación instantánea (sin modal), en modo "automático" — reparte lo que sobra entre las automáticas (ver repartirEquitativoCriterio). */
 function agregarAsignacionRapida(criterio, mm, materia, plan, onCambiar) {
   const numero = (criterio.asignaciones || []).length + 1;
   criterio.asignaciones.push(crearAsignacion({ nombre: `Asignación ${numero}`, valor: 0 }));
-  repartirEquitativoCriterio(criterio); // resetea TODAS a partes iguales, aunque alguna tuviera peso editado a mano
+  repartirEquitativoCriterio(criterio);
   sellarTimestamp(criterio);
   persistirCambioMateria(mm, materia, plan, onCambiar);
 }
@@ -516,13 +658,17 @@ function construirFilaAsignacion(asignacion, criterio, mm, materia, plan, escala
 
   const izq = document.createElement("span");
   izq.style.fontSize = "0.85rem";
-  izq.textContent = `${asignacion.nombre} · ${formatearNumero(asignacion.valor)} pts`;
+  const sufijoModo = asignacion.modo_valor === "personalizado" ? "" : " · auto";
+  izq.textContent = `${asignacion.nombre} · ${formatearNumero(asignacion.valor)} pts${sufijoModo}`;
   fila.appendChild(izq);
 
   const der = document.createElement("span");
   if (asignacion.nota === null || asignacion.nota === undefined) {
     der.className = "badge badge-neutral";
     der.textContent = "Pendiente";
+  } else if (asignacion.modo_calificacion === "puntos") {
+    der.className = "badge badge-success";
+    der.textContent = `${formatearNumero(asignacion.nota)}/${formatearNumero(asignacion.valor)} pts`;
   } else {
     der.className = "badge badge-success";
     der.textContent = `${formatearNumero(asignacion.nota)}/${escalaActiva}`;
