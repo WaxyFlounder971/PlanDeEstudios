@@ -16,7 +16,7 @@ import {
   calcularNotaFinalMateria,
 } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { ESTADOS_MATERIA, abrirMenuRapidoCategoria } from "../plan/plan-vista-lista-tarjetas.js";
+import { ESTADOS_MATERIA, abrirMenuRapidoCategoria, abrirModalResolverConflictoGenerico } from "../plan/plan-vista-lista-tarjetas.js";
 import { abrirModalDesbloquea, abrirModalHistorial } from "../plan/plan-detalle.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 
@@ -43,8 +43,47 @@ function textoBadgeUniversidad(universidad) {
   return universidad.length > 14 ? obtenerIniciales(universidad) : universidad;
 }
 
-function manejarClickConflictoMatricula() {
-  mostrarToast("Esta matrícula se registró en 2 dispositivos. Con los datos actuales no hay nada que elegir — se resuelve solo en el próximo sync.");
+/**
+ * Entrega 3: reemplaza el toast genérico de antes ("no hay nada que
+ * elegir — se resuelve solo") — ahora que materia-matriculada y criterio
+ * pasan por marcarConflictoSiCorresponde (ver storage-merge.js), sí hay
+ * datos reales que comparar. Reutiliza el mismo modal que ya usan las
+ * materias del plan (ver abrirModalResolverConflictoGenerico).
+ */
+function abrirModalResolverConflictoMatricula(mm, materia, plan, onCambiar) {
+  abrirModalResolverConflictoGenerico({
+    entidad: mm,
+    plan,
+    titulo: "⚠️ Matrícula editada en dos dispositivos",
+    explicacion:
+      `"${aplicarFormatoTexto(materia.nombre)}" (${materia.codigo}) se editó de forma distinta en dos ` +
+      "dispositivos antes de que sincronizaran entre sí — puede ser el estado de la nota, un criterio o una " +
+      "asignación. Elegí cuál versión dejar — la otra se descarta.",
+    onResuelto: onCambiar,
+  });
+}
+
+function abrirModalResolverConflictoCriterio(criterio, mm, materia, plan, onCambiar) {
+  abrirModalResolverConflictoGenerico({
+    entidad: criterio,
+    plan,
+    titulo: "⚠️ Criterio editado en dos dispositivos",
+    explicacion:
+      `El criterio "${criterio.nombre}" de "${aplicarFormatoTexto(materia.nombre)}" se editó de forma ` +
+      "distinta en dos dispositivos antes de que sincronizaran entre sí. Elegí cuál versión dejar — la otra se descarta.",
+    onResuelto: onCambiar,
+  });
+}
+
+function abrirModalResolverConflictoSemestre(semestre, onCambiar) {
+  abrirModalResolverConflictoGenerico({
+    entidad: semestre,
+    titulo: "⚠️ Semestre editado en dos dispositivos",
+    explicacion:
+      `"${semestre.nombre}" se editó de forma distinta en dos dispositivos antes de que sincronizaran entre sí. ` +
+      "Elegí cuál versión dejar — la otra se descarta.",
+    onResuelto: onCambiar,
+  });
 }
 
 /* =========================================================================
@@ -494,6 +533,19 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
   badgeValor.textContent = `${formatearNumero(usado)}/${formatearNumero(criterio.valor_total)} %`;
   encabezado.appendChild(badgeValor);
 
+  if (criterio._conflicto) {
+    const badgeConflicto = document.createElement("span");
+    badgeConflicto.className = "badge badge-danger";
+    badgeConflicto.style.fontSize = "0.68rem";
+    badgeConflicto.textContent = "⚠️ 2 dispositivos";
+    badgeConflicto.title = "Este criterio se cambió de forma distinta en dos dispositivos. Toca para elegir cuál dejar.";
+    badgeConflicto.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      abrirModalResolverConflictoCriterio(criterio, mm, materia, plan, onCambiar);
+    });
+    encabezado.appendChild(badgeConflicto);
+  }
+
   cont.appendChild(encabezado);
 
   (criterio.asignaciones || []).forEach((asig) => {
@@ -836,9 +888,10 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, onCambiar) {
     badgeConflicto.className = "badge badge-danger";
     badgeConflicto.style.fontSize = "0.68rem";
     badgeConflicto.textContent = "⚠️ Editado en 2 dispositivos";
+    badgeConflicto.title = "Se cambió de forma distinta en dos dispositivos. Toca para elegir cuál dejar.";
     badgeConflicto.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      manejarClickConflictoMatricula();
+      abrirModalResolverConflictoMatricula(mm, materia, plan, onCambiar);
     });
     colDerecha.appendChild(badgeConflicto);
   }
@@ -907,9 +960,10 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEdita
     const badgeConflicto = document.createElement("span");
     badgeConflicto.className = "badge badge-danger";
     badgeConflicto.textContent = "⚠️ Editado en 2 dispositivos";
+    badgeConflicto.title = "Se cambió de forma distinta en dos dispositivos. Toca para elegir cuál dejar.";
     badgeConflicto.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      manejarClickConflictoMatricula();
+      abrirModalResolverConflictoSemestre(semestre, onCambiar);
     });
     derecha.appendChild(badgeConflicto);
   }
