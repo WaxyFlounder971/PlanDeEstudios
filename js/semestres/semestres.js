@@ -27,6 +27,8 @@ import { aplicarFormatoTexto } from "../core/utils.js";
 import { abrirConfirmacion } from "../ui/componentes.js";
 import { construirTarjetaSemestre } from "./semestres-tarjetas.js";
 
+const MESES_SELECT = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
 // Transitorio (no persistido): si el "modo edición" de Semestres está activo
 // — mismo concepto que estado.modoEdicionPlan en el Plan de Estudios.
 estado.modoEdicionSemestres = false;
@@ -371,14 +373,60 @@ function abrirModalAltaSemestre(semestreExistente = null) {
 
   const filaFechas = document.createElement("div");
   filaFechas.className = "row";
-  const bloqueFecha = document.createElement("div");
+const bloqueFecha = document.createElement("div");
   bloqueFecha.style.flex = "1";
   bloqueFecha.innerHTML = `<span class="form-label">Fecha de inicio</span>`;
+
   const inputFecha = document.createElement("input");
   inputFecha.type = "date";
   inputFecha.className = "form-input";
-  inputFecha.value = esEdicion ? semestreExistente.fecha_inicio : "";
+
+  const filaMesAnio = document.createElement("div");
+  filaMesAnio.className = "row oculto";
+  filaMesAnio.style.gap = "6px";
+
+  const selectMes = document.createElement("select");
+  selectMes.className = "form-input";
+  MESES_SELECT.forEach((nombreMes, i) => {
+    const opt = document.createElement("option");
+    opt.value = String(i + 1);
+    opt.textContent = nombreMes;
+    selectMes.appendChild(opt);
+  });
+
+  const inputAnio = document.createElement("input");
+  inputAnio.type = "number";
+  inputAnio.className = "form-input";
+  inputAnio.placeholder = "Año";
+  inputAnio.min = "2000";
+  inputAnio.max = "2100";
+  inputAnio.value = String(new Date().getFullYear());
+
+  filaMesAnio.appendChild(selectMes);
+  filaMesAnio.appendChild(inputAnio);
+
   bloqueFecha.appendChild(inputFecha);
+  bloqueFecha.appendChild(filaMesAnio);
+
+  // v2.1.6: no siempre se sabe el día exacto de inicio — con esto activo se
+  // guarda el 1ro del mes elegido como fecha_inicio (no hay un campo aparte
+  // en el esquema para marcar "aproximada"; el impacto real es mínimo, ya
+  // que fecha_inicio solo se usa para calcular semanas transcurridas —
+  // ver obtenerEstadoEfectivoSemestre, schema.js).
+  const chkFechaAproximada = document.createElement("label");
+  chkFechaAproximada.className = "checkbox";
+  chkFechaAproximada.style.cssText = "margin-top:6px; font-size:0.85rem;";
+  chkFechaAproximada.innerHTML = `
+    <input type="checkbox">
+    <span class="box"></span>
+    <span>No sé el día exacto (solo mes y año)</span>
+  `;
+  chkFechaAproximada.querySelector('input[type="checkbox"]').addEventListener("change", (e) => {
+    inputFecha.classList.toggle("oculto", e.target.checked);
+    filaMesAnio.classList.toggle("oculto", !e.target.checked);
+  });
+  bloqueFecha.appendChild(chkFechaAproximada);
+
   filaFechas.appendChild(bloqueFecha);
 
   const bloqueDuracion = document.createElement("div");
@@ -448,7 +496,10 @@ function abrirModalAltaSemestre(semestreExistente = null) {
   btnGuardar.textContent = esEdicion ? "Guardar cambios" : "Guardar";
   btnGuardar.addEventListener("click", () => {
     const nombre = inputNombre.value.trim();
-    const fecha = inputFecha.value;
+    const usaFechaAproximada = !inputFecha.classList.contains("oculto") === false; // checkbox activo = fecha oculta
+    const fecha = usaFechaAproximada
+      ? `${inputAnio.value}-${String(selectMes.value).padStart(2, "0")}-01`
+      : inputFecha.value;
     const duracion = Math.min(Number(inputDuracion.value) || 0, LIMITE_SEMANAS_SEMESTRE);
     const totalMarcadas = Array.from(seleccionPorPlan.values()).reduce((n, set) => n + set.size, 0);
 

@@ -172,10 +172,13 @@ function construirFilaAccionesMatricula(materia, plan) {
   agregarLongPress(badge, () => abrirMenuRapidoCategoria(materia, plan, badge));
   fila.appendChild(badge);
 
+  const estiloBotonComoBadge =
+    "font-size:0.78rem; font-weight:700; padding:4px 12px; border-radius:var(--radius-pill); line-height:normal;";
+
   const btnHistorial = document.createElement("button");
   btnHistorial.type = "button";
   btnHistorial.className = "btn btn-secondary";
-  btnHistorial.style.justifySelf = "center";
+  btnHistorial.style.cssText = estiloBotonComoBadge + " justify-self:center;";
   btnHistorial.textContent = "Historial";
   btnHistorial.addEventListener("click", (ev) => {
     ev.stopPropagation();
@@ -186,7 +189,7 @@ function construirFilaAccionesMatricula(materia, plan) {
   const btnEsRequisito = document.createElement("button");
   btnEsRequisito.type = "button";
   btnEsRequisito.className = "btn btn-secondary";
-  btnEsRequisito.style.justifySelf = "end";
+  btnEsRequisito.style.cssText = estiloBotonComoBadge + " justify-self:end;";
   btnEsRequisito.textContent = "Es requisito";
   btnEsRequisito.addEventListener("click", (ev) => {
     ev.stopPropagation();
