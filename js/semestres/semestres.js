@@ -140,36 +140,50 @@ function construirBuscadorAltaSemestre(contenedor, onCambiar) {
   contenedor.appendChild(input);
 }
 
+/** v2.1.4: se rehace desde cero por 2 problemas visuales:
+ *  (a) el pill-group no ocupaba todo el ancho -> ahora flex + cada botón
+ *      con flex:1 se reparten el 100% del espacio disponible.
+ *  (b) al apagar un filtro, la clase SÍ cambiaba pero nunca se volvía a
+ *      pintar el botón (onCambiar solo refrescaba el checklist) -> ahora
+ *      esta misma función se reinvoca sobre sí misma tras cada click, así
+ *      el opacity/tachado quedan visibles de inmediato. */
 function construirPillsFiltroEstado(contenedor, onCambiar) {
   contenedor.innerHTML = "";
-  const fila = document.createElement("div");
-  fila.className = "row";
-  fila.style.alignItems = "center";
+  const cont = document.createElement("div");
+  cont.className = "stack";
+  cont.style.gap = "6px";
 
   const etiqueta = document.createElement("span");
   etiqueta.className = "muted";
   etiqueta.textContent = "Mostrar:";
-  fila.appendChild(etiqueta);
+  cont.appendChild(etiqueta);
 
   const grupo = document.createElement("div");
   grupo.className = "pill-group";
+  grupo.style.cssText = "display:flex; width:100%; gap:8px;";
+
   [
     { valor: "aprobado", texto: "Aprobados" },
     { valor: "reprobado", texto: "Reprobados" },
   ].forEach(({ valor, texto }) => {
+    const oculto = estadosOcultosAltaSemestre.has(valor);
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "pill-item" + (estadosOcultosAltaSemestre.has(valor) ? "" : " active");
+    btn.className = "pill-item" + (oculto ? "" : " active");
+    btn.style.cssText =
+      "flex:1; white-space:nowrap; text-align:center;" +
+      (oculto ? " opacity:0.45; text-decoration:line-through;" : "");
     btn.textContent = texto;
     btn.addEventListener("click", () => {
       if (estadosOcultosAltaSemestre.has(valor)) estadosOcultosAltaSemestre.delete(valor);
       else estadosOcultosAltaSemestre.add(valor);
-      onCambiar();
+      construirPillsFiltroEstado(contenedor, onCambiar); // repinta ESTE grupo con el nuevo estado apagado/encendido
+      onCambiar(); // y refresca el checklist filtrado
     });
     grupo.appendChild(btn);
   });
-  fila.appendChild(grupo);
-  contenedor.appendChild(fila);
+  cont.appendChild(grupo);
+  contenedor.appendChild(cont);
 }
 
 /** Checkboxes agrupado por bloque, con buscador + filtro por estado.
@@ -190,9 +204,14 @@ function construirChecklistMaterias(contenedor, plan) {
   const seleccion = seleccionPorPlan.get(plan.id) || new Set();
   seleccionPorPlan.set(plan.id, seleccion);
 
+  // v2.1.4: buscador insensible a tildes — normaliza quitando diacríticos
+  // (NFD + strip de marcas de combinación) tanto en lo que se escribe como
+  // en nombre/código, así "codigo" encuentra "Código" y viceversa.
+  const normalizar = (t) => (t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
   let materias = plan.materias.filter((m) => !estadosOcultosAltaSemestre.has(m.estado) || seleccion.has(m.codigo));
-  const q = busquedaAltaSemestre.trim().toLowerCase();
-  if (q) materias = materias.filter((m) => m.nombre.toLowerCase().includes(q) || m.codigo.toLowerCase().includes(q));
+  const q = normalizar(busquedaAltaSemestre.trim());
+  if (q) materias = materias.filter((m) => normalizar(m.nombre).includes(q) || normalizar(m.codigo).includes(q));
 
   if (materias.length === 0) {
     contenedor.innerHTML = `<p class="muted">No hay materias que coincidan con el filtro.</p>`;
@@ -220,10 +239,11 @@ function construirChecklistMaterias(contenedor, plan) {
       porBloque.get(bloque).forEach((materia) => {
         const label = document.createElement("label");
         label.className = "checkbox";
+        label.style.borderLeft = "0";
         label.innerHTML = `
           <input type="checkbox" ${seleccion.has(materia.codigo) ? "checked" : ""}>
-          <span class="box"></span>
-          <span style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">
+          <span class="box" style="border-left:0;"></span>
+          <span style="display:flex; align-items:center; gap:8px; flex:1; min-width:0; border-left:0;">
             <span style="min-width:64px; flex-shrink:0; font-family:monospace; font-size:0.85rem;">${materia.codigo}</span>
             <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${aplicarFormatoTexto(materia.nombre)}</span>
           </span>

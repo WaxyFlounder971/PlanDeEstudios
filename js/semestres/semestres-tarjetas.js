@@ -1,28 +1,20 @@
 /* =========================================================================
    SEMESTRES — Tarjetas (Fase 1 de "Semestres y Notas")
-   Tarjeta de semestre colapsada/expandida (+ modo edición: lápiz/papelera) y,
-   dentro de ella, la tarjeta de cada materia matriculada. Reutiliza el
-   estilo y las piezas ya probadas de plan-vista-lista-tarjetas.js /
-   plan-detalle.js en vez de reinventarlas.
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
-import { aplicarFormatoTexto, obtenerIniciales } from "../core/utils.js";
+import { aplicarFormatoTexto, estiloBadgeCategoria, obtenerIniciales } from "../core/utils.js";
 import { agregarLongPress, mostrarToast } from "../ui/componentes.js";
 import { obtenerEstadoEfectivoSemestre, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { ESTADOS_MATERIA } from "../plan/plan-vista-lista-tarjetas.js";
-import { construirColumnaAccionesTarjeta } from "../plan/plan-detalle.js";
+import { ESTADOS_MATERIA, abrirMenuRapidoCategoria } from "../plan/plan-vista-lista-tarjetas.js";
+import { abrirModalDesbloquea, abrirModalHistorial } from "../plan/plan-detalle.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 
-// Transitorio (no persistido): qué semestres/materias matriculadas están
-// expandidos en esta sesión — mismo patrón que estado.materiasExpandidas.
 estado.semestresExpandidos = estado.semestresExpandidos || new Map();
 
 const MESES_LARGOS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
-/** "3 de agosto del 2026" — parseo manual (no `new Date()`) para no
- *  arriesgarse a que el navegador interprete el ISO en UTC y corra el día. */
 function formatearFechaLarga(fechaISO) {
   const [anio, mes, dia] = String(fechaISO).split("-").map(Number);
   if (!anio || !mes || !dia) return fechaISO;
@@ -42,18 +34,10 @@ function textoBadgeUniversidad(universidad) {
   return universidad.length > 14 ? obtenerIniciales(universidad) : universidad;
 }
 
-/** Conflicto de la matrícula en sí: la entidad no tiene campos mutables
- *  interesantes que comparar todavía (ver crearMateriaMatriculada,
- *  schema.js), así que en vez de un resolver genérico completo se avisa —
- *  el resolver real tiene más sentido cuando la Fase 6 le agregue campos
- *  mutables (criterios, nota_final). */
 function manejarClickConflictoMatricula() {
   mostrarToast("Esta matrícula se registró en 2 dispositivos. Con los datos actuales no hay nada que elegir — se resuelve solo en el próximo sync.");
 }
 
-/** Mismo patrón que abrirMenuRapidoCategoria (plan-vista-lista-tarjetas.js)
- *  pero para elegir Estado — mantener presionado (o clic derecho) el badge
- *  de Estado abre este popover. */
 function abrirMenuRapidoEstadoMatricula(materia, anclaEl, onCambiar) {
   document.querySelectorAll(".popover-estado-rapido").forEach((el) => el.remove());
 
@@ -67,10 +51,11 @@ function abrirMenuRapidoEstadoMatricula(materia, anclaEl, onCambiar) {
   ESTADOS_MATERIA.forEach((opcion) => {
     const item = document.createElement("button");
     item.type = "button";
-    item.className = "btn btn-secondary btn-block";
+    item.className = "btn " + (materia.estado === opcion.valor ? "btn-primary" : "btn-secondary") + " btn-block";
     item.style.cssText = "text-align:left; padding:6px 10px; font-size:0.85rem;";
     item.textContent = opcion.texto;
-    item.addEventListener("click", () => {
+    item.addEventListener("click", (ev) => {
+      ev.stopPropagation();
       materia.estado = opcion.valor;
       sellarTimestamp(materia);
       marcarCambioPendiente();
@@ -92,9 +77,59 @@ function abrirMenuRapidoEstadoMatricula(materia, anclaEl, onCambiar) {
   }, 300);
 }
 
-/** Punto 1 del prompt original: estado actual/pasado, con posibilidad de
- *  forzarlo a mano si la detección automática por fecha falla — mantener
- *  presionado cicla automático → forzar "Actual" → forzar "Pasado" → automático. */
+/**
+ * v2.1.4: se reemplaza el ciclo automático→actual→pasado→automático (el
+ * bug reportado — "activé actual manual pero no me deja desactivarlo" — era
+ * justamente que hacía falta un TERCER long-press para volver a
+ * automático, lo cual se sentía como que estaba trabado) por un popover
+ * explícito con las 3 opciones, mismo patrón que abrirMenuRapidoEstadoMatricula.
+ * Ahora "apagar el manual" es 1 solo click en "Automático", sin adivinar
+ * cuántas veces hay que presionar.
+ */
+function abrirMenuRapidoEstadoSemestre(semestre, anclaEl, onCambiar) {
+  document.querySelectorAll(".popover-estado-rapido").forEach((el) => el.remove());
+
+  const opciones = [
+    { valor: null, texto: "Automático (detectar por fecha)" },
+    { valor: "actual", texto: "Forzar: Actual" },
+    { valor: "pasado", texto: "Forzar: Pasado" },
+  ];
+
+  const pop = document.createElement("div");
+  pop.className = "glass-card stack popover-estado-rapido";
+  pop.style.cssText = "position:fixed; z-index:200; padding:8px; min-width:210px;";
+  const rect = anclaEl.getBoundingClientRect();
+  pop.style.top = `${rect.bottom + 6}px`;
+  pop.style.left = `${Math.max(8, rect.left)}px`;
+
+  opciones.forEach((opcion) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "btn " + (semestre.estado_manual === opcion.valor ? "btn-primary" : "btn-secondary") + " btn-block";
+    item.style.cssText = "text-align:left; padding:6px 10px; font-size:0.85rem;";
+    item.textContent = opcion.texto;
+    item.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      semestre.estado_manual = opcion.valor;
+      sellarTimestamp(semestre);
+      marcarCambioPendiente();
+      pop.remove();
+      onCambiar();
+    });
+    pop.appendChild(item);
+  });
+
+  document.body.appendChild(pop);
+  setTimeout(() => {
+    document.addEventListener("click", function cerrar(e) {
+      if (!pop.contains(e.target)) {
+        pop.remove();
+        document.removeEventListener("click", cerrar);
+      }
+    });
+  }, 300);
+}
+
 function construirBadgeEstadoSemestre(semestre, onCambiar) {
   const efectivo = obtenerEstadoEfectivoSemestre(semestre);
   const esManual = semestre.estado_manual === "actual" || semestre.estado_manual === "pasado";
@@ -102,18 +137,64 @@ function construirBadgeEstadoSemestre(semestre, onCambiar) {
   const badge = document.createElement("span");
   badge.className = "badge " + (efectivo === "actual" ? "badge-success" : "badge-neutral");
   badge.textContent = (efectivo === "actual" ? "Actual" : "Pasado") + (esManual ? " (manual)" : "");
-  badge.title = "Mantén presionado (o clic derecho) si la detección automática por fecha se equivocó, para forzarlo a mano.";
+  badge.style.cursor = "pointer";
+  badge.title = "Mantén presionado (o clic derecho) para elegir Automático/Actual/Pasado.";
 
-  agregarLongPress(badge, () => {
-    if (semestre.estado_manual === null) semestre.estado_manual = "actual";
-    else if (semestre.estado_manual === "actual") semestre.estado_manual = "pasado";
-    else semestre.estado_manual = null;
-    sellarTimestamp(semestre);
-    marcarCambioPendiente();
-    onCambiar();
-  });
+  agregarLongPress(badge, () => abrirMenuRapidoEstadoSemestre(semestre, badge, onCambiar));
 
   return badge;
+}
+
+/**
+ * v2.1.4: Categoría / Historial / Es requisito en una fila HORIZONTAL
+ * (izquierda / centro / derecha) — ya no reutiliza construirColumnaAccionesTarjeta
+ * (esa arma una columna VERTICAL pensada para ir al lado de una columna de
+ * Requisitos, que acá no existe). Los botones son idénticos en clase
+ * (btn btn-secondary) a los que arma esa función — mismo tamaño de siempre,
+ * solo cambia el contenedor/orden.
+ */
+function construirFilaAccionesMatricula(materia, plan) {
+  const fila = document.createElement("div");
+  fila.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px; margin-top:6px;";
+
+  const categoria = plan.categorias.find((c) => c.id === materia.categoria_id);
+  const badge = document.createElement("span");
+  if (categoria) {
+    badge.className = "badge";
+    badge.style.cssText = estiloBadgeCategoria(categoria.color) + " cursor:pointer; justify-self:start;";
+    badge.textContent = categoria.nombre;
+  } else {
+    badge.className = "badge badge-neutral";
+    badge.style.cssText = "cursor:pointer; justify-self:start;";
+    badge.textContent = "Sin categoría";
+  }
+  badge.title = "Mantén presionado (o clic derecho) para cambiar la categoría";
+  agregarLongPress(badge, () => abrirMenuRapidoCategoria(materia, plan, badge));
+  fila.appendChild(badge);
+
+  const btnHistorial = document.createElement("button");
+  btnHistorial.type = "button";
+  btnHistorial.className = "btn btn-secondary";
+  btnHistorial.style.justifySelf = "center";
+  btnHistorial.textContent = "Historial";
+  btnHistorial.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    abrirModalHistorial(materia);
+  });
+  fila.appendChild(btnHistorial);
+
+  const btnEsRequisito = document.createElement("button");
+  btnEsRequisito.type = "button";
+  btnEsRequisito.className = "btn btn-secondary";
+  btnEsRequisito.style.justifySelf = "end";
+  btnEsRequisito.textContent = "Es requisito";
+  btnEsRequisito.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    abrirModalDesbloquea(materia, plan);
+  });
+  fila.appendChild(btnEsRequisito);
+
+  return fila;
 }
 
 function construirTarjetaMateriaMatriculada(mm, materia, plan, onCambiar) {
@@ -132,16 +213,18 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, onCambiar) {
     onCambiar();
   });
 
-  // Línea 1: código · nombre · flecha (sin badge de universidad — queda en línea 2, un solo lugar).
   const linea1 = document.createElement("div");
   linea1.className = "materia-linea1";
-  linea1.style.alignItems = "center"; // código y nombre centrados en el mismo eje vertical
+  linea1.style.alignItems = "center";
 
   const prefijo = document.createElement("span");
   prefijo.className = "materia-prefijo";
   const spanCodigo = document.createElement("span");
   spanCodigo.className = "materia-codigo";
   spanCodigo.textContent = materia.codigo;
+  // v2.1.4: el monoespaciado del código queda ~4px más abajo que el nombre
+  // por métrica de fuente — se sube para que ambos queden centrados entre sí.
+  spanCodigo.style.cssText = "position:relative; top:-4px;";
   prefijo.appendChild(spanCodigo);
   linea1.appendChild(prefijo);
 
@@ -157,7 +240,6 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, onCambiar) {
 
   filaPrincipal.appendChild(linea1);
 
-  // Línea 2: badge Estado (clickeable) · badge universidad (único) · badge créditos.
   const linea2 = document.createElement("div");
   linea2.className = "materia-linea2";
 
@@ -195,12 +277,8 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, onCambiar) {
   filaPrincipal.appendChild(linea2);
   card.appendChild(filaPrincipal);
 
-  // Expandida: Categoría + "Es requisito"/"Historial" — reutiliza
-  // construirColumnaAccionesTarjeta TAL CUAL la usa la tarjeta del Plan
-  // (mismo .materia-acciones-botones, btn-secondary — mismo tamaño que en
-  // la lista del Plan). + placeholder vacío para notas (Fase 6).
   if (expandida) {
-    card.appendChild(construirColumnaAccionesTarjeta(materia, plan));
+    card.appendChild(construirFilaAccionesMatricula(materia, plan));
 
     const placeholderNotas = document.createElement("div");
     placeholderNotas.className = "placeholder-notas-materia";
@@ -211,11 +289,6 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, onCambiar) {
   return card;
 }
 
-/**
- * `onEditar`/`onBorrar` los pasa semestres.js — solo se muestran (lápiz/
- * papelera) cuando estado.modoEdicionSemestres está activo, mismo concepto
- * que el modo edición del Plan de Estudios.
- */
 function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEditar, onBorrar) {
   const expandido = estado.semestresExpandidos.get(semestre.id) || false;
 
