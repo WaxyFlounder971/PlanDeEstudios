@@ -655,20 +655,30 @@ function camposEnConflicto(local, alterna) {
 }
 
 /**
- * Modal de resolución de conflicto real (ver hayConflictoReal en
- * storage-merge.js). Se construye 100% en JS (sin depender de markup nuevo
- * en index.html, igual que abrirMenuRapidoCategoria) porque es la única
- * pieza que faltaba para que un conflicto real deje de quedar atascado para
- * siempre: hasta que la persona elige una versión, cada sync lo vuelve a
- * marcar contra la misma base vieja sin avanzar (ni un reinicio lo arregla
- * solo). Elegir acá llama a resolverConflicto(), que resella la entidad con
- * un _version_base limpio — eso es lo que rompe el ciclo.
+ * Entrega 3 (Semestres y Notas): versión genérica del modal de resolución
+ * de conflicto real (ver hayConflictoReal en storage-merge.js), extraída de
+ * lo que antes era abrirModalResolverConflicto de aquí abajo, para que
+ * semestres-tarjetas.js pueda reutilizarla tal cual con materia-matriculada
+ * y criterio — ahora que ambos también pasan por marcarConflictoSiCorresponde
+ * (ver storage-merge.js) en vez de que la fusión elija un ganador a ciegas.
+ * Se construye 100% en JS (sin depender de markup nuevo en index.html,
+ * igual que abrirMenuRapidoCategoria) porque es la única pieza que faltaba
+ * para que un conflicto real deje de quedar atascado para siempre: hasta
+ * que la persona elige una versión, cada sync lo vuelve a marcar contra la
+ * misma base vieja sin avanzar (ni un reinicio lo arregla solo). Elegir acá
+ * llama a resolverConflicto(), que resella la entidad con un _version_base
+ * limpio — eso es lo que rompe el ciclo.
+ *
+ * `entidad` es el objeto vivo con `_conflicto: true` (materia, mm o
+ * criterio) — se muta in-place, igual que hacía la versión original.
+ * `onResuelto` reemplaza la llamada fija a renderizarPlanEstudios() para
+ * que cada pantalla refresque lo que le corresponde.
  */
-function abrirModalResolverConflicto(materia, plan) {
+function abrirModalResolverConflictoGenerico({ entidad, plan, titulo, explicacion, onResuelto }) {
   document.querySelectorAll(".overlay-resolver-conflicto").forEach((el) => el.remove());
 
-  const alterna = materia._version_alterna || {};
-  const diferentes = camposEnConflicto(materia, alterna);
+  const alterna = entidad._version_alterna || {};
+  const diferentes = camposEnConflicto(entidad, alterna);
 
   const overlay = document.createElement("div");
   overlay.className = "overlay-resolver-conflicto";
@@ -681,17 +691,17 @@ function abrirModalResolverConflicto(materia, plan) {
   caja.style.cssText = "max-width:420px; width:100%; padding:18px; max-height:80vh; overflow-y:auto;";
   caja.addEventListener("click", (ev) => ev.stopPropagation());
 
-  const titulo = document.createElement("h3");
-  titulo.style.cssText = "margin:0 0 4px;";
-  titulo.textContent = "⚠️ Edición en dos dispositivos";
-  caja.appendChild(titulo);
+  const tituloEl = document.createElement("h3");
+  tituloEl.style.cssText = "margin:0 0 4px;";
+  tituloEl.textContent = titulo || "⚠️ Edición en dos dispositivos";
+  caja.appendChild(tituloEl);
 
-  const explicacion = document.createElement("p");
-  explicacion.style.cssText = "font-size:0.85rem; opacity:0.85; margin:0 0 12px;";
-  explicacion.textContent =
-    `"${aplicarFormatoTexto(materia.nombre)}" (${materia.codigo}) se editó de forma distinta en dos ` +
-    "dispositivos antes de que sincronizaran entre sí. Elegí cuál versión dejar — la otra se descarta.";
-  caja.appendChild(explicacion);
+  const explicacionEl = document.createElement("p");
+  explicacionEl.style.cssText = "font-size:0.85rem; opacity:0.85; margin:0 0 12px;";
+  explicacionEl.textContent =
+    explicacion ||
+    "Esto se editó de forma distinta en dos dispositivos antes de que sincronizaran entre sí. Elegí cuál versión dejar — la otra se descarta.";
+  caja.appendChild(explicacionEl);
 
   if (diferentes.length === 0) {
     const sinDiferencias = document.createElement("p");
@@ -711,7 +721,7 @@ function abrirModalResolverConflicto(materia, plan) {
       const valores = document.createElement("span");
       valores.style.cssText = "text-align:right;";
       valores.textContent =
-        `${etiquetaCampoConflicto(campo, materia[campo], plan)} → ${etiquetaCampoConflicto(campo, alterna[campo], plan)}`;
+        `${etiquetaCampoConflicto(campo, entidad[campo], plan)} → ${etiquetaCampoConflicto(campo, alterna[campo], plan)}`;
       fila.appendChild(nombreCampo);
       fila.appendChild(valores);
       tabla.appendChild(fila);
@@ -720,12 +730,12 @@ function abrirModalResolverConflicto(materia, plan) {
   }
 
   const elegir = (cual) => {
-    const resuelta = resolverConflicto(materia, cual, sellarTimestamp);
-    Object.keys(materia).forEach((k) => delete materia[k]);
-    Object.assign(materia, resuelta);
+    const resuelta = resolverConflicto(entidad, cual, sellarTimestamp);
+    Object.keys(entidad).forEach((k) => delete entidad[k]);
+    Object.assign(entidad, resuelta);
     marcarCambioPendiente();
     overlay.remove();
-    renderizarPlanEstudios();
+    onResuelto();
   };
 
   const btnLocal = document.createElement("button");
@@ -746,6 +756,19 @@ function abrirModalResolverConflicto(materia, plan) {
   overlay.appendChild(caja);
   overlay.addEventListener("click", () => overlay.remove());
   document.body.appendChild(overlay);
+}
+
+/** Caso particular de abrirModalResolverConflictoGenerico para una materia del plan. */
+function abrirModalResolverConflicto(materia, plan) {
+  abrirModalResolverConflictoGenerico({
+    entidad: materia,
+    plan,
+    titulo: "⚠️ Edición en dos dispositivos",
+    explicacion:
+      `"${aplicarFormatoTexto(materia.nombre)}" (${materia.codigo}) se editó de forma distinta en dos ` +
+      "dispositivos antes de que sincronizaran entre sí. Elegí cuál versión dejar — la otra se descarta.",
+    onResuelto: renderizarPlanEstudios,
+  });
 }
 
 /** Ajuste v4 #7: menú rápido (lista de categorías del plan) para reasignar
@@ -801,6 +824,7 @@ export {
   ESTADOS_MATERIA,
   abrirMenuRapidoCategoria,
   abrirModalResolverConflicto,
+  abrirModalResolverConflictoGenerico,
   construirBloqueOptativas,
   construirContenidoBloques,
   construirTarjetaMateria,
