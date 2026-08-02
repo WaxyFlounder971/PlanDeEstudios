@@ -15,8 +15,10 @@
 
 import {
   LIMITE_SEMANAS_SEMESTRE,
+  calcularNotaFinalMateria,
   crearMateriaMatriculada,
   crearSemestre,
+  obtenerEscalaNotasMateria,
   obtenerEstadoEfectivoSemestre,
   obtenerPlanesActivos,
   sellarTimestamp,
@@ -59,21 +61,81 @@ function creditosTotalesSemestre(semestre) {
   }, 0);
 }
 
+/**
+ * Botón "Terminar semestre" (decisión confirmada 2026-08-02): una materia
+ * matriculada tiene notas "completas" cuando la suma de valor_total de sus
+ * criterios llega a 100 Y todas sus asignaciones tienen nota cargada, O
+ * cuando tiene nota_final_manual activo (el override manual ya es, por
+ * definición, la nota que la persona quiere usar). Cualquier otro caso NO
+ * es completo — resultado queda en null, mismo criterio ya confirmado en
+ * Prompt B (nunca se adivina pasó/no-pasó con notas a medias).
+ */
+function notasCompletas(mm) {
+  if (mm.nota_final_manual) return true;
+  const criterios = mm.criterios || [];
+  const sumaValorTotal = criterios.reduce((total, c) => total + (Number(c.valor_total) || 0), 0);
+  if (Math.abs(sumaValorTotal - 100) > 0.001) return false;
+  return criterios.every(
+    (c) =>
+      (c.asignaciones || []).length > 0 &&
+      (c.asignaciones || []).every((a) => a.nota !== null && a.nota !== undefined)
+  );
+}
+
+/**
+ * D/E/F: calcula y persiste `resultado` en cada materia matriculada del
+ * semestre (comparando nota_final vigente contra umbral_pasar_raspando —
+ * o nota_aprobacion si ese no está definido — del plan de CADA materia,
+ * porque en Modo Hardcore dos materias del mismo semestre pueden venir de
+ * planes/universidades distintas con umbrales distintos) y pasa el
+ * semestre a "pasado". Nunca toca materia.estado — eso sigue siendo 100%
+ * manual/sticky desde el Plan (ver ESTADOS_MATERIA_MANUALES en
+ * plan-vista-lista-tarjetas.js). Solo resella la mm si el resultado
+ * realmente cambió, para no generar sincronía/conflictos de la nada en
+ * materias que no se tocan en este cierre.
+ */
+function terminarSemestre(semestre) {
+  (semestre.materias_matriculadas || []).forEach((mm) => {
+    const plan = obtenerPlanPorId(mm.plan_estudio_id);
+    const materia = plan && plan.materias.find((m) => m.id === mm.materia_id);
+
+    let nuevoResultado = null;
+    if (plan && materia && notasCompletas(mm)) {
+      const escala = obtenerEscalaNotasMateria(materia, plan, estado.datos.configuracion);
+      const notaFinal = mm.nota_final_manual ? mm.nota_final : calcularNotaFinalMateria(mm, escala);
+      const params = plan.parametros_universidad || {};
+      const umbral = Number(params.umbral_pasar_raspando ?? params.nota_aprobacion) || 70;
+      nuevoResultado = notaFinal >= umbral ? "aprobada" : "reprobada";
+    }
+
+    if (mm.resultado !== nuevoResultado) {
+      mm.resultado = nuevoResultado;
+      sellarTimestamp(mm);
+    }
+  });
+
+  semestre.estado_manual = "pasado";
+  sellarTimestamp(semestre);
+  marcarCambioPendiente();
+}
+
 /* ===================== Sincronía Matrícula ↔ Plan de Estudios ===================== */
 
 /**
- * v2.1.2 — prioriza lo que YA hay cargado en el Plan de Estudios (lo más
- * probable es que se registre ahí primero):
- * - "aprobado" -> se queda igual. Matricular NO la toca (no tiene sentido
- *   "repetir" algo aprobado solo por matricularlo).
- * - "reprobado" / "pendiente" -> pasa a "cursando".
- * - "cursando" -> no-op, ya está.
+ * D/E/F (2026-08-02): esta función escribía materia.estado = "cursando" al
+ * matricular — pero de paso reveló una inconsistencia real: el código de
+ * acá SÍ blindaba "aprobado" (lo dejaba intacto), mientras el comentario
+ * original en crearMateriaMatriculada (schema.js) describía lo contrario
+ * ("repetir una Aprobada la vuelve a poner en cursando, deja de contar como
+ * aprobada en los totales") — nunca pasaba en la práctica. Con
+ * obtenerEstadoEfectivoMateria (schema.js) esto ya no hace falta: "cursando"
+ * se deriva SIEMPRE que haya una mm real en un semestre actual, sin importar
+ * qué diga materia.estado debajo — y ahora sí, de verdad, una "Aprobada" que
+ * se repite se ve y se comporta como "Cursando" mientras dura, exactamente
+ * como decía el comentario viejo. materia.estado queda intacto siempre
+ * (sticky, 100% manual) — no hace falta ningún efecto secundario al
+ * matricular ni al desmatricular.
  */
-function sincronizarEstadoAlMatricular(materia) {
-  if (materia.estado === "aprobado" || materia.estado === "cursando") return;
-  materia.estado = "cursando";
-  sellarTimestamp(materia);
-}
 
 /* ===================== Alta / edición de semestre (modal 100% en JS) ===================== */
 
@@ -276,7 +338,6 @@ function guardarNuevoSemestre({ nombre, fecha, duracion, planesConSeleccion }) {
       const materia = plan.materias.find((m) => m.codigo === codigo);
       if (!materia) return;
       semestre.materias_matriculadas.push(crearMateriaMatriculada({ materiaId: materia.id, planEstudioId: planId }));
-      sincronizarEstadoAlMatricular(materia);
     });
   });
 
@@ -332,7 +393,6 @@ function guardarEdicionSemestre(semestre, { nombre, fecha, duracion, planesConSe
       const clave = `${planId}::${materia.id}`;
       if (clavesExistentes.has(clave)) return;
       semestre.materias_matriculadas.push(crearMateriaMatriculada({ materiaId: materia.id, planEstudioId: planId }));
-      sincronizarEstadoAlMatricular(materia);
     });
   });
 
@@ -382,6 +442,19 @@ function abrirModalAltaSemestre(semestreExistente = null) {
   const inputFecha = document.createElement("input");
   inputFecha.type = "date";
   inputFecha.className = "form-input";
+  // FIX (bug C — "fecha vacía al editar semestre"): a diferencia de
+  // inputNombre e inputDuracion (arriba), este input nunca recibía su valor
+  // en modo edición, así que el modal de "Editar semestre" siempre arrancaba
+  // con la fecha en blanco aunque el semestre sí la tuviera guardada.
+  // fecha_inicio siempre se guarda como "YYYY-MM-DD" (venga del selector
+  // normal o del modo aproximado "mes/año", que la arma como "AAAA-MM-01"
+  // — ver btnGuardar más abajo), formato que <input type="date"> acepta tal
+  // cual. No hay dato guardado de si el semestre se cargó en su momento con
+  // el checkbox "No sé el día exacto" activo, así que al editar siempre se
+  // muestra en modo fecha completa (nunca se pierde la fecha real por eso:
+  // el día que se guardó, sea exacto o el "01" del modo aproximado, es el
+  // que se ve y el que se vuelve a guardar si no se toca).
+  inputFecha.value = esEdicion ? semestreExistente.fecha_inicio : "";
 
   const filaMesAnio = document.createElement("div");
   filaMesAnio.className = "row oculto";
@@ -477,6 +550,37 @@ function abrirModalAltaSemestre(semestreExistente = null) {
   error.className = "muted oculto";
   error.style.color = "var(--color-danger)";
   caja.appendChild(error);
+
+  // Botón "Terminar semestre" (D/E/F): solo tiene sentido en edición y
+  // mientras el semestre siga "actual" — uno ya "pasado" (por fecha o a
+  // mano) no necesita este botón.
+  if (esEdicion && obtenerEstadoEfectivoSemestre(semestreExistente) === "actual") {
+    const filaTerminar = document.createElement("div");
+    filaTerminar.className = "row";
+    filaTerminar.style.justifyContent = "flex-start";
+
+    const btnTerminar = document.createElement("button");
+    btnTerminar.type = "button";
+    btnTerminar.className = "btn btn-secondary";
+    btnTerminar.textContent = "Terminar semestre";
+    btnTerminar.addEventListener("click", () => {
+      abrirConfirmacion({
+        titulo: "Terminar semestre",
+        mensaje:
+          `Calcula Aprobada/Reprobada en cada materia con notas completas y pasa "${semestreExistente.nombre}" ` +
+          "a Historial. Las materias con notas incompletas quedan sin resultado (se pueden completar y volver a " +
+          "matricular más adelante). Esta acción no se puede deshacer.",
+        textoConfirmar: "Terminar semestre",
+        onConfirmar: () => {
+          terminarSemestre(semestreExistente);
+          overlay.remove();
+          renderizarSemestres();
+        },
+      });
+    });
+    filaTerminar.appendChild(btnTerminar);
+    caja.appendChild(filaTerminar);
+  }
 
   const filaBotones = document.createElement("div");
   filaBotones.className = "row";
