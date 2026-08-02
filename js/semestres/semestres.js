@@ -373,9 +373,11 @@ function abrirModalAltaSemestre(semestreExistente = null) {
 
   const filaFechas = document.createElement("div");
   filaFechas.className = "row";
-const bloqueFecha = document.createElement("div");
+  filaFechas.style.alignItems = "flex-start";
+
+  const bloqueFecha = document.createElement("div");
   bloqueFecha.style.flex = "1";
-  bloqueFecha.innerHTML = `<span class="form-label">Fecha de inicio</span>`;
+  bloqueFecha.innerHTML = `<span class="form-label" style="white-space:nowrap;">Fecha de inicio</span>`;
 
   const inputFecha = document.createElement("input");
   inputFecha.type = "date";
@@ -407,31 +409,11 @@ const bloqueFecha = document.createElement("div");
 
   bloqueFecha.appendChild(inputFecha);
   bloqueFecha.appendChild(filaMesAnio);
-
-  // v2.1.6: no siempre se sabe el día exacto de inicio — con esto activo se
-  // guarda el 1ro del mes elegido como fecha_inicio (no hay un campo aparte
-  // en el esquema para marcar "aproximada"; el impacto real es mínimo, ya
-  // que fecha_inicio solo se usa para calcular semanas transcurridas —
-  // ver obtenerEstadoEfectivoSemestre, schema.js).
-  const chkFechaAproximada = document.createElement("label");
-  chkFechaAproximada.className = "checkbox";
-  chkFechaAproximada.style.cssText = "margin-top:6px; font-size:0.85rem;";
-  chkFechaAproximada.innerHTML = `
-    <input type="checkbox">
-    <span class="box"></span>
-    <span>No sé el día exacto (solo mes y año)</span>
-  `;
-  chkFechaAproximada.querySelector('input[type="checkbox"]').addEventListener("change", (e) => {
-    inputFecha.classList.toggle("oculto", e.target.checked);
-    filaMesAnio.classList.toggle("oculto", !e.target.checked);
-  });
-  bloqueFecha.appendChild(chkFechaAproximada);
-
   filaFechas.appendChild(bloqueFecha);
 
   const bloqueDuracion = document.createElement("div");
   bloqueDuracion.style.flex = "1";
-  bloqueDuracion.innerHTML = `<span class="form-label">Duración (semanas)</span>`;
+  bloqueDuracion.innerHTML = `<span class="form-label" style="white-space:nowrap;">Duración (semanas)</span>`;
   const inputDuracion = document.createElement("input");
   inputDuracion.type = "number";
   inputDuracion.className = "form-input";
@@ -443,6 +425,22 @@ const bloqueFecha = document.createElement("div");
   bloqueDuracion.appendChild(inputDuracion);
   filaFechas.appendChild(bloqueDuracion);
   caja.appendChild(filaFechas);
+
+  caja.appendChild(filaFechas);
+
+  const chkFechaAproximada = document.createElement("label");
+  chkFechaAproximada.className = "checkbox";
+  chkFechaAproximada.style.cssText = "margin-top:6px; font-size:0.85rem; width:100%;";
+  chkFechaAproximada.innerHTML = `
+    <input type="checkbox">
+    <span class="box"></span>
+    <span>No sé el día exacto (solo mes y año)</span>
+  `;
+  chkFechaAproximada.querySelector('input[type="checkbox"]').addEventListener("change", (e) => {
+    inputFecha.classList.toggle("oculto", e.target.checked);
+    filaMesAnio.classList.toggle("oculto", !e.target.checked);
+  });
+  caja.appendChild(chkFechaAproximada);
 
   const planesIds = Array.from(new Set([...obtenerPlanesActivos(cfg), ...(esEdicion ? semestreExistente.plan_estudio_id : [])]));
 

@@ -162,10 +162,12 @@ function construirFilaAccionesMatricula(materia, plan) {
   if (categoria) {
     badge.className = "badge";
     badge.style.cssText = estiloBadgeCategoria(categoria.color) + " cursor:pointer; justify-self:start;";
+    badge.style.cssText += " min-width:0;";
     badge.textContent = categoria.nombre;
   } else {
     badge.className = "badge badge-neutral";
     badge.style.cssText = "cursor:pointer; justify-self:start;";
+    badge.style.cssText += " min-width:0;";
     badge.textContent = "Sin categoría";
   }
   badge.title = "Mantén presionado (o clic derecho) para cambiar la categoría";
@@ -190,6 +192,7 @@ function construirFilaAccionesMatricula(materia, plan) {
   btnEsRequisito.type = "button";
   btnEsRequisito.className = "btn btn-secondary";
   btnEsRequisito.style.cssText = estiloBotonComoBadge + " justify-self:end;";
+  btnEsRequisito.style.cssText += " min-width:0;";
   btnEsRequisito.textContent = "Es requisito";
   btnEsRequisito.addEventListener("click", (ev) => {
     ev.stopPropagation();
@@ -207,7 +210,7 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, onCambiar) {
   const card = document.createElement("div");
   card.className = "glass-panel materia-card";
   const categoria = plan.categorias.find((c) => c.id === materia.categoria_id);
-  if (categoria) card.style.borderLeft = `6px solid ${categoria.color}`;
+  if (categoria) card.style.boxShadow = `inset 6px 0 0 0 ${categoria.color}`;
 
   const filaPrincipal = document.createElement("div");
   filaPrincipal.className = "materia-fila-principal";
@@ -227,7 +230,7 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, onCambiar) {
   spanCodigo.textContent = materia.codigo;
   // v2.1.4: el monoespaciado del código queda ~4px más abajo que el nombre
   // por métrica de fuente — se sube para que ambos queden centrados entre sí.
-  spanCodigo.style.cssText = "position:relative; top:-4px;";
+  spanCodigo.style.cssText = "position:relative; top:-3px;";
   prefijo.appendChild(spanCodigo);
   linea1.appendChild(prefijo);
 
@@ -245,25 +248,34 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, onCambiar) {
 
   const linea2 = document.createElement("div");
   linea2.className = "materia-linea2";
+  linea2.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px;";
 
+  const colEstado = document.createElement("div");
+  colEstado.style.cssText = "justify-self:start; min-width:0;";
   const badgeEstado = document.createElement("span");
   badgeEstado.className = `badge ${infoEstado.badge}`;
   badgeEstado.textContent = infoEstado.texto;
   badgeEstado.style.cursor = "pointer";
   badgeEstado.title = "Mantén presionado (o clic derecho) para cambiar el estado";
   agregarLongPress(badgeEstado, () => abrirMenuRapidoEstadoMatricula(materia, badgeEstado, onCambiar));
-  linea2.appendChild(badgeEstado);
+  colEstado.appendChild(badgeEstado);
+  linea2.appendChild(colEstado);
 
   const badgeUniversidad = document.createElement("span");
   badgeUniversidad.className = "badge badge-neutral";
+  badgeUniversidad.style.justifySelf = "center";
   badgeUniversidad.textContent = textoBadgeUniversidad(plan.universidad);
   badgeUniversidad.title = plan.universidad;
   linea2.appendChild(badgeUniversidad);
 
+  const colDerecha = document.createElement("div");
+  colDerecha.className = "row";
+  colDerecha.style.cssText = "justify-self:end; min-width:0; align-items:center; gap:8px;";
+
   const badgeCreditos = document.createElement("span");
   badgeCreditos.className = "badge badge-accent";
   badgeCreditos.textContent = `Créditos: ${materia.creditos}`;
-  linea2.appendChild(badgeCreditos);
+  colDerecha.appendChild(badgeCreditos);
 
   if (mm._conflicto) {
     const badgeConflicto = document.createElement("span");
@@ -274,10 +286,12 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, onCambiar) {
       ev.stopPropagation();
       manejarClickConflictoMatricula();
     });
-    linea2.appendChild(badgeConflicto);
+    colDerecha.appendChild(badgeConflicto);
   }
+  linea2.appendChild(colDerecha);
 
   filaPrincipal.appendChild(linea2);
+  
   card.appendChild(filaPrincipal);
 
   if (expandida) {
@@ -308,6 +322,7 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEdita
   const izquierda = document.createElement("div");
   izquierda.className = "stack";
   izquierda.style.gap = "2px";
+  izquierda.style.cssText = "gap:2px; min-width:0;";
 
   const titulo = document.createElement("h3");
   titulo.style.cssText = "margin:0; font-size:1.05rem; font-weight:800;";
@@ -331,6 +346,7 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEdita
   const derecha = document.createElement("div");
   derecha.className = "row";
   derecha.style.cssText = "justify-self:end; align-items:center; gap:8px;";
+  derecha.style.cssText = "justify-self:end; align-items:center; gap:8px; min-width:0;";
 
   const badgeCreditos = document.createElement("span");
   badgeCreditos.className = "badge badge-accent";
