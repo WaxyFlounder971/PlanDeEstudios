@@ -74,16 +74,34 @@ function esMasReciente(a, b) {
  * versión más nueva que la otra, aunque sea por segundos), no hay conflicto
  * real — es una línea causal continua y esMasReciente() decide bien.
  */
+// Metadatos de sincronización propios de CADA dispositivo — nunca describen
+// una edición real, así que nunca deberían decidir por sí solos si dos
+// versiones "son distintas". Se usa en la Guarda 1 de abajo.
+const CAMPOS_META_SELLADO = ["_actualizadoEn", "_version_base", "_dispositivoId"];
+
+function despojarMetaSellado(obj) {
+  const copia = { ...obj };
+  CAMPOS_META_SELLADO.forEach((campo) => delete copia[campo]);
+  return copia;
+}
+
 function hayConflictoReal(local, remoto) {
   if (!local || !remoto) return false;
 
-  // Guarda 1: si el contenido es idéntico (misma foto, distinta instancia
-  // de objeto — típico de perfil/configuracion, que viajan enteros en cada
-  // sync aunque no hayan cambiado), no hay NADA que resolver, sin importar
-  // qué digan los metadatos de versión. Evita marcar "conflicto" en algo
-  // que ni siquiera es una edición real.
+  // Guarda 1 (ajuste 2026-08-02 — "cuando ambas versiones sean exactamente
+  // iguales este aviso no tiene que salir para nada"): antes se comparaba
+  // JSON.stringify(local) contra JSON.stringify(remoto) TAL CUAL, metadatos
+  // de sellado incluidos. Eso fallaba en un caso real: dos dispositivos que
+  // editan el mismo campo y terminan escribiendo EXACTAMENTE el mismo valor
+  // (ej. ambos marcan "Aprobada" a mano, cada uno en su momento) sellan cada
+  // uno con su propio _actualizadoEn/_dispositivoId — el contenido real es
+  // idéntico, pero el JSON completo no, así que cualquier coincidencia así
+  // se colaba de largo hasta la Guarda 2 y terminaba marcada como conflicto
+  // igual, aunque no hubiera absolutamente nada que elegir. Ahora se
+  // compara sin esos tres campos — si el resto es idéntico, no hay NADA que
+  // resolver, sin importar qué digan los metadatos de versión.
   try {
-    if (JSON.stringify(local) === JSON.stringify(remoto)) return false;
+    if (JSON.stringify(despojarMetaSellado(local)) === JSON.stringify(despojarMetaSellado(remoto))) return false;
   } catch (e) {
     // Objeto no serializable (raro) — se sigue con la comparación normal.
   }
