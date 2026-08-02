@@ -613,20 +613,34 @@ function crearAsignacion({ nombre, valor }) {
     nombre,
     valor: Number(valor) || 0,
     nota: null,
+    // Fase 6.1 (2026-08-02): "automatico" = participa del reparto
+    // equitativo (ver repartirEquitativoCriterio); "personalizado" = el
+    // usuario fijó el valor a mano y nunca se toca. "nota" = calificación en
+    // escala 0-escalaActiva (comportamiento de siempre); "puntos" = la
+    // calificación son puntos directos, con tope en `valor`.
+    modo_valor: "automatico",
+    modo_calificacion: "nota",
   });
 }
 
 /**
- * Reparto equitativo (decisión confirmada): al añadir una asignación
- * nueva, se recalcula el valor de TODAS las asignaciones de ese criterio
- * a partes iguales — pisando pesos editados a mano previamente. Sella
- * cada asignación tocada para que se propague en la próxima sincronización.
+ * Reparto equitativo (Fase 6.1, decisión confirmada 2026-08-02): las
+ * asignaciones en modo "personalizado" mantienen el valor que el usuario
+ * fijó a mano y NUNCA se tocan acá. Las "automatico" se reparten en partes
+ * iguales lo que SOBRA del criterio después de restar la suma de las
+ * personalizadas — no el total completo (ej. criterio de 100pts con una
+ * personalizada de 40 y dos automáticas → cada automática = 30, no 33.3).
+ * Si no queda ninguna "automatico", no hay nada que repartir.
  */
 function repartirEquitativoCriterio(criterio) {
-  const n = criterio.asignaciones.length;
-  if (n === 0) return;
-  const partePlana = criterio.valor_total / n;
-  criterio.asignaciones.forEach((asig) => {
+  const automaticas = (criterio.asignaciones || []).filter((a) => a.modo_valor !== "personalizado");
+  if (automaticas.length === 0) return;
+  const sumaPersonalizadas = (criterio.asignaciones || [])
+    .filter((a) => a.modo_valor === "personalizado")
+    .reduce((total, a) => total + (Number(a.valor) || 0), 0);
+  const restante = Math.max(criterio.valor_total - sumaPersonalizadas, 0);
+  const partePlana = restante / automaticas.length;
+  automaticas.forEach((asig) => {
     asig.valor = partePlana;
     sellarTimestamp(asig);
   });
@@ -653,6 +667,11 @@ function obtenerEscalaNotasMateria(materia, plan, configuracion) {
  */
 function calcularPuntosAsignacion(asignacion, escalaActiva) {
   if (asignacion.nota === null || asignacion.nota === undefined) return 0;
+  if (asignacion.modo_calificacion === "puntos") {
+    // Puntos directos: el usuario ya reporta cuánto obtuvo, con tope en el
+    // valor de la asignación (no se divide por escala — no aplica).
+    return Math.min(Number(asignacion.nota) || 0, Number(asignacion.valor) || 0);
+  }
   return (Number(asignacion.nota) / escalaActiva) * asignacion.valor;
 }
 
@@ -808,6 +827,21 @@ function migrarDatosAntiguos(datos) {
         if (!Array.isArray(mm._eliminados_criterios)) mm._eliminados_criterios = [];
         if (mm.nota_final === undefined) mm.nota_final = null;
         if (mm.nota_final_manual === undefined) mm.nota_final_manual = false;
+        // Fase 6.1 (2026-08-02): asignaciones creadas antes del switch
+        // Automático/Personalizado y Nota/Puntos se tratan como
+        // "automatico" + "nota" — es exactamente el comportamiento que ya
+        // tenían (reparto equitativo siempre, calificación siempre en
+        // escala 0-escalaActiva). Mismo relleno defensivo que el resto de
+        // esta función: sin esto, un lado sin estos campos se ve "distinto"
+        // del otro lado que sí los tiene, y dispara un conflicto falso.
+        mm.criterios.forEach((criterio) => {
+          if (!Array.isArray(criterio.asignaciones)) criterio.asignaciones = [];
+          if (!Array.isArray(criterio._eliminados_asignaciones)) criterio._eliminados_asignaciones = [];
+          criterio.asignaciones.forEach((asig) => {
+            if (asig.modo_valor === undefined) asig.modo_valor = "automatico";
+            if (asig.modo_calificacion === undefined) asig.modo_calificacion = "nota";
+          });
+        });
       });
     });
   }
