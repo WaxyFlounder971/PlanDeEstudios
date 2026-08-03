@@ -10,6 +10,7 @@ import { renderizarEnlacesRapidos } from "../config/config-enlaces.js";
 import { renderizarPerfil } from "../main.js";
 import { renderizarModoHardcore, renderizarSelectorPlan } from "../plan/plan-gestionar.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
+import { renderizarSemestres } from "../semestres/semestres.js";
 import { abrirModalTodosLosConflictos } from "../semestres/semestres-tarjetas.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { aplicarPaleta } from "../ui/tema.js";
@@ -441,6 +442,15 @@ function aplicarDatosRemotosFrescos(datosFrescos) {
   renderizarEnlacesRapidos();
   renderizarPerfil();
   if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
+  // BUG FIX (ronda actual — "se actualiza pero tengo que recargar toda la
+  // página"): faltaba repintar la pantalla de Semestre acá. estado.datos ya
+  // se fusionaba bien (por eso un F5 completo lo mostraba correcto — vuelve
+  // a correr el render inicial), pero ningún sondeo (~9s) ni pull-to-refresh
+  // volvía a llamar a renderizarSemestres(), así que el DOM de esa pantalla
+  // quedaba congelado con los datos viejos hasta recargar. renderizarSemestres
+  // ya se protege sola si #seccion-semestres no está en el DOM, así que es
+  // seguro llamarla siempre, mismo patrón que renderizarPlanEstudios arriba.
+  if (typeof renderizarSemestres === "function") renderizarSemestres();
   marcarUltimaSincronizacionConfirmada();
 }
 
