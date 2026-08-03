@@ -605,8 +605,18 @@ function abrirModalAltaSemestre(semestreExistente = null) {
   }
 
   const filaBotones = document.createElement("div");
-  filaBotones.className = "row";
-  filaBotones.style.justifyContent = "flex-end";
+  filaBotones.className = "row glass-card";
+  // Pedido: "Guardar" siempre visible, anclado al final de la ventana. `caja`
+  // ya es el contenedor con scroll propio (max-height:85vh; overflow-y:auto,
+  // ver arriba), así que position:sticky respecto a ESA caja es lo que
+  // ancla esta fila al fondo mientras el resto (checklist largo de materias)
+  // se desplaza por encima. bottom:-18px + márgenes horizontales negativos
+  // compensan el padding:18px de la caja para que la barra llegue borde a
+  // borde y quede pegada al fondo real del modal, en vez de flotar 18px por
+  // encima de él con un hueco visible debajo.
+  filaBotones.style.cssText =
+    "justify-content:flex-end; position:sticky; bottom:-18px; margin:10px -18px -18px; " +
+    "padding:12px 18px; z-index:5; border-radius:0 0 var(--radius-card, 14px) var(--radius-card, 14px);";
   const btnCancelar = document.createElement("button");
   btnCancelar.type = "button";
   btnCancelar.className = "btn btn-secondary";
