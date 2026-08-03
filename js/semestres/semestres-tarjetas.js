@@ -73,6 +73,31 @@ function buscarMmVivaPorId(mmId) {
   return null;
 }
 
+/**
+ * Fix (2026-08-02, causa raíz de "a veces creo una asignación y no se crea
+ * pero la nota cambia igual"): el mismo problema de referencia obsoleta que
+ * ya se arregló para el modal de conflictos (ver comentario arriba) también
+ * afecta a CUALQUIER edición de criterios/asignaciones, no solo al modal de
+ * conflicto — fusionarMateriaMatriculada/fusionarCriterio (storage-merge.js)
+ * generan un objeto `mm`/`criterio` NUEVO en cada sync (cada ~9s), incluso
+ * cuando no hay ningún conflicto real. Si el usuario tarda más de eso en
+ * llenar el modal de "Nueva asignación" (algo normal escribiendo una nota),
+ * el `criterio`/`mm` capturados al abrir el modal quedan huérfanos: el
+ * push de la nueva asignación termina escribiendo en un array que ya no es
+ * el que vive en estado.datos — la asignación "desaparece" en silencio, y
+ * el recálculo de nota_final que sí corre (sobre el `mm` huérfano) no se ve
+ * reflejado en la UI, dando la sensación de "la nota cambió mal". Por eso
+ * cada función que MUTA un criterio o una asignación abajo vuelve a buscar
+ * la mm/criterio VIVOS por id justo antes de escribir, en vez de confiar en
+ * la referencia que llegó por parámetro (que solo sirve para leer/mostrar
+ * al momento de abrir el modal).
+ */
+function buscarCriterioVivoPorId(mmId, criterioId) {
+  const mmVivo = buscarMmVivaPorId(mmId);
+  if (!mmVivo) return null;
+  return (mmVivo.criterios || []).find((c) => c.id === criterioId) || null;
+}
+
 function abrirModalResolverConflictoMatricula(mm, materia, plan, onCambiar) {
   const mmId = mm.id;
   abrirModalResolverConflictoGenerico({
@@ -124,11 +149,38 @@ function abrirModalResolverConflictoSemestre(semestre, onCambiar) {
    Fase 6 — Motor de notas: helpers de datos (redondeo, tumbas, cálculo)
    ========================================================================= */
 
+/**
+ * Fix (2026-08-02, "las calificaciones deben aceptar , y . por igual"):
+ * <input type="number"> rechaza la coma decimal de plano en locale en-US —
+ * el teclado numérico de muchos teléfonos en español la inserta por
+ * defecto, y el campo quedaba con el valor vacío/inválido sin avisar nada
+ * (el usuario escribía "8,5" y el input simplemente no lo aceptaba). Los
+ * campos decimales de este archivo ahora son texto + teclado decimal (ver
+ * agregarCampoModal) y se analizan acá en vez de con Number() directo.
+ */
+function analizarDecimal(texto) {
+  if (texto === null || texto === undefined) return NaN;
+  const limpio = String(texto).trim().replace(",", ".");
+  if (limpio === "") return NaN;
+  return Number(limpio);
+}
+
 /** Formato compacto para mostrar números en la UI (máx. 1 decimal, sin ceros de más). */
 function formatearNumero(n) {
   const num = Number(n) || 0;
   const redondeado = Math.round(num * 10) / 10;
   return Number.isInteger(redondeado) ? String(redondeado) : redondeado.toFixed(1);
+}
+
+/**
+ * Ajuste (2026-08-02, pedido explícito): "nota" (la cruda, sin redondeo de
+ * la universidad) siempre se muestra con 2 decimales fijos — a diferencia
+ * de formatearNumero (máx. 1, sin ceros de más), que es el formato correcto
+ * para "nota final" (la que ya pasó por aplicarRedondeoRaspando).
+ */
+function formatearNumeroFijo(n, decimales) {
+  const num = Number(n) || 0;
+  return num.toFixed(decimales);
 }
 
 /**
@@ -226,7 +278,7 @@ function crearModalDinamico({ titulo, ancha }) {
   return { overlay, card };
 }
 
-function agregarCampoModal(card, { etiqueta, tipo, valor, paso }) {
+function agregarCampoModal(card, { etiqueta, tipo, valor, paso, decimal }) {
   const wrap = document.createElement("div");
   const label = document.createElement("label");
   label.className = "form-label";
@@ -234,10 +286,19 @@ function agregarCampoModal(card, { etiqueta, tipo, valor, paso }) {
   wrap.appendChild(label);
 
   const input = document.createElement("input");
-  input.type = tipo || "text";
+  if (decimal) {
+    // Fix (2026-08-02): texto + teclado numérico decimal en vez de
+    // type="number", para poder aceptar coma y punto por igual — ver
+    // analizarDecimal(), que es quien debe leer el valor de este input,
+    // nunca Number(input.value) directo.
+    input.type = "text";
+    input.inputMode = "decimal";
+  } else {
+    input.type = tipo || "text";
+    if (paso) input.step = paso;
+  }
   input.className = "form-input";
   if (valor !== undefined && valor !== null) input.value = valor;
-  if (paso) input.step = paso;
   wrap.appendChild(input);
 
   card.appendChild(wrap);
@@ -303,18 +364,20 @@ function abrirModalCriterio({ mm, materia, plan, criterioExistente, onGuardado }
   });
   const inputValor = agregarCampoModal(card, {
     etiqueta: "Valor dentro de la materia (%)",
-    tipo: "number",
     valor: esEdicion ? criterioExistente.valor_total : "",
-    paso: "0.1",
+    decimal: true,
   });
 
-  const disponible = 100 - sumaValorTotalCriterios(mm, esEdicion ? criterioExistente.id : undefined);
+  const disponibleEstimado = 100 - sumaValorTotalCriterios(mm, esEdicion ? criterioExistente.id : undefined);
   const ayuda = document.createElement("p");
   ayuda.className = "muted";
   ayuda.style.fontSize = "0.8rem";
   ayuda.style.margin = "0";
-  ayuda.textContent = `Disponible en esta materia: ${formatearNumero(disponible)}%`;
+  ayuda.textContent = `Disponible en esta materia: ${formatearNumero(disponibleEstimado)}%`;
   card.appendChild(ayuda);
+
+  const mmId = mm.id;
+  const criterioId = esEdicion ? criterioExistente.id : null;
 
   const btnGuardar = document.createElement("button");
   btnGuardar.type = "button";
@@ -322,7 +385,7 @@ function abrirModalCriterio({ mm, materia, plan, criterioExistente, onGuardado }
   btnGuardar.textContent = "Guardar";
   btnGuardar.addEventListener("click", () => {
     const nombre = inputNombre.value.trim();
-    const valorNum = Number(inputValor.value);
+    const valorNum = analizarDecimal(inputValor.value);
 
     if (!nombre) {
       mostrarToast("Ponele un nombre al criterio");
@@ -332,38 +395,65 @@ function abrirModalCriterio({ mm, materia, plan, criterioExistente, onGuardado }
       mostrarToast("El valor debe ser un número mayor a 0");
       return;
     }
-    if (valorNum > disponible + 0.001) {
-      mostrarToast(`Ese valor supera el ${formatearNumero(disponible)}% disponible en la materia`);
+
+    // Fix (2026-08-02): se vuelve a buscar la mm viva justo antes de
+    // escribir — ver buscarCriterioVivoPorId más arriba. `mm`/`criterioExistente`
+    // capturados al abrir el modal solo se usan para leer/mostrar.
+    const mmViva = buscarMmVivaPorId(mmId);
+    if (!mmViva) {
+      mostrarToast("Esta materia se eliminó desde otro dispositivo — no se pudo guardar");
+      overlay.remove();
+      onGuardado();
+      return;
+    }
+    const disponibleReal = 100 - sumaValorTotalCriterios(mmViva, criterioId || undefined);
+    if (valorNum > disponibleReal + 0.001) {
+      mostrarToast(`Ese valor supera el ${formatearNumero(disponibleReal)}% disponible en la materia`);
       return;
     }
 
     if (esEdicion) {
-      criterioExistente.nombre = nombre;
-      criterioExistente.valor_total = valorNum;
-      sellarTimestamp(criterioExistente);
+      const criterioVivo = (mmViva.criterios || []).find((c) => c.id === criterioId);
+      if (!criterioVivo) {
+        mostrarToast("Este criterio se eliminó desde otro dispositivo — no se pudo guardar");
+        overlay.remove();
+        onGuardado();
+        return;
+      }
+      criterioVivo.nombre = nombre;
+      criterioVivo.valor_total = valorNum;
+      sellarTimestamp(criterioVivo);
       // Si ya tenía asignaciones, el nuevo valor_total redistribuye el
       // reparto equitativo (misma regla confirmada que al añadir una nueva).
-      if (criterioExistente.asignaciones.length > 0) repartirEquitativoCriterio(criterioExistente);
+      if (criterioVivo.asignaciones.length > 0) repartirEquitativoCriterio(criterioVivo);
     } else {
-      mm.criterios.push(crearCriterio({ nombre, valorTotal: valorNum }));
+      mmViva.criterios.push(crearCriterio({ nombre, valorTotal: valorNum }));
     }
 
-    persistirCambioMateria(mm, materia, plan, onGuardado);
+    persistirCambioMateria(mmViva, materia, plan, onGuardado);
     overlay.remove();
   });
   card.appendChild(btnGuardar);
 }
 
 function eliminarCriterio(mm, materia, plan, criterio, onCambiar) {
+  const mmId = mm.id;
+  const criterioId = criterio.id;
   abrirConfirmacion({
     titulo: "Eliminar criterio",
     mensaje: `¿Eliminar "${criterio.nombre}" y todas sus asignaciones? Esta acción no se puede deshacer.`,
     textoConfirmar: "Eliminar",
     onConfirmar: () => {
-      mm.criterios = (mm.criterios || []).filter((c) => c.id !== criterio.id);
-      mm._eliminados_criterios = mm._eliminados_criterios || [];
-      mm._eliminados_criterios.push(crearEntradaTumba(criterio.id));
-      persistirCambioMateria(mm, materia, plan, onCambiar);
+      const mmViva = buscarMmVivaPorId(mmId);
+      if (!mmViva) {
+        mostrarToast("Esto ya no existe — puede que se haya eliminado desde otro dispositivo");
+        onCambiar();
+        return;
+      }
+      mmViva.criterios = (mmViva.criterios || []).filter((c) => c.id !== criterioId);
+      mmViva._eliminados_criterios = mmViva._eliminados_criterios || [];
+      mmViva._eliminados_criterios.push(crearEntradaTumba(criterioId));
+      persistirCambioMateria(mmViva, materia, plan, onCambiar);
     },
   });
 }
@@ -415,9 +505,8 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
 
   const inputValor = agregarCampoModal(card, {
     etiqueta: "Puntos del criterio",
-    tipo: "number",
     valor: esEdicion && asignacionExistente.modo_valor === "personalizado" ? asignacionExistente.valor : "",
-    paso: "0.1",
+    decimal: true,
   });
 
   function actualizarCampoValor(modo) {
@@ -448,14 +537,13 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
 
   const inputCalif = agregarCampoModal(card, {
     etiqueta: "",
-    tipo: "number",
     valor: esEdicion && asignacionExistente.nota !== null && asignacionExistente.nota !== undefined ? asignacionExistente.nota : "",
-    paso: "0.1",
+    decimal: true,
   });
   const labelCalif = inputCalif.parentElement.querySelector("label");
 
   function valorVigenteParaTope() {
-    return switchValor.obtenerValor() === "automatico" ? equitativoEstimado : Number(inputValor.value) || 0;
+    return switchValor.obtenerValor() === "automatico" ? equitativoEstimado : analizarDecimal(inputValor.value) || 0;
   }
 
   function actualizarEtiquetaCalif(modo) {
@@ -476,6 +564,10 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
   ayuda.textContent = `Disponible en este criterio: ${formatearNumero(disponible)} puntos`;
   card.appendChild(ayuda);
 
+  const mmId = mm.id;
+  const criterioId = criterio.id;
+  const asignacionId = esEdicion ? asignacionExistente.id : null;
+
   const btnGuardar = document.createElement("button");
   btnGuardar.type = "button";
   btnGuardar.className = "btn btn-primary btn-block";
@@ -484,9 +576,9 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
     const nombre = inputNombre.value.trim();
     const modoValor = switchValor.obtenerValor();
     const modoCalif = switchCalif.obtenerValor();
-    const valorNum = modoValor === "automatico" ? equitativoEstimado : Number(inputValor.value);
-    const califTexto = inputCalif.value;
-    const califNum = califTexto === "" ? null : Number(califTexto);
+    const valorNum = modoValor === "automatico" ? equitativoEstimado : analizarDecimal(inputValor.value);
+    const califTexto = inputCalif.value.trim();
+    const califNum = califTexto === "" ? null : analizarDecimal(califTexto);
 
     if (!nombre) {
       mostrarToast("Ponele un nombre a la asignación");
@@ -495,10 +587,6 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
     if (modoValor === "personalizado") {
       if (!Number.isFinite(valorNum) || valorNum <= 0) {
         mostrarToast("El valor debe ser un número mayor a 0");
-        return;
-      }
-      if (valorNum > disponible + 0.001) {
-        mostrarToast(`Ese valor supera los ${formatearNumero(disponible)} puntos disponibles en el criterio`);
         return;
       }
     }
@@ -514,55 +602,108 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
       }
     }
 
+    // FIX DE RAÍZ (2026-08-02 — "a veces creo nuevas asignaciones y NO se
+    // crean pero aun así la nota cambia igual"): `criterio`/`mm` llegaron
+    // por parámetro capturados en el momento de ABRIR el modal. Si pasó un
+    // sync (cada ~9s) mientras el usuario llenaba el formulario —muy común
+    // escribiendo una nota con calma—, esos objetos quedaron huérfanos (ver
+    // buscarCriterioVivoPorId más arriba): escribir en ellos no toca nada
+    // de lo que en verdad vive en estado.datos. Antes esto pasaba en
+    // silencio: el push de la nueva asignación se perdía (por eso "no se
+    // crea"), pero el recálculo de nota_final SÍ corría sobre el `mm`
+    // huérfano y quedaba mal (por eso "la nota cambia igual", sin ninguna
+    // asignación nueva de verdad detrás). Ahora se vuelve a buscar todo
+    // fresco, justo antes de escribir.
+    const mmViva = buscarMmVivaPorId(mmId);
+    const criterioVivo = mmViva && (mmViva.criterios || []).find((c) => c.id === criterioId);
+    if (!mmViva || !criterioVivo) {
+      mostrarToast("Este criterio se eliminó desde otro dispositivo — no se pudo guardar");
+      overlay.remove();
+      onGuardado();
+      return;
+    }
+    const disponibleReal = criterioVivo.valor_total - sumaValorAsignaciones(criterioVivo, asignacionId || undefined);
+    if (modoValor === "personalizado" && valorNum > disponibleReal + 0.001) {
+      mostrarToast(`Ese valor supera los ${formatearNumero(disponibleReal)} puntos disponibles en el criterio`);
+      return;
+    }
+
     if (esEdicion) {
-      asignacionExistente.nombre = nombre;
-      asignacionExistente.modo_valor = modoValor;
-      asignacionExistente.modo_calificacion = modoCalif;
-      asignacionExistente.nota = califNum;
-      if (modoValor === "personalizado") asignacionExistente.valor = valorNum;
-      sellarTimestamp(asignacionExistente);
+      const asignacionViva = (criterioVivo.asignaciones || []).find((a) => a.id === asignacionId);
+      if (!asignacionViva) {
+        mostrarToast("Esta asignación se eliminó desde otro dispositivo — no se pudo guardar");
+        overlay.remove();
+        onGuardado();
+        return;
+      }
+      asignacionViva.nombre = nombre;
+      asignacionViva.modo_valor = modoValor;
+      asignacionViva.modo_calificacion = modoCalif;
+      asignacionViva.nota = califNum;
+      if (modoValor === "personalizado") asignacionViva.valor = valorNum;
+      sellarTimestamp(asignacionViva);
     } else {
       const nueva = crearAsignacion({ nombre, valor: valorNum });
       nueva.modo_valor = modoValor;
       nueva.modo_calificacion = modoCalif;
       nueva.nota = califNum;
-      criterio.asignaciones.push(nueva);
+      criterioVivo.asignaciones.push(nueva);
     }
     // Reparte lo que sobra entre las "automatico" con el total ya
     // actualizado (nueva asignación agregada, o esta pasó a
     // automático/personalizado, o cambió su valor fijo) — decisión
     // confirmada 2026-08-02.
-    repartirEquitativoCriterio(criterio);
-    sellarTimestamp(criterio);
+    repartirEquitativoCriterio(criterioVivo);
+    sellarTimestamp(criterioVivo);
 
-    persistirCambioMateria(mm, materia, plan, onGuardado);
+    persistirCambioMateria(mmViva, materia, plan, onGuardado);
     overlay.remove();
   });
   card.appendChild(btnGuardar);
 }
 
 function eliminarAsignacion(criterio, mm, materia, plan, asignacion, onCambiar) {
+  const mmId = mm.id;
+  const criterioId = criterio.id;
+  const asignacionId = asignacion.id;
   abrirConfirmacion({
     titulo: "Eliminar asignación",
     mensaje: `¿Eliminar "${asignacion.nombre}"?`,
     textoConfirmar: "Eliminar",
     onConfirmar: () => {
-      criterio.asignaciones = (criterio.asignaciones || []).filter((a) => a.id !== asignacion.id);
-      criterio._eliminados_asignaciones = criterio._eliminados_asignaciones || [];
-      criterio._eliminados_asignaciones.push(crearEntradaTumba(asignacion.id));
-      sellarTimestamp(criterio);
-      persistirCambioMateria(mm, materia, plan, onCambiar);
+      const mmViva = buscarMmVivaPorId(mmId);
+      const criterioVivo = mmViva && (mmViva.criterios || []).find((c) => c.id === criterioId);
+      if (!mmViva || !criterioVivo) {
+        mostrarToast("Esto ya no existe — puede que se haya eliminado desde otro dispositivo");
+        onCambiar();
+        return;
+      }
+      criterioVivo.asignaciones = (criterioVivo.asignaciones || []).filter((a) => a.id !== asignacionId);
+      criterioVivo._eliminados_asignaciones = criterioVivo._eliminados_asignaciones || [];
+      criterioVivo._eliminados_asignaciones.push(crearEntradaTumba(asignacionId));
+      sellarTimestamp(criterioVivo);
+      persistirCambioMateria(mmViva, materia, plan, onCambiar);
     },
   });
 }
 
 /** Añade una asignación instantánea (sin modal), en modo "automático" — reparte lo que sobra entre las automáticas (ver repartirEquitativoCriterio). */
 function agregarAsignacionRapida(criterio, mm, materia, plan, onCambiar) {
-  const numero = (criterio.asignaciones || []).length + 1;
-  criterio.asignaciones.push(crearAsignacion({ nombre: `Asignación ${numero}`, valor: 0 }));
-  repartirEquitativoCriterio(criterio);
-  sellarTimestamp(criterio);
-  persistirCambioMateria(mm, materia, plan, onCambiar);
+  // Fix (2026-08-02): este botón vive en una tarjeta que pudo renderizarse
+  // hace rato — si pasó un sync (cada 9s) desde entonces, `criterio`/`mm`
+  // son referencias huérfanas (ver comentario en buscarCriterioVivoPorId).
+  const mmViva = buscarMmVivaPorId(mm.id);
+  const criterioVivo = mmViva && (mmViva.criterios || []).find((c) => c.id === criterio.id);
+  if (!mmViva || !criterioVivo) {
+    mostrarToast("Esto cambió en otro dispositivo — se actualiza la pantalla");
+    onCambiar();
+    return;
+  }
+  const numero = (criterioVivo.asignaciones || []).length + 1;
+  criterioVivo.asignaciones.push(crearAsignacion({ nombre: `Asignación ${numero}`, valor: 0 }));
+  repartirEquitativoCriterio(criterioVivo);
+  sellarTimestamp(criterioVivo);
+  persistirCambioMateria(mmViva, materia, plan, onCambiar);
 }
 
 /* ===================== Modal: override manual de nota_final ===================== */
@@ -580,26 +721,36 @@ function abrirModalNotaManual({ mm, materia, plan, notaFinalVigente, onGuardado 
 
   const inputNota = agregarCampoModal(card, {
     etiqueta: "Nota final (0-100)",
-    tipo: "number",
     valor: notaFinalVigente !== null && notaFinalVigente !== undefined ? notaFinalVigente : "",
-    paso: "0.1",
+    decimal: true,
   });
+
+  const mmId = mm.id;
 
   const btnGuardar = document.createElement("button");
   btnGuardar.type = "button";
   btnGuardar.className = "btn btn-primary btn-block";
   btnGuardar.textContent = "Guardar";
   btnGuardar.addEventListener("click", () => {
-    const valor = Number(inputNota.value);
+    const valor = analizarDecimal(inputNota.value);
     if (!Number.isFinite(valor) || valor < 0 || valor > 100) {
       mostrarToast("La nota final debe estar entre 0 y 100");
       return;
     }
+    // Fix (2026-08-02): misma clase de bug de referencia obsoleta — se
+    // busca la mm viva antes de escribir (ver buscarCriterioVivoPorId).
+    const mmViva = buscarMmVivaPorId(mmId);
+    if (!mmViva) {
+      mostrarToast("Esta materia se eliminó desde otro dispositivo — no se pudo guardar");
+      overlay.remove();
+      onGuardado();
+      return;
+    }
     // No pasa por persistirCambioMateria/recalcularNotaFinal a propósito:
     // el override manual es justamente lo que NO debe recalcularse.
-    mm.nota_final = valor;
-    mm.nota_final_manual = true;
-    sellarTimestamp(mm);
+    mmViva.nota_final = valor;
+    mmViva.nota_final_manual = true;
+    sellarTimestamp(mmViva);
     marcarCambioPendiente();
     onGuardado();
     overlay.remove();
@@ -679,9 +830,14 @@ function abrirMenuRapidoAsignacion(asignacion, criterio, mm, materia, plan, esca
    Fase 6 — Construcción de la sección de notas (reemplaza placeholderNotas)
    ========================================================================= */
 
+// Estilo compartido de las pills de valor — el ancho real (fijo, igualado
+// entre todas las de la tarjeta) lo pone igualarAnchoBadges() después de
+// que la tarjeta ya está en el documento (ver construirTarjetaCriterio).
+const PILL_ESTILO = "display:inline-flex; align-items:center; justify-content:center; height:24px; text-align:center; white-space:nowrap; font-variant-numeric:tabular-nums;";
+
 function construirFilaAsignacion(asignacion, criterio, mm, materia, plan, escalaActiva, onCambiar) {
   const fila = document.createElement("div");
-  fila.className = "row";
+  fila.className = "row fila-asignacion";
   fila.style.cssText =
     "justify-content:space-between; align-items:center; gap:8px; padding:6px 10px; border-radius:var(--radius-sm); background:rgba(255,255,255,0.03); cursor:pointer;";
   fila.addEventListener("click", (ev) => {
@@ -690,41 +846,36 @@ function construirFilaAsignacion(asignacion, criterio, mm, materia, plan, escala
   });
   agregarLongPress(fila, () => abrirMenuRapidoAsignacion(asignacion, criterio, mm, materia, plan, escalaActiva, fila, onCambiar));
 
+  // Rediseño (2026-08-02): antes acá también iban "· X pts" y "· auto" —
+  // esa información ya vive en la pill de puntaje de al lado (X/Y pts) y
+  // en el modal de edición; repetirla acá solo ensuciaba la fila. Ahora
+  // solo el nombre, para que la fila quede limpia: Criterio | Nota | Puntaje.
   const izq = document.createElement("span");
-  izq.style.fontSize = "0.85rem";
-  const sufijoModo = asignacion.modo_valor === "personalizado" ? "" : " · auto";
-  izq.textContent = `${asignacion.nombre} · ${formatearNumero(asignacion.valor)} pts${sufijoModo}`;
+  izq.style.cssText = "font-size:0.85rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+  izq.textContent = asignacion.nombre;
   fila.appendChild(izq);
-
-  // Ajuste (2026-08-02): antes esto era UNA pill que, según el modo, ya
-  // mostraba "nota/escala" o (si modo_calificacion==="puntos") en realidad
-  // el puntaje directo — el puntaje REAL obtenido hacia el criterio (en las
-  // mismas unidades que asignacion.valor) nunca se veía en el modo "nota".
-  // Ahora son dos pills fijas, mismo tamaño siempre, para que la fila no
-  // "salte" de ancho/alto entre asignaciones: la nota tal cual se calificó,
-  // y al lado el puntaje que esa nota representa dentro del criterio.
-  const PILL_ESTILO = "display:inline-flex; align-items:center; justify-content:center; min-width:64px; height:24px; text-align:center; white-space:nowrap;";
 
   const contDer = document.createElement("div");
   contDer.className = "row";
-  contDer.style.cssText = "gap:6px; flex-wrap:nowrap;";
+  contDer.style.cssText = "gap:6px; flex-wrap:nowrap; flex-shrink:0;";
 
   const pillNota = document.createElement("span");
+  pillNota.className = "pill-tamano-fijo";
   pillNota.style.cssText = PILL_ESTILO;
   if (asignacion.nota === null || asignacion.nota === undefined) {
-    pillNota.className = "badge badge-neutral";
+    pillNota.classList.add("badge", "badge-neutral");
     pillNota.textContent = "Pendiente";
   } else if (asignacion.modo_calificacion === "puntos") {
-    pillNota.className = "badge badge-success";
+    pillNota.classList.add("badge", "badge-success");
     pillNota.textContent = `${formatearNumero(asignacion.nota)}/${formatearNumero(asignacion.valor)}`;
   } else {
-    pillNota.className = "badge badge-success";
+    pillNota.classList.add("badge", "badge-success");
     pillNota.textContent = `${formatearNumero(asignacion.nota)}/${escalaActiva}`;
   }
   contDer.appendChild(pillNota);
 
   const pillPuntos = document.createElement("span");
-  pillPuntos.className = "badge badge-accent";
+  pillPuntos.className = "pill-tamano-fijo badge badge-accent";
   pillPuntos.style.cssText = PILL_ESTILO;
   const puntosObtenidos = calcularPuntosAsignacion(asignacion, escalaActiva);
   const textoPuntos = asignacion.nota === null || asignacion.nota === undefined ? "—" : formatearNumero(puntosObtenidos);
@@ -736,27 +887,82 @@ function construirFilaAsignacion(asignacion, criterio, mm, materia, plan, escala
   return fila;
 }
 
+/**
+ * Después de que la tarjeta ya está en el documento (por eso el
+ * requestAnimationFrame — offsetWidth solo es confiable con layout real
+ * hecho), mide el ancho natural de cada pill (.pill-tamano-fijo) DENTRO de
+ * esta tarjeta y le fija a TODAS el ancho de la más ancha — el pedido
+ * explícito de "los badges sean tamaño fijo todos, el más grande decide el
+ * tamaño de los demás", para que Nota y Puntaje queden alineados en
+ * columna en vez de saltar de ancho entre filas.
+ */
+function igualarAnchoBadges(cont) {
+  requestAnimationFrame(() => {
+    const pills = cont.querySelectorAll(".pill-tamano-fijo");
+    if (!pills.length) return;
+    let maxAncho = 0;
+    pills.forEach((p) => {
+      p.style.width = "";
+      maxAncho = Math.max(maxAncho, p.offsetWidth);
+    });
+    pills.forEach((p) => {
+      p.style.width = maxAncho + "px";
+    });
+  });
+}
+
+/** Puntos realmente obtenidos hasta ahora en este criterio (mismas unidades
+ *  que criterio.valor_total) — la calificación total que va en el pie de la
+ *  tarjeta. Usa el mismo motor de cálculo que la nota final de la materia
+ *  (calcularPuntosAsignacion, schema.js), así nunca puede desalinearse de
+ *  ella. */
+function calcularPuntosCriterio(criterio, escalaActiva) {
+  return (criterio.asignaciones || []).reduce((total, asig) => total + calcularPuntosAsignacion(asig, escalaActiva), 0);
+}
+
 function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onCambiar) {
   const cont = document.createElement("div");
   cont.className = "glass-panel stack";
   cont.style.cssText = "padding:10px 12px; gap:8px;";
 
+  /* ---------- Encabezado: Criterio | Nota | Puntaje ---------- */
   const encabezado = document.createElement("div");
   encabezado.className = "row";
   encabezado.style.cssText = "justify-content:space-between; align-items:center; cursor:pointer;";
   encabezado.title = "Mantén presionado (o clic derecho) para editar o eliminar este criterio";
   agregarLongPress(encabezado, () => abrirMenuRapidoCriterio(criterio, mm, materia, plan, encabezado, onCambiar));
 
+  const tituloWrap = document.createElement("div");
+  tituloWrap.className = "stack";
+  tituloWrap.style.cssText = "gap:0;";
   const titulo = document.createElement("strong");
   titulo.style.fontSize = "0.92rem";
   titulo.textContent = criterio.nombre;
-  encabezado.appendChild(titulo);
+  tituloWrap.appendChild(titulo);
+  // El peso del criterio dentro de la materia se muestra como subtítulo
+  // discreto (ya no como badge en el encabezado — ese lugar ahora es para
+  // las etiquetas de columna Nota/Puntaje, ver abajo).
+  const subtitulo = document.createElement("span");
+  subtitulo.className = "muted";
+  subtitulo.style.fontSize = "0.72rem";
+  subtitulo.textContent = `${formatearNumero(criterio.valor_total)}% de la materia`;
+  tituloWrap.appendChild(subtitulo);
+  encabezado.appendChild(tituloWrap);
 
-  const usado = sumaValorAsignaciones(criterio);
-  const badgeValor = document.createElement("span");
-  badgeValor.className = "badge badge-accent";
-  badgeValor.textContent = `${formatearNumero(usado)}/${formatearNumero(criterio.valor_total)} %`;
-  encabezado.appendChild(badgeValor);
+  const etiquetasCol = document.createElement("div");
+  etiquetasCol.className = "row";
+  etiquetasCol.style.cssText = "gap:6px; flex-wrap:nowrap;";
+  const etiquetaNota = document.createElement("span");
+  etiquetaNota.className = "muted pill-tamano-fijo";
+  etiquetaNota.style.cssText = PILL_ESTILO + "font-size:0.72rem; font-weight:700;";
+  etiquetaNota.textContent = "Nota";
+  etiquetasCol.appendChild(etiquetaNota);
+  const etiquetaPuntaje = document.createElement("span");
+  etiquetaPuntaje.className = "muted pill-tamano-fijo";
+  etiquetaPuntaje.style.cssText = PILL_ESTILO + "font-size:0.72rem; font-weight:700;";
+  etiquetaPuntaje.textContent = "Puntaje";
+  etiquetasCol.appendChild(etiquetaPuntaje);
+  encabezado.appendChild(etiquetasCol);
 
   if (criterio._conflicto) {
     agregarIndicadorConflicto(cont, () => abrirModalResolverConflictoCriterio(criterio, mm, materia, plan, onCambiar));
@@ -768,16 +974,31 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
     cont.appendChild(construirFilaAsignacion(asig, criterio, mm, materia, plan, escalaActiva, onCambiar));
   });
 
+  /* ---------- Pie: + Añadir asignación (izq) | calificación total (der) ---------- */
+  const pie = document.createElement("div");
+  pie.className = "row";
+  pie.style.cssText = "justify-content:space-between; align-items:center; margin-top:2px;";
+
   const btnAgregar = document.createElement("button");
   btnAgregar.type = "button";
   btnAgregar.className = "btn btn-secondary";
-  btnAgregar.style.cssText = "font-size:0.78rem; padding:5px 10px; align-self:flex-start;";
+  btnAgregar.style.cssText = "font-size:0.78rem; padding:5px 10px;";
   btnAgregar.textContent = "+ Añadir asignación";
   btnAgregar.addEventListener("click", (ev) => {
     ev.stopPropagation();
     agregarAsignacionRapida(criterio, mm, materia, plan, onCambiar);
   });
-  cont.appendChild(btnAgregar);
+  pie.appendChild(btnAgregar);
+
+  const puntosObtenidosCriterio = calcularPuntosCriterio(criterio, escalaActiva);
+  const badgeTotal = document.createElement("span");
+  badgeTotal.className = "badge badge-accent";
+  badgeTotal.textContent = `${formatearNumero(puntosObtenidosCriterio)}/${formatearNumero(criterio.valor_total)} pts`;
+  pie.appendChild(badgeTotal);
+
+  cont.appendChild(pie);
+
+  igualarAnchoBadges(cont);
 
   return cont;
 }
@@ -805,7 +1026,12 @@ function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, onCam
   cont.style.cssText = "gap:6px;";
 
   const notaRedondeada = aplicarRedondeoRaspando(notaFinalVigente, plan);
-  const textoNota = notaFinalVigente === null || notaFinalVigente === undefined ? "—" : formatearNumero(notaFinalVigente);
+  // "Nota" = valor absoluto, siempre 2 decimales (pedido explícito). "Nota
+  // final" = la misma nota ya pasada por el redondeo de la universidad
+  // (aplicarRedondeoRaspando) — se mantiene con el formato compacto de
+  // siempre, porque es la que importa para decidir si aprobó o no, no un
+  // valor "de precisión" que alguien vaya a auditar decimal a decimal.
+  const textoNota = notaFinalVigente === null || notaFinalVigente === undefined ? "—" : formatearNumeroFijo(notaFinalVigente, 2);
   const textoNotaFinal = notaRedondeada === null || notaRedondeada === undefined ? "—" : formatearNumero(notaRedondeada);
 
   const lineaNota = document.createElement("span");
@@ -829,8 +1055,17 @@ function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, onCam
     badge.title = "Clic para volver a cálculo automático por criterios";
     badge.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      mm.nota_final_manual = false;
-      persistirCambioMateria(mm, materia, plan, onCambiar);
+      // Fix (2026-08-02): mismo patrón — la tarjeta pudo renderizarse hace
+      // más de un ciclo de sync, así que `mm` capturada acá puede ser
+      // huérfana (ver buscarCriterioVivoPorId).
+      const mmViva = buscarMmVivaPorId(mm.id);
+      if (!mmViva) {
+        mostrarToast("Esta materia se eliminó desde otro dispositivo");
+        onCambiar();
+        return;
+      }
+      mmViva.nota_final_manual = false;
+      persistirCambioMateria(mmViva, materia, plan, onCambiar);
       mostrarToast("La nota final vuelve a calcularse automáticamente");
     });
     filaNotaFinal.appendChild(badge);
