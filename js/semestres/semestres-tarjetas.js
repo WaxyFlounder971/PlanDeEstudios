@@ -15,6 +15,7 @@ import {
   obtenerEscalaNotasMateria,
   calcularPuntosAsignacion,
   calcularNotaFinalMateria,
+  redondearNotaFinalAlCincoMasCercano,
 } from "../core/schema.js";
 import { marcarCambioPendiente, actualizarIndicadorSync } from "../core/storage-sync.js";
 import { ESTADOS_MATERIA, abrirMenuRapidoCategoria, abrirModalResolverConflicto, abrirModalResolverConflictoGenerico, agregarIndicadorConflicto } from "../plan/plan-vista-lista-tarjetas.js";
@@ -321,7 +322,15 @@ function formatearNumero(n) {
  */
 function formatearNumeroFijo(n, decimales) {
   const num = Number(n) || 0;
-  return num.toFixed(decimales);
+  const factor = Math.pow(10, decimales);
+  // FIX (pedido explícito: "era 67.59 y lo redondeó a 67.60, eso no se
+  // puede"): toFixed() por sí solo hereda cualquier basura de coma
+  // flotante que ya traiga `num` (ej. 67.58500000000004 en vez de 67.585
+  // real). Redondear primero a la cantidad exacta de decimales pedida, con
+  // corrección epsilon, y recién ahí formatear, evita que se muestre un
+  // decimal de más de lo que en verdad se calculó.
+  const corregido = Math.round((num + Number.EPSILON) * factor) / factor;
+  return corregido.toFixed(decimales);
 }
 
 /**
@@ -1001,17 +1010,27 @@ function construirFilaAsignacion(asignacion, criterio, mm, materia, plan, escala
   contDer.style.cssText = "gap:6px; flex-wrap:nowrap; flex-shrink:0;";
 
   const pillNota = document.createElement("span");
-  pillNota.className = "pill-tamano-fijo";
+  pillNota.className = "pill-tamano-fijo badge";
   pillNota.style.cssText = PILL_ESTILO;
   if (asignacion.nota === null || asignacion.nota === undefined) {
-    pillNota.classList.add("badge", "badge-neutral");
+    pillNota.classList.add("badge-neutral");
     pillNota.textContent = "Pendiente";
-  } else if (asignacion.modo_calificacion === "puntos") {
-    pillNota.classList.add("badge", "badge-success");
-    pillNota.textContent = `${formatearNumero(asignacion.nota)}/${formatearNumero(asignacion.valor)}`;
   } else {
-    pillNota.classList.add("badge", "badge-success");
-    pillNota.textContent = `${formatearNumero(asignacion.nota)}/${escalaActiva}`;
+    let pct;
+    if (asignacion.modo_calificacion === "puntos") {
+      pillNota.textContent = `${formatearNumero(asignacion.nota)}/${formatearNumero(asignacion.valor)}`;
+      pct = (Number(asignacion.nota) / (Number(asignacion.valor) || 1)) * 100;
+    } else {
+      pillNota.textContent = `${formatearNumero(asignacion.nota)}/${escalaActiva}`;
+      pct = (Number(asignacion.nota) / escalaActiva) * 100;
+    }
+    const colorPersonalizado = colorParaPorcentaje(pct);
+    if (colorPersonalizado) {
+      pillNota.style.background = colorPersonalizado;
+      pillNota.style.color = "#fff";
+    } else {
+      pillNota.classList.add("badge-success");
+    }
   }
   contDer.appendChild(pillNota);
 
@@ -1137,7 +1156,7 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
   // (el mismo lugar), para no competir visualmente con las pills de Nota/
   // Puntaje de cada asignación.
   const textoTotal = document.createElement("span");
-  textoTotal.style.cssText = "font-size:0.82rem; white-space:nowrap;";
+  textoTotal.style.cssText = "font-size:0.82rem; white-space:nowrap; margin-right:5px;";
   textoTotal.innerHTML = `<span class="muted">Puntos totales:</span> <strong>${formatearNumero(puntosObtenidosCriterio)}/${formatearNumero(criterio.valor_total)} pts</strong>`;
   pie.appendChild(textoTotal);
 
@@ -1147,20 +1166,21 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
 }
 
 /**
- * Aplica el redondeo real de "pasar raspando" (parametros_universidad del
- * plan de la materia): si la nota cruda cae por debajo de nota_aprobacion
- * pero llega al umbral_pasar_raspando, se redondea hacia arriba hasta
- * nota_aprobacion. Fuera de ese rango angosto, la nota queda tal cual. Si
- * el plan no tiene ambos valores definidos, no hay redondeo que aplicar.
+ * Escala de color por desempeño (pedido explícito): verde puro en 90-100,
+ * cada vez más amarillento entre 70 y 90, amarillo en 50-70, naranja en
+ * 30-50, rojo debajo de 30. Recibe un porcentaje 0-100 — quien llama ya
+ * debe normalizar a esa escala (una nota sobre 20 hay que convertirla
+ * antes). Devuelve `null` para el tramo 90-100 a propósito: ese caso sigue
+ * usando la clase badge-success de siempre ("verde como está ahorita"),
+ * sin inventar un hex que podría no calzar exacto con la paleta real.
  */
-function aplicarRedondeoRaspando(nota, plan) {
-  if (nota === null || nota === undefined) return nota;
-  const params = plan.parametros_universidad || {};
-  const aprobacion = Number(params.nota_aprobacion);
-  const umbral = Number(params.umbral_pasar_raspando);
-  if (!Number.isFinite(aprobacion) || !Number.isFinite(umbral)) return nota;
-  if (nota >= umbral && nota < aprobacion) return aprobacion;
-  return nota;
+function colorParaPorcentaje(pct) {
+  if (pct >= 90) return null;
+  if (pct >= 80) return "#7cb342"; // verde un poquitititito más amarillento
+  if (pct >= 70) return "#9e9d24"; // verde un poco más amarillento
+  if (pct >= 50) return "#eab308"; // amarillo
+  if (pct >= 30) return "#f97316"; // naranja
+  return "#ef4444"; // rojo
 }
 
 function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, onCambiar) {
@@ -1168,12 +1188,12 @@ function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, onCam
   cont.className = "stack";
   cont.style.cssText = "gap:6px;";
 
-  const notaRedondeada = aplicarRedondeoRaspando(notaFinalVigente, plan);
+  const notaRedondeada = redondearNotaFinalAlCincoMasCercano(notaFinalVigente);
   // "Nota" = valor absoluto, siempre 2 decimales (pedido explícito). "Nota
-  // final" = la misma nota ya pasada por el redondeo de la universidad
-  // (aplicarRedondeoRaspando) — se mantiene con el formato compacto de
-  // siempre, porque es la que importa para decidir si aprobó o no, no un
-  // valor "de precisión" que alguien vaya a auditar decimal a decimal.
+  // final" = la misma nota ya redondeada al 5 más cercano — se mantiene con
+  // el formato compacto de siempre, porque es la que importa para decidir
+  // si aprobó o no, no un valor "de precisión" que alguien vaya a auditar
+  // decimal a decimal.
   const textoNota = notaFinalVigente === null || notaFinalVigente === undefined ? "—" : formatearNumeroFijo(notaFinalVigente, 2);
   const textoNotaFinal = notaRedondeada === null || notaRedondeada === undefined ? "—" : formatearNumero(notaRedondeada);
 
@@ -1188,6 +1208,10 @@ function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, onCam
   const izq = document.createElement("span");
   izq.style.fontWeight = "700";
   izq.textContent = `Nota final: ${textoNotaFinal}`;
+  if (notaRedondeada !== null && notaRedondeada !== undefined) {
+    const colorPersonalizado = colorParaPorcentaje(notaRedondeada);
+    if (colorPersonalizado) izq.style.color = colorPersonalizado;
+  }
   filaNotaFinal.appendChild(izq);
 
   if (mm.nota_final_manual) {
@@ -1276,7 +1300,13 @@ function construirSeccionNotas(mm, materia, plan, onCambiar) {
     ev.stopPropagation();
     abrirModalCriterio({ mm, materia, plan, onGuardado: onCambiar });
   });
-  cont.appendChild(btnNuevoCriterio);
+  // Pedido explícito: si el 100% ya está repartido entre los criterios
+  // existentes, no tiene sentido ofrecer crear uno más (no habría margen
+  // que asignarle). Mismo margen de tolerancia de coma flotante que ya usa
+  // notasCompletas() en semestres.js.
+  if (100 - sumaValorTotalCriterios(mm) > 0.001) {
+    cont.appendChild(btnNuevoCriterio);
+  }
 
   return cont;
 }
