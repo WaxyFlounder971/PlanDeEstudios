@@ -4,6 +4,7 @@
    (reordenar, eliminar, favorito).
    ========================================================================= */
 
+import { sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
@@ -31,6 +32,11 @@ function renderizarSelectorPlan() {
     btn.textContent = `${plan.universidad} · ${plan.nombre_carrera}`;
     btn.addEventListener("click", () => {
       estado.datos.configuracion.plan_activo_id = plan.id;
+      // FIX sync: configuracion se funde entera por _actualizadoEn
+      // (fusionarBloqueUnico) — sin sellar, el campo se quedaba en 0 y
+      // cada sondeo de ~9s decidía el ganador por _dispositivoId, no por
+      // quién editó de verdad más reciente. Ver storage-merge.js.
+      sellarTimestamp(estado.datos.configuracion);
       marcarCambioPendiente();
       renderizarSelectorPlan();
     });
@@ -44,99 +50,53 @@ function renderizarSelectorPlan() {
 function renderizarModoHardcore() {
   const cfg = estado.datos.configuracion;
   const chk = document.getElementById("switch-modo-hardcore");
-  const bloqueSecundario = document.getElementById("bloque-plan-secundario");
-  const bloqueTerciario = document.getElementById("bloque-plan-terciario");
-
-  // Guard defensivo (datos viejos/corruptos): si por algún motivo anterior a
-  // este fix secundario y terciario ya quedaron apuntando al MISMO plan, se
-  // limpia terciario acá antes de pintar nada — así nunca se llega a
-  // mostrar la misma carrera como "elegida" en dos slots a la vez.
-  if (cfg.plan_activo_terciario_id && cfg.plan_activo_terciario_id === cfg.plan_activo_secundario_id) {
-    cfg.plan_activo_terciario_id = null;
-    marcarCambioPendiente();
-  }
+  const bloque = document.getElementById("bloque-plan-secundario");
 
   chk.checked = !!cfg.modo_hardcore;
-  bloqueSecundario.classList.toggle("oculto", !cfg.modo_hardcore);
-  bloqueTerciario.classList.toggle("oculto", !cfg.modo_hardcore);
+  bloque.classList.toggle("oculto", !cfg.modo_hardcore);
 
   chk.onchange = () => {
     cfg.modo_hardcore = chk.checked;
-    // No se borran datos, solo se deja de combinar/mostrar el 2do y 3er plan.
-    bloqueSecundario.classList.toggle("oculto", !cfg.modo_hardcore);
-    bloqueTerciario.classList.toggle("oculto", !cfg.modo_hardcore);
+    if (!cfg.modo_hardcore) {
+      // No se borran datos, solo se deja de combinar/mostrar el segundo plan.
+      bloque.classList.add("oculto");
+    } else {
+      bloque.classList.remove("oculto");
+    }
+    // FIX sync: mismo caso que plan_activo_id — sin este sello,
+    // configuracion._actualizadoEn se queda en 0 y el switch se revierte
+    // solo en el próximo sondeo (ver storage-merge.js: fusionarBloqueUnico).
+    sellarTimestamp(cfg);
     marcarCambioPendiente();
     if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
   };
 
-  // Semestres y Notas — Fase 1: helper compartido entre el selector
-  // secundario y el terciario — cada uno arma su propia lista de candidatos
-  // (todos los planes MENOS los que ya están ocupados en los otros 2 slots,
-  // para que no se pueda elegir el mismo plan dos veces) y su propio
-  // pill-group. `idSeleccionado`/`onElegir` son lo único que cambia entre
-  // los dos, así se reutiliza exactamente el mismo patrón que ya usaba el
-  // selector secundario en vez de duplicar el bloque completo.
-  const renderizarSelectorHardcore = (contenedorId, idsOcupados, idSeleccionado, onElegir) => {
-    const cont = document.getElementById(contenedorId);
-    const planes = estado.datos.planes_estudio.filter((p) => !idsOcupados.includes(p.id));
-    cont.innerHTML = "";
+  const cont = document.getElementById("selector-plan-secundario");
+  const planes = estado.datos.planes_estudio.filter((p) => p.id !== cfg.plan_activo_id);
+  cont.innerHTML = "";
 
-    if (planes.length === 0) {
-      cont.innerHTML = `<p class="muted">No hay otro Plan de Estudios disponible para este slot.</p>`;
-      return;
-    }
+  if (planes.length === 0) {
+    cont.innerHTML = `<p class="muted">Necesitas al menos un segundo Plan de Estudios importado para usar el Modo Hardcore.</p>`;
+    return;
+  }
 
-    const grupo = document.createElement("div");
-    grupo.className = "pill-group";
-    planes.forEach((plan) => {
-      const btn = document.createElement("button");
-      btn.className = "pill-item" + (plan.id === idSeleccionado ? " active" : "");
-      btn.textContent = `${plan.universidad} · ${plan.nombre_carrera}`;
-      btn.addEventListener("click", () => onElegir(plan.id));
-      grupo.appendChild(btn);
-    });
-    cont.appendChild(grupo);
-  };
-
-  renderizarSelectorHardcore(
-    "selector-plan-secundario",
-    [cfg.plan_activo_id, cfg.plan_activo_terciario_id].filter(Boolean),
-    cfg.plan_activo_secundario_id,
-    (planId) => {
-      cfg.plan_activo_secundario_id = planId;
+  const grupo = document.createElement("div");
+  grupo.className = "pill-group";
+  planes.forEach((plan) => {
+    const btn = document.createElement("button");
+    btn.className = "pill-item" + (plan.id === cfg.plan_activo_secundario_id ? " active" : "");
+    btn.textContent = `${plan.universidad} · ${plan.nombre_carrera}`;
+    btn.addEventListener("click", () => {
+      cfg.plan_activo_secundario_id = plan.id;
+      sellarTimestamp(cfg);
       marcarCambioPendiente();
       renderizarModoHardcore();
       if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
-    }
-  );
-
-  // FIX (reportado: "sale duplicada"): con un solo plan extra disponible,
-  // ANTES de elegir nada, tanto el selector secundario como el terciario
-  // ofrecían exactamente ese mismo candidato sin seleccionar todavía —
-  // nada los distinguía porque ninguno de los dos slots tenía valor aún.
-  // Visualmente se veía el mismo texto de carrera repetido bajo las dos
-  // etiquetas, aunque técnicamente ninguno estuviera "elegido" de verdad.
-  // Ahora el bloque terciario no se ofrece (se reemplaza por un aviso) hasta
-  // que el secundario tenga un valor real — además tiene sentido en el
-  // flujo: no debería poder armarse un 3er plan antes de confirmar el 2do.
-  const contTerciario = document.getElementById("selector-plan-terciario");
-  if (cfg.modo_hardcore && !cfg.plan_activo_secundario_id) {
-    contTerciario.innerHTML = `<p class="muted">Elegí primero el plan secundario.</p>`;
-  } else {
-    renderizarSelectorHardcore(
-      "selector-plan-terciario",
-      [cfg.plan_activo_id, cfg.plan_activo_secundario_id].filter(Boolean),
-      cfg.plan_activo_terciario_id,
-      (planId) => {
-        cfg.plan_activo_terciario_id = planId;
-        marcarCambioPendiente();
-        renderizarModoHardcore();
-        if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
-      }
-    );
-  }
+    });
+    grupo.appendChild(btn);
+  });
+  cont.appendChild(grupo);
 }
-
 estado.planGestionImportandoId = null;     // qué fila del panel de gestión tiene el mini-import abierto
 estado.reabrirGestionPlanesTrasCrear = false;
 estado.arrastrandoPlanId = null;          // v5 1.4: drag-and-drop en Gestionar plan
@@ -284,10 +244,7 @@ function eliminarPlanEstudio(planId) {
   if (cfg.plan_activo_secundario_id === planId) {
     cfg.plan_activo_secundario_id = null;
   }
-  if (cfg.plan_activo_terciario_id === planId) {
-    cfg.plan_activo_terciario_id = null;
-  }
-
+  sellarTimestamp(cfg);
   marcarCambioPendiente();
   renderizarListaGestionPlanes();
   renderizarSelectorPlan();
@@ -393,6 +350,11 @@ function inicializarModalEditarPlanInfo() {
     plan.parametros_universidad.horario_inicio_default = horaInicio;
     plan.parametros_universidad.horario_duracion_bloque_min = duracion;
 
+    // FIX sync (hallazgo aparte, misma clase de bug): esta edición toca
+    // el objeto `plan`, no `configuracion` — fusionarPlan también decide
+    // por _actualizadoEn (storage-merge.js), así que necesita su propio
+    // sello, igual que ya se hace para materias/semestres/criterios.
+    sellarTimestamp(plan);
     marcarCambioPendiente();
     cerrarModalEditarPlanInfo();
     renderizarListaGestionPlanes();
