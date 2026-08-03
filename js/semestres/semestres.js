@@ -21,6 +21,7 @@ import {
   obtenerEscalaNotasMateria,
   obtenerEstadoEfectivoSemestre,
   obtenerPlanesActivos,
+  redondearNotaFinalAlCincoMasCercano,
   sellarTimestamp,
 } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
@@ -100,15 +101,16 @@ function notasCompletas(mm) {
 
 /**
  * D/E/F: calcula y persiste `resultado` en cada materia matriculada del
- * semestre (comparando nota_final vigente contra umbral_pasar_raspando —
- * o nota_aprobacion si ese no está definido — del plan de CADA materia,
- * porque en Modo Hardcore dos materias del mismo semestre pueden venir de
- * planes/universidades distintas con umbrales distintos) y pasa el
- * semestre a "pasado". Nunca toca materia.estado — eso sigue siendo 100%
- * manual/sticky desde el Plan (ver ESTADOS_MATERIA_MANUALES en
- * plan-vista-lista-tarjetas.js). Solo resella la mm si el resultado
- * realmente cambió, para no generar sincronía/conflictos de la nada en
- * materias que no se tocan en este cierre.
+ * semestre (comparando la nota_final vigente, YA redondeada al 5 más
+ * cercano — mismo criterio en toda la app, ver
+ * redondearNotaFinalAlCincoMasCercano — contra nota_aprobacion del plan de
+ * CADA materia, porque en Modo Hardcore dos materias del mismo semestre
+ * pueden venir de planes/universidades distintas con notas de aprobación
+ * distintas) y pasa el semestre a "pasado". Nunca toca materia.estado —
+ * eso sigue siendo 100% manual/sticky desde el Plan (ver
+ * ESTADOS_MATERIA_MANUALES en plan-vista-lista-tarjetas.js). Solo resella
+ * la mm si el resultado realmente cambió, para no generar sincronía/
+ * conflictos de la nada en materias que no se tocan en este cierre.
  */
 function terminarSemestre(semestre) {
   (semestre.materias_matriculadas || []).forEach((mm) => {
@@ -119,9 +121,8 @@ function terminarSemestre(semestre) {
     if (plan && materia && notasCompletas(mm)) {
       const escala = obtenerEscalaNotasMateria(materia, plan, estado.datos.configuracion);
       const notaFinal = mm.nota_final_manual ? mm.nota_final : calcularNotaFinalMateria(mm, escala);
-      const params = plan.parametros_universidad || {};
-      const umbral = Number(params.umbral_pasar_raspando ?? params.nota_aprobacion) || 70;
-      nuevoResultado = notaFinal >= umbral ? "aprobada" : "reprobada";
+      const notaAprobacion = Number((plan.parametros_universidad || {}).nota_aprobacion) || 70;
+      nuevoResultado = redondearNotaFinalAlCincoMasCercano(notaFinal) >= notaAprobacion ? "aprobada" : "reprobada";
     }
 
     if (mm.resultado !== nuevoResultado) {
