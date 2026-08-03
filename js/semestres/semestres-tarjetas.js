@@ -1132,14 +1132,16 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
   pie.appendChild(btnAgregar);
 
   const puntosObtenidosCriterio = calcularPuntosCriterio(criterio, escalaActiva);
-  const badgeTotal = document.createElement("span");
-  badgeTotal.className = "badge badge-accent";
-  badgeTotal.textContent = `${formatearNumero(puntosObtenidosCriterio)}/${formatearNumero(criterio.valor_total)} pts`;
-  pie.appendChild(badgeTotal);
+  // Ajuste (pedido explícito: "no sobrecargar de pills"): antes esto era una
+  // pill badge-accent más. Ahora es texto plano ancla a la derecha del pie
+  // (el mismo lugar), para no competir visualmente con las pills de Nota/
+  // Puntaje de cada asignación.
+  const textoTotal = document.createElement("span");
+  textoTotal.style.cssText = "font-size:0.82rem; white-space:nowrap;";
+  textoTotal.innerHTML = `<span class="muted">Puntos totales:</span> <strong>${formatearNumero(puntosObtenidosCriterio)}/${formatearNumero(criterio.valor_total)} pts</strong>`;
+  pie.appendChild(textoTotal);
 
   cont.appendChild(pie);
-
-  igualarAnchoBadges(cont);
 
   return cont;
 }
@@ -1252,6 +1254,13 @@ function construirSeccionNotas(mm, materia, plan, onCambiar) {
     criterios.forEach((criterio) => {
       cont.appendChild(construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onCambiar));
     });
+    // Pedido explícito ("que se vea todo parejito"): antes cada tarjeta de
+    // criterio igualaba el ancho de sus propias pills por separado, así que
+    // dos criterios distintos en la misma materia podían tener columnas de
+    // ancho distinto entre sí. Ahora se igualan TODAS las pills de Nota y
+    // Puntaje de la materia entera (los criterios ya están en `cont`) de
+    // una sola pasada, para que la columna quede alineada de punta a punta.
+    igualarAnchoBadges(cont);
   }
 
   // Ajuste (2026-08-02): la nota final y "Editar a mano" ahora van AL FINAL
