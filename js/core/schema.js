@@ -703,6 +703,34 @@ function obtenerEscalaNotasMateria(materia, plan, configuracion) {
 }
 
 /**
+ * Redondeo "epsilon-safe": Math.round normal sobre sumas/divisiones
+ * encadenadas puede arrastrar basura de coma flotante (ej. 0.1 + 0.2 =
+ * 0.30000000000000004) que, acumulada entre varias asignaciones, termina
+ * mostrando un decimal de más de lo real (pedido explícito: "era 67.59 y lo
+ * redondeó a 67.60, eso no se puede"). Sumar Number.EPSILON antes de
+ * redondear corrige el caso típico sin inventar precisión que no existe.
+ */
+function redondearDecimales(num, decimales) {
+  const factor = Math.pow(10, decimales);
+  return Math.round((Number(num) + Number.EPSILON) * factor) / factor;
+}
+
+/**
+ * Ajuste (pedido explícito, "por ahora"): la nota final se redondea al
+ * múltiplo de 5 más cercano (0, 5, 10, ..., 100) antes de decidir si
+ * aprobó — así un 67.5 redondea a 70 y cuenta como aprobado. Reemplaza la
+ * lógica anterior de "raspando" (que solo empujaba hacia arriba dentro de
+ * un rango angosto definido por umbral_pasar_raspando); con este redondeo
+ * general ya no hace falta ese caso especial. El campo
+ * umbral_pasar_raspando se deja intacto en parametros_universidad por
+ * compatibilidad con datos existentes, pero ya no se lee acá.
+ */
+function redondearNotaFinalAlCincoMasCercano(nota) {
+  if (nota === null || nota === undefined) return nota;
+  return Math.round(Number(nota) / 5) * 5;
+}
+
+/**
  * Motor de cálculo (punto 3): puntos ponderados reales que aporta una
  * asignación calificada, normalizados a escala 0-100. Sin nota todavía
  * (null) no aporta puntos — se trata como pendiente, nunca como un cero.
@@ -714,7 +742,11 @@ function calcularPuntosAsignacion(asignacion, escalaActiva) {
     // valor de la asignación (no se divide por escala — no aplica).
     return Math.min(Number(asignacion.nota) || 0, Number(asignacion.valor) || 0);
   }
-  return (Number(asignacion.nota) / escalaActiva) * asignacion.valor;
+  // Redondeo epsilon-safe a 6 decimales: sin esto, sumar muchas asignaciones
+  // con divisiones no exactas (ej. nota/escala) va acumulando basura de
+  // coma flotante que después, al mostrar solo 2 decimales, hace que el
+  // total se vea redondeado "de más" (ver redondearDecimales arriba).
+  return redondearDecimales((Number(asignacion.nota) / escalaActiva) * asignacion.valor, 6);
 }
 
 /**
@@ -731,7 +763,7 @@ function calcularNotaFinalMateria(materiaMatriculada, escalaActiva) {
       total += calcularPuntosAsignacion(asig, escalaActiva);
     });
   });
-  return total;
+  return redondearDecimales(total, 6);
 }
 
 /**
@@ -1033,4 +1065,6 @@ export {
   calcularPuntosAsignacion,
   calcularNotaFinalMateria,
   obtenerEstadoEfectivoMateria,
+  redondearDecimales,
+  redondearNotaFinalAlCincoMasCercano,
 };
