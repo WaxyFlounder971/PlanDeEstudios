@@ -23,6 +23,7 @@ import { abrirModalDesbloquea, abrirModalHistorial } from "../plan/plan-detalle.
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 
 estado.semestresExpandidos = estado.semestresExpandidos || new Map();
+estado.criteriosExpandidos = estado.criteriosExpandidos || new Map();
 
 const MESES_LARGOS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
@@ -322,14 +323,15 @@ function formatearNumero(n) {
  */
 function formatearNumeroFijo(n, decimales) {
   const num = Number(n) || 0;
+  // FIX 2 (pedido explícito: "era como 67.594 y lo mostraba en 67.60"): el
+  // primer intento (sumar Number.EPSILON) no alcanzaba — ese margen es de
+  // ~2.22e-16, mucho menor que el arrastre real que deja sumar varias
+  // asignaciones (del orden de 1e-10 a 1e-13). toPrecision(12) limpia ese
+  // arrastre antes de redondear (mismo mecanismo que redondearDecimales en
+  // schema.js), sin inventar precisión que no existe.
+  const limpio = Number(num.toPrecision(12));
   const factor = Math.pow(10, decimales);
-  // FIX (pedido explícito: "era 67.59 y lo redondeó a 67.60, eso no se
-  // puede"): toFixed() por sí solo hereda cualquier basura de coma
-  // flotante que ya traiga `num` (ej. 67.58500000000004 en vez de 67.585
-  // real). Redondear primero a la cantidad exacta de decimales pedida, con
-  // corrección epsilon, y recién ahí formatear, evita que se muestre un
-  // decimal de más de lo que en verdad se calculó.
-  const corregido = Math.round((num + Number.EPSILON) * factor) / factor;
+  const corregido = Math.round(limpio * factor) / factor;
   return corregido.toFixed(decimales);
 }
 
@@ -1026,8 +1028,7 @@ function construirFilaAsignacion(asignacion, criterio, mm, materia, plan, escala
     }
     const colorPersonalizado = colorParaPorcentaje(pct);
     if (colorPersonalizado) {
-      pillNota.style.background = colorPersonalizado;
-      pillNota.style.color = "#fff";
+      aplicarColorBadgePersonalizado(pillNota, colorPersonalizado);
     } else {
       pillNota.classList.add("badge-success");
     }
@@ -1081,15 +1082,26 @@ function calcularPuntosCriterio(criterio, escalaActiva) {
 }
 
 function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onCambiar) {
+  // Pedido explícito: "quiero que cada criterio esté contraido, cerrado, y
+  // tenga la flecha ▲▼ tal como en todo el resto de tarjetas" — mismo
+  // patrón que ya usan materias y semestres (estado.semestresExpandidos),
+  // pero en su propio Map (los ids de criterio no comparten espacio con
+  // los de mm/semestre). Sin entrada todavía = contraído por defecto.
+  const expandido = estado.criteriosExpandidos.get(criterio.id) || false;
+
   const cont = document.createElement("div");
   cont.className = "glass-panel stack";
   cont.style.cssText = "padding:10px 12px; gap:8px;";
 
-  /* ---------- Encabezado: Criterio | Nota | Puntaje ---------- */
+  /* ---------- Encabezado: nombre + % de la materia | flecha ---------- */
   const encabezado = document.createElement("div");
   encabezado.className = "row";
   encabezado.style.cssText = "justify-content:space-between; align-items:center; cursor:pointer;";
-  encabezado.title = "Mantén presionado (o clic derecho) para editar o eliminar este criterio";
+  encabezado.title = "Clic para expandir o contraer. Mantén presionado (o clic derecho) para editar o eliminar este criterio";
+  encabezado.addEventListener("click", () => {
+    estado.criteriosExpandidos.set(criterio.id, !expandido);
+    onCambiar();
+  });
   agregarLongPress(encabezado, () => abrirMenuRapidoCriterio(criterio, mm, materia, plan, encabezado, onCambiar));
 
   const tituloWrap = document.createElement("div");
@@ -1099,9 +1111,6 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
   titulo.style.fontSize = "0.92rem";
   titulo.textContent = criterio.nombre;
   tituloWrap.appendChild(titulo);
-  // El peso del criterio dentro de la materia se muestra como subtítulo
-  // discreto (ya no como badge en el encabezado — ese lugar ahora es para
-  // las etiquetas de columna Nota/Puntaje, ver abajo).
   const subtitulo = document.createElement("span");
   subtitulo.className = "muted";
   subtitulo.style.fontSize = "0.72rem";
@@ -1109,20 +1118,13 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
   tituloWrap.appendChild(subtitulo);
   encabezado.appendChild(tituloWrap);
 
-  const etiquetasCol = document.createElement("div");
-  etiquetasCol.className = "row";
-  etiquetasCol.style.cssText = "gap:6px; flex-wrap:nowrap;";
-  const etiquetaNota = document.createElement("span");
-  etiquetaNota.className = "muted pill-tamano-fijo";
-  etiquetaNota.style.cssText = PILL_ESTILO + "font-size:0.72rem; font-weight:700;";
-  etiquetaNota.textContent = "Nota";
-  etiquetasCol.appendChild(etiquetaNota);
-  const etiquetaPuntaje = document.createElement("span");
-  etiquetaPuntaje.className = "muted pill-tamano-fijo";
-  etiquetaPuntaje.style.cssText = PILL_ESTILO + "font-size:0.72rem; font-weight:700;";
-  etiquetaPuntaje.textContent = "Puntaje";
-  etiquetasCol.appendChild(etiquetaPuntaje);
-  encabezado.appendChild(etiquetasCol);
+  // El lugar que antes ocupaban las etiquetas Nota/Puntaje ahora lo ocupa
+  // la flecha de expandir/contraer; las etiquetas se movieron a su propia
+  // fila más abajo (ver filaEtiquetas), visible solo cuando está expandido.
+  const iconoExpandir = document.createElement("span");
+  iconoExpandir.className = "materia-expandir";
+  iconoExpandir.textContent = expandido ? "▲" : "▼";
+  encabezado.appendChild(iconoExpandir);
 
   if (criterio._conflicto) {
     agregarIndicadorConflicto(cont, () => abrirModalResolverConflictoCriterio(criterio, mm, materia, plan, onCambiar));
@@ -1130,37 +1132,59 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
 
   cont.appendChild(encabezado);
 
-  (criterio.asignaciones || []).forEach((asig) => {
-    cont.appendChild(construirFilaAsignacion(asig, criterio, mm, materia, plan, escalaActiva, onCambiar));
-  });
+  if (expandido) {
+    // FIX (pedido explícito: "Nota y Puntaje NO está centrado a su pill,
+    // como 20px corridos a la derecha"): fila-asignacion (construirFilaAsignacion)
+    // tiene padding:6px 10px propio, así que sus pills quedan 10px adentro
+    // del borde derecho de la tarjeta. Esta fila de etiquetas no tenía ese
+    // mismo padding — sus hijos, con justify-content:flex-end, quedaban
+    // pegados al borde (0px de inset) en vez de a los mismos 10px, por eso
+    // se veían corridas hacia la derecha respecto a las pills de abajo.
+    const filaEtiquetas = document.createElement("div");
+    filaEtiquetas.className = "row";
+    filaEtiquetas.style.cssText = "justify-content:flex-end; align-items:center; gap:6px; flex-wrap:nowrap; padding:0 10px;";
+    const etiquetaNota = document.createElement("span");
+    etiquetaNota.className = "muted pill-tamano-fijo";
+    etiquetaNota.style.cssText = PILL_ESTILO + "font-size:0.72rem; font-weight:700;";
+    etiquetaNota.textContent = "Nota";
+    filaEtiquetas.appendChild(etiquetaNota);
+    const etiquetaPuntaje = document.createElement("span");
+    etiquetaPuntaje.className = "muted pill-tamano-fijo";
+    etiquetaPuntaje.style.cssText = PILL_ESTILO + "font-size:0.72rem; font-weight:700;";
+    etiquetaPuntaje.textContent = "Puntaje";
+    filaEtiquetas.appendChild(etiquetaPuntaje);
+    cont.appendChild(filaEtiquetas);
 
-  /* ---------- Pie: + Añadir asignación (izq) | calificación total (der) ---------- */
-  const pie = document.createElement("div");
-  pie.className = "row";
-  pie.style.cssText = "justify-content:space-between; align-items:center; margin-top:2px;";
+    // La fila de asignación queda intacta, tal cual estaba (pedido
+    // explícito: "deja como está la asignación").
+    (criterio.asignaciones || []).forEach((asig) => {
+      cont.appendChild(construirFilaAsignacion(asig, criterio, mm, materia, plan, escalaActiva, onCambiar));
+    });
 
-  const btnAgregar = document.createElement("button");
-  btnAgregar.type = "button";
-  btnAgregar.className = "btn btn-secondary";
-  btnAgregar.style.cssText = "font-size:0.78rem; padding:5px 10px;";
-  btnAgregar.textContent = "+ Añadir asignación";
-  btnAgregar.addEventListener("click", (ev) => {
-    ev.stopPropagation();
-    agregarAsignacionRapida(criterio, mm, materia, plan, onCambiar);
-  });
-  pie.appendChild(btnAgregar);
+    /* ---------- Pie: + Añadir asignación (izq) | calificación total (der) ---------- */
+    const pie = document.createElement("div");
+    pie.className = "row";
+    pie.style.cssText = "justify-content:space-between; align-items:center; margin-top:2px;";
 
-  const puntosObtenidosCriterio = calcularPuntosCriterio(criterio, escalaActiva);
-  // Ajuste (pedido explícito: "no sobrecargar de pills"): antes esto era una
-  // pill badge-accent más. Ahora es texto plano ancla a la derecha del pie
-  // (el mismo lugar), para no competir visualmente con las pills de Nota/
-  // Puntaje de cada asignación.
-  const textoTotal = document.createElement("span");
-  textoTotal.style.cssText = "font-size:0.82rem; white-space:nowrap; margin-right:5px;";
-  textoTotal.innerHTML = `<span class="muted">Puntos totales:</span> <strong>${formatearNumero(puntosObtenidosCriterio)}/${formatearNumero(criterio.valor_total)} pts</strong>`;
-  pie.appendChild(textoTotal);
+    const btnAgregar = document.createElement("button");
+    btnAgregar.type = "button";
+    btnAgregar.className = "btn btn-secondary";
+    btnAgregar.style.cssText = "font-size:0.78rem; padding:5px 10px;";
+    btnAgregar.textContent = "+ Añadir asignación";
+    btnAgregar.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      agregarAsignacionRapida(criterio, mm, materia, plan, onCambiar);
+    });
+    pie.appendChild(btnAgregar);
 
-  cont.appendChild(pie);
+    const puntosObtenidosCriterio = calcularPuntosCriterio(criterio, escalaActiva);
+    const textoTotal = document.createElement("span");
+    textoTotal.style.cssText = "font-size:0.82rem; white-space:nowrap; margin-right:5px;";
+    textoTotal.innerHTML = `<span class="muted">Puntos totales:</span> <strong>${formatearNumero(puntosObtenidosCriterio)}/${formatearNumero(criterio.valor_total)} pts</strong>`;
+    pie.appendChild(textoTotal);
+
+    cont.appendChild(pie);
+  }
 
   return cont;
 }
@@ -1181,6 +1205,23 @@ function colorParaPorcentaje(pct) {
   if (pct >= 50) return "#eab308"; // amarillo
   if (pct >= 30) return "#f97316"; // naranja
   return "#ef4444"; // rojo
+}
+
+/**
+ * Pinta una pill con el mismo lenguaje visual que los badges existentes
+ * (fondo translúcido + borde + texto del color, ver badge-success/-danger/
+ * -warning en design-system.css) en vez de relleno sólido + texto blanco.
+ * Pedido explícito: "los colores están bien pero la forma de pintarlos
+ * nada que ver [...] quiero que todos se parezcan a como se ve de 90 a
+ * 100". Sin acceso a design-system.css en esta sesión, el efecto se arma a
+ * mano con el mismo hex de colorParaPorcentaje — si el tono translúcido no
+ * calza exacto con el resto de badges, pasame los valores reales de
+ * --color-success/etc. y se ajusta fino a eso en vez de a ojo.
+ */
+function aplicarColorBadgePersonalizado(el, hex) {
+  el.style.background = hex + "26"; // ~15% opacidad
+  el.style.border = "1px solid " + hex + "80"; // ~50% opacidad
+  el.style.color = hex;
 }
 
 function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, onCambiar) {
@@ -1208,10 +1249,8 @@ function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, onCam
   const izq = document.createElement("span");
   izq.style.fontWeight = "700";
   izq.textContent = `Nota final: ${textoNotaFinal}`;
-  if (notaRedondeada !== null && notaRedondeada !== undefined) {
-    const colorPersonalizado = colorParaPorcentaje(notaRedondeada);
-    if (colorPersonalizado) izq.style.color = colorPersonalizado;
-  }
+  // Pedido explícito: "en nota final NO debe cambiar de color" — la escala
+  // de color queda solo en la pill de cada asignación (construirFilaAsignacion).
   filaNotaFinal.appendChild(izq);
 
   if (mm.nota_final_manual) {
