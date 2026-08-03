@@ -1577,8 +1577,21 @@ function abrirMenuRapidoEstadoSemestre(semestre, anclaEl, onCambiar) {
     item.textContent = opcion.texto;
     item.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      semestre.estado_manual = opcion.valor;
-      sellarTimestamp(semestre);
+      // BUG FIX (ronda actual — closure viejo, "a veces sí, a veces no"):
+      // este era el único popover de "editar algo" en el archivo que
+      // mutaba directo el `semestre` capturado al abrirse, en vez de
+      // releerlo vivo por id como ya hacen mm/criterio/asignación. Si un
+      // sondeo (~9s) reemplazaba estado.datos mientras el popover seguía
+      // abierto, forzar "Actual"/"Pasado"/"Automático" no hacía nada.
+      const semestreVivo = (estado.datos.semestres || []).find((s) => s.id === semestre.id) || null;
+      if (!semestreVivo) {
+        mostrarToast("Este semestre se eliminó desde otro dispositivo");
+        pop.remove();
+        onCambiar();
+        return;
+      }
+      semestreVivo.estado_manual = opcion.valor;
+      sellarTimestamp(semestreVivo);
       marcarCambioPendiente();
       pop.remove();
       onCambiar();

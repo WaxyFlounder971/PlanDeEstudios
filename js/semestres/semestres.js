@@ -26,7 +26,7 @@ import {
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
-import { abrirConfirmacion } from "../ui/componentes.js";
+import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { recalcularPlanesHardcore } from "../plan/plan-gestionar.js";
 import { construirTarjetaSemestre } from "./semestres-tarjetas.js";
 
@@ -52,6 +52,21 @@ function obtenerSemestresPasados() {
 
 function obtenerPlanPorId(planId) {
   return estado.datos.planes_estudio.find((p) => p.id === planId) || null;
+}
+
+/**
+ * BUG FIX (ronda actual — closure viejo, mismo patrón ya resuelto para mm en
+ * semestres-tarjetas.js con buscarMmVivaPorId/buscarCriterioVivoPorId): el
+ * modal de alta/edición de semestre (abrirModalAltaSemestre) captura
+ * `semestreExistente` una sola vez al abrirse. Si el usuario tarda en llenar
+ * el formulario (o en confirmar "Terminar semestre") y de por medio pasa un
+ * sondeo remoto (~9s) que reemplaza estado.datos entero, esa referencia queda
+ * huérfana y la edición se pierde en silencio. Se relee la entidad viva por
+ * id justo antes de mutar — mismo patrón que ya usa
+ * abrirModalResolverConflictoSemestre.
+ */
+function buscarSemestreVivoPorId(semestreId) {
+  return (estado.datos.semestres || []).find((s) => s.id === semestreId) || null;
 }
 
 function creditosTotalesSemestre(semestre) {
@@ -641,7 +656,14 @@ function abrirModalAltaSemestre(semestreExistente = null) {
           "matricular más adelante). Esta acción no se puede deshacer.",
         textoConfirmar: "Terminar semestre",
         onConfirmar: () => {
-          terminarSemestre(semestreExistente);
+          const semestreVivo = buscarSemestreVivoPorId(semestreExistente.id);
+          if (!semestreVivo) {
+            mostrarToast("Este semestre se eliminó desde otro dispositivo — no se pudo terminar");
+            overlay.remove();
+            renderizarSemestres();
+            return;
+          }
+          terminarSemestre(semestreVivo);
           overlay.remove();
           renderizarSemestres();
         },
@@ -699,8 +721,18 @@ function abrirModalAltaSemestre(semestreExistente = null) {
       (id) => (seleccionPorPlan.get(id) || new Set()).size > 0
     );
 
-    if (esEdicion) guardarEdicionSemestre(semestreExistente, { nombre, fecha, duracion, planesConSeleccion });
-    else guardarNuevoSemestre({ nombre, fecha, duracion, planesConSeleccion });
+    if (esEdicion) {
+      const semestreVivo = buscarSemestreVivoPorId(semestreExistente.id);
+      if (!semestreVivo) {
+        mostrarToast("Este semestre se eliminó desde otro dispositivo — no se pudo guardar");
+        overlay.remove();
+        renderizarSemestres();
+        return;
+      }
+      guardarEdicionSemestre(semestreVivo, { nombre, fecha, duracion, planesConSeleccion });
+    } else {
+      guardarNuevoSemestre({ nombre, fecha, duracion, planesConSeleccion });
+    }
 
     overlay.remove();
     renderizarSemestres();
