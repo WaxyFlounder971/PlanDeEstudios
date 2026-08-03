@@ -4,12 +4,13 @@
    acciones (orden/buscador/exportar) y panel de estadísticas.
    ========================================================================= */
 
+import { sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { construirPanelCategorias } from "./plan-categorias.js";
 import { abrirModalMateriaManual, obtenerMateriasVisibles, obtenerPlanActivo } from "./plan-esquema.js";
-import { abrirModalGestionPlanes, renderizarSelectorPlan } from "./plan-gestionar.js";
+import { abrirModalGestionPlanes, recalcularPlanesHardcore, renderizarSelectorPlan } from "./plan-gestionar.js";
 import { alternarModoEdicionPlan } from "./plan-modo-edicion.js";
 import { construirMiniPanelImportacion, obtenerPalabraOptativa, serializarRequisitoArbol } from "./plan-importacion-csv.js";
 import { construirEncabezadoCSV, construirPanelImportacion } from "./plan-importacion.js";
@@ -188,7 +189,13 @@ function navegarPlanCarrusel(delta) {
   const planes = estado.datos.planes_estudio;
   const idxActual = planes.findIndex((p) => p.id === estado.datos.configuracion.plan_activo_id);
   const nuevoIdx = (idxActual + delta + planes.length) % planes.length;
-  estado.datos.configuracion.plan_activo_id = planes[nuevoIdx].id;
+  const cfg = estado.datos.configuracion;
+  cfg.plan_activo_id = planes[nuevoIdx].id;
+  // FIX (mismo patrón que los demás puntos de entrada a plan_activo_id en
+  // plan-gestionar.js): cambiar el principal también recalcula quién es el
+  // acompañante automático de Modo Hardcore.
+  recalcularPlanesHardcore(cfg);
+  sellarTimestamp(cfg);
   marcarCambioPendiente();
   renderizarSelectorPlan();
   renderizarPlanEstudios();
