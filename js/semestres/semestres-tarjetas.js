@@ -321,18 +321,28 @@ function formatearNumero(n) {
  * de formatearNumero (máx. 1, sin ceros de más), que es el formato correcto
  * para "nota final" (la que ya pasó por aplicarRedondeoRaspando).
  */
+/**
+ * Ajuste (2026-08-02, pedido explícito): "nota" (la cruda, sin redondeo de
+ * la universidad) siempre se muestra con 2 decimales fijos — a diferencia
+ * de formatearNumero (máx. 1, sin ceros de más), que es el formato correcto
+ * para "nota final" (la que ya pasó por el redondeo al 5 más cercano).
+ *
+ * FIX 3 (pedido explícito: "la nota sí sale bien 67.597618 pero en Nota se
+ * redondea a 67.60, esto no me sirve, necesito saber la nota EXACTA pero
+ * que se corte a 2 decimales solamente"): esto nunca fue un bug de arrastre
+ * de coma flotante — 67.597618 redondeado a 2 decimales SÍ da 67.60, eso es
+ * matemáticamente correcto. Lo que se pedía en realidad es TRUNCAR (cortar
+ * el número tal cual, sin subir el último dígito), no redondear. Se
+ * mantiene la limpieza con toPrecision(12) por las dudas (evita que ruido
+ * de cálculo tipo 67.589999999999996 se trunque mal a 67.58 en vez de
+ * 67.59), pero el redondeo final pasa de Math.round a Math.trunc.
+ */
 function formatearNumeroFijo(n, decimales) {
   const num = Number(n) || 0;
-  // FIX 2 (pedido explícito: "era como 67.594 y lo mostraba en 67.60"): el
-  // primer intento (sumar Number.EPSILON) no alcanzaba — ese margen es de
-  // ~2.22e-16, mucho menor que el arrastre real que deja sumar varias
-  // asignaciones (del orden de 1e-10 a 1e-13). toPrecision(12) limpia ese
-  // arrastre antes de redondear (mismo mecanismo que redondearDecimales en
-  // schema.js), sin inventar precisión que no existe.
   const limpio = Number(num.toPrecision(12));
   const factor = Math.pow(10, decimales);
-  const corregido = Math.round(limpio * factor) / factor;
-  return corregido.toFixed(decimales);
+  const truncado = Math.trunc(limpio * factor) / factor;
+  return truncado.toFixed(decimales);
 }
 
 /**
