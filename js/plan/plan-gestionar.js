@@ -31,14 +31,29 @@ function renderizarSelectorPlan() {
     btn.className = "pill-item" + (plan.id === estado.datos.configuracion.plan_activo_id ? " active" : "");
     btn.textContent = `${plan.universidad} · ${plan.nombre_carrera}`;
     btn.addEventListener("click", () => {
-      estado.datos.configuracion.plan_activo_id = plan.id;
+      const cfg = estado.datos.configuracion;
+      cfg.plan_activo_id = plan.id;
+      // FIX caso borde (no cubierto por el parche anterior): un mismo plan
+      // no puede ser principal y secundario a la vez. El drag-and-drop de
+      // "Gestionar Planes" ya limpiaba esto al reordenar (ver más abajo),
+      // pero este selector del encabezado es OTRO punto de entrada al mismo
+      // plan_activo_id y no tenía la misma protección — podías dejar
+      // plan_activo_id === plan_activo_secundario_id sin que nada lo avisara.
+      if (cfg.plan_activo_secundario_id === plan.id) {
+        cfg.plan_activo_secundario_id = null;
+      }
       // FIX sync: configuracion se funde entera por _actualizadoEn
       // (fusionarBloqueUnico) — sin sellar, el campo se quedaba en 0 y
       // cada sondeo de ~9s decidía el ganador por _dispositivoId, no por
       // quién editó de verdad más reciente. Ver storage-merge.js.
-      sellarTimestamp(estado.datos.configuracion);
+      sellarTimestamp(cfg);
       marcarCambioPendiente();
       renderizarSelectorPlan();
+      // Si el modal de Gestionar Planes está abierto, su switch/pill de
+      // Modo Hardcore también deben reflejar el plan_activo_secundario_id
+      // recién limpiado — si no, quedaría mostrando una pill "activa" para
+      // un plan que en cfg real ya no es el secundario.
+      if (typeof renderizarModoHardcore === "function") renderizarModoHardcore();
     });
     grupo.appendChild(btn);
   });
@@ -48,6 +63,22 @@ function renderizarSelectorPlan() {
 /* --------------------------- Modo Hardcore 💀 --------------------------- */
 
 function renderizarModoHardcore() {
+  // FIX sync (bug real de raíz — reporte de usuario "elegí el plan
+  // secundario y quedó en null"): antes esta función capturaba
+  // `const cfg = estado.datos.configuracion` UNA sola vez, al abrir el
+  // modal, y tanto el onchange del switch como el click de cada pill
+  // cerraban sobre esa misma variable. Pero storage-sync.js REEMPLAZA
+  // estado.datos entero en cada sondeo (~9s): `estado.datos =
+  // fusionarDatos(...)`. Si en algún sondeo la config remota "ganaba" la
+  // fusión (fusionarBloqueUnico devuelve un objeto NUEVO, no el mismo),
+  // estado.datos.configuracion pasaba a ser una referencia distinta — pero
+  // el click, más tarde, seguía mutando el objeto viejo ya desconectado.
+  // marcarCambioPendiente() se disparaba igual, pero terminaba guardando
+  // el estado vivo actual, que nunca había recibido esa mutación: la
+  // elección se perdía en silencio sin ningún error visible. La solución
+  // es no cachear `cfg` en absoluto — cada handler lee
+  // estado.datos.configuracion FRESCO en el momento del evento, igual que
+  // ya hace correctamente renderizarSelectorPlan().
   const cfg = estado.datos.configuracion;
   const chk = document.getElementById("switch-modo-hardcore");
   const bloque = document.getElementById("bloque-plan-secundario");
@@ -56,17 +87,15 @@ function renderizarModoHardcore() {
   bloque.classList.toggle("oculto", !cfg.modo_hardcore);
 
   chk.onchange = () => {
-    cfg.modo_hardcore = chk.checked;
-    if (!cfg.modo_hardcore) {
+    const cfgActual = estado.datos.configuracion;
+    cfgActual.modo_hardcore = chk.checked;
+    if (!cfgActual.modo_hardcore) {
       // No se borran datos, solo se deja de combinar/mostrar el segundo plan.
       bloque.classList.add("oculto");
     } else {
       bloque.classList.remove("oculto");
     }
-    // FIX sync: mismo caso que plan_activo_id — sin este sello,
-    // configuracion._actualizadoEn se queda en 0 y el switch se revierte
-    // solo en el próximo sondeo (ver storage-merge.js: fusionarBloqueUnico).
-    sellarTimestamp(cfg);
+    sellarTimestamp(cfgActual);
     marcarCambioPendiente();
     if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
   };
@@ -87,8 +116,9 @@ function renderizarModoHardcore() {
     btn.className = "pill-item" + (plan.id === cfg.plan_activo_secundario_id ? " active" : "");
     btn.textContent = `${plan.universidad} · ${plan.nombre_carrera}`;
     btn.addEventListener("click", () => {
-      cfg.plan_activo_secundario_id = plan.id;
-      sellarTimestamp(cfg);
+      const cfgActual = estado.datos.configuracion;
+      cfgActual.plan_activo_secundario_id = plan.id;
+      sellarTimestamp(cfgActual);
       marcarCambioPendiente();
       renderizarModoHardcore();
       if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
@@ -111,9 +141,17 @@ function abrirModalGestionPlanes() {
 
 /** v5 1.4: tarjetas arrastrables para reordenar los planes — la primera del
  *  orden es automáticamente la favorita/principal (estrella a la derecha,
- *  sin botón de estrella aparte). Reordenar NO cambia cuál es plan_activo_id
- *  (eso lo sigue controlando el carrusel del encabezado); solo cambia el
- *  orden de la lista y por lo tanto cuál queda marcada como favorita. */
+ *  sin botón de estrella aparte).
+ *
+ *  FIX (reporte de usuario — "arrastro para poner un plan como principal y
+ *  solo cambia visualmente, abajo sigue el secundario de antes"): antes
+ *  reordenar la lista NUNCA tocaba `plan_activo_id` — la estrella se movía
+ *  pero el carrusel del encabezado / Modo Hardcore seguían leyendo el
+ *  `plan_activo_id` viejo, así que en la práctica "hacerlo principal"
+ *  arrastrando no hacía nada funcional, solo visual. Ahora la posición 0
+ *  y `plan_activo_id` son la misma fuente de verdad: al soltar, si el plan
+ *  que queda primero no es ya el activo, se actualiza `plan_activo_id` y se
+ *  sella `configuracion` (mismo patrón que el resto de este archivo). */
 
 function renderizarListaGestionPlanes() {
   const cont = document.getElementById("lista-gestion-planes");
@@ -210,8 +248,27 @@ function renderizarListaGestionPlanes() {
       if (idxOrigen === -1 || idxDestino === -1) return;
       const [movido] = estado.datos.planes_estudio.splice(idxOrigen, 1);
       estado.datos.planes_estudio.splice(idxDestino, 0, movido);
+
+      // Ver FIX arriba: la posición 0 ahora manda sobre plan_activo_id.
+      const cfg = estado.datos.configuracion;
+      const nuevoPrincipal = estado.datos.planes_estudio[0];
+      if (nuevoPrincipal && cfg.plan_activo_id !== nuevoPrincipal.id) {
+        cfg.plan_activo_id = nuevoPrincipal.id;
+        // Si el plan que arrastraste a principal era el secundario elegido,
+        // limpiarlo — un mismo plan no puede ser principal y secundario a
+        // la vez (renderizarModoHardcore ya lo excluye de la lista, pero
+        // sin esto cfg.plan_activo_secundario_id quedaba apuntando a una
+        // referencia obsoleta en vez de a null).
+        if (cfg.plan_activo_secundario_id === nuevoPrincipal.id) {
+          cfg.plan_activo_secundario_id = null;
+        }
+        sellarTimestamp(cfg);
+      }
+
       marcarCambioPendiente();
       renderizarListaGestionPlanes();
+      renderizarSelectorPlan();
+      renderizarModoHardcore();
     });
 
     cont.appendChild(fila);
