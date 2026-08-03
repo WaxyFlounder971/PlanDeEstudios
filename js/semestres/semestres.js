@@ -407,6 +407,15 @@ function abrirModalAltaSemestre(semestreExistente = null) {
   const cfg = estado.datos.configuracion;
   const esEdicion = !!semestreExistente;
   const planDefault = planPorDefectoParaDuracion();
+  // FIX (semanas máximas): el tope real no es el límite plano
+  // LIMITE_SEMANAS_SEMESTRE (ese sigue existiendo solo para la transición
+  // automática a "pasado"), sino las semanas disponibles del plan activo
+  // más un margen de 2 semanas de colchón (evaluaciones tardías, prórrogas,
+  // etc.). Si no hay plan (o no trae el parámetro), se cae al valor por
+  // defecto de 16 + 2.
+  const semanasBaseDuracion =
+    (planDefault && planDefault.parametros_universidad && planDefault.parametros_universidad.semanas_por_bloque) || 16;
+  const topeSemanasDuracion = semanasBaseDuracion + 2;
 
   const overlay = document.createElement("div");
   overlay.className = "overlay-alta-semestre";
@@ -491,10 +500,8 @@ function abrirModalAltaSemestre(semestreExistente = null) {
   inputDuracion.type = "number";
   inputDuracion.className = "form-input";
   inputDuracion.min = "1";
-  inputDuracion.max = String(LIMITE_SEMANAS_SEMESTRE);
-  inputDuracion.value = String(
-    esEdicion ? semestreExistente.duracion_semanas : (planDefault && planDefault.parametros_universidad.semanas_por_bloque) || 16
-  );
+  inputDuracion.max = String(topeSemanasDuracion);
+  inputDuracion.value = String(esEdicion ? semestreExistente.duracion_semanas : semanasBaseDuracion);
   bloqueDuracion.appendChild(inputDuracion);
   filaFechas.appendChild(bloqueDuracion);
   caja.appendChild(filaFechas);
@@ -604,7 +611,7 @@ function abrirModalAltaSemestre(semestreExistente = null) {
     const fecha = usaFechaAproximada
       ? `${inputAnio.value}-${String(selectMes.value).padStart(2, "0")}-01`
       : inputFecha.value;
-    const duracion = Math.min(Number(inputDuracion.value) || 0, LIMITE_SEMANAS_SEMESTRE);
+    const duracion = Math.min(Number(inputDuracion.value) || 0, topeSemanasDuracion);
     const totalMarcadas = Array.from(seleccionPorPlan.values()).reduce((n, set) => n + set.size, 0);
 
     if (!nombre || !fecha || !duracion) {

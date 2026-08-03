@@ -16,8 +16,8 @@ import {
   calcularPuntosAsignacion,
   calcularNotaFinalMateria,
 } from "../core/schema.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { ESTADOS_MATERIA, abrirMenuRapidoCategoria, abrirModalResolverConflictoGenerico, agregarIndicadorConflicto } from "../plan/plan-vista-lista-tarjetas.js";
+import { marcarCambioPendiente, actualizarIndicadorSync } from "../core/storage-sync.js";
+import { ESTADOS_MATERIA, abrirMenuRapidoCategoria, abrirModalResolverConflicto, abrirModalResolverConflictoGenerico, agregarIndicadorConflicto } from "../plan/plan-vista-lista-tarjetas.js";
 import { abrirModalDesbloquea, abrirModalHistorial } from "../plan/plan-detalle.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 
@@ -143,6 +143,147 @@ function abrirModalResolverConflictoSemestre(semestre, onCambiar) {
     onResuelto: onCambiar,
     obtenerFresca: () => (estado.datos.semestres || []).find((s) => s.id === semestreId) || null,
   });
+}
+
+/**
+ * Punto 4 (badge ⚠️ global + "ver todos los choques"): hasta acá, la única
+ * forma de encontrar un conflicto era toparse con su ⚠️ chiquito navegando
+ * tarjeta por tarjeta — nada avisaba "hay N choques en total" ni dejaba
+ * verlos juntos. contarConflictosGlobales() (storage-sync.js) hace el
+ * conteo para el badge; esta función arma la LISTA completa (con etiqueta
+ * legible + un resolver ya enganchado) recorriendo estado.datos exactamente
+ * igual: planes → materias, semestres → materias_matriculadas → criterios,
+ * y los semestres mismos. Cada fila reutiliza el resolver específico que
+ * ya existe para ese tipo de entidad (mismo modal de siempre) — este
+ * listado no inventa una forma nueva de resolver, solo las junta.
+ */
+function listarTodosLosConflictos() {
+  const items = [];
+
+  (estado.datos.planes_estudio || []).forEach((plan) => {
+    (plan.materias || []).forEach((materia) => {
+      if (materia._conflicto) {
+        items.push({
+          etiqueta: `📚 ${aplicarFormatoTexto(materia.nombre)} (${materia.codigo})`,
+          resolver: () => abrirModalResolverConflicto(materia, plan, alResolverUnConflictoGlobal),
+        });
+      }
+    });
+  });
+
+  (estado.datos.semestres || []).forEach((semestre) => {
+    if (semestre._conflicto) {
+      items.push({
+        etiqueta: `📅 Semestre "${semestre.nombre}"`,
+        resolver: () =>
+          abrirModalResolverConflictoSemestre(semestre, () => {
+            renderizarSemestres();
+            alResolverUnConflictoGlobal();
+          }),
+      });
+    }
+
+    (semestre.materias_matriculadas || []).forEach((mm) => {
+      const plan = (estado.datos.planes_estudio || []).find((p) => p.id === mm.plan_estudio_id);
+      const materia = plan && (plan.materias || []).find((m) => m.id === mm.materia_id);
+      const nombreMateria = materia ? `${aplicarFormatoTexto(materia.nombre)} (${materia.codigo})` : "una materia matriculada";
+
+      if (mm._conflicto) {
+        items.push({
+          etiqueta: `📝 Matrícula de ${nombreMateria}`,
+          resolver: () =>
+            abrirModalResolverConflictoMatricula(mm, materia || { nombre: "?", codigo: "?" }, plan, () => {
+              renderizarSemestres();
+              alResolverUnConflictoGlobal();
+            }),
+        });
+      }
+
+      (mm.criterios || []).forEach((criterio) => {
+        if (criterio._conflicto) {
+          items.push({
+            etiqueta: `🎯 Criterio "${criterio.nombre}" de ${nombreMateria}`,
+            resolver: () =>
+              abrirModalResolverConflictoCriterio(criterio, mm, materia || { nombre: "?", codigo: "?" }, plan, () => {
+                renderizarSemestres();
+                alResolverUnConflictoGlobal();
+              }),
+          });
+        }
+      });
+    });
+  });
+
+  return items;
+}
+
+/** Guarda la referencia al overlay abierto del modal global para poder
+ *  reconstruirlo (con la lista ya achicada) justo después de resolver
+ *  una fila, sin dejarlo huérfano ni cerrarlo de golpe. */
+let overlayTodosLosConflictosActivo = null;
+
+function alResolverUnConflictoGlobal() {
+  // Refresca el badge (¿bajó el conteo? ¿llegó a 0?) apenas se resuelve
+  // cualquier fila, no solo cuando corre el sondeo cada 9s.
+  actualizarIndicadorSync();
+  if (overlayTodosLosConflictosActivo && document.body.contains(overlayTodosLosConflictosActivo)) {
+    abrirModalTodosLosConflictos();
+  }
+}
+
+function abrirModalTodosLosConflictos() {
+  document.querySelectorAll(".overlay-todos-conflictos").forEach((el) => el.remove());
+
+  const items = listarTodosLosConflictos();
+
+  const overlay = document.createElement("div");
+  overlay.className = "overlay-todos-conflictos";
+  overlay.style.cssText =
+    "position:fixed; inset:0; z-index:300; background:rgba(0,0,0,0.55); " +
+    "display:flex; align-items:center; justify-content:center; padding:16px;";
+  overlayTodosLosConflictosActivo = overlay;
+
+  const caja = document.createElement("div");
+  caja.className = "glass-card stack";
+  caja.style.cssText = "max-width:480px; width:100%; padding:18px; max-height:80vh; overflow-y:auto;";
+  caja.addEventListener("click", (ev) => ev.stopPropagation());
+
+  const tituloEl = document.createElement("h3");
+  tituloEl.style.cssText = "margin:0 0 4px;";
+  tituloEl.textContent = "⚠️ Cambios pendientes de resolver";
+  caja.appendChild(tituloEl);
+
+  const explicacionEl = document.createElement("p");
+  explicacionEl.style.cssText = "font-size:0.85rem; opacity:0.85; margin:0 0 14px;";
+  explicacionEl.textContent =
+    items.length === 0
+      ? "No hay ningún choque pendiente en este momento."
+      : `Se editó lo mismo desde dos dispositivos distintos antes de que sincronizaran entre sí, en ${items.length} ${
+          items.length === 1 ? "lugar" : "lugares"
+        }. Elegí uno para resolverlo — esta lista se actualiza sola al terminar.`;
+  caja.appendChild(explicacionEl);
+
+  items.forEach((item) => {
+    const fila = document.createElement("button");
+    fila.type = "button";
+    fila.className = "btn btn-secondary btn-block";
+    fila.style.cssText = "text-align:left; margin-bottom:6px;";
+    fila.textContent = item.etiqueta;
+    fila.addEventListener("click", () => item.resolver());
+    caja.appendChild(fila);
+  });
+
+  const btnCerrar = document.createElement("button");
+  btnCerrar.type = "button";
+  btnCerrar.className = "btn btn-secondary btn-block";
+  btnCerrar.style.marginTop = items.length === 0 ? "0" : "10px";
+  btnCerrar.textContent = "Cerrar";
+  btnCerrar.addEventListener("click", () => overlay.remove());
+  caja.appendChild(btnCerrar);
+
+  overlay.appendChild(caja);
+  overlay.addEventListener("click", () => overlay.remove());
+  document.body.appendChild(overlay);
 }
 
 /* =========================================================================
@@ -1512,4 +1653,4 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEdita
   return card;
 }
 
-export { construirTarjetaSemestre };
+export { construirTarjetaSemestre, abrirModalTodosLosConflictos };
