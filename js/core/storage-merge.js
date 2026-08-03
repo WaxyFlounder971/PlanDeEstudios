@@ -124,18 +124,35 @@ function hayConflictoReal(local, remoto) {
 
   const baseLocal = Number(local._version_base) || 0;
   const baseRemota = Number(remoto._version_base) || 0;
-  // Mismo punto de partida = ambas son ediciones directas de la MISMA
-  // versión previa, hechas sin que ninguna conociera a la otra. Esto es
-  // cierto sin importar en qué contador haya terminado cada una — incluso
-  // si por coincidencia ambos dispositivos avanzaron su reloj lógico al
-  // mismo número exacto (caso límite: dos dispositivos que nunca se habían
-  // sincronizado antes, cada uno partiendo de "0 ediciones vistas"), eso NO
-  // los vuelve la misma edición — son dos ediciones distintas de contenido
-  // que casualmente comparten número de contador. La única señal confiable
-  // de "es la misma edición, no hay nada que resolver" es que sean
-  // literalmente el mismo objeto (ver el `existente === item` en
-  // fusionarColeccion, que ya se revisa ANTES de llegar aquí) o tener
-  // contenido idéntico (Guarda 1, arriba).
+
+  // Guarda 3 (fix 2026-08-02 — "TODAS las materias salieron en conflicto sin
+  // razón"): base=0 NO es un punto de partida real que ambos dispositivos
+  // hayan visto — es el valor por defecto de sellarTimestamp() para
+  // cualquier entidad que nunca se había sellado antes de ESTA edición (dato
+  // viejo de antes de que existiera este motor, o entidad recién creada).
+  // Casi toda la base de datos histórica de un usuario cae en ese caso. Dos
+  // ediciones que comparten base=0 no partieron necesariamente del MISMO
+  // estado real — solo significa que ninguna de las dos tenía historial
+  // confiable todavía, y pudieron haber pasado en momentos completamente
+  // distintos, no simultáneos. Tratar ese "sin historial" compartido como
+  // "mismo punto de partida" (la lógica anterior) marcaba como choque real a
+  // CUALQUIER materia/mm/criterio viejo que se tocara en ambos dispositivos,
+  // sin importar cuándo. Con base > 0 sí es señal confiable (ambos
+  // dispositivos partieron de un _actualizadoEn real, ya sincronizado al
+  // menos una vez) y ahí el choque real se sigue detectando igual que antes.
+  // Sin conflicto detectado acá, la fusión no pierde nada: cae en el camino
+  // normal (esMasReciente elige la más nueva, la otra se descarta pero se
+  // loguea en consola — mismo comportamiento ya usado en cualquier edición
+  // no conflictiva del proyecto).
+  if (baseLocal === 0 && baseRemota === 0) return false;
+
+  // Mismo punto de partida real (base > 0 en ambos) = ambas son ediciones
+  // directas de la MISMA versión previa ya sincronizada, hechas sin que
+  // ninguna conociera a la otra — eso sí es un choque real (equivalente a un
+  // merge conflict de Git). La única señal confiable de "es la misma
+  // edición, no hay nada que resolver" es que sean literalmente el mismo
+  // objeto (ver el `existente === item` en fusionarColeccion, que ya se
+  // revisa ANTES de llegar aquí) o tener contenido idéntico (Guarda 1, arriba).
   return baseLocal === baseRemota;
 }
 
