@@ -47,6 +47,15 @@ function renderizarModoHardcore() {
   const bloqueSecundario = document.getElementById("bloque-plan-secundario");
   const bloqueTerciario = document.getElementById("bloque-plan-terciario");
 
+  // Guard defensivo (datos viejos/corruptos): si por algún motivo anterior a
+  // este fix secundario y terciario ya quedaron apuntando al MISMO plan, se
+  // limpia terciario acá antes de pintar nada — así nunca se llega a
+  // mostrar la misma carrera como "elegida" en dos slots a la vez.
+  if (cfg.plan_activo_terciario_id && cfg.plan_activo_terciario_id === cfg.plan_activo_secundario_id) {
+    cfg.plan_activo_terciario_id = null;
+    marcarCambioPendiente();
+  }
+
   chk.checked = !!cfg.modo_hardcore;
   bloqueSecundario.classList.toggle("oculto", !cfg.modo_hardcore);
   bloqueTerciario.classList.toggle("oculto", !cfg.modo_hardcore);
@@ -101,17 +110,31 @@ function renderizarModoHardcore() {
     }
   );
 
-  renderizarSelectorHardcore(
-    "selector-plan-terciario",
-    [cfg.plan_activo_id, cfg.plan_activo_secundario_id].filter(Boolean),
-    cfg.plan_activo_terciario_id,
-    (planId) => {
-      cfg.plan_activo_terciario_id = planId;
-      marcarCambioPendiente();
-      renderizarModoHardcore();
-      if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
-    }
-  );
+  // FIX (reportado: "sale duplicada"): con un solo plan extra disponible,
+  // ANTES de elegir nada, tanto el selector secundario como el terciario
+  // ofrecían exactamente ese mismo candidato sin seleccionar todavía —
+  // nada los distinguía porque ninguno de los dos slots tenía valor aún.
+  // Visualmente se veía el mismo texto de carrera repetido bajo las dos
+  // etiquetas, aunque técnicamente ninguno estuviera "elegido" de verdad.
+  // Ahora el bloque terciario no se ofrece (se reemplaza por un aviso) hasta
+  // que el secundario tenga un valor real — además tiene sentido en el
+  // flujo: no debería poder armarse un 3er plan antes de confirmar el 2do.
+  const contTerciario = document.getElementById("selector-plan-terciario");
+  if (cfg.modo_hardcore && !cfg.plan_activo_secundario_id) {
+    contTerciario.innerHTML = `<p class="muted">Elegí primero el plan secundario.</p>`;
+  } else {
+    renderizarSelectorHardcore(
+      "selector-plan-terciario",
+      [cfg.plan_activo_id, cfg.plan_activo_secundario_id].filter(Boolean),
+      cfg.plan_activo_terciario_id,
+      (planId) => {
+        cfg.plan_activo_terciario_id = planId;
+        marcarCambioPendiente();
+        renderizarModoHardcore();
+        if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
+      }
+    );
+  }
 }
 
 estado.planGestionImportandoId = null;     // qué fila del panel de gestión tiene el mini-import abierto
