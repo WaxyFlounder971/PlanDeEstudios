@@ -591,13 +591,9 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
   const linea2 = construirLinea2Materia(materia, !expandida, plan);
   filaPrincipal.appendChild(linea2);
 
-  if (mostrarOrigen) {
-    const badgeOrigen = document.createElement("span");
-    badgeOrigen.className = "badge badge-neutral";
-    badgeOrigen.style.fontSize = "0.68rem";
-    badgeOrigen.textContent = fila.origen === "principal" ? "Principal" : "Secundario";
-    linea2.appendChild(badgeOrigen);
-  }
+  // Pedido explícito (2026-08-03): se quita el badge Principal/Secundario —
+  // `mostrarOrigen` se deja como parámetro (lo sigue pasando el llamador en
+  // construirBloqueOptativas) para no tocar esa firma, pero ya no se usa acá.
 
   // FIX sync (conflicto real sin resolver): si esta materia se editó de
   // forma distinta en dos dispositivos a partir de la misma versión
