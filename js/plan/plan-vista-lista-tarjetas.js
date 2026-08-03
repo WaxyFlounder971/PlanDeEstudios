@@ -732,12 +732,24 @@ function camposEnConflicto(local, alterna) {
  * llama a resolverConflicto(), que resella la entidad con un _version_base
  * limpio — eso es lo que rompe el ciclo.
  *
- * `entidad` es el objeto vivo con `_conflicto: true` (materia, mm o
- * criterio) — se muta in-place, igual que hacía la versión original.
+ * `entidad` es el objeto con `_conflicto: true` tal como se veía al abrir el
+ * modal — se usa SOLO para pintar el contenido inicial (título, campos
+ * distintos). `obtenerFresca` es obligatoria: una función que, en el momento
+ * exacto del clic, vuelve a buscar la entidad VIVA dentro de estado.datos
+ * (por id) y la muta in-place. Esto es necesario porque `estado.datos` se
+ * REEMPLAZA por un objeto nuevo en cada sync (sondeo cada 9s, pull-to-
+ * refresh, o cualquier guardado — ver aplicarDatosRemotosFrescos en
+ * storage-sync.js: `estado.datos = fusionarDatos(...)`). Si el modal queda
+ * abierto más de 9s y el sondeo trae un cambio remoto mientras tanto, la
+ * referencia `entidad` capturada al abrir el modal queda huérfana — mutarla
+ * no toca nada de lo que en verdad está en `estado.datos`, así que el clic
+ * "se pierde" en silencio (bug real reportado: "a veces sí, a veces no").
+ * Fix (2026-08-02): en vez de mutar la referencia vieja, se busca la
+ * entidad fresca justo antes de resolver.
  * `onResuelto` reemplaza la llamada fija a renderizarPlanEstudios() para
  * que cada pantalla refresque lo que le corresponde.
  */
-function abrirModalResolverConflictoGenerico({ entidad, plan, titulo, explicacion, onResuelto }) {
+function abrirModalResolverConflictoGenerico({ entidad, plan, titulo, explicacion, onResuelto, obtenerFresca }) {
   document.querySelectorAll(".overlay-resolver-conflicto").forEach((el) => el.remove());
 
   const alterna = entidad._version_alterna || {};
@@ -809,9 +821,35 @@ function abrirModalResolverConflictoGenerico({ entidad, plan, titulo, explicacio
   }
 
   const elegir = (cual) => {
-    const resuelta = resolverConflicto(entidad, cual, sellarTimestamp);
-    Object.keys(entidad).forEach((k) => delete entidad[k]);
-    Object.assign(entidad, resuelta);
+    // Fix (2026-08-02, bug "a veces sí, a veces no"): nunca se muta
+    // `entidad` directamente — puede llevar minutos abierta esta ventana, y
+    // en ese tiempo estado.datos ya pudo haber sido reemplazado por un sync
+    // en segundo plano. Se busca la copia VIVA justo ahora.
+    const viva = obtenerFresca();
+    if (!viva) {
+      // La entidad ya no existe (se borró desde el otro dispositivo mientras
+      // el modal estaba abierto) — no hay nada que resolver.
+      overlay.remove();
+      onResuelto();
+      return;
+    }
+    if (!viva._conflicto) {
+      // Ya se resolvió por otro medio (ej. el otro dispositivo también tenía
+      // el modal abierto y resolvió primero, y ese resultado ya llegó por
+      // sync) — no pisar una resolución que ya quedó limpia.
+      overlay.remove();
+      onResuelto();
+      return;
+    }
+    // La elección del usuario fue sobre lo que vio en pantalla (local/alterna
+    // de la entidad capturada al abrir el modal) — pero se aplica sobre la
+    // entidad viva, que puede tener una _version_alterna más nueva si hubo
+    // un sync de por medio. Si el usuario eligió "alterna" y la viva ya trae
+    // otra _version_alterna distinta, se respeta igual su elección de lado,
+    // solo que sobre los datos actuales (nunca sobre la copia huérfana).
+    const resuelta = resolverConflicto(viva, cual, sellarTimestamp);
+    Object.keys(viva).forEach((k) => delete viva[k]);
+    Object.assign(viva, resuelta);
     marcarCambioPendiente();
     overlay.remove();
     onResuelto();
@@ -839,6 +877,8 @@ function abrirModalResolverConflictoGenerico({ entidad, plan, titulo, explicacio
 
 /** Caso particular de abrirModalResolverConflictoGenerico para una materia del plan. */
 function abrirModalResolverConflicto(materia, plan) {
+  const planId = plan.id;
+  const materiaId = materia.id;
   abrirModalResolverConflictoGenerico({
     entidad: materia,
     plan,
@@ -847,6 +887,11 @@ function abrirModalResolverConflicto(materia, plan) {
       `"${aplicarFormatoTexto(materia.nombre)}" (${materia.codigo}) se editó de forma distinta en dos ` +
       "dispositivos antes de que sincronizaran entre sí. Elegí cuál versión dejar — la otra se descarta.",
     onResuelto: renderizarPlanEstudios,
+    obtenerFresca: () => {
+      const planVivo = (estado.datos.planes_estudio || []).find((p) => p.id === planId);
+      if (!planVivo) return null;
+      return (planVivo.materias || []).find((m) => m.id === materiaId) || null;
+    },
   });
 }
 
