@@ -193,7 +193,9 @@ function construirSelectorPlanesHardcore(contenedor, planesIds, onCambiarVisible
 
   const btnAnterior = document.createElement("button");
   btnAnterior.type = "button";
-  btnAnterior.className = "btn btn-secondary";
+  btnAnterior.className = "carrusel-flecha";
+  btnAnterior.style.cssText =
+    "background:none; border:none; padding:4px 8px; font-size:1.4rem; line-height:1; cursor:pointer; color:inherit;";
   btnAnterior.textContent = "‹";
   btnAnterior.setAttribute("aria-label", "Plan de estudios anterior");
 
@@ -202,7 +204,9 @@ function construirSelectorPlanesHardcore(contenedor, planesIds, onCambiarVisible
 
   const btnSiguiente = document.createElement("button");
   btnSiguiente.type = "button";
-  btnSiguiente.className = "btn btn-secondary";
+  btnSiguiente.className = "carrusel-flecha";
+  btnSiguiente.style.cssText =
+    "background:none; border:none; padding:4px 8px; font-size:1.4rem; line-height:1; cursor:pointer; color:inherit;";
   btnSiguiente.textContent = "›";
   btnSiguiente.setAttribute("aria-label", "Plan de estudios siguiente");
 
