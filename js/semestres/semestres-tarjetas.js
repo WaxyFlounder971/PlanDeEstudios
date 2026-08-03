@@ -51,7 +51,30 @@ function textoBadgeUniversidad(universidad) {
  * datos reales que comparar. Reutiliza el mismo modal que ya usan las
  * materias del plan (ver abrirModalResolverConflictoGenerico).
  */
+/**
+ * Fix (2026-08-02, bug "a veces sí, a veces no"): estado.datos se reemplaza
+ * por un objeto nuevo en cada sync (cada 9s) — si el modal de conflicto
+ * queda abierto más de eso, la referencia capturada al abrirse queda
+ * huérfana. abrirModalResolverConflictoGenerico ahora exige un getter que
+ * vuelve a buscar la entidad viva justo antes de resolver; estos 3 helpers
+ * arman ese getter navegando estado.datos por id en cada nivel.
+ */
+/** Busca una materia-matriculada viva por id en CUALQUIER semestre — mm.id
+ *  es un uuid único en toda la app (ver crearMateriaMatriculada, schema.js),
+ *  así que no hace falta saber de qué semestre viene para encontrarla de
+ *  nuevo; evita tener que threadear semestre.id por las firmas de
+ *  construirTarjetaCriterio/construirFilaAsignacion/etc, que hoy no lo
+ *  reciben. */
+function buscarMmVivaPorId(mmId) {
+  for (const semestreVivo of estado.datos.semestres || []) {
+    const mmVivo = (semestreVivo.materias_matriculadas || []).find((m) => m.id === mmId);
+    if (mmVivo) return mmVivo;
+  }
+  return null;
+}
+
 function abrirModalResolverConflictoMatricula(mm, materia, plan, onCambiar) {
+  const mmId = mm.id;
   abrirModalResolverConflictoGenerico({
     entidad: mm,
     plan,
@@ -61,10 +84,13 @@ function abrirModalResolverConflictoMatricula(mm, materia, plan, onCambiar) {
       "dispositivos antes de que sincronizaran entre sí — puede ser el estado de la nota, un criterio o una " +
       "asignación. Elegí cuál versión dejar — la otra se descarta.",
     onResuelto: onCambiar,
+    obtenerFresca: () => buscarMmVivaPorId(mmId),
   });
 }
 
 function abrirModalResolverConflictoCriterio(criterio, mm, materia, plan, onCambiar) {
+  const mmId = mm.id;
+  const criterioId = criterio.id;
   abrirModalResolverConflictoGenerico({
     entidad: criterio,
     plan,
@@ -73,10 +99,16 @@ function abrirModalResolverConflictoCriterio(criterio, mm, materia, plan, onCamb
       `El criterio "${criterio.nombre}" de "${aplicarFormatoTexto(materia.nombre)}" se editó de forma ` +
       "distinta en dos dispositivos antes de que sincronizaran entre sí. Elegí cuál versión dejar — la otra se descarta.",
     onResuelto: onCambiar,
+    obtenerFresca: () => {
+      const mmVivo = buscarMmVivaPorId(mmId);
+      if (!mmVivo) return null;
+      return (mmVivo.criterios || []).find((c) => c.id === criterioId) || null;
+    },
   });
 }
 
 function abrirModalResolverConflictoSemestre(semestre, onCambiar) {
+  const semestreId = semestre.id;
   abrirModalResolverConflictoGenerico({
     entidad: semestre,
     titulo: "⚠️ Semestre editado en dos dispositivos",
@@ -84,6 +116,7 @@ function abrirModalResolverConflictoSemestre(semestre, onCambiar) {
       `"${semestre.nombre}" se editó de forma distinta en dos dispositivos antes de que sincronizaran entre sí. ` +
       "Elegí cuál versión dejar — la otra se descarta.",
     onResuelto: onCambiar,
+    obtenerFresca: () => (estado.datos.semestres || []).find((s) => s.id === semestreId) || null,
   });
 }
 
