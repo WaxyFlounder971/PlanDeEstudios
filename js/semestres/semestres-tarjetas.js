@@ -1457,10 +1457,23 @@ function construirSeccionNotas(mm, materia, plan, onCambiar) {
 // construirTarjetaMateriaMatriculada) y no hay nada que fijar a mano
 // todavía — por eso el popover solo se abre para semestres pasados (ver el
 // long-press condicionado más abajo).
+//
+// BUG FIX (reportado: "no me deja marcar reprobada, solo aprobada o sin
+// resultado"): la causa real es la misma que ya documenta buscarMmVivaPorId
+// más arriba en este archivo — estado.datos se reemplaza por un objeto
+// NUEVO en cada sync (~9s). El popover queda abierto capturando la `mm` de
+// ese momento; si pasa un ciclo de sync antes de tocar una opción, esa `mm`
+// queda huérfana y escribirle .resultado no tiene ningún efecto real (muta
+// un objeto que ya nadie referencia). Por eso "a veces sí, a veces no":
+// dependía de qué tan rápido se hiciera clic después de abrir el popover.
+// Ahora se vuelve a buscar la mm VIVA por id justo antes de escribir, igual
+// que hace el resto del archivo (ver persistirCambioMateria, etc.).
 const OPCIONES_RESULTADO_MATRICULA = [
   { valor: "aprobada", texto: "Aprobada" },
   { valor: "reprobada", texto: "Reprobada" },
-  { valor: null, texto: "Sin resultado" },
+  // Pedido explícito: no tiene sentido que un botón de "estado" diga
+  // "Sin resultado" — es la opción neutra/por defecto, se llama "Estado".
+  { valor: null, texto: "Estado" },
 ];
 
 function abrirMenuRapidoResultadoMatricula(mm, anclaEl, onCambiar) {
@@ -1481,8 +1494,15 @@ function abrirMenuRapidoResultadoMatricula(mm, anclaEl, onCambiar) {
     item.textContent = opcion.texto;
     item.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      mm.resultado = opcion.valor;
-      sellarTimestamp(mm);
+      const mmViva = buscarMmVivaPorId(mm.id);
+      if (!mmViva) {
+        mostrarToast("Esta materia se eliminó desde otro dispositivo");
+        pop.remove();
+        onCambiar();
+        return;
+      }
+      mmViva.resultado = opcion.valor;
+      sellarTimestamp(mmViva);
       marcarCambioPendiente();
       pop.remove();
       onCambiar();
@@ -1625,7 +1645,7 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
   // Es requisito de esta tarjeta — el código ahora abre directo la tarjetita
   // de detalle de la materia (misma ventana que en Plan de Estudios, donde
   // sí siguen viviendo categoría, requisitos e historial).
-  spanCodigo.style.cssText = "position:relative; top:-3px; cursor:pointer; text-decoration:underline dotted;";
+  spanCodigo.style.cssText = "position:relative; top:-3px; cursor:pointer;";
   spanCodigo.title = "Ver la tarjeta de esta materia";
   spanCodigo.addEventListener("click", (ev) => {
     ev.stopPropagation();
@@ -1664,8 +1684,11 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
   } else {
     badgeEstado.style.cursor = "pointer";
     badgeEstado.title =
-      "Mantén presionado (o clic derecho) para corregir el resultado de este intento — solo afecta este semestre, no el Plan de estudios";
-    agregarLongPress(badgeEstado, () => abrirMenuRapidoResultadoMatricula(mm, badgeEstado, onCambiar));
+      "Clic para corregir el resultado de este intento — solo afecta este semestre, no el Plan de estudios";
+    badgeEstado.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      abrirMenuRapidoResultadoMatricula(mm, badgeEstado, onCambiar);
+    });
   }
   colEstado.appendChild(badgeEstado);
   linea2.appendChild(colEstado);
@@ -1714,6 +1737,15 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEdita
   // de anidamiento que le esté restando ancho.
   card.style.width = "100%";
   card.style.boxSizing = "border-box";
+  // FIX (reportado: "no parece haber servido"): width:100% por sí solo no
+  // alcanza si el contenedor padre (.stack, dentro de "Semestres pasados")
+  // es un flex con align-items que NO sea stretch (ej. center/flex-start) —
+  // en ese caso el hijo se encoge a su contenido sin importar qué width
+  // tenga declarado. align-self:stretch fuerza a ESTA tarjeta puntual a
+  // ocupar el ancho completo del contenedor sin depender de esa regla del
+  // padre, que no puedo ver desde acá (vive en design-system.css).
+  card.style.alignSelf = "stretch";
+  card.style.margin = "0";
 
   const encabezado = document.createElement("div");
   encabezado.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px; cursor:pointer;";
