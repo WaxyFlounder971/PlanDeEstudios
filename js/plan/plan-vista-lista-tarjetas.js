@@ -875,8 +875,12 @@ function abrirModalResolverConflictoGenerico({ entidad, plan, titulo, explicacio
   document.body.appendChild(overlay);
 }
 
-/** Caso particular de abrirModalResolverConflictoGenerico para una materia del plan. */
-function abrirModalResolverConflicto(materia, plan) {
+/** Caso particular de abrirModalResolverConflictoGenerico para una materia del plan.
+ *  `onResueltoExtra` (opcional): además del refresco fijo de siempre
+ *  (renderizarPlanEstudios), permite que quien llama enganche un refresco
+ *  propio — lo usa el modal global "ver todos los choques" en
+ *  semestres-tarjetas.js para actualizarse a sí mismo tras resolver una fila. */
+function abrirModalResolverConflicto(materia, plan, onResueltoExtra) {
   const planId = plan.id;
   const materiaId = materia.id;
   abrirModalResolverConflictoGenerico({
@@ -886,7 +890,10 @@ function abrirModalResolverConflicto(materia, plan) {
     explicacion:
       `"${aplicarFormatoTexto(materia.nombre)}" (${materia.codigo}) se editó de forma distinta en dos ` +
       "dispositivos antes de que sincronizaran entre sí. Elegí cuál versión dejar — la otra se descarta.",
-    onResuelto: renderizarPlanEstudios,
+    onResuelto: () => {
+      renderizarPlanEstudios();
+      if (onResueltoExtra) onResueltoExtra();
+    },
     obtenerFresca: () => {
       const planVivo = (estado.datos.planes_estudio || []).find((p) => p.id === planId);
       if (!planVivo) return null;
