@@ -774,6 +774,84 @@ function calcularNotaFinalMateria(materiaMatriculada, escalaActiva) {
 }
 
 /**
+ * Fase 6 — Simulador "Proyectar" (What If). Todo lo de acá abajo es cálculo
+ * puro: nunca muta materiaMatriculada ni llama a sellarTimestamp/
+ * marcarCambioPendiente. "Pendiente" = cualquier asignación con nota null
+ * o undefined, sin importar en qué criterio esté.
+ */
+function obtenerAsignacionesPendientes(materiaMatriculada) {
+  const pendientes = [];
+  (materiaMatriculada.criterios || []).forEach((criterio) => {
+    (criterio.asignaciones || []).forEach((asignacion) => {
+      if (asignacion.nota === null || asignacion.nota === undefined) {
+        pendientes.push({ criterio, asignacion });
+      }
+    });
+  });
+  return pendientes;
+}
+
+/**
+ * Nota final si se saca la nota máxima en absolutamente todo lo pendiente
+ * (modo "Máximo posible"): lo ya obtenido + el 100% del peso pendiente.
+ */
+function calcularMaximoPosibleMateria(materiaMatriculada, escalaActiva) {
+  const puntosObtenidos = calcularNotaFinalMateria(materiaMatriculada, escalaActiva);
+  const pesoPendienteTotal = obtenerAsignacionesPendientes(materiaMatriculada).reduce(
+    (total, p) => total + (Number(p.asignacion.valor) || 0),
+    0
+  );
+  return redondearDecimales(puntosObtenidos + pesoPendienteTotal, 6);
+}
+
+/**
+ * Nota uniforme necesaria en CADA asignación pendiente para que la nota
+ * final llegue a `objetivo` (0-100, mismas unidades que nota_aprobacion).
+ * "Uniforme" = mismo % de desempeño en todas las pendientes — así el peso
+ * real de cada una (punto 3) ya queda respetado solo, sin repartir puntos
+ * a mano ni caer en un reparto ingenuo 1:1.
+ * Devuelve:
+ *  - { estado: "ya_alcanzado" } si lo ya obtenido alcanza sin necesitar más.
+ *  - { estado: "imposible", notaHipotetica } si ni con nota máxima alcanza
+ *    (notaHipotetica puede superar la escala, ej. 120/100 — es informativo,
+ *    nunca se usa para cálculos reales).
+ *  - { estado: "posible", notaNecesaria } en el caso normal. notaNecesaria
+ *    se redondea siempre HACIA ARRIBA (2 decimales) para no subestimar por
+ *    un pelo de coma flotante lo que hace falta de verdad.
+ */
+function calcularNotaNecesariaUniforme(materiaMatriculada, escalaActiva, objetivo) {
+  const puntosObtenidos = calcularNotaFinalMateria(materiaMatriculada, escalaActiva);
+  if (puntosObtenidos >= objetivo) return { estado: "ya_alcanzado" };
+
+  const pesoPendienteTotal = obtenerAsignacionesPendientes(materiaMatriculada).reduce(
+    (total, p) => total + (Number(p.asignacion.valor) || 0),
+    0
+  );
+  if (pesoPendienteTotal <= 0) return { estado: "imposible", notaHipotetica: null };
+
+  const puntosFaltantes = objetivo - puntosObtenidos;
+  const notaNecesaria = Math.ceil((puntosFaltantes / pesoPendienteTotal) * escalaActiva * 100) / 100;
+
+  if (notaNecesaria > escalaActiva) return { estado: "imposible", notaHipotetica: notaNecesaria };
+  return { estado: "posible", notaNecesaria };
+}
+
+/**
+ * Objetivo real de "Pasar raspando": el mínimo valor CRUDO de nota_final
+ * que, redondeado al 5 más cercano (mismo criterio que
+ * redondearNotaFinalAlCincoMasCercano), ya alcanza `notaAprobacion` — ej.
+ * notaAprobacion=70 -> 67.5, porque Math.round(67.5/5)*5 = 70. Reemplaza
+ * al viejo umbral_pasar_raspando (ya no se lee en ningún otro lado del
+ * proyecto): a nivel de sistema, 67.5 y 72.4 aprueban exactamente igual,
+ * así que este modo existe aparte de "Mínimo pasable" solo para el caso
+ * de "ya no da para más" — no es la meta que se persigue normalmente.
+ */
+function calcularObjetivoPasarRaspando(notaAprobacion) {
+  const multiploSuperior = Math.ceil(Number(notaAprobacion) / 5) * 5;
+  return multiploSuperior - 2.5;
+}
+
+/**
  * FIX sync (bug real encontrado en esta ronda de auditoría): a diferencia
  * de crearMateria y crearPlanEstudio, esta función NUNCA llamaba a
  * sellarTimestamp() — toda categoría nacía sin _actualizadoEn real. En
@@ -1074,4 +1152,8 @@ export {
   obtenerEstadoEfectivoMateria,
   redondearDecimales,
   redondearNotaFinalAlCincoMasCercano,
+  obtenerAsignacionesPendientes,
+  calcularMaximoPosibleMateria,
+  calcularNotaNecesariaUniforme,
+  calcularObjetivoPasarRaspando,
 };
