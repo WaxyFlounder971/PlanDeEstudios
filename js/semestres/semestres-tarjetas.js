@@ -16,6 +16,11 @@ import {
   calcularPuntosAsignacion,
   calcularNotaFinalMateria,
   redondearNotaFinalAlCincoMasCercano,
+  redondearDecimales,
+  obtenerAsignacionesPendientes,
+  calcularMaximoPosibleMateria,
+  calcularNotaNecesariaUniforme,
+  calcularObjetivoPasarRaspando,
 } from "../core/schema.js";
 import { marcarCambioPendiente, actualizarIndicadorSync } from "../core/storage-sync.js";
 import { ESTADOS_MATERIA, abrirModalResolverConflicto, abrirModalResolverConflictoGenerico, agregarIndicadorConflicto } from "../plan/plan-vista-lista-tarjetas.js";
@@ -953,6 +958,214 @@ function abrirModalNotaManual({ mm, materia, plan, notaFinalVigente, onGuardado 
   card.appendChild(btnGuardar);
 }
 
+/* ===================== Modal: Simulador "Proyectar" (What If) ===================== */
+
+/**
+ * Pinta el resultado de un modo "objetivo fijo" (Máximo posible ya no pasa
+ * por acá — se pinta aparte porque no tiene estado de "imposible"/"ya
+ * alcanzado", siempre hay un número). Textos cortos a propósito: nadie
+ * debería tener que adivinar qué significa cada caso.
+ */
+function pintarResultadoObjetivo(contenedor, resultado, escalaActiva) {
+  contenedor.innerHTML = "";
+  const p = document.createElement("p");
+  p.style.cssText = "margin:0; font-weight:600; text-align:center;";
+
+  if (resultado.estado === "ya_alcanzado") {
+    p.textContent = "✅ Ya alcanzás esto con lo que tenés — necesitás 0 en lo que falta.";
+  } else if (resultado.estado === "imposible") {
+    const notaImposible = resultado.notaHipotetica !== null ? formatearNumero(resultado.notaHipotetica) : "—";
+    p.innerHTML =
+      `Necesitarías un <strong>${notaImposible}</strong> (sobre ${escalaActiva}) en cada pendiente — ` +
+      `lo cual ya ni existe. <br><span style="font-weight:400;">No pos ya valió, no hay por dónde.</span>`;
+  } else {
+    p.innerHTML = `Necesitás sacarte un <strong>${formatearNumero(resultado.notaNecesaria)}</strong> (sobre ${escalaActiva}) en cada pendiente.`;
+  }
+  contenedor.appendChild(p);
+}
+
+/**
+ * Modo "Manejo libre": inputs editables por cada asignación pendiente,
+ * respetando modo_calificacion (nota vs. puntos) igual que el modal real
+ * de asignación — pero nada de esto toca `mm` ni se persiste. El total se
+ * recalcula en vivo con los mismos criterios que calcularPuntosAsignacion.
+ */
+function construirModoManejoLibre(contenedor, mm, materia, plan, escalaActiva) {
+  contenedor.innerHTML = "";
+  const pendientes = obtenerAsignacionesPendientes(mm);
+  const puntosBase = calcularNotaFinalMateria(mm, escalaActiva);
+  const notasHipoteticas = new Map();
+
+  const lista = document.createElement("div");
+  lista.className = "stack";
+  lista.style.gap = "6px";
+
+  const resultadoTexto = document.createElement("p");
+  resultadoTexto.style.cssText = "margin:8px 0 0; font-weight:700; text-align:center;";
+
+  function recalcular() {
+    let total = puntosBase;
+    pendientes.forEach(({ asignacion }) => {
+      const valorCrudo = notasHipoteticas.get(asignacion.id);
+      if (valorCrudo === undefined || valorCrudo === "") return;
+      const valorNum = analizarDecimal(valorCrudo);
+      if (!Number.isFinite(valorNum)) return;
+      if (asignacion.modo_calificacion === "puntos") {
+        total += Math.min(Math.max(valorNum, 0), Number(asignacion.valor) || 0);
+      } else {
+        const notaAcotada = Math.min(Math.max(valorNum, 0), escalaActiva);
+        total += redondearDecimales((notaAcotada / escalaActiva) * asignacion.valor, 6);
+      }
+    });
+    resultadoTexto.textContent = `Nota final hipotética: ${formatearNumero(redondearDecimales(total, 2))}`;
+  }
+
+  pendientes.forEach(({ criterio, asignacion }) => {
+    const fila = document.createElement("div");
+    fila.className = "row";
+    fila.style.cssText = "align-items:center; gap:8px;";
+
+    const label = document.createElement("span");
+    label.style.cssText = "flex:1; font-size:0.85rem; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+    label.textContent = `${criterio.nombre} · ${asignacion.nombre}`;
+    fila.appendChild(label);
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.inputMode = "decimal";
+    input.className = "form-input";
+    input.style.cssText = "width:70px; flex-shrink:0;";
+    input.placeholder = asignacion.modo_calificacion === "puntos" ? `0-${formatearNumero(asignacion.valor)}` : `0-${escalaActiva}`;
+    input.addEventListener("input", () => {
+      notasHipoteticas.set(asignacion.id, input.value);
+      recalcular();
+    });
+    fila.appendChild(input);
+
+    lista.appendChild(fila);
+  });
+
+  contenedor.appendChild(lista);
+  contenedor.appendChild(resultadoTexto);
+  recalcular();
+}
+
+const MODOS_PROYECCION = [
+  { valor: "maximo", texto: "Máximo posible", desc: "Si sacás la nota máxima en todo lo que falta." },
+  { valor: "minimo", texto: "Mínimo pasable", desc: "Lo que necesitás para pasar con la nota de aprobación cerrada." },
+  { valor: "raspando", texto: "Pasar raspando", desc: "El mínimo real usando el margen de redondeo — para cuando ya no da para más." },
+  { valor: "deseada", texto: "Nota deseada", desc: "Elegí a qué nota querés llegar." },
+  { valor: "libre", texto: "Manejo libre", desc: "Poné notas hipotéticas y mirá el resultado en vivo." },
+];
+
+/**
+ * Simulador "Proyectar" (Fase 6, punto 4). Bloqueado si los criterios de la
+ * materia no suman 100% todavía (decisión confirmada 2026-08-03): con
+ * criterios a medias el "máximo posible" y el "mínimo pasable" mienten,
+ * mejor que no se pueda abrir a que alguien piense que la página falla.
+ * No persiste NADA — es una copia de trabajo puramente en memoria.
+ */
+function abrirModalProyectar({ mm, materia, plan, escalaActiva }) {
+  if (100 - sumaValorTotalCriterios(mm) > 0.001) {
+    mostrarToast("Completá el 100% de los criterios de la materia antes de proyectar");
+    return;
+  }
+  const pendientes = obtenerAsignacionesPendientes(mm);
+  if (pendientes.length === 0) {
+    mostrarToast("Ya tenés todas las notas cargadas — no hay nada que proyectar");
+    return;
+  }
+
+  const { card } = crearModalDinamico({ titulo: "Proyectar" });
+  const notaAprobacion = Number((plan.parametros_universidad || {}).nota_aprobacion) || 70;
+
+  const descripcion = document.createElement("p");
+  descripcion.className = "muted";
+  descripcion.style.cssText = "font-size:0.8rem; margin:0;";
+  card.appendChild(descripcion);
+
+  const grupoModos = document.createElement("div");
+  grupoModos.className = "pill-group";
+  grupoModos.style.cssText = "display:flex; flex-wrap:wrap; gap:6px;";
+  card.appendChild(grupoModos);
+
+  const inputDeseada = document.createElement("input");
+  inputDeseada.type = "text";
+  inputDeseada.inputMode = "decimal";
+  inputDeseada.className = "form-input oculto";
+  inputDeseada.placeholder = "Nota a la que querés llegar (0-100)";
+  card.appendChild(inputDeseada);
+
+  const contenedorResultado = document.createElement("div");
+  contenedorResultado.className = "glass-panel";
+  contenedorResultado.style.cssText = "padding:12px; margin-top:2px;";
+  card.appendChild(contenedorResultado);
+
+  let modoActivo = "maximo";
+
+  function pintar() {
+    grupoModos.innerHTML = "";
+    MODOS_PROYECCION.forEach(({ valor, texto }) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pill-item" + (modoActivo === valor ? " active" : "");
+      btn.textContent = texto;
+      btn.addEventListener("click", () => {
+        modoActivo = valor;
+        pintar();
+      });
+      grupoModos.appendChild(btn);
+    });
+
+    descripcion.textContent = MODOS_PROYECCION.find((m) => m.valor === modoActivo).desc;
+    inputDeseada.classList.toggle("oculto", modoActivo !== "deseada");
+    contenedorResultado.innerHTML = "";
+
+    if (modoActivo === "libre") {
+      construirModoManejoLibre(contenedorResultado, mm, materia, plan, escalaActiva);
+      return;
+    }
+
+    if (modoActivo === "maximo") {
+      const max = calcularMaximoPosibleMateria(mm, escalaActiva);
+      const p = document.createElement("p");
+      p.style.cssText = "margin:0; font-weight:700; text-align:center;";
+      p.textContent = `Tu nota final sería: ${formatearNumero(max)}`;
+      contenedorResultado.appendChild(p);
+      return;
+    }
+
+    if (modoActivo === "deseada" && !inputDeseada.value.trim()) {
+      const p = document.createElement("p");
+      p.className = "muted";
+      p.style.cssText = "margin:0; text-align:center;";
+      p.textContent = "Escribí arriba la nota a la que querés llegar.";
+      contenedorResultado.appendChild(p);
+      return;
+    }
+
+    let objetivo;
+    if (modoActivo === "minimo") objetivo = notaAprobacion;
+    else if (modoActivo === "raspando") objetivo = calcularObjetivoPasarRaspando(notaAprobacion);
+    else objetivo = analizarDecimal(inputDeseada.value);
+
+    if (!Number.isFinite(objetivo)) {
+      const p = document.createElement("p");
+      p.className = "muted";
+      p.style.cssText = "margin:0; text-align:center;";
+      p.textContent = "Escribí una nota válida arriba.";
+      contenedorResultado.appendChild(p);
+      return;
+    }
+
+    const resultado = calcularNotaNecesariaUniforme(mm, escalaActiva, objetivo);
+    pintarResultadoObjetivo(contenedorResultado, resultado, escalaActiva);
+  }
+
+  inputDeseada.addEventListener("input", pintar);
+  pintar();
+}
+
 /* =========================================================================
    Fase 6 — Popovers de long-press (mismo patrón que abrirMenuRapidoEstadoMatricula)
    ========================================================================= */
@@ -1333,7 +1546,7 @@ function aplicarColorBadgePersonalizado(el, hex) {
   el.style.color = hex;
 }
 
-function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, onCambiar) {
+function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, escalaActiva, onCambiar) {
   const cont = document.createElement("div");
   cont.className = "stack";
   cont.style.cssText = "gap:6px;";
@@ -1361,6 +1574,22 @@ function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, onCam
   // Pedido explícito: "en nota final NO debe cambiar de color" — la escala
   // de color queda solo en la pill de cada asignación (construirFilaAsignacion).
   filaNotaFinal.appendChild(izq);
+
+  // Simulador "Proyectar" (Fase 6, punto 4): última línea, centrado entre
+  // "Nota final" y "Editar a mano" — solo tiene sentido si hay al menos un
+  // criterio creado (si no, no hay nada sobre qué proyectar).
+  if ((mm.criterios || []).length > 0) {
+    const btnProyectar = document.createElement("button");
+    btnProyectar.type = "button";
+    btnProyectar.className = "btn btn-secondary";
+    btnProyectar.style.cssText = "font-size:0.75rem; padding:4px 10px;";
+    btnProyectar.textContent = "🔮 Proyectar";
+    btnProyectar.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      abrirModalProyectar({ mm, materia, plan, escalaActiva });
+    });
+    filaNotaFinal.appendChild(btnProyectar);
+  }
 
   if (mm.nota_final_manual) {
     const badge = document.createElement("span");
@@ -1438,7 +1667,7 @@ function construirSeccionNotas(mm, materia, plan, onCambiar) {
   // Ajuste (2026-08-02): la nota final y "Editar a mano" ahora van AL FINAL
   // de los criterios (antes iban primero) — para que el flujo de lectura
   // sea "acá están los criterios, y este es el resultado", no al revés.
-  cont.appendChild(construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, onCambiar));
+  cont.appendChild(construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, escalaActiva, onCambiar));
 
   const btnNuevoCriterio = document.createElement("button");
   btnNuevoCriterio.type = "button";
