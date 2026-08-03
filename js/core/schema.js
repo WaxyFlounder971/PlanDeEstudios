@@ -295,8 +295,7 @@ function crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, tipo_titul
       formula_ponderado: "creditos",
       horario_inicio_default: "07:30",
       horario_duracion_bloque_min: 50,
-      nota_aprobacion: 70,           // por universidad/plan, editable en Ajustes
-      umbral_pasar_raspando: 70,     // umbral real para "pasar raspando" (ej. 67.5)
+      nota_aprobacion: 70,           // por universidad/plan, editable en Ajustes — única fuente de verdad para aprobar/reprobar
       tipos_horas: ["Horas"], // se sobrescribe abajo con lo que traiga parametros_universidad
       ...(parametros_universidad || {}),
     },
@@ -726,11 +725,11 @@ function redondearDecimales(num, decimales) {
  * Ajuste (pedido explícito, "por ahora"): la nota final se redondea al
  * múltiplo de 5 más cercano (0, 5, 10, ..., 100) antes de decidir si
  * aprobó — así un 67.5 redondea a 70 y cuenta como aprobado. Reemplaza la
- * lógica anterior de "raspando" (que solo empujaba hacia arriba dentro de
- * un rango angosto definido por umbral_pasar_raspando); con este redondeo
- * general ya no hace falta ese caso especial. El campo
- * umbral_pasar_raspando se deja intacto en parametros_universidad por
- * compatibilidad con datos existentes, pero ya no se lee acá.
+ * lógica anterior de "raspando" (que usaba un umbral_pasar_raspando
+ * guardado aparte); con este redondeo general ese campo dejó de existir
+ * (limpiado en Fase 6, punto 5) — nota_aprobacion es ahora la única fuente
+ * de verdad, y "pasar raspando" se calcula al vuelo desde ella (ver
+ * calcularObjetivoPasarRaspando) solo para el simulador "Proyectar".
  */
 function redondearNotaFinalAlCincoMasCercano(nota) {
   if (nota === null || nota === undefined) return nota;
@@ -1038,7 +1037,11 @@ function migrarDatosAntiguos(datos) {
     }
 
     if (params.nota_aprobacion === undefined) params.nota_aprobacion = 70;
-    if (params.umbral_pasar_raspando === undefined) params.umbral_pasar_raspando = params.nota_aprobacion;
+    // Fase 6, punto 5: umbral_pasar_raspando queda eliminado del modelo —
+    // ya no es un número guardado (ver calcularObjetivoPasarRaspando). Se
+    // limpia acá mismo si viene de datos viejos, para no dejar un campo
+    // muerto dando vueltas y que alguien lo lea por error en el futuro.
+    if ("umbral_pasar_raspando" in params) delete params.umbral_pasar_raspando;
 
     (plan.materias || []).forEach((materia) => {
       const horasViejas = materia.horas || {};
