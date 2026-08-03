@@ -703,16 +703,23 @@ function obtenerEscalaNotasMateria(materia, plan, configuracion) {
 }
 
 /**
- * Redondeo "epsilon-safe": Math.round normal sobre sumas/divisiones
- * encadenadas puede arrastrar basura de coma flotante (ej. 0.1 + 0.2 =
- * 0.30000000000000004) que, acumulada entre varias asignaciones, termina
- * mostrando un decimal de más de lo real (pedido explícito: "era 67.59 y lo
- * redondeó a 67.60, eso no se puede"). Sumar Number.EPSILON antes de
- * redondear corrige el caso típico sin inventar precisión que no existe.
+ * Redondeo "decimal-safe": la corrección anterior (sumar Number.EPSILON,
+ * ~2.22e-16) era demasiado pequeña para corregir el arrastre real que deja
+ * una cadena de sumas/divisiones (típicamente de orden 1e-10 a 1e-13) —
+ * por eso 67.594999999999 seguía mostrando 67.60. toPrecision(12) limpia
+ * ese ruido de binario ANTES de redondear (un double solo garantiza ~15-17
+ * dígitos significativos reales; lo que sobra después del dígito 12 casi
+ * siempre es basura de cálculo, no precisión real), y recién sobre ese
+ * valor limpio se aplica Math.round. Si el valor real cae justo en .5,
+ * esto sigue redondeando hacia arriba (correcto) — no fuerza el resultado
+ * hacia abajo, solo evita que el arrastre invente un .5 que no existe.
  */
 function redondearDecimales(num, decimales) {
+  const n = Number(num);
+  if (!isFinite(n)) return 0;
+  const limpio = Number(n.toPrecision(12));
   const factor = Math.pow(10, decimales);
-  return Math.round((Number(num) + Number.EPSILON) * factor) / factor;
+  return Math.round(limpio * factor) / factor;
 }
 
 /**
