@@ -1746,7 +1746,7 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
   return card;
 }
 
-function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEditar, onBorrar) {
+function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEditar, onBorrar, anidada = false) {
   _ultimoOnCambiarParaResize = onCambiar;
   const expandido = estado.semestresExpandidos.get(semestre.id) || false;
 
@@ -1768,6 +1768,23 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEdita
   // padre, que no puedo ver desde acá (vive en design-system.css).
   card.style.alignSelf = "stretch";
   card.style.margin = "0";
+
+  // FIX real del espacio lateral perdido (reportado: "en celular tantos
+  // items anidados joden la visión"): width:100% solo llena el CONTENT-BOX
+  // del padre — no elimina el padding lateral propio de esta tarjeta
+  // (.glass-card trae 18px, mismo valor usado en toda la app — ver
+  // filaBotones en semestres.js). Dentro de "Semestres pasados" eso se
+  // suma al padding del contenedor padre: 18px (padre) + 18px (esta
+  // tarjeta) = 36px de espacio muerto en cada lado, mientras que el título
+  // "Semestres pasados" al lado solo tiene 18px de inset. Un margen lateral
+  // negativo del mismo tamaño que el padding del padre hace que esta
+  // tarjeta "sangre" hasta el borde real del contenedor — su propio
+  // padding pasa a ser el ÚNICO inset visible, alineado con el resto del
+  // contenido de esa sección, sin desperdiciar ancho.
+  if (anidada) {
+    card.style.margin = "0 -18px";
+    card.style.width = "calc(100% + 36px)";
+  }
 
   const encabezado = document.createElement("div");
   encabezado.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px; cursor:pointer;";

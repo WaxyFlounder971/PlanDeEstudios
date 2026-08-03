@@ -787,7 +787,7 @@ function renderizarSemestres() {
     const seccionPasados = document.createElement("section");
     seccionPasados.className = "glass-card stack";
     seccionPasados.innerHTML = `<h3 style="margin:0;">Semestres pasados</h3>`;
-    pasados.forEach((s) => seccionPasados.appendChild(construirTarjetaSemestre(s, obtenerPlanPorId, renderizarSemestres, onEditar, onBorrar)));
+    pasados.forEach((s) => seccionPasados.appendChild(construirTarjetaSemestre(s, obtenerPlanPorId, renderizarSemestres, onEditar, onBorrar, true)));
     cont.appendChild(seccionPasados);
   }
 }
