@@ -255,7 +255,16 @@ function inicializarModalCategoria() {
       onConfirmar: () => {
         plan.categorias = plan.categorias.filter((c) => c.id !== catId);
         plan.materias.forEach((m) => {
-          if (m.categoria_id === catId) m.categoria_id = null;
+          if (m.categoria_id === catId) {
+            m.categoria_id = null;
+            // FIX sync (hallazgo de auditoría — mismo cambio que ya sella
+            // el modal "Editar materias de la categoría" más abajo en este
+            // archivo, línea ~426): quitar categoria_id también es una
+            // edición real de la materia. Sin sellar acá, el desmarcado por
+            // borrado de categoría corría el riesgo de perderse en el
+            // próximo sync (fusionarColeccion decide por _actualizadoEn).
+            sellarTimestamp(m);
+          }
         });
         // FIX sync (bug real encontrado en esta ronda de auditoría): antes
         // el borrado solo filtraba el arreglo local, sin dejar ningún

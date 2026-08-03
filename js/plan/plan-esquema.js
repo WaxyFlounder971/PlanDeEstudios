@@ -299,6 +299,12 @@ function inicializarModalCrearPlan() {
     } else if (!estado.datos.configuracion.plan_activo_id) {
       estado.datos.configuracion.plan_activo_id = nuevoPlan.id;
     }
+    // FIX sync (mismo bug de plan-gestionar.js, misma causa raíz): esto
+    // también escribe en estado.datos.configuracion, que se funde entera
+    // por su propio _actualizadoEn (fusionarBloqueUnico en storage-merge.js)
+    // — sin sellar acá, crear un plan y activarlo de una vez podía perder
+    // esa asignación en el próximo sync igual que el switch de Modo Hardcore.
+    sellarTimestamp(estado.datos.configuracion);
 
     marcarCambioPendiente();
     document.getElementById("modal-crear-plan").classList.add("oculto");
@@ -831,6 +837,14 @@ function reemplazarCupoOptativa(materiaTemplate, plan, indiceCupo) {
 
   if (codigoAnterior !== cupo.codigo) estado.materiasExpandidas.delete(codigoAnterior);
 
+  // FIX sync (mismo patrón que la edición manual de materias más arriba en
+  // este archivo): este bloque muta `cupo` in-place con datos nuevos
+  // (código, nombre, créditos, horas, requisitos) pero nunca lo sellaba —
+  // fusionarColeccion en storage-merge.js decide por _actualizadoEn, así
+  // que sin esto el reemplazo podía perderse en el próximo sync como
+  // cualquier otra edición sin sellar.
+  sellarTimestamp(cupo);
+
   marcarCambioPendiente();
   cerrarModalVincularOptativa();
   renderizarPlanEstudios();
@@ -845,6 +859,11 @@ function asignarOptativaABloqueEspecifico(materiaTemplate, plan, bloque) {
   quitarDeOrigenEspecialOptativa(plan, materiaTemplate, ctx ? ctx.origen : "optativa");
   materiaTemplate.es_optativa = false;
   materiaTemplate.bloque = bloque;
+  // FIX sync (mismo caso que reemplazarCupoOptativa, arriba): se editan
+  // es_optativa y bloque antes de que la materia entre a plan.materias —
+  // sin sellar, esta asignación corre el mismo riesgo de perderse en el
+  // próximo sync que cualquier otra edición sin sellar en este archivo.
+  sellarTimestamp(materiaTemplate);
   plan.materias.push(materiaTemplate);
   marcarCambioPendiente();
   cerrarModalVincularOptativa();
