@@ -4,7 +4,7 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
-import { aplicarFormatoTexto, estiloBadgeCategoria, obtenerIniciales } from "../core/utils.js";
+import { aplicarFormatoTexto, obtenerIniciales } from "../core/utils.js";
 import { agregarLongPress, mostrarToast, abrirConfirmacion } from "../ui/componentes.js";
 import {
   obtenerEstadoEfectivoSemestre,
@@ -18,12 +18,24 @@ import {
   redondearNotaFinalAlCincoMasCercano,
 } from "../core/schema.js";
 import { marcarCambioPendiente, actualizarIndicadorSync } from "../core/storage-sync.js";
-import { ESTADOS_MATERIA, abrirMenuRapidoCategoria, abrirModalResolverConflicto, abrirModalResolverConflictoGenerico, agregarIndicadorConflicto } from "../plan/plan-vista-lista-tarjetas.js";
-import { abrirModalDesbloquea, abrirModalHistorial } from "../plan/plan-detalle.js";
+import { ESTADOS_MATERIA, abrirModalResolverConflicto, abrirModalResolverConflictoGenerico, agregarIndicadorConflicto } from "../plan/plan-vista-lista-tarjetas.js";
+import { abrirModalRequisito } from "../plan/plan-detalle.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 
 estado.semestresExpandidos = estado.semestresExpandidos || new Map();
 estado.criteriosExpandidos = estado.criteriosExpandidos || new Map();
+// Pendiente #7 (2026-08-03): en pantalla angosta solo se muestra Nota O
+// Puntaje por fila (nunca los dos), con flechas para alternar — "nota" es
+// el default pedido. Es un solo toggle global (no por criterio/materia) a
+// propósito: si cada fila tuviera su propio estado, alternar una tarjeta no
+// cambiaría las demás y la vista quedaría inconsistente entre materias.
+estado.vistaNotaPuntajeAngosta = estado.vistaNotaPuntajeAngosta || "nota";
+
+// Mismo umbral en los 3 lugares de este archivo que necesitan detectar
+// "pantalla angosta" (pills Nota/Puntaje, "Puntos totales:"→"Pts:", "X% de
+// la materia"→"X%") — evaluado en cada render, no hay listener de resize
+// acá porque el resto de la app tampoco lo tiene (se re-renderiza entera).
+const ANCHO_PANTALLA_ANGOSTA = 480;
 
 const MESES_LARGOS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
@@ -1043,7 +1055,6 @@ function construirFilaAsignacion(asignacion, criterio, mm, materia, plan, escala
       pillNota.classList.add("badge-success");
     }
   }
-  contDer.appendChild(pillNota);
 
   const pillPuntos = document.createElement("span");
   pillPuntos.className = "pill-tamano-fijo badge badge-accent";
@@ -1051,7 +1062,18 @@ function construirFilaAsignacion(asignacion, criterio, mm, materia, plan, escala
   const puntosObtenidos = calcularPuntosAsignacion(asignacion, escalaActiva);
   const textoPuntos = asignacion.nota === null || asignacion.nota === undefined ? "—" : formatearNumero(puntosObtenidos);
   pillPuntos.textContent = `${textoPuntos}/${formatearNumero(asignacion.valor)} pts`;
-  contDer.appendChild(pillPuntos);
+
+  // Pendiente #7 (2026-08-03): en pantalla angosta se muestra UNA sola pill
+  // por fila, la que diga estado.vistaNotaPuntajeAngosta (mismo toggle que
+  // filaEtiquetas en construirTarjetaCriterio, así todas las filas de la
+  // tarjeta cambian juntas y quedan alineadas con su encabezado).
+  const angosta = window.innerWidth < ANCHO_PANTALLA_ANGOSTA;
+  if (angosta) {
+    contDer.appendChild(estado.vistaNotaPuntajeAngosta === "puntaje" ? pillPuntos : pillNota);
+  } else {
+    contDer.appendChild(pillNota);
+    contDer.appendChild(pillPuntos);
+  }
 
   fila.appendChild(contDer);
 
@@ -1121,10 +1143,14 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
   titulo.style.fontSize = "0.92rem";
   titulo.textContent = criterio.nombre;
   tituloWrap.appendChild(titulo);
+  const angosta = window.innerWidth < ANCHO_PANTALLA_ANGOSTA;
+
   const subtitulo = document.createElement("span");
   subtitulo.className = "muted";
   subtitulo.style.fontSize = "0.72rem";
-  subtitulo.textContent = `${formatearNumero(criterio.valor_total)}% de la materia`;
+  subtitulo.textContent = angosta
+    ? `${formatearNumero(criterio.valor_total)}%`
+    : `${formatearNumero(criterio.valor_total)}% de la materia`;
   tituloWrap.appendChild(subtitulo);
   encabezado.appendChild(tituloWrap);
 
@@ -1142,7 +1168,8 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
   const puntosObtenidosCriterio = calcularPuntosCriterio(criterio, escalaActiva);
   const textoTotal = document.createElement("span");
   textoTotal.style.cssText = "font-size:0.82rem; white-space:nowrap;";
-  textoTotal.innerHTML = `<span class="muted">Puntos totales:</span> <strong>${formatearNumero(puntosObtenidosCriterio)}/${formatearNumero(criterio.valor_total)} pts</strong>`;
+  const etiquetaPuntosTotales = angosta ? "Pts:" : "Puntos totales:";
+  textoTotal.innerHTML = `<span class="muted">${etiquetaPuntosTotales}</span> <strong>${formatearNumero(puntosObtenidosCriterio)}/${formatearNumero(criterio.valor_total)} pts</strong>`;
   derechaWrap.appendChild(textoTotal);
 
   const iconoExpandir = document.createElement("span");
@@ -1169,16 +1196,55 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
     const filaEtiquetas = document.createElement("div");
     filaEtiquetas.className = "row";
     filaEtiquetas.style.cssText = "justify-content:flex-end; align-items:center; gap:6px; flex-wrap:nowrap; padding:0 10px;";
-    const etiquetaNota = document.createElement("span");
-    etiquetaNota.className = "muted pill-tamano-fijo";
-    etiquetaNota.style.cssText = PILL_ESTILO + "font-size:0.72rem; font-weight:700;";
-    etiquetaNota.textContent = "Nota";
-    filaEtiquetas.appendChild(etiquetaNota);
-    const etiquetaPuntaje = document.createElement("span");
-    etiquetaPuntaje.className = "muted pill-tamano-fijo";
-    etiquetaPuntaje.style.cssText = PILL_ESTILO + "font-size:0.72rem; font-weight:700;";
-    etiquetaPuntaje.textContent = "Puntaje";
-    filaEtiquetas.appendChild(etiquetaPuntaje);
+
+    if (angosta) {
+      // Pendiente #7 (2026-08-03): en pantalla angosta solo cabe Nota O
+      // Puntaje por fila — se muestra uno solo (estado.vistaNotaPuntajeAngosta,
+      // "nota" por defecto) con flechas ‹ › para alternar entre las dos.
+      const estiloFlecha =
+        "background:none; border:none; cursor:pointer; font-size:1rem; line-height:1; padding:2px 4px; color:inherit;";
+
+      const btnAnterior = document.createElement("button");
+      btnAnterior.type = "button";
+      btnAnterior.style.cssText = estiloFlecha;
+      btnAnterior.textContent = "‹";
+      btnAnterior.title = "Ver Nota/Puntaje";
+      btnAnterior.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        estado.vistaNotaPuntajeAngosta = estado.vistaNotaPuntajeAngosta === "nota" ? "puntaje" : "nota";
+        onCambiar();
+      });
+      filaEtiquetas.appendChild(btnAnterior);
+
+      const etiquetaActiva = document.createElement("span");
+      etiquetaActiva.className = "muted pill-tamano-fijo";
+      etiquetaActiva.style.cssText = PILL_ESTILO + "font-size:0.72rem; font-weight:700;";
+      etiquetaActiva.textContent = estado.vistaNotaPuntajeAngosta === "nota" ? "Nota" : "Puntaje";
+      filaEtiquetas.appendChild(etiquetaActiva);
+
+      const btnSiguiente = document.createElement("button");
+      btnSiguiente.type = "button";
+      btnSiguiente.style.cssText = estiloFlecha;
+      btnSiguiente.textContent = "›";
+      btnSiguiente.title = "Ver Nota/Puntaje";
+      btnSiguiente.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        estado.vistaNotaPuntajeAngosta = estado.vistaNotaPuntajeAngosta === "nota" ? "puntaje" : "nota";
+        onCambiar();
+      });
+      filaEtiquetas.appendChild(btnSiguiente);
+    } else {
+      const etiquetaNota = document.createElement("span");
+      etiquetaNota.className = "muted pill-tamano-fijo";
+      etiquetaNota.style.cssText = PILL_ESTILO + "font-size:0.72rem; font-weight:700;";
+      etiquetaNota.textContent = "Nota";
+      filaEtiquetas.appendChild(etiquetaNota);
+      const etiquetaPuntaje = document.createElement("span");
+      etiquetaPuntaje.className = "muted pill-tamano-fijo";
+      etiquetaPuntaje.style.cssText = PILL_ESTILO + "font-size:0.72rem; font-weight:700;";
+      etiquetaPuntaje.textContent = "Puntaje";
+      filaEtiquetas.appendChild(etiquetaPuntaje);
+    }
     cont.appendChild(filaEtiquetas);
 
     // La fila de asignación queda intacta, tal cual estaba (pedido
@@ -1372,7 +1438,32 @@ function construirSeccionNotas(mm, materia, plan, onCambiar) {
   return cont;
 }
 
-function abrirMenuRapidoEstadoMatricula(materia, anclaEl, onCambiar) {
+// Pendiente #3 (2026-08-03) — "Separar el estado de cada semestre del
+// estado del Plan de estudios": esta función ANTES se llamaba
+// abrirMenuRapidoEstadoMatricula(materia, ...) y escribía directo sobre
+// materia.estado — el campo sticky del Plan de estudios (ver ESTADOS_MATERIA
+// en plan-vista-lista-tarjetas.js). Eso significaba que corregir a mano el
+// resultado de UN intento puntual desde Semestres terminaba pisando el
+// estado global de la materia en el Plan, afectando también cualquier otro
+// semestre donde esa materia se haya matriculado.
+//
+// Ahora esta acción escribe sobre `mm.resultado` — el campo que ya existía
+// en el schema (ver crearMateriaMatriculada) específicamente para el
+// resultado real de ESTE intento, independiente de materia.estado — y por
+// eso NUNCA llama a renderizarPlanEstudios(): editar esto no debe afectar
+// la vista de Plan de estudios ni viceversa. Solo tiene sentido en un
+// semestre ya "pasado": mientras el semestre está en curso, el badge
+// siempre muestra "Cursando" derivado en vivo (ver
+// construirTarjetaMateriaMatriculada) y no hay nada que fijar a mano
+// todavía — por eso el popover solo se abre para semestres pasados (ver el
+// long-press condicionado más abajo).
+const OPCIONES_RESULTADO_MATRICULA = [
+  { valor: "aprobada", texto: "Aprobada" },
+  { valor: "reprobada", texto: "Reprobada" },
+  { valor: null, texto: "Sin resultado" },
+];
+
+function abrirMenuRapidoResultadoMatricula(mm, anclaEl, onCambiar) {
   document.querySelectorAll(".popover-estado-rapido").forEach((el) => el.remove());
 
   const pop = document.createElement("div");
@@ -1382,20 +1473,21 @@ function abrirMenuRapidoEstadoMatricula(materia, anclaEl, onCambiar) {
   pop.style.top = `${rect.bottom + 6}px`;
   pop.style.left = `${Math.max(8, rect.left)}px`;
 
-  ESTADOS_MATERIA.forEach((opcion) => {
+  OPCIONES_RESULTADO_MATRICULA.forEach((opcion) => {
     const item = document.createElement("button");
     item.type = "button";
-    item.className = "btn " + (materia.estado === opcion.valor ? "btn-primary" : "btn-secondary") + " btn-block";
+    item.className = "btn " + (mm.resultado === opcion.valor ? "btn-primary" : "btn-secondary") + " btn-block";
     item.style.cssText = "text-align:left; padding:6px 10px; font-size:0.85rem;";
     item.textContent = opcion.texto;
     item.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      materia.estado = opcion.valor;
-      sellarTimestamp(materia);
+      mm.resultado = opcion.valor;
+      sellarTimestamp(mm);
       marcarCambioPendiente();
       pop.remove();
       onCambiar();
-      if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
+      // A propósito: NO se llama renderizarPlanEstudios() — este cambio es
+      // exclusivo de este semestre/intento, no debe tocar el Plan de estudios.
     });
     pop.appendChild(item);
   });
@@ -1472,69 +1564,17 @@ function construirBadgeEstadoSemestre(semestre, onCambiar) {
   badge.className = "badge " + (efectivo === "actual" ? "badge-success" : "badge-neutral");
   badge.textContent = (efectivo === "actual" ? "Actual" : "Pasado") + (esManual ? " (manual)" : "");
   badge.style.cursor = "pointer";
-  badge.title = "Mantén presionado (o clic derecho) para elegir Automático/Actual/Pasado.";
+  badge.title = "Clic para elegir Automático/Actual/Pasado.";
 
-  agregarLongPress(badge, () => abrirMenuRapidoEstadoSemestre(semestre, badge, onCambiar));
+  // Pendiente #4 (2026-08-03): antes requería mantener presionado (o clic
+  // derecho) — ahora un solo clic abre el menú, igual que el resto de
+  // acciones rápidas de un solo toque en la app.
+  badge.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    abrirMenuRapidoEstadoSemestre(semestre, badge, onCambiar);
+  });
 
   return badge;
-}
-
-/**
- * v2.1.4: Categoría / Historial / Es requisito en una fila HORIZONTAL
- * (izquierda / centro / derecha) — ya no reutiliza construirColumnaAccionesTarjeta
- * (esa arma una columna VERTICAL pensada para ir al lado de una columna de
- * Requisitos, que acá no existe). Los botones son idénticos en clase
- * (btn btn-secondary) a los que arma esa función — mismo tamaño de siempre,
- * solo cambia el contenedor/orden.
- */
-function construirFilaAccionesMatricula(materia, plan) {
-  const fila = document.createElement("div");
-  fila.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px; margin-top:6px;";
-
-  const categoria = plan.categorias.find((c) => c.id === materia.categoria_id);
-  const badge = document.createElement("span");
-  if (categoria) {
-    badge.className = "badge";
-    badge.style.cssText = estiloBadgeCategoria(categoria.color) + " cursor:pointer; justify-self:start;";
-    badge.style.cssText += " min-width:0;";
-    badge.textContent = categoria.nombre;
-  } else {
-    badge.className = "badge badge-neutral";
-    badge.style.cssText = "cursor:pointer; justify-self:start;";
-    badge.style.cssText += " min-width:0;";
-    badge.textContent = "Sin categoría";
-  }
-  badge.title = "Mantén presionado (o clic derecho) para cambiar la categoría";
-  agregarLongPress(badge, () => abrirMenuRapidoCategoria(materia, plan, badge));
-  fila.appendChild(badge);
-
-  const estiloBotonComoBadge =
-    "font-size:0.78rem; font-weight:700; padding:4px 12px; border-radius:var(--radius-pill); line-height:normal;";
-
-  const btnHistorial = document.createElement("button");
-  btnHistorial.type = "button";
-  btnHistorial.className = "btn btn-secondary";
-  btnHistorial.style.cssText = estiloBotonComoBadge + " justify-self:center;";
-  btnHistorial.textContent = "Historial";
-  btnHistorial.addEventListener("click", (ev) => {
-    ev.stopPropagation();
-    abrirModalHistorial(materia);
-  });
-  fila.appendChild(btnHistorial);
-
-  const btnEsRequisito = document.createElement("button");
-  btnEsRequisito.type = "button";
-  btnEsRequisito.className = "btn btn-secondary";
-  btnEsRequisito.style.cssText = estiloBotonComoBadge + " justify-self:end;";
-  btnEsRequisito.style.cssText += " min-width:0;";
-  btnEsRequisito.textContent = "Es requisito";
-  btnEsRequisito.addEventListener("click", (ev) => {
-    ev.stopPropagation();
-    abrirModalDesbloquea(materia, plan);
-  });
-  fila.appendChild(btnEsRequisito);
-
-  return fila;
 }
 
 function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambiar) {
@@ -1581,7 +1621,16 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
   spanCodigo.textContent = materia.codigo;
   // v2.1.4: el monoespaciado del código queda ~4px más abajo que el nombre
   // por métrica de fuente — se sube para que ambos queden centrados entre sí.
-  spanCodigo.style.cssText = "position:relative; top:-3px;";
+  // Pendiente #5 (2026-08-03): se quitaron los botones de Categoría/Historial/
+  // Es requisito de esta tarjeta — el código ahora abre directo la tarjetita
+  // de detalle de la materia (misma ventana que en Plan de Estudios, donde
+  // sí siguen viviendo categoría, requisitos e historial).
+  spanCodigo.style.cssText = "position:relative; top:-3px; cursor:pointer; text-decoration:underline dotted;";
+  spanCodigo.title = "Ver la tarjeta de esta materia";
+  spanCodigo.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    abrirModalRequisito(materia.codigo);
+  });
   prefijo.appendChild(spanCodigo);
   linea1.appendChild(prefijo);
 
@@ -1606,11 +1655,18 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
   const badgeEstado = document.createElement("span");
   badgeEstado.className = `badge ${infoEstado.badge}`;
   badgeEstado.textContent = infoEstado.texto;
-  badgeEstado.style.cursor = "pointer";
-  badgeEstado.title = semestreActual
-    ? "Mantén presionado (o clic derecho) para cambiar el estado de la materia en el Plan"
-    : "Esto es el resultado de este intento. Mantén presionado para cambiar el estado de la materia en el Plan";
-  agregarLongPress(badgeEstado, () => abrirMenuRapidoEstadoMatricula(materia, badgeEstado, onCambiar));
+  if (semestreActual) {
+    // Mientras el semestre está en curso, "Cursando" se deriva en vivo
+    // (ver obtenerEstadoEfectivoMateria en schema.js) — no hay nada que
+    // fijar a mano todavía, así que el badge queda de solo lectura.
+    badgeEstado.style.cursor = "default";
+    badgeEstado.title = "Se calcula automáticamente mientras el semestre esté en curso";
+  } else {
+    badgeEstado.style.cursor = "pointer";
+    badgeEstado.title =
+      "Mantén presionado (o clic derecho) para corregir el resultado de este intento — solo afecta este semestre, no el Plan de estudios";
+    agregarLongPress(badgeEstado, () => abrirMenuRapidoResultadoMatricula(mm, badgeEstado, onCambiar));
+  }
   colEstado.appendChild(badgeEstado);
   linea2.appendChild(colEstado);
 
@@ -1640,7 +1696,6 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
   card.appendChild(filaPrincipal);
 
   if (expandida) {
-    card.appendChild(construirFilaAccionesMatricula(materia, plan));
     card.appendChild(construirSeccionNotas(mm, materia, plan, onCambiar));
   }
 
@@ -1652,6 +1707,13 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEdita
 
   const card = document.createElement("div");
   card.className = "glass-card stack";
+  // Pendiente #1 (2026-08-03): dentro de "Semestres pasados" esta tarjeta
+  // queda anidada dentro de OTRO .glass-card (la sección "Semestres
+  // pasados" en sí) — se fuerza el 100% + box-sizing acá para que no quede
+  // más angosta que la sección que la contiene, sea cual sea la regla CSS
+  // de anidamiento que le esté restando ancho.
+  card.style.width = "100%";
+  card.style.boxSizing = "border-box";
 
   const encabezado = document.createElement("div");
   encabezado.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px; cursor:pointer;";
