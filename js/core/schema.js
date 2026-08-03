@@ -534,7 +534,7 @@ function crearSemestre({ nombre, fecha_inicio, duracion_semanas, planesEstudioId
  *
  * Auto-cierre: sin el botón "Terminar semestre" todavía (Fase 6, depende de
  * notas), este cálculo por fecha es la ÚNICA forma en que un semestre pasa a
- * "pasado" en esta fase — al llegar a LIMITE_SEMANAS_SEMESTRE desde
+ * "pasado" en esta fase — al llegar a (duracion_semanas + 2) desde
  * fecha_inicio, se cierra solo, sin preguntarle nada al usuario (no hay
  * review de materias todavía). Cuando se construya "Terminar semestre", ese
  * botón va a poder cerrar el semestre ANTES de este límite; este cálculo
@@ -547,7 +547,14 @@ function obtenerEstadoEfectivoSemestre(semestre) {
   const inicio = new Date(semestre.fecha_inicio);
   if (isNaN(inicio.getTime())) return "actual"; // fecha inválida: no se puede calcular, no se fuerza a "pasado"
   const semanasTranscurridas = (Date.now() - inicio.getTime()) / (7 * 24 * 60 * 60 * 1000);
-  return semanasTranscurridas >= LIMITE_SEMANAS_SEMESTRE ? "pasado" : "actual";
+  // FIX (2026-08-02): antes el tope era el límite plano LIMITE_SEMANAS_SEMESTRE
+  // (25) para CUALQUIER semestre, sin importar su duración real. Ahora usa la
+  // duración propia de este semestre + 2 semanas de colchón — el mismo
+  // margen que ya se aplica al elegir la duración en el formulario (ver
+  // semestres.js) — para que el cierre automático sea consistente con lo que
+  // el usuario configuró, no con un número global fijo.
+  const topeSemanas = (Number(semestre.duracion_semanas) || 16) + 2;
+  return semanasTranscurridas >= topeSemanas ? "pasado" : "actual";
 }
 
 /**
