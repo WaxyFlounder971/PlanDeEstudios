@@ -349,6 +349,62 @@ function fusionarPlan(planLocal, planRemoto) {
   if (!planLocal) return planRemoto;
   if (!planRemoto) return planLocal;
 
+  // FIX sync (hallazgo de auditoría — paridad con fusionarColeccion y
+  // fusionarBloqueUnico): esta función decidía el ganador de los metadatos
+  // del plan (nombre_carrera, universidad, codigo_plan, parametros_
+  // universidad, etc.) llamando a esMasReciente() directo, sin las dos
+  // cosas que ya hace el resto del motor de fusión:
+  //  1. observarEntidadRemota(): si se salta, el reloj de Lamport de este
+  //     dispositivo puede quedar atrasado respecto de un plan remoto que
+  //     "pierde" la comparación, y la próxima edición local de ESE plan
+  //     terminaría con un contador más bajo que algo que el otro
+  //     dispositivo ya conocía.
+  //  2. marcarConflictoSiCorresponde(): sin esto, dos ediciones concurrentes
+  //     reales a los metadatos del plan (ej. universidad cambiada en un
+  //     dispositivo y nombre_carrera en otro, ambas partiendo de la misma
+  //     versión, offline) no se detectaban como choque — se elegía un
+  //     ganador a ciegas y el otro cambio se perdía sin avisar, a
+  //     diferencia de materias/semestres/configuracion que sí lo hacen.
+  observarEntidadRemota(planRemoto);
+
+  const conConflicto = marcarConflictoSiCorresponde(planLocal, planRemoto, "plan");
+  if (conConflicto) {
+    console.warn(
+      `[conflicto real] Plan "${planLocal.id}": metadatos generales editados de forma ` +
+        `distinta en dos dispositivos a partir de la misma versión; las materias se ` +
+        `funden aparte, sin verse afectadas por este conflicto.`
+    );
+    return {
+      ...conConflicto,
+      materias: fusionarColeccion(
+        planLocal.materias,
+        planRemoto.materias,
+        fusionarTumbas(planLocal._eliminados_materias, planRemoto._eliminados_materias),
+        "materia"
+      ),
+      categorias: fusionarColeccion(
+        planLocal.categorias,
+        planRemoto.categorias,
+        fusionarTumbas(planLocal._eliminados_categorias, planRemoto._eliminados_categorias),
+        "categoría"
+      ),
+      optativas_disponibles: fusionarColeccion(
+        planLocal.optativas_disponibles,
+        planRemoto.optativas_disponibles,
+        fusionarTumbas(planLocal._eliminados_materias, planRemoto._eliminados_materias),
+        "optativa disponible"
+      ),
+      materias_revisar: fusionarColeccion(
+        planLocal.materias_revisar,
+        planRemoto.materias_revisar,
+        fusionarTumbas(planLocal._eliminados_materias, planRemoto._eliminados_materias),
+        "materia por revisar"
+      ),
+      _eliminados_materias: fusionarTumbas(planLocal._eliminados_materias, planRemoto._eliminados_materias),
+      _eliminados_categorias: fusionarTumbas(planLocal._eliminados_categorias, planRemoto._eliminados_categorias),
+    };
+  }
+
   const base = esMasReciente(planRemoto, planLocal) ? planRemoto : planLocal;
   const otro = base === planRemoto ? planLocal : planRemoto;
 
