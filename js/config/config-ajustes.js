@@ -1,11 +1,13 @@
 /* =========================================================================
    CONFIGURACIÓN — AJUSTES GENERALES
-   Paletas, modo claro/oscuro, escala de notas, formato de texto.
+   Paletas, modo claro/oscuro, escala de notas, nota de aprobación por
+   plan/universidad, formato de texto.
    ========================================================================= */
 
-import { PALETAS_DISPONIBLES, sellarTimestamp } from "../core/schema.js";
+import { PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, sellarTimestamp } from "../core/schema.js";
 import { actualizarIndicadorSync, marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
+import { aplicarFormatoTexto } from "../core/utils.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta } from "../ui/tema.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
@@ -125,6 +127,12 @@ function renderizarAjustes() {
     };
   });
 
+  // Fase 6, punto 5: nota de aprobación por universidad/plan — va justo
+  // después de la escala de notas (mismo grupo "académico" dentro del
+  // flujo de Ajustes: apariencia arriba, académico en el medio, formato
+  // de texto al final).
+  renderizarNotasAprobacion();
+
   // Formato de texto de nombres de materias/carrera (v5 #9)
   const grupoFormato = document.getElementById("pill-formato-texto");
   if (grupoFormato) {
@@ -141,6 +149,119 @@ function renderizarAjustes() {
   }
 
   actualizarIndicadorSync();
+}
+
+/**
+ * Fase 6, punto 5 — Nota de aprobación por universidad/plan. Una tarjeta
+ * por CADA plan que el usuario tenga creado (no solo los activos de Modo
+ * Hardcore: si mañana reactiva uno, el número ya lo tiene puesto).
+ *
+ * Decisión de diseño (2026-08-03): acá solo se edita `nota_aprobacion`.
+ * El viejo `umbral_pasar_raspando` se eliminó del modelo por completo —
+ * "pasar raspando" dejó de ser un número guardado aparte y pasó a ser el
+ * mismo `nota_aprobacion` con el margen de redondeo ya aplicado (ver
+ * calcularObjetivoPasarRaspando en schema.js, y redondearNotaFinalAlCinco-
+ * MasCercano que usa terminarSemestre() para decidir aprobó/no aprobó).
+ * Por eso acá al lado del input se muestra ese margen, pero SOLO como dato
+ * informativo (no editable) — mostrarlo como si fuera un segundo ajuste
+ * independiente reintroduciría la misma inconsistencia de dos números que
+ * deberían ser uno solo.
+ *
+ * Layout pedido: universidad/carrera como título de la tarjeta, y debajo
+ * los dos bloques uno al lado del otro ocupando todo el ancho disponible
+ * si caben (flex:1 1 140px + flex-wrap) — si no entran, se apilan uno
+ * arriba del otro ocupando el ancho completo. Ver #seccion-notas-aprobacion
+ * en index.html (nuevo contenedor a agregar, ver nota al final).
+ */
+function formatearNumeroCorto(numero) {
+  const n = Number(numero);
+  if (!Number.isFinite(n)) return "—";
+  return Number(n.toFixed(2)).toString();
+}
+
+function renderizarNotasAprobacion() {
+  const contenedor = document.getElementById("seccion-notas-aprobacion");
+  if (!contenedor) return;
+  contenedor.innerHTML = "";
+
+  const planes = estado.datos.planes_estudio || [];
+  if (planes.length === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.cssText = "font-size:0.85rem; margin:0;";
+    vacio.textContent = "Todavía no tenés ningún plan de estudios creado.";
+    contenedor.appendChild(vacio);
+    return;
+  }
+
+  planes.forEach((plan) => {
+    plan.parametros_universidad = plan.parametros_universidad || {};
+
+    const tarjeta = document.createElement("div");
+    tarjeta.className = "glass-panel";
+    tarjeta.style.cssText = "padding:12px; margin-bottom:10px;";
+
+    const titulo = document.createElement("p");
+    titulo.style.cssText = "margin:0 0 8px; font-weight:700; font-size:0.9rem;";
+    titulo.textContent = `${plan.universidad} · ${aplicarFormatoTexto(plan.nombre_carrera)}`;
+    tarjeta.appendChild(titulo);
+
+    const fila = document.createElement("div");
+    fila.style.cssText = "display:flex; flex-wrap:wrap; gap:10px;";
+
+    // Bloque 1: nota de aprobación real (editable)
+    const bloqueAprobacion = document.createElement("div");
+    bloqueAprobacion.style.cssText = "flex:1 1 140px;";
+    const labelAprobacion = document.createElement("label");
+    labelAprobacion.className = "muted";
+    labelAprobacion.style.cssText = "display:block; font-size:0.75rem; margin-bottom:4px;";
+    labelAprobacion.textContent = "Nota de aprobación";
+    const inputAprobacion = document.createElement("input");
+    inputAprobacion.type = "number";
+    inputAprobacion.className = "form-input";
+    inputAprobacion.style.width = "100%";
+    inputAprobacion.min = "0";
+    inputAprobacion.max = "100";
+    inputAprobacion.step = "0.1";
+    inputAprobacion.value = formatearNumeroCorto(plan.parametros_universidad.nota_aprobacion ?? 70);
+    bloqueAprobacion.appendChild(labelAprobacion);
+    bloqueAprobacion.appendChild(inputAprobacion);
+    fila.appendChild(bloqueAprobacion);
+
+    // Bloque 2: margen real para "pasar raspando" (informativo, no editable)
+    const bloqueRaspando = document.createElement("div");
+    bloqueRaspando.style.cssText = "flex:1 1 140px;";
+    const labelRaspando = document.createElement("label");
+    labelRaspando.className = "muted";
+    labelRaspando.style.cssText = "display:block; font-size:0.75rem; margin-bottom:4px;";
+    labelRaspando.textContent = "Pasás raspando con";
+    const valorRaspando = document.createElement("div");
+    valorRaspando.className = "form-input";
+    valorRaspando.style.cssText = "width:100%; opacity:0.7; display:flex; align-items:center; cursor:default;";
+    bloqueRaspando.appendChild(labelRaspando);
+    bloqueRaspando.appendChild(valorRaspando);
+    fila.appendChild(bloqueRaspando);
+
+    function actualizarRaspando() {
+      const notaActual = Number(plan.parametros_universidad.nota_aprobacion) || 70;
+      valorRaspando.textContent = formatearNumeroCorto(calcularObjetivoPasarRaspando(notaActual));
+    }
+    actualizarRaspando();
+
+    inputAprobacion.addEventListener("change", () => {
+      let valor = Number(inputAprobacion.value);
+      if (!Number.isFinite(valor)) valor = 70;
+      valor = Math.min(Math.max(valor, 0), 100);
+      inputAprobacion.value = formatearNumeroCorto(valor);
+      plan.parametros_universidad.nota_aprobacion = valor;
+      sellarTimestamp(plan);
+      marcarCambioPendiente();
+      actualizarRaspando();
+    });
+
+    tarjeta.appendChild(fila);
+    contenedor.appendChild(tarjeta);
+  });
 }
 
 export {
