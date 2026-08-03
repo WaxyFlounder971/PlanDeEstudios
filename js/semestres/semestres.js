@@ -27,6 +27,7 @@ import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { abrirConfirmacion } from "../ui/componentes.js";
+import { recalcularPlanesHardcore } from "../plan/plan-gestionar.js";
 import { construirTarjetaSemestre } from "./semestres-tarjetas.js";
 
 const MESES_SELECT = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -170,37 +171,65 @@ function resetearFormularioAlta(semestreExistente) {
 }
 
 /**
- * Combinar materias de ambas carreras — switch de plan visible en el
- * checklist de matrícula. Antes eran botones .btn normales apilados; el
- * pedido explícito fue: pill (misma estética que el resto de la app, ver
- * .pill-group/.pill-item ya usados en construirPillsFiltroEstado y en
- * renderizarSelectorPlan de plan-gestionar.js), pero VERTICAL en vez de en
- * fila — nombres largos de carrera + universidad no caben uno al lado del
- * otro sin cortarse — y ocupando todo el ancho disponible. white-space:normal
- * (en vez del nowrap que traían los .btn) es lo que evita el corte de texto:
- * ahora el nombre puede pasar a una segunda línea dentro de la misma pill en
- * vez de truncarse.
+ * REDISEÑO (reporte de usuario): combinar materias de todos los planes
+ * activos — carrusel "‹ Plan de Estudios ›" en vez de una lista de pills
+ * apiladas. Con Modo Hardcore encendido siempre entran TODOS los planes
+ * que no son el principal (automático, ver recalcularPlanesHardcore en
+ * plan-gestionar.js) — acá solo se pagina entre ellos, sean 2 o 3. Cambiar
+ * de plan visible con las flechas NO borra lo ya marcado en los otros:
+ * seleccionPorPlan guarda la selección de cada plan por separado, así que
+ * se puede marcar materias de varios planes sin cerrar la ventana.
  */
 function construirSelectorPlanesHardcore(contenedor, planesIds, onCambiarVisible) {
   contenedor.innerHTML = "";
   if (planesIds.length <= 1) return;
 
-  const grupo = document.createElement("div");
-  grupo.className = "pill-group";
-  grupo.style.cssText = "display:flex; flex-direction:column; width:100%; gap:8px;";
-  planesIds.forEach((planId) => {
-    const plan = obtenerPlanPorId(planId);
+  let indice = planesIds.indexOf(planVisibleEnSelector);
+  if (indice === -1) indice = 0;
+
+  const fila = document.createElement("div");
+  fila.className = "row-between";
+  fila.style.cssText = "display:flex; align-items:center; gap:10px; width:100%;";
+
+  const btnAnterior = document.createElement("button");
+  btnAnterior.type = "button";
+  btnAnterior.className = "btn btn-secondary";
+  btnAnterior.textContent = "‹";
+  btnAnterior.setAttribute("aria-label", "Plan de estudios anterior");
+
+  const etiqueta = document.createElement("span");
+  etiqueta.style.cssText = "flex:1; text-align:center; font-weight:600; line-height:1.3;";
+
+  const btnSiguiente = document.createElement("button");
+  btnSiguiente.type = "button";
+  btnSiguiente.className = "btn btn-secondary";
+  btnSiguiente.textContent = "›";
+  btnSiguiente.setAttribute("aria-label", "Plan de estudios siguiente");
+
+  function pintarEtiqueta() {
+    const plan = obtenerPlanPorId(planesIds[indice]);
     if (!plan) return;
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "pill-item" + (planId === planVisibleEnSelector ? " active" : "");
-    btn.style.cssText = "width:100%; white-space:normal; word-break:break-word; text-align:center; line-height:1.3;";
-    const marcadas = (seleccionPorPlan.get(planId) || new Set()).size;
-    btn.textContent = `${plan.universidad} · ${aplicarFormatoTexto(plan.nombre_carrera)}` + (marcadas > 0 ? ` (${marcadas})` : "");
-    btn.addEventListener("click", () => onCambiarVisible(planId));
-    grupo.appendChild(btn);
+    const marcadas = (seleccionPorPlan.get(planesIds[indice]) || new Set()).size;
+    etiqueta.textContent =
+      `${plan.universidad} · ${aplicarFormatoTexto(plan.nombre_carrera)}` + (marcadas > 0 ? ` (${marcadas})` : "");
+  }
+
+  btnAnterior.addEventListener("click", () => {
+    indice = (indice - 1 + planesIds.length) % planesIds.length;
+    pintarEtiqueta();
+    onCambiarVisible(planesIds[indice]);
   });
-  contenedor.appendChild(grupo);
+  btnSiguiente.addEventListener("click", () => {
+    indice = (indice + 1) % planesIds.length;
+    pintarEtiqueta();
+    onCambiarVisible(planesIds[indice]);
+  });
+
+  pintarEtiqueta();
+  fila.appendChild(btnAnterior);
+  fila.appendChild(etiqueta);
+  fila.appendChild(btnSiguiente);
+  contenedor.appendChild(fila);
 }
 
 function construirBuscadorAltaSemestre(contenedor, onCambiar) {
@@ -535,16 +564,21 @@ function abrirModalAltaSemestre(semestreExistente = null) {
   });
   caja.appendChild(chkFechaAproximada);
 
+  // Auto-corrección defensiva: si plan_activo_secundario_id/terciario_id
+  // quedaron desincronizados (datos de antes del rediseño, o traídos por
+  // una fusión de sync vieja), se recalculan acá también — así este modal
+  // SIEMPRE toma todos los planes activos (sean 2 o 3), sin depender de
+  // que el usuario haya abierto antes "Gestionar Planes".
+  const cfgAntes = `${cfg.plan_activo_secundario_id}|${cfg.plan_activo_terciario_id}`;
+  recalcularPlanesHardcore(cfg);
+  if (`${cfg.plan_activo_secundario_id}|${cfg.plan_activo_terciario_id}` !== cfgAntes) {
+    sellarTimestamp(cfg);
+    marcarCambioPendiente();
+  }
+
   const planesIds = Array.from(
     new Set([...obtenerPlanesActivos(cfg), ...(esEdicion ? semestreExistente.plan_estudio_id : [])])
   ).filter((id) => obtenerPlanPorId(id));
-
-  if (planesIds.length > 1) {
-    const aviso = document.createElement("p");
-    aviso.className = "muted";
-    aviso.textContent = "Modo Hardcore: elegí de cuál plan sacar materias (podés marcar de más de uno).";
-    caja.appendChild(aviso);
-  }
 
   const contenedorBuscador = document.createElement("div");
   const contenedorFiltroEstado = document.createElement("div");
@@ -553,6 +587,15 @@ function abrirModalAltaSemestre(semestreExistente = null) {
   contenedorChecklist.className = "stack";
   caja.appendChild(contenedorBuscador);
   caja.appendChild(contenedorFiltroEstado);
+
+  // REORDEN (pedido explícito): "Mostrar: Aprobados/Reprobados" va antes
+  // del bloque de Modo Hardcore, no después.
+  if (planesIds.length > 1) {
+    const aviso = document.createElement("p");
+    aviso.className = "muted";
+    aviso.textContent = "Modo Hardcore: puedes elegir materias de todos tus planes activos.";
+    caja.appendChild(aviso);
+  }
   caja.appendChild(contenedorSelectorPlanes);
   caja.appendChild(contenedorChecklist);
 
