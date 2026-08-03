@@ -1118,13 +1118,29 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
   tituloWrap.appendChild(subtitulo);
   encabezado.appendChild(tituloWrap);
 
-  // El lugar que antes ocupaban las etiquetas Nota/Puntaje ahora lo ocupa
-  // la flecha de expandir/contraer; las etiquetas se movieron a su propia
-  // fila más abajo (ver filaEtiquetas), visible solo cuando está expandido.
+  // Pedido explícito: "puntos totales necesito que se muestren arriba, en
+  // el encabezado [...] Criterio (izquierda), puntos totales (derecha),
+  // botón de flecha [...] para que se muestre siempre esté cerrado o no".
+  // Antes vivía en el pie, dentro del bloque `if (expandido)` — por eso
+  // solo se veía con la tarjeta abierta. Ahora se calcula siempre (no
+  // depende de `expandido`) y va en un grupo a la derecha del encabezado,
+  // junto con la flecha — SOLO para el criterio, la materia no cambia.
+  const derechaWrap = document.createElement("div");
+  derechaWrap.className = "row";
+  derechaWrap.style.cssText = "align-items:center; gap:10px; flex-wrap:nowrap;";
+
+  const puntosObtenidosCriterio = calcularPuntosCriterio(criterio, escalaActiva);
+  const textoTotal = document.createElement("span");
+  textoTotal.style.cssText = "font-size:0.82rem; white-space:nowrap;";
+  textoTotal.innerHTML = `<span class="muted">Puntos totales:</span> <strong>${formatearNumero(puntosObtenidosCriterio)}/${formatearNumero(criterio.valor_total)} pts</strong>`;
+  derechaWrap.appendChild(textoTotal);
+
   const iconoExpandir = document.createElement("span");
   iconoExpandir.className = "materia-expandir";
   iconoExpandir.textContent = expandido ? "▲" : "▼";
-  encabezado.appendChild(iconoExpandir);
+  derechaWrap.appendChild(iconoExpandir);
+
+  encabezado.appendChild(derechaWrap);
 
   if (criterio._conflicto) {
     agregarIndicadorConflicto(cont, () => abrirModalResolverConflictoCriterio(criterio, mm, materia, plan, onCambiar));
@@ -1161,10 +1177,12 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
       cont.appendChild(construirFilaAsignacion(asig, criterio, mm, materia, plan, escalaActiva, onCambiar));
     });
 
-    /* ---------- Pie: + Añadir asignación (izq) | calificación total (der) ---------- */
+    /* ---------- Pie: + Añadir asignación ---------- */
+    // "Puntos totales" ya no vive acá (ver derechaWrap en el encabezado,
+    // arriba) — el pie ahora es solo el botón de agregar.
     const pie = document.createElement("div");
     pie.className = "row";
-    pie.style.cssText = "justify-content:space-between; align-items:center; margin-top:2px;";
+    pie.style.cssText = "justify-content:flex-start; align-items:center; margin-top:2px;";
 
     const btnAgregar = document.createElement("button");
     btnAgregar.type = "button";
@@ -1176,12 +1194,6 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
       agregarAsignacionRapida(criterio, mm, materia, plan, onCambiar);
     });
     pie.appendChild(btnAgregar);
-
-    const puntosObtenidosCriterio = calcularPuntosCriterio(criterio, escalaActiva);
-    const textoTotal = document.createElement("span");
-    textoTotal.style.cssText = "font-size:0.82rem; white-space:nowrap; margin-right:5px;";
-    textoTotal.innerHTML = `<span class="muted">Puntos totales:</span> <strong>${formatearNumero(puntosObtenidosCriterio)}/${formatearNumero(criterio.valor_total)} pts</strong>`;
-    pie.appendChild(textoTotal);
 
     cont.appendChild(pie);
   }
