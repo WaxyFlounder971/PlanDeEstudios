@@ -10,6 +10,7 @@ import { renderizarEnlacesRapidos } from "../config/config-enlaces.js";
 import { renderizarPerfil } from "../main.js";
 import { renderizarModoHardcore, renderizarSelectorPlan } from "../plan/plan-gestionar.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
+import { abrirModalTodosLosConflictos } from "../semestres/semestres-tarjetas.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { aplicarPaleta } from "../ui/tema.js";
 import { guardarDatos, leerDatos, obtenerMetadatosArchivo, refrescarAccessTokenGoogle } from "./auth.js";
@@ -663,6 +664,61 @@ async function forzarSincronizacion() {
  * necesita saber, tenga o no cambios pendientes en ese momento.
  */
 
+/**
+ * Punto 4 (badge ⚠️ global): cuenta TODOS los choques de sincronización
+ * pendientes en cualquier parte de los datos — planes → materias,
+ * semestres → materias_matriculadas → criterios, y los semestres mismos —
+ * para pintar el número en el badge junto a #indicador-sync. La lista
+ * completa (con detalle de cada uno) la arma listarTodosLosConflictos() en
+ * semestres-tarjetas.js; acá solo se necesita el conteo.
+ */
+function contarConflictosGlobales() {
+  let total = 0;
+
+  (estado.datos.planes_estudio || []).forEach((plan) => {
+    (plan.materias || []).forEach((materia) => {
+      if (materia._conflicto) total++;
+    });
+  });
+
+  (estado.datos.semestres || []).forEach((semestre) => {
+    if (semestre._conflicto) total++;
+    (semestre.materias_matriculadas || []).forEach((mm) => {
+      if (mm._conflicto) total++;
+      (mm.criterios || []).forEach((criterio) => {
+        if (criterio._conflicto) total++;
+      });
+    });
+  });
+
+  return total;
+}
+
+/**
+ * El markup del badge (#indicador-conflictos) vive en index.html como
+ * hermano oculto de #indicador-sync, dentro del mismo .row del sidebar —
+ * acá solo se lo muestra/oculta y se le pone el conteo + el click. Se usa
+ * `onclick` (no addEventListener) a propósito: esta función se llama en
+ * cada sync/sondeo (cada ~9s) y con addEventListener iría acumulando un
+ * listener duplicado por cada llamada.
+ */
+function actualizarBadgeConflictosGlobales() {
+  const badge = document.getElementById("indicador-conflictos");
+  if (!badge) return;
+
+  const n = contarConflictosGlobales();
+  if (n === 0) {
+    badge.classList.add("oculto");
+    return;
+  }
+
+  badge.classList.remove("oculto");
+  badge.textContent = `⚠️ ${n}`;
+  badge.title =
+    n === 1 ? "1 choque pendiente de resolver — toca para verlo" : `${n} choques pendientes de resolver — toca para verlos`;
+  badge.onclick = () => abrirModalTodosLosConflictos();
+}
+
 function actualizarIndicadorSync() {
   const el = document.getElementById("indicador-sync");
   if (!el) return;
@@ -680,6 +736,8 @@ function actualizarIndicadorSync() {
     el.className = "badge badge-success";
     el.style.cursor = "";
   }
+
+  actualizarBadgeConflictosGlobales();
 }
 
 export {
@@ -687,6 +745,7 @@ export {
   aplicarDatosRemotosFrescos,
   conReintentoSi401,
   contadorCargando,
+  contarConflictosGlobales,
   forzarSincronizacion,
   inicializarPullToRefresh,
   inicializarSondeoAlVolver,
