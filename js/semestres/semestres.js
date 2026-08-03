@@ -169,19 +169,32 @@ function resetearFormularioAlta(semestreExistente) {
   }
 }
 
+/**
+ * Combinar materias de ambas carreras — switch de plan visible en el
+ * checklist de matrícula. Antes eran botones .btn normales apilados; el
+ * pedido explícito fue: pill (misma estética que el resto de la app, ver
+ * .pill-group/.pill-item ya usados en construirPillsFiltroEstado y en
+ * renderizarSelectorPlan de plan-gestionar.js), pero VERTICAL en vez de en
+ * fila — nombres largos de carrera + universidad no caben uno al lado del
+ * otro sin cortarse — y ocupando todo el ancho disponible. white-space:normal
+ * (en vez del nowrap que traían los .btn) es lo que evita el corte de texto:
+ * ahora el nombre puede pasar a una segunda línea dentro de la misma pill en
+ * vez de truncarse.
+ */
 function construirSelectorPlanesHardcore(contenedor, planesIds, onCambiarVisible) {
   contenedor.innerHTML = "";
   if (planesIds.length <= 1) return;
 
   const grupo = document.createElement("div");
-  grupo.className = "stack";
-  grupo.style.gap = "6px";
+  grupo.className = "pill-group";
+  grupo.style.cssText = "display:flex; flex-direction:column; width:100%; gap:8px;";
   planesIds.forEach((planId) => {
     const plan = obtenerPlanPorId(planId);
     if (!plan) return;
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "btn btn-block " + (planId === planVisibleEnSelector ? "btn-primary" : "btn-secondary");
+    btn.className = "pill-item" + (planId === planVisibleEnSelector ? " active" : "");
+    btn.style.cssText = "width:100%; white-space:normal; word-break:break-word; text-align:center; line-height:1.3;";
     const marcadas = (seleccionPorPlan.get(planId) || new Set()).size;
     btn.textContent = `${plan.universidad} · ${aplicarFormatoTexto(plan.nombre_carrera)}` + (marcadas > 0 ? ` (${marcadas})` : "");
     btn.addEventListener("click", () => onCambiarVisible(planId));

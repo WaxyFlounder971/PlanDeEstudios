@@ -33,9 +33,30 @@ estado.vistaNotaPuntajeAngosta = estado.vistaNotaPuntajeAngosta || "nota";
 
 // Mismo umbral en los 3 lugares de este archivo que necesitan detectar
 // "pantalla angosta" (pills Nota/Puntaje, "Puntos totales:"→"Pts:", "X% de
-// la materia"→"X%") — evaluado en cada render, no hay listener de resize
-// acá porque el resto de la app tampoco lo tiene (se re-renderiza entera).
+// la materia"→"X%") — evaluado en cada render.
 const ANCHO_PANTALLA_ANGOSTA = 480;
+
+// FIX (reportado: "solo funciona en modo móvil, no en PC con ventana
+// angosta"): la causa era justo lo que decía el comentario anterior — se
+// evalúa `angosta` en cada render, pero nada disparaba un render cuando
+// SOLO cambiaba el tamaño de la ventana. En un celular el ancho ya es
+// angosto desde la primera carga (por eso "funcionaba" ahí, por
+// casualidad), pero en PC, angostar la ventana a mano no dispara ningún
+// otro evento de la app, así que el layout quedaba congelado con el
+// `angosta` calculado en el último render real. Acá se guarda el último
+// onCambiar recibido (se refresca en cada construirTarjetaSemestre) y se
+// vuelve a llamar, con debounce, cuando el usuario termina de arrastrar el
+// borde de la ventana.
+let _ultimoOnCambiarParaResize = null;
+let _resizeTimeoutId = null;
+if (typeof window !== "undefined") {
+  window.addEventListener("resize", () => {
+    clearTimeout(_resizeTimeoutId);
+    _resizeTimeoutId = setTimeout(() => {
+      if (_ultimoOnCambiarParaResize) _ultimoOnCambiarParaResize();
+    }, 150);
+  });
+}
 
 const MESES_LARGOS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
@@ -1616,7 +1637,7 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
     ? { texto: "Aprobada", badge: "badge-success" }
     : mm.resultado === "reprobada"
     ? { texto: "Reprobada", badge: "badge-danger" }
-    : { texto: "Sin resultado", badge: "badge-neutral" };
+    : { texto: "Estado", badge: "badge-neutral" };
 
   const card = document.createElement("div");
   card.className = "glass-panel materia-card";
@@ -1726,6 +1747,7 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
 }
 
 function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEditar, onBorrar) {
+  _ultimoOnCambiarParaResize = onCambiar;
   const expandido = estado.semestresExpandidos.get(semestre.id) || false;
 
   const card = document.createElement("div");
