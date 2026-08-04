@@ -493,6 +493,37 @@ function abrirModalAltaSemestre(semestreExistente = null) {
   caja.style.cssText = "max-width:480px; width:100%; padding:18px; max-height:85vh; overflow-y:auto;";
   caja.addEventListener("click", (ev) => ev.stopPropagation());
 
+  // Pedido explícito (2026-08-03): si no hay datos ingresados, cerrar (tocar
+  // fuera o "Cancelar") debe funcionar directo, como siempre. Pero si ya se
+  // escribió algo (nombre, fecha, duración, o se marcó alguna materia), hay
+  // que avisar antes de perderlo — mismo patrón que crearModalDinamico:
+  // tocar fuera con datos sin guardar no hace nada (se queda quieto),
+  // "Cancelar" sí confirma antes de cerrar. El buscador de materias queda
+  // afuera del rastreo: es un filtro de vista, no un dato que se guarde.
+  let sucio = false;
+  const marcarSucio = () => { sucio = true; };
+  caja.addEventListener("input", (e) => {
+    if (contenedorBuscador.contains(e.target)) return;
+    marcarSucio();
+  });
+  caja.addEventListener("change", (e) => {
+    if (contenedorBuscador.contains(e.target)) return;
+    marcarSucio();
+  });
+
+  function cerrar() {
+    if (!sucio) {
+      overlay.remove();
+      return;
+    }
+    abrirConfirmacion({
+      titulo: "¿Cerrar sin guardar?",
+      mensaje: `Vas a perder los datos que ingresaste para ${esEdicion ? "este semestre" : "el nuevo semestre"}.`,
+      textoConfirmar: "Cerrar sin guardar",
+      onConfirmar: () => overlay.remove(),
+    });
+  }
+
   caja.innerHTML = `<h2 style="margin:0;">${esEdicion ? "Editar semestre" : "Registrar semestre"}</h2>`;
 
   const bloqueNombre = document.createElement("div");
@@ -694,7 +725,7 @@ function abrirModalAltaSemestre(semestreExistente = null) {
   btnCancelar.type = "button";
   btnCancelar.className = "btn btn-secondary";
   btnCancelar.textContent = "Cancelar";
-  btnCancelar.addEventListener("click", () => overlay.remove());
+  btnCancelar.addEventListener("click", cerrar);
   filaBotones.appendChild(btnCancelar);
 
   const btnGuardar = document.createElement("button");
@@ -745,7 +776,9 @@ function abrirModalAltaSemestre(semestreExistente = null) {
   caja.appendChild(filaBotones);
 
   overlay.appendChild(caja);
-  overlay.addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay && !sucio) overlay.remove();
+  });
   document.body.appendChild(overlay);
 }
 
