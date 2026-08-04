@@ -1192,7 +1192,6 @@ function abrirModalProyectar({ mm, materia, plan, escalaActiva }) {
   // ocupa su propia fila completa, siempre en el mismo orden vertical —
   // nunca vuelve a horizontal aunque haya espacio de sobra.
   const grupoModos = document.createElement("div");
-  grupoModos.className = "pill-group";
   grupoModos.style.cssText = "display:flex; flex-direction:column; gap:6px; width:100%;";
   card.appendChild(grupoModos);
 
@@ -1219,8 +1218,8 @@ function abrirModalProyectar({ mm, materia, plan, escalaActiva }) {
     MODOS_PROYECCION.forEach(({ valor, texto }) => {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "pill-item" + (modoActivo === valor ? " active" : "");
-      btn.style.cssText = "width:100%; box-sizing:border-box; white-space:normal; text-align:center;";
+      btn.className = "btn btn-block " + (modoActivo === valor ? "btn-primary" : "btn-secondary");
+      btn.style.cssText = "text-align:center; white-space:normal; font-size:0.85rem;";
       btn.textContent = texto;
       btn.addEventListener("click", () => {
         modoActivo = valor;
