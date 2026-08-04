@@ -704,11 +704,24 @@ function contarConflictosGlobales() {
   (estado.datos.semestres || []).forEach((semestre) => {
     if (semestre._conflicto) total++;
     (semestre.materias_matriculadas || []).forEach((mm) => {
+      // mm._conflicto ya cubre el vínculo Profesor↔Semestre embebido
+      // (profesor_id/calificacion_profesor/volveria_a_llevar_profesor son
+      // campos planos de mm, no una sub-entidad con su propio timestamp) —
+      // no hace falta un chequeo aparte para eso acá.
       if (mm._conflicto) total++;
       (mm.criterios || []).forEach((criterio) => {
         if (criterio._conflicto) total++;
       });
     });
+  });
+
+  // Comunidad — Parte 1: profesores y companeros son colecciones top-level
+  // planas, igual que agenda — se cuentan igual de directo.
+  (estado.datos.profesores || []).forEach((profesor) => {
+    if (profesor._conflicto) total++;
+  });
+  (estado.datos.companeros || []).forEach((companero) => {
+    if (companero._conflicto) total++;
   });
 
   return total;

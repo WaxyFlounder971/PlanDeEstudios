@@ -726,6 +726,11 @@ function fusionarDatos(datosLocal, datosRemoto) {
   const tumbasPlanes = fusionarTumbas(datosLocal._eliminados_planes, datosRemoto._eliminados_planes);
   const tumbasSemestres = fusionarTumbas(datosLocal._eliminados_semestres, datosRemoto._eliminados_semestres);
   const tumbasProfesores = fusionarTumbas(datosLocal._eliminados_profesores, datosRemoto._eliminados_profesores);
+  // Comunidad — Parte 1: companeros es colección plana (sin sub-colecciones
+  // propias, a diferencia de plan/semestre) — fusionarColeccion genérica
+  // alcanza igual que con profesores, comparando por _actualizadoEn entero
+  // del objeto completo.
+  const tumbasCompaneros = fusionarTumbas(datosLocal._eliminados_companeros, datosRemoto._eliminados_companeros);
   const tumbasAgenda = fusionarTumbas(datosLocal._eliminados_agenda, datosRemoto._eliminados_agenda);
   const tumbasEnlaces = fusionarTumbas(
     datosLocal.configuracion && datosLocal.configuracion._eliminados_enlaces,
@@ -755,10 +760,12 @@ function fusionarDatos(datosLocal, datosRemoto) {
     // semestre funde su propia matrícula por separado (ver fusionarSemestre).
     semestres: fusionarSemestres(datosLocal.semestres, datosRemoto.semestres, tumbasSemestres),
     profesores: fusionarColeccion(datosLocal.profesores, datosRemoto.profesores, tumbasProfesores, "profesor"),
+    companeros: fusionarColeccion(datosLocal.companeros, datosRemoto.companeros, tumbasCompaneros, "compañero"),
     agenda: fusionarColeccion(datosLocal.agenda, datosRemoto.agenda, tumbasAgenda, "evento de agenda"),
     _eliminados_planes: tumbasPlanes,
     _eliminados_semestres: tumbasSemestres,
     _eliminados_profesores: tumbasProfesores,
+    _eliminados_companeros: tumbasCompaneros,
     _eliminados_agenda: tumbasAgenda,
   };
 }
