@@ -44,9 +44,22 @@ function obtenerPlanActivo() {
 }
 
 function obtenerPlanSecundario() {
-  const cfg = estado.datos.configuracion;
-  if (!cfg.modo_hardcore || !cfg.plan_activo_secundario_id) return null;
-  return estado.datos.planes_estudio.find((p) => p.id === cfg.plan_activo_secundario_id) || null;
+  // FIX (reporte de usuario, "los planes de estudio NO se combinan en plan
+  // de estudio, para eso esta la funcion de cambiar entre estos"): antes
+  // esta función devolvía el plan acompañante de Modo Hardcore siempre que
+  // cfg.modo_hardcore estuviera activo, y ESE plan secundario terminaba
+  // fusionado dentro de obtenerMateriasVisibles/obtenerOptativasDisponibles/
+  // obtenerMateriasRevisar/abrirModalMateriaManual — mezclando materias de
+  // dos planes en una sola vista. Eso pisaba el propósito del selector de
+  // plan (las pills / las flechas ‹ › en el encabezado): cambiar de plan
+  // debe mostrar SOLO las materias de ese plan, nunca combinadas con otro.
+  // Se corta acá, en el único punto de origen del plan secundario, en vez
+  // de tocar cada función que lo consume — así ninguna vista vuelve a
+  // mezclar planes, sin necesidad de tocar el modelo de datos de Modo
+  // Hardcore (cfg.modo_hardcore / plan_activo_secundario_id siguen
+  // existiendo por si en el futuro se usan para otra cosa que no sea
+  // combinar materias en esta lista).
+  return null;
 }
 
 /** Todas las materias visibles ahora mismo, con una referencia a su plan de origen. */
