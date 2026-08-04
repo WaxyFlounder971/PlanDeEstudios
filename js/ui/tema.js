@@ -316,6 +316,20 @@ function calcularVariablesDerivadas(colores) {
     "--accent-1-20": hexARgba(accent1, canvasClaro ? 0.22 : 0.28),
     "--color-danger": canvasClaro ? "#dc2626" : "#f87171",
     "--color-luz": luz,
+    // FIX (reporte de usuario, "cuando la paleta personalizada esté activa
+    // necesito que TODO lo que se considere badge se vea igual pero sin
+    // transparencia... no importa que color le pongas, se pueda ver"): en
+    // las 13 paletas fijas el fondo translúcido de los badges (--accent-1-10,
+    // ~10-12% de opacidad) está calibrado a mano en design-system.css, así
+    // que siempre contrasta bien contra --bg-card. Acá arriba, en cambio,
+    // --accent-1-10 sale de un color ARBITRARIO que eligió la persona, y a
+    // esa opacidad tan baja el contraste no está garantizado para ningún
+    // color. Estas dos variables son fondo/texto SÓLIDOS (mismo mecanismo
+    // de --on-accent, contraste WCAG garantizado) y solo existen bajo
+    // paleta personalizada — design-system.css las usa con fallback al
+    // valor de siempre, así que las 13 paletas fijas no cambian en nada.
+    "--badge-bg-solid": accent1,
+    "--badge-text-solid": textoSobreAccent,
   };
 }
 
@@ -343,6 +357,10 @@ function limpiarColoresPersonalizadosInline() {
     "--on-accent",
     "--accent-glow-1", "--accent-glow-2", "--accent-1-10", "--accent-1-20",
     "--color-danger", "--color-luz",
+    // Ver comentario en calcularVariablesDerivadas: limpiar también estas
+    // dos, si no, al volver a una paleta fija quedarían "pegadas" inline
+    // por encima de --accent-1-10 real de esa paleta.
+    "--badge-bg-solid", "--badge-text-solid",
   ];
   variables.forEach((variable) => document.documentElement.style.removeProperty(variable));
 }
