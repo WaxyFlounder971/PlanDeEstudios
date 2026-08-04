@@ -230,7 +230,15 @@ a { color: var(--accent-1); }
 .badge-warning { background: rgba(245, 158, 11, 0.15); border-color: #f59e0b; color: #fbbf24; }
 .badge-danger  { background: rgba(239, 68, 68, 0.15);  border-color: #ef4444; color: #f87171; }
 .badge-neutral { background: rgba(148, 163, 184, 0.15); border-color: #94a3b8; color: #cbd5e1; }
-.badge-accent  { background: var(--accent-1-10); border-color: var(--accent-1); color: var(--accent-2); }
+.badge-accent  {
+  /* FIX contraste en paleta personalizada: --badge-bg-solid/--badge-text-solid
+     solo existen cuando data-palette="personalizada" (ver tema.js); en las
+     13 paletas fijas caen al fallback de siempre (fondo translúcido +
+     accent-2), cero cambio visual ahí. */
+  background: var(--badge-bg-solid, var(--accent-1-10));
+  border-color: var(--accent-1);
+  color: var(--badge-text-solid, var(--accent-2));
+}
 
 /* ---- Bug 4 (v7.1): las 4 badges de arriba usaban colores de texto pastel
    pensados solo para fondo oscuro (contraste ~9-12:1 en dark, pero apenas
@@ -1845,39 +1853,50 @@ html.exportar-tema-default[data-mode="dark"] {
 
 /* 1. backdrop-filter: blur(...) fuera; el mismo tono de fondo sube de
    opacidad (color-mix con el canvas) para que la tarjeta se siga viendo
-   diferenciada del fondo, sin el costo de GPU del difuminado. */
+   diferenciada del fondo, sin el costo de GPU del difuminado.
+
+   FIX (reporte de stakeholder Dayi, uso en teléfono + Modo Rendimiento):
+   "en los menus o ventanas a veces se ven MUY transparentes... bájale la
+   transparencia en un 50%". Bajo este modo, todo lo de acá (tarjetas,
+   paneles/menús, la topbar, el fondo oscuro detrás de modales, el aviso de
+   reconexión y el overlay de carga) usa una porción "transparente" (el %
+   que deja ver lo que hay detrás, sea color-mix hacia --bg-canvas o alpha
+   en rgba). Se recorta esa porción transparente A LA MITAD en cada una —
+   ej. 45% de transparencia → 22.5% — dejándolas bastante más sólidas sin
+   perder el tinte del color de fondo (nada de esto toca el modo normal,
+   solo vive bajo [data-rendimiento="reducido"]). */
 [data-rendimiento="reducido"] .glass-card {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  background: color-mix(in srgb, var(--bg-card) 55%, var(--bg-canvas) 45%);
+  background: color-mix(in srgb, var(--bg-card) 77.5%, var(--bg-canvas) 22.5%);
 }
 [data-rendimiento="reducido"] .glass-panel {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  background: color-mix(in srgb, var(--bg-panel) 55%, var(--bg-canvas) 45%);
+  background: color-mix(in srgb, var(--bg-panel) 77.5%, var(--bg-canvas) 22.5%);
 }
 [data-rendimiento="reducido"] .mobile-topbar {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  background: color-mix(in srgb, var(--bg-panel) 55%, var(--bg-canvas) 45%);
+  background: color-mix(in srgb, var(--bg-panel) 77.5%, var(--bg-canvas) 22.5%);
 }
 [data-rendimiento="reducido"] .modal-overlay {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.9);
 }
 [data-mode="light"][data-rendimiento="reducido"] .modal-overlay {
-  background: rgba(30, 41, 59, 0.34);
+  background: rgba(30, 41, 59, 0.67);
 }
 [data-rendimiento="reducido"] .aviso-reconexion {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  background: rgba(245, 158, 11, 0.34);
+  background: rgba(245, 158, 11, 0.67);
 }
 [data-rendimiento="reducido"] .overlay-cargando {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  background: color-mix(in srgb, var(--bg-canvas) 88%, transparent);
+  background: color-mix(in srgb, var(--bg-canvas) 94%, transparent);
 }
 
 /* 2. Glow del botón primario en hover y de la "luz" de disponibilidad:
@@ -2086,8 +2105,9 @@ html.exportar-tema-default[data-mode="dark"] {
 .ppz-preview-btn { align-self: auto; }
 
 .ppz-preview-badge {
-  background: var(--accent-1-10);
-  color: var(--accent-1);
+  /* Mismo fix de contraste que .badge-accent, ver tema.js. */
+  background: var(--badge-bg-solid, var(--accent-1-10));
+  color: var(--badge-text-solid, var(--accent-1));
   border: 1px solid var(--accent-1-20);
   border-radius: var(--radius-pill);
   padding: 5px 12px;
