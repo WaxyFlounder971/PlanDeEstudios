@@ -101,13 +101,14 @@ function notasCompletas(mm) {
 
 /**
  * D/E/F: calcula y persiste `resultado` en cada materia matriculada del
- * semestre (comparando la nota_final vigente, YA redondeada al 5 más
- * cercano — mismo criterio en toda la app, ver
- * redondearNotaFinalAlCincoMasCercano — contra nota_aprobacion del plan de
- * CADA materia, porque en Modo Hardcore dos materias del mismo semestre
- * pueden venir de planes/universidades distintas con notas de aprobación
- * distintas) y pasa el semestre a "pasado". Nunca toca materia.estado —
- * eso sigue siendo 100% manual/sticky desde el Plan (ver
+ * semestre (comparando la nota_final vigente contra nota_aprobacion del
+ * plan de CADA materia, porque en Modo Hardcore dos materias del mismo
+ * semestre pueden venir de planes/universidades distintas con notas de
+ * aprobación distintas) y pasa el semestre a "pasado". El redondeo al 5
+ * más cercano ANTES de comparar es opcional por plan (`redondeo_activo`,
+ * Fase 6.2) — no toda universidad trabaja así; con el switch apagado se
+ * compara la nota cruda, sin margen. Nunca toca materia.estado — eso
+ * sigue siendo 100% manual/sticky desde el Plan (ver
  * ESTADOS_MATERIA_MANUALES en plan-vista-lista-tarjetas.js). Solo resella
  * la mm si el resultado realmente cambió, para no generar sincronía/
  * conflictos de la nada en materias que no se tocan en este cierre.
@@ -121,8 +122,10 @@ function terminarSemestre(semestre) {
     if (plan && materia && notasCompletas(mm)) {
       const escala = obtenerEscalaNotasMateria(materia, plan, estado.datos.configuracion);
       const notaFinal = mm.nota_final_manual ? mm.nota_final : calcularNotaFinalMateria(mm, escala);
-      const notaAprobacion = Number((plan.parametros_universidad || {}).nota_aprobacion) || 70;
-      nuevoResultado = redondearNotaFinalAlCincoMasCercano(notaFinal) >= notaAprobacion ? "aprobada" : "reprobada";
+      const params = plan.parametros_universidad || {};
+      const notaAprobacion = Number(params.nota_aprobacion) || 70;
+      const notaComparada = params.redondeo_activo === false ? notaFinal : redondearNotaFinalAlCincoMasCercano(notaFinal);
+      nuevoResultado = notaComparada >= notaAprobacion ? "aprobada" : "reprobada";
     }
 
     if (mm.resultado !== nuevoResultado) {

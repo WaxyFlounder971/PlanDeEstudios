@@ -21,6 +21,10 @@ import {
   calcularMaximoPosibleMateria,
   calcularNotaNecesariaUniforme,
   calcularObjetivoPasarRaspando,
+  ESCALAS_DISPONIBLES,
+  obtenerEscalaPorId,
+  obtenerFraccionNota,
+  notaMinimaParaFraccion,
 } from "../core/schema.js";
 import { marcarCambioPendiente, actualizarIndicadorSync } from "../core/storage-sync.js";
 import { ESTADOS_MATERIA, abrirModalResolverConflicto, abrirModalResolverConflictoGenerico, agregarIndicadorConflicto } from "../plan/plan-vista-lista-tarjetas.js";
@@ -447,6 +451,15 @@ function persistirCambioMateria(mm, materia, plan, onCambiar) {
    long-press (abrirMenuRapidoEstadoMatricula, etc.), solo que a tamaño modal.
    ========================================================================= */
 
+/**
+ * Fase 6.2: tocar fuera del modal (overlay) o la X ya NO cierran a lo loco
+ * si hay cambios sin guardar — "sucio" se prende solo con cualquier
+ * input/change dentro de la tarjeta (delegado, no hay que acordarse de
+ * marcarlo a mano en cada modal nuevo). Tocar fuera con cambios pendientes
+ * no hace nada (se queda quieto, no pierde nada); la X sí permite salir,
+ * pero primero confirma con el mismo componente de confirmación que ya se
+ * usa para eliminar criterios/asignaciones — misma estética, nada nuevo.
+ */
 function crearModalDinamico({ titulo, ancha }) {
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
@@ -455,12 +468,35 @@ function crearModalDinamico({ titulo, ancha }) {
   card.className = "glass-card modal-card stack" + (ancha ? " modal-card-ancha" : "");
   card.style.gap = "14px";
 
+  let sucio = false;
+  const marcarSucio = () => { sucio = true; };
+  card.addEventListener("input", marcarSucio);
+  card.addEventListener("change", marcarSucio);
+  card.addEventListener("click", (e) => {
+    // Cubre botones tipo pill (ej. selector de letras) que sí burbujean —
+    // los que no (switchDosOpciones) avisan aparte con su propio "change".
+    if (e.target.closest("button") && !e.target.closest(".modal-x-close")) marcarSucio();
+  });
+
+  function cerrar() {
+    if (!sucio) {
+      overlay.remove();
+      return;
+    }
+    abrirConfirmacion({
+      titulo: "¿Cerrar sin guardar?",
+      mensaje: "Vas a perder los cambios que hiciste acá.",
+      textoConfirmar: "Cerrar sin guardar",
+      onConfirmar: () => overlay.remove(),
+    });
+  }
+
   const btnX = document.createElement("button");
   btnX.type = "button";
   btnX.className = "modal-x-close";
   btnX.setAttribute("aria-label", "Cerrar");
   btnX.textContent = "✕";
-  btnX.addEventListener("click", () => overlay.remove());
+  btnX.addEventListener("click", cerrar);
   card.appendChild(btnX);
 
   if (titulo) {
@@ -472,10 +508,12 @@ function crearModalDinamico({ titulo, ancha }) {
 
   overlay.appendChild(card);
   overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) overlay.remove();
+    // Tocar fuera: solo cierra si NO hay nada sin guardar. Con "sucio" en
+    // true, no pasa nada — ni cierra ni borra, se queda tal cual.
+    if (e.target === overlay && !sucio) overlay.remove();
   });
   document.body.appendChild(overlay);
-  return { overlay, card };
+  return { overlay, card, marcarSucio };
 }
 
 function agregarCampoModal(card, { etiqueta, tipo, valor, paso, decimal }) {
@@ -540,6 +578,11 @@ function agregarSwitchDosOpciones(card, { etiqueta, opciones, valorInicial, onCa
       Object.keys(botones).forEach((v) => {
         botones[v].className = "btn " + (v === valorActual ? "btn-primary" : "btn-secondary");
       });
+      // Fase 6.2: este click no burbujea (stopPropagation arriba), así que
+      // el dirty-tracking del modal (crearModalDinamico, delegado en
+      // input/change) no se entera solo — se avisa a mano con un evento
+      // fresco que sí burbujea.
+      wrap.dispatchEvent(new Event("change", { bubbles: true }));
       if (onCambiar) onCambiar(valorActual);
     });
     botones[op.valor] = btn;
@@ -737,16 +780,58 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
 
   const inputCalif = agregarCampoModal(card, {
     etiqueta: "",
-    valor: esEdicion && asignacionExistente.nota !== null && asignacionExistente.nota !== undefined ? asignacionExistente.nota : "",
+    valor: esEdicion && typeof asignacionExistente.nota === "number" ? asignacionExistente.nota : "",
     decimal: true,
   });
   const labelCalif = inputCalif.parentElement.querySelector("label");
+
+  /* ---------- Fase 6.2: selector de letras ----------
+     Si la escala activa es "letras" y el modo es "Nota" (en "Puntos"
+     siempre es numérico, sin importar la escala), se oculta inputCalif y
+     se muestra este selector en su lugar. Un click sobre la letra ya
+     activa la deselecciona (vuelve a quedar pendiente/sin calificar). */
+  const descriptorEscala = obtenerEscalaPorId(escalaActiva);
+  let letraSeleccionada =
+    esEdicion && asignacionExistente.modo_calificacion === "nota" && typeof asignacionExistente.nota === "string"
+      ? asignacionExistente.nota
+      : null;
+
+  const contenedorLetras = document.createElement("div");
+  contenedorLetras.className = "oculto";
+  contenedorLetras.style.cssText = "display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;";
+  if (descriptorEscala.tipo === "letras") {
+    descriptorEscala.valores.forEach(({ letra }) => {
+      const btnLetra = document.createElement("button");
+      btnLetra.type = "button";
+      btnLetra.className = "pill-item" + (letraSeleccionada === letra ? " active" : "");
+      btnLetra.textContent = letra;
+      btnLetra.addEventListener("click", () => {
+        letraSeleccionada = letraSeleccionada === letra ? null : letra;
+        contenedorLetras.querySelectorAll(".pill-item").forEach((b) => {
+          b.classList.toggle("active", b.textContent === letraSeleccionada);
+        });
+      });
+      contenedorLetras.appendChild(btnLetra);
+    });
+  }
+  inputCalif.parentElement.insertAdjacentElement("afterend", contenedorLetras);
+
+  function actualizarVisibilidadCalif(modo) {
+    const usaLetras = descriptorEscala.tipo === "letras" && modo === "nota";
+    inputCalif.parentElement.classList.toggle("oculto", usaLetras);
+    contenedorLetras.classList.toggle("oculto", !usaLetras);
+  }
 
   function valorVigenteParaTope() {
     return switchValor.obtenerValor() === "automatico" ? equitativoEstimado : analizarDecimal(inputValor.value) || 0;
   }
 
   function actualizarEtiquetaCalif(modo) {
+    actualizarVisibilidadCalif(modo);
+    if (descriptorEscala.tipo === "letras" && modo === "nota") {
+      labelCalif.textContent = "¿Qué nota te sacaste? (tocá una letra, o ninguna si aún no la tenés)";
+      return;
+    }
     labelCalif.textContent =
       modo === "puntos"
         ? `¿Cuántos puntos te dieron? (0-${formatearNumero(valorVigenteParaTope())}, dejalo vacío si aún no la tenés)`
@@ -777,8 +862,10 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
     const modoValor = switchValor.obtenerValor();
     const modoCalif = switchCalif.obtenerValor();
     const valorNum = modoValor === "automatico" ? equitativoEstimado : analizarDecimal(inputValor.value);
+    const usaLetras = descriptorEscala.tipo === "letras" && modoCalif === "nota";
     const califTexto = inputCalif.value.trim();
-    const califNum = califTexto === "" ? null : analizarDecimal(califTexto);
+    const califNumerico = califTexto === "" ? null : analizarDecimal(califTexto);
+    const califFinal = usaLetras ? letraSeleccionada : califNumerico;
 
     if (!nombre) {
       mostrarToast("Ponele un nombre a la asignación");
@@ -790,16 +877,18 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
         return;
       }
     }
-    if (califNum !== null) {
+    if (califFinal !== null) {
       if (modoCalif === "puntos") {
-        if (!Number.isFinite(califNum) || califNum < 0 || califNum > valorNum + 0.001) {
+        if (!Number.isFinite(califFinal) || califFinal < 0 || califFinal > valorNum + 0.001) {
           mostrarToast(`Los puntos deben estar entre 0 y ${formatearNumero(valorNum)}`);
           return;
         }
-      } else if (!Number.isFinite(califNum) || califNum < 0 || califNum > escalaActiva) {
+      } else if (!usaLetras && (!Number.isFinite(califFinal) || califFinal < 0 || califFinal > escalaActiva)) {
         mostrarToast(`La nota debe estar entre 0 y ${escalaActiva}`);
         return;
       }
+      // usaLetras: califFinal ya salió del picker (solo letras reales),
+      // no hace falta validar nada más acá.
     }
 
     // FIX DE RAÍZ (2026-08-02 — "a veces creo nuevas asignaciones y NO se
@@ -839,14 +928,14 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
       asignacionViva.nombre = nombre;
       asignacionViva.modo_valor = modoValor;
       asignacionViva.modo_calificacion = modoCalif;
-      asignacionViva.nota = califNum;
+      asignacionViva.nota = califFinal;
       if (modoValor === "personalizado") asignacionViva.valor = valorNum;
       sellarTimestamp(asignacionViva);
     } else {
       const nueva = crearAsignacion({ nombre, valor: valorNum });
       nueva.modo_valor = modoValor;
       nueva.modo_calificacion = modoCalif;
-      nueva.nota = califNum;
+      nueva.nota = califFinal;
       criterioVivo.asignaciones.push(nueva);
     }
     // Reparte lo que sobra entre las "automatico" con el total ya
