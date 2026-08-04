@@ -316,20 +316,23 @@ function calcularVariablesDerivadas(colores) {
     "--accent-1-20": hexARgba(accent1, canvasClaro ? 0.22 : 0.28),
     "--color-danger": canvasClaro ? "#dc2626" : "#f87171",
     "--color-luz": luz,
-    // FIX (reporte de usuario, "cuando la paleta personalizada esté activa
-    // necesito que TODO lo que se considere badge se vea igual pero sin
-    // transparencia... no importa que color le pongas, se pueda ver"): en
-    // las 13 paletas fijas el fondo translúcido de los badges (--accent-1-10,
-    // ~10-12% de opacidad) está calibrado a mano en design-system.css, así
-    // que siempre contrasta bien contra --bg-card. Acá arriba, en cambio,
-    // --accent-1-10 sale de un color ARBITRARIO que eligió la persona, y a
-    // esa opacidad tan baja el contraste no está garantizado para ningún
-    // color. Estas dos variables son fondo/texto SÓLIDOS (mismo mecanismo
-    // de --on-accent, contraste WCAG garantizado) y solo existen bajo
-    // paleta personalizada — design-system.css las usa con fallback al
-    // valor de siempre, así que las 13 paletas fijas no cambian en nada.
-    "--badge-bg-solid": accent1,
-    "--badge-text-solid": textoSobreAccent,
+    // FIX v2 (corrección de la persona: "los badges no me gustan, el diseño
+    // se debe mantener fiel a como estaba antes... las letras y el borde
+    // se mantienen igual, el color debe ser puro sobre un fondo que le
+    // haga contraste, manteniendo el estilo tipo badge"). La v1 de este fix
+    // cambiaba fondo Y texto a un color plano fuerte (--on-accent) — eso sí
+    // rompía el estilo. Esta versión NO toca texto ni borde (siguen en
+    // --accent-2 / --accent-1, igual que en las 13 paletas fijas): solo
+    // resuelve el problema real, que es que --accent-1-10 es un rgba() con
+    // canal alfa real, y por eso el resultado final depende de literalmente
+    // qué haya renderizado detrás en ese momento (otra tarjeta, blur,
+    // Modo Rendimiento con su propio fondo, etc.) — con ciertos fondos ese
+    // alfa tan bajo se vuelve casi invisible. compositarSobreFondo mezcla
+    // ESE MISMO rgba() (mismo tono, misma intensidad) contra --bg-card una
+    // sola vez acá, y devuelve un color sólido de 6 dígitos — mismo look
+    // exacto de siempre, pero ya no depende de qué haya detrás en cada
+    // render.
+    "--badge-bg-solid": compositarSobreFondo(hexARgba(accent1, canvasClaro ? 0.10 : 0.12), fondoCard),
   };
 }
 
@@ -357,10 +360,10 @@ function limpiarColoresPersonalizadosInline() {
     "--on-accent",
     "--accent-glow-1", "--accent-glow-2", "--accent-1-10", "--accent-1-20",
     "--color-danger", "--color-luz",
-    // Ver comentario en calcularVariablesDerivadas: limpiar también estas
-    // dos, si no, al volver a una paleta fija quedarían "pegadas" inline
-    // por encima de --accent-1-10 real de esa paleta.
-    "--badge-bg-solid", "--badge-text-solid",
+    // Ver comentario en calcularVariablesDerivadas: limpiar también esta,
+    // si no, al volver a una paleta fija quedaría "pegada" inline por
+    // encima de --accent-1-10 real de esa paleta.
+    "--badge-bg-solid",
   ];
   variables.forEach((variable) => document.documentElement.style.removeProperty(variable));
 }
