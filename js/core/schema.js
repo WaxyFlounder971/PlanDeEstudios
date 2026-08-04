@@ -999,6 +999,26 @@ function crearCategoria({ nombre, color }) {
 /* ===================== Comunidad — Parte 1: Profesor y Compañero ===================== */
 
 /**
+ * Comunidad — Parte 2 (conecta el botón "Historial" de Plan de Estudios,
+ * que hasta ahora era un stub fijo — ver plan-detalle.js): todos los
+ * intentos reales de cursar `materiaId` dentro de `planEstudioId`, cruzando
+ * TODOS los semestres del historial. Devuelve [{ semestre, mm }], más
+ * reciente primero — mismo criterio de orden que obtenerHistorialProfesor.
+ */
+function obtenerIntentosMateria(materiaId, planEstudioId, datos) {
+  const resultado = [];
+  (datos.semestres || []).forEach((semestre) => {
+    (semestre.materias_matriculadas || []).forEach((mm) => {
+      if (mm.materia_id === materiaId && mm.plan_estudio_id === planEstudioId) {
+        resultado.push({ semestre, mm });
+      }
+    });
+  });
+  resultado.sort((a, b) => new Date(b.semestre.fecha_inicio) - new Date(a.semestre.fecha_inicio));
+  return resultado;
+}
+
+/**
  * Profesor — vive en datos.profesores (colección top-level, tumba propia
  * _eliminados_profesores). "materias" es de referencia libre (qué imparte en
  * general, no ligado a un plan/semestre puntual) — la relación real con
@@ -1426,4 +1446,5 @@ export {
   obtenerHistorialProfesor,
   obtenerUniversidadesDeProfesor,
   obtenerMateriasCompartidasValidas,
+  obtenerIntentosMateria,
 };
