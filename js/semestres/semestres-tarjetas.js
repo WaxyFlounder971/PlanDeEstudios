@@ -1001,6 +1001,15 @@ function eliminarAsignacion(criterio, mm, materia, plan, asignacion, onCambiar) 
       criterioVivo.asignaciones = (criterioVivo.asignaciones || []).filter((a) => a.id !== asignacionId);
       criterioVivo._eliminados_asignaciones = criterioVivo._eliminados_asignaciones || [];
       criterioVivo._eliminados_asignaciones.push(crearEntradaTumba(asignacionId));
+      // FIX (2026-08-04): faltaba este llamado. Sin él, al borrar una
+      // asignación las "automatico" que quedan se congelan con el valor
+      // viejo (repartido entre N) en vez de recalcularse entre N-1 — los
+      // puntos de la eliminada quedaban flotando sin volver al criterio
+      // (ej. 3 automáticas de 13.3 cada una, se borra una, deberían quedar
+      // 2 en 20 c/u, pero se quedaban en 13.3 y 13.3). Misma regla que ya
+      // se aplica al agregar (agregarAsignacionRapida) o editar una
+      // asignación — ver repartirEquitativoCriterio en schema.js.
+      repartirEquitativoCriterio(criterioVivo);
       sellarTimestamp(criterioVivo);
       persistirCambioMateria(mmViva, materia, plan, onCambiar);
     },
