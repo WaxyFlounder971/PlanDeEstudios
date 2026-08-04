@@ -316,23 +316,19 @@ function calcularVariablesDerivadas(colores) {
     "--accent-1-20": hexARgba(accent1, canvasClaro ? 0.22 : 0.28),
     "--color-danger": canvasClaro ? "#dc2626" : "#f87171",
     "--color-luz": luz,
-    // FIX v2 (corrección de la persona: "los badges no me gustan, el diseño
-    // se debe mantener fiel a como estaba antes... las letras y el borde
-    // se mantienen igual, el color debe ser puro sobre un fondo que le
-    // haga contraste, manteniendo el estilo tipo badge"). La v1 de este fix
-    // cambiaba fondo Y texto a un color plano fuerte (--on-accent) — eso sí
-    // rompía el estilo. Esta versión NO toca texto ni borde (siguen en
-    // --accent-2 / --accent-1, igual que en las 13 paletas fijas): solo
-    // resuelve el problema real, que es que --accent-1-10 es un rgba() con
-    // canal alfa real, y por eso el resultado final depende de literalmente
-    // qué haya renderizado detrás en ese momento (otra tarjeta, blur,
-    // Modo Rendimiento con su propio fondo, etc.) — con ciertos fondos ese
-    // alfa tan bajo se vuelve casi invisible. compositarSobreFondo mezcla
-    // ESE MISMO rgba() (mismo tono, misma intensidad) contra --bg-card una
-    // sola vez acá, y devuelve un color sólido de 6 dígitos — mismo look
-    // exacto de siempre, pero ya no depende de qué haya detrás en cada
-    // render.
-    "--badge-bg-solid": compositarSobreFondo(hexARgba(accent1, canvasClaro ? 0.10 : 0.12), fondoCard),
+    // FIX v3 (captura real: el badge quedaba invisible — borde fuerte pero
+    // relleno idéntico al fondo azul de atrás). v2 mezclaba accent1 contra
+    // --bg-card con compositarSobreFondo: sí quedaba sólido, PERO seguía
+    // dependiendo de que --bg-card se pareciera al fondo real detrás del
+    // badge — si no (como en la captura), el resultado se funde igual.
+    // Pedido explícito: "el borde se mantiene con color fuerte, el fondo
+    // un poco más claro, pero que funcione en cualquier fondo" — o sea,
+    // el relleno NO debe depender de lo que haya detrás en absoluto. Acá
+    // se aclara accent1 mezclándolo con blanco (mezclarHex, no alpha real)
+    // — un tono pastel sólido del MISMO color del borde, autocontenido:
+    // sea cual sea la pantalla o tarjeta detrás, el badge siempre se ve
+    // igual de claro y de legible.
+    "--badge-bg-solid": mezclarHex(accent1, "#ffffff", 0.55),
   };
 }
 
