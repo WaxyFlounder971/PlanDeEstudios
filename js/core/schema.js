@@ -296,6 +296,7 @@ function crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, tipo_titul
       horario_inicio_default: "07:30",
       horario_duracion_bloque_min: 50,
       nota_aprobacion: 70,           // por universidad/plan, editable en Ajustes — única fuente de verdad para aprobar/reprobar
+      redondeo_activo: true,         // Fase 6.2: no toda universidad redondea al 5 más cercano — editable en Ajustes
       tipos_horas: ["Horas"], // se sobrescribe abajo con lo que traiga parametros_universidad
       ...(parametros_universidad || {}),
     },
@@ -691,6 +692,12 @@ function repartirEquitativoCriterio(criterio) {
  * Escala de notas activa (10 o 100) para una materia matriculada: override
  * propio > escala del plan/universidad > escala global. Único punto de
  * verdad — reutilizar en vez de leer los 3 campos por separado.
+ *
+ * A partir de esta ronda el valor devuelto puede ser:
+ *  - un número (7, 10, 12, 15, 20, 100...) para escalas numéricas "0 al X".
+ *  - el string "letras" para el sistema de letras (A+, A, A-, ... F).
+ * Ver ESCALAS_DISPONIBLES para la lista completa y obtenerEscalaPorId para
+ * ir de este valor crudo al descriptor completo (tipo, max, valores).
  */
 function obtenerEscalaNotasMateria(materia, plan, configuracion) {
   return (
@@ -699,6 +706,96 @@ function obtenerEscalaNotasMateria(materia, plan, configuracion) {
     (configuracion && configuracion.escala_notas_global) ||
     100
   );
+}
+
+/**
+ * Fase 6.2 — Escalas de calificación. Los ids numéricos son los mismos
+ * números que ya se guardaban desde siempre (10, 100) — así los datos
+ * viejos siguen funcionando sin migración: un plan con escala_notas=100
+ * de antes de este cambio sigue encontrando su descriptor acá mismo.
+ * "letras" es el único tipo nuevo de verdad.
+ *
+ * Para letras no existe un estándar universal, así que usamos la escala
+ * de EE.UU. más común (A+ a F) con su equivalencia en % típica de
+ * universidad — es una convención razonable, no una regla exacta; si
+ * alguna universidad usa otra tabla, esto es lo primero que habría que
+ * hacer editable a futuro.
+ */
+const ESCALAS_DISPONIBLES = [
+  { id: 7, etiqueta: "0 – 7", tipo: "numerica", max: 7 },
+  { id: 10, etiqueta: "0 – 10", tipo: "numerica", max: 10 },
+  { id: 12, etiqueta: "0 – 12", tipo: "numerica", max: 12 },
+  { id: 15, etiqueta: "0 – 15", tipo: "numerica", max: 15 },
+  { id: 20, etiqueta: "0 – 20", tipo: "numerica", max: 20 },
+  { id: 100, etiqueta: "0 – 100", tipo: "numerica", max: 100 },
+  {
+    id: "letras",
+    etiqueta: "A – F (letras)",
+    tipo: "letras",
+    // Ordenado de mejor a peor a propósito — varias funciones de acá abajo
+    // dependen de este orden (ej. encontrar "la letra más baja que ya
+    // alcanza tal fracción").
+    valores: [
+      { letra: "A+", fraccion: 1.00 },
+      { letra: "A", fraccion: 0.95 },
+      { letra: "A-", fraccion: 0.91 },
+      { letra: "B+", fraccion: 0.88 },
+      { letra: "B", fraccion: 0.85 },
+      { letra: "B-", fraccion: 0.81 },
+      { letra: "C+", fraccion: 0.78 },
+      { letra: "C", fraccion: 0.75 },
+      { letra: "C-", fraccion: 0.71 },
+      { letra: "D+", fraccion: 0.68 },
+      { letra: "D", fraccion: 0.65 },
+      { letra: "D-", fraccion: 0.61 },
+      { letra: "F", fraccion: 0.50 },
+    ],
+  },
+];
+
+/** Descriptor completo de una escala a partir de su id crudo (lo que se
+ * guarda en escala_notas_global/escala_notas/escala_notas_override). Si el
+ * id no existe (dato corrupto o escala vieja que ya no está en la lista),
+ * cae de vuelta a 0-100 en vez de romper cualquier cálculo. */
+function obtenerEscalaPorId(escalaId) {
+  return ESCALAS_DISPONIBLES.find((e) => e.id === escalaId) || ESCALAS_DISPONIBLES.find((e) => e.id === 100);
+}
+
+/**
+ * Fracción (0 a 1, o más de 1 si la nota está mal cargada) que representa
+ * una nota cruda dentro de su escala — el único lugar donde "nota" deja de
+ * ser un número o una letra sueltos y se vuelve algo comparable/sumable.
+ * Devuelve null si la nota no es válida para esa escala (letra que no
+ * existe, número no finito, etc.) — quien llama decide qué hacer con eso.
+ */
+function obtenerFraccionNota(nota, escalaId) {
+  if (nota === null || nota === undefined || nota === "") return null;
+  const escala = obtenerEscalaPorId(escalaId);
+  if (escala.tipo === "letras") {
+    const encontrada = escala.valores.find((v) => v.letra === nota);
+    return encontrada ? encontrada.fraccion : null;
+  }
+  const n = Number(nota);
+  if (!Number.isFinite(n)) return null;
+  return n / escala.max;
+}
+
+/**
+ * Camino inverso: dada una fracción (0 a 1+) necesaria, ¿qué nota "cruda"
+ * hay que sacarse en esta escala para llegarle? Usado por el simulador
+ * "Proyectar". Para numéricas es directo (fracción × máximo, redondeado
+ * hacia arriba para no subestimar). Para letras se busca la letra MÁS BAJA
+ * que todavía cubre esa fracción — si ni la mejor letra (A+, fracción 1.0)
+ * alcanza, devuelve null (lo mismo que "ni con nota máxima se puede").
+ */
+function notaMinimaParaFraccion(fraccion, escalaId) {
+  const escala = obtenerEscalaPorId(escalaId);
+  if (escala.tipo === "letras") {
+    const ordenAscendente = [...escala.valores].sort((a, b) => a.fraccion - b.fraccion);
+    const encontrada = ordenAscendente.find((v) => v.fraccion >= fraccion);
+    return encontrada ? encontrada.letra : null;
+  }
+  return Math.ceil(fraccion * escala.max * 100) / 100;
 }
 
 /**
@@ -748,11 +845,16 @@ function calcularPuntosAsignacion(asignacion, escalaActiva) {
     // valor de la asignación (no se divide por escala — no aplica).
     return Math.min(Number(asignacion.nota) || 0, Number(asignacion.valor) || 0);
   }
+  // Fase 6.2: obtenerFraccionNota entiende tanto escalas numéricas (nota/max)
+  // como letras (A+, B-, etc. → su fracción de la tabla) — un solo camino
+  // para las dos, en vez de duplicar la lógica de conversión acá.
+  const fraccion = obtenerFraccionNota(asignacion.nota, escalaActiva);
+  if (fraccion === null) return 0;
   // Redondeo epsilon-safe a 6 decimales: sin esto, sumar muchas asignaciones
   // con divisiones no exactas (ej. nota/escala) va acumulando basura de
   // coma flotante que después, al mostrar solo 2 decimales, hace que el
   // total se vea redondeado "de más" (ver redondearDecimales arriba).
-  return redondearDecimales((Number(asignacion.nota) / escalaActiva) * asignacion.valor, 6);
+  return redondearDecimales(fraccion * asignacion.valor, 6);
 }
 
 /**
@@ -804,19 +906,21 @@ function calcularMaximoPosibleMateria(materiaMatriculada, escalaActiva) {
 }
 
 /**
- * Nota uniforme necesaria en CADA asignación pendiente para que la nota
- * final llegue a `objetivo` (0-100, mismas unidades que nota_aprobacion).
- * "Uniforme" = mismo % de desempeño en todas las pendientes — así el peso
- * real de cada una (punto 3) ya queda respetado solo, sin repartir puntos
- * a mano ni caer en un reparto ingenuo 1:1.
+ * Fracción uniforme necesaria en CADA asignación pendiente para que la
+ * nota final llegue a `objetivo` (0-100, mismas unidades que
+ * nota_aprobacion). "Uniforme" = mismo % de desempeño en todas las
+ * pendientes — así el peso real de cada una (punto 3) ya queda respetado
+ * solo, sin repartir puntos a mano ni caer en un reparto ingenuo 1:1.
+ *
+ * Fase 6.2: devuelve una FRACCIÓN (0 a 1+), no una nota cruda — porque la
+ * nota cruda depende de la escala (número o letra), y esa conversión le
+ * toca a la UI vía notaMinimaParaFraccion(). fraccionNecesaria > 1 =
+ * imposible sin importar la escala (nadie saca más del 100% de nada).
  * Devuelve:
  *  - { estado: "ya_alcanzado" } si lo ya obtenido alcanza sin necesitar más.
- *  - { estado: "imposible", notaHipotetica } si ni con nota máxima alcanza
- *    (notaHipotetica puede superar la escala, ej. 120/100 — es informativo,
- *    nunca se usa para cálculos reales).
- *  - { estado: "posible", notaNecesaria } en el caso normal. notaNecesaria
- *    se redondea siempre HACIA ARRIBA (2 decimales) para no subestimar por
- *    un pelo de coma flotante lo que hace falta de verdad.
+ *  - { estado: "imposible", fraccionNecesaria } si ni con nota máxima
+ *    alcanza (fraccionNecesaria > 1, informativo).
+ *  - { estado: "posible", fraccionNecesaria } en el caso normal.
  */
 function calcularNotaNecesariaUniforme(materiaMatriculada, escalaActiva, objetivo) {
   const puntosObtenidos = calcularNotaFinalMateria(materiaMatriculada, escalaActiva);
@@ -826,13 +930,13 @@ function calcularNotaNecesariaUniforme(materiaMatriculada, escalaActiva, objetiv
     (total, p) => total + (Number(p.asignacion.valor) || 0),
     0
   );
-  if (pesoPendienteTotal <= 0) return { estado: "imposible", notaHipotetica: null };
+  if (pesoPendienteTotal <= 0) return { estado: "imposible", fraccionNecesaria: null };
 
   const puntosFaltantes = objetivo - puntosObtenidos;
-  const notaNecesaria = Math.ceil((puntosFaltantes / pesoPendienteTotal) * escalaActiva * 100) / 100;
+  const fraccionNecesaria = puntosFaltantes / pesoPendienteTotal;
 
-  if (notaNecesaria > escalaActiva) return { estado: "imposible", notaHipotetica: notaNecesaria };
-  return { estado: "posible", notaNecesaria };
+  if (fraccionNecesaria > 1) return { estado: "imposible", fraccionNecesaria };
+  return { estado: "posible", fraccionNecesaria };
 }
 
 /**
@@ -1037,6 +1141,9 @@ function migrarDatosAntiguos(datos) {
     }
 
     if (params.nota_aprobacion === undefined) params.nota_aprobacion = 70;
+    // Fase 6.2: universidades que no redondean al 5 más cercano — default
+    // true porque es el comportamiento que ya existía antes de este campo.
+    if (params.redondeo_activo === undefined) params.redondeo_activo = true;
     // Fase 6, punto 5: umbral_pasar_raspando queda eliminado del modelo —
     // ya no es un número guardado (ver calcularObjetivoPasarRaspando). Se
     // limpia acá mismo si viene de datos viejos, para no dejar un campo
@@ -1159,4 +1266,8 @@ export {
   calcularMaximoPosibleMateria,
   calcularNotaNecesariaUniforme,
   calcularObjetivoPasarRaspando,
+  ESCALAS_DISPONIBLES,
+  obtenerEscalaPorId,
+  obtenerFraccionNota,
+  notaMinimaParaFraccion,
 };
