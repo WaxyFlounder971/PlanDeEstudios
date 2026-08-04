@@ -316,19 +316,20 @@ function calcularVariablesDerivadas(colores) {
     "--accent-1-20": hexARgba(accent1, canvasClaro ? 0.22 : 0.28),
     "--color-danger": canvasClaro ? "#dc2626" : "#f87171",
     "--color-luz": luz,
-    // FIX v3 (captura real: el badge quedaba invisible — borde fuerte pero
-    // relleno idéntico al fondo azul de atrás). v2 mezclaba accent1 contra
-    // --bg-card con compositarSobreFondo: sí quedaba sólido, PERO seguía
-    // dependiendo de que --bg-card se pareciera al fondo real detrás del
-    // badge — si no (como en la captura), el resultado se funde igual.
-    // Pedido explícito: "el borde se mantiene con color fuerte, el fondo
-    // un poco más claro, pero que funcione en cualquier fondo" — o sea,
-    // el relleno NO debe depender de lo que haya detrás en absoluto. Acá
-    // se aclara accent1 mezclándolo con blanco (mezclarHex, no alpha real)
-    // — un tono pastel sólido del MISMO color del borde, autocontenido:
-    // sea cual sea la pantalla o tarjeta detrás, el badge siempre se ve
-    // igual de claro y de legible.
-    "--badge-bg-solid": mezclarHex(accent1, "#ffffff", 0.55),
+    // FIX v4 (captura real: "estilo neon", el fondo pastel de v3 se veía
+    // pálido y fuera de lugar contra un tema oscuro). Los badges que SÍ
+    // funcionan (badge-danger, badge-neutral) son "vidrio oscuro con un
+    // toque de color": ~15% del color de acento mezclado sobre un fondo
+    // casi negro — el estilo "neón" es precisamente ESE contraste entre un
+    // relleno oscuro y un borde/texto brillante encima, no un pastel claro.
+    // v3 mezclaba accent1 con BLANCO sin importar el modo — mal en un tema
+    // oscuro. Ahora mezcla hacia negro en modo oscuro y hacia blanco en
+    // modo claro (mismo criterio que ya usa canvasClaro en toda esta
+    // función), con la MISMA proporción ~15% que usan los badges fijos —
+    // pero mezclado con mezclarHex (sin alpha real), así sigue sin
+    // depender de qué haya renderizado detrás: es un color sólido fijo,
+    // nunca "el fondo real de esta tarjeta en particular".
+    "--badge-bg-solid": mezclarHex(accent1, canvasClaro ? "#ffffff" : "#000000", 0.85),
   };
 }
 
