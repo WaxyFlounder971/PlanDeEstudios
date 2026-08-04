@@ -119,10 +119,18 @@ function crearDatosUsuarioNuevo() {
       */
     ],
 
+    // Comunidad — Parte 1: ver crearProfesor(). El vínculo Profesor↔Semestre
+    // (calificación, ¿volvería a llevar?) NO vive acá — vive embebido en cada
+    // materia_matriculada (profesor_id/calificacion_profesor/
+    // volveria_a_llevar_profesor, ver crearMateriaMatriculada) para que un
+    // mismo profesor pueda tener 2+ materias distintas en el MISMO semestre
+    // (ej. correquisitos) cada una con su propia calificación, sin chocar.
     profesores: [
-      /*
-      { id, nombre, materias_impartidas: [{ materia_id, semestre_id, nota_obtenida, calificacion_dada }] }
-      */
+      /* ver crearProfesor() */
+    ],
+    // Comunidad — Parte 1: ver crearCompanero().
+    companeros: [
+      /* ver crearCompanero() */
     ],
 
     agenda: [
@@ -131,6 +139,16 @@ function crearDatosUsuarioNuevo() {
         completado: false, archivado: false, notas: "" }
       */
     ],
+
+    // Tumbas top-level (regla obligatoria de sincronización — ver
+    // storage-merge.js/fusionarDatos, que ya las esperaba). BUG encontrado en
+    // esta ronda: _eliminados_profesores/_eliminados_planes/_eliminados_agenda
+    // nunca se inicializaban acá — sobrevivían solo porque fusionarTumbas
+    // tolera undefined. Se agregan explícitas para profesores/companeros (las
+    // que sí necesita este prompt); _eliminados_semestres ya se auto-crea de
+    // forma perezosa en semestres.js al primer borrado.
+    _eliminados_profesores: [],
+    _eliminados_companeros: [],
   };
 }
 
@@ -600,6 +618,17 @@ function crearMateriaMatriculada({ materiaId, planEstudioId }) {
     id: "mm_" + crypto.randomUUID(),
     materia_id: materiaId,
     plan_estudio_id: planEstudioId,
+    // Comunidad — Parte 1: vínculo Profesor↔Semestre, embebido acá a
+    // propósito (decisión confirmada 2026-08-04) en vez de vivir como
+    // entidad/tumba separada — así un mismo profesor con 2+ materias en el
+    // MISMO semestre (ej. correquisitos) tiene una calificación independiente
+    // por cada una, sin necesidad de decidir "cuál gana" a nivel semestre.
+    // Se sincroniza gratis: al ser campos de mm, ya heredan su propio
+    // sellado/_version_base y la tumba _eliminados_materias_matriculadas del
+    // semestre — nada nuevo que fusionar en storage-merge.js.
+    profesor_id: null,
+    calificacion_profesor: null,       // 1-10, o null = sin calificar
+    volveria_a_llevar_profesor: null,  // true | false | null = neutro/sin contestar
     // Fase 6 (motor de notas): criterios de ESTA matrícula puntual (nunca
     // de la materia del plan) — cada criterio trae su propio array de
     // asignaciones anidado (ver crearCriterio).
@@ -967,6 +996,106 @@ function crearCategoria({ nombre, color }) {
   return sellarTimestamp({ id: "cat_" + crypto.randomUUID(), nombre, color });
 }
 
+/* ===================== Comunidad — Parte 1: Profesor y Compañero ===================== */
+
+/**
+ * Profesor — vive en datos.profesores (colección top-level, tumba propia
+ * _eliminados_profesores). "materias" es de referencia libre (qué imparte en
+ * general, no ligado a un plan/semestre puntual) — la relación real con
+ * semestres/materias cursadas vive en cada materia_matriculada (ver
+ * crearMateriaMatriculada). Cada bloque de info se muestra en la UI solo si
+ * tiene datos, así que acá no se fuerza ningún string vacío: null real.
+ */
+function crearProfesor({ nombre, materias, correo, telefono }) {
+  return sellarTimestamp({
+    id: "prof_" + crypto.randomUUID(),
+    nombre,
+    materias: Array.isArray(materias) ? materias : [],
+    correo: correo || null,
+    telefono: telefono || null,
+  });
+}
+
+/**
+ * Compañero — vive en datos.companeros (colección top-level, tumba propia
+ * _eliminados_companeros). `lista` es un switch de 2 estados obligatorio, sin
+ * neutral (a diferencia de volveria_a_llevar_profesor, que sí admite null) —
+ * default "whitelist" si no se especifica. `materias_compartidas` guarda ids
+ * de materia_matriculada puntuales (la instancia de un semestre concreto, no
+ * la materia genérica del plan) — si esa mm se borra alguna vez, la
+ * referencia queda huérfana silenciosamente (se filtra sola al renderizar,
+ * ver obtenerMateriasCompartidasValidas), nunca revienta la UI.
+ */
+function crearCompanero({ nombre_completo, carnet, lista, materias_compartidas, nota }) {
+  return sellarTimestamp({
+    id: "comp_" + crypto.randomUUID(),
+    nombre_completo,
+    carnet: carnet || null,
+    lista: lista === "blacklist" ? "blacklist" : "whitelist",
+    materias_compartidas: Array.isArray(materias_compartidas) ? materias_compartidas : [],
+    nota: nota || "",
+  });
+}
+
+/**
+ * Recorre TODOS los semestres buscando materias_matriculadas ligadas a este
+ * profesor (mm.profesor_id === profesorId), y devuelve un arreglo plano
+ * { semestre, mm } — una entrada por cada materia dada, no por semestre, así
+ * el caso de 2 materias correquisito con el mismo profesor en el mismo
+ * semestre aparece como 2 entradas independientes con su propia calificación
+ * y volveria_a_llevar. Único punto de verdad para armar la tarjeta expandida
+ * de un profesor (semestres-tarjetas.js / la futura vista de Comunidad).
+ */
+function obtenerHistorialProfesor(profesorId, datos) {
+  const resultado = [];
+  (datos.semestres || []).forEach((semestre) => {
+    (semestre.materias_matriculadas || []).forEach((mm) => {
+      if (mm.profesor_id === profesorId) resultado.push({ semestre, mm });
+    });
+  });
+  // Más reciente primero, por fecha de inicio del semestre.
+  resultado.sort((a, b) => new Date(b.semestre.fecha_inicio) - new Date(a.semestre.fecha_inicio));
+  return resultado;
+}
+
+/**
+ * Universidades ("TEC" | "UCR" | otra) de los planes asociados a los
+ * semestres donde este profesor dio clases — puede devolver más de una (ej.
+ * Modo Hardcore, o el profesor pasó de una carrera a otra). Único punto de
+ * verdad para decidir qué botón(es) "Buscar en MisProfesX" mostrar (decisión
+ * confirmada 2026-08-04: si trabaja en dos universidades, se muestran ambos).
+ */
+function obtenerUniversidadesDeProfesor(profesorId, datos) {
+  const universidades = new Set();
+  const planesPorId = new Map((datos.planes_estudio || []).map((p) => [p.id, p]));
+  obtenerHistorialProfesor(profesorId, datos).forEach(({ mm }) => {
+    const plan = planesPorId.get(mm.plan_estudio_id);
+    if (plan && plan.universidad) universidades.add(plan.universidad);
+  });
+  return Array.from(universidades);
+}
+
+/**
+ * Filtra materias_compartidas de un compañero a solo las que todavía
+ * apuntan a una materia_matriculada real (ver comentario en crearCompanero
+ * sobre referencias huérfanas por borrado). Devuelve [{ mm, semestre,
+ * materia }] listo para renderizar, en vez de solo los ids crudos —
+ * `materia` puede ser null si la materia del plan también se borró.
+ */
+function obtenerMateriasCompartidasValidas(companero, datos) {
+  const idsBuscados = new Set(companero.materias_compartidas || []);
+  const resultado = [];
+  (datos.semestres || []).forEach((semestre) => {
+    (semestre.materias_matriculadas || []).forEach((mm) => {
+      if (!idsBuscados.has(mm.id)) return;
+      const plan = (datos.planes_estudio || []).find((p) => p.id === mm.plan_estudio_id);
+      const materia = plan ? (plan.materias || []).find((m) => m.id === mm.materia_id) : null;
+      resultado.push({ mm, semestre, materia: materia || null });
+    });
+  });
+  return resultado;
+}
+
 /**
  * Crea una materia a partir de una fila ya parseada del CSV o del formulario
  * manual (ver js/plan.js). `horas` debe venir como un objeto con EXACTAMENTE
@@ -1110,6 +1239,28 @@ function migrarDatosAntiguos(datos) {
             if (asig.modo_calificacion === undefined) asig.modo_calificacion = "nota";
           });
         });
+      });
+    });
+  }
+
+  // Comunidad — Parte 1: relleno defensivo para datos guardados antes de que
+  // existieran estas colecciones/tumbas top-level (mismo patrón que ya usa
+  // el resto de esta función, ej. plan.optativas_disponibles más abajo).
+  if (!Array.isArray(datos.profesores)) datos.profesores = [];
+  if (!Array.isArray(datos.companeros)) datos.companeros = [];
+  if (!Array.isArray(datos._eliminados_profesores)) datos._eliminados_profesores = [];
+  if (!Array.isArray(datos._eliminados_companeros)) datos._eliminados_companeros = [];
+
+  if (Array.isArray(datos.semestres)) {
+    datos.semestres.forEach((semestre) => {
+      (semestre.materias_matriculadas || []).forEach((mm) => {
+        // Comunidad — Parte 1: mm creadas antes de este prompt no traen el
+        // vínculo Profesor↔Semestre embebido — se rellena para que ninguna
+        // lectura posterior (obtenerHistorialProfesor, UI de tarjeta, etc.)
+        // se tope con undefined donde espera null explícito.
+        if (mm.profesor_id === undefined) mm.profesor_id = null;
+        if (mm.calificacion_profesor === undefined) mm.calificacion_profesor = null;
+        if (mm.volveria_a_llevar_profesor === undefined) mm.volveria_a_llevar_profesor = null;
       });
     });
   }
@@ -1270,4 +1421,9 @@ export {
   obtenerEscalaPorId,
   obtenerFraccionNota,
   notaMinimaParaFraccion,
+  crearProfesor,
+  crearCompanero,
+  obtenerHistorialProfesor,
+  obtenerUniversidadesDeProfesor,
+  obtenerMateriasCompartidasValidas,
 };
