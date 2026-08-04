@@ -469,8 +469,16 @@ function persistirCambioMateria(mm, materia, plan, onCambiar) {
  * no hace nada (se queda quieto, no pierde nada); la X sí permite salir,
  * pero primero confirma con el mismo componente de confirmación que ya se
  * usa para eliminar criterios/asignaciones — misma estética, nada nuevo.
+ *
+ * confirmarCierre=false (pedido explícito 2026-08-03): para modales que NO
+ * persisten nada (ej. el simulador "Proyectar", que es puro cálculo en
+ * memoria) el rastreo de "sucio" ni siquiera se activa — cerrar() siempre
+ * hace overlay.remove() directo, tocar fuera y la X funcionan siempre.
+ * Esto evita el aviso de "cerrar sin guardar" en modales donde no hay nada
+ * que guardar; solo debe aparecer al crear/editar asignaciones o criterios
+ * reales.
  */
-function crearModalDinamico({ titulo, ancha }) {
+function crearModalDinamico({ titulo, ancha, confirmarCierre = true }) {
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
 
@@ -479,7 +487,7 @@ function crearModalDinamico({ titulo, ancha }) {
   card.style.gap = "14px";
 
   let sucio = false;
-  const marcarSucio = () => { sucio = true; };
+  const marcarSucio = () => { if (confirmarCierre) sucio = true; };
   card.addEventListener("input", marcarSucio);
   card.addEventListener("change", marcarSucio);
   card.addEventListener("click", (e) => {
@@ -1082,7 +1090,7 @@ function pintarResultadoObjetivo(contenedor, resultado, escalaActiva, objetivo) 
     const notaNecesaria = notaMinimaParaFraccion(resultado.fraccionNecesaria, escalaActiva);
     p.innerHTML =
       `Necesitás sacarte un <strong>${formatearNotaCruda(notaNecesaria)}</strong> (sobre ${escalaActiva}) en cada pendiente.` +
-      `<br>Tu nota final sería: <strong>${formatearNumero(objetivo)}</strong> (o la que aplique)`;
+      `<br>Tu nota final sería: <strong>${formatearNumero(objetivo)}</strong>`;
   }
   contenedor.appendChild(p);
 }
@@ -1179,7 +1187,7 @@ function abrirModalProyectar({ mm, materia, plan, escalaActiva }) {
     return;
   }
 
-  const { card } = crearModalDinamico({ titulo: "Proyectar" });
+  const { card } = crearModalDinamico({ titulo: "Proyectar", confirmarCierre: false });
   const notaAprobacion = Number((plan.parametros_universidad || {}).nota_aprobacion) || 70;
 
   const descripcion = document.createElement("p");
