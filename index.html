@@ -126,6 +126,32 @@
         <section class="glass-card stack">
           <h2>Ajustes generales</h2>
 
+          <div>
+            <span class="form-label">Formato de nombres de materias y carrera</span>
+            <div class="pill-group" id="pill-formato-texto">
+              <button type="button" class="pill-item" data-valor="titulo">Cada Palabra</button>
+              <button type="button" class="pill-item" data-valor="mayusculas">MAYÚSCULAS</button>
+              <button type="button" class="pill-item" data-valor="oracion">Solo la primera</button>
+            </div>
+          </div>
+
+          <div>
+            <span class="form-label">Escala de notas por defecto</span>
+            <div class="pill-group" id="pill-escala-notas">
+              <button type="button" class="pill-item" data-valor="10">1 – 10</button>
+              <button type="button" class="pill-item" data-valor="100">1 – 100</button>
+            </div>
+          </div>
+
+          <div>
+            <span class="form-label">Nota de aprobación por universidad/plan</span>
+            <div id="seccion-notas-aprobacion" class="stack"></div>
+          </div>
+        </section>
+
+        <section class="glass-card stack">
+          <h2>Personalizar</h2>
+
           <div class="row-between">
             <span>Modo oscuro / claro</span>
             <label class="switch switch-tema">
@@ -143,30 +169,8 @@
           </div>
 
           <div>
-            <span class="form-label">Escala de notas por defecto</span>
-            <div class="pill-group" id="pill-escala-notas">
-              <button type="button" class="pill-item" data-valor="10">1 – 10</button>
-              <button type="button" class="pill-item" data-valor="100">1 – 100</button>
-            </div>
-          </div>
-
-          <div>
-            <span class="form-label">Nota de aprobación por universidad/plan</span>
-            <div id="seccion-notas-aprobacion" class="stack"></div>
-          </div>
-
-          <div>
             <span class="form-label">Paleta de color</span>
             <div class="palette-grid" id="grid-paletas"></div>
-          </div>
-
-          <div>
-            <span class="form-label">Formato de nombres de materias y carrera</span>
-            <div class="pill-group" id="pill-formato-texto">
-              <button type="button" class="pill-item" data-valor="titulo">Cada Palabra</button>
-              <button type="button" class="pill-item" data-valor="mayusculas">MAYÚSCULAS</button>
-              <button type="button" class="pill-item" data-valor="oracion">Solo la primera</button>
-            </div>
           </div>
         </section>
 
