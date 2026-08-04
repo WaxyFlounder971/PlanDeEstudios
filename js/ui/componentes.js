@@ -47,7 +47,18 @@ function abrirConfirmacion({ titulo, mensaje, textoConfirmar, claseConfirmar, on
   btn.textContent = textoConfirmar || "Confirmar";
   btn.className = "btn " + (claseConfirmar || "btn-danger");
   callbackConfirmacionActual = onConfirmar || null;
-  document.getElementById("modal-confirmacion").classList.remove("oculto");
+  const modal = document.getElementById("modal-confirmacion");
+  // Fix (2026-08-03): este modal vive fijo en el HTML, así que cuando se
+  // abre un modal dinámico DESPUÉS (ej. cualquier crearModalDinamico, o el
+  // overlay de alta de semestre), ese overlay queda más abajo en el DOM y,
+  // con el mismo z-index de ".modal-overlay", gana el empate y tapa a este
+  // — la confirmación quedaba atrapada detrás, sin poder tocarla, y la
+  // única salida era recargar la página. Reinsertarlo al final de <body>
+  // cada vez que se abre lo pone siempre último en el DOM (arriba de
+  // cualquier overlay ya abierto) sin depender de tocar su CSS.
+  document.body.appendChild(modal);
+  modal.style.zIndex = "99999";
+  modal.classList.remove("oculto");
 }
 
 function cerrarConfirmacion() {
