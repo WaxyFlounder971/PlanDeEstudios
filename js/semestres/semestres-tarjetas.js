@@ -425,7 +425,20 @@ function sumaValorAsignaciones(criterio, excluirId) {
 function calcularNotaFinalVigente(mm, materia, plan) {
   if (mm.nota_final_manual) return mm.nota_final;
   const escala = obtenerEscalaNotasMateria(materia, plan, estado.datos.configuracion);
-  return calcularNotaFinalMateria(mm, escala);
+  const base = calcularNotaFinalMateria(mm, escala);
+  // Fase 7 — "Puntos extra" (idea stakeholder Dayi): un bono plano que se
+  // suma encima del cálculo normal por criterios, sin tocar los criterios
+  // en sí (se guarda aparte en mm.puntos_extra). Se acota SIEMPRE al techo
+  // de la escala activa, nunca puede hacer que la nota final se "salga" del
+  // rango 0-escala. Si la escala activa devuelve una letra en vez de un
+  // número (ver notaMinimaParaFraccion / escala "letras"), no hay nada
+  // numérico sobre lo cual sumar el bono, así que se ignora sin explotar —
+  // typeof base === "number" cubre ese caso.
+  const extra = Number(mm.puntos_extra) || 0;
+  if (extra > 0 && typeof base === "number") {
+    return Math.min(base + extra, escala);
+  }
+  return base;
 }
 
 /**
@@ -1057,6 +1070,62 @@ function abrirModalNotaManual({ mm, materia, plan, notaFinalVigente, onGuardado 
     // el override manual es justamente lo que NO debe recalcularse.
     mmViva.nota_final = valor;
     mmViva.nota_final_manual = true;
+    sellarTimestamp(mmViva);
+    marcarCambioPendiente();
+    onGuardado();
+    overlay.remove();
+  });
+  card.appendChild(btnGuardar);
+}
+
+/**
+ * Fase 7 — "Puntos extra" (idea stakeholder Dayi): bono plano guardado en
+ * mm.puntos_extra, aplicado por calcularNotaFinalVigente encima del cálculo
+ * normal por criterios (ver ahí). No pasa por persistirCambioMateria porque
+ * ese punto de entrada RECALCULA nota_final desde cero por criterios —
+ * pisaría el bono en el mismo golpe. Acá se guarda el campo y se sella
+ * timestamp directo, mismo patrón que abrirModalNotaManual con el override
+ * manual.
+ */
+function abrirModalPuntosExtra({ mm, materia, plan, escalaActiva, onGuardado }) {
+  const { overlay, card } = crearModalDinamico({ titulo: "Puntos extra" });
+
+  const aviso = document.createElement("p");
+  aviso.className = "muted";
+  aviso.style.fontSize = "0.8rem";
+  aviso.style.margin = "0";
+  aviso.textContent =
+    "Se suman directo a la nota final calculada por criterios, sin tocar los criterios. Se acotan para que la nota final nunca pase de " +
+    formatearNumero(escalaActiva) + ".";
+  card.appendChild(aviso);
+
+  const inputExtra = agregarCampoModal(card, {
+    etiqueta: `Puntos extra (0-${formatearNumero(escalaActiva)})`,
+    valor: mm.puntos_extra !== null && mm.puntos_extra !== undefined ? mm.puntos_extra : "",
+    decimal: true,
+  });
+
+  const mmId = mm.id;
+
+  const btnGuardar = document.createElement("button");
+  btnGuardar.type = "button";
+  btnGuardar.className = "btn btn-primary btn-block";
+  btnGuardar.textContent = "Guardar";
+  btnGuardar.addEventListener("click", () => {
+    const texto = inputExtra.value.trim();
+    const valor = texto === "" ? 0 : analizarDecimal(texto);
+    if (!Number.isFinite(valor) || valor < 0 || valor > escalaActiva) {
+      mostrarToast(`Los puntos extra deben estar entre 0 y ${formatearNumero(escalaActiva)}`);
+      return;
+    }
+    const mmViva = buscarMmVivaPorId(mmId);
+    if (!mmViva) {
+      mostrarToast("Esta materia se eliminó desde otro dispositivo — no se pudo guardar");
+      overlay.remove();
+      onGuardado();
+      return;
+    }
+    mmViva.puntos_extra = valor;
     sellarTimestamp(mmViva);
     marcarCambioPendiente();
     onGuardado();
@@ -1698,16 +1767,39 @@ function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, escal
   // "Nota final" y "Editar a mano" — solo tiene sentido si hay al menos un
   // criterio creado (si no, no hay nada sobre qué proyectar).
   if ((mm.criterios || []).length > 0) {
+    // Pedido explícito: "Extra" va justo encima de "Proyectar", los dos del
+    // mismo tamaño de botón, ancho = el de la palabra más larga entre los
+    // dos. En vez de medir a mano con offsetWidth, se aprovecha que un
+    // contenedor flex en columna (sin ancho propio fijado) se achica al
+    // ancho de su hijo más ancho, y con align-items stretch (default) TODOS
+    // los hijos se estiran a ESE mismo ancho — el CSS resuelve solo el
+    // "mismo tamaño = el más largo" sin cálculos.
+    const colBotones = document.createElement("div");
+    colBotones.style.cssText = "display:flex; flex-direction:column; gap:4px;";
+
+    const btnExtra = document.createElement("button");
+    btnExtra.type = "button";
+    btnExtra.className = "btn btn-secondary";
+    btnExtra.style.cssText = "font-size:0.75rem; padding:4px 10px; white-space:nowrap;";
+    btnExtra.textContent = "✨ Extra";
+    btnExtra.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      abrirModalPuntosExtra({ mm, materia, plan, escalaActiva, onGuardado: onCambiar });
+    });
+    colBotones.appendChild(btnExtra);
+
     const btnProyectar = document.createElement("button");
     btnProyectar.type = "button";
     btnProyectar.className = "btn btn-secondary";
-    btnProyectar.style.cssText = "font-size:0.75rem; padding:4px 10px;";
+    btnProyectar.style.cssText = "font-size:0.75rem; padding:4px 10px; white-space:nowrap;";
     btnProyectar.textContent = "🔮 Proyectar";
     btnProyectar.addEventListener("click", (ev) => {
       ev.stopPropagation();
       abrirModalProyectar({ mm, materia, plan, escalaActiva });
     });
-    filaNotaFinal.appendChild(btnProyectar);
+    colBotones.appendChild(btnProyectar);
+
+    filaNotaFinal.appendChild(colBotones);
   }
 
   if (mm.nota_final_manual) {
