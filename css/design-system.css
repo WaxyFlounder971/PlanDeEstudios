@@ -231,13 +231,13 @@ a { color: var(--accent-1); }
 .badge-danger  { background: rgba(239, 68, 68, 0.15);  border-color: #ef4444; color: #f87171; }
 .badge-neutral { background: rgba(148, 163, 184, 0.15); border-color: #94a3b8; color: #cbd5e1; }
 .badge-accent  {
-  /* FIX contraste en paleta personalizada: --badge-bg-solid/--badge-text-solid
-     solo existen cuando data-palette="personalizada" (ver tema.js); en las
-     13 paletas fijas caen al fallback de siempre (fondo translúcido +
-     accent-2), cero cambio visual ahí. */
+  /* FIX v2: fondo sólido (compositarSobreFondo en tema.js) solo bajo
+     paleta personalizada, mismo tono/intensidad de siempre — ver
+     comentario en tema.js. Texto y borde NO cambian, son los de siempre
+     en las 14 paletas (fijas + personalizada) por igual. */
   background: var(--badge-bg-solid, var(--accent-1-10));
   border-color: var(--accent-1);
-  color: var(--badge-text-solid, var(--accent-2));
+  color: var(--accent-2);
 }
 
 /* ---- Bug 4 (v7.1): las 4 badges de arriba usaban colores de texto pastel
@@ -2105,9 +2105,9 @@ html.exportar-tema-default[data-mode="dark"] {
 .ppz-preview-btn { align-self: auto; }
 
 .ppz-preview-badge {
-  /* Mismo fix de contraste que .badge-accent, ver tema.js. */
+  /* Mismo fix v2 que .badge-accent: solo el fondo cambia, ver tema.js. */
   background: var(--badge-bg-solid, var(--accent-1-10));
-  color: var(--badge-text-solid, var(--accent-1));
+  color: var(--accent-1);
   border: 1px solid var(--accent-1-20);
   border-radius: var(--radius-pill);
   padding: 5px 12px;
