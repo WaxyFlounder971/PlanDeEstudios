@@ -22,8 +22,15 @@
    Este cambio es exclusivo del modal; la tarjeta de lista no se toca.
    ========================================================================= */
 
-import { obtenerEstadoEfectivoMateria } from "../core/schema.js";
+import {
+  crearProfesor,
+  obtenerEstadoEfectivoMateria,
+  obtenerEstadoEfectivoSemestre,
+  obtenerIntentosMateria,
+  sellarTimestamp,
+} from "../core/schema.js";
 import { estado } from "../core/storage.js";
+import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { aplicarFormatoTexto, estiloBadgeCategoria, formatearHoras, formatearHorasCompactoIniciales } from "../core/utils.js";
 import { agregarLongPress } from "../ui/componentes.js";
 import { buscarMateriaPorCodigoEnPlanes } from "./plan-esquema.js";
@@ -155,7 +162,7 @@ function construirBotonesFinalesDetalle(materia, plan, opciones) {
   btnHistorial.textContent = "Historial";
   btnHistorial.addEventListener("click", (ev) => {
     ev.stopPropagation();
-    abrirModalHistorial(materia);
+    abrirModalHistorial(materia, plan);
   });
   fila.appendChild(btnHistorial);
 
@@ -470,7 +477,7 @@ function construirColumnaAccionesTarjeta(materia, plan) {
   btnHistorial.textContent = "Historial";
   btnHistorial.addEventListener("click", (ev) => {
     ev.stopPropagation();
-    abrirModalHistorial(materia);
+    abrirModalHistorial(materia, plan);
   });
   botones.appendChild(btnHistorial);
 
@@ -622,18 +629,225 @@ function abrirModalDesbloquea(materia, plan) {
 }
 
 /**
- * v7 #4: muestra el registro de todas las veces que se ha cursado esta
- * materia (reprobada semestre X, aprobada semestre Y, etc.). El módulo de
- * Semestres todavía no existe, así que por ahora siempre muestra el estado
- * vacío — queda listo para conectarse en cuanto exista esa información, sin
- * dejar el botón "Historial" fuera del layout mientras tanto.
+ * Comunidad — Parte 2: ya NO es un stub — cruza esta materia (materia.id +
+ * plan.id) contra TODOS los semestres del historial (ver
+ * obtenerIntentosMateria en schema.js) y muestra cada intento real:
+ * semestre, estado efectivo de ESE intento (cursando/aprobada/reprobada —
+ * mismo criterio que usa semestres-tarjetas.js, nunca materia.estado plano
+ * porque eso es el estado STICKY del Plan, no de un intento puntual), nota
+ * final si ya se calculó, y el profesor de esa materia en ese semestre —
+ * con la posibilidad de asignar uno existente o crear uno nuevo al vuelo
+ * (requerimiento "Comunidad" 4a: alta/asignación de profesor también desde
+ * acá, además de la pestaña Profesores y el alta de semestre).
  */
-
-function abrirModalHistorial(materia) {
+function abrirModalHistorial(materia, plan) {
   document.getElementById("titulo-modal-historial").textContent = `Historial — ${aplicarFormatoTexto(materia.nombre)}`;
-  const cont = document.getElementById("cuerpo-modal-historial");
-  cont.innerHTML = `<p class="muted">Aún no tienes semestres registrados.</p>`;
+  renderizarCuerpoModalHistorial(materia, plan);
   document.getElementById("modal-historial").classList.remove("oculto");
+}
+
+function renderizarCuerpoModalHistorial(materia, plan) {
+  const cont = document.getElementById("cuerpo-modal-historial");
+  cont.innerHTML = "";
+
+  const intentos = obtenerIntentosMateria(materia.id, plan.id, estado.datos);
+  if (intentos.length === 0) {
+    cont.innerHTML = `<p class="muted">Aún no has cursado esta materia en ningún semestre registrado.</p>`;
+    return;
+  }
+
+  const listaCont = document.createElement("div");
+  listaCont.className = "stack";
+
+  intentos.forEach(({ semestre, mm }) => {
+    listaCont.appendChild(construirFilaIntentoHistorial(materia, plan, semestre, mm));
+  });
+
+  cont.appendChild(listaCont);
+}
+
+/** Una fila del historial: un semestre concreto en que se cursó esta materia. */
+function construirFilaIntentoHistorial(materia, plan, semestre, mm) {
+  const fila = document.createElement("div");
+  fila.className = "glass-panel stack";
+  fila.style.padding = "12px 14px";
+
+  // Mismo criterio que semestres-tarjetas.js: mientras el semestre siga
+  // "actual" es Cursando; si ya terminó, se lee mm.resultado (el resultado
+  // REAL de ese intento puntual, que puede no coincidir con el estado
+  // actual del Plan si la materia se repitió después).
+  const semestreActual = obtenerEstadoEfectivoSemestre(semestre) === "actual";
+  const infoEstado = semestreActual
+    ? { texto: "Cursando", badge: "badge-warning" }
+    : mm.resultado === "aprobada"
+    ? { texto: "Aprobada", badge: "badge-success" }
+    : mm.resultado === "reprobada"
+    ? { texto: "Reprobada", badge: "badge-danger" }
+    : { texto: "Sin cerrar", badge: "badge-neutral" };
+
+  const encabezado = document.createElement("div");
+  encabezado.className = "row";
+  encabezado.style.justifyContent = "space-between";
+  encabezado.innerHTML = `
+    <strong>${aplicarFormatoTexto(semestre.nombre)}</strong>
+    <span class="badge ${infoEstado.badge}">${infoEstado.texto}</span>
+  `;
+  fila.appendChild(encabezado);
+
+  if (typeof mm.nota_final === "number") {
+    const notaP = document.createElement("p");
+    notaP.className = "muted";
+    notaP.style.margin = "0";
+    notaP.textContent = `Nota final: ${mm.nota_final}`;
+    fila.appendChild(notaP);
+  }
+
+  fila.appendChild(construirBloqueProfesorIntento(materia, plan, semestre, mm));
+
+  return fila;
+}
+
+/**
+ * Bloque de profesor DENTRO de un intento del historial: si ya hay uno
+ * asignado, muestra su nombre + calificación (1-10, opcional) + ¿volvería a
+ * llevar? (Sí/No/— neutro, opcional) con controles para editarlas o quitar
+ * la asignación; si no hay ninguno, un selector para elegir uno ya creado o
+ * crear uno nuevo al vuelo (solo pide el nombre acá — correo/teléfono/
+ * materias se completan después desde la pestaña Profesores de Comunidad).
+ */
+function construirBloqueProfesorIntento(materia, plan, semestre, mm) {
+  const cont = document.createElement("div");
+  cont.className = "stack";
+  cont.style.marginTop = "4px";
+
+  const profesor = mm.profesor_id
+    ? (estado.datos.profesores || []).find((p) => p.id === mm.profesor_id)
+    : null;
+
+  const reRenderizar = () => renderizarCuerpoModalHistorial(materia, plan);
+
+  if (!profesor) {
+    const fila = document.createElement("div");
+    fila.className = "row";
+
+    const select = document.createElement("select");
+    select.className = "form-select";
+    select.innerHTML = `<option value="">Asignar profesor…</option>`;
+    (estado.datos.profesores || [])
+      .slice()
+      .sort((a, b) => a.nombre.localeCompare(b.nombre))
+      .forEach((p) => {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = p.nombre;
+        select.appendChild(opt);
+      });
+    const optNuevo = document.createElement("option");
+    optNuevo.value = "__nuevo__";
+    optNuevo.textContent = "+ Crear profesor nuevo…";
+    select.appendChild(optNuevo);
+
+    select.addEventListener("change", () => {
+      if (!select.value) return;
+      if (select.value === "__nuevo__") {
+        const nombre = (prompt("Nombre del nuevo profesor:") || "").trim();
+        if (!nombre) return;
+        const nuevo = crearProfesor({ nombre, materias: [], correo: null, telefono: null });
+        estado.datos.profesores.push(nuevo);
+        mm.profesor_id = nuevo.id;
+      } else {
+        mm.profesor_id = select.value;
+      }
+      sellarTimestamp(mm);
+      marcarCambioPendiente();
+      reRenderizar();
+    });
+
+    fila.appendChild(select);
+    cont.appendChild(fila);
+    return cont;
+  }
+
+  const filaProfesor = document.createElement("div");
+  filaProfesor.className = "row";
+  filaProfesor.style.justifyContent = "space-between";
+  filaProfesor.innerHTML = `<span>👤 ${profesor.nombre}</span>`;
+
+  const btnQuitar = document.createElement("button");
+  btnQuitar.type = "button";
+  btnQuitar.className = "btn btn-secondary";
+  btnQuitar.textContent = "Quitar";
+  btnQuitar.addEventListener("click", () => {
+    mm.profesor_id = null;
+    mm.calificacion_profesor = null;
+    mm.volveria_a_llevar_profesor = null;
+    sellarTimestamp(mm);
+    marcarCambioPendiente();
+    reRenderizar();
+  });
+  filaProfesor.appendChild(btnQuitar);
+  cont.appendChild(filaProfesor);
+
+  // Calificación 1-10 (opcional — null = sin calificar).
+  const filaCalificacion = document.createElement("div");
+  filaCalificacion.className = "row";
+  const etiquetaCalificacion = document.createElement("span");
+  etiquetaCalificacion.className = "muted";
+  etiquetaCalificacion.textContent = "Calificación:";
+  filaCalificacion.appendChild(etiquetaCalificacion);
+  const inputCalificacion = document.createElement("input");
+  inputCalificacion.type = "number";
+  inputCalificacion.className = "form-input";
+  inputCalificacion.style.width = "70px";
+  inputCalificacion.min = "1";
+  inputCalificacion.max = "10";
+  inputCalificacion.placeholder = "—";
+  if (mm.calificacion_profesor !== null && mm.calificacion_profesor !== undefined) {
+    inputCalificacion.value = mm.calificacion_profesor;
+  }
+  inputCalificacion.addEventListener("change", () => {
+    const valor = inputCalificacion.value === "" ? null : Math.min(10, Math.max(1, Number(inputCalificacion.value) || 1));
+    mm.calificacion_profesor = valor;
+    sellarTimestamp(mm);
+    marcarCambioPendiente();
+  });
+  filaCalificacion.appendChild(inputCalificacion);
+  cont.appendChild(filaCalificacion);
+
+  // ¿Volvería a llevar? — 3 estados reales: Sí / No / — (neutro, sin
+  // contestar), nunca forzado a true/false (a diferencia del switch
+  // whitelist/blacklist de Compañero, que sí es obligatorio de 2 estados).
+  const filaVolveria = document.createElement("div");
+  filaVolveria.className = "row";
+  const etiquetaVolveria = document.createElement("span");
+  etiquetaVolveria.className = "muted";
+  etiquetaVolveria.textContent = "¿Volvería a llevarlo?";
+  filaVolveria.appendChild(etiquetaVolveria);
+
+  const opcionesVolveria = [
+    { valor: true, texto: "Sí" },
+    { valor: false, texto: "No" },
+    { valor: null, texto: "—" },
+  ];
+  const grupoVolveria = document.createElement("div");
+  grupoVolveria.className = "pill-group";
+  opcionesVolveria.forEach((op) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pill-item" + (mm.volveria_a_llevar_profesor === op.valor ? " active" : "");
+    btn.textContent = op.texto;
+    btn.addEventListener("click", () => {
+      mm.volveria_a_llevar_profesor = op.valor;
+      sellarTimestamp(mm);
+      marcarCambioPendiente();
+      reRenderizar();
+    });
+    grupoVolveria.appendChild(btn);
+  });
+  filaVolveria.appendChild(grupoVolveria);
+  cont.appendChild(filaVolveria);
+
+  return cont;
 }
 
 function inicializarModalDesbloquea() {
