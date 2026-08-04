@@ -683,6 +683,16 @@ async function forzarSincronizacion() {
  * semestres-tarjetas.js; acá solo se necesita el conteo.
  */
 function contarConflictosGlobales() {
+  // Fix (2026-08-03 — "ERROR GRAVE" al loguearse): establecerTokenActivo()
+  // (storage.js) llama a ocultarAvisoReconexion() -> actualizarIndicadorSync()
+  // -> esta función, TODO de forma síncrona, apenas se obtiene el token. Pero
+  // estado.datos recién se asigna después, dentro de onLoginExitoso (main.js),
+  // una vez que termina el await de buscarOCrearArchivoDatos(). En un
+  // dispositivo sin caché local todavía (primer login ahí) estado.datos sigue
+  // en null en ese instante -> estallaba acá. Con caché local ya cargada no
+  // se nota, por eso era intermitente.
+  if (!estado.datos) return 0;
+
   let total = 0;
 
   (estado.datos.planes_estudio || []).forEach((plan) => {
