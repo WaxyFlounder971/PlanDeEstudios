@@ -358,6 +358,16 @@ function formatearNumero(n) {
 }
 
 /**
+ * Igual que formatearNumero, pero letras-safe: notaMinimaParaFraccion puede
+ * devolver una letra ("A-", "B+", etc.) en vez de un número cuando la
+ * escala activa es "letras" — en ese caso se muestra tal cual, sin pasar
+ * por formatearNumero (que la convertiría a 0).
+ */
+function formatearNotaCruda(valor) {
+  return typeof valor === "string" ? valor : formatearNumero(valor);
+}
+
+/**
  * Ajuste (2026-08-02, pedido explícito): "nota" (la cruda, sin redondeo de
  * la universidad) siempre se muestra con 2 decimales fijos — a diferencia
  * de formatearNumero (máx. 1, sin ceros de más), que es el formato correcto
@@ -1055,7 +1065,7 @@ function abrirModalNotaManual({ mm, materia, plan, notaFinalVigente, onGuardado 
  * alcanzado", siempre hay un número). Textos cortos a propósito: nadie
  * debería tener que adivinar qué significa cada caso.
  */
-function pintarResultadoObjetivo(contenedor, resultado, escalaActiva) {
+function pintarResultadoObjetivo(contenedor, resultado, escalaActiva, objetivo) {
   contenedor.innerHTML = "";
   const p = document.createElement("p");
   p.style.cssText = "margin:0; font-weight:600; text-align:center;";
@@ -1063,12 +1073,16 @@ function pintarResultadoObjetivo(contenedor, resultado, escalaActiva) {
   if (resultado.estado === "ya_alcanzado") {
     p.textContent = "✅ Ya alcanzás esto con lo que tenés — necesitás 0 en lo que falta.";
   } else if (resultado.estado === "imposible") {
-    const notaImposible = resultado.notaHipotetica !== null ? formatearNumero(resultado.notaHipotetica) : "—";
+    const notaHipotetica = notaMinimaParaFraccion(resultado.fraccionNecesaria, escalaActiva);
+    const notaImposible = notaHipotetica !== null ? formatearNotaCruda(notaHipotetica) : "—";
     p.innerHTML =
       `Necesitarías un <strong>${notaImposible}</strong> (sobre ${escalaActiva}) en cada pendiente — ` +
       `lo cual ya ni existe. <br><span style="font-weight:400;">No pos ya valió, no hay por dónde.</span>`;
   } else {
-    p.innerHTML = `Necesitás sacarte un <strong>${formatearNumero(resultado.notaNecesaria)}</strong> (sobre ${escalaActiva}) en cada pendiente.`;
+    const notaNecesaria = notaMinimaParaFraccion(resultado.fraccionNecesaria, escalaActiva);
+    p.innerHTML =
+      `Necesitás sacarte un <strong>${formatearNotaCruda(notaNecesaria)}</strong> (sobre ${escalaActiva}) en cada pendiente.` +
+      `<br>Tu nota final sería: <strong>${formatearNumero(objetivo)}</strong> (o la que aplique)`;
   }
   contenedor.appendChild(p);
 }
@@ -1173,9 +1187,13 @@ function abrirModalProyectar({ mm, materia, plan, escalaActiva }) {
   descripcion.style.cssText = "font-size:0.8rem; margin:0;";
   card.appendChild(descripcion);
 
+  // Pedido explícito (2026-08-03): un pill-group horizontal de 5 opciones
+  // siempre se corta / no se alcanza a leer. En vez de eso, cada opción
+  // ocupa su propia fila completa, siempre en el mismo orden vertical —
+  // nunca vuelve a horizontal aunque haya espacio de sobra.
   const grupoModos = document.createElement("div");
   grupoModos.className = "pill-group";
-  grupoModos.style.cssText = "display:flex; flex-wrap:wrap; gap:6px;";
+  grupoModos.style.cssText = "display:flex; flex-direction:column; gap:6px; width:100%;";
   card.appendChild(grupoModos);
 
   const inputDeseada = document.createElement("input");
@@ -1183,6 +1201,10 @@ function abrirModalProyectar({ mm, materia, plan, escalaActiva }) {
   inputDeseada.inputMode = "decimal";
   inputDeseada.className = "form-input oculto";
   inputDeseada.placeholder = "Nota a la que querés llegar (0-100)";
+  // Pedido explícito: el input de la última opción hipotética ("Nota
+  // deseada") se ve un 10% más ancho que el resto del modal — se centra
+  // con márgenes negativos para que no se salga del glass-card.
+  inputDeseada.style.cssText = "width:110%; margin-left:-5%; margin-right:-5%; box-sizing:border-box;";
   card.appendChild(inputDeseada);
 
   const contenedorResultado = document.createElement("div");
@@ -1198,6 +1220,7 @@ function abrirModalProyectar({ mm, materia, plan, escalaActiva }) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "pill-item" + (modoActivo === valor ? " active" : "");
+      btn.style.cssText = "width:100%; box-sizing:border-box; white-space:normal; text-align:center;";
       btn.textContent = texto;
       btn.addEventListener("click", () => {
         modoActivo = valor;
@@ -1248,7 +1271,7 @@ function abrirModalProyectar({ mm, materia, plan, escalaActiva }) {
     }
 
     const resultado = calcularNotaNecesariaUniforme(mm, escalaActiva, objetivo);
-    pintarResultadoObjetivo(contenedorResultado, resultado, escalaActiva);
+    pintarResultadoObjetivo(contenedorResultado, resultado, escalaActiva, objetivo);
   }
 
   inputDeseada.addEventListener("input", pintar);
