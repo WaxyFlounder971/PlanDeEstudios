@@ -661,13 +661,20 @@ function crearMateriaMatriculada({ materiaId, planEstudioId }) {
  * DENTRO de la materia (0-100). Trae su propio array de asignaciones y su
  * propia tumba, igual que cualquier otra colección anidada del proyecto.
  */
-function crearCriterio({ nombre, valorTotal }) {
+function crearCriterio({ nombre, valorTotal, orden }) {
   return sellarTimestamp({
     id: "crit_" + crypto.randomUUID(),
     nombre,
     valor_total: Number(valorTotal) || 0,
     asignaciones: [],
     _eliminados_asignaciones: [],
+    // Fase 8 — Drag and drop (2026-08-04): posición visual dentro de la
+    // materia. No se infiere del índice del array porque la fusión de sync
+    // (fusionarColeccion) no garantiza mantener el orden del array entre
+    // dispositivos — solo decide, por id, qué versión de CADA item gana.
+    // Con un campo propio, reordenar es una edición de campo más, que se
+    // sincroniza y resuelve conflictos igual que cualquier otro cambio.
+    orden: Number.isFinite(orden) ? orden : 0,
   });
 }
 
@@ -678,7 +685,7 @@ function crearCriterio({ nombre, valorTotal }) {
  * examen de 15% se suman directo sin conversión. `nota` queda en null
  * hasta que el usuario la registra (según la escala activa).
  */
-function crearAsignacion({ nombre, valor }) {
+function crearAsignacion({ nombre, valor, orden }) {
   return sellarTimestamp({
     id: "asig_" + crypto.randomUUID(),
     nombre,
@@ -691,6 +698,35 @@ function crearAsignacion({ nombre, valor }) {
     // calificación son puntos directos, con tope en `valor`.
     modo_valor: "automatico",
     modo_calificacion: "nota",
+    // Fase 8 — Drag and drop: ver comentario de `orden` en crearCriterio.
+    orden: Number.isFinite(orden) ? orden : 0,
+  });
+}
+
+/** Fase 8 — Drag and drop: próximo valor de `orden` para agregar algo al
+ *  final de una colección (criterios de una materia, asignaciones de un
+ *  criterio) — el máximo actual + 1, o 0 si está vacía. */
+function siguienteOrden(coleccion) {
+  const items = coleccion || [];
+  if (items.length === 0) return 0;
+  return Math.max(...items.map((it) => Number(it.orden) || 0)) + 1;
+}
+
+/**
+ * Fase 8 — Drag and drop: reasigna `orden` de forma secuencial (0, 1, 2…)
+ * según `idsEnNuevoOrden` (el orden visual tras soltar el drag) y sella
+ * timestamp SOLO en los items cuyo `orden` realmente cambió — así un drag
+ * que no modificó la posición de un item no dispara un conflicto de sync
+ * falso en él.
+ */
+function reordenarPorArrastre(coleccion, idsEnNuevoOrden) {
+  const items = coleccion || [];
+  idsEnNuevoOrden.forEach((id, idx) => {
+    const item = items.find((it) => it.id === id);
+    if (item && item.orden !== idx) {
+      item.orden = idx;
+      sellarTimestamp(item);
+    }
   });
 }
 
@@ -1251,12 +1287,18 @@ function migrarDatosAntiguos(datos) {
         // escala 0-escalaActiva). Mismo relleno defensivo que el resto de
         // esta función: sin esto, un lado sin estos campos se ve "distinto"
         // del otro lado que sí los tiene, y dispara un conflicto falso.
-        mm.criterios.forEach((criterio) => {
+        mm.criterios.forEach((criterio, idxCriterio) => {
           if (!Array.isArray(criterio.asignaciones)) criterio.asignaciones = [];
           if (!Array.isArray(criterio._eliminados_asignaciones)) criterio._eliminados_asignaciones = [];
-          criterio.asignaciones.forEach((asig) => {
+          // Fase 8 — Drag and drop (2026-08-04): mismo patrón de relleno
+          // defensivo. `orden` no existía antes de esta fase — se rellena
+          // con la posición que ya tenía en el array (el orden visual que
+          // el usuario ya venía viendo no cambia con esta migración).
+          if (criterio.orden === undefined) criterio.orden = idxCriterio;
+          criterio.asignaciones.forEach((asig, idxAsig) => {
             if (asig.modo_valor === undefined) asig.modo_valor = "automatico";
             if (asig.modo_calificacion === undefined) asig.modo_calificacion = "nota";
+            if (asig.orden === undefined) asig.orden = idxAsig;
           });
         });
       });
@@ -1447,4 +1489,6 @@ export {
   obtenerUniversidadesDeProfesor,
   obtenerMateriasCompartidasValidas,
   obtenerIntentosMateria,
+  siguienteOrden,
+  reordenarPorArrastre,
 };
