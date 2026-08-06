@@ -763,6 +763,28 @@ function crearModalDinamico({ titulo, ancha, confirmarCierre = true }) {
     if (e.target.closest("button") && !e.target.closest(".modal-x-close")) marcarSucio();
   });
 
+  // Ajuste (2026-08-04, pedido explícito): Enter en una casilla de una sola
+  // línea (<input>) activa el botón de Guardar — comportamiento centralizado
+  // acá para que aplique igual en TODOS los modales que usan este helper,
+  // sin tener que repetirlo en cada uno. Deliberadamente NO reacciona sobre
+  // <textarea>: ahí Enter debe seguir siendo un salto de línea normal, sin
+  // ningún atajo de teclado que dispare el guardado (el guardado en esas
+  // casillas es solo por el botón). Shift+Enter tampoco dispara nada en
+  // ningún caso — con inputs de una sola línea no hay salto de línea que
+  // insertar, así que se ignora sin más.
+  card.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.shiftKey) return;
+    if (!e.target || e.target.tagName !== "INPUT") return;
+    e.preventDefault();
+    // El botón Guardar de cada modal usa siempre "btn-primary btn-block"
+    // (ver el resto de este archivo) — a diferencia de los switches de dos
+    // opciones (agregarSwitchDosOpciones), que también usan "btn-primary"
+    // para marcar la opción activa pero SIN "btn-block", así que este
+    // selector nunca los confunde entre sí.
+    const btnGuardar = card.querySelector(".btn-primary.btn-block");
+    if (btnGuardar && !btnGuardar.disabled) btnGuardar.click();
+  });
+
   function cerrar() {
     if (!sucio) {
       overlay.remove();
