@@ -410,6 +410,26 @@ async function sincronizarAhora() {
  */
 
 function aplicarDatosRemotosFrescos(datosFrescos) {
+  // FIX (scroll fantasma — capa adicional sobre el fix local de
+  // renderizarSemestres/renderizarPlanEstudios): esta función es el único
+  // punto por el que pasan LOS 3 disparadores de sync (sincronizarAhora,
+  // sondearCambiosRemotos cada ~9s, y sincronizarAlIniciar), y dispara en
+  // cadena varios renders más (renderizarSelectorPlan, renderizarAjustes,
+  // renderizarModoHardcore, renderizarEnlacesRapidos, renderizarPerfil)
+  // antes de llegar siquiera a renderizarPlanEstudios/renderizarSemestres.
+  // Esos renders "hermanos" viven en otros archivos (plan-gestionar.js,
+  // config-ajustes.js, config-enlaces.js, main.js) y no tienen su propio
+  // guardado/restauración de scrollY. Si cualquiera de ellos provoca un
+  // reflow con el contenedor momentáneamente más corto, el navegador puede
+  // recortar window.scrollY ANTES de que renderizarSemestres/
+  // renderizarPlanEstudios lleguen a capturar su propio "scrollPrevio" —
+  // en ese caso el fix local de cada uno restaura fielmente una posición
+  // que ya venía corrompida desde antes. Capturando acá, antes de la
+  // primera llamada del lote, y restaurando en un único rAF después de la
+  // última, la posición correcta queda protegida sin importar qué pase en
+  // el medio, sin necesidad de tocar esos otros archivos.
+  const scrollPrevio = window.scrollY;
+
   const remotoMigrado = migrarDatosAntiguos(datosFrescos);
   // v1.16 (FIX CRÍTICO — reporte Ivanna, "se sobrepone lo de un dispositivo
   // sobre el otro" / "categorías creadas pero no en cada materia"): antes
@@ -452,6 +472,10 @@ function aplicarDatosRemotosFrescos(datosFrescos) {
   // seguro llamarla siempre, mismo patrón que renderizarPlanEstudios arriba.
   if (typeof renderizarSemestres === "function") renderizarSemestres();
   marcarUltimaSincronizacionConfirmada();
+
+  requestAnimationFrame(() => {
+    window.scrollTo(0, scrollPrevio);
+  });
 }
 
 /**
