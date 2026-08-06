@@ -486,6 +486,8 @@ function mostrarSeccion(nombre) {
     semestres: "seccion-semestres",
     comunidad: "seccion-comunidad",
     finanzas: "seccion-finanzas",
+    agenda: "seccion-agenda",
+    horario: "seccion-horario",
   };
   Object.entries(secciones).forEach(([clave, idEl]) => {
     const el = document.getElementById(idEl);
@@ -512,6 +514,31 @@ function mostrarSeccion(nombre) {
  * expone en window para que ese archivo la llame sin crear un import
  * circular (config-ajustes.js ya es importado POR main.js).
  */
+/**
+ * Ajustes — orden personalizable de navegación (2026-08-06): mismo patrón
+ * que navegacion_oculta (arriba), pero para el ORDEN en vez de la
+ * visibilidad. DEFAULT_ORDEN_NAV es la única lista de qué secciones son
+ * reordenables — "Resumen" (fijo arriba) y "Configuración" (fijo abajo)
+ * nunca entran acá, ni se les aplica ningún reordenamiento.
+ *
+ * Se resuelve el arreglo guardado en vivo, sin depender de un backfill en
+ * schema.js: se descartan ids guardados que ya no existan (ej. una
+ * sección que se haya quitado a futuro) y se agregan al final, en su
+ * posición por defecto, los que falten (ej. "agenda"/"horario" recién
+ * agregados para cuentas que ya tenían el arreglo guardado de antes). Se
+ * expone en window para que config-ajustes.js dibuje los switches en el
+ * mismo orden que el nav real, sin import circular (mismo motivo que
+ * aplicarVisibilidadNavegacion ya se expone así).
+ */
+const DEFAULT_ORDEN_NAV = ["plan-estudios", "semestres", "agenda", "horario", "comunidad", "finanzas"];
+
+function obtenerOrdenNavegacionEfectivo() {
+  const guardado = (estado.datos.configuracion.navegacion_orden || []).filter((id) => DEFAULT_ORDEN_NAV.includes(id));
+  const faltantes = DEFAULT_ORDEN_NAV.filter((id) => !guardado.includes(id));
+  return [...guardado, ...faltantes];
+}
+window.obtenerOrdenNavegacion = obtenerOrdenNavegacionEfectivo;
+
 function aplicarVisibilidadNavegacion() {
   const ocultas = new Set((estado.datos.configuracion.navegacion_oculta || []).filter((s) => s !== "configuracion"));
   let seccionActivaOculta = false;
@@ -522,6 +549,20 @@ function aplicarVisibilidadNavegacion() {
       seccionActivaOculta = true;
     }
   });
+
+  // Reordena solo el bloque de botones togglables (ver DEFAULT_ORDEN_NAV);
+  // "Resumen" y "Configuración" quedan exactamente donde ya están en el
+  // HTML (primero y último), insertBefore los va colocando en su orden
+  // guardado justo antes de "Configuración" sin tocarlos a ellos.
+  const contenedorNav = document.querySelector(".sidebar-scroll");
+  const btnConfiguracion = document.getElementById("nav-configuracion");
+  if (contenedorNav && btnConfiguracion) {
+    obtenerOrdenNavegacionEfectivo().forEach((id) => {
+      const btn = contenedorNav.querySelector(`.btn-nav[data-seccion="${id}"]`);
+      if (btn) contenedorNav.insertBefore(btn, btnConfiguracion);
+    });
+  }
+
   // Si la sección que se estaba viendo se acaba de ocultar, no dejar a la
   // persona sin nav visible para volver — se cae a la primera que siga
   // visible (Ajustes, al ser el único que nunca se puede ocultar, es
