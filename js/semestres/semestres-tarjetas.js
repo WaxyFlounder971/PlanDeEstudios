@@ -2254,24 +2254,40 @@ function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, escal
     return cont;
   }
 
-  // ---------- Pantalla normal: Extra en la línea de Nota, Proyectar (+
-  // Editar a mano) en la línea de Nota final ----------
+  // ---------- Pantalla normal: Extra centrado en la línea de Nota,
+  // Proyectar centrado en la línea de Nota final (Editar a mano queda a
+  // la derecha) ----------
+  // FIX (2026-08-06 — "en compu Extra y Proyectar se van al final, a la
+  // derecha — deben ir centrados a la tarjeta"): antes cada fila era un
+  // flex simple con justify-content:space-between (texto a la izquierda,
+  // botón pegado contra el borde derecho de la tarjeta — el "centrado" que
+  // daba space-between con solo 2 elementos en realidad es eso: uno a cada
+  // punta). Ahora cada fila es un grid de 3 columnas (texto | botón | col
+  // derecha) — la columna del medio queda SIEMPRE centrada respecto al
+  // ANCHO TOTAL de la tarjeta, porque las columnas 1 y 3 se reparten el
+  // mismo ancho (1fr cada una) sin importar cuánto texto tenga cada una.
   const cont = document.createElement("div");
   cont.className = "stack";
   cont.style.cssText = "gap:4px;";
 
   const filaNota = document.createElement("div");
-  filaNota.className = "row";
-  filaNota.style.cssText = "justify-content:space-between; align-items:center; gap:8px;";
   const lineaNota = document.createElement("span");
   lineaNota.textContent = `Nota: ${textoNota}`;
-  filaNota.appendChild(lineaNota);
-  if (hayCriterios) filaNota.appendChild(crearBtnExtra());
+  if (hayCriterios) {
+    filaNota.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px;";
+    filaNota.appendChild(lineaNota);
+    const celdaExtra = document.createElement("div");
+    celdaExtra.style.justifySelf = "center";
+    celdaExtra.appendChild(crearBtnExtra());
+    filaNota.appendChild(celdaExtra);
+    filaNota.appendChild(document.createElement("div")); // columna derecha vacía — balancea el centrado de celdaExtra
+  } else {
+    filaNota.appendChild(lineaNota);
+  }
   cont.appendChild(filaNota);
 
   const filaNotaFinal = document.createElement("div");
-  filaNotaFinal.className = "row";
-  filaNotaFinal.style.cssText = "justify-content:space-between; align-items:center; gap:8px;";
+  filaNotaFinal.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px;";
   const lineaNotaFinal = document.createElement("span");
   lineaNotaFinal.style.fontWeight = "700";
   lineaNotaFinal.textContent = `Nota final: ${textoNotaFinal}`;
@@ -2279,11 +2295,16 @@ function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, escal
   // de color queda solo en la pill de cada asignación (construirFilaAsignacion).
   filaNotaFinal.appendChild(lineaNotaFinal);
 
-  const botonesDerecha = document.createElement("div");
-  botonesDerecha.style.cssText = "display:flex; align-items:center; gap:6px; flex-shrink:0;";
-  if (hayCriterios) botonesDerecha.appendChild(crearBtnProyectar());
-  botonesDerecha.appendChild(crearBtnEditarManual());
-  filaNotaFinal.appendChild(botonesDerecha);
+  const celdaProyectar = document.createElement("div");
+  celdaProyectar.style.justifySelf = "center";
+  if (hayCriterios) celdaProyectar.appendChild(crearBtnProyectar());
+  filaNotaFinal.appendChild(celdaProyectar);
+
+  const celdaEditar = document.createElement("div");
+  celdaEditar.style.justifySelf = "end";
+  celdaEditar.appendChild(crearBtnEditarManual());
+  filaNotaFinal.appendChild(celdaEditar);
+
   cont.appendChild(filaNotaFinal);
 
   return cont;
