@@ -807,7 +807,7 @@ function abrirConfirmacionBorrarSemestre(semestre) {
 
 /* ===================== Listado ===================== */
 
-function renderizarSemestres() {
+function renderizarSemestres(omitirRestauracionScroll = false) {
   const cont = document.getElementById("seccion-semestres");
   if (!cont) return;
   // FIX (2026-08-06 — "cada rato hace un scroll fantasma de la nada"):
@@ -826,7 +826,24 @@ function renderizarSemestres() {
   // layout real recalculado), evita el salto sin afectar el caso legítimo
   // de que el contenido haya quedado más corto de verdad (scrollTo igual
   // lo recorta bien ahí).
-  const scrollPrevio = window.scrollY;
+  //
+  // FIX (scroll fantasma, ronda 2 — "dos restauradores compitiendo"):
+  // cuando esta función corre como parte del lote de
+  // aplicarDatosRemotosFrescos() (storage-sync.js), ESA función ya captura
+  // su propio scrollPrevio ANTES de disparar todo el lote de renders
+  // (incluido este) y ya se encarga de restaurar el scroll al final, una
+  // sola vez, con la posición correcta de todo el lote. Si acá ADEMÁS
+  // capturáramos y reafirmáramos nuestro propio scrollPrevio (leído tarde,
+  // después de que los renders "hermanos" del lote ya movieron la página),
+  // las dos restauraciones pelean por la posición final en frames
+  // similares — exactamente el patrón intermitente reportado ("a veces se
+  // corrige, a veces no"). Por eso el caller del lote pasa
+  // omitirRestauracionScroll=true, y acá nos abstenemos por completo de
+  // tocar el scroll, dejando que aplicarDatosRemotosFrescos sea la única
+  // fuente de verdad para esa restauración. En cualquier otro caso (click
+  // del usuario expandiendo/colapsando algo, editar nota, etc.) seguimos
+  // restaurando localmente como antes.
+  const scrollPrevio = omitirRestauracionScroll ? null : window.scrollY;
   cont.innerHTML = "";
 
   // Dashboard académico (pestaña contraíble, colapsada por default — ver
@@ -901,6 +918,13 @@ function renderizarSemestres() {
   // en las que el scroll ya coincide con lo esperado — recién ahí se da por
   // estable y se detiene. Esto cubre cualquier reflow tardío sin quedar
   // corriendo para siempre.
+  //
+  // Si omitirRestauracionScroll es true (ver comentario arriba), nos
+  // salteamos todo este bloque: no hay scrollPrevio local que reafirmar,
+  // porque aplicarDatosRemotosFrescos (storage-sync.js) ya se encarga de
+  // su propia restauración para todo el lote, con el mismo mecanismo.
+  if (omitirRestauracionScroll) return;
+
   const FRAMES_MAXIMOS_REAFIRMAR = 12;
   const LECTURAS_ESTABLES_REQUERIDAS = 3;
   let framesRestantes = FRAMES_MAXIMOS_REAFIRMAR;
