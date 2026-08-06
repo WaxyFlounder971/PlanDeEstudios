@@ -79,14 +79,13 @@
 
       <div class="sidebar-scroll">
         <button class="btn btn-secondary btn-block btn-nav" title="Resumen" disabled>🏠 <span class="texto-nav">Resumen</span></button>
-        <button class="btn btn-secondary btn-block btn-nav" title="Agenda" disabled>📖 <span class="texto-nav">Agenda</span></button>
-        <button class="btn btn-secondary btn-block btn-nav" title="Horario" disabled>🗓️ <span class="texto-nav">Horario</span></button>
-        
+        <button id="nav-agenda" class="btn btn-secondary btn-block btn-nav" data-seccion="agenda" title="Agenda">📖 <span class="texto-nav">Agenda</span></button>
+        <button id="nav-horario" class="btn btn-secondary btn-block btn-nav" data-seccion="horario" title="Horario">🗓️ <span class="texto-nav">Horario</span></button>
+
         <button id="nav-semestres" class="btn btn-secondary btn-block btn-nav" data-seccion="semestres" title="Semestres">📅 <span class="texto-nav">Semestres</span></button>
 
         <button id="nav-comunidad" class="btn btn-secondary btn-block btn-nav" data-seccion="comunidad" title="Comunidad">👥 <span class="texto-nav">Comunidad</span></button>
         <button id="nav-finanzas" class="btn btn-secondary btn-block btn-nav" data-seccion="finanzas" title="Finanzas">💰 <span class="texto-nav">Finanzas</span></button>
-        <button class="btn btn-secondary btn-block btn-nav" title="Profesores" disabled>👨‍🏫 <span class="texto-nav">Profesores</span></button>
         <button id="nav-plan-estudios" class="btn btn-secondary btn-block btn-nav" data-seccion="plan-estudios" title="Plan de Estudios">📚 <span class="texto-nav">Plan de Estudios</span></button>
         <button id="nav-configuracion" class="btn btn-primary btn-block btn-nav" data-seccion="configuracion" title="Configuración">⚙️ <span class="texto-nav">Configuración</span></button>
         <div style="flex:1;"></div>
@@ -153,8 +152,8 @@
 
         <section class="glass-card stack">
           <h2>Navegación</h2>
-          <p class="muted" style="font-size:0.82rem; margin:0 0 4px;">Elegí qué secciones mostrar en el menú. "Configuración" siempre queda visible.</p>
-          <div id="lista-nav-oculta" class="stack" style="gap:10px;"></div>
+          <p class="muted" style="font-size:0.82rem; margin:0 0 4px;">Elegí qué secciones mostrar en el menú y arrastrá <span class="handle-mover" style="display:inline; padding:0 2px; cursor:default;">⋮⋮</span> para cambiar el orden. "Resumen" y "Configuración" siempre quedan visibles y fijos arriba/abajo.</p>
+          <div id="lista-nav-oculta" class="stack" style="gap:8px;"></div>
         </section>
 
         <section class="glass-card stack">
@@ -203,6 +202,20 @@
       <div id="seccion-finanzas" class="stack oculto">
         <div class="glass-panel" style="padding:24px; text-align:center;">
           <p class="muted" style="margin:0;">💰 Finanzas está en construcción — volvé pronto.</p>
+        </div>
+      </div>
+
+      <!-- ===================== SECCIÓN: Agenda (placeholder, feature futura) ===================== -->
+      <div id="seccion-agenda" class="stack oculto">
+        <div class="glass-panel" style="padding:24px; text-align:center;">
+          <p class="muted" style="margin:0;">📖 Agenda está en construcción — volvé pronto.</p>
+        </div>
+      </div>
+
+      <!-- ===================== SECCIÓN: Horario (placeholder, feature futura) ===================== -->
+      <div id="seccion-horario" class="stack oculto">
+        <div class="glass-panel" style="padding:24px; text-align:center;">
+          <p class="muted" style="margin:0;">🗓️ Horario está en construcción — volvé pronto.</p>
         </div>
       </div>
 
