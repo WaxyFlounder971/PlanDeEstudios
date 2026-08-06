@@ -12,6 +12,7 @@ import { fusionarDatos } from "./core/storage-merge.js";
 import { actualizarIndicadorSync, forzarSincronizacion, inicializarPullToRefresh, inicializarSondeoAlVolver, intentarReconexionSilenciosa, intentarSincronizar, mostrarAvisoReconexion, mostrarCargando, ocultarCargando, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
 import { CLAVE_CACHE_LOCAL, borrarTokenCache, correoConocido, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
 import { obtenerIniciales } from "./core/utils.js";
+import { inicializarComunidad, renderizarComunidad } from "./comunidad/comunidad.js";
 import { inicializarModalCategoria, inicializarModalCategoriaMaterias } from "./plan/plan-categorias.js";
 import { inicializarModalDesbloquea, inicializarModalHistorial, inicializarModalRequisito } from "./plan/plan-detalle.js";
 import { inicializarModalCrearPlan, inicializarModalMateriaManual, inicializarModalVincularOptativa } from "./plan/plan-esquema.js";
@@ -174,6 +175,12 @@ window.addEventListener("DOMContentLoaded", () => {
   inicializarModalEnlace();
   inicializarModalConfirmacion();
   inicializarNavegacionSecciones();
+  // Comunidad — Parte 3: se inyecta ANTES de inicializarBotonesCerrarModal()
+  // (así sus 2 modales dinámicos también reciben el botón "✕" automático) y
+  // ANTES del posible mostrarApp() por caché unas líneas más abajo (así
+  // #seccion-comunidad ya existe si esa es la última sección que el usuario
+  // tenía activa).
+  inicializarComunidad();
   inicializarBotonesCerrarModal();
   inicializarPullToRefresh();
 
@@ -419,8 +426,10 @@ function mostrarApp() {
   renderizarEnlacesRapidos();
   renderizarPerfil();
   restaurarEstadoSidebar();
+  aplicarVisibilidadNavegacion();
   if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
   if (typeof renderizarSemestres === "function") renderizarSemestres();
+  if (typeof renderizarComunidad === "function") renderizarComunidad();
   // Bug 3: antes mostrarSeccion() solo se llamaba desde clics del nav, así que
   // tras un refresh la sección de Plan de Estudios se quedaba con la clase
   // "oculto" del HTML aunque su contenido sí se hubiera renderizado.
@@ -471,7 +480,12 @@ function inicializarNavegacionSecciones() {
 }
 
 function mostrarSeccion(nombre) {
-  const secciones = { configuracion: "seccion-configuracion", "plan-estudios": "seccion-plan-estudios", semestres: "seccion-semestres" };
+  const secciones = {
+    configuracion: "seccion-configuracion",
+    "plan-estudios": "seccion-plan-estudios",
+    semestres: "seccion-semestres",
+    comunidad: "seccion-comunidad",
+  };
   Object.entries(secciones).forEach(([clave, idEl]) => {
     const el = document.getElementById(idEl);
     if (el) el.classList.toggle("oculto", clave !== nombre);
@@ -483,6 +497,40 @@ function mostrarSeccion(nombre) {
   });
   localStorage.setItem(CLAVE_SECCION_ACTIVA, nombre);
 }
+
+/**
+ * Ajustes — ocultar botones de navegación principal (2026-08-04): oculta
+ * (display:none vía la clase "oculto" de siempre) cada .btn-nav cuyo
+ * data-seccion esté en configuracion.navegacion_oculta. "configuracion"
+ * (Ajustes) se filtra acá también por las dudas — aunque la UI de Ajustes
+ * ya ni siquiera ofrece la opción de desactivarlo, así nunca puede quedar
+ * sin forma de volver a Ajustes ni por un dato corrupto/editado a mano.
+ *
+ * Se llama al mostrar la app (mostrarApp) y cada vez que se toca un
+ * switch en Ajustes (ver renderizarAjustes en config-ajustes.js) — se
+ * expone en window para que ese archivo la llame sin crear un import
+ * circular (config-ajustes.js ya es importado POR main.js).
+ */
+function aplicarVisibilidadNavegacion() {
+  const ocultas = new Set((estado.datos.configuracion.navegacion_oculta || []).filter((s) => s !== "configuracion"));
+  let seccionActivaOculta = false;
+  document.querySelectorAll(".btn-nav[data-seccion]").forEach((btn) => {
+    const oculto = ocultas.has(btn.dataset.seccion);
+    btn.classList.toggle("oculto", oculto);
+    if (oculto && btn.dataset.seccion === localStorage.getItem(CLAVE_SECCION_ACTIVA)) {
+      seccionActivaOculta = true;
+    }
+  });
+  // Si la sección que se estaba viendo se acaba de ocultar, no dejar a la
+  // persona sin nav visible para volver — se cae a la primera que siga
+  // visible (Ajustes, al ser el único que nunca se puede ocultar, es
+  // garantía de que siempre hay al menos una opción).
+  if (seccionActivaOculta) {
+    const primeraVisible = document.querySelector(".btn-nav[data-seccion]:not(.oculto)");
+    mostrarSeccion(primeraVisible ? primeraVisible.dataset.seccion : "configuracion");
+  }
+}
+window.aplicarVisibilidadNavegacion = aplicarVisibilidadNavegacion;
 
 /* ===================== Perfil de Google (punto 6) ===================== */
 
