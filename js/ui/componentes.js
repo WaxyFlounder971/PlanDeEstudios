@@ -18,11 +18,39 @@ const CLAVE_SIDEBAR_COLAPSADA = "sidebar_colapsada";
 function agregarLongPress(el, callback, duracionMs = 500) {
   if (!el) return;
   let timer = null;
-  el.addEventListener("pointerdown", () => {
+  let origenX = 0;
+  let origenY = 0;
+  // Si el dedo se mueve más que esto antes de cumplirse el tiempo, es un
+  // scroll o un intento de arrastre normal, no una intención de long-press
+  // — se cancela para no disparar el menú por accidente en medio de un scroll.
+  const UMBRAL_MOVIMIENTO_PX = 10;
+
+  const cancelar = () => {
+    clearTimeout(timer);
+    timer = null;
+  };
+
+  el.addEventListener("pointerdown", (e) => {
+    origenX = e.clientX;
+    origenY = e.clientY;
     timer = setTimeout(callback, duracionMs);
   });
-  el.addEventListener("pointerup", () => clearTimeout(timer));
-  el.addEventListener("pointerleave", () => clearTimeout(timer));
+  el.addEventListener("pointermove", (e) => {
+    if (timer === null) return;
+    if (Math.abs(e.clientX - origenX) > UMBRAL_MOVIMIENTO_PX || Math.abs(e.clientY - origenY) > UMBRAL_MOVIMIENTO_PX) {
+      cancelar();
+    }
+  });
+  el.addEventListener("pointerup", cancelar);
+  el.addEventListener("pointerleave", cancelar);
+  // FIX (2026-08-05): en touch, cuando el navegador decide que el gesto es
+  // un scroll (no una presión quieta), dispara `pointercancel` en vez de
+  // `pointerup`/`pointerleave` — sin escuchar esto, el timer seguía vivo y
+  // el callback (menú rápido / "Reordenar") podía disparar solo, después,
+  // aunque la persona ya se hubiera ido a hacer scroll a otro lado. Esto es
+  // casi seguro la causa de que el long-press se sintiera poco confiable
+  // en teléfono ("a veces no pasa nada, a veces pasa algo raro").
+  el.addEventListener("pointercancel", cancelar);
   el.addEventListener("contextmenu", (e) => {
     e.preventDefault();
     callback();
