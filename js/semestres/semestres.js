@@ -809,6 +809,23 @@ function abrirConfirmacionBorrarSemestre(semestre) {
 function renderizarSemestres() {
   const cont = document.getElementById("seccion-semestres");
   if (!cont) return;
+  // FIX (2026-08-06 — "cada rato hace un scroll fantasma de la nada"):
+  // esta función vacía y reconstruye #seccion-semestres COMPLETO en cada
+  // render — y por acá pasa CUALQUIER cambio, porque es el onCambiar que
+  // usan tanto el sync automático (cada sondeo ~9s que trae algo nuevo)
+  // como cada expandir/colapsar tarjeta, editar nota, etc. (ver
+  // construirTarjetaSemestre más abajo). El contenedor no tiene su propio
+  // scroll (ver .app-contenido en design-system.css) — quien scrollea de
+  // verdad es la página entera (window). Al vaciar innerHTML, la altura
+  // total de la página cae a ~0 por una fracción de segundo; si el
+  // usuario estaba más abajo de esa nueva altura reducida, el navegador
+  // recorta scrollY al máximo posible EN ESE INSTANTE, y cuando el
+  // contenido vuelve a crecer no lo restaura solo — eso es el salto.
+  // Guardar y devolver scrollY a mano, ya en el próximo frame (con el
+  // layout real recalculado), evita el salto sin afectar el caso legítimo
+  // de que el contenido haya quedado más corto de verdad (scrollTo igual
+  // lo recorta bien ahí).
+  const scrollPrevio = window.scrollY;
   cont.innerHTML = "";
 
   const actuales = obtenerSemestresActuales();
@@ -859,6 +876,10 @@ function renderizarSemestres() {
     pasados.forEach((s) => seccionPasados.appendChild(construirTarjetaSemestre(s, obtenerPlanPorId, renderizarSemestres, onEditar, onBorrar, true)));
     cont.appendChild(seccionPasados);
   }
+
+  requestAnimationFrame(() => {
+    window.scrollTo(0, scrollPrevio);
+  });
 }
 
 export { abrirModalAltaSemestre, obtenerSemestresActuales, obtenerSemestresPasados, renderizarSemestres };
