@@ -25,6 +25,8 @@ import {
   obtenerEscalaPorId,
   obtenerFraccionNota,
   notaMinimaParaFraccion,
+  siguienteOrden,
+  reordenarPorArrastre,
 } from "../core/schema.js";
 import { marcarCambioPendiente, actualizarIndicadorSync } from "../core/storage-sync.js";
 import { ESTADOS_MATERIA, abrirModalResolverConflicto, abrirModalResolverConflictoGenerico, agregarIndicadorConflicto } from "../plan/plan-vista-lista-tarjetas.js";
@@ -33,7 +35,259 @@ import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 
 estado.semestresExpandidos = estado.semestresExpandidos || new Map();
 estado.criteriosExpandidos = estado.criteriosExpandidos || new Map();
-// Pendiente #7 (2026-08-03): en pantalla angosta solo se muestra Nota O
+
+/**
+ * Fase 8 — Drag and drop (2026-08-04, spec completa): NO es un botón fijo
+ * por materia — se activa "bajo demanda" desde la 3ra opción ("Reordenar")
+ * del menú que ya se abre con long-press sobre un criterio o una
+ * asignación (ver abrirMenuRapidoCriterio/abrirMenuRapidoAsignacion), y
+ * afecta solo a ESA lista puntual (la de criterios de una materia, o la
+ * de asignaciones de UN criterio) — nunca a toda la materia entera. Fuera
+ * de estos sets no hay ningún ícono ni espacio reservado (cero impacto
+ * visual/de espacio en el uso normal, pedido explícito). Es UI pura, no
+ * se persiste ni se sincroniza — vive en memoria, nunca sobrevive un
+ * recargue de página.
+ */
+const criteriosListaEnReordenar = new Set(); // ids de materia_matriculada
+const asignacionesListaEnReordenar = new Set(); // ids de criterio
+
+/**
+ * Fase 8 — Drag and drop: motor genérico de arrastrar-y-soltar vía Pointer
+ * Events (mouse Y touch con el mismo código — a diferencia de la API
+ * nativa HTML5 Drag&Drop, que en navegadores de teléfono es poco confiable
+ * dentro de contenedores con scroll). `itemEl` es la tarjeta/fila completa
+ * que se mueve; `handleEl` es el ícono "⋮⋮" que dispara el arrastre — el
+ * resto de la tarjeta (click para expandir, long-press para el menú) se
+ * deja de escuchar por completo mientras esa lista puntual está en modo
+ * reordenar (ver construirTarjetaCriterio/construirFilaAsignacion), así
+ * que no hay forma de que el drag choque con esas otras acciones.
+ *
+ * `getContenedores()` se llama recién al iniciar cada arrastre (no una vez
+ * al armar la tarjeta) para tener siempre la lista de contenedores vigente
+ * — cada contenedor debe tener como hijos directos los items con
+ * `dataset.id` puesto. Si el item se suelta sobre un contenedor DISTINTO
+ * al de origen (y ese contenedor está en la lista), cuenta como "cruzar" —
+ * quien llama decide qué hacer con eso en `onSoltar`.
+ */
+function iniciarArrastre(itemEl, handleEl, { getContenedores, onSoltar }) {
+  handleEl.style.touchAction = "none";
+  handleEl.addEventListener("pointerdown", (evDown) => {
+    if (evDown.button !== undefined && evDown.button !== 0) return; // solo click izq / touch
+    evDown.preventDefault();
+    evDown.stopPropagation();
+
+    const contenedorOrigen = itemEl.parentElement;
+    const rectInicial = itemEl.getBoundingClientRect();
+    const anchoItem = rectInicial.width;
+    const alturaItem = rectInicial.height;
+
+    const placeholder = document.createElement("div");
+    placeholder.className = "arrastre-placeholder";
+    placeholder.style.height = alturaItem + "px";
+    contenedorOrigen.insertBefore(placeholder, itemEl);
+
+    itemEl.classList.add("arrastrando");
+    itemEl.style.position = "fixed";
+    itemEl.style.zIndex = "99998";
+    itemEl.style.width = anchoItem + "px";
+    itemEl.style.pointerEvents = "none";
+    itemEl.style.left = rectInicial.left + "px";
+    itemEl.style.top = rectInicial.top + "px";
+    document.body.appendChild(itemEl);
+
+    try {
+      itemEl.setPointerCapture(evDown.pointerId);
+    } catch (e) {
+      // Si el navegador no puede capturar (raro), el arrastre sigue
+      // funcionando igual — solo se pierde la garantía de recibir el
+      // pointerup aunque el dedo salga del elemento.
+    }
+
+    const contenedores = getContenedores();
+
+    const mover = (x, y) => {
+      itemEl.style.left = x - anchoItem / 2 + "px";
+      itemEl.style.top = y - alturaItem / 2 + "px";
+
+      itemEl.style.display = "none";
+      const elDebajo = document.elementFromPoint(x, y);
+      itemEl.style.display = "";
+      if (!elDebajo) return;
+      const contenedorDebajo = contenedores.find((c) => c && c.contains(elDebajo));
+      if (!contenedorDebajo) return;
+
+      const hijos = Array.from(contenedorDebajo.children).filter((h) => h !== placeholder);
+      let referencia = null;
+      for (const hijo of hijos) {
+        const rect = hijo.getBoundingClientRect();
+        if (y < rect.top + rect.height / 2) {
+          referencia = hijo;
+          break;
+        }
+      }
+      if (referencia) contenedorDebajo.insertBefore(placeholder, referencia);
+      else contenedorDebajo.appendChild(placeholder);
+    };
+
+    const alMover = (evMove) => mover(evMove.clientX, evMove.clientY);
+
+    const alSoltar = () => {
+      itemEl.removeEventListener("pointermove", alMover);
+      itemEl.removeEventListener("pointerup", alSoltar);
+      itemEl.removeEventListener("pointercancel", alSoltar);
+      try {
+        itemEl.releasePointerCapture(evDown.pointerId);
+      } catch (e) {
+        // nada que limpiar si nunca se pudo capturar
+      }
+
+      const contenedorFinal = placeholder.parentElement;
+      contenedorFinal.insertBefore(itemEl, placeholder);
+      placeholder.remove();
+
+      itemEl.classList.remove("arrastrando");
+      itemEl.style.position = "";
+      itemEl.style.zIndex = "";
+      itemEl.style.width = "";
+      itemEl.style.left = "";
+      itemEl.style.top = "";
+      itemEl.style.pointerEvents = "";
+      itemEl.style.display = "";
+
+      onSoltar(contenedorOrigen, contenedorFinal);
+    };
+
+    itemEl.addEventListener("pointermove", alMover);
+    itemEl.addEventListener("pointerup", alSoltar);
+    itemEl.addEventListener("pointercancel", alSoltar);
+  });
+}
+
+/**
+ * Fase 8 — Drag and drop: botón "✓ Listo" que saca `id` de `setListas` (uno
+ * de criteriosListaEnReordenar / asignacionesListaEnReordenar) y sale del
+ * modo reordenar para esa lista puntual — los handles "⋮⋮" desaparecen y
+ * esa lista vuelve a su comportamiento normal (click/long-press) en el
+ * próximo render. Es la única forma de salida implementada a propósito
+ * (más simple y sin fugas de listeners que "tocar fuera de la lista");
+ * `contenedorLista` no se usa acá pero se recibe por si a futuro hace
+ * falta, ej. para un doble-check de que la lista sigue en el documento.
+ */
+function construirBotonListoReordenar(contenedorLista, id, setListas, onCambiar) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "btn btn-secondary btn-block";
+  btn.style.cssText = "font-size:0.8rem; padding:6px 10px; margin-top:2px;";
+  btn.textContent = "✓ Listo";
+  btn.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    setListas.delete(id);
+    onCambiar();
+  });
+  return btn;
+}
+
+/**
+ * Fase 8 — Drag and drop: engancha el arrastre a cada criterio DENTRO de
+ * `contCriterios` (hijos directos con `dataset.id`) — reordenarlos entre
+ * sí es la única acción posible (los criterios no tienen un "padre" al
+ * que cruzar). Al soltar, reasigna `orden` según la posición final en el
+ * DOM y persiste.
+ */
+function wirearArrastreCriterios(contCriterios, mm, materia, plan, onCambiar) {
+  Array.from(contCriterios.children).forEach((tarjetaCriterio) => {
+    const handle = tarjetaCriterio.querySelector(".criterio-handle-mover");
+    if (!handle) return;
+    iniciarArrastre(tarjetaCriterio, handle, {
+      getContenedores: () => [contCriterios],
+      onSoltar: () => {
+        const mmViva = buscarMmVivaPorId(mm.id);
+        if (!mmViva) {
+          mostrarToast("Esta materia se eliminó desde otro dispositivo");
+          onCambiar();
+          return;
+        }
+        const idsEnOrden = Array.from(contCriterios.children)
+          .filter((el) => el.dataset && el.dataset.id)
+          .map((el) => el.dataset.id);
+        reordenarPorArrastre(mmViva.criterios, idsEnOrden);
+        persistirCambioMateria(mmViva, materia, plan, onCambiar);
+      },
+    });
+  });
+}
+
+/**
+ * Fase 8 — Drag and drop: engancha el arrastre a cada asignación DENTRO de
+ * `listaAsignaciones` (el criterio cuyo menú disparó "Reordenar"). A
+ * diferencia de los criterios, acá SÍ puede "cruzar": `getContenedores`
+ * busca, al vuelo y en todo el documento, cualquier
+ * `.criterio-lista-asignaciones` de la MISMA materia (mismo `data-mm-id`)
+ * que esté actualmente expandida — no hace falta que ese otro criterio
+ * también esté en modo reordenar para poder soltar ahí (solo el item que
+ * se arrastra necesita el handle).
+ */
+function wirearArrastreAsignaciones(listaAsignaciones, mm, materia, plan, onCambiar) {
+  Array.from(listaAsignaciones.children).forEach((filaAsig) => {
+    const handle = filaAsig.querySelector(".asignacion-handle-mover");
+    if (!handle) return;
+    iniciarArrastre(filaAsig, handle, {
+      getContenedores: () => Array.from(document.querySelectorAll(`.criterio-lista-asignaciones[data-mm-id="${mm.id}"]`)),
+      onSoltar: (contenedorOrigen, contenedorFinal) => {
+        const mmViva = buscarMmVivaPorId(mm.id);
+        if (!mmViva) {
+          mostrarToast("Esta materia se eliminó desde otro dispositivo");
+          onCambiar();
+          return;
+        }
+        const criterioOrigenId = contenedorOrigen.dataset.criterioListaId;
+        const criterioDestinoId = contenedorFinal.dataset.criterioListaId;
+        const criterioOrigen = (mmViva.criterios || []).find((c) => c.id === criterioOrigenId);
+        const criterioDestino = (mmViva.criterios || []).find((c) => c.id === criterioDestinoId);
+        if (!criterioOrigen || !criterioDestino) {
+          onCambiar();
+          return;
+        }
+
+        const idsEnOrdenDestino = Array.from(contenedorFinal.children)
+          .filter((el) => el.dataset && el.dataset.id)
+          .map((el) => el.dataset.id);
+
+        if (criterioOrigenId === criterioDestinoId) {
+          reordenarPorArrastre(criterioOrigen.asignaciones, idsEnOrdenDestino);
+          sellarTimestamp(criterioOrigen);
+        } else {
+          // Se soltó en un criterio DISTINTO al de origen: la asignación
+          // que "cruzó" es la que aparece en el orden final pero todavía
+          // no estaba en las asignaciones actuales del destino.
+          const idsYaEnDestino = new Set((criterioDestino.asignaciones || []).map((a) => a.id));
+          const idMovida = idsEnOrdenDestino.find((id) => !idsYaEnDestino.has(id));
+          const asignacionMovida = idMovida && (criterioOrigen.asignaciones || []).find((a) => a.id === idMovida);
+          if (asignacionMovida) {
+            // Sale de origen CON tumba (no es un borrado real, pero sin la
+            // tumba un sync desde otro dispositivo que no vio este cruce
+            // podría "resucitarla" de vuelta en el criterio de origen —
+            // ver comentario de _eliminados_asignaciones en schema.js).
+            criterioOrigen.asignaciones = (criterioOrigen.asignaciones || []).filter((a) => a.id !== idMovida);
+            criterioOrigen._eliminados_asignaciones = criterioOrigen._eliminados_asignaciones || [];
+            criterioOrigen._eliminados_asignaciones.push(crearEntradaTumba(idMovida));
+            repartirEquitativoCriterio(criterioOrigen);
+            sellarTimestamp(criterioOrigen);
+
+            criterioDestino.asignaciones = criterioDestino.asignaciones || [];
+            criterioDestino.asignaciones.push(asignacionMovida);
+            reordenarPorArrastre(criterioDestino.asignaciones, idsEnOrdenDestino);
+            repartirEquitativoCriterio(criterioDestino);
+            sellarTimestamp(criterioDestino);
+            sellarTimestamp(asignacionMovida);
+          }
+        }
+
+        persistirCambioMateria(mmViva, materia, plan, onCambiar);
+      },
+    });
+  });
+}
 // Puntaje por fila (nunca los dos), con flechas para alternar — "nota" es
 // el default pedido. Es un solo toggle global (no por criterio/materia) a
 // propósito: si cada fila tuviera su propio estado, alternar una tarjeta no
@@ -701,7 +955,7 @@ function abrirModalCriterio({ mm, materia, plan, criterioExistente, onGuardado }
       // reparto equitativo (misma regla confirmada que al añadir una nueva).
       if (criterioVivo.asignaciones.length > 0) repartirEquitativoCriterio(criterioVivo);
     } else {
-      mmViva.criterios.push(crearCriterio({ nombre, valorTotal: valorNum }));
+      mmViva.criterios.push(crearCriterio({ nombre, valorTotal: valorNum, orden: siguienteOrden(mmViva.criterios) }));
     }
 
     persistirCambioMateria(mmViva, materia, plan, onGuardado);
@@ -963,7 +1217,7 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
       if (modoValor === "personalizado") asignacionViva.valor = valorNum;
       sellarTimestamp(asignacionViva);
     } else {
-      const nueva = crearAsignacion({ nombre, valor: valorNum });
+      const nueva = crearAsignacion({ nombre, valor: valorNum, orden: siguienteOrden(criterioVivo.asignaciones) });
       nueva.modo_valor = modoValor;
       nueva.modo_calificacion = modoCalif;
       nueva.nota = califFinal;
@@ -1029,7 +1283,7 @@ function agregarAsignacionRapida(criterio, mm, materia, plan, onCambiar) {
     return;
   }
   const numero = (criterioVivo.asignaciones || []).length + 1;
-  criterioVivo.asignaciones.push(crearAsignacion({ nombre: `Asignación ${numero}`, valor: 0 }));
+  criterioVivo.asignaciones.push(crearAsignacion({ nombre: `Asignación ${numero}`, valor: 0, orden: siguienteOrden(criterioVivo.asignaciones) }));
   repartirEquitativoCriterio(criterioVivo);
   sellarTimestamp(criterioVivo);
   persistirCambioMateria(mmViva, materia, plan, onCambiar);
@@ -1413,6 +1667,16 @@ function abrirMenuRapidoCriterio(criterio, mm, materia, plan, anclaEl, onCambiar
       clase: "btn-danger",
       onClick: () => eliminarCriterio(mm, materia, plan, criterio, onCambiar),
     },
+    {
+      // Fase 8 — Drag and drop (spec completa): activa el modo reordenar
+      // para TODA la lista de criterios de esta materia (no solo este
+      // criterio) — es el orden entre ellos lo que se puede reordenar.
+      texto: "🔀 Reordenar",
+      onClick: () => {
+        criteriosListaEnReordenar.add(mm.id);
+        onCambiar();
+      },
+    },
   ]);
 }
 
@@ -1428,6 +1692,17 @@ function abrirMenuRapidoAsignacion(asignacion, criterio, mm, materia, plan, esca
       clase: "btn-danger",
       onClick: () => eliminarAsignacion(criterio, mm, materia, plan, asignacion, onCambiar),
     },
+    {
+      // Fase 8 — Drag and drop (spec completa): activa el modo reordenar
+      // para la lista de asignaciones DE ESTE criterio puntual (no toca
+      // los demás criterios de la materia) — igual se puede arrastrar
+      // hacia otro criterio hermano si ese también está expandido.
+      texto: "🔀 Reordenar",
+      onClick: () => {
+        asignacionesListaEnReordenar.add(criterio.id);
+        onCambiar();
+      },
+    },
   ]);
 }
 
@@ -1441,15 +1716,30 @@ function abrirMenuRapidoAsignacion(asignacion, criterio, mm, materia, plan, esca
 const PILL_ESTILO = "display:inline-flex; align-items:center; justify-content:center; height:24px; text-align:center; white-space:nowrap; font-variant-numeric:tabular-nums;";
 
 function construirFilaAsignacion(asignacion, criterio, mm, materia, plan, escalaActiva, onCambiar) {
+  const enReorden = asignacionesListaEnReordenar.has(criterio.id);
+
   const fila = document.createElement("div");
   fila.className = "row fila-asignacion";
   fila.style.cssText =
-    "justify-content:space-between; align-items:center; gap:8px; padding:6px 10px; border-radius:var(--radius-sm); background:rgba(255,255,255,0.03); cursor:pointer;";
-  fila.addEventListener("click", (ev) => {
-    ev.stopPropagation();
-    abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asignacionExistente: asignacion, onGuardado: onCambiar });
-  });
-  agregarLongPress(fila, () => abrirMenuRapidoAsignacion(asignacion, criterio, mm, materia, plan, escalaActiva, fila, onCambiar));
+    "justify-content:space-between; align-items:center; gap:8px; padding:6px 10px; border-radius:var(--radius-sm); background:rgba(255,255,255,0.03); cursor:pointer; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;";
+  fila.dataset.id = asignacion.id;
+
+  // Fase 8 — Drag and drop: mismo criterio que en construirTarjetaCriterio
+  // — en modo reordenar no hay click ni long-press, solo el handle "⋮⋮".
+  if (enReorden) {
+    const handle = document.createElement("span");
+    handle.className = "asignacion-handle-mover handle-mover";
+    handle.textContent = "⋮⋮";
+    handle.setAttribute("aria-label", "Mantené presionado y arrastrá para reordenar o mover esta asignación");
+    fila.appendChild(handle);
+    fila.style.cursor = "default";
+  } else {
+    fila.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asignacionExistente: asignacion, onGuardado: onCambiar });
+    });
+    agregarLongPress(fila, () => abrirMenuRapidoAsignacion(asignacion, criterio, mm, materia, plan, escalaActiva, fila, onCambiar));
+  }
 
   // Rediseño (2026-08-02): antes acá también iban "· X pts" y "· auto" —
   // esa información ya vive en la pill de puntaje de al lado (X/Y pts) y
@@ -1545,27 +1835,58 @@ function calcularPuntosCriterio(criterio, escalaActiva) {
 }
 
 function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onCambiar) {
+  // Fase 8 — Drag and drop: esta lista puntual (los criterios DE ESTA
+  // materia) entra en modo reordenar cuando el usuario elige "Reordenar"
+  // en el menú rápido de CUALQUIERA de sus criterios — afecta a todos los
+  // criterios de la materia por igual (ver abrirMenuRapidoCriterio).
+  const enReordenCriterios = criteriosListaEnReordenar.has(mm.id);
+
   // Pedido explícito: "quiero que cada criterio esté contraido, cerrado, y
   // tenga la flecha ▲▼ tal como en todo el resto de tarjetas" — mismo
   // patrón que ya usan materias y semestres (estado.semestresExpandidos),
   // pero en su propio Map (los ids de criterio no comparten espacio con
   // los de mm/semestre). Sin entrada todavía = contraído por defecto.
-  const expandido = estado.criteriosExpandidos.get(criterio.id) || false;
+  // Fase 8 — Drag and drop: si esta lista de criterios está en modo
+  // reordenar, se fuerza expandido=true (sin tocar el Map, así que al
+  // salir del modo vuelve a su estado de antes) para reconocer mejor cuál
+  // es cuál al arrastrar. Si en cambio es la lista de ASIGNACIONES de este
+  // criterio puntual la que está en modo reordenar, igual se fuerza
+  // expandido (esa lista tiene que estar visible para poder arrastrarla).
+  const enReordenAsignaciones = asignacionesListaEnReordenar.has(criterio.id);
+  const expandido = enReordenCriterios || enReordenAsignaciones ? true : estado.criteriosExpandidos.get(criterio.id) || false;
 
   const cont = document.createElement("div");
   cont.className = "glass-panel stack";
   cont.style.cssText = "padding:10px 12px; gap:8px;";
+  cont.dataset.id = criterio.id;
 
   /* ---------- Encabezado: nombre + % de la materia | flecha ---------- */
   const encabezado = document.createElement("div");
   encabezado.className = "row";
-  encabezado.style.cssText = "justify-content:space-between; align-items:center; cursor:pointer;";
-  encabezado.title = "Clic para expandir o contraer. Mantén presionado (o clic derecho) para editar o eliminar este criterio";
-  encabezado.addEventListener("click", () => {
-    estado.criteriosExpandidos.set(criterio.id, !expandido);
-    onCambiar();
-  });
-  agregarLongPress(encabezado, () => abrirMenuRapidoCriterio(criterio, mm, materia, plan, encabezado, onCambiar));
+  encabezado.style.cssText =
+    "justify-content:space-between; align-items:center; cursor:pointer; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;";
+
+  // Fase 8 — Drag and drop: mientras la lista de CRITERIOS está en modo
+  // reordenar, el encabezado deja de reaccionar a click (expandir) y
+  // long-press (menú rápido) — la ÚNICA acción posible es arrastrar desde
+  // el handle "⋮⋮", para que no choque con esas otras dos funciones
+  // (pedido explícito). Si es la lista de ASIGNACIONES la que está en modo
+  // reordenar (no esta), el encabezado del criterio se comporta normal.
+  if (enReordenCriterios) {
+    const handle = document.createElement("span");
+    handle.className = "criterio-handle-mover handle-mover";
+    handle.textContent = "⋮⋮";
+    handle.setAttribute("aria-label", "Mantené presionado y arrastrá para reordenar este criterio");
+    encabezado.appendChild(handle);
+    encabezado.style.cursor = "default";
+  } else {
+    encabezado.title = "Clic para expandir o contraer. Mantén presionado (o clic derecho) para editar o eliminar este criterio";
+    encabezado.addEventListener("click", () => {
+      estado.criteriosExpandidos.set(criterio.id, !expandido);
+      onCambiar();
+    });
+    agregarLongPress(encabezado, () => abrirMenuRapidoCriterio(criterio, mm, materia, plan, encabezado, onCambiar));
+  }
 
   const tituloWrap = document.createElement("div");
   tituloWrap.className = "stack";
@@ -1678,31 +1999,63 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
     }
     cont.appendChild(filaEtiquetas);
 
-    // La fila de asignación queda intacta, tal cual estaba (pedido
-    // explícito: "deja como está la asignación").
-    (criterio.asignaciones || []).forEach((asig) => {
-      cont.appendChild(construirFilaAsignacion(asig, criterio, mm, materia, plan, escalaActiva, onCambiar));
+    // Fase 8 — Drag and drop: contenedor propio para las filas de
+    // asignación (antes iban sueltas directo en `cont`, mezcladas con
+    // filaEtiquetas/pie) — necesario para que el motor de arrastre tenga
+    // un contenedor bien delimitado como destino al soltar, tanto para
+    // reordenar dentro del mismo criterio como para "cruzar" desde otro.
+    // Se ordenan por `orden` (no por posición en el array — ver comentario
+    // de ese campo en schema.js) antes de pintarlas.
+    const listaAsignaciones = document.createElement("div");
+    listaAsignaciones.className = "stack criterio-lista-asignaciones";
+    listaAsignaciones.style.cssText = "gap:6px;";
+    listaAsignaciones.dataset.criterioListaId = criterio.id;
+    // Fase 8 — Drag and drop: para permitir "cruzar" una asignación a OTRO
+    // criterio de la misma materia (pedido explícito), el motor de
+    // arrastre busca todas las listas con este mismo mm-id al vuelo (ver
+    // wirearArrastreAsignaciones) — así puede soltarse en cualquier
+    // criterio hermano que también esté expandido en ese momento.
+    listaAsignaciones.dataset.mmId = mm.id;
+    const asignacionesOrdenadas = [...(criterio.asignaciones || [])].sort(
+      (a, b) => (Number(a.orden) || 0) - (Number(b.orden) || 0)
+    );
+    asignacionesOrdenadas.forEach((asig) => {
+      listaAsignaciones.appendChild(
+        construirFilaAsignacion(asig, criterio, mm, materia, plan, escalaActiva, onCambiar)
+      );
     });
+    cont.appendChild(listaAsignaciones);
+
+    if (enReordenAsignaciones) {
+      wirearArrastreAsignaciones(listaAsignaciones, mm, materia, plan, onCambiar);
+      cont.appendChild(
+        construirBotonListoReordenar(listaAsignaciones, criterio.id, asignacionesListaEnReordenar, onCambiar)
+      );
+    }
 
     /* ---------- Pie: + Añadir asignación ---------- */
     // "Puntos totales" ya no vive acá (ver derechaWrap en el encabezado,
-    // arriba) — el pie ahora es solo el botón de agregar.
-    const pie = document.createElement("div");
-    pie.className = "row";
-    pie.style.cssText = "justify-content:flex-start; align-items:center; margin-top:2px;";
+    // arriba) — el pie ahora es solo el botón de agregar. En modo
+    // reordenar se oculta (no tiene sentido agregar mientras se está
+    // reordenando, y evita otro botón compitiendo con el drag).
+    if (!enReordenCriterios && !enReordenAsignaciones) {
+      const pie = document.createElement("div");
+      pie.className = "row";
+      pie.style.cssText = "justify-content:flex-start; align-items:center; margin-top:2px;";
 
-    const btnAgregar = document.createElement("button");
-    btnAgregar.type = "button";
-    btnAgregar.className = "btn btn-secondary";
-    btnAgregar.style.cssText = "font-size:0.78rem; padding:5px 10px;";
-    btnAgregar.textContent = "+ Añadir asignación";
-    btnAgregar.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      agregarAsignacionRapida(criterio, mm, materia, plan, onCambiar);
-    });
-    pie.appendChild(btnAgregar);
+      const btnAgregar = document.createElement("button");
+      btnAgregar.type = "button";
+      btnAgregar.className = "btn btn-secondary";
+      btnAgregar.style.cssText = "font-size:0.78rem; padding:5px 10px;";
+      btnAgregar.textContent = "+ Añadir asignación";
+      btnAgregar.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        agregarAsignacionRapida(criterio, mm, materia, plan, onCambiar);
+      });
+      pie.appendChild(btnAgregar);
 
-    cont.appendChild(pie);
+      cont.appendChild(pie);
+    }
   }
 
   return cont;
@@ -1744,9 +2097,15 @@ function aplicarColorBadgePersonalizado(el, hex) {
 }
 
 function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, escalaActiva, onCambiar) {
-  const cont = document.createElement("div");
-  cont.className = "stack";
-  cont.style.cssText = "gap:6px;";
+  // Rediseño (2026-08-04, spec completa): "Extra" va en la línea de Nota,
+  // "Proyectar" en la línea de Nota final (junto con "Editar a mano") —
+  // eso mientras hay espacio horizontal normal. Solo cuando la pantalla es
+  // angosta (mismo umbral ANCHO_PANTALLA_ANGOSTA que el resto del archivo)
+  // los 3 se agrupan en una columna vertical a la derecha, en un grid de 2
+  // columnas independientes (texto | botones) para que, aunque esa columna
+  // de 3 botones sea más alta que el texto, el texto NUNCA se mueva ni se
+  // corte (pedido explícito: "los botones son independientes al texto").
+  const angosta = window.innerWidth < ANCHO_PANTALLA_ANGOSTA;
 
   const notaRedondeada = redondearNotaFinalAlCincoMasCercano(notaFinalVigente);
   // "Nota" = valor absoluto, siempre 2 decimales (pedido explícito). "Nota
@@ -1757,96 +2116,136 @@ function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, escal
   const textoNota = notaFinalVigente === null || notaFinalVigente === undefined ? "—" : formatearNumeroFijo(notaFinalVigente, 2);
   const textoNotaFinal = notaRedondeada === null || notaRedondeada === undefined ? "—" : formatearNumero(notaRedondeada);
 
+  const estiloBotonNota = "font-size:0.75rem; padding:4px 10px; white-space:nowrap;";
+  const hayCriterios = (mm.criterios || []).length > 0;
+
+  // Simulador "Proyectar" y "Extra" solo tienen sentido si hay al menos un
+  // criterio creado (si no, no hay nada sobre qué calcular) — se arman acá,
+  // sueltos, y se ubican más abajo según el ancho de pantalla.
+  const crearBtnExtra = () => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-secondary";
+    btn.style.cssText = estiloBotonNota;
+    btn.textContent = "✨ Extra";
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      abrirModalPuntosExtra({ mm, materia, plan, escalaActiva, onGuardado: onCambiar });
+    });
+    return btn;
+  };
+  const crearBtnProyectar = () => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-secondary";
+    btn.style.cssText = estiloBotonNota;
+    btn.textContent = "🔮 Proyectar";
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      abrirModalProyectar({ mm, materia, plan, escalaActiva });
+    });
+    return btn;
+  };
+  const crearBtnEditarManual = () => {
+    if (mm.nota_final_manual) {
+      const badge = document.createElement("button");
+      badge.type = "button";
+      badge.className = "badge badge-warning";
+      badge.style.cssText = estiloBotonNota + " cursor:pointer; border-radius:var(--radius-pill); text-align:center;";
+      badge.textContent = "✏️ Editado a mano";
+      badge.title = "Clic para volver a cálculo automático por criterios";
+      badge.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        // Fix (2026-08-02): mismo patrón — la tarjeta pudo renderizarse hace
+        // más de un ciclo de sync, así que `mm` capturada acá puede ser
+        // huérfana (ver buscarCriterioVivoPorId).
+        const mmViva = buscarMmVivaPorId(mm.id);
+        if (!mmViva) {
+          mostrarToast("Esta materia se eliminó desde otro dispositivo");
+          onCambiar();
+          return;
+        }
+        mmViva.nota_final_manual = false;
+        persistirCambioMateria(mmViva, materia, plan, onCambiar);
+        mostrarToast("La nota final vuelve a calcularse automáticamente");
+      });
+      return badge;
+    }
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-secondary";
+    btn.style.cssText = estiloBotonNota;
+    btn.textContent = "Editar a mano";
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      abrirModalNotaManual({ mm, materia, plan, notaFinalVigente, onGuardado: onCambiar });
+    });
+    return btn;
+  };
+
+  if (angosta) {
+    // ---------- Pantalla angosta: grid de 2 columnas independientes ----------
+    const cont = document.createElement("div");
+    cont.style.cssText = "display:grid; grid-template-columns:1fr auto; align-items:center; gap:10px;";
+
+    const colTexto = document.createElement("div");
+    colTexto.className = "stack";
+    colTexto.style.cssText = "gap:6px; min-width:0;";
+    const lineaNota = document.createElement("span");
+    lineaNota.textContent = `Nota: ${textoNota}`;
+    colTexto.appendChild(lineaNota);
+    const lineaNotaFinal = document.createElement("span");
+    lineaNotaFinal.style.fontWeight = "700";
+    lineaNotaFinal.textContent = `Nota final: ${textoNotaFinal}`;
+    colTexto.appendChild(lineaNotaFinal);
+    cont.appendChild(colTexto);
+
+    // Los 3 con el mismo tamaño (el del más largo, "Editar a mano") gracias
+    // a flex-column + align-items:stretch (default) — ver comentario abajo.
+    const colBotones = document.createElement("div");
+    colBotones.style.cssText = "display:flex; flex-direction:column; gap:4px; flex-shrink:0;";
+    if (hayCriterios) {
+      colBotones.appendChild(crearBtnExtra());
+      colBotones.appendChild(crearBtnProyectar());
+    }
+    colBotones.appendChild(crearBtnEditarManual());
+    cont.appendChild(colBotones);
+
+    return cont;
+  }
+
+  // ---------- Pantalla normal: Extra en la línea de Nota, Proyectar (+
+  // Editar a mano) en la línea de Nota final ----------
+  const cont = document.createElement("div");
+  cont.className = "stack";
+  cont.style.cssText = "gap:4px;";
+
+  const filaNota = document.createElement("div");
+  filaNota.className = "row";
+  filaNota.style.cssText = "justify-content:space-between; align-items:center; gap:8px;";
   const lineaNota = document.createElement("span");
   lineaNota.textContent = `Nota: ${textoNota}`;
-  cont.appendChild(lineaNota);
+  filaNota.appendChild(lineaNota);
+  if (hayCriterios) filaNota.appendChild(crearBtnExtra());
+  cont.appendChild(filaNota);
 
   const filaNotaFinal = document.createElement("div");
   filaNotaFinal.className = "row";
   filaNotaFinal.style.cssText = "justify-content:space-between; align-items:center; gap:8px;";
-
-  const izq = document.createElement("span");
-  izq.style.fontWeight = "700";
-  izq.textContent = `Nota final: ${textoNotaFinal}`;
+  const lineaNotaFinal = document.createElement("span");
+  lineaNotaFinal.style.fontWeight = "700";
+  lineaNotaFinal.textContent = `Nota final: ${textoNotaFinal}`;
   // Pedido explícito: "en nota final NO debe cambiar de color" — la escala
   // de color queda solo en la pill de cada asignación (construirFilaAsignacion).
-  filaNotaFinal.appendChild(izq);
+  filaNotaFinal.appendChild(lineaNotaFinal);
 
-  // Simulador "Proyectar" (Fase 6, punto 4): última línea, centrado entre
-  // "Nota final" y "Editar a mano" — solo tiene sentido si hay al menos un
-  // criterio creado (si no, no hay nada sobre qué proyectar).
-  if ((mm.criterios || []).length > 0) {
-    // Pedido explícito: "Extra" va justo encima de "Proyectar", los dos del
-    // mismo tamaño de botón, ancho = el de la palabra más larga entre los
-    // dos. En vez de medir a mano con offsetWidth, se aprovecha que un
-    // contenedor flex en columna (sin ancho propio fijado) se achica al
-    // ancho de su hijo más ancho, y con align-items stretch (default) TODOS
-    // los hijos se estiran a ESE mismo ancho — el CSS resuelve solo el
-    // "mismo tamaño = el más largo" sin cálculos.
-    const colBotones = document.createElement("div");
-    colBotones.style.cssText = "display:flex; flex-direction:column; gap:4px;";
-
-    const btnExtra = document.createElement("button");
-    btnExtra.type = "button";
-    btnExtra.className = "btn btn-secondary";
-    btnExtra.style.cssText = "font-size:0.75rem; padding:4px 10px; white-space:nowrap;";
-    btnExtra.textContent = "✨ Extra";
-    btnExtra.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      abrirModalPuntosExtra({ mm, materia, plan, escalaActiva, onGuardado: onCambiar });
-    });
-    colBotones.appendChild(btnExtra);
-
-    const btnProyectar = document.createElement("button");
-    btnProyectar.type = "button";
-    btnProyectar.className = "btn btn-secondary";
-    btnProyectar.style.cssText = "font-size:0.75rem; padding:4px 10px; white-space:nowrap;";
-    btnProyectar.textContent = "🔮 Proyectar";
-    btnProyectar.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      abrirModalProyectar({ mm, materia, plan, escalaActiva });
-    });
-    colBotones.appendChild(btnProyectar);
-
-    filaNotaFinal.appendChild(colBotones);
-  }
-
-  if (mm.nota_final_manual) {
-    const badge = document.createElement("span");
-    badge.className = "badge badge-warning";
-    badge.style.cursor = "pointer";
-    badge.textContent = "✏️ Editado a mano";
-    badge.title = "Clic para volver a cálculo automático por criterios";
-    badge.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      // Fix (2026-08-02): mismo patrón — la tarjeta pudo renderizarse hace
-      // más de un ciclo de sync, así que `mm` capturada acá puede ser
-      // huérfana (ver buscarCriterioVivoPorId).
-      const mmViva = buscarMmVivaPorId(mm.id);
-      if (!mmViva) {
-        mostrarToast("Esta materia se eliminó desde otro dispositivo");
-        onCambiar();
-        return;
-      }
-      mmViva.nota_final_manual = false;
-      persistirCambioMateria(mmViva, materia, plan, onCambiar);
-      mostrarToast("La nota final vuelve a calcularse automáticamente");
-    });
-    filaNotaFinal.appendChild(badge);
-  } else {
-    const btnManual = document.createElement("button");
-    btnManual.type = "button";
-    btnManual.className = "btn btn-secondary";
-    btnManual.style.cssText = "font-size:0.75rem; padding:4px 10px;";
-    btnManual.textContent = "Editar a mano";
-    btnManual.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      abrirModalNotaManual({ mm, materia, plan, notaFinalVigente, onGuardado: onCambiar });
-    });
-    filaNotaFinal.appendChild(btnManual);
-  }
-
+  const botonesDerecha = document.createElement("div");
+  botonesDerecha.style.cssText = "display:flex; align-items:center; gap:6px; flex-shrink:0;";
+  if (hayCriterios) botonesDerecha.appendChild(crearBtnProyectar());
+  botonesDerecha.appendChild(crearBtnEditarManual());
+  filaNotaFinal.appendChild(botonesDerecha);
   cont.appendChild(filaNotaFinal);
+
   return cont;
 }
 
@@ -1864,7 +2263,7 @@ function construirSeccionNotas(mm, materia, plan, onCambiar) {
   cont.className = "stack";
   cont.style.cssText = "gap:10px; margin-top:6px;";
 
-  const criterios = mm.criterios || [];
+  const criterios = [...(mm.criterios || [])].sort((a, b) => (Number(a.orden) || 0) - (Number(b.orden) || 0));
   if (criterios.length === 0) {
     const vacio = document.createElement("p");
     vacio.className = "muted";
@@ -1872,9 +2271,24 @@ function construirSeccionNotas(mm, materia, plan, onCambiar) {
     vacio.textContent = "Todavía no hay criterios de evaluación para esta materia.";
     cont.appendChild(vacio);
   } else {
+    // Fase 8 — Drag and drop (2026-08-04, spec completa): contenedor propio
+    // para la lista de criterios de ESTA materia — es el contenedor que
+    // recibe el drop al reordenar criterios (ver "Reordenar" en el menú
+    // rápido de un criterio, abrirMenuRapidoCriterio).
+    const contCriterios = document.createElement("div");
+    contCriterios.className = "stack criterios-lista-reordenable";
+    contCriterios.style.cssText = "gap:8px;";
+    contCriterios.dataset.mmIdCriterios = mm.id;
     criterios.forEach((criterio) => {
-      cont.appendChild(construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onCambiar));
+      contCriterios.appendChild(construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onCambiar));
     });
+    cont.appendChild(contCriterios);
+
+    if (criteriosListaEnReordenar.has(mm.id)) {
+      wirearArrastreCriterios(contCriterios, mm, materia, plan, onCambiar);
+      cont.appendChild(construirBotonListoReordenar(contCriterios, mm.id, criteriosListaEnReordenar, onCambiar));
+    }
+
     // Pedido explícito ("que se vea todo parejito"): antes cada tarjeta de
     // criterio igualaba el ancho de sus propias pills por separado, así que
     // dos criterios distintos en la misma materia podían tener columnas de
@@ -2249,7 +2663,8 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEdita
   }
 
   const encabezado = document.createElement("div");
-  encabezado.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px; cursor:pointer;";
+  encabezado.style.cssText =
+    "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px; cursor:pointer; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;";
   encabezado.addEventListener("click", () => {
     estado.semestresExpandidos.set(semestre.id, !expandido);
     onCambiar();
