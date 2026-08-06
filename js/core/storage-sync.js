@@ -17,7 +17,7 @@ import { aplicarPaleta } from "../ui/tema.js";
 import { guardarDatos, leerDatos, obtenerMetadatosArchivo, refrescarAccessTokenGoogle } from "./auth.js";
 import { migrarDatosAntiguos } from "./schema.js";
 import { fusionarDatos } from "./storage-merge.js";
-import { authListo, correoConocido, establecerTokenActivo, estado, guardarCacheLocal } from "./storage.js";
+import { authListo, correoConocido, establecerTokenActivo, estado, guardarCacheLocal, leerTokenCacheValido } from "./storage.js";
 
 /**
  * Bug 1 (v8): pide un access_token nuevo de forma silenciosa apenas carga la
@@ -587,6 +587,41 @@ async function sincronizarAlIniciar() {
  * pestañas ocultas (`if (document.hidden) return`) y contra sondeos
  * redundantes (compara modifiedTime), así que aquí basta con dispararla sin
  * lógica adicional.
+ *
+ * FIX (reporte: "cada pocos minutos se abre y cierra sola una ventana de
+ * Google"): el prompt silencioso (`prompt: ""`, ver refrescarAccessTokenGoogle
+ * en auth.js) ya estaba bien configurado, y NO se pide un token nuevo en
+ * cada sync/sondeo — se confirmó recorriendo TODOS los llamados a
+ * refrescarAccessTokenGoogle/intentarReconexionSilenciosa en la app: bajo un
+ * token sano, el único refresco automático es el proactivo, programado por
+ * programarRefrescoProactivo() ~5 minutos antes de que venza (usualmente
+ * ~55 min después del último login/refresco).
+ *
+ * La causa real: ese refresco proactivo depende enteramente de un
+ * setTimeout — y los navegadores (y el sistema operativo, en móvil)
+ * suspenden o "throttlean" los timers de una pestaña en 2do plano (pantalla
+ * bloqueada, cambio de app, minimizado largo rato). Si el usuario deja la
+ * pestaña en 2do plano más tiempo del que le quedaba de vida al token, ese
+ * setTimeout puede perder su ventana sin disparar nunca. El token queda
+ * vencido en silencio, y nadie se entera hasta la PRIMERA llamada real a
+ * Drive tras volver — que entonces falla con 401 y recién ahí
+ * conReintentoSi401 dispara el refresco, "de apuro" en vez de uno calmo y
+ * programado. Ese refresco de apuro, ocurriendo justo al volver de 2do
+ * plano, es el que puede terminar mostrando el destello: es exactamente el
+ * momento en que el estado de cookies/sesión del navegador es menos
+ * predecible (ver comentario de refrescarAccessTokenGoogle en auth.js sobre
+ * esta limitación real de la plataforma, que ningún parámetro de acá puede
+ * eliminar al 100%).
+ *
+ * El fix no cambia CÓMO se pide el token (ya era silencioso y ya cacheaba
+ * bien) sino CUÁNDO: se revalida la vigencia del token ANTES de la primera
+ * llamada a Drive tras volver a la pestaña, reusando el mismo patrón ya
+ * usado al cargar la app (ver DOMContentLoaded en main.js) — si la caché
+ * todavía tiene margen, no se pide nada nuevo (cero llamadas de más); si no,
+ * se refresca ahí mismo, una sola vez, de forma predecible, en vez de
+ * dejar que lo descubra un 401 disparado desde cualquiera de los otros
+ * caminos (el sondeo de 9s, el reintento de 45s, o el próximo cambio que
+ * haga el usuario).
  */
 
 let sondeoAlVolverRegistrado = false;
@@ -595,8 +630,30 @@ function inicializarSondeoAlVolver() {
   if (sondeoAlVolverRegistrado) return; // se llama una sola vez desde DOMContentLoaded en main.js
   sondeoAlVolverRegistrado = true;
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) sondearCambiosRemotos();
+    if (document.hidden) return;
+    asegurarTokenFrescoAlVolver().finally(() => sondearCambiosRemotos());
   });
+}
+
+/**
+ * Revalida el token justo al volver a primer plano — ver comentario arriba.
+ * Si la caché local todavía es válida (le quedan más de 5 min, mismo margen
+ * que usa el resto de la app), solo realinea estado.token con ella (por si
+ * esta pestaña estuvo suspendida y quedó desactualizada en memoria) sin
+ * pedirle nada a Google. Si no hay caché usable, recién ahí se refresca en
+ * silencio — la misma llamada que ya se usaba, solo que disparada en el
+ * momento correcto en vez de esperar a que un 401 la descubra.
+ */
+async function asegurarTokenFrescoAlVolver() {
+  await authListo; // punto 5, misma condición de carrera que el resto del módulo
+  if (!estado.fileId) return; // todavía no hay una sesión real armada (ej. pantalla de login)
+
+  const cacheValida = leerTokenCacheValido();
+  if (cacheValida) {
+    estado.token = cacheValida.token;
+    return;
+  }
+  await intentarReconexionSilenciosa(); // ya deduplicada (reconexionEnCurso) y ya silenciosa (prompt:"")
 }
 
 /** Se llama cada vez que se modifica algo en `estado.datos`. */
