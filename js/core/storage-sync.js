@@ -425,9 +425,24 @@ function aplicarDatosRemotosFrescos(datosFrescos) {
   // renderizarPlanEstudios lleguen a capturar su propio "scrollPrevio" —
   // en ese caso el fix local de cada uno restaura fielmente una posición
   // que ya venía corrompida desde antes. Capturando acá, antes de la
-  // primera llamada del lote, y restaurando en un único rAF después de la
-  // última, la posición correcta queda protegida sin importar qué pase en
-  // el medio, sin necesidad de tocar esos otros archivos.
+  // primera llamada del lote, y restaurando después de la última, la
+  // posición correcta queda protegida sin importar qué pase en el medio,
+  // sin necesidad de tocar esos otros archivos.
+  //
+  // FIX (scroll fantasma, ronda 2 — "dos restauradores compitiendo"): esta
+  // función y renderizarSemestres() capturaban CADA UNA su propio
+  // scrollPrevio y reafirmaban en paralelo — la de renderizarSemestres se
+  // leía tarde (después de que los renders "hermanos" ya movieron la
+  // página) y la de acá solo tenía un rAF, más débil que la reafirmación
+  // en varios frames que sí tiene renderizarSemestres. Dos restauraciones
+  // corriendo en frames similares, con valores de referencia distintos,
+  // producían el patrón "a veces se corrige, a veces no". Ahora
+  // renderizarSemestres recibe omitirRestauracionScroll=true cuando la
+  // llama este lote (ver más abajo) y no toca el scroll por su cuenta;
+  // esta función queda como la única fuente de verdad, y usa el mismo
+  // mecanismo de reafirmación en varios frames (no un solo rAF) para
+  // cubrir el mismo reflow tardío (igualarAnchoBadges en
+  // semestres-tarjetas.js, etc.) que motivó ese refuerzo en primer lugar.
   const scrollPrevio = window.scrollY;
 
   const remotoMigrado = migrarDatosAntiguos(datosFrescos);
@@ -470,12 +485,39 @@ function aplicarDatosRemotosFrescos(datosFrescos) {
   // quedaba congelado con los datos viejos hasta recargar. renderizarSemestres
   // ya se protege sola si #seccion-semestres no está en el DOM, así que es
   // seguro llamarla siempre, mismo patrón que renderizarPlanEstudios arriba.
-  if (typeof renderizarSemestres === "function") renderizarSemestres();
+  // omitirRestauracionScroll=true: este lote ya captura y restaura su
+  // propio scrollPrevio acá abajo (ver comentario al inicio de la
+  // función); si renderizarSemestres además capturara y reafirmara el
+  // suyo, las dos restauraciones competirían por la posición final.
+  if (typeof renderizarSemestres === "function") renderizarSemestres(true);
   marcarUltimaSincronizacionConfirmada();
 
-  requestAnimationFrame(() => {
-    window.scrollTo(0, scrollPrevio);
-  });
+  // Mismo mecanismo de reafirmación en varios frames que usa
+  // renderizarSemestres() (semestres.js) para su propio fix local: un solo
+  // requestAnimationFrame no alcanza porque el layout de la página puede
+  // seguir "asentándose" después de ese primer frame (reflows en cascada
+  // de los renders del lote de arriba, incluido igualarAnchoBadges en
+  // semestres-tarjetas.js, que agenda su propio rAF anidado). Reafirmar
+  // scrollPrevio durante varios frames hasta acumular lecturas estables
+  // cubre ese asentamiento tardío sin quedar corriendo para siempre.
+  const FRAMES_MAXIMOS_REAFIRMAR = 12;
+  const LECTURAS_ESTABLES_REQUERIDAS = 3;
+  let framesRestantes = FRAMES_MAXIMOS_REAFIRMAR;
+  let lecturasEstables = 0;
+
+  function reafirmarScroll() {
+    if (Math.abs(window.scrollY - scrollPrevio) > 0.5) {
+      window.scrollTo(0, scrollPrevio);
+      lecturasEstables = 0;
+    } else {
+      lecturasEstables += 1;
+    }
+    framesRestantes -= 1;
+    if (framesRestantes > 0 && lecturasEstables < LECTURAS_ESTABLES_REQUERIDAS) {
+      requestAnimationFrame(reafirmarScroll);
+    }
+  }
+  requestAnimationFrame(reafirmarScroll);
 }
 
 /**
