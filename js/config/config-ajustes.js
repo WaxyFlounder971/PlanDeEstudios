@@ -35,10 +35,12 @@ function aplicarModoRendimiento(activo) {
  * (expuesta por main.js) para que el nav se actualice al toque.
  */
 const SECCIONES_TOGGLEABLES = [
-  { id: "plan-estudios", etiqueta: "Plan de Estudios" },
-  { id: "semestres", etiqueta: "Semestres" },
-  { id: "comunidad", etiqueta: "Comunidad" },
-  { id: "finanzas", etiqueta: "Finanzas" },
+  { id: "plan-estudios", etiqueta: "Plan de Estudios", icono: "📚" },
+  { id: "semestres", etiqueta: "Semestres", icono: "📅" },
+  { id: "agenda", etiqueta: "Agenda", icono: "📖" },
+  { id: "horario", etiqueta: "Horario", icono: "🗓️" },
+  { id: "comunidad", etiqueta: "Comunidad", icono: "👥" },
+  { id: "finanzas", etiqueta: "Finanzas", icono: "💰" },
 ];
 
 function renderizarNavegacionOculta() {
@@ -47,14 +49,43 @@ function renderizarNavegacionOculta() {
   cont.innerHTML = "";
 
   const ocultas = new Set(estado.datos.configuracion.navegacion_oculta || []);
+  // window.obtenerOrdenNavegacion la expone main.js (mismo motivo que
+  // aplicarVisibilidadNavegacion: evitar import circular, ya que
+  // config-ajustes.js es importado POR main.js). Si por lo que sea no
+  // está disponible todavía, se cae al orden fijo de SECCIONES_TOGGLEABLES
+  // para no romper el render.
+  const orden = typeof window.obtenerOrdenNavegacion === "function"
+    ? window.obtenerOrdenNavegacion()
+    : SECCIONES_TOGGLEABLES.map((s) => s.id);
 
-  SECCIONES_TOGGLEABLES.forEach(({ id, etiqueta }) => {
+  orden.forEach((id) => {
+    const seccion = SECCIONES_TOGGLEABLES.find((s) => s.id === id);
+    if (!seccion) return; // id huérfano (ej. una sección que ya no existe) — se ignora
+
     const fila = document.createElement("div");
-    fila.className = "row-between";
+    fila.className = "fila-nav-orden row-between";
+    fila.dataset.id = id;
+
+    const izquierda = document.createElement("div");
+    izquierda.className = "row";
+    izquierda.style.cssText = "align-items:center; gap:10px; min-width:0;";
+
+    const handle = document.createElement("span");
+    handle.className = "handle-mover";
+    handle.textContent = "⋮⋮";
+    handle.title = "Arrastrá para reordenar";
+    izquierda.appendChild(handle);
+
+    const icono = document.createElement("span");
+    icono.textContent = seccion.icono;
+    icono.style.cssText = "font-size:1.05rem; flex-shrink:0;";
+    izquierda.appendChild(icono);
 
     const texto = document.createElement("span");
-    texto.textContent = etiqueta;
-    fila.appendChild(texto);
+    texto.textContent = seccion.etiqueta;
+    izquierda.appendChild(texto);
+
+    fila.appendChild(izquierda);
 
     const label = document.createElement("label");
     label.className = "switch switch-tema";
@@ -82,6 +113,119 @@ function renderizarNavegacionOculta() {
     fila.appendChild(label);
 
     cont.appendChild(fila);
+  });
+
+  habilitarArrastreNavegacion(cont);
+}
+
+/**
+ * Ajustes — arrastrar para reordenar los switches de navegación
+ * (2026-08-06): mismo motor por Pointer Events que la Fase 8 de
+ * semestres-tarjetas.js (mouse y touch con el mismo código, más fiable en
+ * teléfono que el HTML5 Drag&Drop nativo) — reusa a propósito las mismas
+ * clases CSS (.handle-mover / .arrastrando / .arrastre-placeholder) para
+ * que el gesto se sienta igual en toda la app. A diferencia de
+ * criterios/asignaciones, acá el ícono de agarre queda SIEMPRE visible
+ * (pedido explícito: lista corta y fija, sin el "modo bajo demanda").
+ * Al soltar, guarda el nuevo orden completo en
+ * estado.datos.configuracion.navegacion_orden y dispara
+ * aplicarVisibilidadNavegacion() para que el nav real se reordene igual.
+ */
+function habilitarArrastreNavegacion(contenedor) {
+  contenedor.querySelectorAll(".fila-nav-orden").forEach((fila) => {
+    const handle = fila.querySelector(".handle-mover");
+    if (!handle) return;
+    handle.style.touchAction = "none";
+    handle.addEventListener("pointerdown", (evDown) => {
+      if (evDown.button !== undefined && evDown.button !== 0) return; // solo click izq / touch
+      evDown.preventDefault();
+      evDown.stopPropagation();
+
+      const rectInicial = fila.getBoundingClientRect();
+      const anchoItem = rectInicial.width;
+      const alturaItem = rectInicial.height;
+
+      const placeholder = document.createElement("div");
+      placeholder.className = "arrastre-placeholder";
+      placeholder.style.height = alturaItem + "px";
+      contenedor.insertBefore(placeholder, fila);
+
+      fila.classList.add("arrastrando");
+      fila.style.position = "fixed";
+      fila.style.zIndex = "99998";
+      fila.style.width = anchoItem + "px";
+      fila.style.pointerEvents = "none";
+      fila.style.left = rectInicial.left + "px";
+      fila.style.top = rectInicial.top + "px";
+      document.body.appendChild(fila);
+
+      try {
+        fila.setPointerCapture(evDown.pointerId);
+      } catch (e) {
+        // Si el navegador no puede capturar (raro), el arrastre sigue
+        // funcionando igual — solo se pierde la garantía de recibir el
+        // pointerup aunque el dedo salga del elemento.
+      }
+
+      const mover = (x, y) => {
+        fila.style.left = x - anchoItem / 2 + "px";
+        fila.style.top = y - alturaItem / 2 + "px";
+
+        fila.style.display = "none";
+        const elDebajo = document.elementFromPoint(x, y);
+        fila.style.display = "";
+        if (!elDebajo || !contenedor.contains(elDebajo)) return;
+
+        const hijos = Array.from(contenedor.children).filter((h) => h !== placeholder && h !== fila);
+        let referencia = null;
+        for (const hijo of hijos) {
+          const rect = hijo.getBoundingClientRect();
+          if (y < rect.top + rect.height / 2) {
+            referencia = hijo;
+            break;
+          }
+        }
+        if (referencia) contenedor.insertBefore(placeholder, referencia);
+        else contenedor.appendChild(placeholder);
+      };
+
+      const alMover = (evMove) => mover(evMove.clientX, evMove.clientY);
+
+      const alSoltar = () => {
+        fila.removeEventListener("pointermove", alMover);
+        fila.removeEventListener("pointerup", alSoltar);
+        fila.removeEventListener("pointercancel", alSoltar);
+        try {
+          fila.releasePointerCapture(evDown.pointerId);
+        } catch (e) {
+          // nada que limpiar si nunca se pudo capturar
+        }
+
+        contenedor.insertBefore(fila, placeholder);
+        placeholder.remove();
+
+        fila.classList.remove("arrastrando");
+        fila.style.position = "";
+        fila.style.zIndex = "";
+        fila.style.width = "";
+        fila.style.left = "";
+        fila.style.top = "";
+        fila.style.pointerEvents = "";
+        fila.style.display = "";
+
+        const nuevoOrden = Array.from(contenedor.querySelectorAll(".fila-nav-orden")).map((f) => f.dataset.id);
+        estado.datos.configuracion.navegacion_orden = nuevoOrden;
+        sellarTimestamp(estado.datos.configuracion);
+        marcarCambioPendiente();
+        if (typeof window.aplicarVisibilidadNavegacion === "function") {
+          window.aplicarVisibilidadNavegacion();
+        }
+      };
+
+      fila.addEventListener("pointermove", alMover);
+      fila.addEventListener("pointerup", alSoltar);
+      fila.addEventListener("pointercancel", alSoltar);
+    });
   });
 }
 
