@@ -86,6 +86,12 @@ a { color: var(--accent-1); }
   border-radius: var(--radius-pill);
   padding: 12px 22px;
   transition: transform var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
+  /* Pedido explícito: en teléfono, mantener presionado un botón (long-press,
+     ej. el indicador de sync) no debe activar la selección/lupa de texto
+     nativa del navegador — solo debe disparar la acción del botón. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .btn:active { transform: scale(0.97); }
 .btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
@@ -2354,4 +2360,33 @@ html.exportar-tema-default[data-mode="dark"] {
 [data-rendimiento="reducido"] .ppz-rueda-perilla { box-shadow: none; }
 [data-rendimiento="reducido"] .ppz-degradado-contenido {
   transition: none;
+}
+
+/* ---- Fase 8 — Drag and drop de criterios/asignaciones (2026-08-04) ----
+   Bajo demanda desde "Reordenar" en el menú de long-press — fuera de ese
+   modo no existe ningún ícono ni espacio reservado (cero impacto visual
+   en el uso normal, pedido explícito). ---- */
+.handle-mover {
+  cursor: grab;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--text-secondary);
+  padding: 2px 6px;
+  flex-shrink: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.handle-mover:active { cursor: grabbing; }
+
+.arrastrando {
+  opacity: 0.92;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+  border-radius: var(--radius-sm);
+}
+
+.arrastre-placeholder {
+  border: 2px dashed var(--border-glass);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
 }
