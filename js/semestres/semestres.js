@@ -30,6 +30,7 @@ import { aplicarFormatoTexto } from "../core/utils.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { recalcularPlanesHardcore } from "../plan/plan-gestionar.js";
 import { construirTarjetaSemestre } from "./semestres-tarjetas.js";
+import { construirDashboardAcademico } from "./semestres-dashboard.js";
 
 const MESES_SELECT = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
@@ -827,6 +828,12 @@ function renderizarSemestres() {
   // lo recorta bien ahí).
   const scrollPrevio = window.scrollY;
   cont.innerHTML = "";
+
+  // Dashboard académico (pestaña contraíble, colapsada por default — ver
+  // semestres-dashboard.js): va PRIMERO, antes de los semestres actuales,
+  // pero colapsada de entrada no empuja nada hacia abajo (el propio
+  // dashboard controla su alto real según estado.dashboardAcademicoAbierto).
+  cont.appendChild(construirDashboardAcademico(renderizarSemestres));
 
   const actuales = obtenerSemestresActuales();
   const pasados = obtenerSemestresPasados();
