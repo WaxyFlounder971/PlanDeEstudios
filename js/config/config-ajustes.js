@@ -24,6 +24,67 @@ function aplicarModoRendimiento(activo) {
   document.documentElement.setAttribute("data-rendimiento", activo ? "reducido" : "normal");
 }
 
+/**
+ * Ajustes — ocultar botones de navegación principal (2026-08-06): una fila
+ * con switch por cada sección togglable. "configuracion" NUNCA aparece acá
+ * (no se puede ocultar) — mismo filtro que ya aplica aplicarVisibilidadNavegacion
+ * en main.js por las dudas, pero acá directamente no se le ofrece la opción.
+ * Los switches son la única fuente de verdad de UI: leen y escriben
+ * directo sobre estado.datos.configuracion.navegacion_oculta (arreglo de
+ * ids), y en cada cambio llaman a window.aplicarVisibilidadNavegacion()
+ * (expuesta por main.js) para que el nav se actualice al toque.
+ */
+const SECCIONES_TOGGLEABLES = [
+  { id: "plan-estudios", etiqueta: "Plan de Estudios" },
+  { id: "semestres", etiqueta: "Semestres" },
+  { id: "comunidad", etiqueta: "Comunidad" },
+  { id: "finanzas", etiqueta: "Finanzas" },
+];
+
+function renderizarNavegacionOculta() {
+  const cont = document.getElementById("lista-nav-oculta");
+  if (!cont) return;
+  cont.innerHTML = "";
+
+  const ocultas = new Set(estado.datos.configuracion.navegacion_oculta || []);
+
+  SECCIONES_TOGGLEABLES.forEach(({ id, etiqueta }) => {
+    const fila = document.createElement("div");
+    fila.className = "row-between";
+
+    const texto = document.createElement("span");
+    texto.textContent = etiqueta;
+    fila.appendChild(texto);
+
+    const label = document.createElement("label");
+    label.className = "switch switch-tema";
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    // El switch representa "visible" (encendido = se muestra en el nav),
+    // así que va invertido respecto a `ocultas` (que guarda lo OCULTO).
+    chk.checked = !ocultas.has(id);
+    chk.addEventListener("change", () => {
+      const actuales = new Set(estado.datos.configuracion.navegacion_oculta || []);
+      if (chk.checked) actuales.delete(id);
+      else actuales.add(id);
+      estado.datos.configuracion.navegacion_oculta = Array.from(actuales);
+      sellarTimestamp(estado.datos.configuracion);
+      marcarCambioPendiente();
+      if (typeof window.aplicarVisibilidadNavegacion === "function") {
+        window.aplicarVisibilidadNavegacion();
+      }
+    });
+    const track = document.createElement("span");
+    track.className = "track";
+    track.innerHTML = '<span class="thumb"></span>';
+    label.appendChild(chk);
+    label.appendChild(track);
+    fila.appendChild(label);
+
+    cont.appendChild(fila);
+  });
+}
+
 function renderizarAjustes() {
   // Paletas — cada cuadro muestra su propio color real (punto 3)
   const grid = document.getElementById("grid-paletas");
@@ -147,6 +208,9 @@ function renderizarAjustes() {
       };
     });
   }
+
+  // Ajustes — ocultar botones de navegación principal
+  renderizarNavegacionOculta();
 
   actualizarIndicadorSync();
 }
