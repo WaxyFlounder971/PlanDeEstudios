@@ -530,7 +530,7 @@ function mostrarSeccion(nombre) {
  * mismo orden que el nav real, sin import circular (mismo motivo que
  * aplicarVisibilidadNavegacion ya se expone así).
  */
-const DEFAULT_ORDEN_NAV = ["plan-estudios", "semestres", "agenda", "horario", "comunidad", "finanzas"];
+const DEFAULT_ORDEN_NAV = ["agenda", "horario", "semestres", "comunidad", "finanzas", "plan-estudios"];
 
 function obtenerOrdenNavegacionEfectivo() {
   const guardado = (estado.datos.configuracion.navegacion_orden || []).filter((id) => DEFAULT_ORDEN_NAV.includes(id));
