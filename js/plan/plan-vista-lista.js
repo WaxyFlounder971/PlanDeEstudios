@@ -32,6 +32,20 @@ function renderizarPlanEstudios() {
   const cont = document.getElementById("seccion-plan-estudios");
   if (!cont) return;
 
+  // FIX (scroll fantasma — mismo patrón ya usado en renderizarSemestres,
+  // semestres.js): esta función vacía y reconstruye #seccion-plan-estudios
+  // COMPLETO en cada render — tanto por acción directa del usuario (toggle
+  // de Estadísticas, abrir/cerrar importación, cambiar de plan del
+  // carrusel, editar/borrar materias, etc.) como por el sondeo de sync
+  // automático (~9s) vía aplicarDatosRemotosFrescos en storage-sync.js, o
+  // por el listener de resize (inicializarResponsivoListaPlan). Ninguno de
+  // esos caminos tenía protección — de ahí que el salto de scroll acá fuera
+  // más frecuente y más visible que en Semestres. Se usa `finally` (no solo
+  // el camino feliz) para que la restauración corra también en el retorno
+  // temprano de "sin plan activo todavía" y en el catch de error, no solo
+  // en el render normal.
+  const scrollPrevio = window.scrollY;
+
   const principal = obtenerPlanActivo();
   cont.innerHTML = "";
 
@@ -98,6 +112,14 @@ function renderizarPlanEstudios() {
     aviso.appendChild(detalle);
     aviso.appendChild(tecnico);
     cont.appendChild(aviso);
+  } finally {
+    // Mismo mecanismo que renderizarSemestres: al vaciar innerHTML la altura
+    // de la página cae por una fracción de segundo y el navegador puede
+    // recortar scrollY al máximo posible en ese instante; se restaura ya en
+    // el próximo frame, con el layout real recalculado.
+    requestAnimationFrame(() => {
+      window.scrollTo(0, scrollPrevio);
+    });
   }
 }
 
