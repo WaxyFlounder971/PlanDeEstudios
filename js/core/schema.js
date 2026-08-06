@@ -1026,6 +1026,258 @@ function calcularObjetivoPasarRaspando(notaAprobacion) {
   return multiploSuperior - 2.5;
 }
 
+/* =========================================================================
+   Dashboard académico — Promedio ponderado (niveles a/b) + estadísticas de
+   aprobación. Todo lo de acá abajo es cálculo puro (nunca muta nada, nunca
+   llama a sellarTimestamp/marcarCambioPendiente) — se recalcula siempre al
+   vuelo a partir de estado.datos, igual criterio que calcularNotaFinalMateria.
+
+   Decisión confirmada (respuestas del prompt de diseño):
+   - Se incluyen materias de semestres ACTUALES (en curso), usando su
+     nota_final VIGENTE (respeta override manual) — no hace falta que el
+     semestre esté "Terminado" ni que mm.resultado esté seteado.
+   - La nota de cada materia se redondea al 5 más cercano ANTES de
+     ponderar (mismo criterio que terminarSemestre en semestres.js),
+     respetando el switch redondeo_activo de CADA plan — en Modo Hardcore
+     dos materias del mismo semestre pueden pertenecer a planes con
+     configuraciones de redondeo distintas.
+   - Nivel (c) "combinado de TODO junto" queda EXPLÍCITAMENTE fuera de esta
+     entrega (documentado como pendiente al final de este bloque) — (a) y
+     (b) son la prioridad y deben quedar sólidos primero.
+   ========================================================================= */
+
+/**
+ * nota_final VIGENTE de una materia matriculada, sin mutar nada — mismo
+ * cálculo que calcularNotaFinalVigente en semestres-tarjetas.js (que sigue
+ * siendo la fuente para la UI de esa tarjeta puntual; esta copia vive acá
+ * para que el dashboard no tenga que importar desde un archivo de UI).
+ * Respeta nota_final_manual y el bono de puntos_extra, igual que el motor
+ * de notas real — así el promedio del dashboard nunca se desalinea de lo
+ * que la persona ve en la tarjeta de cada materia.
+ */
+function calcularNotaFinalVigenteMateria(mm, materia, plan, configuracion) {
+  if (mm.nota_final_manual) return mm.nota_final;
+  const escala = obtenerEscalaNotasMateria(materia, plan, configuracion);
+  const base = calcularNotaFinalMateria(mm, escala);
+  const extra = Number(mm.puntos_extra) || 0;
+  if (extra > 0 && typeof base === "number") {
+    return Math.min(base + extra, escala);
+  }
+  return base;
+}
+
+/**
+ * nota_final vigente de una materia YA redondeada al 5 más cercano si el
+ * plan de esa materia tiene redondeo_activo (default true) — mismo switch
+ * por plan que ya usa terminarSemestre (semestres.js) para decidir
+ * aprobado/reprobado. Única puerta de entrada para "la nota que cuenta
+ * para el promedio" — nunca se pondera la cruda sin pasar por acá primero.
+ */
+function calcularNotaParaPromedio(mm, materia, plan, configuracion) {
+  const vigente = calcularNotaFinalVigenteMateria(mm, materia, plan, configuracion);
+  if (vigente === null || vigente === undefined) return null;
+  const redondeoActivo = !plan || !plan.parametros_universidad || plan.parametros_universidad.redondeo_activo !== false;
+  return redondeoActivo ? redondearNotaFinalAlCincoMasCercano(vigente) : vigente;
+}
+
+/**
+ * Recorre TODOS los semestres (actuales + pasados) y devuelve una lista
+ * plana de "materias matriculadas resolubles" — con su materia/plan/
+ * semestre ya unidos por join y su nota lista para ponderar. Filtra sola
+ * cualquier mm huérfana (plan o materia borrados) sin explotar. Único
+ * punto de entrada que recorren las funciones de agrupación de abajo,
+ * para no repetir el mismo recorrido triple.
+ */
+function listarMatriculasResolubles(datos) {
+  const resultado = [];
+  (datos.semestres || []).forEach((semestre) => {
+    (semestre.materias_matriculadas || []).forEach((mm) => {
+      const plan = (datos.planes_estudio || []).find((p) => p.id === mm.plan_estudio_id);
+      const materia = plan && (plan.materias || []).find((m) => m.id === mm.materia_id);
+      if (!plan || !materia) return; // referencia huérfana — se ignora, no rompe el cálculo
+      const nota = calcularNotaParaPromedio(mm, materia, plan, datos.configuracion);
+      const creditos = Number(materia.creditos) || 0;
+      resultado.push({ semestre, mm, materia, plan, nota, creditos });
+    });
+  });
+  return resultado;
+}
+
+/**
+ * Promedio ponderado por créditos: Σ(nota×créditos) / Σcréditos, sobre una
+ * lista ya filtrada de entradas { nota, creditos } (ver
+ * listarMatriculasResolubles). Ignora entradas sin nota todavía (nota
+ * null = nunca se calificó nada en esa materia) — no cuentan como 0, se
+ * excluyen del todo, igual criterio que "pendiente" en el resto del motor
+ * de notas (ver calcularPuntosAsignacion). Devuelve { promedio: null, ... }
+ * si no hay ninguna entrada válida (nada que promediar todavía) — un 0
+ * real sería engañoso ahí.
+ */
+function calcularPromedioPonderado(entradas) {
+  let sumaPonderada = 0;
+  let sumaCreditos = 0;
+  let materiasContadas = 0;
+  (entradas || []).forEach(({ nota, creditos }) => {
+    if (nota === null || nota === undefined) return;
+    if (!(creditos > 0)) return; // sin créditos válidos no aporta al ponderado
+    sumaPonderada += nota * creditos;
+    sumaCreditos += creditos;
+    materiasContadas += 1;
+  });
+  if (sumaCreditos <= 0) return { promedio: null, creditos: 0, materias: materiasContadas };
+  return { promedio: redondearDecimales(sumaPonderada / sumaCreditos, 2), creditos: sumaCreditos, materias: materiasContadas };
+}
+
+/**
+ * Nivel (a) — Promedio por semestre, separado por universidad. Relevante
+ * en Modo Hardcore: si un semestre tiene materias de más de un plan (y
+ * esos planes son de universidades distintas), cada universidad obtiene
+ * su propio promedio independiente — nunca se mezclan automáticamente.
+ * Agrupa por `plan.universidad` (no por plan_estudio_id) a propósito: dos
+ * planes de la MISMA universidad dentro del mismo semestre sí deben
+ * combinarse en un solo número, ya que la separación real que pide el
+ * usuario es por universidad, no por carrera.
+ *
+ * Devuelve, por cada semestre (más reciente primero), { semestre,
+ * universidades: [{ universidad, promedio, creditos, materias }] } — una
+ * entrada por cada universidad presente en ese semestre.
+ */
+function calcularPromedioPorSemestreYUniversidad(datos) {
+  const entradas = listarMatriculasResolubles(datos);
+  const porSemestre = new Map(); // semestre.id -> Map(universidad -> entradas[])
+
+  entradas.forEach((e) => {
+    if (!porSemestre.has(e.semestre.id)) porSemestre.set(e.semestre.id, new Map());
+    const porUniversidad = porSemestre.get(e.semestre.id);
+    const universidad = e.plan.universidad || "Sin universidad";
+    if (!porUniversidad.has(universidad)) porUniversidad.set(universidad, []);
+    porUniversidad.get(universidad).push(e);
+  });
+
+  const semestresOrdenados = (datos.semestres || [])
+    .filter((s) => porSemestre.has(s.id))
+    .sort((a, b) => String(b.fecha_inicio).localeCompare(String(a.fecha_inicio)));
+
+  return semestresOrdenados.map((semestre) => {
+    const porUniversidad = porSemestre.get(semestre.id);
+    const universidades = Array.from(porUniversidad.entries()).map(([universidad, entradasU]) => {
+      const resultado = calcularPromedioPonderado(entradasU);
+      return { universidad, ...resultado };
+    });
+    return { semestre, universidades };
+  });
+}
+
+/**
+ * Nivel (b) — Promedio general por carrera/plan, acumulado a lo largo de
+ * TODA la trayectoria (todos los semestres, actuales y pasados, de ese
+ * plan de estudios) — a diferencia de (a), acá no importa en qué semestre
+ * puntual estuvo cada materia, se junta todo por plan_estudio_id.
+ *
+ * Devuelve un arreglo de { plan, promedio, creditos, materias } — uno por
+ * cada plan que tenga al menos una materia matriculada en algún semestre.
+ * Incluye planes ya no-activos (ej. carrera que se dejó de cursar) siempre
+ * que tengan historial real — así el promedio de una carrera pausada no
+ * desaparece solo por desactivarla.
+ */
+function calcularPromedioPorPlan(datos) {
+  const entradas = listarMatriculasResolubles(datos);
+  const porPlan = new Map(); // plan.id -> entradas[]
+
+  entradas.forEach((e) => {
+    if (!porPlan.has(e.plan.id)) porPlan.set(e.plan.id, []);
+    porPlan.get(e.plan.id).push(e);
+  });
+
+  return Array.from(porPlan.entries()).map(([planId, entradasP]) => {
+    const plan = entradasP[0].plan;
+    const resultado = calcularPromedioPonderado(entradasP);
+    return { plan, ...resultado };
+  });
+}
+
+/**
+ * Nivel (c) — PENDIENTE A PROPÓSITO. Promedio combinado de TODO junto,
+ * mezclando universidades/carreras distintas en un solo número total (caso:
+ * 2 carreras en paralelo, se quiere ver un total único). Decisión explícita
+ * del prompt de diseño: (a) y (b) son la prioridad y deben quedar sólidos
+ * primero; (c) se documenta acá para implementarse en una entrega
+ * posterior en vez de improvisarse ahora. Cuando se implemente, debería
+ * ser tan simple como calcularPromedioPonderado(listarMatriculasResolubles(datos))
+ * directo, sin agrupar — pero falta decidir con el usuario si "todo junto"
+ * excluye duplicados de alguna forma particular (ej. una materia repetida
+ * dos veces, ¿cuenta una vez o las dos intentonas?) antes de darlo por
+ * sólido.
+ */
+
+/**
+ * Punto 2 — Porcentaje de cursos aprobados/reprobados. Basado en
+ * mm.resultado (independiente de materia.estado, que es manual/sticky del
+ * Plan de Estudios) — SOLO cuenta materias ya CERRADAS (resultado !==
+ * null); una materia en curso o con notas incompletas no cuenta en
+ * ninguno de los dos lados, no se adivina. `planId` es opcional: si se
+ * pasa, filtra solo las matrículas de ese plan; sin él, es global (toda la
+ * trayectoria, todos los planes).
+ *
+ * Devuelve { totalCursos, aprobadas: {cantidad, creditos, promedio,
+ * porcentaje}, reprobadas: {...} } — el "promedio" de cada lado es el
+ * promedio ponderado (mismo cálculo que arriba) SOLO de las materias de
+ * ese lado, para el texto tipo "80.6 promedio de cursos aprobados".
+ */
+function calcularEstadisticasAprobacion(datos, planId) {
+  const entradas = listarMatriculasResolubles(datos).filter((e) => {
+    if (planId && e.plan.id !== planId) return false;
+    return e.mm.resultado === "aprobada" || e.mm.resultado === "reprobada";
+  });
+
+  const aprobadasEntradas = entradas.filter((e) => e.mm.resultado === "aprobada");
+  const reprobadasEntradas = entradas.filter((e) => e.mm.resultado === "reprobada");
+
+  const resumen = (lista) => {
+    const ponderado = calcularPromedioPonderado(lista);
+    return { cantidad: lista.length, creditos: ponderado.creditos, promedio: ponderado.promedio };
+  };
+
+  const totalCursos = entradas.length;
+  const aprobadas = resumen(aprobadasEntradas);
+  const reprobadas = resumen(reprobadasEntradas);
+
+  return {
+    totalCursos,
+    aprobadas: { ...aprobadas, porcentaje: totalCursos > 0 ? redondearDecimales((aprobadas.cantidad / totalCursos) * 100, 1) : 0 },
+    reprobadas: { ...reprobadas, porcentaje: totalCursos > 0 ? redondearDecimales((reprobadas.cantidad / totalCursos) * 100, 1) : 0 },
+  };
+}
+
+/**
+ * Punto 3 — Detalle por estado, usando ÚNICAMENTE los 4 estados que ya
+ * existen en la app (Aprobada, Cursando, Reprobada, Pendiente — ver
+ * ESTADOS_MATERIA en plan-vista-lista-tarjetas.js). A propósito NO cuenta
+ * mm.resultado ni nada de Semestres — este conteo es sobre materia.estado
+ * del PLAN (el campo manual/sticky), recorriendo TODAS las materias de
+ * TODOS los planes (o de un solo plan si se pasa `planId`), incluyendo las
+ * que nunca se han matriculado todavía. "Cursando" se lee vía
+ * obtenerEstadoEfectivoMateria (nunca materia.estado crudo), para que
+ * coincida exactamente con lo que ya muestra el Plan de Estudios en su
+ * propia UI.
+ */
+function calcularDetallePorEstado(datos, planId) {
+  const conteo = { pendiente: 0, cursando: 0, aprobado: 0, reprobado: 0 };
+  const planes = planId ? (datos.planes_estudio || []).filter((p) => p.id === planId) : datos.planes_estudio || [];
+
+  planes.forEach((plan) => {
+    (plan.materias || []).forEach((materia) => {
+      const efectivo = obtenerEstadoEfectivoMateria(materia, plan.id, datos);
+      if (efectivo === "cursando") conteo.cursando += 1;
+      else if (efectivo === "aprobado") conteo.aprobado += 1;
+      else if (efectivo === "reprobado") conteo.reprobado += 1;
+      else conteo.pendiente += 1;
+    });
+  });
+
+  return conteo;
+}
+
 /**
  * FIX sync (bug real encontrado en esta ronda de auditoría): a diferencia
  * de crearMateria y crearPlanEstudio, esta función NUNCA llamaba a
@@ -1512,4 +1764,12 @@ export {
   obtenerIntentosMateria,
   siguienteOrden,
   reordenarPorArrastre,
+  calcularNotaFinalVigenteMateria,
+  calcularNotaParaPromedio,
+  listarMatriculasResolubles,
+  calcularPromedioPonderado,
+  calcularPromedioPorSemestreYUniversidad,
+  calcularPromedioPorPlan,
+  calcularEstadisticasAprobacion,
+  calcularDetallePorEstado,
 };
