@@ -2390,3 +2390,23 @@ html.exportar-tema-default[data-mode="dark"] {
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.03);
 }
+
+/* ---- Ajustes: switches de navegación reordenables (2026-08-06) ----
+   Reusa a propósito el mismo motor y las mismas clases de arrastre que la
+   Fase 8 de criterios/asignaciones (.handle-mover/.arrastrando/.arrastre-
+   placeholder, arriba) para que el gesto se sienta igual en toda la app.
+   A diferencia de esas listas, acá el ícono de agarre queda SIEMPRE
+   visible (lista corta y fija, sin el modo "bajo demanda") — por eso cada
+   fila necesita su propio fondo/borde en vez de quedar "pelada" como una
+   .row-between común. */
+.fila-nav-orden {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-glass);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.fila-nav-orden:hover { border-color: var(--accent-1); }
+.fila-nav-orden .handle-mover { cursor: grab; }
+.fila-nav-orden .handle-mover:active { cursor: grabbing; }
+[data-rendimiento="reducido"] .fila-nav-orden { transition: none; }
