@@ -672,6 +672,24 @@ function sumaValorAsignaciones(criterio, excluirId) {
 }
 
 /**
+ * FIX (2026-08-06 — "el disponible marca 25 en vez de 15 con 30+30 de 75"):
+ * a diferencia de sumaValorAsignaciones, esta NO cuenta las asignaciones en
+ * modo "automatico" — su .valor es solo la última foto de un reparto
+ * equitativo (ver repartirEquitativoCriterio en schema.js), no un espacio
+ * reservado de verdad, porque se vuelven a repartir solas apenas algo
+ * cambia. Para saber cuánto espacio le queda LIBRE a una "personalizado"
+ * (nueva o existente), solo hay que restar lo que otras "personalizado"
+ * ya se llevaron fijo — el resto sigue disponible para repartirse. Misma
+ * regla que ya usaba calcularValorEquitativoEstimado más abajo.
+ */
+function sumaValorPersonalizadoAsignaciones(criterio, excluirId) {
+  return (criterio.asignaciones || []).reduce(
+    (total, a) => total + (a.id === excluirId || a.modo_valor !== "personalizado" ? 0 : Number(a.valor) || 0),
+    0
+  );
+}
+
+/**
  * Calcula el valor vigente de nota_final SIN mutar mm — para mostrar en
  * pantalla en cada render. Si hay override manual activo, es simplemente
  * mm.nota_final tal cual (no se recalcula).
@@ -1148,7 +1166,7 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
   actualizarCampoValor(modoValorInicial);
   actualizarEtiquetaCalif(modoCalifInicial);
 
-  const disponible = criterio.valor_total - sumaValorAsignaciones(criterio, esEdicion ? asignacionExistente.id : undefined);
+  const disponible = criterio.valor_total - sumaValorPersonalizadoAsignaciones(criterio, esEdicion ? asignacionExistente.id : undefined);
   const ayuda = document.createElement("p");
   ayuda.className = "muted";
   ayuda.style.fontSize = "0.8rem";
@@ -1218,7 +1236,7 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
       onGuardado();
       return;
     }
-    const disponibleReal = criterioVivo.valor_total - sumaValorAsignaciones(criterioVivo, asignacionId || undefined);
+    const disponibleReal = criterioVivo.valor_total - sumaValorPersonalizadoAsignaciones(criterioVivo, asignacionId || undefined);
     if (modoValor === "personalizado" && valorNum > disponibleReal + 0.001) {
       mostrarToast(`Ese valor supera los ${formatearNumero(disponibleReal)} puntos disponibles en el criterio`);
       return;
