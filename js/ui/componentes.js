@@ -20,6 +20,16 @@ function agregarLongPress(el, callback, duracionMs = 500) {
   let timer = null;
   let origenX = 0;
   let origenY = 0;
+  // FIX (2026-08-06 — "el hold también dispara el click de golpe, se
+  // buguea"): el navegador SIEMPRE manda un "click" normal justo después
+  // del pointerup/touchend, sin importar que el timer del hold ya haya
+  // disparado su propio callback antes — agregarLongPress nunca escuchaba
+  // ni bloqueaba ese click, así que el listener de "click" que cada
+  // elemento ya tenía por su cuenta (ej. expandir la tarjeta) se
+  // ejecutaba igual, ENCIMA de lo que el hold acababa de abrir. Esta
+  // bandera marca que el hold (o el clic derecho) ya resolvió el gesto,
+  // para poder cancelar solo ESE click puntual más abajo.
+  let disparadoPorHold = false;
   // Si el dedo se mueve más que esto antes de cumplirse el tiempo, es un
   // scroll o un intento de arrastre normal, no una intención de long-press
   // — se cancela para no disparar el menú por accidente en medio de un scroll.
@@ -33,7 +43,11 @@ function agregarLongPress(el, callback, duracionMs = 500) {
   el.addEventListener("pointerdown", (e) => {
     origenX = e.clientX;
     origenY = e.clientY;
-    timer = setTimeout(callback, duracionMs);
+    timer = setTimeout(() => {
+      timer = null;
+      disparadoPorHold = true;
+      callback();
+    }, duracionMs);
   });
   el.addEventListener("pointermove", (e) => {
     if (timer === null) return;
@@ -53,8 +67,27 @@ function agregarLongPress(el, callback, duracionMs = 500) {
   el.addEventListener("pointercancel", cancelar);
   el.addEventListener("contextmenu", (e) => {
     e.preventDefault();
+    disparadoPorHold = true;
     callback();
   });
+
+  // Se registra en fase de CAPTURA (3er argumento `true`) para llegar
+  // antes que cualquier otro listener de "click" que ya exista sobre este
+  // mismo elemento (ej. el que expande/colapsa la tarjeta) y poder
+  // cancelarlo con stopPropagation antes de que corra. Solo actúa la
+  // primera vez después de un hold — el resto de los clics normales
+  // (sin hold de por medio) siguen funcionando exactamente igual que
+  // siempre.
+  el.addEventListener(
+    "click",
+    (e) => {
+      if (!disparadoPorHold) return;
+      disparadoPorHold = false;
+      e.stopPropagation();
+      e.preventDefault();
+    },
+    true
+  );
 }
 
 /* ===================== Confirmación genérica (reemplaza confirm() nativo) ===================== */
