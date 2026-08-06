@@ -84,6 +84,8 @@
         
         <button id="nav-semestres" class="btn btn-secondary btn-block btn-nav" data-seccion="semestres" title="Semestres">📅 <span class="texto-nav">Semestres</span></button>
 
+        <button id="nav-comunidad" class="btn btn-secondary btn-block btn-nav" data-seccion="comunidad" title="Comunidad">👥 <span class="texto-nav">Comunidad</span></button>
+        <button id="nav-finanzas" class="btn btn-secondary btn-block btn-nav" data-seccion="finanzas" title="Finanzas">💰 <span class="texto-nav">Finanzas</span></button>
         <button class="btn btn-secondary btn-block btn-nav" title="Profesores" disabled>👨‍🏫 <span class="texto-nav">Profesores</span></button>
         <button id="nav-plan-estudios" class="btn btn-secondary btn-block btn-nav" data-seccion="plan-estudios" title="Plan de Estudios">📚 <span class="texto-nav">Plan de Estudios</span></button>
         <button id="nav-configuracion" class="btn btn-primary btn-block btn-nav" data-seccion="configuracion" title="Configuración">⚙️ <span class="texto-nav">Configuración</span></button>
@@ -150,6 +152,12 @@
         </section>
 
         <section class="glass-card stack">
+          <h2>Navegación</h2>
+          <p class="muted" style="font-size:0.82rem; margin:0 0 4px;">Elegí qué secciones mostrar en el menú. "Configuración" siempre queda visible.</p>
+          <div id="lista-nav-oculta" class="stack" style="gap:10px;"></div>
+        </section>
+
+        <section class="glass-card stack">
           <h2>Personalizar</h2>
 
           <div class="row-between">
@@ -190,6 +198,13 @@
 
       <!-- ===================== SECCIÓN: Semestres ===================== -->
       <div id="seccion-semestres" class="stack oculto"></div>
+
+      <!-- ===================== SECCIÓN: Finanzas (placeholder, feature futura) ===================== -->
+      <div id="seccion-finanzas" class="stack oculto">
+        <div class="glass-panel" style="padding:24px; text-align:center;">
+          <p class="muted" style="margin:0;">💰 Finanzas está en construcción — volvé pronto.</p>
+        </div>
+      </div>
 
     </main>
 
