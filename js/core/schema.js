@@ -33,6 +33,13 @@ function crearDatosUsuarioNuevo() {
       plan_activo_id: null,         // id del Plan de Estudios seleccionado como activo
       enlaces_rapidos: [],          // ver estructura de "enlace" abajo (máx. 20)
 
+      // Ajustes — ocultar botones de navegación (2026-08-04): ids de sección
+      // ("plan-estudios" | "semestres" | "comunidad") que el usuario decidió
+      // ocultar del nav principal. "configuracion" nunca se guarda acá —
+      // aplicarVisibilidadNavegacion() (main.js) la filtra igual por las
+      // dudas, pero la UI de Ajustes ni siquiera ofrece esa opción.
+      navegacion_oculta: [],
+
       // --- Modo Hardcore 💀 (hasta 3 carreras simultáneas) ---
       modo_hardcore: false,             // si está activo, se combinan hasta 3 Planes de Estudio a la vez
       plan_activo_secundario_id: null,  // 2do Plan de Estudios (solo relevante si modo_hardcore = true)
@@ -1249,6 +1256,20 @@ function migrarDatosAntiguos(datos) {
   // forma consistente en todos lados) y confundiría al selector de 3 botones.
   if (datos.configuracion && datos.configuracion.plan_activo_terciario_id === undefined) {
     datos.configuracion.plan_activo_terciario_id = null;
+  }
+
+  // Ajustes — ocultar botones de navegación (2026-08-04): mismo relleno
+  // defensivo que el resto de esta función — cuentas creadas antes de este
+  // ajuste no tienen navegacion_oculta ni como arreglo vacío, el campo
+  // directamente no existe. Sin esto, aplicarVisibilidadNavegacion()
+  // (main.js) igual funciona gracias al `|| []` de respaldo que trae, pero
+  // el campo quedaría undefined en el objeto guardado — y en cuanto UN
+  // dispositivo lo toque (oculta o muestra una sección), ese dispositivo
+  // pasa a tener el arreglo mientras el otro (que nunca abrió Ajustes)
+  // sigue sin él: mismo patrón de conflicto falso en storage-merge.js que
+  // ya se documentó arriba para criterios/nota_final.
+  if (datos.configuracion && !Array.isArray(datos.configuracion.navegacion_oculta)) {
+    datos.configuracion.navegacion_oculta = [];
   }
 
   // FIX sync (2026-08-02): materias matriculadas creadas antes del motor de
