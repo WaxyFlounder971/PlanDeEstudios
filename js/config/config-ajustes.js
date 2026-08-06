@@ -35,12 +35,12 @@ function aplicarModoRendimiento(activo) {
  * (expuesta por main.js) para que el nav se actualice al toque.
  */
 const SECCIONES_TOGGLEABLES = [
-  { id: "plan-estudios", etiqueta: "Plan de Estudios", icono: "📚" },
-  { id: "semestres", etiqueta: "Semestres", icono: "📅" },
   { id: "agenda", etiqueta: "Agenda", icono: "📖" },
   { id: "horario", etiqueta: "Horario", icono: "🗓️" },
+  { id: "semestres", etiqueta: "Semestres", icono: "📅" },
   { id: "comunidad", etiqueta: "Comunidad", icono: "👥" },
   { id: "finanzas", etiqueta: "Finanzas", icono: "💰" },
+  { id: "plan-estudios", etiqueta: "Plan de Estudios", icono: "📚" },
 ];
 
 function renderizarNavegacionOculta() {
