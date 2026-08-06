@@ -884,9 +884,41 @@ function renderizarSemestres() {
     cont.appendChild(seccionPasados);
   }
 
-  requestAnimationFrame(() => {
-    window.scrollTo(0, scrollPrevio);
-  });
+  // FIX REFORZADO (2026-08-06 — "el scroll fantasma sigue pasando, incluso
+  // solo cada ~9-10s sin tocar nada"): el intervalo de 9s en main.js
+  // (setInterval(sondearCambiosRemotos, 9000)) es justamente lo que
+  // reproduce el patrón reportado — un re-render disparado por el sondeo
+  // remoto, sin ninguna acción del usuario de por medio. Un solo
+  // requestAnimationFrame no bastaba porque el layout de esta sección
+  // sigue "asentándose" después de ese primer frame: construirTarjetaCriterio
+  // (semestres-tarjetas.js) llama a igualarAnchoBadges(), que agenda SU
+  // PROPIO requestAnimationFrame anidado para medir anchos reales de pills
+  // ya en el documento — ese ajuste tardío puede seguir cambiando la altura
+  // de la página después de que el primer rAF de acá ya restauró el scroll,
+  // y ESE cambio posterior es el que se comía silenciosamente el resultado.
+  // reafirmarScroll() se reprograma a sí mismo unos cuantos frames más,
+  // reimponiendo scrollPrevio cada vez, hasta acumular suficientes lecturas
+  // en las que el scroll ya coincide con lo esperado — recién ahí se da por
+  // estable y se detiene. Esto cubre cualquier reflow tardío sin quedar
+  // corriendo para siempre.
+  const FRAMES_MAXIMOS_REAFIRMAR = 12;
+  const LECTURAS_ESTABLES_REQUERIDAS = 3;
+  let framesRestantes = FRAMES_MAXIMOS_REAFIRMAR;
+  let lecturasEstables = 0;
+
+  function reafirmarScroll() {
+    if (Math.abs(window.scrollY - scrollPrevio) > 0.5) {
+      window.scrollTo(0, scrollPrevio);
+      lecturasEstables = 0;
+    } else {
+      lecturasEstables += 1;
+    }
+    framesRestantes -= 1;
+    if (framesRestantes > 0 && lecturasEstables < LECTURAS_ESTABLES_REQUERIDAS) {
+      requestAnimationFrame(reafirmarScroll);
+    }
+  }
+  requestAnimationFrame(reafirmarScroll);
 }
 
 export { abrirModalAltaSemestre, obtenerSemestresActuales, obtenerSemestresPasados, renderizarSemestres };
