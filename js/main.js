@@ -485,6 +485,7 @@ function mostrarSeccion(nombre) {
     "plan-estudios": "seccion-plan-estudios",
     semestres: "seccion-semestres",
     comunidad: "seccion-comunidad",
+    finanzas: "seccion-finanzas",
   };
   Object.entries(secciones).forEach(([clave, idEl]) => {
     const el = document.getElementById(idEl);
