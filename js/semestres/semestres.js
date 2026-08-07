@@ -869,7 +869,19 @@ function renderizarSemestres(omitirRestauracionScroll = false) {
     cardVacio.appendChild(btn);
     cont.appendChild(cardVacio);
   } else {
-    actuales.forEach((s) => cont.appendChild(construirTarjetaSemestre(s, obtenerPlanPorId, renderizarSemestres, onEditar, onBorrar)));
+    // FIX (2026-08-07 — "agregale una tarjeta de fondo a los semestres
+    // actuales, que siga exactamente como funciona semestres pasados"):
+    // mismo wrapper glass-card + encabezado que ya usa la sección de abajo
+    // ("Semestres pasados"), y anidada=true en construirTarjetaSemestre
+    // para que cada tarjeta reciba el mismo ajuste de borde/margen negativo
+    // que ya evita el doble padding dentro de "pasados" (ver el comentario
+    // "anidada" en construirTarjetaSemestre, semestres-tarjetas.js) —
+    // sin esto, "actuales" quedaría con más espacio lateral desperdiciado
+    // que "pasados".
+    const seccionActuales = document.createElement("section");
+    seccionActuales.className = "glass-card stack";
+    seccionActuales.innerHTML = `<h3 style="margin:0;">${actuales.length === 1 ? "Semestre actual" : "Semestres actuales"}</h3>`;
+    actuales.forEach((s) => seccionActuales.appendChild(construirTarjetaSemestre(s, obtenerPlanPorId, renderizarSemestres, onEditar, onBorrar, true)));
 
     const filaBotones = document.createElement("div");
     filaBotones.className = "row";
@@ -890,13 +902,14 @@ function renderizarSemestres(omitirRestauracionScroll = false) {
     btnEditar.addEventListener("click", alternarModoEdicionSemestres);
     filaBotones.appendChild(btnEditar);
 
-    cont.appendChild(filaBotones);
+    seccionActuales.appendChild(filaBotones);
+    cont.appendChild(seccionActuales);
   }
 
   if (pasados.length > 0) {
     const seccionPasados = document.createElement("section");
     seccionPasados.className = "glass-card stack";
-    seccionPasados.innerHTML = `<h3 style="margin:0;">Semestres pasados</h3>`;
+    seccionPasados.innerHTML = `<h3 style="margin:0;">${pasados.length === 1 ? "Semestre pasado" : "Semestres pasados"}</h3>`;
     pasados.forEach((s) => seccionPasados.appendChild(construirTarjetaSemestre(s, obtenerPlanPorId, renderizarSemestres, onEditar, onBorrar, true)));
     cont.appendChild(seccionPasados);
   }

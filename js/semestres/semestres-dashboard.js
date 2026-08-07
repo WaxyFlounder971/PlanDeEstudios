@@ -1,11 +1,12 @@
 /* =========================================================================
-   SEMESTRES — Dashboard académico (pestaña contraíble)
+   SEMESTRES — Historial académico (pestaña contraíble)
    Vive al inicio de la sección Semestres, colapsada por default (no debe
    empujar el contenido normal hacia abajo al entrar a Semestres). Adentro,
-   un selector tipo pestañas alterna entre 3 vistas:
+   un selector tipo pestañas alterna entre 2 vistas:
+     1) Estadísticas — % de cursos aprobados/reprobados (barra dividida) +
+        detalle por estado (Aprobada/Cursando/Reprobada/Pendiente), fusionados
+        en una sola pestaña (2026-08-07, antes eran 2 separadas).
      a/b) Promedio ponderado — por semestre+universidad, y por plan/carrera
-     2)   % de cursos aprobados/reprobados (barra dividida)
-     3)   Detalle por estado (Aprobada/Cursando/Reprobada/Pendiente)
 
    Nivel (c) del promedio ponderado (combinado de TODO junto, mezclando
    universidades/carreras) queda EXPLÍCITAMENTE fuera de esta entrega — ver
@@ -33,13 +34,21 @@ import {
 // pestaña del dashboard está expandida, y qué vista/plan tiene elegidos.
 // Colapsada por default — pedido explícito, no debe empujar nada al entrar.
 estado.dashboardAcademicoAbierto = estado.dashboardAcademicoAbierto || false;
-estado.dashboardAcademicoVista = estado.dashboardAcademicoVista || "ponderado";
+// FIX (2026-08-07): "Estadísticas" pasa a ser la vista por default — ahora
+// es la primera pestaña y la más general (aprobados/reprobados + detalle
+// por estado, fusionados). Antes el default era "ponderado", que ya no es
+// la primera opción.
+estado.dashboardAcademicoVista = estado.dashboardAcademicoVista || "estadisticas";
 estado.dashboardAcademicoPlanFiltro = estado.dashboardAcademicoPlanFiltro || null; // null = todos los planes (global)
 
+// FIX (2026-08-07 — rediseño "Historial académico"): antes había 3
+// pestañas (Promedio Ponderado / Aprobados-Reprobados / Detalle por
+// Estado). Las últimas dos se fusionaron en una sola "Estadísticas"
+// (ver construirVistaEstadisticas) — quedan solo 2 pestañas, Estadísticas
+// primero.
 const VISTAS_DASHBOARD = [
+  { valor: "estadisticas", texto: "Estadísticas" },
   { valor: "ponderado", texto: "Promedio Ponderado" },
-  { valor: "aprobacion", texto: "Aprobados / Reprobados" },
-  { valor: "estados", texto: "Detalle por Estado" },
 ];
 
 function obtenerPlanPorId(planId) {
@@ -64,7 +73,7 @@ function construirEncabezadoDashboard(onCambiar) {
   izquierda.style.cssText = "gap:8px; align-items:center;";
   const titulo = document.createElement("h3");
   titulo.style.cssText = "margin:0; font-size:1.05rem; font-weight:800;";
-  titulo.textContent = "📊 Dashboard académico";
+  titulo.textContent = "Historial académico";
   izquierda.appendChild(titulo);
   encabezado.appendChild(izquierda);
 
@@ -298,89 +307,7 @@ function construirVistaPromedioPonderado() {
   return cont;
 }
 
-/* ===================== Vista 2: % Aprobados / Reprobados ===================== */
-
-function construirVistaAprobacion(onCambiar) {
-  const cont = document.createElement("div");
-  cont.className = "stack";
-  cont.style.cssText = "gap:12px; margin-top:14px;";
-
-  const selectorPlan = construirSelectorPlanFiltro(onCambiar);
-  if (selectorPlan) cont.appendChild(selectorPlan);
-
-  const stats = calcularEstadisticasAprobacion(estado.datos, estado.dashboardAcademicoPlanFiltro);
-
-  if (stats.totalCursos === 0) {
-    const vacio = document.createElement("p");
-    vacio.className = "muted";
-    vacio.style.cssText = "font-size:0.85rem; margin:8px 0 0;";
-    vacio.textContent = "Todavía no hay semestres terminados con resultado (Aprobada/Reprobada) para calcular esto.";
-    cont.appendChild(vacio);
-    return cont;
-  }
-
-  /* ---------- Barra dividida ---------- */
-  const barra = document.createElement("div");
-  barra.style.cssText =
-    "display:flex; width:100%; height:22px; border-radius:var(--radius-pill); overflow:hidden; " +
-    "border:1px solid var(--border-glass);";
-
-  const segAprobados = document.createElement("div");
-  segAprobados.style.cssText = `width:${stats.aprobadas.porcentaje}%; background:#10b981;`;
-  segAprobados.title = `${stats.aprobadas.porcentaje}% aprobados`;
-  barra.appendChild(segAprobados);
-
-  const segReprobados = document.createElement("div");
-  segReprobados.style.cssText = `width:${stats.reprobadas.porcentaje}%; background:#ef4444;`;
-  segReprobados.title = `${stats.reprobadas.porcentaje}% reprobados`;
-  barra.appendChild(segReprobados);
-
-  cont.appendChild(barra);
-
-  /* ---------- Detalle a cada lado ---------- */
-  const filaDetalle = document.createElement("div");
-  filaDetalle.style.cssText = "display:grid; grid-template-columns:1fr 1fr; gap:10px;";
-
-  const construirLadoDetalle = (titulo, datosLado, colorHex) => {
-    const panel = document.createElement("div");
-    panel.className = "glass-panel";
-    panel.style.cssText = `padding:10px 12px; border-left:4px solid ${colorHex};`;
-
-    const pct = document.createElement("div");
-    pct.style.cssText = `font-size:1.3rem; font-weight:800; color:${colorHex};`;
-    pct.textContent = `${datosLado.porcentaje}%`;
-    panel.appendChild(pct);
-
-    const label = document.createElement("div");
-    label.style.cssText = "font-size:0.8rem; font-weight:600; margin-top:2px;";
-    label.textContent = titulo;
-    panel.appendChild(label);
-
-    const cantidad = document.createElement("div");
-    cantidad.className = "muted";
-    cantidad.style.fontSize = "0.75rem";
-    cantidad.textContent = `${datosLado.cantidad} ${datosLado.cantidad === 1 ? "curso" : "cursos"} · ${datosLado.creditos} créd.`;
-    panel.appendChild(cantidad);
-
-    if (datosLado.promedio !== null) {
-      const promedio = document.createElement("div");
-      promedio.className = "muted";
-      promedio.style.fontSize = "0.75rem";
-      promedio.textContent = `${formatearPromedio(datosLado.promedio)} promedio de cursos ${titulo.toLowerCase()}`;
-      panel.appendChild(promedio);
-    }
-
-    return panel;
-  };
-
-  filaDetalle.appendChild(construirLadoDetalle("Aprobados", stats.aprobadas, "#10b981"));
-  filaDetalle.appendChild(construirLadoDetalle("Reprobados", stats.reprobadas, "#ef4444"));
-  cont.appendChild(filaDetalle);
-
-  return cont;
-}
-
-/* ===================== Vista 3: Detalle por estado ===================== */
+/* ===================== Vista "Estadísticas": aprobados/reprobados + detalle por estado ===================== */
 
 const ESTADOS_DETALLE_CONFIG = [
   { clave: "aprobado", texto: "Aprobada", color: "#10b981" },
@@ -389,49 +316,154 @@ const ESTADOS_DETALLE_CONFIG = [
   { clave: "pendiente", texto: "Pendiente", color: "#94a3b8" },
 ];
 
-function construirVistaDetalleEstados(onCambiar) {
+/**
+ * Fusión (2026-08-07, pedido explícito "que este todo junto"): antes eran
+ * dos pestañas separadas — "Aprobados/Reprobados" (barra + paneles) y
+ * "Detalle por Estado" (grid 2x2) — ahora es una sola vista, con la barra
+ * arriba y el grid debajo, compartiendo el mismo selector de plan.
+ *
+ * FIX (2026-08-07 — "reprobados NO debe sacarse de plan de estudios, debe
+ * sacarse de semestres"): el grid de abajo mostraba "Reprobada" contando
+ * materia.estado del PLAN (calcularDetallePorEstado) — el estado FINAL de
+ * cada materia, así que una materia repetida y luego aprobada perdía su
+ * historial de reprobadas. Acá se pisa esa celda con
+ * stats.reprobadas.cantidad (mismo número que ya usa el panel de arriba,
+ * calculado desde semestres/mm.resultado) — así CADA intento reprobado
+ * cuenta, sin importar si esa materia se terminó aprobando después.
+ * "Aprobada"/"Cursando"/"Pendiente" siguen viniendo del Plan, sin cambios
+ * (decisión confirmada: esas están bien como están).
+ */
+function construirVistaEstadisticas(onCambiar) {
   const cont = document.createElement("div");
   cont.className = "stack";
-  cont.style.cssText = "gap:12px; margin-top:14px;";
+  cont.style.cssText = "gap:16px; margin-top:14px;";
 
   const selectorPlan = construirSelectorPlanFiltro(onCambiar);
   if (selectorPlan) cont.appendChild(selectorPlan);
 
+  const stats = calcularEstadisticasAprobacion(estado.datos, estado.dashboardAcademicoPlanFiltro);
+
+  /* ---------- Aprobados / Reprobados: barra + paneles de 3 líneas ---------- */
+  if (stats.totalCursos === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.cssText = "font-size:0.85rem; margin:8px 0 0;";
+    vacio.textContent = "Todavía no hay semestres terminados con resultado (Aprobada/Reprobada) para calcular esto.";
+    cont.appendChild(vacio);
+  } else {
+    const seccionAprobacion = document.createElement("div");
+    seccionAprobacion.className = "stack";
+    seccionAprobacion.style.gap = "10px";
+
+    const barra = document.createElement("div");
+    barra.style.cssText =
+      "display:flex; width:100%; height:22px; border-radius:var(--radius-pill); overflow:hidden; " +
+      "border:1px solid var(--border-glass);";
+
+    const segAprobados = document.createElement("div");
+    segAprobados.style.cssText = `width:${stats.aprobadas.porcentaje}%; background:#10b981;`;
+    segAprobados.title = `${stats.aprobadas.porcentaje}% aprobados`;
+    barra.appendChild(segAprobados);
+
+    const segReprobados = document.createElement("div");
+    segReprobados.style.cssText = `width:${stats.reprobadas.porcentaje}%; background:#ef4444;`;
+    segReprobados.title = `${stats.reprobadas.porcentaje}% reprobados`;
+    barra.appendChild(segReprobados);
+
+    seccionAprobacion.appendChild(barra);
+
+    /* ---------- Detalle a cada lado — 3 líneas separadas (cursos /
+       créditos / promedio), sin redundancia con el título del panel ---------- */
+    const filaDetalle = document.createElement("div");
+    filaDetalle.style.cssText = "display:grid; grid-template-columns:1fr 1fr; gap:10px;";
+
+    const construirLadoDetalle = (titulo, datosLado, colorHex) => {
+      const panel = document.createElement("div");
+      panel.className = "glass-panel";
+      panel.style.cssText = `padding:10px 12px; border-left:4px solid ${colorHex};`;
+
+      const pct = document.createElement("div");
+      pct.style.cssText = `font-size:1.3rem; font-weight:800; color:${colorHex};`;
+      pct.textContent = `${datosLado.porcentaje}%`;
+      panel.appendChild(pct);
+
+      const label = document.createElement("div");
+      label.style.cssText = "font-size:0.8rem; font-weight:600; margin-top:2px;";
+      label.textContent = titulo;
+      panel.appendChild(label);
+
+      const filaTexto = document.createElement("div");
+      filaTexto.className = "muted";
+      filaTexto.style.cssText = "font-size:0.75rem; margin-top:4px; line-height:1.5;";
+
+      const lineaCursos = document.createElement("div");
+      lineaCursos.textContent = `${datosLado.cantidad} ${datosLado.cantidad === 1 ? "curso" : "cursos"}`;
+      filaTexto.appendChild(lineaCursos);
+
+      const lineaCreditos = document.createElement("div");
+      lineaCreditos.textContent = `${datosLado.creditos} ${datosLado.creditos === 1 ? "crédito" : "créditos"}`;
+      filaTexto.appendChild(lineaCreditos);
+
+      if (datosLado.promedio !== null) {
+        const lineaPromedio = document.createElement("div");
+        lineaPromedio.textContent = `${formatearPromedio(datosLado.promedio)} promedio`;
+        filaTexto.appendChild(lineaPromedio);
+      }
+
+      panel.appendChild(filaTexto);
+      return panel;
+    };
+
+    filaDetalle.appendChild(construirLadoDetalle("Aprobados", stats.aprobadas, "#10b981"));
+    filaDetalle.appendChild(construirLadoDetalle("Reprobados", stats.reprobadas, "#ef4444"));
+    seccionAprobacion.appendChild(filaDetalle);
+
+    cont.appendChild(seccionAprobacion);
+  }
+
+  /* ---------- Detalle por estado: grid 2x2, "todo junto" debajo ---------- */
   const conteo = calcularDetallePorEstado(estado.datos, estado.dashboardAcademicoPlanFiltro);
+  // Ver comentario grande arriba de la función: reprobado se pisa con el
+  // conteo real por intento (semestres), no con el estado final del Plan.
+  conteo.reprobado = stats.reprobadas.cantidad;
   const total = conteo.aprobado + conteo.cursando + conteo.reprobado + conteo.pendiente;
 
-  if (total === 0) {
+  if (total > 0) {
+    const grid = document.createElement("div");
+    grid.style.cssText = "display:grid; grid-template-columns:1fr 1fr; gap:10px;";
+
+    ESTADOS_DETALLE_CONFIG.forEach(({ clave, texto, color }) => {
+      const cantidad = conteo[clave];
+      const panel = document.createElement("div");
+      panel.className = "glass-panel";
+      panel.style.cssText = `padding:10px 12px; border-left:4px solid ${color};`;
+
+      const numero = document.createElement("div");
+      numero.style.cssText = `font-size:1.3rem; font-weight:800; color:${color};`;
+      numero.textContent = String(cantidad);
+      panel.appendChild(numero);
+
+      const label = document.createElement("div");
+      label.style.cssText = "font-size:0.8rem; font-weight:600;";
+      label.textContent = texto;
+      panel.appendChild(label);
+
+      grid.appendChild(panel);
+    });
+
+    cont.appendChild(grid);
+  } else if (stats.totalCursos > 0) {
+    // Caso borde: hay cursos cerrados (aprobación ya se mostró arriba) pero
+    // el plan filtrado no tiene materias registradas en absoluto — no hace
+    // falta otro mensaje vacío redundante.
+  } else {
     const vacio = document.createElement("p");
     vacio.className = "muted";
     vacio.style.cssText = "font-size:0.85rem; margin:8px 0 0;";
     vacio.textContent = "Este plan todavía no tiene materias.";
     cont.appendChild(vacio);
-    return cont;
   }
 
-  const grid = document.createElement("div");
-  grid.style.cssText = "display:grid; grid-template-columns:1fr 1fr; gap:10px;";
-
-  ESTADOS_DETALLE_CONFIG.forEach(({ clave, texto, color }) => {
-    const cantidad = conteo[clave];
-    const panel = document.createElement("div");
-    panel.className = "glass-panel";
-    panel.style.cssText = `padding:10px 12px; border-left:4px solid ${color};`;
-
-    const numero = document.createElement("div");
-    numero.style.cssText = `font-size:1.3rem; font-weight:800; color:${color};`;
-    numero.textContent = String(cantidad);
-    panel.appendChild(numero);
-
-    const label = document.createElement("div");
-    label.style.cssText = "font-size:0.8rem; font-weight:600;";
-    label.textContent = texto;
-    panel.appendChild(label);
-
-    grid.appendChild(panel);
-  });
-
-  cont.appendChild(grid);
   return cont;
 }
 
@@ -458,10 +490,8 @@ function construirDashboardAcademico(onCambiar) {
   card.appendChild(construirSelectorVista(onCambiar));
 
   let vistaContenido;
-  if (estado.dashboardAcademicoVista === "aprobacion") {
-    vistaContenido = construirVistaAprobacion(onCambiar);
-  } else if (estado.dashboardAcademicoVista === "estados") {
-    vistaContenido = construirVistaDetalleEstados(onCambiar);
+  if (estado.dashboardAcademicoVista === "estadisticas") {
+    vistaContenido = construirVistaEstadisticas(onCambiar);
   } else {
     vistaContenido = construirVistaPromedioPonderado();
   }
