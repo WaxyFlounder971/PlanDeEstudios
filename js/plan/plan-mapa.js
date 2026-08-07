@@ -29,6 +29,28 @@ const SVG_PANTALLA_COMPLETA_SALIR =
   'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="display:block;">' +
   '<path d="M9 3v4a2 2 0 0 1-2 2H3"/><path d="M15 3v4a2 2 0 0 0 2 2h4"/>' +
   '<path d="M9 21v-4a2 2 0 0 0-2-2H3"/><path d="M15 21v-4a2 2 0 0 1 2-2h4"/></svg>';
+// V1.x: chevrón ⌃/⌄ del bloque de controles — antes era un glyph de texto
+// ("⌃"/"⌄", font-size 0.95rem) que no se alineaba bien con los íconos SVG
+// de al lado (quedaba visualmente más abajo, distinto tamaño de línea). Se
+// pasa a SVG con el MISMO viewBox/tamaño/trazo que el ícono de pantalla
+// completa para que ambos queden centrados a la misma altura.
+const SVG_CHEVRON_ARRIBA =
+  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="display:block;">' +
+  '<path d="M18 15l-6-6-6 6"/></svg>';
+const SVG_CHEVRON_ABAJO =
+  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="display:block;">' +
+  '<path d="M6 9l6 6 6-6"/></svg>';
+// V1.x: "girar pantalla" usaba el emoji "🔄" (se ve distinto en cada
+// dispositivo/fuente y no combina con el trazo fino de los otros dos
+// íconos). Se reemplaza por un ícono SVG de flecha circular, mismo estilo
+// (trazo, sin relleno) y mismo tamaño que los demás.
+const SVG_GIRAR =
+  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="display:block;">' +
+  '<path d="M3 12a9 9 0 0 1 15.3-6.5L21 8"/><path d="M21 3v5h-5"/>' +
+  '<path d="M21 12a9 9 0 0 1-15.3 6.5L3 16"/><path d="M3 21v-5h5"/></svg>';
 
 /* ---- B.3 (v8/v9): Vista de Mapa interactivo del Plan de Estudios ---- */
 estado.vistaPlanEstudios = "lista";        // "lista" | "mapa"
@@ -54,12 +76,17 @@ estado.temaTarjetaMapa = null;             // "clara" | "oscura" | null
 estado.mapaPantallaCompleta = false;
 // V1.x (rediseño 2 — sin duplicado): un solo bloque de controles, siempre
 // el mismo nodo del DOM, tanto adentro como afuera de pantalla completa.
-// La fila 4 (Descargar / ⛶ / ⌃⌄ / 🔄 / Zoom) queda SIEMPRE visible pase lo
-// que pase. Lo único que se puede ocultar son las filas 2 y 3 (colorear,
-// trazado, tamaño, tema) — y solo mediante el chevrón ⌃/⌄ de la fila 4, que
-// a su vez SOLO existe/funciona mientras estado.mapaPantallaCompleta es
-// true (pedido explícito original: "el exterior no debe tener eso"). Este
-// flag es el estado de visibilidad de esas filas 2/3.
+// La fila 4 (⛶ / ⌃⌄ / 🔄 / Zoom) queda SIEMPRE visible pase lo que pase.
+// Lo único que se puede ocultar son las filas 2 y 3 (colorear, trazado,
+// tamaño, tema) — y solo mediante el chevrón ⌃/⌄ de la fila 4, que a su vez
+// SOLO existe/funciona mientras estado.mapaPantallaCompleta es true (pedido
+// explícito original: "el exterior no debe tener eso"). Este flag es el
+// estado de visibilidad de esas filas 2/3.
+// V1.x (rediseño 3): dentro de pantalla completa, "Descargar" ya NO queda
+// fijo/siempre visible — se ata a este mismo flag, así que solo aparece
+// mientras las filas 2/3 están extendidas (chevrón ⌃). Afuera de pantalla
+// completa este flag nunca se activa, así que Descargar sigue siempre
+// visible ahí (sin cambios).
 estado.controlesMapaOcultosFullscreen = false;
 
 /** Referencias vivas del ÚNICO bloque de controles (se reasignan en cada
@@ -69,6 +96,7 @@ estado.controlesMapaOcultosFullscreen = false;
 let btnPantallaCompletaRef = null;
 let btnGirarRef = null;
 let btnChevronRef = null;
+let btnDescargarRef = null;
 let contFilasSuperioresRef = null;
 // V1.x: encabezado "Vista" + switch Lista/Mapa — se oculta por completo
 // SOLO dentro de pantalla completa (afuera siempre visible, sin cambios).
@@ -129,6 +157,13 @@ function actualizarControlesPantallaCompleta() {
   if (btnChevronRef && btnChevronRef.isConnected) {
     btnChevronRef.style.display = activo ? "" : "none";
   }
+  // V1.x (rediseño 3): al ENTRAR a pantalla completa, "Descargar" arranca
+  // visible solo si las filas 2/3 están extendidas (chevrón ⌃, es decir
+  // controlesMapaOcultosFullscreen === false). Afuera de pantalla completa
+  // siempre visible (ver el bloque `if (!activo)` más abajo, que lo fuerza).
+  if (btnDescargarRef && btnDescargarRef.isConnected) {
+    btnDescargarRef.style.display = activo && estado.controlesMapaOcultosFullscreen ? "none" : "";
+  }
   // V1.x: encabezado "Vista"/switch Lista-Mapa — se esconde solo dentro de
   // pantalla completa (pedido explícito), afuera siempre visible.
   if (encabezadoRef && encabezadoRef.isConnected) {
@@ -149,9 +184,10 @@ function actualizarControlesPantallaCompleta() {
     estado.controlesMapaOcultosFullscreen = false;
     if (contFilasSuperioresRef) contFilasSuperioresRef.style.display = "";
     if (btnChevronRef) {
-      btnChevronRef.textContent = "⌃";
+      btnChevronRef.innerHTML = SVG_CHEVRON_ARRIBA;
       btnChevronRef.setAttribute("aria-label", "Ocultar controles del mapa");
     }
+    if (btnDescargarRef) btnDescargarRef.style.display = "";
   }
 }
 
@@ -326,11 +362,13 @@ function construirBloqueControles(plan) {
   raiz.appendChild(contFilasSuperiores);
 
   /* ---- Línea 4: Descargar (izq.) | ⛶ / ⌃⌄ / 🔄 (centro, solo ícono) | Zoom (der.) ----
-     SIEMPRE visible — nunca se oculta, ni siquiera con el chevrón (que solo
-     esconde las filas 2/3 de arriba). Grid de 3 columnas (mismo truco que
-     construirEncabezadoNotaFinal en semestres-tarjetas.js) en vez de
-     space-between: con solo 3 ítems y anchos distintos, space-between NO
-     centra de verdad el del medio. */
+     Grid de 3 columnas (mismo truco que construirEncabezadoNotaFinal en
+     semestres-tarjetas.js) en vez de space-between: con solo 3 ítems y
+     anchos distintos, space-between NO centra de verdad el del medio.
+     Afuera de pantalla completa, Descargar SIEMPRE visible (sin cambios).
+     Dentro de pantalla completa, Descargar sigue el mismo flag que las
+     filas 2/3: solo aparece mientras esas filas están extendidas (chevrón
+     ⌃) — ver btnChevron más abajo y actualizarControlesPantallaCompleta(). */
   const fila4 = document.createElement("div");
   fila4.className = "vista-fila";
   fila4.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px;";
@@ -339,6 +377,7 @@ function construirBloqueControles(plan) {
   btnDescargar.type = "button";
   btnDescargar.className = "btn btn-secondary";
   btnDescargar.style.justifySelf = "start";
+  btnDescargar.style.display = estado.mapaPantallaCompleta && estado.controlesMapaOcultosFullscreen ? "none" : "";
   btnDescargar.textContent = "Descargar";
   btnDescargar.addEventListener("click", () => abrirSelectorDescargaMapa());
   fila4.appendChild(btnDescargar);
@@ -349,9 +388,13 @@ function construirBloqueControles(plan) {
   // colorear/trazado/tamaño/tema) → 🔄 (girar). El chevrón y el girar solo
   // se muestran mientras se está en pantalla completa — ver
   // actualizarControlesPantallaCompleta(), que mantiene su
-  // texto/visibilidad al día.
+  // texto/visibilidad al día. V1.x (rediseño 3): el gap entre estos 3
+  // íconos se define en la clase .mapa-controles-centro (design-system.css)
+  // — 2px por defecto, y se duplica a 4px SOLO si hay ancho de pantalla de
+  // sobra (media query), para no apretar el layout en celulares angostos.
   const contBotonesCentro = document.createElement("div");
-  contBotonesCentro.style.cssText = "display:flex; align-items:center; gap:2px; justify-self:center;";
+  contBotonesCentro.className = "mapa-controles-centro";
+  contBotonesCentro.style.justifySelf = "center";
 
   const btnPantallaCompleta = document.createElement("button");
   btnPantallaCompleta.type = "button";
@@ -379,8 +422,8 @@ function construirBloqueControles(plan) {
   // vuelta a visibles.
   const btnChevron = document.createElement("button");
   btnChevron.type = "button";
-  btnChevron.className = "btn-icono-fantasma mapa-toggle-controles";
-  btnChevron.textContent = estado.controlesMapaOcultosFullscreen ? "⌄" : "⌃";
+  btnChevron.className = "btn-icono-fantasma";
+  btnChevron.innerHTML = estado.controlesMapaOcultosFullscreen ? SVG_CHEVRON_ABAJO : SVG_CHEVRON_ARRIBA;
   btnChevron.style.display = estado.mapaPantallaCompleta ? "" : "none";
   btnChevron.setAttribute(
     "aria-label",
@@ -389,7 +432,10 @@ function construirBloqueControles(plan) {
   btnChevron.addEventListener("click", () => {
     estado.controlesMapaOcultosFullscreen = !estado.controlesMapaOcultosFullscreen;
     contFilasSuperiores.style.display = estado.controlesMapaOcultosFullscreen ? "none" : "";
-    btnChevron.textContent = estado.controlesMapaOcultosFullscreen ? "⌄" : "⌃";
+    // V1.x (rediseño 3): Descargar sigue al mismo flag — solo visible
+    // dentro de pantalla completa mientras las filas 2/3 están extendidas.
+    btnDescargar.style.display = estado.controlesMapaOcultosFullscreen ? "none" : "";
+    btnChevron.innerHTML = estado.controlesMapaOcultosFullscreen ? SVG_CHEVRON_ABAJO : SVG_CHEVRON_ARRIBA;
     btnChevron.setAttribute(
       "aria-label",
       estado.controlesMapaOcultosFullscreen ? "Mostrar controles del mapa" : "Ocultar controles del mapa"
@@ -408,7 +454,7 @@ function construirBloqueControles(plan) {
     btnGirar = document.createElement("button");
     btnGirar.type = "button";
     btnGirar.className = "btn-icono-fantasma";
-    btnGirar.textContent = "🔄";
+    btnGirar.innerHTML = SVG_GIRAR;
     btnGirar.style.display = estado.mapaPantallaCompleta ? "" : "none";
     btnGirar.setAttribute("aria-label", "Girar pantalla (bloquear orientación horizontal)");
     btnGirar.addEventListener("click", () => {
@@ -471,7 +517,7 @@ function construirBloqueControles(plan) {
     etiquetaZoom.textContent = Math.round(estado.zoomMapa * 100) + "%";
   };
 
-  return { raiz, refrescar, btnPantallaCompleta, btnGirar, btnChevron, contFilasSuperiores };
+  return { raiz, refrescar, btnPantallaCompleta, btnGirar, btnChevron, btnDescargar, contFilasSuperiores };
 }
 
 function construirTarjetaVista(plan) {
@@ -522,14 +568,17 @@ function construirTarjetaVista(plan) {
 
   if (estado.vistaPlanEstudios === "mapa") {
     // V1.x (rediseño 2 — sin duplicado): un solo bloque de controles. La
-    // fila 4 (Descargar/⛶/⌃⌄/🔄/Zoom) queda siempre visible; el chevrón
-    // ⌃/⌄ que oculta las filas 2/3 solo aparece mientras se está en
-    // pantalla completa (actualizarControlesPantallaCompleta se encarga).
+    // fila 4 (⛶/⌃⌄/🔄/Zoom) queda siempre visible; el chevrón ⌃/⌄ que
+    // oculta las filas 2/3 solo aparece mientras se está en pantalla
+    // completa (actualizarControlesPantallaCompleta se encarga). Descargar
+    // sigue el mismo flag que las filas 2/3 (rediseño 3): solo dentro de
+    // pantalla completa deja de ser fijo y aparece/desaparece con ellas.
     const bloque = construirBloqueControles(plan);
     refrescarRef = bloque.refrescar;
     btnPantallaCompletaRef = bloque.btnPantallaCompleta;
     btnGirarRef = bloque.btnGirar;
     btnChevronRef = bloque.btnChevron;
+    btnDescargarRef = bloque.btnDescargar;
     contFilasSuperioresRef = bloque.contFilasSuperiores;
     card.appendChild(bloque.raiz);
 
