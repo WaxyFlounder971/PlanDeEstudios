@@ -1249,7 +1249,7 @@ function calcularPromedioPorSemestreYUniversidad(datos) {
  * desaparece solo por desactivarla.
  */
 function calcularPromedioPorPlan(datos) {
-  const entradas = listarMatriculasResolubles(datos);
+  const entradas = listarMatriculasResolubles(datos, false)
   const porPlan = new Map(); // plan.id -> entradas[]
 
   entradas.forEach((e) => {
@@ -1287,7 +1287,7 @@ function calcularPromedioPorPlan(datos) {
  * para (b), sin deduplicar intentos.
  */
 function calcularPromedioTotalCombinado(datos) {
-  const entradas = listarMatriculasResolubles(datos);
+  const entradas = listarMatriculasResolubles(datos, false)
   return calcularPromedioPonderado(entradas);
 }
 
