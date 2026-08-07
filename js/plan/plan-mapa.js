@@ -51,6 +51,9 @@ let btnPantallaCompletaRef = null;
 let btnGirarRef = null;
 let btnChevronRef = null;
 let contFilasSuperioresRef = null;
+// V1.x: encabezado "Vista" + switch Lista/Mapa — se oculta por completo
+// SOLO dentro de pantalla completa (afuera siempre visible, sin cambios).
+let encabezadoRef = null;
 
 // Tarjeta y plan actuales — necesarios para el handler de ⛶ (requestFullscreen
 // apunta siempre a la tarjeta real, no a un nodo desconectado).
@@ -69,6 +72,27 @@ function sincronizarControlesMapa() {
   if (refrescarRef) refrescarRef();
 }
 
+/** V1.x: `renderizarPlanEstudios()` reconstruye la tarjeta "Vista" entera
+ *  desde cero (nodo nuevo) — como el nodo en pantalla completa queda
+ *  desconectado del documento al reemplazarlo, el navegador sale de
+ *  pantalla completa automáticamente (evento fullscreenchange). Para que
+ *  cambios como "Tamaño" o "Tarjeta clara/oscura" (que SÍ necesitan
+ *  reconstrucción completa) no boten al usuario afuera, se detecta si se
+ *  estaba en pantalla completa ANTES del re-render y, de ser así, se
+ *  vuelve a pedir pantalla completa sobre la tarjeta NUEVA de inmediato —
+ *  todo dentro del mismo click, así el navegador lo sigue permitiendo sin
+ *  pedir un nuevo gesto del usuario. Puede verse un parpadeo brevísimo
+ *  (sale y re-entra), pero el usuario nunca queda afuera. */
+function renderizarPlanEstudiosPreservandoFullscreen() {
+  const estabaEnPantallaCompleta = estado.mapaPantallaCompleta;
+  renderizarPlanEstudios();
+  if (estabaEnPantallaCompleta && cardRef && cardRef.requestFullscreen) {
+    cardRef.requestFullscreen().catch((err) => {
+      console.error("No se pudo mantener pantalla completa tras el cambio:", err);
+    });
+  }
+}
+
 function actualizarControlesPantallaCompleta() {
   const activo = estado.mapaPantallaCompleta;
 
@@ -85,6 +109,11 @@ function actualizarControlesPantallaCompleta() {
   // tamaño y tema) solo existe mientras se está en pantalla completa.
   if (btnChevronRef && btnChevronRef.isConnected) {
     btnChevronRef.style.display = activo ? "" : "none";
+  }
+  // V1.x: encabezado "Vista"/switch Lista-Mapa — se esconde solo dentro de
+  // pantalla completa (pedido explícito), afuera siempre visible.
+  if (encabezadoRef && encabezadoRef.isConnected) {
+    encabezadoRef.style.display = activo ? "none" : "";
   }
   // Al SALIR de pantalla completa, se fuerza todo visible de nuevo — afuera
   // nunca queda nada oculto (pedido explícito original).
@@ -243,7 +272,7 @@ function construirBloqueControles(plan) {
     (valor) => {
       if (estado.tamanioTarjetaMapa === valor) return;
       estado.tamanioTarjetaMapa = valor;
-      renderizarPlanEstudios();
+      renderizarPlanEstudiosPreservandoFullscreen();
     }
   );
   fila3.appendChild(switchTamanio);
@@ -261,7 +290,7 @@ function construirBloqueControles(plan) {
     (valor) => {
       if (estado.temaTarjetaMapa === valor) return;
       estado.temaTarjetaMapa = valor;
-      renderizarPlanEstudios();
+      renderizarPlanEstudiosPreservandoFullscreen();
     }
   );
   fila3.appendChild(switchTemaTarjeta);
@@ -423,9 +452,18 @@ function construirTarjetaVista(plan) {
   cardRef = card;
   planActualRef = plan;
 
-  /* ---- Línea 1: título "Vista" (izq.) + switch Lista/Mapa (der.) ---- */
+  /* ---- Línea 1: título "Vista" (izq.) + switch Lista/Mapa (der.) ----
+     V1.x: se oculta por completo SOLO dentro de pantalla completa (pedido
+     explícito) — afuera del modo Mapa fullscreen, siempre visible sin
+     cambios. Solo tiene sentido ocultarla mientras estado.vistaPlanEstudios
+     es "mapa", que es el único caso en que puede haber pantalla completa
+     activa (el botón ⛶ vive solo en los controles del mapa). */
   const encabezado = document.createElement("div");
   encabezado.className = "vista-encabezado";
+  encabezadoRef = encabezado;
+  if (estado.vistaPlanEstudios === "mapa" && estado.mapaPantallaCompleta) {
+    encabezado.style.display = "none";
+  }
   const titulo = document.createElement("h2");
   titulo.style.margin = "0";
   titulo.textContent = "Vista";
