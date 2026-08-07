@@ -14,6 +14,7 @@ import {
   repartirEquitativoCriterio,
   obtenerEscalaNotasMateria,
   calcularPuntosAsignacion,
+  recalcularNotaDesdePuntaje,
   calcularNotaFinalMateria,
   redondearNotaFinalAlCincoMasCercano,
   redondearDecimales,
@@ -1103,9 +1104,19 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
     onCambiar: (modo) => actualizarEtiquetaCalif(modo),
   });
 
+  // FIX (2026-08-06): el input muestra el campo crudo correspondiente al
+  // modo actual — `puntaje_obtenido` en modo "puntos" (nota ya no guarda
+  // el crudo, guarda la nota convertida), `nota` en modo "nota". Sin esto,
+  // al editar una asignación en modo "puntos" se mostraría la nota
+  // convertida en vez del puntaje que el usuario realmente tipeó.
   const inputCalif = agregarCampoModal(card, {
     etiqueta: "",
-    valor: esEdicion && typeof asignacionExistente.nota === "number" ? asignacionExistente.nota : "",
+    valor:
+      esEdicion && modoCalifInicial === "puntos" && typeof asignacionExistente.puntaje_obtenido === "number"
+        ? asignacionExistente.puntaje_obtenido
+        : esEdicion && modoCalifInicial === "nota" && typeof asignacionExistente.nota === "number"
+        ? asignacionExistente.nota
+        : "",
     decimal: true,
   });
   const labelCalif = inputCalif.parentElement.querySelector("label");
@@ -1253,14 +1264,33 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
       asignacionViva.nombre = nombre;
       asignacionViva.modo_valor = modoValor;
       asignacionViva.modo_calificacion = modoCalif;
-      asignacionViva.nota = califFinal;
       if (modoValor === "personalizado") asignacionViva.valor = valorNum;
+      // FIX (2026-08-06): en modo "puntos", califFinal es el puntaje crudo
+      // que el usuario tipeó (0 a valorNum) — vive en puntaje_obtenido, y
+      // `nota` se recalcula como la nota REAL equivalente en la escala
+      // activa (recalcularNotaDesdePuntaje necesita `valor` ya actualizado,
+      // por eso corre después de tocar asignacionViva.valor arriba). En
+      // modo "nota", califFinal ES la nota tal cual — puntaje_obtenido no
+      // aplica y se limpia para no dejar un valor viejo colgado de un
+      // cambio de modo anterior.
+      if (modoCalif === "puntos") {
+        asignacionViva.puntaje_obtenido = califFinal;
+        recalcularNotaDesdePuntaje(asignacionViva, escalaActiva);
+      } else {
+        asignacionViva.puntaje_obtenido = null;
+        asignacionViva.nota = califFinal;
+      }
       sellarTimestamp(asignacionViva);
     } else {
       const nueva = crearAsignacion({ nombre, valor: valorNum, orden: siguienteOrden(criterioVivo.asignaciones) });
       nueva.modo_valor = modoValor;
       nueva.modo_calificacion = modoCalif;
-      nueva.nota = califFinal;
+      if (modoCalif === "puntos") {
+        nueva.puntaje_obtenido = califFinal;
+        recalcularNotaDesdePuntaje(nueva, escalaActiva);
+      } else {
+        nueva.nota = califFinal;
+      }
       criterioVivo.asignaciones.push(nueva);
     }
     // Reparte lo que sobra entre las "automatico" con el total ya
@@ -1801,14 +1831,18 @@ function construirFilaAsignacion(asignacion, criterio, mm, materia, plan, escala
     pillNota.classList.add("badge-neutral");
     pillNota.textContent = "Pendiente";
   } else {
-    let pct;
-    if (asignacion.modo_calificacion === "puntos") {
-      pillNota.textContent = `${formatearNumero(asignacion.nota)}/${formatearNumero(asignacion.valor)}`;
-      pct = (Number(asignacion.nota) / (Number(asignacion.valor) || 1)) * 100;
-    } else {
-      pillNota.textContent = `${formatearNumero(asignacion.nota)}/${escalaActiva}`;
-      pct = (Number(asignacion.nota) / escalaActiva) * 100;
-    }
+    // FIX (2026-08-06 — "la pill de Nota muestra el puntaje crudo, no la
+    // nota equivalente"): antes, en modo "puntos", acá se mostraba
+    // nota/valor (el puntaje crudo disfrazado de nota, ej. "8/10" cuando
+    // la nota real en escala 100 era 80). `nota` ahora SIEMPRE guarda la
+    // nota ya convertida a la escala activa (ver recalcularNotaDesdePuntaje
+    // en schema.js) sin importar el modo, así que ambos modos muestran
+    // exactamente lo mismo acá — una única rama, sin distinguir modo.
+    const fraccion = obtenerFraccionNota(asignacion.nota, escalaActiva);
+    const descriptorEscalaLocal = obtenerEscalaPorId(escalaActiva);
+    pillNota.textContent =
+      descriptorEscalaLocal.tipo === "letras" ? formatearNotaCruda(asignacion.nota) : `${formatearNumero(asignacion.nota)}/${escalaActiva}`;
+    const pct = (fraccion || 0) * 100;
     const colorPersonalizado = colorParaPorcentaje(pct);
     if (colorPersonalizado) {
       aplicarColorBadgePersonalizado(pillNota, colorPersonalizado);
