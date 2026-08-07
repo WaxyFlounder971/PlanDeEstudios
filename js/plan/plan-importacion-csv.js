@@ -769,7 +769,7 @@ function construirMiniPanelImportacion(plan) {
   } else if (estado.modoImportacion === "pdf") {
     const nota = document.createElement("p");
     nota.className = "muted";
-    nota.textContent = "Vas a adjuntar tu PDF directamente en la ventana de Claude que se abra.";
+    nota.textContent = "Vas a adjuntar tu PDF o imagen (todo el plan completo, en máximo 20 imágenes) directamente en la ventana de Claude que se abra.";
     sec.appendChild(nota);
   } else if (estado.modoImportacion === "capturas") {
     // Puntos 3/5 (v1.10.1): igual que en el panel inicial — solo se ofrece

@@ -451,7 +451,7 @@ function construirPanelImportacion() {
   } else if (estado.modoImportacion === "pdf") {
     const nota = document.createElement("p");
     nota.className = "muted";
-    nota.textContent = "Vas a adjuntar tu PDF o imagen (todo el plan completo, en máximo 4 imágenes) directamente en la ventana de Claude que se abra.";
+    nota.textContent = "Vas a adjuntar tu PDF o imagen (todo el plan completo, en máximo 20 imágenes) directamente en la ventana de Claude que se abra.";
     sec.appendChild(nota);
   } else if (estado.modoImportacion === "capturas") {
     // v1.10.1 (puntos 3/5): ya no se muestra el input de imágenes ni el botón
