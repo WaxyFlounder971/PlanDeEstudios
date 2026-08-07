@@ -361,14 +361,20 @@ function construirBloqueControles(plan) {
   contFilasSuperiores.appendChild(fila3);
   raiz.appendChild(contFilasSuperiores);
 
-  /* ---- Línea 4: Descargar (izq.) | ⛶ / ⌃⌄ / 🔄 (centro, solo ícono) | Zoom (der.) ----
+  /* ---- Línea 4: Zoom (izq.) | ⛶ / ⌃⌄ / 🔄 (centro, solo ícono) | Descargar (der.) ----
      Grid de 3 columnas (mismo truco que construirEncabezadoNotaFinal en
      semestres-tarjetas.js) en vez de space-between: con solo 3 ítems y
-     anchos distintos, space-between NO centra de verdad el del medio.
+     anchos distintos, space-between NO centra de verdad el del medio. Como
+     las columnas 1 y 3 son "1fr" cada una (reparten el espacio sobrante en
+     PARTES IGUALES sin importar qué contengan, incluso si una queda vacía
+     por display:none), la columna del medio queda SIEMPRE centrada de
+     verdad — pedido explícito.
      Afuera de pantalla completa, Descargar SIEMPRE visible (sin cambios).
      Dentro de pantalla completa, Descargar sigue el mismo flag que las
      filas 2/3: solo aparece mientras esas filas están extendidas (chevrón
-     ⌃) — ver btnChevron más abajo y actualizarControlesPantallaCompleta(). */
+     ⌃) — ver btnChevron más abajo y actualizarControlesPantallaCompleta().
+     Los botones se agregan al final de la función, en el orden
+     zoom → centro → descargar, para que el grid los ubique en ese orden. */
   const fila4 = document.createElement("div");
   fila4.className = "vista-fila";
   fila4.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px;";
@@ -376,11 +382,10 @@ function construirBloqueControles(plan) {
   const btnDescargar = document.createElement("button");
   btnDescargar.type = "button";
   btnDescargar.className = "btn btn-secondary";
-  btnDescargar.style.justifySelf = "start";
+  btnDescargar.style.justifySelf = "end";
   btnDescargar.style.display = estado.mapaPantallaCompleta && estado.controlesMapaOcultosFullscreen ? "none" : "";
   btnDescargar.textContent = "Descargar";
   btnDescargar.addEventListener("click", () => abrirSelectorDescargaMapa());
-  fila4.appendChild(btnDescargar);
 
   // V1.x (rediseño 2): pantalla completa, chevrón y girar — solo ícono, sin
   // fondo de botón, centrados entre Descargar y el zoom, EN ESTE ORDEN:
@@ -470,11 +475,9 @@ function construirBloqueControles(plan) {
     contBotonesCentro.appendChild(btnGirar);
   }
 
-  fila4.appendChild(contBotonesCentro);
-
   const zoomGrupo = document.createElement("div");
   zoomGrupo.className = "mapa-zoom-controles";
-  zoomGrupo.style.justifySelf = "end";
+  zoomGrupo.style.justifySelf = "start";
   const btnMenos = document.createElement("button");
   btnMenos.type = "button";
   btnMenos.className = "btn-icono-fantasma mapa-zoom-btn";
@@ -499,7 +502,12 @@ function construirBloqueControles(plan) {
   zoomGrupo.appendChild(btnMenos);
   zoomGrupo.appendChild(etiquetaZoom);
   zoomGrupo.appendChild(btnMas);
+
+  // Orden de inserción = orden de columnas del grid: zoom (col 1, izq.),
+  // íconos (col 2, centro), Descargar (col 3, der.) — pedido explícito.
   fila4.appendChild(zoomGrupo);
+  fila4.appendChild(contBotonesCentro);
+  fila4.appendChild(btnDescargar);
 
   raiz.appendChild(fila4);
 
