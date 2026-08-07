@@ -6,7 +6,7 @@
    antes de enviar.
    ========================================================================= */
 
-import { abrirModalCopiaManualPortapapeles, copiarPromptConAviso } from "../core/clipboard.js";
+import { abrirModalCopiaManualPortapapeles, copiarAlPortapapelesBlindado, copiarPromptConAviso } from "../core/clipboard.js";
 import { PRESETS_TIPOS_HORAS } from "../core/schema.js";
 import { mostrarCargando, ocultarCargando } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
@@ -59,8 +59,8 @@ function construirEncabezadoCSV(tiposHoras) {
 }
 
 /**
- * Prompt oficial y único del proyecto para pedirle a una IA externa (Claude o
- * ChatGPT) que estructure el plan de estudios en CSV. `modo` cambia solo el
+ * Prompt oficial y único del proyecto para pedirle a Claude que estructure
+ * el plan de estudios en CSV. `modo` cambia solo el
  * párrafo de instrucción de entrada; las reglas de formato CSV son las
  * mismas siempre. Cualquier flujo del proyecto que necesite este texto
  * (import inicial, re-importar/actualizar malla desde gestión de planes)
@@ -294,18 +294,21 @@ estado.tiposHorasPersonalizadoTexto = "";  // texto crudo cuando universidadImpo
 /* ===================== B.2 — Panel de importación (solo cuando no hay plan) ===================== */
 
 /**
- * v7 #3: texto final de la ventana "Antes de ir a la IA", con un salto de
+ * v7 #3: texto final de la ventana "Antes de ir a Claude", con un salto de
  * línea entre cada instrucción. Es el mismo para los 3 modos (Link/PDF/
- * Capturas) — ya no varía por modo, solo por la IA elegida.
+ * Capturas).
+ * v-ajuste (2026-08-06): ahora copiar y enviar son dos acciones separadas
+ * dentro de este mismo modal (ver botón "📋 Copiar prompt" más abajo), así
+ * que las instrucciones reflejan ese orden explícito en vez de asumir que
+ * la copia ya ocurrió sola en segundo plano.
  */
 
-function construirTextoInstruccionesImportacion(destino) {
-  const nombreIA = NOMBRE_IA[destino] || "la IA seleccionada";
+function construirTextoInstruccionesImportacion() {
   return [
-    `Cuando presiones Aceptar, se te enviará a ${nombreIA}.`,
-    "Cuando estés en el chat, pega el prompt que se guardó en tu portapapeles.",
-    "Adjunta el tipo de archivo que habías elegido.",
-    "Guarda bien la respuesta que te entregue la IA para traerla de vuelta a esta página.",
+    'Primero presiona "📋 Copiar prompt" para copiarlo a tu portapapeles.',
+    'Después presiona "Aceptar" — se abrirá Claude en una pestaña nueva.',
+    "Ya en el chat, pega el prompt copiado y adjunta el tipo de archivo que habías elegido.",
+    "Guarda bien la respuesta que te entregue Claude para traerla de vuelta a esta página.",
   ].join("\n\n");
 }
 
@@ -397,16 +400,6 @@ function construirPanelImportacion() {
   etiquetaModo.textContent = "¿Cómo quieres traer tu plan de estudios?";
   sec.appendChild(etiquetaModo);
 
-  // v1.12.12: recomendación general (no solo para "Tomar capturas") — con
-  // varios modos, Claude viene presentando menos fallos/negativas que
-  // ChatGPT al procesar el documento. No sacamos ChatGPT de las opciones
-  // (cada quien puede tener su propia cuenta/preferencia), pero sí avisamos
-  // para ahorrar reintentos.
-  const recomendacionClaude = document.createElement("p");
-  recomendacionClaude.className = "muted";
-  recomendacionClaude.textContent = "💡 Se recomienda usar Claude IA — suele presentar menos fallos que ChatGPT importando planes de estudio.";
-  sec.appendChild(recomendacionClaude);
-
   const grupoModo = document.createElement("div");
   grupoModo.className = "pill-group";
   [
@@ -446,17 +439,19 @@ function construirPanelImportacion() {
     sec.appendChild(avisoNavegacion);
 
     // Punto 6 (v1.10.1): aviso de compatibilidad — este modo depende de que
-    // la IA pueda navegar y leer bien la página, lo cual no siempre funciona
-    // igual de bien en todas las universidades/plataformas.
+    // la IA pueda navegar y leer bien la página. Se confirmó que sí funciona
+    // (2026-08-06: se corrige el tono alarmista anterior, que decía "muy
+    // frágil"/"rara vez funciona" — ya no es cierto), pero como depende de
+    // la navegación web de la IA, no está 100% garantizado en todos los
+    // casos, así que se avisa igual sin desalentar su uso.
     const avisoCompatibilidad = document.createElement("p");
     avisoCompatibilidad.className = "muted";
-    avisoCompatibilidad.style.color = "var(--color-warning, #f59e0b)";
-    avisoCompatibilidad.textContent = "⚠️ Esta es la opción MÁS FRÁGIL de las tres — rara vez funciona bien, porque depende de que la IA pueda navegar y leer la página tal cual la ves vos. Si no te funciona (o el resultado sale incompleto/mal), no insistas: probá con \"Adjuntar PDF/Imagen\" o \"Tomar capturas\" en su lugar — casi siempre resuelven lo que el link no pudo.";
+    avisoCompatibilidad.textContent = "ℹ️ Este modo funciona bien en la gran mayoría de los casos. No es 100% infalible (depende de que Claude pueda navegar y leer la página tal cual la ves vos), así que si el resultado sale incompleto, probá con \"Adjuntar PDF/Imagen\" o \"Tomar capturas\" como alternativa.";
     sec.appendChild(avisoCompatibilidad);
   } else if (estado.modoImportacion === "pdf") {
     const nota = document.createElement("p");
     nota.className = "muted";
-    nota.textContent = "Vas a adjuntar tu PDF o imagen (todo el plan completo, en máximo 4 imágenes) directamente en la ventana de Claude o ChatGPT que se abra.";
+    nota.textContent = "Vas a adjuntar tu PDF o imagen (todo el plan completo, en máximo 4 imágenes) directamente en la ventana de Claude que se abra.";
     sec.appendChild(nota);
   } else if (estado.modoImportacion === "capturas") {
     // v1.10.1 (puntos 3/5): ya no se muestra el input de imágenes ni el botón
@@ -482,36 +477,16 @@ function construirPanelImportacion() {
   const mostrarBloqueEnvioYCsv = estado.modoImportacion === "link" || estado.modoImportacion === "pdf";
 
   if (mostrarBloqueEnvioYCsv) {
-    const filaBotones = document.createElement("div");
-    filaBotones.className = "row";
-
     const btnClaude = document.createElement("button");
-    btnClaude.className = "btn btn-primary";
-    btnClaude.style.flex = "1";
+    btnClaude.className = "btn btn-primary btn-block";
     btnClaude.textContent = "Enviar a Claude";
     btnClaude.addEventListener("click", () => {
       abrirModalInstruccionesImportacion(
         estado.modoImportacion,
-        "claude",
         construirPromptImportacion(estado.modoImportacion, estado.linkImportacion)
       );
     });
-    filaBotones.appendChild(btnClaude);
-
-    const btnChatGPT = document.createElement("button");
-    btnChatGPT.className = "btn btn-secondary";
-    btnChatGPT.style.flex = "1";
-    btnChatGPT.textContent = "Enviar a ChatGPT";
-    btnChatGPT.addEventListener("click", () => {
-      abrirModalInstruccionesImportacion(
-        estado.modoImportacion,
-        "chatgpt",
-        construirPromptImportacion(estado.modoImportacion, estado.linkImportacion)
-      );
-    });
-    filaBotones.appendChild(btnChatGPT);
-
-    sec.appendChild(filaBotones);
+    sec.appendChild(btnClaude);
 
     const textarea = document.createElement("textarea");
     textarea.className = "form-textarea";
@@ -539,7 +514,7 @@ function construirPanelImportacion() {
 
 /* ===================== v1.10.0 — Capturas -> un solo PDF (modo "capturas") =====================
  * Antes de esto, el usuario adjuntaba cada foto/captura suelta directamente
- * en Claude/ChatGPT. Ahora, en el modo "Tomar capturas", primero se arma UN
+ * en Claude. Ahora, en el modo "Tomar capturas", primero se arma UN
  * SOLO PDF (una imagen por página, sin backend, 100% en el navegador con
  * jsPDF vía CDN) y ESE PDF es lo que se adjunta en la IA. */
 
@@ -791,38 +766,49 @@ function copiarPromptImportacionBlindado(texto) {
   copiarPromptConAviso(texto);
 }
 
+/**
+ * Abre Claude en pestaña nueva y, además, intenta copiar el prompt como
+ * RESPALDO SILENCIOSO (sin toast ni modal de copia manual): la experiencia
+ * de copia con feedback completo ya vive en el botón dedicado "📋 Copiar
+ * prompt" del modal de instrucciones (ver más abajo) — este intento extra
+ * es solo por si el usuario presionó "Aceptar" sin haber usado ese botón
+ * antes, para no dejarlo sin nada en el portapapeles en ese caso. Si este
+ * intento silencioso falla, no pasa nada visible: el usuario ya vio (o
+ * puede volver a ver) el prompt completo a través del botón dedicado.
+ */
+
 function enviarPromptAClaude(texto) {
   abrirVentanaNueva("https://claude.ai/new");
-  copiarPromptImportacionBlindado(texto);
-}
-
-function enviarPromptAChatGPT(texto) {
-  abrirVentanaNueva("https://chatgpt.com/");
-  copiarPromptImportacionBlindado(texto);
+  copiarAlPortapapelesBlindado(texto);
 }
 
 /* ===================== Modal de instrucciones antes de enviar (v6) ===================== */
 
-/** Guarda qué acción ejecutar si el usuario presiona "Aceptar" en el modal
+/** Guarda qué prompt copiar/enviar si el usuario usa los botones del modal
  *  de instrucciones — null mientras el modal está cerrado. */
 
 let instruccionesImportacionPendiente = null;
 
-const NOMBRE_IA = { claude: "Claude", chatgpt: "ChatGPT" };
-
 /**
- * v6 nuevo: en vez de copiar y redirigir de inmediato al presionar "Enviar a
- * Claude/ChatGPT", primero se muestra este modal con las instrucciones
- * completas (adaptadas al modo Link/PDF/Capturas). Solo al presionar
- * "Aceptar" se ejecuta la acción real (copiar + abrir la IA en pestaña nueva).
+ * v6: en vez de copiar y redirigir de inmediato al presionar "Enviar a
+ * Claude", primero se muestra este modal con las instrucciones completas
+ * (adaptadas al modo Link/PDF/Capturas).
+ * v-ajuste (2026-08-06): copiar y enviar ahora son dos botones separados
+ * dentro del modal — "📋 Copiar prompt" copia (con su propio feedback: toast
+ * de éxito o modal de copia manual si falla) y se puede presionar las veces
+ * que haga falta sin cerrar nada; "Aceptar" recién ahí abre Claude en
+ * pestaña nueva. Esto asegura que el usuario copie el prompt de forma
+ * explícita y confirmada ANTES de irse a la pestaña de Claude, en vez de
+ * que la copia ocurra en silencio justo cuando el foco ya se está yendo a
+ * la ventana nueva (que es precisamente el escenario donde antes el
+ * usuario podía no enterarse de que la copia había fallado).
  */
 
-function abrirModalInstruccionesImportacion(modo, destino, textoPrompt) {
-  instruccionesImportacionPendiente = { destino, textoPrompt };
-  document.getElementById("titulo-modal-instrucciones-importacion").textContent =
-    `Antes de ir a ${NOMBRE_IA[destino] || "la IA"}…`;
+function abrirModalInstruccionesImportacion(modo, textoPrompt) {
+  instruccionesImportacionPendiente = { textoPrompt };
+  document.getElementById("titulo-modal-instrucciones-importacion").textContent = "Antes de ir a Claude…";
   document.getElementById("cuerpo-modal-instrucciones-importacion").textContent =
-    construirTextoInstruccionesImportacion(destino);
+    construirTextoInstruccionesImportacion();
   document.getElementById("modal-instrucciones-importacion").classList.remove("oculto");
 }
 
@@ -836,18 +822,24 @@ function inicializarModalInstruccionesImportacion() {
   document.getElementById("modal-instrucciones-importacion").addEventListener("click", (e) => {
     if (e.target.id === "modal-instrucciones-importacion") cerrarModalInstruccionesImportacion();
   });
+  // Botón dedicado de copia: usa copiarPromptImportacionBlindado (mismo
+  // camino que ya respeta estado.permisoPortapapeles y abre el modal de
+  // copia manual si hace falta) — no cierra este modal, para que el usuario
+  // pueda copiar de nuevo si quiere antes de presionar "Aceptar".
+  document.getElementById("btn-copiar-prompt-instrucciones-importacion").addEventListener("click", () => {
+    if (!instruccionesImportacionPendiente) return;
+    copiarPromptImportacionBlindado(instruccionesImportacionPendiente.textoPrompt);
+  });
   document.getElementById("btn-aceptar-instrucciones-importacion").addEventListener("click", () => {
     if (!instruccionesImportacionPendiente) return;
-    const { destino, textoPrompt } = instruccionesImportacionPendiente;
+    const { textoPrompt } = instruccionesImportacionPendiente;
     document.getElementById("modal-instrucciones-importacion").classList.add("oculto");
     instruccionesImportacionPendiente = null;
-    if (destino === "chatgpt") enviarPromptAChatGPT(textoPrompt);
-    else enviarPromptAClaude(textoPrompt);
+    enviarPromptAClaude(textoPrompt);
   });
 }
 
 export {
-  NOMBRE_IA,
   abrirModalCapturasPDF,
   abrirModalInstruccionesImportacion,
   abrirVentanaNueva,
@@ -860,7 +852,6 @@ export {
   construirPromptImportacion,
   construirTextoInstruccionesImportacion,
   convertirCapturasAPDF,
-  enviarPromptAChatGPT,
   enviarPromptAClaude,
   extraerMetadatosImportacion,
   inicializarModalCapturasPDF,

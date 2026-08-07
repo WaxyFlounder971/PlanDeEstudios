@@ -759,17 +759,17 @@ function construirMiniPanelImportacion(plan) {
     sec.appendChild(avisoNavegacion);
 
     // Punto 6 (v1.10.1): mismo aviso de compatibilidad que en el panel de
-    // importación inicial — este modo no siempre funciona bien en todas las
-    // universidades/plataformas.
+    // importación inicial. Corregido (2026-08-06): se confirmó que este modo
+    // sí funciona — el mensaje anterior era alarmista y ya no era cierto;
+    // ahora comunica "confiable pero no infalible" en vez de desalentar su uso.
     const avisoCompatibilidad = document.createElement("p");
     avisoCompatibilidad.className = "muted";
-    avisoCompatibilidad.style.color = "var(--color-warning, #f59e0b)";
-    avisoCompatibilidad.textContent = "⚠️ Esta opción podría no ser compatible con algunos planes de estudios. Recomendamos usar la opción de PDF o la de adjuntar capturas de pantalla o imágenes.";
+    avisoCompatibilidad.textContent = "ℹ️ Este modo funciona bien en la gran mayoría de los casos. No es 100% infalible (depende de que Claude pueda navegar y leer la página tal cual la ves vos), así que si el resultado sale incompleto, probá con la opción de PDF o la de adjuntar capturas de pantalla o imágenes como alternativa.";
     sec.appendChild(avisoCompatibilidad);
   } else if (estado.modoImportacion === "pdf") {
     const nota = document.createElement("p");
     nota.className = "muted";
-    nota.textContent = "Vas a adjuntar tu PDF directamente en la ventana de Claude o ChatGPT que se abra.";
+    nota.textContent = "Vas a adjuntar tu PDF directamente en la ventana de Claude que se abra.";
     sec.appendChild(nota);
   } else if (estado.modoImportacion === "capturas") {
     // Puntos 3/5 (v1.10.1): igual que en el panel inicial — solo se ofrece
@@ -795,37 +795,19 @@ function construirMiniPanelImportacion(plan) {
   const mostrarBloqueEnvioYCsv = estado.modoImportacion === "link" || estado.modoImportacion === "pdf";
 
   if (mostrarBloqueEnvioYCsv) {
-    // v5 1.3: selector de IA destino + botón de envío deshabilitado si el
-    // modo es "link" y el campo está vacío.
-    const filaBotones = document.createElement("div");
-    filaBotones.className = "row";
+    // v5 1.3: botón de envío deshabilitado si el modo es "link" y el campo
+    // está vacío. Claude es la única IA soportada (ChatGPT se eliminó).
     const btnClaude = document.createElement("button");
     btnClaude.id = "btn-enviar-import-claude";
-    btnClaude.className = "btn btn-primary";
-    btnClaude.style.flex = "1";
+    btnClaude.className = "btn btn-primary btn-block";
     btnClaude.textContent = "Enviar a Claude";
     btnClaude.addEventListener("click", () => {
       abrirModalInstruccionesImportacion(
         estado.modoImportacion,
-        "claude",
         construirPromptImportacion(estado.modoImportacion, estado.linkImportacion)
       );
     });
-    const btnChatGPT = document.createElement("button");
-    btnChatGPT.id = "btn-enviar-import-chatgpt";
-    btnChatGPT.className = "btn btn-secondary";
-    btnChatGPT.style.flex = "1";
-    btnChatGPT.textContent = "Enviar a ChatGPT";
-    btnChatGPT.addEventListener("click", () => {
-      abrirModalInstruccionesImportacion(
-        estado.modoImportacion,
-        "chatgpt",
-        construirPromptImportacion(estado.modoImportacion, estado.linkImportacion)
-      );
-    });
-    filaBotones.appendChild(btnClaude);
-    filaBotones.appendChild(btnChatGPT);
-    sec.appendChild(filaBotones);
+    sec.appendChild(btnClaude);
 
     const textarea = document.createElement("textarea");
     textarea.className = "form-textarea";
@@ -970,18 +952,15 @@ function construirMiniPanelImportacion(plan) {
   return sec;
 }
 
-/** Deshabilita "Enviar a Claude/ChatGPT" si el modo es "link" y el campo
- *  está vacío (v5 1.3). Se llama tras cada render del panel de importación. */
+/** Deshabilita "Enviar a Claude" si el modo es "link" y el campo está vacío
+ *  (v5 1.3). Se llama tras cada render del panel de importación. */
 
 function actualizarEstadoBotonesEnvioImportacion() {
   const btnClaude = document.getElementById("btn-enviar-import-claude");
-  const btnChatGPT = document.getElementById("btn-enviar-import-chatgpt");
-  if (!btnClaude || !btnChatGPT) return;
+  if (!btnClaude) return;
   const bloqueado = estado.modoImportacion === "link" && !estado.linkImportacion.trim();
   btnClaude.disabled = bloqueado;
-  btnChatGPT.disabled = bloqueado;
   btnClaude.style.opacity = bloqueado ? "0.5" : "";
-  btnChatGPT.style.opacity = bloqueado ? "0.5" : "";
 }
 
 export {
