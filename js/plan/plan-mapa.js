@@ -32,38 +32,110 @@ estado.temaTarjetaMapa = null;             // "clara" | "oscura" | null
 // vía el listener de "fullscreenchange" de abajo (única fuente de verdad:
 // nunca se asume `true` solo porque se llamó a requestFullscreen, porque esa
 // llamada es async y puede fallar o ser cancelada por el usuario con Esc).
-// LIMITACIÓN CONOCIDA: cambiar "Tamaño de tarjeta" o "Tema de tarjeta" (fila
-// 3) reconstruye toda la tarjeta vía renderizarPlanEstudios() — el navegador
-// sale de pantalla completa solo al reemplazarse el elemento del DOM. No se
-// intenta restaurar automáticamente (requeriría tocar plan-vista-lista.js).
 estado.mapaPantallaCompleta = false;
-// V1.x: fila 2/3/4 (color, trazado, tamaño, tema, descargar, pantalla
-// completa, zoom) se pueden ocultar con el chevrón centrado arriba de
-// ellas, para ganar espacio vertical sin salir del modo Mapa. Solo afecta
-// a los CONTROLES — el mapa en sí (construirMapaInteractivo) sigue
-// visible siempre.
-estado.controlesMapaOcultos = false;
+// V1.x (rediseño, pedido explícito: "el exterior no debe tener eso"): la
+// fila 2/3/4 de controles (colorear, trazado, tamaño, tema, descargar,
+// pantalla completa/girar, zoom) YA NO se pueden ocultar desde AFUERA de
+// pantalla completa — ese bloque exterior queda siempre visible, sin
+// chevrón ni ocultamiento propio. El chevrón ⌃/⌄ y el ocultar/mostrar son
+// EXCLUSIVOS de un SEGUNDO bloque — un duplicado real del DOM (mismos
+// controles, elementos distintos, ambos escriben sobre el mismo `estado`)
+// — que se inyecta dentro de la tarjeta ÚNICAMENTE mientras
+// estado.mapaPantallaCompleta es true (se crea al entrar, se destruye al
+// salir — ver actualizarControlesPantallaCompleta). Este flag es el
+// estado de visibilidad de ESE duplicado exclusivamente.
+estado.controlesMapaOcultosFullscreen = false;
 
-/** Referencias a los botones de pantalla completa / girar actualmente en
- *  el DOM (si los hay) — se actualizan en cada construirTarjetaVista(). El
- *  listener de fullscreenchange (registrado UNA sola vez a nivel de
- *  módulo, no por render) las usa para reflejar el estado real sin tener
- *  que re-renderizar nada. */
+/** Referencias a los botones de pantalla completa / girar del bloque
+ *  EXTERIOR (el único que existe siempre) — se actualizan en cada
+ *  construirTarjetaVista(). El listener de fullscreenchange (registrado
+ *  UNA sola vez a nivel de módulo, no por render) las usa para reflejar el
+ *  estado real sin tener que re-renderizar nada. El bloque duplicado de
+ *  adentro de pantalla completa tiene su PROPIO par (ver
+ *  contControlesFullscreenEl y sus refs más abajo), porque conviven al
+ *  mismo tiempo mientras se está en pantalla completa. */
 let btnPantallaCompletaRef = null;
 let btnGirarRef = null;
 
+// V1.x (rediseño): referencias vivas del bloque duplicado dentro de
+// pantalla completa (su nodo raíz + sus propios botones ⛶/🔄) — se crean
+// al entrar a fullscreen y se destruyen al salir. Viven a nivel de módulo
+// porque el listener de fullscreenchange no recibe argumentos.
+let contControlesFullscreenEl = null;
+let btnPantallaCompletaFsRef = null;
+let btnGirarFsRef = null;
+
+// Tarjeta y plan actuales — necesarios para poder construir/destruir el
+// bloque duplicado desde el listener de fullscreenchange, que dispara de
+// forma asíncrona y no recibe ningún argumento de construirTarjetaVista.
+let cardRef = null;
+let planActualRef = null;
+
+/**
+ * V1.x (rediseño): cada bloque de controles (exterior y el duplicado de
+ * fullscreen) expone, tras construirse, un `refrescar()` que actualiza IN
+ * PLACE (sin reconstruir nodos) qué pill está `.active` y qué dice la
+ * etiqueta de zoom — según el estado ACTUAL de `estado`. Se guardan acá
+ * las dos funciones vigentes; cualquier control, en cualquiera de los dos
+ * bloques, llama a sincronizarControlesMapa() después de mutar `estado`
+ * para que el otro bloque (si existe) quede al día también. Actualizar in
+ * place (no re-crear <button>s) evita perder el foco/listener y es más
+ * barato que reconstruir.
+ */
+let refrescarExteriorRef = null;
+let refrescarFullscreenRef = null;
+
+function sincronizarControlesMapa() {
+  if (refrescarExteriorRef) refrescarExteriorRef();
+  if (refrescarFullscreenRef) refrescarFullscreenRef();
+}
+
 function actualizarControlesPantallaCompleta() {
   const activo = estado.mapaPantallaCompleta;
+
   if (btnPantallaCompletaRef && btnPantallaCompletaRef.isConnected) {
     btnPantallaCompletaRef.textContent = activo ? "🗗" : "⛶";
     btnPantallaCompletaRef.setAttribute("aria-label", activo ? "Salir de pantalla completa" : "Ver el mapa en pantalla completa");
   }
   // V1.x: girar pantalla — solo tiene sentido (y la Screen Orientation API
-  // solo lo permite) mientras se está en pantalla completa, así que el
-  // botón se muestra/oculta junto con ese estado en vez de quedar ahí
-  // muerto el resto del tiempo.
+  // solo lo permite) mientras se está en pantalla completa.
   if (btnGirarRef && btnGirarRef.isConnected) {
     btnGirarRef.style.display = activo ? "" : "none";
+  }
+
+  // V1.x (rediseño): el bloque duplicado de controles vive/muere junto con
+  // pantalla completa — se construye recién al entrar (nunca antes, para
+  // no tener un segundo set de botones fantasma en el DOM el resto del
+  // tiempo) y se destruye por completo al salir.
+  if (activo && cardRef && !contControlesFullscreenEl) {
+    const bloque = construirBloqueControlesFullscreen(planActualRef);
+    contControlesFullscreenEl = bloque.raiz;
+    refrescarFullscreenRef = bloque.refrescar;
+    btnPantallaCompletaFsRef = bloque.btnPantallaCompleta;
+    btnGirarFsRef = bloque.btnGirar;
+
+    // Se inserta arriba del mapa, dentro de la tarjeta — mismo lugar
+    // relativo que el bloque exterior respecto al mapa (el mapa
+    // .mapa-wrapper siempre es el último hijo de card en modo Mapa).
+    const mapaWrapper = cardRef.querySelector(".mapa-wrapper");
+    if (mapaWrapper) cardRef.insertBefore(contControlesFullscreenEl, mapaWrapper);
+    else cardRef.appendChild(contControlesFullscreenEl);
+  } else if (!activo && contControlesFullscreenEl) {
+    contControlesFullscreenEl.remove();
+    contControlesFullscreenEl = null;
+    refrescarFullscreenRef = null;
+    btnPantallaCompletaFsRef = null;
+    btnGirarFsRef = null;
+  }
+
+  // Botón "Salir de pantalla completa" / girar DEL DUPLICADO (si existe en
+  // este momento) — se actualiza igual que el exterior, en paralelo.
+  if (btnPantallaCompletaFsRef && btnPantallaCompletaFsRef.isConnected) {
+    btnPantallaCompletaFsRef.textContent = activo ? "🗗" : "⛶";
+    btnPantallaCompletaFsRef.setAttribute("aria-label", activo ? "Salir de pantalla completa" : "Ver el mapa en pantalla completa");
+  }
+  if (btnGirarFsRef && btnGirarFsRef.isConnected) {
+    btnGirarFsRef.style.display = activo ? "" : "none";
   }
 }
 
@@ -91,7 +163,12 @@ const COLOR_ESTADO_MAPA = {
 /** Construye un pill-group de selección exclusiva. Los pill-item de estos
  *  grupos NUNCA truncan su texto (ver .pill-group-vista en el CSS): si no
  *  caben a tamaño legible, el propio grupo se vuelve scrolleable en vez de
- *  cortar las letras con "…". */
+ *  cortar las letras.
+ *
+ *  V1.x: cada pill se marca con `dataset.valor` — la función de refresco
+ *  de cada bloque (ver construirBloqueControles) necesita, dado el valor
+ *  actual en `estado`, encontrar y marcar `.active` la pill correcta sin
+ *  reconstruir nada, y ese dataset es la forma más simple de identificarlas. */
 function construirPillGroupVista(opciones, valorActual, onSeleccionar) {
   const grupo = document.createElement("div");
   grupo.className = "pill-group pill-group-vista";
@@ -100,15 +177,298 @@ function construirPillGroupVista(opciones, valorActual, onSeleccionar) {
     btn.type = "button";
     btn.className = "pill-item" + (valorActual === op.valor ? " active" : "");
     btn.textContent = op.texto;
+    btn.dataset.valor = op.valor;
     btn.addEventListener("click", () => onSeleccionar(op.valor, btn, grupo));
     grupo.appendChild(btn);
   });
   return grupo;
 }
 
+/** Repinta un pill-group ya construido para que `.active` quede en la pill
+ *  cuyo dataset.valor coincide con `valorActivo` — usado por el refresco
+ *  in-place de cada bloque de controles. */
+function refrescarPillGroupVista(grupo, valorActivo) {
+  grupo.querySelectorAll(".pill-item").forEach((p) => {
+    p.classList.toggle("active", p.dataset.valor === String(valorActivo));
+  });
+}
+
+/**
+ * V1.x (rediseño): construye el contenido COMPLETO de controles — filas 2
+ * (colorear/trazado), 3 (tamaño/tema) y 4 (descargar/⛶+🔄/zoom) — más,
+ * opcionalmente, un chevrón propio que envuelve y oculta las 3 filas.
+ *
+ * `conChevron`: false para el bloque EXTERIOR (pedido explícito: nunca
+ * oculta nada ahí, siempre visible) — true para el bloque duplicado de
+ * DENTRO de pantalla completa (tiene su chevrón propio e independiente,
+ * con su propio flag estado.controlesMapaOcultosFullscreen).
+ *
+ * Devuelve { raiz, refrescar, btnPantallaCompleta, btnGirar }:
+ * - raiz: nodo a insertar en el DOM.
+ * - refrescar(): actualiza in-place qué pill está activa y qué dice el
+ *   zoom, según el estado ACTUAL — se llama desde sincronizarControlesMapa()
+ *   cuando el cambio se disparó desde el OTRO bloque.
+ * - btnPantallaCompleta/btnGirar: refs para que
+ *   actualizarControlesPantallaCompleta() pueda mantenerlas al día
+ *   (texto/visibilidad) sin duplicar esa lógica.
+ */
+function construirBloqueControles(plan, conChevron) {
+  const raiz = document.createElement("div");
+  raiz.className = "stack";
+  raiz.style.cssText = "gap:0;";
+
+  const contFilas = document.createElement("div");
+  contFilas.className = "stack";
+  contFilas.style.cssText = "gap:0;";
+
+  if (conChevron) {
+    const btnToggle = document.createElement("button");
+    btnToggle.type = "button";
+    btnToggle.className = "btn-icono-fantasma mapa-toggle-controles";
+    btnToggle.textContent = estado.controlesMapaOcultosFullscreen ? "⌄" : "⌃";
+    btnToggle.setAttribute(
+      "aria-label",
+      estado.controlesMapaOcultosFullscreen ? "Mostrar controles del mapa" : "Ocultar controles del mapa"
+    );
+    if (estado.controlesMapaOcultosFullscreen) contFilas.style.display = "none";
+
+    btnToggle.addEventListener("click", () => {
+      estado.controlesMapaOcultosFullscreen = !estado.controlesMapaOcultosFullscreen;
+      contFilas.style.display = estado.controlesMapaOcultosFullscreen ? "none" : "";
+      btnToggle.textContent = estado.controlesMapaOcultosFullscreen ? "⌄" : "⌃";
+      btnToggle.setAttribute(
+        "aria-label",
+        estado.controlesMapaOcultosFullscreen ? "Mostrar controles del mapa" : "Ocultar controles del mapa"
+      );
+    });
+    raiz.appendChild(btnToggle);
+  }
+
+  /* ---- Línea 2: Colorear por (izq.) | Líneas libres/rectas (der.) ---- */
+  const fila2 = document.createElement("div");
+  fila2.className = "vista-fila";
+
+  const switchColor = construirPillGroupVista(
+    [
+      { valor: "simbologia", texto: "Colorear por Simbología" },
+      { valor: "categoria", texto: "Colorear por Categoría" },
+    ],
+    estado.colorMapaPor,
+    (valor) => {
+      if (estado.colorMapaPor === valor) return;
+      estado.colorMapaPor = valor;
+      recolorearNodosMapa(plan);
+      sincronizarControlesMapa();
+    }
+  );
+  fila2.appendChild(switchColor);
+
+  // V10: switch de trazado del camino — líneas libres (curva) o rectas
+  // (tramos ortogonales por el centro del gap entre bloques).
+  const switchTrazado = construirPillGroupVista(
+    [
+      { valor: "libre", texto: "Líneas libres" },
+      { valor: "recta", texto: "Líneas rectas" },
+    ],
+    estado.trazadoMapaPor,
+    (valor) => {
+      if (estado.trazadoMapaPor === valor) return;
+      estado.trazadoMapaPor = valor;
+      dibujarCaminoDesbloqueo(plan);
+      sincronizarControlesMapa();
+    }
+  );
+  fila2.appendChild(switchTrazado);
+  contFilas.appendChild(fila2);
+
+  /* ---- Línea 3: tamaño de tarjeta (izq.) | tema de tarjeta (der.) ---- */
+  const fila3 = document.createElement("div");
+  fila3.className = "vista-fila";
+
+  // V1.10: tamaño horizontal de cada tarjeta del mapa. Cambia la
+  // estructura interna en modo "extendido", así que se reconstruye TODO el
+  // Plan de Estudios (no basta con recolorear/redibujar el camino) — eso
+  // reconstruye esta tarjeta entera desde cero (ver construirTarjetaVista),
+  // así que no hace falta sincronizar el otro bloque a mano acá: ambos
+  // (exterior y duplicado, si sigue en pantalla completa) nacen de nuevo
+  // ya al día.
+  const switchTamanio = construirPillGroupVista(
+    [
+      { valor: "compacto", texto: "Compacto" },
+      { valor: "normal", texto: "Normal" },
+      { valor: "extendido", texto: "Extendido" },
+    ],
+    estado.tamanioTarjetaMapa,
+    (valor) => {
+      if (estado.tamanioTarjetaMapa === valor) return;
+      estado.tamanioTarjetaMapa = valor;
+      renderizarPlanEstudios();
+    }
+  );
+  fila3.appendChild(switchTamanio);
+
+  // V1.10: tema SOLO del interior de las tarjetas. Si todavía no se ha
+  // elegido, arranca igual al modo actual de la app (claro/oscuro).
+  const temaTarjetaActual =
+    estado.temaTarjetaMapa || (document.documentElement.dataset.mode === "light" ? "clara" : "oscura");
+  const switchTemaTarjeta = construirPillGroupVista(
+    [
+      { valor: "clara", texto: "Tarjeta clara" },
+      { valor: "oscura", texto: "Tarjeta oscura" },
+    ],
+    temaTarjetaActual,
+    (valor) => {
+      if (estado.temaTarjetaMapa === valor) return;
+      estado.temaTarjetaMapa = valor;
+      renderizarPlanEstudios();
+    }
+  );
+  fila3.appendChild(switchTemaTarjeta);
+  contFilas.appendChild(fila3);
+
+  /* ---- Línea 4: Descargar (izq.) | ⛶/🔄 (centro, solo ícono) | Zoom (der.) ----
+     Grid de 3 columnas (mismo truco que construirEncabezadoNotaFinal en
+     semestres-tarjetas.js) en vez de space-between: con solo 3 ítems y
+     anchos distintos, space-between NO centra de verdad el del medio. */
+  const fila4 = document.createElement("div");
+  fila4.className = "vista-fila";
+  fila4.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px;";
+
+  const btnDescargar = document.createElement("button");
+  btnDescargar.type = "button";
+  btnDescargar.className = "btn btn-secondary";
+  btnDescargar.style.justifySelf = "start";
+  btnDescargar.textContent = "Descargar";
+  btnDescargar.addEventListener("click", () => abrirSelectorDescargaMapa());
+  fila4.appendChild(btnDescargar);
+
+  // V1.x: pantalla completa + girar — solo ícono, sin fondo de botón,
+  // centrados entre Descargar y el zoom. Cada bloque (exterior y
+  // duplicado) tiene su PROPIO par de botones — ambos disparan la misma
+  // acción real (document.exitFullscreen / cardRef.requestFullscreen), así
+  // que no hace falta que se conozcan entre sí para funcionar; solo su
+  // texto/visibilidad se mantiene al día vía actualizarControlesPantallaCompleta().
+  const contBotonesCentro = document.createElement("div");
+  contBotonesCentro.style.cssText = "display:flex; align-items:center; gap:2px; justify-self:center;";
+
+  const btnPantallaCompleta = document.createElement("button");
+  btnPantallaCompleta.type = "button";
+  btnPantallaCompleta.className = "btn-icono-fantasma";
+  btnPantallaCompleta.textContent = estado.mapaPantallaCompleta ? "🗗" : "⛶";
+  btnPantallaCompleta.setAttribute(
+    "aria-label",
+    estado.mapaPantallaCompleta ? "Salir de pantalla completa" : "Ver el mapa en pantalla completa"
+  );
+  btnPantallaCompleta.addEventListener("click", () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else if (cardRef && cardRef.requestFullscreen) {
+      cardRef.requestFullscreen().catch((err) => {
+        console.error("No se pudo activar pantalla completa:", err);
+      });
+    }
+  });
+  contBotonesCentro.appendChild(btnPantallaCompleta);
+
+  let btnGirar = null;
+  // Girar pantalla (Screen Orientation API): solo se arma el botón si el
+  // navegador de verdad soporta bloquear orientación — Safari/iOS no lo
+  // soporta en absoluto, así que ahí no tendría sentido mostrar un botón
+  // muerto. Donde sí existe, además solo se MUESTRA mientras se está en
+  // pantalla completa, porque la propia API exige estar en pantalla
+  // completa para bloquear.
+  if (typeof screen !== "undefined" && screen.orientation && typeof screen.orientation.lock === "function") {
+    btnGirar = document.createElement("button");
+    btnGirar.type = "button";
+    btnGirar.className = "btn-icono-fantasma";
+    btnGirar.textContent = "🔄";
+    btnGirar.style.display = estado.mapaPantallaCompleta ? "" : "none";
+    btnGirar.setAttribute("aria-label", "Girar pantalla (bloquear orientación horizontal)");
+    btnGirar.addEventListener("click", () => {
+      const tipoActual = screen.orientation.type || "";
+      if (tipoActual.startsWith("landscape")) {
+        screen.orientation.unlock();
+      } else {
+        screen.orientation.lock("landscape").catch((err) => {
+          console.error("No se pudo bloquear la orientación de pantalla:", err);
+        });
+      }
+    });
+    contBotonesCentro.appendChild(btnGirar);
+  }
+
+  fila4.appendChild(contBotonesCentro);
+
+  const zoomGrupo = document.createElement("div");
+  zoomGrupo.className = "mapa-zoom-controles";
+  zoomGrupo.style.justifySelf = "end";
+  const btnMenos = document.createElement("button");
+  btnMenos.type = "button";
+  btnMenos.className = "btn-icono-fantasma mapa-zoom-btn";
+  btnMenos.textContent = "−";
+  btnMenos.setAttribute("aria-label", "Alejar mapa");
+  const etiquetaZoom = document.createElement("span");
+  etiquetaZoom.className = "muted mapa-zoom-etiqueta";
+  etiquetaZoom.textContent = Math.round(estado.zoomMapa * 100) + "%";
+  const btnMas = document.createElement("button");
+  btnMas.type = "button";
+  btnMas.className = "btn-icono-fantasma mapa-zoom-btn";
+  btnMas.textContent = "+";
+  btnMas.setAttribute("aria-label", "Acercar mapa");
+  btnMenos.addEventListener("click", () => {
+    ajustarZoomMapa(-0.1, etiquetaZoom);
+    sincronizarControlesMapa();
+  });
+  btnMas.addEventListener("click", () => {
+    ajustarZoomMapa(0.1, etiquetaZoom);
+    sincronizarControlesMapa();
+  });
+  zoomGrupo.appendChild(btnMenos);
+  zoomGrupo.appendChild(etiquetaZoom);
+  zoomGrupo.appendChild(btnMas);
+  fila4.appendChild(zoomGrupo);
+
+  contFilas.appendChild(fila4);
+  raiz.appendChild(contFilas);
+
+  // Refresco in-place: se llama cuando el cambio se originó en el OTRO
+  // bloque — solo repinta `.active`/texto de zoom, nunca reconstruye nada
+  // ni vuelve a llamar a los handlers (evita loops y efectos secundarios
+  // duplicados, ej. recolorearNodosMapa() llamándose dos veces).
+  const refrescar = () => {
+    refrescarPillGroupVista(switchColor, estado.colorMapaPor);
+    refrescarPillGroupVista(switchTrazado, estado.trazadoMapaPor);
+    refrescarPillGroupVista(switchTamanio, estado.tamanioTarjetaMapa);
+    refrescarPillGroupVista(
+      switchTemaTarjeta,
+      estado.temaTarjetaMapa || (document.documentElement.dataset.mode === "light" ? "clara" : "oscura")
+    );
+    etiquetaZoom.textContent = Math.round(estado.zoomMapa * 100) + "%";
+  };
+
+  return { raiz, refrescar, btnPantallaCompleta, btnGirar };
+}
+
+/** Bloque EXTERIOR — siempre visible, sin chevrón ni ocultamiento propio
+ *  (pedido explícito: "el exterior no debe tener eso"). */
+function construirBloqueControlesExterior(plan) {
+  return construirBloqueControles(plan, false);
+}
+
+/** Bloque DUPLICADO dentro de pantalla completa — mismos controles reales
+ *  (mismo `estado`, misma lógica), pero elementos de DOM propios y con su
+ *  propio chevrón/ocultamiento (estado.controlesMapaOcultosFullscreen),
+ *  independiente del exterior. Se construye solo mientras se está en
+ *  pantalla completa (ver actualizarControlesPantallaCompleta). */
+function construirBloqueControlesFullscreen(plan) {
+  return construirBloqueControles(plan, true);
+}
+
 function construirTarjetaVista(plan) {
   const card = document.createElement("section");
   card.className = "glass-card stack vista-card";
+  cardRef = card;
+  planActualRef = plan;
 
   /* ---- Línea 1: título "Vista" (izq.) + switch Lista/Mapa (der.) ---- */
   const encabezado = document.createElement("div");
@@ -135,209 +495,31 @@ function construirTarjetaVista(plan) {
   card.appendChild(encabezado);
 
   if (estado.vistaPlanEstudios === "mapa") {
-    // V1.x: chevrón centrado para ocultar/mostrar las filas 2-4 (color,
-    // trazado, tamaño, tema, descargar, pantalla completa, zoom) y ganar
-    // espacio vertical sin salir del modo Mapa. El mapa en sí queda afuera
-    // de `contControles` — nunca se oculta.
-    const btnToggleControles = document.createElement("button");
-    btnToggleControles.type = "button";
-    btnToggleControles.className = "btn-icono-fantasma mapa-toggle-controles";
-    btnToggleControles.textContent = estado.controlesMapaOcultos ? "⌄" : "⌃";
-    btnToggleControles.setAttribute(
-      "aria-label",
-      estado.controlesMapaOcultos ? "Mostrar controles del mapa" : "Ocultar controles del mapa"
-    );
-    card.appendChild(btnToggleControles);
+    // V1.x (rediseño): el bloque EXTERIOR de controles ya NO tiene chevrón
+    // ni se oculta — siempre visible (pedido explícito). El chevrón y el
+    // ocultar/mostrar viven exclusivamente en el bloque duplicado de
+    // DENTRO de pantalla completa (ver construirBloqueControlesFullscreen,
+    // inyectado por actualizarControlesPantallaCompleta cuando corresponda).
+    const bloqueExterior = construirBloqueControlesExterior(plan);
+    refrescarExteriorRef = bloqueExterior.refrescar;
+    btnPantallaCompletaRef = bloqueExterior.btnPantallaCompleta;
+    btnGirarRef = bloqueExterior.btnGirar;
+    card.appendChild(bloqueExterior.raiz);
 
-    const contControles = document.createElement("div");
-    contControles.className = "stack";
-    contControles.style.cssText = "gap:0;";
-    if (estado.controlesMapaOcultos) contControles.style.display = "none";
-
-    btnToggleControles.addEventListener("click", () => {
-      estado.controlesMapaOcultos = !estado.controlesMapaOcultos;
-      contControles.style.display = estado.controlesMapaOcultos ? "none" : "";
-      btnToggleControles.textContent = estado.controlesMapaOcultos ? "⌄" : "⌃";
-      btnToggleControles.setAttribute(
-        "aria-label",
-        estado.controlesMapaOcultos ? "Mostrar controles del mapa" : "Ocultar controles del mapa"
-      );
-    });
-
-    /* ---- Línea 2: Colorear por (izq.) | Líneas libres/rectas (der.) ---- */
-    const fila2 = document.createElement("div");
-    fila2.className = "vista-fila";
-
-    const switchColor = construirPillGroupVista(
-      [
-        { valor: "simbologia", texto: "Colorear por Simbología" },
-        { valor: "categoria", texto: "Colorear por Categoría" },
-      ],
-      estado.colorMapaPor,
-      (valor, btn, grupo) => {
-        if (estado.colorMapaPor === valor) return;
-        estado.colorMapaPor = valor;
-        grupo.querySelectorAll(".pill-item").forEach((p) => p.classList.remove("active"));
-        btn.classList.add("active");
-        recolorearNodosMapa(plan);
-      }
-    );
-    fila2.appendChild(switchColor);
-
-    // V10: switch de trazado del camino — líneas libres (curva) o rectas
-    // (tramos ortogonales por el centro del gap entre bloques).
-    const switchTrazado = construirPillGroupVista(
-      [
-        { valor: "libre", texto: "Líneas libres" },
-        { valor: "recta", texto: "Líneas rectas" },
-      ],
-      estado.trazadoMapaPor,
-      (valor, btn, grupo) => {
-        if (estado.trazadoMapaPor === valor) return;
-        estado.trazadoMapaPor = valor;
-        grupo.querySelectorAll(".pill-item").forEach((p) => p.classList.remove("active"));
-        btn.classList.add("active");
-        dibujarCaminoDesbloqueo(plan);
-      }
-    );
-    fila2.appendChild(switchTrazado);
-    contControles.appendChild(fila2);
-
-    /* ---- Línea 3: tamaño de tarjeta (izq.) | tema de tarjeta (der.) ---- */
-    const fila3 = document.createElement("div");
-    fila3.className = "vista-fila";
-
-    // V1.10: tamaño horizontal de cada tarjeta del mapa. Cambia la
-    // estructura interna en modo "extendido", así que se reconstruye todo
-    // el mapa (no basta con recolorear/redibujar el camino).
-    const switchTamanio = construirPillGroupVista(
-      [
-        { valor: "compacto", texto: "Compacto" },
-        { valor: "normal", texto: "Normal" },
-        { valor: "extendido", texto: "Extendido" },
-      ],
-      estado.tamanioTarjetaMapa,
-      (valor) => {
-        if (estado.tamanioTarjetaMapa === valor) return;
-        estado.tamanioTarjetaMapa = valor;
-        renderizarPlanEstudios();
-      }
-    );
-    fila3.appendChild(switchTamanio);
-
-    // V1.10: tema SOLO del interior de las tarjetas. Si todavía no se ha
-    // elegido, arranca igual al modo actual de la app (claro/oscuro).
-    const temaTarjetaActual =
-      estado.temaTarjetaMapa || (document.documentElement.dataset.mode === "light" ? "clara" : "oscura");
-    const switchTemaTarjeta = construirPillGroupVista(
-      [
-        { valor: "clara", texto: "Tarjeta clara" },
-        { valor: "oscura", texto: "Tarjeta oscura" },
-      ],
-      temaTarjetaActual,
-      (valor) => {
-        if (estado.temaTarjetaMapa === valor) return;
-        estado.temaTarjetaMapa = valor;
-        renderizarPlanEstudios();
-      }
-    );
-    fila3.appendChild(switchTemaTarjeta);
-    contControles.appendChild(fila3);
-
-    /* ---- Línea 4: Descargar (izq.) | ⛶/🔄 (centro, solo ícono) | Zoom (der.) ----
-       Grid de 3 columnas (mismo truco que construirEncabezadoNotaFinal en
-       semestres-tarjetas.js) en vez de space-between: con solo 3 ítems y
-       anchos distintos, space-between NO centra de verdad el del medio. */
-    const fila4 = document.createElement("div");
-    fila4.className = "vista-fila";
-    fila4.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px;";
-
-    const btnDescargar = document.createElement("button");
-    btnDescargar.type = "button";
-    btnDescargar.className = "btn btn-secondary";
-    btnDescargar.style.justifySelf = "start";
-    btnDescargar.textContent = "Descargar";
-    btnDescargar.addEventListener("click", () => abrirSelectorDescargaMapa());
-    fila4.appendChild(btnDescargar);
-
-    // V1.x: pantalla completa + girar — solo ícono, sin fondo de botón
-    // (pedido explícito), centrados entre Descargar y el zoom.
-    const contBotonesCentro = document.createElement("div");
-    contBotonesCentro.style.cssText = "display:flex; align-items:center; gap:2px; justify-self:center;";
-
-    // Pantalla completa — aplica sobre `card` (la tarjeta "Vista" entera),
-    // no solo el mapa, para no perder los controles de arriba.
-    const btnPantallaCompleta = document.createElement("button");
-    btnPantallaCompleta.type = "button";
-    btnPantallaCompleta.className = "btn-icono-fantasma";
-    btnPantallaCompleta.addEventListener("click", () => {
-      if (document.fullscreenElement) {
-        document.exitFullscreen();
-      } else if (card.requestFullscreen) {
-        card.requestFullscreen().catch((err) => {
-          console.error("No se pudo activar pantalla completa:", err);
-        });
-      }
-    });
-    btnPantallaCompletaRef = btnPantallaCompleta;
-    contBotonesCentro.appendChild(btnPantallaCompleta);
-
-    // Girar pantalla (Screen Orientation API): solo se arma el botón si el
-    // navegador de verdad soporta bloquear orientación — Safari/iOS no lo
-    // soporta en absoluto, así que ahí no tendría sentido mostrar un botón
-    // muerto. Donde sí existe, además solo se MUESTRA mientras se está en
-    // pantalla completa (ver actualizarControlesPantallaCompleta), porque
-    // la propia API exige estar en pantalla completa para bloquear.
-    if (typeof screen !== "undefined" && screen.orientation && typeof screen.orientation.lock === "function") {
-      const btnGirar = document.createElement("button");
-      btnGirar.type = "button";
-      btnGirar.className = "btn-icono-fantasma";
-      btnGirar.textContent = "🔄";
-      btnGirar.style.display = "none";
-      btnGirar.setAttribute("aria-label", "Girar pantalla (bloquear orientación horizontal)");
-      btnGirar.addEventListener("click", () => {
-        const tipoActual = screen.orientation.type || "";
-        if (tipoActual.startsWith("landscape")) {
-          screen.orientation.unlock();
-        } else {
-          screen.orientation.lock("landscape").catch((err) => {
-            console.error("No se pudo bloquear la orientación de pantalla:", err);
-          });
-        }
-      });
-      btnGirarRef = btnGirar;
-      contBotonesCentro.appendChild(btnGirar);
-    }
-
-    actualizarControlesPantallaCompleta();
-    fila4.appendChild(contBotonesCentro);
-
-    const zoomGrupo = document.createElement("div");
-    zoomGrupo.className = "mapa-zoom-controles";
-    zoomGrupo.style.justifySelf = "end";
-    const btnMenos = document.createElement("button");
-    btnMenos.type = "button";
-    btnMenos.className = "btn-icono-fantasma mapa-zoom-btn";
-    btnMenos.textContent = "−";
-    btnMenos.setAttribute("aria-label", "Alejar mapa");
-    const etiquetaZoom = document.createElement("span");
-    etiquetaZoom.className = "muted mapa-zoom-etiqueta";
-    etiquetaZoom.textContent = Math.round(estado.zoomMapa * 100) + "%";
-    const btnMas = document.createElement("button");
-    btnMas.type = "button";
-    btnMas.className = "btn-icono-fantasma mapa-zoom-btn";
-    btnMas.textContent = "+";
-    btnMas.setAttribute("aria-label", "Acercar mapa");
-    btnMenos.addEventListener("click", () => ajustarZoomMapa(-0.1, etiquetaZoom));
-    btnMas.addEventListener("click", () => ajustarZoomMapa(0.1, etiquetaZoom));
-    zoomGrupo.appendChild(btnMenos);
-    zoomGrupo.appendChild(etiquetaZoom);
-    zoomGrupo.appendChild(btnMas);
-    fila4.appendChild(zoomGrupo);
-
-    contControles.appendChild(fila4);
-    card.appendChild(contControles);
     card.appendChild(construirMapaInteractivo(plan));
+
+    // Si la tarjeta se está reconstruyendo (ej. cambiaste "Tamaño de
+    // tarjeta") mientras ya se estaba en pantalla completa, el duplicado
+    // de adentro también se recrea acá — actualizarControlesPantallaCompleta()
+    // ve que estado.mapaPantallaCompleta sigue true pero
+    // contControlesFullscreenEl ya no existe (la tarjeta vieja que lo
+    // contenía se descartó al re-renderizar), así que lo reconstruye e
+    // inserta en la tarjeta NUEVA sin que el usuario tenga que salir y
+    // volver a entrar a pantalla completa.
+    if (estado.mapaPantallaCompleta) {
+      contControlesFullscreenEl = null;
+      actualizarControlesPantallaCompleta();
+    }
   }
 
   return card;
@@ -473,6 +655,7 @@ function construirMapaInteractivo(plan) {
       if (!ev.ctrlKey) return;
       ev.preventDefault();
       ajustarZoomMapa(ev.deltaY < 0 ? 0.1 : -0.1, wrapper.querySelector(".mapa-zoom-etiqueta"));
+      sincronizarControlesMapa();
     },
     { passive: false }
   );
@@ -501,6 +684,7 @@ function construirMapaInteractivo(plan) {
         aplicarZoomMapa();
         const etiqueta = wrapper.querySelector(".mapa-zoom-etiqueta");
         if (etiqueta) etiqueta.textContent = Math.round(estado.zoomMapa * 100) + "%";
+        sincronizarControlesMapa();
       }
     },
     { passive: false }
