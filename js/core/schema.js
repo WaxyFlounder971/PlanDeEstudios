@@ -668,7 +668,7 @@ function crearMateriaMatriculada({ materiaId, planEstudioId }) {
  * DENTRO de la materia (0-100). Trae su propio array de asignaciones y su
  * propia tumba, igual que cualquier otra colección anidada del proyecto.
  */
-function crearCriterio({ nombre, valorTotal, orden }) {
+function crearCriterio({ nombre, valorTotal, orden, esExtra }) {
   return sellarTimestamp({
     id: "crit_" + crypto.randomUUID(),
     nombre,
@@ -682,6 +682,18 @@ function crearCriterio({ nombre, valorTotal, orden }) {
     // Con un campo propio, reordenar es una edición de campo más, que se
     // sincroniza y resuelve conflictos igual que cualquier otro cambio.
     orden: Number.isFinite(orden) ? orden : 0,
+    // Reemplaza a mm.puntos_extra (Fase 7, un único bono plano): ahora
+    // "✨ Extra" es un criterio real, así se pueden tener varios a la vez
+    // (examen de reposición, puntos regalados, tarea extra, lo que sea),
+    // cada uno con sus propias asignaciones. `es_extra` es la única marca
+    // que lo distingue de un criterio normal — NO se infiere del nombre
+    // (el usuario puede renombrarlo sin que deje de comportarse como
+    // extra). Efecto de la marca: sumaValorTotalCriterios (ver
+    // semestres-tarjetas.js) lo excluye del 100% de la materia, así estos
+    // puntos se suman aparte, sin quitarle espacio a los criterios
+    // normales — mismo resultado que el viejo mm.puntos_extra, pero
+    // repartido en criterios/asignaciones reales en vez de un solo número.
+    es_extra: !!esExtra,
   });
 }
 
@@ -1105,17 +1117,26 @@ function calcularObjetivoPasarRaspando(notaAprobacion) {
  * cálculo que calcularNotaFinalVigente en semestres-tarjetas.js (que sigue
  * siendo la fuente para la UI de esa tarjeta puntual; esta copia vive acá
  * para que el dashboard no tenga que importar desde un archivo de UI).
- * Respeta nota_final_manual y el bono de puntos_extra, igual que el motor
- * de notas real — así el promedio del dashboard nunca se desalinea de lo
- * que la persona ve en la tarjeta de cada materia.
+ * Respeta nota_final_manual y el viejo bono de mm.puntos_extra, igual que
+ * el motor de notas real — así el promedio del dashboard nunca se
+ * desalinea de lo que la persona ve en la tarjeta de cada materia.
+ *
+ * "✨ Extra" como criterio real (reemplaza a mm.puntos_extra — ver
+ * crearCriterio): un criterio con es_extra:true ya suma sus puntos solo,
+ * porque calcularNotaFinalMateria recorre TODOS los criterios de la
+ * materia sin distinguirlos — no necesita tratamiento especial acá. El
+ * bloque de mm.puntos_extra que sigue abajo es SOLO compatibilidad hacia
+ * atrás: materias matriculadas de antes de este cambio que ya tenían ese
+ * campo guardado con un valor > 0 lo siguen viendo aplicado, pero la UI ya
+ * no lo escribe (reemplazado por el botón "✨ Extra" → nuevo criterio).
  */
 function calcularNotaFinalVigenteMateria(mm, materia, plan, configuracion) {
   if (mm.nota_final_manual) return mm.nota_final;
   const escala = obtenerEscalaNotasMateria(materia, plan, configuracion);
   const base = calcularNotaFinalMateria(mm, escala);
-  const extra = Number(mm.puntos_extra) || 0;
-  if (extra > 0 && typeof base === "number") {
-    return Math.min(base + extra, escala);
+  const extraLegado = Number(mm.puntos_extra) || 0;
+  if (extraLegado > 0 && typeof base === "number") {
+    return Math.min(base + extraLegado, escala);
   }
   return base;
 }
@@ -1667,6 +1688,9 @@ function migrarDatosAntiguos(datos) {
           // con la posición que ya tenía en el array (el orden visual que
           // el usuario ya venía viendo no cambia con esta migración).
           if (criterio.orden === undefined) criterio.orden = idxCriterio;
+          // "✨ Extra" como criterio real (reemplaza a mm.puntos_extra):
+          // cualquier criterio de antes de este cambio no es extra.
+          if (criterio.es_extra === undefined) criterio.es_extra = false;
           criterio.asignaciones.forEach((asig, idxAsig) => {
             if (asig.modo_valor === undefined) asig.modo_valor = "automatico";
             if (asig.modo_calificacion === undefined) asig.modo_calificacion = "nota";
