@@ -1,5 +1,5 @@
 /* =========================================================================
-   PORTAPAPELES — blindaje del flujo "Enviar a Claude/ChatGPT"
+   PORTAPAPELES — blindaje del flujo "Enviar a Claude"
    -------------------------------------------------------------------------
    Motivo (bug urgente reportado): navigator.clipboard.writeText() puede
    fallar sin que el usuario se entere — el flujo anterior solo dejaba un
