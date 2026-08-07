@@ -1197,18 +1197,31 @@ function calcularPromedioPorPlan(datos) {
 }
 
 /**
- * Nivel (c) — PENDIENTE A PROPÓSITO. Promedio combinado de TODO junto,
- * mezclando universidades/carreras distintas en un solo número total (caso:
- * 2 carreras en paralelo, se quiere ver un total único). Decisión explícita
- * del prompt de diseño: (a) y (b) son la prioridad y deben quedar sólidos
- * primero; (c) se documenta acá para implementarse en una entrega
- * posterior en vez de improvisarse ahora. Cuando se implemente, debería
- * ser tan simple como calcularPromedioPonderado(listarMatriculasResolubles(datos))
- * directo, sin agrupar — pero falta decidir con el usuario si "todo junto"
- * excluye duplicados de alguna forma particular (ej. una materia repetida
- * dos veces, ¿cuenta una vez o las dos intentonas?) antes de darlo por
- * sólido.
+ * Nivel (c) — Promedio combinado de TODO junto, mezclando universidades/
+ * carreras distintas en un solo número total (caso: 2 carreras en
+ * paralelo, se quiere ver un total único).
+ *
+ * Decisión confirmada (respuesta del prompt de diseño, misma sesión que
+ * (a)/(b)): el "general" se arma a partir de lo que aportó cada semestre
+ * en concreto, ponderando siempre sobre valores SIN redondear a mitad de
+ * camino — nunca se promedia el número YA redondeado que se muestra en
+ * los niveles (a)/(b), porque eso compondría error de redondeo. En la
+ * práctica esto significa lo mismo que hacen calcularPromedioPorPlan y
+ * calcularPromedioPorSemestreYUniversidad: se pondera directo sobre
+ * listarMatriculasResolubles (notas crudas ya redondeadas al 5 más
+ * cercano por materia — eso SÍ corresponde, es la nota real de esa
+ * materia — pero nunca sobre un promedio ya agregado). No hay
+ * agrupamiento acá: es calcularPromedioPonderado sobre TODAS las
+ * entradas, sin separar por plan ni por universidad.
+ *
+ * Una materia repetida (reprobada y vuelta a cursar) cuenta las veces que
+ * aparece como mm real en el historial — mismo criterio ya confirmado
+ * para (b), sin deduplicar intentos.
  */
+function calcularPromedioTotalCombinado(datos) {
+  const entradas = listarMatriculasResolubles(datos);
+  return calcularPromedioPonderado(entradas);
+}
 
 /**
  * Punto 2 — Porcentaje de cursos aprobados/reprobados. Basado en
@@ -1770,6 +1783,7 @@ export {
   calcularPromedioPonderado,
   calcularPromedioPorSemestreYUniversidad,
   calcularPromedioPorPlan,
+  calcularPromedioTotalCombinado,
   calcularEstadisticasAprobacion,
   calcularDetallePorEstado,
 };
