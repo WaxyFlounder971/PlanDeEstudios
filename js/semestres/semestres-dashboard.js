@@ -24,6 +24,7 @@ import { aplicarFormatoTexto } from "../core/utils.js";
 import {
   calcularPromedioPorSemestreYUniversidad,
   calcularPromedioPorPlan,
+  calcularPromedioTotalCombinado,
   calcularEstadisticasAprobacion,
   calcularDetallePorEstado,
 } from "../core/schema.js";
@@ -190,7 +191,35 @@ function construirVistaPromedioPonderado() {
   cont.className = "stack";
   cont.style.cssText = "gap:16px; margin-top:14px;";
 
-  /* ---------- Nivel (b): por plan/carrera — primero, es el resumen general ---------- */
+  const porPlan = calcularPromedioPorPlan(estado.datos);
+
+  /* ---------- Nivel (c): combinado de TODO junto — primero, es el
+     resumen más general de todos. Solo tiene sentido mostrarlo cuando hay
+     2+ carreras/planes con historial real; con 0-1 plan sería un número
+     idéntico al de (b) de abajo, redundante. ---------- */
+  if (porPlan.length > 1) {
+    const seccionC = document.createElement("div");
+    seccionC.className = "stack";
+    seccionC.style.gap = "8px";
+    const tituloC = document.createElement("p");
+    tituloC.style.cssText = "font-weight:700; margin:0; font-size:0.88rem;";
+    tituloC.textContent = "Promedio combinado (todas las carreras)";
+    seccionC.appendChild(tituloC);
+
+    const combinado = calcularPromedioTotalCombinado(estado.datos);
+    seccionC.appendChild(
+      construirFilaPromedio({
+        etiquetaIzquierda: "Total general",
+        etiquetaDerecha: `${porPlan.length} carreras combinadas`,
+        promedio: combinado.promedio,
+        creditos: combinado.creditos,
+        materias: combinado.materias,
+      })
+    );
+    cont.appendChild(seccionC);
+  }
+
+  /* ---------- Nivel (b): por plan/carrera ---------- */
   const seccionB = document.createElement("div");
   seccionB.className = "stack";
   seccionB.style.gap = "8px";
@@ -199,7 +228,6 @@ function construirVistaPromedioPonderado() {
   tituloB.textContent = "Promedio general por carrera";
   seccionB.appendChild(tituloB);
 
-  const porPlan = calcularPromedioPorPlan(estado.datos);
   if (porPlan.length === 0) {
     const vacio = document.createElement("p");
     vacio.className = "muted";
@@ -266,13 +294,6 @@ function construirVistaPromedioPonderado() {
     });
   }
   cont.appendChild(seccionA);
-
-  /* ---------- Nivel (c): documentado como pendiente, nunca improvisado ---------- */
-  const notaPendienteC = document.createElement("p");
-  notaPendienteC.className = "muted";
-  notaPendienteC.style.cssText = "font-size:0.72rem; margin:0; text-align:center; opacity:0.7;";
-  notaPendienteC.textContent = "El promedio combinado de todas las carreras juntas todavía no está disponible — pendiente de una próxima entrega.";
-  cont.appendChild(notaPendienteC);
 
   return cont;
 }
