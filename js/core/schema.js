@@ -705,6 +705,15 @@ function crearAsignacion({ nombre, valor, orden }) {
     // calificación son puntos directos, con tope en `valor`.
     modo_valor: "automatico",
     modo_calificacion: "nota",
+    // FIX (2026-08-06 — "la pill de Nota muestra el puntaje crudo, no la
+    // nota equivalente"): en modo "puntos" el usuario tipea cuánto obtuvo
+    // de un examen/tarea (ej. 27 de un máximo de 30) — eso vive acá,
+    // crudo, SIN pasar por la escala. `nota` ya no guarda ese crudo:
+    // siempre guarda la nota convertida a la escala activa de la materia
+    // (ver recalcularNotaDesdePuntaje), así la pill de Nota muestra algo
+    // que de verdad es una nota, consistente con el modo "nota". null
+    // mientras no se cargó ningún puntaje todavía.
+    puntaje_obtenido: null,
     // Fase 8 — Drag and drop: ver comentario de `orden` en crearCriterio.
     orden: Number.isFinite(orden) ? orden : 0,
   });
@@ -906,17 +915,62 @@ function redondearNotaFinalAlCincoMasCercano(nota) {
 }
 
 /**
+ * FIX (2026-08-06 — "la pill de Nota muestra el puntaje crudo, no la nota
+ * equivalente"): dado el puntaje crudo que el usuario tipeó
+ * (asignacion.puntaje_obtenido, de 0 a asignacion.valor), calcula la nota
+ * REAL equivalente en la escala activa de la materia y la deja en
+ * asignacion.nota — la misma nota que se mostraría si el usuario hubiera
+ * elegido modo "nota" directamente. Sin redondeo al 5 más cercano (ese
+ * redondeo es exclusivo de nota_final de toda la materia, ver
+ * redondearNotaFinalAlCincoMasCercano — acá aplicaría de más, dos veces).
+ *
+ * Para escalas numéricas es una simple regla de tres. Para letras se busca
+ * la letra cuya fracción de corte sea la más alta que el puntaje SÍ
+ * alcanza (a diferencia de notaMinimaParaFraccion, que busca la mínima
+ * letra NECESARIA para un objetivo — acá se quiere la letra que el
+ * desempeño real ya ganó, no una meta).
+ *
+ * Muta la asignación en el lugar (mismo patrón que sellarTimestamp) y la
+ * devuelve, para poder encadenar `sellarTimestamp(recalcularNotaDesdePuntaje(...))`.
+ */
+function recalcularNotaDesdePuntaje(asignacion, escalaActiva) {
+  if (asignacion.puntaje_obtenido === null || asignacion.puntaje_obtenido === undefined) {
+    asignacion.nota = null;
+    return asignacion;
+  }
+  const puntaje = Number(asignacion.puntaje_obtenido) || 0;
+  const valor = Number(asignacion.valor) || 0;
+  const fraccion = valor > 0 ? puntaje / valor : 0;
+  const escala = obtenerEscalaPorId(escalaActiva);
+  if (escala.tipo === "letras") {
+    const ordenDescendente = [...escala.valores].sort((a, b) => b.fraccion - a.fraccion);
+    const encontrada = ordenDescendente.find((v) => fraccion >= v.fraccion);
+    // Si ni la letra más baja (F) se alcanza, igual se asigna la más baja
+    // disponible — no queda "sin nota" solo porque el desempeño fue peor
+    // que el piso de la tabla.
+    asignacion.nota = encontrada ? encontrada.letra : ordenDescendente[ordenDescendente.length - 1].letra;
+  } else {
+    asignacion.nota = fraccion * escala.max;
+  }
+  return asignacion;
+}
+
+/**
  * Motor de cálculo (punto 3): puntos ponderados reales que aporta una
  * asignación calificada, normalizados a escala 0-100. Sin nota todavía
  * (null) no aporta puntos — se trata como pendiente, nunca como un cero.
+ *
+ * FIX (2026-08-06): antes, el modo "puntos" capaba `nota` contra `valor`
+ * directo, tratando ese campo como puntaje crudo — nunca pasaba por la
+ * escala de notas. Ahora `nota` SIEMPRE guarda la nota ya convertida a la
+ * escala activa (ver recalcularNotaDesdePuntaje, que se llama al guardar
+ * la asignación), sin importar el modo — así los dos modos convergen a un
+ * único camino de cálculo acá. El resultado final (puntos aportados a la
+ * materia) da matemáticamente igual que antes para datos ya migrados —
+ * cambia que ahora `nota` es una nota real, no puntaje disfrazado.
  */
 function calcularPuntosAsignacion(asignacion, escalaActiva) {
   if (asignacion.nota === null || asignacion.nota === undefined) return 0;
-  if (asignacion.modo_calificacion === "puntos") {
-    // Puntos directos: el usuario ya reporta cuánto obtuvo, con tope en el
-    // valor de la asignación (no se divide por escala — no aplica).
-    return Math.min(Number(asignacion.nota) || 0, Number(asignacion.valor) || 0);
-  }
   // Fase 6.2: obtenerFraccionNota entiende tanto escalas numéricas (nota/max)
   // como letras (A+, B-, etc. → su fracción de la tabla) — un solo camino
   // para las dos, en vez de duplicar la lógica de conversión acá.
@@ -1573,6 +1627,13 @@ function migrarDatosAntiguos(datos) {
         // escala 0-escalaActiva). Mismo relleno defensivo que el resto de
         // esta función: sin esto, un lado sin estos campos se ve "distinto"
         // del otro lado que sí los tiene, y dispara un conflicto falso.
+        // FIX (2026-08-06 — "la pill de Nota muestra el puntaje crudo, no
+        // la nota equivalente"): se resuelve la escala activa de ESTA
+        // materia una sola vez acá afuera del loop de asignaciones (no
+        // cambia entre criterios/asignaciones de la misma mm) — mismo
+        // criterio que usa el resto de la app (ver obtenerEscalaNotasMateria).
+        const planDeLaMateria = (datos.planes_estudio || []).find((p) => p.id === mm.plan_estudio_id);
+        const escalaDeLaMateria = obtenerEscalaNotasMateria(mm, planDeLaMateria, datos.configuracion);
         mm.criterios.forEach((criterio, idxCriterio) => {
           if (!Array.isArray(criterio.asignaciones)) criterio.asignaciones = [];
           if (!Array.isArray(criterio._eliminados_asignaciones)) criterio._eliminados_asignaciones = [];
@@ -1585,6 +1646,29 @@ function migrarDatosAntiguos(datos) {
             if (asig.modo_valor === undefined) asig.modo_valor = "automatico";
             if (asig.modo_calificacion === undefined) asig.modo_calificacion = "nota";
             if (asig.orden === undefined) asig.orden = idxAsig;
+            // FIX (2026-08-06): asignaciones en modo "puntos" creadas ANTES
+            // de que existiera `puntaje_obtenido` tenían el puntaje crudo
+            // guardado directo en `nota` (ver comentario viejo de
+            // calcularPuntosAsignacion, ya reemplazado). La AUSENCIA de
+            // puntaje_obtenido es la marca de "es de antes del fix" — se
+            // corre una sola vez: se rescata ese crudo tal cual estaba,
+            // y recién ahí se recalcula `nota` como la nota real
+            // equivalente en la escala de la materia. Es naturalmente
+            // idempotente: una vez migrada, la asignación ya tiene
+            // puntaje_obtenido (aunque sea null, si nunca se cargó nada),
+            // así que esta rama no la vuelve a tocar en la próxima carga.
+            if (asig.modo_calificacion === "puntos" && asig.puntaje_obtenido === undefined) {
+              asig.puntaje_obtenido = asig.nota === null || asig.nota === undefined ? null : Number(asig.nota) || 0;
+              recalcularNotaDesdePuntaje(asig, escalaDeLaMateria);
+              sellarTimestamp(asig);
+            } else if (asig.puntaje_obtenido === undefined) {
+              // Asignaciones en modo "nota" tampoco tenían este campo —
+              // se rellena como null (nunca se usa en ese modo, pero
+              // mismo patrón defensivo que el resto de esta función para
+              // no dejar el campo undefined y disparar un conflicto falso
+              // de sync entre dispositivos).
+              asig.puntaje_obtenido = null;
+            }
           });
         });
       });
@@ -1757,6 +1841,7 @@ export {
   repartirEquitativoCriterio,
   obtenerEscalaNotasMateria,
   calcularPuntosAsignacion,
+  recalcularNotaDesdePuntaje,
   calcularNotaFinalMateria,
   obtenerEstadoEfectivoMateria,
   redondearDecimales,
