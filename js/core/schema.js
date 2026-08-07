@@ -1142,9 +1142,23 @@ function calcularNotaParaPromedio(mm, materia, plan, configuracion) {
  * punto de entrada que recorren las funciones de agrupación de abajo,
  * para no repetir el mismo recorrido triple.
  */
-function listarMatriculasResolubles(datos) {
+/**
+ * FIX (promedio ponderado — "el semestre actual no debe contar en el
+ * promedio general de ninguna carrera"): `incluirActuales` decide si las
+ * materias de semestres con estado efectivo "actual" entran o no en la
+ * lista. El nivel (a) del dashboard ("Promedio por semestre") SÍ debe
+ * seguir mostrando el semestre actual con sus notas en vivo (para ver
+ * cómo va cambiando mientras se cursa) — pero los niveles (b) "por
+ * carrera" y (c) "combinado" deben excluirlo por completo, sin importar
+ * si ya tiene notas cargadas o no: mientras el semestre siga activo,
+ * cualquier nota puede seguir cambiando, así que no es un promedio
+ * "cerrado" todavía. Default true (comportamiento de siempre) para no
+ * romper ningún otro caller que no pase el parámetro.
+ */
+function listarMatriculasResolubles(datos, incluirActuales = true) {
   const resultado = [];
   (datos.semestres || []).forEach((semestre) => {
+    if (!incluirActuales && obtenerEstadoEfectivoSemestre(semestre) === "actual") return;
     (semestre.materias_matriculadas || []).forEach((mm) => {
       const plan = (datos.planes_estudio || []).find((p) => p.id === mm.plan_estudio_id);
       const materia = plan && (plan.materias || []).find((m) => m.id === mm.materia_id);
