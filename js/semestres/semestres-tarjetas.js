@@ -664,8 +664,16 @@ function crearEntradaTumba(id) {
   return { id, eliminadoEn: Date.now() };
 }
 
+// "✨ Extra" (es_extra:true) se excluye SIEMPRE de este total: son puntos
+// que se suman aparte del 100% de la materia (ver crearCriterio en
+// schema.js), así que no deben competir por el mismo presupuesto que los
+// criterios normales — ni bloquear "+ Nuevo criterio"/"Proyectar" cuando
+// los normales ya suman 100% pero todavía hay espacio para agregar extra.
 function sumaValorTotalCriterios(mm, excluirId) {
-  return (mm.criterios || []).reduce((total, c) => total + (c.id === excluirId ? 0 : Number(c.valor_total) || 0), 0);
+  return (mm.criterios || []).reduce(
+    (total, c) => total + (c.id === excluirId || c.es_extra ? 0 : Number(c.valor_total) || 0),
+    0
+  );
 }
 
 function sumaValorAsignaciones(criterio, excluirId) {
@@ -699,17 +707,19 @@ function calcularNotaFinalVigente(mm, materia, plan) {
   if (mm.nota_final_manual) return mm.nota_final;
   const escala = obtenerEscalaNotasMateria(materia, plan, estado.datos.configuracion);
   const base = calcularNotaFinalMateria(mm, escala);
-  // Fase 7 — "Puntos extra" (idea stakeholder Dayi): un bono plano que se
-  // suma encima del cálculo normal por criterios, sin tocar los criterios
-  // en sí (se guarda aparte en mm.puntos_extra). Se acota SIEMPRE al techo
-  // de la escala activa, nunca puede hacer que la nota final se "salga" del
-  // rango 0-escala. Si la escala activa devuelve una letra en vez de un
-  // número (ver notaMinimaParaFraccion / escala "letras"), no hay nada
-  // numérico sobre lo cual sumar el bono, así que se ignora sin explotar —
-  // typeof base === "number" cubre ese caso.
-  const extra = Number(mm.puntos_extra) || 0;
-  if (extra > 0 && typeof base === "number") {
-    return Math.min(base + extra, escala);
+  // "✨ Extra" como criterio real (reemplaza a la Fase 7 original — un bono
+  // plano guardado en mm.puntos_extra): calcularNotaFinalMateria ya suma
+  // los criterios con es_extra:true junto con los normales (no distingue),
+  // así que acá no hace falta tratamiento especial para ellos. Lo de abajo
+  // es SOLO compatibilidad hacia atrás con mm.puntos_extra de materias
+  // matriculadas de antes de este cambio — la UI ya no lo escribe. Se
+  // acota siempre al techo de la escala activa. Si la escala activa
+  // devuelve una letra en vez de un número (ver notaMinimaParaFraccion /
+  // escala "letras"), no hay nada numérico sobre lo cual sumar el bono, así
+  // que se ignora sin explotar — typeof base === "number" cubre ese caso.
+  const extraLegado = Number(mm.puntos_extra) || 0;
+  if (extraLegado > 0 && typeof base === "number") {
+    return Math.min(base + extraLegado, escala);
   }
   return base;
 }
@@ -922,28 +932,53 @@ function agregarSwitchDosOpciones(card, { etiqueta, opciones, valorInicial, onCa
 
 /* ===================== Modal: crear/editar criterio ===================== */
 
-function abrirModalCriterio({ mm, materia, plan, criterioExistente, onGuardado }) {
+/**
+ * `esExtra` (solo aplica al crear, no a editar): abre el modal en modo
+ * "✨ Extra" — nombre precargado igual al del botón (con el emoji), sin el
+ * tope del 100% de la materia (ver sumaValorTotalCriterios), porque estos
+ * puntos se suman aparte. Un criterio ya existente conserva su propio
+ * es_extra tal cual esté guardado (no se puede "convertir" un criterio
+ * normal en extra ni viceversa desde acá — si hiciera falta, se borra y
+ * se crea de nuevo).
+ */
+function abrirModalCriterio({ mm, materia, plan, criterioExistente, esExtra, onGuardado }) {
   const esEdicion = !!criterioExistente;
-  const { overlay, card } = crearModalDinamico({ titulo: esEdicion ? "Editar criterio" : "Nuevo criterio" });
+  const esExtraEfectivo = esEdicion ? !!criterioExistente.es_extra : !!esExtra;
+  const { overlay, card } = crearModalDinamico({
+    titulo: esEdicion ? "Editar criterio" : esExtraEfectivo ? "Nuevo ✨ Extra" : "Nuevo criterio",
+  });
 
   const inputNombre = agregarCampoModal(card, {
     etiqueta: "Nombre (ej. Exámenes)",
     tipo: "text",
-    valor: esEdicion ? criterioExistente.nombre : "",
+    valor: esEdicion ? criterioExistente.nombre : esExtraEfectivo ? "✨ Extra" : "",
   });
   const inputValor = agregarCampoModal(card, {
-    etiqueta: "Valor dentro de la materia (%)",
+    etiqueta: esExtraEfectivo ? "Puntos extra (se suman aparte del 100%)" : "Valor dentro de la materia (%)",
     valor: esEdicion ? criterioExistente.valor_total : "",
     decimal: true,
   });
 
-  const disponibleEstimado = 100 - sumaValorTotalCriterios(mm, esEdicion ? criterioExistente.id : undefined);
-  const ayuda = document.createElement("p");
-  ayuda.className = "muted";
-  ayuda.style.fontSize = "0.8rem";
-  ayuda.style.margin = "0";
-  ayuda.textContent = `Disponible en esta materia: ${formatearNumero(disponibleEstimado)}%`;
-  card.appendChild(ayuda);
+  // Los criterios "✨ Extra" no compiten por el 100% de la materia (ver
+  // sumaValorTotalCriterios) — no tiene sentido mostrar ni validar contra
+  // un "disponible" que no aplica.
+  if (!esExtraEfectivo) {
+    const disponibleEstimado = 100 - sumaValorTotalCriterios(mm, esEdicion ? criterioExistente.id : undefined);
+    const ayuda = document.createElement("p");
+    ayuda.className = "muted";
+    ayuda.style.fontSize = "0.8rem";
+    ayuda.style.margin = "0";
+    ayuda.textContent = `Disponible en esta materia: ${formatearNumero(disponibleEstimado)}%`;
+    card.appendChild(ayuda);
+  } else {
+    const ayuda = document.createElement("p");
+    ayuda.className = "muted";
+    ayuda.style.fontSize = "0.8rem";
+    ayuda.style.margin = "0";
+    ayuda.textContent =
+      "Se suma directo a la nota final calculada por criterios, sin quitarle espacio a los demás. Podés crear varios (examen de reposición, puntos regalados, tarea extra...).";
+    card.appendChild(ayuda);
+  }
 
   const mmId = mm.id;
   const criterioId = esEdicion ? criterioExistente.id : null;
@@ -975,10 +1010,12 @@ function abrirModalCriterio({ mm, materia, plan, criterioExistente, onGuardado }
       onGuardado();
       return;
     }
-    const disponibleReal = 100 - sumaValorTotalCriterios(mmViva, criterioId || undefined);
-    if (valorNum > disponibleReal + 0.001) {
-      mostrarToast(`Ese valor supera el ${formatearNumero(disponibleReal)}% disponible en la materia`);
-      return;
+    if (!esExtraEfectivo) {
+      const disponibleReal = 100 - sumaValorTotalCriterios(mmViva, criterioId || undefined);
+      if (valorNum > disponibleReal + 0.001) {
+        mostrarToast(`Ese valor supera el ${formatearNumero(disponibleReal)}% disponible en la materia`);
+        return;
+      }
     }
 
     if (esEdicion) {
@@ -996,7 +1033,9 @@ function abrirModalCriterio({ mm, materia, plan, criterioExistente, onGuardado }
       // reparto equitativo (misma regla confirmada que al añadir una nueva).
       if (criterioVivo.asignaciones.length > 0) repartirEquitativoCriterio(criterioVivo);
     } else {
-      mmViva.criterios.push(crearCriterio({ nombre, valorTotal: valorNum, orden: siguienteOrden(mmViva.criterios) }));
+      mmViva.criterios.push(
+        crearCriterio({ nombre, valorTotal: valorNum, orden: siguienteOrden(mmViva.criterios), esExtra: esExtraEfectivo })
+      );
     }
 
     persistirCambioMateria(mmViva, materia, plan, onGuardado);
@@ -1403,62 +1442,6 @@ function abrirModalNotaManual({ mm, materia, plan, notaFinalVigente, onGuardado 
     // el override manual es justamente lo que NO debe recalcularse.
     mmViva.nota_final = valor;
     mmViva.nota_final_manual = true;
-    sellarTimestamp(mmViva);
-    marcarCambioPendiente();
-    onGuardado();
-    overlay.remove();
-  });
-  card.appendChild(btnGuardar);
-}
-
-/**
- * Fase 7 — "Puntos extra" (idea stakeholder Dayi): bono plano guardado en
- * mm.puntos_extra, aplicado por calcularNotaFinalVigente encima del cálculo
- * normal por criterios (ver ahí). No pasa por persistirCambioMateria porque
- * ese punto de entrada RECALCULA nota_final desde cero por criterios —
- * pisaría el bono en el mismo golpe. Acá se guarda el campo y se sella
- * timestamp directo, mismo patrón que abrirModalNotaManual con el override
- * manual.
- */
-function abrirModalPuntosExtra({ mm, materia, plan, escalaActiva, onGuardado }) {
-  const { overlay, card } = crearModalDinamico({ titulo: "Puntos extra" });
-
-  const aviso = document.createElement("p");
-  aviso.className = "muted";
-  aviso.style.fontSize = "0.8rem";
-  aviso.style.margin = "0";
-  aviso.textContent =
-    "Se suman directo a la nota final calculada por criterios, sin tocar los criterios. Se acotan para que la nota final nunca pase de " +
-    formatearNumero(escalaActiva) + ".";
-  card.appendChild(aviso);
-
-  const inputExtra = agregarCampoModal(card, {
-    etiqueta: `Puntos extra (0-${formatearNumero(escalaActiva)})`,
-    valor: mm.puntos_extra !== null && mm.puntos_extra !== undefined ? mm.puntos_extra : "",
-    decimal: true,
-  });
-
-  const mmId = mm.id;
-
-  const btnGuardar = document.createElement("button");
-  btnGuardar.type = "button";
-  btnGuardar.className = "btn btn-primary btn-block";
-  btnGuardar.textContent = "Guardar";
-  btnGuardar.addEventListener("click", () => {
-    const texto = inputExtra.value.trim();
-    const valor = texto === "" ? 0 : analizarDecimal(texto);
-    if (!Number.isFinite(valor) || valor < 0 || valor > escalaActiva) {
-      mostrarToast(`Los puntos extra deben estar entre 0 y ${formatearNumero(escalaActiva)}`);
-      return;
-    }
-    const mmViva = buscarMmVivaPorId(mmId);
-    if (!mmViva) {
-      mostrarToast("Esta materia se eliminó desde otro dispositivo — no se pudo guardar");
-      overlay.remove();
-      onGuardado();
-      return;
-    }
-    mmViva.puntos_extra = valor;
     sellarTimestamp(mmViva);
     marcarCambioPendiente();
     onGuardado();
@@ -1974,7 +1957,11 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
   const subtitulo = document.createElement("span");
   subtitulo.className = "muted";
   subtitulo.style.fontSize = "0.72rem";
-  subtitulo.textContent = angosta
+  // "✨ Extra" no es un % de la materia (se suma aparte del 100%, ver
+  // sumaValorTotalCriterios) — mostrarlo como "% de la materia" confundiría.
+  subtitulo.textContent = criterio.es_extra
+    ? `+${formatearNumero(criterio.valor_total)} pts extra`
+    : angosta
     ? `${formatearNumero(criterio.valor_total)}%`
     : `${formatearNumero(criterio.valor_total)}% de la materia`;
   tituloWrap.appendChild(subtitulo);
@@ -2204,7 +2191,11 @@ function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, escal
     btn.textContent = "✨ Extra";
     btn.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      abrirModalPuntosExtra({ mm, materia, plan, escalaActiva, onGuardado: onCambiar });
+      // Cada clic abre "Nuevo criterio" en modo ✨ Extra — se puede llamar
+      // varias veces para tener varios (examen de reposición, puntos
+      // regalados, tarea extra...), cada uno con sus propias asignaciones,
+      // igual que cualquier otro criterio (ver abrirModalCriterio).
+      abrirModalCriterio({ mm, materia, plan, esExtra: true, onGuardado: onCambiar });
     });
     return btn;
   };
