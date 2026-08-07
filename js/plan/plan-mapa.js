@@ -26,6 +26,53 @@ estado.tamanioTarjetaMapa = "normal";      // "compacto" | "normal" | "extendido
 // general de la app). null = todavía no se ha elegido, se usa el modo
 // actual de la app como punto de partida.
 estado.temaTarjetaMapa = null;             // "clara" | "oscura" | null
+// V1.x: pantalla completa nativa (Fullscreen API) sobre la tarjeta "Vista"
+// completa (no solo el mapa) — así los controles de color/tamaño/tema/zoom
+// siguen accesibles adentro. Se sincroniza con el estado REAL del navegador
+// vía el listener de "fullscreenchange" de abajo (única fuente de verdad:
+// nunca se asume `true` solo porque se llamó a requestFullscreen, porque esa
+// llamada es async y puede fallar o ser cancelada por el usuario con Esc).
+// LIMITACIÓN CONOCIDA: cambiar "Tamaño de tarjeta" o "Tema de tarjeta" (fila
+// 3) reconstruye toda la tarjeta vía renderizarPlanEstudios() — el navegador
+// sale de pantalla completa solo al reemplazarse el elemento del DOM. No se
+// intenta restaurar automáticamente (requeriría tocar plan-vista-lista.js).
+estado.mapaPantallaCompleta = false;
+// V1.x: fila 2/3/4 (color, trazado, tamaño, tema, descargar, pantalla
+// completa, zoom) se pueden ocultar con el chevrón centrado arriba de
+// ellas, para ganar espacio vertical sin salir del modo Mapa. Solo afecta
+// a los CONTROLES — el mapa en sí (construirMapaInteractivo) sigue
+// visible siempre.
+estado.controlesMapaOcultos = false;
+
+/** Referencias a los botones de pantalla completa / girar actualmente en
+ *  el DOM (si los hay) — se actualizan en cada construirTarjetaVista(). El
+ *  listener de fullscreenchange (registrado UNA sola vez a nivel de
+ *  módulo, no por render) las usa para reflejar el estado real sin tener
+ *  que re-renderizar nada. */
+let btnPantallaCompletaRef = null;
+let btnGirarRef = null;
+
+function actualizarControlesPantallaCompleta() {
+  const activo = estado.mapaPantallaCompleta;
+  if (btnPantallaCompletaRef && btnPantallaCompletaRef.isConnected) {
+    btnPantallaCompletaRef.textContent = activo ? "🗗" : "⛶";
+    btnPantallaCompletaRef.setAttribute("aria-label", activo ? "Salir de pantalla completa" : "Ver el mapa en pantalla completa");
+  }
+  // V1.x: girar pantalla — solo tiene sentido (y la Screen Orientation API
+  // solo lo permite) mientras se está en pantalla completa, así que el
+  // botón se muestra/oculta junto con ese estado en vez de quedar ahí
+  // muerto el resto del tiempo.
+  if (btnGirarRef && btnGirarRef.isConnected) {
+    btnGirarRef.style.display = activo ? "" : "none";
+  }
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("fullscreenchange", () => {
+    estado.mapaPantallaCompleta = !!document.fullscreenElement;
+    actualizarControlesPantallaCompleta();
+  });
+}
 
 /* ===================== B.3 (v8/v9) — Vista de Mapa interactivo ===================== */
 
@@ -88,6 +135,35 @@ function construirTarjetaVista(plan) {
   card.appendChild(encabezado);
 
   if (estado.vistaPlanEstudios === "mapa") {
+    // V1.x: chevrón centrado para ocultar/mostrar las filas 2-4 (color,
+    // trazado, tamaño, tema, descargar, pantalla completa, zoom) y ganar
+    // espacio vertical sin salir del modo Mapa. El mapa en sí queda afuera
+    // de `contControles` — nunca se oculta.
+    const btnToggleControles = document.createElement("button");
+    btnToggleControles.type = "button";
+    btnToggleControles.className = "btn-icono-fantasma mapa-toggle-controles";
+    btnToggleControles.textContent = estado.controlesMapaOcultos ? "⌄" : "⌃";
+    btnToggleControles.setAttribute(
+      "aria-label",
+      estado.controlesMapaOcultos ? "Mostrar controles del mapa" : "Ocultar controles del mapa"
+    );
+    card.appendChild(btnToggleControles);
+
+    const contControles = document.createElement("div");
+    contControles.className = "stack";
+    contControles.style.cssText = "gap:0;";
+    if (estado.controlesMapaOcultos) contControles.style.display = "none";
+
+    btnToggleControles.addEventListener("click", () => {
+      estado.controlesMapaOcultos = !estado.controlesMapaOcultos;
+      contControles.style.display = estado.controlesMapaOcultos ? "none" : "";
+      btnToggleControles.textContent = estado.controlesMapaOcultos ? "⌄" : "⌃";
+      btnToggleControles.setAttribute(
+        "aria-label",
+        estado.controlesMapaOcultos ? "Mostrar controles del mapa" : "Ocultar controles del mapa"
+      );
+    });
+
     /* ---- Línea 2: Colorear por (izq.) | Líneas libres/rectas (der.) ---- */
     const fila2 = document.createElement("div");
     fila2.className = "vista-fila";
@@ -125,7 +201,7 @@ function construirTarjetaVista(plan) {
       }
     );
     fila2.appendChild(switchTrazado);
-    card.appendChild(fila2);
+    contControles.appendChild(fila2);
 
     /* ---- Línea 3: tamaño de tarjeta (izq.) | tema de tarjeta (der.) ---- */
     const fila3 = document.createElement("div");
@@ -166,24 +242,82 @@ function construirTarjetaVista(plan) {
       }
     );
     fila3.appendChild(switchTemaTarjeta);
-    card.appendChild(fila3);
+    contControles.appendChild(fila3);
 
-    /* ---- Línea 4: Descargar (izq.) | Control de zoom (der.) ---- */
+    /* ---- Línea 4: Descargar (izq.) | ⛶/🔄 (centro, solo ícono) | Zoom (der.) ----
+       Grid de 3 columnas (mismo truco que construirEncabezadoNotaFinal en
+       semestres-tarjetas.js) en vez de space-between: con solo 3 ítems y
+       anchos distintos, space-between NO centra de verdad el del medio. */
     const fila4 = document.createElement("div");
     fila4.className = "vista-fila";
+    fila4.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px;";
 
     const btnDescargar = document.createElement("button");
     btnDescargar.type = "button";
     btnDescargar.className = "btn btn-secondary";
+    btnDescargar.style.justifySelf = "start";
     btnDescargar.textContent = "Descargar";
     btnDescargar.addEventListener("click", () => abrirSelectorDescargaMapa());
     fila4.appendChild(btnDescargar);
 
+    // V1.x: pantalla completa + girar — solo ícono, sin fondo de botón
+    // (pedido explícito), centrados entre Descargar y el zoom.
+    const contBotonesCentro = document.createElement("div");
+    contBotonesCentro.style.cssText = "display:flex; align-items:center; gap:2px; justify-self:center;";
+
+    // Pantalla completa — aplica sobre `card` (la tarjeta "Vista" entera),
+    // no solo el mapa, para no perder los controles de arriba.
+    const btnPantallaCompleta = document.createElement("button");
+    btnPantallaCompleta.type = "button";
+    btnPantallaCompleta.className = "btn-icono-fantasma";
+    btnPantallaCompleta.addEventListener("click", () => {
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else if (card.requestFullscreen) {
+        card.requestFullscreen().catch((err) => {
+          console.error("No se pudo activar pantalla completa:", err);
+        });
+      }
+    });
+    btnPantallaCompletaRef = btnPantallaCompleta;
+    contBotonesCentro.appendChild(btnPantallaCompleta);
+
+    // Girar pantalla (Screen Orientation API): solo se arma el botón si el
+    // navegador de verdad soporta bloquear orientación — Safari/iOS no lo
+    // soporta en absoluto, así que ahí no tendría sentido mostrar un botón
+    // muerto. Donde sí existe, además solo se MUESTRA mientras se está en
+    // pantalla completa (ver actualizarControlesPantallaCompleta), porque
+    // la propia API exige estar en pantalla completa para bloquear.
+    if (typeof screen !== "undefined" && screen.orientation && typeof screen.orientation.lock === "function") {
+      const btnGirar = document.createElement("button");
+      btnGirar.type = "button";
+      btnGirar.className = "btn-icono-fantasma";
+      btnGirar.textContent = "🔄";
+      btnGirar.style.display = "none";
+      btnGirar.setAttribute("aria-label", "Girar pantalla (bloquear orientación horizontal)");
+      btnGirar.addEventListener("click", () => {
+        const tipoActual = screen.orientation.type || "";
+        if (tipoActual.startsWith("landscape")) {
+          screen.orientation.unlock();
+        } else {
+          screen.orientation.lock("landscape").catch((err) => {
+            console.error("No se pudo bloquear la orientación de pantalla:", err);
+          });
+        }
+      });
+      btnGirarRef = btnGirar;
+      contBotonesCentro.appendChild(btnGirar);
+    }
+
+    actualizarControlesPantallaCompleta();
+    fila4.appendChild(contBotonesCentro);
+
     const zoomGrupo = document.createElement("div");
     zoomGrupo.className = "mapa-zoom-controles";
+    zoomGrupo.style.justifySelf = "end";
     const btnMenos = document.createElement("button");
     btnMenos.type = "button";
-    btnMenos.className = "btn btn-secondary mapa-zoom-btn";
+    btnMenos.className = "btn-icono-fantasma mapa-zoom-btn";
     btnMenos.textContent = "−";
     btnMenos.setAttribute("aria-label", "Alejar mapa");
     const etiquetaZoom = document.createElement("span");
@@ -191,7 +325,7 @@ function construirTarjetaVista(plan) {
     etiquetaZoom.textContent = Math.round(estado.zoomMapa * 100) + "%";
     const btnMas = document.createElement("button");
     btnMas.type = "button";
-    btnMas.className = "btn btn-secondary mapa-zoom-btn";
+    btnMas.className = "btn-icono-fantasma mapa-zoom-btn";
     btnMas.textContent = "+";
     btnMas.setAttribute("aria-label", "Acercar mapa");
     btnMenos.addEventListener("click", () => ajustarZoomMapa(-0.1, etiquetaZoom));
@@ -201,7 +335,8 @@ function construirTarjetaVista(plan) {
     zoomGrupo.appendChild(btnMas);
     fila4.appendChild(zoomGrupo);
 
-    card.appendChild(fila4);
+    contControles.appendChild(fila4);
+    card.appendChild(contControles);
     card.appendChild(construirMapaInteractivo(plan));
   }
 
