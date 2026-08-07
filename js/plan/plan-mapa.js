@@ -11,6 +11,25 @@ import { abrirModalRequisito } from "./plan-detalle.js";
 import { abrirModalResolverConflicto, obtenerMateriasQueDesbloquea } from "./plan-vista-lista-tarjetas.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
 
+// V1.x: el botón de pantalla completa usaba emoji "🗗" (RESTORE DOWN,
+// U+1F5D7) para el estado "activo" — ese carácter no está en la fuente de
+// emoji de muchos teléfonos (Android sobre todo) y se ve como un cuadrado
+// de "carácter desconocido". Se reemplaza por dos íconos SVG propios
+// (trazo, sin depender de ninguna fuente de emoji) — iguales en cualquier
+// dispositivo. "⛶" (entrar) se mantenía porque ese sí es un carácter
+// tipográfico normal (U+26F6, no emoji) con buen soporte, pero para que
+// ambos estados luzcan consistentes se pasan los dos a SVG.
+const SVG_PANTALLA_COMPLETA_ENTRAR =
+  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="display:block;">' +
+  '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/>' +
+  '<path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
+const SVG_PANTALLA_COMPLETA_SALIR =
+  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="display:block;">' +
+  '<path d="M9 3v4a2 2 0 0 1-2 2H3"/><path d="M15 3v4a2 2 0 0 0 2 2h4"/>' +
+  '<path d="M9 21v-4a2 2 0 0 0-2-2H3"/><path d="M15 21v-4a2 2 0 0 1 2-2h4"/></svg>';
+
 /* ---- B.3 (v8/v9): Vista de Mapa interactivo del Plan de Estudios ---- */
 estado.vistaPlanEstudios = "lista";        // "lista" | "mapa"
 estado.colorMapaPor = "simbologia";        // "simbologia" (por Estado) | "categoria"
@@ -97,7 +116,7 @@ function actualizarControlesPantallaCompleta() {
   const activo = estado.mapaPantallaCompleta;
 
   if (btnPantallaCompletaRef && btnPantallaCompletaRef.isConnected) {
-    btnPantallaCompletaRef.textContent = activo ? "🗗" : "⛶";
+    btnPantallaCompletaRef.innerHTML = activo ? SVG_PANTALLA_COMPLETA_SALIR : SVG_PANTALLA_COMPLETA_ENTRAR;
     btnPantallaCompletaRef.setAttribute("aria-label", activo ? "Salir de pantalla completa" : "Ver el mapa en pantalla completa");
   }
   // V1.x: girar pantalla — solo tiene sentido (y la Screen Orientation API
@@ -114,6 +133,15 @@ function actualizarControlesPantallaCompleta() {
   // pantalla completa (pedido explícito), afuera siempre visible.
   if (encabezadoRef && encabezadoRef.isConnected) {
     encabezadoRef.style.display = activo ? "none" : "";
+  }
+  // V1.x: dentro de pantalla completa, si el contenido de la tarjeta (mapa
+  // + controles) es más alto que la pantalla, antes quedaba recortado sin
+  // forma de verlo — se habilita scroll vertical de la tarjeta mientras
+  // está en pantalla completa (se quita al salir, para no afectar el
+  // layout normal fuera de fullscreen).
+  if (cardRef && cardRef.isConnected) {
+    cardRef.style.overflowY = activo ? "auto" : "";
+    cardRef.style.maxHeight = activo ? "100vh" : "";
   }
   // Al SALIR de pantalla completa, se fuerza todo visible de nuevo — afuera
   // nunca queda nada oculto (pedido explícito original).
@@ -328,7 +356,7 @@ function construirBloqueControles(plan) {
   const btnPantallaCompleta = document.createElement("button");
   btnPantallaCompleta.type = "button";
   btnPantallaCompleta.className = "btn-icono-fantasma";
-  btnPantallaCompleta.textContent = estado.mapaPantallaCompleta ? "🗗" : "⛶";
+  btnPantallaCompleta.innerHTML = estado.mapaPantallaCompleta ? SVG_PANTALLA_COMPLETA_SALIR : SVG_PANTALLA_COMPLETA_ENTRAR;
   btnPantallaCompleta.setAttribute(
     "aria-label",
     estado.mapaPantallaCompleta ? "Salir de pantalla completa" : "Ver el mapa en pantalla completa"
@@ -463,6 +491,13 @@ function construirTarjetaVista(plan) {
   encabezadoRef = encabezado;
   if (estado.vistaPlanEstudios === "mapa" && estado.mapaPantallaCompleta) {
     encabezado.style.display = "none";
+    // Ver comentario en actualizarControlesPantallaCompleta(): habilita
+    // scroll vertical mientras se está en pantalla completa. Se aplica acá
+    // también (no solo en el listener de fullscreenchange) para que no
+    // haya un instante con contenido recortado al reconstruir la tarjeta
+    // (ej. al cambiar "Tamaño"/"Tema") mientras ya se está en fullscreen.
+    card.style.overflowY = "auto";
+    card.style.maxHeight = "100vh";
   }
   const titulo = document.createElement("h2");
   titulo.style.margin = "0";
@@ -975,7 +1010,16 @@ function abrirSelectorDescargaMapa() {
 
   overlay.appendChild(caja);
   overlay.addEventListener("click", (e) => { if (e.target === overlay) cerrar(); });
-  document.body.appendChild(overlay);
+  // V1.x: pedido explícito — que las ventanas flotantes se vean aunque se
+  // esté en pantalla completa. El Fullscreen API nativo solo pinta encima
+  // el elemento en pantalla completa y SUS DESCENDIENTES DEL DOM; cualquier
+  // nodo agregado a document.body (como este overlay) queda tapado detrás.
+  // La solución es agregar el overlay como hijo del elemento que está
+  // realmente en pantalla completa cuando corresponda — sigue siendo
+  // position:fixed (cubre toda la pantalla igual), solo cambia DÓNDE cuelga
+  // en el árbol del DOM.
+  const contenedorModal = document.fullscreenElement || document.body;
+  contenedorModal.appendChild(overlay);
 }
 
 /**
