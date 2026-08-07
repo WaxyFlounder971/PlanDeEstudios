@@ -1066,6 +1066,41 @@ function eliminarCriterio(mm, materia, plan, criterio, onCambiar) {
   });
 }
 
+/**
+ * Corrección de diseño (2026-08-07, pedido explícito — "Extra debe crear un
+ * criterio nuevo, no una asignación suelta"): el botón "✨ Extra" solo debe
+ * poder tener UN criterio por materia matriculada (a diferencia de antes,
+ * que dejaba crear varios "✨ Extra" sueltos con cada clic). Si ese criterio
+ * ya existe, un nuevo clic en el botón NO abre "Nuevo criterio" de nuevo —
+ * en cambio, ofrece vaciar sus asignaciones (el criterio en sí permanece, y
+ * sigue pudiendo tener varias asignaciones adentro vía su propio "+
+ * asignación", igual que cualquier otro criterio).
+ */
+function vaciarAsignacionesExtra(mm, materia, plan, criterioExtra, onCambiar) {
+  const mmId = mm.id;
+  const criterioId = criterioExtra.id;
+  abrirConfirmacion({
+    titulo: "Vaciar Extra",
+    mensaje: "¿Deseas eliminar todas las asignaciones de Extra?",
+    textoConfirmar: "Eliminar",
+    onConfirmar: () => {
+      const mmViva = buscarMmVivaPorId(mmId);
+      const criterioVivo = mmViva && (mmViva.criterios || []).find((c) => c.id === criterioId);
+      if (!mmViva || !criterioVivo) {
+        mostrarToast("Esto ya no existe — puede que se haya eliminado desde otro dispositivo");
+        onCambiar();
+        return;
+      }
+      const idsAsignaciones = (criterioVivo.asignaciones || []).map((a) => a.id);
+      criterioVivo.asignaciones = [];
+      criterioVivo._eliminados_asignaciones = criterioVivo._eliminados_asignaciones || [];
+      idsAsignaciones.forEach((id) => criterioVivo._eliminados_asignaciones.push(crearEntradaTumba(id)));
+      sellarTimestamp(criterioVivo);
+      persistirCambioMateria(mmViva, materia, plan, onCambiar);
+    },
+  });
+}
+
 /* ===================== Modal: registrar/editar asignación ===================== */
 
 /** Estima cuánto le tocaría a esta asignación si quedara en modo "automático", sin mutar nada — solo para mostrar en el modal antes de guardar. Sigue la misma regla que repartirEquitativoCriterio (schema.js): reparte lo que sobra tras restar las "personalizado". */
@@ -1215,6 +1250,17 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
 
   actualizarCampoValor(modoValorInicial);
   actualizarEtiquetaCalif(modoCalifInicial);
+
+  // Pedido explícito: al EDITAR una asignación existente, el cuadro de nota
+  // (inputCalif) debe estar enfocado por default, listo para escribir sin
+  // tener que tocarlo primero — no aplica al crear una asignación nueva
+  // (ahí tiene más sentido arrancar en el nombre, que es lo primero que
+  // falta). Si la escala activa es de letras y el modo inicial es "Nota",
+  // inputCalif está oculto (se usa el selector de letras en su lugar, ver
+  // contenedorLetras) — no hay "cuadro" que enfocar en ese caso, se omite.
+  if (esEdicion && !(descriptorEscala.tipo === "letras" && modoCalifInicial === "nota")) {
+    requestAnimationFrame(() => inputCalif.focus());
+  }
 
   const disponible = criterio.valor_total - sumaValorPersonalizadoAsignaciones(criterio, esEdicion ? asignacionExistente.id : undefined);
   const ayuda = document.createElement("p");
@@ -2191,11 +2237,21 @@ function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, escal
     btn.textContent = "✨ Extra";
     btn.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      // Cada clic abre "Nuevo criterio" en modo ✨ Extra — se puede llamar
-      // varias veces para tener varios (examen de reposición, puntos
-      // regalados, tarea extra...), cada uno con sus propias asignaciones,
-      // igual que cualquier otro criterio (ver abrirModalCriterio).
-      abrirModalCriterio({ mm, materia, plan, esExtra: true, onGuardado: onCambiar });
+      // Corrección de diseño (2026-08-07): a diferencia de antes (que
+      // abría "Nuevo criterio" en modo ✨ Extra en CADA clic, permitiendo
+      // varios criterios "✨ Extra" sueltos), ahora solo existe UN criterio
+      // "✨ Extra" por materia matriculada. Se busca fresco (mismo motivo
+      // que buscarCriterioVivoPorId: `mm` capturada acá puede ser huérfana
+      // tras un sync) — si ya existe, el clic ofrece vaciar sus
+      // asignaciones en vez de crear otro; si no existe todavía, se crea
+      // (ver abrirModalCriterio).
+      const mmViva = buscarMmVivaPorId(mm.id);
+      const criterioExtra = mmViva && (mmViva.criterios || []).find((c) => c.es_extra);
+      if (criterioExtra) {
+        vaciarAsignacionesExtra(mm, materia, plan, criterioExtra, onCambiar);
+      } else {
+        abrirModalCriterio({ mm, materia, plan, esExtra: true, onGuardado: onCambiar });
+      }
     });
     return btn;
   };
