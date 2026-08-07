@@ -1694,11 +1694,26 @@ img, svg { max-width: 100%; }
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  /* V1.x: pedido explícito — reducir a la mitad (24px del .glass-card base
+     → 12px) el espacio entre el borde superior de la pantalla y los
+     botones. SOLO dentro de pantalla completa; el exterior sigue con el
+     padding normal de .glass-card, sin cambios. */
+  padding-top: 12px;
+  /* V1.x: pedido explícito — los laterales también se ajustan para que las
+     flechas ‹ › del mapa (ver .flecha-plan) queden cerca del borde de la
+     pantalla sin espacio de sobra, pero sin quedar 100% pegadas al borde
+     (se deja un margen mínimo visible). SOLO dentro de pantalla completa. */
+  padding-left: 8px;
+  padding-right: 8px;
 }
 .vista-card:fullscreen .mapa-wrapper,
 .vista-card:-webkit-full-screen .mapa-wrapper {
   flex: 1;
   min-height: 0;
+  /* V1.x: pedido explícito — reducir a la mitad (16px del .mapa-wrapper
+     base → 8px) el espacio entre la línea de Descargar/⛶/Zoom y el mapa.
+     SOLO dentro de pantalla completa (afuera sigue en 16px, sin cambios). */
+  margin-top: 8px;
 }
 .vista-card:fullscreen .mapa-scroll,
 .vista-card:-webkit-full-screen .mapa-scroll {
