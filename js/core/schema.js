@@ -1294,6 +1294,17 @@ function calcularPromedioTotalCombinado(datos) {
 function calcularEstadisticasAprobacion(datos, planId) {
   const entradas = listarMatriculasResolubles(datos).filter((e) => {
     if (planId && e.plan.id !== planId) return false;
+    // FIX (2026-08-07 — "si el semestre está marcado como actual no debe
+    // aparecer en las estadísticas hasta que esté guardado como pasado"):
+    // obtenerEstadoEfectivoSemestre ya colapsa manual-forzado vs.
+    // automático-por-fecha en un solo valor de salida — "actual" y
+    // "actual forzado" son equivalentes acá (ambos devuelven "actual"),
+    // igual que "pasado" y "pasado forzado" (ambos devuelven "pasado").
+    // mm.resultado se puede marcar a mano de forma independiente del
+    // estado del semestre (ver semestres-tarjetas.js), así que sin este
+    // filtro un semestre todavía en curso podría colarse acá si alguien
+    // marcó alguna materia como aprobada/reprobada antes de tiempo.
+    if (obtenerEstadoEfectivoSemestre(e.semestre) === "actual") return false;
     return e.mm.resultado === "aprobada" || e.mm.resultado === "reprobada";
   });
 
