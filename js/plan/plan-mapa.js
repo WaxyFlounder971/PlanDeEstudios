@@ -33,61 +33,40 @@ estado.temaTarjetaMapa = null;             // "clara" | "oscura" | null
 // nunca se asume `true` solo porque se llamó a requestFullscreen, porque esa
 // llamada es async y puede fallar o ser cancelada por el usuario con Esc).
 estado.mapaPantallaCompleta = false;
-// V1.x (rediseño, pedido explícito: "el exterior no debe tener eso"): la
-// fila 2/3/4 de controles (colorear, trazado, tamaño, tema, descargar,
-// pantalla completa/girar, zoom) YA NO se pueden ocultar desde AFUERA de
-// pantalla completa — ese bloque exterior queda siempre visible, sin
-// chevrón ni ocultamiento propio. El chevrón ⌃/⌄ y el ocultar/mostrar son
-// EXCLUSIVOS de un SEGUNDO bloque — un duplicado real del DOM (mismos
-// controles, elementos distintos, ambos escriben sobre el mismo `estado`)
-// — que se inyecta dentro de la tarjeta ÚNICAMENTE mientras
-// estado.mapaPantallaCompleta es true (se crea al entrar, se destruye al
-// salir — ver actualizarControlesPantallaCompleta). Este flag es el
-// estado de visibilidad de ESE duplicado exclusivamente.
+// V1.x (rediseño 2 — sin duplicado): un solo bloque de controles, siempre
+// el mismo nodo del DOM, tanto adentro como afuera de pantalla completa.
+// La fila 4 (Descargar / ⛶ / ⌃⌄ / 🔄 / Zoom) queda SIEMPRE visible pase lo
+// que pase. Lo único que se puede ocultar son las filas 2 y 3 (colorear,
+// trazado, tamaño, tema) — y solo mediante el chevrón ⌃/⌄ de la fila 4, que
+// a su vez SOLO existe/funciona mientras estado.mapaPantallaCompleta es
+// true (pedido explícito original: "el exterior no debe tener eso"). Este
+// flag es el estado de visibilidad de esas filas 2/3.
 estado.controlesMapaOcultosFullscreen = false;
 
-/** Referencias a los botones de pantalla completa / girar del bloque
- *  EXTERIOR (el único que existe siempre) — se actualizan en cada
- *  construirTarjetaVista(). El listener de fullscreenchange (registrado
+/** Referencias vivas del ÚNICO bloque de controles (se reasignan en cada
+ *  construirTarjetaVista()). El listener de fullscreenchange (registrado
  *  UNA sola vez a nivel de módulo, no por render) las usa para reflejar el
- *  estado real sin tener que re-renderizar nada. El bloque duplicado de
- *  adentro de pantalla completa tiene su PROPIO par (ver
- *  contControlesFullscreenEl y sus refs más abajo), porque conviven al
- *  mismo tiempo mientras se está en pantalla completa. */
+ *  estado real sin tener que re-renderizar nada. */
 let btnPantallaCompletaRef = null;
 let btnGirarRef = null;
+let btnChevronRef = null;
+let contFilasSuperioresRef = null;
 
-// V1.x (rediseño): referencias vivas del bloque duplicado dentro de
-// pantalla completa (su nodo raíz + sus propios botones ⛶/🔄) — se crean
-// al entrar a fullscreen y se destruyen al salir. Viven a nivel de módulo
-// porque el listener de fullscreenchange no recibe argumentos.
-let contControlesFullscreenEl = null;
-let btnPantallaCompletaFsRef = null;
-let btnGirarFsRef = null;
-
-// Tarjeta y plan actuales — necesarios para poder construir/destruir el
-// bloque duplicado desde el listener de fullscreenchange, que dispara de
-// forma asíncrona y no recibe ningún argumento de construirTarjetaVista.
+// Tarjeta y plan actuales — necesarios para el handler de ⛶ (requestFullscreen
+// apunta siempre a la tarjeta real, no a un nodo desconectado).
 let cardRef = null;
 let planActualRef = null;
 
 /**
- * V1.x (rediseño): cada bloque de controles (exterior y el duplicado de
- * fullscreen) expone, tras construirse, un `refrescar()` que actualiza IN
- * PLACE (sin reconstruir nodos) qué pill está `.active` y qué dice la
- * etiqueta de zoom — según el estado ACTUAL de `estado`. Se guardan acá
- * las dos funciones vigentes; cualquier control, en cualquiera de los dos
- * bloques, llama a sincronizarControlesMapa() después de mutar `estado`
- * para que el otro bloque (si existe) quede al día también. Actualizar in
- * place (no re-crear <button>s) evita perder el foco/listener y es más
- * barato que reconstruir.
+ * El bloque de controles expone, tras construirse, un `refrescar()` que
+ * actualiza IN PLACE (sin reconstruir nodos) qué pill está `.active` y qué
+ * dice la etiqueta de zoom, según el estado ACTUAL de `estado`. Se guarda
+ * acá la función vigente del render actual.
  */
-let refrescarExteriorRef = null;
-let refrescarFullscreenRef = null;
+let refrescarRef = null;
 
 function sincronizarControlesMapa() {
-  if (refrescarExteriorRef) refrescarExteriorRef();
-  if (refrescarFullscreenRef) refrescarFullscreenRef();
+  if (refrescarRef) refrescarRef();
 }
 
 function actualizarControlesPantallaCompleta() {
@@ -102,40 +81,20 @@ function actualizarControlesPantallaCompleta() {
   if (btnGirarRef && btnGirarRef.isConnected) {
     btnGirarRef.style.display = activo ? "" : "none";
   }
-
-  // V1.x (rediseño): el bloque duplicado de controles vive/muere junto con
-  // pantalla completa — se construye recién al entrar (nunca antes, para
-  // no tener un segundo set de botones fantasma en el DOM el resto del
-  // tiempo) y se destruye por completo al salir.
-  if (activo && cardRef && !contControlesFullscreenEl) {
-    const bloque = construirBloqueControlesFullscreen(planActualRef);
-    contControlesFullscreenEl = bloque.raiz;
-    refrescarFullscreenRef = bloque.refrescar;
-    btnPantallaCompletaFsRef = bloque.btnPantallaCompleta;
-    btnGirarFsRef = bloque.btnGirar;
-
-    // Se inserta arriba del mapa, dentro de la tarjeta — mismo lugar
-    // relativo que el bloque exterior respecto al mapa (el mapa
-    // .mapa-wrapper siempre es el último hijo de card en modo Mapa).
-    const mapaWrapper = cardRef.querySelector(".mapa-wrapper");
-    if (mapaWrapper) cardRef.insertBefore(contControlesFullscreenEl, mapaWrapper);
-    else cardRef.appendChild(contControlesFullscreenEl);
-  } else if (!activo && contControlesFullscreenEl) {
-    contControlesFullscreenEl.remove();
-    contControlesFullscreenEl = null;
-    refrescarFullscreenRef = null;
-    btnPantallaCompletaFsRef = null;
-    btnGirarFsRef = null;
+  // V1.x (rediseño 2): el chevrón ⌃/⌄ (oculta/muestra colorear, trazado,
+  // tamaño y tema) solo existe mientras se está en pantalla completa.
+  if (btnChevronRef && btnChevronRef.isConnected) {
+    btnChevronRef.style.display = activo ? "" : "none";
   }
-
-  // Botón "Salir de pantalla completa" / girar DEL DUPLICADO (si existe en
-  // este momento) — se actualiza igual que el exterior, en paralelo.
-  if (btnPantallaCompletaFsRef && btnPantallaCompletaFsRef.isConnected) {
-    btnPantallaCompletaFsRef.textContent = activo ? "🗗" : "⛶";
-    btnPantallaCompletaFsRef.setAttribute("aria-label", activo ? "Salir de pantalla completa" : "Ver el mapa en pantalla completa");
-  }
-  if (btnGirarFsRef && btnGirarFsRef.isConnected) {
-    btnGirarFsRef.style.display = activo ? "" : "none";
+  // Al SALIR de pantalla completa, se fuerza todo visible de nuevo — afuera
+  // nunca queda nada oculto (pedido explícito original).
+  if (!activo) {
+    estado.controlesMapaOcultosFullscreen = false;
+    if (contFilasSuperioresRef) contFilasSuperioresRef.style.display = "";
+    if (btnChevronRef) {
+      btnChevronRef.textContent = "⌃";
+      btnChevronRef.setAttribute("aria-label", "Ocultar controles del mapa");
+    }
   }
 }
 
@@ -194,55 +153,37 @@ function refrescarPillGroupVista(grupo, valorActivo) {
 }
 
 /**
- * V1.x (rediseño): construye el contenido COMPLETO de controles — filas 2
- * (colorear/trazado), 3 (tamaño/tema) y 4 (descargar/⛶+🔄/zoom) — más,
- * opcionalmente, un chevrón propio que envuelve y oculta las 3 filas.
+ * V1.x (rediseño 2 — sin duplicado): construye el ÚNICO bloque de
+ * controles — filas 2 (colorear/trazado) y 3 (tamaño/tema), agrupadas en un
+ * contenedor ocultable, más la fila 4 (descargar / ⛶ / ⌃⌄ / 🔄 / zoom) que
+ * queda SIEMPRE visible, sin importar pantalla completa ni el estado del
+ * chevrón.
  *
- * `conChevron`: false para el bloque EXTERIOR (pedido explícito: nunca
- * oculta nada ahí, siempre visible) — true para el bloque duplicado de
- * DENTRO de pantalla completa (tiene su chevrón propio e independiente,
- * con su propio flag estado.controlesMapaOcultosFullscreen).
+ * El chevrón ⌃/⌄ vive DENTRO de la fila 4 (entre ⛶ y 🔄) y solo se muestra
+ * mientras estado.mapaPantallaCompleta es true — ver
+ * actualizarControlesPantallaCompleta(), que lo oculta/reaparece y fuerza
+ * las filas 2/3 visibles de nuevo al salir de pantalla completa.
  *
- * Devuelve { raiz, refrescar, btnPantallaCompleta, btnGirar }:
+ * Devuelve { raiz, refrescar, btnPantallaCompleta, btnGirar, btnChevron,
+ * contFilasSuperiores }:
  * - raiz: nodo a insertar en el DOM.
  * - refrescar(): actualiza in-place qué pill está activa y qué dice el
- *   zoom, según el estado ACTUAL — se llama desde sincronizarControlesMapa()
- *   cuando el cambio se disparó desde el OTRO bloque.
- * - btnPantallaCompleta/btnGirar: refs para que
- *   actualizarControlesPantallaCompleta() pueda mantenerlas al día
- *   (texto/visibilidad) sin duplicar esa lógica.
+ *   zoom, según el estado ACTUAL.
+ * - btnPantallaCompleta/btnGirar/btnChevron/contFilasSuperiores: refs para
+ *   que actualizarControlesPantallaCompleta() los mantenga al día.
  */
-function construirBloqueControles(plan, conChevron) {
+function construirBloqueControles(plan) {
   const raiz = document.createElement("div");
   raiz.className = "stack";
   raiz.style.cssText = "gap:0;";
 
-  const contFilas = document.createElement("div");
-  contFilas.className = "stack";
-  contFilas.style.cssText = "gap:0;";
-
-  if (conChevron) {
-    const btnToggle = document.createElement("button");
-    btnToggle.type = "button";
-    btnToggle.className = "btn-icono-fantasma mapa-toggle-controles";
-    btnToggle.textContent = estado.controlesMapaOcultosFullscreen ? "⌄" : "⌃";
-    btnToggle.setAttribute(
-      "aria-label",
-      estado.controlesMapaOcultosFullscreen ? "Mostrar controles del mapa" : "Ocultar controles del mapa"
-    );
-    if (estado.controlesMapaOcultosFullscreen) contFilas.style.display = "none";
-
-    btnToggle.addEventListener("click", () => {
-      estado.controlesMapaOcultosFullscreen = !estado.controlesMapaOcultosFullscreen;
-      contFilas.style.display = estado.controlesMapaOcultosFullscreen ? "none" : "";
-      btnToggle.textContent = estado.controlesMapaOcultosFullscreen ? "⌄" : "⌃";
-      btnToggle.setAttribute(
-        "aria-label",
-        estado.controlesMapaOcultosFullscreen ? "Mostrar controles del mapa" : "Ocultar controles del mapa"
-      );
-    });
-    raiz.appendChild(btnToggle);
-  }
+  // Filas 2 y 3: lo único que el chevrón puede ocultar. Fila 4 (más abajo)
+  // se agrega directo a `raiz`, fuera de este contenedor, para que nunca
+  // se oculte junto con ellas.
+  const contFilasSuperiores = document.createElement("div");
+  contFilasSuperiores.className = "stack";
+  contFilasSuperiores.style.cssText = "gap:0;";
+  if (estado.controlesMapaOcultosFullscreen) contFilasSuperiores.style.display = "none";
 
   /* ---- Línea 2: Colorear por (izq.) | Líneas libres/rectas (der.) ---- */
   const fila2 = document.createElement("div");
@@ -279,7 +220,7 @@ function construirBloqueControles(plan, conChevron) {
     }
   );
   fila2.appendChild(switchTrazado);
-  contFilas.appendChild(fila2);
+  contFilasSuperiores.appendChild(fila2);
 
   /* ---- Línea 3: tamaño de tarjeta (izq.) | tema de tarjeta (der.) ---- */
   const fila3 = document.createElement("div");
@@ -324,12 +265,15 @@ function construirBloqueControles(plan, conChevron) {
     }
   );
   fila3.appendChild(switchTemaTarjeta);
-  contFilas.appendChild(fila3);
+  contFilasSuperiores.appendChild(fila3);
+  raiz.appendChild(contFilasSuperiores);
 
-  /* ---- Línea 4: Descargar (izq.) | ⛶/🔄 (centro, solo ícono) | Zoom (der.) ----
-     Grid de 3 columnas (mismo truco que construirEncabezadoNotaFinal en
-     semestres-tarjetas.js) en vez de space-between: con solo 3 ítems y
-     anchos distintos, space-between NO centra de verdad el del medio. */
+  /* ---- Línea 4: Descargar (izq.) | ⛶ / ⌃⌄ / 🔄 (centro, solo ícono) | Zoom (der.) ----
+     SIEMPRE visible — nunca se oculta, ni siquiera con el chevrón (que solo
+     esconde las filas 2/3 de arriba). Grid de 3 columnas (mismo truco que
+     construirEncabezadoNotaFinal en semestres-tarjetas.js) en vez de
+     space-between: con solo 3 ítems y anchos distintos, space-between NO
+     centra de verdad el del medio. */
   const fila4 = document.createElement("div");
   fila4.className = "vista-fila";
   fila4.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px;";
@@ -342,12 +286,13 @@ function construirBloqueControles(plan, conChevron) {
   btnDescargar.addEventListener("click", () => abrirSelectorDescargaMapa());
   fila4.appendChild(btnDescargar);
 
-  // V1.x: pantalla completa + girar — solo ícono, sin fondo de botón,
-  // centrados entre Descargar y el zoom. Cada bloque (exterior y
-  // duplicado) tiene su PROPIO par de botones — ambos disparan la misma
-  // acción real (document.exitFullscreen / cardRef.requestFullscreen), así
-  // que no hace falta que se conozcan entre sí para funcionar; solo su
-  // texto/visibilidad se mantiene al día vía actualizarControlesPantallaCompleta().
+  // V1.x (rediseño 2): pantalla completa, chevrón y girar — solo ícono, sin
+  // fondo de botón, centrados entre Descargar y el zoom, EN ESTE ORDEN:
+  // ⛶ (salir/entrar a pantalla completa) → ⌃⌄ (ocultar/mostrar
+  // colorear/trazado/tamaño/tema) → 🔄 (girar). El chevrón y el girar solo
+  // se muestran mientras se está en pantalla completa — ver
+  // actualizarControlesPantallaCompleta(), que mantiene su
+  // texto/visibilidad al día.
   const contBotonesCentro = document.createElement("div");
   contBotonesCentro.style.cssText = "display:flex; align-items:center; gap:2px; justify-self:center;";
 
@@ -369,6 +314,31 @@ function construirBloqueControles(plan, conChevron) {
     }
   });
   contBotonesCentro.appendChild(btnPantallaCompleta);
+
+  // V1.x (rediseño 2): chevrón ⌃/⌄ — oculta/muestra las filas 2/3
+  // (colorear, trazado, tamaño, tema). Solo existe visualmente mientras se
+  // está en pantalla completa (display:none afuera); actualizarControles-
+  // PantallaCompleta() lo muestra/oculta y, al salir, fuerza las filas de
+  // vuelta a visibles.
+  const btnChevron = document.createElement("button");
+  btnChevron.type = "button";
+  btnChevron.className = "btn-icono-fantasma mapa-toggle-controles";
+  btnChevron.textContent = estado.controlesMapaOcultosFullscreen ? "⌄" : "⌃";
+  btnChevron.style.display = estado.mapaPantallaCompleta ? "" : "none";
+  btnChevron.setAttribute(
+    "aria-label",
+    estado.controlesMapaOcultosFullscreen ? "Mostrar controles del mapa" : "Ocultar controles del mapa"
+  );
+  btnChevron.addEventListener("click", () => {
+    estado.controlesMapaOcultosFullscreen = !estado.controlesMapaOcultosFullscreen;
+    contFilasSuperiores.style.display = estado.controlesMapaOcultosFullscreen ? "none" : "";
+    btnChevron.textContent = estado.controlesMapaOcultosFullscreen ? "⌄" : "⌃";
+    btnChevron.setAttribute(
+      "aria-label",
+      estado.controlesMapaOcultosFullscreen ? "Mostrar controles del mapa" : "Ocultar controles del mapa"
+    );
+  });
+  contBotonesCentro.appendChild(btnChevron);
 
   let btnGirar = null;
   // Girar pantalla (Screen Orientation API): solo se arma el botón si el
@@ -428,13 +398,11 @@ function construirBloqueControles(plan, conChevron) {
   zoomGrupo.appendChild(btnMas);
   fila4.appendChild(zoomGrupo);
 
-  contFilas.appendChild(fila4);
-  raiz.appendChild(contFilas);
+  raiz.appendChild(fila4);
 
-  // Refresco in-place: se llama cuando el cambio se originó en el OTRO
-  // bloque — solo repinta `.active`/texto de zoom, nunca reconstruye nada
-  // ni vuelve a llamar a los handlers (evita loops y efectos secundarios
-  // duplicados, ej. recolorearNodosMapa() llamándose dos veces).
+  // Refresco in-place: solo repinta `.active`/texto de zoom, nunca
+  // reconstruye nada ni vuelve a llamar a los handlers (evita efectos
+  // secundarios duplicados, ej. recolorearNodosMapa() llamándose dos veces).
   const refrescar = () => {
     refrescarPillGroupVista(switchColor, estado.colorMapaPor);
     refrescarPillGroupVista(switchTrazado, estado.trazadoMapaPor);
@@ -446,22 +414,7 @@ function construirBloqueControles(plan, conChevron) {
     etiquetaZoom.textContent = Math.round(estado.zoomMapa * 100) + "%";
   };
 
-  return { raiz, refrescar, btnPantallaCompleta, btnGirar };
-}
-
-/** Bloque EXTERIOR — siempre visible, sin chevrón ni ocultamiento propio
- *  (pedido explícito: "el exterior no debe tener eso"). */
-function construirBloqueControlesExterior(plan) {
-  return construirBloqueControles(plan, false);
-}
-
-/** Bloque DUPLICADO dentro de pantalla completa — mismos controles reales
- *  (mismo `estado`, misma lógica), pero elementos de DOM propios y con su
- *  propio chevrón/ocultamiento (estado.controlesMapaOcultosFullscreen),
- *  independiente del exterior. Se construye solo mientras se está en
- *  pantalla completa (ver actualizarControlesPantallaCompleta). */
-function construirBloqueControlesFullscreen(plan) {
-  return construirBloqueControles(plan, true);
+  return { raiz, refrescar, btnPantallaCompleta, btnGirar, btnChevron, contFilasSuperiores };
 }
 
 function construirTarjetaVista(plan) {
@@ -495,31 +448,24 @@ function construirTarjetaVista(plan) {
   card.appendChild(encabezado);
 
   if (estado.vistaPlanEstudios === "mapa") {
-    // V1.x (rediseño): el bloque EXTERIOR de controles ya NO tiene chevrón
-    // ni se oculta — siempre visible (pedido explícito). El chevrón y el
-    // ocultar/mostrar viven exclusivamente en el bloque duplicado de
-    // DENTRO de pantalla completa (ver construirBloqueControlesFullscreen,
-    // inyectado por actualizarControlesPantallaCompleta cuando corresponda).
-    const bloqueExterior = construirBloqueControlesExterior(plan);
-    refrescarExteriorRef = bloqueExterior.refrescar;
-    btnPantallaCompletaRef = bloqueExterior.btnPantallaCompleta;
-    btnGirarRef = bloqueExterior.btnGirar;
-    card.appendChild(bloqueExterior.raiz);
+    // V1.x (rediseño 2 — sin duplicado): un solo bloque de controles. La
+    // fila 4 (Descargar/⛶/⌃⌄/🔄/Zoom) queda siempre visible; el chevrón
+    // ⌃/⌄ que oculta las filas 2/3 solo aparece mientras se está en
+    // pantalla completa (actualizarControlesPantallaCompleta se encarga).
+    const bloque = construirBloqueControles(plan);
+    refrescarRef = bloque.refrescar;
+    btnPantallaCompletaRef = bloque.btnPantallaCompleta;
+    btnGirarRef = bloque.btnGirar;
+    btnChevronRef = bloque.btnChevron;
+    contFilasSuperioresRef = bloque.contFilasSuperiores;
+    card.appendChild(bloque.raiz);
 
     card.appendChild(construirMapaInteractivo(plan));
 
-    // Si la tarjeta se está reconstruyendo (ej. cambiaste "Tamaño de
-    // tarjeta") mientras ya se estaba en pantalla completa, el duplicado
-    // de adentro también se recrea acá — actualizarControlesPantallaCompleta()
-    // ve que estado.mapaPantallaCompleta sigue true pero
-    // contControlesFullscreenEl ya no existe (la tarjeta vieja que lo
-    // contenía se descartó al re-renderizar), así que lo reconstruye e
-    // inserta en la tarjeta NUEVA sin que el usuario tenga que salir y
-    // volver a entrar a pantalla completa.
-    if (estado.mapaPantallaCompleta) {
-      contControlesFullscreenEl = null;
-      actualizarControlesPantallaCompleta();
-    }
+    // Si la tarjeta se reconstruye (ej. cambiaste "Tamaño de tarjeta")
+    // mientras se está en pantalla completa, las refs de arriba ya quedan
+    // apuntando al bloque nuevo — no hace falta lógica extra, al no existir
+    // más un segundo bloque que reinyectar.
   }
 
   return card;
