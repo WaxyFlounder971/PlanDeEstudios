@@ -5,7 +5,7 @@
 import { LIMITE_ENLACES_RAPIDOS, crearEnlaceRapido } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
-import { convertirArchivoABase64 } from "../core/utils.js";
+import { convertirImagenABase64Comprimida } from "../core/utils.js";
 
 /* --------------------------- Enlaces rápidos --------------------------- */
 
@@ -53,8 +53,20 @@ function renderizarListaEnlacesEn(contenedorId, enlaces, conEditar) {
     enlaceAbrir.style.textDecoration = "none";
     enlaceAbrir.style.flex = "1";
     enlaceAbrir.style.minWidth = "0";
-    enlaceAbrir.innerHTML = `<span style="font-size:1.3rem">${
-      enlace.icono_tipo === "emoji" ? enlace.icono_valor : `<img src="${enlace.icono_valor}" style="width:24px;height:24px;border-radius:6px">`
+    // Fix (2026-08-07): antes el ícono vivía en un <span style="font-size:
+    // 1.3rem"> suelto — con un emoji eso alinea bien por accidente (cae
+    // sobre la línea de base del texto), pero con una <img> el
+    // vertical-align:baseline por defecto del navegador deja un hueco
+    // inline debajo de la imagen (el "descender gap"), y la imagen queda
+    // corrida hacia arriba respecto al nombre del enlace. .enlace-rapido-
+    // icono (design-system.css) fuerza una caja fija de 24x24 en flex
+    // centrado — así emoji e imagen quedan alineados igual sin importar
+    // el tipo de contenido, y cualquier ícono futuro (SVG, librería de
+    // íconos, etc.) hereda el mismo centrado gratis.
+    enlaceAbrir.innerHTML = `<span class="enlace-rapido-icono">${
+      enlace.icono_tipo === "emoji"
+        ? enlace.icono_valor
+        : `<img src="${enlace.icono_valor}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:6px;display:block;">`
     }</span><span class="enlace-rapido-nombre" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${enlace.nombre}</span>`;
 
     item.appendChild(enlaceAbrir);
@@ -181,7 +193,7 @@ async function guardarEnlaceDesdeModal() {
     }
     if (archivo) {
       try {
-        icono_valor = await convertirArchivoABase64(archivo);
+        icono_valor = await convertirImagenABase64Comprimida(archivo);
         icono_tipo = "imagen";
       } catch (e) {
         mostrarErrorModalEnlace("No se pudo leer la imagen, intenta con otra.");
