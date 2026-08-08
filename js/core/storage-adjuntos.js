@@ -47,6 +47,15 @@ import {
 import { conReintentoSi401, marcarCambioPendiente, registrarHookPostFusion } from "./storage-sync.js";
 import { estado } from "./storage.js";
 
+// Fix 2026-08-08: el import de arriba estaba pero nunca se USABA — faltaba
+// esta línea. Sin ella, storage-sync.js nunca se enteraba de que este
+// módulo quería correr algo tras cada fusión remota, así que
+// procesarTumbasDriveHuerfanas() nunca se disparaba sola (solo quedaba
+// disponible para llamarla a mano). Se registra acá, a nivel de módulo, así
+// que corre una sola vez apenas se importa storage-adjuntos.js en la app —
+// mismo momento en el que ya conviene tener el hook listo.
+registrarHookPostFusion(procesarTumbasDriveHuerfanas);
+
 /* ------------------------- Cola de subida (en memoria) ------------------------- */
 
 // { adjuntoId, archivo }[] — solo dura mientras esta pestaña está abierta,

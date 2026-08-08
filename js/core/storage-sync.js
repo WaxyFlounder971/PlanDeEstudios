@@ -525,15 +525,14 @@ function aplicarDatosRemotosFrescos(datosFrescos) {
     }
   });
 
-  // Adjuntos (2026-08-08): tras CUALQUIER fusión remota (sondeo, pull-to-
-  // refresh, o el pull inicial), este dispositivo puede haber recibido una
-  // tumba de adjunto con un archivo de Drive que el dispositivo que borró
-  // no llegó a limpiar (ej. estaba offline en ese momento). Se dispara en
-  // segundo plano, sin await — no tiene sentido demorar el render de la UI
-  // por una limpieza de housekeeping que al usuario no le importa ver.
-  procesarTumbasDriveHuerfanas().catch((e) =>
-    console.warn("No se pudo limpiar adjuntos huérfanos de Drive:", e)
-  );
+  // Nota: la limpieza de adjuntos huérfanos en Drive ya corre arriba, vía
+  // hooksPostFusion — storage-adjuntos.js se registra solo (ver
+  // registrarHookPostFusion). Este archivo no importa procesarTumbasDrive-
+  // Huerfanas a propósito (evita el import circular), así que NO debe
+  // llamarla directo acá: una llamada suelta a una función no importada
+  // reventaba con ReferenceError en cada sync/sondeo/login, cortando esta
+  // función antes de llegar a la reafirmación de scroll de abajo. Fix
+  // 2026-08-08.
 
   // Mismo mecanismo de reafirmación en varios frames que usa
   // renderizarSemestres() (semestres.js) para su propio fix local: un solo
