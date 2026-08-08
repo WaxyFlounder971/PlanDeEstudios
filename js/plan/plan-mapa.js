@@ -380,7 +380,19 @@ function construirBloqueControles(plan) {
      ubique en ese orden. */
   const fila4 = document.createElement("div");
   fila4.className = "vista-fila";
-  fila4.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px;";
+  // Ajuste (2026-08-07, pedido explícito): "1fr auto 1fr" no garantizaba
+  // centrado real — en CSS Grid una columna "1fr" tiene un mínimo implícito
+  // de "auto" (el ancho de su propio contenido), así que si Descargar (col
+  // 1) y el grupo de Zoom (col 3) tienen contenidos de ancho distinto, las
+  // dos columnas dejan de repartirse el espacio 50/50 y el grupo central
+  // (salir pantalla completa + flecha + girar) se corre del centro real de
+  // la fila. "minmax(0,1fr)" fuerza a que ambas columnas midan SIEMPRE lo
+  // mismo (mínimo 0, no el ancho de su contenido), sin importar qué texto o
+  // botones tengan adentro — así el centro queda matemáticamente centrado
+  // y Zoom (justifySelf:end, col 3) queda siempre anclado al borde derecho
+  // real de la fila, en cualquier estado (Descargar oculto o visible,
+  // cualquier ancho de pantalla).
+  fila4.style.cssText = "display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:8px;";
 
   const btnDescargar = document.createElement("button");
   btnDescargar.type = "button";
