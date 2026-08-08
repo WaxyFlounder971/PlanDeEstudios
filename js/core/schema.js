@@ -1201,6 +1201,30 @@ function calcularObjetivoPasarRaspando(notaAprobacion) {
   return multiploSuperior - 2.5;
 }
 
+/**
+ * Ajustes por Universidad (ronda 2, 2026-08-08): "Pasar raspando" ahora
+ * admite un override manual por plan (`parametros_universidad.raspando_override`,
+ * en la MISMA unidad 0-100 que nota_aprobacion) — la persona puede fijar a
+ * mano con qué nota exacta considera que "raspó", en vez de aceptar siempre
+ * el cálculo automático de calcularObjetivoPasarRaspando. Esta función es el
+ * único punto que decide cuál de los dos usar, así que reemplaza a
+ * calcularObjetivoPasarRaspando en cualquier lugar que necesite el
+ * objetivo REAL (config-ajustes.js para mostrarlo, semestres-tarjetas.js
+ * para el simulador Proyectar).
+ *
+ * La AUSENCIA del campo (no null, no 0) es la señal de "sin override,
+ * calculalo solo" — por eso se chequea undefined/null explícito y no un
+ * simple `if (params.raspando_override)`, que trataría un override
+ * legítimo de 0 como "no hay override".
+ */
+function resolverObjetivoPasarRaspando(params) {
+  const p = params || {};
+  const tieneOverride = p.raspando_override !== null && p.raspando_override !== undefined;
+  if (tieneOverride) return Number(p.raspando_override);
+  const notaAprobacion = Number(p.nota_aprobacion) || 70;
+  return calcularObjetivoPasarRaspando(notaAprobacion);
+}
+
 /* =========================================================================
    Dashboard académico — Promedio ponderado (niveles a/b) + estadísticas de
    aprobación. Todo lo de acá abajo es cálculo puro (nunca muta nada, nunca
@@ -2056,6 +2080,7 @@ export {
   calcularMaximoPosibleMateria,
   calcularNotaNecesariaUniforme,
   calcularObjetivoPasarRaspando,
+  resolverObjetivoPasarRaspando,
   ESCALAS_DISPONIBLES,
   obtenerEscalaPorId,
   obtenerFraccionNota,
