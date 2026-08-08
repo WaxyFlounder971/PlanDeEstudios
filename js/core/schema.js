@@ -40,6 +40,13 @@ function crearDatosUsuarioNuevo() {
       // dudas, pero la UI de Ajustes ni siquiera ofrece esa opción.
       navegacion_oculta: [],
 
+      // Ajustes — orden personalizable de navegación (2026-08-06): ids de
+      // sección en el orden que el usuario armó arrastrando en Ajustes.
+      // Vacío = orden por defecto (DEFAULT_ORDEN_NAV en main.js). Arreglo
+      // real desde la creación del usuario, nunca undefined — mismo
+      // motivo que navegacion_oculta.
+      navegacion_orden: [],
+
       // --- Modo Hardcore 💀 (hasta 3 carreras simultáneas) ---
       modo_hardcore: false,             // si está activo, se combinan hasta 3 Planes de Estudio a la vez
       plan_activo_secundario_id: null,  // 2do Plan de Estudios (solo relevante si modo_hardcore = true)
@@ -1655,6 +1662,13 @@ function migrarDatosAntiguos(datos) {
   // ya se documentó arriba para criterios/nota_final.
   if (datos.configuracion && !Array.isArray(datos.configuracion.navegacion_oculta)) {
     datos.configuracion.navegacion_oculta = [];
+  }
+
+  // Ajustes — orden personalizable de navegación (2026-08-06): mismo
+  // patrón que navegacion_oculta justo arriba, para cuentas creadas antes
+  // de que existiera el orden personalizable de navegación.
+  if (datos.configuracion && !Array.isArray(datos.configuracion.navegacion_orden)) {
+    datos.configuracion.navegacion_orden = [];
   }
 
   // FIX sync (2026-08-02): materias matriculadas creadas antes del motor de
