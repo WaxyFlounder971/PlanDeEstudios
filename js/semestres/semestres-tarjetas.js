@@ -2859,18 +2859,19 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
   spanNombre.textContent = aplicarFormatoTexto(materia.nombre);
   linea1.appendChild(spanNombre);
 
-  // Ajuste (2026-08-07, pedido explícito): "Nota: X" vuelve a línea 1, al
-  // mismo nivel/línea que el nombre de la materia (la versión de línea 2,
-  // apilada arriba de Créditos, no gustó). Tamaño de letra +50% (0.8rem →
-  // 1.2rem) — mismo peso/color que antes, solo más grande. flex-shrink:0
-  // para reservar su espacio fijo desde el primer cálculo de layout, igual
-  // que .materia-codigo — el nombre (único flex:1 de la fila) se trunca
-  // más si hace falta espacio.
+  // Ajuste (2026-08-07, pedido explícito — 2do ajuste, reemplaza el
+  // anterior): "Nota: X" debe verse EXACTAMENTE igual que el nombre de la
+  // materia — mismo tamaño, misma tipografía, mismo peso. Se logra
+  // reutilizando los mismos valores que .materia-nombre en design-system.css
+  // (font-family:var(--font-display), font-weight:700) y SIN fijar
+  // font-size ni color acá: al no forzar ninguno de los dos, ambos spans
+  // heredan el mismo tamaño/color base que ya usa .materia-nombre (que
+  // tampoco los fija explícito) — así quedan visualmente idénticos.
   const notaFinalVigenteLinea1 = calcularNotaFinalVigente(mm, materia, plan);
   const notaRedondeadaLinea1 = redondearNotaFinalAlCincoMasCercano(notaFinalVigenteLinea1);
   const spanNota = document.createElement("span");
   spanNota.className = "materia-nota";
-  spanNota.style.cssText = "flex-shrink:0; font-size:1.2rem; white-space:nowrap; color:var(--text-secondary);";
+  spanNota.style.cssText = "flex-shrink:0; font-family:var(--font-display); font-weight:700; white-space:nowrap;";
   spanNota.textContent = `Nota: ${
     notaRedondeadaLinea1 === null || notaRedondeadaLinea1 === undefined ? "—" : formatearNumero(notaRedondeadaLinea1)
   }`;
