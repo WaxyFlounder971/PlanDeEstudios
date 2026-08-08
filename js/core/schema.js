@@ -27,7 +27,6 @@ function crearDatosUsuarioNuevo() {
       modo: "dark",                 // "dark" | "light"
       paleta_personalizada: null,   // v1.13: { basadaEn, colores: { fondoCanvas, fondoCard, borde, accent1, accent2, luz } }
                                      // v1.15: colores también incluye degradado: { activo, color, intensidad (0-100, % del stop medio), angulo (0-360) }
-      escala_notas_global: 100,     // 10 o 100 (1-10 ó 1-100)
       formato_texto_nombres: "titulo", // "titulo" | "mayusculas" | "oracion" (v5 #9)
       modo_rendimiento: false,      // v1.14.1: reduce blur/sombras/animaciones para laptops con GPU integrada
       plan_activo_id: null,         // id del Plan de Estudios seleccionado como activo
@@ -865,20 +864,26 @@ function repartirEquitativoCriterio(criterio) {
 
 /**
  * Escala de notas activa (10 o 100) para una materia matriculada: override
- * propio > escala del plan/universidad > escala global. Único punto de
- * verdad — reutilizar en vez de leer los 3 campos por separado.
+ * propio > escala del plan/universidad > default 100. Único punto de
+ * verdad — reutilizar en vez de leer los 2 campos por separado.
  *
  * A partir de esta ronda el valor devuelto puede ser:
  *  - un número (7, 10, 12, 15, 20, 100...) para escalas numéricas "0 al X".
  *  - el string "letras" para el sistema de letras (A+, A, A-, ... F).
  * Ver ESCALAS_DISPONIBLES para la lista completa y obtenerEscalaPorId para
  * ir de este valor crudo al descriptor completo (tipo, max, valores).
+ *
+ * Ajustes por Universidad (2026-08-08): `configuracion` queda como
+ * parámetro por compatibilidad de firma con todos los callers existentes
+ * (semestres.js, semestres-tarjetas.js, etc. la siguen pasando), pero ya
+ * NO se lee — escala_notas_global se eliminó del modelo, la escala es
+ * 100% responsabilidad de cada plan desde ahora. Sin `plan` (caso raro:
+ * referencia huérfana) o sin `escala_notas` seteada, cae a 100 directo.
  */
 function obtenerEscalaNotasMateria(materia, plan, configuracion) {
   return (
     (materia && materia.escala_notas_override) ||
     (plan && plan.parametros_universidad && plan.parametros_universidad.escala_notas) ||
-    (configuracion && configuracion.escala_notas_global) ||
     100
   );
 }
@@ -903,6 +908,16 @@ const ESCALAS_DISPONIBLES = [
   { id: 15, etiqueta: "0 – 15", tipo: "numerica", max: 15 },
   { id: 20, etiqueta: "0 – 20", tipo: "numerica", max: 20 },
   { id: 100, etiqueta: "0 – 100", tipo: "numerica", max: 100 },
+  // Ajustes por Universidad (2026-08-08): GPA estilo EE.UU. — "con
+  // decimales" es la escala continua típica (4.0, 3.7, 3.3...), "sin
+  // decimales" es para universidades que solo reportan el GPA redondeado a
+  // entero (4, 3, 2, 1, 0). `paso` es opcional — obtenerEscalaPorId no lo
+  // usa para ningún cálculo (obtenerFraccionNota sigue siendo nota/max sin
+  // importar el paso), es solo una pista para el input numérico de la UI
+  // (ver config-ajustes.js); si una escala no trae `paso`, la UI cae al
+  // 0.1 de siempre.
+  { id: "gpa4", etiqueta: "GPA 0 – 4 (decimales)", tipo: "numerica", max: 4, paso: 0.1 },
+  { id: "gpa4_entero", etiqueta: "GPA 0 – 4 (enteros)", tipo: "numerica", max: 4, paso: 1 },
   {
     id: "letras",
     etiqueta: "A – F (letras)",
@@ -929,9 +944,9 @@ const ESCALAS_DISPONIBLES = [
 ];
 
 /** Descriptor completo de una escala a partir de su id crudo (lo que se
- * guarda en escala_notas_global/escala_notas/escala_notas_override). Si el
- * id no existe (dato corrupto o escala vieja que ya no está en la lista),
- * cae de vuelta a 0-100 en vez de romper cualquier cálculo. */
+ * guarda en escala_notas/escala_notas_override — ver obtenerEscalaNotasMateria).
+ * Si el id no existe (dato corrupto o escala vieja que ya no está en la
+ * lista), cae de vuelta a 0-100 en vez de romper cualquier cálculo. */
 function obtenerEscalaPorId(escalaId) {
   return ESCALAS_DISPONIBLES.find((e) => e.id === escalaId) || ESCALAS_DISPONIBLES.find((e) => e.id === 100);
 }
@@ -1230,7 +1245,16 @@ function calcularNotaFinalVigenteMateria(mm, materia, plan, configuracion) {
   const base = calcularNotaFinalMateria(mm, escala);
   const extraLegado = Number(mm.puntos_extra) || 0;
   if (extraLegado > 0 && typeof base === "number") {
-    return Math.min(base + extraLegado, escala);
+    // FIX (2026-08-08 — Ajustes por Universidad): antes se tapaba contra
+    // `escala` (el id crudo: 10, 100, "letras"...), pero `base` viene de
+    // calcularNotaFinalMateria, que YA es interno 0-100 sin importar la
+    // escala de captura (criterios/asignaciones ponderan por peso, no por
+    // escala — ver calcularPuntosAsignacion). Tapar contra `escala` daba
+    // igual mientras esa escala fuera siempre 100 en la práctica (única
+    // opción real hasta ahora); con escala_notas editable por plan, un
+    // plan en 0-10 capaba la nota final en 10 en vez de 100, y en "letras"
+    // Math.min(numero, "letras") da NaN. El tope real siempre es 100.
+    return Math.min(base + extraLegado, 100);
   }
   return base;
 }
@@ -1894,6 +1918,15 @@ function migrarDatosAntiguos(datos) {
     // limpia acá mismo si viene de datos viejos, para no dejar un campo
     // muerto dando vueltas y que alguien lo lea por error en el futuro.
     if ("umbral_pasar_raspando" in params) delete params.umbral_pasar_raspando;
+    // Ajustes por Universidad (2026-08-08): escala_notas_global se elimina
+    // del modelo — la escala pasa a ser 100% por plan. Para no cambiarle
+    // el comportamiento a nadie de un día para otro, cada plan que todavía
+    // no tenga su propia escala_notas hereda como punto de partida la que
+    // tenía la vieja global (o 100 si ni esa existía) — de ahí en más cada
+    // plan queda independiente y editable por separado en Ajustes.
+    if (params.escala_notas === undefined) {
+      params.escala_notas = (datos.configuracion && datos.configuracion.escala_notas_global) || 100;
+    }
 
     (plan.materias || []).forEach((materia) => {
       const horasViejas = materia.horas || {};
@@ -1944,6 +1977,15 @@ function migrarDatosAntiguos(datos) {
       if (materia.cupo_generico_original === undefined) materia.cupo_generico_original = null;
     });
   });
+
+  // Ajustes por Universidad (2026-08-08): recién ACÁ, después de que el
+  // forEach de arriba ya le repartió su valor a cada plan existente, se
+  // borra la global — si se borrara antes o dentro del forEach, los planes
+  // que todavía no se hubieran procesado la leerían ya vacía y caerían al
+  // 100 por defecto en vez de heredar el valor real que tenía el usuario.
+  if (datos.configuracion && "escala_notas_global" in datos.configuracion) {
+    delete datos.configuracion.escala_notas_global;
+  }
 
   // 2026-08-02 ("marca el segundo y tercero aunque uno no existe"): si
   // plan_activo_secundario_id/terciario_id (o incluso plan_activo_id) quedan
