@@ -63,8 +63,12 @@
 
   <!-- Barra superior solo-móvil -->
   <div class="mobile-topbar">
-    <button id="btn-hamburguesa" class="btn-hamburguesa" aria-label="Abrir menú">☰</button>
+    <button id="btn-hamburguesa" class="btn-topbar-icono" aria-label="Abrir menú">☰</button>
     <h3>🎓 App Académica</h3>
+    <!-- Acceso directo a Enlaces rápidos en móvil (2026-08-07): antes solo se
+         llegaba entrando a Ajustes. Mismo estilo "símbolo limpio" sin borde
+         ni fondo que la hamburguesa — ver .btn-topbar-icono en design-system.css. -->
+    <button id="btn-topbar-enlaces" class="btn-topbar-icono" aria-label="Enlaces rápidos" title="Enlaces rápidos">🔗</button>
   </div>
 
   <!-- Overlay para cerrar el drawer móvil tocando fuera -->
@@ -179,7 +183,7 @@
           </div>
         </section>
 
-        <section class="glass-card stack">
+        <section id="seccion-enlaces-rapidos" class="glass-card stack">
           <div class="row-between">
             <h2 style="margin:0;">Enlaces rápidos</h2>
             <button id="btn-agregar-enlace" class="btn btn-primary">+ Añadir enlace</button>
