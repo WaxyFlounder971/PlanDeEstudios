@@ -7,9 +7,9 @@
 import { renderizarAjustes } from "./config/config-ajustes.js";
 import { inicializarModalEnlace, renderizarEnlacesRapidos } from "./config/config-enlaces.js";
 import { buscarOCrearArchivoDatos, cerrarSesionGoogle, inicializarGoogleAuth, iniciarSesionConGoogle, obtenerMetadatosArchivo, obtenerPerfilGoogle, refrescarAccessTokenGoogle } from "./core/auth.js";
-import { migrarDatosAntiguos } from "./core/schema.js";
+import { migrarDatosAntiguos, sellarTimestamp } from "./core/schema.js";
 import { fusionarDatos } from "./core/storage-merge.js";
-import { actualizarIndicadorSync, forzarSincronizacion, inicializarPullToRefresh, inicializarSondeoAlVolver, intentarReconexionSilenciosa, intentarSincronizar, mostrarAvisoReconexion, mostrarCargando, ocultarCargando, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
+import { actualizarIndicadorSync, forzarSincronizacion, inicializarPullToRefresh, inicializarSondeoAlVolver, intentarReconexionSilenciosa, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, mostrarCargando, ocultarCargando, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
 import { CLAVE_CACHE_LOCAL, borrarTokenCache, correoConocido, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
 import { obtenerIniciales } from "./core/utils.js";
 import { inicializarComunidad, renderizarComunidad } from "./comunidad/comunidad.js";
@@ -529,11 +529,39 @@ function mostrarSeccion(nombre) {
  * expone en window para que config-ajustes.js dibuje los switches en el
  * mismo orden que el nav real, sin import circular (mismo motivo que
  * aplicarVisibilidadNavegacion ya se expone así).
+ *
+ * Bug — duplicado en drag-and-drop de navegación (2026-08-07): esta
+ * función es el único punto de lectura real de `navegacion_orden` en toda
+ * la app, así que acá va la limpieza defensiva general (corre en CADA
+ * llamada, no una sola vez al cargar). Se queda con la PRIMERA aparición
+ * de cada id y descarta duplicados posteriores. No es un parche de una
+ * sola vez: si algún camino futuro que no anticipamos vuelve a introducir
+ * un duplicado, se corrige solo cada vez que se lee. Si encuentra y
+ * corrige uno, re-sella `configuracion` y marca el cambio pendiente para
+ * que la limpieza se sincronice y no reaparezca en otros dispositivos con
+ * el dato viejo.
  */
 const DEFAULT_ORDEN_NAV = ["agenda", "horario", "semestres", "comunidad", "finanzas", "plan-estudios"];
 
 function obtenerOrdenNavegacionEfectivo() {
-  const guardado = (estado.datos.configuracion.navegacion_orden || []).filter((id) => DEFAULT_ORDEN_NAV.includes(id));
+  const crudo = estado.datos.configuracion.navegacion_orden || [];
+
+  const vistos = new Set();
+  const sinDuplicados = [];
+  crudo.forEach((id) => {
+    if (vistos.has(id)) return;
+    vistos.add(id);
+    sinDuplicados.push(id);
+  });
+
+  if (sinDuplicados.length !== crudo.length) {
+    console.warn("[nav] Se detectaron y limpiaron ids duplicados en navegacion_orden:", crudo);
+    estado.datos.configuracion.navegacion_orden = sinDuplicados;
+    sellarTimestamp(estado.datos.configuracion);
+    marcarCambioPendiente();
+  }
+
+  const guardado = sinDuplicados.filter((id) => DEFAULT_ORDEN_NAV.includes(id));
   const faltantes = DEFAULT_ORDEN_NAV.filter((id) => !guardado.includes(id));
   return [...guardado, ...faltantes];
 }
