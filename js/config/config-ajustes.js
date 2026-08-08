@@ -594,8 +594,19 @@ function renderizarNotasAprobacion() {
       listaEscala.classList.add("oculto");
       botonEscala.setAttribute("aria-expanded", "false");
       if (listaEscala.parentElement === document.body) dropdownEscala.appendChild(listaEscala);
-      window.removeEventListener("scroll", cerrarListaEscala, true);
+      window.removeEventListener("scroll", cerrarSiScrollExterno, true);
       window.removeEventListener("resize", cerrarListaEscala);
+    }
+    // FIX (2026-08-08 — "el scroll no funciona, se sale del selector"): el
+    // listener de scroll usa capture:true a propósito (scroll no burbujea,
+    // así que es la única forma de enterarse de un scroll en CUALQUIER
+    // contenedor de la página) — pero eso también lo hace disparar con el
+    // scroll INTERNO de la propia lista (su overflow-y:auto), cerrándola
+    // apenas la persona intentaba usar la rueda o arrastrar la scrollbar.
+    // Este wrapper ignora los eventos que se originan adentro de la lista.
+    function cerrarSiScrollExterno(e) {
+      if (listaEscala.contains(e.target)) return;
+      cerrarListaEscala();
     }
     function abrirListaEscala() {
       // Solo puede haber un dropdown propio abierto a la vez en toda la
@@ -612,11 +623,13 @@ function renderizarNotasAprobacion() {
       posicionarListaEscala();
       listaEscala.classList.remove("oculto");
       botonEscala.setAttribute("aria-expanded", "true");
-      // Cerrar al hacer scroll (adentro o afuera de la tarjeta) o al
-      // cambiar el tamaño de ventana — reposicionar en vivo agregaría
-      // complejidad para un dropdown que en general se usa y se suelta
-      // rápido; cerrar es más predecible que dejarlo desalineado.
-      window.addEventListener("scroll", cerrarListaEscala, true);
+      // Cerrar al hacer scroll de la PÁGINA (adentro o afuera de la
+      // tarjeta) o al cambiar el tamaño de ventana — reposicionar en vivo
+      // agregaría complejidad para un dropdown que en general se usa y se
+      // suelta rápido; cerrar es más predecible que dejarlo desalineado.
+      // El scroll DENTRO de la lista (para ver más opciones) queda afuera
+      // de esto — ver cerrarSiScrollExterno.
+      window.addEventListener("scroll", cerrarSiScrollExterno, true);
       window.addEventListener("resize", cerrarListaEscala);
     }
 
