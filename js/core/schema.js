@@ -1,10 +1,10 @@
-/* ========================================================================
+/* =========================================================================
    ESQUEMA DE DATOS — App Académica
    Este archivo NO valida nada por ahora, solo documenta y crea la
    estructura inicial ("de fábrica") de los datos de un usuario nuevo.
    Todo el proyecto (iteraciones 1-7) va a ir llenando estas mismas llaves,
    así que este archivo es el mapa de referencia de todo el modelo.
-   ======================================================================== */
+   ========================================================================= */
 
 /**
  * Devuelve el objeto de datos "vacío" para un usuario que recién inicia
@@ -949,6 +949,41 @@ const ESCALAS_DISPONIBLES = [
  * lista), cae de vuelta a 0-100 en vez de romper cualquier cálculo. */
 function obtenerEscalaPorId(escalaId) {
   return ESCALAS_DISPONIBLES.find((e) => e.id === escalaId) || ESCALAS_DISPONIBLES.find((e) => e.id === 100);
+}
+
+/**
+ * Ajustes por Universidad, ronda 3 (2026-08-08 — bug "un 37 se muestra como
+ * 370"): estas dos funciones ya existían DUPLICADAS solo dentro de
+ * config-ajustes.js para nota_aprobacion/raspando_override. El mismo
+ * problema apareció en semestres-tarjetas.js: la nota final de una materia
+ * (calcularNotaFinalMateria) es SIEMPRE 0-100 internamente — es una suma
+ * ponderada de pesos de criterios, que son porcentajes (0-100) sin importar
+ * la escala de notas del plan — pero se estaba MOSTRANDO ese crudo 0-100
+ * directo al usuario en vez de convertirlo a la escala elegida (0-10,
+ * 0-20, etc.), igual que antes pasaba con nota_aprobacion. Se centralizan
+ * acá para que ambos archivos (config-ajustes.js y semestres-tarjetas.js)
+ * puedan compartir la misma conversión probada, en vez de que cada uno
+ * mantenga su propia copia. config-ajustes.js sigue con su copia local
+ * (ya funcionando, no se tocó para no arriesgar una regresión ahí) —
+ * semestres-tarjetas.js importa estas.
+ *
+ * Reciben el DESCRIPTOR de escala completo (el objeto que devuelve
+ * obtenerEscalaPorId), no el id crudo — igual que el resto de las
+ * funciones de esta sección. "letras" no tiene conversión numérica
+ * razonable (A+/A/... no son un rango 0-N), así que ahí se devuelve el
+ * número sin tocar, mismo criterio que ya usaba config-ajustes.js.
+ */
+function convertirA100(valorEnEscala, escala) {
+  const n = Number(valorEnEscala);
+  if (!Number.isFinite(n)) return NaN;
+  if (!escala || escala.tipo === "letras" || !escala.max) return n;
+  return (n / escala.max) * 100;
+}
+function convertirDesde100(valorEn100, escala) {
+  const n = Number(valorEn100);
+  if (!Number.isFinite(n)) return NaN;
+  if (!escala || escala.tipo === "letras" || !escala.max) return n;
+  return (n / 100) * escala.max;
 }
 
 /**
@@ -2083,6 +2118,8 @@ export {
   resolverObjetivoPasarRaspando,
   ESCALAS_DISPONIBLES,
   obtenerEscalaPorId,
+  convertirA100,
+  convertirDesde100,
   obtenerFraccionNota,
   notaMinimaParaFraccion,
   crearProfesor,
