@@ -4,7 +4,7 @@
    plan/universidad, formato de texto.
    ========================================================================= */
 
-import { ESCALAS_DISPONIBLES, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, obtenerEscalaPorId, sellarTimestamp } from "../core/schema.js";
+import { ESCALAS_DISPONIBLES, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
 import { actualizarIndicadorSync, marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
@@ -542,16 +542,9 @@ function renderizarNotasAprobacion() {
     labelEscala.style.cssText = "display:block; font-size:0.75rem; margin-bottom:4px;";
     labelEscala.textContent = "Escala de notas";
     const selectEscala = document.createElement("select");
-    // v1.15.10: .form-select (definida en design-system.css junto a
-    // .form-input/.form-textarea) trae las variables del tema aplicadas al
-    // <select> nativo — antes este selector solo tenía "form-input", que
-    // NO cubre las reglas de fondo/texto/opciones de un <select> en todos
-    // los navegadores; sin eso, el <select> caía al estilo nativo del
-    // sistema operativo (fondo blanco fijo, texto negro fijo), ilegible en
-    // modo oscuro. Ver el bloque nuevo en design-system.css para el resto
-    // del estilo (flecha propia, opciones con el mismo fondo del tema).
-    selectEscala.className = "form-input form-select";
-    selectEscala.style.width = "100%";
+    selectEscala.hidden = true;
+    selectEscala.setAttribute("aria-hidden", "true");
+    selectEscala.tabIndex = -1;
     ESCALAS_DISPONIBLES.forEach((escala) => {
       const opt = document.createElement("option");
       opt.value = String(escala.id);
@@ -559,8 +552,66 @@ function renderizarNotasAprobacion() {
       selectEscala.appendChild(opt);
     });
     selectEscala.value = String(plan.parametros_universidad.escala_notas ?? 100);
+
+    // v1.15.11 (2026-08-08 — el <select> nativo seguía viéndose feo pese al
+    // CSS anterior: el popup de <option> lo pinta cada navegador con SU
+    // propio criterio — color-scheme/background-color en <option> es, en la
+    // práctica, territorio no confiable entre Chrome/Firefox/Safari. En vez
+    // de seguir peleando con eso, el <select> de arriba queda oculto como
+    // única fuente de verdad (mantiene .value y dispara 'change' normal,
+    // así el resto del archivo no cambia un carácter), y la parte VISIBLE
+    // es este botón + lista propios, 100% CSS nuestro — mismo look que
+    // cualquier otro elemento del tema, sin sorpresas de navegador.
+    const dropdownEscala = document.createElement("div");
+    dropdownEscala.className = "select-custom";
+    const botonEscala = document.createElement("button");
+    botonEscala.type = "button";
+    botonEscala.className = "form-input select-custom-boton";
+    const escalaInicial = ESCALAS_DISPONIBLES.find((e) => String(e.id) === selectEscala.value);
+    botonEscala.textContent = escalaInicial ? escalaInicial.etiqueta : "Elegir escala";
+    const listaEscala = document.createElement("ul");
+    listaEscala.className = "select-custom-lista oculto";
+    ESCALAS_DISPONIBLES.forEach((escala) => {
+      const item = document.createElement("li");
+      item.className = "select-custom-opcion";
+      item.textContent = escala.etiqueta;
+      if (String(escala.id) === selectEscala.value) item.classList.add("activa");
+      item.addEventListener("click", () => {
+        selectEscala.value = String(escala.id);
+        botonEscala.textContent = escala.etiqueta;
+        listaEscala.querySelectorAll(".select-custom-opcion").forEach((li) => li.classList.remove("activa"));
+        item.classList.add("activa");
+        listaEscala.classList.add("oculto");
+        botonEscala.setAttribute("aria-expanded", "false");
+        // El <select> oculto sigue siendo el dueño real del valor — acá
+        // solo se dispara el evento que ya escucha el resto del código,
+        // como si el cambio hubiera venido de un <select> normal.
+        selectEscala.dispatchEvent(new Event("change"));
+      });
+      listaEscala.appendChild(item);
+    });
+    botonEscala.setAttribute("aria-expanded", "false");
+    botonEscala.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const abierta = !listaEscala.classList.contains("oculto");
+      // Solo puede haber un dropdown propio abierto a la vez en toda la
+      // pantalla — cierra cualquier otro antes de abrir este.
+      document.querySelectorAll(".select-custom-lista").forEach((l) => l.classList.add("oculto"));
+      listaEscala.classList.toggle("oculto", abierta);
+      botonEscala.setAttribute("aria-expanded", String(!abierta));
+    });
+    document.addEventListener("click", (e) => {
+      if (!dropdownEscala.contains(e.target)) {
+        listaEscala.classList.add("oculto");
+        botonEscala.setAttribute("aria-expanded", "false");
+      }
+    });
+    dropdownEscala.appendChild(botonEscala);
+    dropdownEscala.appendChild(listaEscala);
+    dropdownEscala.appendChild(selectEscala);
+
     bloqueEscala.appendChild(labelEscala);
-    bloqueEscala.appendChild(selectEscala);
+    bloqueEscala.appendChild(dropdownEscala);
     fila.appendChild(bloqueEscala);
 
     // Bloque 2: nota de aprobación — mostrada y editada en la escala
@@ -677,15 +728,29 @@ function renderizarNotasAprobacion() {
       // así que el chequeo isNaN decide cuál de las dos ramas corresponde.
       const crudo = selectEscala.value;
       const comoNumero = Number(crudo);
-      plan.parametros_universidad.escala_notas = Number.isNaN(comoNumero) ? crudo : comoNumero;
-      escalaActiva = obtenerEscalaPorId(plan.parametros_universidad.escala_notas);
+      const escalaIdNueva = Number.isNaN(comoNumero) ? crudo : comoNumero;
+      const escalaIdVieja = plan.parametros_universidad.escala_notas ?? 100;
+      if (escalaIdNueva === escalaIdVieja) return;
+
+      // FIX (2026-08-08 — ronda 4, bug real reportado: "nota en escala 10
+      // sigue mostrando 37, no se convirtió" / "puntaje x10"): la versión
+      // anterior de este handler NUNCA tocaba las notas ya cargadas —
+      // decisión de diseño explícita que en la práctica dejaba las notas
+      // viejas sin sentido apenas cambiabas de escala (ver el comentario
+      // que reemplaza este). Ahora sí se migran de verdad, ANTES de pisar
+      // el id guardado (se necesita la escala VIEJA para saber desde dónde
+      // convertir) — ver migrarNotasAsignacionesEscalaPlan en schema.js.
+      migrarNotasAsignacionesEscalaPlan(estado.datos, plan.id, escalaIdVieja, escalaIdNueva);
+
+      plan.parametros_universidad.escala_notas = escalaIdNueva;
+      escalaActiva = obtenerEscalaPorId(escalaIdNueva);
       sellarTimestamp(plan);
       marcarCambioPendiente();
-      // Nunca toca ninguna nota ya cargada — solo cambia con qué escala se
-      // reinterpretan de acá en adelante (ver obtenerEscalaNotasMateria).
-      // Los DOS campos numéricos de esta tarjeta (aprobación y raspando)
-      // sí necesitan repintarse acá — su valor GUARDADO (0-100) no cambió,
-      // pero su valor MOSTRADO depende de la escala recién elegida.
+      // Los DOS campos numéricos de esta tarjeta (aprobación y raspando) se
+      // repintan igual que antes — su valor GUARDADO (0-100) no cambió,
+      // solo su valor MOSTRADO depende de la escala recién elegida. Las
+      // notas de las asignaciones, en cambio, SÍ se migraron arriba porque
+      // están guardadas directo en unidades de escala, no en 0-100.
       actualizarLimitesAprobacion();
       inputAprobacion.value = formatearNumeroCorto(convertirDesde100(plan.parametros_universidad.nota_aprobacion ?? 70, escalaActiva));
       actualizarRaspando();
