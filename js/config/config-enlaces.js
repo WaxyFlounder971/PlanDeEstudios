@@ -189,6 +189,21 @@ function cerrarModalEnlace() {
 
 function eliminarEnlaceDesdeModal() {
   if (!estado.enlaceEditandoId) return;
+  // Fix (2026-08-08 — "enlaces borrados resucitando"): antes esto solo
+  // filtraba el array local — nunca dejaba rastro de que el borrado había
+  // pasado. schema.js no exporta avanzarRelojLogico directamente (solo
+  // sellarTimestamp/observarRelojLogico), así que se sella un objeto
+  // liviano de una sola llave para conseguir un contador de Lamport válido
+  // y se arma la tumba con la misma forma que fusionarTumbas espera en
+  // storage-merge.js: { id, eliminadoEn }.
+  const tumba = sellarTimestamp({ id: estado.enlaceEditandoId });
+  if (!Array.isArray(estado.datos.configuracion._eliminados_enlaces)) {
+    estado.datos.configuracion._eliminados_enlaces = [];
+  }
+  estado.datos.configuracion._eliminados_enlaces.push({
+    id: estado.enlaceEditandoId,
+    eliminadoEn: tumba._actualizadoEn,
+  });
   estado.datos.configuracion.enlaces_rapidos = estado.datos.configuracion.enlaces_rapidos.filter(
     (e) => e.id !== estado.enlaceEditandoId
   );
