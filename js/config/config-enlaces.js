@@ -14,6 +14,12 @@ function renderizarEnlacesRapidos() {
 
   renderizarListaEnlacesEn("lista-enlaces", enlaces, true);
   renderizarListaEnlacesEn("lista-enlaces-lateral", enlaces, false);
+  // Drawer de Enlaces rápidos en móvil (2026-08-07): mismo criterio que el
+  // panel lateral fijo de escritorio — es acceso rápido, no edición, así
+  // que va sin el lápiz (conEditar = false). Si el contenedor no existe
+  // (ej. una vista que no cargó el drawer), renderizarListaEnlacesEn ya
+  // resuelve el `if (!cont) return;` sin romper nada.
+  renderizarListaEnlacesEn("lista-enlaces-drawer-movil", enlaces, false);
 
   const btnAgregar = document.getElementById("btn-agregar-enlace");
   btnAgregar.disabled = enlaces.length >= LIMITE_ENLACES_RAPIDOS;
