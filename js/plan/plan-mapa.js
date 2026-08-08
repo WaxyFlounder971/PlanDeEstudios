@@ -373,8 +373,11 @@ function construirBloqueControles(plan) {
      Dentro de pantalla completa, Descargar sigue el mismo flag que las
      filas 2/3: solo aparece mientras esas filas están extendidas (chevrón
      ⌃) — ver btnChevron más abajo y actualizarControlesPantallaCompleta().
-     Los botones se agregan al final de la función, en el orden
-     zoom → centro → descargar, para que el grid los ubique en ese orden. */
+     Punto 1 (2026-08-07, corrección — el usuario se había confundido en el
+     pedido anterior: el orden original real era Descargar a la izquierda,
+     Zoom a la derecha, no al revés). Los botones se agregan al final de la
+     función, en el orden descargar → centro → zoom, para que el grid los
+     ubique en ese orden. */
   const fila4 = document.createElement("div");
   fila4.className = "vista-fila";
   fila4.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px;";
@@ -382,7 +385,7 @@ function construirBloqueControles(plan) {
   const btnDescargar = document.createElement("button");
   btnDescargar.type = "button";
   btnDescargar.className = "btn btn-secondary";
-  btnDescargar.style.justifySelf = "end";
+  btnDescargar.style.justifySelf = "start";
   btnDescargar.style.display = estado.mapaPantallaCompleta && estado.controlesMapaOcultosFullscreen ? "none" : "";
   btnDescargar.textContent = "Descargar";
   btnDescargar.addEventListener("click", () => abrirSelectorDescargaMapa());
@@ -477,7 +480,7 @@ function construirBloqueControles(plan) {
 
   const zoomGrupo = document.createElement("div");
   zoomGrupo.className = "mapa-zoom-controles";
-  zoomGrupo.style.justifySelf = "start";
+  zoomGrupo.style.justifySelf = "end";
   const btnMenos = document.createElement("button");
   btnMenos.type = "button";
   btnMenos.className = "btn-icono-fantasma mapa-zoom-btn";
@@ -503,11 +506,12 @@ function construirBloqueControles(plan) {
   zoomGrupo.appendChild(etiquetaZoom);
   zoomGrupo.appendChild(btnMas);
 
-  // Orden de inserción = orden de columnas del grid: zoom (col 1, izq.),
-  // íconos (col 2, centro), Descargar (col 3, der.) — pedido explícito.
-  fila4.appendChild(zoomGrupo);
-  fila4.appendChild(contBotonesCentro);
+  // Orden de inserción = orden de columnas del grid: descargar (col 1,
+  // izq.), íconos (col 2, centro), zoom (col 3, der.) — corrección del
+  // pedido anterior (ver comentario arriba de fila4).
   fila4.appendChild(btnDescargar);
+  fila4.appendChild(contBotonesCentro);
+  fila4.appendChild(zoomGrupo);
 
   raiz.appendChild(fila4);
 
