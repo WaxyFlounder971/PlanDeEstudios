@@ -299,6 +299,16 @@ a { color: var(--accent-1); }
   content: "✓"; color: #fff; font-size: 14px; font-weight: 700;
 }
 
+/* Utilidad genérica: ocultar cualquier elemento sin sacarlo del DOM ni
+   reacomodar layout de hermanos. Bug 2026-08-08: antes solo existían
+   versiones de .oculto ya acopladas a un padre puntual (.perfil-popover.oculto,
+   .overlay-cargando.oculto, .ppz-degradado-*.oculto) — cualquier código nuevo
+   que usara classList.toggle("oculto", ...) sobre OTRO elemento (como el
+   bloque "Pasás raspando con" en config-ajustes.js) no ocultaba nada, porque
+   ninguna regla lo cubría. Esta versión genérica cierra ese hueco sin pisar
+   las anteriores (mismo valor, sin conflicto de especificidad). */
+.oculto { display: none; }
+
 /* ---- Inputs ---- */
 .form-input, .form-select, .form-textarea {
   width: 100%;
@@ -314,6 +324,32 @@ a { color: var(--accent-1); }
 [data-mode="light"] .form-input,
 [data-mode="light"] .form-select,
 [data-mode="light"] .form-textarea { background: rgba(0,0,0,0.04); }
+
+/* v1.15.10: el <select> nativo, aparte de fondo/borde/texto (ya cubiertos
+   arriba junto con .form-input), tiene DOS partes que el navegador sigue
+   pintando con su propio criterio si no se le dice lo contrario:
+   1) la flechita — viene del tema del SO, no de esta hoja de estilos.
+   2) la lista desplegable de <option> al hacer click — en Chrome/Edge
+      hereda color-scheme (no el CSS del <select>), así que sin esto
+      renderiza con fondo blanco fijo aunque el <select> cerrado ya se vea
+      oscuro. color-scheme resuelve el popup; el estilo de <option> de abajo
+      cubre Firefox, que si respeta ese CSS. */
+.form-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  color-scheme: dark;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'><path d='M1 1L7 7L13 1' stroke='%238892b0' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 12px 8px;
+  padding-right: 38px;
+}
+[data-mode="light"] .form-select { color-scheme: light; }
+.form-select option {
+  background: var(--bg-panel);
+  color: var(--text-primary);
+}
 
 .form-input:focus, .form-select:focus, .form-textarea:focus {
   outline: none;
