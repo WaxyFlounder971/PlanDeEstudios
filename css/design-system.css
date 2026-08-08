@@ -738,17 +738,30 @@ a { color: var(--accent-1); }
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
-.mobile-topbar .btn-hamburguesa {
+/* Acceso directo a Enlaces rápidos en móvil (2026-08-07): botón nuevo a la
+   derecha de la barra, mismo símbolo-limpio que la hamburguesa — comparten
+   .btn-topbar-icono en vez de cada uno tener su propio estilo, para que
+   cualquier ajuste futuro de tamaño/color quede sincronizado entre los dos.
+   Sin borde ni fondo: solo el símbolo (pedido explícito, la hamburguesa NO
+   debe verse como un botón). */
+.mobile-topbar .btn-topbar-icono {
   background: transparent;
-  border: 1px solid var(--border-glass);
+  border: none;
   color: var(--text-primary);
-  border-radius: var(--radius-sm);
   width: 42px; height: 42px;
   font-size: 1.2rem;
   cursor: pointer;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
 }
-.mobile-topbar h3 { margin: 0; font-size: 1rem; }
+.mobile-topbar .btn-topbar-icono:active { opacity: 0.6; }
+/* flex:1 para que el título ocupe el espacio del medio y el botón de
+   Enlaces (agregado después de <h3> en el HTML) quede pegado al borde
+   derecho de la barra, sin necesitar un wrapper extra. */
+.mobile-topbar h3 { margin: 0; font-size: 1rem; flex: 1; }
 
 /* ---- Overlay para el drawer móvil ---- */
 .sidebar-overlay {
