@@ -933,50 +933,43 @@ function agregarSwitchDosOpciones(card, { etiqueta, opciones, valorInicial, onCa
 /* ===================== Modal: crear/editar criterio ===================== */
 
 /**
- * `esExtra` (solo aplica al crear, no a editar): abre el modal en modo
- * "✨ Extra" — nombre precargado igual al del botón (con el emoji), sin el
- * tope del 100% de la materia (ver sumaValorTotalCriterios), porque estos
- * puntos se suman aparte. Un criterio ya existente conserva su propio
- * es_extra tal cual esté guardado (no se puede "convertir" un criterio
- * normal en extra ni viceversa desde acá — si hiciera falta, se borra y
- * se crea de nuevo).
+ * Crear/editar un criterio NORMAL (compite por el 100% de la materia).
+ *
+ * Corrección de diseño (2026-08-07 v2): el criterio "✨ Extra" ya NO se crea
+ * acá — se crea directo, sin modal (ver crearCriterioExtraDirecto), porque
+ * no tiene un tope fijo que preguntar. Este modal solo lo sigue tocando
+ * para EDITAR un "✨ Extra" ya existente (rama `esEdicionExtra` abajo), y
+ * ahí solo deja renombrarlo — el campo de valor no aplica (sus puntos salen
+ * de sumar las asignaciones de adentro, ver calcularPuntosCriterio).
  */
-function abrirModalCriterio({ mm, materia, plan, criterioExistente, esExtra, onGuardado }) {
+function abrirModalCriterio({ mm, materia, plan, criterioExistente, onGuardado }) {
   const esEdicion = !!criterioExistente;
-  const esExtraEfectivo = esEdicion ? !!criterioExistente.es_extra : !!esExtra;
+  const esEdicionExtra = esEdicion && !!criterioExistente.es_extra;
   const { overlay, card } = crearModalDinamico({
-    titulo: esEdicion ? "Editar criterio" : esExtraEfectivo ? "Nuevo ✨ Extra" : "Nuevo criterio",
+    titulo: esEdicionExtra ? "Editar ✨ Extra" : esEdicion ? "Editar criterio" : "Nuevo criterio",
   });
 
   const inputNombre = agregarCampoModal(card, {
     etiqueta: "Nombre (ej. Exámenes)",
     tipo: "text",
-    valor: esEdicion ? criterioExistente.nombre : esExtraEfectivo ? "✨ Extra" : "",
-  });
-  const inputValor = agregarCampoModal(card, {
-    etiqueta: esExtraEfectivo ? "Puntos extra (se suman aparte del 100%)" : "Valor dentro de la materia (%)",
-    valor: esEdicion ? criterioExistente.valor_total : "",
-    decimal: true,
+    valor: esEdicion ? criterioExistente.nombre : "",
   });
 
-  // Los criterios "✨ Extra" no compiten por el 100% de la materia (ver
-  // sumaValorTotalCriterios) — no tiene sentido mostrar ni validar contra
-  // un "disponible" que no aplica.
-  if (!esExtraEfectivo) {
+  // "✨ Extra" no tiene un valor_total fijo que editar (ver comentario de
+  // arriba) — el modal, en ese caso, es solo el campo de nombre.
+  let inputValor = null;
+  if (!esEdicionExtra) {
+    inputValor = agregarCampoModal(card, {
+      etiqueta: "Valor dentro de la materia (%)",
+      valor: esEdicion ? criterioExistente.valor_total : "",
+      decimal: true,
+    });
     const disponibleEstimado = 100 - sumaValorTotalCriterios(mm, esEdicion ? criterioExistente.id : undefined);
     const ayuda = document.createElement("p");
     ayuda.className = "muted";
     ayuda.style.fontSize = "0.8rem";
     ayuda.style.margin = "0";
     ayuda.textContent = `Disponible en esta materia: ${formatearNumero(disponibleEstimado)}%`;
-    card.appendChild(ayuda);
-  } else {
-    const ayuda = document.createElement("p");
-    ayuda.className = "muted";
-    ayuda.style.fontSize = "0.8rem";
-    ayuda.style.margin = "0";
-    ayuda.textContent =
-      "Se suma directo a la nota final calculada por criterios, sin quitarle espacio a los demás. Podés crear varios (examen de reposición, puntos regalados, tarea extra...).";
     card.appendChild(ayuda);
   }
 
@@ -989,13 +982,13 @@ function abrirModalCriterio({ mm, materia, plan, criterioExistente, esExtra, onG
   btnGuardar.textContent = "Guardar";
   btnGuardar.addEventListener("click", () => {
     const nombre = inputNombre.value.trim();
-    const valorNum = analizarDecimal(inputValor.value);
+    const valorNum = esEdicionExtra ? null : analizarDecimal(inputValor.value);
 
     if (!nombre) {
       mostrarToast("Ponele un nombre al criterio");
       return;
     }
-    if (!Number.isFinite(valorNum) || valorNum <= 0) {
+    if (!esEdicionExtra && (!Number.isFinite(valorNum) || valorNum <= 0)) {
       mostrarToast("El valor debe ser un número mayor a 0");
       return;
     }
@@ -1010,7 +1003,7 @@ function abrirModalCriterio({ mm, materia, plan, criterioExistente, esExtra, onG
       onGuardado();
       return;
     }
-    if (!esExtraEfectivo) {
+    if (!esEdicionExtra) {
       const disponibleReal = 100 - sumaValorTotalCriterios(mmViva, criterioId || undefined);
       if (valorNum > disponibleReal + 0.001) {
         mostrarToast(`Ese valor supera el ${formatearNumero(disponibleReal)}% disponible en la materia`);
@@ -1027,14 +1020,18 @@ function abrirModalCriterio({ mm, materia, plan, criterioExistente, esExtra, onG
         return;
       }
       criterioVivo.nombre = nombre;
-      criterioVivo.valor_total = valorNum;
-      sellarTimestamp(criterioVivo);
-      // Si ya tenía asignaciones, el nuevo valor_total redistribuye el
-      // reparto equitativo (misma regla confirmada que al añadir una nueva).
-      if (criterioVivo.asignaciones.length > 0) repartirEquitativoCriterio(criterioVivo);
+      if (!esEdicionExtra) {
+        criterioVivo.valor_total = valorNum;
+        sellarTimestamp(criterioVivo);
+        // Si ya tenía asignaciones, el nuevo valor_total redistribuye el
+        // reparto equitativo (misma regla confirmada que al añadir una nueva).
+        if (criterioVivo.asignaciones.length > 0) repartirEquitativoCriterio(criterioVivo);
+      } else {
+        sellarTimestamp(criterioVivo);
+      }
     } else {
       mmViva.criterios.push(
-        crearCriterio({ nombre, valorTotal: valorNum, orden: siguienteOrden(mmViva.criterios), esExtra: esExtraEfectivo })
+        crearCriterio({ nombre, valorTotal: valorNum, orden: siguienteOrden(mmViva.criterios) })
       );
     }
 
@@ -1064,6 +1061,28 @@ function eliminarCriterio(mm, materia, plan, criterio, onCambiar) {
       persistirCambioMateria(mmViva, materia, plan, onCambiar);
     },
   });
+}
+
+/**
+ * Corrección de diseño (2026-08-07 v2, pedido explícito — "no quiero que
+ * pida cuántos puntos totales se les va a poner, solamente quiero que
+ * exista como criterio libre"): el botón "✨ Extra" YA NO abre ningún modal
+ * al crear — el criterio "✨ Extra" no tiene un tope fijo (valor_total),
+ * porque cada asignación adentro declara sus propios puntos directamente
+ * (ver abrirModalAsignacionExtra). Se crea de una, en silencio, y queda
+ * listo para agregarle asignaciones con "+ Añadir asignación".
+ */
+function crearCriterioExtraDirecto(mm, materia, plan, onCambiar) {
+  const mmViva = buscarMmVivaPorId(mm.id);
+  if (!mmViva) {
+    mostrarToast("Esta materia se eliminó desde otro dispositivo — no se pudo crear");
+    onCambiar();
+    return;
+  }
+  mmViva.criterios.push(
+    crearCriterio({ nombre: "✨ Extra", valorTotal: 0, orden: siguienteOrden(mmViva.criterios), esExtra: true })
+  );
+  persistirCambioMateria(mmViva, materia, plan, onCambiar);
 }
 
 /**
@@ -1384,6 +1403,108 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
     // confirmada 2026-08-02.
     repartirEquitativoCriterio(criterioVivo);
     sellarTimestamp(criterioVivo);
+
+    persistirCambioMateria(mmViva, materia, plan, onGuardado);
+    overlay.remove();
+  });
+  card.appendChild(btnGuardar);
+}
+
+/**
+ * Modal simplificado (2026-08-07, pedido explícito — "ahí solamente se
+ * ponen nombre de asignación, puntos extra dados y ya, lo demás no
+ * aplica"): a diferencia de abrirModalAsignacion (Automático/Personalizado,
+ * Nota/Puntos, letras...), acá solo hay 2 campos. Los puntos ingresados se
+ * suman DIRECTO a la nota final (modo_calificacion:"extra" — ver
+ * calcularPuntosAsignacion en schema.js), sin concepto de "pendiente".
+ */
+function abrirModalAsignacionExtra({ criterio, mm, materia, plan, asignacionExistente, onGuardado }) {
+  const esEdicion = !!asignacionExistente;
+  const { overlay, card } = crearModalDinamico({ titulo: esEdicion ? "Editar ✨ Extra" : "Nueva asignación ✨ Extra" });
+
+  const inputNombre = agregarCampoModal(card, {
+    etiqueta: "Nombre (ej. Examen de reposición)",
+    tipo: "text",
+    valor: esEdicion ? asignacionExistente.nombre : "",
+  });
+  const inputPuntos = agregarCampoModal(card, {
+    etiqueta: "Puntos extra dados",
+    valor: esEdicion ? asignacionExistente.valor : "",
+    decimal: true,
+  });
+
+  // Mismo criterio que abrirModalAsignacion: al editar, arranca enfocado en
+  // el campo que hace falta llenar/corregir (acá, los puntos — el nombre ya
+  // suele estar bien si se está editando).
+  if (esEdicion) {
+    requestAnimationFrame(() => inputPuntos.focus());
+  }
+
+  const ayuda = document.createElement("p");
+  ayuda.className = "muted";
+  ayuda.style.fontSize = "0.8rem";
+  ayuda.style.margin = "0";
+  ayuda.textContent = "Se suma directo a la nota final, aparte del 100% de la materia.";
+  card.appendChild(ayuda);
+
+  const mmId = mm.id;
+  const criterioId = criterio.id;
+  const asignacionId = esEdicion ? asignacionExistente.id : null;
+
+  const btnGuardar = document.createElement("button");
+  btnGuardar.type = "button";
+  btnGuardar.className = "btn btn-primary btn-block";
+  btnGuardar.textContent = "Guardar";
+  btnGuardar.addEventListener("click", () => {
+    const nombre = inputNombre.value.trim();
+    const puntos = analizarDecimal(inputPuntos.value);
+
+    if (!nombre) {
+      mostrarToast("Ponele un nombre a la asignación");
+      return;
+    }
+    if (!Number.isFinite(puntos) || puntos <= 0) {
+      mostrarToast("Los puntos deben ser un número mayor a 0");
+      return;
+    }
+
+    const mmViva = buscarMmVivaPorId(mmId);
+    const criterioVivo = mmViva && (mmViva.criterios || []).find((c) => c.id === criterioId);
+    if (!mmViva || !criterioVivo) {
+      mostrarToast("Este criterio se eliminó desde otro dispositivo — no se pudo guardar");
+      overlay.remove();
+      onGuardado();
+      return;
+    }
+
+    if (esEdicion) {
+      const asignacionViva = (criterioVivo.asignaciones || []).find((a) => a.id === asignacionId);
+      if (!asignacionViva) {
+        mostrarToast("Esta asignación se eliminó desde otro dispositivo — no se pudo guardar");
+        overlay.remove();
+        onGuardado();
+        return;
+      }
+      asignacionViva.nombre = nombre;
+      asignacionViva.valor = puntos;
+      // "personalizado" siempre (nunca "automatico"): si quedara en
+      // "automatico", repartirEquitativoCriterio (que SÍ puede correr por
+      // otros caminos, ej. al agregar/borrar otra asignación del mismo
+      // criterio) la repartiría sobre un valor_total de 0 y borraría estos
+      // puntos sin querer — ver comentario en crearCriterioExtraDirecto.
+      asignacionViva.modo_valor = "personalizado";
+      sellarTimestamp(asignacionViva);
+    } else {
+      const nueva = crearAsignacion({
+        nombre,
+        valor: puntos,
+        orden: siguienteOrden(criterioVivo.asignaciones),
+        modoCalificacion: "extra",
+      });
+      nueva.modo_valor = "personalizado";
+      criterioVivo.asignaciones.push(nueva);
+      sellarTimestamp(criterioVivo);
+    }
 
     persistirCambioMateria(mmViva, materia, plan, onGuardado);
     overlay.remove();
@@ -1784,7 +1905,9 @@ function abrirMenuRapidoAsignacion(asignacion, criterio, mm, materia, plan, esca
     {
       texto: "Editar",
       onClick: () =>
-        abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asignacionExistente: asignacion, onGuardado: onCambiar }),
+        criterio.es_extra
+          ? abrirModalAsignacionExtra({ criterio, mm, materia, plan, asignacionExistente: asignacion, onGuardado: onCambiar })
+          : abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asignacionExistente: asignacion, onGuardado: onCambiar }),
     },
     {
       texto: "Eliminar",
@@ -1835,7 +1958,11 @@ function construirFilaAsignacion(asignacion, criterio, mm, materia, plan, escala
   } else {
     fila.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asignacionExistente: asignacion, onGuardado: onCambiar });
+      if (criterio.es_extra) {
+        abrirModalAsignacionExtra({ criterio, mm, materia, plan, asignacionExistente: asignacion, onGuardado: onCambiar });
+      } else {
+        abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asignacionExistente: asignacion, onGuardado: onCambiar });
+      }
     });
     agregarLongPress(fila, () => abrirMenuRapidoAsignacion(asignacion, criterio, mm, materia, plan, escalaActiva, fila, onCambiar));
   }
@@ -1852,6 +1979,19 @@ function construirFilaAsignacion(asignacion, criterio, mm, materia, plan, escala
   const contDer = document.createElement("div");
   contDer.className = "row";
   contDer.style.cssText = "gap:6px; flex-wrap:nowrap; flex-shrink:0;";
+
+  // "✨ Extra" (2026-08-07): no hay nota ni estado "pendiente" — una sola
+  // pill con los puntos que suma directo (ver modo_calificacion:"extra" en
+  // calcularPuntosAsignacion, schema.js).
+  if (criterio.es_extra) {
+    const pillExtra = document.createElement("span");
+    pillExtra.className = "pill-tamano-fijo badge badge-accent";
+    pillExtra.style.cssText = PILL_ESTILO;
+    pillExtra.textContent = `+${formatearNumero(asignacion.valor)} pts`;
+    contDer.appendChild(pillExtra);
+    fila.appendChild(contDer);
+    return fila;
+  }
 
   const pillNota = document.createElement("span");
   pillNota.className = "pill-tamano-fijo badge";
@@ -2003,10 +2143,15 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
   const subtitulo = document.createElement("span");
   subtitulo.className = "muted";
   subtitulo.style.fontSize = "0.72rem";
+  const puntosObtenidosCriterio = calcularPuntosCriterio(criterio, escalaActiva);
+
   // "✨ Extra" no es un % de la materia (se suma aparte del 100%, ver
-  // sumaValorTotalCriterios) — mostrarlo como "% de la materia" confundiría.
+  // sumaValorTotalCriterios) y, desde el rediseño sin tope fijo (2026-08-07
+  // v2), tampoco tiene un valor_total real que mostrar — lo que se ve es la
+  // suma viva de sus asignaciones (puntosObtenidosCriterio), que para Extra
+  // siempre coincide con lo "obtenido" (no hay estado pendiente).
   subtitulo.textContent = criterio.es_extra
-    ? `+${formatearNumero(criterio.valor_total)} pts extra`
+    ? "criterio libre — se suma aparte"
     : angosta
     ? `${formatearNumero(criterio.valor_total)}%`
     : `${formatearNumero(criterio.valor_total)}% de la materia`;
@@ -2024,11 +2169,14 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
   derechaWrap.className = "row";
   derechaWrap.style.cssText = "align-items:center; gap:10px; flex-wrap:nowrap;";
 
-  const puntosObtenidosCriterio = calcularPuntosCriterio(criterio, escalaActiva);
   const textoTotal = document.createElement("span");
   textoTotal.style.cssText = "font-size:0.82rem; white-space:nowrap;";
-  const etiquetaPuntosTotales = angosta ? "Pts:" : "Puntos totales:";
-  textoTotal.innerHTML = `<span class="muted">${etiquetaPuntosTotales}</span> <strong>${formatearNumero(puntosObtenidosCriterio)}/${formatearNumero(criterio.valor_total)} pts</strong>`;
+  if (criterio.es_extra) {
+    textoTotal.innerHTML = `<strong>+${formatearNumero(puntosObtenidosCriterio)} pts extra</strong>`;
+  } else {
+    const etiquetaPuntosTotales = angosta ? "Pts:" : "Puntos totales:";
+    textoTotal.innerHTML = `<span class="muted">${etiquetaPuntosTotales}</span> <strong>${formatearNumero(puntosObtenidosCriterio)}/${formatearNumero(criterio.valor_total)} pts</strong>`;
+  }
   derechaWrap.appendChild(textoTotal);
 
   const iconoExpandir = document.createElement("span");
@@ -2045,6 +2193,10 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
   cont.appendChild(encabezado);
 
   if (expandido) {
+    // "✨ Extra" (2026-08-07): sus filas no tienen columnas Nota/Puntaje
+    // (ver construirFilaAsignacion — una sola pill "+X pts"), así que este
+    // encabezado de columnas no aplica y se omite entero.
+    if (!criterio.es_extra) {
     // FIX (pedido explícito: "Nota y Puntaje NO está centrado a su pill,
     // como 20px corridos a la derecha"): fila-asignacion (construirFilaAsignacion)
     // tiene padding:6px 10px propio, así que sus pills quedan 10px adentro
@@ -2105,6 +2257,7 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
       filaEtiquetas.appendChild(etiquetaPuntaje);
     }
     cont.appendChild(filaEtiquetas);
+    }
 
     // Fase 8 — Drag and drop: contenedor propio para las filas de
     // asignación (antes iban sueltas directo en `cont`, mezcladas con
@@ -2157,7 +2310,15 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
       btnAgregar.textContent = "+ Añadir asignación";
       btnAgregar.addEventListener("click", (ev) => {
         ev.stopPropagation();
-        agregarAsignacionRapida(criterio, mm, materia, plan, onCambiar);
+        // "✨ Extra" (2026-08-07): a diferencia de un criterio normal (que
+        // agrega un placeholder vacío para completar tocándolo después),
+        // acá el modal simplificado se abre directo — nombre y puntos son
+        // los únicos 2 campos, no tiene sentido el paso intermedio.
+        if (criterio.es_extra) {
+          abrirModalAsignacionExtra({ criterio, mm, materia, plan, onGuardado: onCambiar });
+        } else {
+          agregarAsignacionRapida(criterio, mm, materia, plan, onCambiar);
+        }
       });
       pie.appendChild(btnAgregar);
 
@@ -2244,13 +2405,13 @@ function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, escal
       // que buscarCriterioVivoPorId: `mm` capturada acá puede ser huérfana
       // tras un sync) — si ya existe, el clic ofrece vaciar sus
       // asignaciones en vez de crear otro; si no existe todavía, se crea
-      // (ver abrirModalCriterio).
+      // directo, sin modal (ver crearCriterioExtraDirecto).
       const mmViva = buscarMmVivaPorId(mm.id);
       const criterioExtra = mmViva && (mmViva.criterios || []).find((c) => c.es_extra);
       if (criterioExtra) {
         vaciarAsignacionesExtra(mm, materia, plan, criterioExtra, onCambiar);
       } else {
-        abrirModalCriterio({ mm, materia, plan, esExtra: true, onGuardado: onCambiar });
+        crearCriterioExtraDirecto(mm, materia, plan, onCambiar);
       }
     });
     return btn;
@@ -2697,6 +2858,23 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
   spanNombre.className = "materia-nombre " + (expandida ? "completa" : "truncada");
   spanNombre.textContent = aplicarFormatoTexto(materia.nombre);
   linea1.appendChild(spanNombre);
+
+  // Punto 6 (2026-08-07, pedido explícito): "Nota: X" justo antes de la
+  // flecha — la flecha NO se mueve de posición (mismo flex-shrink:0 que
+  // .materia-codigo/.materia-expandir en design-system.css, así este span
+  // reserva su propio espacio fijo desde el primer cálculo de layout) y el
+  // nombre se trunca más si hace falta espacio (es el único flex:1 de la
+  // fila). Mismo redondeo al 5 más cercano que "Nota final" (no el de 2
+  // decimales que usa el otro texto "Nota" del encabezado de notas).
+  const notaFinalVigenteLinea1 = calcularNotaFinalVigente(mm, materia, plan);
+  const notaRedondeadaLinea1 = redondearNotaFinalAlCincoMasCercano(notaFinalVigenteLinea1);
+  const spanNotaLinea1 = document.createElement("span");
+  spanNotaLinea1.className = "materia-nota-linea1";
+  spanNotaLinea1.style.cssText = "flex-shrink:0; font-size:0.8rem; white-space:nowrap; color:var(--text-secondary);";
+  spanNotaLinea1.textContent = `Nota: ${
+    notaRedondeadaLinea1 === null || notaRedondeadaLinea1 === undefined ? "—" : formatearNumero(notaRedondeadaLinea1)
+  }`;
+  linea1.appendChild(spanNotaLinea1);
 
   const iconoExpandir = document.createElement("span");
   iconoExpandir.className = "materia-expandir";
