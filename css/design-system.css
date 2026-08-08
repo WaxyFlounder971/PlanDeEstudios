@@ -381,7 +381,7 @@ a { color: var(--accent-1); }
 }
 .select-custom-lista {
   position: absolute;
-  z-index: 40;
+  z-index: 9999;
   top: calc(100% + 6px);
   left: 0;
   right: 0;
@@ -391,6 +391,8 @@ a { color: var(--accent-1); }
   max-height: 260px;
   overflow-y: auto;
   background: var(--bg-panel);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 1px solid var(--border-glass, rgba(255,255,255,0.12));
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-float);
