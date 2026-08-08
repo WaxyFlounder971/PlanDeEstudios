@@ -119,6 +119,39 @@ function renderizarNavegacionOculta() {
 }
 
 /**
+ * Bug — duplicado en drag-and-drop de navegación (2026-08-07): reordena
+ * `navegacion_orden` moviendo `idArrastrado` a la posición inmediatamente
+ * ANTES de `idReferencia` (o al final, si `idReferencia` es null).
+ *
+ * Estructuralmente imposible que duplique un id: SIEMPRE parte del orden
+ * canónico ya deduplicado (window.obtenerOrdenNavegacion(), que además se
+ * autolimpia en cada llamada — ver obtenerOrdenNavegacionEfectivo en
+ * main.js), le quita `idArrastrado` una única vez (filter) y lo vuelve a
+ * insertar una única vez (splice/push). Nunca se lee ni se reconstruye el
+ * arreglo final a partir de lo que hay pintado en el DOM.
+ */
+function reordenarSeccionNav(idArrastrado, idReferencia) {
+  const ordenBase = typeof window.obtenerOrdenNavegacion === "function"
+    ? window.obtenerOrdenNavegacion()
+    : SECCIONES_TOGGLEABLES.map((s) => s.id);
+
+  const sinArrastrado = ordenBase.filter((id) => id !== idArrastrado);
+  const indiceDestino = idReferencia ? sinArrastrado.indexOf(idReferencia) : -1;
+
+  const nuevoOrden = [...sinArrastrado];
+  if (indiceDestino === -1) nuevoOrden.push(idArrastrado);
+  else nuevoOrden.splice(indiceDestino, 0, idArrastrado);
+
+  estado.datos.configuracion.navegacion_orden = nuevoOrden;
+  sellarTimestamp(estado.datos.configuracion);
+  marcarCambioPendiente();
+  if (typeof window.aplicarVisibilidadNavegacion === "function") {
+    window.aplicarVisibilidadNavegacion();
+  }
+  renderizarNavegacionOculta(); // reconstruye el DOM limpio desde el dato ya sano
+}
+
+/**
  * Ajustes — arrastrar para reordenar los switches de navegación
  * (2026-08-06): mismo motor por Pointer Events que la Fase 8 de
  * semestres-tarjetas.js (mouse y touch con el mismo código, más fiable en
@@ -127,9 +160,8 @@ function renderizarNavegacionOculta() {
  * que el gesto se sienta igual en toda la app. A diferencia de
  * criterios/asignaciones, acá el ícono de agarre queda SIEMPRE visible
  * (pedido explícito: lista corta y fija, sin el "modo bajo demanda").
- * Al soltar, guarda el nuevo orden completo en
- * estado.datos.configuracion.navegacion_orden y dispara
- * aplicarVisibilidadNavegacion() para que el nav real se reordene igual.
+ * Al soltar, delega en reordenarSeccionNav (ver arriba) — esa función es
+ * la única que escribe estado.datos.configuracion.navegacion_orden.
  */
 function habilitarArrastreNavegacion(contenedor) {
   contenedor.querySelectorAll(".fila-nav-orden").forEach((fila) => {
@@ -140,6 +172,13 @@ function habilitarArrastreNavegacion(contenedor) {
       if (evDown.button !== undefined && evDown.button !== 0) return; // solo click izq / touch
       evDown.preventDefault();
       evDown.stopPropagation();
+
+      // Bug — duplicado en drag-and-drop de navegación (2026-08-07): se
+      // captura el id ANTES de que `fila` se desprenda del DOM real. El
+      // resultado final del drag nunca se arma leyendo `data-id` desde el
+      // DOM (ver alSoltar/reordenarSeccionNav) — este id es el único dato
+      // que el gesto necesita conservar del elemento arrastrado.
+      const idArrastrado = fila.dataset.id;
 
       const rectInicial = fila.getBoundingClientRect();
       const anchoItem = rectInicial.width;
@@ -201,25 +240,25 @@ function habilitarArrastreNavegacion(contenedor) {
           // nada que limpiar si nunca se pudo capturar
         }
 
-        contenedor.insertBefore(fila, placeholder);
+        // Bug — duplicado en drag-and-drop de navegación (2026-08-07): única
+        // lectura del DOM usada para decidir la posición final: qué fila
+        // (por id) quedó inmediatamente DESPUÉS del placeholder, o null si
+        // quedó al final. El arreglo persistido NUNCA se arma leyendo
+        // querySelectorAll sobre el contenedor — eso era la causa raíz del
+        // bug (nodo desprendido + re-render concurrente = doble data-id).
+        const filaSiguiente = placeholder.nextElementSibling;
+        const idReferencia =
+          filaSiguiente && filaSiguiente.classList.contains("fila-nav-orden") ? filaSiguiente.dataset.id : null;
+
+        // Se limpia el DOM temporal del drag ANTES de tocar los datos, así
+        // `fila` nunca queda flotando fuera de #lista-nav-oculta mientras
+        // se recalcula el orden. renderizarNavegacionOculta() (llamada
+        // dentro de reordenarSeccionNav) reconstruye el DOM limpio desde
+        // el dato ya sano.
+        fila.remove();
         placeholder.remove();
 
-        fila.classList.remove("arrastrando");
-        fila.style.position = "";
-        fila.style.zIndex = "";
-        fila.style.width = "";
-        fila.style.left = "";
-        fila.style.top = "";
-        fila.style.pointerEvents = "";
-        fila.style.display = "";
-
-        const nuevoOrden = Array.from(contenedor.querySelectorAll(".fila-nav-orden")).map((f) => f.dataset.id);
-        estado.datos.configuracion.navegacion_orden = nuevoOrden;
-        sellarTimestamp(estado.datos.configuracion);
-        marcarCambioPendiente();
-        if (typeof window.aplicarVisibilidadNavegacion === "function") {
-          window.aplicarVisibilidadNavegacion();
-        }
+        reordenarSeccionNav(idArrastrado, idReferencia);
       };
 
       fila.addEventListener("pointermove", alMover);
