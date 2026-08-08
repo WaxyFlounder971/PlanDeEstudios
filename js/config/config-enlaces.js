@@ -71,11 +71,46 @@ function renderizarListaEnlacesEn(contenedorId, enlaces, conEditar) {
     // dispositivo). onerror reemplaza ese ícono roto por un 🔗 genérico en
     // vez de dejar que el navegador dibuje su X fea — mismo tamaño de caja,
     // se ve intencional en vez de un error visual.
-    enlaceAbrir.innerHTML = `<span class="enlace-rapido-icono">${
-      enlace.icono_tipo === "emoji"
-        ? enlace.icono_valor
-        : `<img src="${enlace.icono_valor}" alt="" style="object-fit:cover;border-radius:6px;display:block;" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'🔗'}))">`
-    }</span><span class="enlace-rapido-nombre" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${enlace.nombre}</span>`;
+    // Fix (2026-08-08 — "la X sigue existiendo y está horrible"): el intento
+    // anterior usaba onerror="..." como atributo inline dentro de un string
+    // de innerHTML. Si la app corre bajo una Content-Security-Policy sin
+    // 'unsafe-inline' para scripts (común en PWAs), el navegador IGNORA por
+    // completo ese atributo — nunca se ejecuta, así que la imagen rota se
+    // queda tal cual, con el ícono nativo de "imagen rota" del navegador (la
+    // X fea). Se reconstruye todo el ícono con el DOM real (createElement +
+    // addEventListener) en vez de innerHTML: un listener de "error" agregado
+    // así SÍ corre siempre, sin depender de que el sitio permita scripts
+    // inline.
+    const icono = document.createElement("span");
+    icono.className = "enlace-rapido-icono";
+
+    if (enlace.icono_tipo === "emoji") {
+      icono.textContent = enlace.icono_valor;
+    } else {
+      const img = document.createElement("img");
+      img.src = enlace.icono_valor;
+      img.alt = "";
+      img.style.objectFit = "cover";
+      img.style.borderRadius = "6px";
+      img.style.display = "block";
+      img.addEventListener("error", () => {
+        // Ícono roto/incompleto (típico: uno viejo que no terminó de
+        // sincronizar) — se reemplaza por un 🔗 genérico en vez de dejar el
+        // ícono de imagen rota del navegador.
+        icono.textContent = "🔗";
+      });
+      icono.appendChild(img);
+    }
+
+    const nombre = document.createElement("span");
+    nombre.className = "enlace-rapido-nombre";
+    nombre.style.overflow = "hidden";
+    nombre.style.textOverflow = "ellipsis";
+    nombre.style.whiteSpace = "nowrap";
+    nombre.textContent = enlace.nombre;
+
+    enlaceAbrir.appendChild(icono);
+    enlaceAbrir.appendChild(nombre);
 
     item.appendChild(enlaceAbrir);
 
