@@ -356,6 +356,59 @@ a { color: var(--accent-1); }
   color: var(--text-primary);
 }
 
+/* v1.15.11 (2026-08-08): dropdown propio para reemplazar al <select>
+   nativo en los casos donde SÍ importa que el popup se vea bien de verdad
+   (ver "Escala de notas" en config-ajustes.js) — el <select> real queda
+   oculto como fuente de valor/evento, esto es 100% la parte visible. */
+.select-custom { position: relative; width: 100%; }
+.select-custom-boton {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'><path d='M1 1L7 7L13 1' stroke='%238892b0' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 12px 8px;
+  padding-right: 38px;
+}
+.select-custom-boton:hover { border-color: var(--accent-1-40, var(--accent-1)); }
+.select-custom-boton[aria-expanded="true"] {
+  border-color: var(--accent-1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-1) 25%, transparent);
+}
+.select-custom-lista {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-glass, rgba(255,255,255,0.12));
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-float);
+}
+.select-custom-opcion {
+  padding: 9px 12px;
+  border-radius: calc(var(--radius-sm) - 4px);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.select-custom-opcion:hover { background: rgba(255,255,255,0.08); }
+.select-custom-opcion.activa {
+  background: color-mix(in srgb, var(--accent-1) 20%, transparent);
+  color: var(--accent-1);
+  font-weight: 600;
+}
+
 .form-input:focus, .form-select:focus, .form-textarea:focus {
   outline: none;
   border-color: var(--accent-1);
