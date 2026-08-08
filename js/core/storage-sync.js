@@ -32,6 +32,23 @@ import { authListo, correoConocido, establecerTokenActivo, estado, guardarCacheL
 
 let reconexionEnCurso = null;
 
+/**
+ * v9.4 (2026-08-08 — arquitectura de adjuntos, evitar import circular):
+ * este archivo es el motor base de sync — no debería tener que IMPORTAR a
+ * cada módulo de features que quiera enterarse de "recién se fundieron
+ * datos remotos" (hoy solo storage-adjuntos.js, pero cualquier feature
+ * futura con el mismo patrón puede sumarse igual). En vez de eso, exponen
+ * su interés registrando un hook acá; este archivo nunca necesita saber
+ * qué módulo lo registró ni importarlo. Mismo espíritu que ya usa
+ * resolverConflicto en storage-merge.js (recibe sellarTimestamp como
+ * parámetro en vez de importar schema.js), generalizado a una lista.
+ */
+const hooksPostFusion = [];
+
+function registrarHookPostFusion(fn) {
+  hooksPostFusion.push(fn);
+}
+
 function intentarReconexionSilenciosa() {
   if (reconexionEnCurso) return reconexionEnCurso; // evita refrescos duplicados en paralelo
   const timeoutMs = 8000;
@@ -492,6 +509,32 @@ function aplicarDatosRemotosFrescos(datosFrescos) {
   if (typeof renderizarSemestres === "function") renderizarSemestres(true);
   marcarUltimaSincronizacionConfirmada();
 
+  // Adjuntos (2026-08-08) / mecanismo genérico de hooks (ver
+  // registrarHookPostFusion más abajo): tras CUALQUIER fusión remota
+  // (sondeo, pull-to-refresh, pull inicial), puede haber housekeeping que
+  // otros módulos quieran correr en segundo plano — ej. storage-
+  // adjuntos.js limpiando archivos de Drive huérfanos que un dispositivo
+  // offline no llegó a borrar. Se dispara sin await (no bloquea el render
+  // de la UI por housekeeping que al usuario no le importa ver) y cada
+  // hook se protege solo (un hook roto no debe tirar abajo los demás).
+  hooksPostFusion.forEach((hook) => {
+    try {
+      Promise.resolve(hook()).catch((e) => console.warn("Error en hook post-fusión:", e));
+    } catch (e) {
+      console.warn("Error en hook post-fusión:", e);
+    }
+  });
+
+  // Adjuntos (2026-08-08): tras CUALQUIER fusión remota (sondeo, pull-to-
+  // refresh, o el pull inicial), este dispositivo puede haber recibido una
+  // tumba de adjunto con un archivo de Drive que el dispositivo que borró
+  // no llegó a limpiar (ej. estaba offline en ese momento). Se dispara en
+  // segundo plano, sin await — no tiene sentido demorar el render de la UI
+  // por una limpieza de housekeeping que al usuario no le importa ver.
+  procesarTumbasDriveHuerfanas().catch((e) =>
+    console.warn("No se pudo limpiar adjuntos huérfanos de Drive:", e)
+  );
+
   // Mismo mecanismo de reafirmación en varios frames que usa
   // renderizarSemestres() (semestres.js) para su propio fix local: un solo
   // requestAnimationFrame no alcanza porque el layout de la página puede
@@ -915,6 +958,7 @@ export {
   ocultarCargando,
   programarRefrescoProactivo,
   reconexionEnCurso,
+  registrarHookPostFusion,
   sincronizarAhora,
   sincronizarAlIniciar,
   sondearCambiosRemotos,

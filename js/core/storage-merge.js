@@ -732,6 +732,10 @@ function fusionarDatos(datosLocal, datosRemoto) {
   // del objeto completo.
   const tumbasCompaneros = fusionarTumbas(datosLocal._eliminados_companeros, datosRemoto._eliminados_companeros);
   const tumbasAgenda = fusionarTumbas(datosLocal._eliminados_agenda, datosRemoto._eliminados_agenda);
+  // Adjuntos (2026-08-08): colección plana de nivel superior, igual patrón
+  // que profesores/companeros/agenda — fusionarColeccion ya sabe fundir por
+  // _actualizadoEn y respetar tumbas, no hace falta ninguna función nueva.
+  const tumbasAdjuntos = fusionarTumbas(datosLocal._eliminados_adjuntos, datosRemoto._eliminados_adjuntos);
   const tumbasEnlaces = fusionarTumbas(
     datosLocal.configuracion && datosLocal.configuracion._eliminados_enlaces,
     datosRemoto.configuracion && datosRemoto.configuracion._eliminados_enlaces
@@ -762,11 +766,13 @@ function fusionarDatos(datosLocal, datosRemoto) {
     profesores: fusionarColeccion(datosLocal.profesores, datosRemoto.profesores, tumbasProfesores, "profesor"),
     companeros: fusionarColeccion(datosLocal.companeros, datosRemoto.companeros, tumbasCompaneros, "compañero"),
     agenda: fusionarColeccion(datosLocal.agenda, datosRemoto.agenda, tumbasAgenda, "evento de agenda"),
+    adjuntos: fusionarColeccion(datosLocal.adjuntos, datosRemoto.adjuntos, tumbasAdjuntos, "adjunto"),
     _eliminados_planes: tumbasPlanes,
     _eliminados_semestres: tumbasSemestres,
     _eliminados_profesores: tumbasProfesores,
     _eliminados_companeros: tumbasCompaneros,
     _eliminados_agenda: tumbasAgenda,
+    _eliminados_adjuntos: tumbasAdjuntos,
   };
 }
 

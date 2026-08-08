@@ -322,9 +322,104 @@ function refrescarAccessTokenGoogle(correoConocido) {
   });
 }
 
+/**
+ * v9.4 (2026-08-08 — arquitectura de adjuntos): a diferencia de
+ * guardarDatos/leerDatos (que siempre operan sobre EL MISMO archivo,
+ * `estado.fileId`, el JSON central de la app), estas 3 funciones crean/leen/
+ * borran archivos SUELTOS en Drive — uno por adjunto. Nunca se llaman desde
+ * intentarSincronizar() ni desde ningún ciclo de sync del JSON: las
+ * orquesta core/storage-adjuntos.js, en su propio flujo (subida lazy al
+ * elegir el archivo, descarga lazy al pedirla, borrado en cola). Comparten
+ * el mismo token de acceso porque el scope de Drive ("drive.file") ya
+ * cubre cualquier archivo que la app cree, no solo el JSON central.
+ */
+
+/**
+ * Sube un archivo binario cualquiera (File/Blob del input de adjuntos) como
+ * un archivo NUEVO e independiente en Drive. A diferencia de
+ * crearArchivoDatos (que arma el body entero como un string, porque ahí
+ * adentro solo va JSON de texto), acá el contenido puede ser binario
+ * arbitrario — convertir esos bytes a string rompería cualquier byte que
+ * no sea texto válido. Se arma el body multipart como un Blob real,
+ * combinando las partes de texto (metadata) con los bytes crudos del
+ * archivo en el medio, en vez de concatenar todo como string.
+ */
+async function subirArchivoBinarioADrive(token, archivo) {
+  const metadata = { name: archivo.name || "adjunto", mimeType: archivo.type || "application/octet-stream" };
+  const boundary = "-------academicapp-adjunto";
+  const bytes = new Uint8Array(await archivo.arrayBuffer());
+  const body = new Blob([
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`,
+    `--${boundary}\r\nContent-Type: ${metadata.mimeType}\r\n\r\n`,
+    bytes,
+    `\r\n--${boundary}--`,
+  ]);
+
+  const respuesta = await fetch(
+    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": `multipart/related; boundary=${boundary}`,
+      },
+      body,
+    }
+  );
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Drive respondió ${respuesta.status} al subir el adjunto: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+  const json = await respuesta.json();
+  return json.id; // este id es el driveFileId que se guarda en la referencia (schema.js/crearAdjunto)
+}
+
+/** Descarga el contenido real de un adjunto por su driveFileId. Se llama
+ *  bajo demanda (el usuario toca "ver"/"descargar"), nunca de antemano. */
+async function descargarArchivoBinarioDeDrive(token, driveFileId) {
+  const respuesta = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Drive respondió ${respuesta.status} al descargar el adjunto: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+  return respuesta.blob();
+}
+
+/**
+ * Borra el archivo real de Drive de un adjunto eliminado. Un 404 (el
+ * archivo ya no existe) se trata como ÉXITO, no como error — puede pasar
+ * si otro dispositivo ya lo borró antes, o si nunca llegó a terminar de
+ * subirse; en ambos casos el resultado que se quería ("que ese archivo no
+ * exista en Drive") ya está cumplido, así que no tiene sentido reintentar.
+ */
+async function eliminarArchivoDeDriveConId(token, driveFileId) {
+  const respuesta = await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!respuesta.ok && respuesta.status !== 404) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Drive respondió ${respuesta.status} al borrar el adjunto: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+}
+
 export {
   buscarOCrearArchivoDatos,
   cerrarSesionGoogle,
+  descargarArchivoBinarioDeDrive,
+  eliminarArchivoDeDriveConId,
   guardarDatos,
   inicializarGoogleAuth,
   iniciarSesionConGoogle,
@@ -332,4 +427,5 @@ export {
   obtenerMetadatosArchivo,
   obtenerPerfilGoogle,
   refrescarAccessTokenGoogle,
+  subirArchivoBinarioADrive,
 };

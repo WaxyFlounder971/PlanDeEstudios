@@ -32,6 +32,18 @@ function crearDatosUsuarioNuevo() {
       modo_rendimiento: false,      // v1.14.1: reduce blur/sombras/animaciones para laptops con GPU integrada
       plan_activo_id: null,         // id del Plan de Estudios seleccionado como activo
       enlaces_rapidos: [],          // ver estructura de "enlace" abajo (máx. 20)
+      // Fix (2026-08-08 — enlaces borrados "resucitando" entre dispositivos):
+      // storage-merge.js/fusionarDatos ya esperaba esta tumba
+      // (datosLocal.configuracion._eliminados_enlaces) desde que se agregó
+      // enlaces_rapidos como colección fundida aparte — pero acá nunca se
+      // creaba, así que siempre llegaba undefined. Sin una tumba real,
+      // borrar un enlace en un dispositivo no dejaba ningún rastro
+      // explícito: al fusionar con otro dispositivo que todavía tuviera esa
+      // versión vieja (por no haber sincronizado el borrado todavía),
+      // fusionarColeccion no tenía forma de saber que había que excluirlo —
+      // el enlace "resucitaba" solo. Mismo patrón ya usado para
+      // materias/categorías/profesores/compañeros.
+      _eliminados_enlaces: [],
 
       // Ajustes — ocultar botones de navegación (2026-08-04): ids de sección
       // ("plan-estudios" | "semestres" | "comunidad") que el usuario decidió
@@ -154,6 +166,17 @@ function crearDatosUsuarioNuevo() {
       */
     ],
 
+    // Adjuntos (2026-08-08): colección PLANA de nivel superior (no anidada
+    // dentro de cada materia/evento) — así se funde con una sola llamada a
+    // fusionarColeccion, igual que profesores/companeros/agenda, en vez de
+    // necesitar una función de fusión nueva por cada tipo de entidad que
+    // pueda tener adjuntos. `entidadTipo`+`entidadId` (ver crearAdjunto) es
+    // lo que conecta cada adjunto con lo que corresponda; renderizar es
+    // solo filtrar por esos dos campos.
+    adjuntos: [
+      /* ver crearAdjunto() */
+    ],
+
     // Tumbas top-level (regla obligatoria de sincronización — ver
     // storage-merge.js/fusionarDatos, que ya las esperaba). BUG encontrado en
     // esta ronda: _eliminados_profesores/_eliminados_planes/_eliminados_agenda
@@ -163,6 +186,7 @@ function crearDatosUsuarioNuevo() {
     // forma perezosa en semestres.js al primer borrado.
     _eliminados_profesores: [],
     _eliminados_companeros: [],
+    _eliminados_adjuntos: [],
   };
 }
 
@@ -171,6 +195,49 @@ function crearEnlaceRapido({ nombre, url, icono_tipo, icono_valor }) {
   // icono_tipo: "emoji" | "imagen" ; icono_valor: el emoji o la URL/base64 de la imagen
   return { id: crypto.randomUUID(), nombre, url, icono_tipo, icono_valor };
 }
+
+/**
+ * Adjuntos (2026-08-08): a diferencia de todo lo demás en este archivo, el
+ * CONTENIDO real de un adjunto (el binario) nunca vive dentro de este JSON
+ * — se sube como su propio archivo aparte en el Drive del usuario (ver
+ * subirArchivoBinarioADrive en auth.js). Esto es solo la REFERENCIA
+ * liviana que sí vive acá: qué es, a qué pertenece, y dónde encontrarlo
+ * (driveFileId). Se funde igual que cualquier otra entidad con id
+ * (fusionarColeccion en storage-merge.js), por eso NO se sella acá —
+ * mismo criterio que crearEnlaceRapido: quien la crea (core/storage-
+ * adjuntos.js) llama a sellarTimestamp() después, una vez decidido el
+ * contenido final.
+ *
+ * `entidadTipo`/`entidadId` son la única relación con lo que sea que
+ * adjunta este archivo (una materia, un evento de agenda, etc.) — se deja
+ * como referencia libre por texto en vez de una lista fija de tipos, para
+ * no tener que tocar este archivo cada vez que una pantalla nueva quiera
+ * soportar adjuntos.
+ *
+ * `driveFileId: null` + `subidaPendiente: true` es el estado inicial
+ * mientras el binario todavía no terminó de subirse (ver core/storage-
+ * adjuntos.js) — la UI ya puede mostrar la referencia de inmediato (con un
+ * indicador de "subiendo"), sin esperar a que la subida real termine.
+ */
+function crearAdjunto({ nombre, mimeType, tamanoBytes, entidadTipo, entidadId }) {
+  return {
+    id: crypto.randomUUID(),
+    nombre,
+    mimeType: mimeType || "application/octet-stream",
+    tamanoBytes: Number(tamanoBytes) || 0,
+    entidadTipo,
+    entidadId,
+    driveFileId: null,
+    subidaPendiente: true,
+  };
+}
+
+// Límite defensivo de tamaño por adjunto — Drive en sí no lo necesita (su
+// cuota es mucho mayor), pero subir algo muy pesado desde una conexión
+// móvil lenta puede colgar la app sin feedback claro. 25MB es holgado para
+// PDFs de enunciados/comprobantes o fotos de apuntes, y deja margen para
+// que Wagner lo ajuste después si hace falta un tipo de adjunto más pesado.
+const LIMITE_MB_ADJUNTO = 25;
 
 // Semestres y Notas — Fase 1: tope real de un semestre. Los programas duran
 // como máximo ~20 semanas; se deja un margen de 5 semanas de holgura (clases
@@ -1671,6 +1738,13 @@ function migrarDatosAntiguos(datos) {
     datos.configuracion.navegacion_orden = [];
   }
 
+  // Fix (2026-08-08 — tumba de enlaces faltante): mismo relleno defensivo
+  // que el resto de esta función, para cuentas cuyo JSON en Drive se guardó
+  // antes de que _eliminados_enlaces existiera en crearDatosUsuarioNuevo.
+  if (datos.configuracion && !Array.isArray(datos.configuracion._eliminados_enlaces)) {
+    datos.configuracion._eliminados_enlaces = [];
+  }
+
   // FIX sync (2026-08-02): materias matriculadas creadas antes del motor de
   // notas (Fase 6) no tienen criterios/_eliminados_criterios/nota_final/
   // nota_final_manual — ni siquiera como arreglo vacío o null explícito, el
@@ -1765,6 +1839,11 @@ function migrarDatosAntiguos(datos) {
   if (!Array.isArray(datos.companeros)) datos.companeros = [];
   if (!Array.isArray(datos._eliminados_profesores)) datos._eliminados_profesores = [];
   if (!Array.isArray(datos._eliminados_companeros)) datos._eliminados_companeros = [];
+
+  // Adjuntos (2026-08-08): mismo relleno defensivo — cuentas cuyo JSON en
+  // Drive se guardó antes de que existiera esta colección.
+  if (!Array.isArray(datos.adjuntos)) datos.adjuntos = [];
+  if (!Array.isArray(datos._eliminados_adjuntos)) datos._eliminados_adjuntos = [];
 
   if (Array.isArray(datos.semestres)) {
     datos.semestres.forEach((semestre) => {
@@ -1894,11 +1973,13 @@ function migrarDatosAntiguos(datos) {
 
 export {
   LIMITE_ENLACES_RAPIDOS,
+  LIMITE_MB_ADJUNTO,
   MAPEO_HORAS_VIEJO_A_NUEVO,
   PALETAS_DISPONIBLES,
   PARAMETROS_UNIVERSIDAD_DEFAULT,
   PRESETS_TIPOS_HORAS,
   arbolContieneCodigo,
+  crearAdjunto,
   crearCategoria,
   crearDatosUsuarioNuevo,
   crearEnlaceRapido,
