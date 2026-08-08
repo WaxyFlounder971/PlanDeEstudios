@@ -338,13 +338,18 @@ a { color: var(--accent-1); }
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
+  cursor: pointer;
   color-scheme: dark;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'><path d='M1 1L7 7L13 1' stroke='%238892b0' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
   background-repeat: no-repeat;
   background-position: right 14px center;
   background-size: 12px 8px;
   padding-right: 38px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
 }
+.form-select:hover { border-color: var(--accent-1-40, var(--accent-1)); }
 [data-mode="light"] .form-select { color-scheme: light; }
 .form-select option {
   background: var(--bg-panel);
