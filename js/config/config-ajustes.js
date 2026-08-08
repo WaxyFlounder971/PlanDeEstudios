@@ -4,7 +4,7 @@
    plan/universidad, formato de texto.
    ========================================================================= */
 
-import { ESCALAS_DISPONIBLES, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
+import { ESCALAS_DISPONIBLES, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, migrarDatosAntiguos, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
 import { actualizarIndicadorSync, marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
@@ -394,7 +394,184 @@ function renderizarAjustes() {
   // Ajustes — ocultar botones de navegación principal
   renderizarNavegacionOculta();
 
+  // Ajustes — respaldo de datos (exportar/importar JSON completo)
+  renderizarSeccionDatos();
+
   actualizarIndicadorSync();
+}
+
+/**
+ * Ajustes — Respaldo de datos (exportar / importar JSON completo): permite
+ * bajar un archivo .json con TODO lo que vive en estado.datos (perfil,
+ * configuración, planes, semestres, notas, agenda, profesores, compañeros,
+ * adjuntos) y restaurarlo más adelante — mismo archivo que ya usás para
+ * respaldos manuales.
+ *
+ * EXPORTAR es de solo lectura: no muta nada, no pide confirmación.
+ *
+ * IMPORTAR es DESTRUCTIVO — reemplaza el 100% de estado.datos actual — por
+ * eso sigue 4 pasos, en orden, y aborta sin tocar nada si cualquiera falla:
+ *   1. Valida que el archivo sea JSON y tenga la forma mínima esperada
+ *      (objeto con version_esquema + las colecciones principales) — un
+ *      archivo random no debe poder dejar la app en un estado roto a medias.
+ *   2. Pide confirmación explícita con window.confirm, dejando clarísimo que
+ *      es irreversible y sugiriendo exportar antes por las dudas.
+ *   3. Corre migrarDatosAntiguos() sobre el JSON importado ANTES de
+ *      aplicarlo — el mismo paso que corre cualquier dato que entra a la
+ *      app (cache local o Drive), así un backup viejo (de una versión
+ *      anterior del schema) se pone al día solo en vez de faltarle campos
+ *      nuevos (ver schema.js).
+ *   4. Muta estado.datos EN EL MISMO OBJETO (vacía sus llaves y copia las
+ *      nuevas con Object.assign) en vez de reasignar estado.datos =
+ *      nuevoObjeto — igual que el resto de la app, que nunca reasigna
+ *      estado.datos en ningún lado, solo muta sus propiedades.
+ *
+ * Después de aplicar, llama a marcarCambioPendiente() (mismo mecanismo que
+ * cualquier otro cambio) y recarga la página: reemplazar TODO el estado de
+ * punta a punta (agenda, finanzas, horario, comunidad — secciones que este
+ * archivo ni siquiera importa) sin recargar implicaría reconstruir a mano
+ * el render de cada sección desde acá; recargar es la única forma de
+ * garantizar que TODA la UI, no solo Ajustes, quede consistente con los
+ * datos nuevos.
+ */
+const LLAVES_MINIMAS_DATOS_VALIDOS = ["version_esquema", "configuracion", "semestres", "planes_estudio"];
+
+function formatearFechaArchivo(fecha) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${fecha.getFullYear()}-${pad(fecha.getMonth() + 1)}-${pad(fecha.getDate())}`;
+}
+
+function exportarDatos() {
+  const json = JSON.stringify(estado.datos);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `academica-backup-${formatearFechaArchivo(new Date())}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Delay antes de revocar el object URL: algunos navegadores (Safari en
+  // particular) cancelan la descarga si se revoca demasiado rápido.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function datosParecenValidos(datos) {
+  if (!datos || typeof datos !== "object" || Array.isArray(datos)) return false;
+  return LLAVES_MINIMAS_DATOS_VALIDOS.every((llave) => llave in datos);
+}
+
+function importarDatosDesdeArchivo(archivo, elEstado) {
+  const lector = new FileReader();
+  lector.onload = () => {
+    let datosImportados;
+    try {
+      datosImportados = JSON.parse(lector.result);
+    } catch (err) {
+      elEstado.textContent = "❌ Ese archivo no es un JSON válido. No se tocó nada.";
+      return;
+    }
+
+    if (!datosParecenValidos(datosImportados)) {
+      elEstado.textContent = "❌ Ese archivo no tiene la forma de un respaldo de esta app (le faltan campos básicos). No se tocó nada.";
+      return;
+    }
+
+    const confirmado = window.confirm(
+      "Esto va a REEMPLAZAR TODOS tus datos actuales (planes, semestres, notas, agenda, profesores, todo) por lo que hay en este archivo.\n\n" +
+      "Esta acción no se puede deshacer desde la app. Si no exportaste un respaldo de lo que tenés ahora mismo, cancelá y hacelo primero.\n\n" +
+      "¿Confirmás que querés continuar?"
+    );
+    if (!confirmado) {
+      elEstado.textContent = "Importación cancelada — no se tocó nada.";
+      return;
+    }
+
+    try {
+      migrarDatosAntiguos(datosImportados);
+
+      Object.keys(estado.datos).forEach((llave) => delete estado.datos[llave]);
+      Object.assign(estado.datos, datosImportados);
+
+      marcarCambioPendiente();
+
+      elEstado.textContent = "✅ Datos importados. Recargando...";
+      setTimeout(() => window.location.reload(), 700);
+    } catch (err) {
+      console.error("Error importando datos:", err);
+      elEstado.textContent = "❌ Ocurrió un error aplicando el archivo. Por las dudas, recargá la página antes de seguir usando la app.";
+    }
+  };
+  lector.onerror = () => {
+    elEstado.textContent = "❌ No se pudo leer el archivo.";
+  };
+  lector.readAsText(archivo);
+}
+
+function renderizarSeccionDatos() {
+  const contenedor = document.getElementById("seccion-datos-respaldo");
+  if (!contenedor) return;
+  contenedor.innerHTML = "";
+
+  const panel = document.createElement("div");
+  panel.className = "glass-panel";
+  panel.style.cssText = "padding:12px; display:flex; flex-direction:column; gap:10px;";
+
+  const explicacion = document.createElement("p");
+  explicacion.className = "muted";
+  explicacion.style.cssText = "font-size:0.8rem; margin:0;";
+  explicacion.textContent = "Exportá un archivo .json con absolutamente todos tus datos (planes, semestres, notas, agenda, profesores, compañeros) para guardarlo como respaldo, o importá uno para restaurarlo.";
+  panel.appendChild(explicacion);
+
+  const filaBotones = document.createElement("div");
+  filaBotones.style.cssText = "display:flex; gap:8px; flex-wrap:wrap;";
+
+  const btnExportar = document.createElement("button");
+  btnExportar.type = "button";
+  btnExportar.className = "btn btn-secondary";
+  btnExportar.style.cssText = "flex:1 1 160px;";
+  btnExportar.textContent = "⬇️ Exportar datos (JSON)";
+  filaBotones.appendChild(btnExportar);
+
+  const btnImportar = document.createElement("button");
+  btnImportar.type = "button";
+  btnImportar.className = "btn btn-danger";
+  btnImportar.style.cssText = "flex:1 1 160px;";
+  btnImportar.textContent = "⬆️ Importar datos (JSON)";
+  filaBotones.appendChild(btnImportar);
+
+  panel.appendChild(filaBotones);
+
+  const inputArchivo = document.createElement("input");
+  inputArchivo.type = "file";
+  inputArchivo.accept = "application/json,.json";
+  inputArchivo.hidden = true;
+  panel.appendChild(inputArchivo);
+
+  const estadoTexto = document.createElement("p");
+  estadoTexto.className = "muted";
+  estadoTexto.style.cssText = "font-size:0.78rem; margin:0; min-height:1em;";
+  panel.appendChild(estadoTexto);
+
+  btnExportar.addEventListener("click", () => {
+    exportarDatos();
+    estadoTexto.textContent = "✅ Descarga iniciada.";
+  });
+
+  btnImportar.addEventListener("click", () => {
+    estadoTexto.textContent = "";
+    inputArchivo.value = "";
+    inputArchivo.click();
+  });
+
+  inputArchivo.addEventListener("change", () => {
+    const archivo = inputArchivo.files && inputArchivo.files[0];
+    if (!archivo) return;
+    estadoTexto.textContent = "Leyendo archivo...";
+    importarDatosDesdeArchivo(archivo, estadoTexto);
+  });
+
+  contenedor.appendChild(panel);
 }
 
 /**
