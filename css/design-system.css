@@ -1742,8 +1742,16 @@ img, svg { max-width: 100%; }
 .mapa-scroll {
   flex: 1;
   overflow-x: auto;
-  overflow-y: hidden;
-  touch-action: pan-x;
+  /* Punto 1 (2026-08-07, pedido explícito): antes overflow-y:hidden +
+     touch-action:pan-x bloqueaban el arrastre libre de un dedo en vertical
+     — solo dejaban pasar el pinch-zoom (2 dedos, manejado a mano en JS con
+     preventDefault, ver plan-mapa.js). Con pan-y habilitado el navegador
+     deja pasar el arrastre vertical de un dedo de forma nativa, y el
+     handler de touchmove de plan-mapa.js sigue haciendo su propio
+     preventDefault cuando detecta 2 dedos, así que el pinch-zoom no se
+     rompe. */
+  overflow-y: auto;
+  touch-action: pan-x pan-y;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
 }
