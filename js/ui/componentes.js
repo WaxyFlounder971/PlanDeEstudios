@@ -4,7 +4,7 @@
    flechas de scroll horizontal, y el layout responsivo del sidebar/drawer.
    ========================================================================= */
 
-import { togglePerfilPopover } from "../main.js";
+import { mostrarSeccion, togglePerfilPopover } from "../main.js";
 
 const CLAVE_SIDEBAR_COLAPSADA = "sidebar_colapsada";
 
@@ -162,6 +162,16 @@ function inicializarLayoutResponsivo() {
 
   overlay.addEventListener("click", cerrarSidebarMovil);
 
+  // Acceso directo a Enlaces rápidos en móvil (2026-08-07): antes la única
+  // forma de llegar era entrando a Ajustes. Este botón vive en la barra
+  // superior (no en el drawer), así que no depende de abrir/cerrar el
+  // sidebar: cambia a la sección Configuración y hace scroll directo hasta
+  // la tarjeta de Enlaces rápidos dentro de ella.
+  const btnTopbarEnlaces = document.getElementById("btn-topbar-enlaces");
+  if (btnTopbarEnlaces) {
+    btnTopbarEnlaces.addEventListener("click", irAEnlacesRapidosMovil);
+  }
+
   // Cerrar el drawer móvil al usar cualquier botón de navegación/config.
   sidebar.addEventListener("click", (e) => {
     if (window.innerWidth < 900 && e.target.closest(".btn-nav")) {
@@ -184,6 +194,24 @@ function cerrarSidebarMovil() {
   document.getElementById("app-sidebar").classList.remove("abierta");
   document.getElementById("sidebar-overlay").classList.remove("abierta");
   document.body.classList.remove("scroll-bloqueado");
+}
+
+/**
+ * Acceso directo a Enlaces rápidos en móvil (2026-08-07): cambia a la
+ * sección Configuración (donde vive la tarjeta real de Enlaces rápidos,
+ * #seccion-enlaces-rapidos en index.html) y hace scroll suave hasta ella.
+ * El requestAnimationFrame es necesario porque mostrarSeccion() recién
+ * quita la clase "oculto" de #seccion-configuracion de forma síncrona —
+ * sin esperar al siguiente frame, scrollIntoView podía correr sobre un
+ * layout que el navegador todavía no terminó de recalcular tras el cambio
+ * de display, y el scroll quedaba corto o directamente no hacía nada.
+ */
+function irAEnlacesRapidosMovil() {
+  mostrarSeccion("configuracion");
+  requestAnimationFrame(() => {
+    const seccion = document.getElementById("seccion-enlaces-rapidos");
+    if (seccion) seccion.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 
 function restaurarEstadoSidebar() {
@@ -315,6 +343,7 @@ export {
   inicializarBotonesCerrarModal,
   inicializarLayoutResponsivo,
   inicializarModalConfirmacion,
+  irAEnlacesRapidosMovil,
   mostrarToast,
   restaurarEstadoSidebar,
 };
