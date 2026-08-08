@@ -571,6 +571,55 @@ function renderizarNotasAprobacion() {
     botonEscala.textContent = escalaInicial ? escalaInicial.etiqueta : "Elegir escala";
     const listaEscala = document.createElement("ul");
     listaEscala.className = "select-custom-lista oculto";
+
+    // v1.15.12 (2026-08-08 — "la lista no tiene fondo / se mete detrás de
+    // la tarjeta siguiente"): las tarjetas usan glass-panel (backdrop-filter),
+    // y eso crea un contexto de apilamiento PROPIO por tarjeta — ningún
+    // z-index adentro de esta tarjeta puede ganarle a la tarjeta de al
+    // lado, sin importar qué tan alto sea (limitación real de CSS, no
+    // cuestión de subir el número). La solución es sacar la lista de la
+    // tarjeta por completo mientras está abierta: se reparenta a
+    // document.body (con posición calculada acá, en JS, según dónde esté
+    // el botón en pantalla) y vuelve a su lugar original al cerrarse — así
+    // nunca queda flotando huérfana si la sección de Ajustes se
+    // re-renderiza mientras está cerrada.
+    function posicionarListaEscala() {
+      const r = botonEscala.getBoundingClientRect();
+      listaEscala.style.position = "fixed";
+      listaEscala.style.top = `${r.bottom + 6}px`;
+      listaEscala.style.left = `${r.left}px`;
+      listaEscala.style.width = `${r.width}px`;
+    }
+    function cerrarListaEscala() {
+      listaEscala.classList.add("oculto");
+      botonEscala.setAttribute("aria-expanded", "false");
+      if (listaEscala.parentElement === document.body) dropdownEscala.appendChild(listaEscala);
+      window.removeEventListener("scroll", cerrarListaEscala, true);
+      window.removeEventListener("resize", cerrarListaEscala);
+    }
+    function abrirListaEscala() {
+      // Solo puede haber un dropdown propio abierto a la vez en toda la
+      // pantalla — cierra cualquier otro antes de abrir este (incluye
+      // repatriar cualquier lista de OTRA tarjeta que haya quedado en body).
+      document.querySelectorAll(".select-custom-lista").forEach((l) => {
+        if (l !== listaEscala) {
+          l.classList.add("oculto");
+          if (l.parentElement === document.body && l._volverA) l._volverA.appendChild(l);
+        }
+      });
+      listaEscala._volverA = dropdownEscala;
+      document.body.appendChild(listaEscala);
+      posicionarListaEscala();
+      listaEscala.classList.remove("oculto");
+      botonEscala.setAttribute("aria-expanded", "true");
+      // Cerrar al hacer scroll (adentro o afuera de la tarjeta) o al
+      // cambiar el tamaño de ventana — reposicionar en vivo agregaría
+      // complejidad para un dropdown que en general se usa y se suelta
+      // rápido; cerrar es más predecible que dejarlo desalineado.
+      window.addEventListener("scroll", cerrarListaEscala, true);
+      window.addEventListener("resize", cerrarListaEscala);
+    }
+
     ESCALAS_DISPONIBLES.forEach((escala) => {
       const item = document.createElement("li");
       item.className = "select-custom-opcion";
@@ -581,8 +630,7 @@ function renderizarNotasAprobacion() {
         botonEscala.textContent = escala.etiqueta;
         listaEscala.querySelectorAll(".select-custom-opcion").forEach((li) => li.classList.remove("activa"));
         item.classList.add("activa");
-        listaEscala.classList.add("oculto");
-        botonEscala.setAttribute("aria-expanded", "false");
+        cerrarListaEscala();
         // El <select> oculto sigue siendo el dueño real del valor — acá
         // solo se dispara el evento que ya escucha el resto del código,
         // como si el cambio hubiera venido de un <select> normal.
@@ -593,17 +641,12 @@ function renderizarNotasAprobacion() {
     botonEscala.setAttribute("aria-expanded", "false");
     botonEscala.addEventListener("click", (e) => {
       e.stopPropagation();
-      const abierta = !listaEscala.classList.contains("oculto");
-      // Solo puede haber un dropdown propio abierto a la vez en toda la
-      // pantalla — cierra cualquier otro antes de abrir este.
-      document.querySelectorAll(".select-custom-lista").forEach((l) => l.classList.add("oculto"));
-      listaEscala.classList.toggle("oculto", abierta);
-      botonEscala.setAttribute("aria-expanded", String(!abierta));
+      if (listaEscala.classList.contains("oculto")) abrirListaEscala();
+      else cerrarListaEscala();
     });
     document.addEventListener("click", (e) => {
-      if (!dropdownEscala.contains(e.target)) {
-        listaEscala.classList.add("oculto");
-        botonEscala.setAttribute("aria-expanded", "false");
+      if (!dropdownEscala.contains(e.target) && !listaEscala.contains(e.target)) {
+        cerrarListaEscala();
       }
     });
     dropdownEscala.appendChild(botonEscala);
