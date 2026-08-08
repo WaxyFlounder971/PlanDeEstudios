@@ -937,16 +937,37 @@ body.scroll-bloqueado {
 /* Fix (2026-08-07): caja fija en flex para el ícono del enlace rápido —
    ver el comentario en config-enlaces.js. font-size:1.3rem queda acá para
    que el emoji se vea al mismo tamaño que antes; para <img> es
-   irrelevante (la imagen se estira al 100% de esta caja de 24x24). */
+   irrelevante (el tamaño real de la imagen ahora se fija en su propio
+   estilo inline, ver más abajo).
+   Fix (2026-08-08 — "cuando hay más de un emoji se pone uno sobre otro"):
+   `width: 24px` fijo convertía este span en un contenedor angosto; el
+   texto de varios emojis adentro es un ítem flex anónimo que sigue
+   pudiendo hacer salto de línea normal (white-space: normal por
+   defecto) — con 2+ emojis (cada uno ronda los 20px+ a este tamaño de
+   fuente) no entraban en 24px de ancho y el navegador los partía línea
+   por línea, uno debajo del otro. Se cambia a `min-width` (así una sola
+   imagen sigue centrada en una caja de al menos 24px) + `white-space:
+   nowrap` (así el texto de los emojis nunca envuelve, sin importar
+   cuántos haya — quedan todos en una sola línea horizontal, como texto
+   normal). */
 .enlace-rapido-icono {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
+  min-width: 24px;
   height: 24px;
   flex-shrink: 0;
   font-size: 1.3rem;
   line-height: 1;
+  white-space: nowrap;
+}
+/* El tamaño de la imagen ahora se fija acá (antes era width/height:100% del
+   contenedor, que dependía de que el contenedor tuviera un ancho fijo —
+   ya no lo tiene, porque pasó a min-width para poder crecer con emojis). */
+.enlace-rapido-icono img {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
 }
 
 /* ---- v7.1: el nombre del enlace rápido usaba var(--accent-1) heredado del
