@@ -1,10 +1,10 @@
-/* =========================================================================
+/* ========================================================================
    ESQUEMA DE DATOS — App Académica
    Este archivo NO valida nada por ahora, solo documenta y crea la
    estructura inicial ("de fábrica") de los datos de un usuario nuevo.
    Todo el proyecto (iteraciones 1-7) va a ir llenando estas mismas llaves,
    así que este archivo es el mapa de referencia de todo el modelo.
-   ========================================================================= */
+   ======================================================================== */
 
 /**
  * Devuelve el objeto de datos "vacío" para un usuario que recién inicia
