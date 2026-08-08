@@ -17,13 +17,13 @@
 <!-- ============================ PANTALLA DE LOGIN ============================ -->
 <div id="pantalla-login" class="stack" style="min-height:100vh; align-items:center; justify-content:center; padding:24px;">
   <div class="glass-card stack" style="max-width:420px; width:100%; text-align:center;">
-    <h1 style="font-size:1.6rem;">🎓 App Académica</h1>
-    <p>Tu plan de estudios, notas, horario y agenda en un solo lugar — sincronizado en tu propio Google Drive.</p>
+    <h1 style="font-size:1.6rem; display:flex; align-items:center; justify-content:center; gap:8px;"><img src="imagenes/LogoApp.png" alt="Logo App Académica" style="height:1.4em; width:auto; vertical-align:middle;"> App Académica</h1>
+    <p>Toda tu carrera en un solo lugar disponible en todos tus dispositivos</p>
     <button id="btn-login-google" class="btn btn-primary btn-block">Iniciar sesión con Google</button>
-    <p class="muted" style="color:var(--color-warning, #f59e0b);">⚠️ Debes aceptar el permiso de Google Drive para poder usar la app — sin él, no se puede guardar ningún cambio.</p>
+    <p class="muted" style="color:var(--color-warning, #f59e0b);">⚠️ Debes aceptar el permiso de Google Drive para poder utilizar la app</p>
     <p id="aviso-login-bloqueado" class="aviso-login-bloqueado oculto"></p>
     <p id="aviso-permiso-rechazado" class="aviso-login-bloqueado oculto"></p>
-    <p class="muted">Solo se guarda un archivo dentro de tu Drive. Nadie más que tú (y esta app) puede leerlo.</p>
+    <p class="muted">☝️Usamos Drive para guardar toda la info que tengas en la App, NUNCA borres el archivo que se creó en tu cuenta</p>
   </div>
 </div>
 
@@ -64,7 +64,7 @@
   <!-- Barra superior solo-móvil -->
   <div class="mobile-topbar">
     <button id="btn-hamburguesa" class="btn-topbar-icono" aria-label="Abrir menú">☰</button>
-    <h3>🎓 App Académica</h3>
+    <h3 style="display:flex; align-items:center; gap:6px; justify-content:center;"><img src="imagenes/LogoApp.png" alt="Logo App Académica" style="height:1.2em; width:auto; vertical-align:middle;"> App Académica</h3>
     <!-- Acceso directo a Enlaces rápidos en móvil (2026-08-07): antes solo se
          llegaba entrando a Ajustes. Mismo estilo "símbolo limpio" sin borde
          ni fondo que la hamburguesa — ver .btn-topbar-icono en design-system.css. -->
@@ -91,7 +91,7 @@
     <!-- Sidebar -->
     <nav id="app-sidebar" class="glass-panel app-sidebar">
       <button id="btn-colapsar-sidebar" class="btn-colapsar sidebar-cerrar-movil" title="Colapsar menú">⟨⟨</button>
-      <h3 class="sidebar-titulo">🎓 <span class="texto">App Académica</span></h3>
+      <h3 class="sidebar-titulo" style="display:flex; align-items:center; gap:8px;"><img src="imagenes/LogoApp.png" alt="Logo App Académica" style="height:1.3em; width:auto; vertical-align:middle;"> <span class="texto">App Académica</span></h3>
 
       <div class="sidebar-scroll">
         <button class="btn btn-secondary btn-block btn-nav" title="Resumen" disabled>🏠 <span class="texto-nav">Resumen</span></button>
