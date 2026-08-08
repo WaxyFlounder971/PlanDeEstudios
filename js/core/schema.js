@@ -867,8 +867,8 @@ function repartirEquitativoCriterio(criterio) {
  * propio > escala del plan/universidad > default 100. Único punto de
  * verdad — reutilizar en vez de leer los 2 campos por separado.
  *
- * El valor devuelto es siempre un número (7, 10, 12, 15, 20, 100, "gpa4",
- * "gpa4_entero"...). Ver ESCALAS_DISPONIBLES para la lista completa y
+ * El valor devuelto es siempre un número (7, 10, 12, 15, 20, 100, "gpa4"...).
+ * Ver ESCALAS_DISPONIBLES para la lista completa y
  * obtenerEscalaPorId para ir de este valor crudo al descriptor completo
  * (tipo, max, valores).
  *
@@ -922,8 +922,7 @@ const ESCALAS_DISPONIBLES = [
   // importar el paso), es solo una pista para el input numérico de la UI
   // (ver config-ajustes.js); si una escala no trae `paso`, la UI cae al
   // 0.1 de siempre.
-  { id: "gpa4", etiqueta: "GPA 0 – 4 (decimales)", tipo: "numerica", max: 4, paso: 0.1 },
-  { id: "gpa4_entero", etiqueta: "GPA 0 – 4 (enteros)", tipo: "numerica", max: 4, paso: 1 },
+  { id: "gpa4", etiqueta: "GPA 0 – 4", tipo: "numerica", max: 4, paso: 0.1 },
 ];
 
 /** Descriptor completo de una escala a partir de su id crudo (lo que se
