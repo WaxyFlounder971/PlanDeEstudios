@@ -4,7 +4,7 @@
    plan/universidad, formato de texto.
    ========================================================================= */
 
-import { PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, sellarTimestamp } from "../core/schema.js";
+import { ESCALAS_DISPONIBLES, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, sellarTimestamp } from "../core/schema.js";
 import { actualizarIndicadorSync, marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
@@ -359,17 +359,16 @@ function renderizarAjustes() {
     marcarCambioPendiente();
   };
 
-  // Escala de notas global
-  const grupoEscala = document.getElementById("pill-escala-notas");
-  grupoEscala.querySelectorAll(".pill-item").forEach((btn) => {
-    btn.classList.toggle("active", Number(btn.dataset.valor) === estado.datos.configuracion.escala_notas_global);
-    btn.onclick = () => {
-      estado.datos.configuracion.escala_notas_global = Number(btn.dataset.valor);
-      sellarTimestamp(estado.datos.configuracion);
-      marcarCambioPendiente();
-      renderizarAjustes();
-    };
-  });
+  // Ajustes por Universidad (2026-08-08): el selector de escala global que
+  // vivía acá (#pill-escala-notas, leyendo/escribiendo
+  // configuracion.escala_notas_global) se elimina — ese campo ya no existe
+  // en el schema (ver migrarDatosAntiguos). La escala ahora es 100% por
+  // plan, y se edita dentro de cada tarjeta (ver renderizarNotasAprobacion
+  // más abajo, junto a nota de aprobación y redondeo).
+  //
+  // NOTA para quien toque index.html: el contenedor viejo #pill-escala-notas
+  // queda huérfano en el HTML — ya no se busca ni se usa desde acá, se
+  // puede borrar del markup con seguridad.
 
   // Fase 6, punto 5: nota de aprobación por universidad/plan — va justo
   // después de la escala de notas (mismo grupo "académico" dentro del
@@ -399,26 +398,39 @@ function renderizarAjustes() {
 }
 
 /**
- * Fase 6, punto 5 — Nota de aprobación por universidad/plan. Una tarjeta
- * por CADA plan que el usuario tenga creado (no solo los activos de Modo
- * Hardcore: si mañana reactiva uno, el número ya lo tiene puesto).
+ * Ajustes por Universidad (2026-08-08) — una tarjeta por CADA plan que el
+ * usuario tenga creado (no solo los activos de Modo Hardcore: si mañana
+ * reactiva uno, ya tiene todo configurado). Cada tarjeta edita 3 cosas del
+ * plan, las 3 con efecto inmediato (sellarTimestamp + marcarCambioPendiente
+ * al toque, mismo patrón que el resto de Ajustes):
  *
- * Decisión de diseño (2026-08-03): acá solo se edita `nota_aprobacion`.
- * El viejo `umbral_pasar_raspando` se eliminó del modelo por completo —
- * "pasar raspando" dejó de ser un número guardado aparte y pasó a ser el
- * mismo `nota_aprobacion` con el margen de redondeo ya aplicado (ver
- * calcularObjetivoPasarRaspando en schema.js, y redondearNotaFinalAlCinco-
- * MasCercano que usa terminarSemestre() para decidir aprobó/no aprobó).
- * Por eso acá al lado del input se muestra ese margen, pero SOLO como dato
- * informativo (no editable) — mostrarlo como si fuera un segundo ajuste
- * independiente reintroduciría la misma inconsistencia de dos números que
- * deberían ser uno solo.
+ *  - Escala de notas (`parametros_universidad.escala_notas`): selector
+ *    desplegable con TODAS las opciones de ESCALAS_DISPONIBLES (schema.js).
+ *    Reemplaza al viejo pill de escala GLOBAL — ver nota en renderizarAjustes.
+ *    Cambiar de escala acá NUNCA reescribe notas ya cargadas: las
+ *    asignaciones siguen guardando su nota cruda tal cual se tipeó, y el
+ *    motor de cálculo simplemente la reinterpreta contra la escala vigente
+ *    en el momento de calcular (ver obtenerEscalaNotasMateria) — por eso el
+ *    cambio de escala es reversible infinitas veces sin perder ni corromper
+ *    ningún dato ya registrado.
+ *  - Nota de aprobación (`parametros_universidad.nota_aprobacion`): sigue
+ *    siendo un número 0-100 SIEMPRE, sin importar la escala elegida al
+ *    lado — no está desalineado a propósito: nota_final de una materia ya
+ *    es internamente 0-100 pase lo que pase por la escala de captura (el
+ *    peso de cada criterio/asignación siempre suma 100%, ver
+ *    calcularPuntosAsignacion en schema.js), así que 0-100 es la unidad
+ *    real y estable en la que vale la pena comparar/guardar esto.
+ *  - Redondeo al 5 más cercano (`parametros_universidad.redondeo_activo`):
+ *    switch — existía en el schema desde Fase 6.2 pero nunca tuvo control
+ *    en la UI a pesar del comentario "editable en Ajustes". El bloque
+ *    informativo "Pasás raspando con" (calcularObjetivoPasarRaspando) solo
+ *    tiene sentido si el redondeo está activo — se oculta si no.
  *
- * Layout pedido: universidad/carrera como título de la tarjeta, y debajo
- * los dos bloques uno al lado del otro ocupando todo el ancho disponible
- * si caben (flex:1 1 140px + flex-wrap) — si no entran, se apilan uno
- * arriba del otro ocupando el ancho completo. Ver #seccion-notas-aprobacion
- * en index.html (nuevo contenedor a agregar, ver nota al final).
+ * Decisión de diseño (2026-08-03, sigue vigente): NO existe un
+ * umbral_redondeo separado editable — "pasar raspando" se calcula al vuelo
+ * desde nota_aprobacion, nunca se guarda como número aparte. Reintroducir
+ * un número independiente ahí reabriría la inconsistencia de dos fuentes
+ * de verdad que esa decisión cerró.
  */
 function formatearNumeroCorto(numero) {
   const n = Number(numero);
@@ -456,7 +468,46 @@ function renderizarNotasAprobacion() {
     const fila = document.createElement("div");
     fila.style.cssText = "display:flex; flex-wrap:wrap; gap:10px;";
 
-    // Bloque 1: nota de aprobación real (editable)
+    // Bloque 1: escala de notas (selector desplegable — NO switch de 2
+    // opciones, tiene que caber cualquier cantidad de escalas)
+    const bloqueEscala = document.createElement("div");
+    bloqueEscala.style.cssText = "flex:1 1 140px;";
+    const labelEscala = document.createElement("label");
+    labelEscala.className = "muted";
+    labelEscala.style.cssText = "display:block; font-size:0.75rem; margin-bottom:4px;";
+    labelEscala.textContent = "Escala de notas";
+    const selectEscala = document.createElement("select");
+    selectEscala.className = "form-input";
+    selectEscala.style.width = "100%";
+    ESCALAS_DISPONIBLES.forEach((escala) => {
+      const opt = document.createElement("option");
+      opt.value = String(escala.id);
+      opt.textContent = escala.etiqueta;
+      selectEscala.appendChild(opt);
+    });
+    selectEscala.value = String(plan.parametros_universidad.escala_notas ?? 100);
+    selectEscala.addEventListener("change", () => {
+      // Los ids numéricos (7,10,12,...,100) viajan como string en
+      // selectEscala.value — hay que volver a Number salvo para "letras"
+      // y las escalas gpa*, que son ids de texto. Number("letras") da NaN,
+      // así que el chequeo isNaN decide cuál de las dos ramas corresponde.
+      const crudo = selectEscala.value;
+      const comoNumero = Number(crudo);
+      plan.parametros_universidad.escala_notas = Number.isNaN(comoNumero) ? crudo : comoNumero;
+      sellarTimestamp(plan);
+      marcarCambioPendiente();
+      // Nunca toca ninguna nota ya cargada — solo cambia con qué escala se
+      // reinterpretan de acá en adelante (ver obtenerEscalaNotasMateria),
+      // por eso no hace falta re-renderizar nada de Plan de Estudios/
+      // Semestres desde acá: la próxima vez que se calcule algo, ya toma
+      // la escala nueva sola.
+    });
+    bloqueEscala.appendChild(labelEscala);
+    bloqueEscala.appendChild(selectEscala);
+    fila.appendChild(bloqueEscala);
+
+    // Bloque 2: nota de aprobación real (editable) — SIEMPRE 0-100, ver
+    // docblock de arriba sobre por qué no depende de la escala elegida.
     const bloqueAprobacion = document.createElement("div");
     bloqueAprobacion.style.cssText = "flex:1 1 140px;";
     const labelAprobacion = document.createElement("label");
@@ -475,7 +526,32 @@ function renderizarNotasAprobacion() {
     bloqueAprobacion.appendChild(inputAprobacion);
     fila.appendChild(bloqueAprobacion);
 
-    // Bloque 2: margen real para "pasar raspando" (informativo, no editable)
+    tarjeta.appendChild(fila);
+
+    // Segunda fila: switch de redondeo + "pasás raspando" (solo si el
+    // redondeo está activo — con redondeo apagado ese número no aplica).
+    const filaRedondeo = document.createElement("div");
+    filaRedondeo.style.cssText = "display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-top:10px;";
+
+    const bloqueSwitch = document.createElement("div");
+    bloqueSwitch.style.cssText = "flex:1 1 140px; display:flex; align-items:center; justify-content:space-between; gap:8px;";
+    const labelSwitch = document.createElement("span");
+    labelSwitch.style.cssText = "font-size:0.8rem;";
+    labelSwitch.textContent = "Redondear al 5 más cercano";
+    const labelToggle = document.createElement("label");
+    labelToggle.className = "switch switch-tema";
+    const chkRedondeo = document.createElement("input");
+    chkRedondeo.type = "checkbox";
+    chkRedondeo.checked = plan.parametros_universidad.redondeo_activo !== false;
+    const trackRedondeo = document.createElement("span");
+    trackRedondeo.className = "track";
+    trackRedondeo.innerHTML = '<span class="thumb"></span>';
+    labelToggle.appendChild(chkRedondeo);
+    labelToggle.appendChild(trackRedondeo);
+    bloqueSwitch.appendChild(labelSwitch);
+    bloqueSwitch.appendChild(labelToggle);
+    filaRedondeo.appendChild(bloqueSwitch);
+
     const bloqueRaspando = document.createElement("div");
     bloqueRaspando.style.cssText = "flex:1 1 140px;";
     const labelRaspando = document.createElement("label");
@@ -487,13 +563,23 @@ function renderizarNotasAprobacion() {
     valorRaspando.style.cssText = "width:100%; opacity:0.7; display:flex; align-items:center; cursor:default;";
     bloqueRaspando.appendChild(labelRaspando);
     bloqueRaspando.appendChild(valorRaspando);
-    fila.appendChild(bloqueRaspando);
+    filaRedondeo.appendChild(bloqueRaspando);
 
     function actualizarRaspando() {
+      const activo = plan.parametros_universidad.redondeo_activo !== false;
+      bloqueRaspando.style.display = activo ? "" : "none";
+      if (!activo) return;
       const notaActual = Number(plan.parametros_universidad.nota_aprobacion) || 70;
       valorRaspando.textContent = formatearNumeroCorto(calcularObjetivoPasarRaspando(notaActual));
     }
     actualizarRaspando();
+
+    chkRedondeo.addEventListener("change", () => {
+      plan.parametros_universidad.redondeo_activo = chkRedondeo.checked;
+      sellarTimestamp(plan);
+      marcarCambioPendiente();
+      actualizarRaspando();
+    });
 
     inputAprobacion.addEventListener("change", () => {
       let valor = Number(inputAprobacion.value);
@@ -506,7 +592,7 @@ function renderizarNotasAprobacion() {
       actualizarRaspando();
     });
 
-    tarjeta.appendChild(fila);
+    tarjeta.appendChild(filaRedondeo);
     contenedor.appendChild(tarjeta);
   });
 }
