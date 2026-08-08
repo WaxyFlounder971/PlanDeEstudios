@@ -15,6 +15,61 @@ function convertirArchivoABase64(archivo) {
   });
 }
 
+/**
+ * Fix (2026-08-07) — ícono de enlace guardado como foto original sin
+ * comprimir: convertirArchivoABase64 (arriba) lee el archivo tal cual, sin
+ * redimensionar. Para un ícono que se termina mostrando a 24x24px, eso
+ * significa guardar (y sincronizar, dentro del mismo JSON que el resto de
+ * los datos de la app) una foto de cámara de varios MB para pintar un
+ * cuadradito chico. En dispositivos con localStorage más chico (típico en
+ * Safari/iOS), ese guardado puede fallar en silencio — y ahí no solo no
+ * se guarda la imagen, puede que no se guarde nada de ese cambio en ese
+ * dispositivo.
+ *
+ * Esta función redimensiona a un máximo de `maxDimensionPx` por lado
+ * (conservando proporción) y recomprime como JPEG con calidad `calidad`
+ * ANTES de convertir a base64 — el resultado queda del orden de unos
+ * pocos KB sin importar cuánto pese el archivo original.
+ *
+ * A propósito NO reemplaza a convertirArchivoABase64: esa sigue existiendo
+ * igual que antes para cualquier otro uso que necesite el archivo sin
+ * tocar (ej. capturas para importación por OCR, donde perder resolución
+ * rompería la lectura).
+ */
+function convertirImagenABase64Comprimida(archivo, maxDimensionPx = 96, calidad = 0.8) {
+  return new Promise((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height && width > maxDimensionPx) {
+          height = Math.round((height * maxDimensionPx) / width);
+          width = maxDimensionPx;
+        } else if (height > maxDimensionPx) {
+          width = Math.round((width * maxDimensionPx) / height);
+          height = maxDimensionPx;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        // JPEG no soporta transparencia (el alpha queda negro) — para un
+        // ícono chico es un compromiso aceptable frente a lo que se ahorra
+        // de tamaño contra PNG. Si a futuro hace falta transparencia real,
+        // cambiar a "image/webp" (sí soporta alpha y comprime mejor que
+        // PNG), verificando soporte del navegador antes.
+        resolve(canvas.toDataURL("image/jpeg", calidad));
+      };
+      img.onerror = () => reject(new Error("No se pudo procesar la imagen"));
+      img.src = lector.result;
+    };
+    lector.onerror = () => reject(new Error("No se pudo leer el archivo"));
+    lector.readAsDataURL(archivo);
+  });
+}
+
 function obtenerIniciales(texto) {
   const partes = texto.trim().split(/\s+/).filter(Boolean);
   if (partes.length === 0) return "?";
@@ -158,6 +213,7 @@ function estiloBadgeCategoria(hex) {
 export {
   aplicarFormatoTexto,
   convertirArchivoABase64,
+  convertirImagenABase64Comprimida,
   esTokenNumeroRomano,
   estiloBadgeCategoria,
   formatearHoras,
