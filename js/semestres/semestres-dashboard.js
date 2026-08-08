@@ -276,19 +276,10 @@ function construirVistaPromedioPonderado() {
   cont.appendChild(seccionB);
 
   /* ---------- Nivel (a): por semestre, separado por universidad ----------
-     PENDIENTE (coherencia de escala, no se tocó en este pase): a diferencia
-     de (b), acá calcularPromedioPorSemestreYUniversidad solo devuelve el
-     nombre de la universidad como string, no el plan asociado. Con Modo
-     Hardcore, dos planes/carreras distintos pueden compartir la MISMA
-     universidad dentro del mismo semestre (ver construirSelectorPlanFiltro
-     más arriba, que ya contempla ese caso) — así que resolver la escala
-     buscando el plan por nombre de universidad sería adivinar y podría
-     convertir con la escala de un plan que no es. Para hacer esto bien sin
-     riesgo de silenciosamente mostrar la escala equivocada, hace falta que
-     schema.js devuelva también el plan (o su escala_notas) en cada grupo de
-     "universidades". No se tocó schema.js en esta sesión porque no fue
-     subido — este nivel sigue mostrando el promedio crudo en 0-100 hasta
-     que eso se resuelva. */
+     RESUELTO (antes "PENDIENTE — coherencia de escala"): schema.js ya
+     devuelve `escalaId` por cada grupo de universidad (null si los planes
+     agrupados no comparten una sola escala — ver calcularPromedioPorSemestreYUniversidad),
+     así que este nivel ahora convierte igual que el (b) de arriba. */
   const seccionA = document.createElement("div");
   seccionA.className = "stack";
   seccionA.style.gap = "8px";
@@ -318,11 +309,26 @@ function construirVistaPromedioPonderado() {
 
       // Modo Hardcore: si el semestre tiene más de una universidad, cada
       // una queda como su propia fila independiente — nunca se mezclan.
-      universidades.forEach(({ universidad, promedio, creditos, materias }) => {
+      // FIX (coherencia de escala — "promedio por semestre NO se muestra
+      // según la escala seleccionada"): schema.js YA calculaba y devolvía
+      // `escalaId` por cada grupo de universidad (ver
+      // calcularPromedioPorSemestreYUniversidad, comentario "escalaId
+      // 2026-08-08") desde una sesión anterior, pero este archivo nunca
+      // llegó a leerlo — se quedó mostrando el promedio crudo en 0-100 sin
+      // convertir, mismo bug que ya se había resuelto para el nivel (b) de
+      // arriba. Mismo patrón exacto que (b): si escalaId es null (los
+      // planes agrupados bajo esta universidad no comparten una sola
+      // escala), obtenerEscalaPorId(null) no encuentra coincidencia y cae
+      // sola al fallback de 0-100 — mostrar el crudo sin convertir sigue
+      // siendo lo correcto en ese caso borde, no hace falta un chequeo
+      // aparte acá.
+      universidades.forEach(({ universidad, escalaId, promedio, creditos, materias }) => {
+        const escalaGrupo = obtenerEscalaPorId(escalaId ?? 100);
+        const promedioMostrado = promedio === null || promedio === undefined ? promedio : convertirDesde100(promedio, escalaGrupo);
         bloqueSemestre.appendChild(
           construirFilaPromedio({
             etiquetaIzquierda: universidad,
-            promedio,
+            promedio: promedioMostrado,
             creditos,
             materias,
           })
