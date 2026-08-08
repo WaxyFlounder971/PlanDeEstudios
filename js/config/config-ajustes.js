@@ -4,7 +4,7 @@
    plan/universidad, formato de texto.
    ========================================================================= */
 
-import { ESCALAS_DISPONIBLES, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, sellarTimestamp } from "../core/schema.js";
+import { ESCALAS_DISPONIBLES, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, obtenerEscalaPorId, sellarTimestamp } from "../core/schema.js";
 import { actualizarIndicadorSync, marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
@@ -413,29 +413,89 @@ function renderizarAjustes() {
  *    en el momento de calcular (ver obtenerEscalaNotasMateria) — por eso el
  *    cambio de escala es reversible infinitas veces sin perder ni corromper
  *    ningún dato ya registrado.
- *  - Nota de aprobación (`parametros_universidad.nota_aprobacion`): sigue
- *    siendo un número 0-100 SIEMPRE, sin importar la escala elegida al
- *    lado — no está desalineado a propósito: nota_final de una materia ya
- *    es internamente 0-100 pase lo que pase por la escala de captura (el
- *    peso de cada criterio/asignación siempre suma 100%, ver
- *    calcularPuntosAsignacion en schema.js), así que 0-100 es la unidad
- *    real y estable en la que vale la pena comparar/guardar esto.
+ *
+ *  - Nota de aprobación (`parametros_universidad.nota_aprobacion`): el
+ *    ALMACENAMIENTO sigue siendo 0-100 SIEMPRE (nota_final de una materia
+ *    ya es internamente 0-100 pase lo que pase por la escala de captura —
+ *    ver calcularPuntosAsignacion en schema.js), pero la UI ahora la
+ *    MUESTRA y la EDITA en la escala elegida en la misma tarjeta.
+ *
+ *    FIX (reporte "puse escala 0-10 y de 36 pasó a 360"): antes este campo
+ *    mostraba/aceptaba SIEMPRE el número crudo en 0-100, sin importar la
+ *    escala del select de al lado — así que escribir "7" pensando en una
+ *    escala 0-10 en realidad guardaba 7/100 (un 7% de aprobación), y
+ *    cualquier lectura posterior contra esa escala multiplicaba en vez de
+ *    dividir el número mostrado (36 → 360 es exactamente ×10, el factor
+ *    entre 0-100 y 0-10). Ahora `convertirA100`/`convertirDesde100` son el
+ *    único punto de conversión entre "lo que se ve" (en la escala activa)
+ *    y "lo que se guarda" (siempre 0-100) — ver más abajo.
+ *
  *  - Redondeo al 5 más cercano (`parametros_universidad.redondeo_activo`):
  *    switch — existía en el schema desde Fase 6.2 pero nunca tuvo control
- *    en la UI a pesar del comentario "editable en Ajustes". El bloque
- *    informativo "Pasás raspando con" (calcularObjetivoPasarRaspando) solo
- *    tiene sentido si el redondeo está activo — se oculta si no.
+ *    en la UI a pesar del comentario "editable en Ajustes".
  *
- * Decisión de diseño (2026-08-03, sigue vigente): NO existe un
- * umbral_redondeo separado editable — "pasar raspando" se calcula al vuelo
- * desde nota_aprobacion, nunca se guarda como número aparte. Reintroducir
- * un número independiente ahí reabriría la inconsistencia de dos fuentes
- * de verdad que esa decisión cerró.
+ *  - "Pasás raspando con": AHORA EDITABLE a mano (antes era de solo
+ *    lectura, calculado siempre desde nota_aprobacion). Al escribir un
+ *    valor a mano se guarda como override explícito
+ *    (`parametros_universidad.raspando_override`, en la MISMA escala que
+ *    nota_aprobacion — 0-100 interno, mostrado en la escala activa); al
+ *    vaciar el campo, vuelve a calcularse solo desde nota_aprobacion (ver
+ *    calcularObjetivoPasarRaspando en schema.js). Esto reabre, a pedido
+ *    explícito, la decisión de 2026-08-03 de no tener un número aparte —
+ *    ver el comentario en schema.js junto a calcularObjetivoPasarRaspando
+ *    para el razonamiento original, que ya no aplica tal cual.
+ *
+ * LAYOUT (pedido explícito): el switch de redondeo queda SIEMPRE en la
+ * misma posición vertical, tanto apagado como encendido — antes vivía
+ * junto al texto "Redondear al 5 más cercano" en una fila que solo
+ * aparecía cuando había espacio, y el bloque de "Pasás raspando con"
+ * empujaba todo hacia abajo al aparecer. Ahora la estructura es fija:
+ *   1. Fila superior: "Redondear" + el switch, siempre en el mismo lugar.
+ *   2. Fila inferior: "Pasás raspando con" — se muestra/oculta con
+ *      classList.toggle("oculto", ...) en vez de sacarla del DOM, así el
+ *      switch de arriba nunca se reacomoda cuando esta fila aparece o
+ *      desaparece.
  */
 function formatearNumeroCorto(numero) {
   const n = Number(numero);
   if (!Number.isFinite(n)) return "—";
+  // Fase 6.2: algunas escalas (gpa4) usan 1 decimal con sentido real —
+  // toFixed(2) fijo aplastaba esa precisión visualmente sin necesidad
+  // (ej. "3.7" se mostraba "3.70", no es un error pero no hace falta).
+  // Se conserva el toFixed(2)+Number() de siempre para no romper el
+  // formato ya usado en el resto de la tarjeta; solo se le quitan ceros
+  // de más al final, igual que antes.
   return Number(n.toFixed(2)).toString();
+}
+
+/**
+ * FIX (reporte "puse escala 0-10 y de 36 pasó a 360"): `nota_aprobacion`
+ * (y ahora `raspando_override`) siempre se GUARDAN en 0-100 — es la unidad
+ * interna estable de todo el motor de notas (ver docblock de arriba). Pero
+ * mostrarle a la persona ese número crudo sin convertirlo a la escala que
+ * ELLA eligió en el selector de al lado no tiene sentido: en una escala
+ * 0-10, "nota de aprobación 70" (70/100) debe leerse y escribirse como
+ * "7" (7/10), no como "70". Estas dos funciones son el ÚNICO punto de
+ * conversión entre "lo que se ve en el input" (en la escala activa) y "lo
+ * que se guarda" (siempre 0-100) — todo el resto de la tarjeta pasa por
+ * acá, nunca lee/escribe el crudo directo salvo estas dos.
+ *
+ * "letras" no tiene una conversión numérica razonable (A+/A/A-/... no son
+ * un rango 0-N) — para esa escala el campo sigue mostrando/guardando
+ * directo en 0-100, sin convertir (mismo comportamiento que ya existía
+ * antes de este fix).
+ */
+function convertirA100(valorEnEscala, escala) {
+  const n = Number(valorEnEscala);
+  if (!Number.isFinite(n)) return NaN;
+  if (!escala || escala.tipo === "letras" || !escala.max) return n;
+  return (n / escala.max) * 100;
+}
+function convertirDesde100(valorEn100, escala) {
+  const n = Number(valorEn100);
+  if (!Number.isFinite(n)) return NaN;
+  if (!escala || escala.tipo === "letras" || !escala.max) return n;
+  return (n / 100) * escala.max;
 }
 
 function renderizarNotasAprobacion() {
@@ -465,6 +525,11 @@ function renderizarNotasAprobacion() {
     titulo.textContent = `${plan.universidad} · ${aplicarFormatoTexto(plan.nombre_carrera)}`;
     tarjeta.appendChild(titulo);
 
+    // Escala activa de ESTE plan — se resuelve una sola vez acá arriba
+    // porque tanto el input de aprobación como el de raspando dependen de
+    // ella para convertir a/desde 0-100 (ver convertirA100/convertirDesde100).
+    let escalaActiva = obtenerEscalaPorId(plan.parametros_universidad.escala_notas ?? 100);
+
     const fila = document.createElement("div");
     fila.style.cssText = "display:flex; flex-wrap:wrap; gap:10px;";
 
@@ -477,7 +542,15 @@ function renderizarNotasAprobacion() {
     labelEscala.style.cssText = "display:block; font-size:0.75rem; margin-bottom:4px;";
     labelEscala.textContent = "Escala de notas";
     const selectEscala = document.createElement("select");
-    selectEscala.className = "form-input";
+    // v1.15.10: .form-select (definida en design-system.css junto a
+    // .form-input/.form-textarea) trae las variables del tema aplicadas al
+    // <select> nativo — antes este selector solo tenía "form-input", que
+    // NO cubre las reglas de fondo/texto/opciones de un <select> en todos
+    // los navegadores; sin eso, el <select> caía al estilo nativo del
+    // sistema operativo (fondo blanco fijo, texto negro fijo), ilegible en
+    // modo oscuro. Ver el bloque nuevo en design-system.css para el resto
+    // del estilo (flecha propia, opciones con el mismo fondo del tema).
+    selectEscala.className = "form-input form-select";
     selectEscala.style.width = "100%";
     ESCALAS_DISPONIBLES.forEach((escala) => {
       const opt = document.createElement("option");
@@ -486,58 +559,51 @@ function renderizarNotasAprobacion() {
       selectEscala.appendChild(opt);
     });
     selectEscala.value = String(plan.parametros_universidad.escala_notas ?? 100);
-    selectEscala.addEventListener("change", () => {
-      // Los ids numéricos (7,10,12,...,100) viajan como string en
-      // selectEscala.value — hay que volver a Number salvo para "letras"
-      // y las escalas gpa*, que son ids de texto. Number("letras") da NaN,
-      // así que el chequeo isNaN decide cuál de las dos ramas corresponde.
-      const crudo = selectEscala.value;
-      const comoNumero = Number(crudo);
-      plan.parametros_universidad.escala_notas = Number.isNaN(comoNumero) ? crudo : comoNumero;
-      sellarTimestamp(plan);
-      marcarCambioPendiente();
-      // Nunca toca ninguna nota ya cargada — solo cambia con qué escala se
-      // reinterpretan de acá en adelante (ver obtenerEscalaNotasMateria),
-      // por eso no hace falta re-renderizar nada de Plan de Estudios/
-      // Semestres desde acá: la próxima vez que se calcule algo, ya toma
-      // la escala nueva sola.
-    });
     bloqueEscala.appendChild(labelEscala);
     bloqueEscala.appendChild(selectEscala);
     fila.appendChild(bloqueEscala);
 
-    // Bloque 2: nota de aprobación real (editable) — SIEMPRE 0-100, ver
-    // docblock de arriba sobre por qué no depende de la escala elegida.
+    // Bloque 2: nota de aprobación — mostrada y editada en la escala
+    // activa (ver FIX arriba), guardada siempre en 0-100.
     const bloqueAprobacion = document.createElement("div");
     bloqueAprobacion.style.cssText = "flex:1 1 140px;";
     const labelAprobacion = document.createElement("label");
     labelAprobacion.className = "muted";
     labelAprobacion.style.cssText = "display:block; font-size:0.75rem; margin-bottom:4px;";
-    labelAprobacion.textContent = "Nota de aprobación";
     const inputAprobacion = document.createElement("input");
     inputAprobacion.type = "number";
     inputAprobacion.className = "form-input";
     inputAprobacion.style.width = "100%";
-    inputAprobacion.min = "0";
-    inputAprobacion.max = "100";
-    inputAprobacion.step = "0.1";
-    inputAprobacion.value = formatearNumeroCorto(plan.parametros_universidad.nota_aprobacion ?? 70);
+
+    function actualizarLimitesAprobacion() {
+      const esLetras = escalaActiva.tipo === "letras";
+      labelAprobacion.textContent = esLetras ? "Nota de aprobación (0–100)" : `Nota de aprobación (0–${formatearNumeroCorto(escalaActiva.max)})`;
+      inputAprobacion.min = "0";
+      inputAprobacion.max = esLetras ? "100" : String(escalaActiva.max);
+      inputAprobacion.step = escalaActiva.paso ? String(escalaActiva.paso) : "0.1";
+    }
+    actualizarLimitesAprobacion();
+    inputAprobacion.value = formatearNumeroCorto(convertirDesde100(plan.parametros_universidad.nota_aprobacion ?? 70, escalaActiva));
+
     bloqueAprobacion.appendChild(labelAprobacion);
     bloqueAprobacion.appendChild(inputAprobacion);
     fila.appendChild(bloqueAprobacion);
 
     tarjeta.appendChild(fila);
 
-    // Segunda fila: switch de redondeo + "pasás raspando" (solo si el
-    // redondeo está activo — con redondeo apagado ese número no aplica).
+    // ---------- Fila fija: "Redondear" + switch, SIEMPRE en la misma
+    // posición vertical (pedido explícito) — nunca se mueve al aparecer o
+    // desaparecer "Pasás raspando con", que ahora vive en su PROPIA fila,
+    // debajo, oculta/mostrada con classList.toggle en vez de agregarse o
+    // quitarse del DOM. ----------
     const filaRedondeo = document.createElement("div");
-    filaRedondeo.style.cssText = "display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-top:10px;";
+    filaRedondeo.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:10px;";
 
-    const bloqueSwitch = document.createElement("div");
-    bloqueSwitch.style.cssText = "flex:1 1 140px; display:flex; align-items:center; justify-content:space-between; gap:8px;";
     const labelSwitch = document.createElement("span");
     labelSwitch.style.cssText = "font-size:0.8rem;";
-    labelSwitch.textContent = "Redondear al 5 más cercano";
+    // Pedido explícito: "Redondear al 5 más cercano" → "Redondear" (el
+    // switch, justo al lado, ya deja claro qué se está prendiendo/apagando).
+    labelSwitch.textContent = "Redondear";
     const labelToggle = document.createElement("label");
     labelToggle.className = "switch switch-tema";
     const chkRedondeo = document.createElement("input");
@@ -548,31 +614,82 @@ function renderizarNotasAprobacion() {
     trackRedondeo.innerHTML = '<span class="thumb"></span>';
     labelToggle.appendChild(chkRedondeo);
     labelToggle.appendChild(trackRedondeo);
-    bloqueSwitch.appendChild(labelSwitch);
-    bloqueSwitch.appendChild(labelToggle);
-    filaRedondeo.appendChild(bloqueSwitch);
+    filaRedondeo.appendChild(labelSwitch);
+    filaRedondeo.appendChild(labelToggle);
+    tarjeta.appendChild(filaRedondeo);
 
+    // ---------- Fila propia para "Pasás raspando con" — debajo de la fila
+    // fija de arriba, nunca la desplaza. Ahora EDITABLE (pedido explícito):
+    // un valor escrito a mano queda como override explícito
+    // (raspando_override, en la misma escala 0-100 interna que
+    // nota_aprobacion); vaciar el campo vuelve al cálculo automático. ----------
     const bloqueRaspando = document.createElement("div");
-    bloqueRaspando.style.cssText = "flex:1 1 140px;";
+    bloqueRaspando.style.cssText = "margin-top:10px;";
     const labelRaspando = document.createElement("label");
     labelRaspando.className = "muted";
     labelRaspando.style.cssText = "display:block; font-size:0.75rem; margin-bottom:4px;";
     labelRaspando.textContent = "Pasás raspando con";
-    const valorRaspando = document.createElement("div");
-    valorRaspando.className = "form-input";
-    valorRaspando.style.cssText = "width:100%; opacity:0.7; display:flex; align-items:center; cursor:default;";
+    const inputRaspando = document.createElement("input");
+    inputRaspando.type = "number";
+    inputRaspando.className = "form-input";
+    inputRaspando.style.width = "100%";
     bloqueRaspando.appendChild(labelRaspando);
-    bloqueRaspando.appendChild(valorRaspando);
-    filaRedondeo.appendChild(bloqueRaspando);
+    bloqueRaspando.appendChild(inputRaspando);
+    tarjeta.appendChild(bloqueRaspando);
 
     function actualizarRaspando() {
       const activo = plan.parametros_universidad.redondeo_activo !== false;
-      bloqueRaspando.style.display = activo ? "" : "none";
+      // classList.toggle("oculto", ...) en vez de sacar el elemento del
+      // DOM (antes era display:none inline en un bloque que además vivía
+      // en la MISMA fila que el switch, empujándolo hacia abajo al
+      // aparecer) — así el layout de arriba (switch de Redondear) nunca
+      // se reacomoda, sea cual sea el estado de esta fila.
+      bloqueRaspando.classList.toggle("oculto", !activo);
       if (!activo) return;
+
+      const esLetras = escalaActiva.tipo === "letras";
+      inputRaspando.min = "0";
+      inputRaspando.max = esLetras ? "100" : String(escalaActiva.max);
+      inputRaspando.step = escalaActiva.paso ? String(escalaActiva.paso) : "0.1";
+
       const notaActual = Number(plan.parametros_universidad.nota_aprobacion) || 70;
-      valorRaspando.textContent = formatearNumeroCorto(calcularObjetivoPasarRaspando(notaActual));
+      const tieneOverride = plan.parametros_universidad.raspando_override !== null
+        && plan.parametros_universidad.raspando_override !== undefined;
+      const valorEn100 = tieneOverride
+        ? plan.parametros_universidad.raspando_override
+        : calcularObjetivoPasarRaspando(notaActual);
+      // No pisar lo que la persona está escribiendo AHORA MISMO — solo se
+      // resincroniza el valor mostrado cuando el campo no tiene foco (ej.
+      // al cambiar de escala, o al editar la nota de aprobación desde el
+      // otro input).
+      if (document.activeElement !== inputRaspando) {
+        inputRaspando.value = formatearNumeroCorto(convertirDesde100(valorEn100, escalaActiva));
+      }
     }
     actualizarRaspando();
+
+    // ---------- Eventos ----------
+
+    selectEscala.addEventListener("change", () => {
+      // Los ids numéricos (7,10,12,...,100) viajan como string en
+      // selectEscala.value — hay que volver a Number salvo para "letras"
+      // y las escalas gpa*, que son ids de texto. Number("letras") da NaN,
+      // así que el chequeo isNaN decide cuál de las dos ramas corresponde.
+      const crudo = selectEscala.value;
+      const comoNumero = Number(crudo);
+      plan.parametros_universidad.escala_notas = Number.isNaN(comoNumero) ? crudo : comoNumero;
+      escalaActiva = obtenerEscalaPorId(plan.parametros_universidad.escala_notas);
+      sellarTimestamp(plan);
+      marcarCambioPendiente();
+      // Nunca toca ninguna nota ya cargada — solo cambia con qué escala se
+      // reinterpretan de acá en adelante (ver obtenerEscalaNotasMateria).
+      // Los DOS campos numéricos de esta tarjeta (aprobación y raspando)
+      // sí necesitan repintarse acá — su valor GUARDADO (0-100) no cambió,
+      // pero su valor MOSTRADO depende de la escala recién elegida.
+      actualizarLimitesAprobacion();
+      inputAprobacion.value = formatearNumeroCorto(convertirDesde100(plan.parametros_universidad.nota_aprobacion ?? 70, escalaActiva));
+      actualizarRaspando();
+    });
 
     chkRedondeo.addEventListener("change", () => {
       plan.parametros_universidad.redondeo_activo = chkRedondeo.checked;
@@ -582,17 +699,46 @@ function renderizarNotasAprobacion() {
     });
 
     inputAprobacion.addEventListener("change", () => {
-      let valor = Number(inputAprobacion.value);
-      if (!Number.isFinite(valor)) valor = 70;
-      valor = Math.min(Math.max(valor, 0), 100);
-      inputAprobacion.value = formatearNumeroCorto(valor);
-      plan.parametros_universidad.nota_aprobacion = valor;
+      let valorEnEscala = Number(inputAprobacion.value);
+      const tope = escalaActiva.tipo === "letras" ? 100 : escalaActiva.max;
+      if (!Number.isFinite(valorEnEscala)) valorEnEscala = convertirDesde100(70, escalaActiva);
+      valorEnEscala = Math.min(Math.max(valorEnEscala, 0), tope);
+      inputAprobacion.value = formatearNumeroCorto(valorEnEscala);
+      // Conversión a la unidad de guardado (0-100) — ver FIX arriba. Este
+      // es el punto exacto donde antes faltaba la conversión y el número
+      // se guardaba crudo en la escala equivocada.
+      plan.parametros_universidad.nota_aprobacion = convertirA100(valorEnEscala, escalaActiva);
       sellarTimestamp(plan);
       marcarCambioPendiente();
       actualizarRaspando();
     });
 
-    tarjeta.appendChild(filaRedondeo);
+    inputRaspando.addEventListener("change", () => {
+      const texto = inputRaspando.value.trim();
+      if (texto === "") {
+        // Campo vaciado a propósito: se vuelve al cálculo automático desde
+        // nota_aprobacion — se borra el override en vez de guardar null,
+        // así una fusión de sync entre dispositivos ve un campo que
+        // realmente dejó de existir, no un null "editado a la nada".
+        delete plan.parametros_universidad.raspando_override;
+        sellarTimestamp(plan);
+        marcarCambioPendiente();
+        actualizarRaspando();
+        return;
+      }
+      let valorEnEscala = Number(texto);
+      const tope = escalaActiva.tipo === "letras" ? 100 : escalaActiva.max;
+      if (!Number.isFinite(valorEnEscala)) {
+        actualizarRaspando(); // input inválido: se descarta, se repinta el valor real
+        return;
+      }
+      valorEnEscala = Math.min(Math.max(valorEnEscala, 0), tope);
+      inputRaspando.value = formatearNumeroCorto(valorEnEscala);
+      plan.parametros_universidad.raspando_override = convertirA100(valorEnEscala, escalaActiva);
+      sellarTimestamp(plan);
+      marcarCambioPendiente();
+    });
+
     contenedor.appendChild(tarjeta);
   });
 }
