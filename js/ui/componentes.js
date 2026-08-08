@@ -4,7 +4,7 @@
    flechas de scroll horizontal, y el layout responsivo del sidebar/drawer.
    ========================================================================= */
 
-import { mostrarSeccion, togglePerfilPopover } from "../main.js";
+import { togglePerfilPopover } from "../main.js";
 
 const CLAVE_SIDEBAR_COLAPSADA = "sidebar_colapsada";
 
@@ -162,14 +162,30 @@ function inicializarLayoutResponsivo() {
 
   overlay.addEventListener("click", cerrarSidebarMovil);
 
-  // Acceso directo a Enlaces rápidos en móvil (2026-08-07): antes la única
-  // forma de llegar era entrando a Ajustes. Este botón vive en la barra
-  // superior (no en el drawer), así que no depende de abrir/cerrar el
-  // sidebar: cambia a la sección Configuración y hace scroll directo hasta
-  // la tarjeta de Enlaces rápidos dentro de ella.
+  // Acceso directo a Enlaces rápidos en móvil (2026-08-07): drawer propio,
+  // independiente del sidebar principal, que se desliza desde la derecha.
+  // A propósito NO navega a la sección Configuración — así el usuario no
+  // pierde la pantalla en la que estaba (ej. a mitad de una tarjeta de
+  // Semestres) solo por querer abrir un enlace.
   const btnTopbarEnlaces = document.getElementById("btn-topbar-enlaces");
+  const drawerEnlaces = document.getElementById("drawer-enlaces-movil");
+  const overlayEnlaces = document.getElementById("enlaces-movil-overlay");
+  const btnCerrarDrawerEnlaces = document.getElementById("btn-cerrar-drawer-enlaces");
   if (btnTopbarEnlaces) {
-    btnTopbarEnlaces.addEventListener("click", irAEnlacesRapidosMovil);
+    btnTopbarEnlaces.addEventListener("click", abrirDrawerEnlacesMovil);
+  }
+  if (overlayEnlaces) {
+    overlayEnlaces.addEventListener("click", cerrarDrawerEnlacesMovil);
+  }
+  if (btnCerrarDrawerEnlaces) {
+    btnCerrarDrawerEnlaces.addEventListener("click", cerrarDrawerEnlacesMovil);
+  }
+  // Cerrar el drawer de Enlaces al tocar cualquier enlace de la lista
+  // (mismo criterio que el sidebar principal: navegar cierra el panel).
+  if (drawerEnlaces) {
+    drawerEnlaces.addEventListener("click", (e) => {
+      if (e.target.closest("a")) cerrarDrawerEnlacesMovil();
+    });
   }
 
   // Cerrar el drawer móvil al usar cualquier botón de navegación/config.
@@ -186,7 +202,10 @@ function inicializarLayoutResponsivo() {
   });
 
   window.addEventListener("resize", () => {
-    if (window.innerWidth >= 900) cerrarSidebarMovil();
+    if (window.innerWidth >= 900) {
+      cerrarSidebarMovil();
+      cerrarDrawerEnlacesMovil();
+    }
   });
 }
 
@@ -197,21 +216,21 @@ function cerrarSidebarMovil() {
 }
 
 /**
- * Acceso directo a Enlaces rápidos en móvil (2026-08-07): cambia a la
- * sección Configuración (donde vive la tarjeta real de Enlaces rápidos,
- * #seccion-enlaces-rapidos en index.html) y hace scroll suave hasta ella.
- * El requestAnimationFrame es necesario porque mostrarSeccion() recién
- * quita la clase "oculto" de #seccion-configuracion de forma síncrona —
- * sin esperar al siguiente frame, scrollIntoView podía correr sobre un
- * layout que el navegador todavía no terminó de recalcular tras el cambio
- * de display, y el scroll quedaba corto o directamente no hacía nada.
+ * Drawer de Enlaces rápidos en móvil (2026-08-07): mismo mecanismo que el
+ * sidebar principal (clase "abierta" + overlay propio + scroll bloqueado
+ * de fondo), pero con su propio overlay (#enlaces-movil-overlay) para que
+ * abrir uno nunca interfiera con el estado del otro.
  */
-function irAEnlacesRapidosMovil() {
-  mostrarSeccion("configuracion");
-  requestAnimationFrame(() => {
-    const seccion = document.getElementById("seccion-enlaces-rapidos");
-    if (seccion) seccion.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
+function abrirDrawerEnlacesMovil() {
+  document.getElementById("drawer-enlaces-movil").classList.add("abierta");
+  document.getElementById("enlaces-movil-overlay").classList.add("abierta");
+  document.body.classList.add("scroll-bloqueado");
+}
+
+function cerrarDrawerEnlacesMovil() {
+  document.getElementById("drawer-enlaces-movil").classList.remove("abierta");
+  document.getElementById("enlaces-movil-overlay").classList.remove("abierta");
+  document.body.classList.remove("scroll-bloqueado");
 }
 
 function restaurarEstadoSidebar() {
@@ -335,15 +354,16 @@ function envolverConFlechasScroll(elementoScroll) {
 export {
   CLAVE_SIDEBAR_COLAPSADA,
   abrirConfirmacion,
+  abrirDrawerEnlacesMovil,
   agregarLongPress,
   callbackConfirmacionActual,
   cerrarConfirmacion,
+  cerrarDrawerEnlacesMovil,
   cerrarSidebarMovil,
   envolverConFlechasScroll,
   inicializarBotonesCerrarModal,
   inicializarLayoutResponsivo,
   inicializarModalConfirmacion,
-  irAEnlacesRapidosMovil,
   mostrarToast,
   restaurarEstadoSidebar,
 };
