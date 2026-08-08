@@ -934,6 +934,21 @@ body.scroll-bloqueado {
   .app-contenido > * { max-width: 920px; }
 }
 
+/* Fix (2026-08-07): caja fija en flex para el ícono del enlace rápido —
+   ver el comentario en config-enlaces.js. font-size:1.3rem queda acá para
+   que el emoji se vea al mismo tamaño que antes; para <img> es
+   irrelevante (la imagen se estira al 100% de esta caja de 24x24). */
+.enlace-rapido-icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
 /* ---- v7.1: el nombre del enlace rápido usaba var(--accent-1) heredado del
    <a> global (`a { color: var(--accent-1); }`), y en varias paletas ese
    acento tiene muy poco contraste contra el fondo detrás (ej. paleta negro
