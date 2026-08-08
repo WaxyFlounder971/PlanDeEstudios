@@ -703,8 +703,15 @@ function crearCriterio({ nombre, valorTotal, orden, esExtra }) {
  * del criterio (no relativo al criterio) — así una tarea de 5% y un
  * examen de 15% se suman directo sin conversión. `nota` queda en null
  * hasta que el usuario la registra (según la escala activa).
+ *
+ * `modoCalificacion` (2026-08-07, criterio "✨ Extra" simplificado): además
+ * de "nota"/"puntos" (ver comentario abajo), acepta "extra" — usado SOLO
+ * por asignaciones dentro de un criterio es_extra:true. En ese modo
+ * `valor` ES la calificación (los puntos que efectivamente te dieron, ej.
+ * "+5 pts"), sin pasar por nota/escala ni por un estado "pendiente" — ver
+ * calcularPuntosAsignacion y obtenerAsignacionesPendientes más abajo.
  */
-function crearAsignacion({ nombre, valor, orden }) {
+function crearAsignacion({ nombre, valor, orden, modoCalificacion }) {
   return sellarTimestamp({
     id: "asig_" + crypto.randomUUID(),
     nombre,
@@ -714,9 +721,10 @@ function crearAsignacion({ nombre, valor, orden }) {
     // equitativo (ver repartirEquitativoCriterio); "personalizado" = el
     // usuario fijó el valor a mano y nunca se toca. "nota" = calificación en
     // escala 0-escalaActiva (comportamiento de siempre); "puntos" = la
-    // calificación son puntos directos, con tope en `valor`.
+    // calificación son puntos directos, con tope en `valor`; "extra" = ver
+    // comentario de `modoCalificacion` arriba.
     modo_valor: "automatico",
-    modo_calificacion: "nota",
+    modo_calificacion: modoCalificacion || "nota",
     // FIX (2026-08-06 — "la pill de Nota muestra el puntaje crudo, no la
     // nota equivalente"): en modo "puntos" el usuario tipea cuánto obtuvo
     // de un examen/tarea (ej. 27 de un máximo de 30) — eso vive acá,
@@ -982,6 +990,11 @@ function recalcularNotaDesdePuntaje(asignacion, escalaActiva) {
  * cambia que ahora `nota` es una nota real, no puntaje disfrazado.
  */
 function calcularPuntosAsignacion(asignacion, escalaActiva) {
+  // Criterio "✨ Extra" simplificado (2026-08-07): estas asignaciones no
+  // tienen "nota" — `valor` ES directamente los puntos que aporta, sin
+  // pasar por la escala ni por un estado "pendiente" (se cuentan apenas
+  // se cargan). Ver comentario de `modoCalificacion` en crearAsignacion.
+  if (asignacion.modo_calificacion === "extra") return Number(asignacion.valor) || 0;
   if (asignacion.nota === null || asignacion.nota === undefined) return 0;
   // Fase 6.2: obtenerFraccionNota entiende tanto escalas numéricas (nota/max)
   // como letras (A+, B-, etc. → su fracción de la tabla) — un solo camino
@@ -1022,6 +1035,13 @@ function obtenerAsignacionesPendientes(materiaMatriculada) {
   const pendientes = [];
   (materiaMatriculada.criterios || []).forEach((criterio) => {
     (criterio.asignaciones || []).forEach((asignacion) => {
+      // Las asignaciones de "✨ Extra" (modo_calificacion:"extra") no tienen
+      // concepto de "pendiente" — ya cuentan completas apenas se cargan
+      // (ver calcularPuntosAsignacion), así que nunca entran acá. Sin este
+      // filtro, "Máximo posible" y "Nota necesaria" del simulador Proyectar
+      // las tratarían como una nota que falta por sacar, inflando el
+      // cálculo con puntos que ya están contados en lo obtenido.
+      if (asignacion.modo_calificacion === "extra") return;
       if (asignacion.nota === null || asignacion.nota === undefined) {
         pendientes.push({ criterio, asignacion });
       }
