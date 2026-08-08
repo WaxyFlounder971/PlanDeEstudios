@@ -2859,33 +2859,22 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
   spanNombre.textContent = aplicarFormatoTexto(materia.nombre);
   linea1.appendChild(spanNombre);
 
-  // Punto 6 (2026-08-07, pedido explícito): "Nota: X" justo antes de la
-  // flecha — la flecha NO se mueve de posición (mismo flex-shrink:0 que
-  // .materia-codigo/.materia-expandir en design-system.css, así este span
-  // reserva su propio espacio fijo desde el primer cálculo de layout) y el
-  // nombre se trunca más si hace falta espacio (es el único flex:1 de la
-  // fila). Mismo redondeo al 5 más cercano que "Nota final" (no el de 2
-  // decimales que usa el otro texto "Nota" del encabezado de notas).
-  const notaFinalVigenteLinea1 = calcularNotaFinalVigente(mm, materia, plan);
-  const notaRedondeadaLinea1 = redondearNotaFinalAlCincoMasCercano(notaFinalVigenteLinea1);
-  const spanNotaLinea1 = document.createElement("span");
-  spanNotaLinea1.className = "materia-nota-linea1";
-  spanNotaLinea1.style.cssText = "flex-shrink:0; font-size:0.8rem; white-space:nowrap; color:var(--text-secondary);";
-  spanNotaLinea1.textContent = `Nota: ${
-    notaRedondeadaLinea1 === null || notaRedondeadaLinea1 === undefined ? "—" : formatearNumero(notaRedondeadaLinea1)
-  }`;
-  linea1.appendChild(spanNotaLinea1);
-
-  const iconoExpandir = document.createElement("span");
-  iconoExpandir.className = "materia-expandir";
-  iconoExpandir.textContent = expandida ? "▲" : "▼";
-  linea1.appendChild(iconoExpandir);
-
+  // Punto 3 (2026-08-07, pedido explícito — reemplaza la versión anterior
+  // de "Nota: X" que vivía acá, pegada a la flecha en línea 1): la flecha
+  // baja de nivel a línea 2 (junto a Créditos) y "Nota: X" se reubica
+  // arriba de esos dos, anclada a la derecha — ver colDerecha más abajo.
+  // Línea 1 queda solo con código + nombre, que ahora tiene TODO el ancho
+  // libre para truncarse (ya no compite por espacio con nota ni flecha).
   filaPrincipal.appendChild(linea1);
 
   const linea2 = document.createElement("div");
   linea2.className = "materia-linea2";
-  linea2.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px;";
+  // Punto 3 (2026-08-07): align-items pasa de center a end — colDerecha
+  // ahora tiene 2 líneas apiladas (Nota arriba, Créditos+flecha abajo) y
+  // es más alta que antes; con "end" el badge de Estado y el de
+  // universidad quedan alineados contra la fila de Créditos/flecha (la
+  // fila "principal" de línea 2), no flotando en el medio del bloque.
+  linea2.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:end; gap:8px;";
 
   const colEstado = document.createElement("div");
   colEstado.style.cssText = "justify-self:start; min-width:0;";
@@ -2917,14 +2906,43 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
   badgeUniversidad.title = plan.universidad;
   linea2.appendChild(badgeUniversidad);
 
+  // Punto 3 (2026-08-07, pedido explícito — reemplaza la versión anterior
+  // de "Nota: X" en línea 1, ver comentario ahí): columna derecha con 2
+  // líneas apiladas, ambas ancladas a la derecha — arriba "Nota: X", abajo
+  // Créditos + flecha ▲▼ juntos (la flecha bajó de nivel, ya no vive en
+  // línea 1). Mismo cálculo/redondeo de nota que la versión anterior
+  // (calcularNotaFinalVigente + redondearNotaFinalAlCincoMasCercano, al 5
+  // más cercano — no el de 2 decimales del otro texto "Nota" del
+  // encabezado de notas).
   const colDerecha = document.createElement("div");
   colDerecha.className = "row";
-  colDerecha.style.cssText = "justify-self:end; min-width:0; align-items:center; gap:8px;";
+  colDerecha.style.cssText = "flex-direction:column; align-items:flex-end; justify-self:end; min-width:0; gap:2px;";
+
+  const notaFinalVigenteLinea1 = calcularNotaFinalVigente(mm, materia, plan);
+  const notaRedondeadaLinea1 = redondearNotaFinalAlCincoMasCercano(notaFinalVigenteLinea1);
+  const spanNota = document.createElement("span");
+  spanNota.className = "materia-nota";
+  spanNota.style.cssText = "flex-shrink:0; font-size:0.8rem; white-space:nowrap; color:var(--text-secondary);";
+  spanNota.textContent = `Nota: ${
+    notaRedondeadaLinea1 === null || notaRedondeadaLinea1 === undefined ? "—" : formatearNumero(notaRedondeadaLinea1)
+  }`;
+  colDerecha.appendChild(spanNota);
+
+  const filaCreditosFlecha = document.createElement("div");
+  filaCreditosFlecha.className = "row";
+  filaCreditosFlecha.style.cssText = "align-items:center; gap:8px;";
 
   const badgeCreditos = document.createElement("span");
   badgeCreditos.className = "badge badge-accent";
   badgeCreditos.textContent = `Créditos: ${materia.creditos}`;
-  colDerecha.appendChild(badgeCreditos);
+  filaCreditosFlecha.appendChild(badgeCreditos);
+
+  const iconoExpandir = document.createElement("span");
+  iconoExpandir.className = "materia-expandir";
+  iconoExpandir.textContent = expandida ? "▲" : "▼";
+  filaCreditosFlecha.appendChild(iconoExpandir);
+
+  colDerecha.appendChild(filaCreditosFlecha);
 
   if (mm._conflicto) {
     agregarIndicadorConflicto(card, () => abrirModalResolverConflictoMatricula(mm, materia, plan, onCambiar));

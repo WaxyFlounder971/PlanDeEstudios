@@ -309,10 +309,13 @@ function construirVistaPromedioPonderado() {
 
 /* ===================== Vista "Estadísticas": aprobados/reprobados + detalle por estado ===================== */
 
+// Punto 4 (2026-08-07, pedido explícito): "Reprobados"/"Cursando" estaban
+// en el orden invertido — se intercambia el orden de estas dos entradas
+// (el resto del array no cambia).
 const ESTADOS_DETALLE_CONFIG = [
   { clave: "aprobado", texto: "Aprobada", color: "#10b981" },
-  { clave: "cursando", texto: "Cursando", color: "#38bdf8" },
   { clave: "reprobado", texto: "Reprobada", color: "#ef4444" },
+  { clave: "cursando", texto: "Cursando", color: "#38bdf8" },
   { clave: "pendiente", texto: "Pendiente", color: "#94a3b8" },
 ];
 
