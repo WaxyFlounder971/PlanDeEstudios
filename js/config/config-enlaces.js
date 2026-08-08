@@ -2,7 +2,7 @@
    CONFIGURACIÓN — ENLACES RÁPIDOS
    ========================================================================= */
 
-import { LIMITE_ENLACES_RAPIDOS, crearEnlaceRapido } from "../core/schema.js";
+import { LIMITE_ENLACES_RAPIDOS, crearEnlaceRapido, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { convertirImagenABase64Comprimida } from "../core/utils.js";
@@ -63,10 +63,18 @@ function renderizarListaEnlacesEn(contenedorId, enlaces, conEditar) {
     // centrado — así emoji e imagen quedan alineados igual sin importar
     // el tipo de contenido, y cualquier ícono futuro (SVG, librería de
     // íconos, etc.) hereda el mismo centrado gratis.
+    // Fix (2026-08-08 — "sale una X horrible en enlaces rápidos"): esa X es
+    // el ícono nativo de "imagen rota" que pinta el navegador cuando un
+    // <img src="..."> falla al cargar — pasa cuando icono_valor quedó
+    // corrupto/incompleto (ej. un ícono viejo, guardado antes del fix de
+    // compresión, que no llegó a sincronizarse completo a este
+    // dispositivo). onerror reemplaza ese ícono roto por un 🔗 genérico en
+    // vez de dejar que el navegador dibuje su X fea — mismo tamaño de caja,
+    // se ve intencional en vez de un error visual.
     enlaceAbrir.innerHTML = `<span class="enlace-rapido-icono">${
       enlace.icono_tipo === "emoji"
         ? enlace.icono_valor
-        : `<img src="${enlace.icono_valor}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:6px;display:block;">`
+        : `<img src="${enlace.icono_valor}" alt="" style="object-fit:cover;border-radius:6px;display:block;" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'🔗'}))">`
     }</span><span class="enlace-rapido-nombre" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${enlace.nombre}</span>`;
 
     item.appendChild(enlaceAbrir);
@@ -206,15 +214,30 @@ async function guardarEnlaceDesdeModal() {
     }
   }
 
+  // Fix (2026-08-08 — "subí imágenes a los logos y nada se refleja en el
+  // teléfono"): esta función mutaba enlaceExistente directo (nombre, url,
+  // icono_tipo, icono_valor) y nunca llamaba a sellarTimestamp() antes de
+  // marcarCambioPendiente() — rompe la regla universal del proyecto (todo
+  // lo demás: materias, semestres, criterios, sí la sigue). Sin sellar,
+  // _actualizadoEn del enlace se queda en 0 (o en el valor viejo de cuando
+  // se creó), así que fusionarColeccion (storage-merge.js) no tiene forma
+  // real de saber que ESTA edición es más nueva que la que ya había en
+  // Drive — en un empate de contador, el desempate es por _dispositivoId
+  // (arbitrario), así que la imagen nueva podía perfectamente perder
+  // contra la vieja al fusionar, ANTES de llegar a subirse. Esto también
+  // explica la X fea del fix de arriba: un ícono que nunca terminó de
+  // sincronizarse completo puede quedar guardado a medias/corrupto en
+  // otro dispositivo.
   if (enlaceExistente) {
     enlaceExistente.nombre = nombre;
     enlaceExistente.url = url;
     enlaceExistente.icono_tipo = icono_tipo;
     enlaceExistente.icono_valor = icono_valor;
+    sellarTimestamp(enlaceExistente);
   } else {
-    estado.datos.configuracion.enlaces_rapidos.push(
-      crearEnlaceRapido({ nombre, url, icono_tipo, icono_valor })
-    );
+    const nuevo = crearEnlaceRapido({ nombre, url, icono_tipo, icono_valor });
+    sellarTimestamp(nuevo);
+    estado.datos.configuracion.enlaces_rapidos.push(nuevo);
   }
 
   marcarCambioPendiente();
