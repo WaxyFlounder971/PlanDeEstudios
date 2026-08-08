@@ -867,8 +867,8 @@ function repartirEquitativoCriterio(criterio) {
  * propio > escala del plan/universidad > default 100. Único punto de
  * verdad — reutilizar en vez de leer los 2 campos por separado.
  *
- * El valor devuelto es siempre un número (7, 10, 12, 15, 20, 100, "gpa4",
- * "gpa4_entero"...). Ver ESCALAS_DISPONIBLES para la lista completa y
+ * El valor devuelto es siempre un número (7, 10, 12, 15, 20, 100, "gpa4"...).
+ * Ver ESCALAS_DISPONIBLES para la lista completa y
  * obtenerEscalaPorId para ir de este valor crudo al descriptor completo
  * (tipo, max, valores).
  *
@@ -914,16 +914,21 @@ const ESCALAS_DISPONIBLES = [
   { id: 15, etiqueta: "0 – 15", tipo: "numerica", max: 15 },
   { id: 20, etiqueta: "0 – 20", tipo: "numerica", max: 20 },
   { id: 100, etiqueta: "0 – 100", tipo: "numerica", max: 100 },
-  // Ajustes por Universidad (2026-08-08): GPA estilo EE.UU. — "con
-  // decimales" es la escala continua típica (4.0, 3.7, 3.3...), "sin
-  // decimales" es para universidades que solo reportan el GPA redondeado a
-  // entero (4, 3, 2, 1, 0). `paso` es opcional — obtenerEscalaPorId no lo
-  // usa para ningún cálculo (obtenerFraccionNota sigue siendo nota/max sin
-  // importar el paso), es solo una pista para el input numérico de la UI
-  // (ver config-ajustes.js); si una escala no trae `paso`, la UI cae al
-  // 0.1 de siempre.
-  { id: "gpa4", etiqueta: "GPA 0 – 4 (decimales)", tipo: "numerica", max: 4, paso: 0.1 },
-  { id: "gpa4_entero", etiqueta: "GPA 0 – 4 (enteros)", tipo: "numerica", max: 4, paso: 1 },
+  // Ajustes por Universidad (2026-08-08): GPA estilo EE.UU. (4.0, 3.7,
+  // 3.3...). Unificado (pedido explícito "no tiene sentido que existan 2
+  // GPA distintos") — antes había una variante "con decimales" y otra
+  // "sin decimales" (solo enteros); se dejó una sola. `paso` es opcional
+  // y solo es una pista para el input numérico de la UI (ver
+  // config-ajustes.js) — obtenerEscalaPorId/obtenerFraccionNota no lo usan
+  // para ningún cálculo (siempre es nota/max, sin importar el paso), así
+  // que igual se puede tipear un GPA entero (ej. "3") sin problema.
+  //
+  // Un plan viejo que haya quedado guardado con escala_notas="gpa4_entero"
+  // (el id que existía acá antes de unificar) cae solo al fallback de
+  // obtenerEscalaPorId (0-100) la próxima vez que se lea — mismo
+  // comportamiento ya documentado arriba para cuando se sacó el tipo
+  // "letras", no hace falta migrar datos a mano.
+  { id: "gpa4", etiqueta: "GPA 0 – 4", tipo: "numerica", max: 4, paso: 0.1 },
 ];
 
 /** Descriptor completo de una escala a partir de su id crudo (lo que se
