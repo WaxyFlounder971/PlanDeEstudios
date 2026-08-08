@@ -944,7 +944,7 @@ function agregarSwitchDosOpciones(card, { etiqueta, opciones, valorInicial, onCa
  * ahí solo deja renombrarlo — el campo de valor no aplica (sus puntos salen
  * de sumar las asignaciones de adentro, ver calcularPuntosCriterio).
  */
-function abrirModalCriterio({ mm, materia, plan, criterioExistente, onGuardado }) {
+function abrirModalCriterio({ mm, materia, plan, escalaActiva, criterioExistente, onGuardado }) {
   const esEdicion = !!criterioExistente;
   const esEdicionExtra = esEdicion && !!criterioExistente.es_extra;
   const { overlay, card } = crearModalDinamico({
@@ -957,21 +957,36 @@ function abrirModalCriterio({ mm, materia, plan, criterioExistente, onGuardado }
     valor: esEdicion ? criterioExistente.nombre : "",
   });
 
+  // FIX (2026-08-08 — "no tiene sentido que la nota final sea un 10 si los
+  // puntos repartidos son de 100"): criterio.valor_total sigue
+  // GUARDÁNDOSE en 0-100 internamente (es el peso del criterio dentro de
+  // la materia, no depende de la escala) — pero ahora se MUESTRA y se
+  // EDITA en la escala activa del plan, igual que ya se hizo con
+  // nota_aprobacion y nota_final. Así todos los números que ve el usuario
+  // hablan el mismo idioma: si la escala es 0-10, "vale 3 de 10" en vez
+  // de "vale 30%".
+  const descriptorEscalaCriterio = obtenerEscalaPorId(escalaActiva);
+  const esLetrasCriterio = descriptorEscalaCriterio.tipo === "letras";
+  const unidadCriterio = esLetrasCriterio ? "%" : formatearNumero(descriptorEscalaCriterio.max);
+
   // "✨ Extra" no tiene un valor_total fijo que editar (ver comentario de
   // arriba) — el modal, en ese caso, es solo el campo de nombre.
   let inputValor = null;
   if (!esEdicionExtra) {
     inputValor = agregarCampoModal(card, {
-      etiqueta: "Valor dentro de la materia (%)",
-      valor: esEdicion ? criterioExistente.valor_total : "",
+      etiqueta: esLetrasCriterio ? "Valor dentro de la materia (%)" : `Valor dentro de la materia (sobre ${unidadCriterio})`,
+      valor: esEdicion ? formatearNumero(convertirDesde100(criterioExistente.valor_total, descriptorEscalaCriterio)) : "",
       decimal: true,
     });
-    const disponibleEstimado = 100 - sumaValorTotalCriterios(mm, esEdicion ? criterioExistente.id : undefined);
+    const disponibleEstimado100 = 100 - sumaValorTotalCriterios(mm, esEdicion ? criterioExistente.id : undefined);
+    const disponibleEstimado = convertirDesde100(disponibleEstimado100, descriptorEscalaCriterio);
     const ayuda = document.createElement("p");
     ayuda.className = "muted";
     ayuda.style.fontSize = "0.8rem";
     ayuda.style.margin = "0";
-    ayuda.textContent = `Disponible en esta materia: ${formatearNumero(disponibleEstimado)}%`;
+    ayuda.textContent = esLetrasCriterio
+      ? `Disponible en esta materia: ${formatearNumero(disponibleEstimado)}%`
+      : `Disponible en esta materia: ${formatearNumero(disponibleEstimado)} de ${unidadCriterio}`;
     card.appendChild(ayuda);
   }
 
@@ -984,13 +999,19 @@ function abrirModalCriterio({ mm, materia, plan, criterioExistente, onGuardado }
   btnGuardar.textContent = "Guardar";
   btnGuardar.addEventListener("click", () => {
     const nombre = inputNombre.value.trim();
-    const valorNum = esEdicionExtra ? null : analizarDecimal(inputValor.value);
+    // valorEnEscala = lo que el usuario tipeó/ve (unidad de la escala);
+    // valorNum = lo mismo convertido a 0-100 para guardar — todo el resto
+    // del método (sumaValorTotalCriterios, validaciones contra otros
+    // criterios) sigue trabajando en 0-100 sin tocarse, solo cambia qué
+    // unidad ve y tipea la persona.
+    const valorEnEscala = esEdicionExtra ? null : analizarDecimal(inputValor.value);
+    const valorNum = esEdicionExtra ? null : convertirA100(valorEnEscala, descriptorEscalaCriterio);
 
     if (!nombre) {
       mostrarToast("Ponele un nombre al criterio");
       return;
     }
-    if (!esEdicionExtra && (!Number.isFinite(valorNum) || valorNum <= 0)) {
+    if (!esEdicionExtra && (!Number.isFinite(valorEnEscala) || valorEnEscala <= 0)) {
       mostrarToast("El valor debe ser un número mayor a 0");
       return;
     }
@@ -1008,7 +1029,12 @@ function abrirModalCriterio({ mm, materia, plan, criterioExistente, onGuardado }
     if (!esEdicionExtra) {
       const disponibleReal = 100 - sumaValorTotalCriterios(mmViva, criterioId || undefined);
       if (valorNum > disponibleReal + 0.001) {
-        mostrarToast(`Ese valor supera el ${formatearNumero(disponibleReal)}% disponible en la materia`);
+        const disponibleRealMostrado = convertirDesde100(disponibleReal, descriptorEscalaCriterio);
+        mostrarToast(
+          esLetrasCriterio
+            ? `Ese valor supera el ${formatearNumero(disponibleRealMostrado)}% disponible en la materia`
+            : `Ese valor supera el ${formatearNumero(disponibleRealMostrado)} disponible en la materia`
+        );
         return;
       }
     }
@@ -1139,6 +1165,10 @@ function calcularValorEquitativoEstimado(criterio, excluirId) {
 function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asignacionExistente, onGuardado }) {
   const esEdicion = !!asignacionExistente;
   const { overlay, card } = crearModalDinamico({ titulo: esEdicion ? "Editar asignación" : "Nueva asignación" });
+  // Declarado temprano (antes se declaraba más abajo, cerca del selector de
+  // letras) porque ahora también lo necesita el campo "Puntos del
+  // criterio" para mostrarlo en la escala activa en vez de 0-100 crudo.
+  const descriptorEscala = obtenerEscalaPorId(escalaActiva);
 
   const inputNombre = agregarCampoModal(card, {
     etiqueta: "Nombre (ej. Examen I)",
@@ -1168,18 +1198,24 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
   });
 
   const inputValor = agregarCampoModal(card, {
-    etiqueta: "Puntos del criterio",
-    valor: esEdicion && asignacionExistente.modo_valor === "personalizado" ? asignacionExistente.valor : "",
+    etiqueta: descriptorEscala.tipo === "letras" ? "Puntos del criterio (%)" : `Puntos del criterio (sobre ${formatearNumero(descriptorEscala.max)})`,
+    valor:
+      esEdicion && asignacionExistente.modo_valor === "personalizado"
+        ? formatearNumero(convertirDesde100(asignacionExistente.valor, descriptorEscala))
+        : "",
     decimal: true,
   });
 
   function actualizarCampoValor(modo) {
     if (modo === "automatico") {
-      inputValor.value = formatearNumero(equitativoEstimado);
+      inputValor.value = formatearNumero(convertirDesde100(equitativoEstimado, descriptorEscala));
       inputValor.disabled = true;
     } else {
       inputValor.disabled = false;
-      inputValor.value = esEdicion && asignacionExistente.modo_valor === "personalizado" ? asignacionExistente.valor : "";
+      inputValor.value =
+        esEdicion && asignacionExistente.modo_valor === "personalizado"
+          ? formatearNumero(convertirDesde100(asignacionExistente.valor, descriptorEscala))
+          : "";
     }
   }
 
@@ -1221,7 +1257,6 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
      siempre es numérico, sin importar la escala), se oculta inputCalif y
      se muestra este selector en su lugar. Un click sobre la letra ya
      activa la deselecciona (vuelve a quedar pendiente/sin calificar). */
-  const descriptorEscala = obtenerEscalaPorId(escalaActiva);
   let letraSeleccionada =
     esEdicion && asignacionExistente.modo_calificacion === "nota" && typeof asignacionExistente.nota === "string"
       ? asignacionExistente.nota
@@ -1254,7 +1289,9 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
   }
 
   function valorVigenteParaTope() {
-    return switchValor.obtenerValor() === "automatico" ? equitativoEstimado : analizarDecimal(inputValor.value) || 0;
+    return switchValor.obtenerValor() === "automatico"
+      ? convertirDesde100(equitativoEstimado, descriptorEscala)
+      : analizarDecimal(inputValor.value) || 0;
   }
 
   function actualizarEtiquetaCalif(modo) {
@@ -1266,7 +1303,7 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
     labelCalif.textContent =
       modo === "puntos"
         ? `¿Cuántos puntos te dieron? (0-${formatearNumero(valorVigenteParaTope())}, dejalo vacío si aún no la tenés)`
-        : `¿Qué nota te sacaste? (escala 0-${escalaActiva}, dejalo vacío si aún no la tenés)`;
+        : `¿Qué nota te sacaste? (escala 0-${formatearNumero(descriptorEscala.max)}, dejalo vacío si aún no la tenés)`;
   }
 
   actualizarCampoValor(modoValorInicial);
@@ -1283,7 +1320,11 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
     requestAnimationFrame(() => inputCalif.focus());
   }
 
-  const disponible = criterio.valor_total - sumaValorPersonalizadoAsignaciones(criterio, esEdicion ? asignacionExistente.id : undefined);
+  // FIX (2026-08-08): 'disponible' vive en 0-100 internamente (mismo
+  // criterio.valor_total de siempre) — se convierte a la escala solo para
+  // mostrar, igual que el resto de este modal.
+  const disponible100 = criterio.valor_total - sumaValorPersonalizadoAsignaciones(criterio, esEdicion ? asignacionExistente.id : undefined);
+  const disponible = convertirDesde100(disponible100, descriptorEscala);
   const ayuda = document.createElement("p");
   ayuda.className = "muted";
   ayuda.style.fontSize = "0.8rem";
@@ -1303,7 +1344,14 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
     const nombre = inputNombre.value.trim();
     const modoValor = switchValor.obtenerValor();
     const modoCalif = switchCalif.obtenerValor();
-    const valorNum = modoValor === "automatico" ? equitativoEstimado : analizarDecimal(inputValor.value);
+    // valorNumEscala: unidad que la persona ve y tipea (escala activa).
+    // valorNum100: la misma cantidad convertida a 0-100 para guardar —
+    // mismo patrón que criterio.valor_total. equitativoEstimado YA está en
+    // 0-100 (repartirEquitativoCriterio en schema.js trabaja en esa
+    // unidad), por eso ahí no hace falta convertir para guardar, solo para
+    // mostrar (ver valorVigenteParaTope).
+    const valorNumEscala = modoValor === "automatico" ? convertirDesde100(equitativoEstimado, descriptorEscala) : analizarDecimal(inputValor.value);
+    const valorNum100 = modoValor === "automatico" ? equitativoEstimado : convertirA100(valorNumEscala, descriptorEscala);
     const usaLetras = descriptorEscala.tipo === "letras" && modoCalif === "nota";
     const califTexto = inputCalif.value.trim();
     const califNumerico = califTexto === "" ? null : analizarDecimal(califTexto);
@@ -1314,19 +1362,25 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
       return;
     }
     if (modoValor === "personalizado") {
-      if (!Number.isFinite(valorNum) || valorNum <= 0) {
+      if (!Number.isFinite(valorNumEscala) || valorNumEscala <= 0) {
         mostrarToast("El valor debe ser un número mayor a 0");
         return;
       }
     }
     if (califFinal !== null) {
       if (modoCalif === "puntos") {
-        if (!Number.isFinite(califFinal) || califFinal < 0 || califFinal > valorNum + 0.001) {
-          mostrarToast(`Los puntos deben estar entre 0 y ${formatearNumero(valorNum)}`);
+        // FIX (2026-08-08): valorVigenteParaTope() ya devuelve el tope en
+        // unidades de escala — antes se comparaba contra 'valorNum', que en
+        // modo automático seguía siendo 0-100 (equitativoEstimado sin
+        // convertir), permitiendo puntajes hasta 10x más altos de lo que
+        // debía en escalas chicas.
+        const topeEscala = valorVigenteParaTope();
+        if (!Number.isFinite(califFinal) || califFinal < 0 || califFinal > topeEscala + 0.001) {
+          mostrarToast(`Los puntos deben estar entre 0 y ${formatearNumero(topeEscala)}`);
           return;
         }
-      } else if (!usaLetras && (!Number.isFinite(califFinal) || califFinal < 0 || califFinal > escalaActiva)) {
-        mostrarToast(`La nota debe estar entre 0 y ${escalaActiva}`);
+      } else if (!usaLetras && (!Number.isFinite(califFinal) || califFinal < 0 || califFinal > descriptorEscala.max)) {
+        mostrarToast(`La nota debe estar entre 0 y ${formatearNumero(descriptorEscala.max)}`);
         return;
       }
       // usaLetras: califFinal ya salió del picker (solo letras reales),
@@ -1353,9 +1407,9 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
       onGuardado();
       return;
     }
-    const disponibleReal = criterioVivo.valor_total - sumaValorPersonalizadoAsignaciones(criterioVivo, asignacionId || undefined);
-    if (modoValor === "personalizado" && valorNum > disponibleReal + 0.001) {
-      mostrarToast(`Ese valor supera los ${formatearNumero(disponibleReal)} puntos disponibles en el criterio`);
+    const disponibleReal100 = criterioVivo.valor_total - sumaValorPersonalizadoAsignaciones(criterioVivo, asignacionId || undefined);
+    if (modoValor === "personalizado" && valorNum100 > disponibleReal100 + 0.001) {
+      mostrarToast(`Ese valor supera los ${formatearNumero(convertirDesde100(disponibleReal100, descriptorEscala))} puntos disponibles en el criterio`);
       return;
     }
 
@@ -1370,17 +1424,22 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
       asignacionViva.nombre = nombre;
       asignacionViva.modo_valor = modoValor;
       asignacionViva.modo_calificacion = modoCalif;
-      if (modoValor === "personalizado") asignacionViva.valor = valorNum;
-      // FIX (2026-08-06): en modo "puntos", califFinal es el puntaje crudo
-      // que el usuario tipeó (0 a valorNum) — vive en puntaje_obtenido, y
-      // `nota` se recalcula como la nota REAL equivalente en la escala
-      // activa (recalcularNotaDesdePuntaje necesita `valor` ya actualizado,
-      // por eso corre después de tocar asignacionViva.valor arriba). En
-      // modo "nota", califFinal ES la nota tal cual — puntaje_obtenido no
-      // aplica y se limpia para no dejar un valor viejo colgado de un
-      // cambio de modo anterior.
+      if (modoValor === "personalizado") asignacionViva.valor = valorNum100;
+      // FIX (2026-08-06, actualizado 2026-08-08): en modo "puntos",
+      // califFinal es el puntaje que el usuario tipeó EN UNIDADES DE
+      // ESCALA (0 a valorVigenteParaTope()) — se convierte a 0-100 antes de
+      // guardarlo en puntaje_obtenido, para que quede en la MISMA unidad
+      // que `valor` (asignacionViva.valor, guardado arriba en 0-100) —
+      // recalcularNotaDesdePuntaje calcula puntaje/valor directo, sin
+      // convertir nada por su cuenta, así que ambos deben coincidir en
+      // unidad para que esa razón siga siendo correcta. `nota` se recalcula
+      // como la nota REAL equivalente en la escala activa (por eso corre
+      // después de tocar asignacionViva.valor arriba). En modo "nota",
+      // califFinal ES la nota tal cual, ya en su propia escala — no pasa
+      // por esta conversión — puntaje_obtenido no aplica y se limpia para
+      // no dejar un valor viejo colgado de un cambio de modo anterior.
       if (modoCalif === "puntos") {
-        asignacionViva.puntaje_obtenido = califFinal;
+        asignacionViva.puntaje_obtenido = convertirA100(califFinal, descriptorEscala);
         recalcularNotaDesdePuntaje(asignacionViva, escalaActiva);
       } else {
         asignacionViva.puntaje_obtenido = null;
@@ -1388,11 +1447,11 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
       }
       sellarTimestamp(asignacionViva);
     } else {
-      const nueva = crearAsignacion({ nombre, valor: valorNum, orden: siguienteOrden(criterioVivo.asignaciones) });
+      const nueva = crearAsignacion({ nombre, valor: valorNum100, orden: siguienteOrden(criterioVivo.asignaciones) });
       nueva.modo_valor = modoValor;
       nueva.modo_calificacion = modoCalif;
       if (modoCalif === "puntos") {
-        nueva.puntaje_obtenido = califFinal;
+        nueva.puntaje_obtenido = convertirA100(califFinal, descriptorEscala);
         recalcularNotaDesdePuntaje(nueva, escalaActiva);
       } else {
         nueva.nota = califFinal;
@@ -1420,9 +1479,14 @@ function abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asign
  * suman DIRECTO a la nota final (modo_calificacion:"extra" — ver
  * calcularPuntosAsignacion en schema.js), sin concepto de "pendiente".
  */
-function abrirModalAsignacionExtra({ criterio, mm, materia, plan, asignacionExistente, onGuardado }) {
+function abrirModalAsignacionExtra({ criterio, mm, materia, plan, escalaActiva, asignacionExistente, onGuardado }) {
   const esEdicion = !!asignacionExistente;
   const { overlay, card } = crearModalDinamico({ titulo: esEdicion ? "Editar ✨ Extra" : "Nueva asignación ✨ Extra" });
+  // FIX (2026-08-08): asignacion.valor en modo "extra" se suma DIRECTO a
+  // nota_final (0-100 interno) — se muestra/edita en la escala activa,
+  // igual que el resto de los números de nota, convirtiendo a 0-100 recién
+  // al guardar.
+  const descriptorEscalaExtra = obtenerEscalaPorId(escalaActiva);
 
   const inputNombre = agregarCampoModal(card, {
     etiqueta: "Nombre (ej. Examen de reposición)",
@@ -1431,7 +1495,7 @@ function abrirModalAsignacionExtra({ criterio, mm, materia, plan, asignacionExis
   });
   const inputPuntos = agregarCampoModal(card, {
     etiqueta: "Puntos extra dados",
-    valor: esEdicion ? asignacionExistente.valor : "",
+    valor: esEdicion ? formatearNumero(convertirDesde100(asignacionExistente.valor, descriptorEscalaExtra)) : "",
     decimal: true,
   });
 
@@ -1459,13 +1523,14 @@ function abrirModalAsignacionExtra({ criterio, mm, materia, plan, asignacionExis
   btnGuardar.textContent = "Guardar";
   btnGuardar.addEventListener("click", () => {
     const nombre = inputNombre.value.trim();
-    const puntos = analizarDecimal(inputPuntos.value);
+    const puntosEscala = analizarDecimal(inputPuntos.value);
+    const puntos = convertirA100(puntosEscala, descriptorEscalaExtra);
 
     if (!nombre) {
       mostrarToast("Ponele un nombre a la asignación");
       return;
     }
-    if (!Number.isFinite(puntos) || puntos <= 0) {
+    if (!Number.isFinite(puntosEscala) || puntosEscala <= 0) {
       mostrarToast("Los puntos deben ser un número mayor a 0");
       return;
     }
@@ -1905,11 +1970,11 @@ function abrirPopoverAcciones(anclaEl, acciones) {
   }, 300);
 }
 
-function abrirMenuRapidoCriterio(criterio, mm, materia, plan, anclaEl, onCambiar) {
+function abrirMenuRapidoCriterio(criterio, mm, materia, plan, escalaActiva, anclaEl, onCambiar) {
   abrirPopoverAcciones(anclaEl, [
     {
       texto: "Editar criterio",
-      onClick: () => abrirModalCriterio({ mm, materia, plan, criterioExistente: criterio, onGuardado: onCambiar }),
+      onClick: () => abrirModalCriterio({ mm, materia, plan, escalaActiva, criterioExistente: criterio, onGuardado: onCambiar }),
     },
     {
       texto: "Eliminar criterio",
@@ -1935,7 +2000,7 @@ function abrirMenuRapidoAsignacion(asignacion, criterio, mm, materia, plan, esca
       texto: "Editar",
       onClick: () =>
         criterio.es_extra
-          ? abrirModalAsignacionExtra({ criterio, mm, materia, plan, asignacionExistente: asignacion, onGuardado: onCambiar })
+          ? abrirModalAsignacionExtra({ criterio, mm, materia, plan, escalaActiva, asignacionExistente: asignacion, onGuardado: onCambiar })
           : abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asignacionExistente: asignacion, onGuardado: onCambiar }),
     },
     {
@@ -1988,7 +2053,7 @@ function construirFilaAsignacion(asignacion, criterio, mm, materia, plan, escala
     fila.addEventListener("click", (ev) => {
       ev.stopPropagation();
       if (criterio.es_extra) {
-        abrirModalAsignacionExtra({ criterio, mm, materia, plan, asignacionExistente: asignacion, onGuardado: onCambiar });
+        abrirModalAsignacionExtra({ criterio, mm, materia, plan, escalaActiva, asignacionExistente: asignacion, onGuardado: onCambiar });
       } else {
         abrirModalAsignacion({ criterio, mm, materia, plan, escalaActiva, asignacionExistente: asignacion, onGuardado: onCambiar });
       }
@@ -2016,7 +2081,13 @@ function construirFilaAsignacion(asignacion, criterio, mm, materia, plan, escala
     const pillExtra = document.createElement("span");
     pillExtra.className = "pill-tamano-fijo badge badge-accent";
     pillExtra.style.cssText = PILL_ESTILO;
-    pillExtra.textContent = `+${formatearNumero(asignacion.valor)} pts`;
+    // FIX (2026-08-08): asignacion.valor acá ES la calificación directa
+    // (no un peso 0-100 como en criterios normales — ver comentario de
+    // modoCalificacion "extra" en schema.js), pero de todas formas suma
+    // directo a nota_final, que ya se muestra en la escala del plan — así
+    // que también se convierte, para no mezclar unidades en la misma
+    // tarjeta.
+    pillExtra.textContent = `+${formatearNumero(convertirDesde100(asignacion.valor, obtenerEscalaPorId(escalaActiva)))} pts`;
     contDer.appendChild(pillExtra);
     fila.appendChild(contDer);
     return fila;
@@ -2052,9 +2123,17 @@ function construirFilaAsignacion(asignacion, criterio, mm, materia, plan, escala
   const pillPuntos = document.createElement("span");
   pillPuntos.className = "pill-tamano-fijo badge badge-accent";
   pillPuntos.style.cssText = PILL_ESTILO;
+  const descriptorEscalaPuntos = obtenerEscalaPorId(escalaActiva);
   const puntosObtenidos = calcularPuntosAsignacion(asignacion, escalaActiva);
-  const textoPuntos = asignacion.nota === null || asignacion.nota === undefined ? "—" : formatearNumero(puntosObtenidos);
-  pillPuntos.textContent = `${textoPuntos}/${formatearNumero(asignacion.valor)} pts`;
+  // FIX (2026-08-08 — "no tiene sentido que la nota final sea un 10 si los
+  // puntos repartidos son de 100"): puntosObtenidos y asignacion.valor
+  // siguen viviendo en 0-100 internamente (mismo peso de siempre), se
+  // convierten acá solo para mostrar, igual que la nota final de arriba.
+  const textoPuntos =
+    asignacion.nota === null || asignacion.nota === undefined
+      ? "—"
+      : formatearNumero(convertirDesde100(puntosObtenidos, descriptorEscalaPuntos));
+  pillPuntos.textContent = `${textoPuntos}/${formatearNumero(convertirDesde100(asignacion.valor, descriptorEscalaPuntos))} pts`;
 
   // Pendiente #7 (2026-08-03): en pantalla angosta se muestra UNA sola pill
   // por fila, la que diga estado.vistaNotaPuntajeAngosta (mismo toggle que
@@ -2157,7 +2236,7 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
       estado.criteriosExpandidos.set(criterio.id, !expandido);
       onCambiar();
     });
-    agregarLongPress(encabezado, () => abrirMenuRapidoCriterio(criterio, mm, materia, plan, encabezado, onCambiar));
+    agregarLongPress(encabezado, () => abrirMenuRapidoCriterio(criterio, mm, materia, plan, escalaActiva, encabezado, onCambiar));
   }
 
   const tituloWrap = document.createElement("div");
@@ -2174,6 +2253,10 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
   subtitulo.style.fontSize = "0.72rem";
   const puntosObtenidosCriterio = calcularPuntosCriterio(criterio, escalaActiva);
 
+  const descriptorEscalaCriterioCard = obtenerEscalaPorId(escalaActiva);
+  const esLetrasCriterioCard = descriptorEscalaCriterioCard.tipo === "letras";
+  const valorTotalMostrado = convertirDesde100(criterio.valor_total, descriptorEscalaCriterioCard);
+
   // "✨ Extra" no es un % de la materia (se suma aparte del 100%, ver
   // sumaValorTotalCriterios) y, desde el rediseño sin tope fijo (2026-08-07
   // v2), tampoco tiene un valor_total real que mostrar — lo que se ve es la
@@ -2181,9 +2264,13 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
   // siempre coincide con lo "obtenido" (no hay estado pendiente).
   subtitulo.textContent = criterio.es_extra
     ? "criterio libre — se suma aparte"
+    : esLetrasCriterioCard
+    ? angosta
+      ? `${formatearNumero(valorTotalMostrado)}%`
+      : `${formatearNumero(valorTotalMostrado)}% de la materia`
     : angosta
-    ? `${formatearNumero(criterio.valor_total)}%`
-    : `${formatearNumero(criterio.valor_total)}% de la materia`;
+    ? `${formatearNumero(valorTotalMostrado)}/${formatearNumero(descriptorEscalaCriterioCard.max)}`
+    : `${formatearNumero(valorTotalMostrado)} de ${formatearNumero(descriptorEscalaCriterioCard.max)} de la materia`;
   tituloWrap.appendChild(subtitulo);
   encabezado.appendChild(tituloWrap);
 
@@ -2201,10 +2288,11 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
   const textoTotal = document.createElement("span");
   textoTotal.style.cssText = "font-size:0.82rem; white-space:nowrap;";
   if (criterio.es_extra) {
-    textoTotal.innerHTML = `<strong>+${formatearNumero(puntosObtenidosCriterio)} pts extra</strong>`;
+    textoTotal.innerHTML = `<strong>+${formatearNumero(convertirDesde100(puntosObtenidosCriterio, descriptorEscalaCriterioCard))} pts extra</strong>`;
   } else {
     const etiquetaPuntosTotales = angosta ? "Pts:" : "Puntos totales:";
-    textoTotal.innerHTML = `<span class="muted">${etiquetaPuntosTotales}</span> <strong>${formatearNumero(puntosObtenidosCriterio)}/${formatearNumero(criterio.valor_total)} pts</strong>`;
+    const puntosObtenidosMostrados = convertirDesde100(puntosObtenidosCriterio, descriptorEscalaCriterioCard);
+    textoTotal.innerHTML = `<span class="muted">${etiquetaPuntosTotales}</span> <strong>${formatearNumero(puntosObtenidosMostrados)}/${formatearNumero(valorTotalMostrado)} pts</strong>`;
   }
   derechaWrap.appendChild(textoTotal);
 
@@ -2344,7 +2432,7 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
         // acá el modal simplificado se abre directo — nombre y puntos son
         // los únicos 2 campos, no tiene sentido el paso intermedio.
         if (criterio.es_extra) {
-          abrirModalAsignacionExtra({ criterio, mm, materia, plan, onGuardado: onCambiar });
+          abrirModalAsignacionExtra({ criterio, mm, materia, plan, escalaActiva, onGuardado: onCambiar });
         } else {
           agregarAsignacionRapida(criterio, mm, materia, plan, onCambiar);
         }
@@ -2654,7 +2742,7 @@ function construirSeccionNotas(mm, materia, plan, onCambiar) {
   btnNuevoCriterio.textContent = "+ Nuevo criterio";
   btnNuevoCriterio.addEventListener("click", (ev) => {
     ev.stopPropagation();
-    abrirModalCriterio({ mm, materia, plan, onGuardado: onCambiar });
+    abrirModalCriterio({ mm, materia, plan, escalaActiva, onGuardado: onCambiar });
   });
   // Pedido explícito: si el 100% ya está repartido entre los criterios
   // existentes, no tiene sentido ofrecer crear uno más (no habría margen

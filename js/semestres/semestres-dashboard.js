@@ -28,6 +28,8 @@ import {
   calcularPromedioTotalCombinado,
   calcularEstadisticasAprobacion,
   calcularDetallePorEstado,
+  obtenerEscalaPorId,
+  convertirDesde100,
 } from "../core/schema.js";
 
 // Transitorio (no persistido, igual que estado.semestresExpandidos): si la
@@ -155,7 +157,10 @@ function construirSelectorPlanFiltro(onCambiar) {
 
 function formatearPromedio(valor) {
   if (valor === null || valor === undefined) return "—";
-  return valor.toFixed(2);
+  // letras-safe: convertirDesde100 puede devolver una letra ("B+", etc.)
+  // cuando la escala activa del plan es "letras" — mismo patrón que
+  // formatearNotaCruda en semestres-tarjetas.js, sin pasar por toFixed.
+  return typeof valor === "string" ? valor : valor.toFixed(2);
 }
 
 function construirFilaPromedio({ etiquetaIzquierda, promedio, creditos, materias, etiquetaDerecha }) {
@@ -207,6 +212,12 @@ function construirVistaPromedioPonderado() {
      2+ carreras/planes con historial real; con 0-1 plan sería un número
      idéntico al de (b) de abajo, redundante. ---------- */
   if (porPlan.length > 1) {
+    // PENDIENTE (coherencia de escala): "Total general" mezcla materias de
+    // planes que pueden tener escalas de notas distintas (0-100 vs 0-10 vs
+    // letras), así que no existe UNA escala correcta a la cual convertir
+    // este número sin ser arbitrario. Se deja en 0-100 crudo a propósito
+    // hasta que se defina qué mostrar acá (¿0-100 siempre, con una nota
+    // aclaratoria en la UI? ¿la escala del plan principal?).
     const seccionC = document.createElement("div");
     seccionC.className = "stack";
     seccionC.style.gap = "8px";
@@ -245,11 +256,17 @@ function construirVistaPromedioPonderado() {
     seccionB.appendChild(vacio);
   } else {
     porPlan.forEach(({ plan, promedio, creditos, materias }) => {
+      // FIX (misma coherencia de escala que semestres-tarjetas.js): promedio
+      // viene siempre 0-100 internamente (calcularPromedioPorPlan pondera
+      // notas_final crudas). Acá SÍ hay un plan concreto por fila, así que
+      // se puede convertir sin ambigüedad a la escala de ESE plan.
+      const escalaPlan = obtenerEscalaPorId((plan.parametros_universidad || {}).escala_notas ?? 100);
+      const promedioMostrado = promedio === null || promedio === undefined ? promedio : convertirDesde100(promedio, escalaPlan);
       seccionB.appendChild(
         construirFilaPromedio({
           etiquetaIzquierda: aplicarFormatoTexto(plan.nombre_carrera),
           etiquetaDerecha: plan.universidad,
-          promedio,
+          promedio: promedioMostrado,
           creditos,
           materias,
         })
@@ -258,7 +275,20 @@ function construirVistaPromedioPonderado() {
   }
   cont.appendChild(seccionB);
 
-  /* ---------- Nivel (a): por semestre, separado por universidad ---------- */
+  /* ---------- Nivel (a): por semestre, separado por universidad ----------
+     PENDIENTE (coherencia de escala, no se tocó en este pase): a diferencia
+     de (b), acá calcularPromedioPorSemestreYUniversidad solo devuelve el
+     nombre de la universidad como string, no el plan asociado. Con Modo
+     Hardcore, dos planes/carreras distintos pueden compartir la MISMA
+     universidad dentro del mismo semestre (ver construirSelectorPlanFiltro
+     más arriba, que ya contempla ese caso) — así que resolver la escala
+     buscando el plan por nombre de universidad sería adivinar y podría
+     convertir con la escala de un plan que no es. Para hacer esto bien sin
+     riesgo de silenciosamente mostrar la escala equivocada, hace falta que
+     schema.js devuelva también el plan (o su escala_notas) en cada grupo de
+     "universidades". No se tocó schema.js en esta sesión porque no fue
+     subido — este nivel sigue mostrando el promedio crudo en 0-100 hasta
+     que eso se resuelva. */
   const seccionA = document.createElement("div");
   seccionA.className = "stack";
   seccionA.style.gap = "8px";
@@ -309,13 +339,10 @@ function construirVistaPromedioPonderado() {
 
 /* ===================== Vista "Estadísticas": aprobados/reprobados + detalle por estado ===================== */
 
-// Punto 4 (2026-08-07, pedido explícito): "Reprobados"/"Cursando" estaban
-// en el orden invertido — se intercambia el orden de estas dos entradas
-// (el resto del array no cambia).
 const ESTADOS_DETALLE_CONFIG = [
   { clave: "aprobado", texto: "Aprobada", color: "#10b981" },
-  { clave: "reprobado", texto: "Reprobada", color: "#ef4444" },
   { clave: "cursando", texto: "Cursando", color: "#38bdf8" },
+  { clave: "reprobado", texto: "Reprobada", color: "#ef4444" },
   { clave: "pendiente", texto: "Pendiente", color: "#94a3b8" },
 ];
 
