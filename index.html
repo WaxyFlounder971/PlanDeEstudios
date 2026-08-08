@@ -74,6 +74,18 @@
   <!-- Overlay para cerrar el drawer móvil tocando fuera -->
   <div id="sidebar-overlay" class="sidebar-overlay"></div>
 
+  <!-- Drawer de Enlaces rápidos en móvil (2026-08-07): overlay propio,
+       independiente del de arriba — así abrir/cerrar uno no interfiere con
+       el otro (nunca están abiertos a la vez, ver componentes.js). -->
+  <div id="enlaces-movil-overlay" class="sidebar-overlay"></div>
+  <aside id="drawer-enlaces-movil" class="glass-panel drawer-enlaces-movil">
+    <div class="row-between" style="margin-bottom:14px;">
+      <h3 style="margin:0;">🔗 Enlaces rápidos</h3>
+      <button id="btn-cerrar-drawer-enlaces" class="btn-topbar-icono" aria-label="Cerrar">✕</button>
+    </div>
+    <div id="lista-enlaces-drawer-movil" class="stack" style="gap:8px;"></div>
+  </aside>
+
   <div class="app-layout">
 
     <!-- Sidebar -->
@@ -183,7 +195,7 @@
           </div>
         </section>
 
-        <section id="seccion-enlaces-rapidos" class="glass-card stack">
+        <section class="glass-card stack">
           <div class="row-between">
             <h2 style="margin:0;">Enlaces rápidos</h2>
             <button id="btn-agregar-enlace" class="btn btn-primary">+ Añadir enlace</button>
