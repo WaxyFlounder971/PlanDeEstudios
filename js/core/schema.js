@@ -987,6 +987,65 @@ function convertirDesde100(valorEn100, escala) {
 }
 
 /**
+ * Ajustes por Universidad, ronda 4 (2026-08-08 — bug real: "cambio de
+ * escala no migra las notas ya cargadas"). Hasta ahora, cambiar
+ * escala_notas de un plan NO tocaba ninguna nota ya cargada — era una
+ * decisión de diseño explícita (documentada en config-ajustes.js: "solo
+ * cambia con qué escala se reinterpretan de acá en adelante"). En la
+ * práctica eso deja las notas viejas sin sentido: un 8/10 pasa a leerse
+ * como 8/100 si el plan cambia a esa escala, y el cálculo de puntos
+ * ponderados se rompe porque fraccion = nota/escala.max deja de estar
+ * entre 0 y 1 (síntoma reportado: "puntaje x10" al cambiar de escala 100
+ * a escala 10). Esta función reemplaza esa decisión: migra de verdad.
+ *
+ * Recorre TODAS las materias matriculadas de TODOS los semestres que
+ * pertenecen a este plan (mm.plan_estudio_id) y convierte cada
+ * asignación:
+ *   - modo "puntos": se re-deriva `nota` desde puntaje_obtenido/valor con
+ *     la escala NUEVA vía recalcularNotaDesdePuntaje — más preciso que
+ *     convertir la nota vieja, porque puntaje_obtenido nunca dependió de
+ *     la escala (siempre fueron puntos crudos).
+ *   - modo "nota": conversión lineal escala vieja → escala nueva
+ *     (mismo principio que convertirA100/convertirDesde100 de arriba).
+ *   - modo "extra": no se toca — `valor` ahí ES la calificación directa,
+ *     nunca pasó por ninguna escala.
+ *
+ * Si CUALQUIERA de las dos escalas (vieja o nueva) es "letras", no hay
+ * conversión lineal razonable entre letras y números — se deja la nota
+ * como estaba (el usuario deberá revisarla a mano al cambiar desde/hacia
+ * una escala de letras; es un caso borde real, no algo que se pueda
+ * inventar con una fórmula).
+ */
+function migrarNotasAsignacionesEscalaPlan(datos, planId, escalaIdVieja, escalaIdNueva) {
+  const escalaVieja = obtenerEscalaPorId(escalaIdVieja);
+  const escalaNueva = obtenerEscalaPorId(escalaIdNueva);
+  if (escalaVieja.id === escalaNueva.id) return;
+  const puedeConvertirLineal = escalaVieja.tipo !== "letras" && escalaNueva.tipo !== "letras";
+
+  (datos.semestres || []).forEach((semestre) => {
+    (semestre.materias_matriculadas || []).forEach((mm) => {
+      if (mm.plan_estudio_id !== planId) return;
+      (mm.criterios || []).forEach((criterio) => {
+        (criterio.asignaciones || []).forEach((asig) => {
+          if (asig.modo_calificacion === "puntos") {
+            if (asig.puntaje_obtenido === null || asig.puntaje_obtenido === undefined) return;
+            recalcularNotaDesdePuntaje(asig, escalaIdNueva);
+            sellarTimestamp(asig);
+          } else if (asig.modo_calificacion === "nota") {
+            if (asig.nota === null || asig.nota === undefined) return;
+            if (!puedeConvertirLineal) return;
+            const fraccion = Number(asig.nota) / escalaVieja.max;
+            asig.nota = redondearDecimales(fraccion * escalaNueva.max, 6);
+            sellarTimestamp(asig);
+          }
+          // modo "extra": nunca pasó por escala, no se toca.
+        });
+      });
+    });
+  });
+}
+
+/**
  * Fracción (0 a 1, o más de 1 si la nota está mal cargada) que representa
  * una nota cruda dentro de su escala — el único lugar donde "nota" deja de
  * ser un número o una letra sueltos y se vuelve algo comparable/sumable.
@@ -2120,6 +2179,7 @@ export {
   obtenerEscalaPorId,
   convertirA100,
   convertirDesde100,
+  migrarNotasAsignacionesEscalaPlan,
   obtenerFraccionNota,
   notaMinimaParaFraccion,
   crearProfesor,
