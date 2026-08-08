@@ -55,12 +55,19 @@ function convertirImagenABase64Comprimida(archivo, maxDimensionPx = 96, calidad 
         canvas.height = height;
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, width, height);
-        // JPEG no soporta transparencia (el alpha queda negro) — para un
-        // ícono chico es un compromiso aceptable frente a lo que se ahorra
-        // de tamaño contra PNG. Si a futuro hace falta transparencia real,
-        // cambiar a "image/webp" (sí soporta alpha y comprime mejor que
-        // PNG), verificando soporte del navegador antes.
-        resolve(canvas.toDataURL("image/jpeg", calidad));
+        // Fix (2026-08-08 — "fondo negro y feo" en logos PNG): la nota de
+        // arriba decía que JPEG rellena el alpha con negro, y eso es
+        // exactamente lo que se estaba viendo — cualquier logo con fondo
+        // transparente (típicamente PNG) se recomprimía a JPEG y perdía la
+        // transparencia por completo. Para los formatos que sí suelen traer
+        // canal alfa real (PNG, GIF, WEBP, SVG) se conserva PNG, que sí
+        // soporta transparencia. Para fotos comunes (JPEG normal, sin alpha
+        // que conservar) se sigue comprimiendo como JPEG, que pesa bastante
+        // menos — no tiene sentido pagar el tamaño de PNG en una foto sin
+        // transparencia.
+        const formatosConTransparencia = ["image/png", "image/gif", "image/webp", "image/svg+xml"];
+        const conservarTransparencia = formatosConTransparencia.includes(archivo.type);
+        resolve(conservarTransparencia ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", calidad));
       };
       img.onerror = () => reject(new Error("No se pudo procesar la imagen"));
       img.src = lector.result;
