@@ -24,6 +24,8 @@ import {
   resolverObjetivoPasarRaspando,
   ESCALAS_DISPONIBLES,
   obtenerEscalaPorId,
+  convertirA100,
+  convertirDesde100,
   obtenerFraccionNota,
   notaMinimaParaFraccion,
   siguienteOrden,
@@ -1567,7 +1569,7 @@ function agregarAsignacionRapida(criterio, mm, materia, plan, onCambiar) {
 
 /* ===================== Modal: override manual de nota_final ===================== */
 
-function abrirModalNotaManual({ mm, materia, plan, notaFinalVigente, onGuardado }) {
+function abrirModalNotaManual({ mm, materia, plan, notaFinalVigente, escalaActiva, onGuardado }) {
   const { overlay, card } = crearModalDinamico({ titulo: "Editar nota final a mano" });
 
   const aviso = document.createElement("p");
@@ -1578,9 +1580,24 @@ function abrirModalNotaManual({ mm, materia, plan, notaFinalVigente, onGuardado 
     "Uso excepcional: mientras esté activo, el cálculo automático por criterios queda en pausa, y se muestra con un badge de \"editado a mano\" hasta que lo desactives.";
   card.appendChild(aviso);
 
+  // FIX (2026-08-08 — mismo bug que nota_aprobacion en Ajustes): el
+  // override manual se guarda internamente en 0-100 SIEMPRE (así lo espera
+  // el resto del motor — es la misma unidad que nota_final calculado), pero
+  // se muestra y se edita en la escala activa del plan, no en el crudo
+  // 0-100. Para "letras" no hay conversión numérica razonable (ver
+  // convertirA100/convertirDesde100 en schema.js) — ahí se mantiene 0-100
+  // directo, mismo comportamiento que tenía antes.
+  const descriptorEscala = obtenerEscalaPorId(escalaActiva);
+  const esLetras = descriptorEscala.tipo === "letras";
+  const etiquetaEscala = esLetras ? "0-100" : `0-${formatearNumero(descriptorEscala.max)}`;
+  const valorMostrado =
+    notaFinalVigente !== null && notaFinalVigente !== undefined
+      ? formatearNumero(convertirDesde100(notaFinalVigente, descriptorEscala))
+      : "";
+
   const inputNota = agregarCampoModal(card, {
-    etiqueta: "Nota final (0-100)",
-    valor: notaFinalVigente !== null && notaFinalVigente !== undefined ? notaFinalVigente : "",
+    etiqueta: `Nota final (${etiquetaEscala})`,
+    valor: valorMostrado,
     decimal: true,
   });
 
@@ -1591,11 +1608,13 @@ function abrirModalNotaManual({ mm, materia, plan, notaFinalVigente, onGuardado 
   btnGuardar.className = "btn btn-primary btn-block";
   btnGuardar.textContent = "Guardar";
   btnGuardar.addEventListener("click", () => {
-    const valor = analizarDecimal(inputNota.value);
-    if (!Number.isFinite(valor) || valor < 0 || valor > 100) {
-      mostrarToast("La nota final debe estar entre 0 y 100");
+    const valorEnEscala = analizarDecimal(inputNota.value);
+    const tope = esLetras ? 100 : descriptorEscala.max;
+    if (!Number.isFinite(valorEnEscala) || valorEnEscala < 0 || valorEnEscala > tope) {
+      mostrarToast(`La nota final debe estar entre 0 y ${formatearNumero(tope)}`);
       return;
     }
+    const valor = convertirA100(valorEnEscala, descriptorEscala);
     // Fix (2026-08-02): misma clase de bug de referencia obsoleta — se
     // busca la mm viva antes de escribir (ver buscarCriterioVivoPorId).
     const mmViva = buscarMmVivaPorId(mmId);
@@ -1640,9 +1659,15 @@ function pintarResultadoObjetivo(contenedor, resultado, escalaActiva, objetivo) 
       `lo cual ya ni existe. <br><span style="font-weight:400;">No pos ya valió, no hay por dónde.</span>`;
   } else {
     const notaNecesaria = notaMinimaParaFraccion(resultado.fraccionNecesaria, escalaActiva);
+    // FIX (2026-08-08 — mismo bug de "37 en vez de 3.7"): objetivo llega en
+    // 0-100 (misma unidad que nota_aprobacion/raspando — ver
+    // abrirModalProyectar), pero acá se muestra junto a "necesitás sacarte
+    // X (sobre escalaActiva)" — hay que convertirlo a la escala activa para
+    // que ambos números del mismo párrafo hablen el mismo idioma.
+    const objetivoMostrado = convertirDesde100(objetivo, obtenerEscalaPorId(escalaActiva));
     p.innerHTML =
       `Necesitás sacarte un <strong>${formatearNotaCruda(notaNecesaria)}</strong> (sobre ${escalaActiva}) en cada pendiente.` +
-      `<br>Tu nota final sería: <strong>${formatearNumero(objetivo)}</strong>`;
+      `<br>Tu nota final sería: <strong>${formatearNumero(objetivoMostrado)}</strong>`;
   }
   contenedor.appendChild(p);
 }
@@ -1759,7 +1784,10 @@ function abrirModalProyectar({ mm, materia, plan, escalaActiva }) {
   inputDeseada.type = "text";
   inputDeseada.inputMode = "decimal";
   inputDeseada.className = "form-input oculto";
-  inputDeseada.placeholder = "Nota a la que querés llegar (0-100)";
+  const descriptorEscalaProyectar = obtenerEscalaPorId(escalaActiva);
+  inputDeseada.placeholder = descriptorEscalaProyectar.tipo === "letras"
+    ? "Nota a la que querés llegar (0-100)"
+    : `Nota a la que querés llegar (0-${formatearNumero(descriptorEscalaProyectar.max)})`;
   // Pedido explícito: el input de la última opción hipotética ("Nota
   // deseada") se ve un 10% más ancho que el resto del modal — se centra
   // con márgenes negativos para que no se salga del glass-card.
@@ -1799,9 +1827,10 @@ function abrirModalProyectar({ mm, materia, plan, escalaActiva }) {
 
     if (modoActivo === "maximo") {
       const max = calcularMaximoPosibleMateria(mm, escalaActiva);
+      const maxMostrado = convertirDesde100(max, obtenerEscalaPorId(escalaActiva));
       const p = document.createElement("p");
       p.style.cssText = "margin:0; font-weight:700; text-align:center;";
-      p.textContent = `Tu nota final sería: ${formatearNumero(max)}`;
+      p.textContent = `Tu nota final sería: ${formatearNumero(maxMostrado)}`;
       contenedorResultado.appendChild(p);
       return;
     }
@@ -1818,7 +1847,7 @@ function abrirModalProyectar({ mm, materia, plan, escalaActiva }) {
     let objetivo;
     if (modoActivo === "minimo") objetivo = notaAprobacion;
     else if (modoActivo === "raspando") objetivo = resolverObjetivoPasarRaspando(plan.parametros_universidad);
-    else objetivo = analizarDecimal(inputDeseada.value);
+    else objetivo = convertirA100(analizarDecimal(inputDeseada.value), descriptorEscalaProyectar);
 
     if (!Number.isFinite(objetivo)) {
       const p = document.createElement("p");
@@ -2376,13 +2405,26 @@ function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, escal
   const angosta = window.innerWidth < ANCHO_PANTALLA_ANGOSTA;
 
   const notaRedondeada = redondearNotaFinalAlCincoMasCercano(notaFinalVigente);
+  // FIX (2026-08-08 — "un 37 se sigue marcando como 370 en lugar de 3.7"):
+  // notaFinalVigente/notaRedondeada son SIEMPRE 0-100 internamente (suma
+  // ponderada de pesos de criterio, que son porcentajes — ver
+  // calcularNotaFinalMateria en schema.js), sin importar la escala de
+  // notas del plan. Antes se mostraban tal cual, crudas en 0-100; ahora se
+  // convierten a la escala activa para mostrar, igual que ya se hace con
+  // nota_aprobacion en Ajustes — el redondeo al 5 más cercano sigue
+  // calculándose ANTES de convertir (sobre el 0-100 real), porque esa es
+  // la unidad en la que vive nota_aprobacion y en la que tiene sentido
+  // "el múltiplo de 5 más cercano".
+  const descriptorEscalaActiva = obtenerEscalaPorId(escalaActiva);
+  const notaFinalMostrada = convertirDesde100(notaFinalVigente, descriptorEscalaActiva);
+  const notaRedondeadaMostrada = convertirDesde100(notaRedondeada, descriptorEscalaActiva);
   // "Nota" = valor absoluto, siempre 2 decimales (pedido explícito). "Nota
   // final" = la misma nota ya redondeada al 5 más cercano — se mantiene con
   // el formato compacto de siempre, porque es la que importa para decidir
   // si aprobó o no, no un valor "de precisión" que alguien vaya a auditar
   // decimal a decimal.
-  const textoNota = notaFinalVigente === null || notaFinalVigente === undefined ? "—" : formatearNumeroFijo(notaFinalVigente, 2);
-  const textoNotaFinal = notaRedondeada === null || notaRedondeada === undefined ? "—" : formatearNumero(notaRedondeada);
+  const textoNota = notaFinalVigente === null || notaFinalVigente === undefined ? "—" : formatearNumeroFijo(notaFinalMostrada, 2);
+  const textoNotaFinal = notaRedondeada === null || notaRedondeada === undefined ? "—" : formatearNumero(notaRedondeadaMostrada);
 
   const estiloBotonNota = "font-size:0.75rem; padding:4px 10px; white-space:nowrap;";
   const hayCriterios = (mm.criterios || []).length > 0;
@@ -2460,7 +2502,7 @@ function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, escal
     btn.textContent = "Editar a mano";
     btn.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      abrirModalNotaManual({ mm, materia, plan, notaFinalVigente, onGuardado: onCambiar });
+      abrirModalNotaManual({ mm, materia, plan, notaFinalVigente, escalaActiva, onGuardado: onCambiar });
     });
     return btn;
   };
@@ -2869,11 +2911,16 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
   // tampoco los fija explícito) — así quedan visualmente idénticos.
   const notaFinalVigenteLinea1 = calcularNotaFinalVigente(mm, materia, plan);
   const notaRedondeadaLinea1 = redondearNotaFinalAlCincoMasCercano(notaFinalVigenteLinea1);
+  // FIX (2026-08-08 — "un 37 se sigue marcando como 370 en lugar de 3.7"):
+  // mismo bug que en construirEncabezadoNotaFinal — notaRedondeadaLinea1 es
+  // 0-100 interno, hay que convertirlo a la escala del plan para mostrar.
+  const escalaActivaLinea1 = obtenerEscalaNotasMateria(materia, plan, estado.datos.configuracion);
+  const notaRedondeadaLinea1Mostrada = convertirDesde100(notaRedondeadaLinea1, obtenerEscalaPorId(escalaActivaLinea1));
   const spanNota = document.createElement("span");
   spanNota.className = "materia-nota";
   spanNota.style.cssText = "flex-shrink:0; font-family:var(--font-display); font-weight:700; white-space:nowrap;";
   spanNota.textContent = `Nota: ${
-    notaRedondeadaLinea1 === null || notaRedondeadaLinea1 === undefined ? "—" : formatearNumero(notaRedondeadaLinea1)
+    notaRedondeadaLinea1 === null || notaRedondeadaLinea1 === undefined ? "—" : formatearNumero(notaRedondeadaLinea1Mostrada)
   }`;
   linea1.appendChild(spanNota);
 
