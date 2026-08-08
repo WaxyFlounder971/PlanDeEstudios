@@ -1005,6 +1005,27 @@ a:hover .enlace-rapido-nombre {
   .sidebar-cerrar-movil { display: none; }
 }
 
+/* ---- Drawer de Enlaces rápidos en móvil (2026-08-07) ----
+   Mismo mecanismo del sidebar principal (fixed + transform + overlay
+   propio), pero anclado a la derecha y deslizando en sentido contrario:
+   así abrir Enlaces no navega a otra sección ni saca al usuario de donde
+   estaba — la pantalla de fondo queda intacta detrás del overlay. */
+.drawer-enlaces-movil {
+  position: fixed;
+  top: 0; right: 0;
+  height: 100vh;
+  height: 100dvh; /* mismo motivo que .app-sidebar: barra de navegador móvil */
+  width: min(320px, 86vw);
+  max-width: min(320px, 86vw);
+  z-index: 50;
+  padding: 20px 16px;
+  overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform var(--transition-med);
+  box-shadow: var(--shadow-glass);
+}
+.drawer-enlaces-movil.abierta { transform: translateX(0); }
+
 /* ---- Modal "Añadir enlace" (punto 7), responsivo también en 375px ---- */
 .modal-card { width: min(440px, calc(100vw - 32px)); }
 .modal-card .form-input[type="file"] { padding: 8px; }
