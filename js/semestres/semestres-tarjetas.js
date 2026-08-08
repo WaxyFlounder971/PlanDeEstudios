@@ -21,7 +21,7 @@ import {
   obtenerAsignacionesPendientes,
   calcularMaximoPosibleMateria,
   calcularNotaNecesariaUniforme,
-  calcularObjetivoPasarRaspando,
+  resolverObjetivoPasarRaspando,
   ESCALAS_DISPONIBLES,
   obtenerEscalaPorId,
   obtenerFraccionNota,
@@ -1817,7 +1817,7 @@ function abrirModalProyectar({ mm, materia, plan, escalaActiva }) {
 
     let objetivo;
     if (modoActivo === "minimo") objetivo = notaAprobacion;
-    else if (modoActivo === "raspando") objetivo = calcularObjetivoPasarRaspando(notaAprobacion);
+    else if (modoActivo === "raspando") objetivo = resolverObjetivoPasarRaspando(plan.parametros_universidad);
     else objetivo = analizarDecimal(inputDeseada.value);
 
     if (!Number.isFinite(objetivo)) {
