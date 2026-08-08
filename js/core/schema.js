@@ -867,11 +867,10 @@ function repartirEquitativoCriterio(criterio) {
  * propio > escala del plan/universidad > default 100. Único punto de
  * verdad — reutilizar en vez de leer los 2 campos por separado.
  *
- * A partir de esta ronda el valor devuelto puede ser:
- *  - un número (7, 10, 12, 15, 20, 100...) para escalas numéricas "0 al X".
- *  - el string "letras" para el sistema de letras (A+, A, A-, ... F).
- * Ver ESCALAS_DISPONIBLES para la lista completa y obtenerEscalaPorId para
- * ir de este valor crudo al descriptor completo (tipo, max, valores).
+ * El valor devuelto es siempre un número (7, 10, 12, 15, 20, 100, "gpa4",
+ * "gpa4_entero"...). Ver ESCALAS_DISPONIBLES para la lista completa y
+ * obtenerEscalaPorId para ir de este valor crudo al descriptor completo
+ * (tipo, max, valores).
  *
  * Ajustes por Universidad (2026-08-08): `configuracion` queda como
  * parámetro por compatibilidad de firma con todos los callers existentes
@@ -893,13 +892,20 @@ function obtenerEscalaNotasMateria(materia, plan, configuracion) {
  * números que ya se guardaban desde siempre (10, 100) — así los datos
  * viejos siguen funcionando sin migración: un plan con escala_notas=100
  * de antes de este cambio sigue encontrando su descriptor acá mismo.
- * "letras" es el único tipo nuevo de verdad.
  *
- * Para letras no existe un estándar universal, así que usamos la escala
- * de EE.UU. más común (A+ a F) con su equivalencia en % típica de
- * universidad — es una convención razonable, no una regla exacta; si
- * alguna universidad usa otra tabla, esto es lo primero que habría que
- * hacer editable a futuro.
+ * QUITADO (2026-08-08, pedido explícito "no nos hace sentido a lo que
+ * necesitamos"): existió acá un tipo "letras" (A+ a F, con tabla de
+ * equivalencia en %) — se eliminó por completo de esta lista. Un plan
+ * viejo que ya tenía escala_notas="letras" guardado simplemente cae al
+ * fallback de obtenerEscalaPorId (0-100) la próxima vez que se lea, sin
+ * romper nada — no hace falta migrar datos a mano. Varias funciones más
+ * abajo (obtenerFraccionNota, notaMinimaParaFraccion,
+ * recalcularNotaDesdePuntaje, migrarNotasAsignacionesEscalaPlan,
+ * convertirA100/convertirDesde100) todavía tienen una rama genérica
+ * `if (escala.tipo === "letras")` — quedan como código muerto inofensivo
+ * (nunca se van a disparar, ningún descriptor de acá abajo tiene ese
+ * tipo), no se tocaron para no arriesgar el resto de la lógica numérica
+ * que sí está viva en esas mismas funciones.
  */
 const ESCALAS_DISPONIBLES = [
   { id: 7, etiqueta: "0 – 7", tipo: "numerica", max: 7 },
@@ -918,29 +924,6 @@ const ESCALAS_DISPONIBLES = [
   // 0.1 de siempre.
   { id: "gpa4", etiqueta: "GPA 0 – 4 (decimales)", tipo: "numerica", max: 4, paso: 0.1 },
   { id: "gpa4_entero", etiqueta: "GPA 0 – 4 (enteros)", tipo: "numerica", max: 4, paso: 1 },
-  {
-    id: "letras",
-    etiqueta: "A – F (letras)",
-    tipo: "letras",
-    // Ordenado de mejor a peor a propósito — varias funciones de acá abajo
-    // dependen de este orden (ej. encontrar "la letra más baja que ya
-    // alcanza tal fracción").
-    valores: [
-      { letra: "A+", fraccion: 1.00 },
-      { letra: "A", fraccion: 0.95 },
-      { letra: "A-", fraccion: 0.91 },
-      { letra: "B+", fraccion: 0.88 },
-      { letra: "B", fraccion: 0.85 },
-      { letra: "B-", fraccion: 0.81 },
-      { letra: "C+", fraccion: 0.78 },
-      { letra: "C", fraccion: 0.75 },
-      { letra: "C-", fraccion: 0.71 },
-      { letra: "D+", fraccion: 0.68 },
-      { letra: "D", fraccion: 0.65 },
-      { letra: "D-", fraccion: 0.61 },
-      { letra: "F", fraccion: 0.50 },
-    ],
-  },
 ];
 
 /** Descriptor completo de una escala a partir de su id crudo (lo que se
@@ -1487,7 +1470,17 @@ function calcularPromedioPorSemestreYUniversidad(datos) {
     const porUniversidad = porSemestre.get(semestre.id);
     const universidades = Array.from(porUniversidad.entries()).map(([universidad, entradasU]) => {
       const resultado = calcularPromedioPonderado(entradasU);
-      return { universidad, ...resultado };
+      // escalaId (2026-08-08, coherencia de escala en el dashboard): solo
+      // tiene sentido convertir este promedio a una escala si TODOS los
+      // planes agrupados bajo esta universidad usan la MISMA escala_notas
+      // — caso borde real: 2 carreras de la misma universidad con
+      // reglamentos de notas distintos (una en 0-10, otra en 0-100). Si no
+      // coinciden, se devuelve null y quien llama (semestres-dashboard.js)
+      // muestra el 0-100 crudo en vez de adivinar con la escala de un plan
+      // que no corresponde a todo el grupo.
+      const escalasDelGrupo = new Set(entradasU.map((e) => (e.plan.parametros_universidad || {}).escala_notas ?? 100));
+      const escalaId = escalasDelGrupo.size === 1 ? [...escalasDelGrupo][0] : null;
+      return { universidad, escalaId, ...resultado };
     });
     return { semestre, universidades };
   });
