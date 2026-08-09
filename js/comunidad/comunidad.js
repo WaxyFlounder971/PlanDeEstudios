@@ -1259,6 +1259,17 @@ function abrirModalAltaProfesor(profesorExistente = null) {
   caja.appendChild(bloqueVolveria);
 
   // ---------- Vincular materias (reemplaza el viejo campo de tags) ----------
+  // 2026-08-09 (pedido explícito): "no permite vincularle nada hasta que
+  // esté guardado, se deberia permitir vincularlo mientras se guarda, si no
+  // se guarda se borra" — en modo alta (!esEdicion) ya NO se bloquea el
+  // botón. Las materias elegidas se guardan en `materiasPendientes` (solo
+  // ids, en memoria) y recién se escriben de verdad en cada
+  // mm.profesor_ids cuando el profesor se guarda (ver btnGuardar más
+  // abajo). Si el modal se cierra sin guardar, `materiasPendientes` se
+  // pierde con el resto del formulario sin que haya que revertir nada,
+  // porque nunca se tocó la data real.
+  let materiasPendientes = [];
+
   const bloqueVincular = document.createElement("div");
   bloqueVincular.innerHTML = `<span class="form-label">Materias vinculadas</span>`;
   const listaVinculaciones = document.createElement("div");
@@ -1268,12 +1279,20 @@ function abrirModalAltaProfesor(profesorExistente = null) {
   function repintarVinculaciones() {
     listaVinculaciones.innerHTML = "";
     if (!esEdicion) {
-      const p = document.createElement("p");
-      p.className = "muted";
-      p.style.margin = "0";
-      p.style.fontSize = "0.8rem";
-      p.textContent = "Guardá el profesor primero, después podés vincularlo a tus materias.";
-      listaVinculaciones.appendChild(p);
+      if (materiasPendientes.length === 0) {
+        const p = document.createElement("p");
+        p.className = "muted";
+        p.style.margin = "0";
+        p.style.fontSize = "0.8rem";
+        p.textContent = "Todavía no vinculaste ninguna materia — se guarda junto con el profesor.";
+        listaVinculaciones.appendChild(p);
+        return;
+      }
+      materiasPendientes.forEach((mmId) => {
+        const encontrada = buscarMmVivaPorId(mmId);
+        if (!encontrada) return; // materia borrada mientras el modal estaba abierto — se ignora en el preview, no revienta
+        listaVinculaciones.appendChild(construirMiniTarjetaMateriaVinculada(encontrada.mm, encontrada.semestre));
+      });
       return;
     }
     const vivo = buscarProfesorVivoPorId(profesorExistente.id) || profesorExistente;
@@ -1299,12 +1318,25 @@ function abrirModalAltaProfesor(profesorExistente = null) {
   btnVincular.className = "btn btn-secondary btn-block";
   btnVincular.style.marginTop = "8px";
   btnVincular.textContent = "+ Vincular a una materia tuya";
-  btnVincular.disabled = !esEdicion;
-  btnVincular.title = esEdicion ? "" : "Guardá el profesor primero";
   btnVincular.addEventListener("click", () => {
-    abrirModalVincularProfesor(buscarProfesorVivoPorId(profesorExistente.id) || profesorExistente, () => {
-      repintarVinculaciones();
-    });
+    if (esEdicion) {
+      abrirModalVincularProfesor(buscarProfesorVivoPorId(profesorExistente.id) || profesorExistente, () => {
+        repintarVinculaciones();
+      });
+    } else {
+      // Placeholder sin id real — abrirModalVincularProfesor detecta
+      // profesor.id === null y devuelve los ids elegidos en vez de
+      // escribirlos, ver su doc-comment.
+      abrirModalVincularProfesor(
+        { id: null, nombre: inputNombre.value.trim() || "el nuevo profesor" },
+        (idsElegidos) => {
+          materiasPendientes = idsElegidos;
+          sucio = true;
+          repintarVinculaciones();
+        },
+        materiasPendientes
+      );
+    }
   });
   bloqueVincular.appendChild(btnVincular);
   caja.appendChild(bloqueVincular);
@@ -1386,8 +1418,25 @@ function abrirModalAltaProfesor(profesorExistente = null) {
       nuevo.calificacion = calificacionActual || null;
       nuevo.volveria_a_llevar = volveriaActual;
       estado.datos.profesores.push(nuevo);
+      // Recién acá se aplican de verdad las vinculaciones elegidas ANTES de
+      // guardar (materiasPendientes, ver arriba) — ya con el id real del
+      // profesor recién creado.
+      let algunaFallo = false;
+      materiasPendientes.forEach((mmId) => {
+        const encontrada = buscarMmVivaPorId(mmId);
+        if (!encontrada) {
+          algunaFallo = true;
+          return;
+        }
+        if (!Array.isArray(encontrada.mm.profesor_ids)) encontrada.mm.profesor_ids = [];
+        if (!encontrada.mm.profesor_ids.includes(nuevo.id)) {
+          encontrada.mm.profesor_ids.push(nuevo.id);
+          sellarTimestamp(encontrada.mm);
+        }
+      });
       marcarCambioPendiente();
       overlay.remove();
+      if (algunaFallo) mostrarToast("Alguna materia vinculada ya no existía — se guardaron las demás.");
       renderizarComunidad();
       // Pedido explícito: "desde que agregas profesor te debe permitir
       // vincularlo" — apenas se crea, se reabre el modal ya en modo
@@ -1423,7 +1472,26 @@ function abrirModalAltaProfesor(profesorExistente = null) {
  * modal de Editar profesor (que puede seguir abierto detrás) refresque su
  * propia lista de vinculaciones sin tener que cerrarse y reabrirse.
  */
-function abrirModalVincularProfesor(profesor, onVinculado) {
+/**
+ * `profesor` puede ser un profesor real ya guardado ({id, nombre, ...}) o,
+ * en modo alta (profesor todavía no existe), un objeto placeholder
+ * {id: null, nombre}. Con id null, "Vincular" ya NO escribe nada en la data
+ * real — solo devuelve los ids elegidos vía onVinculado(idsElegidos), para
+ * que el llamador (abrirModalAltaProfesor) los guarde en memoria y recién
+ * los aplique cuando el profesor se guarde de verdad (pedido explícito: "no
+ * permite vincularle nada hasta que esté guardado, se deberia permitir
+ * vincularlo mientras se guarda, si no se guarda se borra").
+ *
+ * 2026-08-09 (pedido explícito): multi-select — se puede elegir varias
+ * materias de DISTINTOS semestres en una sola pasada; `seleccionadas` es un
+ * Set que vive fuera de repintarMaterias así que cambiar el semestre del
+ * selector de arriba ya NO borra lo marcado en otros semestres (antes era
+ * un solo valor escalar que se reseteaba a null en cada cambio — de ahí el
+ * bug de "solo se guarda el último"). `idsPreseleccionados` deja reabrir el
+ * selector con lo elegido en una pasada anterior ya marcado (mismo modal se
+ * reabre en modo alta con lo que el usuario ya había tildado).
+ */
+function abrirModalVincularProfesor(profesor, onVinculado, idsPreseleccionados = []) {
   document.querySelectorAll(".overlay-vincular-profesor").forEach((el) => el.remove());
 
   const semestres = [...obtenerSemestresActuales(), ...obtenerSemestresPasados()];
@@ -1458,25 +1526,40 @@ function abrirModalVincularProfesor(profesor, onVinculado) {
     return;
   }
 
-  let mmSeleccionadaId = null;
+  const seleccionadas = new Set(idsPreseleccionados);
 
   const bloqueSemestre = document.createElement("div");
   bloqueSemestre.innerHTML = `<span class="form-label">Semestre</span>`;
   const opcionesSemestre = semestres.map((s) => ({ valor: s.id, etiqueta: s.nombre }));
   const selectorSemestre = construirSelectorCustom(opcionesSemestre, semestres[0].id, (semestreId) => {
-    mmSeleccionadaId = null;
+    // A propósito: NO se toca `seleccionadas` acá — cambiar de semestre
+    // solo cambia qué materias se ven, nunca lo ya marcado en otros.
     repintarMaterias(semestreId);
   });
   bloqueSemestre.appendChild(selectorSemestre.elemento);
   caja.appendChild(bloqueSemestre);
 
   const bloqueMateria = document.createElement("div");
-  bloqueMateria.innerHTML = `<span class="form-label">Materias de ese semestre, tocá una para vincularla</span>`;
+  bloqueMateria.innerHTML = `<span class="form-label">Materias de ese semestre, tocá las que querés vincular</span>`;
   const contenedorMaterias = document.createElement("div");
   contenedorMaterias.className = "stack";
   contenedorMaterias.style.gap = "6px";
   bloqueMateria.appendChild(contenedorMaterias);
   caja.appendChild(bloqueMateria);
+
+  // Contador — recuerda al usuario que la selección se acumula entre
+  // semestres (no se ve nada de otros semestres mientras el dropdown de
+  // arriba muestra uno solo, así que sin esto no habría forma de confirmar
+  // que sigue ahí).
+  const contador = document.createElement("p");
+  contador.className = "muted";
+  contador.style.cssText = "margin:0; font-size:0.78rem;";
+  function actualizarContador() {
+    const n = seleccionadas.size;
+    contador.textContent =
+      n === 0 ? "Ninguna materia seleccionada todavía." : n === 1 ? "1 materia seleccionada." : `${n} materias seleccionadas.`;
+  }
+  caja.appendChild(contador);
 
   /**
    * Mini-tarjeta de materia usada COMO BOTÓN dentro del selector: misma
@@ -1503,23 +1586,49 @@ function abrirModalVincularProfesor(profesor, onVinculado) {
       ";" +
       (categoria ? ` box-shadow: inset 4px 0 0 0 ${categoria.color}${seleccionada ? ", 0 0 0 2px var(--accent-1)" : ""};` : "");
 
+    // Checkbox visual — el selector es multi-select (2026-08-09: se puede
+    // vincular varias materias de una sola pasada, de cualquier semestre,
+    // sin que cambiar de semestre borre lo ya marcado — ver `seleccionadas`
+    // más abajo, es un Set que vive fuera de repintarMaterias).
+    const casilla = document.createElement("span");
+    casilla.style.cssText =
+      "flex-shrink:0; width:16px; height:16px; box-sizing:border-box; border-radius:4px; border:2px solid var(--accent-1); display:flex; align-items:center; justify-content:center; font-size:0.7rem; line-height:1; color:var(--accent-1); font-weight:700;" +
+      (seleccionada ? " background:var(--accent-1); color:#fff;" : "");
+    casilla.textContent = seleccionada ? "✓" : "";
+    boton.appendChild(casilla);
+
     const nombre = document.createElement("span");
     nombre.className = "materia-nombre truncada";
     nombre.style.cssText = "flex:1; min-width:0; font-size:0.85rem; top:0;";
     nombre.textContent = materia ? materia.nombre : "Materia eliminada";
     boton.appendChild(nombre);
 
-    const yaConOtro = mm.profesor_id && mm.profesor_id !== profesor.id;
-    const yaConEste = mm.profesor_id === profesor.id;
-    if (yaConOtro || yaConEste) {
+    // 2026-08-09 (pedido explícito): ahora se permite más de un profesor
+    // por materia — "yaConOtro" ya NO bloquea la selección, solo informa
+    // cuántos profesores tiene además de este. Lo único que sí sigue
+    // bloqueado es re-vincular al MISMO profesor dos veces.
+    const idsVinculados = Array.isArray(mm.profesor_ids) ? mm.profesor_ids : [];
+    const yaConEste = profesor.id && idsVinculados.includes(profesor.id);
+    const otrosCount = idsVinculados.filter((id) => id !== profesor.id).length;
+    if (yaConEste || otrosCount > 0) {
       const etiqueta = document.createElement("span");
       etiqueta.className = "muted";
       etiqueta.style.cssText = "font-size:0.72rem; flex-shrink:0; white-space:nowrap;";
-      etiqueta.textContent = yaConEste ? "Ya vinculada a este" : "Ya tiene otro profesor";
+      etiqueta.textContent = yaConEste
+        ? "Ya vinculada a este"
+        : otrosCount === 1
+        ? "Ya tiene 1 profesor"
+        : `Ya tiene ${otrosCount} profesores`;
       boton.appendChild(etiqueta);
     }
 
-    boton.addEventListener("click", onClick);
+    if (yaConEste) {
+      boton.disabled = true;
+      boton.style.opacity = "0.55";
+      boton.style.cursor = "default";
+    } else {
+      boton.addEventListener("click", onClick);
+    }
     return boton;
   }
 
@@ -1537,14 +1646,17 @@ function abrirModalVincularProfesor(profesor, onVinculado) {
     }
     mms.forEach((mm) => {
       contenedorMaterias.appendChild(
-        construirMiniTarjetaSeleccionable(mm, mmSeleccionadaId === mm.id, () => {
-          mmSeleccionadaId = mm.id;
+        construirMiniTarjetaSeleccionable(mm, seleccionadas.has(mm.id), () => {
+          if (seleccionadas.has(mm.id)) seleccionadas.delete(mm.id);
+          else seleccionadas.add(mm.id);
           repintarMaterias(semestreId);
+          actualizarContador();
         })
       );
     });
   }
   repintarMaterias(selectorSemestre.obtenerValor());
+  actualizarContador();
 
   const error = document.createElement("p");
   error.className = "muted oculto";
@@ -1566,22 +1678,38 @@ function abrirModalVincularProfesor(profesor, onVinculado) {
   btnGuardar.className = "btn btn-primary";
   btnGuardar.textContent = "Vincular";
   btnGuardar.addEventListener("click", () => {
-    if (!mmSeleccionadaId) {
-      error.textContent = "Elegí una materia.";
+    if (seleccionadas.size === 0) {
+      error.textContent = "Elegí al menos una materia.";
       error.classList.remove("oculto");
       return;
     }
-    const encontrada = buscarMmVivaPorId(mmSeleccionadaId);
-    if (!encontrada) {
-      mostrarToast("Esa materia matriculada ya no existe — no se pudo vincular");
+    const idsElegidos = Array.from(seleccionadas);
+
+    // Modo alta (profesor.id === null): todavía no hay profesor real al
+    // cual escribirle nada — se devuelven los ids elegidos tal cual,
+    // recién se aplican cuando abrirModalAltaProfesor guarde de verdad.
+    if (!profesor.id) {
       overlay.remove();
-      renderizarComunidad();
+      if (onVinculado) onVinculado(idsElegidos);
       return;
     }
-    encontrada.mm.profesor_id = profesor.id;
-    sellarTimestamp(encontrada.mm);
+
+    let algunaFallo = false;
+    idsElegidos.forEach((mmId) => {
+      const encontrada = buscarMmVivaPorId(mmId);
+      if (!encontrada) {
+        algunaFallo = true;
+        return;
+      }
+      if (!Array.isArray(encontrada.mm.profesor_ids)) encontrada.mm.profesor_ids = [];
+      if (!encontrada.mm.profesor_ids.includes(profesor.id)) {
+        encontrada.mm.profesor_ids.push(profesor.id);
+        sellarTimestamp(encontrada.mm);
+      }
+    });
     marcarCambioPendiente();
     overlay.remove();
+    if (algunaFallo) mostrarToast("Alguna materia matriculada ya no existía — se vincularon las demás.");
     if (onVinculado) onVinculado();
     renderizarComunidad();
   });
@@ -1609,16 +1737,21 @@ function abrirConfirmacionBorrarProfesor(profesor, onEliminado) {
     onConfirmar: () => {
       // Limpieza defensiva (regla obligatoria de sincronización): ninguna
       // materia_matriculada debe quedar apuntando a un profesor_id que ya
-      // no existe.
+      // no existe. 2026-08-09: profesor_ids es arreglo — se saca SOLO a
+      // este profesor, sin tocar otros que sigan vinculados a la misma
+      // materia (más de un profesor por materia ya es válido).
       (estado.datos.semestres || []).forEach((semestre) => {
         (semestre.materias_matriculadas || []).forEach((mm) => {
-          if (mm.profesor_id === profesor.id) {
-            mm.profesor_id = null;
+          if (Array.isArray(mm.profesor_ids) && mm.profesor_ids.includes(profesor.id)) {
+            mm.profesor_ids = mm.profesor_ids.filter((id) => id !== profesor.id);
             // Campos legados de la versión anterior del diseño (la
             // calificación/volvería ya no viven en la mm, ver arriba) — se
-            // limpian igual por si quedó algo de una sincronización vieja.
-            mm.calificacion_profesor = null;
-            mm.volveria_a_llevar_profesor = null;
+            // limpian solo si ya no queda NINGÚN profesor vinculado, para
+            // no perder el dato de otro profesor que siga vinculado.
+            if (mm.profesor_ids.length === 0) {
+              mm.calificacion_profesor = null;
+              mm.volveria_a_llevar_profesor = null;
+            }
             sellarTimestamp(mm);
           }
         });
