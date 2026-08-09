@@ -60,8 +60,17 @@ import { obtenerSemestresActuales, obtenerSemestresPasados } from "../semestres/
 // estado.modoEdicionSemestres en semestres.js: vive en memoria, se resetea
 // solo al recargar la página.
 estado.tabComunidad = "profesores"; // "profesores" | "companeros"
-estado.filtroComunidadProfesores = "todos"; // "todos" | "tuyos" | "no-tuyos"
+estado.filtroComunidadProfesores = "todos"; // "todos" | "tuyos" | "no-tuyos" (pills dicen "Profe"/"No profe")
+// Filtro de recomendación en Profesores, entre el de "Profe/No profe" y el
+// de orden (Alfabético/Por bloque) — mismo patrón que ya existía en
+// Compañeros. Se basa en profesor.volveria_a_llevar.
+estado.filtroRecomendacionProfesores = estado.filtroRecomendacionProfesores || "todos"; // "todos" | "recomendados" | "no-recomendados"
 estado.filtroComunidadCompaneros = "todos"; // "todos" | "recomendados" | "no-recomendados"
+// "Todos, Compañeros, Conocidos" — para diferenciar compañeros con los que
+// YA se compartió alguna materia real (validada, ver esCompanero /
+// obtenerMateriasCompartidasValidas) de los que solo están agregados pero
+// todavía no comparten ninguna clase ("conocidos").
+estado.filtroTipoCompaneros = estado.filtroTipoCompaneros || "todos"; // "todos" | "companeros" | "conocidos"
 estado.profesoresExpandidos = estado.profesoresExpandidos || new Set(); // ids con la tarjeta abierta
 estado.companerosExpandidos = estado.companerosExpandidos || new Set(); // ids con la tarjeta abierta
 // Orden de la lista de Profesores: "alfabetico" (default) o "bloque" (agrupados
@@ -75,6 +84,12 @@ estado.ordenComunidadProfesores = estado.ordenComunidadProfesores || "alfabetico
 // semestre nuevo que aparezca después arranque expandido sin tener que
 // agregarlo a mano a ningún lado.
 estado.bloquesProfesoresColapsados = estado.bloquesProfesoresColapsados || new Set();
+// Mismo patrón, ahora también para Compañeros (pedido explícito: "mismos
+// filtros que en profes", incluye Alfabético/Por bloque).
+estado.ordenComunidadCompaneros = estado.ordenComunidadCompaneros || "alfabetico"; // "alfabetico" | "bloque"
+estado.bloquesCompanerosColapsados = estado.bloquesCompanerosColapsados || new Set();
+
+
 
 // Escuela completa en misprofesores.com (no un profesor puntual — pedido
 // explícito: los profesores suelen estar duplicados/mal cargados ahí, así
@@ -193,6 +208,15 @@ function buscarMmVivaPorId(mmId) {
  *  filtro"), solo se quitó el badge visual de la tarjeta. */
 function esProfesorTuyo(profesor, datos) {
   return obtenerHistorialProfesor(profesor.id, datos).length > 0;
+}
+
+/** Análogo a esProfesorTuyo, pero para Compañeros: "ya es compañero" (en
+ *  vez de solo "conocido") si comparte al menos una materia VÁLIDA (ver
+ *  obtenerMateriasCompartidasValidas — descarta referencias a materias que
+ *  ya no existen). Pedido explícito del filtro "Todos, Compañeros,
+ *  Conocidos" para diferenciar si ya han compartido clase de verdad. */
+function esCompanero(companero, datos) {
+  return obtenerMateriasCompartidasValidas(companero, datos).length > 0;
 }
 
 /* ===================== Estrellas (calificación 1-10, medias estrellas) ===================== */
@@ -659,6 +683,29 @@ function construirBadgeWhatsapp(telefono) {
   return badge;
 }
 
+/** Badge de carné (ancla izquierda, expandida, Compañeros): mismo botón y
+ *  color que el de correo de Profesores, solo cambia el emoji y el texto
+ *  (el carné en vez del correo). Pedido explícito: "mantener presionado no
+ *  hará nada" — a diferencia del correo, acá NO hay acción de mantener
+ *  presionado (no existe un "mailto" equivalente para un carné), por eso
+ *  onLongPress es un no-op: si el usuario mantiene presionado, simplemente
+ *  no pasa nada (tampoco se dispara el tap-copiar, ya que press-largo y tap
+ *  son mutuamente excluyentes en adjuntarPressLargo). */
+function construirBadgeCarnet(carnet) {
+  const badge = document.createElement("span");
+  badge.className = "badge";
+  badge.style.cssText =
+    "background:#1C4BBF; color:#fff; cursor:pointer; user-select:none; -webkit-user-select:none;" +
+    " display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+  badge.textContent = `🪪 ${carnet}`;
+  badge.title = "Tocá para copiar";
+  adjuntarPressLargo(badge, {
+    onTap: () => copiarAlPortapapeles(carnet, "Carné copiado al portapapeles"),
+    onLongPress: () => {},
+  });
+  return badge;
+}
+
 /* ===================== Tarjetas ===================== */
 
 function construirTarjetaProfesor(profesor, datos) {
@@ -836,23 +883,45 @@ function construirTarjetaProfesor(profesor, datos) {
 }
 
 function construirTarjetaCompanero(companero, datos) {
-  const recomendado = companero.lista !== "blacklist";
   const expandido = estado.companerosExpandidos.has(companero.id);
+  const recomendado = companero.lista !== "blacklist";
 
   const card = document.createElement("div");
   card.className = "glass-panel stack";
   card.style.cssText = "gap:6px; cursor:pointer; padding:14px 16px;";
 
+  /* ---------- Colapsada: Nombre · Recomendado (der.) · flecha ----------
+     Copia exacta del patrón de Profesores, sin la columna de estrellas
+     (Compañeros no tiene calificación general) — por eso alcanza con un
+     row simple justify-content:space-between, sin el grid de 3 columnas
+     que en Profesores existe solo para centrar las estrellas. */
   const encabezado = document.createElement("div");
   encabezado.className = "row";
-  encabezado.style.cssText = "justify-content:space-between; align-items:center; gap:8px;";
-  encabezado.innerHTML = `
-    <strong>${escaparHtml(companero.nombre_completo)}</strong>
-    <span style="display:flex; align-items:center; gap:6px;">
-      <span class="muted" style="font-size:11px; white-space:nowrap;">${recomendado ? "✓ Recomendado" : "✕ No recomendado"}</span>
-      <span class="muted" style="font-size:12px;">${expandido ? "▲" : "▼"}</span>
-    </span>
-  `;
+  encabezado.style.cssText = "justify-content:space-between; align-items:center; gap:10px;";
+
+  const nombre = document.createElement("strong");
+  nombre.style.cssText = "min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+  nombre.textContent = companero.nombre_completo;
+  encabezado.appendChild(nombre);
+
+  const derechaEncabezado = document.createElement("div");
+  derechaEncabezado.className = "row";
+  derechaEncabezado.style.cssText = "align-items:center; gap:10px; min-width:0; flex-shrink:0;";
+
+  const badgeRecomendado = document.createElement("span");
+  badgeRecomendado.className = "badge " + (recomendado ? "badge-success" : "badge-danger");
+  badgeRecomendado.style.cssText = "flex-shrink:0; white-space:nowrap;";
+  badgeRecomendado.textContent = recomendado ? "✓ Recomendado" : "✕ No recomendado";
+  derechaEncabezado.appendChild(badgeRecomendado);
+
+  const flecha = document.createElement("span");
+  flecha.className = "muted";
+  flecha.style.fontSize = "0.9rem";
+  flecha.textContent = expandido ? "▲" : "▼";
+  derechaEncabezado.appendChild(flecha);
+
+  encabezado.appendChild(derechaEncabezado);
+
   encabezado.addEventListener("click", () => {
     if (expandido) estado.companerosExpandidos.delete(companero.id);
     else estado.companerosExpandidos.add(companero.id);
@@ -860,28 +929,39 @@ function construirTarjetaCompanero(companero, datos) {
   });
   card.appendChild(encabezado);
 
-  const datosContacto = [companero.carnet, companero.telefono].filter(Boolean);
-  if (datosContacto.length > 0) {
-    const contacto = document.createElement("p");
-    contacto.className = "muted";
-    contacto.style.margin = "0";
-    contacto.textContent = datosContacto.join(" · ");
-    card.appendChild(contacto);
-  }
-
   if (!expandido) return card;
 
-  if (companero.nota) {
-    const nota = document.createElement("p");
-    nota.style.margin = "0";
-    nota.textContent = companero.nota;
-    card.appendChild(nota);
+  /* ---------- Fila de contacto: carné (izq.) / WhatsApp (der.) ----------
+     Copia exacta del patrón de Profesores (correo/WhatsApp), cambiando
+     solo el dato de la izquierda por el carné (mismo botón y color, otro
+     emoji, y mantener presionado ya no hace nada — ver
+     construirBadgeCarnet). El de WhatsApp es idéntico al de Profesores. */
+  if (companero.carnet || companero.telefono) {
+    const filaContacto = document.createElement("div");
+    filaContacto.style.cssText = "display:flex; justify-content:space-between; align-items:center; gap:8px;";
+
+    const slotCarnet = document.createElement("div");
+    slotCarnet.style.cssText = "flex:1; min-width:0; overflow:hidden;";
+    if (companero.carnet) slotCarnet.appendChild(construirBadgeCarnet(companero.carnet));
+    filaContacto.appendChild(slotCarnet);
+
+    const slotWhatsapp = document.createElement("div");
+    slotWhatsapp.style.cssText = "flex-shrink:0; min-width:0; overflow:hidden;";
+    if (companero.telefono) slotWhatsapp.appendChild(construirBadgeWhatsapp(companero.telefono));
+    filaContacto.appendChild(slotWhatsapp);
+
+    card.appendChild(filaContacto);
   }
 
+  /* ---------- Expandida: mini-tarjetas de materias compartidas ----------
+     Misma mini-tarjeta que usa Profesores (barra de categoría + nombre +
+     Nota centrada + badge de semestre) — obtenerMateriasCompartidasValidas
+     ya devuelve {mm, semestre, materia} con la misma forma que espera
+     construirMiniTarjetaMateriaVinculada(mm, semestre). */
   const compartidas = obtenerMateriasCompartidasValidas(companero, datos);
   const bloqueCompartidas = document.createElement("div");
   bloqueCompartidas.className = "stack";
-  bloqueCompartidas.style.gap = "4px";
+  bloqueCompartidas.style.gap = "6px";
   if (compartidas.length === 0) {
     const p = document.createElement("p");
     p.className = "muted";
@@ -889,51 +969,39 @@ function construirTarjetaCompanero(companero, datos) {
     p.textContent = "Todavía no lo vinculaste a ninguna materia compartida.";
     bloqueCompartidas.appendChild(p);
   } else {
-    compartidas.forEach(({ mm, semestre, materia }) => {
-      const fila = document.createElement("p");
-      fila.style.margin = "0";
-      fila.innerHTML = `<strong>${escaparHtml(materia ? materia.nombre : "Materia eliminada")}</strong> <span class="muted">· ${escaparHtml(
-        semestre.nombre
-      )}</span>`;
-      bloqueCompartidas.appendChild(fila);
+    compartidas.forEach(({ mm, semestre }) => {
+      bloqueCompartidas.appendChild(construirMiniTarjetaMateriaVinculada(mm, semestre));
     });
   }
   card.appendChild(bloqueCompartidas);
 
+  /* ---------- Fila final: Nota (ocupa todo el ancho libre) + Editar ----------
+     Pedido explícito: en vez del logo de MisProfes (que acá no aplica),
+     va el texto que el usuario haya puesto en "Nota", ocupando todo el
+     ancho disponible SIN tocar el botón Editar — flex:1 en el texto +
+     flex-shrink:0 en Editar logran exactamente eso, sea cual sea el largo
+     de la nota. "Eliminar" ya no vive acá — pasa a vivir dentro del modal
+     de Editar (idéntico al rediseño de Profesores). */
   const filaAcciones = document.createElement("div");
   filaAcciones.className = "row";
-  filaAcciones.style.gap = "8px";
+  filaAcciones.style.cssText = "justify-content:space-between; align-items:flex-start; gap:10px;";
 
-  const btnVincular = document.createElement("button");
-  btnVincular.type = "button";
-  btnVincular.className = "btn btn-secondary";
-  btnVincular.style.flex = "1";
-  btnVincular.textContent = "Vincular materia compartida";
-  btnVincular.addEventListener("click", (e) => {
-    e.stopPropagation();
-    abrirModalVincularMateriaCompanero(companero);
-  });
-  filaAcciones.appendChild(btnVincular);
+  const textoNota = document.createElement("p");
+  textoNota.style.cssText =
+    "flex:1; min-width:0; margin:0; font-size:0.85rem; line-height:1.4; white-space:pre-wrap; word-break:break-word;";
+  textoNota.textContent = companero.nota || "";
+  filaAcciones.appendChild(textoNota);
 
   const btnEditar = document.createElement("button");
   btnEditar.type = "button";
   btnEditar.className = "btn btn-secondary";
+  btnEditar.style.cssText = "flex-shrink:0; padding:6px 14px; font-size:0.82rem;";
   btnEditar.textContent = "Editar";
   btnEditar.addEventListener("click", (e) => {
     e.stopPropagation();
     abrirModalAltaCompanero(companero);
   });
   filaAcciones.appendChild(btnEditar);
-
-  const btnBorrar = document.createElement("button");
-  btnBorrar.type = "button";
-  btnBorrar.className = "btn btn-secondary";
-  btnBorrar.textContent = "Eliminar";
-  btnBorrar.addEventListener("click", (e) => {
-    e.stopPropagation();
-    abrirConfirmacionBorrarCompanero(companero);
-  });
-  filaAcciones.appendChild(btnBorrar);
 
   card.appendChild(filaAcciones);
 
@@ -1497,14 +1565,14 @@ function abrirModalAltaCompanero(companeroExistente = null) {
   caja.appendChild(bloqueCarnet);
 
   const bloqueTelefono = document.createElement("div");
-  bloqueTelefono.innerHTML = `<span class="form-label">Teléfono (opcional)</span>`;
+  bloqueTelefono.innerHTML = `<span class="form-label">Teléfono / WhatsApp (opcional)</span>`;
   const filaTelefono = document.createElement("div");
   filaTelefono.className = "row";
   filaTelefono.style.gap = "6px";
   const inputTelefono = document.createElement("input");
   inputTelefono.type = "tel";
   inputTelefono.className = "form-input";
-  inputTelefono.placeholder = "8888-8888";
+  inputTelefono.placeholder = "+506 8888-8888";
   inputTelefono.style.flex = "1";
   inputTelefono.value = esEdicion ? companeroExistente.telefono || "" : "";
   filaTelefono.appendChild(inputTelefono);
@@ -1520,6 +1588,13 @@ function abrirModalAltaCompanero(companeroExistente = null) {
     filaTelefono.appendChild(btnImportar);
   }
   bloqueTelefono.appendChild(filaTelefono);
+  // Mismo aviso que en Profesores: el botón de WhatsApp de la tarjeta
+  // necesita el código de país para armar el link de wa.me correctamente.
+  const ayudaTelefono = document.createElement("p");
+  ayudaTelefono.className = "muted";
+  ayudaTelefono.style.cssText = "margin:4px 0 0; font-size:0.75rem;";
+  ayudaTelefono.textContent = "Incluí el código de país (ej: +506) para que el botón de WhatsApp funcione.";
+  bloqueTelefono.appendChild(ayudaTelefono);
   caja.appendChild(bloqueTelefono);
 
   const bloqueLista = document.createElement("div");
@@ -1557,24 +1632,93 @@ function abrirModalAltaCompanero(companeroExistente = null) {
   bloqueNota.appendChild(inputNota);
   caja.appendChild(bloqueNota);
 
+  // ---------- Vincular materias compartidas (idéntico al patrón de Profesores) ----------
+  const bloqueVincular = document.createElement("div");
+  bloqueVincular.innerHTML = `<span class="form-label">Materias compartidas</span>`;
+  const listaVinculaciones = document.createElement("div");
+  listaVinculaciones.className = "stack";
+  listaVinculaciones.style.gap = "6px";
+
+  function repintarVinculaciones() {
+    listaVinculaciones.innerHTML = "";
+    if (!esEdicion) {
+      const p = document.createElement("p");
+      p.className = "muted";
+      p.style.margin = "0";
+      p.style.fontSize = "0.8rem";
+      p.textContent = "Guardá el compañero primero, después podés vincularlo a tus materias.";
+      listaVinculaciones.appendChild(p);
+      return;
+    }
+    const vivo = buscarCompaneroVivoPorId(companeroExistente.id) || companeroExistente;
+    const compartidas = obtenerMateriasCompartidasValidas(vivo, estado.datos);
+    if (compartidas.length === 0) {
+      const p = document.createElement("p");
+      p.className = "muted";
+      p.style.margin = "0";
+      p.style.fontSize = "0.8rem";
+      p.textContent = "Todavía no lo vinculaste a ninguna materia compartida.";
+      listaVinculaciones.appendChild(p);
+    } else {
+      compartidas.forEach(({ mm, semestre }) => {
+        listaVinculaciones.appendChild(construirMiniTarjetaMateriaVinculada(mm, semestre));
+      });
+    }
+  }
+  repintarVinculaciones();
+  bloqueVincular.appendChild(listaVinculaciones);
+
+  const btnVincular = document.createElement("button");
+  btnVincular.type = "button";
+  btnVincular.className = "btn btn-secondary btn-block";
+  btnVincular.style.marginTop = "8px";
+  btnVincular.textContent = "+ Vincular a una materia compartida";
+  btnVincular.disabled = !esEdicion;
+  btnVincular.title = esEdicion ? "" : "Guardá el compañero primero";
+  btnVincular.addEventListener("click", () => {
+    abrirModalVincularMateriaCompanero(buscarCompaneroVivoPorId(companeroExistente.id) || companeroExistente, () => {
+      repintarVinculaciones();
+    });
+  });
+  bloqueVincular.appendChild(btnVincular);
+  caja.appendChild(bloqueVincular);
+
   const error = document.createElement("p");
   error.className = "muted oculto";
   error.style.color = "var(--color-danger)";
   caja.appendChild(error);
 
+  // Mismo patrón que Profesores: Cancelar (gris) / Eliminar (rojo, solo en
+  // edición, ya no vive en la vista pública) / Guardar (color de paleta),
+  // los 3 repartiendo todo el ancho, nunca uno sobre otro.
   const filaBotones = document.createElement("div");
   filaBotones.className = "row";
-  filaBotones.style.justifyContent = "flex-end";
+  filaBotones.style.cssText = "gap:8px; flex-wrap:nowrap; width:100%;";
+
   const btnCancelar = document.createElement("button");
   btnCancelar.type = "button";
   btnCancelar.className = "btn btn-secondary";
+  btnCancelar.style.cssText = "flex:1; min-width:0; padding:10px 6px; font-size:0.85rem;";
   btnCancelar.textContent = "Cancelar";
   btnCancelar.addEventListener("click", cerrar);
   filaBotones.appendChild(btnCancelar);
 
+  if (esEdicion) {
+    const btnEliminar = document.createElement("button");
+    btnEliminar.type = "button";
+    btnEliminar.className = "btn btn-danger";
+    btnEliminar.style.cssText = "flex:1; min-width:0; padding:10px 6px; font-size:0.85rem;";
+    btnEliminar.textContent = "Eliminar";
+    btnEliminar.addEventListener("click", () => {
+      abrirConfirmacionBorrarCompanero(companeroExistente, () => overlay.remove());
+    });
+    filaBotones.appendChild(btnEliminar);
+  }
+
   const btnGuardar = document.createElement("button");
   btnGuardar.type = "button";
   btnGuardar.className = "btn btn-primary";
+  btnGuardar.style.cssText = "flex:1; min-width:0; padding:10px 6px; font-size:0.85rem;";
   btnGuardar.textContent = esEdicion ? "Guardar cambios" : "Guardar";
   btnGuardar.addEventListener("click", () => {
     const nombre_completo = inputNombre.value.trim();
@@ -1601,15 +1745,20 @@ function abrirModalAltaCompanero(companeroExistente = null) {
       vivo.lista = listaValor;
       vivo.nota = nota;
       sellarTimestamp(vivo);
+      marcarCambioPendiente();
+      overlay.remove();
+      renderizarComunidad();
     } else {
       estado.datos.companeros = estado.datos.companeros || [];
-      estado.datos.companeros.push(
-        crearCompanero({ nombre_completo, carnet, telefono, lista: listaValor, nota, materias_compartidas: [] })
-      );
+      const nuevo = crearCompanero({ nombre_completo, carnet, telefono, lista: listaValor, nota, materias_compartidas: [] });
+      estado.datos.companeros.push(nuevo);
+      marcarCambioPendiente();
+      overlay.remove();
+      renderizarComunidad();
+      // Pedido explícito (idéntico a Profesores): al crear, se reabre el
+      // modal ya en modo edición para poder vincularlo enseguida.
+      abrirModalAltaCompanero(nuevo);
     }
-    marcarCambioPendiente();
-    overlay.remove();
-    renderizarComunidad();
   });
   filaBotones.appendChild(btnGuardar);
   caja.appendChild(filaBotones);
@@ -1621,9 +1770,28 @@ function abrirModalAltaCompanero(companeroExistente = null) {
   document.body.appendChild(overlay);
 }
 
-/* ===================== Modal: vincular materia compartida con un compañero (sin cambios) ===================== */
+/* ===================== Modal: vincular materia compartida con un compañero ===================== */
 
-function abrirModalVincularMateriaCompanero(companero) {
+/**
+ * Rediseño (pedido explícito: "exactamente como funciona en profesores"):
+ * el selector de semestre ya NO es un <select> nativo — usa
+ * construirSelectorCustom (mismo patrón que Ajustes / abrirModalVincularProfesor).
+ * Las materias del semestre elegido se muestran como las mismas
+ * mini-tarjetas delgadas que Profesores (barra de categoría + tipografía
+ * .materia-nombre), también clickeables como botones.
+ *
+ * Única diferencia real con Profesores: acá el vínculo NO es 1 a 1 (un
+ * compañero puede compartir VARIAS materias, y una materia puede
+ * compartirse con VARIOS compañeros) — por eso cada mini-tarjeta es un
+ * TOGGLE (tocar marca/desmarca, con el mismo realce visual de "activa" que
+ * usa el selector de Profesores) en vez de una selección única, y el botón
+ * final persiste TODA la selección de una vez ("Listo", igual que antes).
+ *
+ * `onVinculado` (opcional) se llama tras guardar con éxito, para que el
+ * modal de Editar compañero (que puede seguir abierto detrás) refresque su
+ * propia lista de vinculaciones sin tener que cerrarse y reabrirse.
+ */
+function abrirModalVincularMateriaCompanero(companero, onVinculado) {
   document.querySelectorAll(".overlay-vincular-companero").forEach((el) => el.remove());
 
   const semestres = [...obtenerSemestresActuales(), ...obtenerSemestresPasados()];
@@ -1631,7 +1799,7 @@ function abrirModalVincularMateriaCompanero(companero) {
   const overlay = document.createElement("div");
   overlay.className = "overlay-vincular-companero";
   overlay.style.cssText =
-    "position:fixed; inset:0; z-index:300; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; padding:16px;";
+    "position:fixed; inset:0; z-index:310; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; padding:16px;";
 
   const caja = document.createElement("div");
   caja.className = "glass-card stack";
@@ -1664,23 +1832,53 @@ function abrirModalVincularMateriaCompanero(companero) {
 
   const bloqueSemestre = document.createElement("div");
   bloqueSemestre.innerHTML = `<span class="form-label">Semestre</span>`;
-  const selectSemestre = document.createElement("select");
-  selectSemestre.className = "form-input";
-  semestres.forEach((s) => {
-    const opt = document.createElement("option");
-    opt.value = s.id;
-    opt.textContent = s.nombre;
-    selectSemestre.appendChild(opt);
+  const opcionesSemestre = semestres.map((s) => ({ valor: s.id, etiqueta: s.nombre }));
+  const selectorSemestre = construirSelectorCustom(opcionesSemestre, semestres[0].id, (semestreId) => {
+    repintarMaterias(semestreId);
   });
-  bloqueSemestre.appendChild(selectSemestre);
+  bloqueSemestre.appendChild(selectorSemestre.elemento);
   caja.appendChild(bloqueSemestre);
 
-  const bloqueMaterias = document.createElement("div");
-  bloqueMaterias.innerHTML = `<span class="form-label">Materias de ese semestre (tocá para marcar/desmarcar)</span>`;
+  const bloqueMateria = document.createElement("div");
+  bloqueMateria.innerHTML = `<span class="form-label">Materias de ese semestre, tocá para marcar/desmarcar</span>`;
   const contenedorMaterias = document.createElement("div");
-  contenedorMaterias.style.cssText = "display:flex; flex-direction:column; gap:6px;";
-  bloqueMaterias.appendChild(contenedorMaterias);
-  caja.appendChild(bloqueMaterias);
+  contenedorMaterias.className = "stack";
+  contenedorMaterias.style.gap = "6px";
+  bloqueMateria.appendChild(contenedorMaterias);
+  caja.appendChild(bloqueMateria);
+
+  /** Misma mini-tarjeta-botón que usa Profesores (construirMiniTarjetaSeleccionable),
+   *  pero de TOGGLE en vez de selección única — ver comentario de la función. */
+  function construirMiniTarjetaToggle(mm, marcada, onClick) {
+    const { plan, materia } = obtenerContextoMateria(mm);
+    const categoria = plan && materia ? plan.categorias.find((c) => c.id === materia.categoria_id) : null;
+
+    const boton = document.createElement("button");
+    boton.type = "button";
+    boton.className = "glass-panel row";
+    boton.style.cssText =
+      "padding:8px 12px; align-items:center; gap:10px; width:100%; box-sizing:border-box; text-align:left; cursor:pointer; color:inherit; font:inherit; border:1px solid " +
+      (marcada ? "var(--accent-1)" : "transparent") +
+      ";" +
+      (categoria ? ` box-shadow: inset 4px 0 0 0 ${categoria.color}${marcada ? ", 0 0 0 2px var(--accent-1)" : ""};` : "");
+
+    const nombre = document.createElement("span");
+    nombre.className = "materia-nombre truncada";
+    nombre.style.cssText = "flex:1; min-width:0; font-size:0.85rem; top:0;";
+    nombre.textContent = materia ? materia.nombre : "Materia eliminada";
+    boton.appendChild(nombre);
+
+    if (marcada) {
+      const etiqueta = document.createElement("span");
+      etiqueta.className = "muted";
+      etiqueta.style.cssText = "font-size:0.72rem; flex-shrink:0; white-space:nowrap;";
+      etiqueta.textContent = "✓ Vinculada";
+      boton.appendChild(etiqueta);
+    }
+
+    boton.addEventListener("click", onClick);
+    return boton;
+  }
 
   function repintarMaterias(semestreId) {
     contenedorMaterias.innerHTML = "";
@@ -1695,26 +1893,27 @@ function abrirModalVincularMateriaCompanero(companero) {
       return;
     }
     mms.forEach((mm) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      const marcada = seleccionActual.has(mm.id);
-      btn.className = "pill-item" + (marcada ? " active" : "");
-      btn.style.cssText = "text-align:left; width:100%;";
-      btn.textContent = (marcada ? "✓ " : "") + obtenerNombreMateria(mm);
-      btn.addEventListener("click", () => {
-        if (marcada) seleccionActual.delete(mm.id);
-        else seleccionActual.add(mm.id);
-        repintarMaterias(semestreId);
-      });
-      contenedorMaterias.appendChild(btn);
+      contenedorMaterias.appendChild(
+        construirMiniTarjetaToggle(mm, seleccionActual.has(mm.id), () => {
+          if (seleccionActual.has(mm.id)) seleccionActual.delete(mm.id);
+          else seleccionActual.add(mm.id);
+          repintarMaterias(semestreId);
+        })
+      );
     });
   }
-  repintarMaterias(selectSemestre.value);
-  selectSemestre.addEventListener("change", () => repintarMaterias(selectSemestre.value));
+  repintarMaterias(selectorSemestre.obtenerValor());
 
   const filaBotones = document.createElement("div");
   filaBotones.className = "row";
   filaBotones.style.justifyContent = "flex-end";
+
+  const btnCancelar = document.createElement("button");
+  btnCancelar.type = "button";
+  btnCancelar.className = "btn btn-secondary";
+  btnCancelar.textContent = "Cancelar";
+  btnCancelar.addEventListener("click", () => overlay.remove());
+  filaBotones.appendChild(btnCancelar);
 
   const btnListo = document.createElement("button");
   btnListo.type = "button";
@@ -1732,6 +1931,7 @@ function abrirModalVincularMateriaCompanero(companero) {
     sellarTimestamp(vivo);
     marcarCambioPendiente();
     overlay.remove();
+    if (onVinculado) onVinculado();
     renderizarComunidad();
   });
   filaBotones.appendChild(btnListo);
@@ -1744,9 +1944,13 @@ function abrirModalVincularMateriaCompanero(companero) {
   document.body.appendChild(overlay);
 }
 
-/* ===================== Borrar compañero (sin cambios) ===================== */
+/* ===================== Borrar compañero ===================== */
 
-function abrirConfirmacionBorrarCompanero(companero) {
+/** `onEliminado` (opcional) se llama tras confirmar el borrado, antes de
+ *  renderizarComunidad() — usado por el modal de Editar (idéntico al patrón
+ *  de Profesores) para cerrarse a sí mismo, ya que "Eliminar" ahora vive
+ *  DENTRO de ese modal en vez de en la tarjeta pública. */
+function abrirConfirmacionBorrarCompanero(companero, onEliminado) {
   abrirConfirmacion({
     titulo: "Eliminar compañero",
     mensaje: `¿Seguro que querés eliminar a "${companero.nombre_completo}"?`,
@@ -1761,6 +1965,7 @@ function abrirConfirmacionBorrarCompanero(companero) {
       estado.datos._eliminados_companeros.push({ id: companero.id, eliminadoEn: Date.now() });
       estado.companerosExpandidos.delete(companero.id);
       marcarCambioPendiente();
+      if (onEliminado) onEliminado();
       renderizarComunidad();
     },
   });
@@ -1894,12 +2099,31 @@ function construirSeccionProfesores() {
     construirGrupoPills(
       [
         { valor: "todos", texto: "Todos" },
-        { valor: "tuyos", texto: "Tuyos" },
-        { valor: "no-tuyos", texto: "No tuyos" },
+        { valor: "tuyos", texto: "Profe" },
+        { valor: "no-tuyos", texto: "No profe" },
       ],
       estado.filtroComunidadProfesores,
       (valor) => {
         estado.filtroComunidadProfesores = valor;
+        renderizarComunidad();
+      }
+    )
+  );
+
+  // Pedido explícito: filtro de recomendación en Profesores, entre el de
+  // "Profe/No profe" y el de orden (Alfabético/Por bloque) — mismo patrón
+  // que ya existía en Compañeros, basado en profesor.volveria_a_llevar
+  // (mismo campo que ya se usa para el badge Recomendado/No recomendado).
+  seccion.appendChild(
+    construirGrupoPills(
+      [
+        { valor: "todos", texto: "Todos" },
+        { valor: "recomendados", texto: "Recomendados" },
+        { valor: "no-recomendados", texto: "No recomendados" },
+      ],
+      estado.filtroRecomendacionProfesores,
+      (valor) => {
+        estado.filtroRecomendacionProfesores = valor;
         renderizarComunidad();
       }
     )
@@ -1925,9 +2149,15 @@ function construirSeccionProfesores() {
   const todos = datos.profesores || [];
   const filtrados = todos
     .filter((p) => {
-      if (estado.filtroComunidadProfesores === "todos") return true;
-      const tuyo = esProfesorTuyo(p, datos);
-      return estado.filtroComunidadProfesores === "tuyos" ? tuyo : !tuyo;
+      if (estado.filtroComunidadProfesores !== "todos") {
+        const tuyo = esProfesorTuyo(p, datos);
+        if (estado.filtroComunidadProfesores === "tuyos" ? !tuyo : tuyo) return false;
+      }
+      if (estado.filtroRecomendacionProfesores !== "todos") {
+        const recomendado = p.volveria_a_llevar !== false;
+        if (estado.filtroRecomendacionProfesores === "recomendados" ? !recomendado : recomendado) return false;
+      }
+      return true;
     })
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 
@@ -1955,10 +2185,130 @@ function construirSeccionProfesores() {
   return seccion;
 }
 
+/** Análogo exacto a agruparProfesoresPorBloque, pero para Compañeros: usa
+ *  obtenerMateriasCompartidasValidas (misma forma {semestre, mm, materia})
+ *  en vez de obtenerHistorialProfesor. Un compañero con materias
+ *  compartidas en varios semestres aparece una vez por cada uno; los que
+ *  todavía no comparten ninguna materia caen en "Sin semestre vinculado". */
+function agruparCompanerosPorBloque(companeros, datos) {
+  const semestres = [...obtenerSemestresActuales(), ...obtenerSemestresPasados()];
+  const porSemestreId = new Map(); // semestreId -> { semestre, companeros: [] }
+  const sinSemestre = [];
+
+  companeros.forEach((c) => {
+    const compartidas = obtenerMateriasCompartidasValidas(c, datos);
+    if (compartidas.length === 0) {
+      sinSemestre.push(c);
+      return;
+    }
+    const idsVistos = new Set();
+    compartidas.forEach(({ semestre }) => {
+      if (idsVistos.has(semestre.id)) return;
+      idsVistos.add(semestre.id);
+      if (!porSemestreId.has(semestre.id)) {
+        porSemestreId.set(semestre.id, { semestre, companeros: [] });
+      }
+      porSemestreId.get(semestre.id).companeros.push(c);
+    });
+  });
+
+  const bloques = semestres
+    .map((s) => porSemestreId.get(s.id))
+    .filter(Boolean)
+    .map((b) => ({
+      ...b,
+      companeros: b.companeros.sort((a, c) => a.nombre_completo.localeCompare(c.nombre_completo, "es")),
+    }));
+
+  if (sinSemestre.length > 0) {
+    bloques.push({
+      semestre: { id: "__sin_semestre__", nombre: "Sin semestre vinculado" },
+      companeros: sinSemestre.sort((a, c) => a.nombre_completo.localeCompare(c.nombre_completo, "es")),
+    });
+  }
+
+  return bloques;
+}
+
+/** Análogo exacto a construirBloqueSemestreProfesores: mismo padding
+ *  horizontal 0 en el bloque (sin espacio lateral perdido) y las tarjetas de
+ *  compañero adentro quedan al mismo ancho que en la vista alfabética plana. */
+function construirBloqueSemestreCompaneros(semestre, companeros, datos) {
+  const idBloque = semestre.id;
+  const colapsado = estado.bloquesCompanerosColapsados.has(idBloque);
+
+  const bloque = document.createElement("div");
+  bloque.className = "glass-panel stack";
+  bloque.style.cssText = "padding:0; gap:0; overflow:hidden;";
+
+  const header = document.createElement("div");
+  header.className = "row";
+  header.style.cssText =
+    "justify-content:space-between; align-items:center; gap:8px; cursor:pointer; padding:12px 16px;" +
+    (colapsado ? "" : " border-bottom:1px solid var(--color-borde, rgba(148,163,184,0.18));");
+
+  const nombreBloque = document.createElement("strong");
+  nombreBloque.style.cssText = "font-size:0.92rem; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+  nombreBloque.textContent = semestre.nombre;
+  header.appendChild(nombreBloque);
+
+  const derecha = document.createElement("div");
+  derecha.className = "row";
+  derecha.style.cssText = "align-items:center; gap:8px; flex-shrink:0;";
+
+  const badgeCantidad = document.createElement("span");
+  badgeCantidad.className = "badge badge-neutral";
+  badgeCantidad.textContent = String(companeros.length);
+  derecha.appendChild(badgeCantidad);
+
+  const flecha = document.createElement("span");
+  flecha.className = "muted";
+  flecha.style.fontSize = "0.85rem";
+  flecha.textContent = colapsado ? "▼" : "▲";
+  derecha.appendChild(flecha);
+
+  header.appendChild(derecha);
+  header.addEventListener("click", () => {
+    if (colapsado) estado.bloquesCompanerosColapsados.delete(idBloque);
+    else estado.bloquesCompanerosColapsados.add(idBloque);
+    renderizarComunidad();
+  });
+  bloque.appendChild(header);
+
+  if (!colapsado) {
+    const lista = document.createElement("div");
+    lista.className = "stack";
+    lista.style.cssText = "gap:6px; padding:8px 0 4px;"; // sin padding horizontal a propósito, ver comentario de la función
+    companeros.forEach((c) => lista.appendChild(construirTarjetaCompanero(c, datos)));
+    bloque.appendChild(lista);
+  }
+
+  return bloque;
+}
+
 function construirSeccionCompaneros() {
   const datos = estado.datos;
   const seccion = document.createElement("section");
   seccion.className = "glass-card stack";
+
+  // Pedido explícito: "Todos, Compañeros, Conocidos" — para diferenciar
+  // compañeros con los que YA se compartió alguna materia real (validada,
+  // ver esCompanero/obtenerMateriasCompartidasValidas) de los que solo
+  // están agregados pero todavía no comparten ninguna clase ("conocidos").
+  seccion.appendChild(
+    construirGrupoPills(
+      [
+        { valor: "todos", texto: "Todos" },
+        { valor: "companeros", texto: "Compañeros" },
+        { valor: "conocidos", texto: "Conocidos" },
+      ],
+      estado.filtroTipoCompaneros,
+      (valor) => {
+        estado.filtroTipoCompaneros = valor;
+        renderizarComunidad();
+      }
+    )
+  );
 
   seccion.appendChild(
     construirGrupoPills(
@@ -1975,12 +2325,34 @@ function construirSeccionCompaneros() {
     )
   );
 
+  // Pedido explícito: "mismos filtros que en profes", incluye Alfabético/Por
+  // bloque — ver agruparCompanerosPorBloque / construirBloqueSemestreCompaneros.
+  seccion.appendChild(
+    construirGrupoPills(
+      [
+        { valor: "alfabetico", texto: "Alfabético" },
+        { valor: "bloque", texto: "Por bloque" },
+      ],
+      estado.ordenComunidadCompaneros,
+      (valor) => {
+        estado.ordenComunidadCompaneros = valor;
+        renderizarComunidad();
+      }
+    )
+  );
+
   const todos = datos.companeros || [];
   const filtrados = todos
     .filter((c) => {
-      if (estado.filtroComunidadCompaneros === "todos") return true;
-      const recomendado = c.lista !== "blacklist";
-      return estado.filtroComunidadCompaneros === "recomendados" ? recomendado : !recomendado;
+      if (estado.filtroTipoCompaneros !== "todos") {
+        const conocido = esCompanero(c, datos);
+        if (estado.filtroTipoCompaneros === "companeros" ? !conocido : conocido) return false;
+      }
+      if (estado.filtroComunidadCompaneros !== "todos") {
+        const recomendado = c.lista !== "blacklist";
+        if (estado.filtroComunidadCompaneros === "recomendados" ? !recomendado : recomendado) return false;
+      }
+      return true;
     })
     .sort((a, b) => a.nombre_completo.localeCompare(b.nombre_completo, "es"));
 
@@ -1990,6 +2362,10 @@ function construirSeccionCompaneros() {
     vacio.textContent =
       todos.length === 0 ? "Todavía no tenés ningún compañero registrado." : "No hay compañeros que coincidan con el filtro.";
     seccion.appendChild(vacio);
+  } else if (estado.ordenComunidadCompaneros === "bloque") {
+    agruparCompanerosPorBloque(filtrados, datos).forEach(({ semestre, companeros }) => {
+      seccion.appendChild(construirBloqueSemestreCompaneros(semestre, companeros, datos));
+    });
   } else {
     filtrados.forEach((c) => seccion.appendChild(construirTarjetaCompanero(c, datos)));
   }
