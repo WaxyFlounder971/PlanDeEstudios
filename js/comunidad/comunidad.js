@@ -199,12 +199,14 @@ const COLOR_ESTRELLA_VACIA = "rgba(255,255,255,0.18)";
 
 /** Construye el SVG de una estrella, rellena en la fracción indicada
  *  (0, 0.5 o 1) usando un <linearGradient> con paradas duras — mismo truco
- *  estándar para "media estrella" sin necesitar dos capas superpuestas. */
-function construirSvgEstrella(fraccion, idUnico) {
+ *  estándar para "media estrella" sin necesitar dos capas superpuestas.
+ *  `tamano` en px (default 18, el usado en las tarjetas de lectura). */
+function construirSvgEstrella(fraccion, idUnico, tamano = 18) {
   const pct = Math.round(Math.max(0, Math.min(1, fraccion)) * 100);
   const puntosPoligono = "10,1 12.6,6.9 19,7.6 14.2,11.9 15.6,18.2 10,14.9 4.4,18.2 5.8,11.9 1,7.6 7.4,6.9";
+  const alto = Math.round(tamano * 0.95); // mismo ratio que 18/19 del viewBox original
   return `
-    <svg viewBox="0 0 20 19" width="18" height="18" aria-hidden="true">
+    <svg viewBox="0 0 20 19" width="${tamano}" height="${alto}" aria-hidden="true">
       <defs>
         <linearGradient id="${idUnico}">
           <stop offset="${pct}%" stop-color="${COLOR_ESTRELLA}"></stop>
@@ -244,12 +246,18 @@ function construirEstrellasLectura(calificacion) {
  * una estrella = media (X.5), clic en la mitad derecha = completa (X.0),
  * tal como se pidió. `onCambiar(valor)` se dispara en cada clic; `obtenerValor`
  * permite leer el valor actual desde afuera al guardar.
+ *
+ * Pedido explícito: "dentro de editar profesor resizea las estrellas un
+ * 100%, basicamente el doble de grande" — TAMANO_ESTRELLA_EDITABLE es
+ * exactamente el doble del tamaño de las estrellas de solo lectura (18px).
  */
+const TAMANO_ESTRELLA_EDITABLE = 36;
+
 function construirEstrellasEditables(valorInicial, onCambiar) {
   let valorActual = Number(valorInicial) || 0;
 
   const cont = document.createElement("div");
-  cont.style.cssText = "display:flex; gap:4px; justify-content:center; padding:6px 0;";
+  cont.style.cssText = "display:flex; gap:8px; justify-content:center; padding:6px 0;";
 
   const estrellas = [];
   for (let i = 0; i < 5; i++) {
@@ -278,7 +286,7 @@ function construirEstrellasEditables(valorInicial, onCambiar) {
     estrellas.forEach((boton, i) => {
       const fraccionEstrella = Math.max(0, Math.min(1, valorActual / 2 - i));
       contadorIdEstrella++;
-      boton.innerHTML = construirSvgEstrella(fraccionEstrella, `estrella-editable-${contadorIdEstrella}`);
+      boton.innerHTML = construirSvgEstrella(fraccionEstrella, `estrella-editable-${contadorIdEstrella}`, TAMANO_ESTRELLA_EDITABLE);
     });
   }
   repintar();
@@ -450,6 +458,20 @@ function construirMiniTarjetaMateriaVinculada(mm, semestre) {
   nombre.textContent = materia ? materia.nombre : "Materia eliminada";
   mini.appendChild(nombre);
 
+  // Pedido explícito: a la izquierda del badge de semestre va la NOTA que
+  // el estudiante sacó en esa materia (mm.nota_final, el mismo dato que
+  // vive y se calcula en Semestres) — no es una calificación del profesor,
+  // es el resultado real del estudiante en ese intento puntual. Si esa
+  // materia matriculada no tiene nota_final cargada todavía, no se muestra
+  // nada (no hay "Nota: —" ni placeholder, se omite el elemento entero).
+  if (mm.nota_final !== null && mm.nota_final !== undefined) {
+    const badgeNota = document.createElement("span");
+    badgeNota.className = "muted";
+    badgeNota.style.cssText = "flex-shrink:0; white-space:nowrap; font-size:0.78rem; text-align:center; margin-left:auto;";
+    badgeNota.textContent = `Nota: ${mm.nota_final}`;
+    mini.appendChild(badgeNota);
+  }
+
   const badgeSemestre = document.createElement("span");
   badgeSemestre.className = "badge badge-neutral";
   badgeSemestre.style.cssText = "flex-shrink:0; white-space:nowrap;";
@@ -457,6 +479,160 @@ function construirMiniTarjetaMateriaVinculada(mm, semestre) {
   mini.appendChild(badgeSemestre);
 
   return mini;
+}
+
+/* ===================== Enlace a MisProfes con copia de nombre ===================== */
+
+/**
+ * Pedido explícito: al tocar el logo de MisProfes, primero se copia el
+ * nombre del profesor al portapapeles (para pegarlo en el buscador de
+ * MisProfes, ya que el link lleva a la escuela completa, no a un profesor
+ * puntual — ver LINKS_MISPROFES) y se avisa con un toast; recién 3
+ * segundos después se abre la página en una pestaña nueva, dando tiempo a
+ * leer el aviso antes de que el foco salte fuera de la app.
+ * navigator.clipboard requiere contexto seguro (https/localhost) — si no
+ * está disponible (http plano, navegador viejo), se avisa igual y se
+ * continúa con la apertura del link sin bloquear el flujo por eso.
+ */
+function abrirEnlaceMisProfesConAviso(nombreProfesor, url) {
+  const avisar = () => mostrarToast(`"${nombreProfesor}" copiado en el portapapeles`);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard
+      .writeText(nombreProfesor)
+      .then(avisar)
+      .catch(() => mostrarToast("No se pudo copiar el nombre — igual te llevamos a MisProfes"));
+  } else {
+    mostrarToast("No se pudo copiar el nombre — igual te llevamos a MisProfes");
+  }
+  setTimeout(() => {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }, 3000);
+}
+
+/* ===================== Badges de contacto (correo / WhatsApp) ===================== */
+
+/**
+ * Pedido explícito: tap corto = copiar; mantener presionado = ejecutar la
+ * acción "fuerte" (abrir el cliente de correo o WhatsApp). Funciona con
+ * mouse (desktop) y touch (mobile) — un solo helper para no duplicar la
+ * lógica de temporizador en cada badge. `contextmenu` se bloquea porque en
+ * mobile un press largo sobre texto suele disparar el menú nativo de
+ * "copiar/seleccionar", que taparía nuestro propio flujo.
+ */
+function adjuntarPressLargo(el, { onTap, onLongPress, umbralMs = 550 }) {
+  let temporizador = null;
+  let fueLargo = false;
+
+  function iniciar() {
+    fueLargo = false;
+    temporizador = setTimeout(() => {
+      fueLargo = true;
+      onLongPress();
+    }, umbralMs);
+  }
+  function soltar() {
+    if (temporizador) {
+      clearTimeout(temporizador);
+      temporizador = null;
+    }
+    if (!fueLargo) onTap();
+  }
+  function cancelar() {
+    if (temporizador) {
+      clearTimeout(temporizador);
+      temporizador = null;
+    }
+  }
+
+  el.addEventListener("mousedown", (ev) => {
+    ev.stopPropagation();
+    iniciar();
+  });
+  el.addEventListener("mouseup", (ev) => {
+    ev.stopPropagation();
+    soltar();
+  });
+  el.addEventListener("mouseleave", cancelar);
+  el.addEventListener(
+    "touchstart",
+    (ev) => {
+      ev.stopPropagation();
+      iniciar();
+    },
+    { passive: true }
+  );
+  el.addEventListener("touchend", (ev) => {
+    ev.stopPropagation();
+    soltar();
+  });
+  el.addEventListener("touchcancel", cancelar);
+  el.addEventListener("contextmenu", (ev) => ev.preventDefault());
+}
+
+/** Copia texto al portapapeles y avisa con un toast (éxito o falla) —
+ *  mismo patrón defensivo que abrirEnlaceMisProfesConAviso (clipboard
+ *  requiere contexto seguro, no todos los navegadores lo soportan). */
+function copiarAlPortapapeles(texto, mensajeExito) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(
+      () => mostrarToast(mensajeExito),
+      () => mostrarToast("No se pudo copiar")
+    );
+  } else {
+    mostrarToast("No se pudo copiar");
+  }
+}
+
+/** wa.me solo acepta dígitos puros (sin +, espacios, guiones ni
+ *  paréntesis) — pedido explícito: la app debe aceptar cualquiera de esos
+ *  formatos al escribir el teléfono, así que acá se limpia todo lo que no
+ *  sea número justo antes de armar el link. */
+function sanitizarTelefonoWhatsapp(telefono) {
+  return (telefono || "").replace(/[^\d]/g, "");
+}
+
+/** Badge de correo (ancla izquierda, expandida): tap copia el correo,
+ *  mantener presionado abre el cliente de correo (mailto:). Sin logo de
+ *  terceros — usa un emoji de sobre. Si el profesor no tiene correo
+ *  cargado, quien llama a esta función directamente no debe hacerlo (ver
+ *  construirTarjetaProfesor, que ya filtra por profesor.correo antes). */
+function construirBadgeCorreo(correo) {
+  const badge = document.createElement("span");
+  badge.className = "badge";
+  badge.style.cssText =
+    "background:#17A6F9; color:#fff; cursor:pointer; user-select:none; -webkit-user-select:none;" +
+    " display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+  badge.textContent = `✉️ ${correo}`;
+  badge.title = "Tocá para copiar · mantené presionado para enviar un correo";
+  adjuntarPressLargo(badge, {
+    onTap: () => copiarAlPortapapeles(correo, "Correo copiado al portapapeles"),
+    onLongPress: () => {
+      window.location.href = `mailto:${correo}`;
+    },
+  });
+  return badge;
+}
+
+/** Badge de WhatsApp (ancla derecha, expandida): tap copia el número tal
+ *  cual está guardado, mantener presionado abre https://wa.me/<dígitos>
+ *  (sin logo de terceros — usa un emoji de burbuja de chat). */
+function construirBadgeWhatsapp(telefono) {
+  const digitos = sanitizarTelefonoWhatsapp(telefono);
+  const badge = document.createElement("span");
+  badge.className = "badge";
+  badge.style.cssText =
+    "background:#00D756; color:#fff; cursor:pointer; user-select:none; -webkit-user-select:none;" +
+    " display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+  badge.textContent = `💬 ${telefono}`;
+  badge.title = "Tocá para copiar · mantené presionado para abrir WhatsApp";
+  adjuntarPressLargo(badge, {
+    onTap: () => copiarAlPortapapeles(telefono, "Número copiado al portapapeles"),
+    onLongPress: () => {
+      if (!digitos) return;
+      window.open(`https://wa.me/${digitos}`, "_blank", "noopener,noreferrer");
+    },
+  });
+  return badge;
 }
 
 /* ===================== Tarjetas ===================== */
@@ -467,11 +643,22 @@ function construirTarjetaProfesor(profesor, datos) {
 
   const card = document.createElement("div");
   card.className = "glass-panel stack";
-  card.style.cssText = "gap:6px; cursor:pointer; padding:14px 16px;"; // pedido explícito: la tarjeta no tenía márgenes internos, se ven feo
+  card.style.cssText = "gap:6px; cursor:pointer; padding:14px 16px;";
 
-  /* ---------- Colapsada: Nombre · Estrellas (centro) · Recomendado (der.) · flecha ---------- */
+  /* ---------- Colapsada: Nombre · Estrellas (centro REAL de la tarjeta) · Recomendado (der.) · flecha ----------
+     Pedido explícito: "las estrellas [...] esten bien centradas con
+     respecto a la tarjeta, los demas items ahi estan bien" — con el grid
+     de 4 columnas 1fr/auto/auto/auto de antes, la columna de estrellas
+     medía solo lo que las estrellas ocupan y quedaba corrida hacia la
+     izquierda (su "centro" no era el centro de la tarjeta, sino el centro
+     de esa columna angosta). Ahora es un grid de 3 columnas simétricas
+     (1fr / auto / 1fr): nombre a la izquierda empujado por la 1ra 1fr,
+     estrellas en la columna del medio (su ancho natural, sin crecer),
+     badge+flecha agrupados a la derecha empujados por la 2da 1fr — con
+     las dos columnas 1fr midiendo lo mismo, el centro de "estrellas" cae
+     exactamente en el centro geométrico de la tarjeta. */
   const encabezado = document.createElement("div");
-  encabezado.style.cssText = "display:grid; grid-template-columns:1fr auto auto auto; align-items:center; gap:10px;";
+  encabezado.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px;";
 
   const nombre = document.createElement("strong");
   nombre.style.cssText = "min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
@@ -480,17 +667,23 @@ function construirTarjetaProfesor(profesor, datos) {
 
   encabezado.appendChild(construirEstrellasLectura(profesor.calificacion));
 
+  const derechaEncabezado = document.createElement("div");
+  derechaEncabezado.className = "row";
+  derechaEncabezado.style.cssText = "justify-self:end; align-items:center; gap:10px; min-width:0;";
+
   const badgeRecomendado = document.createElement("span");
   badgeRecomendado.className = "badge " + (recomendado ? "badge-success" : "badge-danger");
   badgeRecomendado.style.cssText = "flex-shrink:0; white-space:nowrap;";
   badgeRecomendado.textContent = recomendado ? "✓ Recomendado" : "✕ No recomendado";
-  encabezado.appendChild(badgeRecomendado);
+  derechaEncabezado.appendChild(badgeRecomendado);
 
   const flecha = document.createElement("span");
   flecha.className = "muted";
   flecha.style.fontSize = "0.9rem";
   flecha.textContent = expandido ? "▲" : "▼";
-  encabezado.appendChild(flecha);
+  derechaEncabezado.appendChild(flecha);
+
+  encabezado.appendChild(derechaEncabezado);
 
   encabezado.addEventListener("click", () => {
     if (expandido) estado.profesoresExpandidos.delete(profesor.id);
@@ -500,6 +693,29 @@ function construirTarjetaProfesor(profesor, datos) {
   card.appendChild(encabezado);
 
   if (!expandido) return card;
+
+  /* ---------- Fila de contacto: correo (izq.) / WhatsApp (der.) ----------
+     Pedido explícito: justo debajo del nombre y antes de las materias.
+     Cada slot (izquierda/derecha) se crea siempre para que la ancla no se
+     mueva según cuál dato exista — si falta uno de los dos, ese lado
+     queda vacío y no se agrega nada ahí (nunca un placeholder). Si el
+     profesor no tiene NI correo NI teléfono, la fila entera no se agrega. */
+  if (profesor.correo || profesor.telefono) {
+    const filaContacto = document.createElement("div");
+    filaContacto.style.cssText = "display:flex; justify-content:space-between; align-items:center; gap:8px;";
+
+    const slotCorreo = document.createElement("div");
+    slotCorreo.style.cssText = "flex:1; min-width:0; overflow:hidden;";
+    if (profesor.correo) slotCorreo.appendChild(construirBadgeCorreo(profesor.correo));
+    filaContacto.appendChild(slotCorreo);
+
+    const slotWhatsapp = document.createElement("div");
+    slotWhatsapp.style.cssText = "flex-shrink:0; min-width:0; overflow:hidden;";
+    if (profesor.telefono) slotWhatsapp.appendChild(construirBadgeWhatsapp(profesor.telefono));
+    filaContacto.appendChild(slotWhatsapp);
+
+    card.appendChild(filaContacto);
+  }
 
   /* ---------- Expandida: mini-tarjetas de vinculación ---------- */
   const historial = obtenerHistorialProfesor(profesor.id, datos);
@@ -519,55 +735,76 @@ function construirTarjetaProfesor(profesor, datos) {
   }
   card.appendChild(bloqueHistorial);
 
-  /* ---------- Fila final: Logo MisProfes · Editar · Eliminar, reparten TODO el ancho ---------- */
-  const universidades = obtenerUniversidadesDeProfesor(profesor.id, datos);
-  const universidadConLink = universidades.find((u) => LINKS_MISPROFES[u]);
+  /* ---------- Fila final: logo(s) MisProfes (sin forma de botón) + Editar anclado a la derecha, pequeño ----------
+     Rediseño (pedido explícito):
+     - "Eliminar" ya no vive en la vista pública — pasa a vivir dentro del
+       modal de Editar (ver abrirModalAltaProfesor).
+     - El logo de MisProfes deja de tener pinta de botón (sin fondo/borde/
+       padding de .btn) — es solo la imagen, clickeable.
+     - MisProfes SOLO cubre TEC y UCR (ninguna otra universidad tiene
+       sentido ahí) — se filtra `universidades` contra LINKS_MISPROFES en
+       vez de asumir que la única universidad del profesor ya es una de
+       esas dos. Si el profesor tiene materias vinculadas en AMBAS TEC y
+       UCR (dato real, sacado de las materias vinculadas — nunca
+       adivinado), se muestran los DOS logos, cada uno con su propio label
+       ("TEC"/"UCR") centrado justo encima de su imagen para diferenciarlos
+       — si solo tiene una, el logo va solo, sin label (no hace falta
+       aclarar cuál es si no hay ambigüedad).
+     - "Editar" queda anclado a la derecha, chico/discreto (no flex:1) —
+       ya no reparte el ancho con nada más, porque ya no hay "Eliminar" al
+       lado y los logos ocupan su espacio natural a la izquierda. */
+  const universidadesConLink = obtenerUniversidadesDeProfesor(profesor.id, datos).filter((u) => LINKS_MISPROFES[u]);
 
   const filaAcciones = document.createElement("div");
   filaAcciones.className = "row";
-  filaAcciones.style.cssText = "gap:8px; align-items:stretch;";
+  filaAcciones.style.cssText = "justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;";
 
-  if (universidadConLink) {
-    const a = document.createElement("a");
-    a.href = LINKS_MISPROFES[universidadConLink];
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    a.className = "btn btn-secondary";
-    a.style.cssText = "flex:1; display:flex; align-items:center; justify-content:center; padding:8px 10px;";
-    a.title = `Buscar en MisProfes ${universidadConLink}`;
-    a.addEventListener("click", (e) => e.stopPropagation());
+  const contLogos = document.createElement("div");
+  contLogos.className = "row";
+  contLogos.style.cssText = "gap:16px; align-items:flex-end; min-width:0;";
+
+  universidadesConLink.forEach((u) => {
+    const bloqueLogo = document.createElement("div");
+    bloqueLogo.className = "stack";
+    bloqueLogo.style.cssText = "gap:2px; align-items:center;";
+
+    if (universidadesConLink.length > 1) {
+      const label = document.createElement("span");
+      label.className = "muted";
+      label.style.cssText = "font-size:0.7rem; font-weight:700; text-align:center;";
+      label.textContent = u;
+      bloqueLogo.appendChild(label);
+    }
+
     const img = document.createElement("img");
     img.src = RUTA_LOGO_MISPROFES;
-    img.alt = `MisProfes ${universidadConLink}`;
-    // Pedido explícito: no deformar la relación de aspecto — solo se fija
-    // la altura, el ancho queda "auto" para que el navegador la calcule
-    // sola a partir del tamaño real del PNG.
-    img.style.cssText = "height:22px; width:auto; max-width:100%; display:block;";
-    a.appendChild(img);
-    filaAcciones.appendChild(a);
-  }
+    img.alt = `MisProfes ${u}`;
+    img.title = `Ir a MisProfes ${u}`;
+    // Pedido explícito: sin forma de botón (ni fondo ni borde ni padding) —
+    // solo la imagen misma es clickeable. No se deforma su relación de
+    // aspecto: solo se fija la altura, el ancho queda "auto".
+    img.style.cssText = "height:22px; width:auto; max-width:100%; display:block; cursor:pointer;";
+    img.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      abrirEnlaceMisProfesConAviso(profesor.nombre, LINKS_MISPROFES[u]);
+    });
+    bloqueLogo.appendChild(img);
+
+    contLogos.appendChild(bloqueLogo);
+  });
+
+  filaAcciones.appendChild(contLogos);
 
   const btnEditar = document.createElement("button");
   btnEditar.type = "button";
   btnEditar.className = "btn btn-secondary";
-  btnEditar.style.flex = "1";
+  btnEditar.style.cssText = "flex-shrink:0; padding:6px 14px; font-size:0.82rem;";
   btnEditar.textContent = "Editar";
   btnEditar.addEventListener("click", (e) => {
     e.stopPropagation();
     abrirModalAltaProfesor(profesor);
   });
   filaAcciones.appendChild(btnEditar);
-
-  const btnBorrar = document.createElement("button");
-  btnBorrar.type = "button";
-  btnBorrar.className = "btn btn-secondary";
-  btnBorrar.style.flex = "1";
-  btnBorrar.textContent = "Eliminar";
-  btnBorrar.addEventListener("click", (e) => {
-    e.stopPropagation();
-    abrirConfirmacionBorrarProfesor(profesor);
-  });
-  filaAcciones.appendChild(btnBorrar);
 
   card.appendChild(filaAcciones);
 
@@ -747,13 +984,23 @@ function abrirModalAltaProfesor(profesorExistente = null) {
   caja.appendChild(bloqueCorreo);
 
   const bloqueTelefono = document.createElement("div");
-  bloqueTelefono.innerHTML = `<span class="form-label">Teléfono (opcional)</span>`;
+  bloqueTelefono.innerHTML = `<span class="form-label">Teléfono / WhatsApp (opcional)</span>`;
   const inputTelefono = document.createElement("input");
   inputTelefono.type = "tel";
   inputTelefono.className = "form-input";
-  inputTelefono.placeholder = "8888-8888";
+  inputTelefono.placeholder = "+506 8888-8888";
   inputTelefono.value = esEdicion ? profesorExistente.telefono || "" : "";
   bloqueTelefono.appendChild(inputTelefono);
+  // Pedido explícito: aclarar que hay que incluir el código de país, porque
+  // el enlace de WhatsApp (wa.me) lo necesita para armar el número
+  // completo. Podés escribirlo con +, con espacios, con guiones o con
+  // paréntesis — sanitizarTelefonoWhatsapp() limpia todo eso antes de
+  // armar el link, así que cualquiera de esos formatos funciona igual.
+  const ayudaTelefono = document.createElement("p");
+  ayudaTelefono.className = "muted";
+  ayudaTelefono.style.cssText = "margin:4px 0 0; font-size:0.75rem;";
+  ayudaTelefono.textContent = "Incluí el código de país (ej: +506) para que el botón de WhatsApp funcione.";
+  bloqueTelefono.appendChild(ayudaTelefono);
   caja.appendChild(bloqueTelefono);
 
   // ---------- Calificación general (estrellas, 1-10 con medias) ----------
@@ -849,19 +1096,44 @@ function abrirModalAltaProfesor(profesorExistente = null) {
   error.style.color = "var(--color-danger)";
   caja.appendChild(error);
 
+  // Pedido explícito: "el boton eliminar sacalo de la vista publica, que
+  // viva dentro de editar [...] Cancelar en gris, Eliminar en rojo, Guardar
+  // en el color de paleta [...] entre los 3 deben ocupar todo el espacio
+  // disponible y NUNCA deben irse uno sobre otro, siempre en la misma
+  // linea". flex-wrap:nowrap explícito (contrario al .row/.pill-group por
+  // defecto de otras partes de la app, que sí pueden envolver) + flex:1 en
+  // los 3 botones — así siempre están en una sola fila repartiendo el
+  // ancho por igual, sin importar el ancho de pantalla ni el largo del
+  // texto. "Eliminar" solo existe en modo edición (no hay nada que borrar
+  // al dar de alta un profesor nuevo).
   const filaBotones = document.createElement("div");
   filaBotones.className = "row";
-  filaBotones.style.justifyContent = "flex-end";
+  filaBotones.style.cssText = "gap:8px; flex-wrap:nowrap; width:100%;";
+
   const btnCancelar = document.createElement("button");
   btnCancelar.type = "button";
   btnCancelar.className = "btn btn-secondary";
+  btnCancelar.style.cssText = "flex:1; min-width:0; padding:10px 6px; font-size:0.85rem;";
   btnCancelar.textContent = "Cancelar";
   btnCancelar.addEventListener("click", cerrar);
   filaBotones.appendChild(btnCancelar);
 
+  if (esEdicion) {
+    const btnEliminar = document.createElement("button");
+    btnEliminar.type = "button";
+    btnEliminar.className = "btn btn-danger";
+    btnEliminar.style.cssText = "flex:1; min-width:0; padding:10px 6px; font-size:0.85rem;";
+    btnEliminar.textContent = "Eliminar";
+    btnEliminar.addEventListener("click", () => {
+      abrirConfirmacionBorrarProfesor(profesorExistente, () => overlay.remove());
+    });
+    filaBotones.appendChild(btnEliminar);
+  }
+
   const btnGuardar = document.createElement("button");
   btnGuardar.type = "button";
   btnGuardar.className = "btn btn-primary";
+  btnGuardar.style.cssText = "flex:1; min-width:0; padding:10px 6px; font-size:0.85rem;";
   btnGuardar.textContent = esEdicion ? "Guardar cambios" : "Guardar";
   btnGuardar.addEventListener("click", () => {
     const nombre = inputNombre.value.trim();
@@ -1102,7 +1374,11 @@ function abrirModalVincularProfesor(profesor, onVinculado) {
 
 /* ===================== Borrar profesor ===================== */
 
-function abrirConfirmacionBorrarProfesor(profesor) {
+/** `onEliminado` (opcional) se llama tras confirmar el borrado, antes de
+ *  renderizarComunidad() — usado por el modal de Editar (ver arriba) para
+ *  cerrarse a sí mismo, ya que "Eliminar" ahora vive DENTRO de ese modal en
+ *  vez de en la tarjeta pública. */
+function abrirConfirmacionBorrarProfesor(profesor, onEliminado) {
   abrirConfirmacion({
     titulo: "Eliminar profesor",
     mensaje: `¿Seguro que querés eliminar a "${profesor.nombre}"? Se borra también su vínculo con las materias que le hayas asignado.`,
@@ -1129,6 +1405,7 @@ function abrirConfirmacionBorrarProfesor(profesor) {
       estado.datos._eliminados_profesores.push({ id: profesor.id, eliminadoEn: Date.now() });
       estado.profesoresExpandidos.delete(profesor.id);
       marcarCambioPendiente();
+      if (onEliminado) onEliminado();
       renderizarComunidad();
     },
   });
