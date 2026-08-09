@@ -1,32 +1,42 @@
 /* =========================================================================
-   COMUNIDAD — Parte 3c (Profesores + Compañeros completos)
+   COMUNIDAD — Parte 3d (Profesores rediseñados + Compañeros)
    Responsable de: la sección #seccion-comunidad completa.
 
-   PROFESORES:
-   - Alta / edición (nombre, correo, teléfono, materias que da como tags
-     libres — de referencia general, no atadas a ningún semestre tuyo).
-   - Tarjeta expandible: contacto, materias generales, link(s) a MisProfes
-     (según en qué universidad(es) diste clase con él — la escuela completa,
-     no un profesor puntual, ver LINKS_MISPROFES), historial de vinculaciones
-     reales y botones Vincular/Editar/Eliminar.
-   - "Vincular a una materia tuya": selector semestre → materia (de TUS
-     semestres) que guarda profesor_id + calificación 1-10 (decimal) +
-     "¿volverías a llevarlo?" directo en esa materia_matriculada puntual —
-     es lo único que hace que el filtro "Tuyos" lo cuente.
-   - Eliminar un profesor limpia también la referencia (profesor_id,
-     calificación, volvería_a_llevar) en cualquier materia_matriculada que
-     apuntara a él, para no dejar ids huérfanos sueltos.
+   PROFESORES — rediseño (2026-08-08, pedido explícito):
+   - Tarjeta colapsada: SOLO Nombre · Estrellas (centradas) · badge
+     Recomendado/No recomendado (ancla derecha) · flecha ▼/▲. Ya no hay
+     badge "Tuyo" (el filtro Tuyo/No tuyo sigue existiendo, solo se quitó
+     el badge visual de la tarjeta).
+   - La calificación 1-10 (con medias estrellas) y "¿volverías a
+     llevarlo?" (mostrado como Recomendado/No recomendado, badge verde/
+     rojo) DEJARON de vivir por vinculación materia+semestre — ahora son
+     UNA sola calificación general del profesor, se editan desde el modal
+     de alta/edición.
+   - Tarjeta expandida: mini-tarjetas de cada vinculación materia+semestre
+     (barra de categoría a la izquierda + nombre de la materia + badge de
+     semestre anclado al final), luego una fila con 3 elementos que
+     reparten TODO el ancho disponible: logo MisProfes (según la
+     universidad de la materia vinculada) · Editar · Eliminar.
+   - Vincular materias pasa a vivir DENTRO del modal de Editar (ya no hay
+     botón "Vincular a una materia tuya" en la tarjeta) — ahí mismo se
+     reemplaza el viejo campo de tags de materias por un botón que abre el
+     selector de semestre → materias (mismo lenguaje visual que el
+     selector de escala en Ajustes: dropdown propio, no <select> nativo).
+   - Universidad (TEC/UCR) se sigue heredando de la materia vinculada
+     dentro de semestres → arma el link directo a MisProfes, ahora como
+     imagen (imagenes/MisProfes.png) en vez de texto, sin deformar su
+     relación de aspecto.
 
-   COMPAÑEROS:
+   COMPAÑEROS (sin cambios en esta ronda):
    - Alta / edición (nombre, carné, teléfono —con importar opcional desde
      los contactos del dispositivo vía Contacts Picker API, solo si el
      navegador lo soporta—, switch Recomendado/No recomendado, nota libre).
    - Tarjeta expandible: contacto, nota, materias compartidas vinculadas,
      botones Vincular materia compartida / Editar / Eliminar.
-   - "Vincular materia compartida": a diferencia de profesores (1 vínculo
-     exclusivo por mm), acá un compañero puede compartir VARIAS materias —
-     el modal deja marcar/desmarcar varias de un semestre y persiste todo
-     junto al tocar "Listo".
+   - "Vincular materia compartida": a diferencia de profesores (vínculo
+     1 a 1 por materia+semestre), acá un compañero puede compartir VARIAS
+     materias — el modal deja marcar/desmarcar varias de un semestre y
+     persiste todo junto al tocar "Listo".
    - Eliminar un compañero no requiere limpieza en otro lado: sus materias
      compartidas viven adentro del propio registro, no hay ningún mm que
      apunte de vuelta a él.
@@ -42,6 +52,7 @@ import {
 } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
+import { estiloBadgeCategoria } from "../core/utils.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { obtenerSemestresActuales, obtenerSemestresPasados } from "../semestres/semestres.js";
 
@@ -61,6 +72,13 @@ const LINKS_MISPROFES = {
   TEC: "https://costarica.misprofesores.com/escuelas/ITCR-Instituto-Tecnologico-de-Costa-Rica_1135",
   UCR: "https://costarica.misprofesores.com/escuelas/UCR-Universidad-de-Costa-Rica_1126",
 };
+
+// Rediseño: el botón de "ir a MisProfes" ahora es la imagen del logo de la
+// página (imagenes/MisProfes.png, misma carpeta que el resto de assets de
+// la app — ver imagenes/LogoApp.png en index.html) en vez de texto — pedido
+// explícito de no deformar su relación de aspecto (ver <img> más abajo,
+// sin width/height fijos por separado, solo height + width:auto).
+const RUTA_LOGO_MISPROFES = "imagenes/MisProfes.png";
 
 /* ===================== Helpers de datos ===================== */
 
@@ -82,6 +100,15 @@ function obtenerNombreMateria(mm) {
   const plan = obtenerPlanPorId(mm.plan_estudio_id);
   const materia = plan && plan.materias.find((m) => m.id === mm.materia_id);
   return materia ? materia.nombre : "Materia eliminada";
+}
+
+/** Igual que obtenerNombreMateria, pero además devuelve la materia y el
+ *  plan (para leer categoria_id/color y universidad) — evita repetir la
+ *  misma búsqueda dos veces en las mini-tarjetas nuevas. */
+function obtenerContextoMateria(mm) {
+  const plan = obtenerPlanPorId(mm.plan_estudio_id);
+  const materia = plan && plan.materias.find((m) => m.id === mm.materia_id);
+  return { plan, materia };
 }
 
 function buscarProfesorVivoPorId(id) {
@@ -150,9 +177,232 @@ function buscarMmVivaPorId(mmId) {
 
 /** "Tuyo" = tiene al menos una vinculación real a una materia_matriculada de
  *  TUS semestres (ver obtenerHistorialProfesor en schema.js) — no es un flag
- *  manual, se deriva solo de si vos lo vinculaste alguna vez a una materia. */
+ *  manual, se deriva solo de si vos lo vinculaste alguna vez a una materia.
+ *  El filtro sigue existiendo (pedido explícito: "quita el badge, deja el
+ *  filtro"), solo se quitó el badge visual de la tarjeta. */
 function esProfesorTuyo(profesor, datos) {
   return obtenerHistorialProfesor(profesor.id, datos).length > 0;
+}
+
+/* ===================== Estrellas (calificación 1-10, medias estrellas) ===================== */
+
+/**
+ * Rediseño: calificación general del profesor, 1-10 con medias estrellas,
+ * mostrada como 5 estrellas visuales (cada estrella = 2 puntos). Amarillas
+ * (pedido explícito) — se fija el color a mano en vez de usar --accent-1,
+ * porque en varias paletas el acento no es amarillo y "estrella" como
+ * símbolo universal de calificación se espera dorado/amarillo sin importar
+ * la paleta activa de la app.
+ */
+const COLOR_ESTRELLA = "#FBBF24";
+const COLOR_ESTRELLA_VACIA = "rgba(255,255,255,0.18)";
+
+/** Construye el SVG de una estrella, rellena en la fracción indicada
+ *  (0, 0.5 o 1) usando un <linearGradient> con paradas duras — mismo truco
+ *  estándar para "media estrella" sin necesitar dos capas superpuestas. */
+function construirSvgEstrella(fraccion, idUnico) {
+  const pct = Math.round(Math.max(0, Math.min(1, fraccion)) * 100);
+  const puntosPoligono = "10,1 12.6,6.9 19,7.6 14.2,11.9 15.6,18.2 10,14.9 4.4,18.2 5.8,11.9 1,7.6 7.4,6.9";
+  return `
+    <svg viewBox="0 0 20 19" width="18" height="18" aria-hidden="true">
+      <defs>
+        <linearGradient id="${idUnico}">
+          <stop offset="${pct}%" stop-color="${COLOR_ESTRELLA}"></stop>
+          <stop offset="${pct}%" stop-color="${COLOR_ESTRELLA_VACIA}"></stop>
+        </linearGradient>
+      </defs>
+      <polygon points="${puntosPoligono}" fill="url(#${idUnico})"></polygon>
+    </svg>
+  `;
+}
+
+let contadorIdEstrella = 0;
+
+/**
+ * Estrellas de SOLO LECTURA (tarjeta colapsada/expandida) — 5 estrellas,
+ * cada una representa 2 puntos de la escala 1-10. Siempre centradas
+ * (pedido explícito), sin interacción.
+ */
+function construirEstrellasLectura(calificacion) {
+  const cont = document.createElement("span");
+  cont.className = "row";
+  cont.style.cssText = "gap:2px; justify-content:center; flex-shrink:0;";
+  const valor = Number(calificacion) || 0;
+  for (let i = 0; i < 5; i++) {
+    const fraccionEstrella = Math.max(0, Math.min(1, valor / 2 - i));
+    contadorIdEstrella++;
+    const span = document.createElement("span");
+    span.style.cssText = "display:inline-flex; line-height:0;";
+    span.innerHTML = construirSvgEstrella(fraccionEstrella, `estrella-lectura-${contadorIdEstrella}`);
+    cont.appendChild(span);
+  }
+  return cont;
+}
+
+/**
+ * Estrellas INTERACTIVAS (modal de edición) — clic en la mitad izquierda de
+ * una estrella = media (X.5), clic en la mitad derecha = completa (X.0),
+ * tal como se pidió. `onCambiar(valor)` se dispara en cada clic; `obtenerValor`
+ * permite leer el valor actual desde afuera al guardar.
+ */
+function construirEstrellasEditables(valorInicial, onCambiar) {
+  let valorActual = Number(valorInicial) || 0;
+
+  const cont = document.createElement("div");
+  cont.style.cssText = "display:flex; gap:4px; justify-content:center; padding:6px 0;";
+
+  const estrellas = [];
+  for (let i = 0; i < 5; i++) {
+    const boton = document.createElement("button");
+    boton.type = "button";
+    boton.style.cssText = "background:none; border:none; padding:4px; cursor:pointer; line-height:0;";
+    boton.setAttribute("aria-label", `Calificar ${i + 1} de 5 estrellas`);
+
+    // Mitad izquierda = X.5, mitad derecha = X.0 en puntos de escala 1-10
+    // (cada estrella vale 2 puntos) — se detecta con la posición X del
+    // clic dentro del propio botón, sin necesitar dos elementos separados.
+    boton.addEventListener("click", (ev) => {
+      const rect = boton.getBoundingClientRect();
+      const mitadIzquierda = ev.clientX - rect.left < rect.width / 2;
+      const base = i * 2; // puntos que ya cubren las estrellas anteriores
+      valorActual = mitadIzquierda ? base + 1 : base + 2;
+      repintar();
+      onCambiar(valorActual);
+    });
+
+    cont.appendChild(boton);
+    estrellas.push(boton);
+  }
+
+  function repintar() {
+    estrellas.forEach((boton, i) => {
+      const fraccionEstrella = Math.max(0, Math.min(1, valorActual / 2 - i));
+      contadorIdEstrella++;
+      boton.innerHTML = construirSvgEstrella(fraccionEstrella, `estrella-editable-${contadorIdEstrella}`);
+    });
+  }
+  repintar();
+
+  return { elemento: cont, obtenerValor: () => valorActual, establecerValor: (v) => { valorActual = v; repintar(); } };
+}
+
+/* ===================== Selector custom de semestre (mismo patrón que Ajustes) ===================== */
+
+/**
+ * Mismo lenguaje visual que el selector de "Escala de notas" en Ajustes
+ * (ver config-ajustes.js / .select-custom en design-system.css): un
+ * <select> real oculto como única fuente de valor/evento, y un botón +
+ * lista propios 100% CSS del tema, reparentados a document.body mientras
+ * están abiertos (para no quedar atrapados detrás de otra tarjeta con su
+ * propio contexto de apilamiento por backdrop-filter).
+ *
+ * `opciones` es un arreglo de { valor, etiqueta }. `onCambiar(valor)` se
+ * dispara cada vez que se elige una opción distinta a la actual.
+ */
+function construirSelectorCustom(opciones, valorInicial, onCambiar) {
+  const wrap = document.createElement("div");
+  wrap.className = "select-custom";
+
+  const selectOculto = document.createElement("select");
+  selectOculto.hidden = true;
+  selectOculto.setAttribute("aria-hidden", "true");
+  selectOculto.tabIndex = -1;
+  opciones.forEach((op) => {
+    const opt = document.createElement("option");
+    opt.value = String(op.valor);
+    opt.textContent = op.etiqueta;
+    selectOculto.appendChild(opt);
+  });
+  selectOculto.value = String(valorInicial);
+
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.className = "form-input select-custom-boton";
+  const opcionInicial = opciones.find((o) => String(o.valor) === String(valorInicial));
+  boton.textContent = opcionInicial ? opcionInicial.etiqueta : "Elegir semestre";
+  boton.setAttribute("aria-expanded", "false");
+
+  const lista = document.createElement("ul");
+  lista.className = "select-custom-lista oculto";
+
+  function posicionarLista() {
+    const r = boton.getBoundingClientRect();
+    lista.style.position = "fixed";
+    lista.style.top = `${r.bottom + 6}px`;
+    lista.style.left = `${r.left}px`;
+    lista.style.width = `${r.width}px`;
+  }
+  function cerrarLista() {
+    lista.classList.add("oculto");
+    boton.setAttribute("aria-expanded", "false");
+    if (lista.parentElement === document.body) wrap.appendChild(lista);
+    window.removeEventListener("scroll", cerrarSiScrollExterno, true);
+    window.removeEventListener("resize", cerrarLista);
+  }
+  function cerrarSiScrollExterno(e) {
+    if (lista.contains(e.target)) return;
+    cerrarLista();
+  }
+  function abrirLista() {
+    document.querySelectorAll(".select-custom-lista").forEach((l) => {
+      if (l !== lista) {
+        l.classList.add("oculto");
+        if (l.parentElement === document.body && l._volverA) l._volverA.appendChild(l);
+      }
+    });
+    lista._volverA = wrap;
+    document.body.appendChild(lista);
+    posicionarLista();
+    lista.classList.remove("oculto");
+    boton.setAttribute("aria-expanded", "true");
+    window.addEventListener("scroll", cerrarSiScrollExterno, true);
+    window.addEventListener("resize", cerrarLista);
+  }
+
+  function repintarOpciones() {
+    lista.innerHTML = "";
+    opciones.forEach((op) => {
+      const item = document.createElement("li");
+      item.className = "select-custom-opcion";
+      item.textContent = op.etiqueta;
+      if (String(op.valor) === selectOculto.value) item.classList.add("activa");
+      item.addEventListener("click", () => {
+        const cambio = selectOculto.value !== String(op.valor);
+        selectOculto.value = String(op.valor);
+        boton.textContent = op.etiqueta;
+        lista.querySelectorAll(".select-custom-opcion").forEach((li) => li.classList.remove("activa"));
+        item.classList.add("activa");
+        cerrarLista();
+        if (cambio) onCambiar(op.valor);
+      });
+      lista.appendChild(item);
+    });
+  }
+  repintarOpciones();
+
+  boton.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (lista.classList.contains("oculto")) abrirLista();
+    else cerrarLista();
+  });
+  document.addEventListener("click", (e) => {
+    if (!wrap.contains(e.target) && !lista.contains(e.target)) cerrarLista();
+  });
+
+  wrap.appendChild(boton);
+  wrap.appendChild(lista);
+  wrap.appendChild(selectOculto);
+
+  return {
+    elemento: wrap,
+    obtenerValor: () => selectOculto.value,
+    // Por si hace falta reconstruir las opciones (no se usa hoy, pero deja
+    // la puerta abierta sin tener que rehacer todo el selector).
+    actualizarOpciones: (nuevasOpciones) => {
+      opciones = nuevasOpciones;
+      repintarOpciones();
+    },
+  };
 }
 
 /* ===================== Pills reusables (tabs y filtros) ===================== */
@@ -173,27 +423,75 @@ function construirGrupoPills(opciones, valorActivo, onCambiar) {
   return grupo;
 }
 
+/* ===================== Mini-tarjeta de materia vinculada (profesor) ===================== */
+
+/**
+ * Rediseño: reemplaza la línea de texto plano del historial por una
+ * mini-tarjeta delgada, ocupando todo el ancho disponible — barra de
+ * categoría a la izquierda (mismo patrón que las tarjetas de materia en
+ * Semestres: box-shadow inset con el color de la categoría), nombre de la
+ * materia vinculada con la tipografía clásica de materias (.materia-nombre,
+ * font-display 700), y un badge de semestre anclado al final de la
+ * mini-tarjeta.
+ */
+function construirMiniTarjetaMateriaVinculada(mm, semestre) {
+  const { plan, materia } = obtenerContextoMateria(mm);
+  const categoria = plan && materia ? plan.categorias.find((c) => c.id === materia.categoria_id) : null;
+
+  const mini = document.createElement("div");
+  mini.className = "glass-panel row";
+  mini.style.cssText =
+    "padding:8px 12px; align-items:center; gap:10px; width:100%; box-sizing:border-box;" +
+    (categoria ? ` box-shadow: inset 4px 0 0 0 ${categoria.color};` : "");
+
+  const nombre = document.createElement("span");
+  nombre.className = "materia-nombre truncada";
+  nombre.style.cssText = "flex:1; min-width:0; font-size:0.85rem; top:0;"; // top:0 anula el ajuste -3px pensado para su contexto original
+  nombre.textContent = materia ? materia.nombre : "Materia eliminada";
+  mini.appendChild(nombre);
+
+  const badgeSemestre = document.createElement("span");
+  badgeSemestre.className = "badge badge-neutral";
+  badgeSemestre.style.cssText = "flex-shrink:0; white-space:nowrap;";
+  badgeSemestre.textContent = semestre.nombre;
+  mini.appendChild(badgeSemestre);
+
+  return mini;
+}
+
 /* ===================== Tarjetas ===================== */
 
 function construirTarjetaProfesor(profesor, datos) {
-  const tuyo = esProfesorTuyo(profesor, datos);
-  const universidades = obtenerUniversidadesDeProfesor(profesor.id, datos);
   const expandido = estado.profesoresExpandidos.has(profesor.id);
+  const recomendado = profesor.volveria_a_llevar !== false; // default true (sin badge rojo hasta que se marque explícito que no)
 
   const card = document.createElement("div");
   card.className = "glass-panel stack";
-  card.style.cssText = "gap:6px; cursor:pointer;";
+  card.style.cssText = "gap:6px; cursor:pointer; padding:14px 16px;"; // pedido explícito: la tarjeta no tenía márgenes internos, se ven feo
 
+  /* ---------- Colapsada: Nombre · Estrellas (centro) · Recomendado (der.) · flecha ---------- */
   const encabezado = document.createElement("div");
-  encabezado.className = "row";
-  encabezado.style.cssText = "justify-content:space-between; align-items:center; gap:8px;";
-  encabezado.innerHTML = `
-    <strong>${escaparHtml(profesor.nombre)}</strong>
-    <span style="display:flex; align-items:center; gap:6px;">
-      ${tuyo ? '<span class="badge-warning" style="font-size:11px; white-space:nowrap;">Tuyo</span>' : ""}
-      <span class="muted" style="font-size:12px;">${expandido ? "▲" : "▼"}</span>
-    </span>
-  `;
+  encabezado.style.cssText = "display:grid; grid-template-columns:1fr auto auto auto; align-items:center; gap:10px;";
+
+  const nombre = document.createElement("strong");
+  nombre.style.cssText = "min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+  nombre.textContent = profesor.nombre;
+  encabezado.appendChild(nombre);
+
+  encabezado.appendChild(construirEstrellasLectura(profesor.calificacion));
+
+  const badgeRecomendado = document.createElement("span");
+  badgeRecomendado.className = "badge " + (recomendado ? "badge-success" : "badge-danger");
+  badgeRecomendado.style.cssText = "flex-shrink:0; white-space:nowrap;";
+  badgeRecomendado.textContent = recomendado ? "✓ Recomendado" : "✕ No recomendado";
+  encabezado.appendChild(badgeRecomendado);
+
+  const flecha = document.createElement("span");
+  flecha.className = "muted";
+  flecha.style.fontSize = "0.9rem";
+  flecha.textContent = expandido ? "▲" : "▼";
+  encabezado.appendChild(flecha);
+
   encabezado.addEventListener("click", () => {
     if (expandido) estado.profesoresExpandidos.delete(profesor.id);
     else estado.profesoresExpandidos.add(profesor.id);
@@ -201,50 +499,13 @@ function construirTarjetaProfesor(profesor, datos) {
   });
   card.appendChild(encabezado);
 
-  const datosContacto = [profesor.correo, profesor.telefono].filter(Boolean);
-  if (datosContacto.length > 0) {
-    const contacto = document.createElement("p");
-    contacto.className = "muted";
-    contacto.style.margin = "0";
-    contacto.textContent = datosContacto.join(" · ");
-    card.appendChild(contacto);
-  }
-
   if (!expandido) return card;
 
-  if ((profesor.materias || []).length > 0) {
-    const tags = document.createElement("p");
-    tags.style.margin = "0";
-    tags.innerHTML = profesor.materias
-      .map((m) => `<span class="pill-item" style="display:inline-block; margin:2px 4px 2px 0; cursor:default;">${escaparHtml(m)}</span>`)
-      .join("");
-    card.appendChild(tags);
-  }
-
-  const universidadesConLink = universidades.filter((u) => LINKS_MISPROFES[u]);
-  if (universidadesConLink.length > 0) {
-    const filaLinks = document.createElement("div");
-    filaLinks.className = "row";
-    filaLinks.style.gap = "8px";
-    universidadesConLink.forEach((u) => {
-      const a = document.createElement("a");
-      a.href = LINKS_MISPROFES[u];
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      a.className = "btn btn-secondary";
-      a.style.flex = "1";
-      a.style.textAlign = "center";
-      a.textContent = `Buscar en MisProfes ${u}`;
-      a.addEventListener("click", (e) => e.stopPropagation());
-      filaLinks.appendChild(a);
-    });
-    card.appendChild(filaLinks);
-  }
-
+  /* ---------- Expandida: mini-tarjetas de vinculación ---------- */
   const historial = obtenerHistorialProfesor(profesor.id, datos);
   const bloqueHistorial = document.createElement("div");
   bloqueHistorial.className = "stack";
-  bloqueHistorial.style.gap = "4px";
+  bloqueHistorial.style.gap = "6px";
   if (historial.length === 0) {
     const p = document.createElement("p");
     p.className = "muted";
@@ -253,41 +514,43 @@ function construirTarjetaProfesor(profesor, datos) {
     bloqueHistorial.appendChild(p);
   } else {
     historial.forEach(({ semestre, mm }) => {
-      const fila = document.createElement("p");
-      fila.style.margin = "0";
-      const calif = mm.calificacion_profesor != null ? `${mm.calificacion_profesor}/10` : "sin calificar";
-      const volveria =
-        mm.volveria_a_llevar_profesor === true
-          ? "✓ volvería a llevarlo"
-          : mm.volveria_a_llevar_profesor === false
-          ? "✕ no volvería a llevarlo"
-          : "sin contestar";
-      fila.innerHTML = `<strong>${escaparHtml(obtenerNombreMateria(mm))}</strong> <span class="muted">— ${escaparHtml(
-        semestre.nombre
-      )} · ${calif} · ${volveria}</span>`;
-      bloqueHistorial.appendChild(fila);
+      bloqueHistorial.appendChild(construirMiniTarjetaMateriaVinculada(mm, semestre));
     });
   }
   card.appendChild(bloqueHistorial);
 
+  /* ---------- Fila final: Logo MisProfes · Editar · Eliminar, reparten TODO el ancho ---------- */
+  const universidades = obtenerUniversidadesDeProfesor(profesor.id, datos);
+  const universidadConLink = universidades.find((u) => LINKS_MISPROFES[u]);
+
   const filaAcciones = document.createElement("div");
   filaAcciones.className = "row";
-  filaAcciones.style.gap = "8px";
+  filaAcciones.style.cssText = "gap:8px; align-items:stretch;";
 
-  const btnVincular = document.createElement("button");
-  btnVincular.type = "button";
-  btnVincular.className = "btn btn-secondary";
-  btnVincular.style.flex = "1";
-  btnVincular.textContent = "Vincular a una materia tuya";
-  btnVincular.addEventListener("click", (e) => {
-    e.stopPropagation();
-    abrirModalVincularProfesor(profesor);
-  });
-  filaAcciones.appendChild(btnVincular);
+  if (universidadConLink) {
+    const a = document.createElement("a");
+    a.href = LINKS_MISPROFES[universidadConLink];
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.className = "btn btn-secondary";
+    a.style.cssText = "flex:1; display:flex; align-items:center; justify-content:center; padding:8px 10px;";
+    a.title = `Buscar en MisProfes ${universidadConLink}`;
+    a.addEventListener("click", (e) => e.stopPropagation());
+    const img = document.createElement("img");
+    img.src = RUTA_LOGO_MISPROFES;
+    img.alt = `MisProfes ${universidadConLink}`;
+    // Pedido explícito: no deformar la relación de aspecto — solo se fija
+    // la altura, el ancho queda "auto" para que el navegador la calcule
+    // sola a partir del tamaño real del PNG.
+    img.style.cssText = "height:22px; width:auto; max-width:100%; display:block;";
+    a.appendChild(img);
+    filaAcciones.appendChild(a);
+  }
 
   const btnEditar = document.createElement("button");
   btnEditar.type = "button";
   btnEditar.className = "btn btn-secondary";
+  btnEditar.style.flex = "1";
   btnEditar.textContent = "Editar";
   btnEditar.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -298,6 +561,7 @@ function construirTarjetaProfesor(profesor, datos) {
   const btnBorrar = document.createElement("button");
   btnBorrar.type = "button";
   btnBorrar.className = "btn btn-secondary";
+  btnBorrar.style.flex = "1";
   btnBorrar.textContent = "Eliminar";
   btnBorrar.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -316,7 +580,7 @@ function construirTarjetaCompanero(companero, datos) {
 
   const card = document.createElement("div");
   card.className = "glass-panel stack";
-  card.style.cssText = "gap:6px; cursor:pointer;";
+  card.style.cssText = "gap:6px; cursor:pointer; padding:14px 16px;";
 
   const encabezado = document.createElement("div");
   encabezado.className = "row";
@@ -367,7 +631,7 @@ function construirTarjetaCompanero(companero, datos) {
     compartidas.forEach(({ mm, semestre, materia }) => {
       const fila = document.createElement("p");
       fila.style.margin = "0";
-      fila.innerHTML = `<strong>${escaparHtml(materia ? materia.nombre : "Materia eliminada")}</strong> <span class="muted">— ${escaparHtml(
+      fila.innerHTML = `<strong>${escaparHtml(materia ? materia.nombre : "Materia eliminada")}</strong> <span class="muted">· ${escaparHtml(
         semestre.nombre
       )}</span>`;
       bloqueCompartidas.appendChild(fila);
@@ -417,6 +681,15 @@ function construirTarjetaCompanero(companero, datos) {
 
 /* ===================== Modal: alta / edición de profesor ===================== */
 
+/**
+ * Rediseño: el viejo campo de tags libres de "materias que da" se
+ * reemplaza por un botón "Vincular materias" que abre
+ * abrirModalVincularProfesor (selector de semestre + mini-tarjetas de
+ * materia como botones) — vincular ahora vive DENTRO de este modal, no
+ * como acción propia de la tarjeta. También se agregan acá la calificación
+ * general (estrellas 1-10, medias) y "¿volverías a llevarlo?"
+ * (Recomendado/No recomendado).
+ */
 function abrirModalAltaProfesor(profesorExistente = null) {
   document.querySelectorAll(".overlay-alta-profesor").forEach((el) => el.remove());
   const esEdicion = !!profesorExistente;
@@ -483,69 +756,93 @@ function abrirModalAltaProfesor(profesorExistente = null) {
   bloqueTelefono.appendChild(inputTelefono);
   caja.appendChild(bloqueTelefono);
 
-  const bloqueMaterias = document.createElement("div");
-  bloqueMaterias.innerHTML = `<span class="form-label">Materias que da (opcional, de referencia general)</span>`;
-  const filaTagInput = document.createElement("div");
-  filaTagInput.className = "row";
-  filaTagInput.style.gap = "6px";
-  const inputTag = document.createElement("input");
-  inputTag.type = "text";
-  inputTag.className = "form-input";
-  inputTag.placeholder = "Ej. Cálculo I";
-  inputTag.style.flex = "1";
-  const btnAgregarTag = document.createElement("button");
-  btnAgregarTag.type = "button";
-  btnAgregarTag.className = "btn btn-secondary";
-  btnAgregarTag.textContent = "+";
-  const contenedorTags = document.createElement("div");
-  contenedorTags.style.cssText = "display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;";
-
-  const materiasTags = esEdicion ? [...(profesorExistente.materias || [])] : [];
-
-  function repintarTags() {
-    contenedorTags.innerHTML = "";
-    materiasTags.forEach((tag, i) => {
-      const chip = document.createElement("span");
-      chip.className = "pill-item active";
-      chip.style.cssText = "display:inline-flex; align-items:center; gap:6px; cursor:default;";
-      chip.textContent = tag;
-      const btnX = document.createElement("button");
-      btnX.type = "button";
-      btnX.textContent = "✕";
-      btnX.setAttribute("aria-label", "Quitar");
-      btnX.style.cssText = "background:none; border:none; color:inherit; cursor:pointer; font-size:11px; padding:0;";
-      btnX.addEventListener("click", () => {
-        materiasTags.splice(i, 1);
-        sucio = true;
-        repintarTags();
-      });
-      chip.appendChild(btnX);
-      contenedorTags.appendChild(chip);
-    });
-  }
-  repintarTags();
-
-  function agregarTag() {
-    const valor = inputTag.value.trim();
-    if (!valor) return;
-    materiasTags.push(valor);
-    inputTag.value = "";
+  // ---------- Calificación general (estrellas, 1-10 con medias) ----------
+  const bloqueCalificacion = document.createElement("div");
+  bloqueCalificacion.innerHTML = `<span class="form-label">Calificación general</span>`;
+  let calificacionActual = esEdicion ? Number(profesorExistente.calificacion) || 0 : 0;
+  const estrellasEditables = construirEstrellasEditables(calificacionActual, (valor) => {
+    calificacionActual = valor;
     sucio = true;
-    repintarTags();
-  }
-  btnAgregarTag.addEventListener("click", agregarTag);
-  inputTag.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      agregarTag();
-    }
   });
+  bloqueCalificacion.appendChild(estrellasEditables.elemento);
+  caja.appendChild(bloqueCalificacion);
 
-  filaTagInput.appendChild(inputTag);
-  filaTagInput.appendChild(btnAgregarTag);
-  bloqueMaterias.appendChild(filaTagInput);
-  bloqueMaterias.appendChild(contenedorTags);
-  caja.appendChild(bloqueMaterias);
+  // ---------- ¿Volverías a llevarlo? (Recomendado / No recomendado) ----------
+  const bloqueVolveria = document.createElement("div");
+  bloqueVolveria.innerHTML = `<span class="form-label">¿Volverías a llevarlo?</span>`;
+  let volveriaActual = esEdicion && profesorExistente.volveria_a_llevar === false ? false : true; // default Recomendado
+  const contenedorVolveria = document.createElement("div");
+  function repintarVolveria() {
+    contenedorVolveria.innerHTML = "";
+    contenedorVolveria.appendChild(
+      construirGrupoPills(
+        [
+          { valor: "si", texto: "✓ Recomendado" },
+          { valor: "no", texto: "✕ No recomendado" },
+        ],
+        volveriaActual ? "si" : "no",
+        (valor) => {
+          volveriaActual = valor === "si";
+          sucio = true;
+          repintarVolveria();
+        }
+      )
+    );
+  }
+  repintarVolveria();
+  bloqueVolveria.appendChild(contenedorVolveria);
+  caja.appendChild(bloqueVolveria);
+
+  // ---------- Vincular materias (reemplaza el viejo campo de tags) ----------
+  const bloqueVincular = document.createElement("div");
+  bloqueVincular.innerHTML = `<span class="form-label">Materias vinculadas</span>`;
+  const listaVinculaciones = document.createElement("div");
+  listaVinculaciones.className = "stack";
+  listaVinculaciones.style.gap = "6px";
+
+  function repintarVinculaciones() {
+    listaVinculaciones.innerHTML = "";
+    if (!esEdicion) {
+      const p = document.createElement("p");
+      p.className = "muted";
+      p.style.margin = "0";
+      p.style.fontSize = "0.8rem";
+      p.textContent = "Guardá el profesor primero, después podés vincularlo a tus materias.";
+      listaVinculaciones.appendChild(p);
+      return;
+    }
+    const vivo = buscarProfesorVivoPorId(profesorExistente.id) || profesorExistente;
+    const historial = obtenerHistorialProfesor(vivo.id, estado.datos);
+    if (historial.length === 0) {
+      const p = document.createElement("p");
+      p.className = "muted";
+      p.style.margin = "0";
+      p.style.fontSize = "0.8rem";
+      p.textContent = "Todavía no lo vinculaste a ninguna materia tuya.";
+      listaVinculaciones.appendChild(p);
+    } else {
+      historial.forEach(({ semestre, mm }) => {
+        listaVinculaciones.appendChild(construirMiniTarjetaMateriaVinculada(mm, semestre));
+      });
+    }
+  }
+  repintarVinculaciones();
+  bloqueVincular.appendChild(listaVinculaciones);
+
+  const btnVincular = document.createElement("button");
+  btnVincular.type = "button";
+  btnVincular.className = "btn btn-secondary btn-block";
+  btnVincular.style.marginTop = "8px";
+  btnVincular.textContent = "+ Vincular a una materia tuya";
+  btnVincular.disabled = !esEdicion;
+  btnVincular.title = esEdicion ? "" : "Guardá el profesor primero";
+  btnVincular.addEventListener("click", () => {
+    abrirModalVincularProfesor(buscarProfesorVivoPorId(profesorExistente.id) || profesorExistente, () => {
+      repintarVinculaciones();
+    });
+  });
+  bloqueVincular.appendChild(btnVincular);
+  caja.appendChild(bloqueVincular);
 
   const error = document.createElement("p");
   error.className = "muted oculto";
@@ -587,15 +884,27 @@ function abrirModalAltaProfesor(profesorExistente = null) {
       vivo.nombre = nombre;
       vivo.correo = correo || null;
       vivo.telefono = telefono || null;
-      vivo.materias = [...materiasTags];
+      vivo.calificacion = calificacionActual || null;
+      vivo.volveria_a_llevar = volveriaActual;
       sellarTimestamp(vivo);
+      marcarCambioPendiente();
+      overlay.remove();
+      renderizarComunidad();
     } else {
       estado.datos.profesores = estado.datos.profesores || [];
-      estado.datos.profesores.push(crearProfesor({ nombre, correo, telefono, materias: materiasTags }));
+      const nuevo = crearProfesor({ nombre, correo, telefono, materias: [] });
+      nuevo.calificacion = calificacionActual || null;
+      nuevo.volveria_a_llevar = volveriaActual;
+      estado.datos.profesores.push(nuevo);
+      marcarCambioPendiente();
+      overlay.remove();
+      renderizarComunidad();
+      // Pedido explícito: "desde que agregas profesor te debe permitir
+      // vincularlo" — apenas se crea, se reabre el modal ya en modo
+      // edición para que el botón "Vincular" quede disponible al toque,
+      // sin tener que buscarlo de nuevo en la lista.
+      abrirModalAltaProfesor(nuevo);
     }
-    marcarCambioPendiente();
-    overlay.remove();
-    renderizarComunidad();
   });
   filaBotones.appendChild(btnGuardar);
   caja.appendChild(filaBotones);
@@ -609,7 +918,22 @@ function abrirModalAltaProfesor(profesorExistente = null) {
 
 /* ===================== Modal: vincular profesor a una materia tuya ===================== */
 
-function abrirModalVincularProfesor(profesor) {
+/**
+ * Rediseño: el selector de semestre ya NO es un <select> nativo — usa
+ * construirSelectorCustom (mismo patrón que "Escala de notas" en Ajustes).
+ * Las materias del semestre elegido se muestran como mini-tarjetas
+ * delgadas (barra de categoría + nombre con tipografía de materia) que
+ * actúan como botones, en vez de la lista de pill-item de antes.
+ *
+ * La calificación y "¿volverías a llevarlo?" YA NO se piden acá — pasaron
+ * a ser un dato general del profesor (ver abrirModalAltaProfesor). Este
+ * modal ahora solo decide QUÉ materia+semestre se vincula.
+ *
+ * `onVinculado` (opcional) se llama tras guardar con éxito, para que el
+ * modal de Editar profesor (que puede seguir abierto detrás) refresque su
+ * propia lista de vinculaciones sin tener que cerrarse y reabrirse.
+ */
+function abrirModalVincularProfesor(profesor, onVinculado) {
   document.querySelectorAll(".overlay-vincular-profesor").forEach((el) => el.remove());
 
   const semestres = [...obtenerSemestresActuales(), ...obtenerSemestresPasados()];
@@ -617,7 +941,7 @@ function abrirModalVincularProfesor(profesor) {
   const overlay = document.createElement("div");
   overlay.className = "overlay-vincular-profesor";
   overlay.style.cssText =
-    "position:fixed; inset:0; z-index:300; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; padding:16px;";
+    "position:fixed; inset:0; z-index:310; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; padding:16px;";
 
   const caja = document.createElement("div");
   caja.className = "glass-card stack";
@@ -644,82 +968,65 @@ function abrirModalVincularProfesor(profesor) {
     return;
   }
 
-  let sucio = false;
   let mmSeleccionadaId = null;
-  let volveriaValor = null; // true | false | null
-
-  function cerrar() {
-    if (!sucio) {
-      overlay.remove();
-      return;
-    }
-    abrirConfirmacion({
-      titulo: "¿Cerrar sin guardar?",
-      mensaje: "Vas a perder la vinculación que estabas armando.",
-      textoConfirmar: "Cerrar sin guardar",
-      onConfirmar: () => overlay.remove(),
-    });
-  }
 
   const bloqueSemestre = document.createElement("div");
   bloqueSemestre.innerHTML = `<span class="form-label">Semestre</span>`;
-  const selectSemestre = document.createElement("select");
-  selectSemestre.className = "form-input";
-  semestres.forEach((s) => {
-    const opt = document.createElement("option");
-    opt.value = s.id;
-    opt.textContent = s.nombre;
-    selectSemestre.appendChild(opt);
+  const opcionesSemestre = semestres.map((s) => ({ valor: s.id, etiqueta: s.nombre }));
+  const selectorSemestre = construirSelectorCustom(opcionesSemestre, semestres[0].id, (semestreId) => {
+    mmSeleccionadaId = null;
+    repintarMaterias(semestreId);
   });
-  bloqueSemestre.appendChild(selectSemestre);
+  bloqueSemestre.appendChild(selectorSemestre.elemento);
   caja.appendChild(bloqueSemestre);
 
   const bloqueMateria = document.createElement("div");
-  bloqueMateria.innerHTML = `<span class="form-label">Materia</span>`;
+  bloqueMateria.innerHTML = `<span class="form-label">Materias de ese semestre, tocá una para vincularla</span>`;
   const contenedorMaterias = document.createElement("div");
-  contenedorMaterias.style.cssText = "display:flex; flex-direction:column; gap:6px;";
+  contenedorMaterias.className = "stack";
+  contenedorMaterias.style.gap = "6px";
   bloqueMateria.appendChild(contenedorMaterias);
   caja.appendChild(bloqueMateria);
 
-  const bloqueCalificacion = document.createElement("div");
-  bloqueCalificacion.innerHTML = `<span class="form-label">Calificación (1-10, opcional)</span>`;
-  const inputCalificacion = document.createElement("input");
-  inputCalificacion.type = "number";
-  inputCalificacion.className = "form-input";
-  inputCalificacion.min = "1";
-  inputCalificacion.max = "10";
-  inputCalificacion.step = "0.1";
-  inputCalificacion.placeholder = "Ej. 8.5";
-  inputCalificacion.addEventListener("input", () => {
-    sucio = true;
-  });
-  bloqueCalificacion.appendChild(inputCalificacion);
-  caja.appendChild(bloqueCalificacion);
+  /**
+   * Mini-tarjeta de materia usada COMO BOTÓN dentro del selector: misma
+   * pinta que construirMiniTarjetaMateriaVinculada (barra de categoría +
+   * tipografía .materia-nombre), pero clickeable, con estado "activa"
+   * (borde/realce) cuando es la seleccionada, y sin badge de semestre
+   * (acá el semestre ya está fijo arriba, sería redundante).
+   */
+  function construirMiniTarjetaSeleccionable(mm, seleccionada, onClick) {
+    const { plan, materia } = obtenerContextoMateria(mm);
+    const categoria = plan && materia ? plan.categorias.find((c) => c.id === materia.categoria_id) : null;
 
-  const bloqueVolveria = document.createElement("div");
-  bloqueVolveria.innerHTML = `<span class="form-label">¿Volverías a llevarlo?</span>`;
-  const contenedorVolveria = document.createElement("div");
-  function repintarVolveria() {
-    contenedorVolveria.innerHTML = "";
-    contenedorVolveria.appendChild(
-      construirGrupoPills(
-        [
-          { valor: "si", texto: "Sí" },
-          { valor: "no", texto: "No" },
-          { valor: "sin-contestar", texto: "Sin contestar" },
-        ],
-        volveriaValor === true ? "si" : volveriaValor === false ? "no" : "sin-contestar",
-        (valor) => {
-          volveriaValor = valor === "si" ? true : valor === "no" ? false : null;
-          sucio = true;
-          repintarVolveria();
-        }
-      )
-    );
+    const boton = document.createElement("button");
+    boton.type = "button";
+    boton.className = "glass-panel row";
+    boton.style.cssText =
+      "padding:8px 12px; align-items:center; gap:10px; width:100%; box-sizing:border-box; text-align:left; cursor:pointer; border:1px solid " +
+      (seleccionada ? "var(--accent-1)" : "transparent") +
+      ";" +
+      (categoria ? ` box-shadow: inset 4px 0 0 0 ${categoria.color}${seleccionada ? ", 0 0 0 2px var(--accent-1)" : ""};` : "");
+
+    const nombre = document.createElement("span");
+    nombre.className = "materia-nombre truncada";
+    nombre.style.cssText = "flex:1; min-width:0; font-size:0.85rem; top:0;";
+    nombre.textContent = materia ? materia.nombre : "Materia eliminada";
+    boton.appendChild(nombre);
+
+    const yaConOtro = mm.profesor_id && mm.profesor_id !== profesor.id;
+    const yaConEste = mm.profesor_id === profesor.id;
+    if (yaConOtro || yaConEste) {
+      const etiqueta = document.createElement("span");
+      etiqueta.className = "muted";
+      etiqueta.style.cssText = "font-size:0.72rem; flex-shrink:0; white-space:nowrap;";
+      etiqueta.textContent = yaConEste ? "Ya vinculada a este" : "Ya tiene otro profesor";
+      boton.appendChild(etiqueta);
+    }
+
+    boton.addEventListener("click", onClick);
+    return boton;
   }
-  repintarVolveria();
-  bloqueVolveria.appendChild(contenedorVolveria);
-  caja.appendChild(bloqueVolveria);
 
   function repintarMaterias(semestreId) {
     contenedorMaterias.innerHTML = "";
@@ -731,39 +1038,18 @@ function abrirModalVincularProfesor(profesor) {
       p.style.margin = "0";
       p.textContent = "Este semestre no tiene materias matriculadas.";
       contenedorMaterias.appendChild(p);
-      mmSeleccionadaId = null;
       return;
     }
     mms.forEach((mm) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "pill-item" + (mmSeleccionadaId === mm.id ? " active" : "");
-      btn.style.cssText = "text-align:left; width:100%;";
-      const yaConOtro = mm.profesor_id && mm.profesor_id !== profesor.id;
-      const yaConEste = mm.profesor_id === profesor.id;
-      btn.textContent = obtenerNombreMateria(mm) + (yaConOtro ? " (ya tiene otro profesor)" : yaConEste ? " (ya vinculada a este)" : "");
-      btn.addEventListener("click", () => {
-        mmSeleccionadaId = mm.id;
-        sucio = true;
-        if (yaConEste) {
-          inputCalificacion.value = mm.calificacion_profesor != null ? mm.calificacion_profesor : "";
-          volveriaValor = mm.volveria_a_llevar_profesor;
-        } else {
-          inputCalificacion.value = "";
-          volveriaValor = null;
-        }
-        repintarVolveria();
-        repintarMaterias(semestreId);
-      });
-      contenedorMaterias.appendChild(btn);
+      contenedorMaterias.appendChild(
+        construirMiniTarjetaSeleccionable(mm, mmSeleccionadaId === mm.id, () => {
+          mmSeleccionadaId = mm.id;
+          repintarMaterias(semestreId);
+        })
+      );
     });
   }
-  repintarMaterias(selectSemestre.value);
-  selectSemestre.addEventListener("change", () => {
-    mmSeleccionadaId = null;
-    sucio = true;
-    repintarMaterias(selectSemestre.value);
-  });
+  repintarMaterias(selectorSemestre.obtenerValor());
 
   const error = document.createElement("p");
   error.className = "muted oculto";
@@ -777,13 +1063,13 @@ function abrirModalVincularProfesor(profesor) {
   btnCancelar.type = "button";
   btnCancelar.className = "btn btn-secondary";
   btnCancelar.textContent = "Cancelar";
-  btnCancelar.addEventListener("click", cerrar);
+  btnCancelar.addEventListener("click", () => overlay.remove());
   filaBotones.appendChild(btnCancelar);
 
   const btnGuardar = document.createElement("button");
   btnGuardar.type = "button";
   btnGuardar.className = "btn btn-primary";
-  btnGuardar.textContent = "Guardar";
+  btnGuardar.textContent = "Vincular";
   btnGuardar.addEventListener("click", () => {
     if (!mmSeleccionadaId) {
       error.textContent = "Elegí una materia.";
@@ -797,18 +1083,11 @@ function abrirModalVincularProfesor(profesor) {
       renderizarComunidad();
       return;
     }
-    const crudo = inputCalificacion.value.trim();
-    let calificacion = null;
-    if (crudo !== "") {
-      const numero = Number(crudo);
-      calificacion = Number.isNaN(numero) ? null : Math.min(10, Math.max(1, numero));
-    }
     encontrada.mm.profesor_id = profesor.id;
-    encontrada.mm.calificacion_profesor = calificacion;
-    encontrada.mm.volveria_a_llevar_profesor = volveriaValor;
     sellarTimestamp(encontrada.mm);
     marcarCambioPendiente();
     overlay.remove();
+    if (onVinculado) onVinculado();
     renderizarComunidad();
   });
   filaBotones.appendChild(btnGuardar);
@@ -816,7 +1095,7 @@ function abrirModalVincularProfesor(profesor) {
 
   overlay.appendChild(caja);
   overlay.addEventListener("click", (e) => {
-    if (e.target === overlay && !sucio) overlay.remove();
+    if (e.target === overlay) overlay.remove();
   });
   document.body.appendChild(overlay);
 }
@@ -826,18 +1105,19 @@ function abrirModalVincularProfesor(profesor) {
 function abrirConfirmacionBorrarProfesor(profesor) {
   abrirConfirmacion({
     titulo: "Eliminar profesor",
-    mensaje: `¿Seguro que querés eliminar a "${profesor.nombre}"? Se borra también su vínculo con las materias que le hayas asignado (la calificación y el "volvería a llevarlo" de esas materias se pierden).`,
+    mensaje: `¿Seguro que querés eliminar a "${profesor.nombre}"? Se borra también su vínculo con las materias que le hayas asignado.`,
     textoConfirmar: "Eliminar definitivamente",
     onConfirmar: () => {
       // Limpieza defensiva (regla obligatoria de sincronización): ninguna
       // materia_matriculada debe quedar apuntando a un profesor_id que ya
-      // no existe — mismo criterio que ya usa obtenerMateriasCompartidasValidas
-      // para materias_compartidas huérfanas, pero acá se limpia de una vez
-      // en vez de solo filtrarse al renderizar (el link es 1 a 1, no una lista).
+      // no existe.
       (estado.datos.semestres || []).forEach((semestre) => {
         (semestre.materias_matriculadas || []).forEach((mm) => {
           if (mm.profesor_id === profesor.id) {
             mm.profesor_id = null;
+            // Campos legados de la versión anterior del diseño (la
+            // calificación/volvería ya no viven en la mm, ver arriba) — se
+            // limpian igual por si quedó algo de una sincronización vieja.
             mm.calificacion_profesor = null;
             mm.volveria_a_llevar_profesor = null;
             sellarTimestamp(mm);
@@ -854,7 +1134,7 @@ function abrirConfirmacionBorrarProfesor(profesor) {
   });
 }
 
-/* ===================== Modal: alta / edición de compañero ===================== */
+/* ===================== Modal: alta / edición de compañero (sin cambios) ===================== */
 
 function abrirModalAltaCompanero(companeroExistente = null) {
   document.querySelectorAll(".overlay-alta-companero").forEach((el) => el.remove());
@@ -1035,15 +1315,8 @@ function abrirModalAltaCompanero(companeroExistente = null) {
   document.body.appendChild(overlay);
 }
 
-/* ===================== Modal: vincular materia compartida con un compañero ===================== */
+/* ===================== Modal: vincular materia compartida con un compañero (sin cambios) ===================== */
 
-/**
- * A diferencia del vínculo con un profesor (1 profesor por mm, campo
- * exclusivo), un compañero puede compartir VARIAS materias con vos — acá
- * cada clic en una materia la agrega/quita de companero.materias_compartidas
- * al toque (no hay un paso de "Guardar" separado para la selección en sí,
- * solo para cerrar el modal), así se pueden marcar varias sin reabrir.
- */
 function abrirModalVincularMateriaCompanero(companero) {
   document.querySelectorAll(".overlay-vincular-companero").forEach((el) => el.remove());
 
@@ -1165,7 +1438,7 @@ function abrirModalVincularMateriaCompanero(companero) {
   document.body.appendChild(overlay);
 }
 
-/* ===================== Borrar compañero ===================== */
+/* ===================== Borrar compañero (sin cambios) ===================== */
 
 function abrirConfirmacionBorrarCompanero(companero) {
   abrirConfirmacion({
