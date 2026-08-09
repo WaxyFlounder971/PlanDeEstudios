@@ -56,6 +56,66 @@ import { estiloBadgeCategoria } from "../core/utils.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { obtenerSemestresActuales, obtenerSemestresPasados } from "../semestres/semestres.js";
 
+/**
+ * Estilos responsivos de Comunidad — SOLO se activan si no hay espacio
+ * suficiente (viewport de teléfono, <=480px), inyectados UNA vez al cargar
+ * el módulo (guardado por id para no duplicar en hot-reload). Si hay
+ * espacio de sobra, todo se comporta EXACTAMENTE igual que antes (las
+ * reglas base fuera del @media son las mismas que ya estaban inline, solo
+ * se movieron acá para que el @media pueda pisarlas sin necesitar
+ * !important).
+ *
+ * NOTA / SUPUESTO: el "full-bleed" de las listas (.com-lista-tarjetas)
+ * asume que el padding horizontal de .glass-card es 16px (mismo valor que
+ * ya se usa en el resto de este archivo, ej. el header de bloque). Si el
+ * padding real de tu .glass-card es distinto, avisame el valor y ajusto
+ * ese -16px.
+ */
+(function inyectarEstilosResponsivosComunidad() {
+  if (document.getElementById("com-estilos-responsivos")) return;
+  const style = document.createElement("style");
+  style.id = "com-estilos-responsivos";
+  style.textContent = `
+    .com-tarjeta-profesor { container-type: inline-size; }
+
+    .com-encabezado-profesor {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      grid-template-areas: "nombre estrellas accion";
+      align-items: center;
+      gap: 6px 10px;
+    }
+    .com-encabezado-profesor .com-nombre-profesor { grid-area: nombre; }
+    .com-encabezado-profesor .com-estrellas-profesor { grid-area: estrellas; justify-self: center; }
+    .com-encabezado-profesor .com-accion-profesor { grid-area: accion; }
+
+    .com-fila-logos-profesor { flex-wrap: wrap; }
+    .com-logo-misprofes { height: 22px; }
+
+    @media (max-width: 480px) {
+      /* ---- Encabezado de Profesor: nombre+flecha arriba, estrellas+recomendado abajo ---- */
+      .com-encabezado-profesor {
+        grid-template-columns: 1fr auto;
+        grid-template-areas: "nombre flecha" "estrellas badge";
+        row-gap: 6px;
+      }
+      .com-encabezado-profesor .com-estrellas-profesor { justify-self: start; }
+      .com-encabezado-profesor .com-accion-profesor { display: contents; }
+      .com-encabezado-profesor .com-badge-recomendado-profesor { grid-area: badge; justify-self: end; }
+      .com-encabezado-profesor .com-flecha-profesor { grid-area: flecha; justify-self: end; }
+
+      /* ---- Logos MisProfes: nunca se van a otra línea; si hay 2, se achican un poco ---- */
+      .com-fila-logos-profesor { flex-wrap: nowrap; }
+      .com-cont-logos { flex-shrink: 1; min-width: 0; overflow: hidden; }
+      .com-cont-logos--doble .com-logo-misprofes { height: 18px; }
+
+      /* ---- Listas (bloques / tarjetas de Profes y Compañeros): ocupan todo el ancho de la tarjeta que las contiene ---- */
+      .com-lista-tarjetas { margin-left: -16px; margin-right: -16px; }
+    }
+  `;
+  document.head.appendChild(style);
+})();
+
 // Transitorio (no persistido, no sincronizado) — mismo patrón que
 // estado.modoEdicionSemestres en semestres.js: vive en memoria, se resetea
 // solo al recargar la página.
@@ -131,6 +191,19 @@ function obtenerNombreMateria(mm) {
 /** Igual que obtenerNombreMateria, pero además devuelve la materia y el
  *  plan (para leer categoria_id/color y universidad) — evita repetir la
  *  misma búsqueda dos veces en las mini-tarjetas nuevas. */
+/** Formatea una nota numérica con máximo 2 decimales SIN redondear (trunca,
+ *  no redondea — 8.666 debe mostrar "8.66", no "8.67"). toFixed(10) primero
+ *  evita errores de precisión de punto flotante al truncar (ej. 8.1*100 en
+ *  JS puede dar 809.999...); después se recortan los ceros finales
+ *  sobrantes para que un entero como 8.00 se vea "8" y 8.50 se vea "8.5". */
+function formatearNotaTruncada(valor) {
+  const numero = Number(valor);
+  if (!Number.isFinite(numero)) return String(valor);
+  const [enteros, decimales = ""] = numero.toFixed(10).split(".");
+  const decimalesTruncados = decimales.slice(0, 2).replace(/0+$/, "");
+  return decimalesTruncados ? `${enteros}.${decimalesTruncados}` : enteros;
+}
+
 function obtenerContextoMateria(mm) {
   const plan = obtenerPlanPorId(mm.plan_estudio_id);
   const materia = plan && plan.materias.find((m) => m.id === mm.materia_id);
@@ -496,8 +569,16 @@ function construirMiniTarjetaMateriaVinculada(mm, semestre) {
 
   const nombre = document.createElement("span");
   nombre.className = "materia-nombre truncada";
-  nombre.style.cssText = "min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:0.85rem; top:0;"; // top:0 anula el ajuste -3px pensado para su contexto original
+  nombre.style.cssText =
+    "min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:0.85rem; top:0;" + // top:0 anula el ajuste -3px pensado para su contexto original
+    (materia ? " cursor:pointer;" : ""); // Pedido explícito: el texto actúa como link, SIN subrayado ni cambio de color — solo cursor pointer y el click. Si la materia fue eliminada no hay a dónde navegar, así que no se agrega el cursor ni el listener.
   nombre.textContent = materia ? materia.nombre : "Materia eliminada";
+  if (materia) {
+    nombre.addEventListener("click", (e) => {
+      e.stopPropagation();
+      abrirTarjetaMateria(materia, mm, semestre);
+    });
+  }
   mini.appendChild(nombre);
 
   // Pedido explícito: la NOTA que el estudiante sacó en esa materia
@@ -511,7 +592,7 @@ function construirMiniTarjetaMateriaVinculada(mm, semestre) {
     const badgeNota = document.createElement("span");
     badgeNota.className = "muted";
     badgeNota.style.cssText = "justify-self:center; flex-shrink:0; white-space:nowrap; font-size:0.78rem;";
-    badgeNota.textContent = `Nota: ${mm.nota_final}`;
+    badgeNota.textContent = `Nota: ${formatearNotaTruncada(mm.nota_final)}`;
     mini.appendChild(badgeNota);
   } else {
     // Placeholder vacío para no perder la 2da columna del grid (si no se
@@ -527,6 +608,24 @@ function construirMiniTarjetaMateriaVinculada(mm, semestre) {
   mini.appendChild(badgeSemestre);
 
   return mini;
+}
+
+/* ===================== Navegar a la tarjeta de una materia ===================== */
+
+/**
+ * TODO (pendiente de confirmar con Wagner): esta función debe abrir/resaltar
+ * la tarjeta real de `materia` en Semestres o Plan de Estudios — no sé
+ * todavía qué función ya existe en esos módulos (plan-esquema.js,
+ * plan-gestionar.js, semestres.js) para desplazarse/resaltar una materia
+ * por id, así que por ahora solo cambia de sección como mejor aproximación
+ * y deja un console.warn como recordatorio. En cuanto Wagner confirme el
+ * nombre/firma de la función real, se reemplaza este cuerpo por esa llamada.
+ */
+function abrirTarjetaMateria(materia, mm, semestre) {
+  console.warn(
+    "abrirTarjetaMateria: falta conectar con la función real de navegación a una materia (ver TODO en comunidad.js).",
+    { materiaId: materia.id, mmId: mm.id, semestreId: semestre.id }
+  );
 }
 
 /* ===================== Enlace a MisProfes con copia de nombre ===================== */
@@ -669,7 +768,7 @@ function construirBadgeWhatsapp(telefono) {
   const badge = document.createElement("span");
   badge.className = "badge";
   badge.style.cssText =
-    "background:#25D366; color:#fff; cursor:pointer; user-select:none; -webkit-user-select:none;" +
+    "background:#33D26D; color:#fff; cursor:pointer; user-select:none; -webkit-user-select:none;" +
     " display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
   badge.textContent = `💬 ${telefono}`;
   badge.title = "Tocá para copiar · mantené presionado para abrir WhatsApp";
@@ -697,7 +796,15 @@ function construirBadgeCarnet(carnet) {
   badge.style.cssText =
     "background:#1C4BBF; color:#fff; cursor:pointer; user-select:none; -webkit-user-select:none;" +
     " display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
-  badge.textContent = `🪪 ${carnet}`;
+  // Pedido explícito: el emoji 🪪 se ve muy abajo respecto al texto — se
+  // sube un 33% con translateY sobre un span propio (display:inline-block,
+  // requisito de transform) sin tocar el texto del carné ni el layout del
+  // badge.
+  const emojiCarnet = document.createElement("span");
+  emojiCarnet.style.cssText = "display:inline-block; transform:translateY(-33%);";
+  emojiCarnet.textContent = "🪪";
+  badge.appendChild(emojiCarnet);
+  badge.appendChild(document.createTextNode(` ${carnet}`));
   badge.title = "Tocá para copiar";
   adjuntarPressLargo(badge, {
     onTap: () => copiarAlPortapapeles(carnet, "Carné copiado al portapapeles"),
@@ -713,7 +820,7 @@ function construirTarjetaProfesor(profesor, datos) {
   const recomendado = profesor.volveria_a_llevar !== false; // default true (sin badge rojo hasta que se marque explícito que no)
 
   const card = document.createElement("div");
-  card.className = "glass-panel stack";
+  card.className = "glass-panel stack com-tarjeta-profesor";
   card.style.cssText = "gap:6px; cursor:pointer; padding:14px 16px;";
 
   /* ---------- Colapsada: Nombre · Estrellas (centro REAL de la tarjeta) · Recomendado (der.) · flecha ----------
@@ -727,29 +834,40 @@ function construirTarjetaProfesor(profesor, datos) {
      estrellas en la columna del medio (su ancho natural, sin crecer),
      badge+flecha agrupados a la derecha empujados por la 2da 1fr — con
      las dos columnas 1fr midiendo lo mismo, el centro de "estrellas" cae
-     exactamente en el centro geométrico de la tarjeta. */
+     exactamente en el centro geométrico de la tarjeta.
+
+     Responsivo (pedido explícito, SOLO si no hay espacio en pantalla,
+     <=480px, ver estilo inyectado por inyectarEstilosResponsivosComunidad):
+     pasa a 2 líneas — nombre+flecha arriba, estrellas+recomendado abajo. El
+     layout base (grid-template-columns/areas) ahora vive en la clase
+     .com-encabezado-profesor del stylesheet inyectado (no inline) para que
+     el @media pueda pisarlo sin necesitar !important; acá solo quedan
+     inline los estilos que no cambian entre modo ancho/angosto. */
   const encabezado = document.createElement("div");
-  encabezado.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px;";
+  encabezado.className = "com-encabezado-profesor";
 
   const nombre = document.createElement("strong");
+  nombre.className = "com-nombre-profesor";
   nombre.style.cssText = "min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
   nombre.textContent = profesor.nombre;
   encabezado.appendChild(nombre);
 
-  encabezado.appendChild(construirEstrellasLectura(profesor.calificacion));
+  const estrellas = construirEstrellasLectura(profesor.calificacion);
+  estrellas.classList.add("com-estrellas-profesor");
+  encabezado.appendChild(estrellas);
 
   const derechaEncabezado = document.createElement("div");
-  derechaEncabezado.className = "row";
+  derechaEncabezado.className = "row com-accion-profesor";
   derechaEncabezado.style.cssText = "justify-self:end; align-items:center; gap:10px; min-width:0;";
 
   const badgeRecomendado = document.createElement("span");
-  badgeRecomendado.className = "badge " + (recomendado ? "badge-success" : "badge-danger");
+  badgeRecomendado.className = "badge com-badge-recomendado-profesor " + (recomendado ? "badge-success" : "badge-danger");
   badgeRecomendado.style.cssText = "flex-shrink:0; white-space:nowrap;";
   badgeRecomendado.textContent = recomendado ? "✓ Recomendado" : "✕ No recomendado";
   derechaEncabezado.appendChild(badgeRecomendado);
 
   const flecha = document.createElement("span");
-  flecha.className = "muted";
+  flecha.className = "muted com-flecha-profesor";
   flecha.style.fontSize = "0.9rem";
   flecha.textContent = expandido ? "▲" : "▼";
   derechaEncabezado.appendChild(flecha);
@@ -827,11 +945,11 @@ function construirTarjetaProfesor(profesor, datos) {
   const universidadesConLink = obtenerUniversidadesDeProfesor(profesor.id, datos).filter((u) => LINKS_MISPROFES[u]);
 
   const filaAcciones = document.createElement("div");
-  filaAcciones.className = "row";
-  filaAcciones.style.cssText = "justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;";
+  filaAcciones.className = "row com-fila-logos-profesor";
+  filaAcciones.style.cssText = "justify-content:space-between; align-items:center; gap:10px;";
 
   const contLogos = document.createElement("div");
-  contLogos.className = "row";
+  contLogos.className = "row com-cont-logos" + (universidadesConLink.length > 1 ? " com-cont-logos--doble" : "");
   contLogos.style.cssText = "gap:16px; align-items:flex-end; min-width:0;";
 
   universidadesConLink.forEach((u) => {
@@ -854,7 +972,8 @@ function construirTarjetaProfesor(profesor, datos) {
     // Pedido explícito: sin forma de botón (ni fondo ni borde ni padding) —
     // solo la imagen misma es clickeable. No se deforma su relación de
     // aspecto: solo se fija la altura, el ancho queda "auto".
-    img.style.cssText = "height:22px; width:auto; max-width:100%; display:block; cursor:pointer;";
+    img.className = "com-logo-misprofes";
+    img.style.cssText = "width:auto; max-width:100%; display:block; cursor:pointer;";
     img.addEventListener("click", (ev) => {
       ev.stopPropagation();
       abrirEnlaceMisProfesConAviso(profesor.nombre, LINKS_MISPROFES[u]);
@@ -2161,19 +2280,29 @@ function construirSeccionProfesores() {
     })
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 
+  // Pedido explícito: SOLO si no hay espacio en pantalla, las tarjetas de
+  // bloques/profes deben ocupar todo el ancho disponible dentro de la
+  // tarjeta que las contiene (ver .com-lista-tarjetas en el estilo
+  // inyectado) — con espacio de sobra queda EXACTAMENTE igual que antes
+  // (margin 0, ningún cambio visual). Los pills de filtro y el botón
+  // "Agregar" quedan FUERA de este wrapper, nunca se bleeding.
+  const listaTarjetas = document.createElement("div");
+  listaTarjetas.className = "stack com-lista-tarjetas";
+
   if (filtrados.length === 0) {
     const vacio = document.createElement("p");
     vacio.className = "muted";
     vacio.textContent =
       todos.length === 0 ? "Todavía no tenés ningún profesor registrado." : "No hay profesores que coincidan con el filtro.";
-    seccion.appendChild(vacio);
+    listaTarjetas.appendChild(vacio);
   } else if (estado.ordenComunidadProfesores === "bloque") {
     agruparProfesoresPorBloque(filtrados, datos).forEach(({ semestre, profesores }) => {
-      seccion.appendChild(construirBloqueSemestreProfesores(semestre, profesores, datos));
+      listaTarjetas.appendChild(construirBloqueSemestreProfesores(semestre, profesores, datos));
     });
   } else {
-    filtrados.forEach((p) => seccion.appendChild(construirTarjetaProfesor(p, datos)));
+    filtrados.forEach((p) => listaTarjetas.appendChild(construirTarjetaProfesor(p, datos)));
   }
+  seccion.appendChild(listaTarjetas);
 
   const btnAgregar = document.createElement("button");
   btnAgregar.type = "button";
@@ -2356,19 +2485,25 @@ function construirSeccionCompaneros() {
     })
     .sort((a, b) => a.nombre_completo.localeCompare(b.nombre_completo, "es"));
 
+  // Mismo wrapper full-bleed que Profesores — ver comentario en
+  // construirSeccionProfesores.
+  const listaTarjetas = document.createElement("div");
+  listaTarjetas.className = "stack com-lista-tarjetas";
+
   if (filtrados.length === 0) {
     const vacio = document.createElement("p");
     vacio.className = "muted";
     vacio.textContent =
       todos.length === 0 ? "Todavía no tenés ningún compañero registrado." : "No hay compañeros que coincidan con el filtro.";
-    seccion.appendChild(vacio);
+    listaTarjetas.appendChild(vacio);
   } else if (estado.ordenComunidadCompaneros === "bloque") {
     agruparCompanerosPorBloque(filtrados, datos).forEach(({ semestre, companeros }) => {
-      seccion.appendChild(construirBloqueSemestreCompaneros(semestre, companeros, datos));
+      listaTarjetas.appendChild(construirBloqueSemestreCompaneros(semestre, companeros, datos));
     });
   } else {
-    filtrados.forEach((c) => seccion.appendChild(construirTarjetaCompanero(c, datos)));
+    filtrados.forEach((c) => listaTarjetas.appendChild(construirTarjetaCompanero(c, datos)));
   }
+  seccion.appendChild(listaTarjetas);
 
   const btnAgregar = document.createElement("button");
   btnAgregar.type = "button";
