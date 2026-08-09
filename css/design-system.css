@@ -1746,6 +1746,20 @@ img, svg { max-width: 100%; }
 .puntitos-carga span:nth-child(1) { animation-delay: 0s; }
 .puntitos-carga span:nth-child(2) { animation-delay: 0.15s; }
 .puntitos-carga span:nth-child(3) { animation-delay: 0.3s; }
+/* Destello de resaltado al navegar desde otra sección a una tarjeta
+   puntual (ver desplazarYResaltarElemento en componentes.js) — un halo con
+   el color de acento que aparece y se desvanece solo, sin dejar rastro
+   permanente ni pisar el box-shadow propio de la tarjeta (ej. la barra de
+   categoría de una materia) una vez termina. */
+.destello-resaltado {
+  animation: destello-resaltado 1.6s ease-out;
+}
+@keyframes destello-resaltado {
+  0% { box-shadow: 0 0 0 3px var(--accent-1), 0 0 28px 6px var(--accent-glow-1); }
+  70% { box-shadow: 0 0 0 3px var(--accent-1), 0 0 28px 6px var(--accent-glow-1); }
+  100% { box-shadow: 0 0 0 0 transparent, 0 0 0 0 transparent; }
+}
+
 @keyframes puntito-rebote {
   0%, 60%, 100% { transform: translateY(0); opacity: 0.6; }
   30% { transform: translateY(-16px); opacity: 1; }
