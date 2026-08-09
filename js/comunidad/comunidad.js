@@ -797,11 +797,11 @@ function construirBadgeCarnet(carnet) {
     "background:#1C4BBF; color:#fff; cursor:pointer; user-select:none; -webkit-user-select:none;" +
     " display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
   // Pedido explícito: el emoji 🪪 se ve muy abajo respecto al texto — se
-  // sube un 33% con translateY sobre un span propio (display:inline-block,
+  // sube con translateY sobre un span propio (display:inline-block,
   // requisito de transform) sin tocar el texto del carné ni el layout del
-  // badge.
+  // badge. Ajustado de -33% a -16.16% (el primer valor se pasó de alto).
   const emojiCarnet = document.createElement("span");
-  emojiCarnet.style.cssText = "display:inline-block; transform:translateY(-33%);";
+  emojiCarnet.style.cssText = "display:inline-block; transform:translateY(-16.16%);";
   emojiCarnet.textContent = "🪪";
   badge.appendChild(emojiCarnet);
   badge.appendChild(document.createTextNode(` ${carnet}`));
