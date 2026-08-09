@@ -55,6 +55,13 @@ import { estado } from "../core/storage.js";
 import { estiloBadgeCategoria } from "../core/utils.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { obtenerSemestresActuales, obtenerSemestresPasados } from "../semestres/semestres.js";
+// Parte 1 (navegación a materia por id): resuelto — ver abrirTarjetaMateria
+// más abajo. abrirModalRequisito ya es la función real que usa el resto de
+// la app para abrir la tarjeta de detalle de una materia por código (ej.
+// al hacer clic en el código de una materia dentro de una tarjeta de
+// Semestres, o en los resultados de "Es requisito") — se reutiliza acá tal
+// cual, sin duplicar ningún modal nuevo.
+import { abrirModalRequisito } from "../plan/plan-detalle.js";
 
 /**
  * Estilos responsivos de Comunidad — SOLO se activan si no hay espacio
@@ -613,19 +620,19 @@ function construirMiniTarjetaMateriaVinculada(mm, semestre) {
 /* ===================== Navegar a la tarjeta de una materia ===================== */
 
 /**
- * TODO (pendiente de confirmar con Wagner): esta función debe abrir/resaltar
- * la tarjeta real de `materia` en Semestres o Plan de Estudios — no sé
- * todavía qué función ya existe en esos módulos (plan-esquema.js,
- * plan-gestionar.js, semestres.js) para desplazarse/resaltar una materia
- * por id, así que por ahora solo cambia de sección como mejor aproximación
- * y deja un console.warn como recordatorio. En cuanto Wagner confirme el
- * nombre/firma de la función real, se reemplaza este cuerpo por esa llamada.
+ * Resuelto (pendiente de la ronda anterior): la app ya tenía una función
+ * real para esto — abrirModalRequisito(codigo), en plan-detalle.js — es la
+ * misma tarjeta de detalle que se abre al tocar el código de una materia
+ * en una tarjeta de Semestres, o un resultado de "Es requisito". Se
+ * reutiliza tal cual, por código (buscarMateriaPorCodigoEnPlanes ya
+ * resuelve la materia visible que corresponda). `mm` y `semestre` no hacen
+ * falta para esto — el modal de detalle no es específico de un semestre —
+ * pero se conservan como parámetros por si el llamador necesita usarlos
+ * para otra cosa además de navegar (mismo motivo por el que se le pasan
+ * desde construirMiniTarjetaMateriaVinculada).
  */
 function abrirTarjetaMateria(materia, mm, semestre) {
-  console.warn(
-    "abrirTarjetaMateria: falta conectar con la función real de navegación a una materia (ver TODO en comunidad.js).",
-    { materiaId: materia.id, mmId: mm.id, semestreId: semestre.id }
-  );
+  abrirModalRequisito(materia.codigo);
 }
 
 /* ===================== Enlace a MisProfes con copia de nombre ===================== */
