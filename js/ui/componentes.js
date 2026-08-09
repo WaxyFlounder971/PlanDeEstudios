@@ -351,6 +351,41 @@ function envolverConFlechasScroll(elementoScroll) {
   return wrapper;
 }
 
+/* ===================== Navegación cruzada: scroll + destello ===================== */
+
+/**
+ * Helper reutilizable para "ir a X desde otra sección" (ej. Comunidad →
+ * tarjeta de un semestre en Semestres): hace scroll suave hasta el
+ * elemento que matchea `selector` y le agrega un destello breve de color
+ * de acento para que sea fácil de ubicar en pantalla, sin depender de qué
+ * tipo de entidad sea ni de dónde se dispare la navegación.
+ *
+ * Como el destino típicamente recién se pintó (mostrarSeccion + un
+ * render de golpe antes de llamar a esto), el elemento puede no existir
+ * todavía en el primer frame — reintenta unos cuantos frames antes de
+ * rendirse en silencio (nunca revienta si el elemento nunca aparece, ej.
+ * un id que ya no existe).
+ */
+function desplazarYResaltarElemento(selector, intentosRestantes = 15) {
+  const el = document.querySelector(selector);
+  if (!el) {
+    if (intentosRestantes > 0) {
+      requestAnimationFrame(() => desplazarYResaltarElemento(selector, intentosRestantes - 1));
+    }
+    return;
+  }
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  // Se remueve la clase antes de re-agregarla, por si el usuario navega
+  // dos veces seguidas al mismo elemento: sin este reset la animación no
+  // se reinicia (CSS ignora agregar una clase que ya está puesta).
+  el.classList.remove("destello-resaltado");
+  // Fuerza un reflow entre quitar y volver a poner la clase — mismo truco
+  // que se necesita en cualquier re-disparo de animación CSS por clase.
+  void el.offsetWidth;
+  el.classList.add("destello-resaltado");
+  setTimeout(() => el.classList.remove("destello-resaltado"), 1600);
+}
+
 export {
   CLAVE_SIDEBAR_COLAPSADA,
   abrirConfirmacion,
@@ -360,6 +395,7 @@ export {
   cerrarConfirmacion,
   cerrarDrawerEnlacesMovil,
   cerrarSidebarMovil,
+  desplazarYResaltarElemento,
   envolverConFlechasScroll,
   inicializarBotonesCerrarModal,
   inicializarLayoutResponsivo,
