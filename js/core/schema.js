@@ -1687,8 +1687,13 @@ function crearProfesor({ nombre, materias, correo, telefono }) {
  * la materia genérica del plan) — si esa mm se borra alguna vez, la
  * referencia queda huérfana silenciosamente (se filtra sola al renderizar,
  * ver obtenerMateriasCompartidasValidas), nunca revienta la UI.
+ * `telefono` (Comunidad — Parte 3, agregado 2026-08-08): mismo patrón que en
+ * crearProfesor — opcional, null si no se especifica. Puede llegar tipeado a
+ * mano o importado desde los contactos del dispositivo (solo como atajo
+ * puntual al llenar el formulario, nunca como fuente de verdad — ver
+ * comunidad.js).
  */
-function crearCompanero({ nombre_completo, carnet, lista, materias_compartidas, nota }) {
+function crearCompanero({ nombre_completo, carnet, lista, materias_compartidas, nota, telefono }) {
   return sellarTimestamp({
     id: "comp_" + crypto.randomUUID(),
     nombre_completo,
@@ -1696,6 +1701,7 @@ function crearCompanero({ nombre_completo, carnet, lista, materias_compartidas, 
     lista: lista === "blacklist" ? "blacklist" : "whitelist",
     materias_compartidas: Array.isArray(materias_compartidas) ? materias_compartidas : [],
     nota: nota || "",
+    telefono: telefono || null,
   });
 }
 
@@ -1979,6 +1985,12 @@ function migrarDatosAntiguos(datos) {
   if (!Array.isArray(datos.companeros)) datos.companeros = [];
   if (!Array.isArray(datos._eliminados_profesores)) datos._eliminados_profesores = [];
   if (!Array.isArray(datos._eliminados_companeros)) datos._eliminados_companeros = [];
+  // Comunidad — Parte 3 (2026-08-08): companero.telefono es nuevo — los
+  // compañeros guardados antes de este cambio no traen la llave para nada
+  // (undefined, no null), mismo relleno defensivo de siempre.
+  datos.companeros.forEach((companero) => {
+    if (companero.telefono === undefined) companero.telefono = null;
+  });
 
   // Adjuntos (2026-08-08): mismo relleno defensivo — cuentas cuyo JSON en
   // Drive se guardó antes de que existiera esta colección.
