@@ -1489,6 +1489,27 @@ img, svg { max-width: 100%; }
   margin-top: 4px;
 }
 
+@media (max-width: 480px) {
+  /* Parte 2.1 (pedido explícito): en teléfono, "Es requisito"/"Historial"/
+     "Cerrar" deben verse prolijos, repartir entre los 2 o 3 (según si es
+     modal o tarjeta expandida) todo el ancho disponible, y NUNCA irse a una
+     segunda línea — mismo patrón ya usado para la fila Cancelar/Eliminar/
+     Guardar del modal de profesor en Comunidad (ver comunidad.js,
+     abrirModalAltaProfesor: flex-wrap:nowrap + flex:1 en cada botón).
+     flex-wrap:nowrap acá pisa el wrap de la regla base de arriba. */
+  .detalle-botones-finales {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+  .detalle-botones-finales .btn {
+    flex: 1;
+    min-width: 0;
+    padding: 10px 6px;
+    font-size: 0.82rem;
+    text-align: center;
+  }
+}
+
 /* ---- Fila de requisito/correquisito de 2 columnas (v8 punto 2) ----
    1) Código-Nombre (flexible, es el link en sí, trunca con "…")
    2) Créditos, alineados estrictamente a la derecha de la fila. */
