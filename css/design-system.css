@@ -421,6 +421,37 @@ a { color: var(--accent-1); }
 }
 .form-label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
 
+/* ---- Botón discreto de "quitar/desvincular" (ícono, no btn ancho) ----
+   2026-08-09 (pedido explícito, varias veces: "los botones de quitar no
+   los hagas tan gordos [...] hazlos como un boton de eliminar [...] pero
+   estan gordos y feos"): reemplaza los antiguos <button class="btn
+   btn-secondary">Quitar</button> anchos por un ícono chico y discreto,
+   usado en comunidad.js (desvincular materia desde Editar profesor) y en
+   plan-detalle.js (desvincular profesor desde el Historial). */
+.btn-icono-quitar {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+.btn-icono-quitar:hover,
+.btn-icono-quitar:focus-visible {
+  background: color-mix(in srgb, var(--color-danger, #e5484d) 12%, transparent);
+  color: var(--color-danger, #e5484d);
+  border-color: color-mix(in srgb, var(--color-danger, #e5484d) 35%, transparent);
+  outline: none;
+}
+
 /* ---- Modal ---- */
 .modal-overlay {
   position: fixed; inset: 0;
@@ -1604,6 +1635,16 @@ img, svg { max-width: 100%; }
 
 /* ---- Modal de asignación de materias a categoría: más ancho (sección 7.2) ---- */
 #modal-categoria-materias .modal-card { width: min(640px, calc(100vw - 32px)); }
+
+/* ---- Modal de detalle de materia: siempre al frente ----
+   2026-08-09 (pedido explícito): todos los .modal-overlay comparten
+   z-index:100 por defecto, así que el orden de apilamiento depende del
+   orden en el DOM — poco confiable cuando este modal se abre desde DENTRO
+   de otro (ej. al tocar el nombre de una materia vinculada dentro del
+   modal de Editar profesor, en Comunidad). Se fuerza explícitamente por
+   encima de cualquier otro overlay de la app (el más alto usado en JS es
+   310, ver comunidad.js). */
+#modal-requisito { z-index: 320; }
 
 /* ---- Créditos/estado en tarjeta de materia: más compactos en móvil ---- */
 .materia-centro .badge, .materia-derecha .badge { font-size: 0.72rem; padding: 3px 9px; }
