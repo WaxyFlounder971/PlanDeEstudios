@@ -56,6 +56,9 @@ import { estiloBadgeCategoria } from "../core/utils.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { obtenerSemestresActuales, obtenerSemestresPasados } from "../semestres/semestres.js";
 import { registrarAbrirAltaProfesorPreseleccionado } from "../plan/plan-detalle.js";
+// 2026-08-09: mismo patrón anti-ciclo que la línea de arriba — ver
+// registrarAbrirTarjetaProfesorFlotante en semestres-tarjetas.js.
+import { registrarAbrirTarjetaProfesorFlotante } from "../semestres/semestres-tarjetas.js";
 // Parte 1 (navegación a materia por id): resuelto — ver abrirTarjetaMateria
 // más abajo. abrirModalRequisito ya es la función real que usa el resto de
 // la app para abrir la tarjeta de detalle de una materia por código (ej.
@@ -854,6 +857,11 @@ function construirTarjetaProfesor(profesor, datos) {
   const card = document.createElement("div");
   card.className = "glass-panel stack com-tarjeta-profesor";
   card.style.cssText = "gap:6px; cursor:pointer; padding:14px 16px;";
+  // 2026-08-09: identificador en el DOM para poder ubicar esta tarjeta
+  // puntual desde otro módulo (ej. al navegar acá desde Semestres, tocando
+  // la tarjetita flotante de un profesor — ver navegarYResaltarProfesor
+  // más abajo), mismo patrón que semestre.id en semestres-tarjetas.js.
+  card.dataset.profesorId = profesor.id;
 
   /* ---------- Colapsada: Nombre · Estrellas (centro REAL de la tarjeta) · Recomendado (der.) · flecha ----------
      Pedido explícito: "las estrellas [...] esten bien centradas con
@@ -2703,6 +2711,159 @@ function construirSeccionCompaneros() {
   return seccion;
 }
 
+/* ===================== Tarjeta flotante de profesor + navegación desde Semestres ===================== */
+
+/**
+ * 2026-08-09 (pedido explícito): al tocar la tarjetita de un profesor
+ * dentro del popover "Profesores vinculados a esta materia" (Semestres —
+ * ver abrirPopoverProfesoresMateria en semestres-tarjetas.js), se abre esta
+ * tarjeta flotante con TODA la info del profesor (misma info que la
+ * tarjeta expandida de Comunidad: estrellas, recomendado, correo/WhatsApp,
+ * historial de materias vinculadas) + un botón "Ir" que navega a la
+ * pestaña Comunidad y resalta la tarjeta real de este profesor ahí.
+ * Solo lectura — no hay Editar/Quitar acá (para eso ya existe el popover
+ * de Semestres en modo Editar, o la tarjeta real en Comunidad).
+ */
+function construirCuerpoTarjetaProfesorFlotante(profesor, datos) {
+  const cont = document.createElement("div");
+  cont.className = "stack";
+  cont.style.gap = "10px";
+
+  const encabezado = document.createElement("div");
+  encabezado.className = "com-encabezado-profesor";
+  const nombre = document.createElement("strong");
+  nombre.className = "com-nombre-profesor";
+  nombre.style.cssText = "min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+  nombre.textContent = profesor.nombre;
+  encabezado.appendChild(nombre);
+
+  const estrellas = construirEstrellasLectura(profesor.calificacion);
+  estrellas.classList.add("com-estrellas-profesor");
+  encabezado.appendChild(estrellas);
+
+  const recomendado = profesor.volveria_a_llevar !== false;
+  const badgeRecomendado = document.createElement("span");
+  badgeRecomendado.className = "badge " + (recomendado ? "badge-success" : "badge-danger");
+  badgeRecomendado.style.cssText = "flex-shrink:0; white-space:nowrap; justify-self:end;";
+  badgeRecomendado.textContent = recomendado ? "✓ Recomendado" : "✕ No recomendado";
+  encabezado.appendChild(badgeRecomendado);
+  cont.appendChild(encabezado);
+
+  if (profesor.correo || profesor.telefono) {
+    const filaContacto = document.createElement("div");
+    filaContacto.style.cssText = "display:flex; justify-content:space-between; align-items:center; gap:8px;";
+    const slotCorreo = document.createElement("div");
+    slotCorreo.style.cssText = "flex:1; min-width:0; overflow:hidden;";
+    if (profesor.correo) slotCorreo.appendChild(construirBadgeCorreo(profesor.correo));
+    filaContacto.appendChild(slotCorreo);
+    const slotWhatsapp = document.createElement("div");
+    slotWhatsapp.style.cssText = "flex-shrink:0; min-width:0; overflow:hidden;";
+    if (profesor.telefono) slotWhatsapp.appendChild(construirBadgeWhatsapp(profesor.telefono));
+    filaContacto.appendChild(slotWhatsapp);
+    cont.appendChild(filaContacto);
+  }
+
+  const historial = obtenerHistorialProfesor(profesor.id, datos);
+  const bloqueHistorial = document.createElement("div");
+  bloqueHistorial.className = "stack";
+  bloqueHistorial.style.gap = "6px";
+  if (historial.length === 0) {
+    const p = document.createElement("p");
+    p.className = "muted";
+    p.style.margin = "0";
+    p.textContent = "Todavía no lo vinculaste a ninguna materia tuya.";
+    bloqueHistorial.appendChild(p);
+  } else {
+    historial.forEach(({ semestre, mm }) => {
+      bloqueHistorial.appendChild(construirMiniTarjetaMateriaVinculada(mm, semestre));
+    });
+  }
+  cont.appendChild(bloqueHistorial);
+
+  return cont;
+}
+
+/**
+ * Cambia a la sección Comunidad (clic real sobre el botón del sidebar que
+ * la muestra — no se conoce/duplica acá la lógica interna de mostrar/
+ * ocultar secciones de main.js, así que se dispara el mismo botón que
+ * tocaría el usuario), fuerza la pestaña "profesores", expande la tarjeta
+ * real de este profesor y la resalta con el mismo destello que ya usa el
+ * resto de la app para "navegar desde otra sección a una tarjeta puntual"
+ * (.destello-resaltado, ver design-system.css) — acá se controla a mano la
+ * duración (2s, pedido explícito) en vez de depender solo de la animación.
+ */
+function navegarYResaltarProfesor(profesorId) {
+  const btnNav = Array.from(document.querySelectorAll(".btn-nav")).find((b) => (b.textContent || "").includes("Comunidad"));
+  if (btnNav) btnNav.click();
+
+  estado.tabComunidad = "profesores";
+  estado.profesoresExpandidos.add(profesorId);
+  renderizarComunidad();
+
+  // Un tick extra (además del render síncrono de arriba) para darle tiempo
+  // al navegador de pintar el cambio de sección/scroll disponible antes de
+  // medir posiciones — mismo motivo por el que otros scrolls animados de la
+  // app (ver navegarASemestre) no lo hacen en el mismo tick del click.
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      const card = Array.from(document.querySelectorAll(".com-tarjeta-profesor")).find((c) => c.dataset.profesorId === profesorId);
+      if (!card) return;
+      card.scrollIntoView({ behavior: "smooth", block: "center" });
+      card.classList.add("destello-resaltado");
+      setTimeout(() => card.classList.remove("destello-resaltado"), 2000);
+    }, 60);
+  });
+}
+
+function abrirTarjetaProfesorFlotante(profesor) {
+  document.querySelectorAll(".overlay-tarjeta-profesor-flotante").forEach((el) => el.remove());
+
+  const overlay = document.createElement("div");
+  overlay.className = "overlay-tarjeta-profesor-flotante";
+  overlay.style.cssText =
+    "position:fixed; inset:0; z-index:330; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; padding:16px;";
+
+  const caja = document.createElement("div");
+  caja.className = "glass-card stack";
+  caja.style.cssText = "max-width:420px; width:100%; padding:18px; max-height:80vh; overflow-y:auto; gap:14px;";
+  caja.addEventListener("click", (ev) => ev.stopPropagation());
+
+  caja.appendChild(construirCuerpoTarjetaProfesorFlotante(profesor, estado.datos));
+
+  const filaBotones = document.createElement("div");
+  filaBotones.className = "row";
+  filaBotones.style.cssText = "gap:8px; flex-wrap:nowrap;";
+
+  const btnIr = document.createElement("button");
+  btnIr.type = "button";
+  btnIr.className = "btn btn-primary";
+  btnIr.style.flex = "1";
+  btnIr.textContent = "Ir";
+  btnIr.title = "Ir a este profesor en Comunidad";
+  btnIr.addEventListener("click", () => {
+    overlay.remove();
+    navegarYResaltarProfesor(profesor.id);
+  });
+  filaBotones.appendChild(btnIr);
+
+  const btnCerrar = document.createElement("button");
+  btnCerrar.type = "button";
+  btnCerrar.className = "btn btn-secondary";
+  btnCerrar.style.flex = "1";
+  btnCerrar.textContent = "Cerrar";
+  btnCerrar.addEventListener("click", () => overlay.remove());
+  filaBotones.appendChild(btnCerrar);
+
+  caja.appendChild(filaBotones);
+
+  overlay.appendChild(caja);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+  document.body.appendChild(overlay);
+}
+
 /* ===================== Entrada pública ===================== */
 
 /**
@@ -2723,6 +2884,12 @@ function inicializarComunidad() {
   // (comunidad.js ya importa de plan-detalle.js — abrirModalRequisito — así
   // que una importación en el otro sentido crearía un ciclo).
   registrarAbrirAltaProfesorPreseleccionado((mmId, onGuardado) => abrirModalAltaProfesor(null, mmId, onGuardado));
+
+  // 2026-08-09: idem — inyecta la función real de "tarjeta flotante de
+  // profesor" en semestres-tarjetas.js, para el toque sobre una tarjetita
+  // de profesor dentro del popover de Semestres (ver
+  // abrirPopoverProfesoresMateria).
+  registrarAbrirTarjetaProfesorFlotante(abrirTarjetaProfesorFlotante);
 }
 
 /**
