@@ -64,6 +64,17 @@ estado.filtroComunidadProfesores = "todos"; // "todos" | "tuyos" | "no-tuyos"
 estado.filtroComunidadCompaneros = "todos"; // "todos" | "recomendados" | "no-recomendados"
 estado.profesoresExpandidos = estado.profesoresExpandidos || new Set(); // ids con la tarjeta abierta
 estado.companerosExpandidos = estado.companerosExpandidos || new Set(); // ids con la tarjeta abierta
+// Orden de la lista de Profesores: "alfabetico" (default) o "bloque" (agrupados
+// por semestre en que se cursó, como tarjetas retraíbles — ver
+// agruparProfesoresPorBloque). No se resetea entre re-renders de Comunidad,
+// solo al recargar la página (mismo patrón que estado.tabComunidad).
+estado.ordenComunidadProfesores = estado.ordenComunidadProfesores || "alfabetico"; // "alfabetico" | "bloque"
+// Ids de semestre (bloque) que el usuario colapsó a mano en la vista "Por
+// bloque" — vacío por defecto, es decir todos los bloques arrancan
+// expandidos. Es un Set de COLAPSADOS (no de expandidos) para que un
+// semestre nuevo que aparezca después arranque expandido sin tener que
+// agregarlo a mano a ningún lado.
+estado.bloquesProfesoresColapsados = estado.bloquesProfesoresColapsados || new Set();
 
 // Escuela completa en misprofesores.com (no un profesor puntual — pedido
 // explícito: los profesores suelen estar duplicados/mal cargados ahí, así
@@ -1757,6 +1768,123 @@ function abrirConfirmacionBorrarCompanero(companero) {
 
 /* ===================== Secciones por tab ===================== */
 
+/* ===================== Vista "Por bloque" (agrupado por semestre) ===================== */
+
+/**
+ * Agrupa profesores por CADA semestre en que se cursó alguna materia
+ * vinculada a ellos (pedido explícito: "si el profe ha dado en más de un
+ * semestre puede salir repetido una vez por cada semestre, no se puede
+ * repetir en el mismo semestre"). Un profesor con 2 materias vinculadas en
+ * el MISMO semestre aparece una sola vez en ese bloque (dedupe con
+ * idsVistos por profesor). Profesores sin ninguna materia vinculada caen
+ * en un bloque final "Sin semestre vinculado" — nunca desaparecen de la
+ * lista solo por no tener historial.
+ *
+ * Orden de los bloques: el mismo que ya usa el selector de "Vincular
+ * materia" (semestres actuales primero, después pasados) — se descartan
+ * los semestres que no tengan ningún profesor tras el filtro activo.
+ */
+function agruparProfesoresPorBloque(profesores, datos) {
+  const semestres = [...obtenerSemestresActuales(), ...obtenerSemestresPasados()];
+  const porSemestreId = new Map(); // semestreId -> { semestre, profesores: [] }
+  const sinSemestre = [];
+
+  profesores.forEach((p) => {
+    const historial = obtenerHistorialProfesor(p.id, datos);
+    if (historial.length === 0) {
+      sinSemestre.push(p);
+      return;
+    }
+    const idsVistos = new Set();
+    historial.forEach(({ semestre }) => {
+      if (idsVistos.has(semestre.id)) return;
+      idsVistos.add(semestre.id);
+      if (!porSemestreId.has(semestre.id)) {
+        porSemestreId.set(semestre.id, { semestre, profesores: [] });
+      }
+      porSemestreId.get(semestre.id).profesores.push(p);
+    });
+  });
+
+  const bloques = semestres
+    .map((s) => porSemestreId.get(s.id))
+    .filter(Boolean)
+    .map((b) => ({ ...b, profesores: b.profesores.sort((a, c) => a.nombre.localeCompare(c.nombre, "es")) }));
+
+  if (sinSemestre.length > 0) {
+    bloques.push({
+      semestre: { id: "__sin_semestre__", nombre: "Sin semestre vinculado" },
+      profesores: sinSemestre.sort((a, c) => a.nombre.localeCompare(c.nombre, "es")),
+    });
+  }
+
+  return bloques;
+}
+
+/**
+ * Tarjeta de bloque retraíble para un semestre. Pedido explícito: "que la
+ * tarjeta de bloque que contenga los profes no tenga espacio libre
+ * lateral" y "que las tarjetas de cada profesor mantengan el mismo tamaño
+ * actual, no le muevas mucho aunque se anide" — por eso el bloque en sí
+ * tiene padding HORIZONTAL 0 (solo el encabezado agrega su propio padding
+ * interno para verse bien, sin afectar el ancho de nada más), y la lista de
+ * profesores adentro también va con padding horizontal 0 — así cada
+ * construirTarjetaProfesor() queda exactamente al mismo ancho que en la
+ * vista alfabética plana, sin ningún nivel extra de indentación.
+ */
+function construirBloqueSemestreProfesores(semestre, profesores, datos) {
+  const idBloque = semestre.id;
+  const colapsado = estado.bloquesProfesoresColapsados.has(idBloque);
+
+  const bloque = document.createElement("div");
+  bloque.className = "glass-panel stack";
+  bloque.style.cssText = "padding:0; gap:0; overflow:hidden;";
+
+  const header = document.createElement("div");
+  header.className = "row";
+  header.style.cssText =
+    "justify-content:space-between; align-items:center; gap:8px; cursor:pointer; padding:12px 16px;" +
+    (colapsado ? "" : " border-bottom:1px solid var(--color-borde, rgba(148,163,184,0.18));");
+
+  const nombreBloque = document.createElement("strong");
+  nombreBloque.style.cssText = "font-size:0.92rem; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+  nombreBloque.textContent = semestre.nombre;
+  header.appendChild(nombreBloque);
+
+  const derecha = document.createElement("div");
+  derecha.className = "row";
+  derecha.style.cssText = "align-items:center; gap:8px; flex-shrink:0;";
+
+  const badgeCantidad = document.createElement("span");
+  badgeCantidad.className = "badge badge-neutral";
+  badgeCantidad.textContent = String(profesores.length);
+  derecha.appendChild(badgeCantidad);
+
+  const flecha = document.createElement("span");
+  flecha.className = "muted";
+  flecha.style.fontSize = "0.85rem";
+  flecha.textContent = colapsado ? "▼" : "▲";
+  derecha.appendChild(flecha);
+
+  header.appendChild(derecha);
+  header.addEventListener("click", () => {
+    if (colapsado) estado.bloquesProfesoresColapsados.delete(idBloque);
+    else estado.bloquesProfesoresColapsados.add(idBloque);
+    renderizarComunidad();
+  });
+  bloque.appendChild(header);
+
+  if (!colapsado) {
+    const lista = document.createElement("div");
+    lista.className = "stack";
+    lista.style.cssText = "gap:6px; padding:8px 0 4px;"; // sin padding horizontal a propósito, ver comentario de la función
+    profesores.forEach((p) => lista.appendChild(construirTarjetaProfesor(p, datos)));
+    bloque.appendChild(lista);
+  }
+
+  return bloque;
+}
+
 function construirSeccionProfesores() {
   const datos = estado.datos;
   const seccion = document.createElement("section");
@@ -1777,6 +1905,23 @@ function construirSeccionProfesores() {
     )
   );
 
+  // Pedido explícito: filtro/orden — Alfabético (default) o Por bloque
+  // (agrupados en tarjetas retraíbles por semestre, ver
+  // agruparProfesoresPorBloque / construirBloqueSemestreProfesores).
+  seccion.appendChild(
+    construirGrupoPills(
+      [
+        { valor: "alfabetico", texto: "Alfabético" },
+        { valor: "bloque", texto: "Por bloque" },
+      ],
+      estado.ordenComunidadProfesores,
+      (valor) => {
+        estado.ordenComunidadProfesores = valor;
+        renderizarComunidad();
+      }
+    )
+  );
+
   const todos = datos.profesores || [];
   const filtrados = todos
     .filter((p) => {
@@ -1792,6 +1937,10 @@ function construirSeccionProfesores() {
     vacio.textContent =
       todos.length === 0 ? "Todavía no tenés ningún profesor registrado." : "No hay profesores que coincidan con el filtro.";
     seccion.appendChild(vacio);
+  } else if (estado.ordenComunidadProfesores === "bloque") {
+    agruparProfesoresPorBloque(filtrados, datos).forEach(({ semestre, profesores }) => {
+      seccion.appendChild(construirBloqueSemestreProfesores(semestre, profesores, datos));
+    });
   } else {
     filtrados.forEach((p) => seccion.appendChild(construirTarjetaProfesor(p, datos)));
   }
