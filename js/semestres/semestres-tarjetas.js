@@ -33,7 +33,7 @@ import {
 } from "../core/schema.js";
 import { marcarCambioPendiente, actualizarIndicadorSync } from "../core/storage-sync.js";
 import { ESTADOS_MATERIA, abrirModalResolverConflicto, abrirModalResolverConflictoGenerico, agregarIndicadorConflicto } from "../plan/plan-vista-lista-tarjetas.js";
-import { abrirModalRequisito } from "../plan/plan-detalle.js";
+import { abrirModalRequisito, abrirModalAsignarProfesorDesdeHistorial } from "../plan/plan-detalle.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 
 estado.semestresExpandidos = estado.semestresExpandidos || new Map();
@@ -2927,6 +2927,166 @@ function construirBadgeEstadoSemestre(semestre, onCambiar) {
   return badge;
 }
 
+/**
+ * Tarjeta flotante de profesores vinculados a UNA materia matriculada
+ * puntual (mm.profesor_ids) — abierta desde el ícono 👤 en la tarjeta de
+ * materia. 2026-08-09 (pedido explícito, 3 respuestas de comportamiento
+ * confirmadas):
+ *  1) Sin profesor vinculado: dice "Ningún profe vinculado" + botón de
+ *     vincular (existente o nuevo profesor).
+ *  2) Con profesor(es): lista de solo lectura + botón "Editar" que recién
+ *     ahí habilita un botón de "Quitar" por profesor + la opción de
+ *     vincular otro más.
+ *  3) Nunca navega a Comunidad — se queda como vista aislada acá mismo.
+ * Reutiliza abrirModalAsignarProfesorDesdeHistorial (plan-detalle.js) para
+ * el paso de "elegir/crear profesor" — mismo flujo que ya usa el Historial
+ * de Plan de Estudios, solo con otro punto de entrada.
+ */
+function abrirPopoverProfesoresMateria(mm, materia, plan, semestre, onCambiar) {
+  document.querySelectorAll(".overlay-profesores-materia").forEach((el) => el.remove());
+  if (!Array.isArray(mm.profesor_ids)) mm.profesor_ids = [];
+
+  const overlay = document.createElement("div");
+  overlay.className = "overlay-profesores-materia";
+  overlay.style.cssText =
+    "position:fixed; inset:0; z-index:315; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; padding:16px;";
+
+  const caja = document.createElement("div");
+  caja.className = "glass-card stack";
+  caja.style.cssText = "max-width:380px; width:100%; padding:18px; max-height:75vh; overflow-y:auto;";
+  caja.addEventListener("click", (ev) => ev.stopPropagation());
+
+  let editando = false;
+
+  function refrescarVinculacion() {
+    // Al vincular/desvincular desde acá, la tarjeta de materia de fondo
+    // (Nota:/estado/etc.) no depende de esto, pero onCambiar() re-renderiza
+    // el semestre completo para que el resto de la UI quede consistente.
+    onCambiar();
+  }
+
+  function renderContenido() {
+    caja.innerHTML = "";
+
+    const encabezado = document.createElement("div");
+    const ids = Array.isArray(mm.profesor_ids) ? mm.profesor_ids : [];
+    const profesores = ids.map((id) => (estado.datos.profesores || []).find((p) => p.id === id)).filter(Boolean);
+    encabezado.innerHTML = `<h2 style="margin:0;">${profesores.length > 1 ? "Profesores" : "Profesor"}</h2><p class="muted" style="margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${aplicarFormatoTexto(
+      materia.nombre
+    )}</p>`;
+    caja.appendChild(encabezado);
+
+    const lista = document.createElement("div");
+    lista.className = "stack";
+    lista.style.cssText = "gap:6px; margin-top:10px;";
+
+    if (profesores.length === 0) {
+      const p = document.createElement("p");
+      p.className = "muted";
+      p.style.margin = "0";
+      p.textContent = "Ningún profe vinculado.";
+      lista.appendChild(p);
+    } else {
+      profesores.forEach((profesor) => {
+        const fila = document.createElement("div");
+        fila.className = "glass-panel row";
+        fila.style.cssText = "padding:8px 12px; align-items:center; gap:8px;";
+
+        const nombre = document.createElement("span");
+        nombre.style.cssText = "flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+        nombre.textContent = `👤 ${profesor.nombre}`;
+        fila.appendChild(nombre);
+
+        // El botón de Quitar solo aparece en modo Editar (pedido
+        // explícito: "un boton que diga editar y aho ya habilite botones
+        // de quitar") — la vista inicial es de solo lectura.
+        if (editando) {
+          const btnQuitar = document.createElement("button");
+          btnQuitar.type = "button";
+          btnQuitar.className = "btn-icono-quitar";
+          btnQuitar.title = "Desvincular a este profesor";
+          btnQuitar.setAttribute("aria-label", "Desvincular a este profesor");
+          btnQuitar.textContent = "🗑";
+          btnQuitar.addEventListener("click", () => {
+            mm.profesor_ids = mm.profesor_ids.filter((id) => id !== profesor.id);
+            sellarTimestamp(mm);
+            marcarCambioPendiente();
+            renderContenido();
+            refrescarVinculacion();
+          });
+          fila.appendChild(btnQuitar);
+        }
+        lista.appendChild(fila);
+      });
+    }
+    caja.appendChild(lista);
+
+    const filaBotones = document.createElement("div");
+    filaBotones.className = "row";
+    filaBotones.style.cssText = "gap:8px; flex-wrap:nowrap; margin-top:12px;";
+
+    if (profesores.length === 0) {
+      // Caso 1: sin nada vinculado — un solo botón de vincular.
+      const btnVincular = document.createElement("button");
+      btnVincular.type = "button";
+      btnVincular.className = "btn btn-primary";
+      btnVincular.style.flex = "1";
+      btnVincular.textContent = "Vincular profesor";
+      btnVincular.addEventListener("click", () => {
+        abrirModalAsignarProfesorDesdeHistorial(mm, materia, plan, semestre, () => {
+          renderContenido();
+          refrescarVinculacion();
+        });
+      });
+      filaBotones.appendChild(btnVincular);
+    } else if (!editando) {
+      // Caso 2 (vista inicial, solo lectura): botón "Editar".
+      const btnEditar = document.createElement("button");
+      btnEditar.type = "button";
+      btnEditar.className = "btn btn-secondary";
+      btnEditar.style.flex = "1";
+      btnEditar.textContent = "Editar";
+      btnEditar.addEventListener("click", () => {
+        editando = true;
+        renderContenido();
+      });
+      filaBotones.appendChild(btnEditar);
+    } else {
+      // Caso 2 (modo edición): además de los "Quitar" por fila, se puede
+      // vincular otro profesor más.
+      const btnAgregar = document.createElement("button");
+      btnAgregar.type = "button";
+      btnAgregar.className = "btn btn-secondary";
+      btnAgregar.style.flex = "1";
+      btnAgregar.textContent = "+ Agregar profesor";
+      btnAgregar.addEventListener("click", () => {
+        abrirModalAsignarProfesorDesdeHistorial(mm, materia, plan, semestre, () => {
+          renderContenido();
+          refrescarVinculacion();
+        });
+      });
+      filaBotones.appendChild(btnAgregar);
+    }
+
+    const btnCerrar = document.createElement("button");
+    btnCerrar.type = "button";
+    btnCerrar.className = "btn btn-secondary";
+    btnCerrar.style.flex = "1";
+    btnCerrar.textContent = "Cerrar";
+    btnCerrar.addEventListener("click", () => overlay.remove());
+    filaBotones.appendChild(btnCerrar);
+
+    caja.appendChild(filaBotones);
+  }
+
+  renderContenido();
+  overlay.appendChild(caja);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+  document.body.appendChild(overlay);
+}
+
 function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambiar) {
   const expandida = estado.semestresExpandidos.get(mm.id) || false;
 
@@ -3011,6 +3171,22 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
     notaRedondeadaLinea1 === null || notaRedondeadaLinea1 === undefined ? "—" : formatearNumero(notaRedondeadaLinea1Mostrada)
   }`;
   linea1.appendChild(spanNota);
+
+  // Punto pendiente (2026-08-09, confirmado): ícono 👤 clickeable, a la
+  // par de "Nota: X" en línea 1 (por encima de la flecha ▲▼, que vive en
+  // línea 2). Abre una tarjeta flotante de solo consulta con los
+  // profesores vinculados a ESTA materia matriculada puntual — nunca
+  // navega a Comunidad, todo se resuelve ahí mismo.
+  const iconoProfesor = document.createElement("span");
+  iconoProfesor.className = "materia-icono-profesor";
+  iconoProfesor.style.cssText = "flex-shrink:0; cursor:pointer; font-size:0.85rem; line-height:1;";
+  iconoProfesor.textContent = "👤";
+  iconoProfesor.title = "Profesores vinculados a esta materia";
+  iconoProfesor.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    abrirPopoverProfesoresMateria(mm, materia, plan, semestre, onCambiar);
+  });
+  linea1.appendChild(iconoProfesor);
 
   filaPrincipal.appendChild(linea1);
 
