@@ -36,6 +36,27 @@ import { ESTADOS_MATERIA, abrirModalResolverConflicto, abrirModalResolverConflic
 import { abrirModalRequisito, abrirModalAsignarProfesorDesdeHistorial } from "../plan/plan-detalle.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 
+/**
+ * 2026-08-09 (pedido explícito): tocar la tarjetita de un profesor DENTRO
+ * del popover de "Profesores vinculados a esta materia" (ver
+ * abrirPopoverProfesoresMateria) debe abrir una tarjeta flotante con toda
+ * su información + un botón "Ir" que navegue a Comunidad y lo resalte ahí.
+ * Esa lógica (construir la tarjeta con estrellas/badges/historial, cambiar
+ * de sección, expandir la tarjeta real y aplicar el destello) vive en
+ * comunidad.js, que ya tiene todos esos helpers — importarla directo desde
+ * acá crearía un ciclo (semestres.js -> semestres-tarjetas.js ->
+ * comunidad.js -> semestres.js, ver import de obtenerSemestresActuales en
+ * comunidad.js), así que se usa el mismo patrón de "registrar función" que
+ * ya existe entre plan-detalle.js y comunidad.js
+ * (registrarAbrirAltaProfesorPreseleccionado): comunidad.js llama a
+ * registrarAbrirTarjetaProfesorFlotante una vez, al arrancar
+ * (inicializarComunidad), y acá solo se dispara esa función ya inyectada.
+ */
+let _abrirTarjetaProfesorFlotante = null;
+function registrarAbrirTarjetaProfesorFlotante(fn) {
+  _abrirTarjetaProfesorFlotante = fn;
+}
+
 estado.semestresExpandidos = estado.semestresExpandidos || new Map();
 estado.criteriosExpandidos = estado.criteriosExpandidos || new Map();
 
@@ -2937,7 +2958,12 @@ function construirBadgeEstadoSemestre(semestre, onCambiar) {
  *  2) Con profesor(es): lista de solo lectura + botón "Editar" que recién
  *     ahí habilita un botón de "Quitar" por profesor + la opción de
  *     vincular otro más.
- *  3) Nunca navega a Comunidad — se queda como vista aislada acá mismo.
+ *  3) (ACTUALIZADO, mismo día): tocar la tarjetita de un profesor ya SÍ
+ *     puede llevar a Comunidad — abre una tarjeta flotante con toda su
+ *     info + botón "Ir" (ver _abrirTarjetaProfesorFlotante arriba), que
+ *     recién ahí hace la navegación real. Este popover en sí sigue sin
+ *     navegar solo — la decisión de ir a Comunidad queda del lado del
+ *     usuario, un toque más allá.
  * Reutiliza abrirModalAsignarProfesorDesdeHistorial (plan-detalle.js) para
  * el paso de "elegir/crear profesor" — mismo flujo que ya usa el Historial
  * de Plan de Estudios, solo con otro punto de entrada.
@@ -2990,7 +3016,14 @@ function abrirPopoverProfesoresMateria(mm, materia, plan, semestre, onCambiar) {
       profesores.forEach((profesor) => {
         const fila = document.createElement("div");
         fila.className = "glass-panel row";
-        fila.style.cssText = "padding:8px 12px; align-items:center; gap:8px;";
+        fila.style.cssText = "padding:8px 12px; align-items:center; gap:8px; cursor:pointer;";
+        fila.title = "Ver información de este profesor";
+        // Tocar la fila (fuera del botón Quitar) abre la tarjeta flotante
+        // con toda la info del profesor + botón "Ir" a Comunidad — ver
+        // _abrirTarjetaProfesorFlotante, inyectada desde comunidad.js.
+        fila.addEventListener("click", () => {
+          if (_abrirTarjetaProfesorFlotante) _abrirTarjetaProfesorFlotante(profesor);
+        });
 
         const nombre = document.createElement("span");
         nombre.style.cssText = "flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
@@ -3007,7 +3040,11 @@ function abrirPopoverProfesoresMateria(mm, materia, plan, semestre, onCambiar) {
           btnQuitar.title = "Desvincular a este profesor";
           btnQuitar.setAttribute("aria-label", "Desvincular a este profesor");
           btnQuitar.textContent = "🗑";
-          btnQuitar.addEventListener("click", () => {
+          btnQuitar.addEventListener("click", (ev) => {
+            // Sin esto, el click también dispara el listener de la fila
+            // (abrir la tarjeta flotante) justo cuando lo que se quiere es
+            // desvincular — se corta la propagación acá.
+            ev.stopPropagation();
             mm.profesor_ids = mm.profesor_ids.filter((id) => id !== profesor.id);
             sellarTimestamp(mm);
             marcarCambioPendiente();
@@ -3404,4 +3441,4 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEdita
   return card;
 }
 
-export { construirTarjetaSemestre, abrirModalTodosLosConflictos };
+export { construirTarjetaSemestre, abrirModalTodosLosConflictos, registrarAbrirTarjetaProfesorFlotante };
