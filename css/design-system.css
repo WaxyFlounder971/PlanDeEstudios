@@ -1646,6 +1646,17 @@ img, svg { max-width: 100%; }
    310, ver comunidad.js). */
 #modal-requisito { z-index: 320; }
 
+/* ---- Modal de Historial: se abre DESDE DENTRO de #modal-requisito (el
+   botón "Historial" vive en la tarjeta de detalle de materia, que no se
+   cierra al abrirlo) ----
+   2026-08-09 (bug reportado: "historial se abre DETRAS de la tarjeta de
+   materia"): #modal-historial no tenía z-index propio, así que caía en el
+   100 por defecto de .modal-overlay — muy por debajo del 320 forzado
+   arriba para #modal-requisito. Se sube por encima de ese 320 (mismo
+   criterio: el z-index más alto usado en JS es 315, ver
+   abrirPopoverProfesoresMateria en semestres-tarjetas.js). */
+#modal-historial { z-index: 325; }
+
 /* ---- Créditos/estado en tarjeta de materia: más compactos en móvil ---- */
 .materia-centro .badge, .materia-derecha .badge { font-size: 0.72rem; padding: 3px 9px; }
 
@@ -1815,6 +1826,14 @@ img, svg { max-width: 100%; }
    categoría de una materia) una vez termina. */
 .destello-resaltado {
   animation: destello-resaltado 1.6s ease-out;
+}
+/* Variante para la tarjeta de profesor en Comunidad, al navegar ahí desde
+   la tarjeta flotante de Semestres (ver navegarYResaltarProfesor en
+   comunidad.js) — pedido explícito de que el brillo dure 2s exactos en
+   este caso puntual, sin tocar el 1.6s que ya usan otros destellos de la
+   app (ej. navegarASemestre). */
+.com-tarjeta-profesor.destello-resaltado {
+  animation-duration: 2s;
 }
 @keyframes destello-resaltado {
   0% { box-shadow: 0 0 0 3px var(--accent-1), 0 0 28px 6px var(--accent-glow-1); }
