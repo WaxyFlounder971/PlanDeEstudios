@@ -1,8 +1,8 @@
 /* =========================================================================
-   COMUNIDAD — Parte 3b (Profesores completo)
+   COMUNIDAD — Parte 3c (Profesores + Compañeros completos)
    Responsable de: la sección #seccion-comunidad completa.
 
-   PROFESORES — ya incluye:
+   PROFESORES:
    - Alta / edición (nombre, correo, teléfono, materias que da como tags
      libres — de referencia general, no atadas a ningún semestre tuyo).
    - Tarjeta expandible: contacto, materias generales, link(s) a MisProfes
@@ -17,12 +17,29 @@
      calificación, volvería_a_llevar) en cualquier materia_matriculada que
      apuntara a él, para no dejar ids huérfanos sueltos.
 
-   COMPAÑEROS — todavía en esqueleto (alta real es la siguiente parte):
-   - Tabs, filtro Recomendados/No recomendados y listado ya funcionan.
-   - "+ Agregar compañero" todavía solo avisa que viene en la próxima parte.
+   COMPAÑEROS:
+   - Alta / edición (nombre, carné, teléfono —con importar opcional desde
+     los contactos del dispositivo vía Contacts Picker API, solo si el
+     navegador lo soporta—, switch Recomendado/No recomendado, nota libre).
+   - Tarjeta expandible: contacto, nota, materias compartidas vinculadas,
+     botones Vincular materia compartida / Editar / Eliminar.
+   - "Vincular materia compartida": a diferencia de profesores (1 vínculo
+     exclusivo por mm), acá un compañero puede compartir VARIAS materias —
+     el modal deja marcar/desmarcar varias de un semestre y persiste todo
+     junto al tocar "Listo".
+   - Eliminar un compañero no requiere limpieza en otro lado: sus materias
+     compartidas viven adentro del propio registro, no hay ningún mm que
+     apunte de vuelta a él.
    ========================================================================= */
 
-import { crearProfesor, obtenerHistorialProfesor, obtenerUniversidadesDeProfesor, sellarTimestamp } from "../core/schema.js";
+import {
+  crearCompanero,
+  crearProfesor,
+  obtenerHistorialProfesor,
+  obtenerMateriasCompartidasValidas,
+  obtenerUniversidadesDeProfesor,
+  sellarTimestamp,
+} from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
@@ -35,6 +52,7 @@ estado.tabComunidad = "profesores"; // "profesores" | "companeros"
 estado.filtroComunidadProfesores = "todos"; // "todos" | "tuyos" | "no-tuyos"
 estado.filtroComunidadCompaneros = "todos"; // "todos" | "recomendados" | "no-recomendados"
 estado.profesoresExpandidos = estado.profesoresExpandidos || new Set(); // ids con la tarjeta abierta
+estado.companerosExpandidos = estado.companerosExpandidos || new Set(); // ids con la tarjeta abierta
 
 // Escuela completa en misprofesores.com (no un profesor puntual — pedido
 // explícito: los profesores suelen estar duplicados/mal cargados ahí, así
@@ -68,6 +86,55 @@ function obtenerNombreMateria(mm) {
 
 function buscarProfesorVivoPorId(id) {
   return (estado.datos.profesores || []).find((p) => p.id === id) || null;
+}
+
+function buscarCompaneroVivoPorId(id) {
+  return (estado.datos.companeros || []).find((c) => c.id === id) || null;
+}
+
+/** Contacts Picker API (navigator.contacts) — soporte limitado, en la
+ *  práctica solo Chrome/Edge en Android con gesto del usuario. Es a
+ *  propósito una opción más, nunca la base de datos: si no está disponible
+ *  o el usuario cancela, el formulario sigue siendo 100% editable a mano. */
+function contactsPickerDisponible() {
+  return typeof navigator !== "undefined" && "contacts" in navigator && typeof window !== "undefined" && "ContactsManager" in window;
+}
+
+/** Abre el picker nativo, y si el usuario elige un contacto, rellena
+ *  inputTelefono (y inputNombre solo si venía vacío, para no pisar un
+ *  nombre que la persona ya haya escrito a mano). Dispara "input" a mano
+ *  en los campos tocados para que el modal los marque como "sucio" — mismo
+ *  mecanismo que usa el resto del formulario. */
+async function importarContactoTelefono(inputTelefono, inputNombre) {
+  if (!contactsPickerDisponible()) {
+    mostrarToast("Tu navegador no soporta importar contactos acá — escribilo a mano.");
+    return;
+  }
+  try {
+    const propiedadesSoportadas = await navigator.contacts.getProperties();
+    const propiedades = ["name", "tel"].filter((p) => propiedadesSoportadas.includes(p));
+    if (!propiedades.includes("tel")) {
+      mostrarToast("Tu navegador no comparte el teléfono de los contactos.");
+      return;
+    }
+    const seleccion = await navigator.contacts.select(propiedades, { multiple: false });
+    if (!seleccion || seleccion.length === 0) return; // el usuario cerró el picker sin elegir nada
+    const contacto = seleccion[0];
+    if (contacto.tel && contacto.tel.length > 0) {
+      inputTelefono.value = contacto.tel[0];
+      inputTelefono.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    if (inputNombre && !inputNombre.value.trim() && contacto.name && contacto.name.length > 0) {
+      inputNombre.value = contacto.name[0];
+      inputNombre.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  } catch (e) {
+    // AbortError = el usuario canceló el picker a propósito, no es un error real.
+    if (e && e.name !== "AbortError") {
+      console.warn("Comunidad: no se pudo importar el contacto:", e);
+      mostrarToast("No se pudo importar el contacto.");
+    }
+  }
 }
 
 /** Mismo patrón que buscarSemestreVivoPorId en semestres.js: releer por id
@@ -243,20 +310,29 @@ function construirTarjetaProfesor(profesor, datos) {
   return card;
 }
 
-function construirTarjetaCompanero(companero) {
+function construirTarjetaCompanero(companero, datos) {
   const recomendado = companero.lista !== "blacklist";
+  const expandido = estado.companerosExpandidos.has(companero.id);
 
   const card = document.createElement("div");
   card.className = "glass-panel stack";
-  card.style.gap = "4px";
+  card.style.cssText = "gap:6px; cursor:pointer;";
 
   const encabezado = document.createElement("div");
   encabezado.className = "row";
   encabezado.style.cssText = "justify-content:space-between; align-items:center; gap:8px;";
   encabezado.innerHTML = `
     <strong>${escaparHtml(companero.nombre_completo)}</strong>
-    <span class="muted" style="font-size:11px; white-space:nowrap;">${recomendado ? "✓ Recomendado" : "✕ No recomendado"}</span>
+    <span style="display:flex; align-items:center; gap:6px;">
+      <span class="muted" style="font-size:11px; white-space:nowrap;">${recomendado ? "✓ Recomendado" : "✕ No recomendado"}</span>
+      <span class="muted" style="font-size:12px;">${expandido ? "▲" : "▼"}</span>
+    </span>
   `;
+  encabezado.addEventListener("click", () => {
+    if (expandido) estado.companerosExpandidos.delete(companero.id);
+    else estado.companerosExpandidos.add(companero.id);
+    renderizarComunidad();
+  });
   card.appendChild(encabezado);
 
   const datosContacto = [companero.carnet, companero.telefono].filter(Boolean);
@@ -268,12 +344,73 @@ function construirTarjetaCompanero(companero) {
     card.appendChild(contacto);
   }
 
+  if (!expandido) return card;
+
   if (companero.nota) {
     const nota = document.createElement("p");
     nota.style.margin = "0";
     nota.textContent = companero.nota;
     card.appendChild(nota);
   }
+
+  const compartidas = obtenerMateriasCompartidasValidas(companero, datos);
+  const bloqueCompartidas = document.createElement("div");
+  bloqueCompartidas.className = "stack";
+  bloqueCompartidas.style.gap = "4px";
+  if (compartidas.length === 0) {
+    const p = document.createElement("p");
+    p.className = "muted";
+    p.style.margin = "0";
+    p.textContent = "Todavía no lo vinculaste a ninguna materia compartida.";
+    bloqueCompartidas.appendChild(p);
+  } else {
+    compartidas.forEach(({ mm, semestre, materia }) => {
+      const fila = document.createElement("p");
+      fila.style.margin = "0";
+      fila.innerHTML = `<strong>${escaparHtml(materia ? materia.nombre : "Materia eliminada")}</strong> <span class="muted">— ${escaparHtml(
+        semestre.nombre
+      )}</span>`;
+      bloqueCompartidas.appendChild(fila);
+    });
+  }
+  card.appendChild(bloqueCompartidas);
+
+  const filaAcciones = document.createElement("div");
+  filaAcciones.className = "row";
+  filaAcciones.style.gap = "8px";
+
+  const btnVincular = document.createElement("button");
+  btnVincular.type = "button";
+  btnVincular.className = "btn btn-secondary";
+  btnVincular.style.flex = "1";
+  btnVincular.textContent = "Vincular materia compartida";
+  btnVincular.addEventListener("click", (e) => {
+    e.stopPropagation();
+    abrirModalVincularMateriaCompanero(companero);
+  });
+  filaAcciones.appendChild(btnVincular);
+
+  const btnEditar = document.createElement("button");
+  btnEditar.type = "button";
+  btnEditar.className = "btn btn-secondary";
+  btnEditar.textContent = "Editar";
+  btnEditar.addEventListener("click", (e) => {
+    e.stopPropagation();
+    abrirModalAltaCompanero(companero);
+  });
+  filaAcciones.appendChild(btnEditar);
+
+  const btnBorrar = document.createElement("button");
+  btnBorrar.type = "button";
+  btnBorrar.className = "btn btn-secondary";
+  btnBorrar.textContent = "Eliminar";
+  btnBorrar.addEventListener("click", (e) => {
+    e.stopPropagation();
+    abrirConfirmacionBorrarCompanero(companero);
+  });
+  filaAcciones.appendChild(btnBorrar);
+
+  card.appendChild(filaAcciones);
 
   return card;
 }
@@ -717,6 +854,339 @@ function abrirConfirmacionBorrarProfesor(profesor) {
   });
 }
 
+/* ===================== Modal: alta / edición de compañero ===================== */
+
+function abrirModalAltaCompanero(companeroExistente = null) {
+  document.querySelectorAll(".overlay-alta-companero").forEach((el) => el.remove());
+  const esEdicion = !!companeroExistente;
+
+  const overlay = document.createElement("div");
+  overlay.className = "overlay-alta-companero";
+  overlay.style.cssText =
+    "position:fixed; inset:0; z-index:300; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; padding:16px;";
+
+  const caja = document.createElement("div");
+  caja.className = "glass-card stack";
+  caja.style.cssText = "max-width:480px; width:100%; padding:18px; max-height:85vh; overflow-y:auto;";
+  caja.addEventListener("click", (ev) => ev.stopPropagation());
+
+  let sucio = false;
+  caja.addEventListener("input", () => {
+    sucio = true;
+  });
+
+  function cerrar() {
+    if (!sucio) {
+      overlay.remove();
+      return;
+    }
+    abrirConfirmacion({
+      titulo: "¿Cerrar sin guardar?",
+      mensaje: `Vas a perder los datos que ingresaste para ${esEdicion ? "este compañero" : "el nuevo compañero"}.`,
+      textoConfirmar: "Cerrar sin guardar",
+      onConfirmar: () => overlay.remove(),
+    });
+  }
+
+  caja.innerHTML = `<h2 style="margin:0;">${esEdicion ? "Editar compañero" : "Agregar compañero"}</h2>`;
+
+  const bloqueNombre = document.createElement("div");
+  bloqueNombre.innerHTML = `<span class="form-label">Nombre</span>`;
+  const inputNombre = document.createElement("input");
+  inputNombre.type = "text";
+  inputNombre.className = "form-input";
+  inputNombre.placeholder = "Nombre completo";
+  inputNombre.value = esEdicion ? companeroExistente.nombre_completo : "";
+  bloqueNombre.appendChild(inputNombre);
+  caja.appendChild(bloqueNombre);
+
+  const bloqueCarnet = document.createElement("div");
+  bloqueCarnet.innerHTML = `<span class="form-label">Carné (opcional)</span>`;
+  const inputCarnet = document.createElement("input");
+  inputCarnet.type = "text";
+  inputCarnet.className = "form-input";
+  inputCarnet.placeholder = "Ej. 2023123456";
+  inputCarnet.value = esEdicion ? companeroExistente.carnet || "" : "";
+  bloqueCarnet.appendChild(inputCarnet);
+  caja.appendChild(bloqueCarnet);
+
+  const bloqueTelefono = document.createElement("div");
+  bloqueTelefono.innerHTML = `<span class="form-label">Teléfono (opcional)</span>`;
+  const filaTelefono = document.createElement("div");
+  filaTelefono.className = "row";
+  filaTelefono.style.gap = "6px";
+  const inputTelefono = document.createElement("input");
+  inputTelefono.type = "tel";
+  inputTelefono.className = "form-input";
+  inputTelefono.placeholder = "8888-8888";
+  inputTelefono.style.flex = "1";
+  inputTelefono.value = esEdicion ? companeroExistente.telefono || "" : "";
+  filaTelefono.appendChild(inputTelefono);
+  // El botón de importar solo aparece si el navegador lo soporta de verdad
+  // (Contacts Picker API, en la práctica Chrome/Edge Android) — es un atajo
+  // opcional, nunca la única forma de cargar el teléfono.
+  if (contactsPickerDisponible()) {
+    const btnImportar = document.createElement("button");
+    btnImportar.type = "button";
+    btnImportar.className = "btn btn-secondary";
+    btnImportar.textContent = "Importar";
+    btnImportar.addEventListener("click", () => importarContactoTelefono(inputTelefono, inputNombre));
+    filaTelefono.appendChild(btnImportar);
+  }
+  bloqueTelefono.appendChild(filaTelefono);
+  caja.appendChild(bloqueTelefono);
+
+  const bloqueLista = document.createElement("div");
+  bloqueLista.innerHTML = `<span class="form-label">¿Lo recomendás para volver a trabajar juntos?</span>`;
+  const contenedorLista = document.createElement("div");
+  let listaValor = esEdicion ? companeroExistente.lista : "whitelist"; // "whitelist" | "blacklist" — switch sin neutral
+  function repintarLista() {
+    contenedorLista.innerHTML = "";
+    contenedorLista.appendChild(
+      construirGrupoPills(
+        [
+          { valor: "whitelist", texto: "✓ Recomendado" },
+          { valor: "blacklist", texto: "✕ No recomendado" },
+        ],
+        listaValor,
+        (valor) => {
+          listaValor = valor;
+          sucio = true;
+          repintarLista();
+        }
+      )
+    );
+  }
+  repintarLista();
+  bloqueLista.appendChild(contenedorLista);
+  caja.appendChild(bloqueLista);
+
+  const bloqueNota = document.createElement("div");
+  bloqueNota.innerHTML = `<span class="form-label">Nota (opcional)</span>`;
+  const inputNota = document.createElement("textarea");
+  inputNota.className = "form-input";
+  inputNota.rows = 3;
+  inputNota.placeholder = "Ej. Muy responsable con las entregas, buena onda para dividir el trabajo...";
+  inputNota.value = esEdicion ? companeroExistente.nota || "" : "";
+  bloqueNota.appendChild(inputNota);
+  caja.appendChild(bloqueNota);
+
+  const error = document.createElement("p");
+  error.className = "muted oculto";
+  error.style.color = "var(--color-danger)";
+  caja.appendChild(error);
+
+  const filaBotones = document.createElement("div");
+  filaBotones.className = "row";
+  filaBotones.style.justifyContent = "flex-end";
+  const btnCancelar = document.createElement("button");
+  btnCancelar.type = "button";
+  btnCancelar.className = "btn btn-secondary";
+  btnCancelar.textContent = "Cancelar";
+  btnCancelar.addEventListener("click", cerrar);
+  filaBotones.appendChild(btnCancelar);
+
+  const btnGuardar = document.createElement("button");
+  btnGuardar.type = "button";
+  btnGuardar.className = "btn btn-primary";
+  btnGuardar.textContent = esEdicion ? "Guardar cambios" : "Guardar";
+  btnGuardar.addEventListener("click", () => {
+    const nombre_completo = inputNombre.value.trim();
+    if (!nombre_completo) {
+      error.textContent = "El nombre es obligatorio.";
+      error.classList.remove("oculto");
+      return;
+    }
+    const carnet = inputCarnet.value.trim();
+    const telefono = inputTelefono.value.trim();
+    const nota = inputNota.value.trim();
+
+    if (esEdicion) {
+      const vivo = buscarCompaneroVivoPorId(companeroExistente.id);
+      if (!vivo) {
+        mostrarToast("Este compañero se eliminó desde otro dispositivo — no se pudo guardar");
+        overlay.remove();
+        renderizarComunidad();
+        return;
+      }
+      vivo.nombre_completo = nombre_completo;
+      vivo.carnet = carnet || null;
+      vivo.telefono = telefono || null;
+      vivo.lista = listaValor;
+      vivo.nota = nota;
+      sellarTimestamp(vivo);
+    } else {
+      estado.datos.companeros = estado.datos.companeros || [];
+      estado.datos.companeros.push(
+        crearCompanero({ nombre_completo, carnet, telefono, lista: listaValor, nota, materias_compartidas: [] })
+      );
+    }
+    marcarCambioPendiente();
+    overlay.remove();
+    renderizarComunidad();
+  });
+  filaBotones.appendChild(btnGuardar);
+  caja.appendChild(filaBotones);
+
+  overlay.appendChild(caja);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay && !sucio) overlay.remove();
+  });
+  document.body.appendChild(overlay);
+}
+
+/* ===================== Modal: vincular materia compartida con un compañero ===================== */
+
+/**
+ * A diferencia del vínculo con un profesor (1 profesor por mm, campo
+ * exclusivo), un compañero puede compartir VARIAS materias con vos — acá
+ * cada clic en una materia la agrega/quita de companero.materias_compartidas
+ * al toque (no hay un paso de "Guardar" separado para la selección en sí,
+ * solo para cerrar el modal), así se pueden marcar varias sin reabrir.
+ */
+function abrirModalVincularMateriaCompanero(companero) {
+  document.querySelectorAll(".overlay-vincular-companero").forEach((el) => el.remove());
+
+  const semestres = [...obtenerSemestresActuales(), ...obtenerSemestresPasados()];
+
+  const overlay = document.createElement("div");
+  overlay.className = "overlay-vincular-companero";
+  overlay.style.cssText =
+    "position:fixed; inset:0; z-index:300; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; padding:16px;";
+
+  const caja = document.createElement("div");
+  caja.className = "glass-card stack";
+  caja.style.cssText = "max-width:480px; width:100%; padding:18px; max-height:85vh; overflow-y:auto;";
+  caja.addEventListener("click", (ev) => ev.stopPropagation());
+
+  caja.innerHTML = `<h2 style="margin:0;">Vincular materia compartida</h2><p class="muted" style="margin:0;">${escaparHtml(
+    companero.nombre_completo
+  )}</p>`;
+
+  if (semestres.length === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.textContent = "Todavía no tenés ningún semestre registrado.";
+    caja.appendChild(vacio);
+    const btnCerrar = document.createElement("button");
+    btnCerrar.type = "button";
+    btnCerrar.className = "btn btn-secondary btn-block";
+    btnCerrar.textContent = "Cerrar";
+    btnCerrar.addEventListener("click", () => overlay.remove());
+    caja.appendChild(btnCerrar);
+    overlay.appendChild(caja);
+    document.body.appendChild(overlay);
+    return;
+  }
+
+  // Set en memoria, inicializado con lo que ya tenía guardado — se persiste
+  // recién al tocar "Listo", como una sola escritura en vez de una por clic.
+  const seleccionActual = new Set(companero.materias_compartidas || []);
+
+  const bloqueSemestre = document.createElement("div");
+  bloqueSemestre.innerHTML = `<span class="form-label">Semestre</span>`;
+  const selectSemestre = document.createElement("select");
+  selectSemestre.className = "form-input";
+  semestres.forEach((s) => {
+    const opt = document.createElement("option");
+    opt.value = s.id;
+    opt.textContent = s.nombre;
+    selectSemestre.appendChild(opt);
+  });
+  bloqueSemestre.appendChild(selectSemestre);
+  caja.appendChild(bloqueSemestre);
+
+  const bloqueMaterias = document.createElement("div");
+  bloqueMaterias.innerHTML = `<span class="form-label">Materias de ese semestre (tocá para marcar/desmarcar)</span>`;
+  const contenedorMaterias = document.createElement("div");
+  contenedorMaterias.style.cssText = "display:flex; flex-direction:column; gap:6px;";
+  bloqueMaterias.appendChild(contenedorMaterias);
+  caja.appendChild(bloqueMaterias);
+
+  function repintarMaterias(semestreId) {
+    contenedorMaterias.innerHTML = "";
+    const semestre = semestres.find((s) => s.id === semestreId);
+    const mms = (semestre && semestre.materias_matriculadas) || [];
+    if (mms.length === 0) {
+      const p = document.createElement("p");
+      p.className = "muted";
+      p.style.margin = "0";
+      p.textContent = "Este semestre no tiene materias matriculadas.";
+      contenedorMaterias.appendChild(p);
+      return;
+    }
+    mms.forEach((mm) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      const marcada = seleccionActual.has(mm.id);
+      btn.className = "pill-item" + (marcada ? " active" : "");
+      btn.style.cssText = "text-align:left; width:100%;";
+      btn.textContent = (marcada ? "✓ " : "") + obtenerNombreMateria(mm);
+      btn.addEventListener("click", () => {
+        if (marcada) seleccionActual.delete(mm.id);
+        else seleccionActual.add(mm.id);
+        repintarMaterias(semestreId);
+      });
+      contenedorMaterias.appendChild(btn);
+    });
+  }
+  repintarMaterias(selectSemestre.value);
+  selectSemestre.addEventListener("change", () => repintarMaterias(selectSemestre.value));
+
+  const filaBotones = document.createElement("div");
+  filaBotones.className = "row";
+  filaBotones.style.justifyContent = "flex-end";
+
+  const btnListo = document.createElement("button");
+  btnListo.type = "button";
+  btnListo.className = "btn btn-primary";
+  btnListo.textContent = "Listo";
+  btnListo.addEventListener("click", () => {
+    const vivo = buscarCompaneroVivoPorId(companero.id);
+    if (!vivo) {
+      mostrarToast("Este compañero se eliminó desde otro dispositivo — no se pudo guardar");
+      overlay.remove();
+      renderizarComunidad();
+      return;
+    }
+    vivo.materias_compartidas = Array.from(seleccionActual);
+    sellarTimestamp(vivo);
+    marcarCambioPendiente();
+    overlay.remove();
+    renderizarComunidad();
+  });
+  filaBotones.appendChild(btnListo);
+  caja.appendChild(filaBotones);
+
+  overlay.appendChild(caja);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.remove(); // acá no hay "sucio": cada clic ya escribe en seleccionActual, y solo se persiste de verdad al tocar "Listo"
+  });
+  document.body.appendChild(overlay);
+}
+
+/* ===================== Borrar compañero ===================== */
+
+function abrirConfirmacionBorrarCompanero(companero) {
+  abrirConfirmacion({
+    titulo: "Eliminar compañero",
+    mensaje: `¿Seguro que querés eliminar a "${companero.nombre_completo}"?`,
+    textoConfirmar: "Eliminar definitivamente",
+    onConfirmar: () => {
+      // A diferencia del profesor, materias_compartidas vive DENTRO del
+      // propio companero (no hay un mm.companero_id que limpiar en otro
+      // lado) — borrar el registro alcanza, no queda ninguna referencia
+      // huérfana en otra colección.
+      estado.datos.companeros = (estado.datos.companeros || []).filter((c) => c.id !== companero.id);
+      estado.datos._eliminados_companeros = estado.datos._eliminados_companeros || [];
+      estado.datos._eliminados_companeros.push({ id: companero.id, eliminadoEn: Date.now() });
+      estado.companerosExpandidos.delete(companero.id);
+      marcarCambioPendiente();
+      renderizarComunidad();
+    },
+  });
+}
+
 /* ===================== Secciones por tab ===================== */
 
 function construirSeccionProfesores() {
@@ -804,15 +1274,14 @@ function construirSeccionCompaneros() {
       todos.length === 0 ? "Todavía no tenés ningún compañero registrado." : "No hay compañeros que coincidan con el filtro.";
     seccion.appendChild(vacio);
   } else {
-    filtrados.forEach((c) => seccion.appendChild(construirTarjetaCompanero(c)));
+    filtrados.forEach((c) => seccion.appendChild(construirTarjetaCompanero(c, datos)));
   }
 
   const btnAgregar = document.createElement("button");
   btnAgregar.type = "button";
   btnAgregar.className = "btn btn-primary btn-block";
   btnAgregar.textContent = "+ Agregar compañero";
-  // TODO (siguiente parte de Comunidad): abrir el modal de alta real.
-  btnAgregar.addEventListener("click", () => mostrarToast("El alta de compañeros viene en la próxima parte 🙂"));
+  btnAgregar.addEventListener("click", () => abrirModalAltaCompanero());
   seccion.appendChild(btnAgregar);
 
   return seccion;
