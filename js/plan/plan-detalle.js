@@ -23,7 +23,6 @@
    ========================================================================= */
 
 import {
-  crearProfesor,
   obtenerEstadoEfectivoMateria,
   obtenerEstadoEfectivoSemestre,
   obtenerIntentosMateria,
@@ -35,6 +34,20 @@ import { aplicarFormatoTexto, estiloBadgeCategoria, formatearHoras, formatearHor
 import { agregarLongPress } from "../ui/componentes.js";
 import { buscarMateriaPorCodigoEnPlanes } from "./plan-esquema.js";
 import { ESTADOS_MATERIA, abrirMenuRapidoCategoria, materiaDisponible, obtenerMateriasQueDesbloquea } from "./plan-vista-lista-tarjetas.js";
+import { navegarASemestre } from "../semestres/semestres.js";
+
+/** Formatea una nota numérica con máximo 2 decimales SIN redondear (trunca,
+ *  no redondea — 8.666 debe mostrar "8.66", no "8.67"). Duplicado a
+ *  propósito de comunidad.js (misma lógica) — no se importa de ahí porque
+ *  comunidad.js ya importa de este archivo (abrirModalRequisito) y una
+ *  importación en el otro sentido crearía un ciclo. */
+function formatearNotaTruncada(valor) {
+  const numero = Number(valor);
+  if (!Number.isFinite(numero)) return String(valor);
+  const [enteros, decimales = ""] = numero.toFixed(10).split(".");
+  const decimalesTruncados = decimales.slice(0, 2).replace(/0+$/, "");
+  return decimalesTruncados ? `${enteros}.${decimalesTruncados}` : enteros;
+}
 
 /** Requisitos/correquisitos agrupados: "o" dentro de un grupo, grupos en líneas separadas ("y" implícito). */
 
@@ -685,20 +698,41 @@ function construirFilaIntentoHistorial(materia, plan, semestre, mm) {
     ? { texto: "Reprobada", badge: "badge-danger" }
     : { texto: "Sin cerrar", badge: "badge-neutral" };
 
+  // Pedido explícito (2026-08-09): "Semestre" y "Nota Final" al 150% del
+  // tamaño de letra normal, y clic en el nombre del semestre navega a
+  // Semestres con scroll suave hasta esa tarjeta (navegarASemestre ya se
+  // encarga del scroll animado — ver semestres.js).
   const encabezado = document.createElement("div");
   encabezado.className = "row";
   encabezado.style.justifyContent = "space-between";
-  encabezado.innerHTML = `
-    <strong>${aplicarFormatoTexto(semestre.nombre)}</strong>
-    <span class="badge ${infoEstado.badge}">${infoEstado.texto}</span>
-  `;
+  encabezado.style.alignItems = "center";
+
+  const nombreSemestre = document.createElement("strong");
+  nombreSemestre.style.cssText =
+    "font-size:1.5em; cursor:pointer; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+  nombreSemestre.textContent = aplicarFormatoTexto(semestre.nombre);
+  nombreSemestre.title = "Ir a este semestre";
+  nombreSemestre.addEventListener("click", (e) => {
+    e.stopPropagation();
+    document.getElementById("modal-requisito").classList.add("oculto");
+    document.getElementById("modal-historial").classList.add("oculto");
+    navegarASemestre(semestre.id);
+  });
+  encabezado.appendChild(nombreSemestre);
+
+  const badgeEstado = document.createElement("span");
+  badgeEstado.className = `badge ${infoEstado.badge}`;
+  badgeEstado.style.flexShrink = "0";
+  badgeEstado.textContent = infoEstado.texto;
+  encabezado.appendChild(badgeEstado);
+
   fila.appendChild(encabezado);
 
   if (typeof mm.nota_final === "number") {
     const notaP = document.createElement("p");
     notaP.className = "muted";
-    notaP.style.margin = "0";
-    notaP.textContent = `Nota final: ${mm.nota_final}`;
+    notaP.style.cssText = "margin:0; font-size:1.5em;";
+    notaP.textContent = `Nota final: ${formatearNotaTruncada(mm.nota_final)}`;
     fila.appendChild(notaP);
   }
 
@@ -708,15 +742,20 @@ function construirFilaIntentoHistorial(materia, plan, semestre, mm) {
 }
 
 /**
- * Bloque de profesor DENTRO de un intento del historial. 2026-08-09 (pedido
- * explícito, "permitir mas de un profesor por materia vinculado"):
- * mm.profesor_ids es un arreglo — se muestra la lista completa (uno por
- * línea), cada uno con su propio botón "Quitar" (se elige cuál sacar, no
- * limpia todos de una), y el selector de abajo ahora AGREGA un profesor más
- * a la lista en vez de reemplazarla — se sigue mostrando aunque ya haya
- * alguno vinculado, para poder sumar otro. Calificación (1-10, opcional) y
- * ¿volvería a llevar? (Sí/No/— neutro, opcional) siguen siendo un dato de
- * la MATERIA cursada (mm), no de cada profesor puntual — sin cambios ahí.
+ * Bloque de profesor DENTRO de un intento del historial. 2026-08-09
+ * (pedido explícito, confirmado): "Calificación" y "¿Volverías a
+ * llevarlo?" se eliminan por completo de acá — esa información ya se
+ * guarda POR PROFESOR (profesor.calificacion / profesor.volveria_a_llevar,
+ * ver comunidad.js), así que mm.calificacion_profesor y
+ * mm.volveria_a_llevar_profesor quedan como campos legados sin UI (ya se
+ * limpian defensivamente en otros lados cuando se desvincula el último
+ * profesor de una mm — ver comunidad.js).
+ *
+ * El viejo <select> nativo "Agregar otro profesor" también se elimina —
+ * reemplazado por un botón discreto "Vincular profe"/"+ Agregar profesor"
+ * que abre abrirModalAsignarProfesorDesdeHistorial: una ventana con
+ * tarjetitas de profesores existentes + "+ Nuevo profesor" (que abre el
+ * alta de Comunidad con esta materia/semestre ya preseleccionados).
  */
 function construirBloqueProfesorIntento(materia, plan, semestre, mm) {
   const cont = document.createElement("div");
@@ -734,13 +773,23 @@ function construirBloqueProfesorIntento(materia, plan, semestre, mm) {
   profesoresVinculados.forEach((profesor) => {
     const filaProfesor = document.createElement("div");
     filaProfesor.className = "row";
-    filaProfesor.style.justifyContent = "space-between";
-    filaProfesor.innerHTML = `<span>👤 ${profesor.nombre}</span>`;
+    filaProfesor.style.cssText = "justify-content:space-between; align-items:center; gap:8px;";
 
+    const nombreProfesor = document.createElement("span");
+    // Mismo tamaño que "Nota Final" (pedido explícito) + truncado en vez
+    // de saltar de línea cuando el nombre es largo.
+    nombreProfesor.style.cssText =
+      "font-size:1.5em; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+    nombreProfesor.textContent = `👤 ${profesor.nombre}`;
+    filaProfesor.appendChild(nombreProfesor);
+
+    // Botón discreto (ícono), NO el btn btn-secondary ancho de antes.
     const btnQuitar = document.createElement("button");
     btnQuitar.type = "button";
-    btnQuitar.className = "btn btn-secondary";
-    btnQuitar.textContent = "Quitar";
+    btnQuitar.className = "btn-icono-quitar";
+    btnQuitar.title = "Desvincular a este profesor";
+    btnQuitar.setAttribute("aria-label", "Desvincular a este profesor");
+    btnQuitar.textContent = "🗑";
     btnQuitar.addEventListener("click", () => {
       // Solo saca a ESTE profesor puntual — los demás vinculados a la
       // misma materia quedan intactos.
@@ -757,111 +806,117 @@ function construirBloqueProfesorIntento(materia, plan, semestre, mm) {
     cont.appendChild(filaProfesor);
   });
 
-  // ---------- Selector para agregar otro profesor ----------
-  // A propósito se muestra SIEMPRE (haya o no alguno ya vinculado) — ahora
-  // se permite más de uno por materia.
-  const fila = document.createElement("div");
-  fila.className = "row";
-
-  const select = document.createElement("select");
-  select.className = "form-select";
-  select.innerHTML = `<option value="">${profesoresVinculados.length === 0 ? "Asignar profesor…" : "Agregar otro profesor…"}</option>`;
-  (estado.datos.profesores || [])
-    .slice()
-    .sort((a, b) => a.nombre.localeCompare(b.nombre))
-    .filter((p) => !mm.profesor_ids.includes(p.id)) // ya vinculados no se repiten en la lista
-    .forEach((p) => {
-      const opt = document.createElement("option");
-      opt.value = p.id;
-      opt.textContent = p.nombre;
-      select.appendChild(opt);
-    });
-  const optNuevo = document.createElement("option");
-  optNuevo.value = "__nuevo__";
-  optNuevo.textContent = "+ Crear profesor nuevo…";
-  select.appendChild(optNuevo);
-
-  select.addEventListener("change", () => {
-    if (!select.value) return;
-    let idNuevo;
-    if (select.value === "__nuevo__") {
-      const nombre = (prompt("Nombre del nuevo profesor:") || "").trim();
-      if (!nombre) return;
-      const nuevo = crearProfesor({ nombre, materias: [], correo: null, telefono: null });
-      estado.datos.profesores.push(nuevo);
-      idNuevo = nuevo.id;
-    } else {
-      idNuevo = select.value;
-    }
-    if (!mm.profesor_ids.includes(idNuevo)) mm.profesor_ids.push(idNuevo);
-    sellarTimestamp(mm);
-    marcarCambioPendiente();
-    reRenderizar();
+  // ---------- Botón discreto para vincular (el primero) o agregar otro ----------
+  const btnVincular = document.createElement("button");
+  btnVincular.type = "button";
+  btnVincular.className = "btn btn-secondary btn-block";
+  btnVincular.style.marginTop = profesoresVinculados.length > 0 ? "6px" : "0";
+  btnVincular.textContent = profesoresVinculados.length === 0 ? "Vincular profe" : "+ Agregar profesor";
+  btnVincular.addEventListener("click", () => {
+    abrirModalAsignarProfesorDesdeHistorial(mm, materia, plan, semestre, reRenderizar);
   });
-
-  fila.appendChild(select);
-  cont.appendChild(fila);
-
-  // Calificación 1-10 (opcional — null = sin calificar).
-  const filaCalificacion = document.createElement("div");
-  filaCalificacion.className = "row";
-  const etiquetaCalificacion = document.createElement("span");
-  etiquetaCalificacion.className = "muted";
-  etiquetaCalificacion.textContent = "Calificación:";
-  filaCalificacion.appendChild(etiquetaCalificacion);
-  const inputCalificacion = document.createElement("input");
-  inputCalificacion.type = "number";
-  inputCalificacion.className = "form-input";
-  inputCalificacion.style.width = "70px";
-  inputCalificacion.min = "1";
-  inputCalificacion.max = "10";
-  inputCalificacion.placeholder = "—";
-  if (mm.calificacion_profesor !== null && mm.calificacion_profesor !== undefined) {
-    inputCalificacion.value = mm.calificacion_profesor;
-  }
-  inputCalificacion.addEventListener("change", () => {
-    const valor = inputCalificacion.value === "" ? null : Math.min(10, Math.max(1, Number(inputCalificacion.value) || 1));
-    mm.calificacion_profesor = valor;
-    sellarTimestamp(mm);
-    marcarCambioPendiente();
-  });
-  filaCalificacion.appendChild(inputCalificacion);
-  cont.appendChild(filaCalificacion);
-
-  // ¿Volvería a llevar? — 3 estados reales: Sí / No / — (neutro, sin
-  // contestar), nunca forzado a true/false (a diferencia del switch
-  // whitelist/blacklist de Compañero, que sí es obligatorio de 2 estados).
-  const filaVolveria = document.createElement("div");
-  filaVolveria.className = "row";
-  const etiquetaVolveria = document.createElement("span");
-  etiquetaVolveria.className = "muted";
-  etiquetaVolveria.textContent = "¿Volvería a llevarlo?";
-  filaVolveria.appendChild(etiquetaVolveria);
-
-  const opcionesVolveria = [
-    { valor: true, texto: "Sí" },
-    { valor: false, texto: "No" },
-    { valor: null, texto: "—" },
-  ];
-  const grupoVolveria = document.createElement("div");
-  grupoVolveria.className = "pill-group";
-  opcionesVolveria.forEach((op) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "pill-item" + (mm.volveria_a_llevar_profesor === op.valor ? " active" : "");
-    btn.textContent = op.texto;
-    btn.addEventListener("click", () => {
-      mm.volveria_a_llevar_profesor = op.valor;
-      sellarTimestamp(mm);
-      marcarCambioPendiente();
-      reRenderizar();
-    });
-    grupoVolveria.appendChild(btn);
-  });
-  filaVolveria.appendChild(grupoVolveria);
-  cont.appendChild(filaVolveria);
+  cont.appendChild(btnVincular);
 
   return cont;
+}
+
+/**
+ * Ventana de selección de profesor para vincular a esta materia/semestre
+ * puntual (mm), reemplazo del viejo <select> nativo. Muestra los
+ * profesores existentes como tarjetitas clickeables (elegir = vincular al
+ * toque, sin botón de confirmar aparte) + "+ Nuevo profesor", que abre el
+ * alta de profesor de Comunidad con esta materia ya preseleccionada (ver
+ * registrarAbrirAltaProfesorPreseleccionado más abajo — evita un import
+ * circular con comunidad.js).
+ */
+let _abrirAltaProfesorPreseleccionado = null;
+function registrarAbrirAltaProfesorPreseleccionado(fn) {
+  _abrirAltaProfesorPreseleccionado = fn;
+}
+
+function abrirModalAsignarProfesorDesdeHistorial(mm, materia, plan, semestre, onVinculado) {
+  document.querySelectorAll(".overlay-asignar-profesor-historial").forEach((el) => el.remove());
+
+  const overlay = document.createElement("div");
+  overlay.className = "overlay-asignar-profesor-historial";
+  overlay.style.cssText =
+    "position:fixed; inset:0; z-index:330; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; padding:16px;";
+
+  const caja = document.createElement("div");
+  caja.className = "glass-card stack";
+  caja.style.cssText = "max-width:420px; width:100%; padding:18px; max-height:80vh; overflow-y:auto;";
+  caja.addEventListener("click", (ev) => ev.stopPropagation());
+
+  caja.innerHTML = `<h2 style="margin:0;">Vincular profesor</h2><p class="muted" style="margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${aplicarFormatoTexto(
+    materia.nombre
+  )} — ${aplicarFormatoTexto(semestre.nombre)}</p>`;
+
+  const yaVinculados = Array.isArray(mm.profesor_ids) ? mm.profesor_ids : [];
+  const disponibles = (estado.datos.profesores || [])
+    .filter((p) => !yaVinculados.includes(p.id))
+    .slice()
+    .sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+  function elegir(profesorId) {
+    if (!mm.profesor_ids.includes(profesorId)) mm.profesor_ids.push(profesorId);
+    sellarTimestamp(mm);
+    marcarCambioPendiente();
+    overlay.remove();
+    if (onVinculado) onVinculado();
+  }
+
+  const lista = document.createElement("div");
+  lista.className = "stack";
+  lista.style.gap = "6px";
+
+  if (disponibles.length === 0) {
+    const p = document.createElement("p");
+    p.className = "muted";
+    p.style.margin = "0";
+    p.textContent = "No tenés más profesores registrados para elegir.";
+    lista.appendChild(p);
+  } else {
+    disponibles.forEach((profesor) => {
+      const tarjeta = document.createElement("button");
+      tarjeta.type = "button";
+      tarjeta.className = "glass-panel row";
+      tarjeta.style.cssText =
+        "padding:10px 12px; align-items:center; gap:10px; width:100%; box-sizing:border-box; text-align:left; cursor:pointer; color:inherit; font:inherit; border:1px solid transparent;";
+      const nombre = document.createElement("span");
+      nombre.style.cssText = "flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+      nombre.textContent = `👤 ${profesor.nombre}`;
+      tarjeta.appendChild(nombre);
+      tarjeta.addEventListener("click", () => elegir(profesor.id));
+      lista.appendChild(tarjeta);
+    });
+  }
+  caja.appendChild(lista);
+
+  const btnNuevo = document.createElement("button");
+  btnNuevo.type = "button";
+  btnNuevo.className = "btn btn-secondary btn-block";
+  btnNuevo.style.marginTop = "8px";
+  btnNuevo.textContent = "+ Nuevo profesor";
+  btnNuevo.addEventListener("click", () => {
+    overlay.remove();
+    if (_abrirAltaProfesorPreseleccionado) {
+      _abrirAltaProfesorPreseleccionado(mm.id, onVinculado);
+    }
+  });
+  caja.appendChild(btnNuevo);
+
+  const btnCancelar = document.createElement("button");
+  btnCancelar.type = "button";
+  btnCancelar.className = "btn btn-secondary btn-block";
+  btnCancelar.textContent = "Cancelar";
+  btnCancelar.addEventListener("click", () => overlay.remove());
+  caja.appendChild(btnCancelar);
+
+  overlay.appendChild(caja);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+  document.body.appendChild(overlay);
 }
 
 function inicializarModalDesbloquea() {
@@ -919,4 +974,5 @@ export {
   inicializarModalDesbloquea,
   inicializarModalHistorial,
   inicializarModalRequisito,
+  registrarAbrirAltaProfesorPreseleccionado,
 };
