@@ -708,85 +708,99 @@ function construirFilaIntentoHistorial(materia, plan, semestre, mm) {
 }
 
 /**
- * Bloque de profesor DENTRO de un intento del historial: si ya hay uno
- * asignado, muestra su nombre + calificación (1-10, opcional) + ¿volvería a
- * llevar? (Sí/No/— neutro, opcional) con controles para editarlas o quitar
- * la asignación; si no hay ninguno, un selector para elegir uno ya creado o
- * crear uno nuevo al vuelo (solo pide el nombre acá — correo/teléfono/
- * materias se completan después desde la pestaña Profesores de Comunidad).
+ * Bloque de profesor DENTRO de un intento del historial. 2026-08-09 (pedido
+ * explícito, "permitir mas de un profesor por materia vinculado"):
+ * mm.profesor_ids es un arreglo — se muestra la lista completa (uno por
+ * línea), cada uno con su propio botón "Quitar" (se elige cuál sacar, no
+ * limpia todos de una), y el selector de abajo ahora AGREGA un profesor más
+ * a la lista en vez de reemplazarla — se sigue mostrando aunque ya haya
+ * alguno vinculado, para poder sumar otro. Calificación (1-10, opcional) y
+ * ¿volvería a llevar? (Sí/No/— neutro, opcional) siguen siendo un dato de
+ * la MATERIA cursada (mm), no de cada profesor puntual — sin cambios ahí.
  */
 function construirBloqueProfesorIntento(materia, plan, semestre, mm) {
   const cont = document.createElement("div");
   cont.className = "stack";
   cont.style.marginTop = "4px";
 
-  const profesor = mm.profesor_id
-    ? (estado.datos.profesores || []).find((p) => p.id === mm.profesor_id)
-    : null;
+  if (!Array.isArray(mm.profesor_ids)) mm.profesor_ids = [];
+  const profesoresVinculados = mm.profesor_ids
+    .map((id) => (estado.datos.profesores || []).find((p) => p.id === id))
+    .filter(Boolean);
 
   const reRenderizar = () => renderizarCuerpoModalHistorial(materia, plan);
 
-  if (!profesor) {
-    const fila = document.createElement("div");
-    fila.className = "row";
+  // ---------- Lista de profesores ya vinculados, uno por línea ----------
+  profesoresVinculados.forEach((profesor) => {
+    const filaProfesor = document.createElement("div");
+    filaProfesor.className = "row";
+    filaProfesor.style.justifyContent = "space-between";
+    filaProfesor.innerHTML = `<span>👤 ${profesor.nombre}</span>`;
 
-    const select = document.createElement("select");
-    select.className = "form-select";
-    select.innerHTML = `<option value="">Asignar profesor…</option>`;
-    (estado.datos.profesores || [])
-      .slice()
-      .sort((a, b) => a.nombre.localeCompare(b.nombre))
-      .forEach((p) => {
-        const opt = document.createElement("option");
-        opt.value = p.id;
-        opt.textContent = p.nombre;
-        select.appendChild(opt);
-      });
-    const optNuevo = document.createElement("option");
-    optNuevo.value = "__nuevo__";
-    optNuevo.textContent = "+ Crear profesor nuevo…";
-    select.appendChild(optNuevo);
-
-    select.addEventListener("change", () => {
-      if (!select.value) return;
-      if (select.value === "__nuevo__") {
-        const nombre = (prompt("Nombre del nuevo profesor:") || "").trim();
-        if (!nombre) return;
-        const nuevo = crearProfesor({ nombre, materias: [], correo: null, telefono: null });
-        estado.datos.profesores.push(nuevo);
-        mm.profesor_id = nuevo.id;
-      } else {
-        mm.profesor_id = select.value;
+    const btnQuitar = document.createElement("button");
+    btnQuitar.type = "button";
+    btnQuitar.className = "btn btn-secondary";
+    btnQuitar.textContent = "Quitar";
+    btnQuitar.addEventListener("click", () => {
+      // Solo saca a ESTE profesor puntual — los demás vinculados a la
+      // misma materia quedan intactos.
+      mm.profesor_ids = mm.profesor_ids.filter((id) => id !== profesor.id);
+      if (mm.profesor_ids.length === 0) {
+        mm.calificacion_profesor = null;
+        mm.volveria_a_llevar_profesor = null;
       }
       sellarTimestamp(mm);
       marcarCambioPendiente();
       reRenderizar();
     });
+    filaProfesor.appendChild(btnQuitar);
+    cont.appendChild(filaProfesor);
+  });
 
-    fila.appendChild(select);
-    cont.appendChild(fila);
-    return cont;
-  }
+  // ---------- Selector para agregar otro profesor ----------
+  // A propósito se muestra SIEMPRE (haya o no alguno ya vinculado) — ahora
+  // se permite más de uno por materia.
+  const fila = document.createElement("div");
+  fila.className = "row";
 
-  const filaProfesor = document.createElement("div");
-  filaProfesor.className = "row";
-  filaProfesor.style.justifyContent = "space-between";
-  filaProfesor.innerHTML = `<span>👤 ${profesor.nombre}</span>`;
+  const select = document.createElement("select");
+  select.className = "form-select";
+  select.innerHTML = `<option value="">${profesoresVinculados.length === 0 ? "Asignar profesor…" : "Agregar otro profesor…"}</option>`;
+  (estado.datos.profesores || [])
+    .slice()
+    .sort((a, b) => a.nombre.localeCompare(b.nombre))
+    .filter((p) => !mm.profesor_ids.includes(p.id)) // ya vinculados no se repiten en la lista
+    .forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.nombre;
+      select.appendChild(opt);
+    });
+  const optNuevo = document.createElement("option");
+  optNuevo.value = "__nuevo__";
+  optNuevo.textContent = "+ Crear profesor nuevo…";
+  select.appendChild(optNuevo);
 
-  const btnQuitar = document.createElement("button");
-  btnQuitar.type = "button";
-  btnQuitar.className = "btn btn-secondary";
-  btnQuitar.textContent = "Quitar";
-  btnQuitar.addEventListener("click", () => {
-    mm.profesor_id = null;
-    mm.calificacion_profesor = null;
-    mm.volveria_a_llevar_profesor = null;
+  select.addEventListener("change", () => {
+    if (!select.value) return;
+    let idNuevo;
+    if (select.value === "__nuevo__") {
+      const nombre = (prompt("Nombre del nuevo profesor:") || "").trim();
+      if (!nombre) return;
+      const nuevo = crearProfesor({ nombre, materias: [], correo: null, telefono: null });
+      estado.datos.profesores.push(nuevo);
+      idNuevo = nuevo.id;
+    } else {
+      idNuevo = select.value;
+    }
+    if (!mm.profesor_ids.includes(idNuevo)) mm.profesor_ids.push(idNuevo);
     sellarTimestamp(mm);
     marcarCambioPendiente();
     reRenderizar();
   });
-  filaProfesor.appendChild(btnQuitar);
-  cont.appendChild(filaProfesor);
+
+  fila.appendChild(select);
+  cont.appendChild(fila);
 
   // Calificación 1-10 (opcional — null = sin calificar).
   const filaCalificacion = document.createElement("div");
