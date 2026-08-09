@@ -447,34 +447,47 @@ function construirMiniTarjetaMateriaVinculada(mm, semestre) {
   const categoria = plan && materia ? plan.categorias.find((c) => c.id === materia.categoria_id) : null;
 
   const mini = document.createElement("div");
-  mini.className = "glass-panel row";
+  mini.className = "glass-panel";
+  // Pedido explícito: NOTA centrada respecto a TODA la tarjeta (no solo al
+  // espacio libre entre nombre y semestre) — con row/flex eso no se puede
+  // lograr de verdad porque el ancho de cada extremo es distinto. Con un
+  // grid de 3 columnas simétricas (1fr / auto / 1fr) el nombre empuja desde
+  // la 1ra 1fr, el badge de semestre empuja desde la 2da 1fr, y la Nota (en
+  // la columna del medio, "auto") queda exactamente en el centro geométrico
+  // de la tarjeta, sin importar cuánto midan nombre o semestre.
   mini.style.cssText =
-    "padding:8px 12px; align-items:center; gap:10px; width:100%; box-sizing:border-box;" +
+    "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px; padding:8px 12px; width:100%; box-sizing:border-box;" +
     (categoria ? ` box-shadow: inset 4px 0 0 0 ${categoria.color};` : "");
 
   const nombre = document.createElement("span");
   nombre.className = "materia-nombre truncada";
-  nombre.style.cssText = "flex:1; min-width:0; font-size:0.85rem; top:0;"; // top:0 anula el ajuste -3px pensado para su contexto original
+  nombre.style.cssText = "min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:0.85rem; top:0;"; // top:0 anula el ajuste -3px pensado para su contexto original
   nombre.textContent = materia ? materia.nombre : "Materia eliminada";
   mini.appendChild(nombre);
 
-  // Pedido explícito: a la izquierda del badge de semestre va la NOTA que
-  // el estudiante sacó en esa materia (mm.nota_final, el mismo dato que
-  // vive y se calcula en Semestres) — no es una calificación del profesor,
-  // es el resultado real del estudiante en ese intento puntual. Si esa
-  // materia matriculada no tiene nota_final cargada todavía, no se muestra
-  // nada (no hay "Nota: —" ni placeholder, se omite el elemento entero).
+  // Pedido explícito: la NOTA que el estudiante sacó en esa materia
+  // (mm.nota_final, el mismo dato que vive y se calcula en Semestres) — no
+  // es una calificación del profesor, es el resultado real del estudiante
+  // en ese intento puntual. Si esa materia matriculada no tiene nota_final
+  // cargada todavía, no se muestra nada (no hay "Nota: —" ni placeholder,
+  // se omite el elemento entero — la columna del medio queda vacía y el
+  // grid sigue centrando igual al badge de semestre en su propia columna).
   if (mm.nota_final !== null && mm.nota_final !== undefined) {
     const badgeNota = document.createElement("span");
     badgeNota.className = "muted";
-    badgeNota.style.cssText = "flex-shrink:0; white-space:nowrap; font-size:0.78rem; text-align:center; margin-left:auto;";
+    badgeNota.style.cssText = "justify-self:center; flex-shrink:0; white-space:nowrap; font-size:0.78rem;";
     badgeNota.textContent = `Nota: ${mm.nota_final}`;
     mini.appendChild(badgeNota);
+  } else {
+    // Placeholder vacío para no perder la 2da columna del grid (si no se
+    // agrega ningún nodo ahí, el badge de semestre "hereda" la columna del
+    // medio y deja de estar anclado a la derecha real de la tarjeta).
+    mini.appendChild(document.createElement("span"));
   }
 
   const badgeSemestre = document.createElement("span");
   badgeSemestre.className = "badge badge-neutral";
-  badgeSemestre.style.cssText = "flex-shrink:0; white-space:nowrap;";
+  badgeSemestre.style.cssText = "justify-self:end; flex-shrink:0; white-space:nowrap;";
   badgeSemestre.textContent = semestre.nombre;
   mini.appendChild(badgeSemestre);
 
@@ -600,7 +613,7 @@ function construirBadgeCorreo(correo) {
   const badge = document.createElement("span");
   badge.className = "badge";
   badge.style.cssText =
-    "background:#17A6F9; color:#fff; cursor:pointer; user-select:none; -webkit-user-select:none;" +
+    "background:#1C4BBF; color:#fff; cursor:pointer; user-select:none; -webkit-user-select:none;" +
     " display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
   badge.textContent = `✉️ ${correo}`;
   badge.title = "Tocá para copiar · mantené presionado para enviar un correo";
@@ -621,7 +634,7 @@ function construirBadgeWhatsapp(telefono) {
   const badge = document.createElement("span");
   badge.className = "badge";
   badge.style.cssText =
-    "background:#00D756; color:#fff; cursor:pointer; user-select:none; -webkit-user-select:none;" +
+    "background:#25D366; color:#fff; cursor:pointer; user-select:none; -webkit-user-select:none;" +
     " display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
   badge.textContent = `💬 ${telefono}`;
   badge.title = "Tocá para copiar · mantené presionado para abrir WhatsApp";
@@ -1274,8 +1287,13 @@ function abrirModalVincularProfesor(profesor, onVinculado) {
     const boton = document.createElement("button");
     boton.type = "button";
     boton.className = "glass-panel row";
+    // Pedido explícito: el texto debe verse igual que el resto de la app.
+    // Un <button> nativo NO hereda el color de texto del contenedor por
+    // defecto (usa un color de sistema, de ahí que se viera negro) — se
+    // fuerza color:inherit para que tome el mismo color que el resto de
+    // la tarjeta (blanco/claro, según el tema).
     boton.style.cssText =
-      "padding:8px 12px; align-items:center; gap:10px; width:100%; box-sizing:border-box; text-align:left; cursor:pointer; border:1px solid " +
+      "padding:8px 12px; align-items:center; gap:10px; width:100%; box-sizing:border-box; text-align:left; cursor:pointer; color:inherit; font:inherit; border:1px solid " +
       (seleccionada ? "var(--accent-1)" : "transparent") +
       ";" +
       (categoria ? ` box-shadow: inset 4px 0 0 0 ${categoria.color}${seleccionada ? ", 0 0 0 2px var(--accent-1)" : ""};` : "");
