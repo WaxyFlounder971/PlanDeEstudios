@@ -698,10 +698,13 @@ function construirFilaIntentoHistorial(materia, plan, semestre, mm) {
     ? { texto: "Reprobada", badge: "badge-danger" }
     : { texto: "Sin cerrar", badge: "badge-neutral" };
 
-  // Pedido explícito (2026-08-09): "Semestre" y "Nota Final" al 150% del
-  // tamaño de letra normal, y clic en el nombre del semestre navega a
-  // Semestres con scroll suave hasta esa tarjeta (navegarASemestre ya se
-  // encarga del scroll animado — ver semestres.js).
+  // Pedido explícito (2026-08-09): "Semestre" al 150% del tamaño de letra
+  // normal, y clic en el nombre del semestre navega a Semestres con scroll
+  // suave hasta esa tarjeta (navegarASemestre ya se encarga del scroll
+  // animado — ver semestres.js). "Nota Final" arrancó también en 150% pero
+  // se redujo un 30% después (pedido explícito, mismo día): 1.5em * 0.7 =
+  // 1.05em — ver notaP más abajo y nombreProfesor en
+  // construirBloqueProfesorIntento, que replica el mismo tamaño.
   const encabezado = document.createElement("div");
   encabezado.className = "row";
   encabezado.style.justifyContent = "space-between";
@@ -731,7 +734,7 @@ function construirFilaIntentoHistorial(materia, plan, semestre, mm) {
   if (typeof mm.nota_final === "number") {
     const notaP = document.createElement("p");
     notaP.className = "muted";
-    notaP.style.cssText = "margin:0; font-size:1.5em;";
+    notaP.style.cssText = "margin:0; font-size:1.05em;"; // -30% sobre el 1.5em original
     notaP.textContent = `Nota final: ${formatearNotaTruncada(mm.nota_final)}`;
     fila.appendChild(notaP);
   }
@@ -777,9 +780,10 @@ function construirBloqueProfesorIntento(materia, plan, semestre, mm) {
 
     const nombreProfesor = document.createElement("span");
     // Mismo tamaño que "Nota Final" (pedido explícito) + truncado en vez
-    // de saltar de línea cuando el nombre es largo.
+    // de saltar de línea cuando el nombre es largo. -30% aplicado igual que
+    // en notaP (1.5em -> 1.05em) para mantenerlos idénticos entre sí.
     nombreProfesor.style.cssText =
-      "font-size:1.5em; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+      "font-size:1.05em; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
     nombreProfesor.textContent = `👤 ${profesor.nombre}`;
     filaProfesor.appendChild(nombreProfesor);
 
