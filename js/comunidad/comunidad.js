@@ -55,6 +55,7 @@ import { estado } from "../core/storage.js";
 import { estiloBadgeCategoria } from "../core/utils.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { obtenerSemestresActuales, obtenerSemestresPasados } from "../semestres/semestres.js";
+import { registrarAbrirAltaProfesorPreseleccionado } from "../plan/plan-detalle.js";
 // Parte 1 (navegación a materia por id): resuelto — ver abrirTarjetaMateria
 // más abajo. abrirModalRequisito ya es la función real que usa el resto de
 // la app para abrir la tarjeta de detalle de una materia por código (ej.
@@ -557,7 +558,16 @@ function construirGrupoPills(opciones, valorActivo, onCambiar) {
  * font-display 700), y un badge de semestre anclado al final de la
  * mini-tarjeta.
  */
-function construirMiniTarjetaMateriaVinculada(mm, semestre) {
+/**
+ * `onQuitar` (opcional): cuando se pasa, agrega un botón discreto de
+ * desvincular (ícono de basura, NO un btn ancho) a la derecha de la
+ * tarjeta. 2026-08-09 (pedido explícito): "debe permitir desvincular desde
+ * editar" — antes esta mini-tarjeta era de solo lectura dentro del modal
+ * de Editar profesor, no había forma de sacar una materia sin abrir el
+ * selector completo. El grid pasa de 3 a 4 columnas cuando hay onQuitar,
+ * agregando una columna "auto" final solo para el botón.
+ */
+function construirMiniTarjetaMateriaVinculada(mm, semestre, onQuitar = null) {
   const { plan, materia } = obtenerContextoMateria(mm);
   const categoria = plan && materia ? plan.categorias.find((c) => c.id === materia.categoria_id) : null;
 
@@ -569,9 +579,10 @@ function construirMiniTarjetaMateriaVinculada(mm, semestre) {
   // grid de 3 columnas simétricas (1fr / auto / 1fr) el nombre empuja desde
   // la 1ra 1fr, el badge de semestre empuja desde la 2da 1fr, y la Nota (en
   // la columna del medio, "auto") queda exactamente en el centro geométrico
-  // de la tarjeta, sin importar cuánto midan nombre o semestre.
+  // de la tarjeta, sin importar cuánto midan nombre o semestre. Si hay
+  // onQuitar se agrega una 4ta columna "auto" solo para ese botón.
   mini.style.cssText =
-    "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px; padding:8px 12px; width:100%; box-sizing:border-box;" +
+    `display:grid; grid-template-columns:1fr auto 1fr${onQuitar ? " auto" : ""}; align-items:center; gap:10px; padding:8px 12px; width:100%; box-sizing:border-box;` +
     (categoria ? ` box-shadow: inset 4px 0 0 0 ${categoria.color};` : "");
 
   const nombre = document.createElement("span");
@@ -613,6 +624,20 @@ function construirMiniTarjetaMateriaVinculada(mm, semestre) {
   badgeSemestre.style.cssText = "justify-self:end; flex-shrink:0; white-space:nowrap;";
   badgeSemestre.textContent = semestre.nombre;
   mini.appendChild(badgeSemestre);
+
+  if (onQuitar) {
+    const btnQuitar = document.createElement("button");
+    btnQuitar.type = "button";
+    btnQuitar.className = "btn-icono-quitar";
+    btnQuitar.title = "Desvincular esta materia";
+    btnQuitar.setAttribute("aria-label", "Desvincular esta materia");
+    btnQuitar.textContent = "🗑";
+    btnQuitar.addEventListener("click", (e) => {
+      e.stopPropagation();
+      onQuitar();
+    });
+    mini.appendChild(btnQuitar);
+  }
 
   return mini;
 }
@@ -1145,7 +1170,20 @@ function construirTarjetaCompanero(companero, datos) {
  * general (estrellas 1-10, medias) y "¿volverías a llevarlo?"
  * (Recomendado/No recomendado).
  */
-function abrirModalAltaProfesor(profesorExistente = null) {
+/**
+ * `preseleccionMmId` (opcional, solo tiene efecto en modo alta): id de una
+ * materia_matriculada a vincular de entrada, sin que el usuario tenga que
+ * buscarla de nuevo — usado cuando este modal se abre desde "+ Nuevo
+ * profesor" en el selector de Historial de Plan de Estudios (ver
+ * abrirModalAsignarProfesorDesdeHistorial en plan-detalle.js), que ya sabe
+ * exactamente qué materia+semestre originó el alta.
+ * `onGuardado` (opcional): se llama justo después de guardar con éxito
+ * (antes de que el modal se reabra en modo edición), para que quien lo
+ * abrió desde otra sección (ej. el modal de Historial, que puede seguir
+ * abierto detrás) refresque su propia vista sin esperar a que este modal
+ * se cierre del todo.
+ */
+function abrirModalAltaProfesor(profesorExistente = null, preseleccionMmId = null, onGuardado = null) {
   document.querySelectorAll(".overlay-alta-profesor").forEach((el) => el.remove());
   const esEdicion = !!profesorExistente;
 
@@ -1268,7 +1306,7 @@ function abrirModalAltaProfesor(profesorExistente = null) {
   // abajo). Si el modal se cierra sin guardar, `materiasPendientes` se
   // pierde con el resto del formulario sin que haya que revertir nada,
   // porque nunca se tocó la data real.
-  let materiasPendientes = [];
+  let materiasPendientes = preseleccionMmId ? [preseleccionMmId] : [];
 
   const bloqueVincular = document.createElement("div");
   bloqueVincular.innerHTML = `<span class="form-label">Materias vinculadas</span>`;
@@ -1291,7 +1329,13 @@ function abrirModalAltaProfesor(profesorExistente = null) {
       materiasPendientes.forEach((mmId) => {
         const encontrada = buscarMmVivaPorId(mmId);
         if (!encontrada) return; // materia borrada mientras el modal estaba abierto — se ignora en el preview, no revienta
-        listaVinculaciones.appendChild(construirMiniTarjetaMateriaVinculada(encontrada.mm, encontrada.semestre));
+        listaVinculaciones.appendChild(
+          construirMiniTarjetaMateriaVinculada(encontrada.mm, encontrada.semestre, () => {
+            materiasPendientes = materiasPendientes.filter((id) => id !== mmId);
+            sucio = true;
+            repintarVinculaciones();
+          })
+        );
       });
       return;
     }
@@ -1306,7 +1350,20 @@ function abrirModalAltaProfesor(profesorExistente = null) {
       listaVinculaciones.appendChild(p);
     } else {
       historial.forEach(({ semestre, mm }) => {
-        listaVinculaciones.appendChild(construirMiniTarjetaMateriaVinculada(mm, semestre));
+        listaVinculaciones.appendChild(
+          construirMiniTarjetaMateriaVinculada(mm, semestre, () => {
+            // Desvincula SOLO a este profesor de esta mm puntual — otros
+            // profesores que sigan vinculados a la misma materia no se tocan.
+            mm.profesor_ids = (mm.profesor_ids || []).filter((id) => id !== vivo.id);
+            if (mm.profesor_ids.length === 0) {
+              mm.calificacion_profesor = null;
+              mm.volveria_a_llevar_profesor = null;
+            }
+            sellarTimestamp(mm);
+            marcarCambioPendiente();
+            repintarVinculaciones();
+          })
+        );
       });
     }
   }
@@ -1438,6 +1495,7 @@ function abrirModalAltaProfesor(profesorExistente = null) {
       overlay.remove();
       if (algunaFallo) mostrarToast("Alguna materia vinculada ya no existía — se guardaron las demás.");
       renderizarComunidad();
+      if (onGuardado) onGuardado();
       // Pedido explícito: "desde que agregas profesor te debe permitir
       // vincularlo" — apenas se crea, se reabre el modal ya en modo
       // edición para que el botón "Vincular" quede disponible al toque,
@@ -1586,17 +1644,11 @@ function abrirModalVincularProfesor(profesor, onVinculado, idsPreseleccionados =
       ";" +
       (categoria ? ` box-shadow: inset 4px 0 0 0 ${categoria.color}${seleccionada ? ", 0 0 0 2px var(--accent-1)" : ""};` : "");
 
-    // Checkbox visual — el selector es multi-select (2026-08-09: se puede
-    // vincular varias materias de una sola pasada, de cualquier semestre,
-    // sin que cambiar de semestre borre lo ya marcado — ver `seleccionadas`
-    // más abajo, es un Set que vive fuera de repintarMaterias).
-    const casilla = document.createElement("span");
-    casilla.style.cssText =
-      "flex-shrink:0; width:16px; height:16px; box-sizing:border-box; border-radius:4px; border:2px solid var(--accent-1); display:flex; align-items:center; justify-content:center; font-size:0.7rem; line-height:1; color:var(--accent-1); font-weight:700;" +
-      (seleccionada ? " background:var(--accent-1); color:#fff;" : "");
-    casilla.textContent = seleccionada ? "✓" : "";
-    boton.appendChild(casilla);
-
+    // 2026-08-09 (pedido explícito, otra vez: "ponerle checkbox esta
+    // asqueroso, es un rotundo no, [...] basicamente es como estaba antes
+    // pero que se mantenga [el highlight]"): NO hay casilla/checkbox visual.
+    // La selección se indica solo con el highlight ya aplicado más arriba
+    // en boton.style.cssText (borde + box-shadow con --accent-1).
     const nombre = document.createElement("span");
     nombre.className = "materia-nombre truncada";
     nombre.style.cssText = "flex:1; min-width:0; font-size:0.85rem; top:0;";
@@ -1614,11 +1666,7 @@ function abrirModalVincularProfesor(profesor, onVinculado, idsPreseleccionados =
       const etiqueta = document.createElement("span");
       etiqueta.className = "muted";
       etiqueta.style.cssText = "font-size:0.72rem; flex-shrink:0; white-space:nowrap;";
-      etiqueta.textContent = yaConEste
-        ? "Ya vinculada a este"
-        : otrosCount === 1
-        ? "Ya tiene 1 profesor"
-        : `Ya tiene ${otrosCount} profesores`;
+      etiqueta.textContent = yaConEste ? "Ya vinculada a este" : otrosCount === 1 ? "1 Profesor" : `${otrosCount} Profesores`;
       boton.appendChild(etiqueta);
     }
 
@@ -2669,6 +2717,12 @@ function inicializarComunidad() {
   if (!cont) {
     console.warn("Comunidad: no se encontró #seccion-comunidad en el HTML.");
   }
+  // Inyecta la función real de alta de profesor en plan-detalle.js para que
+  // el selector "Vincular profe" del Historial pueda ofrecer "+ Nuevo
+  // profesor" sin que plan-detalle.js tenga que importar de comunidad.js
+  // (comunidad.js ya importa de plan-detalle.js — abrirModalRequisito — así
+  // que una importación en el otro sentido crearía un ciclo).
+  registrarAbrirAltaProfesorPreseleccionado((mmId, onGuardado) => abrirModalAltaProfesor(null, mmId, onGuardado));
 }
 
 /**
