@@ -27,10 +27,18 @@ import {
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
-import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
+import { desplazarYResaltarElemento, abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { recalcularPlanesHardcore } from "../plan/plan-gestionar.js";
 import { construirTarjetaSemestre } from "./semestres-tarjetas.js";
 import { construirDashboardAcademico } from "./semestres-dashboard.js";
+// Import de vuelta a main.js (ciclo intencional, mismo patrón ya usado por
+// ui/componentes.js con togglePerfilPopover): main.js importa
+// renderizarSemestres de este archivo, y este archivo necesita
+// mostrarSeccion de vuelta para poder cambiar de sección desde acá. Con
+// ES modules esto funciona por binding en vivo, siempre que no se use al
+// nivel superior del módulo (acá solo se usa dentro de una función, ya con
+// todo cargado).
+import { mostrarSeccion } from "../main.js";
 
 const MESES_SELECT = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
@@ -805,6 +813,29 @@ function abrirConfirmacionBorrarSemestre(semestre) {
   });
 }
 
+/**
+ * Navegación reutilizable a un semestre puntual desde otra sección (ej. la
+ * palabra "SEMESTRE" en el Historial de una materia, Plan de Estudios →
+ * Semestres; o en el futuro, Comunidad → Semestres). Cambia a la sección
+ * Semestres, se asegura de que la tarjeta de `semestreId` quede expandida
+ * (si ya lo estaba, no hace nada raro — set() con el mismo valor no
+ * dispara ningún efecto secundario), re-renderiza, y recién ahí hace
+ * scroll suave + destello hasta la tarjeta real ya pintada en el DOM (ver
+ * desplazarYResaltarElemento en componentes.js, y el data-semestre-id que
+ * construirTarjetaSemestre le pone a cada tarjeta).
+ *
+ * Se llama con omitirRestauracionScroll=true en el render interno: el
+ * scroll final lo decide desplazarYResaltarElemento, no el mecanismo
+ * anti-salto de renderizarSemestres (pensado para sync remoto, no para una
+ * navegación explícita del usuario).
+ */
+function navegarASemestre(semestreId) {
+  mostrarSeccion("semestres");
+  estado.semestresExpandidos.set(semestreId, true);
+  renderizarSemestres(true);
+  desplazarYResaltarElemento(`[data-semestre-id="${semestreId}"]`);
+}
+
 /* ===================== Listado ===================== */
 
 function renderizarSemestres(omitirRestauracionScroll = false) {
@@ -958,4 +989,4 @@ function renderizarSemestres(omitirRestauracionScroll = false) {
   requestAnimationFrame(reafirmarScroll);
 }
 
-export { abrirModalAltaSemestre, obtenerSemestresActuales, obtenerSemestresPasados, renderizarSemestres };
+export { abrirModalAltaSemestre, navegarASemestre, obtenerSemestresActuales, obtenerSemestresPasados, renderizarSemestres };

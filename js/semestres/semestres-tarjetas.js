@@ -3088,6 +3088,11 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEdita
 
   const card = document.createElement("div");
   card.className = "glass-card stack";
+  // Identificador en el DOM para poder ubicar esta tarjeta puntual desde
+  // otro módulo (ej. navegarASemestre en semestres.js, usado por Comunidad
+  // y por el Historial de una materia en Plan de Estudios) sin depender de
+  // su posición ni de recorrer manualmente el árbol.
+  card.dataset.semestreId = semestre.id;
   // Pendiente #1 (2026-08-03): dentro de "Semestres pasados" esta tarjeta
   // queda anidada dentro de OTRO .glass-card (la sección "Semestres
   // pasados" en sí) — se fuerza el 100% + box-sizing acá para que no quede
