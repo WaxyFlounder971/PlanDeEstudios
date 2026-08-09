@@ -126,7 +126,7 @@ function crearDatosUsuarioNuevo() {
           {
             materia_id: "MA1102",
             plan_estudio_id: "plan_001", // de cuál de los dos planes viene (relevante en Modo Hardcore)
-            profesor_id: null,
+            profesor_ids: [], // 2026-08-09: pasó de escalar (profesor_id) a arreglo — una materia puede tener 2+ profesores vinculados
             criterios: [
               // { id, nombre, valor_total_porcentaje }
             ],
@@ -706,7 +706,13 @@ function crearMateriaMatriculada({ materiaId, planEstudioId }) {
     // Se sincroniza gratis: al ser campos de mm, ya heredan su propio
     // sellado/_version_base y la tumba _eliminados_materias_matriculadas del
     // semestre — nada nuevo que fusionar en storage-merge.js.
-    profesor_id: null,
+    //
+    // 2026-08-09 (pedido explícito): pasó de escalar (profesor_id, un solo
+    // profesor por materia) a arreglo (profesor_ids) — una misma materia
+    // matriculada puede tener 2+ profesores vinculados a la vez (ej. clase
+    // con más de un docente). obtenerHistorialProfesor ya lee este arreglo;
+    // la migración de datos viejos vive en migrarDatosAntiguos más abajo.
+    profesor_ids: [],
     calificacion_profesor: null,       // 1-10, o null = sin calificar
     volveria_a_llevar_profesor: null,  // true | false | null = neutro/sin contestar
     // Fase 6 (motor de notas): criterios de ESTA matrícula puntual (nunca
@@ -1707,18 +1713,22 @@ function crearCompanero({ nombre_completo, carnet, lista, materias_compartidas, 
 
 /**
  * Recorre TODOS los semestres buscando materias_matriculadas ligadas a este
- * profesor (mm.profesor_id === profesorId), y devuelve un arreglo plano
- * { semestre, mm } — una entrada por cada materia dada, no por semestre, así
- * el caso de 2 materias correquisito con el mismo profesor en el mismo
- * semestre aparece como 2 entradas independientes con su propia calificación
- * y volveria_a_llevar. Único punto de verdad para armar la tarjeta expandida
+ * profesor (mm.profesor_ids.includes(profesorId) — 2026-08-09: una mm puede
+ * tener 2+ profesores, así que la misma mm puede aparecer en el historial de
+ * más de un profesor a la vez), y devuelve un arreglo plano { semestre, mm }
+ * — una entrada por cada materia dada, no por semestre, así el caso de 2
+ * materias correquisito con el mismo profesor en el mismo semestre aparece
+ * como 2 entradas independientes con su propia calificación y
+ * volveria_a_llevar. Único punto de verdad para armar la tarjeta expandida
  * de un profesor (semestres-tarjetas.js / la futura vista de Comunidad).
  */
 function obtenerHistorialProfesor(profesorId, datos) {
   const resultado = [];
   (datos.semestres || []).forEach((semestre) => {
     (semestre.materias_matriculadas || []).forEach((mm) => {
-      if (mm.profesor_id === profesorId) resultado.push({ semestre, mm });
+      if (Array.isArray(mm.profesor_ids) && mm.profesor_ids.includes(profesorId)) {
+        resultado.push({ semestre, mm });
+      }
     });
   });
   // Más reciente primero, por fecha de inicio del semestre.
@@ -2004,7 +2014,17 @@ function migrarDatosAntiguos(datos) {
         // vínculo Profesor↔Semestre embebido — se rellena para que ninguna
         // lectura posterior (obtenerHistorialProfesor, UI de tarjeta, etc.)
         // se tope con undefined donde espera null explícito.
-        if (mm.profesor_id === undefined) mm.profesor_id = null;
+        //
+        // 2026-08-09: profesor_id (escalar) → profesor_ids (arreglo). Si la
+        // mm viene de antes de este cambio y todavía no tiene profesor_ids,
+        // se arma a partir del profesor_id viejo (si tenía uno, queda como
+        // arreglo de 1; si no tenía, arreglo vacío) y se borra el campo
+        // viejo para que no quede data muerta ni dispare falsos conflictos
+        // de sync entre dispositivos en versiones distintas.
+        if (!Array.isArray(mm.profesor_ids)) {
+          mm.profesor_ids = mm.profesor_id ? [mm.profesor_id] : [];
+        }
+        if (mm.profesor_id !== undefined) delete mm.profesor_id;
         if (mm.calificacion_profesor === undefined) mm.calificacion_profesor = null;
         if (mm.volveria_a_llevar_profesor === undefined) mm.volveria_a_llevar_profesor = null;
       });
