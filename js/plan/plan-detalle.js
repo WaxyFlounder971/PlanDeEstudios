@@ -827,7 +827,10 @@ function construirBloqueProfesorIntento(materia, plan, semestre, mm) {
  * toque, sin botón de confirmar aparte) + "+ Nuevo profesor", que abre el
  * alta de profesor de Comunidad con esta materia ya preseleccionada (ver
  * registrarAbrirAltaProfesorPreseleccionado más abajo — evita un import
- * circular con comunidad.js).
+ * circular con comunidad.js). Exportada porque también la usa el ícono 👤
+ * de la tarjeta de materia en Semestres (ver semestres-tarjetas.js,
+ * abrirPopoverProfesoresMateria) — mismo flujo de vincular, dos puntos de
+ * entrada distintos.
  */
 let _abrirAltaProfesorPreseleccionado = null;
 function registrarAbrirAltaProfesorPreseleccionado(fn) {
@@ -974,5 +977,6 @@ export {
   inicializarModalDesbloquea,
   inicializarModalHistorial,
   inicializarModalRequisito,
+  abrirModalAsignarProfesorDesdeHistorial,
   registrarAbrirAltaProfesorPreseleccionado,
 };
