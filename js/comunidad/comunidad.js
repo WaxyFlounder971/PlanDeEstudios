@@ -2446,6 +2446,571 @@ function construirBloqueSemestreProfesores(semestre, profesores, datos) {
   return bloque;
 }
 
+/* ===================== Exportar / Importar (Profesores y Compañeros) ===================== */
+
+/**
+ * Pedido explícito (2026-08-09): botones "Exportar"/"Importar" justo debajo
+ * de "+ Agregar profesor"/"+ Agregar compañero" — cada sección exporta/
+ * importa SOLO sus propios datos, nunca ambos a la vez. La exportación
+ * manda TODOS los datos del contacto guardado, con una única excepción: las
+ * materias vinculadas NO se exportan como vínculo real, porque viven atadas
+ * a MI plan de estudios/semestres — no tiene sentido mandarlas a otro
+ * dispositivo/cuenta que no tiene ese plan. Lo que sí se hace (pedido
+ * explícito) es meter el NOMBRE de cada materia vinculada, uno por línea,
+ * como texto plano DENTRO de la nota — así no se pierde la info de "qué
+ * dio" aunque no se pueda mandar el vínculo real. Si el profesor/compañero
+ * ya tenía su propia nota, se agrega DESPUÉS de las materias, separada por
+ * una línea en blanco.
+ */
+
+/** Quita acentos/diacríticos, pasa a minúsculas y colapsa espacios — para
+ *  que un acento, mayúscula o espacio de más no cuente como "diferencia"
+ *  al comparar dos nombres. */
+function normalizarNombreComparable(nombre) {
+  return (nombre || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[.,]/g, "") // "Luis P." y "Luis P" deben comparar igual — el punto de la abreviatura no es una diferencia real
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+/** Distancia de Levenshtein clásica (programación dinámica) — los nombres
+ *  de personas son cortos (pocas palabras), el costo es despreciable. */
+function distanciaLevenshtein(a, b) {
+  const filas = a.length + 1;
+  const columnas = b.length + 1;
+  const dp = Array.from({ length: filas }, () => new Array(columnas).fill(0));
+  for (let i = 0; i < filas; i++) dp[i][0] = i;
+  for (let j = 0; j < columnas; j++) dp[0][j] = j;
+  for (let i = 1; i < filas; i++) {
+    for (let j = 1; j < columnas; j++) {
+      const costo = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + costo);
+    }
+  }
+  return dp[filas - 1][columnas - 1];
+}
+
+/**
+ * Similitud 0..1 entre dos nombres de persona. Pedido explícito: "por si lo
+ * tengo guardado con 1 solo apellido o si recibo con segundo nombre" — se
+ * combinan DOS métricas y se usa la más alta, porque cada una falla
+ * distinto:
+ *  - Levenshtein normalizado: bueno con typos/variaciones de letras, pero
+ *    castiga fuerte una diferencia de LARGO (ej. "Luis Pablo" vs "Luis
+ *    Pablo Soto Jiménez" da una similitud baja aunque evidentemente sea la
+ *    misma persona con más nombres/apellidos).
+ *  - Solapamiento de palabras: cada palabra del nombre más corto cuenta
+ *    como "encontrada" si aparece igual en el más largo, o si una es
+ *    prefijo de la otra con al menos 2 letras (cubre "Luis P." vs "Luis
+ *    Pablo" — "p" es prefijo de "pablo"). Bueno con nombres truncados o
+ *    abreviados, pero no detecta un typo dentro de una misma palabra.
+ * El máximo de los dos cubre ambos casos sin que uno le gane al otro.
+ */
+function similitudNombres(nombreA, nombreB) {
+  const a = normalizarNombreComparable(nombreA);
+  const b = normalizarNombreComparable(nombreB);
+  if (!a || !b) return 0;
+  if (a === b) return 1; // 1.0 queda RESERVADO para igualdad literal tras normalizar — es lo único que se trata como "exacto" y se omite en silencio.
+
+  const distancia = distanciaLevenshtein(a, b);
+  const puntajeLevenshtein = 1 - distancia / Math.max(a.length, b.length);
+
+  const palabrasA = a.split(" ");
+  const palabrasB = b.split(" ");
+  const [cortas, largas] = palabrasA.length <= palabrasB.length ? [palabrasA, palabrasB] : [palabrasB, palabrasA];
+  let coincidencias = 0;
+  cortas.forEach((palabra) => {
+    // El prefijo de UNA sola letra ("Luis P." → token "p") cuenta como
+    // coincidencia — cubre iniciales de segundo nombre/apellido — pero por
+    // eso mismo esta heurística NUNCA debe poder devolver 1.0: "Luis P." no
+    // es idéntico a "Luis Pablo", solo se PARECE mucho. Ver el
+    // Math.min(0.99, ...) más abajo.
+    const hayCoincidencia = largas.some((otra) => otra === palabra || otra.startsWith(palabra) || palabra.startsWith(otra));
+    if (hayCoincidencia) coincidencias += 1;
+  });
+  const puntajePalabras = coincidencias / cortas.length;
+
+  // Tope 0.99 explícito (pedido explícito: "si la coincidencia es exacta a
+  // uno que ya esta registrado, se omite, si la diferencia entra dentro
+  // del umbral se pone como 'este se parece'"): sin este tope, dos nombres
+  // DISTINTOS pero muy parecidos ("Luis Pablo" vs "Luis P.") podían llegar
+  // a puntajePalabras === 1 y colarse por el branch de "exacto" de arriba,
+  // omitiéndose en silencio en vez de mostrarse para que la persona
+  // confirme si es o no la misma persona — que es exactamente el caso que
+  // pidió cubrir.
+  return Math.min(0.99, Math.max(puntajeLevenshtein, puntajePalabras));
+}
+
+// Pedido explícito: "por lo menos un 70%".
+const UMBRAL_SIMILITUD_NOMBRES = 0.7;
+
+/** Arma el texto de "nota" que se exporta: primero el nombre de cada
+ *  materia vinculada (una por línea, SOLO el nombre — pedido explícito
+ *  "asi de sencillo"), y si había una nota propia se agrega DESPUÉS,
+ *  separada por una línea en blanco. */
+function armarNotaExportable(nombresMaterias, notaOriginal) {
+  const partes = [];
+  if (nombresMaterias.length > 0) partes.push(nombresMaterias.join("\n"));
+  if (notaOriginal) partes.push(notaOriginal);
+  return partes.length > 0 ? partes.join("\n\n") : null;
+}
+
+function fechaParaNombreArchivo() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Descarga (o comparte, en móvil) el paquete exportado como archivo .json.
+ * Si el navegador soporta compartir ARCHIVOS (Web Share API nivel 2 —
+ * típicamente Chrome/Edge Android), se ofrece el share sheet nativo
+ * (WhatsApp, correo, Drive, etc. — mismo espíritu que el resto de la app,
+ * que ya usa wa.me para WhatsApp). Si no está disponible (desktop,
+ * navegadores viejos), se cae a una descarga normal del archivo.
+ */
+function descargarOCompartirArchivo(nombreArchivo, contenidoJSON, tituloCompartir) {
+  const blob = new Blob([contenidoJSON], { type: "application/json" });
+
+  if (navigator.canShare && navigator.share) {
+    const archivo = new File([blob], nombreArchivo, { type: "application/json" });
+    if (navigator.canShare({ files: [archivo] })) {
+      navigator.share({ files: [archivo], title: tituloCompartir }).catch(() => {
+        // Cancelar el share sheet es una acción válida del usuario — no
+        // hace falta avisar con un toast de error.
+      });
+      return;
+    }
+  }
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = nombreArchivo;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportarProfesores() {
+  const datos = estado.datos;
+  const profesores = datos.profesores || [];
+  if (profesores.length === 0) {
+    mostrarToast("Todavía no tenés ningún profesor para exportar.");
+    return;
+  }
+  const items = profesores.map((p) => {
+    const historial = obtenerHistorialProfesor(p.id, datos);
+    const nombresMaterias = [
+      ...new Set(
+        historial
+          .map(({ mm }) => obtenerContextoMateria(mm).materia)
+          .filter(Boolean)
+          .map((materia) => materia.nombre)
+      ),
+    ];
+    return {
+      nombre: p.nombre,
+      correo: p.correo || null,
+      telefono: p.telefono || null,
+      calificacion: typeof p.calificacion === "number" ? p.calificacion : null,
+      volveria_a_llevar: p.volveria_a_llevar !== false,
+      nota: armarNotaExportable(nombresMaterias, p.nota || null),
+    };
+  });
+
+  descargarOCompartirArchivo(
+    `profesores-${fechaParaNombreArchivo()}.json`,
+    JSON.stringify({ tipo: "profesores", version: 1, exportadoEn: Date.now(), items }, null, 2),
+    "Profesores exportados"
+  );
+}
+
+function exportarCompaneros() {
+  const datos = estado.datos;
+  const companeros = datos.companeros || [];
+  if (companeros.length === 0) {
+    mostrarToast("Todavía no tenés ningún compañero para exportar.");
+    return;
+  }
+  const items = companeros.map((c) => {
+    const compartidas = obtenerMateriasCompartidasValidas(c, datos);
+    const nombresMaterias = [
+      ...new Set(
+        compartidas
+          .map(({ mm }) => obtenerContextoMateria(mm).materia)
+          .filter(Boolean)
+          .map((materia) => materia.nombre)
+      ),
+    ];
+    return {
+      nombre_completo: c.nombre_completo,
+      carnet: c.carnet || null,
+      telefono: c.telefono || null,
+      lista: c.lista === "blacklist" ? "blacklist" : "whitelist",
+      nota: armarNotaExportable(nombresMaterias, c.nota || null),
+    };
+  });
+
+  descargarOCompartirArchivo(
+    `companeros-${fechaParaNombreArchivo()}.json`,
+    JSON.stringify({ tipo: "companeros", version: 1, exportadoEn: Date.now(), items }, null, 2),
+    "Compañeros exportados"
+  );
+}
+
+/** Abre el selector de archivos nativo, lee el .json elegido y valida que
+ *  sea del tipo esperado ("profesores" o "companeros" — pedido explícito:
+ *  "SOLAMENTE exporta la seccion donde este... nunca ambos", lo mismo
+ *  aplica a importar: un archivo de Compañeros no se puede meter en
+ *  Profesores por accidente). */
+function abrirSelectorArchivoImportar(tipoEsperado, onDatosListos) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json,.json";
+  input.style.display = "none";
+  input.addEventListener("change", () => {
+    const archivo = input.files && input.files[0];
+    input.remove();
+    if (!archivo) return;
+    const lector = new FileReader();
+    lector.onload = () => {
+      let paquete;
+      try {
+        paquete = JSON.parse(String(lector.result));
+      } catch (e) {
+        mostrarToast("Ese archivo no se pudo leer — no es un JSON válido.");
+        return;
+      }
+      if (!paquete || !Array.isArray(paquete.items)) {
+        mostrarToast("Ese archivo no tiene el formato esperado.");
+        return;
+      }
+      if (paquete.tipo && paquete.tipo !== tipoEsperado) {
+        const nombreOtro = paquete.tipo === "profesores" ? "Profesores" : "Compañeros";
+        const nombreEsperado = tipoEsperado === "profesores" ? "Profesores" : "Compañeros";
+        mostrarToast(`Ese archivo es de ${nombreOtro}, no de ${nombreEsperado} — abrí Importar desde la sección correcta.`);
+        return;
+      }
+      onDatosListos(paquete.items);
+    };
+    lector.onerror = () => mostrarToast("No se pudo leer el archivo.");
+    lector.readAsText(archivo);
+  });
+  document.body.appendChild(input);
+  input.click();
+}
+
+/**
+ * Modal de revisión tras importar — SOLO se abre si hubo al menos un
+ * candidato "similar" (score entre el umbral y <100%, ver
+ * similitudNombres); los que no coincidían con nada ya se guardaron
+ * directo, y los que coincidían EXACTO ya se omitieron, ninguno de esos
+ * dos casos pasa por acá.
+ *
+ * Cada bloque agrupa por el contacto YA EXISTENTE que mejor coincidió, con
+ * una tarjetita por cada candidato entrante parecido. "Seleccionada"
+ * (resaltada, SIN checkbox — pedido explícito) es el estado por DEFECTO en
+ * cada candidato: significa "es la misma persona, no lo importes de
+ * nuevo". Tocar la tarjeta la des-resalta, lo que dice "en realidad es
+ * alguien distinto, sí importalo como nuevo" — ese es el único control que
+ * decide qué se importa de este grupo.
+ */
+function abrirModalRevisionImportacion({ gruposSimilares, resumenDirectos, resumenOmitidos, obtenerNombre, onConfirmar }) {
+  document.querySelectorAll(".overlay-revision-importacion").forEach((el) => el.remove());
+
+  const overlay = document.createElement("div");
+  overlay.className = "overlay-revision-importacion";
+  overlay.style.cssText =
+    "position:fixed; inset:0; z-index:310; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; padding:16px;";
+
+  const caja = document.createElement("div");
+  caja.className = "glass-card stack";
+  caja.style.cssText = "max-width:480px; width:100%; padding:18px; max-height:85vh; overflow-y:auto; gap:14px;";
+  caja.addEventListener("click", (ev) => ev.stopPropagation());
+
+  caja.innerHTML = `<h2 style="margin:0;">Revisar importación</h2>`;
+
+  const totalCandidatos = gruposSimilares.reduce((n, g) => n + g.candidatos.length, 0);
+  const resumen = document.createElement("p");
+  resumen.className = "muted";
+  resumen.style.margin = "0";
+  const partesResumen = [];
+  if (resumenDirectos > 0) {
+    partesResumen.push(`Ya se ${resumenDirectos === 1 ? "importó 1 nuevo" : `importaron ${resumenDirectos} nuevos`}`);
+  }
+  if (resumenOmitidos > 0) {
+    partesResumen.push(`${resumenOmitidos} ya lo${resumenOmitidos === 1 ? "" : "s"} tenías exactamente igual y se omiti${resumenOmitidos === 1 ? "ó" : "eron"}`);
+  }
+  partesResumen.push(`quedan ${totalCandidatos} parecido${totalCandidatos === 1 ? "" : "s"} a algo que ya tenés — revisalos abajo`);
+  resumen.textContent = partesResumen.join(". ") + ".";
+  caja.appendChild(resumen);
+
+  const bloquesCont = document.createElement("div");
+  bloquesCont.className = "stack";
+  bloquesCont.style.gap = "14px";
+
+  gruposSimilares.forEach((grupo) => {
+    const bloque = document.createElement("div");
+    bloque.className = "stack";
+    bloque.style.gap = "6px";
+
+    const header = document.createElement("p");
+    header.style.margin = "0";
+    header.innerHTML = `<strong>${escaparHtml(obtenerNombre(grupo.existente))}</strong> <span class="muted">(el ya existente)</span>`;
+    bloque.appendChild(header);
+
+    const subheader = document.createElement("p");
+    subheader.className = "muted";
+    subheader.style.cssText = "margin:0; font-size:0.8rem;";
+    subheader.textContent = "Similitudes";
+    bloque.appendChild(subheader);
+
+    const listaCandidatos = document.createElement("div");
+    listaCandidatos.className = "stack";
+    listaCandidatos.style.gap = "6px";
+
+    grupo.candidatos.forEach((candidato) => {
+      const tarjeta = document.createElement("div");
+      tarjeta.style.cssText =
+        "padding:10px 12px; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:8px; border-radius:10px; transition:background 0.15s, box-shadow 0.15s;";
+      tarjeta.className = "glass-panel";
+
+      function repintarEstadoTarjeta() {
+        // Mismo lenguaje visual que ya usa el resto de la app para "esto
+        // está seleccionado/activo" (ver .form-select:focus/.select-custom
+        // en design-system.css): borde + halo con --accent-1.
+        tarjeta.style.background = candidato.seleccionadoComoMismo ? "var(--accent-1-10)" : "";
+        tarjeta.style.boxShadow = candidato.seleccionadoComoMismo ? "0 0 0 2px var(--accent-1)" : "none";
+      }
+      repintarEstadoTarjeta();
+
+      const texto = document.createElement("span");
+      texto.style.cssText = "min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+      texto.textContent = `${obtenerNombre(candidato.item)} (Es el mismo)`;
+      tarjeta.appendChild(texto);
+
+      tarjeta.addEventListener("click", () => {
+        candidato.seleccionadoComoMismo = !candidato.seleccionadoComoMismo;
+        repintarEstadoTarjeta();
+      });
+
+      listaCandidatos.appendChild(tarjeta);
+    });
+
+    bloque.appendChild(listaCandidatos);
+    bloquesCont.appendChild(bloque);
+  });
+
+  caja.appendChild(bloquesCont);
+
+  const btnConfirmar = document.createElement("button");
+  btnConfirmar.type = "button";
+  btnConfirmar.className = "btn btn-primary btn-block";
+  btnConfirmar.textContent = "Confirmar importación";
+  btnConfirmar.addEventListener("click", () => {
+    const nuevos = [];
+    gruposSimilares.forEach((grupo) => {
+      grupo.candidatos.forEach((candidato) => {
+        if (!candidato.seleccionadoComoMismo) nuevos.push(candidato.item);
+      });
+    });
+    overlay.remove();
+    onConfirmar(nuevos);
+  });
+  caja.appendChild(btnConfirmar);
+
+  overlay.appendChild(caja);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+  document.body.appendChild(overlay);
+}
+
+function guardarProfesorImportado(item) {
+  const nuevo = crearProfesor({ nombre: item.nombre, correo: item.correo || "", telefono: item.telefono || "", materias: [] });
+  nuevo.calificacion = typeof item.calificacion === "number" ? item.calificacion : null;
+  nuevo.volveria_a_llevar = item.volveria_a_llevar !== false;
+  nuevo.nota = item.nota || null;
+  estado.datos.profesores.push(nuevo);
+}
+
+function importarProfesores(itemsImportados) {
+  const datos = estado.datos;
+  datos.profesores = datos.profesores || [];
+  const existentes = datos.profesores;
+
+  const directos = []; // sin ninguna coincidencia — se guardan de una
+  const gruposSimilares = []; // [{ existente, candidatos: [{item, score, seleccionadoComoMismo}] }]
+  let omitidosExactos = 0;
+
+  (itemsImportados || []).forEach((item) => {
+    const nombreItem = (item && item.nombre) || "";
+    if (!nombreItem.trim()) return; // sin nombre no hay nada que comparar/importar
+
+    let mejor = null; // { existente, score }
+    existentes.forEach((existente) => {
+      const score = similitudNombres(nombreItem, existente.nombre);
+      if (!mejor || score > mejor.score) mejor = { existente, score };
+    });
+
+    if (mejor && mejor.score === 1) {
+      omitidosExactos += 1;
+      return;
+    }
+    if (mejor && mejor.score >= UMBRAL_SIMILITUD_NOMBRES) {
+      let grupo = gruposSimilares.find((g) => g.existente.id === mejor.existente.id);
+      if (!grupo) {
+        grupo = { existente: mejor.existente, candidatos: [] };
+        gruposSimilares.push(grupo);
+      }
+      grupo.candidatos.push({ item, score: mejor.score, seleccionadoComoMismo: true });
+      return;
+    }
+    directos.push(item);
+  });
+
+  // Pedido explícito: "los que directamente no existen se guardan directamente".
+  directos.forEach((item) => guardarProfesorImportado(item));
+  if (directos.length > 0) marcarCambioPendiente();
+
+  if (gruposSimilares.length === 0) {
+    renderizarComunidad();
+    const partes = [];
+    if (directos.length > 0) partes.push(`Se ${directos.length === 1 ? "importó 1 profesor nuevo" : `importaron ${directos.length} profesores nuevos`}.`);
+    if (omitidosExactos > 0) partes.push(`${omitidosExactos} ya lo${omitidosExactos === 1 ? "" : "s"} tenías (se omitió${omitidosExactos === 1 ? "" : "n"}).`);
+    mostrarToast(partes.join(" ") || "No había nada nuevo para importar.");
+    return;
+  }
+
+  renderizarComunidad();
+  abrirModalRevisionImportacion({
+    gruposSimilares,
+    resumenDirectos: directos.length,
+    resumenOmitidos: omitidosExactos,
+    obtenerNombre: (entidad) => entidad.nombre,
+    onConfirmar: (nuevosAImportar) => {
+      nuevosAImportar.forEach((item) => guardarProfesorImportado(item));
+      if (nuevosAImportar.length > 0) marcarCambioPendiente();
+      renderizarComunidad();
+      mostrarToast(
+        nuevosAImportar.length > 0
+          ? `Se ${nuevosAImportar.length === 1 ? "importó 1 profesor más" : `importaron ${nuevosAImportar.length} profesores más`}.`
+          : "No se importó ningún profesor adicional."
+      );
+    },
+  });
+}
+
+function guardarCompaneroImportado(item) {
+  const nuevo = crearCompanero({
+    nombre_completo: item.nombre_completo,
+    carnet: item.carnet || "",
+    telefono: item.telefono || "",
+    lista: item.lista === "blacklist" ? "blacklist" : "whitelist",
+    nota: item.nota || "",
+    materias_compartidas: [],
+  });
+  estado.datos.companeros.push(nuevo);
+}
+
+function importarCompaneros(itemsImportados) {
+  const datos = estado.datos;
+  datos.companeros = datos.companeros || [];
+  const existentes = datos.companeros;
+
+  const directos = [];
+  const gruposSimilares = [];
+  let omitidosExactos = 0;
+
+  (itemsImportados || []).forEach((item) => {
+    const nombreItem = (item && item.nombre_completo) || "";
+    if (!nombreItem.trim()) return;
+
+    let mejor = null;
+    existentes.forEach((existente) => {
+      const score = similitudNombres(nombreItem, existente.nombre_completo);
+      if (!mejor || score > mejor.score) mejor = { existente, score };
+    });
+
+    if (mejor && mejor.score === 1) {
+      omitidosExactos += 1;
+      return;
+    }
+    if (mejor && mejor.score >= UMBRAL_SIMILITUD_NOMBRES) {
+      let grupo = gruposSimilares.find((g) => g.existente.id === mejor.existente.id);
+      if (!grupo) {
+        grupo = { existente: mejor.existente, candidatos: [] };
+        gruposSimilares.push(grupo);
+      }
+      grupo.candidatos.push({ item, score: mejor.score, seleccionadoComoMismo: true });
+      return;
+    }
+    directos.push(item);
+  });
+
+  directos.forEach((item) => guardarCompaneroImportado(item));
+  if (directos.length > 0) marcarCambioPendiente();
+
+  if (gruposSimilares.length === 0) {
+    renderizarComunidad();
+    const partes = [];
+    if (directos.length > 0) partes.push(`Se ${directos.length === 1 ? "importó 1 compañero nuevo" : `importaron ${directos.length} compañeros nuevos`}.`);
+    if (omitidosExactos > 0) partes.push(`${omitidosExactos} ya lo${omitidosExactos === 1 ? "" : "s"} tenías (se omitió${omitidosExactos === 1 ? "" : "n"}).`);
+    mostrarToast(partes.join(" ") || "No había nada nuevo para importar.");
+    return;
+  }
+
+  renderizarComunidad();
+  abrirModalRevisionImportacion({
+    gruposSimilares,
+    resumenDirectos: directos.length,
+    resumenOmitidos: omitidosExactos,
+    obtenerNombre: (entidad) => entidad.nombre_completo,
+    onConfirmar: (nuevosAImportar) => {
+      nuevosAImportar.forEach((item) => guardarCompaneroImportado(item));
+      if (nuevosAImportar.length > 0) marcarCambioPendiente();
+      renderizarComunidad();
+      mostrarToast(
+        nuevosAImportar.length > 0
+          ? `Se ${nuevosAImportar.length === 1 ? "importó 1 compañero más" : `importaron ${nuevosAImportar.length} compañeros más`}.`
+          : "No se importó ningún compañero adicional."
+      );
+    },
+  });
+}
+
+/** Fila de dos botones (Exportar/Importar) — pedido explícito: "se acomodan
+ *  horizontalmente siempre... ocupan todo el espacio horizontal
+ *  disponible", mismo patrón que la fila de 3 botones de los modales de
+ *  alta (flex-wrap:nowrap + flex:1 en cada uno) — nunca se apilan
+ *  verticalmente sin importar el ancho de pantalla. */
+function construirFilaExportarImportar(onExportar, onImportar) {
+  const fila = document.createElement("div");
+  fila.className = "row";
+  fila.style.cssText = "gap:8px; flex-wrap:nowrap; width:100%;";
+
+  const btnExportar = document.createElement("button");
+  btnExportar.type = "button";
+  btnExportar.className = "btn btn-secondary";
+  btnExportar.style.cssText = "flex:1; min-width:0; padding:10px 6px; font-size:0.85rem;";
+  btnExportar.textContent = "⬆ Exportar";
+  btnExportar.addEventListener("click", onExportar);
+  fila.appendChild(btnExportar);
+
+  const btnImportar = document.createElement("button");
+  btnImportar.type = "button";
+  btnImportar.className = "btn btn-secondary";
+  btnImportar.style.cssText = "flex:1; min-width:0; padding:10px 6px; font-size:0.85rem;";
+  btnImportar.textContent = "⬇ Importar";
+  btnImportar.addEventListener("click", onImportar);
+  fila.appendChild(btnImportar);
+
+  return fila;
+}
+
 function construirSeccionProfesores() {
   const datos = estado.datos;
   const seccion = document.createElement("section");
@@ -2547,6 +3112,13 @@ function construirSeccionProfesores() {
   btnAgregar.textContent = "+ Agregar profesor";
   btnAgregar.addEventListener("click", () => abrirModalAltaProfesor());
   seccion.appendChild(btnAgregar);
+
+  seccion.appendChild(
+    construirFilaExportarImportar(
+      () => exportarProfesores(),
+      () => abrirSelectorArchivoImportar("profesores", (items) => importarProfesores(items))
+    )
+  );
 
   return seccion;
 }
@@ -2748,6 +3320,13 @@ function construirSeccionCompaneros() {
   btnAgregar.textContent = "+ Agregar compañero";
   btnAgregar.addEventListener("click", () => abrirModalAltaCompanero());
   seccion.appendChild(btnAgregar);
+
+  seccion.appendChild(
+    construirFilaExportarImportar(
+      () => exportarCompaneros(),
+      () => abrirSelectorArchivoImportar("companeros", (items) => importarCompaneros(items))
+    )
+  );
 
   return seccion;
 }
