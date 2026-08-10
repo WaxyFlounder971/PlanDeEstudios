@@ -2804,7 +2804,12 @@ function construirCuerpoTarjetaProfesorFlotante(profesor, datos) {
 
   const filaEstrellasRecomendado = document.createElement("div");
   filaEstrellasRecomendado.className = "row";
-  filaEstrellasRecomendado.style.cssText = "gap:10px; flex-wrap:wrap;";
+  // Pedido explícito (2026-08-09): estrellas anclada a la izquierda, badge
+  // de recomendado anclado a la derecha (antes iban juntas a la izquierda,
+  // pegadas una a la otra). space-between empuja cada una a su extremo;
+  // flex-wrap se mantiene por si el nombre largo + los dos elementos no
+  // caben en una fila angosta.
+  filaEstrellasRecomendado.style.cssText = "gap:10px; flex-wrap:wrap; justify-content:space-between; align-items:center;";
 
   const estrellas = construirEstrellasLectura(profesor.calificacion);
   filaEstrellasRecomendado.appendChild(estrellas);
@@ -2865,6 +2870,22 @@ function construirCuerpoTarjetaProfesorFlotante(profesor, datos) {
  * resto de la app para "navegar desde otra sección a una tarjeta puntual"
  * (.destello-resaltado, ver design-system.css) — acá se controla a mano la
  * duración (2s, pedido explícito) en vez de depender solo de la animación.
+ *
+ * FIX (2026-08-09 — "dejó de funcionar la animación de Ir, me lleva a
+ * Comunidad y ya"): esta función ya existía desde antes de que se agregaran
+ * los filtros "Fue profe/No fue profe", "Recomendados/No recomendados" y la
+ * vista "Por bloque" (con bloques colapsables). El bug de raíz es que si
+ * cualquiera de esos deja afuera a ESTE profesor puntual (ej. el filtro
+ * quedó en "Recomendados" y este profesor no lo es, o su bloque de semestre
+ * está colapsado), su tarjeta ni siquiera se llega a crear en el DOM — el
+ * querySelector de abajo no encuentra nada y la función se corta en
+ * silencio ANTES de scrollear/resaltar. La navegación de sección sí había
+ * pasado (btnNav.click()), por eso se sentía como "me lleva y ya". Ahora,
+ * antes de buscar la tarjeta: se resetean los dos filtros a "todos" (el
+ * propósito de "Ir" es ver a ESTE profesor, no importa qué filtro haya
+ * quedado activo en otra visita) y, si la vista está en "Por bloque", se
+ * descolapsa puntualmente el bloque que contiene a este profesor (sin
+ * tocar el colapso de los demás bloques).
  */
 function navegarYResaltarProfesor(profesorId) {
   const btnNav = Array.from(document.querySelectorAll(".btn-nav")).find((b) => (b.textContent || "").includes("Comunidad"));
@@ -2872,6 +2893,17 @@ function navegarYResaltarProfesor(profesorId) {
 
   estado.tabComunidad = "profesores";
   estado.profesoresExpandidos.add(profesorId);
+  estado.filtroComunidadProfesores = "todos";
+  estado.filtroRecomendacionProfesores = "todos";
+
+  if (estado.ordenComunidadProfesores === "bloque") {
+    const profesor = (estado.datos.profesores || []).find((p) => p.id === profesorId);
+    if (profesor) {
+      const bloques = agruparProfesoresPorBloque([profesor], estado.datos);
+      bloques.forEach((b) => estado.bloquesProfesoresColapsados.delete(b.semestre.id));
+    }
+  }
+
   renderizarComunidad();
 
   // Un tick extra (además del render síncrono de arriba) para darle tiempo
