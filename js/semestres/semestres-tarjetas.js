@@ -32,7 +32,7 @@ import {
   reordenarPorArrastre,
 } from "../core/schema.js";
 import { marcarCambioPendiente, actualizarIndicadorSync } from "../core/storage-sync.js";
-import { ESTADOS_MATERIA, abrirModalResolverConflicto, abrirModalResolverConflictoGenerico, resolverConflictoDirecto, agregarIndicadorConflicto } from "../plan/plan-vista-lista-tarjetas.js";
+import { ESTADOS_MATERIA, abrirModalResolverConflicto, abrirModalResolverConflictoGenerico, agregarIndicadorConflicto } from "../plan/plan-vista-lista-tarjetas.js";
 import { abrirModalRequisito, abrirModalAsignarProfesorDesdeHistorial } from "../plan/plan-detalle.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 
@@ -483,23 +483,11 @@ function listarTodosLosConflictos() {
   const items = [];
 
   (estado.datos.planes_estudio || []).forEach((plan) => {
-    const planId = plan.id;
     (plan.materias || []).forEach((materia) => {
       if (materia._conflicto) {
-        const materiaId = materia.id;
         items.push({
           etiqueta: `📚 ${aplicarFormatoTexto(materia.nombre)} (${materia.codigo})`,
           resolver: () => abrirModalResolverConflicto(materia, plan, alResolverUnConflictoGlobal),
-          // Fase "resolver todos a la vez": misma búsqueda de la entidad
-          // viva que usa abrirModalResolverConflicto arriba, pero expuesta
-          // directamente para que resolverConflictoDirecto pueda aplicarse
-          // sin abrir ningún modal (ver abrirModalTodosLosConflictos).
-          obtenerFresca: () => {
-            const planVivo = (estado.datos.planes_estudio || []).find((p) => p.id === planId);
-            if (!planVivo) return null;
-            return (planVivo.materias || []).find((m) => m.id === materiaId) || null;
-          },
-          onResuelto: () => renderizarPlanEstudios(),
         });
       }
     });
@@ -507,7 +495,6 @@ function listarTodosLosConflictos() {
 
   (estado.datos.semestres || []).forEach((semestre) => {
     if (semestre._conflicto) {
-      const semestreId = semestre.id;
       items.push({
         etiqueta: `📅 Semestre "${semestre.nombre}"`,
         resolver: () =>
@@ -515,8 +502,6 @@ function listarTodosLosConflictos() {
             renderizarSemestres();
             alResolverUnConflictoGlobal();
           }),
-        obtenerFresca: () => (estado.datos.semestres || []).find((s) => s.id === semestreId) || null,
-        onResuelto: () => renderizarSemestres(),
       });
     }
 
@@ -524,7 +509,6 @@ function listarTodosLosConflictos() {
       const plan = (estado.datos.planes_estudio || []).find((p) => p.id === mm.plan_estudio_id);
       const materia = plan && (plan.materias || []).find((m) => m.id === mm.materia_id);
       const nombreMateria = materia ? `${aplicarFormatoTexto(materia.nombre)} (${materia.codigo})` : "una materia matriculada";
-      const mmId = mm.id;
 
       if (mm._conflicto) {
         items.push({
@@ -534,14 +518,11 @@ function listarTodosLosConflictos() {
               renderizarSemestres();
               alResolverUnConflictoGlobal();
             }),
-          obtenerFresca: () => buscarMmVivaPorId(mmId),
-          onResuelto: () => renderizarSemestres(),
         });
       }
 
       (mm.criterios || []).forEach((criterio) => {
         if (criterio._conflicto) {
-          const criterioId = criterio.id;
           items.push({
             etiqueta: `🎯 Criterio "${criterio.nombre}" de ${nombreMateria}`,
             resolver: () =>
@@ -549,12 +530,6 @@ function listarTodosLosConflictos() {
                 renderizarSemestres();
                 alResolverUnConflictoGlobal();
               }),
-            obtenerFresca: () => {
-              const mmVivo = buscarMmVivaPorId(mmId);
-              if (!mmVivo) return null;
-              return (mmVivo.criterios || []).find((c) => c.id === criterioId) || null;
-            },
-            onResuelto: () => renderizarSemestres(),
           });
         }
       });
@@ -562,38 +537,6 @@ function listarTodosLosConflictos() {
   });
 
   return items;
-}
-
-/**
- * "Aplicar para todos" (pedido explícito): resuelve TODA la lista de
- * conflictos pendientes de una sola vez, con el mismo lado ("local" o
- * "alterna") para cada uno — sin abrir un modal por fila. Reutiliza
- * resolverConflictoDirecto (plan-vista-lista-tarjetas.js), la misma función
- * que usa el botón "Usar este/otro dispositivo" del modal individual, así
- * que el resultado de cada fila es idéntico a resolverla a mano una por una.
- * Se recalcula `listarTodosLosConflictos()` fresco en vez de reusar `items`
- * para no arrastrar `obtenerFresca` capturados sobre datos que ya cambiaron
- * a mitad del lote (poco probable en un loop síncrono, pero gratis de
- * evitar). Cada fila que sí tenía conflicto real dispara su propio
- * `onResuelto` para refrescar la pantalla correspondiente (plan o
- * semestres); se deduplica para no renderizar la misma vista N veces.
- */
-function resolverTodosLosConflictos(cual) {
-  const items = listarTodosLosConflictos();
-  const refrescos = new Set();
-  let resueltos = 0;
-
-  items.forEach((item) => {
-    const seResolvio = resolverConflictoDirecto({ obtenerFresca: item.obtenerFresca, cual });
-    if (seResolvio) {
-      resueltos += 1;
-      if (item.onResuelto) refrescos.add(item.onResuelto);
-    }
-  });
-
-  refrescos.forEach((refrescar) => refrescar());
-  actualizarIndicadorSync();
-  return resueltos;
 }
 
 /** Guarda la referencia al overlay abierto del modal global para poder
@@ -639,63 +582,8 @@ function abrirModalTodosLosConflictos() {
       ? "No hay ningún choque pendiente en este momento."
       : `Se editó lo mismo desde dos dispositivos distintos antes de que sincronizaran entre sí, en ${items.length} ${
           items.length === 1 ? "lugar" : "lugares"
-        }. Elegí uno para resolverlo, o aplicá la misma decisión a todos de una vez.`;
+        }. Elegí uno para resolverlo — esta lista se actualiza sola al terminar.`;
   caja.appendChild(explicacionEl);
-
-  if (items.length > 0) {
-    // "Aplicar para todos" (pedido explícito): dos botones ANTES de la
-    // lista individual — izquierda deja "esta versión" (local) en cada
-    // conflicto, derecha deja "la otra versión" (alterna) en cada uno. Se
-    // arma con flex-wrap en vez de una grilla de 2 columnas fija: mientras
-    // quepan lado a lado (ancho normal de modal) se ven en fila; si el
-    // ancho disponible es muy angosto (texto largo, pantalla chica) cada
-    // botón pasa a ocupar la fila completa en vertical, en vez de recortarse
-    // o desbordar — sin que haya que definir un breakpoint a mano.
-    const grupoAplicarTodos = document.createElement("div");
-    grupoAplicarTodos.style.cssText = "display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;";
-
-    const etiquetaGrupo = document.createElement("div");
-    etiquetaGrupo.style.cssText = "flex:1 1 100%; font-size:0.8rem; opacity:0.65; margin-bottom:2px;";
-    etiquetaGrupo.textContent = "Aplicar para todos los cambios:";
-    grupoAplicarTodos.appendChild(etiquetaGrupo);
-
-    const aplicarYRefrescar = (cual) => {
-      const resueltos = resolverTodosLosConflictos(cual);
-      mostrarToast(
-        resueltos > 0
-          ? `Se resolvieron ${resueltos} ${resueltos === 1 ? "cambio" : "cambios"}.`
-          : "No había nada pendiente por resolver."
-      );
-      abrirModalTodosLosConflictos();
-    };
-
-    const btnTodosLocal = document.createElement("button");
-    btnTodosLocal.type = "button";
-    btnTodosLocal.className = "btn btn-secondary";
-    btnTodosLocal.style.cssText = "flex:1 1 160px;";
-    btnTodosLocal.textContent = "📍 Dejar esta versión";
-    btnTodosLocal.addEventListener("click", () => aplicarYRefrescar("local"));
-    grupoAplicarTodos.appendChild(btnTodosLocal);
-
-    const btnTodosAlterna = document.createElement("button");
-    btnTodosAlterna.type = "button";
-    btnTodosAlterna.className = "btn btn-secondary";
-    btnTodosAlterna.style.cssText = "flex:1 1 160px;";
-    btnTodosAlterna.textContent = "📱 Dejar la otra versión";
-    btnTodosAlterna.addEventListener("click", () => aplicarYRefrescar("alterna"));
-    grupoAplicarTodos.appendChild(btnTodosAlterna);
-
-    caja.appendChild(grupoAplicarTodos);
-
-    const separador = document.createElement("div");
-    separador.style.cssText = "border-top:1px solid rgba(255,255,255,0.1); margin:2px 0 10px;";
-    caja.appendChild(separador);
-
-    const etiquetaIndividual = document.createElement("div");
-    etiquetaIndividual.style.cssText = "font-size:0.8rem; opacity:0.65; margin-bottom:2px;";
-    etiquetaIndividual.textContent = "O elegí uno por uno:";
-    caja.appendChild(etiquetaIndividual);
-  }
 
   items.forEach((item) => {
     const fila = document.createElement("button");
@@ -3269,34 +3157,40 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
     onCambiar();
   });
 
-  const linea1 = document.createElement("div");
-  linea1.className = "materia-linea1";
-  linea1.style.alignItems = "center";
+  // ===== Fábricas reutilizables (2026-08-09, pedido explícito: "SOLAMENTE
+  // en pantallas estrechas" la tarjeta pasa a 3 líneas) =====
+  // Para no arriesgar el layout de escritorio (que debe quedar
+  // BYTE-A-BYTE igual a como estaba), se arma el layout ancho de siempre
+  // (linea1/linea2, sin tocar nada) Y, en paralelo, un segundo juego de
+  // filas — angosto, 3 líneas — con nodos propios (nunca se reutiliza el
+  // mismo nodo en dos contenedores). CSS decide cuál juego se ve según el
+  // ancho (ver .materia-linea1/.materia-linea2 vs
+  // .materia-linea*-angosta en design-system.css): por defecto el angosto
+  // vive con display:none, así que si por lo que sea el CSS no cargara,
+  // el resultado sigue siendo el layout de escritorio de toda la vida, no
+  // uno roto o duplicado a la vista.
+  function crearPrefijoCodigo() {
+    const prefijo = document.createElement("span");
+    prefijo.className = "materia-prefijo";
+    const spanCodigo = document.createElement("span");
+    spanCodigo.className = "materia-codigo";
+    spanCodigo.textContent = materia.codigo;
+    spanCodigo.style.cssText = "position:relative; top:-3px; cursor:pointer;";
+    spanCodigo.title = "Ver la tarjeta de esta materia";
+    spanCodigo.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      abrirModalRequisito(materia.codigo);
+    });
+    prefijo.appendChild(spanCodigo);
+    return prefijo;
+  }
 
-  const prefijo = document.createElement("span");
-  prefijo.className = "materia-prefijo";
-  const spanCodigo = document.createElement("span");
-  spanCodigo.className = "materia-codigo";
-  spanCodigo.textContent = materia.codigo;
-  // v2.1.4: el monoespaciado del código queda ~4px más abajo que el nombre
-  // por métrica de fuente — se sube para que ambos queden centrados entre sí.
-  // Pendiente #5 (2026-08-03): se quitaron los botones de Categoría/Historial/
-  // Es requisito de esta tarjeta — el código ahora abre directo la tarjetita
-  // de detalle de la materia (misma ventana que en Plan de Estudios, donde
-  // sí siguen viviendo categoría, requisitos e historial).
-  spanCodigo.style.cssText = "position:relative; top:-3px; cursor:pointer;";
-  spanCodigo.title = "Ver la tarjeta de esta materia";
-  spanCodigo.addEventListener("click", (ev) => {
-    ev.stopPropagation();
-    abrirModalRequisito(materia.codigo);
-  });
-  prefijo.appendChild(spanCodigo);
-  linea1.appendChild(prefijo);
-
-  const spanNombre = document.createElement("span");
-  spanNombre.className = "materia-nombre " + (expandida ? "completa" : "truncada");
-  spanNombre.textContent = aplicarFormatoTexto(materia.nombre);
-  linea1.appendChild(spanNombre);
+  function crearSpanNombre() {
+    const spanNombre = document.createElement("span");
+    spanNombre.className = "materia-nombre " + (expandida ? "completa" : "truncada");
+    spanNombre.textContent = aplicarFormatoTexto(materia.nombre);
+    return spanNombre;
+  }
 
   // Ajuste (2026-08-07, pedido explícito — 2do ajuste, reemplaza el
   // anterior): "Nota: X" debe verse EXACTAMENTE igual que el nombre de la
@@ -3313,91 +3207,170 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
   // 0-100 interno, hay que convertirlo a la escala del plan para mostrar.
   const escalaActivaLinea1 = obtenerEscalaNotasMateria(materia, plan, estado.datos.configuracion);
   const notaRedondeadaLinea1Mostrada = convertirDesde100(notaRedondeadaLinea1, obtenerEscalaPorId(escalaActivaLinea1));
-  const spanNota = document.createElement("span");
-  spanNota.className = "materia-nota";
-  spanNota.style.cssText = "flex-shrink:0; font-family:var(--font-display); font-weight:700; white-space:nowrap;";
-  spanNota.textContent = `Nota: ${
+  const textoNota = `Nota: ${
     notaRedondeadaLinea1 === null || notaRedondeadaLinea1 === undefined ? "—" : formatearNumero(notaRedondeadaLinea1Mostrada)
   }`;
-  linea1.appendChild(spanNota);
+  function crearSpanNota() {
+    const spanNota = document.createElement("span");
+    spanNota.className = "materia-nota";
+    spanNota.style.cssText = "flex-shrink:0; font-family:var(--font-display); font-weight:700; white-space:nowrap;";
+    spanNota.textContent = textoNota;
+    return spanNota;
+  }
 
-  // Punto pendiente (2026-08-09, confirmado): ícono 👤 clickeable, a la
-  // par de "Nota: X" en línea 1 (por encima de la flecha ▲▼, que vive en
-  // línea 2). Abre una tarjeta flotante de solo consulta con los
-  // profesores vinculados a ESTA materia matriculada puntual — nunca
-  // navega a Comunidad, todo se resuelve ahí mismo.
-  const iconoProfesor = document.createElement("span");
-  iconoProfesor.className = "materia-icono-profesor";
-  iconoProfesor.style.cssText = "flex-shrink:0; cursor:pointer; font-size:0.85rem; line-height:1;";
-  iconoProfesor.textContent = "👤";
-  iconoProfesor.title = "Profesores vinculados a esta materia";
-  iconoProfesor.addEventListener("click", (ev) => {
-    ev.stopPropagation();
-    abrirPopoverProfesoresMateria(mm, materia, plan, semestre, onCambiar);
-  });
-  linea1.appendChild(iconoProfesor);
+  // Punto pendiente (2026-08-09, confirmado): ícono 👤 clickeable. Abre una
+  // tarjeta flotante de solo consulta con los profesores vinculados a ESTA
+  // materia matriculada puntual — nunca navega a Comunidad, todo se
+  // resuelve ahí mismo.
+  function crearIconoProfesor() {
+    const iconoProfesor = document.createElement("span");
+    iconoProfesor.className = "materia-icono-profesor";
+    iconoProfesor.style.cssText = "flex-shrink:0; cursor:pointer; font-size:0.85rem; line-height:1;";
+    iconoProfesor.textContent = "👤";
+    iconoProfesor.title = "Profesores vinculados a esta materia";
+    iconoProfesor.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      abrirPopoverProfesoresMateria(mm, materia, plan, semestre, onCambiar);
+    });
+    return iconoProfesor;
+  }
 
+  function crearBadgeEstado() {
+    const badgeEstado = document.createElement("span");
+    badgeEstado.className = `badge ${infoEstado.badge}`;
+    badgeEstado.textContent = infoEstado.texto;
+    if (semestreActual) {
+      // Mientras el semestre está en curso, "Cursando" se deriva en vivo
+      // (ver obtenerEstadoEfectivoMateria en schema.js) — no hay nada que
+      // fijar a mano todavía, así que el badge queda de solo lectura.
+      badgeEstado.style.cursor = "default";
+      badgeEstado.title = "Se calcula automáticamente mientras el semestre esté en curso";
+    } else {
+      badgeEstado.style.cursor = "pointer";
+      badgeEstado.title =
+        "Clic para corregir el resultado de este intento — solo afecta este semestre, no el Plan de estudios";
+      badgeEstado.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        abrirMenuRapidoResultadoMatricula(mm, badgeEstado, onCambiar);
+      });
+    }
+    return badgeEstado;
+  }
+
+  function crearBadgeUniversidad() {
+    const badgeUniversidad = document.createElement("span");
+    badgeUniversidad.className = "badge badge-neutral";
+    badgeUniversidad.textContent = textoBadgeUniversidad(plan.universidad);
+    badgeUniversidad.title = plan.universidad;
+    return badgeUniversidad;
+  }
+
+  function crearBadgeCreditos() {
+    const badgeCreditos = document.createElement("span");
+    badgeCreditos.className = "badge badge-accent";
+    badgeCreditos.textContent = `Créditos: ${materia.creditos}`;
+    return badgeCreditos;
+  }
+
+  function crearIconoExpandir() {
+    const iconoExpandir = document.createElement("span");
+    iconoExpandir.className = "materia-expandir";
+    iconoExpandir.textContent = expandida ? "▲" : "▼";
+    return iconoExpandir;
+  }
+
+  // ===== Vista ANCHA (escritorio/tablet — sin cambios) =====
+  // Línea 1: Código, Materia, Nota, 👤
+  const linea1 = document.createElement("div");
+  linea1.className = "materia-linea1";
+  linea1.style.alignItems = "center";
+  linea1.appendChild(crearPrefijoCodigo());
+  linea1.appendChild(crearSpanNombre());
+  linea1.appendChild(crearSpanNota());
+  linea1.appendChild(crearIconoProfesor());
   filaPrincipal.appendChild(linea1);
 
+  // Línea 2: Estado (izquierda), Universidad (centro), Créditos + flecha (derecha)
   const linea2 = document.createElement("div");
   linea2.className = "materia-linea2";
   linea2.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px;";
 
   const colEstado = document.createElement("div");
   colEstado.style.cssText = "justify-self:start; min-width:0;";
-  const badgeEstado = document.createElement("span");
-  badgeEstado.className = `badge ${infoEstado.badge}`;
-  badgeEstado.textContent = infoEstado.texto;
-  if (semestreActual) {
-    // Mientras el semestre está en curso, "Cursando" se deriva en vivo
-    // (ver obtenerEstadoEfectivoMateria en schema.js) — no hay nada que
-    // fijar a mano todavía, así que el badge queda de solo lectura.
-    badgeEstado.style.cursor = "default";
-    badgeEstado.title = "Se calcula automáticamente mientras el semestre esté en curso";
-  } else {
-    badgeEstado.style.cursor = "pointer";
-    badgeEstado.title =
-      "Clic para corregir el resultado de este intento — solo afecta este semestre, no el Plan de estudios";
-    badgeEstado.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      abrirMenuRapidoResultadoMatricula(mm, badgeEstado, onCambiar);
-    });
-  }
-  colEstado.appendChild(badgeEstado);
+  colEstado.appendChild(crearBadgeEstado());
   linea2.appendChild(colEstado);
 
-  const badgeUniversidad = document.createElement("span");
-  badgeUniversidad.className = "badge badge-neutral";
-  badgeUniversidad.style.justifySelf = "center";
-  badgeUniversidad.textContent = textoBadgeUniversidad(plan.universidad);
-  badgeUniversidad.title = plan.universidad;
-  linea2.appendChild(badgeUniversidad);
+  const badgeUniversidadAncha = crearBadgeUniversidad();
+  badgeUniversidadAncha.style.justifySelf = "center";
+  linea2.appendChild(badgeUniversidadAncha);
 
   // Punto 3 (2026-08-07): columna derecha de línea 2 con Créditos + flecha
-  // ▲▼ juntos (la flecha bajó de nivel, ya no vive en línea 1). "Nota: X"
-  // volvió a línea 1 (ver ajuste más arriba), así que acá ya no hace falta
-  // apilar 2 líneas — vuelve a ser una sola fila.
+  // ▲▼ juntos.
   const colDerecha = document.createElement("div");
   colDerecha.className = "row";
   colDerecha.style.cssText = "justify-self:end; min-width:0; align-items:center; gap:8px;";
+  colDerecha.appendChild(crearBadgeCreditos());
+  colDerecha.appendChild(crearIconoExpandir());
+  linea2.appendChild(colDerecha);
 
-  const badgeCreditos = document.createElement("span");
-  badgeCreditos.className = "badge badge-accent";
-  badgeCreditos.textContent = `Créditos: ${materia.creditos}`;
-  colDerecha.appendChild(badgeCreditos);
+  filaPrincipal.appendChild(linea2);
 
-  const iconoExpandir = document.createElement("span");
-  iconoExpandir.className = "materia-expandir";
-  iconoExpandir.textContent = expandida ? "▲" : "▼";
-  colDerecha.appendChild(iconoExpandir);
+  // ===== Vista ANGOSTA (pedido explícito 2026-08-09, SOLO teléfono —
+  // ver @media(max-width:480px) .materia-linea*-angosta en
+  // design-system.css, oculta por defecto con display:none) =====
+  // Línea 1: Código, Materia (sin Nota ni 👤)
+  const linea1Angosta = document.createElement("div");
+  linea1Angosta.className = "materia-linea1 materia-linea1-angosta";
+  linea1Angosta.style.alignItems = "center";
+  linea1Angosta.appendChild(crearPrefijoCodigo());
+  linea1Angosta.appendChild(crearSpanNombre());
+  filaPrincipal.appendChild(linea1Angosta);
+
+  // Línea 2: Estado (izquierda) · Universidad (centro) · Créditos (derecha)
+  const linea2Angosta = document.createElement("div");
+  linea2Angosta.className = "materia-linea2-angosta";
+
+  const colEstadoAngosta = document.createElement("div");
+  colEstadoAngosta.style.cssText = "justify-self:start; min-width:0;";
+  colEstadoAngosta.appendChild(crearBadgeEstado());
+  linea2Angosta.appendChild(colEstadoAngosta);
+
+  const badgeUniversidadAngosta = crearBadgeUniversidad();
+  badgeUniversidadAngosta.style.justifySelf = "center";
+  linea2Angosta.appendChild(badgeUniversidadAngosta);
+
+  const colCreditosAngosta = document.createElement("div");
+  colCreditosAngosta.style.cssText = "justify-self:end; min-width:0;";
+  colCreditosAngosta.appendChild(crearBadgeCreditos());
+  linea2Angosta.appendChild(colCreditosAngosta);
+
+  filaPrincipal.appendChild(linea2Angosta);
+
+  // Línea 3: 👤 (izquierda) · Nota: x (centro) · flecha ▲▼ (derecha)
+  const linea3Angosta = document.createElement("div");
+  linea3Angosta.className = "materia-linea3-angosta";
+
+  const colProfesorAngosta = document.createElement("div");
+  colProfesorAngosta.style.cssText = "justify-self:start; min-width:0;";
+  colProfesorAngosta.appendChild(crearIconoProfesor());
+  linea3Angosta.appendChild(colProfesorAngosta);
+
+  const colNotaAngosta = document.createElement("div");
+  colNotaAngosta.style.cssText = "justify-self:center; min-width:0;";
+  colNotaAngosta.appendChild(crearSpanNota());
+  linea3Angosta.appendChild(colNotaAngosta);
+
+  const colFlechaAngosta = document.createElement("div");
+  colFlechaAngosta.style.cssText = "justify-self:end; min-width:0;";
+  colFlechaAngosta.appendChild(crearIconoExpandir());
+  linea3Angosta.appendChild(colFlechaAngosta);
+
+  filaPrincipal.appendChild(linea3Angosta);
 
   if (mm._conflicto) {
     agregarIndicadorConflicto(card, () => abrirModalResolverConflictoMatricula(mm, materia, plan, onCambiar));
   }
-  linea2.appendChild(colDerecha);
 
-  filaPrincipal.appendChild(linea2);
-  
   card.appendChild(filaPrincipal);
 
   if (expandida) {
