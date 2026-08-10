@@ -1420,6 +1420,16 @@ img, svg { max-width: 100%; }
   font-size: 0.8rem;
 }
 
+/* Semestres (tarjeta de materia matriculada) — línea 2 ANCHA necesita 3
+   columnas simétricas (Estado / Universidad / Créditos+flecha), a
+   diferencia del .materia-linea2 base (flex, usado también por Plan de
+   Estudios en plan-detalle.js, que NO debe tocarse). El display:grid vive
+   en esta clase — NUNCA como estilo inline — justo para que el
+   @media(max-width:480px) de abajo pueda apagarla en teléfono sin pelear
+   contra la prioridad de un inline (ver FIX 2026-08-09 en
+   construirTarjetaMateriaMatriculada). */
+.materia-linea2-semestre-grid { display: grid; }
+
 .materia-cuerpo { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-glass); }
 .materia-req-linea { text-align: left; color: var(--text-muted); font-size: 0.82rem; margin: 0; }
 
