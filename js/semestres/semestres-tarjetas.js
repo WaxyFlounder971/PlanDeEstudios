@@ -32,7 +32,7 @@ import {
   reordenarPorArrastre,
 } from "../core/schema.js";
 import { marcarCambioPendiente, actualizarIndicadorSync } from "../core/storage-sync.js";
-import { ESTADOS_MATERIA, abrirModalResolverConflicto, abrirModalResolverConflictoGenerico, agregarIndicadorConflicto } from "../plan/plan-vista-lista-tarjetas.js";
+import { ESTADOS_MATERIA, abrirModalResolverConflicto, abrirModalResolverConflictoGenerico, resolverConflictoDirecto, agregarIndicadorConflicto } from "../plan/plan-vista-lista-tarjetas.js";
 import { abrirModalRequisito, abrirModalAsignarProfesorDesdeHistorial } from "../plan/plan-detalle.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 
@@ -483,11 +483,23 @@ function listarTodosLosConflictos() {
   const items = [];
 
   (estado.datos.planes_estudio || []).forEach((plan) => {
+    const planId = plan.id;
     (plan.materias || []).forEach((materia) => {
       if (materia._conflicto) {
+        const materiaId = materia.id;
         items.push({
           etiqueta: `📚 ${aplicarFormatoTexto(materia.nombre)} (${materia.codigo})`,
           resolver: () => abrirModalResolverConflicto(materia, plan, alResolverUnConflictoGlobal),
+          // Fase "resolver todos a la vez": misma búsqueda de la entidad
+          // viva que usa abrirModalResolverConflicto arriba, pero expuesta
+          // directamente para que resolverConflictoDirecto pueda aplicarse
+          // sin abrir ningún modal (ver abrirModalTodosLosConflictos).
+          obtenerFresca: () => {
+            const planVivo = (estado.datos.planes_estudio || []).find((p) => p.id === planId);
+            if (!planVivo) return null;
+            return (planVivo.materias || []).find((m) => m.id === materiaId) || null;
+          },
+          onResuelto: () => renderizarPlanEstudios(),
         });
       }
     });
@@ -495,6 +507,7 @@ function listarTodosLosConflictos() {
 
   (estado.datos.semestres || []).forEach((semestre) => {
     if (semestre._conflicto) {
+      const semestreId = semestre.id;
       items.push({
         etiqueta: `📅 Semestre "${semestre.nombre}"`,
         resolver: () =>
@@ -502,6 +515,8 @@ function listarTodosLosConflictos() {
             renderizarSemestres();
             alResolverUnConflictoGlobal();
           }),
+        obtenerFresca: () => (estado.datos.semestres || []).find((s) => s.id === semestreId) || null,
+        onResuelto: () => renderizarSemestres(),
       });
     }
 
@@ -509,6 +524,7 @@ function listarTodosLosConflictos() {
       const plan = (estado.datos.planes_estudio || []).find((p) => p.id === mm.plan_estudio_id);
       const materia = plan && (plan.materias || []).find((m) => m.id === mm.materia_id);
       const nombreMateria = materia ? `${aplicarFormatoTexto(materia.nombre)} (${materia.codigo})` : "una materia matriculada";
+      const mmId = mm.id;
 
       if (mm._conflicto) {
         items.push({
@@ -518,11 +534,14 @@ function listarTodosLosConflictos() {
               renderizarSemestres();
               alResolverUnConflictoGlobal();
             }),
+          obtenerFresca: () => buscarMmVivaPorId(mmId),
+          onResuelto: () => renderizarSemestres(),
         });
       }
 
       (mm.criterios || []).forEach((criterio) => {
         if (criterio._conflicto) {
+          const criterioId = criterio.id;
           items.push({
             etiqueta: `🎯 Criterio "${criterio.nombre}" de ${nombreMateria}`,
             resolver: () =>
@@ -530,6 +549,12 @@ function listarTodosLosConflictos() {
                 renderizarSemestres();
                 alResolverUnConflictoGlobal();
               }),
+            obtenerFresca: () => {
+              const mmVivo = buscarMmVivaPorId(mmId);
+              if (!mmVivo) return null;
+              return (mmVivo.criterios || []).find((c) => c.id === criterioId) || null;
+            },
+            onResuelto: () => renderizarSemestres(),
           });
         }
       });
@@ -537,6 +562,38 @@ function listarTodosLosConflictos() {
   });
 
   return items;
+}
+
+/**
+ * "Aplicar para todos" (pedido explícito): resuelve TODA la lista de
+ * conflictos pendientes de una sola vez, con el mismo lado ("local" o
+ * "alterna") para cada uno — sin abrir un modal por fila. Reutiliza
+ * resolverConflictoDirecto (plan-vista-lista-tarjetas.js), la misma función
+ * que usa el botón "Usar este/otro dispositivo" del modal individual, así
+ * que el resultado de cada fila es idéntico a resolverla a mano una por una.
+ * Se recalcula `listarTodosLosConflictos()` fresco en vez de reusar `items`
+ * para no arrastrar `obtenerFresca` capturados sobre datos que ya cambiaron
+ * a mitad del lote (poco probable en un loop síncrono, pero gratis de
+ * evitar). Cada fila que sí tenía conflicto real dispara su propio
+ * `onResuelto` para refrescar la pantalla correspondiente (plan o
+ * semestres); se deduplica para no renderizar la misma vista N veces.
+ */
+function resolverTodosLosConflictos(cual) {
+  const items = listarTodosLosConflictos();
+  const refrescos = new Set();
+  let resueltos = 0;
+
+  items.forEach((item) => {
+    const seResolvio = resolverConflictoDirecto({ obtenerFresca: item.obtenerFresca, cual });
+    if (seResolvio) {
+      resueltos += 1;
+      if (item.onResuelto) refrescos.add(item.onResuelto);
+    }
+  });
+
+  refrescos.forEach((refrescar) => refrescar());
+  actualizarIndicadorSync();
+  return resueltos;
 }
 
 /** Guarda la referencia al overlay abierto del modal global para poder
@@ -582,8 +639,63 @@ function abrirModalTodosLosConflictos() {
       ? "No hay ningún choque pendiente en este momento."
       : `Se editó lo mismo desde dos dispositivos distintos antes de que sincronizaran entre sí, en ${items.length} ${
           items.length === 1 ? "lugar" : "lugares"
-        }. Elegí uno para resolverlo — esta lista se actualiza sola al terminar.`;
+        }. Elegí uno para resolverlo, o aplicá la misma decisión a todos de una vez.`;
   caja.appendChild(explicacionEl);
+
+  if (items.length > 0) {
+    // "Aplicar para todos" (pedido explícito): dos botones ANTES de la
+    // lista individual — izquierda deja "esta versión" (local) en cada
+    // conflicto, derecha deja "la otra versión" (alterna) en cada uno. Se
+    // arma con flex-wrap en vez de una grilla de 2 columnas fija: mientras
+    // quepan lado a lado (ancho normal de modal) se ven en fila; si el
+    // ancho disponible es muy angosto (texto largo, pantalla chica) cada
+    // botón pasa a ocupar la fila completa en vertical, en vez de recortarse
+    // o desbordar — sin que haya que definir un breakpoint a mano.
+    const grupoAplicarTodos = document.createElement("div");
+    grupoAplicarTodos.style.cssText = "display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;";
+
+    const etiquetaGrupo = document.createElement("div");
+    etiquetaGrupo.style.cssText = "flex:1 1 100%; font-size:0.8rem; opacity:0.65; margin-bottom:2px;";
+    etiquetaGrupo.textContent = "Aplicar para todos los cambios:";
+    grupoAplicarTodos.appendChild(etiquetaGrupo);
+
+    const aplicarYRefrescar = (cual) => {
+      const resueltos = resolverTodosLosConflictos(cual);
+      mostrarToast(
+        resueltos > 0
+          ? `Se resolvieron ${resueltos} ${resueltos === 1 ? "cambio" : "cambios"}.`
+          : "No había nada pendiente por resolver."
+      );
+      abrirModalTodosLosConflictos();
+    };
+
+    const btnTodosLocal = document.createElement("button");
+    btnTodosLocal.type = "button";
+    btnTodosLocal.className = "btn btn-secondary";
+    btnTodosLocal.style.cssText = "flex:1 1 160px;";
+    btnTodosLocal.textContent = "📍 Dejar esta versión";
+    btnTodosLocal.addEventListener("click", () => aplicarYRefrescar("local"));
+    grupoAplicarTodos.appendChild(btnTodosLocal);
+
+    const btnTodosAlterna = document.createElement("button");
+    btnTodosAlterna.type = "button";
+    btnTodosAlterna.className = "btn btn-secondary";
+    btnTodosAlterna.style.cssText = "flex:1 1 160px;";
+    btnTodosAlterna.textContent = "📱 Dejar la otra versión";
+    btnTodosAlterna.addEventListener("click", () => aplicarYRefrescar("alterna"));
+    grupoAplicarTodos.appendChild(btnTodosAlterna);
+
+    caja.appendChild(grupoAplicarTodos);
+
+    const separador = document.createElement("div");
+    separador.style.cssText = "border-top:1px solid rgba(255,255,255,0.1); margin:2px 0 10px;";
+    caja.appendChild(separador);
+
+    const etiquetaIndividual = document.createElement("div");
+    etiquetaIndividual.style.cssText = "font-size:0.8rem; opacity:0.65; margin-bottom:2px;";
+    etiquetaIndividual.textContent = "O elegí uno por uno:";
+    caja.appendChild(etiquetaIndividual);
+  }
 
   items.forEach((item) => {
     const fila = document.createElement("button");
