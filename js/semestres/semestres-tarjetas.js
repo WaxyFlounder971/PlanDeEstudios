@@ -3292,8 +3292,21 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
 
   // Línea 2: Estado (izquierda), Universidad (centro), Créditos + flecha (derecha)
   const linea2 = document.createElement("div");
-  linea2.className = "materia-linea2";
-  linea2.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px;";
+  // FIX (2026-08-09 — "se duplicó estado/universidad/creditos/flecha en
+  // primera línea"): antes el grid 1fr/auto/1fr se fijaba con
+  // linea2.style.cssText (estilo INLINE), que le gana a CUALQUIER regla de
+  // hoja de estilos externa — incluida el display:none del @media que
+  // apaga esta fila en pantallas angostas (ver .materia-linea2-angosta
+  // abajo). Resultado: en teléfono esta fila NUNCA se ocultaba y quedaba
+  // flotando (visualmente como si fuera la "primera línea" real, porque
+  // linea1 sí se ocultaba bien — ese inline solo tocaba align-items, no
+  // display). Se reemplaza por una clase (.materia-linea2-semestre-grid,
+  // ver design-system.css) para que el @media pueda apagarla sin pelear
+  // contra un inline.
+  linea2.className = "materia-linea2 materia-linea2-semestre-grid";
+  linea2.style.alignItems = "center";
+  linea2.style.gap = "8px";
+  linea2.style.gridTemplateColumns = "1fr auto 1fr";
 
   const colEstado = document.createElement("div");
   colEstado.style.cssText = "justify-self:start; min-width:0;";
