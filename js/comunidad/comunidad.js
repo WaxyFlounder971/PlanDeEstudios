@@ -137,6 +137,12 @@ estado.filtroComunidadProfesores = "todos"; // "todos" | "tuyos" | "no-tuyos" (p
 // Compañeros. Se basa en profesor.volveria_a_llevar.
 estado.filtroRecomendacionProfesores = estado.filtroRecomendacionProfesores || "todos"; // "todos" | "recomendados" | "no-recomendados"
 estado.filtroComunidadCompaneros = "todos"; // "todos" | "recomendados" | "no-recomendados"
+// Buscadores por texto (2026-08-09, pedido explícito: "claramente funcionan
+// por separado") — cada sección tiene el suyo, totalmente independiente del
+// otro; buscar en Profesores nunca toca ni se ve afectado por lo que haya
+// escrito en Compañeros, y viceversa.
+estado.busquedaProfesores = estado.busquedaProfesores || "";
+estado.busquedaCompaneros = estado.busquedaCompaneros || "";
 // "Todos, Compañeros, Conocidos" — para diferenciar compañeros con los que
 // YA se compartió alguna materia real (validada, ver esCompanero /
 // obtenerMateriasCompartidasValidas) de los que solo están agregados pero
@@ -2544,8 +2550,42 @@ function similitudNombres(nombreA, nombreB) {
   return Math.min(0.99, Math.max(puntajeLevenshtein, puntajePalabras));
 }
 
-// Pedido explícito: "por lo menos un 70%".
-const UMBRAL_SIMILITUD_NOMBRES = 0.7;
+/**
+ * Umbral de similitud (pedido explícito 2026-08-09: "no es fijo, calcula
+ * tú cual debería ser"). Se calibró probando la función de arriba contra
+ * pares reales de nombres:
+ *
+ *   DEBEN parecerse (variantes de la MISMA persona):
+ *     "Luis Pablo" / "Luis P."                        -> 0.99
+ *     "Luis Pablo Soto Jiménez" / "Luis P. Soto"       -> 0.99
+ *     "María José Fernández" / "Maria J. Fernandez"    -> 0.99
+ *     "Roberto Vargas" / "Alberto Vargas" (apodo/typo) -> 0.86  <- el más bajo de este grupo
+ *
+ *   NO deben parecerse (personas DISTINTAS):
+ *     "Luis Pablo" / "Juan Carlos"                     -> 0.46
+ *     "Maria Fernandez" / "Maria Rodriguez"             -> 0.53
+ *     "Luis Fernandez" / "Luis Ramirez"                 -> 0.57
+ *     "Carlos Solano" / "Carlos Sologuren"               -> 0.63  <- el más alto de este grupo
+ *
+ * Entre el 0.63 más alto de "personas distintas" y el 0.86 más bajo de
+ * "misma persona" hay un rango libre (0.63–0.86) sin ningún caso de
+ * prueba de ningún lado — cualquier valor ahí separa ambos grupos sin
+ * error en estos casos. Dentro de ese rango se elige el extremo BAJO
+ * (0.68, pegado al 0.63) y no el punto medio, a propósito: el costo de
+ * cada error NO es simétrico.
+ *   - Un FALSO POSITIVO (dos personas distintas que sí superan el umbral)
+ *     solo le cuesta a la persona UN CLIC EXTRA para destildar la
+ *     tarjeta en la pantalla de revisión — no se pierde nada, ahí está
+ *     el nombre completo de cada uno para comparar a simple vista.
+ *   - Un FALSO NEGATIVO (dos nombres de la MISMA persona que no llegan
+ *     al umbral) es mucho peor: ese registro se importa derechito como
+ *     "directo" sin pasar por revisión — el resultado es un contacto
+ *     DUPLICADO silencioso, que es justo lo que este umbral existe para
+ *     evitar.
+ * Con esa asimetría, conviene errar hacia atrapar de más (más tarjetas en
+ * revisión) que hacia dejar pasar un duplicado real sin preguntar.
+ */
+const UMBRAL_SIMILITUD_NOMBRES = 0.68;
 
 /** Arma el texto de "nota" que se exporta: primero el nombre de cada
  *  materia vinculada (una por línea, SOLO el nombre — pedido explícito
@@ -2564,34 +2604,73 @@ function fechaParaNombreArchivo() {
 
 /**
  * Descarga (o comparte, en móvil) el paquete exportado como archivo .json.
- * Si el navegador soporta compartir ARCHIVOS (Web Share API nivel 2 —
- * típicamente Chrome/Edge Android), se ofrece el share sheet nativo
- * (WhatsApp, correo, Drive, etc. — mismo espíritu que el resto de la app,
- * que ya usa wa.me para WhatsApp). Si no está disponible (desktop,
- * navegadores viejos), se cae a una descarga normal del archivo.
+ *
+ * FIX (2026-08-09 — "el botón exportar aún no hace nada"): la primera
+ * versión intentaba el share sheet nativo (Web Share API nivel 2) y, si la
+ * promesa de navigator.share() fallaba por CUALQUIER razón que no fuera
+ * "el usuario canceló", el error se tragaba en silencio y ahí se quedaba
+ * — sin caer a la descarga normal, sin avisar nada. Eso pasa en la
+ * práctica en más casos de los que parece: el navegador puede reportar
+ * canShare({files}) === true pero share() igual fallar (contexto sin
+ * permiso real, webview sin app de destino configurada, etc.). Ahora:
+ *  1. Si el share sheet falla por algo que NO sea cancelación del usuario
+ *     (AbortError), se cae a la descarga directa en vez de quedarse callado.
+ *  2. La descarga directa también estaba sin ningún aviso de éxito — un
+ *     usuario en un entorno donde la descarga no es visualmente obvia
+ *     (algunos WebViews la mandan directo a una carpeta sin mostrar nada)
+ *     no tenía forma de saber si había funcionado. Ahora SIEMPRE hay un
+ *     toast, en éxito o en error — nunca "no pasa nada" en silencio.
+ *  3. Toda la función (detección de share, construcción de Blob/File,
+ *     descarga) queda envuelta en try/catch — un error inesperado en
+ *     cualquiera de esos pasos ya no aborta el clic sin dejar rastro.
  */
 function descargarOCompartirArchivo(nombreArchivo, contenidoJSON, tituloCompartir) {
-  const blob = new Blob([contenidoJSON], { type: "application/json" });
-
-  if (navigator.canShare && navigator.share) {
-    const archivo = new File([blob], nombreArchivo, { type: "application/json" });
-    if (navigator.canShare({ files: [archivo] })) {
-      navigator.share({ files: [archivo], title: tituloCompartir }).catch(() => {
-        // Cancelar el share sheet es una acción válida del usuario — no
-        // hace falta avisar con un toast de error.
-      });
-      return;
-    }
+  let blob;
+  try {
+    blob = new Blob([contenidoJSON], { type: "application/json" });
+  } catch (e) {
+    console.error("No se pudo armar el archivo a exportar:", e);
+    mostrarToast("No se pudo generar el archivo — probá de nuevo.");
+    return;
   }
 
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = nombreArchivo;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  try {
+    if (navigator.canShare && navigator.share) {
+      const archivo = new File([blob], nombreArchivo, { type: "application/json" });
+      if (navigator.canShare({ files: [archivo] })) {
+        navigator
+          .share({ files: [archivo], title: tituloCompartir })
+          .then(() => mostrarToast("Listo — compartido."))
+          .catch((err) => {
+            if (err && err.name === "AbortError") return; // el usuario cerró el share sheet sin elegir nada — cancelación válida, no un error
+            console.error("El share sheet falló, se intenta descarga directa:", err);
+            intentarDescargaDirecta(blob, nombreArchivo);
+          });
+        return;
+      }
+    }
+  } catch (e) {
+    console.error("La detección de share falló, se intenta descarga directa:", e);
+  }
+
+  intentarDescargaDirecta(blob, nombreArchivo);
+}
+
+function intentarDescargaDirecta(blob, nombreArchivo) {
+  try {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = nombreArchivo;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    mostrarToast(`Se descargó ${nombreArchivo}`);
+  } catch (e) {
+    console.error("No se pudo descargar el archivo exportado:", e);
+    mostrarToast("No se pudo descargar el archivo — revisá los permisos de descarga del navegador.");
+  }
 }
 
 function exportarProfesores() {
@@ -3011,10 +3090,56 @@ function construirFilaExportarImportar(onExportar, onImportar) {
   return fila;
 }
 
+/**
+ * Input de búsqueda por texto, genérico para Profesores/Compañeros.
+ *
+ * renderizarComunidad() vuelve a armar TODO desde cero en cada llamada
+ * (`cont.innerHTML = ""` en la raíz) — así que sin nada especial, escribir
+ * una sola letra reconstruye este mismo input desde cero y el navegador
+ * pierde el foco y el cursor a mitad de tipeo (molesto de verdad en
+ * móvil: el teclado virtual también parpadea). Por eso el propio handler
+ * de "input": guarda dónde estaba el cursor, dispara el re-render, y
+ * apenas termina (es síncrono, el nuevo input YA existe en el DOM) le
+ * devuelve el foco y la posición del cursor al input recién creado — se
+ * busca por `id` porque es el único identificador estable entre el input
+ * viejo (que se borró) y el nuevo (recién armado).
+ */
+function construirInputBusqueda({ id, placeholder, valorActual, onCambiar }) {
+  const input = document.createElement("input");
+  input.type = "text";
+  input.id = id;
+  input.className = "form-input";
+  input.placeholder = placeholder;
+  input.value = valorActual;
+  input.addEventListener("input", () => {
+    const cursor = input.selectionStart;
+    onCambiar(input.value);
+    const nuevo = document.getElementById(id);
+    if (nuevo) {
+      nuevo.focus();
+      nuevo.setSelectionRange(cursor, cursor);
+    }
+  });
+  return input;
+}
+
 function construirSeccionProfesores() {
   const datos = estado.datos;
   const seccion = document.createElement("section");
   seccion.className = "glass-card stack";
+
+  // Pedido explícito: buscador ANTES de los filtros.
+  seccion.appendChild(
+    construirInputBusqueda({
+      id: "com-busqueda-profesores",
+      placeholder: "Buscar profesor por nombre...",
+      valorActual: estado.busquedaProfesores,
+      onCambiar: (valor) => {
+        estado.busquedaProfesores = valor;
+        renderizarComunidad();
+      },
+    })
+  );
 
   seccion.appendChild(
     construirGrupoPills(
@@ -3068,8 +3193,10 @@ function construirSeccionProfesores() {
   );
 
   const todos = datos.profesores || [];
+  const consultaBusqueda = normalizarNombreComparable(estado.busquedaProfesores);
   const filtrados = todos
     .filter((p) => {
+      if (consultaBusqueda && !normalizarNombreComparable(p.nombre).includes(consultaBusqueda)) return false;
       if (estado.filtroComunidadProfesores !== "todos") {
         const tuyo = esProfesorTuyo(p, datos);
         if (estado.filtroComunidadProfesores === "tuyos" ? !tuyo : tuyo) return false;
@@ -3229,6 +3356,22 @@ function construirSeccionCompaneros() {
   const seccion = document.createElement("section");
   seccion.className = "glass-card stack";
 
+  // Pedido explícito: buscador ANTES de los filtros — mismo helper que
+  // Profesores, pero con su propio estado independiente
+  // (estado.busquedaCompaneros), así que escribir acá nunca toca lo que
+  // haya en el buscador de Profesores.
+  seccion.appendChild(
+    construirInputBusqueda({
+      id: "com-busqueda-companeros",
+      placeholder: "Buscar compañero por nombre...",
+      valorActual: estado.busquedaCompaneros,
+      onCambiar: (valor) => {
+        estado.busquedaCompaneros = valor;
+        renderizarComunidad();
+      },
+    })
+  );
+
   // Pedido explícito: "Todos, Compañeros, Conocidos" — para diferenciar
   // compañeros con los que YA se compartió alguna materia real (validada,
   // ver esCompanero/obtenerMateriasCompartidasValidas) de los que solo
@@ -3280,8 +3423,10 @@ function construirSeccionCompaneros() {
   );
 
   const todos = datos.companeros || [];
+  const consultaBusqueda = normalizarNombreComparable(estado.busquedaCompaneros);
   const filtrados = todos
     .filter((c) => {
+      if (consultaBusqueda && !normalizarNombreComparable(c.nombre_completo).includes(consultaBusqueda)) return false;
       if (estado.filtroTipoCompaneros !== "todos") {
         const conocido = esCompanero(c, datos);
         if (estado.filtroTipoCompaneros === "companeros" ? !conocido : conocido) return false;
