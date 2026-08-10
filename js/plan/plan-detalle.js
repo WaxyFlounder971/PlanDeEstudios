@@ -684,6 +684,12 @@ function construirFilaIntentoHistorial(materia, plan, semestre, mm) {
   const fila = document.createElement("div");
   fila.className = "glass-panel stack";
   fila.style.padding = "12px 14px";
+  // Pedido explícito (2026-08-09): el gap por defecto de .stack (14px) se
+  // sentía "muy grande" entre Semestre/Nota final y entre Nota final/
+  // Profesor — se reduce un 50% (14px -> 7px). Como los 3 bloques
+  // (encabezado, notaP, bloque de profesor) son hijos DIRECTOS de esta
+  // misma fila-stack, un solo gap acá cubre ambos espacios pedidos a la vez.
+  fila.style.gap = "7px";
 
   // Mismo criterio que semestres-tarjetas.js: mientras el semestre siga
   // "actual" es Cursando; si ya terminó, se lee mm.resultado (el resultado
@@ -811,10 +817,15 @@ function construirBloqueProfesorIntento(materia, plan, semestre, mm) {
   });
 
   // ---------- Botón discreto para vincular (el primero) o agregar otro ----------
+  // Pedido explícito (2026-08-09): "hazlo mas discreto, no tan gordo" — se
+  // saca btn-block (ancho completo) y se achica a padding/font-size chicos,
+  // alineado a la izquierda por su propio contenido (mismo criterio visual
+  // que btnEditar en construirTarjetaProfesor, comunidad.js).
   const btnVincular = document.createElement("button");
   btnVincular.type = "button";
-  btnVincular.className = "btn btn-secondary btn-block";
-  btnVincular.style.marginTop = profesoresVinculados.length > 0 ? "6px" : "0";
+  btnVincular.className = "btn btn-secondary";
+  btnVincular.style.cssText =
+    `align-self:flex-start; padding:6px 14px; font-size:0.82rem; margin-top:${profesoresVinculados.length > 0 ? "6px" : "0"};`;
   btnVincular.textContent = profesoresVinculados.length === 0 ? "Vincular profe" : "+ Agregar profesor";
   btnVincular.addEventListener("click", () => {
     abrirModalAsignarProfesorDesdeHistorial(mm, materia, plan, semestre, reRenderizar);
