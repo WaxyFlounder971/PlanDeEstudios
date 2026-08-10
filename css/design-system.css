@@ -1423,6 +1423,46 @@ img, svg { max-width: 100%; }
 .materia-cuerpo { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-glass); }
 .materia-req-linea { text-align: left; color: var(--text-muted); font-size: 0.82rem; margin: 0; }
 
+/* ---- Vista angosta de la tarjeta de materia (2026-08-09, pedido
+   explícito, SOLO en teléfono) ----
+   Ocultas por defecto: si por lo que sea el CSS de abajo (@media) no
+   llegara a aplicar, el resultado sigue siendo la vista ancha de toda la
+   vida (.materia-linea1/.materia-linea2, sin cambios), nunca un layout
+   roto ni duplicado a la vista. Ver construirTarjetaMateriaMatriculada en
+   semestres-tarjetas.js — arma AMBOS juegos de nodos siempre (nunca
+   reutiliza un mismo nodo en dos contenedores), y es este CSS el que
+   decide cuál se ve. */
+.materia-linea1-angosta,
+.materia-linea2-angosta,
+.materia-linea3-angosta {
+  display: none;
+}
+
+@media (max-width: 480px) {
+  /* Vista ancha (2 líneas) se apaga, la angosta (3 líneas) toma su lugar. */
+  .materia-fila-principal > .materia-linea1:not(.materia-linea1-angosta),
+  .materia-fila-principal > .materia-linea2:not(.materia-linea2-angosta) {
+    display: none;
+  }
+
+  /* Línea 1 angosta: Código, Materia — mismo comportamiento/tipografía que
+     la línea 1 ancha (reutiliza .materia-linea1 como clase base), solo sin
+     Nota ni 👤. */
+  .materia-linea1-angosta { display: flex; }
+
+  /* Líneas 2 y 3 angostas: mismo patrón de 3 columnas simétricas
+     (1fr/auto/1fr) que ya usa el resto de la app para "anclado
+     izquierda/centrado/anclado derecha" sin importar cuánto midan los
+     elementos de los extremos. */
+  .materia-linea2-angosta,
+  .materia-linea3-angosta {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
 /* ---- v1.9.8: cuerpo de la tarjeta de lista, exclusivo de este diseño (el
    modal NO usa esto — sigue con su propio layout de 1 columna, ver
    construirCuerpoDetalleModal en plan-detalle.js). Columna 1 (Requisitos/
