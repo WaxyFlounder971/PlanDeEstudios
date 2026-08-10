@@ -2790,12 +2790,24 @@ function abrirSelectorArchivoImportar(tipoEsperado, onDatosListos) {
  * dos casos pasa por acá.
  *
  * Cada bloque agrupa por el contacto YA EXISTENTE que mejor coincidió, con
- * una tarjetita por cada candidato entrante parecido. "Seleccionada"
- * (resaltada, SIN checkbox — pedido explícito) es el estado por DEFECTO en
- * cada candidato: significa "es la misma persona, no lo importes de
- * nuevo". Tocar la tarjeta la des-resalta, lo que dice "en realidad es
- * alguien distinto, sí importalo como nuevo" — ese es el único control que
- * decide qué se importa de este grupo.
+ * una tarjetita por cada candidato entrante parecido.
+ *
+ * Rediseño 2026-08-09 (pedido explícito, reemplaza el texto plano "(Es el
+ * mismo)" + tarjeta resaltada de la versión anterior):
+ *  - Cada candidato ahora tiene una insignia (badge) tocable en vez de la
+ *    tarjeta completa: "Sí, es el mismo" (verde) o "No, es diferente"
+ *    (roja). Por defecto arranca en "Sí, es el mismo" — mismo criterio que
+ *    antes, solo cambia CÓMO se muestra.
+ *  - "No, es diferente" → el candidato se importa como contacto nuevo, sin
+ *    ningún control adicional (no hay nada que decidir sobre el existente,
+ *    no lo toca para nada).
+ *  - "Sí, es el mismo" → aparece DEBAJO, y solo ahí, un mini-selector
+ *    Omitir/Sobrescribir (pedido explícito: "cuando y solo cuando SI, ES EL
+ *    MISMO sea verdadero"). Omitir es el default (el comportamiento de
+ *    siempre: no se toca nada). Sobrescribir reemplaza los datos del
+ *    contacto YA EXISTENTE con los del que se está importando — ver
+ *    sobrescribirProfesorExistente/sobrescribirCompaneroExistente más abajo
+ *    para la excepción de qué campos NO se tocan si ya hay vinculación.
  */
 function abrirModalRevisionImportacion({ gruposSimilares, resumenDirectos, resumenOmitidos, obtenerNombre, onConfirmar }) {
   document.querySelectorAll(".overlay-revision-importacion").forEach((el) => el.remove());
@@ -2827,6 +2839,14 @@ function abrirModalRevisionImportacion({ gruposSimilares, resumenDirectos, resum
   resumen.textContent = partesResumen.join(". ") + ".";
   caja.appendChild(resumen);
 
+  // Leyenda explicativa (pedido explícito: "que se explique eso arriba").
+  const leyenda = document.createElement("p");
+  leyenda.className = "muted";
+  leyenda.style.cssText = "margin:0; font-size:0.8rem;";
+  leyenda.innerHTML =
+    'Tocá la insignia de cada nombre para cambiarla. <strong>Sí, es el mismo</strong> evita un duplicado — ahí elegís si dejar tus datos tal cual (Omitir) o reemplazarlos con los del archivo (Sobrescribir). <strong>No, es diferente</strong> lo agrega como contacto nuevo.';
+  caja.appendChild(leyenda);
+
   const bloquesCont = document.createElement("div");
   bloquesCont.className = "stack";
   bloquesCont.style.gap = "14px";
@@ -2853,27 +2873,63 @@ function abrirModalRevisionImportacion({ gruposSimilares, resumenDirectos, resum
 
     grupo.candidatos.forEach((candidato) => {
       const tarjeta = document.createElement("div");
-      tarjeta.style.cssText =
-        "padding:10px 12px; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:8px; border-radius:10px; transition:background 0.15s, box-shadow 0.15s;";
-      tarjeta.className = "glass-panel";
+      tarjeta.className = "glass-panel stack";
+      tarjeta.style.cssText = "padding:10px 12px; gap:8px;";
 
-      function repintarEstadoTarjeta() {
-        // Mismo lenguaje visual que ya usa el resto de la app para "esto
-        // está seleccionado/activo" (ver .form-select:focus/.select-custom
-        // en design-system.css): borde + halo con --accent-1.
-        tarjeta.style.background = candidato.seleccionadoComoMismo ? "var(--accent-1-10)" : "";
-        tarjeta.style.boxShadow = candidato.seleccionadoComoMismo ? "0 0 0 2px var(--accent-1)" : "none";
-      }
-      repintarEstadoTarjeta();
+      const filaSuperior = document.createElement("div");
+      filaSuperior.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:10px;";
 
       const texto = document.createElement("span");
-      texto.style.cssText = "min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
-      texto.textContent = `${obtenerNombre(candidato.item)} (Es el mismo)`;
-      tarjeta.appendChild(texto);
+      texto.style.cssText = "min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600;";
+      texto.textContent = obtenerNombre(candidato.item);
+      filaSuperior.appendChild(texto);
 
-      tarjeta.addEventListener("click", () => {
+      const badge = document.createElement("button");
+      badge.type = "button";
+      badge.style.cssText = "flex-shrink:0; cursor:pointer; font-family:inherit;";
+      filaSuperior.appendChild(badge);
+
+      tarjeta.appendChild(filaSuperior);
+
+      // Solo existe (y solo se pinta) cuando seleccionadoComoMismo === true
+      // — pedido explícito "cuando y solo cuando".
+      const contAccion = document.createElement("div");
+      tarjeta.appendChild(contAccion);
+
+      function repintar() {
+        badge.className = "badge " + (candidato.seleccionadoComoMismo ? "badge-success" : "badge-danger");
+        badge.textContent = candidato.seleccionadoComoMismo ? "Sí, es el mismo" : "No, es diferente";
+
+        contAccion.innerHTML = "";
+        if (candidato.seleccionadoComoMismo) {
+          const etiquetaAccion = document.createElement("p");
+          etiquetaAccion.className = "muted";
+          etiquetaAccion.style.cssText = "margin:0; font-size:0.72rem;";
+          etiquetaAccion.textContent = "¿Qué hacer con los datos que ya tenías?";
+          contAccion.appendChild(etiquetaAccion);
+
+          const selectorAccion = construirGrupoPills(
+            [
+              { valor: "omitir", texto: "Omitir" },
+              { valor: "sobrescribir", texto: "Sobrescribir" },
+            ],
+            candidato.accion,
+            (valor) => {
+              candidato.accion = valor;
+              repintar();
+            }
+          );
+          selectorAccion.style.marginTop = "4px";
+          selectorAccion.style.transform = "scale(0.94)";
+          selectorAccion.style.transformOrigin = "left center";
+          contAccion.appendChild(selectorAccion);
+        }
+      }
+      repintar();
+
+      badge.addEventListener("click", () => {
         candidato.seleccionadoComoMismo = !candidato.seleccionadoComoMismo;
-        repintarEstadoTarjeta();
+        repintar();
       });
 
       listaCandidatos.appendChild(tarjeta);
@@ -2891,13 +2947,19 @@ function abrirModalRevisionImportacion({ gruposSimilares, resumenDirectos, resum
   btnConfirmar.textContent = "Confirmar importación";
   btnConfirmar.addEventListener("click", () => {
     const nuevos = [];
+    const sobrescribir = []; // [{ existenteId, item }]
     gruposSimilares.forEach((grupo) => {
       grupo.candidatos.forEach((candidato) => {
-        if (!candidato.seleccionadoComoMismo) nuevos.push(candidato.item);
+        if (!candidato.seleccionadoComoMismo) {
+          nuevos.push(candidato.item);
+        } else if (candidato.accion === "sobrescribir") {
+          sobrescribir.push({ existenteId: grupo.existente.id, item: candidato.item });
+        }
+        // accion === "omitir" (default cuando es el mismo): no se hace nada, se descarta.
       });
     });
     overlay.remove();
-    onConfirmar(nuevos);
+    onConfirmar({ nuevos, sobrescribir });
   });
   caja.appendChild(btnConfirmar);
 
@@ -2914,6 +2976,30 @@ function guardarProfesorImportado(item) {
   nuevo.volveria_a_llevar = item.volveria_a_llevar !== false;
   nuevo.nota = item.nota || null;
   estado.datos.profesores.push(nuevo);
+}
+
+/**
+ * Sobrescribe un profesor YA EXISTENTE con los datos de un candidato
+ * marcado "Sí, es el mismo" → "Sobrescribir" (pedido explícito 2026-08-09).
+ * Nombre/correo/teléfono se reemplazan SIEMPRE. Calificación, recomendado
+ * y nota son la EXCEPCIÓN pedida: "SI YA TENIAS VINCULADO, SOLO SE
+ * SOBREESCRIBE NOMBRE, CORREO Y NUMERO" — si el profesor ya tiene alguna
+ * materia+semestre vinculada de verdad, esos 3 campos son trabajo tuyo
+ * hecho sobre tu propio plan y NO se tocan; solo se reemplazan cuando el
+ * profesor no tiene ninguna vinculación (ahí sí es seguro traer todo tal
+ * cual viene del archivo importado).
+ */
+function sobrescribirProfesorExistente(existente, item, datos) {
+  const tieneVinculacion = obtenerHistorialProfesor(existente.id, datos).length > 0;
+  existente.nombre = item.nombre;
+  existente.correo = item.correo || "";
+  existente.telefono = item.telefono || "";
+  if (!tieneVinculacion) {
+    existente.calificacion = typeof item.calificacion === "number" ? item.calificacion : null;
+    existente.volveria_a_llevar = item.volveria_a_llevar !== false;
+    existente.nota = item.nota || null;
+  }
+  sellarTimestamp(existente);
 }
 
 function importarProfesores(itemsImportados) {
@@ -2945,7 +3031,7 @@ function importarProfesores(itemsImportados) {
         grupo = { existente: mejor.existente, candidatos: [] };
         gruposSimilares.push(grupo);
       }
-      grupo.candidatos.push({ item, score: mejor.score, seleccionadoComoMismo: true });
+      grupo.candidatos.push({ item, score: mejor.score, seleccionadoComoMismo: true, accion: "omitir" });
       return;
     }
     directos.push(item);
@@ -2970,15 +3056,24 @@ function importarProfesores(itemsImportados) {
     resumenDirectos: directos.length,
     resumenOmitidos: omitidosExactos,
     obtenerNombre: (entidad) => entidad.nombre,
-    onConfirmar: (nuevosAImportar) => {
-      nuevosAImportar.forEach((item) => guardarProfesorImportado(item));
-      if (nuevosAImportar.length > 0) marcarCambioPendiente();
+    onConfirmar: ({ nuevos, sobrescribir }) => {
+      nuevos.forEach((item) => guardarProfesorImportado(item));
+
+      let sobrescritos = 0;
+      sobrescribir.forEach(({ existenteId, item }) => {
+        const vivo = buscarProfesorVivoPorId(existenteId);
+        if (!vivo) return; // se pudo haber eliminado desde otro dispositivo entre que se abrió el modal y se confirmó
+        sobrescribirProfesorExistente(vivo, item, datos);
+        sobrescritos += 1;
+      });
+
+      if (nuevos.length > 0 || sobrescritos > 0) marcarCambioPendiente();
       renderizarComunidad();
-      mostrarToast(
-        nuevosAImportar.length > 0
-          ? `Se ${nuevosAImportar.length === 1 ? "importó 1 profesor más" : `importaron ${nuevosAImportar.length} profesores más`}.`
-          : "No se importó ningún profesor adicional."
-      );
+
+      const partes = [];
+      if (nuevos.length > 0) partes.push(`se ${nuevos.length === 1 ? "importó 1 profesor más" : `importaron ${nuevos.length} profesores más`}`);
+      if (sobrescritos > 0) partes.push(`se actualiz${sobrescritos === 1 ? "ó 1" : `aron ${sobrescritos}`} con los datos del archivo`);
+      mostrarToast(partes.length > 0 ? partes.join(", ") + "." : "No se importó ni actualizó nada adicional.");
     },
   });
 }
@@ -2993,6 +3088,23 @@ function guardarCompaneroImportado(item) {
     materias_compartidas: [],
   });
   estado.datos.companeros.push(nuevo);
+}
+
+/** Análogo exacto a sobrescribirProfesorExistente, pero para Compañeros:
+ *  nombre/carnet/teléfono siempre, lista (recomendado/no recomendado) y
+ *  nota SOLO si el compañero no tiene ninguna materia compartida validada
+ *  todavía (obtenerMateriasCompartidasValidas) — la misma excepción de "si
+ *  ya tenías vinculado". */
+function sobrescribirCompaneroExistente(existente, item, datos) {
+  const tieneVinculacion = obtenerMateriasCompartidasValidas(existente, datos).length > 0;
+  existente.nombre_completo = item.nombre_completo;
+  existente.carnet = item.carnet || "";
+  existente.telefono = item.telefono || "";
+  if (!tieneVinculacion) {
+    existente.lista = item.lista === "blacklist" ? "blacklist" : "whitelist";
+    existente.nota = item.nota || null;
+  }
+  sellarTimestamp(existente);
 }
 
 function importarCompaneros(itemsImportados) {
@@ -3024,7 +3136,7 @@ function importarCompaneros(itemsImportados) {
         grupo = { existente: mejor.existente, candidatos: [] };
         gruposSimilares.push(grupo);
       }
-      grupo.candidatos.push({ item, score: mejor.score, seleccionadoComoMismo: true });
+      grupo.candidatos.push({ item, score: mejor.score, seleccionadoComoMismo: true, accion: "omitir" });
       return;
     }
     directos.push(item);
@@ -3048,15 +3160,24 @@ function importarCompaneros(itemsImportados) {
     resumenDirectos: directos.length,
     resumenOmitidos: omitidosExactos,
     obtenerNombre: (entidad) => entidad.nombre_completo,
-    onConfirmar: (nuevosAImportar) => {
-      nuevosAImportar.forEach((item) => guardarCompaneroImportado(item));
-      if (nuevosAImportar.length > 0) marcarCambioPendiente();
+    onConfirmar: ({ nuevos, sobrescribir }) => {
+      nuevos.forEach((item) => guardarCompaneroImportado(item));
+
+      let sobrescritos = 0;
+      sobrescribir.forEach(({ existenteId, item }) => {
+        const vivo = buscarCompaneroVivoPorId(existenteId);
+        if (!vivo) return;
+        sobrescribirCompaneroExistente(vivo, item, datos);
+        sobrescritos += 1;
+      });
+
+      if (nuevos.length > 0 || sobrescritos > 0) marcarCambioPendiente();
       renderizarComunidad();
-      mostrarToast(
-        nuevosAImportar.length > 0
-          ? `Se ${nuevosAImportar.length === 1 ? "importó 1 compañero más" : `importaron ${nuevosAImportar.length} compañeros más`}.`
-          : "No se importó ningún compañero adicional."
-      );
+
+      const partes = [];
+      if (nuevos.length > 0) partes.push(`se ${nuevos.length === 1 ? "importó 1 compañero más" : `importaron ${nuevos.length} compañeros más`}`);
+      if (sobrescritos > 0) partes.push(`se actualiz${sobrescritos === 1 ? "ó 1" : `aron ${sobrescritos}`} con los datos del archivo`);
+      mostrarToast(partes.length > 0 ? partes.join(", ") + "." : "No se importó ni actualizó nada adicional.");
     },
   });
 }
