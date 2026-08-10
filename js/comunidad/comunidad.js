@@ -850,6 +850,29 @@ function construirBadgeCarnet(carnet) {
 
 /* ===================== Tarjetas ===================== */
 
+/**
+ * "Tarjetita" de Nota de un profesor (2026-08-09, pedido explícito:
+ * "igualito a como funciona en compañeros [...] se mostrará justo debajo
+ * de las materias vinculadas, como una tarjetita mas [...] texto
+ * centrado"). A diferencia de companero.nota (que se muestra como texto
+ * plano a la izquierda en la fila final, junto a Editar), acá se pidió una
+ * tarjetita propia (glass-panel) con el texto centrado, y en DOS lugares:
+ * la tarjeta expandida de Comunidad (construirTarjetaProfesor) y la
+ * tarjeta flotante que se abre desde Semestres
+ * (construirCuerpoTarjetaProfesorFlotante) — de ahí que viva como función
+ * compartida en vez de repetir el markup en los dos lugares. Sin nota
+ * cargada no se agrega nada (null) — no tiene sentido una tarjetita vacía.
+ */
+function construirTarjetitaNotaProfesor(profesor) {
+  if (!profesor.nota) return null;
+  const tarjetita = document.createElement("div");
+  tarjetita.className = "glass-panel";
+  tarjetita.style.cssText =
+    "padding:10px 12px; text-align:center; font-size:0.85rem; line-height:1.4; white-space:pre-wrap; word-break:break-word;";
+  tarjetita.textContent = profesor.nota;
+  return tarjetita;
+}
+
 function construirTarjetaProfesor(profesor, datos) {
   const expandido = estado.profesoresExpandidos.has(profesor.id);
   const recomendado = profesor.volveria_a_llevar !== false; // default true (sin badge rojo hasta que se marque explícito que no)
@@ -963,6 +986,9 @@ function construirTarjetaProfesor(profesor, datos) {
     });
   }
   card.appendChild(bloqueHistorial);
+
+  const tarjetitaNota = construirTarjetitaNotaProfesor(profesor);
+  if (tarjetitaNota) card.appendChild(tarjetitaNota);
 
   /* ---------- Fila final: logo(s) MisProfes (sin forma de botón) + Editar anclado a la derecha, pequeño ----------
      Rediseño (pedido explícito):
@@ -1304,6 +1330,18 @@ function abrirModalAltaProfesor(profesorExistente = null, preseleccionMmId = nul
   bloqueVolveria.appendChild(contenedorVolveria);
   caja.appendChild(bloqueVolveria);
 
+  // ---------- Nota (2026-08-09, pedido explícito: "igualito a como funciona
+  // en compañeros") ----------
+  const bloqueNota = document.createElement("div");
+  bloqueNota.innerHTML = `<span class="form-label">Nota (opcional)</span>`;
+  const inputNota = document.createElement("textarea");
+  inputNota.className = "form-input";
+  inputNota.rows = 3;
+  inputNota.placeholder = "Ej. Explica clarísimo, pero es estricto con las tardanzas...";
+  inputNota.value = esEdicion ? profesorExistente.nota || "" : "";
+  bloqueNota.appendChild(inputNota);
+  caja.appendChild(bloqueNota);
+
   // ---------- Vincular materias (reemplaza el viejo campo de tags) ----------
   // 2026-08-09 (pedido explícito): "no permite vincularle nada hasta que
   // esté guardado, se deberia permitir vincularlo mientras se guarda, si no
@@ -1459,6 +1497,7 @@ function abrirModalAltaProfesor(profesorExistente = null, preseleccionMmId = nul
     }
     const correo = inputCorreo.value.trim();
     const telefono = inputTelefono.value.trim();
+    const nota = inputNota.value.trim();
 
     if (esEdicion) {
       const vivo = buscarProfesorVivoPorId(profesorExistente.id);
@@ -1473,6 +1512,7 @@ function abrirModalAltaProfesor(profesorExistente = null, preseleccionMmId = nul
       vivo.telefono = telefono || null;
       vivo.calificacion = calificacionActual || null;
       vivo.volveria_a_llevar = volveriaActual;
+      vivo.nota = nota || null;
       sellarTimestamp(vivo);
       marcarCambioPendiente();
       overlay.remove();
@@ -1482,6 +1522,7 @@ function abrirModalAltaProfesor(profesorExistente = null, preseleccionMmId = nul
       const nuevo = crearProfesor({ nombre, correo, telefono, materias: [] });
       nuevo.calificacion = calificacionActual || null;
       nuevo.volveria_a_llevar = volveriaActual;
+      nuevo.nota = nota || null;
       estado.datos.profesores.push(nuevo);
       // Recién acá se aplican de verdad las vinculaciones elegidas ANTES de
       // guardar (materiasPendientes, ver arriba) — ya con el id real del
@@ -2724,29 +2765,58 @@ function construirSeccionCompaneros() {
  * Solo lectura — no hay Editar/Quitar acá (para eso ya existe el popover
  * de Semestres en modo Editar, o la tarjeta real en Comunidad).
  */
+/**
+ * 2026-08-09 (pedido explícito): al tocar la tarjetita de un profesor
+ * dentro del popover "Profesores vinculados a esta materia" (Semestres —
+ * ver abrirPopoverProfesoresMateria en semestres-tarjetas.js), se abre esta
+ * tarjeta flotante con TODA la info del profesor (misma info que la
+ * tarjeta expandida de Comunidad: estrellas, recomendado, correo/WhatsApp,
+ * historial de materias vinculadas, Nota) + un botón "Ir" que navega a la
+ * pestaña Comunidad y resalta la tarjeta real de este profesor ahí.
+ * Solo lectura — no hay Editar/Quitar acá (para eso ya existe el popover
+ * de Semestres en modo Editar, o la tarjeta real en Comunidad).
+ *
+ * Layout del encabezado (2026-08-09, ajuste — la tarjeta flotante es
+ * angosta lateralmente, a diferencia de la tarjeta ancha de la lista de
+ * Comunidad): ya NO es una sola fila con 3 columnas — pasa a ser 2 líneas
+ * apiladas: 1) nombre completo, solo, con todo el ancho disponible para
+ * poder mostrarse completo sin truncar (tocarlo copia el nombre al
+ * portapapeles — mismo patrón que los badges de correo/WhatsApp); 2)
+ * estrellas + badge Recomendado/No recomendado juntos, en una fila aparte.
+ */
 function construirCuerpoTarjetaProfesorFlotante(profesor, datos) {
   const cont = document.createElement("div");
   cont.className = "stack";
   cont.style.gap = "10px";
 
   const encabezado = document.createElement("div");
-  encabezado.className = "com-encabezado-profesor";
+  encabezado.className = "stack";
+  encabezado.style.gap = "6px";
+
   const nombre = document.createElement("strong");
-  nombre.className = "com-nombre-profesor";
-  nombre.style.cssText = "min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+  nombre.style.cssText = "display:block; font-size:1.1rem; cursor:pointer; word-break:break-word;";
   nombre.textContent = profesor.nombre;
+  nombre.title = "Tocar para copiar el nombre";
+  nombre.addEventListener("click", () => {
+    copiarAlPortapapeles(profesor.nombre, `"${profesor.nombre}" copiado en el portapapeles`);
+  });
   encabezado.appendChild(nombre);
 
+  const filaEstrellasRecomendado = document.createElement("div");
+  filaEstrellasRecomendado.className = "row";
+  filaEstrellasRecomendado.style.cssText = "gap:10px; flex-wrap:wrap;";
+
   const estrellas = construirEstrellasLectura(profesor.calificacion);
-  estrellas.classList.add("com-estrellas-profesor");
-  encabezado.appendChild(estrellas);
+  filaEstrellasRecomendado.appendChild(estrellas);
 
   const recomendado = profesor.volveria_a_llevar !== false;
   const badgeRecomendado = document.createElement("span");
   badgeRecomendado.className = "badge " + (recomendado ? "badge-success" : "badge-danger");
-  badgeRecomendado.style.cssText = "flex-shrink:0; white-space:nowrap; justify-self:end;";
+  badgeRecomendado.style.cssText = "flex-shrink:0; white-space:nowrap;";
   badgeRecomendado.textContent = recomendado ? "✓ Recomendado" : "✕ No recomendado";
-  encabezado.appendChild(badgeRecomendado);
+  filaEstrellasRecomendado.appendChild(badgeRecomendado);
+
+  encabezado.appendChild(filaEstrellasRecomendado);
   cont.appendChild(encabezado);
 
   if (profesor.correo || profesor.telefono) {
@@ -2779,6 +2849,9 @@ function construirCuerpoTarjetaProfesorFlotante(profesor, datos) {
     });
   }
   cont.appendChild(bloqueHistorial);
+
+  const tarjetitaNota = construirTarjetitaNotaProfesor(profesor);
+  if (tarjetitaNota) cont.appendChild(tarjetitaNota);
 
   return cont;
 }
@@ -2842,7 +2915,14 @@ function abrirTarjetaProfesorFlotante(profesor) {
   btnIr.textContent = "Ir";
   btnIr.title = "Ir a este profesor en Comunidad";
   btnIr.addEventListener("click", () => {
-    overlay.remove();
+    // Pedido explícito (2026-08-09): "se abre o quedo abierta la ventana
+    // profesor, la que se abre al presionar el emoji [...] esto le quita
+    // como importancia a la animacion de ir" — además de esta tarjeta
+    // flotante, hay que cerrar TAMBIÉN el popover de Semestres que la abrió
+    // (overlay-profesores-materia, ver abrirPopoverProfesoresMateria en
+    // semestres-tarjetas.js) para que la navegación se sienta limpia, sin
+    // nada apilado quedando atrás.
+    document.querySelectorAll(".overlay-tarjeta-profesor-flotante, .overlay-profesores-materia").forEach((el) => el.remove());
     navegarYResaltarProfesor(profesor.id);
   });
   filaBotones.appendChild(btnIr);
