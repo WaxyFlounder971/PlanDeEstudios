@@ -654,18 +654,56 @@ function abrirModalDesbloquea(materia, plan) {
  * acá, además de la pestaña Profesores y el alta de semestre).
  */
 function abrirModalHistorial(materia, plan) {
-  document.getElementById("titulo-modal-historial").textContent = `Historial — ${aplicarFormatoTexto(materia.nombre)}`;
+  // Pedido explícito (2026-08-09): antes el título era "Historial — Nombre"
+  // en una sola línea de texto plano. Ahora el título vuelve a ser solo
+  // "Historial" (misma fuente/tamaño de siempre, sin tocar el elemento) y
+  // el nombre de la materia se muestra aparte, como una tarjetita compacta
+  // justo debajo (ver construirTarjetaMateriaHistorial) — mismo lenguaje
+  // visual que ya usan las materias vinculadas dentro de un profesor en
+  // Comunidad (franja de color de categoría + nombre), pero simplificada.
+  document.getElementById("titulo-modal-historial").textContent = "Historial";
   renderizarCuerpoModalHistorial(materia, plan);
   document.getElementById("modal-historial").classList.remove("oculto");
+}
+
+/**
+ * Tarjetita compacta de la materia dentro del modal de Historial (pedido
+ * explícito 2026-08-09): mismo lenguaje visual que
+ * construirMiniTarjetaMateriaVinculada (comunidad.js) — franja de color de
+ * la categoría a la izquierda (box-shadow inset) sobre un glass-panel — pero
+ * simplificada a SOLO el nombre: acá no hay nota ni semestre que mostrar
+ * (es un resumen de la materia en sí, no de un intento puntual como sí lo
+ * son las filas de abajo).
+ */
+function construirTarjetaMateriaHistorial(materia, plan) {
+  const categoria = plan.categorias.find((c) => c.id === materia.categoria_id);
+
+  const mini = document.createElement("div");
+  mini.className = "glass-panel";
+  mini.style.cssText =
+    "padding:8px 12px; width:100%; box-sizing:border-box; margin-bottom:10px;" +
+    (categoria ? ` box-shadow: inset 4px 0 0 0 ${categoria.color};` : "");
+
+  const nombre = document.createElement("span");
+  nombre.className = "materia-nombre truncada";
+  nombre.style.cssText = "display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+  nombre.textContent = aplicarFormatoTexto(materia.nombre);
+  mini.appendChild(nombre);
+
+  return mini;
 }
 
 function renderizarCuerpoModalHistorial(materia, plan) {
   const cont = document.getElementById("cuerpo-modal-historial");
   cont.innerHTML = "";
+  cont.appendChild(construirTarjetaMateriaHistorial(materia, plan));
 
   const intentos = obtenerIntentosMateria(materia.id, plan.id, estado.datos);
   if (intentos.length === 0) {
-    cont.innerHTML = `<p class="muted">Aún no has cursado esta materia en ningún semestre registrado.</p>`;
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.textContent = "Aún no has cursado esta materia en ningún semestre registrado.";
+    cont.appendChild(vacio);
     return;
   }
 
