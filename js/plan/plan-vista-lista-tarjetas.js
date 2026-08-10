@@ -5,7 +5,7 @@
    ========================================================================= */
 
 import { arbolContieneCodigo, evaluarNodoRequisito, obtenerEstadoEfectivoMateria, sellarTimestamp } from "../core/schema.js";
-import { resolverConflicto } from "../core/storage-merge.js";
+import { resolverConflicto, sonValoresEquivalentes } from "../core/storage-merge.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto, formatearHoras } from "../core/utils.js";
@@ -706,9 +706,16 @@ function camposEnConflicto(local, alterna) {
   const diferentes = [];
   llaves.forEach((campo) => {
     if (CAMPOS_META_CONFLICTO.has(campo)) return;
-    const a = JSON.stringify(local[campo]);
-    const b = JSON.stringify(alterna[campo]);
-    if (a !== b) diferentes.push(campo);
+    // FIX sync (2026-08-09, mismo bug que hayConflictoReal en
+    // storage-merge.js): comparar con JSON.stringify campo por campo tiene
+    // el mismo problema a nivel de un solo campo — un objeto anidado con
+    // las llaves en otro orden, o un arreglo de ids en otro orden (ej.
+    // profesor_ids), se veía como "diferente" en este comparador aunque el
+    // contenido fuera exactamente igual. Se usa la misma igualdad profunda
+    // que ya decide si el conflicto es real, para que la lista de campos
+    // que se le muestra a la persona nunca incluya algo que en realidad es
+    // idéntico.
+    if (!sonValoresEquivalentes(local[campo], alterna[campo])) diferentes.push(campo);
   });
   return diferentes;
 }
@@ -745,6 +752,31 @@ function camposEnConflicto(local, alterna) {
  * `onResuelto` reemplaza la llamada fija a renderizarPlanEstudios() para
  * que cada pantalla refresque lo que le corresponde.
  */
+/**
+ * Aplica la resolución de un conflicto ("local" o "alterna") directamente
+ * sobre la entidad viva, sin pasar por ningún modal — es la misma lógica que
+ * antes vivía adentro de `elegir()` en abrirModalResolverConflictoGenerico,
+ * extraída para que "resolver todos a la vez" (ver el modal global en
+ * semestres-tarjetas.js) pueda reutilizarla exactamente igual, campo por
+ * campo, en vez de reimplementar el mismo mutado a ciegas en otro archivo.
+ * Nunca muta la referencia capturada al listar los conflictos — siempre
+ * busca la copia viva con `obtenerFresca()` en el momento del clic, por la
+ * misma razón documentada arriba (estado.datos se reemplaza por completo en
+ * cada sync). Devuelve true si resolvió algo, false si no había nada que
+ * resolver (ya se había resuelto o la entidad ya no existe).
+ */
+function resolverConflictoDirecto({ obtenerFresca, cual }) {
+  const viva = obtenerFresca();
+  if (!viva) return false; // se borró desde el otro dispositivo mientras tanto
+  if (!viva._conflicto) return false; // ya se resolvió por otro medio (ej. sync entre medio)
+
+  const resuelta = resolverConflicto(viva, cual, sellarTimestamp);
+  Object.keys(viva).forEach((k) => delete viva[k]);
+  Object.assign(viva, resuelta);
+  marcarCambioPendiente();
+  return true;
+}
+
 function abrirModalResolverConflictoGenerico({ entidad, plan, titulo, explicacion, onResuelto, obtenerFresca }) {
   document.querySelectorAll(".overlay-resolver-conflicto").forEach((el) => el.remove());
 
@@ -817,36 +849,7 @@ function abrirModalResolverConflictoGenerico({ entidad, plan, titulo, explicacio
   }
 
   const elegir = (cual) => {
-    // Fix (2026-08-02, bug "a veces sí, a veces no"): nunca se muta
-    // `entidad` directamente — puede llevar minutos abierta esta ventana, y
-    // en ese tiempo estado.datos ya pudo haber sido reemplazado por un sync
-    // en segundo plano. Se busca la copia VIVA justo ahora.
-    const viva = obtenerFresca();
-    if (!viva) {
-      // La entidad ya no existe (se borró desde el otro dispositivo mientras
-      // el modal estaba abierto) — no hay nada que resolver.
-      overlay.remove();
-      onResuelto();
-      return;
-    }
-    if (!viva._conflicto) {
-      // Ya se resolvió por otro medio (ej. el otro dispositivo también tenía
-      // el modal abierto y resolvió primero, y ese resultado ya llegó por
-      // sync) — no pisar una resolución que ya quedó limpia.
-      overlay.remove();
-      onResuelto();
-      return;
-    }
-    // La elección del usuario fue sobre lo que vio en pantalla (local/alterna
-    // de la entidad capturada al abrir el modal) — pero se aplica sobre la
-    // entidad viva, que puede tener una _version_alterna más nueva si hubo
-    // un sync de por medio. Si el usuario eligió "alterna" y la viva ya trae
-    // otra _version_alterna distinta, se respeta igual su elección de lado,
-    // solo que sobre los datos actuales (nunca sobre la copia huérfana).
-    const resuelta = resolverConflicto(viva, cual, sellarTimestamp);
-    Object.keys(viva).forEach((k) => delete viva[k]);
-    Object.assign(viva, resuelta);
-    marcarCambioPendiente();
+    resolverConflictoDirecto({ obtenerFresca, cual });
     overlay.remove();
     onResuelto();
   };
@@ -952,6 +955,7 @@ export {
   abrirMenuRapidoCategoria,
   abrirModalResolverConflicto,
   abrirModalResolverConflictoGenerico,
+  resolverConflictoDirecto,
   agregarIndicadorConflicto,
   construirBloqueOptativas,
   construirContenidoBloques,
