@@ -131,8 +131,8 @@ import { abrirModalRequisito } from "../plan/plan-detalle.js";
 // estado.modoEdicionSemestres en semestres.js: vive en memoria, se resetea
 // solo al recargar la página.
 estado.tabComunidad = "profesores"; // "profesores" | "companeros"
-estado.filtroComunidadProfesores = "todos"; // "todos" | "tuyos" | "no-tuyos" (pills dicen "Profe"/"No profe")
-// Filtro de recomendación en Profesores, entre el de "Profe/No profe" y el
+estado.filtroComunidadProfesores = "todos"; // "todos" | "tuyos" | "no-tuyos" (pills dicen "Fue profe"/"No fue profe")
+// Filtro de recomendación en Profesores, entre el de "Fue profe/No fue profe" y el
 // de orden (Alfabético/Por bloque) — mismo patrón que ya existía en
 // Compañeros. Se basa en profesor.volveria_a_llevar.
 estado.filtroRecomendacionProfesores = estado.filtroRecomendacionProfesores || "todos"; // "todos" | "recomendados" | "no-recomendados"
@@ -2455,8 +2455,8 @@ function construirSeccionProfesores() {
     construirGrupoPills(
       [
         { valor: "todos", texto: "Todos" },
-        { valor: "tuyos", texto: "Profe" },
-        { valor: "no-tuyos", texto: "No profe" },
+        { valor: "tuyos", texto: "Fue profe" },
+        { valor: "no-tuyos", texto: "No fue profe" },
       ],
       estado.filtroComunidadProfesores,
       (valor) => {
@@ -2467,7 +2467,7 @@ function construirSeccionProfesores() {
   );
 
   // Pedido explícito: filtro de recomendación en Profesores, entre el de
-  // "Profe/No profe" y el de orden (Alfabético/Por bloque) — mismo patrón
+  // "Fue profe/No fue profe" y el de orden (Alfabético/Por bloque) — mismo patrón
   // que ya existía en Compañeros, basado en profesor.volveria_a_llevar
   // (mismo campo que ya se usa para el badge Recomendado/No recomendado).
   seccion.appendChild(
