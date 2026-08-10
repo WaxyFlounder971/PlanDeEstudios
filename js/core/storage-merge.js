@@ -85,26 +85,76 @@ function despojarMetaSellado(obj) {
   return copia;
 }
 
+/**
+ * FIX sync (2026-08-09 — "Profesor Ids... la única diferencia es el formato
+ * pero sigue siendo exactamente igual"): la Guarda 1 de abajo comparaba con
+ * JSON.stringify(a) === JSON.stringify(b). Eso es sensible al ORDEN de las
+ * llaves de un objeto — dos objetos con el mismo contenido pero construidos
+ * por caminos distintos (ej. `{...base, x}` en un dispositivo vs. el mismo
+ * objeto reconstruido desde otro orden de spread/lectura en el otro) generan
+ * JSON distinto aunque el contenido sea idéntico. Eso es exactamente lo que
+ * reportó el usuario: "Profesor Ids" mostraba el mismo array en ambos lados
+ * y aun así se marcaba como choque. JSON.stringify nunca debió usarse para
+ * decidir igualdad de contenido — solo sirve para display. Esta función
+ * compara profundamente, ignorando el orden de las llaves de un objeto
+ * (compara por conjunto de llaves + valor, no por posición). Los arreglos sí
+ * respetan su orden posicional (índice a índice), salvo que sean arreglos de
+ * solo primitivos (strings/números/booleanos) — ahí el orden no representa
+ * una edición real (ej. profesor_ids), así que se comparan como conjunto.
+ * undefined y "llave ausente" se tratan como equivalentes en ambos lados,
+ * para que un spread que agrega una llave con valor undefined no cuente
+ * como diferencia real.
+ */
+function sonValoresEquivalentes(a, b) {
+  if (a === b) return true;
+  if (typeof a === "number" && typeof b === "number" && Number.isNaN(a) && Number.isNaN(b)) return true;
+  if (a === null || b === null || a === undefined || b === undefined) return a === b;
+  if (typeof a !== typeof b) return false;
+
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b)) return false;
+    if (a.length !== b.length) return false;
+    const soloPrimitivos = (arr) => arr.every((v) => v === null || (typeof v !== "object" && typeof v !== "function"));
+    if (soloPrimitivos(a) && soloPrimitivos(b)) {
+      // Arreglo de ids/valores sueltos: el orden no es una edición con
+      // significado, es un detalle de cómo cada dispositivo lo reconstruyó.
+      const copiaA = [...a].sort();
+      const copiaB = [...b].sort();
+      return copiaA.every((v, i) => sonValoresEquivalentes(v, copiaB[i]));
+    }
+    // Arreglo de objetos/arreglos anidados: sí respeta el orden posicional
+    // (reordenar elementos complejos normalmente SÍ es una edición real).
+    return a.every((v, i) => sonValoresEquivalentes(v, b[i]));
+  }
+
+  if (typeof a === "object") {
+    const llaves = new Set([...Object.keys(a), ...Object.keys(b)]);
+    for (const llave of llaves) {
+      if (!sonValoresEquivalentes(a[llave], b[llave])) return false;
+    }
+    return true;
+  }
+
+  return false;
+}
+
 function hayConflictoReal(local, remoto) {
   if (!local || !remoto) return false;
 
-  // Guarda 1 (ajuste 2026-08-02 — "cuando ambas versiones sean exactamente
-  // iguales este aviso no tiene que salir para nada"): antes se comparaba
-  // JSON.stringify(local) contra JSON.stringify(remoto) TAL CUAL, metadatos
-  // de sellado incluidos. Eso fallaba en un caso real: dos dispositivos que
-  // editan el mismo campo y terminan escribiendo EXACTAMENTE el mismo valor
-  // (ej. ambos marcan "Aprobada" a mano, cada uno en su momento) sellan cada
-  // uno con su propio _actualizadoEn/_dispositivoId — el contenido real es
-  // idéntico, pero el JSON completo no, así que cualquier coincidencia así
-  // se colaba de largo hasta la Guarda 2 y terminaba marcada como conflicto
-  // igual, aunque no hubiera absolutamente nada que elegir. Ahora se
-  // compara sin esos tres campos — si el resto es idéntico, no hay NADA que
-  // resolver, sin importar qué digan los metadatos de versión.
-  try {
-    if (JSON.stringify(despojarMetaSellado(local)) === JSON.stringify(despojarMetaSellado(remoto))) return false;
-  } catch (e) {
-    // Objeto no serializable (raro) — se sigue con la comparación normal.
-  }
+  // Guarda 1 (ajuste 2026-08-02, reforzada 2026-08-09 — "cuando ambas
+  // versiones sean exactamente iguales este aviso no tiene que salir para
+  // nada"): antes se comparaba JSON.stringify(local) contra
+  // JSON.stringify(remoto) TAL CUAL, metadatos de sellado incluidos. Eso
+  // fallaba en dos casos reales: (a) dos dispositivos que editan el mismo
+  // campo y terminan escribiendo EXACTAMENTE el mismo valor (ej. ambos
+  // marcan "Aprobada" a mano, cada uno en su momento) sellan cada uno con su
+  // propio _actualizadoEn/_dispositivoId; y (b) el orden de las llaves del
+  // objeto puede diferir entre dispositivos sin que el contenido cambie en
+  // nada (ver sonValoresEquivalentes arriba — esto fue lo que causó el falso
+  // choque de "Profesor Ids" reportado). JSON.stringify es sensible a ambos
+  // casos aunque no haya NADA que resolver de verdad. Ahora se usa una
+  // igualdad profunda que ignora metadatos de sellado y orden de llaves.
+  if (sonValoresEquivalentes(despojarMetaSellado(local), despojarMetaSellado(remoto))) return false;
 
   // Guarda 2: _version_base solo tiene sentido para entidades que SÍ pasan
   // por sellarTimestamp() (materias, categorías, planes). Objetos que nunca
@@ -778,6 +828,7 @@ function fusionarDatos(datosLocal, datosRemoto) {
 
 export {
   esMasReciente,
+  sonValoresEquivalentes,
   fusionarColeccion,
   fusionarDatos,
   fusionarPlan,
