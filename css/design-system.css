@@ -118,6 +118,27 @@ a { color: var(--accent-1); }
 
 .btn-block { width: 100%; }
 
+/* ---- v2.8.9: botón de texto "discreto" — mismo texto que un .btn normal
+   pero sin caja ni fondo propio, para acciones secundarias que no deberían
+   competir visualmente con el CTA principal de la fila (ej. "Editar
+   registro" al lado de un badge de monto). Mismo espíritu que
+   .btn-icono-fantasma pero con texto en vez de un solo glyph. ---- */
+.btn-discreto {
+  background: none;
+  border: none;
+  padding: 6px 10px;
+  color: var(--accent-2);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast), color var(--transition-fast);
+  white-space: nowrap;
+}
+.btn-discreto:hover { background: rgba(255, 255, 255, 0.08); color: var(--text-primary); }
+[data-mode="light"] .btn-discreto:hover { background: rgba(0, 0, 0, 0.06); }
+.btn-discreto:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+
 /* ---- Grupo de botones "pill" (selección exclusiva) ---- */
 .pill-group {
   display: flex;
@@ -185,6 +206,33 @@ a { color: var(--accent-1); }
   background: var(--gradient-accent-alt, var(--gradient-accent));
   color: var(--on-accent);
   box-shadow: var(--shadow-float);
+}
+
+/* ---- v2.8.9: grid de 2 columnas para grupos de opciones tipo switch con
+   etiquetas que no caben cómodas en una sola fila horizontal sin cortarse
+   (ej. Frecuencia de un gasto recurrente: Semanal/Quincenal/Mensual/Anual/
+   Personalizado). Sigue siendo un switch de selección única — mismos
+   .pill-item adentro, mismo estado .active — solo cambia el LAYOUT: en vez
+   de una fila que trunca o scrollea, es una grilla de 2 columnas (2 arriba,
+   2 abajo, y así sucesivamente) donde cada botón crece en alto lo que haga
+   falta para mostrar el texto completo, nunca se recorta. ---- */
+.pill-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.18);
+  padding: 4px;
+  border-radius: var(--radius-md);
+}
+[data-mode="light"] .pill-grid-2 { background: rgba(0, 0, 0, 0.05); }
+.pill-grid-2 .pill-item {
+  flex: unset;
+  min-width: 0;
+  overflow: visible;
+  text-overflow: unset;
+  white-space: normal;
+  text-align: center;
+  min-height: 38px;
 }
 
 /* Punto 4 (v1.9.6): separador "·" entre "Bloques ▲▼" y "Materias ▲▼" dentro
