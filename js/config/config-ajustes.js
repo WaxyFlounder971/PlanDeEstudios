@@ -4,7 +4,7 @@
    plan/universidad, formato de texto.
    ========================================================================= */
 
-import { ESCALAS_DISPONIBLES, FRECUENCIAS_BACKUP_DRIVE, MONEDAS_DISPONIBLES, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, migrarDatosAntiguos, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
+import { ESCALAS_DISPONIBLES, FRECUENCIAS_BACKUP_DRIVE, MONEDAS_DISPONIBLES, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, crearBackupDriveDefault, migrarDatosAntiguos, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
 import { actualizarIndicadorSync, forzarBackupManual, marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
@@ -542,7 +542,7 @@ function renderizarSeccionBackupDrive() {
   const grupoFrecuencia = document.getElementById("pill-frecuencia-backup");
   if (grupoFrecuencia) {
     grupoFrecuencia.innerHTML = "";
-    const cfgBackup = estado.datos.configuracion.backup_drive || { frecuencia: "semanal", ultimo_backup_iso: null };
+    const cfgBackup = estado.datos.configuracion.backup_drive || crearBackupDriveDefault();
     FRECUENCIAS_BACKUP_DRIVE.forEach((frecuencia) => {
       const btn = document.createElement("button");
       btn.type = "button";
@@ -550,7 +550,7 @@ function renderizarSeccionBackupDrive() {
       btn.textContent = frecuencia.etiqueta;
       btn.addEventListener("click", () => {
         estado.datos.configuracion.backup_drive =
-          estado.datos.configuracion.backup_drive || { frecuencia: "semanal", ultimo_backup_iso: null };
+          estado.datos.configuracion.backup_drive || crearBackupDriveDefault();
         estado.datos.configuracion.backup_drive.frecuencia = frecuencia.id;
         sellarTimestamp(estado.datos.configuracion);
         marcarCambioPendiente();
