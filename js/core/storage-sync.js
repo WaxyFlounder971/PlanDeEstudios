@@ -12,6 +12,7 @@ import { renderizarModoHardcore, renderizarSelectorPlan } from "../plan/plan-ges
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 import { renderizarSemestres } from "../semestres/semestres.js";
 import { abrirModalTodosLosConflictos } from "../semestres/semestres-tarjetas.js";
+import { renderizarFinanzas } from "../finanzas/finanzas.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { aplicarPaleta } from "../ui/tema.js";
 import { guardarDatos, leerDatos, obtenerMetadatosArchivo, refrescarAccessTokenGoogle } from "./auth.js";
@@ -507,6 +508,11 @@ function aplicarDatosRemotosFrescos(datosFrescos) {
   // función); si renderizarSemestres además capturara y reafirmara el
   // suyo, las dos restauraciones competirían por la posición final.
   if (typeof renderizarSemestres === "function") renderizarSemestres(true);
+  // Finanzas (2026-08-10): mismo patrón que renderizarSemestres arriba —
+  // sin esto, un cambio financiero hecho en otro dispositivo quedaría
+  // congelado en el DOM de #seccion-finanzas hasta un F5 completo, el mismo
+  // bug que ya se cazó y arregló para Semestres.
+  if (typeof renderizarFinanzas === "function") renderizarFinanzas();
   marcarUltimaSincronizacionConfirmada();
 
   // Adjuntos (2026-08-08) / mecanismo genérico de hooks (ver
