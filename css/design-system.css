@@ -1449,9 +1449,23 @@ img, svg { max-width: 100%; }
 }
 
 @media (max-width: 480px) {
-  /* Vista ancha (2 líneas) se apaga, la angosta (3 líneas) toma su lugar. */
-  .materia-fila-principal > .materia-linea1:not(.materia-linea1-angosta),
-  .materia-fila-principal > .materia-linea2:not(.materia-linea2-angosta) {
+  /* Vista ancha (2 líneas) se apaga, la angosta (3 líneas) toma su lugar —
+     PERO solo dentro de tarjetas que efectivamente construyeron el juego de
+     nodos angosto (Semestres / construirTarjetaMateriaMatriculada). FIX
+     2026-08-10: el selector original apagaba .materia-linea1/.materia-linea2
+     por nombre de clase nomás, sin importar el contenedor — como
+     .materia-fila-principal/.materia-linea1/.materia-linea2 son las MISMAS
+     clases que usa Plan de Estudios (plan-vista-lista-tarjetas.js, que
+     NUNCA arma los nodos -angosta), esas tarjetas quedaban con su línea 1 y
+     línea 2 ocultas y nada que las reemplazara: tarjeta vacía en pantallas
+     angostas. El :has() acota el apagado a fila-principal que sí tiene un
+     descendiente -angosta (Semestres); en Plan de Estudios, al no existir
+     ese descendiente, la condición no matchea y la vista ancha de siempre
+     queda visible — que es justo el fallback que el comentario de arriba
+     ("Ocultas por defecto...") ya decía que debía pasar si el @media no
+     aplicara. */
+  .materia-fila-principal:has(.materia-linea1-angosta) > .materia-linea1:not(.materia-linea1-angosta),
+  .materia-fila-principal:has(.materia-linea2-angosta) > .materia-linea2:not(.materia-linea2-angosta) {
     display: none;
   }
 
