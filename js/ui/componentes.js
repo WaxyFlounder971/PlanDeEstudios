@@ -272,13 +272,21 @@ function inicializarBotonesCerrarModal() {
 
 /** Toast breve reutilizable (ej. "✓ Prompt copiado en el portapapeles", v5 #1.3). */
 
-function mostrarToast(mensaje) {
+/**
+ * v2.8.9: segundo parámetro opcional de duración — el toast por defecto
+ * (2400ms) es corto a propósito para avisos rápidos, pero el flujo de
+ * "copiar prompt de Beneficios y enviar a Claude" (ver finanzas-gastos.js)
+ * necesita que el mensaje quede visible los 3 segundos completos antes de
+ * redirigir, así que ese caso pasa su propia duración. Nadie más pasa el
+ * segundo argumento, así que ningún toast existente cambia de comportamiento.
+ */
+function mostrarToast(mensaje, duracionMs = 2400) {
   document.querySelectorAll(".toast-app").forEach((el) => el.remove());
   const toast = document.createElement("div");
   toast.className = "toast-app";
   toast.textContent = mensaje;
   document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 2400);
+  setTimeout(() => toast.remove(), duracionMs);
 }
 
 /* ===================== Flechas de scroll horizontal reutilizables ===================== */
