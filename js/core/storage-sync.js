@@ -27,7 +27,7 @@ import {
   refrescarAccessTokenGoogle,
   renombrarArchivoDrive,
 } from "./auth.js";
-import { FRECUENCIAS_BACKUP_DRIVE, migrarDatosAntiguos } from "./schema.js";
+import { FRECUENCIAS_BACKUP_DRIVE, migrarDatosAntiguos, sellarTimestamp } from "./schema.js";
 import { fusionarDatos } from "./storage-merge.js";
 import { authListo, correoConocido, establecerTokenActivo, estado, guardarCacheLocal, leerTokenCacheValido } from "./storage.js";
 
@@ -786,6 +786,48 @@ async function asegurarTokenFrescoAlVolver() {
  * ensuciar ni interrumpir ese resultado. Se reintenta solo en el próximo
  * sync exitoso, una vez se cumpla el intervalo de nuevo.
  */
+/**
+ * El ciclo de rotación en sí (crear carpeta si hace falta, rotar
+ * backup_reciente.json -> backup_anterior.json, copiar el archivo vigente
+ * como el nuevo backup_reciente.json) — sin ninguna condición de
+ * frecuencia. Separado de ejecutarBackupSiToca (2026-08-10, pedido
+ * explícito: botón de "Hacer backup ahora") para que el botón manual
+ * pueda correr el mismo ciclo real ignorando el intervalo elegido, sin
+ * duplicar la lógica de rotación en dos lugares.
+ *
+ * NO actualiza cfg.ultimo_backup_iso ni cachea — eso queda a cargo de
+ * quien llama (ver ejecutarBackupSiToca y forzarBackupManual), porque
+ * cada uno decide en qué momento y con qué efectos secundarios (silencioso
+ * vs. con feedback al usuario) se sella el timestamp.
+ */
+async function ejecutarCicloRotacionBackup() {
+  const folderId = await conReintentoSi401(() => buscarOCrearCarpetaEnDrive(estado.token, NOMBRE_CARPETA_BACKUP));
+  const idReciente = await conReintentoSi401(() => buscarArchivoEnCarpeta(estado.token, folderId, "backup_reciente.json"));
+
+  if (idReciente) {
+    const idAnterior = await conReintentoSi401(() => buscarArchivoEnCarpeta(estado.token, folderId, "backup_anterior.json"));
+    // Se borra la copia vieja ANTES de renombrar la nueva encima: Drive
+    // permite nombres duplicados dentro de una misma carpeta, así que sin
+    // este paso quedarían 2 archivos "backup_anterior.json" sueltos y
+    // buscarArchivoEnCarpeta (que toma el primero que devuelva la API,
+    // sin orden garantizado) dejaría de ser determinista sobre cuál es
+    // el real. Un 404 (ya no existe) se trata como éxito, ver
+    // eliminarArchivoDeDriveConId en auth.js.
+    if (idAnterior) await conReintentoSi401(() => eliminarArchivoDeDriveConId(estado.token, idAnterior));
+    await conReintentoSi401(() => renombrarArchivoDrive(estado.token, idReciente, "backup_anterior.json"));
+  }
+
+  // Copia exacta del archivo vigente actual — mismo contenido, solo
+  // cambia el nombre (pedido explícito).
+  await conReintentoSi401(() => copiarArchivoDrive(estado.token, estado.fileId, "backup_reciente.json", folderId));
+}
+
+/**
+ * Backup automático: revisa si ya toca según la frecuencia elegida y, si
+ * toca, corre el ciclo de rotación. Totalmente silencioso: cualquier error
+ * se loguea y se descarta sin avisar al usuario ni tocar
+ * estado.pendienteSync — ver comentario grande más arriba.
+ */
 async function ejecutarBackupSiToca() {
   try {
     if (!estado.datos || !estado.datos.configuracion) return;
@@ -801,25 +843,7 @@ async function ejecutarBackupSiToca() {
     const ultimo = cfg.ultimo_backup_iso ? new Date(cfg.ultimo_backup_iso).getTime() : 0;
     if (Date.now() - ultimo < msIntervalo) return; // todavía no toca, según la frecuencia elegida
 
-    const folderId = await conReintentoSi401(() => buscarOCrearCarpetaEnDrive(estado.token, NOMBRE_CARPETA_BACKUP));
-    const idReciente = await conReintentoSi401(() => buscarArchivoEnCarpeta(estado.token, folderId, "backup_reciente.json"));
-
-    if (idReciente) {
-      const idAnterior = await conReintentoSi401(() => buscarArchivoEnCarpeta(estado.token, folderId, "backup_anterior.json"));
-      // Se borra la copia vieja ANTES de renombrar la nueva encima: Drive
-      // permite nombres duplicados dentro de una misma carpeta, así que sin
-      // este paso quedarían 2 archivos "backup_anterior.json" sueltos y
-      // buscarArchivoEnCarpeta (que toma el primero que devuelva la API,
-      // sin orden garantizado) dejaría de ser determinista sobre cuál es
-      // el real. Un 404 (ya no existe) se trata como éxito, ver
-      // eliminarArchivoDeDriveConId en auth.js.
-      if (idAnterior) await conReintentoSi401(() => eliminarArchivoDeDriveConId(estado.token, idAnterior));
-      await conReintentoSi401(() => renombrarArchivoDrive(estado.token, idReciente, "backup_anterior.json"));
-    }
-
-    // Copia exacta del archivo vigente actual — mismo contenido, solo
-    // cambia el nombre (pedido explícito).
-    await conReintentoSi401(() => copiarArchivoDrive(estado.token, estado.fileId, "backup_reciente.json", folderId));
+    await ejecutarCicloRotacionBackup();
 
     cfg.ultimo_backup_iso = new Date().toISOString();
     // A propósito NO se llama a marcarCambioPendiente() acá: eso dispararía
@@ -833,6 +857,33 @@ async function ejecutarBackupSiToca() {
   } catch (e) {
     console.warn("No se pudo completar el backup rotativo a Drive (se reintentará en el próximo sync):", e);
   }
+}
+
+/**
+ * Backup manual (2026-08-10, botón "Hacer backup ahora" en Ajustes):
+ * corre el mismo ciclo real de rotación, IGNORANDO el intervalo de la
+ * frecuencia elegida — a diferencia de ejecutarBackupSiToca, acá SÍ
+ * interesa que el usuario se entere del resultado, así que no traga el
+ * error en silencio: lo relanza para que quien llama (la UI) pueda
+ * mostrar un aviso. Si tiene éxito, sella el timestamp y SÍ llama a
+ * marcarCambioPendiente() (a diferencia del automático) porque este no
+ * corre desde dentro de un sync en curso — es una acción nueva e
+ * independiente iniciada por la persona.
+ */
+async function forzarBackupManual() {
+  if (!estado.datos || !estado.datos.configuracion) throw new Error("No hay datos cargados todavía.");
+  if (!estado.token || !estado.fileId) throw new Error("No hay sesión de Drive activa.");
+
+  // Cada llamada interna a Drive dentro de ejecutarCicloRotacionBackup ya
+  // va envuelta en conReintentoSi401 por separado — no hace falta un
+  // envoltorio extra acá afuera.
+  await ejecutarCicloRotacionBackup();
+
+  const cfg = (estado.datos.configuracion.backup_drive =
+    estado.datos.configuracion.backup_drive || { frecuencia: "semanal", ultimo_backup_iso: null });
+  cfg.ultimo_backup_iso = new Date().toISOString();
+  sellarTimestamp(estado.datos.configuracion);
+  marcarCambioPendiente();
 }
 
 /** Se llama cada vez que se modifica algo en `estado.datos`. */
@@ -1047,6 +1098,7 @@ export {
   contadorCargando,
   contarConflictosGlobales,
   ejecutarBackupSiToca,
+  forzarBackupManual,
   forzarSincronizacion,
   inicializarPullToRefresh,
   inicializarSondeoAlVolver,

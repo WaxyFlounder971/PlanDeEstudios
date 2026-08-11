@@ -370,19 +370,55 @@ const PALETAS_DISPONIBLES = [
 /* Selector de moneda (Ajustes generales, 2026-08-10): preferencia GLOBAL
  * del usuario que usa Finanzas para formatear montos. CRC primero porque
  * TEC/UCR (las universidades que ya maneja el resto del schema, ver
- * PARAMETROS_UNIVERSIDAD_DEFAULT) son costarricenses — el resto de la
- * lista son las monedas más comunes entre estudiantes de la región que
- * también podrían usar la app (Latinoamérica) más USD/EUR como referencia
- * internacional habitual (ej. becas, compras en dólares). */
+ * PARAMETROS_UNIVERSIDAD_DEFAULT) son costarricenses.
+ *
+ * v1.15.13 (2026-08-10, pedido explícito): la lista se amplió para cubrir
+ * TODOS los símbolos de moneda distintos en los que se pudo pensar, no
+ * solo los países de la región — un símbolo por entrada, sin repetir.
+ * Cuando varios países comparten el mismo símbolo (ej. USD/MXN/COP/ARS
+ * comparten "$", o la mayoría de coronas nórdicas comparten "kr"), se
+ * incluye UNA sola moneda representativa de ese símbolo — a propósito,
+ * como pidió el usuario ("si se repiten 5 países con dólares, con uno
+ * solo es válido"). El país elegido para representar cada símbolo no
+ * necesariamente es el único que lo usa, es solo el más reconocible. */
 const MONEDAS_DISPONIBLES = [
   { id: "CRC", etiqueta: "Colón costarricense", simbolo: "₡" },
   { id: "USD", etiqueta: "Dólar estadounidense", simbolo: "$" },
   { id: "EUR", etiqueta: "Euro", simbolo: "€" },
-  { id: "MXN", etiqueta: "Peso mexicano", simbolo: "$" },
-  { id: "COP", etiqueta: "Peso colombiano", simbolo: "$" },
+  { id: "GBP", etiqueta: "Libra esterlina", simbolo: "£" },
+  { id: "JPY", etiqueta: "Yen japonés", simbolo: "¥" },
+  { id: "INR", etiqueta: "Rupia india", simbolo: "₹" },
+  { id: "KRW", etiqueta: "Won surcoreano", simbolo: "₩" },
+  { id: "RUB", etiqueta: "Rublo ruso", simbolo: "₽" },
+  { id: "TRY", etiqueta: "Lira turca", simbolo: "₺" },
+  { id: "UAH", etiqueta: "Grivna ucraniana", simbolo: "₴" },
+  { id: "NGN", etiqueta: "Naira nigeriana", simbolo: "₦" },
+  { id: "VND", etiqueta: "Dong vietnamita", simbolo: "₫" },
+  { id: "ILS", etiqueta: "Shékel israelí", simbolo: "₪" },
+  { id: "THB", etiqueta: "Baht tailandés", simbolo: "฿" },
+  { id: "PHP", etiqueta: "Peso filipino", simbolo: "₱" },
+  { id: "PLN", etiqueta: "Zloty polaco", simbolo: "zł" },
+  { id: "CZK", etiqueta: "Corona checa", simbolo: "Kč" },
+  { id: "HUF", etiqueta: "Forint húngaro", simbolo: "Ft" },
+  { id: "SEK", etiqueta: "Corona sueca", simbolo: "kr" },
+  { id: "CHF", etiqueta: "Franco suizo", simbolo: "CHF" },
   { id: "PEN", etiqueta: "Sol peruano", simbolo: "S/" },
-  { id: "ARS", etiqueta: "Peso argentino", simbolo: "$" },
   { id: "GTQ", etiqueta: "Quetzal guatemalteco", simbolo: "Q" },
+  { id: "BRL", etiqueta: "Real brasileño", simbolo: "R$" },
+  { id: "ZAR", etiqueta: "Rand sudafricano", simbolo: "R" },
+  { id: "PKR", etiqueta: "Rupia pakistaní", simbolo: "₨" },
+  { id: "BDT", etiqueta: "Taka bangladesí", simbolo: "৳" },
+  { id: "PYG", etiqueta: "Guaraní paraguayo", simbolo: "₲" },
+  { id: "GHS", etiqueta: "Cedi ghanés", simbolo: "₵" },
+  { id: "KZT", etiqueta: "Tenge kazajo", simbolo: "₸" },
+  { id: "AZN", etiqueta: "Manat azerbaiyano", simbolo: "₼" },
+  { id: "GEL", etiqueta: "Lari georgiano", simbolo: "₾" },
+  { id: "MNT", etiqueta: "Tugrik mongol", simbolo: "₮" },
+  { id: "LAK", etiqueta: "Kip laosiano", simbolo: "₭" },
+  { id: "AMD", etiqueta: "Dram armenio", simbolo: "֏" },
+  { id: "BGN", etiqueta: "Lev búlgaro", simbolo: "лв" },
+  { id: "MYR", etiqueta: "Ringgit malayo", simbolo: "RM" },
+  { id: "IDR", etiqueta: "Rupia indonesia", simbolo: "Rp" },
 ];
 
 /* Frecuencias de backup rotativo a Drive (Ajustes generales, 2026-08-10) —
