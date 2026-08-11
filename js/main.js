@@ -21,7 +21,7 @@ import { inicializarModalEditarPlanInfo, inicializarModalGestionPlanes, renderiz
 import { inicializarModalCapturasPDF, inicializarModalInstruccionesImportacion } from "./plan/plan-importacion.js";
 import { inicializarResponsivoListaPlan, renderizarPlanEstudios } from "./plan/plan-vista-lista.js";
 import { renderizarSemestres } from "./semestres/semestres.js";
-import { abrirConfirmacion, agregarLongPress, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, restaurarEstadoSidebar } from "./ui/componentes.js";
+import { abrirConfirmacion, agregarLongPress, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, restaurarEstadoSidebar } from "./ui/componentes.js";
 import { aplicarPaleta, aplicarTemaGuardadoLocalmente } from "./ui/tema.js";
 
 /* ---------------------------- Arranque ---------------------------- */
@@ -176,6 +176,14 @@ window.addEventListener("DOMContentLoaded", () => {
   inicializarModalEnlace();
   inicializarModalConfirmacion();
   inicializarNavegacionSecciones();
+  // v2.8.9 (punto 10): botones "atrás"/"adelante" de un mouse de 5 botones
+  // navegan entre secciones — se registra acá, junto al resto de
+  // inicializaciones de gestos/eventos globales del arranque (mismo
+  // criterio que agregarLongPress unas líneas arriba), y ANTES de
+  // mostrarApp()/mostrarSeccion() más abajo, aunque no depende de que la
+  // app ya esté visible (solo agrega un listener global de document, sin
+  // tocar nada del DOM que dependa de haber iniciado sesión).
+  inicializarNavegacionBotonesMouse();
   // Comunidad — Parte 3: se inyecta ANTES de inicializarBotonesCerrarModal()
   // (así sus 2 modales dinámicos también reciben el botón "✕" automático) y
   // ANTES del posible mostrarApp() por caché unas líneas más abajo (así
@@ -502,6 +510,11 @@ function mostrarSeccion(nombre) {
   });
   localStorage.setItem(CLAVE_SECCION_ACTIVA, nombre);
 }
+// v2.8.9 (punto 10): se expone en window para que ui/componentes.js pueda
+// llamarla desde inicializarNavegacionBotonesMouse() sin crear un import
+// circular (este archivo ya importa DE componentes.js) — mismo patrón que
+// ya usan aplicarVisibilidadNavegacion/obtenerOrdenNavegacion más abajo.
+window.mostrarSeccion = mostrarSeccion;
 
 /**
  * Ajustes — ocultar botones de navegación principal (2026-08-04): oculta
