@@ -153,23 +153,13 @@
           <div>
             <span class="form-label">Moneda</span>
             <p class="muted" style="font-size:0.78rem; margin:2px 0 6px;">La usa Finanzas para mostrar tus montos con el símbolo correspondiente.</p>
-            <div class="pill-group" id="pill-moneda"></div>
+            <div id="pill-moneda"></div>
           </div>
 
           <div>
             <span class="form-label">Nota de aprobación por universidad/plan</span>
             <div id="seccion-notas-aprobacion" class="stack"></div>
           </div>
-        </section>
-
-        <section class="glass-card stack">
-          <h2>Backup de seguridad (Google Drive)</h2>
-          <p class="muted" style="font-size:0.82rem; margin:0 0 4px;">Además del archivo que ya se sincroniza, la app guarda automáticamente hasta 2 copias rotativas en una carpeta "AppAcademica" de tu Drive, con la frecuencia que elijas acá.</p>
-          <div>
-            <span class="form-label">Frecuencia</span>
-            <div class="pill-group" id="pill-frecuencia-backup"></div>
-          </div>
-          <p class="muted" id="texto-ultimo-backup" style="font-size:0.78rem; margin:4px 0 0;"></p>
         </section>
 
         <section class="glass-card stack">
@@ -210,6 +200,17 @@
           </div>
           <p class="muted">Hasta 20 accesos directos (matrícula, TEC Digital, pagos, lo que necesites).</p>
           <div id="lista-enlaces" class="stack"></div>
+        </section>
+
+        <section class="glass-card stack">
+          <h2>Backup de seguridad (Google Drive)</h2>
+          <p class="muted" style="font-size:0.82rem; margin:0 0 4px;">Además del archivo que ya se sincroniza, la app guarda automáticamente hasta 2 copias rotativas en una carpeta "AppAcademica" de tu Drive, con la frecuencia que elijas acá.</p>
+          <div>
+            <span class="form-label">Frecuencia</span>
+            <div class="pill-group" id="pill-frecuencia-backup"></div>
+          </div>
+          <p class="muted" id="texto-ultimo-backup" style="font-size:0.78rem; margin:4px 0 0;"></p>
+          <button type="button" id="btn-backup-manual" class="btn btn-secondary btn-block">Hacer backup ahora</button>
         </section>
 
         <section class="glass-card stack">
