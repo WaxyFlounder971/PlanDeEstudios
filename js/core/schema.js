@@ -186,6 +186,23 @@ function crearDatosUsuarioNuevo() {
     _eliminados_profesores: [],
     _eliminados_companeros: [],
     _eliminados_adjuntos: [],
+
+    // Finanzas (2026-08-10): dos colecciones planas de nivel superior, mismo
+    // patrón que profesores/companeros/adjuntos — se funden con una sola
+    // llamada a fusionarColeccion cada una (ver fusionarDatos en
+    // storage-merge.js), nada de lógica de fusión nueva que escribir.
+    // finanzas_semestre se vincula a un semestre por semestre_id (no vive
+    // embebido dentro del semestre a propósito, ver crearRegistroFinancieroSemestre).
+    finanzas_semestre: [
+      /* ver crearRegistroFinancieroSemestre() */
+    ],
+    // Gastos generales de la universidad, no vinculados a ningún semestre
+    // puntual (carné, seguro estudiantil, materiales, etc.).
+    gastos_u: [
+      /* ver crearGastoU() */
+    ],
+    _eliminados_finanzas_semestre: [],
+    _eliminados_gastos_u: [],
   };
 }
 
@@ -229,6 +246,81 @@ function crearAdjunto({ nombre, mimeType, tamanoBytes, entidadTipo, entidadId })
     driveFileId: null,
     subidaPendiente: true,
   };
+}
+
+/* ===================== Finanzas ===================== */
+
+/**
+ * Finanzas (2026-08-10): registro financiero de UN semestre. Entidad
+ * separada vinculada por `semestre_id` (no embebida dentro del semestre,
+ * decisión confirmada) — así un semestre puede no tener registro todavía
+ * sin que crearSemestre tenga que saber nada de dinero.
+ *
+ * `porcentaje_beca` solo importa si `beca_activa` es true; se guarda igual
+ * aunque esté apagada (no se borra al desactivar el switch) para que
+ * reactivarla no pierda el último valor que el usuario había puesto.
+ *
+ * `pago_confirmado` nace como el neto sugerido (costo_total con el
+ * descuento de la beca aplicado, si corresponde) pero es 100% editable a
+ * mano después — `pago_confirmado_manual` marca si el usuario ya lo tocó,
+ * para que un cambio posterior en costo_total/porcentaje_beca (ver
+ * recalcularPagoSugerido) no le pise un valor que la persona ya ajustó a
+ * propósito.
+ *
+ * `desglose_mensual.modo` guarda cuál de los dos modos se usó para poder
+ * re-editar después con el mismo modo por defecto (manual: array cargado
+ * mes por mes; automatico: total repartido entre `automatico_cantidad_meses`,
+ * con el residuo de la división absorbido por el último mes para que la
+ * suma de los meses siempre cuadre exacto con el total).
+ */
+function crearRegistroFinancieroSemestre({ semestreId, costoTotal, becaActiva, porcentajeBeca }) {
+  const costo = Number(costoTotal) || 0;
+  const porcentaje = Number(porcentajeBeca) || 0;
+  const netoSugerido = calcularNetoSugeridoFinanzas(costo, becaActiva, porcentaje);
+
+  return sellarTimestamp({
+    id: "finsem_" + crypto.randomUUID(),
+    semestre_id: semestreId,
+    costo_total: costo,
+    beca_activa: !!becaActiva,
+    porcentaje_beca: porcentaje,
+    pago_confirmado: netoSugerido,
+    pago_confirmado_manual: false,
+    desglose_mensual: {
+      modo: "manual", // "manual" | "automatico"
+      meses: [], // [{ id, mes: "Enero"/"2026-01"/lo que el usuario escriba, monto }]
+      automatico_cantidad_meses: null, // solo relevante si modo === "automatico"
+    },
+  });
+}
+
+/**
+ * Único punto que calcula el neto sugerido a partir de costo_total + beca —
+ * lo usa tanto crearRegistroFinancieroSemestre (al crear) como la UI (al
+ * recalcular en vivo mientras el usuario edita costo/porcentaje, siempre
+ * que pago_confirmado_manual siga en false). Puede dar negativo a propósito
+ * (beca que supera el costo total = la universidad "le paga" al estudiante,
+ * ver "total ganado" en el Resumen).
+ */
+function calcularNetoSugeridoFinanzas(costoTotal, becaActiva, porcentajeBeca) {
+  const costo = Number(costoTotal) || 0;
+  if (!becaActiva) return redondearDecimales(costo, 2);
+  const porcentaje = Number(porcentajeBeca) || 0;
+  return redondearDecimales(costo * (1 - porcentaje / 100), 2);
+}
+
+/**
+ * Finanzas (2026-08-10): un gasto general de la universidad, NO vinculado a
+ * ningún semestre (carné, seguro estudiantil, materiales sueltos, etc.) —
+ * colección plana propia (`gastos_u`), mismo patrón que crearAdjunto.
+ */
+function crearGastoU({ nombre, costo, nota }) {
+  return sellarTimestamp({
+    id: "gastou_" + crypto.randomUUID(),
+    nombre,
+    costo: Number(costo) || 0,
+    nota: nota || null,
+  });
 }
 
 // Límite defensivo de tamaño por adjunto — Drive en sí no lo necesita (su
@@ -2007,6 +2099,20 @@ function migrarDatosAntiguos(datos) {
   if (!Array.isArray(datos.adjuntos)) datos.adjuntos = [];
   if (!Array.isArray(datos._eliminados_adjuntos)) datos._eliminados_adjuntos = [];
 
+  // Finanzas (2026-08-10): mismo relleno defensivo — cuentas cuyo JSON en
+  // Drive se guardó antes de que existiera esta sección.
+  if (!Array.isArray(datos.finanzas_semestre)) datos.finanzas_semestre = [];
+  if (!Array.isArray(datos.gastos_u)) datos.gastos_u = [];
+  if (!Array.isArray(datos._eliminados_finanzas_semestre)) datos._eliminados_finanzas_semestre = [];
+  if (!Array.isArray(datos._eliminados_gastos_u)) datos._eliminados_gastos_u = [];
+  // Registros financieros creados antes de que pago_confirmado_manual
+  // existiera: se tratan como "nunca tocado a mano" (false), que es
+  // exactamente el comportamiento que ya tenían (el neto sugerido siempre
+  // se recalculaba solo).
+  datos.finanzas_semestre.forEach((registro) => {
+    if (registro.pago_confirmado_manual === undefined) registro.pago_confirmado_manual = false;
+  });
+
   if (Array.isArray(datos.semestres)) {
     datos.semestres.forEach((semestre) => {
       (semestre.materias_matriculadas || []).forEach((mm) => {
@@ -2229,4 +2335,7 @@ export {
   calcularPromedioTotalCombinado,
   calcularEstadisticasAprobacion,
   calcularDetallePorEstado,
+  crearRegistroFinancieroSemestre,
+  crearGastoU,
+  calcularNetoSugeridoFinanzas,
 };

@@ -786,6 +786,15 @@ function fusionarDatos(datosLocal, datosRemoto) {
   // que profesores/companeros/agenda — fusionarColeccion ya sabe fundir por
   // _actualizadoEn y respetar tumbas, no hace falta ninguna función nueva.
   const tumbasAdjuntos = fusionarTumbas(datosLocal._eliminados_adjuntos, datosRemoto._eliminados_adjuntos);
+  // Finanzas (2026-08-10): dos colecciones planas de nivel superior, mismo
+  // patrón exacto que profesores/companeros/adjuntos — fusionarColeccion ya
+  // sabe fundir por _actualizadoEn y respetar tumbas, no hace falta ninguna
+  // función de fusión nueva.
+  const tumbasFinanzasSemestre = fusionarTumbas(
+    datosLocal._eliminados_finanzas_semestre,
+    datosRemoto._eliminados_finanzas_semestre
+  );
+  const tumbasGastosU = fusionarTumbas(datosLocal._eliminados_gastos_u, datosRemoto._eliminados_gastos_u);
   const tumbasEnlaces = fusionarTumbas(
     datosLocal.configuracion && datosLocal.configuracion._eliminados_enlaces,
     datosRemoto.configuracion && datosRemoto.configuracion._eliminados_enlaces
@@ -817,12 +826,21 @@ function fusionarDatos(datosLocal, datosRemoto) {
     companeros: fusionarColeccion(datosLocal.companeros, datosRemoto.companeros, tumbasCompaneros, "compañero"),
     agenda: fusionarColeccion(datosLocal.agenda, datosRemoto.agenda, tumbasAgenda, "evento de agenda"),
     adjuntos: fusionarColeccion(datosLocal.adjuntos, datosRemoto.adjuntos, tumbasAdjuntos, "adjunto"),
+    finanzas_semestre: fusionarColeccion(
+      datosLocal.finanzas_semestre,
+      datosRemoto.finanzas_semestre,
+      tumbasFinanzasSemestre,
+      "registro financiero de semestre"
+    ),
+    gastos_u: fusionarColeccion(datosLocal.gastos_u, datosRemoto.gastos_u, tumbasGastosU, "gasto general U"),
     _eliminados_planes: tumbasPlanes,
     _eliminados_semestres: tumbasSemestres,
     _eliminados_profesores: tumbasProfesores,
     _eliminados_companeros: tumbasCompaneros,
     _eliminados_agenda: tumbasAgenda,
     _eliminados_adjuntos: tumbasAdjuntos,
+    _eliminados_finanzas_semestre: tumbasFinanzasSemestre,
+    _eliminados_gastos_u: tumbasGastosU,
   };
 }
 
