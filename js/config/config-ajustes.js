@@ -4,7 +4,7 @@
    plan/universidad, formato de texto.
    ========================================================================= */
 
-import { ESCALAS_DISPONIBLES, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, migrarDatosAntiguos, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
+import { ESCALAS_DISPONIBLES, FRECUENCIAS_BACKUP_DRIVE, MONEDAS_DISPONIBLES, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, migrarDatosAntiguos, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
 import { actualizarIndicadorSync, marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
@@ -391,13 +391,81 @@ function renderizarAjustes() {
     });
   }
 
+  // Moneda preferida (Ajustes generales, 2026-08-10): preferencia GLOBAL
+  // del usuario (no por universidad/plan) que usa Finanzas para formatear
+  // montos. Se construye dinámicamente desde MONEDAS_DISPONIBLES (mismo
+  // patrón que el grid de paletas de arriba) en vez de pills fijos en el
+  // HTML, así la lista puede crecer sin tocar dos lugares.
+  const grupoMoneda = document.getElementById("pill-moneda");
+  if (grupoMoneda) {
+    grupoMoneda.innerHTML = "";
+    const monedaActual = estado.datos.configuracion.moneda_preferida || "CRC";
+    MONEDAS_DISPONIBLES.forEach((moneda) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pill-item" + (moneda.id === monedaActual ? " active" : "");
+      btn.title = moneda.etiqueta;
+      btn.textContent = `${moneda.simbolo} ${moneda.id}`;
+      btn.addEventListener("click", () => {
+        estado.datos.configuracion.moneda_preferida = moneda.id;
+        sellarTimestamp(estado.datos.configuracion);
+        marcarCambioPendiente();
+        renderizarAjustes();
+      });
+      grupoMoneda.appendChild(btn);
+    });
+  }
+
   // Ajustes — ocultar botones de navegación principal
   renderizarNavegacionOculta();
+
+  // Ajustes — backup de seguridad rotativo a Drive (frecuencia + estado)
+  renderizarSeccionBackupDrive();
 
   // Ajustes — respaldo de datos (exportar/importar JSON completo)
   renderizarSeccionDatos();
 
   actualizarIndicadorSync();
+}
+
+/**
+ * Ajustes — Backup de seguridad rotativo a Drive (2026-08-10): elegir la
+ * frecuencia e informar cuándo fue el último backup exitoso. El ciclo en
+ * sí (crear/rotar backup_reciente.json / backup_anterior.json dentro de
+ * AppAcademica/) corre SOLO, enganchado al ciclo normal de sync — ver
+ * ejecutarBackupSiToca en core/storage-sync.js. Esta función nunca dispara
+ * un backup a mano, solo lee/escribe la preferencia y muestra el estado.
+ */
+function renderizarSeccionBackupDrive() {
+  const grupoFrecuencia = document.getElementById("pill-frecuencia-backup");
+  if (grupoFrecuencia) {
+    grupoFrecuencia.innerHTML = "";
+    const cfgBackup = estado.datos.configuracion.backup_drive || { frecuencia: "semanal", ultimo_backup_iso: null };
+    FRECUENCIAS_BACKUP_DRIVE.forEach((frecuencia) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pill-item" + (frecuencia.id === (cfgBackup.frecuencia || "semanal") ? " active" : "");
+      btn.textContent = frecuencia.etiqueta;
+      btn.addEventListener("click", () => {
+        estado.datos.configuracion.backup_drive =
+          estado.datos.configuracion.backup_drive || { frecuencia: "semanal", ultimo_backup_iso: null };
+        estado.datos.configuracion.backup_drive.frecuencia = frecuencia.id;
+        sellarTimestamp(estado.datos.configuracion);
+        marcarCambioPendiente();
+        renderizarSeccionBackupDrive();
+      });
+      grupoFrecuencia.appendChild(btn);
+    });
+  }
+
+  const elEstado = document.getElementById("texto-ultimo-backup");
+  if (elEstado) {
+    const cfgBackup = estado.datos.configuracion.backup_drive;
+    elEstado.textContent =
+      cfgBackup && cfgBackup.ultimo_backup_iso
+        ? `Último backup: ${new Date(cfgBackup.ultimo_backup_iso).toLocaleString()}`
+        : "Todavía no se hizo ningún backup automático — se hará en la próxima sincronización.";
+  }
 }
 
 /**
@@ -1043,5 +1111,6 @@ function renderizarNotasAprobacion() {
 
 export {
   renderizarAjustes,
+  renderizarSeccionBackupDrive,
   aplicarModoRendimiento,
 };
