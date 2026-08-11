@@ -45,10 +45,7 @@ function crearDatosUsuarioNuevo() {
       // vive la preferencia de frecuencia y la fecha del último éxito, para
       // poder calcular cuándo toca el próximo sin depender de un timer
       // propio. Ver FRECUENCIAS_BACKUP_DRIVE más abajo para las opciones.
-      backup_drive: {
-        frecuencia: "semanal",       // "diaria" | "cada_3_dias" | "semanal" | "quincenal" | "mensual"
-        ultimo_backup_iso: null,     // fecha ISO del último backup exitoso, o null si nunca corrió uno
-      },
+      backup_drive: crearBackupDriveDefault(),
       plan_activo_id: null,         // id del Plan de Estudios seleccionado como activo
       enlaces_rapidos: [],          // ver estructura de "enlace" abajo (máx. 20)
       // Fix (2026-08-08 — enlaces borrados "resucitando" entre dispositivos):
@@ -432,6 +429,30 @@ const FRECUENCIAS_BACKUP_DRIVE = [
   { id: "quincenal", etiqueta: "Quincenal", dias: 14 },
   { id: "mensual", etiqueta: "Mensual", dias: 30 },
 ];
+
+/* Valor default de configuracion.backup_drive — extraído a helper
+ * (2026-08-10) porque se necesitaba construir el mismo objeto en varios
+ * lugares (crearDatosUsuarioNuevo, migrarDatosAntiguos, y los puntos de
+ * relleno defensivo en storage-sync.js/config-ajustes.js que asumen que el
+ * campo puede no existir todavía); repetir el literal en cada uno de esos
+ * lugares es justo el tipo de duplicación que hace fácil que un campo
+ * nuevo (como archivo_vigente_migrado) se agregue en un lugar y se quede
+ * afuera en los demás sin que nadie lo note. */
+function crearBackupDriveDefault() {
+  return {
+    frecuencia: "semanal",          // "diaria" | "cada_3_dias" | "semanal" | "quincenal" | "mensual"
+    ultimo_backup_iso: null,        // fecha ISO del último backup exitoso, o null si nunca corrió uno
+    // Migración única del archivo vigente (2026-08-10): el JSON central de
+    // la app (estado.fileId) se crea originalmente en la raíz del Drive,
+    // antes de que exista la carpeta "AppAcademica". La primera vez que el
+    // ciclo de backup corre de verdad, ese archivo se MUEVE (no se copia)
+    // adentro de la carpeta, conservando el mismo nombre y el mismo
+    // fileId — ver migrarArchivoVigenteSiHaceFalta en storage-sync.js. Esta
+    // bandera evita reintentar la mudanza en cada ciclo una vez que ya se
+    // hizo una vez.
+    archivo_vigente_migrado: false,
+  };
+}
 
 /* ===================== Árbol de expresión Y/O (requisitos/correquisitos) =====================
    v1.12: reemplaza el modelo plano de "grupos de alternativas". Cada nodo es
@@ -2093,7 +2114,17 @@ function migrarDatosAntiguos(datos) {
   // cuanto se cumpla el intervalo, en vez de reventar leyendo un campo
   // inexistente.
   if (datos.configuracion && (!datos.configuracion.backup_drive || typeof datos.configuracion.backup_drive !== "object")) {
-    datos.configuracion.backup_drive = { frecuencia: "semanal", ultimo_backup_iso: null };
+    datos.configuracion.backup_drive = crearBackupDriveDefault();
+  }
+  // Cuentas que ya tenían backup_drive de ANTES de que existiera
+  // archivo_vigente_migrado (2026-08-10) — se rellena por separado para no
+  // pisar frecuencia/ultimo_backup_iso ya guardados.
+  if (
+    datos.configuracion &&
+    datos.configuracion.backup_drive &&
+    typeof datos.configuracion.backup_drive.archivo_vigente_migrado !== "boolean"
+  ) {
+    datos.configuracion.backup_drive.archivo_vigente_migrado = false;
   }
 
   // FIX sync (2026-08-02): materias matriculadas creadas antes del motor de
@@ -2376,6 +2407,7 @@ export {
   MAPEO_HORAS_VIEJO_A_NUEVO,
   MONEDAS_DISPONIBLES,
   FRECUENCIAS_BACKUP_DRIVE,
+  crearBackupDriveDefault,
   PALETAS_DISPONIBLES,
   PARAMETROS_UNIVERSIDAD_DEFAULT,
   PRESETS_TIPOS_HORAS,

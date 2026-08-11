@@ -524,6 +524,53 @@ async function copiarArchivoDrive(token, fileId, nombreCopia, folderId) {
   return respuesta.json();
 }
 
+/**
+ * Mueve un archivo YA EXISTENTE hacia adentro de una carpeta, SIN tocar su
+ * contenido ni su fileId — a diferencia de copiarArchivoDrive (que crea un
+ * archivo nuevo e independiente), esto es el mismo archivo de siempre,
+ * solo que cambia de ubicación. Drive v3 no tiene un endpoint "mover"
+ * directo: se hace agregando el parent nuevo (addParents) y quitando
+ * explícitamente los parents viejos (removeParents) en la misma llamada
+ * — sin el removeParents, el archivo quedaría visible en las DOS
+ * ubicaciones a la vez en vez de mudarse de verdad.
+ *
+ * Se usa una única vez por cuenta (2026-08-10) para migrar el archivo de
+ * datos vigente —creado originalmente en la raíz del Drive, antes de que
+ * existiera "AppAcademica"— hacia adentro de esa carpeta. Como el fileId
+ * no cambia, guardarDatos/leerDatos/obtenerMetadatosArchivo (que solo
+ * conocen el fileId, nunca la ubicación) siguen funcionando exactamente
+ * igual después de la mudanza, sin ningún otro cambio en el resto del
+ * código — ver migrarArchivoVigenteSiHaceFalta en storage-sync.js.
+ */
+async function moverArchivoAlaCarpeta(token, fileId, folderIdDestino) {
+  const metaActual = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=parents`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }).then((r) => r.json());
+  const parentsActuales = metaActual.parents || [];
+
+  // Ya está adentro de la carpeta (ej. si esto se reintentó después de un
+  // fallo a mitad de camino, o si en algún dispositivo la bandera todavía
+  // no llegó a sincronizarse) — nada que mover, evita una llamada inútil
+  // y un posible error de Drive por pedir quitar un parent que ya no está.
+  if (parentsActuales.includes(folderIdDestino)) return { id: fileId, parents: parentsActuales };
+
+  const params = new URLSearchParams({ addParents: folderIdDestino, fields: "id,parents" });
+  if (parentsActuales.length > 0) params.set("removeParents", parentsActuales.join(","));
+
+  const respuesta = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?${params.toString()}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Drive respondió ${respuesta.status} al mover el archivo vigente a la carpeta de backup: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+  return respuesta.json();
+}
+
 export {
   NOMBRE_CARPETA_BACKUP,
   buscarOCrearArchivoDatos,
@@ -531,6 +578,7 @@ export {
   buscarArchivoEnCarpeta,
   renombrarArchivoDrive,
   copiarArchivoDrive,
+  moverArchivoAlaCarpeta,
   cerrarSesionGoogle,
   descargarArchivoBinarioDeDrive,
   eliminarArchivoDeDriveConId,

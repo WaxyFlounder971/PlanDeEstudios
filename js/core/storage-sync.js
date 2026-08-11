@@ -23,11 +23,12 @@ import {
   eliminarArchivoDeDriveConId,
   guardarDatos,
   leerDatos,
+  moverArchivoAlaCarpeta,
   obtenerMetadatosArchivo,
   refrescarAccessTokenGoogle,
   renombrarArchivoDrive,
 } from "./auth.js";
-import { FRECUENCIAS_BACKUP_DRIVE, migrarDatosAntiguos, sellarTimestamp } from "./schema.js";
+import { FRECUENCIAS_BACKUP_DRIVE, crearBackupDriveDefault, migrarDatosAntiguos, sellarTimestamp } from "./schema.js";
 import { fusionarDatos } from "./storage-merge.js";
 import { authListo, correoConocido, establecerTokenActivo, estado, guardarCacheLocal, leerTokenCacheValido } from "./storage.js";
 
@@ -785,23 +786,58 @@ async function asegurarTokenFrescoAlVolver() {
  * función corre, el sync normal ya tuvo éxito, y un backup fallido no debe
  * ensuciar ni interrumpir ese resultado. Se reintenta solo en el próximo
  * sync exitoso, una vez se cumpla el intervalo de nuevo.
- */
-/**
- * El ciclo de rotación en sí (crear carpeta si hace falta, rotar
- * backup_reciente.json -> backup_anterior.json, copiar el archivo vigente
- * como el nuevo backup_reciente.json) — sin ninguna condición de
- * frecuencia. Separado de ejecutarBackupSiToca (2026-08-10, pedido
+ *
+ * El ciclo de rotación en sí (crear carpeta si hace falta, migrar el
+ * archivo vigente si es la primera vez, rotar backup_reciente.json ->
+ * backup_anterior.json, copiar el archivo vigente como el nuevo
+ * backup_reciente.json) vive en ejecutarCicloRotacionBackup, sin ninguna
+ * condición de frecuencia — separado de esta función (2026-08-10, pedido
  * explícito: botón de "Hacer backup ahora") para que el botón manual
  * pueda correr el mismo ciclo real ignorando el intervalo elegido, sin
  * duplicar la lógica de rotación en dos lugares.
+ */
+
+/**
+ * Migración única del archivo vigente (2026-08-10, pedido explícito): el
+ * JSON central de la app (estado.fileId) se crea originalmente en la raíz
+ * del Drive del usuario, antes de que exista la carpeta "AppAcademica". La
+ * primera vez que el ciclo de backup corre de verdad —automático o
+ * manual, lo que pase primero— este archivo se MUEVE (no se copia) hacia
+ * adentro de la carpeta, conservando el mismo nombre. Como Drive conserva
+ * el mismo fileId al mover (solo cambian los parents), guardarDatos/
+ * leerDatos/obtenerMetadatosArchivo (que solo conocen estado.fileId, nunca
+ * la ubicación) siguen apuntando ahí mismo sin ningún otro cambio: todo el
+ * guardado normal de la app queda apuntando a la ubicación nueva dentro de
+ * la carpeta automáticamente, sin tocar storage.js ni auth.js más allá de
+ * la primitiva moverArchivoAlaCarpeta.
  *
+ * Gateada por cfg.archivo_vigente_migrado para que esto corra una única
+ * vez por cuenta — los intentos siguientes ven la bandera en true y
+ * salen de inmediato, sin llamar a Drive.
+ */
+async function migrarArchivoVigenteSiHaceFalta(cfg, folderId) {
+  if (cfg.archivo_vigente_migrado) return;
+  await conReintentoSi401(() => moverArchivoAlaCarpeta(estado.token, estado.fileId, folderId));
+  cfg.archivo_vigente_migrado = true;
+}
+
+/**
  * NO actualiza cfg.ultimo_backup_iso ni cachea — eso queda a cargo de
  * quien llama (ver ejecutarBackupSiToca y forzarBackupManual), porque
  * cada uno decide en qué momento y con qué efectos secundarios (silencioso
- * vs. con feedback al usuario) se sella el timestamp.
+ * vs. con feedback al usuario) se sella el timestamp. Sí garantiza que
+ * configuracion.backup_drive exista (lo crea con el default si hace
+ * falta) — quien llama puede leerlo de estado.datos.configuracion.backup_drive
+ * después, sin repetir la inicialización.
  */
 async function ejecutarCicloRotacionBackup() {
+  const cfg = (estado.datos.configuracion.backup_drive =
+    estado.datos.configuracion.backup_drive || crearBackupDriveDefault());
+
   const folderId = await conReintentoSi401(() => buscarOCrearCarpetaEnDrive(estado.token, NOMBRE_CARPETA_BACKUP));
+
+  await migrarArchivoVigenteSiHaceFalta(cfg, folderId);
+
   const idReciente = await conReintentoSi401(() => buscarArchivoEnCarpeta(estado.token, folderId, "backup_reciente.json"));
 
   if (idReciente) {
@@ -833,7 +869,7 @@ async function ejecutarBackupSiToca() {
     if (!estado.datos || !estado.datos.configuracion) return;
 
     const cfg = (estado.datos.configuracion.backup_drive =
-      estado.datos.configuracion.backup_drive || { frecuencia: "semanal", ultimo_backup_iso: null });
+      estado.datos.configuracion.backup_drive || crearBackupDriveDefault());
 
     const frecuenciaElegida =
       FRECUENCIAS_BACKUP_DRIVE.find((f) => f.id === cfg.frecuencia) ||
@@ -876,11 +912,12 @@ async function forzarBackupManual() {
 
   // Cada llamada interna a Drive dentro de ejecutarCicloRotacionBackup ya
   // va envuelta en conReintentoSi401 por separado — no hace falta un
-  // envoltorio extra acá afuera.
+  // envoltorio extra acá afuera. ejecutarCicloRotacionBackup ya garantiza
+  // que configuracion.backup_drive exista (lo crea si hace falta), así que
+  // acá abajo alcanza con leerlo, no hay que volver a inicializarlo.
   await ejecutarCicloRotacionBackup();
 
-  const cfg = (estado.datos.configuracion.backup_drive =
-    estado.datos.configuracion.backup_drive || { frecuencia: "semanal", ultimo_backup_iso: null });
+  const cfg = estado.datos.configuracion.backup_drive;
   cfg.ultimo_backup_iso = new Date().toISOString();
   sellarTimestamp(estado.datos.configuracion);
   marcarCambioPendiente();
