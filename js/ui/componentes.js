@@ -394,6 +394,79 @@ function desplazarYResaltarElemento(selector, intentosRestantes = 15) {
   setTimeout(() => el.classList.remove("destello-resaltado"), 1600);
 }
 
+/* ===================== Botones "atrás"/"adelante" del mouse (4 y 5) ===================== */
+
+// Misma clave de localStorage que CLAVE_SECCION_ACTIVA en main.js. No se
+// importa directo de ahí (evitaría un import circular real: main.js ya
+// importa este archivo) — es solo el nombre de la llave, no lógica, así
+// que duplicar el string puntual es más seguro que forzar una dependencia
+// nueva solo para esto.
+const CLAVE_SECCION_ACTIVA_MOUSE = "seccion_activa_v1";
+
+/**
+ * v2.8.9 (pedido explícito): los botones "atrás"/"adelante" de un mouse de
+ * 5 botones (MouseEvent.button 3 y 4) navegan entre las secciones del nav
+ * principal, en vez de disparar el historial NATIVO del navegador — que
+ * sin este listener cierra la pestaña (si no hay historial previo) o deja
+ * la app en un estado roto/mostrando HTML crudo (si sí lo hay, ej.
+ * volviendo a un estado servido desde bfcache). Se engancha sobre
+ * "mouseup" (no "click": los botones 4/5 no disparan evento click en
+ * todos los navegadores) y llama a preventDefault() en cuanto detecta
+ * botón 3 o 4, haya o no una sección a la que efectivamente navegar — así
+ * el navegador nunca llega a intentar su propia navegación de historial
+ * para esos botones, sin importar el resultado de acá adentro.
+ *
+ * Reutiliza el MISMO mecanismo de navegación que ya existe
+ * (window.mostrarSeccion, ver main.js) en vez de inventar un historial
+ * paralelo — se expone en window por el mismo motivo que
+ * aplicarVisibilidadNavegacion/obtenerOrdenNavegacion ya se exponen así
+ * (main.js importa este archivo, así que este archivo no puede importar
+ * de vuelta a main.js para esto sin crear un ciclo).
+ *
+ * El orden a recorrer es el de las secciones REALMENTE visibles en el nav
+ * en este momento — se lee directo del DOM (.btn-nav[data-seccion] ya
+ * filtrados/ordenados por aplicarVisibilidadNavegacion, que corre en cada
+ * mostrarApp() y en cada cambio de Ajustes) en vez de recalcular acá la
+ * lista lógica de nuevo — así nunca se desincroniza de lo que la persona
+ * ve realmente en el sidebar, sea cual sea su configuración de
+ * orden/ocultas.
+ */
+function inicializarNavegacionBotonesMouse() {
+  document.addEventListener("mouseup", (e) => {
+    if (e.button !== 3 && e.button !== 4) return;
+    e.preventDefault();
+
+    if (typeof window.mostrarSeccion !== "function") return;
+
+    const botones = Array.from(document.querySelectorAll(".btn-nav[data-seccion]:not(.oculto)"));
+    if (botones.length === 0) return;
+
+    const actual = localStorage.getItem(CLAVE_SECCION_ACTIVA_MOUSE);
+    let indiceActual = botones.findIndex((btn) => btn.dataset.seccion === actual);
+    if (indiceActual === -1) indiceActual = 0;
+
+    // Botón 3 = "atrás" (sección anterior en la lista); botón 4 =
+    // "adelante" (siguiente) — mismo sentido que el historial de un
+    // navegador normal. No da la vuelta circular (se queda quieto en la
+    // punta): ir "más atrás" que la primera sección o "más adelante" que
+    // la última no tiene a dónde navegar, en vez de saltar sorpresivamente
+    // al otro extremo de la lista.
+    const direccion = e.button === 3 ? -1 : 1;
+    const indiceNuevo = indiceActual + direccion;
+    if (indiceNuevo < 0 || indiceNuevo >= botones.length) return;
+
+    window.mostrarSeccion(botones[indiceNuevo].dataset.seccion);
+  });
+
+  // Algunos navegadores (Chrome en Windows, sobre todo) además disparan su
+  // propia navegación de historial sobre "auxclick" para estos mismos
+  // botones — se bloquea también acá por las dudas, para cubrir el caso de
+  // que el navegador actúe sobre auxclick en vez de (o además de) mouseup.
+  document.addEventListener("auxclick", (e) => {
+    if (e.button === 3 || e.button === 4) e.preventDefault();
+  });
+}
+
 export {
   CLAVE_SIDEBAR_COLAPSADA,
   abrirConfirmacion,
@@ -408,6 +481,7 @@ export {
   inicializarBotonesCerrarModal,
   inicializarLayoutResponsivo,
   inicializarModalConfirmacion,
+  inicializarNavegacionBotonesMouse,
   mostrarToast,
   restaurarEstadoSidebar,
 };
