@@ -1962,6 +1962,79 @@ img, svg { max-width: 100%; }
   white-space: nowrap;
 }
 
+/* ---- Finanzas: pestañas responsivas (Resumen/Semestres/Gastos generales
+   U/Beneficios) — v2.8.8, 2026-08-11 ----
+   A diferencia de .pill-group genérico (trunca con "…" y se vuelve
+   scrolleable horizontal si no caben) y de .pill-group-vista (conserva el
+   ancho natural pero también resuelve el desborde con scroll horizontal),
+   acá el pedido es explícito: el texto JAMÁS se corta, ni con "…" ni
+   apretado ni recortado — si no entran cómodas en una fila, las 4
+   pestañas pasan a apilarse en una columna, cada una ocupando el ancho
+   completo del contenedor, creciendo en alto lo que haga falta.
+
+   Se usa una @container en vez de un @media de viewport porque el ancho
+   real disponible para este grupo depende del layout (sidebar colapsada o
+   expandida, con o sin panel lateral) y no del viewport completo — un
+   @media fijo podría no activarse (o activarse tarde) según ese contexto
+   aunque las pestañas ya estén apretadas ahí adentro. */
+.finanzas-tabs-contenedor {
+  container-type: inline-size;
+  container-name: finanzas-tabs;
+}
+
+.pill-group-finanzas {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.18);
+  padding: 4px;
+  border-radius: var(--radius-pill);
+}
+[data-mode="light"] .pill-group-finanzas { background: rgba(0, 0, 0, 0.05); }
+
+.pill-group-finanzas .pill-item {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: visible;
+  text-overflow: unset;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* Ancho insuficiente para una fila cómoda -> columna, ancho completo por
+   botón, alto libre (el texto decide cuánto crece el botón, nunca al
+   revés). 560px cubre con margen el peor caso ("Gastos generales U" es la
+   etiqueta más larga de las 4) sin activarse de más en anchos donde en
+   realidad sí entrarían bien. */
+@container finanzas-tabs (max-width: 560px) {
+  .pill-group-finanzas {
+    flex-direction: column;
+    border-radius: var(--radius-lg);
+  }
+  .pill-group-finanzas .pill-item {
+    width: 100%;
+    white-space: normal;
+    height: auto;
+    padding: 10px 14px;
+  }
+}
+
+/* Fallback para navegadores sin soporte de container queries (Safari <16 —
+   poco frecuente ya en 2026, pero de costo casi nulo cubrirlo dado que acá
+   el requisito de "nunca cortar texto" es duro): un @media de viewport
+   conservador que como mínimo evita el corte, aunque no sea tan preciso
+   como la container query de arriba frente a un sidebar colapsado/expandido. */
+@supports not (container-type: inline-size) {
+  @media (max-width: 480px) {
+    .pill-group-finanzas { flex-direction: column; }
+    .pill-group-finanzas .pill-item {
+      width: 100%;
+      white-space: normal;
+      height: auto;
+    }
+  }
+}
+
 .mapa-zoom-controles {
   display: flex;
   align-items: center;
