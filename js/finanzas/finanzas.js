@@ -7,8 +7,9 @@
    calcula los totales del Resumen — nada de CRUD acá.
    ========================================================================= */
 
+import { calcularPagosRecurrentesTranscurridos } from "../core/schema.js";
 import { estado } from "../core/storage.js";
-import { renderizarPestanaGastosEstudiantiles, renderizarPestanaGastosU } from "./finanzas-gastos.js";
+import { renderizarPestanaBeneficios, renderizarPestanaGastosU } from "./finanzas-gastos.js";
 import { renderizarPestanaSemestresFinanzas } from "./finanzas-semestres.js";
 
 // Estado de UI puro (no viaja a Drive, no necesita sellarTimestamp) — cuál
@@ -16,55 +17,85 @@ import { renderizarPestanaSemestresFinanzas } from "./finanzas-semestres.js";
 // cargar el módulo, igual que estado.categoriaEditandoId en plan-categorias.js.
 if (estado.finanzasVistaActiva === undefined) estado.finanzasVistaActiva = "resumen";
 
+// v2.8.8: "Gastos estudiantiles" -> "Beneficios" (pedido explícito). El id
+// interno ("gastos-estudiantiles") se deja igual a propósito — cambiarlo
+// significaría migrar estado.finanzasVistaActiva para cuentas que hayan
+// quedado con ese valor guardado en memoria/sesión, sin ninguna ganancia
+// real ya que el id nunca se muestra, solo la etiqueta.
 const PESTANAS_FINANZAS = [
   { id: "resumen", etiqueta: "Resumen" },
   { id: "semestres", etiqueta: "Semestres" },
   { id: "gastos-u", etiqueta: "Gastos generales U" },
-  { id: "gastos-estudiantiles", etiqueta: "Gastos estudiantiles" },
+  { id: "gastos-estudiantiles", etiqueta: "Beneficios" },
 ];
 
 /**
  * Formato de colones consistente en toda la sección — sin decimales
  * sueltos raros, siempre 2 decimales, separador de miles local.
+ *
+ * v2.8.8: para negativos (ej. el Balance del Resumen cuando hay más gasto
+ * que ingreso) el signo "-" se pone A MANO, antes del símbolo de moneda
+ * ("-₡100.00"), en vez de dejar que toLocaleString lo intercale donde el
+ * locale decida ("₡-100.00" se leía raro/ambiguo) — pedido explícito de
+ * que el signo quede explícito y claro antes del monto.
  */
 function formatearMonto(numero) {
   const n = Number(numero) || 0;
-  return "₡" + n.toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const signo = n < 0 ? "-" : "";
+  return signo + "₡" + Math.abs(n).toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /**
  * Único punto que calcula los totales del Resumen — reutilizable si algún
  * día otra pantalla necesita el mismo número (ej. un widget en Configuración).
- * Ver punto 7 del prompt: total gastado, total "ganado" (cuando el neto de
- * un semestre da negativo por una beca que supera el costo) y balance neto
- * general de toda la carrera. gastos_u se suma siempre como gasto (no se
- * espera que un gasto general dé negativo, a diferencia del registro de
- * semestre que sí puede por la beca).
+ *
+ * v2.8.8: ya no existe un "neto por semestre" auto-calculado — costo_matricula
+ * y beca_monto son dos montos directos e independientes por registro:
+ *   - totalGastado = suma de costo_matricula (todos los semestres) + costo
+ *     de cada gasto_u (los simples: `costo`; los recurrentes: lo ya pagado
+ *     hasta hoy vía calcularPagosRecurrentesTranscurridos, nunca lo que
+ *     falte pagar a futuro).
+ *   - totalBecas = suma de beca_monto — funciona como INGRESO/ahorro, no
+ *     como un gasto más.
+ *   - balanceNeto = totalBecas − totalGastado. Positivo (>=0) = más
+ *     ingresos/beca que gastos; negativo = más gastos que ingresos (ver
+ *     color en construirResumenFinanzas).
  */
 function calcularTotalesResumenFinanzas() {
   const registros = estado.datos.finanzas_semestre || [];
   const gastos = estado.datos.gastos_u || [];
 
   let totalGastado = 0;
-  let totalGanado = 0;
+  let totalBecas = 0;
 
   registros.forEach((r) => {
-    const neto = Number(r.pago_confirmado) || 0;
-    if (neto >= 0) totalGastado += neto;
-    else totalGanado += Math.abs(neto);
+    totalGastado += Number(r.costo_matricula) || 0;
+    totalBecas += Number(r.beca_monto) || 0;
   });
 
   gastos.forEach((g) => {
-    totalGastado += Number(g.costo) || 0;
+    if (g.recurrente) {
+      totalGastado += calcularPagosRecurrentesTranscurridos(g.recurrente).totalPagado;
+    } else {
+      totalGastado += Number(g.costo) || 0;
+    }
   });
 
-  const balanceNeto = totalGastado - totalGanado;
-  return { totalGastado, totalGanado, balanceNeto };
+  const balanceNeto = totalBecas - totalGastado;
+  return { totalGastado, totalBecas, balanceNeto };
 }
 
 function construirTabsFinanzas() {
+  // v2.8.8: contenedor con container-type: inline-size (ver
+  // .finanzas-tabs-contenedor en design-system.css) — permite que las 4
+  // pestañas se apilen en columna cuando el ancho REAL disponible no
+  // alcanza para mostrarlas en una fila sin apretarse, sin depender de un
+  // @media de viewport que no sabe si el sidebar está colapsado o no.
+  const envoltorio = document.createElement("div");
+  envoltorio.className = "finanzas-tabs-contenedor";
+
   const grupo = document.createElement("div");
-  grupo.className = "pill-group";
+  grupo.className = "pill-group-finanzas";
   PESTANAS_FINANZAS.forEach((pestana) => {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -78,11 +109,12 @@ function construirTabsFinanzas() {
     });
     grupo.appendChild(btn);
   });
-  return grupo;
+  envoltorio.appendChild(grupo);
+  return envoltorio;
 }
 
 function construirResumenFinanzas() {
-  const { totalGastado, totalGanado, balanceNeto } = calcularTotalesResumenFinanzas();
+  const { totalGastado, totalBecas, balanceNeto } = calcularTotalesResumenFinanzas();
   const sec = document.createElement("section");
   sec.className = "glass-card stack";
 
@@ -100,18 +132,23 @@ function construirResumenFinanzas() {
     return fila;
   };
 
+  // "Total gastado" sin cambios de comportamiento (pedido explícito: sigue
+  // siempre en rojo, sin condicionar el color a su signo).
   filaTotales.appendChild(construirLinea("Total gastado", totalGastado, "badge-danger"));
-  if (totalGanado > 0) {
-    filaTotales.appendChild(construirLinea("Total ganado (beca sobre costo)", totalGanado, "badge-success"));
+  if (totalBecas > 0) {
+    filaTotales.appendChild(construirLinea("Total cubierto por becas", totalBecas, "badge-success"));
   }
+  // Balance: verde si es positivo (más ingresos/beca que gastos), rojo si
+  // es negativo (más gastos que ingresos) — el signo "-" explícito ya lo
+  // pone formatearMonto arriba cuando balanceNeto < 0.
   filaTotales.appendChild(
-    construirLinea("Balance neto de la carrera", balanceNeto, balanceNeto <= 0 ? "badge-success" : "badge-neutral")
+    construirLinea("Balance neto de la carrera", balanceNeto, balanceNeto >= 0 ? "badge-success" : "badge-danger")
   );
 
   sec.innerHTML = `<h2 style="margin:0;">💰 Resumen</h2>`;
   sec.appendChild(filaTotales);
 
-  if (totalGanado === 0 && totalGastado === 0) {
+  if (totalBecas === 0 && totalGastado === 0) {
     const vacio = document.createElement("p");
     vacio.className = "muted";
     vacio.style.margin = "0";
@@ -136,7 +173,7 @@ function renderizarContenidoFinanzasActivo() {
   } else if (estado.finanzasVistaActiva === "gastos-u") {
     renderizarPestanaGastosU(contenido);
   } else if (estado.finanzasVistaActiva === "gastos-estudiantiles") {
-    renderizarPestanaGastosEstudiantiles(contenido);
+    renderizarPestanaBeneficios(contenido);
   }
 }
 

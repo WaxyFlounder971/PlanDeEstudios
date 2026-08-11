@@ -1,18 +1,47 @@
 /* =========================================================================
-   FINANZAS — Pestañas Gastos generales U y Gastos estudiantiles (2026-08-10)
-   La primera es un CRUD simple de gastos sueltos no vinculados a un
-   semestre. La segunda vive el generador del prompt de descuentos
-   estudiantiles: arma el texto, lo copia al portapapeles (blindado) y abre
-   claude.ai en pestaña nueva.
+   FINANZAS — Pestañas Gastos generales U y Beneficios (2026-08-10,
+   renombrada de "Gastos estudiantiles" a "Beneficios" + pagos recurrentes
+   y vínculo opcional a semestre en v2.8.8)
+   La primera es un CRUD de gastos sueltos no vinculados a un semestre —
+   simples (monto único) o recurrentes (se repiten en el tiempo), con
+   vínculo opcional a un semestre puntual. La segunda vive el generador
+   del prompt de descuentos estudiantiles: arma el texto, lo copia al
+   portapapeles (blindado) y abre claude.ai en pestaña nueva.
    ========================================================================= */
 
-import { crearGastoU, sellarTimestamp } from "../core/schema.js";
+import { calcularPagosRecurrentesTranscurridos, crearGastoU, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { copiarPromptConAviso } from "../core/clipboard.js";
 import { abrirConfirmacion } from "../ui/componentes.js";
 import { obtenerPlanActivo } from "../plan/plan-esquema.js";
+import { obtenerSemestresActuales, obtenerSemestresPasados } from "../semestres/semestres.js";
 import { formatearMonto } from "./finanzas.js";
+
+const FRECUENCIAS_GASTO_RECURRENTE = [
+  { id: "semanal", etiqueta: "Semanal" },
+  { id: "quincenal", etiqueta: "Quincenal" },
+  { id: "mensual", etiqueta: "Mensual" },
+  { id: "anual", etiqueta: "Anual" },
+];
+
+/** Todos los semestres del historial (actuales + pasados), mismo orden que la pestaña Semestres. */
+function obtenerTodosLosSemestres() {
+  return [...obtenerSemestresActuales(), ...obtenerSemestresPasados()];
+}
+
+function obtenerNombreSemestre(semestreId) {
+  if (!semestreId) return null;
+  const semestre = obtenerTodosLosSemestres().find((s) => s.id === semestreId);
+  return semestre ? semestre.nombre : "semestre eliminado";
+}
+
+/** "YYYY-MM-DD" -> "DD/MM/AAAA" para mostrar; si viene vacío/null devuelve "". */
+function formatearFechaCorta(fechaIso) {
+  if (!fechaIso) return "";
+  const [anio, mes, dia] = fechaIso.split("-");
+  return `${dia}/${mes}/${anio}`;
+}
 
 /* ===================== Gastos generales U ===================== */
 
@@ -32,7 +61,7 @@ function renderizarPestanaGastosU(contenedor) {
   if (gastos.length === 0) {
     const vacio = document.createElement("p");
     vacio.className = "muted";
-    vacio.textContent = "Carné, seguro estudiantil, materiales... cualquier gasto suelto que no pertenezca a un semestre puntual.";
+    vacio.textContent = "Carné, seguro estudiantil, materiales, pagos recurrentes... cualquier gasto que no pertenezca a un semestre puntual.";
     contenedor.appendChild(vacio);
     return;
   }
@@ -40,17 +69,33 @@ function renderizarPestanaGastosU(contenedor) {
   gastos.forEach((gasto) => {
     const fila = document.createElement("div");
     fila.className = "glass-card row-between";
+
+    const nombreSemestre = obtenerNombreSemestre(gasto.semestre_id);
+    let subtextos = "";
+    if (gasto.nota) subtextos += `<p class="muted" style="margin:2px 0 0;">${gasto.nota}</p>`;
+    if (gasto.recurrente) {
+      const etiquetaFrecuencia =
+        FRECUENCIAS_GASTO_RECURRENTE.find((f) => f.id === gasto.recurrente.frecuencia)?.etiqueta || "Mensual";
+      subtextos += `<p class="muted" style="margin:2px 0 0;">🔁 ${etiquetaFrecuencia} · ${formatearMonto(gasto.recurrente.monto_por_pago)} c/u · desde ${formatearFechaCorta(gasto.recurrente.fecha_inicio)}${gasto.recurrente.fecha_fin ? ` hasta ${formatearFechaCorta(gasto.recurrente.fecha_fin)}` : ""}</p>`;
+    }
+    if (nombreSemestre) subtextos += `<p class="muted" style="margin:2px 0 0;">📎 Vinculado a ${nombreSemestre}</p>`;
+
     fila.innerHTML = `
       <div>
         <p style="margin:0; font-weight:600;">${gasto.nombre}</p>
-        ${gasto.nota ? `<p class="muted" style="margin:2px 0 0;">${gasto.nota}</p>` : ""}
+        ${subtextos}
       </div>
     `;
     const derecha = document.createElement("div");
     derecha.className = "row";
     const badge = document.createElement("span");
     badge.className = "badge badge-neutral";
-    badge.textContent = formatearMonto(gasto.costo);
+    if (gasto.recurrente) {
+      const { totalPagado } = calcularPagosRecurrentesTranscurridos(gasto.recurrente);
+      badge.textContent = formatearMonto(totalPagado) + " a la fecha";
+    } else {
+      badge.textContent = formatearMonto(gasto.costo);
+    }
     const btnEditar = document.createElement("button");
     btnEditar.type = "button";
     btnEditar.className = "btn btn-secondary";
@@ -70,7 +115,7 @@ function abrirModalGastoU(gastoExistente, contenedorLista) {
     "display:flex; align-items:center; justify-content:center; padding:16px;";
   const caja = document.createElement("div");
   caja.className = "glass-card stack";
-  caja.style.cssText = "max-width:440px; width:100%; padding:18px;";
+  caja.style.cssText = "max-width:460px; width:100%; padding:18px; max-height:85vh; overflow-y:auto;";
   caja.addEventListener("click", (e) => e.stopPropagation());
   const cerrar = () => overlay.remove();
   overlay.addEventListener("click", cerrar);
@@ -82,20 +127,153 @@ function abrirModalGastoU(gastoExistente, contenedorLista) {
   const inputNombre = document.createElement("input");
   inputNombre.type = "text";
   inputNombre.className = "form-input";
-  inputNombre.placeholder = "Ej. Carné, seguro estudiantil...";
+  inputNombre.placeholder = "Ej. Carné, seguro estudiantil, pase de transporte...";
   inputNombre.value = gastoExistente ? gastoExistente.nombre : "";
   bloqueNombre.appendChild(inputNombre);
   caja.appendChild(bloqueNombre);
 
+  // ----- ¿Es un pago recurrente? (2026-08-11, v2.8.8) -----
+  const filaRecurrente = document.createElement("div");
+  filaRecurrente.className = "row-between";
+  filaRecurrente.innerHTML = `
+    <span>¿Es un pago recurrente?</span>
+    <label class="switch switch-tema">
+      <input type="checkbox" id="switch-gasto-recurrente">
+      <span class="track"><span class="thumb"></span></span>
+    </label>
+  `;
+  caja.appendChild(filaRecurrente);
+  const switchRecurrente = filaRecurrente.querySelector("#switch-gasto-recurrente");
+  switchRecurrente.checked = !!(gastoExistente && gastoExistente.recurrente);
+
+  // ----- Costo simple (monto único, gasto NO recurrente) -----
   const bloqueCosto = document.createElement("div");
   bloqueCosto.innerHTML = `<span class="form-label">Costo</span>`;
   const inputCosto = document.createElement("input");
   inputCosto.type = "number";
   inputCosto.step = "0.01";
   inputCosto.className = "form-input";
-  inputCosto.value = gastoExistente ? gastoExistente.costo : "";
+  inputCosto.value = gastoExistente && !gastoExistente.recurrente ? gastoExistente.costo : "";
   bloqueCosto.appendChild(inputCosto);
   caja.appendChild(bloqueCosto);
+
+  // ----- Bloque de recurrencia (frecuencia + monto por pago + fechas) -----
+  const bloqueRecurrente = document.createElement("div");
+  bloqueRecurrente.className = "stack";
+
+  const pillFrecuencia = document.createElement("div");
+  pillFrecuencia.innerHTML = `<span class="form-label">Frecuencia</span>`;
+  const grupoFrecuencia = document.createElement("div");
+  grupoFrecuencia.className = "pill-group";
+  FRECUENCIAS_GASTO_RECURRENTE.forEach((f) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pill-item";
+    btn.dataset.valor = f.id;
+    btn.textContent = f.etiqueta;
+    grupoFrecuencia.appendChild(btn);
+  });
+  pillFrecuencia.appendChild(grupoFrecuencia);
+  bloqueRecurrente.appendChild(pillFrecuencia);
+
+  let frecuenciaElegida = (gastoExistente && gastoExistente.recurrente && gastoExistente.recurrente.frecuencia) || "mensual";
+  function marcarFrecuenciaActiva() {
+    grupoFrecuencia.querySelectorAll(".pill-item").forEach((p) => p.classList.toggle("active", p.dataset.valor === frecuenciaElegida));
+  }
+  marcarFrecuenciaActiva();
+  grupoFrecuencia.querySelectorAll(".pill-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      frecuenciaElegida = btn.dataset.valor;
+      marcarFrecuenciaActiva();
+      actualizarVistaPreviaRecurrente();
+    });
+  });
+
+  const bloqueMontoPago = document.createElement("div");
+  bloqueMontoPago.innerHTML = `<span class="form-label">Monto por pago</span>`;
+  const inputMontoPago = document.createElement("input");
+  inputMontoPago.type = "number";
+  inputMontoPago.step = "0.01";
+  inputMontoPago.className = "form-input";
+  inputMontoPago.value = gastoExistente && gastoExistente.recurrente ? gastoExistente.recurrente.monto_por_pago : "";
+  inputMontoPago.addEventListener("input", actualizarVistaPreviaRecurrente);
+  bloqueMontoPago.appendChild(inputMontoPago);
+  bloqueRecurrente.appendChild(bloqueMontoPago);
+
+  const filaFechas = document.createElement("div");
+  filaFechas.className = "row";
+
+  const bloqueFechaInicio = document.createElement("div");
+  bloqueFechaInicio.style.flex = "1";
+  bloqueFechaInicio.innerHTML = `<span class="form-label">Fecha de inicio</span>`;
+  const inputFechaInicio = document.createElement("input");
+  inputFechaInicio.type = "date";
+  inputFechaInicio.className = "form-input";
+  inputFechaInicio.value = gastoExistente && gastoExistente.recurrente ? gastoExistente.recurrente.fecha_inicio || "" : "";
+  inputFechaInicio.addEventListener("input", actualizarVistaPreviaRecurrente);
+  bloqueFechaInicio.appendChild(inputFechaInicio);
+  filaFechas.appendChild(bloqueFechaInicio);
+
+  const bloqueFechaFin = document.createElement("div");
+  bloqueFechaFin.style.flex = "1";
+  bloqueFechaFin.innerHTML = `<span class="form-label">Fecha de fin (opcional)</span>`;
+  const inputFechaFin = document.createElement("input");
+  inputFechaFin.type = "date";
+  inputFechaFin.className = "form-input";
+  inputFechaFin.value = gastoExistente && gastoExistente.recurrente ? gastoExistente.recurrente.fecha_fin || "" : "";
+  inputFechaFin.addEventListener("input", actualizarVistaPreviaRecurrente);
+  bloqueFechaFin.appendChild(inputFechaFin);
+  filaFechas.appendChild(bloqueFechaFin);
+
+  bloqueRecurrente.appendChild(filaFechas);
+
+  const vistaPrevia = document.createElement("p");
+  vistaPrevia.className = "muted";
+  vistaPrevia.style.margin = "0";
+  bloqueRecurrente.appendChild(vistaPrevia);
+
+  function actualizarVistaPreviaRecurrente() {
+    if (!inputFechaInicio.value) {
+      vistaPrevia.textContent = "Indicá la fecha de inicio para ver cuánto llevás pagado hasta hoy.";
+      return;
+    }
+    const { cantidadPagos, totalPagado } = calcularPagosRecurrentesTranscurridos({
+      frecuencia: frecuenciaElegida,
+      monto_por_pago: Number(inputMontoPago.value) || 0,
+      fecha_inicio: inputFechaInicio.value,
+      fecha_fin: inputFechaFin.value || null,
+    });
+    vistaPrevia.textContent = `Llevás ${cantidadPagos} pago${cantidadPagos === 1 ? "" : "s"} = ${formatearMonto(totalPagado)} hasta hoy.`;
+  }
+
+  caja.appendChild(bloqueRecurrente);
+
+  function actualizarVisibilidadRecurrente() {
+    bloqueCosto.classList.toggle("oculto", switchRecurrente.checked);
+    bloqueRecurrente.classList.toggle("oculto", !switchRecurrente.checked);
+    if (switchRecurrente.checked) actualizarVistaPreviaRecurrente();
+  }
+  actualizarVisibilidadRecurrente();
+  switchRecurrente.addEventListener("change", actualizarVisibilidadRecurrente);
+
+  // ----- Vincular a un semestre (opcional, 2026-08-11, v2.8.8) -----
+  const bloqueSemestre = document.createElement("div");
+  bloqueSemestre.innerHTML = `<span class="form-label">Vincular a un semestre (opcional)</span>`;
+  const selectSemestre = document.createElement("select");
+  selectSemestre.className = "form-select";
+  const opcionSinVincular = document.createElement("option");
+  opcionSinVincular.value = "";
+  opcionSinVincular.textContent = "Sin vincular";
+  selectSemestre.appendChild(opcionSinVincular);
+  obtenerTodosLosSemestres().forEach((semestre) => {
+    const opt = document.createElement("option");
+    opt.value = semestre.id;
+    opt.textContent = semestre.nombre;
+    selectSemestre.appendChild(opt);
+  });
+  selectSemestre.value = (gastoExistente && gastoExistente.semestre_id) || "";
+  bloqueSemestre.appendChild(selectSemestre);
+  caja.appendChild(bloqueSemestre);
 
   const bloqueNota = document.createElement("div");
   bloqueNota.innerHTML = `<span class="form-label">Nota (opcional)</span>`;
@@ -151,16 +329,35 @@ function abrirModalGastoU(gastoExistente, contenedorLista) {
   btnGuardar.addEventListener("click", () => {
     const nombre = inputNombre.value.trim();
     if (!nombre) return;
-    const costo = Number(inputCosto.value) || 0;
     const nota = inputNota.value.trim();
+    const semestreId = selectSemestre.value || null;
+
+    const recurrente = switchRecurrente.checked
+      ? {
+          frecuencia: frecuenciaElegida,
+          montoPorPago: Number(inputMontoPago.value) || 0,
+          fechaInicio: inputFechaInicio.value || null,
+          fechaFin: inputFechaFin.value || null,
+        }
+      : null;
+    const costo = switchRecurrente.checked ? 0 : Number(inputCosto.value) || 0;
 
     if (gastoExistente) {
       gastoExistente.nombre = nombre;
       gastoExistente.costo = costo;
       gastoExistente.nota = nota || null;
+      gastoExistente.semestre_id = semestreId;
+      gastoExistente.recurrente = recurrente
+        ? {
+            frecuencia: recurrente.frecuencia,
+            monto_por_pago: recurrente.montoPorPago,
+            fecha_inicio: recurrente.fechaInicio,
+            fecha_fin: recurrente.fechaFin,
+          }
+        : null;
       sellarTimestamp(gastoExistente);
     } else {
-      const nuevo = crearGastoU({ nombre, costo, nota: nota || null });
+      const nuevo = crearGastoU({ nombre, costo, nota: nota || null, semestreId, recurrente });
       if (!Array.isArray(estado.datos.gastos_u)) estado.datos.gastos_u = [];
       estado.datos.gastos_u.push(nuevo);
     }
@@ -176,7 +373,7 @@ function abrirModalGastoU(gastoExistente, contenedorLista) {
   document.body.appendChild(overlay);
 }
 
-/* ===================== Gastos estudiantiles: generador de prompt ===================== */
+/* ===================== Beneficios: generador de prompt de descuentos ===================== */
 
 // Plantilla completa del prompt de descuentos — {UNIVERSIDAD} se interpola
 // con el nombre real de la universidad del plan elegido antes de copiar.
@@ -228,7 +425,7 @@ async function generarYCopiarPromptDescuentos(universidad) {
   window.open("https://claude.ai", "_blank");
 }
 
-function renderizarPestanaGastosEstudiantiles(contenedor) {
+function renderizarPestanaBeneficios(contenedor) {
   const sec = document.createElement("section");
   sec.className = "glass-card stack";
   sec.innerHTML = `
@@ -272,4 +469,4 @@ function renderizarPestanaGastosEstudiantiles(contenedor) {
   contenedor.appendChild(sec);
 }
 
-export { renderizarPestanaGastosEstudiantiles, renderizarPestanaGastosU };
+export { renderizarPestanaBeneficios, renderizarPestanaGastosU };

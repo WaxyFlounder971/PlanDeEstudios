@@ -1,12 +1,13 @@
 /* =========================================================================
-   FINANZAS — Pestaña Semestres (2026-08-10)
+   FINANZAS — Pestaña Semestres (2026-08-10, simplificado en v2.8.8)
    Lista TODOS los semestres del historial (actuales y pasados) y permite
-   crear/editar el registro financiero de cada uno: costo total, beca +
-   porcentaje, desglose mensual (manual o automático) y pago confirmado
-   (auto-calculado, editable a mano).
+   crear/editar el registro financiero de cada uno: costo de matrícula,
+   cobertura de beca (dos montos directos e independientes, sin fórmula
+   entre ellos) y desglose mensual del pago de matrícula (manual o
+   automático, para semestres pagados en varias cuotas).
    ========================================================================= */
 
-import { calcularNetoSugeridoFinanzas, crearRegistroFinancieroSemestre, sellarTimestamp } from "../core/schema.js";
+import { crearRegistroFinancieroSemestre, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { abrirConfirmacion } from "../ui/componentes.js";
@@ -64,9 +65,16 @@ function renderizarPestanaSemestresFinanzas(contenedor) {
 
     if (registro) {
       const badge = document.createElement("span");
-      badge.className = "badge " + (Number(registro.pago_confirmado) < 0 ? "badge-success" : "badge-neutral");
-      badge.textContent = formatearMonto(registro.pago_confirmado);
+      badge.className = "badge badge-neutral";
+      badge.textContent = formatearMonto(registro.costo_matricula);
       derecha.appendChild(badge);
+      if (Number(registro.beca_monto) > 0) {
+        const badgeBeca = document.createElement("span");
+        badgeBeca.className = "badge badge-success";
+        badgeBeca.title = "Cobertura de tu beca";
+        badgeBeca.textContent = "🎓 " + formatearMonto(registro.beca_monto);
+        derecha.appendChild(badgeBeca);
+      }
     }
 
     const btn = document.createElement("button");
@@ -98,89 +106,49 @@ function abrirModalRegistroFinanciero(semestre, registroExistente, contenedorLis
 
   caja.innerHTML = `<h2 style="margin:0;">${registroExistente ? "Editar" : "Registrar"} finanzas de ${semestre.nombre}</h2>`;
 
-  // ----- Costo total -----
+  // ----- Costo de matrícula (v2.8.8: reemplaza costo total + pago
+  // confirmado + beca% — ahora es UN solo input, lo que efectivamente
+  // pagaste. Se quita a propósito la aclaración de "puede ser negativo":
+  // el campo internamente sigue aceptando cualquier valor, solo se saca
+  // el texto visible porque confundía. -----
   const bloqueCosto = document.createElement("div");
-  bloqueCosto.innerHTML = `<span class="form-label">Costo total (puede ser negativo)</span>`;
+  bloqueCosto.innerHTML = `<span class="form-label">Costo de matrícula</span>`;
   const inputCosto = document.createElement("input");
   inputCosto.type = "number";
   inputCosto.step = "0.01";
   inputCosto.className = "form-input";
-  inputCosto.value = registroExistente ? registroExistente.costo_total : "";
+  inputCosto.value = registroExistente ? registroExistente.costo_matricula : "";
   bloqueCosto.appendChild(inputCosto);
   caja.appendChild(bloqueCosto);
 
-  // ----- Beca -----
-  const filaBeca = document.createElement("div");
-  filaBeca.className = "row-between";
-  filaBeca.innerHTML = `
-    <span>¿Tiene beca?</span>
-    <label class="switch switch-tema">
-      <input type="checkbox" id="switch-beca-finanzas">
-      <span class="track"><span class="thumb"></span></span>
-    </label>
+  // ----- Cobertura de tu beca (v2.8.8: monto directo, sin switch ni
+  // porcentaje — cuánto cayó de beca. Es un ingreso/ahorro dentro de las
+  // estadísticas generales, no un gasto más (ver calcularTotalesResumenFinanzas
+  // en finanzas.js). Opcional: se puede dejar en 0/vacío si no aplica. -----
+  const bloqueBeca = document.createElement("div");
+  bloqueBeca.innerHTML = `
+    <span class="form-label">Cobertura de tu beca</span>
+    <p class="muted" style="font-size:0.78rem; margin:2px 0 6px;">Lo que no pagaste gracias a la beca — cuenta como ingreso en el Resumen, no como gasto.</p>
   `;
-  caja.appendChild(filaBeca);
-  const switchBeca = filaBeca.querySelector("#switch-beca-finanzas");
-  switchBeca.checked = registroExistente ? !!registroExistente.beca_activa : false;
+  const inputBeca = document.createElement("input");
+  inputBeca.type = "number";
+  inputBeca.step = "0.01";
+  inputBeca.min = "0";
+  inputBeca.className = "form-input";
+  inputBeca.value = registroExistente ? registroExistente.beca_monto : "";
+  bloqueBeca.appendChild(inputBeca);
+  caja.appendChild(bloqueBeca);
 
-  const bloquePorcentaje = document.createElement("div");
-  bloquePorcentaje.innerHTML = `<span class="form-label">Porcentaje de la beca</span>`;
-  const inputPorcentaje = document.createElement("input");
-  inputPorcentaje.type = "number";
-  inputPorcentaje.min = "0";
-  inputPorcentaje.max = "100";
-  inputPorcentaje.step = "1";
-  inputPorcentaje.className = "form-input";
-  inputPorcentaje.value = registroExistente ? registroExistente.porcentaje_beca : "";
-  bloquePorcentaje.appendChild(inputPorcentaje);
-  caja.appendChild(bloquePorcentaje);
-
-  const actualizarVisibilidadPorcentaje = () => {
-    bloquePorcentaje.classList.toggle("oculto", !switchBeca.checked);
-  };
-  actualizarVisibilidadPorcentaje();
-  switchBeca.addEventListener("change", () => {
-    actualizarVisibilidadPorcentaje();
-    recalcularPagoSugeridoSiCorresponde();
-  });
-
-  // ----- Pago confirmado (auto + editable) -----
-  const bloquePago = document.createElement("div");
-  bloquePago.innerHTML = `<span class="form-label">Pago confirmado (neto sugerido, editable a mano)</span>`;
-  const inputPago = document.createElement("input");
-  inputPago.type = "number";
-  inputPago.step = "0.01";
-  inputPago.className = "form-input";
-  inputPago.value = registroExistente
-    ? registroExistente.pago_confirmado
-    : calcularNetoSugeridoFinanzas(0, false, 0);
-  bloquePago.appendChild(inputPago);
-  caja.appendChild(bloquePago);
-
-  // Si el usuario ya editó pago_confirmado a mano en esta sesión, dejar de
-  // recalcularlo solo al tocar costo/beca — mismo criterio que
-  // pago_confirmado_manual en el dato persistido.
-  let pagoTocadoAMano = registroExistente ? !!registroExistente.pago_confirmado_manual : false;
-  inputPago.addEventListener("input", () => {
-    pagoTocadoAMano = true;
-  });
-
-  function recalcularPagoSugeridoSiCorresponde() {
-    if (pagoTocadoAMano) return;
-    const sugerido = calcularNetoSugeridoFinanzas(
-      Number(inputCosto.value) || 0,
-      switchBeca.checked,
-      Number(inputPorcentaje.value) || 0
-    );
-    inputPago.value = sugerido;
-  }
-  inputCosto.addEventListener("input", recalcularPagoSugeridoSiCorresponde);
-  inputPorcentaje.addEventListener("input", recalcularPagoSugeridoSiCorresponde);
-
-  // ----- Desglose mensual -----
+  // ----- Desglose mensual (v2.8.8: se queda donde estaba — sobre el pago
+  // de matrícula, no se movió — solo se le agrega texto aclaratorio de
+  // para qué sirve: pagar el semestre en varias cuotas en vez de un solo
+  // monto. -----
   const bloqueDesglose = document.createElement("div");
   bloqueDesglose.className = "stack";
-  bloqueDesglose.innerHTML = `<span class="form-label">Desglose mensual</span>`;
+  bloqueDesglose.innerHTML = `
+    <span class="form-label">Desglose mensual del pago</span>
+    <p class="muted" style="font-size:0.78rem; margin:2px 0 6px;">En caso de que pagués el semestre por pagos: indicá cuántos pagos hiciste y en qué mes cayó cada uno.</p>
+  `;
 
   const pillModo = document.createElement("div");
   pillModo.className = "pill-group";
@@ -242,7 +210,7 @@ function abrirModalRegistroFinanciero(semestre, registroExistente, contenedorLis
     const btnAgregar = document.createElement("button");
     btnAgregar.type = "button";
     btnAgregar.className = "btn btn-secondary btn-block";
-    btnAgregar.textContent = "+ Agregar mes";
+    btnAgregar.textContent = "+ Agregar pago";
     btnAgregar.addEventListener("click", () => {
       desgloseActual.meses.push({ id: "dm_" + crypto.randomUUID(), mes: "", monto: 0 });
       renderizarFilasManual();
@@ -258,7 +226,7 @@ function abrirModalRegistroFinanciero(semestre, registroExistente, contenedorLis
     inputCantidad.type = "number";
     inputCantidad.min = "1";
     inputCantidad.className = "form-input";
-    inputCantidad.placeholder = "Cantidad de meses";
+    inputCantidad.placeholder = "Cantidad de pagos";
     inputCantidad.value = desgloseActual.automatico_cantidad_meses || "";
     const btnRepartir = document.createElement("button");
     btnRepartir.type = "button";
@@ -268,7 +236,9 @@ function abrirModalRegistroFinanciero(semestre, registroExistente, contenedorLis
       const cantidad = Number(inputCantidad.value) || 0;
       if (cantidad < 1) return;
       desgloseActual.automatico_cantidad_meses = cantidad;
-      desgloseActual.meses = repartirMontoEnMeses(inputPago.value, cantidad);
+      // v2.8.8: se reparte el costo de matrícula (único monto de pago que
+      // queda), ya no "pago confirmado" (campo que desapareció).
+      desgloseActual.meses = repartirMontoEnMeses(inputCosto.value, cantidad);
       renderizarBloqueAutomatico();
     });
     filaCantidad.appendChild(inputCantidad);
@@ -353,28 +323,20 @@ function abrirModalRegistroFinanciero(semestre, registroExistente, contenedorLis
   btnGuardar.style.flex = "1";
   btnGuardar.textContent = "Guardar";
   btnGuardar.addEventListener("click", () => {
-    const costo = Number(inputCosto.value) || 0;
-    const becaActiva = switchBeca.checked;
-    const porcentaje = Number(inputPorcentaje.value) || 0;
-    const pago = Number(inputPago.value) || 0;
+    const costoMatricula = Number(inputCosto.value) || 0;
+    const becaMonto = Number(inputBeca.value) || 0;
 
     if (registroExistente) {
-      registroExistente.costo_total = costo;
-      registroExistente.beca_activa = becaActiva;
-      registroExistente.porcentaje_beca = porcentaje;
-      registroExistente.pago_confirmado = pago;
-      registroExistente.pago_confirmado_manual = pagoTocadoAMano;
+      registroExistente.costo_matricula = costoMatricula;
+      registroExistente.beca_monto = becaMonto;
       registroExistente.desglose_mensual = desgloseActual;
       sellarTimestamp(registroExistente);
     } else {
       const nuevo = crearRegistroFinancieroSemestre({
         semestreId: semestre.id,
-        costoTotal: costo,
-        becaActiva,
-        porcentajeBeca: porcentaje,
+        costoMatricula,
+        becaMonto,
       });
-      nuevo.pago_confirmado = pago;
-      nuevo.pago_confirmado_manual = pagoTocadoAMano;
       nuevo.desglose_mensual = desgloseActual;
       if (!Array.isArray(estado.datos.finanzas_semestre)) estado.datos.finanzas_semestre = [];
       estado.datos.finanzas_semestre.push(nuevo);
