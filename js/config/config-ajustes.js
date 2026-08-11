@@ -5,10 +5,11 @@
    ========================================================================= */
 
 import { ESCALAS_DISPONIBLES, FRECUENCIAS_BACKUP_DRIVE, MONEDAS_DISPONIBLES, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, migrarDatosAntiguos, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
-import { actualizarIndicadorSync, marcarCambioPendiente } from "../core/storage-sync.js";
+import { actualizarIndicadorSync, forzarBackupManual, marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
+import { mostrarToast } from "../ui/componentes.js";
 import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta } from "../ui/tema.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
 
@@ -393,28 +394,19 @@ function renderizarAjustes() {
 
   // Moneda preferida (Ajustes generales, 2026-08-10): preferencia GLOBAL
   // del usuario (no por universidad/plan) que usa Finanzas para formatear
-  // montos. Se construye dinámicamente desde MONEDAS_DISPONIBLES (mismo
-  // patrón que el grid de paletas de arriba) en vez de pills fijos en el
-  // HTML, así la lista puede crecer sin tocar dos lugares.
-  const grupoMoneda = document.getElementById("pill-moneda");
-  if (grupoMoneda) {
-    grupoMoneda.innerHTML = "";
-    const monedaActual = estado.datos.configuracion.moneda_preferida || "CRC";
-    MONEDAS_DISPONIBLES.forEach((moneda) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "pill-item" + (moneda.id === monedaActual ? " active" : "");
-      btn.title = moneda.etiqueta;
-      btn.textContent = `${moneda.simbolo} ${moneda.id}`;
-      btn.addEventListener("click", () => {
-        estado.datos.configuracion.moneda_preferida = moneda.id;
-        sellarTimestamp(estado.datos.configuracion);
-        marcarCambioPendiente();
-        renderizarAjustes();
-      });
-      grupoMoneda.appendChild(btn);
-    });
-  }
+  // montos.
+  //
+  // v1.15.13 (2026-08-10, pedido explícito: "hazlo como un selector...
+  // ASEGURATE que mantenga el diseño general de la app como la usan en
+  // escala de notas"): con 37 monedas un pill-group de botones sueltos no
+  // entra bien en pantalla de teléfono (se desborda / se apila feo). Se
+  // reemplaza por el MISMO componente ".select-custom" que ya usa "Escala
+  // de notas" más abajo (ver renderizarNotasAprobacion) — botón + lista
+  // propia reparentada a document.body, mismo fondo/tipografía/color del
+  // tema (viene 100% de design-system.css), sin depender del <select>
+  // nativo del navegador. Se construye dinámicamente desde
+  // MONEDAS_DISPONIBLES, así la lista puede crecer sin tocar el markup.
+  renderizarSelectorMoneda();
 
   // Ajustes — ocultar botones de navegación principal
   renderizarNavegacionOculta();
@@ -426,6 +418,116 @@ function renderizarAjustes() {
   renderizarSeccionDatos();
 
   actualizarIndicadorSync();
+}
+
+/**
+ * Ajustes — Selector de moneda preferida (2026-08-10): mismo patrón visual
+ * y de comportamiento que el dropdown de "Escala de notas" (ver más abajo,
+ * dentro de renderizarNotasAprobacion) — se duplica la lógica en vez de
+ * generalizarla a un helper porque los dos vivían en momentos distintos
+ * del archivo con datos de origen distintos (uno por plan, este es
+ * global); un helper compartido hoy exigiría un refactor más grande que
+ * el pedido puntual de "que se vea igual". Si en el futuro aparece un
+ * tercer selector custom, ahí sí vale la pena extraer el patrón.
+ */
+function renderizarSelectorMoneda() {
+  const contenedor = document.getElementById("pill-moneda");
+  if (!contenedor) return;
+  contenedor.innerHTML = "";
+
+  const monedaActualId = estado.datos.configuracion.moneda_preferida || "CRC";
+  const selectMoneda = document.createElement("select");
+  selectMoneda.hidden = true;
+  selectMoneda.setAttribute("aria-hidden", "true");
+  selectMoneda.tabIndex = -1;
+  MONEDAS_DISPONIBLES.forEach((moneda) => {
+    const opt = document.createElement("option");
+    opt.value = moneda.id;
+    opt.textContent = `${moneda.simbolo} ${moneda.etiqueta}`;
+    selectMoneda.appendChild(opt);
+  });
+  selectMoneda.value = monedaActualId;
+
+  const dropdownMoneda = document.createElement("div");
+  dropdownMoneda.className = "select-custom";
+  const botonMoneda = document.createElement("button");
+  botonMoneda.type = "button";
+  botonMoneda.className = "form-input select-custom-boton";
+  const monedaInicial = MONEDAS_DISPONIBLES.find((m) => m.id === selectMoneda.value);
+  botonMoneda.textContent = monedaInicial ? `${monedaInicial.simbolo} ${monedaInicial.etiqueta}` : "Elegir moneda";
+  const listaMoneda = document.createElement("ul");
+  listaMoneda.className = "select-custom-lista oculto";
+
+  function posicionarListaMoneda() {
+    const r = botonMoneda.getBoundingClientRect();
+    listaMoneda.style.position = "fixed";
+    listaMoneda.style.top = `${r.bottom + 6}px`;
+    listaMoneda.style.left = `${r.left}px`;
+    listaMoneda.style.width = `${r.width}px`;
+  }
+  function cerrarListaMoneda() {
+    listaMoneda.classList.add("oculto");
+    botonMoneda.setAttribute("aria-expanded", "false");
+    if (listaMoneda.parentElement === document.body) dropdownMoneda.appendChild(listaMoneda);
+    window.removeEventListener("scroll", cerrarSiScrollExternoMoneda, true);
+    window.removeEventListener("resize", cerrarListaMoneda);
+  }
+  function cerrarSiScrollExternoMoneda(e) {
+    if (listaMoneda.contains(e.target)) return;
+    cerrarListaMoneda();
+  }
+  function abrirListaMoneda() {
+    document.querySelectorAll(".select-custom-lista").forEach((l) => {
+      if (l !== listaMoneda) {
+        l.classList.add("oculto");
+        if (l.parentElement === document.body && l._volverA) l._volverA.appendChild(l);
+      }
+    });
+    listaMoneda._volverA = dropdownMoneda;
+    document.body.appendChild(listaMoneda);
+    posicionarListaMoneda();
+    listaMoneda.classList.remove("oculto");
+    botonMoneda.setAttribute("aria-expanded", "true");
+    window.addEventListener("scroll", cerrarSiScrollExternoMoneda, true);
+    window.addEventListener("resize", cerrarListaMoneda);
+  }
+
+  MONEDAS_DISPONIBLES.forEach((moneda) => {
+    const item = document.createElement("li");
+    item.className = "select-custom-opcion";
+    item.textContent = `${moneda.simbolo} ${moneda.etiqueta}`;
+    if (moneda.id === selectMoneda.value) item.classList.add("activa");
+    item.addEventListener("click", () => {
+      selectMoneda.value = moneda.id;
+      botonMoneda.textContent = `${moneda.simbolo} ${moneda.etiqueta}`;
+      listaMoneda.querySelectorAll(".select-custom-opcion").forEach((li) => li.classList.remove("activa"));
+      item.classList.add("activa");
+      cerrarListaMoneda();
+      selectMoneda.dispatchEvent(new Event("change"));
+    });
+    listaMoneda.appendChild(item);
+  });
+  botonMoneda.setAttribute("aria-expanded", "false");
+  botonMoneda.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (listaMoneda.classList.contains("oculto")) abrirListaMoneda();
+    else cerrarListaMoneda();
+  });
+  document.addEventListener("click", (e) => {
+    if (!dropdownMoneda.contains(e.target) && !listaMoneda.contains(e.target)) {
+      cerrarListaMoneda();
+    }
+  });
+  selectMoneda.addEventListener("change", () => {
+    estado.datos.configuracion.moneda_preferida = selectMoneda.value;
+    sellarTimestamp(estado.datos.configuracion);
+    marcarCambioPendiente();
+  });
+
+  dropdownMoneda.appendChild(botonMoneda);
+  dropdownMoneda.appendChild(listaMoneda);
+  dropdownMoneda.appendChild(selectMoneda);
+  contenedor.appendChild(dropdownMoneda);
 }
 
 /**
@@ -465,6 +567,33 @@ function renderizarSeccionBackupDrive() {
       cfgBackup && cfgBackup.ultimo_backup_iso
         ? `Último backup: ${new Date(cfgBackup.ultimo_backup_iso).toLocaleString()}`
         : "Todavía no se hizo ningún backup automático — se hará en la próxima sincronización.";
+  }
+
+  // Botón "Hacer backup ahora" (2026-08-10, pedido explícito): fuerza el
+  // mismo ciclo real de rotación (ver forzarBackupManual en
+  // core/storage-sync.js), ignorando el intervalo de la frecuencia
+  // elegida. A diferencia del backup automático, acá SÍ se avisa el
+  // resultado (éxito o error) porque es una acción que la persona pidió a
+  // mano y espera confirmación.
+  const btnManual = document.getElementById("btn-backup-manual");
+  if (btnManual && !btnManual.dataset.enganchado) {
+    btnManual.dataset.enganchado = "1";
+    btnManual.addEventListener("click", async () => {
+      btnManual.disabled = true;
+      const textoOriginal = btnManual.textContent;
+      btnManual.textContent = "Haciendo backup…";
+      try {
+        await forzarBackupManual();
+        mostrarToast("✓ Backup completado");
+        renderizarSeccionBackupDrive();
+      } catch (e) {
+        console.warn("No se pudo completar el backup manual:", e);
+        mostrarToast("No se pudo hacer el backup. Intenta de nuevo.");
+      } finally {
+        btnManual.disabled = false;
+        btnManual.textContent = textoOriginal;
+      }
+    });
   }
 }
 
