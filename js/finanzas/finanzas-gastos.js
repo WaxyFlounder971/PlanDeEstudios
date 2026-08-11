@@ -13,17 +13,44 @@ import { calcularPagosRecurrentesTranscurridos, crearGastoU, sellarTimestamp } f
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { copiarPromptConAviso } from "../core/clipboard.js";
-import { abrirConfirmacion } from "../ui/componentes.js";
+import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { obtenerPlanActivo } from "../plan/plan-esquema.js";
 import { obtenerSemestresActuales, obtenerSemestresPasados } from "../semestres/semestres.js";
-import { formatearMonto } from "./finanzas.js";
+import { formatearFechaLarga, formatearMonto } from "./finanzas.js";
 
 const FRECUENCIAS_GASTO_RECURRENTE = [
   { id: "semanal", etiqueta: "Semanal" },
   { id: "quincenal", etiqueta: "Quincenal" },
   { id: "mensual", etiqueta: "Mensual" },
   { id: "anual", etiqueta: "Anual" },
+  { id: "personalizado", etiqueta: "Personalizado" },
 ];
+
+/** Etiquetas de los 7 días de la semana en formato corto, para mostrar el resumen de "días específicos". */
+const DIAS_SEMANA_CORTA = { 0: "Dom", 1: "Lun", 2: "Mar", 3: "Mié", 4: "Jue", 5: "Vie", 6: "Sáb" };
+
+/**
+ * Texto legible de la frecuencia de un gasto recurrente para la lista —
+ * cubre tanto las 4 frecuencias fijas como los 3 sub-modos de
+ * "Personalizado" (diario / días específicos / cada N días).
+ */
+function formatearFrecuenciaRecurrente(recurrente) {
+  if (recurrente.frecuencia !== "personalizado") {
+    return FRECUENCIAS_GASTO_RECURRENTE.find((f) => f.id === recurrente.frecuencia)?.etiqueta || "Mensual";
+  }
+  const p = recurrente.personalizado;
+  if (!p) return "Personalizado";
+  if (p.modo === "diario") return "Diario";
+  if (p.modo === "cada_n_dias") return `Cada ${p.cada_n_dias || 1} días`;
+  if (p.modo === "dias_semana" && Array.isArray(p.dias_semana) && p.dias_semana.length > 0) {
+    return p.dias_semana
+      .slice()
+      .sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b)) // lunes primero, domingo al final
+      .map((d) => DIAS_SEMANA_CORTA[d])
+      .join(", ");
+  }
+  return "Personalizado";
+}
 
 /** Todos los semestres del historial (actuales + pasados), mismo orden que la pestaña Semestres. */
 function obtenerTodosLosSemestres() {
@@ -34,13 +61,6 @@ function obtenerNombreSemestre(semestreId) {
   if (!semestreId) return null;
   const semestre = obtenerTodosLosSemestres().find((s) => s.id === semestreId);
   return semestre ? semestre.nombre : "semestre eliminado";
-}
-
-/** "YYYY-MM-DD" -> "DD/MM/AAAA" para mostrar; si viene vacío/null devuelve "". */
-function formatearFechaCorta(fechaIso) {
-  if (!fechaIso) return "";
-  const [anio, mes, dia] = fechaIso.split("-");
-  return `${dia}/${mes}/${anio}`;
 }
 
 /* ===================== Gastos generales U ===================== */
@@ -74,9 +94,7 @@ function renderizarPestanaGastosU(contenedor) {
     let subtextos = "";
     if (gasto.nota) subtextos += `<p class="muted" style="margin:2px 0 0;">${gasto.nota}</p>`;
     if (gasto.recurrente) {
-      const etiquetaFrecuencia =
-        FRECUENCIAS_GASTO_RECURRENTE.find((f) => f.id === gasto.recurrente.frecuencia)?.etiqueta || "Mensual";
-      subtextos += `<p class="muted" style="margin:2px 0 0;">🔁 ${etiquetaFrecuencia} · ${formatearMonto(gasto.recurrente.monto_por_pago)} c/u · desde ${formatearFechaCorta(gasto.recurrente.fecha_inicio)}${gasto.recurrente.fecha_fin ? ` hasta ${formatearFechaCorta(gasto.recurrente.fecha_fin)}` : ""}</p>`;
+      subtextos += `<p class="muted" style="margin:2px 0 0;">🔁 ${formatearFrecuenciaRecurrente(gasto.recurrente)} · ${formatearMonto(gasto.recurrente.monto_por_pago)} c/u · desde ${formatearFechaLarga(gasto.recurrente.fecha_inicio)}${gasto.recurrente.fecha_fin ? ` hasta ${formatearFechaLarga(gasto.recurrente.fecha_fin)}` : ""}</p>`;
     }
     if (nombreSemestre) subtextos += `<p class="muted" style="margin:2px 0 0;">📎 Vinculado a ${nombreSemestre}</p>`;
 
@@ -161,10 +179,14 @@ function abrirModalGastoU(gastoExistente, contenedorLista) {
   const bloqueRecurrente = document.createElement("div");
   bloqueRecurrente.className = "stack";
 
+  // v2.8.9: "la frecuencia se corta" -> grid de 2 columnas (.pill-grid-2,
+  // ver design-system.css) en vez de una fila horizontal — sigue siendo un
+  // switch de selección única, solo cambia el layout, nunca trunca texto.
+  // Se agrega "Personalizado" como 5ta opción (2 arriba/2 abajo/1 sola).
   const pillFrecuencia = document.createElement("div");
   pillFrecuencia.innerHTML = `<span class="form-label">Frecuencia</span>`;
   const grupoFrecuencia = document.createElement("div");
-  grupoFrecuencia.className = "pill-group";
+  grupoFrecuencia.className = "pill-grid-2";
   FRECUENCIAS_GASTO_RECURRENTE.forEach((f) => {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -185,9 +207,110 @@ function abrirModalGastoU(gastoExistente, contenedorLista) {
     btn.addEventListener("click", () => {
       frecuenciaElegida = btn.dataset.valor;
       marcarFrecuenciaActiva();
+      actualizarVisibilidadPersonalizado();
       actualizarVistaPreviaRecurrente();
     });
   });
+
+  // ----- "Personalizado" (v2.8.9, pedido explícito): días específicos de
+  // la semana, diario, o cada N días — N 100% libre, sin límite fijo. -----
+  const bloquePersonalizado = document.createElement("div");
+  bloquePersonalizado.className = "stack oculto";
+  bloquePersonalizado.style.cssText = "padding:10px; border:1px solid var(--border-glass); border-radius:var(--radius-md);";
+
+  const pillSubmodo = document.createElement("div");
+  pillSubmodo.innerHTML = `<span class="form-label">¿Cómo se repite?</span>`;
+  const grupoSubmodo = document.createElement("div");
+  grupoSubmodo.className = "pill-grid-2";
+  const SUBMODOS_PERSONALIZADO = [
+    { id: "diario", etiqueta: "Diario" },
+    { id: "dias_semana", etiqueta: "Días específicos" },
+    { id: "cada_n_dias", etiqueta: "Cada N días" },
+  ];
+  SUBMODOS_PERSONALIZADO.forEach((sm) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pill-item";
+    btn.dataset.valor = sm.id;
+    btn.textContent = sm.etiqueta;
+    grupoSubmodo.appendChild(btn);
+  });
+  pillSubmodo.appendChild(grupoSubmodo);
+  bloquePersonalizado.appendChild(pillSubmodo);
+
+  let submodoElegido =
+    (gastoExistente && gastoExistente.recurrente && gastoExistente.recurrente.personalizado && gastoExistente.recurrente.personalizado.modo) ||
+    "diario";
+  function marcarSubmodoActivo() {
+    grupoSubmodo.querySelectorAll(".pill-item").forEach((p) => p.classList.toggle("active", p.dataset.valor === submodoElegido));
+  }
+
+  // Días específicos de la semana: multi-selección (no es un switch de una
+  // sola opción como el resto de los pill-group/pill-grid de este modal).
+  const DIAS_SEMANA = [
+    { id: 1, corta: "Lun" }, { id: 2, corta: "Mar" }, { id: 3, corta: "Mié" }, { id: 4, corta: "Jue" },
+    { id: 5, corta: "Vie" }, { id: 6, corta: "Sáb" }, { id: 0, corta: "Dom" },
+  ];
+  const bloqueDiasSemana = document.createElement("div");
+  bloqueDiasSemana.className = "stack oculto";
+  bloqueDiasSemana.innerHTML = `<span class="form-label">¿Qué días?</span>`;
+  const grupoDiasSemana = document.createElement("div");
+  grupoDiasSemana.className = "row";
+  grupoDiasSemana.style.cssText = "flex-wrap:wrap; gap:6px;";
+  let diasSemanaElegidos = new Set(
+    (gastoExistente && gastoExistente.recurrente && gastoExistente.recurrente.personalizado && gastoExistente.recurrente.personalizado.dias_semana) || []
+  );
+  DIAS_SEMANA.forEach((d) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pill-item" + (diasSemanaElegidos.has(d.id) ? " active" : "");
+    btn.style.cssText = "flex:0 0 auto; padding:8px 14px;";
+    btn.textContent = d.corta;
+    btn.addEventListener("click", () => {
+      if (diasSemanaElegidos.has(d.id)) diasSemanaElegidos.delete(d.id);
+      else diasSemanaElegidos.add(d.id);
+      btn.classList.toggle("active", diasSemanaElegidos.has(d.id));
+      actualizarVistaPreviaRecurrente();
+    });
+    grupoDiasSemana.appendChild(btn);
+  });
+  bloqueDiasSemana.appendChild(grupoDiasSemana);
+  bloquePersonalizado.appendChild(bloqueDiasSemana);
+
+  const bloqueCadaNDias = document.createElement("div");
+  bloqueCadaNDias.className = "oculto";
+  bloqueCadaNDias.innerHTML = `<span class="form-label">Cada cuántos días</span>`;
+  const inputCadaNDias = document.createElement("input");
+  inputCadaNDias.type = "number";
+  inputCadaNDias.min = "1";
+  inputCadaNDias.className = "form-input";
+  inputCadaNDias.placeholder = "Ej. 3";
+  inputCadaNDias.value =
+    (gastoExistente && gastoExistente.recurrente && gastoExistente.recurrente.personalizado && gastoExistente.recurrente.personalizado.cada_n_dias) || "";
+  inputCadaNDias.addEventListener("input", actualizarVistaPreviaRecurrente);
+  bloqueCadaNDias.appendChild(inputCadaNDias);
+  bloquePersonalizado.appendChild(bloqueCadaNDias);
+
+  function actualizarVisibilidadSubmodo() {
+    bloqueDiasSemana.classList.toggle("oculto", submodoElegido !== "dias_semana");
+    bloqueCadaNDias.classList.toggle("oculto", submodoElegido !== "cada_n_dias");
+  }
+  marcarSubmodoActivo();
+  actualizarVisibilidadSubmodo();
+  grupoSubmodo.querySelectorAll(".pill-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      submodoElegido = btn.dataset.valor;
+      marcarSubmodoActivo();
+      actualizarVisibilidadSubmodo();
+      actualizarVistaPreviaRecurrente();
+    });
+  });
+
+  function actualizarVisibilidadPersonalizado() {
+    bloquePersonalizado.classList.toggle("oculto", frecuenciaElegida !== "personalizado");
+  }
+  actualizarVisibilidadPersonalizado();
+  bloqueRecurrente.appendChild(bloquePersonalizado);
 
   const bloqueMontoPago = document.createElement("div");
   bloqueMontoPago.innerHTML = `<span class="form-label">Monto por pago</span>`;
@@ -242,6 +365,10 @@ function abrirModalGastoU(gastoExistente, contenedorLista) {
       monto_por_pago: Number(inputMontoPago.value) || 0,
       fecha_inicio: inputFechaInicio.value,
       fecha_fin: inputFechaFin.value || null,
+      personalizado:
+        frecuenciaElegida === "personalizado"
+          ? { modo: submodoElegido, dias_semana: [...diasSemanaElegidos], cada_n_dias: Number(inputCadaNDias.value) || null }
+          : null,
     });
     vistaPrevia.textContent = `Llevás ${cantidadPagos} pago${cantidadPagos === 1 ? "" : "s"} = ${formatearMonto(totalPagado)} hasta hoy.`;
   }
@@ -257,10 +384,19 @@ function abrirModalGastoU(gastoExistente, contenedorLista) {
   switchRecurrente.addEventListener("change", actualizarVisibilidadRecurrente);
 
   // ----- Vincular a un semestre (opcional, 2026-08-11, v2.8.8) -----
+  // v2.8.9: "el selector está muy culero" -> mismo patrón custom que ya
+  // usa Ajustes (Escala de notas) y Profesores — botón + lista propia
+  // reparentada a document.body, mismo look que el resto del tema, en vez
+  // del <select> nativo (que cada navegador pinta con su propio criterio,
+  // sin match real con el resto de la UI). El <select> oculto sigue siendo
+  // la fuente de verdad real (mantiene .value, dispara 'change'), así el
+  // resto del archivo (selectSemestre.value en el guardado) no cambia.
   const bloqueSemestre = document.createElement("div");
   bloqueSemestre.innerHTML = `<span class="form-label">Vincular a un semestre (opcional)</span>`;
   const selectSemestre = document.createElement("select");
-  selectSemestre.className = "form-select";
+  selectSemestre.hidden = true;
+  selectSemestre.setAttribute("aria-hidden", "true");
+  selectSemestre.tabIndex = -1;
   const opcionSinVincular = document.createElement("option");
   opcionSinVincular.value = "";
   opcionSinVincular.textContent = "Sin vincular";
@@ -272,8 +408,84 @@ function abrirModalGastoU(gastoExistente, contenedorLista) {
     selectSemestre.appendChild(opt);
   });
   selectSemestre.value = (gastoExistente && gastoExistente.semestre_id) || "";
-  bloqueSemestre.appendChild(selectSemestre);
+
+  const dropdownSemestre = document.createElement("div");
+  dropdownSemestre.className = "select-custom";
+  const botonSemestre = document.createElement("button");
+  botonSemestre.type = "button";
+  botonSemestre.className = "form-input select-custom-boton";
+  const opcionInicial = Array.from(selectSemestre.options).find((o) => o.value === selectSemestre.value);
+  botonSemestre.textContent = opcionInicial ? opcionInicial.textContent : "Sin vincular";
+  const listaSemestre = document.createElement("ul");
+  listaSemestre.className = "select-custom-lista oculto";
+
+  function posicionarListaSemestre() {
+    const r = botonSemestre.getBoundingClientRect();
+    listaSemestre.style.position = "fixed";
+    listaSemestre.style.top = `${r.bottom + 6}px`;
+    listaSemestre.style.left = `${r.left}px`;
+    listaSemestre.style.width = `${r.width}px`;
+  }
+  function cerrarListaSemestre() {
+    listaSemestre.classList.add("oculto");
+    botonSemestre.setAttribute("aria-expanded", "false");
+    if (listaSemestre.parentElement === document.body) dropdownSemestre.appendChild(listaSemestre);
+    window.removeEventListener("scroll", cerrarSiScrollExternoSemestre, true);
+    window.removeEventListener("resize", cerrarListaSemestre);
+  }
+  function cerrarSiScrollExternoSemestre(e) {
+    if (listaSemestre.contains(e.target)) return;
+    cerrarListaSemestre();
+  }
+  function abrirListaSemestre() {
+    document.querySelectorAll(".select-custom-lista").forEach((l) => {
+      if (l !== listaSemestre) {
+        l.classList.add("oculto");
+        if (l.parentElement === document.body && l._volverA) l._volverA.appendChild(l);
+      }
+    });
+    listaSemestre._volverA = dropdownSemestre;
+    document.body.appendChild(listaSemestre);
+    posicionarListaSemestre();
+    listaSemestre.classList.remove("oculto");
+    botonSemestre.setAttribute("aria-expanded", "true");
+    window.addEventListener("scroll", cerrarSiScrollExternoSemestre, true);
+    window.addEventListener("resize", cerrarListaSemestre);
+  }
+
+  Array.from(selectSemestre.options).forEach((opt) => {
+    const item = document.createElement("li");
+    item.className = "select-custom-opcion";
+    item.textContent = opt.textContent;
+    if (opt.value === selectSemestre.value) item.classList.add("activa");
+    item.addEventListener("click", () => {
+      selectSemestre.value = opt.value;
+      botonSemestre.textContent = opt.textContent;
+      listaSemestre.querySelectorAll(".select-custom-opcion").forEach((li) => li.classList.remove("activa"));
+      item.classList.add("activa");
+      cerrarListaSemestre();
+      selectSemestre.dispatchEvent(new Event("change"));
+    });
+    listaSemestre.appendChild(item);
+  });
+  botonSemestre.setAttribute("aria-expanded", "false");
+  botonSemestre.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (listaSemestre.classList.contains("oculto")) abrirListaSemestre();
+    else cerrarListaSemestre();
+  });
+  document.addEventListener("click", (e) => {
+    if (!dropdownSemestre.contains(e.target) && !listaSemestre.contains(e.target)) {
+      cerrarListaSemestre();
+    }
+  });
+
+  dropdownSemestre.appendChild(botonSemestre);
+  dropdownSemestre.appendChild(listaSemestre);
+  dropdownSemestre.appendChild(selectSemestre);
+  bloqueSemestre.appendChild(dropdownSemestre);
   caja.appendChild(bloqueSemestre);
+
 
   const bloqueNota = document.createElement("div");
   bloqueNota.innerHTML = `<span class="form-label">Nota (opcional)</span>`;
@@ -338,6 +550,10 @@ function abrirModalGastoU(gastoExistente, contenedorLista) {
           montoPorPago: Number(inputMontoPago.value) || 0,
           fechaInicio: inputFechaInicio.value || null,
           fechaFin: inputFechaFin.value || null,
+          personalizado:
+            frecuenciaElegida === "personalizado"
+              ? { modo: submodoElegido, diasSemana: [...diasSemanaElegidos], cadaNDias: Number(inputCadaNDias.value) || null }
+              : null,
         }
       : null;
     const costo = switchRecurrente.checked ? 0 : Number(inputCosto.value) || 0;
@@ -353,6 +569,13 @@ function abrirModalGastoU(gastoExistente, contenedorLista) {
             monto_por_pago: recurrente.montoPorPago,
             fecha_inicio: recurrente.fechaInicio,
             fecha_fin: recurrente.fechaFin,
+            personalizado: recurrente.personalizado
+              ? {
+                  modo: recurrente.personalizado.modo,
+                  dias_semana: recurrente.personalizado.diasSemana,
+                  cada_n_dias: recurrente.personalizado.cadaNDias,
+                }
+              : null,
           }
         : null;
       sellarTimestamp(gastoExistente);
@@ -419,10 +642,20 @@ function obtenerUniversidadesElegibles() {
   return [...new Set(universidades)];
 }
 
+/**
+ * v2.8.9: en vez de copiar y abrir claude.ai al toque (sensación de "no sé
+ * si pasó algo"), se muestra un aviso explícito de que el prompt ya está
+ * copiado y de que se va a abrir Claude, y recién 3 segundos después —
+ * tiempo de sobra para leer el aviso — se abre la pestaña nueva. mostrarToast
+ * ya limpia cualquier toast anterior (incluido el que pueda mostrar
+ * copiarPromptConAviso al copiar), así que no queda ningún mensaje viejo
+ * pisado con este.
+ */
 async function generarYCopiarPromptDescuentos(universidad) {
   const prompt = armarPromptDescuentos(universidad);
   await copiarPromptConAviso(prompt);
-  window.open("https://claude.ai", "_blank");
+  mostrarToast("✓ Se copió el prompt. Pegalo en el chat — enviando a Claude en 3 segundos…", 3000);
+  setTimeout(() => window.open("https://claude.ai", "_blank"), 3000);
 }
 
 function renderizarPestanaBeneficios(contenedor) {

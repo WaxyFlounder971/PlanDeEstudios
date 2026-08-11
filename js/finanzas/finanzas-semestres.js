@@ -10,9 +10,9 @@
 import { crearRegistroFinancieroSemestre, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
-import { abrirConfirmacion } from "../ui/componentes.js";
+import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { obtenerSemestresActuales, obtenerSemestresPasados } from "../semestres/semestres.js";
-import { formatearMonto } from "./finanzas.js";
+import { formatearFechaLarga, formatearMonto } from "./finanzas.js";
 
 /**
  * Reparte `total` entre `cantidadMeses` meses lo más parejo posible,
@@ -57,30 +57,45 @@ function renderizarPestanaSemestresFinanzas(contenedor) {
     const info = document.createElement("div");
     info.innerHTML = `
       <p style="margin:0; font-weight:600;">${semestre.nombre}</p>
-      <p class="muted" style="margin:2px 0 0;">${semestre.fecha_inicio || ""}</p>
+      <p class="muted" style="margin:2px 0 0;">${formatearFechaLarga(semestre.fecha_inicio)}</p>
     `;
 
     const derecha = document.createElement("div");
     derecha.className = "row";
+    derecha.style.alignItems = "center";
+    derecha.style.gap = "10px";
 
     if (registro) {
-      const badge = document.createElement("span");
-      badge.className = "badge badge-neutral";
-      badge.textContent = formatearMonto(registro.costo_matricula);
-      derecha.appendChild(badge);
+      // v2.8.9: antes eran 2 badges lado a lado — ahora van apiladas, una
+      // sobre la otra, en el mismo lugar: matrícula (rojo, es gasto) arriba,
+      // beca (verde, es ingreso) abajo — mismo código de color que el resto
+      // de Finanzas (badge-danger/badge-success), pedido explícito.
+      const columnaMontos = document.createElement("div");
+      columnaMontos.className = "stack";
+      columnaMontos.style.cssText = "gap:4px; align-items:flex-end;";
+
+      const badgeMatricula = document.createElement("span");
+      badgeMatricula.className = "badge badge-danger";
+      badgeMatricula.textContent = formatearMonto(registro.costo_matricula);
+      columnaMontos.appendChild(badgeMatricula);
+
       if (Number(registro.beca_monto) > 0) {
         const badgeBeca = document.createElement("span");
         badgeBeca.className = "badge badge-success";
-        badgeBeca.title = "Cobertura de tu beca";
+        badgeBeca.title = "Beca";
         badgeBeca.textContent = "🎓 " + formatearMonto(registro.beca_monto);
-        derecha.appendChild(badgeBeca);
+        columnaMontos.appendChild(badgeBeca);
       }
+      derecha.appendChild(columnaMontos);
     }
 
+    // v2.8.9: "se ve feo" -> botón de texto discreto (sin caja/fondo propio)
+    // en vez de .btn-secondary, para que no compita visualmente con los
+    // badges de monto que están justo al lado.
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "btn btn-secondary";
-    btn.textContent = registro ? "Editar registro" : "Crear registro";
+    btn.className = "btn-discreto";
+    btn.textContent = registro ? "Editar" : "Crear registro";
     btn.addEventListener("click", () => abrirModalRegistroFinanciero(semestre, registro, contenedor));
     derecha.appendChild(btn);
 
@@ -121,15 +136,13 @@ function abrirModalRegistroFinanciero(semestre, registroExistente, contenedorLis
   bloqueCosto.appendChild(inputCosto);
   caja.appendChild(bloqueCosto);
 
-  // ----- Cobertura de tu beca (v2.8.8: monto directo, sin switch ni
-  // porcentaje — cuánto cayó de beca. Es un ingreso/ahorro dentro de las
-  // estadísticas generales, no un gasto más (ver calcularTotalesResumenFinanzas
-  // en finanzas.js). Opcional: se puede dejar en 0/vacío si no aplica. -----
+  // ----- ¿Cuánto cayó de beca? (v2.8.9: se pregunta directo, así es como
+  // la gente lo piensa de verdad — la matrícula se exonera aparte y sola;
+  // esto es la plata que sí te depositan (transporte, comida, etc.). Monto
+  // directo, sin switch ni porcentaje. Opcional: se puede dejar en 0/vacío
+  // si no aplica. -----
   const bloqueBeca = document.createElement("div");
-  bloqueBeca.innerHTML = `
-    <span class="form-label">Cobertura de tu beca</span>
-    <p class="muted" style="font-size:0.78rem; margin:2px 0 6px;">Lo que no pagaste gracias a la beca — cuenta como ingreso en el Resumen, no como gasto.</p>
-  `;
+  bloqueBeca.innerHTML = `<span class="form-label">¿Cuánto cayó de beca?</span>`;
   const inputBeca = document.createElement("input");
   inputBeca.type = "number";
   inputBeca.step = "0.01";
@@ -142,12 +155,15 @@ function abrirModalRegistroFinanciero(semestre, registroExistente, contenedorLis
   // ----- Desglose mensual (v2.8.8: se queda donde estaba — sobre el pago
   // de matrícula, no se movió — solo se le agrega texto aclaratorio de
   // para qué sirve: pagar el semestre en varias cuotas en vez de un solo
-  // monto. -----
+  // monto. v2.8.9: se saca "cayó" del texto (quedaba raro) y se agrega un
+  // resumen en vivo de cuánto llevás repartido / cuánto queda, con
+  // validación real: no se puede guardar un desglose manual que reparta
+  // más de lo que cuesta la matrícula. -----
   const bloqueDesglose = document.createElement("div");
   bloqueDesglose.className = "stack";
   bloqueDesglose.innerHTML = `
     <span class="form-label">Desglose mensual del pago</span>
-    <p class="muted" style="font-size:0.78rem; margin:2px 0 6px;">En caso de que pagués el semestre por pagos: indicá cuántos pagos hiciste y en qué mes cayó cada uno.</p>
+    <p class="muted" style="font-size:0.78rem; margin:2px 0 6px;">En caso de que pagués el semestre por pagos: indicá cuántos pagos hiciste y el monto de cada uno.</p>
   `;
 
   const pillModo = document.createElement("div");
@@ -165,7 +181,36 @@ function abrirModalRegistroFinanciero(semestre, registroExistente, contenedorLis
   const contenedorDesglose = document.createElement("div");
   contenedorDesglose.className = "stack";
   bloqueDesglose.appendChild(contenedorDesglose);
+
+  // Resumen en vivo de "cuánto llevás repartido / cuánto queda" — solo
+  // aplica al modo manual (el automático siempre reparte EXACTO el total
+  // que tenía inputCosto en el momento de tocar "Repartir", por
+  // construcción de repartirMontoEnMeses, así que nunca puede pasarse).
+  // Persiste fuera de contenedorDesglose para no perderse entre
+  // re-renders del modo, y devuelve `false` cuando el desglose manual se
+  // pasa del costo de matrícula — eso es lo que btnGuardar consulta al
+  // hacer click para bloquear el guardado (ver más abajo).
+  const resumenReparto = document.createElement("p");
+  resumenReparto.className = "muted";
+  resumenReparto.style.cssText = "font-size:0.82rem; margin:6px 0 0;";
+  bloqueDesglose.appendChild(resumenReparto);
   caja.appendChild(bloqueDesglose);
+
+  function estaDesgloseManualSobrepasado() {
+    if (desgloseActual.modo !== "manual") {
+      resumenReparto.textContent = "";
+      return false;
+    }
+    const costoMatricula = Number(inputCosto.value) || 0;
+    const sumaRepartida = desgloseActual.meses.reduce((acc, m) => acc + (Number(m.monto) || 0), 0);
+    const restante = costoMatricula - sumaRepartida;
+    if (restante < -0.005) {
+      resumenReparto.innerHTML = `Repartiste ${formatearMonto(sumaRepartida)} de ${formatearMonto(costoMatricula)} — <strong style="color:#f87171;">te pasaste por ${formatearMonto(Math.abs(restante))}</strong>. No podés repartir más de lo que cuesta la matrícula.`;
+      return true;
+    }
+    resumenReparto.innerHTML = `Repartiste ${formatearMonto(sumaRepartida)} de ${formatearMonto(costoMatricula)} — queda <strong>${formatearMonto(restante)}</strong> por repartir.`;
+    return false;
+  }
 
   function marcarPillActivo() {
     pillModo.querySelectorAll(".pill-item").forEach((p) => p.classList.toggle("active", p.dataset.valor === desgloseActual.modo));
@@ -190,7 +235,10 @@ function abrirModalRegistroFinanciero(semestre, registroExistente, contenedorLis
       inputMonto.className = "form-input";
       inputMonto.style.width = "120px";
       inputMonto.value = mesEntry.monto;
-      inputMonto.addEventListener("input", () => (mesEntry.monto = Number(inputMonto.value) || 0));
+      inputMonto.addEventListener("input", () => {
+        mesEntry.monto = Number(inputMonto.value) || 0;
+        estaDesgloseManualSobrepasado();
+      });
 
       const btnQuitar = document.createElement("button");
       btnQuitar.type = "button";
@@ -216,10 +264,13 @@ function abrirModalRegistroFinanciero(semestre, registroExistente, contenedorLis
       renderizarFilasManual();
     });
     contenedorDesglose.appendChild(btnAgregar);
+
+    estaDesgloseManualSobrepasado();
   }
 
   function renderizarBloqueAutomatico() {
     contenedorDesglose.innerHTML = "";
+    resumenReparto.textContent = "";
     const filaCantidad = document.createElement("div");
     filaCantidad.className = "row";
     const inputCantidad = document.createElement("input");
@@ -273,6 +324,11 @@ function abrirModalRegistroFinanciero(semestre, registroExistente, contenedorLis
     });
   });
 
+  // Cambiar el costo de matrícula también recalcula en vivo cuánto queda
+  // por repartir (si el desglose es manual) — sin reconstruir las filas,
+  // para no perder el foco de lo que la persona esté editando.
+  inputCosto.addEventListener("input", estaDesgloseManualSobrepasado);
+
   renderizarSegunModo();
 
   // ----- Botones -----
@@ -323,6 +379,10 @@ function abrirModalRegistroFinanciero(semestre, registroExistente, contenedorLis
   btnGuardar.style.flex = "1";
   btnGuardar.textContent = "Guardar";
   btnGuardar.addEventListener("click", () => {
+    if (estaDesgloseManualSobrepasado()) {
+      mostrarToast("El desglose manual reparte más de lo que cuesta la matrícula — ajustalo antes de guardar.");
+      return;
+    }
     const costoMatricula = Number(inputCosto.value) || 0;
     const becaMonto = Number(inputBeca.value) || 0;
 

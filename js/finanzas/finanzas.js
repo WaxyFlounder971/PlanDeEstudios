@@ -29,6 +29,25 @@ const PESTANAS_FINANZAS = [
   { id: "gastos-estudiantiles", etiqueta: "Beneficios" },
 ];
 
+// v2.8.9: fechas NUNCA en bruto (nada de "2026-08-11" pelado) — en toda
+// Finanzas se muestran como "11 de agosto de 2026". Vive acá porque
+// finanzas-semestres.js y finanzas-gastos.js ya importan formatearMonto de
+// este mismo archivo — mismo lugar central para formato de datos de la
+// sección completa.
+const MESES_LARGOS = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+/** "YYYY-MM-DD" -> "11 de agosto de 2026". Vacío/null -> "". */
+function formatearFechaLarga(fechaIso) {
+  if (!fechaIso) return "";
+  const [anio, mes, dia] = fechaIso.split("-");
+  const nombreMes = MESES_LARGOS[Number(mes) - 1];
+  if (!nombreMes) return fechaIso; // formato inesperado — mejor mostrar algo que nada
+  return `${Number(dia)} de ${nombreMes} de ${anio}`;
+}
+
 /**
  * Formato de colones consistente en toda la sección — sin decimales
  * sueltos raros, siempre 2 decimales, separador de miles local.
@@ -198,4 +217,4 @@ function renderizarFinanzas() {
   renderizarContenidoFinanzasActivo();
 }
 
-export { calcularTotalesResumenFinanzas, formatearMonto, renderizarContenidoFinanzasActivo, renderizarFinanzas };
+export { calcularTotalesResumenFinanzas, formatearFechaLarga, formatearMonto, renderizarContenidoFinanzasActivo, renderizarFinanzas };
