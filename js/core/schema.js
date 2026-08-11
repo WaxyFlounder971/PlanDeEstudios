@@ -268,41 +268,37 @@ function crearAdjunto({ nombre, mimeType, tamanoBytes, entidadTipo, entidadId })
 /* ===================== Finanzas ===================== */
 
 /**
- * Finanzas (2026-08-10): registro financiero de UN semestre. Entidad
- * separada vinculada por `semestre_id` (no embebida dentro del semestre,
- * decisión confirmada) — así un semestre puede no tener registro todavía
+ * Finanzas (2026-08-10, simplificado en v2.8.8): registro financiero de UN
+ * semestre. Entidad separada vinculada por `semestre_id` (no embebida
+ * dentro del semestre) — así un semestre puede no tener registro todavía
  * sin que crearSemestre tenga que saber nada de dinero.
  *
- * `porcentaje_beca` solo importa si `beca_activa` es true; se guarda igual
- * aunque esté apagada (no se borra al desactivar el switch) para que
- * reactivarla no pierda el último valor que el usuario había puesto.
+ * v2.8.8: se sacó el flujo de switch de beca + porcentaje + autocálculo de
+ * neto (costo_total/beca_activa/porcentaje_beca/pago_confirmado/
+ * pago_confirmado_manual desaparecen por completo). Ahora son DOS montos
+ * directos, sin ninguna fórmula entre ellos — el usuario los escribe a
+ * mano, cada uno por su lado:
+ *   - `costo_matricula`: lo que efectivamente pagaste de matrícula.
+ *   - `beca_monto`: lo que cayó de beca. Funciona como INGRESO/ahorro
+ *     dentro de las estadísticas generales (Resumen), no como un gasto
+ *     más — ver calcularTotalesResumenFinanzas en finanzas.js.
+ * Cambiar uno de los dos campos NUNCA recalcula el otro.
  *
- * `pago_confirmado` nace como el neto sugerido (costo_total con el
- * descuento de la beca aplicado, si corresponde) pero es 100% editable a
- * mano después — `pago_confirmado_manual` marca si el usuario ya lo tocó,
- * para que un cambio posterior en costo_total/porcentaje_beca (ver
- * recalcularPagoSugerido) no le pise un valor que la persona ya ajustó a
- * propósito.
- *
- * `desglose_mensual.modo` guarda cuál de los dos modos se usó para poder
- * re-editar después con el mismo modo por defecto (manual: array cargado
- * mes por mes; automatico: total repartido entre `automatico_cantidad_meses`,
- * con el residuo de la división absorbido por el último mes para que la
- * suma de los meses siempre cuadre exacto con el total).
+ * `desglose_mensual` sigue aplicando sobre `costo_matricula` (para
+ * semestres pagados en varias cuotas/pagos, no de una sola vez) — no se
+ * movió de lugar. `desglose_mensual.modo` guarda cuál de los dos modos se
+ * usó para poder re-editar después con el mismo modo por defecto (manual:
+ * array cargado mes por mes; automatico: total repartido entre
+ * `automatico_cantidad_meses`, con el residuo de la división absorbido por
+ * el último mes para que la suma de los meses siempre cuadre exacto con
+ * el total).
  */
-function crearRegistroFinancieroSemestre({ semestreId, costoTotal, becaActiva, porcentajeBeca }) {
-  const costo = Number(costoTotal) || 0;
-  const porcentaje = Number(porcentajeBeca) || 0;
-  const netoSugerido = calcularNetoSugeridoFinanzas(costo, becaActiva, porcentaje);
-
+function crearRegistroFinancieroSemestre({ semestreId, costoMatricula, becaMonto }) {
   return sellarTimestamp({
     id: "finsem_" + crypto.randomUUID(),
     semestre_id: semestreId,
-    costo_total: costo,
-    beca_activa: !!becaActiva,
-    porcentaje_beca: porcentaje,
-    pago_confirmado: netoSugerido,
-    pago_confirmado_manual: false,
+    costo_matricula: Number(costoMatricula) || 0,
+    beca_monto: Number(becaMonto) || 0,
     desglose_mensual: {
       modo: "manual", // "manual" | "automatico"
       meses: [], // [{ id, mes: "Enero"/"2026-01"/lo que el usuario escriba, monto }]
@@ -312,32 +308,84 @@ function crearRegistroFinancieroSemestre({ semestreId, costoTotal, becaActiva, p
 }
 
 /**
- * Único punto que calcula el neto sugerido a partir de costo_total + beca —
- * lo usa tanto crearRegistroFinancieroSemestre (al crear) como la UI (al
- * recalcular en vivo mientras el usuario edita costo/porcentaje, siempre
- * que pago_confirmado_manual siga en false). Puede dar negativo a propósito
- * (beca que supera el costo total = la universidad "le paga" al estudiante,
- * ver "total ganado" en el Resumen).
+ * Finanzas (2026-08-10): un gasto general de la universidad, NO vinculado
+ * obligatoriamente a ningún semestre (carné, seguro estudiantil,
+ * materiales sueltos, etc.) — colección plana propia (`gastos_u`), mismo
+ * patrón que crearAdjunto.
+ *
+ * v2.8.8:
+ *  - `semestre_id` (opcional, 2026-08-11): vínculo opcional a UN
+ *    semestre, puramente organizativo — no cambia el cálculo de totales
+ *    (el gasto ya se cuenta una sola vez dentro de `gastos_u`; vincularlo
+ *    no lo duplica ni lo mueve a otro total). `null` = sin vincular
+ *    (comportamiento de siempre, sigue siendo el default).
+ *  - `recurrente` (opcional, 2026-08-11): si no es `null`, este gasto
+ *    representa un pago que se repite en el tiempo (ej. abono de
+ *    transporte, alquiler de casillero, suscripción) en vez de un monto
+ *    único. Cuando está activo, `costo` deja de usarse para los totales —
+ *    ver calcularPagosRecurrentesTranscurridos, que calcula cuánto se ha
+ *    pagado hasta HOY (nunca pagos futuros) a partir de fecha_inicio/
+ *    fecha_fin/frecuencia/monto_por_pago.
  */
-function calcularNetoSugeridoFinanzas(costoTotal, becaActiva, porcentajeBeca) {
-  const costo = Number(costoTotal) || 0;
-  if (!becaActiva) return redondearDecimales(costo, 2);
-  const porcentaje = Number(porcentajeBeca) || 0;
-  return redondearDecimales(costo * (1 - porcentaje / 100), 2);
-}
-
-/**
- * Finanzas (2026-08-10): un gasto general de la universidad, NO vinculado a
- * ningún semestre (carné, seguro estudiantil, materiales sueltos, etc.) —
- * colección plana propia (`gastos_u`), mismo patrón que crearAdjunto.
- */
-function crearGastoU({ nombre, costo, nota }) {
+function crearGastoU({ nombre, costo, nota, semestreId, recurrente }) {
   return sellarTimestamp({
     id: "gastou_" + crypto.randomUUID(),
     nombre,
     costo: Number(costo) || 0,
     nota: nota || null,
+    semestre_id: semestreId || null,
+    recurrente: recurrente
+      ? {
+          frecuencia: recurrente.frecuencia || "mensual", // "semanal" | "quincenal" | "mensual" | "anual"
+          monto_por_pago: Number(recurrente.montoPorPago) || 0,
+          fecha_inicio: recurrente.fechaInicio || null, // "YYYY-MM-DD"
+          fecha_fin: recurrente.fechaFin || null, // "YYYY-MM-DD" o null = sigue activo, sin fecha de fin todavía
+        }
+      : null,
   });
+}
+
+/**
+ * Cuenta cuántos pagos de un gasto recurrente ya "cayeron" entre
+ * fecha_inicio y HOY (o fecha_fin, lo que sea antes) — SIN contar pagos
+ * futuros, para que el total del Resumen refleje lo que de verdad ya se
+ * pagó hasta ahora, no el compromiso completo hacia adelante.
+ *
+ * "Mensual"/"anual" cuentan por mes/año calendario real (no por bloques
+ * fijos de 30/365 días) para que un inicio un día 31, por ejemplo, no
+ * genere pagos fantasma por redondeo de días. "Semanal"/"quincenal" sí
+ * cuentan por bloques fijos de 7/14 días porque no tienen un equivalente
+ * calendario natural como mes o año.
+ */
+function calcularPagosRecurrentesTranscurridos(recurrente) {
+  if (!recurrente || !recurrente.fecha_inicio) return { cantidadPagos: 0, totalPagado: 0 };
+
+  const inicio = new Date(recurrente.fecha_inicio + "T00:00:00");
+  const hoy = new Date();
+  const limite = recurrente.fecha_fin ? new Date(recurrente.fecha_fin + "T00:00:00") : hoy;
+  const fin = limite < hoy ? limite : hoy;
+  if (fin < inicio) return { cantidadPagos: 0, totalPagado: 0 };
+
+  let cantidadPagos;
+  if (recurrente.frecuencia === "semanal" || recurrente.frecuencia === "quincenal") {
+    const pasoDias = recurrente.frecuencia === "semanal" ? 7 : 14;
+    const diffMs = fin.getTime() - inicio.getTime();
+    cantidadPagos = Math.floor(diffMs / (pasoDias * 24 * 60 * 60 * 1000)) + 1;
+  } else if (recurrente.frecuencia === "anual") {
+    let anios = fin.getFullYear() - inicio.getFullYear();
+    const aniversarioEsteAnio = new Date(inicio);
+    aniversarioEsteAnio.setFullYear(inicio.getFullYear() + anios);
+    if (aniversarioEsteAnio > fin) anios -= 1; // el aniversario de este año todavía no llegó
+    cantidadPagos = Math.max(0, anios) + 1;
+  } else {
+    // "mensual" (default)
+    let meses = (fin.getFullYear() - inicio.getFullYear()) * 12 + (fin.getMonth() - inicio.getMonth());
+    if (fin.getDate() < inicio.getDate()) meses -= 1; // el día del mes de inicio todavía no llegó este mes
+    cantidadPagos = Math.max(0, meses) + 1;
+  }
+
+  const monto = Number(recurrente.monto_por_pago) || 0;
+  return { cantidadPagos, totalPagado: redondearDecimales(cantidadPagos * monto, 2) };
 }
 
 // Límite defensivo de tamaño por adjunto — Drive en sí no lo necesita (su
@@ -2239,12 +2287,41 @@ function migrarDatosAntiguos(datos) {
   if (!Array.isArray(datos.gastos_u)) datos.gastos_u = [];
   if (!Array.isArray(datos._eliminados_finanzas_semestre)) datos._eliminados_finanzas_semestre = [];
   if (!Array.isArray(datos._eliminados_gastos_u)) datos._eliminados_gastos_u = [];
-  // Registros financieros creados antes de que pago_confirmado_manual
-  // existiera: se tratan como "nunca tocado a mano" (false), que es
-  // exactamente el comportamiento que ya tenían (el neto sugerido siempre
-  // se recalculaba solo).
+
+  // Finanzas (v2.8.8, 2026-08-11): se simplificó el registro financiero de
+  // semestre — costo_total/beca_activa/porcentaje_beca/pago_confirmado/
+  // pago_confirmado_manual desaparecen, reemplazados por costo_matricula +
+  // beca_monto (dos montos directos, sin fórmula entre ellos). Se detecta
+  // un registro viejo por la AUSENCIA de costo_matricula (campo que no
+  // existía antes de v2.8.8) y se migra una única vez:
+  //   - costo_matricula toma pago_confirmado si ya existía (es el último
+  //     valor "real" que el usuario había confirmado que pagó) o, si no,
+  //     costo_total.
+  //   - beca_monto se deriva de costo_total × porcentaje_beca de antes
+  //     (solo si beca_activa estaba prendida), para no perder de un
+  //     vistazo cuánto representaba la beca en colones.
   datos.finanzas_semestre.forEach((registro) => {
-    if (registro.pago_confirmado_manual === undefined) registro.pago_confirmado_manual = false;
+    if (registro.costo_matricula === undefined) {
+      const costoTotalViejo = Number(registro.costo_total) || 0;
+      registro.costo_matricula =
+        registro.pago_confirmado !== undefined ? Number(registro.pago_confirmado) || 0 : costoTotalViejo;
+      registro.beca_monto = registro.beca_activa
+        ? redondearDecimales(costoTotalViejo * ((Number(registro.porcentaje_beca) || 0) / 100), 2)
+        : 0;
+      delete registro.costo_total;
+      delete registro.beca_activa;
+      delete registro.porcentaje_beca;
+      delete registro.pago_confirmado;
+      delete registro.pago_confirmado_manual;
+    }
+  });
+
+  // Gastos generales U (v2.8.8, 2026-08-11): relleno defensivo de los dos
+  // campos nuevos — vínculo opcional a semestre y pago recurrente, ambos
+  // ausentes en cuentas guardadas antes de este cambio.
+  datos.gastos_u.forEach((gasto) => {
+    if (gasto.semestre_id === undefined) gasto.semestre_id = null;
+    if (gasto.recurrente === undefined) gasto.recurrente = null;
   });
 
   if (Array.isArray(datos.semestres)) {
@@ -2474,5 +2551,5 @@ export {
   calcularDetallePorEstado,
   crearRegistroFinancieroSemestre,
   crearGastoU,
-  calcularNetoSugeridoFinanzas,
+  calcularPagosRecurrentesTranscurridos,
 };
