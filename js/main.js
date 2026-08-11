@@ -13,6 +13,7 @@ import { actualizarIndicadorSync, forzarSincronizacion, inicializarPullToRefresh
 import { CLAVE_CACHE_LOCAL, borrarTokenCache, correoConocido, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
 import { obtenerIniciales } from "./core/utils.js";
 import { inicializarComunidad, renderizarComunidad } from "./comunidad/comunidad.js";
+import { renderizarFinanzas } from "./finanzas/finanzas.js";
 import { inicializarModalCategoria, inicializarModalCategoriaMaterias } from "./plan/plan-categorias.js";
 import { inicializarModalDesbloquea, inicializarModalHistorial, inicializarModalRequisito } from "./plan/plan-detalle.js";
 import { inicializarModalCrearPlan, inicializarModalMateriaManual, inicializarModalVincularOptativa } from "./plan/plan-esquema.js";
@@ -430,6 +431,7 @@ function mostrarApp() {
   if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
   if (typeof renderizarSemestres === "function") renderizarSemestres();
   if (typeof renderizarComunidad === "function") renderizarComunidad();
+  if (typeof renderizarFinanzas === "function") renderizarFinanzas();
   // Bug 3: antes mostrarSeccion() solo se llamaba desde clics del nav, así que
   // tras un refresh la sección de Plan de Estudios se quedaba con la clase
   // "oculto" del HTML aunque su contenido sí se hubiera renderizado.
