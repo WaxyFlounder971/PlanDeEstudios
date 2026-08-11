@@ -15,8 +15,19 @@ import { abrirModalTodosLosConflictos } from "../semestres/semestres-tarjetas.js
 import { renderizarFinanzas } from "../finanzas/finanzas.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { aplicarPaleta } from "../ui/tema.js";
-import { guardarDatos, leerDatos, obtenerMetadatosArchivo, refrescarAccessTokenGoogle } from "./auth.js";
-import { migrarDatosAntiguos } from "./schema.js";
+import {
+  NOMBRE_CARPETA_BACKUP,
+  buscarArchivoEnCarpeta,
+  buscarOCrearCarpetaEnDrive,
+  copiarArchivoDrive,
+  eliminarArchivoDeDriveConId,
+  guardarDatos,
+  leerDatos,
+  obtenerMetadatosArchivo,
+  refrescarAccessTokenGoogle,
+  renombrarArchivoDrive,
+} from "./auth.js";
+import { FRECUENCIAS_BACKUP_DRIVE, migrarDatosAntiguos } from "./schema.js";
 import { fusionarDatos } from "./storage-merge.js";
 import { authListo, correoConocido, establecerTokenActivo, estado, guardarCacheLocal, leerTokenCacheValido } from "./storage.js";
 
@@ -746,6 +757,84 @@ async function asegurarTokenFrescoAlVolver() {
   await intentarReconexionSilenciosa(); // ya deduplicada (reconexionEnCurso) y ya silenciosa (prompt:"")
 }
 
+/**
+ * Backup de seguridad rotativo a Drive (Ajustes — 2026-08-10): NO tiene
+ * timer propio — se llama desde intentarSincronizar() justo después de un
+ * guardado exitoso (ver más abajo). Es a propósito: reutiliza la MISMA
+ * cadencia que ya dispara guardarDatos en cada sync (más el sondeo
+ * periódico de ~9s y el pull-to-refresh), así que el chequeo "¿ya toca
+ * según la frecuencia elegida?" corre con frecuencia de sobra sin necesitar
+ * un setTimeout/setInterval propio — que además sería poco confiable en
+ * móvil (el navegador/SO puede suspender timers de una pestaña en 2do
+ * plano, mismo problema documentado arriba para programarRefrescoProactivo).
+ * El chequeo en sí es barato (una resta de fechas), así que no penaliza en
+ * absoluto que se dispare en cada sync.
+ *
+ * Carpeta "AppAcademica/" con máximo 2 copias rotativas:
+ *   - Si ya existe backup_reciente.json, se borra el backup_anterior.json
+ *     viejo (si había) y se renombra backup_reciente.json -> backup_anterior.json
+ *     (PATCH de solo metadata, no re-sube contenido).
+ *   - Se genera un backup_reciente.json NUEVO como copia server-side
+ *     (Drive files.copy, sin bajar/subir bytes por el cliente) del archivo
+ *     vigente actual (estado.fileId) — copia EXACTA, mismo JSON, pedido
+ *     explícito.
+ * Nunca se acumulan más de 2 copias.
+ *
+ * Totalmente silencioso: cualquier error se loguea y se descarta sin
+ * avisar al usuario ni tocar estado.pendienteSync — para cuando esta
+ * función corre, el sync normal ya tuvo éxito, y un backup fallido no debe
+ * ensuciar ni interrumpir ese resultado. Se reintenta solo en el próximo
+ * sync exitoso, una vez se cumpla el intervalo de nuevo.
+ */
+async function ejecutarBackupSiToca() {
+  try {
+    if (!estado.datos || !estado.datos.configuracion) return;
+
+    const cfg = (estado.datos.configuracion.backup_drive =
+      estado.datos.configuracion.backup_drive || { frecuencia: "semanal", ultimo_backup_iso: null });
+
+    const frecuenciaElegida =
+      FRECUENCIAS_BACKUP_DRIVE.find((f) => f.id === cfg.frecuencia) ||
+      FRECUENCIAS_BACKUP_DRIVE.find((f) => f.id === "semanal");
+    const msIntervalo = frecuenciaElegida.dias * 24 * 60 * 60 * 1000;
+
+    const ultimo = cfg.ultimo_backup_iso ? new Date(cfg.ultimo_backup_iso).getTime() : 0;
+    if (Date.now() - ultimo < msIntervalo) return; // todavía no toca, según la frecuencia elegida
+
+    const folderId = await conReintentoSi401(() => buscarOCrearCarpetaEnDrive(estado.token, NOMBRE_CARPETA_BACKUP));
+    const idReciente = await conReintentoSi401(() => buscarArchivoEnCarpeta(estado.token, folderId, "backup_reciente.json"));
+
+    if (idReciente) {
+      const idAnterior = await conReintentoSi401(() => buscarArchivoEnCarpeta(estado.token, folderId, "backup_anterior.json"));
+      // Se borra la copia vieja ANTES de renombrar la nueva encima: Drive
+      // permite nombres duplicados dentro de una misma carpeta, así que sin
+      // este paso quedarían 2 archivos "backup_anterior.json" sueltos y
+      // buscarArchivoEnCarpeta (que toma el primero que devuelva la API,
+      // sin orden garantizado) dejaría de ser determinista sobre cuál es
+      // el real. Un 404 (ya no existe) se trata como éxito, ver
+      // eliminarArchivoDeDriveConId en auth.js.
+      if (idAnterior) await conReintentoSi401(() => eliminarArchivoDeDriveConId(estado.token, idAnterior));
+      await conReintentoSi401(() => renombrarArchivoDrive(estado.token, idReciente, "backup_anterior.json"));
+    }
+
+    // Copia exacta del archivo vigente actual — mismo contenido, solo
+    // cambia el nombre (pedido explícito).
+    await conReintentoSi401(() => copiarArchivoDrive(estado.token, estado.fileId, "backup_reciente.json", folderId));
+
+    cfg.ultimo_backup_iso = new Date().toISOString();
+    // A propósito NO se llama a marcarCambioPendiente() acá: eso dispararía
+    // un intentarSincronizar() recursivo desde DENTRO de un sync que recién
+    // terminó. El timestamp nuevo queda en memoria y en la caché local
+    // (guardarCacheLocal, justo abajo) y sube a Drive solo, en el PRÓXIMO
+    // cambio real del usuario o el próximo sync/sondeo periódico — que de
+    // sobra van a ocurrir mucho antes de que vuelva a tocar otro backup
+    // (el intervalo más corto disponible es 1 día).
+    guardarCacheLocal();
+  } catch (e) {
+    console.warn("No se pudo completar el backup rotativo a Drive (se reintentará en el próximo sync):", e);
+  }
+}
+
 /** Se llama cada vez que se modifica algo en `estado.datos`. */
 
 function marcarCambioPendiente() {
@@ -795,6 +884,13 @@ async function intentarSincronizar() {
     if (meta && meta.modifiedTime) estado.ultimoModifiedTimeConocido = meta.modifiedTime;
     ocultarAvisoReconexion();
     actualizarIndicadorSync();
+    // Backup rotativo a Drive (Ajustes): fire-and-forget a propósito — no
+    // se espera (sin await) para no demorar el indicador de "Todo
+    // sincronizado" con las llamadas extra a Drive que puede implicar. En
+    // la enorme mayoría de los syncs esta llamada no hace ninguna petición
+    // de red real: el propio chequeo interno de frecuencia (ver
+    // ejecutarBackupSiToca) vuelve de inmediato si todavía no toca.
+    ejecutarBackupSiToca();
   } catch (e) {
     // v7 (Bug 2): antes solo se logueaba un mensaje genérico. Ahora se
     // imprime el detalle real (status HTTP + cuerpo de la respuesta de
@@ -950,6 +1046,7 @@ export {
   conReintentoSi401,
   contadorCargando,
   contarConflictosGlobales,
+  ejecutarBackupSiToca,
   forzarSincronizacion,
   inicializarPullToRefresh,
   inicializarSondeoAlVolver,

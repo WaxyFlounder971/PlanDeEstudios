@@ -415,8 +415,122 @@ async function eliminarArchivoDeDriveConId(token, driveFileId) {
   }
 }
 
+/**
+ * Backup rotativo a Drive (Ajustes — 2026-08-10): primitivas sueltas sobre
+ * la carpeta "AppAcademica" y sus 2 archivos de respaldo. La ORQUESTACIÓN
+ * del ciclo completo (¿ya toca según la frecuencia elegida?, rotar
+ * reciente→anterior, crear el nuevo reciente) vive en storage-sync.js
+ * (ejecutarBackupSiToca), enganchada al mismo ciclo de sync normal — este
+ * archivo solo expone las operaciones de Drive en sí, mismo espíritu que
+ * subirArchivoBinarioADrive/descargarArchivoBinarioDeDrive de arriba
+ * (adjuntos), que tampoco conocen NADA del ciclo que las llama.
+ */
+const NOMBRE_CARPETA_BACKUP = "AppAcademica";
+
+/**
+ * Busca una carpeta por nombre visible para esta app (scope drive.file:
+ * solo ve archivos/carpetas que ELLA MISMA creó, nunca el resto del Drive
+ * del usuario). La crea si todavía no existe. Devuelve el folderId.
+ */
+async function buscarOCrearCarpetaEnDrive(token, nombreCarpeta) {
+  const busqueda = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=name='${nombreCarpeta}' and mimeType='application/vnd.google-apps.folder' and trashed=false&spaces=drive&fields=files(id,name)`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  ).then((r) => r.json());
+
+  if (busqueda.files && busqueda.files.length > 0) return busqueda.files[0].id;
+
+  const respuesta = await fetch("https://www.googleapis.com/drive/v3/files?fields=id", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name: nombreCarpeta, mimeType: "application/vnd.google-apps.folder" }),
+  });
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Drive respondió ${respuesta.status} al crear la carpeta de backup: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+  const json = await respuesta.json();
+  return json.id;
+}
+
+/**
+ * Busca un archivo por nombre DENTRO de una carpeta puntual. Devuelve su
+ * fileId, o null si todavía no existe (ej. el primer backup de la cuenta,
+ * donde "AppAcademica" recién se creó y está vacía).
+ */
+async function buscarArchivoEnCarpeta(token, folderId, nombreArchivo) {
+  const busqueda = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=name='${nombreArchivo}' and '${folderId}' in parents and trashed=false&spaces=drive&fields=files(id,name)`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  ).then((r) => r.json());
+  return (busqueda.files && busqueda.files[0] && busqueda.files[0].id) || null;
+}
+
+/**
+ * Renombra un archivo existente SIN tocar su contenido (PATCH de solo
+ * metadata, no re-sube nada) — se usa para "rotar" backup_reciente.json a
+ * backup_anterior.json de forma barata, sin descargar ni volver a subir el
+ * JSON completo por el cliente.
+ */
+async function renombrarArchivoDrive(token, fileId, nuevoNombre) {
+  const respuesta = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=id`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name: nuevoNombre }),
+  });
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Drive respondió ${respuesta.status} al renombrar el archivo de backup: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+  return respuesta.json();
+}
+
+/**
+ * Copia un archivo YA EXISTENTE en Drive (endpoint files.copy — la copia
+ * ocurre del lado del servidor de Google, el cliente nunca baja ni vuelve
+ * a subir los bytes) dentro de una carpeta puntual, con un nombre nuevo.
+ * Se usa para generar backup_reciente.json como copia EXACTA del archivo
+ * de datos vigente (mismo JSON, solo cambia el nombre — pedido explícito),
+ * sin el costo de leerDatos+guardarDatos.
+ */
+async function copiarArchivoDrive(token, fileId, nombreCopia, folderId) {
+  const respuesta = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/copy?fields=id`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name: nombreCopia, parents: [folderId] }),
+  });
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Drive respondió ${respuesta.status} al copiar el archivo de backup: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+  return respuesta.json();
+}
+
 export {
+  NOMBRE_CARPETA_BACKUP,
   buscarOCrearArchivoDatos,
+  buscarOCrearCarpetaEnDrive,
+  buscarArchivoEnCarpeta,
+  renombrarArchivoDrive,
+  copiarArchivoDrive,
   cerrarSesionGoogle,
   descargarArchivoBinarioDeDrive,
   eliminarArchivoDeDriveConId,

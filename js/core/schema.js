@@ -29,6 +29,26 @@ function crearDatosUsuarioNuevo() {
                                      // v1.15: colores también incluye degradado: { activo, color, intensidad (0-100, % del stop medio), angulo (0-360) }
       formato_texto_nombres: "titulo", // "titulo" | "mayusculas" | "oracion" (v5 #9)
       modo_rendimiento: false,      // v1.14.1: reduce blur/sombras/animaciones para laptops con GPU integrada
+
+      // Selector de moneda (Ajustes generales, 2026-08-10): preferencia
+      // GLOBAL del usuario (NO por universidad/plan) — la usa Finanzas para
+      // formatear montos con el símbolo/formato correspondiente. Ver
+      // MONEDAS_DISPONIBLES más abajo para la lista completa de opciones.
+      moneda_preferida: "CRC",
+
+      // Backup de seguridad rotativo a Drive (Ajustes generales, 2026-08-10):
+      // además del archivo vigente que ya se sincroniza (ver auth.js/
+      // storage-sync.js), se guardan hasta 2 copias rotativas dentro de una
+      // carpeta "AppAcademica" del Drive del usuario (backup_reciente.json /
+      // backup_anterior.json). El ciclo corre solo, enganchado al sync
+      // normal (ver ejecutarBackupSiToca en storage-sync.js) — acá solo
+      // vive la preferencia de frecuencia y la fecha del último éxito, para
+      // poder calcular cuándo toca el próximo sin depender de un timer
+      // propio. Ver FRECUENCIAS_BACKUP_DRIVE más abajo para las opciones.
+      backup_drive: {
+        frecuencia: "semanal",       // "diaria" | "cada_3_dias" | "semanal" | "quincenal" | "mensual"
+        ultimo_backup_iso: null,     // fecha ISO del último backup exitoso, o null si nunca corrió uno
+      },
       plan_activo_id: null,         // id del Plan de Estudios seleccionado como activo
       enlaces_rapidos: [],          // ver estructura de "enlace" abajo (máx. 20)
       // Fix (2026-08-08 — enlaces borrados "resucitando" entre dispositivos):
@@ -345,6 +365,36 @@ const PALETAS_DISPONIBLES = [
   "blanco", "gris", "negro",
   "rojo", "dorado", "amarillo", "verde", "cyan", "azul", "indigo", "morado", "rosado",
   "azucarado",
+];
+
+/* Selector de moneda (Ajustes generales, 2026-08-10): preferencia GLOBAL
+ * del usuario que usa Finanzas para formatear montos. CRC primero porque
+ * TEC/UCR (las universidades que ya maneja el resto del schema, ver
+ * PARAMETROS_UNIVERSIDAD_DEFAULT) son costarricenses — el resto de la
+ * lista son las monedas más comunes entre estudiantes de la región que
+ * también podrían usar la app (Latinoamérica) más USD/EUR como referencia
+ * internacional habitual (ej. becas, compras en dólares). */
+const MONEDAS_DISPONIBLES = [
+  { id: "CRC", etiqueta: "Colón costarricense", simbolo: "₡" },
+  { id: "USD", etiqueta: "Dólar estadounidense", simbolo: "$" },
+  { id: "EUR", etiqueta: "Euro", simbolo: "€" },
+  { id: "MXN", etiqueta: "Peso mexicano", simbolo: "$" },
+  { id: "COP", etiqueta: "Peso colombiano", simbolo: "$" },
+  { id: "PEN", etiqueta: "Sol peruano", simbolo: "S/" },
+  { id: "ARS", etiqueta: "Peso argentino", simbolo: "$" },
+  { id: "GTQ", etiqueta: "Quetzal guatemalteco", simbolo: "Q" },
+];
+
+/* Frecuencias de backup rotativo a Drive (Ajustes generales, 2026-08-10) —
+ * `dias` es el intervalo MÍNIMO entre dos backups exitosos consecutivos;
+ * lo usa ejecutarBackupSiToca (storage-sync.js) para decidir si ya toca
+ * correr el ciclo. "semanal" es el default (ver crearDatosUsuarioNuevo). */
+const FRECUENCIAS_BACKUP_DRIVE = [
+  { id: "diaria", etiqueta: "Diaria", dias: 1 },
+  { id: "cada_3_dias", etiqueta: "Cada 3 días", dias: 3 },
+  { id: "semanal", etiqueta: "Semanal", dias: 7 },
+  { id: "quincenal", etiqueta: "Quincenal", dias: 14 },
+  { id: "mensual", etiqueta: "Mensual", dias: 30 },
 ];
 
 /* ===================== Árbol de expresión Y/O (requisitos/correquisitos) =====================
@@ -1993,6 +2043,23 @@ function migrarDatosAntiguos(datos) {
     datos.configuracion._eliminados_enlaces = [];
   }
 
+  // Selector de moneda (2026-08-10): mismo relleno defensivo que el resto
+  // de esta función — cuentas creadas antes de este ajuste no tienen
+  // moneda_preferida en absoluto (el campo directamente no existe).
+  if (datos.configuracion && !datos.configuracion.moneda_preferida) {
+    datos.configuracion.moneda_preferida = "CRC";
+  }
+
+  // Backup rotativo a Drive (2026-08-10): mismo patrón — cuentas viejas no
+  // tienen el objeto backup_drive en absoluto. Se rellena con el default
+  // (semanal, sin backup previo todavía) para que ejecutarBackupSiToca
+  // (storage-sync.js) sepa desde el primer sync que "toca" backear en
+  // cuanto se cumpla el intervalo, en vez de reventar leyendo un campo
+  // inexistente.
+  if (datos.configuracion && (!datos.configuracion.backup_drive || typeof datos.configuracion.backup_drive !== "object")) {
+    datos.configuracion.backup_drive = { frecuencia: "semanal", ultimo_backup_iso: null };
+  }
+
   // FIX sync (2026-08-02): materias matriculadas creadas antes del motor de
   // notas (Fase 6) no tienen criterios/_eliminados_criterios/nota_final/
   // nota_final_manual — ni siquiera como arreglo vacío o null explícito, el
@@ -2271,6 +2338,8 @@ export {
   LIMITE_ENLACES_RAPIDOS,
   LIMITE_MB_ADJUNTO,
   MAPEO_HORAS_VIEJO_A_NUEVO,
+  MONEDAS_DISPONIBLES,
+  FRECUENCIAS_BACKUP_DRIVE,
   PALETAS_DISPONIBLES,
   PARAMETROS_UNIVERSIDAD_DEFAULT,
   PRESETS_TIPOS_HORAS,
