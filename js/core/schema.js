@@ -326,6 +326,17 @@ function crearRegistroFinancieroSemestre({ semestreId, costoMatricula, becaMonto
  *    ver calcularPagosRecurrentesTranscurridos, que calcula cuánto se ha
  *    pagado hasta HOY (nunca pagos futuros) a partir de fecha_inicio/
  *    fecha_fin/frecuencia/monto_por_pago.
+ *
+ * v2.8.9: `recurrente.frecuencia` suma la opción "personalizado" (pedido
+ * explícito — no todos los gastos recurrentes caen limpio en semanal/
+ * quincenal/mensual/anual). Cuando la frecuencia es "personalizado",
+ * `recurrente.personalizado` manda y define CÓMO se repite, con 3 modos:
+ *   - "diario": todos los días, sin excepción.
+ *   - "dias_semana": solo ciertos días de la semana (ej. lunes/miércoles/
+ *     viernes) — `dias_semana` es un array de 0-6 (0=domingo ... 6=sábado,
+ *     mismo criterio que Date.prototype.getDay()).
+ *   - "cada_n_dias": cada N días exactos desde fecha_inicio, con N 100%
+ *     libre (no limitado a 2/3/4 — el usuario pone lo que necesite).
  */
 function crearGastoU({ nombre, costo, nota, semestreId, recurrente }) {
   return sellarTimestamp({
@@ -336,10 +347,18 @@ function crearGastoU({ nombre, costo, nota, semestreId, recurrente }) {
     semestre_id: semestreId || null,
     recurrente: recurrente
       ? {
-          frecuencia: recurrente.frecuencia || "mensual", // "semanal" | "quincenal" | "mensual" | "anual"
+          frecuencia: recurrente.frecuencia || "mensual", // "semanal" | "quincenal" | "mensual" | "anual" | "personalizado"
           monto_por_pago: Number(recurrente.montoPorPago) || 0,
           fecha_inicio: recurrente.fechaInicio || null, // "YYYY-MM-DD"
           fecha_fin: recurrente.fechaFin || null, // "YYYY-MM-DD" o null = sigue activo, sin fecha de fin todavía
+          personalizado:
+            recurrente.frecuencia === "personalizado"
+              ? {
+                  modo: (recurrente.personalizado && recurrente.personalizado.modo) || "diario", // "diario" | "dias_semana" | "cada_n_dias"
+                  dias_semana: (recurrente.personalizado && recurrente.personalizado.diasSemana) || [], // solo si modo === "dias_semana"
+                  cada_n_dias: (recurrente.personalizado && Number(recurrente.personalizado.cadaNDias)) || null, // solo si modo === "cada_n_dias"
+                }
+              : null,
         }
       : null,
   });
@@ -356,6 +375,13 @@ function crearGastoU({ nombre, costo, nota, semestreId, recurrente }) {
  * genere pagos fantasma por redondeo de días. "Semanal"/"quincenal" sí
  * cuentan por bloques fijos de 7/14 días porque no tienen un equivalente
  * calendario natural como mes o año.
+ *
+ * "Personalizado" (v2.8.9) delega en su propio `modo`: "diario" y
+ * "cada_n_dias" son bloques fijos de 1/N días (mismo mecanismo que
+ * semanal/quincenal); "dias_semana" recorre día por día el rango completo
+ * contando solo los días de la semana elegidos — un poco más caro en CPU
+ * que una fórmula cerrada, pero el rango nunca es tan largo (como mucho
+ * unos pocos años) como para que importe en la práctica.
  */
 function calcularPagosRecurrentesTranscurridos(recurrente) {
   if (!recurrente || !recurrente.fecha_inicio) return { cantidadPagos: 0, totalPagado: 0 };
@@ -367,7 +393,21 @@ function calcularPagosRecurrentesTranscurridos(recurrente) {
   if (fin < inicio) return { cantidadPagos: 0, totalPagado: 0 };
 
   let cantidadPagos;
-  if (recurrente.frecuencia === "semanal" || recurrente.frecuencia === "quincenal") {
+  if (recurrente.frecuencia === "personalizado" && recurrente.personalizado) {
+    const p = recurrente.personalizado;
+    if (p.modo === "dias_semana" && Array.isArray(p.dias_semana) && p.dias_semana.length > 0) {
+      cantidadPagos = 0;
+      const cursor = new Date(inicio);
+      while (cursor <= fin) {
+        if (p.dias_semana.includes(cursor.getDay())) cantidadPagos++;
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    } else {
+      const pasoDias = p.modo === "cada_n_dias" ? Math.max(1, Number(p.cada_n_dias) || 1) : 1; // "diario" = paso de 1
+      const diffMs = fin.getTime() - inicio.getTime();
+      cantidadPagos = Math.floor(diffMs / (pasoDias * 24 * 60 * 60 * 1000)) + 1;
+    }
+  } else if (recurrente.frecuencia === "semanal" || recurrente.frecuencia === "quincenal") {
     const pasoDias = recurrente.frecuencia === "semanal" ? 7 : 14;
     const diffMs = fin.getTime() - inicio.getTime();
     cantidadPagos = Math.floor(diffMs / (pasoDias * 24 * 60 * 60 * 1000)) + 1;
@@ -2322,6 +2362,12 @@ function migrarDatosAntiguos(datos) {
   datos.gastos_u.forEach((gasto) => {
     if (gasto.semestre_id === undefined) gasto.semestre_id = null;
     if (gasto.recurrente === undefined) gasto.recurrente = null;
+    // v2.8.9: gastos recurrentes creados antes de que existiera el modo
+    // "personalizado" no traen la llave `personalizado` — se rellena en
+    // null (no aplica, la frecuencia ya es semanal/quincenal/mensual/anual).
+    if (gasto.recurrente && gasto.recurrente.personalizado === undefined) {
+      gasto.recurrente.personalizado = null;
+    }
   });
 
   if (Array.isArray(datos.semestres)) {
