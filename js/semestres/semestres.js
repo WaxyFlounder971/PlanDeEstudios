@@ -836,6 +836,42 @@ function navegarASemestre(semestreId) {
   desplazarYResaltarElemento(`[data-semestre-id="${semestreId}"]`);
 }
 
+/* ===================== Horario: navegación cronológica + vínculo profesor =====================
+ * Agregado para la sección Horario (header con flechas < >). No se toca
+ * obtenerSemestresActuales/Pasadas (están ordenados desc para el listado):
+ * acá se necesita orden ASC real para poder envolver (wrap) de forma
+ * consistente sin importar si el semestre es actual o pasado.
+ */
+function obtenerSemestresOrdenCronologico() {
+  return [...(estado.datos.semestres || [])].sort((a, b) => String(a.fecha_inicio).localeCompare(String(b.fecha_inicio)));
+}
+
+/** direccion: 1 = siguiente (más nuevo), -1 = anterior. Envuelve en los extremos. */
+function obtenerSemestreAdyacente(semestreId, direccion) {
+  const lista = obtenerSemestresOrdenCronologico();
+  if (lista.length === 0) return null;
+  const idx = lista.findIndex((s) => s.id === semestreId);
+  if (idx === -1) return lista[0];
+  return lista[(idx + direccion + lista.length) % lista.length];
+}
+
+/** Vincula un profesor a una materia matriculada de un semestre (usado desde
+ *  el modal de bloque de Horario cuando se crea/vincula profesor ahí mismo,
+ *  para que quede guardado también en Semestres sin que el usuario tenga
+ *  que ir a hacerlo aparte). mm.profesor_ids se crea perezosamente porque
+ *  crearMateriaMatriculada (schema.js) todavía no lo trae por defecto. */
+function vincularProfesorAMateriaMatriculada(semestreId, mmId, profesorId) {
+  const semestre = buscarSemestreVivoPorId(semestreId);
+  if (!semestre) return;
+  const mm = (semestre.materias_matriculadas || []).find((m) => m.id === mmId);
+  if (!mm || !profesorId) return;
+  mm.profesor_ids = mm.profesor_ids || [];
+  if (!mm.profesor_ids.includes(profesorId)) mm.profesor_ids.push(profesorId);
+  sellarTimestamp(mm);
+  sellarTimestamp(semestre);
+  marcarCambioPendiente();
+}
+
 /* ===================== Listado ===================== */
 
 function renderizarSemestres(omitirRestauracionScroll = false) {
@@ -989,4 +1025,14 @@ function renderizarSemestres(omitirRestauracionScroll = false) {
   requestAnimationFrame(reafirmarScroll);
 }
 
-export { abrirModalAltaSemestre, navegarASemestre, obtenerSemestresActuales, obtenerSemestresPasados, renderizarSemestres };
+export {
+  abrirModalAltaSemestre,
+  buscarSemestreVivoPorId,
+  navegarASemestre,
+  obtenerSemestreAdyacente,
+  obtenerSemestresActuales,
+  obtenerSemestresOrdenCronologico,
+  obtenerSemestresPasados,
+  renderizarSemestres,
+  vincularProfesorAMateriaMatriculada,
+};
