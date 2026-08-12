@@ -5,6 +5,7 @@
    ========================================================================= */
 
 import { togglePerfilPopover } from "../main.js";
+import { MODALIDADES_HORARIO, crearModalidadHorario } from "../core/schema.js";
 
 const CLAVE_SIDEBAR_COLAPSADA = "sidebar_colapsada";
 
@@ -467,6 +468,105 @@ function inicializarNavegacionBotonesMouse() {
   });
 }
 
+/* ===================== Horario — Selector de modalidad ===================== */
+
+const ETIQUETAS_MODALIDAD_HORARIO = {
+  presencial: "Presencial",
+  semipresencial: "Semipresencial",
+  virtual: "Virtual",
+  personalizado: "Personalizado",
+};
+
+/**
+ * Horario — Núcleo: selector de modalidad (Presencial/Semipresencial/
+ * Virtual/Personalizado), reutilizable en el modal de creación/edición de
+ * bloque Y en el editor de excepción por semana (mismo campo en los dos
+ * lugares). No existía un componente de "pill-group con opción que revela
+ * un input de texto libre" en el proyecto (comunidad.js tiene
+ * construirGrupoPills, pero es puramente visual: no maneja estado propio ni
+ * reacciona a la opción elegida) — este sí lleva su propio estado interno,
+ * por eso vive acá en vez de ser una llamada más a ese helper.
+ *
+ * `valorInicial` es un objeto modalidad completo (ver crearModalidadHorario
+ * en schema.js), no un string suelto. Si viene vacío/inválido arranca en
+ * "presencial". El input de texto libre queda oculto (clase .oculto, mismo
+ * mecanismo que el resto de la app) salvo que la opción activa sea
+ * "personalizado".
+ *
+ * Devuelve { elemento, obtenerValor() } — mismo contrato que
+ * construirSelectorCustom en comunidad.js, así el caller no necesita leer
+ * el DOM a mano para saber el valor final al guardar el modal.
+ */
+function construirSelectorModalidad(valorInicial, onCambiar) {
+  const wrap = document.createElement("div");
+  wrap.className = "selector-modalidad-horario";
+
+  let valorActual =
+    valorInicial && MODALIDADES_HORARIO.includes(valorInicial.tipo)
+      ? { tipo: valorInicial.tipo, texto_personalizado: valorInicial.texto_personalizado || "" }
+      : crearModalidadHorario("presencial");
+
+  const grupo = document.createElement("div");
+  grupo.className = "pill-group";
+  grupo.style.cssText = "display:flex; width:100%; gap:8px;";
+
+  const inputPersonalizado = document.createElement("input");
+  inputPersonalizado.type = "text";
+  inputPersonalizado.className = "form-input";
+  inputPersonalizado.style.marginTop = "8px";
+  inputPersonalizado.placeholder = "Ej: Virtual asincrónica, laboratorio remoto...";
+  inputPersonalizado.maxLength = 60;
+  inputPersonalizado.value = valorActual.texto_personalizado || "";
+
+  function actualizarVisibilidadInput() {
+    inputPersonalizado.classList.toggle("oculto", valorActual.tipo !== "personalizado");
+  }
+
+  function repintarPills() {
+    grupo.querySelectorAll(".pill-item").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.tipo === valorActual.tipo);
+    });
+  }
+
+  MODALIDADES_HORARIO.forEach((tipo) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pill-item" + (valorActual.tipo === tipo ? " active" : "");
+    btn.style.flex = "1";
+    btn.dataset.tipo = tipo;
+    btn.textContent = ETIQUETAS_MODALIDAD_HORARIO[tipo];
+    btn.addEventListener("click", () => {
+      if (valorActual.tipo === tipo) return;
+      valorActual = crearModalidadHorario(tipo, tipo === "personalizado" ? inputPersonalizado.value : null);
+      repintarPills();
+      actualizarVisibilidadInput();
+      if (tipo === "personalizado") inputPersonalizado.focus();
+      onCambiar(valorActual);
+    });
+    grupo.appendChild(btn);
+  });
+
+  // FIX previsible ("el texto personalizado se borra al tocar otro campo"):
+  // el input actualiza valorActual en cada tecleo, no solo al cerrar el
+  // modal — así el objeto que devuelve obtenerValor() siempre está al día,
+  // sin depender de un evento "blur" que el usuario podría no disparar
+  // antes de guardar.
+  inputPersonalizado.addEventListener("input", () => {
+    valorActual = crearModalidadHorario("personalizado", inputPersonalizado.value);
+    onCambiar(valorActual);
+  });
+
+  actualizarVisibilidadInput();
+
+  wrap.appendChild(grupo);
+  wrap.appendChild(inputPersonalizado);
+
+  return {
+    elemento: wrap,
+    obtenerValor: () => valorActual,
+  };
+}
+
 export {
   CLAVE_SIDEBAR_COLAPSADA,
   abrirConfirmacion,
@@ -476,6 +576,7 @@ export {
   cerrarConfirmacion,
   cerrarDrawerEnlacesMovil,
   cerrarSidebarMovil,
+  construirSelectorModalidad,
   desplazarYResaltarElemento,
   envolverConFlechasScroll,
   inicializarBotonesCerrarModal,
