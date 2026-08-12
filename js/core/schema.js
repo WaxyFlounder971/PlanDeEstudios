@@ -908,6 +908,15 @@ function crearSemestre({ nombre, fecha_inicio, duracion_semanas, planesEstudioId
     // propia para materias matriculadas borradas, igual que
     // plan._eliminados_materias — ver fusionarSemestre en storage-merge.js.
     _eliminados_materias_matriculadas: [],
+
+    // Horario — Núcleo: colección propia por semestre, mismo patrón que
+    // materias_matriculadas (tumba hermana _eliminados_bloques_horario). Se
+    // anida acá (y no top-level como profesores/companeros) porque un
+    // bloque de horario no tiene sentido fuera de un semestre concreto —
+    // así Cronograma (prompt futuro) puede recorrer semestre.bloques_horario
+    // directo, sin necesitar cruzar por semestre_id.
+    bloques_horario: [],
+    _eliminados_bloques_horario: [],
   });
 }
 
@@ -1153,6 +1162,157 @@ function repartirEquitativoCriterio(criterio) {
     asig.valor = partePlana;
     sellarTimestamp(asig);
   });
+}
+
+/* ===================== Horario — Núcleo ===================== */
+
+/**
+ * Horario — Núcleo: valores fijos de modalidad. "personalizado" es el único
+ * que además lleva texto libre (ver crearModalidadHorario) — los otros tres
+ * ignoran texto_libre aunque venga seteado, para no arrastrar basura si el
+ * usuario cambia de opción y regresa.
+ */
+const MODALIDADES_HORARIO = ["presencial", "semipresencial", "virtual", "personalizado"];
+
+/**
+ * Horario — Núcleo: constructor del valor de modalidad, usado tanto en el
+ * bloque base como en cada excepción de semana. Se guarda como objeto (no
+ * string plano) para que "personalizado" pueda cargar su propio texto sin
+ * necesitar un segundo campo suelto a nivel de bloque.
+ */
+function crearModalidadHorario(tipo, textoPersonalizado) {
+  const tipoValido = MODALIDADES_HORARIO.includes(tipo) ? tipo : "presencial";
+  return {
+    tipo: tipoValido,
+    texto_personalizado: tipoValido === "personalizado" ? (textoPersonalizado || "") : null,
+  };
+}
+
+/**
+ * Horario — Núcleo: un bloque es la PLANTILLA base del semestre, no una
+ * clase de una semana puntual. Se define una sola vez y se proyecta a todas
+ * las semanas del semestre (ver obtenerBloqueEfectivoSemana) — el usuario
+ * puede después ajustar CUALQUIER campo para una semana específica sin tocar
+ * la plantilla (excepciones_semana), excepto materia_id/nombre_personalizado
+ * (a esta altura cambiar de materia ya no tiene sentido, sería otro bloque).
+ *
+ * `materiaId` null = bloque "Crear personalizado", usa `nombre` propio en vez
+ * de heredar el de una materia matriculada real.
+ * `color` null = hereda el color de la categoría de la materia (resuelto en
+ * el render, ver obtenerContextoMateria en comunidad.js para el mismo
+ * patrón de lookup); string = color propio editado a mano, independiente.
+ */
+function crearBloqueHorario({ materiaId, planEstudioId, nombre, apodo, grupo, dias, modalidad, aula, profesorId, enlace, notas, color }) {
+  return sellarTimestamp({
+    id: "bh_" + crypto.randomUUID(),
+    materia_id: materiaId || null,
+    plan_estudio_id: materiaId ? (planEstudioId || null) : null,
+    // Solo aplica en modo "Crear personalizado" (materia_id null).
+    nombre: materiaId ? null : (nombre || ""),
+    apodo: apodo || null,
+    grupo: grupo || null,
+    // [{ dia: "L"|"K"|"M"|"J"|"V"|"S"|"D", hora_inicio: "HH:MM", hora_fin: "HH:MM" }, ...]
+    dias: Array.isArray(dias) ? dias : [],
+    modalidad: modalidad || crearModalidadHorario("presencial"),
+    aula: aula || null,
+    // Un solo profesor por bloque, a propósito (distinto de mm.profesor_ids,
+    // que sí es arreglo) — un bloque es una sesión de clase concreta, no
+    // toda la materia, así que no necesita soportar 2+ docentes a la vez.
+    profesor_id: profesorId || null,
+    enlace: enlace || null,
+    notas: notas || null,
+    color: color || null,
+    // Ajustes finos por semana puntual (feriado, profesor sustituto, cambio
+    // de modalidad esa semana nada más, etc.) — ver crearExcepcionSemanaBloque
+    // y obtenerBloqueEfectivoSemana. Tumba propia, mismo patrón que cualquier
+    // otra colección anidada del proyecto — ver fusionarBloqueHorario en
+    // storage-merge.js.
+    excepciones_semana: [],
+    _eliminados_excepciones_semana: [],
+  });
+}
+
+/**
+ * Horario — Núcleo: ajuste puntual de UNA semana sobre un bloque base. Todo
+ * campo que se deje sin pasar (undefined) significa "no toca este campo,
+ * usa el de la plantilla" — a propósito NO se usa null como "sin cambios"
+ * porque null es un valor válido real para varios de estos campos (ej.
+ * "borrar el aula esta semana nada más"). `numeroSemana` es 1-based, igual
+ * que el resto de la app calcula semanas del semestre.
+ * `cancelada: true` apaga el bloque completo esa semana (ej. no hay clase
+ * por feriado) sin necesidad de vaciar cada campo a mano ni de borrar la
+ * excepción después para "reactivarlo" — alcanza con volver a false o
+ * borrar la excepción entera.
+ */
+function crearExcepcionSemanaBloque({ numeroSemana, apodo, grupo, dias, modalidad, aula, profesorId, enlace, notas, color, cancelada }) {
+  return sellarTimestamp({
+    id: "exc_" + crypto.randomUUID(),
+    numero_semana: Number(numeroSemana),
+    apodo,
+    grupo,
+    dias,
+    modalidad,
+    aula,
+    profesor_id: profesorId,
+    enlace,
+    notas,
+    color,
+    cancelada: !!cancelada,
+  });
+}
+
+/**
+ * Horario — Núcleo: versión EFECTIVA de un bloque para una semana concreta —
+ * fusiona la plantilla base con su excepción de esa semana, si existe. Único
+ * punto de verdad que debe usar tanto el grid semanal como Cronograma (prompt
+ * futuro) para saber qué mostrar — nunca leer bloque.campo directo si lo que
+ * importa es "qué pasa esta semana en particular".
+ * Devuelve null si esa semana está marcada como cancelada (no se renderiza
+ * ninguna tarjeta ese día/hora).
+ * `materia_id`/`nombre`/`plan_estudio_id` NUNCA se leen de la excepción — no
+ * son campos que una excepción de semana pueda tener, siempre vienen del
+ * bloque base.
+ */
+function obtenerBloqueEfectivoSemana(bloque, numeroSemana) {
+  const excepcion = (bloque.excepciones_semana || []).find((e) => e.numero_semana === numeroSemana);
+  if (excepcion && excepcion.cancelada) return null;
+
+  return {
+    id: bloque.id,
+    materia_id: bloque.materia_id,
+    plan_estudio_id: bloque.plan_estudio_id,
+    nombre: bloque.nombre,
+    apodo: excepcion && excepcion.apodo !== undefined ? excepcion.apodo : bloque.apodo,
+    grupo: excepcion && excepcion.grupo !== undefined ? excepcion.grupo : bloque.grupo,
+    dias: excepcion && excepcion.dias !== undefined ? excepcion.dias : bloque.dias,
+    modalidad: excepcion && excepcion.modalidad !== undefined ? excepcion.modalidad : bloque.modalidad,
+    aula: excepcion && excepcion.aula !== undefined ? excepcion.aula : bloque.aula,
+    profesor_id: excepcion && excepcion.profesor_id !== undefined ? excepcion.profesor_id : bloque.profesor_id,
+    enlace: excepcion && excepcion.enlace !== undefined ? excepcion.enlace : bloque.enlace,
+    notas: excepcion && excepcion.notas !== undefined ? excepcion.notas : bloque.notas,
+    color: excepcion && excepcion.color !== undefined ? excepcion.color : bloque.color,
+    // Referencia para la UI: "esta tarjeta tiene un ajuste solo para esta
+    // semana" (ej. mostrar un pequeño ícono), sin tener que comparar campo
+    // por campo contra el bloque base.
+    tiene_excepcion_esta_semana: !!excepcion,
+  };
+}
+
+/**
+ * Horario — Núcleo: número de semana 1-based dentro de un semestre, a partir
+ * de fecha_inicio — mismo cálculo de "semanas transcurridas" que ya usa
+ * obtenerEstadoEfectivoSemestre, pero acá se necesita el NÚMERO exacto (no
+ * solo actual/pasado), para direccionar excepciones_semana y para el header
+ * de Horario ("mostrado de forma clara y visible"). Clampeado entre 1 y
+ * duracion_semanas — antes de que arranque el semestre muestra semana 1,
+ * después de que termine se queda pegado en la última.
+ */
+function calcularNumeroSemanaSemestre(semestre) {
+  const inicio = new Date(semestre.fecha_inicio);
+  if (isNaN(inicio.getTime())) return 1;
+  const semanasTranscurridas = Math.floor((Date.now() - inicio.getTime()) / (7 * 24 * 60 * 60 * 1000));
+  const total = Number(semestre.duracion_semanas) || 16;
+  return Math.min(Math.max(semanasTranscurridas + 1, 1), total);
 }
 
 /**
@@ -2233,6 +2393,16 @@ function migrarDatosAntiguos(datos) {
       if (!Array.isArray(semestre._eliminados_materias_matriculadas)) {
         semestre._eliminados_materias_matriculadas = [];
       }
+      // Horario — Núcleo: relleno defensivo para semestres creados antes de
+      // esta sección — mismo motivo que el resto de esta función (evitar
+      // conflictos falsos de sync entre un dispositivo que ya tocó el
+      // semestre, quedando con estas llaves, y uno viejo que no las tiene).
+      if (!Array.isArray(semestre.bloques_horario)) semestre.bloques_horario = [];
+      if (!Array.isArray(semestre._eliminados_bloques_horario)) semestre._eliminados_bloques_horario = [];
+      semestre.bloques_horario.forEach((bloque) => {
+        if (!Array.isArray(bloque.excepciones_semana)) bloque.excepciones_semana = [];
+        if (!Array.isArray(bloque._eliminados_excepciones_semana)) bloque._eliminados_excepciones_semana = [];
+      });
       (semestre.materias_matriculadas || []).forEach((mm) => {
         if (!Array.isArray(mm.criterios)) mm.criterios = [];
         if (!Array.isArray(mm._eliminados_criterios)) mm._eliminados_criterios = [];
@@ -2598,4 +2768,10 @@ export {
   crearRegistroFinancieroSemestre,
   crearGastoU,
   calcularPagosRecurrentesTranscurridos,
+  MODALIDADES_HORARIO,
+  crearModalidadHorario,
+  crearBloqueHorario,
+  crearExcepcionSemanaBloque,
+  obtenerBloqueEfectivoSemana,
+  calcularNumeroSemanaSemestre,
 };
