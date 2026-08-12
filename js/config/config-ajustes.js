@@ -35,6 +35,112 @@ function aplicarModoRendimiento(activo) {
  * ids), y en cada cambio llaman a window.aplicarVisibilidadNavegacion()
  * (expuesta por main.js) para que el nav se actualice al toque.
  */
+/**
+ * Ajustes — Horario: configuración de días (2026-08-12): día de inicio de
+ * semana, días visibles en el grid, y nombres personalizados (hasta 3
+ * caracteres). Defaults: lunes como inicio, los 7 días visibles, sin
+ * nombres personalizados (se usan las abreviaturas por defecto).
+ */
+const DIAS_SEMANA_CONFIG = [
+  { id: "lunes", etiqueta: "Lunes", abrevDefault: "L" },
+  { id: "martes", etiqueta: "Martes", abrevDefault: "K" },
+  { id: "miercoles", etiqueta: "Miércoles", abrevDefault: "M" },
+  { id: "jueves", etiqueta: "Jueves", abrevDefault: "J" },
+  { id: "viernes", etiqueta: "Viernes", abrevDefault: "V" },
+  { id: "sabado", etiqueta: "Sábado", abrevDefault: "S" },
+  { id: "domingo", etiqueta: "Domingo", abrevDefault: "D" },
+];
+
+function renderizarConfigDiasHorario() {
+  const cfg = estado.datos.configuracion;
+  cfg.dias_visibles = cfg.dias_visibles || DIAS_SEMANA_CONFIG.map((d) => d.id);
+  cfg.nombres_dias_personalizados = cfg.nombres_dias_personalizados || {};
+  cfg.dia_inicio_semana = cfg.dia_inicio_semana || "lunes";
+
+  // Día de inicio de semana
+  const pillInicio = document.getElementById("pill-dia-inicio-semana");
+  if (pillInicio) {
+    pillInicio.innerHTML = "";
+    DIAS_SEMANA_CONFIG.forEach((dia) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pill-item" + (cfg.dia_inicio_semana === dia.id ? " active" : "");
+      btn.textContent = dia.etiqueta;
+      btn.addEventListener("click", () => {
+        cfg.dia_inicio_semana = dia.id;
+        sellarTimestamp(cfg);
+        marcarCambioPendiente();
+        renderizarConfigDiasHorario();
+      });
+      pillInicio.appendChild(btn);
+    });
+  }
+
+  // Días visibles (switch por día). Guardia: no se permite dejar 0 días
+  // visibles, mismo criterio que "nunca quedarse sin nav visible" en main.js.
+  const listaVisibles = document.getElementById("lista-dias-visibles");
+  if (listaVisibles) {
+    listaVisibles.innerHTML = "";
+    DIAS_SEMANA_CONFIG.forEach((dia) => {
+      const fila = document.createElement("div");
+      fila.className = "row-between";
+      const span = document.createElement("span");
+      span.textContent = dia.etiqueta;
+      const label = document.createElement("label");
+      label.className = "switch switch-tema";
+      const chk = document.createElement("input");
+      chk.type = "checkbox";
+      chk.checked = cfg.dias_visibles.includes(dia.id);
+      chk.onchange = () => {
+        const visibles = new Set(cfg.dias_visibles);
+        if (chk.checked) visibles.add(dia.id);
+        else visibles.delete(dia.id);
+        if (visibles.size === 0) {
+          chk.checked = true; // revierte: siempre debe quedar al menos 1 día
+          return;
+        }
+        cfg.dias_visibles = DIAS_SEMANA_CONFIG.map((d) => d.id).filter((id) => visibles.has(id));
+        sellarTimestamp(cfg);
+        marcarCambioPendiente();
+      };
+      label.appendChild(chk);
+      label.insertAdjacentHTML("beforeend", '<span class="track"><span class="thumb"></span></span>');
+      fila.appendChild(span);
+      fila.appendChild(label);
+      listaVisibles.appendChild(fila);
+    });
+  }
+
+  // Nombres personalizados (máx 3 caracteres, opcional por día)
+  const listaNombres = document.getElementById("lista-nombres-dias");
+  if (listaNombres) {
+    listaNombres.innerHTML = "";
+    DIAS_SEMANA_CONFIG.forEach((dia) => {
+      const fila = document.createElement("div");
+      fila.className = "row-between";
+      const span = document.createElement("span");
+      span.textContent = dia.etiqueta;
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "form-input";
+      input.style.maxWidth = "70px";
+      input.maxLength = 3;
+      input.placeholder = dia.abrevDefault;
+      input.value = cfg.nombres_dias_personalizados[dia.id] || "";
+      input.addEventListener("change", () => {
+        const valor = input.value.trim().slice(0, 3);
+        if (valor) cfg.nombres_dias_personalizados[dia.id] = valor;
+        else delete cfg.nombres_dias_personalizados[dia.id];
+        sellarTimestamp(cfg);
+        marcarCambioPendiente();
+      });
+      fila.appendChild(span);
+      fila.appendChild(input);
+      listaNombres.appendChild(fila);
+    });
+  }
+}
+
 const SECCIONES_TOGGLEABLES = [
   { id: "agenda", etiqueta: "Agenda", icono: "📖" },
   { id: "horario", etiqueta: "Horario", icono: "🗓️" },
@@ -407,6 +513,9 @@ function renderizarAjustes() {
   // nativo del navegador. Se construye dinámicamente desde
   // MONEDAS_DISPONIBLES, así la lista puede crecer sin tocar el markup.
   renderizarSelectorMoneda();
+
+  // Ajustes — Horario: configuración de días
+  renderizarConfigDiasHorario();
 
   // Ajustes — ocultar botones de navegación principal
   renderizarNavegacionOculta();
