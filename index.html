@@ -163,6 +163,25 @@
         </section>
 
         <section class="glass-card stack">
+          <h2>Horario</h2>
+
+          <div>
+            <span class="form-label">Día de inicio de semana</span>
+            <div class="pill-group" id="pill-dia-inicio-semana"></div>
+          </div>
+
+          <div>
+            <span class="form-label">Días visibles</span>
+            <div id="lista-dias-visibles" class="stack" style="gap:8px;"></div>
+          </div>
+
+          <div>
+            <span class="form-label">Nombres personalizados (opcional, máx. 3 caracteres)</span>
+            <div id="lista-nombres-dias" class="stack" style="gap:8px;"></div>
+          </div>
+        </section>
+
+        <section class="glass-card stack">
           <h2>Navegación</h2>
           <p class="muted" style="font-size:0.82rem; margin:0 0 4px;">Elegí qué secciones mostrar en el menú y arrastrá <span class="handle-mover" style="display:inline; padding:0 2px; cursor:default;">⋮⋮</span> para cambiar el orden. "Resumen" y "Configuración" siempre quedan visibles y fijos arriba/abajo.</p>
           <div id="lista-nav-oculta" class="stack" style="gap:8px;"></div>
@@ -240,11 +259,39 @@
         </div>
       </div>
 
-      <!-- ===================== SECCIÓN: Horario (placeholder, feature futura) ===================== -->
+      <!-- ===================== SECCIÓN: Horario ===================== -->
+      <!-- Contenido construido dinámicamente por js/horario/horario.js.
+           Header con navegación entre semestres + semana actual, grid
+           semanal, y modal de creación/edición de bloque. -->
       <div id="seccion-horario" class="stack oculto">
-        <div class="glass-panel" style="padding:24px; text-align:center;">
-          <p class="muted" style="margin:0;">🗓️ Horario está en construcción — volvé pronto.</p>
-        </div>
+        <section class="glass-panel stack" id="horario-header">
+          <div class="row-between">
+            <button type="button" class="btn btn-secondary" id="btn-horario-semestre-anterior">‹</button>
+            <div class="stack" style="align-items:center; text-align:center;">
+              <span class="muted" id="horario-nombre-semestre" style="font-size:0.82rem;"></span>
+              <span id="horario-semana-actual" style="font-weight:600;"></span>
+              <span class="muted" id="horario-fecha-actual" style="font-size:0.72rem;"></span>
+            </div>
+            <button type="button" class="btn btn-secondary" id="btn-horario-semestre-siguiente">›</button>
+          </div>
+          <div class="row-between">
+            <button type="button" class="btn btn-primary" id="btn-horario-agregar">+ Agregar</button>
+            <button type="button" class="btn btn-secondary" id="btn-horario-amigos">Amigos</button>
+            <button type="button" class="btn btn-secondary" id="btn-horario-pantalla-completa">⛶</button>
+          </div>
+        </section>
+
+        <section class="glass-panel" id="horario-grid-contenedor">
+          <div id="horario-grid"></div>
+        </section>
+      </div>
+
+      <!-- MODAL: bloque flotante (1er tap en celda vacía) -->
+      <div id="modal-bloque-flotante" class="oculto"></div>
+
+      <!-- MODAL: creación/edición completa de bloque de horario (2do tap) -->
+      <div id="modal-bloque-horario" class="modal-overlay oculto">
+        <div class="modal-contenido glass-panel stack" id="modal-bloque-horario-contenido"></div>
       </div>
 
     </main>
