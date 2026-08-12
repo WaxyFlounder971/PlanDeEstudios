@@ -545,6 +545,19 @@ function fusionarSemestre(semestreLocal, semestreRemoto) {
     tumbasMatriculadas
   );
 
+  // Horario — Núcleo: mismo motivo exacto que materias_matriculadas arriba
+  // — colección anidada propia del semestre, con su propia tumba, fundida
+  // aparte para no perder bloques creados/editados en cada lado.
+  const tumbasBloquesHorario = fusionarTumbas(
+    semestreLocal._eliminados_bloques_horario,
+    semestreRemoto._eliminados_bloques_horario
+  );
+  const bloquesHorarioFundidos = fusionarBloquesHorario(
+    semestreLocal.bloques_horario,
+    semestreRemoto.bloques_horario,
+    tumbasBloquesHorario
+  );
+
   // FIX sync (Entrega 3 — el badge de conflicto de semestre existía en la
   // UI desde la Fase 1 pero nunca podía dispararse: esta función elegía un
   // ganador a ciegas con esMasReciente, sin pasar nunca por
@@ -566,10 +579,23 @@ function fusionarSemestre(semestreLocal, semestreRemoto) {
   // materias_matriculadas ni su tumba) para que este chequeo represente de
   // verdad lo que pertenece a ESTE nivel (nombre, fechas, estado_manual,
   // etc.), y no lo que ya se resuelve por separado un nivel más abajo.
-  const { materias_matriculadas: _mmLocal, _eliminados_materias_matriculadas: _tumbaLocal, ...semestreLocalPlano } =
-    semestreLocal;
-  const { materias_matriculadas: _mmRemoto, _eliminados_materias_matriculadas: _tumbaRemoto, ...semestreRemotoPlano } =
-    semestreRemoto;
+  // Horario — Núcleo: bloques_horario se excluye por el mismo motivo exacto
+  // (se resella en cada edición de un bloque/excepción, sin tocar el
+  // semestre en sí).
+  const {
+    materias_matriculadas: _mmLocal,
+    _eliminados_materias_matriculadas: _tumbaLocal,
+    bloques_horario: _bhLocal,
+    _eliminados_bloques_horario: _tbhLocal,
+    ...semestreLocalPlano
+  } = semestreLocal;
+  const {
+    materias_matriculadas: _mmRemoto,
+    _eliminados_materias_matriculadas: _tumbaRemoto,
+    bloques_horario: _bhRemoto,
+    _eliminados_bloques_horario: _tbhRemoto,
+    ...semestreRemotoPlano
+  } = semestreRemoto;
 
   const conConflicto = marcarConflictoSiCorresponde(semestreLocalPlano, semestreRemotoPlano, "semestre");
   const base = conConflicto || (esMasReciente(semestreRemoto, semestreLocal) ? semestreRemoto : semestreLocal);
@@ -578,6 +604,8 @@ function fusionarSemestre(semestreLocal, semestreRemoto) {
     ...base,
     materias_matriculadas: matriculadasFundidas,
     _eliminados_materias_matriculadas: tumbasMatriculadas,
+    bloques_horario: bloquesHorarioFundidos,
+    _eliminados_bloques_horario: tumbasBloquesHorario,
   };
 }
 
@@ -722,6 +750,75 @@ function fusionarMateriasMatriculadas(local, remoto, tumbas) {
 
 
 /**
+ * Horario — Núcleo: mismo patrón exacto que fusionarMateriaMatriculada/
+ * fusionarCriterio — funde un bloque de horario individual junto con su
+ * colección anidada de excepciones_semana y su propia tumba
+ * (_eliminados_excepciones_semana, ver crearBloqueHorario en schema.js).
+ * excepciones_semana no tiene NINGUNA sub-colección propia (a diferencia de
+ * mm→criterios→asignaciones), así que se funde directo con
+ * fusionarColeccion genérica — no hace falta un fusionarExcepcionSemana
+ * dedicado, igual que profesores/companeros/agenda tampoco lo necesitan.
+ *
+ * Igual que fusionarSemestre/fusionarMateriaMatriculada: un bloque se
+ * resella en CADA edición de una excepción de semana (crear/editar/borrar),
+ * así que dos dispositivos tocando SEMANAS DISTINTAS del mismo bloque sin
+ * conocerse entre sí terminarían con el mismo _version_base y contenido
+ * distinto si se comparara el bloque completo — por eso la detección de
+ * conflicto real se hace solo sobre la "foto plana" (sin
+ * excepciones_semana ni su tumba), que ya se resuelve aparte arriba.
+ */
+function fusionarBloqueHorario(bloqueLocal, bloqueRemoto) {
+  if (!bloqueLocal) return bloqueRemoto;
+  if (!bloqueRemoto) return bloqueLocal;
+  if (bloqueLocal === bloqueRemoto) return bloqueLocal;
+
+  const tumbasExcepciones = fusionarTumbas(
+    bloqueLocal._eliminados_excepciones_semana,
+    bloqueRemoto._eliminados_excepciones_semana
+  );
+  const excepcionesFundidas = fusionarColeccion(
+    bloqueLocal.excepciones_semana,
+    bloqueRemoto.excepciones_semana,
+    tumbasExcepciones,
+    "excepción de horario por semana"
+  );
+
+  const { excepciones_semana: _eLocal, _eliminados_excepciones_semana: _teLocal, ...bloqueLocalPlano } = bloqueLocal;
+  const { excepciones_semana: _eRemoto, _eliminados_excepciones_semana: _teRemoto, ...bloqueRemotoPlano } = bloqueRemoto;
+
+  const conConflicto = marcarConflictoSiCorresponde(bloqueLocalPlano, bloqueRemotoPlano, "bloque de horario");
+  const base = conConflicto || (esMasReciente(bloqueRemoto, bloqueLocal) ? bloqueRemoto : bloqueLocal);
+
+  return {
+    ...base,
+    excepciones_semana: excepcionesFundidas,
+    _eliminados_excepciones_semana: tumbasExcepciones,
+  };
+}
+
+/** Equivalente de fusionarMateriasMatriculadas pero para `bloques_horario`. */
+function fusionarBloquesHorario(local, remoto, tumbas) {
+  const listaLocal = Array.isArray(local) ? local : [];
+  const listaRemota = Array.isArray(remoto) ? remoto : [];
+  const idsEliminados = new Set(tumbas.map((t) => t.id));
+
+  const porId = new Map();
+  listaLocal.forEach((b) => porId.set(b.id, b));
+  listaRemota.forEach((b) => {
+    observarEntidadRemota(b);
+    const existente = porId.get(b.id);
+    porId.set(b.id, existente ? fusionarBloqueHorario(existente, b) : b);
+  });
+
+  const resultado = [];
+  porId.forEach((bloque, id) => {
+    if (!idsEliminados.has(id)) resultado.push(bloque);
+  });
+  return resultado;
+}
+
+
+/**
  * Semestres y Notas — Fase 1: equivalente de fusionarPlanesEstudio (arriba)
  * pero para la colección de nivel superior `semestres` — cada semestre se
  * identifica por su `id` y, si existe en ambos lados, se funde con
@@ -859,4 +956,6 @@ export {
   fusionarMateriasMatriculadas,
   fusionarCriterio,
   fusionarCriterios,
+  fusionarBloqueHorario,
+  fusionarBloquesHorario,
 };
