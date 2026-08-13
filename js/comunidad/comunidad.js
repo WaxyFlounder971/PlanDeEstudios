@@ -3885,4 +3885,4 @@ function renderizarComunidad() {
   cont.appendChild(estado.tabComunidad === "companeros" ? construirSeccionCompaneros() : construirSeccionProfesores());
 }
 
-export { inicializarComunidad, renderizarComunidad };
+export { inicializarComunidad, renderizarComunidad, abrirModalAltaProfesor };
