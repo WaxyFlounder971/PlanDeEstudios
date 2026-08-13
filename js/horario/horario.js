@@ -12,8 +12,8 @@ import { obtenerSemestreAdyacente, obtenerSemestresOrdenCronologico, buscarSemes
 import { obtenerPlanActivo } from "../plan/plan-esquema.js";
 import { abrirModalBloqueHorario } from "./horario-modal.js";
 
-const HORA_INICIO_GRID = 6; // 06:00
-const HORA_FIN_GRID = 22; // 22:00
+const HORA_INICIO_GRID = 0; // 00:00
+const HORA_FIN_GRID = 24; // 24:00
 const PX_POR_MIN = 1.2;
 const ALTO_GRID = (HORA_FIN_GRID - HORA_INICIO_GRID) * 60 * PX_POR_MIN;
 
@@ -178,7 +178,7 @@ function construirColumnaDia(dia, bloquesDia, semestre) {
     const rect = col.getBoundingClientRect();
     const offsetY = ev.clientY - rect.top;
     const minutos = HORA_INICIO_GRID * 60 + Math.round(offsetY / PX_POR_MIN / 15) * 15;
-    mostrarBloqueFlotante(semestre, dia, minutos);
+    mostrarBloqueFlotante(semestre, dia, minutos, ev.clientX, ev.clientY);
   });
 
   return col;
@@ -186,7 +186,7 @@ function construirColumnaDia(dia, bloquesDia, semestre) {
 
 /* ===================== Bloque flotante (1er tap → borrador; 2do tap → modal) ===================== */
 
-function mostrarBloqueFlotante(semestre, dia, minutosInicio) {
+function mostrarBloqueFlotante(semestre, dia, minutosInicio, clientX, clientY) {
   const cont = document.getElementById("modal-bloque-flotante");
   if (!cont) return;
   const plan = obtenerPlanActivo();
@@ -195,11 +195,18 @@ function mostrarBloqueFlotante(semestre, dia, minutosInicio) {
   const finMin = minutosInicio + duracion;
   const horaFin = `${String(Math.floor(finMin / 60)).padStart(2, "0")}:${String(finMin % 60).padStart(2, "0")}`;
 
+  // Se posiciona pegado a donde tocó el usuario (no centrado en pantalla),
+  // clampeado para que la tarjeta nunca quede cortada por el borde.
+  const ANCHO_TARJETA = 200;
+  const ALTO_TARJETA_APROX = 60;
+  const left = Math.min(Math.max(8, clientX - ANCHO_TARJETA / 2), window.innerWidth - ANCHO_TARJETA - 8);
+  const top = Math.min(Math.max(8, clientY - ALTO_TARJETA_APROX - 12), window.innerHeight - ALTO_TARJETA_APROX - 8);
+
   cont.classList.remove("oculto");
   cont.innerHTML = `
     <div id="horario-flotante-tarjeta" class="glass-panel" style="position:fixed; z-index:200; padding:8px 12px; border-radius:10px;
-      backdrop-filter:blur(14px); border:1px solid rgba(255,255,255,0.3); cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,0.35);
-      top:50%; left:50%; transform:translate(-50%,-50%);">
+      width:${ANCHO_TARJETA}px; backdrop-filter:blur(14px); border:1px solid rgba(255,255,255,0.3); cursor:pointer;
+      box-shadow:0 6px 20px rgba(0,0,0,0.35); top:${top}px; left:${left}px;">
       <div style="font-weight:600; font-size:0.85rem;">Nuevo bloque — ${dia.etiqueta}</div>
       <div class="muted" style="font-size:0.75rem;">${horaInicio} – ${horaFin} · tocá para completar</div>
     </div>

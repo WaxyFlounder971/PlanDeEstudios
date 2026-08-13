@@ -6,10 +6,12 @@
 import { crearBloqueHorario, crearModalidadHorario, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
-import { construirSelectorModalidad, mostrarToast } from "../ui/componentes.js";
+import { mostrarToast } from "../ui/componentes.js";
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 import { buscarSemestreVivoPorId, vincularProfesorAMateriaMatriculada } from "../semestres/semestres.js";
 import { abrirModalAltaProfesor } from "../comunidad/comunidad.js";
+
+const ETIQUETAS_MODALIDAD = { presencial: "Presencial", semipresencial: "Semipresencial", virtual: "Virtual", personalizado: "Personalizado" };
 
 let contextoActual = null; // { semestreId, bloqueId } de la sesión de edición abierta
 
@@ -26,6 +28,108 @@ function obtenerDiasConfig() {
 function cerrarModalBloqueHorario() {
   document.getElementById("modal-bloque-horario")?.classList.add("oculto");
   contextoActual = null;
+}
+
+/**
+ * Select personalizado (mismo patrón que "Escala de notas" en Ajustes):
+ * un <select> real oculto como dueño del valor, y un botón + lista propios
+ * como parte visible, para que el fondo/letras se vean bien en cualquier
+ * tema en vez del popup nativo del navegador. `opciones` es [{valor, etiqueta}].
+ */
+function construirSelectPersonalizado({ opciones, valorInicial, etiquetaVacia, onCambiar }) {
+  const wrap = document.createElement("div");
+  wrap.className = "select-custom";
+
+  const oculto = document.createElement("select");
+  oculto.hidden = true;
+  oculto.setAttribute("aria-hidden", "true");
+  oculto.tabIndex = -1;
+
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.className = "form-input select-custom-boton";
+  const lista = document.createElement("ul");
+  lista.className = "select-custom-lista oculto";
+
+  function etiquetaDe(valor) {
+    const opt = opciones.find((o) => o.valor === valor);
+    return opt ? opt.etiqueta : etiquetaVacia;
+  }
+  boton.textContent = etiquetaDe(valorInicial);
+
+  function posicionar() {
+    const r = boton.getBoundingClientRect();
+    lista.style.position = "fixed";
+    lista.style.top = `${r.bottom + 6}px`;
+    lista.style.left = `${r.left}px`;
+    lista.style.width = `${r.width}px`;
+  }
+  function cerrarSiExterno(e) {
+    if (lista.contains(e.target)) return;
+    cerrar();
+  }
+  function cerrar() {
+    lista.classList.add("oculto");
+    boton.setAttribute("aria-expanded", "false");
+    if (lista.parentElement === document.body) wrap.appendChild(lista);
+    window.removeEventListener("scroll", cerrarSiExterno, true);
+    window.removeEventListener("resize", cerrar);
+  }
+  function abrir() {
+    document.querySelectorAll(".select-custom-lista").forEach((l) => {
+      if (l !== lista) {
+        l.classList.add("oculto");
+        if (l.parentElement === document.body && l._volverA) l._volverA.appendChild(l);
+      }
+    });
+    lista._volverA = wrap;
+    document.body.appendChild(lista);
+    posicionar();
+    lista.classList.remove("oculto");
+    boton.setAttribute("aria-expanded", "true");
+    window.addEventListener("scroll", cerrarSiExterno, true);
+    window.addEventListener("resize", cerrar);
+  }
+
+  function redibujarOpciones() {
+    lista.innerHTML = "";
+    opciones.forEach((op) => {
+      const item = document.createElement("li");
+      item.className = "select-custom-opcion" + (op.valor === oculto.value ? " activa" : "");
+      item.textContent = op.etiqueta;
+      item.addEventListener("click", () => {
+        oculto.value = op.valor;
+        boton.textContent = op.etiqueta;
+        lista.querySelectorAll(".select-custom-opcion").forEach((li) => li.classList.remove("activa"));
+        item.classList.add("activa");
+        cerrar();
+        onCambiar(op.valor);
+      });
+      lista.appendChild(item);
+    });
+  }
+
+  oculto.value = valorInicial || "";
+  redibujarOpciones();
+  boton.setAttribute("aria-expanded", "false");
+  boton.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (lista.classList.contains("oculto")) abrir();
+    else cerrar();
+  });
+
+  wrap.appendChild(oculto);
+  wrap.appendChild(boton);
+  wrap.appendChild(lista);
+
+  return {
+    elemento: wrap,
+    setValor: (valor) => {
+      oculto.value = valor || "";
+      boton.textContent = etiquetaDe(valor);
+      redibujarOpciones();
+    },
+  };
 }
 
 /* ===================== Apertura ===================== */
@@ -83,42 +187,53 @@ function renderizarFormulario(semestre, bloque, estadoForm) {
   cont.innerHTML = `
     <h3>${bloque ? "Editar bloque" : "Nuevo bloque"}</h3>
 
-    <label class="form-label">Materia</label>
-    <select id="hb-select-materia" class="form-input">
-      <option value="">— Crear personalizado —</option>
-      ${materiasDisponibles
-        .map(
-          ({ mm, materia }) =>
-            `<option value="${mm.id}" ${estadoForm.materiaId === materia.id ? "selected" : ""}>${materia.nombre}</option>`
-        )
-        .join("")}
-    </select>
-    <input type="text" id="hb-nombre-personalizado" class="form-input oculto" placeholder="Nombre del bloque" value="${estadoForm.nombrePersonalizado}" />
+    <div>
+      <label class="form-label">Materia</label>
+      <div id="hb-select-materia-zona"></div>
+      <input type="text" id="hb-nombre-personalizado" class="form-input oculto" placeholder="Nombre del bloque" value="${estadoForm.nombrePersonalizado}" style="margin-top:8px;" />
+    </div>
 
-    <label class="form-label">Apodo (opcional)</label>
-    <input type="text" id="hb-apodo" class="form-input" value="${estadoForm.apodo}" placeholder="Ej. AP" />
+    <div>
+      <label class="form-label">Apodo (opcional)</label>
+      <input type="text" id="hb-apodo" class="form-input" value="${estadoForm.apodo}" placeholder="Ej. AP" />
+    </div>
 
-    <label class="form-label">Grupo (opcional)</label>
-    <input type="text" id="hb-grupo" class="form-input" value="${estadoForm.grupo}" placeholder="Ej. Grupo 2" />
+    <div>
+      <label class="form-label">Grupo (opcional)</label>
+      <input type="text" id="hb-grupo" class="form-input" value="${estadoForm.grupo}" placeholder="Ej. Grupo 2" />
+    </div>
 
-    <label class="form-label">Días</label>
-    <div id="hb-dias-pills" class="pill-group"></div>
-    <div id="hb-horarios-por-dia" class="stack"></div>
+    <div>
+      <label class="form-label">Días</label>
+      <div id="hb-dias-pills" class="pill-group"></div>
+      <div id="hb-horarios-por-dia" class="stack" style="margin-top:10px;"></div>
+    </div>
 
-    <label class="form-label">Modalidad</label>
-    <div id="hb-selector-modalidad"></div>
+    <div>
+      <label class="form-label">Modalidad</label>
+      <div id="hb-selector-modalidad"></div>
+      <input type="text" id="hb-modalidad-personalizada" class="form-input oculto" placeholder="Ej. Virtual asincrónica" maxlength="60" style="margin-top:8px;" value="${estadoForm.modalidad?.tipo === "personalizado" ? estadoForm.modalidad.texto_personalizado || "" : ""}" />
+    </div>
 
-    <label class="form-label">Aula (opcional)</label>
-    <input type="text" id="hb-aula" class="form-input" value="${estadoForm.aula}" />
+    <div>
+      <label class="form-label">Aula (opcional)</label>
+      <input type="text" id="hb-aula" class="form-input" value="${estadoForm.aula}" />
+    </div>
 
-    <label class="form-label">Profesor</label>
-    <div id="hb-profesor-zona"></div>
+    <div>
+      <label class="form-label">Enlace (opcional)</label>
+      <input type="text" id="hb-enlace" class="form-input" value="${estadoForm.enlace}" placeholder="https://..." />
+    </div>
 
-    <label class="form-label">Enlace (opcional)</label>
-    <input type="text" id="hb-enlace" class="form-input" value="${estadoForm.enlace}" placeholder="https://..." />
+    <div>
+      <label class="form-label">Profesor</label>
+      <div id="hb-profesor-zona"></div>
+    </div>
 
-    <label class="form-label">Notas</label>
-    <textarea id="hb-notas" class="form-input">${estadoForm.notas}</textarea>
+    <div>
+      <label class="form-label">Notas</label>
+      <textarea id="hb-notas" class="form-textarea" style="resize:none; overflow:hidden; min-height:44px;">${estadoForm.notas}</textarea>
+    </div>
 
     <div class="row-between" style="margin-top:12px;">
       ${bloque ? `<button type="button" class="btn btn-danger" id="hb-btn-borrar">Borrar</button>` : "<span></span>"}
@@ -129,46 +244,73 @@ function renderizarFormulario(semestre, bloque, estadoForm) {
     </div>
   `;
 
-  // Materia / personalizado
-  const selectMateria = document.getElementById("hb-select-materia");
+  // Materia / personalizado (select propio, mismo look que Ajustes)
   const inputNombrePersonalizado = document.getElementById("hb-nombre-personalizado");
-  const sincronizarMateria = () => {
-    const mmId = selectMateria.value;
-    if (!mmId) {
-      estadoForm.materiaId = null;
-      estadoForm.planEstudioId = null;
-      inputNombrePersonalizado.classList.remove("oculto");
-    } else {
-      const encontrada = materiasDisponibles.find((x) => x.mm.id === mmId);
-      estadoForm.materiaId = encontrada ? encontrada.materia.id : null;
-      estadoForm.planEstudioId = encontrada ? encontrada.mm.plan_estudio_id : null;
-      inputNombrePersonalizado.classList.add("oculto");
-      // Autocompleta profesor si la materia matriculada ya tiene uno vinculado.
-      if (encontrada && (encontrada.mm.profesor_ids || []).length > 0 && !estadoForm.profesorId) {
-        estadoForm.profesorId = encontrada.mm.profesor_ids[0];
-      }
-      renderizarZonaProfesor(semestre, estadoForm);
-    }
-  };
-  selectMateria.value = estadoForm.materiaId
+  const opcionesMateria = [
+    { valor: "", etiqueta: "— Crear personalizado —" },
+    ...materiasDisponibles.map(({ mm, materia }) => ({ valor: mm.id, etiqueta: materia.nombre })),
+  ];
+  const valorMateriaInicial = estadoForm.materiaId
     ? materiasDisponibles.find((x) => x.materia.id === estadoForm.materiaId)?.mm.id || ""
     : "";
-  if (!selectMateria.value) inputNombrePersonalizado.classList.remove("oculto");
+  const selectorMateria = construirSelectPersonalizado({
+    opciones: opcionesMateria,
+    valorInicial: valorMateriaInicial,
+    etiquetaVacia: "— Crear personalizado —",
+    onCambiar: (mmId) => {
+      if (!mmId) {
+        estadoForm.materiaId = null;
+        estadoForm.planEstudioId = null;
+        inputNombrePersonalizado.classList.remove("oculto");
+      } else {
+        const encontrada = materiasDisponibles.find((x) => x.mm.id === mmId);
+        estadoForm.materiaId = encontrada ? encontrada.materia.id : null;
+        estadoForm.planEstudioId = encontrada ? encontrada.mm.plan_estudio_id : null;
+        inputNombrePersonalizado.classList.add("oculto");
+        if (encontrada && (encontrada.mm.profesor_ids || []).length > 0 && !estadoForm.profesorId) {
+          estadoForm.profesorId = encontrada.mm.profesor_ids[0];
+        }
+        renderizarZonaProfesor(semestre, estadoForm);
+      }
+    },
+  });
+  document.getElementById("hb-select-materia-zona").appendChild(selectorMateria.elemento);
+  if (!valorMateriaInicial) inputNombrePersonalizado.classList.remove("oculto");
   else inputNombrePersonalizado.classList.add("oculto");
-  selectMateria.addEventListener("change", sincronizarMateria);
 
   // Días + horas por día
   renderizarDiasYHoras(dias, estadoForm);
 
-  // Modalidad (reutiliza el selector ya existente en el proyecto)
-  const zonaModalidad = document.getElementById("hb-selector-modalidad");
-  const selectorModalidad = construirSelectorModalidad(estadoForm.modalidad, (nuevaModalidad) => {
-    estadoForm.modalidad = nuevaModalidad;
+  // Modalidad (dropdown propio, en vez de pills, para que nunca se corte)
+  const inputModalidadPersonalizada = document.getElementById("hb-modalidad-personalizada");
+  const opcionesModalidad = Object.entries(ETIQUETAS_MODALIDAD).map(([valor, etiqueta]) => ({ valor, etiqueta }));
+  const selectorModalidad = construirSelectPersonalizado({
+    opciones: opcionesModalidad,
+    valorInicial: estadoForm.modalidad?.tipo || "presencial",
+    etiquetaVacia: "Elegir modalidad",
+    onCambiar: (tipo) => {
+      estadoForm.modalidad = crearModalidadHorario(tipo, tipo === "personalizado" ? inputModalidadPersonalizada.value : null);
+      inputModalidadPersonalizada.classList.toggle("oculto", tipo !== "personalizado");
+      if (tipo === "personalizado") inputModalidadPersonalizada.focus();
+    },
   });
-  zonaModalidad.appendChild(selectorModalidad.elemento);
+  document.getElementById("hb-selector-modalidad").appendChild(selectorModalidad.elemento);
+  inputModalidadPersonalizada.classList.toggle("oculto", estadoForm.modalidad?.tipo !== "personalizado");
+  inputModalidadPersonalizada.addEventListener("input", () => {
+    estadoForm.modalidad = crearModalidadHorario("personalizado", inputModalidadPersonalizada.value);
+  });
 
   // Profesor
   renderizarZonaProfesor(semestre, estadoForm);
+
+  // Notas: se agranda solo hacia abajo, nunca a lo ancho ni con handle de resize.
+  const textareaNotas = document.getElementById("hb-notas");
+  const autoAjustarNotas = () => {
+    textareaNotas.style.height = "auto";
+    textareaNotas.style.height = `${textareaNotas.scrollHeight}px`;
+  };
+  textareaNotas.addEventListener("input", autoAjustarNotas);
+  requestAnimationFrame(autoAjustarNotas);
 
   // Botones
   document.getElementById("hb-btn-cancelar").addEventListener("click", cerrarModalBloqueHorario);
@@ -259,28 +401,26 @@ function renderizarZonaProfesor(semestre, estadoForm) {
   const profesores = estado.datos.profesores || [];
   zona.innerHTML = `
     <div class="stack" style="gap:6px;">
-      ${
-        profesores.length > 0
-          ? `<select id="hb-select-profesor-existente" class="form-input">
-               <option value="">Elegir profesor existente…</option>
-               ${profesores.map((p) => `<option value="${p.id}">${p.nombre}</option>`).join("")}
-             </select>`
-          : ""
-      }
+      ${profesores.length > 0 ? `<div id="hb-select-profesor-existente-zona"></div>` : ""}
       <button type="button" class="btn btn-secondary" id="hb-btn-crear-profesor">+ Crear profesor</button>
     </div>
   `;
 
-  const selectExistente = document.getElementById("hb-select-profesor-existente");
-  if (selectExistente) {
-    selectExistente.addEventListener("change", () => {
-      if (!selectExistente.value) return;
-      estadoForm.profesorId = selectExistente.value;
-      // Deja también el vínculo guardado en la materia matriculada, si aplica.
-      const mm = (semestre.materias_matriculadas || []).find((m) => m.materia_id === estadoForm.materiaId);
-      if (mm) vincularProfesorAMateriaMatriculada(semestre.id, mm.id, estadoForm.profesorId);
-      renderizarZonaProfesor(semestre, estadoForm);
+  const zonaSelectExistente = document.getElementById("hb-select-profesor-existente-zona");
+  if (zonaSelectExistente) {
+    const selectorExistente = construirSelectPersonalizado({
+      opciones: profesores.map((p) => ({ valor: p.id, etiqueta: p.nombre })),
+      valorInicial: "",
+      etiquetaVacia: "Elegir profesor existente…",
+      onCambiar: (profesorId) => {
+        estadoForm.profesorId = profesorId;
+        // Deja también el vínculo guardado en la materia matriculada, si aplica.
+        const mm = (semestre.materias_matriculadas || []).find((m) => m.materia_id === estadoForm.materiaId);
+        if (mm) vincularProfesorAMateriaMatriculada(semestre.id, mm.id, profesorId);
+        renderizarZonaProfesor(semestre, estadoForm);
+      },
     });
+    zonaSelectExistente.appendChild(selectorExistente.elemento);
   }
 
   document.getElementById("hb-btn-crear-profesor").addEventListener("click", () => {
