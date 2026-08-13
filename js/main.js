@@ -21,6 +21,7 @@ import { inicializarModalEditarPlanInfo, inicializarModalGestionPlanes, renderiz
 import { inicializarModalCapturasPDF, inicializarModalInstruccionesImportacion } from "./plan/plan-importacion.js";
 import { inicializarResponsivoListaPlan, renderizarPlanEstudios } from "./plan/plan-vista-lista.js";
 import { renderizarSemestres } from "./semestres/semestres.js";
+import { inicializarHorario, renderizarHorario } from "./horario/horario.js";
 import { abrirConfirmacion, agregarLongPress, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, restaurarEstadoSidebar } from "./ui/componentes.js";
 import { aplicarPaleta, aplicarTemaGuardadoLocalmente } from "./ui/tema.js";
 
@@ -190,6 +191,7 @@ window.addEventListener("DOMContentLoaded", () => {
   // #seccion-comunidad ya existe si esa es la última sección que el usuario
   // tenía activa).
   inicializarComunidad();
+  inicializarHorario();
   inicializarBotonesCerrarModal();
   inicializarPullToRefresh();
 
@@ -440,6 +442,7 @@ function mostrarApp() {
   if (typeof renderizarSemestres === "function") renderizarSemestres();
   if (typeof renderizarComunidad === "function") renderizarComunidad();
   if (typeof renderizarFinanzas === "function") renderizarFinanzas();
+  if (typeof renderizarHorario === "function") renderizarHorario();
   // Bug 3: antes mostrarSeccion() solo se llamaba desde clics del nav, así que
   // tras un refresh la sección de Plan de Estudios se quedaba con la clase
   // "oculto" del HTML aunque su contenido sí se hubiera renderizado.
