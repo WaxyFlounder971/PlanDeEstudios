@@ -1351,4 +1351,5 @@ export {
   renderizarAjustes,
   renderizarSeccionBackupDrive,
   aplicarModoRendimiento,
+  DIAS_SEMANA_CONFIG,
 };
