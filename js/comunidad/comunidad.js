@@ -1550,7 +1550,7 @@ function abrirModalAltaProfesor(profesorExistente = null, preseleccionMmId = nul
       overlay.remove();
       if (algunaFallo) mostrarToast("Alguna materia vinculada ya no existía — se guardaron las demás.");
       renderizarComunidad();
-      if (onGuardado) onGuardado();
+      if (onGuardado) onGuardado(nuevo);
       // Pedido explícito: "desde que agregas profesor te debe permitir
       // vincularlo" — apenas se crea, se reabre el modal ya en modo
       // edición para que el botón "Vincular" quede disponible al toque,
