@@ -266,18 +266,18 @@
       <div id="seccion-horario" class="stack oculto">
         <section class="glass-panel stack" id="horario-header">
           <div class="row-between">
-            <button type="button" class="btn btn-secondary" id="btn-horario-semestre-anterior">‹</button>
-            <div class="stack" style="align-items:center; text-align:center;">
+            <button type="button" class="btn-icono-fantasma" id="btn-horario-semestre-anterior" style="font-size:1.3rem;">‹</button>
+            <div class="stack" style="align-items:center; text-align:center; gap:2px;">
               <span class="muted" id="horario-nombre-semestre" style="font-size:0.82rem;"></span>
               <span id="horario-semana-actual" style="font-weight:600;"></span>
               <span class="muted" id="horario-fecha-actual" style="font-size:0.72rem;"></span>
             </div>
-            <button type="button" class="btn btn-secondary" id="btn-horario-semestre-siguiente">›</button>
+            <button type="button" class="btn-icono-fantasma" id="btn-horario-semestre-siguiente" style="font-size:1.3rem;">›</button>
           </div>
-          <div class="row-between">
-            <button type="button" class="btn btn-primary" id="btn-horario-agregar">+ Agregar</button>
-            <button type="button" class="btn btn-secondary" id="btn-horario-amigos">Amigos</button>
-            <button type="button" class="btn btn-secondary" id="btn-horario-pantalla-completa">⛶</button>
+          <div style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center;">
+            <button type="button" class="btn btn-primary" id="btn-horario-agregar" style="justify-self:start;">+ Agregar</button>
+            <button type="button" class="btn-icono-fantasma" id="btn-horario-pantalla-completa" style="justify-self:center; font-size:1.3rem;">⛶</button>
+            <button type="button" class="btn btn-secondary" id="btn-horario-amigos" style="justify-self:end;">Amigos</button>
           </div>
         </section>
 
@@ -291,7 +291,9 @@
 
       <!-- MODAL: creación/edición completa de bloque de horario (2do tap) -->
       <div id="modal-bloque-horario" class="modal-overlay oculto">
-        <div class="glass-card modal-card stack" id="modal-bloque-horario-contenido"></div>
+        <div class="glass-card modal-card modal-card-ancha stack">
+          <div id="modal-bloque-horario-contenido" class="stack"></div>
+        </div>
       </div>
 
     </main>
