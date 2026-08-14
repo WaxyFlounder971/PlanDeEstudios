@@ -947,7 +947,7 @@ function renderizarSemestres(omitirRestauracionScroll = false) {
     // que "pasados".
     const seccionActuales = document.createElement("section");
     seccionActuales.className = "glass-card stack";
-    seccionActuales.innerHTML = `<h3 style="margin:0;">${actuales.length === 1 ? "Semestre actual" : "Semestres actuales"}</h3>`;
+    seccionActuales.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">${actuales.length === 1 ? "Semestre actual" : "Semestres actuales"}</h3>`;
     actuales.forEach((s) => seccionActuales.appendChild(construirTarjetaSemestre(s, obtenerPlanPorId, renderizarSemestres, onEditar, onBorrar, true)));
 
     const filaBotones = document.createElement("div");
@@ -976,7 +976,7 @@ function renderizarSemestres(omitirRestauracionScroll = false) {
   if (pasados.length > 0) {
     const seccionPasados = document.createElement("section");
     seccionPasados.className = "glass-card stack";
-    seccionPasados.innerHTML = `<h3 style="margin:0;">${pasados.length === 1 ? "Semestre pasado" : "Semestres pasados"}</h3>`;
+    seccionPasados.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">${pasados.length === 1 ? "Semestre pasado" : "Semestres pasados"}</h3>`;
     pasados.forEach((s) => seccionPasados.appendChild(construirTarjetaSemestre(s, obtenerPlanPorId, renderizarSemestres, onEditar, onBorrar, true)));
     cont.appendChild(seccionPasados);
   }
