@@ -11,7 +11,7 @@ import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 import { buscarSemestreVivoPorId, vincularProfesorAMateriaMatriculada } from "../semestres/semestres.js";
 import { abrirModalAltaProfesor } from "../comunidad/comunidad.js";
 
-const ETIQUETAS_MODALIDAD = { presencial: "Presencial", semipresencial: "Semipresencial", virtual: "Virtual", personalizado: "Personalizado" };
+const ETIQUETAS_MODALIDAD = { presencial: "Presencial", virtual: "Virtual", asincronica: "Asincrónica" };
 
 let contextoActual = null; // { semestreId, bloqueId } de la sesión de edición abierta
 
@@ -28,6 +28,32 @@ function obtenerDiasConfig() {
 function cerrarModalBloqueHorario() {
   document.getElementById("modal-bloque-horario")?.classList.add("oculto");
   contextoActual = null;
+}
+
+function limpiarSelectsFlotantes() {
+  // Los selects personalizados abiertos "escapan" temporalmente al <body>
+  // para posicionarse con position:fixed — si el modal se cierra con uno
+  // abierto (X, click en el fondo, ESC), no pasan por cerrarModalBloqueHorario
+  // y quedan flotando invisibles pero presentes en el DOM. Por eso se
+  // observa el modal directamente en vez de depender de un solo punto de
+  // cierre.
+  document.querySelectorAll(".select-custom-lista").forEach((l) => {
+    if (l.parentElement === document.body) l.remove();
+  });
+}
+
+let observadorModalInstalado = false;
+function instalarObservadorCierreModal() {
+  if (observadorModalInstalado) return;
+  const overlay = document.getElementById("modal-bloque-horario");
+  if (!overlay) return;
+  observadorModalInstalado = true;
+  new MutationObserver(() => {
+    if (overlay.classList.contains("oculto")) {
+      limpiarSelectsFlotantes();
+      contextoActual = null;
+    }
+  }).observe(overlay, { attributes: true, attributeFilter: ["class"] });
 }
 
 /**
@@ -65,7 +91,7 @@ function construirSelectPersonalizado({ opciones, valorInicial, etiquetaVacia, o
     lista.style.width = `${r.width}px`;
   }
   function cerrarSiExterno(e) {
-    if (lista.contains(e.target)) return;
+    if (lista.contains(e.target) || boton.contains(e.target)) return;
     cerrar();
   }
   function cerrar() {
@@ -74,6 +100,7 @@ function construirSelectPersonalizado({ opciones, valorInicial, etiquetaVacia, o
     if (lista.parentElement === document.body) wrap.appendChild(lista);
     window.removeEventListener("scroll", cerrarSiExterno, true);
     window.removeEventListener("resize", cerrar);
+    document.removeEventListener("click", cerrarSiExterno, true);
   }
   function abrir() {
     document.querySelectorAll(".select-custom-lista").forEach((l) => {
@@ -89,6 +116,7 @@ function construirSelectPersonalizado({ opciones, valorInicial, etiquetaVacia, o
     boton.setAttribute("aria-expanded", "true");
     window.addEventListener("scroll", cerrarSiExterno, true);
     window.addEventListener("resize", cerrar);
+    setTimeout(() => document.addEventListener("click", cerrarSiExterno, true), 0);
   }
 
   function redibujarOpciones() {
@@ -135,6 +163,7 @@ function construirSelectPersonalizado({ opciones, valorInicial, etiquetaVacia, o
 /* ===================== Apertura ===================== */
 
 function abrirModalBloqueHorario({ semestreId, bloqueId, diaPreseleccionado, horaInicioPreseleccionada, horaFinPreseleccionada }) {
+  instalarObservadorCierreModal();
   const semestre = buscarSemestreVivoPorId(semestreId);
   if (!semestre) {
     mostrarToast("Ese semestre ya no existe");
@@ -210,12 +239,6 @@ function renderizarFormulario(semestre, bloque, estadoForm) {
     </div>
 
     <div>
-      <label class="form-label">Modalidad</label>
-      <div id="hb-selector-modalidad"></div>
-      <input type="text" id="hb-modalidad-personalizada" class="form-input oculto" placeholder="Ej. Virtual asincrónica" maxlength="60" style="margin-top:8px;" value="${estadoForm.modalidad?.tipo === "personalizado" ? estadoForm.modalidad.texto_personalizado || "" : ""}" />
-    </div>
-
-    <div>
       <label class="form-label">Aula (opcional)</label>
       <input type="text" id="hb-aula" class="form-input" value="${estadoForm.aula}" />
     </div>
@@ -278,27 +301,8 @@ function renderizarFormulario(semestre, bloque, estadoForm) {
   if (!valorMateriaInicial) inputNombrePersonalizado.classList.remove("oculto");
   else inputNombrePersonalizado.classList.add("oculto");
 
-  // Días + horas por día
+  // Días + horas por día (cada día trae su propia modalidad, ver abajo)
   renderizarDiasYHoras(dias, estadoForm);
-
-  // Modalidad (dropdown propio, en vez de pills, para que nunca se corte)
-  const inputModalidadPersonalizada = document.getElementById("hb-modalidad-personalizada");
-  const opcionesModalidad = Object.entries(ETIQUETAS_MODALIDAD).map(([valor, etiqueta]) => ({ valor, etiqueta }));
-  const selectorModalidad = construirSelectPersonalizado({
-    opciones: opcionesModalidad,
-    valorInicial: estadoForm.modalidad?.tipo || "presencial",
-    etiquetaVacia: "Elegir modalidad",
-    onCambiar: (tipo) => {
-      estadoForm.modalidad = crearModalidadHorario(tipo, tipo === "personalizado" ? inputModalidadPersonalizada.value : null);
-      inputModalidadPersonalizada.classList.toggle("oculto", tipo !== "personalizado");
-      if (tipo === "personalizado") inputModalidadPersonalizada.focus();
-    },
-  });
-  document.getElementById("hb-selector-modalidad").appendChild(selectorModalidad.elemento);
-  inputModalidadPersonalizada.classList.toggle("oculto", estadoForm.modalidad?.tipo !== "personalizado");
-  inputModalidadPersonalizada.addEventListener("input", () => {
-    estadoForm.modalidad = crearModalidadHorario("personalizado", inputModalidadPersonalizada.value);
-  });
 
   // Profesor
   renderizarZonaProfesor(semestre, estadoForm);
@@ -319,6 +323,67 @@ function renderizarFormulario(semestre, bloque, estadoForm) {
   if (btnBorrar) btnBorrar.addEventListener("click", () => borrarBloque(semestre, bloque));
 }
 
+/**
+ * Selector de hora personalizado: mismo look que el selector de materia
+ * (2 dropdowns propios lado a lado, HH y MM) en vez del <input type="time">
+ * nativo — evita el ícono de reloj negro invisible en modo oscuro y hace
+ * que se vea EXACTAMENTE igual al resto de selects de la app.
+ */
+function construirSelectorHora({ valorInicial, onCambiar }) {
+  const [hIni, mIni] = String(valorInicial || "").split(":");
+  const opcionesHora = Array.from({ length: 24 }, (_, h) => ({ valor: String(h).padStart(2, "0"), etiqueta: String(h).padStart(2, "0") }));
+  const opcionesMinuto = Array.from({ length: 12 }, (_, i) => {
+    const m = String(i * 5).padStart(2, "0");
+    return { valor: m, etiqueta: m };
+  });
+
+  const wrap = document.createElement("div");
+  wrap.className = "horario-selector-hora";
+
+  let horaActual = hIni || "";
+  let minutoActual = mIni || "";
+  const emitir = () => {
+    if (horaActual && minutoActual) onCambiar(`${horaActual}:${minutoActual}`);
+  };
+
+  const selectorH = construirSelectPersonalizado({
+    opciones: opcionesHora,
+    valorInicial: horaActual,
+    etiquetaVacia: "HH",
+    onCambiar: (v) => {
+      horaActual = v;
+      emitir();
+    },
+  });
+  const separador = document.createElement("span");
+  separador.className = "horario-selector-hora-separador";
+  separador.textContent = ":";
+  const selectorM = construirSelectPersonalizado({
+    opciones: opcionesMinuto,
+    valorInicial: minutoActual,
+    etiquetaVacia: "MM",
+    onCambiar: (v) => {
+      minutoActual = v;
+      emitir();
+    },
+  });
+
+  wrap.appendChild(selectorH.elemento);
+  wrap.appendChild(separador);
+  wrap.appendChild(selectorM.elemento);
+
+  return {
+    elemento: wrap,
+    setValor: (valor) => {
+      const [h, m] = String(valor || "").split(":");
+      horaActual = h || "";
+      minutoActual = m || "";
+      selectorH.setValor(horaActual);
+      selectorM.setValor(minutoActual);
+    },
+  };
+}
+
 function renderizarDiasYHoras(dias, estadoForm) {
   const pillsCont = document.getElementById("hb-dias-pills");
   const horariosCont = document.getElementById("hb-horarios-por-dia");
@@ -330,48 +395,110 @@ function renderizarDiasYHoras(dias, estadoForm) {
     horariosCont.innerHTML = "";
     estadoForm.dias.forEach((d) => {
       const fila = document.createElement("div");
-      fila.className = "row-between";
-      fila.innerHTML = `
-        <span class="muted" style="min-width:70px;">${dias.find((x) => x.abrevDefault === d.dia)?.etiqueta || d.dia}</span>
-        <input type="time" class="form-input hb-hora-inicio" value="${d.hora_inicio || ""}" style="max-width:110px;" />
-        <input type="time" class="form-input hb-hora-fin" value="${d.hora_fin || ""}" style="max-width:110px;" />
-      `;
-      const inputInicio = fila.querySelector(".hb-hora-inicio");
-      const inputFin = fila.querySelector(".hb-hora-fin");
+      fila.className = "stack";
+      fila.style.cssText = "gap:6px; padding:8px 0; border-bottom:1px solid rgba(150,150,170,0.15);";
+      const filaSuperior = document.createElement("div");
+      filaSuperior.className = "row-between";
+      const etiquetaDia = document.createElement("span");
+      etiquetaDia.className = "muted";
+      etiquetaDia.style.minWidth = "70px";
+      etiquetaDia.textContent = dias.find((x) => x.abrevDefault === d.dia)?.etiqueta || d.dia;
+      filaSuperior.appendChild(etiquetaDia);
+
+      const zonaHoraInicio = document.createElement("div");
+      const zonaHoraFin = document.createElement("div");
+      filaSuperior.appendChild(zonaHoraInicio);
+      filaSuperior.appendChild(zonaHoraFin);
+      fila.appendChild(filaSuperior);
+
+      const zonaModalidad = document.createElement("div");
+      zonaModalidad.style.maxWidth = "180px";
+      fila.appendChild(zonaModalidad);
+
       let finTocadoAMano = !!d.hora_fin;
-      inputInicio.addEventListener("change", () => {
-        d.hora_inicio = inputInicio.value;
-        if (!finTocadoAMano) {
-          d.hora_fin = inputInicio.value;
-          inputFin.value = inputInicio.value;
-        }
+      const selectorInicio = construirSelectorHora({
+        valorInicial: d.hora_inicio,
+        onCambiar: (valor) => {
+          d.hora_inicio = valor;
+          if (!finTocadoAMano) {
+            d.hora_fin = valor;
+            selectorFin.setValor(valor);
+          }
+        },
       });
-      inputFin.addEventListener("change", () => {
-        d.hora_fin = inputFin.value;
-        finTocadoAMano = true;
+      const selectorFin = construirSelectorHora({
+        valorInicial: d.hora_fin,
+        onCambiar: (valor) => {
+          d.hora_fin = valor;
+          finTocadoAMano = true;
+        },
       });
+      zonaHoraInicio.appendChild(selectorInicio.elemento);
+      zonaHoraFin.appendChild(selectorFin.elemento);
+
+      const opcionesModalidad = Object.entries(ETIQUETAS_MODALIDAD).map(([valor, etiqueta]) => ({ valor, etiqueta }));
+      const selectorModalidadDia = construirSelectPersonalizado({
+        opciones: opcionesModalidad,
+        valorInicial: d.modalidad || "presencial",
+        etiquetaVacia: "Modalidad",
+        onCambiar: (tipo) => {
+          d.modalidad = tipo;
+        },
+      });
+      if (!d.modalidad) d.modalidad = "presencial";
+      zonaModalidad.appendChild(selectorModalidadDia.elemento);
+
       horariosCont.appendChild(fila);
     });
   };
 
-  pillsCont.innerHTML = "";
-  dias.forEach((dia) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "pill-item" + (estaActivo(dia.abrevDefault) ? " active" : "");
-    btn.textContent = dia.etiquetaCorta;
-    btn.addEventListener("click", () => {
-      if (estaActivo(dia.abrevDefault)) {
-        estadoForm.dias = estadoForm.dias.filter((d) => d.dia !== dia.abrevDefault);
-      } else {
-        estadoForm.dias.push({ dia: dia.abrevDefault, hora_inicio: "", hora_fin: "" });
-      }
-      btn.classList.toggle("active");
-      redibujarHorarios();
+  // Etiquetas configuradas en Ajustes (respeta lo que el usuario haya
+  // puesto ahí, ej. "Mar" en vez de "M") — si no caben todas en una sola
+  // fila sin cortarse, se pasa a grid de 4, 3 o 2 columnas (nunca trunca).
+  const construirPills = () => {
+    pillsCont.innerHTML = "";
+    pillsCont.className = "pill-group";
+    pillsCont.style.cssText = "";
+    dias.forEach((dia) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pill-item" + (estaActivo(dia.abrevDefault) ? " active" : "");
+      btn.textContent = dia.etiquetaCorta;
+      btn.addEventListener("click", () => {
+        if (estaActivo(dia.abrevDefault)) {
+          estadoForm.dias = estadoForm.dias.filter((d) => d.dia !== dia.abrevDefault);
+        } else {
+          // Autorelleno: si ya hay al menos un día con horas puestas, se
+          // copian como punto de partida (igual queda editable después).
+          const referencia = estadoForm.dias.find((d) => d.hora_inicio && d.hora_fin);
+          estadoForm.dias.push({
+            dia: dia.abrevDefault,
+            hora_inicio: referencia ? referencia.hora_inicio : "",
+            hora_fin: referencia ? referencia.hora_fin : "",
+            modalidad: referencia ? referencia.modalidad : "presencial",
+          });
+        }
+        btn.classList.toggle("active");
+        redibujarHorarios();
+      });
+      pillsCont.appendChild(btn);
     });
-    pillsCont.appendChild(btn);
-  });
 
+    // Mide si entran todas en una fila; si no, arma el grid 4-3 / 3-3-1 / 2-2-2-1.
+    requestAnimationFrame(() => {
+      const botones = Array.from(pillsCont.children);
+      if (botones.length === 0) return;
+      const anchoNecesario = botones.reduce((suma, b) => suma + b.offsetWidth + 8, 0);
+      const anchoDisponible = pillsCont.parentElement.clientWidth || pillsCont.clientWidth;
+      if (anchoNecesario <= anchoDisponible) return; // entran bien en una fila, no tocar nada
+      const anchoPromedio = anchoNecesario / botones.length;
+      let columnas = Math.max(2, Math.min(4, Math.floor(anchoDisponible / anchoPromedio)));
+      pillsCont.classList.add("horario-dias-pill-grid");
+      pillsCont.style.gridTemplateColumns = `repeat(${columnas}, 1fr)`;
+    });
+  };
+
+  construirPills();
   redibujarHorarios();
 }
 

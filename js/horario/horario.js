@@ -1,24 +1,29 @@
 /* =========================================================================
-   HORARIO — Núcleo (grid semanal, navegación entre semestres, config de días)
-   No incluye el modal completo de creación/edición (ver horario-modal.js) ni
-   "Horario entre Amigos" (prompt aparte).
+   HORARIO — Núcleo (grid semanal, navegación entre semanas, config de días)
+   No incluye "Horario entre Amigos" (prompt aparte).
    ========================================================================= */
 
 import { calcularNumeroSemanaSemestre, obtenerBloqueEfectivoSemana } from "../core/schema.js";
 import { estado } from "../core/storage.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
-import { obtenerSemestreAdyacente, obtenerSemestresOrdenCronologico, buscarSemestreVivoPorId } from "../semestres/semestres.js";
+import { obtenerSemestresOrdenCronologico, buscarSemestreVivoPorId } from "../semestres/semestres.js";
 import { obtenerPlanActivo } from "../plan/plan-esquema.js";
 import { abrirModalBloqueHorario } from "./horario-modal.js";
 
-const HORA_INICIO_GRID = 0; // 00:00
-const HORA_FIN_GRID = 24; // 24:00
-const PX_POR_MIN = 1.2;
-const ALTO_GRID = (HORA_FIN_GRID - HORA_INICIO_GRID) * 60 * PX_POR_MIN;
+const PX_POR_MIN_EXPANDIDO = 0.84; // 30% menos que antes (1.2), pedido explícito
+const MIN_PX_POR_MIN_COMPACTO = 0.34; // piso para que nunca quede ilegible en pantallas muy chicas
+const ALTO_RESERVADO_CHROME = 230; // header de horario + nav inferior, aproximado
 
-// Transitorio (no persistido): semestre mostrado actualmente en Horario.
+// Transitorio (no persistido): qué se está mostrando ahora mismo en Horario.
 estado.horarioSemestreId = estado.horarioSemestreId || null;
+estado.horarioNumeroSemana = estado.horarioNumeroSemana || null;
+estado.horarioExpandido = estado.horarioExpandido || false;
+
+// Cache del último semestre/semana renderizados, para que centrarVistaInicial
+// no tenga que recalcular nada por su cuenta.
+let cacheSemestre = null;
+let cacheNumeroSemana = null;
 
 /* ===================== Helpers de datos ===================== */
 
@@ -26,11 +31,6 @@ function obtenerPlanPorId(planId) {
   return (estado.datos.planes_estudio || []).find((p) => p.id === planId) || null;
 }
 
-/**
- * Resuelve el semestre a mostrar: el guardado en estado.horarioSemestreId si
- * sigue existiendo, si no el semestre "actual" más reciente, si no el
- * primero en orden cronológico, si no null (todavía no hay semestres).
- */
 function obtenerSemestreHorarioActual() {
   if (estado.horarioSemestreId) {
     const vivo = buscarSemestreVivoPorId(estado.horarioSemestreId);
@@ -42,6 +42,15 @@ function obtenerSemestreHorarioActual() {
   const elegido = actuales[actuales.length - 1] || cronologico[cronologico.length - 1];
   estado.horarioSemestreId = elegido.id;
   return elegido;
+}
+
+function obtenerNumeroSemanaMostrado(semestre) {
+  if (estado.horarioNumeroSemana == null) {
+    estado.horarioNumeroSemana = calcularNumeroSemanaSemestre(semestre);
+  }
+  const total = Number(semestre.duracion_semanas) || 16;
+  estado.horarioNumeroSemana = Math.min(Math.max(estado.horarioNumeroSemana, 1), total);
+  return estado.horarioNumeroSemana;
 }
 
 function minutosDesdeHora(horaStr) {
@@ -66,18 +75,25 @@ function obtenerNombreBloque(bloqueEfectivo) {
   return (materia && materia.nombre) || "Materia";
 }
 
+/**
+ * "Para no gastar espacio": primer nombre + primer apellido completos,
+ * cualquier palabra extra (segundo nombre, segundo apellido) se reduce a
+ * su inicial. Ej. "Wagner Andrés Obando Salas" -> "Wagner Obando A. S."
+ */
+function abreviarNombreProfesor(nombreCompleto) {
+  const partes = String(nombreCompleto || "").trim().split(/\s+/).filter(Boolean);
+  if (partes.length <= 2) return partes.join(" ");
+  const base = partes.slice(0, 2).join(" ");
+  const iniciales = partes.slice(2).map((p) => p[0].toUpperCase() + ".").join(" ");
+  return `${base} ${iniciales}`;
+}
+
 function obtenerNombreProfesor(profesorId) {
   if (!profesorId) return "";
   const prof = (estado.datos.profesores || []).find((p) => p.id === profesorId);
-  return prof ? prof.nombre : "";
+  return prof ? abreviarNombreProfesor(prof.nombre) : "";
 }
 
-/**
- * Devuelve DIAS_SEMANA_CONFIG filtrado a dias_visibles y rotado para que
- * empiece en dia_inicio_semana. abrevDefault ES el código de letra
- * ("L"|"K"|"M"|"J"|"V"|"S"|"D") que ya usa bloque.dias[].dia en schema.js —
- * único punto de verdad para esa conversión, no se inventa un mapeo aparte.
- */
 function obtenerDiasVisiblesOrdenados() {
   const cfg = estado.datos.configuracion;
   const visiblesIds = new Set(cfg.dias_visibles || DIAS_SEMANA_CONFIG.map((d) => d.id));
@@ -87,7 +103,26 @@ function obtenerDiasVisiblesOrdenados() {
   const rotado = [...DIAS_SEMANA_CONFIG.slice(idxInicio), ...DIAS_SEMANA_CONFIG.slice(0, idxInicio)];
   return rotado
     .filter((d) => visiblesIds.has(d.id))
-    .map((d) => ({ ...d, etiquetaCorta: nombres[d.id] || d.abrevDefault }));
+    .map((d, idx) => ({ ...d, etiquetaCorta: nombres[d.id] || d.abrevDefault, offsetDesdeInicio: idx }));
+}
+
+/**
+ * Fecha calendario real de un día dentro de la semana mostrada, asumiendo
+ * que fecha_inicio del semestre es el día 1 de la semana 1 (mismo criterio
+ * simple que ya usa calcularNumeroSemanaSemestre para no inventar otro).
+ */
+function calcularFechaDelDia(semestre, numeroSemana, offsetDesdeInicio) {
+  const inicio = new Date(semestre.fecha_inicio);
+  if (isNaN(inicio.getTime())) return null;
+  const fecha = new Date(inicio);
+  fecha.setDate(inicio.getDate() + (numeroSemana - 1) * 7 + offsetDesdeInicio);
+  return fecha;
+}
+
+function esHoy(fecha) {
+  if (!fecha) return false;
+  const hoy = new Date();
+  return fecha.getDate() === hoy.getDate() && fecha.getMonth() === hoy.getMonth() && fecha.getFullYear() === hoy.getFullYear();
 }
 
 /* ===================== Choques de horario (apilado tipo cartas) ===================== */
@@ -105,56 +140,50 @@ function calcularLanesDia(bloquesDia) {
     }
     b.lane = lane;
   });
-  const totalLanes = finesLane.length || 1;
-  ordenados.forEach((b) => (b.totalLanes = totalLanes));
   return ordenados;
 }
 
 /* ===================== Construcción del grid ===================== */
 
 function construirBloquesEfectivosSemana(semestre, numeroSemana) {
-  return (semestre.bloques_horario || [])
-    .map((b) => obtenerBloqueEfectivoSemana(b, numeroSemana))
-    .filter(Boolean);
+  return (semestre.bloques_horario || []).map((b) => obtenerBloqueEfectivoSemana(b, numeroSemana)).filter(Boolean);
 }
 
-function construirColumnaHoras() {
+function construirColumnaHoras(pxPorMin, altoGrid) {
   const col = document.createElement("div");
   col.className = "horario-col-horas";
-  col.style.cssText = `position:relative; width:44px; flex-shrink:0; height:${ALTO_GRID}px;`;
-  for (let h = HORA_INICIO_GRID; h <= HORA_FIN_GRID; h++) {
-    const top = (h - HORA_INICIO_GRID) * 60 * PX_POR_MIN;
+  col.style.cssText = `position:relative; width:38px; flex-shrink:0; height:${altoGrid}px;`;
+  for (let h = 0; h <= 24; h++) {
+    const top = h * 60 * pxPorMin;
     const etiqueta = document.createElement("span");
     etiqueta.className = "muted";
-    etiqueta.style.cssText = `position:absolute; top:${top - 7}px; right:6px; font-size:0.68rem;`;
+    etiqueta.style.cssText = `position:absolute; top:${top - 7}px; right:6px; font-size:0.62rem;`;
     etiqueta.textContent = String(h).padStart(2, "0") + ":00";
     col.appendChild(etiqueta);
   }
   return col;
 }
 
-function construirLineasHorarias() {
-  // Línea marcada en cada hora en punto, línea tenue en cada media hora.
+function construirLineasHorarias(pxPorMin) {
   const stops = [];
-  for (let min = 0; min <= (HORA_FIN_GRID - HORA_INICIO_GRID) * 60; min += 30) {
-    const y = min * PX_POR_MIN;
-    const grosor = min % 60 === 0 ? 1 : 1;
+  for (let min = 0; min <= 24 * 60; min += 30) {
+    const y = min * pxPorMin;
     const opacidad = min % 60 === 0 ? 0.28 : 0.1;
-    stops.push(`linear-gradient(rgba(150,150,170,${opacidad}), rgba(150,150,170,${opacidad})) 0 ${y}px / 100% ${grosor}px no-repeat`);
+    stops.push(`linear-gradient(rgba(150,150,170,${opacidad}), rgba(150,150,170,${opacidad})) 0 ${y}px / 100% 1px no-repeat`);
   }
   return stops.join(",\n");
 }
 
-function construirColumnaDia(dia, bloquesDia, semestre) {
+function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid) {
   const col = document.createElement("div");
   col.className = "horario-col-dia";
   col.dataset.diaCodigo = dia.abrevDefault;
-  col.style.cssText = `position:relative; flex:1; min-width:64px; height:${ALTO_GRID}px; background:${construirLineasHorarias()}; cursor:pointer; border-left:1px solid rgba(150,150,170,0.15);`;
+  col.style.cssText = `position:relative; flex:1; min-width:56px; height:${altoGrid}px; background:${construirLineasHorarias(pxPorMin)}; cursor:pointer; border-left:1px solid rgba(150,150,170,0.15);`;
 
   const conLanes = calcularLanesDia(bloquesDia);
   conLanes.forEach((b) => {
-    const top = Math.max(0, (b.inicioMin - HORA_INICIO_GRID * 60) * PX_POR_MIN);
-    const alto = Math.max(20, (b.finMin - b.inicioMin) * PX_POR_MIN);
+    const top = Math.max(0, b.inicioMin * pxPorMin);
+    const alto = Math.max(24, (b.finMin - b.inicioMin) * pxPorMin);
     const offsetPx = b.lane * 12;
     const tarjeta = document.createElement("div");
     tarjeta.className = "horario-bloque-tarjeta";
@@ -162,9 +191,10 @@ function construirColumnaDia(dia, bloquesDia, semestre) {
       background:${b.color}; color:#fff; border-radius:8px; padding:3px 6px; overflow:hidden;
       box-shadow:0 2px 6px rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.25);`;
     tarjeta.innerHTML = `
-      <div style="font-size:11px; font-weight:600; line-height:1.15;">${b.nombreCorto}</div>
-      ${b.profesorNombre ? `<div style="font-size:9px; opacity:0.9;">${b.profesorNombre}</div>` : ""}
-      ${b.aula ? `<div style="font-size:9px; opacity:0.85;">${b.aula}</div>` : ""}
+      <div style="font-size:16.5px; font-weight:600; line-height:1.15;">${b.nombreCorto}</div>
+      ${b.profesorNombre ? `<div style="font-size:13.5px; opacity:0.9;">${b.profesorNombre}</div>` : ""}
+      ${b.aula ? `<div style="font-size:13.5px; opacity:0.85;">${b.aula}</div>` : ""}
+      ${b.enlace ? `<a href="${b.enlace}" target="_blank" rel="noopener" class="horario-btn-entrar-clase" onclick="event.stopPropagation()">Entrar a clase</a>` : ""}
     `;
     tarjeta.addEventListener("click", (ev) => {
       ev.stopPropagation();
@@ -174,10 +204,10 @@ function construirColumnaDia(dia, bloquesDia, semestre) {
   });
 
   col.addEventListener("click", (ev) => {
-    if (ev.target !== col) return; // solo celda vacía, no sobre una tarjeta
+    if (ev.target !== col) return;
     const rect = col.getBoundingClientRect();
     const offsetY = ev.clientY - rect.top;
-    const minutos = HORA_INICIO_GRID * 60 + Math.round(offsetY / PX_POR_MIN / 15) * 15;
+    const minutos = Math.round(offsetY / pxPorMin / 15) * 15;
     mostrarBloqueFlotante(semestre, dia, minutos, ev.clientX, ev.clientY);
   });
 
@@ -195,8 +225,6 @@ function mostrarBloqueFlotante(semestre, dia, minutosInicio, clientX, clientY) {
   const finMin = minutosInicio + duracion;
   const horaFin = `${String(Math.floor(finMin / 60)).padStart(2, "0")}:${String(finMin % 60).padStart(2, "0")}`;
 
-  // Se posiciona pegado a donde tocó el usuario (no centrado en pantalla),
-  // clampeado para que la tarjeta nunca quede cortada por el borde.
   const ANCHO_TARJETA = 200;
   const ALTO_TARJETA_APROX = 60;
   const left = Math.min(Math.max(8, clientX - ANCHO_TARJETA / 2), window.innerWidth - ANCHO_TARJETA - 8);
@@ -230,9 +258,47 @@ function mostrarBloqueFlotante(semestre, dia, minutosInicio, clientX, clientY) {
   });
 }
 
-/* ===================== Header: navegación + semana actual ===================== */
+/* ===================== Selector de semestre (tap en el nombre) ===================== */
 
-function renderizarHeaderHorario(semestre) {
+function abrirSelectorSemestre() {
+  const modal = document.getElementById("modal-selector-semestre");
+  const cont = document.getElementById("selector-semestre-contenido");
+  if (!modal || !cont) return;
+  const semestres = obtenerSemestresOrdenCronologico();
+
+  cont.innerHTML = `
+    <h3>Elegir semestre</h3>
+    <div class="stack" id="selector-semestre-lista" style="gap:8px; max-height:60vh; overflow-y:auto;"></div>
+  `;
+  const lista = document.getElementById("selector-semestre-lista");
+  if (semestres.length === 0) {
+    lista.innerHTML = `<p class="muted">No hay semestres todavía.</p>`;
+  }
+  semestres.forEach((s) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "glass-panel";
+    item.style.cssText = "text-align:left; padding:10px 14px; cursor:pointer; border:none; width:100%;";
+    const inicio = new Date(s.fecha_inicio);
+    const finEstimado = new Date(inicio);
+    finEstimado.setDate(inicio.getDate() + (Number(s.duracion_semanas) || 16) * 7);
+    const fmt = (d) => (isNaN(d.getTime()) ? "" : d.toLocaleDateString("es-CR", { day: "numeric", month: "short", year: "numeric" }));
+    item.innerHTML = `<div style="font-weight:600;">${s.nombre}</div><div class="muted" style="font-size:0.78rem;">${fmt(inicio)} – ${fmt(finEstimado)}</div>`;
+    item.addEventListener("click", () => {
+      estado.horarioSemestreId = s.id;
+      estado.horarioNumeroSemana = null; // recalcula al entrar a ese semestre
+      modal.classList.add("oculto");
+      renderizarHorario();
+    });
+    lista.appendChild(item);
+  });
+
+  modal.classList.remove("oculto");
+}
+
+/* ===================== Header ===================== */
+
+function renderizarHeaderHorario(semestre, numeroSemana) {
   const nombreEl = document.getElementById("horario-nombre-semestre");
   const semanaEl = document.getElementById("horario-semana-actual");
   const fechaEl = document.getElementById("horario-fecha-actual");
@@ -243,21 +309,41 @@ function renderizarHeaderHorario(semestre) {
     return;
   }
   if (nombreEl) nombreEl.textContent = semestre.nombre || "";
-  const numeroSemana = calcularNumeroSemanaSemestre(semestre);
-  if (semanaEl) semanaEl.textContent = numeroSemana ? `Semana ${numeroSemana}` : "Fuera de rango";
-  if (fechaEl) {
-    fechaEl.textContent = new Date().toLocaleDateString("es-CR", { day: "numeric", month: "short" });
+  if (semanaEl) semanaEl.textContent = `Semana ${numeroSemana}`;
+  if (fechaEl) fechaEl.textContent = new Date().toLocaleDateString("es-CR", { day: "numeric", month: "short" });
+}
+
+/* ===================== Vista inicial (centra en la clase más temprana / hora actual) ===================== */
+
+function centrarVistaInicial(cont, dias, bloquesEfectivos, pxPorMin) {
+  const hoy = new Date();
+  const diaHoy = dias.find((d) => esHoy(calcularFechaDelDia(cacheSemestre, cacheNumeroSemana, d.offsetDesdeInicio)));
+  let minutoReferencia = hoy.getHours() * 60 + hoy.getMinutes();
+  if (diaHoy) {
+    const minutosClasesHoy = bloquesEfectivos
+      .filter((b) => (b.dias || []).some((d) => d.dia === diaHoy.abrevDefault))
+      .flatMap((b) => (b.dias || []).filter((d) => d.dia === diaHoy.abrevDefault).map((d) => minutosDesdeHora(d.hora_inicio)));
+    if (minutosClasesHoy.length > 0) minutoReferencia = Math.min(...minutosClasesHoy);
   }
-  return numeroSemana;
+  const destino = Math.max(0, minutoReferencia * pxPorMin - 80);
+  if (document.fullscreenElement) {
+    document.fullscreenElement.scrollTop = destino;
+  } else if (estado.horarioExpandido) {
+    window.scrollTo({ top: window.scrollY + destino - window.innerHeight / 3 });
+  }
 }
 
 /* ===================== Render principal ===================== */
 
-function renderizarHorario() {
+function renderizarHorarioInterno() {
   const cont = document.getElementById("horario-grid");
-  if (!cont) return;
+  const contenedor = document.getElementById("horario-grid-contenedor");
+  if (!cont || !contenedor) return;
   const semestre = obtenerSemestreHorarioActual();
-  const numeroSemana = renderizarHeaderHorario(semestre);
+  const numeroSemana = semestre ? obtenerNumeroSemanaMostrado(semestre) : null;
+  cacheSemestre = semestre;
+  cacheNumeroSemana = numeroSemana;
+  renderizarHeaderHorario(semestre, numeroSemana);
   cont.innerHTML = "";
 
   if (!semestre) {
@@ -266,24 +352,47 @@ function renderizarHorario() {
   }
 
   const dias = obtenerDiasVisiblesOrdenados();
-  const bloquesEfectivos = construirBloquesEfectivosSemana(semestre, numeroSemana || 1);
+  const bloquesEfectivos = construirBloquesEfectivosSemana(semestre, numeroSemana);
 
-  // Encabezado de días
+  // Alto disponible sin scroll propio: calculado contra la pantalla real,
+  // salvo que el usuario haya abierto la barra inferior ("expandido"), en
+  // cuyo caso se usa el alto real de 24h y el scroll pasa a ser el de la
+  // página completa (la tarjeta deja su propio overflow).
+  const altoDisponible = Math.max(280, window.innerHeight - ALTO_RESERVADO_CHROME);
+  const pxPorMinCompacto = Math.max(MIN_PX_POR_MIN_COMPACTO, altoDisponible / (24 * 60));
+  const pxPorMin = estado.horarioExpandido || document.fullscreenElement ? PX_POR_MIN_EXPANDIDO : pxPorMinCompacto;
+  const altoGrid = 24 * 60 * pxPorMin;
+
+  contenedor.style.overflowY = estado.horarioExpandido && !document.fullscreenElement ? "visible" : "auto";
+  contenedor.style.maxHeight = document.fullscreenElement ? "100vh" : "";
+
+  // Fila compartida de scroll horizontal: encabezado de días + grid van
+  // DENTRO del mismo contenedor con overflow-x, así nunca se desalinean
+  // al scrollear en teléfono (antes eran 2 filas con overflow separado).
+  const scrollHorizontal = document.createElement("div");
+  scrollHorizontal.style.cssText = "overflow-x:auto; overflow-y:hidden;";
+  const columnaAncha = document.createElement("div");
+  columnaAncha.style.cssText = "display:flex; flex-direction:column; min-width:100%; width:max-content;";
+
   const headerFila = document.createElement("div");
   headerFila.style.cssText = "display:flex; position:sticky; top:0; z-index:5; background:inherit;";
   const espaciador = document.createElement("div");
-  espaciador.style.cssText = "width:44px; flex-shrink:0;";
+  espaciador.style.cssText = "width:38px; flex-shrink:0;";
   headerFila.appendChild(espaciador);
   dias.forEach((dia) => {
+    const fecha = calcularFechaDelDia(semestre, numeroSemana, dia.offsetDesdeInicio);
     const h = document.createElement("div");
-    h.style.cssText = "flex:1; min-width:64px; text-align:center; font-size:0.72rem; font-weight:600; padding:4px 0;";
-    h.textContent = dia.etiquetaCorta;
+    h.style.cssText = "flex:1; min-width:56px; text-align:center; padding:4px 0;";
+    h.innerHTML = `
+      <div class="${esHoy(fecha) ? "horario-dia-actual-glow" : ""}" style="font-size:0.72rem; font-weight:600;">${dia.etiquetaCorta}</div>
+      <div class="muted" style="font-size:0.6rem;">${fecha ? fecha.toLocaleDateString("es-CR", { day: "numeric", month: "short" }) : ""}</div>
+    `;
     headerFila.appendChild(h);
   });
 
   const filaGrid = document.createElement("div");
-  filaGrid.style.cssText = "display:flex; overflow-x:auto;";
-  filaGrid.appendChild(construirColumnaHoras());
+  filaGrid.style.cssText = "display:flex;";
+  filaGrid.appendChild(construirColumnaHoras(pxPorMin, altoGrid));
   dias.forEach((dia) => {
     const bloquesDia = bloquesEfectivos
       .filter((b) => (b.dias || []).some((d) => d.dia === dia.abrevDefault))
@@ -298,13 +407,32 @@ function renderizarHorario() {
             nombreCorto: obtenerNombreBloque(b),
             profesorNombre: obtenerNombreProfesor(b.profesor_id),
             aula: b.aula,
+            enlace: b.enlace,
           }))
       );
-    filaGrid.appendChild(construirColumnaDia(dia, bloquesDia, semestre));
+    filaGrid.appendChild(construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid));
   });
 
-  cont.appendChild(headerFila);
-  cont.appendChild(filaGrid);
+  columnaAncha.appendChild(headerFila);
+  columnaAncha.appendChild(filaGrid);
+  scrollHorizontal.appendChild(columnaAncha);
+  cont.appendChild(scrollHorizontal);
+
+  // Barra delgada inferior para expandir/contraer a las 24h reales.
+  const barra = document.createElement("div");
+  barra.className = "horario-barra-expandir";
+  barra.innerHTML = `<span class="horario-barra-expandir-icono" style="display:inline-block; transform:rotate(${estado.horarioExpandido ? "90deg" : "-90deg"});">‹</span>`;
+  barra.addEventListener("click", () => {
+    estado.horarioExpandido = !estado.horarioExpandido;
+    renderizarHorarioInterno();
+  });
+  if (!document.fullscreenElement) cont.appendChild(barra);
+
+  requestAnimationFrame(() => centrarVistaInicial(cont, dias, bloquesEfectivos, pxPorMin));
+}
+
+function renderizarHorario() {
+  renderizarHorarioInterno();
 }
 
 /* ===================== Inicialización (listeners, una sola vez) ===================== */
@@ -315,28 +443,25 @@ function inicializarHorario() {
   const btnAgregar = document.getElementById("btn-horario-agregar");
   const btnAmigos = document.getElementById("btn-horario-amigos");
   const btnPantallaCompleta = document.getElementById("btn-horario-pantalla-completa");
+  const nombreSemestreEl = document.getElementById("horario-nombre-semestre");
 
   if (btnAnterior) {
     btnAnterior.addEventListener("click", () => {
-      const actual = obtenerSemestreHorarioActual();
-      if (!actual) return;
-      const adyacente = obtenerSemestreAdyacente(actual.id, -1);
-      if (adyacente) {
-        estado.horarioSemestreId = adyacente.id;
-        renderizarHorario();
-      }
+      estado.horarioNumeroSemana = Math.max(1, (estado.horarioNumeroSemana || 1) - 1);
+      renderizarHorarioInterno();
     });
   }
   if (btnSiguiente) {
     btnSiguiente.addEventListener("click", () => {
-      const actual = obtenerSemestreHorarioActual();
-      if (!actual) return;
-      const adyacente = obtenerSemestreAdyacente(actual.id, 1);
-      if (adyacente) {
-        estado.horarioSemestreId = adyacente.id;
-        renderizarHorario();
-      }
+      const semestre = obtenerSemestreHorarioActual();
+      const total = semestre ? Number(semestre.duracion_semanas) || 16 : 16;
+      estado.horarioNumeroSemana = Math.min((estado.horarioNumeroSemana || 1) + 1, total);
+      renderizarHorarioInterno();
     });
+  }
+  if (nombreSemestreEl) {
+    nombreSemestreEl.style.cursor = "pointer";
+    nombreSemestreEl.addEventListener("click", abrirSelectorSemestre);
   }
   if (btnAgregar) {
     btnAgregar.addEventListener("click", () => {
@@ -358,7 +483,11 @@ function inicializarHorario() {
       if (document.fullscreenElement) document.exitFullscreen();
       else contenedor.requestFullscreen?.();
     });
+    document.addEventListener("fullscreenchange", () => requestAnimationFrame(() => renderizarHorarioInterno()));
   }
+  window.addEventListener("resize", () => {
+    if (!document.getElementById("seccion-horario")?.classList.contains("oculto")) renderizarHorarioInterno();
+  });
 }
 
 // Se expone en window para que horario-modal.js pueda refrescar el grid tras
