@@ -264,7 +264,7 @@
            Header con navegación entre semestres + semana actual, grid
            semanal, y modal de creación/edición de bloque. -->
       <div id="seccion-horario" class="stack oculto">
-        <section class="glass-panel stack" id="horario-header">
+        <section class="glass-panel stack" id="horario-header" style="padding:12px 14px;">
           <div class="row-between">
             <button type="button" class="btn-icono-fantasma" id="btn-horario-semestre-anterior" style="font-size:1.3rem;">‹</button>
             <div class="stack" style="align-items:center; text-align:center; gap:2px;">
@@ -274,16 +274,23 @@
             </div>
             <button type="button" class="btn-icono-fantasma" id="btn-horario-semestre-siguiente" style="font-size:1.3rem;">›</button>
           </div>
-          <div style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center;">
-            <button type="button" class="btn btn-primary" id="btn-horario-agregar" style="justify-self:start;">+ Agregar</button>
+          <div style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center; padding:0 6px;">
+            <button type="button" class="btn btn-primary" id="btn-horario-agregar" style="justify-self:start; padding:8px 14px; font-size:0.85rem;">+ Agregar</button>
             <button type="button" class="btn-icono-fantasma" id="btn-horario-pantalla-completa" style="justify-self:center; font-size:1.3rem;">⛶</button>
-            <button type="button" class="btn btn-secondary" id="btn-horario-amigos" style="justify-self:end;">Amigos</button>
+            <button type="button" class="btn btn-secondary" id="btn-horario-amigos" style="justify-self:end; padding:8px 14px; font-size:0.85rem;">Amigos</button>
           </div>
         </section>
 
         <section class="glass-panel" id="horario-grid-contenedor">
           <div id="horario-grid"></div>
         </section>
+      </div>
+
+      <!-- MODAL: selector de semestre (tap en el nombre del semestre) -->
+      <div id="modal-selector-semestre" class="modal-overlay oculto">
+        <div class="glass-card modal-card stack">
+          <div id="selector-semestre-contenido" class="stack"></div>
+        </div>
       </div>
 
       <!-- MODAL: bloque flotante (1er tap en celda vacía) -->
