@@ -212,11 +212,6 @@ function abrirModalBloqueHorario({ semestreId, bloqueId, diaPreseleccionado, hor
     enlace: bloque ? bloque.enlace || "" : "",
     notas: bloque ? bloque.notas || "" : "",
     color: bloque ? bloque.color : null,
-    // Estado puramente de UI de la sección Cronograma (no se guarda tal
-    // cual en el bloque, ver renderizarZonaCronograma más abajo).
-    _cronogramaAbierto: false,
-    _cronogramaSemanaAbierta: numeroSemanaVista || null,
-    _cronogramaEditando: null,
   };
 
   renderizarFormulario(semestre, bloque, estadoForm);
@@ -289,13 +284,7 @@ function renderizarFormulario(semestre, bloque, estadoForm) {
       <textarea id="hb-notas" class="form-textarea" style="resize:none; overflow:hidden; min-height:44px;">${estadoForm.notas}</textarea>
     </div>
 
-    <div>
-      <button type="button" class="btn-discreto row-between" id="hb-cronograma-toggle" style="width:100%; text-align:left; padding:8px 0;">
-        <span>📅 Cronograma de clases</span>
-        <span id="hb-cronograma-chevron">▼</span>
-      </button>
-      <div id="hb-cronograma-zona"></div>
-    </div>
+    <div id="hb-cronograma-cont"></div>
 
     <div class="row-between" style="margin-top:12px;">
       ${bloque ? `<button type="button" class="btn btn-danger" id="hb-btn-borrar">Borrar</button>` : "<span></span>"}
@@ -359,13 +348,11 @@ function renderizarFormulario(semestre, bloque, estadoForm) {
   textareaNotas.addEventListener("input", autoAjustarNotas);
   requestAnimationFrame(autoAjustarNotas);
 
-  // Cronograma de clases (granular por día, ver más abajo)
-  document.getElementById("hb-cronograma-toggle").addEventListener("click", () => {
-    estadoForm._cronogramaAbierto = !estadoForm._cronogramaAbierto;
-    estadoForm._cronogramaEditando = null;
-    renderizarZonaCronograma(semestre, bloque, estadoForm);
-  });
-  renderizarZonaCronograma(semestre, bloque, estadoForm);
+  // Cronograma de clases (widget autocontenido, reusado también en la
+  // tarjeta de info de solo-lectura del grid — ver construirZonaCronograma)
+  document.getElementById("hb-cronograma-cont").appendChild(
+    construirZonaCronograma(semestre, bloque, { semanaInicial: contextoActual?.numeroSemanaVista })
+  );
 
   // Botones
   document.getElementById("hb-btn-cancelar").addEventListener("click", cerrarModalBloqueHorario);
@@ -819,13 +806,11 @@ function aplicarModalidadDia(bloque, numeroSemana, diaCodigo, nuevaModalidad) {
   window.renderizarHorario?.();
 }
 
-function renderizarZonaCronograma(semestre, bloque, estadoForm) {
-  const zona = document.getElementById("hb-cronograma-zona");
-  const chevron = document.getElementById("hb-cronograma-chevron");
+function renderizarZonaCronograma(zona, chevron, semestre, bloque, estadoLocal, repintar) {
   if (!zona) return;
-  if (chevron) chevron.textContent = estadoForm._cronogramaAbierto ? "▲" : "▼";
+  if (chevron) chevron.textContent = estadoLocal._cronogramaAbierto ? "▲" : "▼";
 
-  if (!estadoForm._cronogramaAbierto) {
+  if (!estadoLocal._cronogramaAbierto) {
     zona.innerHTML = "";
     return;
   }
@@ -837,7 +822,7 @@ function renderizarZonaCronograma(semestre, bloque, estadoForm) {
 
   const totalSemanas = Number(semestre.duracion_semanas) || 16;
   const semanaActual = calcularNumeroSemanaSemestre(semestre);
-  const semanaAbierta = estadoForm._cronogramaSemanaAbierta;
+  const semanaAbierta = estadoLocal._cronogramaSemanaAbierta;
 
   const pillsHtml = Array.from({ length: totalSemanas }, (_, i) => i + 1)
     .map((n) => {
@@ -861,7 +846,7 @@ function renderizarZonaCronograma(semestre, bloque, estadoForm) {
             const fecha = calcularFechaClaseSemana(semestre, semanaAbierta, c.dia);
             const fechaTxt = fecha && !isNaN(fecha.getTime()) ? fecha.toLocaleDateString("es-CR", { day: "numeric", month: "short" }) : "";
             const clave = `${semanaAbierta}-${c.dia}`;
-            const editando = estadoForm._cronogramaEditando === clave;
+            const editando = estadoLocal._cronogramaEditando === clave;
             return `
           <div class="stack" style="gap:4px; padding:8px 10px; border-radius:8px; background:rgba(150,150,170,0.08);">
             <div class="row-between">
@@ -883,23 +868,23 @@ function renderizarZonaCronograma(semestre, bloque, estadoForm) {
   zona.querySelectorAll("[data-semana]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const n = Number(btn.dataset.semana);
-      estadoForm._cronogramaSemanaAbierta = estadoForm._cronogramaSemanaAbierta === n ? null : n;
-      estadoForm._cronogramaEditando = null;
-      renderizarZonaCronograma(semestre, bloque, estadoForm);
+      estadoLocal._cronogramaSemanaAbierta = estadoLocal._cronogramaSemanaAbierta === n ? null : n;
+      estadoLocal._cronogramaEditando = null;
+      repintar();
     });
   });
 
   zona.querySelectorAll("[data-editar-dia]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const clave = btn.dataset.editarDia;
-      estadoForm._cronogramaEditando = estadoForm._cronogramaEditando === clave ? null : clave;
-      renderizarZonaCronograma(semestre, bloque, estadoForm);
+      estadoLocal._cronogramaEditando = estadoLocal._cronogramaEditando === clave ? null : clave;
+      repintar();
     });
   });
 
-  if (estadoForm._cronogramaEditando && semanaAbierta) {
-    const diaCodigo = estadoForm._cronogramaEditando.split("-")[1];
-    const lineaModalidad = zona.querySelector(`[data-linea-modalidad="${estadoForm._cronogramaEditando}"]`);
+  if (estadoLocal._cronogramaEditando && semanaAbierta) {
+    const diaCodigo = estadoLocal._cronogramaEditando.split("-")[1];
+    const lineaModalidad = zona.querySelector(`[data-linea-modalidad="${estadoLocal._cronogramaEditando}"]`);
     const claseActual = obtenerClasesEfectivasSemana(bloque, semanaAbierta).find((c) => c.dia === diaCodigo);
     if (lineaModalidad && claseActual) {
       const opciones = Object.entries(ETIQUETAS_MODALIDAD_CRONOGRAMA).map(([valor, etiqueta]) => ({ valor, etiqueta }));
@@ -909,13 +894,50 @@ function renderizarZonaCronograma(semestre, bloque, estadoForm) {
         etiquetaVacia: "Modalidad",
         onCambiar: (valor) => {
           aplicarModalidadDia(bloque, semanaAbierta, diaCodigo, valor);
-          estadoForm._cronogramaEditando = null;
-          renderizarZonaCronograma(semestre, bloque, estadoForm);
+          estadoLocal._cronogramaEditando = null;
+          repintar();
         },
       });
       lineaModalidad.appendChild(selector.elemento);
     }
   }
+}
+
+/**
+ * Widget autocontenido (botón expandible + contenido) para poder reusar el
+ * Cronograma tanto en el modal de editar bloque como en la tarjeta de info
+ * de solo-lectura del grid (horario.js) — cada instancia lleva su propio
+ * estado de UI (abierto/semana/editando), independiente entre sí.
+ * `semanaInicial` deja esa semana preseleccionada (ej. la que se estaba
+ * viendo en el grid) sin expandir la sección automáticamente — igual
+ * criterio que numeroSemanaVista en abrirModalBloqueHorario.
+ */
+function construirZonaCronograma(semestre, bloque, { semanaInicial } = {}) {
+  const wrap = document.createElement("div");
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.className = "btn-discreto row-between";
+  boton.style.cssText = "width:100%; text-align:left; padding:8px 0;";
+  boton.innerHTML = `<span>📅 Cronograma de clases</span><span class="hb-cronograma-chevron">▼</span>`;
+  const zona = document.createElement("div");
+
+  const estadoLocal = {
+    _cronogramaAbierto: false,
+    _cronogramaSemanaAbierta: semanaInicial || null,
+    _cronogramaEditando: null,
+  };
+
+  const repintar = () => renderizarZonaCronograma(zona, boton.querySelector(".hb-cronograma-chevron"), semestre, bloque, estadoLocal, repintar);
+
+  boton.addEventListener("click", () => {
+    estadoLocal._cronogramaAbierto = !estadoLocal._cronogramaAbierto;
+    estadoLocal._cronogramaEditando = null;
+    repintar();
+  });
+
+  wrap.appendChild(boton);
+  wrap.appendChild(zona);
+  return wrap;
 }
 
 // Nota (2026-08-14): antes acá vivía el prompt "¿Aplicar a todas las
@@ -1001,4 +1023,4 @@ function borrarBloque(semestre, bloque) {
   window.renderizarHorario?.();
 }
 
-export { abrirModalBloqueHorario, cerrarModalBloqueHorario };
+export { abrirModalBloqueHorario, cerrarModalBloqueHorario, construirZonaCronograma };

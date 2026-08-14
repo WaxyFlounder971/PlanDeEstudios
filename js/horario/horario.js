@@ -10,7 +10,7 @@ import { mostrarToast } from "../ui/componentes.js";
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 import { obtenerSemestresOrdenCronologico, buscarSemestreVivoPorId } from "../semestres/semestres.js";
 import { obtenerPlanActivo } from "../plan/plan-esquema.js";
-import { abrirModalBloqueHorario } from "./horario-modal.js";
+import { abrirModalBloqueHorario, construirZonaCronograma } from "./horario-modal.js";
 
 const PX_POR_MIN_EXPANDIDO = 0.84; // 30% menos que antes (1.2), pedido explícito
 const ALTO_RESERVADO_CHROME = 230; // header de horario + nav inferior, aproximado
@@ -325,11 +325,23 @@ function abrirTarjetaInfoBloque(semestre, numeroSemana, b) {
               <div style="white-space:pre-wrap; overflow-wrap:break-word;">${b.notas}</div>
             </div>` : ""}
         </div>
+        <div id="horario-info-cronograma-cont"></div>
         <button type="button" class="btn-discreto" id="horario-info-editar" style="width:100%; margin-top:20px; text-align:center;">✎ Editar</button>
       </div>
     </div>
   `;
   (document.fullscreenElement || document.body).appendChild(overlay);
+
+  // Cronograma de clases: mismo widget del modal de editar, reusado acá en
+  // solo-lectura + edición puntual de modalidad (ver construirZonaCronograma
+  // en horario-modal.js). Necesita el bloque REAL (con .dias/.cronograma_dias),
+  // no la clase efectiva ya aplanada que llega en `b`.
+  const bloqueReal = (semestre.bloques_horario || []).find((bl) => bl.id === b.bloqueOriginalId);
+  if (bloqueReal) {
+    document.getElementById("horario-info-cronograma-cont").appendChild(
+      construirZonaCronograma(semestre, bloqueReal, { semanaInicial: numeroSemana })
+    );
+  }
 
   const cerrar = () => overlay.remove();
   overlay.addEventListener("click", (ev) => { if (ev.target === overlay) cerrar(); });
