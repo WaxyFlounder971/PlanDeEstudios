@@ -747,28 +747,26 @@ function obtenerEmojiModalidadCronograma(modalidad) {
 }
 
 /**
- * Offset en días de `diaCodigo` respecto a fecha_inicio del semestre,
- * respetando la config de "día de inicio de semana" del usuario — mismo
- * cálculo que usa el grid semanal (ver obtenerDiasVisiblesOrdenados en
- * horario.js), pero SIN filtrar por días visibles: el Cronograma debe
- * poder mostrar cualquier día en que el bloque tenga clase, aunque el
- * usuario lo haya ocultado del grid.
+ * Fecha calendario real de un día/semana puntual — ANCLADA al día de la
+ * semana REAL de fecha_inicio (vía Date.getDay()), no a la config de "día
+ * de inicio de semana" (esa config es solo de orden visual, ver
+ * DIAS_SEMANA_CONFIG). Mismo cálculo, mismo bug corregido en calcularFechaDelDia
+ * de horario.js — antes ambos asumían que fecha_inicio caía justo en el
+ * día configurado como inicio de semana, y cuando eso no se cumplía toda
+ * fecha calculada quedaba corrida (bug real reportado: "hoy es viernes y
+ * la app dice sábado").
  */
-function calcularOffsetDiaEnSemana(diaCodigo) {
-  const cfg = estado.datos.configuracion;
-  const inicioId = cfg.dia_inicio_semana || "lunes";
-  const idxInicio = Math.max(0, DIAS_SEMANA_CONFIG.findIndex((d) => d.id === inicioId));
-  const rotado = [...DIAS_SEMANA_CONFIG.slice(idxInicio), ...DIAS_SEMANA_CONFIG.slice(0, idxInicio)];
-  return rotado.findIndex((d) => d.abrevDefault === diaCodigo);
-}
-
 function calcularFechaClaseSemana(semestre, numeroSemana, diaCodigo) {
   const inicio = fechaLocalDesdeISOCronograma(semestre.fecha_inicio);
   if (isNaN(inicio.getTime())) return null;
-  const offset = calcularOffsetDiaEnSemana(diaCodigo);
-  if (offset === -1) return null;
+  const idxCanonico = DIAS_SEMANA_CONFIG.findIndex((d) => d.abrevDefault === diaCodigo);
+  if (idxCanonico === -1) return null;
+  // DIAS_SEMANA_CONFIG va lunes→domingo (índices 0-6); Date.getDay() usa
+  // domingo=0..sábado=6 — de ahí el +1 % 7 para pasar de un sistema al otro.
+  const pesoObjetivo = (idxCanonico + 1) % 7;
+  const diffDentroDeSemana = (pesoObjetivo - inicio.getDay() + 7) % 7;
   const fecha = new Date(inicio);
-  fecha.setDate(inicio.getDate() + (numeroSemana - 1) * 7 + offset);
+  fecha.setDate(inicio.getDate() + (numeroSemana - 1) * 7 + diffDentroDeSemana);
   return fecha;
 }
 

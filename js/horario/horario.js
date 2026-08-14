@@ -138,19 +138,31 @@ function obtenerDiasVisiblesOrdenados() {
   const rotado = [...DIAS_SEMANA_CONFIG.slice(idxInicio), ...DIAS_SEMANA_CONFIG.slice(0, idxInicio)];
   return rotado
     .filter((d) => visiblesIds.has(d.id))
-    .map((d, idx) => ({ ...d, etiquetaCorta: nombres[d.id] || d.abrevDefault, offsetDesdeInicio: idx }));
+    .map((d) => ({ ...d, etiquetaCorta: nombres[d.id] || d.abrevDefault }));
 }
 
 /**
- * Fecha calendario real de un día dentro de la semana mostrada, asumiendo
- * que fecha_inicio del semestre es el día 1 de la semana 1 (mismo criterio
- * simple que ya usa calcularNumeroSemanaSemestre para no inventar otro).
+ * Fecha calendario real de un día dentro de la semana mostrada. ANCLADA al
+ * día de la semana REAL de fecha_inicio (vía Date.getDay()), no a la
+ * posición que ese día ocupe en la config de "inicio de semana" — antes se
+ * asumía que fecha_inicio caía justo en el día configurado como inicio de
+ * semana (ej. lunes), pero nada obliga eso al crear un semestre, y cuando
+ * no se cumplía TODA la fila de encabezados del grid quedaba corrida
+ * (bug real reportado: hoy viernes 14 se mostraba bajo la columna
+ * "Sábado"). `diaCodigo` es el código real del día ("L"|"K"|"M"|"J"|"V"|
+ * "S"|"D"), no un offset de posición visual.
  */
-function calcularFechaDelDia(semestre, numeroSemana, offsetDesdeInicio) {
+function calcularFechaDelDia(semestre, numeroSemana, diaCodigo) {
   const inicio = fechaLocalDesdeISO(semestre.fecha_inicio);
   if (isNaN(inicio.getTime())) return null;
+  const idxCanonico = DIAS_SEMANA_CONFIG.findIndex((d) => d.abrevDefault === diaCodigo);
+  if (idxCanonico === -1) return null;
+  // DIAS_SEMANA_CONFIG va lunes→domingo (índices 0-6); Date.getDay() usa
+  // domingo=0..sábado=6 — de ahí el +1 % 7 para pasar de un sistema al otro.
+  const pesoObjetivo = (idxCanonico + 1) % 7;
+  const diffDentroDeSemana = (pesoObjetivo - inicio.getDay() + 7) % 7;
   const fecha = new Date(inicio);
-  fecha.setDate(inicio.getDate() + (numeroSemana - 1) * 7 + offsetDesdeInicio);
+  fecha.setDate(inicio.getDate() + (numeroSemana - 1) * 7 + diffDentroDeSemana);
   return fecha;
 }
 
@@ -262,7 +274,7 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid) {
       ${b.profesorNombre ? `<div style="font-size:0.72rem; opacity:0.9; overflow-wrap:break-word; word-break:break-word;">${b.profesorNombre}</div>` : ""}
       ${b.aula ? `<div style="font-size:0.72rem; opacity:0.85; overflow-wrap:break-word; word-break:break-word;">${b.aula}</div>` : ""}
       ${emojiModalidad ? `<span title="${b.modalidad}" style="position:absolute; right:5px; bottom:3px; font-size:1.17rem; line-height:1;">${emojiModalidad}</span>` : ""}
-      ${b.enlace ? `<a href="${b.enlace}" target="_blank" rel="noopener" class="horario-btn-entrar-clase" onclick="event.stopPropagation()">Entrar a clase</a>` : ""}
+      ${b.enlace ? `<a href="${b.enlace}" target="_blank" rel="noopener" class="horario-btn-entrar-clase" style="position:absolute; left:5px; bottom:3px; line-height:1;" onclick="event.stopPropagation()">Entrar</a>` : ""}
     `;
     tarjeta.addEventListener("click", (ev) => {
       ev.stopPropagation();
@@ -318,7 +330,7 @@ function abrirTarjetaInfoBloque(semestre, numeroSemana, b) {
               <div class="muted" style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.02em;">Aula</div>
               <div style="overflow-wrap:break-word;">${b.aula}</div>
             </div>` : ""}
-          ${b.enlace ? `<a href="${b.enlace}" target="_blank" rel="noopener" class="horario-btn-entrar-clase" style="display:inline-block; width:fit-content; background:${b.color}; color:#fff;">Entrar a clase</a>` : ""}
+          ${b.enlace ? `<a href="${b.enlace}" target="_blank" rel="noopener" class="horario-btn-entrar-clase" style="display:inline-block; width:fit-content; background:${b.color}; color:#fff;">Entrar</a>` : ""}
           ${b.notas ? `
             <div>
               <div class="muted" style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.02em;">Notas</div>
@@ -568,7 +580,7 @@ function renderizarHorarioInterno() {
   espaciador.style.cssText = "width:38px; flex-shrink:0;";
   headerFila.appendChild(espaciador);
   dias.forEach((dia) => {
-    const fecha = calcularFechaDelDia(semestre, numeroSemana, dia.offsetDesdeInicio);
+    const fecha = calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault);
     const h = document.createElement("div");
     h.style.cssText = "flex:1; min-width:56px; text-align:center; padding:4px 0;";
     h.innerHTML = `
