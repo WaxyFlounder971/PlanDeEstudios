@@ -68,7 +68,7 @@ function obtenerNombreSemestre(semestreId) {
 function renderizarPestanaGastosU(contenedor) {
   const cabecera = document.createElement("div");
   cabecera.className = "row-between";
-  cabecera.innerHTML = `<h3 style="margin:0;">Gastos generales U</h3>`;
+  cabecera.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Gastos generales U</h3>`;
   const btnAgregar = document.createElement("button");
   btnAgregar.type = "button";
   btnAgregar.className = "btn btn-primary";
@@ -662,7 +662,7 @@ function renderizarPestanaBeneficios(contenedor) {
   const sec = document.createElement("section");
   sec.className = "glass-card stack";
   sec.innerHTML = `
-    <h3 style="margin:0;">Buscar descuentos para estudiantes</h3>
+    <h3 class="texto-encabezado-seccion" style="margin:0;">Buscar descuentos para estudiantes</h3>
     <p class="muted" style="margin:0;">
       Copia un prompt listo para pegar en una sesión nueva de Claude, que investiga
       descuentos, beneficios y tarifas estudiantiles reales para tu universidad.
