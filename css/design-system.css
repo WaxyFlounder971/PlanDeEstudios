@@ -1931,7 +1931,14 @@ img, svg { max-width: 100%; }
   color: inherit;
   font: inherit;
 }
-.ajuste-seccion-cabecera h2 { margin: 0; }
+.ajuste-seccion-cabecera h2 {
+  margin: 0;
+  /* Mismo tamaño/peso que los botones del sidebar (.btn, 0.95rem/600) —
+     antes heredaban el tamaño de h2 por defecto del navegador (~1.5em),
+     mucho más grande que el resto de la UI de Ajustes. */
+  font-size: 0.95rem;
+  font-weight: 600;
+}
 .ajuste-seccion-chevron {
   flex-shrink: 0;
   margin-left: 12px;
