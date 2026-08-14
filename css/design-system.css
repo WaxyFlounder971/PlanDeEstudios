@@ -1933,12 +1933,10 @@ img, svg { max-width: 100%; }
 }
 .ajuste-seccion-cabecera h2 {
   margin: 0;
-  /* Pedido explícito: 15px fijos (no rem) para que no se achique más en
-     teléfono por el -10% global de letra (ver @media(max-width:480px) al
-     principio del archivo) — a 0.95rem terminaba rondando ~13-14px ahí,
-     que se leía como "como en 12px". Un tamaño fijo mantiene siempre los
-     mismos 15px sin importar el root font-size del breakpoint. */
-  font-size: 15px;
+  /* 15px * 1.3 = 19.5px (pedido explícito: +30%). Fijo en px, no rem, para
+     que no se vea afectado por el -10% global de letra en teléfono (ver
+     @media(max-width:480px) al principio del archivo). */
+  font-size: 19.5px;
   font-weight: 600;
 }
 .ajuste-seccion-chevron {
