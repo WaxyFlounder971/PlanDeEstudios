@@ -1168,11 +1168,15 @@ function repartirEquitativoCriterio(criterio) {
 
 /**
  * Horario — Núcleo: valores fijos de modalidad. "personalizado" es el único
- * que además lleva texto libre (ver crearModalidadHorario) — los otros tres
+ * que además lleva texto libre (ver crearModalidadHorario) — los otros
  * ignoran texto_libre aunque venga seteado, para no arrastrar basura si el
  * usuario cambia de opción y regresa.
+ * "sin_clase" (Cronograma, 2026-08-14): reemplaza al viejo switch booleano
+ * `cancelada` de excepciones_semana — ahora "no hay clase" es una opción de
+ * modalidad más, seleccionable por día individual desde el Cronograma. Ver
+ * obtenerClasesEfectivasSemana.
  */
-const MODALIDADES_HORARIO = ["presencial", "semipresencial", "virtual", "personalizado"];
+const MODALIDADES_HORARIO = ["presencial", "semipresencial", "virtual", "personalizado", "sin_clase"];
 
 /**
  * Horario — Núcleo: constructor del valor de modalidad, usado tanto en el
@@ -1191,10 +1195,11 @@ function crearModalidadHorario(tipo, textoPersonalizado) {
 /**
  * Horario — Núcleo: un bloque es la PLANTILLA base del semestre, no una
  * clase de una semana puntual. Se define una sola vez y se proyecta a todas
- * las semanas del semestre (ver obtenerBloqueEfectivoSemana) — el usuario
- * puede después ajustar CUALQUIER campo para una semana específica sin tocar
- * la plantilla (excepciones_semana), excepto materia_id/nombre_personalizado
- * (a esta altura cambiar de materia ya no tiene sentido, sería otro bloque).
+ * las semanas del semestre (ver obtenerClasesEfectivasSemana) — todo campo
+ * (aula, profesor, enlace, notas, color, horario) es fijo para todo el
+ * semestre y solo se edita acá, en la plantilla. La única excepción puntual
+ * por semana que soporta el modelo es la Modalidad de un día individual —
+ * ver cronograma_dias / crearDiaCronograma.
  *
  * `materiaId` null = bloque "Crear personalizado", usa `nombre` propio en vez
  * de heredar el de una materia matriculada real.
@@ -1222,87 +1227,103 @@ function crearBloqueHorario({ materiaId, planEstudioId, nombre, apodo, grupo, di
     enlace: enlace || null,
     notas: notas || null,
     color: color || null,
-    // Ajustes finos por semana puntual (feriado, profesor sustituto, cambio
-    // de modalidad esa semana nada más, etc.) — ver crearExcepcionSemanaBloque
-    // y obtenerBloqueEfectivoSemana. Tumba propia, mismo patrón que cualquier
-    // otra colección anidada del proyecto — ver fusionarBloqueHorario en
-    // storage-merge.js.
-    excepciones_semana: [],
-    _eliminados_excepciones_semana: [],
+    // Cronograma de clases (reemplaza al viejo excepciones_semana, que
+    // aplicaba a TODOS los días de un bloque en una semana dada). Ahora es
+    // granular por día individual: una entrada por (numero_semana, dia),
+    // y lo único que guarda es la Modalidad efectiva de ese día puntual —
+    // ver crearDiaCronograma y obtenerClasesEfectivasSemana. Tumba propia,
+    // mismo patrón que cualquier otra colección anidada del proyecto — ver
+    // fusionarBloqueHorario en storage-merge.js.
+    cronograma_dias: [],
+    _eliminados_cronograma_dias: [],
   });
 }
 
 /**
- * Horario — Núcleo: ajuste puntual de UNA semana sobre un bloque base. Todo
- * campo que se deje sin pasar (undefined) significa "no toca este campo,
- * usa el de la plantilla" — a propósito NO se usa null como "sin cambios"
- * porque null es un valor válido real para varios de estos campos (ej.
- * "borrar el aula esta semana nada más"). `numeroSemana` es 1-based, igual
- * que el resto de la app calcula semanas del semestre.
- * `cancelada: true` apaga el bloque completo esa semana (ej. no hay clase
- * por feriado) sin necesidad de vaciar cada campo a mano ni de borrar la
- * excepción después para "reactivarlo" — alcanza con volver a false o
- * borrar la excepción entera.
+ * Horario — Cronograma: ajuste de Modalidad de UN día individual de UNA
+ * semana puntual (ej. "el jueves de la semana 6 esta materia es virtual" o
+ * "el lunes de la semana 3 no hay clase"). `numeroSemana` es 1-based, igual
+ * que el resto de la app calcula semanas del semestre. `dia` es el mismo
+ * código de un día en bloque.dias ("L"|"K"|"M"|"J"|"V"|"S"|"D") — junto con
+ * numeroSemana identifican de forma única qué clase puntual se está
+ * ajustando (un bloque lunes+jueves guarda hasta 2 entradas de cronograma
+ * distintas para la misma semana, una por día).
+ * `modalidad` es un STRING plano (ej. "presencial"/"virtual"/"asincronica"/
+ * "sin_clase"), NO el objeto de crearModalidadHorario — a propósito, para
+ * que sea el mismo formato que ya usa bloque.dias[].modalidad (el valor que
+ * REALMENTE se pinta en cada tarjetita del grid, ver obtenerEmojiModalidad
+ * en horario.js). bloque.modalidad (el campo objeto a nivel de bloque) es
+ * un campo aparte que hoy no participa del render — el Cronograma no lo
+ * toca.
+ * A propósito esto es lo ÚNICO editable por día — aula/profesor/enlace/
+ * notas/color/horario siguen siendo responsabilidad exclusiva de la
+ * plantilla base (crearBloqueHorario). "Sin clase" ya no es un switch
+ * booleano aparte: es un valor más de modalidad, así que cancelar un día
+ * puntual es simplemente crear/editar su entrada de cronograma con
+ * modalidad "sin_clase".
  */
-function crearExcepcionSemanaBloque({ numeroSemana, apodo, grupo, dias, modalidad, aula, profesorId, enlace, notas, color, cancelada }) {
+function crearDiaCronograma({ numeroSemana, dia, modalidad }) {
   return sellarTimestamp({
-    id: "exc_" + crypto.randomUUID(),
+    id: "cd_" + crypto.randomUUID(),
     numero_semana: Number(numeroSemana),
-    apodo,
-    grupo,
-    dias,
-    modalidad,
-    aula,
-    profesor_id: profesorId,
-    enlace,
-    notas,
-    color,
-    cancelada: !!cancelada,
+    dia,
+    modalidad: modalidad || "presencial",
   });
 }
 
 /**
- * Horario — Núcleo: versión EFECTIVA de un bloque para una semana concreta —
- * fusiona la plantilla base con su excepción de esa semana, si existe. Único
- * punto de verdad que debe usar tanto el grid semanal como Cronograma (prompt
- * futuro) para saber qué mostrar — nunca leer bloque.campo directo si lo que
- * importa es "qué pasa esta semana en particular".
- * Devuelve null si esa semana está marcada como cancelada (no se renderiza
- * ninguna tarjeta ese día/hora).
- * `materia_id`/`nombre`/`plan_estudio_id` NUNCA se leen de la excepción — no
- * son campos que una excepción de semana pueda tener, siempre vienen del
- * bloque base.
+ * Horario — Núcleo: lista de clases EFECTIVAS de un bloque para una semana
+ * concreta — una entrada por cada día en bloque.dias, con su Modalidad
+ * resuelta (override de cronograma_dias para ese (numeroSemana, dia) si
+ * existe, si no la modalidad ya definida por día en la plantilla —
+ * diaBloque.modalidad). Único punto de verdad que debe usar tanto el grid
+ * semanal como la sección Cronograma para saber qué modalidad mostrar —
+ * nunca leer diaBloque.modalidad directo si lo que importa es "qué pasa
+ * este día puntual de esta semana".
+ * A diferencia del viejo obtenerBloqueEfectivoSemana, esto NUNCA devuelve
+ * null ni oculta nada: modalidad "sin_clase" es solo un valor más de
+ * modalidad, la tarjetita sigue existiendo en el grid (atenuada/transparente
+ * a criterio de la UI, ver horario.js) — así se evita recalcular layout del
+ * grid cada vez que cambia una modalidad puntual.
+ * Todo campo que NO sea `dia`/`hora_inicio`/`hora_fin`/`modalidad` viene
+ * siempre de la plantilla (aula, profesor, enlace, notas, color, materia_id,
+ * nombre, plan_estudio_id) — el Cronograma no los puede tocar.
  */
-function obtenerBloqueEfectivoSemana(bloque, numeroSemana) {
-  const excepcion = (bloque.excepciones_semana || []).find((e) => e.numero_semana === numeroSemana);
-  if (excepcion && excepcion.cancelada) return null;
+function obtenerClasesEfectivasSemana(bloque, numeroSemana) {
+  const overridesEstaSemana = (bloque.cronograma_dias || []).filter((cd) => cd.numero_semana === numeroSemana);
 
-  return {
-    id: bloque.id,
-    materia_id: bloque.materia_id,
-    plan_estudio_id: bloque.plan_estudio_id,
-    nombre: bloque.nombre,
-    apodo: excepcion && excepcion.apodo !== undefined ? excepcion.apodo : bloque.apodo,
-    grupo: excepcion && excepcion.grupo !== undefined ? excepcion.grupo : bloque.grupo,
-    dias: excepcion && excepcion.dias !== undefined ? excepcion.dias : bloque.dias,
-    modalidad: excepcion && excepcion.modalidad !== undefined ? excepcion.modalidad : bloque.modalidad,
-    aula: excepcion && excepcion.aula !== undefined ? excepcion.aula : bloque.aula,
-    profesor_id: excepcion && excepcion.profesor_id !== undefined ? excepcion.profesor_id : bloque.profesor_id,
-    enlace: excepcion && excepcion.enlace !== undefined ? excepcion.enlace : bloque.enlace,
-    notas: excepcion && excepcion.notas !== undefined ? excepcion.notas : bloque.notas,
-    color: excepcion && excepcion.color !== undefined ? excepcion.color : bloque.color,
-    // Referencia para la UI: "esta tarjeta tiene un ajuste solo para esta
-    // semana" (ej. mostrar un pequeño ícono), sin tener que comparar campo
-    // por campo contra el bloque base.
-    tiene_excepcion_esta_semana: !!excepcion,
-  };
+  return (bloque.dias || []).map((diaBloque) => {
+    const override = overridesEstaSemana.find((cd) => cd.dia === diaBloque.dia);
+    const modalidad = override ? override.modalidad : diaBloque.modalidad || "presencial";
+    return {
+      id: bloque.id,
+      materia_id: bloque.materia_id,
+      plan_estudio_id: bloque.plan_estudio_id,
+      nombre: bloque.nombre,
+      apodo: bloque.apodo,
+      grupo: bloque.grupo,
+      dia: diaBloque.dia,
+      hora_inicio: diaBloque.hora_inicio,
+      hora_fin: diaBloque.hora_fin,
+      modalidad,
+      aula: bloque.aula,
+      profesor_id: bloque.profesor_id,
+      enlace: bloque.enlace,
+      notas: bloque.notas,
+      color: bloque.color,
+      // Referencia para la UI: "esta tarjeta tiene un ajuste de Cronograma
+      // solo para este día puntual" (ej. mostrar un pequeño ícono), sin
+      // tener que comparar campo por campo contra la plantilla.
+      tiene_ajuste_cronograma: !!override,
+    };
+  });
 }
 
 /**
  * Horario — Núcleo: número de semana 1-based dentro de un semestre, a partir
  * de fecha_inicio — mismo cálculo de "semanas transcurridas" que ya usa
  * obtenerEstadoEfectivoSemestre, pero acá se necesita el NÚMERO exacto (no
- * solo actual/pasado), para direccionar excepciones_semana y para el header
+ * solo actual/pasado), para direccionar cronograma_dias y para el header
  * de Horario ("mostrado de forma clara y visible"). Clampeado entre 1 y
  * duracion_semanas — antes de que arranque el semestre muestra semana 1,
  * después de que termine se queda pegado en la última.
@@ -2400,8 +2421,12 @@ function migrarDatosAntiguos(datos) {
       if (!Array.isArray(semestre.bloques_horario)) semestre.bloques_horario = [];
       if (!Array.isArray(semestre._eliminados_bloques_horario)) semestre._eliminados_bloques_horario = [];
       semestre.bloques_horario.forEach((bloque) => {
-        if (!Array.isArray(bloque.excepciones_semana)) bloque.excepciones_semana = [];
-        if (!Array.isArray(bloque._eliminados_excepciones_semana)) bloque._eliminados_excepciones_semana = [];
+        // Cronograma de clases (2026-08-14): reemplaza excepciones_semana.
+        // No hay datos viejos que migrar (ver ARQUITECTURA.md / decisión del
+        // prompt), así que este relleno solo cubre bloques creados antes de
+        // esta fase con el mismo patrón defensivo del resto de esta función.
+        if (!Array.isArray(bloque.cronograma_dias)) bloque.cronograma_dias = [];
+        if (!Array.isArray(bloque._eliminados_cronograma_dias)) bloque._eliminados_cronograma_dias = [];
       });
       (semestre.materias_matriculadas || []).forEach((mm) => {
         if (!Array.isArray(mm.criterios)) mm.criterios = [];
@@ -2771,7 +2796,7 @@ export {
   MODALIDADES_HORARIO,
   crearModalidadHorario,
   crearBloqueHorario,
-  crearExcepcionSemanaBloque,
-  obtenerBloqueEfectivoSemana,
+  crearDiaCronograma,
+  obtenerClasesEfectivasSemana,
   calcularNumeroSemanaSemestre,
 };
