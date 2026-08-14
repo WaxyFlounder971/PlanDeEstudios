@@ -23,12 +23,8 @@ const ETIQUETAS_MODALIDAD = { presencial: "Presencial", virtual: "Virtual", asin
 // Editor de color de materia/bloque (pendiente de la ronda anterior): el
 // schema ya soporta bloque.color (override propio, independiente del color
 // de categoría) y excepcion.color (override solo esa semana) — acá se
-// habilita la UI. Paleta curada fija, mismo patrón visual que
-// .palette-swatch (usado en Ajustes para las paletas de tema).
-const PALETA_COLORES_BLOQUE = [
-  "#a78bfa", "#f472b6", "#fb7185", "#fb923c", "#fbbf24", "#a3e635",
-  "#34d399", "#22d3ee", "#60a5fa", "#818cf8", "#f87171", "#94a3b8",
-];
+// habilita la UI. Selector totalmente libre (input type="color" nativo),
+// sin paleta predefinida — ver construirSelectorColor más abajo.
 
 let contextoActual = null; // { semestreId, bloqueId } de la sesión de edición abierta
 
@@ -394,53 +390,77 @@ function obtenerColorHeredadoDeCategoria(materiaId, planEstudioId) {
 }
 
 /**
- * Fila de swatches redondos (paleta curada + "↺" para volver al color
- * heredado de categoría). Reutilizado tanto para el color del bloque base
- * como para el override de cada excepción de semana.
+ * Selector de color del bloque: hereda el color de categoría por defecto
+ * (mismo criterio que obtenerColorBloque en horario.js) — el círculo "↺"
+ * vuelve a ese heredado; el círculo con el input de color nativo permite
+ * elegir CUALQUIER color (sin paleta predefinida ni swatches curados).
+ * Reutilizado tanto para el color del bloque base como para el override
+ * de cada excepción de semana.
  */
 function construirSelectorColor({ colorActual, colorHeredado, onCambiar }) {
   const wrap = document.createElement("div");
   wrap.className = "row";
-  wrap.style.cssText = "gap:6px; flex-wrap:wrap;";
+  wrap.style.cssText = "gap:10px; align-items:center; flex-wrap:wrap;";
 
   let seleccionado = colorActual || null;
 
-  function crearSwatch(valor, esHeredado) {
-    const sw = document.createElement("button");
-    sw.type = "button";
-    sw.title = esHeredado ? "Usar color de categoría" : valor;
-    const activo = esHeredado ? !seleccionado : seleccionado === valor;
-    sw.style.cssText = `
+  const btnHeredar = document.createElement("button");
+  btnHeredar.type = "button";
+  btnHeredar.title = "Usar color de categoría";
+  btnHeredar.innerHTML = `<span style="font-size:0.7rem; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.5);">↺</span>`;
+
+  // El <input type="color"> nativo abre la rueda de color del sistema
+  // operativo/navegador: cualquier color es válido, no solo los de una
+  // paleta curada. Se envuelve en un círculo con overflow:hidden y el
+  // input se agranda/desplaza (-25% / 150%) por encima porque el swatch
+  // interno del input no siempre respeta border-radius directo entre
+  // navegadores — así se ve igual de redondo que el botón "↺" de al lado.
+  const wrapPicker = document.createElement("div");
+  wrapPicker.title = "Elegir color libre";
+  const inputColor = document.createElement("input");
+  inputColor.type = "color";
+  inputColor.style.cssText = "position:absolute; top:-25%; left:-25%; width:150%; height:150%; border:none; padding:0; margin:0; cursor:pointer; background:none;";
+  wrapPicker.appendChild(inputColor);
+
+  function actualizarEstilos() {
+    const heredadoActivo = !seleccionado;
+    btnHeredar.style.cssText = `
       width:28px; height:28px; border-radius:50%; cursor:pointer;
-      background:${esHeredado ? colorHeredado : valor};
-      border:2px solid ${activo ? "var(--text-primary)" : "transparent"};
+      background:${colorHeredado};
+      border:2px solid ${heredadoActivo ? "var(--text-primary)" : "transparent"};
       box-shadow:0 1px 3px rgba(0,0,0,0.3);
       display:flex; align-items:center; justify-content:center;
       flex-shrink:0; padding:0;
     `;
-    if (esHeredado) {
-      sw.innerHTML = `<span style="font-size:0.7rem; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.5);">↺</span>`;
-    }
-    sw.addEventListener("click", () => {
-      seleccionado = esHeredado ? null : valor;
-      onCambiar(seleccionado);
-      redibujar();
-    });
-    return sw;
+    wrapPicker.style.cssText = `
+      width:28px; height:28px; border-radius:50%; overflow:hidden; position:relative;
+      cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.3);
+      border:2px solid ${heredadoActivo ? "transparent" : "var(--text-primary)"};
+      flex-shrink:0; background:${seleccionado || colorHeredado};
+    `;
+    inputColor.value = seleccionado || colorHeredado;
   }
 
-  function redibujar() {
-    wrap.innerHTML = "";
-    wrap.appendChild(crearSwatch(null, true));
-    PALETA_COLORES_BLOQUE.forEach((c) => wrap.appendChild(crearSwatch(c, false)));
-  }
-  redibujar();
+  btnHeredar.addEventListener("click", () => {
+    seleccionado = null;
+    onCambiar(null);
+    actualizarEstilos();
+  });
+  inputColor.addEventListener("input", () => {
+    seleccionado = inputColor.value;
+    onCambiar(seleccionado);
+    actualizarEstilos();
+  });
+
+  actualizarEstilos();
+  wrap.appendChild(btnHeredar);
+  wrap.appendChild(wrapPicker);
 
   return {
     elemento: wrap,
     setValor: (valor) => {
       seleccionado = valor || null;
-      redibujar();
+      actualizarEstilos();
     },
   };
 }
