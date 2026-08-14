@@ -952,7 +952,7 @@ function preguntarAlcanceEdicion(numeroSemana, onElegir) {
       </div>
     </div>
   `;
-  document.body.appendChild(overlay);
+  (document.fullscreenElement || document.body).appendChild(overlay);
   const cerrar = () => overlay.remove();
   overlay.addEventListener("click", (ev) => { if (ev.target === overlay) cerrar(); });
   document.getElementById("horario-alcance-todas").addEventListener("click", () => { cerrar(); onElegir("todas"); });

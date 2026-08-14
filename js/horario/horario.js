@@ -115,7 +115,8 @@ function obtenerNombreProfesor(profesorId) {
  * incluyendo el caso de una excepción de semana que cambie la modalidad
  * solo esa semana puntual (viene resuelta ya en d.modalidad).
  */
-function obtenerEmojiModalidad(modalidad) {
+function obtenerEmojiModalidad(modalidad, cancelada) {
+  if (cancelada) return "✖️";
   const normalizado = String(modalidad || "")
     .toLowerCase()
     .normalize("NFD")
@@ -239,12 +240,12 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid) {
     const emojiModalidad = obtenerEmojiModalidad(b.modalidad);
     tarjeta.innerHTML = `
       <div style="font-size:0.85rem; font-weight:600; line-height:1.15; display:flex; align-items:center; gap:4px; margin-bottom:2px; overflow-wrap:break-word; word-break:break-word;">
-        ${b.tieneExcepcionEstaSemana ? `<span title="Esta semana tiene un ajuste puntual" style="font-size:0.7rem; opacity:0.9; flex-shrink:0;">✎</span>` : ""}
+        ${b.tieneExcepcionEstaSemana ? `<span title="Esta semana tiene un ajuste puntual" style="font-size:1.05rem; opacity:0.9; flex-shrink:0;">✎</span>` : ""}
         <span>${b.nombreCorto}</span>
       </div>
       ${b.profesorNombre ? `<div style="font-size:0.72rem; opacity:0.9; overflow-wrap:break-word; word-break:break-word;">${b.profesorNombre}</div>` : ""}
       ${b.aula ? `<div style="font-size:0.72rem; opacity:0.85; overflow-wrap:break-word; word-break:break-word;">${b.aula}</div>` : ""}
-      ${emojiModalidad ? `<span title="${b.modalidad}" style="position:absolute; right:5px; bottom:3px; font-size:0.78rem; line-height:1;">${emojiModalidad}</span>` : ""}
+      ${emojiModalidad ? `<span title="${b.modalidad}" style="position:absolute; right:5px; bottom:3px; font-size:1.17rem; line-height:1;">${emojiModalidad}</span>` : ""}
       ${b.enlace ? `<a href="${b.enlace}" target="_blank" rel="noopener" class="horario-btn-entrar-clase" onclick="event.stopPropagation()">Entrar a clase</a>` : ""}
     `;
     tarjeta.addEventListener("click", (ev) => {
@@ -308,11 +309,11 @@ function abrirTarjetaInfoBloque(semestre, numeroSemana, b) {
               <div style="white-space:pre-wrap; overflow-wrap:break-word;">${b.notas}</div>
             </div>` : ""}
         </div>
-        <button type="button" class="btn-secondary" id="horario-info-editar" style="width:100%; margin-top:20px;">Editar</button>
+        <button type="button" class="btn-discreto" id="horario-info-editar" style="width:100%; margin-top:20px; text-align:center;">✎ Editar</button>
       </div>
     </div>
   `;
-  document.body.appendChild(overlay);
+  (document.fullscreenElement || document.body).appendChild(overlay);
 
   const cerrar = () => overlay.remove();
   overlay.addEventListener("click", (ev) => { if (ev.target === overlay) cerrar(); });
@@ -453,7 +454,11 @@ function centrarVistaInicial(contenedor, dias, bloquesEfectivos, pxPorMin) {
   const minutoReferencia = minutosClasesSemana.length > 0
     ? Math.min(...minutosClasesSemana)
     : hoy.getHours() * 60 + hoy.getMinutes();
-  const destino = Math.max(0, minutoReferencia * pxPorMin - 80);
+  // Antes restaba 80px de "aire" arriba de la clase — con el zoom actual
+  // (pxPorMin ≈ 0.84) eso son ~95 minutos, así que una clase a las 9:30
+  // terminaba mostrando la vista arrancando cerca de las 8:00. Se deja un
+  // margen chico (~14px, un par de líneas de grid) en vez de casi 1h35.
+  const destino = Math.max(0, minutoReferencia * pxPorMin - 14);
   if (document.fullscreenElement) {
     document.fullscreenElement.scrollTop = destino;
   } else if (estado.horarioExpandido) {
@@ -599,6 +604,22 @@ function renderizarHorario() {
   renderizarHorarioInterno();
 }
 
+// IDs de los modales que viven fuera de #horario-grid-contenedor en el HTML
+// (normalmente colgando directo de <body>). El API de Fullscreen SOLO pinta
+// en pantalla document.fullscreenElement y sus descendientes — cualquier
+// modal que quede afuera de ese árbol se vuelve invisible mientras el
+// horario está en pantalla completa (aunque siga "abierto" en el DOM). Por
+// eso se reubican adentro al entrar, y de vuelta a <body> al salir.
+const IDS_MODALES_GLOBALES = ["modal-bloque-horario", "modal-selector-semestre", "modal-bloque-flotante"];
+
+function sincronizarModalesConPantallaCompleta() {
+  const destino = document.fullscreenElement || document.body;
+  IDS_MODALES_GLOBALES.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el && el.parentElement !== destino) destino.appendChild(el);
+  });
+}
+
 /* ===================== Inicialización (listeners, una sola vez) ===================== */
 
 function inicializarHorario() {
@@ -647,7 +668,10 @@ function inicializarHorario() {
       if (document.fullscreenElement) document.exitFullscreen();
       else contenedor.requestFullscreen?.();
     });
-    document.addEventListener("fullscreenchange", () => requestAnimationFrame(() => renderizarHorarioInterno()));
+    document.addEventListener("fullscreenchange", () => {
+      sincronizarModalesConPantallaCompleta();
+      requestAnimationFrame(() => renderizarHorarioInterno());
+    });
   }
   window.addEventListener("resize", () => {
     if (!document.getElementById("seccion-horario")?.classList.contains("oculto")) renderizarHorarioInterno();
