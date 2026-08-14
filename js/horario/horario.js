@@ -108,6 +108,23 @@ function obtenerNombreProfesor(profesorId) {
   return prof ? abreviarNombreProfesor(prof.nombre) : "";
 }
 
+/**
+ * Presencial es el default y no lleva emoji (para no ensuciar la tarjeta
+ * en el caso más común). Virtual y Asincrónico sí se marcan en la
+ * esquina inferior derecha para que salte a la vista de un vistazo,
+ * incluyendo el caso de una excepción de semana que cambie la modalidad
+ * solo esa semana puntual (viene resuelta ya en d.modalidad).
+ */
+function obtenerEmojiModalidad(modalidad) {
+  const normalizado = String(modalidad || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, ""); // quita acentos: "asincronico" === "asincrónico"
+  if (normalizado.startsWith("virtual")) return "💻";
+  if (normalizado.startsWith("asincron")) return "📖";
+  return ""; // presencial u otro valor no reconocido: sin emoji
+}
+
 function obtenerDiasVisiblesOrdenados() {
   const cfg = estado.datos.configuracion;
   const visiblesIds = new Set(cfg.dias_visibles || DIAS_SEMANA_CONFIG.map((d) => d.id));
@@ -204,13 +221,22 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid) {
     tarjeta.style.cssText = `position:absolute; top:${top}px; left:${offsetPx}px; right:0; height:${alto}px; z-index:${10 + b.lane};
       background:${b.color}; color:#fff; border-radius:8px; padding:3px 6px; overflow:hidden;
       box-shadow:0 2px 6px rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.25);`;
+    // Tamaños en rem (no px fijo) para que respeten el mismo escalado que el
+    // resto de la app (0.85rem para el nombre, igual que la mayoría del
+    // texto "normal" del sistema; 0.72rem para los datos secundarios, igual
+    // que las etiquetas pequeñas como .materia-codigo) — antes eran px fijos
+    // más grandes que el resto de la UI y en pantallas angostas cortaban
+    // palabras. word-break + overflow-wrap dejan que el texto se ajuste en
+    // vez de cortarse a la mitad de una palabra.
+    const emojiModalidad = obtenerEmojiModalidad(b.modalidad);
     tarjeta.innerHTML = `
-      <div style="font-size:16.5px; font-weight:600; line-height:1.15; display:flex; align-items:center; gap:4px;">
-        ${b.tieneExcepcionEstaSemana ? `<span title="Esta semana tiene un ajuste puntual" style="font-size:12px; opacity:0.9;">✎</span>` : ""}
+      <div style="font-size:0.85rem; font-weight:600; line-height:1.15; display:flex; align-items:center; gap:4px; margin-bottom:2px; overflow-wrap:break-word; word-break:break-word;">
+        ${b.tieneExcepcionEstaSemana ? `<span title="Esta semana tiene un ajuste puntual" style="font-size:0.7rem; opacity:0.9; flex-shrink:0;">✎</span>` : ""}
         <span>${b.nombreCorto}</span>
       </div>
-      ${b.profesorNombre ? `<div style="font-size:13.5px; opacity:0.9;">${b.profesorNombre}</div>` : ""}
-      ${b.aula ? `<div style="font-size:13.5px; opacity:0.85;">${b.aula}</div>` : ""}
+      ${b.profesorNombre ? `<div style="font-size:0.72rem; opacity:0.9; overflow-wrap:break-word; word-break:break-word;">${b.profesorNombre}</div>` : ""}
+      ${b.aula ? `<div style="font-size:0.72rem; opacity:0.85; overflow-wrap:break-word; word-break:break-word;">${b.aula}</div>` : ""}
+      ${emojiModalidad ? `<span title="${b.modalidad}" style="position:absolute; right:5px; bottom:3px; font-size:0.78rem; line-height:1;">${emojiModalidad}</span>` : ""}
       ${b.enlace ? `<a href="${b.enlace}" target="_blank" rel="noopener" class="horario-btn-entrar-clase" onclick="event.stopPropagation()">Entrar a clase</a>` : ""}
     `;
     tarjeta.addEventListener("click", (ev) => {
@@ -416,7 +442,12 @@ function renderizarHorarioInterno() {
   // para que las tarjetas de materia no se transparenten al pasar detrás.
   // z-index por encima del rango de las tarjetas (10 + lane) para que el
   // header quede siempre POR ENCIMA, nunca tapado por una tarjeta.
-  headerFila.style.cssText = "display:flex; position:sticky; top:0; z-index:50; background:var(--bg-canvas); border-bottom:1px solid rgba(150,150,170,0.15);";
+  // Mismo fondo que usan las tarjetas/paneles del resto de la app
+  // (var(--bg-card), igual que .glass-panel) en vez de --bg-canvas, que
+  // se veía demasiado oscuro. Con blur para que, al ser --bg-card
+  // semitransparente, lo que quede detrás se vea difuminado y nunca
+  // "roto" como antes (además ya tiene z-index por encima de las tarjetas).
+  headerFila.style.cssText = "display:flex; position:sticky; top:0; z-index:50; background:var(--bg-card); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); border-bottom:1px solid rgba(150,150,170,0.15);";
   const espaciador = document.createElement("div");
   espaciador.style.cssText = "width:38px; flex-shrink:0;";
   headerFila.appendChild(espaciador);
@@ -449,6 +480,7 @@ function renderizarHorarioInterno() {
             profesorNombre: obtenerNombreProfesor(b.profesor_id),
             aula: b.aula,
             enlace: b.enlace,
+            modalidad: d.modalidad,
             tieneExcepcionEstaSemana: !!b.tiene_excepcion_esta_semana,
           }))
       );
