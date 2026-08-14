@@ -1933,9 +1933,17 @@ img, svg { max-width: 100%; }
 }
 .ajuste-seccion-cabecera h2 {
   margin: 0;
-  /* 15px * 1.3 = 19.5px (pedido explícito: +30%). Fijo en px, no rem, para
-     que no se vea afectado por el -10% global de letra en teléfono (ver
-     @media(max-width:480px) al principio del archivo). */
+}
+
+/* ---- Tamaño de letra estándar para encabezados de sección (pedido
+   explícito, 15px base +30%) — se usa acá y en cualquier otro encabezado
+   que deba quedar "igual a los de Ajustes": Semana X (Horario), Historial
+   académico / Semestre actual / Semestres pasados (Semestres), Comunidad,
+   Resumen / Gastos generales de la U / Buscar beneficios, y Estadísticas /
+   Vista / Categorías (Plan de Estudios). Centralizado en una sola clase en
+   vez de repetir el font-size suelto en cada lugar, para que sea un único
+   punto de ajuste si el tamaño vuelve a cambiar. ---- */
+.texto-encabezado-seccion {
   font-size: 19.5px;
   font-weight: 600;
 }
