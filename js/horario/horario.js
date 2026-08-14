@@ -411,7 +411,12 @@ function renderizarHorarioInterno() {
   columnaAncha.style.cssText = "display:flex; flex-direction:column; min-width:100%; width:max-content;";
 
   const headerFila = document.createElement("div");
-  headerFila.style.cssText = "display:flex; position:sticky; top:0; z-index:5; background:var(--bg-panel); border-bottom:1px solid rgba(150,150,170,0.15);";
+  // Fondo SÓLIDO (no --bg-panel, que es semitransparente en todas las
+  // paletas — ver mismo patrón en .mapa-nodo dentro de design-system.css)
+  // para que las tarjetas de materia no se transparenten al pasar detrás.
+  // z-index por encima del rango de las tarjetas (10 + lane) para que el
+  // header quede siempre POR ENCIMA, nunca tapado por una tarjeta.
+  headerFila.style.cssText = "display:flex; position:sticky; top:0; z-index:50; background:var(--bg-canvas); border-bottom:1px solid rgba(150,150,170,0.15);";
   const espaciador = document.createElement("div");
   espaciador.style.cssText = "width:38px; flex-shrink:0;";
   headerFila.appendChild(espaciador);
