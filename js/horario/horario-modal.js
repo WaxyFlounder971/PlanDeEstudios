@@ -3,7 +3,14 @@
    o tap directo sobre una tarjeta existente / botón "+ Agregar").
    ========================================================================= */
 
-import { crearBloqueHorario, crearModalidadHorario, sellarTimestamp } from "../core/schema.js";
+import {
+  crearBloqueHorario,
+  crearModalidadHorario,
+  crearExcepcionSemanaBloque,
+  obtenerBloqueEfectivoSemana,
+  calcularNumeroSemanaSemestre,
+  sellarTimestamp,
+} from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { mostrarToast } from "../ui/componentes.js";
@@ -12,6 +19,16 @@ import { buscarSemestreVivoPorId, vincularProfesorAMateriaMatriculada } from "..
 import { abrirModalAltaProfesor } from "../comunidad/comunidad.js";
 
 const ETIQUETAS_MODALIDAD = { presencial: "Presencial", virtual: "Virtual", asincronica: "Asincrónica" };
+
+// Editor de color de materia/bloque (pendiente de la ronda anterior): el
+// schema ya soporta bloque.color (override propio, independiente del color
+// de categoría) y excepcion.color (override solo esa semana) — acá se
+// habilita la UI. Paleta curada fija, mismo patrón visual que
+// .palette-swatch (usado en Ajustes para las paletas de tema).
+const PALETA_COLORES_BLOQUE = [
+  "#a78bfa", "#f472b6", "#fb7185", "#fb923c", "#fbbf24", "#a3e635",
+  "#34d399", "#22d3ee", "#60a5fa", "#818cf8", "#f87171", "#94a3b8",
+];
 
 let contextoActual = null; // { semestreId, bloqueId } de la sesión de edición abierta
 
@@ -62,7 +79,7 @@ function instalarObservadorCierreModal() {
  * como parte visible, para que el fondo/letras se vean bien en cualquier
  * tema en vez del popup nativo del navegador. `opciones` es [{valor, etiqueta}].
  */
-function construirSelectPersonalizado({ opciones, valorInicial, etiquetaVacia, onCambiar }) {
+function construirSelectPersonalizado({ opciones, valorInicial, etiquetaVacia, onCambiar, anchoMinimoLista }) {
   const wrap = document.createElement("div");
   wrap.className = "select-custom";
 
@@ -85,10 +102,13 @@ function construirSelectPersonalizado({ opciones, valorInicial, etiquetaVacia, o
 
   function posicionar() {
     const r = boton.getBoundingClientRect();
+    const ancho = Math.max(r.width, anchoMinimoLista || 0);
     lista.style.position = "fixed";
     lista.style.top = `${r.bottom + 6}px`;
-    lista.style.left = `${r.left}px`;
-    lista.style.width = `${r.width}px`;
+    // Si la lista quedó más ancha que el botón, centrarla contra el botón
+    // en vez de desalinearla hacia la derecha.
+    lista.style.left = `${r.left - (ancho - r.width) / 2}px`;
+    lista.style.width = `${ancho}px`;
   }
   function cerrarSiExterno(e) {
     if (lista.contains(e.target) || boton.contains(e.target)) return;
@@ -350,6 +370,7 @@ function construirSelectorHora({ valorInicial, onCambiar }) {
     opciones: opcionesHora,
     valorInicial: horaActual,
     etiquetaVacia: "HH",
+    anchoMinimoLista: 68,
     onCambiar: (v) => {
       horaActual = v;
       emitir();
@@ -362,6 +383,7 @@ function construirSelectorHora({ valorInicial, onCambiar }) {
     opciones: opcionesMinuto,
     valorInicial: minutoActual,
     etiquetaVacia: "MM",
+    anchoMinimoLista: 68,
     onCambiar: (v) => {
       minutoActual = v;
       emitir();
@@ -392,6 +414,9 @@ function renderizarDiasYHoras(dias, estadoForm) {
   const estaActivo = (diaCodigo) => estadoForm.dias.some((d) => d.dia === diaCodigo);
 
   const redibujarHorarios = () => {
+    estadoForm.dias.sort(
+      (a, b) => dias.findIndex((x) => x.abrevDefault === a.dia) - dias.findIndex((x) => x.abrevDefault === b.dia)
+    );
     horariosCont.innerHTML = "";
     estadoForm.dias.forEach((d) => {
       const fila = document.createElement("div");
@@ -412,7 +437,7 @@ function renderizarDiasYHoras(dias, estadoForm) {
       fila.appendChild(filaSuperior);
 
       const zonaModalidad = document.createElement("div");
-      zonaModalidad.style.maxWidth = "180px";
+      zonaModalidad.style.width = "100%";
       fila.appendChild(zonaModalidad);
 
       let finTocadoAMano = !!d.hora_fin;
@@ -493,8 +518,12 @@ function renderizarDiasYHoras(dias, estadoForm) {
       if (anchoNecesario <= anchoDisponible) return; // entran bien en una fila, no tocar nada
       const anchoPromedio = anchoNecesario / botones.length;
       let columnas = Math.max(2, Math.min(4, Math.floor(anchoDisponible / anchoPromedio)));
+      const gap = 8;
+      const anchoPill = `calc((100% - ${gap * (columnas - 1)}px) / ${columnas})`;
       pillsCont.classList.add("horario-dias-pill-grid");
-      pillsCont.style.gridTemplateColumns = `repeat(${columnas}, 1fr)`;
+      botones.forEach((b) => {
+        b.style.flexBasis = anchoPill;
+      });
     });
   };
 
@@ -515,7 +544,7 @@ function renderizarZonaProfesor(semestre, estadoForm) {
     zona.innerHTML = `
       <div class="row-between">
         <span>${profesorActual.nombre}</span>
-        <button type="button" class="btn btn-secondary" id="hb-btn-quitar-profesor">Quitar</button>
+        <button type="button" class="btn-discreto" id="hb-btn-quitar-profesor">Quitar</button>
       </div>
     `;
     document.getElementById("hb-btn-quitar-profesor").addEventListener("click", () => {

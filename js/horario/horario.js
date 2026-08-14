@@ -12,7 +12,6 @@ import { obtenerPlanActivo } from "../plan/plan-esquema.js";
 import { abrirModalBloqueHorario } from "./horario-modal.js";
 
 const PX_POR_MIN_EXPANDIDO = 0.84; // 30% menos que antes (1.2), pedido explícito
-const MIN_PX_POR_MIN_COMPACTO = 0.34; // piso para que nunca quede ilegible en pantallas muy chicas
 const ALTO_RESERVADO_CHROME = 230; // header de horario + nav inferior, aproximado
 
 // Transitorio (no persistido): qué se está mostrando ahora mismo en Horario.
@@ -56,6 +55,21 @@ function obtenerNumeroSemanaMostrado(semestre) {
 function minutosDesdeHora(horaStr) {
   const [h, m] = String(horaStr || "00:00").split(":").map(Number);
   return (h || 0) * 60 + (m || 0);
+}
+
+/**
+ * Parsea "YYYY-MM-DD" como fecha LOCAL (medianoche en el huso horario del
+ * usuario), no UTC. `new Date("YYYY-MM-DD")` interpreta el string como UTC
+ * medianoche — en cualquier huso horario negativo (ej. Costa Rica, UTC-6)
+ * eso cae en el día anterior a las 6pm local, y de ahí en adelante toda
+ * cuenta basada en .getDate()/.setDate() queda corrida un día. Este era el
+ * bug de "hoy es jueves y aparece marcado/mostrado como viernes".
+ */
+function fechaLocalDesdeISO(str) {
+  const soloFecha = String(str || "").slice(0, 10);
+  const [y, m, d] = soloFecha.split("-").map(Number);
+  if (!y || !m || !d) return new Date(NaN);
+  return new Date(y, m - 1, d);
 }
 
 function obtenerColorBloque(bloqueEfectivo) {
@@ -112,7 +126,7 @@ function obtenerDiasVisiblesOrdenados() {
  * simple que ya usa calcularNumeroSemanaSemestre para no inventar otro).
  */
 function calcularFechaDelDia(semestre, numeroSemana, offsetDesdeInicio) {
-  const inicio = new Date(semestre.fecha_inicio);
+  const inicio = fechaLocalDesdeISO(semestre.fecha_inicio);
   if (isNaN(inicio.getTime())) return null;
   const fecha = new Date(inicio);
   fecha.setDate(inicio.getDate() + (numeroSemana - 1) * 7 + offsetDesdeInicio);
@@ -279,7 +293,7 @@ function abrirSelectorSemestre() {
     item.type = "button";
     item.className = "glass-panel";
     item.style.cssText = "text-align:left; padding:10px 14px; cursor:pointer; border:none; width:100%;";
-    const inicio = new Date(s.fecha_inicio);
+    const inicio = fechaLocalDesdeISO(s.fecha_inicio);
     const finEstimado = new Date(inicio);
     finEstimado.setDate(inicio.getDate() + (Number(s.duracion_semanas) || 16) * 7);
     const fmt = (d) => (isNaN(d.getTime()) ? "" : d.toLocaleDateString("es-CR", { day: "numeric", month: "short", year: "numeric" }));
@@ -315,7 +329,7 @@ function renderizarHeaderHorario(semestre, numeroSemana) {
 
 /* ===================== Vista inicial (centra en la clase más temprana / hora actual) ===================== */
 
-function centrarVistaInicial(cont, dias, bloquesEfectivos, pxPorMin) {
+function centrarVistaInicial(contenedor, dias, bloquesEfectivos, pxPorMin) {
   const hoy = new Date();
   const diaHoy = dias.find((d) => esHoy(calcularFechaDelDia(cacheSemestre, cacheNumeroSemana, d.offsetDesdeInicio)));
   let minutoReferencia = hoy.getHours() * 60 + hoy.getMinutes();
@@ -330,6 +344,12 @@ function centrarVistaInicial(cont, dias, bloquesEfectivos, pxPorMin) {
     document.fullscreenElement.scrollTop = destino;
   } else if (estado.horarioExpandido) {
     window.scrollTo({ top: window.scrollY + destino - window.innerHeight / 3 });
+  } else {
+    // Modo cerrado por defecto: ya no comprime todo el día para que quepa,
+    // corta a la altura disponible y usa su propio scroll vertical interno,
+    // arrancando en la hora más temprana que haya en materias registradas
+    // (o la hora actual si hoy no hay clases).
+    contenedor.scrollTop = destino;
   }
 }
 
@@ -354,28 +374,41 @@ function renderizarHorarioInterno() {
   const dias = obtenerDiasVisiblesOrdenados();
   const bloquesEfectivos = construirBloquesEfectivosSemana(semestre, numeroSemana);
 
-  // Alto disponible sin scroll propio: calculado contra la pantalla real,
-  // salvo que el usuario haya abierto la barra inferior ("expandido"), en
-  // cuyo caso se usa el alto real de 24h y el scroll pasa a ser el de la
-  // página completa (la tarjeta deja su propio overflow).
-  const altoDisponible = Math.max(280, window.innerHeight - ALTO_RESERVADO_CHROME);
-  const pxPorMinCompacto = Math.max(MIN_PX_POR_MIN_COMPACTO, altoDisponible / (24 * 60));
-  const pxPorMin = estado.horarioExpandido || document.fullscreenElement ? PX_POR_MIN_EXPANDIDO : pxPorMinCompacto;
+  // Ya no se comprime el día completo para que "quepa" (se veía feo y
+  // amontonado) — siempre se usa el tamaño legible normal. Lo que cambia
+  // según el modo es cuánto se ve sin scroll:
+  //  - Fullscreen: recorta a 100vh, scroll vertical propio.
+  //  - Expandido (barra abierta): sin recorte, scrollea la página entera.
+  //  - Cerrado (default): recorta a altoDisponible y scrollea internamente,
+  //    arrancando en la clase más temprana del día (ver centrarVistaInicial).
+  const pxPorMin = PX_POR_MIN_EXPANDIDO;
   const altoGrid = 24 * 60 * pxPorMin;
+  const altoDisponible = Math.max(280, window.innerHeight - ALTO_RESERVADO_CHROME);
 
-  contenedor.style.overflowY = estado.horarioExpandido && !document.fullscreenElement ? "visible" : "auto";
-  contenedor.style.maxHeight = document.fullscreenElement ? "100vh" : "";
+  if (document.fullscreenElement) {
+    contenedor.style.maxHeight = "100vh";
+    contenedor.style.overflowY = "auto";
+  } else if (estado.horarioExpandido) {
+    contenedor.style.maxHeight = "";
+    contenedor.style.overflowY = "visible";
+  } else {
+    contenedor.style.maxHeight = `${altoDisponible}px`;
+    contenedor.style.overflowY = "auto";
+  }
+  // El propio contenedor maneja AMBOS ejes de scroll (antes el scroll
+  // horizontal vivía en un div anidado aparte, lo que hacía que el header
+  // sticky "top:0" quedara pegado a ESE div en vez del contenedor real que
+  // scrollea verticalmente — se despegaba de la pantalla al hacer scroll).
+  // Con un solo contenedor para los dos ejes, el header queda siempre
+  // visible arriba Y perfectamente sincronizado con las columnas al
+  // scrollear de lado.
+  contenedor.style.overflowX = "auto";
 
-  // Fila compartida de scroll horizontal: encabezado de días + grid van
-  // DENTRO del mismo contenedor con overflow-x, así nunca se desalinean
-  // al scrollear en teléfono (antes eran 2 filas con overflow separado).
-  const scrollHorizontal = document.createElement("div");
-  scrollHorizontal.style.cssText = "overflow-x:auto; overflow-y:hidden;";
   const columnaAncha = document.createElement("div");
   columnaAncha.style.cssText = "display:flex; flex-direction:column; min-width:100%; width:max-content;";
 
   const headerFila = document.createElement("div");
-  headerFila.style.cssText = "display:flex; position:sticky; top:0; z-index:5; background:inherit;";
+  headerFila.style.cssText = "display:flex; position:sticky; top:0; z-index:5; background:var(--bg-panel); border-bottom:1px solid rgba(150,150,170,0.15);";
   const espaciador = document.createElement("div");
   espaciador.style.cssText = "width:38px; flex-shrink:0;";
   headerFila.appendChild(espaciador);
@@ -415,8 +448,7 @@ function renderizarHorarioInterno() {
 
   columnaAncha.appendChild(headerFila);
   columnaAncha.appendChild(filaGrid);
-  scrollHorizontal.appendChild(columnaAncha);
-  cont.appendChild(scrollHorizontal);
+  cont.appendChild(columnaAncha);
 
   // Barra delgada inferior para expandir/contraer a las 24h reales.
   const barra = document.createElement("div");
@@ -428,7 +460,7 @@ function renderizarHorarioInterno() {
   });
   if (!document.fullscreenElement) cont.appendChild(barra);
 
-  requestAnimationFrame(() => centrarVistaInicial(cont, dias, bloquesEfectivos, pxPorMin));
+  requestAnimationFrame(() => centrarVistaInicial(contenedor, dias, bloquesEfectivos, pxPorMin));
 }
 
 function renderizarHorario() {
