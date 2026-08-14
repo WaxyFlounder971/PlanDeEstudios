@@ -290,6 +290,17 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minI
     // palabras. word-break + overflow-wrap dejan que el texto se ajuste en
     // vez de cortarse a la mitad de una palabra.
     const emojiModalidad = obtenerEmojiModalidad(b.modalidad);
+    // Botón "Entrar" solo si la tarjeta tiene alto real para mostrarlo sin
+    // pisar el nombre/profesor/aula — antes se dibujaba siempre que hubiera
+    // b.enlace, y en tarjetas cortas (típico en teléfono, donde pxPorMin es
+    // menor) quedaba superpuesto sobre el resto del texto, generando clicks
+    // erróneos. Se estima el alto que ya ocupa el contenido de texto
+    // (título ~17px + una línea por profesor/aula si existen, más el
+    // padding vertical de la tarjeta) y solo se agrega el link si sobra
+    // espacio para su propia línea (~16px) sin invadir eso.
+    const lineasTexto = 1 + (b.profesorNombre ? 1 : 0) + (b.aula ? 1 : 0);
+    const altoTextoEstimado = 6 /* padding vertical */ + lineasTexto * 15;
+    const cabeEntrar = alto >= altoTextoEstimado + 16;
     tarjeta.innerHTML = `
       <div style="font-size:0.85rem; font-weight:600; line-height:1.15; display:flex; align-items:center; gap:4px; margin-bottom:2px; overflow-wrap:break-word; word-break:break-word;">
         ${b.tieneExcepcionEstaSemana ? `<span title="Esta semana tiene un ajuste puntual" style="font-size:1.05rem; opacity:0.9; flex-shrink:0;">✎</span>` : ""}
@@ -298,7 +309,7 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minI
       ${b.profesorNombre ? `<div style="font-size:0.72rem; opacity:0.9; overflow-wrap:break-word; word-break:break-word;">${b.profesorNombre}</div>` : ""}
       ${b.aula ? `<div style="font-size:0.72rem; opacity:0.85; overflow-wrap:break-word; word-break:break-word;">${b.aula}</div>` : ""}
       ${emojiModalidad ? `<span title="${b.modalidad}" style="position:absolute; right:5px; bottom:3px; font-size:1.17rem; line-height:1;">${emojiModalidad}</span>` : ""}
-      ${b.enlace ? `<a href="${b.enlace}" target="_blank" rel="noopener" class="horario-btn-entrar-clase" style="position:absolute; left:5px; bottom:3px; line-height:1;" onclick="event.stopPropagation()">Entrar</a>` : ""}
+      ${b.enlace && cabeEntrar ? `<a href="${b.enlace}" target="_blank" rel="noopener" class="horario-btn-entrar-clase" style="position:absolute; left:5px; bottom:3px; line-height:1;" onclick="event.stopPropagation()">Entrar</a>` : ""}
     `;
     tarjeta.addEventListener("click", (ev) => {
       ev.stopPropagation();
