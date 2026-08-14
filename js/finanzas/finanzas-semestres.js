@@ -83,7 +83,7 @@ function renderizarPestanaSemestresFinanzas(contenedor) {
         const badgeBeca = document.createElement("span");
         badgeBeca.className = "badge badge-success";
         badgeBeca.title = "Beca";
-        badgeBeca.textContent = "🎓 " + formatearMonto(registro.beca_monto);
+        badgeBeca.textContent = formatearMonto(registro.beca_monto);
         columnaMontos.appendChild(badgeBeca);
       }
       derecha.appendChild(columnaMontos);

@@ -155,7 +155,7 @@ function construirResumenFinanzas() {
   // siempre en rojo, sin condicionar el color a su signo).
   filaTotales.appendChild(construirLinea("Total gastado", totalGastado, "badge-danger"));
   if (totalBecas > 0) {
-    filaTotales.appendChild(construirLinea("Total cubierto por becas", totalBecas, "badge-success"));
+    filaTotales.appendChild(construirLinea("Total recibido en becas", totalBecas, "badge-success"));
   }
   // Balance: verde si es positivo (más ingresos/beca que gastos), rojo si
   // es negativo (más gastos que ingresos) — el signo "-" explícito ya lo
