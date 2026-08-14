@@ -57,11 +57,16 @@ function renderizarConfigDiasHorario() {
   cfg.nombres_dias_personalizados = cfg.nombres_dias_personalizados || {};
   cfg.dia_inicio_semana = cfg.dia_inicio_semana || "lunes";
 
-  // Día de inicio de semana
+  // Día de inicio de semana — solo Lunes/Domingo (pedido explícito): las
+  // únicas dos convenciones reales de "primer día de la semana" que se
+  // usan en la práctica. Los otros 5 días de DIAS_SEMANA_CONFIG siguen
+  // existiendo para "Días visibles" y "Nombres personalizados" más abajo,
+  // que sí necesitan los 7 — por eso el filtro va solo acá, no se toca la
+  // constante compartida.
   const pillInicio = document.getElementById("pill-dia-inicio-semana");
   if (pillInicio) {
     pillInicio.innerHTML = "";
-    DIAS_SEMANA_CONFIG.forEach((dia) => {
+    DIAS_SEMANA_CONFIG.filter((dia) => dia.id === "lunes" || dia.id === "domingo").forEach((dia) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "pill-item" + (cfg.dia_inicio_semana === dia.id ? " active" : "");
