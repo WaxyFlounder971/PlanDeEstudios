@@ -240,6 +240,32 @@ a { color: var(--accent-1); }
   min-height: 38px;
 }
 
+/* Cronograma (horario-modal.js) — grid de semanas (2026-08-14): antes
+   reutilizaba .pill-group (fila scrolleable, nunca envuelve) y con más de
+   ~10 semanas la mayoría quedaba fuera de vista sin aviso, y el highlight
+   de la semana seleccionada podía quedar oculto tras el scroll. Con CSS
+   Grid + auto-fill, el navegador calcula UNA sola vez cuántas columnas
+   caben según el ancho disponible y las repite en cada fila — así todas
+   las filas quedan con la misma cantidad de botones (la última fila, si
+   queda incompleta, simplemente no llena todas las columnas, nunca
+   desareja el resto) y NUNCA se recorta ni hace falta scrollear. */
+.pill-grid-semanas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.18);
+  padding: 4px;
+  border-radius: var(--radius-md);
+  margin-top: 10px;
+}
+[data-mode="light"] .pill-grid-semanas { background: rgba(0, 0, 0, 0.05); }
+.pill-grid-semanas .pill-item {
+  flex: unset;
+  min-width: 0;
+  text-align: center;
+  padding: 8px 4px;
+}
+
 /* Punto 4 (v1.9.6): separador "·" entre "Bloques ▲▼" y "Materias ▲▼" dentro
    de la misma pill combinada — no es un pill-item, así que no participa del
    reparto flex:1 1 0 de arriba (ancho fijo, solo el glyph). */
