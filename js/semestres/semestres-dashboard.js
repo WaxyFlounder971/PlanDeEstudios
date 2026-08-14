@@ -74,7 +74,8 @@ function construirEncabezadoDashboard(onCambiar) {
   izquierda.className = "row";
   izquierda.style.cssText = "gap:8px; align-items:center;";
   const titulo = document.createElement("h3");
-  titulo.style.cssText = "margin:0; font-size:1.05rem; font-weight:800;";
+  titulo.className = "texto-encabezado-seccion";
+  titulo.style.margin = "0";
   titulo.textContent = "Historial académico";
   izquierda.appendChild(titulo);
   encabezado.appendChild(izquierda);
