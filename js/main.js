@@ -512,6 +512,10 @@ function mostrarSeccion(nombre) {
     btn.classList.toggle("btn-secondary", !activo);
   });
   localStorage.setItem(CLAVE_SECCION_ACTIVA, nombre);
+  // Horario depende de datos que se editan en otras pestañas (nombre/fechas
+  // de semestre, materias matriculadas) — se re-renderiza al entrar para
+  // que nunca se vea desactualizado.
+  if (nombre === "horario") window.renderizarHorario?.();
 }
 // v2.8.9 (punto 10): se expone en window para que ui/componentes.js pueda
 // llamarla desde inicializarNavegacionBotonesMouse() sin crear un import
