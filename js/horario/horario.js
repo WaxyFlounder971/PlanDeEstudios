@@ -13,7 +13,23 @@ import { obtenerPlanActivo } from "../plan/plan-esquema.js";
 import { abrirModalBloqueHorario, construirZonaCronograma } from "./horario-modal.js";
 
 const PX_POR_MIN_EXPANDIDO = 0.84; // 30% menos que antes (1.2), pedido explícito
-const ALTO_RESERVADO_CHROME = 230; // header de horario + nav inferior, aproximado
+
+/**
+ * Rango de horas visibles en el grid (Ajustes → Horario). Antes el grid
+ * siempre dibujaba las 24h completas; ahora el usuario puede acortar el
+ * rango (ej. 6am–11pm) para no scrollear horas muertas que nunca usa.
+ * Guardado como enteros 0-24 (hora_inicio puede ser 0=12am, hora_fin hasta
+ * 24=12am del día siguiente). Default: rango completo (ambos "12 am").
+ */
+function obtenerRangoHorasHorario() {
+  const cfg = estado.datos.configuracion || {};
+  let horaInicio = Number.isFinite(cfg.horario_hora_inicio) ? cfg.horario_hora_inicio : 0;
+  let horaFin = Number.isFinite(cfg.horario_hora_fin) ? cfg.horario_hora_fin : 24;
+  horaInicio = Math.min(Math.max(horaInicio, 0), 23);
+  horaFin = Math.min(Math.max(horaFin, 1), 24);
+  if (horaFin <= horaInicio) horaFin = 24; // rango inválido guardado -> cae a día completo
+  return { horaInicio, horaFin };
+}
 
 // Transitorio (no persistido): qué se está mostrando ahora mismo en Horario.
 estado.horarioSemestreId = estado.horarioSemestreId || null;
@@ -203,12 +219,14 @@ function construirClasesEfectivasSemana(semestre, numeroSemana) {
   return (semestre.bloques_horario || []).flatMap((b) => obtenerClasesEfectivasSemana(b, numeroSemana));
 }
 
-function construirColumnaHoras(pxPorMin, altoGrid) {
+function construirColumnaHoras(pxPorMin, altoGrid, minInicioRango, minFinRango) {
   const col = document.createElement("div");
   col.className = "horario-col-horas";
   col.style.cssText = `position:relative; width:38px; flex-shrink:0; height:${altoGrid}px;`;
-  for (let h = 0; h <= 24; h++) {
-    const top = h * 60 * pxPorMin;
+  const horaInicio = Math.ceil(minInicioRango / 60);
+  const horaFin = Math.floor(minFinRango / 60);
+  for (let h = horaInicio; h <= horaFin; h++) {
+    const top = (h * 60 - minInicioRango) * pxPorMin;
     // Antes: una sola línea "14:00" en formato 24h. Ahora: dos líneas,
     // número de hora en 12h arriba y am/pm abajo (ej. "2" / "pm"), y con
     // transform:translateY(-50%) las dos líneas quedan centradas
@@ -226,26 +244,32 @@ function construirColumnaHoras(pxPorMin, altoGrid) {
   return col;
 }
 
-function construirLineasHorarias(pxPorMin) {
+function construirLineasHorarias(pxPorMin, minInicioRango, minFinRango) {
   const stops = [];
-  for (let min = 0; min <= 24 * 60; min += 30) {
-    const y = min * pxPorMin;
+  for (let min = minInicioRango; min <= minFinRango; min += 30) {
+    const y = (min - minInicioRango) * pxPorMin;
     const opacidad = min % 60 === 0 ? 0.28 : 0.1;
     stops.push(`linear-gradient(rgba(150,150,170,${opacidad}), rgba(150,150,170,${opacidad})) 0 ${y}px / 100% 1px no-repeat`);
   }
   return stops.join(",\n");
 }
 
-function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid) {
+function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango) {
   const col = document.createElement("div");
   col.className = "horario-col-dia";
   col.dataset.diaCodigo = dia.abrevDefault;
-  col.style.cssText = `position:relative; flex:1; min-width:56px; height:${altoGrid}px; background:${construirLineasHorarias(pxPorMin)}; cursor:pointer; border-left:1px solid rgba(150,150,170,0.15);`;
+  col.style.cssText = `position:relative; flex:1; min-width:56px; height:${altoGrid}px; background:${construirLineasHorarias(pxPorMin, minInicioRango, minFinRango)}; cursor:pointer; border-left:1px solid rgba(150,150,170,0.15);`;
 
   const conLanes = calcularLanesDia(bloquesDia);
   conLanes.forEach((b) => {
-    const top = Math.max(0, b.inicioMin * pxPorMin);
-    const alto = Math.max(24, (b.finMin - b.inicioMin) * pxPorMin);
+    // Recorte al rango configurado (Ajustes → Horario): un bloque que
+    // empieza o termina fuera del rango visible se corta en el borde; si
+    // queda enteramente fuera, no se dibuja (sigue existiendo en los datos).
+    const inicioClamp = Math.max(b.inicioMin, minInicioRango);
+    const finClamp = Math.min(b.finMin, minFinRango);
+    if (finClamp <= inicioClamp) return;
+    const top = Math.max(0, (inicioClamp - minInicioRango) * pxPorMin);
+    const alto = Math.max(24, (finClamp - inicioClamp) * pxPorMin);
     const offsetPx = b.lane * 12;
     const tarjeta = document.createElement("div");
     tarjeta.className = "horario-bloque-tarjeta";
@@ -287,7 +311,7 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid) {
     if (ev.target !== col) return;
     const rect = col.getBoundingClientRect();
     const offsetY = ev.clientY - rect.top;
-    const minutos = Math.round(offsetY / pxPorMin / 15) * 15;
+    const minutos = minInicioRango + Math.round(offsetY / pxPorMin / 15) * 15;
     mostrarBloqueFlotante(semestre, dia, minutos, ev.clientX, ev.clientY);
   });
 
@@ -476,7 +500,7 @@ function renderizarHeaderHorario(semestre, numeroSemana) {
 
 /* ===================== Vista inicial (centra en la clase más temprana / hora actual) ===================== */
 
-function centrarVistaInicial(contenedor, dias, clasesEfectivas, pxPorMin) {
+function centrarVistaInicial(contenedor, dias, clasesEfectivas, pxPorMin, minInicioRango, minFinRango) {
   const hoy = new Date();
   // Antes solo miraba las clases de HOY (y si hoy no había, caía a la hora
   // actual) — por eso casi nunca arrancaba en la primera clase real: si hoy
@@ -489,14 +513,17 @@ function centrarVistaInicial(contenedor, dias, clasesEfectivas, pxPorMin) {
   const minutosClasesSemana = clasesEfectivas
     .filter((c) => diasAbrevVisibles.has(c.dia))
     .map((c) => minutosDesdeHora(c.hora_inicio));
-  const minutoReferencia = minutosClasesSemana.length > 0
+  const minutoReferenciaCrudo = minutosClasesSemana.length > 0
     ? Math.min(...minutosClasesSemana)
     : hoy.getHours() * 60 + hoy.getMinutes();
+  // Recorta la referencia al rango visible configurado, si no el destino de
+  // scroll podría caer fuera del alto real del grid.
+  const minutoReferencia = Math.min(Math.max(minutoReferenciaCrudo, minInicioRango), minFinRango);
   // Antes restaba 80px de "aire" arriba de la clase — con el zoom actual
   // (pxPorMin ≈ 0.84) eso son ~95 minutos, así que una clase a las 9:30
   // terminaba mostrando la vista arrancando cerca de las 8:00. Se deja un
   // margen chico (~14px, un par de líneas de grid) en vez de casi 1h35.
-  const destino = Math.max(0, minutoReferencia * pxPorMin - 14);
+  const destino = Math.max(0, (minutoReferencia - minInicioRango) * pxPorMin - 14);
   if (document.fullscreenElement) {
     document.fullscreenElement.scrollTop = destino;
   } else if (estado.horarioExpandido) {
@@ -539,8 +566,19 @@ function renderizarHorarioInterno() {
   //  - Cerrado (default): recorta a altoDisponible y scrollea internamente,
   //    arrancando en la clase más temprana del día (ver centrarVistaInicial).
   const pxPorMin = PX_POR_MIN_EXPANDIDO;
-  const altoGrid = 24 * 60 * pxPorMin;
-  const altoDisponible = Math.max(280, window.innerHeight - ALTO_RESERVADO_CHROME);
+  const { horaInicio, horaFin } = obtenerRangoHorasHorario();
+  const minInicioRango = horaInicio * 60;
+  const minFinRango = horaFin * 60;
+  const altoGrid = (minFinRango - minInicioRango) * pxPorMin;
+  // Antes se restaba un estimado fijo (ALTO_RESERVADO_CHROME) del alto de
+  // pantalla, que no siempre coincidía con el chrome real arriba del grid
+  // (header de horario, nav, etc. cambian de alto según la pantalla). Ahora
+  // se mide la posición real del contenedor y se usa TODO el espacio que
+  // queda hasta el fondo — así el cuadro siempre llega hasta el final de la
+  // pantalla sin tener que abrir el modo expandido.
+  const paddingInferior = window.innerWidth <= 768 ? 16 : 28;
+  const alturaDisponibleReal = window.innerHeight - contenedor.getBoundingClientRect().top - paddingInferior;
+  const altoDisponible = Math.max(280, alturaDisponibleReal);
 
   if (document.fullscreenElement) {
     contenedor.style.maxHeight = "100vh";
@@ -592,7 +630,7 @@ function renderizarHorarioInterno() {
 
   const filaGrid = document.createElement("div");
   filaGrid.style.cssText = "display:flex;";
-  filaGrid.appendChild(construirColumnaHoras(pxPorMin, altoGrid));
+  filaGrid.appendChild(construirColumnaHoras(pxPorMin, altoGrid, minInicioRango, minFinRango));
   dias.forEach((dia) => {
     // clasesEfectivas ya viene PLANA (una entrada por día puntual, ver
     // obtenerClasesEfectivasSemana en schema.js) — no hay .dias anidado que
@@ -612,7 +650,7 @@ function renderizarHorarioInterno() {
         notas: c.notas,
         tieneExcepcionEstaSemana: !!c.tiene_ajuste_cronograma,
       }));
-    filaGrid.appendChild(construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid));
+    filaGrid.appendChild(construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango));
   });
 
   columnaAncha.appendChild(headerFila);
@@ -634,7 +672,7 @@ function renderizarHorarioInterno() {
   });
   if (!document.fullscreenElement) cont.appendChild(barra);
 
-  requestAnimationFrame(() => centrarVistaInicial(contenedor, dias, clasesEfectivas, pxPorMin));
+  requestAnimationFrame(() => centrarVistaInicial(contenedor, dias, clasesEfectivas, pxPorMin, minInicioRango, minFinRango));
 }
 
 function renderizarHorario() {

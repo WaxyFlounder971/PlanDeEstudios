@@ -861,7 +861,14 @@ function renderizarZonaCronograma(zona, chevron, semestre, bloque, estadoLocal, 
     }
   }
 
-  zona.innerHTML = `<div class="pill-group" style="margin-top:10px;">${pillsHtml}</div>${tarjetasHtml}`;
+  // Antes: .pill-group (scroll horizontal de una sola línea) — con más de
+  // ~10 semanas, la mayoría quedaba fuera de vista sin indicio de que había
+  // que deslizar, y al re-renderizar el scroll volvía a 0 así que la
+  // semana realmente seleccionada podía quedar oculta (se veía como si el
+  // highlight estuviera "en cualquier lado"). Ahora: grid que envuelve,
+  // TODAS las semanas visibles de una, mismo número de columnas en cada
+  // fila (las incompletas al final dejan casillas vacías, nunca desparejo).
+  zona.innerHTML = `<div class="pill-grid-semanas">${pillsHtml}</div>${tarjetasHtml}`;
 
   zona.querySelectorAll("[data-semana]").forEach((btn) => {
     btn.addEventListener("click", () => {
