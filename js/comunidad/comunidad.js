@@ -3864,7 +3864,7 @@ function renderizarComunidad() {
   const encabezado = document.createElement("section");
   encabezado.className = "glass-card stack";
   encabezado.innerHTML = `
-    <h2 style="margin:0;">Comunidad</h2>
+    <h2 class="texto-encabezado-seccion" style="margin:0;">Comunidad</h2>
     <p class="muted" style="margin:0;">Profesores y compañeros con los que compartiste clase.</p>
   `;
   encabezado.appendChild(
