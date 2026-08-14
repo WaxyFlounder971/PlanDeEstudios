@@ -570,6 +570,7 @@ function construirTarjetaVista(plan) {
     card.style.maxHeight = "100vh";
   }
   const titulo = document.createElement("h2");
+  titulo.className = "texto-encabezado-seccion";
   titulo.style.margin = "0";
   titulo.textContent = "Vista";
   encabezado.appendChild(titulo);

@@ -36,6 +36,7 @@ function construirPanelCategorias() {
   const fila = document.createElement("div");
   fila.className = "row-between";
   const h3 = document.createElement("h2");
+  h3.className = "texto-encabezado-seccion";
   h3.style.margin = "0";
   h3.textContent = "Categorías";
   fila.appendChild(h3);
