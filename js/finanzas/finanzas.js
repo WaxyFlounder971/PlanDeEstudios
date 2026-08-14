@@ -164,7 +164,7 @@ function construirResumenFinanzas() {
     construirLinea("Balance neto de la carrera", balanceNeto, balanceNeto >= 0 ? "badge-success" : "badge-danger")
   );
 
-  sec.innerHTML = `<h2 style="margin:0;">💰 Resumen</h2>`;
+  sec.innerHTML = `<h2 class="texto-encabezado-seccion" style="margin:0;">💰 Resumen</h2>`;
   sec.appendChild(filaTotales);
 
   if (totalBecas === 0 && totalGastado === 0) {
