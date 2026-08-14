@@ -156,6 +156,105 @@ function etiquetaHora12(h) {
   return `${hora12} ${periodo}`;
 }
 
+/**
+ * Selector custom genérico (mismo patrón visual/comportamiento que Moneda y
+ * Escala de notas más abajo): botón + lista propia reparentada a
+ * document.body para posicionarse con position:fixed, así el fondo/letras
+ * respetan el tema en vez del popup nativo del navegador. `opciones` es
+ * [{ valor, etiqueta }]. Se usa acá para Rango de horas del horario — antes
+ * ese campo escribía <option> directo dentro de un <div> (bug: <option>
+ * fuera de un <select> no arma ningún control, el navegador solo pinta el
+ * texto suelto de cada opción, una debajo de otra, que es justo el "ya solo
+ * salen las horas y no el select" reportado).
+ */
+function construirSelectCustomAjustes({ opciones, valorInicial, onCambiar }) {
+  const selectOculto = document.createElement("select");
+  selectOculto.hidden = true;
+  selectOculto.setAttribute("aria-hidden", "true");
+  selectOculto.tabIndex = -1;
+  opciones.forEach((op) => {
+    const opt = document.createElement("option");
+    opt.value = String(op.valor);
+    opt.textContent = op.etiqueta;
+    selectOculto.appendChild(opt);
+  });
+  selectOculto.value = String(valorInicial);
+
+  const dropdown = document.createElement("div");
+  dropdown.className = "select-custom";
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.className = "form-input select-custom-boton";
+  const inicial = opciones.find((op) => String(op.valor) === selectOculto.value);
+  boton.textContent = inicial ? inicial.etiqueta : "Elegir";
+  const lista = document.createElement("ul");
+  lista.className = "select-custom-lista oculto";
+
+  function posicionar() {
+    const r = boton.getBoundingClientRect();
+    lista.style.position = "fixed";
+    lista.style.top = `${r.bottom + 6}px`;
+    lista.style.left = `${r.left}px`;
+    lista.style.width = `${r.width}px`;
+  }
+  function cerrar() {
+    lista.classList.add("oculto");
+    boton.setAttribute("aria-expanded", "false");
+    if (lista.parentElement === document.body) dropdown.appendChild(lista);
+    window.removeEventListener("scroll", cerrarSiScrollExterno, true);
+    window.removeEventListener("resize", cerrar);
+  }
+  function cerrarSiScrollExterno(e) {
+    if (lista.contains(e.target)) return;
+    cerrar();
+  }
+  function abrir() {
+    document.querySelectorAll(".select-custom-lista").forEach((l) => {
+      if (l !== lista) {
+        l.classList.add("oculto");
+        if (l.parentElement === document.body && l._volverA) l._volverA.appendChild(l);
+      }
+    });
+    lista._volverA = dropdown;
+    document.body.appendChild(lista);
+    posicionar();
+    lista.classList.remove("oculto");
+    boton.setAttribute("aria-expanded", "true");
+    window.addEventListener("scroll", cerrarSiScrollExterno, true);
+    window.addEventListener("resize", cerrar);
+  }
+
+  opciones.forEach((op) => {
+    const item = document.createElement("li");
+    item.className = "select-custom-opcion";
+    item.textContent = op.etiqueta;
+    if (String(op.valor) === selectOculto.value) item.classList.add("activa");
+    item.addEventListener("click", () => {
+      selectOculto.value = String(op.valor);
+      boton.textContent = op.etiqueta;
+      lista.querySelectorAll(".select-custom-opcion").forEach((li) => li.classList.remove("activa"));
+      item.classList.add("activa");
+      cerrar();
+      onCambiar(op.valor);
+    });
+    lista.appendChild(item);
+  });
+  boton.setAttribute("aria-expanded", "false");
+  boton.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (lista.classList.contains("oculto")) abrir();
+    else cerrar();
+  });
+  document.addEventListener("click", (e) => {
+    if (!dropdown.contains(e.target) && !lista.contains(e.target)) cerrar();
+  });
+
+  dropdown.appendChild(boton);
+  dropdown.appendChild(lista);
+  dropdown.appendChild(selectOculto);
+  return dropdown;
+}
+
 function renderizarConfigRangoHorasHorario() {
   const cfg = estado.datos.configuracion;
   // Mismos defaults que el fallback de obtenerRangoHorasHorario en
@@ -164,31 +263,35 @@ function renderizarConfigRangoHorasHorario() {
   cfg.horario_hora_inicio = Number.isFinite(cfg.horario_hora_inicio) ? cfg.horario_hora_inicio : 0;
   cfg.horario_hora_fin = Number.isFinite(cfg.horario_hora_fin) ? cfg.horario_hora_fin : 24;
 
-  const selInicio = document.getElementById("select-horario-hora-inicio");
-  const selFin = document.getElementById("select-horario-hora-fin");
-  if (!selInicio || !selFin) return;
+  const contInicio = document.getElementById("select-horario-hora-inicio");
+  const contFin = document.getElementById("select-horario-hora-fin");
+  if (!contInicio || !contFin) return;
 
   // Inicio: 12am (0) a 11pm (23). Fin: 1am (1) a 12am del día siguiente
   // (24, mostrado también como "12 am" vía etiquetaHora12(24) = 24%24=0).
-  selInicio.innerHTML = Array.from({ length: 24 }, (_, h) => h)
-    .map((h) => `<option value="${h}"${cfg.horario_hora_inicio === h ? " selected" : ""}>${etiquetaHora12(h)}</option>`)
-    .join("");
-  selFin.innerHTML = Array.from({ length: 24 }, (_, h) => h + 1)
-    .map((h) => `<option value="${h}"${cfg.horario_hora_fin === h ? " selected" : ""}>${etiquetaHora12(h)}</option>`)
-    .join("");
+  contInicio.innerHTML = "";
+  contInicio.appendChild(construirSelectCustomAjustes({
+    opciones: Array.from({ length: 24 }, (_, h) => ({ valor: h, etiqueta: etiquetaHora12(h) })),
+    valorInicial: cfg.horario_hora_inicio,
+    onCambiar: (valor) => {
+      cfg.horario_hora_inicio = Number(valor);
+      sellarTimestamp(cfg);
+      marcarCambioPendiente();
+      window.renderizarHorario?.();
+    },
+  }));
 
-  selInicio.onchange = () => {
-    cfg.horario_hora_inicio = Number(selInicio.value);
-    sellarTimestamp(cfg);
-    marcarCambioPendiente();
-    window.renderizarHorario?.();
-  };
-  selFin.onchange = () => {
-    cfg.horario_hora_fin = Number(selFin.value);
-    sellarTimestamp(cfg);
-    marcarCambioPendiente();
-    window.renderizarHorario?.();
-  };
+  contFin.innerHTML = "";
+  contFin.appendChild(construirSelectCustomAjustes({
+    opciones: Array.from({ length: 24 }, (_, h) => h + 1).map((h) => ({ valor: h, etiqueta: etiquetaHora12(h) })),
+    valorInicial: cfg.horario_hora_fin,
+    onCambiar: (valor) => {
+      cfg.horario_hora_fin = Number(valor);
+      sellarTimestamp(cfg);
+      marcarCambioPendiente();
+      window.renderizarHorario?.();
+    },
+  }));
 }
 
 const SECCIONES_TOGGLEABLES = [
