@@ -186,10 +186,18 @@ function construirColumnaHoras(pxPorMin, altoGrid) {
   col.style.cssText = `position:relative; width:38px; flex-shrink:0; height:${altoGrid}px;`;
   for (let h = 0; h <= 24; h++) {
     const top = h * 60 * pxPorMin;
-    const etiqueta = document.createElement("span");
+    // Antes: una sola línea "14:00" en formato 24h. Ahora: dos líneas,
+    // número de hora en 12h arriba y am/pm abajo (ej. "2" / "pm"), y con
+    // transform:translateY(-50%) las dos líneas quedan centradas
+    // verticalmente respecto a la raya que marca esa hora (antes el
+    // offset -7px era solo una aproximación para una sola línea).
+    const horaMod = h % 24; // h=24 (medianoche del día siguiente) se ve igual que h=0
+    const hora12 = horaMod % 12 === 0 ? 12 : horaMod % 12;
+    const periodo = horaMod < 12 ? "am" : "pm";
+    const etiqueta = document.createElement("div");
     etiqueta.className = "muted";
-    etiqueta.style.cssText = `position:absolute; top:${top - 7}px; right:6px; font-size:0.62rem;`;
-    etiqueta.textContent = String(h).padStart(2, "0") + ":00";
+    etiqueta.style.cssText = `position:absolute; top:${top}px; right:6px; transform:translateY(-50%); text-align:center; line-height:1.1;`;
+    etiqueta.innerHTML = `<div style="font-size:0.68rem; font-weight:600;">${hora12}</div><div style="font-size:0.56rem;">${periodo}</div>`;
     col.appendChild(etiqueta);
   }
   return col;
@@ -360,14 +368,22 @@ function renderizarHeaderHorario(semestre, numeroSemana) {
 
 function centrarVistaInicial(contenedor, dias, bloquesEfectivos, pxPorMin) {
   const hoy = new Date();
-  const diaHoy = dias.find((d) => esHoy(calcularFechaDelDia(cacheSemestre, cacheNumeroSemana, d.offsetDesdeInicio)));
-  let minutoReferencia = hoy.getHours() * 60 + hoy.getMinutes();
-  if (diaHoy) {
-    const minutosClasesHoy = bloquesEfectivos
-      .filter((b) => (b.dias || []).some((d) => d.dia === diaHoy.abrevDefault))
-      .flatMap((b) => (b.dias || []).filter((d) => d.dia === diaHoy.abrevDefault).map((d) => minutosDesdeHora(d.hora_inicio)));
-    if (minutosClasesHoy.length > 0) minutoReferencia = Math.min(...minutosClasesHoy);
-  }
+  // Antes solo miraba las clases de HOY (y si hoy no había, caía a la hora
+  // actual) — por eso casi nunca arrancaba en la primera clase real: si hoy
+  // no tenías clase a esa hora, se iba a la hora del reloj en vez de a la
+  // materia más temprana de la semana. Ahora se busca la hora de inicio
+  // más temprana entre TODOS los días visibles, y solo si no hay ninguna
+  // clase registrada en toda la semana se usa la hora actual como último
+  // recurso.
+  const diasAbrevVisibles = new Set(dias.map((d) => d.abrevDefault));
+  const minutosClasesSemana = bloquesEfectivos.flatMap((b) =>
+    (b.dias || [])
+      .filter((d) => diasAbrevVisibles.has(d.dia))
+      .map((d) => minutosDesdeHora(d.hora_inicio))
+  );
+  const minutoReferencia = minutosClasesSemana.length > 0
+    ? Math.min(...minutosClasesSemana)
+    : hoy.getHours() * 60 + hoy.getMinutes();
   const destino = Math.max(0, minutoReferencia * pxPorMin - 80);
   if (document.fullscreenElement) {
     document.fullscreenElement.scrollTop = destino;
@@ -377,7 +393,7 @@ function centrarVistaInicial(contenedor, dias, bloquesEfectivos, pxPorMin) {
     // Modo cerrado por defecto: ya no comprime todo el día para que quepa,
     // corta a la altura disponible y usa su propio scroll vertical interno,
     // arrancando en la hora más temprana que haya en materias registradas
-    // (o la hora actual si hoy no hay clases).
+    // (o la hora actual si no hay ninguna clase registrada).
     contenedor.scrollTop = destino;
   }
 }
@@ -442,12 +458,12 @@ function renderizarHorarioInterno() {
   // para que las tarjetas de materia no se transparenten al pasar detrás.
   // z-index por encima del rango de las tarjetas (10 + lane) para que el
   // header quede siempre POR ENCIMA, nunca tapado por una tarjeta.
-  // Mismo fondo que usan las tarjetas/paneles del resto de la app
-  // (var(--bg-card), igual que .glass-panel) en vez de --bg-canvas, que
-  // se veía demasiado oscuro. Con blur para que, al ser --bg-card
-  // semitransparente, lo que quede detrás se vea difuminado y nunca
-  // "roto" como antes (además ya tiene z-index por encima de las tarjetas).
-  headerFila.style.cssText = "display:flex; position:sticky; top:0; z-index:50; background:var(--bg-card); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); border-bottom:1px solid rgba(150,150,170,0.15);";
+  // --bg-header-solido: mismo color que se ve al mirar una tarjeta común
+  // (--bg-card) sobre el fondo (--bg-canvas), pero ya "aplanado" a un color
+  // sólido para esta paleta — se agregó junto a los demás tokens en
+  // design-system.css. No es transparente, así que nunca se ve nada de
+  // lo que scrollea por debajo.
+  headerFila.style.cssText = "display:flex; position:sticky; top:0; z-index:50; background:var(--bg-header-solido); border-bottom:1px solid rgba(150,150,170,0.15);";
   const espaciador = document.createElement("div");
   espaciador.style.cssText = "width:38px; flex-shrink:0;";
   headerFila.appendChild(espaciador);
@@ -492,8 +508,13 @@ function renderizarHorarioInterno() {
   cont.appendChild(columnaAncha);
 
   // Barra delgada inferior para expandir/contraer a las 24h reales.
+  // Antes quedaba al final del contenido (había que scrollear hasta abajo
+  // del todo para verla). Con sticky bottom:0 se queda fija abajo del
+  // área visible, igual que el header queda fijo arriba, para que siempre
+  // se note que se puede tocar.
   const barra = document.createElement("div");
   barra.className = "horario-barra-expandir";
+  barra.style.cssText = "position:sticky; bottom:0; z-index:40; background:var(--bg-header-solido);";
   barra.innerHTML = `<span class="horario-barra-expandir-icono" style="display:inline-block; transform:rotate(${estado.horarioExpandido ? "90deg" : "-90deg"});">‹</span>`;
   barra.addEventListener("click", () => {
     estado.horarioExpandido = !estado.horarioExpandido;
