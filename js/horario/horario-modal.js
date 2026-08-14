@@ -6,9 +6,6 @@
 import {
   crearBloqueHorario,
   crearModalidadHorario,
-  crearExcepcionSemanaBloque,
-  obtenerBloqueEfectivoSemana,
-  calcularNumeroSemanaSemestre,
   sellarTimestamp,
 } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
@@ -22,9 +19,9 @@ const ETIQUETAS_MODALIDAD = { presencial: "Presencial", virtual: "Virtual", asin
 
 // Editor de color de materia/bloque (pendiente de la ronda anterior): el
 // schema ya soporta bloque.color (override propio, independiente del color
-// de categoría) y excepcion.color (override solo esa semana) — acá se
-// habilita la UI. Selector totalmente libre (input type="color" nativo),
-// sin paleta predefinida — ver construirSelectorColor más abajo.
+// de categoría) — acá se habilita la UI. Selector totalmente libre (input
+// type="color" nativo), sin paleta predefinida — ver construirSelectorColor
+// más abajo.
 
 let contextoActual = null; // { semestreId, bloqueId } de la sesión de edición abierta
 
@@ -41,11 +38,6 @@ function obtenerDiasConfig() {
 function cerrarModalBloqueHorario() {
   document.getElementById("modal-bloque-horario")?.classList.add("oculto");
   contextoActual = null;
-  // Cualquier excepción marcada para borrar en esta sesión (botón ✕ en una
-  // tarjeta de excepción) que nunca llegó a Guardar no debe arrastrarse a
-  // la próxima vez que se abra el modal — Cancelar debe descartar TODO,
-  // igual que ya pasa con estadoForm.dias.
-  idsExcepcionesABorrar = new Set();
 }
 
 function limpiarSelectsFlotantes() {
@@ -289,8 +281,6 @@ function renderizarFormulario(semestre, bloque, estadoForm) {
       <textarea id="hb-notas" class="form-textarea" style="resize:none; overflow:hidden; min-height:44px;">${estadoForm.notas}</textarea>
     </div>
 
-    ${bloque ? `<div id="hb-excepciones-zona"></div>` : ""}
-
     <div class="row-between" style="margin-top:12px;">
       ${bloque ? `<button type="button" class="btn btn-danger" id="hb-btn-borrar">Borrar</button>` : "<span></span>"}
       <div class="row" style="gap:8px;">
@@ -343,11 +333,6 @@ function renderizarFormulario(semestre, bloque, estadoForm) {
 
   // Color del bloque (override propio, independiente de la categoría)
   renderizarZonaColor(estadoForm);
-
-  // Excepciones por semana (solo al editar un bloque ya existente)
-  if (bloque) {
-    renderizarZonaExcepciones(semestre, bloque, dias);
-  }
 
   // Notas: se agranda solo hacia abajo, nunca a lo ancho ni con handle de resize.
   const textareaNotas = document.getElementById("hb-notas");
@@ -718,272 +703,14 @@ function renderizarZonaProfesor(semestre, estadoForm) {
   });
 }
 
-/* ===================== Excepciones por semana (solo al editar) ===================== */
 
-/**
- * Horario — excepciones de semana: tarjetitas "Semana N" bajo el bloque,
- * cada una editable en un mini-formulario propio (mismos campos clave que
- * el bloque: días/horas, modalidad, aula, profesor, enlace, notas, color,
- * y el switch "Sin clase esta semana"). Los campos que el usuario NO toca
- * en la excepción quedan `undefined` en el objeto (no se guardan) — así
- * siguen heredando del bloque base según obtenerBloqueEfectivoSemana.
- *
- * Se opera sobre bloque.excepciones_semana directo (mutación en memoria);
- * recién se sella/persiste al tocar Guardar del modal principal — mismo
- * patrón que estadoForm.dias para el bloque base, para que Cancelar
- * descarte también los cambios de excepciones sin persistir nada a medias.
- */
-function renderizarZonaExcepciones(semestre, bloque, dias) {
-  const zona = document.getElementById("hb-excepciones-zona");
-  if (!zona) return;
-
-  const numeroSemanaActual = calcularNumeroSemanaSemestre(semestre);
-  const totalSemanas = Number(semestre.duracion_semanas) || 16;
-
-  const redibujar = () => {
-    zona.innerHTML = `
-      <div class="row-between" style="margin-top:4px;">
-        <label class="form-label" style="margin:0;">Excepciones por semana</label>
-        <button type="button" class="btn-discreto" id="hb-btn-agregar-excepcion">+ Agregar excepción</button>
-      </div>
-      <div id="hb-lista-excepciones" class="stack" style="gap:8px; margin-top:6px;"></div>
-    `;
-
-    const lista = document.getElementById("hb-lista-excepciones");
-    const excepciones = [...(bloque.excepciones_semana || [])].sort((a, b) => a.numero_semana - b.numero_semana);
-
-    if (excepciones.length === 0) {
-      lista.innerHTML = `<p class="muted" style="font-size:0.78rem; margin:0;">Sin ajustes puntuales — cada semana usa la configuración de arriba.</p>`;
-    }
-
-    excepciones.forEach((exc) => {
-      lista.appendChild(construirTarjetaExcepcion(exc, dias, numeroSemanaActual, redibujar));
-    });
-
-    document.getElementById("hb-btn-agregar-excepcion").addEventListener("click", () => {
-      bloque.excepciones_semana = bloque.excepciones_semana || [];
-      // Primera semana libre a partir de la actual, para que la excepción
-      // recién creada sea inmediatamente relevante en vez de perderse en
-      // semana 1 de un semestre ya avanzado.
-      const usadas = new Set(bloque.excepciones_semana.map((e) => e.numero_semana));
-      let semanaSugerida = numeroSemanaActual;
-      while (usadas.has(semanaSugerida) && semanaSugerida <= totalSemanas) semanaSugerida++;
-      if (semanaSugerida > totalSemanas) semanaSugerida = numeroSemanaActual;
-
-      const nueva = crearExcepcionSemanaBloque({ numeroSemana: semanaSugerida });
-      bloque.excepciones_semana.push(nueva);
-      redibujar();
-    });
-  };
-
-  redibujar();
-}
-
-function construirTarjetaExcepcion(exc, dias, numeroSemanaActual, alCambiar) {
-  const tarjeta = document.createElement("div");
-  tarjeta.className = "glass-panel stack";
-  tarjeta.style.cssText = "padding:10px 12px; gap:8px;";
-
-  const filaTop = document.createElement("div");
-  filaTop.className = "row-between";
-
-  const zonaNumero = document.createElement("div");
-  zonaNumero.className = "row";
-  zonaNumero.style.cssText = "gap:8px; align-items:center;";
-  const etiquetaSemana = document.createElement("span");
-  etiquetaSemana.style.fontWeight = "600";
-  etiquetaSemana.textContent = `Semana ${exc.numero_semana}` + (exc.numero_semana === numeroSemanaActual ? " (actual)" : "");
-  zonaNumero.appendChild(etiquetaSemana);
-
-  const inputSemana = document.createElement("input");
-  inputSemana.type = "number";
-  inputSemana.className = "form-input";
-  inputSemana.style.cssText = "width:64px; padding:6px 8px;";
-  inputSemana.min = "1";
-  inputSemana.value = exc.numero_semana;
-  inputSemana.addEventListener("change", () => {
-    const n = Math.max(1, Number(inputSemana.value) || 1);
-    exc.numero_semana = n;
-    sellarTimestamp(exc);
-    alCambiar();
-  });
-  zonaNumero.appendChild(inputSemana);
-  filaTop.appendChild(zonaNumero);
-
-  const btnQuitar = document.createElement("button");
-  btnQuitar.type = "button";
-  btnQuitar.className = "btn-icono-quitar";
-  btnQuitar.title = "Quitar esta excepción";
-  btnQuitar.textContent = "✕";
-  filaTop.appendChild(btnQuitar);
-  tarjeta.appendChild(filaTop);
-
-  // Switch "Sin clase esta semana" (cancelada) — al activarlo, el resto de
-  // los campos de esta excepción quedan sin sentido (obtenerBloqueEfectivoSemana
-  // devuelve null completo esa semana), así que se ocultan.
-  const filaCancelada = document.createElement("div");
-  filaCancelada.className = "row-between";
-  const spanCancelada = document.createElement("span");
-  spanCancelada.style.fontSize = "0.85rem";
-  spanCancelada.textContent = "Sin clase esta semana";
-  const labelCancelada = document.createElement("label");
-  labelCancelada.className = "switch switch-tema";
-  const chkCancelada = document.createElement("input");
-  chkCancelada.type = "checkbox";
-  chkCancelada.checked = !!exc.cancelada;
-  labelCancelada.appendChild(chkCancelada);
-  labelCancelada.insertAdjacentHTML("beforeend", '<span class="track"><span class="thumb"></span></span>');
-  filaCancelada.appendChild(spanCancelada);
-  filaCancelada.appendChild(labelCancelada);
-  tarjeta.appendChild(filaCancelada);
-
-  const cuerpoEditable = document.createElement("div");
-  cuerpoEditable.className = "stack";
-  cuerpoEditable.style.cssText = "gap:8px;";
-  tarjeta.appendChild(cuerpoEditable);
-
-  function redibujarCuerpo() {
-    cuerpoEditable.classList.toggle("oculto", !!exc.cancelada);
-    if (exc.cancelada) return;
-    cuerpoEditable.innerHTML = "";
-
-    // Aula
-    const inputAula = document.createElement("input");
-    inputAula.type = "text";
-    inputAula.className = "form-input";
-    inputAula.placeholder = "Aula esta semana (opcional — vacío = usa la de siempre)";
-    inputAula.value = exc.aula !== undefined ? exc.aula || "" : "";
-    inputAula.addEventListener("change", () => {
-      exc.aula = inputAula.value.trim() || null;
-      sellarTimestamp(exc);
-    });
-    cuerpoEditable.appendChild(inputAula);
-
-    // Enlace
-    const inputEnlace = document.createElement("input");
-    inputEnlace.type = "text";
-    inputEnlace.className = "form-input";
-    inputEnlace.placeholder = "Enlace esta semana (opcional)";
-    inputEnlace.value = exc.enlace !== undefined ? exc.enlace || "" : "";
-    inputEnlace.addEventListener("change", () => {
-      exc.enlace = inputEnlace.value.trim() || null;
-      sellarTimestamp(exc);
-    });
-    cuerpoEditable.appendChild(inputEnlace);
-
-    // Notas
-    const inputNotas = document.createElement("input");
-    inputNotas.type = "text";
-    inputNotas.className = "form-input";
-    inputNotas.placeholder = "Notas esta semana (opcional, ej. profesor sustituto)";
-    inputNotas.value = exc.notas !== undefined ? exc.notas || "" : "";
-    inputNotas.addEventListener("change", () => {
-      exc.notas = inputNotas.value.trim() || null;
-      sellarTimestamp(exc);
-    });
-    cuerpoEditable.appendChild(inputNotas);
-
-    // Color propio de esta semana
-    const labelColor = document.createElement("label");
-    labelColor.className = "muted";
-    labelColor.style.cssText = "font-size:0.75rem;";
-    labelColor.textContent = "Color esta semana";
-    cuerpoEditable.appendChild(labelColor);
-    const selectorColorExc = construirSelectorColor({
-      colorActual: exc.color || null,
-      colorHeredado: "#a78bfa",
-      onCambiar: (valor) => {
-        exc.color = valor;
-        sellarTimestamp(exc);
-      },
-    });
-    cuerpoEditable.appendChild(selectorColorExc.elemento);
-  }
-  redibujarCuerpo();
-
-  chkCancelada.addEventListener("change", () => {
-    exc.cancelada = chkCancelada.checked;
-    sellarTimestamp(exc);
-    redibujarCuerpo();
-  });
-
-  btnQuitar.addEventListener("click", () => {
-    marcarExcepcionParaBorrar(exc);
-    alCambiar();
-  });
-
-  return tarjeta;
-}
-
-/**
- * Borra una excepción de la lista viva del bloque (se resuelve contra el
- * bloque real más adelante, en guardarBloque, para no necesitar pasar el
- * bloque completo hasta acá) — se guarda el id a borrar en un set del
- * contexto de edición actual.
- */
-let idsExcepcionesABorrar = new Set();
-function marcarExcepcionParaBorrar(exc) {
-  idsExcepcionesABorrar.add(exc.id);
-}
-
-/* ===================== Guardar / Borrar ===================== */
-
-/**
- * Prompt pequeño "¿Aplicar a todas las semanas o solo a esta?", mismo look
- * que el resto de modales (.modal-overlay / .modal-card / .glass-panel).
- * Se resuelve por callback (no hay await en el resto del archivo) — llama
- * a onElegir("todas") o onElegir("esta") según el botón tocado; si se
- * cierra sin elegir (click afuera / X), no llama a nada y el Guardar
- * original queda cancelado (no se pierde nada, el formulario sigue abierto).
- */
-function preguntarAlcanceEdicion(numeroSemana, onElegir) {
-  document.getElementById("horario-alcance-overlay")?.remove();
-  const overlay = document.createElement("div");
-  overlay.id = "horario-alcance-overlay";
-  overlay.className = "modal-overlay";
-  overlay.style.zIndex = "300"; // por encima del modal de edición, que ya está abierto
-  overlay.innerHTML = `
-    <div class="glass-panel modal-card" style="padding:20px; max-width:340px;">
-      <div style="font-weight:600; margin-bottom:4px;">¿Aplicar estos cambios a...?</div>
-      <p class="muted" style="font-size:0.82rem; margin:0 0 16px;">Esta materia se repite todas las semanas. Elegí si el cambio vale para siempre o solo para esta semana.</p>
-      <div class="stack" style="gap:8px;">
-        <button type="button" class="btn-primary" id="horario-alcance-todas" style="width:100%;">Todas las semanas</button>
-        <button type="button" class="btn-secondary" id="horario-alcance-esta" style="width:100%;">Solo esta semana (Semana ${numeroSemana})</button>
-      </div>
-    </div>
-  `;
-  (document.fullscreenElement || document.body).appendChild(overlay);
-  const cerrar = () => overlay.remove();
-  overlay.addEventListener("click", (ev) => { if (ev.target === overlay) cerrar(); });
-  document.getElementById("horario-alcance-todas").addEventListener("click", () => { cerrar(); onElegir("todas"); });
-  document.getElementById("horario-alcance-esta").addEventListener("click", () => { cerrar(); onElegir("esta"); });
-}
-
-/**
- * Aplica los campos editados como una excepción de ESTA semana solamente,
- * en vez de tocar la plantilla base del bloque — reusa la excepción ya
- * existente para esa semana si hay una (para no duplicar), o crea una
- * nueva. La materia/plan/nombre no se tocan acá (el schema de excepción no
- * las soporta — no tendría sentido "esta semana es otra materia").
- */
-function aplicarComoExcepcionDeEstaSemana(bloque, numeroSemana, campos) {
-  bloque.excepciones_semana = bloque.excepciones_semana || [];
-  let exc = bloque.excepciones_semana.find((e) => e.numero_semana === numeroSemana);
-  if (!exc) {
-    exc = crearExcepcionSemanaBloque({ numeroSemana });
-    bloque.excepciones_semana.push(exc);
-  }
-  exc.apodo = campos.apodo;
-  exc.grupo = campos.grupo;
-  exc.dias = campos.dias;
-  exc.modalidad = campos.modalidad;
-  exc.aula = campos.aula;
-  exc.profesor_id = campos.profesorId;
-  exc.enlace = campos.enlace;
-  exc.notas = campos.notas;
-  exc.color = campos.color;
-  sellarTimestamp(exc);
-}
+// Nota (2026-08-14): antes acá vivía el prompt "¿Aplicar a todas las
+// semanas o solo a esta?" + la lógica de excepciones por semana completa.
+// Reemplazado por el Cronograma de clases granular por día (ver
+// cronograma_dias / crearDiaCronograma / obtenerClasesEfectivasSemana en
+// schema.js) — este modal ahora edita únicamente la plantilla base del
+// bloque, siempre para todas las semanas. La edición puntual de un día
+// específico (solo modalidad) vive en la sección Cronograma aparte.
 
 function guardarBloque(semestre, bloque, estadoForm) {
   const diasValidos = estadoForm.dias.filter((d) => d.hora_inicio && d.hora_fin);
@@ -1031,60 +758,23 @@ function guardarBloque(semestre, bloque, estadoForm) {
     return;
   }
 
-  const aplicarATodas = () => {
-    bloque.materia_id = campos.materiaId;
-    bloque.plan_estudio_id = campos.planEstudioId;
-    bloque.nombre = campos.nombre;
-    bloque.apodo = campos.apodo;
-    bloque.grupo = campos.grupo;
-    bloque.dias = campos.dias;
-    bloque.modalidad = campos.modalidad;
-    bloque.aula = campos.aula;
-    bloque.profesor_id = campos.profesorId;
-    bloque.enlace = campos.enlace;
-    bloque.notas = campos.notas;
-    bloque.color = campos.color;
+  // Siempre edita la plantilla base (todas las semanas) — la edición
+  // puntual de un día específico vive en la sección Cronograma aparte.
+  bloque.materia_id = campos.materiaId;
+  bloque.plan_estudio_id = campos.planEstudioId;
+  bloque.nombre = campos.nombre;
+  bloque.apodo = campos.apodo;
+  bloque.grupo = campos.grupo;
+  bloque.dias = campos.dias;
+  bloque.modalidad = campos.modalidad;
+  bloque.aula = campos.aula;
+  bloque.profesor_id = campos.profesorId;
+  bloque.enlace = campos.enlace;
+  bloque.notas = campos.notas;
+  bloque.color = campos.color;
 
-    // Excepciones borradas en esta sesión de edición: se sacan del arreglo
-    // vivo y se dejan en la tumba propia del bloque, mismo patrón que el
-    // resto de colecciones anidadas del proyecto.
-    if (idsExcepcionesABorrar.size > 0) {
-      bloque._eliminados_excepciones_semana = bloque._eliminados_excepciones_semana || [];
-      bloque.excepciones_semana = (bloque.excepciones_semana || []).filter((e) => {
-        if (idsExcepcionesABorrar.has(e.id)) {
-          bloque._eliminados_excepciones_semana.push({ id: e.id, eliminadoEn: Date.now() });
-          return false;
-        }
-        return true;
-      });
-      idsExcepcionesABorrar = new Set();
-    }
-    // Las excepciones que siguen vivas ya se editaron/sellaron en el lugar
-    // (ver construirTarjetaExcepcion) — no hace falta re-sellarlas acá.
-
-    sellarTimestamp(bloque);
-    finalizar();
-  };
-
-  // La materia (a qué clase pertenece este bloque) no tiene override por
-  // semana en el schema — si cambió, el cambio es forzosamente global, sin
-  // preguntar nada (no existe un "esta semana es otra materia" posible).
-  const materiaCambio = campos.materiaId !== bloque.materia_id || campos.nombre !== bloque.nombre;
-  if (materiaCambio) {
-    aplicarATodas();
-    return;
-  }
-
-  const numeroSemana = (contextoActual && contextoActual.numeroSemanaVista) || calcularNumeroSemanaSemestre(semestre);
-  preguntarAlcanceEdicion(numeroSemana, (alcance) => {
-    if (alcance === "todas") {
-      aplicarATodas();
-    } else {
-      aplicarComoExcepcionDeEstaSemana(bloque, numeroSemana, campos);
-      sellarTimestamp(bloque);
-      finalizar();
-    }
-  });
+  sellarTimestamp(bloque);
+  finalizar();
 }
 
 function borrarBloque(semestre, bloque) {

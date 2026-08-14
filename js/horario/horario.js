@@ -3,8 +3,9 @@
    No incluye "Horario entre Amigos" (prompt aparte).
    ========================================================================= */
 
-import { calcularNumeroSemanaSemestre, obtenerBloqueEfectivoSemana } from "../core/schema.js";
+import { calcularNumeroSemanaSemestre, obtenerClasesEfectivasSemana, crearDiaCronograma, sellarTimestamp } from "../core/schema.js";
 import { estado } from "../core/storage.js";
+import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 import { obtenerSemestresOrdenCronologico, buscarSemestreVivoPorId } from "../semestres/semestres.js";
@@ -110,13 +111,15 @@ function obtenerNombreProfesor(profesorId) {
 
 /**
  * Presencial es el default y no lleva emoji (para no ensuciar la tarjeta
- * en el caso más común). Virtual y Asincrónico sí se marcan en la
- * esquina inferior derecha para que salte a la vista de un vistazo,
- * incluyendo el caso de una excepción de semana que cambie la modalidad
- * solo esa semana puntual (viene resuelta ya en d.modalidad).
+ * en el caso más común). Virtual y Asincrónico sí se marcan en la esquina
+ * inferior derecha para que salte a la vista de un vistazo. "sin_clase"
+ * (Cronograma, reemplaza al viejo switch `cancelada`) es ahora un valor de
+ * modalidad más — viene resuelto ya en el campo `modalidad` de cada clase
+ * efectiva (ver obtenerClasesEfectivasSemana en schema.js), así que esta
+ * función ya no necesita un segundo parámetro aparte.
  */
-function obtenerEmojiModalidad(modalidad, cancelada) {
-  if (cancelada) return "✖️";
+function obtenerEmojiModalidad(modalidad) {
+  if (modalidad === "sin_clase") return "✖️";
   const normalizado = String(modalidad || "")
     .toLowerCase()
     .normalize("NFD")
@@ -177,8 +180,15 @@ function calcularLanesDia(bloquesDia) {
 
 /* ===================== Construcción del grid ===================== */
 
-function construirBloquesEfectivosSemana(semestre, numeroSemana) {
-  return (semestre.bloques_horario || []).map((b) => obtenerBloqueEfectivoSemana(b, numeroSemana)).filter(Boolean);
+/**
+ * Lista PLANA de clases efectivas de la semana: una entrada por cada día
+ * puntual de cada bloque (no un bloque con .dias anidado como antes) — así
+ * cada día ya trae su propia Modalidad resuelta (ver
+ * obtenerClasesEfectivasSemana en schema.js, que fusiona la plantilla con
+ * el Cronograma de esa semana puntual).
+ */
+function construirClasesEfectivasSemana(semestre, numeroSemana) {
+  return (semestre.bloques_horario || []).flatMap((b) => obtenerClasesEfectivasSemana(b, numeroSemana));
 }
 
 function construirColumnaHoras(pxPorMin, altoGrid) {
@@ -227,9 +237,15 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid) {
     const offsetPx = b.lane * 12;
     const tarjeta = document.createElement("div");
     tarjeta.className = "horario-bloque-tarjeta";
+    // "sin_clase" (Cronograma): la tarjeta sigue ocupando su lugar en el
+    // grid (no se oculta, ver obtenerClasesEfectivasSemana en schema.js)
+    // pero se atenúa para que salte a la vista que ese día puntual no hay
+    // clase, sin tener que leer el emoji chiquito de la esquina.
+    const esSinClase = b.modalidad === "sin_clase";
     tarjeta.style.cssText = `position:absolute; top:${top}px; left:${offsetPx}px; right:0; height:${alto}px; z-index:${10 + b.lane};
       background:${b.color}; color:#fff; border-radius:8px; padding:3px 6px; overflow:hidden;
-      box-shadow:0 2px 6px rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.25);`;
+      box-shadow:0 2px 6px rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.25);
+      ${esSinClase ? "opacity:0.45;" : ""}`;
     // Tamaños en rem (no px fijo) para que respeten el mismo escalado que el
     // resto de la app (0.85rem para el nombre, igual que la mayoría del
     // texto "normal" del sistema; 0.72rem para los datos secundarios, igual
@@ -324,7 +340,7 @@ function abrirTarjetaInfoBloque(semestre, numeroSemana, b) {
   });
 }
 
-const ETIQUETAS_MODALIDAD_INFO = { presencial: "Presencial", virtual: "Virtual", asincronica: "Asincrónica" };
+const ETIQUETAS_MODALIDAD_INFO = { presencial: "Presencial", virtual: "Virtual", asincronica: "Asincrónica", sin_clase: "Sin clase" };
 
 /* ===================== Bloque flotante (1er tap → borrador; 2do tap → modal) ===================== */
 
@@ -436,7 +452,7 @@ function renderizarHeaderHorario(semestre, numeroSemana) {
 
 /* ===================== Vista inicial (centra en la clase más temprana / hora actual) ===================== */
 
-function centrarVistaInicial(contenedor, dias, bloquesEfectivos, pxPorMin) {
+function centrarVistaInicial(contenedor, dias, clasesEfectivas, pxPorMin) {
   const hoy = new Date();
   // Antes solo miraba las clases de HOY (y si hoy no había, caía a la hora
   // actual) — por eso casi nunca arrancaba en la primera clase real: si hoy
@@ -446,11 +462,9 @@ function centrarVistaInicial(contenedor, dias, bloquesEfectivos, pxPorMin) {
   // clase registrada en toda la semana se usa la hora actual como último
   // recurso.
   const diasAbrevVisibles = new Set(dias.map((d) => d.abrevDefault));
-  const minutosClasesSemana = bloquesEfectivos.flatMap((b) =>
-    (b.dias || [])
-      .filter((d) => diasAbrevVisibles.has(d.dia))
-      .map((d) => minutosDesdeHora(d.hora_inicio))
-  );
+  const minutosClasesSemana = clasesEfectivas
+    .filter((c) => diasAbrevVisibles.has(c.dia))
+    .map((c) => minutosDesdeHora(c.hora_inicio));
   const minutoReferencia = minutosClasesSemana.length > 0
     ? Math.min(...minutosClasesSemana)
     : hoy.getHours() * 60 + hoy.getMinutes();
@@ -491,7 +505,7 @@ function renderizarHorarioInterno() {
   }
 
   const dias = obtenerDiasVisiblesOrdenados();
-  const bloquesEfectivos = construirBloquesEfectivosSemana(semestre, numeroSemana);
+  const clasesEfectivas = construirClasesEfectivasSemana(semestre, numeroSemana);
 
   // Ya no se comprime el día completo para que "quepa" (se veía feo y
   // amontonado) — siempre se usa el tamaño legible normal. Lo que cambia
@@ -556,25 +570,24 @@ function renderizarHorarioInterno() {
   filaGrid.style.cssText = "display:flex;";
   filaGrid.appendChild(construirColumnaHoras(pxPorMin, altoGrid));
   dias.forEach((dia) => {
-    const bloquesDia = bloquesEfectivos
-      .filter((b) => (b.dias || []).some((d) => d.dia === dia.abrevDefault))
-      .flatMap((b) =>
-        (b.dias || [])
-          .filter((d) => d.dia === dia.abrevDefault)
-          .map((d) => ({
-            bloqueOriginalId: b.id,
-            inicioMin: minutosDesdeHora(d.hora_inicio),
-            finMin: minutosDesdeHora(d.hora_fin),
-            color: obtenerColorBloque(b),
-            nombreCorto: obtenerNombreBloque(b),
-            profesorNombre: obtenerNombreProfesor(b.profesor_id),
-            aula: b.aula,
-            enlace: b.enlace,
-            modalidad: d.modalidad,
-            notas: b.notas,
-            tieneExcepcionEstaSemana: !!b.tiene_excepcion_esta_semana,
-          }))
-      );
+    // clasesEfectivas ya viene PLANA (una entrada por día puntual, ver
+    // obtenerClasesEfectivasSemana en schema.js) — no hay .dias anidado que
+    // filtrar/recorrer, cada item ya es la clase de un día concreto.
+    const bloquesDia = clasesEfectivas
+      .filter((c) => c.dia === dia.abrevDefault)
+      .map((c) => ({
+        bloqueOriginalId: c.id,
+        inicioMin: minutosDesdeHora(c.hora_inicio),
+        finMin: minutosDesdeHora(c.hora_fin),
+        color: obtenerColorBloque(c),
+        nombreCorto: obtenerNombreBloque(c),
+        profesorNombre: obtenerNombreProfesor(c.profesor_id),
+        aula: c.aula,
+        enlace: c.enlace,
+        modalidad: c.modalidad,
+        notas: c.notas,
+        tieneExcepcionEstaSemana: !!c.tiene_ajuste_cronograma,
+      }));
     filaGrid.appendChild(construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid));
   });
 
@@ -597,7 +610,7 @@ function renderizarHorarioInterno() {
   });
   if (!document.fullscreenElement) cont.appendChild(barra);
 
-  requestAnimationFrame(() => centrarVistaInicial(contenedor, dias, bloquesEfectivos, pxPorMin));
+  requestAnimationFrame(() => centrarVistaInicial(contenedor, dias, clasesEfectivas, pxPorMin));
 }
 
 function renderizarHorario() {
