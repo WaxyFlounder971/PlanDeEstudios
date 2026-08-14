@@ -29,6 +29,16 @@
 /* ---- Estructura base (independiente de paleta) ---- */
 * { box-sizing: border-box; }
 
+/* ---- Letra 10% más chica solo en teléfono (pedido explícito) ----
+   16px * 0.9 = 14.4px. Todo el sistema usa rem para tipografía (ver
+   comentarios en horario.js sobre esto), así que bajar el font-size base
+   de <html> solo en este breakpoint escala el texto de toda la app un
+   10% únicamente en pantallas de teléfono, sin tocar cada regla suelta ni
+   afectar tablet/escritorio. */
+@media (max-width: 480px) {
+  html { font-size: 14.4px; }
+}
+
 html, body {
   margin: 0;
   padding: 0;
@@ -1897,6 +1907,47 @@ img, svg { max-width: 100%; }
 .encabezado-plan-linea2.sin-flechas { padding-left: 0; }
 
 /* ---- Bloques colapsables independientes ---- */
+
+/* ---- Secciones de Ajustes: contraídas por defecto (pedido explícito) ----
+   Cada <section class="glass-card stack ajuste-seccion colapsada"> arranca
+   colapsada; config-ajustes.js le saca la clase .colapsada al tocar la
+   cabecera. La cabecera es un <button> (accesible por teclado, foco nativo)
+   resetado a look de texto plano. El cuerpo pierde su display en colapsado
+   en vez de animar altura: estas secciones tienen contenido muy variable
+   (desde 1 pill-group hasta listas largas de enlaces), así que animar
+   max-height requeriría medir cada una en JS; display:none es instantáneo
+   y evita el "salto" de una transición de altura mal calculada. */
+.ajuste-seccion-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+.ajuste-seccion-cabecera h2 { margin: 0; }
+.ajuste-seccion-chevron {
+  flex-shrink: 0;
+  margin-left: 12px;
+  font-size: 1rem;
+  color: var(--text-muted);
+  transition: transform var(--transition-fast);
+}
+/* Expandida (sin .colapsada): chevron apunta hacia arriba (▾ rotado 180°) */
+.ajuste-seccion:not(.colapsada) .ajuste-seccion-chevron { transform: rotate(180deg); }
+.ajuste-seccion-cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 14px; /* mismo gap que .stack, para no perder el espaciado que tenían
+                estos elementos cuando eran hijos directos de la sección */
+}
+.ajuste-seccion.colapsada .ajuste-seccion-cuerpo { display: none; }
 
 /* ---- v8.3: indicador de "desliza para sincronizar" ----
    Vive fijo arriba del todo, centrado, oculto (translateY negativo) hasta
