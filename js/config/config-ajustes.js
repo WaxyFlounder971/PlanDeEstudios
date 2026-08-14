@@ -425,7 +425,29 @@ function habilitarArrastreNavegacion(contenedor) {
   });
 }
 
+/**
+ * Secciones de Ajustes contraídas por defecto (pedido explícito). Las
+ * cabeceras (<button class="ajuste-seccion-cabecera">) ya están fijas en
+ * index.html, no se regeneran en cada render de Ajustes — por eso se usa
+ * delegación de eventos sobre el contenedor estable #seccion-configuracion
+ * en vez de un addEventListener por botón, que se duplicaría cada vez que
+ * renderizarAjustes() se vuelve a llamar (cada cambio de pill, tema, etc.).
+ * El dataset.accordionInit evita enganchar el delegado más de una vez.
+ */
+function inicializarAccordionAjustes() {
+  const contenedor = document.getElementById("seccion-configuracion");
+  if (!contenedor || contenedor.dataset.accordionInit) return;
+  contenedor.dataset.accordionInit = "1";
+  contenedor.addEventListener("click", (ev) => {
+    const cabecera = ev.target.closest(".ajuste-seccion-cabecera");
+    if (!cabecera) return;
+    cabecera.closest(".ajuste-seccion")?.classList.toggle("colapsada");
+  });
+}
+
 function renderizarAjustes() {
+  inicializarAccordionAjustes();
+
   // Paletas — cada cuadro muestra su propio color real (punto 3)
   const grid = document.getElementById("grid-paletas");
   grid.innerHTML = "";
