@@ -133,13 +133,16 @@
       <!-- ===================== SECCIÓN: Configuración ===================== -->
       <div id="seccion-configuracion" class="stack">
 
-        <section class="glass-card stack">
-          <h2>Plan de Estudios activo</h2>
+        <section class="glass-card stack ajuste-seccion colapsada">
+          <button type="button" class="ajuste-seccion-cabecera"><h2>Plan de Estudios activo</h2><span class="ajuste-seccion-chevron">▾</span></button>
+          <div class="ajuste-seccion-cuerpo">
           <div id="selector-plan"></div>
+          </div>
         </section>
 
-        <section class="glass-card stack">
-          <h2>Ajustes generales</h2>
+        <section class="glass-card stack ajuste-seccion colapsada">
+          <button type="button" class="ajuste-seccion-cabecera"><h2>Ajustes generales</h2><span class="ajuste-seccion-chevron">▾</span></button>
+          <div class="ajuste-seccion-cuerpo">
 
           <div>
             <span class="form-label">Formato de nombres de materias y carrera</span>
@@ -160,10 +163,12 @@
             <span class="form-label">Nota de aprobación por universidad/plan</span>
             <div id="seccion-notas-aprobacion" class="stack"></div>
           </div>
+          </div>
         </section>
 
-        <section class="glass-card stack">
-          <h2>Horario</h2>
+        <section class="glass-card stack ajuste-seccion colapsada">
+          <button type="button" class="ajuste-seccion-cabecera"><h2>Horario</h2><span class="ajuste-seccion-chevron">▾</span></button>
+          <div class="ajuste-seccion-cuerpo">
 
           <div>
             <span class="form-label">Día de inicio de semana</span>
@@ -186,24 +191,28 @@
             <div class="row-between" style="gap:10px;">
               <div class="stack" style="gap:4px; flex:1;">
                 <span class="muted" style="font-size:0.72rem;">Iniciar en</span>
-                <select id="select-horario-hora-inicio" class="form-select"></select>
+                <div id="select-horario-hora-inicio"></div>
               </div>
               <div class="stack" style="gap:4px; flex:1;">
                 <span class="muted" style="font-size:0.72rem;">Terminar en</span>
-                <select id="select-horario-hora-fin" class="form-select"></select>
+                <div id="select-horario-hora-fin"></div>
               </div>
             </div>
           </div>
+          </div>
         </section>
 
-        <section class="glass-card stack">
-          <h2>Navegación</h2>
+        <section class="glass-card stack ajuste-seccion colapsada">
+          <button type="button" class="ajuste-seccion-cabecera"><h2>Navegación</h2><span class="ajuste-seccion-chevron">▾</span></button>
+          <div class="ajuste-seccion-cuerpo">
           <p class="muted" style="font-size:0.82rem; margin:0 0 4px;">Elegí qué secciones mostrar en el menú y arrastrá <span class="handle-mover" style="display:inline; padding:0 2px; cursor:default;">⋮⋮</span> para cambiar el orden. "Resumen" y "Configuración" siempre quedan visibles y fijos arriba/abajo.</p>
           <div id="lista-nav-oculta" class="stack" style="gap:8px;"></div>
+          </div>
         </section>
 
-        <section class="glass-card stack">
-          <h2>Personalizar</h2>
+        <section class="glass-card stack ajuste-seccion colapsada">
+          <button type="button" class="ajuste-seccion-cabecera"><h2>Personalizar</h2><span class="ajuste-seccion-chevron">▾</span></button>
+          <div class="ajuste-seccion-cuerpo">
 
           <div class="row-between">
             <span>Modo oscuro / claro</span>
@@ -225,19 +234,23 @@
             <span>Paleta de color</span>
             <div class="palette-grid" id="grid-paletas"></div>
           </div>
+          </div>
         </section>
 
-        <section class="glass-card stack">
+        <section class="glass-card stack ajuste-seccion colapsada">
+          <button type="button" class="ajuste-seccion-cabecera"><h2>Enlaces rápidos</h2><span class="ajuste-seccion-chevron">▾</span></button>
+          <div class="ajuste-seccion-cuerpo">
           <div class="row-between">
-            <h2 style="margin:0;">Enlaces rápidos</h2>
             <button id="btn-agregar-enlace" class="btn btn-primary">+ Añadir enlace</button>
           </div>
           <p class="muted">Hasta 20 accesos directos (matrícula, TEC Digital, pagos, lo que necesites).</p>
           <div id="lista-enlaces" class="stack"></div>
+          </div>
         </section>
 
-        <section class="glass-card stack">
-          <h2>Backup de seguridad (Google Drive)</h2>
+        <section class="glass-card stack ajuste-seccion colapsada">
+          <button type="button" class="ajuste-seccion-cabecera"><h2>Backup de seguridad (Google Drive)</h2><span class="ajuste-seccion-chevron">▾</span></button>
+          <div class="ajuste-seccion-cuerpo">
           <p class="muted" style="font-size:0.82rem; margin:0 0 4px;">Además del archivo que ya se sincroniza, la app guarda automáticamente hasta 2 copias rotativas en una carpeta "AppAcademica" de tu Drive, con la frecuencia que elijas acá.</p>
           <div>
             <span class="form-label">Frecuencia</span>
@@ -245,11 +258,14 @@
           </div>
           <p class="muted" id="texto-ultimo-backup" style="font-size:0.78rem; margin:4px 0 0;"></p>
           <button type="button" id="btn-backup-manual" class="btn btn-secondary btn-block">Hacer backup ahora</button>
+          </div>
         </section>
 
-        <section class="glass-card stack">
-          <h2>Datos</h2>
+        <section class="glass-card stack ajuste-seccion colapsada">
+          <button type="button" class="ajuste-seccion-cabecera"><h2>Datos</h2><span class="ajuste-seccion-chevron">▾</span></button>
+          <div class="ajuste-seccion-cuerpo">
           <div id="seccion-datos-respaldo" class="stack"></div>
+          </div>
         </section>
 
       </div>
@@ -291,7 +307,10 @@
           </div>
           <div style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center; padding:0 6px;">
             <button type="button" class="btn btn-primary" id="btn-horario-agregar" style="justify-self:start; padding:8px 14px; font-size:0.85rem;">+ Agregar</button>
-            <button type="button" class="btn-icono-fantasma" id="btn-horario-pantalla-completa" style="justify-self:center; font-size:1.3rem;">⛶</button>
+            <div style="justify-self:center; display:flex; align-items:center; gap:10px;">
+              <button type="button" class="btn-icono-fantasma" id="btn-horario-pantalla-completa" style="font-size:1.3rem;">⛶</button>
+              <button type="button" class="btn-icono-fantasma" id="btn-horario-actualizar-vista" title="Recalcular tamaño del cuadro" style="font-size:1.1rem;">🔄</button>
+            </div>
             <button type="button" class="btn btn-secondary" id="btn-horario-amigos" style="justify-self:end; padding:8px 14px; font-size:0.85rem;">Amigos</button>
           </div>
         </section>
