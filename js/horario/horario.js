@@ -205,7 +205,10 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid) {
       background:${b.color}; color:#fff; border-radius:8px; padding:3px 6px; overflow:hidden;
       box-shadow:0 2px 6px rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.25);`;
     tarjeta.innerHTML = `
-      <div style="font-size:16.5px; font-weight:600; line-height:1.15;">${b.nombreCorto}</div>
+      <div style="font-size:16.5px; font-weight:600; line-height:1.15; display:flex; align-items:center; gap:4px;">
+        ${b.tieneExcepcionEstaSemana ? `<span title="Esta semana tiene un ajuste puntual" style="font-size:12px; opacity:0.9;">✎</span>` : ""}
+        <span>${b.nombreCorto}</span>
+      </div>
       ${b.profesorNombre ? `<div style="font-size:13.5px; opacity:0.9;">${b.profesorNombre}</div>` : ""}
       ${b.aula ? `<div style="font-size:13.5px; opacity:0.85;">${b.aula}</div>` : ""}
       ${b.enlace ? `<a href="${b.enlace}" target="_blank" rel="noopener" class="horario-btn-entrar-clase" onclick="event.stopPropagation()">Entrar a clase</a>` : ""}
@@ -441,6 +444,7 @@ function renderizarHorarioInterno() {
             profesorNombre: obtenerNombreProfesor(b.profesor_id),
             aula: b.aula,
             enlace: b.enlace,
+            tieneExcepcionEstaSemana: !!b.tiene_excepcion_esta_semana,
           }))
       );
     filaGrid.appendChild(construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid));

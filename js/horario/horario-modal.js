@@ -45,6 +45,11 @@ function obtenerDiasConfig() {
 function cerrarModalBloqueHorario() {
   document.getElementById("modal-bloque-horario")?.classList.add("oculto");
   contextoActual = null;
+  // Cualquier excepción marcada para borrar en esta sesión (botón ✕ en una
+  // tarjeta de excepción) que nunca llegó a Guardar no debe arrastrarse a
+  // la próxima vez que se abra el modal — Cancelar debe descartar TODO,
+  // igual que ya pasa con estadoForm.dias.
+  idsExcepcionesABorrar = new Set();
 }
 
 function limpiarSelectsFlotantes() {
@@ -274,9 +279,16 @@ function renderizarFormulario(semestre, bloque, estadoForm) {
     </div>
 
     <div>
+      <label class="form-label">Color</label>
+      <div id="hb-color-zona"></div>
+    </div>
+
+    <div>
       <label class="form-label">Notas</label>
       <textarea id="hb-notas" class="form-textarea" style="resize:none; overflow:hidden; min-height:44px;">${estadoForm.notas}</textarea>
     </div>
+
+    ${bloque ? `<div id="hb-excepciones-zona"></div>` : ""}
 
     <div class="row-between" style="margin-top:12px;">
       ${bloque ? `<button type="button" class="btn btn-danger" id="hb-btn-borrar">Borrar</button>` : "<span></span>"}
@@ -314,6 +326,7 @@ function renderizarFormulario(semestre, bloque, estadoForm) {
           estadoForm.profesorId = encontrada.mm.profesor_ids[0];
         }
         renderizarZonaProfesor(semestre, estadoForm);
+        renderizarZonaColor(estadoForm);
       }
     },
   });
@@ -326,6 +339,14 @@ function renderizarFormulario(semestre, bloque, estadoForm) {
 
   // Profesor
   renderizarZonaProfesor(semestre, estadoForm);
+
+  // Color del bloque (override propio, independiente de la categoría)
+  renderizarZonaColor(estadoForm);
+
+  // Excepciones por semana (solo al editar un bloque ya existente)
+  if (bloque) {
+    renderizarZonaExcepciones(semestre, bloque, dias);
+  }
 
   // Notas: se agranda solo hacia abajo, nunca a lo ancho ni con handle de resize.
   const textareaNotas = document.getElementById("hb-notas");
@@ -341,6 +362,87 @@ function renderizarFormulario(semestre, bloque, estadoForm) {
   document.getElementById("hb-btn-guardar").addEventListener("click", () => guardarBloque(semestre, bloque, estadoForm));
   const btnBorrar = document.getElementById("hb-btn-borrar");
   if (btnBorrar) btnBorrar.addEventListener("click", () => borrarBloque(semestre, bloque));
+}
+
+/**
+ * Selector de color del bloque: hereda el color de categoría por defecto
+ * (mismo criterio que obtenerColorBloque en horario.js) — el primer swatch
+ * ("↺") vuelve a ese heredado; los demás son overrides propios del bloque.
+ */
+function renderizarZonaColor(estadoForm) {
+  const zona = document.getElementById("hb-color-zona");
+  if (!zona) return;
+  zona.innerHTML = "";
+  const colorHeredado = estadoForm.materiaId
+    ? obtenerColorHeredadoDeCategoria(estadoForm.materiaId, estadoForm.planEstudioId)
+    : "#a78bfa";
+  const selector = construirSelectorColor({
+    colorActual: estadoForm.color,
+    colorHeredado,
+    onCambiar: (valor) => {
+      estadoForm.color = valor;
+    },
+  });
+  zona.appendChild(selector.elemento);
+}
+
+function obtenerColorHeredadoDeCategoria(materiaId, planEstudioId) {
+  const plan = obtenerPlanPorId(planEstudioId);
+  const materia = plan && plan.materias.find((m) => m.id === materiaId);
+  const categoria = plan && materia && plan.categorias.find((c) => c.id === materia.categoria_id);
+  return (categoria && categoria.color) || "#a78bfa";
+}
+
+/**
+ * Fila de swatches redondos (paleta curada + "↺" para volver al color
+ * heredado de categoría). Reutilizado tanto para el color del bloque base
+ * como para el override de cada excepción de semana.
+ */
+function construirSelectorColor({ colorActual, colorHeredado, onCambiar }) {
+  const wrap = document.createElement("div");
+  wrap.className = "row";
+  wrap.style.cssText = "gap:6px; flex-wrap:wrap;";
+
+  let seleccionado = colorActual || null;
+
+  function crearSwatch(valor, esHeredado) {
+    const sw = document.createElement("button");
+    sw.type = "button";
+    sw.title = esHeredado ? "Usar color de categoría" : valor;
+    const activo = esHeredado ? !seleccionado : seleccionado === valor;
+    sw.style.cssText = `
+      width:28px; height:28px; border-radius:50%; cursor:pointer;
+      background:${esHeredado ? colorHeredado : valor};
+      border:2px solid ${activo ? "var(--text-primary)" : "transparent"};
+      box-shadow:0 1px 3px rgba(0,0,0,0.3);
+      display:flex; align-items:center; justify-content:center;
+      flex-shrink:0; padding:0;
+    `;
+    if (esHeredado) {
+      sw.innerHTML = `<span style="font-size:0.7rem; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.5);">↺</span>`;
+    }
+    sw.addEventListener("click", () => {
+      seleccionado = esHeredado ? null : valor;
+      onCambiar(seleccionado);
+      redibujar();
+    });
+    return sw;
+  }
+
+  function redibujar() {
+    wrap.innerHTML = "";
+    wrap.appendChild(crearSwatch(null, true));
+    PALETA_COLORES_BLOQUE.forEach((c) => wrap.appendChild(crearSwatch(c, false)));
+  }
+  redibujar();
+
+  return {
+    elemento: wrap,
+    setValor: (valor) => {
+      seleccionado = valor || null;
+      redibujar();
+    },
+  };
 }
 
 /**
@@ -591,6 +693,214 @@ function renderizarZonaProfesor(semestre, estadoForm) {
   });
 }
 
+/* ===================== Excepciones por semana (solo al editar) ===================== */
+
+/**
+ * Horario — excepciones de semana: tarjetitas "Semana N" bajo el bloque,
+ * cada una editable en un mini-formulario propio (mismos campos clave que
+ * el bloque: días/horas, modalidad, aula, profesor, enlace, notas, color,
+ * y el switch "Sin clase esta semana"). Los campos que el usuario NO toca
+ * en la excepción quedan `undefined` en el objeto (no se guardan) — así
+ * siguen heredando del bloque base según obtenerBloqueEfectivoSemana.
+ *
+ * Se opera sobre bloque.excepciones_semana directo (mutación en memoria);
+ * recién se sella/persiste al tocar Guardar del modal principal — mismo
+ * patrón que estadoForm.dias para el bloque base, para que Cancelar
+ * descarte también los cambios de excepciones sin persistir nada a medias.
+ */
+function renderizarZonaExcepciones(semestre, bloque, dias) {
+  const zona = document.getElementById("hb-excepciones-zona");
+  if (!zona) return;
+
+  const numeroSemanaActual = calcularNumeroSemanaSemestre(semestre);
+  const totalSemanas = Number(semestre.duracion_semanas) || 16;
+
+  const redibujar = () => {
+    zona.innerHTML = `
+      <div class="row-between" style="margin-top:4px;">
+        <label class="form-label" style="margin:0;">Excepciones por semana</label>
+        <button type="button" class="btn-discreto" id="hb-btn-agregar-excepcion">+ Agregar excepción</button>
+      </div>
+      <div id="hb-lista-excepciones" class="stack" style="gap:8px; margin-top:6px;"></div>
+    `;
+
+    const lista = document.getElementById("hb-lista-excepciones");
+    const excepciones = [...(bloque.excepciones_semana || [])].sort((a, b) => a.numero_semana - b.numero_semana);
+
+    if (excepciones.length === 0) {
+      lista.innerHTML = `<p class="muted" style="font-size:0.78rem; margin:0;">Sin ajustes puntuales — cada semana usa la configuración de arriba.</p>`;
+    }
+
+    excepciones.forEach((exc) => {
+      lista.appendChild(construirTarjetaExcepcion(exc, dias, numeroSemanaActual, redibujar));
+    });
+
+    document.getElementById("hb-btn-agregar-excepcion").addEventListener("click", () => {
+      bloque.excepciones_semana = bloque.excepciones_semana || [];
+      // Primera semana libre a partir de la actual, para que la excepción
+      // recién creada sea inmediatamente relevante en vez de perderse en
+      // semana 1 de un semestre ya avanzado.
+      const usadas = new Set(bloque.excepciones_semana.map((e) => e.numero_semana));
+      let semanaSugerida = numeroSemanaActual;
+      while (usadas.has(semanaSugerida) && semanaSugerida <= totalSemanas) semanaSugerida++;
+      if (semanaSugerida > totalSemanas) semanaSugerida = numeroSemanaActual;
+
+      const nueva = crearExcepcionSemanaBloque({ numeroSemana: semanaSugerida });
+      bloque.excepciones_semana.push(nueva);
+      redibujar();
+    });
+  };
+
+  redibujar();
+}
+
+function construirTarjetaExcepcion(exc, dias, numeroSemanaActual, alCambiar) {
+  const tarjeta = document.createElement("div");
+  tarjeta.className = "glass-panel stack";
+  tarjeta.style.cssText = "padding:10px 12px; gap:8px;";
+
+  const filaTop = document.createElement("div");
+  filaTop.className = "row-between";
+
+  const zonaNumero = document.createElement("div");
+  zonaNumero.className = "row";
+  zonaNumero.style.cssText = "gap:8px; align-items:center;";
+  const etiquetaSemana = document.createElement("span");
+  etiquetaSemana.style.fontWeight = "600";
+  etiquetaSemana.textContent = `Semana ${exc.numero_semana}` + (exc.numero_semana === numeroSemanaActual ? " (actual)" : "");
+  zonaNumero.appendChild(etiquetaSemana);
+
+  const inputSemana = document.createElement("input");
+  inputSemana.type = "number";
+  inputSemana.className = "form-input";
+  inputSemana.style.cssText = "width:64px; padding:6px 8px;";
+  inputSemana.min = "1";
+  inputSemana.value = exc.numero_semana;
+  inputSemana.addEventListener("change", () => {
+    const n = Math.max(1, Number(inputSemana.value) || 1);
+    exc.numero_semana = n;
+    sellarTimestamp(exc);
+    alCambiar();
+  });
+  zonaNumero.appendChild(inputSemana);
+  filaTop.appendChild(zonaNumero);
+
+  const btnQuitar = document.createElement("button");
+  btnQuitar.type = "button";
+  btnQuitar.className = "btn-icono-quitar";
+  btnQuitar.title = "Quitar esta excepción";
+  btnQuitar.textContent = "✕";
+  filaTop.appendChild(btnQuitar);
+  tarjeta.appendChild(filaTop);
+
+  // Switch "Sin clase esta semana" (cancelada) — al activarlo, el resto de
+  // los campos de esta excepción quedan sin sentido (obtenerBloqueEfectivoSemana
+  // devuelve null completo esa semana), así que se ocultan.
+  const filaCancelada = document.createElement("div");
+  filaCancelada.className = "row-between";
+  const spanCancelada = document.createElement("span");
+  spanCancelada.style.fontSize = "0.85rem";
+  spanCancelada.textContent = "Sin clase esta semana";
+  const labelCancelada = document.createElement("label");
+  labelCancelada.className = "switch switch-tema";
+  const chkCancelada = document.createElement("input");
+  chkCancelada.type = "checkbox";
+  chkCancelada.checked = !!exc.cancelada;
+  labelCancelada.appendChild(chkCancelada);
+  labelCancelada.insertAdjacentHTML("beforeend", '<span class="track"><span class="thumb"></span></span>');
+  filaCancelada.appendChild(spanCancelada);
+  filaCancelada.appendChild(labelCancelada);
+  tarjeta.appendChild(filaCancelada);
+
+  const cuerpoEditable = document.createElement("div");
+  cuerpoEditable.className = "stack";
+  cuerpoEditable.style.cssText = "gap:8px;";
+  tarjeta.appendChild(cuerpoEditable);
+
+  function redibujarCuerpo() {
+    cuerpoEditable.classList.toggle("oculto", !!exc.cancelada);
+    if (exc.cancelada) return;
+    cuerpoEditable.innerHTML = "";
+
+    // Aula
+    const inputAula = document.createElement("input");
+    inputAula.type = "text";
+    inputAula.className = "form-input";
+    inputAula.placeholder = "Aula esta semana (opcional — vacío = usa la de siempre)";
+    inputAula.value = exc.aula !== undefined ? exc.aula || "" : "";
+    inputAula.addEventListener("change", () => {
+      exc.aula = inputAula.value.trim() || null;
+      sellarTimestamp(exc);
+    });
+    cuerpoEditable.appendChild(inputAula);
+
+    // Enlace
+    const inputEnlace = document.createElement("input");
+    inputEnlace.type = "text";
+    inputEnlace.className = "form-input";
+    inputEnlace.placeholder = "Enlace esta semana (opcional)";
+    inputEnlace.value = exc.enlace !== undefined ? exc.enlace || "" : "";
+    inputEnlace.addEventListener("change", () => {
+      exc.enlace = inputEnlace.value.trim() || null;
+      sellarTimestamp(exc);
+    });
+    cuerpoEditable.appendChild(inputEnlace);
+
+    // Notas
+    const inputNotas = document.createElement("input");
+    inputNotas.type = "text";
+    inputNotas.className = "form-input";
+    inputNotas.placeholder = "Notas esta semana (opcional, ej. profesor sustituto)";
+    inputNotas.value = exc.notas !== undefined ? exc.notas || "" : "";
+    inputNotas.addEventListener("change", () => {
+      exc.notas = inputNotas.value.trim() || null;
+      sellarTimestamp(exc);
+    });
+    cuerpoEditable.appendChild(inputNotas);
+
+    // Color propio de esta semana
+    const labelColor = document.createElement("label");
+    labelColor.className = "muted";
+    labelColor.style.cssText = "font-size:0.75rem;";
+    labelColor.textContent = "Color esta semana";
+    cuerpoEditable.appendChild(labelColor);
+    const selectorColorExc = construirSelectorColor({
+      colorActual: exc.color || null,
+      colorHeredado: "#a78bfa",
+      onCambiar: (valor) => {
+        exc.color = valor;
+        sellarTimestamp(exc);
+      },
+    });
+    cuerpoEditable.appendChild(selectorColorExc.elemento);
+  }
+  redibujarCuerpo();
+
+  chkCancelada.addEventListener("change", () => {
+    exc.cancelada = chkCancelada.checked;
+    sellarTimestamp(exc);
+    redibujarCuerpo();
+  });
+
+  btnQuitar.addEventListener("click", () => {
+    marcarExcepcionParaBorrar(exc);
+    alCambiar();
+  });
+
+  return tarjeta;
+}
+
+/**
+ * Borra una excepción de la lista viva del bloque (se resuelve contra el
+ * bloque real más adelante, en guardarBloque, para no necesitar pasar el
+ * bloque completo hasta acá) — se guarda el id a borrar en un set del
+ * contexto de edición actual.
+ */
+let idsExcepcionesABorrar = new Set();
+function marcarExcepcionParaBorrar(exc) {
+  idsExcepcionesABorrar.add(exc.id);
+}
+
 /* ===================== Guardar / Borrar ===================== */
 
 function guardarBloque(semestre, bloque, estadoForm) {
@@ -618,6 +928,25 @@ function guardarBloque(semestre, bloque, estadoForm) {
     bloque.profesor_id = estadoForm.profesorId;
     bloque.enlace = enlace || null;
     bloque.notas = notas || null;
+    bloque.color = estadoForm.color || null;
+
+    // Excepciones borradas en esta sesión de edición: se sacan del arreglo
+    // vivo y se dejan en la tumba propia del bloque, mismo patrón que el
+    // resto de colecciones anidadas del proyecto.
+    if (idsExcepcionesABorrar.size > 0) {
+      bloque._eliminados_excepciones_semana = bloque._eliminados_excepciones_semana || [];
+      bloque.excepciones_semana = (bloque.excepciones_semana || []).filter((e) => {
+        if (idsExcepcionesABorrar.has(e.id)) {
+          bloque._eliminados_excepciones_semana.push({ id: e.id, eliminadoEn: Date.now() });
+          return false;
+        }
+        return true;
+      });
+      idsExcepcionesABorrar = new Set();
+    }
+    // Las excepciones que siguen vivas ya se editaron/sellaron en el lugar
+    // (ver construirTarjetaExcepcion) — no hace falta re-sellarlas acá.
+
     sellarTimestamp(bloque);
   } else {
     const nuevo = crearBloqueHorario({
@@ -632,6 +961,7 @@ function guardarBloque(semestre, bloque, estadoForm) {
       profesorId: estadoForm.profesorId,
       enlace,
       notas,
+      color: estadoForm.color || null,
     });
     semestre.bloques_horario = semestre.bloques_horario || [];
     semestre.bloques_horario.push(nuevo);
