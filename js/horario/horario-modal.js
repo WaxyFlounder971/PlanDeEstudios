@@ -6,6 +6,9 @@
 import {
   crearBloqueHorario,
   crearModalidadHorario,
+  crearDiaCronograma,
+  obtenerClasesEfectivasSemana,
+  calcularNumeroSemanaSemestre,
   sellarTimestamp,
 } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
@@ -183,10 +186,10 @@ function abrirModalBloqueHorario({ semestreId, bloqueId, diaPreseleccionado, hor
     return;
   }
   // numeroSemanaVista: la semana que el usuario estaba viendo en el grid
-  // cuando abrió este editor (viene de horario.js). Es la que se usa si
-  // elige "solo esta semana" al guardar — si no viene (ej. al crear un
-  // bloque nuevo desde el botón "+"), no hace falta: crear siempre aplica
-  // a todas las semanas por igual.
+  // cuando abrió este editor (viene de horario.js). Ya no se usa para
+  // ningún prompt de alcance (ese flujo se eliminó) — ahora solo sirve
+  // para dejar preseleccionada esa semana en la sección Cronograma, así
+  // el usuario no tiene que ir a buscarla de nuevo si la abre.
   contextoActual = { semestreId, bloqueId: bloqueId || null, numeroSemanaVista: numeroSemanaVista || null };
   const bloque = bloqueId ? (semestre.bloques_horario || []).find((b) => b.id === bloqueId) : null;
 
@@ -209,6 +212,11 @@ function abrirModalBloqueHorario({ semestreId, bloqueId, diaPreseleccionado, hor
     enlace: bloque ? bloque.enlace || "" : "",
     notas: bloque ? bloque.notas || "" : "",
     color: bloque ? bloque.color : null,
+    // Estado puramente de UI de la sección Cronograma (no se guarda tal
+    // cual en el bloque, ver renderizarZonaCronograma más abajo).
+    _cronogramaAbierto: false,
+    _cronogramaSemanaAbierta: numeroSemanaVista || null,
+    _cronogramaEditando: null,
   };
 
   renderizarFormulario(semestre, bloque, estadoForm);
@@ -281,6 +289,14 @@ function renderizarFormulario(semestre, bloque, estadoForm) {
       <textarea id="hb-notas" class="form-textarea" style="resize:none; overflow:hidden; min-height:44px;">${estadoForm.notas}</textarea>
     </div>
 
+    <div>
+      <button type="button" class="btn-discreto row-between" id="hb-cronograma-toggle" style="width:100%; text-align:left; padding:8px 0;">
+        <span>📅 Cronograma de clases</span>
+        <span id="hb-cronograma-chevron">▼</span>
+      </button>
+      <div id="hb-cronograma-zona"></div>
+    </div>
+
     <div class="row-between" style="margin-top:12px;">
       ${bloque ? `<button type="button" class="btn btn-danger" id="hb-btn-borrar">Borrar</button>` : "<span></span>"}
       <div class="row" style="gap:8px;">
@@ -343,6 +359,14 @@ function renderizarFormulario(semestre, bloque, estadoForm) {
   textareaNotas.addEventListener("input", autoAjustarNotas);
   requestAnimationFrame(autoAjustarNotas);
 
+  // Cronograma de clases (granular por día, ver más abajo)
+  document.getElementById("hb-cronograma-toggle").addEventListener("click", () => {
+    estadoForm._cronogramaAbierto = !estadoForm._cronogramaAbierto;
+    estadoForm._cronogramaEditando = null;
+    renderizarZonaCronograma(semestre, bloque, estadoForm);
+  });
+  renderizarZonaCronograma(semestre, bloque, estadoForm);
+
   // Botones
   document.getElementById("hb-btn-cancelar").addEventListener("click", cerrarModalBloqueHorario);
   document.getElementById("hb-btn-guardar").addEventListener("click", () => guardarBloque(semestre, bloque, estadoForm));
@@ -384,8 +408,6 @@ function obtenerColorHeredadoDeCategoria(materiaId, planEstudioId) {
  * (mismo criterio que obtenerColorBloque en horario.js) — el círculo "↺"
  * vuelve a ese heredado; el círculo con el input de color nativo permite
  * elegir CUALQUIER color (sin paleta predefinida ni swatches curados).
- * Reutilizado tanto para el color del bloque base como para el override
- * de cada excepción de semana.
  */
 function construirSelectorColor({ colorActual, colorHeredado, onCambiar }) {
   const wrap = document.createElement("div");
@@ -703,6 +725,198 @@ function renderizarZonaProfesor(semestre, estadoForm) {
   });
 }
 
+
+/* ===================== Cronograma de clases ===================== *
+ * Reemplaza al viejo sistema de "excepciones por semana completa" (ver
+ * nota arriba de guardarBloque). Modelo de datos en schema.js:
+ * cronograma_dias / crearDiaCronograma / obtenerClasesEfectivasSemana.
+ * Acá solo vive la UI: lista de semanas del semestre, y al tocar una,
+ * una tarjetita por cada día que el bloque tenga esa semana con su
+ * Modalidad efectiva y un lápiz para ajustarla puntualmente. Nada más es
+ * editable desde acá — horario/aula/profesor/enlace/notas/color siguen
+ * siendo responsabilidad exclusiva de la plantilla base, arriba en este
+ * mismo formulario.
+ */
+
+const ETIQUETAS_MODALIDAD_CRONOGRAMA = { ...ETIQUETAS_MODALIDAD, sin_clase: "Sin clase" };
+
+// Duplicado deliberado de fechaLocalDesdeISO/obtenerEmojiModalidad (ver
+// horario.js): evita un import circular, ya que horario.js importa de
+// este archivo (abrirModalBloqueHorario). Son funciones puras de pocas
+// líneas sin estado propio — si alguna cambia, replicar acá también.
+function fechaLocalDesdeISOCronograma(str) {
+  const soloFecha = String(str || "").slice(0, 10);
+  const [y, m, d] = soloFecha.split("-").map(Number);
+  if (!y || !m || !d) return new Date(NaN);
+  return new Date(y, m - 1, d);
+}
+
+function obtenerEmojiModalidadCronograma(modalidad) {
+  if (modalidad === "sin_clase") return "✖️";
+  const normalizado = String(modalidad || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (normalizado.startsWith("virtual")) return "💻";
+  if (normalizado.startsWith("asincron")) return "📖";
+  return "";
+}
+
+/**
+ * Offset en días de `diaCodigo` respecto a fecha_inicio del semestre,
+ * respetando la config de "día de inicio de semana" del usuario — mismo
+ * cálculo que usa el grid semanal (ver obtenerDiasVisiblesOrdenados en
+ * horario.js), pero SIN filtrar por días visibles: el Cronograma debe
+ * poder mostrar cualquier día en que el bloque tenga clase, aunque el
+ * usuario lo haya ocultado del grid.
+ */
+function calcularOffsetDiaEnSemana(diaCodigo) {
+  const cfg = estado.datos.configuracion;
+  const inicioId = cfg.dia_inicio_semana || "lunes";
+  const idxInicio = Math.max(0, DIAS_SEMANA_CONFIG.findIndex((d) => d.id === inicioId));
+  const rotado = [...DIAS_SEMANA_CONFIG.slice(idxInicio), ...DIAS_SEMANA_CONFIG.slice(0, idxInicio)];
+  return rotado.findIndex((d) => d.abrevDefault === diaCodigo);
+}
+
+function calcularFechaClaseSemana(semestre, numeroSemana, diaCodigo) {
+  const inicio = fechaLocalDesdeISOCronograma(semestre.fecha_inicio);
+  if (isNaN(inicio.getTime())) return null;
+  const offset = calcularOffsetDiaEnSemana(diaCodigo);
+  if (offset === -1) return null;
+  const fecha = new Date(inicio);
+  fecha.setDate(inicio.getDate() + (numeroSemana - 1) * 7 + offset);
+  return fecha;
+}
+
+/**
+ * Aplica (o revierte) el ajuste puntual de Modalidad de un día concreto de
+ * una semana concreta. Si la modalidad elegida coincide con la de la
+ * plantilla, se interpreta como "volver a lo normal": si había un ajuste
+ * guardado, se borra (con tumba real, mismo patrón que el resto de
+ * colecciones anidadas). Si difiere, crea o actualiza la entrada de
+ * cronograma_dias correspondiente. Esto NO pasa por el botón "Guardar"
+ * del formulario — se persiste al toque, como cualquier otro cambio
+ * puntual sincronizable.
+ */
+function aplicarModalidadDia(bloque, numeroSemana, diaCodigo, nuevaModalidad) {
+  const diaPlantilla = (bloque.dias || []).find((d) => d.dia === diaCodigo);
+  const modalidadPlantilla = (diaPlantilla && diaPlantilla.modalidad) || "presencial";
+  bloque.cronograma_dias = bloque.cronograma_dias || [];
+  bloque._eliminados_cronograma_dias = bloque._eliminados_cronograma_dias || [];
+  const existente = bloque.cronograma_dias.find((cd) => cd.numero_semana === numeroSemana && cd.dia === diaCodigo);
+
+  if (nuevaModalidad === modalidadPlantilla) {
+    if (existente) {
+      bloque.cronograma_dias = bloque.cronograma_dias.filter((cd) => cd.id !== existente.id);
+      bloque._eliminados_cronograma_dias.push({ id: existente.id, eliminadoEn: Date.now() });
+    }
+  } else if (existente) {
+    existente.modalidad = nuevaModalidad;
+    sellarTimestamp(existente);
+  } else {
+    bloque.cronograma_dias.push(crearDiaCronograma({ numeroSemana, dia: diaCodigo, modalidad: nuevaModalidad }));
+  }
+
+  sellarTimestamp(bloque);
+  marcarCambioPendiente();
+  window.renderizarHorario?.();
+}
+
+function renderizarZonaCronograma(semestre, bloque, estadoForm) {
+  const zona = document.getElementById("hb-cronograma-zona");
+  const chevron = document.getElementById("hb-cronograma-chevron");
+  if (!zona) return;
+  if (chevron) chevron.textContent = estadoForm._cronogramaAbierto ? "▲" : "▼";
+
+  if (!estadoForm._cronogramaAbierto) {
+    zona.innerHTML = "";
+    return;
+  }
+
+  if (!bloque) {
+    zona.innerHTML = `<p class="muted" style="font-size:0.82rem; padding:8px 0;">Disponible después de guardar este bloque por primera vez.</p>`;
+    return;
+  }
+
+  const totalSemanas = Number(semestre.duracion_semanas) || 16;
+  const semanaActual = calcularNumeroSemanaSemestre(semestre);
+  const semanaAbierta = estadoForm._cronogramaSemanaAbierta;
+
+  const pillsHtml = Array.from({ length: totalSemanas }, (_, i) => i + 1)
+    .map((n) => {
+      const clases = "pill-item" + (n === semanaAbierta ? " active" : "");
+      return `<button type="button" class="${clases}" data-semana="${n}">${n}${n === semanaActual ? " •" : ""}</button>`;
+    })
+    .join("");
+
+  let tarjetasHtml = "";
+  if (semanaAbierta) {
+    const clases = obtenerClasesEfectivasSemana(bloque, semanaAbierta);
+    if (clases.length === 0) {
+      tarjetasHtml = `<p class="muted" style="font-size:0.8rem; margin-top:10px;">Este bloque no tiene días configurados.</p>`;
+    } else {
+      tarjetasHtml =
+        `<div class="stack" style="gap:8px; margin-top:10px;">` +
+        clases
+          .map((c) => {
+            const diaInfo = DIAS_SEMANA_CONFIG.find((x) => x.abrevDefault === c.dia);
+            const nombreDia = (diaInfo && diaInfo.etiqueta) || c.dia;
+            const fecha = calcularFechaClaseSemana(semestre, semanaAbierta, c.dia);
+            const fechaTxt = fecha && !isNaN(fecha.getTime()) ? fecha.toLocaleDateString("es-CR", { day: "numeric", month: "short" }) : "";
+            const clave = `${semanaAbierta}-${c.dia}`;
+            const editando = estadoForm._cronogramaEditando === clave;
+            return `
+          <div class="stack" style="gap:4px; padding:8px 10px; border-radius:8px; background:rgba(150,150,170,0.08);">
+            <div class="row-between">
+              <span style="font-weight:600; font-size:0.85rem;">Clase - ${nombreDia}${fechaTxt ? ` ${fechaTxt}` : ""}</span>
+              <button type="button" class="btn-discreto" data-editar-dia="${clave}" title="Ajustar modalidad de este día">✎</button>
+            </div>
+            <div class="row-between" data-linea-modalidad="${clave}">
+              ${editando ? "" : `<span class="muted" style="font-size:0.78rem;">${ETIQUETAS_MODALIDAD_CRONOGRAMA[c.modalidad] || c.modalidad}</span><span style="font-size:1rem;">${obtenerEmojiModalidadCronograma(c.modalidad)}</span>`}
+            </div>
+          </div>`;
+          })
+          .join("") +
+        `</div>`;
+    }
+  }
+
+  zona.innerHTML = `<div class="pill-group" style="margin-top:10px;">${pillsHtml}</div>${tarjetasHtml}`;
+
+  zona.querySelectorAll("[data-semana]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const n = Number(btn.dataset.semana);
+      estadoForm._cronogramaSemanaAbierta = estadoForm._cronogramaSemanaAbierta === n ? null : n;
+      estadoForm._cronogramaEditando = null;
+      renderizarZonaCronograma(semestre, bloque, estadoForm);
+    });
+  });
+
+  zona.querySelectorAll("[data-editar-dia]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const clave = btn.dataset.editarDia;
+      estadoForm._cronogramaEditando = estadoForm._cronogramaEditando === clave ? null : clave;
+      renderizarZonaCronograma(semestre, bloque, estadoForm);
+    });
+  });
+
+  if (estadoForm._cronogramaEditando && semanaAbierta) {
+    const diaCodigo = estadoForm._cronogramaEditando.split("-")[1];
+    const lineaModalidad = zona.querySelector(`[data-linea-modalidad="${estadoForm._cronogramaEditando}"]`);
+    const claseActual = obtenerClasesEfectivasSemana(bloque, semanaAbierta).find((c) => c.dia === diaCodigo);
+    if (lineaModalidad && claseActual) {
+      const opciones = Object.entries(ETIQUETAS_MODALIDAD_CRONOGRAMA).map(([valor, etiqueta]) => ({ valor, etiqueta }));
+      const selector = construirSelectPersonalizado({
+        opciones,
+        valorInicial: claseActual.modalidad,
+        etiquetaVacia: "Modalidad",
+        onCambiar: (valor) => {
+          aplicarModalidadDia(bloque, semanaAbierta, diaCodigo, valor);
+          estadoForm._cronogramaEditando = null;
+          renderizarZonaCronograma(semestre, bloque, estadoForm);
+        },
+      });
+      lineaModalidad.appendChild(selector.elemento);
+    }
+  }
+}
 
 // Nota (2026-08-14): antes acá vivía el prompt "¿Aplicar a todas las
 // semanas o solo a esta?" + la lógica de excepciones por semana completa.
