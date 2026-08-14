@@ -179,6 +179,21 @@
             <span class="form-label">Nombres personalizados (opcional, máx. 3 caracteres)</span>
             <div id="lista-nombres-dias" class="stack" style="gap:8px;"></div>
           </div>
+
+          <div>
+            <span class="form-label">Rango de horas visible en el grid</span>
+            <p class="muted" style="font-size:0.78rem; margin:2px 0 6px;">Acortá el rango para no scrollear horas que nunca usás. Por defecto muestra el día completo.</p>
+            <div class="row-between" style="gap:10px;">
+              <div class="stack" style="gap:4px; flex:1;">
+                <span class="muted" style="font-size:0.72rem;">Iniciar en</span>
+                <select id="select-horario-hora-inicio" class="form-select"></select>
+              </div>
+              <div class="stack" style="gap:4px; flex:1;">
+                <span class="muted" style="font-size:0.72rem;">Terminar en</span>
+                <select id="select-horario-hora-fin" class="form-select"></select>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section class="glass-card stack">
