@@ -249,7 +249,7 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid) {
     `;
     tarjeta.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      abrirModalBloqueHorario({ semestreId: semestre.id, bloqueId: b.bloqueOriginalId });
+      abrirTarjetaInfoBloque(semestre, cacheNumeroSemana, b);
     });
     col.appendChild(tarjeta);
   });
@@ -264,6 +264,66 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid) {
 
   return col;
 }
+
+/* ===================== Tarjeta de información (1er tap sobre un bloque existente) ===================== */
+
+/**
+ * Antes, tocar una tarjeta ya existente abría directo el editor. Ahora abre
+ * primero esta tarjeta de solo-lectura con los datos de la clase — el
+ * editor real queda un tap más allá, en el botón "Editar" de acá abajo.
+ */
+function abrirTarjetaInfoBloque(semestre, numeroSemana, b) {
+  document.getElementById("horario-info-overlay")?.remove();
+
+  const emojiModalidad = obtenerEmojiModalidad(b.modalidad);
+  const overlay = document.createElement("div");
+  overlay.id = "horario-info-overlay";
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="glass-panel modal-card" style="padding:0; overflow:hidden;">
+      <div style="height:8px; background:${b.color};"></div>
+      <button type="button" class="modal-x-close" id="horario-info-cerrar">✕</button>
+      <div style="padding:20px;">
+        <div style="font-size:1.05rem; font-weight:700; padding-right:28px; overflow-wrap:break-word;">${b.nombreCorto}</div>
+        <div class="muted" style="font-size:0.78rem; margin-bottom:16px;">Semana ${numeroSemana}</div>
+        <div class="stack" style="gap:12px;">
+          ${b.profesorNombre ? `
+            <div>
+              <div class="muted" style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.02em;">Profesor</div>
+              <div style="overflow-wrap:break-word;">${b.profesorNombre}</div>
+            </div>` : ""}
+          <div>
+            <div class="muted" style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.02em;">Modalidad</div>
+            <div>${emojiModalidad ? emojiModalidad + " " : ""}${ETIQUETAS_MODALIDAD_INFO[b.modalidad] || b.modalidad || "Presencial"}</div>
+          </div>
+          ${b.aula ? `
+            <div>
+              <div class="muted" style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.02em;">Aula</div>
+              <div style="overflow-wrap:break-word;">${b.aula}</div>
+            </div>` : ""}
+          ${b.enlace ? `<a href="${b.enlace}" target="_blank" rel="noopener" class="horario-btn-entrar-clase" style="display:inline-block; width:fit-content; background:${b.color}; color:#fff;">Entrar a clase</a>` : ""}
+          ${b.notas ? `
+            <div>
+              <div class="muted" style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.02em;">Notas</div>
+              <div style="white-space:pre-wrap; overflow-wrap:break-word;">${b.notas}</div>
+            </div>` : ""}
+        </div>
+        <button type="button" class="btn-secondary" id="horario-info-editar" style="width:100%; margin-top:20px;">Editar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const cerrar = () => overlay.remove();
+  overlay.addEventListener("click", (ev) => { if (ev.target === overlay) cerrar(); });
+  document.getElementById("horario-info-cerrar").addEventListener("click", cerrar);
+  document.getElementById("horario-info-editar").addEventListener("click", () => {
+    cerrar();
+    abrirModalBloqueHorario({ semestreId: semestre.id, bloqueId: b.bloqueOriginalId, numeroSemanaVista: numeroSemana });
+  });
+}
+
+const ETIQUETAS_MODALIDAD_INFO = { presencial: "Presencial", virtual: "Virtual", asincronica: "Asincrónica" };
 
 /* ===================== Bloque flotante (1er tap → borrador; 2do tap → modal) ===================== */
 
@@ -315,7 +375,12 @@ function abrirSelectorSemestre() {
   const modal = document.getElementById("modal-selector-semestre");
   const cont = document.getElementById("selector-semestre-contenido");
   if (!modal || !cont) return;
-  const semestres = obtenerSemestresOrdenCronologico();
+  // obtenerSemestresOrdenCronologico() es ascendente (más viejo primero) —
+  // otras partes del código dependen de ese orden (ej. obtenerSemestreHorarioActual
+  // usa el último del arreglo como "el más reciente"), así que no se toca
+  // esa función; para este listado se usa una copia invertida, solo para
+  // mostrar, de más reciente a más viejo como se pidió.
+  const semestres = [...obtenerSemestresOrdenCronologico()].reverse();
 
   cont.innerHTML = `
     <h3>Elegir semestre</h3>
@@ -334,7 +399,11 @@ function abrirSelectorSemestre() {
     const finEstimado = new Date(inicio);
     finEstimado.setDate(inicio.getDate() + (Number(s.duracion_semanas) || 16) * 7);
     const fmt = (d) => (isNaN(d.getTime()) ? "" : d.toLocaleDateString("es-CR", { day: "numeric", month: "short", year: "numeric" }));
-    item.innerHTML = `<div style="font-weight:600;">${s.nombre}</div><div class="muted" style="font-size:0.78rem;">${fmt(inicio)} – ${fmt(finEstimado)}</div>`;
+    // Antes no tenía color propio y heredaba negro por defecto (ilegible
+    // en modo oscuro) — se fija al color de texto normal del tema, y el
+    // nombre queda 20% más grande (0.95rem ≈ 1.2 × 0.78rem, el tamaño base
+    // que ya traía la fecha de abajo) tal como se pidió.
+    item.innerHTML = `<div style="font-weight:600; font-size:0.95rem; color:var(--text-primary);">${s.nombre}</div><div class="muted" style="font-size:0.78rem;">${fmt(inicio)} – ${fmt(finEstimado)}</div>`;
     item.addEventListener("click", () => {
       estado.horarioSemestreId = s.id;
       estado.horarioNumeroSemana = null; // recalcula al entrar a ese semestre
@@ -497,6 +566,7 @@ function renderizarHorarioInterno() {
             aula: b.aula,
             enlace: b.enlace,
             modalidad: d.modalidad,
+            notas: b.notas,
             tieneExcepcionEstaSemana: !!b.tiene_excepcion_esta_semana,
           }))
       );

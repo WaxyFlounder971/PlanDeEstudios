@@ -183,14 +183,19 @@ function construirSelectPersonalizado({ opciones, valorInicial, etiquetaVacia, o
 
 /* ===================== Apertura ===================== */
 
-function abrirModalBloqueHorario({ semestreId, bloqueId, diaPreseleccionado, horaInicioPreseleccionada, horaFinPreseleccionada }) {
+function abrirModalBloqueHorario({ semestreId, bloqueId, diaPreseleccionado, horaInicioPreseleccionada, horaFinPreseleccionada, numeroSemanaVista }) {
   instalarObservadorCierreModal();
   const semestre = buscarSemestreVivoPorId(semestreId);
   if (!semestre) {
     mostrarToast("Ese semestre ya no existe");
     return;
   }
-  contextoActual = { semestreId, bloqueId: bloqueId || null };
+  // numeroSemanaVista: la semana que el usuario estaba viendo en el grid
+  // cuando abrió este editor (viene de horario.js). Es la que se usa si
+  // elige "solo esta semana" al guardar — si no viene (ej. al crear un
+  // bloque nuevo desde el botón "+"), no hace falta: crear siempre aplica
+  // a todas las semanas por igual.
+  contextoActual = { semestreId, bloqueId: bloqueId || null, numeroSemanaVista: numeroSemanaVista || null };
   const bloque = bloqueId ? (semestre.bloques_horario || []).find((b) => b.id === bloqueId) : null;
 
   const diasIniciales = bloque
@@ -923,6 +928,63 @@ function marcarExcepcionParaBorrar(exc) {
 
 /* ===================== Guardar / Borrar ===================== */
 
+/**
+ * Prompt pequeño "¿Aplicar a todas las semanas o solo a esta?", mismo look
+ * que el resto de modales (.modal-overlay / .modal-card / .glass-panel).
+ * Se resuelve por callback (no hay await en el resto del archivo) — llama
+ * a onElegir("todas") o onElegir("esta") según el botón tocado; si se
+ * cierra sin elegir (click afuera / X), no llama a nada y el Guardar
+ * original queda cancelado (no se pierde nada, el formulario sigue abierto).
+ */
+function preguntarAlcanceEdicion(numeroSemana, onElegir) {
+  document.getElementById("horario-alcance-overlay")?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "horario-alcance-overlay";
+  overlay.className = "modal-overlay";
+  overlay.style.zIndex = "300"; // por encima del modal de edición, que ya está abierto
+  overlay.innerHTML = `
+    <div class="glass-panel modal-card" style="padding:20px; max-width:340px;">
+      <div style="font-weight:600; margin-bottom:4px;">¿Aplicar estos cambios a...?</div>
+      <p class="muted" style="font-size:0.82rem; margin:0 0 16px;">Esta materia se repite todas las semanas. Elegí si el cambio vale para siempre o solo para esta semana.</p>
+      <div class="stack" style="gap:8px;">
+        <button type="button" class="btn-primary" id="horario-alcance-todas" style="width:100%;">Todas las semanas</button>
+        <button type="button" class="btn-secondary" id="horario-alcance-esta" style="width:100%;">Solo esta semana (Semana ${numeroSemana})</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const cerrar = () => overlay.remove();
+  overlay.addEventListener("click", (ev) => { if (ev.target === overlay) cerrar(); });
+  document.getElementById("horario-alcance-todas").addEventListener("click", () => { cerrar(); onElegir("todas"); });
+  document.getElementById("horario-alcance-esta").addEventListener("click", () => { cerrar(); onElegir("esta"); });
+}
+
+/**
+ * Aplica los campos editados como una excepción de ESTA semana solamente,
+ * en vez de tocar la plantilla base del bloque — reusa la excepción ya
+ * existente para esa semana si hay una (para no duplicar), o crea una
+ * nueva. La materia/plan/nombre no se tocan acá (el schema de excepción no
+ * las soporta — no tendría sentido "esta semana es otra materia").
+ */
+function aplicarComoExcepcionDeEstaSemana(bloque, numeroSemana, campos) {
+  bloque.excepciones_semana = bloque.excepciones_semana || [];
+  let exc = bloque.excepciones_semana.find((e) => e.numero_semana === numeroSemana);
+  if (!exc) {
+    exc = crearExcepcionSemanaBloque({ numeroSemana });
+    bloque.excepciones_semana.push(exc);
+  }
+  exc.apodo = campos.apodo;
+  exc.grupo = campos.grupo;
+  exc.dias = campos.dias;
+  exc.modalidad = campos.modalidad;
+  exc.aula = campos.aula;
+  exc.profesor_id = campos.profesorId;
+  exc.enlace = campos.enlace;
+  exc.notas = campos.notas;
+  exc.color = campos.color;
+  sellarTimestamp(exc);
+}
+
 function guardarBloque(semestre, bloque, estadoForm) {
   const diasValidos = estadoForm.dias.filter((d) => d.hora_inicio && d.hora_fin);
   if (diasValidos.length === 0) {
@@ -936,19 +998,52 @@ function guardarBloque(semestre, bloque, estadoForm) {
   const notas = document.getElementById("hb-notas").value.trim();
   const nombrePersonalizado = document.getElementById("hb-nombre-personalizado").value.trim();
 
-  if (bloque) {
-    bloque.materia_id = estadoForm.materiaId;
-    bloque.plan_estudio_id = estadoForm.materiaId ? estadoForm.planEstudioId : null;
-    bloque.nombre = estadoForm.materiaId ? null : nombrePersonalizado;
-    bloque.apodo = apodo || null;
-    bloque.grupo = grupo || null;
-    bloque.dias = diasValidos;
-    bloque.modalidad = estadoForm.modalidad;
-    bloque.aula = aula || null;
-    bloque.profesor_id = estadoForm.profesorId;
-    bloque.enlace = enlace || null;
-    bloque.notas = notas || null;
-    bloque.color = estadoForm.color || null;
+  const campos = {
+    materiaId: estadoForm.materiaId,
+    planEstudioId: estadoForm.materiaId ? estadoForm.planEstudioId : null,
+    nombre: estadoForm.materiaId ? null : nombrePersonalizado,
+    apodo: apodo || null,
+    grupo: grupo || null,
+    dias: diasValidos,
+    modalidad: estadoForm.modalidad,
+    aula: aula || null,
+    profesorId: estadoForm.profesorId,
+    enlace: enlace || null,
+    notas: notas || null,
+    color: estadoForm.color || null,
+  };
+
+  const finalizar = () => {
+    sellarTimestamp(semestre);
+    marcarCambioPendiente();
+    cerrarModalBloqueHorario();
+    window.renderizarHorario?.();
+  };
+
+  if (!bloque) {
+    // Creación: al copiarse automáticamente todas las semanas (una sola
+    // plantilla base recurrente), no hay nada que "elegir esta semana"
+    // todavía — siempre aplica a todas por igual desde el primer momento.
+    const nuevo = crearBloqueHorario(campos);
+    semestre.bloques_horario = semestre.bloques_horario || [];
+    semestre.bloques_horario.push(nuevo);
+    finalizar();
+    return;
+  }
+
+  const aplicarATodas = () => {
+    bloque.materia_id = campos.materiaId;
+    bloque.plan_estudio_id = campos.planEstudioId;
+    bloque.nombre = campos.nombre;
+    bloque.apodo = campos.apodo;
+    bloque.grupo = campos.grupo;
+    bloque.dias = campos.dias;
+    bloque.modalidad = campos.modalidad;
+    bloque.aula = campos.aula;
+    bloque.profesor_id = campos.profesorId;
+    bloque.enlace = campos.enlace;
+    bloque.notas = campos.notas;
+    bloque.color = campos.color;
 
     // Excepciones borradas en esta sesión de edición: se sacan del arreglo
     // vivo y se dejan en la tumba propia del bloque, mismo patrón que el
@@ -968,28 +1063,28 @@ function guardarBloque(semestre, bloque, estadoForm) {
     // (ver construirTarjetaExcepcion) — no hace falta re-sellarlas acá.
 
     sellarTimestamp(bloque);
-  } else {
-    const nuevo = crearBloqueHorario({
-      materiaId: estadoForm.materiaId,
-      planEstudioId: estadoForm.planEstudioId,
-      nombre: nombrePersonalizado,
-      apodo,
-      grupo,
-      dias: diasValidos,
-      modalidad: estadoForm.modalidad,
-      aula,
-      profesorId: estadoForm.profesorId,
-      enlace,
-      notas,
-      color: estadoForm.color || null,
-    });
-    semestre.bloques_horario = semestre.bloques_horario || [];
-    semestre.bloques_horario.push(nuevo);
+    finalizar();
+  };
+
+  // La materia (a qué clase pertenece este bloque) no tiene override por
+  // semana en el schema — si cambió, el cambio es forzosamente global, sin
+  // preguntar nada (no existe un "esta semana es otra materia" posible).
+  const materiaCambio = campos.materiaId !== bloque.materia_id || campos.nombre !== bloque.nombre;
+  if (materiaCambio) {
+    aplicarATodas();
+    return;
   }
-  sellarTimestamp(semestre);
-  marcarCambioPendiente();
-  cerrarModalBloqueHorario();
-  window.renderizarHorario?.();
+
+  const numeroSemana = (contextoActual && contextoActual.numeroSemanaVista) || calcularNumeroSemanaSemestre(semestre);
+  preguntarAlcanceEdicion(numeroSemana, (alcance) => {
+    if (alcance === "todas") {
+      aplicarATodas();
+    } else {
+      aplicarComoExcepcionDeEstaSemana(bloque, numeroSemana, campos);
+      sellarTimestamp(bloque);
+      finalizar();
+    }
+  });
 }
 
 function borrarBloque(semestre, bloque) {
