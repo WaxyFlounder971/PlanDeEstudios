@@ -141,6 +141,56 @@ function renderizarConfigDiasHorario() {
   }
 }
 
+/**
+ * Ajustes — Horario: rango de horas visibles (2026-08-14). Antes el grid
+ * siempre mostraba las 24h del día; ahora se puede acortar el rango (ej.
+ * 6am–11pm) para no tener que scrollear horas que nunca se usan. Guardado
+ * como enteros 0-24 en cfg.horario_hora_inicio / horario_hora_fin. Default:
+ * ambos "12 am" → equivale al día completo (ver obtenerRangoHorasHorario en
+ * horario.js, que además blinda fin<=inicio cayendo a día completo).
+ */
+function etiquetaHora12(h) {
+  const horaMod = h % 24;
+  const hora12 = horaMod % 12 === 0 ? 12 : horaMod % 12;
+  const periodo = horaMod < 12 ? "am" : "pm";
+  return `${hora12} ${periodo}`;
+}
+
+function renderizarConfigRangoHorasHorario() {
+  const cfg = estado.datos.configuracion;
+  // Mismos defaults que el fallback de obtenerRangoHorasHorario en
+  // horario.js (0 = 12am, 24 = 12am del día siguiente) para que lo que se
+  // ve seleccionado acá coincida siempre con lo que realmente se dibuja.
+  cfg.horario_hora_inicio = Number.isFinite(cfg.horario_hora_inicio) ? cfg.horario_hora_inicio : 0;
+  cfg.horario_hora_fin = Number.isFinite(cfg.horario_hora_fin) ? cfg.horario_hora_fin : 24;
+
+  const selInicio = document.getElementById("select-horario-hora-inicio");
+  const selFin = document.getElementById("select-horario-hora-fin");
+  if (!selInicio || !selFin) return;
+
+  // Inicio: 12am (0) a 11pm (23). Fin: 1am (1) a 12am del día siguiente
+  // (24, mostrado también como "12 am" vía etiquetaHora12(24) = 24%24=0).
+  selInicio.innerHTML = Array.from({ length: 24 }, (_, h) => h)
+    .map((h) => `<option value="${h}"${cfg.horario_hora_inicio === h ? " selected" : ""}>${etiquetaHora12(h)}</option>`)
+    .join("");
+  selFin.innerHTML = Array.from({ length: 24 }, (_, h) => h + 1)
+    .map((h) => `<option value="${h}"${cfg.horario_hora_fin === h ? " selected" : ""}>${etiquetaHora12(h)}</option>`)
+    .join("");
+
+  selInicio.onchange = () => {
+    cfg.horario_hora_inicio = Number(selInicio.value);
+    sellarTimestamp(cfg);
+    marcarCambioPendiente();
+    window.renderizarHorario?.();
+  };
+  selFin.onchange = () => {
+    cfg.horario_hora_fin = Number(selFin.value);
+    sellarTimestamp(cfg);
+    marcarCambioPendiente();
+    window.renderizarHorario?.();
+  };
+}
+
 const SECCIONES_TOGGLEABLES = [
   { id: "agenda", etiqueta: "Agenda", icono: "📖" },
   { id: "horario", etiqueta: "Horario", icono: "🗓️" },
@@ -516,6 +566,9 @@ function renderizarAjustes() {
 
   // Ajustes — Horario: configuración de días
   renderizarConfigDiasHorario();
+
+  // Ajustes — Horario: rango de horas visibles en el grid
+  renderizarConfigRangoHorasHorario();
 
   // Ajustes — ocultar botones de navegación principal
   renderizarNavegacionOculta();
