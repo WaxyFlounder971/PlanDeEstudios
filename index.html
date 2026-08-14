@@ -167,6 +167,39 @@
         </section>
 
         <section class="glass-card stack ajuste-seccion colapsada">
+          <button type="button" class="ajuste-seccion-cabecera"><h2>Personalizar</h2><span class="ajuste-seccion-chevron">▾</span></button>
+          <div class="ajuste-seccion-cuerpo">
+
+          <div class="row-between">
+            <span>Modo oscuro / claro</span>
+            <label class="switch switch-tema">
+              <input type="checkbox" id="switch-modo">
+              <span class="track"><span class="thumb"></span></span>
+            </label>
+          </div>
+
+          <div class="row-between">
+            <span>Modo de rendimiento</span>
+            <label class="switch switch-tema">
+              <input type="checkbox" id="switch-rendimiento">
+              <span class="track"><span class="thumb"></span></span>
+            </label>
+          </div>
+
+          <div>
+            <span>Paleta de color</span>
+            <div class="palette-grid" id="grid-paletas"></div>
+          </div>
+
+          <div>
+            <span class="form-label">Navegación</span>
+            <p class="muted" style="font-size:0.82rem; margin:2px 0 6px;">Elegí qué secciones mostrar en el menú y arrastrá <span class="handle-mover" style="display:inline; padding:0 2px; cursor:default;">⋮⋮</span> para cambiar el orden. "Resumen" y "Configuración" siempre quedan visibles y fijos arriba/abajo.</p>
+            <div id="lista-nav-oculta" class="stack" style="gap:8px;"></div>
+          </div>
+          </div>
+        </section>
+
+        <section class="glass-card stack ajuste-seccion colapsada">
           <button type="button" class="ajuste-seccion-cabecera"><h2>Horario</h2><span class="ajuste-seccion-chevron">▾</span></button>
           <div class="ajuste-seccion-cuerpo">
 
@@ -203,41 +236,6 @@
         </section>
 
         <section class="glass-card stack ajuste-seccion colapsada">
-          <button type="button" class="ajuste-seccion-cabecera"><h2>Navegación</h2><span class="ajuste-seccion-chevron">▾</span></button>
-          <div class="ajuste-seccion-cuerpo">
-          <p class="muted" style="font-size:0.82rem; margin:0 0 4px;">Elegí qué secciones mostrar en el menú y arrastrá <span class="handle-mover" style="display:inline; padding:0 2px; cursor:default;">⋮⋮</span> para cambiar el orden. "Resumen" y "Configuración" siempre quedan visibles y fijos arriba/abajo.</p>
-          <div id="lista-nav-oculta" class="stack" style="gap:8px;"></div>
-          </div>
-        </section>
-
-        <section class="glass-card stack ajuste-seccion colapsada">
-          <button type="button" class="ajuste-seccion-cabecera"><h2>Personalizar</h2><span class="ajuste-seccion-chevron">▾</span></button>
-          <div class="ajuste-seccion-cuerpo">
-
-          <div class="row-between">
-            <span>Modo oscuro / claro</span>
-            <label class="switch switch-tema">
-              <input type="checkbox" id="switch-modo">
-              <span class="track"><span class="thumb"></span></span>
-            </label>
-          </div>
-
-          <div class="row-between">
-            <span>Modo de rendimiento</span>
-            <label class="switch switch-tema">
-              <input type="checkbox" id="switch-rendimiento">
-              <span class="track"><span class="thumb"></span></span>
-            </label>
-          </div>
-
-          <div>
-            <span>Paleta de color</span>
-            <div class="palette-grid" id="grid-paletas"></div>
-          </div>
-          </div>
-        </section>
-
-        <section class="glass-card stack ajuste-seccion colapsada">
           <button type="button" class="ajuste-seccion-cabecera"><h2>Enlaces rápidos</h2><span class="ajuste-seccion-chevron">▾</span></button>
           <div class="ajuste-seccion-cuerpo">
           <div class="row-between">
@@ -249,26 +247,23 @@
         </section>
 
         <section class="glass-card stack ajuste-seccion colapsada">
-          <button type="button" class="ajuste-seccion-cabecera"><h2>Backup de seguridad (Google Drive)</h2><span class="ajuste-seccion-chevron">▾</span></button>
-          <div class="ajuste-seccion-cuerpo">
-          <p class="muted" style="font-size:0.82rem; margin:0 0 4px;">Además del archivo que ya se sincroniza, la app guarda automáticamente hasta 2 copias rotativas en una carpeta "AppAcademica" de tu Drive, con la frecuencia que elijas acá.</p>
-          <div>
-            <span class="form-label">Frecuencia</span>
-            <div class="pill-group" id="pill-frecuencia-backup"></div>
-          </div>
-          <p class="muted" id="texto-ultimo-backup" style="font-size:0.78rem; margin:4px 0 0;"></p>
-          <button type="button" id="btn-backup-manual" class="btn btn-secondary btn-block">Hacer backup ahora</button>
-          </div>
-        </section>
-
-        <section class="glass-card stack ajuste-seccion colapsada">
           <button type="button" class="ajuste-seccion-cabecera"><h2>Datos</h2><span class="ajuste-seccion-chevron">▾</span></button>
           <div class="ajuste-seccion-cuerpo">
+
+          <div>
+            <span class="form-label">Backup de seguridad (Google Drive)</span>
+            <p class="muted" style="font-size:0.82rem; margin:2px 0 6px;">Además del archivo que ya se sincroniza, la app guarda automáticamente hasta 2 copias rotativas en una carpeta "AppAcademica" de tu Drive, con la frecuencia que elijas acá.</p>
+            <div class="pill-group" id="pill-frecuencia-backup"></div>
+            <p class="muted" id="texto-ultimo-backup" style="font-size:0.78rem; margin:8px 0 0;"></p>
+            <button type="button" id="btn-backup-manual" class="btn btn-secondary btn-block" style="margin-top:8px;">Hacer backup ahora</button>
+          </div>
+
           <div id="seccion-datos-respaldo" class="stack"></div>
           </div>
         </section>
 
       </div>
+
 
       <!-- ===================== SECCIÓN: Plan de Estudios ===================== -->
       <div id="seccion-plan-estudios" class="stack oculto"></div>
