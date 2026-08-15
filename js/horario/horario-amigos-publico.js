@@ -109,6 +109,8 @@ function construirClasesEfectivasSemana(bloques, numeroSemana) {
         id: bloque.id,
         nombre: bloque.nombre,
         color: bloque.color,
+        aula: bloque.aula || null,
+        universidad: bloque.universidad || null,
         dia: diaBloque.dia,
         hora_inicio: diaBloque.hora_inicio,
         hora_fin: diaBloque.hora_fin,
@@ -187,11 +189,18 @@ function construirColumnaDia(dia, bloquesDia, pxPorMin, altoGrid, minInicioRango
       box-shadow:0 2px 6px rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.25);
       ${esSinClase ? "opacity:0.45;" : ""}`;
     const emojiModalidad = obtenerEmojiModalidad(b.modalidad);
+    // Mismo criterio de espacio que en horario.js: título + una línea por
+    // aula/universidad si existen, para no forzarlas si la tarjeta quedó
+    // muy angosta/baja.
+    const lineasTexto = 1 + (b.universidad ? 1 : 0) + (b.aula ? 1 : 0);
+    const cabeExtra = alto >= lineasTexto * 15 + 6;
     tarjeta.innerHTML = `
       <div style="font-size:0.85rem; font-weight:600; line-height:1.15; display:flex; align-items:center; gap:4px; overflow-wrap:break-word; word-break:break-word;">
         ${b.tieneExcepcionEstaSemana ? `<span title="Esta semana tiene un ajuste puntual" style="font-size:1.05rem; opacity:0.9; flex-shrink:0;">✎</span>` : ""}
         <span>${b.nombreCorto}</span>
       </div>
+      ${cabeExtra && b.universidad ? `<div style="font-size:0.72rem; opacity:0.9; overflow-wrap:break-word; word-break:break-word;">${b.universidad}</div>` : ""}
+      ${cabeExtra && b.aula ? `<div style="font-size:0.72rem; opacity:0.85; overflow-wrap:break-word; word-break:break-word;">${b.aula}</div>` : ""}
       ${emojiModalidad ? `<span title="${b.modalidad}" style="position:absolute; right:5px; bottom:3px; font-size:1.17rem; line-height:1;">${emojiModalidad}</span>` : ""}
     `;
     col.appendChild(tarjeta);
@@ -266,6 +275,8 @@ function renderizarGridPublico(snapshot) {
         finMin: minutosDesdeHora(c.hora_fin),
         color: c.color || "#a78bfa",
         nombreCorto: c.nombre || "Materia",
+        aula: c.aula,
+        universidad: c.universidad,
         modalidad: c.modalidad,
         tieneExcepcionEstaSemana: c.tiene_ajuste_cronograma,
       }));
@@ -286,12 +297,29 @@ function inicializarFlujoAsociar(fileId, snapshot) {
   const btnCancelar = document.getElementById("amigos-btn-cancelar-asociar");
   const btnConfirmar = document.getElementById("amigos-btn-confirmar-asociar");
 
-  btnAbrir.addEventListener("click", () => {
+  // Defensivo: además de la clase "oculto" (CSS), se fuerza el estado
+  // oculto/no-interactivo por inline style. Este modal vive estático en el
+  // HTML (no se appendea desde JS como los otros modales de la app), así
+  // que si por lo que sea el CSS no lo tapa bien (caché vieja del deploy,
+  // orden de reglas, etc.) igual queda garantizado que no bloquea/blurea
+  // el horario al entrar — solo se vuelve visible/clickeable con el click
+  // explícito en "+ Asociar a mi cuenta".
+  function cerrarModalAsociar() {
+    modal.classList.add("oculto");
+    modal.style.display = "none";
+    modal.style.pointerEvents = "none";
+  }
+  function abrirModalAsociar() {
     input.value = snapshot.apodo_propietario || "";
     modal.classList.remove("oculto");
-  });
-  btnCancelar.onclick = () => modal.classList.add("oculto");
-  modal.onclick = (e) => { if (e.target === modal) modal.classList.add("oculto"); };
+    modal.style.display = "flex";
+    modal.style.pointerEvents = "auto";
+  }
+  cerrarModalAsociar(); // estado inicial garantizado, no solo confiado al CSS
+
+  btnAbrir.addEventListener("click", abrirModalAsociar);
+  btnCancelar.onclick = cerrarModalAsociar;
+  modal.onclick = (e) => { if (e.target === modal) cerrarModalAsociar(); };
   btnConfirmar.onclick = () => {
     const apodo = input.value.trim().slice(0, 30) || "Amigo";
     // Se deja el pendiente en localStorage (NUNCA en la URL) para que

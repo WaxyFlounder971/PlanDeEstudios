@@ -20,7 +20,7 @@ import { crearEnlaceHorarioCompartido, crearAmigoVinculado, sellarTimestamp } fr
 import { crearArchivoJsonEnDrive, crearPermisoPublicoLectura, eliminarPermisoDrive, guardarDatos, leerDatos } from "../core/auth.js";
 import { mostrarToast, abrirConfirmacion, desplazarYResaltarElemento } from "../ui/componentes.js";
 import { copiarAlPortapapelesBlindado } from "../core/clipboard.js";
-import { obtenerSemestreHorarioActual, obtenerColorBloque, obtenerNombreBloque, obtenerRangoHorasHorario } from "./horario.js";
+import { obtenerSemestreHorarioActual, obtenerColorBloque, obtenerNombreBloque, obtenerRangoHorasHorario, obtenerPlanPorId } from "./horario.js";
 
 // Restringido por dominio en Google Cloud a este mismo GitHub Pages — ver
 // nota de configuración del prompt. amigos.html vive en la raíz del repo,
@@ -31,12 +31,12 @@ const BASE_URL_AMIGOS = "https://waxyflounder971.github.io/PlanDeEstudios/amigos
 
 /**
  * Arma el JSON que se sube a Drive como archivo público. A propósito NO es
- * un recorte de estado.datos: es un objeto nuevo con SOLO lo que el prompt
- * autoriza a exponer (bloques, días, horas, nombres/apodo ya resueltos) —
- * nunca aula, profesor, enlace de clase ni notas, aunque esos campos sí
- * vivan en el bloque real. Motivo: un horario ya es sensible de por sí
- * (revela dónde está una persona cada semana); exponer de más "porque ya
- * estaba ahí" sería fácil pero innecesario.
+ * un recorte de estado.datos: es un objeto nuevo con SOLO lo que se
+ * autoriza a exponer (bloques, días, horas, nombres/apodo ya resueltos,
+ * aula y universidad) — nunca profesor, enlace de clase ni notas, aunque
+ * esos campos sí vivan en el bloque real. Motivo: un horario ya es
+ * sensible de por sí (revela dónde está una persona cada semana); exponer
+ * de más "porque ya estaba ahí" sería fácil pero innecesario.
  *
  * `nombre`/`color` van RESUELTOS (no materia_id/plan_estudio_id) porque
  * quien abre el enlace nunca tiene sesión — no hay plan/categorías propias
@@ -67,6 +67,11 @@ function construirSnapshotHorarioCompartido(semestre, apodoPropietario) {
       id: bloque.id,
       nombre: obtenerNombreBloque(bloque),
       color: obtenerColorBloque(bloque),
+      // Fijos para todo el semestre (igual que en el bloque real, ver
+      // crearBloqueHorario en schema.js), por eso se resuelven una sola vez
+      // acá y no por día/excepción de cronograma.
+      aula: bloque.aula || null,
+      universidad: (obtenerPlanPorId(bloque.plan_estudio_id) || {}).universidad || null,
       dias: (bloque.dias || []).map((d) => ({
         dia: d.dia,
         hora_inicio: d.hora_inicio,
@@ -355,6 +360,14 @@ function renderizarListaEnlacesCompartidos() {
       </div>
     `;
     if (enlace.activo) {
+      const btnCopiar = document.createElement("button");
+      btnCopiar.type = "button";
+      btnCopiar.className = "btn btn-secondary";
+      btnCopiar.style.cssText = "padding:6px 12px; font-size:0.78rem;";
+      btnCopiar.textContent = "Copiar enlace";
+      btnCopiar.addEventListener("click", () => copiarEnlaceExistente(enlace.file_id));
+      fila.querySelector(".row").appendChild(btnCopiar);
+
       const btnRevocar = document.createElement("button");
       btnRevocar.type = "button";
       btnRevocar.className = "btn btn-danger";

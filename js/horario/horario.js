@@ -824,4 +824,5 @@ export {
   obtenerColorBloque,
   obtenerNombreBloque,
   obtenerRangoHorasHorario,
+  obtenerPlanPorId,
 };
