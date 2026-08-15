@@ -409,10 +409,17 @@ a { color: var(--accent-1); }
   font-size: 0.95rem;
   font-family: var(--font-body);
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  /* Agenda (inputs type="date"/"time" en el modal de alta/edición): sin
+     esto, el ícono nativo del selector de fecha/hora queda pintado según el
+     tema del SISTEMA OPERATIVO, no el de la app — en modo oscuro de la app
+     con SO en modo claro (o viceversa) el ícono queda casi invisible sobre
+     el fondo. .form-select ya resolvía esto para sí mismo; se sube acá para
+     que lo hereden TODOS los inputs, date/time incluidos. */
+  color-scheme: dark;
 }
 [data-mode="light"] .form-input,
 [data-mode="light"] .form-select,
-[data-mode="light"] .form-textarea { background: rgba(0,0,0,0.04); }
+[data-mode="light"] .form-textarea { background: rgba(0,0,0,0.04); color-scheme: light; }
 
 /* v1.15.10: el <select> nativo, aparte de fondo/borde/texto (ya cubiertos
    arriba junto con .form-input), tiene DOS partes que el navegador sigue
@@ -1994,6 +2001,67 @@ img, svg { max-width: 100%; }
                 estos elementos cuando eran hijos directos de la sección */
 }
 .ajuste-seccion.colapsada .ajuste-seccion-cuerpo { display: none; }
+
+/* ===================== Agenda ===================== */
+
+/* Tarjetita "Mostrar clases" (colapsada por default) — mismo patrón visual
+   de cabecera-clickeable-con-chevron que .ajuste-seccion-cabecera, pero en
+   tamaño más chico/casual (vive DENTRO de la tarjeta de un día, no es un
+   encabezado de sección de nivel superior) y con su propio contenedor con
+   borde sutil para distinguirla del resto de la tarjeta del día. */
+.agenda-tarjeta-clases {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+[data-mode="light"] .agenda-tarjeta-clases { background: rgba(0, 0, 0, 0.02); }
+.agenda-tarjeta-clases-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.agenda-tarjeta-clases-cabecera .ajuste-seccion-chevron { transition: transform var(--transition-fast); }
+.agenda-tarjeta-clases-cuerpo { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+
+/* Filas de clase (dentro de "Mostrar clases") y de evento/tarea/examen
+   (lista principal del día) comparten el mismo lenguaje visual: pill
+   clickeable de ancho completo, fondo sutil que se resalta al hover. */
+.agenda-fila-clase,
+.agenda-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: none;
+  border-radius: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+[data-mode="light"] .agenda-fila-clase,
+[data-mode="light"] .agenda-item { background: rgba(0, 0, 0, 0.04); }
+.agenda-fila-clase:hover,
+.agenda-item:hover { background: rgba(255, 255, 255, 0.08); }
+[data-mode="light"] .agenda-fila-clase:hover,
+[data-mode="light"] .agenda-item:hover { background: rgba(0, 0, 0, 0.07); }
+
 
 /* ---- v8.3: indicador de "desliza para sincronizar" ----
    Vive fijo arriba del todo, centrado, oculto (translateY negativo) hasta
