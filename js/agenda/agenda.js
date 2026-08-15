@@ -7,6 +7,7 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
+import { aplicarFormatoTexto } from "../core/utils.js";
 import { desplazarYResaltarElemento, mostrarToast } from "../ui/componentes.js";
 import { mostrarSeccion } from "../main.js";
 import { construirTarjetaClasesDia } from "./agenda-clases.js";
@@ -28,27 +29,13 @@ const ORDEN_TIPO = ["examen", "tarea", "evento"];
 // estado.horarioNumeroSemana en horario.js.
 estado.agendaOffsetSemana = estado.agendaOffsetSemana || 0;
 
-function nombreMateriaVinculada(evento) {
-  if (!evento.materia_matriculada_id || !evento.semestre_id) return null;
-  const semestre = (estado.datos.semestres || []).find((s) => s.id === evento.semestre_id);
-  const mm = semestre && (semestre.materias_matriculadas || []).find((m) => m.id === evento.materia_matriculada_id);
-  if (!mm) return null;
-  // Import perezoso evitado a propósito: reconstruir el nombre exacto acá
-  // requeriría obtenerPlanPorId + aplicarFormatoTexto, ya centralizados en
-  // obtenerMateriasVinculablesAgenda (agenda-utils.js) — pero esa lista solo
-  // trae materias del semestre ACTIVO, y un evento viejo puede apuntar a un
-  // semestre que ya dejó de ser el activo. Se resuelve directo acá con la
-  // misma lógica para cualquier semestre, no solo el activo.
-  return mm.materia_id || null;
-}
-
 function construirBadgeMateria(evento) {
   const semestre = (estado.datos.semestres || []).find((s) => s.id === evento.semestre_id);
   const mm = semestre && (semestre.materias_matriculadas || []).find((m) => m.id === evento.materia_matriculada_id);
   if (!mm) return "";
   const plan = (estado.datos.planes_estudio || []).find((p) => p.id === mm.plan_estudio_id);
   const materia = plan && (plan.materias || []).find((m) => m.id === mm.materia_id);
-  return materia ? `<span class="muted" style="font-size:0.72rem;">${materia.nombre}</span>` : "";
+  return materia ? `<span class="muted" style="font-size:0.72rem;">${aplicarFormatoTexto(materia.nombre)}</span>` : "";
 }
 
 function construirItemEvento(evento) {
