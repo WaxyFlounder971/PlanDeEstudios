@@ -186,11 +186,18 @@ function crearDatosUsuarioNuevo() {
       /* ver crearEnlaceHorarioCompartido() */
     ],
 
+    // Agenda — Núcleo: colección PLANA de nivel superior (no anidada por
+    // semestre) — un evento de Agenda puede existir sin relación a ningún
+    // semestre (ej. un recordatorio personal). Cuando SÍ está vinculado a
+    // una materia, se guarda junto el id de esa materia_matriculada Y el
+    // semestre al que pertenece (`materia_matriculada_id` + `semestre_id`)
+    // para poder resolver el nombre de la materia con una búsqueda directa
+    // en vez de recorrer TODOS los semestres del usuario — el formulario de
+    // alta (agenda.js) solo deja elegir materias del semestre activo, así
+    // que en la práctica `semestre_id` siempre es el semestre activo al
+    // momento de crear/editar el vínculo. Ver crearEventoAgenda().
     agenda: [
-      /*
-      { id, tipo: "tarea"|"examen"|"recordatorio", titulo, fecha, hora, materia_id, semestre_id,
-        completado: false, archivado: false, notas: "" }
-      */
+      /* ver crearEventoAgenda() */
     ],
 
     // Adjuntos (2026-08-08): colección PLANA de nivel superior (no anidada
@@ -214,6 +221,13 @@ function crearDatosUsuarioNuevo() {
     _eliminados_profesores: [],
     _eliminados_companeros: [],
     _eliminados_adjuntos: [],
+    // Agenda — Núcleo: tumba propia — storage-merge.js/fusionarDatos ya la
+    // esperaba (_eliminados_agenda) desde que "agenda" existe como colección
+    // placeholder, pero nunca se inicializaba acá — mismo bug exacto ya
+    // cazado y corregido arriba para profesores/companeros (ver comentario
+    // de esta ronda). Se agrega explícita para no depender de que
+    // fusionarTumbas tolere undefined para siempre.
+    _eliminados_agenda: [],
     // Horario entre Amigos — Parte 1: tumba de horario_enlaces_compartidos,
     // inicializada explícita desde el día 1 (mismo motivo que las de arriba
     // — evitar el bug de "tumba nunca creada" ya cazado con enlaces_rapidos).
@@ -278,6 +292,43 @@ function crearAdjunto({ nombre, mimeType, tamanoBytes, entidadTipo, entidadId })
     driveFileId: null,
     subidaPendiente: true,
   };
+}
+
+/* ===================== Agenda ===================== */
+
+const TIPOS_EVENTO_AGENDA = ["evento", "tarea", "examen"];
+
+/**
+ * Agenda — Núcleo: crea un evento/tarea/examen. Colección plana top-level
+ * (ver comentario en crearDatosUsuarioNuevo) — se sella acá mismo (a
+ * diferencia de crearAdjunto/crearEnlaceRapido) porque no hay ningún paso
+ * intermedio entre "el usuario llena el formulario" y "esto ya es la
+ * versión final a guardar".
+ *
+ * `nombre`: libre en los 3 tipos — para "tarea"/"examen" la UI puede
+ * sugerir un placeholder según el tipo, pero el campo real siempre es
+ * texto libre (ver spec: "también libre pero con sugerencia de
+ * placeholder").
+ * `hora`: null = evento de día completo, sin hora puntual.
+ * `materiaMatriculadaId`/`semestreId`: SIEMPRE juntos o SIEMPRE null — un
+ * evento vinculado a una materia solo tiene sentido si se sabe de qué
+ * semestre es esa materia matriculada (ver comentario en
+ * crearDatosUsuarioNuevo). El formulario de alta (agenda.js) es quien
+ * garantiza que ambos vengan de la materia realmente elegida.
+ */
+function crearEventoAgenda({ tipo, nombre, fecha, hora, materiaMatriculadaId, semestreId, notas }) {
+  const tipoValido = TIPOS_EVENTO_AGENDA.includes(tipo) ? tipo : "evento";
+  const vinculada = Boolean(materiaMatriculadaId && semestreId);
+  return sellarTimestamp({
+    id: "ag_" + crypto.randomUUID(),
+    tipo: tipoValido,
+    nombre: nombre || "",
+    fecha, // "YYYY-MM-DD"
+    hora: hora || null, // "HH:MM" | null (día completo)
+    materia_matriculada_id: vinculada ? materiaMatriculadaId : null,
+    semestre_id: vinculada ? semestreId : null,
+    notas: notas || "",
+  });
 }
 
 /* ===================== Finanzas ===================== */
@@ -2615,6 +2666,30 @@ function migrarDatosAntiguos(datos) {
   if (!Array.isArray(datos.adjuntos)) datos.adjuntos = [];
   if (!Array.isArray(datos._eliminados_adjuntos)) datos._eliminados_adjuntos = [];
 
+  // Agenda — Núcleo: mismo relleno defensivo. Además, cuentas que ya tenían
+  // "agenda" desde el placeholder viejo (titulo/completado/archivado, sin
+  // materia_matriculada_id) se migran una sola vez al esquema nuevo: se
+  // preserva lo que sí sobrevive (nombre viene de "titulo") y se descarta
+  // cualquier vínculo a materia viejo (materia_id/semestre_id sueltos, sin
+  // relación con el formato materia_matriculada_id actual) en vez de
+  // arrastrar una referencia que ya no aplica a nada.
+  if (!Array.isArray(datos.agenda)) datos.agenda = [];
+  if (!Array.isArray(datos._eliminados_agenda)) datos._eliminados_agenda = [];
+  datos.agenda.forEach((ev) => {
+    if (!TIPOS_EVENTO_AGENDA.includes(ev.tipo)) ev.tipo = "evento";
+    if (ev.nombre === undefined) ev.nombre = ev.titulo || "";
+    if (ev.hora === undefined) ev.hora = null;
+    if (ev.notas === undefined) ev.notas = "";
+    if (ev.materia_matriculada_id === undefined || ev.semestre_id === undefined) {
+      ev.materia_matriculada_id = null;
+      ev.semestre_id = null;
+    }
+    delete ev.titulo;
+    delete ev.materia_id;
+    delete ev.completado;
+    delete ev.archivado;
+  });
+
   // Finanzas (2026-08-10): mismo relleno defensivo — cuentas cuyo JSON en
   // Drive se guardó antes de que existiera esta sección.
   if (!Array.isArray(datos.finanzas_semestre)) datos.finanzas_semestre = [];
@@ -2900,4 +2975,6 @@ export {
   calcularNumeroSemanaSemestre,
   crearEnlaceHorarioCompartido,
   crearAmigoVinculado,
+  TIPOS_EVENTO_AGENDA,
+  crearEventoAgenda,
 };
