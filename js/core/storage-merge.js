@@ -896,6 +896,19 @@ function fusionarDatos(datosLocal, datosRemoto) {
     datosLocal.configuracion && datosLocal.configuracion._eliminados_enlaces,
     datosRemoto.configuracion && datosRemoto.configuracion._eliminados_enlaces
   );
+  // Horario entre Amigos — Parte 1/3: dos colecciones distintas, cada una
+  // con su propia tumba. horario_enlaces_compartidos es top-level (BUG
+  // encontrado en esta ronda: quedó fuera de fusionarDatos desde la Parte
+  // 1 — sin esto, el spread `...datosLocal, ...datosRemoto` de más abajo
+  // hacía que el lado remoto ganara ENTERO sobre esa colección en cualquier
+  // fusión real, en vez de fundirse por entidad como el resto). horario_
+  // amigos_vinculados vive dentro de configuracion, mismo patrón que
+  // enlaces_rapidos (tumba también dentro de configuracion).
+  const tumbasHorarioEnlaces = fusionarTumbas(datosLocal._eliminados_horario_enlaces, datosRemoto._eliminados_horario_enlaces);
+  const tumbasHorarioAmigosVinculados = fusionarTumbas(
+    datosLocal.configuracion && datosLocal.configuracion._eliminados_horario_amigos_vinculados,
+    datosRemoto.configuracion && datosRemoto.configuracion._eliminados_horario_amigos_vinculados
+  );
 
   const configuracionFundida = fusionarBloqueUnico(datosLocal.configuracion, datosRemoto.configuracion, "configuración");
   // enlaces_rapidos vive DENTRO de configuracion pero se funde como
@@ -908,6 +921,16 @@ function fusionarDatos(datosLocal, datosRemoto) {
     "enlace rápido"
   );
   configuracionFundida._eliminados_enlaces = tumbasEnlaces;
+  // Horario entre Amigos — Parte 3: mismo criterio que enlaces_rapidos
+  // arriba — se funde como colección propia por id, no como parte del
+  // "todo o nada" de fusionarBloqueUnico.
+  configuracionFundida.horario_amigos_vinculados = fusionarColeccion(
+    datosLocal.configuracion && datosLocal.configuracion.horario_amigos_vinculados,
+    datosRemoto.configuracion && datosRemoto.configuracion.horario_amigos_vinculados,
+    tumbasHorarioAmigosVinculados,
+    "horario de amigo vinculado"
+  );
+  configuracionFundida._eliminados_horario_amigos_vinculados = tumbasHorarioAmigosVinculados;
 
   return {
     ...datosLocal,
@@ -930,6 +953,15 @@ function fusionarDatos(datosLocal, datosRemoto) {
       "registro financiero de semestre"
     ),
     gastos_u: fusionarColeccion(datosLocal.gastos_u, datosRemoto.gastos_u, tumbasGastosU, "gasto general U"),
+    // Horario entre Amigos — Parte 1 (bug fix de esta ronda, ver comentario
+    // arriba): ahora sí se funde por entidad en vez de heredar el reemplazo
+    // total del spread de más abajo.
+    horario_enlaces_compartidos: fusionarColeccion(
+      datosLocal.horario_enlaces_compartidos,
+      datosRemoto.horario_enlaces_compartidos,
+      tumbasHorarioEnlaces,
+      "enlace de horario compartido"
+    ),
     _eliminados_planes: tumbasPlanes,
     _eliminados_semestres: tumbasSemestres,
     _eliminados_profesores: tumbasProfesores,
@@ -938,6 +970,7 @@ function fusionarDatos(datosLocal, datosRemoto) {
     _eliminados_adjuntos: tumbasAdjuntos,
     _eliminados_finanzas_semestre: tumbasFinanzasSemestre,
     _eliminados_gastos_u: tumbasGastosU,
+    _eliminados_horario_enlaces: tumbasHorarioEnlaces,
   };
 }
 

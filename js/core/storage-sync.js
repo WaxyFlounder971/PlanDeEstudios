@@ -62,6 +62,23 @@ function registrarHookPostFusion(fn) {
   hooksPostFusion.push(fn);
 }
 
+/**
+ * Horario entre Amigos — Parte 1/3 (BUG encontrado en esta ronda: horario-
+ * amigos.js ya importaba y llamaba a registrarHookPostGuardado() desde la
+ * Parte 1, pero esta función nunca se llegó a definir acá — el import
+ * fallaba con un SyntaxError que rompía la carga de TODO el módulo, mismo
+ * tipo de bug que ya se documentó arriba para sincronizarAlIniciar). A
+ * diferencia de hooksPostFusion (corre tras bajar/fundir datos remotos),
+ * este corre tras SUBIR datos exitosamente — es el punto que necesita
+ * horario-amigos.js para mantener los archivos públicos de Drive al día
+ * cada vez que algo se sincroniza, no solo cuando baja algo nuevo.
+ */
+const hooksPostGuardado = [];
+
+function registrarHookPostGuardado(fn) {
+  hooksPostGuardado.push(fn);
+}
+
 function intentarReconexionSilenciosa() {
   if (reconexionEnCurso) return reconexionEnCurso; // evita refrescos duplicados en paralelo
   const timeoutMs = 8000;
@@ -979,6 +996,17 @@ async function intentarSincronizar() {
     // de red real: el propio chequeo interno de frecuencia (ver
     // ejecutarBackupSiToca) vuelve de inmediato si todavía no toca.
     ejecutarBackupSiToca();
+    // Horario entre Amigos — Parte 1: mismo mecanismo fire-and-forget que
+    // hooksPostFusion (ver aplicarDatosRemotosFrescos) pero disparado tras
+    // cada SUBIDA exitosa — cada hook se protege solo, uno roto no debe
+    // tirar abajo los demás ni bloquear el resto de intentarSincronizar.
+    hooksPostGuardado.forEach((hook) => {
+      try {
+        Promise.resolve(hook()).catch((e) => console.warn("Error en hook post-guardado:", e));
+      } catch (e) {
+        console.warn("Error en hook post-guardado:", e);
+      }
+    });
   } catch (e) {
     // v7 (Bug 2): antes solo se logueaba un mensaje genérico. Ahora se
     // imprime el detalle real (status HTTP + cuerpo de la respuesta de
@@ -1150,6 +1178,7 @@ export {
   programarRefrescoProactivo,
   reconexionEnCurso,
   registrarHookPostFusion,
+  registrarHookPostGuardado,
   sincronizarAhora,
   sincronizarAlIniciar,
   sondearCambiosRemotos,

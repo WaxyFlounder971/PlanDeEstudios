@@ -1391,6 +1391,33 @@ function crearEnlaceHorarioCompartido({ fileId, permissionId, semestreId, apodoP
 }
 
 /**
+ * Horario entre Amigos — Parte 3: registro de UN horario de AMIGO que este
+ * usuario asoció al suyo (dirección opuesta de crearEnlaceHorarioCompartido
+ * — ver comentario en configuracion.horario_amigos_vinculados). Vive DENTRO
+ * de configuracion (colección propia, tumba `_eliminados_horario_amigos_
+ * vinculados`, mismo patrón que enlaces_rapidos — ver fusionarDatos en
+ * storage-merge.js).
+ *
+ * `activo` controla la superposición en el grid (switch "Horarios Activos",
+ * Parte 3b) sin desvincular — desvincular de verdad es un borrado real
+ * (tumba), no solo apagar `activo`. `color` se asigna una sola vez, al
+ * vincular (hash determinístico del id — ver asignarColorAmigo en
+ * horario-amigos.js), y quedaría fijo aunque después cambien los otros
+ * amigos vinculados, para que el color de cada amigo no "salte" con cada
+ * vinculación/desvinculación nueva.
+ */
+function crearAmigoVinculado({ fileId, nombre, color }) {
+  return sellarTimestamp({
+    id: "hav_" + crypto.randomUUID(),
+    file_id: fileId,
+    nombre: nombre ? String(nombre).trim().slice(0, 30) : "Amigo",
+    color: color || "#a78bfa",
+    activo: true,
+    fecha_vinculacion: new Date().toISOString(),
+  });
+}
+
+/**
  * Escala de notas activa (10 o 100) para una materia matriculada: override
  * propio > escala del plan/universidad > default 100. Único punto de
  * verdad — reutilizar en vez de leer los 2 campos por separado.
@@ -2562,6 +2589,20 @@ function migrarDatosAntiguos(datos) {
   // antes de este feature (mismo patrón que profesores/companeros arriba).
   if (!Array.isArray(datos.horario_enlaces_compartidos)) datos.horario_enlaces_compartidos = [];
   if (!Array.isArray(datos._eliminados_horario_enlaces)) datos._eliminados_horario_enlaces = [];
+  // Horario entre Amigos — Parte 3: horario_amigos_vinculados vive DENTRO de
+  // configuracion (no top-level) porque es una preferencia del usuario sobre
+  // qué horarios de amigos quiere ver superpuestos al suyo — mismo criterio
+  // que enlaces_rapidos, que también vive en configuracion y se funde como
+  // colección aparte (ver fusionarDatos en storage-merge.js). Relleno
+  // defensivo con el mismo patrón que dias_visibles/horario_hora_inicio
+  // (lazy, nunca en el objeto default de crearDatosUsuarioNuevo), guardado
+  // con `datos.configuracion &&` igual que el resto de esta función.
+  if (datos.configuracion && !Array.isArray(datos.configuracion.horario_amigos_vinculados)) {
+    datos.configuracion.horario_amigos_vinculados = [];
+  }
+  if (datos.configuracion && !Array.isArray(datos.configuracion._eliminados_horario_amigos_vinculados)) {
+    datos.configuracion._eliminados_horario_amigos_vinculados = [];
+  }
   // Comunidad — Parte 3 (2026-08-08): companero.telefono es nuevo — los
   // compañeros guardados antes de este cambio no traen la llave para nada
   // (undefined, no null), mismo relleno defensivo de siempre.
@@ -2858,4 +2899,5 @@ export {
   obtenerClasesEfectivasSemana,
   calcularNumeroSemanaSemestre,
   crearEnlaceHorarioCompartido,
+  crearAmigoVinculado,
 };
