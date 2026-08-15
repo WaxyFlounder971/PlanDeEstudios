@@ -297,12 +297,22 @@ async function revocarEnlaceCompartido(enlaceId) {
  * NO toca Drive (el archivo y el permiso ya se eliminaron/revocaron en
  * revocarEnlaceCompartido antes de llegar acá) ni deja borrar un enlace
  * todavía activo, esa es la línea de defensa real (revocar primero).
+ *
+ * FIX (tumba faltante): esta función filtraba el array local pero nunca
+ * escribía en _eliminados_horario_enlaces. Sin tumba, fusionarColeccion
+ * (storage-merge.js) no tiene forma de saber que este id se borró a
+ * propósito — en la próxima fusión, el lado remoto (que todavía no se
+ * enteró del borrado) lo vuelve a traer y el registro "resucita". Mismo
+ * patrón que _eliminados_materias en plan-esquema.js: id + eliminadoEn
+ * (reloj de pared, no el contador de Lamport de sellarTimestamp).
  */
 function eliminarRegistroEnlace(enlaceId) {
   const lista = estado.datos.horario_enlaces_compartidos || [];
   const enlace = lista.find((e) => e.id === enlaceId);
   if (!enlace || enlace.activo) return; // defensivo, el botón ya debería estar oculto para uno activo
   estado.datos.horario_enlaces_compartidos = lista.filter((e) => e.id !== enlaceId);
+  estado.datos._eliminados_horario_enlaces = estado.datos._eliminados_horario_enlaces || [];
+  estado.datos._eliminados_horario_enlaces.push({ id: enlaceId, eliminadoEn: Date.now() });
   marcarCambioPendiente();
   renderizarListaEnlacesCompartidos();
   mostrarToast("Registro eliminado");
@@ -781,7 +791,20 @@ function confirmarDesvincularAmigo(fileId, nombre) {
     claseConfirmar: "btn-danger",
     onConfirmar: () => {
       const lista = estado.datos.configuracion.horario_amigos_vinculados || [];
+      const amigo = lista.find((a) => a.file_id === fileId);
       estado.datos.configuracion.horario_amigos_vinculados = lista.filter((a) => a.file_id !== fileId);
+      // FIX (tumba faltante, mismo bug que eliminarRegistroEnlace arriba):
+      // sin esto, un amigo desvinculado en un dispositivo volvía a aparecer
+      // vinculado tras la próxima fusión con un dispositivo que todavía no
+      // se había enterado del desvínculo. La tumba usa el id del amigo
+      // vinculado (amigo.id, no el file_id — file_id se repite si el mismo
+      // amigo se vuelve a vincular después).
+      estado.datos.configuracion._eliminados_horario_amigos_vinculados =
+        estado.datos.configuracion._eliminados_horario_amigos_vinculados || [];
+      estado.datos.configuracion._eliminados_horario_amigos_vinculados.push({
+        id: amigo ? amigo.id : fileId,
+        eliminadoEn: Date.now(),
+      });
       sellarTimestamp(estado.datos.configuracion);
       marcarCambioPendiente();
       cacheSnapshotsAmigos.delete(fileId);
