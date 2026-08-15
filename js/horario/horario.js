@@ -319,14 +319,17 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minI
     // espacio para su propia línea (~16px) sin invadir eso.
     const lineasTexto = 1 + (b.profesorNombre ? 1 : 0) + (b.aula ? 1 : 0);
     const altoTextoEstimado = 6 /* padding vertical */ + lineasTexto * 15;
-    // window.innerWidth <= 768 (mismo breakpoint que ya usa el resto del
-    // horario, ver paddingInferior más abajo): en pantallas angostas las
-    // columnas de día quedan tan comprimidas que este botón (abajo-
-    // izquierda) termina pisando el emoji de modalidad (abajo-derecha,
-    // misma fila). Se oculta ahí — el emoji solo ya avisa la modalidad, y
-    // el link sigue disponible tocando la tarjeta (abre el detalle en
-    // modal, que trae su propio botón "Entrar" sin este límite de ancho).
-    const cabeEntrar = alto >= altoTextoEstimado + 16 && window.innerWidth > 768;
+    // Antes se comparaba solo window.innerWidth <= 768, pero eso depende de
+    // la ORIENTACIÓN: un teléfono en horizontal (landscape) fácilmente
+    // supera los 768px de ancho (ej. ~844-932px en iPhones grandes) aunque
+    // siga siendo una pantalla chica donde el botón choca con el emoji. Se
+    // usa la dimensión MÁS CHICA del viewport (ancho o alto, lo que sea
+    // menor) — así un teléfono se detecta igual esté vertical u horizontal,
+    // porque su lado corto sigue siendo chico en cualquiera de los dos
+    // casos (a diferencia de una tablet/laptop, donde ambos lados son
+    // grandes).
+    const pantallaEsDeTelefono = Math.min(window.innerWidth, window.innerHeight) <= 768;
+    const cabeEntrar = alto >= altoTextoEstimado + 16 && !pantallaEsDeTelefono;
     tarjeta.innerHTML = `
       <div style="font-size:0.85rem; font-weight:600; line-height:1.15; display:flex; align-items:center; gap:4px; margin-bottom:2px; overflow-wrap:break-word; word-break:break-word;">
         ${b.tieneExcepcionEstaSemana ? `<span title="Esta semana tiene un ajuste puntual" style="font-size:1.05rem; opacity:0.9; flex-shrink:0;">✎</span>` : ""}
