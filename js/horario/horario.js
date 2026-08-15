@@ -274,25 +274,35 @@ function construirLineasHorarias(pxPorMin, minInicioRango, minFinRango) {
 // pantalla generaba ruido visual innecesario en el uso del día a día.
 
 /**
- * Oculta el botón "Entrar" de una tarjeta SOLO si de verdad se superpone
- * con el emoji de modalidad (misma esquina inferior) — se llama DESPUÉS de
- * que el grid ya está en el DOM, así getBoundingClientRect() da el tamaño
- * real ya renderizado (fuente, padding, ancho de columna real, todo tal
- * como quedó en pantalla) en vez de adivinar con un breakpoint de pantalla,
- * que escondía el botón incluso en tarjetas donde sí entraba perfecto
- * (pocas materias ese día → columna más ancha → nunca chocan).
+ * Oculta el botón "Entrar" de una tarjeta SOLO si de verdad no cabe — se
+ * llama DESPUÉS de que el grid ya está en el DOM, así getBoundingClientRect()
+ * da el tamaño real ya renderizado (fuente, padding, ancho de columna real)
+ * en vez de adivinar con un breakpoint de pantalla, que escondía el botón
+ * incluso en tarjetas donde sí entraba perfecto (pocas materias ese día →
+ * columna más ancha → nunca chocan).
+ *
+ * El límite derecho contra el que se mide cambia según haya o no emoji de
+ * modalidad en esa misma esquina: si hay emoji, el botón no puede pisarlo;
+ * si NO hay emoji, de todos modos tiene que caber completo dentro del borde
+ * derecho de la tarjeta — antes, sin emoji, esto no se chequeaba para nada
+ * y el botón podía quedar cortado o saliéndose en columnas muy angostas
+ * (que es justo el caso típico de las materias sin modalidad marcada, o sea
+ * sin emoji, así que se estaban salvando del chequeo las que más lo
+ * necesitaban).
  */
 function ocultarBotonesEntrarQueChocan(cont) {
   cont.querySelectorAll(".horario-bloque-tarjeta").forEach((tarjeta) => {
     const entrar = tarjeta.querySelector(".horario-btn-entrar-clase");
-    const emoji = tarjeta.querySelector(".horario-emoji-modalidad");
-    if (!entrar || !emoji) return;
+    if (!entrar) return;
     entrar.style.display = ""; // por si quedó oculto de un render anterior con menos espacio
+    const emoji = tarjeta.querySelector(".horario-emoji-modalidad");
+    const rTarjeta = tarjeta.getBoundingClientRect();
     const rEntrar = entrar.getBoundingClientRect();
-    const rEmoji = emoji.getBoundingClientRect();
-    const chocan = rEntrar.left < rEmoji.right && rEntrar.right > rEmoji.left
-      && rEntrar.top < rEmoji.bottom && rEntrar.bottom > rEmoji.top;
-    if (chocan) entrar.style.display = "none";
+    // Mismos 5px de margen que ya usa el emoji (right:5px, ver arriba en
+    // el innerHTML) para que el límite sin-emoji se sienta igual de
+    // "pegado al borde" que el límite con-emoji.
+    const limiteDerecho = emoji ? emoji.getBoundingClientRect().left : rTarjeta.right - 5;
+    if (rEntrar.right > limiteDerecho) entrar.style.display = "none";
   });
 }
 
