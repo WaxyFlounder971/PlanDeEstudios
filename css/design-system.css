@@ -2062,6 +2062,63 @@ img, svg { max-width: 100%; }
 [data-mode="light"] .agenda-fila-clase:hover,
 [data-mode="light"] .agenda-item:hover { background: rgba(0, 0, 0, 0.07); }
 
+/* ---- Vista Calendario (mensual/semanal) — grid de 7 columnas ---- */
+.agenda-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.agenda-cal-fila-cabecera { margin-bottom: 2px; }
+.agenda-cal-cabecera-dia {
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 2px 0;
+}
+.agenda-cal-celda {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 6px 4px;
+  min-height: 52px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+[data-mode="light"] .agenda-cal-celda { background: rgba(0, 0, 0, 0.03); }
+.agenda-cal-celda:hover { background: rgba(255, 255, 255, 0.09); }
+[data-mode="light"] .agenda-cal-celda:hover { background: rgba(0, 0, 0, 0.06); }
+.agenda-cal-celda-hoy { border-color: var(--accent-1); }
+.agenda-cal-celda-fuera-mes { opacity: 0.35; }
+.agenda-cal-numero { font-size: 0.8rem; font-weight: 600; }
+.agenda-cal-indicadores { display: flex; align-items: center; gap: 3px; margin-top: 4px; flex-wrap: wrap; justify-content: center; }
+.agenda-cal-punto { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.agenda-cal-clases-dot { font-size: 0.7rem; line-height: 1; }
+
+/* Submodo Semanal (celdas grandes, con nombres de eventos truncados) */
+.agenda-cal-grid-semanal .agenda-cal-celda {
+  align-items: stretch;
+  min-height: 120px;
+  padding: 8px;
+  text-align: left;
+}
+.agenda-cal-nombre-evento {
+  display: block;
+  font-size: 0.72rem;
+  padding: 2px 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-mode="light"] .agenda-cal-nombre-evento { background: rgba(0, 0, 0, 0.05); }
+
 
 /* ---- v8.3: indicador de "desliza para sincronizar" ----
    Vive fijo arriba del todo, centrado, oculto (translateY negativo) hasta
