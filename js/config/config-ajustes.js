@@ -631,6 +631,22 @@ function renderizarAjustes() {
     };
   }
 
+  // Agenda: "Mostrar días sin eventos ni tareas" — default true (sí se
+  // muestran) si nunca se tocó, mismo criterio de "undefined = default" que
+  // dias_visibles/dia_inicio_semana más abajo (renderizarConfigDiasHorario),
+  // en vez de rellenarlo en crearDatosUsuarioNuevo (schema.js) para no
+  // tocar ese archivo por un solo campo más de configuración de UI.
+  const chkAgendaDiasVacios = document.getElementById("switch-agenda-mostrar-dias-vacios");
+  if (chkAgendaDiasVacios) {
+    chkAgendaDiasVacios.checked = estado.datos.configuracion.agenda_mostrar_dias_vacios !== false;
+    chkAgendaDiasVacios.onchange = () => {
+      estado.datos.configuracion.agenda_mostrar_dias_vacios = chkAgendaDiasVacios.checked;
+      sellarTimestamp(estado.datos.configuracion);
+      marcarCambioPendiente();
+      window.renderizarAgenda?.();
+    };
+  }
+
   // Modo claro/oscuro
   const chkModo = document.getElementById("switch-modo");
   chkModo.checked = estado.datos.configuracion.modo === "light";
