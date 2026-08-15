@@ -313,7 +313,10 @@
             <button type="button" class="btn-icono-fantasma" id="btn-horario-semestre-siguiente" style="font-size:1.3rem;">›</button>
           </div>
           <div style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center; padding:0 6px;">
-            <button type="button" class="btn btn-primary" id="btn-horario-agregar" style="justify-self:start; padding:8px 14px; font-size:0.85rem;">+ Agregar</button>
+            <div style="justify-self:start;">
+              <button type="button" class="btn btn-primary" id="btn-horario-agregar" style="padding:8px 14px; font-size:0.85rem;">+ Agregar</button>
+              <button type="button" class="btn btn-secondary oculto" id="btn-salir-modo-conjunto" style="padding:8px 14px; font-size:0.85rem;">← Salir del modo conjunto</button>
+            </div>
             <div style="justify-self:center; display:flex; align-items:center; gap:10px;">
               <button type="button" class="btn-icono-fantasma" id="btn-horario-pantalla-completa" style="font-size:1.3rem;">⛶</button>
             </div>
@@ -747,25 +750,6 @@
       <p class="muted" style="font-size:0.76rem; margin:0;">Horarios de amigos que vinculaste a tu cuenta. Se superponen al tuyo como franjas de color; podés ocultarlos sin desvincularlos.</p>
       <div id="lista-amigos-vinculados" class="stack" style="gap:6px;"></div>
     </div>
-  </div>
-</div>
-
-<!-- ===================== MODAL: Horario entre Amigos — Horario conjunto (mezcla de horarios propios+amigos en columnas, un día a la vez) ===================== -->
-<div id="modal-horario-conjunto" class="modal-overlay oculto">
-  <div class="glass-card modal-card stack" style="max-width:min(96vw, 920px); width:100%;">
-    <div class="row-between">
-      <h2 style="margin:0;">🗓️ Horario conjunto</h2>
-      <button type="button" id="btn-cerrar-horario-conjunto" class="btn-icono-fantasma" style="font-size:1.3rem;">✕</button>
-    </div>
-    <p class="muted" style="margin:0; font-size:0.8rem;">Un día a la vez, cada quien en su propia columna. Deslizá hacia los lados si hay muchos horarios.</p>
-    <div class="row-between" style="align-items:center;">
-      <button type="button" class="btn-icono-fantasma" id="btn-conjunto-dia-anterior" style="font-size:1.3rem;">‹</button>
-      <span id="conjunto-dia-actual" class="texto-encabezado-seccion" style="text-align:center;"></span>
-      <button type="button" class="btn-icono-fantasma" id="btn-conjunto-dia-siguiente" style="font-size:1.3rem;">›</button>
-    </div>
-    <section class="glass-panel" id="horario-conjunto-grid-contenedor" style="overflow:auto; max-height:70vh;">
-      <div id="horario-conjunto-grid"></div>
-    </section>
   </div>
 </div>
 
