@@ -22,6 +22,7 @@ import { inicializarModalCapturasPDF, inicializarModalInstruccionesImportacion }
 import { inicializarResponsivoListaPlan, renderizarPlanEstudios } from "./plan/plan-vista-lista.js";
 import { renderizarSemestres } from "./semestres/semestres.js";
 import { inicializarHorario, renderizarHorario } from "./horario/horario.js";
+import { procesarAsociacionPendienteDeAmigo } from "./horario/horario-amigos.js";
 import { abrirConfirmacion, agregarLongPress, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, restaurarEstadoSidebar } from "./ui/componentes.js";
 import { aplicarPaleta, aplicarTemaGuardadoLocalmente } from "./ui/tema.js";
 
@@ -443,6 +444,13 @@ function mostrarApp() {
   if (typeof renderizarComunidad === "function") renderizarComunidad();
   if (typeof renderizarFinanzas === "function") renderizarFinanzas();
   if (typeof renderizarHorario === "function") renderizarHorario();
+  // Horario entre Amigos — Parte 3: revisa si amigos.html dejó un pendiente
+  // de "Asociar a mi cuenta" en localStorage (ver horario-amigos-publico.js).
+  // Va DESPUÉS de renderizarHorario() para que, si se confirma, el próximo
+  // renderizarHorario (disparado por marcarCambioPendiente → sync → re-render,
+  // o el de Parte 3b que refresca el overlay) ya tenga el amigo recién
+  // vinculado en estado.datos.
+  procesarAsociacionPendienteDeAmigo();
   // Bug 3: antes mostrarSeccion() solo se llamaba desde clics del nav, así que
   // tras un refresh la sección de Plan de Estudios se quedaba con la clase
   // "oculto" del HTML aunque su contenido sí se hubiera renderizado.
