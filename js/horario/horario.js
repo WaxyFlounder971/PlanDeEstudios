@@ -1117,4 +1117,15 @@ export {
   // abrirHorarioConjunto cuando esto era un modal aparte; el nombre externo
   // se mantiene igual para no tocar el import de horario-amigos.js).
   activarModoConjunto as abrirHorarioConjunto,
+  // Agenda — Núcleo: la tarjetita "Mostrar clases" (agenda-clases.js)
+  // reutiliza el MISMO modal de info de materia que usa el grid de Horario
+  // (pedido explícito del spec: "reutilizar el mismo componente/modal de
+  // info que ya existe en horario.js"), en vez de crear uno paralelo. Estos
+  // 4 helpers son los que agenda-clases.js necesita para armar el mismo
+  // objeto "clase efectiva enriquecida" que arma construirColumnaDia acá
+  // arriba antes de poder llamar a abrirTarjetaInfoBloque.
+  abrirTarjetaInfoBloque,
+  obtenerEmojiModalidad,
+  obtenerNombreProfesor,
+  fechaLocalDesdeISO,
 };
