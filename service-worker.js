@@ -28,7 +28,7 @@
        que main.js dispara cada una hora / al volver a primer plano).
    ========================================================================= */
 
-const VERSION = "v1"; // <-- subir en cada despliegue (v2, v3, ...)
+const VERSION = "v2"; // <-- subir en cada despliegue (v2, v3, ...)
 const CACHE_NAME = `app-academica-${VERSION}`;
 const PREFIJO_CACHE = "app-academica-";
 
@@ -49,6 +49,8 @@ const CASCARON_MINIMO = [
   "css/design-system.css",
   "js/main.js",
   "imagenes/LogoApp.png",
+  "imagenes/LogoApp-192.png",
+  "imagenes/LogoApp-512.png",
 ];
 
 // Cualquier petición a estos hosts se deja pasar SIN TOCAR: ni se cachea,
