@@ -21,6 +21,7 @@ import { inicializarModalEditarPlanInfo, inicializarModalGestionPlanes, renderiz
 import { inicializarModalCapturasPDF, inicializarModalInstruccionesImportacion } from "./plan/plan-importacion.js";
 import { inicializarResponsivoListaPlan, renderizarPlanEstudios } from "./plan/plan-vista-lista.js";
 import { renderizarSemestres } from "./semestres/semestres.js";
+import { inicializarAgenda, renderizarAgenda } from "./agenda/agenda.js";
 import { inicializarHorario, renderizarHorario } from "./horario/horario.js";
 import { procesarAsociacionPendienteDeAmigo, iniciarRefrescoPeriodicoAmigos } from "./horario/horario-amigos.js";
 import { abrirConfirmacion, agregarLongPress, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, mostrarToastAccion, restaurarEstadoSidebar } from "./ui/componentes.js";
@@ -274,6 +275,7 @@ window.addEventListener("DOMContentLoaded", () => {
   // #seccion-comunidad ya existe si esa es la última sección que el usuario
   // tenía activa).
   inicializarComunidad();
+  inicializarAgenda();
   inicializarHorario();
   inicializarBotonesCerrarModal();
   inicializarPullToRefresh();
@@ -525,6 +527,7 @@ function mostrarApp() {
   if (typeof renderizarSemestres === "function") renderizarSemestres();
   if (typeof renderizarComunidad === "function") renderizarComunidad();
   if (typeof renderizarFinanzas === "function") renderizarFinanzas();
+  if (typeof renderizarAgenda === "function") renderizarAgenda();
   if (typeof renderizarHorario === "function") renderizarHorario();
   // Horario entre Amigos — Parte 3: revisa si amigos.html dejó un pendiente
   // de "Asociar a mi cuenta" en localStorage (ver horario-amigos-publico.js).
@@ -607,6 +610,10 @@ function mostrarSeccion(nombre) {
   // de semestre, materias matriculadas) — se re-renderiza al entrar para
   // que nunca se vea desactualizado.
   if (nombre === "horario") window.renderizarHorario?.();
+  // Agenda: mismo motivo (materias matriculadas/bloques de Horario que se
+  // editan en otras secciones), más el hecho de que "hoy"/"esta semana"
+  // pueden haber cambiado si la pestaña quedó abierta de un día para otro.
+  if (nombre === "agenda") window.renderizarAgenda?.();
 }
 // v2.8.9 (punto 10): se expone en window para que ui/componentes.js pueda
 // llamarla desde inicializarNavegacionBotonesMouse() sin crear un import
