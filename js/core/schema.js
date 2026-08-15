@@ -175,6 +175,17 @@ function crearDatosUsuarioNuevo() {
       /* ver crearCompanero() */
     ],
 
+    // Horario entre Amigos — Parte 1: registro de los enlaces de horario que
+    // ESTE usuario generó al compartir (colección top-level plana, tumba
+    // propia _eliminados_horario_enlaces — mismo patrón que profesores/
+    // companeros). Ver crearEnlaceHorarioCompartido(). No confundir con
+    // configuracion.horario_amigos_vinculados (los horarios de AMIGOS que
+    // este usuario vinculó al suyo, prompt aparte) — son las dos direcciones
+    // opuestas del mismo feature, cada una con su propia colección.
+    horario_enlaces_compartidos: [
+      /* ver crearEnlaceHorarioCompartido() */
+    ],
+
     agenda: [
       /*
       { id, tipo: "tarea"|"examen"|"recordatorio", titulo, fecha, hora, materia_id, semestre_id,
@@ -203,6 +214,10 @@ function crearDatosUsuarioNuevo() {
     _eliminados_profesores: [],
     _eliminados_companeros: [],
     _eliminados_adjuntos: [],
+    // Horario entre Amigos — Parte 1: tumba de horario_enlaces_compartidos,
+    // inicializada explícita desde el día 1 (mismo motivo que las de arriba
+    // — evitar el bug de "tumba nunca creada" ya cazado con enlaces_rapidos).
+    _eliminados_horario_enlaces: [],
 
     // Finanzas (2026-08-10): dos colecciones planas de nivel superior, mismo
     // patrón que profesores/companeros/adjuntos — se funden con una sola
@@ -1334,6 +1349,45 @@ function calcularNumeroSemanaSemestre(semestre) {
   const semanasTranscurridas = Math.floor((Date.now() - inicio.getTime()) / (7 * 24 * 60 * 60 * 1000));
   const total = Number(semestre.duracion_semanas) || 16;
   return Math.min(Math.max(semanasTranscurridas + 1, 1), total);
+}
+
+/**
+ * Horario entre Amigos — Parte 1: registro de UN enlace de horario
+ * compartido por el usuario (uno nuevo cada vez que presiona "Compartir
+ * horario" — presionarlo de nuevo genera OTRO enlace independiente, no
+ * reemplaza el anterior). Vive en datos.horario_enlaces_compartidos
+ * (colección top-level, tumba propia _eliminados_horario_enlaces — ver
+ * fusionarColeccion en storage-merge.js, mismo patrón que profesores/
+ * companeros).
+ *
+ * `file_id` es el archivo real en Drive (h_<uuid>.json, nombre no
+ * descriptivo a propósito — ver auth.js). `permission_id` es el id que
+ * devuelve Drive al crear el permiso público de solo lectura
+ * (permissions.create) — se guarda para poder revocarlo después con una
+ * sola llamada a permissions.delete, sin tener que listar los permisos del
+ * archivo primero para encontrarlo.
+ *
+ * `activo` se apaga al revocar — el registro NUNCA se borra del todo (así
+ * la lista de "enlaces que generaste" conserva el historial completo,
+ * incluyendo los ya revocados, para que el usuario nunca pierda el rastro
+ * de qué compartió alguna vez, aunque ya no esté vivo).
+ */
+function crearEnlaceHorarioCompartido({ fileId, permissionId, semestreId, apodoPropietario }) {
+  return sellarTimestamp({
+    id: "hec_" + crypto.randomUUID(),
+    file_id: fileId,
+    permission_id: permissionId || null,
+    semestre_id: semestreId || null,
+    fecha_creacion: new Date().toISOString(),
+    activo: true,
+    // Apodo opcional que el propio usuario escribe al compartir (nunca su
+    // nombre real por defecto) — se guarda en el ENLACE, no solo en el
+    // snapshot, porque el hook de sync reconstruye el snapshot en cada
+    // ciclo (ver actualizarArchivosHorarioCompartidosSiHaceFalta en
+    // horario-amigos.js) y necesita poder volver a leerlo sin que el
+    // usuario tenga que volver a escribirlo cada vez.
+    apodo_propietario: apodoPropietario ? String(apodoPropietario).trim().slice(0, 30) : null,
+  });
 }
 
 /**
@@ -2504,6 +2558,10 @@ function migrarDatosAntiguos(datos) {
   if (!Array.isArray(datos.companeros)) datos.companeros = [];
   if (!Array.isArray(datos._eliminados_profesores)) datos._eliminados_profesores = [];
   if (!Array.isArray(datos._eliminados_companeros)) datos._eliminados_companeros = [];
+  // Horario entre Amigos — Parte 1: relleno defensivo para cuentas creadas
+  // antes de este feature (mismo patrón que profesores/companeros arriba).
+  if (!Array.isArray(datos.horario_enlaces_compartidos)) datos.horario_enlaces_compartidos = [];
+  if (!Array.isArray(datos._eliminados_horario_enlaces)) datos._eliminados_horario_enlaces = [];
   // Comunidad — Parte 3 (2026-08-08): companero.telefono es nuevo — los
   // compañeros guardados antes de este cambio no traen la llave para nada
   // (undefined, no null), mismo relleno defensivo de siempre.
@@ -2799,4 +2857,5 @@ export {
   crearDiaCronograma,
   obtenerClasesEfectivasSemana,
   calcularNumeroSemanaSemestre,
+  crearEnlaceHorarioCompartido,
 };
