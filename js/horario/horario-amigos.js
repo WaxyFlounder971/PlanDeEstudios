@@ -132,25 +132,31 @@ registrarHookPostGuardado(actualizarArchivosHorarioCompartidosSiHaceFalta);
 function abrirModalAvisoPrivacidad(onConfirmar) {
   const modal = document.getElementById("modal-aviso-privacidad-horario");
   const check = document.getElementById("check-entiendo-privacidad-horario");
-  const inputApodo = document.getElementById("input-apodo-horario-compartido");
   const btnConfirmar = document.getElementById("btn-confirmar-aviso-privacidad-horario");
   const btnCancelar = document.getElementById("btn-cancelar-aviso-privacidad-horario");
   if (!modal || !check || !btnConfirmar || !btnCancelar) return;
 
   check.checked = false;
   btnConfirmar.disabled = true;
-  if (inputApodo) inputApodo.value = "";
+  btnConfirmar.style.opacity = "0.45";
+  btnConfirmar.style.cursor = "not-allowed";
   // .onchange/.onclick (no addEventListener) a propósito: este modal se
-  // reabre cada vez que se comparte de nuevo — con addEventListener se
+  // reabre cada vez que se comparte de nuevo, con addEventListener se
   // irían acumulando listeners duplicados, mismo criterio que ya usa
   // actualizarBadgeConflictosGlobales en storage-sync.js.
-  check.onchange = () => { btnConfirmar.disabled = !check.checked; };
+  check.onchange = () => {
+    btnConfirmar.disabled = !check.checked;
+    btnConfirmar.style.opacity = check.checked ? "1" : "0.45";
+    btnConfirmar.style.cursor = check.checked ? "pointer" : "not-allowed";
+  };
   btnCancelar.onclick = () => modal.classList.add("oculto");
   btnConfirmar.onclick = () => {
     if (!check.checked) return; // defensivo, el botón ya debería estar disabled
     modal.classList.add("oculto");
-    const apodo = inputApodo ? inputApodo.value.trim().slice(0, 30) : "";
-    onConfirmar(apodo || null);
+    // El apodo ya NO se pide acá: quien comparte no lo elige por sí mismo.
+    // Se pide del lado de quien RECIBE el enlace (modal-confirmar-asociar-amigo),
+    // así no queda duplicado en los dos flujos.
+    onConfirmar();
   };
   // .onclick (no addEventListener) por el mismo motivo que check/btnConfirmar
   // arriba: este modal se reabre, addEventListener acumularía un listener
@@ -202,7 +208,7 @@ function iniciarFlujoCompartir() {
     return;
   }
   cerrarPanelAmigos();
-  abrirModalAvisoPrivacidad((apodo) => generarEnlaceCompartido(semestre, apodo));
+  abrirModalAvisoPrivacidad(() => generarEnlaceCompartido(semestre, null));
 }
 
 /** Modal de resultado: enlace ya copiado + botones de copiar de nuevo / compartir nativo. */
@@ -392,8 +398,8 @@ function inicializarHorarioAmigos() {
   // función corre en el primer DOMContentLoaded, antes de que estado.datos/
   // estado.token existan (mismo motivo documentado en
   // procesarAsociacionPendienteDeAmigo, más abajo). Se llama en cambio
-  // desde mostrarApp() (main.js), junto a procesarAsociacionPendienteDeAmigo()
-  // — agregar ahí: `iniciarRefrescoPeriodicoAmigos();`
+  // desde mostrarApp() (main.js), junto a procesarAsociacionPendienteDeAmigo().
+  // Agregar ahí: `iniciarRefrescoPeriodicoAmigos();`
 }
 
 /* ===================== Parte 3: asociar el horario de un amigo (localStorage → cuenta) ===================== */
@@ -499,7 +505,7 @@ function procesarAsociacionPendienteDeAmigo() {
 
 /**
  * Visibilidad (mostrar/ocultar en el grid) es una preferencia de VISTA, no
- * un dato del horario en sí — se guarda en localStorage, NO en
+ * un dato del horario en sí. Se guarda en localStorage, NO en
  * estado.datos.configuracion. Motivo: no tiene sentido que viaje al sync
  * (nadie espera que ocultar un amigo en el teléfono lo oculte también en la
  * PC), y así se evita tocar el esquema sincronizado (schema.js) para algo
@@ -536,9 +542,9 @@ function alternarVisibilidadAmigo(fileId) {
 
 /* ----------------- Snapshots remotos: caché + refresco periódico ----------------- */
 
-// file_id -> { snapshot, caida: bool } — en memoria de esta sesión nada
+// file_id -> { snapshot, caida: bool }, en memoria de esta sesión nada
 // más. `caida` marca un amigo cuyo enlace ya no responde (404: lo revocó,
-// o borró el archivo) — se sigue mostrando en la lista para que la persona
+// o borró el archivo). Se sigue mostrando en la lista para que la persona
 // pueda desvincularlo a mano, pero no se dibuja nada de él en el grid.
 const cacheSnapshotsAmigos = new Map();
 
@@ -553,7 +559,7 @@ async function refrescarSnapshotsAmigos() {
       } catch (e) {
         // 404/403 (enlace revocado del otro lado) se trata distinto de un
         // fallo de red transitorio: se marca "caída" para avisar en el
-        // panel, pero no se descarta el vínculo — desvincular es siempre
+        // panel, pero no se descarta el vínculo. Desvincular es siempre
         // una decisión explícita de la persona, nunca automática.
         const status = e && e.status;
         cacheSnapshotsAmigos.set(amigo.file_id, { snapshot: null, caida: status === 404 || status === 403 });
@@ -570,7 +576,7 @@ let intervaloRefrescoAmigos = null;
 function iniciarRefrescoPeriodicoAmigos() {
   refrescarSnapshotsAmigos();
   clearInterval(intervaloRefrescoAmigos);
-  // Cada 5 min mientras la pestaña siga abierta — mismo espíritu que el
+  // Cada 5 min mientras la pestaña siga abierta, mismo espíritu que el
   // sondeo de storage-sync.js, pero un intervalo propio y más largo: esto
   // no es data propia (no hay nada que "perder" por tardar un poco más en
   // notarlo), así que no vale la pena sondear tan seguido como el sync
@@ -588,8 +594,8 @@ function parseFechaLocalAmigo(str) {
 }
 
 /**
- * Semana del snapshot del amigo (1-based) a la que pertenece `fecha` —
- * simple diferencia de días entre semanas de 7 días reales desde su
+ * Semana del snapshot del amigo (1-based) a la que pertenece `fecha`.
+ * Simple diferencia de días entre semanas de 7 días reales desde su
  * fecha_inicio, sin importar en qué día de la semana caiga esa fecha
  * (misma idea que calcularNumeroSemanaSemestre en schema.js, pero
  * reimplementada acá porque el snapshot no es un semestre local real).
@@ -607,9 +613,9 @@ function calcularNumeroSemanaAmigo(snapshot, fecha) {
 /**
  * Bloques de TODOS los amigos visibles (no ocultos, con snapshot cargado)
  * que caen en `diaCodigo` para la fecha real `fecha`. Se le pasa `fecha`
- * (no numeroSemana local) porque el amigo tiene su PROPIO semestre —
- * distinto fecha_inicio/duración que el semestre que se esté mirando acá
- * — así que lo único que de verdad se puede alinear entre los dos horarios
+ * (no numeroSemana local) porque el amigo tiene su PROPIO semestre,
+ * distinto fecha_inicio/duración que el semestre que se esté mirando acá.
+ * Así que lo único que de verdad se puede alinear entre los dos horarios
  * es la fecha calendario real, nunca el número de semana.
  */
 function obtenerBloquesAmigosPorDia(fecha, diaCodigo) {
@@ -685,7 +691,7 @@ function renderizarListaAmigosVinculados() {
       <div class="row" style="align-items:center; gap:8px; min-width:0;">
         <span style="width:12px; height:12px; border-radius:50%; flex-shrink:0; background:${amigo.color};"></span>
         <span style="font-size:0.85rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${amigo.nombre}</span>
-        ${caida ? `<span class="badge badge-danger" style="font-size:0.68rem;" title="El enlace ya no responde — puede que lo hayan revocado">Enlace caído</span>` : ""}
+        ${caida ? `<span class="badge badge-danger" style="font-size:0.68rem;" title="El enlace ya no responde, puede que lo hayan revocado">Enlace caído</span>` : ""}
       </div>
     `;
     const controles = document.createElement("div");

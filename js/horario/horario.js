@@ -255,7 +255,7 @@ function construirLineasHorarias(pxPorMin, minInicioRango, minFinRango) {
   return stops.join(",\n");
 }
 
-// Horario entre Amigos — Parte 3b: franja delgada de bloques ajenos, pegada
+// Horario entre Amigos, Parte 3b: franja delgada de bloques ajenos, pegada
 // al borde derecho de cada columna de día. A propósito NO comparte lanes ni
 // z-index con las tarjetas propias (b.lane * 12, z-index 10+lane): lo propio
 // tiene que verse siempre completo, nunca tapado por el horario de un
