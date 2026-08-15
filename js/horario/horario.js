@@ -11,7 +11,7 @@ import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 import { obtenerSemestresOrdenCronologico, buscarSemestreVivoPorId } from "../semestres/semestres.js";
 import { obtenerPlanActivo } from "../plan/plan-esquema.js";
 import { abrirModalBloqueHorario, construirZonaCronograma } from "./horario-modal.js";
-import { abrirPanelAmigos, inicializarHorarioAmigos, obtenerBloquesAmigosPorDia, obtenerListaAmigosParaDiaConjunto, refrescarSnapshotsAmigos } from "./horario-amigos.js";
+import { abrirPanelAmigos, inicializarHorarioAmigos, obtenerListaAmigosParaDiaConjunto, refrescarSnapshotsAmigos } from "./horario-amigos.js";
 
 const PX_POR_MIN_EXPANDIDO = 0.84; // 30% menos que antes (1.2), pedido explícito
 
@@ -231,7 +231,7 @@ function construirClasesEfectivasSemana(semestre, numeroSemana) {
 function construirColumnaHoras(pxPorMin, altoGrid, minInicioRango, minFinRango) {
   const col = document.createElement("div");
   col.className = "horario-col-horas";
-  col.style.cssText = `position:relative; width:38px; flex-shrink:0; height:${altoGrid}px;`;
+  col.style.cssText = `position:relative; width:28px; flex-shrink:0; height:${altoGrid}px;`;
   const horaInicio = Math.ceil(minInicioRango / 60);
   const horaFin = Math.floor(minFinRango / 60);
   for (let h = horaInicio; h <= horaFin; h++) {
@@ -246,7 +246,11 @@ function construirColumnaHoras(pxPorMin, altoGrid, minInicioRango, minFinRango) 
     const periodo = horaMod < 12 ? "am" : "pm";
     const etiqueta = document.createElement("div");
     etiqueta.className = "muted";
-    etiqueta.style.cssText = `position:absolute; top:${top}px; right:6px; transform:translateY(-50%); text-align:center; line-height:1.1;`;
+    // right:2px (antes 6px): ese margen extra era espacio muerto entre el
+    // número y el borde de la primera columna de día, sin aportar nada —
+    // se recorta al mínimo para que quepa más grid en pantalla, dejando
+    // apenas el aire justo para que el texto no se pegue a la línea.
+    etiqueta.style.cssText = `position:absolute; top:${top}px; right:2px; transform:translateY(-50%); text-align:center; line-height:1.1;`;
     etiqueta.innerHTML = `<div style="font-size:0.68rem; font-weight:600;">${hora12}</div><div style="font-size:0.56rem;">${periodo}</div>`;
     col.appendChild(etiqueta);
   }
@@ -263,48 +267,17 @@ function construirLineasHorarias(pxPorMin, minInicioRango, minFinRango) {
   return stops.join(",\n");
 }
 
-// Horario entre Amigos, Parte 3b: franja delgada de bloques ajenos, pegada
-// al borde derecho de cada columna de día. A propósito NO comparte lanes ni
-// z-index con las tarjetas propias (b.lane * 12, z-index 10+lane): lo propio
-// tiene que verse siempre completo, nunca tapado por el horario de un
-// amigo. Cada amigo con choque en ese rango de horas ocupa su propio
-// mini-carril (ANCHO_FRANJA_AMIGO px), así que 2+ amigos superpuestos entre
-// sí también se distinguen sin taparse uno al otro.
-const ANCHO_FRANJA_AMIGO = 7;
+// Nota: el horario default (grid semanal de siempre) ya NO muestra nada de
+// amigos superpuesto — la franja lateral con los bloques ajenos que vivía
+// acá se quitó porque ahora existe una vista dedicada para eso ("Horario
+// conjunto", ver más abajo), y mezclar los dos conceptos en la misma
+// pantalla generaba ruido visual innecesario en el uso del día a día.
 
-function construirFranjasAmigos(bloquesAmigosDia, pxPorMin, minInicioRango, minFinRango) {
-  const frag = document.createDocumentFragment();
-  if (!bloquesAmigosDia || bloquesAmigosDia.length === 0) return frag;
-
-  const conLanes = calcularLanesDia(bloquesAmigosDia);
-  conLanes.forEach((b) => {
-    const inicioClamp = Math.max(b.inicioMin, minInicioRango);
-    const finClamp = Math.min(b.finMin, minFinRango);
-    if (finClamp <= inicioClamp) return;
-    const top = Math.max(0, (inicioClamp - minInicioRango) * pxPorMin);
-    const alto = Math.max(10, (finClamp - inicioClamp) * pxPorMin);
-    const franja = document.createElement("div");
-    // z-index bajo (1-10, un amigo por lane) a propósito: siempre por
-    // debajo del rango 10+lane que usan las tarjetas propias más arriba.
-    franja.style.cssText = `position:absolute; top:${top}px; right:${b.lane * (ANCHO_FRANJA_AMIGO + 2)}px; width:${ANCHO_FRANJA_AMIGO}px; height:${alto}px; z-index:${1 + b.lane};
-      background:${b.color}; border-radius:3px; opacity:0.85; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.3);`;
-    franja.title = `${b.nombreAmigo} · ${b.nombreBloque}`;
-    franja.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      mostrarToast(`${b.nombreAmigo}: ${b.nombreBloque}`);
-    });
-    frag.appendChild(franja);
-  });
-  return frag;
-}
-
-function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango, bloquesAmigosDia) {
+function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango) {
   const col = document.createElement("div");
   col.className = "horario-col-dia";
   col.dataset.diaCodigo = dia.abrevDefault;
   col.style.cssText = `position:relative; flex:1; min-width:56px; height:${altoGrid}px; background:${construirLineasHorarias(pxPorMin, minInicioRango, minFinRango)}; cursor:pointer; border-left:1px solid rgba(150,150,170,0.15);`;
-
-  col.appendChild(construirFranjasAmigos(bloquesAmigosDia, pxPorMin, minInicioRango, minFinRango));
 
   const conLanes = calcularLanesDia(bloquesDia);
   conLanes.forEach((b) => {
@@ -346,7 +319,14 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minI
     // espacio para su propia línea (~16px) sin invadir eso.
     const lineasTexto = 1 + (b.profesorNombre ? 1 : 0) + (b.aula ? 1 : 0);
     const altoTextoEstimado = 6 /* padding vertical */ + lineasTexto * 15;
-    const cabeEntrar = alto >= altoTextoEstimado + 16;
+    // window.innerWidth <= 768 (mismo breakpoint que ya usa el resto del
+    // horario, ver paddingInferior más abajo): en pantallas angostas las
+    // columnas de día quedan tan comprimidas que este botón (abajo-
+    // izquierda) termina pisando el emoji de modalidad (abajo-derecha,
+    // misma fila). Se oculta ahí — el emoji solo ya avisa la modalidad, y
+    // el link sigue disponible tocando la tarjeta (abre el detalle en
+    // modal, que trae su propio botón "Entrar" sin este límite de ancho).
+    const cabeEntrar = alto >= altoTextoEstimado + 16 && window.innerWidth > 768;
     tarjeta.innerHTML = `
       <div style="font-size:0.85rem; font-weight:600; line-height:1.15; display:flex; align-items:center; gap:4px; margin-bottom:2px; overflow-wrap:break-word; word-break:break-word;">
         ${b.tieneExcepcionEstaSemana ? `<span title="Esta semana tiene un ajuste puntual" style="font-size:1.05rem; opacity:0.9; flex-shrink:0;">✎</span>` : ""}
@@ -557,21 +537,18 @@ function renderizarHeaderHorario(semestre, numeroSemana) {
 
 /* ===================== Vista inicial (centra en la clase más temprana / hora actual) ===================== */
 
-function centrarVistaInicial(contenedor, dias, clasesEfectivas, pxPorMin, minInicioRango, minFinRango) {
+function centrarVistaInicial(contenedor, minutosClases, pxPorMin, minInicioRango, minFinRango) {
   const hoy = new Date();
   // Antes solo miraba las clases de HOY (y si hoy no había, caía a la hora
   // actual) — por eso casi nunca arrancaba en la primera clase real: si hoy
   // no tenías clase a esa hora, se iba a la hora del reloj en vez de a la
-  // materia más temprana de la semana. Ahora se busca la hora de inicio
-  // más temprana entre TODOS los días visibles, y solo si no hay ninguna
-  // clase registrada en toda la semana se usa la hora actual como último
-  // recurso.
-  const diasAbrevVisibles = new Set(dias.map((d) => d.abrevDefault));
-  const minutosClasesSemana = clasesEfectivas
-    .filter((c) => diasAbrevVisibles.has(c.dia))
-    .map((c) => minutosDesdeHora(c.hora_inicio));
-  const minutoReferenciaCrudo = minutosClasesSemana.length > 0
-    ? Math.min(...minutosClasesSemana)
+  // materia más temprana. Ahora se recibe ya armada la lista de minutos de
+  // inicio a considerar (arma esa lista cada llamador: el grid semanal pasa
+  // todas las clases de la semana visible; el modo conjunto pasa las del
+  // día actual, mías + de todos los amigos) y solo si viene vacía se usa la
+  // hora actual como último recurso.
+  const minutoReferenciaCrudo = minutosClases.length > 0
+    ? Math.min(...minutosClases)
     : hoy.getHours() * 60 + hoy.getMinutes();
   // Recorta la referencia al rango visible configurado, si no el destino de
   // scroll podría caer fuera del alto real del grid.
@@ -683,7 +660,9 @@ function renderizarHorarioInterno() {
     // lo que scrollea por debajo.
     headerFila.style.cssText = "display:flex; position:sticky; top:0; z-index:50; background:var(--bg-header-solido); border-bottom:1px solid rgba(150,150,170,0.15);";
     const espaciador = document.createElement("div");
-    espaciador.style.cssText = "width:38px; flex-shrink:0;";
+    // 28px: mismo ancho que .horario-col-horas (ver construirColumnaHoras),
+    // para que este header quede alineado con la columna de horas de abajo.
+    espaciador.style.cssText = "width:28px; flex-shrink:0;";
     headerFila.appendChild(espaciador);
     dias.forEach((dia) => {
       const fecha = calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault);
@@ -718,10 +697,8 @@ function renderizarHorarioInterno() {
           notas: c.notas,
           tieneExcepcionEstaSemana: !!c.tiene_ajuste_cronograma,
         }));
-      const fechaDia = calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault);
-      const bloquesAmigosDia = obtenerBloquesAmigosPorDia(fechaDia, dia.abrevDefault);
       filaGrid.appendChild(
-        construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango, bloquesAmigosDia)
+        construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango)
       );
     });
 
@@ -746,11 +723,16 @@ function renderizarHorarioInterno() {
   });
   if (!document.fullscreenElement) cont.appendChild(barra);
 
-  // El auto-scroll a "la clase más temprana del día" es un concepto del
-  // grid semanal completo (mira los 7 días a la vez) — en modo conjunto ya
-  // se está viendo un solo día explícito elegido con la nav, no aplica.
+  // El auto-scroll del grid semanal completo busca la clase más temprana
+  // entre TODOS los días visibles de la semana. El modo conjunto tiene su
+  // propio auto-scroll (por día, mío + de amigos) disparado desde adentro
+  // de renderizarHorarioConjuntoInterno — no aplica acá.
   if (!estado.horarioModoConjunto) {
-    requestAnimationFrame(() => centrarVistaInicial(contenedor, dias, clasesEfectivas, pxPorMin, minInicioRango, minFinRango));
+    const diasAbrevVisibles = new Set(dias.map((d) => d.abrevDefault));
+    const minutosClasesSemana = clasesEfectivas
+      .filter((c) => diasAbrevVisibles.has(c.dia))
+      .map((c) => minutosDesdeHora(c.hora_inicio));
+    requestAnimationFrame(() => centrarVistaInicial(contenedor, minutosClasesSemana, pxPorMin, minInicioRango, minFinRango));
   }
 }
 
@@ -968,7 +950,8 @@ function renderizarHorarioConjuntoInterno(cont, semestre, numeroSemana) {
   const headerFila = document.createElement("div");
   headerFila.style.cssText = "display:flex; border-bottom:1px solid rgba(150,150,170,0.15);";
   const espaciador = document.createElement("div");
-  espaciador.style.cssText = "width:38px; flex-shrink:0;";
+  // 28px: mismo ancho que .horario-col-horas (ver construirColumnaHoras).
+  espaciador.style.cssText = "width:28px; flex-shrink:0;";
   headerFila.appendChild(espaciador);
 
   const headerYo = document.createElement("div");
@@ -1003,6 +986,20 @@ function renderizarHorarioConjuntoInterno(cont, semestre, numeroSemana) {
   columnaAncha.appendChild(encabezado);
   columnaAncha.appendChild(filaGrid);
   cont.appendChild(columnaAncha);
+
+  // Auto-scroll a la clase más temprana del día ENTRE TODAS LAS COLUMNAS
+  // (mía + cada amigo), no solo la mía — si yo no tengo clase a esa hora
+  // pero un amigo sí, igual hay que arrancar ahí. Se recalcula en cada
+  // render de este modo, así que al navegar de día con ‹ › (que vuelve a
+  // llamar a esta función) se re-enfoca solo, sin acción extra del user.
+  const minutosClasesDia = [
+    ...bloquesPropios.map((b) => b.inicioMin),
+    ...amigosDia.flatMap(({ bloques }) => bloques.map((b) => b.inicioMin)),
+  ];
+  const contenedorScroll = document.getElementById("horario-grid-contenedor");
+  if (contenedorScroll) {
+    requestAnimationFrame(() => centrarVistaInicial(contenedorScroll, minutosClasesDia, pxPorMin, minInicioRango, minFinRango));
+  }
 }
 
 function inicializarHorario() {
