@@ -16,7 +16,7 @@
 
 import { estado } from "../core/storage.js";
 import { marcarCambioPendiente, mostrarCargando, ocultarCargando, registrarHookPostGuardado } from "../core/storage-sync.js";
-import { crearEnlaceHorarioCompartido, sellarTimestamp } from "../core/schema.js";
+import { crearEnlaceHorarioCompartido, crearAmigoVinculado, sellarTimestamp } from "../core/schema.js";
 import { crearArchivoJsonEnDrive, crearPermisoPublicoLectura, eliminarPermisoDrive, guardarDatos } from "../core/auth.js";
 import { mostrarToast, abrirConfirmacion, desplazarYResaltarElemento } from "../ui/componentes.js";
 import { copiarAlPortapapelesBlindado } from "../core/clipboard.js";
@@ -386,4 +386,105 @@ function inicializarHorarioAmigos() {
   renderizarListaEnlacesCompartidos();
 }
 
-export { inicializarHorarioAmigos, abrirPanelAmigos, renderizarListaEnlacesCompartidos };
+/* ===================== Parte 3: asociar el horario de un amigo (localStorage → cuenta) ===================== */
+
+const KEY_LOCALSTORAGE_PENDIENTE = "horario_amigo_pendiente";
+const MS_EXPIRACION_PENDIENTE = 60 * 60 * 1000; // 1h — ver amigos.html/horario-amigos-publico.js
+const MAX_AMIGOS_VINCULADOS = 10;
+
+// Paleta fija, no colores random en cada carga: así el color de un amigo se
+// mantiene estable a través del tiempo (se elige UNA vez, al vincular, con
+// un hash determinístico de su id — ver crearAmigoVinculado en schema.js —
+// y de ahí en adelante ese amigo siempre se ve con el mismo color, sin
+// depender del orden en que se vincularon los demás).
+const PALETA_COLORES_AMIGOS = [
+  "#f472b6", "#60a5fa", "#34d399", "#fbbf24", "#a78bfa",
+  "#fb923c", "#22d3ee", "#f87171", "#4ade80", "#c084fc",
+];
+
+function asignarColorAmigo(semilla) {
+  let hash = 0;
+  const str = String(semilla || "");
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 31 + str.charCodeAt(i)) | 0;
+  }
+  const idx = Math.abs(hash) % PALETA_COLORES_AMIGOS.length;
+  return PALETA_COLORES_AMIGOS[idx];
+}
+
+function abrirModalConfirmarAsociarAmigo(apodoDefault, onConfirmar) {
+  const modal = document.getElementById("modal-confirmar-asociar-amigo");
+  const input = document.getElementById("input-apodo-confirmar-asociar-amigo");
+  const btnCancelar = document.getElementById("btn-cancelar-confirmar-asociar-amigo");
+  const btnConfirmar = document.getElementById("btn-confirmar-confirmar-asociar-amigo");
+  if (!modal || !input || !btnCancelar || !btnConfirmar) return;
+
+  input.value = apodoDefault || "";
+  // .onclick (no addEventListener): mismo motivo que el resto de los
+  // modales de este archivo — este también puede reabrirse (aunque en la
+  // práctica solo debería disparar una vez por login, no está de más).
+  btnCancelar.onclick = () => modal.classList.add("oculto");
+  modal.onclick = (e) => { if (e.target === modal) modal.classList.add("oculto"); };
+  btnConfirmar.onclick = () => {
+    modal.classList.add("oculto");
+    onConfirmar(input.value.trim().slice(0, 30) || "Amigo");
+  };
+
+  document.body.appendChild(modal);
+  modal.style.zIndex = "99999";
+  modal.classList.remove("oculto");
+}
+
+/**
+ * Se llama una vez por carga, desde mostrarApp() (main.js) — NO desde
+ * inicializarHorarioAmigos(), porque esa corre en el primer DOMContentLoaded,
+ * antes de que estado.datos exista (ver inicializarHorario() en horario.js,
+ * que se llama antes del login). Acá ya hay datos cargados sí o sí.
+ */
+function procesarAsociacionPendienteDeAmigo() {
+  const crudo = localStorage.getItem(KEY_LOCALSTORAGE_PENDIENTE);
+  if (!crudo) return;
+  // Se limpia siempre de una vez, se resuelva o no — así nunca vuelve a
+  // preguntar por el mismo pendiente en la próxima carga (ej. si la
+  // persona cierra el modal sin decidir, o si ya expiró).
+  localStorage.removeItem(KEY_LOCALSTORAGE_PENDIENTE);
+
+  let pendiente;
+  try {
+    pendiente = JSON.parse(crudo);
+  } catch (e) {
+    return;
+  }
+  if (!pendiente || !pendiente.fileId) return;
+  if (Date.now() - Number(pendiente.guardado_en || 0) > MS_EXPIRACION_PENDIENTE) return; // muy viejo, se descarta en silencio
+
+  const vinculados = estado.datos.configuracion.horario_amigos_vinculados || [];
+  if (vinculados.some((a) => a.file_id === pendiente.fileId)) {
+    mostrarToast("Ya tenías vinculado este horario.");
+    return;
+  }
+  if (vinculados.length >= MAX_AMIGOS_VINCULADOS) {
+    mostrarToast(`Ya tenés el máximo de ${MAX_AMIGOS_VINCULADOS} horarios vinculados. Desvinculá alguno primero.`);
+    return;
+  }
+
+  abrirModalConfirmarAsociarAmigo(pendiente.apodo, (apodoFinal) => {
+    const amigo = crearAmigoVinculado({
+      fileId: pendiente.fileId,
+      nombre: apodoFinal,
+      color: asignarColorAmigo(pendiente.fileId),
+    });
+    estado.datos.configuracion.horario_amigos_vinculados.push(amigo);
+    sellarTimestamp(estado.datos.configuracion);
+    marcarCambioPendiente();
+    mostrarToast(`Vinculado el horario de ${amigo.nombre}.`);
+  });
+}
+
+export {
+  inicializarHorarioAmigos,
+  abrirPanelAmigos,
+  renderizarListaEnlacesCompartidos,
+  procesarAsociacionPendienteDeAmigo,
+  asignarColorAmigo,
+};
