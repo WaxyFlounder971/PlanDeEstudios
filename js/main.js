@@ -22,7 +22,7 @@ import { inicializarModalCapturasPDF, inicializarModalInstruccionesImportacion }
 import { inicializarResponsivoListaPlan, renderizarPlanEstudios } from "./plan/plan-vista-lista.js";
 import { renderizarSemestres } from "./semestres/semestres.js";
 import { inicializarHorario, renderizarHorario } from "./horario/horario.js";
-import { procesarAsociacionPendienteDeAmigo } from "./horario/horario-amigos.js";
+import { procesarAsociacionPendienteDeAmigo, iniciarRefrescoPeriodicoAmigos } from "./horario/horario-amigos.js";
 import { abrirConfirmacion, agregarLongPress, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, restaurarEstadoSidebar } from "./ui/componentes.js";
 import { aplicarPaleta, aplicarTemaGuardadoLocalmente } from "./ui/tema.js";
 
