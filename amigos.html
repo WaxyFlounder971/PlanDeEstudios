@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es" data-palette="azul" data-mode="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Horario compartido — App Académica</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="icon" type="image/png" href="imagenes/LogoApp.png">
+</head>
+<body>
+
+<!-- amigos.html — Horario entre Amigos, Parte 2: vista pública sin sesión.
+     Standalone a propósito: NO importa nada de js/core ni js/horario de la
+     app (ver horario-amigos-publico.js) para no arrastrar el stack de
+     auth/sync solo para mostrarle un horario a alguien sin cuenta. -->
+
+<div class="stack" style="max-width:900px; margin:0 auto; padding:20px; min-height:100vh;">
+
+  <div class="row-between">
+    <h1 style="font-size:1.15rem; display:flex; align-items:center; gap:8px; margin:0;">
+      <img src="imagenes/LogoApp.png" alt="" style="height:1.3em; width:auto;"> Horario compartido
+    </h1>
+    <a href="index.html" class="btn btn-secondary" style="text-decoration:none; font-size:0.8rem; padding:8px 14px;">Abrir App Académica</a>
+  </div>
+
+  <!-- Estado: cargando -->
+  <div id="amigos-cargando" class="glass-card" style="text-align:center;">
+    <p class="muted" style="margin:0;">Cargando horario…</p>
+  </div>
+
+  <!-- Estado: error (fileId inválido, revocado, o falta en la URL) -->
+  <div id="amigos-error" class="glass-card oculto" style="text-align:center;">
+    <p style="margin:0 0 6px;">😕 Este horario ya no está disponible</p>
+    <p class="muted" style="margin:0;">El enlace pudo haber sido revocado por quien lo compartió, o ya no existe.</p>
+  </div>
+
+  <!-- Estado: contenido -->
+  <div id="amigos-contenido" class="stack oculto">
+    <div class="glass-card">
+      <div class="row-between" style="flex-wrap:wrap; gap:10px;">
+        <div>
+          <h2 id="amigos-titulo-semestre" style="margin:0 0 2px; font-size:1rem;"></h2>
+          <p class="muted" id="amigos-subtitulo-semana" style="margin:0;"></p>
+        </div>
+        <button type="button" id="btn-asociar-amigo" class="btn btn-primary" style="font-size:0.85rem;">+ Asociar a mi cuenta</button>
+      </div>
+    </div>
+
+    <div class="glass-panel" id="amigos-grid-contenedor" style="overflow:auto; max-height:70vh; position:relative;">
+      <div id="amigos-grid"></div>
+    </div>
+
+    <p class="muted" style="text-align:center; font-size:0.72rem;">Vista de solo lectura. Se actualiza cada vez que recargás esta página.</p>
+  </div>
+
+</div>
+
+<!-- Modal chico: confirmar apodo antes de asociar (reusa .modal-overlay/.glass-card del design system, sin depender de componentes.js) -->
+<div id="amigos-modal-asociar" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;">Asociar a mi cuenta</h2>
+    <p class="muted">Vas a necesitar iniciar sesión (o ya tenerla iniciada) en App Académica. Este horario va a superponerse al tuyo, con su propio color, hasta que lo desvincules.</p>
+    <div>
+      <label class="muted" style="display:block; font-size:0.75rem; margin-bottom:4px;">Nombre para identificarlo</label>
+      <input type="text" id="amigos-input-apodo-asociar" class="form-input" maxlength="30" placeholder="Ej. Juan">
+    </div>
+    <div class="row" style="justify-content:flex-end;">
+      <button type="button" id="amigos-btn-cancelar-asociar" class="btn btn-secondary">Cancelar</button>
+      <button type="button" id="amigos-btn-confirmar-asociar" class="btn btn-primary">Continuar</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/horario/horario-amigos-publico.js"></script>
+</body>
+</html>

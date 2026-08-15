@@ -235,6 +235,18 @@
           </div>
         </section>
 
+        <!-- Horario entre Amigos — Parte 1: enlaces que compartiste (obligatorio
+             #4 del prompt — historial completo, no solo el más reciente). Se
+             llega acá también con un atajo desde el panel "Amigos" en Horario
+             (ver desplazarYResaltarElemento en horario-amigos.js). -->
+        <section class="glass-card stack ajuste-seccion colapsada" id="ajuste-seccion-horario-enlaces">
+          <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Horario compartido</h2><span class="ajuste-seccion-chevron">▾</span></button>
+          <div class="ajuste-seccion-cuerpo">
+          <p class="muted" style="font-size:0.82rem; margin:2px 0 6px;">Enlaces de tu horario que compartiste alguna vez — revisá cuáles siguen activos y revocá cualquiera cuando quieras.</p>
+          <div id="lista-horario-enlaces-compartidos" class="stack" style="gap:8px;"></div>
+          </div>
+        </section>
+
         <section class="glass-card stack ajuste-seccion colapsada">
           <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Enlaces rápidos</h2><span class="ajuste-seccion-chevron">▾</span></button>
           <div class="ajuste-seccion-cuerpo">
@@ -717,6 +729,58 @@
     <div class="row" style="justify-content:flex-end;">
       <button id="btn-cancelar-confirmacion" class="btn btn-secondary">Cancelar</button>
       <button id="btn-aceptar-confirmacion" class="btn btn-danger">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Horario entre Amigos — panel principal (botón "Amigos" del header de Horario) ===================== -->
+<div id="modal-panel-amigos" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;">👥 Horario entre Amigos</h2>
+    <p class="muted">Compartí tu horario por un enlace de solo lectura, o gestioná lo que ya compartiste.</p>
+    <button type="button" id="btn-compartir-horario" class="btn btn-primary btn-block">🔗 Compartir mi horario</button>
+    <button type="button" id="btn-ir-enlaces-generados" class="btn btn-secondary btn-block">Ver mis enlaces compartidos</button>
+    <!-- Horario entre Amigos — Parte 3 (pendiente): acá va "Horarios Activos"
+         (la lista de amigos vinculados, con su switch de mostrar/ocultar en
+         la superposición del grid propio). -->
+  </div>
+</div>
+
+<!-- ===================== MODAL: Horario entre Amigos — aviso de privacidad obligatorio ===================== -->
+<div id="modal-aviso-privacidad-horario" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;">⚠️ Antes de compartir tu horario</h2>
+    <p class="muted">Cualquier persona con este enlace podrá ver tu horario hasta que lo revoques. Tu horario revela dónde estás cada semana, de forma recurrente — compartilo solo con quien confiés.</p>
+    <div>
+      <label class="muted" style="display:block; font-size:0.75rem; margin-bottom:4px;">Apodo para identificarte (opcional)</label>
+      <input type="text" id="input-apodo-horario-compartido" class="form-input" maxlength="30" placeholder="Ej. Juan, El de Cálculo II...">
+    </div>
+    <label class="row" style="align-items:center; gap:10px; cursor:pointer;">
+      <label class="switch switch-tema" style="flex-shrink:0;">
+        <input type="checkbox" id="check-entiendo-privacidad-horario">
+        <span class="track"><span class="thumb"></span></span>
+      </label>
+      <span style="font-size:0.85rem;">Entiendo que cualquiera con el enlace puede ver mi horario.</span>
+    </label>
+    <div class="row" style="justify-content:flex-end;">
+      <button type="button" id="btn-cancelar-aviso-privacidad-horario" class="btn btn-secondary">Cancelar</button>
+      <button type="button" id="btn-confirmar-aviso-privacidad-horario" class="btn btn-primary" disabled>Entendido, generar enlace</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Horario entre Amigos — enlace ya generado ===================== -->
+<div id="modal-enlace-horario-generado" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;">✓ Enlace generado</h2>
+    <p class="muted">Ya se copió al portapapeles. Cualquier persona con este enlace puede ver tu horario hasta que lo revoques (Ajustes → Horario compartido).</p>
+    <input type="text" id="input-enlace-horario-generado" class="form-input" readonly style="font-size:0.76rem;">
+    <div class="row">
+      <button type="button" id="btn-copiar-enlace-horario-generado" class="btn btn-secondary" style="flex:1;">Copiar de nuevo</button>
+      <button type="button" id="btn-compartir-enlace-horario-generado" class="btn btn-primary oculto" style="flex:1;">Compartir</button>
+    </div>
+    <div class="row" style="justify-content:flex-end;">
+      <button type="button" id="btn-cerrar-enlace-horario-generado" class="btn btn-secondary">Listo</button>
     </div>
   </div>
 </div>
