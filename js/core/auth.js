@@ -202,6 +202,96 @@ async function crearArchivoDatos(token, datos) {
   return respuesta.id;
 }
 
+/**
+ * Horario entre Amigos — Parte 1: versión genérica de crearArchivoDatos
+ * (que siempre usa NOMBRE_ARCHIVO_DATOS fijo) — acá el nombre y el
+ * contenido los decide quien llama. Se usa para crear el archivo público
+ * h_<uuid>.json de un horario compartido, con nombre no descriptivo a
+ * propósito (ver horario-amigos.js) — nunca el nombre del usuario ni nada
+ * identificable, para que el archivo en sí no revele de quién es.
+ */
+async function crearArchivoJsonEnDrive(token, nombreArchivo, datos) {
+  const metadata = { name: nombreArchivo, mimeType: "application/json" };
+  const boundary = "-------academicapp";
+  const body =
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+    `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(datos)}\r\n` +
+    `--${boundary}--`;
+
+  const respuesta = await fetch(
+    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": `multipart/related; boundary=${boundary}`,
+      },
+      body,
+    }
+  );
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Drive respondió ${respuesta.status} al crear el archivo compartido: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+  const json = await respuesta.json();
+  return json.id;
+}
+
+/**
+ * Horario entre Amigos — Parte 1: aplica permiso público de solo lectura
+ * (role: reader, type: anyone) sobre un archivo — es lo que hace que
+ * cualquiera con el link pueda leerlo sin iniciar sesión. Devuelve
+ * { id } — ese `id` es el permissionId que hay que guardar (ver
+ * crearEnlaceHorarioCompartido en schema.js) para poder revocarlo después
+ * con una sola llamada, sin tener que listar los permisos del archivo.
+ */
+async function crearPermisoPublicoLectura(token, fileId) {
+  const respuesta = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}/permissions?fields=id`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ role: "reader", type: "anyone" }),
+    }
+  );
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Drive respondió ${respuesta.status} al dar permiso público: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+  return respuesta.json(); // { id: permissionId }
+}
+
+/**
+ * Horario entre Amigos — Parte 1: revoca el acceso público de un enlace
+ * (botón "Revocar" en la lista de enlaces generados). Un 404 (el permiso o
+ * el archivo ya no existen — ej. el usuario lo borró a mano desde Drive)
+ * se trata como ÉXITO, no como error: el resultado que se quería ("que ese
+ * link ya no funcione") ya está cumplido, mismo criterio que
+ * eliminarArchivoDeDriveConId más abajo.
+ */
+async function eliminarPermisoDrive(token, fileId, permissionId) {
+  const respuesta = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}/permissions/${permissionId}`,
+    { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!respuesta.ok && respuesta.status !== 404) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Drive respondió ${respuesta.status} al revocar el permiso: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+}
+
 async function leerDatos(token, fileId) {
   const respuesta = await fetch(
     `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
@@ -573,6 +663,9 @@ async function moverArchivoAlaCarpeta(token, fileId, folderIdDestino) {
 
 export {
   NOMBRE_CARPETA_BACKUP,
+  crearArchivoJsonEnDrive,
+  crearPermisoPublicoLectura,
+  eliminarPermisoDrive,
   buscarOCrearArchivoDatos,
   buscarOCrearCarpetaEnDrive,
   buscarArchivoEnCarpeta,
