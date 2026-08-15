@@ -17,7 +17,7 @@
 import { estado } from "../core/storage.js";
 import { marcarCambioPendiente, mostrarCargando, ocultarCargando, registrarHookPostGuardado } from "../core/storage-sync.js";
 import { crearEnlaceHorarioCompartido, crearAmigoVinculado, sellarTimestamp } from "../core/schema.js";
-import { crearArchivoJsonEnDrive, crearPermisoPublicoLectura, eliminarPermisoDrive, guardarDatos, leerDatos } from "../core/auth.js";
+import { crearArchivoJsonEnDrive, crearPermisoPublicoLectura, eliminarPermisoDrive, guardarDatos } from "../core/auth.js";
 import { mostrarToast, abrirConfirmacion, desplazarYResaltarElemento } from "../ui/componentes.js";
 import { copiarAlPortapapelesBlindado } from "../core/clipboard.js";
 import { obtenerSemestreHorarioActual, obtenerColorBloque, obtenerNombreBloque, obtenerRangoHorasHorario, obtenerPlanPorId, abrirHorarioConjunto } from "./horario.js";
@@ -26,6 +26,31 @@ import { obtenerSemestreHorarioActual, obtenerColorBloque, obtenerNombreBloque, 
 // nota de configuración del prompt. amigos.html vive en la raíz del repo,
 // hermano de index.html.
 const BASE_URL_AMIGOS = "https://waxyflounder971.github.io/PlanDeEstudios/amigos.html";
+
+// Misma API key restringida por dominio + Drive API que ya usa amigos.html
+// (ver nota de configuración del prompt) — se usa acá TAMBIÉN, no solo en
+// la página pública. Motivo (bug real reportado: "el enlace está 100%
+// funcional pero dice caído"): leer el horario de un AMIGO con TU propio
+// token OAuth (leerDatos) puede devolver 403 aunque el archivo sea público,
+// porque el scope de Drive de esta app probablemente solo alcanza para
+// archivos que la app propia creó — un archivo AJENO, aunque tenga permiso
+// "cualquiera con el enlace", queda fuera de ese scope igual. La lectura
+// pública sin sesión (misma vía que amigos.html: fetch directo + API key,
+// sin token) no tiene ese problema porque no depende de ningún scope de
+// usuario — es exactamente el mecanismo que el usuario ya confirmó que
+// funciona siempre.
+const API_KEY_LECTURA_AMIGOS = "AIzaSyDfpExr25F972ur_fztdELmU6MCxJOVBmg";
+
+async function leerSnapshotPublicoAmigo(fileId) {
+  const url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&key=${API_KEY_LECTURA_AMIGOS}`;
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    const err = new Error(`HTTP ${resp.status}`);
+    err.status = resp.status;
+    throw err;
+  }
+  return resp.json();
+}
 
 /* ===================== Snapshot público (privacidad: mínimo indispensable) ===================== */
 
@@ -626,7 +651,7 @@ async function refrescarSnapshotsAmigos() {
   await Promise.all(
     vinculados.map(async (amigo) => {
       try {
-        const snapshot = await leerDatos(estado.token, amigo.file_id);
+        const snapshot = await leerSnapshotPublicoAmigo(amigo.file_id);
         cacheSnapshotsAmigos.set(amigo.file_id, { snapshot, caida: false });
       } catch (e) {
         // 404/403 (enlace revocado del otro lado) se trata distinto de un

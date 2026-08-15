@@ -36,9 +36,13 @@ function obtenerRangoHorasHorario() {
 estado.horarioSemestreId = estado.horarioSemestreId || null;
 estado.horarioNumeroSemana = estado.horarioNumeroSemana || null;
 estado.horarioExpandido = estado.horarioExpandido || false;
-// Horario conjunto: índice (dentro de obtenerDiasVisiblesOrdenados) del día
-// que se está mostrando ahí. null = todavía no se abrió esta sesión, se
-// inicializa la primera vez en abrirHorarioConjunto() al día real de hoy.
+// Horario conjunto: NO es un modal — reemplaza temporalmente el contenido
+// de #horario-grid (ver renderizarHorarioInterno). horarioModoConjunto
+// indica si está activo ahora mismo; horarioConjuntoDiaIdx es el índice
+// (dentro de obtenerDiasVisiblesOrdenados) del día que se está mostrando
+// ahí. null = todavía no se activó esta sesión, se inicializa la primera
+// vez en activarModoConjunto() al día real de hoy.
+estado.horarioModoConjunto = estado.horarioModoConjunto || false;
 estado.horarioConjuntoDiaIdx = estado.horarioConjuntoDiaIdx ?? null;
 
 // Cache del último semestre/semana renderizados, para que centrarVistaInicial
@@ -604,7 +608,11 @@ function renderizarHorarioInterno() {
   cont.innerHTML = "";
 
   if (!semestre) {
-    cont.innerHTML = `<p class="muted" style="padding:16px;">Creá un semestre en la sección Semestres para empezar a armar tu horario.</p>`;
+    if (estado.horarioModoConjunto) {
+      renderizarHorarioConjuntoInterno(cont, null, null);
+    } else {
+      cont.innerHTML = `<p class="muted" style="padding:16px;">Creá un semestre en la sección Semestres para empezar a armar tu horario.</p>`;
+    }
     return;
   }
 
@@ -652,73 +660,82 @@ function renderizarHorarioInterno() {
   // scrollear de lado.
   contenedor.style.overflowX = "auto";
 
-  const columnaAncha = document.createElement("div");
-  columnaAncha.style.cssText = "display:flex; flex-direction:column; min-width:100%; width:max-content;";
+  // Horario conjunto (mezcla propio + amigos, un día a la vez, columnas por
+  // persona) NO es una ventana aparte: reemplaza TEMPORALMENTE este mismo
+  // contenido, reutilizando el mismo contenedor/tamaño/scroll de siempre —
+  // ver activarModoConjunto/desactivarModoConjunto más abajo.
+  if (estado.horarioModoConjunto) {
+    renderizarHorarioConjuntoInterno(cont, semestre, numeroSemana);
+  } else {
+    const columnaAncha = document.createElement("div");
+    columnaAncha.style.cssText = "display:flex; flex-direction:column; min-width:100%; width:max-content;";
 
-  const headerFila = document.createElement("div");
-  // Fondo SÓLIDO (no --bg-panel, que es semitransparente en todas las
-  // paletas — ver mismo patrón en .mapa-nodo dentro de design-system.css)
-  // para que las tarjetas de materia no se transparenten al pasar detrás.
-  // z-index por encima del rango de las tarjetas (10 + lane) para que el
-  // header quede siempre POR ENCIMA, nunca tapado por una tarjeta.
-  // --bg-header-solido: mismo color que se ve al mirar una tarjeta común
-  // (--bg-card) sobre el fondo (--bg-canvas), pero ya "aplanado" a un color
-  // sólido para esta paleta — se agregó junto a los demás tokens en
-  // design-system.css. No es transparente, así que nunca se ve nada de
-  // lo que scrollea por debajo.
-  headerFila.style.cssText = "display:flex; position:sticky; top:0; z-index:50; background:var(--bg-header-solido); border-bottom:1px solid rgba(150,150,170,0.15);";
-  const espaciador = document.createElement("div");
-  espaciador.style.cssText = "width:38px; flex-shrink:0;";
-  headerFila.appendChild(espaciador);
-  dias.forEach((dia) => {
-    const fecha = calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault);
-    const h = document.createElement("div");
-    h.style.cssText = "flex:1; min-width:56px; text-align:center; padding:4px 0;";
-    h.innerHTML = `
-      <div class="${esHoy(fecha) ? "horario-dia-actual-glow" : ""}" style="font-size:0.72rem; font-weight:600;">${dia.etiquetaCorta}</div>
-      <div class="muted" style="font-size:0.6rem;">${fecha ? fecha.toLocaleDateString("es-CR", { day: "numeric", month: "short" }) : ""}</div>
-    `;
-    headerFila.appendChild(h);
-  });
+    const headerFila = document.createElement("div");
+    // Fondo SÓLIDO (no --bg-panel, que es semitransparente en todas las
+    // paletas — ver mismo patrón en .mapa-nodo dentro de design-system.css)
+    // para que las tarjetas de materia no se transparenten al pasar detrás.
+    // z-index por encima del rango de las tarjetas (10 + lane) para que el
+    // header quede siempre POR ENCIMA, nunca tapado por una tarjeta.
+    // --bg-header-solido: mismo color que se ve al mirar una tarjeta común
+    // (--bg-card) sobre el fondo (--bg-canvas), pero ya "aplanado" a un color
+    // sólido para esta paleta — se agregó junto a los demás tokens en
+    // design-system.css. No es transparente, así que nunca se ve nada de
+    // lo que scrollea por debajo.
+    headerFila.style.cssText = "display:flex; position:sticky; top:0; z-index:50; background:var(--bg-header-solido); border-bottom:1px solid rgba(150,150,170,0.15);";
+    const espaciador = document.createElement("div");
+    espaciador.style.cssText = "width:38px; flex-shrink:0;";
+    headerFila.appendChild(espaciador);
+    dias.forEach((dia) => {
+      const fecha = calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault);
+      const h = document.createElement("div");
+      h.style.cssText = "flex:1; min-width:56px; text-align:center; padding:4px 0;";
+      h.innerHTML = `
+        <div class="${esHoy(fecha) ? "horario-dia-actual-glow" : ""}" style="font-size:0.72rem; font-weight:600;">${dia.etiquetaCorta}</div>
+        <div class="muted" style="font-size:0.6rem;">${fecha ? fecha.toLocaleDateString("es-CR", { day: "numeric", month: "short" }) : ""}</div>
+      `;
+      headerFila.appendChild(h);
+    });
 
-  const filaGrid = document.createElement("div");
-  filaGrid.style.cssText = "display:flex;";
-  filaGrid.appendChild(construirColumnaHoras(pxPorMin, altoGrid, minInicioRango, minFinRango));
-  dias.forEach((dia) => {
-    // clasesEfectivas ya viene PLANA (una entrada por día puntual, ver
-    // obtenerClasesEfectivasSemana en schema.js) — no hay .dias anidado que
-    // filtrar/recorrer, cada item ya es la clase de un día concreto.
-    const bloquesDia = clasesEfectivas
-      .filter((c) => c.dia === dia.abrevDefault)
-      .map((c) => ({
-        bloqueOriginalId: c.id,
-        inicioMin: minutosDesdeHora(c.hora_inicio),
-        finMin: minutosDesdeHora(c.hora_fin),
-        color: obtenerColorBloque(c),
-        nombreCorto: obtenerNombreBloque(c),
-        profesorNombre: obtenerNombreProfesor(c.profesor_id),
-        aula: c.aula,
-        enlace: c.enlace,
-        modalidad: c.modalidad,
-        notas: c.notas,
-        tieneExcepcionEstaSemana: !!c.tiene_ajuste_cronograma,
-      }));
-    const fechaDia = calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault);
-    const bloquesAmigosDia = obtenerBloquesAmigosPorDia(fechaDia, dia.abrevDefault);
-    filaGrid.appendChild(
-      construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango, bloquesAmigosDia)
-    );
-  });
+    const filaGrid = document.createElement("div");
+    filaGrid.style.cssText = "display:flex;";
+    filaGrid.appendChild(construirColumnaHoras(pxPorMin, altoGrid, minInicioRango, minFinRango));
+    dias.forEach((dia) => {
+      // clasesEfectivas ya viene PLANA (una entrada por día puntual, ver
+      // obtenerClasesEfectivasSemana en schema.js) — no hay .dias anidado que
+      // filtrar/recorrer, cada item ya es la clase de un día concreto.
+      const bloquesDia = clasesEfectivas
+        .filter((c) => c.dia === dia.abrevDefault)
+        .map((c) => ({
+          bloqueOriginalId: c.id,
+          inicioMin: minutosDesdeHora(c.hora_inicio),
+          finMin: minutosDesdeHora(c.hora_fin),
+          color: obtenerColorBloque(c),
+          nombreCorto: obtenerNombreBloque(c),
+          profesorNombre: obtenerNombreProfesor(c.profesor_id),
+          aula: c.aula,
+          enlace: c.enlace,
+          modalidad: c.modalidad,
+          notas: c.notas,
+          tieneExcepcionEstaSemana: !!c.tiene_ajuste_cronograma,
+        }));
+      const fechaDia = calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault);
+      const bloquesAmigosDia = obtenerBloquesAmigosPorDia(fechaDia, dia.abrevDefault);
+      filaGrid.appendChild(
+        construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango, bloquesAmigosDia)
+      );
+    });
 
-  columnaAncha.appendChild(headerFila);
-  columnaAncha.appendChild(filaGrid);
-  cont.appendChild(columnaAncha);
+    columnaAncha.appendChild(headerFila);
+    columnaAncha.appendChild(filaGrid);
+    cont.appendChild(columnaAncha);
+  }
 
   // Barra delgada inferior para expandir/contraer a las 24h reales.
   // Antes quedaba al final del contenido (había que scrollear hasta abajo
   // del todo para verla). Con sticky bottom:0 se queda fija abajo del
   // área visible, igual que el header queda fijo arriba, para que siempre
-  // se note que se puede tocar.
+  // se note que se puede tocar. Se muestra en los dos modos (conjunto
+  // también respeta el mismo alto expandido/recortado).
   const barra = document.createElement("div");
   barra.className = "horario-barra-expandir";
   barra.style.cssText = "position:sticky; bottom:0; z-index:40; background:var(--bg-header-solido);";
@@ -729,7 +746,12 @@ function renderizarHorarioInterno() {
   });
   if (!document.fullscreenElement) cont.appendChild(barra);
 
-  requestAnimationFrame(() => centrarVistaInicial(contenedor, dias, clasesEfectivas, pxPorMin, minInicioRango, minFinRango));
+  // El auto-scroll a "la clase más temprana del día" es un concepto del
+  // grid semanal completo (mira los 7 días a la vez) — en modo conjunto ya
+  // se está viendo un solo día explícito elegido con la nav, no aplica.
+  if (!estado.horarioModoConjunto) {
+    requestAnimationFrame(() => centrarVistaInicial(contenedor, dias, clasesEfectivas, pxPorMin, minInicioRango, minFinRango));
+  }
 }
 
 function renderizarHorario() {
@@ -763,36 +785,9 @@ function sincronizarModalesConPantallaCompleta() {
    para no duplicar esa lógica.
    ========================================================================= */
 
-function inicializarHorarioConjunto() {
-  const modal = document.getElementById("modal-horario-conjunto");
-  const btnCerrar = document.getElementById("btn-cerrar-horario-conjunto");
-  const btnAnterior = document.getElementById("btn-conjunto-dia-anterior");
-  const btnSiguiente = document.getElementById("btn-conjunto-dia-siguiente");
-  if (!modal) return;
-
-  btnCerrar?.addEventListener("click", cerrarHorarioConjunto);
-  modal.addEventListener("click", (e) => {
-    if (e.target === modal) cerrarHorarioConjunto();
-  });
-  btnAnterior?.addEventListener("click", () => moverDiaConjunto(-1));
-  btnSiguiente?.addEventListener("click", () => moverDiaConjunto(1));
-}
-
-function moverDiaConjunto(delta) {
-  const dias = obtenerDiasVisiblesOrdenados();
-  if (dias.length === 0) return;
-  const actual = estado.horarioConjuntoDiaIdx ?? 0;
-  estado.horarioConjuntoDiaIdx = (actual + delta + dias.length) % dias.length;
-  renderizarHorarioConjunto();
-}
-
-function cerrarHorarioConjunto() {
-  document.getElementById("modal-horario-conjunto")?.classList.add("oculto");
-}
-
-function abrirHorarioConjunto() {
-  const modal = document.getElementById("modal-horario-conjunto");
-  if (!modal) return;
+function activarModoConjunto() {
+  if (estado.horarioModoConjunto) return;
+  estado.horarioModoConjunto = true;
 
   if (estado.horarioConjuntoDiaIdx == null) {
     // Primera vez en esta sesión: arranca en el día real de hoy si está
@@ -805,18 +800,47 @@ function abrirHorarioConjunto() {
     estado.horarioConjuntoDiaIdx = idxHoy !== -1 ? idxHoy : 0;
   }
 
-  document.body.appendChild(modal);
-  modal.style.zIndex = "99999";
-  modal.classList.remove("oculto");
-  renderizarHorarioConjunto();
+  document.getElementById("btn-horario-agregar")?.classList.add("oculto");
+  document.getElementById("btn-salir-modo-conjunto")?.classList.remove("oculto");
+  renderizarHorarioInterno();
+
   // Best-effort: refresca los snapshots de amigos por si cambió algo desde
   // el último sondeo de 5 min (ver iniciarRefrescoPeriodicoAmigos en
-  // horario-amigos.js) — no bloquea la apertura, se re-renderiza sola al
-  // terminar (refrescarSnapshotsAmigos ya llama a window.renderizarHorario,
-  // no a esto, así que se refresca acá aparte).
+  // horario-amigos.js) — no bloquea la entrada al modo, se re-renderiza
+  // sola al terminar (solo si seguimos en modo conjunto: pudo cerrarse
+  // mientras la petición estaba en vuelo).
   refrescarSnapshotsAmigos()
-    .then(() => renderizarHorarioConjunto())
+    .then(() => {
+      if (estado.horarioModoConjunto) renderizarHorarioInterno();
+    })
     .catch(() => {});
+}
+
+function desactivarModoConjunto() {
+  if (!estado.horarioModoConjunto) return;
+  estado.horarioModoConjunto = false;
+  document.getElementById("btn-horario-agregar")?.classList.remove("oculto");
+  document.getElementById("btn-salir-modo-conjunto")?.classList.add("oculto");
+  renderizarHorarioInterno();
+}
+
+// Cablea el botón "‹ Salir del modo conjunto" (ver index.html, junto a
+// btn-horario-agregar). Se llama una sola vez desde inicializarHorario();
+// activarModoConjunto() ya se dispara aparte, desde el click de
+// btn-horario-conjunto en horario-amigos.js.
+function inicializarHorarioConjunto() {
+  const btnSalir = document.getElementById("btn-salir-modo-conjunto");
+  if (btnSalir) {
+    btnSalir.addEventListener("click", () => desactivarModoConjunto());
+  }
+}
+
+function moverDiaConjunto(delta) {
+  const dias = obtenerDiasVisiblesOrdenados();
+  if (dias.length === 0) return;
+  const actual = estado.horarioConjuntoDiaIdx ?? 0;
+  estado.horarioConjuntoDiaIdx = (actual + delta + dias.length) % dias.length;
+  renderizarHorarioInterno();
 }
 
 /** Una columna de persona: igual criterio visual que construirColumnaDia,
@@ -861,11 +885,21 @@ function construirColumnaPersonaConjunto(bloques, pxPorMin, altoGrid, minInicioR
   return col;
 }
 
-function renderizarHorarioConjunto() {
-  const cont = document.getElementById("horario-conjunto-grid");
-  const contenedor = document.getElementById("horario-conjunto-grid-contenedor");
-  const etiquetaDia = document.getElementById("conjunto-dia-actual");
-  if (!cont || !contenedor) return;
+/**
+ * Reemplaza TEMPORALMENTE el contenido de #horario-grid mientras
+ * estado.horarioModoConjunto esté activo (ver renderizarHorarioInterno,
+ * que decide cuál de las dos ramas renderizar) — no es una ventana/modal
+ * aparte, es el mismo grid de siempre con otro contenido adentro. En vez
+ * de la fila de encabezados Lun..Dom del grid semanal, acá va una fila de
+ * navegación "‹ Lunes ›" (un solo día a la vez) seguida de una fila con
+ * una columna por persona (Yo + cada amigo vinculado).
+ */
+function renderizarHorarioConjuntoInterno(cont, semestre, numeroSemana) {
+  cont.innerHTML = "";
+  if (!semestre) {
+    cont.innerHTML = `<p class="muted" style="padding:16px;">Creá un semestre en Semestres para ver el horario conjunto.</p>`;
+    return;
+  }
 
   const dias = obtenerDiasVisiblesOrdenados();
   if (dias.length === 0) {
@@ -875,16 +909,7 @@ function renderizarHorarioConjunto() {
   const idx = Math.min(Math.max(estado.horarioConjuntoDiaIdx ?? 0, 0), dias.length - 1);
   estado.horarioConjuntoDiaIdx = idx;
   const diaSel = dias[idx];
-  if (etiquetaDia) etiquetaDia.textContent = diaSel.etiqueta || diaSel.etiquetaCorta;
 
-  const semestre = obtenerSemestreHorarioActual();
-  cont.innerHTML = "";
-  if (!semestre) {
-    cont.innerHTML = `<p class="muted" style="padding:16px;">Creá un semestre en Semestres para ver el horario conjunto.</p>`;
-    return;
-  }
-
-  const numeroSemana = obtenerNumeroSemanaMostrado(semestre);
   const { horaInicio, horaFin } = obtenerRangoHorasHorario();
   const minInicioRango = horaInicio * 60;
   const minFinRango = horaFin * 60;
@@ -910,12 +935,38 @@ function renderizarHorarioConjunto() {
   // vez de reventar (ver el chequeo isNaN ahí mismo).
   const amigosDia = obtenerListaAmigosParaDiaConjunto(fechaDia, diaSel.abrevDefault);
 
-  contenedor.style.overflowX = "auto";
   const columnaAncha = document.createElement("div");
   columnaAncha.style.cssText = "display:flex; flex-direction:column; min-width:100%; width:max-content;";
 
+  // Encabezado sticky de dos filas: nav de día arriba, nombres de persona
+  // debajo — un solo wrapper sticky (no cada fila por separado) para no
+  // tener que adivinar el alto de la fila de arriba con un top:Npx fijo.
+  const encabezado = document.createElement("div");
+  encabezado.style.cssText = "position:sticky; top:0; z-index:50; background:var(--bg-header-solido);";
+
+  const navFila = document.createElement("div");
+  navFila.style.cssText = "display:flex; align-items:center; justify-content:center; gap:14px; padding:6px 0;";
+  const btnAnt = document.createElement("button");
+  btnAnt.type = "button";
+  btnAnt.className = "btn-icono-fantasma";
+  btnAnt.style.fontSize = "1.3rem";
+  btnAnt.textContent = "‹";
+  btnAnt.addEventListener("click", () => moverDiaConjunto(-1));
+  const etiquetaDia = document.createElement("span");
+  etiquetaDia.className = "texto-encabezado-seccion";
+  etiquetaDia.textContent = diaSel.etiqueta || diaSel.etiquetaCorta;
+  const btnSig = document.createElement("button");
+  btnSig.type = "button";
+  btnSig.className = "btn-icono-fantasma";
+  btnSig.style.fontSize = "1.3rem";
+  btnSig.textContent = "›";
+  btnSig.addEventListener("click", () => moverDiaConjunto(1));
+  navFila.appendChild(btnAnt);
+  navFila.appendChild(etiquetaDia);
+  navFila.appendChild(btnSig);
+
   const headerFila = document.createElement("div");
-  headerFila.style.cssText = "display:flex; position:sticky; top:0; z-index:50; background:var(--bg-header-solido); border-bottom:1px solid rgba(150,150,170,0.15);";
+  headerFila.style.cssText = "display:flex; border-bottom:1px solid rgba(150,150,170,0.15);";
   const espaciador = document.createElement("div");
   espaciador.style.cssText = "width:38px; flex-shrink:0;";
   headerFila.appendChild(espaciador);
@@ -935,6 +986,9 @@ function renderizarHorarioConjunto() {
     headerFila.appendChild(h);
   });
 
+  encabezado.appendChild(navFila);
+  encabezado.appendChild(headerFila);
+
   const filaGrid = document.createElement("div");
   filaGrid.style.cssText = "display:flex;";
   filaGrid.appendChild(construirColumnaHoras(pxPorMin, altoGrid, minInicioRango, minFinRango));
@@ -946,7 +1000,7 @@ function renderizarHorarioConjunto() {
     filaGrid.appendChild(construirColumnaPersonaConjunto(bloques, pxPorMin, altoGrid, minInicioRango, minFinRango, mensaje));
   });
 
-  columnaAncha.appendChild(headerFila);
+  columnaAncha.appendChild(encabezado);
   columnaAncha.appendChild(filaGrid);
   cont.appendChild(columnaAncha);
 }
@@ -1027,5 +1081,8 @@ export {
   obtenerNombreBloque,
   obtenerRangoHorasHorario,
   obtenerPlanPorId,
-  abrirHorarioConjunto,
+  // activarModoConjunto es el nombre real de la función (se llamaba
+  // abrirHorarioConjunto cuando esto era un modal aparte; el nombre externo
+  // se mantiene igual para no tocar el import de horario-amigos.js).
+  activarModoConjunto as abrirHorarioConjunto,
 };
