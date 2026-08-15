@@ -290,6 +290,48 @@ function mostrarToast(mensaje, duracionMs = 2400) {
   setTimeout(() => toast.remove(), duracionMs);
 }
 
+/**
+ * PWA (2026-08-15): variante de mostrarToast() que NO se autodestruye —
+ * queda fija en pantalla hasta que el usuario decide algo, con un botón de
+ * acción y un cierre discreto (✕) para descartarla sin actuar. Mismo
+ * lenguaje visual que .toast-app (misma esquina, mismo estilo de "pill"),
+ * pero con su propia clase (.toast-app-accion) porque .toast-app trae una
+ * animación CSS que la desvanece sola a los 2.4s pase lo que pase —
+ * incompatible con algo que necesita quedarse hasta que el usuario le dé
+ * al botón. Pensado hoy para el aviso de "hay una actualización
+ * disponible" (ver main.js), pero queda genérico por si algún otro flujo
+ * futuro necesita el mismo patrón de "aviso persistente + una acción".
+ */
+function mostrarToastAccion(mensaje, textoBoton, alConfirmar) {
+  document.querySelectorAll(".toast-app-accion").forEach((el) => el.remove());
+
+  const toast = document.createElement("div");
+  toast.className = "toast-app-accion";
+
+  const texto = document.createElement("span");
+  texto.textContent = mensaje;
+
+  const btnAccion = document.createElement("button");
+  btnAccion.type = "button";
+  btnAccion.className = "btn btn-primary";
+  btnAccion.textContent = textoBoton;
+  btnAccion.addEventListener("click", () => {
+    toast.remove();
+    alConfirmar();
+  });
+
+  const btnCerrar = document.createElement("button");
+  btnCerrar.type = "button";
+  btnCerrar.className = "toast-app-accion-cerrar";
+  btnCerrar.setAttribute("aria-label", "Cerrar aviso");
+  btnCerrar.textContent = "✕";
+  btnCerrar.addEventListener("click", () => toast.remove());
+
+  toast.append(texto, btnAccion, btnCerrar);
+  document.body.appendChild(toast);
+  return toast;
+}
+
 /* ===================== Flechas de scroll horizontal reutilizables ===================== */
 
 /**
@@ -584,5 +626,6 @@ export {
   inicializarModalConfirmacion,
   inicializarNavegacionBotonesMouse,
   mostrarToast,
+  mostrarToastAccion,
   restaurarEstadoSidebar,
 };
