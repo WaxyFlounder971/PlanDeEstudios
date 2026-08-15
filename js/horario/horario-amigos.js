@@ -268,7 +268,7 @@ async function revocarEnlaceCompartido(enlaceId) {
   mostrarCargando();
   try {
     // 404 (permiso o archivo ya no existen) se trata como éxito dentro de
-    // eliminarPermisoDrive — ver comentario en auth.js.
+    // eliminarPermisoDrive, ver comentario en auth.js.
     if (enlace.permission_id) {
       await eliminarPermisoDrive(estado.token, enlace.file_id, enlace.permission_id);
     }
@@ -287,10 +287,38 @@ async function revocarEnlaceCompartido(enlaceId) {
 }
 
 /**
+ * Solo borra el REGISTRO local del enlace ya revocado, para que no quede
+ * dando vueltas en la lista si la persona no quiere verlo más. A propósito
+ * NO toca Drive (el archivo y el permiso ya se eliminaron/revocaron en
+ * revocarEnlaceCompartido antes de llegar acá) ni deja borrar un enlace
+ * todavía activo, esa es la línea de defensa real (revocar primero).
+ */
+function eliminarRegistroEnlace(enlaceId) {
+  const lista = estado.datos.horario_enlaces_compartidos || [];
+  const enlace = lista.find((e) => e.id === enlaceId);
+  if (!enlace || enlace.activo) return; // defensivo, el botón ya debería estar oculto para uno activo
+  estado.datos.horario_enlaces_compartidos = lista.filter((e) => e.id !== enlaceId);
+  marcarCambioPendiente();
+  renderizarListaEnlacesCompartidos();
+  mostrarToast("Registro eliminado");
+}
+
+function confirmarEliminarRegistroEnlace(enlaceId) {
+  abrirConfirmacion({
+    titulo: "¿Eliminar este registro?",
+    mensaje: "Ya está revocado, esto solo borra el registro de la lista. No afecta a nadie que lo haya tenido guardado.",
+    textoConfirmar: "Eliminar",
+    claseConfirmar: "btn-danger",
+    onConfirmar: () => eliminarRegistroEnlace(enlaceId),
+  });
+}
+
+/**
  * Punto obligatorio del prompt: TODOS los enlaces que el usuario generó a
- * lo largo del tiempo, no solo el más reciente — incluidos los ya
+ * lo largo del tiempo, no solo el más reciente, incluidos los ya
  * revocados (para que nunca se pierda el rastro de qué se llegó a
- * compartir alguna vez). Vive en Ajustes → "Horario compartido".
+ * compartir alguna vez, salvo que la persona borre el registro a mano con
+ * el botón de papelera). Vive en Ajustes → "Horario compartido".
  */
 function renderizarListaEnlacesCompartidos() {
   const cont = document.getElementById("lista-horario-enlaces-compartidos");
@@ -334,10 +362,20 @@ function renderizarListaEnlacesCompartidos() {
       btnRevocar.textContent = "Revocar";
       btnRevocar.addEventListener("click", () => confirmarRevocarEnlace(enlace.id));
       fila.querySelector(".row").appendChild(btnRevocar);
+    } else {
+      const btnEliminar = document.createElement("button");
+      btnEliminar.type = "button";
+      btnEliminar.title = "Eliminar registro";
+      btnEliminar.setAttribute("aria-label", "Eliminar registro");
+      btnEliminar.style.cssText = "background:none; border:none; cursor:pointer; padding:4px; color:#e05252; display:flex; align-items:center; justify-content:center;";
+      btnEliminar.innerHTML = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>`;
+      btnEliminar.addEventListener("click", () => confirmarEliminarRegistroEnlace(enlace.id));
+      fila.querySelector(".row").appendChild(btnEliminar);
     }
     cont.appendChild(fila);
   });
 }
+
 
 /* ===================== Panel "Amigos" (botón del header de Horario) ===================== */
 
