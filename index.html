@@ -320,14 +320,6 @@
             <button type="button" class="pill-item" data-vista="calendario">Calendario</button>
           </div>
           <div class="row-between">
-            <button type="button" class="btn-icono-fantasma" id="btn-agenda-semana-anterior" style="font-size:1.3rem;">‹</button>
-            <div class="stack" style="align-items:center; text-align:center; gap:2px;">
-              <span id="agenda-rango-semana" class="texto-encabezado-seccion"></span>
-              <span class="muted" id="agenda-volver-hoy" style="font-size:0.72rem; text-decoration:underline; cursor:pointer;">Volver a hoy</span>
-            </div>
-            <button type="button" class="btn-icono-fantasma" id="btn-agenda-semana-siguiente" style="font-size:1.3rem;">›</button>
-          </div>
-          <div class="row-between">
             <button type="button" class="btn btn-primary" id="btn-agenda-agregar" style="padding:8px 14px; font-size:0.85rem;">+ Agregar</button>
             <button type="button" class="btn-discreto" id="btn-agenda-ir-ajustes" style="font-size:0.8rem;">⚙️ Ajustes de Agenda</button>
           </div>
@@ -335,9 +327,7 @@
 
         <div id="agenda-lista-dias" class="stack"></div>
 
-        <section class="glass-panel oculto" id="agenda-vista-calendario" style="padding:24px; text-align:center;">
-          <p class="muted" style="margin:0;">📅 Vista Calendario — próximamente.</p>
-        </section>
+        <div id="agenda-vista-calendario" class="stack oculto"></div>
       </div>
 
       <!-- ===================== SECCIÓN: Horario ===================== -->
