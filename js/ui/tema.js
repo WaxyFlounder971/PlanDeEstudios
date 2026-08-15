@@ -297,6 +297,15 @@ function calcularVariablesDerivadas(colores) {
 
   return {
     "--bg-canvas": fondoCanvas,
+    // PWA: para las 13 paletas fijas, --bg-header-solido viene definido a
+    // mano en design-system.css con un tono levemente distinto al canvas
+    // (ver bloques [data-palette="..."]). La paleta personalizada no tiene
+    // ese control aparte (nunca se le pregunta al usuario un 6º color solo
+    // para esto), así que se usa el propio fondoCanvas tal cual — ya es un
+    // color sólido (sin alpha), consistente con el resto de esta paleta, y
+    // es justo lo que necesita <meta name="theme-color"> para que la barra
+    // del sistema combine con lo que el usuario armó.
+    "--bg-header-solido": fondoCanvas,
     "--bg-card": fondoCard,
     "--bg-panel": fondoPanel,
     "--border-glass": borde,
@@ -346,6 +355,7 @@ function aplicarColoresPersonalizadosInline(colores) {
 function limpiarColoresPersonalizadosInline() {
   const variables = [
     "--bg-canvas", "--bg-card", "--bg-panel", "--border-glass",
+    "--bg-header-solido",
     "--text-primary", "--text-secondary", "--text-muted",
     "--accent-1", "--accent-2", "--gradient-accent",
     // v1.15 (Parte 2): antes el degradado personalizado solo tocaba
@@ -367,6 +377,32 @@ function limpiarColoresPersonalizadosInline() {
 
 /* ------------------------------ Tema ------------------------------ */
 
+/**
+ * PWA (2026-08-15): el color de la barra de título/encabezado del sistema
+ * (visible cuando la app está instalada como PWA en compu) lo controla el
+ * <meta name="theme-color"> del HTML — el "theme_color" del manifest.json
+ * es fijo y solo se usa como color de pantalla de carga al instalar, no
+ * se puede cambiar dinámicamente. Como la app ya cambia de paleta en vivo
+ * (aplicarPaleta/aplicarTemaGuardadoLocalmente), este meta debe
+ * actualizarse junto con ellas para que la barra combine siempre con la
+ * paleta activa, en vez de quedarse pegada al azul que se puso como valor
+ * inicial en index.html.
+ *
+ * Se usa --bg-header-solido: ya existe en las 13 paletas fijas
+ * específicamente como el color sólido pensado para encabezados (a
+ * diferencia de --bg-canvas o --bg-card, que suelen ser semitransparentes
+ * por el efecto glassmorphism, y un <meta theme-color> no sabe qué hay
+ * detrás para transparentar). getComputedStyle fuerza el recálculo de
+ * estilos, así que llamarlo justo después de setAttribute()/setProperty()
+ * ya lee el valor correcto, sin necesidad de esperar un frame.
+ */
+function actualizarThemeColorMeta() {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) return;
+  const color = getComputedStyle(document.documentElement).getPropertyValue("--bg-header-solido").trim();
+  if (color) meta.setAttribute("content", color);
+}
+
 function aplicarPaleta(paleta, modo, coloresPersonalizados) {
   document.documentElement.setAttribute("data-palette", paleta);
   document.documentElement.setAttribute("data-mode", modo);
@@ -379,6 +415,7 @@ function aplicarPaleta(paleta, modo, coloresPersonalizados) {
   } else {
     limpiarColoresPersonalizadosInline();
   }
+  actualizarThemeColorMeta();
 }
 
 function aplicarTemaGuardadoLocalmente() {
@@ -397,6 +434,7 @@ function aplicarTemaGuardadoLocalmente() {
       // hasta que carguen los datos reales de Drive.
     }
   }
+  actualizarThemeColorMeta();
 }
 
 export {
@@ -405,6 +443,7 @@ export {
   TEXTO_PREVIEW_PALETA,
   aplicarPaleta,
   aplicarTemaGuardadoLocalmente,
+  actualizarThemeColorMeta,
   // v1.13 — utilidades de color y derivación (usadas por ui/paleta-personalizada.js)
   hexARgb,
   colorARgb,
