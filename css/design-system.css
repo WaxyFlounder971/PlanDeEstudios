@@ -1849,6 +1849,37 @@ img, svg { max-width: 100%; }
   100% { opacity: 0; transform: translate(-50%, 10px); }
 }
 
+/* ---- Toast persistente con acción (ej. aviso de actualización de la PWA) ----
+   Mismo lenguaje visual que .toast-app (misma esquina, mismo tipo de
+   "pill" flotante), pero SIN la animación de autodesaparición: queda fija
+   hasta que el usuario aprieta el botón de acción o la cierra con ✕. */
+.toast-app-accion {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 12px;
+  max-width: calc(100vw - 32px);
+  background: var(--bg-header-solido); color: var(--text-primary);
+  border: 1px solid var(--border-glass);
+  padding: 12px 14px 12px 20px; border-radius: var(--radius-pill);
+  font-weight: 600; font-size: 0.88rem;
+  box-shadow: var(--shadow-glass);
+  z-index: 300;
+  animation: toast-accion-in var(--transition-med) ease;
+}
+.toast-app-accion span { flex: 1; min-width: 0; }
+.toast-app-accion .btn { flex-shrink: 0; padding: 7px 16px; font-size: 0.82rem; }
+.toast-app-accion-cerrar {
+  flex-shrink: 0; background: none; border: none; cursor: pointer;
+  color: var(--text-muted); font-size: 0.9rem; line-height: 1; padding: 6px;
+}
+.toast-app-accion-cerrar:hover { color: var(--text-primary); }
+@keyframes toast-accion-in {
+  0% { opacity: 0; transform: translate(-50%, 10px); }
+  100% { opacity: 1; transform: translate(-50%, 0); }
+}
+@media (max-width: 480px) {
+  .toast-app-accion { flex-wrap: wrap; bottom: 16px; }
+}
+
 /* ---- Punto 6 (v1.9.6): badge fijo "Modo edición" ---- */
 .badge-modo-edicion-fijo {
   position: fixed;
