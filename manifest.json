@@ -1,0 +1,19 @@
+{
+  "name": "App Académica",
+  "short_name": "App Académica",
+  "description": "Toda tu carrera en un solo lugar, disponible en todos tus dispositivos.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#0A0E17",
+  "theme_color": "#2563EB",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "imagenes/LogoApp.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
