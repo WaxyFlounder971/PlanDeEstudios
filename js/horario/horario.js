@@ -11,7 +11,7 @@ import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 import { obtenerSemestresOrdenCronologico, buscarSemestreVivoPorId } from "../semestres/semestres.js";
 import { obtenerPlanActivo } from "../plan/plan-esquema.js";
 import { abrirModalBloqueHorario, construirZonaCronograma } from "./horario-modal.js";
-import { abrirPanelAmigos, inicializarHorarioAmigos, obtenerBloquesAmigosPorDia } from "./horario-amigos.js";
+import { abrirPanelAmigos, inicializarHorarioAmigos, obtenerBloquesAmigosPorDia, obtenerListaAmigosParaDiaConjunto, refrescarSnapshotsAmigos } from "./horario-amigos.js";
 
 const PX_POR_MIN_EXPANDIDO = 0.84; // 30% menos que antes (1.2), pedido explícito
 
@@ -36,6 +36,10 @@ function obtenerRangoHorasHorario() {
 estado.horarioSemestreId = estado.horarioSemestreId || null;
 estado.horarioNumeroSemana = estado.horarioNumeroSemana || null;
 estado.horarioExpandido = estado.horarioExpandido || false;
+// Horario conjunto: índice (dentro de obtenerDiasVisiblesOrdenados) del día
+// que se está mostrando ahí. null = todavía no se abrió esta sesión, se
+// inicializa la primera vez en abrirHorarioConjunto() al día real de hoy.
+estado.horarioConjuntoDiaIdx = estado.horarioConjuntoDiaIdx ?? null;
 
 // Cache del último semestre/semana renderizados, para que centrarVistaInicial
 // no tenga que recalcular nada por su cuenta.
@@ -750,6 +754,203 @@ function sincronizarModalesConPantallaCompleta() {
 
 /* ===================== Inicialización (listeners, una sola vez) ===================== */
 
+/* =========================================================================
+   Horario conjunto: mezcla del horario propio + el de todos los amigos
+   vinculados, en columnas (una por persona) en vez de por día — se ve un
+   solo día a la vez, con navegación "‹ Lunes ›", y scroll horizontal si hay
+   muchas columnas. Reutiliza las mismas piezas de construcción del grid
+   semanal (construirColumnaHoras, construirLineasHorarias, calcularLanesDia)
+   para no duplicar esa lógica.
+   ========================================================================= */
+
+function inicializarHorarioConjunto() {
+  const modal = document.getElementById("modal-horario-conjunto");
+  const btnCerrar = document.getElementById("btn-cerrar-horario-conjunto");
+  const btnAnterior = document.getElementById("btn-conjunto-dia-anterior");
+  const btnSiguiente = document.getElementById("btn-conjunto-dia-siguiente");
+  if (!modal) return;
+
+  btnCerrar?.addEventListener("click", cerrarHorarioConjunto);
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) cerrarHorarioConjunto();
+  });
+  btnAnterior?.addEventListener("click", () => moverDiaConjunto(-1));
+  btnSiguiente?.addEventListener("click", () => moverDiaConjunto(1));
+}
+
+function moverDiaConjunto(delta) {
+  const dias = obtenerDiasVisiblesOrdenados();
+  if (dias.length === 0) return;
+  const actual = estado.horarioConjuntoDiaIdx ?? 0;
+  estado.horarioConjuntoDiaIdx = (actual + delta + dias.length) % dias.length;
+  renderizarHorarioConjunto();
+}
+
+function cerrarHorarioConjunto() {
+  document.getElementById("modal-horario-conjunto")?.classList.add("oculto");
+}
+
+function abrirHorarioConjunto() {
+  const modal = document.getElementById("modal-horario-conjunto");
+  if (!modal) return;
+
+  if (estado.horarioConjuntoDiaIdx == null) {
+    // Primera vez en esta sesión: arranca en el día real de hoy si está
+    // entre los días visibles configurados; si no (ej. domingo oculto),
+    // cae al primero de la lista en vez de romper.
+    const dias = obtenerDiasVisiblesOrdenados();
+    const hoy = new Date();
+    const codigoHoy = DIAS_SEMANA_CONFIG[(hoy.getDay() + 6) % 7].abrevDefault; // getDay(): dom=0..sáb=6 -> reordena a L..D
+    const idxHoy = dias.findIndex((d) => d.abrevDefault === codigoHoy);
+    estado.horarioConjuntoDiaIdx = idxHoy !== -1 ? idxHoy : 0;
+  }
+
+  document.body.appendChild(modal);
+  modal.style.zIndex = "99999";
+  modal.classList.remove("oculto");
+  renderizarHorarioConjunto();
+  // Best-effort: refresca los snapshots de amigos por si cambió algo desde
+  // el último sondeo de 5 min (ver iniciarRefrescoPeriodicoAmigos en
+  // horario-amigos.js) — no bloquea la apertura, se re-renderiza sola al
+  // terminar (refrescarSnapshotsAmigos ya llama a window.renderizarHorario,
+  // no a esto, así que se refresca acá aparte).
+  refrescarSnapshotsAmigos()
+    .then(() => renderizarHorarioConjunto())
+    .catch(() => {});
+}
+
+/** Una columna de persona: igual criterio visual que construirColumnaDia,
+ *  pero sin franjas de amigos superpuestas (acá cada persona YA es su
+ *  propia columna, no hace falta la franja lateral). */
+function construirColumnaPersonaConjunto(bloques, pxPorMin, altoGrid, minInicioRango, minFinRango, mensajeVacio) {
+  const col = document.createElement("div");
+  col.style.cssText = `position:relative; flex:1; min-width:130px; height:${altoGrid}px; background:${construirLineasHorarias(pxPorMin, minInicioRango, minFinRango)}; border-left:1px solid rgba(150,150,170,0.15);`;
+
+  if (mensajeVacio) {
+    col.innerHTML = `<p class="muted" style="padding:8px 6px; font-size:0.72rem;">${mensajeVacio}</p>`;
+    return col;
+  }
+
+  const conLanes = calcularLanesDia(bloques);
+  conLanes.forEach((b) => {
+    const inicioClamp = Math.max(b.inicioMin, minInicioRango);
+    const finClamp = Math.min(b.finMin, minFinRango);
+    if (finClamp <= inicioClamp) return;
+    const top = Math.max(0, (inicioClamp - minInicioRango) * pxPorMin);
+    const alto = Math.max(24, (finClamp - inicioClamp) * pxPorMin);
+    const offsetPx = b.lane * 10;
+    const tarjeta = document.createElement("div");
+    const esSinClase = b.modalidad === "sin_clase";
+    tarjeta.style.cssText = `position:absolute; top:${top}px; left:${offsetPx}px; right:0; height:${alto}px; z-index:${10 + b.lane};
+      background:${b.color}; color:#fff; border-radius:8px; padding:3px 6px; overflow:hidden;
+      box-shadow:0 2px 6px rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.25);
+      ${esSinClase ? "opacity:0.45;" : ""}`;
+    const emojiModalidad = obtenerEmojiModalidad(b.modalidad);
+    const lineasTexto = 1 + (b.profesorNombre ? 1 : 0) + (b.universidad ? 1 : 0) + (b.aula ? 1 : 0);
+    const cabeExtra = alto >= lineasTexto * 15 + 6;
+    tarjeta.innerHTML = `
+      <div style="font-size:0.8rem; font-weight:600; line-height:1.15; overflow-wrap:break-word; word-break:break-word;">${b.nombreBloque}</div>
+      ${cabeExtra && b.profesorNombre ? `<div style="font-size:0.68rem; opacity:0.9; overflow-wrap:break-word; word-break:break-word;">${b.profesorNombre}</div>` : ""}
+      ${cabeExtra && b.universidad ? `<div style="font-size:0.68rem; opacity:0.9; overflow-wrap:break-word; word-break:break-word;">${b.universidad}</div>` : ""}
+      ${cabeExtra && b.aula ? `<div style="font-size:0.68rem; opacity:0.85; overflow-wrap:break-word; word-break:break-word;">${b.aula}</div>` : ""}
+      ${emojiModalidad ? `<span title="${b.modalidad}" style="position:absolute; right:4px; bottom:2px; font-size:1rem; line-height:1;">${emojiModalidad}</span>` : ""}
+    `;
+    col.appendChild(tarjeta);
+  });
+
+  return col;
+}
+
+function renderizarHorarioConjunto() {
+  const cont = document.getElementById("horario-conjunto-grid");
+  const contenedor = document.getElementById("horario-conjunto-grid-contenedor");
+  const etiquetaDia = document.getElementById("conjunto-dia-actual");
+  if (!cont || !contenedor) return;
+
+  const dias = obtenerDiasVisiblesOrdenados();
+  if (dias.length === 0) {
+    cont.innerHTML = `<p class="muted" style="padding:16px;">No hay días visibles configurados (Ajustes → Horario).</p>`;
+    return;
+  }
+  const idx = Math.min(Math.max(estado.horarioConjuntoDiaIdx ?? 0, 0), dias.length - 1);
+  estado.horarioConjuntoDiaIdx = idx;
+  const diaSel = dias[idx];
+  if (etiquetaDia) etiquetaDia.textContent = diaSel.etiqueta || diaSel.etiquetaCorta;
+
+  const semestre = obtenerSemestreHorarioActual();
+  cont.innerHTML = "";
+  if (!semestre) {
+    cont.innerHTML = `<p class="muted" style="padding:16px;">Creá un semestre en Semestres para ver el horario conjunto.</p>`;
+    return;
+  }
+
+  const numeroSemana = obtenerNumeroSemanaMostrado(semestre);
+  const { horaInicio, horaFin } = obtenerRangoHorasHorario();
+  const minInicioRango = horaInicio * 60;
+  const minFinRango = horaFin * 60;
+  const pxPorMin = PX_POR_MIN_EXPANDIDO;
+  const altoGrid = (minFinRango - minInicioRango) * pxPorMin;
+
+  const fechaDia = calcularFechaDelDia(semestre, numeroSemana, diaSel.abrevDefault);
+  const clasesEfectivas = construirClasesEfectivasSemana(semestre, numeroSemana);
+  const bloquesPropios = clasesEfectivas
+    .filter((c) => c.dia === diaSel.abrevDefault)
+    .map((c) => ({
+      inicioMin: minutosDesdeHora(c.hora_inicio),
+      finMin: minutosDesdeHora(c.hora_fin),
+      color: obtenerColorBloque(c),
+      nombreBloque: obtenerNombreBloque(c),
+      profesorNombre: obtenerNombreProfesor(c.profesor_id),
+      aula: c.aula,
+      modalidad: c.modalidad,
+    }));
+
+  // fechaDia puede venir null (semestre sin fecha_inicio válida) — en ese
+  // caso obtenerListaAmigosParaDiaConjunto ya sabe devolver todo vacío en
+  // vez de reventar (ver el chequeo isNaN ahí mismo).
+  const amigosDia = obtenerListaAmigosParaDiaConjunto(fechaDia, diaSel.abrevDefault);
+
+  contenedor.style.overflowX = "auto";
+  const columnaAncha = document.createElement("div");
+  columnaAncha.style.cssText = "display:flex; flex-direction:column; min-width:100%; width:max-content;";
+
+  const headerFila = document.createElement("div");
+  headerFila.style.cssText = "display:flex; position:sticky; top:0; z-index:50; background:var(--bg-header-solido); border-bottom:1px solid rgba(150,150,170,0.15);";
+  const espaciador = document.createElement("div");
+  espaciador.style.cssText = "width:38px; flex-shrink:0;";
+  headerFila.appendChild(espaciador);
+
+  const headerYo = document.createElement("div");
+  headerYo.style.cssText = "flex:1; min-width:130px; text-align:center; padding:4px 6px;";
+  headerYo.innerHTML = `<span style="font-size:0.8rem; font-weight:700;">Yo</span>`;
+  headerFila.appendChild(headerYo);
+
+  amigosDia.forEach(({ amigo }) => {
+    const h = document.createElement("div");
+    h.style.cssText = "flex:1; min-width:130px; text-align:center; padding:4px 6px; display:flex; align-items:center; justify-content:center; gap:6px;";
+    h.innerHTML = `
+      <span style="width:10px; height:10px; border-radius:50%; flex-shrink:0; background:${amigo.color};"></span>
+      <span style="font-size:0.8rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${amigo.nombre}</span>
+    `;
+    headerFila.appendChild(h);
+  });
+
+  const filaGrid = document.createElement("div");
+  filaGrid.style.cssText = "display:flex;";
+  filaGrid.appendChild(construirColumnaHoras(pxPorMin, altoGrid, minInicioRango, minFinRango));
+  filaGrid.appendChild(
+    construirColumnaPersonaConjunto(bloquesPropios, pxPorMin, altoGrid, minInicioRango, minFinRango, bloquesPropios.length === 0 ? "Sin clases" : null)
+  );
+  amigosDia.forEach(({ bloques, caida }) => {
+    const mensaje = caida ? "Enlace caído" : bloques.length === 0 ? "Sin clases" : null;
+    filaGrid.appendChild(construirColumnaPersonaConjunto(bloques, pxPorMin, altoGrid, minInicioRango, minFinRango, mensaje));
+  });
+
+  columnaAncha.appendChild(headerFila);
+  columnaAncha.appendChild(filaGrid);
+  cont.appendChild(columnaAncha);
+}
+
 function inicializarHorario() {
   const btnAnterior = document.getElementById("btn-horario-semestre-anterior");
   const btnSiguiente = document.getElementById("btn-horario-semestre-siguiente");
@@ -790,6 +991,7 @@ function inicializarHorario() {
     btnAmigos.addEventListener("click", () => abrirPanelAmigos());
   }
   inicializarHorarioAmigos();
+  inicializarHorarioConjunto();
   if (btnPantallaCompleta) {
     const contenedor = document.getElementById("horario-grid-contenedor");
     btnPantallaCompleta.addEventListener("click", () => {
@@ -825,4 +1027,5 @@ export {
   obtenerNombreBloque,
   obtenerRangoHorasHorario,
   obtenerPlanPorId,
+  abrirHorarioConjunto,
 };

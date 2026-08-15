@@ -20,7 +20,7 @@ import { crearEnlaceHorarioCompartido, crearAmigoVinculado, sellarTimestamp } fr
 import { crearArchivoJsonEnDrive, crearPermisoPublicoLectura, eliminarPermisoDrive, guardarDatos, leerDatos } from "../core/auth.js";
 import { mostrarToast, abrirConfirmacion, desplazarYResaltarElemento } from "../ui/componentes.js";
 import { copiarAlPortapapelesBlindado } from "../core/clipboard.js";
-import { obtenerSemestreHorarioActual, obtenerColorBloque, obtenerNombreBloque, obtenerRangoHorasHorario, obtenerPlanPorId } from "./horario.js";
+import { obtenerSemestreHorarioActual, obtenerColorBloque, obtenerNombreBloque, obtenerRangoHorasHorario, obtenerPlanPorId, abrirHorarioConjunto } from "./horario.js";
 
 // Restringido por dominio en Google Cloud a este mismo GitHub Pages — ver
 // nota de configuración del prompt. amigos.html vive en la raíz del repo,
@@ -425,6 +425,17 @@ function inicializarPanelAmigos() {
 
   if (btnCompartir) btnCompartir.addEventListener("click", iniciarFlujoCompartir);
 
+  // Horario conjunto: solo visible cuando ya hay al menos un amigo
+  // vinculado (ver renderizarListaAmigosVinculados, que hace el toggle
+  // real cada vez que se abre este panel) — acá solo se cablea el click.
+  const btnConjunto = document.getElementById("btn-horario-conjunto");
+  if (btnConjunto) {
+    btnConjunto.addEventListener("click", () => {
+      cerrarPanelAmigos();
+      abrirHorarioConjunto();
+    });
+  }
+
   if (btnIrEnlaces) {
     btnIrEnlaces.addEventListener("click", () => {
       cerrarPanelAmigos();
@@ -726,6 +737,54 @@ function minutosDesdeHoraAmigo(horaStr) {
   return (h || 0) * 60 + (m || 0);
 }
 
+/**
+ * Horario conjunto: a diferencia de obtenerBloquesAmigosPorDia (que
+ * devuelve todo MEZCLADO en una sola lista, pensado para superponerse
+ * sobre el grid propio), esta función devuelve los bloques SEPARADOS por
+ * amigo — una entrada por cada amigo vinculado, con su propia lista de
+ * bloques de ese día. A propósito NO respeta obtenerFileIdsOcultos() (esa
+ * preferencia es solo para la superposición del grid propio): acá se listan
+ * TODOS los vinculados, se hayan ocultado o no en esa vista, porque el
+ * usuario entra a esta pantalla explícitamente a comparar todos los
+ * horarios que tiene registrados.
+ */
+function obtenerListaAmigosParaDiaConjunto(fecha, diaCodigo) {
+  const vinculados = estado.datos?.configuracion?.horario_amigos_vinculados || [];
+
+  return vinculados.map((amigo) => {
+    const entrada = cacheSnapshotsAmigos.get(amigo.file_id);
+    if (!entrada || !entrada.snapshot) {
+      return { amigo, bloques: [], caida: entrada?.caida === true };
+    }
+    if (!fecha || isNaN(fecha.getTime())) return { amigo, bloques: [], caida: false };
+
+    const snapshot = entrada.snapshot;
+    const numeroSemana = calcularNumeroSemanaAmigo(snapshot, fecha);
+    if (numeroSemana == null) return { amigo, bloques: [], caida: false }; // fuera del rango de su semestre
+
+    const bloques = [];
+    (snapshot.bloques || []).forEach((bloque) => {
+      const diaBase = (bloque.dias || []).find((d) => d.dia === diaCodigo);
+      if (!diaBase) return;
+      const excepcion = (bloque.cronograma_dias || []).find(
+        (cd) => cd.numero_semana === numeroSemana && cd.dia === diaCodigo
+      );
+      const modalidad = excepcion ? excepcion.modalidad : diaBase.modalidad;
+      if (modalidad === "sin_clase") return;
+      bloques.push({
+        inicioMin: minutosDesdeHoraAmigo(diaBase.hora_inicio),
+        finMin: minutosDesdeHoraAmigo(diaBase.hora_fin),
+        color: bloque.color || amigo.color,
+        nombreBloque: bloque.nombre,
+        aula: bloque.aula || null,
+        universidad: bloque.universidad || null,
+        modalidad,
+      });
+    });
+    return { amigo, bloques, caida: false };
+  });
+}
+
 /* ----------------- Panel "Horarios Activos" (switches + desvincular) ----------------- */
 
 function renderizarListaAmigosVinculados() {
@@ -733,6 +792,13 @@ function renderizarListaAmigosVinculados() {
   if (!cont || !estado.datos) return;
 
   const vinculados = estado.datos.configuracion?.horario_amigos_vinculados || [];
+
+  // "Horario conjunto" solo tiene sentido si hay algo que mezclar — se
+  // oculta/muestra acá porque esta función ya corre cada vez que se abre
+  // el panel de Amigos (fresco, no solo una vez al cargar la app).
+  const btnConjunto = document.getElementById("btn-horario-conjunto");
+  if (btnConjunto) btnConjunto.classList.toggle("oculto", vinculados.length === 0);
+
   if (vinculados.length === 0) {
     cont.innerHTML = `<p class="muted" style="font-size:0.82rem;">Todavía no vinculaste el horario de ningún amigo. Pedile que te comparta su enlace.</p>`;
     return;
@@ -827,4 +893,6 @@ export {
   iniciarRefrescoPeriodicoAmigos,
   obtenerBloquesAmigosPorDia,
   renderizarListaAmigosVinculados,
+  obtenerListaAmigosParaDiaConjunto,
+  refrescarSnapshotsAmigos,
 };
