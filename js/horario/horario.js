@@ -281,27 +281,33 @@ function construirLineasHorarias(pxPorMin, minInicioRango, minFinRango) {
  * incluso en tarjetas donde sí entraba perfecto (pocas materias ese día →
  * columna más ancha → nunca chocan).
  *
- * El límite derecho contra el que se mide cambia según haya o no emoji de
- * modalidad en esa misma esquina: si hay emoji, el botón no puede pisarlo;
- * si NO hay emoji, de todos modos tiene que caber completo dentro del borde
- * derecho de la tarjeta — antes, sin emoji, esto no se chequeaba para nada
- * y el botón podía quedar cortado o saliéndose en columnas muy angostas
- * (que es justo el caso típico de las materias sin modalidad marcada, o sea
- * sin emoji, así que se estaban salvando del chequeo las que más lo
- * necesitaban).
+ * El límite derecho es el MISMO para todas las tarjetas del grid, tengan o
+ * no tengan emoji de modalidad — antes se comparaba cada tarjeta contra SU
+ * PROPIO emoji (o su propio borde si no tenía ninguno), y como sin emoji
+ * sobra casi toda la tarjeta libre, el botón prácticamente nunca chocaba
+ * ahí: en la práctica solo se ocultaba en las materias CON emoji, que son
+ * justo las que más necesitan el link (suelen ser las virtuales). Ahora se
+ * reserva el mismo ancho de "espacio para emoji" en TODAS las tarjetas —
+ * medido del emoji real de cualquier materia que sí lo tenga en este grid,
+ * para no hardcodear un número que se desincronice si cambia el font-size —
+ * así el criterio de "cabe o no cabe" es uno solo para toda la semana.
  */
 function ocultarBotonesEntrarQueChocan(cont) {
+  const GAP_ENTRE_BOTON_Y_EMOJI = 3;
+  const ANCHO_EMOJI_FALLBACK = 21; // si este grid no tiene NINGÚN emoji visible para medir
+  const emojiDeReferencia = cont.querySelector(".horario-emoji-modalidad");
+  const anchoReservadoEmoji = emojiDeReferencia
+    ? emojiDeReferencia.getBoundingClientRect().width + GAP_ENTRE_BOTON_Y_EMOJI
+    : ANCHO_EMOJI_FALLBACK;
+
   cont.querySelectorAll(".horario-bloque-tarjeta").forEach((tarjeta) => {
     const entrar = tarjeta.querySelector(".horario-btn-entrar-clase");
     if (!entrar) return;
     entrar.style.display = ""; // por si quedó oculto de un render anterior con menos espacio
-    const emoji = tarjeta.querySelector(".horario-emoji-modalidad");
     const rTarjeta = tarjeta.getBoundingClientRect();
     const rEntrar = entrar.getBoundingClientRect();
-    // Mismos 5px de margen que ya usa el emoji (right:5px, ver arriba en
-    // el innerHTML) para que el límite sin-emoji se sienta igual de
-    // "pegado al borde" que el límite con-emoji.
-    const limiteDerecho = emoji ? emoji.getBoundingClientRect().left : rTarjeta.right - 5;
+    // 5px: mismo margen right:5px que usa el emoji.
+    const limiteDerecho = rTarjeta.right - 5 - anchoReservadoEmoji;
     if (rEntrar.right > limiteDerecho) entrar.style.display = "none";
   });
 }
