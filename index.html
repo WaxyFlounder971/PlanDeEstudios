@@ -785,6 +785,24 @@
   </div>
 </div>
 
+<!-- ===================== MODAL: Horario entre Amigos — confirmar asociar (Parte 3) ===================== -->
+<!-- Se abre desde procesarAsociacionPendienteDeAmigo() (horario-amigos.js), tras
+     volver de amigos.html con un pendiente en localStorage. -->
+<div id="modal-confirmar-asociar-amigo" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;">Asociar horario de amigo</h2>
+    <p class="muted">Este horario se va a superponer al tuyo en Horario, con su propio color, hasta que lo desvincules.</p>
+    <div>
+      <label class="muted" style="display:block; font-size:0.75rem; margin-bottom:4px;">Nombre para identificarlo</label>
+      <input type="text" id="input-apodo-confirmar-asociar-amigo" class="form-input" maxlength="30">
+    </div>
+    <div class="row" style="justify-content:flex-end;">
+      <button type="button" id="btn-cancelar-confirmar-asociar-amigo" class="btn btn-secondary">Cancelar</button>
+      <button type="button" id="btn-confirmar-confirmar-asociar-amigo" class="btn btn-primary">Vincular</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===================== MODAL: Convertir capturas a PDF (v1.10.1) ===================== -->
 <div id="modal-capturas-pdf" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
