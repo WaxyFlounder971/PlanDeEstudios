@@ -23,8 +23,90 @@ import { inicializarResponsivoListaPlan, renderizarPlanEstudios } from "./plan/p
 import { renderizarSemestres } from "./semestres/semestres.js";
 import { inicializarHorario, renderizarHorario } from "./horario/horario.js";
 import { procesarAsociacionPendienteDeAmigo, iniciarRefrescoPeriodicoAmigos } from "./horario/horario-amigos.js";
-import { abrirConfirmacion, agregarLongPress, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, restaurarEstadoSidebar } from "./ui/componentes.js";
+import { abrirConfirmacion, agregarLongPress, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, mostrarToastAccion, restaurarEstadoSidebar } from "./ui/componentes.js";
 import { aplicarPaleta, aplicarTemaGuardadoLocalmente } from "./ui/tema.js";
+
+/* ===================== PWA: registro del Service Worker ===================== */
+/*
+   Se registra en el evento 'load' (no en DOMContentLoaded): así el
+   registro del SW nunca compite por recursos con el arranque real de la
+   app (login, primera carga de datos, etc.), que es justo lo que pide el
+   punto 3 del prompt ("verificar que no rompa nada del flujo de
+   autenticación ni del arranque normal"). Todo el bloque está guardado
+   por el feature-check de arriba, así que en un navegador sin soporte
+   simplemente no hace nada — la app sigue funcionando igual que antes,
+   solo sin capacidad offline/instalable.
+
+   Flujo de actualización (para que quede documentado en un solo lugar):
+     1. El navegador detecta un service-worker.js distinto en el servidor
+        (algo cambió) y lo empieza a instalar en segundo plano, en
+        paralelo al que ya está activo — esto es 100% nativo del browser,
+        no hace falta programarlo.
+     2. 'updatefound' avisa que ese SW nuevo se está instalando. Cuando
+        termina (state === "installed") Y YA HABÍA un SW controlando esta
+        pestaña (navigator.serviceWorker.controller existe), eso significa
+        que hay una versión nueva LISTA Y ESPERANDO — se muestra el aviso
+        no intrusivo con mostrarToastAccion(). Si "controller" NO existe
+        todavía, es la primera instalación de siempre (primera visita del
+        usuario a la app) y no hay nada que avisar.
+     3. El SW nuevo se queda en estado "esperando" (waiting) sin tomar
+        control de nada — NUNCA se llama skipWaiting() de forma automática
+        (eso vive del lado del propio service-worker.js, y solo reacciona
+        a un mensaje explícito). Si el usuario no hace nada, sigue
+        trabajando tranquilo con la versión vieja indefinidamente; no se
+        le fuerza ni se le corta nada a mitad de un formulario.
+     4. Si el usuario aprieta "Recargar" en el aviso, recién ahí se le
+        manda el mensaje SKIP_WAITING al SW en espera. Este toma control
+        (evento 'controllerchange') y ahí SÍ se recarga la página una
+        única vez, ya con el usuario habiendo dado el visto bueno.
+     5. Como esta app puede quedar con la pestaña abierta durante horas
+        (mismo motivo que programarRefrescoProactivo() ya contempla para
+        el token de Google en storage-sync.js), se le pide al navegador
+        que revise si hay una versión nueva cada una hora y también cada
+        vez que la pestaña vuelve a primer plano — si no, una
+        actualización podría tardar en detectarse hasta el próximo cierre
+        y apertura real de la app.
+*/
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("./service-worker.js")
+      .then((registro) => {
+        registro.addEventListener("updatefound", () => {
+          const swInstalando = registro.installing;
+          if (!swInstalando) return;
+          swInstalando.addEventListener("statechange", () => {
+            if (swInstalando.state === "installed" && navigator.serviceWorker.controller) {
+              mostrarToastAccion("Hay una actualización disponible.", "Recargar", () => {
+                if (registro.waiting) registro.waiting.postMessage({ type: "SKIP_WAITING" });
+              });
+            }
+          });
+        });
+
+        setInterval(() => registro.update(), 60 * 60 * 1000); // cada 1h
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") registro.update();
+        });
+      })
+      .catch((e) => {
+        // No crítico: la app sigue funcionando 100% normal sin service
+        // worker, solo sin capacidad offline/instalable.
+        console.warn("No se pudo registrar el service worker:", e);
+      });
+
+    // Se dispara una única vez, cuando el SW nuevo por fin toma control
+    // tras el SKIP_WAITING que manda el botón "Recargar" de arriba. El
+    // guard evita un doble reload si el navegador disparara el evento más
+    // de una vez.
+    let yaRecargandoPorActualizacion = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (yaRecargandoPorActualizacion) return;
+      yaRecargandoPorActualizacion = true;
+      window.location.reload();
+    });
+  });
+}
 
 /* ---------------------------- Arranque ---------------------------- */
 
