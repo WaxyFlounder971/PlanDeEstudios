@@ -273,6 +273,29 @@ function construirLineasHorarias(pxPorMin, minInicioRango, minFinRango) {
 // conjunto", ver más abajo), y mezclar los dos conceptos en la misma
 // pantalla generaba ruido visual innecesario en el uso del día a día.
 
+/**
+ * Oculta el botón "Entrar" de una tarjeta SOLO si de verdad se superpone
+ * con el emoji de modalidad (misma esquina inferior) — se llama DESPUÉS de
+ * que el grid ya está en el DOM, así getBoundingClientRect() da el tamaño
+ * real ya renderizado (fuente, padding, ancho de columna real, todo tal
+ * como quedó en pantalla) en vez de adivinar con un breakpoint de pantalla,
+ * que escondía el botón incluso en tarjetas donde sí entraba perfecto
+ * (pocas materias ese día → columna más ancha → nunca chocan).
+ */
+function ocultarBotonesEntrarQueChocan(cont) {
+  cont.querySelectorAll(".horario-bloque-tarjeta").forEach((tarjeta) => {
+    const entrar = tarjeta.querySelector(".horario-btn-entrar-clase");
+    const emoji = tarjeta.querySelector(".horario-emoji-modalidad");
+    if (!entrar || !emoji) return;
+    entrar.style.display = ""; // por si quedó oculto de un render anterior con menos espacio
+    const rEntrar = entrar.getBoundingClientRect();
+    const rEmoji = emoji.getBoundingClientRect();
+    const chocan = rEntrar.left < rEmoji.right && rEntrar.right > rEmoji.left
+      && rEntrar.top < rEmoji.bottom && rEntrar.bottom > rEmoji.top;
+    if (chocan) entrar.style.display = "none";
+  });
+}
+
 function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango) {
   const col = document.createElement("div");
   col.className = "horario-col-dia";
@@ -319,17 +342,7 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minI
     // espacio para su propia línea (~16px) sin invadir eso.
     const lineasTexto = 1 + (b.profesorNombre ? 1 : 0) + (b.aula ? 1 : 0);
     const altoTextoEstimado = 6 /* padding vertical */ + lineasTexto * 15;
-    // Antes se comparaba solo window.innerWidth <= 768, pero eso depende de
-    // la ORIENTACIÓN: un teléfono en horizontal (landscape) fácilmente
-    // supera los 768px de ancho (ej. ~844-932px en iPhones grandes) aunque
-    // siga siendo una pantalla chica donde el botón choca con el emoji. Se
-    // usa la dimensión MÁS CHICA del viewport (ancho o alto, lo que sea
-    // menor) — así un teléfono se detecta igual esté vertical u horizontal,
-    // porque su lado corto sigue siendo chico en cualquiera de los dos
-    // casos (a diferencia de una tablet/laptop, donde ambos lados son
-    // grandes).
-    const pantallaEsDeTelefono = Math.min(window.innerWidth, window.innerHeight) <= 768;
-    const cabeEntrar = alto >= altoTextoEstimado + 16 && !pantallaEsDeTelefono;
+    const cabeEntrar = alto >= altoTextoEstimado + 16;
     tarjeta.innerHTML = `
       <div style="font-size:0.85rem; font-weight:600; line-height:1.15; display:flex; align-items:center; gap:4px; margin-bottom:2px; overflow-wrap:break-word; word-break:break-word;">
         ${b.tieneExcepcionEstaSemana ? `<span title="Esta semana tiene un ajuste puntual" style="font-size:1.05rem; opacity:0.9; flex-shrink:0;">✎</span>` : ""}
@@ -337,7 +350,7 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minI
       </div>
       ${b.profesorNombre ? `<div style="font-size:0.72rem; opacity:0.9; overflow-wrap:break-word; word-break:break-word;">${b.profesorNombre}</div>` : ""}
       ${b.aula ? `<div style="font-size:0.72rem; opacity:0.85; overflow-wrap:break-word; word-break:break-word;">${b.aula}</div>` : ""}
-      ${emojiModalidad ? `<span title="${b.modalidad}" style="position:absolute; right:5px; bottom:3px; font-size:1.17rem; line-height:1;">${emojiModalidad}</span>` : ""}
+      ${emojiModalidad ? `<span class="horario-emoji-modalidad" title="${b.modalidad}" style="position:absolute; right:5px; bottom:3px; font-size:1.17rem; line-height:1;">${emojiModalidad}</span>` : ""}
       ${b.enlace && cabeEntrar ? `<a href="${b.enlace}" target="_blank" rel="noopener" class="horario-btn-entrar-clase" style="position:absolute; left:5px; bottom:3px; line-height:1;" onclick="event.stopPropagation()">Entrar</a>` : ""}
     `;
     tarjeta.addEventListener("click", (ev) => {
@@ -735,7 +748,10 @@ function renderizarHorarioInterno() {
     const minutosClasesSemana = clasesEfectivas
       .filter((c) => diasAbrevVisibles.has(c.dia))
       .map((c) => minutosDesdeHora(c.hora_inicio));
-    requestAnimationFrame(() => centrarVistaInicial(contenedor, minutosClasesSemana, pxPorMin, minInicioRango, minFinRango));
+    requestAnimationFrame(() => {
+      centrarVistaInicial(contenedor, minutosClasesSemana, pxPorMin, minInicioRango, minFinRango);
+      ocultarBotonesEntrarQueChocan(cont);
+    });
   }
 }
 
