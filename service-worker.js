@@ -28,7 +28,7 @@
        que main.js dispara cada una hora / al volver a primer plano).
    ========================================================================= */
 
-const VERSION = "v2"; // <-- subir en cada despliegue (v2, v3, ...)
+const VERSION = "v3"; // <-- subir en cada despliegue (v2, v3, ...)
 const CACHE_NAME = `app-academica-${VERSION}`;
 const PREFIJO_CACHE = "app-academica-";
 
