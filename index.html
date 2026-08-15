@@ -201,6 +201,20 @@
           </div>
         </section>
 
+        <section class="glass-card stack ajuste-seccion colapsada" id="ajuste-seccion-agenda">
+          <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Agenda</h2><span class="ajuste-seccion-chevron">▾</span></button>
+          <div class="ajuste-seccion-cuerpo">
+
+          <div class="row-between">
+            <span>Mostrar días sin eventos ni tareas</span>
+            <label class="switch switch-tema">
+              <input type="checkbox" id="switch-agenda-mostrar-dias-vacios">
+              <span class="track"><span class="thumb"></span></span>
+            </label>
+          </div>
+          </div>
+        </section>
+
         <section class="glass-card stack ajuste-seccion colapsada">
           <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Horario</h2><span class="ajuste-seccion-chevron">▾</span></button>
           <div class="ajuste-seccion-cuerpo">
@@ -293,10 +307,37 @@
       <div id="seccion-finanzas" class="stack oculto"></div>
 
       <!-- ===================== SECCIÓN: Agenda (placeholder, feature futura) ===================== -->
+      <!-- ===================== SECCIÓN: Agenda ===================== -->
+      <!-- Contenido construido dinámicamente por js/agenda/agenda.js.
+           Header con selector Lista/Calendario + navegación semanal, lista
+           cronológica de días (tarjetita "Mostrar clases" + eventos/tareas/
+           exámenes agrupados), y modal de alta/edición (más abajo, junto al
+           resto de modales fijos del HTML). -->
       <div id="seccion-agenda" class="stack oculto">
-        <div class="glass-panel" style="padding:24px; text-align:center;">
-          <p class="muted" style="margin:0;">📖 Agenda está en construcción — volvé pronto.</p>
-        </div>
+        <section class="glass-panel stack" id="agenda-header" style="padding:12px 14px;">
+          <div class="pill-group" id="pills-agenda-vista">
+            <button type="button" class="pill-item active" data-vista="lista">Lista</button>
+            <button type="button" class="pill-item" data-vista="calendario">Calendario</button>
+          </div>
+          <div class="row-between">
+            <button type="button" class="btn-icono-fantasma" id="btn-agenda-semana-anterior" style="font-size:1.3rem;">‹</button>
+            <div class="stack" style="align-items:center; text-align:center; gap:2px;">
+              <span id="agenda-rango-semana" class="texto-encabezado-seccion"></span>
+              <span class="muted" id="agenda-volver-hoy" style="font-size:0.72rem; text-decoration:underline; cursor:pointer;">Volver a hoy</span>
+            </div>
+            <button type="button" class="btn-icono-fantasma" id="btn-agenda-semana-siguiente" style="font-size:1.3rem;">›</button>
+          </div>
+          <div class="row-between">
+            <button type="button" class="btn btn-primary" id="btn-agenda-agregar" style="padding:8px 14px; font-size:0.85rem;">+ Agregar</button>
+            <button type="button" class="btn-discreto" id="btn-agenda-ir-ajustes" style="font-size:0.8rem;">⚙️ Ajustes de Agenda</button>
+          </div>
+        </section>
+
+        <div id="agenda-lista-dias" class="stack"></div>
+
+        <section class="glass-panel oculto" id="agenda-vista-calendario" style="padding:24px; text-align:center;">
+          <p class="muted" style="margin:0;">📅 Vista Calendario — próximamente.</p>
+        </section>
       </div>
 
       <!-- ===================== SECCIÓN: Horario ===================== -->
@@ -734,6 +775,61 @@
     <div class="row" style="justify-content:flex-end;">
       <button id="btn-cancelar-confirmacion" class="btn btn-secondary">Cancelar</button>
       <button id="btn-aceptar-confirmacion" class="btn btn-danger">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Agenda — alta/edición ===================== -->
+<div id="modal-agenda-evento" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 id="titulo-modal-agenda-evento" style="margin:0;">Agregar a Agenda</h2>
+
+    <div class="pill-group" id="pills-agenda-tipo">
+      <button type="button" class="pill-item active" data-valor="evento">Evento</button>
+      <button type="button" class="pill-item" data-valor="tarea">Tarea</button>
+      <button type="button" class="pill-item" data-valor="examen">Examen</button>
+    </div>
+
+    <div>
+      <label class="form-label" for="input-agenda-nombre">Nombre</label>
+      <input type="text" id="input-agenda-nombre" class="form-input" maxlength="80" placeholder="Ej. Charla de RRHH">
+    </div>
+
+    <div class="row" style="gap:10px;">
+      <div style="flex:1;">
+        <label class="form-label" for="input-agenda-fecha">Fecha</label>
+        <input type="date" id="input-agenda-fecha" class="form-input">
+      </div>
+      <div style="flex:1;">
+        <label class="form-label" for="input-agenda-hora">Hora</label>
+        <input type="time" id="input-agenda-hora" class="form-input">
+      </div>
+    </div>
+
+    <label class="row" style="align-items:center; gap:10px; cursor:pointer;">
+      <label class="switch switch-tema" style="flex-shrink:0;">
+        <input type="checkbox" id="chk-agenda-todo-el-dia">
+        <span class="track"><span class="thumb"></span></span>
+      </label>
+      <span style="font-size:0.85rem;">Todo el día (sin hora puntual)</span>
+    </label>
+
+    <div>
+      <label class="form-label" for="select-agenda-materia">Materia vinculada (opcional)</label>
+      <select id="select-agenda-materia" class="form-select"></select>
+    </div>
+
+    <div>
+      <label class="form-label" for="input-agenda-notas">Notas</label>
+      <textarea id="input-agenda-notas" class="form-textarea" rows="3"></textarea>
+    </div>
+
+    <div class="row-between">
+      <button type="button" class="btn btn-danger oculto" id="btn-agenda-borrar">Borrar</button>
+      <div class="row" style="justify-content:flex-end; flex:1;">
+        <button type="button" class="btn btn-secondary" id="btn-agenda-cancelar">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btn-agenda-guardar">Guardar</button>
+      </div>
     </div>
   </div>
 </div>
