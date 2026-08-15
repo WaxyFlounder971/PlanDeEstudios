@@ -450,6 +450,7 @@ function mostrarApp() {
   // renderizarHorario (disparado por marcarCambioPendiente → sync → re-render,
   // o el de Parte 3b que refresca el overlay) ya tenga el amigo recién
   // vinculado en estado.datos.
+  iniciarRefrescoPeriodicoAmigos();
   procesarAsociacionPendienteDeAmigo();
   // Bug 3: antes mostrarSeccion() solo se llamaba desde clics del nav, así que
   // tras un refresh la sección de Plan de Estudios se quedaba con la clase
