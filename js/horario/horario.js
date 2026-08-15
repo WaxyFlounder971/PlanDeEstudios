@@ -11,6 +11,7 @@ import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 import { obtenerSemestresOrdenCronologico, buscarSemestreVivoPorId } from "../semestres/semestres.js";
 import { obtenerPlanActivo } from "../plan/plan-esquema.js";
 import { abrirModalBloqueHorario, construirZonaCronograma } from "./horario-modal.js";
+import { abrirPanelAmigos, inicializarHorarioAmigos, obtenerBloquesAmigosPorDia } from "./horario-amigos.js";
 
 const PX_POR_MIN_EXPANDIDO = 0.84; // 30% menos que antes (1.2), pedido explícito
 
@@ -254,11 +255,48 @@ function construirLineasHorarias(pxPorMin, minInicioRango, minFinRango) {
   return stops.join(",\n");
 }
 
-function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango) {
+// Horario entre Amigos — Parte 3b: franja delgada de bloques ajenos, pegada
+// al borde derecho de cada columna de día. A propósito NO comparte lanes ni
+// z-index con las tarjetas propias (b.lane * 12, z-index 10+lane): lo propio
+// tiene que verse siempre completo, nunca tapado por el horario de un
+// amigo. Cada amigo con choque en ese rango de horas ocupa su propio
+// mini-carril (ANCHO_FRANJA_AMIGO px), así que 2+ amigos superpuestos entre
+// sí también se distinguen sin taparse uno al otro.
+const ANCHO_FRANJA_AMIGO = 7;
+
+function construirFranjasAmigos(bloquesAmigosDia, pxPorMin, minInicioRango, minFinRango) {
+  const frag = document.createDocumentFragment();
+  if (!bloquesAmigosDia || bloquesAmigosDia.length === 0) return frag;
+
+  const conLanes = calcularLanesDia(bloquesAmigosDia);
+  conLanes.forEach((b) => {
+    const inicioClamp = Math.max(b.inicioMin, minInicioRango);
+    const finClamp = Math.min(b.finMin, minFinRango);
+    if (finClamp <= inicioClamp) return;
+    const top = Math.max(0, (inicioClamp - minInicioRango) * pxPorMin);
+    const alto = Math.max(10, (finClamp - inicioClamp) * pxPorMin);
+    const franja = document.createElement("div");
+    // z-index bajo (1-10, un amigo por lane) a propósito: siempre por
+    // debajo del rango 10+lane que usan las tarjetas propias más arriba.
+    franja.style.cssText = `position:absolute; top:${top}px; right:${b.lane * (ANCHO_FRANJA_AMIGO + 2)}px; width:${ANCHO_FRANJA_AMIGO}px; height:${alto}px; z-index:${1 + b.lane};
+      background:${b.color}; border-radius:3px; opacity:0.85; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.3);`;
+    franja.title = `${b.nombreAmigo} · ${b.nombreBloque}`;
+    franja.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      mostrarToast(`${b.nombreAmigo}: ${b.nombreBloque}`);
+    });
+    frag.appendChild(franja);
+  });
+  return frag;
+}
+
+function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango, bloquesAmigosDia) {
   const col = document.createElement("div");
   col.className = "horario-col-dia";
   col.dataset.diaCodigo = dia.abrevDefault;
   col.style.cssText = `position:relative; flex:1; min-width:56px; height:${altoGrid}px; background:${construirLineasHorarias(pxPorMin, minInicioRango, minFinRango)}; cursor:pointer; border-left:1px solid rgba(150,150,170,0.15);`;
+
+  col.appendChild(construirFranjasAmigos(bloquesAmigosDia, pxPorMin, minInicioRango, minFinRango));
 
   const conLanes = calcularLanesDia(bloquesDia);
   conLanes.forEach((b) => {
@@ -661,7 +699,11 @@ function renderizarHorarioInterno() {
         notas: c.notas,
         tieneExcepcionEstaSemana: !!c.tiene_ajuste_cronograma,
       }));
-    filaGrid.appendChild(construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango));
+    const fechaDia = calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault);
+    const bloquesAmigosDia = obtenerBloquesAmigosPorDia(fechaDia, dia.abrevDefault);
+    filaGrid.appendChild(
+      construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango, bloquesAmigosDia)
+    );
   });
 
   columnaAncha.appendChild(headerFila);
@@ -745,8 +787,9 @@ function inicializarHorario() {
     });
   }
   if (btnAmigos) {
-    btnAmigos.addEventListener("click", () => mostrarToast("Horario entre Amigos: próximamente"));
+    btnAmigos.addEventListener("click", () => abrirPanelAmigos());
   }
+  inicializarHorarioAmigos();
   if (btnPantallaCompleta) {
     const contenedor = document.getElementById("horario-grid-contenedor");
     btnPantallaCompleta.addEventListener("click", () => {
@@ -769,4 +812,16 @@ function inicializarHorario() {
 // horario-modal.js) — mismo patrón que mostrarSeccion en main.js.
 window.renderizarHorario = renderizarHorario;
 
-export { inicializarHorario, renderizarHorario, obtenerSemestreHorarioActual };
+// Horario entre Amigos — Parte 1: se exportan estos 3 helpers (ya existían,
+// uso interno nada más) para que horario-amigos.js arme el snapshot público
+// con exactamente el mismo color/nombre resuelto y el mismo rango de horas
+// que ya se ven en el grid propio — sin duplicar esta lógica en otro
+// archivo, lo que tarde o temprano se hubiera desincronizado del original.
+export {
+  inicializarHorario,
+  renderizarHorario,
+  obtenerSemestreHorarioActual,
+  obtenerColorBloque,
+  obtenerNombreBloque,
+  obtenerRangoHorasHorario,
+};

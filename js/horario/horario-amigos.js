@@ -17,7 +17,7 @@
 import { estado } from "../core/storage.js";
 import { marcarCambioPendiente, mostrarCargando, ocultarCargando, registrarHookPostGuardado } from "../core/storage-sync.js";
 import { crearEnlaceHorarioCompartido, crearAmigoVinculado, sellarTimestamp } from "../core/schema.js";
-import { crearArchivoJsonEnDrive, crearPermisoPublicoLectura, eliminarPermisoDrive, guardarDatos } from "../core/auth.js";
+import { crearArchivoJsonEnDrive, crearPermisoPublicoLectura, eliminarPermisoDrive, guardarDatos, leerDatos } from "../core/auth.js";
 import { mostrarToast, abrirConfirmacion, desplazarYResaltarElemento } from "../ui/componentes.js";
 import { copiarAlPortapapelesBlindado } from "../core/clipboard.js";
 import { obtenerSemestreHorarioActual, obtenerColorBloque, obtenerNombreBloque, obtenerRangoHorasHorario } from "./horario.js";
@@ -340,6 +340,10 @@ function abrirPanelAmigos() {
   if (!modal) return;
   document.body.appendChild(modal);
   modal.classList.remove("oculto");
+  // Se repinta cada vez que se abre (no solo una vez al cargar) para que un
+  // cambio hecho en otro dispositivo (ej. te desvincularon, o el enlace de
+  // un amigo se cayó) se refleje sin depender del ciclo de 5 min.
+  renderizarListaAmigosVinculados();
 }
 
 function cerrarPanelAmigos() {
@@ -384,6 +388,12 @@ function inicializarPanelAmigos() {
 function inicializarHorarioAmigos() {
   inicializarPanelAmigos();
   renderizarListaEnlacesCompartidos();
+  // iniciarRefrescoPeriodicoAmigos() NO se llama acá a propósito: esta
+  // función corre en el primer DOMContentLoaded, antes de que estado.datos/
+  // estado.token existan (mismo motivo documentado en
+  // procesarAsociacionPendienteDeAmigo, más abajo). Se llama en cambio
+  // desde mostrarApp() (main.js), junto a procesarAsociacionPendienteDeAmigo()
+  // — agregar ahí: `iniciarRefrescoPeriodicoAmigos();`
 }
 
 /* ===================== Parte 3: asociar el horario de un amigo (localStorage → cuenta) ===================== */
@@ -481,10 +491,260 @@ function procesarAsociacionPendienteDeAmigo() {
   });
 }
 
+/* =========================================================================
+   Parte 3b: superponer los horarios de amigos vinculados sobre el grid
+   propio, panel "Horarios Activos" (switches mostrar/ocultar + desvincular)
+   y refresco periódico de los archivos públicos externos.
+   ========================================================================= */
+
+/**
+ * Visibilidad (mostrar/ocultar en el grid) es una preferencia de VISTA, no
+ * un dato del horario en sí — se guarda en localStorage, NO en
+ * estado.datos.configuracion. Motivo: no tiene sentido que viaje al sync
+ * (nadie espera que ocultar un amigo en el teléfono lo oculte también en la
+ * PC), y así se evita tocar el esquema sincronizado (schema.js) para algo
+ * que es puramente de UI local. Guarda solo los file_id OCULTOS (no los
+ * visibles) para que un amigo recién vinculado aparezca visible por
+ * default sin tener que sembrar nada al vincularlo.
+ */
+const KEY_LOCALSTORAGE_OCULTOS = "horario_amigos_ocultos_vista";
+
+function obtenerFileIdsOcultos() {
+  try {
+    const crudo = localStorage.getItem(KEY_LOCALSTORAGE_OCULTOS);
+    const arr = crudo ? JSON.parse(crudo) : [];
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch (e) {
+    return new Set();
+  }
+}
+
+function guardarFileIdsOcultos(set) {
+  try {
+    localStorage.setItem(KEY_LOCALSTORAGE_OCULTOS, JSON.stringify([...set]));
+  } catch (e) {
+    console.warn("No se pudo guardar la preferencia de amigos ocultos:", e);
+  }
+}
+
+function alternarVisibilidadAmigo(fileId) {
+  const ocultos = obtenerFileIdsOcultos();
+  if (ocultos.has(fileId)) ocultos.delete(fileId);
+  else ocultos.add(fileId);
+  guardarFileIdsOcultos(ocultos);
+}
+
+/* ----------------- Snapshots remotos: caché + refresco periódico ----------------- */
+
+// file_id -> { snapshot, caida: bool } — en memoria de esta sesión nada
+// más. `caida` marca un amigo cuyo enlace ya no responde (404: lo revocó,
+// o borró el archivo) — se sigue mostrando en la lista para que la persona
+// pueda desvincularlo a mano, pero no se dibuja nada de él en el grid.
+const cacheSnapshotsAmigos = new Map();
+
+async function refrescarSnapshotsAmigos() {
+  if (!estado.datos || !estado.token) return;
+  const vinculados = estado.datos.configuracion?.horario_amigos_vinculados || [];
+  await Promise.all(
+    vinculados.map(async (amigo) => {
+      try {
+        const snapshot = await leerDatos(estado.token, amigo.file_id);
+        cacheSnapshotsAmigos.set(amigo.file_id, { snapshot, caida: false });
+      } catch (e) {
+        // 404/403 (enlace revocado del otro lado) se trata distinto de un
+        // fallo de red transitorio: se marca "caída" para avisar en el
+        // panel, pero no se descarta el vínculo — desvincular es siempre
+        // una decisión explícita de la persona, nunca automática.
+        const status = e && e.status;
+        cacheSnapshotsAmigos.set(amigo.file_id, { snapshot: null, caida: status === 404 || status === 403 });
+        console.warn(`No se pudo refrescar el horario de ${amigo.nombre}:`, e);
+      }
+    })
+  );
+  if (typeof window.renderizarHorario === "function") window.renderizarHorario();
+  renderizarListaAmigosVinculados();
+}
+
+let intervaloRefrescoAmigos = null;
+
+function iniciarRefrescoPeriodicoAmigos() {
+  refrescarSnapshotsAmigos();
+  clearInterval(intervaloRefrescoAmigos);
+  // Cada 5 min mientras la pestaña siga abierta — mismo espíritu que el
+  // sondeo de storage-sync.js, pero un intervalo propio y más largo: esto
+  // no es data propia (no hay nada que "perder" por tardar un poco más en
+  // notarlo), así que no vale la pena sondear tan seguido como el sync
+  // normal ni gastar cuota de Drive en archivos ajenos.
+  intervaloRefrescoAmigos = setInterval(refrescarSnapshotsAmigos, 5 * 60 * 1000);
+}
+
+/* ----------------- Resolver clases de un amigo para un día real ----------------- */
+
+function parseFechaLocalAmigo(str) {
+  const soloFecha = String(str || "").slice(0, 10);
+  const [y, m, d] = soloFecha.split("-").map(Number);
+  if (!y || !m || !d) return new Date(NaN);
+  return new Date(y, m - 1, d);
+}
+
+/**
+ * Semana del snapshot del amigo (1-based) a la que pertenece `fecha` —
+ * simple diferencia de días entre semanas de 7 días reales desde su
+ * fecha_inicio, sin importar en qué día de la semana caiga esa fecha
+ * (misma idea que calcularNumeroSemanaSemestre en schema.js, pero
+ * reimplementada acá porque el snapshot no es un semestre local real).
+ */
+function calcularNumeroSemanaAmigo(snapshot, fecha) {
+  const inicio = parseFechaLocalAmigo(snapshot.fecha_inicio);
+  if (isNaN(inicio.getTime()) || isNaN(fecha.getTime())) return null;
+  const diffDias = Math.round((fecha - inicio) / 86400000);
+  const numero = Math.floor(diffDias / 7) + 1;
+  const total = Number(snapshot.duracion_semanas) || 16;
+  if (numero < 1 || numero > total) return null; // fuera del rango de su semestre
+  return numero;
+}
+
+/**
+ * Bloques de TODOS los amigos visibles (no ocultos, con snapshot cargado)
+ * que caen en `diaCodigo` para la fecha real `fecha`. Se le pasa `fecha`
+ * (no numeroSemana local) porque el amigo tiene su PROPIO semestre —
+ * distinto fecha_inicio/duración que el semestre que se esté mirando acá
+ * — así que lo único que de verdad se puede alinear entre los dos horarios
+ * es la fecha calendario real, nunca el número de semana.
+ */
+function obtenerBloquesAmigosPorDia(fecha, diaCodigo) {
+  if (!fecha || isNaN(fecha.getTime())) return [];
+  const ocultos = obtenerFileIdsOcultos();
+  const vinculados = estado.datos?.configuracion?.horario_amigos_vinculados || [];
+  const resultado = [];
+
+  vinculados.forEach((amigo) => {
+    if (ocultos.has(amigo.file_id)) return;
+    const entrada = cacheSnapshotsAmigos.get(amigo.file_id);
+    if (!entrada || !entrada.snapshot) return;
+    const snapshot = entrada.snapshot;
+    const numeroSemana = calcularNumeroSemanaAmigo(snapshot, fecha);
+    if (numeroSemana == null) return;
+
+    (snapshot.bloques || []).forEach((bloque) => {
+      const diaBase = (bloque.dias || []).find((d) => d.dia === diaCodigo);
+      if (!diaBase) return;
+      // Excepción puntual de esa semana (mismo patrón que
+      // obtenerClasesEfectivasSemana en schema.js): si existe, su
+      // modalidad manda; "sin_clase" se omite del todo acá (a diferencia
+      // del grid propio, no vale la pena dibujar una tarjeta ajena
+      // atenuada solo para decir "hoy no tiene clase").
+      const excepcion = (bloque.cronograma_dias || []).find(
+        (cd) => cd.numero_semana === numeroSemana && cd.dia === diaCodigo
+      );
+      const modalidad = excepcion ? excepcion.modalidad : diaBase.modalidad;
+      if (modalidad === "sin_clase") return;
+
+      resultado.push({
+        inicioMin: minutosDesdeHoraAmigo(diaBase.hora_inicio),
+        finMin: minutosDesdeHoraAmigo(diaBase.hora_fin),
+        color: amigo.color,
+        nombreAmigo: amigo.nombre,
+        nombreBloque: bloque.nombre,
+        modalidad,
+      });
+    });
+  });
+
+  return resultado;
+}
+
+function minutosDesdeHoraAmigo(horaStr) {
+  const [h, m] = String(horaStr || "00:00").split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+/* ----------------- Panel "Horarios Activos" (switches + desvincular) ----------------- */
+
+function renderizarListaAmigosVinculados() {
+  const cont = document.getElementById("lista-amigos-vinculados");
+  if (!cont || !estado.datos) return;
+
+  const vinculados = estado.datos.configuracion?.horario_amigos_vinculados || [];
+  if (vinculados.length === 0) {
+    cont.innerHTML = `<p class="muted" style="font-size:0.82rem;">Todavía no vinculaste el horario de ningún amigo. Pedile que te comparta su enlace.</p>`;
+    return;
+  }
+
+  const ocultos = obtenerFileIdsOcultos();
+  cont.innerHTML = "";
+  vinculados.forEach((amigo) => {
+    const entrada = cacheSnapshotsAmigos.get(amigo.file_id);
+    const caida = entrada?.caida === true;
+    const oculto = ocultos.has(amigo.file_id);
+
+    const fila = document.createElement("div");
+    fila.className = "row-between";
+    fila.style.cssText = "padding:8px 10px; border-radius:10px; background:rgba(150,150,170,0.08); gap:8px;";
+    fila.innerHTML = `
+      <div class="row" style="align-items:center; gap:8px; min-width:0;">
+        <span style="width:12px; height:12px; border-radius:50%; flex-shrink:0; background:${amigo.color};"></span>
+        <span style="font-size:0.85rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${amigo.nombre}</span>
+        ${caida ? `<span class="badge badge-danger" style="font-size:0.68rem;" title="El enlace ya no responde — puede que lo hayan revocado">Enlace caído</span>` : ""}
+      </div>
+    `;
+    const controles = document.createElement("div");
+    controles.className = "row";
+    controles.style.cssText = "align-items:center; gap:8px; flex-shrink:0;";
+
+    const labelSwitch = document.createElement("label");
+    labelSwitch.className = "switch switch-tema";
+    labelSwitch.title = oculto ? "Mostrar en el horario" : "Ocultar del horario";
+    labelSwitch.innerHTML = `<input type="checkbox" ${oculto ? "" : "checked"}><span class="track"><span class="thumb"></span></span>`;
+    labelSwitch.querySelector("input").addEventListener("change", () => {
+      alternarVisibilidadAmigo(amigo.file_id);
+      renderizarListaAmigosVinculados();
+      if (typeof window.renderizarHorario === "function") window.renderizarHorario();
+    });
+    controles.appendChild(labelSwitch);
+
+    const btnQuitar = document.createElement("button");
+    btnQuitar.type = "button";
+    btnQuitar.className = "btn btn-danger";
+    btnQuitar.style.cssText = "padding:6px 10px; font-size:0.75rem;";
+    btnQuitar.textContent = "Desvincular";
+    btnQuitar.addEventListener("click", () => confirmarDesvincularAmigo(amigo.file_id, amigo.nombre));
+    controles.appendChild(btnQuitar);
+
+    fila.appendChild(controles);
+    cont.appendChild(fila);
+  });
+}
+
+function confirmarDesvincularAmigo(fileId, nombre) {
+  abrirConfirmacion({
+    titulo: `¿Desvincular a ${nombre}?`,
+    mensaje: "Ya no vas a ver su horario superpuesto. Podés volver a vincularlo si te comparte el enlace de nuevo.",
+    textoConfirmar: "Desvincular",
+    claseConfirmar: "btn-danger",
+    onConfirmar: () => {
+      const lista = estado.datos.configuracion.horario_amigos_vinculados || [];
+      estado.datos.configuracion.horario_amigos_vinculados = lista.filter((a) => a.file_id !== fileId);
+      sellarTimestamp(estado.datos.configuracion);
+      marcarCambioPendiente();
+      cacheSnapshotsAmigos.delete(fileId);
+      const ocultos = obtenerFileIdsOcultos();
+      ocultos.delete(fileId);
+      guardarFileIdsOcultos(ocultos);
+      renderizarListaAmigosVinculados();
+      if (typeof window.renderizarHorario === "function") window.renderizarHorario();
+      mostrarToast(`Desvinculado el horario de ${nombre}.`);
+    },
+  });
+}
+
 export {
   inicializarHorarioAmigos,
   abrirPanelAmigos,
   renderizarListaEnlacesCompartidos,
   procesarAsociacionPendienteDeAmigo,
   asignarColorAmigo,
+  iniciarRefrescoPeriodicoAmigos,
+  obtenerBloquesAmigosPorDia,
+  renderizarListaAmigosVinculados,
 };
