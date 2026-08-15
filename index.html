@@ -740,9 +740,12 @@
     <p class="muted">Compartí tu horario por un enlace de solo lectura, o gestioná lo que ya compartiste.</p>
     <button type="button" id="btn-compartir-horario" class="btn btn-primary btn-block">🔗 Compartir mi horario</button>
     <button type="button" id="btn-ir-enlaces-generados" class="btn btn-secondary btn-block">Ver mis enlaces compartidos</button>
-    <!-- Horario entre Amigos — Parte 3 (pendiente): acá va "Horarios Activos"
-         (la lista de amigos vinculados, con su switch de mostrar/ocultar en
-         la superposición del grid propio). -->
+
+    <div class="stack" style="gap:6px; margin-top:4px;">
+      <span class="form-label">Horarios Activos</span>
+      <p class="muted" style="font-size:0.76rem; margin:0;">Horarios de amigos que vinculaste a tu cuenta. Se superponen al tuyo como franjas de color; podés ocultarlos sin desvincularlos.</p>
+      <div id="lista-amigos-vinculados" class="stack" style="gap:6px;"></div>
+    </div>
   </div>
 </div>
 
