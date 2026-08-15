@@ -1,15 +1,17 @@
 /* =========================================================================
-   AGENDA — Núcleo (vista Lista)
-   Header con navegación semanal + botón agregar, y la lista cronológica de
-   los 7 días de la semana mostrada, cada uno con su tarjetita "Mostrar
-   clases" y sus eventos/tareas/exámenes agrupados por tipo.
-   No incluye todavía la vista Calendario (prompt/entrega aparte).
+   AGENDA — Núcleo
+   Header fijo (pills Lista/Calendario + Agregar/Ajustes) + despacho entre
+   las dos vistas. Esta vista (Lista) es cronológica: los 7 días de la
+   semana mostrada, cada uno con su tarjetita "Mostrar clases" y sus
+   eventos/tareas/exámenes agrupados por tipo. La vista Calendario vive en
+   agenda-calendario.js.
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
-import { desplazarYResaltarElemento, mostrarToast } from "../ui/componentes.js";
+import { desplazarYResaltarElemento } from "../ui/componentes.js";
 import { mostrarSeccion } from "../main.js";
+import { renderizarCalendarioAgenda } from "./agenda-calendario.js";
 import { construirTarjetaClasesDia } from "./agenda-clases.js";
 import { abrirModalEventoAgenda, inicializarModalAgendaEvento } from "./agenda-modal.js";
 import {
@@ -24,9 +26,11 @@ const ETIQUETA_TIPO = { evento: "Eventos", tarea: "Tareas", examen: "Exámenes" 
 const BADGE_TIPO = { evento: "badge-accent", tarea: "badge-warning", examen: "badge-danger" };
 const ORDEN_TIPO = ["examen", "tarea", "evento"];
 
-// Transitorio (no persistido): semanas de offset respecto a la semana de
-// hoy que Agenda está mostrando ahora mismo. Mismo criterio que
-// estado.horarioNumeroSemana en horario.js.
+// Transitorio (no persistido). "lista" | "calendario" — cuál de las 2
+// vistas está activa ahora mismo (ver pills #pills-agenda-vista).
+estado.agendaVistaActiva = estado.agendaVistaActiva || "lista";
+// Semanas de offset respecto a la semana de hoy que Lista (y el submodo
+// "Semanal" del Calendario, que la comparte a propósito) está mostrando.
 estado.agendaOffsetSemana = estado.agendaOffsetSemana || 0;
 
 function construirBadgeMateria(evento) {
@@ -65,6 +69,10 @@ function construirBloqueDia(diaInfo, semestreActivo, mostrarDiasVacios) {
   const bloque = document.createElement("section");
   bloque.className = "glass-panel stack";
   bloque.style.padding = "14px";
+  // Ancla para el salto "Calendario -> Lista" (ver agenda-calendario.js,
+  // saltarADiaEnLista) — así el clic en una celda del grid puede encontrar
+  // y resaltar el bloque de ese día exacto con un simple selector.
+  bloque.dataset.fecha = fechaISO;
 
   const hoy = esHoyFecha(diaInfo.fecha);
   const header = document.createElement("div");
@@ -108,6 +116,61 @@ function construirBloqueDia(diaInfo, semestreActivo, mostrarDiasVacios) {
   return bloque;
 }
 
+/**
+ * Subheader de navegación semanal de Lista — se arma en JS (no vive fijo en
+ * el HTML) por el mismo motivo que el subheader del Calendario
+ * (agenda-calendario.js): cada vista tiene su propio criterio de "qué
+ * significa avanzar/retroceder" (semana acá, mes o semana allá), así que no
+ * pueden compartir una sola barra de navegación estática.
+ */
+function construirSubheaderLista(dias) {
+  const wrap = document.createElement("section");
+  wrap.className = "glass-panel row-between";
+  wrap.style.padding = "10px 14px";
+
+  const btnAnterior = document.createElement("button");
+  btnAnterior.type = "button";
+  btnAnterior.className = "btn-icono-fantasma";
+  btnAnterior.style.fontSize = "1.3rem";
+  btnAnterior.textContent = "‹";
+  btnAnterior.addEventListener("click", () => {
+    estado.agendaOffsetSemana -= 1;
+    renderizarAgendaInterno();
+  });
+
+  const centro = document.createElement("div");
+  centro.className = "stack";
+  centro.style.cssText = "align-items:center; text-align:center; gap:2px; flex:1;";
+  const rango = document.createElement("span");
+  rango.className = "texto-encabezado-seccion";
+  rango.textContent = formatearRangoSemanaAgenda(dias);
+  const volverHoy = document.createElement("span");
+  volverHoy.className = "muted";
+  volverHoy.style.cssText = "font-size:0.72rem; text-decoration:underline; cursor:pointer;";
+  volverHoy.textContent = "Volver a hoy";
+  volverHoy.addEventListener("click", () => {
+    estado.agendaOffsetSemana = 0;
+    renderizarAgendaInterno();
+  });
+  centro.appendChild(rango);
+  centro.appendChild(volverHoy);
+
+  const btnSiguiente = document.createElement("button");
+  btnSiguiente.type = "button";
+  btnSiguiente.className = "btn-icono-fantasma";
+  btnSiguiente.style.fontSize = "1.3rem";
+  btnSiguiente.textContent = "›";
+  btnSiguiente.addEventListener("click", () => {
+    estado.agendaOffsetSemana += 1;
+    renderizarAgendaInterno();
+  });
+
+  wrap.appendChild(btnAnterior);
+  wrap.appendChild(centro);
+  wrap.appendChild(btnSiguiente);
+  return wrap;
+}
+
 function renderizarAgendaInterno() {
   const cont = document.getElementById("agenda-lista-dias");
   if (!cont) return;
@@ -117,13 +180,11 @@ function renderizarAgendaInterno() {
   const mostrarDiasVacios = cfg.agenda_mostrar_dias_vacios !== false; // default: sí
 
   const dias = obtenerDiasSemanaAgenda(estado.agendaOffsetSemana);
-  document.getElementById("agenda-rango-semana").textContent = formatearRangoSemanaAgenda(dias);
+  cont.appendChild(construirSubheaderLista(dias));
 
   const semestreActivo = obtenerSemestreActivoAgenda();
 
-  const bloques = dias
-    .map((dia) => construirBloqueDia(dia, semestreActivo, mostrarDiasVacios))
-    .filter(Boolean);
+  const bloques = dias.map((dia) => construirBloqueDia(dia, semestreActivo, mostrarDiasVacios)).filter(Boolean);
 
   if (bloques.length === 0) {
     const vacio = document.createElement("p");
@@ -137,24 +198,19 @@ function renderizarAgendaInterno() {
 }
 
 function renderizarAgenda() {
-  renderizarAgendaInterno();
+  const esLista = estado.agendaVistaActiva === "lista";
+  document.getElementById("agenda-lista-dias")?.classList.toggle("oculto", !esLista);
+  document.getElementById("agenda-vista-calendario")?.classList.toggle("oculto", esLista);
+  document.querySelectorAll("#pills-agenda-vista .pill-item").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.vista === estado.agendaVistaActiva);
+  });
+  if (esLista) renderizarAgendaInterno();
+  else renderizarCalendarioAgenda();
 }
 
 function inicializarAgenda() {
   inicializarModalAgendaEvento();
 
-  document.getElementById("btn-agenda-semana-anterior")?.addEventListener("click", () => {
-    estado.agendaOffsetSemana -= 1;
-    renderizarAgendaInterno();
-  });
-  document.getElementById("btn-agenda-semana-siguiente")?.addEventListener("click", () => {
-    estado.agendaOffsetSemana += 1;
-    renderizarAgendaInterno();
-  });
-  document.getElementById("agenda-volver-hoy")?.addEventListener("click", () => {
-    estado.agendaOffsetSemana = 0;
-    renderizarAgendaInterno();
-  });
   document.getElementById("btn-agenda-agregar")?.addEventListener("click", () => {
     abrirModalEventoAgenda({ fechaDefault: new Date().toISOString().slice(0, 10) });
   });
@@ -164,20 +220,20 @@ function inicializarAgenda() {
     desplazarYResaltarElemento("#ajuste-seccion-agenda");
   });
 
-  // Vista Calendario todavía no existe (entrega aparte) — el tab queda
-  // presente porque el spec lo pide como parte del selector, pero por ahora
-  // solo avisa que está en construcción en vez de fallar en silencio.
   document.querySelectorAll("#pills-agenda-vista .pill-item").forEach((btn) => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll("#pills-agenda-vista .pill-item").forEach((b) => b.classList.toggle("active", b === btn));
-      const esCalendario = btn.dataset.vista === "calendario";
-      document.getElementById("agenda-lista-dias").classList.toggle("oculto", esCalendario);
-      document.getElementById("agenda-vista-calendario").classList.toggle("oculto", !esCalendario);
-      if (esCalendario) mostrarToast("Vista Calendario — próximamente");
+      estado.agendaVistaActiva = btn.dataset.vista;
+      renderizarAgenda();
     });
   });
 }
 
+// Expuesta en window: agenda-modal.js (guardar/borrar) necesita poder
+// refrescar sin crear un import circular de vuelta hacia este archivo —
+// mismo patrón que window.renderizarHorario en horario.js. agenda-
+// calendario.js, en cambio, SÍ importa renderizarAgenda directo (ciclo
+// intencional, igual que main.js <-> semestres.js): lo necesita en el mismo
+// tick del click del usuario sobre una celda del grid.
 window.renderizarAgenda = renderizarAgenda;
 
 export { inicializarAgenda, renderizarAgenda };

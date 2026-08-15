@@ -79,7 +79,16 @@ function obtenerDiasSemanaOrdenAgenda() {
   const cfg = estado.datos.configuracion;
   const inicioId = cfg.dia_inicio_semana || "lunes";
   const idxInicio = Math.max(0, DIAS_SEMANA_CONFIG.findIndex((d) => d.id === inicioId));
-  return [...DIAS_SEMANA_CONFIG.slice(idxInicio), ...DIAS_SEMANA_CONFIG.slice(0, idxInicio)];
+  const nombres = cfg.nombres_dias_personalizados || {};
+  return [...DIAS_SEMANA_CONFIG.slice(idxInicio), ...DIAS_SEMANA_CONFIG.slice(0, idxInicio)].map((d) => ({
+    ...d,
+    // Mismo criterio que obtenerDiasVisiblesOrdenados en horario.js: nombre
+    // personalizado si el usuario puso uno en Ajustes → Horario, si no la
+    // abreviatura por defecto (L, K, M...) — se comparte la misma
+    // configuración entre Horario y Agenda a propósito, es la MISMA idea de
+    // "cómo le decís vos a este día", no algo que deba configurarse dos veces.
+    etiquetaCorta: nombres[d.id] || d.abrevDefault,
+  }));
 }
 
 /**
@@ -88,15 +97,76 @@ function obtenerDiasSemanaOrdenAgenda() {
  * L-D -> Date.getDay() que usa calcularFechaDelDia en horario.js.
  */
 function obtenerFechaInicioSemanaAgenda(offsetSemanas) {
-  const diasOrdenados = obtenerDiasSemanaOrdenAgenda();
-  const idxInicioCanonico = DIAS_SEMANA_CONFIG.findIndex((d) => d.id === diasOrdenados[0].id);
-  const pesoInicio = (idxInicioCanonico + 1) % 7;
+  const pesoInicio = obtenerPesoDiaInicioAgenda();
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
   const diff = (hoy.getDay() - pesoInicio + 7) % 7;
   const inicio = new Date(hoy);
   inicio.setDate(hoy.getDate() - diff + offsetSemanas * 7);
   return inicio;
+}
+
+/**
+ * getDay() (0=domingo..6=sábado) del día configurado como inicio de semana
+ * — pieza compartida entre obtenerFechaInicioSemanaAgenda() (ancla en HOY)
+ * y obtenerInicioSemanaQueContiene() (ancla en una fecha arbitraria, la que
+ * necesita el Calendario para saber en qué semana de Lista cae un día
+ * cualquiera del grid mensual).
+ */
+function obtenerPesoDiaInicioAgenda() {
+  const diasOrdenados = obtenerDiasSemanaOrdenAgenda();
+  const idxInicioCanonico = DIAS_SEMANA_CONFIG.findIndex((d) => d.id === diasOrdenados[0].id);
+  return (idxInicioCanonico + 1) % 7;
+}
+
+/**
+ * Calendario — Núcleo: primer día de la semana (según dia_inicio_semana)
+ * que contiene `fecha` — a diferencia de obtenerFechaInicioSemanaAgenda,
+ * que siempre ancla en HOY, esta ancla en cualquier fecha arbitraria. La
+ * usa el grid mensual para agrupar sus celdas en filas de semana completa
+ * (incluyendo los días del mes anterior/siguiente que rellenan la primera y
+ * última fila), y el salto "Calendario -> Lista" para saber a qué semana
+ * moverse.
+ */
+function obtenerInicioSemanaQueContiene(fecha) {
+  const pesoInicio = obtenerPesoDiaInicioAgenda();
+  const base = new Date(fecha);
+  base.setHours(0, 0, 0, 0);
+  const diff = (base.getDay() - pesoInicio + 7) % 7;
+  const inicio = new Date(base);
+  inicio.setDate(base.getDate() - diff);
+  return inicio;
+}
+
+/**
+ * Calendario — Núcleo: cuántas semanas hay que sumarle al offset de HOY
+ * (estado.agendaOffsetSemana, el mismo que usa la vista Lista) para que
+ * Lista muestre la semana que contiene `fecha` — es lo que permite que
+ * tocar un día en el grid mensual/semanal del Calendario salte a Lista ya
+ * parado en la semana correcta.
+ */
+function obtenerOffsetSemanaParaFecha(fecha) {
+  const inicioHoy = obtenerFechaInicioSemanaAgenda(0);
+  const inicioObjetivo = obtenerInicioSemanaQueContiene(fecha);
+  const diffMs = inicioObjetivo.getTime() - inicioHoy.getTime();
+  return Math.round(diffMs / (7 * 24 * 60 * 60 * 1000));
+}
+
+/**
+ * Código de día ("L".."D") de una fecha CUALQUIERA, directo por
+ * Date.getDay() — a diferencia de obtenerDiasSemanaAgenda/
+ * obtenerDiasSemanaOrdenAgenda (que dan los días YA rotados según
+ * dia_inicio_semana para armar una semana completa), esto es para el caso
+ * inverso: ya se tiene una fecha puntual (una celda del grid mensual) y
+ * hace falta saber su código de día para consultar bloques_horario/
+ * obtenerClasesEfectivasSemana, que siempre usan el código CANÓNICO
+ * (L=lunes..D=domingo), sin importar cuál sea el inicio de semana
+ * configurado.
+ */
+function obtenerCodigoDiaSemana(fecha) {
+  const peso = fecha.getDay(); // 0=domingo..6=sábado
+  const idxCanonico = (peso + 6) % 7; // 0=lunes..6=domingo
+  return DIAS_SEMANA_CONFIG[idxCanonico].abrevDefault;
 }
 
 /**
@@ -131,9 +201,12 @@ export {
   esHoyFecha,
   formatearFechaISO,
   formatearRangoSemanaAgenda,
+  obtenerCodigoDiaSemana,
   obtenerDiasSemanaAgenda,
   obtenerDiasSemanaOrdenAgenda,
   obtenerFechaInicioSemanaAgenda,
+  obtenerInicioSemanaQueContiene,
   obtenerMateriasVinculablesAgenda,
+  obtenerOffsetSemanaParaFecha,
   obtenerSemestreActivoAgenda,
 };

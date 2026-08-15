@@ -36,6 +36,23 @@ function enriquecerClaseParaTarjetaInfo(claseEfectiva) {
 }
 
 /**
+ * Mismo cálculo que hace calcularNumeroSemanaSemestre (schema.js), pero
+ * evaluado contra una fecha puntual en vez de Date.now() — hace falta la
+ * semana del DÍA que se está pintando (que en Agenda casi nunca es hoy: se
+ * navega semanas/meses enteros), no la de "ahora mismo". Compartida entre
+ * la tarjetita y el conteo liviano para el Calendario (agenda-calendario.js)
+ * para no repetir la fórmula una tercera vez.
+ */
+function calcularNumeroSemanaParaFecha(semestre, fecha) {
+  const inicio = new Date(semestre.fecha_inicio);
+  const semanasTranscurridas = isNaN(inicio.getTime())
+    ? 0
+    : Math.floor((fecha.getTime() - inicio.getTime()) / (7 * 24 * 60 * 60 * 1000));
+  const total = Number(semestre.duracion_semanas) || 16;
+  return Math.min(Math.max(semanasTranscurridas + 1, 1), total);
+}
+
+/**
  * Clases del semestre activo que caen en `diaCodigo` ("L"|"K"|...) de la
  * semana `numeroSemana`. `numeroSemana` se recalcula por fecha real (no se
  * asume "semana actual de Horario") para que la tarjetita muestre lo
@@ -51,22 +68,23 @@ function obtenerClasesDelDia(semestre, numeroSemana, diaCodigo) {
 }
 
 /**
+ * Conteo liviano (sin construir DOM) de cuántas clases caen en `fecha` —
+ * lo usa el grid del Calendario (agenda-calendario.js) para pintar un
+ * indicador chico por celda, sin pagar el costo de armar la tarjetita
+ * completa en las ~35-42 celdas de una vista mensual.
+ */
+function contarClasesDelDia(semestre, fecha, diaCodigo) {
+  if (!semestre) return 0;
+  return obtenerClasesDelDia(semestre, calcularNumeroSemanaParaFecha(semestre, fecha), diaCodigo).length;
+}
+
+/**
  * Construye la tarjetita completa (colapsada por default). `semestre` puede
  * ser null (usuario sin semestre activo) — en ese caso no se muestra nada
  * (ver agenda.js, que ya evita llamar a esto sin semestre).
  */
 function construirTarjetaClasesDia(semestre, fecha, diaCodigo) {
-  // calcularNumeroSemanaSemestre (schema.js) calcula la semana contra
-  // Date.now() — no sirve directo acá porque hace falta la semana del DÍA
-  // que se está pintando (que puede no ser hoy, ej. navegando a la semana
-  // pasada/siguiente en Agenda). Misma fórmula exacta, pero evaluada contra
-  // `fecha` en vez de "ahora".
-  const inicio = new Date(semestre.fecha_inicio);
-  const semanasTranscurridas = isNaN(inicio.getTime())
-    ? 0
-    : Math.floor((fecha.getTime() - inicio.getTime()) / (7 * 24 * 60 * 60 * 1000));
-  const total = Number(semestre.duracion_semanas) || 16;
-  const numeroSemanaReal = Math.min(Math.max(semanasTranscurridas + 1, 1), total);
+  const numeroSemanaReal = calcularNumeroSemanaParaFecha(semestre, fecha);
 
   const clases = obtenerClasesDelDia(semestre, numeroSemanaReal, diaCodigo);
 
@@ -116,4 +134,4 @@ function construirTarjetaClasesDia(semestre, fecha, diaCodigo) {
   return cont;
 }
 
-export { construirTarjetaClasesDia };
+export { construirTarjetaClasesDia, contarClasesDelDia };
