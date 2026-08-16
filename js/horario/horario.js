@@ -1248,6 +1248,7 @@ function generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas) {
         profesorNombre: obtenerNombreProfesor(c.profesor_id),
         aula: c.aula,
         modalidad: c.modalidad,
+        emoji: obtenerEmojiModalidad(c.modalidad),
       }));
     const conLanes = calcularLanesDia(bloquesDia);
     conLanes.forEach((b) => {
@@ -1284,6 +1285,14 @@ function generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas) {
       if (b.aula && alto > 44) {
         ctx.font = "400 10px " + FONT_CANVAS;
         ctx.fillText(truncarTextoCanvas(ctx, b.aula, ancho - 8), x + 5, ty);
+      }
+      if (b.emoji) {
+        // Esquina inferior derecha, mismo lugar que ocupa en la tarjeta
+        // viva (.horario-emoji-modalidad: right:5px; bottom:3px).
+        ctx.textAlign = "right";
+        ctx.font = "13px " + FONT_CANVAS;
+        ctx.fillText(b.emoji, x + ancho - 5, top + alto - 5);
+        ctx.textAlign = "left";
       }
       ctx.restore();
     });
@@ -1327,21 +1336,22 @@ function descargarHorarioComoImagen() {
   }
   const clasesEfectivas = construirClasesEfectivasSemana(semestre, numeroSemana);
   const canvas = generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas);
-  canvas.toBlob((blob) => {
-    if (!blob) {
-      mostrarToast("No se pudo generar la imagen");
-      return;
-    }
-    const nombreArchivo = `horario_${(semestre.nombre || "semestre").toLowerCase().replace(/[^a-z0-9]+/g, "-")}_semana-${numeroSemana}.png`;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = nombreArchivo;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }, "image/png");
+  // toDataURL es SÍNCRONO (a diferencia de toBlob). El click del link de
+  // descarga tiene que dispararse todavía dentro de la ventana de "user
+  // activation" que abrió el click original del botón — con toBlob, para
+  // cuando el callback async resuelve, esa ventana ya cerró y navegadores
+  // de escritorio (Firefox, Chrome en modo estricto) bloquean la descarga
+  // programática silenciosamente. Mobile es más laxo con esto, por eso
+  // funcionaba en el teléfono pero no en PC. No hace falta revokeObjectURL
+  // acá: no es un object URL, es un data URL.
+  const nombreArchivo = `horario_${(semestre.nombre || "semestre").toLowerCase().replace(/[^a-z0-9]+/g, "-")}_semana-${numeroSemana}.png`;
+  const url = canvas.toDataURL("image/png");
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 function inicializarHorario() {
