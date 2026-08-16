@@ -39,11 +39,24 @@
   <!-- Estado: contenido -->
   <div id="amigos-contenido" class="stack oculto">
     <div class="glass-card">
-      <div class="row-between" style="flex-wrap:wrap; gap:10px;">
+      <div class="row-between" style="flex-wrap:wrap; gap:10px; position:relative;">
         <div>
           <h2 id="amigos-titulo-semestre" style="margin:0 0 2px; font-size:1rem;"></h2>
           <p class="muted" id="amigos-subtitulo-semana" style="margin:0;"></p>
         </div>
+        <!-- Centrado real en X e Y entre el bloque de semestre y "Asociar a
+             mi cuenta": position:absolute + translate(-50%,-50%) sobre el
+             contenedor relativo de arriba, en vez de un truco con
+             margin:auto (que con justify-content:space-between y 3 hijos da
+             resultados impredecibles — un auto-margin en un item anula
+             space-between para TODA la fila, empujando el botón "Asociar"
+             fuera de su lugar). Así el ícono queda en el centro geométrico
+             exacto de la fila sin importar cuánto texto tenga el título del
+             semestre. El handler de click (toggle sobre
+             #amigos-grid-contenedor, mismo patrón que
+             btn-horario-pantalla-completa en horario.js) va en
+             horario-amigos-publico.js — pendiente, no subido todavía. -->
+        <button type="button" id="btn-amigos-pantalla-completa" class="btn-icono-fantasma" style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);" title="Pantalla completa" aria-label="Pantalla completa">⛶</button>
         <button type="button" id="btn-asociar-amigo" class="btn btn-primary" style="font-size:0.85rem;">+ Asociar a mi cuenta</button>
       </div>
     </div>
