@@ -98,6 +98,23 @@ function fechaLocalDesdeISO(str) {
   return new Date(y, m - 1, d);
 }
 
+/**
+ * Línea de hora actual — Núcleo: inverso de fechaLocalDesdeISO, para poder
+ * marcar cada columna del grid con su fecha real ("YYYY-MM-DD") sin
+ * problemas de zona horaria (Date#toISOString usa UTC, que puede correrse
+ * un día — mismo bug de fondo que ya se cazó en TeamPeachesHub con
+ * cumpleaños/recordatorios). El actualizador periódico de la línea
+ * (actualizarPosicionLineaHoraActual) compara contra esto para saber en
+ * cuál columna corresponde dibujarla SIN tener que recalcular fechas de
+ * semestre otra vez cada minuto.
+ */
+function fechaAISOLocal(fecha) {
+  const y = fecha.getFullYear();
+  const m = String(fecha.getMonth() + 1).padStart(2, "0");
+  const d = String(fecha.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 function obtenerColorBloque(bloqueEfectivo) {
   if (bloqueEfectivo.color) return bloqueEfectivo.color;
   if (!bloqueEfectivo.materia_id) return "#a78bfa";
@@ -267,6 +284,61 @@ function construirLineasHorarias(pxPorMin, minInicioRango, minFinRango) {
   return stops.join(",\n");
 }
 
+/**
+ * Línea de hora actual — Núcleo: mismo indicador que Google Calendar (línea
+ * horizontal + puntito a la izquierda) SOLO en la columna del día de hoy —
+ * si "hoy" no está entre los días visibles de la semana que se está
+ * mirando (ej. navegaste a la semana pasada/siguiente), no se dibuja nada
+ * en ningún lado. Devuelve null si la hora actual cae fuera del rango de
+ * horas configurado (Ajustes → Horario) — no tiene sentido dibujarla fuera
+ * del grid visible.
+ */
+function construirLineaHoraActual(pxPorMin, minInicioRango, minFinRango) {
+  const ahora = new Date();
+  const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
+  if (minutosAhora < minInicioRango || minutosAhora > minFinRango) return null;
+  const top = (minutosAhora - minInicioRango) * pxPorMin;
+  const linea = document.createElement("div");
+  linea.className = "horario-linea-hora-actual";
+  linea.style.top = `${top}px`;
+  linea.innerHTML = `<span class="horario-linea-hora-actual-punto"></span>`;
+  return linea;
+}
+
+/**
+ * Recorre las columnas ya pintadas en el DOM y mueve/crea/borra la línea de
+ * hora actual sin volver a renderizar todo el grid (eso perdería la
+ * posición de scroll y sería carísimo hacerlo cada 60s). Se apoya en
+ * col.dataset.fecha (ver renderizarHorarioInterno) para saber cuál columna
+ * es "hoy" sin tener que recalcular fechas de semestre en cada tick.
+ */
+function actualizarPosicionLineaHoraActual() {
+  const columnas = document.querySelectorAll(".horario-col-dia");
+  if (columnas.length === 0) return;
+  const hoyISO = fechaAISOLocal(new Date());
+  const { horaInicio, horaFin } = obtenerRangoHorasHorario();
+  const minInicioRango = horaInicio * 60;
+  const minFinRango = horaFin * 60;
+  const ahora = new Date();
+  const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
+  const dentroDeRango = minutosAhora >= minInicioRango && minutosAhora <= minFinRango;
+
+  columnas.forEach((col) => {
+    const existente = col.querySelector(".horario-linea-hora-actual");
+    if (col.dataset.fecha !== hoyISO || !dentroDeRango) {
+      existente?.remove();
+      return;
+    }
+    const top = (minutosAhora - minInicioRango) * PX_POR_MIN_EXPANDIDO;
+    if (existente) {
+      existente.style.top = `${top}px`;
+    } else {
+      const nueva = construirLineaHoraActual(PX_POR_MIN_EXPANDIDO, minInicioRango, minFinRango);
+      if (nueva) col.appendChild(nueva);
+    }
+  });
+}
+
 // Nota: el horario default (grid semanal de siempre) ya NO muestra nada de
 // amigos superpuesto — la franja lateral con los bloques ajenos que vivía
 // acá se quitó porque ahora existe una vista dedicada para eso ("Horario
@@ -312,11 +384,22 @@ function ocultarBotonesEntrarQueChocan(cont) {
   });
 }
 
-function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango) {
+function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango, fecha) {
   const col = document.createElement("div");
   col.className = "horario-col-dia";
   col.dataset.diaCodigo = dia.abrevDefault;
+  // Línea de hora actual — Núcleo: ancla para que
+  // actualizarPosicionLineaHoraActual() sepa, cada minuto, cuál columna es
+  // "hoy" sin recalcular fechas de semestre. `fecha` puede venir undefined
+  // (llamadores viejos que no la pasen) — en ese caso simplemente nunca
+  // coincide con hoyISO y no se dibuja línea acá, sin romper nada.
+  if (fecha) col.dataset.fecha = fechaAISOLocal(fecha);
   col.style.cssText = `position:relative; flex:1; min-width:56px; height:${altoGrid}px; background:${construirLineasHorarias(pxPorMin, minInicioRango, minFinRango)}; cursor:pointer; border-left:1px solid rgba(150,150,170,0.15);`;
+
+  if (fecha && esHoy(fecha)) {
+    const linea = construirLineaHoraActual(pxPorMin, minInicioRango, minFinRango);
+    if (linea) col.appendChild(linea);
+  }
 
   const conLanes = calcularLanesDia(bloquesDia);
   conLanes.forEach((b) => {
@@ -711,6 +794,7 @@ function renderizarHorarioInterno() {
     filaGrid.style.cssText = "display:flex;";
     filaGrid.appendChild(construirColumnaHoras(pxPorMin, altoGrid, minInicioRango, minFinRango));
     dias.forEach((dia) => {
+      const fecha = calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault);
       // clasesEfectivas ya viene PLANA (una entrada por día puntual, ver
       // obtenerClasesEfectivasSemana en schema.js) — no hay .dias anidado que
       // filtrar/recorrer, cada item ya es la clase de un día concreto.
@@ -730,7 +814,7 @@ function renderizarHorarioInterno() {
           tieneExcepcionEstaSemana: !!c.tiene_ajuste_cronograma,
         }));
       filaGrid.appendChild(
-        construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango)
+        construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango, fecha)
       );
     });
 
@@ -1037,12 +1121,250 @@ function renderizarHorarioConjuntoInterno(cont, semestre, numeroSemana) {
   }
 }
 
+/* ===================== Descargar horario como imagen ===================== */
+
+const FONT_CANVAS = "Inter, 'Segoe UI', system-ui, sans-serif";
+
+/** Lee un color real de la paleta activa (CSS custom property) en vez de hardcodear colores — la imagen exportada respeta la paleta que el usuario tenga puesta (son 15+, ver ui/paleta-personalizada.js). */
+function obtenerVarCSS(nombre, fallback) {
+  const valor = getComputedStyle(document.documentElement).getPropertyValue(nombre).trim();
+  return valor || fallback;
+}
+
+function truncarTextoCanvas(ctx, texto, maxAncho) {
+  if (ctx.measureText(texto).width <= maxAncho) return texto;
+  let recortado = texto;
+  while (recortado.length > 1 && ctx.measureText(recortado + "…").width > maxAncho) {
+    recortado = recortado.slice(0, -1);
+  }
+  return recortado + "…";
+}
+
+function dibujarRectRedondeado(ctx, x, y, w, h, r) {
+  const radio = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + radio, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radio);
+  ctx.arcTo(x + w, y + h, x, y + h, radio);
+  ctx.arcTo(x, y + h, x, y, radio);
+  ctx.arcTo(x, y, x + w, y, radio);
+  ctx.closePath();
+}
+
+/**
+ * Descargar horario — Núcleo: se genera dibujando a mano en un <canvas> en
+ * vez de con html2canvas/similar — evita sumar una librería externa (pesada
+ * y con sus propias rarezas capturando gradientes/box-shadow) solo para
+ * esto, y da control total sobre el resultado: una imagen 16:9 fija, con
+ * TODO el rango de horas visible (nunca un recorte forzado que corte una
+ * clase a la mitad, que es justo lo que un scroll interno sí puede hacer
+ * en pantalla). Reutiliza los mismos helpers de datos que ya arma el grid
+ * en vivo (calcularLanesDia, obtenerColorBloque, obtenerNombreBloque, etc.)
+ * para que la imagen exportada sea fiel a lo que el usuario ve en pantalla.
+ */
+function generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas) {
+  const ANCHO = 1600;
+  const ALTO = 900; // 16:9
+
+  const colorFondo = obtenerVarCSS("--bg-canvas", "#101114");
+  const colorBorde = obtenerVarCSS("--border-glass", "rgba(255,255,255,0.10)");
+  const colorTexto = obtenerVarCSS("--text-primary", "#F1F2F4");
+  const colorTextoSec = obtenerVarCSS("--text-secondary", "#B7BAC1");
+
+  const canvas = document.createElement("canvas");
+  canvas.width = ANCHO;
+  canvas.height = ALTO;
+  const ctx = canvas.getContext("2d");
+  ctx.textBaseline = "top";
+
+  ctx.fillStyle = colorFondo;
+  ctx.fillRect(0, 0, ANCHO, ALTO);
+
+  const margenX = 24;
+  const margenInferior = 22;
+  let cursorY = 20;
+
+  ctx.fillStyle = colorTexto;
+  ctx.font = "700 26px " + FONT_CANVAS;
+  ctx.fillText(semestre.nombre || "Horario", margenX, cursorY);
+
+  ctx.fillStyle = colorTextoSec;
+  ctx.font = "400 15px " + FONT_CANVAS;
+  ctx.fillText(`Semana ${numeroSemana}`, margenX, cursorY + 32);
+
+  cursorY += 66;
+
+  const { horaInicio, horaFin } = obtenerRangoHorasHorario();
+  const minInicioRango = horaInicio * 60;
+  const minFinRango = horaFin * 60;
+  const anchoHoras = 56;
+  const xGridInicio = margenX + anchoHoras;
+  const anchoGridDisponible = ANCHO - margenX - xGridInicio;
+  const anchoColumna = anchoGridDisponible / dias.length;
+
+  // Encabezados de día
+  ctx.textAlign = "center";
+  dias.forEach((dia, i) => {
+    const x = xGridInicio + i * anchoColumna + anchoColumna / 2;
+    const fecha = calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault);
+    ctx.fillStyle = colorTexto;
+    ctx.font = "600 14px " + FONT_CANVAS;
+    ctx.fillText(dia.etiquetaCorta, x, cursorY);
+    ctx.fillStyle = colorTextoSec;
+    ctx.font = "400 11px " + FONT_CANVAS;
+    ctx.fillText(fecha ? fecha.toLocaleDateString("es-CR", { day: "numeric", month: "short" }) : "", x, cursorY + 18);
+  });
+  ctx.textAlign = "left";
+
+  const yGridInicio = cursorY + 42;
+  const altoGridReal = ALTO - yGridInicio - margenInferior;
+  const pxPorMinReal = altoGridReal / (minFinRango - minInicioRango);
+
+  // Líneas horarias + etiquetas de hora (cada hora en punto, para no
+  // amontonar texto — el grid en vivo sí marca cada 30min pero acá el
+  // espacio es fijo y limitado)
+  ctx.strokeStyle = colorBorde;
+  ctx.lineWidth = 1;
+  ctx.textAlign = "right";
+  for (let h = Math.ceil(horaInicio); h <= Math.floor(horaFin); h++) {
+    const y = yGridInicio + (h * 60 - minInicioRango) * pxPorMinReal;
+    ctx.beginPath();
+    ctx.moveTo(xGridInicio, y);
+    ctx.lineTo(ANCHO - margenX, y);
+    ctx.stroke();
+    const horaStr = h === 0 ? "12am" : h < 12 ? `${h}am` : h === 12 ? "12pm" : `${h - 12}pm`;
+    ctx.fillStyle = colorTextoSec;
+    ctx.font = "400 11px " + FONT_CANVAS;
+    ctx.fillText(horaStr, xGridInicio - 8, y - 4);
+  }
+  ctx.textAlign = "left";
+
+  // Separadores verticales entre columnas
+  for (let i = 0; i <= dias.length; i++) {
+    const x = xGridInicio + i * anchoColumna;
+    ctx.beginPath();
+    ctx.moveTo(x, yGridInicio);
+    ctx.lineTo(x, yGridInicio + altoGridReal);
+    ctx.stroke();
+  }
+
+  // Bloques de clase — mismo criterio de lanes/recorte que el grid en vivo
+  // (calcularLanesDia + clamp al rango de horas configurado).
+  dias.forEach((dia, i) => {
+    const xCol = xGridInicio + i * anchoColumna;
+    const bloquesDia = clasesEfectivas
+      .filter((c) => c.dia === dia.abrevDefault)
+      .map((c) => ({
+        inicioMin: minutosDesdeHora(c.hora_inicio),
+        finMin: minutosDesdeHora(c.hora_fin),
+        color: obtenerColorBloque(c),
+        nombreCorto: obtenerNombreBloque(c),
+        profesorNombre: obtenerNombreProfesor(c.profesor_id),
+        aula: c.aula,
+        modalidad: c.modalidad,
+      }));
+    const conLanes = calcularLanesDia(bloquesDia);
+    conLanes.forEach((b) => {
+      const inicioClamp = Math.max(b.inicioMin, minInicioRango);
+      const finClamp = Math.min(b.finMin, minFinRango);
+      if (finClamp <= inicioClamp) return;
+      const top = yGridInicio + (inicioClamp - minInicioRango) * pxPorMinReal;
+      const alto = Math.max(16, (finClamp - inicioClamp) * pxPorMinReal);
+      const offsetPx = b.lane * 10;
+      const x = xCol + offsetPx + 2;
+      const ancho = anchoColumna - offsetPx - 4;
+      if (ancho <= 4) return;
+
+      const esSinClase = b.modalidad === "sin_clase";
+      ctx.globalAlpha = esSinClase ? 0.45 : 1;
+      ctx.fillStyle = b.color;
+      dibujarRectRedondeado(ctx, x, top, ancho, alto, 6);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      ctx.save();
+      dibujarRectRedondeado(ctx, x, top, ancho, alto, 6);
+      ctx.clip();
+      ctx.fillStyle = "#ffffff";
+      let ty = top + 5;
+      ctx.font = "600 12px " + FONT_CANVAS;
+      ctx.fillText(truncarTextoCanvas(ctx, b.nombreCorto, ancho - 8), x + 5, ty);
+      ty += 15;
+      if (b.profesorNombre && alto > 30) {
+        ctx.font = "400 10px " + FONT_CANVAS;
+        ctx.fillText(truncarTextoCanvas(ctx, b.profesorNombre, ancho - 8), x + 5, ty);
+        ty += 13;
+      }
+      if (b.aula && alto > 44) {
+        ctx.font = "400 10px " + FONT_CANVAS;
+        ctx.fillText(truncarTextoCanvas(ctx, b.aula, ancho - 8), x + 5, ty);
+      }
+      ctx.restore();
+    });
+  });
+
+  // Línea de hora actual — solo si "hoy" es uno de los días de ESTA semana
+  // exportada y cae dentro del rango de horas visible (mismo criterio que
+  // el indicador en vivo del grid).
+  const ahora = new Date();
+  const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
+  const idxHoy = dias.findIndex((dia) => esHoy(calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault)));
+  if (idxHoy !== -1 && minutosAhora >= minInicioRango && minutosAhora <= minFinRango) {
+    const y = yGridInicio + (minutosAhora - minInicioRango) * pxPorMinReal;
+    const xCol = xGridInicio + idxHoy * anchoColumna;
+    ctx.strokeStyle = "#ef4444";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(xCol, y);
+    ctx.lineTo(xCol + anchoColumna, y);
+    ctx.stroke();
+    ctx.fillStyle = "#ef4444";
+    ctx.beginPath();
+    ctx.arc(xCol, y, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  return canvas;
+}
+
+function descargarHorarioComoImagen() {
+  const semestre = obtenerSemestreHorarioActual();
+  if (!semestre) {
+    mostrarToast("No hay horario para descargar");
+    return;
+  }
+  const numeroSemana = obtenerNumeroSemanaMostrado(semestre);
+  const dias = obtenerDiasVisiblesOrdenados();
+  if (dias.length === 0) {
+    mostrarToast("No hay días visibles configurados (Ajustes → Horario)");
+    return;
+  }
+  const clasesEfectivas = construirClasesEfectivasSemana(semestre, numeroSemana);
+  const canvas = generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas);
+  canvas.toBlob((blob) => {
+    if (!blob) {
+      mostrarToast("No se pudo generar la imagen");
+      return;
+    }
+    const nombreArchivo = `horario_${(semestre.nombre || "semestre").toLowerCase().replace(/[^a-z0-9]+/g, "-")}_semana-${numeroSemana}.png`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nombreArchivo;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, "image/png");
+}
+
 function inicializarHorario() {
   const btnAnterior = document.getElementById("btn-horario-semestre-anterior");
   const btnSiguiente = document.getElementById("btn-horario-semestre-siguiente");
   const btnAgregar = document.getElementById("btn-horario-agregar");
   const btnAmigos = document.getElementById("btn-horario-amigos");
   const btnPantallaCompleta = document.getElementById("btn-horario-pantalla-completa");
+  const btnDescargar = document.getElementById("btn-horario-descargar");
   const nombreSemestreEl = document.getElementById("horario-nombre-semestre");
 
   if (btnAnterior) {
@@ -1078,6 +1400,9 @@ function inicializarHorario() {
   }
   inicializarHorarioAmigos();
   inicializarHorarioConjunto();
+  if (btnDescargar) {
+    btnDescargar.addEventListener("click", descargarHorarioComoImagen);
+  }
   if (btnPantallaCompleta) {
     const contenedor = document.getElementById("horario-grid-contenedor");
     btnPantallaCompleta.addEventListener("click", () => {
@@ -1093,6 +1418,16 @@ function inicializarHorario() {
   window.addEventListener("resize", () => {
     if (!document.getElementById("seccion-horario")?.classList.contains("oculto")) renderizarHorarioInterno();
   });
+
+  // Línea de hora actual: se mueve sola cada minuto sin re-renderizar todo
+  // el grid (ver actualizarPosicionLineaHoraActual). Solo cuando la sección
+  // está realmente visible — sin costo mientras el usuario está en otra
+  // pestaña de la app.
+  setInterval(() => {
+    if (!document.getElementById("seccion-horario")?.classList.contains("oculto")) {
+      actualizarPosicionLineaHoraActual();
+    }
+  }, 60000);
 }
 
 // Se expone en window para que horario-modal.js pueda refrescar el grid tras
