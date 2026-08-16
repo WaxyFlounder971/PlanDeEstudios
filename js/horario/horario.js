@@ -1663,6 +1663,46 @@ function truncarTextoCanvas(ctx, texto, maxAncho) {
   return recortado + "…";
 }
 
+/**
+ * Envuelve `texto` en hasta `maxLineas` líneas que quepan en `maxAncho`
+ * (con el font YA seteado en `ctx` antes de llamar) — mismo espíritu que el
+ * word-wrap de la tarjeta viva (overflow-wrap/word-break en CSS), que el
+ * canvas no tiene gratis. Antes el nombre de la materia siempre se dibujaba
+ * en una sola línea con truncarTextoCanvas, así que cualquier nombre que
+ * necesitara 2 líneas se cortaba de una, aunque el bloque tuviera alto de
+ * sobra para mostrarlo completo (bug real reportado).
+ *
+ * Una vez alcanzado el límite de líneas, TODAS las palabras que sobran se
+ * amontonan en la última línea a la fuerza, y esa última línea se recorta
+ * con "…" al final (vía truncarTextoCanvas) si sigue sin entrar — así el
+ * único lugar donde de verdad se pierde texto es la última línea, nunca una
+ * de las de arriba.
+ */
+function envolverTextoCanvas(ctx, texto, maxAncho, maxLineas) {
+  const palabras = String(texto || "").trim().split(/\s+/).filter(Boolean);
+  if (palabras.length === 0) return [];
+  const lineas = [];
+  let actual = "";
+  let i = 0;
+  while (i < palabras.length) {
+    const estaEnUltimaLineaPermitida = lineas.length === maxLineas - 1;
+    const prueba = actual ? `${actual} ${palabras[i]}` : palabras[i];
+    if (estaEnUltimaLineaPermitida || !actual || ctx.measureText(prueba).width <= maxAncho) {
+      actual = prueba;
+      i++;
+    } else {
+      lineas.push(actual);
+      actual = "";
+    }
+  }
+  if (actual) lineas.push(actual);
+  const idxUltima = lineas.length - 1;
+  if (idxUltima >= 0 && ctx.measureText(lineas[idxUltima]).width > maxAncho) {
+    lineas[idxUltima] = truncarTextoCanvas(ctx, lineas[idxUltima], maxAncho);
+  }
+  return lineas;
+}
+
 function dibujarRectRedondeado(ctx, x, y, w, h, r) {
   const radio = Math.max(0, Math.min(r, w / 2, h / 2));
   ctx.beginPath();
@@ -1810,18 +1850,32 @@ function generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas) {
       dibujarRectRedondeado(ctx, x, top, ancho, alto, 6);
       ctx.clip();
       ctx.fillStyle = "#ffffff";
+      const maxAnchoTexto = ancho - 8;
+      const lineHeightTitulo = 14;
       let ty = top + 5;
       ctx.font = "600 12px " + FONT_CANVAS;
-      ctx.fillText(truncarTextoCanvas(ctx, b.nombreCorto, ancho - 8), x + 5, ty);
-      ty += 15;
-      if (b.profesorNombre && alto > 30) {
+      // Cuántas líneas puede ocupar el título antes de que no quede alto ni
+      // para eso: bloques bajitos se quedan en 1 línea (mismo resultado que
+      // antes), pero uno con alto de sobra ahora sí puede envolver a 2-3
+      // líneas en vez de truncarse de una.
+      const maxLineasTitulo = alto > 60 ? 3 : alto > 34 ? 2 : 1;
+      envolverTextoCanvas(ctx, b.nombreCorto, maxAnchoTexto, maxLineasTitulo).forEach((linea) => {
+        ctx.fillText(linea, x + 5, ty);
+        ty += lineHeightTitulo;
+      });
+
+      // Espacio real que queda después del título (que ahora puede ocupar
+      // 1, 2 o 3 líneas) — reemplaza los umbrales fijos `alto > 30`/`alto >
+      // 44` de antes, que asumían el título siempre en una sola línea y por
+      // eso ya no reflejaban el alto real disponible.
+      if (b.profesorNombre && top + alto - ty >= 12) {
         ctx.font = "400 10px " + FONT_CANVAS;
-        ctx.fillText(truncarTextoCanvas(ctx, b.profesorNombre, ancho - 8), x + 5, ty);
+        ctx.fillText(truncarTextoCanvas(ctx, b.profesorNombre, maxAnchoTexto), x + 5, ty);
         ty += 13;
       }
-      if (b.aula && alto > 44) {
+      if (b.aula && top + alto - ty >= 12) {
         ctx.font = "400 10px " + FONT_CANVAS;
-        ctx.fillText(truncarTextoCanvas(ctx, b.aula, ancho - 8), x + 5, ty);
+        ctx.fillText(truncarTextoCanvas(ctx, b.aula, maxAnchoTexto), x + 5, ty);
       }
       ctx.restore();
 
