@@ -3219,6 +3219,33 @@ html.exportar-tema-default[data-mode="dark"] {
   font-weight: 700;
 }
 
+/* Línea de "hora actual" (igual al indicador de Google Calendar) — solo
+   vive dentro de la columna del día de hoy (ver construirLineaHoraActual y
+   actualizarPosicionLineaHoraActual en horario.js). Un solo elemento marca
+   BORDE (la línea, con ::before ocupando todo el ancho) + un puntito
+   sobresaliendo a la izquierda del borde de la columna, mismo lenguaje
+   visual que Google Calendar.
+   z-index 35: por encima de las tarjetas de clase (10 + lane, lane rara vez
+   pasa de ~20) pero por debajo del header sticky del grid (z-index 50). */
+.horario-linea-hora-actual {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 2px solid #ef4444;
+  z-index: 35;
+  pointer-events: none;
+}
+.horario-linea-hora-actual-punto {
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+}
+
 /* Días del modal: por default fila única con scroll horizontal (pill-group
    normal); cuando horario-modal.js detecta que no caben todas las etiquetas
    sin cortarse, pasa a wrap (4-3 / 3-3-1 / 2-2-2-1, ancho fijo por JS
