@@ -1293,38 +1293,28 @@ function generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas) {
         ctx.font = "400 10px " + FONT_CANVAS;
         ctx.fillText(truncarTextoCanvas(ctx, b.aula, ancho - 8), x + 5, ty);
       }
+      ctx.restore();
+
       if (b.emoji) {
-        // Esquina inferior derecha, mismo lugar que ocupa en la tarjeta
-        // viva (.horario-emoji-modalidad: right:5px; bottom:3px).
+        // Dibujado FUERA del clip del rect redondeado (a diferencia de
+        // antes) — pegado a la esquina inferior derecha, la curva del
+        // borde (radius 6) le recortaba un pedazo al emoji. Con 8px de
+        // margen (antes 5px) además queda lejos de la zona curva. Mismo
+        // lugar relativo que ocupa en la tarjeta viva (esquina inferior
+        // derecha), solo que ya no corre riesgo de que el clip lo tape.
         ctx.textAlign = "right";
+        ctx.textBaseline = "alphabetic";
         ctx.font = "13px " + FONT_CANVAS;
-        ctx.fillText(b.emoji, x + ancho - 5, top + alto - 5);
+        ctx.fillText(b.emoji, x + ancho - 8, top + alto - 8);
         ctx.textAlign = "left";
       }
-      ctx.restore();
     });
   });
 
-  // Línea de hora actual — solo si "hoy" es uno de los días de ESTA semana
-  // exportada y cae dentro del rango de horas visible (mismo criterio que
-  // el indicador en vivo del grid).
-  const ahora = new Date();
-  const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
-  const idxHoy = dias.findIndex((dia) => esHoy(calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault)));
-  if (idxHoy !== -1 && minutosAhora >= minInicioRango && minutosAhora <= minFinRango) {
-    const y = yGridInicio + (minutosAhora - minInicioRango) * pxPorMinReal;
-    const xCol = xGridInicio + idxHoy * anchoColumna;
-    ctx.strokeStyle = "#ef4444";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(xCol, y);
-    ctx.lineTo(xCol + anchoColumna, y);
-    ctx.stroke();
-    ctx.fillStyle = "#ef4444";
-    ctx.beginPath();
-    ctx.arc(xCol, y, 4, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  // Pedido explícito: la imagen descargada NO debe incluir la línea de hora
+  // actual (a diferencia de antes, que sí la dibujaba si "hoy" caía en la
+  // semana exportada). La línea sigue viva en el grid en pantalla; acá
+  // simplemente ya no se dibuja nada para ese indicador.
 
   return canvas;
 }
