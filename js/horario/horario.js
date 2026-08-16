@@ -11,7 +11,15 @@ import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 import { obtenerSemestresOrdenCronologico, buscarSemestreVivoPorId } from "../semestres/semestres.js";
 import { obtenerPlanActivo } from "../plan/plan-esquema.js";
 import { abrirModalBloqueHorario, construirZonaCronograma } from "./horario-modal.js";
-import { abrirPanelAmigos, inicializarHorarioAmigos, obtenerListaAmigosParaDiaConjunto, refrescarSnapshotsAmigos } from "./horario-amigos.js";
+import {
+  abrirPanelAmigos,
+  inicializarHorarioAmigos,
+  obtenerListaAmigosParaDiaConjunto,
+  refrescarSnapshotsAmigos,
+  obtenerSnapshotAmigoPorId,
+  obtenerDiasConClaseAmigosVinculados,
+  calcularNumeroSemanaAmigo,
+} from "./horario-amigos.js";
 
 const PX_POR_MIN_EXPANDIDO = 0.84; // 30% menos que antes (1.2), pedido explícito
 
@@ -44,6 +52,19 @@ estado.horarioExpandido = estado.horarioExpandido || false;
 // vez en activarModoConjunto() al día real de hoy.
 estado.horarioModoConjunto = estado.horarioModoConjunto || false;
 estado.horarioConjuntoDiaIdx = estado.horarioConjuntoDiaIdx ?? null;
+// Punto 4 del prompt: además del modo Día (columnas por persona, un día a
+// la vez, ya existente arriba), ahora el horario conjunto también puede
+// mostrar la semana completa. "dia" | "semana" — se resetea a "dia" en
+// cada carga de página a propósito, no se persiste ninguna preferencia.
+estado.horarioConjuntoVista = estado.horarioConjuntoVista || "dia";
+// Nivel de zoom del modo Semana (mismo mecanismo que estado.zoomMapa en el
+// Mapa del Plan de Estudios — pan libre vía scroll nativo + esto solo
+// controla el transform:scale, ver renderizarConjuntoModoSemana).
+estado.horarioConjuntoSemanaZoom = estado.horarioConjuntoSemanaZoom || 1;
+// Punto 2 del prompt: vista individual de UN amigo en pantalla completa.
+// null = no está activa. Mutuamente excluyente con horarioModoConjunto
+// (activar una desactiva la otra, ver activarVistaIndividualAmigo).
+estado.horarioVistaIndividualAmigoFileId = estado.horarioVistaIndividualAmigoFileId ?? null;
 
 // Cache del último semestre/semana renderizados, para que centrarVistaInicial
 // no tenga que recalcular nada por su cuenta.
@@ -171,16 +192,47 @@ function obtenerEmojiModalidad(modalidad) {
   return ""; // presencial u otro valor no reconocido: sin emoji
 }
 
-function obtenerDiasVisiblesOrdenados() {
+/**
+ * TODOS los 7 días, ordenados según "día de inicio de semana" (Ajustes →
+ * Horario) y con la etiqueta corta personalizada aplicada — sin filtrar por
+ * "días visibles". Antes esto vivía mezclado dentro de
+ * obtenerDiasVisiblesOrdenados(); se separa acá porque el punto 3 del
+ * prompt (vista compartida ignora los días ocultos de MI configuración
+ * personal) necesita el orden/etiquetas sin el filtro de visibilidad, tanto
+ * para el Horario conjunto como para la vista individual de un amigo.
+ */
+function obtenerDiasOrdenados() {
   const cfg = estado.datos.configuracion;
-  const visiblesIds = new Set(cfg.dias_visibles || DIAS_SEMANA_CONFIG.map((d) => d.id));
   const nombres = cfg.nombres_dias_personalizados || {};
   const inicioId = cfg.dia_inicio_semana || "lunes";
   const idxInicio = Math.max(0, DIAS_SEMANA_CONFIG.findIndex((d) => d.id === inicioId));
   const rotado = [...DIAS_SEMANA_CONFIG.slice(idxInicio), ...DIAS_SEMANA_CONFIG.slice(0, idxInicio)];
-  return rotado
-    .filter((d) => visiblesIds.has(d.id))
-    .map((d) => ({ ...d, etiquetaCorta: nombres[d.id] || d.abrevDefault }));
+  return rotado.map((d) => ({ ...d, etiquetaCorta: nombres[d.id] || d.abrevDefault }));
+}
+
+function obtenerDiasVisiblesOrdenados() {
+  const cfg = estado.datos.configuracion;
+  const visiblesIds = new Set(cfg.dias_visibles || DIAS_SEMANA_CONFIG.map((d) => d.id));
+  return obtenerDiasOrdenados().filter((d) => visiblesIds.has(d.id));
+}
+
+/**
+ * Set de códigos de día ("L","K","M","J","V","S","D") en los que hay al
+ * menos un bloque configurado, a partir de una lista de bloques con la
+ * misma forma que semestre.bloques_horario o snapshot.bloques (ambos traen
+ * `.dias` con `.dia` = código). Reutilizable para "mi" semestre y para el
+ * snapshot de un amigo — es la base del punto 3 (mostrar todos los días
+ * que ESE horario tenga clases, sin importar configuraciones de
+ * visibilidad de nadie).
+ */
+function obtenerCodigosDiaConClase(bloques) {
+  const set = new Set();
+  (bloques || []).forEach((b) => {
+    (b.dias || []).forEach((d) => {
+      if (d && d.dia) set.add(d.dia);
+    });
+  });
+  return set;
 }
 
 /**
@@ -687,6 +739,8 @@ function renderizarHorarioInterno() {
   if (!semestre) {
     if (estado.horarioModoConjunto) {
       renderizarHorarioConjuntoInterno(cont, null, null);
+    } else if (estado.horarioVistaIndividualAmigoFileId) {
+      renderizarVistaIndividualAmigoInterno(cont, null, null);
     } else {
       cont.innerHTML = `<p class="muted" style="padding:16px;">Creá un semestre en la sección Semestres para empezar a armar tu horario.</p>`;
     }
@@ -743,6 +797,11 @@ function renderizarHorarioInterno() {
   // ver activarModoConjunto/desactivarModoConjunto más abajo.
   if (estado.horarioModoConjunto) {
     renderizarHorarioConjuntoInterno(cont, semestre, numeroSemana);
+  } else if (estado.horarioVistaIndividualAmigoFileId) {
+    // Vista individual de un amigo (punto 2 del prompt) — NO es una ventana
+    // aparte, reemplaza TEMPORALMENTE este mismo contenido, igual criterio
+    // que el Horario conjunto de la rama de arriba.
+    renderizarVistaIndividualAmigoInterno(cont, semestre, numeroSemana);
   } else {
     const columnaAncha = document.createElement("div");
     columnaAncha.style.cssText = "display:flex; flex-direction:column; min-width:100%; width:max-content;";
@@ -833,10 +892,11 @@ function renderizarHorarioInterno() {
   if (!document.fullscreenElement) cont.appendChild(barra);
 
   // El auto-scroll del grid semanal completo busca la clase más temprana
-  // entre TODOS los días visibles de la semana. El modo conjunto tiene su
-  // propio auto-scroll (por día, mío + de amigos) disparado desde adentro
-  // de renderizarHorarioConjuntoInterno — no aplica acá.
-  if (!estado.horarioModoConjunto) {
+  // entre TODOS los días visibles de la semana. El modo conjunto y la vista
+  // individual de un amigo tienen su propio auto-scroll (disparado desde
+  // adentro de renderizarHorarioConjuntoInterno / renderizarVistaIndividualAmigoInterno)
+  // — no aplica acá.
+  if (!estado.horarioModoConjunto && !estado.horarioVistaIndividualAmigoFileId) {
     const diasAbrevVisibles = new Set(dias.map((d) => d.abrevDefault));
     const minutosClasesSemana = clasesEfectivas
       .filter((c) => diasAbrevVisibles.has(c.dia))
@@ -879,15 +939,34 @@ function sincronizarModalesConPantallaCompleta() {
    para no duplicar esa lógica.
    ========================================================================= */
 
+/**
+ * Punto 3 del prompt: días navegables/mostrados en el Horario conjunto
+ * (tanto modo Día como modo Semana). Es la UNIÓN de:
+ *  - mis días visibles (Ajustes → Horario) — mi configuración personal
+ *    sigue aplicando a MI propio horario, tal como antes;
+ *  - cualquier día en el que ALGÚN amigo vinculado tenga clase, sin
+ *    importar si yo lo tengo oculto — así un día que solo un amigo usa
+ *    nunca queda invisible por una preferencia mía que no tiene nada que
+ *    ver con su horario.
+ * No filtra por si YO tengo o no clase ese día (mi columna simplemente
+ * muestra "Sin clases" si no tengo nada, igual que siempre).
+ */
+function obtenerDiasModoConjunto() {
+  const idsVisibles = new Set(obtenerDiasVisiblesOrdenados().map((d) => d.id));
+  const codigosDiaAmigos = obtenerDiasConClaseAmigosVinculados();
+  return obtenerDiasOrdenados().filter((d) => idsVisibles.has(d.id) || codigosDiaAmigos.has(d.abrevDefault));
+}
+
 function activarModoConjunto() {
   if (estado.horarioModoConjunto) return;
   estado.horarioModoConjunto = true;
 
   if (estado.horarioConjuntoDiaIdx == null) {
     // Primera vez en esta sesión: arranca en el día real de hoy si está
-    // entre los días visibles configurados; si no (ej. domingo oculto),
-    // cae al primero de la lista en vez de romper.
-    const dias = obtenerDiasVisiblesOrdenados();
+    // entre los días navegables del conjunto (mis días visibles + días con
+    // clase de algún amigo, ver obtenerDiasModoConjunto); si no, cae al
+    // primero de la lista en vez de romper.
+    const dias = obtenerDiasModoConjunto();
     const hoy = new Date();
     const codigoHoy = DIAS_SEMANA_CONFIG[(hoy.getDay() + 6) % 7].abrevDefault; // getDay(): dom=0..sáb=6 -> reordena a L..D
     const idxHoy = dias.findIndex((d) => d.abrevDefault === codigoHoy);
@@ -918,19 +997,209 @@ function desactivarModoConjunto() {
   renderizarHorarioInterno();
 }
 
+/* =========================================================================
+   Vista individual de un amigo en pantalla completa (punto 2 del prompt):
+   a diferencia del Horario conjunto (mezcla TODOS los amigos), esta vista
+   muestra el horario de UN SOLO amigo, en un grid semanal normal (como
+   amigos.html) con TODOS los días que ESE horario tenga clases (punto 3 —
+   nunca limitado por mi configuración personal de días visibles). Entra
+   automáticamente a pantalla completa (Fullscreen API sobre el mismo
+   #horario-grid-contenedor que ya usa el botón ⛶ del header) — el botón
+   "✕ Cerrar" vive DENTRO del propio grid (ver
+   renderizarVistaIndividualAmigoInterno), no en el header: el header queda
+   fuera del árbol de pantalla completa (ver comentario en
+   IDS_MODALES_GLOBALES más abajo) y por lo tanto invisible mientras dura.
+   ========================================================================= */
+
+function activarVistaIndividualAmigo(fileId) {
+  const vinculados = estado.datos?.configuracion?.horario_amigos_vinculados || [];
+  if (!vinculados.some((a) => a.file_id === fileId)) return;
+  if (estado.horarioModoConjunto) desactivarModoConjunto();
+
+  estado.horarioVistaIndividualAmigoFileId = fileId;
+  // Mismo par de botones que usa el modo conjunto (ver activarModoConjunto)
+  // — fallback por si Fullscreen no está disponible/falla (ej. algunos
+  // navegadores en iframe): con el header todavía visible, esto sigue
+  // dando una salida además del ✕ propio de adentro del grid.
+  document.getElementById("btn-horario-agregar")?.classList.add("oculto");
+  const btnSalir = document.getElementById("btn-salir-modo-conjunto");
+  if (btnSalir) {
+    btnSalir.textContent = "← Cerrar horario";
+    btnSalir.classList.remove("oculto");
+  }
+  renderizarHorarioInterno();
+
+  const contenedor = document.getElementById("horario-grid-contenedor");
+  contenedor?.requestFullscreen?.().catch(() => {
+    // Sin soporte o el navegador lo bloqueó — la vista sigue activa igual,
+    // solo sin el modo pantalla completa nativo.
+  });
+
+  // Best-effort, mismo criterio que activarModoConjunto: refresca el
+  // snapshot por si cambió desde el último sondeo de 5 min.
+  refrescarSnapshotsAmigos()
+    .then(() => {
+      if (estado.horarioVistaIndividualAmigoFileId === fileId) renderizarHorarioInterno();
+    })
+    .catch(() => {});
+}
+
+/**
+ * Grid semanal normal (mismo criterio visual que el grid propio de siempre:
+ * columnas por día, header con fecha, línea de hora actual) pero READ-ONLY
+ * y con el snapshot de UN SOLO amigo en vez de mis propias clases — las
+ * columnas de persona se construyen con construirColumnaPersonaConjunto
+ * (misma pieza que ya usa el Horario conjunto, sin click-to-editar, a
+ * diferencia de construirColumnaDia que es para MI horario editable).
+ *
+ * Punto 3 del prompt aplicado acá también: los días mostrados son los que
+ * TIENEN clase en el snapshot de este amigo puntual (obtenerCodigosDiaConClase),
+ * nunca recortados por mi configuración personal de días visibles ni por la
+ * que el amigo tenía guardada al compartir.
+ *
+ * `semestre`/`numeroSemana` son MI semestre/semana actual (el mismo contexto
+ * que ya se está mirando en el resto de la app) — de ahí se saca la fecha
+ * calendario real de cada día, y desde esa fecha se traduce a la semana
+ * PROPIA del snapshot del amigo (calcularNumeroSemanaAmigo, vía
+ * obtenerListaAmigosParaDiaConjunto) — mismo mecanismo que usa el Horario
+ * conjunto para alinear dos semestres con fechas de inicio distintas.
+ */
+function renderizarVistaIndividualAmigoInterno(cont, semestre, numeroSemana) {
+  const fileId = estado.horarioVistaIndividualAmigoFileId;
+  const vinculados = estado.datos?.configuracion?.horario_amigos_vinculados || [];
+  const amigo = vinculados.find((a) => a.file_id === fileId);
+  if (!amigo) {
+    cont.innerHTML = `<p class="muted" style="padding:16px;">Este horario ya no está vinculado.</p>`;
+    return;
+  }
+
+  const entrada = obtenerSnapshotAmigoPorId(fileId);
+  if (!entrada || !entrada.snapshot) {
+    cont.innerHTML = `<p class="muted" style="padding:16px;">${
+      entrada?.caida ? "El enlace de este horario está caído." : `Cargando el horario de ${amigo.nombre}…`
+    }</p>`;
+    return;
+  }
+  const snapshot = entrada.snapshot;
+  const codigosConClase = obtenerCodigosDiaConClase(snapshot.bloques);
+  const dias = obtenerDiasOrdenados().filter((d) => codigosConClase.has(d.abrevDefault));
+
+  const { horaInicio, horaFin } = obtenerRangoHorasHorario();
+  const minInicioRango = horaInicio * 60;
+  const minFinRango = horaFin * 60;
+  const pxPorMin = PX_POR_MIN_EXPANDIDO;
+  const altoGrid = (minFinRango - minInicioRango) * pxPorMin;
+
+  const columnaAncha = document.createElement("div");
+  columnaAncha.style.cssText = "display:flex; flex-direction:column; min-width:100%; width:max-content;";
+
+  const encabezado = document.createElement("div");
+  encabezado.style.cssText = "position:sticky; top:0; z-index:50; background:var(--bg-header-solido);";
+  const tituloFila = document.createElement("div");
+  tituloFila.style.cssText = "display:flex; align-items:center; justify-content:center; gap:8px; padding:6px 0; border-bottom:1px solid rgba(150,150,170,0.15);";
+  tituloFila.innerHTML = `
+    <span style="width:10px; height:10px; border-radius:50%; flex-shrink:0; background:${amigo.color};"></span>
+    <span class="texto-encabezado-seccion">${amigo.nombre}</span>
+  `;
+  encabezado.appendChild(tituloFila);
+
+  if (dias.length === 0) {
+    columnaAncha.appendChild(encabezado);
+    columnaAncha.appendChild(
+      Object.assign(document.createElement("p"), {
+        className: "muted",
+        textContent: `${amigo.nombre} no tiene ninguna clase registrada.`,
+        style: "padding:16px; text-align:center;",
+      })
+    );
+    cont.appendChild(columnaAncha);
+    return;
+  }
+
+  // Mismo ancho (130px, flex:1) en el header y en las columnas de abajo —
+  // construirColumnaPersonaConjunto usa ese ancho, así que el header tiene
+  // que matchear o los días quedan desalineados con sus propias columnas.
+  const headerFila = document.createElement("div");
+  headerFila.style.cssText = "display:flex; border-bottom:1px solid rgba(150,150,170,0.15);";
+  const espaciador = document.createElement("div");
+  espaciador.style.cssText = "width:28px; flex-shrink:0;";
+  headerFila.appendChild(espaciador);
+
+  let semanaIncluyeHoy = false;
+  const bloquesPorDia = dias.map((dia) => {
+    const fecha = semestre ? calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault) : null;
+    if (fecha && esHoy(fecha)) semanaIncluyeHoy = true;
+    const entradaDia = fecha ? obtenerListaAmigosParaDiaConjunto(fecha, dia.abrevDefault).find((e) => e.amigo.file_id === fileId) : null;
+
+    const h = document.createElement("div");
+    h.style.cssText = "flex:1; min-width:130px; text-align:center; padding:4px 0;";
+    h.innerHTML = `
+      <div class="${fecha && esHoy(fecha) ? "horario-dia-actual-glow" : ""}" style="font-size:0.72rem; font-weight:600;">${dia.etiquetaCorta}</div>
+      <div class="muted" style="font-size:0.6rem;">${fecha ? fecha.toLocaleDateString("es-CR", { day: "numeric", month: "short" }) : ""}</div>
+    `;
+    headerFila.appendChild(h);
+
+    return { bloques: entradaDia ? entradaDia.bloques : [], caida: entradaDia ? false : entrada.caida === true };
+  });
+  encabezado.appendChild(headerFila);
+
+  const filaGrid = document.createElement("div");
+  filaGrid.style.cssText = "display:flex; position:relative;";
+  filaGrid.appendChild(construirColumnaHoras(pxPorMin, altoGrid, minInicioRango, minFinRango));
+  bloquesPorDia.forEach(({ bloques, caida }) => {
+    const mensaje = caida ? "Enlace caído" : bloques.length === 0 ? "Sin clases" : null;
+    filaGrid.appendChild(construirColumnaPersonaConjunto(bloques, pxPorMin, altoGrid, minInicioRango, minFinRango, mensaje));
+  });
+  if (semanaIncluyeHoy) {
+    const linea = construirLineaHoraActualGrid(pxPorMin, minInicioRango, minFinRango);
+    if (linea) filaGrid.appendChild(linea);
+  }
+
+  columnaAncha.appendChild(encabezado);
+  columnaAncha.appendChild(filaGrid);
+  cont.appendChild(columnaAncha);
+
+  // Auto-scroll a la clase más temprana entre todos los días mostrados de
+  // este amigo — mismo criterio que el grid propio (centrarVistaInicial).
+  const minutosClasesSemana = bloquesPorDia.flatMap(({ bloques }) => bloques.map((b) => b.inicioMin));
+  const contenedorScroll = document.getElementById("horario-grid-contenedor");
+  if (contenedorScroll) {
+    requestAnimationFrame(() => centrarVistaInicial(contenedorScroll, minutosClasesSemana, pxPorMin, minInicioRango, minFinRango));
+  }
+}
+
+function desactivarVistaIndividualAmigo() {
+  if (!estado.horarioVistaIndividualAmigoFileId) return;
+  estado.horarioVistaIndividualAmigoFileId = null;
+  document.getElementById("btn-horario-agregar")?.classList.remove("oculto");
+  const btnSalir = document.getElementById("btn-salir-modo-conjunto");
+  if (btnSalir) {
+    btnSalir.textContent = "← Salir del modo conjunto";
+    btnSalir.classList.add("oculto");
+  }
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  renderizarHorarioInterno();
+}
+
 // Cablea el botón "‹ Salir del modo conjunto" (ver index.html, junto a
-// btn-horario-agregar). Se llama una sola vez desde inicializarHorario();
-// activarModoConjunto() ya se dispara aparte, desde el click de
-// btn-horario-conjunto en horario-amigos.js.
+// btn-horario-agregar) — hoy sirve como salida de DOS vistas especiales
+// (modo conjunto Y, de respaldo si Fullscreen falla, la vista individual de
+// un amigo), así que decide cuál desactivar según cuál esté activa. Se
+// llama una sola vez desde inicializarHorario(); activarModoConjunto() y
+// activarVistaIndividualAmigo() ya se disparan aparte, desde sus propios
+// puntos de entrada (horario-amigos.js).
 function inicializarHorarioConjunto() {
   const btnSalir = document.getElementById("btn-salir-modo-conjunto");
   if (btnSalir) {
-    btnSalir.addEventListener("click", () => desactivarModoConjunto());
+    btnSalir.addEventListener("click", () => {
+      if (estado.horarioVistaIndividualAmigoFileId) desactivarVistaIndividualAmigo();
+      else desactivarModoConjunto();
+    });
   }
 }
 
 function moverDiaConjunto(delta) {
-  const dias = obtenerDiasVisiblesOrdenados();
+  const dias = obtenerDiasModoConjunto();
   if (dias.length === 0) return;
   const actual = estado.horarioConjuntoDiaIdx ?? 0;
   estado.horarioConjuntoDiaIdx = (actual + delta + dias.length) % dias.length;
@@ -979,14 +1248,36 @@ function construirColumnaPersonaConjunto(bloques, pxPorMin, altoGrid, minInicioR
   return col;
 }
 
+/** Switch "Día / Semana" del Horario conjunto (punto 4 del prompt) — el
+ *  mismo pill-group visual que ya usa el resto de la app (ver Agenda). */
+function construirSwitchDiaSemanaConjunto() {
+  const grupo = document.createElement("div");
+  grupo.className = "pill-group";
+  grupo.style.cssText = "justify-content:center; margin:0 auto;";
+  [["dia", "Día"], ["semana", "Semana"]].forEach(([valor, etiqueta]) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `pill-item${estado.horarioConjuntoVista === valor ? " active" : ""}`;
+    btn.textContent = etiqueta;
+    btn.addEventListener("click", () => {
+      if (estado.horarioConjuntoVista === valor) return;
+      estado.horarioConjuntoVista = valor;
+      renderizarHorarioInterno();
+    });
+    grupo.appendChild(btn);
+  });
+  return grupo;
+}
+
 /**
  * Reemplaza TEMPORALMENTE el contenido de #horario-grid mientras
  * estado.horarioModoConjunto esté activo (ver renderizarHorarioInterno,
  * que decide cuál de las dos ramas renderizar) — no es una ventana/modal
- * aparte, es el mismo grid de siempre con otro contenido adentro. En vez
- * de la fila de encabezados Lun..Dom del grid semanal, acá va una fila de
- * navegación "‹ Lunes ›" (un solo día a la vez) seguida de una fila con
- * una columna por persona (Yo + cada amigo vinculado).
+ * aparte, es el mismo grid de siempre con otro contenido adentro. Dentro de
+ * este modo hay a su vez dos vistas (switch Día/Semana, punto 4 del
+ * prompt): modo Día (columnas por persona, un día a la vez, ya existía) y
+ * modo Semana (todos los días navegables uno al lado del otro, punto 4
+ * nuevo) — cada una en su propia función de render más abajo.
  */
 function renderizarHorarioConjuntoInterno(cont, semestre, numeroSemana) {
   cont.innerHTML = "";
@@ -995,11 +1286,27 @@ function renderizarHorarioConjuntoInterno(cont, semestre, numeroSemana) {
     return;
   }
 
-  const dias = obtenerDiasVisiblesOrdenados();
+  // Punto 3 del prompt: días fusionados (mis días visibles + días donde
+  // algún amigo tiene clase), no solo mi configuración personal — ver
+  // obtenerDiasModoConjunto.
+  const dias = obtenerDiasModoConjunto();
   if (dias.length === 0) {
-    cont.innerHTML = `<p class="muted" style="padding:16px;">No hay días visibles configurados (Ajustes → Horario).</p>`;
+    cont.innerHTML = `<p class="muted" style="padding:16px;">No hay días para mostrar (ni tuyos ni de tus amigos vinculados).</p>`;
     return;
   }
+
+  if (estado.horarioConjuntoVista === "semana") {
+    renderizarConjuntoModoSemana(cont, semestre, numeroSemana, dias);
+  } else {
+    renderizarConjuntoModoDia(cont, semestre, numeroSemana, dias);
+  }
+}
+
+/** Modo Día del Horario conjunto: un solo día a la vez ("‹ Lunes ›"),
+ *  columnas por persona (Yo + cada amigo vinculado). Comportamiento igual
+ *  al que ya existía, solo que ahora recibe `dias` ya fusionado (punto 3)
+ *  y agrega el switch Día/Semana arriba de todo (punto 4). */
+function renderizarConjuntoModoDia(cont, semestre, numeroSemana, dias) {
   const idx = Math.min(Math.max(estado.horarioConjuntoDiaIdx ?? 0, 0), dias.length - 1);
   estado.horarioConjuntoDiaIdx = idx;
   const diaSel = dias[idx];
@@ -1032,11 +1339,12 @@ function renderizarHorarioConjuntoInterno(cont, semestre, numeroSemana) {
   const columnaAncha = document.createElement("div");
   columnaAncha.style.cssText = "display:flex; flex-direction:column; min-width:100%; width:max-content;";
 
-  // Encabezado sticky de dos filas: nav de día arriba, nombres de persona
-  // debajo — un solo wrapper sticky (no cada fila por separado) para no
-  // tener que adivinar el alto de la fila de arriba con un top:Npx fijo.
+  // Encabezado sticky de TRES filas: switch Día/Semana, nav de día, nombres
+  // de persona — un solo wrapper sticky (no cada fila por separado) para no
+  // tener que adivinar el alto de las filas de arriba con un top:Npx fijo.
   const encabezado = document.createElement("div");
   encabezado.style.cssText = "position:sticky; top:0; z-index:50; background:var(--bg-header-solido);";
+  encabezado.appendChild(construirSwitchDiaSemanaConjunto());
 
   const navFila = document.createElement("div");
   navFila.style.cssText = "display:flex; align-items:center; justify-content:center; gap:14px; padding:6px 0;";
@@ -1112,6 +1420,228 @@ function renderizarHorarioConjuntoInterno(cont, semestre, numeroSemana) {
   if (contenedorScroll) {
     requestAnimationFrame(() => centrarVistaInicial(contenedorScroll, minutosClasesDia, pxPorMin, minInicioRango, minFinRango));
   }
+}
+
+/**
+ * Modo Semana del Horario conjunto (punto 4 del prompt, nuevo): en vez de
+ * un solo día, muestra TODOS los días navegables (ver
+ * obtenerDiasModoConjunto) uno al lado del otro, cada uno con sus propias
+ * sub-columnas (Yo + cada amigo). Las columnas mantienen el mismo ancho
+ * natural que tendrían en un horario normal (no se achican para que
+ * quepan) — el contenido desborda horizontalmente y se recorre con el
+ * MISMO estilo de scroll que ya usa el Mapa del Plan de Estudios: scroll
+ * nativo libre en ambos ejes (reutiliza .mapa-scroll/.mapa-sizer/
+ * .mapa-track de design-system.css, sin CSS nuevo) + pellizco táctil y
+ * Ctrl+rueda para zoom, con su PROPIO nivel de zoom independiente
+ * (estado.horarioConjuntoSemanaZoom) para no interferir con el zoom del
+ * mapa — mismo mecanismo que aplicarZoomMapa/ajustarZoomMapa en
+ * plan-mapa.js, adaptado acá con sus propias funciones.
+ */
+function renderizarConjuntoModoSemana(cont, semestre, numeroSemana, dias) {
+  const { horaInicio, horaFin } = obtenerRangoHorasHorario();
+  const minInicioRango = horaInicio * 60;
+  const minFinRango = horaFin * 60;
+  const pxPorMin = PX_POR_MIN_EXPANDIDO;
+  const altoGrid = (minFinRango - minInicioRango) * pxPorMin;
+  const clasesEfectivas = construirClasesEfectivasSemana(semestre, numeroSemana);
+
+  const encabezado = document.createElement("div");
+  encabezado.style.cssText = "position:sticky; top:0; z-index:50; background:var(--bg-header-solido); padding-bottom:4px;";
+  encabezado.appendChild(construirSwitchDiaSemanaConjunto());
+
+  const controlesFila = document.createElement("div");
+  controlesFila.style.cssText = "display:flex; align-items:center; justify-content:center; padding:4px 0 2px;";
+  const zoomControles = document.createElement("div");
+  zoomControles.className = "mapa-zoom-controles";
+  const btnMenos = document.createElement("button");
+  btnMenos.type = "button";
+  btnMenos.className = "btn-icono-fantasma mapa-zoom-btn";
+  btnMenos.textContent = "－";
+  btnMenos.setAttribute("aria-label", "Alejar");
+  const etiquetaZoom = document.createElement("span");
+  etiquetaZoom.className = "muted mapa-zoom-etiqueta";
+  etiquetaZoom.textContent = Math.round(estado.horarioConjuntoSemanaZoom * 100) + "%";
+  const btnMas = document.createElement("button");
+  btnMas.type = "button";
+  btnMas.className = "btn-icono-fantasma mapa-zoom-btn";
+  btnMas.textContent = "＋";
+  btnMas.setAttribute("aria-label", "Acercar");
+  btnMenos.addEventListener("click", () => ajustarZoomConjuntoSemana(-0.1, etiquetaZoom));
+  btnMas.addEventListener("click", () => ajustarZoomConjuntoSemana(0.1, etiquetaZoom));
+  zoomControles.appendChild(btnMenos);
+  zoomControles.appendChild(etiquetaZoom);
+  zoomControles.appendChild(btnMas);
+  controlesFila.appendChild(zoomControles);
+  encabezado.appendChild(controlesFila);
+  cont.appendChild(encabezado);
+
+  // Alto disponible: mismo criterio que el resto del grid (medir la
+  // posición real del contenedor y usar lo que quede hasta el fondo de la
+  // pantalla), restando el espacio que ya ocupa el encabezado sticky de
+  // arriba (switch + zoom), que en este modo NO es parte del área que
+  // scrollea internamente.
+  const contenedorRef = document.getElementById("horario-grid-contenedor");
+  const paddingInferior = window.innerWidth <= 768 ? 16 : 28;
+  const alturaDisponible = contenedorRef
+    ? Math.max(240, window.innerHeight - contenedorRef.getBoundingClientRect().top - paddingInferior - 76)
+    : 420;
+
+  const scrollDiv = document.createElement("div");
+  scrollDiv.className = "mapa-scroll";
+  scrollDiv.style.cssText = `height:${alturaDisponible}px; flex:none;`;
+
+  const sizerDiv = document.createElement("div");
+  sizerDiv.className = "mapa-sizer";
+  const trackDiv = document.createElement("div");
+  trackDiv.className = "mapa-track";
+  trackDiv.style.cssText = "display:flex; align-items:flex-start; gap:18px; padding:4px 6px 10px;";
+
+  let idxHoy = -1;
+  dias.forEach((dia, i) => {
+    const fecha = calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault);
+    const esHoyDia = esHoy(fecha);
+    if (esHoyDia) idxHoy = i;
+
+    const bloquesPropios = clasesEfectivas
+      .filter((c) => c.dia === dia.abrevDefault)
+      .map((c) => ({
+        inicioMin: minutosDesdeHora(c.hora_inicio),
+        finMin: minutosDesdeHora(c.hora_fin),
+        color: obtenerColorBloque(c),
+        nombreBloque: obtenerNombreBloque(c),
+        profesorNombre: obtenerNombreProfesor(c.profesor_id),
+        aula: c.aula,
+        modalidad: c.modalidad,
+      }));
+    const amigosDia = fecha ? obtenerListaAmigosParaDiaConjunto(fecha, dia.abrevDefault) : [];
+
+    const bloqueDia = document.createElement("div");
+    bloqueDia.style.cssText = "display:flex; flex-direction:column; flex-shrink:0;";
+
+    const tituloDia = document.createElement("div");
+    tituloDia.style.cssText = "text-align:center; padding:2px 0 4px;";
+    tituloDia.innerHTML = `
+      <div class="${esHoyDia ? "horario-dia-actual-glow" : ""}" style="font-size:0.78rem; font-weight:700;">${dia.etiqueta || dia.etiquetaCorta}</div>
+      <div class="muted" style="font-size:0.6rem;">${fecha ? fecha.toLocaleDateString("es-CR", { day: "numeric", month: "short" }) : ""}</div>
+    `;
+    bloqueDia.appendChild(tituloDia);
+
+    const nombresFila = document.createElement("div");
+    nombresFila.style.cssText = "display:flex; border-bottom:1px solid rgba(150,150,170,0.15);";
+    const headerYo = document.createElement("div");
+    headerYo.style.cssText = "width:130px; flex-shrink:0; text-align:center; padding:2px 4px;";
+    headerYo.innerHTML = `<span style="font-size:0.72rem; font-weight:700;">Yo</span>`;
+    nombresFila.appendChild(headerYo);
+    amigosDia.forEach(({ amigo }) => {
+      const h = document.createElement("div");
+      h.style.cssText = "width:130px; flex-shrink:0; text-align:center; padding:2px 4px; display:flex; align-items:center; justify-content:center; gap:4px;";
+      h.innerHTML = `
+        <span style="width:8px; height:8px; border-radius:50%; flex-shrink:0; background:${amigo.color};"></span>
+        <span style="font-size:0.72rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${amigo.nombre}</span>
+      `;
+      nombresFila.appendChild(h);
+    });
+    bloqueDia.appendChild(nombresFila);
+
+    const filaColumnas = document.createElement("div");
+    filaColumnas.style.cssText = "display:flex;";
+    filaColumnas.appendChild(construirColumnaHoras(pxPorMin, altoGrid, minInicioRango, minFinRango));
+    filaColumnas.appendChild(
+      construirColumnaPersonaConjunto(bloquesPropios, pxPorMin, altoGrid, minInicioRango, minFinRango, bloquesPropios.length === 0 ? "Sin clases" : null)
+    );
+    amigosDia.forEach(({ bloques, caida }) => {
+      const mensaje = caida ? "Enlace caído" : bloques.length === 0 ? "Sin clases" : null;
+      filaColumnas.appendChild(construirColumnaPersonaConjunto(bloques, pxPorMin, altoGrid, minInicioRango, minFinRango, mensaje));
+    });
+    bloqueDia.appendChild(filaColumnas);
+
+    trackDiv.appendChild(bloqueDia);
+  });
+
+  sizerDiv.appendChild(trackDiv);
+  scrollDiv.appendChild(sizerDiv);
+  cont.appendChild(scrollDiv);
+
+  estado._refsConjuntoSemanaActual = { sizerDiv, trackDiv };
+  requestAnimationFrame(() => {
+    aplicarZoomConjuntoSemana();
+    // Auto-scroll horizontal al bloque de hoy, si está entre los días
+    // mostrados — igual espíritu que el auto-scroll del modo Día, pero acá
+    // es horizontal (de qué bloque de día partir) en vez de vertical (a
+    // qué hora partir); el vertical se deja arriba del todo, cada bloque es
+    // angosto y ya se ve completo casi siempre sin desplazamiento extra.
+    if (idxHoy > 0) {
+      const bloqueHoyEl = trackDiv.children[idxHoy];
+      if (bloqueHoyEl) scrollDiv.scrollLeft = Math.max(0, bloqueHoyEl.offsetLeft - 12);
+    }
+  });
+
+  // Ctrl + rueda del mouse = zoom (sin Ctrl, la rueda hace scroll normal) —
+  // mismo criterio que el Mapa.
+  scrollDiv.addEventListener(
+    "wheel",
+    (ev) => {
+      if (!ev.ctrlKey) return;
+      ev.preventDefault();
+      ajustarZoomConjuntoSemana(ev.deltaY < 0 ? 0.1 : -0.1, etiquetaZoom);
+    },
+    { passive: false }
+  );
+
+  // Pellizco táctil = zoom — mismo criterio que el Mapa.
+  let distanciaInicialToque = null;
+  let zoomInicialToque = 1;
+  const distanciaEntreToques = (toques) => Math.hypot(toques[0].clientX - toques[1].clientX, toques[0].clientY - toques[1].clientY);
+  scrollDiv.addEventListener(
+    "touchstart",
+    (ev) => {
+      if (ev.touches.length === 2) {
+        distanciaInicialToque = distanciaEntreToques(ev.touches);
+        zoomInicialToque = estado.horarioConjuntoSemanaZoom;
+      }
+    },
+    { passive: true }
+  );
+  scrollDiv.addEventListener(
+    "touchmove",
+    (ev) => {
+      if (ev.touches.length === 2 && distanciaInicialToque) {
+        ev.preventDefault();
+        const factor = distanciaEntreToques(ev.touches) / distanciaInicialToque;
+        estado.horarioConjuntoSemanaZoom = Math.min(2, Math.max(0.5, zoomInicialToque * factor));
+        aplicarZoomConjuntoSemana();
+        etiquetaZoom.textContent = Math.round(estado.horarioConjuntoSemanaZoom * 100) + "%";
+      }
+    },
+    { passive: false }
+  );
+  scrollDiv.addEventListener("touchend", (ev) => { if (ev.touches.length < 2) distanciaInicialToque = null; });
+}
+
+/** Recalcula el tamaño real del track del modo Semana y aplica el zoom
+ *  actual (transform: scale) — mismo mecanismo que aplicarZoomMapa en
+ *  plan-mapa.js, adaptado a estado._refsConjuntoSemanaActual. */
+function aplicarZoomConjuntoSemana() {
+  const refs = estado._refsConjuntoSemanaActual;
+  if (!refs) return;
+  const { sizerDiv, trackDiv } = refs;
+  trackDiv.style.transform = "none";
+  const anchoNatural = trackDiv.scrollWidth;
+  const altoNatural = trackDiv.scrollHeight;
+  trackDiv.style.width = anchoNatural + "px";
+  trackDiv.style.height = altoNatural + "px";
+  const zoom = estado.horarioConjuntoSemanaZoom || 1;
+  trackDiv.style.transform = `scale(${zoom})`;
+  sizerDiv.style.width = anchoNatural * zoom + "px";
+  sizerDiv.style.height = altoNatural * zoom + "px";
+}
+
+/** Botones +/- de zoom del modo Semana (no re-renderiza nada, conserva
+ *  scroll) — mismo mecanismo que ajustarZoomMapa en plan-mapa.js. */
+function ajustarZoomConjuntoSemana(delta, etiquetaEl) {
+  estado.horarioConjuntoSemanaZoom = Math.min(2, Math.max(0.5, Math.round((estado.horarioConjuntoSemanaZoom + delta) * 100) / 100));
+  aplicarZoomConjuntoSemana();
+  if (etiquetaEl) etiquetaEl.textContent = Math.round(estado.horarioConjuntoSemanaZoom * 100) + "%";
 }
 
 /* ===================== Descargar horario como imagen ===================== */
@@ -1445,6 +1975,11 @@ export {
   // abrirHorarioConjunto cuando esto era un modal aparte; el nombre externo
   // se mantiene igual para no tocar el import de horario-amigos.js).
   activarModoConjunto as abrirHorarioConjunto,
+  // Punto 2 del prompt: mismo criterio de alias que la línea de arriba — el
+  // nombre externo que horario-amigos.js ya importa ("abrir...") describe
+  // la ACCIÓN desde afuera, mientras que acá adentro el nombre real
+  // ("activar...") describe el cambio de estado interno.
+  activarVistaIndividualAmigo as abrirVistaIndividualAmigo,
   // Agenda — Núcleo: la tarjetita "Mostrar clases" (agenda-clases.js)
   // reutiliza el MISMO modal de info de materia que usa el grid de Horario
   // (pedido explícito del spec: "reutilizar el mismo componente/modal de

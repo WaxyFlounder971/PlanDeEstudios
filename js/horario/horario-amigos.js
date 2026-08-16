@@ -19,8 +19,8 @@ import { marcarCambioPendiente, mostrarCargando, ocultarCargando, registrarHookP
 import { crearEnlaceHorarioCompartido, crearAmigoVinculado, sellarTimestamp } from "../core/schema.js";
 import { crearArchivoJsonEnDrive, crearPermisoPublicoLectura, eliminarPermisoDrive, guardarDatos } from "../core/auth.js";
 import { mostrarToast, abrirConfirmacion, desplazarYResaltarElemento } from "../ui/componentes.js";
-import { copiarAlPortapapelesBlindado } from "../core/clipboard.js";
-import { obtenerSemestreHorarioActual, obtenerColorBloque, obtenerNombreBloque, obtenerRangoHorasHorario, obtenerPlanPorId, abrirHorarioConjunto } from "./horario.js";
+import { copiarAlPortapapelesBlindado, abrirModalCopiaManualPortapapeles } from "../core/clipboard.js";
+import { obtenerSemestreHorarioActual, obtenerColorBloque, obtenerNombreBloque, obtenerRangoHorasHorario, obtenerPlanPorId, abrirHorarioConjunto, abrirVistaIndividualAmigo } from "./horario.js";
 
 // Restringido por dominio en Google Cloud a este mismo GitHub Pages — ver
 // nota de configuración del prompt. amigos.html vive en la raíz del repo,
@@ -313,6 +313,30 @@ async function revocarEnlaceCompartido(enlaceId) {
     mostrarToast("No se pudo revocar. Intentá de nuevo.");
   } finally {
     ocultarCargando();
+  }
+}
+
+/**
+ * FIX (bug real reportado — causa confirmada): el botón "Copiar enlace" de
+ * la lista de "Ver mis enlaces compartidos" (Ajustes) llamaba a esta
+ * función, pero nunca se había escrito en ningún lado del archivo — era una
+ * llamada a una función fantasma, tiraba ReferenceError apenas se
+ * clickeaba. El modal de "enlace recién generado" (mostrarModalEnlaceGenerado,
+ * más arriba) estaba bien, ese no era el problema.
+ *
+ * Reconstruye la misma URL que se generó en su momento (mismo formato que
+ * generarEnlaceCompartido: BASE_URL_AMIGOS + #fileId=) y usa el mismo
+ * blindaje de copia de dos capas + fallback de copia manual que ya usa el
+ * resto de la app (ver core/clipboard.js) — así este botón queda con
+ * exactamente el mismo comportamiento que el de copiar recién generado.
+ */
+async function copiarEnlaceExistente(fileId) {
+  const url = `${BASE_URL_AMIGOS}#fileId=${fileId}`;
+  const ok = await copiarAlPortapapelesBlindado(url);
+  if (ok) {
+    mostrarToast("✓ Enlace copiado");
+  } else {
+    abrirModalCopiaManualPortapapeles(url);
   }
 }
 
@@ -681,6 +705,40 @@ function iniciarRefrescoPeriodicoAmigos() {
   intervaloRefrescoAmigos = setInterval(refrescarSnapshotsAmigos, 5 * 60 * 1000);
 }
 
+/**
+ * Snapshot crudo (+ estado "caída") de UN amigo puntual, tal cual está en
+ * caché ahora mismo. Usado por la vista individual en pantalla completa
+ * (horario.js) para no duplicar el Map privado acá — solo se expone un
+ * getter de lectura, el caché en sí sigue siendo interno de este archivo.
+ */
+function obtenerSnapshotAmigoPorId(fileId) {
+  return cacheSnapshotsAmigos.get(fileId) || null;
+}
+
+/**
+ * Punto 3 del prompt: unión de TODOS los códigos de día ("L","K","M"...)
+ * en los que CUALQUIER amigo vinculado tiene al menos un bloque configurado
+ * — a propósito NO filtra por obtenerFileIdsOcultos() (esa preferencia es
+ * solo para la superposición del grid propio) ni por ninguna configuración
+ * de días visibles (ni la propia del usuario que mira, ni la que el amigo
+ * tenía guardada al compartir): la vista compartida debe poder mostrar
+ * cualquier día en el que un amigo realmente tenga clase, sin que ninguna
+ * preferencia de visualización de nadie lo esconda. Usado por horario.js
+ * para armar la lista de días navegables del Horario conjunto.
+ */
+function obtenerDiasConClaseAmigosVinculados() {
+  const set = new Set();
+  cacheSnapshotsAmigos.forEach((entrada) => {
+    if (!entrada || !entrada.snapshot) return;
+    (entrada.snapshot.bloques || []).forEach((bloque) => {
+      (bloque.dias || []).forEach((d) => {
+        if (d && d.dia) set.add(d.dia);
+      });
+    });
+  });
+  return set;
+}
+
 /* ----------------- Resolver clases de un amigo para un día real ----------------- */
 
 function parseFechaLocalAmigo(str) {
@@ -850,6 +908,23 @@ function renderizarListaAmigosVinculados() {
     controles.className = "row";
     controles.style.cssText = "align-items:center; gap:8px; flex-shrink:0;";
 
+    // Punto 2 del prompt: ver el horario de ESTE amigo solo, en pantalla
+    // completa (no mezclado con los demás en el modo conjunto). Se cierra
+    // el panel de Amigos antes de entrar, mismo patrón que "Horario
+    // conjunto" un poco más abajo en este mismo archivo.
+    const btnVerIndividual = document.createElement("button");
+    btnVerIndividual.type = "button";
+    btnVerIndividual.className = "btn-icono-fantasma";
+    btnVerIndividual.title = `Ver el horario de ${amigo.nombre} en pantalla completa`;
+    btnVerIndividual.setAttribute("aria-label", `Ver el horario de ${amigo.nombre} en pantalla completa`);
+    btnVerIndividual.style.cssText = "font-size:1.05rem; padding:2px 6px;";
+    btnVerIndividual.textContent = "⛶";
+    btnVerIndividual.addEventListener("click", () => {
+      cerrarPanelAmigos();
+      abrirVistaIndividualAmigo(amigo.file_id);
+    });
+    controles.appendChild(btnVerIndividual);
+
     const labelSwitch = document.createElement("label");
     labelSwitch.className = "switch switch-tema";
     labelSwitch.title = oculto ? "Mostrar en el horario" : "Ocultar del horario";
@@ -920,4 +995,7 @@ export {
   renderizarListaAmigosVinculados,
   obtenerListaAmigosParaDiaConjunto,
   refrescarSnapshotsAmigos,
+  obtenerSnapshotAmigoPorId,
+  obtenerDiasConClaseAmigosVinculados,
+  calcularNumeroSemanaAmigo,
 };
