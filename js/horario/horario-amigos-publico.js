@@ -168,6 +168,47 @@ function construirLineasHorarias(pxPorMin, minInicioRango, minFinRango) {
   return stops.join(",\n");
 }
 
+/* Línea de "hora actual" — Núcleo, portada de horario.js. Mismo criterio:
+   abarca TODO el ancho del grid de días (no solo el día de hoy), se
+   posiciona relativa a filaGrid (padre real, ver position:relative que se
+   le agrega en renderizarGridPublico), y usa la MISMA clase CSS
+   (.horario-linea-hora-actual, definida en design-system.css, compartida
+   con el horario propio) — así hereda el glow "brillante pero discreta"
+   sin duplicar esos estilos acá.
+   OJO: el left offset es 38px, NO 28px como en horario.js — esta página
+   tiene su propia columna de horas con OTRO ancho (ver
+   construirColumnaHoras más arriba: width:38px). Copiar el 28px de la app
+   principal a ciegas volvería a meter la línea encima de los números de
+   hora, mismo bug que se corrigió en horario.js. */
+function construirLineaHoraActualGrid(pxPorMin, minInicioRango, minFinRango) {
+  const ahora = new Date();
+  const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
+  if (minutosAhora < minInicioRango || minutosAhora > minFinRango) return null;
+  const top = (minutosAhora - minInicioRango) * pxPorMin;
+  const linea = document.createElement("div");
+  linea.className = "horario-linea-hora-actual";
+  linea.style.top = `${top}px`;
+  linea.style.left = "38px";
+  linea.innerHTML = `<span class="horario-linea-hora-actual-punto"></span>`;
+  return linea;
+}
+
+/* Mueve la línea cada 60s sin re-renderizar todo el grid (mismo motivo que
+   en horario.js: perdería la posición de scroll del usuario). Guarda el
+   rango de horas en un closure porque acá no hay "estado" global — se
+   arma una sola vez en iniciar() con el rango del snapshot ya cargado. */
+function actualizarPosicionLineaHoraActualPublico(minInicioRango, minFinRango, pxPorMin) {
+  const linea = document.querySelector(".horario-linea-hora-actual");
+  if (!linea) return;
+  const ahora = new Date();
+  const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
+  if (minutosAhora < minInicioRango || minutosAhora > minFinRango) {
+    linea.remove();
+    return;
+  }
+  linea.style.top = `${(minutosAhora - minInicioRango) * pxPorMin}px`;
+}
+
 function construirColumnaDia(dia, bloquesDia, pxPorMin, altoGrid, minInicioRango, minFinRango) {
   const col = document.createElement("div");
   col.className = "horario-col-dia";
@@ -265,9 +306,12 @@ function renderizarGridPublico(snapshot) {
   });
 
   const filaGrid = document.createElement("div");
-  filaGrid.style.cssText = "display:flex;";
+  filaGrid.style.cssText = "display:flex; position:relative;";
   filaGrid.appendChild(construirColumnaHoras(PX_POR_MIN, altoGrid, minInicioRango, minFinRango));
+  let semanaIncluyeHoy = false;
   dias.forEach((dia) => {
+    const fecha = calcularFechaDelDia(snapshot.fecha_inicio, numeroSemana, dia.abrevDefault);
+    if (esHoy(fecha)) semanaIncluyeHoy = true;
     const bloquesDia = clasesEfectivas
       .filter((c) => c.dia === dia.abrevDefault)
       .map((c) => ({
@@ -282,10 +326,23 @@ function renderizarGridPublico(snapshot) {
       }));
     filaGrid.appendChild(construirColumnaDia(dia, bloquesDia, PX_POR_MIN, altoGrid, minInicioRango, minFinRango));
   });
+  // Línea de hora actual: solo si "hoy" es uno de los días de ESTA semana
+  // que se está mostrando (mismo criterio que horario.js) — se agrega
+  // DESPUÉS de las columnas para que su z-index quede por encima en el
+  // orden natural del DOM.
+  if (semanaIncluyeHoy) {
+    const linea = construirLineaHoraActualGrid(PX_POR_MIN, minInicioRango, minFinRango);
+    if (linea) filaGrid.appendChild(linea);
+  }
 
   columnaAncha.appendChild(headerFila);
   columnaAncha.appendChild(filaGrid);
   cont.appendChild(columnaAncha);
+
+  // Se devuelve el rango de horas de ESTE snapshot para que iniciar() pueda
+  // armar el intervalo de actualización de la línea (cada 60s) sin tener
+  // que volver a leer snapshot.rango_horas ni recalcular nada.
+  return { minInicioRango, minFinRango, semanaIncluyeHoy };
 }
 
 /* ===================== Flujo "Asociar a mi cuenta" ===================== */
@@ -337,6 +394,34 @@ function inicializarFlujoAsociar(fileId, snapshot) {
   };
 }
 
+/* ===================== Pantalla completa ===================== */
+
+/* Mismo patrón que btnPantallaCompleta en horario.js: toggle sobre el
+   contenedor con scroll (acá #amigos-grid-contenedor, que en el HTML
+   arranca con max-height:70vh fijo — inline, no en la clase CSS). En
+   fullscreen se cambia a 100vh para aprovechar toda la pantalla real, y al
+   salir se vuelve al 70vh original. No hace falta re-renderizar el grid
+   (a diferencia del horario propio, acá el ancho de columna no depende del
+   alto disponible — es de solo lectura, sin auto-scroll a "la clase más
+   temprana").
+*/
+function inicializarPantallaCompletaPublico() {
+  const btn = document.getElementById("btn-amigos-pantalla-completa");
+  const contenedor = document.getElementById("amigos-grid-contenedor");
+  if (!btn || !contenedor) return;
+  btn.addEventListener("click", () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else contenedor.requestFullscreen?.();
+  });
+  document.addEventListener("fullscreenchange", () => {
+    if (document.fullscreenElement === contenedor) {
+      contenedor.style.maxHeight = "100vh";
+    } else {
+      contenedor.style.maxHeight = "70vh";
+    }
+  });
+}
+
 /* ===================== Arranque ===================== */
 
 async function iniciar() {
@@ -355,8 +440,15 @@ async function iniciar() {
     const snapshot = await obtenerSnapshotPublico(fileId);
     elCargando.classList.add("oculto");
     elContenido.classList.remove("oculto");
-    renderizarGridPublico(snapshot);
+    const { minInicioRango, minFinRango } = renderizarGridPublico(snapshot);
     inicializarFlujoAsociar(fileId, snapshot);
+    // Línea de hora actual: se mueve sola cada minuto, mismo patrón que
+    // inicializarHorario() en horario.js (setInterval de 60s, sin
+    // re-renderizar el grid — eso perdería la posición de scroll). Acá no
+    // hay que chequear visibilidad de sección (esta página SOLO muestra
+    // el horario, no hay otras pestañas de la app que tapen esto).
+    setInterval(() => actualizarPosicionLineaHoraActualPublico(minInicioRango, minFinRango, PX_POR_MIN), 60000);
+    inicializarPantallaCompletaPublico();
   } catch (e) {
     console.warn("No se pudo cargar el horario compartido:", e);
     elCargando.classList.add("oculto");
