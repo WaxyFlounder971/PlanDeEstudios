@@ -290,9 +290,9 @@ function construirLineasHorarias(pxPorMin, minInicioRango, minFinRango) {
  * vez), no solo la columna de hoy — se posiciona relativa a filaGrid
  * (padre real), con left = ancho de la columna de horas (28px, ver
  * construirColumnaHoras) para no invadir esa columna ni salirse del borde
- * derecho del grid. z-index 32: por encima de las tarjetas de clase
- * (10 + lane) pero por debajo del header sticky (z:50) y de la barra de
- * expandir (z:40) — nunca las tapa.
+ * derecho del grid. z-index 35 (ver design-system.css): por encima de las
+ * tarjetas de clase (10 + lane) pero por debajo del header sticky (z:50) y
+ * de la barra de expandir (z:40) — nunca las tapa.
  */
 function construirLineaHoraActualGrid(pxPorMin, minInicioRango, minFinRango) {
   const ahora = new Date();
@@ -302,6 +302,13 @@ function construirLineaHoraActualGrid(pxPorMin, minInicioRango, minFinRango) {
   const linea = document.createElement("div");
   linea.className = "horario-linea-hora-actual";
   linea.style.top = `${top}px`;
+  // 28px: mismo ancho que .horario-col-horas (ver construirColumnaHoras) —
+  // sin esto la línea arranca en left:0 de filaGrid (default de la clase
+  // CSS), que es el borde IZQUIERDO de la columna de horas, invadiéndola.
+  // Con este offset arranca justo donde arranca el primer día, y con
+  // right:0 (CSS) llega exacto hasta el borde derecho del último día —
+  // nunca se sale de las líneas de borde laterales del grid de días.
+  linea.style.left = "28px";
   linea.innerHTML = `<span class="horario-linea-hora-actual-punto"></span>`;
   return linea;
 }
