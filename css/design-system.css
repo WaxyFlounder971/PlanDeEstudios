@@ -3243,10 +3243,10 @@ html.exportar-tema-default[data-mode="dark"] {
 }
 .horario-linea-hora-actual-punto {
   position: absolute;
-  left: -4px;
-  top: -4px;
-  width: 8px;
-  height: 8px;
+  left: -3px;
+  top: -2px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: #ef4444;
   box-shadow: 0 0 5px 1px rgba(239,68,68,0.7);
