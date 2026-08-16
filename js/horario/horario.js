@@ -285,15 +285,16 @@ function construirLineasHorarias(pxPorMin, minInicioRango, minFinRango) {
 }
 
 /**
- * Línea de hora actual — Núcleo: mismo indicador que Google Calendar (línea
- * horizontal + puntito a la izquierda) SOLO en la columna del día de hoy —
- * si "hoy" no está entre los días visibles de la semana que se está
- * mirando (ej. navegaste a la semana pasada/siguiente), no se dibuja nada
- * en ningún lado. Devuelve null si la hora actual cae fuera del rango de
- * horas configurado (Ajustes → Horario) — no tiene sentido dibujarla fuera
- * del grid visible.
+ * Línea de hora actual — Núcleo: mismo indicador que Google Calendar, pero
+ * pedido explícito: abarca TODO el ancho del grid (todos los días a la
+ * vez), no solo la columna de hoy — se posiciona relativa a filaGrid
+ * (padre real), con left = ancho de la columna de horas (28px, ver
+ * construirColumnaHoras) para no invadir esa columna ni salirse del borde
+ * derecho del grid. z-index 32: por encima de las tarjetas de clase
+ * (10 + lane) pero por debajo del header sticky (z:50) y de la barra de
+ * expandir (z:40) — nunca las tapa.
  */
-function construirLineaHoraActual(pxPorMin, minInicioRango, minFinRango) {
+function construirLineaHoraActualGrid(pxPorMin, minInicioRango, minFinRango) {
   const ahora = new Date();
   const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
   if (minutosAhora < minInicioRango || minutosAhora > minFinRango) return null;
@@ -306,37 +307,25 @@ function construirLineaHoraActual(pxPorMin, minInicioRango, minFinRango) {
 }
 
 /**
- * Recorre las columnas ya pintadas en el DOM y mueve/crea/borra la línea de
- * hora actual sin volver a renderizar todo el grid (eso perdería la
- * posición de scroll y sería carísimo hacerlo cada 60s). Se apoya en
- * col.dataset.fecha (ver renderizarHorarioInterno) para saber cuál columna
- * es "hoy" sin tener que recalcular fechas de semestre en cada tick.
+ * Mueve la línea cada 60s sin re-renderizar todo el grid (eso perdería la
+ * posición de scroll). Ya no hace falta decidir "cuál columna es hoy" acá
+ * (la línea siempre abarca el grid entero) — solo si sigue siendo válido
+ * mostrarla: que exista (se dibujó porque la semana visible incluye hoy) y
+ * que la hora actual siga dentro del rango configurado.
  */
 function actualizarPosicionLineaHoraActual() {
-  const columnas = document.querySelectorAll(".horario-col-dia");
-  if (columnas.length === 0) return;
-  const hoyISO = fechaAISOLocal(new Date());
+  const linea = document.querySelector(".horario-linea-hora-actual");
+  if (!linea) return;
   const { horaInicio, horaFin } = obtenerRangoHorasHorario();
   const minInicioRango = horaInicio * 60;
   const minFinRango = horaFin * 60;
   const ahora = new Date();
   const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
-  const dentroDeRango = minutosAhora >= minInicioRango && minutosAhora <= minFinRango;
-
-  columnas.forEach((col) => {
-    const existente = col.querySelector(".horario-linea-hora-actual");
-    if (col.dataset.fecha !== hoyISO || !dentroDeRango) {
-      existente?.remove();
-      return;
-    }
-    const top = (minutosAhora - minInicioRango) * PX_POR_MIN_EXPANDIDO;
-    if (existente) {
-      existente.style.top = `${top}px`;
-    } else {
-      const nueva = construirLineaHoraActual(PX_POR_MIN_EXPANDIDO, minInicioRango, minFinRango);
-      if (nueva) col.appendChild(nueva);
-    }
-  });
+  if (minutosAhora < minInicioRango || minutosAhora > minFinRango) {
+    linea.remove();
+    return;
+  }
+  linea.style.top = `${(minutosAhora - minInicioRango) * PX_POR_MIN_EXPANDIDO}px`;
 }
 
 // Nota: el horario default (grid semanal de siempre) ya NO muestra nada de
@@ -384,22 +373,11 @@ function ocultarBotonesEntrarQueChocan(cont) {
   });
 }
 
-function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango, fecha) {
+function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango) {
   const col = document.createElement("div");
   col.className = "horario-col-dia";
   col.dataset.diaCodigo = dia.abrevDefault;
-  // Línea de hora actual — Núcleo: ancla para que
-  // actualizarPosicionLineaHoraActual() sepa, cada minuto, cuál columna es
-  // "hoy" sin recalcular fechas de semestre. `fecha` puede venir undefined
-  // (llamadores viejos que no la pasen) — en ese caso simplemente nunca
-  // coincide con hoyISO y no se dibuja línea acá, sin romper nada.
-  if (fecha) col.dataset.fecha = fechaAISOLocal(fecha);
   col.style.cssText = `position:relative; flex:1; min-width:56px; height:${altoGrid}px; background:${construirLineasHorarias(pxPorMin, minInicioRango, minFinRango)}; cursor:pointer; border-left:1px solid rgba(150,150,170,0.15);`;
-
-  if (fecha && esHoy(fecha)) {
-    const linea = construirLineaHoraActual(pxPorMin, minInicioRango, minFinRango);
-    if (linea) col.appendChild(linea);
-  }
 
   const conLanes = calcularLanesDia(bloquesDia);
   conLanes.forEach((b) => {
@@ -791,10 +769,12 @@ function renderizarHorarioInterno() {
     });
 
     const filaGrid = document.createElement("div");
-    filaGrid.style.cssText = "display:flex;";
+    filaGrid.style.cssText = "display:flex; position:relative;";
     filaGrid.appendChild(construirColumnaHoras(pxPorMin, altoGrid, minInicioRango, minFinRango));
+    let semanaIncluyeHoy = false;
     dias.forEach((dia) => {
       const fecha = calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault);
+      if (esHoy(fecha)) semanaIncluyeHoy = true;
       // clasesEfectivas ya viene PLANA (una entrada por día puntual, ver
       // obtenerClasesEfectivasSemana en schema.js) — no hay .dias anidado que
       // filtrar/recorrer, cada item ya es la clase de un día concreto.
@@ -813,10 +793,16 @@ function renderizarHorarioInterno() {
           notas: c.notas,
           tieneExcepcionEstaSemana: !!c.tiene_ajuste_cronograma,
         }));
-      filaGrid.appendChild(
-        construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango, fecha)
-      );
+      filaGrid.appendChild(construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango));
     });
+    // Línea de hora actual — Núcleo: se agrega DESPUÉS de las columnas (así
+    // su z-index queda por encima en el orden natural del DOM) solo si la
+    // semana que se está mostrando incluye el día de hoy — mostrarla en una
+    // semana pasada/futura no tendría sentido.
+    if (semanaIncluyeHoy) {
+      const linea = construirLineaHoraActualGrid(pxPorMin, minInicioRango, minFinRango);
+      if (linea) filaGrid.appendChild(linea);
+    }
 
     columnaAncha.appendChild(headerFila);
     columnaAncha.appendChild(filaGrid);
