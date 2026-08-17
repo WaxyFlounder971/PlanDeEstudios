@@ -54,6 +54,7 @@ import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { estiloBadgeCategoria } from "../core/utils.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
+import { abrirModalCopiaManualPortapapeles, copiarAlPortapapelesBlindado } from "../core/clipboard.js";
 import { obtenerSemestresActuales, obtenerSemestresPasados } from "../semestres/semestres.js";
 import { registrarAbrirAltaProfesorPreseleccionado } from "../plan/plan-detalle.js";
 // 2026-08-09: mismo patrón anti-ciclo que la línea de arriba — ver
@@ -757,6 +758,51 @@ function adjuntarPressLargo(el, { onTap, onLongPress, umbralMs = 550 }) {
   el.addEventListener("contextmenu", (ev) => ev.preventDefault());
 }
 
+/** Copia usando el blindaje de clipboard.js (2 capas: API moderna +
+ *  respaldo execCommand) — mismo mensaje de toast que ya usa
+ *  abrirEnlaceMisProfesConAviso para copiar el nombre de un profesor. Si
+ *  ninguno de los dos métodos automáticos funcionó, abre el modal de copia
+ *  manual de clipboard.js en vez de dejar solo un toast de error sin salida. */
+async function copiarNombreProfesorConAviso(nombreProfesor) {
+  const exito = await copiarAlPortapapelesBlindado(nombreProfesor);
+  if (exito) {
+    mostrarToast(`"${nombreProfesor}" copiado en el portapapeles`);
+  } else {
+    abrirModalCopiaManualPortapapeles(nombreProfesor);
+  }
+}
+
+/**
+ * Doble click (desktop) / doble tap (mobile) para copiar `texto`, SIN
+ * pisar ningún click simple que el elemento ya tenga (acá: el nombre del
+ * profesor vive dentro de `encabezado`, cuyo click togglea expandir/
+ * colapsar la tarjeta — ver construirTarjetaProfesor).
+ *
+ * A propósito NO usa el evento "dblclick" nativo: en mobile un doble tap
+ * dispara dos "click" (uno por tap), pero "dblclick" no es confiable entre
+ * navegadores táctiles — este patrón de timestamp sobre el propio "click"
+ * cubre mouse y touch por igual, mismo espíritu que adjuntarPressLargo más
+ * arriba (que tampoco depende de eventos nativos de gesto).
+ *
+ * El PRIMER click de cada par siempre se deja burbujear normal — ahí sigue
+ * viviendo el comportamiento existente (togglear la tarjeta). Solo el
+ * SEGUNDO click, si llegó dentro del umbral, se intercepta con
+ * stopPropagation (evita un segundo toggle de más) y dispara la copia.
+ */
+function adjuntarDobleClickCopiar(el, obtenerTexto, umbralMs = 350) {
+  let ultimoClick = 0;
+  el.addEventListener("click", (e) => {
+    const ahora = Date.now();
+    if (ahora - ultimoClick < umbralMs) {
+      e.stopPropagation();
+      ultimoClick = 0;
+      copiarNombreProfesorConAviso(obtenerTexto());
+      return;
+    }
+    ultimoClick = ahora;
+  });
+}
+
 /** Copia texto al portapapeles y avisa con un toast (éxito o falla) —
  *  mismo patrón defensivo que abrirEnlaceMisProfesConAviso (clipboard
  *  requiere contexto seguro, no todos los navegadores lo soportan). */
@@ -919,6 +965,8 @@ function construirTarjetaProfesor(profesor, datos) {
   nombre.className = "com-nombre-profesor";
   nombre.style.cssText = "min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
   nombre.textContent = profesor.nombre;
+  nombre.title = "Doble click / doble tap para copiar el nombre";
+  adjuntarDobleClickCopiar(nombre, () => profesor.nombre);
   encabezado.appendChild(nombre);
 
   const estrellas = construirEstrellasLectura(profesor.calificacion);
