@@ -123,18 +123,29 @@ function actualizarPlaceholderNombre(tipo) {
  * volver a "evento" nunca arrastre un feriado marcado por error mientras
  * estaba invisible.
  *
- * Ronda de ajustes visuales #5 — punto C: togglea .visible sobre el wrapper
- * en grid (.reveal-feriado, ver comentario en index.html y design-system.
- * css), que anima hacia la altura REAL del contenido en vez de un
- * max-height fijo — así no hay forma de que quede cortado.
+ * Ronda de ajustes visuales #6 — foco 100% en que esto no se corte NUNCA:
+ * se probaron 3 técnicas de animación de tamaño (display:none instantáneo,
+ * max-height fijo, CSS Grid 0fr/1fr) y las 3 terminaron cortando el switch
+ * — la de Grid incluso lo cortaba a media animación. Se elimina toda
+ * animación: esto es un toggle plano de "oculto" (display:none <-> flex).
+ * Sin transición de tamaño no hay forma de "cortar a medio camino" porque
+ * no hay medio camino. Como blindaje extra contra el bug documentado de
+ * iOS Safari (overflow-y:auto de .modal-card sin repintar un hijo que pasa
+ * de display:none a visible en el mismo tick que otro cambio), se lee
+ * offsetHeight justo después del toggle para forzar un reflow síncrono.
  */
 function actualizarVisibilidadFeriado(tipo) {
   const fila = document.getElementById("fila-agenda-es-feriado");
   const chk = document.getElementById("chk-agenda-es-feriado");
   if (!fila || !chk) return;
   const esEvento = tipo === "evento";
-  fila.classList.toggle("visible", esEvento);
+  fila.classList.toggle("oculto", !esEvento);
   if (!esEvento) chk.checked = false;
+  // Fuerza el reflow: leer una propiedad de layout obliga al navegador a
+  // recalcular antes de seguir, en vez de arrastrar el estado viejo.
+  void fila.offsetHeight;
+  const modalCard = fila.closest(".modal-card");
+  if (modalCard) void modalCard.offsetHeight;
 }
 
 function seleccionarPillTipo(tipo) {
