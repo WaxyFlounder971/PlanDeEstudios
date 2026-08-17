@@ -50,11 +50,28 @@ function actualizarPlaceholderNombre(tipo) {
   if (input) input.placeholder = PLACEHOLDER_NOMBRE[tipo] || "";
 }
 
+/**
+ * Rediseño núcleo Agenda — punto 1: el toggle "Es feriado" solo aplica a
+ * tipo "evento" (subtipo especial). Se oculta (no se deshabilita) para los
+ * otros 2 tipos, y se destildesa al ocultarse para que cambiar de tipo y
+ * volver a "evento" nunca arrastre un feriado marcado por error mientras
+ * estaba invisible.
+ */
+function actualizarVisibilidadFeriado(tipo) {
+  const fila = document.getElementById("fila-agenda-es-feriado");
+  const chk = document.getElementById("chk-agenda-es-feriado");
+  if (!fila || !chk) return;
+  const esEvento = tipo === "evento";
+  fila.classList.toggle("oculto", !esEvento);
+  if (!esEvento) chk.checked = false;
+}
+
 function seleccionarPillTipo(tipo) {
   document.querySelectorAll("#pills-agenda-tipo .pill-item").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.valor === tipo);
   });
   actualizarPlaceholderNombre(tipo);
+  actualizarVisibilidadFeriado(tipo);
 }
 
 function obtenerTipoSeleccionado() {
@@ -75,7 +92,10 @@ function abrirModalEventoAgenda({ eventoId = null, fechaDefault = null } = {}) {
     ? "Editar"
     : "Agregar a Agenda";
 
-  seleccionarPillTipo(eventoExistente ? eventoExistente.tipo : "evento");
+  // Orden/default del selector (rediseño núcleo Agenda, punto 1): alta
+  // nueva siempre arranca en "tarea" — ya no en "evento".
+  seleccionarPillTipo(eventoExistente ? eventoExistente.tipo : "tarea");
+  document.getElementById("chk-agenda-es-feriado").checked = eventoExistente ? Boolean(eventoExistente.es_feriado) : false;
   document.getElementById("input-agenda-nombre").value = eventoExistente ? eventoExistente.nombre : "";
   document.getElementById("input-agenda-fecha").value = eventoExistente
     ? eventoExistente.fecha
@@ -124,6 +144,10 @@ function guardarEventoAgenda(eventoExistente) {
     ? obtenerMateriasVinculablesAgenda().find((m) => m.mmId === mmId)
     : null;
   const notas = document.getElementById("input-agenda-notas").value.trim();
+  // Solo tiene sentido si tipo === "evento" (el checkbox está oculto para
+  // los otros 2 tipos y se destildesa solo al ocultarse — ver
+  // actualizarVisibilidadFeriado) — se fuerza igual acá por las dudas.
+  const esFeriado = tipo === "evento" && document.getElementById("chk-agenda-es-feriado").checked;
 
   estado.datos.agenda = estado.datos.agenda || [];
 
@@ -146,6 +170,11 @@ function guardarEventoAgenda(eventoExistente) {
     viva.materia_matriculada_id = materiaVinculada ? materiaVinculada.mmId : null;
     viva.semestre_id = materiaVinculada ? materiaVinculada.semestreId : null;
     viva.notas = notas;
+    viva.es_feriado = esFeriado;
+    // `completada` NO se toca acá: este formulario no tiene UI para ella
+    // (vive en el checkbox circular de la lista/tarjeta de info — punto 5
+    // del rediseño), así que una edición del resto de los campos nunca debe
+    // pisarla con un valor por defecto.
     sellarTimestamp(viva);
   } else {
     const nuevo = crearEventoAgenda({
@@ -156,6 +185,7 @@ function guardarEventoAgenda(eventoExistente) {
       materiaMatriculadaId: materiaVinculada ? materiaVinculada.mmId : null,
       semestreId: materiaVinculada ? materiaVinculada.semestreId : null,
       notas,
+      esFeriado,
     });
     estado.datos.agenda.push(nuevo);
   }
