@@ -133,6 +133,38 @@ a { color: var(--accent-1); }
 
 .btn-block { width: 100%; }
 
+/* Ronda de ajustes visuales — punto 3: botón de engranaje del header de
+   Agenda (#btn-agenda-ajustes), consolidado a partir de los 3 botones
+   anteriores (Agregar / engranaje-a-Ajustes-global / Filtros). Pedido
+   explícito: mismo lenguaje visual que "Agregar" (.btn-primary — fondo
+   degradado + sombra), no el .btn-icono-fantasma transparente que traía
+   antes y que se veía "distinto/feo" al lado. Ícono-solo (sin texto), así
+   que se define aparte en vez de reusar .btn (que trae padding pensado
+   para texto). */
+.agenda-btn-ajustes {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--gradient-accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-float);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.agenda-btn-ajustes:hover { box-shadow: 0 10px 26px var(--accent-glow-1); }
+.agenda-btn-ajustes:active { transform: scale(0.97); }
+.agenda-btn-ajustes:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+
 /* ---- v2.8.9: botón de texto "discreto" — mismo texto que un .btn normal
    pero sin caja ni fondo propio, para acciones secundarias que no deberían
    competir visualmente con el CTA principal de la fila (ej. "Editar
@@ -2116,6 +2148,17 @@ img, svg { max-width: 100%; }
   background: transparent;
 }
 [data-mode="light"] .agenda-badge-vencida { color: #b91c1c; }
+
+/* Ronda de ajustes visuales — punto 1: badge de tipo (Tarea/Examen/Evento)
+   de la columna derecha de la tarjeta, del mismo tamaño chico que
+   .agenda-badge-vencida (arriba) — el `.badge` genérico (design-system.css,
+   ~línea 314) es más grande y quedaba desproporcionado apilado con
+   "Vencida" en 2 líneas cortas. Se sobreescribe puntualmente acá en vez de
+   tocar `.badge` global, que se comparte con el resto de la app. */
+.agenda-badge-tipo {
+  font-size: 0.68rem;
+  padding: 1px 7px;
+}
 
 /* Punto 6: timer de cuenta regresiva para tareas que vencen HOY — texto
    chico, mismo tono ámbar que "tarea pendiente" (badge-warning) para que se
