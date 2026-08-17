@@ -317,35 +317,32 @@
           <button type="button" class="pill-item" data-vista="calendario">Calendario</button>
         </div>
 
-        <!-- Ronda de ajustes visuales #2 — punto C: encabezado unificado.
-             Antes "Semestre / Semana N / Ir a hoy" vivía acá arriba (fijo) y
-             la navegación "‹ rango de fechas ›" vivía en un glass-panel
-             APARTE dentro de la lista (construirSubheaderLista, agenda.js) —
-             quedaban 2 paneles apilados con el mismo tipo de información
-             repartida entre los dos. Ahora es UN solo panel: fila superior
-             con el nombre del semestre (tocable — abre el selector de
-             semestre, ver #agenda-semestre-popover) + Agregar/Ajustes
-             compactos a la derecha (ahorra una fila completa de alto vs.
-             antes), y abajo #agenda-subheader-dinamico, que agenda.js llena
-             en cada render con "‹ Semana N ›" + rango de fechas + "Hoy"
-             (modo Semanal), el botón "Ver días anteriores" (modo Todo), o
-             se deja vacío (vista Calendario, que arma su propia navegación
-             en agenda-calendario.js). -->
-        <section class="glass-panel stack" id="agenda-header" style="padding:10px 14px; gap:8px; position:relative;">
-          <div class="row-between" style="gap:10px;">
-            <button type="button" id="agenda-nombre-semestre" class="btn-discreto" style="padding:4px 8px; font-size:0.85rem; font-weight:700; text-align:left;"></button>
-            <div class="row" style="gap:8px; flex-shrink:0;">
-              <button type="button" class="btn btn-primary" id="btn-agenda-agregar" style="padding:6px 12px; font-size:0.8rem;">+ Agregar</button>
-              <button type="button" class="agenda-btn-ajustes" id="btn-agenda-ajustes" title="Ajustes de Agenda">⚙️</button>
-            </div>
-          </div>
+        <!-- Ronda de ajustes visuales #3 — punto A: encabezado a 3 líneas
+             bien aprovechadas. Línea 1: nombre del semestre, centrado,
+             tocable (abre #agenda-semestre-popover). Líneas 2-3: una sola
+             fila (row-between) con Agregar ("+", ahora solo ícono) y
+             Ajustes (⚙️, sin cambios) a los costados, flanqueando
+             #agenda-subheader-dinamico en el centro — ese bloque central
+             ocupa esas mismas 2 líneas (Semana N arriba, rango+Hoy abajo;
+             ver construirSubheaderSemanal en agenda.js), y los botones de
+             los costados quedan centrados verticalmente contra esa altura,
+             no apilados aparte como antes. -->
+        <section class="glass-panel stack" id="agenda-header" style="padding:10px 14px; gap:6px; position:relative;">
+          <button type="button" id="agenda-nombre-semestre" class="btn-discreto" style="align-self:center; padding:2px 10px; font-size:0.85rem; font-weight:700; text-align:center;"></button>
 
-          <!-- Selector de semestre — popover posicionado bajo el nombre,
-               mismo patrón que #perfil-popover (glass-panel absoluto,
-               oculto por default, armado/poblado en JS al tocar el botón). -->
+          <!-- Selector de semestre — popover posicionado bajo TODO el
+               header (position:relative en #agenda-header, top:100% acá),
+               mismo patrón que #perfil-popover. Su posición no depende de
+               dónde viva el botón del nombre dentro del header. -->
           <div id="agenda-semestre-popover" class="glass-panel stack agenda-semestre-popover oculto"></div>
 
-          <div id="agenda-subheader-dinamico" class="stack" style="align-items:center; text-align:center; gap:2px;"></div>
+          <div class="row-between" style="gap:8px;">
+            <button type="button" class="btn btn-primary" id="btn-agenda-agregar" title="Agregar" style="width:38px; height:38px; padding:0; font-size:1.35rem; line-height:1; flex-shrink:0; border-radius:50%; display:flex; align-items:center; justify-content:center;">+</button>
+
+            <div id="agenda-subheader-dinamico" class="stack" style="align-items:center; text-align:center; gap:2px; flex:1; min-width:0;"></div>
+
+            <button type="button" class="agenda-btn-ajustes" id="btn-agenda-ajustes" title="Ajustes de Agenda">⚙️</button>
+          </div>
         </section>
 
         <div id="agenda-lista-dias" class="stack"></div>
@@ -804,7 +801,16 @@
       <button type="button" class="pill-item" data-valor="evento">Evento</button>
     </div>
 
-    <label class="row oculto" id="fila-agenda-es-feriado" style="align-items:center; gap:10px; cursor:pointer;">
+    <!-- Ronda de ajustes visuales #3 — "Es feriado" seguía cortado pese al
+         reflow forzado. Se agrega un min-height explícito (mide lo mismo
+         que el switch, 26px, + line-height del texto) para que, apenas se
+         quite "oculto", el bloque reserve de una su alto real en vez de
+         depender de que el motor recalcule bien — y padding vertical
+         propio en vez de confiar solo en el gap:14px del .stack padre, por
+         si el corte era en realidad el borde de esa franja topando con el
+         siguiente elemento. Preferible "de más" a que se vuelva a cortar
+         (pedido explícito). -->
+    <label class="row oculto" id="fila-agenda-es-feriado" style="align-items:center; gap:10px; cursor:pointer; min-height:26px; padding:4px 0;">
       <label class="switch switch-tema" style="flex-shrink:0;">
         <input type="checkbox" id="chk-agenda-es-feriado">
         <span class="track"><span class="thumb"></span></span>
@@ -1063,44 +1069,6 @@
   .grupo-toggles-bloques-materias .pill-group { flex-basis: 96px; }
 }
 </style>
-
-<!-- Fix bug "Es feriado cortado": WebKit/iOS a veces no recalcula el alto de
-     .modal-card (overflow-y:auto) cuando un hijo pasa de oculto→visible
-     (ej. #fila-agenda-es-feriado) en el mismo tick que otro cambio de
-     estado (ej. click en pill "Evento"). El resultado es contenido que
-     queda cortado/superpuesto hasta que el usuario hace scroll o resize.
-     Este observer es agnóstico del modal/JS que dispare el cambio: vigila
-     cualquier .modal-card y, si una clase cambia adentro (típicamente
-     agregar/quitar "oculto"), fuerza un reflow del panel en el próximo
-     frame. No depende de tocar agenda-modal.js ni ningún otro módulo. -->
-<script>
-(function () {
-  function forzarReflow(el) {
-    if (!el) return;
-    el.style.display = "none";
-    // Leer una propiedad de layout obliga al browser a recalcular ya.
-    void el.offsetHeight;
-    el.style.display = "";
-  }
-  var observador = new MutationObserver(function (mutaciones) {
-    var paneles = new Set();
-    mutaciones.forEach(function (m) {
-      var panel = m.target.closest && m.target.closest(".modal-card");
-      if (panel) paneles.add(panel);
-    });
-    paneles.forEach(function (panel) {
-      requestAnimationFrame(function () { forzarReflow(panel); });
-    });
-  });
-  document.querySelectorAll(".modal-card").forEach(function (panel) {
-    observador.observe(panel, {
-      attributes: true,
-      attributeFilter: ["class", "style"],
-      subtree: true,
-    });
-  });
-})();
-</script>
 
 <script type="module" src="js/main.js"></script>
 </body>
