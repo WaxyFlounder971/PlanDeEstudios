@@ -315,8 +315,20 @@ const TIPOS_EVENTO_AGENDA = ["evento", "tarea", "examen"];
  * semestre es esa materia matriculada (ver comentario en
  * crearDatosUsuarioNuevo). El formulario de alta (agenda.js) es quien
  * garantiza que ambos vengan de la materia realmente elegida.
+ *
+ * `completada` (rediseño núcleo Agenda): solo tiene sentido para tipo
+ * "tarea" — nace siempre en `false` (no existe forma de crear una tarea ya
+ * completada desde el alta). Se deja el campo presente en los 3 tipos (en
+ * vez de solo en "tarea") para no tener que ramificar el objeto según tipo
+ * en cada lugar que lo lea; simplemente se ignora en "evento"/"examen".
+ * `esFeriado` (rediseño núcleo Agenda): solo tiene sentido para tipo
+ * "evento" (subtipo especial, se pinta distinto — ver design-system.css).
+ * Mismo criterio: presente siempre, se ignora fuera de "evento". Si el tipo
+ * elegido no es "evento", se fuerza a `false` acá mismo para que nunca
+ * quede un examen/tarea con `es_feriado: true` colgado de una edición vieja
+ * (ej. el usuario cambió el tipo de un evento-feriado a "tarea").
  */
-function crearEventoAgenda({ tipo, nombre, fecha, hora, materiaMatriculadaId, semestreId, notas }) {
+function crearEventoAgenda({ tipo, nombre, fecha, hora, materiaMatriculadaId, semestreId, notas, esFeriado }) {
   const tipoValido = TIPOS_EVENTO_AGENDA.includes(tipo) ? tipo : "evento";
   const vinculada = Boolean(materiaMatriculadaId && semestreId);
   return sellarTimestamp({
@@ -328,6 +340,8 @@ function crearEventoAgenda({ tipo, nombre, fecha, hora, materiaMatriculadaId, se
     materia_matriculada_id: vinculada ? materiaMatriculadaId : null,
     semestre_id: vinculada ? semestreId : null,
     notas: notas || "",
+    completada: false,
+    es_feriado: tipoValido === "evento" ? Boolean(esFeriado) : false,
   });
 }
 
@@ -2684,6 +2698,15 @@ function migrarDatosAntiguos(datos) {
       ev.materia_matriculada_id = null;
       ev.semestre_id = null;
     }
+    // Rediseño núcleo Agenda: relleno defensivo para eventos creados antes
+    // de que existieran estos 2 campos — mismo criterio que el resto de
+    // esta migración, nunca dejarlos en `undefined`. `es_feriado` además se
+    // fuerza a `false` fuera de tipo "evento" (ver comentario en
+    // crearEventoAgenda) por si algún dato viejo/corrupto trae ambas cosas
+    // juntas.
+    if (ev.completada === undefined) ev.completada = false;
+    if (ev.es_feriado === undefined) ev.es_feriado = false;
+    if (ev.tipo !== "evento") ev.es_feriado = false;
     delete ev.titulo;
     delete ev.materia_id;
     delete ev.completado;
