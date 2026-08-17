@@ -405,8 +405,16 @@ a { color: var(--accent-1); }
    que usara classList.toggle("oculto", ...) sobre OTRO elemento (como el
    bloque "Pasás raspando con" en config-ajustes.js) no ocultaba nada, porque
    ninguna regla lo cubría. Esta versión genérica cierra ese hueco sin pisar
-   las anteriores (mismo valor, sin conflicto de especificidad). */
-.oculto { display: none; }
+   las anteriores (mismo valor, sin conflicto de especificidad).
+
+   Corrección 2026-08-17: sí había conflicto — .row (más abajo en este
+   archivo) define display:flex con la MISMA especificidad, y por orden de
+   declaración le ganaba a este display:none cuando un elemento combinaba
+   class="row oculto" (ej. #fila-agenda-es-feriado, #info-agenda-fila-
+   completada). El elemento quedaba SIEMPRE visible pese al toggle de
+   "oculto" en JS. !important a propósito: es una utilidad de "ocultar sí o
+   sí", no debe depender del orden en que se declaren otras clases nuevas. */
+.oculto { display: none !important; }
 
 /* ---- Inputs ---- */
 .form-input, .form-select, .form-textarea {
