@@ -327,7 +327,19 @@
              ver construirSubheaderSemanal en agenda.js), y los botones de
              los costados quedan centrados verticalmente contra esa altura,
              no apilados aparte como antes. -->
-        <section class="glass-panel stack" id="agenda-header" style="padding:10px 14px; gap:6px; position:relative;">
+        <!-- Ronda de ajustes visuales #5 — punto B: el popover de semestre
+             (ver #agenda-semestre-popover más abajo) salía DETRÁS de las
+             tarjetas de día pese a tener z-index:60. Causa real: este
+             header es .glass-panel (backdrop-filter), y backdrop-filter
+             crea su propio contexto de apilamiento — el z-index del
+             popover solo compite DENTRO de ese contexto, no contra
+             hermanos de afuera (#agenda-lista-dias). Como el header en sí
+             no tenía z-index propio, se pintaba en orden normal del DOM,
+             y la lista de días (que viene después en el HTML) quedaba
+             encima de TODO el header, popover incluido. Agregar z-index
+             acá sube el header completo (con su popover adentro) por
+             encima de lo que viene después. -->
+        <section class="glass-panel stack" id="agenda-header" style="padding:10px 14px; gap:6px; position:relative; z-index:10;">
           <button type="button" id="agenda-nombre-semestre" class="btn-discreto" style="align-self:center; padding:2px 10px; font-size:0.85rem; font-weight:700; text-align:center;"></button>
 
           <!-- Selector de semestre — popover posicionado bajo TODO el
@@ -801,25 +813,30 @@
       <button type="button" class="pill-item" data-valor="evento">Evento</button>
     </div>
 
-    <!-- Ronda de ajustes visuales #4 — "Es feriado" seguía cortándose pese
-         al reflow forzado en JS. Causa real: togglear "oculto"
-         (display:none -> display:flex INSTANTÁNEO) es precisamente el tipo
-         de cambio que WebKit a veces no repinta bien dentro de un
-         contenedor con overflow-y:auto en el mismo tick que otro cambio de
-         estado. La solución robusta es no usar un salto instantáneo acá:
-         esta fila SIEMPRE existe en el flujo (nunca display:none) y se
-         abre/cierra animando max-height + opacity (ver
-         .fila-feriado-visible en design-system.css) — un valor que cambia
-         de forma continua en vez de saltar de golpe no le da pie a ese bug
-         de repintado. agenda-modal.js ahora togglea esa clase en vez de
-         "oculto". -->
-    <label class="row fila-feriado-oculta" id="fila-agenda-es-feriado" style="align-items:center; gap:10px; cursor:pointer;">
-      <label class="switch switch-tema" style="flex-shrink:0;">
-        <input type="checkbox" id="chk-agenda-es-feriado">
-        <span class="track"><span class="thumb"></span></span>
-      </label>
-      <span style="font-size:0.85rem;">Es feriado</span>
-    </label>
+    <!-- Ronda de ajustes visuales #5 — punto C: "Es feriado" seguía
+         cortándose incluso con max-height animado (intento anterior, ver
+         historial). Causa real de fondo: max-height a un valor fijo en px
+         es SIEMPRE una apuesta — si el contenido real mide un pelo más que
+         el número que se adivinó (por fuente distinta, zoom del navegador,
+         etc.), lo corta, sin importar cuán "generoso" parezca el número en
+         un caso puntual. La solución que no depende de adivinar ningún
+         valor es el patrón CSS Grid `0fr -> 1fr`: el motor de layout mide
+         el contenido real y anima hacia ESA altura, nunca hacia un número
+         fijo, así que nunca puede cortarlo. Estructura: un wrapper en
+         grid (ácá abajo) con overflow:hidden en un solo hijo interno — ver
+         .reveal-feriado en design-system.css. agenda-modal.js togglea una
+         sola clase ("visible") en el wrapper. -->
+    <div class="reveal-feriado" id="fila-agenda-es-feriado">
+      <div class="reveal-feriado-inner">
+        <label class="row" style="align-items:center; gap:10px; cursor:pointer; padding-top:4px;">
+          <label class="switch switch-tema" style="flex-shrink:0;">
+            <input type="checkbox" id="chk-agenda-es-feriado">
+            <span class="track"><span class="thumb"></span></span>
+          </label>
+          <span style="font-size:0.85rem;">Es feriado</span>
+        </label>
+      </div>
+    </div>
 
     <div>
       <label class="form-label" for="input-agenda-nombre">Nombre</label>
