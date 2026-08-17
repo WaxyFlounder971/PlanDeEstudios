@@ -449,32 +449,27 @@ a { color: var(--accent-1); }
 .switch-tema .thumb { width: 20px; height: 20px; top: 3px; left: 3px; }
 .switch-tema input:checked + .track .thumb { transform: translateX(20px); }
 
-/* Ronda de ajustes visuales #4 — reveal animado de #fila-agenda-es-feriado
-   (ver comentario en index.html): en vez de togglear "oculto"
-   (display:none <-> flex, instantáneo), esta fila anima max-height +
-   opacity. max-height de 60px es generoso a propósito (el contenido real
-   mide ~34px con el padding) — un valor "de más" nunca corta nada, uno
-   ajustado al pixel es justo el tipo de cálculo frágil que causó el bug
-   original. overflow:hidden solo mientras está cerrada (si no, el
-   focus-visible del switch se recortaría también estando abierta). */
-.fila-feriado-oculta {
-  max-height: 0;
+/* Ronda de ajustes visuales #5 — punto C: reveal de #fila-agenda-es-feriado
+   con el patrón CSS Grid `0fr -> 1fr` (ver comentario en index.html) en vez
+   de max-height a un valor fijo adivinado — la fila de afuera anima su
+   propia fila de grid entre "0fr" (colapsada) y "1fr" (altura real del
+   contenido, la que sea), y el div interno recorta con overflow:hidden
+   mientras se anima. Como nunca hay un número de px de por medio, no hay
+   forma de que el contenido termine más alto que el límite: el límite ES
+   el contenido. */
+.reveal-feriado {
+  display: grid;
+  grid-template-rows: 0fr;
   opacity: 0;
-  overflow: hidden;
-  padding-top: 0;
-  padding-bottom: 0;
-  margin: 0;
   pointer-events: none;
-  transition: max-height 0.22s ease, opacity 0.16s ease, padding 0.22s ease;
+  transition: grid-template-rows 0.22s ease, opacity 0.16s ease;
 }
-.fila-feriado-visible {
-  max-height: 60px;
+.reveal-feriado.visible {
+  grid-template-rows: 1fr;
   opacity: 1;
-  overflow: visible;
-  padding-top: 4px;
-  padding-bottom: 4px;
   pointer-events: auto;
 }
+.reveal-feriado-inner { overflow: hidden; min-height: 0; }
 
 /* ---- Checkbox custom ---- */
 .checkbox { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
@@ -2215,6 +2210,30 @@ img, svg { max-width: 100%; }
 }
 .agenda-check-completada:hover { transform: scale(1.08); }
 .agenda-check-completada.marcada { background: #3b82f6; }
+
+/* Ronda de ajustes visuales #5 — punto D: encabezado separador "Semana N"
+   entre grupos de días en el modo "Todo" (ver construirEncabezadoSemanaTodo
+   en agenda.js). Línea horizontal a los costados (mismo patrón que un
+   divisor de fecha en un chat) para que se note como corte, sin pesar
+   tanto como una tarjeta más. */
+.agenda-todo-encabezado-semana {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  padding: 0 2px;
+}
+.agenda-todo-encabezado-semana::before,
+.agenda-todo-encabezado-semana::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-glass);
+}
 
 /* Punto 6: indicador de tarea vencida — deliberadamente DISTINTO del rojo
    sólido de Examen (badge-danger): borde punteado en vez de sólido, para
