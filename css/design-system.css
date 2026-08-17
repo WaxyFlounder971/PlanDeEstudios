@@ -325,6 +325,14 @@ a { color: var(--accent-1); }
 .badge-warning { background: rgba(245, 158, 11, 0.15); border-color: #f59e0b; color: #fbbf24; }
 .badge-danger  { background: rgba(239, 68, 68, 0.15);  border-color: #ef4444; color: #f87171; }
 .badge-neutral { background: rgba(148, 163, 184, 0.15); border-color: #94a3b8; color: #cbd5e1; }
+/* Rediseño núcleo Agenda — punto 4: colores FIJOS (no ligados a la paleta
+   de acento del usuario, mismo criterio que badge-success/warning/danger de
+   arriba) para Evento (morado) y Tarea completada (azul) — los otros 3
+   estados (tarea pendiente=amarillo, examen=rojo, evento feriado=verde) ya
+   los cubren badge-warning/badge-danger/badge-success de arriba, sin
+   necesidad de clases nuevas. */
+.badge-purple  { background: rgba(168, 85, 247, 0.15); border-color: #a855f7; color: #c084fc; }
+.badge-info    { background: rgba(59, 130, 246, 0.15); border-color: #3b82f6; color: #60a5fa; }
 .badge-accent  {
   /* FIX v3: fondo pastel sólido y autocontenido (mezclarHex accent1+blanco
      en tema.js) SOLO bajo paleta personalizada — no depende de qué haya
@@ -345,6 +353,8 @@ a { color: var(--accent-1); }
 [data-mode="light"] .badge-warning { color: #92400e; }
 [data-mode="light"] .badge-danger  { color: #991b1b; }
 [data-mode="light"] .badge-neutral { color: #334155; }
+[data-mode="light"] .badge-purple  { color: #7e22ce; }
+[data-mode="light"] .badge-info    { color: #1d4ed8; }
 
 /* ---- Switch (toggle on/off) ---- */
 .switch { position: relative; display: inline-block; width: 46px; height: 26px; flex-shrink: 0; }
@@ -2061,6 +2071,55 @@ img, svg { max-width: 100%; }
 .agenda-item:hover { background: rgba(255, 255, 255, 0.08); }
 [data-mode="light"] .agenda-fila-clase:hover,
 [data-mode="light"] .agenda-item:hover { background: rgba(0, 0, 0, 0.07); }
+
+/* Rediseño núcleo Agenda — punto 5: checkbox circular de "completada",
+   vacío/relleno. Vive a la izquierda del ítem de tarea (adentro de
+   .agenda-item, antes del badge) — botón propio (no <input type="checkbox">)
+   para poder frenar la propagación del click y no abrir la tarjeta de
+   info al togglear, mismo motivo por el que los ítems de agenda ya son
+   <button> en vez de <div> con listener aparte. */
+.agenda-check-completada {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #3b82f6;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+.agenda-check-completada:hover { transform: scale(1.08); }
+.agenda-check-completada.marcada { background: #3b82f6; }
+
+/* Punto 6: indicador de tarea vencida — deliberadamente DISTINTO del rojo
+   sólido de Examen (badge-danger): borde punteado en vez de sólido, para
+   que a simple vista "vencida" no se confunda con "es un examen". */
+.agenda-badge-vencida {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px dashed #ef4444;
+  color: #f87171;
+  background: transparent;
+}
+[data-mode="light"] .agenda-badge-vencida { color: #b91c1c; }
+
+/* Punto 6: timer de cuenta regresiva para tareas que vencen HOY — texto
+   chico, mismo tono ámbar que "tarea pendiente" (badge-warning) para que se
+   lea como "urgencia dentro de lo pendiente", no como un estado nuevo. */
+.agenda-timer-vence-hoy {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #fbbf24;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+[data-mode="light"] .agenda-timer-vence-hoy { color: #92400e; }
 
 /* ---- Vista Calendario (mensual/semanal) — grid de 7 columnas ---- */
 .agenda-cal-grid {
