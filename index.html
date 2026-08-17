@@ -801,16 +801,19 @@
       <button type="button" class="pill-item" data-valor="evento">Evento</button>
     </div>
 
-    <!-- Ronda de ajustes visuales #3 — "Es feriado" seguía cortado pese al
-         reflow forzado. Se agrega un min-height explícito (mide lo mismo
-         que el switch, 26px, + line-height del texto) para que, apenas se
-         quite "oculto", el bloque reserve de una su alto real en vez de
-         depender de que el motor recalcule bien — y padding vertical
-         propio en vez de confiar solo en el gap:14px del .stack padre, por
-         si el corte era en realidad el borde de esa franja topando con el
-         siguiente elemento. Preferible "de más" a que se vuelva a cortar
-         (pedido explícito). -->
-    <label class="row oculto" id="fila-agenda-es-feriado" style="align-items:center; gap:10px; cursor:pointer; min-height:26px; padding:4px 0;">
+    <!-- Ronda de ajustes visuales #4 — "Es feriado" seguía cortándose pese
+         al reflow forzado en JS. Causa real: togglear "oculto"
+         (display:none -> display:flex INSTANTÁNEO) es precisamente el tipo
+         de cambio que WebKit a veces no repinta bien dentro de un
+         contenedor con overflow-y:auto en el mismo tick que otro cambio de
+         estado. La solución robusta es no usar un salto instantáneo acá:
+         esta fila SIEMPRE existe en el flujo (nunca display:none) y se
+         abre/cierra animando max-height + opacity (ver
+         .fila-feriado-visible en design-system.css) — un valor que cambia
+         de forma continua en vez de saltar de golpe no le da pie a ese bug
+         de repintado. agenda-modal.js ahora togglea esa clase en vez de
+         "oculto". -->
+    <label class="row fila-feriado-oculta" id="fila-agenda-es-feriado" style="align-items:center; gap:10px; cursor:pointer;">
       <label class="switch switch-tema" style="flex-shrink:0;">
         <input type="checkbox" id="chk-agenda-es-feriado">
         <span class="track"><span class="thumb"></span></span>
@@ -843,8 +846,24 @@
     </label>
 
     <div>
-      <label class="form-label" for="select-agenda-materia">Materia vinculada (opcional)</label>
-      <select id="select-agenda-materia" class="form-select"></select>
+      <label class="form-label" for="btn-agenda-materia-boton">Materia vinculada (opcional)</label>
+      <!-- Ronda de ajustes visuales #4 — reemplaza el <select> nativo por
+           el dropdown propio del proyecto (.select-custom, ver
+           design-system.css — mismo patrón que "Escala de notas" en
+           config-ajustes.js): el popup nativo de <option> ignora el CSS de
+           la app en varios navegadores/SO (queda blanco con texto blanco),
+           porque ese popup lo pinta el sistema operativo, no el navegador.
+           El <select> real sigue existiendo pero oculto — es la única
+           fuente de verdad del valor (guardarEventoAgenda sigue leyendo
+           select.value sin cambios); el botón+lista de acá es 100% la
+           parte visible, sincronizada a mano en agenda-modal.js. -->
+      <div class="select-custom" id="contenedor-agenda-materia">
+        <button type="button" class="form-select select-custom-boton" id="btn-agenda-materia-boton" aria-haspopup="listbox" aria-expanded="false">
+          <span id="texto-agenda-materia-boton">Sin vincular</span>
+        </button>
+        <ul class="select-custom-lista oculto" id="lista-agenda-materia" role="listbox"></ul>
+      </div>
+      <select id="select-agenda-materia" class="oculto" aria-hidden="true" tabindex="-1"></select>
     </div>
 
     <div>
