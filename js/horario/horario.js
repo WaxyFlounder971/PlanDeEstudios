@@ -193,6 +193,21 @@ function obtenerEmojiModalidad(modalidad) {
 }
 
 /**
+ * Rediseño ronda #4 — bug "Sin clase" en las materias inline de Agenda: se
+ * mostraba como "Presencial" porque agenda-clases.js armaba el texto con
+ * aplicarFormatoTexto (pensado para nombres de materia, no para valores de
+ * modalidad) en vez de esta tabla, que ya es la fuente única de verdad para
+ * las etiquetas humanas de modalidad en el resto de Horario. Fallback
+ * simple (guiones bajos -> espacio, primera letra mayúscula) por si algún
+ * día aparece un valor de modalidad que todavía no está en el mapa.
+ */
+function obtenerEtiquetaModalidad(modalidad) {
+  if (ETIQUETAS_MODALIDAD_INFO[modalidad]) return ETIQUETAS_MODALIDAD_INFO[modalidad];
+  const texto = String(modalidad || "").replace(/_/g, " ").trim();
+  return texto ? texto.charAt(0).toUpperCase() + texto.slice(1) : "";
+}
+
+/**
  * TODOS los 7 días, ordenados según "día de inicio de semana" (Ajustes →
  * Horario) y con la etiqueta corta personalizada aplicada — sin filtrar por
  * "días visibles". Antes esto vivía mezclado dentro de
@@ -2043,6 +2058,7 @@ export {
   // arriba antes de poder llamar a abrirTarjetaInfoBloque.
   abrirTarjetaInfoBloque,
   obtenerEmojiModalidad,
+  obtenerEtiquetaModalidad,
   obtenerNombreProfesor,
   fechaLocalDesdeISO,
 };
