@@ -813,30 +813,30 @@
       <button type="button" class="pill-item" data-valor="evento">Evento</button>
     </div>
 
-    <!-- Ronda de ajustes visuales #5 — punto C: "Es feriado" seguía
-         cortándose incluso con max-height animado (intento anterior, ver
-         historial). Causa real de fondo: max-height a un valor fijo en px
-         es SIEMPRE una apuesta — si el contenido real mide un pelo más que
-         el número que se adivinó (por fuente distinta, zoom del navegador,
-         etc.), lo corta, sin importar cuán "generoso" parezca el número en
-         un caso puntual. La solución que no depende de adivinar ningún
-         valor es el patrón CSS Grid `0fr -> 1fr`: el motor de layout mide
-         el contenido real y anima hacia ESA altura, nunca hacia un número
-         fijo, así que nunca puede cortarlo. Estructura: un wrapper en
-         grid (ácá abajo) con overflow:hidden en un solo hijo interno — ver
-         .reveal-feriado en design-system.css. agenda-modal.js togglea una
-         sola clase ("visible") en el wrapper. -->
-    <div class="reveal-feriado" id="fila-agenda-es-feriado">
-      <div class="reveal-feriado-inner">
-        <label class="row" style="align-items:center; gap:10px; cursor:pointer; padding-top:4px;">
-          <label class="switch switch-tema" style="flex-shrink:0;">
-            <input type="checkbox" id="chk-agenda-es-feriado">
-            <span class="track"><span class="thumb"></span></span>
-          </label>
-          <span style="font-size:0.85rem;">Es feriado</span>
-        </label>
-      </div>
-    </div>
+    <!-- Ronda de ajustes visuales #6 — foco 100% en que "Es feriado" NUNCA
+         se corte: se probaron 3 técnicas de animación (display:none
+         instantáneo -> max-height fijo animado -> CSS Grid 0fr/1fr
+         animado) y las 3 terminaron cortando el switch en algún momento —
+         la de Grid incluso lo cortaba VISIBLEMENTE a media animación. El
+         denominador común de las 3 es que TODAS animan un tamaño que
+         cambia con el layout dentro de un contenedor con overflow-y:auto
+         (#modal-body más abajo/.modal-card) — ese es exactamente el
+         combo donde WebKit/iOS tiene bugs de repintado conocidos. La
+         única forma de garantizar 100% que nunca se corte es sacar la
+         animación de tamaño de la ecuación por completo: esta fila
+         aparece/desaparece con un simple toggle de "oculto"
+         (display:none <-> flex), sin transición de tamaño de ningún tipo.
+         agenda-modal.js fuerza además un reflow síncrono justo después de
+         quitar "oculto" (leer offsetHeight) para blindar el caso puntual
+         de iOS Safari donde un overflow-y:auto no repinta un hijo que
+         pasa de display:none a visible en el mismo tick. -->
+    <label class="row oculto" id="fila-agenda-es-feriado" style="align-items:center; gap:10px; cursor:pointer;">
+      <label class="switch switch-tema" style="flex-shrink:0;">
+        <input type="checkbox" id="chk-agenda-es-feriado">
+        <span class="track"><span class="thumb"></span></span>
+      </label>
+      <span style="font-size:0.85rem;">Es feriado</span>
+    </label>
 
     <div>
       <label class="form-label" for="input-agenda-nombre">Nombre</label>
