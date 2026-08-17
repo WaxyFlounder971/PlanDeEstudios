@@ -7,6 +7,8 @@
    agenda-calendario.js.
    ========================================================================= */
 
+import { sellarTimestamp } from "../core/schema.js";
+import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { desplazarYResaltarElemento } from "../ui/componentes.js";
@@ -14,6 +16,7 @@ import { mostrarSeccion } from "../main.js";
 import { renderizarCalendarioAgenda } from "./agenda-calendario.js";
 import { construirTarjetaClasesDia } from "./agenda-clases.js";
 import { abrirModalEventoAgenda, inicializarModalAgendaEvento } from "./agenda-modal.js";
+import { fechaLocalDesdeISO } from "../horario/horario.js";
 import {
   esHoyFecha,
   formatearFechaISO,
@@ -23,7 +26,6 @@ import {
 } from "./agenda-utils.js";
 
 const ETIQUETA_TIPO = { evento: "Eventos", tarea: "Tareas", examen: "Exámenes" };
-const BADGE_TIPO = { evento: "badge-accent", tarea: "badge-warning", examen: "badge-danger" };
 const ORDEN_TIPO = ["examen", "tarea", "evento"];
 
 // Transitorio (no persistido). "lista" | "calendario" — cuál de las 2
@@ -32,6 +34,75 @@ estado.agendaVistaActiva = estado.agendaVistaActiva || "lista";
 // Semanas de offset respecto a la semana de hoy que Lista (y el submodo
 // "Semanal" del Calendario, que la comparte a propósito) está mostrando.
 estado.agendaOffsetSemana = estado.agendaOffsetSemana || 0;
+
+/**
+ * Rediseño núcleo Agenda — punto 6: intervalos vivos de los timers "vence
+ * hoy" actualmente en pantalla. Se limpian al arrancar cada render de Lista
+ * (ver renderizarAgendaInterno) para no acumular setInterval huérfanos
+ * apuntando a nodos DOM ya descartados cada vez que se navega de semana o
+ * se togglea el checkbox de completada.
+ */
+let intervalosVenceHoy = [];
+function limpiarIntervalosVenceHoy() {
+  intervalosVenceHoy.forEach((id) => clearInterval(id));
+  intervalosVenceHoy = [];
+}
+
+function buscarEventoAgendaVivo(id) {
+  return (estado.datos.agenda || []).find((ev) => ev.id === id) || null;
+}
+
+/**
+ * Rediseño núcleo Agenda — punto 4: mapa único de "cómo se pinta cada
+ * combinación tipo/estado", para que badge (clase) y borde (hex, mismo tono
+ * que el `border-color` de esa clase en design-system.css) nunca queden
+ * desincronizados entre sí. `es_feriado`/`completada` son las 2 únicas
+ * bifurcaciones dentro de un mismo tipo (ver crearEventoAgenda en
+ * schema.js) — evento normal vs. feriado, tarea pendiente vs. completada.
+ */
+function obtenerEstiloEvento(evento) {
+  if (evento.tipo === "tarea" && evento.completada) {
+    return { etiqueta: "Completada", claseBadge: "badge-info", colorBorde: "#3b82f6" };
+  }
+  if (evento.tipo === "tarea") {
+    return { etiqueta: "Tarea", claseBadge: "badge-warning", colorBorde: "#f59e0b" };
+  }
+  if (evento.tipo === "examen") {
+    return { etiqueta: "Examen", claseBadge: "badge-danger", colorBorde: "#ef4444" };
+  }
+  if (evento.tipo === "evento" && evento.es_feriado) {
+    return { etiqueta: "Feriado", claseBadge: "badge-success", colorBorde: "#10b981" };
+  }
+  return { etiqueta: "Evento", claseBadge: "badge-purple", colorBorde: "#a855f7" };
+}
+
+/**
+ * Punto 6: "vencida" es SIEMPRE derivado (no se guarda — ver comentario del
+ * spec en schema.js), se recalcula acá cada render comparando contra la
+ * fecha de HOY en formato ISO (comparación lexicográfica de "YYYY-MM-DD",
+ * válida sin parsear ninguna de las 2 fechas).
+ */
+function esTareaVencida(evento) {
+  if (evento.tipo !== "tarea" || evento.completada) return false;
+  return evento.fecha < formatearFechaISO(new Date());
+}
+
+function tareaVenceHoy(evento) {
+  if (evento.tipo !== "tarea" || evento.completada) return false;
+  return evento.fecha === formatearFechaISO(new Date());
+}
+
+/** "3h 42min restantes" / "42min restantes" hasta las 23:59:59 del día de `fechaISO`. */
+function formatearTiempoRestanteHoy(fechaISO) {
+  const finDelDia = fechaLocalDesdeISO(fechaISO);
+  finDelDia.setHours(23, 59, 59, 999);
+  const msRestantes = finDelDia.getTime() - Date.now();
+  if (msRestantes <= 0) return "Vence en instantes";
+  const minutosTotales = Math.floor(msRestantes / 60000);
+  const horas = Math.floor(minutosTotales / 60);
+  const minutos = minutosTotales % 60;
+  return horas > 0 ? `⏳ ${horas}h ${minutos}min restantes` : `⏳ ${minutos}min restantes`;
+}
 
 function construirBadgeMateria(evento) {
   const semestre = (estado.datos.semestres || []).find((s) => s.id === evento.semestre_id);
@@ -42,18 +113,75 @@ function construirBadgeMateria(evento) {
   return materia ? `<span class="muted" style="font-size:0.72rem;">${aplicarFormatoTexto(materia.nombre)}</span>` : "";
 }
 
+/**
+ * Punto 5: toggle del checkbox circular de "completada" — vive acá (no en
+ * agenda-modal.js) porque no abre ningún modal, solo muta el campo y
+ * refresca en el lugar; mismo patrón de "releer la entidad viva por id
+ * antes de mutar" que usa agenda-modal.js (por si un sondeo remoto
+ * reemplazó estado.datos mientras tanto).
+ */
+function alternarCompletadaEvento(eventoId) {
+  const vivo = buscarEventoAgendaVivo(eventoId);
+  if (!vivo) return;
+  vivo.completada = !vivo.completada;
+  sellarTimestamp(vivo);
+  marcarCambioPendiente();
+  renderizarAgendaInterno();
+}
+
 function construirItemEvento(evento) {
+  const estilo = obtenerEstiloEvento(evento);
+
   const item = document.createElement("button");
   item.type = "button";
   item.className = "agenda-item";
-  item.innerHTML = `
-    <span class="badge ${BADGE_TIPO[evento.tipo] || "badge-neutral"}">${ETIQUETA_TIPO[evento.tipo]?.slice(0, -1) || evento.tipo}</span>
-    <span style="flex:1; text-align:left; overflow-wrap:break-word;">
-      <div style="font-weight:600;">${evento.nombre || "(sin nombre)"}</div>
-      ${construirBadgeMateria(evento)}
-    </span>
-    <span class="muted" style="font-size:0.78rem; flex-shrink:0;">${evento.hora || "Todo el día"}</span>
+  item.style.borderLeft = `3px solid ${estilo.colorBorde}`;
+
+  if (evento.tipo === "tarea") {
+    const check = document.createElement("button");
+    check.type = "button";
+    check.className = "agenda-check-completada" + (evento.completada ? " marcada" : "");
+    check.title = evento.completada ? "Marcar como pendiente" : "Marcar como completada";
+    check.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      alternarCompletadaEvento(evento.id);
+    });
+    item.appendChild(check);
+  }
+
+  const cuerpo = document.createElement("span");
+  cuerpo.style.cssText = "flex:1; text-align:left; overflow-wrap:break-word;";
+  const vencida = esTareaVencida(evento);
+  const venceHoy = tareaVenceHoy(evento);
+  cuerpo.innerHTML = `
+    <div class="row" style="gap:6px; align-items:center; flex-wrap:wrap;">
+      <span class="badge ${estilo.claseBadge}">${estilo.etiqueta}</span>
+      ${vencida ? `<span class="agenda-badge-vencida">⚠ Vencida</span>` : ""}
+    </div>
+    <div style="font-weight:600; ${evento.completada ? "text-decoration:line-through; opacity:0.7;" : ""}">${evento.nombre || "(sin nombre)"}</div>
+    ${construirBadgeMateria(evento)}
   `;
+  item.appendChild(cuerpo);
+
+  const lado = document.createElement("span");
+  lado.className = "muted";
+  lado.style.cssText = "font-size:0.78rem; flex-shrink:0; text-align:right;";
+  if (venceHoy) {
+    lado.innerHTML = `<span class="agenda-timer-vence-hoy">${formatearTiempoRestanteHoy(evento.fecha)}</span>`;
+    const idIntervalo = setInterval(() => {
+      const span = lado.querySelector(".agenda-timer-vence-hoy");
+      if (!span || !span.isConnected) {
+        clearInterval(idIntervalo);
+        return;
+      }
+      span.textContent = formatearTiempoRestanteHoy(evento.fecha);
+    }, 60000);
+    intervalosVenceHoy.push(idIntervalo);
+  } else {
+    lado.textContent = evento.hora || "Todo el día";
+  }
+  item.appendChild(lado);
+
   item.addEventListener("click", () => abrirModalEventoAgenda({ eventoId: evento.id }));
   return item;
 }
@@ -174,6 +302,7 @@ function construirSubheaderLista(dias) {
 function renderizarAgendaInterno() {
   const cont = document.getElementById("agenda-lista-dias");
   if (!cont) return;
+  limpiarIntervalosVenceHoy();
   cont.innerHTML = "";
 
   const cfg = estado.datos.configuracion;
