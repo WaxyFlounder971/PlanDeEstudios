@@ -2121,6 +2121,37 @@ img, svg { max-width: 100%; }
 }
 [data-mode="light"] .agenda-timer-vence-hoy { color: #92400e; }
 
+/* Rediseño núcleo Agenda — punto 8: toggle "‹ N días anteriores" que agrupa
+   los días ya pasados de la semana visible. Mismo lenguaje visual liviano
+   que el resto de cabeceras clickeables de la app (fondo sutil, borde
+   glass) — la flecha rota 180° al expandir, mismo truco que
+   .ajuste-seccion-chevron. */
+.agenda-colapso-pasados {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+.agenda-colapso-pasados:hover { background: rgba(255, 255, 255, 0.07); }
+[data-mode="light"] .agenda-colapso-pasados { background: rgba(0, 0, 0, 0.02); }
+[data-mode="light"] .agenda-colapso-pasados:hover { background: rgba(0, 0, 0, 0.05); }
+.agenda-colapso-pasados-flecha {
+  font-size: 1.1rem;
+  line-height: 1;
+  transition: transform var(--transition-fast);
+}
+
 /* ---- Vista Calendario (mensual/semanal) — grid de 7 columnas ---- */
 .agenda-cal-grid {
   display: grid;
