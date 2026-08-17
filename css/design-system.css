@@ -282,7 +282,16 @@ a { color: var(--accent-1); }
      original de "Solo la primera[m]" cortado a lo bruto. */
   flex: 1 1 0;
   min-width: 0;
-  overflow: hidden;
+  /* v1.9.7: `overflow: hidden` (a secas) recorta el botón en los DOS ejes.
+     El truncado con "…" solo necesita el eje horizontal — al dejar también
+     el vertical recortado, la altura "auto" del botón (padding + line-height)
+     queda sujeta al redondeo a subpíxel del layout flex, y con zoom del
+     navegador >100% ese redondeo se acumula y termina cortando 1-2px de las
+     letras (más zoom = más corte, tal cual se reportó). overflow-x:hidden +
+     overflow-y:visible mantiene el truncado horizontal intacto sin recortar
+     nunca verticalmente, sea cual sea el zoom. */
+  overflow-x: hidden;
+  overflow-y: visible;
   text-overflow: ellipsis;
   border: none;
   background: transparent;
@@ -291,6 +300,7 @@ a { color: var(--accent-1); }
   border-radius: var(--radius-pill);
   font-weight: 600;
   font-size: 0.85rem;
+  line-height: 1.3;
   cursor: pointer;
   transition: all var(--transition-fast);
   white-space: nowrap;
@@ -300,7 +310,8 @@ a { color: var(--accent-1); }
    regla adicional es para los pocos casos que sí envuelven el texto en un
    span (ej. `.texto`), para que el truncado funcione igual ahí. */
 .pill-item span, .pill-item .texto {
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
