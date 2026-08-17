@@ -123,19 +123,17 @@ function actualizarPlaceholderNombre(tipo) {
  * volver a "evento" nunca arrastre un feriado marcado por error mientras
  * estaba invisible.
  *
- * Ronda de ajustes visuales #4: en vez de togglear "oculto" (display:none
- * instantáneo — la causa real del bug "se corta", ver comentario en
- * index.html), togglea .fila-feriado-visible, que anima max-height/opacity
- * en design-system.css. Un cambio continuo no le da pie a WebKit a quedarse
- * con un layout viejo dentro del overflow-y:auto del modal.
+ * Ronda de ajustes visuales #5 — punto C: togglea .visible sobre el wrapper
+ * en grid (.reveal-feriado, ver comentario en index.html y design-system.
+ * css), que anima hacia la altura REAL del contenido en vez de un
+ * max-height fijo — así no hay forma de que quede cortado.
  */
 function actualizarVisibilidadFeriado(tipo) {
   const fila = document.getElementById("fila-agenda-es-feriado");
   const chk = document.getElementById("chk-agenda-es-feriado");
   if (!fila || !chk) return;
   const esEvento = tipo === "evento";
-  fila.classList.toggle("fila-feriado-visible", esEvento);
-  fila.classList.toggle("fila-feriado-oculta", !esEvento);
+  fila.classList.toggle("visible", esEvento);
   if (!esEvento) chk.checked = false;
 }
 

@@ -141,16 +141,16 @@ function alternarCompletadaEvento(eventoId) {
 }
 
 /**
- * Ronda de ajustes visuales — punto 1: layout de tarjeta reestructurado en
- * 2 columnas explícitas. Izquierda (nombre + materia, si tiene) anclada
- * arriba al nivel del nombre — por eso el item pasa a `align-items:
- * flex-start` en vez del `center` que trae `.agenda-item` por defecto (ver
- * design-system.css), así el nombre no queda centrado contra una columna
- * derecha más alta. Derecha apilada verticalmente: badge "Vencida" (si
- * aplica) → badge de tipo → hora — el badge de tipo usa el tamaño chico de
- * `.agenda-badge-vencida` (ver `.agenda-badge-tipo` en design-system.css)
- * para que ambos badges se lean como parte del mismo bloque, en vez del
- * badge grande genérico que traía antes.
+ * Ronda de ajustes visuales — punto 1: layout de tarjeta en 2 columnas
+ * explícitas.
+ *
+ * Ronda de ajustes visuales #5: se saca el `align-items: flex-start` que
+ * tenía este item — con la checkbox de "completada" ya centrada
+ * verticalmente (align-self:center, ver .agenda-check-completada en
+ * design-system.css), dejar el nombre anclado arriba contra una checkbox
+ * centrada se notaba desalineado. Ahora usa el `align-items:center` por
+ * defecto de `.agenda-item`, así checkbox, nombre y columna derecha quedan
+ * todos centrados contra la misma línea media de la tarjeta.
  */
 function construirItemEvento(evento) {
   const estilo = obtenerEstiloEvento(evento);
@@ -159,14 +159,12 @@ function construirItemEvento(evento) {
   item.type = "button";
   item.className = "agenda-item";
   item.style.borderLeft = `3px solid ${estilo.colorBorde}`;
-  item.style.alignItems = "flex-start";
 
   if (evento.tipo === "tarea") {
     const check = document.createElement("button");
     check.type = "button";
     check.className = "agenda-check-completada" + (evento.completada ? " marcada" : "");
     check.title = evento.completada ? "Marcar como pendiente" : "Marcar como completada";
-    check.style.marginTop = "1px"; // óptico: centrado contra la línea del nombre, no del bloque entero
     check.addEventListener("click", (ev) => {
       ev.stopPropagation();
       alternarCompletadaEvento(evento.id);
@@ -546,6 +544,36 @@ function ajustarDiasAtrasTodo(nuevoValor) {
  * según el estado — mismo patrón if/else que el resto del proyecto usa
  * para alternar entre 2 acciones mutuamente excluyentes.
  */
+/**
+ * Ronda de ajustes visuales #5 — punto D: mismo cálculo de "milisegundos a
+ * días" que usa el resto del proyecto para diffs de fecha, pero
+ * normalizando a medianoche local primero — `dia.fecha` e
+ * `inicioSemanaHoy` deberían venir ya normalizados, pero un diff en crudo
+ * es frágil ante cualquier resto de hora/DST, y esto es barato de
+ * garantizar acá.
+ */
+function calcularOffsetSemana(fecha, inicioSemanaHoy) {
+  const medianocheLocal = (f) => new Date(f.getFullYear(), f.getMonth(), f.getDate());
+  const diffDias = Math.round((medianocheLocal(fecha) - medianocheLocal(inicioSemanaHoy)) / 86400000);
+  return Math.floor(diffDias / 7);
+}
+
+/**
+ * Ronda de ajustes visuales #5 — punto D: encabezado separador entre
+ * semanas dentro del modo "Todo" (lista continua). Reusa
+ * obtenerFechaInicioSemanaAgenda + calcularNumeroSemanaParaFecha — el
+ * mismo par que arma "Semana N" en construirSubheaderSemanal — así el
+ * número de semana coincide sea cual sea el modo desde el que se lo mire.
+ */
+function construirEncabezadoSemanaTodo(semestreActivo, offsetSemana) {
+  const inicioSemana = obtenerFechaInicioSemanaAgenda(offsetSemana);
+  const numeroSemana = semestreActivo ? calcularNumeroSemanaParaFecha(semestreActivo, inicioSemana) : null;
+  const encabezado = document.createElement("div");
+  encabezado.className = "agenda-todo-encabezado-semana";
+  encabezado.textContent = numeroSemana ? `Semana ${numeroSemana}` : "Semana";
+  return encabezado;
+}
+
 function construirSubheaderTodo() {
   const wrap = document.createElement("div");
   wrap.className = "row";
@@ -598,15 +626,40 @@ function renderizarAgendaInterno() {
   }
 
   if (modoTodo) {
-    const bloques = dias.map((dia) => construirBloqueDia(dia, semestreActivo, mostrarDiasVacios)).filter(Boolean);
-    if (bloques.length === 0) {
+    // Ronda de ajustes visuales #5 — punto D: el modo "Todo" es una lista
+    // continua (no paginada semana a semana como el modo Semanal), pero
+    // seguía sin ningún corte visual entre semanas, lo que hacía difícil
+    // ubicarse en un rango largo. Se inserta un encabezado "Semana N" cada
+    // vez que el offset de semana (contra HOY, mismo criterio que usa el
+    // modo Semanal vía obtenerFechaInicioSemanaAgenda) cambia respecto al
+    // día anterior — como `dias` ya viene ordenado cronológicamente, esto
+    // agrupa automáticamente sin tener que re-calcular nada por bloques.
+    const frag = document.createDocumentFragment();
+    const inicioSemanaHoy = obtenerFechaInicioSemanaAgenda(0);
+    let offsetSemanaAnterior = null;
+    let huboContenido = false;
+
+    dias.forEach((dia) => {
+      const bloque = construirBloqueDia(dia, semestreActivo, mostrarDiasVacios);
+      if (!bloque) return;
+      huboContenido = true;
+
+      const offsetSemana = calcularOffsetSemana(dia.fecha, inicioSemanaHoy);
+      if (offsetSemana !== offsetSemanaAnterior) {
+        frag.appendChild(construirEncabezadoSemanaTodo(semestreActivo, offsetSemana));
+        offsetSemanaAnterior = offsetSemana;
+      }
+      frag.appendChild(bloque);
+    });
+
+    if (!huboContenido) {
       const vacio = document.createElement("p");
       vacio.className = "muted";
       vacio.style.textAlign = "center";
       vacio.textContent = "Nada pendiente en este rango.";
       cont.appendChild(vacio);
     } else {
-      bloques.forEach((b) => cont.appendChild(b));
+      cont.appendChild(frag);
     }
     return;
   }
