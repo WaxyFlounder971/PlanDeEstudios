@@ -13,7 +13,6 @@ import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { desplazarYResaltarElemento } from "../ui/componentes.js";
-import { mostrarSeccion } from "../main.js";
 import { renderizarCalendarioAgenda } from "./agenda-calendario.js";
 import { construirSeccionMateriasDia, calcularNumeroSemanaParaFecha } from "./agenda-clases.js";
 import { abrirModalEventoAgenda, abrirTarjetaInfoEventoAgenda, inicializarModalAgendaEvento } from "./agenda-modal.js";
@@ -45,6 +44,22 @@ estado.agendaOffsetSemana = estado.agendaOffsetSemana || 0;
 // navegación semana a semana) | "todo" (desde hoy hasta fin de semestre +
 // 2 semanas, scroll libre sin paginar — ver obtenerRangoDiasAgendaTodo).
 estado.agendaFiltroModo = estado.agendaFiltroModo || "semanal";
+// Ronda de ajustes visuales — punto 2 (fix bug): estado de sesión de
+// expandido/colapsado del bloque "‹ N días anteriores" (punto 8). Antes
+// vivía SOLO como clase CSS en el <div> del cuerpo colapsable, armado
+// adentro de construirColapsoDiasPasados — cualquier re-render completo de
+// renderizarAgendaInterno (ej. el que dispara alternarCompletadaEvento al
+// tocar el check circular de una tarea) tira `cont.innerHTML = ""` y
+// reconstruye ese <div> desde cero, que siempre arrancaba con la clase
+// "oculto" puesta — perdiendo el expandido y colapsándose solo. Ahora el
+// estado vive acá (sobrevive a que el DOM se destruya y reconstruya) y
+// construirColapsoDiasPasados solo LEE/actualiza esta bandera.
+estado.agendaDiasPasadosExpandido = estado.agendaDiasPasadosExpandido || false;
+// Punto 4: días adicionales hacia atrás que el control "Ver días
+// anteriores" del subheader de modo Todo va sumando al rango — 0 = rango
+// original (arranca en hoy, sin días previos). Sesión, no persistido, mismo
+// criterio que el resto de estos flags.
+estado.agendaTodoDiasAtras = estado.agendaTodoDiasAtras || 0;
 // Punto 10 + 12: arranca en el valor PERSISTENTE de Ajustes → Agenda
 // (`agenda_mostrar_clases`, punto 12) pero solo para esta sesión: togglear
 // acá (ventana de Filtros) nunca reescribe ese ajuste permanente.
@@ -109,6 +124,18 @@ function alternarCompletadaEvento(eventoId) {
   renderizarAgendaInterno();
 }
 
+/**
+ * Ronda de ajustes visuales — punto 1: layout de tarjeta reestructurado en
+ * 2 columnas explícitas. Izquierda (nombre + materia, si tiene) anclada
+ * arriba al nivel del nombre — por eso el item pasa a `align-items:
+ * flex-start` en vez del `center` que trae `.agenda-item` por defecto (ver
+ * design-system.css), así el nombre no queda centrado contra una columna
+ * derecha más alta. Derecha apilada verticalmente: badge "Vencida" (si
+ * aplica) → badge de tipo → hora — el badge de tipo usa el tamaño chico de
+ * `.agenda-badge-vencida` (ver `.agenda-badge-tipo` en design-system.css)
+ * para que ambos badges se lean como parte del mismo bloque, en vez del
+ * badge grande genérico que traía antes.
+ */
 function construirItemEvento(evento) {
   const estilo = obtenerEstiloEvento(evento);
 
@@ -116,12 +143,14 @@ function construirItemEvento(evento) {
   item.type = "button";
   item.className = "agenda-item";
   item.style.borderLeft = `3px solid ${estilo.colorBorde}`;
+  item.style.alignItems = "flex-start";
 
   if (evento.tipo === "tarea") {
     const check = document.createElement("button");
     check.type = "button";
     check.className = "agenda-check-completada" + (evento.completada ? " marcada" : "");
     check.title = evento.completada ? "Marcar como pendiente" : "Marcar como completada";
+    check.style.marginTop = "1px"; // óptico: centrado contra la línea del nombre, no del bloque entero
     check.addEventListener("click", (ev) => {
       ev.stopPropagation();
       alternarCompletadaEvento(evento.id);
@@ -129,27 +158,33 @@ function construirItemEvento(evento) {
     item.appendChild(check);
   }
 
-  const cuerpo = document.createElement("span");
-  cuerpo.style.cssText = "flex:1; text-align:left; overflow-wrap:break-word;";
-  const vencida = esTareaVencida(evento);
-  const venceHoy = tareaVenceHoy(evento);
-  cuerpo.innerHTML = `
-    <div class="row" style="gap:6px; align-items:center; flex-wrap:wrap;">
-      <span class="badge ${estilo.claseBadge}">${estilo.etiqueta}</span>
-      ${vencida ? `<span class="agenda-badge-vencida">⚠ Vencida</span>` : ""}
-    </div>
+  // Columna izquierda: nombre + materia vinculada (si tiene).
+  const izquierda = document.createElement("span");
+  izquierda.style.cssText = "flex:1; min-width:0; text-align:left; overflow-wrap:break-word;";
+  izquierda.innerHTML = `
     <div style="font-weight:600; ${evento.completada ? "text-decoration:line-through; opacity:0.7;" : ""}">${evento.nombre || "(sin nombre)"}</div>
     ${construirBadgeMateria(evento)}
   `;
-  item.appendChild(cuerpo);
+  item.appendChild(izquierda);
 
-  const lado = document.createElement("span");
-  lado.className = "muted";
-  lado.style.cssText = "font-size:0.78rem; flex-shrink:0; text-align:right;";
+  // Columna derecha: Vencida (opcional) -> badge de tipo -> hora, apilados.
+  const vencida = esTareaVencida(evento);
+  const venceHoy = tareaVenceHoy(evento);
+  const derecha = document.createElement("span");
+  derecha.className = "stack";
+  derecha.style.cssText = "align-items:flex-end; gap:4px; flex-shrink:0; text-align:right;";
+  derecha.innerHTML = `
+    ${vencida ? `<span class="agenda-badge-vencida">⚠ Vencida</span>` : ""}
+    <span class="badge agenda-badge-tipo ${estilo.claseBadge}">${estilo.etiqueta}</span>
+  `;
+
+  const hora = document.createElement("span");
+  hora.className = "muted";
+  hora.style.cssText = "font-size:0.78rem; white-space:nowrap;";
   if (venceHoy) {
-    lado.innerHTML = `<span class="agenda-timer-vence-hoy">${formatearTiempoRestanteHoy(evento.fecha)}</span>`;
+    hora.innerHTML = `<span class="agenda-timer-vence-hoy">${formatearTiempoRestanteHoy(evento.fecha)}</span>`;
     const idIntervalo = setInterval(() => {
-      const span = lado.querySelector(".agenda-timer-vence-hoy");
+      const span = hora.querySelector(".agenda-timer-vence-hoy");
       if (!span || !span.isConnected) {
         clearInterval(idIntervalo);
         return;
@@ -158,9 +193,10 @@ function construirItemEvento(evento) {
     }, 60000);
     intervalosVenceHoy.push(idIntervalo);
   } else {
-    lado.textContent = evento.hora || "Todo el día";
+    hora.textContent = evento.hora || "Todo el día";
   }
-  item.appendChild(lado);
+  derecha.appendChild(hora);
+  item.appendChild(derecha);
 
   item.addEventListener("click", () => abrirTarjetaInfoEventoAgenda(evento.id));
   return item;
@@ -334,15 +370,17 @@ function construirColapsoDiasPasados(bloquesPasados) {
   `;
 
   const cuerpo = document.createElement("div");
-  cuerpo.className = "stack oculto";
+  cuerpo.className = "stack" + (estado.agendaDiasPasadosExpandido ? "" : " oculto");
   cuerpo.style.gap = "14px";
   bloquesPasados.forEach((b) => cuerpo.appendChild(b));
 
+  const flecha = boton.querySelector(".agenda-colapso-pasados-flecha");
+  flecha.style.transform = estado.agendaDiasPasadosExpandido ? "rotate(180deg)" : "rotate(0deg)";
+
   boton.addEventListener("click", () => {
-    cuerpo.classList.toggle("oculto");
-    boton.querySelector(".agenda-colapso-pasados-flecha").style.transform = cuerpo.classList.contains("oculto")
-      ? "rotate(0deg)"
-      : "rotate(180deg)";
+    estado.agendaDiasPasadosExpandido = !estado.agendaDiasPasadosExpandido;
+    cuerpo.classList.toggle("oculto", !estado.agendaDiasPasadosExpandido);
+    flecha.style.transform = estado.agendaDiasPasadosExpandido ? "rotate(180deg)" : "rotate(0deg)";
   });
 
   cont.appendChild(boton);
@@ -353,19 +391,48 @@ function construirColapsoDiasPasados(bloquesPasados) {
 /**
  * Punto 10 (modo "Todo"): subheader liviano, sin flechas ‹ › — acá no hay
  * "semana navegada" que retroceder/avanzar, es un scroll libre continuo
- * desde hoy. Solo informa el rango que se está mostrando.
+ * desde hoy.
+ *
+ * Ronda de ajustes visuales — punto 4: ya no informa el rango con texto
+ * fijo ("Desde hoy hasta el..."); en su lugar hay un control "Ver días
+ * anteriores" que sigue sumando semanas hacia atrás (estado.agendaTodoDiasAtras,
+ * consumido por obtenerRangoDiasAgendaTodo — ver agenda-utils.js) cada vez
+ * que se toca. Solo re-renderiza el contenido interno (renderizarAgendaInterno,
+ * no renderizarAgenda completo) y compensa el scroll del documento por la
+ * altura que agregan los bloques nuevos ANTES de la posición actual, para
+ * que la vista no salte ni se resetee al principio de la lista — lo que la
+ * persona tenía a la vista se queda exactamente donde estaba.
  */
 function construirSubheaderTodo(dias) {
   const wrap = document.createElement("section");
   wrap.className = "glass-panel";
   wrap.style.cssText = "padding:10px 14px; text-align:center;";
-  const texto = document.createElement("span");
-  texto.className = "texto-encabezado-seccion";
-  const ultima = dias[dias.length - 1]?.fecha;
-  texto.textContent = ultima
-    ? `Desde hoy hasta el ${ultima.toLocaleDateString("es-CR", { day: "numeric", month: "short" })}`
-    : "Desde hoy";
-  wrap.appendChild(texto);
+
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.className = "btn-discreto";
+  boton.style.fontSize = "0.8rem";
+  boton.textContent = "‹ Ver días anteriores";
+  boton.addEventListener("click", () => {
+    const cont = document.getElementById("agenda-lista-dias");
+    const scrollEl = document.scrollingElement || document.documentElement;
+    const scrollAntes = scrollEl.scrollTop;
+    const altoAntes = cont?.scrollHeight || 0;
+
+    estado.agendaTodoDiasAtras += 7;
+    renderizarAgendaInterno();
+
+    // El nuevo contenido se agrega ARRIBA de lo que ya estaba, así que sin
+    // esto el navegador mantiene el mismo scrollTop en píxeles y todo lo
+    // que la persona tenía a la vista se corre hacia abajo — se compensa
+    // sumando exactamente lo que creció el contenedor por encima.
+    requestAnimationFrame(() => {
+      const altoDespues = cont?.scrollHeight || 0;
+      scrollEl.scrollTop = scrollAntes + (altoDespues - altoAntes);
+    });
+  });
+
+  wrap.appendChild(boton);
   return wrap;
 }
 
@@ -383,7 +450,9 @@ function renderizarAgendaInterno() {
   // Punto 10: en modo "Todo" el rango arranca siempre en HOY (nunca hay
   // días previos a colapsar — ver obtenerRangoDiasAgendaTodo), así que el
   // colapso de días pasados del punto 8 es exclusivo del modo "Semanal".
-  const dias = modoTodo ? obtenerRangoDiasAgendaTodo(semestreActivo) : obtenerDiasSemanaAgenda(estado.agendaOffsetSemana);
+  const dias = modoTodo
+    ? obtenerRangoDiasAgendaTodo(semestreActivo, estado.agendaTodoDiasAtras)
+    : obtenerDiasSemanaAgenda(estado.agendaOffsetSemana);
   cont.appendChild(modoTodo ? construirSubheaderTodo(dias) : construirSubheaderLista(dias));
 
   if (modoTodo) {
@@ -444,11 +513,6 @@ function inicializarAgenda() {
   document.getElementById("btn-agenda-agregar")?.addEventListener("click", () => {
     abrirModalEventoAgenda({ fechaDefault: new Date().toISOString().slice(0, 10) });
   });
-  document.getElementById("btn-agenda-ir-ajustes")?.addEventListener("click", () => {
-    mostrarSeccion("configuracion");
-    document.getElementById("ajuste-seccion-agenda")?.classList.remove("colapsada");
-    desplazarYResaltarElemento("#ajuste-seccion-agenda");
-  });
   document.getElementById("agenda-fecha-hoy")?.addEventListener("click", () => {
     // Punto 7: siempre lleva a HOY, sin importar en qué vista/semana esté
     // parada la persona — si hace falta, cambia a Lista y resetea el
@@ -480,22 +544,39 @@ function inicializarAgenda() {
 }
 
 /**
- * Punto 10: ventana de Filtros — "Mostrar: Semanal/Todo" y "Mostrar
- * materias en la agenda: Sí/No". Ambos controles aplican al toque (sin
- * botón "Aplicar" separado) y re-renderizan Agenda en el momento — el modal
- * en sí se cierra con el botón "✕" (auto-inyectado, ver
- * inicializarBotonesCerrarModal en componentes.js) o tocando el fondo.
+ * Ronda de ajustes visuales — punto 3: los 3 botones de antes (Agregar /
+ * engranaje-a-Ajustes-global / Filtros) quedan en 2 — Agregar y un único
+ * engranaje (#btn-agenda-ajustes) que abre ESTA ventana combinada. Junta
+ * los 2 controles de SESIÓN que ya vivían en el viejo modal de Filtros
+ * ("Mostrar: Semanal/Todo" y "Mostrar materias en la agenda") con los 2
+ * controles PERSISTENTES que antes vivían sueltos en Ajustes → Agenda
+ * ("Mostrar clases ese día" y "Mostrar días sin eventos ni tareas",
+ * `configuracion.agenda_mostrar_clases`/`agenda_mostrar_dias_vacios` — ver
+ * también agenda-clases.js y renderizarAgendaInterno más arriba). Esa
+ * sección de Ajustes global ya NO existe — este modal, accesible solo
+ * desde acá, es el único lugar donde se tocan estos 4 ajustes.
+ *
+ * Los 4 controles aplican al toque (sin botón "Aplicar" separado) y
+ * re-renderizan Agenda en el momento — el modal en sí se cierra con el
+ * botón "✕" (auto-inyectado, ver inicializarBotonesCerrarModal en
+ * componentes.js) o tocando el fondo.
  */
 function inicializarFiltrosAgenda() {
-  const modal = document.getElementById("modal-agenda-filtros");
+  const modal = document.getElementById("modal-agenda-ajustes");
   if (!modal) return;
 
-  document.getElementById("btn-agenda-filtros")?.addEventListener("click", () => {
+  document.getElementById("btn-agenda-ajustes")?.addEventListener("click", () => {
     asegurarFiltroMostrarMateriasInicializado();
     document.querySelectorAll("#pills-agenda-filtro-modo .pill-item").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.valor === estado.agendaFiltroModo);
     });
     document.getElementById("chk-agenda-filtro-materias").checked = estado.agendaFiltroMostrarMaterias;
+    // Los 2 persistentes se leen directo de configuracion cada vez que se
+    // abre (no de un estado de sesión propio) — son el mismo dato que
+    // antes vivía en Ajustes global, solo que ahora se edita desde acá.
+    const cfg = estado.datos.configuracion;
+    document.getElementById("chk-agenda-mostrar-clases").checked = cfg.agenda_mostrar_clases !== false;
+    document.getElementById("chk-agenda-mostrar-dias-vacios").checked = cfg.agenda_mostrar_dias_vacios !== false;
     modal.classList.remove("oculto");
   });
 
@@ -511,6 +592,10 @@ function inicializarFiltrosAgenda() {
       // no deje a la persona parada en una semana que ya no recuerda por
       // qué eligió.
       estado.agendaOffsetSemana = 0;
+      // Punto 4: los días extra que "Ver días anteriores" fue sumando son
+      // propios de esta entrada al modo Todo — si se sale y se vuelve a
+      // entrar más tarde, arranca de nuevo en el rango original.
+      estado.agendaTodoDiasAtras = 0;
       renderizarAgenda();
     });
   });
@@ -520,8 +605,26 @@ function inicializarFiltrosAgenda() {
     renderizarAgenda();
   });
 
+  // Los 2 controles persistentes (antes en Ajustes → Agenda, ver
+  // config-ajustes.js): mismo criterio de "undefined = default sí" que
+  // tenían allá, mismo sellarTimestamp + marcarCambioPendiente que cualquier
+  // otro cambio de configuracion.
+  document.getElementById("chk-agenda-mostrar-clases")?.addEventListener("change", (ev) => {
+    estado.datos.configuracion.agenda_mostrar_clases = ev.target.checked;
+    sellarTimestamp(estado.datos.configuracion);
+    marcarCambioPendiente();
+    renderizarAgenda();
+  });
+
+  document.getElementById("chk-agenda-mostrar-dias-vacios")?.addEventListener("change", (ev) => {
+    estado.datos.configuracion.agenda_mostrar_dias_vacios = ev.target.checked;
+    sellarTimestamp(estado.datos.configuracion);
+    marcarCambioPendiente();
+    renderizarAgenda();
+  });
+
   modal.addEventListener("click", (ev) => {
-    if (ev.target.id === "modal-agenda-filtros") modal.classList.add("oculto");
+    if (ev.target.id === "modal-agenda-ajustes") modal.classList.add("oculto");
   });
 }
 

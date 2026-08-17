@@ -274,8 +274,14 @@ function formatearTiempoRestanteHoy(fechaISO) {
  * `semestre` (o con `fecha_inicio` inválida), cae a un rango fijo de ~8
  * semanas desde hoy — no hay forma de saber "fin de semestre" sin uno, pero
  * tampoco tiene sentido dejar el modo "Todo" sin ningún rango.
+ *
+ * `diasAtras` (ajuste visual, punto 4): cantidad de días ANTERIORES a hoy a
+ * incluir también al principio del rango — 0 (default) es el comportamiento
+ * original, sin días previos. Lo usa el control "Ver días anteriores" del
+ * subheader de modo Todo (ver construirSubheaderTodo en agenda.js) para ir
+ * extendiendo el rango hacia atrás sin tocar el final calculado.
  */
-function obtenerRangoDiasAgendaTodo(semestre) {
+function obtenerRangoDiasAgendaTodo(semestre, diasAtras = 0) {
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
 
@@ -303,6 +309,7 @@ function obtenerRangoDiasAgendaTodo(semestre) {
 
   const dias = [];
   const cursor = new Date(hoy);
+  if (diasAtras > 0) cursor.setDate(cursor.getDate() - diasAtras);
   while (cursor.getTime() <= fin.getTime()) {
     const codigo = obtenerCodigoDiaSemana(cursor);
     dias.push({ abrevDefault: codigo, etiqueta: etiquetaPorCodigo[codigo] || codigo, fecha: new Date(cursor) });
