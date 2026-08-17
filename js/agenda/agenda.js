@@ -1,9 +1,10 @@
 /* =========================================================================
    AGENDA — Núcleo
-   Header fijo (pills Lista/Calendario + Agregar/Ajustes) + despacho entre
-   las dos vistas. Esta vista (Lista) es cronológica: los 7 días de la
-   semana mostrada, cada uno con su tarjetita "Mostrar clases" y sus
-   eventos/tareas/exámenes agrupados por tipo. La vista Calendario vive en
+   Header fijo (Semestre/semana/día actual + pills Lista/Calendario +
+   Agregar/Ajustes) + despacho entre las dos vistas. Esta vista (Lista) es
+   cronológica: los 7 días de la semana mostrada, cada uno con sus materias
+   inline y sus eventos/tareas/exámenes agrupados por tipo, con los días ya
+   pasados colapsados bajo una flecha. La vista Calendario vive en
    agenda-calendario.js.
    ========================================================================= */
 
@@ -14,7 +15,7 @@ import { aplicarFormatoTexto } from "../core/utils.js";
 import { desplazarYResaltarElemento } from "../ui/componentes.js";
 import { mostrarSeccion } from "../main.js";
 import { renderizarCalendarioAgenda } from "./agenda-calendario.js";
-import { construirTarjetaClasesDia } from "./agenda-clases.js";
+import { construirSeccionMateriasDia, calcularNumeroSemanaParaFecha } from "./agenda-clases.js";
 import { abrirModalEventoAgenda, inicializarModalAgendaEvento } from "./agenda-modal.js";
 import { fechaLocalDesdeISO } from "../horario/horario.js";
 import {
@@ -22,6 +23,7 @@ import {
   formatearFechaISO,
   formatearRangoSemanaAgenda,
   obtenerDiasSemanaAgenda,
+  obtenerFechaInicioSemanaAgenda,
   obtenerSemestreActivoAgenda,
 } from "./agenda-utils.js";
 
@@ -214,9 +216,8 @@ function construirBloqueDia(diaInfo, semestreActivo, mostrarDiasVacios) {
   `;
   bloque.appendChild(header);
 
-  if (semestreActivo) {
-    bloque.appendChild(construirTarjetaClasesDia(semestreActivo, diaInfo.fecha, diaInfo.abrevDefault));
-  }
+  const seccionMaterias = construirSeccionMateriasDia(semestreActivo, diaInfo.fecha, diaInfo.abrevDefault);
+  if (seccionMaterias) bloque.appendChild(seccionMaterias);
 
   if (eventosDelDia.length === 0) {
     const vacio = document.createElement("p");
@@ -263,7 +264,7 @@ function construirSubheaderLista(dias) {
   btnAnterior.textContent = "‹";
   btnAnterior.addEventListener("click", () => {
     estado.agendaOffsetSemana -= 1;
-    renderizarAgendaInterno();
+    renderizarAgenda();
   });
 
   const centro = document.createElement("div");
@@ -278,7 +279,7 @@ function construirSubheaderLista(dias) {
   volverHoy.textContent = "Volver a hoy";
   volverHoy.addEventListener("click", () => {
     estado.agendaOffsetSemana = 0;
-    renderizarAgendaInterno();
+    renderizarAgenda();
   });
   centro.appendChild(rango);
   centro.appendChild(volverHoy);
@@ -290,13 +291,82 @@ function construirSubheaderLista(dias) {
   btnSiguiente.textContent = "›";
   btnSiguiente.addEventListener("click", () => {
     estado.agendaOffsetSemana += 1;
-    renderizarAgendaInterno();
+    renderizarAgenda();
   });
 
   wrap.appendChild(btnAnterior);
   wrap.appendChild(centro);
   wrap.appendChild(btnSiguiente);
   return wrap;
+}
+
+/**
+ * Punto 7: header fijo con Semestre / semana / día actual, mismo tamaño de
+ * letra que renderizarHeaderHorario (horario.js) — se llama desde
+ * renderizarAgenda() (no desde renderizarAgendaInterno) para que quede
+ * correcto sea cual sea la vista activa (Lista o Calendario), sin que este
+ * archivo necesite tocar agenda-calendario.js. La "semana" mostrada es la
+ * del PRIMER día de la semana actualmente navegada (estado.agendaOffsetSemana,
+ * compartido con el submodo "Semanal" del Calendario) — no la semana de
+ * hoy — para que quede en sintonía con lo que la persona está viendo.
+ */
+function renderizarHeaderAgenda() {
+  const semestre = obtenerSemestreActivoAgenda();
+  const nombreEl = document.getElementById("agenda-nombre-semestre");
+  const semanaEl = document.getElementById("agenda-semana-actual");
+  const fechaEl = document.getElementById("agenda-fecha-hoy");
+
+  if (!semestre) {
+    if (nombreEl) nombreEl.textContent = "Sin semestres";
+    if (semanaEl) semanaEl.textContent = "—";
+  } else {
+    if (nombreEl) nombreEl.textContent = semestre.nombre || "";
+    const primerDiaSemana = obtenerFechaInicioSemanaAgenda(estado.agendaOffsetSemana);
+    const numeroSemana = calcularNumeroSemanaParaFecha(semestre, primerDiaSemana);
+    if (semanaEl) semanaEl.textContent = `Semana ${numeroSemana}`;
+  }
+  // Siempre la fecha REAL de hoy (no la navegada) — es lo que hace que
+  // tocarla tenga sentido como atajo "llevame a hoy" (ver listener en
+  // inicializarAgenda).
+  if (fechaEl) fechaEl.textContent = new Date().toLocaleDateString("es-CR", { day: "numeric", month: "short" });
+}
+
+/**
+ * Punto 8: los días de la semana visible anteriores a hoy se agrupan bajo
+ * un único toggle "‹ N días anteriores" (colapsado por default) en vez de
+ * mostrarse cada uno suelto — al presionarlo se expanden todos juntos.
+ * Recibe los bloques YA construidos (no fechas) porque el llamador ya tuvo
+ * que decidir cuáles cuentan como "pasados" para el resto del layout.
+ */
+function construirColapsoDiasPasados(bloquesPasados) {
+  const cont = document.createElement("div");
+  cont.className = "stack";
+  cont.style.gap = "10px";
+
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.className = "agenda-colapso-pasados";
+  const plural = bloquesPasados.length === 1 ? "día anterior" : "días anteriores";
+  boton.innerHTML = `
+    <span class="agenda-colapso-pasados-flecha">‹</span>
+    <span>${bloquesPasados.length} ${plural}</span>
+  `;
+
+  const cuerpo = document.createElement("div");
+  cuerpo.className = "stack oculto";
+  cuerpo.style.gap = "14px";
+  bloquesPasados.forEach((b) => cuerpo.appendChild(b));
+
+  boton.addEventListener("click", () => {
+    cuerpo.classList.toggle("oculto");
+    boton.querySelector(".agenda-colapso-pasados-flecha").style.transform = cuerpo.classList.contains("oculto")
+      ? "rotate(0deg)"
+      : "rotate(180deg)";
+  });
+
+  cont.appendChild(boton);
+  cont.appendChild(cuerpo);
+  return cont;
 }
 
 function renderizarAgendaInterno() {
@@ -313,20 +383,33 @@ function renderizarAgendaInterno() {
 
   const semestreActivo = obtenerSemestreActivoAgenda();
 
-  const bloques = dias.map((dia) => construirBloqueDia(dia, semestreActivo, mostrarDiasVacios)).filter(Boolean);
+  // Punto 8: se separan los días ya pasados (fecha < hoy) del resto ANTES
+  // de construir los bloques, para poder envolver solo los pasados en el
+  // colapso — hoy y los días futuros siguen sueltos, como siempre.
+  const hoyISO = formatearFechaISO(new Date());
+  const diasPasados = dias.filter((d) => formatearFechaISO(d.fecha) < hoyISO);
+  const diasDesdeHoy = dias.filter((d) => formatearFechaISO(d.fecha) >= hoyISO);
 
-  if (bloques.length === 0) {
+  const bloquesPasados = diasPasados.map((dia) => construirBloqueDia(dia, semestreActivo, mostrarDiasVacios)).filter(Boolean);
+  const bloquesDesdeHoy = diasDesdeHoy.map((dia) => construirBloqueDia(dia, semestreActivo, mostrarDiasVacios)).filter(Boolean);
+
+  if (bloquesPasados.length === 0 && bloquesDesdeHoy.length === 0) {
     const vacio = document.createElement("p");
     vacio.className = "muted";
     vacio.style.textAlign = "center";
     vacio.textContent = "Nada pendiente esta semana.";
     cont.appendChild(vacio);
-  } else {
-    bloques.forEach((b) => cont.appendChild(b));
+    return;
   }
+
+  if (bloquesPasados.length > 0) {
+    cont.appendChild(construirColapsoDiasPasados(bloquesPasados));
+  }
+  bloquesDesdeHoy.forEach((b) => cont.appendChild(b));
 }
 
 function renderizarAgenda() {
+  renderizarHeaderAgenda();
   const esLista = estado.agendaVistaActiva === "lista";
   document.getElementById("agenda-lista-dias")?.classList.toggle("oculto", !esLista);
   document.getElementById("agenda-vista-calendario")?.classList.toggle("oculto", esLista);
@@ -347,6 +430,25 @@ function inicializarAgenda() {
     mostrarSeccion("configuracion");
     document.getElementById("ajuste-seccion-agenda")?.classList.remove("colapsada");
     desplazarYResaltarElemento("#ajuste-seccion-agenda");
+  });
+  document.getElementById("agenda-fecha-hoy")?.addEventListener("click", () => {
+    // Punto 7: siempre lleva a HOY, sin importar en qué vista/semana esté
+    // parada la persona — si hace falta, cambia a Lista y resetea el
+    // offset de semana antes de buscar el bloque a resaltar (mismo motivo
+    // por el que desplazarYResaltarElemento reintenta con
+    // requestAnimationFrame: el bloque puede no existir todavía en el DOM
+    // en el mismo tick que se dispara este click).
+    let necesitaRerender = false;
+    if (estado.agendaVistaActiva !== "lista") {
+      estado.agendaVistaActiva = "lista";
+      necesitaRerender = true;
+    }
+    if (estado.agendaOffsetSemana !== 0) {
+      estado.agendaOffsetSemana = 0;
+      necesitaRerender = true;
+    }
+    if (necesitaRerender) renderizarAgenda();
+    desplazarYResaltarElemento(`#agenda-lista-dias [data-fecha="${formatearFechaISO(new Date())}"]`);
   });
 
   document.querySelectorAll("#pills-agenda-vista .pill-item").forEach((btn) => {

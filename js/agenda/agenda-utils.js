@@ -197,9 +197,24 @@ function formatearRangoSemanaAgenda(dias) {
   return `${primero.toLocaleDateString("es-CR", opcionesCorto)} - ${ultimo.toLocaleDateString("es-CR", opcionesCorto)}`;
 }
 
+/**
+ * "7:30 a.m." / "1:05 p.m." a partir de "HH:MM" (24h). Rediseño núcleo
+ * Agenda — punto 9: las materias inline muestran su hora en este formato en
+ * vez del "HH:MM" crudo que usa el grid de Horario, a pedido del spec.
+ */
+function formatearHoraAmPm(horaStr) {
+  if (!horaStr) return "";
+  const [h, m] = String(horaStr).split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return horaStr;
+  const periodo = h < 12 ? "a.m." : "p.m.";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${periodo}`;
+}
+
 export {
   esHoyFecha,
   formatearFechaISO,
+  formatearHoraAmPm,
   formatearRangoSemanaAgenda,
   obtenerCodigoDiaSemana,
   obtenerDiasSemanaAgenda,
