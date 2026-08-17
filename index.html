@@ -212,6 +212,14 @@
               <span class="track"><span class="thumb"></span></span>
             </label>
           </div>
+
+          <div class="row-between">
+            <span>Mostrar clases ese día en Agenda</span>
+            <label class="switch switch-tema">
+              <input type="checkbox" id="switch-agenda-mostrar-clases">
+              <span class="track"><span class="thumb"></span></span>
+            </label>
+          </div>
           </div>
         </section>
 
@@ -328,7 +336,10 @@
           </div>
           <div class="row-between">
             <button type="button" class="btn btn-primary" id="btn-agenda-agregar" style="padding:8px 14px; font-size:0.85rem;">+ Agregar</button>
-            <button type="button" class="btn-icono-fantasma" id="btn-agenda-ir-ajustes" title="Ajustes de Agenda" style="font-size:1.3rem;">⚙️</button>
+            <div class="row" style="gap:6px; align-items:center;">
+              <button type="button" class="btn-discreto" id="btn-agenda-filtros" style="font-size:0.8rem;">🔽 Filtros</button>
+              <button type="button" class="btn-icono-fantasma" id="btn-agenda-ir-ajustes" title="Ajustes de Agenda" style="font-size:1.3rem;">⚙️</button>
+            </div>
           </div>
         </section>
 
@@ -836,6 +847,73 @@
         <button type="button" class="btn btn-secondary" id="btn-agenda-cancelar">Cancelar</button>
         <button type="button" class="btn btn-primary" id="btn-agenda-guardar">Guardar</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Rediseño núcleo Agenda — punto 10: Filtros de sesión (Semanal/Todo,
+     Mostrar materias). Ambos controles aplican al toque, sin botón
+     "Aplicar" separado — ver inicializarFiltrosAgenda en agenda.js. -->
+<div id="modal-agenda-filtros" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <h2 style="margin:0;">Filtros de Agenda</h2>
+
+    <div>
+      <span class="form-label">Mostrar</span>
+      <div class="pill-group" id="pills-agenda-filtro-modo">
+        <button type="button" class="pill-item active" data-valor="semanal">Semanal</button>
+        <button type="button" class="pill-item" data-valor="todo">Todo</button>
+      </div>
+      <p class="muted" style="font-size:0.78rem; margin:6px 0 0;">"Todo" muestra desde hoy hasta el fin del semestre, con scroll libre.</p>
+    </div>
+
+    <div class="row-between">
+      <span>Mostrar materias en la agenda</span>
+      <label class="switch switch-tema">
+        <input type="checkbox" id="chk-agenda-filtro-materias">
+        <span class="track"><span class="thumb"></span></span>
+      </label>
+    </div>
+  </div>
+</div>
+
+<!-- Rediseño núcleo Agenda — punto 11: tarjeta de info al tocar una tarea/
+     examen/evento (en vez del editor directo). "Editar" es el único camino
+     hacia modal-agenda-evento para un evento ya existente — ver
+     agenda-modal.js. -->
+<div id="modal-agenda-info" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack">
+    <div class="row" style="align-items:center; gap:8px; flex-wrap:wrap;">
+      <span id="info-agenda-badge-tipo" class="badge badge-neutral"></span>
+      <span id="info-agenda-badge-vencida" class="agenda-badge-vencida oculto">⚠ Vencida</span>
+    </div>
+
+    <h2 id="info-agenda-nombre" style="margin:0; overflow-wrap:break-word;"></h2>
+
+    <div class="row-between">
+      <span class="muted" id="info-agenda-fecha" style="text-transform:capitalize;"></span>
+      <span class="muted" id="info-agenda-hora"></span>
+    </div>
+    <span class="agenda-timer-vence-hoy oculto" id="info-agenda-timer"></span>
+
+    <div id="info-agenda-fila-materia" class="row-between oculto">
+      <span class="muted">Materia</span>
+      <span id="info-agenda-materia"></span>
+    </div>
+
+    <div id="info-agenda-fila-notas" class="stack oculto" style="gap:2px;">
+      <span class="muted" style="font-size:0.78rem;">Notas</span>
+      <p id="info-agenda-notas-texto" style="margin:0; white-space:pre-wrap; overflow-wrap:break-word;"></p>
+    </div>
+
+    <div id="info-agenda-fila-completada" class="row oculto" style="align-items:center; gap:10px;">
+      <button type="button" class="agenda-check-completada" id="info-agenda-check-completada" title="Marcar como completada"></button>
+      <span id="info-agenda-completada-texto" style="font-size:0.85rem;"></span>
+    </div>
+
+    <div class="row-between">
+      <button type="button" class="btn btn-secondary" id="btn-agenda-info-cerrar">Cerrar</button>
+      <button type="button" class="btn btn-primary" id="btn-agenda-info-editar">Editar</button>
     </div>
   </div>
 </div>
