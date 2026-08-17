@@ -776,10 +776,18 @@
     <h2 id="titulo-modal-agenda-evento" style="margin:0;">Agregar a Agenda</h2>
 
     <div class="pill-group" id="pills-agenda-tipo">
-      <button type="button" class="pill-item active" data-valor="evento">Evento</button>
-      <button type="button" class="pill-item" data-valor="tarea">Tarea</button>
+      <button type="button" class="pill-item active" data-valor="tarea">Tarea</button>
       <button type="button" class="pill-item" data-valor="examen">Examen</button>
+      <button type="button" class="pill-item" data-valor="evento">Evento</button>
     </div>
+
+    <label class="row oculto" id="fila-agenda-es-feriado" style="align-items:center; gap:10px; cursor:pointer;">
+      <label class="switch switch-tema" style="flex-shrink:0;">
+        <input type="checkbox" id="chk-agenda-es-feriado">
+        <span class="track"><span class="thumb"></span></span>
+      </label>
+      <span style="font-size:0.85rem;">Es feriado</span>
+    </label>
 
     <div>
       <label class="form-label" for="input-agenda-nombre">Nombre</label>
@@ -945,5 +953,13 @@
 </style>
 
 <script type="module" src="js/main.js"></script>
+<!-- Ícono dinámico de la PWA: genera un fondo glassmorphism con los colores
+     de la paleta activa y lo aplica al manifest (Android) y al
+     apple-touch-icon (iOS) — ver js/pwa/icono-dinamico.js. Separado de
+     main.js a propósito para no tocar ese archivo en esta iteración. -->
+<script type="module">
+  import { inicializarIconoDinamico } from "./js/pwa/icono-dinamico.js";
+  inicializarIconoDinamico();
+</script>
 </body>
 </html>
