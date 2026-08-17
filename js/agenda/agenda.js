@@ -48,8 +48,23 @@ estado.agendaFiltroModo = estado.agendaFiltroModo || "semanal";
 // Punto 10 + 12: arranca en el valor PERSISTENTE de Ajustes → Agenda
 // (`agenda_mostrar_clases`, punto 12) pero solo para esta sesión: togglear
 // acá (ventana de Filtros) nunca reescribe ese ajuste permanente.
-if (estado.agendaFiltroMostrarMaterias === undefined) {
-  estado.agendaFiltroMostrarMaterias = estado.datos.configuracion.agenda_mostrar_clases !== false;
+//
+// FIX URGENTE: esto vivía suelto en el top-level del módulo, corriendo
+// contra estado.datos.configuracion sin ningún guard. Los imports de ES
+// modules se evalúan de forma EAGER — en cuanto main.js hacía `import` de
+// este archivo, esta línea corría YA, antes del login, con
+// estado.datos === null todavía (recién se llena después de cargar la
+// sesión). Eso tiraba un TypeError no capturado durante la evaluación del
+// módulo, que cortaba en seco TODO lo que main.js hace después de sus
+// imports — incluido el registro del Service Worker — dejando la app sin
+// SW en NINGUNA carga y por lo tanto sin poder instalarse en Android
+// (bug reportado). Ahora es una función lazy, llamada recién en el primer
+// render real de Agenda (ver renderizarAgenda), momento en el que
+// estado.datos ya está garantizado no-null.
+function asegurarFiltroMostrarMateriasInicializado() {
+  if (estado.agendaFiltroMostrarMaterias === undefined) {
+    estado.agendaFiltroMostrarMaterias = estado.datos?.configuracion?.agenda_mostrar_clases !== false;
+  }
 }
 
 /**
@@ -411,6 +426,7 @@ function renderizarAgendaInterno() {
 }
 
 function renderizarAgenda() {
+  asegurarFiltroMostrarMateriasInicializado();
   renderizarHeaderAgenda();
   const esLista = estado.agendaVistaActiva === "lista";
   document.getElementById("agenda-lista-dias")?.classList.toggle("oculto", !esLista);
@@ -475,6 +491,7 @@ function inicializarFiltrosAgenda() {
   if (!modal) return;
 
   document.getElementById("btn-agenda-filtros")?.addEventListener("click", () => {
+    asegurarFiltroMostrarMateriasInicializado();
     document.querySelectorAll("#pills-agenda-filtro-modo .pill-item").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.valor === estado.agendaFiltroModo);
     });
