@@ -16,15 +16,19 @@ import { desplazarYResaltarElemento } from "../ui/componentes.js";
 import { mostrarSeccion } from "../main.js";
 import { renderizarCalendarioAgenda } from "./agenda-calendario.js";
 import { construirSeccionMateriasDia, calcularNumeroSemanaParaFecha } from "./agenda-clases.js";
-import { abrirModalEventoAgenda, inicializarModalAgendaEvento } from "./agenda-modal.js";
-import { fechaLocalDesdeISO } from "../horario/horario.js";
+import { abrirModalEventoAgenda, abrirTarjetaInfoEventoAgenda, inicializarModalAgendaEvento } from "./agenda-modal.js";
 import {
   esHoyFecha,
+  esTareaVencida,
   formatearFechaISO,
   formatearRangoSemanaAgenda,
+  formatearTiempoRestanteHoy,
   obtenerDiasSemanaAgenda,
+  obtenerEstiloEvento,
   obtenerFechaInicioSemanaAgenda,
+  obtenerRangoDiasAgendaTodo,
   obtenerSemestreActivoAgenda,
+  tareaVenceHoy,
 } from "./agenda-utils.js";
 
 const ETIQUETA_TIPO = { evento: "Eventos", tarea: "Tareas", examen: "Exámenes" };
@@ -36,6 +40,17 @@ estado.agendaVistaActiva = estado.agendaVistaActiva || "lista";
 // Semanas de offset respecto a la semana de hoy que Lista (y el submodo
 // "Semanal" del Calendario, que la comparte a propósito) está mostrando.
 estado.agendaOffsetSemana = estado.agendaOffsetSemana || 0;
+// Rediseño núcleo Agenda — punto 10: filtro de SESIÓN (no persistido, se
+// resetea en cada carga de la app) — "semanal" (comportamiento clásico,
+// navegación semana a semana) | "todo" (desde hoy hasta fin de semestre +
+// 2 semanas, scroll libre sin paginar — ver obtenerRangoDiasAgendaTodo).
+estado.agendaFiltroModo = estado.agendaFiltroModo || "semanal";
+// Punto 10 + 12: arranca en el valor PERSISTENTE de Ajustes → Agenda
+// (`agenda_mostrar_clases`, punto 12) pero solo para esta sesión: togglear
+// acá (ventana de Filtros) nunca reescribe ese ajuste permanente.
+if (estado.agendaFiltroMostrarMaterias === undefined) {
+  estado.agendaFiltroMostrarMaterias = estado.datos.configuracion.agenda_mostrar_clases !== false;
+}
 
 /**
  * Rediseño núcleo Agenda — punto 6: intervalos vivos de los timers "vence
@@ -52,58 +67,6 @@ function limpiarIntervalosVenceHoy() {
 
 function buscarEventoAgendaVivo(id) {
   return (estado.datos.agenda || []).find((ev) => ev.id === id) || null;
-}
-
-/**
- * Rediseño núcleo Agenda — punto 4: mapa único de "cómo se pinta cada
- * combinación tipo/estado", para que badge (clase) y borde (hex, mismo tono
- * que el `border-color` de esa clase en design-system.css) nunca queden
- * desincronizados entre sí. `es_feriado`/`completada` son las 2 únicas
- * bifurcaciones dentro de un mismo tipo (ver crearEventoAgenda en
- * schema.js) — evento normal vs. feriado, tarea pendiente vs. completada.
- */
-function obtenerEstiloEvento(evento) {
-  if (evento.tipo === "tarea" && evento.completada) {
-    return { etiqueta: "Completada", claseBadge: "badge-info", colorBorde: "#3b82f6" };
-  }
-  if (evento.tipo === "tarea") {
-    return { etiqueta: "Tarea", claseBadge: "badge-warning", colorBorde: "#f59e0b" };
-  }
-  if (evento.tipo === "examen") {
-    return { etiqueta: "Examen", claseBadge: "badge-danger", colorBorde: "#ef4444" };
-  }
-  if (evento.tipo === "evento" && evento.es_feriado) {
-    return { etiqueta: "Feriado", claseBadge: "badge-success", colorBorde: "#10b981" };
-  }
-  return { etiqueta: "Evento", claseBadge: "badge-purple", colorBorde: "#a855f7" };
-}
-
-/**
- * Punto 6: "vencida" es SIEMPRE derivado (no se guarda — ver comentario del
- * spec en schema.js), se recalcula acá cada render comparando contra la
- * fecha de HOY en formato ISO (comparación lexicográfica de "YYYY-MM-DD",
- * válida sin parsear ninguna de las 2 fechas).
- */
-function esTareaVencida(evento) {
-  if (evento.tipo !== "tarea" || evento.completada) return false;
-  return evento.fecha < formatearFechaISO(new Date());
-}
-
-function tareaVenceHoy(evento) {
-  if (evento.tipo !== "tarea" || evento.completada) return false;
-  return evento.fecha === formatearFechaISO(new Date());
-}
-
-/** "3h 42min restantes" / "42min restantes" hasta las 23:59:59 del día de `fechaISO`. */
-function formatearTiempoRestanteHoy(fechaISO) {
-  const finDelDia = fechaLocalDesdeISO(fechaISO);
-  finDelDia.setHours(23, 59, 59, 999);
-  const msRestantes = finDelDia.getTime() - Date.now();
-  if (msRestantes <= 0) return "Vence en instantes";
-  const minutosTotales = Math.floor(msRestantes / 60000);
-  const horas = Math.floor(minutosTotales / 60);
-  const minutos = minutosTotales % 60;
-  return horas > 0 ? `⏳ ${horas}h ${minutos}min restantes` : `⏳ ${minutos}min restantes`;
 }
 
 function construirBadgeMateria(evento) {
@@ -184,7 +147,7 @@ function construirItemEvento(evento) {
   }
   item.appendChild(lado);
 
-  item.addEventListener("click", () => abrirModalEventoAgenda({ eventoId: evento.id }));
+  item.addEventListener("click", () => abrirTarjetaInfoEventoAgenda(evento.id));
   return item;
 }
 
@@ -321,7 +284,10 @@ function renderizarHeaderAgenda() {
     if (semanaEl) semanaEl.textContent = "—";
   } else {
     if (nombreEl) nombreEl.textContent = semestre.nombre || "";
-    const primerDiaSemana = obtenerFechaInicioSemanaAgenda(estado.agendaOffsetSemana);
+    // Modo "Todo" (punto 10): no hay semana "navegada" (es scroll libre
+    // desde hoy), así que acá siempre es la semana de HOY.
+    const primerDiaSemana =
+      estado.agendaFiltroModo === "todo" ? new Date() : obtenerFechaInicioSemanaAgenda(estado.agendaOffsetSemana);
     const numeroSemana = calcularNumeroSemanaParaFecha(semestre, primerDiaSemana);
     if (semanaEl) semanaEl.textContent = `Semana ${numeroSemana}`;
   }
@@ -369,6 +335,25 @@ function construirColapsoDiasPasados(bloquesPasados) {
   return cont;
 }
 
+/**
+ * Punto 10 (modo "Todo"): subheader liviano, sin flechas ‹ › — acá no hay
+ * "semana navegada" que retroceder/avanzar, es un scroll libre continuo
+ * desde hoy. Solo informa el rango que se está mostrando.
+ */
+function construirSubheaderTodo(dias) {
+  const wrap = document.createElement("section");
+  wrap.className = "glass-panel";
+  wrap.style.cssText = "padding:10px 14px; text-align:center;";
+  const texto = document.createElement("span");
+  texto.className = "texto-encabezado-seccion";
+  const ultima = dias[dias.length - 1]?.fecha;
+  texto.textContent = ultima
+    ? `Desde hoy hasta el ${ultima.toLocaleDateString("es-CR", { day: "numeric", month: "short" })}`
+    : "Desde hoy";
+  wrap.appendChild(texto);
+  return wrap;
+}
+
 function renderizarAgendaInterno() {
   const cont = document.getElementById("agenda-lista-dias");
   if (!cont) return;
@@ -377,11 +362,28 @@ function renderizarAgendaInterno() {
 
   const cfg = estado.datos.configuracion;
   const mostrarDiasVacios = cfg.agenda_mostrar_dias_vacios !== false; // default: sí
-
-  const dias = obtenerDiasSemanaAgenda(estado.agendaOffsetSemana);
-  cont.appendChild(construirSubheaderLista(dias));
-
   const semestreActivo = obtenerSemestreActivoAgenda();
+  const modoTodo = estado.agendaFiltroModo === "todo";
+
+  // Punto 10: en modo "Todo" el rango arranca siempre en HOY (nunca hay
+  // días previos a colapsar — ver obtenerRangoDiasAgendaTodo), así que el
+  // colapso de días pasados del punto 8 es exclusivo del modo "Semanal".
+  const dias = modoTodo ? obtenerRangoDiasAgendaTodo(semestreActivo) : obtenerDiasSemanaAgenda(estado.agendaOffsetSemana);
+  cont.appendChild(modoTodo ? construirSubheaderTodo(dias) : construirSubheaderLista(dias));
+
+  if (modoTodo) {
+    const bloques = dias.map((dia) => construirBloqueDia(dia, semestreActivo, mostrarDiasVacios)).filter(Boolean);
+    if (bloques.length === 0) {
+      const vacio = document.createElement("p");
+      vacio.className = "muted";
+      vacio.style.textAlign = "center";
+      vacio.textContent = "Nada pendiente en este rango.";
+      cont.appendChild(vacio);
+    } else {
+      bloques.forEach((b) => cont.appendChild(b));
+    }
+    return;
+  }
 
   // Punto 8: se separan los días ya pasados (fecha < hoy) del resto ANTES
   // de construir los bloques, para poder envolver solo los pasados en el
@@ -456,6 +458,53 @@ function inicializarAgenda() {
       estado.agendaVistaActiva = btn.dataset.vista;
       renderizarAgenda();
     });
+  });
+
+  inicializarFiltrosAgenda();
+}
+
+/**
+ * Punto 10: ventana de Filtros — "Mostrar: Semanal/Todo" y "Mostrar
+ * materias en la agenda: Sí/No". Ambos controles aplican al toque (sin
+ * botón "Aplicar" separado) y re-renderizan Agenda en el momento — el modal
+ * en sí se cierra con el botón "✕" (auto-inyectado, ver
+ * inicializarBotonesCerrarModal en componentes.js) o tocando el fondo.
+ */
+function inicializarFiltrosAgenda() {
+  const modal = document.getElementById("modal-agenda-filtros");
+  if (!modal) return;
+
+  document.getElementById("btn-agenda-filtros")?.addEventListener("click", () => {
+    document.querySelectorAll("#pills-agenda-filtro-modo .pill-item").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.valor === estado.agendaFiltroModo);
+    });
+    document.getElementById("chk-agenda-filtro-materias").checked = estado.agendaFiltroMostrarMaterias;
+    modal.classList.remove("oculto");
+  });
+
+  document.querySelectorAll("#pills-agenda-filtro-modo .pill-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      estado.agendaFiltroModo = btn.dataset.valor;
+      document.querySelectorAll("#pills-agenda-filtro-modo .pill-item").forEach((b) => {
+        b.classList.toggle("active", b === btn);
+      });
+      // Punto 10: cambiar de modo mientras se está a mitad de semana no
+      // tiene un offset equivalente en "Todo" (que siempre arranca en HOY)
+      // — se resetea el offset acá para que volver a "Semanal" más tarde
+      // no deje a la persona parada en una semana que ya no recuerda por
+      // qué eligió.
+      estado.agendaOffsetSemana = 0;
+      renderizarAgenda();
+    });
+  });
+
+  document.getElementById("chk-agenda-filtro-materias")?.addEventListener("change", (ev) => {
+    estado.agendaFiltroMostrarMaterias = ev.target.checked;
+    renderizarAgenda();
+  });
+
+  modal.addEventListener("click", (ev) => {
+    if (ev.target.id === "modal-agenda-filtros") modal.classList.add("oculto");
   });
 }
 

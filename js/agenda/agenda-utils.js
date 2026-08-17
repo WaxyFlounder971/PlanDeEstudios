@@ -9,7 +9,7 @@
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
-import { obtenerPlanPorId } from "../horario/horario.js";
+import { fechaLocalDesdeISO, obtenerPlanPorId } from "../horario/horario.js";
 import { obtenerSemestresActuales, obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
 
 /**
@@ -211,17 +211,122 @@ function formatearHoraAmPm(horaStr) {
   return `${h12}:${String(m).padStart(2, "0")} ${periodo}`;
 }
 
+/**
+ * Rediseño núcleo Agenda — punto 4: mapa único de "cómo se pinta cada
+ * combinación tipo/estado", para que badge (clase) y borde (hex, mismo tono
+ * que el `border-color` de esa clase en design-system.css) nunca queden
+ * desincronizados entre sí. `es_feriado`/`completada` son las 2 únicas
+ * bifurcaciones dentro de un mismo tipo (ver crearEventoAgenda en
+ * schema.js) — evento normal vs. feriado, tarea pendiente vs. completada.
+ * Vive acá (no en agenda.js) porque agenda-modal.js también la necesita
+ * para pintar la tarjeta de info del punto 11, y agenda-modal.js no puede
+ * importar de vuelta a agenda.js sin crear un ciclo (agenda.js ya importa
+ * DE agenda-modal.js para abrir sus modales).
+ */
+function obtenerEstiloEvento(evento) {
+  if (evento.tipo === "tarea" && evento.completada) {
+    return { etiqueta: "Completada", claseBadge: "badge-info", colorBorde: "#3b82f6" };
+  }
+  if (evento.tipo === "tarea") {
+    return { etiqueta: "Tarea", claseBadge: "badge-warning", colorBorde: "#f59e0b" };
+  }
+  if (evento.tipo === "examen") {
+    return { etiqueta: "Examen", claseBadge: "badge-danger", colorBorde: "#ef4444" };
+  }
+  if (evento.tipo === "evento" && evento.es_feriado) {
+    return { etiqueta: "Feriado", claseBadge: "badge-success", colorBorde: "#10b981" };
+  }
+  return { etiqueta: "Evento", claseBadge: "badge-purple", colorBorde: "#a855f7" };
+}
+
+/**
+ * Punto 6: "vencida" es SIEMPRE derivado (no se guarda — ver comentario del
+ * spec en schema.js), se recalcula cada vez comparando contra la fecha de
+ * HOY en formato ISO (comparación lexicográfica de "YYYY-MM-DD", válida sin
+ * parsear ninguna de las 2 fechas).
+ */
+function esTareaVencida(evento) {
+  if (evento.tipo !== "tarea" || evento.completada) return false;
+  return evento.fecha < formatearFechaISO(new Date());
+}
+
+function tareaVenceHoy(evento) {
+  if (evento.tipo !== "tarea" || evento.completada) return false;
+  return evento.fecha === formatearFechaISO(new Date());
+}
+
+/** "3h 42min restantes" / "42min restantes" hasta las 23:59:59 del día de `fechaISO`. */
+function formatearTiempoRestanteHoy(fechaISO) {
+  const finDelDia = fechaLocalDesdeISO(fechaISO);
+  finDelDia.setHours(23, 59, 59, 999);
+  const msRestantes = finDelDia.getTime() - Date.now();
+  if (msRestantes <= 0) return "Vence en instantes";
+  const minutosTotales = Math.floor(msRestantes / 60000);
+  const horas = Math.floor(minutosTotales / 60);
+  const minutos = minutosTotales % 60;
+  return horas > 0 ? `⏳ ${horas}h ${minutos}min restantes` : `⏳ ${minutos}min restantes`;
+}
+
+/**
+ * Rediseño núcleo Agenda — punto 10 (modo "Todo" del filtro "Mostrar"):
+ * TODOS los días desde HOY hasta el fin del semestre activo, +2 semanas de
+ * margen (pedido explícito del punto 12, "por si se alarga"). Sin
+ * `semestre` (o con `fecha_inicio` inválida), cae a un rango fijo de ~8
+ * semanas desde hoy — no hay forma de saber "fin de semestre" sin uno, pero
+ * tampoco tiene sentido dejar el modo "Todo" sin ningún rango.
+ */
+function obtenerRangoDiasAgendaTodo(semestre) {
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
+  const MS_SEMANA = 7 * 24 * 60 * 60 * 1000;
+  let fin = new Date(hoy.getTime() + 8 * MS_SEMANA);
+  if (semestre) {
+    const inicio = new Date(semestre.fecha_inicio);
+    if (!isNaN(inicio.getTime())) {
+      const totalSemanas = (Number(semestre.duracion_semanas) || 16) + 2;
+      fin = new Date(inicio.getTime() + totalSemanas * MS_SEMANA);
+    }
+  }
+  // Semestre ya terminado (incluido el margen): igual se muestra al menos
+  // 1 semana desde hoy, para que el modo "Todo" nunca quede vacío.
+  if (fin.getTime() < hoy.getTime()) fin = new Date(hoy.getTime() + MS_SEMANA);
+
+  const etiquetaPorCodigo = {};
+  obtenerDiasSemanaOrdenAgenda().forEach((d) => {
+    // `etiqueta` (nombre completo, ej. "Lunes") — mismo campo que usa
+    // construirBloqueDia en agenda.js para el encabezado de cada día en
+    // modo Semanal; NO `etiquetaCorta` (esa es para las abreviaturas del
+    // grid de Horario, un contexto distinto).
+    etiquetaPorCodigo[d.abrevDefault] = d.etiqueta;
+  });
+
+  const dias = [];
+  const cursor = new Date(hoy);
+  while (cursor.getTime() <= fin.getTime()) {
+    const codigo = obtenerCodigoDiaSemana(cursor);
+    dias.push({ abrevDefault: codigo, etiqueta: etiquetaPorCodigo[codigo] || codigo, fecha: new Date(cursor) });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dias;
+}
+
 export {
   esHoyFecha,
+  esTareaVencida,
   formatearFechaISO,
   formatearHoraAmPm,
   formatearRangoSemanaAgenda,
+  formatearTiempoRestanteHoy,
   obtenerCodigoDiaSemana,
   obtenerDiasSemanaAgenda,
   obtenerDiasSemanaOrdenAgenda,
+  obtenerEstiloEvento,
   obtenerFechaInicioSemanaAgenda,
   obtenerInicioSemanaQueContiene,
   obtenerMateriasVinculablesAgenda,
   obtenerOffsetSemanaParaFecha,
+  obtenerRangoDiasAgendaTodo,
   obtenerSemestreActivoAgenda,
+  tareaVenceHoy,
 };

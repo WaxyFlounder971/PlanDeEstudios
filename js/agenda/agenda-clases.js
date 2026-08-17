@@ -116,15 +116,15 @@ function construirFilaMateriaInline(clase, semestre, numeroSemanaReal) {
  * — mismo criterio de "no ocupar espacio de más" que ya usan esos otros
  * grupos.
  *
- * El filtro vive en `estado.datos.configuracion.agenda_mostrar_materias`
- * (default `true`, mismo criterio de "undefined = default" que
- * `agenda_mostrar_dias_vacios`) — hoy sin UI propia todavía (llega en la
- * ventana de Filtros del punto 10, entrega aparte); se deja ya cableado acá
- * para no tener que volver a tocar este archivo cuando esa UI exista.
+ * El filtro leído acá es el de SESIÓN (`estado.agendaFiltroMostrarMaterias`,
+ * ver agenda.js) — el de la ventana de Filtros del punto 10, que arranca en
+ * cada carga de la app tomando como valor inicial el ajuste PERSISTENTE de
+ * Ajustes → Agenda (`agenda_mostrar_clases`, punto 12) pero se puede
+ * togglear solo para la sesión actual sin tocar ese ajuste permanente.
  */
 function construirSeccionMateriasDia(semestre, fecha, diaCodigo) {
   if (!semestre) return null;
-  if (estado.datos.configuracion.agenda_mostrar_materias === false) return null;
+  if (estado.agendaFiltroMostrarMaterias === false) return null;
 
   const numeroSemanaReal = calcularNumeroSemanaParaFecha(semestre, fecha);
   const clases = obtenerClasesDelDia(semestre, numeroSemanaReal, diaCodigo);

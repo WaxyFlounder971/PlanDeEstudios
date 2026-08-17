@@ -6,8 +6,16 @@
 import { TIPOS_EVENTO_AGENDA, crearEventoAgenda, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
+import { aplicarFormatoTexto } from "../core/utils.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
-import { obtenerMateriasVinculablesAgenda } from "./agenda-utils.js";
+import { fechaLocalDesdeISO } from "../horario/horario.js";
+import {
+  esTareaVencida,
+  formatearTiempoRestanteHoy,
+  obtenerEstiloEvento,
+  obtenerMateriasVinculablesAgenda,
+  tareaVenceHoy,
+} from "./agenda-utils.js";
 
 const PLACEHOLDER_NOMBRE = {
   evento: "Ej. Charla de RRHH",
@@ -215,6 +223,107 @@ function confirmarBorrarEventoAgenda(eventoExistente) {
   });
 }
 
+/**
+ * Punto 11: nombre legible de la materia vinculada a `evento` (o "" si no
+ * tiene). Se busca directo en `estado.datos.semestres` por semestre_id/
+ * materia_matriculada_id (en vez de reusar obtenerMateriasVinculablesAgenda,
+ * que solo lista las del semestre ACTIVO de Agenda) porque un evento viejo
+ * puede seguir vinculado a una materia de un semestre que ya no es el
+ * activo — mismo criterio que construirBadgeMateria en agenda.js.
+ */
+function obtenerNombreMateriaEvento(evento) {
+  const semestre = (estado.datos.semestres || []).find((s) => s.id === evento.semestre_id);
+  const mm = semestre && (semestre.materias_matriculadas || []).find((m) => m.id === evento.materia_matriculada_id);
+  if (!mm) return "";
+  const plan = (estado.datos.planes_estudio || []).find((p) => p.id === mm.plan_estudio_id);
+  const materia = plan && (plan.materias || []).find((m) => m.id === mm.materia_id);
+  return materia ? aplicarFormatoTexto(materia.nombre) : "";
+}
+
+/**
+ * Punto 5 + 11: mismo toggle de completada que el checkbox de la lista
+ * (agenda.js), pero disparado desde la tarjeta de info — se relee la
+ * entidad viva por id antes de mutar (mismo patrón que el resto del
+ * archivo). Refresca la lista de atrás vía window.renderizarAgenda (mismo
+ * mecanismo que refrescarAgenda) y vuelve a pintar la tarjeta de info en el
+ * lugar, sin cerrarla, para que el checkbox y el nombre tachado respondan
+ * al toque sin que la persona pierda el contexto que estaba mirando.
+ */
+function alternarCompletadaDesdeInfo(evento) {
+  const viva = buscarEventoVivoPorId(evento.id);
+  if (!viva) return;
+  viva.completada = !viva.completada;
+  sellarTimestamp(viva);
+  marcarCambioPendiente();
+  refrescarAgenda();
+  renderizarTarjetaInfoEventoAgenda(viva);
+}
+
+function renderizarTarjetaInfoEventoAgenda(evento) {
+  const estilo = obtenerEstiloEvento(evento);
+  const badgeTipo = document.getElementById("info-agenda-badge-tipo");
+  badgeTipo.className = `badge ${estilo.claseBadge}`;
+  badgeTipo.textContent = estilo.etiqueta;
+
+  document.getElementById("info-agenda-badge-vencida").classList.toggle("oculto", !esTareaVencida(evento));
+
+  const nombreEl = document.getElementById("info-agenda-nombre");
+  nombreEl.textContent = evento.nombre || "(sin nombre)";
+  nombreEl.style.textDecoration = evento.completada ? "line-through" : "none";
+  nombreEl.style.opacity = evento.completada ? "0.7" : "1";
+
+  document.getElementById("info-agenda-fecha").textContent = fechaLocalDesdeISO(evento.fecha).toLocaleDateString("es-CR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+  document.getElementById("info-agenda-hora").textContent = evento.hora || "Todo el día";
+
+  const timerEl = document.getElementById("info-agenda-timer");
+  const venceHoy = tareaVenceHoy(evento);
+  timerEl.classList.toggle("oculto", !venceHoy);
+  if (venceHoy) timerEl.textContent = formatearTiempoRestanteHoy(evento.fecha);
+
+  const nombreMateria = obtenerNombreMateriaEvento(evento);
+  document.getElementById("info-agenda-fila-materia").classList.toggle("oculto", !nombreMateria);
+  document.getElementById("info-agenda-materia").textContent = nombreMateria;
+
+  document.getElementById("info-agenda-fila-notas").classList.toggle("oculto", !evento.notas);
+  document.getElementById("info-agenda-notas-texto").textContent = evento.notas || "";
+
+  // Punto 5: el mismo checkbox circular de la lista, disponible también
+  // acá — solo aplica a tareas.
+  const filaCompletada = document.getElementById("info-agenda-fila-completada");
+  filaCompletada.classList.toggle("oculto", evento.tipo !== "tarea");
+  const check = document.getElementById("info-agenda-check-completada");
+  check.classList.toggle("marcada", Boolean(evento.completada));
+  check.onclick = () => alternarCompletadaDesdeInfo(evento);
+  document.getElementById("info-agenda-completada-texto").textContent = evento.completada
+    ? "Completada"
+    : "Marcar como completada";
+
+  document.getElementById("btn-agenda-info-editar").onclick = () => {
+    cerrarTarjetaInfoEventoAgenda();
+    abrirModalEventoAgenda({ eventoId: evento.id });
+  };
+}
+
+/**
+ * Punto 11: tocar una tarea/examen/evento en la lista abre ESTA tarjeta de
+ * info primero (no el editor directo) — el botón "Editar" de acá adentro
+ * es el único camino hacia abrirModalEventoAgenda para un evento existente.
+ */
+function abrirTarjetaInfoEventoAgenda(eventoId) {
+  const evento = buscarEventoVivoPorId(eventoId);
+  if (!evento) return;
+  renderizarTarjetaInfoEventoAgenda(evento);
+  document.getElementById("modal-agenda-info").classList.remove("oculto");
+}
+
+function cerrarTarjetaInfoEventoAgenda() {
+  document.getElementById("modal-agenda-info")?.classList.add("oculto");
+}
+
 function inicializarModalAgendaEvento() {
   document.querySelectorAll("#pills-agenda-tipo .pill-item").forEach((btn) => {
     btn.addEventListener("click", () => seleccionarPillTipo(btn.dataset.valor));
@@ -226,6 +335,11 @@ function inicializarModalAgendaEvento() {
   document.getElementById("modal-agenda-evento").addEventListener("click", (ev) => {
     if (ev.target.id === "modal-agenda-evento") cerrarModalEventoAgenda();
   });
+
+  document.getElementById("btn-agenda-info-cerrar")?.addEventListener("click", cerrarTarjetaInfoEventoAgenda);
+  document.getElementById("modal-agenda-info")?.addEventListener("click", (ev) => {
+    if (ev.target.id === "modal-agenda-info") cerrarTarjetaInfoEventoAgenda();
+  });
 }
 
-export { abrirModalEventoAgenda, inicializarModalAgendaEvento };
+export { abrirModalEventoAgenda, abrirTarjetaInfoEventoAgenda, inicializarModalAgendaEvento };
