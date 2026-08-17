@@ -1064,6 +1064,44 @@
 }
 </style>
 
+<!-- Fix bug "Es feriado cortado": WebKit/iOS a veces no recalcula el alto de
+     .modal-card (overflow-y:auto) cuando un hijo pasa de oculto→visible
+     (ej. #fila-agenda-es-feriado) en el mismo tick que otro cambio de
+     estado (ej. click en pill "Evento"). El resultado es contenido que
+     queda cortado/superpuesto hasta que el usuario hace scroll o resize.
+     Este observer es agnóstico del modal/JS que dispare el cambio: vigila
+     cualquier .modal-card y, si una clase cambia adentro (típicamente
+     agregar/quitar "oculto"), fuerza un reflow del panel en el próximo
+     frame. No depende de tocar agenda-modal.js ni ningún otro módulo. -->
+<script>
+(function () {
+  function forzarReflow(el) {
+    if (!el) return;
+    el.style.display = "none";
+    // Leer una propiedad de layout obliga al browser a recalcular ya.
+    void el.offsetHeight;
+    el.style.display = "";
+  }
+  var observador = new MutationObserver(function (mutaciones) {
+    var paneles = new Set();
+    mutaciones.forEach(function (m) {
+      var panel = m.target.closest && m.target.closest(".modal-card");
+      if (panel) paneles.add(panel);
+    });
+    paneles.forEach(function (panel) {
+      requestAnimationFrame(function () { forzarReflow(panel); });
+    });
+  });
+  document.querySelectorAll(".modal-card").forEach(function (panel) {
+    observador.observe(panel, {
+      attributes: true,
+      attributeFilter: ["class", "style"],
+      subtree: true,
+    });
+  });
+})();
+</script>
+
 <script type="module" src="js/main.js"></script>
 </body>
 </html>
