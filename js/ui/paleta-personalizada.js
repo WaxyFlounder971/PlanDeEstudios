@@ -20,12 +20,6 @@ import {
   hslAHex,
   mezclarHex,
 } from "./tema.js";
-// Ícono dinámico de la PWA (fondo glassmorphism según la paleta activa) —
-// se regenera acá también cada vez que se guarda una paleta nueva, para
-// que quede listo con los colores correctos si el usuario reinstala la app
-// más adelante (el ícono ya instalado no se actualiza solo, ver el propio
-// comentario de cabecera en icono-dinamico.js).
-import { regenerarIconoDinamico } from "../pwa/icono-dinamico.js";
 
 /* ------------------------------ Construcción de UI ------------------------------ */
 
@@ -744,7 +738,6 @@ function abrirPanelDeEdicion(overlay, panel, paletaBase, alGuardar, coloresExist
     sellarTimestamp(estado.datos.configuracion);
     marcarCambioPendiente();
     actualizarIndicadorSync();
-    regenerarIconoDinamico();
     cerrarOverlay(overlay);
     if (typeof alGuardar === "function") alGuardar();
   });
