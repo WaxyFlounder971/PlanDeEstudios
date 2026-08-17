@@ -37,20 +37,78 @@ function buscarEventoVivoPorId(id) {
   return (estado.datos.agenda || []).find((ev) => ev.id === id) || null;
 }
 
+/**
+ * Ronda de ajustes visuales #4: el <select> nativo (#select-agenda-materia)
+ * sigue siendo la fuente real del valor — se puebla igual que antes — pero
+ * ya no es la parte visible del formulario (ver comentario en index.html).
+ * Acá además arma/sincroniza el botón+lista de .select-custom a partir de
+ * las mismas opciones.
+ */
 function poblarSelectorMateria(select, materiaSeleccionadaId) {
   select.innerHTML = "";
-  const optSinVincular = document.createElement("option");
-  optSinVincular.value = "";
-  optSinVincular.textContent = "Sin vincular";
-  select.appendChild(optSinVincular);
+  const opciones = [{ mmId: "", nombre: "Sin vincular" }, ...obtenerMateriasVinculablesAgenda()];
 
-  obtenerMateriasVinculablesAgenda().forEach(({ mmId, nombre }) => {
+  opciones.forEach(({ mmId, nombre }) => {
     const opt = document.createElement("option");
     opt.value = mmId;
     opt.textContent = nombre;
     select.appendChild(opt);
   });
   select.value = materiaSeleccionadaId || "";
+
+  sincronizarDropdownMateria(opciones, select.value);
+}
+
+/**
+ * Arma la lista visible de .select-custom y el texto del botón a partir de
+ * `opciones` (mismo arreglo que ya se usó para poblar el <select> oculto) y
+ * marca cuál está activa. Al elegir una opción, escribe directo en
+ * #select-agenda-materia (la fuente real) y se vuelve a llamar a sí misma
+ * para refrescar el check "✓" — no hace falta releer el DOM del <select>
+ * porque `opciones` ya tiene todo lo necesario en el closure del click.
+ */
+function sincronizarDropdownMateria(opciones, valorActual) {
+  const boton = document.getElementById("btn-agenda-materia-boton");
+  const textoBoton = document.getElementById("texto-agenda-materia-boton");
+  const lista = document.getElementById("lista-agenda-materia");
+  const selectReal = document.getElementById("select-agenda-materia");
+  if (!boton || !textoBoton || !lista || !selectReal) return;
+
+  const activa = opciones.find((o) => o.mmId === valorActual) || opciones[0];
+  textoBoton.textContent = activa ? activa.nombre : "Sin vincular";
+
+  lista.innerHTML = "";
+  opciones.forEach(({ mmId, nombre }) => {
+    const li = document.createElement("li");
+    li.className = "select-custom-opcion" + (mmId === valorActual ? " activa" : "");
+    li.setAttribute("role", "option");
+    li.setAttribute("aria-selected", String(mmId === valorActual));
+    li.textContent = nombre;
+    li.addEventListener("click", () => {
+      selectReal.value = mmId;
+      cerrarDropdownMateria();
+      sincronizarDropdownMateria(opciones, mmId);
+    });
+    lista.appendChild(li);
+  });
+}
+
+function cerrarDropdownMateria() {
+  document.getElementById("lista-agenda-materia")?.classList.add("oculto");
+  document.getElementById("btn-agenda-materia-boton")?.setAttribute("aria-expanded", "false");
+}
+
+function alternarDropdownMateria() {
+  const boton = document.getElementById("btn-agenda-materia-boton");
+  const lista = document.getElementById("lista-agenda-materia");
+  if (!boton || !lista) return;
+  const abierto = boton.getAttribute("aria-expanded") === "true";
+  if (abierto) {
+    cerrarDropdownMateria();
+  } else {
+    lista.classList.remove("oculto");
+    boton.setAttribute("aria-expanded", "true");
+  }
 }
 
 function actualizarPlaceholderNombre(tipo) {
@@ -65,36 +123,20 @@ function actualizarPlaceholderNombre(tipo) {
  * volver a "evento" nunca arrastre un feriado marcado por error mientras
  * estaba invisible.
  *
- * Ronda de ajustes visuales #3: al mostrarse (tipo "evento"), se fuerza un
- * reflow del .modal-card contenedor y luego se hace scrollIntoView de la
- * fila — en WebKit/iOS, un contenedor con overflow-y:auto no siempre
- * recalcula su alto cuando un hijo pasa de display:none a visible en el
- * mismo tick que otro cambio de estado (acá, el click en la pill
- * "Evento"), y el contenido nuevo queda recortado hasta que algo más
- * dispara un reflow. Esta es la implementación real de ese fix — antes
- * solo existía como comentario/intención en design-system.css, sin código
- * que efectivamente lo hiciera.
+ * Ronda de ajustes visuales #4: en vez de togglear "oculto" (display:none
+ * instantáneo — la causa real del bug "se corta", ver comentario en
+ * index.html), togglea .fila-feriado-visible, que anima max-height/opacity
+ * en design-system.css. Un cambio continuo no le da pie a WebKit a quedarse
+ * con un layout viejo dentro del overflow-y:auto del modal.
  */
 function actualizarVisibilidadFeriado(tipo) {
   const fila = document.getElementById("fila-agenda-es-feriado");
   const chk = document.getElementById("chk-agenda-es-feriado");
   if (!fila || !chk) return;
   const esEvento = tipo === "evento";
-  fila.classList.toggle("oculto", !esEvento);
-  if (!esEvento) {
-    chk.checked = false;
-    return;
-  }
-  const modalCard = fila.closest(".modal-card");
-  requestAnimationFrame(() => {
-    if (modalCard) {
-      // Forzar reflow: sacar y devolver del flujo obliga a recalcular.
-      modalCard.style.display = "none";
-      void modalCard.offsetHeight;
-      modalCard.style.display = "";
-    }
-    fila.scrollIntoView({ block: "nearest" });
-  });
+  fila.classList.toggle("fila-feriado-visible", esEvento);
+  fila.classList.toggle("fila-feriado-oculta", !esEvento);
+  if (!esEvento) chk.checked = false;
 }
 
 function seleccionarPillTipo(tipo) {
@@ -157,6 +199,7 @@ function abrirModalEventoAgenda({ eventoId = null, fechaDefault = null } = {}) {
 
 function cerrarModalEventoAgenda() {
   document.getElementById("modal-agenda-evento").classList.add("oculto");
+  cerrarDropdownMateria();
 }
 
 function guardarEventoAgenda(eventoExistente) {
@@ -357,6 +400,17 @@ function inicializarModalAgendaEvento() {
   document.getElementById("btn-agenda-cancelar").addEventListener("click", cerrarModalEventoAgenda);
   document.getElementById("modal-agenda-evento").addEventListener("click", (ev) => {
     if (ev.target.id === "modal-agenda-evento") cerrarModalEventoAgenda();
+  });
+
+  // Ronda de ajustes visuales #4: dropdown propio de "vincular a materia"
+  // — tocar el botón abre/cierra la lista, un click afuera del contenedor
+  // la cierra (mismo patrón que el resto de popovers del proyecto, ej.
+  // #perfil-popover / #agenda-semestre-popover).
+  document.getElementById("btn-agenda-materia-boton")?.addEventListener("click", alternarDropdownMateria);
+  document.addEventListener("click", (ev) => {
+    const cont = document.getElementById("contenedor-agenda-materia");
+    if (!cont || cont.contains(ev.target)) return;
+    cerrarDropdownMateria();
   });
 
   document.getElementById("btn-agenda-info-cerrar")?.addEventListener("click", cerrarTarjetaInfoEventoAgenda);

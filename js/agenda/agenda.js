@@ -538,28 +538,32 @@ function ajustarDiasAtrasTodo(nuevoValor) {
   });
 }
 
+/**
+ * Ronda de ajustes visuales #4 — fix: antes se agregaba "Ver días
+ * anteriores" SIEMPRE y "Ocultar días anteriores" se sumaba aparte cuando
+ * ya había algo expandido, así que una vez expandido quedaban los DOS
+ * botones a la vez. Ahora es un solo botón que cambia de texto/acción
+ * según el estado — mismo patrón if/else que el resto del proyecto usa
+ * para alternar entre 2 acciones mutuamente excluyentes.
+ */
 function construirSubheaderTodo() {
   const wrap = document.createElement("div");
   wrap.className = "row";
   wrap.style.cssText = "justify-content:center; flex-wrap:wrap; gap:6px 16px;";
 
-  const botonMas = document.createElement("button");
-  botonMas.type = "button";
-  botonMas.className = "btn-discreto";
-  botonMas.style.fontSize = "0.8rem";
-  botonMas.textContent = "‹ Ver días anteriores";
-  botonMas.addEventListener("click", () => ajustarDiasAtrasTodo(estado.agendaTodoDiasAtras + 7));
-  wrap.appendChild(botonMas);
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.className = "btn-discreto";
+  boton.style.fontSize = "0.8rem";
 
   if (estado.agendaTodoDiasAtras > 0) {
-    const botonOcultar = document.createElement("button");
-    botonOcultar.type = "button";
-    botonOcultar.className = "btn-discreto";
-    botonOcultar.style.fontSize = "0.8rem";
-    botonOcultar.textContent = "› Ocultar días anteriores";
-    botonOcultar.addEventListener("click", () => ajustarDiasAtrasTodo(0));
-    wrap.appendChild(botonOcultar);
+    boton.textContent = "› Ocultar días anteriores";
+    boton.addEventListener("click", () => ajustarDiasAtrasTodo(0));
+  } else {
+    boton.textContent = "‹ Ver días anteriores";
+    boton.addEventListener("click", () => ajustarDiasAtrasTodo(estado.agendaTodoDiasAtras + 7));
   }
+  wrap.appendChild(boton);
 
   return wrap;
 }
