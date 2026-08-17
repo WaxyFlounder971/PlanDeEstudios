@@ -647,6 +647,25 @@ function renderizarAjustes() {
     };
   }
 
+  // Rediseño núcleo Agenda — punto 12: toggle PERSISTENTE (separado del
+  // filtro de sesión "Mostrar materias en la agenda" del punto 10, que
+  // vive en estado.agendaFiltroMostrarMaterias — ver agenda.js). Este es el
+  // default que ese filtro de sesión toma la próxima vez que se cargue la
+  // app; tocarlo acá NO sobreescribe el filtro de sesión activo en este
+  // mismo momento si Agenda ya está abierta con otro valor elegido en
+  // Filtros (mismo criterio de "el ajuste permanente es el punto de
+  // partida, no una orden retroactiva" que ya aplica en el resto de la
+  // app entre config persistida y estado transitorio).
+  const chkAgendaMostrarClases = document.getElementById("switch-agenda-mostrar-clases");
+  if (chkAgendaMostrarClases) {
+    chkAgendaMostrarClases.checked = estado.datos.configuracion.agenda_mostrar_clases !== false;
+    chkAgendaMostrarClases.onchange = () => {
+      estado.datos.configuracion.agenda_mostrar_clases = chkAgendaMostrarClases.checked;
+      sellarTimestamp(estado.datos.configuracion);
+      marcarCambioPendiente();
+    };
+  }
+
   // Modo claro/oscuro
   const chkModo = document.getElementById("switch-modo");
   chkModo.checked = estado.datos.configuracion.modo === "light";
