@@ -11,7 +11,7 @@
    en agenda-calendario.js.
    ========================================================================= */
 
-import { sellarTimestamp } from "../core/schema.js";
+import { obtenerEstadoEfectivoSemestre, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
@@ -31,6 +31,7 @@ import {
   obtenerFechaInicioSemanaAgenda,
   obtenerRangoDiasAgendaTodo,
   obtenerSemestreActivoAgenda,
+  obtenerSemestresSeleccionadosAgenda,
   tareaVenceHoy,
 } from "./agenda-utils.js";
 
@@ -64,18 +65,21 @@ estado.agendaDiasPasadosExpandido = estado.agendaDiasPasadosExpandido || false;
 // original (arranca en hoy, sin días previos). Sesión, no persistido, mismo
 // criterio que el resto de estos flags.
 estado.agendaTodoDiasAtras = estado.agendaTodoDiasAtras || 0;
-// Ronda de ajustes visuales #2 — punto C: semestre que Agenda está
-// mostrando, elegido a mano desde el popover del header (tocar el nombre
-// del semestre, ver inicializarSelectorSemestreAgenda). `undefined` =
-// "automático" (el criterio de siempre en obtenerSemestreActivoAgenda: el
-// semestre "actual" más reciente). Sesión, no persistido — cada carga de
-// la app vuelve a arrancar en automático. Cada semestre tiene su agenda
-// separada: los eventos/tareas nuevos quedan etiquetados con el semestre
-// que estaba activo al crearlos (ver guardarEventoAgenda en
-// agenda-modal.js) y construirBloqueDia acá abajo solo muestra los que
-// coinciden con el semestre mostrado (o que no tienen semestre asignado,
-// por compatibilidad con datos de antes de este cambio).
-estado.agendaSemestreSeleccionadoId = estado.agendaSemestreSeleccionadoId || null;
+// Idea "varios semestres a la vez": qué semestres está mostrando Agenda,
+// elegidos a mano desde el modal de tarjetas del header (tocar el nombre
+// del semestre, ver inicializarSelectorSemestreAgenda). `null`/`undefined`
+// = "automático" (el criterio de siempre en obtenerSemestresSeleccionadosAgenda:
+// los semestres "actuales", o el más reciente si no hay ninguno). Un array
+// (incluso vacío) es una selección EXPLÍCITA — la persona ya tocó al menos
+// una tarjeta esta sesión. Sesión, no persistido — cada carga de la app
+// vuelve a arrancar en automático. Cada semestre tiene su agenda separada:
+// los eventos/tareas nuevos quedan etiquetados con el semestre que estaba
+// activo al crearlos (ver guardarEventoAgenda en agenda-modal.js) y
+// construirBloqueDia acá abajo solo muestra los que coinciden con ALGUNO de
+// los semestres mostrados (o que no tienen semestre asignado, por
+// compatibilidad con datos de antes de este cambio).
+estado.agendaSemestresSeleccionados =
+  estado.agendaSemestresSeleccionados !== undefined ? estado.agendaSemestresSeleccionados : null;
 // Punto 10 + 12: arranca en el valor PERSISTENTE de Ajustes → Agenda
 // (`agenda_mostrar_clases`, punto 12) pero solo para esta sesión: togglear
 // acá (ventana de Filtros) nunca reescribe ese ajuste permanente.
@@ -216,15 +220,17 @@ function construirItemEvento(evento) {
   return item;
 }
 
-function construirBloqueDia(diaInfo, semestreActivo, mostrarDiasVacios) {
+function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios) {
   const fechaISO = formatearFechaISO(diaInfo.fecha);
   const eventosDelDia = (estado.datos.agenda || [])
     .filter((ev) => ev.fecha === fechaISO)
-    // Ronda de ajustes visuales #2 — punto C: cada semestre tiene su agenda
-    // aparte — solo entran acá los eventos sin semestre asignado (datos de
-    // antes de este cambio, o eventos creados sin semestre activo) o los
-    // que coinciden con el semestre que se está mostrando ahora mismo.
-    .filter((ev) => !ev.semestre_id || !semestreActivo || ev.semestre_id === semestreActivo.id)
+    // Varios semestres a la vez: cada semestre tiene su agenda aparte —
+    // solo entran acá los eventos sin semestre asignado (datos de antes de
+    // este cambio, o eventos creados sin semestre activo) o los que
+    // coinciden con ALGUNO de los semestres que se están mostrando ahora
+    // mismo (llega acá solo cuando hay al menos 1 seleccionado — ver el
+    // guard de "Selecciona al menos un semestre" en renderizarAgendaInterno).
+    .filter((ev) => !ev.semestre_id || semestresSeleccionados.some((s) => s.id === ev.semestre_id))
     .sort((a, b) => String(a.hora || "99:99").localeCompare(String(b.hora || "99:99")));
 
   if (!mostrarDiasVacios && eventosDelDia.length === 0) return null;
@@ -249,7 +255,7 @@ function construirBloqueDia(diaInfo, semestreActivo, mostrarDiasVacios) {
   `;
   bloque.appendChild(header);
 
-  const seccionMaterias = construirSeccionMateriasDia(semestreActivo, diaInfo.fecha, diaInfo.abrevDefault);
+  const seccionMaterias = construirSeccionMateriasDia(semestresSeleccionados, diaInfo.fecha, diaInfo.abrevDefault);
   if (seccionMaterias) bloque.appendChild(seccionMaterias);
 
   if (eventosDelDia.length === 0) {
@@ -387,75 +393,116 @@ function construirSubheaderSemanal(dias, semestreActivo) {
 }
 
 /**
- * Header fijo: solo el nombre del semestre mostrado, tocable (abre el
- * popover del selector — ver inicializarSelectorSemestreAgenda). El resto
- * de lo que antes vivía acá (Semana N, atajo a hoy) se movió al bloque
+ * Header fijo: los nombres de los semestres mostrados, tocable (abre el
+ * modal del selector — ver inicializarSelectorSemestreAgenda). El resto de
+ * lo que antes vivía acá (Semana N, atajo a hoy) se movió al bloque
  * dinámico de abajo (construirSubheaderSemanal/construirEnlaceHoyAgenda),
  * que sí depende de qué modo/vista está activo.
+ *
+ * Varios semestres a la vez: con más de uno seleccionado se muestran todos
+ * unidos con " · " (orden cronológico ascendente — el más antiguo primero,
+ * mismo orden que devuelve obtenerSemestresSeleccionadosAgenda), ej.
+ * "Semestre 2025-A · Semestre 2025-B". Si hay semestres creados pero
+ * ninguno seleccionado (caso límite del array explícito vacío), el botón
+ * lo deja claro en vez de mostrar un nombre viejo.
  */
 function renderizarHeaderAgenda() {
-  const semestre = obtenerSemestreActivoAgenda();
+  const seleccionados = obtenerSemestresSeleccionadosAgenda();
   const nombreEl = document.getElementById("agenda-nombre-semestre");
   if (!nombreEl) return;
-  nombreEl.textContent = semestre ? semestre.nombre || "Semestre" : "Sin semestres";
+  const hayAlgunSemestre = (estado.datos.semestres || []).length > 0;
+  if (!hayAlgunSemestre) {
+    nombreEl.textContent = "Sin semestres";
+  } else if (seleccionados.length === 0) {
+    nombreEl.textContent = "Elegir semestre";
+  } else {
+    nombreEl.textContent = seleccionados.map((s) => s.nombre || "Semestre").join(" · ");
+  }
 }
 
 /**
- * Ronda de ajustes visuales #2 — punto C: popover del selector de semestre
- * — tocar el nombre del semestre en el header abre esta lista (mismo patrón
- * que #perfil-popover: absoluto, colgado del contenedor, se cierra tocando
- * afuera). Elegir uno lo fija como "semestre mostrado" de Agenda (sesión) —
- * ver estado.agendaSemestreSeleccionadoId y obtenerSemestreActivoAgenda en
- * agenda-utils.js.
+ * Idea "varios semestres a la vez": tarjeta seleccionable de un semestre
+ * dentro de #modal-agenda-semestres — actúa como botón toggle (no como link
+ * de navegación, como era el popover viejo): tocarla suma/quita ese
+ * semestre del conjunto que Agenda está mostrando, sin cerrar el modal, así
+ * se pueden marcar varias de un tirón. El estado "seleccionada" se resalta
+ * visualmente (ver .agenda-semestre-tarjeta.active en design-system.css).
  */
-function poblarPopoverSemestreAgenda() {
-  const pop = document.getElementById("agenda-semestre-popover");
-  if (!pop) return;
-  pop.innerHTML = "";
+function construirTarjetaSemestreAgenda(semestre, seleccionado) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "agenda-semestre-tarjeta" + (seleccionado ? " active" : "");
+  btn.setAttribute("aria-pressed", String(seleccionado));
 
-  const semestres = obtenerSemestresOrdenCronologico();
+  const esActual = obtenerEstadoEfectivoSemestre(semestre) === "actual";
+  const inicio = new Date(semestre.fecha_inicio);
+  const fechaTexto = isNaN(inicio.getTime()) ? "" : inicio.toLocaleDateString("es-CR", { month: "short", year: "numeric" });
+  const subtitulo = [fechaTexto, esActual ? "Actual" : ""].filter(Boolean).join(" · ");
+
+  btn.innerHTML = `
+    <span class="agenda-semestre-tarjeta-check">✓</span>
+    <span class="stack" style="gap:2px; text-align:left; min-width:0;">
+      <span style="font-weight:700; overflow-wrap:break-word;">${semestre.nombre || "Semestre"}</span>
+      ${subtitulo ? `<span class="muted" style="font-size:0.72rem;">${subtitulo}</span>` : ""}
+    </span>
+  `;
+  btn.addEventListener("click", () => alternarSeleccionSemestreAgenda(semestre.id));
+  return btn;
+}
+
+/**
+ * Toggle de una tarjeta: resuelve la selección ACTUAL (automática si nunca
+ * se tocó, o la explícita ya guardada) para partir de ahí, suma/quita el id
+ * tocado, y la deja guardada como array explícito — a partir de acá,
+ * aunque quede vacío, ya no vuelve a caer en el default automático esta
+ * sesión (decisión confirmada: array vacío = Agenda vacía con mensaje, no
+ * un fallback silencioso).
+ */
+function alternarSeleccionSemestreAgenda(semestreId) {
+  const idsActuales = obtenerSemestresSeleccionadosAgenda().map((s) => s.id);
+  const idx = idsActuales.indexOf(semestreId);
+  if (idx >= 0) idsActuales.splice(idx, 1);
+  else idsActuales.push(semestreId);
+  estado.agendaSemestresSeleccionados = idsActuales;
+  estado.agendaOffsetSemana = 0;
+  poblarModalSemestresAgenda();
+  renderizarAgenda();
+}
+
+/**
+ * Puebla #modal-agenda-semestres con una tarjeta por semestre existente
+ * (todos, no solo los actuales — el caso de uso explícito es poder marcar
+ * un semestre pasado junto con el actual), más reciente primero. Se llama
+ * de nuevo tras cada toggle (ver alternarSeleccionSemestreAgenda) para que
+ * el resaltado ✓ de las tarjetas quede sincronizado sin tener que cerrar y
+ * reabrir el modal.
+ */
+function poblarModalSemestresAgenda() {
+  const cont = document.getElementById("agenda-semestres-tarjetas");
+  if (!cont) return;
+  cont.innerHTML = "";
+
+  const semestres = obtenerSemestresOrdenCronologico().slice().reverse();
   if (semestres.length === 0) {
     const vacio = document.createElement("p");
     vacio.className = "muted";
-    vacio.style.cssText = "font-size:0.8rem; padding:6px 8px; margin:0;";
+    vacio.style.cssText = "text-align:center; padding:6px 0;";
     vacio.textContent = "No hay semestres creados todavía.";
-    pop.appendChild(vacio);
+    cont.appendChild(vacio);
     return;
   }
 
-  const activo = obtenerSemestreActivoAgenda();
-  semestres
-    .slice()
-    .reverse() // más reciente primero, mismo criterio que el resto de estos selectores
-    .forEach((s) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "agenda-semestre-popover-item" + (activo && activo.id === s.id ? " active" : "");
-      btn.textContent = s.nombre || "Semestre";
-      btn.addEventListener("click", () => {
-        estado.agendaSemestreSeleccionadoId = s.id;
-        estado.agendaOffsetSemana = 0;
-        cerrarPopoverSemestreAgenda();
-        renderizarAgenda();
-      });
-      pop.appendChild(btn);
-    });
+  const seleccionadosIds = new Set(obtenerSemestresSeleccionadosAgenda().map((s) => s.id));
+  semestres.forEach((s) => cont.appendChild(construirTarjetaSemestreAgenda(s, seleccionadosIds.has(s.id))));
 }
 
-function cerrarPopoverSemestreAgenda() {
-  document.getElementById("agenda-semestre-popover")?.classList.add("oculto");
+function abrirModalSemestresAgenda() {
+  poblarModalSemestresAgenda();
+  document.getElementById("modal-agenda-semestres")?.classList.remove("oculto");
 }
 
-function alternarPopoverSemestreAgenda(ev) {
-  ev.stopPropagation();
-  const pop = document.getElementById("agenda-semestre-popover");
-  if (!pop) return;
-  if (!pop.classList.contains("oculto")) {
-    cerrarPopoverSemestreAgenda();
-    return;
-  }
-  poblarPopoverSemestreAgenda();
-  pop.classList.remove("oculto");
+function cerrarModalSemestresAgenda() {
+  document.getElementById("modal-agenda-semestres")?.classList.add("oculto");
 }
 
 /**
@@ -604,16 +651,34 @@ function renderizarAgendaInterno() {
   cont.innerHTML = "";
   if (subCont) subCont.innerHTML = "";
 
+  // Decisión confirmada (selector de semestres por tarjetas): si HAY
+  // semestres creados pero la persona los deseleccionó todos, la Agenda
+  // queda vacía con este mensaje — no cae en silencio a "mostrar todo" ni a
+  // otro semestre no elegido. Si directamente no hay NINGÚN semestre creado
+  // todavía, se preserva el comportamiento de siempre (días sueltos, sin
+  // materias inline, eventos sin semestre_id igual visibles).
+  const hayAlgunSemestre = (estado.datos.semestres || []).length > 0;
+  const semestresSeleccionados = obtenerSemestresSeleccionadosAgenda();
+  if (hayAlgunSemestre && semestresSeleccionados.length === 0) {
+    if (subCont) subCont.appendChild(construirEnlaceHoyAgenda());
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.textAlign = "center";
+    vacio.textContent = "Selecciona al menos un semestre para ver tu Agenda.";
+    cont.appendChild(vacio);
+    return;
+  }
+
   const cfg = estado.datos.configuracion;
   const mostrarDiasVacios = cfg.agenda_mostrar_dias_vacios !== false; // default: sí
-  const semestreActivo = obtenerSemestreActivoAgenda();
+  const semestreReferencia = obtenerSemestreActivoAgenda(); // más reciente del conjunto, para "Semana N"
   const modoTodo = estado.agendaFiltroModo === "todo";
 
   // Punto 10: en modo "Todo" el rango arranca siempre en HOY (nunca hay
   // días previos a colapsar — ver obtenerRangoDiasAgendaTodo), así que el
   // colapso de días pasados del punto 8 es exclusivo del modo "Semanal".
   const dias = modoTodo
-    ? obtenerRangoDiasAgendaTodo(semestreActivo, estado.agendaTodoDiasAtras)
+    ? obtenerRangoDiasAgendaTodo(semestreReferencia, estado.agendaTodoDiasAtras)
     : obtenerDiasSemanaAgenda(estado.agendaOffsetSemana);
 
   if (subCont) {
@@ -621,7 +686,7 @@ function renderizarAgendaInterno() {
       subCont.appendChild(construirSubheaderTodo());
       subCont.appendChild(construirEnlaceHoyAgenda());
     } else {
-      subCont.appendChild(construirSubheaderSemanal(dias, semestreActivo));
+      subCont.appendChild(construirSubheaderSemanal(dias, semestreReferencia));
     }
   }
 
@@ -640,13 +705,13 @@ function renderizarAgendaInterno() {
     let huboContenido = false;
 
     dias.forEach((dia) => {
-      const bloque = construirBloqueDia(dia, semestreActivo, mostrarDiasVacios);
+      const bloque = construirBloqueDia(dia, semestresSeleccionados, mostrarDiasVacios);
       if (!bloque) return;
       huboContenido = true;
 
       const offsetSemana = calcularOffsetSemana(dia.fecha, inicioSemanaHoy);
       if (offsetSemana !== offsetSemanaAnterior) {
-        frag.appendChild(construirEncabezadoSemanaTodo(semestreActivo, offsetSemana));
+        frag.appendChild(construirEncabezadoSemanaTodo(semestreReferencia, offsetSemana));
         offsetSemanaAnterior = offsetSemana;
       }
       frag.appendChild(bloque);
@@ -671,8 +736,8 @@ function renderizarAgendaInterno() {
   const diasPasados = dias.filter((d) => formatearFechaISO(d.fecha) < hoyISO);
   const diasDesdeHoy = dias.filter((d) => formatearFechaISO(d.fecha) >= hoyISO);
 
-  const bloquesPasados = diasPasados.map((dia) => construirBloqueDia(dia, semestreActivo, mostrarDiasVacios)).filter(Boolean);
-  const bloquesDesdeHoy = diasDesdeHoy.map((dia) => construirBloqueDia(dia, semestreActivo, mostrarDiasVacios)).filter(Boolean);
+  const bloquesPasados = diasPasados.map((dia) => construirBloqueDia(dia, semestresSeleccionados, mostrarDiasVacios)).filter(Boolean);
+  const bloquesDesdeHoy = diasDesdeHoy.map((dia) => construirBloqueDia(dia, semestresSeleccionados, mostrarDiasVacios)).filter(Boolean);
 
   if (bloquesPasados.length === 0 && bloquesDesdeHoy.length === 0) {
     const vacio = document.createElement("p");
@@ -715,19 +780,19 @@ function renderizarAgenda() {
 }
 
 /**
- * Ronda de ajustes visuales #2 — punto C: wiring del selector de semestre
- * — tocar el nombre abre/cierra el popover (alternarPopoverSemestreAgenda),
- * y un click en cualquier otro lado del documento lo cierra (mismo patrón
- * que el resto de popovers del proyecto, ej. #perfil-popover).
+ * Idea "varios semestres a la vez": wiring del selector de semestres —
+ * tocar el nombre en el header abre el modal de tarjetas
+ * (#modal-agenda-semestres), y tocar el fondo oscuro lo cierra (mismo
+ * patrón que el resto de modales del proyecto, ej. #modal-agenda-ajustes:
+ * click en el propio overlay, no en la tarjeta de adentro). El botón "✕" lo
+ * agrega el inyector global de modales (inicializarBotonesCerrarModal en
+ * componentes.js), como en cualquier otro .modal-overlay — no hace falta
+ * wiring propio para eso acá.
  */
 function inicializarSelectorSemestreAgenda() {
-  document.getElementById("agenda-nombre-semestre")?.addEventListener("click", alternarPopoverSemestreAgenda);
-  document.addEventListener("click", (ev) => {
-    const pop = document.getElementById("agenda-semestre-popover");
-    if (!pop || pop.classList.contains("oculto")) return;
-    const btn = document.getElementById("agenda-nombre-semestre");
-    if (pop.contains(ev.target) || btn?.contains(ev.target)) return;
-    cerrarPopoverSemestreAgenda();
+  document.getElementById("agenda-nombre-semestre")?.addEventListener("click", abrirModalSemestresAgenda);
+  document.getElementById("modal-agenda-semestres")?.addEventListener("click", (ev) => {
+    if (ev.target.id === "modal-agenda-semestres") cerrarModalSemestresAgenda();
   });
 }
 

@@ -18,7 +18,7 @@ import {
   obtenerDiasSemanaOrdenAgenda,
   obtenerInicioSemanaQueContiene,
   obtenerOffsetSemanaParaFecha,
-  obtenerSemestreActivoAgenda,
+  obtenerSemestresSeleccionadosAgenda,
 } from "./agenda-utils.js";
 
 const BADGE_TIPO_DOT = { evento: "#60a5fa", tarea: "#f59e0b", examen: "#ef4444" };
@@ -46,17 +46,23 @@ function saltarADiaEnLista(fecha) {
   requestAnimationFrame(() => desplazarYResaltarElemento(`[data-fecha="${formatearFechaISO(fecha)}"]`));
 }
 
-/** Resumen de una fecha: conteos por tipo + si hay clases ese día. */
-function resumenDia(fecha, semestreActivo) {
+/**
+ * Resumen de una fecha: conteos por tipo + si hay clases ese día.
+ * `semestresSeleccionados`: array (ver obtenerSemestresSeleccionadosAgenda
+ * en agenda-utils.js) — los eventos de un día se filtran igual que en la
+ * vista Lista (construirBloqueDia, agenda.js): sin semestre_id, o de
+ * cualquiera de los seleccionados.
+ */
+function resumenDia(fecha, semestresSeleccionados) {
   const fechaISO = formatearFechaISO(fecha);
-  const eventos = (estado.datos.agenda || []).filter((ev) => ev.fecha === fechaISO);
+  const eventos = (estado.datos.agenda || [])
+    .filter((ev) => ev.fecha === fechaISO)
+    .filter((ev) => !ev.semestre_id || semestresSeleccionados.some((s) => s.id === ev.semestre_id));
   const conteoPorTipo = { evento: 0, tarea: 0, examen: 0 };
   eventos.forEach((ev) => {
     if (conteoPorTipo[ev.tipo] !== undefined) conteoPorTipo[ev.tipo] += 1;
   });
-  const tieneClases = semestreActivo
-    ? contarClasesDelDia(semestreActivo, fecha, obtenerCodigoDiaSemana(fecha)) > 0
-    : false;
+  const tieneClases = contarClasesDelDia(semestresSeleccionados, fecha, obtenerCodigoDiaSemana(fecha)) > 0;
   return { conteoPorTipo, total: eventos.length, tieneClases };
 }
 
@@ -73,8 +79,8 @@ function construirCabeceraDiasSemana() {
 }
 
 /** `detallada`: true en semanal (celdas grandes, muestran nombres); false en mensual (solo puntos). */
-function construirCelda(fecha, { delMesActual, detallada, semestreActivo }) {
-  const { conteoPorTipo, total, tieneClases } = resumenDia(fecha, semestreActivo);
+function construirCelda(fecha, { delMesActual, detallada, semestresSeleccionados }) {
+  const { conteoPorTipo, total, tieneClases } = resumenDia(fecha, semestresSeleccionados);
   const hoy = esHoyFecha(fecha);
 
   const celda = document.createElement("button");
@@ -98,6 +104,7 @@ function construirCelda(fecha, { delMesActual, detallada, semestreActivo }) {
   } else {
     const eventosDelDia = (estado.datos.agenda || [])
       .filter((ev) => ev.fecha === formatearFechaISO(fecha))
+      .filter((ev) => !ev.semestre_id || semestresSeleccionados.some((s) => s.id === ev.semestre_id))
       .sort((a, b) => String(a.hora || "99:99").localeCompare(String(b.hora || "99:99")));
     const nombresVisibles = eventosDelDia.slice(0, 3);
     const restantes = eventosDelDia.length - nombresVisibles.length;
@@ -123,7 +130,7 @@ function construirCelda(fecha, { delMesActual, detallada, semestreActivo }) {
   return celda;
 }
 
-function construirGridMensual(semestreActivo) {
+function construirGridMensual(semestresSeleccionados) {
   const baseMes = obtenerFechaBaseMes(estado.agendaCalendarioOffsetMes);
   const primerDiaMes = new Date(baseMes.getFullYear(), baseMes.getMonth(), 1);
   const ultimoDiaMes = new Date(baseMes.getFullYear(), baseMes.getMonth() + 1, 0);
@@ -144,7 +151,7 @@ function construirGridMensual(semestreActivo) {
       construirCelda(new Date(cursor), {
         delMesActual: cursor.getMonth() === baseMes.getMonth(),
         detallada: false,
-        semestreActivo,
+        semestresSeleccionados,
       })
     );
     cursor.setDate(cursor.getDate() + 1);
@@ -153,7 +160,7 @@ function construirGridMensual(semestreActivo) {
   return { cont, tituloRango: baseMes.toLocaleDateString("es-CR", { month: "long", year: "numeric" }) };
 }
 
-function construirGridSemanal(semestreActivo) {
+function construirGridSemanal(semestresSeleccionados) {
   const dias = obtenerDiasSemanaAgenda(estado.agendaOffsetSemana);
 
   const cont = document.createElement("div");
@@ -164,7 +171,7 @@ function construirGridSemanal(semestreActivo) {
   const grid = document.createElement("div");
   grid.className = "agenda-cal-grid agenda-cal-grid-semanal";
   dias.forEach((dia) => {
-    grid.appendChild(construirCelda(dia.fecha, { detallada: true, semestreActivo }));
+    grid.appendChild(construirCelda(dia.fecha, { detallada: true, semestresSeleccionados }));
   });
   cont.appendChild(grid);
 
@@ -250,12 +257,29 @@ function renderizarCalendarioAgenda() {
   if (!cont) return;
   cont.innerHTML = "";
 
-  const semestreActivo = obtenerSemestreActivoAgenda();
   const subheader = construirSubheaderCalendario();
   cont.appendChild(subheader);
 
+  // Decisión confirmada (selector de semestres por tarjetas, ver agenda.js):
+  // si HAY semestres creados pero la persona los deseleccionó todos, la
+  // Agenda (Lista Y Calendario) queda vacía con este mensaje — no cae en
+  // silencio a "mostrar todo" ni a otro semestre no elegido.
+  const hayAlgunSemestre = (estado.datos.semestres || []).length > 0;
+  const semestresSeleccionados = obtenerSemestresSeleccionadosAgenda();
+  if (hayAlgunSemestre && semestresSeleccionados.length === 0) {
+    subheader.querySelector("#agenda-cal-titulo-rango").textContent = "";
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.cssText = "text-align:center; padding:16px 0;";
+    vacio.textContent = "Selecciona al menos un semestre para ver tu Agenda.";
+    cont.appendChild(vacio);
+    return;
+  }
+
   const { cont: grid, tituloRango } =
-    estado.agendaCalendarioModo === "mensual" ? construirGridMensual(semestreActivo) : construirGridSemanal(semestreActivo);
+    estado.agendaCalendarioModo === "mensual"
+      ? construirGridMensual(semestresSeleccionados)
+      : construirGridSemanal(semestresSeleccionados);
   subheader.querySelector("#agenda-cal-titulo-rango").textContent = tituloRango;
   cont.appendChild(grid);
 }

@@ -73,14 +73,21 @@ function obtenerClasesDelDia(semestre, numeroSemana, diaCodigo) {
 }
 
 /**
- * Conteo liviano (sin construir DOM) de cuántas clases caen en `fecha` —
- * lo usa el grid del Calendario (agenda-calendario.js) para pintar un
- * indicador chico por celda, sin pagar el costo de armar las filas
- * completas en las ~35-42 celdas de una vista mensual.
+ * Conteo liviano (sin construir DOM) de cuántas clases caen en `fecha`,
+ * sumadas entre TODOS los semestres del array `semestres` — lo usa el grid
+ * del Calendario (agenda-calendario.js) para pintar un indicador chico por
+ * celda, sin pagar el costo de armar las filas completas en las ~35-42
+ * celdas de una vista mensual. Cada semestre puede tener un número de
+ * semana distinto para la misma `fecha` (fecha_inicio propia), por eso se
+ * recalcula por separado dentro del reduce en vez de compartir un solo
+ * numeroSemana entre todos.
  */
-function contarClasesDelDia(semestre, fecha, diaCodigo) {
-  if (!semestre) return 0;
-  return obtenerClasesDelDia(semestre, calcularNumeroSemanaParaFecha(semestre, fecha), diaCodigo).length;
+function contarClasesDelDia(semestres, fecha, diaCodigo) {
+  if (!semestres || semestres.length === 0) return 0;
+  return semestres.reduce(
+    (total, semestre) => total + obtenerClasesDelDia(semestre, calcularNumeroSemanaParaFecha(semestre, fecha), diaCodigo).length,
+    0
+  );
 }
 
 /**
@@ -111,10 +118,18 @@ function construirFilaMateriaInline(clase, semestre, numeroSemanaReal) {
 /**
  * Punto 9 + 10: sección "Materias" del día (subtítulo + filas), mismo
  * patrón que los grupos de Tareas/Exámenes/Eventos en agenda.js. Devuelve
- * `null` (nada que insertar) si no hay semestre activo, si el filtro
- * "Mostrar materias en la agenda" está apagado, o si no hay clases ese día
- * — mismo criterio de "no ocupar espacio de más" que ya usan esos otros
- * grupos.
+ * `null` (nada que insertar) si no hay ningún semestre seleccionado, si el
+ * filtro "Mostrar materias en la agenda" está apagado, o si ninguno de los
+ * semestres seleccionados tiene clases ese día — mismo criterio de "no
+ * ocupar espacio de más" que ya usan esos otros grupos.
+ *
+ * Varios semestres a la vez: recibe `semestres` (array, ver
+ * obtenerSemestresSeleccionadosAgenda en agenda-utils.js) en vez de un
+ * único semestre — junta las clases de TODOS los seleccionados que caigan
+ * ese día y las ordena juntas por hora, como si fuera una sola agenda. Cada
+ * clase se resuelve con el numeroSemana de SU PROPIO semestre (fechas de
+ * inicio distintas dan números de semana distintos para la misma fecha
+ * calendario), así que ese cálculo se hace por semestre antes de mezclar.
  *
  * El filtro leído acá es el de SESIÓN (`estado.agendaFiltroMostrarMaterias`,
  * ver agenda.js) — el de la ventana de Filtros del punto 10, que arranca en
@@ -122,13 +137,19 @@ function construirFilaMateriaInline(clase, semestre, numeroSemanaReal) {
  * Ajustes → Agenda (`agenda_mostrar_clases`, punto 12) pero se puede
  * togglear solo para la sesión actual sin tocar ese ajuste permanente.
  */
-function construirSeccionMateriasDia(semestre, fecha, diaCodigo) {
-  if (!semestre) return null;
+function construirSeccionMateriasDia(semestres, fecha, diaCodigo) {
+  if (!semestres || semestres.length === 0) return null;
   if (estado.agendaFiltroMostrarMaterias === false) return null;
 
-  const numeroSemanaReal = calcularNumeroSemanaParaFecha(semestre, fecha);
-  const clases = obtenerClasesDelDia(semestre, numeroSemanaReal, diaCodigo);
-  if (clases.length === 0) return null;
+  const filas = [];
+  semestres.forEach((semestre) => {
+    const numeroSemanaReal = calcularNumeroSemanaParaFecha(semestre, fecha);
+    obtenerClasesDelDia(semestre, numeroSemanaReal, diaCodigo).forEach((clase) => {
+      filas.push({ clase, semestre, numeroSemanaReal });
+    });
+  });
+  if (filas.length === 0) return null;
+  filas.sort((a, b) => String(a.clase.hora_inicio).localeCompare(String(b.clase.hora_inicio)));
 
   const grupo = document.createElement("div");
   grupo.className = "stack";
@@ -140,7 +161,9 @@ function construirSeccionMateriasDia(semestre, fecha, diaCodigo) {
   etiqueta.textContent = "Materias";
   grupo.appendChild(etiqueta);
 
-  clases.forEach((clase) => grupo.appendChild(construirFilaMateriaInline(clase, semestre, numeroSemanaReal)));
+  filas.forEach(({ clase, semestre, numeroSemanaReal }) =>
+    grupo.appendChild(construirFilaMateriaInline(clase, semestre, numeroSemanaReal))
+  );
 
   return grupo;
 }

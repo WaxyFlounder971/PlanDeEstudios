@@ -13,56 +13,113 @@ import { fechaLocalDesdeISO, obtenerPlanPorId } from "../horario/horario.js";
 import { buscarSemestreVivoPorId, obtenerSemestresActuales, obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
 
 /**
- * Agenda — Núcleo: "semestre activo" para Agenda es un concepto propio,
- * DISTINTO del semestre que Horario esté navegando en un momento dado
+ * Idea "varios semestres a la vez" — Núcleo: qué semestres está mostrando
+ * Agenda AHORA MISMO es un conjunto (no un único semestre), DISTINTO del
+ * semestre que Horario esté navegando en un momento dado
  * (estado.horarioSemestreId, que el usuario puede cambiar a mano con las
- * flechas ‹ › sin que eso implique nada sobre cuál es su semestre real
- * ahora mismo). Por default es el semestre "actual" más reciente (mismo
- * criterio de fecha que usa obtenerEstadoEfectivoSemestre en schema.js); si
- * no hay ninguno marcado como actual, cae al más reciente que exista en
- * general, para que el formulario de alta nunca se quede sin materias que
- * ofrecer si el usuario todavía no le puso fecha a nada.
+ * flechas ‹ › sin que eso implique nada sobre qué semestres son "los
+ * reales" ahora). Se elige desde el modal de tarjetas del header (ver
+ * poblarModalSemestresAgenda/alternarSeleccionSemestreAgenda en agenda.js),
+ * que arma sus tarjetas con TODOS los semestres (obtenerSemestresOrdenCronologico) y
+ * marca como seleccionadas las de este conjunto.
  *
- * Ronda de ajustes visuales #2/#3 — fix: si la persona eligió a mano otro
- * semestre en el popover del header (estado.agendaSemestreSeleccionadoId,
- * ver alternarPopoverSemestreAgenda en agenda.js), ESE es el que manda acá
- * — antes esta función lo ignoraba por completo, así que el selector solo
- * cambiaba lo que se veía arriba en el nombre pero la lista de días, el
- * filtrado de eventos, las materias inline y el selector "vincular a
- * materia" del modal seguían mostrando el semestre real actual. Se valida
- * con buscarSemestreVivoPorId (no basta con el id solo) por si ese
- * semestre se borró mientras estaba seleccionado.
+ * `estado.agendaSemestresSeleccionados`: `null`/`undefined` = "automático"
+ * (nunca se tocó el modal esta sesión) — se resuelve acá abajo al conjunto
+ * de semestres "actuales" (mismo criterio de fecha que
+ * obtenerEstadoEfectivoSemestre en schema.js), o si no hay ninguno marcado
+ * como actual, al más reciente que exista en general (mismo fallback de
+ * siempre, para que el formulario de alta nunca se quede sin materias que
+ * ofrecer si el usuario todavía no le puso fecha a nada). Un array
+ * (posiblemente vacío) es una selección EXPLÍCITA: la persona ya tocó al
+ * menos una tarjeta esta sesión, así que manda tal cual — incluido el caso
+ * "array vacío" (decisión confirmada: ningún semestre marcado = Agenda
+ * vacía con mensaje "Selecciona al menos un semestre", no un fallback
+ * silencioso a otra cosa).
+ *
+ * Se valida cada id con buscarSemestreVivoPorId (no basta con el id solo)
+ * por si alguno se borró mientras estaba seleccionado, y el resultado
+ * siempre vuelve ordenado cronológico ASC (más antiguo primero) — mismo
+ * orden que se usa para armar "Semestre X · Semestre Y" en el header.
  */
-function obtenerSemestreActivoAgenda() {
-  if (estado.agendaSemestreSeleccionadoId) {
-    const seleccionado = buscarSemestreVivoPorId(estado.agendaSemestreSeleccionadoId);
-    if (seleccionado) return seleccionado;
+function obtenerSemestresSeleccionadosAgenda() {
+  let ids;
+  if (Array.isArray(estado.agendaSemestresSeleccionados)) {
+    ids = estado.agendaSemestresSeleccionados;
+  } else {
+    const actuales = obtenerSemestresActuales();
+    if (actuales.length > 0) {
+      ids = actuales.map((s) => s.id);
+    } else {
+      const cronologico = obtenerSemestresOrdenCronologico();
+      ids = cronologico.length > 0 ? [cronologico[cronologico.length - 1].id] : [];
+    }
   }
-  const actuales = obtenerSemestresActuales();
-  if (actuales.length > 0) return actuales[0];
-  const cronologico = obtenerSemestresOrdenCronologico();
-  return cronologico.length > 0 ? cronologico[cronologico.length - 1] : null;
+  return ids
+    .map((id) => buscarSemestreVivoPorId(id))
+    .filter(Boolean)
+    .sort((a, b) => String(a.fecha_inicio).localeCompare(String(b.fecha_inicio)));
 }
 
 /**
- * Materias matriculadas del semestre activo, ya resueltas con su nombre
- * legible — es la única fuente de materias que el selector de
+ * Semestre de REFERENCIA entre los seleccionados — el más reciente
+ * cronológicamente. Se mantiene este nombre (antes devolvía el ÚNICO
+ * semestre activo de Agenda) porque algunos cálculos son inherentemente de
+ * UN solo semestre a la vez y no tiene sentido partirlos por conjunto: el
+ * número de "Semana N" del header y el fin de rango del modo "Todo"
+ * (calcularNumeroSemanaParaFecha / obtenerRangoDiasAgendaTodo). El más
+ * reciente de los seleccionados es el criterio más útil ahí (la semana en
+ * curso importa más que la de un semestre viejo que se dejó marcado nada
+ * más para ver sus materias pasadas).
+ */
+function obtenerSemestreActivoAgenda() {
+  const seleccionados = obtenerSemestresSeleccionadosAgenda();
+  return seleccionados.length > 0 ? seleccionados[seleccionados.length - 1] : null;
+}
+
+/**
+ * Materias matriculadas de TODOS los semestres seleccionados, ya resueltas
+ * con su nombre legible — es la única fuente de materias que el selector de
  * materia_matriculada_id de agenda-modal.js debe ofrecer (decisión
- * confirmada: un evento solo se vincula a materias del semestre activo,
- * nunca de otro, para no tener que barrer todos los semestres del usuario).
+ * confirmada: un evento solo se vincula a materias de los semestres
+ * seleccionados, nunca de otro, para no tener que barrer todos los
+ * semestres del usuario).
+ *
+ * Caso límite confirmado: si dos semestres seleccionados tienen una materia
+ * con el MISMO nombre, ambas entradas se desambiguan agregando el nombre de
+ * su semestre ("Cálculo I - Semestre 2025-B") — si el nombre es único entre
+ * los semestres seleccionados, se deja tal cual (sin sufijo), igual que
+ * antes.
+ *
+ * `mmId` (materia_matriculada.id) se asume único globalmente entre TODOS
+ * los semestres del usuario (mismo criterio que ya usa el resto del
+ * proyecto para ids, ej. evento.id) — es lo que permite usarlo tal cual
+ * como valor del <select> nativo en agenda-modal.js sin tener que
+ * componerlo con el semestreId.
  */
 function obtenerMateriasVinculablesAgenda() {
-  const semestre = obtenerSemestreActivoAgenda();
-  if (!semestre) return [];
-  return (semestre.materias_matriculadas || []).map((mm) => {
-    const plan = obtenerPlanPorId(mm.plan_estudio_id);
-    const materia = plan && (plan.materias || []).find((m) => m.id === mm.materia_id);
-    return {
-      mmId: mm.id,
-      semestreId: semestre.id,
-      nombre: materia ? aplicarFormatoTexto(materia.nombre) : "Materia",
-    };
+  const semestres = obtenerSemestresSeleccionadosAgenda();
+  const materias = [];
+  semestres.forEach((semestre) => {
+    (semestre.materias_matriculadas || []).forEach((mm) => {
+      const plan = obtenerPlanPorId(mm.plan_estudio_id);
+      const materia = plan && (plan.materias || []).find((m) => m.id === mm.materia_id);
+      materias.push({
+        mmId: mm.id,
+        semestreId: semestre.id,
+        semestreNombre: semestre.nombre || "Semestre",
+        nombreBase: materia ? aplicarFormatoTexto(materia.nombre) : "Materia",
+      });
+    });
   });
+
+  const conteoPorNombre = new Map();
+  materias.forEach((m) => conteoPorNombre.set(m.nombreBase, (conteoPorNombre.get(m.nombreBase) || 0) + 1));
+
+  return materias.map((m) => ({
+    mmId: m.mmId,
+    semestreId: m.semestreId,
+    nombre: conteoPorNombre.get(m.nombreBase) > 1 ? `${m.nombreBase} - ${m.semestreNombre}` : m.nombreBase,
+  }));
 }
 
 function formatearFechaISO(fecha) {
@@ -349,5 +406,6 @@ export {
   obtenerOffsetSemanaParaFecha,
   obtenerRangoDiasAgendaTodo,
   obtenerSemestreActivoAgenda,
+  obtenerSemestresSeleccionadosAgenda,
   tareaVenceHoy,
 };

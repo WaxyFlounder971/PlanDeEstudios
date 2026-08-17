@@ -414,7 +414,7 @@ function inicializarModalAgendaEvento() {
   // Ronda de ajustes visuales #4: dropdown propio de "vincular a materia"
   // — tocar el botón abre/cierra la lista, un click afuera del contenedor
   // la cierra (mismo patrón que el resto de popovers del proyecto, ej.
-  // #perfil-popover / #agenda-semestre-popover).
+  // #perfil-popover / lista de días pasados).
   document.getElementById("btn-agenda-materia-boton")?.addEventListener("click", alternarDropdownMateria);
   document.addEventListener("click", (ev) => {
     const cont = document.getElementById("contenedor-agenda-materia");
