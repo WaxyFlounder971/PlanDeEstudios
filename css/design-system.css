@@ -449,6 +449,33 @@ a { color: var(--accent-1); }
 .switch-tema .thumb { width: 20px; height: 20px; top: 3px; left: 3px; }
 .switch-tema input:checked + .track .thumb { transform: translateX(20px); }
 
+/* Ronda de ajustes visuales #4 — reveal animado de #fila-agenda-es-feriado
+   (ver comentario en index.html): en vez de togglear "oculto"
+   (display:none <-> flex, instantáneo), esta fila anima max-height +
+   opacity. max-height de 60px es generoso a propósito (el contenido real
+   mide ~34px con el padding) — un valor "de más" nunca corta nada, uno
+   ajustado al pixel es justo el tipo de cálculo frágil que causó el bug
+   original. overflow:hidden solo mientras está cerrada (si no, el
+   focus-visible del switch se recortaría también estando abierta). */
+.fila-feriado-oculta {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin: 0;
+  pointer-events: none;
+  transition: max-height 0.22s ease, opacity 0.16s ease, padding 0.22s ease;
+}
+.fila-feriado-visible {
+  max-height: 60px;
+  opacity: 1;
+  overflow: visible;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  pointer-events: auto;
+}
+
 /* ---- Checkbox custom ---- */
 .checkbox { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
 .checkbox input { display: none; }
@@ -507,6 +534,12 @@ a { color: var(--accent-1); }
 [data-mode="light"] .form-input,
 [data-mode="light"] .form-select,
 [data-mode="light"] .form-textarea { background: rgba(0,0,0,0.04); color-scheme: light; }
+/* v1.15.12 — el <textarea> nativo trae su propio "resize handle" en la
+   esquina inferior derecha que por default permite estirar en las 2
+   direcciones; el ancho no tiene sentido acá (el campo ya ocupa el 100%
+   del modal) — se deja solo el resize vertical, que sí sirve para hacer
+   más alto el cuadro de notas si hace falta. */
+.form-textarea { resize: vertical; }
 
 /* v1.15.10: el <select> nativo, aparte de fondo/borde/texto (ya cubiertos
    arriba junto con .form-input), tiene DOS partes que el navegador sigue
@@ -2174,6 +2207,10 @@ img, svg { max-width: 100%; }
   background: transparent;
   padding: 0;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
   transition: background var(--transition-fast), transform var(--transition-fast);
 }
 .agenda-check-completada:hover { transform: scale(1.08); }
