@@ -631,40 +631,13 @@ function renderizarAjustes() {
     };
   }
 
-  // Agenda: "Mostrar días sin eventos ni tareas" — default true (sí se
-  // muestran) si nunca se tocó, mismo criterio de "undefined = default" que
-  // dias_visibles/dia_inicio_semana más abajo (renderizarConfigDiasHorario),
-  // en vez de rellenarlo en crearDatosUsuarioNuevo (schema.js) para no
-  // tocar ese archivo por un solo campo más de configuración de UI.
-  const chkAgendaDiasVacios = document.getElementById("switch-agenda-mostrar-dias-vacios");
-  if (chkAgendaDiasVacios) {
-    chkAgendaDiasVacios.checked = estado.datos.configuracion.agenda_mostrar_dias_vacios !== false;
-    chkAgendaDiasVacios.onchange = () => {
-      estado.datos.configuracion.agenda_mostrar_dias_vacios = chkAgendaDiasVacios.checked;
-      sellarTimestamp(estado.datos.configuracion);
-      marcarCambioPendiente();
-      window.renderizarAgenda?.();
-    };
-  }
-
-  // Rediseño núcleo Agenda — punto 12: toggle PERSISTENTE (separado del
-  // filtro de sesión "Mostrar materias en la agenda" del punto 10, que
-  // vive en estado.agendaFiltroMostrarMaterias — ver agenda.js). Este es el
-  // default que ese filtro de sesión toma la próxima vez que se cargue la
-  // app; tocarlo acá NO sobreescribe el filtro de sesión activo en este
-  // mismo momento si Agenda ya está abierta con otro valor elegido en
-  // Filtros (mismo criterio de "el ajuste permanente es el punto de
-  // partida, no una orden retroactiva" que ya aplica en el resto de la
-  // app entre config persistida y estado transitorio).
-  const chkAgendaMostrarClases = document.getElementById("switch-agenda-mostrar-clases");
-  if (chkAgendaMostrarClases) {
-    chkAgendaMostrarClases.checked = estado.datos.configuracion.agenda_mostrar_clases !== false;
-    chkAgendaMostrarClases.onchange = () => {
-      estado.datos.configuracion.agenda_mostrar_clases = chkAgendaMostrarClases.checked;
-      sellarTimestamp(estado.datos.configuracion);
-      marcarCambioPendiente();
-    };
-  }
+  // Ronda de ajustes visuales — punto 3: los 2 switches de Agenda que iban
+  // acá ("Mostrar días sin eventos ni tareas" y "Mostrar clases ese día en
+  // Agenda", agenda_mostrar_dias_vacios/agenda_mostrar_clases) se movieron
+  // al modal de Ajustes de Agenda (#modal-agenda-ajustes, ver
+  // inicializarFiltrosAgenda en agenda.js) — dejan de existir en esta
+  // sección global. Los campos de configuracion siguen siendo los mismos,
+  // solo cambió DÓNDE se editan.
 
   // Modo claro/oscuro
   const chkModo = document.getElementById("switch-modo");
