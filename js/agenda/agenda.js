@@ -1,11 +1,14 @@
 /* =========================================================================
    AGENDA — Núcleo
-   Header fijo (Semestre/semana/día actual + pills Lista/Calendario +
-   Agregar/Ajustes) + despacho entre las dos vistas. Esta vista (Lista) es
-   cronológica: los 7 días de la semana mostrada, cada uno con sus materias
-   inline y sus eventos/tareas/exámenes agrupados por tipo, con los días ya
-   pasados colapsados bajo una flecha. La vista Calendario vive en
-   agenda-calendario.js.
+   Pills Lista/Calendario arriba de todo, header fijo debajo (nombre del
+   semestre mostrado — tocable, abre el selector — + Agregar/Ajustes
+   compactos) con un bloque dinámico que cambia según modo/vista (semana
+   navegable + rango + Hoy en Semanal; "Ver días anteriores" + Hoy en Todo;
+   solo Hoy en Calendario) + despacho entre las dos vistas. Esta vista
+   (Lista) es cronológica: los 7 días de la semana mostrada, cada uno con
+   sus materias inline y sus eventos/tareas/exámenes agrupados por tipo, con
+   los días ya pasados colapsados bajo una flecha. La vista Calendario vive
+   en agenda-calendario.js.
    ========================================================================= */
 
 import { sellarTimestamp } from "../core/schema.js";
@@ -13,6 +16,7 @@ import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { desplazarYResaltarElemento } from "../ui/componentes.js";
+import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
 import { renderizarCalendarioAgenda } from "./agenda-calendario.js";
 import { construirSeccionMateriasDia, calcularNumeroSemanaParaFecha } from "./agenda-clases.js";
 import { abrirModalEventoAgenda, abrirTarjetaInfoEventoAgenda, inicializarModalAgendaEvento } from "./agenda-modal.js";
@@ -60,6 +64,18 @@ estado.agendaDiasPasadosExpandido = estado.agendaDiasPasadosExpandido || false;
 // original (arranca en hoy, sin días previos). Sesión, no persistido, mismo
 // criterio que el resto de estos flags.
 estado.agendaTodoDiasAtras = estado.agendaTodoDiasAtras || 0;
+// Ronda de ajustes visuales #2 — punto C: semestre que Agenda está
+// mostrando, elegido a mano desde el popover del header (tocar el nombre
+// del semestre, ver inicializarSelectorSemestreAgenda). `undefined` =
+// "automático" (el criterio de siempre en obtenerSemestreActivoAgenda: el
+// semestre "actual" más reciente). Sesión, no persistido — cada carga de
+// la app vuelve a arrancar en automático. Cada semestre tiene su agenda
+// separada: los eventos/tareas nuevos quedan etiquetados con el semestre
+// que estaba activo al crearlos (ver guardarEventoAgenda en
+// agenda-modal.js) y construirBloqueDia acá abajo solo muestra los que
+// coinciden con el semestre mostrado (o que no tienen semestre asignado,
+// por compatibilidad con datos de antes de este cambio).
+estado.agendaSemestreSeleccionadoId = estado.agendaSemestreSeleccionadoId || null;
 // Punto 10 + 12: arranca en el valor PERSISTENTE de Ajustes → Agenda
 // (`agenda_mostrar_clases`, punto 12) pero solo para esta sesión: togglear
 // acá (ventana de Filtros) nunca reescribe ese ajuste permanente.
@@ -206,6 +222,11 @@ function construirBloqueDia(diaInfo, semestreActivo, mostrarDiasVacios) {
   const fechaISO = formatearFechaISO(diaInfo.fecha);
   const eventosDelDia = (estado.datos.agenda || [])
     .filter((ev) => ev.fecha === fechaISO)
+    // Ronda de ajustes visuales #2 — punto C: cada semestre tiene su agenda
+    // aparte — solo entran acá los eventos sin semestre asignado (datos de
+    // antes de este cambio, o eventos creados sin semestre activo) o los
+    // que coinciden con el semestre que se está mostrando ahora mismo.
+    .filter((ev) => !ev.semestre_id || !semestreActivo || ev.semestre_id === semestreActivo.id)
     .sort((a, b) => String(a.hora || "99:99").localeCompare(String(b.hora || "99:99")));
 
   if (!mostrarDiasVacios && eventosDelDia.length === 0) return null;
@@ -260,16 +281,59 @@ function construirBloqueDia(diaInfo, semestreActivo, mostrarDiasVacios) {
 }
 
 /**
- * Subheader de navegación semanal de Lista — se arma en JS (no vive fijo en
- * el HTML) por el mismo motivo que el subheader del Calendario
- * (agenda-calendario.js): cada vista tiene su propio criterio de "qué
- * significa avanzar/retroceder" (semana acá, mes o semana allá), así que no
- * pueden compartir una sola barra de navegación estática.
+ * Ronda de ajustes visuales #2 — punto C: atajo "Hoy" compartido por los 3
+ * modos (Semanal, Todo, Calendario) — antes vivía en un solo lugar fijo del
+ * header (#agenda-fecha-hoy) que hacía de "llevame a hoy sea cual sea la
+ * vista"; ahora se reconstruye cada vez que se arma #agenda-subheader-
+ * dinamico, así que se centraliza acá el mismo comportamiento (incluido el
+ * caso "estoy en Todo o en Calendario" → vuelve a Lista/Semanal, que es lo
+ * que la persona espera al tocar "Hoy").
  */
-function construirSubheaderLista(dias) {
-  const wrap = document.createElement("section");
-  wrap.className = "glass-panel row-between";
-  wrap.style.padding = "10px 14px";
+function irAHoyAgenda() {
+  let necesitaRerender = false;
+  if (estado.agendaVistaActiva !== "lista") {
+    estado.agendaVistaActiva = "lista";
+    necesitaRerender = true;
+  }
+  if (estado.agendaFiltroModo !== "semanal") {
+    estado.agendaFiltroModo = "semanal";
+    estado.agendaTodoDiasAtras = 0;
+    necesitaRerender = true;
+  }
+  if (estado.agendaOffsetSemana !== 0) {
+    estado.agendaOffsetSemana = 0;
+    necesitaRerender = true;
+  }
+  if (necesitaRerender) renderizarAgenda();
+  desplazarYResaltarElemento(`#agenda-lista-dias [data-fecha="${formatearFechaISO(new Date())}"]`);
+}
+
+function construirEnlaceHoyAgenda() {
+  const hoy = document.createElement("span");
+  hoy.className = "muted";
+  hoy.style.cssText = "font-size:0.74rem; text-decoration:underline; cursor:pointer;";
+  hoy.textContent = "Hoy";
+  hoy.addEventListener("click", irAHoyAgenda);
+  return hoy;
+}
+
+/**
+ * Ronda de ajustes visuales #2 — punto C: encabezado unificado del modo
+ * Semanal — antes esto eran 2 paneles separados: uno fijo arriba (Semestre
+ * / "Semana N" / fecha de hoy, armado por renderizarHeaderAgenda) y otro
+ * aparte dentro de la lista con las flechas ‹ › alrededor del RANGO de
+ * fechas (construirSubheaderLista). Ahora es un solo bloque, inyectado en
+ * #agenda-subheader-dinamico (adentro de #agenda-header): las flechas pasan
+ * a rodear "Semana N" (no el rango), el rango de fechas queda como texto
+ * informativo debajo, y "Hoy" cierra el bloque — mismo layout que pidió el
+ * spec.
+ */
+function construirSubheaderSemanal(dias, semestreActivo) {
+  const frag = document.createDocumentFragment();
+
+  const filaSemana = document.createElement("div");
+  filaSemana.className = "row";
+  filaSemana.style.cssText = "align-items:center; justify-content:center; gap:6px;";
 
   const btnAnterior = document.createElement("button");
   btnAnterior.type = "button";
@@ -281,22 +345,12 @@ function construirSubheaderLista(dias) {
     renderizarAgenda();
   });
 
-  const centro = document.createElement("div");
-  centro.className = "stack";
-  centro.style.cssText = "align-items:center; text-align:center; gap:2px; flex:1;";
-  const rango = document.createElement("span");
-  rango.className = "texto-encabezado-seccion";
-  rango.textContent = formatearRangoSemanaAgenda(dias);
-  const volverHoy = document.createElement("span");
-  volverHoy.className = "muted";
-  volverHoy.style.cssText = "font-size:0.72rem; text-decoration:underline; cursor:pointer;";
-  volverHoy.textContent = "Volver a hoy";
-  volverHoy.addEventListener("click", () => {
-    estado.agendaOffsetSemana = 0;
-    renderizarAgenda();
-  });
-  centro.appendChild(rango);
-  centro.appendChild(volverHoy);
+  const numeroSemana = semestreActivo
+    ? calcularNumeroSemanaParaFecha(semestreActivo, obtenerFechaInicioSemanaAgenda(estado.agendaOffsetSemana))
+    : null;
+  const etiquetaSemana = document.createElement("span");
+  etiquetaSemana.className = "texto-encabezado-seccion";
+  etiquetaSemana.textContent = numeroSemana ? `Semana ${numeroSemana}` : "Semana";
 
   const btnSiguiente = document.createElement("button");
   btnSiguiente.type = "button";
@@ -308,44 +362,91 @@ function construirSubheaderLista(dias) {
     renderizarAgenda();
   });
 
-  wrap.appendChild(btnAnterior);
-  wrap.appendChild(centro);
-  wrap.appendChild(btnSiguiente);
-  return wrap;
+  filaSemana.appendChild(btnAnterior);
+  filaSemana.appendChild(etiquetaSemana);
+  filaSemana.appendChild(btnSiguiente);
+
+  const rango = document.createElement("span");
+  rango.className = "muted";
+  rango.style.fontSize = "0.78rem";
+  rango.textContent = formatearRangoSemanaAgenda(dias);
+
+  frag.appendChild(filaSemana);
+  frag.appendChild(rango);
+  frag.appendChild(construirEnlaceHoyAgenda());
+  return frag;
 }
 
 /**
- * Punto 7: header fijo con Semestre / semana / día actual, mismo tamaño de
- * letra que renderizarHeaderHorario (horario.js) — se llama desde
- * renderizarAgenda() (no desde renderizarAgendaInterno) para que quede
- * correcto sea cual sea la vista activa (Lista o Calendario), sin que este
- * archivo necesite tocar agenda-calendario.js. La "semana" mostrada es la
- * del PRIMER día de la semana actualmente navegada (estado.agendaOffsetSemana,
- * compartido con el submodo "Semanal" del Calendario) — no la semana de
- * hoy — para que quede en sintonía con lo que la persona está viendo.
+ * Header fijo: solo el nombre del semestre mostrado, tocable (abre el
+ * popover del selector — ver inicializarSelectorSemestreAgenda). El resto
+ * de lo que antes vivía acá (Semana N, atajo a hoy) se movió al bloque
+ * dinámico de abajo (construirSubheaderSemanal/construirEnlaceHoyAgenda),
+ * que sí depende de qué modo/vista está activo.
  */
 function renderizarHeaderAgenda() {
   const semestre = obtenerSemestreActivoAgenda();
   const nombreEl = document.getElementById("agenda-nombre-semestre");
-  const semanaEl = document.getElementById("agenda-semana-actual");
-  const fechaEl = document.getElementById("agenda-fecha-hoy");
+  if (!nombreEl) return;
+  nombreEl.textContent = semestre ? semestre.nombre || "Semestre" : "Sin semestres";
+}
 
-  if (!semestre) {
-    if (nombreEl) nombreEl.textContent = "Sin semestres";
-    if (semanaEl) semanaEl.textContent = "—";
-  } else {
-    if (nombreEl) nombreEl.textContent = semestre.nombre || "";
-    // Modo "Todo" (punto 10): no hay semana "navegada" (es scroll libre
-    // desde hoy), así que acá siempre es la semana de HOY.
-    const primerDiaSemana =
-      estado.agendaFiltroModo === "todo" ? new Date() : obtenerFechaInicioSemanaAgenda(estado.agendaOffsetSemana);
-    const numeroSemana = calcularNumeroSemanaParaFecha(semestre, primerDiaSemana);
-    if (semanaEl) semanaEl.textContent = `Semana ${numeroSemana}`;
+/**
+ * Ronda de ajustes visuales #2 — punto C: popover del selector de semestre
+ * — tocar el nombre del semestre en el header abre esta lista (mismo patrón
+ * que #perfil-popover: absoluto, colgado del contenedor, se cierra tocando
+ * afuera). Elegir uno lo fija como "semestre mostrado" de Agenda (sesión) —
+ * ver estado.agendaSemestreSeleccionadoId y obtenerSemestreActivoAgenda en
+ * agenda-utils.js.
+ */
+function poblarPopoverSemestreAgenda() {
+  const pop = document.getElementById("agenda-semestre-popover");
+  if (!pop) return;
+  pop.innerHTML = "";
+
+  const semestres = obtenerSemestresOrdenCronologico();
+  if (semestres.length === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.cssText = "font-size:0.8rem; padding:6px 8px; margin:0;";
+    vacio.textContent = "No hay semestres creados todavía.";
+    pop.appendChild(vacio);
+    return;
   }
-  // Siempre la fecha REAL de hoy (no la navegada) — es lo que hace que
-  // tocarla tenga sentido como atajo "llevame a hoy" (ver listener en
-  // inicializarAgenda).
-  if (fechaEl) fechaEl.textContent = new Date().toLocaleDateString("es-CR", { day: "numeric", month: "short" });
+
+  const activo = obtenerSemestreActivoAgenda();
+  semestres
+    .slice()
+    .reverse() // más reciente primero, mismo criterio que el resto de estos selectores
+    .forEach((s) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "agenda-semestre-popover-item" + (activo && activo.id === s.id ? " active" : "");
+      btn.textContent = s.nombre || "Semestre";
+      btn.addEventListener("click", () => {
+        estado.agendaSemestreSeleccionadoId = s.id;
+        estado.agendaOffsetSemana = 0;
+        cerrarPopoverSemestreAgenda();
+        renderizarAgenda();
+      });
+      pop.appendChild(btn);
+    });
+}
+
+function cerrarPopoverSemestreAgenda() {
+  document.getElementById("agenda-semestre-popover")?.classList.add("oculto");
+}
+
+function alternarPopoverSemestreAgenda(ev) {
+  ev.stopPropagation();
+  const pop = document.getElementById("agenda-semestre-popover");
+  if (!pop) return;
+  if (!pop.classList.contains("oculto")) {
+    cerrarPopoverSemestreAgenda();
+    return;
+  }
+  poblarPopoverSemestreAgenda();
+  pop.classList.remove("oculto");
 }
 
 /**
@@ -389,58 +490,76 @@ function construirColapsoDiasPasados(bloquesPasados) {
 }
 
 /**
- * Punto 10 (modo "Todo"): subheader liviano, sin flechas ‹ › — acá no hay
- * "semana navegada" que retroceder/avanzar, es un scroll libre continuo
- * desde hoy.
+ * Punto 10 (modo "Todo"): acá no hay "semana navegada" que retroceder/
+ * avanzar, es un scroll libre continuo desde hoy.
  *
- * Ronda de ajustes visuales — punto 4: ya no informa el rango con texto
- * fijo ("Desde hoy hasta el..."); en su lugar hay un control "Ver días
- * anteriores" que sigue sumando semanas hacia atrás (estado.agendaTodoDiasAtras,
+ * Ronda de ajustes visuales — punto 4: en vez de informar el rango con
+ * texto fijo ("Desde hoy hasta el..."), hay un control "Ver días
+ * anteriores" que suma semanas hacia atrás (estado.agendaTodoDiasAtras,
  * consumido por obtenerRangoDiasAgendaTodo — ver agenda-utils.js) cada vez
- * que se toca. Solo re-renderiza el contenido interno (renderizarAgendaInterno,
- * no renderizarAgenda completo) y compensa el scroll del documento por la
- * altura que agregan los bloques nuevos ANTES de la posición actual, para
- * que la vista no salte ni se resetee al principio de la lista — lo que la
- * persona tenía a la vista se queda exactamente donde estaba.
+ * que se toca.
+ *
+ * Ronda de ajustes visuales #2 — punto E (fix): antes solo se podía
+ * expandir, sin forma de volver atrás — agrega un segundo botón "Ocultar
+ * días anteriores" (solo visible una vez que ya se expandió algo) que
+ * colapsa de nuevo a 0. Ambos botones comparten ajustarDiasAtrasTodo(), que
+ * hace el mismo ajuste de scroll en los 2 sentidos (agrandar arriba corre
+ * todo hacia abajo, achicar arriba lo corre hacia arriba — misma resta,
+ * signo distinto).
  */
-function construirSubheaderTodo(dias) {
-  const wrap = document.createElement("section");
-  wrap.className = "glass-panel";
-  wrap.style.cssText = "padding:10px 14px; text-align:center;";
+function ajustarDiasAtrasTodo(nuevoValor) {
+  const cont = document.getElementById("agenda-lista-dias");
+  const scrollEl = document.scrollingElement || document.documentElement;
+  const scrollAntes = scrollEl.scrollTop;
+  const altoAntes = cont?.scrollHeight || 0;
 
-  const boton = document.createElement("button");
-  boton.type = "button";
-  boton.className = "btn-discreto";
-  boton.style.fontSize = "0.8rem";
-  boton.textContent = "‹ Ver días anteriores";
-  boton.addEventListener("click", () => {
-    const cont = document.getElementById("agenda-lista-dias");
-    const scrollEl = document.scrollingElement || document.documentElement;
-    const scrollAntes = scrollEl.scrollTop;
-    const altoAntes = cont?.scrollHeight || 0;
+  estado.agendaTodoDiasAtras = Math.max(0, nuevoValor);
+  renderizarAgendaInterno();
 
-    estado.agendaTodoDiasAtras += 7;
-    renderizarAgendaInterno();
-
-    // El nuevo contenido se agrega ARRIBA de lo que ya estaba, así que sin
-    // esto el navegador mantiene el mismo scrollTop en píxeles y todo lo
-    // que la persona tenía a la vista se corre hacia abajo — se compensa
-    // sumando exactamente lo que creció el contenedor por encima.
-    requestAnimationFrame(() => {
-      const altoDespues = cont?.scrollHeight || 0;
-      scrollEl.scrollTop = scrollAntes + (altoDespues - altoAntes);
-    });
+  // El contenido nuevo/quitado se agrega o saca por ARRIBA de lo que ya
+  // estaba, así que sin esto el navegador mantiene el mismo scrollTop en
+  // píxeles y todo lo que la persona tenía a la vista se corre — se
+  // compensa sumando exactamente lo que cambió el contenedor por encima
+  // (positivo al expandir, negativo al colapsar).
+  requestAnimationFrame(() => {
+    const altoDespues = cont?.scrollHeight || 0;
+    scrollEl.scrollTop = scrollAntes + (altoDespues - altoAntes);
   });
+}
 
-  wrap.appendChild(boton);
+function construirSubheaderTodo() {
+  const wrap = document.createElement("div");
+  wrap.className = "row";
+  wrap.style.cssText = "justify-content:center; flex-wrap:wrap; gap:6px 16px;";
+
+  const botonMas = document.createElement("button");
+  botonMas.type = "button";
+  botonMas.className = "btn-discreto";
+  botonMas.style.fontSize = "0.8rem";
+  botonMas.textContent = "‹ Ver días anteriores";
+  botonMas.addEventListener("click", () => ajustarDiasAtrasTodo(estado.agendaTodoDiasAtras + 7));
+  wrap.appendChild(botonMas);
+
+  if (estado.agendaTodoDiasAtras > 0) {
+    const botonOcultar = document.createElement("button");
+    botonOcultar.type = "button";
+    botonOcultar.className = "btn-discreto";
+    botonOcultar.style.fontSize = "0.8rem";
+    botonOcultar.textContent = "› Ocultar días anteriores";
+    botonOcultar.addEventListener("click", () => ajustarDiasAtrasTodo(0));
+    wrap.appendChild(botonOcultar);
+  }
+
   return wrap;
 }
 
 function renderizarAgendaInterno() {
   const cont = document.getElementById("agenda-lista-dias");
+  const subCont = document.getElementById("agenda-subheader-dinamico");
   if (!cont) return;
   limpiarIntervalosVenceHoy();
   cont.innerHTML = "";
+  if (subCont) subCont.innerHTML = "";
 
   const cfg = estado.datos.configuracion;
   const mostrarDiasVacios = cfg.agenda_mostrar_dias_vacios !== false; // default: sí
@@ -453,7 +572,15 @@ function renderizarAgendaInterno() {
   const dias = modoTodo
     ? obtenerRangoDiasAgendaTodo(semestreActivo, estado.agendaTodoDiasAtras)
     : obtenerDiasSemanaAgenda(estado.agendaOffsetSemana);
-  cont.appendChild(modoTodo ? construirSubheaderTodo(dias) : construirSubheaderLista(dias));
+
+  if (subCont) {
+    if (modoTodo) {
+      subCont.appendChild(construirSubheaderTodo());
+      subCont.appendChild(construirEnlaceHoyAgenda());
+    } else {
+      subCont.appendChild(construirSubheaderSemanal(dias, semestreActivo));
+    }
+  }
 
   if (modoTodo) {
     const bloques = dias.map((dia) => construirBloqueDia(dia, semestreActivo, mostrarDiasVacios)).filter(Boolean);
@@ -503,8 +630,37 @@ function renderizarAgenda() {
   document.querySelectorAll("#pills-agenda-vista .pill-item").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.vista === estado.agendaVistaActiva);
   });
-  if (esLista) renderizarAgendaInterno();
-  else renderizarCalendarioAgenda();
+  if (esLista) {
+    renderizarAgendaInterno();
+  } else {
+    // Vista Calendario: arma su propia navegación de mes/semana adentro de
+    // #agenda-vista-calendario (agenda-calendario.js) — acá el bloque
+    // dinámico del header solo necesita el atajo "Hoy", compartido entre
+    // los 3 modos (ver irAHoyAgenda).
+    const subCont = document.getElementById("agenda-subheader-dinamico");
+    if (subCont) {
+      subCont.innerHTML = "";
+      subCont.appendChild(construirEnlaceHoyAgenda());
+    }
+    renderizarCalendarioAgenda();
+  }
+}
+
+/**
+ * Ronda de ajustes visuales #2 — punto C: wiring del selector de semestre
+ * — tocar el nombre abre/cierra el popover (alternarPopoverSemestreAgenda),
+ * y un click en cualquier otro lado del documento lo cierra (mismo patrón
+ * que el resto de popovers del proyecto, ej. #perfil-popover).
+ */
+function inicializarSelectorSemestreAgenda() {
+  document.getElementById("agenda-nombre-semestre")?.addEventListener("click", alternarPopoverSemestreAgenda);
+  document.addEventListener("click", (ev) => {
+    const pop = document.getElementById("agenda-semestre-popover");
+    if (!pop || pop.classList.contains("oculto")) return;
+    const btn = document.getElementById("agenda-nombre-semestre");
+    if (pop.contains(ev.target) || btn?.contains(ev.target)) return;
+    cerrarPopoverSemestreAgenda();
+  });
 }
 
 function inicializarAgenda() {
@@ -512,25 +668,6 @@ function inicializarAgenda() {
 
   document.getElementById("btn-agenda-agregar")?.addEventListener("click", () => {
     abrirModalEventoAgenda({ fechaDefault: new Date().toISOString().slice(0, 10) });
-  });
-  document.getElementById("agenda-fecha-hoy")?.addEventListener("click", () => {
-    // Punto 7: siempre lleva a HOY, sin importar en qué vista/semana esté
-    // parada la persona — si hace falta, cambia a Lista y resetea el
-    // offset de semana antes de buscar el bloque a resaltar (mismo motivo
-    // por el que desplazarYResaltarElemento reintenta con
-    // requestAnimationFrame: el bloque puede no existir todavía en el DOM
-    // en el mismo tick que se dispara este click).
-    let necesitaRerender = false;
-    if (estado.agendaVistaActiva !== "lista") {
-      estado.agendaVistaActiva = "lista";
-      necesitaRerender = true;
-    }
-    if (estado.agendaOffsetSemana !== 0) {
-      estado.agendaOffsetSemana = 0;
-      necesitaRerender = true;
-    }
-    if (necesitaRerender) renderizarAgenda();
-    desplazarYResaltarElemento(`#agenda-lista-dias [data-fecha="${formatearFechaISO(new Date())}"]`);
   });
 
   document.querySelectorAll("#pills-agenda-vista .pill-item").forEach((btn) => {
@@ -540,6 +677,7 @@ function inicializarAgenda() {
     });
   });
 
+  inicializarSelectorSemestreAgenda();
   inicializarFiltrosAgenda();
 }
 
@@ -548,15 +686,21 @@ function inicializarAgenda() {
  * engranaje-a-Ajustes-global / Filtros) quedan en 2 — Agregar y un único
  * engranaje (#btn-agenda-ajustes) que abre ESTA ventana combinada. Junta
  * los 2 controles de SESIÓN que ya vivían en el viejo modal de Filtros
- * ("Mostrar: Semanal/Todo" y "Mostrar materias en la agenda") con los 2
- * controles PERSISTENTES que antes vivían sueltos en Ajustes → Agenda
- * ("Mostrar clases ese día" y "Mostrar días sin eventos ni tareas",
- * `configuracion.agenda_mostrar_clases`/`agenda_mostrar_dias_vacios` — ver
- * también agenda-clases.js y renderizarAgendaInterno más arriba). Esa
- * sección de Ajustes global ya NO existe — este modal, accesible solo
- * desde acá, es el único lugar donde se tocan estos 4 ajustes.
+ * ("Mostrar: Semanal/Todo" y "Mostrar materias en la agenda") con el
+ * control PERSISTENTE que antes vivía suelto en Ajustes → Agenda
+ * ("Mostrar días sin eventos ni tareas",
+ * `configuracion.agenda_mostrar_dias_vacios` — ver renderizarAgendaInterno
+ * más arriba). Esa sección de Ajustes global ya NO existe — este modal,
+ * accesible solo desde acá, es el único lugar donde se toca.
  *
- * Los 4 controles aplican al toque (sin botón "Aplicar" separado) y
+ * Ronda de ajustes visuales #2 — punto D: el otro control persistente que
+ * vivía acá ("Mostrar clases ese día", `agenda_mostrar_clases`) se quitó
+ * por completo — pedido explícito, no tenía un propósito claro para la
+ * persona usuaria (en la práctica duplicaba lo que ya hace "Mostrar
+ * materias en la agenda"). El campo sigue en el schema por compatibilidad
+ * con datos viejos, pero ya no hay forma de tocarlo desde la UI.
+ *
+ * Los 3 controles aplican al toque (sin botón "Aplicar" separado) y
  * re-renderizan Agenda en el momento — el modal en sí se cierra con el
  * botón "✕" (auto-inyectado, ver inicializarBotonesCerrarModal en
  * componentes.js) o tocando el fondo.
@@ -571,11 +715,10 @@ function inicializarFiltrosAgenda() {
       btn.classList.toggle("active", btn.dataset.valor === estado.agendaFiltroModo);
     });
     document.getElementById("chk-agenda-filtro-materias").checked = estado.agendaFiltroMostrarMaterias;
-    // Los 2 persistentes se leen directo de configuracion cada vez que se
-    // abre (no de un estado de sesión propio) — son el mismo dato que
-    // antes vivía en Ajustes global, solo que ahora se edita desde acá.
+    // El persistente se lee directo de configuracion cada vez que se abre
+    // (no de un estado de sesión propio) — mismo dato que antes vivía en
+    // Ajustes global, solo que ahora se edita desde acá.
     const cfg = estado.datos.configuracion;
-    document.getElementById("chk-agenda-mostrar-clases").checked = cfg.agenda_mostrar_clases !== false;
     document.getElementById("chk-agenda-mostrar-dias-vacios").checked = cfg.agenda_mostrar_dias_vacios !== false;
     modal.classList.remove("oculto");
   });
@@ -605,17 +748,14 @@ function inicializarFiltrosAgenda() {
     renderizarAgenda();
   });
 
-  // Los 2 controles persistentes (antes en Ajustes → Agenda, ver
-  // config-ajustes.js): mismo criterio de "undefined = default sí" que
-  // tenían allá, mismo sellarTimestamp + marcarCambioPendiente que cualquier
-  // otro cambio de configuracion.
-  document.getElementById("chk-agenda-mostrar-clases")?.addEventListener("change", (ev) => {
-    estado.datos.configuracion.agenda_mostrar_clases = ev.target.checked;
-    sellarTimestamp(estado.datos.configuracion);
-    marcarCambioPendiente();
-    renderizarAgenda();
-  });
-
+  // Control persistente (antes en Ajustes → Agenda, ver config-ajustes.js):
+  // mismo criterio de "undefined = default sí" que tenía allá, mismo
+  // sellarTimestamp + marcarCambioPendiente que cualquier otro cambio de
+  // configuracion. Ronda de ajustes visuales #2 — punto D: el otro control
+  // persistente que vivía acá ("Mostrar clases ese día",
+  // agenda_mostrar_clases) se quitó — no tenía un propósito claro para la
+  // persona usuaria (duplicaba, en la práctica, lo que ya hace "Mostrar
+  // materias en la agenda" arriba).
   document.getElementById("chk-agenda-mostrar-dias-vacios")?.addEventListener("change", (ev) => {
     estado.datos.configuracion.agenda_mostrar_dias_vacios = ev.target.checked;
     sellarTimestamp(estado.datos.configuracion);
