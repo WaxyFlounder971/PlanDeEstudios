@@ -449,27 +449,11 @@ a { color: var(--accent-1); }
 .switch-tema .thumb { width: 20px; height: 20px; top: 3px; left: 3px; }
 .switch-tema input:checked + .track .thumb { transform: translateX(20px); }
 
-/* Ronda de ajustes visuales #5 — punto C: reveal de #fila-agenda-es-feriado
-   con el patrón CSS Grid `0fr -> 1fr` (ver comentario en index.html) en vez
-   de max-height a un valor fijo adivinado — la fila de afuera anima su
-   propia fila de grid entre "0fr" (colapsada) y "1fr" (altura real del
-   contenido, la que sea), y el div interno recorta con overflow:hidden
-   mientras se anima. Como nunca hay un número de px de por medio, no hay
-   forma de que el contenido termine más alto que el límite: el límite ES
-   el contenido. */
-.reveal-feriado {
-  display: grid;
-  grid-template-rows: 0fr;
-  opacity: 0;
-  pointer-events: none;
-  transition: grid-template-rows 0.22s ease, opacity 0.16s ease;
-}
-.reveal-feriado.visible {
-  grid-template-rows: 1fr;
-  opacity: 1;
-  pointer-events: auto;
-}
-.reveal-feriado-inner { overflow: hidden; min-height: 0; }
+/* Ronda de ajustes visuales #6 — foco 100% en que "Es feriado" no se
+   corte NUNCA (ver comentario largo en index.html): se elimina toda
+   animación de tamaño para esta fila. Ya no hay reglas acá — el toggle es
+   un simple display:none <-> flex vía la clase global .oculto, que no
+   puede "cortarse" a media transición porque no hay transición. */
 
 /* ---- Checkbox custom ---- */
 .checkbox { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
