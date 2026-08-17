@@ -168,49 +168,57 @@ a { color: var(--accent-1); }
 .agenda-btn-ajustes:active { transform: scale(0.94); }
 .agenda-btn-ajustes:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
 
-/* Ronda de ajustes visuales #2 — punto C: popover del selector de semestre
-   de Agenda, mismo patrón posicional que .perfil-popover (absoluto, colgado
-   del contenedor con position:relative, oculto con .oculto). Se ancla
-   arriba-izquierda (no centrado) porque el botón que lo abre
-   (#agenda-nombre-semestre) vive pegado a la izquierda del header. */
-.agenda-semestre-popover {
-  position: absolute;
-  top: 100%;
-  left: 10px;
-  right: 10px;
-  margin-top: 4px;
-  padding: 8px;
-  gap: 2px;
-  z-index: 60;
-  max-height: 260px;
-  overflow-y: auto;
-  /* Ronda de ajustes visuales #7: .glass-panel (de donde viene por defecto
-     el fondo de este popover) usa --bg-panel, que es casi transparente a
-     propósito (pensado para paneles fijos sobre un fondo estático). Acá
-     encima flota sobre contenido que se mueve/scrollea (las tarjetas de
-     día), así que ese nivel de transparencia dejaba el texto de las
-     opciones mezclado con el texto de atrás. --bg-header-solido es la
-     versión opaca de la misma paleta por tema (ya la usa la topbar móvil
-     para el mismo problema) — mantiene el mismo tono/estética, solo que
-     sólido. */
-  background: var(--bg-header-solido);
-}
-.agenda-semestre-popover-item {
-  display: block;
+/* Idea "varios semestres a la vez" — tarjetas seleccionables del modal
+   #modal-agenda-semestres (reemplaza al popover de lista simple que había
+   antes, ver .agenda-semestre-popover-item, ya retirado): cada tarjeta
+   actúa como botón toggle — puede haber VARIAS marcadas a la vez. Mismo
+   lenguaje visual que .glass-panel de base, con el estado "seleccionada"
+   resaltado con el color de acento (mismo criterio que .pill-item.active),
+   más un check circular a la izquierda que se rellena al activarse. */
+.agenda-semestre-tarjeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   text-align: left;
-  background: none;
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 9px 10px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
   color: var(--text-primary);
-  font-size: 0.85rem;
+  font-family: var(--font-body);
   cursor: pointer;
-  transition: background var(--transition-fast);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
-.agenda-semestre-popover-item:hover { background: rgba(255, 255, 255, 0.08); }
-[data-mode="light"] .agenda-semestre-popover-item:hover { background: rgba(0, 0, 0, 0.06); }
-.agenda-semestre-popover-item.active { color: var(--accent-2); font-weight: 700; }
+.agenda-semestre-tarjeta:hover { border-color: var(--accent-1-40, var(--accent-1)); }
+.agenda-semestre-tarjeta:active { transform: scale(0.99); }
+.agenda-semestre-tarjeta:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.agenda-semestre-tarjeta-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--border-glass);
+  color: transparent;
+  font-size: 0.72rem;
+  font-weight: 700;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+.agenda-semestre-tarjeta.active {
+  border-color: var(--accent-1);
+  background: var(--accent-1-10);
+}
+.agenda-semestre-tarjeta.active .agenda-semestre-tarjeta-check {
+  background: var(--accent-1);
+  border-color: var(--accent-1);
+  color: var(--on-accent);
+}
 
 /* ---- v2.8.9: botón de texto "discreto" — mismo texto que un .btn normal
    pero sin caja ni fondo propio, para acciones secundarias que no deberían
@@ -595,8 +603,8 @@ a { color: var(--accent-1); }
   list-style: none;
   max-height: 260px;
   overflow-y: auto;
-  /* Ronda de ajustes visuales #7: mismo motivo que .agenda-semestre-popover
-     acá arriba — --bg-panel es casi transparente por diseño, y este
+  /* Ronda de ajustes visuales #7: --bg-panel es casi transparente por
+     diseño, y este
      dropdown flota sobre contenido detrás (el resto del modal/la lista de
      materias) que se leía mezclado con las opciones. --bg-header-solido
      mantiene el mismo tono por tema pero opaco. */
