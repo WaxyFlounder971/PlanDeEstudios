@@ -201,27 +201,12 @@
           </div>
         </section>
 
-        <section class="glass-card stack ajuste-seccion colapsada" id="ajuste-seccion-agenda">
-          <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Agenda</h2><span class="ajuste-seccion-chevron">▾</span></button>
-          <div class="ajuste-seccion-cuerpo">
-
-          <div class="row-between">
-            <span>Mostrar días sin eventos ni tareas</span>
-            <label class="switch switch-tema">
-              <input type="checkbox" id="switch-agenda-mostrar-dias-vacios">
-              <span class="track"><span class="thumb"></span></span>
-            </label>
-          </div>
-
-          <div class="row-between">
-            <span>Mostrar clases ese día en Agenda</span>
-            <label class="switch switch-tema">
-              <input type="checkbox" id="switch-agenda-mostrar-clases">
-              <span class="track"><span class="thumb"></span></span>
-            </label>
-          </div>
-          </div>
-        </section>
+        <!-- Ronda de ajustes visuales — punto 3: la sección "Agenda" que vivía
+             acá (mostrar días sin eventos ni tareas / mostrar clases ese día)
+             se sacó de Ajustes global — ahora vive únicamente en el modal de
+             Ajustes de Agenda (#modal-agenda-ajustes), accesible solo desde
+             el engranaje del header de Agenda. Ver agenda.js
+             (inicializarFiltrosAgenda) y config-ajustes.js. -->
 
         <section class="glass-card stack ajuste-seccion colapsada">
           <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Horario</h2><span class="ajuste-seccion-chevron">▾</span></button>
@@ -336,10 +321,7 @@
           </div>
           <div class="row-between">
             <button type="button" class="btn btn-primary" id="btn-agenda-agregar" style="padding:8px 14px; font-size:0.85rem;">+ Agregar</button>
-            <div class="row" style="gap:6px; align-items:center;">
-              <button type="button" class="btn-discreto" id="btn-agenda-filtros" style="font-size:0.8rem;">🔽 Filtros</button>
-              <button type="button" class="btn-icono-fantasma" id="btn-agenda-ir-ajustes" title="Ajustes de Agenda" style="font-size:1.3rem;">⚙️</button>
-            </div>
+            <button type="button" class="agenda-btn-ajustes" id="btn-agenda-ajustes" title="Ajustes de Agenda">⚙️</button>
           </div>
         </section>
 
@@ -854,9 +836,16 @@
 <!-- Rediseño núcleo Agenda — punto 10: Filtros de sesión (Semanal/Todo,
      Mostrar materias). Ambos controles aplican al toque, sin botón
      "Aplicar" separado — ver inicializarFiltrosAgenda en agenda.js. -->
-<div id="modal-agenda-filtros" class="modal-overlay oculto">
+<!-- Ronda de ajustes visuales — punto 3: único modal de ajustes de Agenda,
+     accesible solo desde el engranaje del header (#btn-agenda-ajustes).
+     Combina los 2 controles de SESIÓN que antes vivían acá (modo Semanal/
+     Todo, mostrar materias) con los 2 controles PERSISTENTES que antes
+     vivían sueltos en Ajustes → Agenda (mostrar clases ese día, mostrar
+     días sin eventos ni tareas) — esa sección ya no existe en Ajustes
+     global, ver config-ajustes.js. -->
+<div id="modal-agenda-ajustes" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
-    <h2 style="margin:0;">Filtros de Agenda</h2>
+    <h2 style="margin:0;">Ajustes de Agenda</h2>
 
     <div>
       <span class="form-label">Mostrar</span>
@@ -871,6 +860,22 @@
       <span>Mostrar materias en la agenda</span>
       <label class="switch switch-tema">
         <input type="checkbox" id="chk-agenda-filtro-materias">
+        <span class="track"><span class="thumb"></span></span>
+      </label>
+    </div>
+
+    <div class="row-between">
+      <span>Mostrar clases ese día</span>
+      <label class="switch switch-tema">
+        <input type="checkbox" id="chk-agenda-mostrar-clases">
+        <span class="track"><span class="thumb"></span></span>
+      </label>
+    </div>
+
+    <div class="row-between">
+      <span>Mostrar días sin eventos ni tareas</span>
+      <label class="switch switch-tema">
+        <input type="checkbox" id="chk-agenda-mostrar-dias-vacios">
         <span class="track"><span class="thumb"></span></span>
       </label>
     </div>
