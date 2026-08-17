@@ -773,33 +773,41 @@ async function copiarNombreProfesorConAviso(nombreProfesor) {
 }
 
 /**
- * Doble click (desktop) / doble tap (mobile) para copiar `texto`, SIN
- * pisar ningún click simple que el elemento ya tenga (acá: el nombre del
- * profesor vive dentro de `encabezado`, cuyo click togglea expandir/
- * colapsar la tarjeta — ver construirTarjetaProfesor).
+ * Doble click (desktop) / doble tap (mobile) para copiar `texto`, sin que
+ * el despliegue/colapso de la tarjeta (que antes vivía en el click del
+ * `encabezado`, disparado por bubbling desde `nombre`) se dispare NI UNA
+ * VEZ durante el gesto — antes el primer click de cada par todavía
+ * burbujeaba normal y togleaba la tarjeta antes de saberse si venía un
+ * segundo click; un doble click sobre una tarjeta colapsada terminaba
+ * desplegándola igual, que es justo lo que se pidió evitar.
+ *
+ * Por eso este helper YA NO deja que nada burbujee (siempre
+ * stopPropagation) y en cambio recibe `alClickSimple` para ejecutar él
+ * mismo la acción de tap simple — con el patrón clásico de espera: el
+ * primer click NO actúa al toque, se arma un timer del umbral por si
+ * llega un segundo click antes; si no llega ninguno, recién ahí se corre
+ * `alClickSimple` (togglear). Si llega un segundo click a tiempo, se
+ * cancela ese timer (el toggle nunca llega a correr) y se copia.
  *
  * A propósito NO usa el evento "dblclick" nativo: en mobile un doble tap
  * dispara dos "click" (uno por tap), pero "dblclick" no es confiable entre
- * navegadores táctiles — este patrón de timestamp sobre el propio "click"
- * cubre mouse y touch por igual, mismo espíritu que adjuntarPressLargo más
- * arriba (que tampoco depende de eventos nativos de gesto).
- *
- * El PRIMER click de cada par siempre se deja burbujear normal — ahí sigue
- * viviendo el comportamiento existente (togglear la tarjeta). Solo el
- * SEGUNDO click, si llegó dentro del umbral, se intercepta con
- * stopPropagation (evita un segundo toggle de más) y dispara la copia.
+ * navegadores táctiles — este patrón cubre mouse y touch por igual, mismo
+ * espíritu que adjuntarPressLargo más arriba.
  */
-function adjuntarDobleClickCopiar(el, obtenerTexto, umbralMs = 350) {
-  let ultimoClick = 0;
+function adjuntarDobleClickCopiar(el, obtenerTexto, alClickSimple, umbralMs = 350) {
+  let temporizador = null;
   el.addEventListener("click", (e) => {
-    const ahora = Date.now();
-    if (ahora - ultimoClick < umbralMs) {
-      e.stopPropagation();
-      ultimoClick = 0;
+    e.stopPropagation();
+    if (temporizador) {
+      clearTimeout(temporizador);
+      temporizador = null;
       copiarNombreProfesorConAviso(obtenerTexto());
       return;
     }
-    ultimoClick = ahora;
+    temporizador = setTimeout(() => {
+      temporizador = null;
+      if (typeof alClickSimple === "function") alClickSimple();
+    }, umbralMs);
   });
 }
 
@@ -966,7 +974,11 @@ function construirTarjetaProfesor(profesor, datos) {
   nombre.style.cssText = "min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
   nombre.textContent = profesor.nombre;
   nombre.title = "Doble click / doble tap para copiar el nombre";
-  adjuntarDobleClickCopiar(nombre, () => profesor.nombre);
+  adjuntarDobleClickCopiar(nombre, () => profesor.nombre, () => {
+    if (expandido) estado.profesoresExpandidos.delete(profesor.id);
+    else estado.profesoresExpandidos.add(profesor.id);
+    renderizarComunidad();
+  });
   encabezado.appendChild(nombre);
 
   const estrellas = construirEstrellasLectura(profesor.calificacion);
