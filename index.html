@@ -309,19 +309,26 @@
       <!-- ===================== SECCIÓN: Agenda (placeholder, feature futura) ===================== -->
       <!-- ===================== SECCIÓN: Agenda ===================== -->
       <!-- Contenido construido dinámicamente por js/agenda/agenda.js.
-           Header con selector Lista/Calendario + navegación semanal, lista
-           cronológica de días (tarjetita "Mostrar clases" + eventos/tareas/
-           exámenes agrupados), y modal de alta/edición (más abajo, junto al
-           resto de modales fijos del HTML). -->
+           Header con Semestre/semana/día actual, selector Lista/Calendario +
+           navegación semanal, lista cronológica de días (materias inline +
+           eventos/tareas/exámenes agrupados, días pasados colapsados), y
+           modal de alta/edición (más abajo, junto al resto de modales fijos
+           del HTML). -->
       <div id="seccion-agenda" class="stack oculto">
         <section class="glass-panel stack" id="agenda-header" style="padding:12px 14px;">
+          <div class="stack" style="align-items:center; text-align:center; gap:2px;">
+            <span class="muted" id="agenda-nombre-semestre" style="font-size:0.82rem;"></span>
+            <span id="agenda-semana-actual" class="texto-encabezado-seccion"></span>
+            <span class="muted" id="agenda-fecha-hoy" style="font-size:0.72rem; text-decoration:underline; cursor:pointer;" title="Ir a hoy"></span>
+          </div>
+
           <div class="pill-group" id="pills-agenda-vista">
             <button type="button" class="pill-item active" data-vista="lista">Lista</button>
             <button type="button" class="pill-item" data-vista="calendario">Calendario</button>
           </div>
           <div class="row-between">
             <button type="button" class="btn btn-primary" id="btn-agenda-agregar" style="padding:8px 14px; font-size:0.85rem;">+ Agregar</button>
-            <button type="button" class="btn-discreto" id="btn-agenda-ir-ajustes" style="font-size:0.8rem;">⚙️ Ajustes de Agenda</button>
+            <button type="button" class="btn-icono-fantasma" id="btn-agenda-ir-ajustes" title="Ajustes de Agenda" style="font-size:1.3rem;">⚙️</button>
           </div>
         </section>
 
@@ -953,5 +960,13 @@
 </style>
 
 <script type="module" src="js/main.js"></script>
+<!-- Ícono dinámico de la PWA: genera un fondo glassmorphism con los colores
+     de la paleta activa y lo aplica al manifest (Android) y al
+     apple-touch-icon (iOS) — ver js/pwa/icono-dinamico.js. Separado de
+     main.js a propósito para no tocar ese archivo en esta iteración. -->
+<script type="module">
+  import { inicializarIconoDinamico } from "./js/pwa/icono-dinamico.js";
+  inicializarIconoDinamico();
+</script>
 </body>
 </html>
