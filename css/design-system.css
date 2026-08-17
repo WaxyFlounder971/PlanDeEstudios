@@ -184,6 +184,16 @@ a { color: var(--accent-1); }
   z-index: 60;
   max-height: 260px;
   overflow-y: auto;
+  /* Ronda de ajustes visuales #7: .glass-panel (de donde viene por defecto
+     el fondo de este popover) usa --bg-panel, que es casi transparente a
+     propósito (pensado para paneles fijos sobre un fondo estático). Acá
+     encima flota sobre contenido que se mueve/scrollea (las tarjetas de
+     día), así que ese nivel de transparencia dejaba el texto de las
+     opciones mezclado con el texto de atrás. --bg-header-solido es la
+     versión opaca de la misma paleta por tema (ya la usa la topbar móvil
+     para el mismo problema) — mantiene el mismo tono/estética, solo que
+     sólido. */
+  background: var(--bg-header-solido);
 }
 .agenda-semestre-popover-item {
   display: block;
@@ -585,7 +595,12 @@ a { color: var(--accent-1); }
   list-style: none;
   max-height: 260px;
   overflow-y: auto;
-  background: var(--bg-panel);
+  /* Ronda de ajustes visuales #7: mismo motivo que .agenda-semestre-popover
+     acá arriba — --bg-panel es casi transparente por diseño, y este
+     dropdown flota sobre contenido detrás (el resto del modal/la lista de
+     materias) que se leía mezclado con las opciones. --bg-header-solido
+     mantiene el mismo tono por tema pero opaco. */
+  background: var(--bg-header-solido);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid var(--border-glass, rgba(255,255,255,0.12));
