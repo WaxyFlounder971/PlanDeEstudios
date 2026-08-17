@@ -10,20 +10,34 @@ import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { fechaLocalDesdeISO, obtenerPlanPorId } from "../horario/horario.js";
-import { obtenerSemestresActuales, obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
+import { buscarSemestreVivoPorId, obtenerSemestresActuales, obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
 
 /**
  * Agenda — Núcleo: "semestre activo" para Agenda es un concepto propio,
  * DISTINTO del semestre que Horario esté navegando en un momento dado
  * (estado.horarioSemestreId, que el usuario puede cambiar a mano con las
  * flechas ‹ › sin que eso implique nada sobre cuál es su semestre real
- * ahora mismo). Acá siempre es el semestre "actual" más reciente (mismo
+ * ahora mismo). Por default es el semestre "actual" más reciente (mismo
  * criterio de fecha que usa obtenerEstadoEfectivoSemestre en schema.js); si
  * no hay ninguno marcado como actual, cae al más reciente que exista en
  * general, para que el formulario de alta nunca se quede sin materias que
  * ofrecer si el usuario todavía no le puso fecha a nada.
+ *
+ * Ronda de ajustes visuales #2/#3 — fix: si la persona eligió a mano otro
+ * semestre en el popover del header (estado.agendaSemestreSeleccionadoId,
+ * ver alternarPopoverSemestreAgenda en agenda.js), ESE es el que manda acá
+ * — antes esta función lo ignoraba por completo, así que el selector solo
+ * cambiaba lo que se veía arriba en el nombre pero la lista de días, el
+ * filtrado de eventos, las materias inline y el selector "vincular a
+ * materia" del modal seguían mostrando el semestre real actual. Se valida
+ * con buscarSemestreVivoPorId (no basta con el id solo) por si ese
+ * semestre se borró mientras estaba seleccionado.
  */
 function obtenerSemestreActivoAgenda() {
+  if (estado.agendaSemestreSeleccionadoId) {
+    const seleccionado = buscarSemestreVivoPorId(estado.agendaSemestreSeleccionadoId);
+    if (seleccionado) return seleccionado;
+  }
   const actuales = obtenerSemestresActuales();
   if (actuales.length > 0) return actuales[0];
   const cronologico = obtenerSemestresOrdenCronologico();

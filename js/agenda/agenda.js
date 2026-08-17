@@ -366,14 +366,25 @@ function construirSubheaderSemanal(dias, semestreActivo) {
   filaSemana.appendChild(etiquetaSemana);
   filaSemana.appendChild(btnSiguiente);
 
+  // Ronda de ajustes visuales #3: rango de fechas y "Hoy" ahora comparten
+  // una sola línea (antes eran 2 líneas sueltas) para que el bloque
+  // central completo (esta fila + filaSemana arriba) quepa en las 2 líneas
+  // que le corresponden dentro del header de 3 líneas — ver #agenda-header
+  // en index.html.
+  const filaRango = document.createElement("div");
+  filaRango.className = "row";
+  filaRango.style.cssText = "align-items:baseline; justify-content:center; gap:8px;";
+
   const rango = document.createElement("span");
   rango.className = "muted";
   rango.style.fontSize = "0.78rem";
   rango.textContent = formatearRangoSemanaAgenda(dias);
 
+  filaRango.appendChild(rango);
+  filaRango.appendChild(construirEnlaceHoyAgenda());
+
   frag.appendChild(filaSemana);
-  frag.appendChild(rango);
-  frag.appendChild(construirEnlaceHoyAgenda());
+  frag.appendChild(filaRango);
   return frag;
 }
 

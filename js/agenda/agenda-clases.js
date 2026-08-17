@@ -10,11 +10,11 @@
 
 import { obtenerClasesEfectivasSemana } from "../core/schema.js";
 import { estado } from "../core/storage.js";
-import { aplicarFormatoTexto } from "../core/utils.js";
 import {
   abrirTarjetaInfoBloque,
   obtenerColorBloque,
   obtenerEmojiModalidad,
+  obtenerEtiquetaModalidad,
   obtenerNombreBloque,
   obtenerNombreProfesor,
 } from "../horario/horario.js";
@@ -102,7 +102,7 @@ function construirFilaMateriaInline(clase, semestre, numeroSemanaReal) {
   fila.innerHTML = `
     <span style="font-weight:600; flex-shrink:0;">${formatearHoraAmPm(clase.hora_inicio)}</span>
     <span style="flex:1; text-align:left; overflow-wrap:break-word;">${enriquecida.nombreCorto}</span>
-    <span class="muted" style="font-size:0.72rem; flex-shrink:0; text-align:right;">${emoji ? `${emoji} ` : ""}${aplicarFormatoTexto(String(clase.modalidad || ""))}</span>
+    <span class="muted" style="font-size:0.72rem; flex-shrink:0; text-align:right;">${emoji ? `${emoji} ` : ""}${obtenerEtiquetaModalidad(clase.modalidad)}</span>
   `;
   fila.addEventListener("click", () => abrirTarjetaInfoBloque(semestre, numeroSemanaReal, enriquecida));
   return fila;

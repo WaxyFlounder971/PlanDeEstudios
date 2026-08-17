@@ -64,6 +64,16 @@ function actualizarPlaceholderNombre(tipo) {
  * otros 2 tipos, y se destildesa al ocultarse para que cambiar de tipo y
  * volver a "evento" nunca arrastre un feriado marcado por error mientras
  * estaba invisible.
+ *
+ * Ronda de ajustes visuales #3: al mostrarse (tipo "evento"), se fuerza un
+ * reflow del .modal-card contenedor y luego se hace scrollIntoView de la
+ * fila — en WebKit/iOS, un contenedor con overflow-y:auto no siempre
+ * recalcula su alto cuando un hijo pasa de display:none a visible en el
+ * mismo tick que otro cambio de estado (acá, el click en la pill
+ * "Evento"), y el contenido nuevo queda recortado hasta que algo más
+ * dispara un reflow. Esta es la implementación real de ese fix — antes
+ * solo existía como comentario/intención en design-system.css, sin código
+ * que efectivamente lo hiciera.
  */
 function actualizarVisibilidadFeriado(tipo) {
   const fila = document.getElementById("fila-agenda-es-feriado");
@@ -71,7 +81,20 @@ function actualizarVisibilidadFeriado(tipo) {
   if (!fila || !chk) return;
   const esEvento = tipo === "evento";
   fila.classList.toggle("oculto", !esEvento);
-  if (!esEvento) chk.checked = false;
+  if (!esEvento) {
+    chk.checked = false;
+    return;
+  }
+  const modalCard = fila.closest(".modal-card");
+  requestAnimationFrame(() => {
+    if (modalCard) {
+      // Forzar reflow: sacar y devolver del flujo obliga a recalcular.
+      modalCard.style.display = "none";
+      void modalCard.offsetHeight;
+      modalCard.style.display = "";
+    }
+    fila.scrollIntoView({ block: "nearest" });
+  });
 }
 
 function seleccionarPillTipo(tipo) {
