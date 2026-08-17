@@ -308,21 +308,44 @@
            modal de alta/edición (más abajo, junto al resto de modales fijos
            del HTML). -->
       <div id="seccion-agenda" class="stack oculto">
-        <section class="glass-panel stack" id="agenda-header" style="padding:12px 14px;">
-          <div class="stack" style="align-items:center; text-align:center; gap:2px;">
-            <span class="muted" id="agenda-nombre-semestre" style="font-size:0.82rem;"></span>
-            <span id="agenda-semana-actual" class="texto-encabezado-seccion"></span>
-            <span class="muted" id="agenda-fecha-hoy" style="font-size:0.72rem; text-decoration:underline; cursor:pointer;" title="Ir a hoy"></span>
+        <!-- Ronda de ajustes visuales #2 — punto A: Lista/Calendario sale del
+             panel de encabezado y pasa a ser el primer elemento de la
+             sección, arriba de todo (antes vivía adentro de #agenda-header,
+             compitiendo visualmente con el nombre del semestre). -->
+        <div class="pill-group" id="pills-agenda-vista">
+          <button type="button" class="pill-item active" data-vista="lista">Lista</button>
+          <button type="button" class="pill-item" data-vista="calendario">Calendario</button>
+        </div>
+
+        <!-- Ronda de ajustes visuales #2 — punto C: encabezado unificado.
+             Antes "Semestre / Semana N / Ir a hoy" vivía acá arriba (fijo) y
+             la navegación "‹ rango de fechas ›" vivía en un glass-panel
+             APARTE dentro de la lista (construirSubheaderLista, agenda.js) —
+             quedaban 2 paneles apilados con el mismo tipo de información
+             repartida entre los dos. Ahora es UN solo panel: fila superior
+             con el nombre del semestre (tocable — abre el selector de
+             semestre, ver #agenda-semestre-popover) + Agregar/Ajustes
+             compactos a la derecha (ahorra una fila completa de alto vs.
+             antes), y abajo #agenda-subheader-dinamico, que agenda.js llena
+             en cada render con "‹ Semana N ›" + rango de fechas + "Hoy"
+             (modo Semanal), el botón "Ver días anteriores" (modo Todo), o
+             se deja vacío (vista Calendario, que arma su propia navegación
+             en agenda-calendario.js). -->
+        <section class="glass-panel stack" id="agenda-header" style="padding:10px 14px; gap:8px; position:relative;">
+          <div class="row-between" style="gap:10px;">
+            <button type="button" id="agenda-nombre-semestre" class="btn-discreto" style="padding:4px 8px; font-size:0.85rem; font-weight:700; text-align:left;"></button>
+            <div class="row" style="gap:8px; flex-shrink:0;">
+              <button type="button" class="btn btn-primary" id="btn-agenda-agregar" style="padding:6px 12px; font-size:0.8rem;">+ Agregar</button>
+              <button type="button" class="agenda-btn-ajustes" id="btn-agenda-ajustes" title="Ajustes de Agenda">⚙️</button>
+            </div>
           </div>
 
-          <div class="pill-group" id="pills-agenda-vista">
-            <button type="button" class="pill-item active" data-vista="lista">Lista</button>
-            <button type="button" class="pill-item" data-vista="calendario">Calendario</button>
-          </div>
-          <div class="row-between">
-            <button type="button" class="btn btn-primary" id="btn-agenda-agregar" style="padding:8px 14px; font-size:0.85rem;">+ Agregar</button>
-            <button type="button" class="agenda-btn-ajustes" id="btn-agenda-ajustes" title="Ajustes de Agenda">⚙️</button>
-          </div>
+          <!-- Selector de semestre — popover posicionado bajo el nombre,
+               mismo patrón que #perfil-popover (glass-panel absoluto,
+               oculto por default, armado/poblado en JS al tocar el botón). -->
+          <div id="agenda-semestre-popover" class="glass-panel stack agenda-semestre-popover oculto"></div>
+
+          <div id="agenda-subheader-dinamico" class="stack" style="align-items:center; text-align:center; gap:2px;"></div>
         </section>
 
         <div id="agenda-lista-dias" class="stack"></div>
@@ -864,13 +887,12 @@
       </label>
     </div>
 
-    <div class="row-between">
-      <span>Mostrar clases ese día</span>
-      <label class="switch switch-tema">
-        <input type="checkbox" id="chk-agenda-mostrar-clases">
-        <span class="track"><span class="thumb"></span></span>
-      </label>
-    </div>
+    <!-- Ronda de ajustes visuales #2 — punto D: se quita "Mostrar clases ese
+         día" (agenda_mostrar_clases) — pedido explícito, no tenía un
+         propósito claro para la persona usuaria. El campo de configuracion
+         sigue existiendo en el schema (por compatibilidad con datos viejos)
+         pero ya no hay UI para tocarlo, así que efectivamente queda fijo en
+         su comportamiento default (mostrar) — ver agenda.js. -->
 
     <div class="row-between">
       <span>Mostrar días sin eventos ni tareas</span>
