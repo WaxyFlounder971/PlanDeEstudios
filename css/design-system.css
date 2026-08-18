@@ -2383,11 +2383,16 @@ img, svg { max-width: 100%; }
 .agenda-cal-celda:hover { background: rgba(255, 255, 255, 0.09); }
 [data-mode="light"] .agenda-cal-celda:hover { background: rgba(0, 0, 0, 0.06); }
 .agenda-cal-celda-hoy { border-color: var(--accent-1); }
+/* Ajustes vista Calendario — punto 4: celda del día actualmente desplegado
+   debajo del grid — mismo tratamiento (borde + fondo tenue) que usa
+   .agenda-semestre-tarjeta.active para "esto está seleccionado ahora
+   mismo". Puede convivir con .agenda-cal-celda-hoy (hoy Y seleccionada a la
+   vez): el fondo extra sigue distinguiéndola aunque el borde ya coincida. */
+.agenda-cal-celda-seleccionada { border-color: var(--accent-1); background: var(--accent-1-10); }
 .agenda-cal-celda-fuera-mes { opacity: 0.35; }
 .agenda-cal-numero { font-size: 0.8rem; font-weight: 600; }
 .agenda-cal-indicadores { display: flex; align-items: center; gap: 3px; margin-top: 4px; flex-wrap: wrap; justify-content: center; }
 .agenda-cal-punto { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
-.agenda-cal-clases-dot { font-size: 0.7rem; line-height: 1; }
 
 /* Submodo Semanal (celdas grandes, con nombres de eventos truncados) */
 .agenda-cal-grid-semanal .agenda-cal-celda {
