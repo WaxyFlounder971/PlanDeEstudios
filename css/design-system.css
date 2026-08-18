@@ -252,6 +252,19 @@ a { color: var(--accent-1); }
   overflow: visible;
   text-overflow: unset;
 }
+/* v1.9.10: lo anterior (overflow:visible en el botón) no alcanzaba —
+   el CORTE en realidad venía del contenedor .pill-group, que tiene
+   overflow-x:auto (para scrollear pills que no entran). Por spec de CSS,
+   si un eje no es "visible" el otro NUNCA puede quedar realmente visible:
+   el navegador fuerza el overflow-y del contenedor a "auto" también, y ESE
+   es el que seguía recortando con zoom >90%, aunque el botón de adentro ya
+   estuviera bien. Como este grupo es fijo (3 palabras cortas que siempre
+   entran, nunca necesita scroll horizontal), se le saca el overflow-x:auto
+   por completo — así ningún eje queda forzado a "auto" y no hay overflow
+   real en ningún lado que pueda recortar, sea cual sea el zoom. */
+.pill-group-fijo {
+  overflow: visible;
+}
 
 /* ---- Grupo de botones "pill" (selección exclusiva) ---- */
 .pill-group {
