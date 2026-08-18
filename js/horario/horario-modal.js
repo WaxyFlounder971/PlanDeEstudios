@@ -986,6 +986,13 @@ function guardarBloque(semestre, bloque, estadoForm) {
     marcarCambioPendiente();
     cerrarModalBloqueHorario();
     window.renderizarHorario?.();
+    // Bug modalidad → Agenda no actualiza: la Agenda deriva su vista de
+    // clases de estos mismos bloques (modalidad incluida), así que si
+    // queda montada en el DOM (aunque no sea la sección activa en este
+    // momento) se quedaba con datos viejos hasta que la persona salía y
+    // volvía a entrar manualmente a Agenda. Se refresca acá también, igual
+    // que ya se hace al cambiar de sección en main.js.
+    window.renderizarAgenda?.();
   };
 
   if (!bloque) {
