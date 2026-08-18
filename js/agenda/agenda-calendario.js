@@ -1,33 +1,51 @@
 /* =========================================================================
    AGENDA — Vista Calendario (mensual/semanal)
-   Grid de 7 columnas con un vistazo rápido de eventos/tareas/exámenes (y
-   si hay clases) por día. Tocar un día salta a la vista Lista, ya parada
-   en la semana correcta — reutiliza el render de Lista en vez de duplicar
-   el detalle del día acá también.
+   Grid de 7 columnas con puntitos de color (uno por tipo/estado de
+   pendiente presente ese día, misma paleta que Lista) por celda. Tocar un
+   día despliega/colapsa, debajo del grid, el detalle de ese día (Materias +
+   Tareas + Exámenes + Eventos) sin salir de la vista Calendario — ver
+   construirDetalleDia. El salto directo a Lista sigue existiendo, pero como
+   acción explícita ("Ver en Lista") dentro de ese detalle ya desplegado.
    ========================================================================= */
 
+import { fechaLocalDesdeISO } from "../horario/horario.js";
 import { estado } from "../core/storage.js";
 import { desplazarYResaltarElemento } from "../ui/componentes.js";
-import { contarClasesDelDia } from "./agenda-clases.js";
-import { renderizarAgenda } from "./agenda.js";
+import { calcularNumeroSemanaParaFecha, construirSeccionMateriasDia } from "./agenda-clases.js";
+import { construirItemEvento, ETIQUETA_TIPO, limpiarIntervalosVenceHoy, renderizarAgenda } from "./agenda.js";
 import {
   esHoyFecha,
   formatearFechaISO,
   obtenerCodigoDiaSemana,
   obtenerDiasSemanaAgenda,
   obtenerDiasSemanaOrdenAgenda,
+  obtenerEstiloEvento,
   obtenerInicioSemanaQueContiene,
+  obtenerNumeroDiaSemanaCanonico,
   obtenerOffsetSemanaParaFecha,
+  obtenerSemestreActivoAgenda,
   obtenerSemestresSeleccionadosAgenda,
 } from "./agenda-utils.js";
 
-const BADGE_TIPO_DOT = { evento: "#60a5fa", tarea: "#f59e0b", examen: "#ef4444" };
+// Ajustes vista Calendario — punto 4: orden de secciones del detalle de día,
+// distinto de ORDEN_TIPO en agenda.js (examen, tarea, evento) — acá el spec
+// pide explícitamente Materias -> Tareas -> Exámenes -> Eventos.
+const ORDEN_TIPO_DETALLE = ["tarea", "examen", "evento"];
 
 // Transitorio (no persistido). "semanal" comparte estado.agendaOffsetSemana
 // con la vista Lista a propósito: navegar la semana desde acá deja Lista ya
 // parada en la misma semana si el usuario cambia de pestaña.
 estado.agendaCalendarioModo = estado.agendaCalendarioModo || "mensual";
 estado.agendaCalendarioOffsetMes = estado.agendaCalendarioOffsetMes || 0;
+// Ajustes vista Calendario — punto 4: fecha (ISO) del día actualmente
+// desplegado debajo del grid, o `null` si no hay ninguno abierto. Sesión, no
+// persistido — mismo criterio que el resto de estos flags. Se resetea cada
+// vez que se navega a otro mes/semana, se cambia de modo (mensual/semanal) o
+// se vuelve a "Hoy" (ver construirSubheaderCalendario más abajo), porque un
+// día abierto deja de tener sentido una vez que ya no está a la vista en el
+// grid.
+estado.agendaCalendarioFechaSeleccionada =
+  estado.agendaCalendarioFechaSeleccionada !== undefined ? estado.agendaCalendarioFechaSeleccionada : null;
 
 function obtenerFechaBaseMes(offsetMeses) {
   const hoy = new Date();
@@ -47,23 +65,42 @@ function saltarADiaEnLista(fecha) {
 }
 
 /**
- * Resumen de una fecha: conteos por tipo + si hay clases ese día.
- * `semestresSeleccionados`: array (ver obtenerSemestresSeleccionadosAgenda
- * en agenda-utils.js) — los eventos de un día se filtran igual que en la
- * vista Lista (construirBloqueDia, agenda.js): sin semestre_id, o de
- * cualquiera de los seleccionados.
+ * Eventos (evento/tarea/examen) que caen en `fecha`, filtrados igual que en
+ * la vista Lista (construirBloqueDia, agenda.js): sin semestre_id, o de
+ * cualquiera de los `semestresSeleccionados`, ordenados por hora. Punto
+ * compartido entre resumenDia (puntitos + celda detallada) y
+ * construirDetalleDia (secciones del día abierto) — antes esta misma
+ * lógica de filtro estaba duplicada entre resumenDia y construirCelda.
+ */
+function obtenerEventosDelDia(fecha, semestresSeleccionados) {
+  const fechaISO = formatearFechaISO(fecha);
+  return (estado.datos.agenda || [])
+    .filter((ev) => ev.fecha === fechaISO)
+    .filter((ev) => !ev.semestre_id || semestresSeleccionados.some((s) => s.id === ev.semestre_id))
+    .sort((a, b) => String(a.hora || "99:99").localeCompare(String(b.hora || "99:99")));
+}
+
+/**
+ * Ajustes vista Calendario — punto 3: en vez de un conteo por `tipo` crudo
+ * (evento/tarea/examen), acá se resuelve el color de CADA evento vía
+ * obtenerEstiloEvento (agenda-utils.js) — la misma paleta de 5 colores que
+ * ya usa la vista Lista (amarillo=tarea pendiente, azul=tarea completada,
+ * rojo=examen, morado=evento, verde=feriado) — y se junta el set de colores
+ * DISTINTOS presentes ese día, uno por tipo/estado que tenga algo. Punto 2:
+ * ya no calcula "hay clases" (el indicador de libro se quitó del todo).
  */
 function resumenDia(fecha, semestresSeleccionados) {
-  const fechaISO = formatearFechaISO(fecha);
-  const eventos = (estado.datos.agenda || [])
-    .filter((ev) => ev.fecha === fechaISO)
-    .filter((ev) => !ev.semestre_id || semestresSeleccionados.some((s) => s.id === ev.semestre_id));
-  const conteoPorTipo = { evento: 0, tarea: 0, examen: 0 };
+  const eventos = obtenerEventosDelDia(fecha, semestresSeleccionados);
+  const coloresPresentes = [];
+  const vistos = new Set();
   eventos.forEach((ev) => {
-    if (conteoPorTipo[ev.tipo] !== undefined) conteoPorTipo[ev.tipo] += 1;
+    const color = obtenerEstiloEvento(ev).colorBorde;
+    if (!vistos.has(color)) {
+      vistos.add(color);
+      coloresPresentes.push(color);
+    }
   });
-  const tieneClases = contarClasesDelDia(semestresSeleccionados, fecha, obtenerCodigoDiaSemana(fecha)) > 0;
-  return { conteoPorTipo, total: eventos.length, tieneClases };
+  return { eventos, colores: coloresPresentes, total: eventos.length };
 }
 
 function construirCabeceraDiasSemana() {
@@ -80,44 +117,43 @@ function construirCabeceraDiasSemana() {
 
 /** `detallada`: true en semanal (celdas grandes, muestran nombres); false en mensual (solo puntos). */
 function construirCelda(fecha, { delMesActual, detallada, semestresSeleccionados }) {
-  const { conteoPorTipo, total, tieneClases } = resumenDia(fecha, semestresSeleccionados);
+  const { eventos, colores, total } = resumenDia(fecha, semestresSeleccionados);
   const hoy = esHoyFecha(fecha);
+  const fechaISO = formatearFechaISO(fecha);
+  const seleccionada = estado.agendaCalendarioFechaSeleccionada === fechaISO;
 
   const celda = document.createElement("button");
   celda.type = "button";
   celda.className =
-    "agenda-cal-celda" + (hoy ? " agenda-cal-celda-hoy" : "") + (delMesActual === false ? " agenda-cal-celda-fuera-mes" : "");
+    "agenda-cal-celda" +
+    (hoy ? " agenda-cal-celda-hoy" : "") +
+    (delMesActual === false ? " agenda-cal-celda-fuera-mes" : "") +
+    (seleccionada ? " agenda-cal-celda-seleccionada" : "");
 
-  const puntos = Object.entries(conteoPorTipo)
-    .filter(([, n]) => n > 0)
-    .map(([tipo]) => `<span class="agenda-cal-punto" style="background:${BADGE_TIPO_DOT[tipo]};"></span>`)
-    .join("");
+  // Ajustes vista Calendario — punto 3: un puntito por cada color/estado
+  // distinto presente ese día (paleta de obtenerEstiloEvento, ver
+  // resumenDia más arriba) — ya no navega a ningún lado por sí solo, es
+  // puramente informativo (el toque que navega/despliega es en toda la
+  // celda, ver el listener más abajo).
+  const puntos = colores.map((color) => `<span class="agenda-cal-punto" style="background:${color};"></span>`).join("");
 
   if (!detallada) {
     celda.innerHTML = `
       <span class="agenda-cal-numero">${fecha.getDate()}</span>
-      <span class="agenda-cal-indicadores">
-        ${puntos}
-        ${tieneClases ? `<span class="agenda-cal-clases-dot" title="Hay clases">📚</span>` : ""}
-      </span>
+      <span class="agenda-cal-indicadores">${puntos}</span>
     `;
   } else {
-    const eventosDelDia = (estado.datos.agenda || [])
-      .filter((ev) => ev.fecha === formatearFechaISO(fecha))
-      .filter((ev) => !ev.semestre_id || semestresSeleccionados.some((s) => s.id === ev.semestre_id))
-      .sort((a, b) => String(a.hora || "99:99").localeCompare(String(b.hora || "99:99")));
-    const nombresVisibles = eventosDelDia.slice(0, 3);
-    const restantes = eventosDelDia.length - nombresVisibles.length;
+    const nombresVisibles = eventos.slice(0, 3);
+    const restantes = eventos.length - nombresVisibles.length;
     celda.innerHTML = `
       <div class="row-between" style="width:100%;">
         <span class="agenda-cal-numero">${fecha.getDate()}</span>
-        ${tieneClases ? `<span title="Hay clases">📚</span>` : ""}
       </div>
       <div class="stack" style="gap:2px; width:100%; margin-top:4px;">
         ${nombresVisibles
           .map(
             (ev) =>
-              `<span class="agenda-cal-nombre-evento" style="border-left:3px solid ${BADGE_TIPO_DOT[ev.tipo] || "#94a3b8"};">${ev.nombre || "(sin nombre)"}</span>`
+              `<span class="agenda-cal-nombre-evento" style="border-left:3px solid ${obtenerEstiloEvento(ev).colorBorde};">${ev.nombre || "(sin nombre)"}</span>`
           )
           .join("")}
         ${restantes > 0 ? `<span class="muted" style="font-size:0.68rem;">+${restantes} más</span>` : ""}
@@ -126,8 +162,99 @@ function construirCelda(fecha, { delMesActual, detallada, semestresSeleccionados
   }
 
   celda.title = total > 0 ? `${total} pendiente${total === 1 ? "" : "s"}` : "";
-  celda.addEventListener("click", () => saltarADiaEnLista(fecha));
+  // Ajustes vista Calendario — punto 4: ya no salta a Lista al tocar una
+  // fecha — despliega/colapsa el detalle de ESE día debajo del grid, sin
+  // salir de la vista Calendario (ver alternarDetalleDia). El salto a Lista
+  // sigue existiendo, pero como acción explícita ("Ver en Lista") dentro del
+  // detalle ya desplegado — ver construirDetalleDia.
+  celda.addEventListener("click", () => alternarDetalleDia(fecha));
   return celda;
+}
+
+/**
+ * Ajustes vista Calendario — punto 4: toggle del día abierto — tocar la
+ * misma celda ya seleccionada lo cierra (vuelve a `null`); tocar otra celda
+ * cambia el detalle abierto a esa fecha nueva. Un solo día abierto a la vez.
+ */
+function alternarDetalleDia(fecha) {
+  const fechaISO = formatearFechaISO(fecha);
+  estado.agendaCalendarioFechaSeleccionada = estado.agendaCalendarioFechaSeleccionada === fechaISO ? null : fechaISO;
+  renderizarCalendarioAgenda();
+}
+
+/**
+ * Ajustes vista Calendario — punto 4: panel de detalle del día seleccionado,
+ * insertado debajo del grid (mensual o semanal, el que esté activo). Reusa
+ * construirSeccionMateriasDia (agenda-clases.js, misma sección "Materias"
+ * que la vista Lista, con el mismo filtro de "Mostrar materias en la
+ * agenda") y construirItemEvento (agenda.js, mismo componente/colores/
+ * estados — completada, vencida, vence-hoy con timer — que usa Lista), para
+ * no duplicar esa lógica ni arriesgar que quede desincronizada.
+ *
+ * Orden pedido por el spec: Materias -> Tareas -> Exámenes -> Eventos.
+ * "Semana X / Día X": X de semana viene del semestre de referencia
+ * (calcularNumeroSemanaParaFecha, mismo criterio que el header de Lista);
+ * "Día X" es el número de día CANÓNICO 1=lunes..7=domingo
+ * (obtenerNumeroDiaSemanaCanonico, agenda-utils.js), estable sin importar
+ * `dia_inicio_semana`.
+ */
+function construirDetalleDia(fecha, semestresSeleccionados, semestreReferencia) {
+  const panel = document.createElement("section");
+  panel.className = "glass-panel stack";
+  panel.style.padding = "14px";
+
+  const numeroSemana = semestreReferencia ? calcularNumeroSemanaParaFecha(semestreReferencia, fecha) : null;
+  const numeroDia = obtenerNumeroDiaSemanaCanonico(fecha);
+  const tituloSemanaDia = [numeroSemana ? `Semana ${numeroSemana}` : null, `Día ${numeroDia}`].filter(Boolean).join(" / ");
+  const fechaTexto = fecha.toLocaleDateString("es-CR", { weekday: "long", day: "numeric", month: "short" });
+
+  const header = document.createElement("div");
+  header.className = "row-between";
+  header.innerHTML = `
+    <div class="stack" style="gap:2px;">
+      <span style="font-weight:700;">${tituloSemanaDia}</span>
+      <span class="muted" style="font-size:0.8rem; text-transform:capitalize;">${fechaTexto}</span>
+    </div>
+  `;
+  const verEnLista = document.createElement("span");
+  verEnLista.className = "muted";
+  verEnLista.style.cssText = "font-size:0.74rem; text-decoration:underline; cursor:pointer; white-space:nowrap;";
+  verEnLista.textContent = "Ver en Lista";
+  verEnLista.addEventListener("click", () => saltarADiaEnLista(fecha));
+  header.appendChild(verEnLista);
+  panel.appendChild(header);
+
+  const diaCodigo = obtenerCodigoDiaSemana(fecha);
+  const seccionMaterias = construirSeccionMateriasDia(semestresSeleccionados, fecha, diaCodigo);
+  if (seccionMaterias) panel.appendChild(seccionMaterias);
+
+  const eventosDelDia = obtenerEventosDelDia(fecha, semestresSeleccionados);
+  let huboSeccionPendientes = false;
+  ORDEN_TIPO_DETALLE.forEach((tipo) => {
+    const delTipo = eventosDelDia.filter((ev) => ev.tipo === tipo);
+    if (delTipo.length === 0) return;
+    huboSeccionPendientes = true;
+    const grupo = document.createElement("div");
+    grupo.className = "stack";
+    grupo.style.gap = "6px";
+    const etiqueta = document.createElement("span");
+    etiqueta.className = "muted";
+    etiqueta.style.cssText = "font-size:0.7rem; text-transform:uppercase; letter-spacing:0.02em;";
+    etiqueta.textContent = ETIQUETA_TIPO[tipo];
+    grupo.appendChild(etiqueta);
+    delTipo.forEach((ev) => grupo.appendChild(construirItemEvento(ev)));
+    panel.appendChild(grupo);
+  });
+
+  if (!seccionMaterias && !huboSeccionPendientes) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.cssText = "font-size:0.8rem; margin:2px 0 0;";
+    vacio.textContent = "Sin pendientes.";
+    panel.appendChild(vacio);
+  }
+
+  return panel;
 }
 
 function construirGridMensual(semestresSeleccionados) {
@@ -198,6 +325,12 @@ function construirSubheaderCalendario() {
     btn.textContent = modo === "mensual" ? "Mensual" : "Semanal";
     btn.addEventListener("click", () => {
       estado.agendaCalendarioModo = modo;
+      // Ajustes vista Calendario — punto 4: cambiar de mensual a semanal (o
+      // viceversa) puede sacar de pantalla el día que estaba abierto (otra
+      // grilla, otro recorte de fechas) — se cierra el detalle para no
+      // dejarlo "colgado" mostrando un día que ya no se ve resaltado en el
+      // grid nuevo.
+      estado.agendaCalendarioFechaSeleccionada = null;
       renderizarCalendarioAgenda();
     });
     pillsModo.appendChild(btn);
@@ -233,6 +366,9 @@ function construirSubheaderCalendario() {
   const avanzar = (direccion) => {
     if (estado.agendaCalendarioModo === "mensual") estado.agendaCalendarioOffsetMes += direccion;
     else estado.agendaOffsetSemana += direccion;
+    // Punto 4: mismo motivo que el switch de modo — al cambiar de mes/semana
+    // el día abierto deja de estar en el grid mostrado.
+    estado.agendaCalendarioFechaSeleccionada = null;
     renderizarCalendarioAgenda();
   };
   btnAnterior.addEventListener("click", () => avanzar(-1));
@@ -240,6 +376,7 @@ function construirSubheaderCalendario() {
   volverHoy.addEventListener("click", () => {
     estado.agendaCalendarioOffsetMes = 0;
     estado.agendaOffsetSemana = 0;
+    estado.agendaCalendarioFechaSeleccionada = null;
     renderizarCalendarioAgenda();
   });
 
@@ -256,6 +393,14 @@ function renderizarCalendarioAgenda() {
   const cont = document.getElementById("agenda-vista-calendario");
   if (!cont) return;
   cont.innerHTML = "";
+  // Punto 4 (fix): el detalle de día reutiliza construirItemEvento, que
+  // arma sus propios timers "vence hoy" en el array compartido de agenda.js
+  // (ver limpiarIntervalosVenceHoy) — se limpia acá al arrancar CADA render
+  // completo del Calendario (haya o no un día abierto ahora mismo), mismo
+  // criterio que renderizarAgendaInterno hace para Lista, para no dejar
+  // setInterval huérfanos apuntando a nodos ya descartados cada vez que se
+  // cierra/cambia el día abierto o se navega de mes/semana.
+  limpiarIntervalosVenceHoy();
 
   const subheader = construirSubheaderCalendario();
   cont.appendChild(subheader);
@@ -267,6 +412,7 @@ function renderizarCalendarioAgenda() {
   const hayAlgunSemestre = (estado.datos.semestres || []).length > 0;
   const semestresSeleccionados = obtenerSemestresSeleccionadosAgenda();
   if (hayAlgunSemestre && semestresSeleccionados.length === 0) {
+    estado.agendaCalendarioFechaSeleccionada = null;
     subheader.querySelector("#agenda-cal-titulo-rango").textContent = "";
     const vacio = document.createElement("p");
     vacio.className = "muted";
@@ -282,6 +428,18 @@ function renderizarCalendarioAgenda() {
       : construirGridSemanal(semestresSeleccionados);
   subheader.querySelector("#agenda-cal-titulo-rango").textContent = tituloRango;
   cont.appendChild(grid);
+
+  // Punto 4: el detalle va DEBAJO del grid, como tercer hijo directo de
+  // #agenda-vista-calendario (que ya es .stack — gap automático de 14px sin
+  // CSS nuevo). Se reconstruye desde `estado.datos.agenda` fresco en cada
+  // render, así que toggles de "completada" o guardar/borrar desde el modal
+  // (que ya refrescan vía renderizarAgenda(), ver fix en agenda.js) lo dejan
+  // al día sin lógica aparte.
+  if (estado.agendaCalendarioFechaSeleccionada) {
+    const fechaSeleccionada = fechaLocalDesdeISO(estado.agendaCalendarioFechaSeleccionada);
+    const semestreReferencia = obtenerSemestreActivoAgenda();
+    cont.appendChild(construirDetalleDia(fechaSeleccionada, semestresSeleccionados, semestreReferencia));
+  }
 }
 
 export { renderizarCalendarioAgenda };

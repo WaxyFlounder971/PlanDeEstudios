@@ -241,6 +241,23 @@ function obtenerCodigoDiaSemana(fecha) {
 }
 
 /**
+ * Ajustes vista Calendario — punto 4: número de día de semana CANÓNICO
+ * (1=lunes...7=domingo), SIN rotar según `dia_inicio_semana` — a propósito,
+ * distinto de obtenerDiasSemanaOrdenAgenda/obtenerCodigoDiaSemana (que
+ * respetan esa preferencia para decidir CÓMO SE MUESTRA la semana). El
+ * "Día X" del detalle de día en Calendario (ver construirDetalleDia en
+ * agenda-calendario.js) es un número estable que identifica el día en sí
+ * (lunes siempre es 1), no su posición dentro de la semana tal como el
+ * usuario la configuró — esa preferencia solo reordena columnas, no
+ * cambia qué día "es" cada fecha. Se usa el mismo mapeo getDay() -> índice
+ * canónico que ya usa obtenerCodigoDiaSemana, solo que acá se devuelve el
+ * número (1-7) en vez de la abreviatura.
+ */
+function obtenerNumeroDiaSemanaCanonico(fecha) {
+  return ((fecha.getDay() + 6) % 7) + 1;
+}
+
+/**
  * Los 7 días de la semana mostrada, cada uno con su fecha calendario real
  * ya resuelta. `offsetSemanas`: 0 = semana de hoy, 1 = próxima, -1 =
  * anterior, etc.
@@ -403,6 +420,7 @@ export {
   obtenerFechaInicioSemanaAgenda,
   obtenerInicioSemanaQueContiene,
   obtenerMateriasVinculablesAgenda,
+  obtenerNumeroDiaSemanaCanonico,
   obtenerOffsetSemanaParaFecha,
   obtenerRangoDiasAgendaTodo,
   obtenerSemestreActivoAgenda,

@@ -58,14 +58,40 @@ function calcularNumeroSemanaParaFecha(semestre, fecha) {
 }
 
 /**
+ * Ajustes vista Calendario — punto 1: `calcularNumeroSemanaParaFecha` hace
+ * CLAMP del número de semana entre 1 y `duracion_semanas` A PROPÓSITO (lo
+ * sigue necesitando "Semana N" en el header/detalle, que debe seguir
+ * mostrando la última semana real incluso para fechas ya pasado el fin del
+ * semestre). Por eso acá se recalcula el número de semana SIN clamp, nada
+ * más para decidir si la fecha cae DESPUÉS del fin del semestre — pedido
+ * puntual del spec ("no mostrar clases en fechas posteriores al fin del
+ * semestre"), no dice nada de fechas antes del inicio, así que esas se
+ * dejan con el comportamiento de siempre (clampeadas a semana 1).
+ */
+function fechaSuperaFinSemestre(semestre, fecha) {
+  const inicio = new Date(semestre.fecha_inicio);
+  if (isNaN(inicio.getTime())) return false;
+  const total = Number(semestre.duracion_semanas) || 16;
+  const semanasTranscurridas = Math.floor((fecha.getTime() - inicio.getTime()) / (7 * 24 * 60 * 60 * 1000));
+  return semanasTranscurridas + 1 > total;
+}
+
+/**
  * Clases del semestre activo que caen en `diaCodigo` ("L"|"K"|...) de la
  * semana `numeroSemana`. `numeroSemana` se recalcula por fecha real (no se
  * asume "semana actual de Horario") para que las materias inline muestren
  * lo correcto también en días de semanas pasadas/futuras que el usuario
  * navegue dentro de Agenda.
+ *
+ * `fecha` (opcional): fecha calendario real del día que se está resolviendo
+ * — si se pasa y cae después del fin del semestre (ver
+ * fechaSuperaFinSemestre), no devuelve clases aunque `numeroSemana` venga
+ * clampeado a la última semana real. Opcional (no obligatorio) por si algún
+ * llamador futuro solo necesita el corte por semana, sin el de fecha.
  */
-function obtenerClasesDelDia(semestre, numeroSemana, diaCodigo) {
+function obtenerClasesDelDia(semestre, numeroSemana, diaCodigo, fecha) {
   if (!semestre) return [];
+  if (fecha && fechaSuperaFinSemestre(semestre, fecha)) return [];
   return (semestre.bloques_horario || [])
     .flatMap((bloque) => obtenerClasesEfectivasSemana(bloque, numeroSemana))
     .filter((clase) => clase.dia === diaCodigo)
@@ -74,18 +100,22 @@ function obtenerClasesDelDia(semestre, numeroSemana, diaCodigo) {
 
 /**
  * Conteo liviano (sin construir DOM) de cuántas clases caen en `fecha`,
- * sumadas entre TODOS los semestres del array `semestres` — lo usa el grid
- * del Calendario (agenda-calendario.js) para pintar un indicador chico por
- * celda, sin pagar el costo de armar las filas completas en las ~35-42
- * celdas de una vista mensual. Cada semestre puede tener un número de
- * semana distinto para la misma `fecha` (fecha_inicio propia), por eso se
- * recalcula por separado dentro del reduce en vez de compartir un solo
- * numeroSemana entre todos.
+ * sumadas entre TODOS los semestres del array `semestres`. Cada semestre
+ * puede tener un número de semana distinto para la misma `fecha`
+ * (fecha_inicio propia), por eso se recalcula por separado dentro del
+ * reduce en vez de compartir un solo numeroSemana entre todos.
+ *
+ * Ajustes vista Calendario — punto 2: ya no la consume el grid del
+ * Calendario (el indicador "hay clases" que la usaba se quitó del todo) —
+ * queda acá exportada, sin uso interno del proyecto por ahora, por si algún
+ * llamador futuro necesita este mismo conteo liviano sin duplicar la
+ * fórmula.
  */
 function contarClasesDelDia(semestres, fecha, diaCodigo) {
   if (!semestres || semestres.length === 0) return 0;
   return semestres.reduce(
-    (total, semestre) => total + obtenerClasesDelDia(semestre, calcularNumeroSemanaParaFecha(semestre, fecha), diaCodigo).length,
+    (total, semestre) =>
+      total + obtenerClasesDelDia(semestre, calcularNumeroSemanaParaFecha(semestre, fecha), diaCodigo, fecha).length,
     0
   );
 }
@@ -144,7 +174,7 @@ function construirSeccionMateriasDia(semestres, fecha, diaCodigo) {
   const filas = [];
   semestres.forEach((semestre) => {
     const numeroSemanaReal = calcularNumeroSemanaParaFecha(semestre, fecha);
-    obtenerClasesDelDia(semestre, numeroSemanaReal, diaCodigo).forEach((clase) => {
+    obtenerClasesDelDia(semestre, numeroSemanaReal, diaCodigo, fecha).forEach((clase) => {
       filas.push({ clase, semestre, numeroSemanaReal });
     });
   });

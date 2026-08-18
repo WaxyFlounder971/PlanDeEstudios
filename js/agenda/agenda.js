@@ -149,6 +149,18 @@ function construirBadgeMateria(evento) {
  * refresca en el lugar; mismo patrón de "releer la entidad viva por id
  * antes de mutar" que usa agenda-modal.js (por si un sondeo remoto
  * reemplazó estado.datos mientras tanto).
+ *
+ * Ajustes vista Calendario — punto 4 (fix): antes llamaba directo a
+ * renderizarAgendaInterno() (el render INTERNO de Lista nada más), a secas
+ * porque hasta ahora el checkbox de "completada" solo vivía en items de
+ * Lista. Ahora construirItemEvento (con este mismo checkbox) también se
+ * reutiliza desde el detalle de día del Calendario (ver construirDetalleDia
+ * en agenda-calendario.js) — tocar el check desde ahí con la llamada vieja
+ * mutaba el dato pero refrescaba Lista (oculta) en vez del Calendario
+ * (visible), dejando la UI desactualizada hasta el próximo render. Ahora usa
+ * el despachador renderizarAgenda(), que ya sabe re-renderizar la vista que
+ * esté activa en cada momento (mismo criterio que refrescarAgenda() en
+ * agenda-modal.js tras guardar/borrar desde el modal).
  */
 function alternarCompletadaEvento(eventoId) {
   const vivo = buscarEventoAgendaVivo(eventoId);
@@ -156,7 +168,7 @@ function alternarCompletadaEvento(eventoId) {
   vivo.completada = !vivo.completada;
   sellarTimestamp(vivo);
   marcarCambioPendiente();
-  renderizarAgendaInterno();
+  renderizarAgenda();
 }
 
 /**
@@ -951,4 +963,13 @@ function inicializarFiltrosAgenda() {
 // tick del click del usuario sobre una celda del grid.
 window.renderizarAgenda = renderizarAgenda;
 
-export { inicializarAgenda, renderizarAgenda };
+// Ajustes vista Calendario — punto 4: construirItemEvento, ETIQUETA_TIPO y
+// limpiarIntervalosVenceHoy se exportan para que el detalle de día del
+// Calendario (construirDetalleDia en agenda-calendario.js) pinte sus
+// secciones de Tareas/Exámenes/Eventos con el MISMO componente e íconos que
+// la vista Lista (mismo criterio de colores/estados pedido en el spec), en
+// vez de duplicar esa lógica. Mismo ciclo de imports ya tolerado entre estos
+// 2 archivos (agenda.js -> agenda-calendario.js vía renderizarCalendarioAgenda,
+// ver comentario más arriba) — agenda-calendario.js pasa a importar también
+// DE acá.
+export { inicializarAgenda, renderizarAgenda, construirItemEvento, ETIQUETA_TIPO, limpiarIntervalosVenceHoy };
