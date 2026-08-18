@@ -18,17 +18,20 @@ import { aplicarFormatoTexto } from "../core/utils.js";
 import { desplazarYResaltarElemento } from "../ui/componentes.js";
 import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
 import { renderizarCalendarioAgenda } from "./agenda-calendario.js";
+import { inicializarMateriaAgenda, renderizarMateriaAgenda } from "./agenda-materia.js";
 import { construirSeccionMateriasDia, calcularNumeroSemanaParaFecha } from "./agenda-clases.js";
 import { abrirModalEventoAgenda, abrirTarjetaInfoEventoAgenda, inicializarModalAgendaEvento } from "./agenda-modal.js";
 import {
   esHoyFecha,
   esTareaVencida,
   formatearFechaISO,
+  formatearHoraAmPm,
   formatearRangoSemanaAgenda,
   formatearTiempoRestanteHoy,
   obtenerDiasSemanaAgenda,
   obtenerEstiloEvento,
   obtenerFechaInicioSemanaAgenda,
+  obtenerModoVenceHoyAgenda,
   obtenerRangoDiasAgendaTodo,
   obtenerSemestreActivoAgenda,
   obtenerSemestresSeleccionadosAgenda,
@@ -212,39 +215,108 @@ function construirItemEvento(evento) {
   `;
   item.appendChild(izquierda);
 
-  // Columna derecha: Vencida (opcional) -> badge de tipo -> hora, apilados.
-  const vencida = esTareaVencida(evento);
-  const venceHoy = tareaVenceHoy(evento);
-  const derecha = document.createElement("span");
-  derecha.className = "stack";
-  derecha.style.cssText = "align-items:flex-end; gap:4px; flex-shrink:0; text-align:right;";
-  derecha.innerHTML = `
-    ${vencida ? `<span class="agenda-badge-vencida">⚠ Vencida</span>` : ""}
-    <span class="badge agenda-badge-tipo ${estilo.claseBadge}">${estilo.etiqueta}</span>
-  `;
-
-  const hora = document.createElement("span");
-  hora.className = "muted";
-  hora.style.cssText = "font-size:0.78rem; white-space:nowrap;";
-  if (venceHoy) {
-    hora.innerHTML = `<span class="agenda-timer-vence-hoy">${formatearTiempoRestanteHoy(evento.fecha)}</span>`;
-    const idIntervalo = setInterval(() => {
-      const span = hora.querySelector(".agenda-timer-vence-hoy");
-      if (!span || !span.isConnected) {
-        clearInterval(idIntervalo);
-        return;
-      }
-      span.textContent = formatearTiempoRestanteHoy(evento.fecha);
-    }, 60000);
-    intervalosVenceHoy.push(idIntervalo);
-  } else {
-    hora.textContent = evento.hora || "Todo el día";
-  }
-  derecha.appendChild(hora);
-  item.appendChild(derecha);
+  item.appendChild(construirColumnaDerechaEvento(evento, estilo));
 
   item.addEventListener("click", () => abrirTarjetaInfoEventoAgenda(evento.id));
   return item;
+}
+
+/**
+ * Columna derecha de un item (Vencida opcional -> badge de tipo -> hora/
+ * tiempo restante). Se saca a su propia función porque el layout ahora
+ * tiene 2 formas distintas según si hora Y tiempo restante coexisten (ver
+ * más abajo) — separarla de construirItemEvento evita un solo bloque
+ * gigante con ifs anidados.
+ *
+ * Fix del timer: antes formatearTiempoRestanteHoy siempre contaba contra
+ * las 23:59:59, ahora se le pasa `evento.hora` para que apunte a la hora
+ * puntual del evento cuando tiene una (ver agenda-utils.js).
+ *
+ * Pedido nuevo: cuando el ajuste "vence hoy" está en modo "ambos" (ver
+ * obtenerModoVenceHoyAgenda), hora y tiempo restante se muestran los DOS a
+ * la vez — en ese caso puntual el layout cambia a "cuadradito": línea 1 =
+ * hora + badge de tipo lado a lado, línea 2 = tiempo restante debajo. En
+ * cualquier otro caso (solo hora, solo restante, o no vence hoy) se
+ * mantiene el layout de siempre: badge de tipo en su propia línea arriba,
+ * hora/restante debajo.
+ */
+function construirColumnaDerechaEvento(evento, estilo) {
+  const vencida = esTareaVencida(evento);
+  const venceHoy = tareaVenceHoy(evento);
+  const modo = obtenerModoVenceHoyAgenda();
+  const mostrarRestante = venceHoy && modo !== "hora";
+  const mostrarHoraJuntoABadge = venceHoy && modo === "ambos";
+
+  const derecha = document.createElement("span");
+  derecha.className = "stack";
+  derecha.style.cssText = "align-items:flex-end; gap:4px; flex-shrink:0; text-align:right;";
+
+  if (vencida) {
+    const badgeVencida = document.createElement("span");
+    badgeVencida.className = "agenda-badge-vencida";
+    badgeVencida.textContent = "⚠ Vencida";
+    derecha.appendChild(badgeVencida);
+  }
+
+  const textoHora = evento.hora ? formatearHoraAmPm(evento.hora) : "Todo el día";
+
+  if (mostrarHoraJuntoABadge) {
+    // "Cuadradito": línea 1 hora+badge lado a lado, línea 2 tiempo restante.
+    const filaHoraBadge = document.createElement("div");
+    filaHoraBadge.className = "row";
+    filaHoraBadge.style.cssText = "gap:6px; align-items:center; justify-content:flex-end;";
+    filaHoraBadge.innerHTML = `
+      <span class="muted" style="font-size:0.78rem; white-space:nowrap;">${textoHora}</span>
+      <span class="badge agenda-badge-tipo ${estilo.claseBadge}">${estilo.etiqueta}</span>
+    `;
+    derecha.appendChild(filaHoraBadge);
+
+    const restante = document.createElement("span");
+    restante.className = "agenda-timer-vence-hoy";
+    restante.style.cssText = "font-size:0.78rem; white-space:nowrap;";
+    restante.textContent = formatearTiempoRestanteHoy(evento.fecha, evento.hora);
+    derecha.appendChild(restante);
+    registrarTimerVenceHoy(restante, evento);
+  } else {
+    // Layout de siempre: badge de tipo arriba, hora O restante debajo.
+    const badgeTipo = document.createElement("span");
+    badgeTipo.className = `badge agenda-badge-tipo ${estilo.claseBadge}`;
+    badgeTipo.textContent = estilo.etiqueta;
+    derecha.appendChild(badgeTipo);
+
+    const linea = document.createElement("span");
+    linea.className = "muted";
+    linea.style.cssText = "font-size:0.78rem; white-space:nowrap;";
+    if (mostrarRestante) {
+      const restante = document.createElement("span");
+      restante.className = "agenda-timer-vence-hoy";
+      restante.textContent = formatearTiempoRestanteHoy(evento.fecha, evento.hora);
+      linea.appendChild(restante);
+      registrarTimerVenceHoy(restante, evento);
+    } else {
+      linea.textContent = textoHora;
+    }
+    derecha.appendChild(linea);
+  }
+
+  return derecha;
+}
+
+/**
+ * Arranca el intervalo que refresca un span de "tiempo restante" cada
+ * minuto, y lo registra en intervalosVenceHoy para que limpiarIntervalosVenceHoy
+ * lo pueda apagar en el próximo render completo (mismo mecanismo de
+ * siempre, ahora compartido entre las 2 formas de layout de arriba).
+ */
+function registrarTimerVenceHoy(span, evento) {
+  const idIntervalo = setInterval(() => {
+    if (!span.isConnected) {
+      clearInterval(idIntervalo);
+      return;
+    }
+    span.textContent = formatearTiempoRestanteHoy(evento.fecha, evento.hora);
+  }, 60000);
+  intervalosVenceHoy.push(idIntervalo);
 }
 
 function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios) {
@@ -781,30 +853,39 @@ function renderizarAgendaInterno() {
   bloquesDesdeHoy.forEach((b) => cont.appendChild(b));
 }
 
+/**
+ * Punto "Materia" (3er tab): despacho entre las 3 vistas — "lista" |
+ * "calendario" | "materia" (ver #pills-agenda-vista en index.html). Antes
+ * era un simple if/else de 2 ramas (esLista); ahora que hay 3 posibles
+ * vistas activas se resuelve el contenedor visible con un switch explícito
+ * en vez de encadenar más booleanos.
+ */
 function renderizarAgenda() {
   asegurarFiltroMostrarMateriasInicializado();
   asegurarFiltroModoAgendaInicializado();
   renderizarHeaderAgenda();
-  const esLista = estado.agendaVistaActiva === "lista";
-  document.getElementById("agenda-lista-dias")?.classList.toggle("oculto", !esLista);
-  document.getElementById("agenda-vista-calendario")?.classList.toggle("oculto", esLista);
+  const vista = estado.agendaVistaActiva;
+  document.getElementById("agenda-lista-dias")?.classList.toggle("oculto", vista !== "lista");
+  document.getElementById("agenda-vista-calendario")?.classList.toggle("oculto", vista !== "calendario");
+  document.getElementById("agenda-vista-materia")?.classList.toggle("oculto", vista !== "materia");
   document.querySelectorAll("#pills-agenda-vista .pill-item").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.vista === estado.agendaVistaActiva);
+    btn.classList.toggle("active", btn.dataset.vista === vista);
   });
-  if (esLista) {
+  if (vista === "lista") {
     renderizarAgendaInterno();
-  } else {
-    // Vista Calendario: arma su propia navegación de mes/semana adentro de
-    // #agenda-vista-calendario (agenda-calendario.js) — acá el bloque
-    // dinámico del header solo necesita el atajo "Hoy", compartido entre
-    // los 3 modos (ver irAHoyAgenda).
-    const subCont = document.getElementById("agenda-subheader-dinamico");
-    if (subCont) {
-      subCont.innerHTML = "";
-      subCont.appendChild(construirEnlaceHoyAgenda());
-    }
-    renderizarCalendarioAgenda();
+    return;
   }
+  // Calendario y Materia arman su propia navegación adentro de su propio
+  // contenedor (agenda-calendario.js / agenda-materia.js) — acá el bloque
+  // dinámico del header solo necesita el atajo "Hoy", compartido entre los
+  // 3 modos (ver irAHoyAgenda).
+  const subCont = document.getElementById("agenda-subheader-dinamico");
+  if (subCont) {
+    subCont.innerHTML = "";
+    subCont.appendChild(construirEnlaceHoyAgenda());
+  }
+  if (vista === "calendario") renderizarCalendarioAgenda();
+  else renderizarMateriaAgenda();
 }
 
 /**
@@ -840,6 +921,7 @@ function inicializarAgenda() {
 
   inicializarSelectorSemestreAgenda();
   inicializarFiltrosAgenda();
+  inicializarMateriaAgenda();
 }
 
 /**
@@ -889,6 +971,7 @@ function inicializarFiltrosAgenda() {
     // Ajustes global, solo que ahora se edita desde acá.
     const cfg = estado.datos.configuracion;
     document.getElementById("chk-agenda-mostrar-dias-vacios").checked = cfg.agenda_mostrar_dias_vacios !== false;
+    sincronizarSwitchesVenceHoy(obtenerModoVenceHoyAgenda());
     modal.classList.remove("oculto");
   });
 
@@ -952,6 +1035,51 @@ function inicializarFiltrosAgenda() {
 
   modal.addEventListener("click", (ev) => {
     if (ev.target.id === "modal-agenda-ajustes") modal.classList.add("oculto");
+  });
+
+  inicializarSwitchesVenceHoyAgenda();
+}
+
+/**
+ * Pedido nuevo: "cuando algo vence hoy, ¿qué mostrar?" — 3 switches
+ * (Solo hora / Solo tiempo restante / Ambos) que se comportan como un
+ * grupo de radio (uno prendido a la vez, siempre hay exactamente uno
+ * activo) implementados con el componente .switch de siempre a pedido
+ * explícito, en vez del pill-group que usa el resto de Agenda para
+ * elecciones de "una entre varias" — acá se pidió puntualmente así.
+ * `CHK_VENCEHOY_POR_MODO` mapea cada valor persistido ("hora"/"restante"/
+ * "ambos") a su checkbox — un solo mapa para sincronizar (al abrir el
+ * modal) y para escribir (al tocar cualquiera de los 3).
+ */
+const CHK_VENCEHOY_POR_MODO = {
+  hora: "chk-agenda-vencehoy-hora",
+  restante: "chk-agenda-vencehoy-restante",
+  ambos: "chk-agenda-vencehoy-ambos",
+};
+
+function sincronizarSwitchesVenceHoy(modoActivo) {
+  Object.entries(CHK_VENCEHOY_POR_MODO).forEach(([modo, id]) => {
+    const chk = document.getElementById(id);
+    if (chk) chk.checked = modo === modoActivo;
+  });
+}
+
+function inicializarSwitchesVenceHoyAgenda() {
+  Object.entries(CHK_VENCEHOY_POR_MODO).forEach(([modo, id]) => {
+    document.getElementById(id)?.addEventListener("change", (ev) => {
+      if (!ev.target.checked) {
+        // Siempre debe quedar exactamente 1 modo activo — destildar el que
+        // ya estaba activo sin tildar otro no es un estado válido, así que
+        // se revierte el toque (no-op) en vez de dejar los 3 apagados.
+        ev.target.checked = true;
+        return;
+      }
+      estado.datos.configuracion.agenda_venceHoy_modo = modo;
+      sellarTimestamp(estado.datos.configuracion);
+      marcarCambioPendiente();
+      sincronizarSwitchesVenceHoy(modo);
+      renderizarAgenda();
+    });
   });
 }
 

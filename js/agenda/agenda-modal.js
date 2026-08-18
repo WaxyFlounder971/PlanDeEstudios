@@ -11,6 +11,7 @@ import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { fechaLocalDesdeISO } from "../horario/horario.js";
 import {
   esTareaVencida,
+  formatearHoraAmPm,
   formatearTiempoRestanteHoy,
   obtenerEstiloEvento,
   obtenerMateriasVinculablesAgenda,
@@ -24,6 +25,92 @@ const PLACEHOLDER_NOMBRE = {
 };
 
 const ETIQUETA_TIPO = { evento: "Evento", tarea: "Tarea", examen: "Examen" };
+
+// Adjuntos (archivos/imágenes) — pedido nuevo: pensado sobre todo para
+// adjuntar el cronograma del semestre u otros documentos importantes a un
+// evento/tarea/examen puntual. Se guardan como base64 (dataURL) directo en
+// el propio evento (`evento.adjuntos`), mismo criterio que el resto del
+// dato de Agenda (viaja con sellarTimestamp/marcarCambioPendiente, se
+// sincroniza igual que cualquier otro campo) — NO se integró con un módulo
+// de adjuntos aparte (si el proyecto ya tiene uno con otro criterio de
+// almacenamiento, esto se puede migrar a reusarlo).
+//
+// `adjuntosTemporales`: buffer del formulario ACTUALMENTE abierto — no se
+// escribe al evento real hasta tocar "Guardar" (mismo criterio que el resto
+// del formulario, que tampoco muta nada hasta ese momento). Se resetea cada
+// vez que se abre el modal (alta nueva: vacío; edición: copia de
+// evento.adjuntos existente).
+const LIMITE_MB_POR_ADJUNTO = 8;
+let adjuntosTemporales = [];
+
+function generarIdAdjunto() {
+  return `adj_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function leerArchivoComoDataUrl(archivo) {
+  return new Promise((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onload = () => resolve(lector.result);
+    lector.onerror = () => reject(lector.error);
+    lector.readAsDataURL(archivo);
+  });
+}
+
+function formatearTamanoArchivo(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function renderizarListaAdjuntosFormulario() {
+  const cont = document.getElementById("lista-agenda-adjuntos");
+  if (!cont) return;
+  cont.innerHTML = "";
+  cont.classList.toggle("oculto", adjuntosTemporales.length === 0);
+  adjuntosTemporales.forEach((adj) => {
+    const chip = document.createElement("div");
+    chip.className = "agenda-adjunto-chip row-between";
+    const nombre = document.createElement("span");
+    nombre.style.cssText = "overflow-wrap:break-word; font-size:0.82rem; flex:1; min-width:0;";
+    nombre.innerHTML = `📎 ${adj.nombre} <span class="muted">(${formatearTamanoArchivo(adj.tamano)})</span>`;
+    const btnQuitar = document.createElement("button");
+    btnQuitar.type = "button";
+    btnQuitar.className = "btn-icono-fantasma";
+    btnQuitar.style.cssText = "font-size:1rem; flex-shrink:0;";
+    btnQuitar.title = "Quitar adjunto";
+    btnQuitar.textContent = "✕";
+    btnQuitar.addEventListener("click", () => {
+      adjuntosTemporales = adjuntosTemporales.filter((a) => a.id !== adj.id);
+      renderizarListaAdjuntosFormulario();
+    });
+    chip.appendChild(nombre);
+    chip.appendChild(btnQuitar);
+    cont.appendChild(chip);
+  });
+}
+
+async function manejarSeleccionArchivosAdjuntos(fileList) {
+  const archivos = Array.from(fileList || []);
+  for (const archivo of archivos) {
+    if (archivo.size > LIMITE_MB_POR_ADJUNTO * 1024 * 1024) {
+      mostrarToast(`"${archivo.name}" pesa más de ${LIMITE_MB_POR_ADJUNTO}MB, no se adjuntó`);
+      continue;
+    }
+    try {
+      const dataUrl = await leerArchivoComoDataUrl(archivo);
+      adjuntosTemporales.push({
+        id: generarIdAdjunto(),
+        nombre: archivo.name,
+        tipo: archivo.type || "",
+        tamano: archivo.size,
+        dataUrl,
+      });
+    } catch {
+      mostrarToast(`No se pudo leer "${archivo.name}"`);
+    }
+  }
+  renderizarListaAdjuntosFormulario();
+}
 
 // Callback expuesto por agenda.js para refrescar la lista tras guardar/
 // borrar, sin crear un import circular (agenda.js importa DE este archivo
@@ -196,6 +283,12 @@ function abrirModalEventoAgenda({ eventoId = null, fechaDefault = null } = {}) {
   );
   document.getElementById("input-agenda-notas").value = eventoExistente ? eventoExistente.notas || "" : "";
 
+  // Adjuntos: arranca vacío en alta nueva, o con una copia de los ya
+  // guardados en edición — ver comentario de adjuntosTemporales más arriba.
+  adjuntosTemporales =
+    eventoExistente && Array.isArray(eventoExistente.adjuntos) ? eventoExistente.adjuntos.map((a) => ({ ...a })) : [];
+  renderizarListaAdjuntosFormulario();
+
   const btnBorrar = document.getElementById("btn-agenda-borrar");
   btnBorrar.classList.toggle("oculto", !eventoExistente);
 
@@ -254,6 +347,7 @@ function guardarEventoAgenda(eventoExistente) {
     viva.semestre_id = materiaVinculada ? materiaVinculada.semestreId : null;
     viva.notas = notas;
     viva.es_feriado = esFeriado;
+    viva.adjuntos = adjuntosTemporales;
     // `completada` NO se toca acá: este formulario no tiene UI para ella
     // (vive en el checkbox circular de la lista/tarjeta de info — punto 5
     // del rediseño), así que una edición del resto de los campos nunca debe
@@ -270,6 +364,10 @@ function guardarEventoAgenda(eventoExistente) {
       notas,
       esFeriado,
     });
+    // crearEventoAgenda (schema.js) no conoce el campo `adjuntos` todavía
+    // (feature nueva) — se agrega acá directo al objeto recién creado antes
+    // de empujarlo, en vez de tocar schema.js a ciegas sin verlo.
+    nuevo.adjuntos = adjuntosTemporales;
     estado.datos.agenda.push(nuevo);
   }
 
@@ -352,12 +450,12 @@ function renderizarTarjetaInfoEventoAgenda(evento) {
     day: "numeric",
     month: "long",
   });
-  document.getElementById("info-agenda-hora").textContent = evento.hora || "Todo el día";
+  document.getElementById("info-agenda-hora").textContent = evento.hora ? formatearHoraAmPm(evento.hora) : "Todo el día";
 
   const timerEl = document.getElementById("info-agenda-timer");
   const venceHoy = tareaVenceHoy(evento);
   timerEl.classList.toggle("oculto", !venceHoy);
-  if (venceHoy) timerEl.textContent = formatearTiempoRestanteHoy(evento.fecha);
+  if (venceHoy) timerEl.textContent = formatearTiempoRestanteHoy(evento.fecha, evento.hora);
 
   const nombreMateria = obtenerNombreMateriaEvento(evento);
   document.getElementById("info-agenda-fila-materia").classList.toggle("oculto", !nombreMateria);
@@ -365,6 +463,29 @@ function renderizarTarjetaInfoEventoAgenda(evento) {
 
   document.getElementById("info-agenda-fila-notas").classList.toggle("oculto", !evento.notas);
   document.getElementById("info-agenda-notas-texto").textContent = evento.notas || "";
+
+  // Adjuntos: cada uno es un link descargable directo al dataURL guardado
+  // (sin pasar por ningún backend — el archivo entero ya está en el propio
+  // evento). Ver comentario de adjuntosTemporales en la parte de arriba del
+  // archivo sobre por qué se guarda así.
+  const adjuntos = Array.isArray(evento.adjuntos) ? evento.adjuntos : [];
+  const filaAdjuntos = document.getElementById("info-agenda-fila-adjuntos");
+  const listaAdjuntos = document.getElementById("info-agenda-lista-adjuntos");
+  if (filaAdjuntos && listaAdjuntos) {
+    filaAdjuntos.classList.toggle("oculto", adjuntos.length === 0);
+    listaAdjuntos.innerHTML = "";
+    adjuntos.forEach((adj) => {
+      const link = document.createElement("a");
+      link.href = adj.dataUrl;
+      link.download = adj.nombre;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.className = "agenda-adjunto-chip";
+      link.style.cssText = "display:flex; align-items:center; gap:6px; text-decoration:none;";
+      link.innerHTML = `📎 <span style="overflow-wrap:break-word; font-size:0.82rem;">${adj.nombre}</span>`;
+      listaAdjuntos.appendChild(link);
+    });
+  }
 
   // Punto 5: el mismo checkbox circular de la lista, disponible también
   // acá — solo aplica a tareas.
@@ -405,6 +526,13 @@ function inicializarModalAgendaEvento() {
   });
   document.getElementById("chk-agenda-todo-el-dia").addEventListener("change", (ev) => {
     document.getElementById("input-agenda-hora").disabled = ev.target.checked;
+  });
+  document.getElementById("input-agenda-adjuntos")?.addEventListener("change", (ev) => {
+    manejarSeleccionArchivosAdjuntos(ev.target.files);
+    // Limpia el input para poder re-seleccionar el MISMO archivo más
+    // adelante (si se quitó de la lista y se lo quiere volver a adjuntar) —
+    // el evento "change" no dispara de nuevo si el value no cambia.
+    ev.target.value = "";
   });
   document.getElementById("btn-agenda-cancelar").addEventListener("click", cerrarModalEventoAgenda);
   document.getElementById("modal-agenda-evento").addEventListener("click", (ev) => {

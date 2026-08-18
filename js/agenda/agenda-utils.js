@@ -241,23 +241,6 @@ function obtenerCodigoDiaSemana(fecha) {
 }
 
 /**
- * Ajustes vista Calendario — punto 4: número de día de semana CANÓNICO
- * (1=lunes...7=domingo), SIN rotar según `dia_inicio_semana` — a propósito,
- * distinto de obtenerDiasSemanaOrdenAgenda/obtenerCodigoDiaSemana (que
- * respetan esa preferencia para decidir CÓMO SE MUESTRA la semana). El
- * "Día X" del detalle de día en Calendario (ver construirDetalleDia en
- * agenda-calendario.js) es un número estable que identifica el día en sí
- * (lunes siempre es 1), no su posición dentro de la semana tal como el
- * usuario la configuró — esa preferencia solo reordena columnas, no
- * cambia qué día "es" cada fecha. Se usa el mismo mapeo getDay() -> índice
- * canónico que ya usa obtenerCodigoDiaSemana, solo que acá se devuelve el
- * número (1-7) en vez de la abreviatura.
- */
-function obtenerNumeroDiaSemanaCanonico(fecha) {
-  return ((fecha.getDay() + 6) % 7) + 1;
-}
-
-/**
  * Los 7 días de la semana mostrada, cada uno con su fecha calendario real
  * ya resuelta. `offsetSemanas`: 0 = semana de hoy, 1 = próxima, -1 =
  * anterior, etc.
@@ -343,16 +326,50 @@ function tareaVenceHoy(evento) {
   return evento.fecha === formatearFechaISO(new Date());
 }
 
-/** "3h 42min restantes" / "42min restantes" hasta las 23:59:59 del día de `fechaISO`. */
-function formatearTiempoRestanteHoy(fechaISO) {
-  const finDelDia = fechaLocalDesdeISO(fechaISO);
-  finDelDia.setHours(23, 59, 59, 999);
-  const msRestantes = finDelDia.getTime() - Date.now();
+/**
+ * "3h 42min restantes" / "42min restantes" hasta la hora puntual del
+ * evento (`horaStr`, "HH:MM") si tiene una asignada, o hasta las 23:59:59
+ * del día de `fechaISO` si es "todo el día" (`horaStr` vacío/null).
+ *
+ * Fix reportado: antes SIEMPRE apuntaba a las 23:59:59 sin importar la hora
+ * real del evento — bien para "todo el día", pero una vez que el usuario le
+ * ponía una hora puntual (ej. 17:00) el timer seguía contando contra
+ * medianoche, mostrando horas de más ("faltan 22h" en vez de las ~15h
+ * reales hasta las 17:00). Ahora, si `horaStr` viene con valor, el
+ * objetivo del conteo es ESA hora puntual, no el fin del día.
+ */
+function formatearTiempoRestanteHoy(fechaISO, horaStr) {
+  const fin = fechaLocalDesdeISO(fechaISO);
+  if (horaStr) {
+    const [h, m] = String(horaStr).split(":").map(Number);
+    if (!Number.isNaN(h) && !Number.isNaN(m)) fin.setHours(h, m, 0, 0);
+    else fin.setHours(23, 59, 59, 999);
+  } else {
+    fin.setHours(23, 59, 59, 999);
+  }
+  const msRestantes = fin.getTime() - Date.now();
   if (msRestantes <= 0) return "Vence en instantes";
   const minutosTotales = Math.floor(msRestantes / 60000);
   const horas = Math.floor(minutosTotales / 60);
   const minutos = minutosTotales % 60;
   return horas > 0 ? `⏳ ${horas}h ${minutos}min restantes` : `⏳ ${minutos}min restantes`;
+}
+
+/**
+ * Pedido nuevo (Ajustes de Agenda): qué mostrar en la columna derecha de un
+ * item cuando "vence hoy" — "hora" (solo hora de entrega), "restante" (solo
+ * tiempo restante, comportamiento de siempre / default) o "ambos". Persiste
+ * en `configuracion.agenda_venceHoy_modo` — mismo patrón que el resto de
+ * ajustes de Agenda (ver inicializarFiltrosAgenda en agenda.js, que además
+ * escribe acá). Vive en este archivo (no en agenda.js) porque
+ * construirItemEvento (agenda.js) Y la tarjeta de info (agenda-modal.js)
+ * necesitan leerlo por igual, y agenda-modal.js no puede importar de vuelta
+ * a agenda.js sin crear un ciclo — mismo motivo que obtenerEstiloEvento acá
+ * arriba.
+ */
+function obtenerModoVenceHoyAgenda() {
+  const modo = estado.datos?.configuracion?.agenda_venceHoy_modo;
+  return modo === "hora" || modo === "ambos" ? modo : "restante";
 }
 
 /**
@@ -420,7 +437,7 @@ export {
   obtenerFechaInicioSemanaAgenda,
   obtenerInicioSemanaQueContiene,
   obtenerMateriasVinculablesAgenda,
-  obtenerNumeroDiaSemanaCanonico,
+  obtenerModoVenceHoyAgenda,
   obtenerOffsetSemanaParaFecha,
   obtenerRangoDiasAgendaTodo,
   obtenerSemestreActivoAgenda,

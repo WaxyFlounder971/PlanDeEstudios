@@ -21,7 +21,6 @@ import {
   obtenerDiasSemanaOrdenAgenda,
   obtenerEstiloEvento,
   obtenerInicioSemanaQueContiene,
-  obtenerNumeroDiaSemanaCanonico,
   obtenerOffsetSemanaParaFecha,
   obtenerSemestreActivoAgenda,
   obtenerSemestresSeleccionadosAgenda,
@@ -175,11 +174,25 @@ function construirCelda(fecha, { delMesActual, detallada, semestresSeleccionados
  * Ajustes vista Calendario — punto 4: toggle del día abierto — tocar la
  * misma celda ya seleccionada lo cierra (vuelve a `null`); tocar otra celda
  * cambia el detalle abierto a esa fecha nueva. Un solo día abierto a la vez.
+ *
+ * Pedido nuevo: al ABRIR un día (no al cerrarlo) se hace scroll hasta el
+ * final del panel recién insertado — el detalle queda debajo del grid y en
+ * pantallas chicas puede quedar fuera de vista, así que sin este scroll la
+ * persona tocaba la celda y no veía que pasó nada. Un frame de espera
+ * (mismo motivo que el resto de saltos del proyecto, ej. saltarADiaEnLista)
+ * porque el panel recién se insertó en el DOM en renderizarCalendarioAgenda
+ * — sin el frame, scrollIntoView correría contra el layout viejo.
  */
 function alternarDetalleDia(fecha) {
   const fechaISO = formatearFechaISO(fecha);
-  estado.agendaCalendarioFechaSeleccionada = estado.agendaCalendarioFechaSeleccionada === fechaISO ? null : fechaISO;
+  const seAbre = estado.agendaCalendarioFechaSeleccionada !== fechaISO;
+  estado.agendaCalendarioFechaSeleccionada = seAbre ? fechaISO : null;
   renderizarCalendarioAgenda();
+  if (seAbre) {
+    requestAnimationFrame(() => {
+      document.getElementById("agenda-cal-detalle-dia")?.scrollIntoView({ behavior: "smooth", block: "end" });
+    });
+  }
 }
 
 /**
@@ -192,27 +205,24 @@ function alternarDetalleDia(fecha) {
  * no duplicar esa lógica ni arriesgar que quede desincronizada.
  *
  * Orden pedido por el spec: Materias -> Tareas -> Exámenes -> Eventos.
- * "Semana X / Día X": X de semana viene del semestre de referencia
- * (calcularNumeroSemanaParaFecha, mismo criterio que el header de Lista);
- * "Día X" es el número de día CANÓNICO 1=lunes..7=domingo
- * (obtenerNumeroDiaSemanaCanonico, agenda-utils.js), estable sin importar
- * `dia_inicio_semana`.
+ * "Semana X": viene del semestre de referencia (calcularNumeroSemanaParaFecha,
+ * mismo criterio que el header de Lista). El "Día X" que acompañaba esto
+ * se sacó a pedido explícito — no hacía falta.
  */
 function construirDetalleDia(fecha, semestresSeleccionados, semestreReferencia) {
   const panel = document.createElement("section");
   panel.className = "glass-panel stack";
   panel.style.padding = "14px";
+  panel.id = "agenda-cal-detalle-dia";
 
   const numeroSemana = semestreReferencia ? calcularNumeroSemanaParaFecha(semestreReferencia, fecha) : null;
-  const numeroDia = obtenerNumeroDiaSemanaCanonico(fecha);
-  const tituloSemanaDia = [numeroSemana ? `Semana ${numeroSemana}` : null, `Día ${numeroDia}`].filter(Boolean).join(" / ");
   const fechaTexto = fecha.toLocaleDateString("es-CR", { weekday: "long", day: "numeric", month: "short" });
 
   const header = document.createElement("div");
   header.className = "row-between";
   header.innerHTML = `
     <div class="stack" style="gap:2px;">
-      <span style="font-weight:700;">${tituloSemanaDia}</span>
+      ${numeroSemana ? `<span style="font-weight:700;">Semana ${numeroSemana}</span>` : ""}
       <span class="muted" style="font-size:0.8rem; text-transform:capitalize;">${fechaTexto}</span>
     </div>
   `;
