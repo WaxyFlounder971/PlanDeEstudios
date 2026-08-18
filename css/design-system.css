@@ -2227,6 +2227,25 @@ img, svg { max-width: 100%; }
 }
 [data-mode="light"] .agenda-fila-clase,
 [data-mode="light"] .agenda-item { background: rgba(0, 0, 0, 0.04); }
+
+/* Pedido nuevo: chip de un adjunto (formulario y tarjeta de info) — mismo
+   tono de fondo que .agenda-item para que se sienta parte de la misma
+   familia visual, pero sin cursor de "toda la fila es un botón" (el link/
+   quitar de adentro son los interactivos, no el chip entero). */
+.agenda-adjunto-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: inherit;
+  transition: background var(--transition-fast);
+}
+.agenda-adjunto-chip:hover { background: rgba(255, 255, 255, 0.08); }
+[data-mode="light"] .agenda-adjunto-chip { background: rgba(0, 0, 0, 0.04); }
+[data-mode="light"] .agenda-adjunto-chip:hover { background: rgba(0, 0, 0, 0.08); }
 .agenda-fila-clase:hover,
 .agenda-item:hover { background: rgba(255, 255, 255, 0.08); }
 [data-mode="light"] .agenda-fila-clase:hover,
