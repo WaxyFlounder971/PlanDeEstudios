@@ -315,6 +315,7 @@
         <div class="pill-group" id="pills-agenda-vista">
           <button type="button" class="pill-item active" data-vista="lista">Lista</button>
           <button type="button" class="pill-item" data-vista="calendario">Calendario</button>
+          <button type="button" class="pill-item" data-vista="materia">Materia</button>
         </div>
 
         <!-- Ronda de ajustes visuales #3 — punto A: encabezado a 3 líneas
@@ -344,6 +345,13 @@
         <div id="agenda-lista-dias" class="stack"></div>
 
         <div id="agenda-vista-calendario" class="stack oculto"></div>
+
+        <!-- Pedido nuevo: 3er tab "Materia" — selector (mismo patrón
+             .select-custom que el resto de la app) + vista semana-a-semana
+             de lo pendiente de la materia elegida. Construido 100%
+             dinámico por agenda-materia.js, mismo criterio que
+             #agenda-vista-calendario. -->
+        <div id="agenda-vista-materia" class="stack oculto"></div>
       </div>
 
       <!-- ===================== SECCIÓN: Horario ===================== -->
@@ -872,6 +880,16 @@
       <textarea id="input-agenda-notas" class="form-textarea" rows="3"></textarea>
     </div>
 
+    <!-- Pedido nuevo: adjuntar archivos/imágenes (pensado sobre todo para
+         cronogramas u otros documentos importantes) — ver
+         manejarSeleccionArchivosAdjuntos en agenda-modal.js. Se guardan como
+         base64 directo en el evento, viajan con el resto del dato. -->
+    <div>
+      <label class="form-label" for="input-agenda-adjuntos">Adjuntos (archivos e imágenes)</label>
+      <input type="file" id="input-agenda-adjuntos" class="form-input" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt">
+      <div id="lista-agenda-adjuntos" class="stack oculto" style="gap:6px; margin-top:8px;"></div>
+    </div>
+
     <div class="row-between">
       <button type="button" class="btn btn-danger oculto" id="btn-agenda-borrar">Borrar</button>
       <div class="row" style="justify-content:flex-end; flex:1;">
@@ -927,6 +945,37 @@
         <span class="track"><span class="thumb"></span></span>
       </label>
     </div>
+
+    <!-- Pedido nuevo: qué mostrar en la columna derecha de un pendiente
+         cuando "vence hoy" — 3 switches que se comportan como un grupo de
+         radio (siempre 1 activo), ver inicializarSwitchesVenceHoyAgenda en
+         agenda.js. -->
+    <div>
+      <span class="form-label">Cuando algo vence hoy, mostrar</span>
+      <div class="stack" style="gap:8px; margin-top:4px;">
+        <div class="row-between">
+          <span>Solo la hora de entrega</span>
+          <label class="switch switch-tema">
+            <input type="checkbox" id="chk-agenda-vencehoy-hora">
+            <span class="track"><span class="thumb"></span></span>
+          </label>
+        </div>
+        <div class="row-between">
+          <span>Solo el tiempo restante</span>
+          <label class="switch switch-tema">
+            <input type="checkbox" id="chk-agenda-vencehoy-restante">
+            <span class="track"><span class="thumb"></span></span>
+          </label>
+        </div>
+        <div class="row-between">
+          <span>Ambos</span>
+          <label class="switch switch-tema">
+            <input type="checkbox" id="chk-agenda-vencehoy-ambos">
+            <span class="track"><span class="thumb"></span></span>
+          </label>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -977,6 +1026,11 @@
     <div id="info-agenda-fila-notas" class="stack oculto" style="gap:2px;">
       <span class="muted" style="font-size:0.78rem;">Notas</span>
       <p id="info-agenda-notas-texto" style="margin:0; white-space:pre-wrap; overflow-wrap:break-word;"></p>
+    </div>
+
+    <div id="info-agenda-fila-adjuntos" class="stack oculto" style="gap:6px;">
+      <span class="muted" style="font-size:0.78rem;">Adjuntos</span>
+      <div id="info-agenda-lista-adjuntos" class="stack" style="gap:6px;"></div>
     </div>
 
     <div id="info-agenda-fila-completada" class="row oculto" style="align-items:center; gap:10px;">
