@@ -241,6 +241,18 @@ a { color: var(--accent-1); }
 [data-mode="light"] .btn-discreto:hover { background: rgba(0, 0, 0, 0.06); }
 .btn-discreto:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
 
+/* ---- v1.9.9: pill-group para etiquetas CORTAS Y FIJAS (nunca dinámicas ni
+   largas) — ej. Tarea/Examen/Evento en el modal de Agenda. A diferencia del
+   .pill-item genérico (que trunca con "…" porque puede recibir texto largo
+   o dinámico), acá el contenido nunca cambia y siempre entra cómodo, así
+   que sacar el overflow:hidden elimina de raíz cualquier riesgo de corte
+   vertical por redondeo de zoom del navegador, sin necesidad de agrandar
+   el botón (se mantiene con su alto mínimo natural, compacto). */
+.pill-group-fijo .pill-item {
+  overflow: visible;
+  text-overflow: unset;
+}
+
 /* ---- Grupo de botones "pill" (selección exclusiva) ---- */
 .pill-group {
   display: flex;
@@ -282,26 +294,30 @@ a { color: var(--accent-1); }
      original de "Solo la primera[m]" cortado a lo bruto. */
   flex: 1 1 0;
   min-width: 0;
-  /* v1.9.8: se probó overflow-x:hidden + overflow-y:visible para evitar el
-     corte vertical del texto con zoom >100%, pero por spec de CSS cuando un
-     eje no es "visible" el otro NUNCA puede quedar en "visible" de verdad —
-     el navegador lo fuerza a "auto", y eso metió una scrollbar por botón
-     (peor que el problema original). Se descarta ese approach.
-     Fix real: volver a `overflow: hidden` en los dos ejes (sin scrollbars
-     fantasma) pero dejando MUCHO más aire vertical (padding-block subido de
-     8px a 13px + line-height 1.4 en vez de "normal") para que el redondeo a
-     subpíxel del navegador a cualquier nivel de zoom (90–150%+) nunca llegue
-     a comerse una letra — el botón directamente se hace más alto. */
+  /* v1.9.9: se probaron 2 approaches para el corte vertical con zoom:
+     (a) overflow-x:hidden + overflow-y:visible -> por spec de CSS, cuando un
+         eje no es "visible" el otro se fuerza a "auto" -> metía scrollbar
+         por botón.
+     (b) engordar el padding/line-height para que el redondeo nunca alcance
+         la letra -> funciona pero el botón se ve gordo/raro (feedback:
+         "muy gordo se ve raro").
+     Fix real: dejar el .pill-item genérico como estaba (compacto, sin
+     engordar nada) y en su lugar sacar el overflow:hidden puntualmente en
+     el selector Tarea/Examen/Evento vía `.pill-group-fijo` más abajo — ese
+     grupo tiene 3 palabras cortas y fijas que NUNCA necesitan truncarse con
+     "…", así que sin overflow:hidden ahí no hay nada que el zoom pueda
+     recortar, y el botón queda con su alto mínimo natural. El resto de los
+     pill-group del sistema (los que sí truncan texto largo/dinámico)
+     siguen usando este overflow:hidden normal, sin cambios. */
   overflow: hidden;
   text-overflow: ellipsis;
   border: none;
   background: transparent;
   color: var(--text-muted);
-  padding: 13px 16px;
+  padding: 8px 16px;
   border-radius: var(--radius-pill);
   font-weight: 600;
   font-size: 0.85rem;
-  line-height: 1.4;
   cursor: pointer;
   transition: all var(--transition-fast);
   white-space: nowrap;
@@ -809,11 +825,7 @@ a { color: var(--accent-1); }
   .palette-swatch { flex-basis: calc((100% - 6 * 6px) / 7); max-width: 42px; }
   /* Bug 5: un poco más compactos para que quepan más pills por fila antes
      de tener que pasar a la siguiente línea. */
-  /* v1.9.8: se reduce el padding horizontal (para que quepan más pills por
-     fila) pero el vertical se mantiene alto — bajarlo acá reintroducía el
-     corte vertical justo en el breakpoint de celular, que es donde más se
-     reportó el bug. */
-  .pill-item { padding: 13px 12px; font-size: 0.8rem; }
+  .pill-item { padding: 7px 12px; font-size: 0.8rem; }
 }
 .palette-swatch:hover { transform: translateY(-2px) translateZ(0); }
 .palette-swatch.selected { border-color: var(--text-primary); }
