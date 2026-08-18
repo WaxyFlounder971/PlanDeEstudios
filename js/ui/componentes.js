@@ -609,6 +609,81 @@ function construirSelectorModalidad(valorInicial, onCambiar) {
   };
 }
 
+/* ===================== Auto-scroll de selectores activos al abrir un modal ===================== */
+
+/**
+ * Pedido de Wagner (17/08): en selectores largos dentro de ventanas
+ * emergentes — el pill-group de modalidad cuando "Personalizado" queda al
+ * final, la lista de semestres, cualquier selector con scroll propio — el
+ * ítem ya elegido podía quedar fuera de la vista inicial, obligando a
+ * scrollear a ciegas solo para confirmar qué estaba seleccionado. Pedido
+ * explícito: que sea parejo "en todos los semestres" (o sea, en toda la
+ * app, no pantalla por pantalla).
+ *
+ * En vez de ir modal por modal agregando esto a mano (docenas de puntos
+ * distintos, ver abrirSelectorSemestre acá mismo o abrirModalEventoAgenda
+ * en agenda-modal.js), se detecta genéricamente CUALQUIER apertura de
+ * `.modal-overlay` con un único observer acá, y se hace scroll instantáneo
+ * (sin animación — tiene que verse así desde el primer frame, no
+ * "deslizarse" después de que la persona ya lo vio vacío) hasta el ítem
+ * `.active`/`.selected` de cualquier selector adentro. Cubre los 2 patrones
+ * que ya existen en el código:
+ *   1. Modales fijos en el HTML que solo alternan la clase "oculto" (la
+ *      inmensa mayoría — ver inicializarBotonesCerrarModal más arriba,
+ *      mismo criterio de selector `.modal-overlay`).
+ *   2. Modales armados al vuelo con document.createElement + appendChild
+ *      (ej. abrirTarjetaInfoBloque en horario.js), que nacen visibles de
+ *      una y nunca pasan por un cambio de clase que el observer pueda
+ *      detectar por sí solo — por eso también se observa childList.
+ */
+function enfocarSelectoresActivosDeModal(overlay) {
+  if (!overlay || !overlay.classList || overlay.classList.contains("oculto")) return;
+  overlay.querySelectorAll(".pill-group, .selector-modalidad-horario, [data-scroll-selector]").forEach((cont) => {
+    const activo = cont.querySelector(".active, .selected, [aria-selected='true']");
+    // block/inline "nearest": solo mueve el scroll del contenedor propio
+    // del selector (ej. el pill-group con overflow-x:auto) lo mínimo
+    // necesario para que el ítem quede visible — nunca desplaza además la
+    // página entera o el modal completo de arrastre.
+    if (activo) activo.scrollIntoView({ block: "nearest", inline: "nearest" });
+  });
+}
+
+function inicializarAutoScrollSelectoresEnModales() {
+  const observer = new MutationObserver((mutaciones) => {
+    mutaciones.forEach((mut) => {
+      if (mut.type === "attributes" && mut.attributeName === "class") {
+        const el = mut.target;
+        if (el.classList && el.classList.contains("modal-overlay")) {
+          // requestAnimationFrame: se espera al próximo frame para que el
+          // contenido dinámico que cada modal arma recién al abrirse
+          // (innerHTML, pills con .active, etc.) ya esté pintado en el DOM
+          // — mismo motivo que ya usa desplazarYResaltarElemento más
+          // arriba para reintentar hasta que el destino exista.
+          requestAnimationFrame(() => enfocarSelectoresActivosDeModal(el));
+        }
+        return;
+      }
+      if (mut.type === "childList") {
+        mut.addedNodes.forEach((nodo) => {
+          if (nodo.nodeType !== 1) return;
+          if (nodo.classList && nodo.classList.contains("modal-overlay")) {
+            requestAnimationFrame(() => enfocarSelectoresActivosDeModal(nodo));
+          }
+          nodo.querySelectorAll?.(".modal-overlay").forEach((sub) => {
+            requestAnimationFrame(() => enfocarSelectoresActivosDeModal(sub));
+          });
+        });
+      }
+    });
+  });
+  observer.observe(document.body, {
+    attributes: true,
+    attributeFilter: ["class"],
+    childList: true,
+    subtree: true,
+  });
+}
+
 export {
   CLAVE_SIDEBAR_COLAPSADA,
   abrirConfirmacion,
@@ -621,6 +696,7 @@ export {
   construirSelectorModalidad,
   desplazarYResaltarElemento,
   envolverConFlechasScroll,
+  inicializarAutoScrollSelectoresEnModales,
   inicializarBotonesCerrarModal,
   inicializarLayoutResponsivo,
   inicializarModalConfirmacion,
