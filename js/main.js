@@ -24,7 +24,7 @@ import { renderizarSemestres } from "./semestres/semestres.js";
 import { inicializarAgenda, renderizarAgenda } from "./agenda/agenda.js";
 import { inicializarHorario, renderizarHorario } from "./horario/horario.js";
 import { procesarAsociacionPendienteDeAmigo, iniciarRefrescoPeriodicoAmigos } from "./horario/horario-amigos.js";
-import { abrirConfirmacion, agregarLongPress, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, mostrarToastAccion, restaurarEstadoSidebar } from "./ui/componentes.js";
+import { abrirConfirmacion, agregarLongPress, inicializarAutoScrollSelectoresEnModales, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, mostrarToastAccion, restaurarEstadoSidebar } from "./ui/componentes.js";
 import { aplicarPaleta, aplicarTemaGuardadoLocalmente } from "./ui/tema.js";
 
 /* ===================== PWA: registro del Service Worker ===================== */
@@ -278,6 +278,7 @@ window.addEventListener("DOMContentLoaded", () => {
   inicializarAgenda();
   inicializarHorario();
   inicializarBotonesCerrarModal();
+  inicializarAutoScrollSelectoresEnModales();
   inicializarPullToRefresh();
 
   const cache = leerCacheLocal();
