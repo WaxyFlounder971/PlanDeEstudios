@@ -44,11 +44,15 @@ estado.agendaVistaActiva = estado.agendaVistaActiva || "lista";
 // Semanas de offset respecto a la semana de hoy que Lista (y el submodo
 // "Semanal" del Calendario, que la comparte a propósito) está mostrando.
 estado.agendaOffsetSemana = estado.agendaOffsetSemana || 0;
-// Rediseño núcleo Agenda — punto 10: filtro de SESIÓN (no persistido, se
-// resetea en cada carga de la app) — "semanal" (comportamiento clásico,
-// navegación semana a semana) | "todo" (desde hoy hasta fin de semestre +
-// 2 semanas, scroll libre sin paginar — ver obtenerRangoDiasAgendaTodo).
-estado.agendaFiltroModo = estado.agendaFiltroModo || "semanal";
+// Rediseño núcleo Agenda — punto 10: arrancaba como filtro de SESIÓN puro
+// (nunca se guardaba, se reseteaba a "semanal" en cada carga). Pedido
+// nuevo: debe persistir igual que "Mostrar materias en la agenda" más
+// abajo. Se saca el default eager de acá (mismo motivo que el fix de
+// asegurarFiltroMostrarMateriasInicializado un poco más abajo: en el
+// momento en que este módulo se importa, estado.datos todavía es null, así
+// que leer estado.datos.configuracion acá arriba correría contra null) y
+// se deja en manos de asegurarFiltroModoAgendaInicializado(), invocada de
+// forma perezosa en el primer render real (ver renderizarAgenda).
 // Ronda de ajustes visuales — punto 2 (fix bug): estado de sesión de
 // expandido/colapsado del bloque "‹ N días anteriores" (punto 8). Antes
 // vivía SOLO como clase CSS en el <div> del cuerpo colapsable, armado
@@ -99,6 +103,17 @@ estado.agendaSemestresSeleccionados =
 function asegurarFiltroMostrarMateriasInicializado() {
   if (estado.agendaFiltroMostrarMaterias === undefined) {
     estado.agendaFiltroMostrarMaterias = estado.datos?.configuracion?.agenda_mostrar_clases !== false;
+  }
+}
+
+// Mismo patrón/motivo que la función de arriba — perezosa a propósito,
+// llamada recién en el primer render real (ver renderizarAgenda), nunca en
+// el top-level del módulo. Ahora "Semanal"/"Todo" persiste entre cargas
+// via `configuracion.agenda_filtro_modo` (ver el pill-group de arriba, que
+// ya escribe ahí al tocarlo) — "semanal" si nunca se guardó nada todavía.
+function asegurarFiltroModoAgendaInicializado() {
+  if (estado.agendaFiltroModo === undefined) {
+    estado.agendaFiltroModo = estado.datos?.configuracion?.agenda_filtro_modo || "semanal";
   }
 }
 
@@ -756,6 +771,7 @@ function renderizarAgendaInterno() {
 
 function renderizarAgenda() {
   asegurarFiltroMostrarMateriasInicializado();
+  asegurarFiltroModoAgendaInicializado();
   renderizarHeaderAgenda();
   const esLista = estado.agendaVistaActiva === "lista";
   document.getElementById("agenda-lista-dias")?.classList.toggle("oculto", !esLista);
@@ -818,20 +834,18 @@ function inicializarAgenda() {
  * Ronda de ajustes visuales — punto 3: los 3 botones de antes (Agregar /
  * engranaje-a-Ajustes-global / Filtros) quedan en 2 — Agregar y un único
  * engranaje (#btn-agenda-ajustes) que abre ESTA ventana combinada. Junta
- * los 2 controles de SESIÓN que ya vivían en el viejo modal de Filtros
- * ("Mostrar: Semanal/Todo" y "Mostrar materias en la agenda") con el
- * control PERSISTENTE que antes vivía suelto en Ajustes → Agenda
- * ("Mostrar días sin eventos ni tareas",
+ * "Mostrar: Semanal/Todo" y "Mostrar materias en la agenda" (antes vivían
+ * en el viejo modal de Filtros) con el control que antes vivía suelto en
+ * Ajustes → Agenda ("Mostrar días sin eventos ni tareas",
  * `configuracion.agenda_mostrar_dias_vacios` — ver renderizarAgendaInterno
  * más arriba). Esa sección de Ajustes global ya NO existe — este modal,
  * accesible solo desde acá, es el único lugar donde se toca.
  *
- * Ronda de ajustes visuales #2 — punto D: el otro control persistente que
- * vivía acá ("Mostrar clases ese día", `agenda_mostrar_clases`) se quitó
- * por completo — pedido explícito, no tenía un propósito claro para la
- * persona usuaria (en la práctica duplicaba lo que ya hace "Mostrar
- * materias en la agenda"). El campo sigue en el schema por compatibilidad
- * con datos viejos, pero ya no hay forma de tocarlo desde la UI.
+ * Pedido nuevo: los 3 controles son PERSISTENTES — sobreviven a recargar
+ * la app (antes "Semanal/Todo" y "Mostrar materias" eran de sesión pura,
+ * se reseteaban en cada carga). "Mostrar materias" reutiliza para esto el
+ * campo `agenda_mostrar_clases` (ver nota de la Ronda #2 — punto D más
+ * abajo, sobre por qué ese campo ya estaba en el schema).
  *
  * Los 3 controles aplican al toque (sin botón "Aplicar" separado) y
  * re-renderizan Agenda en el momento — el modal en sí se cierra con el
@@ -841,6 +855,16 @@ function inicializarAgenda() {
 function inicializarFiltrosAgenda() {
   const modal = document.getElementById("modal-agenda-ajustes");
   if (!modal) return;
+
+  // Ronda de ajustes visuales #2 — punto D: el control persistente que
+  // vivía acá con nombre propio ("Mostrar clases ese día",
+  // `agenda_mostrar_clases`) se había quitado de la UI por completo — no
+  // tenía un propósito claro para la persona usuaria, en la práctica
+  // duplicaba lo que ya hace "Mostrar materias en la agenda". El campo
+  // quedó en el schema por compatibilidad con datos viejos, de solo
+  // lectura. Ahora (pedido nuevo: persistencia) se retoma ESE mismo campo
+  // como el respaldo persistente de "Mostrar materias en la agenda" — son
+  // el mismo concepto, así que no hace falta sumar uno nuevo al schema.
 
   document.getElementById("btn-agenda-ajustes")?.addEventListener("click", () => {
     asegurarFiltroMostrarMateriasInicializado();
@@ -862,6 +886,13 @@ function inicializarFiltrosAgenda() {
       document.querySelectorAll("#pills-agenda-filtro-modo .pill-item").forEach((b) => {
         b.classList.toggle("active", b === btn);
       });
+      // Pedido nuevo: "Semanal"/"Todo" debe sobrevivir a recargar la app —
+      // mismo patrón que "Mostrar días sin eventos ni tareas" más abajo
+      // (persistente en configuracion, se sincroniza a Drive/caché local
+      // igual que cualquier otro dato).
+      estado.datos.configuracion.agenda_filtro_modo = btn.dataset.valor;
+      sellarTimestamp(estado.datos.configuracion);
+      marcarCambioPendiente();
       // Punto 10: cambiar de modo mientras se está a mitad de semana no
       // tiene un offset equivalente en "Todo" (que siempre arranca en HOY)
       // — se resetea el offset acá para que volver a "Semanal" más tarde
@@ -878,6 +909,17 @@ function inicializarFiltrosAgenda() {
 
   document.getElementById("chk-agenda-filtro-materias")?.addEventListener("change", (ev) => {
     estado.agendaFiltroMostrarMaterias = ev.target.checked;
+    // Pedido nuevo: debe sobrevivir a recargar la app. Se reutiliza
+    // `agenda_mostrar_clases` — el mismo campo que ya se leía como default
+    // acá arriba (asegurarFiltroMostrarMateriasInicializado) pero que desde
+    // la Ronda #2 (punto D) había quedado de solo lectura, sin forma de
+    // escribirlo desde la UI tras quitarse su propio control ("Mostrar
+    // clases ese día", que duplicaba esto). Es el mismo concepto, así que
+    // en vez de sumar un campo nuevo al schema se vuelve a conectar la
+    // escritura acá.
+    estado.datos.configuracion.agenda_mostrar_clases = ev.target.checked;
+    sellarTimestamp(estado.datos.configuracion);
+    marcarCambioPendiente();
     renderizarAgenda();
   });
 
