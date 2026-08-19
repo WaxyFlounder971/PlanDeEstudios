@@ -57,7 +57,7 @@ import { calcularNumeroSemanaParaFecha } from "./agenda-clases.js";
 import { construirItemEvento, limpiarIntervalosVenceHoy } from "./agenda.js";
 import { formatearHoraAmPm, obtenerMateriasVinculablesAgenda } from "./agenda-utils.js";
 import { obtenerAdjuntosActivosDe } from "../core/storage-adjuntos.js";
-import { abrirAdjunto, abrirMenuAdjuntos, abrirModalAdjuntar } from "../ui/adjuntos-ui.js";
+import { abrirAdjunto, abrirMenuAdjuntos } from "../ui/adjuntos-ui.js";
 
 // Sesión, no persistido — mismo criterio que el resto de flags de Agenda
 // (ver agenda.js/agenda-calendario.js): qué materia_matriculada_id está
@@ -160,62 +160,53 @@ function resolverMateriaCompleta(mmId, semestreId) {
 
 /**
  * Fila de pills de adjuntos de la materia (cronograma, reglas, libros —
- * entidadTipo "materia") + una pill "+ Adjuntar" con borde punteado
- * (.adjunto-pill-agregar, ya lista en design-system.css desde la Etapa 2
- * justo para esta fila). Si ya hay al menos un adjunto, se agrega un link
- * "Gestionar" para reordenar/desactivar/borrar — mismo patrón que la
- * tarjeta de info de un evento en agenda-modal.js.
+ * entidadTipo "materia") + UN solo botón "Adjuntar" que abre el menú
+ * completo de gestión (abrirMenuAdjuntos, ver adjuntos-ui.js) — ese menú
+ * ya trae su propio "+ Agregar otro adjunto" adentro, así que no hace
+ * falta un botón aparte para agregar y otro para gestionar.
+ *
+ * Fix reportado: la pill punteada "+ Adjuntar" (.adjunto-pill-agregar) se
+ * veía muy oscura / poco legible. Se reemplaza por un botón `.btn
+ * .btn-secondary` — el mismo estilo que ya usan "📄 Subir archivo" /
+ * "🔗 Agregar enlace" dentro del propio modal, que sí se ve bien y se
+ * adapta solo a modo claro/oscuro (no depende de la clase de pill que
+ * estaba rota).
  */
 function construirFilaAdjuntosMateria(mm, onCambiar) {
   const cont = document.createElement("div");
   cont.className = "stack";
-  cont.style.gap = "4px";
-
-  const filaPills = document.createElement("div");
-  filaPills.className = "adjuntos-pills-fila";
+  cont.style.gap = "6px";
 
   const adjuntos = obtenerAdjuntosActivosDe("materia", mm.id);
-  adjuntos.forEach((adjunto) => {
-    const pill = document.createElement("button");
-    pill.type = "button";
-    pill.className = "adjunto-pill";
-    pill.title = adjunto.nombre;
-    pill.innerHTML = `${adjunto.tipo === "enlace" ? "🔗" : "📄"} <span style="overflow:hidden; text-overflow:ellipsis;">${adjunto.nombre}</span>`;
-    pill.addEventListener("click", () => abrirAdjunto(adjunto));
-    filaPills.appendChild(pill);
-  });
-
-  const pillAgregar = document.createElement("button");
-  pillAgregar.type = "button";
-  pillAgregar.className = "adjunto-pill adjunto-pill-agregar";
-  pillAgregar.textContent = "+ Adjuntar";
-  pillAgregar.addEventListener("click", () => {
-    abrirModalAdjuntar({
-      entidadTipo: "materia",
-      entidadId: mm.id,
-      onListo: onCambiar,
-    });
-  });
-  filaPills.appendChild(pillAgregar);
-
-  cont.appendChild(filaPills);
 
   if (adjuntos.length > 0) {
-    const btnGestionar = document.createElement("button");
-    btnGestionar.type = "button";
-    btnGestionar.className = "btn-link";
-    btnGestionar.style.cssText = "font-size:0.78rem; align-self:center; background:none; border:none; cursor:pointer; text-decoration:underline; opacity:0.8;";
-    btnGestionar.textContent = "Gestionar adjuntos";
-    btnGestionar.addEventListener("click", () => {
-      abrirMenuAdjuntos({
-        entidadTipo: "materia",
-        entidadId: mm.id,
-        titulo: "Adjuntos de esta materia",
-        onCambiar,
-      });
+    const filaPills = document.createElement("div");
+    filaPills.className = "adjuntos-pills-fila";
+    adjuntos.forEach((adjunto) => {
+      const pill = document.createElement("button");
+      pill.type = "button";
+      pill.className = "adjunto-pill";
+      pill.title = adjunto.nombre;
+      pill.innerHTML = `${adjunto.tipo === "enlace" ? "🔗" : "📄"} <span style="overflow:hidden; text-overflow:ellipsis;">${adjunto.nombre}</span>`;
+      pill.addEventListener("click", () => abrirAdjunto(adjunto));
+      filaPills.appendChild(pill);
     });
-    cont.appendChild(btnGestionar);
+    cont.appendChild(filaPills);
   }
+
+  const btnAdjuntar = document.createElement("button");
+  btnAdjuntar.type = "button";
+  btnAdjuntar.className = "btn btn-secondary btn-block";
+  btnAdjuntar.textContent = adjuntos.length > 0 ? "📎 Adjuntos" : "📎 Adjuntar";
+  btnAdjuntar.addEventListener("click", () => {
+    abrirMenuAdjuntos({
+      entidadTipo: "materia",
+      entidadId: mm.id,
+      titulo: "Adjuntos de esta materia",
+      onCambiar,
+    });
+  });
+  cont.appendChild(btnAdjuntar);
 
   return cont;
 }
