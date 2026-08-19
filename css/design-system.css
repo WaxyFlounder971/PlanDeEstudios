@@ -1632,6 +1632,54 @@ img, svg { max-width: 100%; }
    dentro de .materia-linea1, lo que evita que empuje el nombre a una 2da
    línea (ver comentario de .materia-linea1). */
 .materia-expandir { flex-shrink: 0; opacity: 0.7; }
+
+/* ---- Cronograma (Agenda): tarjeta-selector de materia (2026-08-19) ----
+   La tarjeta ES el selector — sin estado seleccionado, es este botón
+   vacío; con estado seleccionado, es la tarjeta-resumen real + la
+   "pestañita" de abajo (.materia-pestana-cambiar). ---- */
+.materia-card-vacia {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
+  cursor: pointer;
+  text-align: center;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.materia-card-vacia:hover { background: rgba(255, 255, 255, 0.05); }
+[data-mode="light"] .materia-card-vacia:hover { background: rgba(0, 0, 0, 0.03); }
+
+/* Pestañita centrada, colgando del borde inferior de la tarjeta-resumen —
+   es la única forma de abrir el selector de materia una vez elegida una.
+   El wrapper `position:relative` que la contiene (ver
+   construirContenidoMateria en agenda-materia.js) no le agrega gap propio,
+   así que no afecta el espaciado entre tarjetas del `.stack`. */
+.materia-pestana-cambiar {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translate(-50%, 50%);
+  width: 34px;
+  height: 18px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: none;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+.materia-pestana-cambiar:hover { background: rgba(255, 255, 255, 0.16); transform: translate(-50%, 50%) translateY(1px); }
+[data-mode="light"] .materia-pestana-cambiar { background: rgba(0, 0, 0, 0.05); border-color: rgba(0, 0, 0, 0.08); }
+[data-mode="light"] .materia-pestana-cambiar:hover { background: rgba(0, 0, 0, 0.09); }
 .materia-nombre {
   font-family: var(--font-display);
   font-weight: 700;
