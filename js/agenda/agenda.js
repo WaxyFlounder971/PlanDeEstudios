@@ -37,6 +37,7 @@ import {
   obtenerSemestresSeleccionadosAgenda,
   tareaVenceHoy,
 } from "./agenda-utils.js";
+import { obtenerAdjuntosActivosDe } from "../core/storage-adjuntos.js";
 
 const ETIQUETA_TIPO = { evento: "Eventos", tarea: "Tareas", examen: "Exámenes" };
 const ORDEN_TIPO = ["examen", "tarea", "evento"];
@@ -147,6 +148,19 @@ function construirBadgeMateria(evento) {
 }
 
 /**
+ * Plan consolidado de Adjuntos — 📎 en la línea 2 de la tarjeta, junto al
+ * badge de materia, visible sin tener que abrir el evento. Solo cuenta
+ * ACTIVOS (obtenerAdjuntosActivosDe) — uno desactivado no debe generar
+ * ruido acá, mismo criterio que ya usa la tarjeta de info del evento
+ * (agenda-modal.js) para decidir qué pills mostrar.
+ */
+function construirBadgeAdjuntos(evento) {
+  const cantidad = obtenerAdjuntosActivosDe("evento", evento.id).length;
+  if (cantidad === 0) return "";
+  return `<span class="muted" style="font-size:0.72rem;">📎 ${cantidad}</span>`;
+}
+
+/**
  * Punto 5: toggle del checkbox circular de "completada" — vive acá (no en
  * agenda-modal.js) porque no abre ningún modal, solo muta el campo y
  * refresca en el lugar; mismo patrón de "releer la entidad viva por id
@@ -211,7 +225,7 @@ function construirItemEvento(evento) {
   izquierda.style.cssText = "flex:1; min-width:0; text-align:left; overflow-wrap:break-word;";
   izquierda.innerHTML = `
     <div style="font-weight:600; ${evento.completada ? "text-decoration:line-through; opacity:0.7;" : ""}">${evento.nombre || "(sin nombre)"}</div>
-    ${construirBadgeMateria(evento)}
+    <div style="display:flex; align-items:center; gap:6px;">${construirBadgeMateria(evento)}${construirBadgeAdjuntos(evento)}</div>
   `;
   item.appendChild(izquierda);
 
