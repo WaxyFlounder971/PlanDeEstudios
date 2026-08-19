@@ -285,6 +285,7 @@ Exporta:
 * `inicializarLayoutResponsivo()` — configura el comportamiento responsivo del sidebar/drawer según el tamaño de pantalla.
 * `inicializarModalConfirmacion()` — engancha los listeners del modal de confirmación (botón, clic afuera).
 * `inicializarNavegacionBotonesMouse()` — habilita la navegación con los botones de mouse (adelante/atrás) respetando el orden/visibilidad configurados en Ajustes.
+* `mostrarPantallaCargaSesion()` / `ocultarPantallaCargaSesion()` — overlay de marca propia (`#overlay-carga-sesion`, ver index.html/design-system.css) que reemplaza a `#pantalla-login` mientras la app decide si puede restaurar la sesión sola, y también mientras `onLoginExitoso` (main.js) trae el archivo de datos de Drive tras un login real. Separado a propósito de `mostrarCargando()`/`ocultarCargando()` (storage-sync.js, los "3 puntitos" genéricos).
 * `mostrarToast(mensaje, duracionMs=2400)` — muestra un toast temporal.
 * `mostrarToastAccion(mensaje, textoBoton, alConfirmar)` — muestra un toast persistente con un botón de acción, para avisos que requieren confirmación del usuario en vez de desvanecerse solos.
 * `restaurarEstadoSidebar()` — restaura el estado colapsado/expandido del sidebar guardado en localStorage.
