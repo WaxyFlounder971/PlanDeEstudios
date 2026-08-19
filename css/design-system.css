@@ -27,7 +27,15 @@
 }
 
 /* ---- Estructura base (independiente de paleta) ---- */
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+  /* Quita el highlight azul nativo que Chrome/Safari en móvil pintan sobre
+     toda la hitbox al tocar cualquier elemento clickeable (botones, links,
+     pills, tarjetas, etc). Es un efecto del navegador, no del sistema de
+     diseño — por eso aparecía en casi todo sin que hubiera una regla
+     nuestra que lo causara. */
+  -webkit-tap-highlight-color: transparent;
+}
 
 /* ---- Letra 10% más chica solo en teléfono (pedido explícito) ----
    16px * 0.9 = 14.4px. Todo el sistema usa rem para tipografía (ver
