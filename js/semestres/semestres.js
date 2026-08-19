@@ -836,6 +836,23 @@ function navegarASemestre(semestreId) {
   desplazarYResaltarElemento(`[data-semestre-id="${semestreId}"]`);
 }
 
+/**
+ * 2026-08-19 — mismo patrón que navegarASemestre, pero apunta a la tarjeta
+ * de UNA materia matriculada puntual dentro de ese semestre (no solo al
+ * semestre entero) — usado por la ➤ de la tarjeta-resumen del tab
+ * Cronograma en Agenda (ver agenda-materia.js), para llevar de vuelta a
+ * Semestres con feedback visual de que sí aterrizó en la materia correcta.
+ * Requiere que la tarjeta de materia tenga `data-mm-id` (ver
+ * construirTarjetaMateriaMatriculada en semestres-tarjetas.js).
+ */
+function navegarAMateriaMatriculada(semestreId, mmId) {
+  mostrarSeccion("semestres");
+  estado.semestresExpandidos.set(semestreId, true);
+  estado.semestresExpandidos.set(mmId, true); // aterriza con la tarjeta de la materia ya abierta, no solo el semestre
+  renderizarSemestres(true);
+  desplazarYResaltarElemento(`[data-mm-id="${mmId}"]`);
+}
+
 /* ===================== Horario: navegación cronológica + vínculo profesor =====================
  * Agregado para la sección Horario (header con flechas < >). No se toca
  * obtenerSemestresActuales/Pasadas (están ordenados desc para el listado):
@@ -1028,6 +1045,7 @@ function renderizarSemestres(omitirRestauracionScroll = false) {
 export {
   abrirModalAltaSemestre,
   buscarSemestreVivoPorId,
+  navegarAMateriaMatriculada,
   navegarASemestre,
   obtenerSemestreAdyacente,
   obtenerSemestresActuales,

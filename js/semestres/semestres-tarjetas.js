@@ -3147,6 +3147,12 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
 
   const card = document.createElement("div");
   card.className = "glass-panel materia-card";
+  // 2026-08-19: identificador en el DOM para ubicar esta tarjeta puntual
+  // desde otro módulo — mismo criterio que card.dataset.semestreId en
+  // construirTarjetaSemestre más abajo. Lo usa navegarAMateriaMatriculada
+  // (semestres.js), llamada desde la ➤ de la tarjeta-resumen del tab
+  // Cronograma en Agenda (agenda-materia.js).
+  card.dataset.mmId = mm.id;
   const categoria = plan.categorias.find((c) => c.id === materia.categoria_id);
   if (categoria) card.style.boxShadow = `inset 6px 0 0 0 ${categoria.color}`;
 
@@ -3539,4 +3545,21 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEdita
   return card;
 }
 
-export { construirTarjetaSemestre, abrirModalTodosLosConflictos, registrarAbrirTarjetaProfesorFlotante };
+export {
+  construirTarjetaSemestre,
+  abrirModalTodosLosConflictos,
+  registrarAbrirTarjetaProfesorFlotante,
+  // Cronograma por materia (agenda-materia.js) reusa esto tal cual para no
+  // duplicar el motor de cálculo/render de criterios y asignaciones — ver
+  // comentario de construirSeccionNotas más arriba.
+  construirSeccionNotas,
+  // Mismo motivo: la tarjeta-resumen del Cronograma clona el ícono 👤 de
+  // esta misma tarjeta — reusa el popover real en vez de uno aparte.
+  abrirPopoverProfesoresMateria,
+  // Mismo motivo otra vez: "Nota: X" en la tarjeta-resumen usa el MISMO
+  // cálculo (redondeo al 5 más cercano + conversión a la escala del plan)
+  // y el MISMO formato de número que ya usa esta tarjeta — cero lógica de
+  // notas duplicada en agenda-materia.js.
+  calcularNotaFinalVigente,
+  formatearNumero,
+};
