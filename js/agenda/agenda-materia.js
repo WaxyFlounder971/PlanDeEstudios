@@ -216,8 +216,22 @@ function construirFilaAdjuntosMateria(mm, onCambiar) {
  * redondearNotaFinalAlCincoMasCercano, convertirDesde100 a la escala del
  * plan, formatearNumero) + ➤ que salta a esa tarjeta real en Semestres
  * (navegarAMateriaMatriculada) para editar ahí lo que haga falta.
+ *
+ * Fix reportado: esta fila se devolvía suelta (sin ningún contenedor con
+ * fondo/borde), así que se veía como texto flotando encima del resto del
+ * tab en vez de una tarjeta — se envuelve acá en un `.glass-panel` (mismo
+ * lenguaje visual que el resto de tarjetas de Agenda/Semestres, ver
+ * `.materia-card` en semestres-tarjetas.js) para que quede una tarjeta real
+ * y autocontenida. A propósito NO se le agrega nada más adentro (ni
+ * adjuntos ni la sección de notas/criterios, que ya viven como bloques
+ * separados debajo) — esta tarjeta muestra ÚNICAMENTE lo mismo que ya
+ * mostraba: nombre, profesor, nota final y el salto a Semestres.
  */
 function construirTarjetaResumenMateria(mm, materia, plan, semestre, onCambiar) {
+  const tarjeta = document.createElement("div");
+  tarjeta.className = "glass-panel materia-card";
+  tarjeta.style.padding = "12px 14px";
+
   const fila = document.createElement("div");
   fila.className = "row-between";
   fila.style.cssText = "gap:8px; align-items:center; flex-wrap:wrap;";
@@ -267,7 +281,8 @@ function construirTarjetaResumenMateria(mm, materia, plan, semestre, onCambiar) 
 
   fila.appendChild(derecha);
 
-  return fila;
+  tarjeta.appendChild(fila);
+  return tarjeta;
 }
 
 /* ------------------------------ Semanas ------------------------------ */
