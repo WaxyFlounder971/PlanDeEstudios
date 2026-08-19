@@ -101,8 +101,17 @@ let procesandoColaSubidas = false;
  * comportamiento de siempre). El binario en Drive SIEMPRE se sube con el
  * nombre real del archivo — esto solo cambia la ETIQUETA que se muestra en
  * la app, nunca el archivo físico.
+ *
+ * `emojiPersonalizado` (opcional, 2026-08-19, pedido explícito — reemplaza
+ * el emoji GLOBAL de configuracion.agendaAdjuntarEmoji que se pedía con un
+ * window.prompt() nativo, que rompía el diseño): emoji propio de ESTE
+ * adjunto puntual, elegido en el mismo campo de texto que el nombre (ver
+ * crearCampoEmojiModal en ui/adjuntos-ui.js) — nunca un diálogo del
+ * navegador. `null` si se deja vacío (nunca string vacío), para que el
+ * resto de la UI pueda hacer un simple `adjunto.emoji || iconoPorDefecto`
+ * sin distinguir "" de null/undefined.
  */
-function adjuntarArchivo(archivo, entidadTipo, entidadId, nombrePersonalizado) {
+function adjuntarArchivo(archivo, entidadTipo, entidadId, nombrePersonalizado, emojiPersonalizado) {
   const limiteBytes = LIMITE_MB_ADJUNTO * 1024 * 1024;
   if (archivo.size > limiteBytes) {
     throw new Error(`El archivo pesa más de ${LIMITE_MB_ADJUNTO}MB — elegí uno más liviano.`);
@@ -117,6 +126,13 @@ function adjuntarArchivo(archivo, entidadTipo, entidadId, nombrePersonalizado) {
     entidadTipo,
     entidadId,
   });
+  // Sin acceso a schema.js en esta sesión para agregarle este campo a la
+  // firma de crearAdjunto() — se asigna acá como un campo plano más sobre
+  // el objeto ya creado (misma colección JSON sin esquema estricto que ya
+  // usa el resto de la app para campos opcionales). Recomendado: si en
+  // algún momento se toca schema.js, mover esto al `crearAdjunto({...})`
+  // de arriba para que quede documentado ahí también.
+  nuevo.emoji = (emojiPersonalizado || "").trim() || null;
   sellarTimestamp(nuevo);
 
   if (!Array.isArray(estado.datos.adjuntos)) estado.datos.adjuntos = [];
@@ -136,11 +152,14 @@ function adjuntarArchivo(archivo, entidadTipo, entidadId, nombrePersonalizado) {
  * referencia queda lista y sincronizable de una sola vez, igual que
  * cualquier otra entidad simple de este JSON (ver crearEnlaceRapido).
  */
-function agregarEnlaceAdjunto({ nombre, url, entidadTipo, entidadId }) {
+function agregarEnlaceAdjunto({ nombre, url, entidadTipo, entidadId, emoji }) {
   if (!url || !/^https?:\/\//i.test(url.trim())) {
     throw new Error("El enlace debe ser una URL válida (empezar con http:// o https://).");
   }
   const nuevo = crearAdjunto({ nombre, url: url.trim(), entidadTipo, entidadId, tipo: "enlace" });
+  // Mismo criterio y misma limitación (sin schema.js a mano) que en
+  // adjuntarArchivo — ver ese comentario para el detalle.
+  nuevo.emoji = (emoji || "").trim() || null;
   sellarTimestamp(nuevo);
 
   if (!Array.isArray(estado.datos.adjuntos)) estado.datos.adjuntos = [];
@@ -228,6 +247,40 @@ async function procesarColaSubidas() {
 window.addEventListener("online", () => {
   if (colaSubidaPendiente.length > 0) procesarColaSubidas();
 });
+
+/**
+ * Edita un adjunto YA EXISTENTE — nombre, emoji y (si aplica) el enlace
+ * (pedido explícito, 2026-08-19: antes solo se podía crear, activar/
+ * desactivar, reordenar o borrar — para corregir un nombre mal escrito o
+ * el emoji había que borrar el adjunto entero y crearlo de nuevo, perdiendo
+ * de paso el archivo real ya subido a Drive si era de tipo "archivo").
+ * `url` se ignora si el adjunto no es de tipo "enlace" — un archivo no
+ * tiene URL editable, su binario ya vive subido en Drive (cambiar el
+ * archivo en sí requeriría borrar y volver a adjuntar, fuera de alcance
+ * acá). Nunca toca Drive ni la cola de subida — solo la referencia liviana.
+ */
+function editarAdjunto(adjuntoId, { nombre, url, emoji }) {
+  const referencia = (estado.datos.adjuntos || []).find((a) => a.id === adjuntoId);
+  if (!referencia) throw new Error("Este adjunto ya no existe — puede que se haya eliminado desde otro dispositivo.");
+
+  const nombreLimpio = (nombre || "").trim();
+  if (!nombreLimpio) throw new Error("Ponele un nombre al adjunto.");
+  referencia.nombre = nombreLimpio;
+
+  if (referencia.tipo === "enlace") {
+    const urlLimpia = (url || "").trim();
+    if (!urlLimpia || !/^https?:\/\//i.test(urlLimpia)) {
+      throw new Error("El enlace debe ser una URL válida (empezar con http:// o https://).");
+    }
+    referencia.url = urlLimpia;
+  }
+
+  referencia.emoji = (emoji || "").trim() || null;
+
+  sellarTimestamp(referencia);
+  marcarCambioPendiente();
+  return referencia;
+}
 
 /* ------------------------------- Descarga ------------------------------- */
 
@@ -456,6 +509,7 @@ export {
   agregarEnlaceAdjunto,
   alternarActivoAdjunto,
   descargarAdjunto,
+  editarAdjunto,
   eliminarAdjunto,
   eliminarAdjuntosDeCronogramaDeSemestre,
   eliminarAdjuntosDeEventosSueltos,
