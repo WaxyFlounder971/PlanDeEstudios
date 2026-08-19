@@ -118,12 +118,15 @@ function construirTarjetaVacia(onTocar) {
 }
 
 /**
- * La "pestañita para jalar" (pedido explícito): un tab chico, centrado,
- * pegado al borde inferior de la tarjeta-resumen — se posiciona con
- * position:absolute sobre un wrapper `position:relative` (ver
- * construirContenidoMateria) para que quede "colgando" del borde de la
- * tarjeta en vez de ocupar una fila propia. Es la ÚNICA forma de abrir el
- * selector de materia una vez que ya hay una elegida.
+ * La "pestañita para jalar" (pedido explícito): una franja angosta pegada
+ * al borde inferior de la tarjeta-resumen, en flujo normal (ver
+ * construirContenidoMateria — nada de position:absolute ni overlap: eso
+ * se probó primero y se veía "sobrepuesta"/flotando, además de dejar
+ * traslucir lo que quedara debajo por el blur de .glass-panel). Al ir
+ * tocando el borde de la tarjeta, angosta y sin border-top, se lee como
+ * una continuación de la tarjeta en vez de un elemento aparte. Es la
+ * ÚNICA forma de abrir el selector de materia una vez que ya hay una
+ * elegida.
  */
 function construirPestanaCambiarMateria(onTocar) {
   const pestana = document.createElement("button");
@@ -608,12 +611,13 @@ function construirContenidoMateria(mmVinculable, materias, onCambiar) {
 
   const { semestre, mm, plan, materia } = resuelto;
 
-  // Wrapper `position:relative` SOLO para poder anclar la pestañita
-  // (position:absolute) al borde inferior de la tarjeta — no le agrega
-  // ningún gap ni padding propio, así que el espaciado hacia el elemento
-  // siguiente lo sigue dando el `.stack` de `cont`, no este wrapper.
+  // Wrapper simple (sin position:relative/absolute — ver comentario de
+  // .materia-pestana-cambiar en design-system.css): la pestañita va en
+  // flujo normal, tocando el borde de abajo de la tarjeta, así el
+  // `.stack` de `cont` mide el gap hacia el siguiente elemento desde el
+  // borde de la pestañita, no desde el de la tarjeta — mismo gap parejo
+  // pedido (tarjeta+pestaña → adjuntos == adjuntos → Semana 1).
   const wrapTarjeta = document.createElement("div");
-  wrapTarjeta.style.position = "relative";
   wrapTarjeta.appendChild(construirTarjetaResumenMateria(mm, materia, plan, semestre, onCambiar));
   wrapTarjeta.appendChild(construirPestanaCambiarMateria(() => abrirSelectorMateriaAgenda(materias)));
   cont.appendChild(wrapTarjeta);
