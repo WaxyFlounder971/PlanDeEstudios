@@ -494,9 +494,14 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minI
     const lineasTexto = 1 + (b.profesorNombre ? 1 : 0) + (b.aula ? 1 : 0);
     const altoTextoEstimado = 6 /* padding vertical */ + lineasTexto * 15;
     const cabeEntrar = alto >= altoTextoEstimado + 16;
+    // Punto 4 del ajuste a Horario propio: el ✎ que marcaba "esta semana
+    // tiene un ajuste puntual" se sacó de acá (pedido explícito). Se
+    // confirmó que no se usa/muestra en ningún otro lugar (ni Agenda ni
+    // otro archivo referencian tieneExcepcionEstaSemana), así que se quita
+    // del todo en vez de moverlo — no queda ninguna referencia visual a la
+    // excepción en el grid de Horario.
     tarjeta.innerHTML = `
       <div style="font-size:0.85rem; font-weight:600; line-height:1.15; display:flex; align-items:center; gap:4px; margin-bottom:2px; overflow-wrap:break-word; word-break:break-word;">
-        ${b.tieneExcepcionEstaSemana ? `<span title="Esta semana tiene un ajuste puntual" style="font-size:1.05rem; opacity:0.9; flex-shrink:0;">✎</span>` : ""}
         <span>${b.nombreCorto}</span>
       </div>
       ${b.profesorNombre ? `<div style="font-size:0.72rem; opacity:0.9; overflow-wrap:break-word; word-break:break-word;">${b.profesorNombre}</div>` : ""}
@@ -821,7 +826,14 @@ function renderizarHorarioInterno() {
     const columnaAncha = document.createElement("div");
     columnaAncha.style.cssText = "display:flex; flex-direction:column; min-width:100%; width:max-content;";
 
-    const headerFila = document.createElement("div");
+    // headerWrap: envoltorio sticky único para el header de días Y (solo en
+    // modo pantalla completa) la barra de navegación de semana/semestre.
+    // Antes headerFila era ella misma el elemento sticky; ahora el
+    // sticky/bg/z-index/border vive acá arriba para que, si se agrega la
+    // fila de navegación fullscreen, las dos filas peguen juntas como UN
+    // solo bloque (si cada una fuera sticky por separado con top:0, se
+    // superpondrían entre sí al scrollear en vez de apilarse).
+    const headerWrap = document.createElement("div");
     // Fondo SÓLIDO (no --bg-panel, que es semitransparente en todas las
     // paletas — ver mismo patrón en .mapa-nodo dentro de design-system.css)
     // para que las tarjetas de materia no se transparenten al pasar detrás.
@@ -832,7 +844,42 @@ function renderizarHorarioInterno() {
     // sólido para esta paleta — se agregó junto a los demás tokens en
     // design-system.css. No es transparente, así que nunca se ve nada de
     // lo que scrollea por debajo.
-    headerFila.style.cssText = "display:flex; position:sticky; top:0; z-index:50; background:var(--bg-header-solido); border-bottom:1px solid rgba(150,150,170,0.15);";
+    headerWrap.style.cssText = "position:sticky; top:0; z-index:50; background:var(--bg-header-solido); border-bottom:1px solid rgba(150,150,170,0.15);";
+
+    // Punto 1 del ajuste a Horario propio: en pantalla completa el header
+    // externo (#horario-header, con las flechas ‹ › de semestre/semana)
+    // queda fuera de document.fullscreenElement (solo #horario-grid-contenedor
+    // entra a pantalla completa) y se vuelve inaccesible. Esta fila
+    // reproduce esa misma navegación DENTRO del grid, visible solo mientras
+    // se está en pantalla completa — así nunca hace falta salir de ese modo
+    // para cambiar de semana. Reusa irASemanaAnterior/irASemanaSiguiente,
+    // las mismas funciones que ya usan los botones del header de siempre.
+    if (document.fullscreenElement) {
+      const navFS = document.createElement("div");
+      navFS.style.cssText = "display:flex; align-items:center; justify-content:center; gap:16px; padding:6px 0; border-bottom:1px solid rgba(150,150,170,0.12);";
+      const btnAntFS = document.createElement("button");
+      btnAntFS.type = "button";
+      btnAntFS.className = "btn-icono-fantasma";
+      btnAntFS.style.fontSize = "1.2rem";
+      btnAntFS.textContent = "‹";
+      btnAntFS.setAttribute("aria-label", "Semana anterior");
+      btnAntFS.addEventListener("click", irASemanaAnterior);
+      const etiquetaFS = document.createElement("span");
+      etiquetaFS.style.cssText = "font-size:0.78rem; font-weight:600; min-width:120px; text-align:center;";
+      etiquetaFS.textContent = `${semestre.nombre || "Semestre"} · Semana ${numeroSemana}`;
+      const btnSigFS = document.createElement("button");
+      btnSigFS.type = "button";
+      btnSigFS.className = "btn-icono-fantasma";
+      btnSigFS.style.fontSize = "1.2rem";
+      btnSigFS.textContent = "›";
+      btnSigFS.setAttribute("aria-label", "Semana siguiente");
+      btnSigFS.addEventListener("click", irASemanaSiguiente);
+      navFS.append(btnAntFS, etiquetaFS, btnSigFS);
+      headerWrap.appendChild(navFS);
+    }
+
+    const headerFila = document.createElement("div");
+    headerFila.style.cssText = "display:flex;";
     const espaciador = document.createElement("div");
     // 28px: mismo ancho que .horario-col-horas (ver construirColumnaHoras),
     // para que este header quede alineado con la columna de horas de abajo.
@@ -848,6 +895,7 @@ function renderizarHorarioInterno() {
       `;
       headerFila.appendChild(h);
     });
+    headerWrap.appendChild(headerFila);
 
     const filaGrid = document.createElement("div");
     filaGrid.style.cssText = "display:flex; position:relative;";
@@ -872,7 +920,6 @@ function renderizarHorarioInterno() {
           enlace: c.enlace,
           modalidad: c.modalidad,
           notas: c.notas,
-          tieneExcepcionEstaSemana: !!c.tiene_ajuste_cronograma,
         }));
       filaGrid.appendChild(construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango));
     });
@@ -885,7 +932,7 @@ function renderizarHorarioInterno() {
       if (linea) filaGrid.appendChild(linea);
     }
 
-    columnaAncha.appendChild(headerFila);
+    columnaAncha.appendChild(headerWrap);
     columnaAncha.appendChild(filaGrid);
     cont.appendChild(columnaAncha);
   }
@@ -1742,43 +1789,85 @@ function dibujarRectRedondeado(ctx, x, y, w, h, r) {
  */
 function generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas) {
   const ANCHO = 1600;
-  const ALTO = 900; // 16:9
+  const ALTO = 900; // 16:9 por default — puede crecer, ver altoFinal más abajo
 
   const colorFondo = obtenerVarCSS("--bg-canvas", "#101114");
   const colorBorde = obtenerVarCSS("--border-glass", "rgba(255,255,255,0.10)");
   const colorTexto = obtenerVarCSS("--text-primary", "#F1F2F4");
   const colorTextoSec = obtenerVarCSS("--text-secondary", "#B7BAC1");
 
-  const canvas = document.createElement("canvas");
-  canvas.width = ANCHO;
-  canvas.height = ALTO;
-  const ctx = canvas.getContext("2d");
-  ctx.textBaseline = "top";
-
-  ctx.fillStyle = colorFondo;
-  ctx.fillRect(0, 0, ANCHO, ALTO);
-
   const margenX = 24;
   const margenInferior = 22;
-  let cursorY = 20;
-
-  ctx.fillStyle = colorTexto;
-  ctx.font = "700 26px " + FONT_CANVAS;
-  ctx.fillText(semestre.nombre || "Horario", margenX, cursorY);
-
-  ctx.fillStyle = colorTextoSec;
-  ctx.font = "400 15px " + FONT_CANVAS;
-  ctx.fillText(`Semana ${numeroSemana}`, margenX, cursorY + 32);
-
-  cursorY += 66;
+  const cursorY = 20 + 66; // título (20) + "Semana N" + separación fija, antes de los días
 
   const { horaInicio, horaFin } = obtenerRangoHorasHorario();
-  const minInicioRango = horaInicio * 60;
-  const minFinRango = horaFin * 60;
+  const minInicioConfig = horaInicio * 60;
+  const minFinConfig = horaFin * 60;
+
+  // Bug 3 (texto cortado en la imagen descargada) — causa real: la imagen
+  // SIEMPRE usaba el rango de horas completo configurado en Ajustes →
+  // Horario (ej. 6am-11pm) para repartir los 900px de alto entre TODAS esas
+  // horas, aunque las clases reales de la semana ocuparan solo una franja
+  // angosta (ej. 7am-3pm) — el resto quedaba vacío y las tarjetas con clase
+  // recibían una fracción mínima del alto disponible, por lo que el texto
+  // (título/profesor/aula) no entraba y se truncaba agresivamente. Acá se
+  // recorta el rango vertical a lo que realmente usan las clases de esta
+  // semana (con 30min de margen arriba/abajo, redondeado a la hora para que
+  // las líneas horarias queden prolijas), clampeado para nunca salirse del
+  // rango configurado por si alguna clase excede esos límites.
+  const minutosConClase = clasesEfectivas.flatMap((c) => [minutosDesdeHora(c.hora_inicio), minutosDesdeHora(c.hora_fin)]);
+  let minInicioRango = minInicioConfig;
+  let minFinRango = minFinConfig;
+  if (minutosConClase.length > 0) {
+    const PADDING_MIN = 30;
+    minInicioRango = Math.max(minInicioConfig, Math.min(...minutosConClase) - PADDING_MIN);
+    minFinRango = Math.min(minFinConfig, Math.max(...minutosConClase) + PADDING_MIN);
+    minInicioRango = Math.floor(minInicioRango / 60) * 60;
+    minFinRango = Math.ceil(minFinRango / 60) * 60;
+    if (minFinRango - minInicioRango < 60) minFinRango = minInicioRango + 60;
+  }
+
   const anchoHoras = 56;
   const xGridInicio = margenX + anchoHoras;
   const anchoGridDisponible = ANCHO - margenX - xGridInicio;
   const anchoColumna = anchoGridDisponible / dias.length;
+
+  const yGridInicio = cursorY + 42;
+  // Además de recortar el rango (arriba), se garantiza una densidad mínima
+  // de px/min igual a la que usa el grid en pantalla (PX_POR_MIN_EXPANDIDO
+  // = 0.84) — sin esto, un rango recortado que todavía sea angosto en
+  // minutos (agenda muy apretada, o rango configurado ya angosto de por sí)
+  // podía seguir dejando tarjetas chicas. En el caso común, el alto fijo de
+  // 900px (16:9) ya alcanza esa densidad sobre el rango recortado y el
+  // resultado sigue siendo 16:9 exacto; solo en casos extremos la imagen
+  // crece en alto para no seguir comprimiendo el texto.
+  //
+  // Este cálculo se hace ANTES de crear el <canvas> a propósito: cambiar
+  // canvas.width/height DESPUÉS de haber dibujado algo borra todo lo ya
+  // pintado (reinicia el bitmap), así que el alto final tiene que quedar
+  // resuelto antes del primer fillRect/fillText.
+  const PX_POR_MIN_MIN_EXPORT = PX_POR_MIN_EXPANDIDO;
+  const rangoMin = minFinRango - minInicioRango;
+  const altoGridReal = Math.max(ALTO - yGridInicio - margenInferior, rangoMin * PX_POR_MIN_MIN_EXPORT);
+  const altoFinal = Math.round(yGridInicio + altoGridReal + margenInferior);
+  const pxPorMinReal = altoGridReal / rangoMin;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = ANCHO;
+  canvas.height = altoFinal;
+  const ctx = canvas.getContext("2d");
+  ctx.textBaseline = "top";
+
+  ctx.fillStyle = colorFondo;
+  ctx.fillRect(0, 0, ANCHO, canvas.height);
+
+  ctx.fillStyle = colorTexto;
+  ctx.font = "700 26px " + FONT_CANVAS;
+  ctx.fillText(semestre.nombre || "Horario", margenX, 20);
+
+  ctx.fillStyle = colorTextoSec;
+  ctx.font = "400 15px " + FONT_CANVAS;
+  ctx.fillText(`Semana ${numeroSemana}`, margenX, 20 + 32);
 
   // Encabezados de día
   ctx.textAlign = "center";
@@ -1793,10 +1882,6 @@ function generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas) {
     ctx.fillText(fecha ? fecha.toLocaleDateString("es-CR", { day: "numeric", month: "short" }) : "", x, cursorY + 18);
   });
   ctx.textAlign = "left";
-
-  const yGridInicio = cursorY + 42;
-  const altoGridReal = ALTO - yGridInicio - margenInferior;
-  const pxPorMinReal = altoGridReal / (minFinRango - minInicioRango);
 
   // Líneas horarias + etiquetas de hora (cada hora en punto, para no
   // amontonar texto — el grid en vivo sí marca cada 30min pero acá el
@@ -1950,6 +2035,25 @@ function descargarHorarioComoImagen() {
   a.remove();
 }
 
+// Punto 1 del ajuste a Horario propio: se extrae la lógica de "cambiar de
+// semana" a estas dos funciones top-level (antes vivía inline, solo dentro
+// de los listeners de los botones ‹ › del header) para poder reusarla desde
+// la barra de navegación que ahora también se dibuja DENTRO del modo
+// pantalla completa (ver headerWrap en renderizarHorarioInterno) — antes,
+// una vez en fullscreen, esos botones del header quedaban fuera del árbol
+// de document.fullscreenElement y por lo tanto inaccesibles/invisibles, sin
+// forma de cambiar de semana sin salir del modo pantalla completa primero.
+function irASemanaAnterior() {
+  estado.horarioNumeroSemana = Math.max(1, (estado.horarioNumeroSemana || 1) - 1);
+  renderizarHorarioInterno();
+}
+function irASemanaSiguiente() {
+  const semestre = obtenerSemestreHorarioActual();
+  const total = semestre ? Number(semestre.duracion_semanas) || 16 : 16;
+  estado.horarioNumeroSemana = Math.min((estado.horarioNumeroSemana || 1) + 1, total);
+  renderizarHorarioInterno();
+}
+
 function inicializarHorario() {
   const btnAnterior = document.getElementById("btn-horario-semestre-anterior");
   const btnSiguiente = document.getElementById("btn-horario-semestre-siguiente");
@@ -1960,18 +2064,10 @@ function inicializarHorario() {
   const nombreSemestreEl = document.getElementById("horario-nombre-semestre");
 
   if (btnAnterior) {
-    btnAnterior.addEventListener("click", () => {
-      estado.horarioNumeroSemana = Math.max(1, (estado.horarioNumeroSemana || 1) - 1);
-      renderizarHorarioInterno();
-    });
+    btnAnterior.addEventListener("click", irASemanaAnterior);
   }
   if (btnSiguiente) {
-    btnSiguiente.addEventListener("click", () => {
-      const semestre = obtenerSemestreHorarioActual();
-      const total = semestre ? Number(semestre.duracion_semanas) || 16 : 16;
-      estado.horarioNumeroSemana = Math.min((estado.horarioNumeroSemana || 1) + 1, total);
-      renderizarHorarioInterno();
-    });
+    btnSiguiente.addEventListener("click", irASemanaSiguiente);
   }
   if (nombreSemestreEl) {
     nombreSemestreEl.style.cursor = "pointer";
