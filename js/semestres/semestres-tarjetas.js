@@ -3562,4 +3562,11 @@ export {
   // notas duplicada en agenda-materia.js.
   calcularNotaFinalVigente,
   formatearNumero,
+  // Mismo motivo otra vez: el encabezado completo de la tarjeta-resumen del
+  // Cronograma (código/nombre/nota/profesor/estado/universidad/créditos)
+  // reusa estos 2 helpers tal cual, para que el badge de universidad y el
+  // menú rápido de resultado se vean y se comporten IDÉNTICO a la tarjeta
+  // real de Semestres — cero lógica duplicada.
+  textoBadgeUniversidad,
+  abrirMenuRapidoResultadoMatricula,
 };
