@@ -1,24 +1,78 @@
 /* =========================================================================
-   AGENDA — Vista Materia (3er tab, junto a Lista/Calendario)
+   AGENDA — Tab "Cronograma" (materia), 3er tab junto a Lista/Calendario
    Selector de una materia (entre las matriculadas de los semestres
    seleccionados en Agenda, mismo criterio que el resto de Agenda — ver
-   obtenerMateriasVinculablesAgenda) + listado semana a semana (TODAS las
-   semanas del semestre de esa materia, incluidas las vacías) de lo
-   pendiente vinculado a ella, con el día de cada cosa. Pedido nuevo.
+   obtenerMateriasVinculablesAgenda) +:
+     1. Adjuntos de la materia (cronograma, reglas, libros — entidadTipo
+        "materia", entidadId = materia_matriculada_id): botón "+ Adjuntar"
+        y pills, mismo sistema unificado que ya usa Agenda para eventos
+        (ver core/storage-adjuntos.js + ui/adjuntos-ui.js).
+     2. Tarjeta-resumen: nombre, ícono 👤 de profesores, "Nota: X" y una
+        flecha ➤ que salta a la tarjeta real en Semestres — clona el
+        mismo cálculo/formato que usa esa tarjeta (calcularNotaFinalVigente
+        + formatearNumero, redondeo al 5 más cercano) para que el número
+        mostrado acá sea IDÉNTICO al de Semestres, nunca una segunda
+        fuente de verdad.
+     3. El motor real de criterios/asignaciones (construirSeccionNotas),
+        reusado tal cual — no se duplica ese render+cálculo acá.
+     4. Listado semana a semana (TODAS las semanas del semestre de esa
+        materia, incluidas las vacías) con las clases de esa materia
+        (siempre con su modalidad, aunque sea presencial) Y lo pendiente
+        vinculado a ella, con el día de cada cosa.
    ========================================================================= */
 
+import {
+  obtenerEscalaNotasMateria,
+  obtenerEscalaPorId,
+  convertirDesde100,
+  redondearNotaFinalAlCincoMasCercano,
+  obtenerClasesEfectivasSemana,
+} from "../core/schema.js";
 import { estado } from "../core/storage.js";
-import { fechaLocalDesdeISO } from "../horario/horario.js";
-import { buscarSemestreVivoPorId } from "../semestres/semestres.js";
+import { aplicarFormatoTexto } from "../core/utils.js";
+import {
+  fechaLocalDesdeISO,
+  obtenerPlanPorId,
+  obtenerColorBloque,
+  obtenerNombreBloque,
+  obtenerEmojiModalidad,
+  obtenerEtiquetaModalidad,
+  obtenerNombreProfesor,
+  abrirTarjetaInfoBloque,
+} from "../horario/horario.js";
+import { buscarSemestreVivoPorId, navegarAMateriaMatriculada } from "../semestres/semestres.js";
+import {
+  construirSeccionNotas,
+  abrirPopoverProfesoresMateria,
+  calcularNotaFinalVigente,
+  formatearNumero,
+} from "../semestres/semestres-tarjetas.js";
 import { calcularNumeroSemanaParaFecha } from "./agenda-clases.js";
 import { construirItemEvento, limpiarIntervalosVenceHoy } from "./agenda.js";
-import { obtenerMateriasVinculablesAgenda } from "./agenda-utils.js";
+import { formatearHoraAmPm, obtenerMateriasVinculablesAgenda } from "./agenda-utils.js";
+import { obtenerAdjuntosActivosDe } from "../core/storage-adjuntos.js";
+import { abrirAdjunto, abrirMenuAdjuntos, abrirModalAdjuntar } from "../ui/adjuntos-ui.js";
 
 // Sesión, no persistido — mismo criterio que el resto de flags de Agenda
 // (ver agenda.js/agenda-calendario.js): qué materia_matriculada_id está
 // elegida ahora mismo en este tab. `null` = ninguna todavía.
 estado.agendaMateriaSeleccionadaId =
   estado.agendaMateriaSeleccionadaId !== undefined ? estado.agendaMateriaSeleccionadaId : null;
+
+// Mismo mapeo de código de día ("L"|"K"|"M"|"J"|"V"|"S"|"D") a etiqueta
+// legible que ya usa el resto de la app (ver DIAS_SEMANA_CONFIG en
+// ui/config-ajustes.js) — se repite acá en vez de importarlo porque ese
+// archivo lo define local (no exportado) y es solo un diccionario chico de
+// texto, no lógica que valga la pena desenredar de ahí para esto.
+const ETIQUETA_DIA_CODIGO = {
+  L: "Lunes",
+  K: "Martes",
+  M: "Miércoles",
+  J: "Jueves",
+  V: "Viernes",
+  S: "Sábado",
+  D: "Domingo",
+};
 
 /**
  * Dropdown de materia — MISMO patrón visual que el resto de la app
@@ -72,14 +126,206 @@ function construirSelectorMateria(materias) {
 }
 
 /**
- * Sección de una semana puntual: encabezado "Semana N" + lo pendiente de
- * `mm` que cae ahí (mismo componente construirItemEvento que Lista/
- * Calendario, mismo criterio de colores/estados) o "Sin pendientes." si no
- * hay nada — pedido explícito: se listan TODAS las semanas del semestre,
- * no solo las que tienen algo, para que se vea de un vistazo el semestre
- * completo de esa materia.
+ * Resuelve la terna completa (materia matriculada real, materia del plan,
+ * plan) a partir del mmId elegido en el selector — obtenerMateriasVinculablesAgenda
+ * solo trae {mmId, nombre, semestreId} (lo mínimo para el dropdown), así
+ * que para todo lo demás (adjuntos, nota, profesores, criterios) hace
+ * falta ir a buscar el objeto real, mismo camino que ya usa
+ * obtenerNombreMateriaEvento en agenda-modal.js.
  */
-function construirSeccionSemanaMateria(semestre, numeroSemana, eventosMateria) {
+function resolverMateriaCompleta(mmId, semestreId) {
+  const semestre = buscarSemestreVivoPorId(semestreId);
+  if (!semestre) return null;
+  const mm = (semestre.materias_matriculadas || []).find((m) => m.id === mmId);
+  if (!mm) return null;
+  const plan = obtenerPlanPorId(mm.plan_estudio_id);
+  const materia = plan && (plan.materias || []).find((m) => m.id === mm.materia_id);
+  if (!materia) return null;
+  return { semestre, mm, plan, materia };
+}
+
+/* ------------------------------ Adjuntos ------------------------------ */
+
+/**
+ * Fila de pills de adjuntos de la materia (cronograma, reglas, libros —
+ * entidadTipo "materia") + una pill "+ Adjuntar" con borde punteado
+ * (.adjunto-pill-agregar, ya lista en design-system.css desde la Etapa 2
+ * justo para esta fila). Si ya hay al menos un adjunto, se agrega un link
+ * "Gestionar" para reordenar/desactivar/borrar — mismo patrón que la
+ * tarjeta de info de un evento en agenda-modal.js.
+ */
+function construirFilaAdjuntosMateria(mm, onCambiar) {
+  const cont = document.createElement("div");
+  cont.className = "stack";
+  cont.style.gap = "4px";
+
+  const filaPills = document.createElement("div");
+  filaPills.className = "adjuntos-pills-fila";
+
+  const adjuntos = obtenerAdjuntosActivosDe("materia", mm.id);
+  adjuntos.forEach((adjunto) => {
+    const pill = document.createElement("button");
+    pill.type = "button";
+    pill.className = "adjunto-pill";
+    pill.title = adjunto.nombre;
+    pill.innerHTML = `${adjunto.tipo === "enlace" ? "🔗" : "📄"} <span style="overflow:hidden; text-overflow:ellipsis;">${adjunto.nombre}</span>`;
+    pill.addEventListener("click", () => abrirAdjunto(adjunto));
+    filaPills.appendChild(pill);
+  });
+
+  const pillAgregar = document.createElement("button");
+  pillAgregar.type = "button";
+  pillAgregar.className = "adjunto-pill adjunto-pill-agregar";
+  pillAgregar.textContent = "+ Adjuntar";
+  pillAgregar.addEventListener("click", () => {
+    abrirModalAdjuntar({
+      entidadTipo: "materia",
+      entidadId: mm.id,
+      onListo: onCambiar,
+    });
+  });
+  filaPills.appendChild(pillAgregar);
+
+  cont.appendChild(filaPills);
+
+  if (adjuntos.length > 0) {
+    const btnGestionar = document.createElement("button");
+    btnGestionar.type = "button";
+    btnGestionar.className = "btn-link";
+    btnGestionar.style.cssText = "font-size:0.78rem; align-self:center; background:none; border:none; cursor:pointer; text-decoration:underline; opacity:0.8;";
+    btnGestionar.textContent = "Gestionar adjuntos";
+    btnGestionar.addEventListener("click", () => {
+      abrirMenuAdjuntos({
+        entidadTipo: "materia",
+        entidadId: mm.id,
+        titulo: "Adjuntos de esta materia",
+        onCambiar,
+      });
+    });
+    cont.appendChild(btnGestionar);
+  }
+
+  return cont;
+}
+
+/* --------------------------- Tarjeta-resumen --------------------------- */
+
+/**
+ * Franja superior: nombre + 👤 (profesores, mismo popover que Semestres) +
+ * "Nota: X" (MISMO cálculo/formato que la tarjeta real: calcularNotaFinalVigente,
+ * redondearNotaFinalAlCincoMasCercano, convertirDesde100 a la escala del
+ * plan, formatearNumero) + ➤ que salta a esa tarjeta real en Semestres
+ * (navegarAMateriaMatriculada) para editar ahí lo que haga falta.
+ */
+function construirTarjetaResumenMateria(mm, materia, plan, semestre, onCambiar) {
+  const fila = document.createElement("div");
+  fila.className = "row-between";
+  fila.style.cssText = "gap:8px; align-items:center; flex-wrap:wrap;";
+
+  const izquierda = document.createElement("div");
+  izquierda.style.cssText = "display:flex; align-items:center; gap:8px; min-width:0;";
+
+  const spanNombre = document.createElement("span");
+  spanNombre.className = "materia-nombre completa";
+  spanNombre.textContent = aplicarFormatoTexto(materia.nombre);
+  izquierda.appendChild(spanNombre);
+
+  const iconoProfesor = document.createElement("span");
+  iconoProfesor.style.cssText = "flex-shrink:0; cursor:pointer; font-size:0.85rem; line-height:1;";
+  iconoProfesor.textContent = "👤";
+  iconoProfesor.title = "Profesores vinculados a esta materia";
+  iconoProfesor.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    abrirPopoverProfesoresMateria(mm, materia, plan, semestre, onCambiar);
+  });
+  izquierda.appendChild(iconoProfesor);
+
+  fila.appendChild(izquierda);
+
+  const derecha = document.createElement("div");
+  derecha.style.cssText = "display:flex; align-items:center; gap:10px; flex-shrink:0;";
+
+  const notaFinalVigente = calcularNotaFinalVigente(mm, materia, plan);
+  const notaRedondeada = redondearNotaFinalAlCincoMasCercano(notaFinalVigente);
+  const escalaActiva = obtenerEscalaNotasMateria(materia, plan, estado.datos.configuracion);
+  const notaRedondeadaMostrada = convertirDesde100(notaRedondeada, obtenerEscalaPorId(escalaActiva));
+  const spanNota = document.createElement("span");
+  spanNota.style.cssText = "font-family:var(--font-display); font-weight:700; white-space:nowrap;";
+  spanNota.textContent = `Nota: ${
+    notaRedondeada === null || notaRedondeada === undefined ? "—" : formatearNumero(notaRedondeadaMostrada)
+  }`;
+  derecha.appendChild(spanNota);
+
+  const btnSalto = document.createElement("button");
+  btnSalto.type = "button";
+  btnSalto.setAttribute("aria-label", "Ver esta materia en Semestres");
+  btnSalto.title = "Ver esta materia en Semestres";
+  btnSalto.style.cssText = "background:none; border:none; cursor:pointer; font-size:1rem; line-height:1; padding:2px;";
+  btnSalto.textContent = "➤";
+  btnSalto.addEventListener("click", () => navegarAMateriaMatriculada(semestre.id, mm.id));
+  derecha.appendChild(btnSalto);
+
+  fila.appendChild(derecha);
+
+  return fila;
+}
+
+/* ------------------------------ Semanas ------------------------------ */
+
+/**
+ * Mismo enriquecido que hace construirColumnaDia en horario.js (y que
+ * duplica agenda-clases.js para su propia fila "Materias" del día) antes
+ * de poder llamar a abrirTarjetaInfoBloque — se repite acá por el mismo
+ * motivo: no está exportado de ninguno de los dos archivos.
+ */
+function enriquecerClaseParaTarjetaInfo(claseEfectiva) {
+  return {
+    bloqueOriginalId: claseEfectiva.id,
+    color: obtenerColorBloque(claseEfectiva),
+    nombreCorto: obtenerNombreBloque(claseEfectiva),
+    profesorNombre: obtenerNombreProfesor(claseEfectiva.profesor_id),
+    aula: claseEfectiva.aula,
+    enlace: claseEfectiva.enlace,
+    modalidad: claseEfectiva.modalidad,
+    notas: claseEfectiva.notas,
+  };
+}
+
+/**
+ * Fila de una clase dentro de la semana — mismo lenguaje visual
+ * (.agenda-item, borde de color) que una fila de pendiente, para que las
+ * clases se vean "al mismo nivel" que las tareas/exámenes de esa semana.
+ * Muestra SIEMPRE la modalidad (aunque sea presencial) — mismo criterio
+ * que ya usa la fila "Materias" del día en agenda-clases.js.
+ */
+function construirFilaClaseMateria(claseEfectiva, semestre, numeroSemana) {
+  const enriquecida = enriquecerClaseParaTarjetaInfo(claseEfectiva);
+  const emoji = obtenerEmojiModalidad(claseEfectiva.modalidad);
+  const etiquetaDia = ETIQUETA_DIA_CODIGO[claseEfectiva.dia] || claseEfectiva.dia;
+
+  const fila = document.createElement("button");
+  fila.type = "button";
+  fila.className = "agenda-item";
+  fila.style.borderLeft = `3px solid ${enriquecida.color}`;
+  fila.innerHTML = `
+    <span style="font-weight:600; flex-shrink:0;">${etiquetaDia} ${formatearHoraAmPm(claseEfectiva.hora_inicio)}</span>
+    <span style="flex:1; text-align:left; overflow-wrap:break-word;">${enriquecida.nombreCorto}</span>
+    <span class="muted" style="font-size:0.72rem; flex-shrink:0; text-align:right;">${emoji ? `${emoji} ` : ""}${obtenerEtiquetaModalidad(claseEfectiva.modalidad)}</span>
+  `;
+  fila.addEventListener("click", () => abrirTarjetaInfoBloque(semestre, numeroSemana, enriquecida));
+  return fila;
+}
+
+/**
+ * Sección de una semana puntual: encabezado "Semana N" + las clases de esa
+ * materia esa semana (siempre, con modalidad) + lo pendiente de `mm` que
+ * cae ahí (mismo componente construirItemEvento que Lista/Calendario) o
+ * "Sin nada esta semana." si ninguno de los dos grupos tiene contenido —
+ * pedido explícito: se listan TODAS las semanas del semestre, no solo las
+ * que tienen algo, para que se vea de un vistazo el semestre completo de
+ * esa materia.
+ */
+function construirSeccionSemanaMateria(semestre, materiaId, numeroSemana, eventosMateria) {
   const bloque = document.createElement("section");
   bloque.className = "glass-panel stack";
   bloque.style.padding = "14px";
@@ -89,18 +335,27 @@ function construirSeccionSemanaMateria(semestre, numeroSemana, eventosMateria) {
   titulo.textContent = `Semana ${numeroSemana}`;
   bloque.appendChild(titulo);
 
+  const clasesDeEstaSemana = (semestre.bloques_horario || [])
+    .filter((b) => b.materia_id === materiaId)
+    .flatMap((b) => obtenerClasesEfectivasSemana(b, numeroSemana))
+    .sort((a, b) => String(a.dia).localeCompare(String(b.dia)) || String(a.hora_inicio).localeCompare(String(b.hora_inicio)));
+
   const deEstaSemana = eventosMateria
     .filter((ev) => calcularNumeroSemanaParaFecha(semestre, fechaLocalDesdeISO(ev.fecha)) === numeroSemana)
     .sort((a, b) => a.fecha.localeCompare(b.fecha) || String(a.hora || "99:99").localeCompare(String(b.hora || "99:99")));
 
-  if (deEstaSemana.length === 0) {
+  if (clasesDeEstaSemana.length === 0 && deEstaSemana.length === 0) {
     const vacio = document.createElement("p");
     vacio.className = "muted";
     vacio.style.cssText = "font-size:0.8rem; margin:2px 0 0;";
-    vacio.textContent = "Sin pendientes.";
+    vacio.textContent = "Sin nada esta semana.";
     bloque.appendChild(vacio);
     return bloque;
   }
+
+  clasesDeEstaSemana.forEach((clase) => {
+    bloque.appendChild(construirFilaClaseMateria(clase, semestre, numeroSemana));
+  });
 
   deEstaSemana.forEach((ev) => {
     const fila = document.createElement("div");
@@ -122,25 +377,31 @@ function construirSeccionSemanaMateria(semestre, numeroSemana, eventosMateria) {
   return bloque;
 }
 
-function construirContenidoMateria(mm) {
-  const semestre = buscarSemestreVivoPorId(mm.semestreId);
+function construirContenidoMateria(mmVinculable, onCambiar) {
+  const resuelto = resolverMateriaCompleta(mmVinculable.mmId, mmVinculable.semestreId);
   const cont = document.createElement("div");
   cont.className = "stack";
 
-  if (!semestre) {
+  if (!resuelto) {
     const vacio = document.createElement("p");
     vacio.className = "muted";
     vacio.style.cssText = "text-align:center; padding:16px 0;";
-    vacio.textContent = "No se encontró el semestre de esta materia.";
+    vacio.textContent = "No se encontró esta materia — puede que haya cambiado desde otro dispositivo.";
     cont.appendChild(vacio);
     return cont;
   }
 
-  const eventosMateria = (estado.datos.agenda || []).filter((ev) => ev.materia_matriculada_id === mm.mmId);
+  const { semestre, mm, plan, materia } = resuelto;
+
+  cont.appendChild(construirTarjetaResumenMateria(mm, materia, plan, semestre, onCambiar));
+  cont.appendChild(construirFilaAdjuntosMateria(mm, onCambiar));
+  cont.appendChild(construirSeccionNotas(mm, materia, plan, onCambiar));
+
+  const eventosMateria = (estado.datos.agenda || []).filter((ev) => ev.materia_matriculada_id === mm.id);
   const totalSemanas = Number(semestre.duracion_semanas) || 16;
 
   for (let semana = 1; semana <= totalSemanas; semana++) {
-    cont.appendChild(construirSeccionSemanaMateria(semestre, semana, eventosMateria));
+    cont.appendChild(construirSeccionSemanaMateria(semestre, mm.materia_id, semana, eventosMateria));
   }
 
   return cont;
@@ -185,8 +446,8 @@ function renderizarMateriaAgenda() {
     return;
   }
 
-  const mm = materias.find((m) => m.mmId === estado.agendaMateriaSeleccionadaId);
-  cont.appendChild(construirContenidoMateria(mm));
+  const mmVinculable = materias.find((m) => m.mmId === estado.agendaMateriaSeleccionadaId);
+  cont.appendChild(construirContenidoMateria(mmVinculable, renderizarMateriaAgenda));
 }
 
 /**

@@ -17,6 +17,8 @@ import {
   obtenerMateriasVinculablesAgenda,
   tareaVenceHoy,
 } from "./agenda-utils.js";
+import { eliminarAdjunto, obtenerAdjuntosActivosDe, obtenerAdjuntosDe } from "../core/storage-adjuntos.js";
+import { abrirAdjunto, abrirMenuAdjuntos, abrirModalAdjuntar } from "../ui/adjuntos-ui.js";
 
 const PLACEHOLDER_NOMBRE = {
   evento: "Ej. Charla de RRHH",
@@ -26,90 +28,62 @@ const PLACEHOLDER_NOMBRE = {
 
 const ETIQUETA_TIPO = { evento: "Evento", tarea: "Tarea", examen: "Examen" };
 
-// Adjuntos (archivos/imágenes) — pedido nuevo: pensado sobre todo para
-// adjuntar el cronograma del semestre u otros documentos importantes a un
-// evento/tarea/examen puntual. Se guardan como base64 (dataURL) directo en
-// el propio evento (`evento.adjuntos`), mismo criterio que el resto del
-// dato de Agenda (viaja con sellarTimestamp/marcarCambioPendiente, se
-// sincroniza igual que cualquier otro campo) — NO se integró con un módulo
-// de adjuntos aparte (si el proyecto ya tiene uno con otro criterio de
-// almacenamiento, esto se puede migrar a reusarlo).
+// Adjuntos (archivos/imágenes/enlaces) — pedido nuevo: pensado sobre todo
+// para adjuntar el cronograma del semestre u otros documentos importantes a
+// un evento/tarea/examen puntual. Ampliado 2026-08-19: ya NO se guardan
+// como base64 dentro del propio evento — se migró al sistema unificado de
+// adjuntos (core/storage-adjuntos.js + ui/adjuntos-ui.js), el mismo que usa
+// Cronograma para materia. Cada adjunto sube a la carpeta dedicada del
+// Drive del usuario y solo queda una referencia liviana con
+// entidadTipo:"evento" + entidadId — nada de binarios sueltos dentro del
+// JSON que se sincroniza, y "Liberar espacio" en Ajustes ya sabe limpiarlos
+// en lote (ver eliminarAdjuntosDeTareasDeSemestre en storage-adjuntos.js).
 //
-// `adjuntosTemporales`: buffer del formulario ACTUALMENTE abierto — no se
-// escribe al evento real hasta tocar "Guardar" (mismo criterio que el resto
-// del formulario, que tampoco muta nada hasta ese momento). Se resetea cada
-// vez que se abre el modal (alta nueva: vacío; edición: copia de
-// evento.adjuntos existente).
-const LIMITE_MB_POR_ADJUNTO = 8;
-let adjuntosTemporales = [];
-
-function generarIdAdjunto() {
-  return `adj_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function leerArchivoComoDataUrl(archivo) {
-  return new Promise((resolve, reject) => {
-    const lector = new FileReader();
-    lector.onload = () => resolve(lector.result);
-    lector.onerror = () => reject(lector.error);
-    lector.readAsDataURL(archivo);
-  });
-}
-
-function formatearTamanoArchivo(bytes) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+// `idEventoActivoAdjuntos`: entidadId contra el que se adjunta MIENTRAS el
+// modal está abierto. En edición es el id real del evento. En alta nueva
+// (todavía sin id — crearEventoAgenda recién lo genera al Guardar) se
+// genera acá mismo un id "pendiente" con el MISMO prefijo/formato que usa
+// crearEventoAgenda ("ag_" + uuid), así se puede adjuntar desde el primer
+// momento; guardarEventoAgenda fuerza ese mismo id en el evento nuevo para
+// que los adjuntos ya subidos queden bien vinculados.
+//
+// `esAltaNuevaConAdjuntosPendientes`: si el usuario CANCELA una alta nueva
+// después de haber adjuntado algo, esos adjuntos quedarían huérfanos (con
+// un entidadId que nunca llega a existir como evento real) — se limpian
+// en cancelarModalEventoAgenda().
+let idEventoActivoAdjuntos = null;
+let esAltaNuevaConAdjuntosPendientes = false;
 
 function renderizarListaAdjuntosFormulario() {
   const cont = document.getElementById("lista-agenda-adjuntos");
-  if (!cont) return;
+  const contGestionar = document.getElementById("fila-agenda-gestionar-adjuntos");
+  if (!cont || !idEventoActivoAdjuntos) return;
   cont.innerHTML = "";
-  cont.classList.toggle("oculto", adjuntosTemporales.length === 0);
-  adjuntosTemporales.forEach((adj) => {
-    const chip = document.createElement("div");
-    chip.className = "agenda-adjunto-chip row-between";
-    const nombre = document.createElement("span");
-    nombre.style.cssText = "overflow-wrap:break-word; font-size:0.82rem; flex:1; min-width:0;";
-    nombre.innerHTML = `📎 ${adj.nombre} <span class="muted">(${formatearTamanoArchivo(adj.tamano)})</span>`;
-    const btnQuitar = document.createElement("button");
-    btnQuitar.type = "button";
-    btnQuitar.className = "btn-icono-fantasma";
-    btnQuitar.style.cssText = "font-size:1rem; flex-shrink:0;";
-    btnQuitar.title = "Quitar adjunto";
-    btnQuitar.textContent = "✕";
-    btnQuitar.addEventListener("click", () => {
-      adjuntosTemporales = adjuntosTemporales.filter((a) => a.id !== adj.id);
-      renderizarListaAdjuntosFormulario();
-    });
-    chip.appendChild(nombre);
-    chip.appendChild(btnQuitar);
-    cont.appendChild(chip);
+  const adjuntos = obtenerAdjuntosActivosDe("evento", idEventoActivoAdjuntos);
+  cont.classList.toggle("oculto", adjuntos.length === 0);
+  adjuntos.forEach((adjunto) => {
+    const pill = document.createElement("button");
+    pill.type = "button";
+    pill.className = "adjunto-pill";
+    pill.title = adjunto.nombre;
+    pill.innerHTML = `${adjunto.tipo === "enlace" ? "🔗" : "📄"} <span style="overflow:hidden; text-overflow:ellipsis;">${adjunto.nombre}</span>`;
+    pill.addEventListener("click", () => abrirAdjunto(adjunto));
+    cont.appendChild(pill);
   });
+  // "Gestionar" (reordenar/desactivar/borrar) solo tiene sentido si ya hay
+  // al menos un adjunto — mismo patrón que la fila de pills de materia en
+  // agenda-materia.js.
+  if (contGestionar) contGestionar.classList.toggle("oculto", adjuntos.length === 0);
 }
 
-async function manejarSeleccionArchivosAdjuntos(fileList) {
-  const archivos = Array.from(fileList || []);
-  for (const archivo of archivos) {
-    if (archivo.size > LIMITE_MB_POR_ADJUNTO * 1024 * 1024) {
-      mostrarToast(`"${archivo.name}" pesa más de ${LIMITE_MB_POR_ADJUNTO}MB, no se adjuntó`);
-      continue;
-    }
-    try {
-      const dataUrl = await leerArchivoComoDataUrl(archivo);
-      adjuntosTemporales.push({
-        id: generarIdAdjunto(),
-        nombre: archivo.name,
-        tipo: archivo.type || "",
-        tamano: archivo.size,
-        dataUrl,
-      });
-    } catch {
-      mostrarToast(`No se pudo leer "${archivo.name}"`);
-    }
-  }
-  renderizarListaAdjuntosFormulario();
+function abrirGestionAdjuntosEvento() {
+  if (!idEventoActivoAdjuntos) return;
+  abrirMenuAdjuntos({
+    entidadTipo: "evento",
+    entidadId: idEventoActivoAdjuntos,
+    titulo: "Adjuntos de este evento",
+    onCambiar: renderizarListaAdjuntosFormulario,
+  });
 }
 
 // Callback expuesto por agenda.js para refrescar la lista tras guardar/
@@ -283,10 +257,11 @@ function abrirModalEventoAgenda({ eventoId = null, fechaDefault = null } = {}) {
   );
   document.getElementById("input-agenda-notas").value = eventoExistente ? eventoExistente.notas || "" : "";
 
-  // Adjuntos: arranca vacío en alta nueva, o con una copia de los ya
-  // guardados en edición — ver comentario de adjuntosTemporales más arriba.
-  adjuntosTemporales =
-    eventoExistente && Array.isArray(eventoExistente.adjuntos) ? eventoExistente.adjuntos.map((a) => ({ ...a })) : [];
+  // Adjuntos: en edición se usa el id real del evento; en alta nueva se
+  // genera un id pendiente (ver comentario arriba de idEventoActivoAdjuntos)
+  // para poder adjuntar desde ya, antes de tocar "Guardar".
+  esAltaNuevaConAdjuntosPendientes = !eventoExistente;
+  idEventoActivoAdjuntos = eventoExistente ? eventoExistente.id : "ag_" + crypto.randomUUID();
   renderizarListaAdjuntosFormulario();
 
   const btnBorrar = document.getElementById("btn-agenda-borrar");
@@ -302,6 +277,21 @@ function abrirModalEventoAgenda({ eventoId = null, fechaDefault = null } = {}) {
 function cerrarModalEventoAgenda() {
   document.getElementById("modal-agenda-evento").classList.add("oculto");
   cerrarDropdownMateria();
+}
+
+/**
+ * Cancelar (botón "Cancelar", tocar afuera del modal): a diferencia de
+ * cerrarModalEventoAgenda (que también se llama tras un Guardar exitoso),
+ * esto SÍ debe limpiar los adjuntos que se hayan subido durante una alta
+ * nueva que el usuario decidió no guardar — si no, quedarían huérfanos en
+ * Drive, vinculados a un entidadId que ningún evento real va a tener nunca
+ * (ver comentario de idEventoActivoAdjuntos más arriba).
+ */
+function cancelarModalEventoAgenda() {
+  if (esAltaNuevaConAdjuntosPendientes && idEventoActivoAdjuntos) {
+    obtenerAdjuntosDe("evento", idEventoActivoAdjuntos).forEach((a) => eliminarAdjunto(a.id));
+  }
+  cerrarModalEventoAgenda();
 }
 
 function guardarEventoAgenda(eventoExistente) {
@@ -347,7 +337,6 @@ function guardarEventoAgenda(eventoExistente) {
     viva.semestre_id = materiaVinculada ? materiaVinculada.semestreId : null;
     viva.notas = notas;
     viva.es_feriado = esFeriado;
-    viva.adjuntos = adjuntosTemporales;
     // `completada` NO se toca acá: este formulario no tiene UI para ella
     // (vive en el checkbox circular de la lista/tarjeta de info — punto 5
     // del rediseño), así que una edición del resto de los campos nunca debe
@@ -364,12 +353,18 @@ function guardarEventoAgenda(eventoExistente) {
       notas,
       esFeriado,
     });
-    // crearEventoAgenda (schema.js) no conoce el campo `adjuntos` todavía
-    // (feature nueva) — se agrega acá directo al objeto recién creado antes
-    // de empujarlo, en vez de tocar schema.js a ciegas sin verlo.
-    nuevo.adjuntos = adjuntosTemporales;
+    // Fuerza el id a que coincida con el "pendiente" usado mientras el
+    // modal estuvo abierto (ver idEventoActivoAdjuntos) — así cualquier
+    // adjunto ya subido durante esta alta queda vinculado al evento real
+    // sin tener que reescribir sus referencias.
+    if (idEventoActivoAdjuntos) nuevo.id = idEventoActivoAdjuntos;
     estado.datos.agenda.push(nuevo);
   }
+
+  // Ya se guardó de verdad — de acá en adelante los adjuntos de este id ya
+  // NO son "pendientes de una alta descartada" (evita que un cierre
+  // posterior del modal, por lo que sea, los borre por error).
+  esAltaNuevaConAdjuntosPendientes = false;
 
   marcarCambioPendiente();
   cerrarModalEventoAgenda();
@@ -385,6 +380,7 @@ function confirmarBorrarEventoAgenda(eventoExistente) {
     onConfirmar: () => {
       const viva = buscarEventoVivoPorId(eventoExistente.id);
       if (viva) {
+        obtenerAdjuntosDe("evento", viva.id).forEach((a) => eliminarAdjunto(a.id));
         estado.datos._eliminados_agenda = estado.datos._eliminados_agenda || [];
         estado.datos._eliminados_agenda.push({ id: viva.id, eliminadoEn: Date.now() });
         estado.datos.agenda = estado.datos.agenda.filter((ev) => ev.id !== viva.id);
@@ -464,27 +460,35 @@ function renderizarTarjetaInfoEventoAgenda(evento) {
   document.getElementById("info-agenda-fila-notas").classList.toggle("oculto", !evento.notas);
   document.getElementById("info-agenda-notas-texto").textContent = evento.notas || "";
 
-  // Adjuntos: cada uno es un link descargable directo al dataURL guardado
-  // (sin pasar por ningún backend — el archivo entero ya está en el propio
-  // evento). Ver comentario de adjuntosTemporales en la parte de arriba del
-  // archivo sobre por qué se guarda así.
-  const adjuntos = Array.isArray(evento.adjuntos) ? evento.adjuntos : [];
+  // Adjuntos: pills del sistema unificado (core/storage-adjuntos.js) —
+  // tocar una la abre directo (archivo se descarga bajo demanda desde
+  // Drive, enlace abre directo); "Gestionar" reordena/desactiva/borra.
+  const adjuntos = obtenerAdjuntosActivosDe("evento", evento.id);
   const filaAdjuntos = document.getElementById("info-agenda-fila-adjuntos");
   const listaAdjuntos = document.getElementById("info-agenda-lista-adjuntos");
+  const btnGestionarAdjuntos = document.getElementById("info-agenda-btn-gestionar-adjuntos");
   if (filaAdjuntos && listaAdjuntos) {
     filaAdjuntos.classList.toggle("oculto", adjuntos.length === 0);
     listaAdjuntos.innerHTML = "";
-    adjuntos.forEach((adj) => {
-      const link = document.createElement("a");
-      link.href = adj.dataUrl;
-      link.download = adj.nombre;
-      link.target = "_blank";
-      link.rel = "noopener";
-      link.className = "agenda-adjunto-chip";
-      link.style.cssText = "display:flex; align-items:center; gap:6px; text-decoration:none;";
-      link.innerHTML = `📎 <span style="overflow-wrap:break-word; font-size:0.82rem;">${adj.nombre}</span>`;
-      listaAdjuntos.appendChild(link);
+    adjuntos.forEach((adjunto) => {
+      const pill = document.createElement("button");
+      pill.type = "button";
+      pill.className = "adjunto-pill";
+      pill.title = adjunto.nombre;
+      pill.innerHTML = `${adjunto.tipo === "enlace" ? "🔗" : "📄"} <span style="overflow:hidden; text-overflow:ellipsis;">${adjunto.nombre}</span>`;
+      pill.addEventListener("click", () => abrirAdjunto(adjunto));
+      listaAdjuntos.appendChild(pill);
     });
+    if (btnGestionarAdjuntos) {
+      btnGestionarAdjuntos.onclick = () => {
+        abrirMenuAdjuntos({
+          entidadTipo: "evento",
+          entidadId: evento.id,
+          titulo: "Adjuntos de este evento",
+          onCambiar: () => renderizarTarjetaInfoEventoAgenda(buscarEventoVivoPorId(evento.id) || evento),
+        });
+      };
+    }
   }
 
   // Punto 5: el mismo checkbox circular de la lista, disponible también
@@ -527,16 +531,18 @@ function inicializarModalAgendaEvento() {
   document.getElementById("chk-agenda-todo-el-dia").addEventListener("change", (ev) => {
     document.getElementById("input-agenda-hora").disabled = ev.target.checked;
   });
-  document.getElementById("input-agenda-adjuntos")?.addEventListener("change", (ev) => {
-    manejarSeleccionArchivosAdjuntos(ev.target.files);
-    // Limpia el input para poder re-seleccionar el MISMO archivo más
-    // adelante (si se quitó de la lista y se lo quiere volver a adjuntar) —
-    // el evento "change" no dispara de nuevo si el value no cambia.
-    ev.target.value = "";
+  document.getElementById("btn-agenda-adjuntar")?.addEventListener("click", () => {
+    if (!idEventoActivoAdjuntos) return;
+    abrirModalAdjuntar({
+      entidadTipo: "evento",
+      entidadId: idEventoActivoAdjuntos,
+      onListo: renderizarListaAdjuntosFormulario,
+    });
   });
-  document.getElementById("btn-agenda-cancelar").addEventListener("click", cerrarModalEventoAgenda);
+  document.getElementById("btn-agenda-gestionar-adjuntos")?.addEventListener("click", abrirGestionAdjuntosEvento);
+  document.getElementById("btn-agenda-cancelar").addEventListener("click", cancelarModalEventoAgenda);
   document.getElementById("modal-agenda-evento").addEventListener("click", (ev) => {
-    if (ev.target.id === "modal-agenda-evento") cerrarModalEventoAgenda();
+    if (ev.target.id === "modal-agenda-evento") cancelarModalEventoAgenda();
   });
 
   // Ronda de ajustes visuales #4: dropdown propio de "vincular a materia"
