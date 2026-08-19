@@ -21,6 +21,7 @@ import {
   agregarEnlaceAdjunto,
   alternarActivoAdjunto,
   descargarAdjunto,
+  editarAdjunto,
   eliminarAdjunto,
   obtenerAdjuntosDe,
   reordenarAdjuntos,
@@ -103,6 +104,59 @@ function crearCampoModal(card, etiquetaTexto, tipo, placeholder) {
   return input;
 }
 
+// Paleta de accesos rápidos (pedido explícito: "facilitales un botón para
+// poner emojis en caso de que su dispositivo no traiga a mano") — un
+// puñado de emojis típicos de material de estudio; tocar uno lo escribe
+// directo en el campo de texto de al lado.
+const EMOJIS_RAPIDOS_ADJUNTO = ["📄", "🔗", "📘", "📝", "📚", "🎥", "🔊", "🗂️", "✅", "⭐"];
+
+/**
+ * Campo de emoji del adjunto (2026-08-19, pedido explícito): antes, tocar
+ * el emoji de la fila "Adjuntar" abría el prompt() NATIVO del navegador
+ * para pedirlo — eso "mataba el diseño" (un diálogo del sistema operativo,
+ * ajeno a toda la app) y encima era el emoji de un botón GLOBAL, no de
+ * CADA adjunto. Ahora es un campo más de este mismo modal — el MISMO tipo
+ * de input de texto que "Nombre" — con esta paleta de accesos rápidos al
+ * lado para quien no tenga a mano el teclado de emojis: nunca un diálogo
+ * nativo, todo vive dentro de la propia tarjeta del modal. Vacío = sin
+ * emoji (queda el ícono por defecto según el tipo de adjunto).
+ */
+function crearCampoEmojiModal(card, valorInicial) {
+  const wrap = document.createElement("div");
+  const label = document.createElement("label");
+  label.className = "form-label";
+  label.textContent = "Emoji (opcional)";
+  wrap.appendChild(label);
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "form-input";
+  input.placeholder = "Sin emoji";
+  input.style.cssText = "text-align:center; font-size:1.1rem;";
+  input.maxLength = 4; // margen para emojis compuestos (banderas, tono de piel), no solo 1 code point
+  if (valorInicial) input.value = valorInicial;
+  wrap.appendChild(input);
+
+  const paleta = document.createElement("div");
+  paleta.className = "adjunto-emoji-paleta";
+  EMOJIS_RAPIDOS_ADJUNTO.forEach((emoji) => {
+    const btnEmoji = document.createElement("button");
+    btnEmoji.type = "button";
+    btnEmoji.className = "adjunto-emoji-opcion";
+    btnEmoji.textContent = emoji;
+    btnEmoji.title = `Usar ${emoji}`;
+    btnEmoji.addEventListener("click", () => {
+      input.value = emoji;
+      input.focus();
+    });
+    paleta.appendChild(btnEmoji);
+  });
+  wrap.appendChild(paleta);
+
+  card.appendChild(wrap);
+  return input;
+}
+
 /**
  * El botón "Adjuntar": arranca en 2 botones (archivo / enlace) — pedido
  * explícito. Elegir "archivo" abre el picker nativo y, apenas se elige un
@@ -147,13 +201,15 @@ function abrirModalAdjuntar({ entidadTipo, entidadId, onListo }) {
     const inputNombre = crearCampoModal(card, "Nombre", "text", "Ej. Libro del curso");
     inputNombre.value = archivo.name;
 
+    const inputEmoji = crearCampoEmojiModal(card, "");
+
     const btnGuardar = document.createElement("button");
     btnGuardar.type = "button";
     btnGuardar.className = "btn btn-primary btn-block";
     btnGuardar.textContent = "Adjuntar";
     btnGuardar.addEventListener("click", () => {
       try {
-        adjuntarArchivo(archivo, entidadTipo, entidadId, inputNombre.value.trim());
+        adjuntarArchivo(archivo, entidadTipo, entidadId, inputNombre.value.trim(), inputEmoji.value.trim());
         mostrarToast(`Adjuntando "${inputNombre.value.trim() || archivo.name}"…`);
         overlay.remove();
         onListo?.();
@@ -180,6 +236,7 @@ function abrirModalAdjuntar({ entidadTipo, entidadId, onListo }) {
 
     const inputNombre = crearCampoModal(card, "Nombre", "text", "Ej. Libro del curso");
     const inputUrl = crearCampoModal(card, "Enlace", "url", "https://…");
+    const inputEmoji = crearCampoEmojiModal(card, "");
 
     const btnGuardar = document.createElement("button");
     btnGuardar.type = "button";
@@ -192,6 +249,7 @@ function abrirModalAdjuntar({ entidadTipo, entidadId, onListo }) {
           url: inputUrl.value.trim(),
           entidadTipo,
           entidadId,
+          emoji: inputEmoji.value.trim(),
         });
         overlay.remove();
         onListo?.();
@@ -209,6 +267,58 @@ function abrirModalAdjuntar({ entidadTipo, entidadId, onListo }) {
     });
     inputNombre.focus();
   });
+}
+
+/**
+ * Edita un adjunto YA EXISTENTE (pedido explícito, 2026-08-19: hasta ahora
+ * no había forma de corregir un nombre, el enlace o el emoji sin borrar el
+ * adjunto entero y crearlo de nuevo). Mismo modal chico y mismos campos que
+ * abrirModalAdjuntar (crearCampoModal/crearCampoEmojiModal) — se siente
+ * como el mismo formulario, ahora pre-llenado. El campo "Enlace" solo
+ * aparece si el adjunto es de tipo "enlace" — un archivo no tiene URL
+ * editable (ver comentario de editarAdjunto en core/storage-adjuntos.js).
+ */
+function abrirModalEditarAdjunto(adjunto, onListo) {
+  const { overlay, card } = crearOverlayModalChico("Editar adjunto");
+
+  const inputNombre = crearCampoModal(card, "Nombre", "text", "Ej. Libro del curso");
+  inputNombre.value = adjunto.nombre || "";
+
+  let inputUrl = null;
+  if (adjunto.tipo === "enlace") {
+    inputUrl = crearCampoModal(card, "Enlace", "url", "https://…");
+    inputUrl.value = adjunto.url || "";
+  }
+
+  const inputEmoji = crearCampoEmojiModal(card, adjunto.emoji || "");
+
+  const btnGuardar = document.createElement("button");
+  btnGuardar.type = "button";
+  btnGuardar.className = "btn btn-primary btn-block";
+  btnGuardar.textContent = "Guardar";
+  btnGuardar.addEventListener("click", () => {
+    try {
+      editarAdjunto(adjunto.id, {
+        nombre: inputNombre.value.trim(),
+        url: inputUrl ? inputUrl.value.trim() : undefined,
+        emoji: inputEmoji.value.trim(),
+      });
+      overlay.remove();
+      onListo?.();
+    } catch (e) {
+      mostrarToast(e.message);
+    }
+  });
+  card.appendChild(btnGuardar);
+
+  card.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      btnGuardar.click();
+    }
+  });
+  inputNombre.focus();
+  inputNombre.select();
 }
 
 /* ------------------------------ Menú de gestión ------------------------------ */
@@ -254,7 +364,10 @@ function abrirMenuAdjuntos({ entidadTipo, entidadId, onCambiar, titulo }) {
       asa.title = "Arrastrar para reordenar";
 
       const icono = document.createElement("span");
-      icono.textContent = adjunto.tipo === "enlace" ? "🔗" : "📄";
+      // Emoji propio del adjunto si se le puso uno (ver
+      // crearCampoEmojiModal) — si no, el ícono por defecto de siempre
+      // según el tipo.
+      icono.textContent = adjunto.emoji || (adjunto.tipo === "enlace" ? "🔗" : "📄");
 
       const nombre = document.createElement("span");
       nombre.className = "adjunto-fila-nombre";
@@ -284,6 +397,19 @@ function abrirMenuAdjuntos({ entidadTipo, entidadId, onCambiar, titulo }) {
       labelSwitch.appendChild(chk);
       labelSwitch.insertAdjacentHTML("beforeend", '<span class="track"><span class="thumb"></span></span>');
 
+      const btnEditar = document.createElement("button");
+      btnEditar.type = "button";
+      btnEditar.className = "adjunto-fila-editar";
+      btnEditar.setAttribute("aria-label", "Editar adjunto");
+      btnEditar.title = "Editar nombre, enlace y emoji";
+      btnEditar.textContent = "✏️";
+      btnEditar.addEventListener("click", () => {
+        abrirModalEditarAdjunto(adjunto, () => {
+          onCambiar?.();
+          refrescar();
+        });
+      });
+
       const btnEliminar = document.createElement("button");
       btnEliminar.type = "button";
       btnEliminar.className = "adjunto-fila-eliminar";
@@ -303,7 +429,7 @@ function abrirMenuAdjuntos({ entidadTipo, entidadId, onCambiar, titulo }) {
         });
       });
 
-      fila.append(asa, icono, nombre, labelSwitch, btnEliminar);
+      fila.append(asa, icono, nombre, labelSwitch, btnEditar, btnEliminar);
 
       fila.addEventListener("dragstart", () => {
         idArrastrando = adjunto.id;
@@ -348,4 +474,4 @@ function abrirMenuAdjuntos({ entidadTipo, entidadId, onCambiar, titulo }) {
   card.appendChild(btnAgregarOtro);
 }
 
-export { abrirAdjunto, abrirMenuAdjuntos, abrirModalAdjuntar };
+export { abrirAdjunto, abrirMenuAdjuntos, abrirModalAdjuntar, abrirModalEditarAdjunto };
