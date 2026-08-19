@@ -315,15 +315,34 @@ function obtenerEstiloEvento(evento) {
  * spec en schema.js), se recalcula cada vez comparando contra la fecha de
  * HOY en formato ISO (comparación lexicográfica de "YYYY-MM-DD", válida sin
  * parsear ninguna de las 2 fechas).
+ *
+ * Fix reportado: una tarea que vence HOY con hora puntual (`evento.hora`) ya
+ * pasada seguía contando como "vence hoy" (mostrando "Vence en instantes"
+ * indefinidamente) hasta medianoche, en vez de pasar a vencida apenas cruza
+ * su hora límite. Ahora, si `fecha` es hoy y hay `hora` asignada, también se
+ * compara esa hora puntual contra el momento actual — sin hora asignada
+ * ("todo el día") el comportamiento sigue siendo el de siempre (solo vence
+ * al cambiar el día).
  */
 function esTareaVencida(evento) {
   if (evento.tipo !== "tarea" || evento.completada) return false;
-  return evento.fecha < formatearFechaISO(new Date());
+  const hoyISO = formatearFechaISO(new Date());
+  if (evento.fecha < hoyISO) return true;
+  if (evento.fecha === hoyISO && evento.hora) {
+    const [h, m] = String(evento.hora).split(":").map(Number);
+    if (!Number.isNaN(h) && !Number.isNaN(m)) {
+      const limite = new Date();
+      limite.setHours(h, m, 0, 0);
+      return Date.now() > limite.getTime();
+    }
+  }
+  return false;
 }
 
 function tareaVenceHoy(evento) {
   if (evento.tipo !== "tarea" || evento.completada) return false;
-  return evento.fecha === formatearFechaISO(new Date());
+  if (evento.fecha !== formatearFechaISO(new Date())) return false;
+  return !esTareaVencida(evento);
 }
 
 /**
