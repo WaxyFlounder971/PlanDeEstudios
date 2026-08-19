@@ -648,6 +648,36 @@ function enfocarSelectoresActivosDeModal(overlay) {
   });
 }
 
+/**
+ * Pantalla de carga de sesión (2026-08-19 — reporte "se abre y cierra sola
+ * una ventana de Google" + pedido explícito "no quiero ver el login de
+ * una, quiero una pantalla de carga bonita"): overlay de marca propia,
+ * separado a propósito del overlay-cargando genérico (los "3 puntitos",
+ * pensado para esperas cortas dentro de la app ya abierta) porque este
+ * cubre dos momentos puntuales del arranque/login:
+ *   1. Mientras la app todavía no sabe si puede restaurar la sesión sola
+ *      (leyendo caché/token, esperando a que cargue el script de Google) —
+ *      antes esto mostraba de entrada la tarjeta de "Iniciar sesión con
+ *      Google" (con el botón ya visible) aunque en la enorme mayoría de las
+ *      cargas ese botón nunca hacía falta tocarlo.
+ *   2. Justo después de un login real exitoso, mientras se trae el archivo
+ *      de datos de Drive (antes usaba mostrarCargando(), el mismo overlay
+ *      genérico de 3 puntitos que se usa para cualquier espera corta).
+ * `#pantalla-login` (el botón real) solo se revela cuando de verdad hace
+ * falta una acción del usuario: no hay sesión en caché, o el intento de
+ * reconexión/carga falló. Nunca se muestran los dos overlays a la vez.
+ */
+
+function mostrarPantallaCargaSesion() {
+  const overlay = document.getElementById("overlay-carga-sesion");
+  if (overlay) overlay.classList.remove("oculto");
+}
+
+function ocultarPantallaCargaSesion() {
+  const overlay = document.getElementById("overlay-carga-sesion");
+  if (overlay) overlay.classList.add("oculto");
+}
+
 function inicializarAutoScrollSelectoresEnModales() {
   const observer = new MutationObserver((mutaciones) => {
     mutaciones.forEach((mut) => {
@@ -701,7 +731,9 @@ export {
   inicializarLayoutResponsivo,
   inicializarModalConfirmacion,
   inicializarNavegacionBotonesMouse,
+  mostrarPantallaCargaSesion,
   mostrarToast,
   mostrarToastAccion,
+  ocultarPantallaCargaSesion,
   restaurarEstadoSidebar,
 };
