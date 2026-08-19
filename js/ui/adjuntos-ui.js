@@ -105,11 +105,14 @@ function crearCampoModal(card, etiquetaTexto, tipo, placeholder) {
 
 /**
  * El botón "Adjuntar": arranca en 2 botones (archivo / enlace) — pedido
- * explícito. Elegir "archivo" abre el picker nativo y adjunta apenas se
- * elige un archivo, sin paso intermedio (misma filosofía que el resto de
- * la app: la UI responde al instante, ver adjuntarArchivo). Elegir
- * "enlace" sí pide nombre — a diferencia de un archivo, una URL sola no es
- * una etiqueta usable para el botón/pill que va a mostrarla después.
+ * explícito. Elegir "archivo" abre el picker nativo y, apenas se elige un
+ * archivo, pide un nombre (pre-llenado con el nombre real del archivo,
+ * editable) antes de subirlo — fix reportado: antes se subía directo con
+ * el nombre crudo del archivo, sin forma de ponerle una etiqueta propia
+ * (ver adjuntarArchivo en storage-adjuntos.js, que ahora acepta ese nombre
+ * personalizado). Elegir "enlace" sigue pidiendo nombre igual que siempre
+ * — a diferencia de un archivo, una URL sola no es una etiqueta usable
+ * para el botón/pill que va a mostrarla después.
  */
 function abrirModalAdjuntar({ entidadTipo, entidadId, onListo }) {
   const { overlay, card } = crearOverlayModalChico("Adjuntar");
@@ -138,14 +141,36 @@ function abrirModalAdjuntar({ entidadTipo, entidadId, onListo }) {
     const archivo = inputFile.files[0];
     inputFile.value = ""; // permite re-elegir el mismo archivo dos veces seguidas si hiciera falta
     if (!archivo) return;
-    try {
-      adjuntarArchivo(archivo, entidadTipo, entidadId);
-      mostrarToast(`Adjuntando "${archivo.name}"…`);
-      overlay.remove();
-      onListo?.();
-    } catch (e) {
-      mostrarToast(e.message);
-    }
+
+    vistaInicial.remove();
+
+    const inputNombre = crearCampoModal(card, "Nombre", "text", "Ej. Libro del curso");
+    inputNombre.value = archivo.name;
+
+    const btnGuardar = document.createElement("button");
+    btnGuardar.type = "button";
+    btnGuardar.className = "btn btn-primary btn-block";
+    btnGuardar.textContent = "Adjuntar";
+    btnGuardar.addEventListener("click", () => {
+      try {
+        adjuntarArchivo(archivo, entidadTipo, entidadId, inputNombre.value.trim());
+        mostrarToast(`Adjuntando "${inputNombre.value.trim() || archivo.name}"…`);
+        overlay.remove();
+        onListo?.();
+      } catch (e) {
+        mostrarToast(e.message);
+      }
+    });
+    card.appendChild(btnGuardar);
+
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        btnGuardar.click();
+      }
+    });
+    inputNombre.focus();
+    inputNombre.select();
   });
   card.appendChild(inputFile);
   btnArchivo.addEventListener("click", () => inputFile.click());
