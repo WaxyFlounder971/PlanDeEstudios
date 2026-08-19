@@ -89,54 +89,163 @@ const ETIQUETA_DIA_CODIGO = {
 const ORDEN_DIAS_SEMANA = ["L", "K", "M", "J", "V", "S", "D"];
 
 /**
- * Dropdown de materia — MISMO patrón visual que el resto de la app
- * (.select-custom, ver design-system.css y el selector de materia del
- * formulario de alta/edición en index.html/agenda-modal.js), pero armado
- * 100% dinámico acá (no hay <select> nativo oculto de por medio: no hace
- * falta, esta elección no se envía en ningún formulario, solo decide qué
- * mostrarse en este mismo tab) — mismo criterio 100%-dinámico que ya usa
- * agenda-calendario.js para su propio subheader.
+ * Rediseño (2026-08-19, pedido explícito — "quiero que la tarjeta sea el
+ * selector, que no haya selector y tarjeta"): se elimina el dropdown
+ * (.select-custom) que vivía SEPARADO arriba de la tarjeta-resumen. Ahora
+ * solo hay dos estados posibles acá:
+ *   1. Ninguna materia elegida todavía → construirTarjetaVacia(): una
+ *      tarjeta (mismo lenguaje visual .glass-panel.materia-card que la
+ *      tarjeta-resumen real) que en sí misma es el botón "elegir materia".
+ *   2. Materia elegida → la tarjeta-resumen real de siempre
+ *      (construirTarjetaResumenMateria) + una "pestañita" chica centrada
+ *      pegada al borde inferior (construirPestanaCambiarMateria) que abre
+ *      abrirSelectorMateriaAgenda() — ESA es ahora la única forma de
+ *      cambiar de materia, no hay ningún selector visible aparte de la
+ *      tarjeta.
  */
-function construirSelectorMateria(materias) {
-  const cont = document.createElement("div");
-  cont.className = "select-custom";
-  cont.id = "agenda-materia-tab-selector";
+function construirTarjetaVacia(onTocar) {
+  const tarjeta = document.createElement("button");
+  tarjeta.type = "button";
+  tarjeta.className = "glass-panel materia-card materia-card-vacia";
+  tarjeta.addEventListener("click", onTocar);
 
-  const boton = document.createElement("button");
-  boton.type = "button";
-  boton.className = "form-select select-custom-boton";
-  boton.setAttribute("aria-haspopup", "listbox");
-  boton.setAttribute("aria-expanded", "false");
-  const activa = materias.find((m) => m.mmId === estado.agendaMateriaSeleccionadaId);
-  boton.innerHTML = `<span>${activa ? activa.nombre : "Elegí una materia"}</span>`;
+  const texto = document.createElement("span");
+  texto.className = "muted";
+  texto.textContent = "Tocá para seleccionar materia";
+  tarjeta.appendChild(texto);
 
-  const lista = document.createElement("ul");
-  lista.className = "select-custom-lista oculto";
-  lista.setAttribute("role", "listbox");
+  return tarjeta;
+}
 
+/**
+ * La "pestañita para jalar" (pedido explícito): un tab chico, centrado,
+ * pegado al borde inferior de la tarjeta-resumen — se posiciona con
+ * position:absolute sobre un wrapper `position:relative` (ver
+ * construirContenidoMateria) para que quede "colgando" del borde de la
+ * tarjeta en vez de ocupar una fila propia. Es la ÚNICA forma de abrir el
+ * selector de materia una vez que ya hay una elegida.
+ */
+function construirPestanaCambiarMateria(onTocar) {
+  const pestana = document.createElement("button");
+  pestana.type = "button";
+  pestana.className = "materia-pestana-cambiar";
+  pestana.setAttribute("aria-label", "Cambiar de materia");
+  pestana.title = "Cambiar de materia";
+  pestana.textContent = "▾";
+  pestana.addEventListener("click", onTocar);
+  return pestana;
+}
+
+/**
+ * Una "tarjeta de semestre" chica dentro del selector — mismo criterio que
+ * el resto de la app (nombre + badge Actual/Pasado, ver
+ * construirBadgeEstadoSemestre en semestres-tarjetas.js), pero simplificada
+ * a propósito: acá no hace falta reutilizar la tarjeta REAL de Semestres
+ * (construirTarjetaSemestre), que trae edición/drag/conflictos — este
+ * selector solo necesita mostrar, por semestre, las materias que se pueden
+ * elegir para este tab, cada una como una fila tocable.
+ */
+function construirTarjetaSemestreSelector(semestre, materiasDelSemestre, onSeleccionar) {
+  const tarjeta = document.createElement("div");
+  tarjeta.className = "glass-panel stack";
+  tarjeta.style.cssText = "padding:12px 14px; gap:8px;";
+
+  const encabezado = document.createElement("div");
+  encabezado.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:8px;";
+
+  const titulo = document.createElement("strong");
+  titulo.style.fontSize = "0.92rem";
+  titulo.textContent = semestre.nombre;
+  encabezado.appendChild(titulo);
+
+  const efectivo = obtenerEstadoEfectivoSemestre(semestre);
+  const badgeEstado = document.createElement("span");
+  badgeEstado.className = "badge " + (efectivo === "actual" ? "badge-success" : "badge-neutral");
+  badgeEstado.textContent = efectivo === "actual" ? "Actual" : "Pasado";
+  encabezado.appendChild(badgeEstado);
+
+  tarjeta.appendChild(encabezado);
+
+  const listaMaterias = document.createElement("div");
+  listaMaterias.className = "stack";
+  listaMaterias.style.gap = "6px";
+
+  materiasDelSemestre.forEach((m) => {
+    const activa = m.mmId === estado.agendaMateriaSeleccionadaId;
+    const btnMateria = document.createElement("button");
+    btnMateria.type = "button";
+    btnMateria.className = "btn btn-block " + (activa ? "btn-primary" : "btn-secondary");
+    btnMateria.style.cssText = "text-align:left;";
+    btnMateria.textContent = m.nombre;
+    btnMateria.addEventListener("click", () => onSeleccionar(m.mmId));
+    listaMaterias.appendChild(btnMateria);
+  });
+
+  tarjeta.appendChild(listaMaterias);
+  return tarjeta;
+}
+
+/**
+ * Ventana con TODAS las tarjetas de semestre activas en Agenda (pedido
+ * explícito) — se arma agrupando `materias` (ya viene filtrada por
+ * obtenerMateriasVinculablesAgenda, mismo criterio que el resto de Agenda)
+ * por semestreId, preservando el orden en que aparecen ahí. Mismo patrón
+ * de modal 100%-dinámico (.modal-overlay/.glass-card.modal-card) que ya
+ * usa el resto de la app (ver crearModalDinamico en semestres-tarjetas.js
+ * o el modal chico de ui/adjuntos-ui.js) — armado acá en vez de
+ * importado porque ninguno de los dos está exportado en una forma
+ * reutilizable para este caso puntual.
+ */
+function abrirSelectorMateriaAgenda(materias) {
+  document.querySelectorAll(".overlay-selector-materia-agenda").forEach((el) => el.remove());
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay overlay-selector-materia-agenda";
+
+  const card = document.createElement("div");
+  card.className = "glass-card modal-card modal-card-ancha stack";
+  card.style.gap = "14px";
+
+  const btnX = document.createElement("button");
+  btnX.type = "button";
+  btnX.className = "modal-x-close";
+  btnX.setAttribute("aria-label", "Cerrar");
+  btnX.textContent = "✕";
+  btnX.addEventListener("click", () => overlay.remove());
+  card.appendChild(btnX);
+
+  const h = document.createElement("h3");
+  h.style.margin = "0";
+  h.textContent = "Elegí una materia";
+  card.appendChild(h);
+
+  const semestreIdsEnOrden = [];
+  const materiasPorSemestre = new Map();
   materias.forEach((m) => {
-    const li = document.createElement("li");
-    const activaEsta = m.mmId === estado.agendaMateriaSeleccionadaId;
-    li.className = "select-custom-opcion" + (activaEsta ? " activa" : "");
-    li.setAttribute("role", "option");
-    li.setAttribute("aria-selected", String(activaEsta));
-    li.textContent = m.nombre;
-    li.addEventListener("click", () => {
-      estado.agendaMateriaSeleccionadaId = m.mmId;
-      renderizarMateriaAgenda();
-    });
-    lista.appendChild(li);
+    if (!materiasPorSemestre.has(m.semestreId)) {
+      materiasPorSemestre.set(m.semestreId, []);
+      semestreIdsEnOrden.push(m.semestreId);
+    }
+    materiasPorSemestre.get(m.semestreId).push(m);
   });
 
-  boton.addEventListener("click", () => {
-    const abierto = boton.getAttribute("aria-expanded") === "true";
-    lista.classList.toggle("oculto", abierto);
-    boton.setAttribute("aria-expanded", String(!abierto));
+  semestreIdsEnOrden.forEach((semestreId) => {
+    const semestre = buscarSemestreVivoPorId(semestreId);
+    if (!semestre) return; // mismo criterio defensivo que resolverMateriaCompleta
+    card.appendChild(
+      construirTarjetaSemestreSelector(semestre, materiasPorSemestre.get(semestreId), (mmId) => {
+        estado.agendaMateriaSeleccionadaId = mmId;
+        overlay.remove();
+        renderizarMateriaAgenda();
+      })
+    );
   });
 
-  cont.appendChild(boton);
-  cont.appendChild(lista);
-  return cont;
+  overlay.appendChild(card);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+  document.body.appendChild(overlay);
 }
 
 /**
@@ -483,7 +592,7 @@ function construirSeccionSemanaMateria(semestre, materiaId, numeroSemana, evento
   return bloque;
 }
 
-function construirContenidoMateria(mmVinculable, onCambiar) {
+function construirContenidoMateria(mmVinculable, materias, onCambiar) {
   const resuelto = resolverMateriaCompleta(mmVinculable.mmId, mmVinculable.semestreId);
   const cont = document.createElement("div");
   cont.className = "stack";
@@ -499,8 +608,25 @@ function construirContenidoMateria(mmVinculable, onCambiar) {
 
   const { semestre, mm, plan, materia } = resuelto;
 
-  cont.appendChild(construirTarjetaResumenMateria(mm, materia, plan, semestre, onCambiar));
-  cont.appendChild(construirFilaAdjuntosMateria(mm, onCambiar));
+  // Wrapper `position:relative` SOLO para poder anclar la pestañita
+  // (position:absolute) al borde inferior de la tarjeta — no le agrega
+  // ningún gap ni padding propio, así que el espaciado hacia el elemento
+  // siguiente lo sigue dando el `.stack` de `cont`, no este wrapper.
+  const wrapTarjeta = document.createElement("div");
+  wrapTarjeta.style.position = "relative";
+  wrapTarjeta.appendChild(construirTarjetaResumenMateria(mm, materia, plan, semestre, onCambiar));
+  wrapTarjeta.appendChild(construirPestanaCambiarMateria(() => abrirSelectorMateriaAgenda(materias)));
+  cont.appendChild(wrapTarjeta);
+
+  // Pedido explícito: el gap tarjeta→adjuntos debe ser el MISMO que
+  // adjuntos→"Semana 1" (ese segundo gap es el de referencia, el que ya
+  // pone el `.stack` de `cont` de forma pareja entre todos sus hijos). La
+  // clase `.adjuntos-pills-fila` trae un `margin-top` propio (pensado para
+  // cuando esta fila va pegada debajo de OTRA cosa, ej. el viejo selector)
+  // que acá rompía esa igualdad — se anula puntualmente para este uso.
+  const filaAdjuntos = construirFilaAdjuntosMateria(mm, onCambiar);
+  filaAdjuntos.style.marginTop = "0";
+  cont.appendChild(filaAdjuntos);
 
   const eventosMateria = (estado.datos.agenda || []).filter((ev) => ev.materia_matriculada_id === mm.id);
   const totalSemanas = Number(semestre.duracion_semanas) || 16;
@@ -540,35 +666,25 @@ function renderizarMateriaAgenda() {
     return;
   }
 
-  cont.appendChild(construirSelectorMateria(materias));
-
   if (!estado.agendaMateriaSeleccionadaId) {
-    const vacio = document.createElement("p");
-    vacio.className = "muted";
-    vacio.style.cssText = "text-align:center; padding:16px 0;";
-    vacio.textContent = "Elegí una materia para ver sus semanas.";
-    cont.appendChild(vacio);
+    cont.appendChild(construirTarjetaVacia(() => abrirSelectorMateriaAgenda(materias)));
     return;
   }
 
   const mmVinculable = materias.find((m) => m.mmId === estado.agendaMateriaSeleccionadaId);
-  cont.appendChild(construirContenidoMateria(mmVinculable, renderizarMateriaAgenda));
+  cont.appendChild(construirContenidoMateria(mmVinculable, materias, renderizarMateriaAgenda));
 }
 
 /**
- * Wiring de una sola vez (llamado desde inicializarAgenda): cerrar el
- * dropdown al tocar afuera — mismo patrón que el selector de materia del
- * formulario (cerrarDropdownMateria en agenda-modal.js), pero delegado acá
- * porque el contenedor se reconstruye en cada render (no es un nodo fijo
- * del HTML estático).
+ * Wiring de una sola vez (llamado desde inicializarAgenda). Rediseño
+ * (2026-08-19): ya no hay ningún dropdown propio que cerrar al tocar
+ * afuera — el modal del selector (abrirSelectorMateriaAgenda) es un
+ * `.modal-overlay` que ya se cierra solo al tocar fuera de su tarjeta
+ * (mismo patrón que el resto de modales dinámicos de la app), así que no
+ * hace falta wiring extra acá. Se deja la función (exportada, llamada
+ * desde inicializarAgenda) como no-op explícito por si a futuro este tab
+ * vuelve a necesitar algún wiring de una sola vez.
  */
-function inicializarMateriaAgenda() {
-  document.addEventListener("click", (ev) => {
-    const cont = document.getElementById("agenda-materia-tab-selector");
-    if (!cont || cont.contains(ev.target)) return;
-    cont.querySelector(".select-custom-lista")?.classList.add("oculto");
-    cont.querySelector(".select-custom-boton")?.setAttribute("aria-expanded", "false");
-  });
-}
+function inicializarMateriaAgenda() {}
 
 export { inicializarMateriaAgenda, renderizarMateriaAgenda };
