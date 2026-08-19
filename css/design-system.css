@@ -2524,6 +2524,62 @@ img, svg { max-width: 100%; }
   to { transform: rotate(360deg); }
 }
 
+/* ---- 2026-08-19: pantalla de carga de sesión (arranque + post-login) ----
+   A propósito NO reutiliza el fondo translúcido/blur de .overlay-cargando
+   (ese es para tapar un pedacito de la app ya visible detrás, esto en
+   cambio reemplaza por completo a la pantalla de login mientras se decide
+   si hace falta mostrarla) — usa el mismo fondo con degradados que ya trae
+   <body> (ver bg-canvas + accent-glow arriba) para que no haya ningún
+   salto de color entre este loader y la pantalla de login o el app-shell
+   que aparezcan después. */
+.overlay-carga-sesion {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: var(--bg-canvas);
+}
+.overlay-carga-sesion.oculto { display: none; }
+.carga-sesion-anillo-wrap {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.carga-sesion-logo {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.35));
+}
+.carga-sesion-anillo {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid var(--accent-1-10, transparent);
+  border-top-color: var(--accent-1);
+  animation: carga-sesion-girar 0.9s linear infinite;
+}
+.carga-sesion-texto {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.01em;
+}
+@keyframes carga-sesion-girar {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+[data-rendimiento="reducido"] .carga-sesion-anillo { animation-duration: 1.4s; }
+
 /* ---- v8.3: overlay de carga reutilizable — 3 puntitos en ola ---- */
 .overlay-cargando {
   position: fixed;
