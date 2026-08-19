@@ -234,6 +234,17 @@ function inicializarPullToRefresh() {
       if (sincronizando || window.scrollY > 4) return;
       // Ignora clics normales sobre controles interactivos.
       if (e.target.closest("button, a, input, textarea, select")) return;
+      // v9.3 (fix "pull-to-refresh se activa desde cualquier parte del
+      // scroll"): el toque inicial (touchstart/pointerdown) tiene que
+      // empezar sobre el encabezado general donde vive el logo —
+      // .mobile-topbar (barra superior en viewport móvil) o
+      // .sidebar-titulo (título del sidebar/drawer, visible en desktop y
+      // también en móvil cuando el drawer está abierto). Si el toque
+      // arranca en cualquier otro contenedor de la app, se descarta acá
+      // mismo y el scroll nativo de esa sección queda intacto — nunca se
+      // marca `candidato`, así que pointermove/touchmove de más abajo no
+      // tienen nada que "comprometer" ni preventDefault() que llamar.
+      if (!e.target.closest(".mobile-topbar, .sidebar-titulo")) return;
       arrastreInicioY = e.clientY;
       arrastreInicioX = e.clientX;
       candidato = true;
