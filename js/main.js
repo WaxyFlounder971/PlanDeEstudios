@@ -9,7 +9,7 @@ import { inicializarModalEnlace, renderizarEnlacesRapidos } from "./config/confi
 import { buscarOCrearArchivoDatos, cerrarSesionGoogle, inicializarGoogleAuth, iniciarSesionConGoogle, obtenerMetadatosArchivo, obtenerPerfilGoogle, refrescarAccessTokenGoogle } from "./core/auth.js";
 import { migrarDatosAntiguos, sellarTimestamp } from "./core/schema.js";
 import { fusionarDatos } from "./core/storage-merge.js";
-import { actualizarIndicadorSync, forzarSincronizacion, inicializarPullToRefresh, inicializarSondeoAlVolver, intentarReconexionSilenciosa, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, mostrarCargando, ocultarCargando, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
+import { actualizarIndicadorSync, forzarSincronizacion, inicializarPullToRefresh, inicializarSondeoAlVolver, intentarReconexionSilenciosa, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
 import { CLAVE_CACHE_LOCAL, borrarTokenCache, correoConocido, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
 import { obtenerIniciales } from "./core/utils.js";
 import { inicializarComunidad, renderizarComunidad } from "./comunidad/comunidad.js";
@@ -24,7 +24,7 @@ import { renderizarSemestres } from "./semestres/semestres.js";
 import { inicializarAgenda, renderizarAgenda } from "./agenda/agenda.js";
 import { inicializarHorario, renderizarHorario } from "./horario/horario.js";
 import { procesarAsociacionPendienteDeAmigo, iniciarRefrescoPeriodicoAmigos } from "./horario/horario-amigos.js";
-import { abrirConfirmacion, agregarLongPress, inicializarAutoScrollSelectoresEnModales, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, mostrarToastAccion, restaurarEstadoSidebar } from "./ui/componentes.js";
+import { abrirConfirmacion, agregarLongPress, inicializarAutoScrollSelectoresEnModales, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, mostrarPantallaCargaSesion, mostrarToastAccion, ocultarPantallaCargaSesion, restaurarEstadoSidebar } from "./ui/componentes.js";
 import { aplicarPaleta, aplicarTemaGuardadoLocalmente } from "./ui/tema.js";
 
 /* ===================== PWA: registro del Service Worker ===================== */
@@ -184,15 +184,29 @@ window.addEventListener("DOMContentLoaded", () => {
           });
         }
       } else {
-        // No había sesión en caché (se muestra la pantalla de login): no hay
-        // nada que sincronizar todavía, así que la "inicialización de auth"
-        // se da por terminada de inmediato.
+        // No había sesión en caché: recién ACÁ se confirma que de verdad
+        // hace falta una acción del usuario, así que es el único momento en
+        // que se revela la tarjeta de login real (con el botón) en vez del
+        // loader de marca propia que estaba tapándola desde que cargó la
+        // página (ver overlay-carga-sesion en index.html). No hay nada que
+        // sincronizar todavía, así que la "inicialización de auth" se da
+        // por terminada de inmediato.
+        ocultarPantallaCargaSesion();
+        document.getElementById("pantalla-login").classList.remove("oculto");
         resolverAuthListo();
       }
     },
     alFallar: () => {
       btnLogin.textContent = textoOriginalBtnLogin;
       btnLogin.disabled = false; // se reactiva para permitir reintentar
+      // El script de Google nunca cargó: si esta carga NO venía de una
+      // sesión en caché, no hay forma de seguir sin una acción del usuario
+      // (reintentar), así que se revela la tarjeta de login real acá
+      // también, igual que en el camino "sin caché" de arriba.
+      if (!habiaCacheAlCargar) {
+        ocultarPantallaCargaSesion();
+        document.getElementById("pantalla-login").classList.remove("oculto");
+      }
       const aviso = document.getElementById("aviso-login-bloqueado");
       aviso.textContent =
         "No se pudo cargar el inicio de sesión de Google. Revisa tu conexión a internet, desactiva bloqueadores de anuncios/VPN para este sitio, y recarga la página.";
@@ -415,7 +429,11 @@ async function onLoginExitoso(token, expiresIn) {
   // carga (no venía de una sesión en caché) — resuelve authListo aquí por
   // si algún sondeo/sincronización quedó esperándola.
   resolverAuthListo();
-  mostrarCargando();
+  // Login real recién completado: se usa el mismo loader de marca propia
+  // del arranque en vez de mostrarCargando() (los "3 puntitos" genéricos)
+  // mientras se trae el archivo de datos de Drive — pedido explícito de que
+  // esta espera puntual no se vea "como el default de carga".
+  mostrarPantallaCargaSesion();
   // v8.3: le pide al navegador que este sitio quede en la lista de
   // almacenamiento "persistente" (no elegible para borrado automático por
   // presión de espacio) — reduce el riesgo de que un móvil borre la sesión
@@ -500,11 +518,16 @@ async function onLoginExitoso(token, expiresIn) {
       aviso.classList.remove("oculto");
     }
   } finally {
-    ocultarCargando();
+    ocultarPantallaCargaSesion();
   }
 }
 
 function mostrarApp() {
+  // Cubre los 2 caminos que llegan acá: sesión restaurada desde caché
+  // (mostrarApp() se llama casi de inmediato al arrancar, ver
+  // DOMContentLoaded) y login real recién completado (onLoginExitoso) — en
+  // ambos, el loader de marca propia ya cumplió su función.
+  ocultarPantallaCargaSesion();
   document.getElementById("pantalla-login").classList.add("oculto");
   document.getElementById("app-shell").classList.remove("oculto");
   // BUG FIX v1.15.4 (causa raíz de "se aplica y a los segundos vuelve a
