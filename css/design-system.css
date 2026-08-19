@@ -3604,9 +3604,19 @@ html.exportar-tema-default[data-mode="dark"] {
   pointer-events: none;
 }
 .horario-linea-hora-actual-punto {
+  /* Bug: quedaba 2px más abajo que el centro real de la línea. La línea es
+     el border-top (2px) de .horario-linea-hora-actual, que se dibuja hacia
+     ABAJO desde su "top" (ocupa de top a top+2px, centro visual en
+     top+1px). Este punto, al ser absolute dentro de ese mismo elemento,
+     se posiciona respecto al padding-box del padre — que por el border-top
+     ya arranca en top+2px, no en top — así que top:-2px lo dejaba en
+     top+2-2 = top (con alto 6px, centro en top+3), 2px por debajo del
+     centro real (top+1) de la línea. Con top:-4px el punto arranca en
+     top+2-4 = top-2 (alto 6px, centro en top+1), coincidiendo con el
+     centro visual de la línea. */
   position: absolute;
   left: -3px;
-  top: -2px;
+  top: -4px;
   width: 6px;
   height: 6px;
   border-radius: 50%;
