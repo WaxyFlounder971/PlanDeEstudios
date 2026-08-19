@@ -9,9 +9,17 @@ import { actualizarIndicadorSync, forzarBackupManual, marcarCambioPendiente } fr
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
-import { mostrarToast } from "../ui/componentes.js";
+import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta } from "../ui/tema.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
+import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
+import {
+  eliminarAdjuntosDeCronogramaDeSemestre,
+  eliminarAdjuntosDeEventosSueltos,
+  eliminarAdjuntosDeSemestre,
+  eliminarAdjuntosDeTareasDeSemestre,
+  hayAdjuntosGuardados,
+} from "../core/storage-adjuntos.js";
 
 /* ------------------------------ Ajustes ------------------------------ */
 
@@ -717,6 +725,10 @@ function renderizarAjustes() {
   // Ajustes — respaldo de datos (exportar/importar JSON completo)
   renderizarSeccionDatos();
 
+  // Ajustes — liberar espacio (borrado en lote de adjuntos, solo si hay
+  // alguno guardado — ver hayAdjuntosGuardados en core/storage-adjuntos.js)
+  renderizarSeccionLiberarEspacio();
+
   actualizarIndicadorSync();
 }
 
@@ -1067,6 +1079,180 @@ function renderizarSeccionDatos() {
     estadoTexto.textContent = "Leyendo archivo...";
     importarDatosDesdeArchivo(archivo, estadoTexto);
   });
+
+  contenedor.appendChild(panel);
+}
+
+/**
+ * Ajustes — Liberar espacio (borrado en lote de adjuntos): solo se muestra
+ * si hayAdjuntosGuardados() dice que hay algo para borrar — si no, el
+ * contenedor #seccion-liberar-espacio queda vacío y oculto (ver el "oculto"
+ * ya presente en el markup de index.html).
+ *
+ * Dos modos:
+ *   - Por semestre (selector): "Cronograma" (adjuntos de materia —
+ *     cronograma, reglas, libros) y "Tareas" (adjuntos de EventoAgenda de
+ *     ese semestre) por separado, más un botón "Borrar todo este semestre"
+ *     que hace ambos de una.
+ *   - Global, sin selector: eventos sueltos (no asociados a ningún
+ *     semestre).
+ *
+ * Cada botón pide confirmación (mismo patrón que el resto de la app,
+ * abrirConfirmacion) antes de borrar — es destructivo e irreversible (borra
+ * también el archivo real en Drive, no solo la referencia local).
+ */
+function renderizarSeccionLiberarEspacio() {
+  const contenedor = document.getElementById("seccion-liberar-espacio");
+  if (!contenedor) return;
+  contenedor.innerHTML = "";
+
+  if (!hayAdjuntosGuardados()) {
+    contenedor.classList.add("oculto");
+    return;
+  }
+  contenedor.classList.remove("oculto");
+
+  const panel = document.createElement("div");
+  panel.className = "glass-panel";
+  panel.style.cssText = "padding:12px; display:flex; flex-direction:column; gap:10px;";
+
+  const titulo = document.createElement("span");
+  titulo.className = "form-label";
+  titulo.textContent = "Liberar espacio";
+  panel.appendChild(titulo);
+
+  const explicacion = document.createElement("p");
+  explicacion.className = "muted";
+  explicacion.style.cssText = "font-size:0.8rem; margin:0;";
+  explicacion.textContent =
+    "Borra en lote los archivos y enlaces adjuntos que ya no necesitás. Esto borra también el archivo real en tu Drive — no se puede deshacer.";
+  panel.appendChild(explicacion);
+
+  const estadoTexto = document.createElement("p");
+  estadoTexto.className = "muted";
+  estadoTexto.style.cssText = "font-size:0.78rem; margin:0; min-height:1em;";
+
+  function confirmarYBorrar({ titulo, mensaje, accion }) {
+    abrirConfirmacion({
+      titulo,
+      mensaje,
+      textoConfirmar: "Borrar",
+      onConfirmar: async () => {
+        estadoTexto.textContent = "Borrando…";
+        try {
+          await accion();
+          estadoTexto.textContent = "✅ Listo.";
+          renderizarSeccionLiberarEspacio();
+        } catch (err) {
+          console.error("Error liberando espacio:", err);
+          estadoTexto.textContent = "❌ No se pudo completar el borrado. Intenta de nuevo.";
+        }
+      },
+    });
+  }
+
+  // --- Por semestre ---
+  const semestres = obtenerSemestresOrdenCronologico();
+  if (semestres.length > 0) {
+    const filaSelector = document.createElement("div");
+    filaSelector.style.cssText = "display:flex; flex-direction:column; gap:6px;";
+
+    const etiquetaSelector = document.createElement("span");
+    etiquetaSelector.className = "muted";
+    etiquetaSelector.style.fontSize = "0.78rem";
+    etiquetaSelector.textContent = "Por semestre:";
+    filaSelector.appendChild(etiquetaSelector);
+
+    const selectSemestre = document.createElement("select");
+    selectSemestre.className = "input";
+    semestres.forEach((semestre) => {
+      const opt = document.createElement("option");
+      opt.value = semestre.id;
+      opt.textContent = semestre.nombre;
+      selectSemestre.appendChild(opt);
+    });
+    filaSelector.appendChild(selectSemestre);
+
+    const filaBotonesSemestre = document.createElement("div");
+    filaBotonesSemestre.style.cssText = "display:flex; gap:8px; flex-wrap:wrap;";
+
+    const btnCronograma = document.createElement("button");
+    btnCronograma.type = "button";
+    btnCronograma.className = "btn btn-secondary";
+    btnCronograma.style.cssText = "flex:1 1 140px;";
+    btnCronograma.textContent = "Cronograma";
+    btnCronograma.addEventListener("click", () => {
+      const semestre = semestres.find((s) => s.id === selectSemestre.value);
+      if (!semestre) return;
+      confirmarYBorrar({
+        titulo: "Borrar adjuntos de Cronograma",
+        mensaje: `¿Borrar todos los archivos y enlaces adjuntos del Cronograma (materia) de "${semestre.nombre}"? Esta acción no se puede deshacer.`,
+        accion: () => eliminarAdjuntosDeCronogramaDeSemestre(semestre.id),
+      });
+    });
+    filaBotonesSemestre.appendChild(btnCronograma);
+
+    const btnTareas = document.createElement("button");
+    btnTareas.type = "button";
+    btnTareas.className = "btn btn-secondary";
+    btnTareas.style.cssText = "flex:1 1 140px;";
+    btnTareas.textContent = "Tareas";
+    btnTareas.addEventListener("click", () => {
+      const semestre = semestres.find((s) => s.id === selectSemestre.value);
+      if (!semestre) return;
+      confirmarYBorrar({
+        titulo: "Borrar adjuntos de Tareas",
+        mensaje: `¿Borrar todos los archivos y enlaces adjuntos de las tareas de "${semestre.nombre}"? Esta acción no se puede deshacer.`,
+        accion: () => eliminarAdjuntosDeTareasDeSemestre(semestre.id),
+      });
+    });
+    filaBotonesSemestre.appendChild(btnTareas);
+
+    const btnTodoSemestre = document.createElement("button");
+    btnTodoSemestre.type = "button";
+    btnTodoSemestre.className = "btn btn-danger";
+    btnTodoSemestre.style.cssText = "flex:1 1 140px;";
+    btnTodoSemestre.textContent = "Todo el semestre";
+    btnTodoSemestre.addEventListener("click", () => {
+      const semestre = semestres.find((s) => s.id === selectSemestre.value);
+      if (!semestre) return;
+      confirmarYBorrar({
+        titulo: "Borrar todos los adjuntos del semestre",
+        mensaje: `¿Borrar TODOS los archivos y enlaces adjuntos (Cronograma y Tareas) de "${semestre.nombre}"? Esta acción no se puede deshacer.`,
+        accion: () => eliminarAdjuntosDeSemestre(semestre.id),
+      });
+    });
+    filaBotonesSemestre.appendChild(btnTodoSemestre);
+
+    filaSelector.appendChild(filaBotonesSemestre);
+    panel.appendChild(filaSelector);
+  }
+
+  // --- Global, sin selector ---
+  const filaGlobal = document.createElement("div");
+  filaGlobal.style.cssText = "display:flex; flex-direction:column; gap:6px;";
+
+  const etiquetaGlobal = document.createElement("span");
+  etiquetaGlobal.className = "muted";
+  etiquetaGlobal.style.fontSize = "0.78rem";
+  etiquetaGlobal.textContent = "Eventos sueltos (no asociados a un semestre):";
+  filaGlobal.appendChild(etiquetaGlobal);
+
+  const btnEventosSueltos = document.createElement("button");
+  btnEventosSueltos.type = "button";
+  btnEventosSueltos.className = "btn btn-danger btn-block";
+  btnEventosSueltos.textContent = "Borrar adjuntos de eventos sueltos";
+  btnEventosSueltos.addEventListener("click", () => {
+    confirmarYBorrar({
+      titulo: "Borrar adjuntos de eventos sueltos",
+      mensaje: "¿Borrar todos los archivos y enlaces adjuntos de eventos que no pertenecen a ningún semestre? Esta acción no se puede deshacer.",
+      accion: () => eliminarAdjuntosDeEventosSueltos(),
+    });
+  });
+  filaGlobal.appendChild(btnEventosSueltos);
+
+  panel.appendChild(filaGlobal);
+  panel.appendChild(estadoTexto);
 
   contenedor.appendChild(panel);
 }
@@ -1541,6 +1727,7 @@ function renderizarNotasAprobacion() {
 export {
   renderizarAjustes,
   renderizarSeccionBackupDrive,
+  renderizarSeccionLiberarEspacio,
   aplicarModoRendimiento,
   DIAS_SEMANA_CONFIG,
 };
