@@ -93,15 +93,25 @@ let procesandoColaSubidas = false;
  * y encola el binario para subir aparte. Devuelve la referencia creada por
  * si quien llama quiere pintarla de inmediato sin esperar a re-renderizar
  * toda la lista.
+ *
+ * `nombrePersonalizado` (opcional, pedido explícito — antes el pill SIEMPRE
+ * mostraba el nombre crudo del archivo elegido, sin forma de renombrarlo):
+ * si viene con texto, se usa tal cual como `nombre` de la referencia; si
+ * viene vacío/undefined, cae al nombre original del archivo (`archivo.name`,
+ * comportamiento de siempre). El binario en Drive SIEMPRE se sube con el
+ * nombre real del archivo — esto solo cambia la ETIQUETA que se muestra en
+ * la app, nunca el archivo físico.
  */
-function adjuntarArchivo(archivo, entidadTipo, entidadId) {
+function adjuntarArchivo(archivo, entidadTipo, entidadId, nombrePersonalizado) {
   const limiteBytes = LIMITE_MB_ADJUNTO * 1024 * 1024;
   if (archivo.size > limiteBytes) {
     throw new Error(`El archivo pesa más de ${LIMITE_MB_ADJUNTO}MB — elegí uno más liviano.`);
   }
 
+  const nombreLimpio = (nombrePersonalizado || "").trim();
+
   const nuevo = crearAdjunto({
-    nombre: archivo.name,
+    nombre: nombreLimpio || archivo.name,
     mimeType: archivo.type,
     tamanoBytes: archivo.size,
     entidadTipo,
