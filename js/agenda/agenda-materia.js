@@ -13,8 +13,10 @@
         + formatearNumero, redondeo al 5 más cercano) para que el número
         mostrado acá sea IDÉNTICO al de Semestres, nunca una segunda
         fuente de verdad.
-     3. El motor real de criterios/asignaciones (construirSeccionNotas),
-        reusado tal cual — no se duplica ese render+cálculo acá.
+     3. Encabezado completo (código, nombre, nota final, 👤, estado,
+        universidad, créditos, ➤). El motor de criterios/asignaciones
+        (construirSeccionNotas) NO se muestra acá — vive solo en Semestres;
+        acá solo se ve el número final de la nota, ya calculado.
      4. Listado semana a semana (TODAS las semanas del semestre de esa
         materia, incluidas las vacías) con las clases de esa materia
         (siempre con su modalidad, aunque sea presencial) Y lo pendiente
@@ -43,7 +45,6 @@ import {
 } from "../horario/horario.js";
 import { buscarSemestreVivoPorId, navegarAMateriaMatriculada } from "../semestres/semestres.js";
 import {
-  construirSeccionNotas,
   abrirPopoverProfesoresMateria,
   calcularNotaFinalVigente,
   formatearNumero,
@@ -78,6 +79,12 @@ const ETIQUETA_DIA_CODIGO = {
   S: "Sábado",
   D: "Domingo",
 };
+
+// Orden real de la semana (Lunes primero) para ordenar clases por día —
+// NUNCA alfabético: los códigos de una letra (L,K,M,J,V,S,D) ordenados con
+// localeCompare dan J,K,L,M,S,V,D (alfabético), no la semana real. Este
+// array fija el índice correcto para .sort() por posición.
+const ORDEN_DIAS_SEMANA = ["L", "K", "M", "J", "V", "S", "D"];
 
 /**
  * Dropdown de materia — MISMO patrón visual que el resto de la app
@@ -223,10 +230,10 @@ function construirFilaAdjuntosMateria(mm, onCambiar) {
  *   Código · Nombre · Nota · 👤 (profesores)
  *   Estado · Universidad · Créditos · ➤ Ir a Semestres
  *
- * A propósito NO se trae nada más de esa tarjeta real (ni el cuerpo
- * expandible de notas/criterios, que sigue viviendo como bloque aparte más
- * abajo en este mismo tab, ver construirSeccionNotas) — es el encabezado
- * solo, envuelto en su propia tarjeta (`.glass-panel.materia-card`, mismo
+ * A propósito NO se trae nada más de esa tarjeta real — el cuerpo
+ * expandible de notas/criterios (construirSeccionNotas) NO se muestra en
+ * este tab, esa vive únicamente en Semestres. Es el encabezado solo,
+ * envuelto en su propia tarjeta (`.glass-panel.materia-card`, mismo
  * lenguaje visual que el resto de tarjetas de Agenda/Semestres) para que se
  * vea como una tarjeta real y autocontenida en vez de elementos sueltos.
  */
@@ -334,10 +341,11 @@ function construirTarjetaResumenMateria(mm, materia, plan, semestre, onCambiar) 
 
   const btnIrA = document.createElement("button");
   btnIrA.type = "button";
-  btnIrA.className = "btn-link";
-  btnIrA.style.cssText = "background:none; border:none; cursor:pointer; font-size:0.78rem; display:flex; align-items:center; gap:3px; white-space:nowrap;";
+  btnIrA.className = "materia-expandir";
+  btnIrA.style.cssText = "background:none; border:none; cursor:pointer; padding:2px;";
+  btnIrA.setAttribute("aria-label", "Ver esta materia en Semestres");
   btnIrA.title = "Ver esta materia en Semestres";
-  btnIrA.innerHTML = `Ir a <span aria-hidden="true">➤</span>`;
+  btnIrA.textContent = "➤";
   btnIrA.addEventListener("click", () => navegarAMateriaMatriculada(semestre.id, mm.id));
   colDerecha.appendChild(btnIrA);
 
@@ -415,7 +423,11 @@ function construirSeccionSemanaMateria(semestre, materiaId, numeroSemana, evento
   const clasesDeEstaSemana = (semestre.bloques_horario || [])
     .filter((b) => b.materia_id === materiaId)
     .flatMap((b) => obtenerClasesEfectivasSemana(b, numeroSemana))
-    .sort((a, b) => String(a.dia).localeCompare(String(b.dia)) || String(a.hora_inicio).localeCompare(String(b.hora_inicio)));
+    .sort(
+      (a, b) =>
+        ORDEN_DIAS_SEMANA.indexOf(a.dia) - ORDEN_DIAS_SEMANA.indexOf(b.dia) ||
+        String(a.hora_inicio).localeCompare(String(b.hora_inicio))
+    );
 
   const deEstaSemana = eventosMateria
     .filter((ev) => calcularNumeroSemanaParaFecha(semestre, fechaLocalDesdeISO(ev.fecha)) === numeroSemana)
@@ -472,7 +484,6 @@ function construirContenidoMateria(mmVinculable, onCambiar) {
 
   cont.appendChild(construirTarjetaResumenMateria(mm, materia, plan, semestre, onCambiar));
   cont.appendChild(construirFilaAdjuntosMateria(mm, onCambiar));
-  cont.appendChild(construirSeccionNotas(mm, materia, plan, onCambiar));
 
   const eventosMateria = (estado.datos.agenda || []).filter((ev) => ev.materia_matriculada_id === mm.id);
   const totalSemanas = Number(semestre.duracion_semanas) || 16;
