@@ -30,7 +30,9 @@ import {
   redondearNotaFinalAlCincoMasCercano,
   obtenerClasesEfectivasSemana,
   obtenerEstadoEfectivoSemestre,
+  sellarTimestamp,
 } from "../core/schema.js";
+import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import {
@@ -160,45 +162,69 @@ function resolverMateriaCompleta(mmId, semestreId) {
 
 /**
  * Fila de pills de adjuntos de la materia (cronograma, reglas, libros —
- * entidadTipo "materia") + UN solo botón "Adjuntar" que abre el menú
- * completo de gestión (abrirMenuAdjuntos, ver adjuntos-ui.js) — ese menú
- * ya trae su propio "+ Agregar otro adjunto" adentro, así que no hace
- * falta un botón aparte para agregar y otro para gestionar.
+ * entidadTipo "materia") + UNA pill más, discreta, del mismo tamaño y
+ * estilo que las demás (.adjunto-pill) que abre el menú completo de
+ * gestión (abrirMenuAdjuntos, ver adjuntos-ui.js) — ese menú ya trae su
+ * propio "+ Agregar otro adjunto" adentro, así que no hace falta un botón
+ * aparte para agregar y otro para gestionar.
  *
- * Fix reportado: la pill punteada "+ Adjuntar" (.adjunto-pill-agregar) se
- * veía muy oscura / poco legible. Se reemplaza por un botón `.btn
- * .btn-secondary` — el mismo estilo que ya usan "📄 Subir archivo" /
- * "🔗 Agregar enlace" dentro del propio modal, que sí se ve bien y se
- * adapta solo a modo claro/oscuro (no depende de la clase de pill que
- * estaba rota).
+ * Fix reportado (2 rondas): 1) la pill punteada "+ Adjuntar"
+ * (.adjunto-pill-agregar) se veía muy oscura/poco legible — se cambió por
+ * `.btn.btn-secondary.btn-block`, pero eso la hizo demasiado GRANDE y con
+ * el texto todavía oscuro. Se vuelve ahora a una pill (`.adjunto-pill`,
+ * la MISMA clase ya usada y confirmada legible en las pills de cada
+ * adjunto — ni una tercera clase distinta ni estilos inline de color a
+ * mano) para que quede chica y discreta como el resto, en la misma fila.
+ * 2) El emoji (`configuracion.agendaAdjuntarEmoji`, "📎" por default) es
+ * ahora un `<span>` propio y clickeable dentro de la pill — un clic pide
+ * uno nuevo (o vacío para sacarlo del todo) y queda guardado, mismo
+ * patrón que el resto de ajustes simples de Agenda (ver
+ * obtenerModoVenceHoyAgenda en agenda-utils.js).
  */
 function construirFilaAdjuntosMateria(mm, onCambiar) {
   const cont = document.createElement("div");
-  cont.className = "stack";
-  cont.style.gap = "6px";
+  cont.className = "adjuntos-pills-fila";
 
   const adjuntos = obtenerAdjuntosActivosDe("materia", mm.id);
+  adjuntos.forEach((adjunto) => {
+    const pill = document.createElement("button");
+    pill.type = "button";
+    pill.className = "adjunto-pill";
+    pill.title = adjunto.nombre;
+    pill.innerHTML = `${adjunto.tipo === "enlace" ? "🔗" : "📄"} <span style="overflow:hidden; text-overflow:ellipsis;">${adjunto.nombre}</span>`;
+    pill.addEventListener("click", () => abrirAdjunto(adjunto));
+    cont.appendChild(pill);
+  });
 
-  if (adjuntos.length > 0) {
-    const filaPills = document.createElement("div");
-    filaPills.className = "adjuntos-pills-fila";
-    adjuntos.forEach((adjunto) => {
-      const pill = document.createElement("button");
-      pill.type = "button";
-      pill.className = "adjunto-pill";
-      pill.title = adjunto.nombre;
-      pill.innerHTML = `${adjunto.tipo === "enlace" ? "🔗" : "📄"} <span style="overflow:hidden; text-overflow:ellipsis;">${adjunto.nombre}</span>`;
-      pill.addEventListener("click", () => abrirAdjunto(adjunto));
-      filaPills.appendChild(pill);
+  const pillAdjuntar = document.createElement("button");
+  pillAdjuntar.type = "button";
+  pillAdjuntar.className = "adjunto-pill";
+  pillAdjuntar.title = "Adjuntos de esta materia";
+
+  const emojiGuardado = estado.datos?.configuracion?.agendaAdjuntarEmoji;
+  const emojiActual = emojiGuardado === undefined ? "📎" : emojiGuardado;
+
+  if (emojiActual) {
+    const spanEmoji = document.createElement("span");
+    spanEmoji.textContent = emojiActual;
+    spanEmoji.title = "Clic para cambiar o quitar este emoji";
+    spanEmoji.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const nuevo = window.prompt("Emoji para el botón de Adjuntar (dejalo vacío para quitarlo):", emojiActual);
+      if (nuevo === null) return; // canceló
+      estado.datos.configuracion.agendaAdjuntarEmoji = nuevo.trim();
+      sellarTimestamp(estado.datos.configuracion);
+      marcarCambioPendiente();
+      onCambiar?.();
     });
-    cont.appendChild(filaPills);
+    pillAdjuntar.appendChild(spanEmoji);
   }
 
-  const btnAdjuntar = document.createElement("button");
-  btnAdjuntar.type = "button";
-  btnAdjuntar.className = "btn btn-secondary btn-block";
-  btnAdjuntar.textContent = adjuntos.length > 0 ? "📎 Adjuntos" : "📎 Adjuntar";
-  btnAdjuntar.addEventListener("click", () => {
+  const spanTexto = document.createElement("span");
+  spanTexto.textContent = "Adjuntar";
+  pillAdjuntar.appendChild(spanTexto);
+
+  pillAdjuntar.addEventListener("click", () => {
     abrirMenuAdjuntos({
       entidadTipo: "materia",
       entidadId: mm.id,
@@ -206,7 +232,7 @@ function construirFilaAdjuntosMateria(mm, onCambiar) {
       onCambiar,
     });
   });
-  cont.appendChild(btnAdjuntar);
+  cont.appendChild(pillAdjuntar);
 
   return cont;
 }
