@@ -1889,7 +1889,7 @@ function generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas) {
   ctx.strokeStyle = colorBorde;
   ctx.lineWidth = 1;
   ctx.textAlign = "right";
-  for (let h = Math.ceil(horaInicio); h <= Math.floor(horaFin); h++) {
+  for (let h = Math.ceil(minInicioRango / 60); h <= Math.floor(minFinRango / 60); h++) {
     const y = yGridInicio + (h * 60 - minInicioRango) * pxPorMinReal;
     ctx.beginPath();
     ctx.moveTo(xGridInicio, y);
