@@ -87,6 +87,43 @@ const ETIQUETA_DIA_CODIGO = {
 // array fija el índice correcto para .sort() por posición.
 const ORDEN_DIAS_SEMANA = ["L", "K", "M", "J", "V", "S", "D"];
 
+// Mapeo de código de día a índice de Date.getUTCDay() (0=Domingo…6=Sábado)
+// — hace falta para obtenerFechaClaseEnSemana, que necesita saber a qué
+// día calendario real corresponde cada código dentro del bloque de 7 días
+// de una semana puntual.
+const INDICE_JS_DIA_SEMANA = { L: 1, K: 2, M: 3, J: 4, V: 5, S: 6, D: 0 };
+
+/**
+ * Fecha calendario real (Date) del día `diaCodigo` dentro de la semana
+ * `numeroSemana` de `semestre` — pedido explícito (2026-08-19): mostrar
+ * "Miércoles, 19 Ago" en vez de solo "Miércoles" en cada fila de clase.
+ *
+ * Mismo modelo de "semana" que ya usan calcularNumeroSemanaParaFecha
+ * (agenda-clases.js) y calcularNumeroSemanaSemestre (core/schema.js):
+ * bloques de exactamente 7 días contados desde `semestre.fecha_inicio`
+ * (NO necesariamente alineados a Lunes-Domingo calendario — la semana 1
+ * arranca justo en fecha_inicio, sea cual sea su día de la semana). Para
+ * ubicar un código de día dentro de ese bloque, se calcula el offset real
+ * entre el día de la semana de fecha_inicio (getUTCDay() — mismo criterio
+ * timezone-agnóstico que las resta de milisegundos de esas otras dos
+ * funciones, para no introducir un desfase de un día entre esta fecha y el
+ * número de semana ya mostrado) y el día objetivo.
+ *
+ * Devuelve `null` si `fecha_inicio` no es una fecha válida (incluso
+ * entonces, la fila sigue mostrando el nombre del día como fallback — ver
+ * construirFilaClaseMateria).
+ */
+function obtenerFechaClaseEnSemana(semestre, numeroSemana, diaCodigo) {
+  const inicio = new Date(semestre.fecha_inicio);
+  const indiceObjetivo = INDICE_JS_DIA_SEMANA[diaCodigo];
+  if (isNaN(inicio.getTime()) || indiceObjetivo === undefined) return null;
+  const indiceInicio = inicio.getUTCDay();
+  let offsetDias = indiceObjetivo - indiceInicio;
+  if (offsetDias < 0) offsetDias += 7;
+  const totalDias = (numeroSemana - 1) * 7 + offsetDias;
+  return new Date(inicio.getTime() + totalDias * 24 * 60 * 60 * 1000);
+}
+
 /**
  * Rediseño (2026-08-19, pedido explícito — "quiero que la tarjeta sea el
  * selector, que no haya selector y tarjeta"): se elimina el dropdown
@@ -500,20 +537,33 @@ function enriquecerClaseParaTarjetaInfo(claseEfectiva) {
  * clases se vean "al mismo nivel" que las tareas/exámenes de esa semana.
  * Muestra SIEMPRE la modalidad (aunque sea presencial) — mismo criterio
  * que ya usa la fila "Materias" del día en agenda-clases.js.
+ *
+ * Layout (pedido explícito, 2026-08-19: "es mas util asi") — 3 columnas
+ * en grid, no flex con space-between, para que la hora quede REALMENTE
+ * centrada sin importar cuánto texto haya a los lados (día+fecha a la
+ * izquierda, modalidad anclada a la derecha):
+ *   "Miércoles, 19 Ago"  |  "1:00 pm."  |  "🖥️ Virtual"
+ * El nombre de la materia ya NO se repite en esta fila — esta vista entera
+ * es de UNA sola materia (el Cronograma de agenda-materia.js), así que
+ * mostrar su nombre en cada clase era redundante; sí se sigue usando para
+ * el color del borde y para abrirTarjetaInfoBloque al tocar la fila.
  */
 function construirFilaClaseMateria(claseEfectiva, semestre, numeroSemana) {
   const enriquecida = enriquecerClaseParaTarjetaInfo(claseEfectiva);
   const emoji = obtenerEmojiModalidad(claseEfectiva.modalidad);
-  const etiquetaDia = ETIQUETA_DIA_CODIGO[claseEfectiva.dia] || claseEfectiva.dia;
+  const fechaClase = obtenerFechaClaseEnSemana(semestre, numeroSemana, claseEfectiva.dia);
+  const etiquetaDiaFecha = fechaClase
+    ? fechaClase.toLocaleDateString("es-CR", { weekday: "long", day: "numeric", month: "short" })
+    : ETIQUETA_DIA_CODIGO[claseEfectiva.dia] || claseEfectiva.dia;
 
   const fila = document.createElement("button");
   fila.type = "button";
   fila.className = "agenda-item";
-  fila.style.borderLeft = `3px solid ${enriquecida.color}`;
+  fila.style.cssText = `border-left: 3px solid ${enriquecida.color}; display:grid; grid-template-columns: 1fr auto 1fr; align-items:center; gap:8px;`;
   fila.innerHTML = `
-    <span style="font-weight:600; flex-shrink:0;">${etiquetaDia} ${formatearHoraAmPm(claseEfectiva.hora_inicio)}</span>
-    <span style="flex:1; text-align:left; overflow-wrap:break-word;">${enriquecida.nombreCorto}</span>
-    <span class="muted" style="font-size:0.72rem; flex-shrink:0; text-align:right;">${emoji ? `${emoji} ` : ""}${obtenerEtiquetaModalidad(claseEfectiva.modalidad)}</span>
+    <span style="justify-self:start; font-weight:600; text-transform:capitalize; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${etiquetaDiaFecha}</span>
+    <span style="justify-self:center; font-weight:600; white-space:nowrap;">${formatearHoraAmPm(claseEfectiva.hora_inicio)}</span>
+    <span class="muted" style="justify-self:end; font-size:0.72rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${emoji ? `${emoji} ` : ""}${obtenerEtiquetaModalidad(claseEfectiva.modalidad)}</span>
   `;
   fila.addEventListener("click", () => abrirTarjetaInfoBloque(semestre, numeroSemana, enriquecida));
   return fila;
