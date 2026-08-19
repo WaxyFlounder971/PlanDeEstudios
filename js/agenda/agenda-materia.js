@@ -27,6 +27,7 @@ import {
   convertirDesde100,
   redondearNotaFinalAlCincoMasCercano,
   obtenerClasesEfectivasSemana,
+  obtenerEstadoEfectivoSemestre,
 } from "../core/schema.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
@@ -46,7 +47,11 @@ import {
   abrirPopoverProfesoresMateria,
   calcularNotaFinalVigente,
   formatearNumero,
+  textoBadgeUniversidad,
+  abrirMenuRapidoResultadoMatricula,
 } from "../semestres/semestres-tarjetas.js";
+import { ESTADOS_MATERIA } from "../plan/plan-vista-lista-tarjetas.js";
+import { abrirModalRequisito } from "../plan/plan-detalle.js";
 import { calcularNumeroSemanaParaFecha } from "./agenda-clases.js";
 import { construirItemEvento, limpiarIntervalosVenceHoy } from "./agenda.js";
 import { formatearHoraAmPm, obtenerMateriasVinculablesAgenda } from "./agenda-utils.js";
@@ -211,40 +216,63 @@ function construirFilaAdjuntosMateria(mm, onCambiar) {
 /* --------------------------- Tarjeta-resumen --------------------------- */
 
 /**
- * Franja superior: nombre + 👤 (profesores, mismo popover que Semestres) +
- * "Nota: X" (MISMO cálculo/formato que la tarjeta real: calcularNotaFinalVigente,
- * redondearNotaFinalAlCincoMasCercano, convertirDesde100 a la escala del
- * plan, formatearNumero) + ➤ que salta a esa tarjeta real en Semestres
- * (navegarAMateriaMatriculada) para editar ahí lo que haga falta.
+ * Encabezado COMPLETO — mismos campos que la línea1+línea2 de la tarjeta
+ * real de materia en Semestres (ver construirTarjetaMateria en
+ * semestres-tarjetas.js), clonados 1:1 para que esta tarjeta-resumen sea el
+ * mismo encabezado, no una versión recortada:
+ *   Código · Nombre · Nota · 👤 (profesores)
+ *   Estado · Universidad · Créditos · ➤ Ir a Semestres
  *
- * Fix reportado: esta fila se devolvía suelta (sin ningún contenedor con
- * fondo/borde), así que se veía como texto flotando encima del resto del
- * tab en vez de una tarjeta — se envuelve acá en un `.glass-panel` (mismo
- * lenguaje visual que el resto de tarjetas de Agenda/Semestres, ver
- * `.materia-card` en semestres-tarjetas.js) para que quede una tarjeta real
- * y autocontenida. A propósito NO se le agrega nada más adentro (ni
- * adjuntos ni la sección de notas/criterios, que ya viven como bloques
- * separados debajo) — esta tarjeta muestra ÚNICAMENTE lo mismo que ya
- * mostraba: nombre, profesor, nota final y el salto a Semestres.
+ * A propósito NO se trae nada más de esa tarjeta real (ni el cuerpo
+ * expandible de notas/criterios, que sigue viviendo como bloque aparte más
+ * abajo en este mismo tab, ver construirSeccionNotas) — es el encabezado
+ * solo, envuelto en su propia tarjeta (`.glass-panel.materia-card`, mismo
+ * lenguaje visual que el resto de tarjetas de Agenda/Semestres) para que se
+ * vea como una tarjeta real y autocontenida en vez de elementos sueltos.
  */
 function construirTarjetaResumenMateria(mm, materia, plan, semestre, onCambiar) {
   const tarjeta = document.createElement("div");
-  tarjeta.className = "glass-panel materia-card";
+  tarjeta.className = "glass-panel materia-card stack";
   tarjeta.style.padding = "12px 14px";
+  tarjeta.style.gap = "8px";
+  const categoria = plan.categorias.find((c) => c.id === materia.categoria_id);
+  if (categoria) tarjeta.style.boxShadow = `inset 6px 0 0 0 ${categoria.color}`;
 
-  const fila = document.createElement("div");
-  fila.className = "row-between";
-  fila.style.cssText = "gap:8px; align-items:center; flex-wrap:wrap;";
+  /* ---- Línea 1: Código · Nombre · Nota · 👤 ---- */
+  const linea1 = document.createElement("div");
+  linea1.style.cssText = "display:flex; align-items:center; gap:8px; flex-wrap:wrap;";
 
-  const izquierda = document.createElement("div");
-  izquierda.style.cssText = "display:flex; align-items:center; gap:8px; min-width:0;";
+  const spanCodigo = document.createElement("span");
+  spanCodigo.className = "materia-codigo";
+  spanCodigo.textContent = materia.codigo;
+  spanCodigo.style.cssText = "cursor:pointer; flex-shrink:0;";
+  spanCodigo.title = "Ver la tarjeta de esta materia";
+  spanCodigo.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    abrirModalRequisito(materia.codigo);
+  });
+  linea1.appendChild(spanCodigo);
 
   const spanNombre = document.createElement("span");
   spanNombre.className = "materia-nombre completa";
+  spanNombre.style.flex = "1";
   spanNombre.textContent = aplicarFormatoTexto(materia.nombre);
-  izquierda.appendChild(spanNombre);
+  linea1.appendChild(spanNombre);
+
+  const notaFinalVigente = calcularNotaFinalVigente(mm, materia, plan);
+  const notaRedondeada = redondearNotaFinalAlCincoMasCercano(notaFinalVigente);
+  const escalaActiva = obtenerEscalaNotasMateria(materia, plan, estado.datos.configuracion);
+  const notaRedondeadaMostrada = convertirDesde100(notaRedondeada, obtenerEscalaPorId(escalaActiva));
+  const spanNota = document.createElement("span");
+  spanNota.className = "materia-nota";
+  spanNota.style.cssText = "flex-shrink:0; font-family:var(--font-display); font-weight:700; white-space:nowrap;";
+  spanNota.textContent = `Nota: ${
+    notaRedondeada === null || notaRedondeada === undefined ? "—" : formatearNumero(notaRedondeadaMostrada)
+  }`;
+  linea1.appendChild(spanNota);
 
   const iconoProfesor = document.createElement("span");
+  iconoProfesor.className = "materia-icono-profesor";
   iconoProfesor.style.cssText = "flex-shrink:0; cursor:pointer; font-size:0.85rem; line-height:1;";
   iconoProfesor.textContent = "👤";
   iconoProfesor.title = "Profesores vinculados a esta materia";
@@ -252,36 +280,70 @@ function construirTarjetaResumenMateria(mm, materia, plan, semestre, onCambiar) 
     ev.stopPropagation();
     abrirPopoverProfesoresMateria(mm, materia, plan, semestre, onCambiar);
   });
-  izquierda.appendChild(iconoProfesor);
+  linea1.appendChild(iconoProfesor);
 
-  fila.appendChild(izquierda);
+  tarjeta.appendChild(linea1);
 
-  const derecha = document.createElement("div");
-  derecha.style.cssText = "display:flex; align-items:center; gap:10px; flex-shrink:0;";
+  /* ---- Línea 2: Estado · Universidad · Créditos · ➤ Ir a Semestres ---- */
+  const linea2 = document.createElement("div");
+  linea2.style.cssText = "display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px;";
 
-  const notaFinalVigente = calcularNotaFinalVigente(mm, materia, plan);
-  const notaRedondeada = redondearNotaFinalAlCincoMasCercano(notaFinalVigente);
-  const escalaActiva = obtenerEscalaNotasMateria(materia, plan, estado.datos.configuracion);
-  const notaRedondeadaMostrada = convertirDesde100(notaRedondeada, obtenerEscalaPorId(escalaActiva));
-  const spanNota = document.createElement("span");
-  spanNota.style.cssText = "font-family:var(--font-display); font-weight:700; white-space:nowrap;";
-  spanNota.textContent = `Nota: ${
-    notaRedondeada === null || notaRedondeada === undefined ? "—" : formatearNumero(notaRedondeadaMostrada)
-  }`;
-  derecha.appendChild(spanNota);
+  const semestreActual = obtenerEstadoEfectivoSemestre(semestre) === "actual";
+  const infoEstado = semestreActual
+    ? ESTADOS_MATERIA.find((e) => e.valor === "cursando")
+    : mm.resultado === "aprobada"
+    ? { texto: "Aprobada", badge: "badge-success" }
+    : mm.resultado === "reprobada"
+    ? { texto: "Reprobada", badge: "badge-danger" }
+    : { texto: "Estado", badge: "badge-neutral" };
 
-  const btnSalto = document.createElement("button");
-  btnSalto.type = "button";
-  btnSalto.setAttribute("aria-label", "Ver esta materia en Semestres");
-  btnSalto.title = "Ver esta materia en Semestres";
-  btnSalto.style.cssText = "background:none; border:none; cursor:pointer; font-size:1rem; line-height:1; padding:2px;";
-  btnSalto.textContent = "➤";
-  btnSalto.addEventListener("click", () => navegarAMateriaMatriculada(semestre.id, mm.id));
-  derecha.appendChild(btnSalto);
+  const colEstado = document.createElement("div");
+  colEstado.style.cssText = "justify-self:start; min-width:0;";
+  const badgeEstado = document.createElement("span");
+  badgeEstado.className = `badge ${infoEstado.badge}`;
+  badgeEstado.textContent = infoEstado.texto;
+  if (semestreActual) {
+    badgeEstado.style.cursor = "default";
+    badgeEstado.title = "Se calcula automáticamente mientras el semestre esté en curso";
+  } else {
+    badgeEstado.style.cursor = "pointer";
+    badgeEstado.title = "Clic para corregir el resultado de este intento — solo afecta este semestre";
+    badgeEstado.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      abrirMenuRapidoResultadoMatricula(mm, badgeEstado, onCambiar);
+    });
+  }
+  colEstado.appendChild(badgeEstado);
+  linea2.appendChild(colEstado);
 
-  fila.appendChild(derecha);
+  const badgeUniversidad = document.createElement("span");
+  badgeUniversidad.className = "badge badge-neutral";
+  badgeUniversidad.style.justifySelf = "center";
+  badgeUniversidad.textContent = textoBadgeUniversidad(plan.universidad);
+  badgeUniversidad.title = plan.universidad;
+  linea2.appendChild(badgeUniversidad);
 
-  tarjeta.appendChild(fila);
+  const colDerecha = document.createElement("div");
+  colDerecha.className = "row";
+  colDerecha.style.cssText = "justify-self:end; min-width:0; align-items:center; gap:8px;";
+
+  const badgeCreditos = document.createElement("span");
+  badgeCreditos.className = "badge badge-accent";
+  badgeCreditos.textContent = `Créditos: ${materia.creditos}`;
+  colDerecha.appendChild(badgeCreditos);
+
+  const btnIrA = document.createElement("button");
+  btnIrA.type = "button";
+  btnIrA.className = "btn-link";
+  btnIrA.style.cssText = "background:none; border:none; cursor:pointer; font-size:0.78rem; display:flex; align-items:center; gap:3px; white-space:nowrap;";
+  btnIrA.title = "Ver esta materia en Semestres";
+  btnIrA.innerHTML = `Ir a <span aria-hidden="true">➤</span>`;
+  btnIrA.addEventListener("click", () => navegarAMateriaMatriculada(semestre.id, mm.id));
+  colDerecha.appendChild(btnIrA);
+
+  linea2.appendChild(colDerecha);
+  tarjeta.appendChild(linea2);
+
   return tarjeta;
 }
 
