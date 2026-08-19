@@ -397,6 +397,14 @@ function construirBloqueControles(plan) {
   const btnDescargar = document.createElement("button");
   btnDescargar.type = "button";
   btnDescargar.className = "btn btn-secondary";
+  // FIX (2026-08-20): columna FIJA. Sin esto, al ocultar este botón con
+  // display:none, CSS Grid saca el ítem de la lista de auto-placement y
+  // renumera a los que quedan (el grupo central pasaba a ocupar la
+  // columna 1 y el zoom la columna 2, dejando la columna 3 vacía) — todo
+  // el bloque se corría a la izquierda. Fijar grid-column ancla cada
+  // elemento a SU columna real pase lo que pase con sus hermanos: nunca
+  // se mueven en el eje horizontal, solo pueden desaparecer/aparecer.
+  btnDescargar.style.gridColumn = "1";
   btnDescargar.style.justifySelf = "start";
   btnDescargar.style.display = estado.mapaPantallaCompleta && estado.controlesMapaOcultosFullscreen ? "none" : "";
   btnDescargar.textContent = "Descargar";
@@ -414,6 +422,7 @@ function construirBloqueControles(plan) {
   // sobra (media query), para no apretar el layout en celulares angostos.
   const contBotonesCentro = document.createElement("div");
   contBotonesCentro.className = "mapa-controles-centro";
+  contBotonesCentro.style.gridColumn = "2"; // ver comentario de btnDescargar
   contBotonesCentro.style.justifySelf = "center";
 
   const btnPantallaCompleta = document.createElement("button");
@@ -492,6 +501,7 @@ function construirBloqueControles(plan) {
 
   const zoomGrupo = document.createElement("div");
   zoomGrupo.className = "mapa-zoom-controles";
+  zoomGrupo.style.gridColumn = "3"; // ver comentario de btnDescargar
   zoomGrupo.style.justifySelf = "end";
   const btnMenos = document.createElement("button");
   btnMenos.type = "button";
