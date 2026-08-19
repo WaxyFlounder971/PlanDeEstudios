@@ -215,17 +215,29 @@ function construirColumnaDia(dia, bloquesDia, pxPorMin, altoGrid, minInicioRango
   col.style.cssText = `position:relative; flex:1; min-width:56px; height:${altoGrid}px; background:${construirLineasHorarias(pxPorMin, minInicioRango, minFinRango)}; border-left:1px solid rgba(150,150,170,0.15);`;
 
   const conLanes = calcularLanesDia(bloquesDia);
+  // Antes, cuando 2+ clases se cruzaban en horario (lanes>0), cada una se
+  // dibujaba con el MISMO ancho que la columna completa, solo corrida
+  // offsetPx a la derecha (12px) y con más z-index — la de encima terminaba
+  // tapando casi todo el nombre de la que quedaba debajo (se veía como si
+  // el nombre se hubiera "cortado a la mitad"). Ahora se reparte el ancho
+  // real de la columna entre TODAS las lanes que se usan ese día (mismo
+  // criterio visual que Google Calendar: clases que se cruzan quedan una
+  // al lado de la otra, no una tapando a la otra) — cada lane ve
+  // completo su propio nombre, aunque la tarjeta quede más angosta.
+  const totalLanes = conLanes.length > 0 ? Math.max(...conLanes.map((b) => b.lane)) + 1 : 1;
   conLanes.forEach((b) => {
     const inicioClamp = Math.max(b.inicioMin, minInicioRango);
     const finClamp = Math.min(b.finMin, minFinRango);
     if (finClamp <= inicioClamp) return;
     const top = Math.max(0, (inicioClamp - minInicioRango) * pxPorMin);
     const alto = Math.max(24, (finClamp - inicioClamp) * pxPorMin);
-    const offsetPx = b.lane * 12;
+    const GAP_ENTRE_LANES = 2;
+    const anchoLanePct = 100 / totalLanes;
+    const leftPct = b.lane * anchoLanePct;
     const tarjeta = document.createElement("div");
     tarjeta.className = "horario-bloque-tarjeta";
     const esSinClase = b.modalidad === "sin_clase";
-    tarjeta.style.cssText = `position:absolute; top:${top}px; left:${offsetPx}px; right:0; height:${alto}px; z-index:${10 + b.lane};
+    tarjeta.style.cssText = `position:absolute; top:${top}px; left:calc(${leftPct}% + ${b.lane > 0 ? GAP_ENTRE_LANES : 0}px); width:calc(${anchoLanePct}% - ${GAP_ENTRE_LANES}px); height:${alto}px; z-index:${10 + b.lane};
       background:${b.color}; color:#fff; border-radius:8px; padding:3px 6px; overflow:hidden;
       box-shadow:0 2px 6px rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.25);
       ${esSinClase ? "opacity:0.45;" : ""}`;

@@ -1986,11 +1986,24 @@ function generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas) {
         // margen (antes 5px) además queda lejos de la zona curva. Mismo
         // lugar relativo que ocupa en la tarjeta viva (esquina inferior
         // derecha), solo que ya no corre riesgo de que el clip lo tape.
+        //
+        // save()/restore() en vez de resetear los valores a mano: textAlign
+        // se devolvía a "left" pero textBaseline se quedaba en "alphabetic"
+        // para el resto del dibujo (bug real reportado — "primera línea
+        // cortada" en casi todas las tarjetas menos la primera dibujada).
+        // Todo el código de arriba asume textBaseline "top" (seteado una
+        // sola vez al principio de la función) para calcular `ty`; con el
+        // baseline roto a "alphabetic", esa misma coordenada pasa a ser la
+        // línea de base en vez del tope del texto, así que el cuerpo de la
+        // letra se dibuja hacia ARRIBA de `ty` y el clip del rect redondeado
+        // le corta el pedazo que se sale del bloque — de ahí el corte "a la
+        // mitad" en el nombre de la materia.
+        ctx.save();
         ctx.textAlign = "right";
         ctx.textBaseline = "alphabetic";
         ctx.font = "13px " + FONT_CANVAS;
         ctx.fillText(b.emoji, x + ancho - 8, top + alto - 8);
-        ctx.textAlign = "left";
+        ctx.restore();
       }
     });
   });
