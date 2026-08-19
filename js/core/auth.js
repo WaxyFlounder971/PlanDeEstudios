@@ -434,8 +434,21 @@ function refrescarAccessTokenGoogle(correoConocido) {
  * combinando las partes de texto (metadata) con los bytes crudos del
  * archivo en el medio, en vez de concatenar todo como string.
  */
-async function subirArchivoBinarioADrive(token, archivo) {
-  const metadata = { name: archivo.name || "adjunto", mimeType: archivo.type || "application/octet-stream" };
+/**
+ * `folderId` (2026-08-19, opcional — quien no lo pase mantiene el
+ * comportamiento de siempre: el archivo cae en la raíz visible de la app,
+ * scope drive.file): destino dentro de una carpeta puntual, mismo `parents`
+ * que ya usa copiarArchivoDrive más abajo para los backups. Se usa para
+ * subir los adjuntos siempre dentro de "ArchivosAdjuntos" (ver
+ * buscarOCrearCarpetaEnDrive + core/storage-adjuntos.js) en vez de sueltos
+ * en la raíz junto al archivo de datos y la carpeta de backups.
+ */
+async function subirArchivoBinarioADrive(token, archivo, folderId) {
+  const metadata = {
+    name: archivo.name || "adjunto",
+    mimeType: archivo.type || "application/octet-stream",
+    ...(folderId ? { parents: [folderId] } : {}),
+  };
   const boundary = "-------academicapp-adjunto";
   const bytes = new Uint8Array(await archivo.arrayBuffer());
   const body = new Blob([

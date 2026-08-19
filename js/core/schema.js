@@ -259,10 +259,11 @@ function crearEnlaceRapido({ nombre, url, icono_tipo, icono_valor }) {
 }
 
 /**
- * Adjuntos (2026-08-08): a diferencia de todo lo demás en este archivo, el
- * CONTENIDO real de un adjunto (el binario) nunca vive dentro de este JSON
- * — se sube como su propio archivo aparte en el Drive del usuario (ver
- * subirArchivoBinarioADrive en auth.js). Esto es solo la REFERENCIA
+ * Adjuntos (2026-08-08 → ampliado 2026-08-19): a diferencia de todo lo
+ * demás en este archivo, el CONTENIDO real de un adjunto tipo "archivo"
+ * nunca vive dentro de este JSON — se sube como su propio archivo aparte
+ * en una carpeta dedicada del Drive del usuario (ver subirArchivoBinarioADrive
+ * + buscarOCrearCarpetaEnDrive en auth.js). Esto es solo la REFERENCIA
  * liviana que sí vive acá: qué es, a qué pertenece, y dónde encontrarlo
  * (driveFileId). Se funde igual que cualquier otra entidad con id
  * (fusionarColeccion en storage-merge.js), por eso NO se sella acá —
@@ -280,17 +281,43 @@ function crearEnlaceRapido({ nombre, url, icono_tipo, icono_valor }) {
  * mientras el binario todavía no terminó de subirse (ver core/storage-
  * adjuntos.js) — la UI ya puede mostrar la referencia de inmediato (con un
  * indicador de "subiendo"), sin esperar a que la subida real termine.
+ *
+ * Ampliación 2026-08-19 (pedido: cronograma/reglas/libros de una materia +
+ * adjuntos por evento de Agenda, con reordenamiento y "desactivar sin
+ * borrar"):
+ *
+ * - `tipo: "archivo" | "enlace"` — un adjunto "enlace" es solo una URL
+ *   externa (ej. el PDF del cronograma ya vive en otro lado, o un link a
+ *   la librería del curso): nunca pasa por Drive, así que `driveFileId`
+ *   queda `null` para siempre y `subidaPendiente` en `false` desde que se
+ *   crea (no hay nada que subir). `url` es el campo que se usa en ese caso;
+ *   queda `null` en un adjunto tipo "archivo".
+ * - `orden` — número (por defecto `Date.now()` al crearlo, así los nuevos
+ *   quedan al final sin tener que leer el resto de la colección) que decide
+ *   el orden de los botones/pills en la UI; el drag-and-drop reescribe este
+ *   campo en los adjuntos afectados en vez de depender del orden de
+ *   inserción en el array.
+ * - `activo` — `true` por defecto. En `false` el adjunto se sigue
+ *   fusionando y sincronizando como cualquier otro (no es una tumba), pero
+ *   la UI lo oculta de la vista normal — permite "desactivar" (esconder sin
+ *   perder el acceso) como algo distinto de `eliminarAdjunto` (que sí borra
+ *   de verdad, referencia + archivo en Drive).
  */
-function crearAdjunto({ nombre, mimeType, tamanoBytes, entidadTipo, entidadId }) {
+function crearAdjunto({ nombre, mimeType, tamanoBytes, entidadTipo, entidadId, tipo, url }) {
+  const esEnlace = tipo === "enlace";
   return {
     id: crypto.randomUUID(),
     nombre,
-    mimeType: mimeType || "application/octet-stream",
-    tamanoBytes: Number(tamanoBytes) || 0,
+    tipo: esEnlace ? "enlace" : "archivo",
+    mimeType: esEnlace ? null : mimeType || "application/octet-stream",
+    tamanoBytes: esEnlace ? 0 : Number(tamanoBytes) || 0,
+    url: esEnlace ? url : null,
     entidadTipo,
     entidadId,
     driveFileId: null,
-    subidaPendiente: true,
+    subidaPendiente: !esEnlace, // un enlace no sube nada — nunca queda "pendiente"
+    orden: Date.now(),
+    activo: true,
   };
 }
 

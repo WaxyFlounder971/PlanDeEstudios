@@ -40,6 +40,7 @@
 
 import { crearAdjunto, LIMITE_MB_ADJUNTO, sellarTimestamp } from "./schema.js";
 import {
+  buscarOCrearCarpetaEnDrive,
   descargarArchivoBinarioDeDrive,
   eliminarArchivoDeDriveConId,
   subirArchivoBinarioADrive,
@@ -55,6 +56,25 @@ import { estado } from "./storage.js";
 // que corre una sola vez apenas se importa storage-adjuntos.js en la app —
 // mismo momento en el que ya conviene tener el hook listo.
 registrarHookPostFusion(procesarTumbasDriveHuerfanas);
+
+/* ------------------------- Carpeta dedicada en Drive ------------------------- */
+
+// Nombre fijo, mismo criterio que NOMBRE_CARPETA_BACKUP en auth.js — todos
+// los adjuntos (de cualquier materia/evento) vivven juntos acá adentro en
+// vez de sueltos en la raíz visible de la app, para que Drive quede
+// ordenado y sea fácil de encontrar/limpiar a mano si hiciera falta.
+const NOMBRE_CARPETA_ADJUNTOS = "ArchivosAdjuntos";
+
+// Se resuelve una sola vez por sesión (buscarOCrearCarpetaEnDrive ya es
+// idempotente del lado de Drive, pero cachear acá evita una llamada de red
+// extra por cada archivo que se sube en la misma pestaña).
+let folderIdAdjuntosCache = null;
+
+async function obtenerCarpetaAdjuntos(token) {
+  if (folderIdAdjuntosCache) return folderIdAdjuntosCache;
+  folderIdAdjuntosCache = await conReintentoSi401(() => buscarOCrearCarpetaEnDrive(token, NOMBRE_CARPETA_ADJUNTOS));
+  return folderIdAdjuntosCache;
+}
 
 /* ------------------------- Cola de subida (en memoria) ------------------------- */
 
@@ -99,6 +119,57 @@ function adjuntarArchivo(archivo, entidadTipo, entidadId) {
   return nuevo;
 }
 
+/**
+ * Punto de entrada para un adjunto tipo "enlace" (URL externa: PDF ya
+ * alojado en otro lado, link a la librería del curso, etc.) — a diferencia
+ * de adjuntarArchivo, esto nunca toca Drive ni la cola de subida: la
+ * referencia queda lista y sincronizable de una sola vez, igual que
+ * cualquier otra entidad simple de este JSON (ver crearEnlaceRapido).
+ */
+function agregarEnlaceAdjunto({ nombre, url, entidadTipo, entidadId }) {
+  if (!url || !/^https?:\/\//i.test(url.trim())) {
+    throw new Error("El enlace debe ser una URL válida (empezar con http:// o https://).");
+  }
+  const nuevo = crearAdjunto({ nombre, url: url.trim(), entidadTipo, entidadId, tipo: "enlace" });
+  sellarTimestamp(nuevo);
+
+  if (!Array.isArray(estado.datos.adjuntos)) estado.datos.adjuntos = [];
+  estado.datos.adjuntos.push(nuevo);
+  marcarCambioPendiente();
+
+  return nuevo;
+}
+
+/**
+ * Reordenamiento (drag-and-drop en el menú de adjuntos): recibe la lista de
+ * ids YA en el orden final que dejó el usuario y reescribe `orden` en cada
+ * referencia afectada como 0,1,2... — más simple y menos propenso a
+ * colisiones que tratar de "insertar entre dos" con decimales. Solo toca
+ * los adjuntos pasados (se espera la lista completa de una misma
+ * entidad/vista, ver obtenerAdjuntosActivosDe), nunca la colección global.
+ */
+function reordenarAdjuntos(idsEnNuevoOrden) {
+  const mapa = new Map((estado.datos.adjuntos || []).map((a) => [a.id, a]));
+  idsEnNuevoOrden.forEach((id, indice) => {
+    const referencia = mapa.get(id);
+    if (!referencia) return;
+    referencia.orden = indice;
+    sellarTimestamp(referencia);
+  });
+  marcarCambioPendiente();
+}
+
+/** Ocultar/mostrar un adjunto sin borrarlo (ver comentario de `activo` en
+ *  schema.js/crearAdjunto) — distinto de eliminarAdjunto, que sí borra de
+ *  verdad. No toca Drive ni la cola de subida para nada. */
+function alternarActivoAdjunto(adjuntoId) {
+  const referencia = (estado.datos.adjuntos || []).find((a) => a.id === adjuntoId);
+  if (!referencia) return;
+  referencia.activo = !referencia.activo;
+  sellarTimestamp(referencia);
+  marcarCambioPendiente();
+}
+
 /** Reintenta cualquier subida pendiente — se llama sola tras adjuntarArchivo,
  *  y conviene engancharla también al evento 'online' (ver abajo) y, si
  *  querés, a un intervalo corto desde main.js, mismo patrón que ya usa
@@ -124,7 +195,8 @@ async function procesarColaSubidas() {
 
       try {
         if (!estado.token) break; // sin sesión de Drive todavía: se reintenta en el próximo llamado
-        const driveFileId = await conReintentoSi401(() => subirArchivoBinarioADrive(estado.token, archivo));
+        const folderId = await obtenerCarpetaAdjuntos(estado.token);
+        const driveFileId = await conReintentoSi401(() => subirArchivoBinarioADrive(estado.token, archivo, folderId));
         referencia.driveFileId = driveFileId;
         referencia.subidaPendiente = false;
         sellarTimestamp(referencia);
@@ -253,18 +325,136 @@ async function procesarTumbasDriveHuerfanas() {
 /* -------------------------------- Lectura -------------------------------- */
 
 /** Helper de renderizado: adjuntos vigentes (ya fundidos, sin los borrados)
- *  de una entidad puntual (ej. una materia, un evento de agenda). */
+ *  de una entidad puntual (ej. una materia, un evento de agenda) — TODOS,
+ *  incluidos los desactivados. Para pintar la UI normal usar
+ *  obtenerAdjuntosActivosDe; este queda para el menú de gestión (que sí
+ *  necesita ver también los desactivados, para poder reactivarlos). */
 function obtenerAdjuntosDe(entidadTipo, entidadId) {
   return (estado.datos.adjuntos || []).filter(
     (a) => a.entidadTipo === entidadTipo && a.entidadId === entidadId
   );
 }
 
+/** Igual que obtenerAdjuntosDe, pero solo los activos y ya ordenados por
+ *  `orden` — lo que efectivamente debe pintarse como pills/chips en la
+ *  tarjeta o el cronograma. */
+function obtenerAdjuntosActivosDe(entidadTipo, entidadId) {
+  return obtenerAdjuntosDe(entidadTipo, entidadId)
+    .filter((a) => a.activo !== false)
+    .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+}
+
+/** Ajustes → "Liberar espacio": true en cuanto haya AL MENOS un adjunto
+ *  guardado (activo o no) — controla si esa sección se muestra en
+ *  Ajustes generales o no (pedido explícito: no mostrar una opción vacía
+ *  sin sentido). */
+function hayAdjuntosGuardados() {
+  return (estado.datos.adjuntos || []).length > 0;
+}
+
+/* --------------------- Limpieza masiva ("Liberar espacio") --------------------- */
+
+/**
+ * Borra en lote una lista de adjuntos ya filtrada por quien llama —
+ * reusa eliminarAdjunto() uno por uno (misma tumba + intento de borrado en
+ * Drive que ya tiene cada borrado individual) en vez de duplicar esa
+ * lógica acá. Secuencial a propósito (no Promise.all): eliminarAdjunto ya
+ * hace su propia llamada de red a Drive por cada uno, y en lote pueden ser
+ * bastantes — ir de a uno evita saturar la API de Drive con ráfagas
+ * paralelas grandes. Devuelve cuántos se borraron, para que la UI pueda
+ * confirmarle al usuario "se liberaron N archivos".
+ */
+async function eliminarVariosAdjuntos(adjuntoIds) {
+  let borrados = 0;
+  for (const id of adjuntoIds) {
+    await eliminarAdjunto(id);
+    borrados++;
+  }
+  return borrados;
+}
+
+/** Ids de materia_matriculada + ids de evento de Agenda que pertenecen a
+ *  un semestre puntual — la relación real vive en agenda.js/semestres.js,
+ *  pero acá solo hace falta leer estado.datos directo (misma colección
+ *  plana de siempre), sin importar esos módulos, para no crear un ciclo
+ *  (agenda.js ya podría llegar a importar de storage-adjuntos.js). */
+function idsDeMateriaYEventosDelSemestre(semestreId) {
+  const semestre = (estado.datos.semestres || []).find((s) => s.id === semestreId);
+  const mmIds = new Set((semestre?.materias_matriculadas || []).map((mm) => mm.id));
+  const eventoIds = (estado.datos.agenda || [])
+    .filter((ev) => ev.materia_matriculada_id && mmIds.has(ev.materia_matriculada_id))
+    .map((ev) => ev.id);
+  return { mmIds, eventoIds };
+}
+
+/** Opción 1 de Ajustes: TODO lo relacionado a un semestre — adjuntos de sus
+ *  materias (cronograma/reglas/libros) + adjuntos de los eventos/tareas
+ *  vinculados a esas materias. Eventos sueltos (sin materia) nunca entran
+ *  acá — ver eliminarAdjuntosDeEventosSueltos para esos. */
+async function eliminarAdjuntosDeSemestre(semestreId) {
+  const { mmIds, eventoIds } = idsDeMateriaYEventosDelSemestre(semestreId);
+  const ids = (estado.datos.adjuntos || [])
+    .filter(
+      (a) =>
+        (a.entidadTipo === "materia" && mmIds.has(a.entidadId)) ||
+        (a.entidadTipo === "evento" && eventoIds.includes(a.entidadId))
+    )
+    .map((a) => a.id);
+  return eliminarVariosAdjuntos(ids);
+}
+
+/** Opción 2: solo los archivos de tareas/eventos (entidadTipo "evento") de
+ *  ese semestre — deja intactos cronograma/reglas/libros de las materias. */
+async function eliminarAdjuntosDeTareasDeSemestre(semestreId) {
+  const { eventoIds } = idsDeMateriaYEventosDelSemestre(semestreId);
+  const ids = (estado.datos.adjuntos || [])
+    .filter((a) => a.entidadTipo === "evento" && eventoIds.includes(a.entidadId))
+    .map((a) => a.id);
+  return eliminarVariosAdjuntos(ids);
+}
+
+/** Opción 3: solo los adjuntos de materia (cronograma/reglas/libros —
+ *  entidadTipo "materia") de ese semestre — deja intactos los de tareas. */
+async function eliminarAdjuntosDeCronogramaDeSemestre(semestreId) {
+  const { mmIds } = idsDeMateriaYEventosDelSemestre(semestreId);
+  const ids = (estado.datos.adjuntos || [])
+    .filter((a) => a.entidadTipo === "materia" && mmIds.has(a.entidadId))
+    .map((a) => a.id);
+  return eliminarVariosAdjuntos(ids);
+}
+
+/** Opción 4: archivos de tareas/eventos SIN materia vinculada (no
+ *  pertenecen a ningún semestre por esa vía) — global, no depende del
+ *  selector de semestre de Ajustes. Solo borra los ADJUNTOS, nunca la
+ *  tarea/evento en sí. */
+async function eliminarAdjuntosDeEventosSueltos() {
+  const idsEventosConMateria = new Set(
+    (estado.datos.agenda || []).filter((ev) => ev.materia_matriculada_id).map((ev) => ev.id)
+  );
+  const idsEventoTodos = new Set((estado.datos.agenda || []).map((ev) => ev.id));
+  const ids = (estado.datos.adjuntos || [])
+    .filter(
+      (a) =>
+        a.entidadTipo === "evento" && idsEventoTodos.has(a.entidadId) && !idsEventosConMateria.has(a.entidadId)
+    )
+    .map((a) => a.id);
+  return eliminarVariosAdjuntos(ids);
+}
+
 export {
   adjuntarArchivo,
+  agregarEnlaceAdjunto,
+  alternarActivoAdjunto,
   descargarAdjunto,
   eliminarAdjunto,
+  eliminarAdjuntosDeCronogramaDeSemestre,
+  eliminarAdjuntosDeEventosSueltos,
+  eliminarAdjuntosDeSemestre,
+  eliminarAdjuntosDeTareasDeSemestre,
+  hayAdjuntosGuardados,
+  obtenerAdjuntosActivosDe,
   obtenerAdjuntosDe,
   procesarColaSubidas,
   procesarTumbasDriveHuerfanas,
+  reordenarAdjuntos,
 };
