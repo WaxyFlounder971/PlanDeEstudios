@@ -1650,36 +1650,37 @@ img, svg { max-width: 100%; }
 .materia-card-vacia:hover { background: rgba(255, 255, 255, 0.05); }
 [data-mode="light"] .materia-card-vacia:hover { background: rgba(0, 0, 0, 0.03); }
 
-/* Pestañita centrada, colgando del borde inferior de la tarjeta-resumen —
-   es la única forma de abrir el selector de materia una vez elegida una.
-   El wrapper `position:relative` que la contiene (ver
-   construirContenidoMateria en agenda-materia.js) no le agrega gap propio,
-   así que no afecta el espaciado entre tarjetas del `.stack`. */
+/* Pestañita pegada al borde inferior de la tarjeta-resumen — NO se
+   superpone a la tarjeta (nada de position:absolute/negative-margin): va
+   en flujo normal, tocando el borde de abajo, así no queda "flotando"
+   sobre la tarjeta ni se ve a través de su fondo semitransparente
+   (.glass-panel usa blur — cualquier cosa que quede DEBAJO en el mismo
+   punto se alcanza a notar difuminada). Es más angosta que la tarjeta
+   (corta antes de llegar a las esquinas redondeadas de esta) y sin
+   border-top, para que se sienta como una continuación/parte de la
+   tarjeta — no un elemento aparte. Es la ÚNICA forma de abrir el selector
+   de materia una vez elegida una. */
 .materia-pestana-cambiar {
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  transform: translate(-50%, 50%);
-  width: 34px;
-  height: 18px;
-  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: calc(100% - 32px);
+  margin: 0 auto;
+  height: 20px;
+  padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-top: none;
   border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
   color: var(--text-secondary);
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   line-height: 1;
   cursor: pointer;
-  z-index: 2;
-  transition: background var(--transition-fast), transform var(--transition-fast);
+  transition: background var(--transition-fast);
 }
-.materia-pestana-cambiar:hover { background: rgba(255, 255, 255, 0.16); transform: translate(-50%, 50%) translateY(1px); }
-[data-mode="light"] .materia-pestana-cambiar { background: rgba(0, 0, 0, 0.05); border-color: rgba(0, 0, 0, 0.08); }
-[data-mode="light"] .materia-pestana-cambiar:hover { background: rgba(0, 0, 0, 0.09); }
+.materia-pestana-cambiar:hover { background: rgba(255, 255, 255, 0.14); }
+[data-mode="light"] .materia-pestana-cambiar { background: rgba(0, 0, 0, 0.04); border-color: rgba(0, 0, 0, 0.08); }
+[data-mode="light"] .materia-pestana-cambiar:hover { background: rgba(0, 0, 0, 0.08); }
 .materia-nombre {
   font-family: var(--font-display);
   font-weight: 700;
