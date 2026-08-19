@@ -3693,6 +3693,7 @@ html.exportar-tema-default[data-mode="dark"] {
   cursor: pointer;
 }
 .adjunto-fila-nombre:hover { text-decoration: underline; }
+.adjunto-fila-editar,
 .adjunto-fila-eliminar {
   background: none;
   border: none;
@@ -3702,7 +3703,34 @@ html.exportar-tema-default[data-mode="dark"] {
   flex-shrink: 0;
   padding: 2px;
 }
+.adjunto-fila-editar:hover,
 .adjunto-fila-eliminar:hover { opacity: 1; }
+
+/* ---- Campo de emoji del modal Adjuntar/Editar adjunto: input de texto +
+   paleta de accesos rápidos al lado (crearCampoEmojiModal en
+   adjuntos-ui.js) — nunca un diálogo nativo del navegador. ---- */
+.adjunto-emoji-paleta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.adjunto-emoji-opcion {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md, 10px);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+.adjunto-emoji-opcion:hover { background: rgba(255, 255, 255, 0.14); transform: translateY(-1px); }
+[data-mode="light"] .adjunto-emoji-opcion { background: rgba(0, 0, 0, 0.04); border-color: rgba(0, 0, 0, 0.08); }
+[data-mode="light"] .adjunto-emoji-opcion:hover { background: rgba(0, 0, 0, 0.08); }
 
 /* ---- Pills de adjuntos (fila debajo del selector de materia en
    Cronograma; también sirve para cualquier otra fila de pills chicas de
