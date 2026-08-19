@@ -16,8 +16,26 @@
 </head>
 <body>
 
+<!-- ==================== PANTALLA DE CARGA DE SESIÓN ====================
+     2026-08-19: visible por defecto (antes de que corra cualquier JS) —
+     tapa a #pantalla-login mientras la app todavía no sabe si puede
+     restaurar la sesión sola. Antes, en cada carga (incluso con sesión ya
+     guardada) se alcanzaba a ver un destello de la tarjeta de login con el
+     botón real antes de que el JS decidiera ocultarla; ahora lo que se ve
+     de entrada es este loader de marca propia, nunca la tarjeta de login,
+     salvo que main.js confirme que sí hace falta una acción del usuario
+     (ver mostrarPantallaCargaSesion()/ocultarPantallaCargaSesion() en
+     ui/componentes.js). -->
+<div id="overlay-carga-sesion" class="overlay-carga-sesion" aria-hidden="true">
+  <div class="carga-sesion-anillo-wrap">
+    <img src="imagenes/LogoApp.png" alt="" class="carga-sesion-logo">
+    <div class="carga-sesion-anillo"></div>
+  </div>
+  <p class="carga-sesion-texto">Cargando tu sesión…</p>
+</div>
+
 <!-- ============================ PANTALLA DE LOGIN ============================ -->
-<div id="pantalla-login" class="stack" style="min-height:100vh; align-items:center; justify-content:center; padding:24px;">
+<div id="pantalla-login" class="stack oculto" style="min-height:100vh; align-items:center; justify-content:center; padding:24px;">
   <div class="glass-card stack" style="max-width:420px; width:100%; text-align:center;">
     <h1 style="font-size:1.6rem; display:flex; align-items:center; justify-content:center; gap:8px;"><img src="imagenes/LogoApp.png" alt="Logo App Académica" style="height:1.4em; width:auto; vertical-align:middle;"> App Académica</h1>
     <p>Toda tu carrera en un solo lugar disponible en todos tus dispositivos</p>
