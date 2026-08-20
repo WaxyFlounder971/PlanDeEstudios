@@ -172,6 +172,22 @@
           <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Ajustes generales</h2><span class="ajuste-seccion-chevron">▾</span></button>
           <div class="ajuste-seccion-cuerpo">
 
+          <!-- Notificaciones push reales (recordatorios de Agenda) — ver
+               core/notificaciones-push.js + worker-notificaciones/ (Worker
+               de Cloudflare, proyecto aparte). Primer ajuste de la sección
+               a propósito: es lo que más impacto directo tiene en el uso
+               diario (recordatorios reales fuera de la app). -->
+          <div class="row-between">
+            <span>Notificaciones reales de Agenda</span>
+            <label class="switch switch-tema">
+              <input type="checkbox" id="switch-notificaciones-push">
+              <span class="track"><span class="thumb"></span></span>
+            </label>
+          </div>
+          <p class="muted oculto" id="aviso-notificaciones-sin-soporte" style="font-size:0.78rem; margin:-4px 0 0;">
+            Tu navegador no soporta notificaciones push.
+          </p>
+
           <div>
             <span class="form-label">Formato de nombres de materias y carrera</span>
             <div class="pill-group" id="pill-formato-texto">
@@ -213,20 +229,6 @@
               <span class="track"><span class="thumb"></span></span>
             </label>
           </div>
-
-          <!-- Notificaciones push reales (recordatorios de Agenda) — ver
-               core/notificaciones-push.js + worker-notificaciones/ (Worker
-               de Cloudflare, proyecto aparte). -->
-          <div class="row-between">
-            <span>Notificaciones reales de Agenda</span>
-            <label class="switch switch-tema">
-              <input type="checkbox" id="switch-notificaciones-push">
-              <span class="track"><span class="thumb"></span></span>
-            </label>
-          </div>
-          <p class="muted oculto" id="aviso-notificaciones-sin-soporte" style="font-size:0.78rem; margin:-4px 0 0;">
-            Tu navegador no soporta notificaciones push.
-          </p>
 
           <div>
             <span>Paleta de color</span>
