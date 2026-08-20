@@ -114,7 +114,7 @@
       <h3 class="sidebar-titulo" style="display:flex; align-items:center; gap:8px;"><img src="imagenes/LogoApp.png" alt="Logo App Académica" style="height:1.3em; width:auto; vertical-align:middle;"> <span class="texto">App Académica</span></h3>
 
       <div class="sidebar-scroll">
-        <button class="btn btn-secondary btn-block btn-nav" title="Resumen" disabled>🏠 <span class="texto-nav">Resumen</span></button>
+        <button id="nav-resumen" class="btn btn-secondary btn-block btn-nav" data-seccion="resumen" title="Resumen">🏠 <span class="texto-nav">Resumen</span></button>
         <button id="nav-agenda" class="btn btn-secondary btn-block btn-nav" data-seccion="agenda" title="Agenda">📖 <span class="texto-nav">Agenda</span></button>
         <button id="nav-horario" class="btn btn-secondary btn-block btn-nav" data-seccion="horario" title="Horario">🗓️ <span class="texto-nav">Horario</span></button>
         <button id="nav-semestres" class="btn btn-secondary btn-block btn-nav" data-seccion="semestres" title="Semestres">📅 <span class="texto-nav">Semestres</span></button>
@@ -149,6 +149,14 @@
 
     <!-- Contenido principal -->
     <main class="app-contenido">
+
+      <!-- ===================== SECCIÓN: Resumen ===================== -->
+      <!-- Contenido construido dinámicamente por js/resumen/resumen.js.
+           Vista de solo lectura: semana actual, clases de hoy, tareas de
+           hoy, próximas tareas, exámenes próximos y próximo evento — todo
+           reutilizado de Agenda/Horario/Semestres, sin modelo de datos
+           propio. -->
+      <div id="seccion-resumen" class="stack oculto"></div>
 
       <!-- ===================== SECCIÓN: Configuración ===================== -->
       <div id="seccion-configuracion" class="stack">
