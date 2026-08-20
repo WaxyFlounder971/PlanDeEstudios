@@ -32,7 +32,7 @@ import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 // viene puesta porque coincide con el par VAPID que te dejé generado; si
 // generaste tu propio par en el Worker, actualizala acá también (paso
 // opcional del README).
-const URL_WORKER_NOTIFICACIONES = "https://worker-notificaciones-agenda.TU-SUBDOMINIO.workers.dev";
+const URL_WORKER_NOTIFICACIONES = "https://worker-notificaciones-agenda.appacademica.workers.dev";
 const VAPID_CLAVE_PUBLICA = "BMbmYWYDGscYiMy9jFXkSqLHzNZZEgRt2Ax22VcKpQJ666e2jdTzcv00sBTQf3l0oLudBu39V7kip2NFj5Z5nZM";
 
 function convertirClaveVapidAUint8Array(base64url) {
