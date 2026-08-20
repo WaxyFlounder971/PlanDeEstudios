@@ -802,6 +802,9 @@ function aplicarModalidadDia(bloque, numeroSemana, diaCodigo, nuevaModalidad) {
   sellarTimestamp(bloque);
   marcarCambioPendiente();
   window.renderizarHorario?.();
+  // Mismo bug/fix de más abajo (finalizar() en guardarBloque): Resumen
+  // deriva "Clases de hoy" de estos mismos bloques, modalidad incluida.
+  window.renderizarResumen?.();
 }
 
 function renderizarZonaCronograma(zona, chevron, semestre, bloque, estadoLocal, repintar) {
@@ -993,6 +996,10 @@ function guardarBloque(semestre, bloque, estadoForm) {
     // volvía a entrar manualmente a Agenda. Se refresca acá también, igual
     // que ya se hace al cambiar de sección en main.js.
     window.renderizarAgenda?.();
+    // Resumen deriva "Clases de hoy" (y por transitividad el chip de
+    // "Semana actual") de estos mismos bloques — mismo bug/mismo fix de
+    // arriba, ahora también acá.
+    window.renderizarResumen?.();
   };
 
   if (!bloque) {
@@ -1033,6 +1040,8 @@ function borrarBloque(semestre, bloque) {
   marcarCambioPendiente();
   cerrarModalBloqueHorario();
   window.renderizarHorario?.();
+  // Mismo motivo que en guardarBloque/aplicarModalidadDia de arriba.
+  window.renderizarResumen?.();
 }
 
 export { abrirModalBloqueHorario, cerrarModalBloqueHorario, construirZonaCronograma };
