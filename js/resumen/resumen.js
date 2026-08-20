@@ -72,6 +72,47 @@ function construirListaEventos(eventos) {
   return lista;
 }
 
+/** "Mañana", o "Lun 25 ago" — encabezado chico de fecha para agrupar
+ *  ítems de distintos días dentro de una misma sección (ej. "Próximas
+ *  tareas"). Usa fechaLocalDesdeISO (horario.js) para parsear, mismo
+ *  criterio que el resto de la app, sin desfase de timezone. */
+function formatearEncabezadoDia(fechaISO, hoyISO) {
+  const mananaISO = fechaISOMasDias(fechaLocalDesdeISO(hoyISO), 1);
+  if (fechaISO === mananaISO) return "Mañana";
+  const fecha = fechaLocalDesdeISO(fechaISO);
+  const texto = new Intl.DateTimeFormat("es-CR", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  }).format(fecha);
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+/** Como construirListaEventos, pero intercala un encabezado chico ("Hoy",
+ *  "Mañana", "Lun 25 ago"...) cada vez que cambia la fecha entre un ítem y
+ *  el siguiente — para secciones como "Próximas tareas" que pueden mezclar
+ *  ítems de varios días distintos y conviene saber de cuál es cada uno.
+ *  Asume `eventos` ya viene ordenado por fecha (ordenarPorFechaYHora). */
+function construirListaEventosAgrupadaPorFecha(eventos, hoyISO) {
+  const lista = document.createElement("div");
+  lista.className = "stack";
+  lista.style.gap = "8px";
+  let fechaAnterior = null;
+  eventos.forEach((evento) => {
+    if (evento.fecha !== fechaAnterior) {
+      const encabezado = document.createElement("p");
+      encabezado.className = "muted resumen-fecha-subencabezado";
+      encabezado.style.cssText =
+        "margin:4px 0 0; font-size:0.78em; text-transform:uppercase; letter-spacing:0.02em;";
+      encabezado.textContent = formatearEncabezadoDia(evento.fecha, hoyISO);
+      lista.appendChild(encabezado);
+      fechaAnterior = evento.fecha;
+    }
+    lista.appendChild(construirItemEvento(evento));
+  });
+  return lista;
+}
+
 /** Eventos de agenda que pertenecen a alguno de los semestres dados (o que
  *  no tienen semestre asignado, por compatibilidad con datos viejos) —
  *  mismo criterio de filtrado que ya usa construirBloqueDia en agenda.js. */
@@ -263,7 +304,9 @@ function renderizarResumen() {
     .sort(ordenarPorFechaYHora)
     .slice(0, CANTIDAD_PROXIMAS_TAREAS);
   if (proximasTareas.length > 0) {
-    cont.appendChild(construirBloqueSeccion("Próximas tareas", construirListaEventos(proximasTareas)));
+    cont.appendChild(
+      construirBloqueSeccion("Próximas tareas", construirListaEventosAgrupadaPorFecha(proximasTareas, hoyISO))
+    );
     huboContenido = true;
   }
 
