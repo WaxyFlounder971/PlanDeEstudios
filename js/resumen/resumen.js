@@ -99,7 +99,10 @@ function construirEstadoVacio() {
  *  anclado a la derecha (días hasta que termina el semestre, calculados
  *  desde fecha_inicio + duracion_semanas). Usa fechaLocalDesdeISO
  *  (horario.js) para leer fecha_inicio igual que el resto de la app, sin
- *  reintroducir el desfase de timezone que ya se resolvió en Agenda. */
+ *  reintroducir el desfase de timezone que ya se resolvió en Agenda.
+ *  El ancho final de la barra y el eventual acortado del texto central se
+ *  resuelven en ajustarTarjetaSemana(), una vez que el elemento ya está
+ *  en el DOM y se puede medir el ancho real de "Faltan X días". */
 function construirTarjetaSemana(semestreActivo, numeroSemana, hoy) {
   const fechaInicio = fechaLocalDesdeISO(semestreActivo.fecha_inicio);
   const totalDias = semestreActivo.duracion_semanas * 7;
@@ -114,7 +117,9 @@ function construirTarjetaSemana(semestreActivo, numeroSemana, hoy) {
   tarjeta.className = "glass-card resumen-semana-tarjeta";
   tarjeta.style.cssText = "display:flex; align-items:center; gap:16px; padding:14px 18px;";
 
-  // Izquierda: barra de progreso del semestre.
+  // Izquierda: barra de progreso del semestre. El ancho de partida (99px)
+  // es solo un placeholder hasta que ajustarTarjetaSemana() la iguale al
+  // ancho real de "Faltan X días".
   const barraCont = document.createElement("div");
   barraCont.className = "resumen-semana-barra";
   barraCont.title = `${porcentaje}% del semestre transcurrido`;
@@ -126,11 +131,16 @@ function construirTarjetaSemana(semestreActivo, numeroSemana, hoy) {
     "height:100%; width:" + porcentaje + "%; border-radius:999px; background:var(--color-primario, #7c9eff);";
   barraCont.appendChild(barraFill);
 
-  // Centro: número de semana, mismo tamaño que los otros encabezados de sección.
+  // Centro: número de semana, mismo tamaño que los otros encabezados de
+  // sección. Siempre en una sola línea (nowrap, sin "…") — si no entra,
+  // ajustarTarjetaSemana() cambia a la versión corta guardada en dataset.
   const centro = document.createElement("h2");
   centro.className = "texto-encabezado-seccion resumen-semana-numero";
-  centro.style.cssText = "flex:1; margin:0; text-align:center;";
-  centro.textContent = `Semana ${numeroSemana} de ${semestreActivo.duracion_semanas}`;
+  centro.style.cssText =
+    "flex:1; min-width:0; margin:0; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:clip;";
+  centro.dataset.textoCompleto = `Semana ${numeroSemana} de ${semestreActivo.duracion_semanas}`;
+  centro.dataset.textoCorto = `Semana ${numeroSemana}`;
+  centro.textContent = centro.dataset.textoCompleto;
 
   // Derecha: días restantes, anclado.
   const faltan = document.createElement("span");
@@ -142,6 +152,29 @@ function construirTarjetaSemana(semestreActivo, numeroSemana, hoy) {
   tarjeta.appendChild(centro);
   tarjeta.appendChild(faltan);
   return tarjeta;
+}
+
+/** Ajustes que requieren el elemento ya insertado en el DOM (para medir
+ *  anchos reales):
+ *  1. La barra de progreso se iguala al ancho de "Faltan X días", como se
+ *     pidió — ambos elementos miden lo mismo.
+ *  2. Si con ese ancho de barra el texto central ya no entra en una sola
+ *     línea, se reemplaza "Semana X de Y" por solo "Semana X" (sin "…" y
+ *     sin salto de línea). Si sí entra, se deja tal cual. */
+function ajustarTarjetaSemana(tarjeta) {
+  const barraCont = tarjeta.querySelector(".resumen-semana-barra");
+  const centro = tarjeta.querySelector(".resumen-semana-numero");
+  const faltan = tarjeta.querySelector(".resumen-semana-faltan");
+  if (!barraCont || !centro || !faltan) return;
+
+  const anchoFaltan = faltan.getBoundingClientRect().width;
+  if (anchoFaltan > 0) {
+    barraCont.style.flex = `0 0 ${anchoFaltan}px`;
+  }
+
+  if (centro.scrollWidth > centro.clientWidth) {
+    centro.textContent = centro.dataset.textoCorto;
+  }
 }
 
 function renderizarResumen() {
@@ -169,7 +202,12 @@ function renderizarResumen() {
   if (semestreActivo && obtenerEstadoEfectivoSemestre(semestreActivo) === "actual") {
     const numeroSemana = calcularNumeroSemanaSemestre(semestreActivo);
     if (numeroSemana >= 1 && numeroSemana <= semestreActivo.duracion_semanas) {
-      cont.appendChild(construirTarjetaSemana(semestreActivo, numeroSemana, hoy));
+      const tarjetaSemana = construirTarjetaSemana(semestreActivo, numeroSemana, hoy);
+      cont.appendChild(tarjetaSemana);
+      // Recién acá el elemento tiene layout real y se puede medir "Faltan
+      // X días" para igualar el ancho de la barra y decidir si el texto
+      // central entra completo o hay que acortarlo.
+      ajustarTarjetaSemana(tarjetaSemana);
     }
   }
 
