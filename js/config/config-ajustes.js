@@ -20,6 +20,16 @@ import {
   eliminarAdjuntosDeTareasDeSemestre,
   hayAdjuntosGuardados,
 } from "../core/storage-adjuntos.js";
+// Notificaciones push reales (Ajustes Avanzados) — ver
+// core/notificaciones-push.js. Este archivo solo dibuja el switch y
+// delega toda la lógica de permiso/suscripción/(des)programación en lote
+// a esas funciones.
+import {
+  activarNotificacionesPush,
+  desactivarNotificacionesPush,
+  notificacionesPushActivas,
+  soportaNotificacionesPush,
+} from "../core/notificaciones-push.js";
 
 /* ------------------------------ Ajustes ------------------------------ */
 
@@ -636,6 +646,38 @@ function renderizarAjustes() {
       aplicarModoRendimiento(chkRendimiento.checked);
       sellarTimestamp(estado.datos.configuracion);
       marcarCambioPendiente();
+    };
+  }
+
+  // Notificaciones push reales — switch en Ajustes Avanzados. Se acepte o
+  // no en el onboarding (ver ofrecerActivarNotificacionesPush en main.js),
+  // queda disponible acá para prender/apagar en cualquier momento. Todo el
+  // trabajo real (permiso del navegador, suscripción, (des)programar cada
+  // recordatorio contra el Worker) vive en core/notificaciones-push.js;
+  // este switch solo dispara esas funciones y refleja su resultado.
+  const chkNotificaciones = document.getElementById("switch-notificaciones-push");
+  const avisoSinSoporte = document.getElementById("aviso-notificaciones-sin-soporte");
+  if (chkNotificaciones) {
+    const soportado = soportaNotificacionesPush();
+    chkNotificaciones.disabled = !soportado;
+    avisoSinSoporte?.classList.toggle("oculto", soportado);
+    chkNotificaciones.checked = notificacionesPushActivas();
+    chkNotificaciones.onchange = async () => {
+      // Se deshabilita mientras se resuelve el permiso/suscripción (puede
+      // tardar un instante y no tiene sentido dejar el switch clickeable a
+      // mitad de camino) — vuelve a habilitarse pase lo que pase.
+      chkNotificaciones.disabled = true;
+      if (chkNotificaciones.checked) {
+        const activado = await activarNotificacionesPush();
+        // Si el usuario rechazó el permiso del navegador (o algo falló),
+        // activarNotificacionesPush ya avisó con un toast — acá solo se
+        // destilda el switch para que la UI quede consistente con lo que
+        // realmente pasó.
+        if (!activado) chkNotificaciones.checked = false;
+      } else {
+        await desactivarNotificacionesPush();
+      }
+      chkNotificaciones.disabled = false;
     };
   }
 
