@@ -9,7 +9,7 @@ Para la vista de alto nivel (capas, por qué existen los imports circulares, y "
 qué archivo empiezo si me piden X") ver `ARQUITECTURA.md`. Este documento es el
 detalle función-por-función; `ARQUITECTURA.md` es el mapa de decisión.
 
-> **Estado:** 41/41 archivos `.js` del proyecto documentados. 0 pendientes.
+> **Estado:** 42/42 archivos `.js` del proyecto documentados. 0 pendientes.
 
 ---
 
@@ -24,6 +24,7 @@ detalle función-por-función; `ARQUITECTURA.md` es el mapa de decisión.
 - [`js/comunidad/`](#js--comunidad) — Profesores y compañeros (1 archivo)
 - [`js/horario/`](#js--horario) — Horario y horario entre amigos (4 archivos)
 - [`js/agenda/`](#js--agenda) — Agenda (5 archivos)
+- [`js/resumen/`](#js--resumen) — Resumen (1 archivo)
 - [`js/main.js`](#jsmainjs) — arranque (1 archivo)
 
 ---
@@ -721,6 +722,17 @@ Propósito: vista Calendario (mensual/semanal) — grid de 7 columnas con vistaz
 Depende de: core/storage.js, ui/componentes.js, agenda/agenda-clases.js, agenda/agenda.js, agenda/agenda-utils.js
 Exporta:
 * `renderizarCalendarioAgenda()` — entrypoint de render de la vista Calendario (subheader + grid mensual o semanal).
+
+---
+
+## JS — resumen
+
+### resumen/resumen.js
+Propósito: primera sección de la app — vista de solo lectura que agrega Semana actual, Clases de hoy, Tareas de hoy, Próximas tareas, Exámenes próximos y Próximo evento, leyendo directo de `estado.datos.agenda` y reutilizando funciones ya existentes de `agenda/agenda-utils.js`, `agenda/agenda-clases.js`, `agenda/agenda.js` (`construirItemEvento`) y `core/schema.js`. Sin modelo de datos propio, sin modales, sin edición — tocar un ítem abre la tarjeta de info que ya existe en Agenda (`abrirTarjetaInfoEventoAgenda`, llamada indirectamente vía `construirItemEvento`).
+Depende de: core/schema.js, core/storage.js, agenda/agenda.js, agenda/agenda-clases.js, agenda/agenda-utils.js
+Exporta:
+* `inicializarResumen()` — no-op por ahora (Resumen no tiene controles propios que cablear); se mantiene por consistencia con el patrón `inicializarX()`/`renderizarX()` que `main.js` espera de cada sección.
+* `renderizarResumen()` — entrypoint de render: reconstruye las 6 secciones de golpe, ocultando cada una si no tiene contenido, y mostrando un mensaje de "día tranquilo" si ninguna tiene nada. También expuesta como `window.renderizarResumen` (mismo patrón que `window.renderizarAgenda`/`window.renderizarHorario`) para que otros módulos puedan refrescar Resumen tras guardar datos, sin import circular.
 
 ---
 
