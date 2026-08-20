@@ -92,6 +92,9 @@ function abrirGestionAdjuntosEvento() {
 // horario.js/horario-modal.js.
 function refrescarAgenda() {
   window.renderizarAgenda?.();
+  // Resumen agrega tareas/exámenes/eventos de Agenda — mismo motivo que
+  // renderizarAgenda de arriba, mismo patrón de exposición en window.
+  window.renderizarResumen?.();
 }
 
 function buscarEventoVivoPorId(id) {
