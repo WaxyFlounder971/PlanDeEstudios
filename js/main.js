@@ -12,7 +12,7 @@ import { fusionarDatos } from "./core/storage-merge.js";
 import { actualizarIndicadorSync, forzarSincronizacion, inicializarPullToRefresh, inicializarSondeoAlVolver, intentarReconexionSilenciosa, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
 import { CLAVE_CACHE_LOCAL, borrarTokenCache, correoConocido, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
 import { obtenerIniciales } from "./core/utils.js";
-import { ofrecerActivarNotificacionesPush } from "./core/notificaciones-push.js";
+import { ofrecerActivarNotificacionesPush, soportaNotificacionesPush } from "./core/notificaciones-push.js";
 import { inicializarComunidad, renderizarComunidad } from "./comunidad/comunidad.js";
 import { renderizarFinanzas } from "./finanzas/finanzas.js";
 import { inicializarModalCategoria, inicializarModalCategoriaMaterias } from "./plan/plan-categorias.js";
@@ -112,6 +112,14 @@ if ("serviceWorker" in navigator) {
 }
 
 /* ---------------------------- Arranque ---------------------------- */
+
+// Notificaciones push — flag de "ya se ofreció el diálogo en ESTE
+// dispositivo/navegador" (ver onLoginExitoso más abajo). Va en localStorage
+// y no en estado.datos.configuracion a propósito: el permiso del navegador
+// (Notification.permission) es por dispositivo, no por cuenta, así que si
+// esto sincronizara por Drive, alguien que ya vio el aviso en el celular
+// nunca lo vería en la PC aunque ahí nunca haya dado el permiso.
+const CLAVE_NOTIFICACIONES_PUSH_OFRECIDAS = "notificaciones_push_ofrecidas_v1";
 
 window.addEventListener("DOMContentLoaded", () => {
   // v9.2 (ajuste v1.8.7, punto 6 — pull-to-refresh no funciona en teléfono
@@ -499,13 +507,23 @@ async function onLoginExitoso(token, expiresIn) {
     mostrarApp();
 
     // Notificaciones push reales — onboarding (ver B.1 del pedido
-    // original): se ofrece una única vez, solo la primera vez que esta
-    // cuenta entra a la app (archivo de Drive recién creado). En logins
-    // siguientes no se vuelve a preguntar acá — el switch queda disponible
-    // en Ajustes Avanzados en cualquier momento (ver config-ajustes.js).
-    // Se dispara después de mostrarApp() y sin `await`: es un diálogo de
-    // confirmación no bloqueante, no debe demorar la entrada a la app.
-    if (esArchivoNuevo) {
+    // original, ampliado luego a pedirse en el primer open de CUALQUIER
+    // cuenta, nueva o existente): se ofrece la primera vez que este
+    // dispositivo/navegador abre la app, ya no solo cuando el archivo de
+    // Drive es recién creado. `Notification.permission === "default"`
+    // filtra los casos en los que no tiene sentido volver a preguntar: si
+    // ya está "granted" no hace falta, y si ya está "denied" el navegador
+    // ni siquiera mostraría el popup (resolvería solo, en silencio) — en
+    // ese caso mejor no disparar el diálogo para nada. La marca en
+    // localStorage asegura que, se acepte, se rechace o se cierre el
+    // diálogo sin elegir, este dispositivo no vuelva a verlo en logins
+    // siguientes. El switch de Ajustes Avanzados sigue disponible siempre
+    // para prender/apagar a mano (ver config-ajustes.js). Se dispara
+    // después de mostrarApp() y sin `await`: es un diálogo de confirmación
+    // no bloqueante, no debe demorar la entrada a la app.
+    const yaSeOfrecioEnEsteDispositivo = localStorage.getItem(CLAVE_NOTIFICACIONES_PUSH_OFRECIDAS) === "1";
+    if (soportaNotificacionesPush() && Notification.permission === "default" && !yaSeOfrecioEnEsteDispositivo) {
+      localStorage.setItem(CLAVE_NOTIFICACIONES_PUSH_OFRECIDAS, "1");
       ofrecerActivarNotificacionesPush();
     }
   } catch (e) {
