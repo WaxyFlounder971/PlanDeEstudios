@@ -28,7 +28,7 @@
        que main.js dispara cada una hora / al volver a primer plano).
    ========================================================================= */
 
-const VERSION = "v3"; // <-- subir en cada despliegue (v2, v3, ...)
+const VERSION = "v4"; // <-- subir en cada despliegue (v2, v3, ...) — v4: agrega los listeners de 'push' y 'notificationclick' (notificaciones reales de Agenda)
 const CACHE_NAME = `app-academica-${VERSION}`;
 const PREFIJO_CACHE = "app-academica-";
 
@@ -97,6 +97,65 @@ self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();
   }
+});
+
+/* =========================================================================
+   NOTIFICACIONES PUSH REALES (recordatorios de Agenda)
+   -------------------------------------------------------------------------
+   El Worker de Cloudflare (proyecto separado, ver worker-notificaciones/)
+   manda el push ya cifrado según el estándar Web Push — acá solo hace
+   falta leer el JSON que trae adentro y mostrar la notificación del
+   sistema operativo. Este service worker nunca decide CUÁNDO ni QUÉ
+   mandar, solo la muestra cuando llega.
+   ========================================================================= */
+
+self.addEventListener("push", (event) => {
+  let datos = {};
+  try {
+    datos = event.data ? event.data.json() : {};
+  } catch (e) {
+    // Si por lo que sea el payload no es JSON válido, se muestra igual
+    // una notificación genérica en vez de fallar en silencio — mejor un
+    // aviso poco específico que ningún aviso.
+    datos = {};
+  }
+
+  const titulo = datos.titulo || "Recordatorio de Agenda";
+  const opciones = {
+    body: datos.cuerpo || "",
+    icon: "imagenes/LogoApp-192.png",
+    badge: "imagenes/LogoApp-192.png",
+    // Mismo tag para todos los recordatorios: si llegan 2 pushes casi
+    // juntos y el usuario todavía no vio el primero, el sistema operativo
+    // los apila/reemplaza en vez de llenar la bandeja de notificaciones
+    // sueltas de la misma app.
+    tag: "agenda-recordatorio",
+    data: { url: "./?abrir=agenda" },
+  };
+
+  event.waitUntil(self.registration.showNotification(titulo, opciones));
+});
+
+/**
+ * Al tocar la notificación: si ya hay una pestaña de la app abierta, la
+ * enfoca y le manda un mensaje para que salte a Agenda sin recargar (ver
+ * el listener de 'message' en main.js). Si no hay ninguna abierta, abre
+ * una pestaña nueva con "?abrir=agenda" (ver mostrarApp() en main.js, que
+ * lee ese query param al terminar de cargar).
+ */
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    (async () => {
+      const listaClientes = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const clienteExistente = listaClientes.find((c) => "focus" in c);
+      if (clienteExistente) {
+        clienteExistente.postMessage({ tipo: "abrir-agenda" });
+        return clienteExistente.focus();
+      }
+      return self.clients.openWindow("./?abrir=agenda");
+    })()
+  );
 });
 
 self.addEventListener("fetch", (event) => {
