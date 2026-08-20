@@ -28,6 +28,7 @@ import {
   activarNotificacionesPush,
   desactivarNotificacionesPush,
   notificacionesPushActivas,
+  notificacionesPushActivasEnEsteDispositivo,
   soportaNotificacionesPush,
 } from "../core/notificaciones-push.js";
 
@@ -661,7 +662,24 @@ function renderizarAjustes() {
     const soportado = soportaNotificacionesPush();
     chkNotificaciones.disabled = !soportado;
     avisoSinSoporte?.classList.toggle("oculto", soportado);
+    // Valor optimista e instantáneo (evita parpadeo) con el flag de la
+    // cuenta (sincronizado por Drive) — se corrige abajo, de forma async,
+    // con el estado real de ESTE dispositivo en particular. Necesario
+    // porque el permiso del navegador es por dispositivo: si se activó
+    // desde otro (celular, por ejemplo), acá el flag de cuenta ya dice
+    // "activas" aunque este navegador nunca haya dado el permiso ni tenga
+    // suscripción — sin esto el switch mostraría "prendido" sin que
+    // realmente vaya a llegar nada a este dispositivo.
     chkNotificaciones.checked = notificacionesPushActivas();
+    if (soportado) {
+      notificacionesPushActivasEnEsteDispositivo().then((activoEnEsteDispositivo) => {
+        // Si Ajustes se volvió a renderizar mientras esta promesa estaba
+        // pendiente, este switch ya no está en el DOM — no pisar un
+        // render más nuevo con el resultado de uno viejo.
+        if (!document.body.contains(chkNotificaciones)) return;
+        chkNotificaciones.checked = activoEnEsteDispositivo;
+      });
+    }
     chkNotificaciones.onchange = async () => {
       // Se deshabilita mientras se resuelve el permiso/suscripción (puede
       // tardar un instante y no tiene sentido dejar el switch clickeable a
