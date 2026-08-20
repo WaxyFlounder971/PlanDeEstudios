@@ -12,6 +12,7 @@ import { fusionarDatos } from "./core/storage-merge.js";
 import { actualizarIndicadorSync, forzarSincronizacion, inicializarPullToRefresh, inicializarSondeoAlVolver, intentarReconexionSilenciosa, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
 import { CLAVE_CACHE_LOCAL, borrarTokenCache, correoConocido, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
 import { obtenerIniciales } from "./core/utils.js";
+import { ofrecerActivarNotificacionesPush } from "./core/notificaciones-push.js";
 import { inicializarComunidad, renderizarComunidad } from "./comunidad/comunidad.js";
 import { renderizarFinanzas } from "./finanzas/finanzas.js";
 import { inicializarModalCategoria, inicializarModalCategoriaMaterias } from "./plan/plan-categorias.js";
@@ -496,6 +497,17 @@ async function onLoginExitoso(token, expiresIn) {
       // No crítico: si falla, el primer sondeo simplemente fija la base.
     }
     mostrarApp();
+
+    // Notificaciones push reales — onboarding (ver B.1 del pedido
+    // original): se ofrece una única vez, solo la primera vez que esta
+    // cuenta entra a la app (archivo de Drive recién creado). En logins
+    // siguientes no se vuelve a preguntar acá — el switch queda disponible
+    // en Ajustes Avanzados en cualquier momento (ver config-ajustes.js).
+    // Se dispara después de mostrarApp() y sin `await`: es un diálogo de
+    // confirmación no bloqueante, no debe demorar la entrada a la app.
+    if (esArchivoNuevo) {
+      ofrecerActivarNotificacionesPush();
+    }
   } catch (e) {
     // v1.15.1 (fix real del reporte "inicio sesión y como que no inicia,
     // tengo que recargar y volver a intentar"): antes este try no tenía
@@ -568,6 +580,29 @@ function mostrarApp() {
   // tras un refresh la sección de Plan de Estudios se quedaba con la clase
   // "oculto" del HTML aunque su contenido sí se hubiera renderizado.
   mostrarSeccion(localStorage.getItem(CLAVE_SECCION_ACTIVA) || "plan-estudios");
+  // Notificaciones push — al tocar la notificación del sistema, el service
+  // worker abre la app con "?abrir=agenda" en la URL (ver 'notificationclick'
+  // en service-worker.js). Se revisa acá, al final de mostrarApp() (cubre
+  // tanto el arranque con caché como el login recién completado), y se
+  // limpia el query param enseguida para que un refresh posterior no vuelva
+  // a saltar a Agenda solo.
+  if (new URLSearchParams(window.location.search).get("abrir") === "agenda") {
+    mostrarSeccion("agenda");
+    window.history.replaceState({}, "", window.location.pathname);
+  }
+}
+
+// Notificaciones push — mismo caso que el query param de arriba, pero para
+// cuando la app YA estaba abierta en una pestaña al tocar la notificación:
+// el service worker no puede navegar una pestaña ya abierta con un query
+// param nuevo sin recargarla, así que en ese caso le manda un mensaje
+// directo (ver 'notificationclick' en service-worker.js) y acá se atiende.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("message", (evento) => {
+    if (evento.data && evento.data.tipo === "abrir-agenda") {
+      mostrarSeccion("agenda");
+    }
+  });
 }
 
 /* --------------------------- Cerrar sesión --------------------------- */
