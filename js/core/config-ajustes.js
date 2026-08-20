@@ -9,9 +9,27 @@ import { actualizarIndicadorSync, forzarBackupManual, marcarCambioPendiente } fr
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
-import { mostrarToast } from "../ui/componentes.js";
+import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta } from "../ui/tema.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
+import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
+import {
+  eliminarAdjuntosDeCronogramaDeSemestre,
+  eliminarAdjuntosDeEventosSueltos,
+  eliminarAdjuntosDeSemestre,
+  eliminarAdjuntosDeTareasDeSemestre,
+  hayAdjuntosGuardados,
+} from "../core/storage-adjuntos.js";
+// Notificaciones push reales (Ajustes Avanzados) — ver
+// core/notificaciones-push.js. Este archivo solo dibuja el switch y
+// delega toda la lógica de permiso/suscripción/(des)programación en lote
+// a esas funciones.
+import {
+  activarNotificacionesPush,
+  desactivarNotificacionesPush,
+  notificacionesPushActivas,
+  soportaNotificacionesPush,
+} from "../core/notificaciones-push.js";
 
 /* ------------------------------ Ajustes ------------------------------ */
 
@@ -631,21 +649,45 @@ function renderizarAjustes() {
     };
   }
 
-  // Agenda: "Mostrar días sin eventos ni tareas" — default true (sí se
-  // muestran) si nunca se tocó, mismo criterio de "undefined = default" que
-  // dias_visibles/dia_inicio_semana más abajo (renderizarConfigDiasHorario),
-  // en vez de rellenarlo en crearDatosUsuarioNuevo (schema.js) para no
-  // tocar ese archivo por un solo campo más de configuración de UI.
-  const chkAgendaDiasVacios = document.getElementById("switch-agenda-mostrar-dias-vacios");
-  if (chkAgendaDiasVacios) {
-    chkAgendaDiasVacios.checked = estado.datos.configuracion.agenda_mostrar_dias_vacios !== false;
-    chkAgendaDiasVacios.onchange = () => {
-      estado.datos.configuracion.agenda_mostrar_dias_vacios = chkAgendaDiasVacios.checked;
-      sellarTimestamp(estado.datos.configuracion);
-      marcarCambioPendiente();
-      window.renderizarAgenda?.();
+  // Notificaciones push reales — switch en Ajustes Avanzados. Se acepte o
+  // no en el onboarding (ver ofrecerActivarNotificacionesPush en main.js),
+  // queda disponible acá para prender/apagar en cualquier momento. Todo el
+  // trabajo real (permiso del navegador, suscripción, (des)programar cada
+  // recordatorio contra el Worker) vive en core/notificaciones-push.js;
+  // este switch solo dispara esas funciones y refleja su resultado.
+  const chkNotificaciones = document.getElementById("switch-notificaciones-push");
+  const avisoSinSoporte = document.getElementById("aviso-notificaciones-sin-soporte");
+  if (chkNotificaciones) {
+    const soportado = soportaNotificacionesPush();
+    chkNotificaciones.disabled = !soportado;
+    avisoSinSoporte?.classList.toggle("oculto", soportado);
+    chkNotificaciones.checked = notificacionesPushActivas();
+    chkNotificaciones.onchange = async () => {
+      // Se deshabilita mientras se resuelve el permiso/suscripción (puede
+      // tardar un instante y no tiene sentido dejar el switch clickeable a
+      // mitad de camino) — vuelve a habilitarse pase lo que pase.
+      chkNotificaciones.disabled = true;
+      if (chkNotificaciones.checked) {
+        const activado = await activarNotificacionesPush();
+        // Si el usuario rechazó el permiso del navegador (o algo falló),
+        // activarNotificacionesPush ya avisó con un toast — acá solo se
+        // destilda el switch para que la UI quede consistente con lo que
+        // realmente pasó.
+        if (!activado) chkNotificaciones.checked = false;
+      } else {
+        await desactivarNotificacionesPush();
+      }
+      chkNotificaciones.disabled = false;
     };
   }
+
+  // Ronda de ajustes visuales — punto 3: los 2 switches de Agenda que iban
+  // acá ("Mostrar días sin eventos ni tareas" y "Mostrar clases ese día en
+  // Agenda", agenda_mostrar_dias_vacios/agenda_mostrar_clases) se movieron
+  // al modal de Ajustes de Agenda (#modal-agenda-ajustes, ver
+  // inicializarFiltrosAgenda en agenda.js) — dejan de existir en esta
+  // sección global. Los campos de configuracion siguen siendo los mismos,
+  // solo cambió DÓNDE se editan.
 
   // Modo claro/oscuro
   const chkModo = document.getElementById("switch-modo");
@@ -724,6 +766,10 @@ function renderizarAjustes() {
 
   // Ajustes — respaldo de datos (exportar/importar JSON completo)
   renderizarSeccionDatos();
+
+  // Ajustes — liberar espacio (borrado en lote de adjuntos, solo si hay
+  // alguno guardado — ver hayAdjuntosGuardados en core/storage-adjuntos.js)
+  renderizarSeccionLiberarEspacio();
 
   actualizarIndicadorSync();
 }
@@ -1075,6 +1121,180 @@ function renderizarSeccionDatos() {
     estadoTexto.textContent = "Leyendo archivo...";
     importarDatosDesdeArchivo(archivo, estadoTexto);
   });
+
+  contenedor.appendChild(panel);
+}
+
+/**
+ * Ajustes — Liberar espacio (borrado en lote de adjuntos): solo se muestra
+ * si hayAdjuntosGuardados() dice que hay algo para borrar — si no, el
+ * contenedor #seccion-liberar-espacio queda vacío y oculto (ver el "oculto"
+ * ya presente en el markup de index.html).
+ *
+ * Dos modos:
+ *   - Por semestre (selector): "Cronograma" (adjuntos de materia —
+ *     cronograma, reglas, libros) y "Tareas" (adjuntos de EventoAgenda de
+ *     ese semestre) por separado, más un botón "Borrar todo este semestre"
+ *     que hace ambos de una.
+ *   - Global, sin selector: eventos sueltos (no asociados a ningún
+ *     semestre).
+ *
+ * Cada botón pide confirmación (mismo patrón que el resto de la app,
+ * abrirConfirmacion) antes de borrar — es destructivo e irreversible (borra
+ * también el archivo real en Drive, no solo la referencia local).
+ */
+function renderizarSeccionLiberarEspacio() {
+  const contenedor = document.getElementById("seccion-liberar-espacio");
+  if (!contenedor) return;
+  contenedor.innerHTML = "";
+
+  if (!hayAdjuntosGuardados()) {
+    contenedor.classList.add("oculto");
+    return;
+  }
+  contenedor.classList.remove("oculto");
+
+  const panel = document.createElement("div");
+  panel.className = "glass-panel";
+  panel.style.cssText = "padding:12px; display:flex; flex-direction:column; gap:10px;";
+
+  const titulo = document.createElement("span");
+  titulo.className = "form-label";
+  titulo.textContent = "Liberar espacio";
+  panel.appendChild(titulo);
+
+  const explicacion = document.createElement("p");
+  explicacion.className = "muted";
+  explicacion.style.cssText = "font-size:0.8rem; margin:0;";
+  explicacion.textContent =
+    "Borra en lote los archivos y enlaces adjuntos que ya no necesitás. Esto borra también el archivo real en tu Drive — no se puede deshacer.";
+  panel.appendChild(explicacion);
+
+  const estadoTexto = document.createElement("p");
+  estadoTexto.className = "muted";
+  estadoTexto.style.cssText = "font-size:0.78rem; margin:0; min-height:1em;";
+
+  function confirmarYBorrar({ titulo, mensaje, accion }) {
+    abrirConfirmacion({
+      titulo,
+      mensaje,
+      textoConfirmar: "Borrar",
+      onConfirmar: async () => {
+        estadoTexto.textContent = "Borrando…";
+        try {
+          await accion();
+          estadoTexto.textContent = "✅ Listo.";
+          renderizarSeccionLiberarEspacio();
+        } catch (err) {
+          console.error("Error liberando espacio:", err);
+          estadoTexto.textContent = "❌ No se pudo completar el borrado. Intenta de nuevo.";
+        }
+      },
+    });
+  }
+
+  // --- Por semestre ---
+  const semestres = obtenerSemestresOrdenCronologico();
+  if (semestres.length > 0) {
+    const filaSelector = document.createElement("div");
+    filaSelector.style.cssText = "display:flex; flex-direction:column; gap:6px;";
+
+    const etiquetaSelector = document.createElement("span");
+    etiquetaSelector.className = "muted";
+    etiquetaSelector.style.fontSize = "0.78rem";
+    etiquetaSelector.textContent = "Por semestre:";
+    filaSelector.appendChild(etiquetaSelector);
+
+    const selectSemestre = document.createElement("select");
+    selectSemestre.className = "input";
+    semestres.forEach((semestre) => {
+      const opt = document.createElement("option");
+      opt.value = semestre.id;
+      opt.textContent = semestre.nombre;
+      selectSemestre.appendChild(opt);
+    });
+    filaSelector.appendChild(selectSemestre);
+
+    const filaBotonesSemestre = document.createElement("div");
+    filaBotonesSemestre.style.cssText = "display:flex; gap:8px; flex-wrap:wrap;";
+
+    const btnCronograma = document.createElement("button");
+    btnCronograma.type = "button";
+    btnCronograma.className = "btn btn-secondary";
+    btnCronograma.style.cssText = "flex:1 1 140px;";
+    btnCronograma.textContent = "Cronograma";
+    btnCronograma.addEventListener("click", () => {
+      const semestre = semestres.find((s) => s.id === selectSemestre.value);
+      if (!semestre) return;
+      confirmarYBorrar({
+        titulo: "Borrar adjuntos de Cronograma",
+        mensaje: `¿Borrar todos los archivos y enlaces adjuntos del Cronograma (materia) de "${semestre.nombre}"? Esta acción no se puede deshacer.`,
+        accion: () => eliminarAdjuntosDeCronogramaDeSemestre(semestre.id),
+      });
+    });
+    filaBotonesSemestre.appendChild(btnCronograma);
+
+    const btnTareas = document.createElement("button");
+    btnTareas.type = "button";
+    btnTareas.className = "btn btn-secondary";
+    btnTareas.style.cssText = "flex:1 1 140px;";
+    btnTareas.textContent = "Tareas";
+    btnTareas.addEventListener("click", () => {
+      const semestre = semestres.find((s) => s.id === selectSemestre.value);
+      if (!semestre) return;
+      confirmarYBorrar({
+        titulo: "Borrar adjuntos de Tareas",
+        mensaje: `¿Borrar todos los archivos y enlaces adjuntos de las tareas de "${semestre.nombre}"? Esta acción no se puede deshacer.`,
+        accion: () => eliminarAdjuntosDeTareasDeSemestre(semestre.id),
+      });
+    });
+    filaBotonesSemestre.appendChild(btnTareas);
+
+    const btnTodoSemestre = document.createElement("button");
+    btnTodoSemestre.type = "button";
+    btnTodoSemestre.className = "btn btn-danger";
+    btnTodoSemestre.style.cssText = "flex:1 1 140px;";
+    btnTodoSemestre.textContent = "Todo el semestre";
+    btnTodoSemestre.addEventListener("click", () => {
+      const semestre = semestres.find((s) => s.id === selectSemestre.value);
+      if (!semestre) return;
+      confirmarYBorrar({
+        titulo: "Borrar todos los adjuntos del semestre",
+        mensaje: `¿Borrar TODOS los archivos y enlaces adjuntos (Cronograma y Tareas) de "${semestre.nombre}"? Esta acción no se puede deshacer.`,
+        accion: () => eliminarAdjuntosDeSemestre(semestre.id),
+      });
+    });
+    filaBotonesSemestre.appendChild(btnTodoSemestre);
+
+    filaSelector.appendChild(filaBotonesSemestre);
+    panel.appendChild(filaSelector);
+  }
+
+  // --- Global, sin selector ---
+  const filaGlobal = document.createElement("div");
+  filaGlobal.style.cssText = "display:flex; flex-direction:column; gap:6px;";
+
+  const etiquetaGlobal = document.createElement("span");
+  etiquetaGlobal.className = "muted";
+  etiquetaGlobal.style.fontSize = "0.78rem";
+  etiquetaGlobal.textContent = "Eventos sueltos (no asociados a un semestre):";
+  filaGlobal.appendChild(etiquetaGlobal);
+
+  const btnEventosSueltos = document.createElement("button");
+  btnEventosSueltos.type = "button";
+  btnEventosSueltos.className = "btn btn-danger btn-block";
+  btnEventosSueltos.textContent = "Borrar adjuntos de eventos sueltos";
+  btnEventosSueltos.addEventListener("click", () => {
+    confirmarYBorrar({
+      titulo: "Borrar adjuntos de eventos sueltos",
+      mensaje: "¿Borrar todos los archivos y enlaces adjuntos de eventos que no pertenecen a ningún semestre? Esta acción no se puede deshacer.",
+      accion: () => eliminarAdjuntosDeEventosSueltos(),
+    });
+  });
+  filaGlobal.appendChild(btnEventosSueltos);
+
+  panel.appendChild(filaGlobal);
+  panel.appendChild(estadoTexto);
 
   contenedor.appendChild(panel);
 }
@@ -1549,6 +1769,7 @@ function renderizarNotasAprobacion() {
 export {
   renderizarAjustes,
   renderizarSeccionBackupDrive,
+  renderizarSeccionLiberarEspacio,
   aplicarModoRendimiento,
   DIAS_SEMANA_CONFIG,
 };
