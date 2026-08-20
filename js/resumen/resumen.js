@@ -158,9 +158,14 @@ function construirTarjetaSemana(semestreActivo, numeroSemana, hoy) {
  *  anchos reales):
  *  1. La barra de progreso se iguala al ancho de "Faltan X días", como se
  *     pidió — ambos elementos miden lo mismo.
- *  2. Si con ese ancho de barra el texto central ya no entra en una sola
- *     línea, se reemplaza "Semana X de Y" por solo "Semana X" (sin "…" y
- *     sin salto de línea). Si sí entra, se deja tal cual. */
+ *  2. Si con ese ancho de barra el texto central completo ("Semana X de
+ *     Y") no entra en el espacio disponible, se reemplaza ENTERO por
+ *     "Semana X" (sin " de Y") — nunca queda cortado a la mitad. Para
+ *     evitar el recorte visual que daba overflow:hidden + scrollWidth
+ *     (que a veces mostraba "Semana 5 de 1…" en vez de saltar limpio),
+ *     acá se mide el ancho real del texto con un canvas usando la
+ *     tipografía real del elemento, y se decide ANTES de pintar el texto
+ *     final — así el usuario nunca ve una versión a medio cortar. */
 function ajustarTarjetaSemana(tarjeta) {
   const barraCont = tarjeta.querySelector(".resumen-semana-barra");
   const centro = tarjeta.querySelector(".resumen-semana-numero");
@@ -172,9 +177,25 @@ function ajustarTarjetaSemana(tarjeta) {
     barraCont.style.flex = `0 0 ${anchoFaltan}px`;
   }
 
-  if (centro.scrollWidth > centro.clientWidth) {
-    centro.textContent = centro.dataset.textoCorto;
-  }
+  // Con la barra ya en su ancho final, medimos cuánto espacio le queda
+  // realmente al centro y comparamos contra el ancho que ocuparía el
+  // texto completo (medido con canvas, no con layout/clip).
+  const disponible = centro.getBoundingClientRect().width;
+  const anchoCompleto = medirAnchoTexto(centro.dataset.textoCompleto, centro);
+  centro.textContent =
+    anchoCompleto > disponible ? centro.dataset.textoCorto : centro.dataset.textoCompleto;
+}
+
+/** Ancho en píxeles que ocuparía `texto` si se pintara con la misma
+ *  tipografía computada de `elementoReferencia` (font-weight/size/family).
+ *  Usa un <canvas> descartable en vez de insertar/medir un nodo real, así
+ *  no genera reflow extra ni parpadeo. */
+function medirAnchoTexto(texto, elementoReferencia) {
+  const canvas = medirAnchoTexto._canvas || (medirAnchoTexto._canvas = document.createElement("canvas"));
+  const ctx = canvas.getContext("2d");
+  const estilo = getComputedStyle(elementoReferencia);
+  ctx.font = `${estilo.fontWeight} ${estilo.fontSize} ${estilo.fontFamily}`;
+  return ctx.measureText(texto).width;
 }
 
 function renderizarResumen() {
