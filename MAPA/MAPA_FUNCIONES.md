@@ -268,7 +268,8 @@ Depende de: schema.js, storage-sync.js, storage.js, utils.js, ui/componentes.js
 Exporta:
 * `soportaNotificacionesPush()` — si el navegador soporta Service Worker + PushManager + Notification.
 * `notificacionesPushActivas()` — lee el switch de Ajustes (`estado.datos.configuracion.notificaciones_push_activas`).
-* `activarNotificacionesPush()` — pide permiso de `Notification`, suscribe con `pushManager`, prende el switch de Ajustes y reprograma en lote todo lo pendiente. Devuelve `true`/`false` según haya quedado activo.
+* `activarNotificacionesPush()` — pide permiso de `Notification`, suscribe con `pushManager`, manda una notificación de prueba (`enviarNotificacionDePrueba`) para feedback inmediato, prende el switch de Ajustes y reprograma en lote todo lo pendiente. Devuelve `true`/`false` según haya quedado activo.
+* `enviarNotificacionDePrueba(suscripcion)` — llama a `POST /prueba` del Worker justo al activar: notificación de bienvenida inmediata, sin pasar por D1 ni por el cron. Sirve de diagnóstico end-to-end (VAPID + Worker + Service Worker) sin esperar a un recordatorio real.
 * `desactivarNotificacionesPush()` — apaga el switch, cancela en lote todo lo programado contra el Worker, y se desuscribe del `pushManager`.
 * `ofrecerActivarNotificacionesPush()` — diálogo de onboarding (se llama una única vez desde `main.js`, tras el primer login de una cuenta nueva).
 * `programarRecordatorioPush(evento)` — (re)programa el recordatorio de un `EventoAgenda` contra el Worker; si `evento.completada` es `true`, cancela en vez de programar. No hace nada si el switch de Ajustes está apagado.
