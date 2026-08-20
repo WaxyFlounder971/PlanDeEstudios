@@ -92,6 +92,58 @@ function construirEstadoVacio() {
   return p;
 }
 
+/** Tarjeta "Semana X de Y" — mismo tamaño de título que usan "Clases de
+ *  hoy" y "Próximas tareas" (texto-encabezado-seccion), pero acá centrado
+ *  en una tarjeta propia con: barra de progreso del semestre a la
+ *  izquierda (días transcurridos / días totales, en %) y "Faltan X días"
+ *  anclado a la derecha (días hasta que termina el semestre, calculados
+ *  desde fecha_inicio + duracion_semanas). Usa fechaLocalDesdeISO
+ *  (horario.js) para leer fecha_inicio igual que el resto de la app, sin
+ *  reintroducir el desfase de timezone que ya se resolvió en Agenda. */
+function construirTarjetaSemana(semestreActivo, numeroSemana, hoy) {
+  const fechaInicio = fechaLocalDesdeISO(semestreActivo.fecha_inicio);
+  const totalDias = semestreActivo.duracion_semanas * 7;
+  const diasTranscurridos = Math.floor((hoy - fechaInicio) / 86400000);
+  const porcentaje = Math.min(100, Math.max(0, Math.round((diasTranscurridos / totalDias) * 100)));
+
+  const fechaFin = new Date(fechaInicio);
+  fechaFin.setDate(fechaFin.getDate() + totalDias);
+  const diasRestantes = Math.max(0, Math.ceil((fechaFin - hoy) / 86400000));
+
+  const tarjeta = document.createElement("section");
+  tarjeta.className = "glass-card resumen-semana-tarjeta";
+  tarjeta.style.cssText = "display:flex; align-items:center; gap:16px; padding:14px 18px;";
+
+  // Izquierda: barra de progreso del semestre.
+  const barraCont = document.createElement("div");
+  barraCont.className = "resumen-semana-barra";
+  barraCont.title = `${porcentaje}% del semestre transcurrido`;
+  barraCont.style.cssText =
+    "flex:0 0 72px; height:8px; border-radius:999px; background:rgba(255,255,255,0.14); overflow:hidden;";
+  const barraFill = document.createElement("div");
+  barraFill.className = "resumen-semana-barra-fill";
+  barraFill.style.cssText =
+    "height:100%; width:" + porcentaje + "%; border-radius:999px; background:var(--color-primario, #7c9eff);";
+  barraCont.appendChild(barraFill);
+
+  // Centro: número de semana, mismo tamaño que los otros encabezados de sección.
+  const centro = document.createElement("h2");
+  centro.className = "texto-encabezado-seccion resumen-semana-numero";
+  centro.style.cssText = "flex:1; margin:0; text-align:center;";
+  centro.textContent = `Semana ${numeroSemana} de ${semestreActivo.duracion_semanas}`;
+
+  // Derecha: días restantes, anclado.
+  const faltan = document.createElement("span");
+  faltan.className = "muted resumen-semana-faltan";
+  faltan.style.cssText = "flex:0 0 auto; white-space:nowrap;";
+  faltan.textContent = diasRestantes === 0 ? "Último día" : `Faltan ${diasRestantes} días`;
+
+  tarjeta.appendChild(barraCont);
+  tarjeta.appendChild(centro);
+  tarjeta.appendChild(faltan);
+  return tarjeta;
+}
+
 function renderizarResumen() {
   const cont = document.getElementById("seccion-resumen");
   if (!cont || !estado.datos) return;
@@ -109,17 +161,15 @@ function renderizarResumen() {
 
   let huboContenido = false;
 
-  // 1. Semana actual del semestre — dato chico arriba de todo. Solo se
-  // muestra si el semestre de referencia está realmente "actual" HOY (evita
-  // un "Semana -2 de 16" o "Semana 40 de 16" si lo que está seleccionado en
-  // Agenda es un semestre pasado o futuro).
+  // 1. Semana actual del semestre — tarjeta arriba de todo, con barra de
+  // progreso del semestre y días restantes. Solo se muestra si el semestre
+  // de referencia está realmente "actual" HOY (evita un "Semana -2 de 16"
+  // o "Semana 40 de 16" si lo que está seleccionado en Agenda es un
+  // semestre pasado o futuro).
   if (semestreActivo && obtenerEstadoEfectivoSemestre(semestreActivo) === "actual") {
     const numeroSemana = calcularNumeroSemanaSemestre(semestreActivo);
     if (numeroSemana >= 1 && numeroSemana <= semestreActivo.duracion_semanas) {
-      const chip = document.createElement("p");
-      chip.className = "muted resumen-semana-chip";
-      chip.textContent = `Semana ${numeroSemana} de ${semestreActivo.duracion_semanas}`;
-      cont.appendChild(chip);
+      cont.appendChild(construirTarjetaSemana(semestreActivo, numeroSemana, hoy));
     }
   }
 
