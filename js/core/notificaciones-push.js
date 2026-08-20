@@ -182,6 +182,31 @@ async function cancelarTodosLosRecordatoriosPendientes() {
 }
 
 /**
+ * Manda una notificación de bienvenida inmediata contra `POST /prueba` del
+ * Worker (no crea ningún recordatorio en D1, ver src/index.js del Worker
+ * — es solo una prueba end-to-end). Sirve como feedback inmediato para el
+ * usuario ("se activó y ya me llegó algo") y como diagnóstico rápido:
+ * si esta notificación no llega, el problema está en las claves VAPID o
+ * en el Worker, sin tener que esperar al cron ni crear un evento de
+ * Agenda de prueba. Devuelve `true`/`false` según si el Worker aceptó
+ * mandarla (no confirma que el sistema operativo la haya mostrado — eso
+ * ya escapa a lo que se puede saber desde acá).
+ */
+async function enviarNotificacionDePrueba(suscripcion) {
+  try {
+    const respuesta = await fetch(`${URL_WORKER_NOTIFICACIONES}/prueba`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ suscripcion_push: suscripcion.toJSON() }),
+    });
+    return respuesta.ok;
+  } catch (e) {
+    console.warn("No se pudo mandar la notificación de prueba (no crítico):", e);
+    return false;
+  }
+}
+
+/**
  * Pide permiso de Notification + suscribe con pushManager. Deja
  * "Notificaciones reales" prendido en Ajustes y reprograma todo lo
  * pendiente. Se usa tanto desde el onboarding (ofrecerActivarNotificacionesPush)
@@ -212,9 +237,21 @@ async function activarNotificacionesPush() {
       });
     }
 
+    // Prueba end-to-end ANTES de dar el switch por activado en la UI: así
+    // el toast puede reflejar si el Worker realmente respondió o no, en
+    // vez de asumir que todo salió bien solo porque el navegador aceptó
+    // la suscripción (eso solo prueba el lado del cliente).
+    const pruebaOk = await enviarNotificacionDePrueba(suscripcion);
+
     estado.datos.configuracion.notificaciones_push_activas = true;
     sellarTimestamp(estado.datos.configuracion);
     marcarCambioPendiente();
+
+    mostrarToast(
+      pruebaOk
+        ? "Notificaciones activadas — deberías recibir un aviso de confirmación en unos segundos"
+        : "Notificaciones activadas, pero la prueba no llegó al Worker — revisá que esté desplegado y bien configurado (no bloquea el resto de la Agenda)"
+    );
 
     reprogramarTodosLosRecordatoriosPendientes();
     return true;
