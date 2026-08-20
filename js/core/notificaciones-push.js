@@ -54,6 +54,31 @@ function notificacionesPushActivas() {
 }
 
 /**
+ * A diferencia de notificacionesPushActivas() (que lee un flag de
+ * estado.datos.configuracion y por lo tanto sincroniza por Drive entre
+ * TODOS los dispositivos de la cuenta), esto chequea si ESTE navegador en
+ * particular tiene de verdad el permiso concedido Y una suscripción push
+ * viva. Necesario porque el permiso del navegador es por dispositivo: si
+ * activaste notificaciones desde el celular, la config sincronizada dice
+ * "activas" también en la PC aunque la PC nunca haya dado el permiso ni
+ * tenga suscripción propia — sin este chequeo, el switch de Ajustes
+ * mostraría "prendido" en un dispositivo que en realidad no va a recibir
+ * nada. Usar en el render del switch en vez de notificacionesPushActivas()
+ * a secas.
+ */
+async function notificacionesPushActivasEnEsteDispositivo() {
+  if (!notificacionesPushActivas()) return false;
+  if (!soportaNotificacionesPush()) return false;
+  if (Notification.permission !== "granted") return false;
+  try {
+    const suscripcion = await obtenerSuscripcionPushActiva();
+    return Boolean(suscripcion);
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
  * Mismo criterio de "nombre legible de la materia vinculada" que ya usaba
  * agenda-modal.js (obtenerNombreMateriaEvento) — se resuelve acá mismo, en
  * vez de importarla desde agenda/, para que este archivo no dependa de
@@ -240,18 +265,27 @@ async function activarNotificacionesPush() {
     // Prueba end-to-end ANTES de dar el switch por activado en la UI: así
     // el toast puede reflejar si el Worker realmente respondió o no, en
     // vez de asumir que todo salió bien solo porque el navegador aceptó
-    // la suscripción (eso solo prueba el lado del cliente).
+    // la suscripción (eso solo prueba el lado del cliente). Si la prueba
+    // falla, se corta acá — a propósito NO se marca
+    // notificaciones_push_activas = true: dejar el switch prendido cuando
+    // el pipeline real no funciona (permiso + suscripción sin Worker
+    // funcionando del otro lado) es peor que dejarlo apagado, porque el
+    // usuario cree que le va a llegar el aviso y nunca le llega. El
+    // switch en Ajustes ya se encarga de destildarse solo cuando esta
+    // función devuelve false.
     const pruebaOk = await enviarNotificacionDePrueba(suscripcion);
+    if (!pruebaOk) {
+      mostrarToast(
+        "El permiso se concedió, pero la prueba no llegó al Worker — no se activaron las notificaciones. Revisá que esté desplegado y bien configurado, y probá de nuevo."
+      );
+      return false;
+    }
 
     estado.datos.configuracion.notificaciones_push_activas = true;
     sellarTimestamp(estado.datos.configuracion);
     marcarCambioPendiente();
 
-    mostrarToast(
-      pruebaOk
-        ? "Notificaciones activadas — deberías recibir un aviso de confirmación en unos segundos"
-        : "Notificaciones activadas, pero la prueba no llegó al Worker — revisá que esté desplegado y bien configurado (no bloquea el resto de la Agenda)"
-    );
+    mostrarToast("Notificaciones activadas — deberías recibir un aviso de confirmación en unos segundos");
 
     reprogramarTodosLosRecordatoriosPendientes();
     return true;
@@ -304,6 +338,7 @@ export {
   cancelarRecordatorioPush,
   desactivarNotificacionesPush,
   notificacionesPushActivas,
+  notificacionesPushActivasEnEsteDispositivo,
   ofrecerActivarNotificacionesPush,
   programarRecordatorioPush,
   soportaNotificacionesPush,
