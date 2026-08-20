@@ -214,6 +214,20 @@
             </label>
           </div>
 
+          <!-- Notificaciones push reales (recordatorios de Agenda) — ver
+               core/notificaciones-push.js + worker-notificaciones/ (Worker
+               de Cloudflare, proyecto aparte). -->
+          <div class="row-between">
+            <span>Notificaciones reales de Agenda</span>
+            <label class="switch switch-tema">
+              <input type="checkbox" id="switch-notificaciones-push">
+              <span class="track"><span class="thumb"></span></span>
+            </label>
+          </div>
+          <p class="muted oculto" id="aviso-notificaciones-sin-soporte" style="font-size:0.78rem; margin:-4px 0 0;">
+            Tu navegador no soporta notificaciones push.
+          </p>
+
           <div>
             <span>Paleta de color</span>
             <div class="palette-grid" id="grid-paletas"></div>
