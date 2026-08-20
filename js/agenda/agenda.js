@@ -21,6 +21,12 @@ import { renderizarCalendarioAgenda } from "./agenda-calendario.js";
 import { inicializarMateriaAgenda, renderizarMateriaAgenda } from "./agenda-materia.js";
 import { construirSeccionMateriasDia, calcularNumeroSemanaParaFecha } from "./agenda-clases.js";
 import { abrirModalEventoAgenda, abrirTarjetaInfoEventoAgenda, inicializarModalAgendaEvento } from "./agenda-modal.js";
+// Notificaciones push reales: al completar/des-completar desde el
+// checkbox de la lista hay que espejar el mismo push que ya maneja
+// agenda-modal.js (programarRecordatorioPush cancela solo si queda
+// completada, o reprograma si vuelve a quedar pendiente) — ver
+// core/notificaciones-push.js.
+import { programarRecordatorioPush } from "../core/notificaciones-push.js";
 import {
   esHoyFecha,
   esTareaVencida,
@@ -186,6 +192,7 @@ function alternarCompletadaEvento(eventoId) {
   sellarTimestamp(vivo);
   marcarCambioPendiente();
   renderizarAgenda();
+  programarRecordatorioPush(vivo);
 }
 
 /**

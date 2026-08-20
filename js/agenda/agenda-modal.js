@@ -19,6 +19,11 @@ import {
 } from "./agenda-utils.js";
 import { eliminarAdjunto, obtenerAdjuntosActivosDe, obtenerAdjuntosDe } from "../core/storage-adjuntos.js";
 import { abrirAdjunto, abrirMenuAdjuntos, abrirModalAdjuntar } from "../ui/adjuntos-ui.js";
+// Notificaciones push reales (recordatorios de Agenda) — ver
+// core/notificaciones-push.js. Ambas llamadas son "best-effort": si el
+// Worker no responde, no bloquean ni revierten el guardado/borrado del
+// evento (ver comentario al inicio de ese archivo).
+import { cancelarRecordatorioPush, programarRecordatorioPush } from "../core/notificaciones-push.js";
 
 const PLACEHOLDER_NOMBRE = {
   evento: "Ej. Charla de RRHH",
@@ -320,6 +325,12 @@ function guardarEventoAgenda(eventoExistente) {
 
   estado.datos.agenda = estado.datos.agenda || [];
 
+  // Se guarda una referencia al evento realmente persistido (el existente
+  // ya mutado, o el nuevo recién creado) para poder programar su
+  // recordatorio push DESPUÉS de que quede guardado — ver el bloque justo
+  // antes de cerrarModalEventoAgenda() más abajo.
+  let eventoGuardado;
+
   if (eventoExistente) {
     // Se relee la entidad viva por id antes de mutar (mismo patrón que el
     // resto del proyecto — ver buscarSemestreVivoPorId en semestres.js) por
@@ -345,6 +356,7 @@ function guardarEventoAgenda(eventoExistente) {
     // del rediseño), así que una edición del resto de los campos nunca debe
     // pisarla con un valor por defecto.
     sellarTimestamp(viva);
+    eventoGuardado = viva;
   } else {
     const nuevo = crearEventoAgenda({
       tipo,
@@ -362,12 +374,21 @@ function guardarEventoAgenda(eventoExistente) {
     // sin tener que reescribir sus referencias.
     if (idEventoActivoAdjuntos) nuevo.id = idEventoActivoAdjuntos;
     estado.datos.agenda.push(nuevo);
+    eventoGuardado = nuevo;
   }
 
   // Ya se guardó de verdad — de acá en adelante los adjuntos de este id ya
   // NO son "pendientes de una alta descartada" (evita que un cierre
   // posterior del modal, por lo que sea, los borre por error).
   esAltaNuevaConAdjuntosPendientes = false;
+
+  // Notificaciones push reales: (re)programa el recordatorio de este
+  // evento contra el Worker con la fecha/hora recién guardada — cubre
+  // tanto altas nuevas como ediciones de fecha/hora/nombre de un evento
+  // existente (un upsert por id del lado del Worker, ver
+  // core/notificaciones-push.js). No hace nada si el switch de Ajustes
+  // está desactivado, y nunca bloquea el guardado si falla.
+  programarRecordatorioPush(eventoGuardado);
 
   marcarCambioPendiente();
   cerrarModalEventoAgenda();
@@ -388,6 +409,8 @@ function confirmarBorrarEventoAgenda(eventoExistente) {
         estado.datos._eliminados_agenda.push({ id: viva.id, eliminadoEn: Date.now() });
         estado.datos.agenda = estado.datos.agenda.filter((ev) => ev.id !== viva.id);
         marcarCambioPendiente();
+        // Cancela el recordatorio push pendiente, si había uno programado.
+        cancelarRecordatorioPush(viva.id);
       }
       cerrarModalEventoAgenda();
       refrescarAgenda();
@@ -429,6 +452,10 @@ function alternarCompletadaDesdeInfo(evento) {
   marcarCambioPendiente();
   refrescarAgenda();
   renderizarTarjetaInfoEventoAgenda(viva);
+  // Al completar se cancela el recordatorio push pendiente; al
+  // des-completar se reprograma (programarRecordatorioPush ya distingue
+  // ambos casos según viva.completada — ver core/notificaciones-push.js).
+  programarRecordatorioPush(viva);
 }
 
 function renderizarTarjetaInfoEventoAgenda(evento) {
