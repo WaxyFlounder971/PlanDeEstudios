@@ -21,6 +21,7 @@ import { inicializarModalEditarPlanInfo, inicializarModalGestionPlanes, renderiz
 import { inicializarModalCapturasPDF, inicializarModalInstruccionesImportacion } from "./plan/plan-importacion.js";
 import { inicializarResponsivoListaPlan, renderizarPlanEstudios } from "./plan/plan-vista-lista.js";
 import { renderizarSemestres } from "./semestres/semestres.js";
+import { inicializarResumen, renderizarResumen } from "./resumen/resumen.js";
 import { inicializarAgenda, renderizarAgenda } from "./agenda/agenda.js";
 import { inicializarHorario, renderizarHorario } from "./horario/horario.js";
 import { procesarAsociacionPendienteDeAmigo, iniciarRefrescoPeriodicoAmigos } from "./horario/horario-amigos.js";
@@ -289,6 +290,7 @@ window.addEventListener("DOMContentLoaded", () => {
   // #seccion-comunidad ya existe si esa es la última sección que el usuario
   // tenía activa).
   inicializarComunidad();
+  inicializarResumen();
   inicializarAgenda();
   inicializarHorario();
   inicializarBotonesCerrarModal();
@@ -551,6 +553,7 @@ function mostrarApp() {
   if (typeof renderizarSemestres === "function") renderizarSemestres();
   if (typeof renderizarComunidad === "function") renderizarComunidad();
   if (typeof renderizarFinanzas === "function") renderizarFinanzas();
+  if (typeof renderizarResumen === "function") renderizarResumen();
   if (typeof renderizarAgenda === "function") renderizarAgenda();
   if (typeof renderizarHorario === "function") renderizarHorario();
   // Horario entre Amigos — Parte 3: revisa si amigos.html dejó un pendiente
@@ -612,6 +615,7 @@ function inicializarNavegacionSecciones() {
 
 function mostrarSeccion(nombre) {
   const secciones = {
+    resumen: "seccion-resumen",
     configuracion: "seccion-configuracion",
     "plan-estudios": "seccion-plan-estudios",
     semestres: "seccion-semestres",
@@ -638,6 +642,11 @@ function mostrarSeccion(nombre) {
   // editan en otras secciones), más el hecho de que "hoy"/"esta semana"
   // pueden haber cambiado si la pestaña quedó abierta de un día para otro.
   if (nombre === "agenda") window.renderizarAgenda?.();
+  // Resumen: agrega datos de Agenda/Horario/Semestres, así que le aplican
+  // los mismos motivos de arriba (datos editados en otras secciones, más
+  // "hoy" pudiendo haber cambiado) — se re-renderiza fresco cada vez que se
+  // entra, en vez de confiar en el render inicial de mostrarApp().
+  if (nombre === "resumen") window.renderizarResumen?.();
 }
 // v2.8.9 (punto 10): se expone en window para que ui/componentes.js pueda
 // llamarla desde inicializarNavegacionBotonesMouse() sin crear un import
@@ -712,7 +721,7 @@ function obtenerOrdenNavegacionEfectivo() {
 window.obtenerOrdenNavegacion = obtenerOrdenNavegacionEfectivo;
 
 function aplicarVisibilidadNavegacion() {
-  const ocultas = new Set((estado.datos.configuracion.navegacion_oculta || []).filter((s) => s !== "configuracion"));
+  const ocultas = new Set((estado.datos.configuracion.navegacion_oculta || []).filter((s) => s !== "configuracion" && s !== "resumen"));
   let seccionActivaOculta = false;
   document.querySelectorAll(".btn-nav[data-seccion]").forEach((btn) => {
     const oculto = ocultas.has(btn.dataset.seccion);
