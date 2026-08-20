@@ -262,6 +262,18 @@ Exporta:
 * `hexARgba(hex, alpha)` — convierte un color hex a `rgba(...)` con la opacidad indicada.
 * `estiloBadgeCategoria(hex)` — string de estilo CSS inline para un badge de categoría (fondo translúcido + borde + texto del color).
 
+### core/notificaciones-push.js
+Propósito: notificaciones push reales para recordatorios de Agenda (tareas, exámenes, eventos), sin backend propio pagado. Única parte del cliente que habla por HTTP con el Worker de Cloudflare (proyecto separado, ver `worker-notificaciones/README.md` — no vive en este repo/hosting). El Worker nunca ve datos académicos: solo la suscripción push, una fecha/hora, y el título/cuerpo cortos que este archivo arma. Toda llamada al Worker es "best-effort": si falla, nunca bloquea ni revierte la acción real del usuario en Agenda.
+Depende de: schema.js, storage-sync.js, storage.js, utils.js, ui/componentes.js
+Exporta:
+* `soportaNotificacionesPush()` — si el navegador soporta Service Worker + PushManager + Notification.
+* `notificacionesPushActivas()` — lee el switch de Ajustes (`estado.datos.configuracion.notificaciones_push_activas`).
+* `activarNotificacionesPush()` — pide permiso de `Notification`, suscribe con `pushManager`, prende el switch de Ajustes y reprograma en lote todo lo pendiente. Devuelve `true`/`false` según haya quedado activo.
+* `desactivarNotificacionesPush()` — apaga el switch, cancela en lote todo lo programado contra el Worker, y se desuscribe del `pushManager`.
+* `ofrecerActivarNotificacionesPush()` — diálogo de onboarding (se llama una única vez desde `main.js`, tras el primer login de una cuenta nueva).
+* `programarRecordatorioPush(evento)` — (re)programa el recordatorio de un `EventoAgenda` contra el Worker; si `evento.completada` es `true`, cancela en vez de programar. No hace nada si el switch de Ajustes está apagado.
+* `cancelarRecordatorioPush(eventoId)` — cancela el recordatorio pendiente de un evento (al borrarlo).
+
 ---
 
 ## JS — ui
@@ -331,10 +343,10 @@ Exporta:
 ## JS — config
 
 ### config/config-ajustes.js
-Propósito: renderiza la sección de Ajustes (paletas, modo claro/oscuro, escala de notas, nota de aprobación por plan/universidad, formato de texto, backup rotativo a Drive, modo rendimiento, config de días de Horario).
-Depende de: core/schema.js, core/storage-sync.js, core/storage.js, core/utils.js, plan/plan-vista-lista.js, ui/componentes.js, ui/tema.js, ui/paleta-personalizada.js
+Propósito: renderiza la sección de Ajustes (paletas, modo claro/oscuro, escala de notas, nota de aprobación por plan/universidad, formato de texto, backup rotativo a Drive, modo rendimiento, notificaciones push reales, config de días de Horario).
+Depende de: core/notificaciones-push.js, core/schema.js, core/storage-sync.js, core/storage.js, core/utils.js, plan/plan-vista-lista.js, ui/componentes.js, ui/tema.js, ui/paleta-personalizada.js
 Exporta:
-* `renderizarAjustes()` — reconstruye toda la sección de Ajustes (paletas, escalas, moneda, backup, etc.) e inicializa el accordion.
+* `renderizarAjustes()` — reconstruye toda la sección de Ajustes (paletas, escalas, moneda, backup, notificaciones push, etc.) e inicializa el accordion.
 * `renderizarSeccionBackupDrive()` — pinta el bloque de frecuencia/estado del backup rotativo a Drive; solo lee/escribe la preferencia, nunca dispara un backup a mano.
 * `aplicarModoRendimiento(activo)` — aplica/quita el atributo `data-rendimiento` en `<html>`, se usa tanto en Ajustes como al iniciar la app.
 * `DIAS_SEMANA_CONFIG` — arreglo con id/etiqueta/abreviatura por defecto de cada día de la semana, usado en la config de días de Horario.
@@ -673,7 +685,7 @@ Nota: no exporta nada — todo el archivo es el punto de entrada de la página. 
 
 ### agenda/agenda.js
 Propósito: núcleo de la Agenda — vista Lista (cronológica, agrupada por día), header, filtros (Semanal/Todo, mostrar materias, mostrar días vacíos), selector de semestres, y el despacho entre Lista y Calendario.
-Depende de: core/schema.js, core/storage-sync.js, core/storage.js, core/utils.js, ui/componentes.js, semestres/semestres.js, agenda/agenda-calendario.js, agenda/agenda-clases.js, agenda/agenda-modal.js, agenda/agenda-utils.js
+Depende de: core/notificaciones-push.js, core/schema.js, core/storage-sync.js, core/storage.js, core/utils.js, ui/componentes.js, semestres/semestres.js, agenda/agenda-calendario.js, agenda/agenda-clases.js, agenda/agenda-modal.js, agenda/agenda-utils.js
 Exporta:
 * `inicializarAgenda()` — wiring inicial: modal de evento, botón "+", pills de vista, selector de semestres, filtros.
 * `renderizarAgenda()` — entrypoint de render: decide Lista vs Calendario y dispara el render correspondiente. También expuesta como `window.renderizarAgenda` (evita import circular con `agenda-modal.js` y `agenda-calendario.js`).
@@ -710,8 +722,8 @@ Exporta:
 * `contarClasesDelDia(semestres, fecha, diaCodigo)` — conteo liviano (sin DOM) de clases ese día, sumado entre todos los semestres — lo usa el Calendario para el indicador 📚.
 
 ### agenda/agenda-modal.js
-Propósito: modal de alta/edición de EventoAgenda (evento/tarea/examen) y tarjeta de info al tocar un ítem de la lista.
-Depende de: core/schema.js, core/storage-sync.js, core/storage.js, core/utils.js, ui/componentes.js, horario/horario.js, agenda/agenda-utils.js
+Propósito: modal de alta/edición de EventoAgenda (evento/tarea/examen) y tarjeta de info al tocar un ítem de la lista. Al guardar/borrar/completar, sincroniza el recordatorio push del evento contra el Worker de notificaciones (ver core/notificaciones-push.js).
+Depende de: core/notificaciones-push.js, core/schema.js, core/storage-sync.js, core/storage.js, core/utils.js, ui/componentes.js, horario/horario.js, agenda/agenda-utils.js
 Exporta:
 * `abrirModalEventoAgenda({eventoId, fechaDefault})` — abre el formulario para crear (si `eventoId` es null) o editar un evento.
 * `abrirTarjetaInfoEventoAgenda(eventoId)` — abre la tarjeta de solo-info de un evento (paso previo al editor).
@@ -739,12 +751,12 @@ Exporta:
 ## js/main.js
 
 Propósito: orquestador raíz de la app — arranque, login/logout, navegación entre secciones y renderizado del perfil de usuario. Importa e inicializa el resto de módulos.
-Depende de: config-ajustes.js, config-enlaces.js, auth.js, schema.js, storage-merge.js, storage-sync.js, storage.js, utils.js, comunidad.js, finanzas.js, plan-categorias.js, plan-detalle.js, plan-esquema.js, plan-gestionar.js, plan-importacion.js, plan-vista-lista.js, semestres.js, agenda.js, horario.js, horario-amigos.js, componentes.js, tema.js
+Depende de: config-ajustes.js, config-enlaces.js, auth.js, notificaciones-push.js, schema.js, storage-merge.js, storage-sync.js, storage.js, utils.js, comunidad.js, finanzas.js, plan-categorias.js, plan-detalle.js, plan-esquema.js, plan-gestionar.js, plan-importacion.js, plan-vista-lista.js, semestres.js, agenda.js, horario.js, horario-amigos.js, componentes.js, tema.js
 Exporta:
 * `programarAvisoLoginBloqueado()` — arma un timeout de 6s que muestra el aviso "no se pudo abrir el login" (VPN/bloqueador de anuncios/extensión de privacidad).
 * `ocultarAvisoLoginBloqueado()` — cancela ese timeout y oculta tanto el aviso de login bloqueado como el de permiso rechazado.
-* `onLoginExitoso(token, expiresIn)` — flujo posterior a un login exitoso de Google: guarda el token activo, resuelve `authListo`, pide almacenamiento persistente al navegador y continúa la carga de datos.
-* `mostrarApp()` — oculta la pantalla de login y muestra el shell de la app; aplica la paleta/tema guardado y renderiza el selector de plan.
+* `onLoginExitoso(token, expiresIn)` — flujo posterior a un login exitoso de Google: guarda el token activo, resuelve `authListo`, pide almacenamiento persistente al navegador, continúa la carga de datos y, si la cuenta es nueva (`esArchivoNuevo`), ofrece activar notificaciones push reales (`ofrecerActivarNotificacionesPush`).
+* `mostrarApp()` — oculta la pantalla de login y muestra el shell de la app; aplica la paleta/tema guardado, renderiza el selector de plan y, si la URL trae `?abrir=agenda` (llegó de tocar una notificación push), salta directo a la sección Agenda.
 * `pedirConfirmacionCerrarSesion()` — cierra el popover de perfil; si hay cambios sin sincronizar pide confirmación antes de cerrar sesión, si no cierra directo.
 * `cerrarSesion()` — limpia token, caché local y estado en memoria; vuelve a mostrar la pantalla de login.
 * `CLAVE_SECCION_ACTIVA` — clave de `localStorage` (`"seccion_activa_v1"`) donde se persiste qué sección de navegación quedó activa.
@@ -753,6 +765,7 @@ Exporta:
 * `temporizadorAvisoLogin` — id del `setTimeout` de `programarAvisoLoginBloqueado`, expuesto para que otros módulos puedan limpiarlo (ej. al cerrar sesión).
 * `renderizarPerfil()` — pinta nombre, correo, foto/iniciales del perfil en el header y en el popover; maneja el fallback si la foto no carga.
 * `togglePerfilPopover(forzarCerrado)` — abre/cierra el popover de perfil (o lo fuerza a cerrado si se pasa `true`).
+* Listener de `serviceWorker.addEventListener("message", ...)` — si el service worker avisa que se tocó una notificación push con la app ya abierta en una pestaña, salta a la sección Agenda sin recargar.
 
 ---
 
