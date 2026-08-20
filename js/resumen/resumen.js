@@ -31,6 +31,7 @@ import {
   obtenerSemestreActivoAgenda,
   obtenerSemestresSeleccionadosAgenda,
 } from "../agenda/agenda-utils.js";
+import { fechaLocalDesdeISO } from "../horario/horario.js";
 
 // Ventanas de tiempo de cada sección (ver prompt de diseño): exámenes hasta
 // 2 semanas adelante, próximo evento hasta 7 días adelante.
