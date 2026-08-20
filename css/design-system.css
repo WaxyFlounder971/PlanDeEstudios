@@ -2229,6 +2229,31 @@ img, svg { max-width: 100%; }
 }
 .ajuste-seccion.colapsada .ajuste-seccion-cuerpo { display: none; }
 
+/* ===================== Resumen ===================== */
+
+/* "Semana N de M" — dato chico arriba de todo, no es un bloque con card
+   propia (ver resumen.js), solo texto discreto centrado. */
+.resumen-semana-chip {
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* Cada sección (Clases de hoy / Tareas de hoy / etc.) es un .glass-card
+   normal — este selector solo ajusta el espaciado interno entre el título
+   y la lista de items para que no herede el gap:14px genérico de .stack
+   (demasiado suelto para una lista de items chicos). */
+.resumen-bloque {
+  gap: 10px;
+}
+
+/* Mensaje de "día tranquilo" cuando todas las secciones están vacías. */
+.resumen-vacio {
+  text-align: center;
+  padding: 32px 16px;
+  font-size: 0.95rem;
+}
+
 /* ===================== Agenda ===================== */
 
 /* Tarjetita "Mostrar clases" (colapsada por default) — mismo patrón visual
