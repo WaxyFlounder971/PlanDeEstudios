@@ -119,7 +119,7 @@ function construirTarjetaSemana(semestreActivo, numeroSemana, hoy) {
   barraCont.className = "resumen-semana-barra";
   barraCont.title = `${porcentaje}% del semestre transcurrido`;
   barraCont.style.cssText =
-    "flex:0 0 72px; height:8px; border-radius:999px; background:rgba(255,255,255,0.14); overflow:hidden;";
+    "flex:0 0 99px; height:8px; border-radius:999px; background:rgba(255,255,255,0.14); overflow:hidden;";
   const barraFill = document.createElement("div");
   barraFill.className = "resumen-semana-barra-fill";
   barraFill.style.cssText =
