@@ -28,7 +28,15 @@ function crearDatosUsuarioNuevo() {
       paleta_personalizada: null,   // v1.13: { basadaEn, colores: { fondoCanvas, fondoCard, borde, accent1, accent2, luz } }
                                      // v1.15: colores también incluye degradado: { activo, color, intensidad (0-100, % del stop medio), angulo (0-360) }
       formato_texto_nombres: "titulo", // "titulo" | "mayusculas" | "oracion" (v5 #9)
-      modo_rendimiento: false,      // v1.14.1: reduce blur/sombras/animaciones para laptops con GPU integrada
+      // v1.16 (2026-08-21): "Modo rendimiento" pasa a ser el default para
+      // TODOS los usuarios nuevos (antes había que activarlo a mano). El
+      // modo "normal" de siempre se renombra a "fancy" de cara al usuario
+      // y queda como la opción manual, en el mismo switch pero invertido
+      // (ver el bloque del switch en config-ajustes.js). El nombre interno
+      // del campo se mantiene igual para no tocar el modelo de datos ni el
+      // merge de sync — ver migrarDatosAntiguos más abajo para el flip
+      // equivalente en cuentas ya existentes.
+      modo_rendimiento: true,       // v1.14.1: reduce blur/sombras/animaciones para laptops con GPU integrada
 
       // Selector de moneda (Ajustes generales, 2026-08-10): preferencia
       // GLOBAL del usuario (NO por universidad/plan) — la usa Finanzas para
@@ -3027,6 +3035,22 @@ function migrarDatosAntiguos(datos) {
     if (cfgLimpieza.plan_activo_terciario_id && !idsReales.has(cfgLimpieza.plan_activo_terciario_id)) {
       cfgLimpieza.plan_activo_terciario_id = null;
     }
+  }
+
+  // Modo Rendimiento como default (v1.16, 2026-08-21): cuentas creadas
+  // ANTES de este cambio tienen modo_rendimiento GUARDADO explícitamente
+  // (false, el default viejo) — a diferencia del resto de esta función,
+  // acá no alcanza con "el campo no existe" para detectar quién falta
+  // migrar, porque el campo siempre existió con un valor real. Por eso se
+  // usa una bandera aparte (mismo patrón que
+  // configuracion.backup_drive.archivo_vigente_migrado más arriba): se
+  // fuerza rendimiento=true UNA sola vez por cuenta, y a partir de ahí la
+  // bandera queda en true para siempre, así que cualquier cambio manual
+  // que la persona haga después (activar "fancy" desde Ajustes) nunca se
+  // vuelve a pisar en la próxima sincronización/carga.
+  if (datos.configuracion && datos.configuracion.rendimiento_default_v2_aplicado !== true) {
+    datos.configuracion.modo_rendimiento = true;
+    datos.configuracion.rendimiento_default_v2_aplicado = true;
   }
 
   return datos;
