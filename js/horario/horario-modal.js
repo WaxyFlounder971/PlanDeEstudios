@@ -702,10 +702,8 @@ function renderizarZonaProfesor(semestre, estadoForm) {
 
   document.getElementById("hb-btn-crear-profesor").addEventListener("click", () => {
     const mm = (semestre.materias_matriculadas || []).find((m) => m.materia_id === estadoForm.materiaId);
-    // NOTA: requiere que comunidad.js llame onGuardado(nuevo) — hoy llama
-    // onGuardado() sin argumento, hay que cambiar esa única línea ahí.
     abrirModalAltaProfesor(null, mm ? mm.id : null, (profesorCreado) => {
-      if (!profesorCreado) return; // hasta que se aplique el fix de arriba, no rompe: solo no autocompleta
+      if (!profesorCreado) return;
       estadoForm.profesorId = profesorCreado.id;
       renderizarZonaProfesor(semestre, estadoForm);
     });
@@ -779,8 +777,24 @@ function calcularFechaClaseSemana(semestre, numeroSemana, diaCodigo) {
  * cronograma_dias correspondiente. Esto NO pasa por el botón "Guardar"
  * del formulario — se persiste al toque, como cualquier otro cambio
  * puntual sincronizable.
+ *
+ * FIX (guardado silencioso — mismo bug de fondo que guardarBloque/
+ * borrarBloque, ver comentario grande ahí): `bloque` puede venir de un
+ * closure abierto antes de que un sync/fusión en curso (ej. disparado por
+ * crear un profesor nuevo desde este mismo formulario) haya reemplazado
+ * `estado.datos.semestres` por objetos nuevos — mutar esa referencia vieja
+ * no persiste nada. Se relee el semestre y el bloque vivos por id antes de
+ * tocar nada; si ya no existen, se avisa con un toast en vez de perder el
+ * cambio en silencio.
  */
-function aplicarModalidadDia(bloque, numeroSemana, diaCodigo, nuevaModalidad) {
+function aplicarModalidadDia(bloqueId, semestreId, numeroSemana, diaCodigo, nuevaModalidad) {
+  const semestreVivo = buscarSemestreVivoPorId(semestreId);
+  const bloque = semestreVivo && (semestreVivo.bloques_horario || []).find((b) => b.id === bloqueId);
+  if (!semestreVivo || !bloque) {
+    mostrarToast("Este bloque ya no existe — no se pudo guardar el cambio");
+    return;
+  }
+
   const diaPlantilla = (bloque.dias || []).find((d) => d.dia === diaCodigo);
   const modalidadPlantilla = (diaPlantilla && diaPlantilla.modalidad) || "presencial";
   bloque.cronograma_dias = bloque.cronograma_dias || [];
@@ -901,7 +915,7 @@ function renderizarZonaCronograma(zona, chevron, semestre, bloque, estadoLocal, 
         valorInicial: claseActual.modalidad,
         etiquetaVacia: "Modalidad",
         onCambiar: (valor) => {
-          aplicarModalidadDia(bloque, semanaAbierta, diaCodigo, valor);
+          aplicarModalidadDia(bloque.id, semestre.id, semanaAbierta, diaCodigo, valor);
           estadoLocal._cronogramaEditando = null;
           repintar();
         },
@@ -956,12 +970,51 @@ function construirZonaCronograma(semestre, bloque, { semanaInicial } = {}) {
 // bloque, siempre para todas las semanas. La edición puntual de un día
 // específico (solo modalidad) vive en la sección Cronograma aparte.
 
-function guardarBloque(semestre, bloque, estadoForm) {
+/**
+ * FIX (bug real reportado — guardado silencioso al crear un profesor desde
+ * dentro de este mismo formulario): `semestre` y `bloque` llegan acá desde
+ * el closure armado cuando se abrió el modal (ver renderizarFormulario /
+ * abrirModalBloqueHorario). Si mientras el formulario estaba abierto se
+ * disparó un ciclo de sincronización — típicamente porque el usuario creó
+ * un profesor nuevo con "+ Crear profesor" sin salir de este formulario, lo
+ * que dispara marcarCambioPendiente() -> intentarSincronizar() de inmediato
+ * (ver storage-sync.js) — aplicarDatosRemotosFrescos funde la respuesta del
+ * servidor sobre estado.datos y puede reemplazar estado.datos.semestres por
+ * objetos NUEVOS. El `semestre`/`bloque` que este formulario venía usando
+ * quedan entonces apuntando a objetos ya huérfanos: seguir escribiendo ahí
+ * (semestre.bloques_horario.push(...), etc.) no vuelve a aparecer en
+ * estado.datos ni se sube nunca a Drive — el profesor sí se guardó (fue una
+ * escritura directa sobre estado.datos.profesores) pero la materia/bloque
+ * de Horario se pierde sin ningún error visible.
+ *
+ * Mismo patrón que ya usa el resto de la app ("Relectura de entidad viva",
+ * ver MAPA_FUNCIONES.md): se relee el semestre vivo por id justo antes de
+ * mutar, en vez de confiar en la referencia capturada al abrir el modal. Si
+ * el semestre ya no existe (borrado real, no solo reemplazado por la
+ * fusión), se avisa con un toast en vez de fallar en silencio — segundo bug
+ * pedido explícitamente: ningún guardado fallido debe quedar mudo.
+ */
+function guardarBloque(semestreOriginal, bloqueOriginal, estadoForm) {
   const diasValidos = estadoForm.dias.filter((d) => d.hora_inicio && d.hora_fin);
   if (diasValidos.length === 0) {
     mostrarToast("Elegí al menos un día con hora de inicio y fin");
     return;
   }
+
+  const semestre = buscarSemestreVivoPorId(semestreOriginal.id);
+  if (!semestre) {
+    mostrarToast("Este semestre ya no existe — no se pudo guardar el bloque");
+    return;
+  }
+  // Si se estaba editando un bloque existente, también hay que releerlo
+  // dentro del semestre YA vivo — el objeto `bloqueOriginal` del closure
+  // puede ser igual de obsoleto que `semestreOriginal`.
+  const bloque = bloqueOriginal ? (semestre.bloques_horario || []).find((b) => b.id === bloqueOriginal.id) : null;
+  if (bloqueOriginal && !bloque) {
+    mostrarToast("Este bloque ya no existe — no se pudo guardar el cambio");
+    return;
+  }
+
   const aula = document.getElementById("hb-aula").value.trim();
   const apodo = document.getElementById("hb-apodo").value.trim();
   const grupo = document.getElementById("hb-grupo").value.trim();
@@ -985,8 +1038,14 @@ function guardarBloque(semestre, bloque, estadoForm) {
   };
 
   const finalizar = () => {
-    sellarTimestamp(semestre);
-    marcarCambioPendiente();
+    try {
+      sellarTimestamp(semestre);
+      marcarCambioPendiente();
+    } catch (e) {
+      console.error("No se pudo guardar el bloque de horario:", e);
+      mostrarToast("No se pudo guardar el bloque — probá de nuevo");
+      return;
+    }
     cerrarModalBloqueHorario();
     window.renderizarHorario?.();
     // Bug modalidad → Agenda no actualiza: la Agenda deriva su vista de
@@ -1032,12 +1091,33 @@ function guardarBloque(semestre, bloque, estadoForm) {
   finalizar();
 }
 
-function borrarBloque(semestre, bloque) {
-  semestre.bloques_horario = (semestre.bloques_horario || []).filter((b) => b.id !== bloque.id);
-  semestre._eliminados_bloques_horario = semestre._eliminados_bloques_horario || [];
-  semestre._eliminados_bloques_horario.push({ id: bloque.id, eliminadoEn: Date.now() });
-  sellarTimestamp(semestre);
-  marcarCambioPendiente();
+/**
+ * FIX (mismo patrón que guardarBloque, ver comentario grande ahí): relee el
+ * semestre y el bloque vivos por id antes de borrar, en vez de confiar en
+ * las referencias capturadas al abrir el modal — y avisa con un toast si
+ * ya no existen, en vez de fallar en silencio.
+ */
+function borrarBloque(semestreOriginal, bloqueOriginal) {
+  const semestre = buscarSemestreVivoPorId(semestreOriginal.id);
+  const bloque = semestre && bloqueOriginal ? (semestre.bloques_horario || []).find((b) => b.id === bloqueOriginal.id) : null;
+  if (!semestre || !bloque) {
+    mostrarToast("Este bloque ya no existe");
+    cerrarModalBloqueHorario();
+    window.renderizarHorario?.();
+    return;
+  }
+
+  try {
+    semestre.bloques_horario = (semestre.bloques_horario || []).filter((b) => b.id !== bloque.id);
+    semestre._eliminados_bloques_horario = semestre._eliminados_bloques_horario || [];
+    semestre._eliminados_bloques_horario.push({ id: bloque.id, eliminadoEn: Date.now() });
+    sellarTimestamp(semestre);
+    marcarCambioPendiente();
+  } catch (e) {
+    console.error("No se pudo borrar el bloque de horario:", e);
+    mostrarToast("No se pudo borrar el bloque — probá de nuevo");
+    return;
+  }
   cerrarModalBloqueHorario();
   window.renderizarHorario?.();
   // Mismo motivo que en guardarBloque/aplicarModalidadDia de arriba.
