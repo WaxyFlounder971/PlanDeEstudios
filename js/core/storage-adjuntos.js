@@ -354,6 +354,28 @@ const tumbasDriveIntentadasEnEstaSesion = new Set();
 
 function marcarTumbaDriveComoProcesada(adjuntoId) {
   tumbasDriveIntentadasEnEstaSesion.add(adjuntoId);
+
+  // FIX (404 repetido en cada arranque): antes esta función solo anotaba
+  // el id acá arriba, en un Set que vive EN MEMORIA — se resetea en cada
+  // arranque, así que la tumba nunca quedaba resuelta de verdad más allá
+  // de la sesión actual, y procesarTumbasDriveHuerfanas() la volvía a
+  // intentar (y a pegarle un 404, ya inofensivo pero repetido) para
+  // siempre. Ahora se persiste la resolución en la tumba misma: se pone
+  // driveFileId a null (el guard "if (!tumba.driveFileId) continue" de
+  // procesarTumbasDriveHuerfanas, más abajo, ya la salta con esto) y se
+  // sube el cambio con marcarCambioPendiente(), para que otros
+  // dispositivos que compartan esta misma tumba también dejen de
+  // reintentarla. Se muta el campo en vez de sacar la tumba entera del
+  // array a propósito: fusionarTumbas (storage-merge.js) resuelve por
+  // "más reciente gana" sobre eliminadoEn, y ante empate se queda con la
+  // entrada local — mutar sobrevive esa fusión, borrar el objeto entero
+  // se puede resucitar si otro dispositivo todavía trae la versión vieja
+  // con el driveFileId puesto.
+  const tumba = (estado.datos._eliminados_adjuntos || []).find((t) => t.id === adjuntoId);
+  if (tumba && tumba.driveFileId !== null) {
+    tumba.driveFileId = null;
+    marcarCambioPendiente();
+  }
 }
 
 /**
