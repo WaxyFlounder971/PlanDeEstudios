@@ -609,6 +609,71 @@ function construirSelectorModalidad(valorInicial, onCambiar) {
   };
 }
 
+/* ===================== Notificaciones — Selector de chips múltiple ===================== */
+
+/**
+ * Notificaciones — Recordatorios configurables (2026-08-20): grupo de
+ * chips de selección MÚLTIPLE (a diferencia de un pill-group normal, que
+ * es de selección única) — usado para elegir qué offsets ("15 min antes",
+ * "1 día antes", etc.) están activos para un tipo de evento dado. Mismo
+ * contrato { elemento, obtenerValor() } que construirSelectorModalidad,
+ * así el caller (config-ajustes.js) no necesita leer el DOM a mano.
+ *
+ * `opciones`: arreglo de { id, etiqueta } (ver OFFSETS_RECORDATORIO_AGENDA
+ * en core/schema.js). `valoresIniciales`: arreglo de ids ya activos.
+ * `onCambiar(valoresActuales)`: se llama en cada toggle con el arreglo
+ * actualizado completo (mismo patrón notificar-en-cada-cambio que
+ * construirSelectorModalidad), para que quien llama pueda guardar en el
+ * momento sin depender de un botón "Guardar" aparte — consistente con el
+ * resto de Ajustes, que aplica todo al toque.
+ *
+ * No permite dejar el grupo completamente vacío: si el usuario destilda el
+ * último chip activo, ese último click se ignora (el chip vuelve a quedar
+ * marcado) — un tipo de evento sin ningún offset activo equivale a "nunca
+ * avisar nada de este tipo", que si se quiere de verdad ya existe como
+ * comportamiento normal con el switch general de Ajustes apagado; dentro
+ * de este selector puntual, vacío se lee más como un estado accidental
+ * (usuario destildando todo sin querer) que como una elección real.
+ */
+function construirSelectorChipsMultiple(opciones, valoresIniciales, onCambiar) {
+  const wrap = document.createElement("div");
+  wrap.className = "pill-group selector-chips-multiple";
+  wrap.style.cssText = "display:flex; flex-wrap:wrap; gap:8px;";
+
+  let valoresActuales = Array.isArray(valoresIniciales) && valoresIniciales.length > 0
+    ? [...valoresIniciales]
+    : [opciones[0]?.id].filter(Boolean);
+
+  function repintar() {
+    wrap.querySelectorAll(".pill-item").forEach((btn) => {
+      btn.classList.toggle("active", valoresActuales.includes(btn.dataset.id));
+    });
+  }
+
+  opciones.forEach(({ id, etiqueta }) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pill-item" + (valoresActuales.includes(id) ? " active" : "");
+    btn.dataset.id = id;
+    btn.textContent = etiqueta;
+    btn.addEventListener("click", () => {
+      const yaActivo = valoresActuales.includes(id);
+      if (yaActivo && valoresActuales.length === 1) return; // no permite vaciar del todo, ver comentario arriba
+      valoresActuales = yaActivo
+        ? valoresActuales.filter((v) => v !== id)
+        : [...valoresActuales, id];
+      repintar();
+      onCambiar([...valoresActuales]);
+    });
+    wrap.appendChild(btn);
+  });
+
+  return {
+    elemento: wrap,
+    obtenerValor: () => [...valoresActuales],
+  };
+}
+
 /* ===================== Auto-scroll de selectores activos al abrir un modal ===================== */
 
 /**
@@ -723,6 +788,7 @@ export {
   cerrarConfirmacion,
   cerrarDrawerEnlacesMovil,
   cerrarSidebarMovil,
+  construirSelectorChipsMultiple,
   construirSelectorModalidad,
   desplazarYResaltarElemento,
   envolverConFlechasScroll,
