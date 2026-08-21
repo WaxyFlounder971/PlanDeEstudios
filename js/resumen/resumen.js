@@ -284,7 +284,17 @@ function renderizarResumen() {
 
   const eventos = obtenerEventosDeSemestres(semestresSeleccionados);
 
-  // 3. Tareas de hoy — sin completar, fecha === hoy.
+  // 3. Exámenes próximos — dentro de las próximas 2 semanas desde hoy
+  // (incluyendo hoy mismo).
+  const examenesProximos = eventos
+    .filter((ev) => ev.tipo === "examen" && ev.fecha >= hoyISO && ev.fecha <= limiteExamenesISO)
+    .sort(ordenarPorFechaYHora);
+  if (examenesProximos.length > 0) {
+    cont.appendChild(construirBloqueSeccion("Exámenes próximos", construirListaEventos(examenesProximos)));
+    huboContenido = true;
+  }
+
+  // 4. Tareas de hoy — sin completar, fecha === hoy.
   const tareasHoy = eventos
     .filter((ev) => ev.tipo === "tarea" && !ev.completada && ev.fecha === hoyISO)
     .sort(ordenarPorFechaYHora);
@@ -293,7 +303,7 @@ function renderizarResumen() {
     huboContenido = true;
   }
 
-  // 4. Próximas tareas — las 3 pendientes más próximas cronológicamente,
+  // 5. Próximas tareas — las 3 pendientes más próximas cronológicamente,
   // sin importar si vencen pronto o no. Decisión de diseño: se toman solo
   // las estrictamente FUTURAS (fecha > hoy) para no repetir acá los mismos
   // ítems que ya se muestran en "Tareas de hoy" arriba — si preferís que
@@ -307,16 +317,6 @@ function renderizarResumen() {
     cont.appendChild(
       construirBloqueSeccion("Próximas tareas", construirListaEventosAgrupadaPorFecha(proximasTareas, hoyISO))
     );
-    huboContenido = true;
-  }
-
-  // 5. Exámenes próximos — dentro de las próximas 2 semanas desde hoy
-  // (incluyendo hoy mismo).
-  const examenesProximos = eventos
-    .filter((ev) => ev.tipo === "examen" && ev.fecha >= hoyISO && ev.fecha <= limiteExamenesISO)
-    .sort(ordenarPorFechaYHora);
-  if (examenesProximos.length > 0) {
-    cont.appendChild(construirBloqueSeccion("Exámenes próximos", construirListaEventos(examenesProximos)));
     huboContenido = true;
   }
 
