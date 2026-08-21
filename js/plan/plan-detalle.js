@@ -168,8 +168,13 @@ function construirBotonesFinalesDetalle(materia, plan, opciones) {
     // (esModal), hay que cerrarlo ANTES de abrir Desbloquea — si no, quedan
     // dos overlays de modal apilados a la vez (mismo patrón que ya usa
     // abrirModalDesbloquea al navegar a un resultado, y el clic de "Ir a
-    // este semestre" en el historial, más abajo en este archivo).
-    if (esModal) document.getElementById("modal-requisito").classList.add("oculto");
+    // este semestre" en el historial, más abajo en este archivo). Se marca
+    // el flag de "volver" para no perder la tarjeta de origen si Desbloquea
+    // se cierra sin elegir nada (ver cerrarModalDesbloquea).
+    if (esModal) {
+      document.getElementById("modal-requisito").classList.add("oculto");
+      volverAModalRequisitoAlCerrar = true;
+    }
     abrirModalDesbloquea(materia, plan);
   });
   fila.appendChild(btnEsRequisito);
@@ -183,8 +188,12 @@ function construirBotonesFinalesDetalle(materia, plan, opciones) {
     ev.stopPropagation();
     // Bug Mochi (2026-08-21): mismo problema que "Es requisito" arriba —
     // cerrar #modal-requisito antes de abrir Historial si este botón vive
-    // dentro de ese modal, para no apilar dos overlays.
-    if (esModal) document.getElementById("modal-requisito").classList.add("oculto");
+    // dentro de ese modal, para no apilar dos overlays. Mismo flag de
+    // "volver" que en "Es requisito" (ver cerrarModalHistorial).
+    if (esModal) {
+      document.getElementById("modal-requisito").classList.add("oculto");
+      volverAModalRequisitoAlCerrar = true;
+    }
     abrirModalHistorial(materia, plan);
   });
   fila.appendChild(btnHistorial);
@@ -551,7 +560,19 @@ function construirCuerpoDetalleMateria(materia, plan, opciones) {
 
 /* ===================== Modal de requisito (navegable) ===================== */
 
+// Bug Mochi (2026-08-21): cuando "Es requisito"/"Historial" se disparan
+// desde DENTRO de #modal-requisito, ese modal se cierra primero (ver
+// construirBotonesFinalesDetalle) para no apilar dos overlays. Este flag
+// recuerda que hay que "volver" a mostrarlo si Desbloquea/Historial se
+// cierran sin elegir nada, para no perder la tarjeta de origen. Se resetea
+// cada vez que abrirModalRequisito() abre contenido nuevo "en frío" (ya sea
+// por navegación hacia adelante o por una apertura no relacionada), así
+// nunca queda una reapertura fantasma pendiente de un flujo viejo.
+let volverAModalRequisitoAlCerrar = false;
+
 function abrirModalRequisito(codigo) {
+  volverAModalRequisitoAlCerrar = false;
+
   const modalCard = document.querySelector("#modal-requisito .modal-card");
   const franjaVieja = modalCard.querySelector(".franja-categoria");
   if (franjaVieja) franjaVieja.remove();
@@ -773,6 +794,11 @@ function construirFilaIntentoHistorial(materia, plan, semestre, mm) {
     e.stopPropagation();
     document.getElementById("modal-requisito").classList.add("oculto");
     document.getElementById("modal-historial").classList.add("oculto");
+    // Navegación explícita hacia otra sección (Semestres): no es un
+    // "cerrar sin elegir nada", así que no debe quedar pendiente una
+    // reapertura fantasma de modal-requisito la próxima vez que se cierre
+    // algo (ver volverAModalRequisitoAlCerrar).
+    volverAModalRequisitoAlCerrar = false;
     navegarASemestre(semestre.id);
   });
   encabezado.appendChild(nombreSemestre);
@@ -985,12 +1011,26 @@ function abrirModalAsignarProfesorDesdeHistorial(mm, materia, plan, semestre, on
   document.body.appendChild(overlay);
 }
 
+// Bug Mochi (2026-08-21): cierre único de Desbloquea — si se llegó acá desde
+// #modal-requisito (ver volverAModalRequisitoAlCerrar), reabre esa tarjeta
+// en vez de dejar la pantalla sin ningún modal visible. Cubre las 3 formas
+// de cerrar: botón "Cerrar", clic afuera, y el "X" genérico de
+// componentes.js (que dispara un clic sintético sobre el propio overlay,
+// atrapado por el listener de clic-afuera de más abajo).
+function cerrarModalDesbloquea() {
+  document.getElementById("modal-desbloquea").classList.add("oculto");
+  if (volverAModalRequisitoAlCerrar) {
+    volverAModalRequisitoAlCerrar = false;
+    document.getElementById("modal-requisito").classList.remove("oculto");
+  }
+}
+
 function inicializarModalDesbloquea() {
   document.getElementById("btn-cerrar-desbloquea").addEventListener("click", () => {
-    document.getElementById("modal-desbloquea").classList.add("oculto");
+    cerrarModalDesbloquea();
   });
   document.getElementById("modal-desbloquea").addEventListener("click", (e) => {
-    if (e.target.id === "modal-desbloquea") e.target.classList.add("oculto");
+    if (e.target.id === "modal-desbloquea") cerrarModalDesbloquea();
   });
 }
 
@@ -1010,13 +1050,22 @@ function inicializarModalRequisito() {
   });
 }
 
+// Bug Mochi (2026-08-21): mismo mecanismo de "volver" que cerrarModalDesbloquea.
+function cerrarModalHistorial() {
+  document.getElementById("modal-historial").classList.add("oculto");
+  if (volverAModalRequisitoAlCerrar) {
+    volverAModalRequisitoAlCerrar = false;
+    document.getElementById("modal-requisito").classList.remove("oculto");
+  }
+}
+
 /** v11 (migración a módulos): cierre del modal de historial, antes suelto en el DOMContentLoaded de plan.js. */
 function inicializarModalHistorial() {
   document.getElementById("btn-cerrar-historial").addEventListener("click", () => {
-    document.getElementById("modal-historial").classList.add("oculto");
+    cerrarModalHistorial();
   });
   document.getElementById("modal-historial").addEventListener("click", (e) => {
-    if (e.target.id === "modal-historial") e.target.classList.add("oculto");
+    if (e.target.id === "modal-historial") cerrarModalHistorial();
   });
 }
 
