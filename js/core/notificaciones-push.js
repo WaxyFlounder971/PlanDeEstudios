@@ -100,6 +100,25 @@ async function obtenerSuscripcionPushActiva() {
 }
 
 /**
+ * A diferencia de notificacionesPushActivas() (que solo lee el flag de la
+ * CUENTA, sincronizado por Drive entre dispositivos), esto chequea si ESTE
+ * dispositivo en particular tiene una suscripción push real activa en el
+ * navegador — el permiso/suscripción es por dispositivo, así que el flag
+ * de cuenta puede decir "activas" aunque este navegador nunca haya dado el
+ * permiso (ej. se activó desde el celular). Usado en config-ajustes.js
+ * para no mostrar el switch prendido en un dispositivo que en realidad no
+ * va a recibir nada.
+ */
+async function notificacionesPushActivasEnEsteDispositivo() {
+  try {
+    const suscripcion = await obtenerSuscripcionPushActiva();
+    return Boolean(suscripcion);
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
  * Programa (o reprograma) el recordatorio push de `evento` contra el
  * Worker. Se llama desde agenda-modal.js al guardar (alta o edición) y
  * desde agenda.js/agenda-modal.js al des-completar una tarea. No hace
@@ -182,6 +201,53 @@ async function cancelarTodosLosRecordatoriosPendientes() {
 }
 
 /**
+ * Notificaciones — Resumen diario (2026-08-20): sincroniza contra
+ * POST/DELETE /resumen-config del Worker la preferencia guardada en
+ * estado.datos.configuracion.notificaciones_resumen_diario ({ activo,
+ * hora }) — ver renderizarNotificacionesResumenDiario en
+ * config-ajustes.js, que llama a esto cada vez que cambia el switch o la
+ * hora elegida. Mismo criterio best-effort que el resto del archivo: si
+ * el Worker no responde, no revierte nada en la UI, solo console.warn.
+ *
+ * offset_minutos_utc usa la misma convención que
+ * Date.prototype.getTimezoneOffset() (minutos a RESTAR a UTC para llegar
+ * a la hora local) — ver el comentario en worker-schema.sql/index.js del
+ * Worker sobre por qué hace falta mandarlo.
+ */
+async function sincronizarResumenDiario() {
+  if (!notificacionesPushActivas()) return;
+  const cfgResumen = estado.datos?.configuracion?.notificaciones_resumen_diario;
+  if (!cfgResumen) return;
+
+  try {
+    const suscripcion = await obtenerSuscripcionPushActiva();
+    if (!suscripcion) return; // este dispositivo no tiene suscripción activa, nada que sincronizar
+
+    if (!cfgResumen.activo) {
+      await fetch(`${URL_WORKER_NOTIFICACIONES}/resumen-config`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: suscripcion.toJSON().endpoint }),
+      });
+      return;
+    }
+
+    await fetch(`${URL_WORKER_NOTIFICACIONES}/resumen-config`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        suscripcion_push: suscripcion.toJSON(),
+        hora_local: cfgResumen.hora || "20:00",
+        offset_minutos_utc: new Date().getTimezoneOffset(),
+        activo: true,
+      }),
+    });
+  } catch (e) {
+    console.warn("No se pudo sincronizar el resumen diario (no crítico):", e);
+  }
+}
+
+/**
  * Manda una notificación de bienvenida inmediata contra `POST /prueba` del
  * Worker (no crea ningún recordatorio en D1, ver src/index.js del Worker
  * — es solo una prueba end-to-end). Sirve como feedback inmediato para el
@@ -254,6 +320,7 @@ async function activarNotificacionesPush() {
     );
 
     reprogramarTodosLosRecordatoriosPendientes();
+    sincronizarResumenDiario();
     return true;
   } catch (e) {
     console.error("No se pudo activar las notificaciones push:", e);
@@ -274,7 +341,18 @@ async function desactivarNotificacionesPush() {
     if (soportaNotificacionesPush()) {
       const registro = await navigator.serviceWorker.ready;
       const suscripcion = await registro.pushManager.getSubscription();
-      if (suscripcion) await suscripcion.unsubscribe();
+      if (suscripcion) {
+        // Mismo momento en que se cancelan los recordatorios pendientes —
+        // ver comentario de manejarBorrarResumenConfig en index.js del
+        // Worker. Se hace ANTES de unsubscribe() porque necesita el
+        // endpoint de la suscripción todavía viva.
+        await fetch(`${URL_WORKER_NOTIFICACIONES}/resumen-config`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: suscripcion.toJSON().endpoint }),
+        }).catch(() => {}); // best-effort, no crítico
+        await suscripcion.unsubscribe();
+      }
     }
   } catch (e) {
     console.warn("No se pudo desuscribir del push (no crítico):", e);
@@ -304,7 +382,9 @@ export {
   cancelarRecordatorioPush,
   desactivarNotificacionesPush,
   notificacionesPushActivas,
+  notificacionesPushActivasEnEsteDispositivo,
   ofrecerActivarNotificacionesPush,
   programarRecordatorioPush,
+  sincronizarResumenDiario,
   soportaNotificacionesPush,
 };
