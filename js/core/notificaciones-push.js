@@ -19,30 +19,9 @@
    programarse/cancelarse del lado del servidor, y solo se avisa por
    console.warn. Guardar una tarea no puede depender de que un servicio de
    notificaciones de terceros esté disponible en ese momento.
-
-   Ronda 2026-08-20 — Recordatorios configurables por tipo + Resumen
-   diario: cambios respecto a la versión anterior de este archivo:
-     - programarRecordatorioPush ya NO manda un solo recordatorio: lee
-       configuracion.notificaciones_recordatorios[tipo] (ver core/schema.js)
-       y programa UNA fila en el Worker por cada offset activo, con id
-       compuesto "eventoId::offset" (POST /programar, uno por offset).
-     - cancelarRecordatorioPush pasa a llamar a
-       DELETE /programar-evento/:eventoId (cancela TODOS los offsets de
-       ese evento de una vez) en vez de DELETE /programar/:id — el Worker
-       es quien sabe encontrarlos todos por prefijo, el cliente no
-       necesita enumerar qué offsets estaban activos.
-     - programarRecordatorioPush también manda fecha_evento + evento_id en
-       CADA llamada a /programar (mismo dato repetido en cada offset, el
-       Worker solo se queda con la última vía upsert) para alimentar
-       eventos_activos, que el resumen diario del Worker usa para saber
-       "¿hay algo mañana?".
-     - Nuevas funciones: sincronizarResumenDiario() (upsert/borrado de la
-       preferencia de resumen en el Worker) y activarNotificacionesPush ya
-       la llama una vez al activar el switch general, si el resumen diario
-       ya estaba marcado como activo desde antes.
    ========================================================================= */
 
-import { sellarTimestamp, OFFSETS_RECORDATORIO_AGENDA, SEPARADOR_ID_RECORDATORIO_OFFSET } from "./schema.js";
+import { sellarTimestamp } from "./schema.js";
 import { marcarCambioPendiente } from "./storage-sync.js";
 import { estado } from "./storage.js";
 import { aplicarFormatoTexto } from "./utils.js";
@@ -75,31 +54,6 @@ function notificacionesPushActivas() {
 }
 
 /**
- * A diferencia de notificacionesPushActivas() (que lee un flag de
- * estado.datos.configuracion y por lo tanto sincroniza por Drive entre
- * TODOS los dispositivos de la cuenta), esto chequea si ESTE navegador en
- * particular tiene de verdad el permiso concedido Y una suscripción push
- * viva. Necesario porque el permiso del navegador es por dispositivo: si
- * activaste notificaciones desde el celular, la config sincronizada dice
- * "activas" también en la PC aunque la PC nunca haya dado el permiso ni
- * tenga suscripción propia — sin este chequeo, el switch de Ajustes
- * mostraría "prendido" en un dispositivo que en realidad no va a recibir
- * nada. Usar en el render del switch en vez de notificacionesPushActivas()
- * a secas.
- */
-async function notificacionesPushActivasEnEsteDispositivo() {
-  if (!notificacionesPushActivas()) return false;
-  if (!soportaNotificacionesPush()) return false;
-  if (Notification.permission !== "granted") return false;
-  try {
-    const suscripcion = await obtenerSuscripcionPushActiva();
-    return Boolean(suscripcion);
-  } catch (e) {
-    return false;
-  }
-}
-
-/**
  * Mismo criterio de "nombre legible de la materia vinculada" que ya usaba
  * agenda-modal.js (obtenerNombreMateriaEvento) — se resuelve acá mismo, en
  * vez de importarla desde agenda/, para que este archivo no dependa de
@@ -116,21 +70,17 @@ function resolverNombreMateriaEvento(evento) {
 }
 
 /**
- * fecha_hora_utc (timestamp Unix en SEGUNDOS) del momento EXACTO del
- * evento — hora real si tiene hora definida; si es de día completo, 8:00
- * AM hora local de ese día (criterio default acordado, sin cambios de la
- * versión anterior). Se arma la fecha a mano con los componentes del ISO
- * (en vez de `new Date(evento.fecha)`, que Chrome interpreta como UTC
- * medianoche y termina corriendo un día para atrás en zonas horarias
- * negativas) — mismo motivo por el que el resto de Agenda usa
- * fechaLocalDesdeISO en horario.js.
- *
- * Ronda 2026-08-20: esta función ahora es la base sobre la que se restan
- * los minutosAntes de cada offset (ver
- * calcularFechaHoraUtcConOffset más abajo) — antes era el único cálculo
- * que existía, ahora es un paso intermedio.
+ * fecha_hora_utc (timestamp Unix en SEGUNDOS) para el Worker: hora exacta
+ * del evento si tiene hora definida; si es de día completo, 8:00 AM hora
+ * local de ese día (criterio default acordado — ver prompt original,
+ * punto B.3, ajustable acá mismo si en algún momento se prefiere otro).
+ * Se arma la fecha a mano con los componentes del ISO (en vez de
+ * `new Date(evento.fecha)`, que Chrome interpreta como UTC medianoche y
+ * termina corriendo un día para atrás en zonas horarias negativas) —
+ * mismo motivo por el que el resto de Agenda usa fechaLocalDesdeISO en
+ * horario.js.
  */
-function calcularFechaHoraUtcMomentoExacto(evento) {
+function calcularFechaHoraUtcRecordatorio(evento) {
   const [anio, mes, dia] = evento.fecha.split("-").map(Number);
   let horas = 8;
   let minutos = 0;
@@ -143,11 +93,6 @@ function calcularFechaHoraUtcMomentoExacto(evento) {
   return Math.floor(fecha.getTime() / 1000);
 }
 
-/** fecha_hora_utc del AVISO, restando minutosAntes al momento exacto del evento. */
-function calcularFechaHoraUtcConOffset(evento, minutosAntes) {
-  return calcularFechaHoraUtcMomentoExacto(evento) - minutosAntes * 60;
-}
-
 async function obtenerSuscripcionPushActiva() {
   if (!soportaNotificacionesPush()) return null;
   const registro = await navigator.serviceWorker.ready;
@@ -155,158 +100,55 @@ async function obtenerSuscripcionPushActiva() {
 }
 
 /**
- * Offsets activos para el TIPO de `evento` — lee
- * configuracion.notificaciones_recordatorios[tipo] y filtra contra
- * OFFSETS_RECORDATORIO_AGENDA (por si quedó guardado algún id que ya no
- * existe más, ej. una versión vieja de la lista de offsets). Un evento
- * tipo "evento" con es_feriado:true usa el conjunto de "feriado" en vez de
- * "evento" — mismo criterio de subtipo especial que ya usa el resto de
- * Agenda para "Es feriado" (ver crearEventoAgenda en core/schema.js).
- */
-function obtenerOffsetsActivosParaEvento(evento) {
-  const tipoConfig = evento.tipo === "evento" && evento.es_feriado ? "feriado" : evento.tipo;
-  const idsGuardados = estado.datos?.configuracion?.notificaciones_recordatorios?.[tipoConfig] || ["1_dia"];
-  return OFFSETS_RECORDATORIO_AGENDA.filter((o) => idsGuardados.includes(o.id));
-}
-
-/**
- * Programa (o reprograma) TODOS los recordatorios activos de `evento`
- * contra el Worker — uno por cada offset configurado para su tipo (ver
- * obtenerOffsetsActivosParaEvento). Se llama desde agenda-modal.js al
- * guardar (alta o edición) y desde agenda.js/agenda-modal.js al
- * des-completar una tarea.
- *
- * Primero cancela lo que hubiera antes (DELETE /programar-evento/:id) y
- * recién después programa el set nuevo — más simple y más robusto que
- * intentar diffear "qué offset se agregó/quitó" contra lo que el Worker
- * ya tenía: si el usuario cambió la config de offsets entre un guardado y
- * otro, un diff a ciegas podría dejar huérfano un offset viejo que ya no
- * corresponde. Es más tráfico de red, pero estas llamadas son poco
- * frecuentes (una por guardado de evento, no por tecla) y best-effort de
- * cualquier forma.
- *
- * No hace nada si:
+ * Programa (o reprograma) el recordatorio push de `evento` contra el
+ * Worker. Se llama desde agenda-modal.js al guardar (alta o edición) y
+ * desde agenda.js/agenda-modal.js al des-completar una tarea. No hace
+ * nada si:
  *   - "Notificaciones reales" está desactivado en Ajustes.
  *   - El evento está completado (no tiene sentido recordarlo).
- *   - El evento no tiene fecha.
+ *   - El evento no tiene fecha, o esa fecha/hora ya pasó.
  *   - Por lo que sea, todavía no hay una suscripción push activa (ej. el
  *     usuario activó el switch pero el navegador tardó en confirmar el
- *     permiso) — no bloquea el guardado del evento, simplemente esos
- *     recordatorios puntuales no quedan programados.
- * Offsets cuya fecha_hora_utc calculada ya pasó se saltan individualmente
- * (ej. "1 día antes" ya pasó pero "15 min antes" todavía no) — no todo o
- * nada por evento.
+ *     permiso) — no bloquea el guardado del evento, simplemente ese
+ *     recordatorio puntual no queda programado.
  */
 async function programarRecordatorioPush(evento) {
   if (!notificacionesPushActivas()) return;
   if (evento.completada) return cancelarRecordatorioPush(evento.id);
   if (!evento.fecha) return;
 
-  // Cancela lo anterior primero — ver comentario arriba sobre por qué no
-  // se intenta diffear offset por offset.
-  await cancelarRecordatorioPush(evento.id);
+  const fechaHoraUtc = calcularFechaHoraUtcRecordatorio(evento);
+  if (fechaHoraUtc <= Math.floor(Date.now() / 1000)) return; // ya pasó, no tiene sentido
 
   try {
     const suscripcion = await obtenerSuscripcionPushActiva();
     if (!suscripcion) return;
 
     const nombreMateria = resolverNombreMateriaEvento(evento);
-    const ahoraSegundos = Math.floor(Date.now() / 1000);
-    const offsets = obtenerOffsetsActivosParaEvento(evento);
 
-    for (const offset of offsets) {
-      const fechaHoraUtc = calcularFechaHoraUtcConOffset(evento, offset.minutosAntes);
-      if (fechaHoraUtc <= ahoraSegundos) continue; // este offset puntual ya pasó — se salta, no todo el evento
-
-      await fetch(`${URL_WORKER_NOTIFICACIONES}/programar`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: `${evento.id}${SEPARADOR_ID_RECORDATORIO_OFFSET}${offset.id}`,
-          suscripcion_push: suscripcion.toJSON(),
-          fecha_hora_utc: fechaHoraUtc,
-          titulo: evento.nombre || "Recordatorio de Agenda",
-          cuerpo: nombreMateria || "Agenda",
-          // Alimenta eventos_activos del Worker (para el resumen diario) —
-          // mismo evento_id/fecha_evento en cada offset, el Worker hace
-          // upsert por evento_id así que solo se queda con la última
-          // escritura (da igual el orden entre offsets).
-          evento_id: evento.id,
-          fecha_evento: evento.fecha,
-        }),
-      });
-    }
-  } catch (e) {
-    console.warn(`No se pudo programar los recordatorios push de "${evento.id}" (no crítico):`, e);
-  }
-}
-
-/**
- * Cancela TODOS los recordatorios push de un evento (todos los offsets a
- * la vez) y su fila de eventos_activos — un solo request al Worker (ver
- * DELETE /programar-evento/:eventoId en worker-notificaciones/index.js),
- * en vez de tener que conocer y borrar cada offset por separado.
- */
-async function cancelarRecordatorioPush(eventoId) {
-  if (!notificacionesPushActivas()) return;
-  try {
-    await fetch(`${URL_WORKER_NOTIFICACIONES}/programar-evento/${encodeURIComponent(eventoId)}`, { method: "DELETE" });
-  } catch (e) {
-    console.warn(`No se pudo cancelar los recordatorios push de "${eventoId}" (no crítico):`, e);
-  }
-}
-
-/**
- * Notificaciones — Resumen diario (2026-08-20): sincroniza contra el
- * Worker la preferencia actual (configuracion.notificaciones_resumen_diario)
- * de ESTE dispositivo. Se llama:
- *   - Al guardar el ajuste en Configuraciones (switch activo / hora
- *     elegida) — ver config/config-ajustes.js.
- *   - Al activar notificaciones push por primera vez, si el resumen ya
- *     estaba marcado como activo desde otra sesión/dispositivo (para que
- *     el Worker tenga la suscripción de ESTE dispositivo nueva, no la de
- *     antes).
- *
- * Manda offset_minutos_utc de ESTE navegador (Date.getTimezoneOffset(),
- * mismo signo/convención que usa el Worker — ver schema.sql del Worker)
- * porque el servidor no tiene otra forma de saber la zona horaria real del
- * usuario. Si notificaciones_resumen_diario.activo es false, en vez de
- * upsertear se llama a DELETE /resumen-config — apagar el switch no debe
- * dejar una fila "inactiva" dando vueltas indefinidamente en el Worker.
- */
-async function sincronizarResumenDiario() {
-  if (!notificacionesPushActivas()) return;
-  const config = estado.datos?.configuracion?.notificaciones_resumen_diario;
-  if (!config) return;
-
-  try {
-    if (!config.activo) {
-      const suscripcion = await obtenerSuscripcionPushActiva();
-      if (suscripcion) {
-        await fetch(`${URL_WORKER_NOTIFICACIONES}/resumen-config`, {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ endpoint: suscripcion.toJSON().endpoint }),
-        });
-      }
-      return;
-    }
-
-    const suscripcion = await obtenerSuscripcionPushActiva();
-    if (!suscripcion) return; // switch general activo pero esta suscripción puntual todavía no está lista
-
-    await fetch(`${URL_WORKER_NOTIFICACIONES}/resumen-config`, {
+    await fetch(`${URL_WORKER_NOTIFICACIONES}/programar`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        id: evento.id,
         suscripcion_push: suscripcion.toJSON(),
-        hora_local: config.hora || "20:00",
-        offset_minutos_utc: new Date().getTimezoneOffset(),
-        activo: true,
+        fecha_hora_utc: fechaHoraUtc,
+        titulo: evento.nombre || "Recordatorio de Agenda",
+        cuerpo: nombreMateria || "Agenda",
       }),
     });
   } catch (e) {
-    console.warn("No se pudo sincronizar el resumen diario (no crítico):", e);
+    console.warn(`No se pudo programar el recordatorio push de "${evento.id}" (no crítico):`, e);
+  }
+}
+
+/** Cancela el recordatorio push de un evento (al completarlo o borrarlo). */
+async function cancelarRecordatorioPush(eventoId) {
+  if (!notificacionesPushActivas()) return;
+  try {
+    await fetch(`${URL_WORKER_NOTIFICACIONES}/programar/${encodeURIComponent(eventoId)}`, { method: "DELETE" });
+  } catch (e) {
+    console.warn(`No se pudo cancelar el recordatorio push de "${eventoId}" (no crítico):`, e);
   }
 }
 
@@ -327,17 +169,12 @@ async function reprogramarTodosLosRecordatoriosPendientes() {
   }
 }
 
-/**
- * Contraparte de arriba: se usa al desactivar el switch de Ajustes.
- * Ronda 2026-08-20: usa el mismo endpoint de cancelación por evento
- * (/programar-evento) que cancelarRecordatorioPush, así también se limpia
- * eventos_activos y no solo recordatorios sueltos.
- */
+/** Contraparte de arriba: se usa al desactivar el switch de Ajustes. */
 async function cancelarTodosLosRecordatoriosPendientes() {
   const eventos = estado.datos.agenda || [];
   for (const evento of eventos) {
     try {
-      await fetch(`${URL_WORKER_NOTIFICACIONES}/programar-evento/${encodeURIComponent(evento.id)}`, { method: "DELETE" });
+      await fetch(`${URL_WORKER_NOTIFICACIONES}/programar/${encodeURIComponent(evento.id)}`, { method: "DELETE" });
     } catch (e) {
       // best-effort — no crítico, ver comentario al inicio del archivo.
     }
@@ -403,34 +240,20 @@ async function activarNotificacionesPush() {
     // Prueba end-to-end ANTES de dar el switch por activado en la UI: así
     // el toast puede reflejar si el Worker realmente respondió o no, en
     // vez de asumir que todo salió bien solo porque el navegador aceptó
-    // la suscripción (eso solo prueba el lado del cliente). Si la prueba
-    // falla, se corta acá — a propósito NO se marca
-    // notificaciones_push_activas = true: dejar el switch prendido cuando
-    // el pipeline real no funciona (permiso + suscripción sin Worker
-    // funcionando del otro lado) es peor que dejarlo apagado, porque el
-    // usuario cree que le va a llegar el aviso y nunca le llega. El
-    // switch en Ajustes ya se encarga de destildarse solo cuando esta
-    // función devuelve false.
+    // la suscripción (eso solo prueba el lado del cliente).
     const pruebaOk = await enviarNotificacionDePrueba(suscripcion);
-    if (!pruebaOk) {
-      mostrarToast(
-        "El permiso se concedió, pero la prueba no llegó al Worker — no se activaron las notificaciones. Revisá que esté desplegado y bien configurado, y probá de nuevo."
-      );
-      return false;
-    }
 
     estado.datos.configuracion.notificaciones_push_activas = true;
     sellarTimestamp(estado.datos.configuracion);
     marcarCambioPendiente();
 
-    mostrarToast("Notificaciones activadas — deberías recibir un aviso de confirmación en unos segundos");
+    mostrarToast(
+      pruebaOk
+        ? "Notificaciones activadas — deberías recibir un aviso de confirmación en unos segundos"
+        : "Notificaciones activadas, pero la prueba no llegó al Worker — revisá que esté desplegado y bien configurado (no bloquea el resto de la Agenda)"
+    );
 
     reprogramarTodosLosRecordatoriosPendientes();
-    // Ronda 2026-08-20: si el resumen diario ya estaba marcado como activo
-    // (ej. reactivando notificaciones después de haberlas desactivado, con
-    // la preferencia de resumen todavía en true), se vuelve a sincronizar
-    // contra el Worker con la suscripción nueva de este dispositivo.
-    sincronizarResumenDiario();
     return true;
   } catch (e) {
     console.error("No se pudo activar las notificaciones push:", e);
@@ -445,11 +268,6 @@ async function desactivarNotificacionesPush() {
   sellarTimestamp(estado.datos.configuracion);
   marcarCambioPendiente();
 
-  // Se cancela el resumen diario ANTES de desuscribirse (necesita la
-  // suscripción todavía viva para poder mandar su endpoint al Worker) —
-  // mismo orden de dependencia que cancelarTodosLosRecordatoriosPendientes
-  // justo debajo, que también corre antes del unsubscribe().
-  await sincronizarResumenDiarioApagado();
   await cancelarTodosLosRecordatoriosPendientes();
 
   try {
@@ -460,31 +278,6 @@ async function desactivarNotificacionesPush() {
     }
   } catch (e) {
     console.warn("No se pudo desuscribir del push (no crítico):", e);
-  }
-}
-
-/**
- * Variante interna de sincronizarResumenDiario() usada SOLO desde
- * desactivarNotificacionesPush(): a diferencia de la función pública (que
- * lee config.activo de estado.datos para decidir upsert vs. delete), acá
- * se fuerza el DELETE sin importar qué diga notificaciones_resumen_diario
- * — al apagar el switch GENERAL, el resumen diario de ESTE dispositivo se
- * cancela sí o sí en el Worker, aunque la preferencia guardada siga en
- * `activo: true` para cuando se vuelva a activar más adelante (no se toca
- * ese campo acá, es intencional: es la preferencia del usuario, no el
- * estado actual de la suscripción).
- */
-async function sincronizarResumenDiarioApagado() {
-  try {
-    const suscripcion = await obtenerSuscripcionPushActiva();
-    if (!suscripcion) return;
-    await fetch(`${URL_WORKER_NOTIFICACIONES}/resumen-config`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ endpoint: suscripcion.toJSON().endpoint }),
-    });
-  } catch (e) {
-    console.warn("No se pudo cancelar el resumen diario (no crítico):", e);
   }
 }
 
@@ -511,9 +304,7 @@ export {
   cancelarRecordatorioPush,
   desactivarNotificacionesPush,
   notificacionesPushActivas,
-  notificacionesPushActivasEnEsteDispositivo,
   ofrecerActivarNotificacionesPush,
   programarRecordatorioPush,
-  sincronizarResumenDiario,
   soportaNotificacionesPush,
 };
