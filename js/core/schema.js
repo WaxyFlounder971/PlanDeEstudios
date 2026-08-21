@@ -46,6 +46,35 @@ function crearDatosUsuarioNuevo() {
       // poder calcular cuándo toca el próximo sin depender de un timer
       // propio. Ver FRECUENCIAS_BACKUP_DRIVE más abajo para las opciones.
       backup_drive: crearBackupDriveDefault(),
+
+      // Notificaciones — Recordatorios configurables por tipo (2026-08-20):
+      // reemplaza el modelo de "1 solo recordatorio implícito por evento"
+      // — ahora cada tipo (tarea/examen/evento/feriado) tiene su propio
+      // conjunto de offsets activos, multi-selección (ej. tarea puede tener
+      // "15 min antes" Y "1 día antes" a la vez). Default: 1 día antes en
+      // los 4 tipos, para que funcione sin que el usuario tenga que entrar
+      // a configurar nada (pedido explícito). Ver OFFSETS_RECORDATORIO_AGENDA
+      // más abajo para la lista completa de offsets válidos — cualquier
+      // valor fuera de esa lista se ignora silenciosamente al programar
+      // (ver programarRecordatorioPush en notificaciones-push.js).
+      notificaciones_recordatorios: {
+        tarea: ["1_dia"],
+        examen: ["1_dia"],
+        evento: ["1_dia"],
+        feriado: ["1_dia"],
+      },
+
+      // Notificaciones — Resumen diario (2026-08-20): aviso condicional
+      // ("tenés pendientes para mañana") a una hora fija elegida acá. El
+      // contenido real NUNCA se arma en el cliente en el momento del envío
+      // (el Worker lo manda solo, genérico, sin detalle — ver diseño en
+      // worker-notificaciones/README.md) porque la app puede estar cerrada
+      // a esa hora. `hora` es "HH:MM" en la hora LOCAL de este dispositivo.
+      notificaciones_resumen_diario: {
+        activo: false,
+        hora: "20:00",
+      },
+
       plan_activo_id: null,         // id del Plan de Estudios seleccionado como activo
       enlaces_rapidos: [],          // ver estructura de "enlace" abajo (máx. 20)
       // Fix (2026-08-08 — enlaces borrados "resucitando" entre dispositivos):
@@ -324,6 +353,33 @@ function crearAdjunto({ nombre, mimeType, tamanoBytes, entidadTipo, entidadId, t
 /* ===================== Agenda ===================== */
 
 const TIPOS_EVENTO_AGENDA = ["evento", "tarea", "examen"];
+
+/**
+ * Notificaciones — Recordatorios configurables (2026-08-20): offsets
+ * disponibles para "cuándo avisar" antes de un evento/tarea/examen/
+ * feriado. `id` es el valor que se guarda en
+ * configuracion.notificaciones_recordatorios[tipo] (arreglo de estos ids,
+ * multi-selección) y también el sufijo que arma el id compuesto que el
+ * Worker persiste por cada recordatorio individual — ver
+ * SEPARADOR_ID_RECORDATORIO_OFFSET y programarRecordatorioPush en
+ * notificaciones-push.js. `minutosAntes` es lo único que ese archivo
+ * necesita para calcular fecha_hora_utc de cada recordatorio a partir de
+ * la fecha/hora real del evento — 0 = al momento exacto.
+ */
+const OFFSETS_RECORDATORIO_AGENDA = [
+  { id: "al_momento", etiqueta: "Al momento", minutosAntes: 0 },
+  { id: "15_min", etiqueta: "15 min antes", minutosAntes: 15 },
+  { id: "1_hora", etiqueta: "1 hora antes", minutosAntes: 60 },
+  { id: "1_dia", etiqueta: "1 día antes", minutosAntes: 60 * 24 },
+  { id: "3_dias", etiqueta: "3 días antes", minutosAntes: 60 * 24 * 3 },
+];
+
+/** Separador del id compuesto "eventoId::offset" que persiste el Worker —
+ *  mismo valor que SEPARADOR_ID_OFFSET en worker-notificaciones/index.js;
+ *  vive acá también porque notificaciones-push.js arma esos ids del lado
+ *  del cliente antes de mandarlos. Un solo lugar en el cliente para no
+ *  repetir el literal "::" suelto en varios archivos. */
+const SEPARADOR_ID_RECORDATORIO_OFFSET = "::";
 
 /**
  * Agenda — Núcleo: crea un evento/tarea/examen. Colección plana top-level
@@ -2813,6 +2869,39 @@ function migrarDatosAntiguos(datos) {
     });
   }
 
+  // Notificaciones — Recordatorios configurables (2026-08-20): mismo
+  // relleno defensivo que el resto de esta función — cuentas creadas antes
+  // de este ajuste no tienen notificaciones_recordatorios en absoluto.
+  // Default: 1 día antes en los 4 tipos (mismo default que
+  // crearDatosUsuarioNuevo, para que una cuenta vieja migrada se comporte
+  // igual que una nueva sin que el usuario tenga que configurar nada).
+  if (datos.configuracion && (!datos.configuracion.notificaciones_recordatorios || typeof datos.configuracion.notificaciones_recordatorios !== "object")) {
+    datos.configuracion.notificaciones_recordatorios = {
+      tarea: ["1_dia"],
+      examen: ["1_dia"],
+      evento: ["1_dia"],
+      feriado: ["1_dia"],
+    };
+  }
+  // Relleno más fino: cuentas que ya tenían el objeto pero les falta algún
+  // tipo puntual (ej. "feriado" se agregó después de que otros 3 ya
+  // existieran en el objeto guardado) — mismo criterio, no se pisa lo que
+  // ya existe.
+  if (datos.configuracion && datos.configuracion.notificaciones_recordatorios) {
+    ["tarea", "examen", "evento", "feriado"].forEach((tipo) => {
+      if (!Array.isArray(datos.configuracion.notificaciones_recordatorios[tipo])) {
+        datos.configuracion.notificaciones_recordatorios[tipo] = ["1_dia"];
+      }
+    });
+  }
+
+  // Notificaciones — Resumen diario (2026-08-20): mismo patrón — default
+  // apagado (a diferencia de los recordatorios, este SÍ arranca inactivo:
+  // es un canal nuevo, no un reemplazo de algo que ya funcionaba antes).
+  if (datos.configuracion && (!datos.configuracion.notificaciones_resumen_diario || typeof datos.configuracion.notificaciones_resumen_diario !== "object")) {
+    datos.configuracion.notificaciones_resumen_diario = { activo: false, hora: "20:00" };
+  }
+
   if (!Array.isArray(datos.planes_estudio)) return datos;
 
   datos.planes_estudio.forEach((plan) => {
@@ -3027,4 +3116,6 @@ export {
   crearAmigoVinculado,
   TIPOS_EVENTO_AGENDA,
   crearEventoAgenda,
+  OFFSETS_RECORDATORIO_AGENDA,
+  SEPARADOR_ID_RECORDATORIO_OFFSET,
 };
