@@ -2663,6 +2663,21 @@ img, svg { max-width: 100%; }
   100% { box-shadow: 0 0 0 0 transparent, 0 0 0 0 transparent; }
 }
 
+/* v1.16: animar box-shadow con blur grande (el glow de 28px) es de lo más
+   caro que existe en repintado — bajo rendimiento se anima la misma idea
+   (aro de acento que aparece y se desvanece, mismo color, mismo timing:
+   solo se cambia animation-name, la duration/easing de cada variante -
+   1.6s acá, 2s en .com-tarjeta-profesor - se respeta igual) pero sin el
+   segundo layer difuso. */
+[data-rendimiento="reducido"] .destello-resaltado {
+  animation-name: destello-resaltado-reducido;
+}
+@keyframes destello-resaltado-reducido {
+  0% { box-shadow: 0 0 0 3px var(--accent-1); }
+  70% { box-shadow: 0 0 0 3px var(--accent-1); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
 @keyframes puntito-rebote {
   0%, 60%, 100% { transform: translateY(0); opacity: 0.6; }
   30% { transform: translateY(-16px); opacity: 1; }
@@ -3105,6 +3120,18 @@ html.exportar-tema-default[data-mode="dark"] {
   --transition-med: 0.05s linear;
 }
 
+/* v1.16 (2026-08-21): background-attachment: fixed en <body> obliga a
+   muchos navegadores (sobre todo Android en GPUs integradas) a repintar
+   los 3 radial-gradient en CADA frame de scroll, en vez de componerlos una
+   sola vez — es, con diferencia, lo más caro de toda la app en equipos de
+   gama baja. "scroll" en vez de "fixed" elimina ese costo por completo; el
+   único cambio perceptible es que el glow ya no queda "clavado" al viewport
+   mientras se scrollea (un detalle que nadie nota en el uso normal), la
+   estética del fondo (colores, forma, posición inicial) queda idéntica. */
+[data-rendimiento="reducido"] body {
+  background-attachment: scroll;
+}
+
 /* 1. backdrop-filter: blur(...) fuera; el mismo tono de fondo sube de
    opacidad (color-mix con el canvas) para que la tarjeta se siga viendo
    diferenciada del fondo, sin el costo de GPU del difuminado.
@@ -3152,6 +3179,14 @@ html.exportar-tema-default[data-mode="dark"] {
   -webkit-backdrop-filter: none;
   background: color-mix(in srgb, var(--bg-canvas) 94%, transparent);
 }
+/* v1.16: el dropdown de los selects custom (.select-custom-lista) ya usa
+   --bg-header-solido, que es un color sólido sin alpha en toda paleta —
+   el blur de acá no tapaba nada realista detrás, así que sacarlo es
+   ahorro puro sin ningún cambio visual perceptible. */
+[data-rendimiento="reducido"] .select-custom-lista {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
 
 /* 2. Glow del botón primario en hover y de la "luz" de disponibilidad:
    se mantiene el color que comunica el estado, sin el brillo expandido. */
@@ -3165,6 +3200,13 @@ html.exportar-tema-default[data-mode="dark"] {
 /* 5. Camino de desbloqueo del mapa: línea sólida, sin el glow neón. */
 [data-rendimiento="reducido"] .mapa-camino-linea {
   filter: none;
+}
+/* v1.16: mismo criterio con los nodos "en camino" — se conserva el anillo
+   sólido de 2px (comunica el estado igual de claro) y se saca el segundo
+   layer difuso de 14px, que con varios nodos desbloqueados a la vez en
+   pantalla es varios box-shadow con blur superpuestos de una. */
+[data-rendimiento="reducido"] .mapa-nodo-en-camino {
+  box-shadow: 0 0 0 2px var(--nodo-color);
 }
 
 /* 4. Los degradados de fondo del body ya son estáticos (sin keyframes
