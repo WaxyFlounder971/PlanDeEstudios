@@ -776,13 +776,21 @@ function renderizarAjustes() {
     grid.appendChild(btnEditar);
   }
 
-  // v1.14.1: Modo de rendimiento (reduce blur/sombras/animaciones)
-  const chkRendimiento = document.getElementById("switch-rendimiento");
-  if (chkRendimiento) {
-    chkRendimiento.checked = !!estado.datos.configuracion.modo_rendimiento;
-    chkRendimiento.onchange = () => {
-      estado.datos.configuracion.modo_rendimiento = chkRendimiento.checked;
-      aplicarModoRendimiento(chkRendimiento.checked);
+  // v1.16 (2026-08-21): Rendimiento pasa a ser el default para todos (ver
+  // crearDatosUsuarioNuevo/migrarDatosAntiguos en schema.js) y el switch se
+  // INVIERTE — antes tildado = "activar rendimiento" (la opción), ahora
+  // tildado = "activar Modo fancy" (el viejo "normal", ahora la opción
+  // manual). El dato de fondo sigue siendo el mismo modo_rendimiento de
+  // siempre (para no tocar el modelo ni el merge de sync): el switch solo
+  // lo lee/escribe invertido. El id del elemento en el HTML se deja igual
+  // (#switch-rendimiento) para no romper el markup existente — solo cambia
+  // el texto visible ahí, fuera de este archivo.
+  const chkFancy = document.getElementById("switch-rendimiento");
+  if (chkFancy) {
+    chkFancy.checked = !estado.datos.configuracion.modo_rendimiento;
+    chkFancy.onchange = () => {
+      estado.datos.configuracion.modo_rendimiento = !chkFancy.checked;
+      aplicarModoRendimiento(estado.datos.configuracion.modo_rendimiento);
       sellarTimestamp(estado.datos.configuracion);
       marcarCambioPendiente();
     };
