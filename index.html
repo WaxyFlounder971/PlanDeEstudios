@@ -162,31 +162,8 @@
       <div id="seccion-configuracion" class="stack">
 
         <section class="glass-card stack ajuste-seccion colapsada">
-          <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Plan de Estudios activo</h2><span class="ajuste-seccion-chevron">▾</span></button>
-          <div class="ajuste-seccion-cuerpo">
-          <div id="selector-plan"></div>
-          </div>
-        </section>
-
-        <section class="glass-card stack ajuste-seccion colapsada">
           <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Ajustes generales</h2><span class="ajuste-seccion-chevron">▾</span></button>
           <div class="ajuste-seccion-cuerpo">
-
-          <!-- Notificaciones push reales (recordatorios de Agenda) — ver
-               core/notificaciones-push.js + worker-notificaciones/ (Worker
-               de Cloudflare, proyecto aparte). Primer ajuste de la sección
-               a propósito: es lo que más impacto directo tiene en el uso
-               diario (recordatorios reales fuera de la app). -->
-          <div class="row-between">
-            <span>Notificaciones reales de Agenda</span>
-            <label class="switch switch-tema">
-              <input type="checkbox" id="switch-notificaciones-push">
-              <span class="track"><span class="thumb"></span></span>
-            </label>
-          </div>
-          <p class="muted oculto" id="aviso-notificaciones-sin-soporte" style="font-size:0.78rem; margin:-4px 0 0;">
-            Tu navegador no soporta notificaciones push.
-          </p>
 
           <div>
             <span class="form-label">Formato de nombres de materias y carrera</span>
@@ -207,6 +184,60 @@
             <span class="form-label">Nota de aprobación por universidad/plan</span>
             <div id="seccion-notas-aprobacion" class="stack"></div>
           </div>
+          </div>
+        </section>
+
+        <section class="glass-card stack ajuste-seccion colapsada">
+          <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Notificaciones</h2><span class="ajuste-seccion-chevron">▾</span></button>
+          <div class="ajuste-seccion-cuerpo">
+
+          <!-- Notificaciones push reales (recordatorios de Agenda) — ver
+               core/notificaciones-push.js + worker-notificaciones/ (Worker
+               de Cloudflare, proyecto aparte). Switch general: apagarlo
+               cancela TODO lo de acá abajo (recordatorios programados +
+               resumen diario) del lado del Worker. -->
+          <div class="row-between">
+            <span>Notificaciones reales de Agenda</span>
+            <label class="switch switch-tema">
+              <input type="checkbox" id="switch-notificaciones-push">
+              <span class="track"><span class="thumb"></span></span>
+            </label>
+          </div>
+          <p class="muted oculto" id="aviso-notificaciones-sin-soporte" style="font-size:0.78rem; margin:-4px 0 0;">
+            Tu navegador no soporta notificaciones push.
+          </p>
+
+          <!-- Recordatorios configurables por tipo (2026-08-20): un
+               conjunto de chips (selección múltiple, ver
+               construirSelectorChipsMultiple en ui/componentes.js) por
+               cada tipo de evento de Agenda. Contenedor vacío — se llena
+               dinámicamente en config-ajustes.js (uno por tipo, en el
+               orden tarea/examen/evento/feriado). Solo tiene sentido con
+               el switch de arriba activo — config-ajustes.js lo
+               deshabilita/atenúa visualmente si está apagado, mismo
+               criterio que el resto de bloques dependientes de un switch
+               en esta pantalla. -->
+          <div id="seccion-notificaciones-recordatorios" class="stack" style="gap:14px;"></div>
+
+          <!-- Resumen diario (2026-08-20): aviso condicional a una hora
+               fija ("tenés pendientes para mañana"), sin detalle real —
+               ver worker-notificaciones/index.js (manejarResumenDiario).
+               El selector de hora reutiliza el mismo patrón de
+               "select-custom" que ya arma construirSelectCustomAjustes
+               para el rango de horas de Horario (contenedor vacío, se
+               llena en config-ajustes.js). -->
+          <div class="row-between">
+            <span>Resumen diario de pendientes</span>
+            <label class="switch switch-tema">
+              <input type="checkbox" id="switch-notificaciones-resumen-diario">
+              <span class="track"><span class="thumb"></span></span>
+            </label>
+          </div>
+          <div id="bloque-notificaciones-resumen-hora">
+            <span class="form-label">Hora del aviso</span>
+            <div id="select-notificaciones-resumen-hora"></div>
+          </div>
+
           </div>
         </section>
 
@@ -295,6 +326,13 @@
           <div class="ajuste-seccion-cuerpo">
           <p class="muted" style="font-size:0.82rem; margin:2px 0 6px;">Enlaces de tu horario que compartiste alguna vez — revisá cuáles siguen activos y revocá cualquiera cuando quieras.</p>
           <div id="lista-horario-enlaces-compartidos" class="stack" style="gap:8px;"></div>
+          </div>
+        </section>
+
+        <section class="glass-card stack ajuste-seccion colapsada">
+          <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Plan de Estudios activo</h2><span class="ajuste-seccion-chevron">▾</span></button>
+          <div class="ajuste-seccion-cuerpo">
+          <div id="selector-plan"></div>
           </div>
         </section>
 
