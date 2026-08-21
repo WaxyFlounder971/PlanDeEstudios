@@ -87,10 +87,10 @@ const ETIQUETA_DIA_CODIGO = {
 // array fija el índice correcto para .sort() por posición.
 const ORDEN_DIAS_SEMANA = ["L", "K", "M", "J", "V", "S", "D"];
 
-// Mapeo de código de día a índice de Date.getUTCDay() (0=Domingo…6=Sábado)
-// — hace falta para obtenerFechaClaseEnSemana, que necesita saber a qué
-// día calendario real corresponde cada código dentro del bloque de 7 días
-// de una semana puntual.
+// Mapeo de código de día a índice de Date.getDay() (0=Domingo…6=Sábado) —
+// hace falta para obtenerFechaClaseEnSemana, que necesita saber a qué día
+// calendario real corresponde cada código dentro del bloque de 7 días de
+// una semana puntual.
 const INDICE_JS_DIA_SEMANA = { L: 1, K: 2, M: 3, J: 4, V: 5, S: 6, D: 0 };
 
 /**
@@ -104,24 +104,35 @@ const INDICE_JS_DIA_SEMANA = { L: 1, K: 2, M: 3, J: 4, V: 5, S: 6, D: 0 };
  * (NO necesariamente alineados a Lunes-Domingo calendario — la semana 1
  * arranca justo en fecha_inicio, sea cual sea su día de la semana). Para
  * ubicar un código de día dentro de ese bloque, se calcula el offset real
- * entre el día de la semana de fecha_inicio (getUTCDay() — mismo criterio
- * timezone-agnóstico que las resta de milisegundos de esas otras dos
- * funciones, para no introducir un desfase de un día entre esta fecha y el
- * número de semana ya mostrado) y el día objetivo.
+ * entre el día de la semana de fecha_inicio y el día objetivo.
+ *
+ * Fix (2026-08-21 — bug reportado: martes/jueves se mostraban como
+ * lunes/miércoles): `fecha_inicio` se parseaba con `new Date(string)`
+ * (medianoche UTC) y el offset se calculaba con `getUTCDay()`. El Date
+ * resultante después se pinta con `toLocaleDateString`, que interpreta el
+ * instante en la zona horaria LOCAL del navegador — en cualquier zona con
+ * offset negativo (ej. Costa Rica, UTC-6) la medianoche UTC cae en la
+ * tarde del día anterior en hora local, corriendo un día tanto la fecha
+ * como el nombre del día de semana mostrado. Ahora se usa
+ * `fechaLocalDesdeISO` (mismo parser local-safe que ya usa este archivo
+ * más abajo para eventos, y que usan calcularFechaDelDia en horario.js y
+ * calcularFechaClaseSemana en horario-modal.js) + `getDay()` + `setDate`,
+ * consistente con el resto de la app.
  *
  * Devuelve `null` si `fecha_inicio` no es una fecha válida (incluso
  * entonces, la fila sigue mostrando el nombre del día como fallback — ver
  * construirFilaClaseMateria).
  */
 function obtenerFechaClaseEnSemana(semestre, numeroSemana, diaCodigo) {
-  const inicio = new Date(semestre.fecha_inicio);
+  const inicio = fechaLocalDesdeISO(semestre.fecha_inicio);
   const indiceObjetivo = INDICE_JS_DIA_SEMANA[diaCodigo];
   if (isNaN(inicio.getTime()) || indiceObjetivo === undefined) return null;
-  const indiceInicio = inicio.getUTCDay();
+  const indiceInicio = inicio.getDay();
   let offsetDias = indiceObjetivo - indiceInicio;
   if (offsetDias < 0) offsetDias += 7;
-  const totalDias = (numeroSemana - 1) * 7 + offsetDias;
-  return new Date(inicio.getTime() + totalDias * 24 * 60 * 60 * 1000);
+  const fecha = new Date(inicio);
+  fecha.setDate(inicio.getDate() + (numeroSemana - 1) * 7 + offsetDias);
+  return fecha;
 }
 
 /**
