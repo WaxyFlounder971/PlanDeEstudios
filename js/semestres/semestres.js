@@ -974,7 +974,7 @@ function renderizarSemestres(omitirRestauracionScroll = false) {
     btnOtro.type = "button";
     btnOtro.className = "btn btn-secondary";
     btnOtro.style.flex = "1";
-    btnOtro.textContent = "+ Agregar otro semestre";
+    btnOtro.textContent = "+ Agregar";
     btnOtro.addEventListener("click", () => abrirModalAltaSemestre());
     filaBotones.appendChild(btnOtro);
 
