@@ -4,12 +4,12 @@
    plan/universidad, formato de texto.
    ========================================================================= */
 
-import { ESCALAS_DISPONIBLES, FRECUENCIAS_BACKUP_DRIVE, MONEDAS_DISPONIBLES, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, crearBackupDriveDefault, migrarDatosAntiguos, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
+import { ESCALAS_DISPONIBLES, FRECUENCIAS_BACKUP_DRIVE, MONEDAS_DISPONIBLES, OFFSETS_RECORDATORIO_AGENDA, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, crearBackupDriveDefault, migrarDatosAntiguos, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
 import { actualizarIndicadorSync, forzarBackupManual, marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
-import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
+import { abrirConfirmacion, construirSelectorChipsMultiple, mostrarToast } from "../ui/componentes.js";
 import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta } from "../ui/tema.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
 import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
@@ -29,6 +29,7 @@ import {
   desactivarNotificacionesPush,
   notificacionesPushActivas,
   notificacionesPushActivasEnEsteDispositivo,
+  sincronizarResumenDiario,
   soportaNotificacionesPush,
 } from "../core/notificaciones-push.js";
 
@@ -316,6 +317,143 @@ function renderizarConfigRangoHorasHorario() {
       window.renderizarHorario?.();
     },
   }));
+}
+
+// Notificaciones — Recordatorios configurables por tipo (2026-08-20):
+// etiquetas legibles para cada tipo de evento de Agenda, en el mismo
+// orden en que se pintan los bloques de chips más abajo.
+const ETIQUETAS_TIPO_RECORDATORIO_AGENDA = {
+  tarea: "Tareas",
+  examen: "Exámenes",
+  evento: "Eventos",
+  feriado: "Feriados",
+};
+
+/**
+ * Notificaciones — Recordatorios configurables por tipo (2026-08-20):
+ * puebla #seccion-notificaciones-recordatorios con un bloque (label +
+ * construirSelectorChipsMultiple, ver ui/componentes.js) por cada tipo en
+ * ["tarea", "examen", "evento", "feriado"], usando los offsets de
+ * OFFSETS_RECORDATORIO_AGENDA (core/schema.js). Se repuebla completo en
+ * cada render de Ajustes — mismo criterio que
+ * renderizarConfigRangoHorasHorario, no hay estado propio que preservar
+ * entre renders.
+ */
+function renderizarNotificacionesRecordatorios() {
+  const cont = document.getElementById("seccion-notificaciones-recordatorios");
+  if (!cont) return;
+  cont.innerHTML = "";
+
+  const cfg = estado.datos.configuracion;
+  // No debería pasar (migrarDatosAntiguos ya lo rellena para toda cuenta
+  // existente), pero por las dudas se arma acá mismo en vez de reventar
+  // leyendo undefined.
+  if (!cfg.notificaciones_recordatorios || typeof cfg.notificaciones_recordatorios !== "object") {
+    cfg.notificaciones_recordatorios = { tarea: ["1_dia"], examen: ["1_dia"], evento: ["1_dia"], feriado: ["1_dia"] };
+  }
+
+  ["tarea", "examen", "evento", "feriado"].forEach((tipo) => {
+    const bloque = document.createElement("div");
+    const label = document.createElement("span");
+    label.className = "form-label";
+    label.textContent = ETIQUETAS_TIPO_RECORDATORIO_AGENDA[tipo];
+    bloque.appendChild(label);
+
+    const selector = construirSelectorChipsMultiple(
+      OFFSETS_RECORDATORIO_AGENDA,
+      cfg.notificaciones_recordatorios[tipo],
+      (nuevosValores) => {
+        cfg.notificaciones_recordatorios[tipo] = nuevosValores;
+        sellarTimestamp(cfg);
+        marcarCambioPendiente();
+      }
+    );
+    bloque.appendChild(selector.elemento);
+    cont.appendChild(bloque);
+  });
+}
+
+/**
+ * Notificaciones — Resumen diario (2026-08-20): switch on/off +
+ * selector de hora, reutilizando el mismo widget "select-custom" que ya
+ * arma construirSelectCustomAjustes para el rango de horas de Horario.
+ * El contenido real del aviso lo arma el Worker solo, genérico, sin
+ * detalle (ver worker-notificaciones/index.js, manejarResumenDiario) —
+ * acá solo se guarda la preferencia de horario y se avisa al Worker vía
+ * sincronizarResumenDiario cuando cambia algo.
+ */
+function renderizarNotificacionesResumenDiario() {
+  const cfg = estado.datos.configuracion;
+  if (!cfg.notificaciones_resumen_diario || typeof cfg.notificaciones_resumen_diario !== "object") {
+    cfg.notificaciones_resumen_diario = { activo: false, hora: "20:00" };
+  }
+
+  const chkResumen = document.getElementById("switch-notificaciones-resumen-diario");
+  const bloqueHora = document.getElementById("bloque-notificaciones-resumen-hora");
+  const contHora = document.getElementById("select-notificaciones-resumen-hora");
+  if (!chkResumen || !bloqueHora || !contHora) return;
+
+  function actualizarVisibilidadHora() {
+    // Independiente de la dependencia con el switch general — ver
+    // actualizarDependenciaNotificaciones, que puede volver a ocultar
+    // este mismo bloque si el switch general está apagado.
+    bloqueHora.classList.toggle("oculto", !chkResumen.checked);
+  }
+
+  chkResumen.checked = !!cfg.notificaciones_resumen_diario.activo;
+  actualizarVisibilidadHora();
+  chkResumen.onchange = () => {
+    cfg.notificaciones_resumen_diario.activo = chkResumen.checked;
+    sellarTimestamp(cfg);
+    marcarCambioPendiente();
+    actualizarVisibilidadHora();
+    sincronizarResumenDiario();
+  };
+
+  // Dropdown de horas "HH:00", 12am a 11pm — mismo componente que ya usa
+  // el rango de Horario. Formato de guardado "HH:MM" (ver
+  // notificaciones_resumen_diario.hora en schema.js).
+  contHora.innerHTML = "";
+  contHora.appendChild(construirSelectCustomAjustes({
+    opciones: Array.from({ length: 24 }, (_, h) => ({
+      valor: `${String(h).padStart(2, "0")}:00`,
+      etiqueta: etiquetaHora12(h),
+    })),
+    valorInicial: cfg.notificaciones_resumen_diario.hora || "20:00",
+    onCambiar: (valor) => {
+      cfg.notificaciones_resumen_diario.hora = valor;
+      sellarTimestamp(cfg);
+      marcarCambioPendiente();
+      sincronizarResumenDiario();
+    },
+  }));
+}
+
+/**
+ * Notificaciones — dependencia con el switch general (2026-08-20): los 3
+ * controles de abajo (recordatorios por tipo, switch de resumen diario,
+ * hora del resumen) no tienen sentido con #switch-notificaciones-push
+ * apagado — cualquier cosa que se programe ahí nunca va a disparar nada
+ * real. Mismo patrón ya usado en Semestres para "Pasás raspando con"
+ * (bloqueRaspando.classList.toggle("oculto", ...)): se ocultan por
+ * completo en vez de solo atenuarlos, así no queda un control fantasma
+ * clickeable sin efecto real.
+ */
+function actualizarDependenciaNotificaciones() {
+  const chkNotificaciones = document.getElementById("switch-notificaciones-push");
+  const seccionRecordatorios = document.getElementById("seccion-notificaciones-recordatorios");
+  const chkResumen = document.getElementById("switch-notificaciones-resumen-diario");
+  const bloqueHora = document.getElementById("bloque-notificaciones-resumen-hora");
+  if (!chkNotificaciones) return;
+
+  const generalActivo = chkNotificaciones.checked && !chkNotificaciones.disabled;
+  seccionRecordatorios?.classList.toggle("oculto", !generalActivo);
+  if (chkResumen) chkResumen.disabled = !generalActivo;
+  // Con el general apagado, la hora queda oculta pase lo que pase; con el
+  // general prendido, depende además del propio switch de resumen diario
+  // (ver renderizarNotificacionesResumenDiario).
+  if (!generalActivo) bloqueHora?.classList.add("oculto");
+  else bloqueHora?.classList.toggle("oculto", !chkResumen?.checked);
 }
 
 const SECCIONES_TOGGLEABLES = [
@@ -671,6 +809,7 @@ function renderizarAjustes() {
     // suscripción — sin esto el switch mostraría "prendido" sin que
     // realmente vaya a llegar nada a este dispositivo.
     chkNotificaciones.checked = notificacionesPushActivas();
+    actualizarDependenciaNotificaciones();
     if (soportado) {
       notificacionesPushActivasEnEsteDispositivo().then((activoEnEsteDispositivo) => {
         // Si Ajustes se volvió a renderizar mientras esta promesa estaba
@@ -678,6 +817,7 @@ function renderizarAjustes() {
         // render más nuevo con el resultado de uno viejo.
         if (!document.body.contains(chkNotificaciones)) return;
         chkNotificaciones.checked = activoEnEsteDispositivo;
+        actualizarDependenciaNotificaciones();
       });
     }
     chkNotificaciones.onchange = async () => {
@@ -696,8 +836,17 @@ function renderizarAjustes() {
         await desactivarNotificacionesPush();
       }
       chkNotificaciones.disabled = false;
+      actualizarDependenciaNotificaciones();
     };
   }
+
+  // Notificaciones — Recordatorios por tipo + Resumen diario (2026-08-20):
+  // se renderizan siempre (independientes de si chkNotificaciones existe
+  // en el DOM), y actualizarDependenciaNotificaciones() se llama al final
+  // para ocultar/deshabilitar lo que corresponda según el switch general.
+  renderizarNotificacionesRecordatorios();
+  renderizarNotificacionesResumenDiario();
+  actualizarDependenciaNotificaciones();
 
   // Ronda de ajustes visuales — punto 3: los 2 switches de Agenda que iban
   // acá ("Mostrar días sin eventos ni tareas" y "Mostrar clases ese día en
