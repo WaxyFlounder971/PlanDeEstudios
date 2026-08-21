@@ -26,10 +26,12 @@ import { estado } from "../core/storage.js";
 import { construirItemEvento } from "../agenda/agenda.js";
 import { construirSeccionMateriasDia } from "../agenda/agenda-clases.js";
 import {
+  esTareaVencida,
   formatearFechaISO,
   obtenerCodigoDiaSemana,
   obtenerSemestreActivoAgenda,
   obtenerSemestresSeleccionadosAgenda,
+  tareaVenceHoy,
 } from "../agenda/agenda-utils.js";
 import { fechaLocalDesdeISO } from "../horario/horario.js";
 
@@ -294,12 +296,28 @@ function renderizarResumen() {
     huboContenido = true;
   }
 
-  // 4. Tareas de hoy — sin completar, fecha === hoy.
-  const tareasHoy = eventos
-    .filter((ev) => ev.tipo === "tarea" && !ev.completada && ev.fecha === hoyISO)
-    .sort(ordenarPorFechaYHora);
+  // 4. Tareas de hoy — sin completar, fecha === hoy Y todavía no vencida
+  // (tareaVenceHoy de agenda-utils.js ya excluye las que vencen hoy con
+  // hora puntual ya pasada — esas las cubre "Tareas vencidas" más abajo,
+  // así no aparecen duplicadas en ambas secciones).
+  const tareasHoy = eventos.filter((ev) => tareaVenceHoy(ev)).sort(ordenarPorFechaYHora);
   if (tareasHoy.length > 0) {
     cont.appendChild(construirBloqueSeccion("Tareas de hoy", construirListaEventos(tareasHoy)));
+    huboContenido = true;
+  }
+
+  // 4.5. Tareas vencidas — reusa esTareaVencida (agenda-utils.js), la
+  // misma fuente/lógica que ya usa el modelo de Agenda: fecha < hoy, O
+  // fecha === hoy con hora puntual ya pasada. Sin tope de cantidad (a
+  // diferencia de "Próximas tareas") porque ocultar vencidas por un límite
+  // arbitrario sería contraproducente para el propósito de la sección.
+  // Agrupadas por fecha con el mismo formatearEncabezadoDia que "Próximas
+  // tareas", ya que pueden acumularse vencidas de varios días distintos.
+  const tareasVencidas = eventos.filter((ev) => esTareaVencida(ev)).sort(ordenarPorFechaYHora);
+  if (tareasVencidas.length > 0) {
+    cont.appendChild(
+      construirBloqueSeccion("Tareas vencidas", construirListaEventosAgrupadaPorFecha(tareasVencidas, hoyISO))
+    );
     huboContenido = true;
   }
 
