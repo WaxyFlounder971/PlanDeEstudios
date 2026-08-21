@@ -164,6 +164,12 @@ function construirBotonesFinalesDetalle(materia, plan, opciones) {
   btnEsRequisito.textContent = "Es requisito";
   btnEsRequisito.addEventListener("click", (ev) => {
     ev.stopPropagation();
+    // Bug Mochi (2026-08-21): si este botón vive dentro de #modal-requisito
+    // (esModal), hay que cerrarlo ANTES de abrir Desbloquea — si no, quedan
+    // dos overlays de modal apilados a la vez (mismo patrón que ya usa
+    // abrirModalDesbloquea al navegar a un resultado, y el clic de "Ir a
+    // este semestre" en el historial, más abajo en este archivo).
+    if (esModal) document.getElementById("modal-requisito").classList.add("oculto");
     abrirModalDesbloquea(materia, plan);
   });
   fila.appendChild(btnEsRequisito);
@@ -175,6 +181,10 @@ function construirBotonesFinalesDetalle(materia, plan, opciones) {
   btnHistorial.textContent = "Historial";
   btnHistorial.addEventListener("click", (ev) => {
     ev.stopPropagation();
+    // Bug Mochi (2026-08-21): mismo problema que "Es requisito" arriba —
+    // cerrar #modal-requisito antes de abrir Historial si este botón vive
+    // dentro de ese modal, para no apilar dos overlays.
+    if (esModal) document.getElementById("modal-requisito").classList.add("oculto");
     abrirModalHistorial(materia, plan);
   });
   fila.appendChild(btnHistorial);
