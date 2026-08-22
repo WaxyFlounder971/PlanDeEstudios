@@ -301,7 +301,8 @@ Devolvé ÚNICAMENTE un JSON con esta forma exacta:
       "materia": "nombre EXACTO de la lista de arriba, o null",
       "fecha": "YYYY-MM-DD",
       "hora": "HH:MM" | null,
-      "notas": "string, vacío salvo que aplique la regla de abajo"
+      "notas": "string, vacío salvo que aplique la regla de abajo",
+      "esFeriado": true | false
     }
   ],
   "aclaracion": "string" | null
@@ -336,6 +337,13 @@ Reglas:
   es grupal", "poné en notas que hay que llevar la calculadora"). NUNCA
   inventes ni infieras contexto por tu cuenta (número de semana, motivo,
   suposiciones) — si el usuario no lo pidió como nota, no va.
+- "esFeriado": true SOLO si el usuario indica explícitamente que es un
+  feriado/día no lectivo/asueto (ej. "el lunes es feriado", "marcá el 15
+  de setiembre como feriado", "no hay clases por el feriado de..."). Para
+  cualquier tarea/examen/evento normal (aunque caiga en fin de semana),
+  "esFeriado" es false. Un feriado casi siempre es "tipo": "evento" y
+  "materia": null — nunca lo relaciones con una materia salvo que el
+  usuario lo pida explícitamente.
 - Un solo mensaje puede describir más de un ítem — devolvé todos los que
   encuentres en "items".
 - Si el mensaje no describe ninguna tarea/examen/evento reconocible
@@ -362,6 +370,7 @@ const ESQUEMA_RESPUESTA_GEMINI = {
           fecha: { type: "STRING" },
           hora: { type: "STRING", nullable: true },
           notas: { type: "STRING" },
+          esFeriado: { type: "BOOLEAN" },
         },
         required: ["tipo", "nombre", "fecha"],
       },
@@ -552,7 +561,10 @@ function guardarItemExtraidoComoEvento(item) {
     materiaMatriculadaId: materiaVinculada ? materiaVinculada.mmId : null,
     semestreId: materiaVinculada ? materiaVinculada.semestreId : null,
     notas: construirNotasFinal(item.notas),
-    esFeriado: false,
+    // item.esFeriado puede venir undefined si Gemini omitió el campo (no es
+    // "required" en el schema) — se trata como false, nunca se asume feriado
+    // por default.
+    esFeriado: item.esFeriado === true,
   });
   estado.datos.agenda.push(evento);
 
@@ -623,7 +635,10 @@ function crearTarjetaEventoGuardado(eventoId) {
     return card;
   }
 
-  const emojiTipo = evento.tipo === "examen" ? "📝" : evento.tipo === "tarea" ? "✅" : "📌";
+  // Feriado tiene prioridad visual sobre tipo — un feriado marcado como
+  // "evento" (caso normal) NUNCA debe verse igual (📌) que un evento
+  // cualquiera, o se pierde la distinción que pidió el usuario.
+  const emojiTipo = evento.esFeriado ? "🎉" : evento.tipo === "examen" ? "📝" : evento.tipo === "tarea" ? "✅" : "📌";
   const titulo = document.createElement("div");
   titulo.style.fontWeight = "600";
   titulo.textContent = `${emojiTipo} ${evento.nombre}`;
@@ -633,6 +648,7 @@ function crearTarjetaEventoGuardado(eventoId) {
   detalle.className = "muted";
   detalle.style.fontSize = "0.85rem";
   const partes = [formatearFechaLarga(evento.fecha), evento.hora ? formatearHoraAmPm(evento.hora) : "Todo el día"];
+  if (evento.esFeriado) partes.push("Feriado");
   const nombreMateria = obtenerNombreMateriaEvento(evento);
   if (nombreMateria) partes.push(nombreMateria);
   detalle.textContent = partes.join(" · ");
