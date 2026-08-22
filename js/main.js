@@ -26,6 +26,12 @@ import { inicializarResumen, renderizarResumen } from "./resumen/resumen.js";
 import { inicializarAgenda, renderizarAgenda } from "./agenda/agenda.js";
 import { inicializarHorario, renderizarHorario } from "./horario/horario.js";
 import { procesarAsociacionPendienteDeAmigo, iniciarRefrescoPeriodicoAmigos } from "./horario/horario-amigos.js";
+// Asistente IA (Gemini): mismo patrón que horario.js/agenda.js arriba —
+// este import no se usa directo acá, existe para que el navegador cargue
+// el módulo y su línea `window.renderizarAsistente = renderizarAsistente`
+// se ejecute (mostrarSeccion() más abajo la llama vía window, no vía
+// import directo, para no acoplar main.js a cada sección una por una).
+import "./asistente/asistente.js";
 import { abrirConfirmacion, agregarLongPress, inicializarAutoScrollSelectoresEnModales, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, mostrarPantallaCargaSesion, mostrarToastAccion, ocultarPantallaCargaSesion, restaurarEstadoSidebar } from "./ui/componentes.js";
 import { aplicarPaleta, aplicarTemaGuardadoLocalmente } from "./ui/tema.js";
 
@@ -826,10 +832,14 @@ function mostrarSeccion(nombre) {
   // "hoy" pudiendo haber cambiado) — se re-renderiza fresco cada vez que se
   // entra, en vez de confiar en el render inicial de mostrarApp().
   if (nombre === "resumen") window.renderizarResumen?.();
-  // Asistente IA (2026-08-22): historial en blanco SIEMPRE — cada visita
-  // arranca una conversación nueva a propósito (no es un chat para releer,
-  // es una interfaz de comando puntual). renderizarAsistente() reconstruye
-  // el DOM de cero cada vez, sin leer ningún estado de una visita anterior.
+  // Asistente IA (revisado 2026-08-22): renderizarAsistente() SIEMPRE
+  // reconstruye el DOM de cero al entrar (nunca deja restos de una visita
+  // anterior colgando), pero eso no significa "chat en blanco siempre" —
+  // si hay una conversación guardada en localStorage con menos de 1h desde
+  // el último mensaje, esa misma función ofrece "Continuar"/"Nueva
+  // conversación" antes de arrancar (ver leerHistorialLocalVigente +
+  // mostrarAvisoContinuar en js/asistente/asistente.js). Con más de 1h, o
+  // sin conversación guardada, arranca directo en blanco.
   if (nombre === "asistente") window.renderizarAsistente?.();
 }
 // v2.8.9 (punto 10): se expone en window para que ui/componentes.js pueda
