@@ -316,7 +316,6 @@ function crearBotonVoz(input) {
 
   return btn;
 }
-}
 
 /* ===================== Historial local (device-only) ===================== */
 
