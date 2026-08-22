@@ -249,7 +249,6 @@ function construirColumnaDia(dia, bloquesDia, pxPorMin, altoGrid, minInicioRango
     const cabeExtra = alto >= lineasTexto * 15 + 6;
     tarjeta.innerHTML = `
       <div style="font-size:0.85rem; font-weight:600; line-height:1.15; display:flex; align-items:center; gap:4px; overflow-wrap:break-word; word-break:break-word;">
-        ${b.tieneExcepcionEstaSemana ? `<span title="Esta semana tiene un ajuste puntual" style="font-size:1.05rem; opacity:0.9; flex-shrink:0;">✎</span>` : ""}
         <span>${b.nombreCorto}</span>
       </div>
       ${cabeExtra && b.universidad ? `<div style="font-size:0.72rem; opacity:0.9; overflow-wrap:break-word; word-break:break-word;">${b.universidad}</div>` : ""}
@@ -334,7 +333,6 @@ function renderizarGridPublico(snapshot) {
         aula: c.aula,
         universidad: c.universidad,
         modalidad: c.modalidad,
-        tieneExcepcionEstaSemana: c.tiene_ajuste_cronograma,
       }));
     filaGrid.appendChild(construirColumnaDia(dia, bloquesDia, PX_POR_MIN, altoGrid, minInicioRango, minFinRango));
   });
