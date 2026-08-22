@@ -1,12 +1,15 @@
 /* =========================================================================
-   FINANZAS — Pestañas Gastos generales U y Beneficios (2026-08-10,
-   renombrada de "Gastos estudiantiles" a "Beneficios" + pagos recurrentes
-   y vínculo opcional a semestre en v2.8.8)
-   La primera es un CRUD de gastos sueltos no vinculados a un semestre —
-   simples (monto único) o recurrentes (se repiten en el tiempo), con
-   vínculo opcional a un semestre puntual. La segunda vive el generador
-   del prompt de descuentos estudiantiles: arma el texto, lo copia al
-   portapapeles (blindado) y abre claude.ai en pestaña nueva.
+   FINANZAS — Pestañas Gastos y Beneficios (2026-08-10, renombrada de
+   "Gastos estudiantiles" a "Beneficios" + pagos recurrentes y vínculo
+   opcional a semestre en v2.8.8; pestaña "Gastos generales U" -> "Gastos"
+   + agrupado colapsable por semestre en v2.9.1)
+   La primera es un CRUD de gastos sueltos — simples (monto único) o
+   recurrentes (se repiten en el tiempo), con vínculo opcional a un
+   semestre puntual; se muestran agrupados por semestre ("General" primero,
+   para los que no tienen semestre_id), cada grupo colapsable. La segunda
+   vive el generador del prompt de descuentos estudiantiles: arma el
+   texto, lo copia al portapapeles (blindado) y abre claude.ai en pestaña
+   nueva.
    ========================================================================= */
 
 import { calcularPagosRecurrentesTranscurridos, crearGastoU, sellarTimestamp } from "../core/schema.js";
@@ -63,12 +66,120 @@ function obtenerNombreSemestre(semestreId) {
   return semestre ? semestre.nombre : "semestre eliminado";
 }
 
-/* ===================== Gastos generales U ===================== */
+/* ===================== Gastos (antes "Gastos generales U") ===================== */
+
+/**
+ * Arma la fila visual de un gasto individual (nombre, subtextos, monto y
+ * botón Editar) — extraído a su propia función para reutilizarse dentro de
+ * cada grupo por semestre (v2.9.1).
+ *
+ * v2.9.1: el bloque de la derecha (monto + botón "Editar") fuerza
+ * flex-wrap:nowrap y un poco de clamp() en tamaño, para que en mobile se
+ * mantenga siempre en una sola línea horizontal en vez de apilarse en
+ * columna (pedido explícito) — si el ancho aprieta, el botón se encoge en
+ * vez de bajar de línea.
+ */
+function construirFilaGasto(gasto, contenedorLista) {
+  const fila = document.createElement("div");
+  fila.className = "glass-card row-between";
+  fila.style.cssText = "flex-wrap:nowrap; gap:10px;";
+
+  const nombreSemestre = obtenerNombreSemestre(gasto.semestre_id);
+  let subtextos = "";
+  if (gasto.nota) subtextos += `<p class="muted" style="margin:2px 0 0;">${gasto.nota}</p>`;
+  if (gasto.recurrente) {
+    subtextos += `<p class="muted" style="margin:2px 0 0;">🔁 ${formatearFrecuenciaRecurrente(gasto.recurrente)} · ${formatearMonto(gasto.recurrente.monto_por_pago)} c/u · desde ${formatearFechaLarga(gasto.recurrente.fecha_inicio)}${gasto.recurrente.fecha_fin ? ` hasta ${formatearFechaLarga(gasto.recurrente.fecha_fin)}` : ""}</p>`;
+  }
+  if (nombreSemestre) subtextos += `<p class="muted" style="margin:2px 0 0;">📎 Vinculado a ${nombreSemestre}</p>`;
+
+  const bloqueIzq = document.createElement("div");
+  bloqueIzq.style.cssText = "min-width:0;";
+  bloqueIzq.innerHTML = `
+    <p style="margin:0; font-weight:600;">${gasto.nombre}</p>
+    ${subtextos}
+  `;
+  fila.appendChild(bloqueIzq);
+
+  const derecha = document.createElement("div");
+  derecha.className = "row";
+  derecha.style.cssText = "flex-wrap:nowrap; flex-shrink:0; gap:clamp(6px,2vw,10px); align-items:center;";
+  const badge = document.createElement("span");
+  badge.className = "badge badge-neutral";
+  badge.style.cssText = "white-space:nowrap; font-size:clamp(0.72rem,2.6vw,0.85rem); padding:clamp(3px,1vw,6px) clamp(6px,2vw,10px);";
+  if (gasto.recurrente) {
+    const { totalPagado } = calcularPagosRecurrentesTranscurridos(gasto.recurrente);
+    badge.textContent = formatearMonto(totalPagado) + " a la fecha";
+  } else {
+    badge.textContent = formatearMonto(gasto.costo);
+  }
+  const btnEditar = document.createElement("button");
+  btnEditar.type = "button";
+  btnEditar.className = "btn btn-secondary";
+  btnEditar.style.cssText = "white-space:nowrap; flex-shrink:0; font-size:clamp(0.72rem,2.6vw,0.9rem); padding:clamp(4px,1.4vw,8px) clamp(8px,2.5vw,14px);";
+  btnEditar.textContent = "Editar";
+  btnEditar.addEventListener("click", () => abrirModalGastoU(gasto, contenedorLista));
+  derecha.appendChild(badge);
+  derecha.appendChild(btnEditar);
+  fila.appendChild(derecha);
+
+  return fila;
+}
+
+/**
+ * Agrupa los gastos por semestre vinculado — "general" (sin semestre_id)
+ * siempre primero, después cada semestre en el mismo orden que
+ * obtenerTodosLosSemestres(). Solo se devuelven los grupos con al menos
+ * un gasto adentro.
+ */
+function agruparGastosPorSemestre(gastos) {
+  const grupos = new Map();
+  grupos.set("general", { nombre: "General", gastos: [] });
+  obtenerTodosLosSemestres().forEach((s) => {
+    if (!grupos.has(s.id)) grupos.set(s.id, { nombre: s.nombre, gastos: [] });
+  });
+
+  gastos.forEach((g) => {
+    const clave = g.semestre_id && grupos.has(g.semestre_id) ? g.semestre_id : "general";
+    grupos.get(clave).gastos.push(g);
+  });
+
+  return [...grupos.values()].filter((grupo) => grupo.gastos.length > 0);
+}
+
+/**
+ * Cada semestre (y "General") es un bloque colapsable independiente —
+ * pedido explícito, para ubicarse mejor cuando hay muchos gastos. Se usa
+ * <details>/<summary> nativo: abierto por defecto, sin necesitar guardar
+ * estado propio de colapsado/expandido entre renders.
+ */
+function construirGrupoSemestre(grupo, contenedorLista) {
+  const detalles = document.createElement("details");
+  detalles.className = "glass-card";
+  detalles.open = true;
+  detalles.style.cssText = "padding:0; overflow:hidden;";
+
+  const resumen = document.createElement("summary");
+  resumen.style.cssText =
+    "cursor:pointer; padding:12px 14px; display:flex; align-items:center; justify-content:space-between; gap:10px; list-style:none;";
+  resumen.innerHTML = `
+    <span style="font-weight:700;">${grupo.nombre === "General" ? "📎 General" : "📚 " + grupo.nombre}</span>
+    <span class="badge badge-neutral" style="white-space:nowrap;">${grupo.gastos.length} ${grupo.gastos.length === 1 ? "gasto" : "gastos"}</span>
+  `;
+  detalles.appendChild(resumen);
+
+  const cuerpo = document.createElement("div");
+  cuerpo.className = "stack";
+  cuerpo.style.cssText = "padding:0 14px 14px;";
+  grupo.gastos.forEach((gasto) => cuerpo.appendChild(construirFilaGasto(gasto, contenedorLista)));
+  detalles.appendChild(cuerpo);
+
+  return detalles;
+}
 
 function renderizarPestanaGastosU(contenedor) {
   const cabecera = document.createElement("div");
   cabecera.className = "row-between";
-  cabecera.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Gastos generales U</h3>`;
+  cabecera.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Gastos</h3>`;
   const btnAgregar = document.createElement("button");
   btnAgregar.type = "button";
   btnAgregar.className = "btn btn-primary";
@@ -86,44 +197,8 @@ function renderizarPestanaGastosU(contenedor) {
     return;
   }
 
-  gastos.forEach((gasto) => {
-    const fila = document.createElement("div");
-    fila.className = "glass-card row-between";
-
-    const nombreSemestre = obtenerNombreSemestre(gasto.semestre_id);
-    let subtextos = "";
-    if (gasto.nota) subtextos += `<p class="muted" style="margin:2px 0 0;">${gasto.nota}</p>`;
-    if (gasto.recurrente) {
-      subtextos += `<p class="muted" style="margin:2px 0 0;">🔁 ${formatearFrecuenciaRecurrente(gasto.recurrente)} · ${formatearMonto(gasto.recurrente.monto_por_pago)} c/u · desde ${formatearFechaLarga(gasto.recurrente.fecha_inicio)}${gasto.recurrente.fecha_fin ? ` hasta ${formatearFechaLarga(gasto.recurrente.fecha_fin)}` : ""}</p>`;
-    }
-    if (nombreSemestre) subtextos += `<p class="muted" style="margin:2px 0 0;">📎 Vinculado a ${nombreSemestre}</p>`;
-
-    fila.innerHTML = `
-      <div>
-        <p style="margin:0; font-weight:600;">${gasto.nombre}</p>
-        ${subtextos}
-      </div>
-    `;
-    const derecha = document.createElement("div");
-    derecha.className = "row";
-    const badge = document.createElement("span");
-    badge.className = "badge badge-neutral";
-    if (gasto.recurrente) {
-      const { totalPagado } = calcularPagosRecurrentesTranscurridos(gasto.recurrente);
-      badge.textContent = formatearMonto(totalPagado) + " a la fecha";
-    } else {
-      badge.textContent = formatearMonto(gasto.costo);
-    }
-    const btnEditar = document.createElement("button");
-    btnEditar.type = "button";
-    btnEditar.className = "btn btn-secondary";
-    btnEditar.textContent = "Editar";
-    btnEditar.addEventListener("click", () => abrirModalGastoU(gasto, contenedor));
-    derecha.appendChild(badge);
-    derecha.appendChild(btnEditar);
-    fila.appendChild(derecha);
-    contenedor.appendChild(fila);
-  });
+  const grupos = agruparGastosPorSemestre(gastos);
+  grupos.forEach((grupo) => contenedor.appendChild(construirGrupoSemestre(grupo, contenedor)));
 }
 
 function abrirModalGastoU(gastoExistente, contenedorLista) {
@@ -498,12 +573,16 @@ function abrirModalGastoU(gastoExistente, contenedorLista) {
 
   const filaBotones = document.createElement("div");
   filaBotones.className = "row";
-  filaBotones.style.marginTop = "8px";
+  // v2.9.1: nowrap explícito + tamaño con clamp() — pedido explícito de que
+  // estos botones se mantengan siempre en 1 sola línea horizontal en
+  // mobile en vez de apilarse en columna; si el ancho aprieta, se encoge
+  // el texto/padding en vez de bajar de línea.
+  filaBotones.style.cssText = "margin-top:8px; flex-wrap:nowrap; gap:8px;";
 
   const btnCancelar = document.createElement("button");
   btnCancelar.type = "button";
   btnCancelar.className = "btn btn-secondary";
-  btnCancelar.style.flex = "1";
+  btnCancelar.style.cssText = "flex:1; min-width:0; white-space:nowrap; font-size:clamp(0.72rem,3vw,0.9rem); padding:clamp(6px,2vw,10px) clamp(6px,2vw,14px);";
   btnCancelar.textContent = "Cancelar";
   btnCancelar.addEventListener("click", cerrar);
   filaBotones.appendChild(btnCancelar);
@@ -512,7 +591,7 @@ function abrirModalGastoU(gastoExistente, contenedorLista) {
     const btnEliminar = document.createElement("button");
     btnEliminar.type = "button";
     btnEliminar.className = "btn btn-danger";
-    btnEliminar.style.flex = "1";
+    btnEliminar.style.cssText = "flex:1; min-width:0; white-space:nowrap; font-size:clamp(0.72rem,3vw,0.9rem); padding:clamp(6px,2vw,10px) clamp(6px,2vw,14px);";
     btnEliminar.textContent = "Eliminar";
     btnEliminar.addEventListener("click", () => {
       abrirConfirmacion({
@@ -536,7 +615,7 @@ function abrirModalGastoU(gastoExistente, contenedorLista) {
   const btnGuardar = document.createElement("button");
   btnGuardar.type = "button";
   btnGuardar.className = "btn btn-primary";
-  btnGuardar.style.flex = "1";
+  btnGuardar.style.cssText = "flex:1; min-width:0; white-space:nowrap; font-size:clamp(0.72rem,3vw,0.9rem); padding:clamp(6px,2vw,10px) clamp(6px,2vw,14px);";
   btnGuardar.textContent = "Guardar";
   btnGuardar.addEventListener("click", () => {
     const nombre = inputNombre.value.trim();

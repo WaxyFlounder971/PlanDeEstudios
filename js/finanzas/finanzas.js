@@ -1,8 +1,8 @@
 /* =========================================================================
    FINANZAS — Shell (2026-08-10)
    Nav principal → #seccion-finanzas. Contiene la vista de Resumen (default
-   al entrar) + 3 pestañas internas (Semestres / Gastos generales U / Gastos
-   estudiantiles), cada una delegada a su propio archivo por el límite de
+   al entrar) + 3 pestañas internas (Semestres / Gastos / Beneficios),
+   cada una delegada a su propio archivo por el límite de
    800 líneas. Este archivo solo arma el shell (pestañas + contenedor) y
    calcula los totales del Resumen — nada de CRUD acá.
    ========================================================================= */
@@ -26,7 +26,7 @@ if (estado.finanzasVistaActiva === undefined) estado.finanzasVistaActiva = "resu
 const PESTANAS_FINANZAS = [
   { id: "resumen", etiqueta: "Resumen" },
   { id: "semestres", etiqueta: "Semestres" },
-  { id: "gastos-u", etiqueta: "Gastos generales U" },
+  { id: "gastos-u", etiqueta: "Gastos" },
   { id: "gastos-estudiantiles", etiqueta: "Beneficios" },
 ];
 
@@ -133,53 +133,29 @@ function construirTabsFinanzas() {
   return envoltorio;
 }
 
+/**
+ * v2.9.1: se sacó el resumen de texto plano (Total gastado / Total becas /
+ * Balance neto) — pedido explícito. El donut de finanzas-graficas.js (título
+ * "Resumen") ahora cumple ese rol con porcentaje + monto de cada lado, así
+ * que esta función solo arma el contenedor de la sección y decide entre el
+ * estado vacío y las gráficas.
+ */
 function construirResumenFinanzas() {
-  const { totalGastado, totalBecas, balanceNeto } = calcularTotalesResumenFinanzas();
+  const { totalGastado, totalBecas } = calcularTotalesResumenFinanzas();
   const sec = document.createElement("section");
-  sec.className = "glass-card stack";
-
-  const filaTotales = document.createElement("div");
-  filaTotales.className = "stack";
-  filaTotales.style.gap = "10px";
-
-  const construirLinea = (etiqueta, valor, claseBadge) => {
-    const fila = document.createElement("div");
-    fila.className = "row-between";
-    fila.innerHTML = `
-      <span>${etiqueta}</span>
-      <span class="badge ${claseBadge}">${formatearMonto(valor)}</span>
-    `;
-    return fila;
-  };
-
-  // "Total gastado" sin cambios de comportamiento (pedido explícito: sigue
-  // siempre en rojo, sin condicionar el color a su signo).
-  filaTotales.appendChild(construirLinea("Total gastado", totalGastado, "badge-danger"));
-  if (totalBecas > 0) {
-    filaTotales.appendChild(construirLinea("Total recibido en becas", totalBecas, "badge-success"));
-  }
-  // Balance: verde si es positivo (más ingresos/beca que gastos), rojo si
-  // es negativo (más gastos que ingresos) — el signo "-" explícito ya lo
-  // pone formatearMonto arriba cuando balanceNeto < 0.
-  filaTotales.appendChild(
-    construirLinea("Balance neto de la carrera", balanceNeto, balanceNeto >= 0 ? "badge-success" : "badge-danger")
-  );
-
-  sec.innerHTML = `<h2 class="texto-encabezado-seccion" style="margin:0;">💰 Resumen</h2>`;
-  sec.appendChild(filaTotales);
+  sec.className = "stack";
 
   if (totalBecas === 0 && totalGastado === 0) {
     const vacio = document.createElement("p");
     vacio.className = "muted";
     vacio.style.margin = "0";
     vacio.textContent =
-      "Todavía no hay ningún registro financiero. Entrá a la pestaña Semestres o Gastos generales U para empezar.";
+      "Todavía no hay ningún registro financiero. Entrá a la pestaña Semestres o Gastos para empezar.";
     sec.appendChild(vacio);
   } else {
-    // v2.9.0: 3 gráficas debajo de los totales — donut beca vs. gastado,
-    // línea de ingresos/gastos por semestre y línea de balance acumulado.
-    // Toda la lógica y el dibujo viven en finanzas-graficas.js (archivo
-    // nuevo), este archivo solo les pasa los 2 totales que ya calculaba.
+    // Gráficas del Resumen — donut (con leyenda) y línea de ingresos/gastos
+    // por semestre. Toda la lógica y el dibujo viven en finanzas-graficas.js,
+    // este archivo solo les pasa los 2 totales que ya calculaba.
     sec.appendChild(construirGraficasResumenFinanzas(totalBecas, totalGastado));
   }
 
