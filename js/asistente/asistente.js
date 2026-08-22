@@ -63,6 +63,79 @@ const MENSAJE_FALLBACK = 'No entendí, ¿podés reformular? Por ejemplo: "tengo 
 let conversacionActual = [];
 let enviandoMensaje = false;
 
+/* ===================== Voz (Web Speech API, nativo del navegador) =====================
+ * Sin costo: no pasa por Gemini ni por ninguna API paga — el navegador
+ * transcribe localmente/vía su propio motor (Chrome usa el de Google, pero
+ * gratis y sin la clave del usuario de por medio). Si el navegador no lo
+ * soporta (ej. Firefox de escritorio), el botón de micrófono directamente
+ * no se dibuja (ver crearBotonVoz) — no hay fallback, degradación
+ * silenciosa a "solo texto", que es como funcionaba antes.
+ */
+const ReconocimientoVozAPI = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+let reconocimientoVoz = null;
+let grabandoVoz = false;
+
+function crearReconocimientoVoz() {
+  const r = new ReconocimientoVozAPI();
+  r.lang = "es-419";
+  r.continuous = false;
+  r.interimResults = true;
+  return r;
+}
+
+/**
+ * Botón de micrófono — vive al lado del input, mismo tratamiento visual
+ * "solo símbolo, sin fondo de botón" que se le dio a 🔄 Nueva. Toca
+ * directo input.value con el texto reconocido (final o parcial mientras
+ * graba) para que el usuario vea/edite antes de tocar Enviar — mismo
+ * principio de "nunca actuar solo" que el resto del módulo.
+ */
+function crearBotonVoz(input) {
+  if (!ReconocimientoVozAPI) return null;
+
+  const btn = document.createElement("button");
+  btn.id = "btn-asistente-voz";
+  btn.title = "Dictar por voz";
+  btn.setAttribute("aria-label", "Dictar por voz");
+  btn.textContent = "🎙️";
+  btn.style.cssText =
+    "background:none; border:none; font-size:1.4rem; line-height:1; cursor:pointer; padding:2px 8px; flex-shrink:0;";
+
+  btn.onclick = () => {
+    if (grabandoVoz) {
+      reconocimientoVoz?.stop();
+      return;
+    }
+    reconocimientoVoz = crearReconocimientoVoz();
+    reconocimientoVoz.onstart = () => {
+      grabandoVoz = true;
+      btn.textContent = "🔴";
+      btn.title = "Grabando… tocá para detener";
+    };
+    reconocimientoVoz.onresult = (e) => {
+      let texto = "";
+      for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript;
+      input.value = texto;
+    };
+    reconocimientoVoz.onerror = (e) => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        mostrarToast("Permiso de micrófono denegado");
+      } else if (e.error !== "no-speech" && e.error !== "aborted") {
+        mostrarToast("No se pudo usar el micrófono");
+      }
+    };
+    reconocimientoVoz.onend = () => {
+      grabandoVoz = false;
+      btn.textContent = "🎙️";
+      btn.title = "Dictar por voz";
+      input.focus();
+    };
+    reconocimientoVoz.start();
+  };
+
+  return btn;
+}
+
 /* ===================== Historial local (device-only) ===================== */
 
 function leerHistorialLocalVigente() {
@@ -427,8 +500,16 @@ function mostrarResultadoEnChat(resultado) {
 function actualizarEstadoEnvio() {
   const input = document.getElementById("input-asistente-mensaje");
   const btn = document.getElementById("btn-asistente-enviar");
+  const btnVoz = document.getElementById("btn-asistente-voz");
   if (input) input.disabled = enviandoMensaje;
-  if (btn) btn.disabled = enviandoMensaje;
+  if (btn) {
+    btn.disabled = enviandoMensaje;
+    btn.style.opacity = enviandoMensaje ? "0.4" : "1";
+  }
+  if (btnVoz) {
+    btnVoz.disabled = enviandoMensaje;
+    btnVoz.style.opacity = enviandoMensaje ? "0.4" : "1";
+  }
 }
 
 async function manejarEnvioMensaje() {
@@ -486,7 +567,7 @@ function construirEsqueletoAsistente(contenedor) {
   const btnNueva = document.createElement("button");
   btnNueva.title = "Nueva conversación";
   btnNueva.setAttribute("aria-label", "Nueva conversación");
-  btnNueva.textContent = "🔄";
+  btnNueva.textContent = "⟳";
   btnNueva.style.cssText =
     "background:none; border:none; font-size:1.5rem; line-height:1; cursor:pointer; padding:2px 4px;";
   btnNueva.onclick = () => {
@@ -499,8 +580,7 @@ function construirEsqueletoAsistente(contenedor) {
 
   const scroll = document.createElement("div");
   scroll.id = "asistente-chat-scroll";
-  scroll.style.cssText =
-    "display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:320px; max-height:calc(100vh - 300px); padding:4px 2px;";
+  scroll.style.cssText = "display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:200px; padding:4px 2px;";
   tarjeta.appendChild(scroll);
 
   const filaInput = document.createElement("div");
@@ -520,15 +600,50 @@ function construirEsqueletoAsistente(contenedor) {
   });
   const btnEnviar = document.createElement("button");
   btnEnviar.id = "btn-asistente-enviar";
-  btnEnviar.className = "btn btn-primary";
-  btnEnviar.textContent = "Enviar";
+  btnEnviar.title = "Enviar";
+  btnEnviar.setAttribute("aria-label", "Enviar");
+  btnEnviar.textContent = "➤";
+  btnEnviar.style.cssText =
+    "background:none; border:none; font-size:1.6rem; line-height:1; cursor:pointer; padding:2px 6px; flex-shrink:0; color:var(--color-luz, #6d5efc);";
   btnEnviar.onclick = manejarEnvioMensaje;
   filaInput.appendChild(input);
+  const btnVoz = crearBotonVoz(input);
+  if (btnVoz) filaInput.appendChild(btnVoz);
   filaInput.appendChild(btnEnviar);
   tarjeta.appendChild(filaInput);
 
   contenedor.appendChild(tarjeta);
+  ajustarAlturaChatAsistente();
 }
+
+/**
+ * Pedido explícito: que el chat use todo el espacio vertical disponible
+ * para verse mejor, en vez del `max-height` fijo de antes. No hay CSS del
+ * layout general (design-system.css) a la vista acá, así que en vez de
+ * inventar un `calc(100vh - Npx)` a ciegas, se mide en JS la posición real
+ * del scroll en el viewport y se le da exactamente el espacio que sobra
+ * hasta abajo — funciona sin importar cuánto midan el header/nav/padding
+ * del layout real. Se re-calcula en cada resize (listener instalado una
+ * sola vez, ver instalarListenerResizeAsistente) y cada vez que se
+ * reconstruye el esqueleto (entrar a la sección, "Nueva conversación").
+ */
+const MARGEN_INFERIOR_CHAT_PX = 16;
+let listenerResizeAsistenteInstalado = false;
+
+function ajustarAlturaChatAsistente() {
+  const scroll = document.getElementById("asistente-chat-scroll");
+  if (!scroll) return;
+  const top = scroll.getBoundingClientRect().top;
+  const alturaDisponible = window.innerHeight - top - MARGEN_INFERIOR_CHAT_PX;
+  scroll.style.height = `${Math.max(200, alturaDisponible)}px`;
+}
+
+function instalarListenerResizeAsistente() {
+  if (listenerResizeAsistenteInstalado) return;
+  listenerResizeAsistenteInstalado = true;
+  window.addEventListener("resize", ajustarAlturaChatAsistente);
+}
+instalarListenerResizeAsistente();
 
 function mostrarSaludoInicial() {
   agregarBurbujaAlDom(
