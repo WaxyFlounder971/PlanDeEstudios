@@ -5,7 +5,7 @@
    acceso a los planes/materias visibles.
    ========================================================================= */
 
-import { PARAMETROS_UNIVERSIDAD_DEFAULT, crearMateria, crearPlanEstudio, sellarTimestamp } from "../core/schema.js";
+import { NOMBRES_UNIVERSIDAD_PRESET, PARAMETROS_UNIVERSIDAD_DEFAULT, crearMateria, crearPlanEstudio, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { abrirModalGestionPlanes, renderizarModoHardcore, renderizarSelectorPlan } from "./plan-gestionar.js";
@@ -202,13 +202,33 @@ function abrirModalCrearPlan(paraSecundario, metadatosDetectados) {
 
   const bloqueUniOtraNombre = document.getElementById("bloque-universidad-otra-nombre");
   const inputUniOtraNombre = document.getElementById("input-universidad-otra-nombre");
-  inputUniOtraNombre.value = estado.nombreUniversidadImportacion || "";
+  // Siglas (2026-08-22, separación nombre_completo/siglas): segundo campo
+  // del bloque "Otra" — obligatorio junto al nombre para poder guardar
+  // (ver validación en btn-confirmar-crear-plan más abajo).
+  const inputUniOtraSiglas = document.getElementById("input-universidad-otra-siglas");
+  // Limpieza (2026-08-22): antes acá se precargaba desde
+  // estado.nombreUniversidadImportacion/siglasUniversidadImportacion, pero
+  // ninguna de las dos se asigna en ningún lado desde v1.12 (quedaron
+  // muertas cuando se eliminó el selector manual de universidad antes de
+  // importar) — siempre resolvían a "". Se arranca vacío directamente; el
+  // bloque de abajo (metadatos.universidad/siglas_universidad) es la única
+  // fuente real de precarga para "Otra".
+  inputUniOtraNombre.value = "";
+  inputUniOtraSiglas.value = "";
   if (btnInicial.dataset.valor === "Otra") {
     bloqueUniOtraNombre.classList.remove("oculto");
     // v7.1: si vino detectada por la IA (metadatos.universidad) y no coincidió
     // con TEC/UCR, se precarga como valor real editable (nunca genérico).
     if (metadatos.universidad && !["TEC", "UCR"].includes(mapearUniversidadDetectada(metadatos.universidad))) {
       inputUniOtraNombre.value = metadatos.universidad;
+    }
+    // Siglas detectadas por la IA (línea SIGLAS_UNIVERSIDAD: del CSV, ver
+    // extraerMetadatosImportacion en plan-importacion.js) — solo aplica en
+    // reimportaciones de un archivo que esta misma app ya exportó antes
+    // con fidelidad completa; un CSV nuevo/externo no la trae y el campo
+    // queda vacío para completar a mano.
+    if (metadatos.siglas_universidad) {
+      inputUniOtraSiglas.value = metadatos.siglas_universidad;
     }
   } else {
     bloqueUniOtraNombre.classList.add("oculto");
@@ -274,12 +294,25 @@ function inicializarModalCrearPlan() {
       return;
     }
     const universidadPill = document.getElementById("pill-plan-universidad").querySelector(".pill-item.active").dataset.valor;
-    // v7.1: si el pill activo es "Otra", se guarda el nombre real que el
-    // usuario escribió (nunca la palabra genérica "Otra"); si lo dejó
-    // vacío, se cae de vuelta a "Otra" para no guardar un campo vacío.
-    const universidad = universidadPill === "Otra"
-      ? (document.getElementById("input-universidad-otra-nombre").value.trim() || "Otra")
-      : universidadPill;
+    // Universidad — separación nombre_completo/siglas (2026-08-22): TEC/UCR
+    // arman el objeto solos (nombre completo real + sigla fija, cero input
+    // manual); "Otra" exige que el usuario haya llenado AMBOS campos —
+    // mismo criterio que el modal bloqueante de completar universidades
+    // (main.js), nunca se guarda un plan con siglas vacías.
+    let universidad;
+    if (universidadPill === "Otra") {
+      const nombreCompletoOtra = document.getElementById("input-universidad-otra-nombre").value.trim();
+      const siglasOtra = document.getElementById("input-universidad-otra-siglas").value.trim();
+      if (!nombreCompletoOtra || !siglasOtra) {
+        const err = document.getElementById("error-modal-crear-plan");
+        err.textContent = "Escribí el nombre completo y las siglas de tu universidad.";
+        err.classList.remove("oculto");
+        return;
+      }
+      universidad = { nombre_completo: nombreCompletoOtra, siglas: siglasOtra };
+    } else {
+      universidad = { nombre_completo: NOMBRES_UNIVERSIDAD_PRESET[universidadPill], siglas: universidadPill };
+    }
     // v1.12: tipos_horas ya no se lee de un selector manual — se deriva de
     // lo que la IA haya detectado en HORAS_COLUMNAS (guardado en
     // abrirModalCrearPlan). Si no hay nada detectado (ej. "+ Nuevo Plan" sin
@@ -392,7 +425,7 @@ function abrirModalMateriaManual(materiaExistente = null, planDeLaMateria = null
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "pill-item" + (plan.id === estado.materiaManualPlanId ? " active" : "");
-      btn.textContent = `${plan.universidad} · ${plan.nombre_carrera}`;
+      btn.textContent = `${plan.universidad.siglas} · ${plan.nombre_carrera}`;
       btn.addEventListener("click", () => {
         estado.materiaManualPlanId = plan.id;
         pillPlan.querySelectorAll(".pill-item").forEach((b) => b.classList.remove("active"));

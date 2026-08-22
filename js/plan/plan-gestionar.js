@@ -65,7 +65,7 @@ function renderizarSelectorPlan() {
   planes.forEach((plan) => {
     const btn = document.createElement("button");
     btn.className = "pill-item" + (plan.id === estado.datos.configuracion.plan_activo_id ? " active" : "");
-    btn.textContent = `${plan.universidad} · ${plan.nombre_carrera}`;
+    btn.textContent = `${plan.universidad.siglas} · ${plan.nombre_carrera}`;
     btn.addEventListener("click", () => {
       const cfg = estado.datos.configuracion;
       cfg.plan_activo_id = plan.id;
@@ -136,7 +136,7 @@ function renderizarModoHardcore() {
   info.className = "muted";
   info.textContent =
     "También se combinan: " +
-    acompanantes.map((p) => `${p.universidad} · ${p.nombre_carrera}`).join(", ");
+    acompanantes.map((p) => `${p.universidad.siglas} · ${p.nombre_carrera}`).join(", ");
   cont.appendChild(info);
 }
 estado.planGestionImportandoId = null;     // qué fila del panel de gestión tiene el mini-import abierto
@@ -196,7 +196,7 @@ function renderizarListaGestionPlanes() {
 
     const info = document.createElement("span");
     info.textContent =
-      `${plan.universidad} · ${aplicarFormatoTexto(plan.nombre_carrera)}` +
+      `${plan.universidad.siglas} · ${aplicarFormatoTexto(plan.nombre_carrera)}` +
       (plan.codigo_plan ? ` (${plan.codigo_plan})` : "") +
       (plan.materias.length === 0 ? " — sin materias" : ` — ${plan.materias.length} materias`);
     fila.appendChild(info);
@@ -368,7 +368,10 @@ estado.editarPlanInfoId = null; // qué plan.id está abierto en este modal
 function abrirModalEditarPlanInfo(plan) {
   estado.editarPlanInfoId = plan.id;
   document.getElementById("input-editar-plan-nombre-carrera").value = plan.nombre_carrera || "";
-  document.getElementById("input-editar-plan-universidad").value = plan.universidad || "";
+  // Universidad — separación nombre_completo/siglas (2026-08-22): 2 campos
+  // independientes en vez del input único de antes.
+  document.getElementById("input-editar-plan-universidad-nombre").value = plan.universidad.nombre_completo || "";
+  document.getElementById("input-editar-plan-universidad-siglas").value = plan.universidad.siglas || "";
   document.getElementById("input-editar-plan-codigo").value = plan.codigo_plan || "";
   document.getElementById("input-editar-plan-tipo-titulo").value = plan.tipo_titulo || "";
   const params = plan.parametros_universidad || {};
@@ -400,7 +403,11 @@ function inicializarModalEditarPlanInfo() {
     }
 
     const nombreCarrera = document.getElementById("input-editar-plan-nombre-carrera").value.trim();
-    const universidad = document.getElementById("input-editar-plan-universidad").value.trim();
+    // Universidad — separación nombre_completo/siglas (2026-08-22): 2
+    // campos independientes, ambos obligatorios (mismo criterio que el
+    // modal bloqueante de completar universidades y que "Nuevo Plan").
+    const universidadNombre = document.getElementById("input-editar-plan-universidad-nombre").value.trim();
+    const universidadSiglas = document.getElementById("input-editar-plan-universidad-siglas").value.trim();
     const codigoPlan = document.getElementById("input-editar-plan-codigo").value.trim();
     const tipoTitulo = document.getElementById("input-editar-plan-tipo-titulo").value.trim();
     const nombreBloque = document.getElementById("input-editar-plan-nombre-bloque").value.trim();
@@ -408,8 +415,8 @@ function inicializarModalEditarPlanInfo() {
     const horaInicio = document.getElementById("input-editar-plan-hora-inicio").value;
     const duracion = Number(document.getElementById("input-editar-plan-duracion").value);
 
-    if (!nombreCarrera || !universidad) {
-      error.textContent = "El nombre de la carrera y la universidad son obligatorios.";
+    if (!nombreCarrera || !universidadNombre || !universidadSiglas) {
+      error.textContent = "El nombre de la carrera, el nombre de la universidad y sus siglas son obligatorios.";
       error.classList.remove("oculto");
       return;
     }
@@ -420,7 +427,7 @@ function inicializarModalEditarPlanInfo() {
     }
 
     plan.nombre_carrera = nombreCarrera;
-    plan.universidad = universidad;
+    plan.universidad = { nombre_completo: universidadNombre, siglas: universidadSiglas };
     plan.codigo_plan = codigoPlan || null;
     plan.tipo_titulo = tipoTitulo || null;
     plan.parametros_universidad.nombre_bloque = nombreBloque;

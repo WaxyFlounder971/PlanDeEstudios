@@ -171,7 +171,7 @@ function construirEncabezadoPlan(planPrincipal) {
   const sub = document.createElement("p");
   sub.className = "muted encabezado-plan-linea2" + (hayCarrusel ? "" : " sin-flechas");
   sub.style.margin = "0";
-  sub.textContent = `${planPrincipal.universidad}` + (planPrincipal.codigo_plan ? ` · ${planPrincipal.codigo_plan}` : "");
+  sub.textContent = `${planPrincipal.universidad.siglas}` + (planPrincipal.codigo_plan ? ` · ${planPrincipal.codigo_plan}` : "");
   tituloWrap.appendChild(sub);
   filaTitulo.appendChild(tituloWrap);
   sec.appendChild(filaTitulo);
@@ -461,7 +461,15 @@ function exportarPlanACSV(planParam) {
   const metadatos = [];
   if (principal.nombre_carrera) metadatos.push(`CARRERA: ${principal.nombre_carrera}`);
   if (principal.codigo_plan) metadatos.push(`CODIGO_PLAN: ${principal.codigo_plan}`);
-  if (principal.universidad) metadatos.push(`UNIVERSIDAD: ${principal.universidad}`);
+  // Universidad — separación nombre_completo/siglas (2026-08-22): 2 líneas
+  // de metadato en vez de 1, para fidelidad completa al reimportar (ver
+  // extraerMetadatosImportacion en plan-importacion.js).
+  if (principal.universidad && principal.universidad.nombre_completo) {
+    metadatos.push(`UNIVERSIDAD: ${principal.universidad.nombre_completo}`);
+  }
+  if (principal.universidad && principal.universidad.siglas) {
+    metadatos.push(`SIGLAS_UNIVERSIDAD: ${principal.universidad.siglas}`);
+  }
   if (principal.tipo_titulo) metadatos.push(`TIPO_TITULO: ${principal.tipo_titulo}`);
   metadatos.push(`HORAS_COLUMNAS: ${tipos.length ? tipos.join(",") : "Ninguna"}`);
 

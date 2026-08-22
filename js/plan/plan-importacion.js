@@ -259,6 +259,12 @@ function extraerMetadatosImportacion(textoCrudo) {
     carrera: /^CARRERA:\s*(.+)$/i,
     codigo_plan: /^CODIGO_PLAN:\s*(.+)$/i,
     universidad: /^UNIVERSIDAD:\s*(.+)$/i,
+    // Siglas — separación nombre_completo/siglas (2026-08-22): línea nueva
+    // de metadato, solo la trae un CSV que esta misma app ya exportó con
+    // fidelidad completa (ver exportarPlanACSV en plan-vista-lista.js). Un
+    // CSV externo/nuevo no la trae y el campo de siglas queda vacío para
+    // completar a mano en el modal "Nuevo Plan".
+    siglas_universidad: /^SIGLAS_UNIVERSIDAD:\s*(.+)$/i,
     tipo_titulo: /^TIPO_TITULO:\s*(.+)$/i,
     horas_columnas: /^HORAS_COLUMNAS:\s*(.+)$/i,
   };
