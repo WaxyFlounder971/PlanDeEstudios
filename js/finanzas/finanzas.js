@@ -9,6 +9,7 @@
 
 import { calcularPagosRecurrentesTranscurridos } from "../core/schema.js";
 import { estado } from "../core/storage.js";
+import { construirGraficasResumenFinanzas } from "./finanzas-graficas.js";
 import { renderizarPestanaBeneficios, renderizarPestanaGastosU } from "./finanzas-gastos.js";
 import { renderizarPestanaSemestresFinanzas } from "./finanzas-semestres.js";
 
@@ -174,6 +175,12 @@ function construirResumenFinanzas() {
     vacio.textContent =
       "Todavía no hay ningún registro financiero. Entrá a la pestaña Semestres o Gastos generales U para empezar.";
     sec.appendChild(vacio);
+  } else {
+    // v2.9.0: 3 gráficas debajo de los totales — donut beca vs. gastado,
+    // línea de ingresos/gastos por semestre y línea de balance acumulado.
+    // Toda la lógica y el dibujo viven en finanzas-graficas.js (archivo
+    // nuevo), este archivo solo les pasa los 2 totales que ya calculaba.
+    sec.appendChild(construirGraficasResumenFinanzas(totalBecas, totalGastado));
   }
 
   return sec;

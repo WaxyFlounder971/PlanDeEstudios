@@ -702,4 +702,4 @@ function renderizarPestanaBeneficios(contenedor) {
   contenedor.appendChild(sec);
 }
 
-export { renderizarPestanaBeneficios, renderizarPestanaGastosU };
+export { obtenerTodosLosSemestres, renderizarPestanaBeneficios, renderizarPestanaGastosU };
