@@ -1038,6 +1038,24 @@
       </label>
     </div>
 
+    <!-- Reporte de Wagner (ronda de ajustes visuales): el puntito de
+         pendientes en la vista Calendario mostraba siempre uno solo, incluso
+         con varios pendientes del mismo tipo/color ese día (ver resumenDia /
+         construirCelda en agenda-calendario.js). En vez de imponer un único
+         comportamiento, queda como ajuste: default ON = un puntito por cada
+         pendiente (con "+N" si son muchos); OFF = el criterio anterior, un
+         puntito por color/estado distinto, sin repetir. -->
+    <div>
+      <div class="row-between">
+        <span>Repetir puntito por cada pendiente</span>
+        <label class="switch switch-tema">
+          <input type="checkbox" id="chk-agenda-calendario-repetir-puntos" checked>
+          <span class="track"><span class="thumb"></span></span>
+        </label>
+      </div>
+      <p class="muted" style="font-size:0.78rem; margin:6px 0 0;">En el Calendario: activado, cada tarea o examen pendiente suma su propio puntito ese día. Desactivado, se muestra un solo puntito por tipo, sin repetir, aunque haya varios pendientes iguales.</p>
+    </div>
+
     <!-- Pedido nuevo: qué mostrar en la columna derecha de un pendiente
          cuando "vence hoy" — 3 switches que se comportan como un grupo de
          radio (siempre 1 activo), ver inicializarSwitchesVenceHoyAgenda en
