@@ -255,6 +255,12 @@ function inicializarBotonesCerrarModal() {
     // agrupado al final del bloque de detalle — el "X" de la esquina se
     // elimina ahí para no duplicar la acción.
     if (overlay.id === "modal-requisito") return;
+    // Completar universidades (2026-08-22): modal BLOQUEANTE a propósito —
+    // no puede tener ninguna forma de cerrarse sin guardar (ver
+    // modal-completar-universidades en index.html / revisarUniversidadesIncompletas
+    // en main.js), así que se excluye de la "X" automática igual que
+    // modal-requisito arriba.
+    if (overlay.id === "modal-completar-universidades") return;
     const card = overlay.querySelector(".modal-card");
     if (!card || card.querySelector(".modal-x-close")) return;
 
