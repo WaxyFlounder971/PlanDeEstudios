@@ -124,7 +124,10 @@ function crearDatosUsuarioNuevo() {
       {
         id: "plan_001",
         nombre_carrera: "Ingeniería en Tecnologías de Información",
-        universidad: "TEC",              // "TEC" | "UCR" | otra
+        // universidad (2026-08-22, separación nombre_completo/siglas): ya
+        // NO es un string plano — ver NOMBRES_UNIVERSIDAD_PRESET y el
+        // comentario completo sobre crearPlanEstudio más abajo.
+        universidad: { nombre_completo: "Instituto Tecnológico de Costa Rica", siglas: "TEC" },
         codigo_plan: "420501, plan 01",  // texto libre, tal cual lo trae la universidad
         parametros_universidad: {
           nombre_bloque: "Semestre",     // "Semestre" | "Cuatrimestre" | "Trimestre"
@@ -825,6 +828,17 @@ const PARAMETROS_UNIVERSIDAD_DEFAULT = {
   UCR: { nombre_bloque: "Semestre", semanas_por_bloque: 16, horario_inicio_default: "07:00", horario_duracion_bloque_min: 50, tipos_horas: ["Teoría", "Práctica", "Laboratorio", "Teoría-Práctica"] },
 };
 
+/** Nombres completos de los 2 presets rápidos (2026-08-22, separación
+ *  universidad en nombre_completo/siglas) — TEC/UCR siguen siendo atajos
+ *  con un clic en el modal "Nuevo Plan"; acá vive el nombre completo real
+ *  que se guarda junto a la sigla, así el usuario nunca tiene que tipearlo
+ *  para esos 2 casos. Cualquier otra universidad ("Otra") lo escribe el
+ *  usuario a mano (ver bloque-universidad-otra-nombre en index.html). */
+const NOMBRES_UNIVERSIDAD_PRESET = {
+  TEC: "Instituto Tecnológico de Costa Rica",
+  UCR: "Universidad de Costa Rica",
+};
+
 /** Presets rápidos de tipos_horas, usados tanto por el modal "Nuevo Plan" como
  *  por el selector de universidad que aparece en el panel de importación
  *  (antes de que el plan exista) — ver js/plan.js. */
@@ -833,6 +847,16 @@ const PRESETS_TIPOS_HORAS = {
   UCR: ["Teoría", "Práctica", "Laboratorio", "Teoría-Práctica"],
 };
 
+/**
+ * `universidad` (2026-08-22, separación nombre_completo/siglas): ya NO es
+ * un string plano — es { nombre_completo, siglas }. `siglas` es lo que se
+ * usa en TODOS los badges/subtítulos cortos de la app (encabezado del
+ * plan, selector de plan, carrusel de Semestres, Modo Hardcore);
+ * `nombre_completo` queda disponible para búsquedas o contexto donde hace
+ * falta el nombre real sin abreviar (ej. prompt del Asistente IA). Quien
+ * llama es responsable de armar este objeto completo — ver
+ * abrirModalCrearPlan/btn-confirmar-crear-plan en plan-esquema.js.
+ */
 function crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, tipo_titulo, parametros_universidad }) {
   return sellarTimestamp({
     id: "plan_" + crypto.randomUUID(),
@@ -2173,7 +2197,12 @@ function calcularPromedioPorSemestreYUniversidad(datos) {
   entradas.forEach((e) => {
     if (!porSemestre.has(e.semestre.id)) porSemestre.set(e.semestre.id, new Map());
     const porUniversidad = porSemestre.get(e.semestre.id);
-    const universidad = e.plan.universidad || "Sin universidad";
+    // Universidad — separación nombre_completo/siglas (2026-08-22): se
+    // agrupa/etiqueta por siglas (mismo criterio "badge" que el resto de
+    // la app) para que semestres-dashboard.js siga recibiendo un string
+    // corto tal cual lo esperaba antes de este cambio, sin tener que
+    // tocar ese archivo.
+    const universidad = (e.plan.universidad && (e.plan.universidad.siglas || e.plan.universidad.nombre_completo)) || "Sin universidad";
     if (!porUniversidad.has(universidad)) porUniversidad.set(universidad, []);
     porUniversidad.get(universidad).push(e);
   });
@@ -2453,7 +2482,13 @@ function obtenerUniversidadesDeProfesor(profesorId, datos) {
   const planesPorId = new Map((datos.planes_estudio || []).map((p) => [p.id, p]));
   obtenerHistorialProfesor(profesorId, datos).forEach(({ mm }) => {
     const plan = planesPorId.get(mm.plan_estudio_id);
-    if (plan && plan.universidad) universidades.add(plan.universidad);
+    // Universidad — separación nombre_completo/siglas (2026-08-22): mismo
+    // criterio que calcularPromedioPorSemestreYUniversidad — se devuelve
+    // la sigla (string corto, mismo contrato de siempre) para no tener
+    // que tocar comunidad.js, que consume este arreglo para decidir qué
+    // botón "Buscar en MisProfesX" mostrar.
+    const sigla = plan && plan.universidad && (plan.universidad.siglas || plan.universidad.nombre_completo);
+    if (sigla) universidades.add(sigla);
   });
   return Array.from(universidades);
 }
@@ -2577,6 +2612,24 @@ function migrarDatosAntiguos(datos) {
   if (datos.configuracion && datos.configuracion.plan_activo_terciario_id === undefined) {
     datos.configuracion.plan_activo_terciario_id = null;
   }
+
+  // Universidad — separación en nombre completo + siglas (2026-08-22):
+  // planes creados antes de este cambio traen `universidad` como string
+  // plano (ej. "TEC", "Universidad Nacional"). Se migra a
+  // { nombre_completo, siglas } usando el string viejo como nombre
+  // completo (es el dato más descriptivo que ya había) y dejando
+  // `siglas` vacío A PROPÓSITO — no hay forma confiable de abreviar un
+  // nombre libre sin arriesgar un badge sin sentido. `siglas: ""` es
+  // justo la señal que usa mostrarApp() (main.js) para detectar planes
+  // "incompletos" y abrir el modal bloqueante que pide completarlas antes
+  // de seguir usando la app — ver abrirModalCompletarUniversidades.
+  (datos.planes_estudio || []).forEach((plan) => {
+    if (typeof plan.universidad === "string") {
+      plan.universidad = { nombre_completo: plan.universidad, siglas: "" };
+    } else if (!plan.universidad || typeof plan.universidad !== "object") {
+      plan.universidad = { nombre_completo: "", siglas: "" };
+    }
+  });
 
   // Ajustes — ocultar botones de navegación (2026-08-04): mismo relleno
   // defensivo que el resto de esta función — cuentas creadas antes de este
@@ -3065,6 +3118,7 @@ export {
   crearBackupDriveDefault,
   PALETAS_DISPONIBLES,
   PARAMETROS_UNIVERSIDAD_DEFAULT,
+  NOMBRES_UNIVERSIDAD_PRESET,
   PRESETS_TIPOS_HORAS,
   arbolContieneCodigo,
   crearAdjunto,
