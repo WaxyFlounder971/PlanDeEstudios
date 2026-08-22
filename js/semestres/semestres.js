@@ -243,7 +243,7 @@ function construirSelectorPlanesHardcore(contenedor, planesIds, onCambiarVisible
     if (!plan) return;
     const marcadas = (seleccionPorPlan.get(planesIds[indice]) || new Set()).size;
     etiqueta.textContent =
-      `${plan.universidad} · ${aplicarFormatoTexto(plan.nombre_carrera)}` + (marcadas > 0 ? ` (${marcadas})` : "");
+      `${plan.universidad.siglas} · ${aplicarFormatoTexto(plan.nombre_carrera)}` + (marcadas > 0 ? ` (${marcadas})` : "");
   }
 
   btnAnterior.addEventListener("click", () => {
