@@ -73,7 +73,7 @@ Exporta:
 
 *Datos de usuario y migraciones:*
 * `crearDatosUsuarioNuevo()` — objeto de datos "vacío" para un usuario que inicia sesión por primera vez (estructura completa de fábrica).
-* `migrarDatosAntiguos(datos)` — corre todas las migraciones de esquema necesarias sobre datos ya existentes, de forma idempotente, antes de renderizar nada.
+* `migrarDatosAntiguos(datos)` — corre todas las migraciones de esquema necesarias sobre datos ya existentes, de forma idempotente, antes de renderizar nada. Incluye (2026-08-22) la migración de `plan.universidad` de string plano a `{ nombre_completo, siglas }`: string viejo → `{ nombre_completo: <string>, siglas: "" }`; ausente/corrupto → ambos campos vacíos. `siglas: ""` es la señal que usa `revisarUniversidadesIncompletas()` (main.js) para detectar planes incompletos y bloquear con `#modal-completar-universidades`.
 * `MAPEO_HORAS_VIEJO_A_NUEVO` — tabla de migración del modelo viejo de horas fijo al modelo dinámico de `tipos_horas`.
 
 *Reloj lógico / sincronización (Lamport):*
@@ -88,10 +88,11 @@ Exporta:
 * `LIMITE_MB_ADJUNTO` — tamaño máximo por adjunto en MB (25).
 
 *Plan de Estudios:*
-* `crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, tipo_titulo, parametros_universidad })` — crea un Plan de Estudios nuevo.
+* `crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, tipo_titulo, parametros_universidad })` — crea un Plan de Estudios nuevo. `universidad` (2026-08-22, separación nombre_completo/siglas) ya no es un string plano — es `{ nombre_completo, siglas }`; `siglas` es lo que se usa en todos los badges cortos de la app, `nombre_completo` queda para contexto donde hace falta el nombre real. Quien llama es responsable de armar el objeto completo (ver `abrirModalCrearPlan`/`btn-confirmar-crear-plan` en plan-esquema.js).
 * `crearMateria({ codigo, nombre, creditos, horas, tiposHoras, bloque, requisitos, correquisitos, esOptativa, sinDefinir })` — crea una materia a partir de una fila de CSV o del formulario manual.
 * `crearCategoria({ nombre, color })` — crea una categoría de materias (con timestamp sellado).
 * `PARAMETROS_UNIVERSIDAD_DEFAULT` — valores sugeridos por universidad (tipos de horas, etc.).
+* `NOMBRES_UNIVERSIDAD_PRESET` (2026-08-22) — nombres completos de los 2 presets rápidos TEC/UCR (`{ TEC: "Instituto Tecnológico de Costa Rica", UCR: "Universidad de Costa Rica" }`), usados para armar `universidad.nombre_completo` sin que el usuario lo tipee en esos 2 casos.
 * `PRESETS_TIPOS_HORAS` — presets rápidos de `tipos_horas` para el modal "Nuevo Plan".
 
 *Árbol de requisitos Y/O:*
@@ -132,7 +133,7 @@ Exporta:
 * `calcularNotaFinalVigenteMateria(mm, materia, plan, configuracion)` / `calcularNotaParaPromedio(mm, materia, plan, configuracion)` — nota final vigente de una matrícula, con y sin redondeo al 5, para dashboards.
 * `listarMatriculasResolubles(datos, incluirActuales = true)` — lista base de matrículas con nota resoluble, para alimentar los cálculos de promedio.
 * `calcularPromedioPonderado(entradas)` — Σ(nota×créditos)/Σcréditos sobre una lista ya filtrada.
-* `calcularPromedioPorSemestreYUniversidad(datos)` / `calcularPromedioPorPlan(datos)` / `calcularPromedioTotalCombinado(datos)` — los 3 niveles de promedio del dashboard (por semestre+universidad, por plan/carrera, combinado total).
+* `calcularPromedioPorSemestreYUniversidad(datos)` / `calcularPromedioPorPlan(datos)` / `calcularPromedioTotalCombinado(datos)` — los 3 niveles de promedio del dashboard (por semestre+universidad, por plan/carrera, combinado total). Agrupa por `plan.universidad.siglas` (con fallback a `nombre_completo` y luego "Sin universidad") desde la separación nombre_completo/siglas (2026-08-22).
 * `calcularEstadisticasAprobacion(datos, planId)` — % de cursos aprobados/reprobados (solo materias cerradas).
 * `calcularDetallePorEstado(datos, planId)` — conteo por los 4 estados manuales del Plan (Aprobada/Cursando/Reprobada/Pendiente).
 
@@ -162,7 +163,7 @@ Exporta:
 *Comunidad:*
 * `crearProfesor({ nombre, materias, correo, telefono })` / `crearCompanero({ nombre_completo, carnet, lista, materias_compartidas, nota, telefono })` — crean profesor/compañero.
 * `obtenerHistorialProfesor(profesorId, datos)` — todas las materias matriculadas ligadas a un profesor, en todos los semestres.
-* `obtenerUniversidadesDeProfesor(profesorId, datos)` — universidades donde dio clases un profesor.
+* `obtenerUniversidadesDeProfesor(profesorId, datos)` — universidades donde dio clases un profesor. Devuelve strings vía `plan.universidad.siglas` (fallback a `nombre_completo`), mismo criterio que `calcularPromedioPorSemestreYUniversidad`.
 * `obtenerMateriasCompartidasValidas(companero, datos)` — filtra las materias compartidas de un compañero a solo las que siguen apuntando a una matrícula real.
 * `obtenerIntentosMateria(materiaId, planEstudioId, datos)` — todos los intentos reales de cursar una materia, cruzando todos los semestres.
 
@@ -418,7 +419,7 @@ Depende de: schema.js, storage-sync.js, storage.js, plan-gestionar.js, plan-impo
 Exporta:
 * `EJEMPLOS_PLACEHOLDER_PLAN` — placeholders de ejemplo de Carrera/Código según universidad (TEC, UCR, etc.) para los inputs del modal de crear plan.
 * `LIMITE_PLANES_ESTUDIO` — número máximo de planes de estudio que el usuario puede tener (3).
-* `abrirModalCrearPlan(paraSecundario, metadatosDetectados)` — abre el modal de crear plan nuevo, marcando si es el plan secundario y precargando metadatos si vienen de una importación.
+* `abrirModalCrearPlan(paraSecundario, metadatosDetectados)` — abre el modal de crear plan nuevo, marcando si es el plan secundario y precargando metadatos si vienen de una importación. Si `metadatosDetectados.universidad` no mapea a TEC/UCR, precarga el bloque "Otra" con nombre completo + siglas detectadas (`siglas_universidad`, línea `SIGLAS_UNIVERSIDAD:` del CSV — ver `extraerMetadatosImportacion` en plan-importacion.js); el campo "Otra" arranca vacío si no hay nada detectado (2026-08-22: se eliminó la precarga muerta desde `estado.nombreUniversidadImportacion`/`siglasUniversidadImportacion`, que nunca se asignaban).
 * `abrirModalMateriaManual(materiaExistente, planDeLaMateria)` — abre el modal "+ Añadir materia" en modo alta o edición, según si se pasa una materia existente.
 * `abrirModalVincularOptativa(materiaTemplate, plan, origen)` — abre el modal para vincular una optativa disponible o una materia a revisar; `origen` indica de cuál arreglo especial viene.
 * `actualizarFormatoHorasMateriaManual()` — actualiza los campos de horas del modal de materia manual según los `tipos_horas` del plan activo.
@@ -427,7 +428,7 @@ Exporta:
 * `buscarMateriaPorCodigoEnPlanes(codigo)` — busca una materia por código entre todas las materias visibles (plan principal + secundario). Devuelve la fila `{materia, plan, origen}` o `null`.
 * `elegirPlaceholderPlan(universidad)` — elige al azar un ejemplo de placeholder de `EJEMPLOS_PLACEHOLDER_PLAN` para la universidad dada.
 * `filasFiltradas()` — devuelve las materias visibles filtradas por categoría activa y texto de búsqueda actuales.
-* `inicializarModalCrearPlan()` — registra los listeners del modal de crear plan (selector de universidad, guardar, cancelar).
+* `inicializarModalCrearPlan()` — registra los listeners del modal de crear plan (selector de universidad, guardar, cancelar). El handler de guardar arma `universidad` como `{ nombre_completo, siglas }`: TEC/UCR lo arman solos vía `NOMBRES_UNIVERSIDAD_PRESET`; "Otra" exige ambos campos completos (bloquea con error si falta alguno) — 2026-08-22.
 * `inicializarModalMateriaManual()` — registra los listeners del modal de añadir/editar materia manual.
 * `inicializarModalVincularOptativa()` — registra los listeners del modal de vincular optativa.
 * `mapearUniversidadDetectada(texto)` — infiere el código de universidad (TEC/UCR/Otra) a partir de un texto libre detectado en una importación.
@@ -757,7 +758,9 @@ Exporta:
 * `programarAvisoLoginBloqueado()` — arma un timeout de 6s que muestra el aviso "no se pudo abrir el login" (VPN/bloqueador de anuncios/extensión de privacidad).
 * `ocultarAvisoLoginBloqueado()` — cancela ese timeout y oculta tanto el aviso de login bloqueado como el de permiso rechazado.
 * `onLoginExitoso(token, expiresIn)` — flujo posterior a un login exitoso de Google: guarda el token activo, resuelve `authListo`, pide almacenamiento persistente al navegador, continúa la carga de datos y, si la cuenta es nueva (`esArchivoNuevo`), ofrece activar notificaciones push reales (`ofrecerActivarNotificacionesPush`).
-* `mostrarApp()` — oculta la pantalla de login y muestra el shell de la app; aplica la paleta/tema guardado, renderiza el selector de plan y, si la URL trae `?abrir=agenda` (llegó de tocar una notificación push), salta directo a la sección Agenda.
+* `mostrarApp()` — oculta la pantalla de login y muestra el shell de la app; aplica la paleta/tema guardado, renderiza el selector de plan y, si la URL trae `?abrir=agenda` (llegó de tocar una notificación push), salta directo a la sección Agenda. Al final llama a `revisarUniversidadesIncompletas()`.
+* `inicializarModalCompletarUniversidades()` (2026-08-22) — registra el listener del botón "Guardar" de `#modal-completar-universidades`; guarda nombre_completo+siglas de cada plan incompleto y solo se habilita cuando todas las filas tienen ambos campos llenos.
+* `revisarUniversidadesIncompletas()` (2026-08-22) — recorre `estado.datos.planes_estudio` buscando planes con `universidad.siglas === ""` (dejados así por `migrarDatosAntiguos` al migrar un `universidad` string viejo); si encuentra alguno, arma las filas dinámicas en `#lista-completar-universidades` y abre el modal bloqueante `#modal-completar-universidades` (excluido del cierre automático por "X"/click-afuera en componentes.js — no se puede posponer). Se llama al final de `mostrarApp()`.
 * `pedirConfirmacionCerrarSesion()` — cierra el popover de perfil; si hay cambios sin sincronizar pide confirmación antes de cerrar sesión, si no cierra directo.
 * `cerrarSesion()` — limpia token, caché local y estado en memoria; vuelve a mostrar la pantalla de login.
 * `CLAVE_SECCION_ACTIVA` — clave de `localStorage` (`"seccion_activa_v1"`) donde se persiste qué sección de navegación quedó activa.
