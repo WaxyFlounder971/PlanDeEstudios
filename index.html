@@ -121,6 +121,13 @@
         <button id="nav-comunidad" class="btn btn-secondary btn-block btn-nav" data-seccion="comunidad" title="Comunidad">👥 <span class="texto-nav">Comunidad</span></button>
         <button id="nav-finanzas" class="btn btn-secondary btn-block btn-nav" data-seccion="finanzas" title="Finanzas">💰 <span class="texto-nav">Finanzas</span></button>
         <button id="nav-plan-estudios" class="btn btn-secondary btn-block btn-nav" data-seccion="plan-estudios" title="Plan de Estudios">📚 <span class="texto-nav">Plan de Estudios</span></button>
+        <!-- Asistente IA (Gemini), 2026-08-22: visibilidad NO pasa por el
+             sistema de navegacion_oculta (eso es preferencia manual del
+             usuario) — se muestra/oculta solo según si hay clave de Gemini
+             guardada, ver aplicarVisibilidadBotonAsistente() en main.js.
+             Arranca oculto por defecto (igual que cualquier cuenta sin
+             clave todavía) hasta que esa función corra al cargar la app. -->
+        <button id="nav-asistente" class="btn btn-secondary btn-block btn-nav oculto" data-seccion="asistente" title="Asistente IA">✨ <span class="texto-nav">Asistente</span></button>
         <button id="nav-configuracion" class="btn btn-primary btn-block btn-nav" data-seccion="configuracion" title="Configuración">⚙️ <span class="texto-nav">Configuración</span></button>
         <div style="flex:1;"></div>
         <div class="row" style="justify-content:flex-start; gap:8px;">
@@ -158,6 +165,14 @@
            propio. -->
       <div id="seccion-resumen" class="stack oculto"></div>
 
+      <!-- ===================== SECCIÓN: Asistente IA ===================== -->
+      <!-- Contenido construido dinámicamente por js/asistente/asistente.js.
+           Mismo patrón que seccion-resumen: div vacío, todo el DOM lo arma
+           el JS. Solo es alcanzable si nav-asistente está visible (hay
+           clave de Gemini guardada) — ver mostrarSeccion()/
+           aplicarVisibilidadBotonAsistente() en main.js. -->
+      <div id="seccion-asistente" class="stack oculto"></div>
+
       <!-- ===================== SECCIÓN: Configuración ===================== -->
       <div id="seccion-configuracion" class="stack">
 
@@ -184,6 +199,46 @@
             <span class="form-label">Nota de aprobación por universidad/plan</span>
             <div id="seccion-notas-aprobacion" class="stack"></div>
           </div>
+          </div>
+        </section>
+
+        <!-- Asistente IA (Gemini), 2026-08-22: la clave se guarda en
+             estado.datos.configuracion.gemini_api_key — mismo nivel de
+             confianza que cualquier otro dato del usuario, sincroniza por
+             Drive como todo lo demás (ver inicializarAsistenteAjustes en
+             config-ajustes.js). -->
+        <section class="glass-card stack ajuste-seccion colapsada">
+          <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Asistente IA (Gemini)</h2><span class="ajuste-seccion-chevron">▾</span></button>
+          <div class="ajuste-seccion-cuerpo">
+
+          <p class="muted">Creá tareas, exámenes y eventos hablando o escribiendo en lenguaje natural, sin llenar el formulario a mano. Usa Gemini, el modelo de IA de Google — con tu propia clave, gratis y solo tuya (no la vemos nosotros, solo Google).</p>
+
+          <p class="muted" style="font-size:0.85rem;">
+            1. Entrá a Google AI Studio (botón abajo).<br>
+            2. Iniciá sesión con tu cuenta de Google.<br>
+            3. Tocá "Create API key".<br>
+            4. Copiala y pegala acá abajo.
+          </p>
+
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="btn btn-secondary btn-block">Abrir Google AI Studio ↗</a>
+
+          <div id="bloque-gemini-key-vacio">
+            <span class="form-label">Clave de API de Gemini</span>
+            <input type="password" id="input-gemini-key" class="form-input" placeholder="Pegá tu clave acá" autocomplete="off">
+            <p id="error-gemini-key" class="muted oculto" style="color:var(--color-danger);"></p>
+            <button id="btn-guardar-gemini-key" class="btn btn-primary btn-block" style="margin-top:8px;">Guardar</button>
+          </div>
+
+          <div id="bloque-gemini-key-guardada" class="stack oculto">
+            <div class="row-between">
+              <span id="texto-gemini-key-guardada" class="muted"></span>
+              <div class="row" style="gap:8px;">
+                <button id="btn-reemplazar-gemini-key" class="btn btn-secondary">Reemplazar</button>
+                <button id="btn-borrar-gemini-key" class="btn btn-danger">Borrar</button>
+              </div>
+            </div>
+          </div>
+
           </div>
         </section>
 
