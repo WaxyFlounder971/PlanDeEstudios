@@ -16,7 +16,7 @@ import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { programarRecordatorioPush } from "../core/notificaciones-push.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { abrirModalEventoAgenda, confirmarBorrarEventoAgenda, obtenerNombreMateriaEvento } from "../agenda/agenda-modal.js";
-import { formatearHoraAmPm, obtenerMateriasVinculablesAgenda } from "../agenda/agenda-utils.js";
+import { formatearHoraAmPm, obtenerMateriasVinculablesAgenda, obtenerSemestresSeleccionadosAgenda } from "../agenda/agenda-utils.js";
 import { fechaLocalDesdeISO } from "../horario/horario.js";
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 
@@ -123,6 +123,11 @@ function crearBotonVoz(input) {
       input.value = texto;
     };
     reconocimientoVoz.onerror = (e) => {
+      // Antes esto no quedaba en consola de ninguna forma — el toast
+      // genérico no distingue causa. Con este log, la próxima vez que
+      // falle alcanza con abrir la consola y mirar qué dice e.error
+      // (ej. "audio-capture", "network") para saber la causa real.
+      console.warn("[asistente] Error de reconocimiento de voz:", e.error, e);
       if (e.error === "not-allowed" || e.error === "service-not-allowed") {
         mostrarToast("Permiso de micrófono denegado");
       } else if (e.error !== "no-speech" && e.error !== "aborted") {
@@ -187,6 +192,61 @@ function obtenerContextoFechaHoy() {
   return { iso: `${y}-${m}-${d}`, diaSemana: NOMBRES_DIA_SEMANA[hoy.getDay()] };
 }
 
+/** "YYYY-MM-DD" a partir de una fecha local (inverso de fechaLocalDesdeISO). */
+function fechaISODesdeLocal(fecha) {
+  const y = fecha.getFullYear();
+  const m = String(fecha.getMonth() + 1).padStart(2, "0");
+  const d = String(fecha.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Bug real reportado (2026-08-22): el usuario dijo "a partir de semana 5"
+ * (semana ACADÉMICA del semestre, no de un mes calendario) y Gemini calculó
+ * mal — puso semana 8/9/10. Nunca fue un problema de "no entendió la
+ * instrucción", fue que le pedíamos hacer aritmética de fechas encadenada
+ * (día de hoy → offset de semanas → fecha calendario) a mano, y ahí un LLM
+ * se resbala fácil.
+ *
+ * La solución no es pedirle que calcule mejor: es no dejarlo calcular. Acá
+ * se arma, con datos REALES de cada semestre (fecha_inicio +
+ * duracion_semanas, mismos campos que usa calcularNumeroSemanaSemestre en
+ * core/schema.js), una tabla ya resuelta "semana N empieza el YYYY-MM-DD
+ * (lunes)" para CADA semestre que Agenda tiene seleccionado ahora mismo.
+ * Gemini ya no calcula la fecha de una semana académica: la busca en la
+ * tabla y como mucho le suma el offset de día-de-semana (lunes+1=martes,
+ * etc.), que es la única aritmética que sí le sale bien de forma
+ * consistente.
+ */
+function construirContextoSemanasSemestres() {
+  const semestres = obtenerSemestresSeleccionadosAgenda();
+  if (semestres.length === 0) return "";
+
+  const bloques = semestres.map((semestre) => {
+    const inicio = fechaLocalDesdeISO(semestre.fecha_inicio);
+    if (isNaN(inicio.getTime())) return null;
+    const totalSemanas = Number(semestre.duracion_semanas) || 16;
+
+    const filas = [];
+    for (let n = 1; n <= totalSemanas; n++) {
+      const inicioSemana = new Date(inicio);
+      inicioSemana.setDate(inicioSemana.getDate() + (n - 1) * 7);
+      filas.push(`  Semana ${n}: lunes ${fechaISODesdeLocal(inicioSemana)}`);
+    }
+    return `Semestre "${semestre.nombre || "Semestre"}" (empieza ${semestre.fecha_inicio}):\n${filas.join("\n")}`;
+  }).filter(Boolean);
+
+  if (bloques.length === 0) return "";
+
+  return `\n\nTabla de semanas académicas (para resolver frases como "a partir de la
+semana 5", "semana 8", etc. — SIEMPRE es semana del semestre, nunca de un
+mes calendario). Cada fila da el lunes de esa semana; si piden un día
+puntual, sumale los días que correspondan a partir de ESE lunes (ej. "el
+martes de la semana 5" = lunes de la semana 5 + 1 día). NUNCA calcules la
+fecha de una semana a mano contando desde hoy — buscá la semana en esta
+tabla:\n${bloques.join("\n\n")}`;
+}
+
 /**
  * Construye el system prompt de extracción con contexto REAL del usuario
  * (fecha de hoy + materias matriculadas de los semestres que Agenda tiene
@@ -227,7 +287,7 @@ Hoy es ${iso} (${diaSemana}). Usá esta fecha como referencia para resolver
 cualquier fecha relativa ("mañana", "el jueves", "en 2 semanas", "el
 próximo lunes", etc.). Si el usuario describe algo que se repite (ej. "los
 martes durante 3 semanas seguidas"), devolvé UN ítem por cada ocurrencia
-real, cada uno con su propia fecha.
+real, cada uno con su propia fecha.${construirContextoSemanasSemestres()}
 
 Materias matriculadas reales del usuario ahora mismo:
 ${listaMaterias}
@@ -248,6 +308,10 @@ Devolvé ÚNICAMENTE un JSON con esta forma exacta:
 }
 
 Reglas:
+- Si el mensaje menciona una "semana N" (semana 5, semana 8, etc.), es
+  SIEMPRE semana académica del semestre — buscá esa semana en la tabla de
+  arriba (si hay una) y calculá la fecha desde ahí, NUNCA contando semanas
+  a mano desde la fecha de hoy.
 - "examen" para exámenes/parciales/quices; "tarea" para tareas/entregas/
   proyectos; "evento" para cualquier otra cosa (charlas, reuniones, citas,
   etc.).
@@ -585,29 +649,44 @@ function crearTarjetaEventoGuardado(eventoId) {
 
   const filaBotones = document.createElement("div");
   filaBotones.className = "row";
-  filaBotones.style.gap = "8px";
+  filaBotones.style.cssText = "gap:6px; justify-content:flex-end;";
 
   const btnEditar = document.createElement("button");
-  btnEditar.className = "btn btn-secondary";
-  btnEditar.style.flex = "1";
+  btnEditar.className = "btn-discreto";
+  btnEditar.style.flex = "none";
   btnEditar.textContent = "Editar";
   btnEditar.onclick = () => abrirModalEventoAgenda({ eventoId: evento.id });
   filaBotones.appendChild(btnEditar);
 
   const btnEliminar = document.createElement("button");
-  btnEliminar.className = "btn btn-danger";
-  btnEliminar.style.flex = "1";
+  btnEliminar.className = "btn-discreto btn-discreto-peligro";
+  btnEliminar.style.flex = "none";
   btnEliminar.textContent = "Eliminar";
-  // No hay forma de engancharse a un "onConfirmar" desde acá (confirmarBorrarEventoAgenda
-  // solo recibe el evento), así que esta tarjeta puntual no se atenúa sola
-  // al confirmar el borrado en el diálogo — si volvés a entrar a Asistente
-  // sí se va a ver como "ya no existe" (arriba). Aviso esto directo, no es
-  // un bug silencioso.
-  btnEliminar.onclick = () => confirmarBorrarEventoAgenda(evento);
+  // onBorrado (segundo argumento, ver agenda-modal.js) solo dispara si de
+  // verdad se confirmó el borrado en el diálogo — recién ahí esta tarjeta
+  // puntual pasa a "Eliminado" al toque, sin esperar a reabrir Asistente.
+  btnEliminar.onclick = () => {
+    confirmarBorrarEventoAgenda(evento, () => marcarTarjetaComoEliminada(card));
+  };
   filaBotones.appendChild(btnEliminar);
 
   card.appendChild(filaBotones);
   return card;
+}
+
+/**
+ * Reemplaza el contenido de una tarjeta ya guardada por un estado visual
+ * "Eliminado" — se llama SOLO desde el callback onBorrado de
+ * confirmarBorrarEventoAgenda (ver arriba), nunca antes de que el borrado
+ * sea real.
+ */
+function marcarTarjetaComoEliminada(card) {
+  card.innerHTML = "";
+  card.style.opacity = "0.55";
+  const p = document.createElement("div");
+  p.className = "muted";
+  p.textContent = "🗑️ Eliminado";
+  card.appendChild(p);
 }
 
 function agregarBurbujaAlDom(elemento) {
@@ -784,36 +863,146 @@ function construirEsqueletoAsistente(contenedor) {
   tarjeta.appendChild(filaInput);
 
   contenedor.appendChild(tarjeta);
-  fijarAlturaChatAsistente();
+  instalarObservadorVisibilidadAsistente(tarjeta);
+  sincronizarEstadoAsistente();
 }
 
 /**
- * Pedido explícito (ronda 2): la TARJETA completa (no solo la lista de
- * mensajes) ocupa siempre el espacio disponible hasta abajo de la pantalla
- * — encabezado y fila de input quedan anclados arriba/abajo, y solo el
- * medio (#asistente-chat-scroll) tiene su propio scroll. Se mide UNA SOLA
- * VEZ por cada carga de la sección (al construir el esqueleto) y se queda
- * estático de ahí en adelante — a propósito ya NO hay listener de resize
- * (antes lo había); si el usuario gira el celular o cambia el tamaño de la
- * ventana, el alto no se recalcula solo hasta la próxima vez que entre a
- * la sección o le dé "Nueva conversación".
+ * Ronda 3 — reemplaza el criterio "medir 1 sola vez y quedarse estático" de
+ * la ronda anterior: en celular eso rompía de 2 formas reales que reportó
+ * el usuario:
+ *   1. `window.innerHeight` en mobile incluye la barra de direcciones del
+ *      navegador, que se expande/colapsa sola al hacer scroll — un alto
+ *      medido una sola vez queda desactualizado apenas eso cambia, y ahí
+ *      aparece el "scroll fantasma" (se puede scrollear hacia abajo aunque
+ *      no haya nada, porque el documento termina midiendo más que la
+ *      pantalla real visible).
+ *   2. Al abrir el teclado en un input, el navegador achica el viewport
+ *      VISUAL (no el viewport de layout) — sin escuchar ese cambio, la
+ *      tarjeta se queda con su alto viejo (de antes de que el teclado
+ *      empujara todo hacia arriba), y ahí aparece tanto el hueco vacío
+ *      abajo (una franja sin color) como el chat empujado fuera de
+ *      pantalla.
+ *
+ * La solución correcta para ambos casos es la Visual Viewport API
+ * (`window.visualViewport`) — a diferencia de escuchar el resize genérico
+ * de `window` (que fue lo que se sacó a propósito en la ronda anterior por
+ * ruidoso/innecesario), `visualViewport.resize` SOLO dispara cuando el
+ * espacio realmente visible cambia (teclado abriendo/cerrando, zoom,
+ * colapso real de la barra de direcciones) — es la señal correcta, no el
+ * resize genérico. Si el navegador no soporta la API (Safari desktop
+ * viejo, por las dudas), cae a `window.innerHeight` sin escuchar nada, que
+ * es el comportamiento que ya había.
  *
  * No hay CSS del layout general (design-system.css) a la vista acá, así
  * que en vez de inventar un `calc(100vh - Npx)` a ciegas, se mide en JS la
- * posición real de la tarjeta en el viewport y se le da exactamente el
- * espacio que sobra hasta abajo — funciona sin importar cuánto midan el
- * header/nav reales. El flex interno (encabezado/scroll/input, ver
- * construirEsqueletoAsistente) es lo que reparte ese alto fijo entre las 3
+ * posición real de la tarjeta y se le da exactamente el espacio que sobra
+ * hasta abajo del viewport VISIBLE ahora mismo — funciona sin importar
+ * cuánto midan el header/nav reales, y se recalcula solo cuando ese
+ * espacio visible de verdad cambia. El flex interno (encabezado/scroll/
+ * input, ver construirEsqueletoAsistente) reparte ese alto entre las 3
  * franjas.
+ *
+ * Ronda 4 — 2 bugs reales reportados sobre lo de arriba:
+ *
+ *   3. "Scroll fantasma": se podía scrollear el documento aunque no hubiera
+ *      nada más abajo. Causa real: nada acá tocaba el scroll del propio
+ *      `body` — `body` en design-system.css usa `min-height:100vh`, así que
+ *      apenas la tarjeta (ya con su alto fijo) más el resto del layout no
+ *      llenan exactos los 100vh (redondeos, barra de direcciones, etc.), el
+ *      documento queda scrolleable esos pocos px de sobra. La sección de
+ *      Asistente se pensó como bloque ESTÁTICO de pantalla completa, así
+ *      que mientras esté visible el scroll del documento se bloquea
+ *      directo (clase `asistente-bloqueo-scroll` en `body`, ver
+ *      design-system.css) — no hace falta nada más fino que eso.
+ *
+ *   4. Teclado en celular: al enfocar el input, el navegador no encoge el
+ *      viewport de LAYOUT (solo el visual) y en cambio empuja/scrollea la
+ *      página para que el input quede visible sobre el teclado — de ahí
+ *      la franja sin color abajo y el chat empujado fuera de pantalla. La
+ *      solución de fondo (bloquear el scroll del documento, punto 3) ya
+ *      evita el empujón real; lo único que queda es, mientras el teclado
+ *      esté abierto, ocultar el header de accesos rápidos (.mobile-topbar,
+ *      hamburguesa + botón de Enlaces) para no desperdiciar ese espacio, y
+ *      re-medir la tarjeta usando el alto VISUAL (que sí encoge con el
+ *      teclado) para que la tarjeta entera cambie de tamaño y siga cabiendo
+ *      completa arriba del teclado.
+ *
+ * "Teclado abierto" se infiere comparando `window.innerHeight` (layout,
+ * no cambia con el teclado) contra `visualViewport.height` (si el
+ * navegador no soporta la API, cae a innerHeight y nunca se detecta
+ * teclado — igual que el comportamiento viejo). Una diferencia chica
+ * (rotación, colapso normal de la barra de direcciones) no cuenta como
+ * teclado; se pide un salto de más de UMBRAL_TECLADO_ABIERTO_PX.
+ *
+ * Visibilidad real de la sección: este módulo no tiene ningún hook de
+ * "salida" que avise cuándo se navega a otra sección (main.js no llama a
+ * nada acá al respecto), así que en vez de asumir "si el nodo existe en el
+ * DOM, la sección está activa" (falso si la app oculta secciones con
+ * display:none en vez de desmontarlas), se usa un IntersectionObserver
+ * sobre la tarjeta — dispara solo con cambios reales de visibilidad
+ * (desmontado, display:none, o de verdad scrolleado fuera de vista), y es
+ * el único momento en que se limpia el bloqueo/estado (`limpiarEstadoAsistente`)
+ * para no dejar el documento entero sin poder scrollear en otra sección.
  */
 const MARGEN_INFERIOR_CHAT_PX = 16;
+const UMBRAL_TECLADO_ABIERTO_PX = 120;
+let listenerViewportAsistenteInstalado = false;
+let observadorVisibilidadAsistente = null;
 
-function fijarAlturaChatAsistente() {
+function limpiarEstadoAsistente() {
+  document.body.classList.remove("asistente-bloqueo-scroll", "asistente-teclado-abierto");
+}
+
+function sincronizarEstadoAsistente() {
   const tarjeta = document.getElementById("asistente-tarjeta");
-  if (!tarjeta) return;
+  // offsetParent === null cubre tanto "ya no está en el DOM" como "un
+  // ancestro tiene display:none" (sección oculta pero no desmontada) —
+  // en cualquiera de los 2 casos, Asistente no está realmente visible.
+  if (!tarjeta || tarjeta.offsetParent === null) {
+    limpiarEstadoAsistente();
+    return;
+  }
+
+  document.body.classList.add("asistente-bloqueo-scroll");
+
+  const alturaLayout = window.innerHeight;
+  const alturaVisual = window.visualViewport ? window.visualViewport.height : alturaLayout;
+  const tecladoAbierto = alturaLayout - alturaVisual > UMBRAL_TECLADO_ABIERTO_PX;
+  document.body.classList.toggle("asistente-teclado-abierto", tecladoAbierto);
+
+  // Se mide DESPUÉS de decidir si el topbar se oculta: ocultarlo cambia el
+  // "top" real de la tarjeta (sube), así que medir antes le daría menos
+  // alto del que en realidad queda disponible.
   const top = tarjeta.getBoundingClientRect().top;
-  const alturaDisponible = window.innerHeight - top - MARGEN_INFERIOR_CHAT_PX;
-  tarjeta.style.height = `${Math.max(300, alturaDisponible)}px`;
+  const alturaDisponible = alturaVisual - top - MARGEN_INFERIOR_CHAT_PX;
+  tarjeta.style.height = `${Math.max(240, alturaDisponible)}px`;
+}
+
+function instalarListenerViewportAsistente() {
+  if (listenerViewportAsistenteInstalado) return;
+  listenerViewportAsistenteInstalado = true;
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", sincronizarEstadoAsistente);
+    window.visualViewport.addEventListener("scroll", sincronizarEstadoAsistente);
+  } else {
+    window.addEventListener("resize", sincronizarEstadoAsistente);
+  }
+}
+instalarListenerViewportAsistente();
+
+/** Se re-crea en cada construcción del esqueleto (tarjeta nueva cada vez). */
+function instalarObservadorVisibilidadAsistente(tarjeta) {
+  if (observadorVisibilidadAsistente) observadorVisibilidadAsistente.disconnect();
+  observadorVisibilidadAsistente = new IntersectionObserver(
+    (entradas) => {
+      const visible = entradas[0] && entradas[0].isIntersecting;
+      if (visible) sincronizarEstadoAsistente();
+      else limpiarEstadoAsistente();
+    },
+    { threshold: [0] }
+  );
+  observadorVisibilidadAsistente.observe(tarjeta);
 }
 
 function mostrarSaludoInicial() {
