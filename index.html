@@ -1045,42 +1045,34 @@
          comportamiento, queda como ajuste: default ON = un puntito por cada
          pendiente (con "+N" si son muchos); OFF = el criterio anterior, un
          puntito por color/estado distinto, sin repetir. -->
-    <div>
-      <div class="row-between">
-        <span>Repetir puntito por cada pendiente</span>
-        <label class="switch switch-tema">
-          <input type="checkbox" id="chk-agenda-calendario-repetir-puntos" checked>
-          <span class="track"><span class="thumb"></span></span>
-        </label>
-      </div>
-      <p class="muted" style="font-size:0.78rem; margin:6px 0 0;">En el Calendario: activado, cada tarea o examen pendiente suma su propio puntito ese día. Desactivado, se muestra un solo puntito por tipo, sin repetir, aunque haya varios pendientes iguales.</p>
+    <div class="row-between">
+      <span>Repetir puntito en calendario</span>
+      <label class="switch switch-tema">
+        <input type="checkbox" id="chk-agenda-calendario-repetir-puntos" checked>
+        <span class="track"><span class="thumb"></span></span>
+      </label>
     </div>
 
     <!-- Pedido nuevo: qué mostrar en la columna derecha de un pendiente
-         cuando "vence hoy" — 3 switches que se comportan como un grupo de
-         radio (siempre 1 activo), ver inicializarSwitchesVenceHoyAgenda en
-         agenda.js. -->
+         cuando "vence hoy" — 2 switches INDEPENDIENTES (ya no un grupo de
+         radio con "Ambos"), ambos default ON. Con los 2 activos se ve la
+         hora y el tiempo restante juntos (antes era el modo "ambos"); se
+         puede apagar cualquiera de los 2 por separado, incluso los 2 a la
+         vez. Ver construirColumnaDerechaEvento en agenda.js. -->
     <div>
       <span class="form-label">Cuando algo vence hoy, mostrar</span>
       <div class="stack" style="gap:8px; margin-top:4px;">
         <div class="row-between">
           <span>Solo la hora de entrega</span>
           <label class="switch switch-tema">
-            <input type="checkbox" id="chk-agenda-vencehoy-hora">
+            <input type="checkbox" id="chk-agenda-vencehoy-hora" checked>
             <span class="track"><span class="thumb"></span></span>
           </label>
         </div>
         <div class="row-between">
           <span>Solo el tiempo restante</span>
           <label class="switch switch-tema">
-            <input type="checkbox" id="chk-agenda-vencehoy-restante">
-            <span class="track"><span class="thumb"></span></span>
-          </label>
-        </div>
-        <div class="row-between">
-          <span>Ambos</span>
-          <label class="switch switch-tema">
-            <input type="checkbox" id="chk-agenda-vencehoy-ambos">
+            <input type="checkbox" id="chk-agenda-vencehoy-restante" checked>
             <span class="track"><span class="thumb"></span></span>
           </label>
         </div>
