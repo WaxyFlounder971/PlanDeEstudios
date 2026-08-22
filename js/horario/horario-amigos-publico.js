@@ -425,12 +425,40 @@ function inicializarPantallaCompletaPublico() {
     if (document.fullscreenElement) document.exitFullscreen();
     else contenedor.requestFullscreen?.();
   });
+
+  // FIX (mismo problema que horario.js): `btn` (el ⛶ de arriba, dentro de
+  // la glass-card del encabezado) vive AFUERA de `contenedor` (ver
+  // amigos.html) — al entrar a fullscreen sobre `contenedor`, ese botón
+  // queda fuera del árbol de document.fullscreenElement y se vuelve
+  // invisible/inaccesible, sin forma de salir salvo Esc. Se agrega un
+  // botón aparte, chico y discreto, colgado directo de `contenedor` para
+  // que sobreviva dentro del árbol de fullscreen.
+  contenedor.style.position = "relative";
+  const btnSalirFS = document.createElement("button");
+  btnSalirFS.type = "button";
+  btnSalirFS.id = "amigos-btn-salir-pantalla-completa";
+  btnSalirFS.className = "btn-icono-fantasma oculto";
+  btnSalirFS.title = "Salir de pantalla completa";
+  btnSalirFS.setAttribute("aria-label", "Salir de pantalla completa");
+  btnSalirFS.textContent = "✕";
+  btnSalirFS.style.cssText =
+    "position:absolute; top:8px; right:8px; z-index:60; font-size:1rem; width:30px; height:30px; " +
+    "display:flex; align-items:center; justify-content:center; border-radius:50%; " +
+    "background:var(--bg-header-solido); opacity:0.55; transition:opacity 0.15s;";
+  btnSalirFS.addEventListener("mouseenter", () => { btnSalirFS.style.opacity = "1"; });
+  btnSalirFS.addEventListener("mouseleave", () => { btnSalirFS.style.opacity = "0.55"; });
+  btnSalirFS.addEventListener("click", () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+  });
+  contenedor.appendChild(btnSalirFS);
+
   document.addEventListener("fullscreenchange", () => {
     if (document.fullscreenElement === contenedor) {
       contenedor.style.maxHeight = "100vh";
     } else {
       contenedor.style.maxHeight = "70vh";
     }
+    btnSalirFS.classList.toggle("oculto", document.fullscreenElement !== contenedor);
   });
 }
 

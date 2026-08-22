@@ -1455,7 +1455,13 @@ function renderizarConjuntoModoDia(cont, semestre, numeroSemana, dias) {
   encabezado.appendChild(headerFila);
 
   const filaGrid = document.createElement("div");
-  filaGrid.style.cssText = "display:flex;";
+  // FIX (reporte: "en horario conjunto no se puede ver la línea roja de la
+  // hora actual"): faltaba tanto agregar la línea (nunca se llamaba a
+  // construirLineaHoraActualGrid en este modo) como el position:relative
+  // que la línea necesita para posicionarse contra ESTE contenedor (mismo
+  // requisito que ya tienen el grid propio y la vista individual de un
+  // amigo, ver filaGrid en renderizarHorarioInterno/renderizarVistaIndividualAmigoInterno).
+  filaGrid.style.cssText = "display:flex; position:relative;";
   filaGrid.appendChild(construirColumnaHoras(pxPorMin, altoGrid, minInicioRango, minFinRango));
   filaGrid.appendChild(
     construirColumnaPersonaConjunto(bloquesPropios, pxPorMin, altoGrid, minInicioRango, minFinRango, bloquesPropios.length === 0 ? "Sin clases" : null)
@@ -1464,6 +1470,12 @@ function renderizarConjuntoModoDia(cont, semestre, numeroSemana, dias) {
     const mensaje = caida ? "Enlace caído" : bloques.length === 0 ? "Sin clases" : null;
     filaGrid.appendChild(construirColumnaPersonaConjunto(bloques, pxPorMin, altoGrid, minInicioRango, minFinRango, mensaje));
   });
+  // Línea de hora actual: solo si el día seleccionado en el modo Día ES hoy
+  // (mismo criterio que "semanaIncluyeHoy" en las demás vistas del grid).
+  if (fechaDia && esHoy(fechaDia)) {
+    const linea = construirLineaHoraActualGrid(pxPorMin, minInicioRango, minFinRango);
+    if (linea) filaGrid.appendChild(linea);
+  }
 
   columnaAncha.appendChild(encabezado);
   columnaAncha.appendChild(filaGrid);
@@ -1606,7 +1618,11 @@ function renderizarConjuntoModoSemana(cont, semestre, numeroSemana, dias) {
     bloqueDia.appendChild(nombresFila);
 
     const filaColumnas = document.createElement("div");
-    filaColumnas.style.cssText = "display:flex;";
+    // FIX (mismo reporte que en modo Día): position:relative para que la
+    // línea de hora actual se pueda posicionar contra ESTE bloque de día
+    // puntual (cada día tiene su propio filaColumnas acá, a diferencia del
+    // modo Día que tiene uno solo).
+    filaColumnas.style.cssText = "display:flex; position:relative;";
     filaColumnas.appendChild(construirColumnaHoras(pxPorMin, altoGrid, minInicioRango, minFinRango));
     filaColumnas.appendChild(
       construirColumnaPersonaConjunto(bloquesPropios, pxPorMin, altoGrid, minInicioRango, minFinRango, bloquesPropios.length === 0 ? "Sin clases" : null)
@@ -1615,6 +1631,12 @@ function renderizarConjuntoModoSemana(cont, semestre, numeroSemana, dias) {
       const mensaje = caida ? "Enlace caído" : bloques.length === 0 ? "Sin clases" : null;
       filaColumnas.appendChild(construirColumnaPersonaConjunto(bloques, pxPorMin, altoGrid, minInicioRango, minFinRango, mensaje));
     });
+    // Línea de hora actual: solo en el bloque del día que ES hoy (de los N
+    // días mostrados uno al lado del otro en este modo).
+    if (esHoyDia) {
+      const linea = construirLineaHoraActualGrid(pxPorMin, minInicioRango, minFinRango);
+      if (linea) filaColumnas.appendChild(linea);
+    }
     bloqueDia.appendChild(filaColumnas);
 
     trackDiv.appendChild(bloqueDia);
@@ -2111,8 +2133,52 @@ function inicializarHorario() {
       if (document.fullscreenElement) document.exitFullscreen();
       else contenedor.requestFullscreen?.();
     });
+
+    // FIX (pedido explícito: "debe existir un botón de salir de pantalla
+    // completa siempre visible en horario normal, horario compartido y
+    // todo, que no tape, que sea discreto pero que siempre esté ahí a
+    // mano"): btnPantallaCompleta (el ⛶ de arriba) vive en #horario-header,
+    // que es HERMANO de `contenedor` — al entrar a fullscreen sobre
+    // `contenedor`, #horario-header queda fuera del árbol de
+    // document.fullscreenElement (mismo motivo que obliga a reubicar
+    // IDS_MODALES_GLOBALES vía sincronizarModalesConPantallaCompleta) y se
+    // vuelve invisible/inaccesible: sin este botón aparte no había forma de
+    // salir salvo Esc o el gesto nativo del navegador. Se crea UNA sola vez
+    // acá (no en cada renderizarHorarioInterno) colgado directo de
+    // `contenedor` — así sobrevive a que renderizarHorarioInterno solo
+    // reconstruya `cont` (#horario-grid) adentro, sin importar cuál de las
+    // 3 vistas (propio / Horario conjunto / individual de un amigo) esté
+    // activa en ese momento.
+    if (contenedor) {
+      contenedor.style.position = "relative";
+      const btnSalirFS = document.createElement("button");
+      btnSalirFS.type = "button";
+      btnSalirFS.id = "btn-horario-salir-pantalla-completa";
+      btnSalirFS.className = "btn-icono-fantasma oculto";
+      btnSalirFS.title = "Salir de pantalla completa";
+      btnSalirFS.setAttribute("aria-label", "Salir de pantalla completa");
+      btnSalirFS.textContent = "✕";
+      // Discreto: chico, translúcido hasta hacer hover/tap, en la esquina
+      // superior derecha. z-index por encima del header sticky (z:50) y de
+      // la barra de expandir (z:40) para que nunca quede tapado, pero sin
+      // invadir ningún control existente (los tres headers de las vistas
+      // usan padding/gap propios que no llegan hasta esa esquina exacta).
+      btnSalirFS.style.cssText =
+        "position:absolute; top:8px; right:8px; z-index:60; font-size:1rem; width:30px; height:30px; " +
+        "display:flex; align-items:center; justify-content:center; border-radius:50%; " +
+        "background:var(--bg-header-solido); opacity:0.55; transition:opacity 0.15s;";
+      btnSalirFS.addEventListener("mouseenter", () => { btnSalirFS.style.opacity = "1"; });
+      btnSalirFS.addEventListener("mouseleave", () => { btnSalirFS.style.opacity = "0.55"; });
+      btnSalirFS.addEventListener("click", () => {
+        if (document.fullscreenElement) document.exitFullscreen();
+      });
+      contenedor.appendChild(btnSalirFS);
+    }
+
     document.addEventListener("fullscreenchange", () => {
       sincronizarModalesConPantallaCompleta();
+      const btnSalirFS = document.getElementById("btn-horario-salir-pantalla-completa");
+      if (btnSalirFS) btnSalirFS.classList.toggle("oculto", document.fullscreenElement !== contenedor);
       requestAnimationFrame(() => renderizarHorarioInterno());
     });
   }
