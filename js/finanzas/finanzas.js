@@ -106,22 +106,26 @@ function calcularTotalesResumenFinanzas() {
 }
 
 function construirTabsFinanzas() {
-  // v2.8.8: contenedor con container-type: inline-size (ver
-  // .finanzas-tabs-contenedor en design-system.css) — permite que las 4
-  // pestañas se apilen en columna cuando el ancho REAL disponible no
-  // alcanza para mostrarlas en una fila sin apretarse, sin depender de un
-  // @media de viewport que no sabe si el sidebar está colapsado o no.
+  // v2.9.1: antes esto dependía de .finanzas-tabs-contenedor (container-type:
+  // inline-size) + .pill-group-finanzas apilándose en columna cuando no
+  // entraban las 4 en una fila — pedido explícito de sacar ese apilado: las
+  // 4 pestañas se quedan SIEMPRE en una sola línea horizontal, y si el
+  // ancho aprieta se encoge la letra/padding en vez de bajar de línea.
   const envoltorio = document.createElement("div");
   envoltorio.className = "finanzas-tabs-contenedor";
 
   const grupo = document.createElement("div");
   grupo.className = "pill-group-finanzas";
+  grupo.style.cssText = "display:flex; flex-direction:row; flex-wrap:nowrap; gap:clamp(4px,1.5vw,8px); width:100%;";
   PESTANAS_FINANZAS.forEach((pestana) => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "pill-item" + (estado.finanzasVistaActiva === pestana.id ? " active" : "");
     btn.dataset.valor = pestana.id;
     btn.textContent = pestana.etiqueta;
+    btn.style.cssText =
+      "flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; " +
+      "text-align:center; font-size:clamp(0.65rem,2.6vw,0.92rem); padding:clamp(6px,2vw,10px) clamp(4px,1.2vw,10px);";
     btn.addEventListener("click", () => {
       if (estado.finanzasVistaActiva === pestana.id) return;
       estado.finanzasVistaActiva = pestana.id;
