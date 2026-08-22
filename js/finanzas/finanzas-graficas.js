@@ -186,12 +186,21 @@ function construirLeyendaDonut(totalBecas, totalGastado) {
   return leyenda;
 }
 
+/** Balance total (beca − gastado), centrado debajo de la gráfica: verde si es >= 0, rojo si es negativo. */
+function construirBalanceTotal(balanceNeto) {
+  const el = document.createElement("div");
+  el.style.cssText = "text-align:center;";
+  const color = balanceNeto >= 0 ? COLOR_INGRESO : COLOR_GASTO;
+  el.innerHTML = `<span class="muted" style="font-size:0.85rem;">Balance total: </span><span style="font-weight:800; font-size:1rem; color:${color};">${formatearMonto(balanceNeto)}</span>`;
+  return el;
+}
+
 /**
  * v2.9.1: título cambiado de "Beca vs. gastado" a "Resumen" (pedido
  * explícito) — este bloque reemplaza al viejo resumen de texto plano
  * (Total gastado / Balance neto) que vivía en finanzas.js. Gráfica a la
  * izquierda, texto a la derecha si hay espacio horizontal; si no, se
- * apilan (flex-wrap).
+ * apilan (flex-wrap). El balance total va centrado debajo de todo.
  */
 function construirSeccionDonut(totalBecas, totalGastado) {
   const sec = document.createElement("section");
@@ -203,6 +212,8 @@ function construirSeccionDonut(totalBecas, totalGastado) {
   fila.appendChild(construirDonutBecaVsGastado(totalBecas, totalGastado));
   fila.appendChild(construirLeyendaDonut(totalBecas, totalGastado));
   sec.appendChild(fila);
+
+  sec.appendChild(construirBalanceTotal(totalBecas - totalGastado));
 
   return sec;
 }
@@ -231,6 +242,28 @@ function formatearMontoCompacto(numero) {
 }
 
 /**
+ * "Nice numbers" para el eje Y: en vez de dividir valorMax en 4 partes
+ * iguales (da cortes feos tipo ₡37,412), redondea el paso al 1/2/5×10^n
+ * más cercano — funciona para cualquier magnitud (cientos, miles,
+ * millones) sin necesitar saber qué moneda usa el usuario.
+ */
+function calcularEscalaAgradable(valorMax) {
+  if (valorMax <= 0) return { max: 4, paso: 1 };
+  const objetivoPasos = 4;
+  const bruto = valorMax / objetivoPasos;
+  const magnitud = Math.pow(10, Math.floor(Math.log10(bruto)));
+  const normalizado = bruto / magnitud;
+  let pasoNormalizado;
+  if (normalizado <= 1) pasoNormalizado = 1;
+  else if (normalizado <= 2) pasoNormalizado = 2;
+  else if (normalizado <= 5) pasoNormalizado = 5;
+  else pasoNormalizado = 10;
+  const paso = pasoNormalizado * magnitud;
+  const max = Math.ceil(valorMax / paso) * paso;
+  return { max, paso };
+}
+
+/**
  * Gráfica de línea genérica con ejes X/Y dibujados y tooltip táctil por
  * punto. Recibe `puntos` (cada uno con `etiqueta` + un valor por serie) y
  * `series` (qué campo/color/nombre dibujar).
@@ -241,7 +274,8 @@ function construirGraficaLinea(puntos, series) {
   const altoUtil = VB_ALTO - MARGEN_SUP - MARGEN_INF;
 
   const todosLosValores = puntos.flatMap((p) => series.map((s) => p[s.clave]));
-  const valorMax = Math.max(0, ...todosLosValores) || 1;
+  const valorMaxCrudo = Math.max(0, ...todosLosValores);
+  const { max: valorMax, paso: pasoY } = calcularEscalaAgradable(valorMaxCrudo);
   const valorMin = 0; // ingresos/gastos nunca son negativos en este modelo
 
   const x = (i) => (n === 1 ? MARGEN_IZQ + anchoUtil / 2 : MARGEN_IZQ + (i / (n - 1)) * anchoUtil);
@@ -252,10 +286,10 @@ function construirGraficaLinea(puntos, series) {
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
   svg.style.cssText = "display:block; width:100%; height:auto;";
 
-  // ----- Eje Y: 4 líneas guía + etiquetas con el monto -----
-  const PASOS_Y = 4;
-  for (let paso = 0; paso <= PASOS_Y; paso++) {
-    const valor = valorMin + ((valorMax - valorMin) * paso) / PASOS_Y;
+  // ----- Eje Y: líneas guía en pasos redondos (₡50k, ₡100k...) + etiquetas -----
+  const cantidadPasos = Math.round(valorMax / pasoY) || 1;
+  for (let paso = 0; paso <= cantidadPasos; paso++) {
+    const valor = paso * pasoY;
     const yPos = y(valor);
 
     const grid = document.createElementNS(svg.namespaceURI, "line");
