@@ -11,9 +11,14 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
+import { crearEventoAgenda } from "../core/schema.js";
+import { marcarCambioPendiente } from "../core/storage-sync.js";
+import { programarRecordatorioPush } from "../core/notificaciones-push.js";
 import { mostrarToast } from "../ui/componentes.js";
-import { abrirModalEventoAgenda } from "../agenda/agenda-modal.js";
-import { obtenerMateriasVinculablesAgenda } from "../agenda/agenda-utils.js";
+import { abrirModalEventoAgenda, confirmarBorrarEventoAgenda, obtenerNombreMateriaEvento } from "../agenda/agenda-modal.js";
+import { formatearHoraAmPm, obtenerMateriasVinculablesAgenda } from "../agenda/agenda-utils.js";
+import { fechaLocalDesdeISO } from "../horario/horario.js";
+import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 
 /**
  * Modelo de Gemini (revisado 2026-08-22, bug real en producción):
@@ -191,14 +196,20 @@ function obtenerContextoFechaHoy() {
  * mitad de una conversación larga (medianoche, o el usuario cambia de
  * semestre seleccionado en otra pestaña).
  *
- * `materia_matriculada_id` queda fuera del JSON a propósito (decisión ya
- * tomada): el usuario vincula la materia a mano en el modal de
- * confirmación, Gemini nunca adivina esa parte. La lista de materias acá
- * solo se usa para dos cosas: (1) que el campo "nombre" use el nombre real
- * tal como está matriculado, no una variante inventada, y (2) para que, si
- * el mensaje es ambiguo entre 2+ materias reales que se parecen, el
- * modelo pregunte en vez de adivinar (ver "aclaracion" más abajo — esta es
- * la pieza central del fallback anti-alucinación acordado).
+ * Revisado 2026-08-22 (bug real reportado en producción): antes Gemini
+ * metía el nombre de la materia DENTRO de "nombre" (ej. "Examen de Cálculo
+ * I") y la vinculación real (materia_matriculada_id) nunca pasaba — quedaba
+ * como texto suelto, no vinculada de verdad en Agenda. Ahora "materia" es
+ * un campo propio: Gemini solo identifica CUÁL materia de la lista aplica
+ * (o null), y la vinculación real (buscar el mmId/semestreId exacto) la
+ * hace resolverMateriaVinculada() en JS — Gemini nunca decide el id, solo
+ * el nombre visible, mismo principio anti-alucinación de siempre.
+ *
+ * "hora" sigue siendo SOLO lo que el usuario dijo explícitamente. Si viene
+ * null, el default (hora de inicio de esa clase según Horario, si la
+ * materia quedó vinculada) se resuelve después en JS con datos reales del
+ * horario — Gemini no tiene ni debe tener ese dato, así que nunca se le
+ * pide inventarlo.
  */
 function construirSystemInstruction() {
   const { iso, diaSemana } = obtenerContextoFechaHoy();
@@ -214,7 +225,9 @@ ahí tareas, exámenes y eventos para su Agenda.
 
 Hoy es ${iso} (${diaSemana}). Usá esta fecha como referencia para resolver
 cualquier fecha relativa ("mañana", "el jueves", "en 2 semanas", "el
-próximo lunes", etc.).
+próximo lunes", etc.). Si el usuario describe algo que se repite (ej. "los
+martes durante 3 semanas seguidas"), devolvé UN ítem por cada ocurrencia
+real, cada uno con su propia fecha.
 
 Materias matriculadas reales del usuario ahora mismo:
 ${listaMaterias}
@@ -224,10 +237,11 @@ Devolvé ÚNICAMENTE un JSON con esta forma exacta:
   "items": [
     {
       "tipo": "evento" | "tarea" | "examen",
-      "nombre": "string corto y descriptivo",
+      "nombre": "string corto, SOLO el título de la tarea/examen/evento",
+      "materia": "nombre EXACTO de la lista de arriba, o null",
       "fecha": "YYYY-MM-DD",
       "hora": "HH:MM" | null,
-      "notas": "string, puede ser vacío"
+      "notas": "string, vacío salvo que aplique la regla de abajo"
     }
   ],
   "aclaracion": "string" | null
@@ -237,19 +251,29 @@ Reglas:
 - "examen" para exámenes/parciales/quices; "tarea" para tareas/entregas/
   proyectos; "evento" para cualquier otra cosa (charlas, reuniones, citas,
   etc.).
-- Si no se menciona hora puntual, "hora" es null (día completo).
-- Un solo mensaje puede describir más de un ítem — devolvé todos los que
-  encuentres en "items".
-- Si el mensaje nombra una materia que coincide claramente con una de la
-  lista de arriba, usá el nombre EXACTO de la lista dentro del campo
-  "nombre" (ejemplo: si dice "examen de cálculo" y en la lista está
-  "Cálculo I", el nombre del ítem debe ser "Examen de Cálculo I", no una
-  variante inventada).
+- "nombre": SOLO el título de la tarea/examen/evento en sí (ej. "Prueba
+  1", "Proyecto final", "Entrega de laboratorio"). NUNCA metas el nombre
+  de la materia acá — eso va aparte, en "materia".
+- "materia": si el mensaje nombra una materia que coincide claramente con
+  una de la lista de arriba, usá el nombre EXACTO de la lista (ej. si dice
+  "examen de cálculo" y en la lista está "Cálculo I", "materia" es
+  "Cálculo I", nunca una variante inventada). Si no se menciona materia o
+  no hay forma de saber cuál, "materia" es null.
 - Si el mensaje es realmente ambiguo entre 2 o más materias de la lista
   (ej. existen "Cálculo I" y "Cálculo II" y el usuario solo dijo
   "cálculo", sin forma de saber cuál con el resto del mensaje), NO
   adivines: devolvé "items": [] y explicá la duda en "aclaracion" con una
   pregunta corta y directa (ej. "¿Te referís a Cálculo I o Cálculo II?").
+- "hora": SOLO si el usuario mencionó una hora puntual explícita (ej. "a
+  las 2pm", "a las 14:00"). Si no la mencionó, "hora" es null SIEMPRE —
+  nunca trates de adivinar a qué hora es una clase, eso no es tu trabajo.
+- "notas": vacío ("") por defecto. SOLO ponés algo acá si el usuario pidió
+  EXPLÍCITAMENTE guardar una nota o aclaración puntual (ej. "y anotá que
+  es grupal", "poné en notas que hay que llevar la calculadora"). NUNCA
+  inventes ni infieras contexto por tu cuenta (número de semana, motivo,
+  suposiciones) — si el usuario no lo pidió como nota, no va.
+- Un solo mensaje puede describir más de un ítem — devolvé todos los que
+  encuentres en "items".
 - Si el mensaje no describe ninguna tarea/examen/evento reconocible
   (saludo, pregunta suelta, charla sin fecha ni intención real de agendar
   algo), devolvé "items": [] y "aclaracion": null.
@@ -270,6 +294,7 @@ const ESQUEMA_RESPUESTA_GEMINI = {
         properties: {
           tipo: { type: "STRING", enum: ["evento", "tarea", "examen"] },
           nombre: { type: "STRING" },
+          materia: { type: "STRING", nullable: true },
           fecha: { type: "STRING" },
           hora: { type: "STRING", nullable: true },
           notas: { type: "STRING" },
@@ -381,6 +406,100 @@ function mensajeParaError(e) {
   return "Algo salió mal de mi lado. Intentá de nuevo en un momento.";
 }
 
+/* ===================== Guardado real del ítem extraído ===================== */
+
+/**
+ * Cruza el "nombre" de materia que devolvió Gemini contra la lista real de
+ * materias vinculables (mismo criterio que ya usa el prompt para restringir
+ * qué puede contestar) — nunca se confía en un match hecho por el modelo,
+ * se vuelve a resolver acá con datos reales.
+ */
+function resolverMateriaVinculada(nombreMateria) {
+  if (!nombreMateria) return null;
+  return obtenerMateriasVinculablesAgenda().find((m) => m.nombre === nombreMateria) || null;
+}
+
+/** "L" | "K" | "M" | "J" | "V" | "S" | "D" real de una fecha "YYYY-MM-DD". */
+function codigoDiaDesdeFecha(fechaIso) {
+  const fecha = fechaLocalDesdeISO(fechaIso);
+  return DIAS_SEMANA_CONFIG[(fecha.getDay() + 6) % 7].abrevDefault;
+}
+
+/**
+ * Default de hora pedido explícitamente: si la materia quedó vinculada y el
+ * usuario no dijo una hora puntual, se busca a qué hora arranca esa materia
+ * ESE día de la semana según los bloques reales de Horario (semestre.
+ * bloques_horario, ver crearBloqueHorario/obtenerClasesEfectivasSemana en
+ * core/schema.js). Si hay más de un bloque ese día (raro, pero posible con
+ * grupos/laboratorios aparte), se toma el más temprano. null si no hay
+ * materia vinculada o no hay clase ese día — el evento queda "todo el día",
+ * nunca se inventa una hora.
+ */
+function resolverHoraDefaultDesdeHorario(materiaVinculada, fechaIso) {
+  if (!materiaVinculada) return null;
+  const semestre = (estado.datos.semestres || []).find((s) => s.id === materiaVinculada.semestreId);
+  const mm = semestre && (semestre.materias_matriculadas || []).find((m) => m.id === materiaVinculada.mmId);
+  if (!semestre || !mm) return null;
+
+  const codigoDia = codigoDiaDesdeFecha(fechaIso);
+  const horasDelDia = (semestre.bloques_horario || [])
+    .filter((b) => b.materia_id === mm.materia_id && b.plan_estudio_id === mm.plan_estudio_id)
+    .flatMap((b) => (b.dias || []).filter((d) => d.dia === codigoDia).map((d) => d.hora_inicio))
+    .filter(Boolean)
+    .sort();
+
+  return horasDelDia[0] || null;
+}
+
+/** "2026-08-22" -> "Martes 22 de agosto del 2026" — nunca el ISO crudo. */
+function formatearFechaLarga(fechaIso) {
+  const fecha = fechaLocalDesdeISO(fechaIso);
+  const texto = fecha.toLocaleDateString("es-CR", { weekday: "long", day: "numeric", month: "long" }).replace(",", "");
+  return `${texto.charAt(0).toUpperCase()}${texto.slice(1)} del ${fecha.getFullYear()}`;
+}
+
+/**
+ * "Agregado por asistente" SIEMPRE en la primera línea, y solo si el
+ * usuario pidió explícitamente guardar algo puntual (Gemini ya filtra esto
+ * en el prompt, nunca inventa notas) va en la línea de abajo.
+ */
+function construirNotasFinal(notasUsuario) {
+  return notasUsuario ? `Agregado por asistente\n${notasUsuario}` : "Agregado por asistente";
+}
+
+/**
+ * Guarda de una un ítem extraído como EventoAgenda real — ya NO pasa por el
+ * modal, el usuario revisa/edita/borra desde la tarjeta del chat (ver
+ * crearTarjetaEventoGuardado) usando el mismo modal real de Agenda
+ * (abrirModalEventoAgenda/confirmarBorrarEventoAgenda, ya expuestos por
+ * agenda-modal.js) — nunca se duplica esa lógica acá. Devuelve el id del
+ * evento recién creado.
+ */
+function guardarItemExtraidoComoEvento(item) {
+  const materiaVinculada = resolverMateriaVinculada(item.materia);
+  const horaFinal = item.hora || resolverHoraDefaultDesdeHorario(materiaVinculada, item.fecha);
+
+  estado.datos.agenda = estado.datos.agenda || [];
+  const evento = crearEventoAgenda({
+    tipo: item.tipo,
+    nombre: item.nombre,
+    fecha: item.fecha,
+    hora: horaFinal,
+    materiaMatriculadaId: materiaVinculada ? materiaVinculada.mmId : null,
+    semestreId: materiaVinculada ? materiaVinculada.semestreId : null,
+    notas: construirNotasFinal(item.notas),
+    esFeriado: false,
+  });
+  estado.datos.agenda.push(evento);
+
+  marcarCambioPendiente();
+  programarRecordatorioPush(evento);
+  window.renderizarAgenda?.();
+  window.renderizarResumen?.();
+
+  return evento.id;
+}
+
 /* ===================== UI: burbujas y tarjetas ===================== */
 
 function crearBurbuja(rol, texto, esError = false) {
@@ -419,54 +538,75 @@ function crearIndicadorEscribiendo() {
 }
 
 /**
- * Tarjeta de confirmación de UN ítem extraído — no crea nada en Agenda
- * directamente. "Agregar a Agenda" abre el modal real con datosIniciales
- * precargado (ver abrirModalEventoAgenda en agenda-modal.js), para que el
- * usuario revise/edite/vincule materia antes de guardar de verdad.
+ * Tarjeta de UN evento YA guardado en Agenda (ver guardarItemExtraidoComoEvento)
+ * — se relee siempre por id contra estado.datos.agenda, nunca contra el item
+ * crudo de Gemini, para que si el usuario lo edita desde acá (Editar abre el
+ * modal REAL, mismo que usa Agenda) la próxima vez que se reconstruya esta
+ * tarjeta (ver reconstruirChatDesdeHistorial) se vea el dato actualizado, y
+ * para poder detectar que ya no existe si lo borró.
  */
-function crearTarjetaItemExtraido(item) {
-  const emojiTipo = item.tipo === "examen" ? "📝" : item.tipo === "tarea" ? "✅" : "📌";
+function crearTarjetaEventoGuardado(eventoId) {
   const card = document.createElement("div");
   card.className = "glass-card stack";
   card.style.cssText = "align-self: stretch; padding: 10px 12px; gap: 6px;";
 
+  const evento = (estado.datos.agenda || []).find((ev) => ev.id === eventoId);
+  if (!evento) {
+    const p = document.createElement("div");
+    p.className = "muted";
+    p.textContent = "Este ítem ya no existe (se eliminó).";
+    card.appendChild(p);
+    return card;
+  }
+
+  const emojiTipo = evento.tipo === "examen" ? "📝" : evento.tipo === "tarea" ? "✅" : "📌";
   const titulo = document.createElement("div");
   titulo.style.fontWeight = "600";
-  titulo.textContent = `${emojiTipo} ${item.nombre}`;
+  titulo.textContent = `${emojiTipo} ${evento.nombre}`;
   card.appendChild(titulo);
 
   const detalle = document.createElement("div");
   detalle.className = "muted";
   detalle.style.fontSize = "0.85rem";
-  const partesFecha = [item.fecha];
-  if (item.hora) partesFecha.push(item.hora);
-  detalle.textContent = partesFecha.join(" · ");
+  const partes = [formatearFechaLarga(evento.fecha), evento.hora ? formatearHoraAmPm(evento.hora) : "Todo el día"];
+  const nombreMateria = obtenerNombreMateriaEvento(evento);
+  if (nombreMateria) partes.push(nombreMateria);
+  detalle.textContent = partes.join(" · ");
   card.appendChild(detalle);
 
-  if (item.notas) {
+  if (evento.notas) {
     const notas = document.createElement("div");
     notas.className = "muted";
     notas.style.fontSize = "0.82rem";
-    notas.textContent = item.notas;
+    notas.style.whiteSpace = "pre-wrap";
+    notas.textContent = evento.notas;
     card.appendChild(notas);
   }
 
-  const btnAgregar = document.createElement("button");
-  btnAgregar.className = "btn btn-primary btn-block";
-  btnAgregar.textContent = "Agregar a Agenda";
-  btnAgregar.onclick = () => {
-    abrirModalEventoAgenda({
-      datosIniciales: {
-        tipo: item.tipo,
-        nombre: item.nombre,
-        fecha: item.fecha,
-        hora: item.hora || null,
-        notas: item.notas || "",
-      },
-    });
-  };
-  card.appendChild(btnAgregar);
+  const filaBotones = document.createElement("div");
+  filaBotones.className = "row";
+  filaBotones.style.gap = "8px";
 
+  const btnEditar = document.createElement("button");
+  btnEditar.className = "btn btn-secondary";
+  btnEditar.style.flex = "1";
+  btnEditar.textContent = "Editar";
+  btnEditar.onclick = () => abrirModalEventoAgenda({ eventoId: evento.id });
+  filaBotones.appendChild(btnEditar);
+
+  const btnEliminar = document.createElement("button");
+  btnEliminar.className = "btn btn-danger";
+  btnEliminar.style.flex = "1";
+  btnEliminar.textContent = "Eliminar";
+  // No hay forma de engancharse a un "onConfirmar" desde acá (confirmarBorrarEventoAgenda
+  // solo recibe el evento), así que esta tarjeta puntual no se atenúa sola
+  // al confirmar el borrado en el diálogo — si volvés a entrar a Asistente
+  // sí se va a ver como "ya no existe" (arriba). Aviso esto directo, no es
+  // un bug silencioso.
+  btnEliminar.onclick = () => confirmarBorrarEventoAgenda(evento);
+  filaBotones.appendChild(btnEliminar);
+
+  card.appendChild(filaBotones);
   return card;
 }
 
@@ -480,19 +620,38 @@ function agregarBurbujaAlDom(elemento) {
 /**
  * Muestra en el chat el resultado ya interpretado de un turno de Gemini
  * ({items, aclaracion}) — la usan tanto el envío en vivo (manejarEnvioMensaje)
- * como la reconstrucción desde historial (reconstruirChatDesdeHistorial),
- * para que ambos caminos terminen viéndose exactamente igual.
+ * como la reconstrucción desde historial (reconstruirChatDesdeHistorial).
+ *
+ * `eventosGuardadosExistentes`: CRÍTICO para no duplicar guardados. En vivo
+ * viene null → acá mismo se crean los eventos reales (guardarItemExtraidoComoEvento)
+ * y se devuelven sus ids para que manejarEnvioMensaje los persista junto al
+ * turno. Al reconstruir desde historial (reabrir Asistente con una
+ * conversación reciente) YA existen esos eventos — vienen los ids guardados
+ * en el propio turno del historial, así que acá NUNCA se vuelve a llamar
+ * guardarItemExtraidoComoEvento, solo se re-renderizan las tarjetas contra
+ * el estado real actual (ver crearTarjetaEventoGuardado).
+ *
+ * Devuelve el array de ids guardados (vacío si no hubo ítems).
  */
-function mostrarResultadoEnChat(resultado) {
+function mostrarResultadoEnChat(resultado, eventosGuardadosExistentes) {
   if (resultado.items.length === 0 && resultado.aclaracion) {
     agregarBurbujaAlDom(crearBurbuja("modelo", resultado.aclaracion));
-  } else if (resultado.items.length === 0) {
-    agregarBurbujaAlDom(crearBurbuja("modelo", MENSAJE_FALLBACK));
-  } else {
-    const resumen = resultado.items.length === 1 ? "Encontré esto:" : `Encontré ${resultado.items.length} cosas:`;
-    agregarBurbujaAlDom(crearBurbuja("modelo", resumen));
-    resultado.items.forEach((item) => agregarBurbujaAlDom(crearTarjetaItemExtraido(item)));
+    return [];
   }
+  if (resultado.items.length === 0) {
+    agregarBurbujaAlDom(crearBurbuja("modelo", MENSAJE_FALLBACK));
+    return [];
+  }
+
+  const resumen = resultado.items.length === 1 ? "Guardé esto en tu Agenda:" : `Guardé ${resultado.items.length} cosas en tu Agenda:`;
+  agregarBurbujaAlDom(crearBurbuja("modelo", resumen));
+
+  const eventosGuardados = Array.isArray(eventosGuardadosExistentes)
+    ? eventosGuardadosExistentes
+    : resultado.items.map((item) => guardarItemExtraidoComoEvento(item));
+
+  eventosGuardados.forEach((id) => agregarBurbujaAlDom(crearTarjetaEventoGuardado(id)));
+  return eventosGuardados;
 }
 
 /* ===================== Envío de mensajes ===================== */
@@ -531,8 +690,11 @@ async function manejarEnvioMensaje() {
   try {
     const resultado = await llamarGemini(texto);
     indicador.remove();
-    conversacionActual.push({ rol: "modelo", texto: resultado.crudo, crudo: resultado.crudo });
-    mostrarResultadoEnChat(resultado);
+    // null = guardado en vivo (ver mostrarResultadoEnChat): acá SÍ se crean
+    // los eventos reales. Los ids que devuelve se guardan en el turno para
+    // que una futura reconstrucción desde historial nunca los vuelva a crear.
+    const eventosGuardados = mostrarResultadoEnChat(resultado, null);
+    conversacionActual.push({ rol: "modelo", texto: resultado.crudo, crudo: resultado.crudo, eventosGuardados });
     guardarHistorialLocal();
   } catch (e) {
     indicador.remove();
@@ -555,11 +717,18 @@ function construirEsqueletoAsistente(contenedor) {
   contenedor.innerHTML = "";
 
   const tarjeta = document.createElement("section");
+  tarjeta.id = "asistente-tarjeta";
   tarjeta.className = "glass-card stack";
-  tarjeta.style.gap = "10px";
+  // Flex column fijo: encabezado y fila de input NUNCA achican (flex-shrink:0,
+  // ver más abajo), el scroll del medio se queda con todo lo que sobra
+  // (flex:1 + min-height:0, si no min-height:0 el flex item no deja que su
+  // hijo con overflow-y:auto scrollee de verdad y en cambio empuja el alto
+  // de la tarjeta entera).
+  tarjeta.style.cssText = "gap:10px; display:flex; flex-direction:column; overflow:hidden;";
 
   const encabezado = document.createElement("div");
   encabezado.className = "row-between";
+  encabezado.style.flexShrink = "0";
   const titulo = document.createElement("h2");
   titulo.className = "texto-encabezado-seccion";
   titulo.textContent = "✨ Asistente IA";
@@ -569,7 +738,7 @@ function construirEsqueletoAsistente(contenedor) {
   btnNueva.setAttribute("aria-label", "Nueva conversación");
   btnNueva.textContent = "⟳";
   btnNueva.style.cssText =
-    "background:none; border:none; font-size:1.5rem; line-height:1; cursor:pointer; padding:2px 4px;";
+    "background:none; border:none; font-size:1.5rem; line-height:1; cursor:pointer; padding:2px 4px; color:var(--color-luz, #6d5efc);";
   btnNueva.onclick = () => {
     const habiaAlgo = conversacionActual.length > 0;
     iniciarConversacionNueva(contenedor);
@@ -580,12 +749,14 @@ function construirEsqueletoAsistente(contenedor) {
 
   const scroll = document.createElement("div");
   scroll.id = "asistente-chat-scroll";
-  scroll.style.cssText = "display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:200px; padding:4px 2px;";
+  scroll.style.cssText =
+    "display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:0; flex:1; padding:4px 2px;";
   tarjeta.appendChild(scroll);
 
   const filaInput = document.createElement("div");
   filaInput.className = "row";
   filaInput.style.gap = "8px";
+  filaInput.style.flexShrink = "0";
   const input = document.createElement("input");
   input.id = "input-asistente-mensaje";
   input.className = "form-input";
@@ -613,43 +784,43 @@ function construirEsqueletoAsistente(contenedor) {
   tarjeta.appendChild(filaInput);
 
   contenedor.appendChild(tarjeta);
-  ajustarAlturaChatAsistente();
+  fijarAlturaChatAsistente();
 }
 
 /**
- * Pedido explícito: que el chat use todo el espacio vertical disponible
- * para verse mejor, en vez del `max-height` fijo de antes. No hay CSS del
- * layout general (design-system.css) a la vista acá, así que en vez de
- * inventar un `calc(100vh - Npx)` a ciegas, se mide en JS la posición real
- * del scroll en el viewport y se le da exactamente el espacio que sobra
- * hasta abajo — funciona sin importar cuánto midan el header/nav/padding
- * del layout real. Se re-calcula en cada resize (listener instalado una
- * sola vez, ver instalarListenerResizeAsistente) y cada vez que se
- * reconstruye el esqueleto (entrar a la sección, "Nueva conversación").
+ * Pedido explícito (ronda 2): la TARJETA completa (no solo la lista de
+ * mensajes) ocupa siempre el espacio disponible hasta abajo de la pantalla
+ * — encabezado y fila de input quedan anclados arriba/abajo, y solo el
+ * medio (#asistente-chat-scroll) tiene su propio scroll. Se mide UNA SOLA
+ * VEZ por cada carga de la sección (al construir el esqueleto) y se queda
+ * estático de ahí en adelante — a propósito ya NO hay listener de resize
+ * (antes lo había); si el usuario gira el celular o cambia el tamaño de la
+ * ventana, el alto no se recalcula solo hasta la próxima vez que entre a
+ * la sección o le dé "Nueva conversación".
+ *
+ * No hay CSS del layout general (design-system.css) a la vista acá, así
+ * que en vez de inventar un `calc(100vh - Npx)` a ciegas, se mide en JS la
+ * posición real de la tarjeta en el viewport y se le da exactamente el
+ * espacio que sobra hasta abajo — funciona sin importar cuánto midan el
+ * header/nav reales. El flex interno (encabezado/scroll/input, ver
+ * construirEsqueletoAsistente) es lo que reparte ese alto fijo entre las 3
+ * franjas.
  */
 const MARGEN_INFERIOR_CHAT_PX = 16;
-let listenerResizeAsistenteInstalado = false;
 
-function ajustarAlturaChatAsistente() {
-  const scroll = document.getElementById("asistente-chat-scroll");
-  if (!scroll) return;
-  const top = scroll.getBoundingClientRect().top;
+function fijarAlturaChatAsistente() {
+  const tarjeta = document.getElementById("asistente-tarjeta");
+  if (!tarjeta) return;
+  const top = tarjeta.getBoundingClientRect().top;
   const alturaDisponible = window.innerHeight - top - MARGEN_INFERIOR_CHAT_PX;
-  scroll.style.height = `${Math.max(200, alturaDisponible)}px`;
+  tarjeta.style.height = `${Math.max(300, alturaDisponible)}px`;
 }
-
-function instalarListenerResizeAsistente() {
-  if (listenerResizeAsistenteInstalado) return;
-  listenerResizeAsistenteInstalado = true;
-  window.addEventListener("resize", ajustarAlturaChatAsistente);
-}
-instalarListenerResizeAsistente();
 
 function mostrarSaludoInicial() {
   agregarBurbujaAlDom(
     crearBurbuja(
       "modelo",
-      'Contame qué tarea, examen o evento querés agregar y te armo el borrador. Por ejemplo: "tengo examen de anatomía el jueves a las 2pm".'
+      'Contame qué tarea, examen o evento querés agregar y lo guardo directo en tu Agenda. Por ejemplo: "tengo examen de anatomía el jueves a las 2pm".'
     )
   );
 }
@@ -667,10 +838,14 @@ function reconstruirChatDesdeHistorial(historial) {
     }
     try {
       const parseado = JSON.parse(turno.crudo);
-      mostrarResultadoEnChat({
-        items: Array.isArray(parseado.items) ? parseado.items : [],
-        aclaracion: parseado.aclaracion || null,
-      });
+      mostrarResultadoEnChat(
+        { items: Array.isArray(parseado.items) ? parseado.items : [], aclaracion: parseado.aclaracion || null },
+        // Historial guardado ANTES de este cambio no tiene eventosGuardados
+        // (undefined) — cae a null y, ese caso puntual, sí re-guarda. Ventana
+        // real de choque: menos de 1 hora desde el deploy de este fix (ver
+        // VIGENCIA_HISTORIAL_MS), después ya no puede pasar.
+        Array.isArray(turno.eventosGuardados) ? turno.eventosGuardados : null
+      );
     } catch (e) {
       // Turno puntual corrupto en el historial guardado — se ignora ESE
       // turno de visualización sin romper la reconstrucción del resto.
