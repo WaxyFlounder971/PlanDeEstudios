@@ -70,15 +70,39 @@ let enviandoMensaje = false;
 
 /* ===================== Voz (Web Speech API, nativo del navegador) =====================
  * Sin costo: no pasa por Gemini ni por ninguna API paga — el navegador
- * transcribe localmente/vía su propio motor (Chrome usa el de Google, pero
- * gratis y sin la clave del usuario de por medio). Si el navegador no lo
- * soporta (ej. Firefox de escritorio), el botón de micrófono directamente
- * no se dibuja (ver crearBotonVoz) — no hay fallback, degradación
- * silenciosa a "solo texto", que es como funcionaba antes.
+ * transcribe localmente/vía su propio motor (Chrome usa el de Google,
+ * Samsung Internet el suyo, gratis y sin la clave del usuario de por
+ * medio). Sigue siendo el camino PRIMARIO en todo navegador que lo
+ * soporte — nada de esto cambió.
+ *
+ * Fallback con Gemini (2026-08-22, pedido explícito): en navegadores donde
+ * el motor nativo no tiene un backend de voz confiable en la red/equipo del
+ * usuario (caso real: Edge, que depende del servicio de voz de Microsoft en
+ * vez del de Google, y ahí falla con error "network" aunque el permiso de
+ * micrófono esté bien dado), en vez de resignarse al toast de error se
+ * graba el audio con MediaRecorder (API distinta, no depende de ningún
+ * backend de voz de Google/Microsoft) y se manda a transcribir a Gemini con
+ * la clave que el usuario ya tiene guardada — mismo proveedor que ya usa el
+ * resto del asistente, un solo lugar de configuración.
+ *
+ * Trade-offs reales de este fallback (ya aceptados): consume algo de la
+ * cuota de Gemini del usuario (transcribir audio pesa más que el texto que
+ * ya manda la extracción normal), y no hay texto en vivo mientras se habla
+ * — recién se llena el input cuando se suelta el botón y Gemini responde.
+ * Si ni siquiera MediaRecorder está disponible (navegador viejo/raro), cae
+ * al mismo criterio de siempre: degradación silenciosa a "solo texto".
  */
 const ReconocimientoVozAPI = window.SpeechRecognition || window.webkitSpeechRecognition || null;
 let reconocimientoVoz = null;
 let grabandoVoz = false;
+
+// Una vez que el motor nativo demuestra en esta sesión del navegador que no
+// sirve (error real, no un simple "no hablaste nada"), no tiene sentido
+// hacerlo fallar de nuevo cada vez que el usuario toca el micrófono — de
+// acá en adelante se va directo al fallback de Gemini.
+let usarFallbackTranscripcionGemini = false;
+let mediaRecorderVoz = null;
+let chunksAudioVoz = [];
 
 function crearReconocimientoVoz() {
   const r = new ReconocimientoVozAPI();
@@ -92,15 +116,67 @@ function crearReconocimientoVoz() {
   return r;
 }
 
+function soportaFallbackGrabacion() {
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+}
+
+/**
+ * Transcribe un Blob de audio con Gemini (mismo modelo/clave que usa
+ * llamarGemini para la extracción) — llamada de una sola vez, sin
+ * historial ni schema JSON, solo se le pide el texto plano de lo que se
+ * dijo. Tira Error si no hay clave, si la red falla, o si Gemini devuelve
+ * error.
+ */
+async function transcribirAudioConGemini(blob) {
+  const claveApi = estado.datos.configuracion.gemini_api_key;
+  if (!claveApi) throw new Error("No hay clave de Gemini guardada.");
+
+  const base64 = await new Promise((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onloadend = () => resolve(String(lector.result).split(",")[1] || "");
+    lector.onerror = () => reject(lector.error || new Error("No se pudo leer el audio grabado."));
+    lector.readAsDataURL(blob);
+  });
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODELO_GEMINI}:generateContent?key=${encodeURIComponent(claveApi)}`;
+  const respuesta = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { inline_data: { mime_type: blob.type || "audio/webm", data: base64 } },
+            {
+              text: "Transcribí EXACTAMENTE lo que se dice en este audio, en español. Devolvé únicamente el texto transcrito, sin comillas ni comentarios adicionales.",
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  const datos = await respuesta.json().catch(() => null);
+  if (!respuesta.ok) {
+    throw new Error((datos && datos.error && datos.error.message) || "Error de Gemini transcribiendo el audio.");
+  }
+  const candidato = datos && datos.candidates && datos.candidates[0];
+  const parte = candidato && candidato.content && candidato.content.parts && candidato.content.parts[0];
+  return ((parte && parte.text) || "").trim();
+}
+
 /**
  * Botón de micrófono — vive al lado del input, mismo tratamiento visual
  * "solo símbolo, sin fondo de botón" que se le dio a 🔄 Nueva. Toca
  * directo input.value con el texto reconocido (final o parcial mientras
  * graba) para que el usuario vea/edite antes de tocar Enviar — mismo
- * principio de "nunca actuar solo" que el resto del módulo.
+ * principio de "nunca actuar solo" que el resto del módulo. Sigue vivo si
+ * hay motor nativo O fallback de grabación disponible; si no hay NINGUNO
+ * de los dos, no se dibuja (degradación silenciosa a solo texto).
  */
 function crearBotonVoz(input) {
-  if (!ReconocimientoVozAPI) return null;
+  if (!ReconocimientoVozAPI && !soportaFallbackGrabacion()) return null;
 
   const btn = document.createElement("button");
   btn.id = "btn-asistente-voz";
@@ -110,7 +186,74 @@ function crearBotonVoz(input) {
   btn.style.cssText =
     "background:none; border:none; font-size:1.4rem; line-height:1; cursor:pointer; padding:2px 8px; flex-shrink:0;";
 
+  // true mientras hay una grabación de MediaRecorder en curso (fallback) —
+  // separado de grabandoVoz (que cubre ambos caminos) porque btn.onclick
+  // necesita saber A CUÁL de los dos motores mandarle el "parar".
+  let grabandoConFallback = false;
+  // true solo durante la ventana entre "el nativo tiró error real" y "el
+  // fallback ya tomó control de la UI" — evita que el onend del nativo
+  // (que dispara igual después de un error) pise el ícono de "grabando"
+  // que el fallback recién está por poner.
+  let transicionandoAFallback = false;
+
+  function iniciarFallbackGrabacion(textoPrevioAlInput) {
+    if (!soportaFallbackGrabacion()) {
+      mostrarToast("El micrófono no está disponible en este navegador.");
+      return;
+    }
+    navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then((stream) => {
+        transicionandoAFallback = false;
+        chunksAudioVoz = [];
+        mediaRecorderVoz = new MediaRecorder(stream);
+        grabandoConFallback = true;
+        grabandoVoz = true;
+        btn.textContent = "🔴";
+        btn.title = "Grabando… tocá para detener";
+
+        mediaRecorderVoz.ondataavailable = (e) => {
+          if (e.data.size > 0) chunksAudioVoz.push(e.data);
+        };
+        mediaRecorderVoz.onstop = async () => {
+          stream.getTracks().forEach((t) => t.stop());
+          grabandoConFallback = false;
+          grabandoVoz = false;
+          btn.disabled = true;
+          btn.textContent = "⏳";
+          btn.title = "Transcribiendo…";
+          try {
+            const blob = new Blob(chunksAudioVoz, { type: mediaRecorderVoz.mimeType || "audio/webm" });
+            const texto = await transcribirAudioConGemini(blob);
+            input.value = textoPrevioAlInput + texto;
+          } catch (e) {
+            console.warn("[asistente] Error transcribiendo audio con Gemini:", e);
+            mostrarToast("No se pudo transcribir el audio grabado.");
+          } finally {
+            btn.disabled = false;
+            btn.textContent = "🎙️";
+            btn.title = "Dictar por voz";
+            input.focus();
+          }
+        };
+        mediaRecorderVoz.start();
+      })
+      .catch((e) => {
+        transicionandoAFallback = false;
+        grabandoConFallback = false;
+        grabandoVoz = false;
+        btn.textContent = "🎙️";
+        btn.title = "Dictar por voz";
+        console.warn("[asistente] No se pudo acceder al micrófono (fallback):", e);
+        mostrarToast(e && e.name === "NotAllowedError" ? "Permiso de micrófono denegado" : "No se pudo usar el micrófono");
+      });
+  }
+
   btn.onclick = () => {
+    if (grabandoConFallback) {
+      mediaRecorderVoz?.stop();
+      return;
+    }
     if (grabandoVoz) {
       reconocimientoVoz?.stop();
       return;
@@ -118,8 +261,15 @@ function crearBotonVoz(input) {
     // Lo que ya había en el input (escrito a mano o de una grabación
     // anterior) se respeta — antes onresult pisaba todo con el texto
     // reconocido de la sesión actual. Se congela ACÁ (antes de empezar)
-    // y cada actualización de onresult se le suma encima, nunca lo borra.
+    // y cada actualización se le suma encima, nunca lo borra. Vale para
+    // ambos caminos (nativo y fallback).
     const textoPrevioAlInput = input.value ? `${input.value} ` : "";
+
+    if (usarFallbackTranscripcionGemini || !ReconocimientoVozAPI) {
+      iniciarFallbackGrabacion(textoPrevioAlInput);
+      return;
+    }
+
     reconocimientoVoz = crearReconocimientoVoz();
     reconocimientoVoz.onstart = () => {
       grabandoVoz = true;
@@ -133,18 +283,30 @@ function crearBotonVoz(input) {
     };
     reconocimientoVoz.onerror = (e) => {
       // Antes esto no quedaba en consola de ninguna forma — el toast
-      // genérico no distingue causa. Con este log, la próxima vez que
-      // falle alcanza con abrir la consola y mirar qué dice e.error
-      // (ej. "audio-capture", "network") para saber la causa real.
+      // genérico no distingue causa. Con este log alcanza con abrir la
+      // consola y mirar qué dice e.error para saber la causa real.
       console.warn("[asistente] Error de reconocimiento de voz:", e.error, e);
       if (e.error === "not-allowed" || e.error === "service-not-allowed") {
         mostrarToast("Permiso de micrófono denegado");
-      } else if (e.error !== "no-speech" && e.error !== "aborted") {
-        mostrarToast("No se pudo usar el micrófono");
+        return;
       }
+      if (e.error === "no-speech" || e.error === "aborted") return;
+      // Fallo real del motor nativo (ej. "network", "audio-capture"): se
+      // marca este navegador para usar el fallback de acá en adelante y se
+      // reintenta YA con Gemini, sin que el usuario tenga que volver a
+      // tocar el botón.
+      usarFallbackTranscripcionGemini = true;
+      transicionandoAFallback = true;
+      mostrarToast("El micrófono nativo falló, probando transcripción alternativa…");
+      iniciarFallbackGrabacion(textoPrevioAlInput);
     };
     reconocimientoVoz.onend = () => {
       grabandoVoz = false;
+      // Si justo se está armando el fallback (ver onerror de arriba), no
+      // tocar el ícono — el fallback lo va a poner en "🔴" apenas
+      // getUserMedia resuelva, pisarlo acá lo dejaría parpadeando a
+      // "🎙️" un instante antes de volver a "🔴".
+      if (transicionandoAFallback) return;
       btn.textContent = "🎙️";
       btn.title = "Dictar por voz";
       input.focus();
@@ -153,6 +315,7 @@ function crearBotonVoz(input) {
   };
 
   return btn;
+}
 }
 
 /* ===================== Historial local (device-only) ===================== */
