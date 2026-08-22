@@ -235,9 +235,28 @@ function obtenerTipoSeleccionado() {
  * "YYYY-MM-DD" a precargar en alta nueva (ej. el día donde se tocó "+" —
  * hoy por defecto si no se pasa nada, ver agenda.js).
  */
-function abrirModalEventoAgenda({ eventoId = null, fechaDefault = null } = {}) {
+/**
+ * `datosIniciales` (Asistente IA, 2026-08-22): precarga de un BORRADOR que
+ * todavía no es un evento real — no vive en estado.datos.agenda, no tiene
+ * id, no se puede editar/borrar. Mismo shape parcial de un EventoAgenda
+ * (tipo/nombre/fecha/hora/notas — lo que Gemini puede extraer con
+ * confianza; `materia_matriculada_id` queda fuera a propósito, el usuario
+ * la vincula a mano acá mismo si quiere) — ver construirPromptExtraccion en
+ * asistente/asistente.js. Nunca coexiste con `eventoId`: si algún día se
+ * pasan ambos, `eventoExistente` gana siempre (es una edición real).
+ *
+ * A propósito NO se agrega ninguna rama nueva en guardarEventoAgenda/
+ * adjuntos/borrado más abajo — `datosIniciales` solo alimenta estos campos
+ * de precarga. Para el resto de la función (guardar, adjuntos, botón
+ * borrar) un borrador es indistinguible de un alta nueva en blanco: al
+ * tocar "Guardar" se crea un evento normal con crearEventoAgenda a partir
+ * de lo que haya en el formulario en ese momento (editado o no por el
+ * usuario) — el borrador nunca se persiste como tal.
+ */
+function abrirModalEventoAgenda({ eventoId = null, fechaDefault = null, datosIniciales = null } = {}) {
   const modal = document.getElementById("modal-agenda-evento");
   const eventoExistente = eventoId ? buscarEventoVivoPorId(eventoId) : null;
+  const datosPrecarga = eventoExistente || datosIniciales;
 
   document.getElementById("titulo-modal-agenda-evento").textContent = eventoExistente
     ? "Editar"
@@ -245,25 +264,28 @@ function abrirModalEventoAgenda({ eventoId = null, fechaDefault = null } = {}) {
 
   // Orden/default del selector (rediseño núcleo Agenda, punto 1): alta
   // nueva siempre arranca en "tarea" — ya no en "evento".
-  seleccionarPillTipo(eventoExistente ? eventoExistente.tipo : "tarea");
-  document.getElementById("chk-agenda-es-feriado").checked = eventoExistente ? Boolean(eventoExistente.es_feriado) : false;
-  document.getElementById("input-agenda-nombre").value = eventoExistente ? eventoExistente.nombre : "";
-  document.getElementById("input-agenda-fecha").value = eventoExistente
-    ? eventoExistente.fecha
+  seleccionarPillTipo(datosPrecarga ? datosPrecarga.tipo : "tarea");
+  document.getElementById("chk-agenda-es-feriado").checked = datosPrecarga ? Boolean(datosPrecarga.es_feriado) : false;
+  document.getElementById("input-agenda-nombre").value = datosPrecarga ? datosPrecarga.nombre : "";
+  document.getElementById("input-agenda-fecha").value = datosPrecarga
+    ? datosPrecarga.fecha
     : fechaDefault || new Date().toISOString().slice(0, 10);
 
   const chkTodoElDia = document.getElementById("chk-agenda-todo-el-dia");
   const inputHora = document.getElementById("input-agenda-hora");
-  const sinHora = eventoExistente ? !eventoExistente.hora : false;
+  const sinHora = datosPrecarga ? !datosPrecarga.hora : false;
   chkTodoElDia.checked = sinHora;
-  inputHora.value = eventoExistente && eventoExistente.hora ? eventoExistente.hora : "";
+  inputHora.value = datosPrecarga && datosPrecarga.hora ? datosPrecarga.hora : "";
   inputHora.disabled = sinHora;
 
+  // materia_matriculada_id: SOLO viene de un evento real (eventoExistente),
+  // nunca de datosIniciales — ver comentario de la función. Un borrador
+  // siempre arranca sin materia vinculada.
   poblarSelectorMateria(
     document.getElementById("select-agenda-materia"),
     eventoExistente ? eventoExistente.materia_matriculada_id : null
   );
-  document.getElementById("input-agenda-notas").value = eventoExistente ? eventoExistente.notas || "" : "";
+  document.getElementById("input-agenda-notas").value = datosPrecarga ? datosPrecarga.notas || "" : "";
 
   // Adjuntos: en edición se usa el id real del evento; en alta nueva se
   // genera un id pendiente (ver comentario arriba de idEventoActivoAdjuntos)
