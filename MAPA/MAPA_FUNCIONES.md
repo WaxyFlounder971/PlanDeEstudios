@@ -345,10 +345,10 @@ Exporta:
 ## JS — config
 
 ### config/config-ajustes.js
-Propósito: renderiza la sección de Ajustes (paletas, modo claro/oscuro, escala de notas, nota de aprobación por plan/universidad, formato de texto, backup rotativo a Drive, modo rendimiento, notificaciones push reales, config de días de Horario).
+Propósito: renderiza la sección de Ajustes (paletas, modo claro/oscuro, escala de notas, nota de aprobación por plan/universidad, formato de texto, backup rotativo a Drive, modo rendimiento, notificaciones push reales, config de días de Horario, clave de API de Gemini para Asistente IA).
 Depende de: core/notificaciones-push.js, core/schema.js, core/storage-sync.js, core/storage.js, core/utils.js, plan/plan-vista-lista.js, ui/componentes.js, ui/tema.js, ui/paleta-personalizada.js
 Exporta:
-* `renderizarAjustes()` — reconstruye toda la sección de Ajustes (paletas, escalas, moneda, backup, notificaciones push, etc.) e inicializa el accordion.
+* `renderizarAjustes()` — reconstruye toda la sección de Ajustes (paletas, escalas, moneda, backup, notificaciones push, etc.) e inicializa el accordion. Desde 2026-08-22 también llama a `inicializarAsistenteAjustes()` (interna, no exportada) — guarda/reemplaza/borra `configuracion.gemini_api_key`, muestra la clave enmascarada (últimos 4 caracteres) si ya hay una guardada, y llama a `window.aplicarVisibilidadBotonAsistente()` (main.js) al guardar o borrar.
 * `renderizarSeccionBackupDrive()` — pinta el bloque de frecuencia/estado del backup rotativo a Drive; solo lee/escribe la preferencia, nunca dispara un backup a mano.
 * `aplicarModoRendimiento(activo)` — aplica/quita el atributo `data-rendimiento` en `<html>`, se usa tanto en Ajustes como al iniciar la app.
 * `DIAS_SEMANA_CONFIG` — arreglo con id/etiqueta/abreviatura por defecto de cada día de la semana, usado en la config de días de Horario.
@@ -727,7 +727,7 @@ Exporta:
 Propósito: modal de alta/edición de EventoAgenda (evento/tarea/examen) y tarjeta de info al tocar un ítem de la lista. Al guardar/borrar/completar, sincroniza el recordatorio push del evento contra el Worker de notificaciones (ver core/notificaciones-push.js).
 Depende de: core/notificaciones-push.js, core/schema.js, core/storage-sync.js, core/storage.js, core/utils.js, ui/componentes.js, horario/horario.js, agenda/agenda-utils.js
 Exporta:
-* `abrirModalEventoAgenda({eventoId, fechaDefault})` — abre el formulario para crear (si `eventoId` es null) o editar un evento.
+* `abrirModalEventoAgenda({eventoId, fechaDefault, datosIniciales})` — abre el formulario para crear (si `eventoId` es null) o editar un evento. `datosIniciales` (2026-08-22, Asistente IA) precarga un borrador `{tipo, nombre, fecha, hora, notas}` que todavía NO es un evento real (no vive en `estado.datos.agenda`, sin id) — usado por asistente/asistente.js para mostrar lo que Gemini extrajo, editable, antes de confirmar. Nunca coexiste con `eventoId` (una edición real siempre gana); al guardar se crea un evento nuevo normal, el borrador nunca se persiste como tal.
 * `abrirTarjetaInfoEventoAgenda(eventoId)` — abre la tarjeta de solo-info de un evento (paso previo al editor).
 * `inicializarModalAgendaEvento()` — wiring de ambos modales (pills de tipo, checkbox "todo el día", dropdown de materia, botones guardar/borrar/cerrar).
 
@@ -765,7 +765,8 @@ Exporta:
 * `cerrarSesion()` — limpia token, caché local y estado en memoria; vuelve a mostrar la pantalla de login.
 * `CLAVE_SECCION_ACTIVA` — clave de `localStorage` (`"seccion_activa_v1"`) donde se persiste qué sección de navegación quedó activa.
 * `inicializarNavegacionSecciones()` — conecta los botones `.btn-nav[data-seccion]` para que llamen a `mostrarSeccion`.
-* `mostrarSeccion(nombre)` — cambia la sección visible del app-shell (configuración, plan-estudios, semestres, comunidad, etc.) y persiste la elección.
+* `mostrarSeccion(nombre)` — cambia la sección visible del app-shell (configuración, plan-estudios, semestres, comunidad, etc.) y persiste la elección. Incluye `"asistente"` (2026-08-22) — al entrar llama a `window.renderizarAsistente?.()` (asistente/asistente.js) para reconstruir la conversación en blanco cada vez (no se persiste historial).
+* `aplicarVisibilidadBotonAsistente()` (2026-08-22) — muestra/oculta `#nav-asistente` según si `configuracion.gemini_api_key` existe; independiente del sistema de `navegacion_oculta` (esa es preferencia manual, esta es disponibilidad real). Si el usuario estaba parado en Asistente y la clave se borra, redirige a Configuración. Se llama desde `mostrarApp()` y desde `inicializarAsistenteAjustes()` (config-ajustes.js).
 * `temporizadorAvisoLogin` — id del `setTimeout` de `programarAvisoLoginBloqueado`, expuesto para que otros módulos puedan limpiarlo (ej. al cerrar sesión).
 * `renderizarPerfil()` — pinta nombre, correo, foto/iniciales del perfil en el header y en el popover; maneja el fallback si la foto no carga.
 * `togglePerfilPopover(forzarCerrado)` — abre/cierra el popover de perfil (o lo fuerza a cerrado si se pasa `true`).
