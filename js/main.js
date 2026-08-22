@@ -692,11 +692,11 @@ function mostrarApp() {
   renderizarPerfil();
   restaurarEstadoSidebar();
   aplicarVisibilidadNavegacion();
-  // Asistente IA (2026-08-22): antes del mostrarSeccion(...) de más abajo,
-  // así si localStorage quedó apuntando a "asistente" sin clave guardada
-  // (ej. otro dispositivo sin la clave, o se borró la clave y se recargó),
-  // el redirect a "configuracion" que hace esta función ya corrigió
-  // localStorage ANTES de que se lea ahí.
+  // Asistente IA (revisado 2026-08-22): ya redundante con la línea de
+  // arriba (el gate de clave vive dentro de aplicarVisibilidadNavegacion
+  // ahora), pero se deja esta llamada porque además refresca la lista de
+  // switches de Ajustes > Navegación si estuviera montada — es idempotente,
+  // no hace daño llamarla dos veces seguidas.
   aplicarVisibilidadBotonAsistente();
   if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
   if (typeof renderizarSemestres === "function") renderizarSemestres();
@@ -878,7 +878,7 @@ window.mostrarSeccion = mostrarSeccion;
  * que la limpieza se sincronice y no reaparezca en otros dispositivos con
  * el dato viejo.
  */
-const DEFAULT_ORDEN_NAV = ["agenda", "horario", "semestres", "comunidad", "finanzas", "plan-estudios"];
+const DEFAULT_ORDEN_NAV = ["agenda", "horario", "semestres", "comunidad", "finanzas", "plan-estudios", "asistente"];
 
 function obtenerOrdenNavegacionEfectivo() {
   const crudo = estado.datos.configuracion.navegacion_orden || [];
@@ -906,11 +906,18 @@ window.obtenerOrdenNavegacion = obtenerOrdenNavegacionEfectivo;
 
 function aplicarVisibilidadNavegacion() {
   const ocultas = new Set((estado.datos.configuracion.navegacion_oculta || []).filter((s) => s !== "configuracion" && s !== "resumen"));
+  // Asistente IA (Gemini): gate de EXISTENCIA por encima de la preferencia
+  // manual de arriba — sin clave guardada el botón no sirve de nada, así
+  // que se oculta sin importar lo que diga navegacion_oculta (ver
+  // aplicarVisibilidadBotonAsistente() más abajo, que es quien dispara este
+  // recálculo cada vez que se guarda/borra la clave).
+  const hayClaveGemini = Boolean(estado.datos.configuracion.gemini_api_key);
   let seccionActivaOculta = false;
   document.querySelectorAll(".btn-nav[data-seccion]").forEach((btn) => {
-    const oculto = ocultas.has(btn.dataset.seccion);
+    const seccion = btn.dataset.seccion;
+    const oculto = ocultas.has(seccion) || (seccion === "asistente" && !hayClaveGemini);
     btn.classList.toggle("oculto", oculto);
-    if (oculto && btn.dataset.seccion === localStorage.getItem(CLAVE_SECCION_ACTIVA)) {
+    if (oculto && seccion === localStorage.getItem(CLAVE_SECCION_ACTIVA)) {
       seccionActivaOculta = true;
     }
   });
@@ -940,36 +947,28 @@ function aplicarVisibilidadNavegacion() {
 window.aplicarVisibilidadNavegacion = aplicarVisibilidadNavegacion;
 
 /**
- * Asistente IA (Gemini), 2026-08-22: el botón "Asistente" del nav se
- * muestra u oculta según si hay clave de Gemini guardada
- * (configuracion.gemini_api_key) — a propósito NO pasa por el sistema de
- * navegacion_oculta/aplicarVisibilidadNavegacion de arriba, porque esa
- * visibilidad es una preferencia manual del usuario ("no quiero ver este
- * botón") y esta es una condición de disponibilidad real ("este botón no
- * sirve de nada sin clave"). Ambos sistemas son independientes: el usuario
- * podría en teoría ocultar "Asistente" desde Ajustes → orden/visibilidad de
- * nav en el futuro, sin que eso afecte esta función ni viceversa (hoy
- * "asistente" ni siquiera está en DEFAULT_ORDEN_NAV, así que esa pantalla
- * de Ajustes no lo lista).
- * Se llama: (1) desde mostrarApp() al arrancar, (2) desde
+ * Asistente IA (Gemini), revisado 2026-08-22: el gate de existencia de
+ * "asistente" (según haya o no clave de Gemini guardada) ahora vive DENTRO
+ * de aplicarVisibilidadNavegacion() de arriba, junto con el resto de la
+ * lógica de mostrar/ocultar/reordenar nav — así el usuario tiene la misma
+ * libertad de ocultarlo o moverlo desde Ajustes > Navegación que con
+ * cualquier otra sección (agenda, horario, etc.), y el gate de clave se
+ * aplica por encima de esa preferencia sin ser un sistema aparte.
+ *
+ * Esta función queda solo como disparador delgado: la usa
  * inicializarAsistenteAjustes() (config-ajustes.js) cada vez que se
- * guarda/borra la clave. Se expone en window por el mismo motivo de
- * siempre: config-ajustes.js ya es importado POR main.js, llamarla al
- * revés crearía un import circular evitable.
+ * guarda/borra la clave, y mostrarApp() al arrancar — así no hay que tocar
+ * esos call-sites. Se expone en window por el motivo de siempre:
+ * config-ajustes.js ya es importado POR main.js, llamarla al revés crearía
+ * un import circular evitable.
  */
 function aplicarVisibilidadBotonAsistente() {
-  const btn = document.getElementById("nav-asistente");
-  if (!btn) return;
-  const hayClave = Boolean(estado.datos.configuracion.gemini_api_key);
-  btn.classList.toggle("oculto", !hayClave);
-  // Si el usuario estaba parado en Asistente y justo ahí borró la clave
-  // (única forma de llegar a este caso: el modal de Ajustes está en la
-  // misma vista que Asistente, no se puede borrar la clave DESDE dentro de
-  // Asistente) — mismo criterio de "no dejar sin nav visible" que
-  // aplicarVisibilidadNavegacion usa para navegacion_oculta.
-  if (!hayClave && localStorage.getItem(CLAVE_SECCION_ACTIVA) === "asistente") {
-    mostrarSeccion("configuracion");
-  }
+  aplicarVisibilidadNavegacion();
+  // Si Ajustes > Navegación está abierta en pantalla, su lista de switches
+  // también debe reflejar en vivo que "Asistente" recién apareció/
+  // desapareció (ver el gate de existencia dentro de
+  // renderizarNavegacionOculta en config-ajustes.js).
+  window.renderizarNavegacionOculta?.();
 }
 window.aplicarVisibilidadBotonAsistente = aplicarVisibilidadBotonAsistente;
 
