@@ -992,6 +992,11 @@ function inicializarFiltrosAgenda() {
     // Ajustes global, solo que ahora se edita desde acá.
     const cfg = estado.datos.configuracion;
     document.getElementById("chk-agenda-mostrar-dias-vacios").checked = cfg.agenda_mostrar_dias_vacios !== false;
+    // Ajustes vista Calendario — punto 3 (rediseño): "Repetir puntito por
+    // cada pendiente" — default true (undefined = repite), igual criterio
+    // que el resto de persistentes de este modal.
+    const chkRepetirPuntos = document.getElementById("chk-agenda-calendario-repetir-puntos");
+    if (chkRepetirPuntos) chkRepetirPuntos.checked = cfg.agenda_calendario_repetir_puntos !== false;
     sincronizarSwitchesVenceHoy(obtenerModoVenceHoyAgenda());
     modal.classList.remove("oculto");
   });
@@ -1049,6 +1054,19 @@ function inicializarFiltrosAgenda() {
   // materias en la agenda" arriba).
   document.getElementById("chk-agenda-mostrar-dias-vacios")?.addEventListener("change", (ev) => {
     estado.datos.configuracion.agenda_mostrar_dias_vacios = ev.target.checked;
+    sellarTimestamp(estado.datos.configuracion);
+    marcarCambioPendiente();
+    renderizarAgenda();
+  });
+
+  // Ajustes vista Calendario — punto 3 (rediseño): "Repetir puntito por
+  // cada pendiente" — ON (default): un puntito por cada tarea/examen
+  // pendiente ese día, con un "+N" si son muchos. OFF: un solo puntito por
+  // tipo/color, sin repetir, aunque haya varios pendientes iguales (el
+  // comportamiento de antes). Persistente, mismo patrón que el resto de
+  // este modal.
+  document.getElementById("chk-agenda-calendario-repetir-puntos")?.addEventListener("change", (ev) => {
+    estado.datos.configuracion.agenda_calendario_repetir_puntos = ev.target.checked;
     sellarTimestamp(estado.datos.configuracion);
     marcarCambioPendiente();
     renderizarAgenda();

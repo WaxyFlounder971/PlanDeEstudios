@@ -99,7 +99,12 @@ function resumenDia(fecha, semestresSeleccionados) {
       coloresPresentes.push(color);
     }
   });
-  return { eventos, colores: coloresPresentes, total: eventos.length };
+  // Ajuste "Repetir puntito por cada pendiente" (agenda_calendario_repetir_
+  // puntos, ver inicializarFiltrosAgenda en agenda.js): con el ajuste
+  // activado (default) se necesita el color de CADA evento, en orden, en
+  // vez de solo los colores distintos — ver construirCelda más abajo.
+  const coloresPorEvento = eventos.map((ev) => obtenerEstiloEvento(ev).colorBorde);
+  return { eventos, colores: coloresPresentes, coloresPorEvento, total: eventos.length };
 }
 
 function construirCabeceraDiasSemana() {
@@ -114,9 +119,13 @@ function construirCabeceraDiasSemana() {
   return fila;
 }
 
+// Ajustes vista Calendario — punto 3 (rediseño): tope de puntos pintados
+// por celda antes de resumir el resto en un "+N" (ver construirCelda).
+const MAX_PUNTOS_CALENDARIO_VISIBLES = 4;
+
 /** `detallada`: true en semanal (celdas grandes, muestran nombres); false en mensual (solo puntos). */
 function construirCelda(fecha, { delMesActual, detallada, semestresSeleccionados }) {
-  const { eventos, colores, total } = resumenDia(fecha, semestresSeleccionados);
+  const { eventos, colores, coloresPorEvento, total } = resumenDia(fecha, semestresSeleccionados);
   const hoy = esHoyFecha(fecha);
   const fechaISO = formatearFechaISO(fecha);
   const seleccionada = estado.agendaCalendarioFechaSeleccionada === fechaISO;
@@ -129,17 +138,28 @@ function construirCelda(fecha, { delMesActual, detallada, semestresSeleccionados
     (delMesActual === false ? " agenda-cal-celda-fuera-mes" : "") +
     (seleccionada ? " agenda-cal-celda-seleccionada" : "");
 
-  // Ajustes vista Calendario — punto 3: un puntito por cada color/estado
-  // distinto presente ese día (paleta de obtenerEstiloEvento, ver
-  // resumenDia más arriba) — ya no navega a ningún lado por sí solo, es
-  // puramente informativo (el toque que navega/despliega es en toda la
-  // celda, ver el listener más abajo).
-  const puntos = colores.map((color) => `<span class="agenda-cal-punto" style="background:${color};"></span>`).join("");
+  // Ajustes vista Calendario — punto 3 (rediseño): "Repetir puntito por
+  // cada pendiente" (agenda_calendario_repetir_puntos, ver
+  // inicializarFiltrosAgenda en agenda.js) — default true. Activado: un
+  // punto por CADA evento pendiente (coloresPorEvento), así 3 tareas del
+  // mismo color YA NO colapsan en un solo puntito indistinguible de "hay 1
+  // sola". Desactivado: se vuelve al criterio anterior, un punto por
+  // color/estado DISTINTO presente ese día (colores, de resumenDia). En
+  // ambos casos se topea la cantidad de puntos pintados
+  // (MAX_PUNTOS_CALENDARIO_VISIBLES) y lo que no entra se resume en un
+  // "+N" — mismo lenguaje visual que el "+N más" de la vista semanal más
+  // abajo — para no desbordar una celda de 52px.
+  const repetirPuntos = estado.datos?.configuracion?.agenda_calendario_repetir_puntos !== false;
+  const listaColoresPuntos = repetirPuntos ? coloresPorEvento : colores;
+  const coloresVisibles = listaColoresPuntos.slice(0, MAX_PUNTOS_CALENDARIO_VISIBLES);
+  const puntosEscondidos = listaColoresPuntos.length - coloresVisibles.length;
+  const puntos = coloresVisibles.map((color) => `<span class="agenda-cal-punto" style="background:${color};"></span>`).join("");
+  const extraPuntos = puntosEscondidos > 0 ? `<span class="agenda-cal-punto-extra">+${puntosEscondidos}</span>` : "";
 
   if (!detallada) {
     celda.innerHTML = `
       <span class="agenda-cal-numero">${fecha.getDate()}</span>
-      <span class="agenda-cal-indicadores">${puntos}</span>
+      <span class="agenda-cal-indicadores">${puntos}${extraPuntos}</span>
     `;
   } else {
     const nombresVisibles = eventos.slice(0, 3);
