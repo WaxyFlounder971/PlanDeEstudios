@@ -2494,6 +2494,11 @@ img, svg { max-width: 100%; }
 .agenda-cal-numero { font-size: 0.8rem; font-weight: 600; }
 .agenda-cal-indicadores { display: flex; align-items: center; gap: 3px; margin-top: 4px; flex-wrap: wrap; justify-content: center; }
 .agenda-cal-punto { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+/* Ajustes vista Calendario — punto 3 (rediseño): "+N" de puntos que no
+   entraron en el tope visible de la celda (ver MAX_PUNTOS_CALENDARIO_
+   VISIBLES en agenda-calendario.js) — mismo criterio tipográfico que
+   ".muted" (texto chico, tenue) usado para "+N más" en la vista semanal. */
+.agenda-cal-punto-extra { font-size: 0.62rem; line-height: 1; color: var(--text-muted); margin-left: 1px; }
 
 /* Submodo Semanal (celdas grandes, con nombres de eventos truncados) */
 .agenda-cal-grid-semanal .agenda-cal-celda {
@@ -3186,6 +3191,19 @@ html.exportar-tema-default[data-mode="dark"] {
 [data-rendimiento="reducido"] .select-custom-lista {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+}
+/* Reporte de Wagner (ronda de ajustes visuales): la barra lateral se veía
+   demasiado transparente en Modo Rendimiento. Causa: #app-sidebar define su
+   fondo con un selector por ID (línea ~1204/1207) — más específico que
+   cualquier regla de .glass-panel — así que aunque comparta esa clase,
+   nunca heredaba el fix de arriba (cortar la transparencia a la mitad).
+   Se repite acá el mismo criterio (color-mix 77.5%/22.5%) pero apuntando
+   directo al ID, con la variante de color correspondiente a cada modo. */
+[data-rendimiento="reducido"][data-mode="dark"] #app-sidebar {
+  background: color-mix(in srgb, var(--bg-panel) 77.5%, var(--bg-canvas) 22.5%);
+}
+[data-rendimiento="reducido"][data-mode="light"] #app-sidebar {
+  background: color-mix(in srgb, var(--bg-panel) 77.5%, var(--bg-canvas) 22.5%);
 }
 
 /* 2. Glow del botón primario en hover y de la "luz" de disponibilidad:
