@@ -34,14 +34,24 @@ import {
 /* ------------------------------ Ajustes ------------------------------ */
 
 /**
- * Asistente IA (Gemini), 2026-08-22: clave de API propia del usuario
- * (nunca compartida ni tocada por Wagner) guardada en
+ * Asistente IA (Gemini), revisado 2026-08-22: clave de API propia del
+ * usuario (nunca compartida ni tocada por Wagner) guardada en
  * estado.datos.configuracion.gemini_api_key — mismo nivel de confianza y
  * mismo mecanismo de sync que cualquier otro campo de configuracion
  * (sellarTimestamp + marcarCambioPendiente). Al guardar/borrar, llama a
  * window.aplicarVisibilidadBotonAsistente() (expuesta por main.js, mismo
- * patrón sin-import-circular que aplicarVisibilidadNavegacion) para que el
- * botón "Asistente" del nav aparezca/desaparezca al toque.
+ * patrón sin-import-circular que aplicarVisibilidadNavegacion) para
+ * recalcular el gate de existencia del botón "Asistente" del nav.
+ *
+ * Ese gate es solo de EXISTENCIA, no de preferencia: "asistente" es una
+ * sección togglable/reordenable más (ver SECCIONES_TOGGLEABLES arriba), así
+ * que el usuario puede ocultarla o moverla desde Ajustes > Navegación con
+ * total libertad, igual que Agenda/Horario/etc. Sin clave guardada, esa
+ * sección directamente no existe todavía (ni el botón del nav ni su fila en
+ * Ajustes > Navegación aparecen), pero su preferencia guardada de
+ * orden/visibilidad no se toca: en cuanto vuelva a haber clave, reaparece
+ * tal como estaba.
+ *
  * Se llama una sola vez desde renderizarAjustes() (idempotente: usa
  * .onclick, no addEventListener, así que puede re-llamarse en cada render
  * de Ajustes sin duplicar handlers) — mismo patrón que el switch de
@@ -407,6 +417,7 @@ const SECCIONES_TOGGLEABLES = [
   { id: "comunidad", etiqueta: "Comunidad", icono: "👥" },
   { id: "finanzas", etiqueta: "Finanzas", icono: "💰" },
   { id: "plan-estudios", etiqueta: "Plan de Estudios", icono: "📚" },
+  { id: "asistente", etiqueta: "Asistente", icono: "✨" },
 ];
 
 function renderizarNavegacionOculta() {
@@ -424,9 +435,19 @@ function renderizarNavegacionOculta() {
     ? window.obtenerOrdenNavegacion()
     : SECCIONES_TOGGLEABLES.map((s) => s.id);
 
+  const hayClaveGemini = Boolean(estado.datos.configuracion.gemini_api_key);
+
   orden.forEach((id) => {
     const seccion = SECCIONES_TOGGLEABLES.find((s) => s.id === id);
     if (!seccion) return; // id huérfano (ej. una sección que ya no existe) — se ignora
+
+    // Asistente IA (Gemini): gate de EXISTENCIA, no de preferencia — sin
+    // clave guardada la sección no existe todavía, así que no tiene
+    // sentido ofrecer un switch para ocultar/mostrar algo que no está
+    // disponible. Su preferencia guardada en navegacion_oculta/
+    // navegacion_orden no se toca ni se pierde: en cuanto haya clave,
+    // reaparece acá con el mismo estado de switch y posición que tenía.
+    if (id === "asistente" && !hayClaveGemini) return;
 
     const fila = document.createElement("div");
     fila.className = "fila-nav-orden row-between";
@@ -483,6 +504,11 @@ function renderizarNavegacionOculta() {
 
   habilitarArrastreNavegacion(cont);
 }
+// Se expone en window (mismo motivo de siempre: config-ajustes.js ya es
+// importado POR main.js) para que aplicarVisibilidadBotonAsistente() en
+// main.js pueda refrescar esta lista en vivo cuando se guarda/borra la
+// clave de Gemini estando parado en otra pantalla de Ajustes.
+window.renderizarNavegacionOculta = renderizarNavegacionOculta;
 
 /**
  * Bug — duplicado en drag-and-drop de navegación (2026-08-07): reordena
