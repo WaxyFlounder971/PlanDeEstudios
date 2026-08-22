@@ -376,19 +376,23 @@ function formatearTiempoRestanteHoy(fechaISO, horaStr) {
 
 /**
  * Pedido nuevo (Ajustes de Agenda): qué mostrar en la columna derecha de un
- * item cuando "vence hoy" — "hora" (solo hora de entrega), "restante" (solo
- * tiempo restante, comportamiento de siempre / default) o "ambos". Persiste
- * en `configuracion.agenda_venceHoy_modo` — mismo patrón que el resto de
- * ajustes de Agenda (ver inicializarFiltrosAgenda en agenda.js, que además
- * escribe acá). Vive en este archivo (no en agenda.js) porque
- * construirItemEvento (agenda.js) Y la tarjeta de info (agenda-modal.js)
- * necesitan leerlo por igual, y agenda-modal.js no puede importar de vuelta
- * a agenda.js sin crear un ciclo — mismo motivo que obtenerEstiloEvento acá
- * arriba.
+ * item cuando "vence hoy" — 2 switches INDEPENDIENTES (ya no un modo único
+ * "hora"/"restante"/"ambos" con radio exclusivo): "mostrar hora de entrega"
+ * y "mostrar tiempo restante", cualquier combinación es válida (incluidos
+ * los 2 apagados). Ambos default true — mismo resultado visual que tenía
+ * antes el modo "ambos". Persisten en `configuracion.agenda_venceHoy_
+ * mostrar_hora` / `agenda_venceHoy_mostrar_restante` (ver
+ * inicializarFiltrosAgenda en agenda.js, que además escribe acá). Viven en
+ * este archivo (no en agenda.js) porque construirItemEvento (agenda.js) Y
+ * la tarjeta de info (agenda-modal.js) necesitan leerlos por igual, y
+ * agenda-modal.js no puede importar de vuelta a agenda.js sin crear un
+ * ciclo — mismo motivo que obtenerEstiloEvento acá arriba.
  */
-function obtenerModoVenceHoyAgenda() {
-  const modo = estado.datos?.configuracion?.agenda_venceHoy_modo;
-  return modo === "hora" || modo === "ambos" ? modo : "restante";
+function agendaVenceHoyMuestraHora() {
+  return estado.datos?.configuracion?.agenda_venceHoy_mostrar_hora !== false;
+}
+function agendaVenceHoyMuestraRestante() {
+  return estado.datos?.configuracion?.agenda_venceHoy_mostrar_restante !== false;
 }
 
 /**
@@ -456,7 +460,8 @@ export {
   obtenerFechaInicioSemanaAgenda,
   obtenerInicioSemanaQueContiene,
   obtenerMateriasVinculablesAgenda,
-  obtenerModoVenceHoyAgenda,
+  agendaVenceHoyMuestraHora,
+  agendaVenceHoyMuestraRestante,
   obtenerOffsetSemanaParaFecha,
   obtenerRangoDiasAgendaTodo,
   obtenerSemestreActivoAgenda,

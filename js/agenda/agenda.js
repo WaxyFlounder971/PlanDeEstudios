@@ -37,7 +37,8 @@ import {
   obtenerDiasSemanaAgenda,
   obtenerEstiloEvento,
   obtenerFechaInicioSemanaAgenda,
-  obtenerModoVenceHoyAgenda,
+  agendaVenceHoyMuestraHora,
+  agendaVenceHoyMuestraRestante,
   obtenerRangoDiasAgendaTodo,
   obtenerSemestreActivoAgenda,
   obtenerSemestresSeleccionadosAgenda,
@@ -253,20 +254,22 @@ function construirItemEvento(evento) {
  * las 23:59:59, ahora se le pasa `evento.hora` para que apunte a la hora
  * puntual del evento cuando tiene una (ver agenda-utils.js).
  *
- * Pedido nuevo: cuando el ajuste "vence hoy" está en modo "ambos" (ver
- * obtenerModoVenceHoyAgenda), hora y tiempo restante se muestran los DOS a
- * la vez — en ese caso puntual el layout cambia a "cuadradito": línea 1 =
+ * Pedido nuevo: cuando los 2 switches de "vence hoy" (hora + restante,
+ * agendaVenceHoyMuestraHora/Restante) están ACTIVOS a la vez, se muestran
+ * los DOS — en ese caso puntual el layout cambia a "cuadradito": línea 1 =
  * hora + badge de tipo lado a lado, línea 2 = tiempo restante debajo. En
- * cualquier otro caso (solo hora, solo restante, o no vence hoy) se
- * mantiene el layout de siempre: badge de tipo en su propia línea arriba,
- * hora/restante debajo.
+ * cualquier otro caso (solo hora, solo restante, los 2 apagados, o no vence
+ * hoy) se mantiene el layout de siempre: badge de tipo en su propia línea
+ * arriba, hora/restante debajo (con los 2 apagados cae al mismo fallback de
+ * mostrar la hora que ya se usaba para los días que no vencen hoy).
  */
 function construirColumnaDerechaEvento(evento, estilo) {
   const vencida = esTareaVencida(evento);
   const venceHoy = tareaVenceHoy(evento);
-  const modo = obtenerModoVenceHoyAgenda();
-  const mostrarRestante = venceHoy && modo !== "hora";
-  const mostrarHoraJuntoABadge = venceHoy && modo === "ambos";
+  const mostrarHoraCfg = agendaVenceHoyMuestraHora();
+  const mostrarRestanteCfg = agendaVenceHoyMuestraRestante();
+  const mostrarRestante = venceHoy && mostrarRestanteCfg;
+  const mostrarHoraJuntoABadge = venceHoy && mostrarHoraCfg && mostrarRestanteCfg;
 
   const derecha = document.createElement("span");
   derecha.className = "stack";
@@ -997,7 +1000,7 @@ function inicializarFiltrosAgenda() {
     // que el resto de persistentes de este modal.
     const chkRepetirPuntos = document.getElementById("chk-agenda-calendario-repetir-puntos");
     if (chkRepetirPuntos) chkRepetirPuntos.checked = cfg.agenda_calendario_repetir_puntos !== false;
-    sincronizarSwitchesVenceHoy(obtenerModoVenceHoyAgenda());
+    sincronizarSwitchesVenceHoy();
     modal.classList.remove("oculto");
   });
 
@@ -1086,39 +1089,32 @@ function inicializarFiltrosAgenda() {
  * activo) implementados con el componente .switch de siempre a pedido
  * explícito, en vez del pill-group que usa el resto de Agenda para
  * elecciones de "una entre varias" — acá se pidió puntualmente así.
- * `CHK_VENCEHOY_POR_MODO` mapea cada valor persistido ("hora"/"restante"/
- * "ambos") a su checkbox — un solo mapa para sincronizar (al abrir el
- * modal) y para escribir (al tocar cualquiera de los 3).
+ * Pedido nuevo: los 2 switches de "vence hoy" (hora / restante) son
+ * independientes entre sí — cualquier combinación es válida, incluidos los
+ * 2 apagados a la vez (antes eran 3 checkboxes en modo radio exclusivo,
+ * con un tercero "Ambos"; ver construirColumnaDerechaEvento más arriba
+ * para cómo se combinan al mostrarse).
  */
-const CHK_VENCEHOY_POR_MODO = {
-  hora: "chk-agenda-vencehoy-hora",
-  restante: "chk-agenda-vencehoy-restante",
-  ambos: "chk-agenda-vencehoy-ambos",
-};
-
-function sincronizarSwitchesVenceHoy(modoActivo) {
-  Object.entries(CHK_VENCEHOY_POR_MODO).forEach(([modo, id]) => {
-    const chk = document.getElementById(id);
-    if (chk) chk.checked = modo === modoActivo;
-  });
+function sincronizarSwitchesVenceHoy() {
+  const cfg = estado.datos.configuracion;
+  const chkHora = document.getElementById("chk-agenda-vencehoy-hora");
+  const chkRestante = document.getElementById("chk-agenda-vencehoy-restante");
+  if (chkHora) chkHora.checked = cfg.agenda_venceHoy_mostrar_hora !== false;
+  if (chkRestante) chkRestante.checked = cfg.agenda_venceHoy_mostrar_restante !== false;
 }
 
 function inicializarSwitchesVenceHoyAgenda() {
-  Object.entries(CHK_VENCEHOY_POR_MODO).forEach(([modo, id]) => {
-    document.getElementById(id)?.addEventListener("change", (ev) => {
-      if (!ev.target.checked) {
-        // Siempre debe quedar exactamente 1 modo activo — destildar el que
-        // ya estaba activo sin tildar otro no es un estado válido, así que
-        // se revierte el toque (no-op) en vez de dejar los 3 apagados.
-        ev.target.checked = true;
-        return;
-      }
-      estado.datos.configuracion.agenda_venceHoy_modo = modo;
-      sellarTimestamp(estado.datos.configuracion);
-      marcarCambioPendiente();
-      sincronizarSwitchesVenceHoy(modo);
-      renderizarAgenda();
-    });
+  document.getElementById("chk-agenda-vencehoy-hora")?.addEventListener("change", (ev) => {
+    estado.datos.configuracion.agenda_venceHoy_mostrar_hora = ev.target.checked;
+    sellarTimestamp(estado.datos.configuracion);
+    marcarCambioPendiente();
+    renderizarAgenda();
+  });
+  document.getElementById("chk-agenda-vencehoy-restante")?.addEventListener("change", (ev) => {
+    estado.datos.configuracion.agenda_venceHoy_mostrar_restante = ev.target.checked;
+    sellarTimestamp(estado.datos.configuracion);
+    marcarCambioPendiente();
+    renderizarAgenda();
   });
 }
 
