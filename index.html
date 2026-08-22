@@ -579,9 +579,15 @@
       </div>
     </div>
 
-    <div id="bloque-universidad-otra-nombre" class="oculto">
-      <span class="form-label">Nombre de tu universidad</span>
-      <input type="text" id="input-universidad-otra-nombre" class="form-input" placeholder="Ej. Universidad Nacional">
+    <div id="bloque-universidad-otra-nombre" class="oculto stack">
+      <div>
+        <span class="form-label">Nombre de tu universidad</span>
+        <input type="text" id="input-universidad-otra-nombre" class="form-input" placeholder="Ej. Universidad Nacional">
+      </div>
+      <div>
+        <span class="form-label">Siglas</span>
+        <input type="text" id="input-universidad-otra-siglas" class="form-input" placeholder="Ej. UNA">
+      </div>
     </div>
 
     <!-- v1.12: el bloque de "Tipos de horas personalizados"/"No aplica" que
@@ -808,9 +814,15 @@
       <input type="text" id="input-editar-plan-nombre-carrera" class="form-input" autocomplete="off" placeholder="Ej. Ingeniería en Tecnologías de Información">
     </div>
 
-    <div>
-      <span class="form-label">Universidad</span>
-      <input type="text" id="input-editar-plan-universidad" class="form-input" autocomplete="off" placeholder="Ej. Tecnológico de Costa Rica">
+    <div class="row" style="flex-wrap:wrap;">
+      <div style="flex:2; min-width:200px;">
+        <span class="form-label">Nombre de la universidad</span>
+        <input type="text" id="input-editar-plan-universidad-nombre" class="form-input" autocomplete="off" placeholder="Ej. Instituto Tecnológico de Costa Rica">
+      </div>
+      <div style="flex:1; min-width:100px;">
+        <span class="form-label">Siglas</span>
+        <input type="text" id="input-editar-plan-universidad-siglas" class="form-input" autocomplete="off" placeholder="Ej. TEC">
+      </div>
     </div>
 
     <div>
@@ -854,6 +866,25 @@
     <div class="row" style="justify-content:flex-end;">
       <button id="btn-cancelar-editar-plan-info" class="btn btn-secondary">Cancelar</button>
       <button id="btn-guardar-editar-plan-info" class="btn btn-primary">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Completar universidades (2026-08-22) =====================
+     Bloqueante — sin botón cancelar, sin click-afuera, sin Esc. Aparece al
+     arrancar la app (ver revisarUniversidadesIncompletas en main.js) si
+     algún plan quedó con `universidad.siglas === ""` tras la migración de
+     universidad de string plano a {nombre_completo, siglas} (ver
+     migrarDatosAntiguos en core/schema.js). Una fila por plan afectado;
+     "Guardar" queda deshabilitado hasta que TODAS las filas tengan ambos
+     campos completos. -->
+<div id="modal-completar-universidades" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack" style="position:relative; z-index:1;">
+    <h2 style="margin:0;">Completá tus universidades</h2>
+    <p class="muted">Separamos "universidad" en nombre completo y siglas para mostrar badges más cortos. Completá las siglas que falten antes de seguir — esto no se puede posponer.</p>
+    <div id="lista-completar-universidades" class="stack"></div>
+    <div class="row" style="justify-content:flex-end;">
+      <button id="btn-guardar-completar-universidades" class="btn btn-primary" disabled>Guardar</button>
     </div>
   </div>
 </div>
