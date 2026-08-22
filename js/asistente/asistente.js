@@ -83,7 +83,11 @@ let grabandoVoz = false;
 function crearReconocimientoVoz() {
   const r = new ReconocimientoVozAPI();
   r.lang = "es-419";
-  r.continuous = false;
+  // continuous:true (antes false) — pedido explícito: no cortar solo
+  // porque el usuario hizo una pausa/muletilla al hablar. Con esto la
+  // única forma de terminar la grabación es tocar el botón de nuevo
+  // (ver btn.onclick, que ya llama a reconocimientoVoz.stop() ahí).
+  r.continuous = true;
   r.interimResults = true;
   return r;
 }
@@ -111,6 +115,11 @@ function crearBotonVoz(input) {
       reconocimientoVoz?.stop();
       return;
     }
+    // Lo que ya había en el input (escrito a mano o de una grabación
+    // anterior) se respeta — antes onresult pisaba todo con el texto
+    // reconocido de la sesión actual. Se congela ACÁ (antes de empezar)
+    // y cada actualización de onresult se le suma encima, nunca lo borra.
+    const textoPrevioAlInput = input.value ? `${input.value} ` : "";
     reconocimientoVoz = crearReconocimientoVoz();
     reconocimientoVoz.onstart = () => {
       grabandoVoz = true;
@@ -120,7 +129,7 @@ function crearBotonVoz(input) {
     reconocimientoVoz.onresult = (e) => {
       let texto = "";
       for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript;
-      input.value = texto;
+      input.value = textoPrevioAlInput + texto;
     };
     reconocimientoVoz.onerror = (e) => {
       // Antes esto no quedaba en consola de ninguna forma — el toast
