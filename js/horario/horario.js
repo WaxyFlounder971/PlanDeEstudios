@@ -743,6 +743,24 @@ function centrarVistaInicial(contenedor, minutosClases, pxPorMin, minInicioRango
   }
 }
 
+// FIX (reporte: el botón de salir de pantalla completa "se sobrepone a
+// otro botón y se ve roto"): antes vivía con position:absolute; top:8px;
+// right:8px colgado directo de #horario-grid-contenedor, flotando sobre
+// TODO el contenido (incluida la fila de días, ancha, sin margen
+// reservado) — por eso tapaba/pisaba el día más a la derecha en la vista
+// propia. Ahora se ancla DENTRO de la fila de título/navegación angosta de
+// cada una de las 3 vistas (propia, conjunto, individual de amigo), que sí
+// tiene aire libre a la derecha de su contenido centrado. Se reutiliza
+// siempre el MISMO nodo (creado una sola vez en inicializarHorario) para no
+// perder su listener de click al reubicarlo — appendChild solo lo mueve,
+// nunca lo clona.
+function anclarBotonSalirFSEnFila(fila) {
+  const btn = document.getElementById("btn-horario-salir-pantalla-completa");
+  if (!btn || !fila) return;
+  fila.style.position = "relative";
+  if (btn.parentElement !== fila) fila.appendChild(btn);
+}
+
 /* ===================== Render principal ===================== */
 
 function renderizarHorarioInterno() {
@@ -875,6 +893,7 @@ function renderizarHorarioInterno() {
       btnSigFS.setAttribute("aria-label", "Semana siguiente");
       btnSigFS.addEventListener("click", irASemanaSiguiente);
       navFS.append(btnAntFS, etiquetaFS, btnSigFS);
+      anclarBotonSalirFSEnFila(navFS);
       headerWrap.appendChild(navFS);
     }
 
@@ -1163,6 +1182,7 @@ function renderizarVistaIndividualAmigoInterno(cont, semestre, numeroSemana) {
     <span style="width:10px; height:10px; border-radius:50%; flex-shrink:0; background:${amigo.color};"></span>
     <span class="texto-encabezado-seccion">${amigo.nombre}</span>
   `;
+  anclarBotonSalirFSEnFila(tituloFila);
   encabezado.appendChild(tituloFila);
 
   if (dias.length === 0) {
@@ -1428,6 +1448,7 @@ function renderizarConjuntoModoDia(cont, semestre, numeroSemana, dias) {
   navFila.appendChild(btnAnt);
   navFila.appendChild(etiquetaDia);
   navFila.appendChild(btnSig);
+  anclarBotonSalirFSEnFila(navFila);
 
   const headerFila = document.createElement("div");
   headerFila.style.cssText = "display:flex; border-bottom:1px solid rgba(150,150,170,0.15);";
@@ -1546,6 +1567,7 @@ function renderizarConjuntoModoSemana(cont, semestre, numeroSemana, dias) {
   zoomControles.appendChild(etiquetaZoom);
   zoomControles.appendChild(btnMas);
   controlesFila.appendChild(zoomControles);
+  anclarBotonSalirFSEnFila(controlesFila);
   encabezado.appendChild(controlesFila);
   cont.appendChild(encabezado);
 
@@ -2144,34 +2166,41 @@ function inicializarHorario() {
     // IDS_MODALES_GLOBALES vía sincronizarModalesConPantallaCompleta) y se
     // vuelve invisible/inaccesible: sin este botón aparte no había forma de
     // salir salvo Esc o el gesto nativo del navegador. Se crea UNA sola vez
-    // acá (no en cada renderizarHorarioInterno) colgado directo de
-    // `contenedor` — así sobrevive a que renderizarHorarioInterno solo
-    // reconstruya `cont` (#horario-grid) adentro, sin importar cuál de las
-    // 3 vistas (propio / Horario conjunto / individual de un amigo) esté
-    // activa en ese momento.
+    // acá (no en cada renderizarHorarioInterno) y luego renderizarHorarioInterno
+    // lo reancla, vía anclarBotonSalirFSEnFila, dentro de la fila de
+    // título/navegación de la vista que corresponda en cada render (propio /
+    // Horario conjunto / individual de un amigo) — nunca se recrea, así no
+    // pierde su listener de click al moverse de una fila a otra.
     if (contenedor) {
-      contenedor.style.position = "relative";
       const btnSalirFS = document.createElement("button");
       btnSalirFS.type = "button";
       btnSalirFS.id = "btn-horario-salir-pantalla-completa";
       btnSalirFS.className = "btn-icono-fantasma oculto";
       btnSalirFS.title = "Salir de pantalla completa";
       btnSalirFS.setAttribute("aria-label", "Salir de pantalla completa");
-      btnSalirFS.textContent = "✕";
-      // Discreto: chico, translúcido hasta hacer hover/tap, en la esquina
-      // superior derecha. z-index por encima del header sticky (z:50) y de
-      // la barra de expandir (z:40) para que nunca quede tapado, pero sin
-      // invadir ningún control existente (los tres headers de las vistas
-      // usan padding/gap propios que no llegan hasta esa esquina exacta).
+      // Ícono "contraer pantalla" (fullscreen_exit — cuatro flechas en L
+      // apuntando hacia adentro) en vez de la "✕" anterior: el usuario pidió
+      // específicamente "el cuadradito de cerrar pantalla completa, no una
+      // X", sin relación visual con el ⛶ (expandir) que ya existe.
+      btnSalirFS.innerHTML =
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+        '<path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>' +
+        "</svg>";
+      // Discreto: translúcido hasta hacer hover/tap. Anclado con
+      // position:absolute pero YA NO relativo a `contenedor` (todo el
+      // grid) sino a la fila angosta de título/navegación que lo reciba en
+      // cada vista vía anclarBotonSalirFSEnFila — ver ahí el porqué del fix.
       btnSalirFS.style.cssText =
-        "position:absolute; top:8px; right:8px; z-index:60; font-size:1rem; width:30px; height:30px; " +
-        "display:flex; align-items:center; justify-content:center; border-radius:50%; " +
-        "background:var(--bg-header-solido); opacity:0.55; transition:opacity 0.15s;";
+        "position:absolute; right:6px; top:50%; transform:translateY(-50%); z-index:5; " +
+        "padding:3px 5px; opacity:0.65; transition:opacity 0.15s;";
       btnSalirFS.addEventListener("mouseenter", () => { btnSalirFS.style.opacity = "1"; });
-      btnSalirFS.addEventListener("mouseleave", () => { btnSalirFS.style.opacity = "0.55"; });
+      btnSalirFS.addEventListener("mouseleave", () => { btnSalirFS.style.opacity = "0.65"; });
       btnSalirFS.addEventListener("click", () => {
         if (document.fullscreenElement) document.exitFullscreen();
       });
+      // Fallback hasta el primer render de una vista (que lo reancla en su
+      // fila correspondiente vía anclarBotonSalirFSEnFila) — oculto igual,
+      // no se ve flotando suelto acá ni un instante.
       contenedor.appendChild(btnSalirFS);
     }
 

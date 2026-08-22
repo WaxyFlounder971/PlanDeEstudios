@@ -21,6 +21,13 @@ import { crearArchivoJsonEnDrive, crearPermisoPublicoLectura, eliminarPermisoDri
 import { mostrarToast, abrirConfirmacion, desplazarYResaltarElemento } from "../ui/componentes.js";
 import { copiarAlPortapapelesBlindado, abrirModalCopiaManualPortapapeles } from "../core/clipboard.js";
 import { obtenerSemestreHorarioActual, obtenerColorBloque, obtenerNombreBloque, obtenerRangoHorasHorario, obtenerPlanPorId, abrirHorarioConjunto, abrirVistaIndividualAmigo } from "./horario.js";
+// Editar nombre/color de un amigo vinculado (punto 3 del ajuste chico
+// pedido por Wagner): no había ningún modal de "editar nombre+color" ya
+// armado en horario-amigos.js/horario.js. El patrón más parecido en toda
+// la app es este helper de modal dinámico 100% en JS (overlay +
+// .glass-card.modal-card), que ya usan todos los modales de
+// semestres-tarjetas.js — se reusa tal cual en vez de duplicarlo.
+import { crearModalDinamico, agregarCampoModal } from "../semestres/semestres-tarjetas.js";
 
 // Restringido por dominio en Google Cloud a este mismo GitHub Pages — ver
 // nota de configuración del prompt. amigos.html vive en la raíz del repo,
@@ -573,6 +580,64 @@ function abrirModalConfirmarAsociarAmigo(apodoDefault, onConfirmar) {
 }
 
 /**
+ * Editar nombre/color de un amigo ya vinculado (punto 3 del ajuste chico
+ * pedido por Wagner). Modal dinámico (crearModalDinamico/agregarCampoModal,
+ * reusados de semestres-tarjetas.js) en vez de uno estático en el HTML,
+ * porque acá no hace falta tocar index.html para agregar un modal nuevo.
+ * Color: <input type="color"> nativo — es el único selector de color que
+ * existe en toda la app (el mismo que usa #modal-categoria para categorías
+ * de materias), no se inventa uno nuevo.
+ */
+function abrirModalEditarAmigoVinculado(amigo) {
+  const { overlay, card } = crearModalDinamico({ titulo: `Editar a ${amigo.nombre}` });
+
+  const inputNombre = agregarCampoModal(card, {
+    etiqueta: "Nombre",
+    tipo: "text",
+    valor: amigo.nombre,
+  });
+  const inputColor = agregarCampoModal(card, {
+    etiqueta: "Color",
+    tipo: "color",
+    valor: amigo.color,
+  });
+
+  const amigoId = amigo.id;
+
+  const btnGuardar = document.createElement("button");
+  btnGuardar.type = "button";
+  btnGuardar.className = "btn btn-primary btn-block";
+  btnGuardar.textContent = "Guardar";
+  btnGuardar.addEventListener("click", () => {
+    const nombre = inputNombre.value.trim().slice(0, 30);
+    if (!nombre) {
+      mostrarToast("Ponele un nombre al amigo");
+      return;
+    }
+    // Se vuelve a buscar el amigo vivo justo antes de escribir (mismo
+    // criterio que buscarMmVivaPorId en semestres-tarjetas.js) — por si la
+    // lista cambió (ej. se desvinculó desde otro dispositivo) mientras el
+    // modal estaba abierto.
+    const vivo = (estado.datos.configuracion.horario_amigos_vinculados || []).find((a) => a.id === amigoId);
+    if (!vivo) {
+      mostrarToast("Este amigo se desvinculó desde otro dispositivo — no se pudo guardar");
+      overlay.remove();
+      renderizarListaAmigosVinculados();
+      return;
+    }
+    vivo.nombre = nombre;
+    vivo.color = inputColor.value;
+    sellarTimestamp(vivo);
+    marcarCambioPendiente();
+    overlay.remove();
+    renderizarListaAmigosVinculados();
+    if (typeof window.renderizarHorario === "function") window.renderizarHorario();
+    mostrarToast(`Se actualizó ${nombre}.`);
+  });
+  card.appendChild(btnGuardar);
+}
+
+/**
  * Se llama una vez por carga, desde mostrarApp() (main.js) — NO desde
  * inicializarHorarioAmigos(), porque esa corre en el primer DOMContentLoaded,
  * antes de que estado.datos exista (ver inicializarHorario() en horario.js,
@@ -1010,6 +1075,19 @@ function renderizarListaAmigosVinculados() {
       abrirVistaIndividualAmigo(amigo.file_id);
     });
     controles.appendChild(btnVerIndividual);
+
+    // Punto 3 del ajuste chico (Wagner): editar nombre/color de un amigo ya
+    // vinculado — botón nuevo, mismo estilo/tamaño que btnVerIndividual de
+    // arriba, ubicado justo al lado.
+    const btnEditarAmigo = document.createElement("button");
+    btnEditarAmigo.type = "button";
+    btnEditarAmigo.className = "btn-icono-fantasma";
+    btnEditarAmigo.title = `Editar nombre/color de ${amigo.nombre}`;
+    btnEditarAmigo.setAttribute("aria-label", `Editar nombre/color de ${amigo.nombre}`);
+    btnEditarAmigo.style.cssText = "font-size:1.05rem; padding:2px 6px;";
+    btnEditarAmigo.textContent = "✎";
+    btnEditarAmigo.addEventListener("click", () => abrirModalEditarAmigoVinculado(amigo));
+    controles.appendChild(btnEditarAmigo);
 
     const labelSwitch = document.createElement("label");
     labelSwitch.className = "switch switch-tema";
