@@ -692,6 +692,12 @@ function mostrarApp() {
   renderizarPerfil();
   restaurarEstadoSidebar();
   aplicarVisibilidadNavegacion();
+  // Asistente IA (2026-08-22): antes del mostrarSeccion(...) de más abajo,
+  // así si localStorage quedó apuntando a "asistente" sin clave guardada
+  // (ej. otro dispositivo sin la clave, o se borró la clave y se recargó),
+  // el redirect a "configuracion" que hace esta función ya corrigió
+  // localStorage ANTES de que se lea ahí.
+  aplicarVisibilidadBotonAsistente();
   if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
   if (typeof renderizarSemestres === "function") renderizarSemestres();
   if (typeof renderizarComunidad === "function") renderizarComunidad();
@@ -795,6 +801,7 @@ function mostrarSeccion(nombre) {
     finanzas: "seccion-finanzas",
     agenda: "seccion-agenda",
     horario: "seccion-horario",
+    asistente: "seccion-asistente",
   };
   Object.entries(secciones).forEach(([clave, idEl]) => {
     const el = document.getElementById(idEl);
@@ -819,6 +826,11 @@ function mostrarSeccion(nombre) {
   // "hoy" pudiendo haber cambiado) — se re-renderiza fresco cada vez que se
   // entra, en vez de confiar en el render inicial de mostrarApp().
   if (nombre === "resumen") window.renderizarResumen?.();
+  // Asistente IA (2026-08-22): historial en blanco SIEMPRE — cada visita
+  // arranca una conversación nueva a propósito (no es un chat para releer,
+  // es una interfaz de comando puntual). renderizarAsistente() reconstruye
+  // el DOM de cero cada vez, sin leer ningún estado de una visita anterior.
+  if (nombre === "asistente") window.renderizarAsistente?.();
 }
 // v2.8.9 (punto 10): se expone en window para que ui/componentes.js pueda
 // llamarla desde inicializarNavegacionBotonesMouse() sin crear un import
@@ -926,6 +938,40 @@ function aplicarVisibilidadNavegacion() {
   }
 }
 window.aplicarVisibilidadNavegacion = aplicarVisibilidadNavegacion;
+
+/**
+ * Asistente IA (Gemini), 2026-08-22: el botón "Asistente" del nav se
+ * muestra u oculta según si hay clave de Gemini guardada
+ * (configuracion.gemini_api_key) — a propósito NO pasa por el sistema de
+ * navegacion_oculta/aplicarVisibilidadNavegacion de arriba, porque esa
+ * visibilidad es una preferencia manual del usuario ("no quiero ver este
+ * botón") y esta es una condición de disponibilidad real ("este botón no
+ * sirve de nada sin clave"). Ambos sistemas son independientes: el usuario
+ * podría en teoría ocultar "Asistente" desde Ajustes → orden/visibilidad de
+ * nav en el futuro, sin que eso afecte esta función ni viceversa (hoy
+ * "asistente" ni siquiera está en DEFAULT_ORDEN_NAV, así que esa pantalla
+ * de Ajustes no lo lista).
+ * Se llama: (1) desde mostrarApp() al arrancar, (2) desde
+ * inicializarAsistenteAjustes() (config-ajustes.js) cada vez que se
+ * guarda/borra la clave. Se expone en window por el mismo motivo de
+ * siempre: config-ajustes.js ya es importado POR main.js, llamarla al
+ * revés crearía un import circular evitable.
+ */
+function aplicarVisibilidadBotonAsistente() {
+  const btn = document.getElementById("nav-asistente");
+  if (!btn) return;
+  const hayClave = Boolean(estado.datos.configuracion.gemini_api_key);
+  btn.classList.toggle("oculto", !hayClave);
+  // Si el usuario estaba parado en Asistente y justo ahí borró la clave
+  // (única forma de llegar a este caso: el modal de Ajustes está en la
+  // misma vista que Asistente, no se puede borrar la clave DESDE dentro de
+  // Asistente) — mismo criterio de "no dejar sin nav visible" que
+  // aplicarVisibilidadNavegacion usa para navegacion_oculta.
+  if (!hayClave && localStorage.getItem(CLAVE_SECCION_ACTIVA) === "asistente") {
+    mostrarSeccion("configuracion");
+  }
+}
+window.aplicarVisibilidadBotonAsistente = aplicarVisibilidadBotonAsistente;
 
 /* ===================== Perfil de Google (punto 6) ===================== */
 
