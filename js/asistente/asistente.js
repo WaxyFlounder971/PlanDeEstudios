@@ -484,9 +484,11 @@ function construirEsqueletoAsistente(contenedor) {
   titulo.textContent = "✨ Asistente IA";
   encabezado.appendChild(titulo);
   const btnNueva = document.createElement("button");
-  btnNueva.className = "btn btn-secondary";
   btnNueva.title = "Nueva conversación";
-  btnNueva.textContent = "🔄 Nueva";
+  btnNueva.setAttribute("aria-label", "Nueva conversación");
+  btnNueva.textContent = "🔄";
+  btnNueva.style.cssText =
+    "background:none; border:none; font-size:1.5rem; line-height:1; cursor:pointer; padding:2px 4px;";
   btnNueva.onclick = () => {
     const habiaAlgo = conversacionActual.length > 0;
     iniciarConversacionNueva(contenedor);
