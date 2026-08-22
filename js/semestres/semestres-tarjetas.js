@@ -2331,10 +2331,23 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
   cont.appendChild(encabezado);
 
   if (expandido) {
+    // Pedido explícito (2026-08-21): "+ Añadir asignación" sube de posición
+    // — antes vivía solo, en un pie después de listar todas las
+    // asignaciones; ahora comparte fila con "Nota"/"Puntaje", pegado a la
+    // izquierda (esa fila ya no tiene ninguna otra función salvo mostrar
+    // las etiquetas de columna, así que es la primera fila útil de la
+    // tarjeta expandida). Se mantiene la MISMA condición de visibilidad de
+    // antes para el botón (oculto en modo reordenar) y para las etiquetas
+    // Nota/Puntaje (que "✨ Extra" nunca mostró, ver comentario más abajo)
+    // — cada mitad de la fila aparece o no de forma independiente.
+    const mostrarBotonAgregar = !enReordenCriterios && !enReordenAsignaciones;
+
     // "✨ Extra" (2026-08-07): sus filas no tienen columnas Nota/Puntaje
-    // (ver construirFilaAsignacion — una sola pill "+X pts"), así que este
-    // encabezado de columnas no aplica y se omite entero.
-    if (!criterio.es_extra) {
+    // (ver construirFilaAsignacion — una sola pill "+X pts"), así que esa
+    // mitad de la fila no aplica y se omite. La fila en sí solo se omite
+    // entera si NO hay nada que mostrar en ninguna mitad (extra + en modo
+    // reordenar, ej.).
+    if (!criterio.es_extra || mostrarBotonAgregar) {
     // FIX (pedido explícito: "Nota y Puntaje NO está centrado a su pill,
     // como 20px corridos a la derecha"): fila-asignacion (construirFilaAsignacion)
     // tiene padding:6px 10px propio, así que sus pills quedan 10px adentro
@@ -2344,7 +2357,37 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
     // se veían corridas hacia la derecha respecto a las pills de abajo.
     const filaEtiquetas = document.createElement("div");
     filaEtiquetas.className = "row";
-    filaEtiquetas.style.cssText = "justify-content:flex-end; align-items:center; gap:6px; flex-wrap:nowrap; padding:0 10px;";
+    filaEtiquetas.style.cssText = "justify-content:space-between; align-items:center; gap:6px; flex-wrap:nowrap; padding:0 10px;";
+
+    if (mostrarBotonAgregar) {
+      const btnAgregar = document.createElement("button");
+      btnAgregar.type = "button";
+      btnAgregar.className = "btn btn-secondary";
+      btnAgregar.style.cssText = "font-size:0.78rem; padding:5px 10px; flex-shrink:0;";
+      btnAgregar.textContent = "+ Añadir asignación";
+      btnAgregar.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        // "✨ Extra" (2026-08-07): a diferencia de un criterio normal (que
+        // agrega un placeholder vacío para completar tocándolo después),
+        // acá el modal simplificado se abre directo — nombre y puntos son
+        // los únicos 2 campos, no tiene sentido el paso intermedio.
+        if (criterio.es_extra) {
+          abrirModalAsignacionExtra({ criterio, mm, materia, plan, escalaActiva, onGuardado: onCambiar });
+        } else {
+          agregarAsignacionRapida(criterio, mm, materia, plan, onCambiar);
+        }
+      });
+      filaEtiquetas.appendChild(btnAgregar);
+    }
+
+    if (!criterio.es_extra) {
+    // Envueltas en su propio wrapper (en vez de ir sueltas directo en
+    // filaEtiquetas) para que sigan actuando como UN solo bloque a la
+    // derecha ahora que filaEtiquetas es space-between con el botón como
+    // otro bloque a la izquierda.
+    const etiquetasWrap = document.createElement("div");
+    etiquetasWrap.className = "row";
+    etiquetasWrap.style.cssText = "align-items:center; gap:6px; flex-wrap:nowrap;";
 
     if (angosta) {
       // Pendiente #7 (2026-08-03): en pantalla angosta solo cabe Nota O
@@ -2363,13 +2406,13 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
         estado.vistaNotaPuntajeAngosta = estado.vistaNotaPuntajeAngosta === "nota" ? "puntaje" : "nota";
         onCambiar();
       });
-      filaEtiquetas.appendChild(btnAnterior);
+      etiquetasWrap.appendChild(btnAnterior);
 
       const etiquetaActiva = document.createElement("span");
       etiquetaActiva.className = "muted pill-tamano-fijo";
       etiquetaActiva.style.cssText = PILL_ESTILO + "font-size:0.72rem; font-weight:700;";
       etiquetaActiva.textContent = estado.vistaNotaPuntajeAngosta === "nota" ? "Nota" : "Puntaje";
-      filaEtiquetas.appendChild(etiquetaActiva);
+      etiquetasWrap.appendChild(etiquetaActiva);
 
       const btnSiguiente = document.createElement("button");
       btnSiguiente.type = "button";
@@ -2381,18 +2424,20 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
         estado.vistaNotaPuntajeAngosta = estado.vistaNotaPuntajeAngosta === "nota" ? "puntaje" : "nota";
         onCambiar();
       });
-      filaEtiquetas.appendChild(btnSiguiente);
+      etiquetasWrap.appendChild(btnSiguiente);
     } else {
       const etiquetaNota = document.createElement("span");
       etiquetaNota.className = "muted pill-tamano-fijo";
       etiquetaNota.style.cssText = PILL_ESTILO + "font-size:0.72rem; font-weight:700;";
       etiquetaNota.textContent = "Nota";
-      filaEtiquetas.appendChild(etiquetaNota);
+      etiquetasWrap.appendChild(etiquetaNota);
       const etiquetaPuntaje = document.createElement("span");
       etiquetaPuntaje.className = "muted pill-tamano-fijo";
       etiquetaPuntaje.style.cssText = PILL_ESTILO + "font-size:0.72rem; font-weight:700;";
       etiquetaPuntaje.textContent = "Puntaje";
-      filaEtiquetas.appendChild(etiquetaPuntaje);
+      etiquetasWrap.appendChild(etiquetaPuntaje);
+    }
+    filaEtiquetas.appendChild(etiquetasWrap);
     }
     cont.appendChild(filaEtiquetas);
     }
@@ -2431,37 +2476,6 @@ function construirTarjetaCriterio(criterio, mm, materia, plan, escalaActiva, onC
       );
     }
 
-    /* ---------- Pie: + Añadir asignación ---------- */
-    // "Puntos totales" ya no vive acá (ver derechaWrap en el encabezado,
-    // arriba) — el pie ahora es solo el botón de agregar. En modo
-    // reordenar se oculta (no tiene sentido agregar mientras se está
-    // reordenando, y evita otro botón compitiendo con el drag).
-    if (!enReordenCriterios && !enReordenAsignaciones) {
-      const pie = document.createElement("div");
-      pie.className = "row";
-      pie.style.cssText = "justify-content:flex-start; align-items:center; margin-top:2px;";
-
-      const btnAgregar = document.createElement("button");
-      btnAgregar.type = "button";
-      btnAgregar.className = "btn btn-secondary";
-      btnAgregar.style.cssText = "font-size:0.78rem; padding:5px 10px;";
-      btnAgregar.textContent = "+ Añadir asignación";
-      btnAgregar.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        // "✨ Extra" (2026-08-07): a diferencia de un criterio normal (que
-        // agrega un placeholder vacío para completar tocándolo después),
-        // acá el modal simplificado se abre directo — nombre y puntos son
-        // los únicos 2 campos, no tiene sentido el paso intermedio.
-        if (criterio.es_extra) {
-          abrirModalAsignacionExtra({ criterio, mm, materia, plan, escalaActiva, onGuardado: onCambiar });
-        } else {
-          agregarAsignacionRapida(criterio, mm, materia, plan, onCambiar);
-        }
-      });
-      pie.appendChild(btnAgregar);
-
-      cont.appendChild(pie);
-    }
   }
 
   return cont;
