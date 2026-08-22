@@ -249,6 +249,12 @@ a { color: var(--accent-1); }
 [data-mode="light"] .btn-discreto:hover { background: rgba(0, 0, 0, 0.06); }
 .btn-discreto:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
 
+/* Variante para acciones destructivas (ej. "Eliminar" en las tarjetas del
+   Asistente) — mismo tratamiento discreto, pero en rojo para diferenciarse
+   de una acción como "Editar". */
+.btn-discreto-peligro { color: var(--color-danger); }
+.btn-discreto-peligro:hover { background: rgba(220, 38, 38, 0.12); color: var(--color-danger); }
+
 /* ---- Grupo de botones "pill" (selección exclusiva) ---- */
 .pill-group {
   display: flex;
@@ -1126,6 +1132,21 @@ a { color: var(--accent-1); }
   width: 100%;
   max-width: 100vw;
   overflow-x: hidden;
+}
+
+/* ---- Asistente IA: bloqueo de scroll del documento + ocultar topbar con
+   teclado abierto (ver sincronizarEstadoAsistente en asistente.js). La
+   sección de Asistente es un bloque estático de pantalla completa con su
+   propio scroll interno (#asistente-chat-scroll) — el documento en sí NUNCA
+   debe poder scrollear mientras esté visible. asistente.js agrega/quita
+   estas 2 clases solo, en base a visibilidad real (IntersectionObserver) y
+   a si el teclado está abierto (comparación de innerHeight vs
+   visualViewport.height), así que no hacen falta media queries acá. */
+body.asistente-bloqueo-scroll {
+  overflow: hidden;
+}
+body.asistente-teclado-abierto .mobile-topbar {
+  display: none !important;
 }
 
 /* ---- Barra superior solo-móvil (hamburguesa) ---- */
