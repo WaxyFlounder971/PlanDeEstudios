@@ -417,7 +417,14 @@ function guardarEventoAgenda(eventoExistente) {
   refrescarAgenda();
 }
 
-function confirmarBorrarEventoAgenda(eventoExistente) {
+/**
+ * `onBorradoConfirmado` es opcional (nadie lo usaba antes de esto) — lo
+ * dispara SOLO dentro de onConfirmar, después de que el evento ya se borró
+ * de verdad de estado.datos.agenda, nunca antes. Lo usa asistente.js para
+ * marcar su propia tarjeta del chat como "Eliminado" al toque, en vez de
+ * que quede desactualizada hasta la próxima vez que se reconstruya el chat.
+ */
+function confirmarBorrarEventoAgenda(eventoExistente, onBorradoConfirmado) {
   if (!eventoExistente) return;
   abrirConfirmacion({
     titulo: `¿Borrar "${eventoExistente.nombre || ETIQUETA_TIPO[eventoExistente.tipo]}"?`,
@@ -436,6 +443,7 @@ function confirmarBorrarEventoAgenda(eventoExistente) {
       }
       cerrarModalEventoAgenda();
       refrescarAgenda();
+      if (typeof onBorradoConfirmado === "function") onBorradoConfirmado();
     },
   });
 }
