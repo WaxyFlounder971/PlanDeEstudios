@@ -401,6 +401,7 @@ window.addEventListener("DOMContentLoaded", () => {
     inicializarModalRequisito,
     inicializarModalHistorial,
     inicializarResponsivoListaPlan,
+    inicializarModalCompletarUniversidades,
   ].forEach((fn) => {
     try {
       fn();
@@ -554,6 +555,118 @@ async function onLoginExitoso(token, expiresIn) {
   }
 }
 
+/**
+ * Universidad — separación nombre_completo/siglas (2026-08-22, Parte 0).
+ *
+ * `revisarUniversidadesIncompletas()`: se llama al final de mostrarApp().
+ * Busca planes con `universidad.siglas === ""` (dejados así a propósito
+ * por migrarDatosAntiguos en core/schema.js) y, si encuentra alguno,
+ * arma una fila editable por plan dentro del modal bloqueante y lo
+ * muestra. Si no hay ninguno incompleto, no hace nada — la inmensa
+ * mayoría de las cargas de la app pasan por acá sin efecto visible.
+ *
+ * `inicializarModalCompletarUniversidades()`: se llama una sola vez al
+ * arrancar (ver lista de inicializadores en DOMContentLoaded) — solo
+ * engancha el listener del botón "Guardar", que lee TODAS las filas
+ * presentes en ese momento (pueden ser varias, una por plan afectado) y
+ * las persiste de una sola vez.
+ *
+ * El modal es intencionalmente imposible de saltar: sin "X" (ver
+ * exclusión en inicializarBotonesCerrarModal, ui/componentes.js), sin
+ * click-afuera (nunca se registra ese listener acá, a diferencia del
+ * resto de los modales de la app) y con el botón "Guardar" deshabilitado
+ * hasta que TODAS las filas tengan ambos campos no vacíos.
+ */
+function inicializarModalCompletarUniversidades() {
+  document.getElementById("btn-guardar-completar-universidades").addEventListener("click", () => {
+    const filas = document.querySelectorAll("#lista-completar-universidades .fila-completar-universidad");
+    filas.forEach((fila) => {
+      const plan = estado.datos.planes_estudio.find((p) => p.id === fila.dataset.planId);
+      if (!plan) return;
+      plan.universidad.nombre_completo = fila.querySelector(".input-completar-nombre").value.trim();
+      plan.universidad.siglas = fila.querySelector(".input-completar-siglas").value.trim();
+      // FIX sync: cada plan se funde por su propio _actualizadoEn
+      // (fusionarPlan en storage-merge.js) — sin sellar acá, el llenado
+      // se perdería en el próximo sync igual que otros bugs ya
+      // documentados en este archivo (ver comentarios de plan-esquema.js
+      // y plan-gestionar.js sobre el mismo patrón).
+      sellarTimestamp(plan);
+    });
+    marcarCambioPendiente();
+    document.getElementById("modal-completar-universidades").classList.add("oculto");
+    renderizarSelectorPlan();
+    renderizarModoHardcore();
+    if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
+    if (typeof renderizarSemestres === "function") renderizarSemestres();
+  });
+}
+
+function revisarUniversidadesIncompletas() {
+  const incompletos = (estado.datos.planes_estudio || []).filter((p) => !p.universidad.siglas);
+  if (incompletos.length === 0) return;
+
+  const cont = document.getElementById("lista-completar-universidades");
+  const btnGuardar = document.getElementById("btn-guardar-completar-universidades");
+  cont.innerHTML = "";
+
+  function actualizarHabilitado() {
+    const todasCompletas = Array.from(cont.querySelectorAll(".fila-completar-universidad")).every(
+      (fila) =>
+        fila.querySelector(".input-completar-nombre").value.trim() &&
+        fila.querySelector(".input-completar-siglas").value.trim()
+    );
+    btnGuardar.disabled = !todasCompletas;
+  }
+
+  incompletos.forEach((plan) => {
+    const fila = document.createElement("div");
+    fila.className = "fila-completar-universidad stack";
+    fila.style.cssText = "gap:8px; padding:10px; border:1px solid var(--color-borde); border-radius:10px;";
+    fila.dataset.planId = plan.id;
+
+    const etiquetaPlan = document.createElement("p");
+    etiquetaPlan.className = "muted";
+    etiquetaPlan.style.margin = "0";
+    etiquetaPlan.textContent = plan.nombre_carrera;
+    fila.appendChild(etiquetaPlan);
+
+    const campoNombre = document.createElement("div");
+    const labelNombre = document.createElement("span");
+    labelNombre.className = "form-label";
+    labelNombre.textContent = "Nombre completo";
+    const inputNombre = document.createElement("input");
+    inputNombre.type = "text";
+    inputNombre.className = "form-input input-completar-nombre";
+    // Precargado con el nombre_completo que ya trae de la migración (el
+    // string viejo tal cual estaba guardado) — el usuario solo tiene que
+    // revisarlo/corregirlo si hace falta, no escribirlo de cero.
+    inputNombre.value = plan.universidad.nombre_completo || "";
+    campoNombre.appendChild(labelNombre);
+    campoNombre.appendChild(inputNombre);
+    fila.appendChild(campoNombre);
+
+    const campoSiglas = document.createElement("div");
+    const labelSiglas = document.createElement("span");
+    labelSiglas.className = "form-label";
+    labelSiglas.textContent = "Siglas";
+    const inputSiglas = document.createElement("input");
+    inputSiglas.type = "text";
+    inputSiglas.className = "form-input input-completar-siglas";
+    inputSiglas.placeholder = "Ej. TEC";
+    campoSiglas.appendChild(labelSiglas);
+    campoSiglas.appendChild(inputSiglas);
+    fila.appendChild(campoSiglas);
+
+    inputNombre.addEventListener("input", actualizarHabilitado);
+    inputSiglas.addEventListener("input", actualizarHabilitado);
+
+    cont.appendChild(fila);
+  });
+
+  actualizarHabilitado();
+  document.getElementById("modal-completar-universidades").classList.remove("oculto");
+}
+
 function mostrarApp() {
   // Cubre los 2 caminos que llegan acá: sesión restaurada desde caché
   // (mostrarApp() se llama casi de inmediato al arrancar, ver
@@ -608,6 +721,12 @@ function mostrarApp() {
     mostrarSeccion("agenda");
     window.history.replaceState({}, "", window.location.pathname);
   }
+  // Universidad — separación nombre_completo/siglas (2026-08-22): va AL
+  // FINAL de mostrarApp() a propósito, después de todos los renders de
+  // arriba — así el modal bloqueante (si hace falta) queda por encima de
+  // una app ya completamente pintada, en vez de interrumpir a mitad de
+  // los renders con la UI todavía a medio construir.
+  revisarUniversidadesIncompletas();
 }
 
 // Notificaciones push — mismo caso que el query param de arriba, pero para
