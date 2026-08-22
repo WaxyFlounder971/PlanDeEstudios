@@ -669,6 +669,67 @@ function alternarVisibilidadAmigo(fileId) {
 // pueda desvincularlo a mano, pero no se dibuja nada de él en el grid.
 const cacheSnapshotsAmigos = new Map();
 
+// FIX (reporte: "algo pasó con horario de amigos, no carga"): antes, CUALQUIER
+// fallo de refrescarSnapshotsAmigos (sin wifi, Drive caído, un timeout suelto)
+// pisaba el snapshot en memoria con `null` exactamente igual que un 404/403
+// real — el amigo desaparecía del grid aunque el enlace siguiera 100%
+// vigente, hasta el próximo refresco exitoso. Copia de respaldo en
+// localStorage (por file_id) para que un fallo transitorio (sin red, o el
+// primer render de la sesión antes de que el fetch resuelva) siga mostrando
+// la última versión conocida en vez de dejar el horario vacío. Solo se borra
+// el respaldo cuando se CONFIRMA que el acceso fue revocado (404/403) — ver
+// refrescarSnapshotsAmigos más abajo.
+const KEY_LOCALSTORAGE_BACKUP_SNAPSHOTS = "horario_amigos_snapshots_backup_v1";
+
+function leerBackupSnapshotsAmigos() {
+  try {
+    const crudo = localStorage.getItem(KEY_LOCALSTORAGE_BACKUP_SNAPSHOTS);
+    const obj = crudo ? JSON.parse(crudo) : {};
+    return obj && typeof obj === "object" ? obj : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function guardarBackupSnapshotAmigo(fileId, snapshot) {
+  const backup = leerBackupSnapshotsAmigos();
+  backup[fileId] = { snapshot, guardado_en: Date.now() };
+  try {
+    localStorage.setItem(KEY_LOCALSTORAGE_BACKUP_SNAPSHOTS, JSON.stringify(backup));
+  } catch (e) {
+    console.warn("No se pudo guardar el respaldo local del horario de un amigo:", e);
+  }
+}
+
+function eliminarBackupSnapshotAmigo(fileId) {
+  const backup = leerBackupSnapshotsAmigos();
+  if (!(fileId in backup)) return;
+  delete backup[fileId];
+  try {
+    localStorage.setItem(KEY_LOCALSTORAGE_BACKUP_SNAPSHOTS, JSON.stringify(backup));
+  } catch (e) {
+    console.warn("No se pudo actualizar el respaldo local tras revocar un amigo:", e);
+  }
+}
+
+/**
+ * Precarga cacheSnapshotsAmigos con el respaldo local ANTES de que corra el
+ * primer fetch de la sesión — así, si la persona abre la app sin wifi (o el
+ * primer refresco tarda/falla), el grid ya tiene algo que dibujar en vez de
+ * quedar vacío, en lugar de esperar a un refresco exitoso.
+ */
+function precargarSnapshotsAmigosDesdeBackup() {
+  const vinculados = estado.datos?.configuracion?.horario_amigos_vinculados || [];
+  const backup = leerBackupSnapshotsAmigos();
+  vinculados.forEach((amigo) => {
+    if (cacheSnapshotsAmigos.has(amigo.file_id)) return; // ya hay algo más fresco en memoria, no pisar
+    const entrada = backup[amigo.file_id];
+    if (entrada && entrada.snapshot) {
+      cacheSnapshotsAmigos.set(amigo.file_id, { snapshot: entrada.snapshot, caida: false });
+    }
+  });
+}
+
 async function refrescarSnapshotsAmigos() {
   if (!estado.datos || !estado.token) return;
   const vinculados = estado.datos.configuracion?.horario_amigos_vinculados || [];
@@ -677,13 +738,35 @@ async function refrescarSnapshotsAmigos() {
       try {
         const snapshot = await leerSnapshotPublicoAmigo(amigo.file_id);
         cacheSnapshotsAmigos.set(amigo.file_id, { snapshot, caida: false });
+        // Éxito: se refresca también el respaldo local con la versión más
+        // reciente, para el próximo fallo transitorio o la próxima sesión.
+        guardarBackupSnapshotAmigo(amigo.file_id, snapshot);
       } catch (e) {
-        // 404/403 (enlace revocado del otro lado) se trata distinto de un
-        // fallo de red transitorio: se marca "caída" para avisar en el
-        // panel, pero no se descarta el vínculo. Desvincular es siempre
-        // una decisión explícita de la persona, nunca automática.
+        // 404/403 (enlace revocado del otro lado, CONFIRMADO por el
+        // servidor) se trata distinto de un fallo de red transitorio (sin
+        // wifi, timeout, Drive caído, etc.):
+        // - Revocado de verdad: se descarta el respaldo local también (ya
+        //   no hace sentido mostrar algo que el dueño dejó de compartir) y
+        //   se marca "caída" para avisar en el panel. El vínculo en sí NO
+        //   se borra solo — desvincular sigue siendo decisión explícita de
+        //   la persona.
+        // - Fallo transitorio: se conserva lo que ya había en memoria (que
+        //   puede venir del respaldo local precargado) en vez de pisarlo
+        //   con null — así el horario del amigo no desaparece del grid solo
+        //   porque un refresco puntual no pudo completarse.
         const status = e && e.status;
-        cacheSnapshotsAmigos.set(amigo.file_id, { snapshot: null, caida: status === 404 || status === 403 });
+        const revocadoConfirmado = status === 404 || status === 403;
+        if (revocadoConfirmado) {
+          cacheSnapshotsAmigos.set(amigo.file_id, { snapshot: null, caida: true });
+          eliminarBackupSnapshotAmigo(amigo.file_id);
+        } else if (!cacheSnapshotsAmigos.has(amigo.file_id)) {
+          // Ni memoria ni backup: no queda otra que mostrarlo vacío, pero
+          // sin marcarlo "caída" (no está confirmado que el enlace esté
+          // muerto, solo que este intento puntual falló).
+          cacheSnapshotsAmigos.set(amigo.file_id, { snapshot: null, caida: false });
+        }
+        // Si ya había algo en cacheSnapshotsAmigos (memoria o backup
+        // precargado), se deja tal cual — no se toca.
         console.warn(`No se pudo refrescar el horario de ${amigo.nombre}:`, e);
       }
     })
@@ -695,6 +778,9 @@ async function refrescarSnapshotsAmigos() {
 let intervaloRefrescoAmigos = null;
 
 function iniciarRefrescoPeriodicoAmigos() {
+  precargarSnapshotsAmigosDesdeBackup();
+  if (typeof window.renderizarHorario === "function") window.renderizarHorario();
+  renderizarListaAmigosVinculados();
   refrescarSnapshotsAmigos();
   clearInterval(intervaloRefrescoAmigos);
   // Cada 5 min mientras la pestaña siga abierta, mismo espíritu que el
