@@ -614,4 +614,10 @@ function inicializarModalAgendaEvento() {
   });
 }
 
-export { abrirModalEventoAgenda, abrirTarjetaInfoEventoAgenda, inicializarModalAgendaEvento };
+export {
+  abrirModalEventoAgenda,
+  abrirTarjetaInfoEventoAgenda,
+  confirmarBorrarEventoAgenda,
+  inicializarModalAgendaEvento,
+  obtenerNombreMateriaEvento,
+};
