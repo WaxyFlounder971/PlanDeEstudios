@@ -16,20 +16,30 @@ import { abrirModalEventoAgenda } from "../agenda/agenda-modal.js";
 import { obtenerMateriasVinculablesAgenda } from "../agenda/agenda-utils.js";
 
 /**
- * Modelo de Gemini (decisión de diseño, 2026-08-22): gemini-2.5-flash.
+ * Modelo de Gemini (revisado 2026-08-22, bug real en producción):
+ * gemini-3.1-flash-lite.
  *
- * Se descartó gemini-2.5-flash-lite (o el equivalente 2.0) por ser más
- * débil siguiendo instrucciones al pie de la letra — acá eso importa de
- * verdad: el prompt exige JSON estricto + reglas de desambiguación, y
- * "casi bien" en este caso significa un evento con la fecha mal resuelta.
- * Se descartó gemini-2.5-pro por costo/latencia innecesarios para extraer
- * texto corto (la clave la paga el usuario mismo con su cuota gratuita de
- * AI Studio, y esto no necesita razonamiento profundo).
- * gemini-2.5-flash es el punto medio: lo bastante barato/rápido para que
- * el usuario prácticamente no lo note, y lo bastante capaz para no fallar
- * la extracción ni la desambiguación.
+ * gemini-2.5-flash (elección original) empezó a devolver 404 en claves de
+ * API nuevas — Google lo está bloqueando de a poco de cara a su apagado
+ * oficial del 16-oct-2026, y las claves creadas después de ese bloqueo ya
+ * ni siquiera llegan a usarlo una vez. No es viable dejarlo ni como
+ * fallback.
+ *
+ * Se descartó gemini-2.5-flash-lite por el mismo motivo (toda la familia
+ * 2.5 comparte fecha de apagado) y porque el resto de este comentario
+ * (débil siguiendo instrucciones al pie de la letra) seguía aplicando en
+ * su momento. gemini-3.1-flash-lite es generación actual (no tiene fecha
+ * de apagado anunciada), y a $0.25/$1.50 por millón de tokens sigue
+ * siendo barato para lo que hace este módulo (extraer texto corto a
+ * JSON) — el usuario prácticamente no lo nota en su cuota. Se descartó
+ * gemini-3.1-pro/gemini-3.x-flash "grande" por costo/latencia
+ * innecesarios para esta tarea puntual.
+ *
+ * Si en el futuro la extracción falla seguido en casos ambiguos (fechas
+ * mal resueltas, desambiguación de materias que no dispara), el primer
+ * paso es subir a gemini-3.5-flash antes de tocar el prompt.
  */
-const MODELO_GEMINI = "gemini-2.5-flash";
+const MODELO_GEMINI = "gemini-3.1-flash-lite";
 
 /**
  * Historial de conversación (2026-08-22): vive SOLO en localStorage de
