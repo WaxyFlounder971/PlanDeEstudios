@@ -34,6 +34,89 @@ import {
 /* ------------------------------ Ajustes ------------------------------ */
 
 /**
+ * Asistente IA (Gemini), 2026-08-22: clave de API propia del usuario
+ * (nunca compartida ni tocada por Wagner) guardada en
+ * estado.datos.configuracion.gemini_api_key — mismo nivel de confianza y
+ * mismo mecanismo de sync que cualquier otro campo de configuracion
+ * (sellarTimestamp + marcarCambioPendiente). Al guardar/borrar, llama a
+ * window.aplicarVisibilidadBotonAsistente() (expuesta por main.js, mismo
+ * patrón sin-import-circular que aplicarVisibilidadNavegacion) para que el
+ * botón "Asistente" del nav aparezca/desaparezca al toque.
+ * Se llama una sola vez desde renderizarAjustes() (idempotente: usa
+ * .onclick, no addEventListener, así que puede re-llamarse en cada render
+ * de Ajustes sin duplicar handlers) — mismo patrón que el switch de
+ * notificaciones push más abajo.
+ */
+function inicializarAsistenteAjustes() {
+  const inputKey = document.getElementById("input-gemini-key");
+  const errorKey = document.getElementById("error-gemini-key");
+  const bloqueVacio = document.getElementById("bloque-gemini-key-vacio");
+  const bloqueGuardada = document.getElementById("bloque-gemini-key-guardada");
+  const textoGuardada = document.getElementById("texto-gemini-key-guardada");
+  if (!inputKey || !bloqueVacio || !bloqueGuardada) return;
+
+  const claveActual = estado.datos.configuracion.gemini_api_key || "";
+
+  if (claveActual) {
+    bloqueVacio.classList.add("oculto");
+    bloqueGuardada.classList.remove("oculto");
+    // Máscara: solo se muestran los últimos 4 caracteres — suficiente para
+    // que el usuario reconozca "sí, esta es la mía" sin exponer la clave
+    // completa en pantalla (ej. alguien mirando de reojo/screenshare).
+    const ultimos4 = claveActual.slice(-4);
+    textoGuardada.textContent = "•".repeat(8) + ultimos4;
+  } else {
+    bloqueVacio.classList.remove("oculto");
+    bloqueGuardada.classList.add("oculto");
+    inputKey.value = "";
+  }
+  errorKey.classList.add("oculto");
+
+  document.getElementById("btn-guardar-gemini-key").onclick = () => {
+    const valor = inputKey.value.trim();
+    if (!valor) {
+      errorKey.textContent = "Pegá una clave antes de guardar.";
+      errorKey.classList.remove("oculto");
+      return;
+    }
+    estado.datos.configuracion.gemini_api_key = valor;
+    sellarTimestamp(estado.datos.configuracion);
+    marcarCambioPendiente();
+    window.aplicarVisibilidadBotonAsistente?.();
+    mostrarToast("✓ Clave de Gemini guardada");
+    renderizarAjustes();
+  };
+
+  document.getElementById("btn-reemplazar-gemini-key").onclick = () => {
+    // No se prellena la clave vieja en el input: "Reemplazar" es un alta
+    // nueva a propósito, exige pegar la clave completa de nuevo — evita
+    // guardar sin querer una clave a medio editar si el usuario solo quería
+    // ver qué había.
+    bloqueGuardada.classList.add("oculto");
+    bloqueVacio.classList.remove("oculto");
+    inputKey.value = "";
+    inputKey.focus();
+  };
+
+  document.getElementById("btn-borrar-gemini-key").onclick = () => {
+    abrirConfirmacion({
+      titulo: "¿Borrar la clave de Gemini?",
+      mensaje: "El botón \"Asistente\" va a desaparecer del menú hasta que guardes una clave nueva.",
+      textoConfirmar: "Borrar",
+      claseConfirmar: "btn-danger",
+      onConfirmar: () => {
+        delete estado.datos.configuracion.gemini_api_key;
+        sellarTimestamp(estado.datos.configuracion);
+        marcarCambioPendiente();
+        window.aplicarVisibilidadBotonAsistente?.();
+        mostrarToast("Clave de Gemini borrada");
+        renderizarAjustes();
+      },
+    });
+  };
+}
+
+/**
  * v1.14.1: aplica (o quita) el atributo data-rendimiento en <html>, mismo
  * patrón que data-palette/data-mode. Se exporta para poder llamarla también
  * al iniciar la app (antes de que el usuario entre a Ajustes), leyendo
@@ -573,6 +656,7 @@ function inicializarAccordionAjustes() {
 
 function renderizarAjustes() {
   inicializarAccordionAjustes();
+  inicializarAsistenteAjustes();
 
   // Paletas — cada cuadro muestra su propio color real (punto 3)
   const grid = document.getElementById("grid-paletas");
