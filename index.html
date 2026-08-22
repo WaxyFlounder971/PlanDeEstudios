@@ -121,12 +121,17 @@
         <button id="nav-comunidad" class="btn btn-secondary btn-block btn-nav" data-seccion="comunidad" title="Comunidad">👥 <span class="texto-nav">Comunidad</span></button>
         <button id="nav-finanzas" class="btn btn-secondary btn-block btn-nav" data-seccion="finanzas" title="Finanzas">💰 <span class="texto-nav">Finanzas</span></button>
         <button id="nav-plan-estudios" class="btn btn-secondary btn-block btn-nav" data-seccion="plan-estudios" title="Plan de Estudios">📚 <span class="texto-nav">Plan de Estudios</span></button>
-        <!-- Asistente IA (Gemini), 2026-08-22: visibilidad NO pasa por el
-             sistema de navegacion_oculta (eso es preferencia manual del
-             usuario) — se muestra/oculta solo según si hay clave de Gemini
-             guardada, ver aplicarVisibilidadBotonAsistente() en main.js.
-             Arranca oculto por defecto (igual que cualquier cuenta sin
-             clave todavía) hasta que esa función corra al cargar la app. -->
+        <!-- Asistente IA (Gemini), 2026-08-22 (revisado 2026-08-22): el botón
+             participa del mismo sistema de navegacion_oculta/navegacion_orden
+             que el resto (ver DEFAULT_ORDEN_NAV/SECCIONES_TOGGLEABLES en
+             main.js/config-ajustes.js) — el usuario lo puede ocultar o mover
+             desde Ajustes > Navegación como a cualquier otra sección. La
+             única diferencia real es un gate de EXISTENCIA por encima de eso:
+             sin clave de Gemini guardada, el botón (y su fila en Ajustes)
+             no aparecen sin importar la preferencia guardada, ver
+             aplicarVisibilidadNavegacion() en main.js. Arranca oculto por
+             defecto (igual que cualquier cuenta sin clave todavía) hasta que
+             esa función corra al cargar la app. -->
         <button id="nav-asistente" class="btn btn-secondary btn-block btn-nav oculto" data-seccion="asistente" title="Asistente IA">✨ <span class="texto-nav">Asistente</span></button>
         <button id="nav-configuracion" class="btn btn-primary btn-block btn-nav" data-seccion="configuracion" title="Configuración">⚙️ <span class="texto-nav">Configuración</span></button>
         <div style="flex:1;"></div>
@@ -211,13 +216,16 @@
           <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Asistente IA (Gemini)</h2><span class="ajuste-seccion-chevron">▾</span></button>
           <div class="ajuste-seccion-cuerpo">
 
-          <p class="muted">Creá tareas, exámenes y eventos hablando o escribiendo en lenguaje natural, sin llenar el formulario a mano. Usa Gemini, el modelo de IA de Google — con tu propia clave, gratis y solo tuya (no la vemos nosotros, solo Google).</p>
+          <p class="muted">Creá tareas, exámenes y eventos hablando o escribiendo en lenguaje natural, sin llenar el formulario a mano. Usa Gemini, el modelo de IA de Google, con tu propia clave. Es gratis y solo vos la ves (no la vemos nosotros, solo Google).</p>
 
           <p class="muted" style="font-size:0.85rem;">
-            1. Entrá a Google AI Studio (botón abajo).<br>
-            2. Iniciá sesión con tu cuenta de Google.<br>
-            3. Tocá "Create API key".<br>
-            4. Copiala y pegala acá abajo.
+            1. Tocá el botón "Abrir Google AI Studio" de abajo.<br>
+            2. Iniciá sesión con tu cuenta de Google si te lo pide.<br>
+            3. En la esquina superior derecha vas a ver un botón de clave de API. Tocalo.<br>
+            4. Se abre una ventana que pide un nombre para la clave y un proyecto. Podés dejar los dos con el valor que aparece por defecto, no hace falta cambiar nada.<br>
+            5. Tocá "Crear".<br>
+            6. Te va a aparecer la clave con un botón "Copiar" abajo. Tocalo para copiarla.<br>
+            7. Volvé a esta pantalla, pegala en el campo de abajo y tocá "Guardar".
           </p>
 
           <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="btn btn-secondary btn-block">Abrir Google AI Studio ↗</a>
