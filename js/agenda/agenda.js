@@ -359,7 +359,15 @@ function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios) 
   if (!mostrarDiasVacios && eventosDelDia.length === 0) return null;
 
   const bloque = document.createElement("section");
-  bloque.className = "glass-panel stack";
+  // Punto 5 (2026-08-23): antes usaba "glass-panel" (mismo tono reservado
+  // para paneles secundarios/anidados, más tenue que una tarjeta normal —
+  // ver --bg-panel en tema.js, siempre recede más hacia --bg-canvas que
+  // --bg-card). Acá el bloque de cada día es el contenido PRINCIPAL de la
+  // vista Lista (mismo rol que una celda de Calendario o una tarjeta de
+  // Cronograma, ambas con "glass-card"), no un panel secundario — por eso
+  // se veía visiblemente más lavado que el resto de la app. "glass-card"
+  // iguala el tono al de las otras 2 vistas de Agenda.
+  bloque.className = "glass-card stack";
   bloque.style.padding = "14px";
   // Ancla para el salto "Calendario -> Lista" (ver agenda-calendario.js,
   // saltarADiaEnLista) — así el clic en una celda del grid puede encontrar
