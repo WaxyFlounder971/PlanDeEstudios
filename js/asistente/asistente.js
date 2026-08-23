@@ -285,20 +285,36 @@ function crearBotonVoz(input) {
     // e.results[0] en CADA evento onresult, incluyendo resultados que en
     // Android no se "reemplazan en el lugar" de forma confiable como en
     // desktop — cada evento intermedio iba sumando de nuevo texto que ya
-    // estaba. La forma correcta (recomendada por la propia spec de la Web
-    // Speech API): separar transcripción FINAL (se acumula UNA sola vez,
-    // apenas isFinal pasa a true) de la interina (se recalcula de cero en
-    // cada evento, nunca se acumula), y recorrer solo desde e.resultIndex
-    // (los resultados que cambiaron en ESTE evento), no desde 0.
-    let transcripcionFinal = "";
+    // estaba.
+    //
+    // BUG REAL #2 (2026-08-23, reportado en celular, seguía pasando incluso
+    // peor que antes — texto creciendo sobre sí mismo tipo "apuntame
+    // apuntame que apuntame que tengo..."): el primer fix de arriba
+    // ayudó pero no alcanzaba. Quedaba una variable `transcripcionFinal`
+    // que vivía FUERA del handler (en el closure) y se le sumaba con +=
+    // cada vez que un resultado con isFinal=true aparecía en el rango
+    // [e.resultIndex, e.results.length). El supuesto (correcto en
+    // desktop) era que e.resultIndex solo apunta a resultados NUEVOS que
+    // todavía no habíamos visto. En Android con continuous:true ese
+    // supuesto se rompe: el motor puede reemitir eventos cuyo
+    // resultIndex vuelve a apuntar a resultados que YA se habían marcado
+    // isFinal en un evento anterior — y como transcripcionFinal nunca se
+    // resetea, ese texto final se le vuelve a sumar ENCIMA de sí mismo,
+    // una y otra vez, con cada evento. Nada de esto se cachea entre
+    // eventos: se reconstruyen las dos (final e interina) DE CERO
+    // recorriendo TODO e.results desde el índice 0 en cada onresult, así
+    // que no importa qué índices reemita el motor ni cuántas veces —
+    // el resultado es siempre el mismo texto correcto, nunca se acumula
+    // sobre una llamada anterior.
     reconocimientoVoz.onstart = () => {
       grabandoVoz = true;
       btn.textContent = "🔴";
       btn.title = "Grabando… tocá para detener";
     };
     reconocimientoVoz.onresult = (e) => {
+      let transcripcionFinal = "";
       let interina = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
+      for (let i = 0; i < e.results.length; i++) {
         const transcript = e.results[i][0].transcript;
         if (e.results[i].isFinal) {
           transcripcionFinal += transcript + " ";
