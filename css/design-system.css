@@ -1244,6 +1244,16 @@ body.scroll-bloqueado {
   position: sticky;
   top: 0;
   overflow: hidden;
+  /* FIX (2026-08-23): en escritorio no tenía z-index propio (auto = 0), así
+     que cualquier header interno con z-index explícito (ej. el encabezado
+     sticky del grid de Horario, z-index:50 — ver horario.js) le ganaba el
+     stacking apenas hubiera cualquier overlap, aunque sea de un par de
+     píxeles por un desborde de layout. Con un z-index propio más alto que
+     cualquier header de sección, el sidebar SIEMPRE queda por encima, pase
+     lo que pase adentro del contenido. (En móvil esto no aplica: ahí el
+     sidebar es un cajón con su propio z-index:55 dentro del media query de
+     abajo, ya mayor a cualquier header — ver ese bloque más abajo.) */
+  z-index: 60;
 }
 /* Un poco menos transparente que el resto de tarjetas de vidrio: se suma
    una capa neutra (oscura en modo oscuro, clara en modo claro) encima del
@@ -1397,6 +1407,23 @@ body.scroll-bloqueado {
    el overlay (position:fixed) quedaba angosto y pegado a la izquierda en
    vez de cubrir toda la pantalla. */
 .app-contenido > .modal-overlay { max-width: none; width: auto; }
+
+/* FIX (2026-08-23): red de contención para el grid de Horario. Antes esta
+   caja no tenía NINGUNA regla acá — el ancho/alto/scroll se fijaban
+   siempre desde horario.js (overflowX, maxHeight, overflowY inline), lo
+   cual deja un hueco: si ese JS no corre a tiempo (ej. la rama "sin
+   semestre" de renderizarHorarioInterno hace un return antes de llegar a
+   esas líneas) o corre después del primer paint, la grilla ancha de adentro
+   (width:max-content) no tiene nada que la recorte y se desborda del
+   contenedor — arrastrando consigo su propio encabezado sticky
+   (z-index:50) por encima de lo que sea que esté al lado, sidebar
+   incluido. overflow-x:auto acá como base asegura que SIEMPRE haya un
+   límite, incluso antes de que el JS termine de correr; horario.js sigue
+   pudiendo ajustar max-height/overflow-y por encima sin problema. */
+#horario-grid-contenedor {
+  overflow-x: auto;
+  max-width: 100%;
+}
 
 /* v5 #2: en pantallas grandes el contenido aprovecha más ancho, centrado
    respecto al espacio libre que deja la barra lateral. */
