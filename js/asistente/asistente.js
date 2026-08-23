@@ -121,26 +121,27 @@ function soportaFallbackGrabacion() {
 }
 
 /**
- * Transcribe un Blob de audio con Gemini (mismo modelo/clave que usa
- * llamarGemini para la extracción) — llamada de una sola vez, sin
- * historial ni schema JSON, solo se le pide el texto plano de lo que se
- * dijo. Tira Error si no hay clave, si la red falla, o si Gemini devuelve
- * error.
+ * Núcleo de la transcripción con Gemini, ya con el audio en base64 (mismo
+ * modelo/clave que usa llamarGemini para la extracción) — llamada de una
+ * sola vez, sin historial ni schema JSON, solo se le pide el texto plano
+ * de lo que se dijo. Tira Error si no hay clave, si la red falla, o si
+ * Gemini devuelve error.
+ *
+ * Separado de transcribirAudioConGemini (2026-08-23, Bandeja pendiente):
+ * asistente-bandeja.js ya recibe el audio en base64 directo desde el
+ * Worker (bandeja_pendiente.audio_base64) — no tiene un Blob real del que
+ * partir, así que repetir el viaje por FileReader no tendría sentido.
+ * transcribirAudioConGemini (abajo) sigue siendo el punto de entrada para
+ * el botón de micrófono del propio chat, que sí arranca de un Blob real
+ * de MediaRecorder.
  */
-async function transcribirAudioConGemini(blob) {
+async function transcribirBase64ConGemini(base64, mimeType) {
   const claveApi = estado.datos.configuracion.gemini_api_key;
   if (!claveApi) throw new Error("No hay clave de Gemini guardada.");
   // Mismo chequeo explícito que llamarGemini — ver comentario ahí.
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     throw new Error("Sin conexión a internet.");
   }
-
-  const base64 = await new Promise((resolve, reject) => {
-    const lector = new FileReader();
-    lector.onloadend = () => resolve(String(lector.result).split(",")[1] || "");
-    lector.onerror = () => reject(lector.error || new Error("No se pudo leer el audio grabado."));
-    lector.readAsDataURL(blob);
-  });
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODELO_GEMINI}:generateContent?key=${encodeURIComponent(claveApi)}`;
   const respuesta = await fetch(url, {
@@ -151,7 +152,7 @@ async function transcribirAudioConGemini(blob) {
         {
           role: "user",
           parts: [
-            { inline_data: { mime_type: blob.type || "audio/webm", data: base64 } },
+            { inline_data: { mime_type: mimeType || "audio/webm", data: base64 } },
             {
               text: "Transcribí EXACTAMENTE lo que se dice en este audio, en español. Devolvé únicamente el texto transcrito, sin comillas ni comentarios adicionales.",
             },
@@ -168,6 +169,21 @@ async function transcribirAudioConGemini(blob) {
   const candidato = datos && datos.candidates && datos.candidates[0];
   const parte = candidato && candidato.content && candidato.content.parts && candidato.content.parts[0];
   return ((parte && parte.text) || "").trim();
+}
+
+/**
+ * Transcribe un Blob de audio con Gemini — wrapper de transcribirBase64ConGemini
+ * que arranca de un Blob real (MediaRecorder del botón de micrófono, ver
+ * crearBotonVoz más abajo) en vez de base64 ya listo.
+ */
+async function transcribirAudioConGemini(blob) {
+  const base64 = await new Promise((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onloadend = () => resolve(String(lector.result).split(",")[1] || "");
+    lector.onerror = () => reject(lector.error || new Error("No se pudo leer el audio grabado."));
+    lector.readAsDataURL(blob);
+  });
+  return transcribirBase64ConGemini(base64, blob.type || "audio/webm");
 }
 
 /**
@@ -820,19 +836,20 @@ const ESQUEMA_RESPUESTA_GEMINI = {
  * que quien llama pueda mostrar un mensaje distinto según el caso (ver
  * mensajeParaError).
  */
-async function llamarGemini(mensajeNuevo) {
+/**
+ * Núcleo real de la llamada a generateContent, ya con `contents` armado por
+ * quien llama — no sabe ni le importa si eso vino del historial del chat en
+ * vivo o de un solo turno suelto. Separado de llamarGemini (2026-08-23,
+ * Bandeja Pendiente) para poder agregar extraerEventosDeTexto (abajo) sin
+ * duplicar todo el manejo de errores/parseo de respuesta.
+ */
+async function ejecutarGeneracionGemini(contents) {
   const claveApi = estado.datos.configuracion.gemini_api_key;
   if (!claveApi) {
     const err = new Error("No hay clave de Gemini guardada.");
     err.tipoError = "clave";
     throw err;
   }
-
-  const contents = conversacionActual.map((turno) => ({
-    role: turno.rol === "usuario" ? "user" : "model",
-    parts: [{ text: turno.rol === "usuario" ? turno.texto : turno.crudo }],
-  }));
-  contents.push({ role: "user", parts: [{ text: mensajeNuevo }] });
 
   // Chequeo explícito de conexión (2026-08-22, pedido: "cubrir el caso de
   // si no tenés wifi"): antes se dependía de que el fetch fallara con un
@@ -915,6 +932,37 @@ async function llamarGemini(mensajeNuevo) {
   };
 }
 
+/**
+ * Llamada "en vivo" del chat — arma `contents` con TODO el historial visible
+ * en pantalla (conversacionActual) más el mensaje nuevo. Sigue siendo el
+ * único punto de entrada para manejarEnvioMensaje (el chat interactivo).
+ */
+async function llamarGemini(mensajeNuevo) {
+  const contents = conversacionActual.map((turno) => ({
+    role: turno.rol === "usuario" ? "user" : "model",
+    parts: [{ text: turno.rol === "usuario" ? turno.texto : turno.crudo }],
+  }));
+  contents.push({ role: "user", parts: [{ text: mensajeNuevo }] });
+  return ejecutarGeneracionGemini(contents);
+}
+
+/**
+ * Variante STATELESS de llamarGemini — nunca lee ni toca conversacionActual
+ * (el historial visible del chat en pantalla de este dispositivo). Un solo
+ * turno con el texto recibido, sin ningún contexto de otros mensajes.
+ *
+ * Agregada 2026-08-23 para Bandeja Pendiente (asistente-bandeja.js): cada
+ * ítem del buzón (texto suelto capturado por el Atajo de Siri, o ya
+ * transcrito desde audio con transcribirBase64ConGemini) se procesa como un
+ * mensaje aislado, independiente de cualquier chat que el usuario pueda
+ * tener abierto en este momento en la sección Asistente — usar llamarGemini
+ * acá mezclaría (o pisaría) esa conversación en vivo, que es justo lo que
+ * esto evita. Misma clave, mismo modelo, mismo esquema de respuesta.
+ */
+async function extraerEventosDeTexto(texto) {
+  return ejecutarGeneracionGemini([{ role: "user", parts: [{ text: texto }] }]);
+}
+
 function mensajeParaError(e) {
   if (e.tipoError === "clave") return "Tu clave de Gemini parece inválida o vencida. Revisala en Ajustes > Asistente IA.";
   if (e.tipoError === "limite") return "Se alcanzó el límite de uso de Gemini por ahora. Esperá un momento y probá de nuevo.";
@@ -991,7 +1039,7 @@ function construirNotasFinal(notasUsuario) {
  * agenda-modal.js) — nunca se duplica esa lógica acá. Devuelve el id del
  * evento recién creado.
  */
-function guardarItemExtraidoComoEvento(item) {
+function guardarItemExtraidoComoEvento(item, googleTaskId = null) {
   const materiaVinculada = resolverMateriaVinculada(item.materia);
   const horaFinal = item.hora || resolverHoraDefaultDesdeHorario(materiaVinculada, item.fecha);
 
@@ -1008,6 +1056,11 @@ function guardarItemExtraidoComoEvento(item) {
     // "required" en el schema) — se trata como false, nunca se asume feriado
     // por default.
     esFeriado: item.esFeriado === true,
+    // googleTaskId (2026-08-23, integración Google Tasks): null para el
+    // chat en vivo y para Bandeja Pendiente — solo agenda-google-tasks.js
+    // lo pasa, para dejar trazabilidad de qué tarea de Google originó este
+    // evento (ver comentario completo en crearEventoAgenda, schema.js).
+    googleTaskId,
   });
   estado.datos.agenda.push(evento);
 
@@ -1600,4 +1653,15 @@ function renderizarAsistente() {
 // existe para que el navegador cargue el módulo y esta línea se ejecute.
 window.renderizarAsistente = renderizarAsistente;
 
-export { renderizarAsistente };
+export {
+  renderizarAsistente,
+  // Ronda 2026-08-23 (Bandeja pendiente / Captura por voz): asistente-bandeja.js
+  // reusa estas tres para no duplicar el pipeline de extracción ni el
+  // guardado real de eventos — un solo lugar de verdad para "texto/audio
+  // crudo -> EventoAgenda real", ya sea que venga del chat en vivo o del
+  // buzón del Worker.
+  transcribirBase64ConGemini,
+  extraerEventosDeTexto,
+  guardarItemExtraidoComoEvento,
+  mensajeParaError,
+};
