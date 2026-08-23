@@ -28,7 +28,19 @@
        que main.js dispara cada una hora / al volver a primer plano).
    ========================================================================= */
 
-const VERSION = "v4"; // <-- subir en cada despliegue (v2, v3, ...) — v4: agrega los listeners de 'push' y 'notificationclick' (notificaciones reales de Agenda)
+// ⚠️ EL NÚMERO QUE EDITÁS A MANO EN CADA DESPLIEGUE VIVE ACÁ, Y SOLO ACÁ.
+// Cumple DOS roles al mismo tiempo:
+//   1. Sufijo del nombre de caché (ver CACHE_NAME abajo) — el navegador
+//      compara el CONTENIDO DE ESTE ARCHIVO byte a byte contra lo que ya
+//      tiene instalado; cambiar este string es lo único que le avisa que
+//      hay una versión nueva (ver el bloque de arriba, "VERSIONADO").
+//   2. Número que se muestra en Configuración → pie de página (ver
+//      responderVersionAlMensaje() más abajo + main.js, que se lo pide a
+//      este Service Worker por mensaje apenas arranca la app). index.html
+//      y main.js NUNCA hardcodean el número — siempre lo leen de acá, así
+//      que actualizar la versión en toda la app es cambiar ESTA línea y
+//      nada más.
+const VERSION = "v3.12.6"; // <-- subir en cada despliegue
 const CACHE_NAME = `app-academica-${VERSION}`;
 const PREFIJO_CACHE = "app-academica-";
 
@@ -93,9 +105,19 @@ self.addEventListener("activate", (event) => {
 // Disparado desde main.js cuando el usuario confirma la actualización
 // (click en "Recargar" del aviso) — recién ahí el SW en espera pasa a
 // activarse. Ver flujo completo en el registro de main.js.
+//
+// GET_VERSION (2026-08-23): agregado para que el número que se ve en
+// Configuración → pie de página nunca se tenga que escribir a mano en
+// index.html — main.js le pregunta a ESTE Service Worker (al que sea que
+// esté controlando la pestaña en ese momento) qué VERSION tiene cargada, y
+// pinta eso tal cual. Responde por event.source (la pestaña que preguntó),
+// no por broadcast, así que no hace falta filtrar destinatarios.
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();
+  }
+  if (event.data && event.data.type === "GET_VERSION") {
+    event.source?.postMessage({ type: "VERSION", version: VERSION });
   }
 });
 
