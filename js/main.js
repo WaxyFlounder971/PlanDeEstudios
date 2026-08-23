@@ -114,6 +114,24 @@ if ("serviceWorker" in navigator) {
       yaRecargandoPorActualizacion = true;
       window.location.reload();
     });
+
+    // Número de versión en Configuración → pie de página (2026-08-23):
+    // se lo pedimos al Service Worker que esté controlando la pestaña
+    // (navigator.serviceWorker.ready espera a que haya uno activo, tanto
+    // en la primera visita como en cualquier carga posterior) en vez de
+    // escribirlo a mano en index.html. Así el único lugar que hay que
+    // tocar para subir de versión es la constante VERSION en
+    // service-worker.js — index.html y main.js nunca vuelven a
+    // necesitar edición manual por esto.
+    navigator.serviceWorker.addEventListener("message", (evento) => {
+      if (evento.data && evento.data.type === "VERSION") {
+        const pie = document.getElementById("pie-version");
+        if (pie) pie.textContent = evento.data.version;
+      }
+    });
+    navigator.serviceWorker.ready.then((registro) => {
+      registro.active?.postMessage({ type: "GET_VERSION" });
+    });
   });
 }
 
