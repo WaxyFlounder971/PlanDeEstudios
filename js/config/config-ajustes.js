@@ -4,12 +4,12 @@
    plan/universidad, formato de texto.
    ========================================================================= */
 
-import { ESCALAS_DISPONIBLES, FRECUENCIAS_BACKUP_DRIVE, MONEDAS_DISPONIBLES, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, crearBackupDriveDefault, migrarDatosAntiguos, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
+import { ESCALAS_DISPONIBLES, FRECUENCIAS_BACKUP_DRIVE, MONEDAS_DISPONIBLES, OFFSETS_RECORDATORIO_AGENDA, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, crearBackupDriveDefault, migrarDatosAntiguos, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
 import { actualizarIndicadorSync, forzarBackupManual, marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
-import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
+import { abrirConfirmacion, construirSelectorChipsMultiple, mostrarToast } from "../ui/componentes.js";
 import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta } from "../ui/tema.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
 import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
@@ -28,6 +28,7 @@ import {
   activarNotificacionesPush,
   desactivarNotificacionesPush,
   notificacionesPushActivas,
+  sincronizarResumenDiario,
   soportaNotificacionesPush,
 } from "../core/notificaciones-push.js";
 
@@ -134,6 +135,118 @@ function inicializarAsistenteAjustes() {
  */
 function aplicarModoRendimiento(activo) {
   document.documentElement.setAttribute("data-rendimiento", activo ? "reducido" : "normal");
+}
+
+/**
+ * Notificaciones — Recordatorios por tipo (2026-08-20): un grupo de chips
+ * (ver construirSelectorChipsMultiple en ui/componentes.js) por cada tipo
+ * de evento de Agenda (tarea/examen/evento/feriado), en ese orden fijo.
+ * Cada grupo lee/escribe estado.datos.configuracion.notificaciones_recordatorios[tipo]
+ * (arreglo de ids de OFFSETS_RECORDATORIO_AGENDA, ver core/schema.js).
+ * Solo tiene sentido con el switch general de notificaciones push activo —
+ * si está apagado, el bloque completo queda atenuado y sin interacción
+ * (mismo criterio visual que el resto de bloques dependientes de un switch
+ * en esta pantalla), pero los valores elegidos NO se pierden: siguen
+ * guardados, listos para cuando el usuario vuelva a prender el switch
+ * general.
+ */
+const ETIQUETAS_TIPOS_RECORDATORIO_AGENDA = [
+  { tipo: "tarea", etiqueta: "Tareas" },
+  { tipo: "examen", etiqueta: "Exámenes" },
+  { tipo: "evento", etiqueta: "Eventos" },
+  { tipo: "feriado", etiqueta: "Feriados" },
+];
+
+function renderizarNotificacionesRecordatorios() {
+  const contenedor = document.getElementById("seccion-notificaciones-recordatorios");
+  if (!contenedor) return;
+
+  const cfg = estado.datos.configuracion;
+  if (!cfg.notificaciones_recordatorios || typeof cfg.notificaciones_recordatorios !== "object") {
+    cfg.notificaciones_recordatorios = { tarea: ["1_dia"], examen: ["1_dia"], evento: ["1_dia"], feriado: ["1_dia"] };
+  }
+
+  const habilitado = notificacionesPushActivas();
+  contenedor.innerHTML = "";
+  contenedor.style.opacity = habilitado ? "" : "0.5";
+  contenedor.style.pointerEvents = habilitado ? "" : "none";
+
+  ETIQUETAS_TIPOS_RECORDATORIO_AGENDA.forEach(({ tipo, etiqueta }) => {
+    const fila = document.createElement("div");
+    fila.className = "stack";
+    fila.style.gap = "6px";
+
+    const titulo = document.createElement("span");
+    titulo.className = "form-label";
+    titulo.textContent = etiqueta;
+    fila.appendChild(titulo);
+
+    const { elemento } = construirSelectorChipsMultiple(
+      OFFSETS_RECORDATORIO_AGENDA,
+      cfg.notificaciones_recordatorios[tipo],
+      (valoresActuales) => {
+        cfg.notificaciones_recordatorios[tipo] = valoresActuales;
+        sellarTimestamp(cfg);
+        marcarCambioPendiente();
+      }
+    );
+    fila.appendChild(elemento);
+    contenedor.appendChild(fila);
+  });
+}
+
+/**
+ * Notificaciones — Resumen diario (2026-08-20): switch + selector de hora
+ * (mismo patrón visual que construirSelectCustomAjustes, ver Rango de
+ * horas del Horario más arriba) para
+ * estado.datos.configuracion.notificaciones_resumen_diario ({ activo,
+ * hora }). Cada cambio (switch u hora) llama a sincronizarResumenDiario()
+ * en core/notificaciones-push.js, que es quien realmente avisa al Worker —
+ * acá solo se guarda localmente y se dispara esa sincronización, siguiendo
+ * el mismo criterio best-effort del resto de notificaciones push (si el
+ * Worker no responde, no se revierte nada en la UI).
+ */
+function renderizarNotificacionesResumenDiario() {
+  const chkResumen = document.getElementById("switch-notificaciones-resumen-diario");
+  const bloqueHora = document.getElementById("bloque-notificaciones-resumen-hora");
+  const contHora = document.getElementById("select-notificaciones-resumen-hora");
+  if (!chkResumen || !bloqueHora || !contHora) return;
+
+  const cfg = estado.datos.configuracion;
+  if (!cfg.notificaciones_resumen_diario || typeof cfg.notificaciones_resumen_diario !== "object") {
+    cfg.notificaciones_resumen_diario = { activo: false, hora: "20:00" };
+  }
+  const cfgResumen = cfg.notificaciones_resumen_diario;
+
+  const habilitado = notificacionesPushActivas();
+  chkResumen.disabled = !habilitado;
+  chkResumen.checked = !!cfgResumen.activo;
+  bloqueHora.classList.toggle("oculto", !cfgResumen.activo);
+  bloqueHora.style.opacity = habilitado ? "" : "0.5";
+  bloqueHora.style.pointerEvents = habilitado ? "" : "none";
+
+  chkResumen.onchange = () => {
+    cfgResumen.activo = chkResumen.checked;
+    sellarTimestamp(cfg);
+    marcarCambioPendiente();
+    bloqueHora.classList.toggle("oculto", !cfgResumen.activo);
+    sincronizarResumenDiario();
+  };
+
+  contHora.innerHTML = "";
+  contHora.appendChild(construirSelectCustomAjustes({
+    opciones: Array.from({ length: 24 }, (_, h) => ({
+      valor: `${String(h).padStart(2, "0")}:00`,
+      etiqueta: etiquetaHora12(h),
+    })),
+    valorInicial: cfgResumen.hora || "20:00",
+    onCambiar: (valor) => {
+      cfgResumen.hora = valor;
+      sellarTimestamp(cfg);
+      marcarCambioPendiente();
+      sincronizarResumenDiario();
+    },
+  }));
 }
 
 /**
@@ -747,13 +860,24 @@ function renderizarAjustes() {
     grid.appendChild(btnEditar);
   }
 
-  // v1.14.1: Modo de rendimiento (reduce blur/sombras/animaciones)
+  // v1.14.1: Modo fancy (id del elemento sigue siendo "switch-rendimiento"
+  // por compatibilidad, pero el switch en pantalla se llama "Modo fancy" —
+  // el dato de fondo (modo_rendimiento) representa lo CONTRARIO de lo que
+  // dice la etiqueta: modo_rendimiento=true significa rendimiento activo,
+  // o sea fancy APAGADO. Fix v1.16.1 (2026-08-23): antes el checkbox
+  // reflejaba modo_rendimiento tal cual, así que el switch se veía
+  // "encendido" (ON) cuando en realidad lo fancy estaba apagado — quedaba
+  // invertido contra su propia etiqueta. Se invierte acá nomás (checked =
+  // fancy activo = !modo_rendimiento) para no tocar el nombre del campo en
+  // el modelo de datos ni la migración que ya corrió para las cuentas
+  // existentes (ver rendimiento_default_v2_aplicado en core/schema.js).
   const chkRendimiento = document.getElementById("switch-rendimiento");
   if (chkRendimiento) {
-    chkRendimiento.checked = !!estado.datos.configuracion.modo_rendimiento;
+    chkRendimiento.checked = !estado.datos.configuracion.modo_rendimiento;
     chkRendimiento.onchange = () => {
-      estado.datos.configuracion.modo_rendimiento = chkRendimiento.checked;
-      aplicarModoRendimiento(chkRendimiento.checked);
+      const fancyActivo = chkRendimiento.checked;
+      estado.datos.configuracion.modo_rendimiento = !fancyActivo;
+      aplicarModoRendimiento(!fancyActivo);
       sellarTimestamp(estado.datos.configuracion);
       marcarCambioPendiente();
     };
@@ -788,8 +912,15 @@ function renderizarAjustes() {
         await desactivarNotificacionesPush();
       }
       chkNotificaciones.disabled = false;
+      // El switch general habilita/deshabilita los bloques de abajo — se
+      // vuelven a pintar acá para que reflejen el nuevo estado al toque,
+      // sin esperar a que el usuario navegue fuera y vuelva a Ajustes.
+      renderizarNotificacionesRecordatorios();
+      renderizarNotificacionesResumenDiario();
     };
   }
+  renderizarNotificacionesRecordatorios();
+  renderizarNotificacionesResumenDiario();
 
   // Ronda de ajustes visuales — punto 3: los 2 switches de Agenda que iban
   // acá ("Mostrar días sin eventos ni tareas" y "Mostrar clases ese día en
