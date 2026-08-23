@@ -1490,7 +1490,19 @@ a:hover .enlace-rapido-nombre {
       progresiva y no rompa nada en navegadores que no soportan dvh. */
     width: min(280px, 82vw);
     max-width: min(280px, 82vw);
-    z-index: 50;
+    /* FIX (punto 4, 2026-08-23): estaba en z-index 50, el MISMO valor que
+       usan los headers sticky internos de Horario (ver headerWrap/barra en
+       horario.js, y el comentario junto a .horario-materia-lane en este
+       archivo). Con z-index empatado, gana quien aparece último en el DOM
+       dentro del mismo contexto de apilamiento — y el contenido de
+       <main class="app-contenido"> va DESPUÉS de #app-sidebar en el
+       markup (ver index.html), así que el header de Horario terminaba
+       pintándose ENCIMA del drawer del sidebar al abrirlo en móvil, en vez
+       de quedar debajo como corresponde a un drawer de navegación. Subir
+       el sidebar a 55 lo deja por encima de cualquier header/barra de
+       sección (max. 50 hoy) sin acercarse a los z-index de modales reales
+       (80 en adelante), que sí deben seguir tapando todo, sidebar incluido. */
+    z-index: 55;
     transform: translateX(-100%);
     box-shadow: var(--shadow-glass);
   }
@@ -1524,7 +1536,13 @@ a:hover .enlace-rapido-nombre {
   height: 100dvh; /* mismo motivo que .app-sidebar: barra de navegador móvil */
   width: min(320px, 86vw);
   max-width: min(320px, 86vw);
-  z-index: 50;
+  /* FIX (punto 4, 2026-08-23): mismo empate de z-index (50) que tenía
+     #app-sidebar contra los headers sticky de sección — ver el comentario
+     junto al z-index de .app-sidebar más arriba. Aunque no había reporte
+     puntual de este drawer tapado, es el mismo mecanismo y el mismo riesgo
+     si se abre Enlaces rápidos estando en Horario, así que se sube en
+     paralelo para no dejar el mismo bug latente en un segundo lugar. */
+  z-index: 55;
   padding: 20px 16px;
   overflow-y: auto;
   transform: translateX(100%);
@@ -3259,12 +3277,23 @@ html.exportar-tema-default[data-mode="dark"] {
    cualquier regla de .glass-panel — así que aunque comparta esa clase,
    nunca heredaba el fix de arriba (cortar la transparencia a la mitad).
    Se repite acá el mismo criterio (color-mix 77.5%/22.5%) pero apuntando
-   directo al ID, con la variante de color correspondiente a cada modo. */
+   directo al ID, con la variante de color correspondiente a cada modo.
+
+   FIX (punto 4, 2026-08-23): esta regla reemplazaba el `background` COMPLETO
+   del sidebar, incluyendo el `linear-gradient(...)` que la regla base
+   (línea ~1251/1254) suma encima de --bg-panel para que el sidebar quede
+   "un poco menos transparente que el resto de tarjetas de vidrio" (fancy).
+   Como Rendimiento Reducido es ahora el modo por defecto (ver punto 2), esa
+   capa de gradiente extra se perdía SIEMPRE, dejando el sidebar con la
+   transparencia plana de un glass-panel normal — de ahí que pasara de
+   "transparencia ligera (como en fancy)" a "casi total". Se reincorpora el
+   mismo linear-gradient de la regla base, solo con el color-mix (sin
+   backdrop-filter) como capa de fondo en vez de --bg-panel puro. */
 [data-rendimiento="reducido"][data-mode="dark"] #app-sidebar {
-  background: color-mix(in srgb, var(--bg-panel) 77.5%, var(--bg-canvas) 22.5%);
+  background: linear-gradient(rgba(0,0,0,0.16), rgba(0,0,0,0.16)), color-mix(in srgb, var(--bg-panel) 77.5%, var(--bg-canvas) 22.5%);
 }
 [data-rendimiento="reducido"][data-mode="light"] #app-sidebar {
-  background: color-mix(in srgb, var(--bg-panel) 77.5%, var(--bg-canvas) 22.5%);
+  background: linear-gradient(rgba(255,255,255,0.16), rgba(255,255,255,0.16)), color-mix(in srgb, var(--bg-panel) 77.5%, var(--bg-canvas) 22.5%);
 }
 
 /* 2. Glow del botón primario en hover y de la "luz" de disponibilidad:
