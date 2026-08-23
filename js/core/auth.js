@@ -28,8 +28,20 @@ const DRIVE_SCOPE = "openid email profile https://www.googleapis.com/auth/drive.
 const NOMBRE_ARCHIVO_DATOS = "app_academica_datos.json";
 const CLAVE_YA_AUTORIZADO = "google_ya_autorizado";
 
+// Google Tasks (2026-08-23), scope OPCIONAL e INCREMENTAL: la gran mayoría
+// de usuarios nunca va a activar "Sincronizar con Google Tasks" (ver switch
+// en Ajustes Avanzados), así que no tiene sentido pedirlo junto con
+// DRIVE_SCOPE en el login normal — eso infla el pedido de permisos para
+// TODOS los usuarios por una función que casi nadie usa. Se pide aparte,
+// con su propio tokenClient, recién cuando el usuario prende ese switch
+// (ver pedirAccessTokenGoogleTasks). Solo lectura: la app nunca necesita
+// escribir ni completar tareas del lado de Google.
+const TASKS_SCOPE = "https://www.googleapis.com/auth/tasks.readonly";
+
 let tokenClient = null;
 let accessToken = null;
+let tasksTokenClient = null;
+let accessTokenTasks = null;
 
 /**
  * El <script> de Google se carga con async/defer, así que puede no estar
@@ -413,6 +425,70 @@ function refrescarAccessTokenGoogle(correoConocido) {
 }
 
 /**
+ * Google Tasks (2026-08-23) — pide/renueva el access_token del scope
+ * tasks.readonly, SEPARADO del token de Drive (`accessToken`/tokenClient de
+ * arriba): son dos permisos distintos, otorgados en momentos distintos, así
+ * que Google Identity Services los maneja con tokenClients propios cada
+ * uno.
+ *
+ * `interactivo: true` fuerza la pantalla de consentimiento — se usa la
+ * PRIMERA vez que el usuario prende el switch de Ajustes, para el permiso
+ * nuevo. `interactivo: false` (default) pide un refresco silencioso
+ * (`prompt: ""`), igual que refrescarAccessTokenGoogle — se usa en cada
+ * sincronización posterior, para no interrumpir con un popup cada vez que
+ * el token de 1 hora vence.
+ *
+ * SUPUESTO A VALIDAR EN PRUEBA REAL: como el usuario ya le dio a esta app
+ * el permiso de Drive antes, la expectativa con Google Identity Services es
+ * que un tokenClient nuevo pidiendo SOLO tasks.readonly muestre consentimiento
+ * únicamente para ese permiso nuevo (no repite el de Drive) — pero esto no
+ * se pudo probar contra la pantalla real de Google todavía. Si en la
+ * práctica Google pide reconfirmar Drive también, no es un bug de este
+ * código, es como responde la plataforma; en ese caso avisá para ajustar el
+ * flujo (ej. mensaje explicativo antes de mostrar el popup).
+ *
+ * Devuelve el access_token (string) en éxito, o `null` si el usuario
+ * rechazó el permiso, cerró la ventana, o el refresco silencioso no pudo
+ * resolverse sin interacción — NUNCA tira, quien llama decide qué hacer
+ * (ver agenda-google-tasks.js: sin token simplemente no sincroniza esta
+ * vez, no es un error fatal).
+ */
+function pedirAccessTokenGoogleTasks({ interactivo = false } = {}) {
+  return new Promise((resolve) => {
+    if (!(window.google && google.accounts && google.accounts.oauth2)) {
+      resolve(null);
+      return;
+    }
+    if (!tasksTokenClient) {
+      tasksTokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: TASKS_SCOPE,
+        callback: () => {}, // se sobreescribe en cada pedido, ver abajo
+      });
+    }
+    tasksTokenClient.callback = (respuesta) => {
+      if (respuesta.error) {
+        console.warn("No se pudo obtener/renovar el permiso de Google Tasks:", respuesta.error);
+        resolve(null);
+        return;
+      }
+      accessTokenTasks = respuesta.access_token;
+      resolve(accessTokenTasks);
+    };
+    tasksTokenClient.requestAccessToken({ prompt: interactivo ? "consent" : "" });
+  });
+}
+
+/** true si este dispositivo ya tiene un access_token de Tasks en memoria
+ * (no garantiza que siga vigente — igual que accessToken de Drive, se
+ * valida de verdad recién al usarlo; ver pedirAccessTokenGoogleTasks para
+ * renovarlo). Sirve para que agenda-google-tasks.js sepa si debe pedir uno
+ * nuevo antes de llamar a la API. */
+function haySesionGoogleTasksEnMemoria() {
+  return Boolean(accessTokenTasks);
+}
+
+/**
  * v9.4 (2026-08-08 — arquitectura de adjuntos): a diferencia de
  * guardarDatos/leerDatos (que siempre operan sobre EL MISMO archivo,
  * `estado.fileId`, el JSON central de la app), estas 3 funciones crean/leen/
@@ -696,4 +772,7 @@ export {
   obtenerPerfilGoogle,
   refrescarAccessTokenGoogle,
   subirArchivoBinarioADrive,
+  // Google Tasks (2026-08-23):
+  pedirAccessTokenGoogleTasks,
+  haySesionGoogleTasksEnMemoria,
 };

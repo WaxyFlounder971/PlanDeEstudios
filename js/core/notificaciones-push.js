@@ -387,4 +387,8 @@ export {
   programarRecordatorioPush,
   sincronizarResumenDiario,
   soportaNotificacionesPush,
+  // Ronda 2026-08-23 (Bandeja pendiente / Captura por voz): asistente-bandeja.js
+  // reusa esta misma constante para hablar con el Worker en vez de
+  // hardcodear una segunda copia de la URL — un solo lugar de verdad.
+  URL_WORKER_NOTIFICACIONES,
 };

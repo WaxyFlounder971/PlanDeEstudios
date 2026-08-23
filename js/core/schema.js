@@ -116,6 +116,37 @@ function crearDatosUsuarioNuevo() {
       modo_hardcore: false,             // si está activo, se combinan hasta 3 Planes de Estudio a la vez
       plan_activo_secundario_id: null,  // 2do Plan de Estudios (solo relevante si modo_hardcore = true)
       plan_activo_terciario_id: null,   // 3er Plan de Estudios (solo relevante si modo_hardcore = true)
+
+      // Captura por voz (Atajo de Siri / Bandeja Pendiente), 2026-08-23:
+      // FIX — este campo se agrega recién ACÁ. El E2 de Bandeja Pendiente
+      // ya lo daba por hecho (config-ajustes.js ya lo lee/escribe, con un
+      // fallback defensivo que evitó que explotara), pero nunca se llegó a
+      // agregar de verdad en crearDatosUsuarioNuevo/migrarDatosAntiguos —
+      // sin esto, cualquier cuenta que sincronizara antes de abrir Ajustes
+      // ni siquiera tenía el campo en el JSON guardado. id_bandeja: UUID
+      // local generado la primera vez que se activa el switch (ver
+      // config-ajustes.js) — se sincroniza por Drive como cualquier otro
+      // campo de configuracion, a diferencia del id de dispositivo (que sí
+      // es puramente local).
+      bandeja_voz: { activo: false, id_bandeja: null },
+
+      // Google Tasks (2026-08-23): opt-in para importar tareas agregadas
+      // por voz/Google Assistant ("Hey Google, agregá tarea..."). Scope
+      // tasks.readonly (ver auth.js) — la app solo LEE, nunca modifica ni
+      // completa tareas del lado de Google.
+      //   - lista_id: id de la lista de Google Tasks elegida por el
+      //     usuario (selector en Ajustes, ver inicializarGoogleTasksAjustes
+      //     en config-ajustes.js). null hasta que se elige una.
+      //   - ids_procesados: ids de tareas de Google YA revisadas (se
+      //     confirmaron, se descartaron, o no arrojaron ningún evento
+      //     reconocible) — como el scope es de solo lectura, la app NUNCA
+      //     puede marcar/completar/borrar nada del lado de Google Tasks
+      //     para "acordarse" de que ya las vio; esta lista es la única
+      //     forma de no volver a mostrar la misma tarea en cada sync. Se
+      //     sincroniza por Drive (mismo criterio que el resto de
+      //     configuracion) para que no se repita la pregunta en otro
+      //     dispositivo del mismo usuario tampoco.
+      google_tasks_sync: { activo: false, lista_id: null, ids_procesados: [] },
     },
 
     // Un usuario puede tener más de un Plan de Estudios (ej. cambio de carrera/universidad).
@@ -421,8 +452,16 @@ const SEPARADOR_ID_RECORDATORIO_OFFSET = "::";
  * elegido no es "evento", se fuerza a `false` acá mismo para que nunca
  * quede un examen/tarea con `es_feriado: true` colgado de una edición vieja
  * (ej. el usuario cambió el tipo de un evento-feriado a "tarea").
+ * `googleTaskId` (2026-08-23, integración Google Tasks): id de la tarea de
+ * Google Tasks que originó este evento, o null si no vino de ahí (chat del
+ * Asistente, Bandeja Pendiente, o alta manual). Es solo de REFERENCIA/
+ * trazabilidad (para que el usuario pueda ver de dónde salió un evento si
+ * hace falta) — el dedupe real de "esta tarea de Google ya se revisó" vive
+ * en configuracion.google_tasks_sync.ids_procesados (ver schema arriba),
+ * no en este campo, porque una sola tarea de Google puede expandirse en 0,
+ * 1 o varios eventos (pasa por el mismo Gemini que Bandeja Pendiente).
  */
-function crearEventoAgenda({ tipo, nombre, fecha, hora, materiaMatriculadaId, semestreId, notas, esFeriado }) {
+function crearEventoAgenda({ tipo, nombre, fecha, hora, materiaMatriculadaId, semestreId, notas, esFeriado, googleTaskId }) {
   const tipoValido = TIPOS_EVENTO_AGENDA.includes(tipo) ? tipo : "evento";
   const vinculada = Boolean(materiaMatriculadaId && semestreId);
   return sellarTimestamp({
@@ -436,6 +475,7 @@ function crearEventoAgenda({ tipo, nombre, fecha, hora, materiaMatriculadaId, se
     notas: notas || "",
     completada: false,
     es_feriado: tipoValido === "evento" ? Boolean(esFeriado) : false,
+    google_task_id: googleTaskId || null,
   });
 }
 
@@ -2961,6 +3001,22 @@ function migrarDatosAntiguos(datos) {
   // es un canal nuevo, no un reemplazo de algo que ya funcionaba antes).
   if (datos.configuracion && (!datos.configuracion.notificaciones_resumen_diario || typeof datos.configuracion.notificaciones_resumen_diario !== "object")) {
     datos.configuracion.notificaciones_resumen_diario = { activo: false, hora: "20:00" };
+  }
+
+  // Captura por voz (Bandeja Pendiente) — FIX: ver comentario completo en
+  // crearDatosUsuarioNuevo sobre por qué esto faltaba desde el E2 original.
+  if (datos.configuracion && (!datos.configuracion.bandeja_voz || typeof datos.configuracion.bandeja_voz !== "object")) {
+    datos.configuracion.bandeja_voz = { activo: false, id_bandeja: null };
+  }
+
+  // Google Tasks (2026-08-23): mismo patrón — default apagado, canal nuevo.
+  if (datos.configuracion && (!datos.configuracion.google_tasks_sync || typeof datos.configuracion.google_tasks_sync !== "object")) {
+    datos.configuracion.google_tasks_sync = { activo: false, lista_id: null, ids_procesados: [] };
+  }
+  // Relleno más fino: por si el objeto ya existía (versión futura de este
+  // mismo cambio desplegada a medias) pero sin el arreglo de procesados.
+  if (datos.configuracion && datos.configuracion.google_tasks_sync && !Array.isArray(datos.configuracion.google_tasks_sync.ids_procesados)) {
+    datos.configuracion.google_tasks_sync.ids_procesados = [];
   }
 
   if (!Array.isArray(datos.planes_estudio)) return datos;
