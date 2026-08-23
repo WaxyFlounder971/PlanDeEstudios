@@ -35,7 +35,7 @@ import { extraerEventosDeTexto, guardarItemExtraidoComoEvento, transcribirBase64
 // es más simple que forzar un export cruzado solo para esto. Si el Worker
 // alguna vez cambia de subdominio, hay que actualizar los dos archivos —
 // ver worker-notificaciones-agenda/README.md, paso 6.
-const URL_WORKER_NOTIFICACIONES = "https://worker-notificaciones-agenda.workers.dev";
+const URL_WORKER_NOTIFICACIONES = "https://worker-notificaciones-agenda.appacademica.workers.dev";
 
 // Evita sincronizar dos veces en paralelo (ej. mostrarApp() se llama tanto
 // en el camino de caché como, más tarde, cuando termina el login real —
