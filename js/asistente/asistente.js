@@ -199,6 +199,51 @@ function crearBotonVoz(input) {
   // (que dispara igual después de un error) pise el ícono de "grabando"
   // que el fallback recién está por poner.
   let transicionandoAFallback = false;
+  // Pedido explícito (2026-08-23): este botón es un ALTERNAR (toggle) —
+  // arranca al tocarlo, para SOLO al volver a tocarlo, nunca por cuenta
+  // propia. `paradaManual` es la única señal que le dice a onend "esto lo
+  // frenó el usuario, quedate quieto"; si onend dispara con esto en false,
+  // significa que el motor cortó solo (silencio largo, timeout interno de
+  // Android, lo que sea) y hay que reiniciar la escucha de forma
+  // transparente, sin que se note ni se pierda una palabra de lo ya
+  // dictado. Se resetea a false cada vez que arranca una escucha nueva
+  // (manual o auto-reinicio) y solo pasa a true en el branch de "parar" de
+  // btn.onclick o si el error es terminal (permiso denegado).
+  let paradaManual = false;
+  // Freno de seguridad contra loop de reinicios: si el motor termina
+  // una y otra vez CASI apenas arranca (sin llegar a onresult ni una
+  // vez), reiniciarlo indefinidamente solo quemaría batería sin lograr
+  // nada — a partir del 3er reinicio consecutivo sin resultado real, se
+  // corta y se avisa en vez de seguir en loop silencioso.
+  let reiniciosSeguidosSinResultado = 0;
+
+  /**
+   * BUG REAL #3 (2026-08-23, reportado en celular, seguía pasando incluso
+   * con el fix anterior — texto creciendo sobre sí mismo tipo "póngale
+   * póngale que póngale que para..."): el fix anterior (reconstruir todo
+   * desde e.results[0] en cada evento, sumando cada resultado marcado
+   * isFinal) asumía que cada entrada final es un pedazo NUEVO e
+   * incremental (así se comporta en desktop: results[0]="póngale",
+   * results[1]="que", results[2]="para"...). En este celular puntual el
+   * motor no se comporta así: cada vez que reemite un resultado final,
+   * esa entrada es la frase ENTERA dicha hasta ese momento, no solo lo
+   * nuevo (results[0]="póngale", results[1]="póngale que",
+   * results[2]="póngale que para"...) — sumar todas esas entradas
+   * duplica sobre sí mismo exactamente con el patrón reportado.
+   *
+   * Como no hay forma de saber de antemano cuál de los dos
+   * comportamientos va a dar un motor/dispositivo dado, esta función es
+   * robusta a AMBOS: descarta cualquier transcripción final que sea
+   * prefijo (o igual) de una posterior — en el caso "cada entrada es la
+   * frase entera", eso colapsa todo a la última entrada (la más
+   * completa); en el caso incremental normal, ninguna es prefijo de la
+   * siguiente, así que no se descarta nada y se concatenan todas como
+   * siempre.
+   */
+  function colapsarFinalesSuperpuestos(finales) {
+    const limpios = finales.map((f) => f.trim()).filter(Boolean);
+    return limpios.filter((actual, i) => !limpios.slice(i + 1).some((posterior) => posterior.startsWith(actual)));
+  }
 
   function iniciarFallbackGrabacion(textoPrevioAlInput) {
     if (!soportaFallbackGrabacion()) {
@@ -257,12 +302,97 @@ function crearBotonVoz(input) {
       });
   }
 
+  function iniciarReconocimientoNativo(textoPrevioAlInput) {
+    paradaManual = false;
+    reconocimientoVoz = crearReconocimientoVoz();
+    let huboResultadoEstaVez = false;
+
+    reconocimientoVoz.onstart = () => {
+      grabandoVoz = true;
+      btn.textContent = "🔴";
+      btn.title = "Grabando… tocá para detener";
+    };
+    reconocimientoVoz.onresult = (e) => {
+      huboResultadoEstaVez = true;
+      reiniciosSeguidosSinResultado = 0;
+      const finales = [];
+      let interina = "";
+      for (let i = 0; i < e.results.length; i++) {
+        const transcript = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finales.push(transcript);
+        else interina += transcript;
+      }
+      const transcripcionFinal = colapsarFinalesSuperpuestos(finales).join(" ");
+      input.value = textoPrevioAlInput + (transcripcionFinal ? transcripcionFinal + " " : "") + interina;
+    };
+    reconocimientoVoz.onerror = (e) => {
+      // Antes esto no quedaba en consola de ninguna forma — el toast
+      // genérico no distingue causa. Con este log alcanza con abrir la
+      // consola y mirar qué dice e.error para saber la causa real.
+      console.warn("[asistente] Error de reconocimiento de voz:", e.error, e);
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        paradaManual = true; // terminal: sin permiso no tiene sentido reintentar solo
+        mostrarToast("Permiso de micrófono denegado");
+        return;
+      }
+      // "no-speech"/"aborted" NO se marcan como parada manual a propósito:
+      // son justo el tipo de corte que el pedido de "nunca debe cortar el
+      // audio solo" quiere que se auto-repare en onend, no que apague el
+      // botón.
+      if (e.error === "no-speech" || e.error === "aborted") return;
+      // Fallo real del motor nativo (ej. "network", "audio-capture"): se
+      // marca este navegador para usar el fallback de acá en adelante y se
+      // reintenta YA con Gemini, sin que el usuario tenga que volver a
+      // tocar el botón.
+      usarFallbackTranscripcionGemini = true;
+      transicionandoAFallback = true;
+      paradaManual = true; // el reintento de acá en más lo maneja el fallback, no el auto-reinicio nativo
+      mostrarToast("El micrófono nativo falló, probando transcripción alternativa…");
+      iniciarFallbackGrabacion(textoPrevioAlInput);
+    };
+    reconocimientoVoz.onend = () => {
+      // Si justo se está armando el fallback (ver onerror de arriba), no
+      // tocar nada acá — el fallback maneja su propio ícono/estado.
+      if (transicionandoAFallback) return;
+      if (paradaManual) {
+        grabandoVoz = false;
+        btn.textContent = "🎙️";
+        btn.title = "Dictar por voz";
+        input.focus();
+        return;
+      }
+      // Pedido explícito: botón de ALTERNAR, nunca debe cortar la
+      // grabación por su cuenta — silencios largos, timeout interno del
+      // motor (típico en Android incluso con continuous:true), lo que
+      // sea. Si llegamos acá es porque el motor terminó SOLO, sin que el
+      // usuario tocara nada: se reinicia de forma transparente, sin tocar
+      // el ícono (sigue en "🔴 Grabando…") ni perder una palabra de lo ya
+      // dictado — input.value tal como quedó pasa a ser el nuevo texto
+      // previo del reinicio, exactamente el mismo mecanismo que usa un
+      // arranque manual.
+      if (!huboResultadoEstaVez) {
+        reiniciosSeguidosSinResultado++;
+        if (reiniciosSeguidosSinResultado >= 3) {
+          reiniciosSeguidosSinResultado = 0;
+          grabandoVoz = false;
+          btn.textContent = "🎙️";
+          btn.title = "Dictar por voz";
+          mostrarToast("No se pudo mantener la escucha activa. Probá de nuevo.");
+          return;
+        }
+      }
+      iniciarReconocimientoNativo(input.value ? `${input.value} ` : "");
+    };
+    reconocimientoVoz.start();
+  }
+
   btn.onclick = () => {
     if (grabandoConFallback) {
       mediaRecorderVoz?.stop();
       return;
     }
     if (grabandoVoz) {
+      paradaManual = true;
       reconocimientoVoz?.stop();
       return;
     }
@@ -278,83 +408,7 @@ function crearBotonVoz(input) {
       return;
     }
 
-    reconocimientoVoz = crearReconocimientoVoz();
-    // Bug real reportado (2026-08-22, Android/Chrome): el texto quedaba
-    // duplicándose sobre sí mismo ("apúntame apúntame que apúntame que
-    // tengo..."). Causa: antes se reconstruía TODO el texto desde
-    // e.results[0] en CADA evento onresult, incluyendo resultados que en
-    // Android no se "reemplazan en el lugar" de forma confiable como en
-    // desktop — cada evento intermedio iba sumando de nuevo texto que ya
-    // estaba.
-    //
-    // BUG REAL #2 (2026-08-23, reportado en celular, seguía pasando incluso
-    // peor que antes — texto creciendo sobre sí mismo tipo "apuntame
-    // apuntame que apuntame que tengo..."): el primer fix de arriba
-    // ayudó pero no alcanzaba. Quedaba una variable `transcripcionFinal`
-    // que vivía FUERA del handler (en el closure) y se le sumaba con +=
-    // cada vez que un resultado con isFinal=true aparecía en el rango
-    // [e.resultIndex, e.results.length). El supuesto (correcto en
-    // desktop) era que e.resultIndex solo apunta a resultados NUEVOS que
-    // todavía no habíamos visto. En Android con continuous:true ese
-    // supuesto se rompe: el motor puede reemitir eventos cuyo
-    // resultIndex vuelve a apuntar a resultados que YA se habían marcado
-    // isFinal en un evento anterior — y como transcripcionFinal nunca se
-    // resetea, ese texto final se le vuelve a sumar ENCIMA de sí mismo,
-    // una y otra vez, con cada evento. Nada de esto se cachea entre
-    // eventos: se reconstruyen las dos (final e interina) DE CERO
-    // recorriendo TODO e.results desde el índice 0 en cada onresult, así
-    // que no importa qué índices reemita el motor ni cuántas veces —
-    // el resultado es siempre el mismo texto correcto, nunca se acumula
-    // sobre una llamada anterior.
-    reconocimientoVoz.onstart = () => {
-      grabandoVoz = true;
-      btn.textContent = "🔴";
-      btn.title = "Grabando… tocá para detener";
-    };
-    reconocimientoVoz.onresult = (e) => {
-      let transcripcionFinal = "";
-      let interina = "";
-      for (let i = 0; i < e.results.length; i++) {
-        const transcript = e.results[i][0].transcript;
-        if (e.results[i].isFinal) {
-          transcripcionFinal += transcript + " ";
-        } else {
-          interina += transcript;
-        }
-      }
-      input.value = textoPrevioAlInput + transcripcionFinal + interina;
-    };
-    reconocimientoVoz.onerror = (e) => {
-      // Antes esto no quedaba en consola de ninguna forma — el toast
-      // genérico no distingue causa. Con este log alcanza con abrir la
-      // consola y mirar qué dice e.error para saber la causa real.
-      console.warn("[asistente] Error de reconocimiento de voz:", e.error, e);
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-        mostrarToast("Permiso de micrófono denegado");
-        return;
-      }
-      if (e.error === "no-speech" || e.error === "aborted") return;
-      // Fallo real del motor nativo (ej. "network", "audio-capture"): se
-      // marca este navegador para usar el fallback de acá en adelante y se
-      // reintenta YA con Gemini, sin que el usuario tenga que volver a
-      // tocar el botón.
-      usarFallbackTranscripcionGemini = true;
-      transicionandoAFallback = true;
-      mostrarToast("El micrófono nativo falló, probando transcripción alternativa…");
-      iniciarFallbackGrabacion(textoPrevioAlInput);
-    };
-    reconocimientoVoz.onend = () => {
-      grabandoVoz = false;
-      // Si justo se está armando el fallback (ver onerror de arriba), no
-      // tocar el ícono — el fallback lo va a poner en "🔴" apenas
-      // getUserMedia resuelva, pisarlo acá lo dejaría parpadeando a
-      // "🎙️" un instante antes de volver a "🔴".
-      if (transicionandoAFallback) return;
-      btn.textContent = "🎙️";
-      btn.title = "Dictar por voz";
-      input.focus();
-    };
-    reconocimientoVoz.start();
+    iniciarReconocimientoNativo(textoPrevioAlInput);
   };
 
   return btn;
