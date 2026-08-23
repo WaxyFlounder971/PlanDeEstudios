@@ -504,6 +504,96 @@ horario real):\n${filas.join("\n")}`;
 }
 
 /**
+ * Bug real reportado (2026-08-22): el usuario le puso un apodo a una
+ * materia en Horario (ej. "Natación" para "Educación Física II", ver
+ * campo `apodo` de crearBloqueHorario/obtenerNombreBloque en
+ * horario/horario.js) y al usarlo en el chat ("tengo tarea de natación")
+ * Gemini no lo reconocía como esa materia — porque solo se le pasaba el
+ * nombre OFICIAL de cada una (obtenerMateriasVinculablesAgenda), nunca sus
+ * apodos. Acá se juntan los apodos reales de cada materia (recorriendo sus
+ * bloques de Horario — puede tener más de uno si tiene varios bloques con
+ * apodos distintos, ej. teoría/práctica) para poder mostrárselos a Gemini
+ * junto al nombre oficial. Devuelve un Map nombreOficial -> Set(apodos).
+ */
+function construirMapaApodosMaterias(materiasVinculables) {
+  const apodosPorMateria = new Map();
+
+  materiasVinculables.forEach((materiaVinculada) => {
+    const semestre = (estado.datos.semestres || []).find((s) => s.id === materiaVinculada.semestreId);
+    const mm = semestre && (semestre.materias_matriculadas || []).find((m) => m.id === materiaVinculada.mmId);
+    if (!semestre || !mm) return;
+
+    const apodos = new Set();
+    (semestre.bloques_horario || [])
+      .filter((b) => b.materia_id === mm.materia_id && b.plan_estudio_id === mm.plan_estudio_id)
+      .forEach((b) => {
+        if (b.apodo && b.apodo.trim()) apodos.add(b.apodo.trim());
+      });
+
+    if (apodos.size > 0) apodosPorMateria.set(materiaVinculada.nombre, apodos);
+  });
+
+  return apodosPorMateria;
+}
+
+/**
+ * Lista de materias para el prompt, con apodo(s) entre paréntesis cuando
+ * la materia tiene alguno. Gemini sigue devolviendo SIEMPRE el nombre
+ * OFICIAL en "materia" (nunca el apodo) — esto solo lo ayuda a identificar
+ * a cuál materia se refiere el usuario cuando usa el apodo.
+ */
+function construirListaMateriasConApodos(materiasVinculables) {
+  if (materiasVinculables.length === 0) {
+    return "(el usuario no tiene materias matriculadas en los semestres que Agenda tiene seleccionados ahora)";
+  }
+  const apodosPorMateria = construirMapaApodosMaterias(materiasVinculables);
+  return materiasVinculables
+    .map((m) => {
+      const apodos = apodosPorMateria.get(m.nombre);
+      if (!apodos || apodos.size === 0) return `- ${m.nombre}`;
+      return `- ${m.nombre} (${apodos.size === 1 ? "apodo" : "apodos"}: ${Array.from(apodos).join(", ")})`;
+    })
+    .join("\n");
+}
+
+/**
+ * Caso límite real (pedido explícito): si el MISMO apodo quedó puesto en
+ * dos materias distintas (ej. el usuario le dijo "Nata" tanto a Natación
+ * como a otra), no hay forma de saber cuál quiso decir con solo el apodo.
+ * Se arma una advertencia puntual por cada apodo duplicado (comparación
+ * sin distinguir mayúsculas/acentos de más) para que Gemini pregunte en
+ * vez de adivinar — mismo principio que ya usa la regla de materias
+ * ambiguas por nombre parecido ("Cálculo I" vs "Cálculo II").
+ */
+function construirAvisoApodosDuplicados(materiasVinculables) {
+  const apodosPorMateria = construirMapaApodosMaterias(materiasVinculables);
+  const materiasPorApodo = new Map();
+
+  apodosPorMateria.forEach((apodos, nombreMateria) => {
+    apodos.forEach((apodo) => {
+      const clave = apodo.toLowerCase();
+      if (!materiasPorApodo.has(clave)) materiasPorApodo.set(clave, { apodo, materias: [] });
+      materiasPorApodo.get(clave).materias.push(nombreMateria);
+    });
+  });
+
+  const duplicados = Array.from(materiasPorApodo.values()).filter((entrada) => entrada.materias.length > 1);
+  if (duplicados.length === 0) return "";
+
+  const filas = duplicados
+    .map((d) => `- "${d.apodo}" lo tienen tanto ${d.materias.join(" como ")}`)
+    .join("\n");
+
+  return `\n\n⚠️ Apodos duplicados (dos o más materias comparten el mismo apodo):
+${filas}
+Si el usuario usa uno de estos apodos SIN aclarar de cuál habla (ej. no
+menciona nada más que lo distinga), NO adivines cuál es: devolvé "items":
+[] y preguntá en "aclaracion" cuál de las dos es, nombrando el nombre
+OFICIAL de cada una (ej. "Le pusiste 'Nata' tanto a Natación como a Vóley
+playa, ¿a cuál te referís?").`;
+}
+
+/**
  * Construye el system prompt de extracción con contexto REAL del usuario
  * (fecha de hoy + materias matriculadas de los semestres que Agenda tiene
  * seleccionados ahora mismo, ver obtenerMateriasVinculablesAgenda en
@@ -529,11 +619,9 @@ horario real):\n${filas.join("\n")}`;
  */
 function construirSystemInstruction() {
   const { iso, diaSemana } = obtenerContextoFechaHoy();
-  const materias = obtenerMateriasVinculablesAgenda().map((m) => m.nombre);
-  const listaMaterias =
-    materias.length > 0
-      ? materias.map((n) => `- ${n}`).join("\n")
-      : "(el usuario no tiene materias matriculadas en los semestres que Agenda tiene seleccionados ahora)";
+  const materiasVinculables = obtenerMateriasVinculablesAgenda();
+  const listaMaterias = construirListaMateriasConApodos(materiasVinculables);
+  const avisoApodosDuplicados = construirAvisoApodosDuplicados(materiasVinculables);
 
   return `Sos el Asistente IA de una app académica. Tu única función es leer un
 mensaje en lenguaje natural de un estudiante universitario y extraer de
@@ -545,8 +633,10 @@ próximo lunes", etc.). Si el usuario describe algo que se repite (ej. "los
 martes durante 3 semanas seguidas"), devolvé UN ítem por cada ocurrencia
 real, cada uno con su propia fecha.${construirContextoSemanasSemestres()}${construirContextoProximasClases()}
 
-Materias matriculadas reales del usuario ahora mismo:
-${listaMaterias}
+Materias matriculadas reales del usuario ahora mismo (nombre oficial —
+entre paréntesis, el/los apodo(s) que el usuario le puso en Horario, si
+tiene):
+${listaMaterias}${avisoApodosDuplicados}
 
 Devolvé ÚNICAMENTE un JSON con esta forma exacta:
 {
@@ -581,16 +671,20 @@ Reglas:
 - "nombre": SOLO el título de la tarea/examen/evento en sí (ej. "Prueba
   1", "Proyecto final", "Entrega de laboratorio"). NUNCA metas el nombre
   de la materia acá — eso va aparte, en "materia".
-- "materia": si el mensaje nombra una materia que coincide claramente con
-  una de la lista de arriba, usá el nombre EXACTO de la lista (ej. si dice
-  "examen de cálculo" y en la lista está "Cálculo I", "materia" es
-  "Cálculo I", nunca una variante inventada). Si no se menciona materia o
-  no hay forma de saber cuál, "materia" es null.
+- "materia": si el mensaje nombra una materia —por su nombre OFICIAL o por
+  su APODO (el que el usuario le puso en Horario, mostrado entre
+  paréntesis en la lista de arriba)— que coincide claramente con una de la
+  lista, usá SIEMPRE el nombre OFICIAL exacto de la lista en "materia",
+  NUNCA el apodo (ej. si dice "tarea de natación" y en la lista está
+  "Educación Física II (apodo: Natación)", "materia" es "Educación Física
+  II", no "Natación"). Si no se menciona materia o no hay forma de saber
+  cuál, "materia" es null.
 - Si el mensaje es realmente ambiguo entre 2 o más materias de la lista
   (ej. existen "Cálculo I" y "Cálculo II" y el usuario solo dijo
-  "cálculo", sin forma de saber cuál con el resto del mensaje), NO
-  adivines: devolvé "items": [] y explicá la duda en "aclaracion" con una
-  pregunta corta y directa (ej. "¿Te referís a Cálculo I o Cálculo II?").
+  "cálculo", sin forma de saber cuál con el resto del mensaje; o usa un
+  apodo que está marcado como duplicado más arriba), NO adivines: devolvé
+  "items": [] y explicá la duda en "aclaracion" con una pregunta corta y
+  directa (ej. "¿Te referís a Cálculo I o Cálculo II?").
 - "hora": SOLO si el usuario mencionó una hora puntual explícita (ej. "a
   las 2pm", "a las 14:00"). Si no la mencionó, "hora" es null SIEMPRE —
   nunca trates de adivinar a qué hora es una clase, eso no es tu trabajo.
