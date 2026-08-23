@@ -938,7 +938,14 @@ function construirTarjetaProfesor(profesor, datos) {
   const recomendado = profesor.volveria_a_llevar !== false; // default true (sin badge rojo hasta que se marque explícito que no)
 
   const card = document.createElement("div");
-  card.className = "glass-panel stack com-tarjeta-profesor";
+  // Punto 5 (2026-08-23): igual que el bloque de día en Agenda Lista (ver
+  // construirBloqueDia en agenda.js), esta tarjeta es contenido PRINCIPAL
+  // de la sección (mismo rol que una tarjeta de Compañero, un profesor de
+  // Semestres, etc.), no un panel secundario — "glass-panel" la dejaba
+  // visiblemente más lavada que el resto de la app. "glass-card" iguala el
+  // tono. Ver también construirBloqueSemestreProfesores más abajo (el
+  // agrupador por semestre), que tenía el mismo problema.
+  card.className = "glass-card stack com-tarjeta-profesor";
   card.style.cssText = "gap:6px; cursor:pointer; padding:14px 16px;";
   // 2026-08-09: identificador en el DOM para poder ubicar esta tarjeta
   // puntual desde otro módulo (ej. al navegar acá desde Semestres, tocando
@@ -2464,7 +2471,10 @@ function construirBloqueSemestreProfesores(semestre, profesores, datos) {
   const colapsado = estado.bloquesProfesoresColapsados.has(idBloque);
 
   const bloque = document.createElement("div");
-  bloque.className = "glass-panel stack";
+  // Punto 5 (2026-08-23): mismo fix que construirTarjetaProfesor de más
+  // arriba — este wrapper también se veía lavado en modo "agrupar por
+  // semestre".
+  bloque.className = "glass-card stack";
   bloque.style.cssText = "padding:0; gap:0; overflow:hidden;";
 
   const header = document.createElement("div");
