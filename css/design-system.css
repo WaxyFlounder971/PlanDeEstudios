@@ -3226,24 +3226,27 @@ html.exportar-tema-default[data-mode="dark"] {
    paneles/menús, la topbar, el fondo oscuro detrás de modales, el aviso de
    reconexión y el overlay de carga) usa una porción "transparente" (el %
    que deja ver lo que hay detrás, sea color-mix hacia --bg-canvas o alpha
-   en rgba). Se recorta esa porción transparente A LA MITAD en cada una —
-   ej. 45% de transparencia → 22.5% — dejándolas bastante más sólidas sin
-   perder el tinte del color de fondo (nada de esto toca el modo normal,
-   solo vive bajo [data-rendimiento="reducido"]). */
+   en rgba).
+
+   AJUSTE (2026-08-23, feedback repetido de que "sigue siendo demasiada la
+   transparencia en los menus"): el recorte a la mitad (45% → 22.5%) seguía
+   dejando ver demasiado el fondo. Se baja directo a 10% de transparencia
+   (90% sólido) en cada una de estas reglas — nada de esto toca el modo
+   normal, solo vive bajo [data-rendimiento="reducido"]). */
 [data-rendimiento="reducido"] .glass-card {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  background: color-mix(in srgb, var(--bg-card) 77.5%, var(--bg-canvas) 22.5%);
+  background: color-mix(in srgb, var(--bg-card) 90%, var(--bg-canvas) 10%);
 }
 [data-rendimiento="reducido"] .glass-panel {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  background: color-mix(in srgb, var(--bg-panel) 77.5%, var(--bg-canvas) 22.5%);
+  background: color-mix(in srgb, var(--bg-panel) 90%, var(--bg-canvas) 10%);
 }
 [data-rendimiento="reducido"] .mobile-topbar {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  background: color-mix(in srgb, var(--bg-panel) 77.5%, var(--bg-canvas) 22.5%);
+  background: color-mix(in srgb, var(--bg-panel) 90%, var(--bg-canvas) 10%);
 }
 [data-rendimiento="reducido"] .modal-overlay {
   backdrop-filter: none;
@@ -3276,7 +3279,8 @@ html.exportar-tema-default[data-mode="dark"] {
    fondo con un selector por ID (línea ~1204/1207) — más específico que
    cualquier regla de .glass-panel — así que aunque comparta esa clase,
    nunca heredaba el fix de arriba (cortar la transparencia a la mitad).
-   Se repite acá el mismo criterio (color-mix 77.5%/22.5%) pero apuntando
+   Se repite acá el mismo criterio (color-mix 90%/10%, ajustado 2026-08-23
+   junto con el resto de reglas de arriba) pero apuntando
    directo al ID, con la variante de color correspondiente a cada modo.
 
    FIX (punto 4, 2026-08-23): esta regla reemplazaba el `background` COMPLETO
@@ -3290,10 +3294,10 @@ html.exportar-tema-default[data-mode="dark"] {
    mismo linear-gradient de la regla base, solo con el color-mix (sin
    backdrop-filter) como capa de fondo en vez de --bg-panel puro. */
 [data-rendimiento="reducido"][data-mode="dark"] #app-sidebar {
-  background: linear-gradient(rgba(0,0,0,0.16), rgba(0,0,0,0.16)), color-mix(in srgb, var(--bg-panel) 77.5%, var(--bg-canvas) 22.5%);
+  background: linear-gradient(rgba(0,0,0,0.16), rgba(0,0,0,0.16)), color-mix(in srgb, var(--bg-panel) 90%, var(--bg-canvas) 10%);
 }
 [data-rendimiento="reducido"][data-mode="light"] #app-sidebar {
-  background: linear-gradient(rgba(255,255,255,0.16), rgba(255,255,255,0.16)), color-mix(in srgb, var(--bg-panel) 77.5%, var(--bg-canvas) 22.5%);
+  background: linear-gradient(rgba(255,255,255,0.16), rgba(255,255,255,0.16)), color-mix(in srgb, var(--bg-panel) 90%, var(--bg-canvas) 10%);
 }
 
 /* 2. Glow del botón primario en hover y de la "luz" de disponibilidad:
