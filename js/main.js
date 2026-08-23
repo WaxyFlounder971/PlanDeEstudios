@@ -13,6 +13,7 @@ import { actualizarIndicadorSync, forzarSincronizacion, inicializarPullToRefresh
 import { CLAVE_CACHE_LOCAL, borrarTokenCache, correoConocido, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
 import { obtenerIniciales } from "./core/utils.js";
 import { ofrecerActivarNotificacionesPush, soportaNotificacionesPush } from "./core/notificaciones-push.js";
+import { sincronizarBandejaPendiente } from "./core/asistente-bandeja.js";
 import { inicializarComunidad, renderizarComunidad } from "./comunidad/comunidad.js";
 import { renderizarFinanzas } from "./finanzas/finanzas.js";
 import { inicializarModalCategoria, inicializarModalCategoriaMaterias } from "./plan/plan-categorias.js";
@@ -768,6 +769,17 @@ function mostrarApp() {
   // una app ya completamente pintada, en vez de interrumpir a mitad de
   // los renders con la UI todavía a medio construir.
   revisarUniversidadesIncompletas();
+
+  // Bandeja Pendiente / Captura por voz (2026-08-23): mismo lugar que
+  // revisarUniversidadesIncompletas de arriba porque, igual que esa,
+  // cubre los 2 caminos que llegan a mostrarApp() — sesión restaurada
+  // desde caché y login real recién completado — que es justo lo que pide
+  // el prompt original ("al abrir/sincronizar la app"). Sin `await` y sin
+  // bloquear nada de lo de arriba: es 100% best-effort (ver comentario al
+  // inicio de asistente-bandeja.js), así que no tiene sentido demorar el
+  // resto del arranque esperándola. No hace nada si el switch de Ajustes
+  // Avanzados está apagado o si todavía no se generó un id_bandeja.
+  sincronizarBandejaPendiente();
 }
 
 // Notificaciones push — mismo caso que el query param de arriba, pero para
