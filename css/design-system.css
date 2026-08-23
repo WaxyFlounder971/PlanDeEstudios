@@ -26,6 +26,32 @@
   --bg-header-solido: #101114;
 }
 
+/* Punto 6 (2026-08-23): en modo claro la sombra negra plana ("rgba(0,0,0,x)")
+   choca contra el fondo claro aprobado — se ve como una mancha gris sucia en
+   vez de dar profundidad. Se tiñe con --accent-1 de la paleta activa (mismo
+   patrón color-mix ya usado en el resto de este archivo, ver línea 645) en
+   vez de negro puro: primero se mezcla el acento con negro para tener una
+   base oscura con tinte de color (--shadow-tinte-claro), y esa base se
+   diluye con transparencia para mantener la MISMA opacidad final que tenía
+   la sombra original (35%/40%/28%/30% según el caso) — solo cambia el color
+   de base, la fuerza del efecto de profundidad queda igual. No toca modo
+   oscuro (ahí el negro plano sí funciona bien contra fondos oscuros, y es
+   el look aprobado). */
+[data-mode="light"] {
+  --shadow-tinte-claro: color-mix(in srgb, var(--accent-1) 25%, black 75%);
+  --shadow-glass: 0 20px 40px color-mix(in srgb, var(--shadow-tinte-claro) 35%, transparent);
+  --shadow-float: 0 8px 20px color-mix(in srgb, var(--shadow-tinte-claro) 40%, transparent);
+}
+/* Mismo fix que arriba, pero para los valores reducidos de Modo Rendimiento
+   (ver bloque [data-rendimiento="reducido"] más abajo) — sin esto, apenas se
+   activa el modo por defecto (rendimiento) la sombra clara volvía a salir
+   negra plana porque esa regla pisa --shadow-glass/--shadow-float con sus
+   propios rgba(0,0,0,...). */
+[data-mode="light"][data-rendimiento="reducido"] {
+  --shadow-glass: 0 2px 6px color-mix(in srgb, var(--shadow-tinte-claro) 28%, transparent);
+  --shadow-float: 0 2px 6px color-mix(in srgb, var(--shadow-tinte-claro) 30%, transparent);
+}
+
 /* ---- Estructura base (independiente de paleta) ---- */
 * {
   box-sizing: border-box;
