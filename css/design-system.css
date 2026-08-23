@@ -1244,6 +1244,20 @@ body.scroll-bloqueado {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Bug real reportado (2026-08-22): el alto de cada botón se basaba en el
+     espacio disponible del contenedor en vez de en su propio contenido —
+     con la lista larga, los botones se veían recortados/aplastados en vez
+     de mantener su alto real y dejar que .sidebar-scroll (ya tiene
+     overflow-y:auto arriba) scrolleara. Causa exacta: overflow:hidden (de
+     la línea de arriba, necesario para el ellipsis del texto) hace que el
+     navegador considere que el "tamaño mínimo automático" de este flex-item
+     es 0 en vez de basado en su contenido (así lo define la spec de
+     flexbox para items con overflow != visible) — eso habilita que
+     flex-shrink (1 por defecto) los encoja de más cuando no entran todos.
+     flex-shrink:0 los saca de ese reparto: SIEMPRE miden lo que su
+     contenido necesita, sin importar cuántos entren; el scroll de
+     .sidebar-scroll se encarga del resto. */
+  flex-shrink: 0;
 }
 .app-sidebar .btn-colapsar {
   background: transparent;
