@@ -4,12 +4,12 @@
    plan/universidad, formato de texto.
    ========================================================================= */
 
-import { ESCALAS_DISPONIBLES, FRECUENCIAS_BACKUP_DRIVE, MONEDAS_DISPONIBLES, OFFSETS_RECORDATORIO_AGENDA, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, crearBackupDriveDefault, migrarDatosAntiguos, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
+import { ESCALAS_DISPONIBLES, FRECUENCIAS_BACKUP_DRIVE, MONEDAS_DISPONIBLES, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, crearBackupDriveDefault, migrarDatosAntiguos, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
 import { actualizarIndicadorSync, forzarBackupManual, marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
-import { abrirConfirmacion, construirSelectorChipsMultiple, mostrarToast } from "../ui/componentes.js";
+import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta } from "../ui/tema.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
 import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
@@ -28,7 +28,6 @@ import {
   activarNotificacionesPush,
   desactivarNotificacionesPush,
   notificacionesPushActivas,
-  sincronizarResumenDiario,
   soportaNotificacionesPush,
 } from "../core/notificaciones-push.js";
 
@@ -138,115 +137,50 @@ function aplicarModoRendimiento(activo) {
 }
 
 /**
- * Notificaciones — Recordatorios por tipo (2026-08-20): un grupo de chips
- * (ver construirSelectorChipsMultiple en ui/componentes.js) por cada tipo
- * de evento de Agenda (tarea/examen/evento/feriado), en ese orden fijo.
- * Cada grupo lee/escribe estado.datos.configuracion.notificaciones_recordatorios[tipo]
- * (arreglo de ids de OFFSETS_RECORDATORIO_AGENDA, ver core/schema.js).
- * Solo tiene sentido con el switch general de notificaciones push activo —
- * si está apagado, el bloque completo queda atenuado y sin interacción
- * (mismo criterio visual que el resto de bloques dependientes de un switch
- * en esta pantalla), pero los valores elegidos NO se pierden: siguen
- * guardados, listos para cuando el usuario vuelva a prender el switch
- * general.
+ * Punto 3 (ronda de ajustes visuales, 2026-08-23): filtro anti-spam para
+ * "Modo fancy" y "Modo claro/oscuro" — los 2 switches que el reporte marca
+ * como "presionarlos muchas veces seguidas no debe romper el estado
+ * guardado ni la sincronización".
+ *
+ * Causa real del bug (confirmada en core/storage-sync.js):
+ * marcarCambioPendiente() dispara intentarSincronizar() de inmediato, sin
+ * esperar a que un intento anterior termine — no existe ningún mutex ni
+ * debounce ahí. Tocar un switch varias veces seguidas dispara varias
+ * rondas de GET+fusión+PUT contra Drive en paralelo, que pueden pisarse
+ * entre sí o dejar guardado un estado intermedio en vez del final (esto
+ * es lo que reportaron como "el modo claro no sincronizó al menos una
+ * vez entre sesiones").
+ *
+ * El fix vive ACÁ, no dentro de marcarCambioPendiente(): esa función la
+ * usa el resto de la app (decenas de campos de configuración, tareas,
+ * eventos, etc.) y volverla debounced de forma global cambiaría el
+ * comportamiento de guardado en todos lados, con mucho más riesgo. Estos
+ * 2 switches son los únicos que el pedido señala como "muchas veces
+ * seguidas" (se prenden/apagan a repetición con más facilidad que
+ * escribir texto o tocar un botón normal).
+ *
+ * El toggle visual del checkbox y el efecto inmediato (aplicarModoRendimiento
+ * / aplicarPaleta) NUNCA se debouncean — el usuario espera ver el cambio al
+ * toque. Solo se retrasa la parte que dispara red (sellarTimestamp +
+ * marcarCambioPendiente): varias pulsaciones seguidas colapsan en un solo
+ * sello de tiempo + una sola sincronización, ya con el ÚLTIMO estado real
+ * (que es siempre lo que interesa guardar, no los intermedios).
+ *
+ * Un solo temporizador compartido entre ambos switches alcanza: si se
+ * tocan los 2 en sucesión rápida, también deben colapsar en una sola
+ * sincronización final (sellarTimestamp() y marcarCambioPendiente() no
+ * reciben ningún dato del switch puntual, siempre leen/marcan el estado
+ * completo ya actualizado en memoria).
  */
-const ETIQUETAS_TIPOS_RECORDATORIO_AGENDA = [
-  { tipo: "tarea", etiqueta: "Tareas" },
-  { tipo: "examen", etiqueta: "Exámenes" },
-  { tipo: "evento", etiqueta: "Eventos" },
-  { tipo: "feriado", etiqueta: "Feriados" },
-];
-
-function renderizarNotificacionesRecordatorios() {
-  const contenedor = document.getElementById("seccion-notificaciones-recordatorios");
-  if (!contenedor) return;
-
-  const cfg = estado.datos.configuracion;
-  if (!cfg.notificaciones_recordatorios || typeof cfg.notificaciones_recordatorios !== "object") {
-    cfg.notificaciones_recordatorios = { tarea: ["1_dia"], examen: ["1_dia"], evento: ["1_dia"], feriado: ["1_dia"] };
-  }
-
-  const habilitado = notificacionesPushActivas();
-  contenedor.innerHTML = "";
-  contenedor.style.opacity = habilitado ? "" : "0.5";
-  contenedor.style.pointerEvents = habilitado ? "" : "none";
-
-  ETIQUETAS_TIPOS_RECORDATORIO_AGENDA.forEach(({ tipo, etiqueta }) => {
-    const fila = document.createElement("div");
-    fila.className = "stack";
-    fila.style.gap = "6px";
-
-    const titulo = document.createElement("span");
-    titulo.className = "form-label";
-    titulo.textContent = etiqueta;
-    fila.appendChild(titulo);
-
-    const { elemento } = construirSelectorChipsMultiple(
-      OFFSETS_RECORDATORIO_AGENDA,
-      cfg.notificaciones_recordatorios[tipo],
-      (valoresActuales) => {
-        cfg.notificaciones_recordatorios[tipo] = valoresActuales;
-        sellarTimestamp(cfg);
-        marcarCambioPendiente();
-      }
-    );
-    fila.appendChild(elemento);
-    contenedor.appendChild(fila);
-  });
-}
-
-/**
- * Notificaciones — Resumen diario (2026-08-20): switch + selector de hora
- * (mismo patrón visual que construirSelectCustomAjustes, ver Rango de
- * horas del Horario más arriba) para
- * estado.datos.configuracion.notificaciones_resumen_diario ({ activo,
- * hora }). Cada cambio (switch u hora) llama a sincronizarResumenDiario()
- * en core/notificaciones-push.js, que es quien realmente avisa al Worker —
- * acá solo se guarda localmente y se dispara esa sincronización, siguiendo
- * el mismo criterio best-effort del resto de notificaciones push (si el
- * Worker no responde, no se revierte nada en la UI).
- */
-function renderizarNotificacionesResumenDiario() {
-  const chkResumen = document.getElementById("switch-notificaciones-resumen-diario");
-  const bloqueHora = document.getElementById("bloque-notificaciones-resumen-hora");
-  const contHora = document.getElementById("select-notificaciones-resumen-hora");
-  if (!chkResumen || !bloqueHora || !contHora) return;
-
-  const cfg = estado.datos.configuracion;
-  if (!cfg.notificaciones_resumen_diario || typeof cfg.notificaciones_resumen_diario !== "object") {
-    cfg.notificaciones_resumen_diario = { activo: false, hora: "20:00" };
-  }
-  const cfgResumen = cfg.notificaciones_resumen_diario;
-
-  const habilitado = notificacionesPushActivas();
-  chkResumen.disabled = !habilitado;
-  chkResumen.checked = !!cfgResumen.activo;
-  bloqueHora.classList.toggle("oculto", !cfgResumen.activo);
-  bloqueHora.style.opacity = habilitado ? "" : "0.5";
-  bloqueHora.style.pointerEvents = habilitado ? "" : "none";
-
-  chkResumen.onchange = () => {
-    cfgResumen.activo = chkResumen.checked;
-    sellarTimestamp(cfg);
+const RETARDO_ANTIRREBOTE_SWITCH_MS = 400;
+let temporizadorAntirreboteSwitch = null;
+function dispararSyncConAntirrebote() {
+  clearTimeout(temporizadorAntirreboteSwitch);
+  temporizadorAntirreboteSwitch = setTimeout(() => {
+    temporizadorAntirreboteSwitch = null;
+    sellarTimestamp(estado.datos.configuracion);
     marcarCambioPendiente();
-    bloqueHora.classList.toggle("oculto", !cfgResumen.activo);
-    sincronizarResumenDiario();
-  };
-
-  contHora.innerHTML = "";
-  contHora.appendChild(construirSelectCustomAjustes({
-    opciones: Array.from({ length: 24 }, (_, h) => ({
-      valor: `${String(h).padStart(2, "0")}:00`,
-      etiqueta: etiquetaHora12(h),
-    })),
-    valorInicial: cfgResumen.hora || "20:00",
-    onCambiar: (valor) => {
-      cfgResumen.hora = valor;
-      sellarTimestamp(cfg);
-      marcarCambioPendiente();
-      sincronizarResumenDiario();
-    },
-  }));
+  }, RETARDO_ANTIRREBOTE_SWITCH_MS);
 }
 
 /**
@@ -860,26 +794,16 @@ function renderizarAjustes() {
     grid.appendChild(btnEditar);
   }
 
-  // v1.14.1: Modo fancy (id del elemento sigue siendo "switch-rendimiento"
-  // por compatibilidad, pero el switch en pantalla se llama "Modo fancy" —
-  // el dato de fondo (modo_rendimiento) representa lo CONTRARIO de lo que
-  // dice la etiqueta: modo_rendimiento=true significa rendimiento activo,
-  // o sea fancy APAGADO. Fix v1.16.1 (2026-08-23): antes el checkbox
-  // reflejaba modo_rendimiento tal cual, así que el switch se veía
-  // "encendido" (ON) cuando en realidad lo fancy estaba apagado — quedaba
-  // invertido contra su propia etiqueta. Se invierte acá nomás (checked =
-  // fancy activo = !modo_rendimiento) para no tocar el nombre del campo en
-  // el modelo de datos ni la migración que ya corrió para las cuentas
-  // existentes (ver rendimiento_default_v2_aplicado en core/schema.js).
+  // v1.14.1: Modo de rendimiento (reduce blur/sombras/animaciones)
   const chkRendimiento = document.getElementById("switch-rendimiento");
   if (chkRendimiento) {
-    chkRendimiento.checked = !estado.datos.configuracion.modo_rendimiento;
+    chkRendimiento.checked = !!estado.datos.configuracion.modo_rendimiento;
     chkRendimiento.onchange = () => {
-      const fancyActivo = chkRendimiento.checked;
-      estado.datos.configuracion.modo_rendimiento = !fancyActivo;
-      aplicarModoRendimiento(!fancyActivo);
-      sellarTimestamp(estado.datos.configuracion);
-      marcarCambioPendiente();
+      // Estado en memoria + efecto visual: instantáneo, sin antirrebote (ver
+      // dispararSyncConAntirrebote más arriba para el porqué).
+      estado.datos.configuracion.modo_rendimiento = chkRendimiento.checked;
+      aplicarModoRendimiento(chkRendimiento.checked);
+      dispararSyncConAntirrebote();
     };
   }
 
@@ -912,15 +836,8 @@ function renderizarAjustes() {
         await desactivarNotificacionesPush();
       }
       chkNotificaciones.disabled = false;
-      // El switch general habilita/deshabilita los bloques de abajo — se
-      // vuelven a pintar acá para que reflejen el nuevo estado al toque,
-      // sin esperar a que el usuario navegue fuera y vuelva a Ajustes.
-      renderizarNotificacionesRecordatorios();
-      renderizarNotificacionesResumenDiario();
     };
   }
-  renderizarNotificacionesRecordatorios();
-  renderizarNotificacionesResumenDiario();
 
   // Ronda de ajustes visuales — punto 3: los 2 switches de Agenda que iban
   // acá ("Mostrar días sin eventos ni tareas" y "Mostrar clases ese día en
@@ -934,6 +851,8 @@ function renderizarAjustes() {
   const chkModo = document.getElementById("switch-modo");
   chkModo.checked = estado.datos.configuracion.modo === "light";
   chkModo.onchange = () => {
+    // Mismo criterio que switch-rendimiento: estado en memoria + repintado de
+    // paleta instantáneos, solo el sello+sync va con antirrebote.
     const nuevoModo = chkModo.checked ? "light" : "dark";
     estado.datos.configuracion.modo = nuevoModo;
     aplicarPaleta(
@@ -941,8 +860,7 @@ function renderizarAjustes() {
       nuevoModo,
       estado.datos.configuracion.paleta === "personalizada" ? personalizada.colores : undefined
     );
-    sellarTimestamp(estado.datos.configuracion);
-    marcarCambioPendiente();
+    dispararSyncConAntirrebote();
   };
 
   // Ajustes por Universidad (2026-08-08): el selector de escala global que
