@@ -130,6 +130,10 @@ function soportaFallbackGrabacion() {
 async function transcribirAudioConGemini(blob) {
   const claveApi = estado.datos.configuracion.gemini_api_key;
   if (!claveApi) throw new Error("No hay clave de Gemini guardada.");
+  // Mismo chequeo explícito que llamarGemini — ver comentario ahí.
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    throw new Error("Sin conexión a internet.");
+  }
 
   const base64 = await new Promise((resolve, reject) => {
     const lector = new FileReader();
@@ -228,7 +232,11 @@ function crearBotonVoz(input) {
             input.value = textoPrevioAlInput + texto;
           } catch (e) {
             console.warn("[asistente] Error transcribiendo audio con Gemini:", e);
-            mostrarToast("No se pudo transcribir el audio grabado.");
+            mostrarToast(
+              typeof navigator !== "undefined" && navigator.onLine === false
+                ? "No tenés conexión a internet."
+                : "No se pudo transcribir el audio grabado."
+            );
           } finally {
             btn.disabled = false;
             btn.textContent = "🎙️";
@@ -271,15 +279,34 @@ function crearBotonVoz(input) {
     }
 
     reconocimientoVoz = crearReconocimientoVoz();
+    // Bug real reportado (2026-08-22, Android/Chrome): el texto quedaba
+    // duplicándose sobre sí mismo ("apúntame apúntame que apúntame que
+    // tengo..."). Causa: antes se reconstruía TODO el texto desde
+    // e.results[0] en CADA evento onresult, incluyendo resultados que en
+    // Android no se "reemplazan en el lugar" de forma confiable como en
+    // desktop — cada evento intermedio iba sumando de nuevo texto que ya
+    // estaba. La forma correcta (recomendada por la propia spec de la Web
+    // Speech API): separar transcripción FINAL (se acumula UNA sola vez,
+    // apenas isFinal pasa a true) de la interina (se recalcula de cero en
+    // cada evento, nunca se acumula), y recorrer solo desde e.resultIndex
+    // (los resultados que cambiaron en ESTE evento), no desde 0.
+    let transcripcionFinal = "";
     reconocimientoVoz.onstart = () => {
       grabandoVoz = true;
       btn.textContent = "🔴";
       btn.title = "Grabando… tocá para detener";
     };
     reconocimientoVoz.onresult = (e) => {
-      let texto = "";
-      for (let i = 0; i < e.results.length; i++) texto += e.results[i][0].transcript;
-      input.value = textoPrevioAlInput + texto;
+      let interina = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const transcript = e.results[i][0].transcript;
+        if (e.results[i].isFinal) {
+          transcripcionFinal += transcript + " ";
+        } else {
+          interina += transcript;
+        }
+      }
+      input.value = textoPrevioAlInput + transcripcionFinal + interina;
     };
     reconocimientoVoz.onerror = (e) => {
       // Antes esto no quedaba en consola de ninguna forma — el toast
@@ -418,6 +445,64 @@ fecha de una semana a mano contando desde hoy — buscá la semana en esta
 tabla:\n${bloques.join("\n\n")}`;
 }
 
+
+/**
+ * Bug real reportado (2026-08-22): el usuario pidió "quiz de cálculo para
+ * la próxima clase" (refiriéndose a la próxima clase REAL de esa materia
+ * puntual, según su horario) y Gemini lo interpretó como "el próximo lunes"
+ * (primer día de la semana calendario) — puso el quiz un lunes en el que ni
+ * siquiera hay clase de esa materia.
+ *
+ * Mismo principio que construirContextoSemanasSemestres de arriba: esto NO
+ * es un problema de instrucción poco clara, es pedirle a un LLM que
+ * adivine un dato que no tiene (el horario real del usuario) — la solución
+ * es no dejarlo adivinar. Acá se calcula en JS, con los bloques_horario
+ * reales de cada materia matriculada (mismos datos que ya usa
+ * resolverHoraDefaultDesdeHorario más abajo), la fecha de la PRÓXIMA vez
+ * que esa materia tiene clase a partir de hoy (buscando hasta 14 días
+ * hacia adelante — cubre incluso materias que solo se ven cada 2 semanas).
+ * Gemini ya no calcula esa fecha: la busca en esta tabla.
+ */
+function construirContextoProximasClases() {
+  const materias = obtenerMateriasVinculablesAgenda();
+  if (materias.length === 0) return "";
+
+  const hoy = fechaLocalDesdeISO(obtenerContextoFechaHoy().iso);
+
+  const filas = materias
+    .map((materiaVinculada) => {
+      const semestre = (estado.datos.semestres || []).find((s) => s.id === materiaVinculada.semestreId);
+      const mm = semestre && (semestre.materias_matriculadas || []).find((m) => m.id === materiaVinculada.mmId);
+      if (!semestre || !mm) return null;
+
+      const diasConClase = new Set();
+      (semestre.bloques_horario || [])
+        .filter((b) => b.materia_id === mm.materia_id && b.plan_estudio_id === mm.plan_estudio_id)
+        .forEach((b) => (b.dias || []).forEach((d) => d.dia && diasConClase.add(d.dia)));
+      if (diasConClase.size === 0) return null;
+
+      for (let offset = 0; offset <= 14; offset++) {
+        const candidata = new Date(hoy);
+        candidata.setDate(candidata.getDate() + offset);
+        const codigoDia = DIAS_SEMANA_CONFIG[(candidata.getDay() + 6) % 7].abrevDefault;
+        if (diasConClase.has(codigoDia)) {
+          return `- ${materiaVinculada.nombre}: ${fechaISODesdeLocal(candidata)}`;
+        }
+      }
+      return null;
+    })
+    .filter(Boolean);
+
+  if (filas.length === 0) return "";
+
+  return `\n\nPróxima clase real de cada materia (para resolver frases como "la
+próxima clase de X", "en la próxima clase de X", "antes de mi próxima
+clase de X" — SIEMPRE es la fecha de esta tabla para esa materia
+puntual, NUNCA el próximo lunes ni el primer día de la semana
+calendario; cada materia tiene su propia próxima clase, según SU
+horario real):\n${filas.join("\n")}`;
+}
+
 /**
  * Construye el system prompt de extracción con contexto REAL del usuario
  * (fecha de hoy + materias matriculadas de los semestres que Agenda tiene
@@ -458,7 +543,7 @@ Hoy es ${iso} (${diaSemana}). Usá esta fecha como referencia para resolver
 cualquier fecha relativa ("mañana", "el jueves", "en 2 semanas", "el
 próximo lunes", etc.). Si el usuario describe algo que se repite (ej. "los
 martes durante 3 semanas seguidas"), devolvé UN ítem por cada ocurrencia
-real, cada uno con su propia fecha.${construirContextoSemanasSemestres()}
+real, cada uno con su propia fecha.${construirContextoSemanasSemestres()}${construirContextoProximasClases()}
 
 Materias matriculadas reales del usuario ahora mismo:
 ${listaMaterias}
@@ -484,6 +569,12 @@ Reglas:
   SIEMPRE semana académica del semestre — buscá esa semana en la tabla de
   arriba (si hay una) y calculá la fecha desde ahí, NUNCA contando semanas
   a mano desde la fecha de hoy.
+- Si el mensaje dice "la próxima clase de X" (o "en/antes de mi próxima
+  clase de X"), sin decir un día puntual, la fecha es la de la tabla
+  "Próxima clase real de cada materia" de arriba para ESA materia
+  específica — NUNCA el próximo lunes ni el primer día de la semana
+  calendario. Cada materia tiene su propio próximo día de clase, no
+  asumas que todas caen el mismo día.
 - "examen" para exámenes/parciales/quices; "tarea" para tareas/entregas/
   proyectos; "evento" para cualquier otra cosa (charlas, reuniones, citas,
   etc.).
@@ -578,6 +669,23 @@ async function llamarGemini(mensajeNuevo) {
     parts: [{ text: turno.rol === "usuario" ? turno.texto : turno.crudo }],
   }));
   contents.push({ role: "user", parts: [{ text: mensajeNuevo }] });
+
+  // Chequeo explícito de conexión (2026-08-22, pedido: "cubrir el caso de
+  // si no tenés wifi"): antes se dependía de que el fetch fallara con un
+  // TypeError de red para que mensajeParaError mostrara el texto correcto
+  // ("No se pudo conectar con Gemini...") — en la práctica no siempre pasa
+  // así de inmediato (algunos navegadores tardan en tirar el error o lo
+  // tiran distinto), y el usuario terminaba viendo el genérico "Algo salió
+  // mal de mi lado". navigator.onLine no es 100% infalible (puede decir
+  // true con wifi conectado pero sin salida real a internet), así que esto
+  // es un atajo rápido para el caso más común (avión, sin datos/wifi), no
+  // un reemplazo del try/catch de abajo — si igual falla la conexión real,
+  // el catch de fetch sigue cubriendo ese caso con el mismo tipoError.
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    const err = new Error("Sin conexión a internet.");
+    err.tipoError = "red";
+    throw err;
+  }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODELO_GEMINI}:generateContent?key=${encodeURIComponent(claveApi)}`;
 
