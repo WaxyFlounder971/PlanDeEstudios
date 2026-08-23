@@ -4,7 +4,7 @@
    todos los demás módulos.
    ========================================================================= */
 
-import { renderizarAjustes } from "./config/config-ajustes.js";
+import { aplicarModoRendimiento, renderizarAjustes } from "./config/config-ajustes.js";
 import { inicializarModalEnlace, renderizarEnlacesRapidos } from "./config/config-enlaces.js";
 import { buscarOCrearArchivoDatos, cerrarSesionGoogle, inicializarGoogleAuth, iniciarSesionConGoogle, obtenerMetadatosArchivo, obtenerPerfilGoogle, refrescarAccessTokenGoogle } from "./core/auth.js";
 import { migrarDatosAntiguos, sellarTimestamp } from "./core/schema.js";
@@ -691,6 +691,17 @@ function mostrarApp() {
   // el bug de abajo en storage-sync.js.
   const cfg = estado.datos.configuracion;
   aplicarPaleta(cfg.paleta, cfg.modo, cfg.paleta === "personalizada" ? cfg.paleta_personalizada?.colores : undefined);
+  // Fix v1.16.1 (2026-08-23 — "switch de fancy necesita varios clicks"):
+  // aplicarModoRendimiento() solo se llamaba desde el onchange del switch
+  // en Ajustes, nunca al arrancar. El atributo [data-rendimiento] en <html>
+  // (de donde depende toda la CSS del modo fancy/rendimiento) quedaba sin
+  // inicializar hasta el primer toque del switch — el primer click movía
+  // el dato guardado pero no cambiaba nada visible (porque el estado visual
+  // de partida ya estaba desincronizado), y recién el segundo click se
+  // notaba. Mismo lugar y mismo criterio que aplicarPaleta arriba: se
+  // aplica acá, apenas se conocen los datos reales del usuario, ANTES de
+  // que pueda entrar a Ajustes.
+  aplicarModoRendimiento(!!cfg.modo_rendimiento);
   renderizarSelectorPlan();
   renderizarAjustes();
   renderizarModoHardcore();
