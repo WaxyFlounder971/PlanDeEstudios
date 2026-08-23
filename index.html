@@ -433,13 +433,13 @@
         </section>
 
         <!-- Número de versión — SOLO texto informativo, fuera de cualquier
-             tarjeta, centrado, al final del todo de Configuración. A
-             propósito NO se genera desde JS (nada de VERSION_APP ni
-             similar en config-ajustes.js) — es un <p> fijo acá mismo para
-             que actualizarlo sea: abrir este archivo, cambiar el número de
-             abajo, guardar. Nada más que tocar, ningún import ni función
-             que romper. -->
-        <p class="muted" style="text-align:center; font-size:0.75rem; margin:20px 0 4px;">v3.12.5</p>
+             tarjeta, centrado, al final del todo de Configuración. Arranca
+             vacío a propósito: main.js le pide la versión al Service
+             Worker apenas carga la página y la escribe acá (ver
+             GET_VERSION en main.js / service-worker.js). Para cambiar de
+             versión NO se toca este archivo — se edita la constante
+             VERSION en service-worker.js, nada más. -->
+        <p id="pie-version" class="muted" style="text-align:center; font-size:0.75rem; margin:20px 0 4px;"></p>
 
       </div>
 
