@@ -2174,10 +2174,26 @@ img, svg { max-width: 100%; }
 .donut-subetiqueta { font-size: 0.75rem; color: var(--text-muted); text-align: center; }
 
 /* ---- Toast breve (feedback "copiado") ---- */
+/* FIX (2026-08-23, reportado en celular: "se cortan horrible, quedan
+   altísimos"): antes no tenía ancho propio — se achicaba al contenido
+   dentro de una "pill" (border-radius:999px) con solo un max-width tope,
+   así que cualquier texto un poco largo se cortaba contra ese tope sin
+   nada de margen para respirar. Ahora usa EXACTAMENTE los mismos tramos de
+   ancho que las tarjetas (.app-contenido > *, más abajo en este archivo):
+   en escritorio 760px (920px desde 1200px), en móvil el 100% del ancho
+   disponible menos 16px de cada lado — nunca más angosto que eso. Sigue
+   centrado a TODA la pantalla (left:50% + translateX(-50%), no al carril
+   de contenido) porque un elemento position:fixed no convive con el
+   sidebar de todas formas. border-radius pasa de --radius-pill a
+   --radius-lg: una píldora completa a este ancho se ve rarísima; el radio
+   de tarjeta es justamente el pedido ("del tamaño de las tarjetas"). */
 .toast-app {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: 760px;
+  text-align: center;
   background: var(--gradient-accent); color: var(--on-accent);
-  padding: 10px 20px; border-radius: var(--radius-pill);
+  padding: 10px 20px; border-radius: var(--radius-lg);
   font-weight: 600; font-size: 0.88rem;
   box-shadow: var(--shadow-float);
   z-index: 300;
@@ -2190,16 +2206,18 @@ img, svg { max-width: 100%; }
 }
 
 /* ---- Toast persistente con acción (ej. aviso de actualización de la PWA) ----
-   Mismo lenguaje visual que .toast-app (misma esquina, mismo tipo de
-   "pill" flotante), pero SIN la animación de autodesaparición: queda fija
-   hasta que el usuario aprieta el botón de acción o la cierra con ✕. */
+   Mismo lenguaje visual que .toast-app (mismo ancho igualado a las
+   tarjetas, mismo radio de esquina, misma esquina/centrado), pero SIN la
+   animación de autodesaparición: queda fija hasta que el usuario aprieta
+   el botón de acción o la cierra con ✕. */
 .toast-app-accion {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; gap: 12px;
-  max-width: calc(100vw - 32px);
+  width: calc(100% - 32px);
+  max-width: 760px;
   background: var(--bg-header-solido); color: var(--text-primary);
   border: 1px solid var(--border-glass);
-  padding: 12px 14px 12px 20px; border-radius: var(--radius-pill);
+  padding: 12px 14px 12px 20px; border-radius: var(--radius-lg);
   font-weight: 600; font-size: 0.88rem;
   box-shadow: var(--shadow-glass);
   z-index: 300;
@@ -2216,8 +2234,17 @@ img, svg { max-width: 100%; }
   0% { opacity: 0; transform: translate(-50%, 10px); }
   100% { opacity: 1; transform: translate(-50%, 0); }
 }
+/* Ya NO fuerza flex-wrap acá abajo: con el ancho de tarjeta que ahora
+   tiene siempre (arriba), el texto largo envuelve solo dentro de su
+   propio <span> (flex:1 dos reglas arriba) sin necesitar que el botón se
+   caiga a una fila aparte — apilar texto+botón en una "pill" angosta era
+   justamente lo que producía la forma alta y cortada. Solo se ajusta el
+   margen inferior en pantallas chicas. */
 @media (max-width: 480px) {
-  .toast-app-accion { flex-wrap: wrap; bottom: 16px; }
+  .toast-app-accion { bottom: 16px; }
+}
+@media (min-width: 1200px) {
+  .toast-app, .toast-app-accion { max-width: 920px; }
 }
 
 /* ---- Punto 6 (v1.9.6): badge fijo "Modo edición" ---- */
