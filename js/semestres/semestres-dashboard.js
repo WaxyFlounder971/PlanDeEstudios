@@ -32,16 +32,18 @@ import {
   convertirDesde100,
 } from "../core/schema.js";
 
-// Transitorio (no persistido, igual que estado.semestresExpandidos): si la
-// pestaña del dashboard está expandida, y qué vista/plan tiene elegidos.
-// Colapsada por default — pedido explícito, no debe empujar nada al entrar.
-estado.dashboardAcademicoAbierto = estado.dashboardAcademicoAbierto || false;
-// FIX (2026-08-07): "Estadísticas" pasa a ser la vista por default — ahora
-// es la primera pestaña y la más general (aprobados/reprobados + detalle
-// por estado, fusionados). Antes el default era "ponderado", que ya no es
-// la primera opción.
-estado.dashboardAcademicoVista = estado.dashboardAcademicoVista || "estadisticas";
-estado.dashboardAcademicoPlanFiltro = estado.dashboardAcademicoPlanFiltro || null; // null = todos los planes (global)
+/**
+ * FIX (mismo bug de arranque "Cannot access 'estado' before initialization"
+ * ya visto en el resto de la app): estas 3 líneas estaban a nivel de
+ * módulo, leyendo Y escribiendo `estado.X` en el mismo statement — se
+ * mueven a una función lazy, llamada desde construirDashboardAcademico
+ * (único punto de entrada exportado de este archivo).
+ */
+function inicializarEstadoDashboardAcademicoSiHaceFalta() {
+  if (typeof estado.dashboardAcademicoAbierto === "undefined") estado.dashboardAcademicoAbierto = false;
+  if (typeof estado.dashboardAcademicoVista === "undefined") estado.dashboardAcademicoVista = "estadisticas";
+  if (typeof estado.dashboardAcademicoPlanFiltro === "undefined") estado.dashboardAcademicoPlanFiltro = null; // null = todos los planes (global)
+}
 
 // FIX (2026-08-07 — rediseño "Historial académico"): antes había 3
 // pestañas (Promedio Ponderado / Aprobados-Reprobados / Detalle por
@@ -514,6 +516,7 @@ function construirVistaEstadisticas(onCambiar) {
  * que el resto del archivo semestres.js.
  */
 function construirDashboardAcademico(onCambiar) {
+  inicializarEstadoDashboardAcademicoSiHaceFalta();
   const card = document.createElement("section");
   card.className = "glass-card stack";
   card.style.cssText = "gap:0;";
