@@ -9,7 +9,7 @@ import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { abrirConfirmacion } from "../ui/componentes.js";
 import { abrirModalCrearPlan } from "./plan-esquema.js";
-import { abrirModalCapturasPDF, abrirModalInstruccionesImportacion, construirInputArchivoCSV, construirPromptImportacion, extraerMetadatosImportacion } from "./plan-importacion.js";
+import { abrirModalCapturasPDF, abrirModalInstruccionesImportacion, construirInputArchivoCSV, construirPromptImportacion, extraerMetadatosImportacion, inicializarEstadoImportacionPlanSiHaceFalta } from "./plan-importacion.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
 
 /* ===================== Parser de CSV ===================== */
@@ -502,6 +502,11 @@ function limpiarBloqueDeCodigoCSV(texto) {
 }
 
 function manejarClickImportar(textoCSV) {
+  // FIX: estado.planImportandoId es "propiedad" de plan-importacion.js (ver
+  // inicializarEstadoImportacionPlanSiHaceFalta ahí, mismo bug de arranque
+  // que el resto de plan/*.js) — se garantiza acá también porque este
+  // archivo lo lee sin ser quien lo inicializa.
+  inicializarEstadoImportacionPlanSiHaceFalta();
   if (!textoCSV || !textoCSV.trim()) {
     mostrarErroresImportacion(["Pega primero el CSV que te devolvió la IA."]);
     return;
@@ -682,6 +687,10 @@ function mostrarErroresImportacion(lista) {
 
 function construirMiniPanelImportacion(plan) {
   inicializarEstadoModoActualizarMallaSiHaceFalta();
+  // FIX: estos campos (modoImportacion, linkImportacion, etc.) son
+  // "propiedad" de plan-importacion.js — ver comentario en
+  // manejarClickImportar más arriba.
+  inicializarEstadoImportacionPlanSiHaceFalta();
   const sec = document.createElement("section");
   sec.className = "glass-card stack";
 
@@ -968,6 +977,10 @@ function construirMiniPanelImportacion(plan) {
  *  (v5 1.3). Se llama tras cada render del panel de importación. */
 
 function actualizarEstadoBotonesEnvioImportacion() {
+  // FIX: exportada y puede llamarse desde fuera de construirMiniPanelImportacion
+  // — garantiza que estado.linkImportacion exista como string antes del
+  // .trim() de abajo (ver comentario en manejarClickImportar más arriba).
+  inicializarEstadoImportacionPlanSiHaceFalta();
   const btnClaude = document.getElementById("btn-enviar-import-claude");
   if (!btnClaude) return;
   const bloqueado = estado.modoImportacion === "link" && !estado.linkImportacion.trim();

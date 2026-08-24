@@ -281,21 +281,39 @@ function extraerMetadatosImportacion(textoCrudo) {
   }
   return { metadatos, csv: lineas.slice(i).join("\n") };
 }
-estado.planImportandoId = null;            // "principal" | "secundario", elegido antes de importar (primer plan)
-estado.csvPendienteDeImportar = null;      // texto CSV en espera mientras se crea el plan
-estado.panelImportacionAbierto = false;   // v5 1.2/1.3: import/actualizar malla, siempre inline
-
-/* ---- B.2: flujo de importación de 3 modos (Link / PDF / Capturas) ----
- * Estas llaves viven en `estado` (no en los datos del usuario) porque son
- * solo del momento de importar, antes de que exista el plan. */
-estado.modoImportacion = null;             // null (sin selección) | "link" | "pdf" | "capturas"
-estado.linkImportacion = "";               // URL pegada en el modo "link"
-// Universidad/tipos_horas elegidos ANTES de que el plan exista (para poder
-// construir el prompt con las columnas de horas correctas). Se resuelven acá
-// primero y se copian al crear el plan real en abrirModalCrearPlan/confirmar.
-estado.universidadImportacion = "TEC";
-estado.tiposHorasImportacion = PRESETS_TIPOS_HORAS.TEC.slice();
-estado.tiposHorasPersonalizadoTexto = "";  // texto crudo cuando universidadImportacion === "Otra"
+/**
+ * FIX (mismo bug de arranque "Cannot access 'estado' before initialization"
+ * ya visto en plan-categorias.js/plan-modo-edicion.js/etc.): estos 8 campos
+ * estaban `estado.X = ...;` a nivel de módulo. Se mueven a una función
+ * lazy, exportada porque plan-importacion-csv.js también lee varios de
+ * estos mismos campos (modoImportacion, linkImportacion) y necesita poder
+ * garantizar que ya existan antes de leerlos, sin depender del orden en
+ * que cada archivo termine de cargar.
+ *
+ * Ojo particular con linkImportacion: a diferencia de los campos que solo
+ * se comparan (=== o truthy, donde `undefined` se comporta igual que
+ * `null`/`false`), este campo se lee con `.trim()` (ver
+ * plan-importacion-csv.js) — ahí sí hace falta que exista como string
+ * real ("") y no como `undefined`, o revienta con "Cannot read
+ * properties of undefined (reading 'trim')". Por eso esta guardia no es
+ * solo cosmética para ese campo en particular.
+ */
+function inicializarEstadoImportacionPlanSiHaceFalta() {
+  if (typeof estado.planImportandoId === "undefined") estado.planImportandoId = null; // "principal" | "secundario", elegido antes de importar (primer plan)
+  if (typeof estado.csvPendienteDeImportar === "undefined") estado.csvPendienteDeImportar = null; // texto CSV en espera mientras se crea el plan
+  if (typeof estado.panelImportacionAbierto === "undefined") estado.panelImportacionAbierto = false; // v5 1.2/1.3: import/actualizar malla, siempre inline
+  // ---- B.2: flujo de importación de 3 modos (Link / PDF / Capturas) ----
+  // Estas llaves viven en `estado` (no en los datos del usuario) porque son
+  // solo del momento de importar, antes de que exista el plan.
+  if (typeof estado.modoImportacion === "undefined") estado.modoImportacion = null; // null (sin selección) | "link" | "pdf" | "capturas"
+  if (typeof estado.linkImportacion === "undefined") estado.linkImportacion = ""; // URL pegada en el modo "link"
+  // Universidad/tipos_horas elegidos ANTES de que el plan exista (para poder
+  // construir el prompt con las columnas de horas correctas). Se resuelven acá
+  // primero y se copian al crear el plan real en abrirModalCrearPlan/confirmar.
+  if (typeof estado.universidadImportacion === "undefined") estado.universidadImportacion = "TEC";
+  if (typeof estado.tiposHorasImportacion === "undefined") estado.tiposHorasImportacion = PRESETS_TIPOS_HORAS.TEC.slice();
+  if (typeof estado.tiposHorasPersonalizadoTexto === "undefined") estado.tiposHorasPersonalizadoTexto = ""; // texto crudo cuando universidadImportacion === "Otra"
+}
 
 /* ===================== B.2 — Panel de importación (solo cuando no hay plan) ===================== */
 
@@ -319,6 +337,7 @@ function construirTextoInstruccionesImportacion() {
 }
 
 function construirPanelImportacion() {
+  inicializarEstadoImportacionPlanSiHaceFalta();
   const cfg = estado.datos.configuracion;
   const sec = document.createElement("section");
   sec.className = "glass-card stack";
@@ -654,6 +673,7 @@ function cerrarModalCapturasPDF() {
 }
 
 function inicializarModalCapturasPDF() {
+  inicializarEstadoImportacionPlanSiHaceFalta();
   document.getElementById("btn-cancelar-capturas-pdf").addEventListener("click", cerrarModalCapturasPDF);
   document.getElementById("modal-capturas-pdf").addEventListener("click", (e) => {
     if (e.target.id === "modal-capturas-pdf") cerrarModalCapturasPDF();
@@ -824,6 +844,7 @@ function cerrarModalInstruccionesImportacion() {
 }
 
 function inicializarModalInstruccionesImportacion() {
+  inicializarEstadoImportacionPlanSiHaceFalta();
   document.getElementById("btn-cancelar-instrucciones-importacion").addEventListener("click", cerrarModalInstruccionesImportacion);
   document.getElementById("modal-instrucciones-importacion").addEventListener("click", (e) => {
     if (e.target.id === "modal-instrucciones-importacion") cerrarModalInstruccionesImportacion();
@@ -855,6 +876,7 @@ export {
   construirEncabezadoCSV,
   construirInputArchivoCSV,
   construirPanelImportacion,
+  inicializarEstadoImportacionPlanSiHaceFalta,
   construirPromptImportacion,
   construirTextoInstruccionesImportacion,
   convertirCapturasAPDF,

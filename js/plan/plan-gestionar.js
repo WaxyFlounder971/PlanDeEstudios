@@ -51,6 +51,7 @@ function recalcularPlanesHardcore(cfg) {
 /* --------------------------- Selector de plan --------------------------- */
 
 function renderizarSelectorPlan() {
+  inicializarEstadoGestionPlanesSiHaceFalta();
   const cont = document.getElementById("selector-plan");
   const planes = estado.datos.planes_estudio;
 
@@ -139,13 +140,23 @@ function renderizarModoHardcore() {
     acompanantes.map((p) => `${p.universidad.siglas} · ${p.nombre_carrera}`).join(", ");
   cont.appendChild(info);
 }
-estado.planGestionImportandoId = null;     // qué fila del panel de gestión tiene el mini-import abierto
-estado.reabrirGestionPlanesTrasCrear = false;
-estado.arrastrandoPlanId = null;          // v5 1.4: drag-and-drop en Gestionar plan
+/**
+ * FIX (mismo bug de arranque "Cannot access 'estado' before initialization"
+ * ya visto en plan-categorias.js/plan-modo-edicion.js/etc.): estas
+ * asignaciones estaban a nivel de módulo. Se mueven a funciones lazy,
+ * llamadas al inicio de cada punto de entrada real de este archivo.
+ */
+function inicializarEstadoGestionPlanesSiHaceFalta() {
+  if (typeof estado.planGestionImportandoId === "undefined") estado.planGestionImportandoId = null; // qué fila del panel de gestión tiene el mini-import abierto
+  if (typeof estado.reabrirGestionPlanesTrasCrear === "undefined") estado.reabrirGestionPlanesTrasCrear = false;
+  if (typeof estado.arrastrandoPlanId === "undefined") estado.arrastrandoPlanId = null; // v5 1.4: drag-and-drop en Gestionar plan
+  if (typeof estado.editarPlanInfoId === "undefined") estado.editarPlanInfoId = null; // qué plan.id está abierto en este modal
+}
 
 /* ===================== B.4 — Gestión de Planes de Estudio (máximo 3) ===================== */
 
 function abrirModalGestionPlanes() {
+  inicializarEstadoGestionPlanesSiHaceFalta();
   // Auto-corrección de datos viejos: si quedó un plan_activo_secundario_id
   // en null (de antes de este rediseño, o por una fusión de sync vieja),
   // se recalcula automáticamente cada vez que se abre este modal, sin que
@@ -363,9 +374,11 @@ function inicializarModalGestionPlanes() {
  * existe — nunca su estructura académica (bloques, tipos de horas, etc.),
  * eso sigue viviendo en Crear Plan / la importación. */
 
-estado.editarPlanInfoId = null; // qué plan.id está abierto en este modal
+// FIX (mismo bug de arranque): `estado.editarPlanInfoId = null;` también
+// estaba a nivel de módulo — se agrega a la guardia lazy de arriba.
 
 function abrirModalEditarPlanInfo(plan) {
+  inicializarEstadoGestionPlanesSiHaceFalta();
   estado.editarPlanInfoId = plan.id;
   document.getElementById("input-editar-plan-nombre-carrera").value = plan.nombre_carrera || "";
   // Universidad — separación nombre_completo/siglas (2026-08-22): 2 campos

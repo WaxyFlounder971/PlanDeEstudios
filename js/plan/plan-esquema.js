@@ -33,8 +33,24 @@ function elegirPlaceholderPlan(universidad) {
 }
 
 const LIMITE_PLANES_ESTUDIO = 3;
-estado.materiaManualPlanId = null;         // a qué plan se le está añadiendo materia manual
-estado.materiaManualEditando = null;       // punto 6 (v1.9.6): { planId, codigoOriginal } si el modal está editando una materia existente, null si es "+ Añadir materia"
+
+/**
+ * FIX (mismo bug de arranque "Cannot access 'estado' before initialization"
+ * ya visto en plan-categorias.js/plan-modo-edicion.js/etc.): estas 2 líneas
+ * estaban `estado.X = null;` a nivel de módulo, ejecutándose apenas se
+ * cargaba este archivo. Con el ciclo de imports real eso podía correr
+ * antes de que `const estado` terminara de inicializarse en storage.js.
+ * Se mueven a una función lazy — no hace falta llamarla en ningún lugar
+ * nuevo: abrirModalMateriaManual() ya escribe ambos campos de forma
+ * incondicional antes de que nada los lea, así que esta guardia es solo
+ * una red de seguridad por si algo llegara a leerlos antes de esa
+ * primera apertura del modal.
+ */
+function inicializarEstadoMateriaManualSiHaceFalta() {
+  if (typeof estado.materiaManualPlanId === "undefined") estado.materiaManualPlanId = null;
+  if (typeof estado.materiaManualEditando === "undefined") estado.materiaManualEditando = null;
+  if (typeof estado.vincularOptativaContexto === "undefined") estado.vincularOptativaContexto = null;
+}
 
 /* ===================== Utilidades de acceso a los planes ===================== */
 
@@ -396,6 +412,7 @@ function inicializarModalCrearPlan() {
  */
 
 function abrirModalMateriaManual(materiaExistente = null, planDeLaMateria = null) {
+  inicializarEstadoMateriaManualSiHaceFalta();
   const editando = !!(materiaExistente && planDeLaMateria);
   const principal = obtenerPlanActivo();
   if (!editando && !principal) return;
@@ -501,6 +518,7 @@ function actualizarFormatoHorasMateriaManual() {
 }
 
 function inicializarModalMateriaManual() {
+  inicializarEstadoMateriaManualSiHaceFalta();
   document.getElementById("btn-cancelar-materia-manual").addEventListener("click", () => {
     document.getElementById("modal-materia-manual").classList.add("oculto");
     estado.materiaManualEditando = null;
@@ -633,7 +651,9 @@ function inicializarModalMateriaManual() {
  * (`optativas_disponibles` o `materias_revisar`, según `origen` — ver
  * abrirModalVincularOptativa) al vincularse, y ya no vuelve a él. */
 
-estado.vincularOptativaContexto = null; // { materiaTemplate, plan, origen } mientras el modal está abierto — origen: "optativa" | "revisar"
+// FIX (mismo bug de arranque): `estado.vincularOptativaContexto = null;`
+// también estaba a nivel de módulo. Se movió a
+// inicializarEstadoMateriaManualSiHaceFalta() más arriba, ver ese comentario.
 
 /** Cupos = materias que YA están dentro de un bloque numerado del plan
  *  (nunca en optativas_disponibles) marcadas como sin_definir=true — un
@@ -679,6 +699,7 @@ function obtenerBloquesEnPlan(plan) {
  * del arreglo correcto (ver quitarDeOrigenEspecialOptativa más abajo).
  */
 function abrirModalVincularOptativa(materiaTemplate, plan, origen = "optativa") {
+  inicializarEstadoMateriaManualSiHaceFalta();
   estado.vincularOptativaContexto = { materiaTemplate, plan, origen };
 
   document.getElementById("nombre-vincular-optativa").textContent = materiaTemplate.nombre;
