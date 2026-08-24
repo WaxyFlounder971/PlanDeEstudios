@@ -40,31 +40,39 @@ function obtenerRangoHorasHorario() {
   return { horaInicio, horaFin };
 }
 
-// Transitorio (no persistido): qué se está mostrando ahora mismo en Horario.
-estado.horarioSemestreId = estado.horarioSemestreId || null;
-estado.horarioNumeroSemana = estado.horarioNumeroSemana || null;
-estado.horarioExpandido = estado.horarioExpandido || false;
-// Horario conjunto: NO es un modal — reemplaza temporalmente el contenido
-// de #horario-grid (ver renderizarHorarioInterno). horarioModoConjunto
-// indica si está activo ahora mismo; horarioConjuntoDiaIdx es el índice
-// (dentro de obtenerDiasVisiblesOrdenados) del día que se está mostrando
-// ahí. null = todavía no se activó esta sesión, se inicializa la primera
-// vez en activarModoConjunto() al día real de hoy.
-estado.horarioModoConjunto = estado.horarioModoConjunto || false;
-estado.horarioConjuntoDiaIdx = estado.horarioConjuntoDiaIdx ?? null;
-// Punto 4 del prompt: además del modo Día (columnas por persona, un día a
-// la vez, ya existente arriba), ahora el horario conjunto también puede
-// mostrar la semana completa. "dia" | "semana" — se resetea a "dia" en
-// cada carga de página a propósito, no se persiste ninguna preferencia.
-estado.horarioConjuntoVista = estado.horarioConjuntoVista || "dia";
-// Nivel de zoom del modo Semana (mismo mecanismo que estado.zoomMapa en el
-// Mapa del Plan de Estudios — pan libre vía scroll nativo + esto solo
-// controla el transform:scale, ver renderizarConjuntoModoSemana).
-estado.horarioConjuntoSemanaZoom = estado.horarioConjuntoSemanaZoom || 1;
-// Punto 2 del prompt: vista individual de UN amigo en pantalla completa.
-// null = no está activa. Mutuamente excluyente con horarioModoConjunto
-// (activar una desactiva la otra, ver activarVistaIndividualAmigo).
-estado.horarioVistaIndividualAmigoFileId = estado.horarioVistaIndividualAmigoFileId ?? null;
+/**
+ * FIX (mismo bug de arranque "Cannot access 'estado' before initialization"
+ * visto en el resto de la app): estas 8 líneas estaban a nivel de módulo.
+ * Se mueven a una guardia lazy, llamada desde CADA punto de entrada
+ * exportado que las toca — no alcanza con ponerla solo en
+ * renderizarHorario/inicializarHorario porque obtenerSemestreHorarioActual,
+ * activarModoConjunto (alias abrirHorarioConjunto) y
+ * activarVistaIndividualAmigo (alias abrirVistaIndividualAmigo) también
+ * están exportadas y otros archivos (agenda.js, agenda-calendario.js,
+ * agenda-materia.js, resumen.js) pueden llamarlas directo, sin pasar
+ * primero por un render de la sección Horario.
+ */
+function inicializarEstadoHorarioSiHaceFalta() {
+  // Qué se está mostrando ahora mismo en Horario.
+  if (typeof estado.horarioSemestreId === "undefined") estado.horarioSemestreId = null;
+  if (typeof estado.horarioNumeroSemana === "undefined") estado.horarioNumeroSemana = null;
+  if (typeof estado.horarioExpandido === "undefined") estado.horarioExpandido = false;
+  // Horario conjunto: NO es un modal — reemplaza temporalmente el contenido
+  // de #horario-grid (ver renderizarHorarioInterno). horarioModoConjunto
+  // indica si está activo ahora mismo; horarioConjuntoDiaIdx es el índice
+  // (dentro de obtenerDiasVisiblesOrdenados) del día que se está mostrando
+  // ahí. null = todavía no se activó esta sesión.
+  if (typeof estado.horarioModoConjunto === "undefined") estado.horarioModoConjunto = false;
+  if (typeof estado.horarioConjuntoDiaIdx === "undefined") estado.horarioConjuntoDiaIdx = null;
+  // "dia" | "semana" — se resetea a "dia" en cada carga de página a
+  // propósito, no se persiste ninguna preferencia.
+  if (typeof estado.horarioConjuntoVista === "undefined") estado.horarioConjuntoVista = "dia";
+  // Nivel de zoom del modo Semana.
+  if (typeof estado.horarioConjuntoSemanaZoom === "undefined") estado.horarioConjuntoSemanaZoom = 1;
+  // Vista individual de UN amigo en pantalla completa. null = no está
+  // activa. Mutuamente excluyente con horarioModoConjunto.
+  if (typeof estado.horarioVistaIndividualAmigoFileId === "undefined") estado.horarioVistaIndividualAmigoFileId = null;
+}
 
 // Cache del último semestre/semana renderizados, para que centrarVistaInicial
 // no tenga que recalcular nada por su cuenta.
@@ -78,6 +86,7 @@ function obtenerPlanPorId(planId) {
 }
 
 function obtenerSemestreHorarioActual() {
+  inicializarEstadoHorarioSiHaceFalta();
   if (estado.horarioSemestreId) {
     const vivo = buscarSemestreVivoPorId(estado.horarioSemestreId);
     if (vivo) return vivo;
@@ -990,6 +999,7 @@ function renderizarHorarioInterno() {
 }
 
 function renderizarHorario() {
+  inicializarEstadoHorarioSiHaceFalta();
   renderizarHorarioInterno();
 }
 
@@ -1039,6 +1049,7 @@ function obtenerDiasModoConjunto() {
 }
 
 function activarModoConjunto() {
+  inicializarEstadoHorarioSiHaceFalta();
   if (estado.horarioModoConjunto) return;
   estado.horarioModoConjunto = true;
 
@@ -1093,6 +1104,7 @@ function desactivarModoConjunto() {
    ========================================================================= */
 
 function activarVistaIndividualAmigo(fileId) {
+  inicializarEstadoHorarioSiHaceFalta();
   const vinculados = estado.datos?.configuracion?.horario_amigos_vinculados || [];
   if (!vinculados.some((a) => a.file_id === fileId)) return;
   if (estado.horarioModoConjunto) desactivarModoConjunto();
@@ -2112,6 +2124,7 @@ function irASemanaSiguiente() {
 }
 
 function inicializarHorario() {
+  inicializarEstadoHorarioSiHaceFalta();
   const btnAnterior = document.getElementById("btn-horario-semestre-anterior");
   const btnSiguiente = document.getElementById("btn-horario-semestre-siguiente");
   const btnAgregar = document.getElementById("btn-horario-agregar");
