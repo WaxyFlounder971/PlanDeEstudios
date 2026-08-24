@@ -11,7 +11,7 @@ import { estado } from "../core/storage.js";
 import { copiarPromptConAviso } from "../core/clipboard.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
-import { abrirConfirmacion, construirSelectorChipsMultiple, mostrarToast } from "../ui/componentes.js";
+import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta } from "../ui/tema.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
 import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
@@ -363,12 +363,16 @@ function dispararSyncConAntirrebote() {
 }
 
 /**
- * Notificaciones — Recordatorios por tipo (2026-08-20): un grupo de chips
- * (ver construirSelectorChipsMultiple en ui/componentes.js) por cada tipo
- * de evento de Agenda (tarea/examen/evento/feriado), en ese orden fijo.
- * Cada grupo lee/escribe estado.datos.configuracion.notificaciones_recordatorios[tipo]
- * (arreglo de ids de OFFSETS_RECORDATORIO_AGENDA, ver core/schema.js).
- * Solo tiene sentido con el switch general de notificaciones push activo —
+ * Notificaciones — Recordatorios por tipo (2026-08-20, migrado a select
+ * único 2026-08-24): un select estilizado (construirSelectCustomAjustes,
+ * mismo patrón que Backup y Rango de horas) por cada tipo de evento de
+ * Agenda (tarea/examen/evento/feriado), en ese orden fijo.
+ * Cada select lee/escribe estado.datos.configuracion.notificaciones_recordatorios[tipo]
+ * — sigue siendo un arreglo de ids de OFFSETS_RECORDATORIO_AGENDA (ver
+ * core/schema.js) para no romper a quien lo consuma (programarRecordatorioPush
+ * en notificaciones-push.js itera ese arreglo), pero ahora el select solo
+ * permite un valor a la vez, así que siempre guarda un arreglo de UN
+ * elemento. Solo tiene sentido con el switch general de notificaciones push activo —
  * si está apagado, el bloque completo queda atenuado y sin interacción
  * (mismo criterio visual que el resto de bloques dependientes de un switch
  * en esta pantalla), pero los valores elegidos NO se pierden: siguen
@@ -411,15 +415,16 @@ function renderizarNotificacionesRecordatorios() {
     titulo.textContent = etiqueta;
     fila.appendChild(titulo);
 
-    const { elemento } = construirSelectorChipsMultiple(
-      OFFSETS_RECORDATORIO_AGENDA,
-      cfg.notificaciones_recordatorios[tipo],
-      (valoresActuales) => {
-        cfg.notificaciones_recordatorios[tipo] = valoresActuales;
+    const valorActual = (cfg.notificaciones_recordatorios[tipo] || [])[0] || "1_dia";
+    const elemento = construirSelectCustomAjustes({
+      opciones: OFFSETS_RECORDATORIO_AGENDA.map((o) => ({ valor: o.id, etiqueta: o.etiqueta })),
+      valorInicial: valorActual,
+      onCambiar: (valor) => {
+        cfg.notificaciones_recordatorios[tipo] = [valor];
         sellarTimestamp(cfg);
         marcarCambioPendiente();
-      }
-    );
+      },
+    });
     fila.appendChild(elemento);
     contenedor.appendChild(fila);
   });
@@ -1365,25 +1370,21 @@ function renderizarSelectorMoneda() {
  * un backup a mano, solo lee/escribe la preferencia y muestra el estado.
  */
 function renderizarSeccionBackupDrive() {
-  const grupoFrecuencia = document.getElementById("pill-frecuencia-backup");
-  if (grupoFrecuencia) {
-    grupoFrecuencia.innerHTML = "";
+  const contFrecuencia = document.getElementById("pill-frecuencia-backup");
+  if (contFrecuencia) {
+    contFrecuencia.innerHTML = "";
     const cfgBackup = estado.datos.configuracion.backup_drive || crearBackupDriveDefault();
-    FRECUENCIAS_BACKUP_DRIVE.forEach((frecuencia) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "pill-item" + (frecuencia.id === (cfgBackup.frecuencia || "semanal") ? " active" : "");
-      btn.textContent = frecuencia.etiqueta;
-      btn.addEventListener("click", () => {
+    contFrecuencia.appendChild(construirSelectCustomAjustes({
+      opciones: FRECUENCIAS_BACKUP_DRIVE.map((f) => ({ valor: f.id, etiqueta: f.etiqueta })),
+      valorInicial: cfgBackup.frecuencia || "semanal",
+      onCambiar: (valor) => {
         estado.datos.configuracion.backup_drive =
           estado.datos.configuracion.backup_drive || crearBackupDriveDefault();
-        estado.datos.configuracion.backup_drive.frecuencia = frecuencia.id;
+        estado.datos.configuracion.backup_drive.frecuencia = valor;
         sellarTimestamp(estado.datos.configuracion);
         marcarCambioPendiente();
-        renderizarSeccionBackupDrive();
-      });
-      grupoFrecuencia.appendChild(btn);
-    });
+      },
+    }));
   }
 
   const elEstado = document.getElementById("texto-ultimo-backup");
@@ -1677,15 +1678,14 @@ function renderizarSeccionLiberarEspacio() {
     etiquetaSelector.textContent = "Por semestre:";
     filaSelector.appendChild(etiquetaSelector);
 
-    const selectSemestre = document.createElement("select");
-    selectSemestre.className = "input";
-    semestres.forEach((semestre) => {
-      const opt = document.createElement("option");
-      opt.value = semestre.id;
-      opt.textContent = semestre.nombre;
-      selectSemestre.appendChild(opt);
-    });
-    filaSelector.appendChild(selectSemestre);
+    const selectSemestre = { value: semestres[0]?.id || null };
+    filaSelector.appendChild(construirSelectCustomAjustes({
+      opciones: semestres.map((s) => ({ valor: s.id, etiqueta: s.nombre })),
+      valorInicial: selectSemestre.value,
+      onCambiar: (valor) => {
+        selectSemestre.value = valor;
+      },
+    }));
 
     const filaBotonesSemestre = document.createElement("div");
     filaBotonesSemestre.style.cssText = "display:flex; gap:8px; flex-wrap:wrap;";
