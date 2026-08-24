@@ -42,9 +42,16 @@ import { mostrarSeccion } from "../main.js";
 
 const MESES_SELECT = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
-// Transitorio (no persistido): si el "modo edición" de Semestres está activo
-// — mismo concepto que estado.modoEdicionPlan en el Plan de Estudios.
-estado.modoEdicionSemestres = false;
+/**
+ * FIX (mismo bug de arranque "Cannot access 'estado' before initialization"
+ * ya visto en el resto de la app): esta línea estaba a nivel de módulo.
+ * Se mueve a una función lazy, llamada desde renderizarSemestres (único
+ * punto de entrada real de este archivo) — mismo concepto que
+ * estado.modoEdicionPlan en el Plan de Estudios.
+ */
+function inicializarEstadoModoEdicionSemestresSiHaceFalta() {
+  if (typeof estado.modoEdicionSemestres === "undefined") estado.modoEdicionSemestres = false;
+}
 
 /* ===================== Helpers de datos ===================== */
 
@@ -892,6 +899,7 @@ function vincularProfesorAMateriaMatriculada(semestreId, mmId, profesorId) {
 /* ===================== Listado ===================== */
 
 function renderizarSemestres(omitirRestauracionScroll = false) {
+  inicializarEstadoModoEdicionSemestresSiHaceFalta();
   const cont = document.getElementById("seccion-semestres");
   if (!cont) return;
   // FIX (2026-08-06 — "cada rato hace un scroll fantasma de la nada"):
