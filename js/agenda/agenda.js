@@ -49,52 +49,32 @@ import { obtenerAdjuntosActivosDe } from "../core/storage-adjuntos.js";
 const ETIQUETA_TIPO = { evento: "Eventos", tarea: "Tareas", examen: "Exámenes" };
 const ORDEN_TIPO = ["examen", "tarea", "evento"];
 
-// Transitorio (no persistido). "lista" | "calendario" — cuál de las 2
-// vistas está activa ahora mismo (ver pills #pills-agenda-vista).
-estado.agendaVistaActiva = estado.agendaVistaActiva || "lista";
-// Semanas de offset respecto a la semana de hoy que Lista (y el submodo
-// "Semanal" del Calendario, que la comparte a propósito) está mostrando.
-estado.agendaOffsetSemana = estado.agendaOffsetSemana || 0;
-// Rediseño núcleo Agenda — punto 10: arrancaba como filtro de SESIÓN puro
-// (nunca se guardaba, se reseteaba a "semanal" en cada carga). Pedido
-// nuevo: debe persistir igual que "Mostrar materias en la agenda" más
-// abajo. Se saca el default eager de acá (mismo motivo que el fix de
-// asegurarFiltroMostrarMateriasInicializado un poco más abajo: en el
-// momento en que este módulo se importa, estado.datos todavía es null, así
-// que leer estado.datos.configuracion acá arriba correría contra null) y
-// se deja en manos de asegurarFiltroModoAgendaInicializado(), invocada de
-// forma perezosa en el primer render real (ver renderizarAgenda).
-// Ronda de ajustes visuales — punto 2 (fix bug): estado de sesión de
-// expandido/colapsado del bloque "‹ N días anteriores" (punto 8). Antes
-// vivía SOLO como clase CSS en el <div> del cuerpo colapsable, armado
-// adentro de construirColapsoDiasPasados — cualquier re-render completo de
-// renderizarAgendaInterno (ej. el que dispara alternarCompletadaEvento al
-// tocar el check circular de una tarea) tira `cont.innerHTML = ""` y
-// reconstruye ese <div> desde cero, que siempre arrancaba con la clase
-// "oculto" puesta — perdiendo el expandido y colapsándose solo. Ahora el
-// estado vive acá (sobrevive a que el DOM se destruya y reconstruya) y
-// construirColapsoDiasPasados solo LEE/actualiza esta bandera.
-estado.agendaDiasPasadosExpandido = estado.agendaDiasPasadosExpandido || false;
-// Punto 4: días adicionales hacia atrás que el control "Ver días
-// anteriores" del subheader de modo Todo va sumando al rango — 0 = rango
-// original (arranca en hoy, sin días previos). Sesión, no persistido, mismo
-// criterio que el resto de estos flags.
-estado.agendaTodoDiasAtras = estado.agendaTodoDiasAtras || 0;
-// Idea "varios semestres a la vez": qué semestres está mostrando Agenda,
-// elegidos a mano desde el modal de tarjetas del header (tocar el nombre
-// del semestre, ver inicializarSelectorSemestreAgenda). `null`/`undefined`
-// = "automático" (el criterio de siempre en obtenerSemestresSeleccionadosAgenda:
-// los semestres "actuales", o el más reciente si no hay ninguno). Un array
-// (incluso vacío) es una selección EXPLÍCITA — la persona ya tocó al menos
-// una tarjeta esta sesión. Sesión, no persistido — cada carga de la app
-// vuelve a arrancar en automático. Cada semestre tiene su agenda separada:
-// los eventos/tareas nuevos quedan etiquetados con el semestre que estaba
-// activo al crearlos (ver guardarEventoAgenda en agenda-modal.js) y
-// construirBloqueDia acá abajo solo muestra los que coinciden con ALGUNO de
-// los semestres mostrados (o que no tienen semestre asignado, por
-// compatibilidad con datos de antes de este cambio).
-estado.agendaSemestresSeleccionados =
-  estado.agendaSemestresSeleccionados !== undefined ? estado.agendaSemestresSeleccionados : null;
+/**
+ * FIX (mismo bug de arranque "Cannot access 'estado' before initialization"
+ * visto en el resto de la app — hermano del bug ya documentado arriba en
+ * asegurarFiltroMostrarMateriasInicializado, pero ahí el problema era leer
+ * `estado.datos` en null; acá es directamente `estado` en su zona muerta
+ * temporal): estas 5 líneas estaban a nivel de módulo. Se mueven a una
+ * función lazy más, con el mismo patrón — llamada desde renderizarAgenda.
+ */
+function asegurarEstadoAgendaBaseInicializado() {
+  // "lista" | "calendario" — cuál de las 2 vistas está activa ahora mismo
+  // (ver pills #pills-agenda-vista).
+  if (typeof estado.agendaVistaActiva === "undefined") estado.agendaVistaActiva = "lista";
+  // Semanas de offset respecto a la semana de hoy que Lista (y el submodo
+  // "Semanal" del Calendario, que la comparte a propósito) está mostrando.
+  if (typeof estado.agendaOffsetSemana === "undefined") estado.agendaOffsetSemana = 0;
+  // Ronda de ajustes visuales — punto 2: estado de sesión de
+  // expandido/colapsado del bloque "‹ N días anteriores" (punto 8).
+  if (typeof estado.agendaDiasPasadosExpandido === "undefined") estado.agendaDiasPasadosExpandido = false;
+  // Punto 4: días adicionales hacia atrás que el control "Ver días
+  // anteriores" del subheader de modo Todo va sumando al rango.
+  if (typeof estado.agendaTodoDiasAtras === "undefined") estado.agendaTodoDiasAtras = 0;
+  // Idea "varios semestres a la vez": qué semestres está mostrando Agenda.
+  // `null`/`undefined` = "automático". Un array (incluso vacío) es una
+  // selección EXPLÍCITA.
+  if (typeof estado.agendaSemestresSeleccionados === "undefined") estado.agendaSemestresSeleccionados = null;
+}
 // Punto 10 + 12: arranca en el valor PERSISTENTE de Ajustes → Agenda
 // (`agenda_mostrar_clases`, punto 12) pero solo para esta sesión: togglear
 // acá (ventana de Filtros) nunca reescribe ese ajuste permanente.
@@ -893,6 +873,7 @@ function renderizarAgendaInterno() {
  * en vez de encadenar más booleanos.
  */
 function renderizarAgenda() {
+  asegurarEstadoAgendaBaseInicializado();
   asegurarFiltroMostrarMateriasInicializado();
   asegurarFiltroModoAgendaInicializado();
   renderizarHeaderAgenda();

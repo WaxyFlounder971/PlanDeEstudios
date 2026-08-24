@@ -31,20 +31,22 @@ import {
 // pide explícitamente Materias -> Tareas -> Exámenes -> Eventos.
 const ORDEN_TIPO_DETALLE = ["tarea", "examen", "evento"];
 
-// Transitorio (no persistido). "semanal" comparte estado.agendaOffsetSemana
-// con la vista Lista a propósito: navegar la semana desde acá deja Lista ya
-// parada en la misma semana si el usuario cambia de pestaña.
-estado.agendaCalendarioModo = estado.agendaCalendarioModo || "mensual";
-estado.agendaCalendarioOffsetMes = estado.agendaCalendarioOffsetMes || 0;
-// Ajustes vista Calendario — punto 4: fecha (ISO) del día actualmente
-// desplegado debajo del grid, o `null` si no hay ninguno abierto. Sesión, no
-// persistido — mismo criterio que el resto de estos flags. Se resetea cada
-// vez que se navega a otro mes/semana, se cambia de modo (mensual/semanal) o
-// se vuelve a "Hoy" (ver construirSubheaderCalendario más abajo), porque un
-// día abierto deja de tener sentido una vez que ya no está a la vista en el
-// grid.
-estado.agendaCalendarioFechaSeleccionada =
-  estado.agendaCalendarioFechaSeleccionada !== undefined ? estado.agendaCalendarioFechaSeleccionada : null;
+/**
+ * FIX (mismo bug de arranque "Cannot access 'estado' before initialization"
+ * visto en el resto de la app): estas 3 líneas estaban a nivel de módulo.
+ * Se mueven a una guardia lazy, llamada desde renderizarCalendarioAgenda
+ * (único punto de entrada exportado de este archivo).
+ */
+function inicializarEstadoCalendarioAgendaSiHaceFalta() {
+  // "semanal" comparte estado.agendaOffsetSemana con la vista Lista a
+  // propósito: navegar la semana desde acá deja Lista ya parada en la
+  // misma semana si el usuario cambia de pestaña.
+  if (typeof estado.agendaCalendarioModo === "undefined") estado.agendaCalendarioModo = "mensual";
+  if (typeof estado.agendaCalendarioOffsetMes === "undefined") estado.agendaCalendarioOffsetMes = 0;
+  // Fecha (ISO) del día actualmente desplegado debajo del grid, o `null`
+  // si no hay ninguno abierto.
+  if (typeof estado.agendaCalendarioFechaSeleccionada === "undefined") estado.agendaCalendarioFechaSeleccionada = null;
+}
 
 function obtenerFechaBaseMes(offsetMeses) {
   const hoy = new Date();
@@ -420,6 +422,7 @@ function construirSubheaderCalendario() {
 }
 
 function renderizarCalendarioAgenda() {
+  inicializarEstadoCalendarioAgendaSiHaceFalta();
   const cont = document.getElementById("agenda-vista-calendario");
   if (!cont) return;
   cont.innerHTML = "";

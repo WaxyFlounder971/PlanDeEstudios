@@ -60,11 +60,19 @@ import { formatearHoraAmPm, obtenerMateriasVinculablesAgenda } from "./agenda-ut
 import { obtenerAdjuntosActivosDe } from "../core/storage-adjuntos.js";
 import { abrirAdjunto, abrirMenuAdjuntos } from "../ui/adjuntos-ui.js";
 
-// Sesión, no persistido — mismo criterio que el resto de flags de Agenda
-// (ver agenda.js/agenda-calendario.js): qué materia_matriculada_id está
-// elegida ahora mismo en este tab. `null` = ninguna todavía.
-estado.agendaMateriaSeleccionadaId =
-  estado.agendaMateriaSeleccionadaId !== undefined ? estado.agendaMateriaSeleccionadaId : null;
+/**
+ * FIX (mismo bug de arranque "Cannot access 'estado' before initialization"
+ * visto en el resto de la app): esta línea estaba a nivel de módulo. Se
+ * mueve a una guardia lazy, llamada desde renderizarMateriaAgenda (único
+ * punto de entrada real de este archivo — inicializarMateriaAgenda es
+ * un no-op).
+ */
+function inicializarEstadoMateriaAgendaSiHaceFalta() {
+  // Sesión, no persistido — mismo criterio que el resto de flags de Agenda
+  // (ver agenda.js/agenda-calendario.js): qué materia_matriculada_id está
+  // elegida ahora mismo en este tab. `null` = ninguna todavía.
+  if (typeof estado.agendaMateriaSeleccionadaId === "undefined") estado.agendaMateriaSeleccionadaId = null;
+}
 
 // Mismo mapeo de código de día ("L"|"K"|"M"|"J"|"V"|"S"|"D") a etiqueta
 // legible que ya usa el resto de la app (ver DIAS_SEMANA_CONFIG en
@@ -693,6 +701,7 @@ function construirContenidoMateria(mmVinculable, materias, onCambiar) {
 }
 
 function renderizarMateriaAgenda() {
+  inicializarEstadoMateriaAgendaSiHaceFalta();
   const cont = document.getElementById("agenda-vista-materia");
   if (!cont) return;
   cont.innerHTML = "";
