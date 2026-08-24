@@ -13,10 +13,22 @@ import { construirGraficasResumenFinanzas } from "./finanzas-graficas.js";
 import { renderizarPestanaBeneficios, renderizarPestanaGastosU } from "./finanzas-gastos.js";
 import { renderizarPestanaSemestresFinanzas } from "./finanzas-semestres.js";
 
-// Estado de UI puro (no viaja a Drive, no necesita sellarTimestamp) — cuál
-// de las 4 vistas está activa ahora mismo. Se inicializa una sola vez, al
-// cargar el módulo, igual que estado.categoriaEditandoId en plan-categorias.js.
-if (estado.finanzasVistaActiva === undefined) estado.finanzasVistaActiva = "resumen";
+/**
+ * FIX (mismo bug de arranque "Cannot access 'estado' before initialization"
+ * visto en el resto de la app): este archivo YA tenía un guard
+ * (`if (estado.finanzasVistaActiva === undefined) ...`) para no pisar el
+ * valor en cada carga del módulo — pero ese guard seguía viviendo a nivel
+ * de módulo, así que la LECTURA de `estado.finanzasVistaActiva` (la
+ * condición del if) igual se ejecutaba apenas se cargaba el archivo. Evitar
+ * la reasignación no evita el problema real: cualquier acceso a `estado.X`
+ * — sea lectura o escritura — alcanza para el ReferenceError si `estado`
+ * sigue en su zona muerta temporal en ese punto del grafo de imports. Se
+ * mueve a una función lazy de verdad, llamada desde los 2 puntos de
+ * entrada exportados que la usan.
+ */
+function inicializarEstadoFinanzasSiHaceFalta() {
+  if (typeof estado.finanzasVistaActiva === "undefined") estado.finanzasVistaActiva = "resumen";
+}
 
 // v2.8.8: "Gastos estudiantiles" -> "Beneficios" (pedido explícito). El id
 // interno ("gastos-estudiantiles") se deja igual a propósito — cambiarlo
@@ -168,6 +180,7 @@ function construirResumenFinanzas() {
 
 /** Repinta solo el contenido de la pestaña activa, sin reconstruir el tab bar. */
 function renderizarContenidoFinanzasActivo() {
+  inicializarEstadoFinanzasSiHaceFalta();
   const contenido = document.getElementById("finanzas-contenido");
   if (!contenido) return;
   contenido.innerHTML = "";
@@ -190,6 +203,7 @@ function renderizarContenidoFinanzasActivo() {
  * sola si #seccion-finanzas todavía no está en el DOM.
  */
 function renderizarFinanzas() {
+  inicializarEstadoFinanzasSiHaceFalta();
   const cont = document.getElementById("seccion-finanzas");
   if (!cont) return;
   cont.innerHTML = "";
