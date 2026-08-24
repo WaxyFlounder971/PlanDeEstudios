@@ -4,9 +4,11 @@
    plan/universidad, formato de texto.
    ========================================================================= */
 
-import { ESCALAS_DISPONIBLES, FRECUENCIAS_BACKUP_DRIVE, MONEDAS_DISPONIBLES, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, crearBackupDriveDefault, migrarDatosAntiguos, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
+import { inicializarBotonGoogleTasksBuscar } from "../agenda/agenda-google-tasks-ui.js";
+import { ESCALAS_DISPONIBLES, FRECUENCIAS_BACKUP_DRIVE, MONEDAS_DISPONIBLES, OFFSETS_RECORDATORIO_AGENDA, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, crearBackupDriveDefault, migrarDatosAntiguos, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
 import { actualizarIndicadorSync, forzarBackupManual, marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
+import { copiarPromptConAviso } from "../core/clipboard.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
@@ -28,10 +30,280 @@ import {
   activarNotificacionesPush,
   desactivarNotificacionesPush,
   notificacionesPushActivas,
+  sincronizarResumenDiario,
   soportaNotificacionesPush,
 } from "../core/notificaciones-push.js";
 
 /* ------------------------------ Ajustes ------------------------------ */
+
+/**
+ * Asistente IA (Gemini), revisado 2026-08-22: clave de API propia del
+ * usuario (nunca compartida ni tocada por Wagner) guardada en
+ * estado.datos.configuracion.gemini_api_key — mismo nivel de confianza y
+ * mismo mecanismo de sync que cualquier otro campo de configuracion
+ * (sellarTimestamp + marcarCambioPendiente). Al guardar/borrar, llama a
+ * window.aplicarVisibilidadBotonAsistente() (expuesta por main.js, mismo
+ * patrón sin-import-circular que aplicarVisibilidadNavegacion) para
+ * recalcular el gate de existencia del botón "Asistente" del nav.
+ *
+ * Ese gate es solo de EXISTENCIA, no de preferencia: "asistente" es una
+ * sección togglable/reordenable más (ver SECCIONES_TOGGLEABLES arriba), así
+ * que el usuario puede ocultarla o moverla desde Ajustes > Navegación con
+ * total libertad, igual que Agenda/Horario/etc. Sin clave guardada, esa
+ * sección directamente no existe todavía (ni el botón del nav ni su fila en
+ * Ajustes > Navegación aparecen), pero su preferencia guardada de
+ * orden/visibilidad no se toca: en cuanto vuelva a haber clave, reaparece
+ * tal como estaba.
+ *
+ * Se llama una sola vez desde renderizarAjustes() (idempotente: usa
+ * .onclick, no addEventListener, así que puede re-llamarse en cada render
+ * de Ajustes sin duplicar handlers) — mismo patrón que el switch de
+ * notificaciones push más abajo.
+ */
+function inicializarAsistenteAjustes() {
+  const inputKey = document.getElementById("input-gemini-key");
+  const errorKey = document.getElementById("error-gemini-key");
+  const bloqueVacio = document.getElementById("bloque-gemini-key-vacio");
+  const bloqueGuardada = document.getElementById("bloque-gemini-key-guardada");
+  const textoGuardada = document.getElementById("texto-gemini-key-guardada");
+  if (!inputKey || !bloqueVacio || !bloqueGuardada) return;
+
+  const claveActual = estado.datos.configuracion.gemini_api_key || "";
+
+  if (claveActual) {
+    bloqueVacio.classList.add("oculto");
+    bloqueGuardada.classList.remove("oculto");
+    // Máscara: solo se muestran los últimos 4 caracteres — suficiente para
+    // que el usuario reconozca "sí, esta es la mía" sin exponer la clave
+    // completa en pantalla (ej. alguien mirando de reojo/screenshare).
+    const ultimos4 = claveActual.slice(-4);
+    textoGuardada.textContent = "•".repeat(8) + ultimos4;
+  } else {
+    bloqueVacio.classList.remove("oculto");
+    bloqueGuardada.classList.add("oculto");
+    inputKey.value = "";
+  }
+  errorKey.classList.add("oculto");
+
+  document.getElementById("btn-guardar-gemini-key").onclick = () => {
+    const valor = inputKey.value.trim();
+    if (!valor) {
+      errorKey.textContent = "Pegá una clave antes de guardar.";
+      errorKey.classList.remove("oculto");
+      return;
+    }
+    estado.datos.configuracion.gemini_api_key = valor;
+    sellarTimestamp(estado.datos.configuracion);
+    marcarCambioPendiente();
+    window.aplicarVisibilidadBotonAsistente?.();
+    mostrarToast("✓ Clave de Gemini guardada");
+    renderizarAjustes();
+  };
+
+  document.getElementById("btn-reemplazar-gemini-key").onclick = () => {
+    // No se prellena la clave vieja en el input: "Reemplazar" es un alta
+    // nueva a propósito, exige pegar la clave completa de nuevo — evita
+    // guardar sin querer una clave a medio editar si el usuario solo quería
+    // ver qué había.
+    bloqueGuardada.classList.add("oculto");
+    bloqueVacio.classList.remove("oculto");
+    inputKey.value = "";
+    inputKey.focus();
+  };
+
+  document.getElementById("btn-borrar-gemini-key").onclick = () => {
+    abrirConfirmacion({
+      titulo: "¿Borrar la clave de Gemini?",
+      mensaje: "El botón \"Asistente\" va a desaparecer del menú hasta que guardes una clave nueva.",
+      textoConfirmar: "Borrar",
+      claseConfirmar: "btn-danger",
+      onConfirmar: () => {
+        delete estado.datos.configuracion.gemini_api_key;
+        sellarTimestamp(estado.datos.configuracion);
+        marcarCambioPendiente();
+        window.aplicarVisibilidadBotonAsistente?.();
+        mostrarToast("Clave de Gemini borrada");
+        renderizarAjustes();
+      },
+    });
+  };
+}
+
+/**
+ * Captura por voz (Atajo de Siri), 2026-08-23: switch opt-in en Ajustes
+ * (default apagado — ver crearDatosUsuarioNuevo/migrarDatosAntiguos en
+ * schema.js, configuracion.bandeja_voz). Al activar por PRIMERA vez
+ * (id_bandeja todavía null) se genera un UUID local con
+ * crypto.randomUUID() — mismo mecanismo que obtenerDispositivoId
+ * (schema.js), pero este SÍ se sella y sincroniza por Drive como
+ * cualquier otro campo de configuracion: a diferencia del id de
+ * dispositivo (puramente local, distinto por aparato), todos los
+ * dispositivos del usuario deben terminar viendo el MISMO id_bandeja, o
+ * el Atajo de un iPhone nuevo no encontraría el buzón de siempre.
+ *
+ * id_bandeja se conserva aunque se apague el switch después — desactivar
+ * solo oculta el bloque de "Copiar" en la UI, no borra la dirección, así
+ * reactivar más adelante reusa el mismo buzón en vez de generar uno nuevo
+ * y dejar huérfano lo que hubiera quedado pendiente con el viejo.
+ *
+ * Usa el mismo antirrebote que el resto de switches simples de esta
+ * pantalla (dispararSyncConAntirrebote) — el toggle visual y la
+ * generación del UUID (si aplica) son instantáneos, solo el
+ * sellado+sync se retrasa 400ms por si el usuario prende/apaga varias
+ * veces seguidas.
+ */
+function inicializarBandejaVozAjustes() {
+  const chk = document.getElementById("switch-bandeja-voz");
+  const bloqueId = document.getElementById("bloque-bandeja-id");
+  const textoId = document.getElementById("texto-bandeja-id");
+  const btnCopiar = document.getElementById("btn-copiar-bandeja-id");
+  if (!chk || !bloqueId || !textoId || !btnCopiar) return;
+
+  // Relleno defensivo en memoria (mismo criterio que backup_drive más
+  // abajo) — no debería hacer falta si migrarDatosAntiguos ya corrió,
+  // pero evita un throw si por lo que sea llegara sin el campo.
+  const cfg = estado.datos.configuracion.bandeja_voz || { activo: false, id_bandeja: null };
+  estado.datos.configuracion.bandeja_voz = cfg;
+
+  chk.checked = Boolean(cfg.activo);
+  bloqueId.classList.toggle("oculto", !cfg.activo);
+  textoId.textContent = cfg.id_bandeja || "";
+
+  chk.onchange = () => {
+    cfg.activo = chk.checked;
+    if (cfg.activo && !cfg.id_bandeja) {
+      cfg.id_bandeja = crypto.randomUUID();
+    }
+    bloqueId.classList.toggle("oculto", !cfg.activo);
+    textoId.textContent = cfg.id_bandeja || "";
+    dispararSyncConAntirrebote();
+  };
+
+  btnCopiar.onclick = () => {
+    if (cfg.id_bandeja) copiarPromptConAviso(cfg.id_bandeja);
+  };
+}
+
+/**
+ * Google Tasks (2026-08-23): switch opt-in + selector de lista. A
+ * diferencia del resto de switches simples de esta pantalla, activar este
+ * SÍ requiere una acción de red bloqueante (pedir el permiso de Google y
+ * traer las listas) antes de poder dejar el switch prendido de verdad — si
+ * cualquiera de los dos pasos falla, el switch se revierte y se muestra el
+ * motivo en `error-google-tasks`, nunca se deja "activado" a medias sin
+ * lista_id.
+ */
+function inicializarGoogleTasksAjustes() {
+  const chk = document.getElementById("switch-google-tasks");
+  const bloqueLista = document.getElementById("bloque-google-tasks-lista");
+  const contSelect = document.getElementById("select-google-tasks-lista");
+  const error = document.getElementById("error-google-tasks");
+  if (!chk || !bloqueLista || !contSelect || !error) return;
+
+  const cfg = estado.datos.configuracion.google_tasks_sync || { activo: false, lista_id: null, ids_procesados: [] };
+  estado.datos.configuracion.google_tasks_sync = cfg;
+
+  chk.checked = Boolean(cfg.activo);
+  bloqueLista.classList.toggle("oculto", !cfg.activo);
+  error.classList.add("oculto");
+
+  // FIX (2026-08-23 — "se ve default"): esto era un <select> nativo, por
+  // eso no tomaba los colores del tema a diferencia del resto de
+  // selectores de Ajustes (ver Rango de horas de Horario, unas funciones
+  // más abajo). Ahora arma el mismo componente construirSelectCustomAjustes
+  // que ya usa ese selector — mismo look, mismos colores de acento.
+  let listasCacheadas = [];
+
+  function pintarSelectorListas() {
+    contSelect.innerHTML = "";
+    if (listasCacheadas.length === 0) return;
+    const valorInicial = listasCacheadas.some((l) => l.id === cfg.lista_id) ? cfg.lista_id : listasCacheadas[0].id;
+    cfg.lista_id = valorInicial;
+    contSelect.appendChild(construirSelectCustomAjustes({
+      opciones: listasCacheadas.map((l) => ({ valor: l.id, etiqueta: l.title })),
+      valorInicial,
+      onCambiar: (valor) => {
+        cfg.lista_id = valor;
+        sellarTimestamp(estado.datos.configuracion);
+        marcarCambioPendiente();
+      },
+    }));
+  }
+
+  async function poblarSelectorListas(tokenParaListar) {
+    const { listarListasGoogleTasks } = await import("../agenda/agenda-google-tasks.js");
+    listasCacheadas = await listarListasGoogleTasks(tokenParaListar);
+    // Si ya había una lista elegida de antes (ej. se apagó y se vuelve a
+    // prender el switch) y sigue existiendo, se re-selecciona — evita que
+    // reactivar el switch resetee la elección a la primera lista sin razón.
+    // (La resolución real de cuál valor queda seleccionado vive en
+    // pintarSelectorListas, para no duplicarla acá.)
+    pintarSelectorListas();
+    return listasCacheadas;
+  }
+
+  chk.onchange = async () => {
+    error.classList.add("oculto");
+
+    if (!chk.checked) {
+      cfg.activo = false;
+      bloqueLista.classList.toggle("oculto", true);
+      sellarTimestamp(estado.datos.configuracion);
+      marcarCambioPendiente();
+      return;
+    }
+
+    chk.disabled = true;
+    try {
+      const { pedirAccessTokenGoogleTasks } = await import("../core/auth.js");
+      // interactivo:true — primera vez que se pide ESTE permiso puntual
+      // (aunque el usuario ya haya iniciado sesión con Drive antes), ver
+      // comentario completo en pedirAccessTokenGoogleTasks (auth.js).
+      const token = await pedirAccessTokenGoogleTasks({ interactivo: true });
+      if (!token) {
+        throw new Error("No se otorgó el permiso de Google Tasks.");
+      }
+
+      const listas = await poblarSelectorListas(token);
+      if (listas.length === 0) {
+        throw new Error("Tu cuenta de Google no tiene ninguna lista de Tasks todavía.");
+      }
+
+      cfg.activo = true;
+      bloqueLista.classList.toggle("oculto", false);
+      sellarTimestamp(estado.datos.configuracion);
+      marcarCambioPendiente();
+      mostrarToast("Google Tasks conectado");
+    } catch (e) {
+      console.warn("No se pudo activar Google Tasks:", e);
+      chk.checked = false;
+      cfg.activo = false;
+      bloqueLista.classList.toggle("oculto", true);
+      error.textContent = e.message || "No se pudo conectar con Google Tasks. Intentá de nuevo.";
+      error.classList.remove("oculto");
+    } finally {
+      chk.disabled = false;
+    }
+  };
+
+  // Si el switch ya estaba activo (Ajustes se re-renderiza, o se entra con
+  // la sincronización ya prendida de antes) y todavía no se pobló el
+  // selector en ESTA carga, se trae la lista de nuevo con un token
+  // silencioso — sin esto, el selector quedaría vacío hasta la próxima vez
+  // que el usuario tocara el switch a mano.
+  if (cfg.activo && listasCacheadas.length === 0) {
+    (async () => {
+      try {
+        const { pedirAccessTokenGoogleTasks } = await import("../core/auth.js");
+        const token = await pedirAccessTokenGoogleTasks({ interactivo: false });
+        if (token) await poblarSelectorListas(token);
+      } catch (e) {
+        console.warn("No se pudo refrescar la lista de Google Tasks en Ajustes (no crítico):", e);
+      }
+    })();
+  }
+  inicializarBotonGoogleTasksBuscar();
+}
 
 /**
  * v1.14.1: aplica (o quita) el atributo data-rendimiento en <html>, mismo
@@ -41,6 +313,174 @@ import {
  */
 function aplicarModoRendimiento(activo) {
   document.documentElement.setAttribute("data-rendimiento", activo ? "reducido" : "normal");
+}
+
+/**
+ * Punto 3 (ronda de ajustes visuales, 2026-08-23): filtro anti-spam para
+ * "Modo fancy" y "Modo claro/oscuro" — los 2 switches que el reporte marca
+ * como "presionarlos muchas veces seguidas no debe romper el estado
+ * guardado ni la sincronización".
+ *
+ * Causa real del bug (confirmada en core/storage-sync.js):
+ * marcarCambioPendiente() dispara intentarSincronizar() de inmediato, sin
+ * esperar a que un intento anterior termine — no existe ningún mutex ni
+ * debounce ahí. Tocar un switch varias veces seguidas dispara varias
+ * rondas de GET+fusión+PUT contra Drive en paralelo, que pueden pisarse
+ * entre sí o dejar guardado un estado intermedio en vez del final (esto
+ * es lo que reportaron como "el modo claro no sincronizó al menos una
+ * vez entre sesiones").
+ *
+ * El fix vive ACÁ, no dentro de marcarCambioPendiente(): esa función la
+ * usa el resto de la app (decenas de campos de configuración, tareas,
+ * eventos, etc.) y volverla debounced de forma global cambiaría el
+ * comportamiento de guardado en todos lados, con mucho más riesgo. Estos
+ * 2 switches son los únicos que el pedido señala como "muchas veces
+ * seguidas" (se prenden/apagan a repetición con más facilidad que
+ * escribir texto o tocar un botón normal).
+ *
+ * El toggle visual del checkbox y el efecto inmediato (aplicarModoRendimiento
+ * / aplicarPaleta) NUNCA se debouncean — el usuario espera ver el cambio al
+ * toque. Solo se retrasa la parte que dispara red (sellarTimestamp +
+ * marcarCambioPendiente): varias pulsaciones seguidas colapsan en un solo
+ * sello de tiempo + una sola sincronización, ya con el ÚLTIMO estado real
+ * (que es siempre lo que interesa guardar, no los intermedios).
+ *
+ * Un solo temporizador compartido entre ambos switches alcanza: si se
+ * tocan los 2 en sucesión rápida, también deben colapsar en una sola
+ * sincronización final (sellarTimestamp() y marcarCambioPendiente() no
+ * reciben ningún dato del switch puntual, siempre leen/marcan el estado
+ * completo ya actualizado en memoria).
+ */
+const RETARDO_ANTIRREBOTE_SWITCH_MS = 400;
+let temporizadorAntirreboteSwitch = null;
+function dispararSyncConAntirrebote() {
+  clearTimeout(temporizadorAntirreboteSwitch);
+  temporizadorAntirreboteSwitch = setTimeout(() => {
+    temporizadorAntirreboteSwitch = null;
+    sellarTimestamp(estado.datos.configuracion);
+    marcarCambioPendiente();
+  }, RETARDO_ANTIRREBOTE_SWITCH_MS);
+}
+
+/**
+ * Notificaciones — Recordatorios por tipo (2026-08-20, migrado a select
+ * único 2026-08-24): un select estilizado (construirSelectCustomAjustes,
+ * mismo patrón que Backup y Rango de horas) por cada tipo de evento de
+ * Agenda (tarea/examen/evento/feriado), en ese orden fijo.
+ * Cada select lee/escribe estado.datos.configuracion.notificaciones_recordatorios[tipo]
+ * — un solo id de OFFSETS_RECORDATORIO_AGENDA (ver core/schema.js), como
+ * string plano; la migración a este formato (desde el arreglo viejo de
+ * cuando el selector era multi-chip) la hace migrarDatosAntiguos en
+ * schema.js. Solo tiene sentido con el switch general de notificaciones push activo —
+ * si está apagado, el bloque completo queda atenuado y sin interacción
+ * (mismo criterio visual que el resto de bloques dependientes de un switch
+ * en esta pantalla), pero los valores elegidos NO se pierden: siguen
+ * guardados, listos para cuando el usuario vuelva a prender el switch
+ * general.
+ *
+ * Reincorporada 2026-08-23 tras perderse (junto con
+ * renderizarNotificacionesResumenDiario) al fusionar esta ronda de fixes
+ * con la rama que traía el filtro anti-spam de arriba — ver
+ * MAPA_FUNCIONES.md para el detalle de por qué se había perdido antes.
+ */
+const ETIQUETAS_TIPOS_RECORDATORIO_AGENDA = [
+  { tipo: "tarea", etiqueta: "Tareas" },
+  { tipo: "examen", etiqueta: "Exámenes" },
+  { tipo: "evento", etiqueta: "Eventos" },
+  { tipo: "feriado", etiqueta: "Feriados" },
+];
+
+function renderizarNotificacionesRecordatorios() {
+  const contenedor = document.getElementById("seccion-notificaciones-recordatorios");
+  if (!contenedor) return;
+
+  const cfg = estado.datos.configuracion;
+  if (!cfg.notificaciones_recordatorios || typeof cfg.notificaciones_recordatorios !== "object") {
+    cfg.notificaciones_recordatorios = { tarea: "1_dia", examen: "1_dia", evento: "1_dia", feriado: "1_dia" };
+  }
+
+  const habilitado = notificacionesPushActivas();
+  contenedor.innerHTML = "";
+  contenedor.style.opacity = habilitado ? "" : "0.5";
+  contenedor.style.pointerEvents = habilitado ? "" : "none";
+
+  ETIQUETAS_TIPOS_RECORDATORIO_AGENDA.forEach(({ tipo, etiqueta }) => {
+    const fila = document.createElement("div");
+    fila.className = "stack";
+    fila.style.gap = "6px";
+
+    const titulo = document.createElement("span");
+    titulo.className = "form-label";
+    titulo.textContent = etiqueta;
+    fila.appendChild(titulo);
+
+    const valorActual = cfg.notificaciones_recordatorios[tipo] || "1_dia";
+    const elemento = construirSelectCustomAjustes({
+      opciones: OFFSETS_RECORDATORIO_AGENDA.map((o) => ({ valor: o.id, etiqueta: o.etiqueta })),
+      valorInicial: valorActual,
+      onCambiar: (valor) => {
+        cfg.notificaciones_recordatorios[tipo] = valor;
+        sellarTimestamp(cfg);
+        marcarCambioPendiente();
+      },
+    });
+    fila.appendChild(elemento);
+    contenedor.appendChild(fila);
+  });
+}
+
+/**
+ * Notificaciones — Resumen diario (2026-08-20): switch + selector de hora
+ * (mismo patrón visual que construirSelectCustomAjustes, ver Rango de
+ * horas del Horario más arriba) para
+ * estado.datos.configuracion.notificaciones_resumen_diario ({ activo,
+ * hora }). Cada cambio (switch u hora) llama a sincronizarResumenDiario()
+ * en core/notificaciones-push.js, que es quien realmente avisa al Worker —
+ * acá solo se guarda localmente y se dispara esa sincronización, siguiendo
+ * el mismo criterio best-effort del resto de notificaciones push (si el
+ * Worker no responde, no se revierte nada en la UI).
+ */
+function renderizarNotificacionesResumenDiario() {
+  const chkResumen = document.getElementById("switch-notificaciones-resumen-diario");
+  const bloqueHora = document.getElementById("bloque-notificaciones-resumen-hora");
+  const contHora = document.getElementById("select-notificaciones-resumen-hora");
+  if (!chkResumen || !bloqueHora || !contHora) return;
+
+  const cfg = estado.datos.configuracion;
+  if (!cfg.notificaciones_resumen_diario || typeof cfg.notificaciones_resumen_diario !== "object") {
+    cfg.notificaciones_resumen_diario = { activo: false, hora: "20:00" };
+  }
+  const cfgResumen = cfg.notificaciones_resumen_diario;
+
+  const habilitado = notificacionesPushActivas();
+  chkResumen.disabled = !habilitado;
+  chkResumen.checked = !!cfgResumen.activo;
+  bloqueHora.classList.toggle("oculto", !cfgResumen.activo);
+  bloqueHora.style.opacity = habilitado ? "" : "0.5";
+  bloqueHora.style.pointerEvents = habilitado ? "" : "none";
+
+  chkResumen.onchange = () => {
+    cfgResumen.activo = chkResumen.checked;
+    sellarTimestamp(cfg);
+    marcarCambioPendiente();
+    bloqueHora.classList.toggle("oculto", !cfgResumen.activo);
+    sincronizarResumenDiario();
+  };
+
+  contHora.innerHTML = "";
+  contHora.appendChild(construirSelectCustomAjustes({
+    opciones: Array.from({ length: 24 }, (_, h) => ({
+      valor: `${String(h).padStart(2, "0")}:00`,
+      etiqueta: etiquetaHora12(h),
+    })),
+    valorInicial: cfgResumen.hora || "20:00",
+    onCambiar: (valor) => {
+      cfgResumen.hora = valor;
+      sellarTimestamp(cfg);
+      marcarCambioPendiente();
+      sincronizarResumenDiario();
+    },
+  }));
 }
 
 /**
@@ -99,16 +539,38 @@ function renderizarConfigDiasHorario() {
     });
   }
 
-  // Días visibles (switch por día). Guardia: no se permite dejar 0 días
-  // visibles, mismo criterio que "nunca quedarse sin nav visible" en main.js.
-  const listaVisibles = document.getElementById("lista-dias-visibles");
-  if (listaVisibles) {
-    listaVisibles.innerHTML = "";
+  // Días de la semana — unificado (2026-08-23, pedido explícito): antes
+  // eran 2 listas separadas ("Días visibles" con switch, "Nombres
+  // personalizados" con input) que repetían el nombre del día 2 veces.
+  // Ahora es una sola fila por día con 3 columnas (Día | Palabra |
+  // Visibilidad) — el día queda anclado a la izquierda, palabra y
+  // visibilidad a la derecha, en el mismo orden que sus encabezados
+  // (#lista-dias-horario / .tabla-dias-horario-header en index.html
+  // comparten el mismo grid-template-columns, ver design-system.css).
+  const listaDias = document.getElementById("lista-dias-horario");
+  if (listaDias) {
+    listaDias.innerHTML = "";
     DIAS_SEMANA_CONFIG.forEach((dia) => {
       const fila = document.createElement("div");
-      fila.className = "row-between";
+      fila.className = "tabla-dias-horario-fila";
+
       const span = document.createElement("span");
       span.textContent = dia.etiqueta;
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "form-input";
+      input.maxLength = 3;
+      input.placeholder = dia.abrevDefault;
+      input.value = cfg.nombres_dias_personalizados[dia.id] || "";
+      input.addEventListener("change", () => {
+        const valor = input.value.trim().slice(0, 3);
+        if (valor) cfg.nombres_dias_personalizados[dia.id] = valor;
+        else delete cfg.nombres_dias_personalizados[dia.id];
+        sellarTimestamp(cfg);
+        marcarCambioPendiente();
+      });
+
       const label = document.createElement("label");
       label.className = "switch switch-tema";
       const chk = document.createElement("input");
@@ -128,38 +590,11 @@ function renderizarConfigDiasHorario() {
       };
       label.appendChild(chk);
       label.insertAdjacentHTML("beforeend", '<span class="track"><span class="thumb"></span></span>');
-      fila.appendChild(span);
-      fila.appendChild(label);
-      listaVisibles.appendChild(fila);
-    });
-  }
 
-  // Nombres personalizados (máx 3 caracteres, opcional por día)
-  const listaNombres = document.getElementById("lista-nombres-dias");
-  if (listaNombres) {
-    listaNombres.innerHTML = "";
-    DIAS_SEMANA_CONFIG.forEach((dia) => {
-      const fila = document.createElement("div");
-      fila.className = "row-between";
-      const span = document.createElement("span");
-      span.textContent = dia.etiqueta;
-      const input = document.createElement("input");
-      input.type = "text";
-      input.className = "form-input";
-      input.style.maxWidth = "70px";
-      input.maxLength = 3;
-      input.placeholder = dia.abrevDefault;
-      input.value = cfg.nombres_dias_personalizados[dia.id] || "";
-      input.addEventListener("change", () => {
-        const valor = input.value.trim().slice(0, 3);
-        if (valor) cfg.nombres_dias_personalizados[dia.id] = valor;
-        else delete cfg.nombres_dias_personalizados[dia.id];
-        sellarTimestamp(cfg);
-        marcarCambioPendiente();
-      });
       fila.appendChild(span);
       fila.appendChild(input);
-      listaNombres.appendChild(fila);
+      fila.appendChild(label);
+      listaDias.appendChild(fila);
     });
   }
 }
@@ -324,6 +759,7 @@ const SECCIONES_TOGGLEABLES = [
   { id: "comunidad", etiqueta: "Comunidad", icono: "👥" },
   { id: "finanzas", etiqueta: "Finanzas", icono: "💰" },
   { id: "plan-estudios", etiqueta: "Plan de Estudios", icono: "📚" },
+  { id: "asistente", etiqueta: "Asistente", icono: "✨" },
 ];
 
 function renderizarNavegacionOculta() {
@@ -341,9 +777,19 @@ function renderizarNavegacionOculta() {
     ? window.obtenerOrdenNavegacion()
     : SECCIONES_TOGGLEABLES.map((s) => s.id);
 
+  const hayClaveGemini = Boolean(estado.datos.configuracion.gemini_api_key);
+
   orden.forEach((id) => {
     const seccion = SECCIONES_TOGGLEABLES.find((s) => s.id === id);
     if (!seccion) return; // id huérfano (ej. una sección que ya no existe) — se ignora
+
+    // Asistente IA (Gemini): gate de EXISTENCIA, no de preferencia — sin
+    // clave guardada la sección no existe todavía, así que no tiene
+    // sentido ofrecer un switch para ocultar/mostrar algo que no está
+    // disponible. Su preferencia guardada en navegacion_oculta/
+    // navegacion_orden no se toca ni se pierde: en cuanto haya clave,
+    // reaparece acá con el mismo estado de switch y posición que tenía.
+    if (id === "asistente" && !hayClaveGemini) return;
 
     const fila = document.createElement("div");
     fila.className = "fila-nav-orden row-between";
@@ -400,6 +846,11 @@ function renderizarNavegacionOculta() {
 
   habilitarArrastreNavegacion(cont);
 }
+// Se expone en window (mismo motivo de siempre: config-ajustes.js ya es
+// importado POR main.js) para que aplicarVisibilidadBotonAsistente() en
+// main.js pueda refrescar esta lista en vivo cuando se guarda/borra la
+// clave de Gemini estando parado en otra pantalla de Ajustes.
+window.renderizarNavegacionOculta = renderizarNavegacionOculta;
 
 /**
  * Bug — duplicado en drag-and-drop de navegación (2026-08-07): reordena
@@ -573,6 +1024,9 @@ function inicializarAccordionAjustes() {
 
 function renderizarAjustes() {
   inicializarAccordionAjustes();
+  inicializarAsistenteAjustes();
+  inicializarBandejaVozAjustes();
+  inicializarGoogleTasksAjustes();
 
   // Paletas — cada cuadro muestra su propio color real (punto 3)
   const grid = document.getElementById("grid-paletas");
@@ -637,15 +1091,29 @@ function renderizarAjustes() {
     grid.appendChild(btnEditar);
   }
 
-  // v1.14.1: Modo de rendimiento (reduce blur/sombras/animaciones)
+  // v1.14.1: Modo fancy (id del elemento sigue siendo "switch-rendimiento"
+  // por compatibilidad, pero el switch en pantalla se llama "Modo fancy" —
+  // el dato de fondo (modo_rendimiento) representa lo CONTRARIO de lo que
+  // dice la etiqueta: modo_rendimiento=true significa rendimiento activo,
+  // o sea fancy APAGADO. Fix v1.16.1 (2026-08-23): antes el checkbox
+  // reflejaba modo_rendimiento tal cual, así que el switch se veía
+  // "encendido" (ON) cuando en realidad lo fancy estaba apagado — quedaba
+  // invertido contra su propia etiqueta. Se invierte acá nomás (checked =
+  // fancy activo = !modo_rendimiento) para no tocar el nombre del campo en
+  // el modelo de datos ni la migración que ya corrió para las cuentas
+  // existentes (ver rendimiento_default_v2_aplicado en core/schema.js).
+  // Reaplicado 2026-08-23 sobre la rama del antirrebote — se había perdido
+  // en esa rama porque partió de una copia anterior al fix v1.16.1.
   const chkRendimiento = document.getElementById("switch-rendimiento");
   if (chkRendimiento) {
-    chkRendimiento.checked = !!estado.datos.configuracion.modo_rendimiento;
+    chkRendimiento.checked = !estado.datos.configuracion.modo_rendimiento;
     chkRendimiento.onchange = () => {
-      estado.datos.configuracion.modo_rendimiento = chkRendimiento.checked;
-      aplicarModoRendimiento(chkRendimiento.checked);
-      sellarTimestamp(estado.datos.configuracion);
-      marcarCambioPendiente();
+      // Estado en memoria + efecto visual: instantáneo, sin antirrebote (ver
+      // dispararSyncConAntirrebote más arriba para el porqué).
+      const fancyActivo = chkRendimiento.checked;
+      estado.datos.configuracion.modo_rendimiento = !fancyActivo;
+      aplicarModoRendimiento(!fancyActivo);
+      dispararSyncConAntirrebote();
     };
   }
 
@@ -678,8 +1146,15 @@ function renderizarAjustes() {
         await desactivarNotificacionesPush();
       }
       chkNotificaciones.disabled = false;
+      // El switch general habilita/deshabilita los bloques de abajo — se
+      // vuelven a pintar acá para que reflejen el nuevo estado al toque,
+      // sin esperar a que el usuario navegue fuera y vuelva a Ajustes.
+      renderizarNotificacionesRecordatorios();
+      renderizarNotificacionesResumenDiario();
     };
   }
+  renderizarNotificacionesRecordatorios();
+  renderizarNotificacionesResumenDiario();
 
   // Ronda de ajustes visuales — punto 3: los 2 switches de Agenda que iban
   // acá ("Mostrar días sin eventos ni tareas" y "Mostrar clases ese día en
@@ -693,6 +1168,8 @@ function renderizarAjustes() {
   const chkModo = document.getElementById("switch-modo");
   chkModo.checked = estado.datos.configuracion.modo === "light";
   chkModo.onchange = () => {
+    // Mismo criterio que switch-rendimiento: estado en memoria + repintado de
+    // paleta instantáneos, solo el sello+sync va con antirrebote.
     const nuevoModo = chkModo.checked ? "light" : "dark";
     estado.datos.configuracion.modo = nuevoModo;
     aplicarPaleta(
@@ -700,8 +1177,7 @@ function renderizarAjustes() {
       nuevoModo,
       estado.datos.configuracion.paleta === "personalizada" ? personalizada.colores : undefined
     );
-    sellarTimestamp(estado.datos.configuracion);
-    marcarCambioPendiente();
+    dispararSyncConAntirrebote();
   };
 
   // Ajustes por Universidad (2026-08-08): el selector de escala global que
@@ -893,25 +1369,21 @@ function renderizarSelectorMoneda() {
  * un backup a mano, solo lee/escribe la preferencia y muestra el estado.
  */
 function renderizarSeccionBackupDrive() {
-  const grupoFrecuencia = document.getElementById("pill-frecuencia-backup");
-  if (grupoFrecuencia) {
-    grupoFrecuencia.innerHTML = "";
+  const contFrecuencia = document.getElementById("pill-frecuencia-backup");
+  if (contFrecuencia) {
+    contFrecuencia.innerHTML = "";
     const cfgBackup = estado.datos.configuracion.backup_drive || crearBackupDriveDefault();
-    FRECUENCIAS_BACKUP_DRIVE.forEach((frecuencia) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "pill-item" + (frecuencia.id === (cfgBackup.frecuencia || "semanal") ? " active" : "");
-      btn.textContent = frecuencia.etiqueta;
-      btn.addEventListener("click", () => {
+    contFrecuencia.appendChild(construirSelectCustomAjustes({
+      opciones: FRECUENCIAS_BACKUP_DRIVE.map((f) => ({ valor: f.id, etiqueta: f.etiqueta })),
+      valorInicial: cfgBackup.frecuencia || "semanal",
+      onCambiar: (valor) => {
         estado.datos.configuracion.backup_drive =
           estado.datos.configuracion.backup_drive || crearBackupDriveDefault();
-        estado.datos.configuracion.backup_drive.frecuencia = frecuencia.id;
+        estado.datos.configuracion.backup_drive.frecuencia = valor;
         sellarTimestamp(estado.datos.configuracion);
         marcarCambioPendiente();
-        renderizarSeccionBackupDrive();
-      });
-      grupoFrecuencia.appendChild(btn);
-    });
+      },
+    }));
   }
 
   const elEstado = document.getElementById("texto-ultimo-backup");
@@ -1205,15 +1677,14 @@ function renderizarSeccionLiberarEspacio() {
     etiquetaSelector.textContent = "Por semestre:";
     filaSelector.appendChild(etiquetaSelector);
 
-    const selectSemestre = document.createElement("select");
-    selectSemestre.className = "input";
-    semestres.forEach((semestre) => {
-      const opt = document.createElement("option");
-      opt.value = semestre.id;
-      opt.textContent = semestre.nombre;
-      selectSemestre.appendChild(opt);
-    });
-    filaSelector.appendChild(selectSemestre);
+    const selectSemestre = { value: semestres[0]?.id || null };
+    filaSelector.appendChild(construirSelectCustomAjustes({
+      opciones: semestres.map((s) => ({ valor: s.id, etiqueta: s.nombre })),
+      valorInicial: selectSemestre.value,
+      onCambiar: (valor) => {
+        selectSemestre.value = valor;
+      },
+    }));
 
     const filaBotonesSemestre = document.createElement("div");
     filaBotonesSemestre.style.cssText = "display:flex; gap:8px; flex-wrap:wrap;";
@@ -1424,7 +1895,7 @@ function renderizarNotasAprobacion() {
 
     const titulo = document.createElement("p");
     titulo.style.cssText = "margin:0 0 8px; font-weight:700; font-size:0.9rem;";
-    titulo.textContent = `${plan.universidad} · ${aplicarFormatoTexto(plan.nombre_carrera)}`;
+    titulo.textContent = `${plan.universidad.siglas} · ${aplicarFormatoTexto(plan.nombre_carrera)}`;
     tarjeta.appendChild(titulo);
 
     // Escala activa de ESTE plan — se resuelve una sola vez acá arriba
