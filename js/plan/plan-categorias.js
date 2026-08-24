@@ -11,24 +11,40 @@ import { abrirConfirmacion } from "../ui/componentes.js";
 import { obtenerPlanActivo } from "./plan-esquema.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
 
-estado.categoriaEditandoId = null;
-estado.planCategoriaEditandoId = null;     // a qué plan pertenece la categoría que se edita
-estado.busquedaCategoriaMaterias = "";
-estado.ordenCategoriaMaterias = "bloque";
-// FIX (v1.9.6, bug "el buscador borra la selección"): fuente de verdad de
-// qué materias están marcadas MIENTRAS se arma la asignación — antes el
-// checked de cada checkbox se derivaba en cada re-render de
-// `materia.categoria_id === categoria.id`, pero categoria_id recién se
-// actualiza al confirmar. Como el buscador (y el cambio de orden) volvían a
-// dibujar la lista completa desde cero en cada tecla, cualquier marca hecha
-// en la sesión actual (todavía no guardada) se perdía. Ahora el checked se
-// lee de este Set, que persiste durante todo el flujo del modal sin
-// importar cuántas veces se re-renderice la lista.
-estado.materiasCategoriaSeleccionadas = new Set();
-
 /* ===================== Categorías: crear / filtrar / editar ===================== */
 
+/**
+ * FIX (bug de arranque "Cannot access 'estado' before initialization"):
+ * estos defaults antes se asignaban a nivel de módulo (fuera de cualquier
+ * función), es decir, se ejecutaban apenas se cargaba este archivo. Con un
+ * ciclo de imports (storage.js -> storage-sync.js -> ... -> este archivo),
+ * ese código podía correr a mitad de la evaluación de storage.js, antes de
+ * que `const estado` terminara de inicializarse ahí — de ahí el crash.
+ * Moverlos acá adentro, y llamarlos al principio de construirPanelCategorias
+ * (el punto de entrada real, que solo se ejecuta cuando el usuario abre
+ * Plan de Estudios, con todos los módulos ya cargados), es seguro y no
+ * cambia el comportamiento: son los mismos defaults que igual se pisan en
+ * abrirModalCategoria()/abrirModalCategoriaMaterias() antes de usarse.
+ */
+function inicializarEstadoCategoriasSiHaceFalta() {
+  if (estado.categoriaEditandoId === undefined) estado.categoriaEditandoId = null;
+  if (estado.planCategoriaEditandoId === undefined) estado.planCategoriaEditandoId = null;
+  if (estado.busquedaCategoriaMaterias === undefined) estado.busquedaCategoriaMaterias = "";
+  if (estado.ordenCategoriaMaterias === undefined) estado.ordenCategoriaMaterias = "bloque";
+  // FIX (v1.9.6, bug "el buscador borra la selección"): fuente de verdad de
+  // qué materias están marcadas MIENTRAS se arma la asignación — antes el
+  // checked de cada checkbox se derivaba en cada re-render de
+  // `materia.categoria_id === categoria.id`, pero categoria_id recién se
+  // actualiza al confirmar. Como el buscador (y el cambio de orden) volvían a
+  // dibujar la lista completa desde cero en cada tecla, cualquier marca hecha
+  // en la sesión actual (todavía no guardada) se perdía. Ahora el checked se
+  // lee de este Set, que persiste durante todo el flujo del modal sin
+  // importar cuántas veces se re-renderice la lista.
+  if (estado.materiasCategoriaSeleccionadas === undefined) estado.materiasCategoriaSeleccionadas = new Set();
+}
+
 function construirPanelCategorias() {
+  inicializarEstadoCategoriasSiHaceFalta();
   const principal = obtenerPlanActivo();
   const sec = document.createElement("section");
   sec.className = "glass-card stack";
