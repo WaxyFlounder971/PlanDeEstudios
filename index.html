@@ -250,6 +250,34 @@
           </div>
         </section>
 
+        <!-- Google Tasks (2026-08-23): switch opt-in + selector de lista +
+             botón de sincronización manual. Ver inicializarGoogleTasksAjustes
+             en config-ajustes.js. -->
+        <section class="glass-card stack ajuste-seccion colapsada">
+          <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Google Tasks</h2><span class="ajuste-seccion-chevron">▾</span></button>
+          <div class="ajuste-seccion-cuerpo">
+
+          <p class="muted">Importá tareas que crees en Google Tasks (por ejemplo, dictándoselas al Asistente de Google) a una lista específica.</p>
+
+          <div class="row-between">
+            <span>Sincronizar con Google Tasks</span>
+            <label class="switch switch-tema">
+              <input type="checkbox" id="switch-google-tasks">
+              <span class="track"><span class="thumb"></span></span>
+            </label>
+          </div>
+
+          <p id="error-google-tasks" class="muted oculto" style="color:var(--color-danger);"></p>
+
+          <div id="bloque-google-tasks-lista" class="stack oculto">
+            <span class="form-label">Lista de Google Tasks a sincronizar</span>
+            <select id="select-google-tasks-lista" class="form-input"></select>
+            <button id="btn-google-tasks-buscar" class="btn btn-secondary" type="button">Buscar tareas nuevas</button>
+          </div>
+
+          </div>
+        </section>
+
         <!-- Captura por voz (Atajo de Siri), 2026-08-23: opt-in para poder
              agregar tareas/exámenes/eventos hablándole a Siri incluso con
              la app cerrada. Al activar por primera vez se genera un UUID
