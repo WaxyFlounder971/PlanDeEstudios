@@ -57,8 +57,24 @@ function registrarAbrirTarjetaProfesorFlotante(fn) {
   _abrirTarjetaProfesorFlotante = fn;
 }
 
-estado.semestresExpandidos = estado.semestresExpandidos || new Map();
-estado.criteriosExpandidos = estado.criteriosExpandidos || new Map();
+/**
+ * FIX (mismo bug de arranque "Cannot access 'estado' before initialization"
+ * ya visto en todo plan/*.js): estas 2 líneas estaban a nivel de módulo —
+ * y acá era aún más frágil que en los otros archivos, porque no solo
+ * ESCRIBÍAN `estado.X`, sino que además LEÍAN `estado.X` en el mismo
+ * statement (`estado.X = estado.X || new Map()`) — cualquiera de las dos
+ * operaciones alcanza para disparar el ReferenceError si `estado` todavía
+ * está en su TDZ (zona muerta temporal) en ese punto del grafo de imports.
+ * Se mueven a una función lazy, llamada desde los 2 puntos de entrada
+ * reales de este archivo (construirTarjetaSemestre y construirSeccionNotas
+ * — esta última se reusa suelta desde agenda-materia.js, sin pasar por
+ * construirTarjetaSemestre, así que necesita su propia guardia también).
+ */
+function inicializarEstadoTarjetasSemestresSiHaceFalta() {
+  if (!estado.semestresExpandidos) estado.semestresExpandidos = new Map();
+  if (!estado.criteriosExpandidos) estado.criteriosExpandidos = new Map();
+  if (typeof estado.vistaNotaPuntajeAngosta === "undefined") estado.vistaNotaPuntajeAngosta = "nota";
+}
 
 /**
  * Fase 8 — Drag and drop (2026-08-04, spec completa): NO es un botón fijo
@@ -316,7 +332,9 @@ function wirearArrastreAsignaciones(listaAsignaciones, mm, materia, plan, onCamb
 // el default pedido. Es un solo toggle global (no por criterio/materia) a
 // propósito: si cada fila tuviera su propio estado, alternar una tarjeta no
 // cambiaría las demás y la vista quedaría inconsistente entre materias.
-estado.vistaNotaPuntajeAngosta = estado.vistaNotaPuntajeAngosta || "nota";
+// FIX (mismo bug de arranque): `estado.vistaNotaPuntajeAngosta = ...` también
+// estaba a nivel de módulo — se agregó a inicializarEstadoTarjetasSemestresSiHaceFalta()
+// más arriba, ver ese comentario.
 
 // Mismo umbral en los 3 lugares de este archivo que necesitan detectar
 // "pantalla angosta" (pills Nota/Puntaje, "Puntos totales:"→"Pts:", "X% de
@@ -2704,6 +2722,7 @@ function construirEncabezadoNotaFinal(mm, materia, plan, notaFinalVigente, escal
 }
 
 function construirSeccionNotas(mm, materia, plan, onCambiar) {
+  inicializarEstadoTarjetasSemestresSiHaceFalta();
   const escalaActiva = obtenerEscalaNotasMateria(materia, plan, estado.datos.configuracion);
   // FIX sync (2026-08-02): antes esto llamaba a recalcularNotaFinal(), que
   // MUTABA mm.nota_final en cada render sin sellar timestamp — eso es lo
@@ -3400,6 +3419,7 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
 }
 
 function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEditar, onBorrar, anidada = false) {
+  inicializarEstadoTarjetasSemestresSiHaceFalta();
   _ultimoOnCambiarParaResize = onCambiar;
   const expandido = estado.semestresExpandidos.get(semestre.id) || false;
 
