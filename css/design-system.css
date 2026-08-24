@@ -3941,6 +3941,50 @@ html.exportar-tema-default[data-mode="dark"] {
 .horario-selector-hora .select-custom-boton { text-align: center; padding-left: 8px; padding-right: 8px; }
 .horario-selector-hora-separador { font-weight: 700; color: var(--text-muted); }
 
+/* Ajustes → Horario → "Días de la semana" (2026-08-23): antes eran 2 listas
+   separadas ("Días visibles" con switch, "Nombres personalizados" con
+   input), cada una repitiendo el nombre del día — se unifican acá en una
+   sola tabla de 3 columnas (Día | Palabra | Visibilidad). El día queda
+   anclado a la izquierda (1fr, crece); Palabra y Visibilidad quedan
+   ancladas a la derecha con ancho fijo, alineadas bajo su propio
+   encabezado — la fila y el encabezado comparten el mismo
+   grid-template-columns a propósito, para que las columnas calcen. */
+.tabla-dias-horario-fila {
+  display: grid;
+  grid-template-columns: 1fr 64px 52px;
+  align-items: center;
+  gap: 10px;
+}
+.tabla-dias-horario-header {
+  padding: 0 0 2px;
+}
+.tabla-dias-horario-header span {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  text-align: right;
+}
+.tabla-dias-horario-header span:first-child { text-align: left; }
+.tabla-dias-horario-fila:not(.tabla-dias-horario-header) span { font-size: 0.9rem; }
+.tabla-dias-horario-fila .form-input {
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+.tabla-dias-horario-fila .switch { justify-self: end; }
+
+/* Ajustes → Horario → "Horario compartido", ahora anidado dentro de la
+   misma tarjeta de Horario en vez de ser su propio glass-card (2026-08-23,
+   pedido explícito de unificar) — el borde superior marca la separación
+   visual que antes daba el espacio entre 2 cards distintas. */
+.ajuste-subseccion {
+  border-top: 1px solid var(--border-glass);
+  padding-top: 14px;
+}
+
 /* Botón "Entrar a clase" dentro de una tarjeta de bloque del grid. */
 .horario-btn-entrar-clase {
   display: inline-block;
