@@ -414,6 +414,7 @@ const OFFSETS_RECORDATORIO_AGENDA = [
   { id: "1_hora", etiqueta: "1 hora antes", minutosAntes: 60 },
   { id: "1_dia", etiqueta: "1 día antes", minutosAntes: 60 * 24 },
   { id: "3_dias", etiqueta: "3 días antes", minutosAntes: 60 * 24 * 3 },
+  { id: "1_semana", etiqueta: "1 semana antes", minutosAntes: 60 * 24 * 7 },
 ];
 
 /** Separador del id compuesto "eventoId::offset" que persiste el Worker —
