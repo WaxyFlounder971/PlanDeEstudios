@@ -4,6 +4,7 @@
    plan/universidad, formato de texto.
    ========================================================================= */
 
+import { inicializarBotonGoogleTasksBuscar } from "../agenda/agenda-google-tasks-ui.js";
 import { ESCALAS_DISPONIBLES, FRECUENCIAS_BACKUP_DRIVE, MONEDAS_DISPONIBLES, OFFSETS_RECORDATORIO_AGENDA, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, crearBackupDriveDefault, migrarDatosAntiguos, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
 import { actualizarIndicadorSync, forzarBackupManual, marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
@@ -293,6 +294,7 @@ function inicializarGoogleTasksAjustes() {
       }
     })();
   }
+  inicializarBotonGoogleTasksBuscar();
 }
 
 /**
@@ -1017,6 +1019,7 @@ function renderizarAjustes() {
   inicializarAccordionAjustes();
   inicializarAsistenteAjustes();
   inicializarBandejaVozAjustes();
+  inicializarGoogleTasksAjustes();
 
   // Paletas — cada cuadro muestra su propio color real (punto 3)
   const grid = document.getElementById("grid-paletas");
