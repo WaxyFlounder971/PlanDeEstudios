@@ -14,21 +14,38 @@ import { abrirModalGestionPlanes, recalcularPlanesHardcore, renderizarSelectorPl
 import { alternarModoEdicionPlan } from "./plan-modo-edicion.js";
 import { construirMiniPanelImportacion, obtenerPalabraOptativa, serializarRequisitoArbol } from "./plan-importacion-csv.js";
 import { construirEncabezadoCSV, construirPanelImportacion } from "./plan-importacion.js";
-import { construirTarjetaVista } from "./plan-mapa.js";
+import { construirTarjetaVista, inicializarEstadoMapaSiHaceFalta } from "./plan-mapa.js";
 import { construirContenidoBloques } from "./plan-vista-lista-tarjetas.js";
 
 /* Estado propio de esta sección, colgado del `estado` global de app.js. */
-estado.ordenPlanEstudios = "bloque";       // "bloque" | "categoria"
-estado.filtroCategoriaId = null;           // categoría por la que se está filtrando la vista
-estado.busquedaPlanEstudios = "";          // texto del buscador general
-estado.materiasExpandidas = new Map();     // codigo -> bool (override manual del expand/collapse)
-estado.bloquesColapsados = new Set();      // claves de bloque/categoría colapsadas
-estado.estadisticasAbiertas = false;      // v5 #3: colapsada por defecto
-estado.mostrarPanelImportacionNuevoPlan = false;  // v1.10.1 (punto 1): fuerza el panel de importación al agregar un plan adicional
+/**
+ * FIX (bug de arranque "Cannot access 'estado' before initialization",
+ * mismo patrón que plan-categorias.js): estos defaults estaban a nivel de
+ * módulo. Se llama al principio de renderizarPlanEstudios() — el
+ * orquestador real de toda la sección Plan de Estudios — ANTES de leer
+ * nada de `estado`, ya que esta función es la primera en tocar varios de
+ * estos campos (y a veces la ÚNICA, si el plan no tiene materias todavía).
+ * También inicializa acá los defaults propios de plan-mapa.js
+ * (inicializarEstadoMapaSiHaceFalta), porque esta función lee
+ * estado.vistaPlanEstudios directo (líneas de abajo) sin pasar siempre por
+ * construirTarjetaVista() de ese archivo — ver el comentario junto a esa
+ * función en plan-mapa.js.
+ */
+function inicializarEstadoVistaListaSiHaceFalta() {
+  if (estado.ordenPlanEstudios === undefined) estado.ordenPlanEstudios = "bloque"; // "bloque" | "categoria"
+  if (estado.filtroCategoriaId === undefined) estado.filtroCategoriaId = null; // categoría por la que se está filtrando la vista
+  if (estado.busquedaPlanEstudios === undefined) estado.busquedaPlanEstudios = ""; // texto del buscador general
+  if (estado.materiasExpandidas === undefined) estado.materiasExpandidas = new Map(); // codigo -> bool (override manual del expand/collapse)
+  if (estado.bloquesColapsados === undefined) estado.bloquesColapsados = new Set(); // claves de bloque/categoría colapsadas
+  if (estado.estadisticasAbiertas === undefined) estado.estadisticasAbiertas = false; // v5 #3: colapsada por defecto
+  if (estado.mostrarPanelImportacionNuevoPlan === undefined) estado.mostrarPanelImportacionNuevoPlan = false; // v1.10.1 (punto 1): fuerza el panel de importación al agregar un plan adicional
+  inicializarEstadoMapaSiHaceFalta();
+}
 
 /* ===================== Render principal de la sección ===================== */
 
 function renderizarPlanEstudios() {
+  inicializarEstadoVistaListaSiHaceFalta();
   const cont = document.getElementById("seccion-plan-estudios");
   if (!cont) return;
 

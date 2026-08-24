@@ -12,9 +12,20 @@ import { abrirModalCrearPlan } from "./plan-esquema.js";
 import { abrirModalCapturasPDF, abrirModalInstruccionesImportacion, construirInputArchivoCSV, construirPromptImportacion, extraerMetadatosImportacion } from "./plan-importacion.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
 
-estado.modoActualizarMalla = "agregar";   // C.5 (v9): "agregar" | "reemplazar" — al reimportar CSV sobre un plan existente
-
 /* ===================== Parser de CSV ===================== */
+
+/**
+ * FIX (bug de arranque "Cannot access 'estado' before initialization",
+ * mismo patrón que plan-categorias.js/plan-modo-edicion.js): este default
+ * estaba a nivel de módulo. Se mueve a una función lazy, llamada al
+ * principio de construirMiniPanelImportacion (el único punto de entrada
+ * real que lee/dibuja este campo) — a diferencia de modoEdicionPlan, acá
+ * SÍ importa el valor por defecto real ("agregar", no solo "algo falsy"),
+ * porque decide qué pill aparece marcada como activa.
+ */
+function inicializarEstadoModoActualizarMallaSiHaceFalta() {
+  if (estado.modoActualizarMalla === undefined) estado.modoActualizarMalla = "agregar";
+}
 
 /** Parser simple de una línea CSV que sí respeta comillas dobles (por si algún nombre trae comas). */
 
@@ -670,6 +681,7 @@ function mostrarErroresImportacion(lista) {
  */
 
 function construirMiniPanelImportacion(plan) {
+  inicializarEstadoModoActualizarMallaSiHaceFalta();
   const sec = document.createElement("section");
   sec.className = "glass-card stack";
 

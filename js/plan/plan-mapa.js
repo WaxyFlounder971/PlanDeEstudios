@@ -53,41 +53,55 @@ const SVG_GIRAR =
   '<path d="M21 12a9 9 0 0 1-15.3 6.5L3 16"/><path d="M3 21v-5h5"/></svg>';
 
 /* ---- B.3 (v8/v9): Vista de Mapa interactivo del Plan de Estudios ---- */
-estado.vistaPlanEstudios = "lista";        // "lista" | "mapa"
-estado.colorMapaPor = "simbologia";        // "simbologia" (por Estado) | "categoria"
-estado.zoomMapa = 1;                       // 0.5 a 2
-estado.materiaSeleccionadaMapa = null;     // código de la materia con camino de desbloqueo dibujado
-estado._refsMapaActual = null;             // referencias DOM del mapa ya renderizado (para zoom/recolorear sin re-render completo)
-// V10: cómo se dibuja el camino de desbloqueo — "libre" (curva Bézier, como
-// siempre) o "recta" (tramos ortogonales rectos a través del gap entre bloques).
-estado.trazadoMapaPor = "libre";           // "libre" | "recta"
-// V1.10: tamaño horizontal de cada tarjeta del mapa.
-estado.tamanioTarjetaMapa = "normal";      // "compacto" | "normal" | "extendido"
-// V1.10: tema SOLO del interior de las tarjetas (independiente del tema
-// general de la app). null = todavía no se ha elegido, se usa el modo
-// actual de la app como punto de partida.
-estado.temaTarjetaMapa = null;             // "clara" | "oscura" | null
-// V1.x: pantalla completa nativa (Fullscreen API) sobre la tarjeta "Vista"
-// completa (no solo el mapa) — así los controles de color/tamaño/tema/zoom
-// siguen accesibles adentro. Se sincroniza con el estado REAL del navegador
-// vía el listener de "fullscreenchange" de abajo (única fuente de verdad:
-// nunca se asume `true` solo porque se llamó a requestFullscreen, porque esa
-// llamada es async y puede fallar o ser cancelada por el usuario con Esc).
-estado.mapaPantallaCompleta = false;
-// V1.x (rediseño 2 — sin duplicado): un solo bloque de controles, siempre
-// el mismo nodo del DOM, tanto adentro como afuera de pantalla completa.
-// La fila 4 (⛶ / ⌃⌄ / 🔄 / Zoom) queda SIEMPRE visible pase lo que pase.
-// Lo único que se puede ocultar son las filas 2 y 3 (colorear, trazado,
-// tamaño, tema) — y solo mediante el chevrón ⌃/⌄ de la fila 4, que a su vez
-// SOLO existe/funciona mientras estado.mapaPantallaCompleta es true (pedido
-// explícito original: "el exterior no debe tener eso"). Este flag es el
-// estado de visibilidad de esas filas 2/3.
-// V1.x (rediseño 3): dentro de pantalla completa, "Descargar" ya NO queda
-// fijo/siempre visible — se ata a este mismo flag, así que solo aparece
-// mientras las filas 2/3 están extendidas (chevrón ⌃). Afuera de pantalla
-// completa este flag nunca se activa, así que Descargar sigue siempre
-// visible ahí (sin cambios).
-estado.controlesMapaOcultosFullscreen = false;
+/**
+ * FIX (bug de arranque "Cannot access 'estado' before initialization",
+ * mismo patrón que plan-categorias.js): estos 9 defaults estaban a nivel de
+ * módulo. Se agrupan en esta función lazy, EXPORTADA, porque a diferencia
+ * de plan-categorias.js el primer lugar que los LEE no es siempre una
+ * función de este mismo archivo — plan-vista-lista.js (el orquestador real
+ * de toda la sección) lee `estado.vistaPlanEstudios` directo, ANTES incluso
+ * de llamar a construirTarjetaVista() de acá (y a veces sin llamarla en
+ * absoluto, si el plan no tiene materias todavía). Por eso
+ * renderizarPlanEstudios() en plan-vista-lista.js llama a esta función al
+ * principio de todo, antes de leer nada — ver ese archivo.
+ */
+function inicializarEstadoMapaSiHaceFalta() {
+  if (estado.vistaPlanEstudios === undefined) estado.vistaPlanEstudios = "lista"; // "lista" | "mapa"
+  if (estado.colorMapaPor === undefined) estado.colorMapaPor = "simbologia"; // "simbologia" (por Estado) | "categoria"
+  if (estado.zoomMapa === undefined) estado.zoomMapa = 1; // 0.5 a 2
+  if (estado.materiaSeleccionadaMapa === undefined) estado.materiaSeleccionadaMapa = null; // código de la materia con camino de desbloqueo dibujado
+  if (estado._refsMapaActual === undefined) estado._refsMapaActual = null; // referencias DOM del mapa ya renderizado (para zoom/recolorear sin re-render completo)
+  // V10: cómo se dibuja el camino de desbloqueo — "libre" (curva Bézier, como
+  // siempre) o "recta" (tramos ortogonales rectos a través del gap entre bloques).
+  if (estado.trazadoMapaPor === undefined) estado.trazadoMapaPor = "libre"; // "libre" | "recta"
+  // V1.10: tamaño horizontal de cada tarjeta del mapa.
+  if (estado.tamanioTarjetaMapa === undefined) estado.tamanioTarjetaMapa = "normal"; // "compacto" | "normal" | "extendido"
+  // V1.10: tema SOLO del interior de las tarjetas (independiente del tema
+  // general de la app). null = todavía no se ha elegido, se usa el modo
+  // actual de la app como punto de partida.
+  if (estado.temaTarjetaMapa === undefined) estado.temaTarjetaMapa = null; // "clara" | "oscura" | null
+  // V1.x: pantalla completa nativa (Fullscreen API) sobre la tarjeta "Vista"
+  // completa (no solo el mapa) — así los controles de color/tamaño/tema/zoom
+  // siguen accesibles adentro. Se sincroniza con el estado REAL del navegador
+  // vía el listener de "fullscreenchange" de abajo (única fuente de verdad:
+  // nunca se asume `true` solo porque se llamó a requestFullscreen, porque esa
+  // llamada es async y puede fallar o ser cancelada por el usuario con Esc).
+  if (estado.mapaPantallaCompleta === undefined) estado.mapaPantallaCompleta = false;
+  // V1.x (rediseño 2 — sin duplicado): un solo bloque de controles, siempre
+  // el mismo nodo del DOM, tanto adentro como afuera de pantalla completa.
+  // La fila 4 (⛶ / ⌃⌄ / 🔄 / Zoom) queda SIEMPRE visible pase lo que pase.
+  // Lo único que se puede ocultar son las filas 2 y 3 (colorear, trazado,
+  // tamaño, tema) — y solo mediante el chevrón ⌃/⌄ de la fila 4, que a su vez
+  // SOLO existe/funciona mientras estado.mapaPantallaCompleta es true (pedido
+  // explícito original: "el exterior no debe tener eso"). Este flag es el
+  // estado de visibilidad de esas filas 2/3.
+  // V1.x (rediseño 3): dentro de pantalla completa, "Descargar" ya NO queda
+  // fijo/siempre visible — se ata a este mismo flag, así que solo aparece
+  // mientras las filas 2/3 están extendidas (chevrón ⌃). Afuera de pantalla
+  // completa este flag nunca se activa, así que Descargar sigue siempre
+  // visible ahí (sin cambios).
+  if (estado.controlesMapaOcultosFullscreen === undefined) estado.controlesMapaOcultosFullscreen = false;
+}
 
 /** Referencias vivas del ÚNICO bloque de controles (se reasignan en cada
  *  construirTarjetaVista()). El listener de fullscreenchange (registrado
@@ -555,6 +569,11 @@ function construirBloqueControles(plan) {
 }
 
 function construirTarjetaVista(plan) {
+  // Guardia defensiva por si esta función se llega a llamar alguna vez sin
+  // pasar por renderizarPlanEstudios() (plan-vista-lista.js) — que es quien
+  // normalmente ya la llamó antes. Ver comentario completo junto a la
+  // definición de inicializarEstadoMapaSiHaceFalta más arriba.
+  inicializarEstadoMapaSiHaceFalta();
   const card = document.createElement("section");
   card.className = "glass-card stack vista-card";
   cardRef = card;
@@ -1192,4 +1211,5 @@ export {
   dibujarCaminoDesbloqueo,
   exportarMapaComoPNG,
   recolorearNodosMapa,
+  inicializarEstadoMapaSiHaceFalta,
 };
