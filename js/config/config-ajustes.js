@@ -196,9 +196,9 @@ function inicializarBandejaVozAjustes() {
 function inicializarGoogleTasksAjustes() {
   const chk = document.getElementById("switch-google-tasks");
   const bloqueLista = document.getElementById("bloque-google-tasks-lista");
-  const select = document.getElementById("select-google-tasks-lista");
+  const contSelect = document.getElementById("select-google-tasks-lista");
   const error = document.getElementById("error-google-tasks");
-  if (!chk || !bloqueLista || !select || !error) return;
+  if (!chk || !bloqueLista || !contSelect || !error) return;
 
   const cfg = estado.datos.configuracion.google_tasks_sync || { activo: false, lista_id: null, ids_procesados: [] };
   estado.datos.configuracion.google_tasks_sync = cfg;
@@ -207,25 +207,39 @@ function inicializarGoogleTasksAjustes() {
   bloqueLista.classList.toggle("oculto", !cfg.activo);
   error.classList.add("oculto");
 
+  // FIX (2026-08-23 — "se ve default"): esto era un <select> nativo, por
+  // eso no tomaba los colores del tema a diferencia del resto de
+  // selectores de Ajustes (ver Rango de horas de Horario, unas funciones
+  // más abajo). Ahora arma el mismo componente construirSelectCustomAjustes
+  // que ya usa ese selector — mismo look, mismos colores de acento.
+  let listasCacheadas = [];
+
+  function pintarSelectorListas() {
+    contSelect.innerHTML = "";
+    if (listasCacheadas.length === 0) return;
+    const valorInicial = listasCacheadas.some((l) => l.id === cfg.lista_id) ? cfg.lista_id : listasCacheadas[0].id;
+    cfg.lista_id = valorInicial;
+    contSelect.appendChild(construirSelectCustomAjustes({
+      opciones: listasCacheadas.map((l) => ({ valor: l.id, etiqueta: l.title })),
+      valorInicial,
+      onCambiar: (valor) => {
+        cfg.lista_id = valor;
+        sellarTimestamp(estado.datos.configuracion);
+        marcarCambioPendiente();
+      },
+    }));
+  }
+
   async function poblarSelectorListas(tokenParaListar) {
     const { listarListasGoogleTasks } = await import("../agenda/agenda-google-tasks.js");
-    const listas = await listarListasGoogleTasks(tokenParaListar);
-    select.innerHTML = "";
-    listas.forEach((lista) => {
-      const opt = document.createElement("option");
-      opt.value = lista.id;
-      opt.textContent = lista.title;
-      select.appendChild(opt);
-    });
+    listasCacheadas = await listarListasGoogleTasks(tokenParaListar);
     // Si ya había una lista elegida de antes (ej. se apagó y se vuelve a
     // prender el switch) y sigue existiendo, se re-selecciona — evita que
     // reactivar el switch resetee la elección a la primera lista sin razón.
-    if (cfg.lista_id && listas.some((l) => l.id === cfg.lista_id)) {
-      select.value = cfg.lista_id;
-    } else if (listas[0]) {
-      cfg.lista_id = listas[0].id;
-    }
-    return listas;
+    // (La resolución real de cuál valor queda seleccionado vive en
+    // pintarSelectorListas, para no duplicarla acá.)
+    pintarSelectorListas();
+    return listasCacheadas;
   }
 
   chk.onchange = async () => {
@@ -272,18 +286,12 @@ function inicializarGoogleTasksAjustes() {
     }
   };
 
-  select.onchange = () => {
-    cfg.lista_id = select.value;
-    sellarTimestamp(estado.datos.configuracion);
-    marcarCambioPendiente();
-  };
-
   // Si el switch ya estaba activo (Ajustes se re-renderiza, o se entra con
   // la sincronización ya prendida de antes) y todavía no se pobló el
   // selector en ESTA carga, se trae la lista de nuevo con un token
-  // silencioso — sin esto, el <select> quedaría vacío hasta la próxima vez
+  // silencioso — sin esto, el selector quedaría vacío hasta la próxima vez
   // que el usuario tocara el switch a mano.
-  if (cfg.activo && select.options.length === 0) {
+  if (cfg.activo && listasCacheadas.length === 0) {
     (async () => {
       try {
         const { pedirAccessTokenGoogleTasks } = await import("../core/auth.js");
@@ -527,16 +535,38 @@ function renderizarConfigDiasHorario() {
     });
   }
 
-  // Días visibles (switch por día). Guardia: no se permite dejar 0 días
-  // visibles, mismo criterio que "nunca quedarse sin nav visible" en main.js.
-  const listaVisibles = document.getElementById("lista-dias-visibles");
-  if (listaVisibles) {
-    listaVisibles.innerHTML = "";
+  // Días de la semana — unificado (2026-08-23, pedido explícito): antes
+  // eran 2 listas separadas ("Días visibles" con switch, "Nombres
+  // personalizados" con input) que repetían el nombre del día 2 veces.
+  // Ahora es una sola fila por día con 3 columnas (Día | Palabra |
+  // Visibilidad) — el día queda anclado a la izquierda, palabra y
+  // visibilidad a la derecha, en el mismo orden que sus encabezados
+  // (#lista-dias-horario / .tabla-dias-horario-header en index.html
+  // comparten el mismo grid-template-columns, ver design-system.css).
+  const listaDias = document.getElementById("lista-dias-horario");
+  if (listaDias) {
+    listaDias.innerHTML = "";
     DIAS_SEMANA_CONFIG.forEach((dia) => {
       const fila = document.createElement("div");
-      fila.className = "row-between";
+      fila.className = "tabla-dias-horario-fila";
+
       const span = document.createElement("span");
       span.textContent = dia.etiqueta;
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "form-input";
+      input.maxLength = 3;
+      input.placeholder = dia.abrevDefault;
+      input.value = cfg.nombres_dias_personalizados[dia.id] || "";
+      input.addEventListener("change", () => {
+        const valor = input.value.trim().slice(0, 3);
+        if (valor) cfg.nombres_dias_personalizados[dia.id] = valor;
+        else delete cfg.nombres_dias_personalizados[dia.id];
+        sellarTimestamp(cfg);
+        marcarCambioPendiente();
+      });
+
       const label = document.createElement("label");
       label.className = "switch switch-tema";
       const chk = document.createElement("input");
@@ -556,38 +586,11 @@ function renderizarConfigDiasHorario() {
       };
       label.appendChild(chk);
       label.insertAdjacentHTML("beforeend", '<span class="track"><span class="thumb"></span></span>');
-      fila.appendChild(span);
-      fila.appendChild(label);
-      listaVisibles.appendChild(fila);
-    });
-  }
 
-  // Nombres personalizados (máx 3 caracteres, opcional por día)
-  const listaNombres = document.getElementById("lista-nombres-dias");
-  if (listaNombres) {
-    listaNombres.innerHTML = "";
-    DIAS_SEMANA_CONFIG.forEach((dia) => {
-      const fila = document.createElement("div");
-      fila.className = "row-between";
-      const span = document.createElement("span");
-      span.textContent = dia.etiqueta;
-      const input = document.createElement("input");
-      input.type = "text";
-      input.className = "form-input";
-      input.style.maxWidth = "70px";
-      input.maxLength = 3;
-      input.placeholder = dia.abrevDefault;
-      input.value = cfg.nombres_dias_personalizados[dia.id] || "";
-      input.addEventListener("change", () => {
-        const valor = input.value.trim().slice(0, 3);
-        if (valor) cfg.nombres_dias_personalizados[dia.id] = valor;
-        else delete cfg.nombres_dias_personalizados[dia.id];
-        sellarTimestamp(cfg);
-        marcarCambioPendiente();
-      });
       fila.appendChild(span);
       fila.appendChild(input);
-      listaNombres.appendChild(fila);
+      fila.appendChild(label);
+      listaDias.appendChild(fila);
     });
   }
 }
