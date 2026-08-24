@@ -250,13 +250,26 @@
           </div>
         </section>
 
-        <!-- Google Tasks (2026-08-23): switch opt-in + selector de lista +
-             botón de sincronización manual. Ver inicializarGoogleTasksAjustes
-             en config-ajustes.js. -->
+        <!-- Asistentes de voz externos (2026-08-23, pedido explícito):
+             unifica lo que antes eran 2 tarjetas separadas (Google Tasks +
+             Captura por voz/Atajo de Siri) bajo una sola, porque las 2
+             cumplen el mismo rol — capturar tareas/eventos habladas desde
+             un asistente de voz externo a la app — solo que cada una usa
+             un camino distinto (Google Assistant → Google Tasks → esta
+             app; Siri → Atajo → buzón propio → esta app). Ningún id
+             cambia: inicializarGoogleTasksAjustes() e
+             inicializarBandejaVozAjustes() (config-ajustes.js) siguen
+             buscando exactamente los mismos elementos, sin importar en
+             qué tarjeta viven ahora. -->
         <section class="glass-card stack ajuste-seccion colapsada">
-          <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Google Tasks</h2><span class="ajuste-seccion-chevron">▾</span></button>
+          <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Asistentes de voz externos</h2><span class="ajuste-seccion-chevron">▾</span></button>
           <div class="ajuste-seccion-cuerpo">
 
+          <!-- Google Tasks (2026-08-23): switch opt-in + selector de lista +
+               botón de sincronización manual. Ver inicializarGoogleTasksAjustes
+               en config-ajustes.js. -->
+          <div class="stack">
+          <h3 class="form-label" style="font-size:0.95rem; margin-bottom:2px;">Google Assistant</h3>
           <p class="muted">Importá tareas que crees en Google Tasks (por ejemplo, dictándoselas al Asistente de Google) a una lista específica.</p>
 
           <div class="row-between">
@@ -271,27 +284,23 @@
 
           <div id="bloque-google-tasks-lista" class="stack oculto">
             <span class="form-label">Lista de Google Tasks a sincronizar</span>
-            <select id="select-google-tasks-lista" class="form-input"></select>
+            <div id="select-google-tasks-lista"></div>
             <button id="btn-google-tasks-buscar" class="btn btn-secondary" type="button">Buscar tareas nuevas</button>
           </div>
-
           </div>
-        </section>
 
-        <!-- Captura por voz (Atajo de Siri), 2026-08-23: opt-in para poder
-             agregar tareas/exámenes/eventos hablándole a Siri incluso con
-             la app cerrada. Al activar por primera vez se genera un UUID
-             local (configuracion.bandeja_voz.id_bandeja) que actúa como
-             dirección de un "buzón" en worker-notificaciones-agenda (tabla
-             bandeja_pendiente) — no identifica a la persona, solo dónde el
-             Atajo debe dejar lo que capturó. La app hace polling de ese
-             buzón al abrir/sincronizar y alimenta cada ítem al mismo
-             pipeline de Gemini del Asistente de arriba. Ver
-             inicializarBandejaVozAjustes en config-ajustes.js. -->
-        <section class="glass-card stack ajuste-seccion colapsada">
-          <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Captura por voz (Atajo de Siri)</h2><span class="ajuste-seccion-chevron">▾</span></button>
-          <div class="ajuste-seccion-cuerpo">
-
+          <!-- Captura por voz (Atajo de Siri), 2026-08-23: opt-in para poder
+               agregar tareas/exámenes/eventos hablándole a Siri incluso con
+               la app cerrada. Al activar por primera vez se genera un UUID
+               local (configuracion.bandeja_voz.id_bandeja) que actúa como
+               dirección de un "buzón" en worker-notificaciones-agenda (tabla
+               bandeja_pendiente) — no identifica a la persona, solo dónde el
+               Atajo debe dejar lo que capturó. La app hace polling de ese
+               buzón al abrir/sincronizar y alimenta cada ítem al mismo
+               pipeline de Gemini del Asistente de arriba. Ver
+               inicializarBandejaVozAjustes en config-ajustes.js. -->
+          <div class="stack ajuste-subseccion">
+          <h3 class="form-label" style="font-size:0.95rem; margin-bottom:2px;">Siri</h3>
           <p class="muted">Agregá tareas, exámenes o eventos hablándole a Siri, incluso con la app cerrada — quedan en un buzón temporal y aparecen para confirmar la próxima vez que abrís la app (usa el mismo Asistente de arriba).</p>
 
           <div class="row-between">
@@ -309,6 +318,7 @@
               <code id="texto-bandeja-id" style="font-size:0.78rem; word-break:break-all; flex:1;"></code>
               <button id="btn-copiar-bandeja-id" class="btn btn-secondary">Copiar</button>
             </div>
+          </div>
           </div>
 
           </div>
@@ -418,13 +428,15 @@
           </div>
 
           <div>
-            <span class="form-label">Días visibles</span>
-            <div id="lista-dias-visibles" class="stack" style="gap:8px;"></div>
-          </div>
-
-          <div>
-            <span class="form-label">Nombres personalizados (opcional, máx. 3 caracteres)</span>
-            <div id="lista-nombres-dias" class="stack" style="gap:8px;"></div>
+            <span class="form-label">Días de la semana</span>
+            <div class="tabla-dias-horario">
+              <div class="tabla-dias-horario-fila tabla-dias-horario-header">
+                <span>Día</span>
+                <span>Palabra</span>
+                <span>Visibilidad</span>
+              </div>
+              <div id="lista-dias-horario" class="stack" style="gap:8px;"></div>
+            </div>
           </div>
 
           <div>
@@ -441,18 +453,26 @@
               </div>
             </div>
           </div>
-          </div>
-        </section>
 
-        <!-- Horario entre Amigos — Parte 1: enlaces que compartiste (obligatorio
-             #4 del prompt — historial completo, no solo el más reciente). Se
-             llega acá también con un atajo desde el panel "Amigos" en Horario
-             (ver desplazarYResaltarElemento en horario-amigos.js). -->
-        <section class="glass-card stack ajuste-seccion colapsada" id="ajuste-seccion-horario-enlaces">
-          <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Horario compartido</h2><span class="ajuste-seccion-chevron">▾</span></button>
-          <div class="ajuste-seccion-cuerpo">
-          <p class="muted" style="font-size:0.82rem; margin:2px 0 6px;">Enlaces de tu horario que compartiste alguna vez — revisá cuáles siguen activos y revocá cualquiera cuando quieras.</p>
-          <div id="lista-horario-enlaces-compartidos" class="stack" style="gap:8px;"></div>
+          <!-- Horario entre Amigos — Parte 1: enlaces que compartiste
+               (obligatorio #4 del prompt — historial completo, no solo el
+               más reciente). Se llega acá también con un atajo desde el
+               panel "Amigos" en Horario (ver desplazarYResaltarElemento en
+               horario-amigos.js) — id y clases de colapso sin tocar,
+               #closest(".ajuste-seccion") encuentra esta sub-sección
+               (la más cercana) sin importar que ahora esté anidada dentro
+               de la sección Horario en vez de ser un card aparte. Unificado
+               acá dentro (2026-08-23, pedido explícito) — ya no es su
+               propio glass-card para no duplicar el panel de vidrio dentro
+               de otro; el borde superior (.ajuste-subseccion) marca la
+               separación en su lugar. -->
+          <div class="ajuste-subseccion stack ajuste-seccion colapsada" id="ajuste-seccion-horario-enlaces">
+            <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion" style="font-size:16px;">Horario compartido</h2><span class="ajuste-seccion-chevron">▾</span></button>
+            <div class="ajuste-seccion-cuerpo">
+            <p class="muted" style="font-size:0.82rem; margin:2px 0 6px;">Enlaces de tu horario que compartiste alguna vez — revisá cuáles siguen activos y revocá cualquiera cuando quieras.</p>
+            <div id="lista-horario-enlaces-compartidos" class="stack" style="gap:8px;"></div>
+            </div>
+          </div>
           </div>
         </section>
 
