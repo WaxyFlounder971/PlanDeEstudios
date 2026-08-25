@@ -121,6 +121,20 @@ async function inicializarGoogleAuth({ alObtenerToken, alListo, alFallar, alRech
     client_id: CLIENT_ID,
     scope: DRIVE_SCOPE,
     ux_mode: "popup",
+    // access_type: "offline" es lo que le pide a Google que incluya un
+    // refresh_token en la respuesta del canje — sin esto, initCodeClient
+    // se comporta como el flujo implícito viejo en la práctica: el
+    // access_token vence a la hora y no hay nada con qué renovarlo en
+    // silencio, así que vuelve a aparecer el selector de cuenta en cada
+    // sesión larga (el bug que este archivo entero existe para resolver).
+    // prompt: "consent" fuerza que Google reemita el refresh_token incluso
+    // si esta cuenta ya había autorizado la app antes (ej. bajo el flujo
+    // implícito viejo) — sin esto, cuentas ya autorizadas simplemente no
+    // reciben refresh_token nunca, por diseño de OAuth2 (ver el comentario
+    // más abajo, en el callback, sobre el caso "Google no devolvió un
+    // refresh_token").
+    access_type: "offline",
+    prompt: "consent",
     callback: async (respuesta) => {
       if (respuesta.error) {
         console.error("Error de autenticación:", respuesta);
