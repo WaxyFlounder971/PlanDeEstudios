@@ -6,11 +6,11 @@
 
 import { aplicarModoRendimiento, renderizarAjustes } from "./config/config-ajustes.js";
 import { inicializarModalEnlace, renderizarEnlacesRapidos } from "./config/config-enlaces.js";
-import { buscarOCrearArchivoDatos, cerrarSesionGoogle, inicializarGoogleAuth, iniciarSesionConGoogle, obtenerMetadatosArchivo, obtenerPerfilGoogle, refrescarAccessTokenGoogle } from "./core/auth.js";
+import { buscarOCrearArchivoDatos, cerrarSesionGoogle, inicializarGoogleAuth, iniciarSesionConGoogle, obtenerMetadatosArchivo, obtenerPerfilGoogle } from "./core/auth.js";
 import { migrarDatosAntiguos, sellarTimestamp } from "./core/schema.js";
 import { fusionarDatos } from "./core/storage-merge.js";
-import { actualizarIndicadorSync, forzarSincronizacion, inicializarPullToRefresh, inicializarSondeoAlVolver, intentarReconexionSilenciosa, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
-import { CLAVE_CACHE_LOCAL, borrarTokenCache, correoConocido, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
+import { actualizarIndicadorSync, asegurarTokenValido, forzarSincronizacion, inicializarPullToRefresh, inicializarSondeoAlVolver, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
+import { CLAVE_CACHE_LOCAL, borrarTokenCache, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
 import { obtenerIniciales } from "./core/utils.js";
 import { ofrecerActivarNotificacionesPush, soportaNotificacionesPush } from "./core/notificaciones-push.js";
 import { sincronizarBandejaPendiente } from "./core/asistente-bandeja.js";
@@ -213,7 +213,7 @@ window.addEventListener("DOMContentLoaded", () => {
           // (y sigue subiendo lo pendiente después, si corresponde).
           sincronizarAlIniciar();
         } else {
-          intentarReconexionSilenciosa().finally(() => {
+          asegurarTokenValido().finally(() => {
             resolverAuthListo();
             sincronizarAlIniciar();
           });
@@ -335,7 +335,7 @@ window.addEventListener("DOMContentLoaded", () => {
   if (cache && cache.datos) {
     // Ya había una sesión local: mostramos la app de inmediato (offline-first).
     // estado.token queda en null aquí a propósito — se obtiene en segundo
-    // plano en alListo() de arriba, vía intentarReconexionSilenciosa(), sin
+    // plano en alListo() de arriba, vía asegurarTokenValido(), sin
     // bloquear el primer render de la app.
     habiaCacheAlCargar = true;
     estado.datos = migrarDatosAntiguos(cache.datos);
@@ -347,21 +347,17 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 
   document.getElementById("btn-reconectar-sesion").addEventListener("click", () => {
-    // Se llama de forma DIRECTA (sin async antes), igual que
-    // iniciarSesionConGoogle(), para no romper el gesto de usuario en
-    // navegadores móviles — necesario porque un click real evita el bloqueo
-    // de popups que sí puede afectar al refresco silencioso automático.
+    // MIGRACIÓN 2026-08-25: este banner ahora solo puede aparecer en dos
+    // casos — (a) el refresh_token guardado ya falló de verdad contra
+    // /oauth/refresh (revocado, o vencido por el límite de 7 días en modo
+    // Prueba), o (b) todavía no hay ningún refresh_token guardado en este
+    // dispositivo (cuenta migrando desde el flujo viejo, ver B.5). En
+    // NINGUNO de los dos casos otro refresco silencioso serviría de algo —
+    // hace falta el login completo con popup real. Se llama de forma
+    // DIRECTA (sin async antes) para no romper el gesto de usuario en
+    // navegadores móviles, igual que el botón de login normal.
     document.getElementById("aviso-reconexion").classList.add("oculto"); // ocultamiento visual inmediato, optimista
-    refrescarAccessTokenGoogle(correoConocido())
-      .then(({ token, expiresIn }) => {
-        establecerTokenActivo(token, expiresIn);
-        if (estado.pendienteSync) intentarSincronizar();
-        else if (estado.ultimoModifiedTimeConocido) sondearCambiosRemotos();
-      })
-      .catch((e) => {
-        console.warn("No se pudo reconectar la sesión de Google:", e);
-        mostrarAvisoReconexion();
-      });
+    iniciarSesionConGoogle();
   });
 
   // Punto 4: el indicador mismo también sirve de botón de reconexión cuando
