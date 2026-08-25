@@ -267,15 +267,37 @@ window.addEventListener("DOMContentLoaded", () => {
       // igual que ya hacía ocultarAvisoLoginBloqueado() en el camino de
       // éxito.
       clearTimeout(temporizadorAvisoLogin);
+      // FIX (2026-08-25): clearTimeout arriba solo cancela el timer si
+      // TODAVÍA no disparó — si el usuario tardó más de 6s en el popup real
+      // de Google (algo normal, no un bloqueo), el banner de "VPN/bloqueador
+      // de anuncios" ya puede estar visible en pantalla para cuando este
+      // callback corre. Sin esto, quedaba mostrado AL MISMO TIEMPO que el
+      // aviso de acá abajo — dos mensajes contradictorios juntos, ninguno
+      // de los dos siendo realmente lo que pasó.
+      document.getElementById("aviso-login-bloqueado").classList.add("oculto");
       btnLogin.textContent = textoOriginalBtnLogin;
       btnLogin.disabled = false;
       const aviso = document.getElementById("aviso-permiso-rechazado");
       // Ajuste (v8): mensaje específico cuando sí se completó el login pero
       // sin la casilla de Drive marcada, para que quede claro qué faltó.
-      aviso.textContent =
-        motivo === "permiso_drive_no_otorgado"
-          ? "No se completó el inicio de sesión: aceptaste tu cuenta de Google pero no marcaste el permiso de Google Drive, que es obligatorio para poder guardar tus datos. Vuelve a intentarlo y esta vez acepta también el permiso de Drive."
-          : "No se completó el inicio de sesión: para usar la app necesitas aceptar el permiso de Google Drive. Vuelve a intentarlo y acepta el permiso cuando Google te lo pida.";
+      // FIX (2026-08-25, MIGRACIÓN oauth code+refresh_token): "canje_fallido"
+      // es un caso DISTINTO — el usuario SÍ aceptó el permiso de Drive
+      // (auth.js ya revisó eso antes de intentar el canje), lo que falló fue
+      // la llamada POST /oauth/exchange contra el Worker (caído, con un
+      // endpoint que no responde, sin red, etc.). Antes esto reusaba el
+      // mensaje genérico de "te faltó aceptar Drive", que es literalmente
+      // falso en este caso y no le da al usuario ninguna pista real de qué
+      // pasó ni qué reintentar.
+      if (motivo === "canje_fallido") {
+        aviso.textContent =
+          "Aceptaste el permiso de Google Drive correctamente, pero no se pudo completar la conexión con el servidor de la app. Puede ser un problema temporal de conexión — espera un momento y vuelve a intentarlo. Si sigue fallando, avisa a soporte.";
+      } else if (motivo === "permiso_drive_no_otorgado") {
+        aviso.textContent =
+          "No se completó el inicio de sesión: aceptaste tu cuenta de Google pero no marcaste el permiso de Google Drive, que es obligatorio para poder guardar tus datos. Vuelve a intentarlo y esta vez acepta también el permiso de Drive.";
+      } else {
+        aviso.textContent =
+          "No se completó el inicio de sesión: para usar la app necesitas aceptar el permiso de Google Drive. Vuelve a intentarlo y acepta el permiso cuando Google te lo pida.";
+      }
       aviso.classList.remove("oculto");
     },
   });
