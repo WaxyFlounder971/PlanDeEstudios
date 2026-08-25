@@ -25,27 +25,90 @@ import {
   leerDatos,
   moverArchivoAlaCarpeta,
   obtenerMetadatosArchivo,
-  refrescarAccessTokenGoogle,
   renombrarArchivoDrive,
+  // OAuth con refresh_token vía Worker (2026-08-25) — ver asegurarTokenValido más abajo:
+  borrarRefreshTokenGoogle,
+  guardarRefreshTokenGoogle,
+  leerRefreshTokenGoogle,
+  refrescarAccessTokenViaWorker,
 } from "./auth.js";
 import { FRECUENCIAS_BACKUP_DRIVE, crearBackupDriveDefault, migrarDatosAntiguos, sellarTimestamp } from "./schema.js";
 import { fusionarDatos } from "./storage-merge.js";
-import { authListo, correoConocido, establecerTokenActivo, estado, guardarCacheLocal, leerTokenCacheValido } from "./storage.js";
+import { authListo, establecerTokenActivo, estado, guardarCacheLocal, leerTokenCacheValido } from "./storage.js";
 
 /**
- * Bug 1 (v8): pide un access_token nuevo de forma silenciosa apenas carga la
- * app (caso de sesión recuperada de caché, ver DOMContentLoaded arriba) o
- * cuando intentarSincronizar() se encuentra sin token. Tiene un timeout
- * propio porque el refresco silencioso de Google puede quedarse colgado sin
- * error ni resolución si el navegador bloquea el mecanismo (ej. "Tracking
- * Prevention" de Edge/Chrome bloqueando el almacenamiento de terceros que
- * usa Google para el flujo silencioso) — sin el timeout, ese cuelgue nunca
- * se reportaba ni se le daba al usuario una forma de reconectar a mano.
+ * MIGRACIÓN 2026-08-25 (reemplaza el flujo implícito + refresco silencioso
+ * viejo por completo): antes, "reconectar en silencio" significaba
+ * pedirle un token nuevo a Google mismo (google.accounts.oauth2
+ * .initTokenClient().requestAccessToken({prompt:""})) — un método que la
+ * propia documentación de Google llama "OAuth 2.0 Token UX flow" y que
+ * espera gesto del usuario. Llamado sin gesto (desde timers, desde el
+ * sondeo, al volver a la pestaña) y con el navegador bloqueando cookies de
+ * terceros hacia accounts.google.com (Tracking Prevention y similares),
+ * eso terminaba mostrando la ventana real de Google una y otra vez.
+ *
+ * Ahora el login (ver auth.js, initCodeClient) entrega un refresh_token de
+ * verdad la primera vez, y asegurarTokenValido() — el ÚNICO punto que
+ * queda en toda la app para "conseguir un access_token que sirva" — lo usa
+ * contra POST /oauth/refresh del Worker: una llamada REST servidor-a-
+ * servidor pura, que NUNCA puede abrir una ventana. Reemplaza a los 4
+ * disparadores dispersos que antes llamaban a Google directo (volver a la
+ * pestaña, sondeo, guardado, refresco proactivo) — todos pasan por acá
+ * ahora. Ya no hace falta ningún freno/cooldown de emergencia: si esto
+ * falla, es porque el refresh_token de verdad venció o se revocó (ej.
+ * límite de 7 días en modo Prueba de Google Cloud), no porque Google
+ * decidió mostrar una ventana — en ese caso sí hace falta el popup real
+ * (ver btn-reconectar-sesion en main.js, que llama a iniciarSesionConGoogle
+ * directo cuando esto devuelve false).
  */
 
-let reconexionEnCurso = null;
-let ultimoFalloRefrescoEn = 0;
-const COOLDOWN_REFRESCO_MS = 3 * 60 * 1000; // 3 min entre intentos tras un fallo
+let refrescoEnCurso = null;
+
+async function asegurarTokenValido() {
+  const cacheValida = leerTokenCacheValido();
+  if (cacheValida) {
+    estado.token = cacheValida.token;
+    return true;
+  }
+
+  if (refrescoEnCurso) return refrescoEnCurso; // evita refrescos duplicados en paralelo
+
+  const refreshToken = leerRefreshTokenGoogle();
+  if (!refreshToken) {
+    // Todavía no hay refresh_token guardado en este dispositivo — primera
+    // vez real, o una cuenta migrando desde el flujo viejo (ver B.5): no
+    // hay nada que se pueda resolver en silencio acá, hace falta el login
+    // completo (popup, gesto real) al menos una vez.
+    mostrarAvisoReconexion();
+    return false;
+  }
+
+  refrescoEnCurso = refrescarAccessTokenViaWorker(refreshToken)
+    .then(({ token, expiresIn, refreshTokenNuevo }) => {
+      // Google normalmente NO rota el refresh_token en un refresco — esto
+      // solo corre en el caso puntual en que sí lo hace, para no quedarse
+      // usando uno viejo que Google ya invalidó del otro lado.
+      if (refreshTokenNuevo) guardarRefreshTokenGoogle(refreshTokenNuevo);
+      establecerTokenActivo(token, expiresIn);
+      ocultarAvisoReconexion();
+      if (estado.pendienteSync) intentarSincronizar();
+      return true;
+    })
+    .catch((e) => {
+      console.warn("No se pudo refrescar el token vía el Worker:", e);
+      // El refresh_token que había ya no sirve (revocado desde la cuenta
+      // de Google, o venció por el límite de 7 días en modo Prueba) — se
+      // borra para no seguir reintentando contra algo que Google ya no va
+      // a aceptar nunca; el próximo "Reconectar" hace el login completo.
+      borrarRefreshTokenGoogle();
+      mostrarAvisoReconexion();
+      return false;
+    })
+    .finally(() => {
+      refrescoEnCurso = null;
+    });
+  return refrescoEnCurso;
+}
 
 /**
  * v9.4 (2026-08-08 — arquitectura de adjuntos, evitar import circular):
@@ -81,53 +144,6 @@ function registrarHookPostGuardado(fn) {
   hooksPostGuardado.push(fn);
 }
 
-function intentarReconexionSilenciosa() {
-  if (reconexionEnCurso) return reconexionEnCurso; // evita refrescos duplicados en paralelo
-
-  // AJUSTE URGENTE 2026-08-24 (v2 — la v1 se pasó de freno): sacar el
-  // refresco automático por completo hacía que CADA cambio del usuario
-  // topara con el banner y exigiera un clic manual — y como este navegador
-  // bloquea el flujo silencioso de Google de por sí, ese clic manual
-  // terminaba abriendo la ventana completa igual, pero ahora en cada
-  // cambio en vez de cada ~1h. Peor, no mejor.
-  //
-  // Se vuelve a intentar solo, pero con freno: si el último intento falló
-  // hace menos de COOLDOWN_MS, no se reintenta — se asume que sigue
-  // bloqueado y se evita repetir el mismo fallo (y su posible ventana) una
-  // y otra vez en segundos. Pasado el cooldown, se vuelve a probar solo:
-  // en la mayoría de sesiones/navegadores esto SÍ resuelve en silencio de
-  // verdad, y solo en el peor caso (bloqueo persistente) el usuario ve como
-  // mucho 1 ventana cada COOLDOWN_MS en vez de una por cada acción.
-  const ahora = Date.now();
-  if (ahora - ultimoFalloRefrescoEn < COOLDOWN_REFRESCO_MS) {
-    mostrarAvisoReconexion();
-    return Promise.resolve();
-  }
-
-  const timeoutMs = 8000;
-  reconexionEnCurso = Promise.race([
-    refrescarAccessTokenGoogle(correoConocido()),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Tiempo de espera agotado al refrescar el token de Google (posible bloqueo del navegador).")), timeoutMs)
-    ),
-  ])
-    .then(({ token, expiresIn }) => {
-      ultimoFalloRefrescoEn = 0; // éxito: se resetea el freno
-      establecerTokenActivo(token, expiresIn);
-      ocultarAvisoReconexion();
-      if (estado.pendienteSync) intentarSincronizar();
-    })
-    .catch((e) => {
-      console.warn("No se pudo reconectar la sesión de Google en silencio:", e);
-      ultimoFalloRefrescoEn = Date.now();
-      mostrarAvisoReconexion();
-    })
-    .finally(() => {
-      reconexionEnCurso = null;
-    });
-  return reconexionEnCurso;
-}
-
 /**
  * v8.3 (Bug 3): antes el token SOLO se refrescaba de forma reactiva (al
  * recibir un 401 de Drive, o al recuperar una sesión de caché). En la
@@ -141,16 +157,6 @@ function intentarReconexionSilenciosa() {
  * la sesión nunca llegue a vencerse de verdad.
  */
 
-/**
- * v8.3 (Bug 3), ajustado 2026-08-24 (v2): con el freno de
- * intentarReconexionSilenciosa (COOLDOWN_REFRESCO_MS) ya puesto, este
- * refresco programado ~5 min antes de que venza el token vuelve a ser
- * seguro: en la mayoría de sesiones resuelve en silencio de verdad, y si
- * este navegador en particular sigue bloqueando el flujo, como mucho
- * muestra una ventana cada COOLDOWN_REFRESCO_MS en vez de exigir que el
- * usuario reconecte a mano en cada acción.
- */
-
 let temporizadorRefrescoProactivo = null;
 
 function programarRefrescoProactivo(expiresInSegundos) {
@@ -158,7 +164,7 @@ function programarRefrescoProactivo(expiresInSegundos) {
   const segundos = Number(expiresInSegundos) || 3600; // Google normalmente da 3600 (1h)
   const esperaMs = Math.max((segundos - 300) * 1000, 10000); // 5 min antes, mínimo 10s de espera
   temporizadorRefrescoProactivo = setTimeout(() => {
-    intentarReconexionSilenciosa();
+    asegurarTokenValido();
   }, esperaMs);
 }
 
@@ -412,31 +418,18 @@ function inicializarPullToRefresh() {
  * error genérico, sin bloquear la app ni perder datos locales.
  */
 
-/**
- * v9.1 (punto 4), AJUSTE URGENTE 2026-08-24 (v2): el intento anterior sacó
- * por completo el refresco automático acá — eso volvió la app inutilizable
- * de otra forma (cada acción exigía un clic manual, y ese clic igual abría
- * la ventana completa en este navegador porque su bloqueo de
- * almacenamiento de terceros ya impide que Google resuelva CUALQUIER
- * intento en silencio, sea automático o por clic).
- *
- * Ahora sí se reintenta solo (intentarReconexionSilenciosa), pero esa
- * función ya trae su propio freno (COOLDOWN_REFRESCO_MS): si el intento
- * anterior falló hace poco, no se vuelve a intentar contra Google — se
- * asume bloqueado por ahora y se muestra el banner sin ventana. Con eso,
- * el sondeo de 9s y el resto de llamados de acá pueden seguir reintentando
- * sin volver a machacar con una ventana cada pocos segundos.
- */
-
 async function conReintentoSi401(operacion) {
   try {
     return await operacion();
   } catch (primerError) {
     if (primerError.status !== 401) throw primerError;
     estado.token = null; // fuerza que cualquier otro intento pase por reconexión
-    await intentarReconexionSilenciosa();
-    if (!estado.token) {
-      const error = new Error("La sesión con Drive venció — hace falta reconectar.");
+    // asegurarTokenValido() ya deja estado.token listo (vía caché o
+    // establecerTokenActivo) cuando devuelve true — no hace falta repetir
+    // ese trabajo acá, a diferencia del refresco viejo directo contra Google.
+    const ok = await asegurarTokenValido();
+    if (!ok) {
+      const error = new Error("No se pudo renovar la sesión con Drive.");
       error.reconexionFallida = true;
       throw error;
     }
@@ -456,7 +449,7 @@ async function sincronizarAhora() {
   mostrarCargando();
   try {
     if (!estado.token) {
-      await intentarReconexionSilenciosa();
+      await asegurarTokenValido();
     }
     if (estado.pendienteSync) {
       await intentarSincronizar(); // sube lo local primero
@@ -763,33 +756,18 @@ async function sincronizarAlIniciar() {
  * redundantes (compara modifiedTime), así que aquí basta con dispararla sin
  * lógica adicional.
  *
- * FIX (reporte: "cada pocos minutos se abre y cierra sola una ventana de
- * Google"): el prompt silencioso (`prompt: ""`, ver refrescarAccessTokenGoogle
- * en auth.js) ya estaba bien configurado, y NO se pide un token nuevo en
- * cada sync/sondeo — se confirmó recorriendo TODOS los llamados a
- * refrescarAccessTokenGoogle/intentarReconexionSilenciosa en la app: bajo un
- * token sano, el único refresco automático es el proactivo, programado por
- * programarRefrescoProactivo() ~5 minutos antes de que venza (usualmente
- * ~55 min después del último login/refresco).
+ * FIX histórico (reporte viejo: "cada pocos minutos se abre y cierra sola
+ * una ventana de Google"), bajo el flujo implícito de antes: el refresco
+ * proactivo dependía de un setTimeout que el navegador podía suspender en
+ * 2do plano, dejando el token vencido en silencio hasta que un 401 real lo
+ * descubría "de apuro" al volver a la pestaña — justo el peor momento para
+ * un refresco silencioso contra Google. MIGRACIÓN 2026-08-25: con
+ * asegurarTokenValido() esto ya no puede mostrar ninguna ventana (es REST
+ * puro contra el Worker), así que ese riesgo desapareció de raíz — este
+ * chequeo al volver a la pestaña ahora es solo una optimización de
+ * frescura/latencia, no una salvaguarda contra popups.
  *
- * La causa real: ese refresco proactivo depende enteramente de un
- * setTimeout — y los navegadores (y el sistema operativo, en móvil)
- * suspenden o "throttlean" los timers de una pestaña en 2do plano (pantalla
- * bloqueada, cambio de app, minimizado largo rato). Si el usuario deja la
- * pestaña en 2do plano más tiempo del que le quedaba de vida al token, ese
- * setTimeout puede perder su ventana sin disparar nunca. El token queda
- * vencido en silencio, y nadie se entera hasta la PRIMERA llamada real a
- * Drive tras volver — que entonces falla con 401 y recién ahí
- * conReintentoSi401 dispara el refresco, "de apuro" en vez de uno calmo y
- * programado. Ese refresco de apuro, ocurriendo justo al volver de 2do
- * plano, es el que puede terminar mostrando el destello: es exactamente el
- * momento en que el estado de cookies/sesión del navegador es menos
- * predecible (ver comentario de refrescarAccessTokenGoogle en auth.js sobre
- * esta limitación real de la plataforma, que ningún parámetro de acá puede
- * eliminar al 100%).
- *
- * El fix no cambia CÓMO se pide el token (ya era silencioso y ya cacheaba
- * bien) sino CUÁNDO: se revalida la vigencia del token ANTES de la primera
+ * El fix no cambia CÓMO se pide el token sino CUÁNDO: se revalida la vigencia del token ANTES de la primera
  * llamada a Drive tras volver a la pestaña, reusando el mismo patrón ya
  * usado al cargar la app (ver DOMContentLoaded en main.js) — si la caché
  * todavía tiene margen, no se pide nada nuevo (cero llamadas de más); si no,
@@ -819,22 +797,6 @@ function inicializarSondeoAlVolver() {
  * silencio — la misma llamada que ya se usaba, solo que disparada en el
  * momento correcto en vez de esperar a que un 401 la descubra.
  */
-/**
- * v9.3, ajustado 2026-08-24: este era el disparador MÁS frecuente del
- * popup de Google apareciendo solo — visibilitychange ocurre cada vez que
- * el usuario cambia de pestaña/app y vuelve (muy seguido, sobre todo en
- * celular), y hasta ahora, si el token no estaba fresco, esto llamaba a
- * intentarReconexionSilenciosa() SIN ningún gesto real del usuario. Mismo
- * problema de fondo documentado en conReintentoSi401 más arriba: Google no
- * garantiza resolver eso sin ventana, y con el bloqueo de almacenamiento de
- * terceros de este navegador, terminaba mostrándola de verdad, una y otra
- * vez, cada vez que se volvía a la pestaña.
- *
- * Ahora, si la caché no alcanza, NO se le pide nada a Google acá: se deja
- * pasar, y sondearCambiosRemotos() (que se dispara igual, justo después)
- * simplemente no va a poder sondear hasta que el usuario reconecte a mano
- * — mismo criterio que el resto de la app desde este ajuste.
- */
 async function asegurarTokenFrescoAlVolver() {
   await authListo; // punto 5, misma condición de carrera que el resto del módulo
   if (!estado.fileId) return; // todavía no hay una sesión real armada (ej. pantalla de login)
@@ -844,11 +806,7 @@ async function asegurarTokenFrescoAlVolver() {
     estado.token = cacheValida.token;
     return;
   }
-  // 2026-08-24 (v2): vuelve a intentar el refresco automático al volver a la
-  // pestaña — con el freno de intentarReconexionSilenciosa (COOLDOWN_REFRESCO_MS)
-  // ya no puede repetirse en cada cambio de pestaña seguido, así que no
-  // vuelve a machacar con una ventana cada vez que se cambia de app.
-  await intentarReconexionSilenciosa();
+  await asegurarTokenValido(); // ya deduplicada (refrescoEnCurso) y ya sin popup (REST puro vía el Worker)
 }
 
 /**
@@ -1034,14 +992,14 @@ async function intentarSincronizar() {
   // reintento) a mitad de la inicialización de auth.
   await authListo;
 
-  // Bug 1 (v8), ajustado 2026-08-24 (v2): esta función corre en CADA edición
-  // del usuario (marcarCambioPendiente) — sacar el reintento automático de
-  // acá era lo que hacía "pedir sesión en cada cambio" (con el freno de
-  // intentarReconexionSilenciosa ya puesto arriba, este reintento no se
-  // repite más de una vez cada COOLDOWN_REFRESCO_MS, así que ya no machaca).
+  // Bug 1 (v8): antes, si no había token (ej. sesión recuperada de caché sin
+  // reconexión todavía), esta función se salía aquí mismo sin intentar nada
+  // ni avisar — la causa raíz de que la sincronización pareciera "rota"
+  // permanentemente en visitas de retorno. Ahora se intenta reconectar en
+  // silencio primero.
   if (!estado.token) {
-    await intentarReconexionSilenciosa();
-    if (!estado.token) return; // seguimos sin token: ya se mostró el aviso
+    await asegurarTokenValido();
+    if (!estado.token) return; // seguimos sin token: ya se mostró el aviso si aplicaba
   }
 
   try {
@@ -1235,6 +1193,10 @@ function actualizarIndicadorSync() {
 export {
   actualizarIndicadorSync,
   aplicarDatosRemotosFrescos,
+  // OAuth con refresh_token vía Worker (2026-08-25) — punto único de
+  // "conseguir un access_token que sirva" para toda la app (reemplaza a
+  // intentarReconexionSilenciosa, eliminada):
+  asegurarTokenValido,
   conReintentoSi401,
   contadorCargando,
   contarConflictosGlobales,
@@ -1243,7 +1205,6 @@ export {
   forzarSincronizacion,
   inicializarPullToRefresh,
   inicializarSondeoAlVolver,
-  intentarReconexionSilenciosa,
   intentarSincronizar,
   marcarCambioPendiente,
   marcarUltimaSincronizacionConfirmada,
@@ -1252,7 +1213,6 @@ export {
   ocultarAvisoReconexion,
   ocultarCargando,
   programarRefrescoProactivo,
-  reconexionEnCurso,
   registrarHookPostFusion,
   registrarHookPostGuardado,
   sincronizarAhora,
