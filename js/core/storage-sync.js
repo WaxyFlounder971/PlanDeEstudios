@@ -44,6 +44,8 @@ import { authListo, correoConocido, establecerTokenActivo, estado, guardarCacheL
  */
 
 let reconexionEnCurso = null;
+let ultimoFalloRefrescoEn = 0;
+const COOLDOWN_REFRESCO_MS = 3 * 60 * 1000; // 3 min entre intentos tras un fallo
 
 /**
  * v9.4 (2026-08-08 — arquitectura de adjuntos, evitar import circular):
@@ -81,6 +83,27 @@ function registrarHookPostGuardado(fn) {
 
 function intentarReconexionSilenciosa() {
   if (reconexionEnCurso) return reconexionEnCurso; // evita refrescos duplicados en paralelo
+
+  // AJUSTE URGENTE 2026-08-24 (v2 — la v1 se pasó de freno): sacar el
+  // refresco automático por completo hacía que CADA cambio del usuario
+  // topara con el banner y exigiera un clic manual — y como este navegador
+  // bloquea el flujo silencioso de Google de por sí, ese clic manual
+  // terminaba abriendo la ventana completa igual, pero ahora en cada
+  // cambio en vez de cada ~1h. Peor, no mejor.
+  //
+  // Se vuelve a intentar solo, pero con freno: si el último intento falló
+  // hace menos de COOLDOWN_MS, no se reintenta — se asume que sigue
+  // bloqueado y se evita repetir el mismo fallo (y su posible ventana) una
+  // y otra vez en segundos. Pasado el cooldown, se vuelve a probar solo:
+  // en la mayoría de sesiones/navegadores esto SÍ resuelve en silencio de
+  // verdad, y solo en el peor caso (bloqueo persistente) el usuario ve como
+  // mucho 1 ventana cada COOLDOWN_MS en vez de una por cada acción.
+  const ahora = Date.now();
+  if (ahora - ultimoFalloRefrescoEn < COOLDOWN_REFRESCO_MS) {
+    mostrarAvisoReconexion();
+    return Promise.resolve();
+  }
+
   const timeoutMs = 8000;
   reconexionEnCurso = Promise.race([
     refrescarAccessTokenGoogle(correoConocido()),
@@ -89,15 +112,15 @@ function intentarReconexionSilenciosa() {
     ),
   ])
     .then(({ token, expiresIn }) => {
+      ultimoFalloRefrescoEn = 0; // éxito: se resetea el freno
       establecerTokenActivo(token, expiresIn);
+      ocultarAvisoReconexion();
       if (estado.pendienteSync) intentarSincronizar();
     })
     .catch((e) => {
       console.warn("No se pudo reconectar la sesión de Google en silencio:", e);
-      // Solo se muestra el aviso si de verdad hace falta sincronizar algo —
-      // no queremos asustar al usuario apenas abre la app si todavía no ha
-      // cambiado nada.
-      if (estado.pendienteSync) mostrarAvisoReconexion();
+      ultimoFalloRefrescoEn = Date.now();
+      mostrarAvisoReconexion();
     })
     .finally(() => {
       reconexionEnCurso = null;
@@ -116,6 +139,16 @@ function intentarReconexionSilenciosa() {
  * refresco tras 401) se programa el SIGUIENTE refresco silencioso 5 minutos
  * antes de que ese token expire, para que mientras la pestaña siga abierta
  * la sesión nunca llegue a vencerse de verdad.
+ */
+
+/**
+ * v8.3 (Bug 3), ajustado 2026-08-24 (v2): con el freno de
+ * intentarReconexionSilenciosa (COOLDOWN_REFRESCO_MS) ya puesto, este
+ * refresco programado ~5 min antes de que venza el token vuelve a ser
+ * seguro: en la mayoría de sesiones resuelve en silencio de verdad, y si
+ * este navegador en particular sigue bloqueando el flujo, como mucho
+ * muestra una ventana cada COOLDOWN_REFRESCO_MS en vez de exigir que el
+ * usuario reconecte a mano en cada acción.
  */
 
 let temporizadorRefrescoProactivo = null;
@@ -379,22 +412,34 @@ function inicializarPullToRefresh() {
  * error genérico, sin bloquear la app ni perder datos locales.
  */
 
+/**
+ * v9.1 (punto 4), AJUSTE URGENTE 2026-08-24 (v2): el intento anterior sacó
+ * por completo el refresco automático acá — eso volvió la app inutilizable
+ * de otra forma (cada acción exigía un clic manual, y ese clic igual abría
+ * la ventana completa en este navegador porque su bloqueo de
+ * almacenamiento de terceros ya impide que Google resuelva CUALQUIER
+ * intento en silencio, sea automático o por clic).
+ *
+ * Ahora sí se reintenta solo (intentarReconexionSilenciosa), pero esa
+ * función ya trae su propio freno (COOLDOWN_REFRESCO_MS): si el intento
+ * anterior falló hace poco, no se vuelve a intentar contra Google — se
+ * asume bloqueado por ahora y se muestra el banner sin ventana. Con eso,
+ * el sondeo de 9s y el resto de llamados de acá pueden seguir reintentando
+ * sin volver a machacar con una ventana cada pocos segundos.
+ */
+
 async function conReintentoSi401(operacion) {
   try {
     return await operacion();
   } catch (primerError) {
     if (primerError.status !== 401) throw primerError;
     estado.token = null; // fuerza que cualquier otro intento pase por reconexión
-    let nuevoToken, expiresIn;
-    try {
-      ({ token: nuevoToken, expiresIn } = await refrescarAccessTokenGoogle(correoConocido()));
-    } catch (errorRefresco) {
-      console.warn("No se pudo refrescar el token de Google automáticamente:", errorRefresco);
-      const error = new Error("No se pudo renovar la sesión con Drive.");
+    await intentarReconexionSilenciosa();
+    if (!estado.token) {
+      const error = new Error("La sesión con Drive venció — hace falta reconectar.");
       error.reconexionFallida = true;
       throw error;
     }
-    establecerTokenActivo(nuevoToken, expiresIn);
     return await operacion(); // reintento único, ya con el token renovado
   }
 }
@@ -774,6 +819,22 @@ function inicializarSondeoAlVolver() {
  * silencio — la misma llamada que ya se usaba, solo que disparada en el
  * momento correcto en vez de esperar a que un 401 la descubra.
  */
+/**
+ * v9.3, ajustado 2026-08-24: este era el disparador MÁS frecuente del
+ * popup de Google apareciendo solo — visibilitychange ocurre cada vez que
+ * el usuario cambia de pestaña/app y vuelve (muy seguido, sobre todo en
+ * celular), y hasta ahora, si el token no estaba fresco, esto llamaba a
+ * intentarReconexionSilenciosa() SIN ningún gesto real del usuario. Mismo
+ * problema de fondo documentado en conReintentoSi401 más arriba: Google no
+ * garantiza resolver eso sin ventana, y con el bloqueo de almacenamiento de
+ * terceros de este navegador, terminaba mostrándola de verdad, una y otra
+ * vez, cada vez que se volvía a la pestaña.
+ *
+ * Ahora, si la caché no alcanza, NO se le pide nada a Google acá: se deja
+ * pasar, y sondearCambiosRemotos() (que se dispara igual, justo después)
+ * simplemente no va a poder sondear hasta que el usuario reconecte a mano
+ * — mismo criterio que el resto de la app desde este ajuste.
+ */
 async function asegurarTokenFrescoAlVolver() {
   await authListo; // punto 5, misma condición de carrera que el resto del módulo
   if (!estado.fileId) return; // todavía no hay una sesión real armada (ej. pantalla de login)
@@ -783,7 +844,11 @@ async function asegurarTokenFrescoAlVolver() {
     estado.token = cacheValida.token;
     return;
   }
-  await intentarReconexionSilenciosa(); // ya deduplicada (reconexionEnCurso) y ya silenciosa (prompt:"")
+  // 2026-08-24 (v2): vuelve a intentar el refresco automático al volver a la
+  // pestaña — con el freno de intentarReconexionSilenciosa (COOLDOWN_REFRESCO_MS)
+  // ya no puede repetirse en cada cambio de pestaña seguido, así que no
+  // vuelve a machacar con una ventana cada vez que se cambia de app.
+  await intentarReconexionSilenciosa();
 }
 
 /**
@@ -969,14 +1034,14 @@ async function intentarSincronizar() {
   // reintento) a mitad de la inicialización de auth.
   await authListo;
 
-  // Bug 1 (v8): antes, si no había token (ej. sesión recuperada de caché sin
-  // reconexión todavía), esta función se salía aquí mismo sin intentar nada
-  // ni avisar — la causa raíz de que la sincronización pareciera "rota"
-  // permanentemente en visitas de retorno. Ahora se intenta reconectar en
-  // silencio primero.
+  // Bug 1 (v8), ajustado 2026-08-24 (v2): esta función corre en CADA edición
+  // del usuario (marcarCambioPendiente) — sacar el reintento automático de
+  // acá era lo que hacía "pedir sesión en cada cambio" (con el freno de
+  // intentarReconexionSilenciosa ya puesto arriba, este reintento no se
+  // repite más de una vez cada COOLDOWN_REFRESCO_MS, así que ya no machaca).
   if (!estado.token) {
     await intentarReconexionSilenciosa();
-    if (!estado.token) return; // seguimos sin token: ya se mostró el aviso si aplicaba
+    if (!estado.token) return; // seguimos sin token: ya se mostró el aviso
   }
 
   try {
