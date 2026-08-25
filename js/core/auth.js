@@ -524,7 +524,7 @@ async function guardarDatos(token, fileId, datos) {
  * `interactivo: true` fuerza la pantalla de consentimiento — se usa la
  * PRIMERA vez que el usuario prende el switch de Ajustes, para el permiso
  * nuevo. `interactivo: false` (default) pide un refresco silencioso
- * (`prompt: ""`), igual que refrescarAccessTokenGoogle — se usa en cada
+ * (`prompt: ""`, el mismo flujo implícito de siempre) — se usa en cada
  * sincronización posterior, para no interrumpir con un popup cada vez que
  * el token de 1 hora vence.
  *

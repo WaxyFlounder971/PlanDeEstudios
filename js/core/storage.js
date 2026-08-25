@@ -74,17 +74,6 @@ function establecerTokenActivo(token, expiresInSegundos) {
   ocultarAvisoReconexion();
 }
 
-/**
- * v9.2: correo ya conocido del perfil (si lo hay), para pasarlo como
- * login_hint en los refrescos silenciosos y reducir la posibilidad de que
- * Google muestre un selector de cuenta por ambigüedad (ver comentario en
- * refrescarAccessTokenGoogle en auth.js).
- */
-
-function correoConocido() {
-  return (estado.datos && estado.datos.perfil && estado.datos.perfil.correo) || undefined;
-}
-
 const estado = {
   token: null,
   fileId: null,
@@ -175,7 +164,6 @@ export {
   CLAVE_TOKEN_CACHE,
   authListo,
   borrarTokenCache,
-  correoConocido,
   establecerTokenActivo,
   estado,
   guardarCacheLocal,
