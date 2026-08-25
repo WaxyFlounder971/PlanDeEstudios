@@ -47,7 +47,8 @@ Exporta:
 * `leerDatos(token, fileId)` — descarga y parsea el JSON completo de un archivo de Drive.
 * `obtenerMetadatosArchivo(token, fileId)` — pide solo `modifiedTime` de un archivo (llamada barata para sondeo de cambios remotos).
 * `guardarDatos(token, fileId, datos)` — sobrescribe el archivo de datos en Drive con el objeto completo; valida `respuesta.ok` y lanza si falla.
-* `refrescarAccessTokenGoogle(correoConocido)` — pide un access_token nuevo de forma silenciosa (sin prompt), usado tras un 401. Devuelve una Promise.
+* `refrescarAccessTokenViaWorker(refreshToken)` — (2026-08-25, reemplaza a `refrescarAccessTokenGoogle`) pide un access_token nuevo vía `POST /oauth/refresh` del Worker — llamada REST servidor-a-servidor pura, nunca puede mostrar una ventana de Google. Devuelve `{ token, expiresIn, refreshTokenNuevo }`.
+* `guardarRefreshTokenGoogle(refreshToken)` / `leerRefreshTokenGoogle()` / `borrarRefreshTokenGoogle()` — (2026-08-25) guardan/leen/borran el refresh_token de Drive en `localStorage`, local a este dispositivo (nunca sincroniza a Drive, es una credencial no un dato de la app).
 * `subirArchivoBinarioADrive(token, archivo)` — sube un `File`/`Blob` arbitrario (adjuntos) como archivo nuevo e independiente en Drive.
 * `descargarArchivoBinarioDeDrive(token, driveFileId)` — descarga el contenido real de un adjunto por demanda.
 * `eliminarArchivoDeDriveConId(token, driveFileId)` — borra el archivo real de Drive de un adjunto eliminado; 404 cuenta como éxito.
@@ -194,7 +195,6 @@ Exporta:
 * `leerTokenCacheValido()` — devuelve `{ token, expiraEn }` solo si queda más de 5 min de vida; si no, `null`.
 * `borrarTokenCache()` — limpia el token cacheado de localStorage.
 * `establecerTokenActivo(token, expiresInSegundos)` — punto único para fijar un token válido: lo guarda en memoria y caché, programa el refresco proactivo, y marca "conexión OK".
-* `correoConocido()` — correo del perfil ya cargado (si existe), para usar como `login_hint` en refrescos silenciosos.
 * `authListo` — Promise que resuelve una sola vez cuando ya se supo si hay token utilizable (evita condiciones de carrera al iniciar).
 * `resolverAuthListo` — función que resuelve la promesa `authListo`.
 * `guardarCacheLocal()` — persiste `{ fileId, datos, pendienteSync }` en localStorage.
@@ -219,20 +219,19 @@ Exporta:
 * **Regla para entidades nuevas:** cualquier colección nueva con `id` propio se funde con `fusionarColeccion()` genérica — no escribir lógica de fusión nueva por tipo salvo que tenga sub-colecciones anidadas propias (patrón `fusionarPlan`/`fusionarSemestre`/`fusionarCriterio`).
 
 ### core/storage-sync.js
-Propósito: orquestación completa de sincronización con Drive: login silencioso, refresco de token, subida/bajada de cambios, sondeo multi-dispositivo, pull-to-refresh, backup rotativo, indicador visual de estado y conteo de conflictos.
+Propósito: orquestación completa de sincronización con Drive: refresco de token vía el Worker (`asegurarTokenValido`, sin popups — ver core/auth.js), subida/bajada de cambios, sondeo multi-dispositivo, pull-to-refresh, backup rotativo, indicador visual de estado y conteo de conflictos.
 Depende de: config-ajustes.js, config-enlaces.js, main.js, plan-gestionar.js, plan-vista-lista.js, semestres.js, semestres-tarjetas.js, finanzas.js, ui/componentes.js, ui/tema.js, auth.js, schema.js, storage-merge.js, storage.js
 > **Nota:** aunque `storage-sync.js` vive en `core/`, importa varios módulos de capas superiores (Plan, Semestres, Finanzas, Config, UI, `main.js`). Es **intencional**, no una violación de capas: son los módulos que hay que re-renderizar después de aplicar datos remotos frescos (`aplicarDatosRemotosFrescos`) o tras un login. Mismo patrón de import circular que `storage.js`↔`storage-sync.js` — ver ARQUITECTURA.md.
 Exporta:
 * `registrarHookPostFusion(fn)` / `registrarHookPostGuardado(fn)` — permiten a otros módulos (ej. storage-adjuntos.js) engancharse a eventos del ciclo de sync sin acoplar este archivo a ellos.
-* `intentarReconexionSilenciosa()` — intenta obtener un token nuevo sin mostrar prompt al usuario.
-* `reconexionEnCurso` — variable de estado: si hay una reconexión en curso ahora mismo.
+* `asegurarTokenValido()` — (2026-08-25, reemplaza a `intentarReconexionSilenciosa`/`reconexionEnCurso`) punto único de "conseguir un access_token que sirva" para toda la app: revisa la caché válida, y si no hay, pide uno nuevo vía `refrescarAccessTokenViaWorker` (REST puro contra el Worker, nunca muestra ventana). Si no hay `refresh_token` guardado, o el refresco falla de verdad (revocado/vencido), muestra el aviso de reconexión y devuelve `false`. Deduplica refrescos en paralelo internamente.
 * `programarRefrescoProactivo(expiresInSegundos)` — programa el refresco del token antes de que expire.
 * `temporizadorRefrescoProactivo` — handle del timer de refresco proactivo.
 * `mostrarAvisoReconexion()` / `ocultarAvisoReconexion()` — muestran/ocultan el banner de "reconectando" en la UI.
 * `mostrarCargando()` / `ocultarCargando()` — controlan el overlay de carga (con contador anidado).
 * `contadorCargando` — contador de llamados anidados a mostrarCargando/ocultarCargando.
 * `inicializarPullToRefresh()` — gesto de "deslizar para refrescar" (Pointer Events, funciona en móvil y desktop).
-* `conReintentoSi401(operacion)` — envuelve una operación de Drive; si falla con 401, refresca el token y reintenta una vez.
+* `conReintentoSi401(operacion)` — envuelve una operación de Drive; si falla con 401, llama a `asegurarTokenValido()` y reintenta una vez.
 * `sincronizarAhora()` — sincronización completa "en el sitio": sube pendientes, baja lo último de Drive, repinta la UI sin recargar.
 * `aplicarDatosRemotosFrescos(datosFrescos)` — bloque compartido que aplica datos ya descargados y repinta toda la UI.
 * `marcarUltimaSincronizacionConfirmada()` — marca en la UI que la última sincronización se confirmó con éxito.
