@@ -513,28 +513,31 @@ function ofrecerActivarSincronizacionCalendario() {
  * consentimiento). Se llama desde activarSincronizacionCalendario, tanto
  * si lo dispara el switch de Ajustes como el onboarding.
  *
- * *** LIMITACIÓN CONOCIDA, sin resolver en esta sesión: se pidió que este
- * aviso sea "no saltable", pero el único modal genérico disponible acá
- * (abrirConfirmacion, componentes.js) es el mismo que usan TODAS las
- * confirmaciones normales de la app (ver #modal-confirmacion en
- * index.html: tiene botón "Cancelar" y, por lo que ya se vio en
- * #modal-completar-universidades, componentes.js excluye del cierre
- * automático por X/click-afuera a modales puntuales por ID — no se sabe
- * el mecanismo exacto sin ver componentes.js, que no se subió en esta
- * sesión). Tal cual quedó, este aviso SÍ se puede cerrar con Cancelar/X/
- * click-afuera, igual que cualquier otra confirmación — no es realmente
- * "no saltable" todavía. Para que lo sea de verdad hace falta componentes.js
- * (ver cómo está armada la exclusión para modal-completar-universidades)
- * y agregar el nuevo modal a esa misma lista. ***
+ * Genuinamente no saltable (confirmado contra componentes.js, sesión
+ * posterior): a diferencia del intento anterior con abrirConfirmacion
+ * (que reutiliza el ÚNICO #modal-confirmacion compartido por toda la app,
+ * con botón Cancelar y click-afuera cableados una sola vez de forma
+ * genérica en inicializarModalConfirmacion — no hay forma de que un uso
+ * puntual sea "más bloqueante" que otro ahí), esto usa un modal DEDICADO
+ * propio (#modal-permiso-calendario, index.html), con el mismo patrón
+ * exacto que modal-completar-universidades: excluido a mano de la "X"
+ * automática (ver exclusión en inicializarBotonesCerrarModal,
+ * ui/componentes.js) y sin ningún listener de click-afuera registrado acá
+ * (a diferencia del resto de los modales de la app, ese listener
+ * simplemente no existe para este modal). Único botón: "Cerrar sesión
+ * ahora", que llama a cerrarSesion() directo.
  */
 function avisarFaltaPermisoCalendar() {
-  abrirConfirmacion({
-    titulo: "Falta autorizar Google Calendar",
-    mensaje:
-      "Tu sesión de Google es de antes de que se agregara la sincronización con Calendar, así que todavía no tiene ese permiso. Para activarla hace falta cerrar sesión y volver a iniciarla, aceptando el permiso de Calendar en la pantalla de Google.",
-    textoConfirmar: "Cerrar sesión ahora",
-    claseConfirmar: "btn-danger",
-    onConfirmar: cerrarSesion,
+  document.getElementById("modal-permiso-calendario").classList.remove("oculto");
+}
+
+/** Engancha el único botón del modal bloqueante — se llama una vez al
+ *  arrancar la app (ver lista de inicializadores en el DOMContentLoaded
+ *  de main.js, mismo criterio que inicializarModalCompletarUniversidades). */
+function inicializarModalPermisoCalendario() {
+  document.getElementById("btn-cerrar-sesion-permiso-calendario").addEventListener("click", () => {
+    document.getElementById("modal-permiso-calendario").classList.add("oculto");
+    cerrarSesion();
   });
 }
 
@@ -543,6 +546,7 @@ export {
   avisarFaltaPermisoCalendar,
   desactivarSincronizacionCalendario,
   eliminarEventoCalendarizado,
+  inicializarModalPermisoCalendario,
   ofrecerActivarSincronizacionCalendario,
   sincronizacionCalendarActiva,
   sincronizarEventoCalendario,
