@@ -19,6 +19,14 @@ import {
   obtenerSnapshotAmigoPorId,
   obtenerDiasConClaseAmigosVinculados,
   calcularNumeroSemanaAmigo,
+  // FIX (reporte: "el switch de ocultar amigo no hace nada"): el toggle
+  // "Mostrar/Ocultar en el horario" del panel de Amigos guardaba su
+  // preferencia pero nada la leía (la franja superpuesta en el horario
+  // propio, que sí la respetaba, se había quitado en otro cambio). Ahora
+  // controla si el amigo aparece en Horario conjunto y en su vista
+  // individual — ver renderizarConjuntoModoDia/Semana y
+  // renderizarVistaIndividualAmigoInterno más abajo.
+  obtenerFileIdsOcultos,
 } from "./horario-amigos.js";
 
 const PX_POR_MIN_EXPANDIDO = 0.84; // 30% menos que antes (1.2), pedido explícito
@@ -1166,6 +1174,16 @@ function renderizarVistaIndividualAmigoInterno(cont, semestre, numeroSemana) {
     return;
   }
 
+  // FIX (switch de ocultar amigo): en teoría no debería poder llegarse acá
+  // con un amigo oculto (el botón ⛶ que dispara esta vista queda
+  // deshabilitado para amigos ocultos, ver renderizarListaAmigosVinculados),
+  // pero se puede quedar oculto un amigo cuya vista individual ya estaba
+  // abierta — este chequeo cubre ese caso también.
+  if (obtenerFileIdsOcultos().has(fileId)) {
+    cont.innerHTML = `<p class="muted" style="padding:16px;">${amigo.nombre} está oculto. Activá el switch en el panel de Amigos para volver a verlo.</p>`;
+    return;
+  }
+
   const entrada = obtenerSnapshotAmigoPorId(fileId);
   if (!entrada || !entrada.snapshot) {
     cont.innerHTML = `<p class="muted" style="padding:16px;">${
@@ -1428,7 +1446,15 @@ function renderizarConjuntoModoDia(cont, semestre, numeroSemana, dias) {
   // fechaDia puede venir null (semestre sin fecha_inicio válida) — en ese
   // caso obtenerListaAmigosParaDiaConjunto ya sabe devolver todo vacío en
   // vez de reventar (ver el chequeo isNaN ahí mismo).
-  const amigosDia = obtenerListaAmigosParaDiaConjunto(fechaDia, diaSel.abrevDefault);
+  // FIX (switch de ocultar amigo): obtenerListaAmigosParaDiaConjunto a
+  // propósito devuelve TODOS los vinculados (la vista individual necesita
+  // poder encontrar a cualquiera por fileId, oculto o no — ver
+  // renderizarVistaIndividualAmigoInterno). Acá, en Horario conjunto, sí se
+  // filtra por lo que diga el switch de cada amigo.
+  const ocultosConjunto = obtenerFileIdsOcultos();
+  const amigosDia = obtenerListaAmigosParaDiaConjunto(fechaDia, diaSel.abrevDefault).filter(
+    ({ amigo }) => !ocultosConjunto.has(amigo.file_id)
+  );
 
   const columnaAncha = document.createElement("div");
   columnaAncha.style.cssText = "display:flex; flex-direction:column; min-width:100%; width:max-content;";
@@ -1604,6 +1630,11 @@ function renderizarConjuntoModoSemana(cont, semestre, numeroSemana, dias) {
   trackDiv.className = "mapa-track";
   trackDiv.style.cssText = "display:flex; align-items:flex-start; gap:18px; padding:4px 6px 10px;";
 
+  // FIX (switch de ocultar amigo): mismo criterio que renderizarConjuntoModoDia
+  // — obtenerListaAmigosParaDiaConjunto trae a todos los vinculados a
+  // propósito, y acá se filtra según el switch de cada amigo.
+  const ocultosConjunto = obtenerFileIdsOcultos();
+
   let idxHoy = -1;
   dias.forEach((dia, i) => {
     const fecha = calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault);
@@ -1621,7 +1652,9 @@ function renderizarConjuntoModoSemana(cont, semestre, numeroSemana, dias) {
         aula: c.aula,
         modalidad: c.modalidad,
       }));
-    const amigosDia = fecha ? obtenerListaAmigosParaDiaConjunto(fecha, dia.abrevDefault) : [];
+    const amigosDia = fecha
+      ? obtenerListaAmigosParaDiaConjunto(fecha, dia.abrevDefault).filter(({ amigo }) => !ocultosConjunto.has(amigo.file_id))
+      : [];
 
     const bloqueDia = document.createElement("div");
     bloqueDia.style.cssText = "display:flex; flex-direction:column; flex-shrink:0;";

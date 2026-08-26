@@ -867,19 +867,23 @@ function obtenerSnapshotAmigoPorId(fileId) {
 }
 
 /**
- * Punto 3 del prompt: unión de TODOS los códigos de día ("L","K","M"...)
- * en los que CUALQUIER amigo vinculado tiene al menos un bloque configurado
- * — a propósito NO filtra por obtenerFileIdsOcultos() (esa preferencia es
- * solo para la superposición del grid propio) ni por ninguna configuración
- * de días visibles (ni la propia del usuario que mira, ni la que el amigo
- * tenía guardada al compartir): la vista compartida debe poder mostrar
- * cualquier día en el que un amigo realmente tenga clase, sin que ninguna
- * preferencia de visualización de nadie lo esconda. Usado por horario.js
- * para armar la lista de días navegables del Horario conjunto.
+ * Punto 3 del prompt: unión de los códigos de día ("L","K","M"...) en los
+ * que algún amigo VISIBLE (no oculto con el switch del panel de Amigos)
+ * tiene al menos un bloque configurado — sí filtra por obtenerFileIdsOcultos()
+ * (antes explícitamente no lo hacía, pero el switch ahora sí controla la
+ * presencia del amigo en Horario conjunto, así que un día que solo usa un
+ * amigo oculto ya no debe quedar navegable ahí). Tampoco filtra por ninguna
+ * configuración de días visibles (ni la propia del usuario que mira, ni la
+ * que el amigo tenía guardada al compartir): más allá de "oculto", un día
+ * con clase real de un amigo visible sigue sin poder esconderse por otra
+ * preferencia. Usado por horario.js para armar la lista de días navegables
+ * del Horario conjunto.
  */
 function obtenerDiasConClaseAmigosVinculados() {
+  const ocultos = obtenerFileIdsOcultos();
   const set = new Set();
-  cacheSnapshotsAmigos.forEach((entrada) => {
+  cacheSnapshotsAmigos.forEach((entrada, fileId) => {
+    if (ocultos.has(fileId)) return;
     if (!entrada || !entrada.snapshot) return;
     (entrada.snapshot.bloques || []).forEach((bloque) => {
       (bloque.dias || []).forEach((d) => {
@@ -1066,11 +1070,20 @@ function renderizarListaAmigosVinculados() {
     const btnVerIndividual = document.createElement("button");
     btnVerIndividual.type = "button";
     btnVerIndividual.className = "btn-icono-fantasma";
-    btnVerIndividual.title = `Ver el horario de ${amigo.nombre} en pantalla completa`;
-    btnVerIndividual.setAttribute("aria-label", `Ver el horario de ${amigo.nombre} en pantalla completa`);
-    btnVerIndividual.style.cssText = "font-size:1.05rem; padding:2px 6px;";
+    // FIX (reporte: "el switch de ocultar amigo no hace nada"): el switch de
+    // abajo ahora sí controla si este amigo aparece en Horario conjunto y en
+    // esta vista individual (antes solo guardaba una preferencia que nadie
+    // leía). Si está oculto, este botón queda deshabilitado en vez de dejar
+    // entrar a una vista que contradice lo que el switch acaba de decir.
+    btnVerIndividual.disabled = oculto;
+    btnVerIndividual.title = oculto
+      ? `${amigo.nombre} está oculto — activá el switch para poder verlo en pantalla completa`
+      : `Ver el horario de ${amigo.nombre} en pantalla completa`;
+    btnVerIndividual.setAttribute("aria-label", btnVerIndividual.title);
+    btnVerIndividual.style.cssText = `font-size:1.05rem; padding:2px 6px; ${oculto ? "opacity:0.35; cursor:not-allowed;" : ""}`;
     btnVerIndividual.textContent = "⛶";
     btnVerIndividual.addEventListener("click", () => {
+      if (oculto) return;
       cerrarPanelAmigos();
       abrirVistaIndividualAmigo(amigo.file_id);
     });
@@ -1162,4 +1175,8 @@ export {
   obtenerSnapshotAmigoPorId,
   obtenerDiasConClaseAmigosVinculados,
   calcularNumeroSemanaAmigo,
+  // FIX (switch de ocultar amigo): horario.js necesita saber quién está
+  // oculto para filtrar las columnas de Horario conjunto y para bloquear
+  // la vista individual de un amigo oculto (ver renderizarVistaIndividualAmigoInterno).
+  obtenerFileIdsOcultos,
 };
