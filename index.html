@@ -455,6 +455,46 @@
              VERSION en service-worker.js, nada más. -->
         <p id="pie-version" class="muted" style="text-align:center; font-size:0.75rem; margin:20px 0 4px;"></p>
 
+        <!-- Créditos — pie de página de la sección Ajustes, siempre visible
+             (no es un .ajuste-seccion acordeón), después de todo lo demás
+             incluida la versión. Estilo "créditos de película": centrado,
+             etiqueta chica y nombre grande. Contenido 100% estático, no
+             depende de estado.datos, así que no requiere JS para pintarse.
+             El botón de feedback es un mailto: directo, sin backend propio. -->
+        <section class="glass-card tarjeta-creditos" style="margin-top:12px;">
+          <h2 class="texto-encabezado-seccion">Créditos</h2>
+
+          <div class="creditos-bloque">
+            <span class="creditos-etiqueta">Creador</span>
+            <span class="creditos-nombre">Wagner Obando</span>
+          </div>
+
+          <div class="creditos-bloque">
+            <span class="creditos-etiqueta">Herramienta principal de desarrollo</span>
+            <span class="creditos-nombre">Claude AI</span>
+          </div>
+
+          <div class="creditos-bloque">
+            <span class="creditos-etiqueta">Beta testers</span>
+            <ul class="creditos-beta-lista">
+              <li>Ivanna V.</li>
+              <li>Mishelle M.</li>
+              <li>Dahianara N.</li>
+              <li>Jan Carlo V.</li>
+              <li>Danny P.</li>
+              <li>Krystel R.</li>
+            </ul>
+          </div>
+
+          <hr class="creditos-separador">
+
+          <p class="muted creditos-feedback-texto">Tu feedback es muy relevante para el desarrollo de este proyecto: nos enfocamos en generar valor real a los usuarios, adaptándonos a la mayor cantidad de personas posible.</p>
+          <a
+            class="btn btn-secondary btn-block"
+            href="mailto:AppAcademica26@gmail.com?subject=Feedback%20-%20AppAcademica"
+          >Enviar comentarios</a>
+        </section>
+
       </div>
 
 
