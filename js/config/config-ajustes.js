@@ -9,7 +9,7 @@ import { actualizarIndicadorSync, forzarBackupManual, marcarCambioPendiente } fr
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
-import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
+import { abrirConfirmacion, construirSelectorChipsMultiple, mostrarToast } from "../ui/componentes.js";
 import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta } from "../ui/tema.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
 import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
@@ -20,17 +20,17 @@ import {
   eliminarAdjuntosDeTareasDeSemestre,
   hayAdjuntosGuardados,
 } from "../core/storage-adjuntos.js";
-// Notificaciones push reales (Ajustes Avanzados) — ver
-// core/notificaciones-push.js. Este archivo solo dibuja el switch y
-// delega toda la lógica de permiso/suscripción/(des)programación en lote
-// a esas funciones.
+// Sincronización con Google Calendar (Ajustes Avanzados), 2026-08-25 —
+// reemplaza a Web Push (ver core/notificaciones-calendario.js, antes
+// core/notificaciones-push.js). Este archivo solo dibuja el switch y
+// delega toda la lógica de creación del calendario secundario/sync en
+// lote a esas funciones.
 import {
-  activarNotificacionesPush,
-  desactivarNotificacionesPush,
-  notificacionesPushActivas,
+  activarSincronizacionCalendario,
+  desactivarSincronizacionCalendario,
+  sincronizacionCalendarActiva,
   sincronizarResumenDiario,
-  soportaNotificacionesPush,
-} from "../core/notificaciones-push.js";
+} from "../core/notificaciones-calendario.js";
 
 /* ------------------------------ Ajustes ------------------------------ */
 
@@ -185,17 +185,14 @@ function dispararSyncConAntirrebote() {
 }
 
 /**
- * Notificaciones — Recordatorios por tipo (2026-08-20, migrado a select
- * único 2026-08-24): un select estilizado (construirSelectCustomAjustes,
- * mismo patrón que Backup y Rango de horas) por cada tipo de evento de
- * Agenda (tarea/examen/evento/feriado), en ese orden fijo.
- * Cada select lee/escribe estado.datos.configuracion.notificaciones_recordatorios[tipo]
- * — sigue siendo un arreglo de ids de OFFSETS_RECORDATORIO_AGENDA (ver
- * core/schema.js) para no romper a quien lo consuma (programarRecordatorioPush
- * en notificaciones-push.js itera ese arreglo), pero ahora el select solo
- * permite un valor a la vez, así que siempre guarda un arreglo de UN
- * elemento. Solo tiene sentido con el switch general de notificaciones push activo —
- * si está apagado, el bloque completo queda atenuado y sin interacción
+ * Notificaciones — Recordatorios por tipo (2026-08-20): un grupo de chips
+ * (ver construirSelectorChipsMultiple en ui/componentes.js) por cada tipo
+ * de evento de Agenda (tarea/examen/evento/feriado), en ese orden fijo.
+ * Cada grupo lee/escribe estado.datos.configuracion.notificaciones_recordatorios[tipo]
+ * (arreglo de ids de OFFSETS_RECORDATORIO_AGENDA, ver core/schema.js).
+ * Solo tiene sentido con el switch general de sincronización con Google
+ * Calendar activo — si está apagado, el bloque completo queda atenuado y
+ * sin interacción
  * (mismo criterio visual que el resto de bloques dependientes de un switch
  * en esta pantalla), pero los valores elegidos NO se pierden: siguen
  * guardados, listos para cuando el usuario vuelva a prender el switch
@@ -222,7 +219,7 @@ function renderizarNotificacionesRecordatorios() {
     cfg.notificaciones_recordatorios = { tarea: ["1_dia"], examen: ["1_dia"], evento: ["1_dia"], feriado: ["1_dia"] };
   }
 
-  const habilitado = notificacionesPushActivas();
+  const habilitado = sincronizacionCalendarActiva();
   contenedor.innerHTML = "";
   contenedor.style.opacity = habilitado ? "" : "0.5";
   contenedor.style.pointerEvents = habilitado ? "" : "none";
@@ -237,16 +234,15 @@ function renderizarNotificacionesRecordatorios() {
     titulo.textContent = etiqueta;
     fila.appendChild(titulo);
 
-    const valorActual = (cfg.notificaciones_recordatorios[tipo] || [])[0] || "1_dia";
-    const elemento = construirSelectCustomAjustes({
-      opciones: OFFSETS_RECORDATORIO_AGENDA.map((o) => ({ valor: o.id, etiqueta: o.etiqueta })),
-      valorInicial: valorActual,
-      onCambiar: (valor) => {
-        cfg.notificaciones_recordatorios[tipo] = [valor];
+    const { elemento } = construirSelectorChipsMultiple(
+      OFFSETS_RECORDATORIO_AGENDA,
+      cfg.notificaciones_recordatorios[tipo],
+      (valoresActuales) => {
+        cfg.notificaciones_recordatorios[tipo] = valoresActuales;
         sellarTimestamp(cfg);
         marcarCambioPendiente();
-      },
-    });
+      }
+    );
     fila.appendChild(elemento);
     contenedor.appendChild(fila);
   });
@@ -258,10 +254,11 @@ function renderizarNotificacionesRecordatorios() {
  * horas del Horario más arriba) para
  * estado.datos.configuracion.notificaciones_resumen_diario ({ activo,
  * hora }). Cada cambio (switch u hora) llama a sincronizarResumenDiario()
- * en core/notificaciones-push.js, que es quien realmente avisa al Worker —
- * acá solo se guarda localmente y se dispara esa sincronización, siguiendo
- * el mismo criterio best-effort del resto de notificaciones push (si el
- * Worker no responde, no se revierte nada en la UI).
+ * en core/notificaciones-calendario.js (2026-08-25: antes avisaba al
+ * Worker, ahora crea/actualiza directo el evento recurrente único en
+ * Google Calendar — Parte C.1 del spec) — acá solo se guarda localmente y
+ * se dispara esa sincronización, siguiendo el mismo criterio best-effort
+ * (si Calendar no responde, no se revierte nada en la UI).
  */
 function renderizarNotificacionesResumenDiario() {
   const chkResumen = document.getElementById("switch-notificaciones-resumen-diario");
@@ -275,7 +272,7 @@ function renderizarNotificacionesResumenDiario() {
   }
   const cfgResumen = cfg.notificaciones_resumen_diario;
 
-  const habilitado = notificacionesPushActivas();
+  const habilitado = sincronizacionCalendarActiva();
   chkResumen.disabled = !habilitado;
   chkResumen.checked = !!cfgResumen.activo;
   bloqueHora.classList.toggle("oculto", !cfgResumen.activo);
@@ -362,38 +359,16 @@ function renderizarConfigDiasHorario() {
     });
   }
 
-  // Días de la semana — unificado (2026-08-23, pedido explícito): antes
-  // eran 2 listas separadas ("Días visibles" con switch, "Nombres
-  // personalizados" con input) que repetían el nombre del día 2 veces.
-  // Ahora es una sola fila por día con 3 columnas (Día | Palabra |
-  // Visibilidad) — el día queda anclado a la izquierda, palabra y
-  // visibilidad a la derecha, en el mismo orden que sus encabezados
-  // (#lista-dias-horario / .tabla-dias-horario-header en index.html
-  // comparten el mismo grid-template-columns, ver design-system.css).
-  const listaDias = document.getElementById("lista-dias-horario");
-  if (listaDias) {
-    listaDias.innerHTML = "";
+  // Días visibles (switch por día). Guardia: no se permite dejar 0 días
+  // visibles, mismo criterio que "nunca quedarse sin nav visible" en main.js.
+  const listaVisibles = document.getElementById("lista-dias-visibles");
+  if (listaVisibles) {
+    listaVisibles.innerHTML = "";
     DIAS_SEMANA_CONFIG.forEach((dia) => {
       const fila = document.createElement("div");
-      fila.className = "tabla-dias-horario-fila";
-
+      fila.className = "row-between";
       const span = document.createElement("span");
       span.textContent = dia.etiqueta;
-
-      const input = document.createElement("input");
-      input.type = "text";
-      input.className = "form-input";
-      input.maxLength = 3;
-      input.placeholder = dia.abrevDefault;
-      input.value = cfg.nombres_dias_personalizados[dia.id] || "";
-      input.addEventListener("change", () => {
-        const valor = input.value.trim().slice(0, 3);
-        if (valor) cfg.nombres_dias_personalizados[dia.id] = valor;
-        else delete cfg.nombres_dias_personalizados[dia.id];
-        sellarTimestamp(cfg);
-        marcarCambioPendiente();
-      });
-
       const label = document.createElement("label");
       label.className = "switch switch-tema";
       const chk = document.createElement("input");
@@ -413,11 +388,38 @@ function renderizarConfigDiasHorario() {
       };
       label.appendChild(chk);
       label.insertAdjacentHTML("beforeend", '<span class="track"><span class="thumb"></span></span>');
+      fila.appendChild(span);
+      fila.appendChild(label);
+      listaVisibles.appendChild(fila);
+    });
+  }
 
+  // Nombres personalizados (máx 3 caracteres, opcional por día)
+  const listaNombres = document.getElementById("lista-nombres-dias");
+  if (listaNombres) {
+    listaNombres.innerHTML = "";
+    DIAS_SEMANA_CONFIG.forEach((dia) => {
+      const fila = document.createElement("div");
+      fila.className = "row-between";
+      const span = document.createElement("span");
+      span.textContent = dia.etiqueta;
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "form-input";
+      input.style.maxWidth = "70px";
+      input.maxLength = 3;
+      input.placeholder = dia.abrevDefault;
+      input.value = cfg.nombres_dias_personalizados[dia.id] || "";
+      input.addEventListener("change", () => {
+        const valor = input.value.trim().slice(0, 3);
+        if (valor) cfg.nombres_dias_personalizados[dia.id] = valor;
+        else delete cfg.nombres_dias_personalizados[dia.id];
+        sellarTimestamp(cfg);
+        marcarCambioPendiente();
+      });
       fila.appendChild(span);
       fila.appendChild(input);
-      fila.appendChild(label);
-      listaDias.appendChild(fila);
+      listaNombres.appendChild(fila);
     });
   }
 }
@@ -938,35 +940,44 @@ function renderizarAjustes() {
     };
   }
 
-  // Notificaciones push reales — switch en Ajustes Avanzados. Se acepte o
-  // no en el onboarding (ver ofrecerActivarNotificacionesPush en main.js),
-  // queda disponible acá para prender/apagar en cualquier momento. Todo el
-  // trabajo real (permiso del navegador, suscripción, (des)programar cada
-  // recordatorio contra el Worker) vive en core/notificaciones-push.js;
-  // este switch solo dispara esas funciones y refleja su resultado.
-  const chkNotificaciones = document.getElementById("switch-notificaciones-push");
-  const avisoSinSoporte = document.getElementById("aviso-notificaciones-sin-soporte");
-  if (chkNotificaciones) {
-    const soportado = soportaNotificacionesPush();
-    chkNotificaciones.disabled = !soportado;
-    avisoSinSoporte?.classList.toggle("oculto", soportado);
-    chkNotificaciones.checked = notificacionesPushActivas();
-    chkNotificaciones.onchange = async () => {
-      // Se deshabilita mientras se resuelve el permiso/suscripción (puede
-      // tardar un instante y no tiene sentido dejar el switch clickeable a
-      // mitad de camino) — vuelve a habilitarse pase lo que pase.
-      chkNotificaciones.disabled = true;
-      if (chkNotificaciones.checked) {
-        const activado = await activarNotificacionesPush();
-        // Si el usuario rechazó el permiso del navegador (o algo falló),
-        // activarNotificacionesPush ya avisó con un toast — acá solo se
-        // destilda el switch para que la UI quede consistente con lo que
-        // realmente pasó.
-        if (!activado) chkNotificaciones.checked = false;
+  // Sincronizar con Google Calendar — switch en Ajustes Avanzados,
+  // 2026-08-25 (reemplaza al viejo "Activar notificaciones push"). Se
+  // acepte o no en el onboarding (ver ofrecerActivarSincronizacionCalendario
+  // en main.js), queda disponible acá para prender/apagar en cualquier
+  // momento. Todo el trabajo real (crear el calendario secundario,
+  // (des)sincronizar cada evento contra la API de Calendar) vive en
+  // core/notificaciones-calendario.js; este switch solo dispara esas
+  // funciones y refleja su resultado.
+  //
+  // *** index.html debe actualizarse a mano (no se subió en esta sesión):
+  // el id del checkbox pasa de "switch-notificaciones-push" a
+  // "switch-sync-calendario", y su label visible de "Activar notificaciones
+  // push" a "Sincronizar recordatorios con Google Calendar" (texto exacto
+  // sugerido en el spec, Parte D.2). El bloque #aviso-notificaciones-sin-
+  // soporte ya NO aplica — a diferencia de Web Push, la sincronización con
+  // Calendar no depende de que el navegador soporte notificaciones (ver
+  // por qué se eliminó soportaNotificacionesPush() en
+  // notificaciones-calendario.js) — puede quitarse del HTML. ***
+  const chkSyncCalendario = document.getElementById("switch-sync-calendario");
+  if (chkSyncCalendario) {
+    chkSyncCalendario.checked = sincronizacionCalendarActiva();
+    chkSyncCalendario.onchange = async () => {
+      // Se deshabilita mientras se resuelve la creación del calendario
+      // secundario/el sync en lote (puede tardar un instante y no tiene
+      // sentido dejar el switch clickeable a mitad de camino) — vuelve a
+      // habilitarse pase lo que pase.
+      chkSyncCalendario.disabled = true;
+      if (chkSyncCalendario.checked) {
+        const activado = await activarSincronizacionCalendario();
+        // Si no se pudo crear el calendario secundario (o falta el scope
+        // de Calendar), activarSincronizacionCalendario ya avisó con un
+        // toast — acá solo se destilda el switch para que la UI quede
+        // consistente con lo que realmente pasó.
+        if (!activado) chkSyncCalendario.checked = false;
       } else {
-        await desactivarNotificacionesPush();
+        await desactivarSincronizacionCalendario();
       }
-      chkNotificaciones.disabled = false;
+      chkSyncCalendario.disabled = false;
       // El switch general habilita/deshabilita los bloques de abajo — se
       // vuelven a pintar acá para que reflejen el nuevo estado al toque,
       // sin esperar a que el usuario navegue fuera y vuelva a Ajustes.
@@ -1190,21 +1201,25 @@ function renderizarSelectorMoneda() {
  * un backup a mano, solo lee/escribe la preferencia y muestra el estado.
  */
 function renderizarSeccionBackupDrive() {
-  const contFrecuencia = document.getElementById("pill-frecuencia-backup");
-  if (contFrecuencia) {
-    contFrecuencia.innerHTML = "";
+  const grupoFrecuencia = document.getElementById("pill-frecuencia-backup");
+  if (grupoFrecuencia) {
+    grupoFrecuencia.innerHTML = "";
     const cfgBackup = estado.datos.configuracion.backup_drive || crearBackupDriveDefault();
-    contFrecuencia.appendChild(construirSelectCustomAjustes({
-      opciones: FRECUENCIAS_BACKUP_DRIVE.map((f) => ({ valor: f.id, etiqueta: f.etiqueta })),
-      valorInicial: cfgBackup.frecuencia || "semanal",
-      onCambiar: (valor) => {
+    FRECUENCIAS_BACKUP_DRIVE.forEach((frecuencia) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pill-item" + (frecuencia.id === (cfgBackup.frecuencia || "semanal") ? " active" : "");
+      btn.textContent = frecuencia.etiqueta;
+      btn.addEventListener("click", () => {
         estado.datos.configuracion.backup_drive =
           estado.datos.configuracion.backup_drive || crearBackupDriveDefault();
-        estado.datos.configuracion.backup_drive.frecuencia = valor;
+        estado.datos.configuracion.backup_drive.frecuencia = frecuencia.id;
         sellarTimestamp(estado.datos.configuracion);
         marcarCambioPendiente();
-      },
-    }));
+        renderizarSeccionBackupDrive();
+      });
+      grupoFrecuencia.appendChild(btn);
+    });
   }
 
   const elEstado = document.getElementById("texto-ultimo-backup");
@@ -1498,14 +1513,15 @@ function renderizarSeccionLiberarEspacio() {
     etiquetaSelector.textContent = "Por semestre:";
     filaSelector.appendChild(etiquetaSelector);
 
-    const selectSemestre = { value: semestres[0]?.id || null };
-    filaSelector.appendChild(construirSelectCustomAjustes({
-      opciones: semestres.map((s) => ({ valor: s.id, etiqueta: s.nombre })),
-      valorInicial: selectSemestre.value,
-      onCambiar: (valor) => {
-        selectSemestre.value = valor;
-      },
-    }));
+    const selectSemestre = document.createElement("select");
+    selectSemestre.className = "input";
+    semestres.forEach((semestre) => {
+      const opt = document.createElement("option");
+      opt.value = semestre.id;
+      opt.textContent = semestre.nombre;
+      selectSemestre.appendChild(opt);
+    });
+    filaSelector.appendChild(selectSemestre);
 
     const filaBotonesSemestre = document.createElement("div");
     filaBotonesSemestre.style.cssText = "display:flex; gap:8px; flex-wrap:wrap;";
