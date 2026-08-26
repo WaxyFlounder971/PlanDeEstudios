@@ -32,14 +32,14 @@ detalle función-por-función; `ARQUITECTURA.md` es el mapa de decisión.
 ## JS — core
 
 ### core/auth.js
-Propósito: toda la integración con Google (login/token) y con la API de Google Drive (crear, leer, escribir, copiar, mover, renombrar y borrar archivos/carpetas/permisos) — es la única capa que habla HTTP con Google.
+Propósito: toda la integración con Google (login/token) y con las API de Google Drive y Google Calendar — es la única capa que habla HTTP con Google.
 Depende de: schema.js (`crearDatosUsuarioNuevo`)
 Exporta:
 * `NOMBRE_CARPETA_BACKUP` — constante `"AppAcademica"`, nombre de la carpeta de Drive donde vive el backup rotativo.
-* `inicializarGoogleAuth({ alObtenerToken, alListo, alFallar, alRechazarPermiso })` — arranca el cliente de Google Identity al cargar la página; llama a los callbacks según el resultado.
-* `iniciarSesionConGoogle()` — dispara la ventana de login/consentimiento de Google (debe llamarse directo desde un click, sin await antes).
+* `inicializarGoogleAuth({ alObtenerToken, alListo, alFallar, alRechazarPermiso })` — arranca el CodeClient de Google Identity al cargar la página; llama a los callbacks según el resultado.
+* `iniciarSesionConGoogle()` — dispara la ventana de login/consentimiento de Google (debe llamarse directo desde un click, sin await antes). 2026-08-25: migrado de `initTokenClient` a `initCodeClient` (flujo de código) — ver `tieneScopeCalendarOtorgado` más abajo.
 * `obtenerPerfilGoogle(token)` — pide nombre y foto de perfil a Google. Devuelve `{ nombre, foto_url }` o `null` si falla.
-* `cerrarSesionGoogle()` — revoca el token en memoria (no borra datos locales, eso lo hace storage.js/main.js).
+* `cerrarSesionGoogle()` — revoca el token en memoria y borra el refresh_token guardado (`borrarRefreshTokenGoogle()`) — no borra datos locales, eso lo hace storage.js/main.js.
 * `buscarOCrearArchivoDatos(token)` — busca el JSON central de la app en Drive; si no existe lo crea con datos de fábrica. Devuelve `{ fileId, datos }`.
 * `crearArchivoJsonEnDrive(token, nombreArchivo, datos)` — versión genérica de creación de archivo JSON en Drive con nombre/contenido arbitrarios (usada para horarios compartidos públicos).
 * `crearPermisoPublicoLectura(token, fileId)` — aplica permiso público de solo lectura sobre un archivo. Devuelve `{ id }` (el `permissionId` a guardar para poder revocarlo).
@@ -47,8 +47,12 @@ Exporta:
 * `leerDatos(token, fileId)` — descarga y parsea el JSON completo de un archivo de Drive.
 * `obtenerMetadatosArchivo(token, fileId)` — pide solo `modifiedTime` de un archivo (llamada barata para sondeo de cambios remotos).
 * `guardarDatos(token, fileId, datos)` — sobrescribe el archivo de datos en Drive con el objeto completo; valida `respuesta.ok` y lanza si falla.
-* `refrescarAccessTokenViaWorker(refreshToken)` — (2026-08-25, reemplaza a `refrescarAccessTokenGoogle`) pide un access_token nuevo vía `POST /oauth/refresh` del Worker — llamada REST servidor-a-servidor pura, nunca puede mostrar una ventana de Google. Devuelve `{ token, expiresIn, refreshTokenNuevo }`.
-* `guardarRefreshTokenGoogle(refreshToken)` / `leerRefreshTokenGoogle()` / `borrarRefreshTokenGoogle()` — (2026-08-25) guardan/leen/borran el refresh_token de Drive en `localStorage`, local a este dispositivo (nunca sincroniza a Drive, es una credencial no un dato de la app).
+* `refrescarAccessTokenViaWorker(refreshToken)` — pide un access_token nuevo vía `POST /oauth/refresh` del Worker — llamada REST servidor-a-servidor pura, nunca puede mostrar una ventana de Google. Devuelve `{ token, expiresIn, refreshTokenNuevo }` (`refreshTokenNuevo` solo si Google rotó el refresh_token). Rechaza con `error.invalidGrant = true` si el refresh_token venció/fue revocado.
+* `guardarRefreshTokenGoogle(refreshToken)` / `leerRefreshTokenGoogle()` / `borrarRefreshTokenGoogle()` — guardan/leen/borran el refresh_token en `localStorage`, local a este dispositivo (nunca sincroniza a Drive, es una credencial no un dato de la app).
+* `tieneScopeCalendarOtorgado()` — (2026-08-25, Calendario Secundario) si el login/canje más reciente incluyó el scope `.../auth/calendar` — Drive es obligatorio desde siempre, Calendar es scope nuevo y opcional en el sentido de que su ausencia no bloquea el login.
+* `crearCalendarioSecundario(token, nombreCalendario)` — `calendars.insert`, crea el calendario secundario (una sola vez por usuario, ver `asegurarCalendarioSecundario` en notificaciones-calendario.js). Devuelve el objeto de Google (`.id` es lo que hay que persistir).
+* `fijarColorCalendario(token, calendarId, colorId)` — `calendarList.patch`, fija el color de fondo del calendario secundario en sí (no de eventos individuales).
+* `insertarEventoCalendar(token, calendarId, evento)` / `actualizarEventoCalendar(token, calendarId, eventId, evento)` / `eliminarEventoCalendar(token, calendarId, eventId)` — `events.insert`/`events.update` (PUT completo)/`events.delete` crudos contra Google Calendar; la orquestación (mapear un EventoAgenda, colorId, reminders, best-effort) vive en notificaciones-calendario.js.
 * `subirArchivoBinarioADrive(token, archivo)` — sube un `File`/`Blob` arbitrario (adjuntos) como archivo nuevo e independiente en Drive.
 * `descargarArchivoBinarioDeDrive(token, driveFileId)` — descarga el contenido real de un adjunto por demanda.
 * `eliminarArchivoDeDriveConId(token, driveFileId)` — borra el archivo real de Drive de un adjunto eliminado; 404 cuenta como éxito.
@@ -57,6 +61,8 @@ Exporta:
 * `renombrarArchivoDrive(token, fileId, nuevoNombre)` — renombra un archivo sin tocar su contenido (solo metadata).
 * `copiarArchivoDrive(token, fileId, nombreCopia, folderId)` — copia un archivo existente del lado del servidor de Google (sin bajar/subir bytes).
 * `moverArchivoAlaCarpeta(token, fileId, folderIdDestino)` — mueve un archivo existente a una carpeta, mismo `fileId`, sin tocar contenido.
+
+> **Nota 2026-08-25:** este archivo YA estaba documentado acá con `refrescarAccessTokenViaWorker`/`guardarRefreshTokenGoogle`/`leerRefreshTokenGoogle`/`borrarRefreshTokenGoogle` desde una sesión anterior — pero el auth.js real que se auditó al empezar esta migración todavía tenía la versión vieja (`initTokenClient`, sin refresh_token, sin ninguna de esas 4 funciones). Es decir, esta parte de OAuth ya se había dado por hecha en la documentación sin haberse aplicado nunca al código real. Se implementó ahora con los nombres que ya documentaba este archivo (no con nombres nuevos), asumiendo que storage-sync.js ya los llama así — si storage-sync.js resulta usar otros nombres, hay que ajustar auth.js, no este documento.
 
 ### core/clipboard.js
 Propósito: blindaje del flujo "copiar prompt al portapapeles" (usado en "Enviar a Claude/ChatGPT") — garantiza que el usuario siempre se entera si la copia falló y siempre tiene una forma manual de recuperarse.
@@ -159,7 +165,10 @@ Exporta:
 
 *Agenda:*
 * `TIPOS_EVENTO_AGENDA` — `["evento", "tarea", "examen"]`.
-* `crearEventoAgenda({ tipo, nombre, fecha, hora, materiaMatriculadaId, semestreId, notas, esFeriado })` — crea un evento/tarea/examen de agenda, ya sellado.
+* `crearEventoAgenda({ tipo, nombre, fecha, hora, materiaMatriculadaId, semestreId, notas, esFeriado })` — crea un evento/tarea/examen de agenda, ya sellado. Incluye `google_calendar_event_id: null` (2026-08-25, ver Calendario Secundario más abajo).
+* `OFFSETS_RECORDATORIO_AGENDA` — offsets disponibles para un recordatorio (id/etiqueta/minutosAntes).
+* `NOMBRE_CALENDARIO_SECUNDARIO` — (2026-08-25) `"AppAcademica"`, nombre exacto del calendario secundario de Google creado vía `calendars.insert` (ver `crearCalendarioSecundario` en auth.js).
+* `COLOR_ID_GOOGLE_CALENDAR_POR_TIPO` — (2026-08-25) mapa tipo→colorId de evento de Google Calendar (tarea/examen/evento/feriado), usado por `core/notificaciones-calendario.js` al armar cada evento espejo.
 
 *Comunidad:*
 * `crearProfesor({ nombre, materias, correo, telefono })` / `crearCompanero({ nombre_completo, carnet, lista, materias_compartidas, nota, telefono })` — crean profesor/compañero.
@@ -262,18 +271,19 @@ Exporta:
 * `hexARgba(hex, alpha)` — convierte un color hex a `rgba(...)` con la opacidad indicada.
 * `estiloBadgeCategoria(hex)` — string de estilo CSS inline para un badge de categoría (fondo translúcido + borde + texto del color).
 
-### core/notificaciones-push.js
-Propósito: notificaciones push reales para recordatorios de Agenda (tareas, exámenes, eventos), sin backend propio pagado. Única parte del cliente que habla por HTTP con el Worker de Cloudflare (proyecto separado, ver `worker-notificaciones/README.md` — no vive en este repo/hosting). El Worker nunca ve datos académicos: solo la suscripción push, una fecha/hora, y el título/cuerpo cortos que este archivo arma. Toda llamada al Worker es "best-effort": si falla, nunca bloquea ni revierte la acción real del usuario en Agenda.
-Depende de: schema.js, storage-sync.js, storage.js, utils.js, ui/componentes.js
+### core/notificaciones-calendario.js
+Propósito: sincronización de recordatorios de Agenda (tareas, exámenes, eventos) con un Calendario Secundario de Google ("AppAcademica") por usuario — reemplaza por completo a `core/notificaciones-push.js` (Web Push + VAPID + Cron en el Worker, dado de baja el 2026-08-25 por no llegar de forma confiable en Doze Mode/Safari). Habla DIRECTO contra la API de Google Calendar (helpers crudos en auth.js) usando el access_token de la sesión — ya NO usa el Worker de Cloudflare para nada de esto (el Worker solo sigue vivo para `/oauth/exchange`/`/oauth/refresh`). Toda llamada de red es "best-effort": si Calendar no responde, nunca bloquea ni revierte la acción real del usuario en Agenda.
+Depende de: schema.js, storage-sync.js, storage.js, utils.js, auth.js, ui/componentes.js
 Exporta:
-* `soportaNotificacionesPush()` — si el navegador soporta Service Worker + PushManager + Notification.
-* `notificacionesPushActivas()` — lee el switch de Ajustes (`estado.datos.configuracion.notificaciones_push_activas`).
-* `activarNotificacionesPush()` — pide permiso de `Notification`, suscribe con `pushManager`, manda una notificación de prueba (`enviarNotificacionDePrueba`) para feedback inmediato, prende el switch de Ajustes y reprograma en lote todo lo pendiente. Devuelve `true`/`false` según haya quedado activo.
-* `enviarNotificacionDePrueba(suscripcion)` — llama a `POST /prueba` del Worker justo al activar: notificación de bienvenida inmediata, sin pasar por D1 ni por el cron. Sirve de diagnóstico end-to-end (VAPID + Worker + Service Worker) sin esperar a un recordatorio real.
-* `desactivarNotificacionesPush()` — apaga el switch, cancela en lote todo lo programado contra el Worker, y se desuscribe del `pushManager`.
-* `ofrecerActivarNotificacionesPush()` — diálogo de onboarding (se llama una única vez desde `main.js`, tras el primer login de una cuenta nueva).
-* `programarRecordatorioPush(evento)` — (re)programa el recordatorio de un `EventoAgenda` contra el Worker; si `evento.completada` es `true`, cancela en vez de programar. No hace nada si el switch de Ajustes está apagado.
-* `cancelarRecordatorioPush(eventoId)` — cancela el recordatorio pendiente de un evento (al borrarlo).
+* `sincronizacionCalendarActiva()` — lee el switch de Ajustes (`estado.datos.configuracion.sincronizar_calendario_google`).
+* `activarSincronizacionCalendario()` — crea el calendario secundario si hace falta (`asegurarCalendarioSecundario`, interna), prende el switch, y sincroniza en lote todo lo pendiente + el Resumen Diario. Devuelve `true`/`false` según haya quedado activo (falla si no se otorgó el scope de Calendar, o si no se pudo crear el calendario).
+* `desactivarSincronizacionCalendario()` — apaga el switch y borra de Calendar todos los eventos espejados + el evento recurrente del Resumen Diario (el calendario secundario en sí NO se borra).
+* `sincronizarEventoCalendario(evento)` — (re)crea/actualiza el espejo de un `EventoAgenda` en Calendar vía `events.insert`/`events.update`; si `evento.completada` es `true`, lo elimina en vez de sincronizarlo. No hace nada si el switch está apagado o falta el scope de Calendar.
+* `eliminarEventoCalendarizado(evento)` — elimina el espejo de un evento en Calendar. A diferencia del viejo `cancelarRecordatorioPush(eventoId)`, necesita el objeto `evento` COMPLETO (con `google_calendar_event_id`), no solo el id.
+* `sincronizarResumenDiario()` — crea/actualiza/borra el ÚNICO evento recurrente (`RRULE:FREQ=DAILY`) del Resumen Diario según `configuracion.notificaciones_resumen_diario`; si cambia la hora, actualiza ese mismo evento (nunca crea uno nuevo).
+* `ofrecerActivarSincronizacionCalendario()` — diálogo de onboarding (se llama una única vez desde `main.js`, tras el primer login de una cuenta nueva).
+
+> **Integración pendiente de confirmar (2026-08-25):** `agenda.js`/`agenda-modal.js` deben actualizarse para llamar a `sincronizarEventoCalendario`/`eliminarEventoCalendarizado` en vez de las funciones viejas de `notificaciones-push.js` (ver nota de cabecera del archivo); `main.js` debe cambiar su import e invocación de `ofrecerActivarNotificacionesPush` a `ofrecerActivarSincronizacionCalendario`, y su listener de `serviceWorker.addEventListener("message", ...)` (salto a Agenda al tocar una notificación push) ya no aplica — el deep link del Resumen Diario ahora es una URL normal (`?abrir=resumen`) que abre el navegador directo, sin pasar por un Service Worker. Ninguno de los 3 archivos se tocó en esta sesión (no se subieron).
 
 ---
 
@@ -344,17 +354,18 @@ Exporta:
 ## JS — config
 
 ### config/config-ajustes.js
-Propósito: renderiza la sección de Ajustes (paletas, modo claro/oscuro, escala de notas, nota de aprobación por plan/universidad, formato de texto, backup rotativo a Drive, modo rendimiento, notificaciones push reales, config de días de Horario, clave de API de Gemini para Asistente IA).
-Depende de: core/notificaciones-push.js, core/schema.js, core/storage-sync.js, core/storage.js, core/utils.js, plan/plan-vista-lista.js, ui/componentes.js, ui/tema.js, ui/paleta-personalizada.js
+Propósito: renderiza la sección de Ajustes (paletas, modo claro/oscuro, escala de notas, nota de aprobación por plan/universidad, formato de texto, backup rotativo a Drive, modo rendimiento, sincronización de recordatorios con Google Calendar, config de días de Horario, clave de API de Gemini para Asistente IA).
+Depende de: core/notificaciones-calendario.js, core/schema.js, core/storage-adjuntos.js, core/storage-sync.js, core/storage.js, core/utils.js, plan/plan-vista-lista.js, semestres/semestres.js, ui/componentes.js, ui/tema.js, ui/paleta-personalizada.js
 Exporta:
-* `renderizarAjustes()` — reconstruye toda la sección de Ajustes (paletas, escalas, moneda, backup, notificaciones push, etc.) e inicializa el accordion. Desde 2026-08-22 también llama a `inicializarAsistenteAjustes()` (interna, no exportada) — guarda/reemplaza/borra `configuracion.gemini_api_key`, muestra la clave enmascarada (últimos 4 caracteres) si ya hay una guardada, y llama a `window.aplicarVisibilidadBotonAsistente()` (main.js) al guardar o borrar. También llama a `renderizarNotificacionesRecordatorios()` y `renderizarNotificacionesResumenDiario()` (internas, no exportadas — reconstruidas 2026-08-23 tras perderse en un merge, ver más abajo).
+* `renderizarAjustes()` — reconstruye toda la sección de Ajustes (paletas, escalas, moneda, backup, sincronización con Google Calendar, etc.) e inicializa el accordion. Desde 2026-08-22 también llama a `inicializarAsistenteAjustes()` (interna, no exportada) — guarda/reemplaza/borra `configuracion.gemini_api_key`, muestra la clave enmascarada (últimos 4 caracteres) si ya hay una guardada, y llama a `window.aplicarVisibilidadBotonAsistente()` (main.js) al guardar o borrar. También llama a `renderizarNotificacionesRecordatorios()` y `renderizarNotificacionesResumenDiario()` (internas, no exportadas — reconstruidas 2026-08-23 tras perderse en un merge, ver más abajo).
 * `renderizarSeccionBackupDrive()` — pinta el bloque de frecuencia/estado del backup rotativo a Drive; solo lee/escribe la preferencia, nunca dispara un backup a mano.
+* `renderizarSeccionLiberarEspacio()` — (no documentada hasta ahora) pinta el bloque de Ajustes "Liberar espacio" (borrado en lote de adjuntos) dentro de `#seccion-liberar-espacio`; si `hayAdjuntosGuardados()` (core/storage-adjuntos.js) devuelve `false`, oculta el contenedor entero y no dibuja nada. Dos modos: por semestre (selector, con botones separados para adjuntos de Cronograma vs. de Tareas, más "Borrar todo este semestre") y global para eventos sueltos sin semestre. Cada botón pide confirmación (`abrirConfirmacion`, ui/componentes.js) antes de borrar — es destructivo e irreversible, borra también el archivo real en Drive vía `eliminarAdjuntosDe*` (core/storage-adjuntos.js), no solo la referencia local. Se re-llama a sí misma al terminar un borrado exitoso para refrescar el estado (ej. ocultarse si ya no queda nada). Llamada desde `renderizarAjustes()`.
 * `aplicarModoRendimiento(activo)` — aplica/quita el atributo `data-rendimiento` en `<html>`. Fix 2026-08-23: antes solo se llamaba desde el `onchange` del switch de Ajustes (causaba el bug de "hace falta tocar el switch dos veces" — el atributo nunca se inicializaba al cargar la app); ahora `main.js` también la llama en `mostrarApp()`, con el valor guardado, apenas se conocen los datos reales del usuario.
 * `DIAS_SEMANA_CONFIG` — arreglo con id/etiqueta/abreviatura por defecto de cada día de la semana, usado en la config de días de Horario.
 
 Funciones internas (no exportadas) relevantes:
-* `renderizarNotificacionesRecordatorios()` — pinta un grupo de chips de selección múltiple (`construirSelectorChipsMultiple`, ui/componentes.js) por cada tipo de evento de Agenda (tarea/examen/evento/feriado, ver `ETIQUETAS_TIPOS_RECORDATORIO_AGENDA`) dentro de `#seccion-notificaciones-recordatorios`. Lee/escribe `configuracion.notificaciones_recordatorios[tipo]` contra `OFFSETS_RECORDATORIO_AGENDA` (core/schema.js). Atenúa y bloquea el bloque completo si el switch general de notificaciones push está apagado, sin perder los valores guardados.
-* `renderizarNotificacionesResumenDiario()` — switch + selector de hora (mismo patrón visual que `construirSelectCustomAjustes`) para `configuracion.notificaciones_resumen_diario` (`{ activo, hora }`). Cada cambio llama a `sincronizarResumenDiario()` (core/notificaciones-push.js). Reconstruida 2026-08-23: se había perdido por completo (junto con `renderizarNotificacionesRecordatorios`) en el merge que integró el Asistente IA a este mismo archivo — la sección "Notificaciones" de Ajustes quedó con el switch general funcionando pero sin recordatorios por tipo ni resumen diario.
+* `renderizarNotificacionesRecordatorios()` — pinta un grupo de chips de selección múltiple (`construirSelectorChipsMultiple`, ui/componentes.js) por cada tipo de evento de Agenda (tarea/examen/evento/feriado, ver `ETIQUETAS_TIPOS_RECORDATORIO_AGENDA`) dentro de `#seccion-notificaciones-recordatorios`. Lee/escribe `configuracion.notificaciones_recordatorios[tipo]` contra `OFFSETS_RECORDATORIO_AGENDA` (core/schema.js). Atenúa y bloquea el bloque completo si el switch general de sincronización con Google Calendar está apagado, sin perder los valores guardados.
+* `renderizarNotificacionesResumenDiario()` — switch + selector de hora (mismo patrón visual que `construirSelectCustomAjustes`) para `configuracion.notificaciones_resumen_diario` (`{ activo, hora }`). Cada cambio llama a `sincronizarResumenDiario()` (core/notificaciones-calendario.js, 2026-08-25: antes creaba un evento por día contra el Worker, ahora es un único evento recurrente en Google Calendar). Reconstruida 2026-08-23: se había perdido por completo (junto con `renderizarNotificacionesRecordatorios`) en el merge que integró el Asistente IA a este mismo archivo — la sección "Notificaciones" de Ajustes quedó con el switch general funcionando pero sin recordatorios por tipo ni resumen diario.
 
 ### config/config-baneados.js
 Propósito: placeholder vacío reservado para cuando se construya la sección de Baneados. No llenar de código de otra cosa por error.
@@ -690,7 +701,7 @@ Nota: no exporta nada — todo el archivo es el punto de entrada de la página. 
 
 ### agenda/agenda.js
 Propósito: núcleo de la Agenda — vista Lista (cronológica, agrupada por día), header, filtros (Semanal/Todo, mostrar materias, mostrar días vacíos), selector de semestres, y el despacho entre Lista y Calendario.
-Depende de: core/notificaciones-push.js, core/schema.js, core/storage-sync.js, core/storage.js, core/utils.js, ui/componentes.js, semestres/semestres.js, agenda/agenda-calendario.js, agenda/agenda-clases.js, agenda/agenda-modal.js, agenda/agenda-utils.js
+Depende de: core/notificaciones-push.js **(2026-08-25: pendiente de cambiar a core/notificaciones-calendario.js — no actualizado en esta sesión, archivo no subido)**, core/schema.js, core/storage-sync.js, core/storage.js, core/utils.js, ui/componentes.js, semestres/semestres.js, agenda/agenda-calendario.js, agenda/agenda-clases.js, agenda/agenda-modal.js, agenda/agenda-utils.js
 Exporta:
 * `inicializarAgenda()` — wiring inicial: modal de evento, botón "+", pills de vista, selector de semestres, filtros.
 * `renderizarAgenda()` — entrypoint de render: decide Lista vs Calendario y dispara el render correspondiente. También expuesta como `window.renderizarAgenda` (evita import circular con `agenda-modal.js` y `agenda-calendario.js`).
@@ -727,8 +738,8 @@ Exporta:
 * `contarClasesDelDia(semestres, fecha, diaCodigo)` — conteo liviano (sin DOM) de clases ese día, sumado entre todos los semestres — lo usa el Calendario para el indicador 📚.
 
 ### agenda/agenda-modal.js
-Propósito: modal de alta/edición de EventoAgenda (evento/tarea/examen) y tarjeta de info al tocar un ítem de la lista. Al guardar/borrar/completar, sincroniza el recordatorio push del evento contra el Worker de notificaciones (ver core/notificaciones-push.js).
-Depende de: core/notificaciones-push.js, core/schema.js, core/storage-sync.js, core/storage.js, core/utils.js, ui/componentes.js, horario/horario.js, agenda/agenda-utils.js
+Propósito: modal de alta/edición de EventoAgenda (evento/tarea/examen) y tarjeta de info al tocar un ítem de la lista. Al guardar/borrar/completar, sincroniza el espejo del evento en Google Calendar (ver core/notificaciones-calendario.js).
+Depende de: core/notificaciones-push.js **(2026-08-25: pendiente de cambiar a core/notificaciones-calendario.js — llamar a sincronizarEventoCalendario/eliminarEventoCalendarizado en vez de las funciones viejas; no actualizado en esta sesión, archivo no subido)**, core/schema.js, core/storage-sync.js, core/storage.js, core/utils.js, ui/componentes.js, horario/horario.js, agenda/agenda-utils.js
 Exporta:
 * `abrirModalEventoAgenda({eventoId, fechaDefault, datosIniciales})` — abre el formulario para crear (si `eventoId` es null) o editar un evento. `datosIniciales` (2026-08-22, Asistente IA) precarga un borrador `{tipo, nombre, fecha, hora, notas}` que todavía NO es un evento real (no vive en `estado.datos.agenda`, sin id) — usado por asistente/asistente.js para mostrar lo que Gemini extrajo, editable, antes de confirmar. Nunca coexiste con `eventoId` (una edición real siempre gana); al guardar se crea un evento nuevo normal, el borrador nunca se persiste como tal.
 * `abrirTarjetaInfoEventoAgenda(eventoId)` — abre la tarjeta de solo-info de un evento (paso previo al editor).
@@ -756,11 +767,11 @@ Exporta:
 ## js/main.js
 
 Propósito: orquestador raíz de la app — arranque, login/logout, navegación entre secciones y renderizado del perfil de usuario. Importa e inicializa el resto de módulos.
-Depende de: config-ajustes.js, config-enlaces.js, auth.js, notificaciones-push.js, schema.js, storage-merge.js, storage-sync.js, storage.js, utils.js, comunidad.js, finanzas.js, plan-categorias.js, plan-detalle.js, plan-esquema.js, plan-gestionar.js, plan-importacion.js, plan-vista-lista.js, semestres.js, agenda.js, horario.js, horario-amigos.js, componentes.js, tema.js
+Depende de: config-ajustes.js, config-enlaces.js, auth.js, notificaciones-push.js **(2026-08-25: pendiente de cambiar a notificaciones-calendario.js — no actualizado en esta sesión, archivo no subido)**, schema.js, storage-merge.js, storage-sync.js, storage.js, utils.js, comunidad.js, finanzas.js, plan-categorias.js, plan-detalle.js, plan-esquema.js, plan-gestionar.js, plan-importacion.js, plan-vista-lista.js, semestres.js, agenda.js, horario.js, horario-amigos.js, componentes.js, tema.js
 Exporta:
 * `programarAvisoLoginBloqueado()` — arma un timeout de 6s que muestra el aviso "no se pudo abrir el login" (VPN/bloqueador de anuncios/extensión de privacidad).
 * `ocultarAvisoLoginBloqueado()` — cancela ese timeout y oculta tanto el aviso de login bloqueado como el de permiso rechazado.
-* `onLoginExitoso(token, expiresIn)` — flujo posterior a un login exitoso de Google: guarda el token activo, resuelve `authListo`, pide almacenamiento persistente al navegador, continúa la carga de datos y, si la cuenta es nueva (`esArchivoNuevo`), ofrece activar notificaciones push reales (`ofrecerActivarNotificacionesPush`).
+* `onLoginExitoso(token, expiresIn)` — flujo posterior a un login exitoso de Google: guarda el token activo, resuelve `authListo`, pide almacenamiento persistente al navegador, continúa la carga de datos y, si la cuenta es nueva (`esArchivoNuevo`), ofrece activar la sincronización con Google Calendar (`ofrecerActivarSincronizacionCalendario`, core/notificaciones-calendario.js — 2026-08-25, reemplaza a `ofrecerActivarNotificacionesPush`; este archivo no se tocó en la sesión de la migración, actualizar el import).
 * `mostrarApp()` — oculta la pantalla de login y muestra el shell de la app; aplica la paleta/tema guardado, renderiza el selector de plan y, si la URL trae `?abrir=agenda` (llegó de tocar una notificación push), salta directo a la sección Agenda. Al final llama a `revisarUniversidadesIncompletas()`.
 * `inicializarModalCompletarUniversidades()` (2026-08-22) — registra el listener del botón "Guardar" de `#modal-completar-universidades`; guarda nombre_completo+siglas de cada plan incompleto y solo se habilita cuando todas las filas tienen ambos campos llenos.
 * `revisarUniversidadesIncompletas()` (2026-08-22) — recorre `estado.datos.planes_estudio` buscando planes con `universidad.siglas === ""` (dejados así por `migrarDatosAntiguos` al migrar un `universidad` string viejo); si encuentra alguno, arma las filas dinámicas en `#lista-completar-universidades` y abre el modal bloqueante `#modal-completar-universidades` (excluido del cierre automático por "X"/click-afuera en componentes.js — no se puede posponer). Se llama al final de `mostrarApp()`.
@@ -787,4 +798,5 @@ Exporta:
 - **Relectura de entidad viva:** antes de mutar algo que vino de un closure (ej. abierto en un modal), se vuelve a buscar por id en `estado.datos` — un sondeo remoto puede haber reemplazado el objeto mientras tanto.
 - **Límite de 800 líneas por archivo:** si un archivo se acerca al límite, se separa por responsabilidad (ver cómo se partió Agenda en núcleo/utils/clases/modal/calendario, y Storage en storage/storage-sync/storage-merge/storage-adjuntos). Archivos que ya superan el límite y son candidatos a dividirse en un próximo prompt: `comunidad/comunidad.js` (3948), `semestres/semestres-tarjetas.js` (~3540), `horario/horario.js` (2064), `horario/horario-modal.js` (1038).
 - **Imports circulares intencionales:** varios módulos se importan entre sí en ambas direcciones a propósito (ver lista completa y la razón de cada uno en `ARQUITECTURA.md`, sección "Imports circulares"). Es seguro en módulos ES mientras el nombre importado solo se use *dentro* de una función, nunca en el nivel superior del archivo. Si una IA nueva ve esto y quiere "arreglarlo" separando más archivos, no hace falta — ya funciona así a propósito.
+- **Worker de Cloudflare (proyecto separado, `worker-notificaciones-agenda`):** 2026-08-25 — se le quitó TODO lo de Web Push/recordatorios/resumen diario/D1/Cron; solo le queda el relevo de OAuth (`/oauth/exchange`, `/oauth/refresh`). La sincronización de Agenda con Google Calendar ya no pasa por él — el cliente habla directo con la API de Calendar (ver `core/notificaciones-calendario.js`, `core/auth.js`).
 - **Índice vivo:** cualquier prompt que cree un archivo nuevo o agregue/quite funciones exportadas a uno existente debe actualizar también su entrada correspondiente acá, en `MAPA_FUNCIONES.md` (y en `ARQUITECTURA.md` si cambia una capa o el cheat-sheet de "¿dónde va cada cosa?").
