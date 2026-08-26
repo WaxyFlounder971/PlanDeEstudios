@@ -975,6 +975,26 @@
   </div>
 </div>
 
+<!-- Falta permiso de Calendar (2026-08-26) — modal BLOQUEANTE, mismo
+     patrón exacto que modal-completar-universidades de arriba: sin "X"
+     (ver exclusión en inicializarBotonesCerrarModal, ui/componentes.js),
+     sin click-afuera (ese listener nunca se registra para este modal,
+     ver avisarFaltaPermisoCalendar en core/notificaciones-calendario.js),
+     un solo botón de acción. Aparece cuando una cuenta que inició sesión
+     ANTES de la migración a Calendar (o que destildó ese permiso en el
+     consentimiento) intenta activar la sincronización — no hay forma de
+     pedir el scope adicional sin un login completo, así que la única
+     salida es cerrar sesión y volver a entrar aceptando el permiso. -->
+<div id="modal-permiso-calendario" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack" style="position:relative; z-index:1;">
+    <h2 style="margin:0;">Falta autorizar Google Calendar</h2>
+    <p class="muted">Tu sesión de Google es de antes de que se agregara la sincronización con Calendar, así que todavía no tiene ese permiso. Para activarla hace falta cerrar sesión y volver a iniciarla, aceptando el permiso de Calendar en la pantalla de Google.</p>
+    <div class="row" style="justify-content:flex-end;">
+      <button id="btn-cerrar-sesion-permiso-calendario" class="btn btn-danger">Cerrar sesión ahora</button>
+    </div>
+  </div>
+</div>
+
 <div id="modal-desbloquea" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
     <h2 style="margin:0;" id="titulo-modal-desbloquea">es requisito para:</h2>
