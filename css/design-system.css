@@ -2362,13 +2362,13 @@ img, svg { max-width: 100%; }
 }
 .ajuste-seccion.colapsada .ajuste-seccion-cuerpo { display: none; }
 
-/* ===================== Créditos (pie de página de Ajustes) =====================
-   Tarjeta fija, siempre expandida (no es un .ajuste-seccion acordeón: no
-   lleva cabecera-botón con chevron, va directo al contenido) al final de
-   #seccion-configuracion, después de #pie-version. Estilo "créditos de
-   película": todo centrado, la etiqueta chica/discreta y el nombre grande
-   con más peso — mismo lenguaje visual que el resto de Ajustes
-   (.glass-card, .texto-encabezado-seccion, .muted, .btn-secondary). */
+/* ===================== Créditos (dentro de Ajustes) =====================
+   Tarjeta colapsable, mismo patrón .ajuste-seccion (cabecera-botón +
+   chevron, colapsada por default) que el resto de Ajustes — ubicada justo
+   después de "Datos". Estilo "créditos de película" dentro del cuerpo:
+   todo centrado, la etiqueta chica/discreta y el nombre grande con más
+   peso — mismo lenguaje visual que el resto de Ajustes (.glass-card,
+   .texto-encabezado-seccion, .muted, .btn-secondary). */
 .tarjeta-creditos {
   text-align: center;
 }
@@ -2411,7 +2411,7 @@ img, svg { max-width: 100%; }
 }
 .creditos-feedback-texto {
   font-size: 0.82rem;
-  margin: 0 0 12px;
+  margin: 0 0 20px;
 }
 
 /* ===================== Resumen ===================== */
