@@ -261,6 +261,12 @@ function inicializarBotonesCerrarModal() {
     // en main.js), así que se excluye de la "X" automática igual que
     // modal-requisito arriba.
     if (overlay.id === "modal-completar-universidades") return;
+    // Falta permiso de Calendar (2026-08-26): mismo criterio bloqueante
+    // que modal-completar-universidades — ver modal-permiso-calendario en
+    // index.html / avisarFaltaPermisoCalendar en
+    // core/notificaciones-calendario.js. Solo tiene una salida (cerrar
+    // sesión), así que tampoco lleva "X".
+    if (overlay.id === "modal-permiso-calendario") return;
     const card = overlay.querySelector(".modal-card");
     if (!card || card.querySelector(".modal-x-close")) return;
 
