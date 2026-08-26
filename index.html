@@ -254,21 +254,25 @@
           <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Notificaciones</h2><span class="ajuste-seccion-chevron">▾</span></button>
           <div class="ajuste-seccion-cuerpo">
 
-          <!-- Notificaciones push reales (recordatorios de Agenda) — ver
-               core/notificaciones-push.js + worker-notificaciones/ (Worker
-               de Cloudflare, proyecto aparte). Switch general: apagarlo
-               cancela TODO lo de acá abajo (recordatorios programados +
-               resumen diario) del lado del Worker. -->
+          <!-- Sincronización con Google Calendar (2026-08-25, reemplaza a
+               Web Push) — ver core/notificaciones-calendario.js. Switch
+               general: apagarlo borra de Calendar TODO lo de acá abajo
+               (eventos espejados + el evento recurrente del resumen
+               diario). El Worker de Cloudflare (worker-notificaciones-
+               agenda/, proyecto aparte) ya NO participa de nada de esto —
+               solo sigue vivo para /oauth/exchange y /oauth/refresh.
+               A diferencia del viejo switch, este NO depende de que el
+               navegador soporte notificaciones push (se eliminó el aviso
+               "Tu navegador no soporta notificaciones push" — Calendar usa
+               la alarma nativa del propio calendario del sistema, no la
+               API de Notification del navegador). -->
           <div class="row-between">
-            <span>Notificaciones reales de Agenda</span>
+            <span>Sincronizar recordatorios con Google Calendar</span>
             <label class="switch switch-tema">
-              <input type="checkbox" id="switch-notificaciones-push">
+              <input type="checkbox" id="switch-sync-calendario">
               <span class="track"><span class="thumb"></span></span>
             </label>
           </div>
-          <p class="muted oculto" id="aviso-notificaciones-sin-soporte" style="font-size:0.78rem; margin:-4px 0 0;">
-            Tu navegador no soporta notificaciones push.
-          </p>
 
           <!-- Recordatorios configurables por tipo (2026-08-20): un
                conjunto de chips (selección múltiple, ver
@@ -282,13 +286,13 @@
                en esta pantalla. -->
           <div id="seccion-notificaciones-recordatorios" class="stack" style="gap:14px;"></div>
 
-          <!-- Resumen diario (2026-08-20): aviso condicional a una hora
-               fija ("tenés pendientes para mañana"), sin detalle real —
-               ver worker-notificaciones/index.js (manejarResumenDiario).
-               El selector de hora reutiliza el mismo patrón de
-               "select-custom" que ya arma construirSelectCustomAjustes
-               para el rango de horas de Horario (contenedor vacío, se
-               llena en config-ajustes.js). -->
+          <!-- Resumen diario (2026-08-20; 2026-08-25 pasa a ser UN solo
+               evento recurrente en el calendario secundario de Google, ver
+               sincronizarResumenDiario en core/notificaciones-calendario.js
+               — antes era un aviso condicional del Worker). El selector de
+               hora reutiliza el mismo patrón de "select-custom" que ya
+               arma construirSelectCustomAjustes para el rango de horas de
+               Horario (contenedor vacío, se llena en config-ajustes.js). -->
           <div class="row-between">
             <span>Resumen diario de pendientes</span>
             <label class="switch switch-tema">
