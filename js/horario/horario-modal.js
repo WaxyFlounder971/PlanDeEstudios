@@ -205,9 +205,10 @@ function abrirModalBloqueHorario({ semestreId, bloqueId, diaPreseleccionado, hor
     apodo: bloque ? bloque.apodo || "" : "",
     grupo: bloque ? bloque.grupo || "" : "",
     nombrePersonalizado: bloque ? bloque.nombre || "" : "",
+    // aula ahora vive por día (d.aula, ver renderizarDiasYHoras) — igual
+    // que modalidad, ya no hay un valor a nivel de bloque que copiar acá.
     dias: diasIniciales.map((d) => ({ ...d })),
     modalidad: bloque ? bloque.modalidad : crearModalidadHorario("presencial"),
-    aula: bloque ? bloque.aula || "" : "",
     profesorId: bloque ? bloque.profesor_id : null,
     enlace: bloque ? bloque.enlace || "" : "",
     notas: bloque ? bloque.notas || "" : "",
@@ -260,13 +261,8 @@ function renderizarFormulario(semestre, bloque, estadoForm) {
     </div>
 
     <div>
-      <label class="form-label">Aula (opcional)</label>
-      <input type="text" id="hb-aula" class="form-input" value="${estadoForm.aula}" />
-    </div>
-
-    <div>
       <label class="form-label">Enlace (opcional)</label>
-      <input type="text" id="hb-enlace" class="form-input" value="${estadoForm.enlace}" placeholder="https://..." />
+      <input type="text" id="hb-enlace" class="form-input" placeholder="https://..." value="${estadoForm.enlace}" />
     </div>
 
     <div>
@@ -330,7 +326,7 @@ function renderizarFormulario(semestre, bloque, estadoForm) {
   if (!valorMateriaInicial) inputNombrePersonalizado.classList.remove("oculto");
   else inputNombrePersonalizado.classList.add("oculto");
 
-  // Días + horas por día (cada día trae su propia modalidad, ver abajo)
+  // Días + horas por día (cada día trae su propia modalidad y aula, ver abajo)
   renderizarDiasYHoras(dias, estadoForm);
 
   // Profesor
@@ -594,6 +590,28 @@ function renderizarDiasYHoras(dias, estadoForm) {
       if (!d.modalidad) d.modalidad = "presencial";
       zonaModalidad.appendChild(selectorModalidadDia.elemento);
 
+      // Aula por día (2026-08-26, pedido de Mochi): mismo patrón que
+      // modalidad arriba — un input de texto libre por día en vez de un
+      // select (aula es texto libre, no un catálogo cerrado de opciones).
+      // El autorelleno al agregar un día nuevo (ver construirPills más
+      // abajo, copia de `referencia.aula`) es lo que da el comportamiento
+      // "un aula aplica a todos por default" sin necesitar un campo aparte
+      // a nivel de materia.
+      const zonaAula = document.createElement("div");
+      zonaAula.style.cssText = "width:100%; margin-top:6px;";
+      const inputAulaDia = document.createElement("input");
+      inputAulaDia.type = "text";
+      inputAulaDia.className = "form-input";
+      inputAulaDia.placeholder = "Aula (opcional)";
+      inputAulaDia.style.cssText = "font-size:0.82rem; padding:6px 8px;";
+      if (d.aula === undefined) d.aula = "";
+      inputAulaDia.value = d.aula || "";
+      inputAulaDia.addEventListener("input", () => {
+        d.aula = inputAulaDia.value;
+      });
+      zonaAula.appendChild(inputAulaDia);
+      fila.appendChild(zonaAula);
+
       horariosCont.appendChild(fila);
     });
   };
@@ -622,6 +640,11 @@ function renderizarDiasYHoras(dias, estadoForm) {
             hora_inicio: referencia ? referencia.hora_inicio : "",
             hora_fin: referencia ? referencia.hora_fin : "",
             modalidad: referencia ? referencia.modalidad : "presencial",
+            // Aula por día (2026-08-26): mismo autorelleno que modalidad —
+            // si ya hay un aula cargada en otro día, ese es el default del
+            // día nuevo (caso más común: una sola aula para toda la
+            // materia), editable independientemente después.
+            aula: referencia ? referencia.aula : "",
           });
         }
         btn.classList.toggle("active");
@@ -995,7 +1018,18 @@ function construirZonaCronograma(semestre, bloque, { semanaInicial } = {}) {
  * pedido explícitamente: ningún guardado fallido debe quedar mudo.
  */
 function guardarBloque(semestreOriginal, bloqueOriginal, estadoForm) {
-  const diasValidos = estadoForm.dias.filter((d) => d.hora_inicio && d.hora_fin);
+  // Aula por día (2026-08-26): se normaliza acá mismo (trim, vacío -> null)
+  // en vez de dejarlo crudo como venía del input — mismo criterio que ya
+  // aplicaba el input único de aula que este reemplaza.
+  const diasValidos = estadoForm.dias
+    .filter((d) => d.hora_inicio && d.hora_fin)
+    .map((d) => ({
+      dia: d.dia,
+      hora_inicio: d.hora_inicio,
+      hora_fin: d.hora_fin,
+      modalidad: d.modalidad || "presencial",
+      aula: d.aula ? d.aula.trim() || null : null,
+    }));
   if (diasValidos.length === 0) {
     mostrarToast("Elegí al menos un día con hora de inicio y fin");
     return;
@@ -1015,7 +1049,6 @@ function guardarBloque(semestreOriginal, bloqueOriginal, estadoForm) {
     return;
   }
 
-  const aula = document.getElementById("hb-aula").value.trim();
   const apodo = document.getElementById("hb-apodo").value.trim();
   const grupo = document.getElementById("hb-grupo").value.trim();
   const enlace = document.getElementById("hb-enlace").value.trim();
@@ -1028,9 +1061,10 @@ function guardarBloque(semestreOriginal, bloqueOriginal, estadoForm) {
     nombre: estadoForm.materiaId ? null : nombrePersonalizado,
     apodo: apodo || null,
     grupo: grupo || null,
+    // Aula viaja dentro de cada día (diasValidos ya la trae normalizada,
+    // ver arriba) — ya no es un campo aparte a nivel de bloque.
     dias: diasValidos,
     modalidad: estadoForm.modalidad,
-    aula: aula || null,
     profesorId: estadoForm.profesorId,
     enlace: enlace || null,
     notas: notas || null,
@@ -1081,7 +1115,6 @@ function guardarBloque(semestreOriginal, bloqueOriginal, estadoForm) {
   bloque.grupo = campos.grupo;
   bloque.dias = campos.dias;
   bloque.modalidad = campos.modalidad;
-  bloque.aula = campos.aula;
   bloque.profesor_id = campos.profesorId;
   bloque.enlace = campos.enlace;
   bloque.notas = campos.notas;

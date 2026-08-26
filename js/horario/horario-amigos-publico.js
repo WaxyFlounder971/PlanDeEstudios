@@ -109,7 +109,9 @@ function construirClasesEfectivasSemana(bloques, numeroSemana) {
         id: bloque.id,
         nombre: bloque.nombre,
         color: bloque.color,
-        aula: bloque.aula || null,
+        // Aula por día (2026-08-26, mismo cambio que schema.js): ya no es
+        // fija por bloque, viene de diaBloque igual que modalidad.
+        aula: diaBloque.aula || null,
         universidad: bloque.universidad || null,
         dia: diaBloque.dia,
         hora_inicio: diaBloque.hora_inicio,
