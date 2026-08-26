@@ -14,7 +14,10 @@ import { CLAVE_CACHE_LOCAL, borrarTokenCache, establecerTokenActivo, estado, gua
 import { obtenerIniciales } from "./core/utils.js";
 // Sincronización con Google Calendar (2026-08-25, reemplaza Web Push) —
 // ver core/notificaciones-calendario.js.
-import { ofrecerActivarSincronizacionCalendario } from "./core/notificaciones-calendario.js";
+import {
+  inicializarModalPermisoCalendario,
+  ofrecerActivarSincronizacionCalendario,
+} from "./core/notificaciones-calendario.js";
 import { inicializarComunidad, renderizarComunidad } from "./comunidad/comunidad.js";
 import { renderizarFinanzas } from "./finanzas/finanzas.js";
 import { inicializarModalCategoria, inicializarModalCategoriaMaterias } from "./plan/plan-categorias.js";
@@ -446,6 +449,9 @@ window.addEventListener("DOMContentLoaded", () => {
     inicializarModalHistorial,
     inicializarResponsivoListaPlan,
     inicializarModalCompletarUniversidades,
+    // 2026-08-26: mismo patrón que inicializarModalCompletarUniversidades
+    // de arriba — modal bloqueante propio, ver core/notificaciones-calendario.js.
+    inicializarModalPermisoCalendario,
   ].forEach((fn) => {
     try {
       fn();
