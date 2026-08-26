@@ -379,9 +379,14 @@ function creditosTotalesSemestre(semestre, obtenerPlanPorId) {
   }, 0);
 }
 
+// (2026-08-26) Antes `universidad` era un string plano acá. Desde la
+// migración a { nombre_completo, siglas } (ver schema.js,
+// migrarDatosAntiguos), `siglas` YA es la versión corta que se quiere
+// mostrar en el badge — revisarUniversidadesIncompletas() en main.js
+// garantiza que nunca llegue vacío, así que no hace falta truncar nada acá.
 function textoBadgeUniversidad(universidad) {
-  if (!universidad) return "?";
-  return universidad.length > 14 ? obtenerIniciales(universidad) : universidad;
+  if (!universidad || !universidad.siglas) return "?";
+  return universidad.siglas;
 }
 
 /**
@@ -3286,7 +3291,7 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
     const badgeUniversidad = document.createElement("span");
     badgeUniversidad.className = "badge badge-neutral";
     badgeUniversidad.textContent = textoBadgeUniversidad(plan.universidad);
-    badgeUniversidad.title = plan.universidad;
+    badgeUniversidad.title = (plan.universidad && plan.universidad.nombre_completo) || "";
     return badgeUniversidad;
   }
 
