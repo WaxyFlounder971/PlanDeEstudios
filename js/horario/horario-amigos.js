@@ -1164,4 +1164,5 @@ export {
   obtenerSnapshotAmigoPorId,
   obtenerDiasConClaseAmigosVinculados,
   calcularNumeroSemanaAmigo,
+  obtenerFileIdsOcultos,
 };
