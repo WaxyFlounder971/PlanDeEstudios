@@ -19,11 +19,11 @@ import {
 } from "./agenda-utils.js";
 import { eliminarAdjunto, obtenerAdjuntosActivosDe, obtenerAdjuntosDe } from "../core/storage-adjuntos.js";
 import { abrirAdjunto, abrirMenuAdjuntos, abrirModalAdjuntar } from "../ui/adjuntos-ui.js";
-// Notificaciones push reales (recordatorios de Agenda) — ver
-// core/notificaciones-push.js. Ambas llamadas son "best-effort": si el
-// Worker no responde, no bloquean ni revierten el guardado/borrado del
-// evento (ver comentario al inicio de ese archivo).
-import { cancelarRecordatorioPush, programarRecordatorioPush } from "../core/notificaciones-push.js";
+// Sincronización con Google Calendar (2026-08-25, reemplaza Web Push) —
+// ver core/notificaciones-calendario.js. Ambas llamadas son "best-effort":
+// si Calendar no responde, no bloquean ni revierten el guardado/borrado
+// del evento (ver comentario al inicio de ese archivo).
+import { eliminarEventoCalendarizado, sincronizarEventoCalendario } from "../core/notificaciones-calendario.js";
 
 const PLACEHOLDER_NOMBRE = {
   evento: "Ej. Charla de RRHH",
@@ -404,13 +404,14 @@ function guardarEventoAgenda(eventoExistente) {
   // posterior del modal, por lo que sea, los borre por error).
   esAltaNuevaConAdjuntosPendientes = false;
 
-  // Notificaciones push reales: (re)programa el recordatorio de este
-  // evento contra el Worker con la fecha/hora recién guardada — cubre
-  // tanto altas nuevas como ediciones de fecha/hora/nombre de un evento
-  // existente (un upsert por id del lado del Worker, ver
-  // core/notificaciones-push.js). No hace nada si el switch de Ajustes
-  // está desactivado, y nunca bloquea el guardado si falla.
-  programarRecordatorioPush(eventoGuardado);
+  // Sincronización con Google Calendar (2026-08-25, reemplaza Web Push):
+  // (re)crea/actualiza el espejo de este evento en el calendario secundario
+  // con la fecha/hora recién guardada — cubre tanto altas nuevas como
+  // ediciones de fecha/hora/nombre de un evento existente (upsert por
+  // google_calendar_event_id, ver core/notificaciones-calendario.js). No
+  // hace nada si el switch de Ajustes está desactivado, y nunca bloquea el
+  // guardado si falla.
+  sincronizarEventoCalendario(eventoGuardado);
 
   marcarCambioPendiente();
   cerrarModalEventoAgenda();
@@ -438,8 +439,15 @@ function confirmarBorrarEventoAgenda(eventoExistente, onBorradoConfirmado) {
         estado.datos._eliminados_agenda.push({ id: viva.id, eliminadoEn: Date.now() });
         estado.datos.agenda = estado.datos.agenda.filter((ev) => ev.id !== viva.id);
         marcarCambioPendiente();
-        // Cancela el recordatorio push pendiente, si había uno programado.
-        cancelarRecordatorioPush(viva.id);
+        // Elimina el espejo en Google Calendar, si había uno sincronizado.
+        // Necesita el objeto `viva` COMPLETO (con google_calendar_event_id)
+        // — a diferencia del viejo cancelarRecordatorioPush(id), que solo
+        // necesitaba el id porque el Worker indexaba por id compuesto
+        // propio; acá hace falta el id real que asignó Google (ver
+        // core/notificaciones-calendario.js). La referencia `viva` sigue
+        // siendo válida aunque ya se haya sacado del arreglo justo arriba
+        // (filter no muta el objeto en sí, solo la lista).
+        eliminarEventoCalendarizado(viva);
       }
       cerrarModalEventoAgenda();
       refrescarAgenda();
@@ -482,10 +490,10 @@ function alternarCompletadaDesdeInfo(evento) {
   marcarCambioPendiente();
   refrescarAgenda();
   renderizarTarjetaInfoEventoAgenda(viva);
-  // Al completar se cancela el recordatorio push pendiente; al
-  // des-completar se reprograma (programarRecordatorioPush ya distingue
-  // ambos casos según viva.completada — ver core/notificaciones-push.js).
-  programarRecordatorioPush(viva);
+  // Al completar se elimina el espejo en Google Calendar; al des-completar
+  // se recrea/actualiza (sincronizarEventoCalendario ya distingue ambos
+  // casos según viva.completada — ver core/notificaciones-calendario.js).
+  sincronizarEventoCalendario(viva);
 }
 
 function renderizarTarjetaInfoEventoAgenda(evento) {
