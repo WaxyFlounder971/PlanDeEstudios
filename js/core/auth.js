@@ -35,6 +35,17 @@ const SCOPE_CALENDAR = "https://www.googleapis.com/auth/calendar";
 const SCOPES = `openid email profile ${SCOPE_DRIVE} ${SCOPE_CALENDAR}`;
 const NOMBRE_ARCHIVO_DATOS = "app_academica_datos.json";
 const CLAVE_YA_AUTORIZADO = "google_ya_autorizado";
+// BUGFIX 2026-08-26: `ultimoScopeCalendarOtorgado` (más abajo) solo se
+// actualizaba dentro de manejarRespuestaCode, es decir, únicamente durante
+// un login completo con popup. En una recarga normal de página (el caso
+// común: el token se renueva en silencio vía refrescarAccessTokenViaWorker,
+// sin pasar por el popup) esa variable arrancaba en `false` de nuevo en
+// cada carga del módulo — así el usuario SÍ tenía el scope de Calendar
+// otorgado del lado de Google, pero tieneScopeCalendarOtorgado() igual
+// devolvía false hasta el próximo login completo, bloqueando la
+// sincronización o disparando el aviso de "falta permiso" sin necesidad.
+// Se persiste el resultado en localStorage para que sobreviva recargas.
+const CLAVE_SCOPE_CALENDAR_OTORGADO = "google_calendar_scope_otorgado_v1";
 // OAuth con refresh_token (2026-08-25, Parte A del spec de migración):
 // el refresh_token vive ÚNICAMENTE en este dispositivo (localStorage) —
 // el Worker es un relevo sin memoria, nunca lo guarda (ver index.js del
@@ -88,8 +99,11 @@ let callbacksAuth = null;
 // canje más reciente — permite a otros módulos (ej. notificaciones-
 // calendario.js, antes de intentar crear el calendario secundario)
 // preguntar si el usuario efectivamente concedió Calendar sin tener que
-// volver a inspeccionar tokens.
-let ultimoScopeCalendarOtorgado = false;
+// volver a inspeccionar tokens. BUGFIX 2026-08-26: se inicializa leyendo
+// el último valor persistido (ver CLAVE_SCOPE_CALENDAR_OTORGADO) en vez de
+// arrancar siempre en false — así una recarga de página con refresh_token
+// silencioso no "olvida" que el usuario ya había otorgado el scope.
+let ultimoScopeCalendarOtorgado = localStorage.getItem(CLAVE_SCOPE_CALENDAR_OTORGADO) === "1";
 
 /**
  * El <script> de Google se carga con async/defer, así que puede no estar
@@ -186,6 +200,9 @@ async function manejarRespuestaCode(respuesta) {
   // notificaciones-calendario.js simplemente no podrá sincronizar hasta
   // que el usuario vuelva a autorizar con Calendar incluido.
   ultimoScopeCalendarOtorgado = scopesOtorgados.includes(SCOPE_CALENDAR);
+  // BUGFIX 2026-08-26: persistir para que sobreviva recargas (ver nota
+  // junto a CLAVE_SCOPE_CALENDAR_OTORGADO más arriba).
+  localStorage.setItem(CLAVE_SCOPE_CALENDAR_OTORGADO, ultimoScopeCalendarOtorgado ? "1" : "0");
   if (!ultimoScopeCalendarOtorgado) {
     console.warn("Login sin permiso de Calendar — la sincronización con Google Calendar queda desactivada.");
   }
@@ -304,6 +321,11 @@ function cerrarSesionGoogle() {
   }
   accessToken = null;
   borrarRefreshTokenGoogle();
+  // BUGFIX 2026-08-26: limpiar también el scope de Calendar persistido —
+  // si la próxima sesión es de otra cuenta de Google, no debe arrastrar
+  // el "sí tiene permiso" de la cuenta anterior.
+  ultimoScopeCalendarOtorgado = false;
+  localStorage.removeItem(CLAVE_SCOPE_CALENDAR_OTORGADO);
 }
 
 /**
@@ -863,6 +885,26 @@ async function crearCalendarioSecundario(token, nombreCalendario) {
     const error = new Error(`Calendar respondió ${respuesta.status} al crear el calendario secundario: ${cuerpo}`);
     error.status = respuesta.status;
     error.body = cuerpo;
+    // 2026-08-26: caso puntual (visto en pruebas) que NO es un problema de
+    // permisos del usuario ni algo que un reintento resuelva — Google
+    // Calendar API todavía no está habilitada en el proyecto de Cloud
+    // Console (error.reason === "SERVICE_DISABLED" / "accessNotConfigured").
+    // Es una acción de UNA sola vez que tiene que hacer quien administra el
+    // proyecto en Google Cloud Console (Wagner), no algo resoluble desde
+    // acá ni volviendo a iniciar sesión. Se marca explícitamente para que
+    // notificaciones-calendario.js no lo confunda con "falta el scope" ni
+    // con un error transitorio de red.
+    try {
+      const cuerpoJson = JSON.parse(cuerpo);
+      const detalle = cuerpoJson?.error?.details?.find((d) => d.reason === "SERVICE_DISABLED");
+      if (detalle || cuerpoJson?.error?.errors?.some((e) => e.reason === "accessNotConfigured")) {
+        error.apiDeshabilitada = true;
+        error.urlActivacion = detalle?.metadata?.activationUrl || null;
+      }
+    } catch (e) {
+      // Cuerpo no era JSON parseable — se ignora, error.apiDeshabilitada
+      // queda undefined y el catch de arriba lo trata como error genérico.
+    }
     throw error;
   }
   return respuesta.json(); // { id, summary, ... }

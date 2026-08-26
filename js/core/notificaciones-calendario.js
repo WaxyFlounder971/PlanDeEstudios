@@ -49,6 +49,13 @@ import { marcarCambioPendiente, asegurarTokenValido, conReintentoSi401 } from ".
 import { estado } from "./storage.js";
 import { aplicarFormatoTexto } from "./utils.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
+// 2026-08-26: import circular intencional (mismo patrón ya usado por
+// storage-sync.js con main.js, ver ARQUITECTURA.md) — se necesita
+// cerrarSesion() para que el aviso de "falta permiso de Calendar" (ver
+// avisarFaltaPermisoCalendar) pueda ofrecer cerrar sesión con una sola
+// acción, en vez de solo indicarle al usuario que lo haga a mano desde el
+// menú de perfil.
+import { cerrarSesion } from "../main.js";
 import {
   tieneScopeCalendarOtorgado,
   crearCalendarioSecundario,
@@ -432,16 +439,32 @@ async function activarSincronizacionCalendario() {
     // es un scope agregado en esta migración — una cuenta que inició
     // sesión ANTES de este cambio no lo tiene todavía. No hay forma de
     // pedir el permiso adicional sin pasar de nuevo por el login completo
-    // en este flujo (ver auth.js) — se le pide explícitamente reconectar.
-    mostrarToast("Hace falta volver a iniciar sesión para autorizar Google Calendar");
+    // en este flujo (ver auth.js) — 2026-08-26: antes esto era un simple
+    // toast (fácil de ignorar sin darse cuenta de qué pasó); ahora es un
+    // aviso explícito con una acción concreta (ver avisarFaltaPermisoCalendar).
+    avisarFaltaPermisoCalendar();
     return false;
   }
 
   try {
     await asegurarCalendarioSecundario();
   } catch (e) {
+    // 2026-08-26: caso puntual de configuración del proyecto de Google
+    // Cloud (API de Calendar sin habilitar) — no es un problema de
+    // permisos del usuario, así que NO se ofrece cerrar sesión acá (no
+    // resolvería nada); se distingue explícitamente del resto de errores
+    // (red, cuota, etc.) para no mandar al usuario a "intentar de nuevo"
+    // cuando reintentar no va a cambiar nada hasta que se habilite la API.
     console.error("No se pudo crear el calendario secundario en Google Calendar:", e);
-    mostrarToast("No se pudo activar la sincronización con Google Calendar. Intentá de nuevo.");
+    if (e && e.apiDeshabilitada) {
+      console.error(
+        "Google Calendar API no está habilitada en el proyecto de Google Cloud — hace falta habilitarla una sola vez desde la consola" +
+          (e.urlActivacion ? `: ${e.urlActivacion}` : " (ver el link en el error de arriba).")
+      );
+      mostrarToast("Google Calendar todavía no está habilitado en el proyecto. Avisale al desarrollador de la app.");
+    } else {
+      mostrarToast("No se pudo activar la sincronización con Google Calendar. Intentá de nuevo.");
+    }
     return false;
   }
 
@@ -484,8 +507,40 @@ function ofrecerActivarSincronizacionCalendario() {
   });
 }
 
+/**
+ * 2026-08-26 — Aviso al usuario cuando falta el scope de Calendar (cuenta
+ * que inició sesión antes de esta migración, o que lo destildó en el
+ * consentimiento). Se llama desde activarSincronizacionCalendario, tanto
+ * si lo dispara el switch de Ajustes como el onboarding.
+ *
+ * *** LIMITACIÓN CONOCIDA, sin resolver en esta sesión: se pidió que este
+ * aviso sea "no saltable", pero el único modal genérico disponible acá
+ * (abrirConfirmacion, componentes.js) es el mismo que usan TODAS las
+ * confirmaciones normales de la app (ver #modal-confirmacion en
+ * index.html: tiene botón "Cancelar" y, por lo que ya se vio en
+ * #modal-completar-universidades, componentes.js excluye del cierre
+ * automático por X/click-afuera a modales puntuales por ID — no se sabe
+ * el mecanismo exacto sin ver componentes.js, que no se subió en esta
+ * sesión). Tal cual quedó, este aviso SÍ se puede cerrar con Cancelar/X/
+ * click-afuera, igual que cualquier otra confirmación — no es realmente
+ * "no saltable" todavía. Para que lo sea de verdad hace falta componentes.js
+ * (ver cómo está armada la exclusión para modal-completar-universidades)
+ * y agregar el nuevo modal a esa misma lista. ***
+ */
+function avisarFaltaPermisoCalendar() {
+  abrirConfirmacion({
+    titulo: "Falta autorizar Google Calendar",
+    mensaje:
+      "Tu sesión de Google es de antes de que se agregara la sincronización con Calendar, así que todavía no tiene ese permiso. Para activarla hace falta cerrar sesión y volver a iniciarla, aceptando el permiso de Calendar en la pantalla de Google.",
+    textoConfirmar: "Cerrar sesión ahora",
+    claseConfirmar: "btn-danger",
+    onConfirmar: cerrarSesion,
+  });
+}
+
 export {
   activarSincronizacionCalendario,
+  avisarFaltaPermisoCalendar,
   desactivarSincronizacionCalendario,
   eliminarEventoCalendarizado,
   ofrecerActivarSincronizacionCalendario,
