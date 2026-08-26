@@ -56,6 +56,33 @@ const CLAVE_REFRESH_TOKEN = "google_refresh_token";
 // cruzado entre archivos, mismo criterio que CLIENT_ID_GOOGLE duplicado en
 // el Worker (ver comentario ahí).
 const URL_WORKER_OAUTH = "https://worker-notificaciones-agenda.appacademica.workers.dev";
+
+// (2026-08-26) FIX: "carga infinita" — un fetch() sin timeout que se cuelga
+// (mala señal, cold-start lento del Worker, lo que sea) deja el await
+// esperando para siempre, lo cual nunca dispara el .catch()/.finally() de
+// asegurarTokenValido() en storage-sync.js, lo cual nunca llama a
+// resolverAuthListo() (ver storage.js), lo cual deja colgado TODO lo que
+// hace `await authListo` en storage-sync.js — o sea, la app entera. Este
+// helper envuelve fetch con un AbortController: pasado TIMEOUT_MS, aborta
+// y el fetch rechaza como cualquier error de red normal, que las dos
+// funciones de abajo ya sabían manejar. 12s da margen a un cold-start del
+// Worker sin dejar al usuario esperando eternamente.
+const TIMEOUT_MS_WORKER = 12000;
+
+async function fetchConTimeout(url, opciones) {
+  const controlador = new AbortController();
+  const idTimeout = setTimeout(() => controlador.abort(), TIMEOUT_MS_WORKER);
+  try {
+    return await fetch(url, { ...opciones, signal: controlador.signal });
+  } catch (e) {
+    if (e.name === "AbortError") {
+      throw new Error(`El Worker no respondió en ${TIMEOUT_MS_WORKER / 1000}s (timeout).`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(idTimeout);
+  }
+}
 // Valor fijo que exige Google Identity Services para el flujo de código en
 // modo popup (ux_mode: "popup"): no hay una URL de redirect real, todo pasa
 // por postMessage dentro del propio popup — por eso el mismo literal
@@ -142,7 +169,7 @@ function esperarGsiListo(timeoutMs = 10000) {
  * ausencia en un canje puntual.
  */
 async function intercambiarCodePorTokens(code) {
-  const respuesta = await fetch(`${URL_WORKER_OAUTH}/oauth/exchange`, {
+  const respuesta = await fetchConTimeout(`${URL_WORKER_OAUTH}/oauth/exchange`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code, redirect_uri: REDIRECT_URI_CODE_FLOW }),
@@ -567,7 +594,7 @@ async function refrescarAccessTokenViaWorker(refreshToken) {
     throw new Error("No hay refresh_token: hace falta volver a iniciar sesión.");
   }
 
-  const respuesta = await fetch(`${URL_WORKER_OAUTH}/oauth/refresh`, {
+  const respuesta = await fetchConTimeout(`${URL_WORKER_OAUTH}/oauth/refresh`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ refresh_token: refreshToken }),
