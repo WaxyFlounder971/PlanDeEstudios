@@ -1051,6 +1051,63 @@ async function eliminarEventoCalendar(token, calendarId, eventId) {
   }
 }
 
+/**
+ * events.patch — actualización PARCIAL (a diferencia de actualizarEventoCalendar,
+ * que hace un PUT completo y reemplaza el objeto entero). Se usa
+ * puntualmente para reescribir SOLO la `description` de UNA instancia
+ * específica del evento recurrente del Resumen Diario (ver
+ * actualizarResumenDiarioDelDia en notificaciones-calendario.js) — un PUT
+ * completo ahí exigiría/pisaría campos como `recurrence` que no aplican a
+ * una instancia individual, y crearía un riesgo de romper la recurrencia
+ * entera por accidente.
+ */
+async function parchearEventoCalendar(token, calendarId, eventId, campos) {
+  const respuesta = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(campos),
+    }
+  );
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Calendar respondió ${respuesta.status} al parchear el evento: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+  return respuesta.json();
+}
+
+/**
+ * events.instances — lista las ocurrencias REALES de un evento recurrente
+ * dentro de una ventana de tiempo (a diferencia del evento maestro, que no
+ * tiene una fecha concreta por sí solo). Se usa para encontrar el id
+ * puntual de la instancia de HOY del Resumen Diario, que es lo que hace
+ * falta para poder parchear (ver arriba) solo ese día sin tocar el resto
+ * de la recurrencia.
+ */
+async function buscarInstanciaEventoCalendar(token, calendarId, eventId, timeMinIso, timeMaxIso) {
+  const params = new URLSearchParams({ timeMin: timeMinIso, timeMax: timeMaxIso, maxResults: "1" });
+  const respuesta = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}/instances?${params}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Calendar respondió ${respuesta.status} al listar instancias: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+  const datos = await respuesta.json();
+  return (datos.items && datos.items[0]) || null;
+}
+
 export {
   NOMBRE_CARPETA_BACKUP,
   crearArchivoJsonEnDrive,
@@ -1082,4 +1139,6 @@ export {
   insertarEventoCalendar,
   actualizarEventoCalendar,
   eliminarEventoCalendar,
+  parchearEventoCalendar,
+  buscarInstanciaEventoCalendar,
 };

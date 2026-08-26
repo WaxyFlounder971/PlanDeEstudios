@@ -62,6 +62,8 @@ import {
   insertarEventoCalendar,
   actualizarEventoCalendar,
   eliminarEventoCalendar,
+  parchearEventoCalendar,
+  buscarInstanciaEventoCalendar,
 } from "./auth.js";
 
 // *** VER NOTA DE INTEGRACIÓN ARRIBA *** — confirmar contra el ruteo real.
@@ -345,14 +347,59 @@ async function eliminarTodosLosEventosCalendarizados() {
  * Notificaciones — Resumen diario (Parte C): UN solo evento recurrente
  * (RRULE:FREQ=DAILY) en vez de un evento por día — si el usuario cambia la
  * hora, se actualiza ESE MISMO evento (events.update), nunca se crea uno
- * nuevo (Parte C.1). Contenido fijo y genérico + source.url con el deep
- * link a la sección Resumen (Parte C.2) — el contenido real se genera al
- * vuelo cuando el usuario realmente abre la app (Parte C.3, sin cambios
- * ahí).
+ * nuevo (Parte C.1).
  *
- * Se llama desde renderizarNotificacionesResumenDiario en
- * config-ajustes.js cada vez que cambia el switch o la hora elegida —
- * mismo punto de entrada que tenía el archivo viejo.
+ * 2026-08-26 (reportado: "llena todo el calendario hasta que me muera"):
+ * antes la recurrencia no tenía fin (`RRULE:FREQ=DAILY` a secas), así que
+ * Google/Samsung Calendar la mostraban repitiéndose literalmente para
+ * siempre al scrollear hacia adelante. Ahora lleva un `UNTIL` acotado a
+ * HORIZONTE_DIAS_RESUMEN días — y se renueva solo, sin que el usuario lo
+ * note, cada vez que actualizarResumenDiarioDelDia() corre (una vez por
+ * día, al abrir la app): como sigue siendo un PUT completo contra el MISMO
+ * id de evento, "renovar" es simplemente volver a llamar a esta función,
+ * que recalcula el UNTIL desde hoy.
+ */
+const HORIZONTE_DIAS_RESUMEN = 120; // ~4 meses de recurrencia visible a la vez
+
+/** Arma el body de events.insert/update para el evento recurrente del
+ *  Resumen Diario. `descripcion` es opcional — si no se pasa, usa el texto
+ *  genérico de fallback (lo que ve cualquier día que la app no se haya
+ *  abierto antes de que suene la alarma, ver generarTextoResumenHoy). */
+function construirCuerpoResumenDiario(cfgResumen, descripcion) {
+  const zonaHoraria = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const hora = cfgResumen.hora || "20:00";
+  const hoyIso = new Date().toISOString().slice(0, 10);
+  const [h, m] = hora.split(":").map(Number);
+  const finDate = new Date(`${hoyIso}T00:00:00`);
+  finDate.setHours(h, m + 15, 0, 0);
+  const finHora = `${String(finDate.getHours()).padStart(2, "0")}:${String(finDate.getMinutes()).padStart(2, "0")}:00`;
+
+  // UNTIL en formato RFC5545 (YYYYMMDDTHHMMSSZ, UTC) — Google lo exige así
+  // para eventos con dateTime (a diferencia de eventos de día completo,
+  // que usarían YYYYMMDD a secas).
+  const untilDate = new Date(`${hoyIso}T${hora}:00`);
+  untilDate.setDate(untilDate.getDate() + HORIZONTE_DIAS_RESUMEN);
+  const untilStr = untilDate.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+
+  return {
+    summary: "📚 Tu resumen académico de hoy",
+    description: descripcion || "Toca para ver tu resumen académico de hoy 👋",
+    start: { dateTime: `${hoyIso}T${hora}:00`, timeZone: zonaHoraria },
+    end: { dateTime: `${hoyIso}T${finHora}`, timeZone: zonaHoraria },
+    recurrence: [`RRULE:FREQ=DAILY;UNTIL=${untilStr}`],
+    reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 0 }] },
+    source: { url: DEEP_LINK_RESUMEN, title: "Resumen académico" },
+  };
+}
+
+/**
+ * Se llama desde renderizarNotificacionesResumenDiario en config-ajustes.js
+ * cada vez que cambia el switch o la hora elegida — mismo punto de entrada
+ * que tenía el archivo viejo. También la reusa internamente
+ * actualizarResumenDiarioDelDia() (ver abajo) para renovar el horizonte de
+ * la recurrencia una vez por día, con el texto genérico (el contenido real
+ * del día lo pisa después esa misma función, parcheando SOLO la instancia
+ * de hoy).
  */
 async function sincronizarResumenDiario() {
   const idGuardado = estado.datos?.configuracion?.google_calendar_resumen_evento_id;
@@ -376,23 +423,7 @@ async function sincronizarResumenDiario() {
     }
 
     const calendarId = await asegurarCalendarioSecundario();
-    const zonaHoraria = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const hora = cfgResumen.hora || "20:00";
-    const hoyIso = new Date().toISOString().slice(0, 10);
-    const [h, m] = hora.split(":").map(Number);
-    const finDate = new Date(`${hoyIso}T00:00:00`);
-    finDate.setHours(h, m + 15, 0, 0);
-    const finHora = `${String(finDate.getHours()).padStart(2, "0")}:${String(finDate.getMinutes()).padStart(2, "0")}:00`;
-
-    const cuerpo = {
-      summary: "📚 Tu resumen académico de hoy",
-      description: "Toca para ver tu resumen académico de hoy 👋",
-      start: { dateTime: `${hoyIso}T${hora}:00`, timeZone: zonaHoraria },
-      end: { dateTime: `${hoyIso}T${finHora}`, timeZone: zonaHoraria },
-      recurrence: ["RRULE:FREQ=DAILY"],
-      reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 0 }] },
-      source: { url: DEEP_LINK_RESUMEN, title: "Resumen académico" },
-    };
+    const cuerpo = construirCuerpoResumenDiario(cfgResumen);
 
     if (idGuardado) {
       await conTokenValido((token) => actualizarEventoCalendar(token, calendarId, idGuardado, cuerpo));
@@ -405,6 +436,95 @@ async function sincronizarResumenDiario() {
     marcarCambioPendiente();
   } catch (e) {
     console.warn("No se pudo sincronizar el Resumen Diario con Google Calendar (no crítico):", e);
+  }
+}
+
+/**
+ * Arma el texto real del Resumen Diario de HOY (2026-08-26 — antes era
+ * siempre el mismo texto genérico "Toca para ver tu resumen académico de
+ * hoy"). Mira los eventos de MAÑANA — la alarma suena hoy en la
+ * tarde/noche, así que avisar lo que se viene tiene más sentido que
+ * repetir lo de hoy — y si no hay nada mañana, busca el próximo evento
+ * pendiente más cercano en cualquier fecha futura para no dejar el aviso
+ * vacío sin necesidad.
+ */
+function generarTextoResumenHoy() {
+  const eventos = (estado.datos.agenda || []).filter((e) => !e.completada && e.fecha);
+  const hoyIso = new Date().toISOString().slice(0, 10);
+  const mañanaDate = new Date();
+  mañanaDate.setDate(mañanaDate.getDate() + 1);
+  const mañanaIso = mañanaDate.toISOString().slice(0, 10);
+
+  const formateadorFecha = new Intl.DateTimeFormat("es-CR", { weekday: "long", day: "numeric", month: "long" });
+  const formatearFecha = (fechaIso) => formateadorFecha.format(new Date(`${fechaIso}T00:00:00`));
+
+  const deManana = eventos.filter((e) => e.fecha === mañanaIso);
+  if (deManana.length > 0) {
+    const nombres = deManana.map((e) => e.nombre || "Evento de Agenda");
+    const listado =
+      nombres.length === 1 ? nombres[0] : `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
+    return `Mañana tenés: ${listado} 📌`;
+  }
+
+  const proximo = eventos.filter((e) => e.fecha > hoyIso).sort((a, b) => a.fecha.localeCompare(b.fecha))[0];
+  if (proximo) {
+    return `Para mañana no tenés nada. Tu próximo evento es "${proximo.nombre || "Evento de Agenda"}" el ${formatearFecha(proximo.fecha)}.`;
+  }
+
+  return "Para mañana no tenés nada pendiente en la Agenda 🎉";
+}
+
+/**
+ * Se llama UNA vez por día, la primera vez que la app arranca ese día (ver
+ * main.js, justo después de mostrarApp()) — deduplicada contra
+ * configuracion.resumen_diario_actualizado_el para no pegarle a la API de
+ * Calendar en cada carga. Hace 2 cosas, ambas "mejor esfuerzo" (mismo
+ * criterio que el resto del archivo):
+ *
+ *   1. Renueva el horizonte de la recurrencia (vía sincronizarResumenDiario
+ *      — mismo id de evento, así que es un PUT que solo extiende el UNTIL,
+ *      nunca crea uno nuevo).
+ *   2. Busca la instancia de HOY del evento recurrente y le parchea SOLO
+ *      la descripción con el contenido real del día (events.patch) — el
+ *      evento maestro sigue con el texto genérico de fallback, para
+ *      cualquier día en que la app no se haya abierto antes de que suene
+ *      la alarma (limitación conocida: sin un disparador del lado del
+ *      servidor —que es justo lo que esta migración eliminó a propósito—
+ *      no hay forma de garantizar el contenido real si el usuario no abre
+ *      la app ese día).
+ */
+async function actualizarResumenDiarioDelDia() {
+  if (!sincronizacionCalendarActiva() || !tieneScopeCalendarOtorgado()) return;
+  const cfgResumen = estado.datos?.configuracion?.notificaciones_resumen_diario;
+  if (!cfgResumen?.activo) return;
+  const idEvento = estado.datos?.configuracion?.google_calendar_resumen_evento_id;
+  if (!idEvento) return;
+
+  const hoyIso = new Date().toISOString().slice(0, 10);
+  if (estado.datos.configuracion.resumen_diario_actualizado_el === hoyIso) return; // ya se hizo hoy
+
+  try {
+    await sincronizarResumenDiario(); // 1) renueva el horizonte
+
+    const calendarId = await asegurarCalendarioSecundario();
+    const timeMin = new Date(`${hoyIso}T00:00:00`).toISOString();
+    const timeMax = new Date(`${hoyIso}T23:59:59`).toISOString();
+    const instancia = await conTokenValido((token) =>
+      buscarInstanciaEventoCalendar(token, calendarId, idEvento, timeMin, timeMax)
+    );
+
+    if (instancia) {
+      const descripcion = generarTextoResumenHoy();
+      await conTokenValido((token) =>
+        parchearEventoCalendar(token, calendarId, instancia.id, { description: descripcion })
+      );
+    }
+
+    estado.datos.configuracion.resumen_diario_actualizado_el = hoyIso;
+    sellarTimestamp(estado.datos.configuracion);
+    marcarCambioPendiente();
+  } catch (e) {
+    console.warn("No se pudo actualizar el Resumen Diario de hoy (no crítico):", e);
   }
 }
 
@@ -543,6 +663,7 @@ function inicializarModalPermisoCalendario() {
 
 export {
   activarSincronizacionCalendario,
+  actualizarResumenDiarioDelDia,
   avisarFaltaPermisoCalendar,
   desactivarSincronizacionCalendario,
   eliminarEventoCalendarizado,
