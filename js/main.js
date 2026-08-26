@@ -12,7 +12,9 @@ import { fusionarDatos } from "./core/storage-merge.js";
 import { actualizarIndicadorSync, asegurarTokenValido, forzarSincronizacion, inicializarPullToRefresh, inicializarSondeoAlVolver, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
 import { CLAVE_CACHE_LOCAL, borrarTokenCache, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
 import { obtenerIniciales } from "./core/utils.js";
-import { ofrecerActivarNotificacionesPush, soportaNotificacionesPush } from "./core/notificaciones-push.js";
+// Sincronización con Google Calendar (2026-08-25, reemplaza Web Push) —
+// ver core/notificaciones-calendario.js.
+import { ofrecerActivarSincronizacionCalendario } from "./core/notificaciones-calendario.js";
 import { inicializarComunidad, renderizarComunidad } from "./comunidad/comunidad.js";
 import { renderizarFinanzas } from "./finanzas/finanzas.js";
 import { inicializarModalCategoria, inicializarModalCategoriaMaterias } from "./plan/plan-categorias.js";
@@ -143,7 +145,7 @@ if ("serviceWorker" in navigator) {
 // (Notification.permission) es por dispositivo, no por cuenta, así que si
 // esto sincronizara por Drive, alguien que ya vio el aviso en el celular
 // nunca lo vería en la PC aunque ahí nunca haya dado el permiso.
-const CLAVE_NOTIFICACIONES_PUSH_OFRECIDAS = "notificaciones_push_ofrecidas_v1";
+const CLAVE_SYNC_CALENDARIO_OFRECIDA = "sincronizacion_calendario_ofrecida_v1";
 
 window.addEventListener("DOMContentLoaded", () => {
   // v9.2 (ajuste v1.8.7, punto 6 — pull-to-refresh no funciona en teléfono
@@ -549,25 +551,27 @@ async function onLoginExitoso(token, expiresIn) {
     }
     mostrarApp();
 
-    // Notificaciones push reales — onboarding (ver B.1 del pedido
-    // original, ampliado luego a pedirse en el primer open de CUALQUIER
-    // cuenta, nueva o existente): se ofrece la primera vez que este
+    // Sincronización con Google Calendar — onboarding (2026-08-25,
+    // reemplaza a Web Push): se ofrece la primera vez que este
     // dispositivo/navegador abre la app, ya no solo cuando el archivo de
-    // Drive es recién creado. `Notification.permission === "default"`
-    // filtra los casos en los que no tiene sentido volver a preguntar: si
-    // ya está "granted" no hace falta, y si ya está "denied" el navegador
-    // ni siquiera mostraría el popup (resolvería solo, en silencio) — en
-    // ese caso mejor no disparar el diálogo para nada. La marca en
+    // Drive es recién creado. A diferencia del viejo mecanismo, esto NO
+    // depende de que el navegador soporte notificaciones (era
+    // `soportaNotificacionesPush()`) ni de `Notification.permission` — la
+    // sincronización con Calendar no usa la API de Notification del
+    // navegador en absoluto, así que esos 2 checks ya no aplican y se
+    // eliminan sin reemplazo (ofrecerActivarSincronizacionCalendario ya
+    // revisa por su cuenta si el usuario otorgó el scope de Calendar antes
+    // de hacer nada, y no hace nada si no lo otorgó). La marca en
     // localStorage asegura que, se acepte, se rechace o se cierre el
     // diálogo sin elegir, este dispositivo no vuelva a verlo en logins
     // siguientes. El switch de Ajustes Avanzados sigue disponible siempre
     // para prender/apagar a mano (ver config-ajustes.js). Se dispara
     // después de mostrarApp() y sin `await`: es un diálogo de confirmación
     // no bloqueante, no debe demorar la entrada a la app.
-    const yaSeOfrecioEnEsteDispositivo = localStorage.getItem(CLAVE_NOTIFICACIONES_PUSH_OFRECIDAS) === "1";
-    if (soportaNotificacionesPush() && Notification.permission === "default" && !yaSeOfrecioEnEsteDispositivo) {
-      localStorage.setItem(CLAVE_NOTIFICACIONES_PUSH_OFRECIDAS, "1");
-      ofrecerActivarNotificacionesPush();
+    const yaSeOfrecioEnEsteDispositivo = localStorage.getItem(CLAVE_SYNC_CALENDARIO_OFRECIDA) === "1";
+    if (!yaSeOfrecioEnEsteDispositivo) {
+      localStorage.setItem(CLAVE_SYNC_CALENDARIO_OFRECIDA, "1");
+      ofrecerActivarSincronizacionCalendario();
     }
   } catch (e) {
     // v1.15.1 (fix real del reporte "inicio sesión y como que no inicia,
@@ -770,14 +774,25 @@ function mostrarApp() {
   // tras un refresh la sección de Plan de Estudios se quedaba con la clase
   // "oculto" del HTML aunque su contenido sí se hubiera renderizado.
   mostrarSeccion(localStorage.getItem(CLAVE_SECCION_ACTIVA) || "plan-estudios");
-  // Notificaciones push — al tocar la notificación del sistema, el service
-  // worker abre la app con "?abrir=agenda" en la URL (ver 'notificationclick'
-  // en service-worker.js). Se revisa acá, al final de mostrarApp() (cubre
-  // tanto el arranque con caché como el login recién completado), y se
-  // limpia el query param enseguida para que un refresh posterior no vuelva
-  // a saltar a Agenda solo.
-  if (new URLSearchParams(window.location.search).get("abrir") === "agenda") {
+  // Deep links por query param — ambos se limpian enseguida para que un
+  // refresh posterior no vuelva a saltar de sección solo:
+  //   "?abrir=agenda"  — notificación push vieja (Web Push, dada de baja
+  //                       2026-08-25, ver 'notificationclick' en
+  //                       service-worker.js — ese archivo no se revisó en
+  //                       esta sesión, puede tener código muerto si seguía
+  //                       generando este link).
+  //   "?abrir=resumen" — (2026-08-25, NUEVO) el `source.url` del evento
+  //                       recurrente del Resumen Diario en el calendario
+  //                       secundario de Google (ver sincronizarResumenDiario
+  //                       en core/notificaciones-calendario.js) — al tocar
+  //                       la alarma nativa del calendario, el sistema
+  //                       operativo abre esta URL en el navegador.
+  const parametroAbrir = new URLSearchParams(window.location.search).get("abrir");
+  if (parametroAbrir === "agenda") {
     mostrarSeccion("agenda");
+    window.history.replaceState({}, "", window.location.pathname);
+  } else if (parametroAbrir === "resumen") {
+    mostrarSeccion("resumen");
     window.history.replaceState({}, "", window.location.pathname);
   }
   // Universidad — separación nombre_completo/siglas (2026-08-22): va AL
