@@ -15,6 +15,7 @@ import { obtenerIniciales } from "./core/utils.js";
 // Sincronización con Google Calendar (2026-08-25, reemplaza Web Push) —
 // ver core/notificaciones-calendario.js.
 import {
+  actualizarResumenDiarioDelDia,
   inicializarModalPermisoCalendario,
   ofrecerActivarSincronizacionCalendario,
 } from "./core/notificaciones-calendario.js";
@@ -579,6 +580,16 @@ async function onLoginExitoso(token, expiresIn) {
       localStorage.setItem(CLAVE_SYNC_CALENDARIO_OFRECIDA, "1");
       ofrecerActivarSincronizacionCalendario();
     }
+
+    // Resumen Diario — contenido real del día + renovación del horizonte
+    // de la recurrencia (2026-08-26, reportado: "llena el calendario hasta
+    // que me muera" + "debería decir qué es el resumen, no un texto fijo").
+    // Se llama una vez por carga; la propia función se deduplica sola
+    // contra configuracion.resumen_diario_actualizado_el para no pegarle a
+    // la API de Calendar más de una vez por día. Sin await: best-effort,
+    // no debe demorar la entrada a la app (mismo criterio que la línea de
+    // arriba).
+    actualizarResumenDiarioDelDia();
   } catch (e) {
     // v1.15.1 (fix real del reporte "inicio sesión y como que no inicia,
     // tengo que recargar y volver a intentar"): antes este try no tenía
