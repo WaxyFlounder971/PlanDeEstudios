@@ -2362,6 +2362,58 @@ img, svg { max-width: 100%; }
 }
 .ajuste-seccion.colapsada .ajuste-seccion-cuerpo { display: none; }
 
+/* ===================== Créditos (pie de página de Ajustes) =====================
+   Tarjeta fija, siempre expandida (no es un .ajuste-seccion acordeón: no
+   lleva cabecera-botón con chevron, va directo al contenido) al final de
+   #seccion-configuracion, después de #pie-version. Estilo "créditos de
+   película": todo centrado, la etiqueta chica/discreta y el nombre grande
+   con más peso — mismo lenguaje visual que el resto de Ajustes
+   (.glass-card, .texto-encabezado-seccion, .muted, .btn-secondary). */
+.tarjeta-creditos {
+  text-align: center;
+}
+.tarjeta-creditos .texto-encabezado-seccion {
+  margin: 0 0 4px;
+}
+.creditos-bloque + .creditos-bloque {
+  margin-top: 18px;
+}
+.creditos-etiqueta {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 4px;
+}
+.creditos-nombre {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.creditos-beta-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.creditos-separador {
+  border: none;
+  border-top: 1px solid var(--border-glass);
+  margin: 20px 0;
+}
+.creditos-feedback-texto {
+  font-size: 0.82rem;
+  margin: 0 0 12px;
+}
+
 /* ===================== Resumen ===================== */
 
 /* "Semana N de M" — dato chico arriba de todo, no es un bloque con card
