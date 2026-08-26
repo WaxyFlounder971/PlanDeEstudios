@@ -1460,10 +1460,12 @@ function crearModalidadHorario(tipo, textoPersonalizado) {
  * Horario — Núcleo: un bloque es la PLANTILLA base del semestre, no una
  * clase de una semana puntual. Se define una sola vez y se proyecta a todas
  * las semanas del semestre (ver obtenerClasesEfectivasSemana) — todo campo
- * (aula, profesor, enlace, notas, color, horario) es fijo para todo el
- * semestre y solo se edita acá, en la plantilla. La única excepción puntual
- * por semana que soporta el modelo es la Modalidad de un día individual —
- * ver cronograma_dias / crearDiaCronograma.
+ * (profesor, enlace, notas, color, horario) es fijo para todo el semestre y
+ * solo se edita acá, en la plantilla. Las únicas excepciones son: (a) el
+ * aula, que es un valor por día dentro de `dias[]` — igual que modalidad,
+ * por pedido de Mochi (2026-08-26): una materia puede dar clase en un aula
+ * un día y en otra distinta otro día — y (b) la Modalidad de un día
+ * individual en una semana puntual — ver cronograma_dias / crearDiaCronograma.
  *
  * `materiaId` null = bloque "Crear personalizado", usa `nombre` propio en vez
  * de heredar el de una materia matriculada real.
@@ -1471,7 +1473,7 @@ function crearModalidadHorario(tipo, textoPersonalizado) {
  * el render, ver obtenerContextoMateria en comunidad.js para el mismo
  * patrón de lookup); string = color propio editado a mano, independiente.
  */
-function crearBloqueHorario({ materiaId, planEstudioId, nombre, apodo, grupo, dias, modalidad, aula, profesorId, enlace, notas, color }) {
+function crearBloqueHorario({ materiaId, planEstudioId, nombre, apodo, grupo, dias, modalidad, profesorId, enlace, notas, color }) {
   return sellarTimestamp({
     id: "bh_" + crypto.randomUUID(),
     materia_id: materiaId || null,
@@ -1480,10 +1482,11 @@ function crearBloqueHorario({ materiaId, planEstudioId, nombre, apodo, grupo, di
     nombre: materiaId ? null : (nombre || ""),
     apodo: apodo || null,
     grupo: grupo || null,
-    // [{ dia: "L"|"K"|"M"|"J"|"V"|"S"|"D", hora_inicio: "HH:MM", hora_fin: "HH:MM" }, ...]
+    // [{ dia: "L"|"K"|"M"|"J"|"V"|"S"|"D", hora_inicio: "HH:MM", hora_fin: "HH:MM", modalidad, aula }, ...]
+    // aula por día (2026-08-26): igual que modalidad, cada día trae su
+    // propio valor de aula — ver obtenerClasesEfectivasSemana.
     dias: Array.isArray(dias) ? dias : [],
     modalidad: modalidad || crearModalidadHorario("presencial"),
-    aula: aula || null,
     // Un solo profesor por bloque, a propósito (distinto de mm.profesor_ids,
     // que sí es arreglo) — un bloque es una sesión de clase concreta, no
     // toda la materia, así que no necesita soportar 2+ docentes a la vez.
@@ -1519,9 +1522,11 @@ function crearBloqueHorario({ materiaId, planEstudioId, nombre, apodo, grupo, di
  * en horario.js). bloque.modalidad (el campo objeto a nivel de bloque) es
  * un campo aparte que hoy no participa del render — el Cronograma no lo
  * toca.
- * A propósito esto es lo ÚNICO editable por día — aula/profesor/enlace/
- * notas/color/horario siguen siendo responsabilidad exclusiva de la
- * plantilla base (crearBloqueHorario). "Sin clase" ya no es un switch
+ * A propósito esto es lo ÚNICO editable POR SEMANA — aula/profesor/enlace/
+ * notas/color siguen siendo responsabilidad exclusiva de la plantilla base
+ * (crearBloqueHorario); aula además ya es por día dentro de esa plantilla
+ * (bloque.dias[].aula, 2026-08-26) pero sigue sin tener excepción semanal
+ * puntual, solo modalidad la tiene. "Sin clase" ya no es un switch
  * booleano aparte: es un valor más de modalidad, así que cancelar un día
  * puntual es simplemente crear/editar su entrada de cronograma con
  * modalidad "sin_clase".
@@ -1549,9 +1554,11 @@ function crearDiaCronograma({ numeroSemana, dia, modalidad }) {
  * modalidad, la tarjetita sigue existiendo en el grid (atenuada/transparente
  * a criterio de la UI, ver horario.js) — así se evita recalcular layout del
  * grid cada vez que cambia una modalidad puntual.
- * Todo campo que NO sea `dia`/`hora_inicio`/`hora_fin`/`modalidad` viene
- * siempre de la plantilla (aula, profesor, enlace, notas, color, materia_id,
- * nombre, plan_estudio_id) — el Cronograma no los puede tocar.
+ * `aula` viene de diaBloque (aula por día, 2026-08-26 — mismo patrón que
+ * modalidad, sin excepción semanal). Todo campo que NO sea
+ * `dia`/`hora_inicio`/`hora_fin`/`modalidad`/`aula` viene siempre de la
+ * plantilla (profesor, enlace, notas, color, materia_id, nombre,
+ * plan_estudio_id) — el Cronograma no los puede tocar.
  */
 function obtenerClasesEfectivasSemana(bloque, numeroSemana) {
   const overridesEstaSemana = (bloque.cronograma_dias || []).filter((cd) => cd.numero_semana === numeroSemana);
@@ -1570,7 +1577,7 @@ function obtenerClasesEfectivasSemana(bloque, numeroSemana) {
       hora_inicio: diaBloque.hora_inicio,
       hora_fin: diaBloque.hora_fin,
       modalidad,
-      aula: bloque.aula,
+      aula: diaBloque.aula || null,
       profesor_id: bloque.profesor_id,
       enlace: bloque.enlace,
       notas: bloque.notas,
@@ -2786,6 +2793,26 @@ function migrarDatosAntiguos(datos) {
         // esta fase con el mismo patrón defensivo del resto de esta función.
         if (!Array.isArray(bloque.cronograma_dias)) bloque.cronograma_dias = [];
         if (!Array.isArray(bloque._eliminados_cronograma_dias)) bloque._eliminados_cronograma_dias = [];
+        // Aula por día (2026-08-26, pedido de Mochi): aula pasa de ser un
+        // valor único a nivel de bloque a ser un valor por día, igual que
+        // modalidad — mismo patrón, mismo motivo (una materia puede tener
+        // clase presencial un día y virtual otro; ahora también puede
+        // tener aulas distintas). Bloques viejos con aula única a nivel de
+        // materia migran ese mismo valor a CADA día ya cargado —
+        // `dia.aula === undefined` es la marca de "no migrado todavía", así
+        // que esto es idempotente y nunca pisa un aula que el usuario ya
+        // haya diferenciado por día después de la migración (ni en la
+        // próxima carga, ni al fusionar con un dispositivo que migró
+        // primero — mismo motivo que el resto de esta función corre
+        // siempre sobre los dos lados antes de comparar). bloque.aula se
+        // descarta una vez copiado: ya no participa del modelo, a
+        // diferencia de bloque.modalidad (el campo objeto a nivel de
+        // bloque, que es código muerto de una versión anterior y no se
+        // toca acá — ver comentario en crearBloqueHorario).
+        (bloque.dias || []).forEach((dia) => {
+          if (dia.aula === undefined) dia.aula = bloque.aula || null;
+        });
+        delete bloque.aula;
       });
       (semestre.materias_matriculadas || []).forEach((mm) => {
         if (!Array.isArray(mm.criterios)) mm.criterios = [];
