@@ -55,21 +55,21 @@ function crearDatosUsuarioNuevo() {
       // propio. Ver FRECUENCIAS_BACKUP_DRIVE más abajo para las opciones.
       backup_drive: crearBackupDriveDefault(),
 
-      // Notificaciones — Recordatorio configurable por tipo (2026-08-20,
-      // migrado a valor único 2026-08-24): cada tipo (tarea/examen/evento/
-      // feriado) tiene UN offset activo (antes era multi-selección; se
-      // simplificó a un select único en Ajustes, así que el dato ahora es
-      // un string, no un arreglo). Default: "1_dia" en los 4 tipos, para
-      // que funcione sin que el usuario tenga que entrar a configurar nada
-      // (pedido explícito). Ver OFFSETS_RECORDATORIO_AGENDA más abajo para
-      // la lista completa de offsets válidos — cualquier valor fuera de
-      // esa lista se ignora silenciosamente al programar (ver
-      // programarRecordatorioPush en notificaciones-push.js).
+      // Notificaciones — Recordatorios configurables por tipo (2026-08-20):
+      // reemplaza el modelo de "1 solo recordatorio implícito por evento"
+      // — ahora cada tipo (tarea/examen/evento/feriado) tiene su propio
+      // conjunto de offsets activos, multi-selección (ej. tarea puede tener
+      // "15 min antes" Y "1 día antes" a la vez). Default: 1 día antes en
+      // los 4 tipos, para que funcione sin que el usuario tenga que entrar
+      // a configurar nada (pedido explícito). Ver OFFSETS_RECORDATORIO_AGENDA
+      // más abajo para la lista completa de offsets válidos — cualquier
+      // valor fuera de esa lista se ignora silenciosamente al programar
+      // (ver programarRecordatorioPush en notificaciones-push.js).
       notificaciones_recordatorios: {
-        tarea: "1_dia",
-        examen: "1_dia",
-        evento: "1_dia",
-        feriado: "1_dia",
+        tarea: ["1_dia"],
+        examen: ["1_dia"],
+        evento: ["1_dia"],
+        feriado: ["1_dia"],
       },
 
       // Notificaciones — Resumen diario (2026-08-20): aviso condicional
@@ -82,6 +82,28 @@ function crearDatosUsuarioNuevo() {
         activo: false,
         hora: "20:00",
       },
+
+      // Calendario Secundario de Google (2026-08-25, reemplaza Web Push):
+      // switch general — reemplaza a notificaciones_push_activas (ese
+      // campo NUNCA estuvo declarado acá de fábrica, se escribía on-the-fly
+      // desde activarNotificacionesPush()/desactivarNotificacionesPush();
+      // se aprovecha esta migración para declararlo explícito).
+      sincronizar_calendario_google: false,
+      // id del calendario "AppAcademica" creado una sola vez por usuario
+      // vía calendars.insert (ver crearCalendarioSecundario en auth.js) —
+      // se guarda acá para no volver a crearlo en cada sesión. null hasta
+      // que el usuario activa la sincronización por primera vez (ver
+      // asegurarCalendarioSecundario en notificaciones-calendario.js) o si
+      // nunca llegó a otorgar el scope de Calendar.
+      google_calendar_id: null,
+      // id del evento recurrente único del Resumen Diario (Parte C.1): se
+      // guarda aparte de google_calendar_id porque es un solo evento fijo
+      // que se ACTUALIZA (nunca se recrea) cada vez que el usuario cambia
+      // la hora en notificaciones_resumen_diario.hora — sin este id,
+      // sincronizarResumenDiario no tendría forma de saber si ya existe un
+      // evento recurrente al que hacerle events.update en vez de
+      // events.insert.
+      google_calendar_resumen_evento_id: null,
 
       plan_activo_id: null,         // id del Plan de Estudios seleccionado como activo
       enlaces_rapidos: [],          // ver estructura de "enlace" abajo (máx. 20)
@@ -116,37 +138,6 @@ function crearDatosUsuarioNuevo() {
       modo_hardcore: false,             // si está activo, se combinan hasta 3 Planes de Estudio a la vez
       plan_activo_secundario_id: null,  // 2do Plan de Estudios (solo relevante si modo_hardcore = true)
       plan_activo_terciario_id: null,   // 3er Plan de Estudios (solo relevante si modo_hardcore = true)
-
-      // Captura por voz (Atajo de Siri / Bandeja Pendiente), 2026-08-23:
-      // FIX — este campo se agrega recién ACÁ. El E2 de Bandeja Pendiente
-      // ya lo daba por hecho (config-ajustes.js ya lo lee/escribe, con un
-      // fallback defensivo que evitó que explotara), pero nunca se llegó a
-      // agregar de verdad en crearDatosUsuarioNuevo/migrarDatosAntiguos —
-      // sin esto, cualquier cuenta que sincronizara antes de abrir Ajustes
-      // ni siquiera tenía el campo en el JSON guardado. id_bandeja: UUID
-      // local generado la primera vez que se activa el switch (ver
-      // config-ajustes.js) — se sincroniza por Drive como cualquier otro
-      // campo de configuracion, a diferencia del id de dispositivo (que sí
-      // es puramente local).
-      bandeja_voz: { activo: false, id_bandeja: null },
-
-      // Google Tasks (2026-08-23): opt-in para importar tareas agregadas
-      // por voz/Google Assistant ("Hey Google, agregá tarea..."). Scope
-      // tasks.readonly (ver auth.js) — la app solo LEE, nunca modifica ni
-      // completa tareas del lado de Google.
-      //   - lista_id: id de la lista de Google Tasks elegida por el
-      //     usuario (selector en Ajustes, ver inicializarGoogleTasksAjustes
-      //     en config-ajustes.js). null hasta que se elige una.
-      //   - ids_procesados: ids de tareas de Google YA revisadas (se
-      //     confirmaron, se descartaron, o no arrojaron ningún evento
-      //     reconocible) — como el scope es de solo lectura, la app NUNCA
-      //     puede marcar/completar/borrar nada del lado de Google Tasks
-      //     para "acordarse" de que ya las vio; esta lista es la única
-      //     forma de no volver a mostrar la misma tarea en cada sync. Se
-      //     sincroniza por Drive (mismo criterio que el resto de
-      //     configuracion) para que no se repita la pregunta en otro
-      //     dispositivo del mismo usuario tampoco.
-      google_tasks_sync: { activo: false, lista_id: null, ids_procesados: [] },
     },
 
     // Un usuario puede tener más de un Plan de Estudios (ej. cambio de carrera/universidad).
@@ -400,9 +391,8 @@ const TIPOS_EVENTO_AGENDA = ["evento", "tarea", "examen"];
  * Notificaciones — Recordatorios configurables (2026-08-20): offsets
  * disponibles para "cuándo avisar" antes de un evento/tarea/examen/
  * feriado. `id` es el valor que se guarda en
- * configuracion.notificaciones_recordatorios[tipo] (un solo id — select
- * único, ver renderizarNotificacionesRecordatorios en config-ajustes.js)
- * y también el sufijo que arma el id compuesto que el
+ * configuracion.notificaciones_recordatorios[tipo] (arreglo de estos ids,
+ * multi-selección) y también el sufijo que arma el id compuesto que el
  * Worker persiste por cada recordatorio individual — ver
  * SEPARADOR_ID_RECORDATORIO_OFFSET y programarRecordatorioPush en
  * notificaciones-push.js. `minutosAntes` es lo único que ese archivo
@@ -415,8 +405,42 @@ const OFFSETS_RECORDATORIO_AGENDA = [
   { id: "1_hora", etiqueta: "1 hora antes", minutosAntes: 60 },
   { id: "1_dia", etiqueta: "1 día antes", minutosAntes: 60 * 24 },
   { id: "3_dias", etiqueta: "3 días antes", minutosAntes: 60 * 24 * 3 },
-  { id: "1_semana", etiqueta: "1 semana antes", minutosAntes: 60 * 24 * 7 },
 ];
+
+/**
+ * Calendario Secundario de Google (2026-08-25): nombre exacto con el que
+ * se crea vía calendars.insert (ver crearCalendarioSecundario en auth.js)
+ * — un solo lugar para el literal, así config-ajustes.js/notificaciones-
+ * calendario.js nunca lo repiten a mano.
+ */
+const NOMBRE_CALENDARIO_SECUNDARIO = "AppAcademica";
+
+/**
+ * Mapeo de colorId de eventos de Google Calendar por tipo de EventoAgenda
+ * (Parte B.3 del spec). Los 11 colorId de evento son fijos del lado de
+ * Google (no se puede pedir un hex custom vía API para eventos individuales,
+ * solo elegir uno de estos 11) — se eligió el más parecido en tono a la
+ * paleta de Agenda que ya existe en design-system.css:
+ *   - tarea   → "5" Banana (amarillo): mismo tono de alerta suave que ya
+ *               usa Agenda para tareas pendientes.
+ *   - examen  → "11" Tomato (rojo): urgencia/alta prioridad, coherente con
+ *               cómo se destacan los exámenes en el resto de la UI.
+ *   - evento  → "9" Blueberry (azul): color neutro/informativo para
+ *               eventos genéricos.
+ *   - feriado → "10" Basil (verde): distingue el subtipo especial de
+ *               "evento" (es_feriado: true) del resto de eventos azules.
+ * OJO: esta app no tuvo acceso a design-system.css al definir este mapeo
+ * (no se subió en la sesión que lo armó) — son la mejor aproximación por
+ * nombre/tono de los 11 colores fijos de Google, no una lectura exacta de
+ * los hex reales de Agenda. Confirmar visualmente contra la paleta real y
+ * ajustar acá si hace falta (es la única fuente de verdad del mapeo).
+ */
+const COLOR_ID_GOOGLE_CALENDAR_POR_TIPO = {
+  tarea: "5",
+  examen: "11",
+  evento: "9",
+  feriado: "10",
+};
 
 /** Separador del id compuesto "eventoId::offset" que persiste el Worker —
  *  mismo valor que SEPARADOR_ID_OFFSET en worker-notificaciones/index.js;
@@ -454,16 +478,19 @@ const SEPARADOR_ID_RECORDATORIO_OFFSET = "::";
  * elegido no es "evento", se fuerza a `false` acá mismo para que nunca
  * quede un examen/tarea con `es_feriado: true` colgado de una edición vieja
  * (ej. el usuario cambió el tipo de un evento-feriado a "tarea").
- * `googleTaskId` (2026-08-23, integración Google Tasks): id de la tarea de
- * Google Tasks que originó este evento, o null si no vino de ahí (chat del
- * Asistente, Bandeja Pendiente, o alta manual). Es solo de REFERENCIA/
- * trazabilidad (para que el usuario pueda ver de dónde salió un evento si
- * hace falta) — el dedupe real de "esta tarea de Google ya se revisó" vive
- * en configuracion.google_tasks_sync.ids_procesados (ver schema arriba),
- * no en este campo, porque una sola tarea de Google puede expandirse en 0,
- * 1 o varios eventos (pasa por el mismo Gemini que Bandeja Pendiente).
+ * `google_calendar_event_id` (2026-08-25, reemplaza Web Push): id del
+ * evento espejo en el calendario secundario de Google, devuelto por
+ * events.insert la primera vez que este EventoAgenda se sincroniza (ver
+ * sincronizarEventoCalendario en notificaciones-calendario.js). null
+ * mientras nunca se sincronizó con éxito (ej. offline, o el usuario nunca
+ * otorgó el scope de Calendar) — en ese estado, el próximo intento de sync
+ * hace events.insert; con un id ya guardado, hace events.update. Se limpia
+ * a null si Google devuelve 404/410 al intentar actualizarlo (el evento
+ * fue borrado del lado de Calendar por fuera de la app), para forzar un
+ * events.insert nuevo en el siguiente intento en vez de seguir apuntando a
+ * un id que ya no existe.
  */
-function crearEventoAgenda({ tipo, nombre, fecha, hora, materiaMatriculadaId, semestreId, notas, esFeriado, googleTaskId }) {
+function crearEventoAgenda({ tipo, nombre, fecha, hora, materiaMatriculadaId, semestreId, notas, esFeriado }) {
   const tipoValido = TIPOS_EVENTO_AGENDA.includes(tipo) ? tipo : "evento";
   const vinculada = Boolean(materiaMatriculadaId && semestreId);
   return sellarTimestamp({
@@ -477,7 +504,7 @@ function crearEventoAgenda({ tipo, nombre, fecha, hora, materiaMatriculadaId, se
     notas: notas || "",
     completada: false,
     es_feriado: tipoValido === "evento" ? Boolean(esFeriado) : false,
-    google_task_id: googleTaskId || null,
+    google_calendar_event_id: null,
   });
 }
 
@@ -2893,6 +2920,11 @@ function migrarDatosAntiguos(datos) {
     if (ev.completada === undefined) ev.completada = false;
     if (ev.es_feriado === undefined) ev.es_feriado = false;
     if (ev.tipo !== "evento") ev.es_feriado = false;
+    // Calendario Secundario de Google (2026-08-25): eventos creados antes
+    // de este campo empiezan sin espejo en Calendar — null es la misma
+    // señal que usa un evento recién creado, así que el próximo sync hace
+    // events.insert normal, sin distinguir "nunca sincronizado" de "viejo".
+    if (ev.google_calendar_event_id === undefined) ev.google_calendar_event_id = null;
     delete ev.titulo;
     delete ev.materia_id;
     delete ev.completado;
@@ -2972,34 +3004,28 @@ function migrarDatosAntiguos(datos) {
     });
   }
 
-  // Notificaciones — Recordatorios configurables (2026-08-20, migrado a
-  // valor único 2026-08-24): mismo relleno defensivo que el resto de esta
-  // función — cuentas creadas antes de este ajuste no tienen
-  // notificaciones_recordatorios en absoluto. Default: "1_dia" en los 4
-  // tipos (mismo default que crearDatosUsuarioNuevo, para que una cuenta
-  // vieja migrada se comporte igual que una nueva sin que el usuario
-  // tenga que configurar nada).
+  // Notificaciones — Recordatorios configurables (2026-08-20): mismo
+  // relleno defensivo que el resto de esta función — cuentas creadas antes
+  // de este ajuste no tienen notificaciones_recordatorios en absoluto.
+  // Default: 1 día antes en los 4 tipos (mismo default que
+  // crearDatosUsuarioNuevo, para que una cuenta vieja migrada se comporte
+  // igual que una nueva sin que el usuario tenga que configurar nada).
   if (datos.configuracion && (!datos.configuracion.notificaciones_recordatorios || typeof datos.configuracion.notificaciones_recordatorios !== "object")) {
     datos.configuracion.notificaciones_recordatorios = {
-      tarea: "1_dia",
-      examen: "1_dia",
-      evento: "1_dia",
-      feriado: "1_dia",
+      tarea: ["1_dia"],
+      examen: ["1_dia"],
+      evento: ["1_dia"],
+      feriado: ["1_dia"],
     };
   }
   // Relleno más fino: cuentas que ya tenían el objeto pero les falta algún
   // tipo puntual (ej. "feriado" se agregó después de que otros 3 ya
-  // existieran en el objeto guardado), O que lo tienen en el formato
-  // viejo de arreglo (de cuando el selector era multi-chip) — se toma el
-  // primer valor guardado para no perder la preferencia de nadie al
-  // migrar a select único. Mismo criterio, no se pisa lo que ya existe.
+  // existieran en el objeto guardado) — mismo criterio, no se pisa lo que
+  // ya existe.
   if (datos.configuracion && datos.configuracion.notificaciones_recordatorios) {
     ["tarea", "examen", "evento", "feriado"].forEach((tipo) => {
-      const valor = datos.configuracion.notificaciones_recordatorios[tipo];
-      if (Array.isArray(valor)) {
-        datos.configuracion.notificaciones_recordatorios[tipo] = valor[0] || "1_dia";
-      } else if (typeof valor !== "string" || !valor) {
-        datos.configuracion.notificaciones_recordatorios[tipo] = "1_dia";
+      if (!Array.isArray(datos.configuracion.notificaciones_recordatorios[tipo])) {
+        datos.configuracion.notificaciones_recordatorios[tipo] = ["1_dia"];
       }
     });
   }
@@ -3011,20 +3037,25 @@ function migrarDatosAntiguos(datos) {
     datos.configuracion.notificaciones_resumen_diario = { activo: false, hora: "20:00" };
   }
 
-  // Captura por voz (Bandeja Pendiente) — FIX: ver comentario completo en
-  // crearDatosUsuarioNuevo sobre por qué esto faltaba desde el E2 original.
-  if (datos.configuracion && (!datos.configuracion.bandeja_voz || typeof datos.configuracion.bandeja_voz !== "object")) {
-    datos.configuracion.bandeja_voz = { activo: false, id_bandeja: null };
+  // Calendario Secundario de Google (2026-08-25): mismo relleno defensivo
+  // — cuentas creadas antes de esta migración no tienen estos 2 campos en
+  // absoluto. null es correcto como default: significa "todavía no se creó
+  // el calendario secundario para este usuario" / "todavía no existe el
+  // evento recurrente del Resumen Diario", exactamente el mismo estado que
+  // un usuario nuevo.
+  if (datos.configuracion && datos.configuracion.sincronizar_calendario_google === undefined) {
+    // Se hereda el valor del switch viejo si existía (el usuario ya había
+    // optado por recibir avisos) — mejor arrancar en el mismo estado que
+    // tenía, aunque el mecanismo de entrega haya cambiado por completo, que
+    // resetear silenciosamente a apagado a todo el mundo.
+    datos.configuracion.sincronizar_calendario_google = Boolean(datos.configuracion.notificaciones_push_activas);
   }
-
-  // Google Tasks (2026-08-23): mismo patrón — default apagado, canal nuevo.
-  if (datos.configuracion && (!datos.configuracion.google_tasks_sync || typeof datos.configuracion.google_tasks_sync !== "object")) {
-    datos.configuracion.google_tasks_sync = { activo: false, lista_id: null, ids_procesados: [] };
+  delete datos.configuracion.notificaciones_push_activas;
+  if (datos.configuracion && datos.configuracion.google_calendar_id === undefined) {
+    datos.configuracion.google_calendar_id = null;
   }
-  // Relleno más fino: por si el objeto ya existía (versión futura de este
-  // mismo cambio desplegada a medias) pero sin el arreglo de procesados.
-  if (datos.configuracion && datos.configuracion.google_tasks_sync && !Array.isArray(datos.configuracion.google_tasks_sync.ids_procesados)) {
-    datos.configuracion.google_tasks_sync.ids_procesados = [];
+  if (datos.configuracion && datos.configuracion.google_calendar_resumen_evento_id === undefined) {
+    datos.configuracion.google_calendar_resumen_evento_id = null;
   }
 
   if (!Array.isArray(datos.planes_estudio)) return datos;
@@ -3260,4 +3291,6 @@ export {
   crearEventoAgenda,
   OFFSETS_RECORDATORIO_AGENDA,
   SEPARADOR_ID_RECORDATORIO_OFFSET,
+  NOMBRE_CALENDARIO_SECUNDARIO,
+  COLOR_ID_GOOGLE_CALENDAR_POR_TIPO,
 };

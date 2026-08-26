@@ -5,27 +5,6 @@
    mínimo (scope "drive.file"): solo puede ver/editar los archivos que ELLA
    MISMA creó. Nunca ve el resto del Drive del usuario.
 
-   MIGRACIÓN 2026-08-25 — flujo de código + refresh_token: hasta ahora esto
-   usaba google.accounts.oauth2.initTokenClient (flujo implícito), que NO
-   entrega refresh_token — cualquier refresco (silencioso o no) tenía que
-   volver a pedirle un token a Google mismo, y ese método es, según la
-   propia documentación de Google, un "OAuth 2.0 Token UX flow" que espera
-   gesto del usuario. En navegadores que bloquean cookies de terceros hacia
-   accounts.google.com (Tracking Prevention y similares), eso terminaba
-   mostrando la ventana de Google una y otra vez sin que nadie la pidiera.
-
-   Ahora se usa google.accounts.oauth2.initCodeClient (flujo de código):
-   el popup de Google sigue apareciendo, pero SOLO la primera vez (o cuando
-   el refresh_token se vence/revoca del todo). El `code` que devuelve se
-   canjea contra worker-notificaciones-agenda (POST /oauth/exchange), que
-   usa el client_secret (nunca expuesto acá) para conseguir un
-   access_token + un refresh_token de verdad. Ese refresh_token se guarda
-   en localStorage (CLAVE_REFRESH_TOKEN, ver más abajo) y es lo que permite
-   pedir access_tokens nuevos con POST /oauth/refresh — una llamada REST
-   pura, servidor a servidor, que NUNCA puede mostrar una ventana. Ver
-   asegurarTokenValido() en storage-sync.js, el único punto que llama a
-   ese refresco de acá en adelante.
-
    *** IMPORTANTE — DEBES REEMPLAZAR ESTO ANTES DE USAR LA APP ***
    Reemplaza el valor de CLIENT_ID por el tuyo (instrucciones en el README,
    sección "Cómo crear tu Client ID de Google").
@@ -45,29 +24,79 @@ const CLIENT_ID = "906522073616-7ofa7i3emqocojhlkh9ot9i0itljmd50.apps.googleuser
 // El scope de Drive por sí solo NO alcanza para que /oauth2/v3/userinfo
 // devuelva "name"/"picture": hace falta pedir también identidad básica
 // (openid/email/profile) junto con el permiso mínimo de archivo de Drive.
-const DRIVE_SCOPE = "openid email profile https://www.googleapis.com/auth/drive.file";
+const SCOPE_DRIVE = "https://www.googleapis.com/auth/drive.file";
+// Calendario Secundario (2026-08-25, ver spec de migración de
+// notificaciones): scope COMPLETO de Calendar, no "calendar.events" — hace
+// falta calendars.insert (crear el calendario secundario en sí), que
+// calendar.events no cubre. Confirmado en la consola real del proyecto
+// como scope "Sensible" (no "Restringido"): la verificación de Google para
+// habilitarlo en producción es gratuita e interna, no una auditoría paga.
+const SCOPE_CALENDAR = "https://www.googleapis.com/auth/calendar";
+const SCOPES = `openid email profile ${SCOPE_DRIVE} ${SCOPE_CALENDAR}`;
 const NOMBRE_ARCHIVO_DATOS = "app_academica_datos.json";
-
-// Mismo Worker que ya usa horario-amigos.js (crear/leer archivos de
-// horario compartido) — mismo criterio de "duplicar la constante es más
-// simple que forzar un export cruzado solo para esto" ya documentado ahí.
-const URL_WORKER_NOTIFICACIONES = "https://worker-notificaciones-agenda.appacademica.workers.dev";
-
-// 2026-08-25: dónde vive el refresh_token de Drive. Es una CREDENCIAL, no
-// un dato de la app — vive únicamente en este dispositivo (localStorage,
-// nunca en estado.datos, que es lo único que sincroniza a Drive) y nunca
-// se manda a ningún lado salvo al propio Worker, en cada POST /oauth/refresh.
+const CLAVE_YA_AUTORIZADO = "google_ya_autorizado";
+// OAuth con refresh_token (2026-08-25, Parte A del spec de migración):
+// el refresh_token vive ÚNICAMENTE en este dispositivo (localStorage) —
+// el Worker es un relevo sin memoria, nunca lo guarda (ver index.js del
+// Worker, manejarOAuthExchange/manejarOAuthRefresh).
 const CLAVE_REFRESH_TOKEN = "google_refresh_token";
+// Mismo Worker que ya habla notificaciones-calendario.js (antes
+// notificaciones-push.js) — se duplica el literal acá en vez de importarlo
+// cruzado entre archivos, mismo criterio que CLIENT_ID_GOOGLE duplicado en
+// el Worker (ver comentario ahí).
+const URL_WORKER_OAUTH = "https://worker-notificaciones-agenda.appacademica.workers.dev";
+// Valor fijo que exige Google Identity Services para el flujo de código en
+// modo popup (ux_mode: "popup"): no hay una URL de redirect real, todo pasa
+// por postMessage dentro del propio popup — por eso el mismo literal
+// "postmessage" se manda también como redirect_uri al canjear el code
+// contra /oauth/exchange (ver manejarOAuthExchange en el Worker).
+const REDIRECT_URI_CODE_FLOW = "postmessage";
+
+/**
+ * 2026-08-25 — ALINEADO CON MAPA_FUNCIONES.md: al auditar el proyecto para
+ * esta migración, MAPA_FUNCIONES.md YA documentaba `guardarRefreshTokenGoogle`/
+ * `leerRefreshTokenGoogle`/`borrarRefreshTokenGoogle` y
+ * `refrescarAccessTokenViaWorker` como exports de este archivo — pero el
+ * auth.js real (el que se subió a esta sesión) todavía tenía la versión
+ * vieja con `initTokenClient`/GIS silencioso y NADA de refresh_token. Es
+ * decir: esta migración específica de OAuth ya se había DOCUMENTADO como
+ * hecha en una sesión anterior, pero nunca se aplicó de verdad al código.
+ * Se usan acá los mismos nombres que ya documentaba el MAPA (en vez de los
+ * que se habían empezado a escribir en esta misma sesión, ver historial),
+ * asumiendo que storage-sync.js (no incluido en esta sesión) YA está
+ * escrito esperando exactamente estos 4 nombres — si storage-sync.js
+ * resulta estar usando otros nombres distintos, avisar para ajustar.
+ */
+function guardarRefreshTokenGoogle(refreshToken) {
+  localStorage.setItem(CLAVE_REFRESH_TOKEN, refreshToken);
+}
+function leerRefreshTokenGoogle() {
+  return localStorage.getItem(CLAVE_REFRESH_TOKEN);
+}
+function borrarRefreshTokenGoogle() {
+  localStorage.removeItem(CLAVE_REFRESH_TOKEN);
+}
 
 let codeClient = null;
 let accessToken = null;
+// Guarda los callbacks pasados a inicializarGoogleAuth() para que
+// manejarRespuestaCode (fuera de esa función, así crearCodeClient puede
+// reinstanciar el codeClient con un prompt distinto en cada login sin
+// perder acceso a ellos) pueda invocarlos.
+let callbacksAuth = null;
+// Último conjunto de scopes realmente otorgados por Google en el login/
+// canje más reciente — permite a otros módulos (ej. notificaciones-
+// calendario.js, antes de intentar crear el calendario secundario)
+// preguntar si el usuario efectivamente concedió Calendar sin tener que
+// volver a inspeccionar tokens.
+let ultimoScopeCalendarOtorgado = false;
 
 /**
  * El <script> de Google se carga con async/defer, así que puede no estar
  * listo todavía cuando corre DOMContentLoaded (esto era la causa de que el
  * login fallara "al azar" y hubiera que recargar varias veces). Aquí
  * esperamos activamente (polling corto) a que exista window.google.accounts
- * antes de crear el codeClient.
+ * antes de crear el tokenClient.
  */
 function esperarGsiListo(timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
@@ -87,10 +116,123 @@ function esperarGsiListo(timeoutMs = 10000) {
 }
 
 /**
- * Se llama una vez cuando la página carga (ver main.js).
+ * Canjea un `code` de un solo uso (recién salido del popup de Google) por
+ * access_token + refresh_token, vía el Worker (POST /oauth/exchange) — el
+ * client_secret nunca toca el navegador, solo vive en el Worker (env.
+ * CLIENT_SECRET_GOOGLE). Devuelve la respuesta de Google tal cual llega
+ * (access_token, refresh_token si Google lo emitió, expires_in, scope,
+ * token_type). Google solo emite refresh_token de forma confiable en un
+ * consentimiento nuevo (prompt "consent") o la primera vez que la cuenta
+ * autoriza esta app — por eso el refresh_token guardado se PISA solo si
+ * viene uno nuevo (ver callback de crearCodeClient), nunca se borra por su
+ * ausencia en un canje puntual.
+ */
+async function intercambiarCodePorTokens(code) {
+  const respuesta = await fetch(`${URL_WORKER_OAUTH}/oauth/exchange`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, redirect_uri: REDIRECT_URI_CODE_FLOW }),
+  });
+  const datos = await respuesta.json().catch(() => ({}));
+  if (!respuesta.ok) {
+    const error = new Error(datos.error || `El Worker respondió ${respuesta.status} al canjear el code.`);
+    error.status = respuesta.status;
+    throw error;
+  }
+  return datos;
+}
+
+/**
+ * Callback único del CodeClient (module-level, no inline) — así
+ * crearCodeClient() puede reinstanciar el cliente con un `prompt` distinto
+ * en cada login (ver iniciarSesionConGoogle) sin duplicar esta lógica ni
+ * perder los callbacks originales (guardados en callbacksAuth por
+ * inicializarGoogleAuth).
+ */
+async function manejarRespuestaCode(respuesta) {
+  if (!callbacksAuth) return;
+  const { alObtenerToken, alRechazarPermiso } = callbacksAuth;
+
+  if (respuesta.error) {
+    console.error("Error de autenticación:", respuesta);
+    // El caso más común: el usuario cerró la ventana de consentimiento o
+    // rechazó el permiso de Drive. Sin ese permiso la app no puede
+    // guardar nada, así que se lo hacemos explícito en vez de dejarla en
+    // un estado ambiguo (botón que "no hizo nada").
+    if (alRechazarPermiso) alRechazarPermiso(respuesta.error);
+    return;
+  }
+
+  // Ajuste (v8, sigue aplicando con el flujo de código): Google NO reporta
+  // respuesta.error cuando el usuario destilda específicamente la casilla
+  // de Drive en la pantalla de consentimiento pero acepta el resto — llega
+  // un code "válido" que simplemente no sirve para guardar nada en Drive.
+  // Se verifica explícitamente que el scope de Drive esté dentro de lo
+  // realmente otorgado (respuesta.scope) antes de canjear el code siquiera.
+  const scopesOtorgados = (respuesta.scope || "").split(" ");
+  if (!scopesOtorgados.includes(SCOPE_DRIVE)) {
+    console.warn("Login sin permiso de Drive (scopes otorgados):", respuesta.scope);
+    // No se guarda CLAVE_YA_AUTORIZADO: así el próximo intento vuelve a
+    // forzar la pantalla completa de consentimiento (prompt "consent"),
+    // en vez de un prompt liviano que podría repetir el mismo problema.
+    if (alRechazarPermiso) alRechazarPermiso("permiso_drive_no_otorgado");
+    return;
+  }
+
+  // Calendar es scope nuevo (Parte A.1): a diferencia de Drive, NO bloquea
+  // el login si el usuario lo destildó — Drive es el mínimo indispensable
+  // para que la app funcione en absoluto, Calendar solo habilita la
+  // sincronización de recordatorios. Si falta, la app entra igual y
+  // notificaciones-calendario.js simplemente no podrá sincronizar hasta
+  // que el usuario vuelva a autorizar con Calendar incluido.
+  ultimoScopeCalendarOtorgado = scopesOtorgados.includes(SCOPE_CALENDAR);
+  if (!ultimoScopeCalendarOtorgado) {
+    console.warn("Login sin permiso de Calendar — la sincronización con Google Calendar queda desactivada.");
+  }
+
+  let datosTokens;
+  try {
+    datosTokens = await intercambiarCodePorTokens(respuesta.code);
+  } catch (e) {
+    console.error("No se pudo canjear el code por tokens:", e);
+    if (alRechazarPermiso) alRechazarPermiso("fallo_canje_code");
+    return;
+  }
+
+  accessToken = datosTokens.access_token;
+  if (datosTokens.refresh_token) {
+    guardarRefreshTokenGoogle(datosTokens.refresh_token);
+  }
+  localStorage.setItem(CLAVE_YA_AUTORIZADO, "1");
+  // v8.3 (Bug 3, sigue aplicando): se pasa también expires_in (segundos que
+  // Google dice que dura el token, normalmente 3600) para que app.js pueda
+  // programar un refresco proactivo ANTES de que expire.
+  alObtenerToken(accessToken, datosTokens.expires_in);
+}
+
+/** Fábrica del CodeClient de GIS — separada de inicializarGoogleAuth porque
+ *  a diferencia del viejo tokenClient (que aceptaba `prompt` como argumento
+ *  de requestAccessToken en cada llamada), el CodeClient solo lo admite
+ *  como parte de su configuración inicial. Recrearlo es instantáneo (no
+ *  hace red), así que reinstanciar justo antes de pedir el code (ver
+ *  iniciarSesionConGoogle) no rompe el gesto de click del usuario. */
+function crearCodeClient(prompt) {
+  return google.accounts.oauth2.initCodeClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    ux_mode: "popup",
+    redirect_uri: REDIRECT_URI_CODE_FLOW,
+    prompt,
+    callback: manejarRespuestaCode,
+  });
+}
+
+/**
+ * Se llama una vez cuando la página carga (ver app.js).
  * Ahora es async: primero espera a que el script de Google esté listo, y
- * solo entonces crea el codeClient. Llama a `alListo()` cuando el botón de
- * login ya puede usarse, o a `alFallar()` si el script nunca cargó.
+ * solo entonces crea el codeClient inicial. Llama a `alListo()` cuando el
+ * botón de login ya puede usarse, o a `alFallar()` si el script nunca
+ * cargó.
  */
 async function inicializarGoogleAuth({ alObtenerToken, alListo, alFallar, alRechazarPermiso }) {
   try {
@@ -101,159 +243,35 @@ async function inicializarGoogleAuth({ alObtenerToken, alListo, alFallar, alRech
     return;
   }
 
-  codeClient = google.accounts.oauth2.initCodeClient({
-    client_id: CLIENT_ID,
-    scope: DRIVE_SCOPE,
-    ux_mode: "popup",
-    // access_type: "offline" es lo que le pide a Google que incluya un
-    // refresh_token en la respuesta del canje — sin esto, initCodeClient
-    // se comporta como el flujo implícito viejo en la práctica: el
-    // access_token vence a la hora y no hay nada con qué renovarlo en
-    // silencio, así que vuelve a aparecer el selector de cuenta en cada
-    // sesión larga (el bug que este archivo entero existe para resolver).
-    // prompt: "consent" fuerza que Google reemita el refresh_token incluso
-    // si esta cuenta ya había autorizado la app antes (ej. bajo el flujo
-    // implícito viejo) — sin esto, cuentas ya autorizadas simplemente no
-    // reciben refresh_token nunca, por diseño de OAuth2 (ver el comentario
-    // más abajo, en el callback, sobre el caso "Google no devolvió un
-    // refresh_token").
-    access_type: "offline",
-    prompt: "consent",
-    callback: async (respuesta) => {
-      if (respuesta.error) {
-        console.error("Error de autenticación:", respuesta);
-        // El caso más común: el usuario cerró la ventana de consentimiento o
-        // rechazó el permiso de Drive. Sin ese permiso la app no puede
-        // guardar nada, así que se lo hacemos explícito en vez de dejarla en
-        // un estado ambiguo (botón que "no hizo nada").
-        if (alRechazarPermiso) alRechazarPermiso(respuesta.error);
-        return;
-      }
-
-      // Ajuste (v8, sigue vigente con el flujo de código): Google reporta
-      // en `scope` (CodeResponse) los permisos que el usuario realmente
-      // aceptó — puede haber destildado justo el de Drive y aceptado el
-      // resto (perfil/email). Se revisa ANTES de canjear el code (no tiene
-      // sentido gastar el canje con el Worker si ya sabemos que no sirve).
-      const scopesOtorgados = (respuesta.scope || "").split(" ");
-      if (!scopesOtorgados.includes("https://www.googleapis.com/auth/drive.file")) {
-        console.warn("Login sin permiso de Drive (scopes otorgados):", respuesta.scope);
-        if (alRechazarPermiso) alRechazarPermiso("permiso_drive_no_otorgado");
-        return;
-      }
-
-      let datos;
-      try {
-        datos = await intercambiarCodigoPorTokens(respuesta.code);
-      } catch (e) {
-        console.error("No se pudo canjear el código de Google con el Worker:", e);
-        if (alRechazarPermiso) alRechazarPermiso("canje_fallido");
-        return;
-      }
-
-      accessToken = datos.access_token;
-
-      if (datos.refresh_token) {
-        guardarRefreshTokenGoogle(datos.refresh_token);
-      } else {
-        // Pasa cuando Google considera que esta cuenta YA había autorizado
-        // esta app antes (ej. quedó un permiso viejo del flujo implícito) —
-        // en ese caso, por diseño de OAuth2, Google NO reemite un
-        // refresh_token nuevo en cada consentimiento. La app sigue
-        // funcionando esta sesión con el access_token que sí llegó, pero
-        // sin refresh_token no hay forma de renovarlo sin volver a mostrar
-        // el popup — hace falta que el usuario revoque el acceso viejo una
-        // vez (https://myaccount.google.com/permissions, "App Académica")
-        // para que la PRÓXIMA vez Google sí mande uno nuevo.
-        console.warn(
-          "Google no devolvió un refresh_token — probablemente esta cuenta ya había autorizado la app antes. " +
-            "Para dejar de ver el popup hace falta revocar el acceso desde https://myaccount.google.com/permissions y volver a conectar."
-        );
-      }
-
-      // v8.3 (Bug 3): se pasa también expires_in para que main.js pueda
-      // programar el próximo refresco proactivo.
-      alObtenerToken(accessToken, datos.expires_in);
-    },
-  });
+  callbacksAuth = { alObtenerToken, alRechazarPermiso };
+  codeClient = crearCodeClient("");
 
   if (alListo) alListo();
 }
 
 /**
- * Dispara la ventana de login/consentimiento de Google. SIEMPRE muestra el
- * popup real de Google (no hay distinción "silenciosa" acá — esa parte
- * ahora la cubre asegurarTokenValido() en storage-sync.js, que ni siquiera
- * pasa por este archivo). Se llama de forma DIRECTA desde el click (sin
- * async antes) para no romper el gesto de usuario en navegadores móviles.
+ * Dispara la ventana de login/consentimiento de Google.
+ * Se llama de forma DIRECTA desde el click (sin async antes) para no
+ * romper el gesto de usuario en navegadores móviles.
+ * Punto 3 del reporte (sigue aplicando con el flujo de código): solo se
+ * fuerza la pantalla completa de "consent" la PRIMERA vez; en logins
+ * siguientes se usa un prompt más liviano. Con refresh_token esto importa
+ * menos que antes (ya no hace falta repetir el login para refrescar la
+ * sesión — ver refrescarAccessTokenViaWorker), pero se mantiene el mismo
+ * criterio para el botón de login en sí.
  */
 function iniciarSesionConGoogle() {
+  const yaAutorizado = localStorage.getItem(CLAVE_YA_AUTORIZADO) === "1";
+  codeClient = crearCodeClient(yaAutorizado ? "" : "consent");
   codeClient.requestCode();
 }
 
-/**
- * Canjea el `code` de Google (recién salido del popup) por access_token +
- * refresh_token, vía POST /oauth/exchange del Worker — el Worker es el
- * único lugar que conoce el client_secret, nunca este archivo. No guarda
- * nada del lado del Worker (ver worker-notificaciones-agenda/src/index.js,
- * manejarOAuthExchange): la respuesta de Google vuelve tal cual.
- */
-async function intercambiarCodigoPorTokens(code) {
-  const respuesta = await fetch(`${URL_WORKER_NOTIFICACIONES}/oauth/exchange`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    // En modo popup, initCodeClient usa el ORIGEN de la página como
-    // redirect_uri de forma implícita (Google lo documenta así) — hay que
-    // mandar exactamente ese mismo valor acá para que el canje matchee.
-    body: JSON.stringify({ code, redirect_uri: window.location.origin }),
-  });
-  const datos = await respuesta.json().catch(() => ({}));
-  if (!respuesta.ok) {
-    const error = new Error(datos.error || `El Worker respondió ${respuesta.status} al canjear el código.`);
-    error.status = respuesta.status;
-    throw error;
-  }
-  return datos; // { access_token, refresh_token?, expires_in, scope, token_type }
-}
-
-/**
- * Pide un access_token nuevo usando el refresh_token guardado, vía POST
- * /oauth/refresh del Worker — llamada REST servidor-a-servidor pura, NUNCA
- * puede mostrar una ventana de Google (a diferencia del refresco
- * silencioso viejo del flujo implícito). Es lo único que llama
- * asegurarTokenValido() en storage-sync.js para renovar la sesión.
- */
-async function refrescarAccessTokenViaWorker(refreshToken) {
-  const respuesta = await fetch(`${URL_WORKER_NOTIFICACIONES}/oauth/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  });
-  const datos = await respuesta.json().catch(() => ({}));
-  if (!respuesta.ok) {
-    // "invalid_grant" es el caso esperado de refresh_token vencido/
-    // revocado (ej. límite de 7 días en modo Prueba de Google Cloud) — se
-    // propaga tal cual para que asegurarTokenValido() lo borre y pida
-    // reconectar, en vez de reintentar contra algo que ya no sirve.
-    const error = new Error(datos.error || `El Worker respondió ${respuesta.status} al refrescar el token.`);
-    error.status = respuesta.status;
-    throw error;
-  }
-  // Google normalmente NO manda refresh_token de vuelta en un refresco
-  // (solo lo rota en casos puntuales) — si lo manda, se reenvía para que
-  // quien llama actualice el guardado; si no, `refreshTokenNuevo` es null.
-  return { token: datos.access_token, expiresIn: datos.expires_in, refreshTokenNuevo: datos.refresh_token || null };
-}
-
-/** Guarda/lee/borra el refresh_token de Drive — SOLO en este dispositivo (nunca sincroniza a Drive, es una credencial, no un dato de la app). */
-function guardarRefreshTokenGoogle(refreshToken) {
-  if (refreshToken) localStorage.setItem(CLAVE_REFRESH_TOKEN, refreshToken);
-}
-function leerRefreshTokenGoogle() {
-  return localStorage.getItem(CLAVE_REFRESH_TOKEN);
-}
-function borrarRefreshTokenGoogle() {
-  localStorage.removeItem(CLAVE_REFRESH_TOKEN);
+/** Devuelve si el login/canje más reciente incluyó el scope de Calendar —
+ *  la usa notificaciones-calendario.js antes de intentar crear el
+ *  calendario secundario o sincronizar un evento, para no gastar una
+ *  llamada a la API que Google va a rechazar de entrada. */
+function tieneScopeCalendarOtorgado() {
+  return ultimoScopeCalendarOtorgado;
 }
 
 /**
@@ -275,16 +293,11 @@ async function obtenerPerfilGoogle(token) {
   }
 }
 
-/**
- * Revoca el token en memoria (el borrado de datos locales lo hace main.js).
- * 2026-08-25: también borra el refresh_token guardado — es la credencial
- * que le permite a este dispositivo volver a entrar sin popup, así que
- * cerrar sesión de verdad tiene que eliminarla (si no, "cerrar sesión y
- * entrar con otra cuenta" seguiría reusando el refresh_token de la cuenta
- * vieja). google.accounts.oauth2.revoke revoca TODOS los tokens que Google
- * emitió para este client_id+usuario (access y refresh por igual), así que
- * ni siquiera hace falta un revoke aparte para el refresh_token.
- */
+/** Revoca el token en memoria (el borrado de datos locales lo hace app.js).
+ *  2026-08-25: además limpia el refresh_token guardado — con el flujo de
+ *  código, cerrar sesión sin borrarlo dejaría el dispositivo con un
+ *  refresh_token todavía válido que refrescarAccessTokenViaWorker podría
+ *  volver a usar sin que el usuario haya vuelto a loguearse. */
 function cerrarSesionGoogle() {
   if (accessToken) {
     google.accounts.oauth2.revoke(accessToken, () => {});
@@ -504,13 +517,56 @@ async function guardarDatos(token, fileId, datos) {
 }
 
 /**
- * REEMPLAZADA 2026-08-25 por refrescarAccessTokenViaWorker() (arriba, junto
- * al resto de las funciones de OAuth) — este refresco usaba el mismo
- * tokenClient implícito que ya no existe (ver initCodeClient más arriba).
- * Se deja este comentario como referencia histórica de POR QUÉ existía
- * (mismo motivo, distinta implementación): renovar la sesión sin volver a
- * mostrarle una ventana al usuario cada vez que un token de 1h vence.
+ * refrescarAccessTokenViaWorker(refreshToken) — 2026-08-25, nombre y firma
+ * tomados de MAPA_FUNCIONES.md (ver nota junto a guardarRefreshTokenGoogle
+ * más arriba: ya documentado ahí, nunca implementado hasta ahora). A
+ * diferencia de la vieja `refrescarAccessTokenGoogle` (GIS "silencioso",
+ * con el riesgo de que Google igual mostrara un selector de cuenta), esto
+ * es una llamada servidor-a-servidor pura contra el Worker (POST
+ * /oauth/refresh): NUNCA involucra un popup ni puede mostrar UI de Google.
+ *
+ * Recibe el refresh_token como parámetro (no lo lee de localStorage
+ * internamente — eso es responsabilidad de quien llama, vía
+ * leerRefreshTokenGoogle(), típicamente storage-sync.js en
+ * asegurarTokenValido()). Devuelve `{ token, expiresIn, refreshTokenNuevo }`
+ * — `refreshTokenNuevo` viene poblado solo si Google rotó el refresh_token
+ * en esta renovación (no es lo común, pero puede pasar); quien llama
+ * decide si lo persiste con guardarRefreshTokenGoogle().
+ *
+ * Rechaza si el refresh_token no existe, venció, o fue revocado (ej.
+ * límite de 7 días en modo Prueba de la consola de Google, o el usuario
+ * revocó el acceso desde su cuenta) — con `error.invalidGrant = true`
+ * cuando específicamente Google respondió "invalid_grant", para que quien
+ * llama sepa que hace falta un login completo (no vale la pena reintentar)
+ * y pueda limpiar el refresh_token guardado con borrarRefreshTokenGoogle().
  */
+async function refrescarAccessTokenViaWorker(refreshToken) {
+  if (!refreshToken) {
+    throw new Error("No hay refresh_token: hace falta volver a iniciar sesión.");
+  }
+
+  const respuesta = await fetch(`${URL_WORKER_OAUTH}/oauth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+  const datos = await respuesta.json().catch(() => ({}));
+
+  if (!respuesta.ok) {
+    const error = new Error(datos.error || `El Worker respondió ${respuesta.status} al refrescar.`);
+    error.status = respuesta.status;
+    error.invalidGrant = Boolean(datos.error && /invalid_grant/i.test(String(datos.error)));
+    throw error;
+  }
+
+  accessToken = datos.access_token;
+  return {
+    token: accessToken,
+    expiresIn: datos.expires_in,
+    // Google rota el refresh_token con poca frecuencia, pero puede pasar.
+    refreshTokenNuevo: datos.refresh_token || null,
+  };
+}
 
 /**
  * v9.4 (2026-08-08 — arquitectura de adjuntos): a diferencia de
@@ -774,6 +830,158 @@ async function moverArchivoAlaCarpeta(token, fileId, folderIdDestino) {
   return respuesta.json();
 }
 
+/**
+ * Calendario Secundario (2026-08-25, Parte A.2 del spec de migración de
+ * notificaciones): helpers crudos contra la API de Google Calendar, mismo
+ * patrón que los helpers de Drive de arriba (una función = una llamada,
+ * sin orquestación). La orquestación real (crear el calendario una sola
+ * vez por usuario, mapear un EventoAgenda a un evento de Calendar, el
+ * best-effort de no bloquear el guardado local si esto falla) vive en
+ * notificaciones-calendario.js — este archivo solo sabe hablar con Google,
+ * igual que ya hacía con Drive.
+ */
+
+/**
+ * calendars.insert — crea el calendario secundario "AppAcademica" en la
+ * cuenta del usuario. Se llama UNA sola vez por usuario (quien llama debe
+ * revisar antes si estado.datos.configuracion ya tiene guardado un ID de
+ * calendario, para no crear uno duplicado en cada sesión). Devuelve el
+ * objeto completo que manda Google; a quien llama le interesa sobre todo
+ * `.id`, que es lo que hay que persistir.
+ */
+async function crearCalendarioSecundario(token, nombreCalendario) {
+  const respuesta = await fetch("https://www.googleapis.com/calendar/v3/calendars", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ summary: nombreCalendario }),
+  });
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Calendar respondió ${respuesta.status} al crear el calendario secundario: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+  return respuesta.json(); // { id, summary, ... }
+}
+
+/**
+ * calendarList.patch — fija el color del calendario secundario en sí (no
+ * de los eventos individuales, ver colorId por evento en insertarEventoCalendar)
+ * usando uno de los colorId de fondo válidos para calendarios completos.
+ * Llamada opcional, separada de crearCalendarioSecundario porque el color
+ * de calendario y el color de evento usan paletas distintas en la API de
+ * Google (colorId de calendarList vs colorId de events).
+ */
+async function fijarColorCalendario(token, calendarId, colorId) {
+  const respuesta = await fetch(
+    `https://www.googleapis.com/calendar/v3/users/me/calendarList/${encodeURIComponent(calendarId)}?fields=id`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ colorId }),
+    }
+  );
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Calendar respondió ${respuesta.status} al fijar el color del calendario: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+  return respuesta.json();
+}
+
+/**
+ * events.insert — crea un evento nuevo dentro del calendario secundario.
+ * `evento` ya viene armado (fecha/hora, reminders.overrides, colorId,
+ * recurrence si aplica, source.url para el deep link del Resumen Diario)
+ * desde notificaciones-calendario.js — este helper no interpreta nada,
+ * solo hace el POST. Devuelve el evento creado por Google; a quien llama
+ * le interesa sobre todo `.id`, para guardarlo como
+ * google_calendar_event_id (o como el id del evento recurrente único del
+ * Resumen Diario).
+ */
+async function insertarEventoCalendar(token, calendarId, evento) {
+  const respuesta = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(evento),
+    }
+  );
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Calendar respondió ${respuesta.status} al crear el evento: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+  return respuesta.json();
+}
+
+/**
+ * events.update — sobrescribe un evento existente (PUT, reemplazo
+ * completo, no PATCH parcial: notificaciones-calendario.js siempre manda
+ * el objeto entero para no arrastrar campos viejos de una edición previa,
+ * ej. un reminder que ya no aplica si el usuario bajó el offset).
+ */
+async function actualizarEventoCalendar(token, calendarId, eventId, evento) {
+  const respuesta = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(evento),
+    }
+  );
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Calendar respondió ${respuesta.status} al actualizar el evento: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+  return respuesta.json();
+}
+
+/**
+ * events.delete — borra un evento del calendario secundario. Un 404/410
+ * (el evento ya no existe del lado de Google, ej. lo borró el usuario a
+ * mano desde Google Calendar) se trata como éxito silencioso: el objetivo
+ * ("que ese evento no exista más en Calendar") ya está cumplido, no hay
+ * nada que reintentar ni ningún error real que reportar.
+ */
+async function eliminarEventoCalendar(token, calendarId, eventId) {
+  const respuesta = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!respuesta.ok && respuesta.status !== 404 && respuesta.status !== 410) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Calendar respondió ${respuesta.status} al borrar el evento: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+}
+
 export {
   NOMBRE_CARPETA_BACKUP,
   crearArchivoJsonEnDrive,
@@ -794,10 +1002,15 @@ export {
   leerDatos,
   obtenerMetadatosArchivo,
   obtenerPerfilGoogle,
-  subirArchivoBinarioADrive,
-  // OAuth con refresh_token vía Worker (2026-08-25):
-  borrarRefreshTokenGoogle,
+  refrescarAccessTokenViaWorker,
   guardarRefreshTokenGoogle,
   leerRefreshTokenGoogle,
-  refrescarAccessTokenViaWorker,
+  borrarRefreshTokenGoogle,
+  subirArchivoBinarioADrive,
+  tieneScopeCalendarOtorgado,
+  crearCalendarioSecundario,
+  fijarColorCalendario,
+  insertarEventoCalendar,
+  actualizarEventoCalendar,
+  eliminarEventoCalendar,
 };
