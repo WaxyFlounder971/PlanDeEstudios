@@ -446,23 +446,18 @@
           </div>
         </section>
 
-        <!-- Número de versión — SOLO texto informativo, fuera de cualquier
-             tarjeta, centrado, al final del todo de Configuración. Arranca
-             vacío a propósito: main.js le pide la versión al Service
-             Worker apenas carga la página y la escribe acá (ver
-             GET_VERSION en main.js / service-worker.js). Para cambiar de
-             versión NO se toca este archivo — se edita la constante
-             VERSION en service-worker.js, nada más. -->
-        <p id="pie-version" class="muted" style="text-align:center; font-size:0.75rem; margin:20px 0 4px;"></p>
-
-        <!-- Créditos — pie de página de la sección Ajustes, siempre visible
-             (no es un .ajuste-seccion acordeón), después de todo lo demás
-             incluida la versión. Estilo "créditos de película": centrado,
-             etiqueta chica y nombre grande. Contenido 100% estático, no
-             depende de estado.datos, así que no requiere JS para pintarse.
-             El botón de feedback es un mailto: directo, sin backend propio. -->
-        <section class="glass-card tarjeta-creditos" style="margin-top:12px;">
-          <h2 class="texto-encabezado-seccion">Créditos</h2>
+        <!-- Créditos — tarjeta colapsable, mismo patrón .ajuste-seccion que
+             el resto de Ajustes (cabecera-botón + chevron, colapsada por
+             default), ubicada justo después de "Datos". Estilo "créditos de
+             película" dentro del cuerpo: centrado, etiqueta chica y nombre
+             grande. Contenido 100% estático, no depende de estado.datos, así
+             que no requiere JS para pintarse — solo el toggle del acordeón,
+             que ya delega en inicializarAccordionAjustes() (config-ajustes.js)
+             sobre #seccion-configuracion. El botón de feedback es un mailto:
+             directo, sin backend propio. -->
+        <section class="glass-card stack ajuste-seccion colapsada tarjeta-creditos">
+          <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Créditos</h2><span class="ajuste-seccion-chevron">▾</span></button>
+          <div class="ajuste-seccion-cuerpo">
 
           <div class="creditos-bloque">
             <span class="creditos-etiqueta">Creador</span>
@@ -475,7 +470,7 @@
           </div>
 
           <div class="creditos-bloque">
-            <span class="creditos-etiqueta">Apoyo creativo</span>
+            <span class="creditos-etiqueta">Apoyo Creativo</span>
             <ul class="creditos-beta-lista">
               <li>Ivanna V.</li>
               <li>Mishelle M.</li>
@@ -493,7 +488,17 @@
             class="btn btn-secondary btn-block"
             href="mailto:AppAcademica26@gmail.com?subject=Feedback%20-%20AppAcademica"
           >Enviar comentarios</a>
+          </div>
         </section>
+
+        <!-- Número de versión — SOLO texto informativo, fuera de cualquier
+             tarjeta, centrado, al final del todo de Configuración. Arranca
+             vacío a propósito: main.js le pide la versión al Service
+             Worker apenas carga la página y la escribe acá (ver
+             GET_VERSION en main.js / service-worker.js). Para cambiar de
+             versión NO se toca este archivo — se edita la constante
+             VERSION en service-worker.js, nada más. -->
+        <p id="pie-version" class="muted" style="text-align:center; font-size:0.75rem; margin:20px 0 4px;"></p>
 
       </div>
 
