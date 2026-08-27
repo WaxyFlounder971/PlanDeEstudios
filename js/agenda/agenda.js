@@ -15,7 +15,7 @@ import { obtenerEstadoEfectivoSemestre, sellarTimestamp } from "../core/schema.j
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
-import { desplazarYResaltarElemento } from "../ui/componentes.js";
+import { abrirConfirmacion, desplazarYResaltarElemento } from "../ui/componentes.js";
 import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
 import { renderizarCalendarioAgenda } from "./agenda-calendario.js";
 import { inicializarMateriaAgenda, renderizarMateriaAgenda } from "./agenda-materia.js";
@@ -27,7 +27,7 @@ import { abrirModalEventoAgenda, abrirTarjetaInfoEventoAgenda, inicializarModalA
 // (sincronizarEventoCalendario elimina el espejo si queda completada, o lo
 // recrea/actualiza si vuelve a quedar pendiente) — ver
 // core/notificaciones-calendario.js.
-import { sincronizarEventoCalendario } from "../core/notificaciones-calendario.js";
+import { eliminarEventoCalendarizado, sincronizarEventoCalendario } from "../core/notificaciones-calendario.js";
 import {
   esHoyFecha,
   esTareaVencida,
@@ -45,10 +45,95 @@ import {
   obtenerSemestresSeleccionadosAgenda,
   tareaVenceHoy,
 } from "./agenda-utils.js";
-import { obtenerAdjuntosActivosDe } from "../core/storage-adjuntos.js";
+import { eliminarAdjunto, obtenerAdjuntosActivosDe, obtenerAdjuntosDe } from "../core/storage-adjuntos.js";
 
 const ETIQUETA_TIPO = { evento: "Eventos", tarea: "Tareas", examen: "Exámenes" };
 const ORDEN_TIPO = ["examen", "tarea", "evento"];
+
+/**
+ * Feature "filtro por estado" — pedido nuevo: 6 badges debajo del
+ * encabezado de semana (Semanal y Todo), en este orden exacto. "Clase" no
+ * es un `tipo` real de EventoAgenda (ver TIPOS_EVENTO_AGENDA en schema.js)
+ * — es la sección de materias inline (construirSeccionMateriasDia); se
+ * incluye acá igual porque el pedido es "un vistazo de qué se lleva" y las
+ * materias son parte de ese vistazo. Los 6 ids son arbitrarios (no vienen
+ * del schema) — nacen y viven acá.
+ */
+const ESTADOS_FILTRO_AGENDA = [
+  { id: "clase", etiqueta: "Clase" },
+  { id: "completado", etiqueta: "Completado" },
+  { id: "pendiente", etiqueta: "Pendiente" },
+  { id: "examen", etiqueta: "Examen" },
+  { id: "evento", etiqueta: "Evento" },
+  { id: "feriado", etiqueta: "Feriado" },
+];
+
+/** Set de ids activos ahora mismo — los 6 si `agendaFiltroEstados` sigue en
+ * `null` ("en reposo"), o exactamente el array explícito ya tocado. */
+function obtenerEstadosFiltroActivos() {
+  if (Array.isArray(estado.agendaFiltroEstados)) return new Set(estado.agendaFiltroEstados);
+  return new Set(ESTADOS_FILTRO_AGENDA.map((e) => e.id));
+}
+
+/**
+ * `evento.completada` solo existe en `tarea` (ver comentario del campo en
+ * schema.js) — Examen/Evento/Feriado no tienen estado de completado, así
+ * que Completado/Pendiente no les aplica: se filtran únicamente por su
+ * propio badge (Examen/Evento/Feriado), sin importar esos otros 2.
+ */
+function eventoPasaFiltroEstados(evento, activos) {
+  if (evento.tipo === "tarea") return activos.has(evento.completada ? "completado" : "pendiente");
+  if (evento.tipo === "examen") return activos.has("examen");
+  if (evento.tipo === "evento") return activos.has(evento.es_feriado ? "feriado" : "evento");
+  return true;
+}
+
+/**
+ * Primer toque mientras está "en reposo" (los 6 activos, nadie tocó nada
+ * todavía) AÍSLA — deja solo ese badge activo. Cualquier toque posterior
+ * (ya con un array explícito, así termine con los 6 marcados de nuevo a
+ * mano) es un toggle independiente de siempre: no vuelve a aislar. Mismo
+ * comportamiento pedido explícitamente para que "marcar todos y sacar uno"
+ * no tire abajo al resto.
+ */
+function alternarFiltroEstadoAgenda(id) {
+  if (!Array.isArray(estado.agendaFiltroEstados)) {
+    estado.agendaFiltroEstados = [id];
+  } else {
+    const idx = estado.agendaFiltroEstados.indexOf(id);
+    if (idx >= 0) estado.agendaFiltroEstados.splice(idx, 1);
+    else estado.agendaFiltroEstados.push(id);
+  }
+  renderizarAgendaInterno();
+}
+
+/**
+ * Los 6 badges, todos con el mismo ancho (el del más largo — "Completado"),
+ * centrados. El ancho se ecualiza DESPUÉS de insertarse en el DOM (ver
+ * llamador) porque necesita el ancho real ya renderizado de cada uno.
+ * "Clase" lleva su propia clase (rosa, ver estilo inyectado en
+ * inicializarAgenda) porque no comparte color con ningún tipo existente.
+ */
+function construirBarraFiltroEstadosAgenda() {
+  const activos = obtenerEstadosFiltroActivos();
+  const barra = document.createElement("div");
+  barra.className = "agenda-filtro-estados";
+  const botones = ESTADOS_FILTRO_AGENDA.map(({ id, etiqueta }) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `agenda-filtro-estado-btn agenda-filtro-estado-${id}` + (activos.has(id) ? " active" : "");
+    btn.textContent = etiqueta;
+    btn.addEventListener("click", () => alternarFiltroEstadoAgenda(id));
+    barra.appendChild(btn);
+    return btn;
+  });
+  requestAnimationFrame(() => {
+    if (!botones[0]?.isConnected) return; // re-renderizado antes del frame — no tocar nodos viejos
+    const maxAncho = Math.max(...botones.map((b) => b.offsetWidth));
+    botones.forEach((b) => (b.style.minWidth = `${maxAncho}px`));
+  });
+  return barra;
+}
 
 /**
  * FIX (mismo bug de arranque "Cannot access 'estado' before initialization"
@@ -75,6 +160,22 @@ function asegurarEstadoAgendaBaseInicializado() {
   // `null`/`undefined` = "automático". Un array (incluso vacío) es una
   // selección EXPLÍCITA.
   if (typeof estado.agendaSemestresSeleccionados === "undefined") estado.agendaSemestresSeleccionados = null;
+  // Feature "filtro por estado" (Clase/Completado/Pendiente/Examen/Evento/
+  // Feriado, ver ESTADOS_FILTRO_AGENDA): `null` = "en reposo", los 6 están
+  // activos y el PRÓXIMO toque sobre cualquier badge aísla ese uno solo
+  // (ver alternarFiltroEstadoAgenda). Un array (incluso con los 6 ids
+  // adentro) es una selección explícita — a partir de ahí cada toque es un
+  // toggle normal, independiente del resto (pedido: "si pongo todos
+  // marcados y quito uno no deben quitarse los demás"). Mismo patrón de
+  // sesión (no persistente) que el resto de estado.agenda* de este bloque.
+  if (typeof estado.agendaFiltroEstados === "undefined") estado.agendaFiltroEstados = null;
+  // Feature "modo selección" (mantener presionado para borrar varias):
+  // `agendaModoSeleccion` es el interruptor general, `agendaSeleccionIds`
+  // los ids de EventoAgenda marcados mientras dura. Viven en `estado` (no
+  // en una variable de módulo) por consistencia con el resto del archivo,
+  // aunque en la práctica solo los toca agenda.js.
+  if (typeof estado.agendaModoSeleccion === "undefined") estado.agendaModoSeleccion = false;
+  if (typeof estado.agendaSeleccionIds === "undefined") estado.agendaSeleccionIds = [];
 }
 // Punto 10 + 12: arranca en el valor PERSISTENTE de Ajustes → Agenda
 // (`agenda_mostrar_clases`, punto 12) pero solo para esta sesión: togglear
@@ -188,14 +289,51 @@ function alternarCompletadaEvento(eventoId) {
  * centrada se notaba desalineado. Ahora usa el `align-items:center` por
  * defecto de `.agenda-item`, así checkbox, nombre y columna derecha quedan
  * todos centrados contra la misma línea media de la tarjeta.
+ *
+ * FIX bug reportado ("a veces no marca completada"): `item` (la tarjeta
+ * entera) ERA un `<button>`, y el círculo de completada (otro `<button>`)
+ * vivía anidado ADENTRO de ese botón. `<button>` dentro de `<button>` es
+ * contenido inválido en HTML — acá no lo corregía el parser porque el árbol
+ * se arma con createElement/appendChild, no parseando markup, así que
+ * quedaba de verdad así en el DOM. Con 2 elementos interactivos superpuestos
+ * el hit-testing táctil deja de ser confiable en todos los navegadores: en
+ * la mayoría de los toques el dedo cae limpio sobre el círculo, pero un
+ * toque cerca del borde (el círculo además es chico — de ahí el pedido de
+ * agrandar el hitbox) a veces se resuelve contra el `<button>` ANCESTRO
+ * (`item`) en vez del hijo (`check`). Ahí `check` nunca recibe el click,
+ * nunca corre `alternarCompletadaEvento`, y en cambio se dispara el click de
+ * `item`, que abre la tarjeta de info sin haber completado nada — de ahí que
+ * la persona tuviera que entrar al detalle y completarla desde ahí (ese
+ * checkbox sí es 100% confiable: es un único botón fijo del modal, no
+ * anidado). Encaja con que no sea 100% reproducible (depende del punto
+ * exacto del toque y de cómo cada navegador arbitra la superposición).
+ * Fix: `item` deja de ser un `<button>` — pasa a un `<div role="button"
+ * tabindex="0">` (con su propio keydown Enter/Espacio para no perder
+ * accesibilidad de teclado). El círculo sigue siendo un `<button>` real,
+ * pero ahora es hijo de un DIV, no de otro botón — deja de haber anidamiento
+ * inválido y el navegador ya no tiene que arbitrar nada.
+ *
+ * Pedido "aumentar el hitbox de la bolita, que se vea igual": el círculo
+ * visual no cambia (mismo `.agenda-check-completada` de siempre); el área
+ * táctil se agranda con un `::before` invisible más grande que el botón
+ * (ver el `<style>` inyectado en inicializarAgenda) — técnica estándar para
+ * esto: el pseudo-elemento cuenta como parte del botón a efectos de click,
+ * pero no pinta nada, así que visualmente no se nota.
+ *
+ * Modo selección (mantener presionado): mismo `item`, mismo `check`, ambos
+ * revisan `estado.agendaModoSeleccion` al toque — ver
+ * registrarPresionLargaSeleccion/alternarSeleccionAgenda más abajo.
  */
 function construirItemEvento(evento) {
   const estilo = obtenerEstiloEvento(evento);
 
-  const item = document.createElement("button");
-  item.type = "button";
+  const item = document.createElement("div");
   item.className = "agenda-item";
+  item.setAttribute("role", "button");
+  item.tabIndex = 0;
   item.style.borderLeft = `3px solid ${estilo.colorBorde}`;
+  item.dataset.eventoId = evento.id;
+  if (estado.agendaSeleccionIds.includes(evento.id)) item.classList.add("agenda-item-seleccionado");
 
   if (evento.tipo === "tarea") {
     const check = document.createElement("button");
@@ -204,6 +342,10 @@ function construirItemEvento(evento) {
     check.title = evento.completada ? "Marcar como pendiente" : "Marcar como completada";
     check.addEventListener("click", (ev) => {
       ev.stopPropagation();
+      if (estado.agendaModoSeleccion) {
+        alternarSeleccionAgenda(evento.id);
+        return;
+      }
       alternarCompletadaEvento(evento.id);
     });
     item.appendChild(check);
@@ -220,8 +362,163 @@ function construirItemEvento(evento) {
 
   item.appendChild(construirColumnaDerechaEvento(evento, estilo));
 
-  item.addEventListener("click", () => abrirTarjetaInfoEventoAgenda(evento.id));
+  item.addEventListener("click", () => {
+    if (estado.agendaModoSeleccion) {
+      alternarSeleccionAgenda(evento.id);
+      return;
+    }
+    abrirTarjetaInfoEventoAgenda(evento.id);
+  });
+  item.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" || ev.key === " ") {
+      ev.preventDefault();
+      item.click();
+    }
+  });
+
+  registrarPresionLargaSeleccion(item, evento.id);
+
   return item;
+}
+
+/**
+ * Feature "modo selección": mantener presionado ~500ms sobre una tarjeta
+ * (cualquier tipo — tarea/examen/evento/feriado) activa el modo y la marca
+ * seleccionada; a partir de ahí CUALQUIER toque corto sobre cualquier
+ * tarjeta (acá o en el checkbox) suma/saca esa tarjeta de la selección en
+ * vez de abrir el detalle o togglear completada (ver los 2 click handlers
+ * de construirItemEvento). `pointerdown/up/leave/cancel` en vez de
+ * touchstart/mousedown para cubrir mouse y touch con el mismo código.
+ *
+ * El listener de `click` en fase de CAPTURA (`{capture:true}`) es lo que
+ * evita que, justo al activarse la presión larga, el click sintético que el
+ * navegador dispara al soltar el dedo termine además abriendo el detalle o
+ * alternando la selección una segunda vez — captura siempre corre antes que
+ * los listeners en fase de burbuja del mismo elemento (los de arriba en
+ * construirItemEvento), así que puede frenarlo con stopImmediatePropagation
+ * antes de que lleguen a ejecutarse.
+ */
+const DURACION_PRESION_LARGA_MS = 500;
+function registrarPresionLargaSeleccion(item, eventoId) {
+  let temporizador = null;
+  let activadaPorEsteToque = false;
+
+  const cancelarTemporizador = () => {
+    if (temporizador) clearTimeout(temporizador);
+    temporizador = null;
+  };
+
+  item.addEventListener("pointerdown", (ev) => {
+    if (ev.pointerType === "mouse" && ev.button !== 0) return;
+    activadaPorEsteToque = false;
+    cancelarTemporizador();
+    temporizador = setTimeout(() => {
+      activadaPorEsteToque = true;
+      estado.agendaModoSeleccion = true;
+      if (!estado.agendaSeleccionIds.includes(eventoId)) estado.agendaSeleccionIds.push(eventoId);
+      if (navigator.vibrate) navigator.vibrate(15);
+      renderizarAgenda();
+    }, DURACION_PRESION_LARGA_MS);
+  });
+  item.addEventListener("pointerup", cancelarTemporizador);
+  item.addEventListener("pointerleave", cancelarTemporizador);
+  item.addEventListener("pointercancel", cancelarTemporizador);
+  item.addEventListener(
+    "click",
+    (ev) => {
+      if (activadaPorEsteToque) {
+        ev.stopImmediatePropagation();
+        activadaPorEsteToque = false;
+      }
+    },
+    { capture: true }
+  );
+}
+
+/** Suma/saca `eventoId` de la selección actual; si queda vacía, sale sola
+ * del modo selección (mismo criterio que "Cancelar" en la barra flotante). */
+function alternarSeleccionAgenda(eventoId) {
+  const idx = estado.agendaSeleccionIds.indexOf(eventoId);
+  if (idx >= 0) estado.agendaSeleccionIds.splice(idx, 1);
+  else estado.agendaSeleccionIds.push(eventoId);
+  if (estado.agendaSeleccionIds.length === 0) estado.agendaModoSeleccion = false;
+  renderizarAgenda();
+}
+
+function cancelarSeleccionAgenda() {
+  estado.agendaModoSeleccion = false;
+  estado.agendaSeleccionIds = [];
+  renderizarAgenda();
+}
+
+/**
+ * Borra TODOS los eventos seleccionados — mismo patrón que
+ * confirmarBorrarEventoAgenda (agenda-modal.js) para un solo evento: pide
+ * confirmación, limpia sus adjuntos, deja el tombstone en
+ * `_eliminados_agenda` (lo necesita el sondeo remoto para no revivir el
+ * evento si el otro dispositivo todavía no bajó este borrado), saca el
+ * espejo de Google Calendar si tenía, y recién ahí lo saca de
+ * estado.datos.agenda. Se re-lee cada evento por id vivo antes de tocarlo
+ * (mismo criterio de "por si un sondeo remoto reemplazó estado.datos
+ * mientras tanto" que usa el resto del proyecto).
+ */
+function confirmarEliminarSeleccionAgenda() {
+  const ids = [...estado.agendaSeleccionIds];
+  if (ids.length === 0) return;
+  abrirConfirmacion({
+    titulo: `¿Borrar ${ids.length} ${ids.length === 1 ? "elemento" : "elementos"}?`,
+    mensaje: "Esta acción no se puede deshacer.",
+    textoConfirmar: "Borrar",
+    onConfirmar: () => {
+      ids.forEach((id) => {
+        const viva = buscarEventoAgendaVivo(id);
+        if (!viva) return;
+        obtenerAdjuntosDe("evento", viva.id).forEach((a) => eliminarAdjunto(a.id));
+        estado.datos._eliminados_agenda = estado.datos._eliminados_agenda || [];
+        estado.datos._eliminados_agenda.push({ id: viva.id, eliminadoEn: Date.now() });
+        eliminarEventoCalendarizado(viva);
+      });
+      estado.datos.agenda = (estado.datos.agenda || []).filter((ev) => !ids.includes(ev.id));
+      marcarCambioPendiente();
+      estado.agendaModoSeleccion = false;
+      estado.agendaSeleccionIds = [];
+      renderizarAgenda();
+    },
+  });
+}
+
+/**
+ * Barra flotante inferior (contador + Cancelar + Eliminar) — un solo nodo
+ * fijo creado una vez (ver inicializarAgenda), no algo que cada render de
+ * Lista/Calendario/Materia tenga que reconstruir; renderizarAgenda() la
+ * sincroniza al final de CADA render, sea cual sea la vista activa, para
+ * que sobreviva a cambiar de vista mientras hay una selección en curso.
+ */
+function inicializarBarraSeleccionAgenda() {
+  if (document.getElementById("agenda-barra-seleccion")) return;
+  const barra = document.createElement("div");
+  barra.id = "agenda-barra-seleccion";
+  barra.className = "agenda-barra-seleccion oculto";
+  barra.innerHTML = `
+    <span id="agenda-seleccion-contador" class="agenda-seleccion-contador"></span>
+    <span style="flex:1;"></span>
+    <button type="button" id="agenda-seleccion-cancelar" class="btn-discreto">Cancelar</button>
+    <button type="button" id="agenda-seleccion-eliminar" class="agenda-btn-eliminar-seleccion">🗑 Eliminar</button>
+  `;
+  document.body.appendChild(barra);
+  document.getElementById("agenda-seleccion-cancelar").addEventListener("click", cancelarSeleccionAgenda);
+  document.getElementById("agenda-seleccion-eliminar").addEventListener("click", confirmarEliminarSeleccionAgenda);
+}
+
+function sincronizarBarraSeleccionAgenda() {
+  const barra = document.getElementById("agenda-barra-seleccion");
+  if (!barra) return;
+  const activa = estado.agendaModoSeleccion && estado.agendaSeleccionIds.length > 0;
+  barra.classList.toggle("oculto", !activa);
+  if (activa) {
+    const n = estado.agendaSeleccionIds.length;
+    document.getElementById("agenda-seleccion-contador").textContent = `${n} ${n === 1 ? "seleccionada" : "seleccionadas"}`;
+  }
 }
 
 /**
@@ -324,7 +621,7 @@ function registrarTimerVenceHoy(span, evento) {
   intervalosVenceHoy.push(idIntervalo);
 }
 
-function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios) {
+function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios, activosFiltro) {
   const fechaISO = formatearFechaISO(diaInfo.fecha);
   const eventosDelDia = (estado.datos.agenda || [])
     .filter((ev) => ev.fecha === fechaISO)
@@ -335,6 +632,8 @@ function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios) 
     // mismo (llega acá solo cuando hay al menos 1 seleccionado — ver el
     // guard de "Selecciona al menos un semestre" en renderizarAgendaInterno).
     .filter((ev) => !ev.semestre_id || semestresSeleccionados.some((s) => s.id === ev.semestre_id))
+    // Feature "filtro por estado": ver eventoPasaFiltroEstados.
+    .filter((ev) => eventoPasaFiltroEstados(ev, activosFiltro))
     .sort((a, b) => String(a.hora || "99:99").localeCompare(String(b.hora || "99:99")));
 
   if (!mostrarDiasVacios && eventosDelDia.length === 0) return null;
@@ -785,6 +1084,12 @@ function renderizarAgendaInterno() {
   const mostrarDiasVacios = cfg.agenda_mostrar_dias_vacios !== false; // default: sí
   const semestreReferencia = obtenerSemestreActivoAgenda(); // más reciente del conjunto, para "Semana N"
   const modoTodo = estado.agendaFiltroModo === "todo";
+  // FIX: esto no se calculaba en ningún lado — construirBloqueDia recibía
+  // `activosFiltro` como `undefined` en los 3 call-sites de más abajo, y
+  // eventoPasaFiltroEstados hacía `activos.has(...)` sobre `undefined`,
+  // tirando un TypeError apenas el día tenía una tarea/examen/evento (o sea,
+  // en la práctica siempre) — rompía el render completo de Lista.
+  const activosFiltro = obtenerEstadosFiltroActivos();
 
   // Punto 10: en modo "Todo" el rango arranca siempre en HOY (nunca hay
   // días previos a colapsar — ver obtenerRangoDiasAgendaTodo), así que el
@@ -800,6 +1105,10 @@ function renderizarAgendaInterno() {
     } else {
       subCont.appendChild(construirSubheaderSemanal(dias, semestreReferencia));
     }
+    // Feature "filtro por estado": pedido explícito para Semanal Y Todo (ver
+    // pregunta/respuesta en el hilo). FIX: esto estaba definido pero nunca
+    // se insertaba en el DOM — los 6 badges no aparecían en ningún lado.
+    subCont.appendChild(construirBarraFiltroEstadosAgenda());
   }
 
   if (modoTodo) {
@@ -817,7 +1126,7 @@ function renderizarAgendaInterno() {
     let huboContenido = false;
 
     dias.forEach((dia) => {
-      const bloque = construirBloqueDia(dia, semestresSeleccionados, mostrarDiasVacios);
+      const bloque = construirBloqueDia(dia, semestresSeleccionados, mostrarDiasVacios, activosFiltro);
       if (!bloque) return;
       huboContenido = true;
 
@@ -848,8 +1157,8 @@ function renderizarAgendaInterno() {
   const diasPasados = dias.filter((d) => formatearFechaISO(d.fecha) < hoyISO);
   const diasDesdeHoy = dias.filter((d) => formatearFechaISO(d.fecha) >= hoyISO);
 
-  const bloquesPasados = diasPasados.map((dia) => construirBloqueDia(dia, semestresSeleccionados, mostrarDiasVacios)).filter(Boolean);
-  const bloquesDesdeHoy = diasDesdeHoy.map((dia) => construirBloqueDia(dia, semestresSeleccionados, mostrarDiasVacios)).filter(Boolean);
+  const bloquesPasados = diasPasados.map((dia) => construirBloqueDia(dia, semestresSeleccionados, mostrarDiasVacios, activosFiltro)).filter(Boolean);
+  const bloquesDesdeHoy = diasDesdeHoy.map((dia) => construirBloqueDia(dia, semestresSeleccionados, mostrarDiasVacios, activosFiltro)).filter(Boolean);
 
   if (bloquesPasados.length === 0 && bloquesDesdeHoy.length === 0) {
     const vacio = document.createElement("p");
@@ -887,19 +1196,26 @@ function renderizarAgenda() {
   });
   if (vista === "lista") {
     renderizarAgendaInterno();
-    return;
+  } else {
+    // Calendario y Materia arman su propia navegación adentro de su propio
+    // contenedor (agenda-calendario.js / agenda-materia.js) — acá el bloque
+    // dinámico del header solo necesita el atajo "Hoy", compartido entre los
+    // 3 modos (ver irAHoyAgenda).
+    const subCont = document.getElementById("agenda-subheader-dinamico");
+    if (subCont) {
+      subCont.innerHTML = "";
+      subCont.appendChild(construirEnlaceHoyAgenda());
+    }
+    if (vista === "calendario") renderizarCalendarioAgenda();
+    else renderizarMateriaAgenda();
   }
-  // Calendario y Materia arman su propia navegación adentro de su propio
-  // contenedor (agenda-calendario.js / agenda-materia.js) — acá el bloque
-  // dinámico del header solo necesita el atajo "Hoy", compartido entre los
-  // 3 modos (ver irAHoyAgenda).
-  const subCont = document.getElementById("agenda-subheader-dinamico");
-  if (subCont) {
-    subCont.innerHTML = "";
-    subCont.appendChild(construirEnlaceHoyAgenda());
-  }
-  if (vista === "calendario") renderizarCalendarioAgenda();
-  else renderizarMateriaAgenda();
+  // FIX: la barra flotante de selección múltiple (contador + Cancelar +
+  // Eliminar) estaba definida (sincronizarBarraSeleccionAgenda) pero nunca
+  // se llamaba desde acá — el modo selección guardaba estado y resaltaba
+  // tarjetas, pero no había forma de disparar el borrado desde la UI. Se
+  // sincroniza al final de CADA render (cualquier vista) para que sobreviva
+  // a cambiar de vista mientras hay una selección en curso.
+  sincronizarBarraSeleccionAgenda();
 }
 
 /**
@@ -936,6 +1252,10 @@ function inicializarAgenda() {
   inicializarSelectorSemestreAgenda();
   inicializarFiltrosAgenda();
   inicializarMateriaAgenda();
+  // FIX: sin esta llamada el nodo #agenda-barra-seleccion nunca se creaba —
+  // sincronizarBarraSeleccionAgenda() (llamada desde renderizarAgenda) no
+  // tenía nada que mostrar/ocultar.
+  inicializarBarraSeleccionAgenda();
 }
 
 /**
