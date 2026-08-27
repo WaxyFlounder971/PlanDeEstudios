@@ -580,11 +580,29 @@ function crearRegistroFinancieroSemestre({ semestreId, costoMatricula, becaMonto
  *     mismo criterio que Date.prototype.getDay()).
  *   - "cada_n_dias": cada N días exactos desde fecha_inicio, con N 100%
  *     libre (no limitado a 2/3/4 — el usuario pone lo que necesite).
+ *
+ * v2.9.2 (2026-08-26, pedido explícito de Krys): se agrega `tipo`
+ * ("gasto" | "ingreso") para poder registrar también ingresos (no solo
+ * beca) dentro de la MISMA colección `gastos_u`, en vez de crear una
+ * lista aparte — reutiliza 100% el CRUD/UI/recurrencia que ya existía
+ * para gastos, tanto simples como recurrentes (ej. un ingreso fijo
+ * quincenal por un trabajo de medio tiempo se modela exactamente igual
+ * que un gasto recurrente, solo que con tipo:"ingreso"). Todo el resto
+ * del objeto (costo/monto, recurrente, semestre_id, nota) significa lo
+ * mismo sin importar el tipo — un "ingreso" de $50 usa el mismo campo
+ * `costo` que usaría un gasto de $50, la diferencia es puramente de
+ * signo/clasificación para los totales (ver calcularTotalesResumenFinanzas
+ * en finanzas.js) y de color en la UI (finanzas-gastos.js). Default
+ * "gasto" tanto si no se manda `tipo` como si viene con cualquier valor
+ * que no sea exactamente "ingreso" — así los gastos_u ya guardados antes
+ * de este cambio (sin el campo) se siguen tratando como gasto, sin
+ * necesitar una migración de datos.
  */
-function crearGastoU({ nombre, costo, nota, semestreId, recurrente }) {
+function crearGastoU({ nombre, tipo, costo, nota, semestreId, recurrente }) {
   return sellarTimestamp({
     id: "gastou_" + crypto.randomUUID(),
     nombre,
+    tipo: tipo === "ingreso" ? "ingreso" : "gasto", // "gasto" | "ingreso"
     costo: Number(costo) || 0,
     nota: nota || null,
     semestre_id: semestreId || null,
@@ -747,6 +765,36 @@ const MONEDAS_DISPONIBLES = [
   { id: "BGN", etiqueta: "Lev búlgaro", simbolo: "лв" },
   { id: "MYR", etiqueta: "Ringgit malayo", simbolo: "RM" },
   { id: "IDR", etiqueta: "Rupia indonesia", simbolo: "Rp" },
+
+  /* v2.9.2 (2026-08-26, pedido explícito de Krys, por inclusividad): se
+   * agregan TODAS las monedas propias de países latinoamericanos que
+   * todavía no estaban representadas, más la de Senegal — a propósito
+   * SIN aplicar acá el criterio de "un solo representante por símbolo"
+   * que se usó arriba (ver comentario de v1.15.13): aunque MXN/ARS/COP/
+   * CLP/UYU/CUP compartan el símbolo "$" con USD, y BOB/VES compartan
+   * "Bs.", cada una se agrega igual como entrada propia, tal como se
+   * pidió explícitamente ("aunque el ícono/símbolo se repita entre
+   * algunas, eso está bien"). Ecuador y El Salvador no se agregan aparte
+   * porque su moneda oficial YA es literalmente el dólar estadounidense
+   * (USD, ya está arriba) — no son monedas propias distintas.
+   * Se incluye Haití (HTG) por ser parte de Latinoamérica en la
+   * definición amplia más común (Latinoamérica = hispanohablante +
+   * Brasil + Haití); si esta app la usa alguien que solo cuenta los 19
+   * países hispanohablantes + Brasil, esta entrada de más no molesta. */
+  { id: "MXN", etiqueta: "Peso mexicano", simbolo: "$" },
+  { id: "ARS", etiqueta: "Peso argentino", simbolo: "$" },
+  { id: "COP", etiqueta: "Peso colombiano", simbolo: "$" },
+  { id: "CLP", etiqueta: "Peso chileno", simbolo: "$" },
+  { id: "UYU", etiqueta: "Peso uruguayo", simbolo: "$U" },
+  { id: "CUP", etiqueta: "Peso cubano", simbolo: "$" },
+  { id: "BOB", etiqueta: "Boliviano", simbolo: "Bs." },
+  { id: "VES", etiqueta: "Bolívar venezolano", simbolo: "Bs.S" },
+  { id: "DOP", etiqueta: "Peso dominicano", simbolo: "RD$" },
+  { id: "HNL", etiqueta: "Lempira hondureño", simbolo: "L" },
+  { id: "NIO", etiqueta: "Córdoba nicaragüense", simbolo: "C$" },
+  { id: "PAB", etiqueta: "Balboa panameño", simbolo: "B/." },
+  { id: "HTG", etiqueta: "Gourde haitiano", simbolo: "G" },
+  { id: "XOF", etiqueta: "Franco CFA (Senegal)", simbolo: "CFA" },
 ];
 
 /* Frecuencias de backup rotativo a Drive (Ajustes generales, 2026-08-10) —
