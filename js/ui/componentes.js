@@ -175,6 +175,12 @@ function inicializarLayoutResponsivo() {
   if (btnTopbarEnlaces) {
     btnTopbarEnlaces.addEventListener("click", abrirDrawerEnlacesMovil);
   }
+  // Segundo disparador del mismo drawer, solo visible entre 900px y 1499px
+  // vía CSS (.btn-flotante-enlaces) — ver comentario en design-system.css.
+  const btnFlotanteEnlaces = document.getElementById("btn-flotante-enlaces");
+  if (btnFlotanteEnlaces) {
+    btnFlotanteEnlaces.addEventListener("click", abrirDrawerEnlacesMovil);
+  }
   if (overlayEnlaces) {
     overlayEnlaces.addEventListener("click", cerrarDrawerEnlacesMovil);
   }
@@ -205,6 +211,14 @@ function inicializarLayoutResponsivo() {
   window.addEventListener("resize", () => {
     if (window.innerWidth >= 900) {
       cerrarSidebarMovil();
+    }
+    // El drawer de Enlaces ahora también se abre en escritorio (900-1499px)
+    // desde el botón flotante — ver .btn-flotante-enlaces en
+    // design-system.css. Solo se auto-cierra al llegar a 1500px, donde
+    // .enlaces-lateral (panel fijo) lo reemplaza y el botón flotante se
+    // oculta; por debajo de eso (incluido el rango de escritorio sin
+    // espacio) queda igual que estaba, el usuario lo cierra a mano.
+    if (window.innerWidth >= 1500) {
       cerrarDrawerEnlacesMovil();
     }
   });
