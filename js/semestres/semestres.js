@@ -814,10 +814,47 @@ function abrirConfirmacionBorrarSemestre(semestre) {
       estado.datos.semestres = (estado.datos.semestres || []).filter((s) => s.id !== semestre.id);
       estado.datos._eliminados_semestres = estado.datos._eliminados_semestres || [];
       estado.datos._eliminados_semestres.push({ id: semestre.id, eliminadoEn: Date.now() });
+
+      /**
+       * FIX (2026-08-27, reportado desde Finanzas: "meti beca y no me sale
+       * en Por semestre, desapareció del todo"): borrar un semestre acá
+       * nunca limpiaba lo que Finanzas tenía colgado de él — ni el registro
+       * financiero (finanzas_semestre: matrícula + beca) ni los gastos_u
+       * vinculados por semestre_id. El registro financiero quedaba
+       * huérfano: calcularTotalesResumenFinanzas (finanzas.js) lo seguía
+       * sumando al total sin más (nunca chequeaba si el semestre_id todavía
+       * existe), pero calcularSerieFinancieraPorSemestre
+       * (finanzas-graficas.js) solo recorre semestres que SÍ existen hoy —
+       * un registro sin semestre real nunca podía volver a matchear con
+       * ningún punto del eje X. Resultado real observado: el donut mostraba
+       * "Beca: ₡1.000.000" (suma sin filtrar) pero la línea verde estaba
+       * plana en 0 en los 7 puntos del gráfico (ninguno era ese semestre
+       * borrado). Se limpia acá, en el único punto de entrada de borrado:
+       *   - finanzas_semestre: se ELIMINA (no tiene sentido un registro de
+       *     matrícula/beca sin el semestre al que pertenece — no existe un
+       *     equivalente a "General" para esto).
+       *   - gastos_u: se DESVINCULA (semestre_id -> null) en vez de
+       *     borrarse — la plata ya gastada/ingresada sigue siendo real y
+       *     debe seguir contando en los totales; simplemente pasa a
+       *     agruparse en el balde "General" del gráfico por semestre en vez
+       *     de perderse (mismo criterio ya usado para gastos sin semestre_id
+       *     desde el principio).
+       */
+      const registroFinanciero = (estado.datos.finanzas_semestre || []).find((r) => r.semestre_id === semestre.id);
+      if (registroFinanciero) {
+        estado.datos.finanzas_semestre = estado.datos.finanzas_semestre.filter((r) => r.id !== registroFinanciero.id);
+        estado.datos._eliminados_finanzas_semestre = estado.datos._eliminados_finanzas_semestre || [];
+        estado.datos._eliminados_finanzas_semestre.push({ id: registroFinanciero.id, eliminadoEn: Date.now() });
+      }
+      (estado.datos.gastos_u || []).forEach((g) => {
+        if (g.semestre_id === semestre.id) g.semestre_id = null;
+      });
+
       marcarCambioPendiente();
       renderizarSemestres();
     },
   });
+
 }
 
 /**
