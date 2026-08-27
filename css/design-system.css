@@ -91,25 +91,6 @@ html, body {
      nada. overscroll-behavior-y: contain apaga el gesto nativo del
      navegador para que solo mande el nuestro. */
   overscroll-behavior-y: contain;
-  /* Fix (2026-08-26 — "el sidebar se pierde al hacer scroll en PC", pedido
-     de Krys): este overflow-x:hidden vivía antes en .app-layout, para
-     evitar cualquier desborde horizontal accidental del layout flex. El
-     problema: .app-layout no declaraba overflow-y, y por spec de CSS
-     Overflow, cuando un eje es distinto de "visible" y el otro queda en
-     "visible", el navegador computa ESE OTRO EJE como "auto" — o sea,
-     .app-layout se convertía sin querer en su propio contenedor de scroll
-     (overflow-y:auto implícito). Como .app-layout nunca tiene un alto fijo
-     (crece libre con .app-contenido), nunca llega a recortarse ni a
-     mostrar scrollbar propio, PERO sigue contando como el "scrollport" de
-     referencia para cualquier position:sticky adentro (#app-sidebar) — y
-     contra una caja que nunca se desplaza de verdad, sticky no tiene nada
-     a qué "pegarse": el sidebar terminaba comportándose como un elemento
-     normal y se iba con el resto de la página al hacer scroll, aunque el
-     CSS ya dijera position:sticky. Moviendo el overflow-x:hidden acá (a
-     html/body, que es quien de verdad scrollea) se logra el mismo recorte
-     horizontal sin crear ese contenedor de scroll intermedio — el sidebar
-     vuelve a quedar sticky contra el scroll real de la página. */
-  overflow-x: hidden;
 }
 
 body {
@@ -1176,10 +1157,24 @@ a { color: var(--accent-1); }
   min-height: 100vh;
   width: 100%;
   max-width: 100vw;
-  /* Fix (2026-08-26): el overflow-x:hidden que estaba acá se movió a
-     html/body — ver el comentario junto a overscroll-behavior-y ahí mismo.
-     Tenerlo en este elemento (sin overflow-y declarado) rompía el
-     position:sticky de #app-sidebar. */
+  /* Fix (2026-08-26 — "el sidebar se pierde al hacer scroll en PC", pedido
+     de Krys): acá había overflow-x:hidden. El problema de fondo: CUALQUIER
+     valor de overflow distinto de "visible"/"clip" (incluido "hidden") por
+     spec convierte al elemento en un "contenedor de scroll" — y eso es
+     exactamente lo que usa position:sticky para decidir contra qué caja
+     "engancharse". #app-sidebar terminaba con sticky calculado contra
+     .app-layout (que nunca se recorta de verdad, porque su alto crece
+     libre con el contenido) en vez de contra el scroll real del documento,
+     así que nunca se sentía "pegado": se iba con el resto de la página.
+     overflow-x: clip recorta el desborde horizontal exactamente igual que
+     hidden, pero por spec NO establece un contenedor de scroll — el
+     sidebar vuelve a quedar sticky contra el scroll real de la página.
+     (Nota: se descartó mover el overflow a html/body — tocar el overflow
+     de la raíz del documento, sobre todo junto con background-attachment:
+     fixed que ya tiene <body>, es una combinación conocida por romper el
+     scroll nativo en varios navegadores; clip acá mismo evita ese riesgo
+     por completo.) */
+  overflow-x: clip;
 }
 
 /* ---- Asistente IA: bloqueo de scroll del documento + ocultar topbar con
@@ -1217,7 +1212,14 @@ body.asistente-teclado-abierto .mobile-topbar {
    cualquier ajuste futuro de tamaño/color quede sincronizado entre los dos.
    Sin borde ni fondo: solo el símbolo (pedido explícito, la hamburguesa NO
    debe verse como un botón). */
-.mobile-topbar .btn-topbar-icono {
+/* Fix (2026-08-26 — "hay una X default muy fea en el panel de enlaces"):
+   este selector estaba scopeado a ".mobile-topbar .btn-topbar-icono", pero
+   #btn-cerrar-drawer-enlaces usa la misma clase y vive dentro de
+   #drawer-enlaces-movil (no de .mobile-topbar) — nunca recibía este estilo
+   y se veía como botón nativo del navegador sin diseñar. Se saca el scope:
+   la intención original ya era que CUALQUIER botón con esta clase
+   comparta el mismo look, sin importar en qué contenedor viva. */
+.btn-topbar-icono {
   background: transparent;
   border: none;
   color: var(--text-primary);
@@ -1230,7 +1232,7 @@ body.asistente-teclado-abierto .mobile-topbar {
   justify-content: center;
   padding: 0;
 }
-.mobile-topbar .btn-topbar-icono:active { opacity: 0.6; }
+.btn-topbar-icono:active { opacity: 0.6; }
 /* flex:1 para que el título ocupe el espacio del medio y el botón de
    Enlaces (agregado después de <h3> en el HTML) quede pegado al borde
    derecho de la barra, sin necesitar un wrapper extra. */
