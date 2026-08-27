@@ -103,14 +103,25 @@ function construirFilaGasto(gasto, contenedorLista) {
   const derecha = document.createElement("div");
   derecha.className = "row";
   derecha.style.cssText = "flex-wrap:nowrap; flex-shrink:0; gap:clamp(6px,2vw,10px); align-items:center;";
+  // v2.9.2 (ingresos, pedido explícito de Krys): el badge de un "ingreso"
+  // se pinta de azul (mismo azul que su serie en la gráfica "Por
+  // semestre", ver COLOR_INGRESO_PROPIO en finanzas-graficas.js) en vez
+  // del gris neutro de siempre, para diferenciarlo a simple vista de un
+  // gasto — no existe una clase .badge-* azul en el proyecto (solo
+  // danger/success/warning/neutral), así que se sobreescribe con estilo
+  // inline en vez de agregar una clase nueva al sistema de diseño para un
+  // solo uso puntual. El "+" adelante refuerza que es plata que ENTRA.
+  const esIngreso = gasto.tipo === "ingreso";
   const badge = document.createElement("span");
   badge.className = "badge badge-neutral";
-  badge.style.cssText = "white-space:nowrap; font-size:clamp(0.72rem,2.6vw,0.85rem); padding:clamp(3px,1vw,6px) clamp(6px,2vw,10px);";
+  badge.style.cssText =
+    "white-space:nowrap; font-size:clamp(0.72rem,2.6vw,0.85rem); padding:clamp(3px,1vw,6px) clamp(6px,2vw,10px);" +
+    (esIngreso ? " background:#3b82f6; border-color:#3b82f6; color:#fff;" : "");
   if (gasto.recurrente) {
     const { totalPagado } = calcularPagosRecurrentesTranscurridos(gasto.recurrente);
-    badge.textContent = formatearMonto(totalPagado) + " a la fecha";
+    badge.textContent = (esIngreso ? "+" : "") + formatearMonto(totalPagado) + " a la fecha";
   } else {
-    badge.textContent = formatearMonto(gasto.costo);
+    badge.textContent = (esIngreso ? "+" : "") + formatearMonto(gasto.costo);
   }
   const btnEditar = document.createElement("button");
   btnEditar.type = "button";
@@ -213,7 +224,9 @@ function abrirModalGastoU(gastoExistente, contenedorLista) {
   const cerrar = () => overlay.remove();
   overlay.addEventListener("click", cerrar);
 
-  caja.innerHTML = `<h2 style="margin:0;">${gastoExistente ? "Editar" : "Nuevo"} gasto</h2>`;
+  const titulo = document.createElement("h2");
+  titulo.style.margin = "0";
+  caja.appendChild(titulo);
 
   const bloqueNombre = document.createElement("div");
   bloqueNombre.innerHTML = `<span class="form-label">Nombre</span>`;
@@ -224,6 +237,35 @@ function abrirModalGastoU(gastoExistente, contenedorLista) {
   inputNombre.value = gastoExistente ? gastoExistente.nombre : "";
   bloqueNombre.appendChild(inputNombre);
   caja.appendChild(bloqueNombre);
+
+  // ----- Tipo: Gasto o Ingreso (2026-08-26, v2.9.2, pedido explícito de
+  // Krys) — reutiliza el mismo modal/CRUD/recurrencia de siempre, la
+  // única diferencia real es este campo. Default "gasto" al crear, para
+  // no romper el flujo de siempre; al editar, precarga el tipo guardado
+  // (o "gasto" si el registro es de antes de este cambio y no lo tiene). -----
+  const bloqueTipo = document.createElement("div");
+  bloqueTipo.innerHTML = `<span class="form-label">Tipo</span>`;
+  const grupoTipo = document.createElement("div");
+  grupoTipo.className = "pill-group";
+  grupoTipo.innerHTML = `
+    <button type="button" class="pill-item" data-valor="gasto">Gasto</button>
+    <button type="button" class="pill-item" data-valor="ingreso">Ingreso</button>
+  `;
+  bloqueTipo.appendChild(grupoTipo);
+  caja.appendChild(bloqueTipo);
+
+  let tipoElegido = (gastoExistente && gastoExistente.tipo) === "ingreso" ? "ingreso" : "gasto";
+  function marcarTipoActivo() {
+    grupoTipo.querySelectorAll(".pill-item").forEach((p) => p.classList.toggle("active", p.dataset.valor === tipoElegido));
+    titulo.textContent = `${gastoExistente ? "Editar" : "Nuevo"} ${tipoElegido === "ingreso" ? "ingreso" : "gasto"}`;
+  }
+  marcarTipoActivo();
+  grupoTipo.querySelectorAll(".pill-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      tipoElegido = btn.dataset.valor;
+      marcarTipoActivo();
+    });
+  });
 
   // ----- ¿Es un pago recurrente? (2026-08-11, v2.8.8) -----
   const filaRecurrente = document.createElement("div");
@@ -639,6 +681,7 @@ function abrirModalGastoU(gastoExistente, contenedorLista) {
 
     if (gastoExistente) {
       gastoExistente.nombre = nombre;
+      gastoExistente.tipo = tipoElegido;
       gastoExistente.costo = costo;
       gastoExistente.nota = nota || null;
       gastoExistente.semestre_id = semestreId;
@@ -659,7 +702,7 @@ function abrirModalGastoU(gastoExistente, contenedorLista) {
         : null;
       sellarTimestamp(gastoExistente);
     } else {
-      const nuevo = crearGastoU({ nombre, costo, nota: nota || null, semestreId, recurrente });
+      const nuevo = crearGastoU({ nombre, tipo: tipoElegido, costo, nota: nota || null, semestreId, recurrente });
       if (!Array.isArray(estado.datos.gastos_u)) estado.datos.gastos_u = [];
       estado.datos.gastos_u.push(nuevo);
     }

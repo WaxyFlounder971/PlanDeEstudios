@@ -7,7 +7,7 @@
    calcula los totales del Resumen — nada de CRUD acá.
    ========================================================================= */
 
-import { calcularPagosRecurrentesTranscurridos } from "../core/schema.js";
+import { MONEDAS_DISPONIBLES, calcularPagosRecurrentesTranscurridos } from "../core/schema.js";
 import { estado } from "../core/storage.js";
 import { construirGraficasResumenFinanzas } from "./finanzas-graficas.js";
 import { renderizarPestanaBeneficios, renderizarPestanaGastosU } from "./finanzas-gastos.js";
@@ -62,8 +62,28 @@ function formatearFechaLarga(fechaIso) {
 }
 
 /**
- * Formato de colones consistente en toda la sección — sin decimales
- * sueltos raros, siempre 2 decimales, separador de miles local.
+ * BUG (2026-08-26, reportado por Krys): "cambio de divisa en Ajustes no se
+ * refleja en Finanzas, sigue mostrando colones". Causa confirmada: esta
+ * función (y su equivalente compacta en finanzas-graficas.js) tenían el
+ * símbolo "₡" hardcodeado y NUNCA leían configuracion.moneda_preferida ni
+ * MONEDAS_DISPONIBLES (schema.js) — el selector de Ajustes (config-
+ * ajustes.js/renderizarSelectorMoneda) sí guardaba bien el valor elegido,
+ * el problema era 100% del lado de lectura acá. Se centraliza la
+ * resolución del símbolo en esta única función para que formatearMonto y
+ * formatearMontoCompacto (finanzas-graficas.js) queden sincronizados con
+ * lo que sea que el usuario haya elegido.
+ */
+function obtenerSimboloMonedaActual() {
+  const monedaId = (estado.datos.configuracion && estado.datos.configuracion.moneda_preferida) || "CRC";
+  const moneda = MONEDAS_DISPONIBLES.find((m) => m.id === monedaId);
+  return moneda ? moneda.simbolo : "₡"; // fallback defensivo si algún día se borra una moneda del catálogo
+}
+
+/**
+ * Formato de monto consistente en toda la sección — sin decimales
+ * sueltos raros, siempre 2 decimales, separador de miles local. El
+ * símbolo ahora sale de obtenerSimboloMonedaActual() (ver fix del bug de
+ * arriba) en vez de "₡" fijo.
  *
  * v2.8.8: para negativos (ej. el Balance del Resumen cuando hay más gasto
  * que ingreso) el signo "-" se pone A MANO, antes del símbolo de moneda
@@ -74,7 +94,7 @@ function formatearFechaLarga(fechaIso) {
 function formatearMonto(numero) {
   const n = Number(numero) || 0;
   const signo = n < 0 ? "-" : "";
-  return signo + "₡" + Math.abs(n).toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return signo + obtenerSimboloMonedaActual() + Math.abs(n).toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /**
@@ -84,14 +104,24 @@ function formatearMonto(numero) {
  * v2.8.8: ya no existe un "neto por semestre" auto-calculado — costo_matricula
  * y beca_monto son dos montos directos e independientes por registro:
  *   - totalGastado = suma de costo_matricula (todos los semestres) + costo
- *     de cada gasto_u (los simples: `costo`; los recurrentes: lo ya pagado
- *     hasta hoy vía calcularPagosRecurrentesTranscurridos, nunca lo que
- *     falte pagar a futuro).
+ *     de cada gasto_u de tipo "gasto" (los simples: `costo`; los
+ *     recurrentes: lo ya pagado hasta hoy vía
+ *     calcularPagosRecurrentesTranscurridos, nunca lo que falte pagar a
+ *     futuro).
  *   - totalBecas = suma de beca_monto — funciona como INGRESO/ahorro, no
  *     como un gasto más.
- *   - balanceNeto = totalBecas − totalGastado. Positivo (>=0) = más
- *     ingresos/beca que gastos; negativo = más gastos que ingresos (ver
- *     color en construirResumenFinanzas).
+ *
+ * v2.9.2 (ingresos, pedido explícito de Krys): se agrega totalIngresos,
+ * el mismo cálculo "a la fecha" que ya usaba totalGastado pero para los
+ * gastos_u con tipo:"ingreso" (en vez de sumarse a totalGastado, se restan
+ * — es plata que entró, no que salió). Los gastos_u sin `tipo` (datos
+ * creados antes de este cambio) se tratan como "gasto", igual que ya
+ * decide crearGastoU/schema.js — ningún dato viejo cambia de categoría
+ * por default.
+ *   - balanceNeto = totalBecas + totalIngresos − totalGastado. Positivo
+ *     (>=0) = más entradas (beca+ingresos) que gastos; negativo = más
+ *     gastos que entradas (ver color en construirResumenFinanzas /
+ *     finanzas-graficas.js).
  */
 function calcularTotalesResumenFinanzas() {
   const registros = estado.datos.finanzas_semestre || [];
@@ -99,6 +129,7 @@ function calcularTotalesResumenFinanzas() {
 
   let totalGastado = 0;
   let totalBecas = 0;
+  let totalIngresos = 0;
 
   registros.forEach((r) => {
     totalGastado += Number(r.costo_matricula) || 0;
@@ -106,15 +137,16 @@ function calcularTotalesResumenFinanzas() {
   });
 
   gastos.forEach((g) => {
-    if (g.recurrente) {
-      totalGastado += calcularPagosRecurrentesTranscurridos(g.recurrente).totalPagado;
+    const monto = g.recurrente ? calcularPagosRecurrentesTranscurridos(g.recurrente).totalPagado : Number(g.costo) || 0;
+    if (g.tipo === "ingreso") {
+      totalIngresos += monto;
     } else {
-      totalGastado += Number(g.costo) || 0;
+      totalGastado += monto;
     }
   });
 
-  const balanceNeto = totalBecas - totalGastado;
-  return { totalGastado, totalBecas, balanceNeto };
+  const balanceNeto = totalBecas + totalIngresos - totalGastado;
+  return { totalGastado, totalBecas, totalIngresos, balanceNeto };
 }
 
 function construirTabsFinanzas() {
@@ -157,11 +189,11 @@ function construirTabsFinanzas() {
  * estado vacío y las gráficas.
  */
 function construirResumenFinanzas() {
-  const { totalGastado, totalBecas } = calcularTotalesResumenFinanzas();
+  const { totalGastado, totalBecas, totalIngresos } = calcularTotalesResumenFinanzas();
   const sec = document.createElement("section");
   sec.className = "stack";
 
-  if (totalBecas === 0 && totalGastado === 0) {
+  if (totalBecas === 0 && totalGastado === 0 && totalIngresos === 0) {
     const vacio = document.createElement("p");
     vacio.className = "muted";
     vacio.style.margin = "0";
@@ -171,8 +203,9 @@ function construirResumenFinanzas() {
   } else {
     // Gráficas del Resumen — donut (con leyenda) y línea de ingresos/gastos
     // por semestre. Toda la lógica y el dibujo viven en finanzas-graficas.js,
-    // este archivo solo les pasa los 2 totales que ya calculaba.
-    sec.appendChild(construirGraficasResumenFinanzas(totalBecas, totalGastado));
+    // este archivo solo les pasa los 3 totales que ya calculaba (v2.9.2:
+    // se agrega totalIngresos junto a los 2 de siempre).
+    sec.appendChild(construirGraficasResumenFinanzas(totalBecas, totalIngresos, totalGastado));
   }
 
   return sec;
@@ -218,4 +251,4 @@ function renderizarFinanzas() {
   renderizarContenidoFinanzasActivo();
 }
 
-export { calcularTotalesResumenFinanzas, formatearFechaLarga, formatearMonto, renderizarContenidoFinanzasActivo, renderizarFinanzas };
+export { calcularTotalesResumenFinanzas, formatearFechaLarga, formatearMonto, obtenerSimboloMonedaActual, renderizarContenidoFinanzasActivo, renderizarFinanzas };
