@@ -25,10 +25,11 @@
 import { calcularPagosRecurrentesTranscurridos } from "../core/schema.js";
 import { estado } from "../core/storage.js";
 import { obtenerTodosLosSemestres } from "./finanzas-gastos.js";
-import { formatearMonto } from "./finanzas.js";
+import { formatearMonto, obtenerSimboloMonedaActual } from "./finanzas.js";
 
 const COLOR_GASTO = "#ef4444"; // mismo rojo que badge-danger / segReprobados en semestres-dashboard.js
-const COLOR_INGRESO = "#10b981"; // mismo verde que badge-success / segAprobados
+const COLOR_INGRESO = "#10b981"; // mismo verde que badge-success / segAprobados — beca
+const COLOR_INGRESO_PROPIO = "#3b82f6"; // azul (2026-08-26, pedido explícito de Krys): ingresos propios, para diferenciarlos visualmente de la beca
 
 /* ===================== Datos: serie por semestre ===================== */
 
@@ -43,11 +44,17 @@ function costoDeGastoUAlaFecha(gasto) {
 }
 
 /**
- * Serie cronológica de ingreso (beca) / gasto (matrícula + gastos_u
- * vinculados) por semestre, ordenada por fecha_inicio ascendente, más un
- * punto final "General" que agrupa los gastos_u SIN semestre_id (carné,
- * seguro, recurrentes generales) — decisión confirmada: no se descartan,
- * se agrupan aparte al final del eje X en vez de perderse.
+ * Serie cronológica de beca / ingresos propios / gasto (matrícula +
+ * gastos_u vinculados) por semestre, ordenada por fecha_inicio ascendente,
+ * más un punto final "General" que agrupa los gastos_u SIN semestre_id
+ * (carné, seguro, recurrentes generales) — decisión confirmada: no se
+ * descartan, se agrupan aparte al final del eje X en vez de perderse.
+ *
+ * v2.9.2 (ingresos, pedido explícito de Krys): antes cada gasto_u
+ * vinculado sumaba siempre a `gasto` sin distinción — ahora se separa por
+ * `tipo`: los de tipo "ingreso" van a su propio campo `ingresoPropio` en
+ * vez de mezclarse con los gastos (si no, un ingreso vinculado a un
+ * semestre se hubiera contado por error como si fuera un gasto más).
  *
  * Solo entran semestres "con movimiento": con registro financiero propio
  * (finanzas_semestre) o con al menos un gasto_u vinculado a ese semestre_id.
@@ -67,32 +74,55 @@ function calcularSerieFinancieraPorSemestre() {
     const huboMovimiento = registro !== null || gastosVinculados.length > 0;
     if (!huboMovimiento) return;
 
-    const ingreso = registro ? Number(registro.beca_monto) || 0 : 0;
+    const beca = registro ? Number(registro.beca_monto) || 0 : 0;
     let gasto = registro ? Number(registro.costo_matricula) || 0 : 0;
-    gastosVinculados.forEach((g) => (gasto += costoDeGastoUAlaFecha(g)));
+    let ingresoPropio = 0;
+    gastosVinculados.forEach((g) => {
+      const monto = costoDeGastoUAlaFecha(g);
+      if (g.tipo === "ingreso") ingresoPropio += monto;
+      else gasto += monto;
+    });
 
-    puntos.push({ etiqueta: semestre.nombre, ingreso, gasto });
+    puntos.push({ etiqueta: semestre.nombre, beca, ingresoPropio, gasto });
   });
 
   const gastosSinSemestre = gastosU.filter((g) => !g.semestre_id);
   if (gastosSinSemestre.length > 0) {
-    const gastoGeneral = gastosSinSemestre.reduce((acc, g) => acc + costoDeGastoUAlaFecha(g), 0);
-    puntos.push({ etiqueta: "General", ingreso: 0, gasto: gastoGeneral });
+    let gastoGeneral = 0;
+    let ingresoGeneral = 0;
+    gastosSinSemestre.forEach((g) => {
+      const monto = costoDeGastoUAlaFecha(g);
+      if (g.tipo === "ingreso") ingresoGeneral += monto;
+      else gastoGeneral += monto;
+    });
+    puntos.push({ etiqueta: "General", beca: 0, ingresoPropio: ingresoGeneral, gasto: gastoGeneral });
   }
 
   return puntos;
 }
 
-/* ===================== Donut: Resumen (beca vs. gastado) ===================== */
+/* ===================== Donut: Resumen (gastado vs. disponible) ===================== */
 
 /**
- * Donut de 2 segmentos con stroke-dasharray sobre un círculo — reutiliza
- * .donut-bloque de design-system.css para el contenedor. v2.9.1: sin texto
- * adentro (ni %, ni "cubierto con beca") y sin etiqueta debajo — el círculo
- * queda solo, el detalle (porcentaje/monto) vive en la leyenda de al lado.
+ * v2.9.2 (ingresos, pedido explícito de Krys): el donut de 2 segmentos
+ * dejó de ser "Beca vs. gastado" — con ingresos propios en la mezcla,
+ * sumar beca+ingresos+gastado en el mismo aro (3 segmentos) mezclaba
+ * ENTRADAS de plata con SALIDAS de plata bajo una sola proporción sin
+ * significado accionable (ver discusión previa a este cambio). En su
+ * lugar, el donut ahora es "Gastado vs. Disponible", sobre el total de
+ * entradas (beca + ingresos) — esto SÍ es una relación real de "partes de
+ * un todo": gastado + disponible = 100% de lo que entró, y le dice a la
+ * persona de un vistazo cuánto le queda. De dónde viene esa plata (beca
+ * vs. ingresos propios) se muestra aparte, en construirComposicionIngresos
+ * — no tiene sentido forzarlo dentro del mismo círculo.
+ *
+ * Cuando el gasto supera lo que entró (`disponible` negativo), el arco se
+ * dibuja 100% rojo (todo "gastado") en vez de un arco que se saldría del
+ * círculo — el monto negativo real se sigue mostrando tal cual en la
+ * leyenda y en el balance total de abajo.
  */
-function construirDonutBecaVsGastado(totalBecas, totalGastado) {
-  const total = totalBecas + totalGastado;
+function construirDonutGastadoVsDisponible(totalEntradas, totalGastado) {
+  const base = Math.max(totalEntradas, totalGastado, 0);
   const bloque = document.createElement("div");
   bloque.className = "donut-bloque";
   bloque.style.flexShrink = "0";
@@ -115,20 +145,10 @@ function construirDonutBecaVsGastado(totalBecas, totalGastado) {
   pista.setAttribute("stroke-width", String(GROSOR));
   svg.appendChild(pista);
 
-  if (total > 0) {
-    const largoBeca = (totalBecas / total) * CIRC;
-    const largoGastado = (totalGastado / total) * CIRC;
-
-    const arcoBeca = document.createElementNS(svg.namespaceURI, "circle");
-    arcoBeca.setAttribute("cx", "70");
-    arcoBeca.setAttribute("cy", "70");
-    arcoBeca.setAttribute("r", String(RADIO));
-    arcoBeca.setAttribute("fill", "none");
-    arcoBeca.setAttribute("stroke", COLOR_INGRESO);
-    arcoBeca.setAttribute("stroke-width", String(GROSOR));
-    arcoBeca.setAttribute("stroke-dasharray", `${largoBeca} ${CIRC - largoBeca}`);
-    arcoBeca.setAttribute("transform", "rotate(-90 70 70)");
-    svg.appendChild(arcoBeca);
+  if (base > 0) {
+    const gastadoParaArco = Math.min(totalGastado, base); // nunca > base, así el arco nunca "se pasa" del círculo
+    const largoGastado = (gastadoParaArco / base) * CIRC;
+    const largoDisponible = CIRC - largoGastado;
 
     const arcoGastado = document.createElementNS(svg.namespaceURI, "circle");
     arcoGastado.setAttribute("cx", "70");
@@ -138,9 +158,20 @@ function construirDonutBecaVsGastado(totalBecas, totalGastado) {
     arcoGastado.setAttribute("stroke", COLOR_GASTO);
     arcoGastado.setAttribute("stroke-width", String(GROSOR));
     arcoGastado.setAttribute("stroke-dasharray", `${largoGastado} ${CIRC - largoGastado}`);
-    arcoGastado.setAttribute("stroke-dashoffset", String(-largoBeca));
     arcoGastado.setAttribute("transform", "rotate(-90 70 70)");
     svg.appendChild(arcoGastado);
+
+    const arcoDisponible = document.createElementNS(svg.namespaceURI, "circle");
+    arcoDisponible.setAttribute("cx", "70");
+    arcoDisponible.setAttribute("cy", "70");
+    arcoDisponible.setAttribute("r", String(RADIO));
+    arcoDisponible.setAttribute("fill", "none");
+    arcoDisponible.setAttribute("stroke", COLOR_INGRESO);
+    arcoDisponible.setAttribute("stroke-width", String(GROSOR));
+    arcoDisponible.setAttribute("stroke-dasharray", `${largoDisponible} ${CIRC - largoDisponible}`);
+    arcoDisponible.setAttribute("stroke-dashoffset", String(-largoGastado));
+    arcoDisponible.setAttribute("transform", "rotate(-90 70 70)");
+    svg.appendChild(arcoDisponible);
   }
 
   bloque.appendChild(svg);
@@ -148,15 +179,18 @@ function construirDonutBecaVsGastado(totalBecas, totalGastado) {
 }
 
 /**
- * Leyenda en grid de 3 columnas (porcentaje / etiqueta / monto) para que
- * las 2 filas queden perfectamente alineadas dato-con-dato en vertical —
- * pedido explícito ("todo parejito"). Porcentaje coloreado según la serie
- * (verde beca, rojo gasto).
+ * Leyenda en grid de 3 columnas (porcentaje / etiqueta / monto) — mismo
+ * patrón visual de siempre ("todo parejito"). Los porcentajes se calculan
+ * sobre la misma base que el arco (para que coincidan visualmente); los
+ * montos que se muestran son los REALES (sin recortar), así que si hay
+ * sobregasto el monto de "Disponible" se ve negativo tal cual es.
  */
-function construirLeyendaDonut(totalBecas, totalGastado) {
-  const total = totalBecas + totalGastado;
-  const pctBeca = total > 0 ? Math.round((totalBecas / total) * 100) : 0;
-  const pctGasto = total > 0 ? Math.round((totalGastado / total) * 100) : 0;
+function construirLeyendaDonut(totalEntradas, totalGastado) {
+  const base = Math.max(totalEntradas, totalGastado, 0);
+  const disponible = totalEntradas - totalGastado;
+  const gastadoParaArco = Math.min(totalGastado, base);
+  const pctGasto = base > 0 ? Math.round((gastadoParaArco / base) * 100) : 0;
+  const pctDisponible = base > 0 ? 100 - pctGasto : 0;
 
   const leyenda = document.createElement("div");
   leyenda.style.cssText =
@@ -180,13 +214,39 @@ function construirLeyendaDonut(totalBecas, totalGastado) {
     leyenda.appendChild(montoEl);
   };
 
-  construirFila(COLOR_INGRESO, pctBeca, "Beca recibida", totalBecas);
-  construirFila(COLOR_GASTO, pctGasto, "Dinero invertido", totalGastado);
+  construirFila(COLOR_GASTO, pctGasto, "Gastado", totalGastado);
+  construirFila(disponible >= 0 ? COLOR_INGRESO : COLOR_GASTO, pctDisponible, "Disponible", disponible);
 
   return leyenda;
 }
 
-/** Balance total (beca − gastado), centrado debajo de la gráfica: verde si es >= 0, rojo si es negativo. */
+/**
+ * Desglose de "de dónde viene la plata" (beca vs. ingresos propios) —
+ * v2.9.2, pedido explícito de Krys. A propósito NO es otro donut: son dos
+ * cifras que se leen mejor como texto/badge que como otra proporción
+ * circular (ver discusión antes de este cambio) — un renglón con 2 chips
+ * de color alcanza y queda más legible.
+ */
+function construirComposicionIngresos(totalBecas, totalIngresos) {
+  const fila = document.createElement("div");
+  fila.style.cssText = "display:flex; gap:18px; flex-wrap:wrap; justify-content:center;";
+
+  const construirChip = (color, etiqueta, monto) => {
+    const chip = document.createElement("span");
+    chip.style.cssText = "display:inline-flex; align-items:center; gap:6px; font-size:0.82rem;";
+    chip.innerHTML =
+      `<span style="width:9px; height:9px; border-radius:50%; background:${color}; display:inline-block; flex-shrink:0;"></span>` +
+      `<span class="muted">${etiqueta}:</span> <strong style="font-variant-numeric:tabular-nums;">${formatearMonto(monto)}</strong>`;
+    return chip;
+  };
+
+  fila.appendChild(construirChip(COLOR_INGRESO, "Beca", totalBecas));
+  fila.appendChild(construirChip(COLOR_INGRESO_PROPIO, "Ingresos", totalIngresos));
+
+  return fila;
+}
+
+/** Balance total (beca + ingresos − gastado), centrado debajo de la gráfica: verde si es >= 0, rojo si es negativo. */
 function construirBalanceTotal(balanceNeto) {
   const el = document.createElement("div");
   el.style.cssText = "text-align:center;";
@@ -196,24 +256,27 @@ function construirBalanceTotal(balanceNeto) {
 }
 
 /**
- * v2.9.1: título cambiado de "Beca vs. gastado" a "Resumen" (pedido
- * explícito) — este bloque reemplaza al viejo resumen de texto plano
- * (Total gastado / Balance neto) que vivía en finanzas.js. Gráfica a la
- * izquierda, texto a la derecha si hay espacio horizontal; si no, se
- * apilan (flex-wrap). El balance total va centrado debajo de todo.
+ * v2.9.2: donut reenfocado a "Gastado vs. Disponible" (ver
+ * construirDonutGastadoVsDisponible) + fila nueva de composición de
+ * ingresos (beca vs. ingresos propios) debajo de la leyenda. v2.9.1: título
+ * "Resumen" (antes "Beca vs. gastado"). El balance total sigue centrado
+ * debajo de todo.
  */
-function construirSeccionDonut(totalBecas, totalGastado) {
+function construirSeccionDonut(totalBecas, totalIngresos, totalGastado) {
+  const totalEntradas = totalBecas + totalIngresos;
+
   const sec = document.createElement("section");
   sec.className = "glass-card stack";
   sec.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Resumen</h3>`;
 
   const fila = document.createElement("div");
   fila.style.cssText = "display:flex; align-items:center; justify-content:center; gap:28px; flex-wrap:wrap;";
-  fila.appendChild(construirDonutBecaVsGastado(totalBecas, totalGastado));
-  fila.appendChild(construirLeyendaDonut(totalBecas, totalGastado));
+  fila.appendChild(construirDonutGastadoVsDisponible(totalEntradas, totalGastado));
+  fila.appendChild(construirLeyendaDonut(totalEntradas, totalGastado));
   sec.appendChild(fila);
 
-  sec.appendChild(construirBalanceTotal(totalBecas - totalGastado));
+  sec.appendChild(construirComposicionIngresos(totalBecas, totalIngresos));
+  sec.appendChild(construirBalanceTotal(totalEntradas - totalGastado));
 
   return sec;
 }
@@ -231,14 +294,20 @@ const MARGEN_DER = 14;
 const MARGEN_SUP = 16;
 const MARGEN_INF = 58; // espacio para las etiquetas del eje X, rotadas -35°
 
-/** "₡" + número abreviado (k/M) para que las etiquetas del eje Y no se amontonen. */
+/**
+ * Símbolo de la moneda elegida (fix del mismo bug de finanzas.js/
+ * formatearMonto: acá también estaba "₡" hardcodeado, así que las
+ * etiquetas del eje Y nunca reflejaban el cambio de divisa) + número
+ * abreviado (k/M) para que no se amontonen.
+ */
 function formatearMontoCompacto(numero) {
   const n = Number(numero) || 0;
   const signo = n < 0 ? "-" : "";
   const abs = Math.abs(n);
-  if (abs >= 1000000) return `${signo}₡${(abs / 1000000).toFixed(abs % 1000000 === 0 ? 0 : 1)}M`;
-  if (abs >= 1000) return `${signo}₡${(abs / 1000).toFixed(abs % 1000 === 0 ? 0 : 1)}k`;
-  return `${signo}₡${abs.toFixed(0)}`;
+  const simbolo = obtenerSimboloMonedaActual();
+  if (abs >= 1000000) return `${signo}${simbolo}${(abs / 1000000).toFixed(abs % 1000000 === 0 ? 0 : 1)}M`;
+  if (abs >= 1000) return `${signo}${simbolo}${(abs / 1000).toFixed(abs % 1000 === 0 ? 0 : 1)}k`;
+  return `${signo}${simbolo}${abs.toFixed(0)}`;
 }
 
 /**
@@ -444,9 +513,13 @@ function construirSeccionLineaIngresosGastos(puntos) {
     return sec;
   }
 
+  // v2.9.2: se agrega la 3ra serie "Ingresos" (azul, ingresos propios) —
+  // "ingreso" (verde) pasa a llamarse "Beca" para que quede claro que es
+  // específicamente la beca y no se confunda con la serie nueva.
   const series = [
     { clave: "gasto", color: COLOR_GASTO, etiqueta: "Gastos" },
-    { clave: "ingreso", color: COLOR_INGRESO, etiqueta: "Ingresos" },
+    { clave: "beca", color: COLOR_INGRESO, etiqueta: "Beca" },
+    { clave: "ingresoPropio", color: COLOR_INGRESO_PROPIO, etiqueta: "Ingresos" },
   ];
   sec.appendChild(construirGraficaLinea(puntos, series));
   sec.appendChild(construirLeyendaSeries(series));
@@ -459,12 +532,15 @@ function construirSeccionLineaIngresosGastos(puntos) {
  * Punto de entrada — llamado desde construirResumenFinanzas en finanzas.js,
  * debajo de los totales. Arma las 2 gráficas del Resumen (donut + línea
  * por semestre; el balance acumulado se sacó en v2.9.1).
+ *
+ * v2.9.2: se agrega el parámetro totalIngresos (entre totalBecas y
+ * totalGastado) — ver calcularTotalesResumenFinanzas en finanzas.js.
  */
-function construirGraficasResumenFinanzas(totalBecas, totalGastado) {
+function construirGraficasResumenFinanzas(totalBecas, totalIngresos, totalGastado) {
   const cont = document.createElement("div");
   cont.className = "stack";
 
-  cont.appendChild(construirSeccionDonut(totalBecas, totalGastado));
+  cont.appendChild(construirSeccionDonut(totalBecas, totalIngresos, totalGastado));
 
   const puntosSerie = calcularSerieFinancieraPorSemestre();
   cont.appendChild(construirSeccionLineaIngresosGastos(puntosSerie));
