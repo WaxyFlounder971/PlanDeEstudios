@@ -2600,6 +2600,21 @@ img, svg { max-width: 100%; }
 }
 .agenda-check-completada:hover { transform: scale(1.08); }
 .agenda-check-completada.marcada { background: #3b82f6; }
+/* Pedido nuevo: "aumentar el hitbox de la bolita, no se debe ver, el
+   usuario no lo notará". El círculo visual no cambia (mismo 20x20 de
+   arriba); el área táctil real crece con un ::before invisible más grande
+   que el botón, centrado sobre él — técnica estándar para agrandar hitboxes
+   sin tocar el tamaño visual. */
+.agenda-check-completada { position: relative; }
+.agenda-check-completada::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  transform: translate(-50%, -50%);
+}
 
 /* Ronda de ajustes visuales #5 — punto D: encabezado separador "Semana N"
    entre grupos de días en el modo "Todo" (ver construirEncabezadoSemanaTodo
@@ -2695,6 +2710,98 @@ img, svg { max-width: 100%; }
   line-height: 1;
   transition: transform var(--transition-fast);
 }
+
+/* Feature "filtro por estado" (Clase/Completado/Pendiente/Examen/Evento/
+   Feriado) — 6 badges bajo el encabezado de semana, en Semanal y Todo (ver
+   construirBarraFiltroEstadosAgenda en agenda.js). El ancho igual entre
+   todos ya lo resuelve JS (min-width calculado del más largo); acá solo el
+   color. Reutiliza el mismo color que ya identifica a cada tipo en el resto
+   de Agenda (mismos valores que .badge-warning/.badge-danger/.badge-purple/
+   .badge-success/.badge-info de arriba) para que el filtro se lea como
+   extensión natural de esos colores. "Clase" es el único sin color propio
+   todavía (no es un `tipo` real de EventoAgenda) — se le asigna un rosa
+   medio a pedido explícito ("ni muy claro ni muy oscuro, muy claro
+   dificulta la vista"). En reposo/inactivo: contorno gris tenue sin
+   relleno; activo: mismo patrón que los badges de arriba (relleno
+   translúcido + borde + texto en el color propio). */
+.agenda-filtro-estados {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.agenda-filtro-estado-btn {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-align: center;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+.agenda-filtro-estado-btn:hover { border-color: rgba(148, 163, 184, 0.55); }
+.agenda-filtro-estado-completado.active { background: rgba(59, 130, 246, 0.15); border-color: #3b82f6; color: #60a5fa; }
+.agenda-filtro-estado-pendiente.active  { background: rgba(245, 158, 11, 0.15); border-color: #f59e0b; color: #fbbf24; }
+.agenda-filtro-estado-examen.active     { background: rgba(239, 68, 68, 0.15);  border-color: #ef4444; color: #f87171; }
+.agenda-filtro-estado-evento.active     { background: rgba(168, 85, 247, 0.15); border-color: #a855f7; color: #c084fc; }
+.agenda-filtro-estado-feriado.active    { background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #34d399; }
+.agenda-filtro-estado-clase.active      { background: rgba(219, 39, 119, 0.18); border-color: #db2777; color: #f472b6; }
+[data-mode="light"] .agenda-filtro-estado-completado.active { color: #1d4ed8; }
+[data-mode="light"] .agenda-filtro-estado-pendiente.active  { color: #92400e; }
+[data-mode="light"] .agenda-filtro-estado-examen.active     { color: #991b1b; }
+[data-mode="light"] .agenda-filtro-estado-evento.active     { color: #7e22ce; }
+[data-mode="light"] .agenda-filtro-estado-feriado.active    { color: #047857; }
+[data-mode="light"] .agenda-filtro-estado-clase.active      { color: #9d174d; }
+
+/* Feature "modo selección" (mantener presionado sobre una tarjeta de Agenda,
+   cualquier tipo, activa selección múltiple para borrar varias a la vez) —
+   pedido explícito: "se resaltarán como con una luz en el borde en lugar de
+   usar checkbox". Halo de luz azul en vez de checkbox propio (ver
+   .agenda-item-seleccionado en construirItemEvento, agenda.js). */
+.agenda-item-seleccionado {
+  box-shadow: 0 0 0 2px #3b82f6, 0 0 12px 1px rgba(59, 130, 246, 0.55);
+}
+
+/* Barra flotante inferior de selección múltiple (contador + Cancelar +
+   Eliminar) — mismo lenguaje visual que .toast-app-accion de arriba (mismo
+   ancho igualado a las tarjetas, mismo radio, mismo centrado), pero sin la
+   animación de auto-desaparición: se muestra/oculta a mano según
+   estado.agendaModoSeleccion (ver sincronizarBarraSeleccionAgenda en
+   agenda.js). */
+.agenda-barra-seleccion {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 12px;
+  width: calc(100% - 32px);
+  max-width: 760px;
+  background: var(--bg-header-solido); color: var(--text-primary);
+  border: 1px solid var(--border-glass);
+  padding: 10px 10px 10px 18px; border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+  z-index: 300;
+}
+.agenda-seleccion-contador {
+  font-weight: 600;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.agenda-btn-eliminar-seleccion {
+  flex-shrink: 0;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid #ef4444;
+  color: #f87171;
+  font-weight: 700;
+  font-size: 0.82rem;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.agenda-btn-eliminar-seleccion:hover { background: rgba(239, 68, 68, 0.25); }
+[data-mode="light"] .agenda-btn-eliminar-seleccion { color: #991b1b; }
 
 /* ---- Vista Calendario (mensual/semanal) — grid de 7 columnas ---- */
 .agenda-cal-grid {
