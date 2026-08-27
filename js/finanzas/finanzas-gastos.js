@@ -750,17 +750,35 @@ function armarPromptDescuentos(universidad) {
   return PLANTILLA_PROMPT_DESCUENTOS.split("{UNIVERSIDAD}").join(universidad);
 }
 
-/** Universidades distintas entre los planes activos (Hardcore) o solo la del plan activo. */
+/**
+ * Universidades distintas entre los planes activos (Hardcore) o solo la del
+ * plan activo.
+ *
+ * FIX (2026-08-27, reportado desde Finanzas → Beneficios): `plan.universidad`
+ * dejó de ser un string desde la separación nombre_completo/siglas
+ * (2026-08-22, ver schema.js) y pasó a ser `{ nombre_completo, siglas }` —
+ * esta función seguía devolviendo el objeto entero en vez de extraer un
+ * campo. Como el llamador mete el resultado directo en un template literal
+ * (`` `...de ${universidades[0]}` ``) y en el prompt (armarPromptDescuentos),
+ * el objeto se stringificaba como "[object Object]" — tanto el botón como
+ * el prompt copiado quedaban rotos. Pedido explícito: usar el nombre
+ * completo (no las siglas) acá.
+ * De paso, el `new Set()` de abajo (dedupe en modo Hardcore) tampoco
+ * funcionaba con objetos — dos planes de la misma universidad nunca
+ * deduplicaban porque cada objeto es una referencia distinta aunque el
+ * contenido sea igual; con strings sí dedupe correctamente.
+ */
 function obtenerUniversidadesElegibles() {
   const cfg = estado.datos.configuracion;
   if (!cfg.modo_hardcore) {
     const activo = obtenerPlanActivo();
-    return activo ? [activo.universidad] : [];
+    return activo && activo.universidad && activo.universidad.nombre_completo ? [activo.universidad.nombre_completo] : [];
   }
   const idsActivos = [cfg.plan_activo_id, cfg.plan_activo_secundario_id, cfg.plan_activo_terciario_id].filter(Boolean);
   const universidades = (estado.datos.planes_estudio || [])
     .filter((p) => idsActivos.includes(p.id))
-    .map((p) => p.universidad);
+    .map((p) => p.universidad && p.universidad.nombre_completo)
+    .filter(Boolean);
   return [...new Set(universidades)];
 }
 
