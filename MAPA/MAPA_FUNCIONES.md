@@ -146,11 +146,11 @@ Exporta:
 
 *Finanzas:*
 * `crearRegistroFinancieroSemestre({ semestreId, costoMatricula, becaMonto })` — registro financiero de un semestre.
-* `crearGastoU({ nombre, costo, nota, semestreId, recurrente })` — gasto general de universidad, con soporte para gastos recurrentes.
+* `crearGastoU({ nombre, tipo, costo, nota, semestreId, recurrente })` — gasto (o **ingreso**, ver `tipo`) general de universidad, con soporte para recurrentes. **v2.9.2 (2026-08-26):** se agrega `tipo` (`"gasto"` | `"ingreso"`, default `"gasto"` — cualquier valor que no sea exactamente `"ingreso"` cae a `"gasto"`, así los `gastos_u` guardados antes de este cambio, sin el campo, se siguen tratando igual sin migración). Reutiliza el mismo objeto/CRUD/recurrencia para ambos tipos — la diferencia es puramente de clasificación para los totales (`calcularTotalesResumenFinanzas`, finanzas.js) y de color en la UI (finanzas-gastos.js), no de estructura.
 * `calcularPagosRecurrentesTranscurridos(recurrente)` — cuenta cuántos pagos de un gasto recurrente ya cayeron hasta hoy (nunca futuros).
 * `crearBackupDriveDefault()` — objeto default de `configuracion.backup_drive`.
 * `FRECUENCIAS_BACKUP_DRIVE` — opciones de frecuencia de backup rotativo (diaria..mensual, con sus días de intervalo).
-* `MONEDAS_DISPONIBLES` — catálogo de monedas con símbolo, para el selector global de moneda.
+* `MONEDAS_DISPONIBLES` — catálogo de monedas con símbolo, para el selector global de moneda. **v2.9.2 (2026-08-26):** se agregan ~14 monedas propias de países latinoamericanos (MXN, ARS, COP, CLP, UYU, CUP, BOB, VES, DOP, HNL, NIO, PAB, HTG) más la de Senegal (XOF) — a propósito SIN aplicar acá el criterio de "un representante por símbolo" que se usó para el resto del catálogo (pedido explícito: aunque el símbolo se repita entre varias, cada país listado tiene su propia entrada).
 * `PALETAS_DISPONIBLES` — lista de las 13 paletas de color disponibles.
 
 *Horario:*
@@ -366,6 +366,7 @@ Exporta:
 Funciones internas (no exportadas) relevantes:
 * `renderizarNotificacionesRecordatorios()` — pinta un grupo de chips de selección múltiple (`construirSelectorChipsMultiple`, ui/componentes.js) por cada tipo de evento de Agenda (tarea/examen/evento/feriado, ver `ETIQUETAS_TIPOS_RECORDATORIO_AGENDA`) dentro de `#seccion-notificaciones-recordatorios`. Lee/escribe `configuracion.notificaciones_recordatorios[tipo]` contra `OFFSETS_RECORDATORIO_AGENDA` (core/schema.js). Atenúa y bloquea el bloque completo si el switch general de sincronización con Google Calendar está apagado, sin perder los valores guardados.
 * `renderizarNotificacionesResumenDiario()` — switch + selector de hora (mismo patrón visual que `construirSelectCustomAjustes`) para `configuracion.notificaciones_resumen_diario` (`{ activo, hora }`). Cada cambio llama a `sincronizarResumenDiario()` (core/notificaciones-calendario.js, 2026-08-25: antes creaba un evento por día contra el Worker, ahora es un único evento recurrente en Google Calendar). Reconstruida 2026-08-23: se había perdido por completo (junto con `renderizarNotificacionesRecordatorios`) en el merge que integró el Asistente IA a este mismo archivo — la sección "Notificaciones" de Ajustes quedó con el switch general funcionando pero sin recordatorios por tipo ni resumen diario.
+* `renderizarSelectorMoneda()` — pinta el selector custom de `configuracion.moneda_preferida` (mismo patrón `.select-custom` que "Escala de notas") a partir de `MONEDAS_DISPONIBLES` (core/schema.js). **v2.9.2 (2026-08-26, pedido explícito):** se agrega un `<input>` de búsqueda por texto (símbolo, nombre o código ISO, sin distinguir mayúsculas/acentos) pegado arriba de la lista desplegable — con ~50 monedas ya no era práctico desplazarse a mano. El buscador se reparenta a `document.body` junto con la lista (antes solo se reparentaba el `<ul>`) para que viajen juntos al abrir/cerrar, y se limpia solo cada vez que el dropdown se abre.
 
 ### config/config-baneados.js
 Propósito: placeholder vacío reservado para cuando se construya la sección de Baneados. No llenar de código de otra cosa por error.
@@ -604,24 +605,31 @@ Exporta:
 ## JS — finanzas
 
 ### finanzas/finanzas.js
-Propósito: shell de la sección Finanzas — arma las 4 pestañas (Resumen / Semestres / Gastos generales U / Beneficios) y calcula los totales del Resumen; el CRUD de cada pestaña vive en los otros dos archivos.
-Depende de: core/schema.js, core/storage.js, finanzas-gastos.js, finanzas-semestres.js
+Propósito: shell de la sección Finanzas — arma las 4 pestañas (Resumen / Semestres / Gastos generales U / Beneficios) y calcula los totales del Resumen; el CRUD de cada pestaña vive en los otros archivos.
+Depende de: core/schema.js, core/storage.js, finanzas-graficas.js, finanzas-gastos.js, finanzas-semestres.js
 Exporta:
-* `calcularTotalesResumenFinanzas()` — suma costo_matricula (todos los semestres) + costo de cada gasto_u (recurrentes: solo lo ya pagado a la fecha) vs. beca_monto; devuelve `{ totalGastado, totalBecas, balanceNeto }`.
+* `calcularTotalesResumenFinanzas()` — suma costo_matricula (todos los semestres) + costo de cada gasto_u de tipo `"gasto"` (recurrentes: solo lo ya pagado a la fecha) vs. beca_monto + gasto_u de tipo `"ingreso"` (mismo criterio "a la fecha"). **v2.9.2 (2026-08-26):** devuelve `{ totalGastado, totalBecas, totalIngresos, balanceNeto }` (se agrega `totalIngresos`; `balanceNeto = totalBecas + totalIngresos − totalGastado`).
 * `formatearFechaLarga(fechaIso)` — convierte `"YYYY-MM-DD"` a `"11 de agosto de 2026"`; vacío/null da `""`.
-* `formatearMonto(numero)` — formatea a colones con 2 decimales; para negativos antepone un `"-"` explícito antes del `"₡"`.
+* `formatearMonto(numero)` — formatea el monto con 2 decimales; para negativos antepone un `"-"` explícito antes del símbolo. **FIX 2026-08-26 (bug reportado por Krys):** el símbolo estaba hardcodeado a `"₡"` y nunca leía la moneda elegida en Ajustes — ahora sale de `obtenerSimboloMonedaActual()`.
+* `obtenerSimboloMonedaActual()` — **nuevo (2026-08-26)**, no exportaba antes: resuelve el símbolo de `configuracion.moneda_preferida` contra `MONEDAS_DISPONIBLES` (core/schema.js), con `"₡"` como fallback defensivo. Único punto de verdad del símbolo actual — lo usa también `formatearMontoCompacto` en finanzas-graficas.js.
 * `renderizarContenidoFinanzasActivo()` — repinta solo el contenido de la pestaña activa dentro de `#finanzas-contenido`, sin reconstruir el tab bar.
 * `renderizarFinanzas()` — punto de entrada de la sección; reconstruye tabs + contenido dentro de `#seccion-finanzas`.
 
+### finanzas/finanzas-graficas.js
+Propósito: las 2 gráficas SVG (a mano, sin librería) de la pestaña Resumen — donut "Gastado vs. Disponible" + composición de ingresos (beca vs. ingresos propios) y línea "Por semestre" (Gastos/Beca/Ingresos). **No estaba documentado en una versión anterior de este mapa** pese a existir como archivo propio — se agrega ahora junto con el cambio de ingresos.
+Depende de: core/schema.js, core/storage.js, finanzas/finanzas-gastos.js, finanzas/finanzas.js
+Exporta:
+* `construirGraficasResumenFinanzas(totalBecas, totalIngresos, totalGastado)` — punto de entrada, llamado desde `construirResumenFinanzas` (finanzas.js). **v2.9.2 (2026-08-26):** firma cambia de `(totalBecas, totalGastado)` a `(totalBecas, totalIngresos, totalGastado)` — el donut de 2 segmentos dejó de ser "Beca vs. gastado" para pasar a ser **"Gastado vs. Disponible"** sobre el total de entradas (beca+ingresos) — mezclar entradas y salidas de plata en un solo donut de 3 segmentos no daba una proporción con sentido accionable (decisión tomada junto con el usuario antes de implementar). La composición de esas entradas (cuánto es beca vs. cuánto es ingreso propio) se muestra aparte, como chips de texto, no como otro donut. La línea "Por semestre" gana una 3ra serie ("Ingresos", azul) además de "Gastos" (rojo) y "Beca" (verde, antes llamada "Ingresos" a secas).
+
 ### finanzas/finanzas-gastos.js
-Propósito: CRUD de gastos sueltos no vinculados a un semestre (pestaña "Gastos generales U", simples o recurrentes, con vínculo opcional a semestre) + generador de prompt de descuentos estudiantiles (pestaña "Beneficios").
+Propósito: CRUD de gastos y, desde v2.9.2, **ingresos** sueltos no vinculados a un semestre (pestaña "Gastos", simples o recurrentes, con vínculo opcional a semestre) + generador de prompt de descuentos estudiantiles (pestaña "Beneficios").
 Depende de: core/schema.js, core/storage-sync.js, core/storage.js, core/clipboard.js, ui/componentes.js, plan/plan-esquema.js, semestres/semestres.js, finanzas/finanzas.js
 Exporta:
 * `renderizarPestanaBeneficios(contenedor)` — pinta la pestaña Beneficios: botón(es) para copiar el prompt de descuentos estudiantiles según la(s) universidad(es) del/los plan(es) activo(s), y abrir claude.ai.
-* `renderizarPestanaGastosU(contenedor)` — pinta la lista de gastos generales U (simples/recurrentes, con badge de monto o de total pagado a la fecha) + botón para abrir el modal de alta/edición.
+* `renderizarPestanaGastosU(contenedor)` — pinta la lista de gastos/ingresos generales U (simples/recurrentes, con badge de monto o de total pagado a la fecha) + botón para abrir el modal de alta/edición. **v2.9.2:** el modal ahora incluye un selector de Tipo (Gasto/Ingreso, pill-group, default "Gasto"); el badge de un registro `tipo:"ingreso"` se pinta de azul (`#3b82f6`, inline — no existe una clase `.badge-*` azul en el proyecto) con un `"+"` adelante, en vez del gris neutro de un gasto normal, para diferenciarlos a simple vista (pedido explícito de Krys).
 
 ### finanzas/finanzas-semestres.js
-Propósito: pestaña "Semestres" de Finanzas — lista todos los semestres del historial (actuales + pasados) y permite crear/editar su registro financiero (costo de matrícula, monto de beca y desglose mensual del pago, manual o automático).
+Propósito: pestaña "Semestres" de Finanzas — lista todos los semestres del historial (actuales + pasados) y permite crear/editar su registro financiero (costo de matrícula, monto de beca y desglose mensual del pago, manual o automático). Sin cambios en esta ronda — el campo `tipo` de ingresos vive en `gastos_u`, no en `finanzas_semestre`.
 Depende de: core/schema.js, core/storage-sync.js, core/storage.js, ui/componentes.js, semestres/semestres.js, finanzas/finanzas.js
 Exporta:
 * `renderizarPestanaSemestresFinanzas(contenedor)` — pinta la lista de semestres con su registro financiero (badges de matrícula/beca, o botón "Crear registro" si aún no tiene) y abre el modal de alta/edición al interactuar.
