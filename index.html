@@ -106,6 +106,13 @@
     <div id="lista-enlaces-drawer-movil" class="stack" style="gap:8px;"></div>
   </aside>
 
+  <!-- Botón flotante de Enlaces rápidos (2026-08-26, pedido de Krys):
+       visible solo entre 900px y 1499px vía CSS (ver .btn-flotante-enlaces
+       en design-system.css) — rango en el que .enlaces-lateral todavía no
+       tiene espacio (recién aparece desde 1500px) y el botón de la topbar
+       móvil ya está oculto. Abre el MISMO drawer de arriba, no uno nuevo. -->
+  <button id="btn-flotante-enlaces" class="btn-flotante-enlaces" aria-label="Enlaces rápidos" title="Enlaces rápidos">🔗</button>
+
   <div class="app-layout">
 
     <!-- Sidebar -->
