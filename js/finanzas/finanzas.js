@@ -124,7 +124,20 @@ function formatearMonto(numero) {
  *     finanzas-graficas.js).
  */
 function calcularTotalesResumenFinanzas() {
-  const registros = estado.datos.finanzas_semestre || [];
+  // FIX (2026-08-27): antes se sumaban TODOS los registros de
+  // finanzas_semestre sin chequear si el semestre al que apuntan sigue
+  // existiendo — un registro huérfano (semestre borrado antes de que
+  // existiera el cascade delete, ver abrirConfirmacionBorrarSemestre en
+  // semestres.js) inflaba el total (ej. el donut mostraba "Beca:
+  // ₡1.000.000" de un semestre que ya no está) sin que ese dinero pudiera
+  // aparecer nunca en el gráfico Por semestre (finanzas-graficas.js), que
+  // sí filtra por semestres vigentes — los dos números quedaban
+  // inconsistentes entre sí. Se filtra acá también para que el total
+  // muestre exactamente lo que hay detrás: si un semestre se borró,
+  // su beca/matrícula deja de contar (el usuario tiene que volver a
+  // cargarla contra el semestre real si todavía aplica).
+  const idsSemestresVigentes = new Set((estado.datos.semestres || []).map((s) => s.id));
+  const registros = (estado.datos.finanzas_semestre || []).filter((r) => idsSemestresVigentes.has(r.semestre_id));
   const gastos = estado.datos.gastos_u || [];
 
   let totalGastado = 0;

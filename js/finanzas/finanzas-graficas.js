@@ -65,6 +65,13 @@ function calcularSerieFinancieraPorSemestre() {
     .sort((a, b) => (a.fecha_inicio || "").localeCompare(b.fecha_inicio || ""));
   const registros = estado.datos.finanzas_semestre || [];
   const gastosU = estado.datos.gastos_u || [];
+  // FIX (2026-08-27, mismo cascade-delete que finanzas.js): un gasto_u
+  // vinculado a un semestre que ya no existe (datos de antes del fix en
+  // abrirConfirmacionBorrarSemestre, semestres.js) no matchea con ningún
+  // semestre del bucle de abajo y antes desaparecía en silencio del
+  // gráfico. Se trata igual que "sin semestre" — cae en "General" en vez
+  // de perderse.
+  const idsSemestresVigentes = new Set(semestres.map((s) => s.id));
 
   const puntos = [];
 
@@ -86,7 +93,7 @@ function calcularSerieFinancieraPorSemestre() {
     puntos.push({ etiqueta: semestre.nombre, beca, ingresoPropio, gasto });
   });
 
-  const gastosSinSemestre = gastosU.filter((g) => !g.semestre_id);
+  const gastosSinSemestre = gastosU.filter((g) => !g.semestre_id || !idsSemestresVigentes.has(g.semestre_id));
   if (gastosSinSemestre.length > 0) {
     let gastoGeneral = 0;
     let ingresoGeneral = 0;
