@@ -38,7 +38,7 @@ function inicializarEstadoFinanzasSiHaceFalta() {
 const PESTANAS_FINANZAS = [
   { id: "resumen", etiqueta: "Resumen" },
   { id: "semestres", etiqueta: "Semestres" },
-  { id: "gastos-u", etiqueta: "Gastos" },
+  { id: "gastos-u", etiqueta: "Movimientos" },
   { id: "gastos-estudiantiles", etiqueta: "Beneficios" },
 ];
 

@@ -111,12 +111,27 @@ function construirFilaGasto(gasto, contenedorLista) {
   // danger/success/warning/neutral), así que se sobreescribe con estilo
   // inline en vez de agregar una clase nueva al sistema de diseño para un
   // solo uso puntual. El "+" adelante refuerza que es plata que ENTRA.
+  //
+  // FIX (2026-08-27, pedido explícito de Krys — "se ve feo, se ve raro"):
+  // la versión anterior rellenaba el badge entero con azul sólido +
+  // texto blanco, que rompía con el resto del sistema (danger/success/
+  // neutral son todos "tinte" — fondo del color en baja opacidad + texto
+  // del mismo color, nunca relleno sólido). Se cambia a ese mismo patrón
+  // de tinte para que el badge de ingreso se vea consistente con los demás,
+  // solo que en azul en vez de verde/rojo/gris.
+  //
+  // Además (mismo pedido): TODOS los badges de monto de esta lista
+  // (gasto e ingreso) deben compartir un ancho fijo = el ancho del más
+  // ancho que haya entre ellos, para que no bailen de tamaño fila a fila.
+  // Se marca con .badge-monto-movimiento y se iguala en un solo pase al
+  // final de renderizarPestanaGastosU (igualarAnchoBadgesMonto), una vez
+  // que todas las filas ya están armadas y se puede medir el ancho real.
   const esIngreso = gasto.tipo === "ingreso";
   const badge = document.createElement("span");
-  badge.className = "badge badge-neutral";
+  badge.className = "badge badge-neutral badge-monto-movimiento";
   badge.style.cssText =
-    "white-space:nowrap; font-size:clamp(0.72rem,2.6vw,0.85rem); padding:clamp(3px,1vw,6px) clamp(6px,2vw,10px);" +
-    (esIngreso ? " background:#3b82f6; border-color:#3b82f6; color:#fff;" : "");
+    "white-space:nowrap; text-align:center; font-size:clamp(0.72rem,2.6vw,0.85rem); padding:clamp(3px,1vw,6px) clamp(6px,2vw,10px);" +
+    (esIngreso ? " background:rgba(59,130,246,0.16); border-color:rgba(59,130,246,0.45); color:#3b82f6;" : "");
   if (gasto.recurrente) {
     const { totalPagado } = calcularPagosRecurrentesTranscurridos(gasto.recurrente);
     badge.textContent = (esIngreso ? "+" : "") + formatearMonto(totalPagado) + " a la fecha";
@@ -174,7 +189,7 @@ function construirGrupoSemestre(grupo, contenedorLista) {
     "cursor:pointer; padding:12px 14px; display:flex; align-items:center; justify-content:space-between; gap:10px; list-style:none;";
   resumen.innerHTML = `
     <span style="font-weight:700;">${grupo.nombre === "General" ? "📎 General" : "📚 " + grupo.nombre}</span>
-    <span class="badge badge-neutral" style="white-space:nowrap;">${grupo.gastos.length} ${grupo.gastos.length === 1 ? "gasto" : "gastos"}</span>
+    <span class="badge badge-neutral" style="white-space:nowrap;">${grupo.gastos.length} ${grupo.gastos.length === 1 ? "movimiento" : "movimientos"}</span>
   `;
   detalles.appendChild(resumen);
 
@@ -187,14 +202,38 @@ function construirGrupoSemestre(grupo, contenedorLista) {
   return detalles;
 }
 
+/**
+ * Iguala el ancho de todos los badges de monto (.badge-monto-movimiento,
+ * tanto gasto como ingreso) de la pestaña Movimientos al ancho del más
+ * ancho que haya — pedido explícito de Krys, para que no bailen de
+ * tamaño entre filas. Se llama una sola vez al final del render, cuando
+ * todas las filas ya están en el DOM real y se puede medir offsetWidth
+ * con confianza (min-width se resetea primero por si es un re-render
+ * sobre badges que ya traían un ancho fijado de una pasada anterior).
+ */
+function igualarAnchoBadgesMonto(contenedor) {
+  const badges = contenedor.querySelectorAll(".badge-monto-movimiento");
+  if (badges.length === 0) return;
+  badges.forEach((b) => {
+    b.style.minWidth = "";
+  });
+  let anchoMax = 0;
+  badges.forEach((b) => {
+    anchoMax = Math.max(anchoMax, b.offsetWidth);
+  });
+  badges.forEach((b) => {
+    b.style.minWidth = anchoMax + "px";
+  });
+}
+
 function renderizarPestanaGastosU(contenedor) {
   const cabecera = document.createElement("div");
   cabecera.className = "row-between";
-  cabecera.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Gastos</h3>`;
+  cabecera.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Movimientos</h3>`;
   const btnAgregar = document.createElement("button");
   btnAgregar.type = "button";
   btnAgregar.className = "btn btn-primary";
-  btnAgregar.textContent = "+ Añadir gasto";
+  btnAgregar.textContent = "+ Añadir movimiento";
   btnAgregar.addEventListener("click", () => abrirModalGastoU(null, contenedor));
   cabecera.appendChild(btnAgregar);
   contenedor.appendChild(cabecera);
@@ -203,13 +242,14 @@ function renderizarPestanaGastosU(contenedor) {
   if (gastos.length === 0) {
     const vacio = document.createElement("p");
     vacio.className = "muted";
-    vacio.textContent = "Carné, seguro estudiantil, materiales, pagos recurrentes... cualquier gasto que no pertenezca a un semestre puntual.";
+    vacio.textContent = "Carné, seguro estudiantil, materiales, pagos recurrentes... cualquier gasto o ingreso que no pertenezca a un semestre puntual.";
     contenedor.appendChild(vacio);
     return;
   }
 
   const grupos = agruparGastosPorSemestre(gastos);
   grupos.forEach((grupo) => contenedor.appendChild(construirGrupoSemestre(grupo, contenedor)));
+  igualarAnchoBadgesMonto(contenedor);
 }
 
 function abrirModalGastoU(gastoExistente, contenedorLista) {
@@ -254,10 +294,34 @@ function abrirModalGastoU(gastoExistente, contenedorLista) {
   bloqueTipo.appendChild(grupoTipo);
   caja.appendChild(bloqueTipo);
 
+  // ----- ¿Es un pago recurrente? (2026-08-11, v2.8.8) -----
+  // FIX (2026-08-27, pedido explícito de Krys): la etiqueta decía "¿Es un
+  // pago recurrente?" siempre, aunque el tipo elegido fuera "Ingreso" — se
+  // vuelve dinámica ("¿Es un ingreso recurrente?" / "¿Es un pago
+  // recurrente?") y se actualiza junto con el resto en marcarTipoActivo().
+  // Se construye ANTES de marcarTipoActivo()/tipoElegido (que la
+  // referencian) para no leer `etiquetaRecurrente` antes de que exista —
+  // mismo tipo de bug de orden ya visto en el resto de la app con
+  // variables leídas antes de su inicialización.
+  const filaRecurrente = document.createElement("div");
+  filaRecurrente.className = "row-between";
+  filaRecurrente.innerHTML = `
+    <span data-rol="etiqueta-recurrente">¿Es un pago recurrente?</span>
+    <label class="switch switch-tema">
+      <input type="checkbox" id="switch-gasto-recurrente">
+      <span class="track"><span class="thumb"></span></span>
+    </label>
+  `;
+  caja.appendChild(filaRecurrente);
+  const etiquetaRecurrente = filaRecurrente.querySelector('[data-rol="etiqueta-recurrente"]');
+  const switchRecurrente = filaRecurrente.querySelector("#switch-gasto-recurrente");
+  switchRecurrente.checked = !!(gastoExistente && gastoExistente.recurrente);
+
   let tipoElegido = (gastoExistente && gastoExistente.tipo) === "ingreso" ? "ingreso" : "gasto";
   function marcarTipoActivo() {
     grupoTipo.querySelectorAll(".pill-item").forEach((p) => p.classList.toggle("active", p.dataset.valor === tipoElegido));
     titulo.textContent = `${gastoExistente ? "Editar" : "Nuevo"} ${tipoElegido === "ingreso" ? "ingreso" : "gasto"}`;
+    etiquetaRecurrente.textContent = tipoElegido === "ingreso" ? "¿Es un ingreso recurrente?" : "¿Es un pago recurrente?";
   }
   marcarTipoActivo();
   grupoTipo.querySelectorAll(".pill-item").forEach((btn) => {
@@ -267,23 +331,13 @@ function abrirModalGastoU(gastoExistente, contenedorLista) {
     });
   });
 
-  // ----- ¿Es un pago recurrente? (2026-08-11, v2.8.8) -----
-  const filaRecurrente = document.createElement("div");
-  filaRecurrente.className = "row-between";
-  filaRecurrente.innerHTML = `
-    <span>¿Es un pago recurrente?</span>
-    <label class="switch switch-tema">
-      <input type="checkbox" id="switch-gasto-recurrente">
-      <span class="track"><span class="thumb"></span></span>
-    </label>
-  `;
-  caja.appendChild(filaRecurrente);
-  const switchRecurrente = filaRecurrente.querySelector("#switch-gasto-recurrente");
-  switchRecurrente.checked = !!(gastoExistente && gastoExistente.recurrente);
-
-  // ----- Costo simple (monto único, gasto NO recurrente) -----
+  // ----- Monto simple (monto único, gasto/ingreso NO recurrente) -----
+  // v2.9.3: "Costo" -> "Monto" (pedido explícito) — con ingresos en la
+  // mezcla, "Costo" solo tenía sentido para gastos; "Monto" sirve para
+  // ambos tipos sin tener que duplicar el campo ni cambiar la etiqueta
+  // según el tipo elegido.
   const bloqueCosto = document.createElement("div");
-  bloqueCosto.innerHTML = `<span class="form-label">Costo</span>`;
+  bloqueCosto.innerHTML = `<span class="form-label">Monto</span>`;
   const inputCosto = document.createElement("input");
   inputCosto.type = "number";
   inputCosto.step = "0.01";
