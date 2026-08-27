@@ -91,6 +91,25 @@ html, body {
      nada. overscroll-behavior-y: contain apaga el gesto nativo del
      navegador para que solo mande el nuestro. */
   overscroll-behavior-y: contain;
+  /* Fix (2026-08-26 — "el sidebar se pierde al hacer scroll en PC", pedido
+     de Krys): este overflow-x:hidden vivía antes en .app-layout, para
+     evitar cualquier desborde horizontal accidental del layout flex. El
+     problema: .app-layout no declaraba overflow-y, y por spec de CSS
+     Overflow, cuando un eje es distinto de "visible" y el otro queda en
+     "visible", el navegador computa ESE OTRO EJE como "auto" — o sea,
+     .app-layout se convertía sin querer en su propio contenedor de scroll
+     (overflow-y:auto implícito). Como .app-layout nunca tiene un alto fijo
+     (crece libre con .app-contenido), nunca llega a recortarse ni a
+     mostrar scrollbar propio, PERO sigue contando como el "scrollport" de
+     referencia para cualquier position:sticky adentro (#app-sidebar) — y
+     contra una caja que nunca se desplaza de verdad, sticky no tiene nada
+     a qué "pegarse": el sidebar terminaba comportándose como un elemento
+     normal y se iba con el resto de la página al hacer scroll, aunque el
+     CSS ya dijera position:sticky. Moviendo el overflow-x:hidden acá (a
+     html/body, que es quien de verdad scrollea) se logra el mismo recorte
+     horizontal sin crear ese contenedor de scroll intermedio — el sidebar
+     vuelve a quedar sticky contra el scroll real de la página. */
+  overflow-x: hidden;
 }
 
 body {
@@ -1157,7 +1176,10 @@ a { color: var(--accent-1); }
   min-height: 100vh;
   width: 100%;
   max-width: 100vw;
-  overflow-x: hidden;
+  /* Fix (2026-08-26): el overflow-x:hidden que estaba acá se movió a
+     html/body — ver el comentario junto a overscroll-behavior-y ahí mismo.
+     Tenerlo en este elemento (sin overflow-y declarado) rompía el
+     position:sticky de #app-sidebar. */
 }
 
 /* ---- Asistente IA: bloqueo de scroll del documento + ocultar topbar con
@@ -1497,6 +1519,41 @@ a:hover .enlace-rapido-nombre {
 }
 @media (min-width: 1500px) {
   .enlaces-lateral { display: block; }
+}
+
+/* ---- Botón flotante de Enlaces rápidos (900px–1499px) ----
+   Pedido de Krys (2026-08-26): en ese rango de escritorio no hay espacio
+   para .enlaces-lateral (que recién aparece a partir de 1500px) y el botón
+   de la topbar móvil está oculto (solo vive en @media max-width:899.98px),
+   así que Enlaces rápidos quedaba sin ningún acceso directo salvo entrar a
+   Configuración. Se replica EXACTAMENTE el patrón que ya existe en
+   móvil: mismo drawer (#drawer-enlaces-movil), mismo overlay
+   (#enlaces-movil-overlay), mismas funciones abrirDrawerEnlacesMovil /
+   cerrarDrawerEnlacesMovil (ver componentes.js) — este botón es solo un
+   segundo disparador para ese mismo mecanismo, no un componente nuevo. */
+.btn-flotante-enlaces {
+  display: none;
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  background: var(--gradient-accent);
+  color: var(--on-accent);
+  font-size: 1.3rem;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-glass);
+  z-index: 45;
+  padding: 0;
+}
+.btn-flotante-enlaces:hover { box-shadow: 0 10px 26px var(--accent-glow-1); }
+.btn-flotante-enlaces:active { transform: scale(0.96); }
+@media (min-width: 900px) and (max-width: 1499.98px) {
+  .btn-flotante-enlaces { display: flex; }
 }
 
 /* =========================================================================
