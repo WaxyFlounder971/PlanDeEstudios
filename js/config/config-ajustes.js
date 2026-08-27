@@ -1117,47 +1117,94 @@ function renderizarSelectorMoneda() {
   botonMoneda.className = "form-input select-custom-boton";
   const monedaInicial = MONEDAS_DISPONIBLES.find((m) => m.id === selectMoneda.value);
   botonMoneda.textContent = monedaInicial ? `${monedaInicial.simbolo} ${monedaInicial.etiqueta}` : "Elegir moneda";
+
+  // v2.9.2 (2026-08-26, pedido explícito): con 50 monedas en la lista
+  // (37 de antes + las 14 LatAm/Senegal agregadas en este mismo cambio,
+  // ver MONEDAS_DISPONIBLES en schema.js) desplazarse a mano hasta la
+  // deseada es lento — se agrega un buscador de texto arriba de la lista.
+  // Reparenta a document.body el WRAPPER completo (buscador + <ul>) en vez
+  // de solo el <ul> como antes, para que el input viaje pegado a la lista
+  // cuando se abre; la clase ".select-custom-lista" (fondo/borde/sombra/
+  // scroll) se mueve del <ul> a este wrapper, y el <ul> queda como lista
+  // interna simple sin esa clase.
+  const wrapperListaMoneda = document.createElement("div");
+  wrapperListaMoneda.className = "select-custom-lista oculto";
+
+  const inputBuscarMoneda = document.createElement("input");
+  inputBuscarMoneda.type = "text";
+  inputBuscarMoneda.className = "form-input";
+  inputBuscarMoneda.placeholder = "Buscar moneda...";
+  inputBuscarMoneda.autocomplete = "off";
+  inputBuscarMoneda.style.cssText = "position:sticky; top:0; margin-bottom:6px;";
+  wrapperListaMoneda.appendChild(inputBuscarMoneda);
+
   const listaMoneda = document.createElement("ul");
-  listaMoneda.className = "select-custom-lista oculto";
+  listaMoneda.style.cssText = "list-style:none; margin:0; padding:0;";
+  wrapperListaMoneda.appendChild(listaMoneda);
 
   function posicionarListaMoneda() {
     const r = botonMoneda.getBoundingClientRect();
-    listaMoneda.style.position = "fixed";
-    listaMoneda.style.top = `${r.bottom + 6}px`;
-    listaMoneda.style.left = `${r.left}px`;
-    listaMoneda.style.width = `${r.width}px`;
+    wrapperListaMoneda.style.position = "fixed";
+    wrapperListaMoneda.style.top = `${r.bottom + 6}px`;
+    wrapperListaMoneda.style.left = `${r.left}px`;
+    wrapperListaMoneda.style.width = `${r.width}px`;
   }
   function cerrarListaMoneda() {
-    listaMoneda.classList.add("oculto");
+    wrapperListaMoneda.classList.add("oculto");
     botonMoneda.setAttribute("aria-expanded", "false");
-    if (listaMoneda.parentElement === document.body) dropdownMoneda.appendChild(listaMoneda);
+    if (wrapperListaMoneda.parentElement === document.body) dropdownMoneda.appendChild(wrapperListaMoneda);
     window.removeEventListener("scroll", cerrarSiScrollExternoMoneda, true);
     window.removeEventListener("resize", cerrarListaMoneda);
   }
   function cerrarSiScrollExternoMoneda(e) {
-    if (listaMoneda.contains(e.target)) return;
+    if (wrapperListaMoneda.contains(e.target)) return;
     cerrarListaMoneda();
   }
   function abrirListaMoneda() {
     document.querySelectorAll(".select-custom-lista").forEach((l) => {
-      if (l !== listaMoneda) {
+      if (l !== wrapperListaMoneda) {
         l.classList.add("oculto");
         if (l.parentElement === document.body && l._volverA) l._volverA.appendChild(l);
       }
     });
-    listaMoneda._volverA = dropdownMoneda;
-    document.body.appendChild(listaMoneda);
+    wrapperListaMoneda._volverA = dropdownMoneda;
+    document.body.appendChild(wrapperListaMoneda);
     posicionarListaMoneda();
-    listaMoneda.classList.remove("oculto");
+    wrapperListaMoneda.classList.remove("oculto");
     botonMoneda.setAttribute("aria-expanded", "true");
+    // Buscador siempre arranca limpio y con todas las opciones visibles
+    // cada vez que se abre — evita el caso confuso de "abrí, ya había un
+    // filtro puesto de la vez pasada, no veo la moneda que busco".
+    inputBuscarMoneda.value = "";
+    filtrarListaMoneda();
+    inputBuscarMoneda.focus();
     window.addEventListener("scroll", cerrarSiScrollExternoMoneda, true);
     window.addEventListener("resize", cerrarListaMoneda);
   }
+
+  /** Filtra las opciones visibles por coincidencia de texto (símbolo, nombre o código ISO), sin distinguir mayúsculas/acentos. */
+  function normalizarTextoBusqueda(texto) {
+    return texto
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
+  function filtrarListaMoneda() {
+    const consulta = normalizarTextoBusqueda(inputBuscarMoneda.value.trim());
+    listaMoneda.querySelectorAll(".select-custom-opcion").forEach((item) => {
+      const coincide = consulta === "" || normalizarTextoBusqueda(item.dataset.busqueda).includes(consulta);
+      item.style.display = coincide ? "" : "none";
+    });
+  }
+  inputBuscarMoneda.addEventListener("input", filtrarListaMoneda);
+  // No cerrar el dropdown al hacer click/teclear dentro del buscador.
+  inputBuscarMoneda.addEventListener("click", (e) => e.stopPropagation());
 
   MONEDAS_DISPONIBLES.forEach((moneda) => {
     const item = document.createElement("li");
     item.className = "select-custom-opcion";
     item.textContent = `${moneda.simbolo} ${moneda.etiqueta}`;
+    item.dataset.busqueda = `${moneda.simbolo} ${moneda.etiqueta} ${moneda.id}`;
     if (moneda.id === selectMoneda.value) item.classList.add("activa");
     item.addEventListener("click", () => {
       selectMoneda.value = moneda.id;
@@ -1172,11 +1219,11 @@ function renderizarSelectorMoneda() {
   botonMoneda.setAttribute("aria-expanded", "false");
   botonMoneda.addEventListener("click", (e) => {
     e.stopPropagation();
-    if (listaMoneda.classList.contains("oculto")) abrirListaMoneda();
+    if (wrapperListaMoneda.classList.contains("oculto")) abrirListaMoneda();
     else cerrarListaMoneda();
   });
   document.addEventListener("click", (e) => {
-    if (!dropdownMoneda.contains(e.target) && !listaMoneda.contains(e.target)) {
+    if (!dropdownMoneda.contains(e.target) && !wrapperListaMoneda.contains(e.target)) {
       cerrarListaMoneda();
     }
   });
@@ -1187,7 +1234,7 @@ function renderizarSelectorMoneda() {
   });
 
   dropdownMoneda.appendChild(botonMoneda);
-  dropdownMoneda.appendChild(listaMoneda);
+  dropdownMoneda.appendChild(wrapperListaMoneda);
   dropdownMoneda.appendChild(selectMoneda);
   contenedor.appendChild(dropdownMoneda);
 }
