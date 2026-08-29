@@ -40,7 +40,7 @@
 //      y main.js NUNCA hardcodean el número — siempre lo leen de acá, así
 //      que actualizar la versión en toda la app es cambiar ESTA línea y
 //      nada más.
-const VERSION = "v3.14.16"; // <-- subir en cada despliegue
+const VERSION = "v3.14.17"; // <-- subir en cada despliegue
 const CACHE_NAME = `app-academica-${VERSION}`;
 const PREFIJO_CACHE = "app-academica-";
 
