@@ -16,7 +16,13 @@ import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { programarRecordatorioPush } from "../core/notificaciones-push.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { abrirModalEventoAgenda, confirmarBorrarEventoAgenda, obtenerNombreMateriaEvento } from "../agenda/agenda-modal.js";
-import { formatearHoraAmPm, obtenerMateriasVinculablesAgenda, obtenerSemestresSeleccionadosAgenda } from "../agenda/agenda-utils.js";
+import {
+  formatearHoraAmPm,
+  obtenerMateriasVinculablesAgenda,
+  obtenerSemestresSeleccionadosAgenda,
+  obtenerSemestreActivoAgenda,
+  obtenerFechaInicioSemanaAgenda,
+} from "../agenda/agenda-utils.js";
 import { fechaLocalDesdeISO, obtenerEtiquetaModalidad } from "../horario/horario.js";
 // Editar modalidad por voz/texto (2026-08-29): mismas dos funciones que ya
 // usa Cronograma a mano (ver construirZonaCronograma) — nunca se reescribe
@@ -890,9 +896,10 @@ function construirSystemInstruction() {
 
   return `Sos el Asistente IA de una app académica. Tu función es leer un
 mensaje en lenguaje natural de un estudiante universitario y, según lo que
-pida, o bien extraer tareas/exámenes/eventos para su Agenda, o bien
-detectar un pedido de cambiar la modalidad de una clase puntual en su
-Horario.
+pida, extraer tareas/exámenes/eventos para su Agenda, detectar un pedido de
+cambiar la modalidad de una clase puntual en su Horario, o reconocer una
+CONSULTA de solo lectura sobre lo que ya tiene guardado (tareas/eventos de
+una semana, o la modalidad de una clase próxima).
 
 Hoy es ${iso} (${diaSemana}). Usá esta fecha como referencia para resolver
 cualquier fecha relativa ("mañana", "el jueves", "en 2 semanas", "el
@@ -907,7 +914,7 @@ ${listaMaterias}${avisoApodosDuplicados}${contextoDiasModalidad}
 
 Devolvé ÚNICAMENTE un JSON con esta forma exacta:
 {
-  "accion": "crear_eventos" | "editar_modalidad",
+  "accion": "crear_eventos" | "editar_modalidad" | "consultar",
   "items": [
     {
       "tipo": "evento" | "tarea" | "examen",
@@ -924,10 +931,39 @@ Devolvé ÚNICAMENTE un JSON con esta forma exacta:
     "dia": "lunes" | "martes" | "miércoles" | "jueves" | "viernes" | "sábado" | "domingo",
     "modalidadNueva": "presencial" | "virtual" | "asincronica" | "sin_clase"
   } | null,
+  "consulta": {
+    "tipo": "tareas_eventos" | "modalidad_clase",
+    "semana": number | null,
+    "materia": "nombre EXACTO de la lista de arriba, o null",
+    "dia": "lunes" | "martes" | "miércoles" | "jueves" | "viernes" | "sábado" | "domingo" | null
+  } | null,
   "aclaracion": "string" | null
 }
 
 Regla de "accion" (elegí una sola por mensaje):
+- "consultar": el usuario PREGUNTA por algo que ya existe (nunca pide crear
+  ni cambiar nada) — ej. "qué tareas tengo para esta semana", "qué tengo
+  para la semana 8", "qué exámenes hay esta semana", "qué modalidad es mi
+  próxima clase de bases de datos", "los jueves de historia son
+  presenciales o virtuales". En este caso "items" va SIEMPRE en [],
+  "cambioModalidad" va en null, y "consulta" lleva el detalle:
+  - "tipo": "tareas_eventos" si pregunta por tareas/exámenes/eventos
+    guardados; "modalidad_clase" si pregunta por la modalidad de una clase.
+  - "semana" (solo aplica a "tareas_eventos"): SOLO si el usuario menciona
+    una "semana N" académica explícita (usá la tabla de semanas de arriba
+    para saber que existe, pero NO calcules fechas vos, eso lo hace el
+    sistema con el número). Si no menciona ninguna semana puntual (ej.
+    "esta semana", "esta nueva semana", o no dice nada), "semana" es null
+    (el sistema asume la semana actual).
+  - "materia" (opcional en "tareas_eventos", para filtrar por una materia
+    puntual si el usuario lo pide; SIEMPRE requerido en
+    "modalidad_clase"): mismo criterio de nombre oficial exacto / apodo que
+    en "items" — si no matchea claro con una sola materia, NO adivines:
+    "consulta": null, "items": [], y preguntá en "aclaracion" cuál es.
+  - "dia" (solo aplica a "modalidad_clase"): SOLO si el usuario nombra un
+    día puntual (ej. "los jueves de bd"). Si pregunta por "la próxima
+    clase" sin nombrar día, "dia" es null (el sistema busca la próxima
+    clase real de esa materia, igual que para crear_eventos).
 - "editar_modalidad": el usuario pide CAMBIAR la modalidad de una clase que
   YA existe en su Horario (ej. "cambiá mi clase de anatomía del jueves a
   virtual", "la clase de cálculo ahora es presencial", "poné asincrónica la
@@ -952,9 +988,9 @@ Regla de "accion" (elegí una sola por mensaje):
     que pida el usuario (virtual/presencial/asincrónica/sin clase o
     equivalentes como "no hay clase", "cancelada", "queda suspendida").
 - "crear_eventos": cualquier otro pedido de agendar una tarea/examen/
-  evento — "items" lleva el detalle como siempre, "cambioModalidad" va en
-  null. Es el valor por defecto para todo lo que no sea explícitamente un
-  cambio de modalidad.
+  evento — "items" lleva el detalle como siempre, "cambioModalidad" y
+  "consulta" van en null. Es el valor por defecto para todo lo que no sea
+  explícitamente una consulta o un cambio de modalidad.
 
 Reglas de "items" (solo aplican cuando accion es "crear_eventos"):
 - Si el mensaje menciona una "semana N" (semana 5, semana 8, etc.), es
@@ -1004,9 +1040,10 @@ Reglas de "items" (solo aplican cuando accion es "crear_eventos"):
   usuario lo pida explícitamente.
 - Un solo mensaje puede describir más de un ítem — devolvé todos los que
   encuentres en "items".
-- Si el mensaje no describe ninguna tarea/examen/evento reconocible ni un
-  cambio de modalidad (saludo, pregunta suelta, charla sin fecha ni
-  intención real de agendar o cambiar algo), devolvé "accion":
+- Si el mensaje no describe ninguna tarea/examen/evento reconocible, ni un
+  cambio de modalidad, ni una consulta de solo lectura (saludo, pregunta
+  suelta sin relación con tareas/horario, charla sin fecha ni intención
+  real de agendar/cambiar/consultar algo), devolvé "accion":
   "crear_eventos", "items": [] y "aclaracion": null.
 - "aclaracion" es SOLO para preguntar algo puntual que te impide resolver
   bien un ítem o un cambio de modalidad por ambigüedad real. Si ya tenés
@@ -1019,7 +1056,7 @@ Reglas de "items" (solo aplican cuando accion es "crear_eventos"):
 const ESQUEMA_RESPUESTA_GEMINI = {
   type: "OBJECT",
   properties: {
-    accion: { type: "STRING", enum: ["crear_eventos", "editar_modalidad"] },
+    accion: { type: "STRING", enum: ["crear_eventos", "editar_modalidad", "consultar"] },
     items: {
       type: "ARRAY",
       items: {
@@ -1052,6 +1089,25 @@ const ESQUEMA_RESPUESTA_GEMINI = {
         modalidadNueva: { type: "STRING" },
       },
       required: ["dia", "modalidadNueva"],
+    },
+    // consultar (2026-08-29, bug real: preguntas de solo lectura caían al
+    // fallback conversacional sin contexto real). "semana"/"materia"/"dia"
+    // sin enum ni required estrictos: Gemini solo aporta la INTENCIÓN
+    // (qué tipo de consulta, qué semana/materia/día mencionó), la
+    // resolución real contra estado.datos.agenda/Horario la hace JS
+    // (resolverConsultaTareasEventos/resolverConsultaModalidad) — mismo
+    // principio anti-alucinación de siempre, Gemini nunca inventa qué
+    // tareas existen.
+    consulta: {
+      type: "OBJECT",
+      nullable: true,
+      properties: {
+        tipo: { type: "STRING", enum: ["tareas_eventos", "modalidad_clase"] },
+        semana: { type: "NUMBER", nullable: true },
+        materia: { type: "STRING", nullable: true },
+        dia: { type: "STRING", nullable: true },
+      },
+      required: ["tipo"],
     },
     aclaracion: { type: "STRING", nullable: true },
   },
@@ -1167,9 +1223,15 @@ async function ejecutarGeneracionGemini(contents) {
     // `accion` no existe en el JSON crudo guardado (ver
     // reconstruirChatDesdeHistorial) — ese caso puntual siempre fue/debe
     // seguir comportándose como creación de eventos.
-    accion: parseado.accion === "editar_modalidad" ? "editar_modalidad" : "crear_eventos",
+    accion:
+      parseado.accion === "editar_modalidad"
+        ? "editar_modalidad"
+        : parseado.accion === "consultar"
+        ? "consultar"
+        : "crear_eventos",
     items: Array.isArray(parseado.items) ? parseado.items : [],
     cambioModalidad: parseado.cambioModalidad || null,
+    consulta: parseado.consulta || null,
     aclaracion: parseado.aclaracion || null,
     crudo: texto,
   };
@@ -1356,6 +1418,173 @@ function resolverCambioModalidad(cambioModalidad) {
   };
 }
 
+/**
+ * Rango de fechas (Date, inicio/fin ambos inclusive) para "consulta" de
+ * tareas_eventos (2026-08-29, bug real: "qué tareas tengo esta semana"/
+ * "semana 8" caían al fallback conversacional sin acceso real a los datos).
+ *
+ * - `numeroSemana` puntual (el usuario dijo "semana 8"): se calcula sobre
+ *   el SEMESTRE ACTIVO (obtenerSemestreActivoAgenda — mismo criterio que ya
+ *   usa el resto de Agenda para "Semana N", ver agenda-utils.js) con la
+ *   misma fórmula (fecha_inicio + (N-1)*7 días) que ya usa
+ *   construirContextoSemanasSemestres para la tabla que ve Gemini — Gemini
+ *   NUNCA calcula la fecha acá, solo dice qué número de semana mencionó el
+ *   usuario (o null), este cálculo es 100% determinístico en JS.
+ * - `numeroSemana` null (el usuario no mencionó una semana puntual, ej.
+ *   "esta semana"): usa obtenerFechaInicioSemanaAgenda(0), la MISMA función
+ *   que ya usa la vista Lista de Agenda para decidir qué es "esta semana"
+ *   ahora mismo — así una consulta del Asistente siempre coincide con lo
+ *   que el usuario ya ve en Agenda, en vez de inventar su propia noción de
+ *   "semana calendario".
+ *
+ * Devuelve null si no hay semestre activo (usuario sin semestres
+ * seleccionados) y se pidió una semana puntual — no hay fecha_inicio de la
+ * que partir.
+ */
+function resolverRangoConsulta(numeroSemana) {
+  if (numeroSemana) {
+    const semestre = obtenerSemestreActivoAgenda();
+    if (!semestre) return null;
+    const inicioSemestre = fechaLocalDesdeISO(semestre.fecha_inicio);
+    if (isNaN(inicioSemestre.getTime())) return null;
+    const inicio = new Date(inicioSemestre);
+    inicio.setDate(inicio.getDate() + (numeroSemana - 1) * 7);
+    const fin = new Date(inicio);
+    fin.setDate(fin.getDate() + 6);
+    return { inicio, fin, numeroSemana, etiqueta: `la semana ${numeroSemana}` };
+  }
+  const inicio = obtenerFechaInicioSemanaAgenda(0);
+  const fin = new Date(inicio);
+  fin.setDate(fin.getDate() + 6);
+  return { inicio, fin, numeroSemana: null, etiqueta: "esta semana" };
+}
+
+/** "1 sep." — "7 sep." — para el encabezado de una consulta por semana. */
+function formatearRangoConsulta(inicio, fin) {
+  const opciones = { day: "numeric", month: "short" };
+  const textoInicio = inicio.toLocaleDateString("es-CR", opciones).replace(/\.$/, "");
+  const textoFin = fin.toLocaleDateString("es-CR", opciones).replace(/\.$/, "");
+  return `${textoInicio} - ${textoFin}`;
+}
+
+/**
+ * Resuelve accion "consultar", tipo "tareas_eventos": lee DIRECTO
+ * estado.datos.agenda (nunca se le pasa esta lista a Gemini — ver
+ * comentario del schema) filtrando por el rango de fechas real
+ * (resolverRangoConsulta) y, si el usuario pidió una materia puntual, por
+ * esa materia (resolverMateriaVinculada, mismo criterio anti-alucinación
+ * de siempre). Devuelve los eventos ordenados por fecha/hora — la UI
+ * (mostrarResultadoConsultaEnChat) los pinta con crearTarjetaEventoGuardado,
+ * la MISMA tarjeta editable/borrable que usa la creación, no una vista de
+ * solo texto aparte.
+ */
+function resolverConsultaTareasEventos(consulta) {
+  const rango = resolverRangoConsulta(consulta.semana || null);
+  if (!rango) {
+    return { ok: false, motivo: "No tienes un semestre activo seleccionado para calcular esa semana." };
+  }
+  const materiaVinculada = consulta.materia ? resolverMateriaVinculada(consulta.materia) : null;
+  if (consulta.materia && !materiaVinculada) {
+    return { ok: false, motivo: "No pude identificar de forma clara a qué materia te refieres." };
+  }
+
+  const inicioIso = fechaISODesdeLocal(rango.inicio);
+  const finIso = fechaISODesdeLocal(rango.fin);
+  const eventos = (estado.datos.agenda || [])
+    .filter((ev) => ev.fecha >= inicioIso && ev.fecha <= finIso)
+    .filter((ev) => !materiaVinculada || ev.materiaMatriculadaId === materiaVinculada.mmId)
+    .sort((a, b) => `${a.fecha} ${a.hora || ""}`.localeCompare(`${b.fecha} ${b.hora || ""}`));
+
+  return { ok: true, rango, materiaVinculada, eventos };
+}
+
+/**
+ * Resuelve accion "consultar", tipo "modalidad_clase": SOLO LECTURA, nunca
+ * cambia nada (a diferencia de resolverCambioModalidad, que arma la misma
+ * búsqueda pero para preparar un cambio). Mismo horizonte de 14 días hacia
+ * adelante que construirContextoProximasClases/resolverCambioModalidad.
+ *
+ * Ojo (2026-08-29, pendiente de confirmar): esto lee la modalidad de
+ * PLANTILLA del bloque de Horario (bloque.dias[].modalidad), NO la
+ * modalidad efectiva de Cronograma si esa semana puntual ya tiene una
+ * excepción aplicada (ver comentario de construirContextoDiasModalidadMaterias
+ * más arriba — mismo criterio que ya usa el resto de este archivo para
+ * identificar a qué día se refiere el usuario). No tengo a la vista
+ * horario.js/horario-modal.js en esta sesión para confirmar si existe un
+ * getter de "modalidad efectiva de una semana puntual" que debería usarse
+ * acá en su lugar — si existe, esto debería cambiarse a usarlo.
+ */
+function resolverConsultaModalidad(materiaNombre, diaNombreOpcional) {
+  const materiaVinculada = resolverMateriaVinculada(materiaNombre);
+  if (!materiaVinculada) {
+    return { ok: false, motivo: "No pude identificar de forma clara a qué materia te refieres." };
+  }
+  const semestre = (estado.datos.semestres || []).find((s) => s.id === materiaVinculada.semestreId);
+  const mm = semestre && (semestre.materias_matriculadas || []).find((m) => m.id === materiaVinculada.mmId);
+  if (!semestre || !mm) {
+    return { ok: false, motivo: "Esa materia ya no está matriculada en el semestre actual." };
+  }
+
+  let diaCodigoFijo = null;
+  if (diaNombreOpcional) {
+    const idxDiaSemana = indiceDiaSemanaDesdeNombre(diaNombreOpcional);
+    if (idxDiaSemana === null) return { ok: false, motivo: "No reconocí el día que mencionaste." };
+    diaCodigoFijo = DIAS_SEMANA_CONFIG[(idxDiaSemana + 6) % 7].abrevDefault;
+    const tieneClaseEseDia = (semestre.bloques_horario || []).some(
+      (b) =>
+        b.materia_id === mm.materia_id &&
+        b.plan_estudio_id === mm.plan_estudio_id &&
+        (b.dias || []).some((d) => d.dia === diaCodigoFijo)
+    );
+    if (!tieneClaseEseDia) {
+      return { ok: false, motivo: `${materiaVinculada.nombre} no tiene clase los ${diaNombreOpcional} según tu Horario.` };
+    }
+  }
+
+  const hoy = new Date();
+  let fechaObjetivo = null;
+  let codigoEncontrado = null;
+  for (let offset = 0; offset <= 13; offset++) {
+    const candidata = new Date(hoy);
+    candidata.setDate(candidata.getDate() + offset);
+    const codigoCandidata = DIAS_SEMANA_CONFIG[(candidata.getDay() + 6) % 7].abrevDefault;
+    if (diaCodigoFijo && codigoCandidata !== diaCodigoFijo) continue;
+    const tieneClase = (semestre.bloques_horario || []).some(
+      (b) =>
+        b.materia_id === mm.materia_id &&
+        b.plan_estudio_id === mm.plan_estudio_id &&
+        (b.dias || []).some((d) => d.dia === codigoCandidata)
+    );
+    if (!tieneClase) continue;
+    fechaObjetivo = candidata;
+    codigoEncontrado = codigoCandidata;
+    break;
+  }
+  if (!fechaObjetivo) {
+    return {
+      ok: false,
+      motivo: `No encontré una próxima clase de ${materiaVinculada.nombre}${diaNombreOpcional ? ` los ${diaNombreOpcional}` : ""} en los próximos 14 días.`,
+    };
+  }
+
+  const bloque = (semestre.bloques_horario || []).find(
+    (b) =>
+      b.materia_id === mm.materia_id &&
+      b.plan_estudio_id === mm.plan_estudio_id &&
+      (b.dias || []).some((d) => d.dia === codigoEncontrado)
+  );
+  const diaPlantilla = bloque.dias.find((d) => d.dia === codigoEncontrado);
+  const modalidad = diaPlantilla.modalidad || "presencial";
+
+  return {
+    ok: true,
+    materiaVinculada,
+    fechaObjetivo,
+    diaNombre: nombreDiaDesdeCodigo(codigoEncontrado),
+    modalidad,
+  };
+}
+
 /** "L" | "K" | "M" | "J" | "V" | "S" | "D" real de una fecha "YYYY-MM-DD". */
 function codigoDiaDesdeFecha(fechaIso) {
   const fecha = fechaLocalDesdeISO(fechaIso);
@@ -1497,35 +1726,17 @@ function crearBurbuja(rol, texto, esError = false) {
 }
 
 /**
- * Chip tocable de un ejemplo de bienvenida (punto 2, personalidad Wapper)
- * — al tocarlo, mete el texto en el input y lo envía directo (mismo
- * camino que si el usuario lo hubiera escrito y tocado "Enviar"), para que
- * sirva de verdad como acceso rápido y no solo de referencia visual.
+ * Corrección 2026-08-29: los ejemplos NO van como 12 chips clicables — es
+ * un único ejemplo, elegido al azar de PLANTILLAS_EJEMPLOS_BIENVENIDA_WAPPER
+ * (ya con la materia real sustituida), mostrado como texto plano ("Ejemplo:
+ * ..."), sin botón ni acción de click. Se usa tanto para la línea debajo
+ * del saludo (mostrarSaludoInicial) como para el placeholder del input
+ * (construirEsqueletoAsistente) — cada uno pide su propio random
+ * independiente, así que normalmente no van a coincidir entre sí.
  */
-function crearChipEjemplo(texto) {
-  const chip = document.createElement("button");
-  chip.type = "button";
-  chip.className = "muted";
-  chip.style.cssText = `
-    text-align: left;
-    padding: 6px 11px;
-    border-radius: 999px;
-    border: 1px solid var(--border-glass, rgba(148,163,184,0.25));
-    background: var(--bg-panel, rgba(148,163,184,0.15));
-    font-size: 0.78rem;
-    line-height: 1.3;
-    cursor: pointer;
-    max-width: 100%;
-    overflow-wrap: break-word;
-  `;
-  chip.textContent = texto;
-  chip.onclick = () => {
-    const input = document.getElementById("input-asistente-mensaje");
-    if (!input) return;
-    input.value = texto;
-    manejarEnvioMensaje();
-  };
-  return chip;
+function elegirEjemploBienvenidaAlAzar() {
+  const ejemplos = construirEjemplosBienvenida();
+  return ejemplos[Math.floor(Math.random() * ejemplos.length)];
 }
 
 function crearIndicadorEscribiendo() {
@@ -1842,30 +2053,113 @@ function mostrarResultadoModalidadEnChat(resultado, turno) {
 }
 
 /**
+ * Rama "consultar" de mostrarResultadoEnChat — agregada 2026-08-29 (bug
+ * real: preguntas de solo lectura como "qué tareas tengo esta semana" o
+ * "qué modalidad es mi próxima clase de bd" caían al fallback conversacional
+ * de Wapper, que no tiene acceso real a los datos y por eso respondía "no
+ * tengo acceso"). Nunca crea ni cambia nada — solo lee.
+ *
+ * `turno.consultaEventoIds` (tipo "tareas_eventos"): ids ya resueltos la
+ * primera vez, mismo patrón que `eventosGuardados` — reabrir el chat
+ * reusa los mismos ids y los vuelve a pintar contra el estado REAL actual
+ * (crearTarjetaEventoGuardado ya maneja el caso de que se haya borrado
+ * uno). `turno.consultaModalidadResuelto` (tipo "modalidad_clase"): el
+ * resultado de solo-lectura ya congelado, sin objetos Date (ver
+ * serializarResueltoModalidad/deserializarResueltoModalidad, mismo
+ * patrón).
+ */
+function mostrarResultadoConsultaEnChat(resultado, turno) {
+  if (resultado.aclaracion) {
+    agregarBurbujaAlDom(crearBurbuja("modelo", resultado.aclaracion));
+    return;
+  }
+  const consulta = resultado.consulta || {};
+
+  if (consulta.tipo === "modalidad_clase") {
+    if (!turno.consultaModalidadResuelto) {
+      const resuelto = resolverConsultaModalidad(consulta.materia, consulta.dia);
+      if (!resuelto.ok) {
+        agregarBurbujaAlDom(crearBurbuja("modelo", resuelto.motivo));
+        return;
+      }
+      turno.consultaModalidadResuelto = {
+        materiaNombre: resuelto.materiaVinculada.nombre,
+        fechaObjetivoIso: fechaISODesdeLocal(resuelto.fechaObjetivo),
+        diaNombre: resuelto.diaNombre,
+        modalidad: resuelto.modalidad,
+      };
+    }
+    const r = turno.consultaModalidadResuelto;
+    const diaCapitalizado = r.diaNombre.charAt(0).toUpperCase() + r.diaNombre.slice(1);
+    agregarBurbujaAlDom(
+      crearBurbuja(
+        "modelo",
+        `📅 ${r.materiaNombre} — ${diaCapitalizado} ${formatearFechaLarga(r.fechaObjetivoIso)}: ${obtenerEtiquetaModalidad(r.modalidad)}`
+      )
+    );
+    return;
+  }
+
+  // tipo "tareas_eventos" (default si Gemini omitió "tipo" por algún motivo)
+  const eventosGuardados = Array.isArray(turno.consultaEventoIds)
+    ? turno.consultaEventoIds
+    : (() => {
+        const resuelto = resolverConsultaTareasEventos(consulta);
+        if (!resuelto.ok) return null;
+        turno.consultaRangoTexto = `${resuelto.rango.etiqueta} (${formatearRangoConsulta(resuelto.rango.inicio, resuelto.rango.fin)})`;
+        return resuelto.eventos.map((ev) => ev.id);
+      })();
+
+  if (eventosGuardados === null) {
+    agregarBurbujaAlDom(crearBurbuja("modelo", "No pude calcular esa semana — revisa que tengas un semestre activo seleccionado."));
+    return;
+  }
+  turno.consultaEventoIds = eventosGuardados;
+
+  const etiquetaRango = turno.consultaRangoTexto || "esa semana";
+  if (eventosGuardados.length === 0) {
+    agregarBurbujaAlDom(crearBurbuja("modelo", `No tienes nada guardado para ${etiquetaRango}.`));
+    return;
+  }
+  agregarBurbujaAlDom(
+    crearBurbuja(
+      "modelo",
+      `Para ${etiquetaRango} tienes ${eventosGuardados.length === 1 ? "esto" : `estas ${eventosGuardados.length} cosas`}:`
+    )
+  );
+  eventosGuardados.forEach((id) => agregarBurbujaAlDom(crearTarjetaEventoGuardado(id)));
+}
+
+/**
  * Muestra en el chat el resultado ya interpretado de un turno de Gemini —
  * la usan tanto el envío en vivo (manejarEnvioMensaje) como la
  * reconstrucción desde historial (reconstruirChatDesdeHistorial). Rama por
- * `resultado.accion` a una de las dos funciones de arriba.
+ * `resultado.accion` a una de las tres funciones de arriba.
  *
  * `turno`: el objeto REAL de conversacionActual (o el reconstruido desde
  * historial.turnos) para este turno de "modelo" — YA debe estar en el
- * array antes de llamar esto (ver manejarEnvioMensaje), porque ambas ramas
- * mutan campos directo sobre esta misma referencia (`eventosGuardados`,
- * `cambioModalidadResuelto`, `estadoModalidad`) para que
+ * array antes de llamar esto (ver manejarEnvioMensaje), porque las tres
+ * ramas mutan campos directo sobre esta misma referencia
+ * (`eventosGuardados`, `cambioModalidadResuelto`, `estadoModalidad`,
+ * `consultaEventoIds`, `consultaModalidadResuelto`) para que
  * guardarHistorialLocal() los persista tal cual, sin un valor de retorno
  * aparte que el caller tenga que acordarse de pegar de vuelta.
  */
 async function mostrarResultadoEnChat(resultado, turno, textoUsuario) {
   if (resultado.accion === "saludo") {
     // Punto 4, personalidad Wapper: nunca llega acá vía Gemini (el schema
-    // solo admite "crear_eventos"/"editar_modalidad") — es un marcador
-    // puramente local para el saludo simple, ver esSaludoSimple/
-    // manejarEnvioMensaje.
+    // solo admite "crear_eventos"/"editar_modalidad"/"consultar") — es un
+    // marcador puramente local para el saludo simple, ver
+    // esSaludoSimple/manejarEnvioMensaje.
     agregarBurbujaAlDom(crearBurbuja("modelo", MENSAJE_SALUDO_WAPPER));
     return;
   }
   if (resultado.accion === "editar_modalidad") {
     mostrarResultadoModalidadEnChat(resultado, turno);
+    return;
+  }
+  if (resultado.accion === "consultar") {
+    mostrarResultadoConsultaEnChat(resultado, turno);
     return;
   }
   await mostrarResultadoEventosEnChat(resultado, turno, textoUsuario);
@@ -2002,7 +2296,7 @@ function construirEsqueletoAsistente(contenedor) {
   const input = document.createElement("input");
   input.id = "input-asistente-mensaje";
   input.className = "form-input";
-  input.placeholder = 'Ej: tengo examen de anatomía el jueves a las 2pm';
+  input.placeholder = `Ejemplo: ${elegirEjemploBienvenidaAlAzar()}`;
   input.autocomplete = "off";
   input.style.flex = "1";
   input.addEventListener("keydown", (e) => {
@@ -2169,19 +2463,14 @@ function instalarObservadorVisibilidadAsistente(tarjeta) {
 }
 
 /**
- * Punto 2 del brief de personalidad Wapper (2026-08-29): texto fijo +
- * ejemplos tocables debajo, con materias REALES del usuario (o genéricos
- * de respaldo si todavía no matriculó ninguna) — ver
- * construirEjemplosBienvenida/crearChipEjemplo arriba.
+ * Punto 2 del brief de personalidad Wapper + corrección 2026-08-29: texto
+ * fijo + UN solo ejemplo random debajo ("Ejemplo: ..."), texto plano, sin
+ * botón — con materias REALES del usuario (o genéricos de respaldo si
+ * todavía no matriculó ninguna).
  */
 function mostrarSaludoInicial() {
   agregarBurbujaAlDom(crearBurbuja("modelo", MENSAJE_BIENVENIDA_WAPPER));
-
-  const contenedorEjemplos = document.createElement("div");
-  contenedorEjemplos.className = "stack";
-  contenedorEjemplos.style.cssText = "align-self: flex-start; max-width: 88%; gap: 6px; margin-top: 2px;";
-  construirEjemplosBienvenida().forEach((texto) => contenedorEjemplos.appendChild(crearChipEjemplo(texto)));
-  agregarBurbujaAlDom(contenedorEjemplos);
+  agregarBurbujaAlDom(crearBurbuja("modelo", `Ejemplo: ${elegirEjemploBienvenidaAlAzar()}`));
 }
 
 /**
@@ -2198,27 +2487,32 @@ function reconstruirChatDesdeHistorial(historial) {
     try {
       const parseado = JSON.parse(turno.crudo);
       // Mismo shape que arma ejecutarGeneracionGemini en vivo — un turno de
-      // un historial guardado ANTES de "editar_modalidad" no tiene `accion`
-      // en el crudo (undefined) y cae a "crear_eventos" por defecto, igual
-      // que en vivo. "saludo" (personalidad Wapper, 2026-08-29) es un
-      // marcador puramente local que nunca devuelve Gemini — solo aparece
-      // acá si el turno se generó vía el atajo de esSaludoSimple.
+      // un historial guardado ANTES de "editar_modalidad"/"consultar" no
+      // tiene `accion` en el crudo (undefined) y cae a "crear_eventos" por
+      // defecto, igual que en vivo. "saludo" (personalidad Wapper,
+      // 2026-08-29) es un marcador puramente local que nunca devuelve
+      // Gemini — solo aparece acá si el turno se generó vía el atajo de
+      // esSaludoSimple.
       const resultado = {
         accion:
           parseado.accion === "editar_modalidad"
             ? "editar_modalidad"
+            : parseado.accion === "consultar"
+            ? "consultar"
             : parseado.accion === "saludo"
             ? "saludo"
             : "crear_eventos",
         items: Array.isArray(parseado.items) ? parseado.items : [],
         cambioModalidad: parseado.cambioModalidad || null,
+        consulta: parseado.consulta || null,
         aclaracion: parseado.aclaracion || null,
       };
       // `turno` es el objeto real de historial.turnos (ver más abajo,
       // conversacionActual = historial.turnos.slice()) — mostrarResultadoEnChat
-      // lo muta directo (eventosGuardados/cambioModalidadResuelto/estadoModalidad),
-      // así que la tarjeta de modalidad reconstruida queda pintada en su
-      // estado real y "Aplicar cambio" sigue funcionando sobre el mismo turno.
+      // lo muta directo (eventosGuardados/cambioModalidadResuelto/estadoModalidad/
+      // consultaEventoIds/consultaModalidadResuelto), así que la tarjeta
+      // reconstruida queda pintada en su estado real y "Aplicar cambio"
+      // sigue funcionando sobre el mismo turno.
       mostrarResultadoEnChat(resultado, turno);
     } catch (e) {
       // Turno puntual corrupto en el historial guardado — se ignora ESE
