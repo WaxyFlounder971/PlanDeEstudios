@@ -281,6 +281,16 @@ function alternarCompletadaEvento(eventoId) {
   sellarTimestamp(vivo);
   marcarCambioPendiente();
   renderizarAgenda();
+  // FIX (bug reportado: "se muestran los elementos pero no sirve el check"
+  // en Resumen): esto solo refrescaba Agenda. El dato SÍ se guardaba bien
+  // (vivo.completada cambia acá arriba), pero cuando el checkbox tocado
+  // vive dentro de una tarjeta de Resumen (construirItemEvento reutilizado
+  // tal cual desde resumen.js), renderizarAgenda() no toca el DOM de
+  // Resumen — así que ese checkbox concreto se quedaba visualmente igual
+  // (sin la clase "marcada", sin el tachado) y parecía que el click no
+  // hacía nada. Mismo patrón que refrescarAgenda() en agenda-modal.js
+  // (llamado tras guardar/borrar desde el modal), que sí refresca los 2.
+  window.renderizarResumen?.();
   sincronizarEventoCalendario(vivo);
 }
 
