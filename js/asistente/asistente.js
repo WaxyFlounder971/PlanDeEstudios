@@ -17,7 +17,12 @@ import { programarRecordatorioPush } from "../core/notificaciones-push.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { abrirModalEventoAgenda, confirmarBorrarEventoAgenda, obtenerNombreMateriaEvento } from "../agenda/agenda-modal.js";
 import { formatearHoraAmPm, obtenerMateriasVinculablesAgenda, obtenerSemestresSeleccionadosAgenda } from "../agenda/agenda-utils.js";
-import { fechaLocalDesdeISO } from "../horario/horario.js";
+import { fechaLocalDesdeISO, obtenerEtiquetaModalidad } from "../horario/horario.js";
+// Editar modalidad por voz/texto (2026-08-29): mismas dos funciones que ya
+// usa Cronograma a mano (ver construirZonaCronograma) — nunca se reescribe
+// esta lógica acá, solo se resuelve el bloque/semana/fecha correctos y se
+// llama a lo mismo que ya existe.
+import { aplicarModalidadDia, calcularNumeroSemanaSinAcotarParaFecha } from "../horario/horario-modal.js";
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 
 /**
@@ -59,6 +64,12 @@ const CLAVE_HISTORIAL_ASISTENTE = "asistente_historial_dispositivo";
 const VIGENCIA_HISTORIAL_MS = 60 * 60 * 1000; // 1 hora
 
 const NOMBRES_DIA_SEMANA = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+
+// Valores reales de modalidad que acepta aplicarModalidadDia (horario-modal.js,
+// ETIQUETAS_MODALIDAD_CRONOGRAMA) — la misma lista se usa para validar lo que
+// devuelve Gemini en cambioModalidad.modalidadNueva, nunca se confía en el
+// string suelto sin chequearlo contra esto.
+const MODALIDADES_VALIDAS_ASISTENTE = ["presencial", "virtual", "asincronica", "sin_clase"];
 
 const MENSAJE_FALLBACK = 'No entendí, ¿podés reformular? Por ejemplo: "tengo examen de anatomía el jueves a las 2pm".';
 
@@ -680,6 +691,60 @@ playa, ¿a cuál te referís?").`;
 }
 
 /**
+ * Días reales de clase de cada materia vinculable, con su modalidad de
+ * PLANTILLA (bloque.dias[].modalidad — la modalidad "de base", la que el
+ * usuario reconoce como normal) — NUNCA la de Cronograma (excepciones
+ * puntuales de una semana ya ajustada), porque para identificar a qué día
+ * se refiere el usuario ("mi clase de anatomía del jueves") lo que importa
+ * es si esa materia REALMENTE tiene clase ese día de la semana, no si esa
+ * semana puntual ya tiene un ajuste.
+ *
+ * Agregada 2026-08-29 (editar modalidad por voz/texto): es el único
+ * contexto nuevo que necesita Gemini para la acción "editar_modalidad" —
+ * sin esto no podría saber si "el jueves" es un día válido para esa
+ * materia, ni qué modalidad tiene hoy para armar la tarjeta de
+ * confirmación ("presencial → virtual").
+ */
+function construirContextoDiasModalidadMaterias(materiasVinculables) {
+  if (materiasVinculables.length === 0) return "";
+
+  const filas = materiasVinculables
+    .map((materiaVinculada) => {
+      const semestre = (estado.datos.semestres || []).find((s) => s.id === materiaVinculada.semestreId);
+      const mm = semestre && (semestre.materias_matriculadas || []).find((m) => m.id === materiaVinculada.mmId);
+      if (!semestre || !mm) return null;
+
+      // Un mismo día puede repetirse en más de un bloque (ej. teoría y
+      // práctica el mismo jueves) — Map por código de día para quedarse
+      // con uno solo por día en el texto que ve Gemini (el primero que
+      // aparezca; desambiguar cuál bloque puntual es no es su trabajo,
+      // eso lo resuelve resolverCambioModalidad en JS con datos reales).
+      const modalidadPorDia = new Map();
+      (semestre.bloques_horario || [])
+        .filter((b) => b.materia_id === mm.materia_id && b.plan_estudio_id === mm.plan_estudio_id)
+        .forEach((b) => {
+          (b.dias || []).forEach((d) => {
+            if (!d.dia || modalidadPorDia.has(d.dia)) return;
+            const nombreDia = nombreDiaDesdeCodigo(d.dia);
+            if (nombreDia) modalidadPorDia.set(d.dia, { nombreDia, modalidad: d.modalidad || "presencial" });
+          });
+        });
+
+      if (modalidadPorDia.size === 0) return null;
+      const partes = Array.from(modalidadPorDia.values()).map(
+        (info) => `${info.nombreDia} (${obtenerEtiquetaModalidad(info.modalidad).toLowerCase()})`
+      );
+      return `- ${materiaVinculada.nombre}: ${partes.join(", ")}`;
+    })
+    .filter(Boolean);
+
+  if (filas.length === 0) return "";
+  return `\n\nDías reales de clase de cada materia, con su modalidad actual (para
+"editar_modalidad" — cambiá SOLO lo que el usuario pida, y solo si el día que
+menciona está en esta lista para esa materia puntual):\n${filas.join("\n")}`;
+}
+
+/**
  * Construye el system prompt de extracción con contexto REAL del usuario
  * (fecha de hoy + materias matriculadas de los semestres que Agenda tiene
  * seleccionados ahora mismo, ver obtenerMateriasVinculablesAgenda en
@@ -708,10 +773,13 @@ function construirSystemInstruction() {
   const materiasVinculables = obtenerMateriasVinculablesAgenda();
   const listaMaterias = construirListaMateriasConApodos(materiasVinculables);
   const avisoApodosDuplicados = construirAvisoApodosDuplicados(materiasVinculables);
+  const contextoDiasModalidad = construirContextoDiasModalidadMaterias(materiasVinculables);
 
-  return `Sos el Asistente IA de una app académica. Tu única función es leer un
-mensaje en lenguaje natural de un estudiante universitario y extraer de
-ahí tareas, exámenes y eventos para su Agenda.
+  return `Sos el Asistente IA de una app académica. Tu función es leer un
+mensaje en lenguaje natural de un estudiante universitario y, según lo que
+pida, o bien extraer tareas/exámenes/eventos para su Agenda, o bien
+detectar un pedido de cambiar la modalidad de una clase puntual en su
+Horario.
 
 Hoy es ${iso} (${diaSemana}). Usá esta fecha como referencia para resolver
 cualquier fecha relativa ("mañana", "el jueves", "en 2 semanas", "el
@@ -722,10 +790,11 @@ real, cada uno con su propia fecha.${construirContextoSemanasSemestres()}${const
 Materias matriculadas reales del usuario ahora mismo (nombre oficial —
 entre paréntesis, el/los apodo(s) que el usuario le puso en Horario, si
 tiene):
-${listaMaterias}${avisoApodosDuplicados}
+${listaMaterias}${avisoApodosDuplicados}${contextoDiasModalidad}
 
 Devolvé ÚNICAMENTE un JSON con esta forma exacta:
 {
+  "accion": "crear_eventos" | "editar_modalidad",
   "items": [
     {
       "tipo": "evento" | "tarea" | "examen",
@@ -737,10 +806,44 @@ Devolvé ÚNICAMENTE un JSON con esta forma exacta:
       "esFeriado": true | false
     }
   ],
+  "cambioModalidad": {
+    "materia": "nombre EXACTO de la lista de arriba, o null",
+    "dia": "lunes" | "martes" | "miércoles" | "jueves" | "viernes" | "sábado" | "domingo",
+    "modalidadNueva": "presencial" | "virtual" | "asincronica" | "sin_clase"
+  } | null,
   "aclaracion": "string" | null
 }
 
-Reglas:
+Regla de "accion" (elegí una sola por mensaje):
+- "editar_modalidad": el usuario pide CAMBIAR la modalidad de una clase que
+  YA existe en su Horario (ej. "cambiá mi clase de anatomía del jueves a
+  virtual", "la clase de cálculo ahora es presencial", "poné asincrónica la
+  clase de historia del lunes"). En este caso "items" va SIEMPRE en [] y
+  "cambioModalidad" lleva el detalle. Solo se refiere a UNA clase puntual
+  (el próximo día de esa materia que caiga en semana), nunca a "todos los
+  jueves para siempre" — no hace falta que lo aclares, el sistema ya lo
+  interpreta así.
+  - "materia": igual criterio que en "items" (nombre oficial exacto o
+    apodo → nombre oficial). Si no matchea claro con una sola materia de
+    la lista de "Días reales de clase" de arriba, NO adivines:
+    "cambioModalidad": null, "items": [], y preguntá en "aclaracion" cuál
+    es (mismo criterio que la regla de materias ambiguas de abajo).
+  - "dia": el día de la semana que el usuario mencionó, en minúscula, uno
+    de los 7 nombres exactos de arriba. Si el día que menciona NO aparece
+    en la lista de "Días reales de clase" para esa materia (ej. dice
+    "viernes" pero esa materia no tiene clase los viernes), NO inventes:
+    "cambioModalidad": null y explicá el problema en "aclaracion" (ej.
+    "Anatomía no tiene clase los viernes según tu Horario — ¿los días que
+    sí tiene clase, cuál es el que querés cambiar?").
+  - "modalidadNueva": SOLO uno de los 4 valores listados arriba, según lo
+    que pida el usuario (virtual/presencial/asincrónica/sin clase o
+    equivalentes como "no hay clase", "cancelada", "queda suspendida").
+- "crear_eventos": cualquier otro pedido de agendar una tarea/examen/
+  evento — "items" lleva el detalle como siempre, "cambioModalidad" va en
+  null. Es el valor por defecto para todo lo que no sea explícitamente un
+  cambio de modalidad.
+
+Reglas de "items" (solo aplican cuando accion es "crear_eventos"):
 - Si el mensaje menciona una "semana N" (semana 5, semana 8, etc.), es
   SIEMPRE semana académica del semestre — buscá esa semana en la tabla de
   arriba (si hay una) y calculá la fecha desde ahí, NUNCA contando semanas
@@ -788,12 +891,14 @@ Reglas:
   usuario lo pida explícitamente.
 - Un solo mensaje puede describir más de un ítem — devolvé todos los que
   encuentres en "items".
-- Si el mensaje no describe ninguna tarea/examen/evento reconocible
-  (saludo, pregunta suelta, charla sin fecha ni intención real de agendar
-  algo), devolvé "items": [] y "aclaracion": null.
-- "aclaracion" es SOLO para preguntar algo puntual que te impide extraer
-  bien un ítem por ambigüedad real. Si ya tenés todo claro, "aclaracion"
-  va en null aunque "items" tenga resultados.`;
+- Si el mensaje no describe ninguna tarea/examen/evento reconocible ni un
+  cambio de modalidad (saludo, pregunta suelta, charla sin fecha ni
+  intención real de agendar o cambiar algo), devolvé "accion":
+  "crear_eventos", "items": [] y "aclaracion": null.
+- "aclaracion" es SOLO para preguntar algo puntual que te impide resolver
+  bien un ítem o un cambio de modalidad por ambigüedad real. Si ya tenés
+  todo claro, "aclaracion" va en null aunque "items" o "cambioModalidad"
+  tengan resultados.`;
 }
 
 /* ===================== Llamada a la API de Gemini ===================== */
@@ -801,6 +906,7 @@ Reglas:
 const ESQUEMA_RESPUESTA_GEMINI = {
   type: "OBJECT",
   properties: {
+    accion: { type: "STRING", enum: ["crear_eventos", "editar_modalidad"] },
     items: {
       type: "ARRAY",
       items: {
@@ -817,9 +923,26 @@ const ESQUEMA_RESPUESTA_GEMINI = {
         required: ["tipo", "nombre", "fecha"],
       },
     },
+    // editar_modalidad (2026-08-29): "dia" y "modalidadNueva" van sin enum
+    // acá porque el modo JSON nativo de Gemini es más confiable devolviendo
+    // string libre que forzando un enum sobre un campo que además puede
+    // venir null si la materia no matcheó — la validación real (contra
+    // NOMBRES_DIA_SEMANA y MODALIDADES_VALIDAS_ASISTENTE) se hace en JS en
+    // resolverCambioModalidad, mismo principio anti-alucinación que
+    // resolverMateriaVinculada.
+    cambioModalidad: {
+      type: "OBJECT",
+      nullable: true,
+      properties: {
+        materia: { type: "STRING", nullable: true },
+        dia: { type: "STRING" },
+        modalidadNueva: { type: "STRING" },
+      },
+      required: ["dia", "modalidadNueva"],
+    },
     aclaracion: { type: "STRING", nullable: true },
   },
-  required: ["items"],
+  required: ["accion", "items"],
 };
 
 /**
@@ -926,7 +1049,14 @@ async function ejecutarGeneracionGemini(contents) {
   }
 
   return {
+    // Default "crear_eventos" (2026-08-29): protege contra un turno viejo
+    // reconstruido desde historial guardado ANTES de este cambio, donde
+    // `accion` no existe en el JSON crudo guardado (ver
+    // reconstruirChatDesdeHistorial) — ese caso puntual siempre fue/debe
+    // seguir comportándose como creación de eventos.
+    accion: parseado.accion === "editar_modalidad" ? "editar_modalidad" : "crear_eventos",
     items: Array.isArray(parseado.items) ? parseado.items : [],
+    cambioModalidad: parseado.cambioModalidad || null,
     aclaracion: parseado.aclaracion || null,
     crudo: texto,
   };
@@ -983,10 +1113,124 @@ function resolverMateriaVinculada(nombreMateria) {
   return obtenerMateriasVinculablesAgenda().find((m) => m.nombre === nombreMateria) || null;
 }
 
+/**
+ * Cruza el cambioModalidad que devolvió Gemini contra datos REALES de
+ * Horario — nunca se confía en que "dia"/"materia" sean válidos solo
+ * porque Gemini los devolvió así (mismo principio que resolverMateriaVinculada
+ * de arriba). Devuelve { ok: true, ...datos para armar la tarjeta y para
+ * llamar a aplicarModalidadDia } o { ok: false, motivo } con un motivo en
+ * texto listo para mostrar en el chat.
+ *
+ * Si la materia tiene más de un bloque con clase ese mismo día (ej. teoría
+ * y práctica), se toma el primero que aparezca en bloques_horario — caso
+ * borde no resuelto con más precisión porque el prompt no le pide a Gemini
+ * distinguir grupos/bloques, solo materia+día.
+ */
+function resolverCambioModalidad(cambioModalidad) {
+  if (!cambioModalidad) return { ok: false, motivo: "No entendí bien qué cambio de modalidad querés hacer." };
+
+  const materiaVinculada = resolverMateriaVinculada(cambioModalidad.materia);
+  if (!materiaVinculada) {
+    return { ok: false, motivo: "No pude identificar de forma clara a qué materia te referís." };
+  }
+
+  const idxDiaSemana = indiceDiaSemanaDesdeNombre(cambioModalidad.dia);
+  if (idxDiaSemana === null) {
+    return { ok: false, motivo: "No reconocí el día que mencionaste." };
+  }
+  const diaCodigo = DIAS_SEMANA_CONFIG[(idxDiaSemana + 6) % 7].abrevDefault;
+
+  const modalidadNueva = MODALIDADES_VALIDAS_ASISTENTE.includes(cambioModalidad.modalidadNueva)
+    ? cambioModalidad.modalidadNueva
+    : null;
+  if (!modalidadNueva) {
+    return { ok: false, motivo: "No reconocí la modalidad nueva que pediste." };
+  }
+
+  const semestre = (estado.datos.semestres || []).find((s) => s.id === materiaVinculada.semestreId);
+  const mm = semestre && (semestre.materias_matriculadas || []).find((m) => m.id === materiaVinculada.mmId);
+  if (!semestre || !mm) {
+    return { ok: false, motivo: "Esa materia ya no está matriculada en el semestre actual." };
+  }
+
+  const bloque = (semestre.bloques_horario || []).find(
+    (b) => b.materia_id === mm.materia_id && b.plan_estudio_id === mm.plan_estudio_id && (b.dias || []).some((d) => d.dia === diaCodigo)
+  );
+  if (!bloque) {
+    return { ok: false, motivo: `${materiaVinculada.nombre} no tiene clase los ${cambioModalidad.dia} según tu Horario.` };
+  }
+  const diaPlantilla = bloque.dias.find((d) => d.dia === diaCodigo);
+  const modalidadActual = diaPlantilla.modalidad || "presencial";
+
+  // Próxima fecha real en la que cae ese día de la semana (hoy cuenta como
+  // válido si hoy mismo es ese día) — mismo horizonte de 14 días que ya usa
+  // construirContextoProximasClases más arriba.
+  const hoy = new Date();
+  let fechaObjetivo = null;
+  for (let offset = 0; offset <= 13; offset++) {
+    const candidata = new Date(hoy);
+    candidata.setDate(candidata.getDate() + offset);
+    if (candidata.getDay() === idxDiaSemana) {
+      fechaObjetivo = candidata;
+      break;
+    }
+  }
+  if (!fechaObjetivo) {
+    return { ok: false, motivo: "No pude calcular la próxima fecha de esa clase." };
+  }
+
+  const numeroSemana = calcularNumeroSemanaSinAcotarParaFecha(semestre, fechaObjetivo);
+  if (numeroSemana == null || numeroSemana < 1) {
+    return { ok: false, motivo: "Esa fecha cae fuera del rango de semanas del semestre." };
+  }
+
+  return {
+    ok: true,
+    materiaVinculada,
+    semestreId: semestre.id,
+    bloqueId: bloque.id,
+    diaCodigo,
+    diaNombre: cambioModalidad.dia,
+    fechaObjetivo,
+    numeroSemana,
+    modalidadActual,
+    modalidadNueva,
+  };
+}
+
 /** "L" | "K" | "M" | "J" | "V" | "S" | "D" real de una fecha "YYYY-MM-DD". */
 function codigoDiaDesdeFecha(fechaIso) {
   const fecha = fechaLocalDesdeISO(fechaIso);
   return DIAS_SEMANA_CONFIG[(fecha.getDay() + 6) % 7].abrevDefault;
+}
+
+/**
+ * Nombre en español ("jueves") de un código de día de DIAS_SEMANA_CONFIG
+ * ("L"/"K"/etc, según abrevDefault) — inverso de codigoDiaDesdeFecha,
+ * agregado para editar_modalidad (2026-08-29): necesito mostrarle al
+ * usuario en la tarjeta de confirmación el nombre del día, partiendo de un
+ * código de bloque.dias, no de una fecha. Mismo giro (+1)%7 que ya usa
+ * codigoDiaDesdeFecha para pasar de DIAS_SEMANA_CONFIG (lunes=0..domingo=6)
+ * a Date.getDay()/NOMBRES_DIA_SEMANA (domingo=0..sábado=6), solo que acá al
+ * revés.
+ */
+function nombreDiaDesdeCodigo(codigo) {
+  const idx = DIAS_SEMANA_CONFIG.findIndex((d) => d.abrevDefault === codigo);
+  return idx === -1 ? null : NOMBRES_DIA_SEMANA[(idx + 1) % 7];
+}
+
+/**
+ * Índice de Date.getDay() (0=domingo..6=sábado) de un nombre de día en
+ * español, sin sensibilidad a acentos/mayúsculas (Gemini debería devolver
+ * el nombre tal cual salió del prompt, pero no hay que confiar 100% en
+ * eso). null si no matchea ninguno de los 7.
+ */
+function indiceDiaSemanaDesdeNombre(nombre) {
+  const normalizado = String(nombre || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const idx = NOMBRES_DIA_SEMANA.findIndex(
+    (n) => n.normalize("NFD").replace(/[\u0300-\u036f]/g, "") === normalizado
+  );
+  return idx === -1 ? null : idx;
 }
 
 /**
@@ -1201,6 +1445,104 @@ function marcarTarjetaComoEliminada(card) {
   card.appendChild(p);
 }
 
+/**
+ * `resolverCambioModalidad` devuelve `fechaObjetivo` como Date real — no
+ * serializable tal cual en el turno que va a `guardarHistorialLocal`
+ * (localStorage guarda texto). Estas dos son el ida/vuelta para poder
+ * congelar la decisión resuelta UNA sola vez (ver mostrarResultadoModalidadEnChat)
+ * y reconstruirla igual de la primera vez, sin volver a llamar
+ * resolverCambioModalidad contra el estado actual de Horario/materias, que
+ * puede haber cambiado desde entonces (mismo criterio que ya usa
+ * eventosGuardados para no volver a crear ítems al reconstruir).
+ */
+function serializarResueltoModalidad(resuelto) {
+  const { fechaObjetivo, ...resto } = resuelto;
+  return { ...resto, fechaObjetivoIso: fechaISODesdeLocal(fechaObjetivo) };
+}
+
+function deserializarResueltoModalidad(serializado) {
+  const { fechaObjetivoIso, ...resto } = serializado;
+  return { ...resto, fechaObjetivo: fechaLocalDesdeISO(fechaObjetivoIso) };
+}
+
+/**
+ * Tarjeta de confirmación para editar_modalidad — a diferencia de
+ * crearTarjetaEventoGuardado (que muestra algo YA guardado, con
+ * Editar/Eliminar), esta tarjeta se muestra ANTES de aplicar nada: el
+ * cambio real (aplicarModalidadDia) recién se dispara si el usuario toca
+ * "Aplicar cambio". Nunca se aplica solo por mostrarse en pantalla.
+ *
+ * `estadoInicial`: "pendiente" | "aplicado" | "cancelado" — al reconstruir
+ * desde historial (ver reconstruirChatDesdeHistorial) puede venir ya
+ * decidido; en ese caso la tarjeta se pinta directo en su estado final,
+ * SIN botones, y sin volver a llamar aplicarModalidadDia (esa función solo
+ * se llama una vez, al click real de "Aplicar cambio").
+ *
+ * `onDecision(estadoNuevo)`: callback para que el caller persista el
+ * cambio de estado en conversacionActual + historial local.
+ */
+function crearTarjetaConfirmacionModalidad(resuelto, estadoInicial, onDecision) {
+  const card = document.createElement("div");
+  card.className = "glass-card stack";
+  card.style.cssText = "align-self: stretch; padding: 10px 12px; gap: 6px;";
+
+  const titulo = document.createElement("div");
+  titulo.style.fontWeight = "600";
+  const diaCapitalizado = resuelto.diaNombre.charAt(0).toUpperCase() + resuelto.diaNombre.slice(1);
+  titulo.textContent = `📅 ${resuelto.materiaVinculada.nombre}, ${diaCapitalizado}`;
+  card.appendChild(titulo);
+
+  const detalle = document.createElement("div");
+  detalle.className = "muted";
+  detalle.style.fontSize = "0.85rem";
+  detalle.textContent = `${obtenerEtiquetaModalidad(resuelto.modalidadActual)} → ${obtenerEtiquetaModalidad(resuelto.modalidadNueva)} · ${formatearFechaLarga(fechaISODesdeLocal(resuelto.fechaObjetivo))}`;
+  card.appendChild(detalle);
+
+  const zonaAccion = document.createElement("div");
+  card.appendChild(zonaAccion);
+
+  function pintarEstado(estado) {
+    zonaAccion.innerHTML = "";
+    if (estado === "pendiente") {
+      const filaBotones = document.createElement("div");
+      filaBotones.className = "row";
+      filaBotones.style.cssText = "gap:6px; justify-content:flex-end; margin-top:2px;";
+
+      const btnCancelar = document.createElement("button");
+      btnCancelar.className = "btn-discreto";
+      btnCancelar.style.flex = "none";
+      btnCancelar.textContent = "Cancelar";
+      btnCancelar.onclick = () => {
+        pintarEstado("cancelado");
+        onDecision("cancelado");
+      };
+      filaBotones.appendChild(btnCancelar);
+
+      const btnAplicar = document.createElement("button");
+      btnAplicar.className = "btn btn-primary";
+      btnAplicar.style.flex = "none";
+      btnAplicar.textContent = "Aplicar cambio";
+      btnAplicar.onclick = () => {
+        aplicarModalidadDia(resuelto.bloqueId, resuelto.semestreId, resuelto.numeroSemana, resuelto.diaCodigo, resuelto.modalidadNueva);
+        pintarEstado("aplicado");
+        onDecision("aplicado");
+      };
+      filaBotones.appendChild(btnAplicar);
+      zonaAccion.appendChild(filaBotones);
+      return;
+    }
+
+    const p = document.createElement("div");
+    p.className = "muted";
+    p.style.fontSize = "0.82rem";
+    p.textContent = estado === "aplicado" ? "✅ Cambio aplicado" : "Cambio cancelado";
+    zonaAccion.appendChild(p);
+  }
+
+  pintarEstado(estadoInicial || "pendiente");
+  return card;
+}
+
 function agregarBurbujaAlDom(elemento) {
   const cont = document.getElementById("asistente-chat-scroll");
   if (!cont) return;
@@ -1209,40 +1551,114 @@ function agregarBurbujaAlDom(elemento) {
 }
 
 /**
- * Muestra en el chat el resultado ya interpretado de un turno de Gemini
- * ({items, aclaracion}) — la usan tanto el envío en vivo (manejarEnvioMensaje)
- * como la reconstrucción desde historial (reconstruirChatDesdeHistorial).
- *
- * `eventosGuardadosExistentes`: CRÍTICO para no duplicar guardados. En vivo
- * viene null → acá mismo se crean los eventos reales (guardarItemExtraidoComoEvento)
- * y se devuelven sus ids para que manejarEnvioMensaje los persista junto al
- * turno. Al reconstruir desde historial (reabrir Asistente con una
- * conversación reciente) YA existen esos eventos — vienen los ids guardados
- * en el propio turno del historial, así que acá NUNCA se vuelve a llamar
- * guardarItemExtraidoComoEvento, solo se re-renderizan las tarjetas contra
- * el estado real actual (ver crearTarjetaEventoGuardado).
- *
- * Devuelve el array de ids guardados (vacío si no hubo ítems).
+ * Rama "crear_eventos" de mostrarResultadoEnChat (ver ahí el contrato de
+ * `turno`) — comportamiento sin cambios respecto de antes de
+ * "editar_modalidad", solo que ahora lee/escribe `turno.eventosGuardados`
+ * directo en vez de recibirlo/devolverlo como parámetro/retorno aparte.
  */
-function mostrarResultadoEnChat(resultado, eventosGuardadosExistentes) {
+function mostrarResultadoEventosEnChat(resultado, turno) {
   if (resultado.items.length === 0 && resultado.aclaracion) {
     agregarBurbujaAlDom(crearBurbuja("modelo", resultado.aclaracion));
-    return [];
+    return;
   }
   if (resultado.items.length === 0) {
     agregarBurbujaAlDom(crearBurbuja("modelo", MENSAJE_FALLBACK));
-    return [];
+    return;
   }
 
   const resumen = resultado.items.length === 1 ? "Guardé esto en tu Agenda:" : `Guardé ${resultado.items.length} cosas en tu Agenda:`;
   agregarBurbujaAlDom(crearBurbuja("modelo", resumen));
 
-  const eventosGuardados = Array.isArray(eventosGuardadosExistentes)
-    ? eventosGuardadosExistentes
+  // Array.isArray(turno.eventosGuardados): CRÍTICO para no duplicar
+  // guardados. En vivo el turno llega recién creado (sin este campo) → acá
+  // mismo se crean los eventos reales (guardarItemExtraidoComoEvento) y sus
+  // ids quedan en el turno para que guardarHistorialLocal los persista. Al
+  // reconstruir desde historial (reabrir Asistente con una conversación
+  // reciente) YA existen esos eventos — vienen los ids guardados en el
+  // propio turno, así que acá NUNCA se vuelve a llamar
+  // guardarItemExtraidoComoEvento, solo se re-renderizan las tarjetas
+  // contra el estado real actual (ver crearTarjetaEventoGuardado). Un turno
+  // de un historial guardado ANTES de que este campo existiera tampoco lo
+  // tiene — cae al mismo camino de "crear de nuevo" que el turno en vivo;
+  // ventana real de choque: menos de 1 hora desde el deploy de ese fix (ver
+  // VIGENCIA_HISTORIAL_MS), después ya no puede pasar.
+  const eventosGuardados = Array.isArray(turno.eventosGuardados)
+    ? turno.eventosGuardados
     : resultado.items.map((item) => guardarItemExtraidoComoEvento(item));
+  turno.eventosGuardados = eventosGuardados;
 
   eventosGuardados.forEach((id) => agregarBurbujaAlDom(crearTarjetaEventoGuardado(id)));
-  return eventosGuardados;
+}
+
+/**
+ * Rama "editar_modalidad" de mostrarResultadoEnChat — agregada 2026-08-29.
+ * Nunca aplica el cambio sola: solo resuelve contra datos reales de Horario
+ * (resolverCambioModalidad) y pinta la tarjeta de confirmación
+ * (crearTarjetaConfirmacionModalidad); el cambio real solo se dispara si el
+ * usuario toca "Aplicar cambio" en esa tarjeta.
+ *
+ * `turno.cambioModalidadResuelto`: la decisión resuelta, CONGELADA la
+ * primera vez (turno en vivo, `cambioModalidadResuelto` todavía no existe)
+ * y nunca vuelta a calcular al reconstruir desde historial — igual que
+ * `eventosGuardados` de arriba, pero acá importa más: si se recalculara en
+ * cada reconstrucción, un cambio posterior en Horario (la materia se borró,
+ * ese día ya no tiene clase, etc.) podría hacer que la MISMA tarjeta
+ * muestre un mensaje distinto al que el usuario vio la primera vez, o que
+ * "Aplicar cambio" ya no sepa a qué bloque/semana apuntar.
+ *
+ * `turno.estadoModalidad`: "pendiente" (default) | "aplicado" | "cancelado"
+ * — se actualiza en el callback `onDecision` de la tarjeta y se persiste al
+ * toque (guardarHistorialLocal), para que reabrir el chat dentro de la 1h
+ * de vigencia del historial muestre la tarjeta ya en su estado final, sin
+ * botones y sin poder volver a aplicar el mismo cambio dos veces.
+ */
+function mostrarResultadoModalidadEnChat(resultado, turno) {
+  if (resultado.aclaracion) {
+    agregarBurbujaAlDom(crearBurbuja("modelo", resultado.aclaracion));
+    return;
+  }
+
+  if (!turno.cambioModalidadResuelto) {
+    const resuelto = resolverCambioModalidad(resultado.cambioModalidad);
+    if (!resuelto.ok) {
+      agregarBurbujaAlDom(crearBurbuja("modelo", resuelto.motivo));
+      return;
+    }
+    turno.cambioModalidadResuelto = serializarResueltoModalidad(resuelto);
+  }
+
+  agregarBurbujaAlDom(
+    crearTarjetaConfirmacionModalidad(
+      deserializarResueltoModalidad(turno.cambioModalidadResuelto),
+      turno.estadoModalidad || "pendiente",
+      (nuevoEstado) => {
+        turno.estadoModalidad = nuevoEstado;
+        guardarHistorialLocal();
+      }
+    )
+  );
+}
+
+/**
+ * Muestra en el chat el resultado ya interpretado de un turno de Gemini —
+ * la usan tanto el envío en vivo (manejarEnvioMensaje) como la
+ * reconstrucción desde historial (reconstruirChatDesdeHistorial). Rama por
+ * `resultado.accion` a una de las dos funciones de arriba.
+ *
+ * `turno`: el objeto REAL de conversacionActual (o el reconstruido desde
+ * historial.turnos) para este turno de "modelo" — YA debe estar en el
+ * array antes de llamar esto (ver manejarEnvioMensaje), porque ambas ramas
+ * mutan campos directo sobre esta misma referencia (`eventosGuardados`,
+ * `cambioModalidadResuelto`, `estadoModalidad`) para que
+ * guardarHistorialLocal() los persista tal cual, sin un valor de retorno
+ * aparte que el caller tenga que acordarse de pegar de vuelta.
+ */
+function mostrarResultadoEnChat(resultado, turno) {
+  if (resultado.accion === "editar_modalidad") {
+    mostrarResultadoModalidadEnChat(resultado, turno);
+    return;
+  }
+  mostrarResultadoEventosEnChat(resultado, turno);
 }
 
 /* ===================== Envío de mensajes ===================== */
@@ -1281,11 +1697,15 @@ async function manejarEnvioMensaje() {
   try {
     const resultado = await llamarGemini(texto);
     indicador.remove();
-    // null = guardado en vivo (ver mostrarResultadoEnChat): acá SÍ se crean
-    // los eventos reales. Los ids que devuelve se guardan en el turno para
-    // que una futura reconstrucción desde historial nunca los vuelva a crear.
-    const eventosGuardados = mostrarResultadoEnChat(resultado, null);
-    conversacionActual.push({ rol: "modelo", texto: resultado.crudo, crudo: resultado.crudo, eventosGuardados });
+    // El turno se pushea ANTES de renderizar (no después, como antes de
+    // "editar_modalidad") porque mostrarResultadoEnChat ahora muta este
+    // mismo objeto por referencia (eventosGuardados / cambioModalidadResuelto
+    // / estadoModalidad) — la tarjeta de modalidad necesita un turno real
+    // ya en conversacionActual para poder actualizarlo al tocar Aplicar/
+    // Cancelar y volver a guardar el historial en ese momento.
+    const turno = { rol: "modelo", texto: resultado.crudo, crudo: resultado.crudo };
+    conversacionActual.push(turno);
+    mostrarResultadoEnChat(resultado, turno);
     guardarHistorialLocal();
   } catch (e) {
     indicador.remove();
@@ -1539,14 +1959,22 @@ function reconstruirChatDesdeHistorial(historial) {
     }
     try {
       const parseado = JSON.parse(turno.crudo);
-      mostrarResultadoEnChat(
-        { items: Array.isArray(parseado.items) ? parseado.items : [], aclaracion: parseado.aclaracion || null },
-        // Historial guardado ANTES de este cambio no tiene eventosGuardados
-        // (undefined) — cae a null y, ese caso puntual, sí re-guarda. Ventana
-        // real de choque: menos de 1 hora desde el deploy de este fix (ver
-        // VIGENCIA_HISTORIAL_MS), después ya no puede pasar.
-        Array.isArray(turno.eventosGuardados) ? turno.eventosGuardados : null
-      );
+      // Mismo shape que arma ejecutarGeneracionGemini en vivo — un turno de
+      // un historial guardado ANTES de "editar_modalidad" no tiene `accion`
+      // en el crudo (undefined) y cae a "crear_eventos" por defecto, igual
+      // que en vivo.
+      const resultado = {
+        accion: parseado.accion === "editar_modalidad" ? "editar_modalidad" : "crear_eventos",
+        items: Array.isArray(parseado.items) ? parseado.items : [],
+        cambioModalidad: parseado.cambioModalidad || null,
+        aclaracion: parseado.aclaracion || null,
+      };
+      // `turno` es el objeto real de historial.turnos (ver más abajo,
+      // conversacionActual = historial.turnos.slice()) — mostrarResultadoEnChat
+      // lo muta directo (eventosGuardados/cambioModalidadResuelto/estadoModalidad),
+      // así que la tarjeta de modalidad reconstruida queda pintada en su
+      // estado real y "Aplicar cambio" sigue funcionando sobre el mismo turno.
+      mostrarResultadoEnChat(resultado, turno);
     } catch (e) {
       // Turno puntual corrupto en el historial guardado — se ignora ESE
       // turno de visualización sin romper la reconstrucción del resto.
