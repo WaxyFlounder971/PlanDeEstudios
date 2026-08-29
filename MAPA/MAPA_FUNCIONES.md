@@ -9,7 +9,7 @@ Para la vista de alto nivel (capas, por qué existen los imports circulares, y "
 qué archivo empiezo si me piden X") ver `ARQUITECTURA.md`. Este documento es el
 detalle función-por-función; `ARQUITECTURA.md` es el mapa de decisión.
 
-> **Estado:** 42/42 archivos `.js` del proyecto documentados. 0 pendientes.
+> **Estado:** 43/44+ archivos `.js` del proyecto documentados (se sumó `asistente/asistente.js`, 2026-08-29). **1 pendiente detectado en esta ronda:** `asistente/asistente-bandeja.js` — existe (lo referencian los comentarios de exports de `asistente.js`, ronda "Bandeja pendiente / Captura por voz") pero nunca se subió/documentó acá; no se documenta en esta ronda por no tener el archivo a la vista, para no inventar su lista de exports.
 
 ---
 
@@ -24,6 +24,7 @@ detalle función-por-función; `ARQUITECTURA.md` es el mapa de decisión.
 - [`js/comunidad/`](#js--comunidad) — Profesores y compañeros (1 archivo)
 - [`js/horario/`](#js--horario) — Horario y horario entre amigos (4 archivos)
 - [`js/agenda/`](#js--agenda) — Agenda (5 archivos)
+- [`js/asistente/`](#js--asistente) — Asistente IA (1 archivo documentado; ver nota sobre `asistente-bandeja.js` pendiente)
 - [`js/resumen/`](#js--resumen) — Resumen (1 archivo)
 - [`js/main.js`](#jsmainjs) — arranque (1 archivo)
 
@@ -669,6 +670,7 @@ Exporta:
 * `obtenerEtiquetaModalidad(modalidad)` — etiqueta humana para una modalidad, con fallback genérico si el valor no está mapeado.
 * `obtenerNombreProfesor(profesorId)` — nombre abreviado del profesor (primer nombre + primer apellido completos, resto a iniciales).
 * `fechaLocalDesdeISO(str)` — parsea una fecha `YYYY-MM-DD` a `Date` local (sin desfase de timezone).
+* `calcularNumeroSemanaSinAcotarParaFecha(semestre, fecha)` *(re-exportada de `horario-modal.js`, 2026-08-29)* — número de semana del semestre para una fecha puntual, SIN acotar (puede dar <1 o mayor que `duracion_semanas`, a propósito). Reutilizada por `agenda/agenda-clases.js` para su propia `calcularNumeroSemanaParaFecha` (esa sí acotada) y por `asistente/asistente.js` para validar cambios de modalidad por voz/texto. Distinta a propósito de `core/schema.js#calcularNumeroSemanaSemestre` (esa resuelve la semana de HOY únicamente).
 * **Candidato a dividir:** 2064 líneas, por encima del límite de 800.
 
 ### horario/horario-modal.js
@@ -678,6 +680,8 @@ Exporta:
 * `abrirModalBloqueHorario({ semestreId, bloqueId, diaPreseleccionado, horaInicioPreseleccionada, horaFinPreseleccionada, numeroSemanaVista })` — abre el modal para crear un bloque nuevo (con día/hora preseleccionados, ej. desde un click-drag en el grid) o editar uno existente por `bloqueId`.
 * `cerrarModalBloqueHorario()` — oculta el modal y limpia el contexto de edición en curso.
 * `construirZonaCronograma(semestre, bloque, { semanaInicial })` — arma el bloque colapsable "📅 Cronograma de clases" dentro del formulario, para editar la modalidad de un día puntual de una semana específica sin afectar la plantilla base del bloque.
+* `aplicarModalidadDia(bloqueId, semestreId, numeroSemana, diaCodigo, nuevaModalidad)` *(exportada 2026-08-29, antes solo interna)* — aplica o revierte el ajuste puntual de modalidad de un día/semana concreto de un bloque (con tumba real si vuelve a coincidir con la plantilla). La sigue usando `construirZonaCronograma` internamente; ahora también la reutiliza `asistente/asistente.js` para aplicar cambios de modalidad pedidos por voz/texto — mismo camino real, sin lógica duplicada.
+* `calcularNumeroSemanaSinAcotarParaFecha(semestre, fechaObjetivo)` *(nueva, 2026-08-29)* — inverso de la fecha-por-semana interna del archivo: dada una fecha real, devuelve su número de semana del semestre, anclado al día real de `fecha_inicio` (no asume que caiga lunes) y SIN acotar entre 1 y `duracion_semanas` a propósito, para poder distinguir "cae fuera del semestre" de "cae en la semana 1/última". Re-exportada vía `horario.js` para `agenda/agenda-clases.js` (que sí necesita la versión acotada, y ahora delega el cálculo crudo acá) y usada directo por `asistente/asistente.js` para resolver cambios de modalidad. **No confundir con `agenda/agenda-clases.js#calcularNumeroSemanaParaFecha`** — incluso siendo casi el mismo nombre, esa acota el resultado y esta no; nunca son intercambiables.
 * **Candidato a dividir:** 1038 líneas, por encima del límite de 800.
 
 ### horario/horario-amigos.js
@@ -741,7 +745,7 @@ Exporta:
 Propósito: sección "Materias" inline por día — qué clases del Horario caen ese día, mostradas junto a eventos/tareas/exámenes.
 Depende de: core/schema.js, core/storage.js, horario/horario.js, agenda/agenda-utils.js
 Exporta:
-* `calcularNumeroSemanaParaFecha(semestre, fecha)` — número de semana del semestre para una fecha puntual (no depende de "hoy").
+* `calcularNumeroSemanaParaFecha(semestre, fecha)` — número de semana del semestre para una fecha puntual (no depende de "hoy"), ACOTADA entre 1 y `duracion_semanas` a propósito (el header/detalle de Agenda-Calendario siempre necesita un número válido que mostrar). Revisada 2026-08-29: antes tenía su propia fórmula de "días desde `fecha_inicio` / 7" con `new Date(string)` directo (mismo tipo de bug de zona horaria ya resuelto en `horario.js`, sin el anclaje-a-lunes que ese cálculo sí usa) — ahora delega el cálculo crudo en `horario/horario.js#calcularNumeroSemanaSinAcotarParaFecha` y solo agrega el acotado. **No es la misma función** que esa (ver nota cruzada en `horario-modal.js`): mismo nombre corto por casualidad de historia, comportamiento distinto a propósito.
 * `construirSeccionMateriasDia(semestres, fecha, diaCodigo)` — arma el bloque DOM "Materias" del día para varios semestres a la vez; devuelve `null` si no hay nada que mostrar.
 * `contarClasesDelDia(semestres, fecha, diaCodigo)` — conteo liviano (sin DOM) de clases ese día, sumado entre todos los semestres — lo usa el Calendario para el indicador 📚.
 
@@ -758,6 +762,28 @@ Propósito: vista Calendario (mensual/semanal) — grid de 7 columnas con vistaz
 Depende de: core/storage.js, ui/componentes.js, agenda/agenda-clases.js, agenda/agenda.js, agenda/agenda-utils.js
 Exporta:
 * `renderizarCalendarioAgenda()` — entrypoint de render de la vista Calendario (subheader + grid mensual o semanal).
+
+---
+
+## JS — asistente
+
+### asistente/asistente.js
+Propósito: chat del Asistente IA (Gemini, clave propia por usuario) — convierte lenguaje natural en tareas/exámenes/eventos de Agenda, y desde 2026-08-29 también puede editar la modalidad de una clase puntual en Horario ("cambiá mi clase de anatomía del jueves a virtual"), siempre con tarjeta de confirmación explícita antes de aplicar. Incluye dictado por voz (Web Speech API nativa, con fallback a transcripción por Gemini vía MediaRecorder en navegadores sin backend de voz confiable) e historial de conversación en `localStorage` del dispositivo, vigente 1 hora.
+Depende de: core/storage.js, core/schema.js, core/storage-sync.js, core/notificaciones-push.js, ui/componentes.js, agenda/agenda-modal.js, agenda/agenda-utils.js, horario/horario.js, horario/horario-modal.js, config/config-ajustes.js
+Exporta:
+* `renderizarAsistente()` — entrypoint de render (llamado por `mostrarSeccion("asistente")`, main.js); si no hay clave de Gemini guardada, muestra aviso con acceso directo a Ajustes en vez del chat. Si hay una conversación reciente (<1h) guardada en este dispositivo, ofrece continuarla o arrancar una nueva.
+* `transcribirBase64ConGemini(base64, mimeType)` — transcribe audio ya en base64 a texto plano vía Gemini (mismo modelo/clave que la extracción). Reutilizada por `asistente-bandeja.js` (audio recibido directo del Worker, sin Blob real del que partir).
+* `extraerEventosDeTexto(texto)` — variante STATELESS de la extracción (sin leer/tocar el historial visible del chat en pantalla): un solo turno aislado, para procesar ítems de la Bandeja pendiente sin mezclarlos con una conversación en vivo.
+* `guardarItemExtraidoComoEvento(item)` — crea el `EventoAgenda` real (`core/schema.js#crearEventoAgenda`) a partir de un ítem ya extraído por Gemini, con recordatorio push si aplica.
+* `mensajeParaError(e)` — texto de error listo para UI según `e.tipoError` ("clave" | "limite" | "red" | desconocido).
+
+**Editar modalidad por voz/texto (2026-08-29, no exportado — funciones internas):**
+* El prompt de extracción (`construirSystemInstruction`) ahora pide a Gemini un campo discriminador `accion: "crear_eventos" | "editar_modalidad"`, con `cambioModalidad {materia, dia, modalidadNueva}` cuando aplica. Gemini nunca decide materia/día por sí solo si hay ambigüedad — devuelve `aclaracion` en vez de adivinar (mismo principio anti-alucinación que ya usaba la extracción de eventos).
+* `resolverCambioModalidad(cambioModalidad)` — revalida lo que devolvió Gemini contra datos reales de Horario (materia vinculada, día con clase real, modalidad válida) y calcula la próxima fecha/semana real del cambio vía `horario/horario-modal.js#calcularNumeroSemanaSinAcotarParaFecha`.
+* `crearTarjetaConfirmacionModalidad(resuelto, estadoInicial, onDecision)` — tarjeta "Aplicar cambio"/"Cancelar"; el cambio real (`horario/horario-modal.js#aplicarModalidadDia`) solo se dispara al tocar "Aplicar cambio", nunca antes.
+* El estado de esa decisión (`pendiente`/`aplicado`/`cancelado`) y la resolución ya congelada (`cambioModalidadResuelto`, serializada sin objetos `Date`) se guardan en el turno del historial local, para que reabrir el chat dentro de la 1h de vigencia muestre la tarjeta en su estado real sin poder re-aplicarla.
+
+**Archivo relacionado no documentado en esta ronda:** `asistente/asistente-bandeja.js` (Bandeja pendiente / Captura por voz, 2026-08-23) — consume `transcribirBase64ConGemini`, `extraerEventosDeTexto` y `guardarItemExtraidoComoEvento` de este archivo. No subido en esta sesión; pendiente de documentar cuando se revise.
 
 ---
 
