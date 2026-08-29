@@ -986,8 +986,10 @@ Regla de "accion" (elegí una sola por mensaje):
     "examen", "laboratorio"/"tarea" → "tarea"), o null si no está claro.
   - "numeroOrdinal" (solo aplica a "buscar_evento"): SOLO si el usuario
     menciona un número u ordinal identificando cuál ítem es (ej. "el
-    TERCER parcial" → 3, "laboratorio 4" → 4, "cotidiano 4" → 4). Convertí
-    ordinales en palabras a número. null si no menciona ninguno.
+    TERCER parcial" → 3, "laboratorio 4" → 4, "cotidiano 4" → 4, "Parcial
+    I" → 1, "el parcial II" → 2, "examen III" → 3). Convertí a número tanto
+    los ordinales en palabras como los números romanos. null si no
+    menciona ninguno.
   - "palabrasClave" (solo aplica a "buscar_evento"): las palabras del
     título del ítem que busca, SIN el número/ordinal (eso va aparte en
     "numeroOrdinal") ni el nombre de la materia (eso va en "materia") —
@@ -1548,14 +1550,28 @@ const PALABRAS_ORDINALES_A_NUMERO = {
   quinto: 5, sexto: 6, septimo: 7, octavo: 8, noveno: 9, decimo: 10,
 };
 
+/**
+ * Números romanos I–XX (2026-08-29: "Parcial I" = "primer parcial" =
+ * "Parcial 1" = "I parcial", todas la misma interpretación) — cubre el
+ * rango normal de parciales/laboratorios/cotidianos, no hace falta más.
+ */
+const NUMEROS_A_ROMANO = [
+  "", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",
+  "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX",
+];
+
 /** true si el nombre de un evento hace referencia a `numero`, ya sea como
- * dígito ("Parcial 3") o como palabra ordinal ("Tercer Parcial"). */
+ * dígito ("Parcial 3"), palabra ordinal ("Tercer Parcial") o número romano
+ * ("Parcial III") — las tres formas son la misma interpretación. */
 function nombreEventoMencionaNumero(nombreEvento, numero) {
   const normalizado = normalizarTexto(nombreEvento);
   if (new RegExp(`(^|\\D)${numero}(\\D|$)`).test(nombreEvento || "")) return true;
-  return Object.entries(PALABRAS_ORDINALES_A_NUMERO).some(
+  const coincideOrdinalPalabra = Object.entries(PALABRAS_ORDINALES_A_NUMERO).some(
     ([palabra, num]) => num === numero && new RegExp(`\\b${palabra}\\b`).test(normalizado)
   );
+  if (coincideOrdinalPalabra) return true;
+  const romano = NUMEROS_A_ROMANO[numero];
+  return !!romano && new RegExp(`\\b${romano}\\b`, "i").test(nombreEvento || "");
 }
 
 /**
