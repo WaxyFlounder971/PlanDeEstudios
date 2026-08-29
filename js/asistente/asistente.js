@@ -24,6 +24,11 @@ import {
   obtenerFechaInicioSemanaAgenda,
 } from "../agenda/agenda-utils.js";
 import { fechaLocalDesdeISO, obtenerEtiquetaModalidad } from "../horario/horario.js";
+// obtenerClasesEfectivasSemana (2026-08-29, consulta de modalidad de solo
+// lectura): mismo import directo que ya hace horario.js — fusiona la
+// modalidad de PLANTILLA con la excepción puntual de Cronograma para una
+// semana real, en vez de leer solo la plantilla (ver resolverConsultaModalidad).
+import { obtenerClasesEfectivasSemana } from "../core/schema.js";
 // Editar modalidad por voz/texto (2026-08-29): mismas dos funciones que ya
 // usa Cronograma a mano (ver construirZonaCronograma) — nunca se reescribe
 // esta lógica acá, solo se resuelve el bloque/semana/fecha correctos y se
@@ -932,10 +937,13 @@ Devolvé ÚNICAMENTE un JSON con esta forma exacta:
     "modalidadNueva": "presencial" | "virtual" | "asincronica" | "sin_clase"
   } | null,
   "consulta": {
-    "tipo": "tareas_eventos" | "modalidad_clase",
+    "tipo": "tareas_eventos" | "modalidad_clase" | "buscar_evento",
     "semana": number | null,
     "materia": "nombre EXACTO de la lista de arriba, o null",
-    "dia": "lunes" | "martes" | "miércoles" | "jueves" | "viernes" | "sábado" | "domingo" | null
+    "dia": "lunes" | "martes" | "miércoles" | "jueves" | "viernes" | "sábado" | "domingo" | null,
+    "tipoItem": "examen" | "tarea" | "evento" | null,
+    "numeroOrdinal": number | null,
+    "palabrasClave": "string" | null
   } | null,
   "aclaracion": "string" | null
 }
@@ -948,15 +956,24 @@ Regla de "accion" (elegí una sola por mensaje):
   presenciales o virtuales". En este caso "items" va SIEMPRE en [],
   "cambioModalidad" va en null, y "consulta" lleva el detalle:
   - "tipo": "tareas_eventos" si pregunta por tareas/exámenes/eventos
-    guardados; "modalidad_clase" si pregunta por la modalidad de una clase.
+    guardados EN GENERAL para un período (ej. "qué tengo esta semana",
+    "qué tareas hay en la semana 8" — sin nombrar un ítem puntual);
+    "modalidad_clase" si pregunta por la modalidad de una clase;
+    "buscar_evento" si pregunta CUÁNDO ES o por el detalle de UN ítem
+    puntual que ya tiene guardado, identificándolo por su nombre/número
+    (ej. "cuándo es el tercer parcial de cálculo", "qué día era el
+    laboratorio 4 de bd", "ya pasé el cotidiano de bd?") — la señal es que
+    el usuario nombra algo específico (un tipo de ítem + alguna pista de
+    cuál, como un número/ordinal o palabra del título), no que pida "todo
+    lo que tengo".
   - "semana" (solo aplica a "tareas_eventos"): SOLO si el usuario menciona
     una "semana N" académica explícita (usá la tabla de semanas de arriba
     para saber que existe, pero NO calcules fechas vos, eso lo hace el
     sistema con el número). Si no menciona ninguna semana puntual (ej.
     "esta semana", "esta nueva semana", o no dice nada), "semana" es null
     (el sistema asume la semana actual).
-  - "materia" (opcional en "tareas_eventos", para filtrar por una materia
-    puntual si el usuario lo pide; SIEMPRE requerido en
+  - "materia" (opcional en "tareas_eventos"/"buscar_evento", para filtrar
+    por una materia puntual si el usuario lo pide; SIEMPRE requerido en
     "modalidad_clase"): mismo criterio de nombre oficial exacto / apodo que
     en "items" — si no matchea claro con una sola materia, NO adivines:
     "consulta": null, "items": [], y preguntá en "aclaracion" cuál es.
@@ -964,6 +981,17 @@ Regla de "accion" (elegí una sola por mensaje):
     día puntual (ej. "los jueves de bd"). Si pregunta por "la próxima
     clase" sin nombrar día, "dia" es null (el sistema busca la próxima
     clase real de esa materia, igual que para crear_eventos).
+  - "tipoItem" (solo aplica a "buscar_evento"): "examen" | "tarea" |
+    "evento" si se puede inferir del pedido (ej. "parcial"/"quiz" →
+    "examen", "laboratorio"/"tarea" → "tarea"), o null si no está claro.
+  - "numeroOrdinal" (solo aplica a "buscar_evento"): SOLO si el usuario
+    menciona un número u ordinal identificando cuál ítem es (ej. "el
+    TERCER parcial" → 3, "laboratorio 4" → 4, "cotidiano 4" → 4). Convertí
+    ordinales en palabras a número. null si no menciona ninguno.
+  - "palabrasClave" (solo aplica a "buscar_evento"): las palabras del
+    título del ítem que busca, SIN el número/ordinal (eso va aparte en
+    "numeroOrdinal") ni el nombre de la materia (eso va en "materia") —
+    ej. para "el tercer parcial de cálculo", "palabrasClave" es "parcial".
 - "editar_modalidad": el usuario pide CAMBIAR la modalidad de una clase que
   YA existe en su Horario (ej. "cambiá mi clase de anatomía del jueves a
   virtual", "la clase de cálculo ahora es presencial", "poné asincrónica la
@@ -1102,10 +1130,13 @@ const ESQUEMA_RESPUESTA_GEMINI = {
       type: "OBJECT",
       nullable: true,
       properties: {
-        tipo: { type: "STRING", enum: ["tareas_eventos", "modalidad_clase"] },
+        tipo: { type: "STRING", enum: ["tareas_eventos", "modalidad_clase", "buscar_evento"] },
         semana: { type: "NUMBER", nullable: true },
         materia: { type: "STRING", nullable: true },
         dia: { type: "STRING", nullable: true },
+        tipoItem: { type: "STRING", enum: ["examen", "tarea", "evento"], nullable: true },
+        numeroOrdinal: { type: "NUMBER", nullable: true },
+        palabrasClave: { type: "STRING", nullable: true },
       },
       required: ["tipo"],
     },
@@ -1499,20 +1530,88 @@ function resolverConsultaTareasEventos(consulta) {
 }
 
 /**
+ * Quita acentos y pasa a minúsculas — mismo criterio que ya usa
+ * esSaludoSimple/indiceDiaSemanaDesdeNombre para comparar texto sin
+ * depender de que el usuario (o Gemini) tilden igual.
+ */
+function normalizarTexto(texto) {
+  return String(texto || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+/**
+ * Convierte ordinales en palabras a número (para poder reconocer "Tercer
+ * Parcial" tanto si el usuario dice "el tercer parcial" como si el ítem
+ * guardado usa el dígito, ej. "Parcial 3").
+ */
+const PALABRAS_ORDINALES_A_NUMERO = {
+  primero: 1, primer: 1, segundo: 2, tercero: 3, tercer: 3, cuarto: 4,
+  quinto: 5, sexto: 6, septimo: 7, octavo: 8, noveno: 9, decimo: 10,
+};
+
+/** true si el nombre de un evento hace referencia a `numero`, ya sea como
+ * dígito ("Parcial 3") o como palabra ordinal ("Tercer Parcial"). */
+function nombreEventoMencionaNumero(nombreEvento, numero) {
+  const normalizado = normalizarTexto(nombreEvento);
+  if (new RegExp(`(^|\\D)${numero}(\\D|$)`).test(nombreEvento || "")) return true;
+  return Object.entries(PALABRAS_ORDINALES_A_NUMERO).some(
+    ([palabra, num]) => num === numero && new RegExp(`\\b${palabra}\\b`).test(normalizado)
+  );
+}
+
+/**
+ * Resuelve accion "consultar", tipo "buscar_evento" (2026-08-29, bug real:
+ * "¿cuándo es el tercer parcial de cálculo?" caía en "tareas_eventos" de la
+ * semana actual porque ese era el único tipo que existía — no había forma
+ * de pedir UN ítem puntual por nombre). Busca en TODO estado.datos.agenda
+ * (sin límite de fecha/semana — quien pregunta "cuándo es X" no sabe de
+ * antemano en qué semana cae), filtrando por materia (si se pidió), tipo de
+ * ítem (si se pudo inferir) y las palabras clave del título — Gemini nunca
+ * decide CUÁL ítem es el correcto, solo aporta los criterios de búsqueda;
+ * la búsqueda real (y por lo tanto la fecha exacta que se muestra) sale
+ * siempre de un evento real ya guardado, mismo principio anti-alucinación
+ * de siempre.
+ *
+ * "numeroOrdinal" SOLO desempata cuando ya hay más de un candidato por
+ * materia+tipo+palabrasClave — nunca descarta el único resultado que ya
+ * matcheó por texto (ej. si el único examen de Cálculo que dice "parcial"
+ * se llama "Tercer Parcial" sin dígito, igual se devuelve aunque el
+ * desempate por número no lo reconozca).
+ */
+function resolverBusquedaEvento(consulta) {
+  const materiaVinculada = consulta.materia ? resolverMateriaVinculada(consulta.materia) : null;
+  if (consulta.materia && !materiaVinculada) {
+    return { ok: false, motivo: "No pude identificar de forma clara a qué materia te refieres." };
+  }
+  const tipoItem = ["examen", "tarea", "evento"].includes(consulta.tipoItem) ? consulta.tipoItem : null;
+  const palabrasClave = normalizarTexto(consulta.palabrasClave).split(/\s+/).filter(Boolean);
+  const numeroOrdinal = Number.isFinite(consulta.numeroOrdinal) ? consulta.numeroOrdinal : null;
+
+  let eventos = (estado.datos.agenda || [])
+    .filter((ev) => !materiaVinculada || ev.materiaMatriculadaId === materiaVinculada.mmId)
+    .filter((ev) => !tipoItem || ev.tipo === tipoItem)
+    .filter((ev) => palabrasClave.every((palabra) => normalizarTexto(ev.nombre).includes(palabra)));
+
+  if (numeroOrdinal !== null && eventos.length > 1) {
+    const angostado = eventos.filter((ev) => nombreEventoMencionaNumero(ev.nombre, numeroOrdinal));
+    if (angostado.length > 0) eventos = angostado;
+  }
+
+  eventos = eventos.slice().sort((a, b) => `${a.fecha} ${a.hora || ""}`.localeCompare(`${b.fecha} ${b.hora || ""}`));
+  return { ok: true, materiaVinculada, eventos };
+}
+
+/**
  * Resuelve accion "consultar", tipo "modalidad_clase": SOLO LECTURA, nunca
  * cambia nada (a diferencia de resolverCambioModalidad, que arma la misma
  * búsqueda pero para preparar un cambio). Mismo horizonte de 14 días hacia
  * adelante que construirContextoProximasClases/resolverCambioModalidad.
  *
- * Ojo (2026-08-29, pendiente de confirmar): esto lee la modalidad de
- * PLANTILLA del bloque de Horario (bloque.dias[].modalidad), NO la
- * modalidad efectiva de Cronograma si esa semana puntual ya tiene una
- * excepción aplicada (ver comentario de construirContextoDiasModalidadMaterias
- * más arriba — mismo criterio que ya usa el resto de este archivo para
- * identificar a qué día se refiere el usuario). No tengo a la vista
- * horario.js/horario-modal.js en esta sesión para confirmar si existe un
- * getter de "modalidad efectiva de una semana puntual" que debería usarse
- * acá en su lugar — si existe, esto debería cambiarse a usarlo.
+ * 2026-08-29: usa la modalidad EFECTIVA de esa semana puntual
+ * (obtenerClasesEfectivasSemana, core/schema.js — fusiona la plantilla con
+ * el Cronograma), no la de plantilla — si esa semana ya tiene una
+ * excepción aplicada (ej. por resolverCambioModalidad/editar_modalidad,
+ * más arriba), la consulta refleja el cambio real, no lo que dice el
+ * Horario "normal".
  */
 function resolverConsultaModalidad(materiaNombre, diaNombreOpcional) {
   const materiaVinculada = resolverMateriaVinculada(materiaNombre);
@@ -1573,8 +1672,19 @@ function resolverConsultaModalidad(materiaNombre, diaNombreOpcional) {
       b.plan_estudio_id === mm.plan_estudio_id &&
       (b.dias || []).some((d) => d.dia === codigoEncontrado)
   );
+
+  // Modalidad EFECTIVA de esa semana puntual, no la de plantilla — ver
+  // comentario de la función. numeroSemana calculado con la misma función
+  // que ya usa resolverCambioModalidad para lo mismo (fechaObjetivo puede
+  // caer en la semana actual o la siguiente, según qué tan lejos esté el
+  // próximo día de clase).
+  const numeroSemana = calcularNumeroSemanaSinAcotarParaFecha(semestre, fechaObjetivo);
+  const claseEfectiva = obtenerClasesEfectivasSemana(bloque, numeroSemana).find((c) => c.dia === codigoEncontrado);
+  // Fallback defensivo a la plantilla si por lo que sea la semana calculada
+  // no trae esa clase (no debería pasar: ya se confirmó arriba que ese día
+  // tiene clase en el bloque) — mejor mostrar algo que romper la consulta.
   const diaPlantilla = bloque.dias.find((d) => d.dia === codigoEncontrado);
-  const modalidad = diaPlantilla.modalidad || "presencial";
+  const modalidad = (claseEfectiva && claseEfectiva.modalidad) || diaPlantilla.modalidad || "presencial";
 
   return {
     ok: true,
@@ -2068,6 +2178,34 @@ function mostrarResultadoModalidadEnChat(resultado, turno) {
  * serializarResueltoModalidad/deserializarResueltoModalidad, mismo
  * patrón).
  */
+/**
+ * "faltan 6 días" / "es hoy" / "fue hace 2 días" — usa fechaLocalDesdeISO
+ * (mismo helper que ya usa todo el archivo para no pelear con zona
+ * horaria) contra la fecha real de HOY en el momento de pintar el mensaje,
+ * nunca congelada — así "cuántos días faltan" sigue siendo correcto si el
+ * chat se reabre días después.
+ */
+function formatearDiasFaltantes(fechaEventoIso) {
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const fechaEvento = fechaLocalDesdeISO(fechaEventoIso);
+  const diffDias = Math.round((fechaEvento - hoy) / 86400000);
+  if (diffDias === 0) return "es hoy";
+  if (diffDias > 0) return `falta${diffDias === 1 ? "" : "n"} ${diffDias} día${diffDias === 1 ? "" : "s"}`;
+  const dias = Math.abs(diffDias);
+  return `fue hace ${dias} día${dias === 1 ? "" : "s"}`;
+}
+
+/**
+ * Punto extra (2026-08-29): "¿cuántos días faltan para el 3 parcial de
+ * cálculo?" es el MISMO caso que "¿cuándo es...?" (buscar_evento) — no
+ * agrego un campo nuevo al esquema de Gemini para distinguir la intención
+ * (arriesgaría el parseo por poco beneficio); en vez de eso, la cuenta de
+ * días SIEMPRE acompaña un resultado de buscar_evento con un único
+ * ítem, sea que el usuario haya preguntado por la fecha o por los días
+ * restantes — no hace daño mostrarla de más y cubre ambos casos con una
+ * sola rama de código.
+ */
 function mostrarResultadoConsultaEnChat(resultado, turno) {
   if (resultado.aclaracion) {
     agregarBurbujaAlDom(crearBurbuja("modelo", resultado.aclaracion));
@@ -2100,33 +2238,49 @@ function mostrarResultadoConsultaEnChat(resultado, turno) {
     return;
   }
 
-  // tipo "tareas_eventos" (default si Gemini omitió "tipo" por algún motivo)
-  const eventosGuardados = Array.isArray(turno.consultaEventoIds)
-    ? turno.consultaEventoIds
-    : (() => {
-        const resuelto = resolverConsultaTareasEventos(consulta);
-        if (!resuelto.ok) return null;
-        turno.consultaRangoTexto = `${resuelto.rango.etiqueta} (${formatearRangoConsulta(resuelto.rango.inicio, resuelto.rango.fin)})`;
-        return resuelto.eventos.map((ev) => ev.id);
-      })();
-
-  if (eventosGuardados === null) {
-    agregarBurbujaAlDom(crearBurbuja("modelo", "No pude calcular esa semana — revisa que tengas un semestre activo seleccionado."));
-    return;
+  // tipo "tareas_eventos" o "buscar_evento" (default a "tareas_eventos" si
+  // Gemini omitió "tipo" por algún motivo) — mismo render de tarjetas para
+  // ambos, solo cambia cómo se resuelve la lista y el texto del encabezado.
+  const esBusqueda = consulta.tipo === "buscar_evento";
+  if (!Array.isArray(turno.consultaEventoIds)) {
+    const resuelto = esBusqueda ? resolverBusquedaEvento(consulta) : resolverConsultaTareasEventos(consulta);
+    if (!resuelto.ok) {
+      agregarBurbujaAlDom(crearBurbuja("modelo", resuelto.motivo));
+      return;
+    }
+    turno.consultaEventoIds = resuelto.eventos.map((ev) => ev.id);
+    turno.consultaEsBusqueda = esBusqueda;
+    if (!esBusqueda) {
+      turno.consultaRangoTexto = `${resuelto.rango.etiqueta} (${formatearRangoConsulta(resuelto.rango.inicio, resuelto.rango.fin)})`;
+    }
   }
-  turno.consultaEventoIds = eventosGuardados;
 
-  const etiquetaRango = turno.consultaRangoTexto || "esa semana";
+  const eventosGuardados = turno.consultaEventoIds;
   if (eventosGuardados.length === 0) {
-    agregarBurbujaAlDom(crearBurbuja("modelo", `No tienes nada guardado para ${etiquetaRango}.`));
+    agregarBurbujaAlDom(
+      crearBurbuja(
+        "modelo",
+        turno.consultaEsBusqueda
+          ? "No encontré nada con ese nombre en tu Agenda — revisa si está escrito distinto, o dime la materia."
+          : `No tienes nada guardado para ${turno.consultaRangoTexto || "esa semana"}.`
+      )
+    );
     return;
   }
-  agregarBurbujaAlDom(
-    crearBurbuja(
-      "modelo",
-      `Para ${etiquetaRango} tienes ${eventosGuardados.length === 1 ? "esto" : `estas ${eventosGuardados.length} cosas`}:`
-    )
-  );
+
+  let textoEncabezado;
+  if (turno.consultaEsBusqueda) {
+    if (eventosGuardados.length === 1) {
+      const eventoEncontrado = (estado.datos.agenda || []).find((ev) => ev.id === eventosGuardados[0]);
+      const sufijoDias = eventoEncontrado ? ` (${formatearDiasFaltantes(eventoEncontrado.fecha)})` : "";
+      textoEncabezado = `Encontré esto${sufijoDias}:`;
+    } else {
+      textoEncabezado = `Encontré ${eventosGuardados.length} coincidencias:`;
+    }
+  } else {
+    textoEncabezado = `Para ${turno.consultaRangoTexto} tienes ${eventosGuardados.length === 1 ? "esto" : `estas ${eventosGuardados.length} cosas`}:`;
+  }
+  agregarBurbujaAlDom(crearBurbuja("modelo", textoEncabezado));
   eventosGuardados.forEach((id) => agregarBurbujaAlDom(crearTarjetaEventoGuardado(id)));
 }
 
