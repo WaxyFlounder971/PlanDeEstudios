@@ -10,7 +10,14 @@ import { mostrarToast } from "../ui/componentes.js";
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 import { obtenerSemestresOrdenCronologico, buscarSemestreVivoPorId } from "../semestres/semestres.js";
 import { obtenerPlanActivo } from "../plan/plan-esquema.js";
-import { abrirModalBloqueHorario, construirZonaCronograma } from "./horario-modal.js";
+import {
+  abrirModalBloqueHorario,
+  construirZonaCronograma,
+  // Re-exportada más abajo para agenda-clases.js (ver comentario en ese
+  // export) — vive en horario-modal.js porque es el inverso de
+  // calcularFechaClaseSemana, que ya está ahí.
+  calcularNumeroSemanaSinAcotarParaFecha,
+} from "./horario-modal.js";
 import {
   abrirPanelAmigos,
   inicializarHorarioAmigos,
@@ -2311,4 +2318,10 @@ export {
   obtenerEtiquetaModalidad,
   obtenerNombreProfesor,
   fechaLocalDesdeISO,
+  // Agenda — Núcleo (2026-08-29): agenda-clases.js reusa esta para el
+  // cálculo crudo (sin acotar) de su propia calcularNumeroSemanaParaFecha,
+  // en vez de mantener una segunda fórmula de "días desde fecha_inicio /
+  // 7" que ya venía sin el anclaje-a-lunes ni el parseo seguro de fecha
+  // que esta versión sí tiene (ver comentario grande en horario-modal.js).
+  calcularNumeroSemanaSinAcotarParaFecha,
 };

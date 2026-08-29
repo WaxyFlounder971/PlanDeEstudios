@@ -792,6 +792,61 @@ function calcularFechaClaseSemana(semestre, numeroSemana, diaCodigo) {
 }
 
 /**
+ * Inverso de calcularFechaClaseSemana (arriba): dada una fecha real
+ * cualquiera, devuelve el número de semana del semestre a la que
+ * pertenece — ANCLADO al mismo criterio (día real de fecha_inicio, no la
+ * config de "día de inicio de semana"), para que un `numeroSemana` devuelto
+ * acá y uno usado por calcularFechaClaseSemana/aplicarModalidadDia siempre
+ * sean consistentes entre sí.
+ *
+ * SIN ACOTAR a propósito (puede devolver <1 o mayor que duracion_semanas):
+ * quien llama necesita poder distinguir "cae fuera del semestre" de "cae en
+ * la semana 1/última", no que ambos casos se vean iguales.
+ *
+ * Agregada 2026-08-29 (Asistente IA — editar modalidad por voz/texto, ver
+ * resolverCambioModalidad en asistente.js): el Asistente resuelve "el
+ * jueves" a una fecha real concreta (próxima ocurrencia con clase de esa
+ * materia) y necesita el numeroSemana correspondiente para poder llamar a
+ * aplicarModalidadDia, y rechazar el cambio si cae fuera de rango — no
+ * tiene sentido "contar semanas a mano" en asistente.js, este es el lugar
+ * que ya sabe hacerlo bien (fecha_inicio no cae necesariamente lunes).
+ *
+ * No usa calcularNumeroSemanaSemestre (core/schema.js) porque esa función
+ * calcula la semana de HOY únicamente — esta resuelve una fecha arbitraria
+ * (que además puede caer en el futuro).
+ *
+ * OJO — nombre a propósito distinto de calcularNumeroSemanaParaFecha de
+ * agenda/agenda-clases.js: esa es una función DISTINTA (no un duplicado
+ * accidental), pensada para mostrar en pantalla ("Semana N" siempre visible
+ * en Agenda/Calendario, nunca fuera de rango) — por eso acota el resultado
+ * entre 1 y duracion_semanas, algo que acá romperia la detección de "fuera
+ * de rango" que resolverCambioModalidad necesita. Esa función ahora
+ * reutiliza esta de acá por dentro para el cálculo crudo (ver comentario en
+ * agenda-clases.js) — no renombrar esta a la misma que esa ni asumir que
+ * son intercambiables.
+ */
+function calcularNumeroSemanaSinAcotarParaFecha(semestre, fechaObjetivo) {
+  const inicio = fechaLocalDesdeISOCronograma(semestre.fecha_inicio);
+  if (isNaN(inicio.getTime()) || !fechaObjetivo || isNaN(fechaObjetivo.getTime())) return null;
+
+  const msPorDia = 24 * 60 * 60 * 1000;
+  // Ancla ambas fechas al lunes real de su propia semana (mismo giro que
+  // calcularFechaClaseSemana con pesoObjetivo/inicio.getDay()) para que el
+  // conteo de "semanas completas" entre una y otra no dependa de en qué
+  // día de la semana cae cada una.
+  const diaSemanaInicio = (inicio.getDay() + 6) % 7; // 0=lunes..6=domingo
+  const lunesSemana1 = new Date(inicio);
+  lunesSemana1.setDate(inicio.getDate() - diaSemanaInicio);
+
+  const diaSemanaObjetivo = (fechaObjetivo.getDay() + 6) % 7;
+  const lunesObjetivo = new Date(fechaObjetivo);
+  lunesObjetivo.setDate(fechaObjetivo.getDate() - diaSemanaObjetivo);
+
+  const diffSemanas = Math.round((lunesObjetivo - lunesSemana1) / (7 * msPorDia));
+  return diffSemanas + 1;
+}
+
+/**
  * Aplica (o revierte) el ajuste puntual de Modalidad de un día concreto de
  * una semana concreta. Si la modalidad elegida coincide con la de la
  * plantilla, se interpreta como "volver a lo normal": si había un ajuste
@@ -809,6 +864,10 @@ function calcularFechaClaseSemana(semestre, numeroSemana, diaCodigo) {
  * no persiste nada. Se relee el semestre y el bloque vivos por id antes de
  * tocar nada; si ya no existen, se avisa con un toast en vez de perder el
  * cambio en silencio.
+ *
+ * Reutilizada desde 2026-08-29 por asistente.js (editar modalidad por voz/
+ * texto) — mismo camino real que usa Cronograma a mano, sin ningún cambio
+ * acá para acomodar ese caller nuevo.
  */
 function aplicarModalidadDia(bloqueId, semestreId, numeroSemana, diaCodigo, nuevaModalidad) {
   const semestreVivo = buscarSemestreVivoPorId(semestreId);
@@ -1157,4 +1216,14 @@ function borrarBloque(semestreOriginal, bloqueOriginal) {
   window.renderizarResumen?.();
 }
 
-export { abrirModalBloqueHorario, cerrarModalBloqueHorario, construirZonaCronograma };
+export {
+  abrirModalBloqueHorario,
+  cerrarModalBloqueHorario,
+  construirZonaCronograma,
+  // Asistente IA — editar modalidad por voz/texto (2026-08-29, ver
+  // resolverCambioModalidad/crearTarjetaConfirmacionModalidad en
+  // asistente.js): mismas dos funciones que ya usa Cronograma a mano, sin
+  // duplicar la lógica de aplicar el cambio ni la de resolver la semana.
+  aplicarModalidadDia,
+  calcularNumeroSemanaSinAcotarParaFecha,
+};
