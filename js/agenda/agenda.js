@@ -103,6 +103,12 @@ function alternarFiltroEstadoAgenda(id) {
     const idx = estado.agendaFiltroEstados.indexOf(id);
     if (idx >= 0) estado.agendaFiltroEstados.splice(idx, 1);
     else estado.agendaFiltroEstados.push(id);
+    // Pedido: "si desactivo todas, automáticamente se reinicia, se prenden
+    // todas en estado inactivo [= reposo], apenas presione una solo va a
+    // estar esa presionada". Sin esto, apagar el último badge activo dejaba
+    // un array vacío (activos.has(...) siempre false) y ocultaba TODO en vez
+    // de volver al estado de reposo.
+    if (estado.agendaFiltroEstados.length === 0) estado.agendaFiltroEstados = null;
   }
   renderizarAgendaInterno();
 }
@@ -666,7 +672,16 @@ function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios, 
   `;
   bloque.appendChild(header);
 
-  const seccionMaterias = construirSeccionMateriasDia(semestresSeleccionados, diaInfo.fecha, diaInfo.abrevDefault);
+  // FIX: el badge "Clase" del filtro (activosFiltro.has("clase")) no hacía
+  // nada — eventoPasaFiltroEstados solo filtra estado.datos.agenda (tarea/
+  // examen/evento/feriado); las materias vienen de un camino de render
+  // aparte (construirSeccionMateriasDia) que antes se llamaba sin condición
+  // ninguna. Ahora respeta AMBOS: el ajuste persistente de Ajustes →
+  // Agenda (agendaFiltroMostrarMaterias, "siempre que Clase se muestre en
+  // Agenda según ajustes") Y el badge de esta sesión.
+  const seccionMaterias = estado.agendaFiltroMostrarMaterias && activosFiltro.has("clase")
+    ? construirSeccionMateriasDia(semestresSeleccionados, diaInfo.fecha, diaInfo.abrevDefault)
+    : null;
   if (seccionMaterias) bloque.appendChild(seccionMaterias);
 
   if (eventosDelDia.length === 0) {
@@ -1072,6 +1087,7 @@ function renderizarAgendaInterno() {
   const semestresSeleccionados = obtenerSemestresSeleccionadosAgenda();
   if (hayAlgunSemestre && semestresSeleccionados.length === 0) {
     if (subCont) subCont.appendChild(construirEnlaceHoyAgenda());
+    document.getElementById("agenda-filtro-estados-cont")?.replaceChildren();
     const vacio = document.createElement("p");
     vacio.className = "muted";
     vacio.style.textAlign = "center";
@@ -1105,11 +1121,20 @@ function renderizarAgendaInterno() {
     } else {
       subCont.appendChild(construirSubheaderSemanal(dias, semestreReferencia));
     }
-    // Feature "filtro por estado": pedido explícito para Semanal Y Todo (ver
-    // pregunta/respuesta en el hilo). FIX: esto estaba definido pero nunca
-    // se insertaba en el DOM — los 6 badges no aparecían en ningún lado.
-    subCont.appendChild(construirBarraFiltroEstadosAgenda());
   }
+  // Corrección: "los botones deben ir AFUERA de la tarjeta de arriba, justo
+  // debajo de esta" — subCont vive ADENTRO de #agenda-header (la tarjeta con
+  // Semana N / fecha / Hoy), así que ya no se cuelga ahí. Se arma su propio
+  // contenedor, creado una sola vez e insertado como HERMANO de
+  // #agenda-header (afterend) — fuera de la tarjeta, pegado justo debajo.
+  let filtroCont = document.getElementById("agenda-filtro-estados-cont");
+  if (!filtroCont) {
+    filtroCont = document.createElement("div");
+    filtroCont.id = "agenda-filtro-estados-cont";
+    document.getElementById("agenda-header")?.insertAdjacentElement("afterend", filtroCont);
+  }
+  filtroCont.innerHTML = "";
+  filtroCont.appendChild(construirBarraFiltroEstadosAgenda());
 
   if (modoTodo) {
     // Ronda de ajustes visuales #5 — punto D: el modo "Todo" es una lista
@@ -1189,6 +1214,7 @@ function renderizarAgenda() {
   renderizarHeaderAgenda();
   const vista = estado.agendaVistaActiva;
   document.getElementById("agenda-lista-dias")?.classList.toggle("oculto", vista !== "lista");
+  document.getElementById("agenda-filtro-estados-cont")?.classList.toggle("oculto", vista !== "lista");
   document.getElementById("agenda-vista-calendario")?.classList.toggle("oculto", vista !== "calendario");
   document.getElementById("agenda-vista-materia")?.classList.toggle("oculto", vista !== "materia");
   document.querySelectorAll("#pills-agenda-vista .pill-item").forEach((btn) => {
