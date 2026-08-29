@@ -17,6 +17,7 @@ import {
   obtenerEtiquetaModalidad,
   obtenerNombreBloque,
   obtenerNombreProfesor,
+  calcularNumeroSemanaSinAcotarParaFecha,
 } from "../horario/horario.js";
 import { formatearHoraAmPm } from "./agenda-utils.js";
 
@@ -47,33 +48,44 @@ function enriquecerClaseParaTarjetaInfo(claseEfectiva) {
  * navega semanas/meses enteros), no la de "ahora mismo". Compartida entre
  * las materias inline y el conteo liviano para el Calendario
  * (agenda-calendario.js) para no repetir la fórmula una tercera vez.
+ *
+ * ACOTADA entre 1 y duracion_semanas A PROPÓSITO ("Semana N" del header/
+ * detalle debe seguir mostrando la última semana real incluso para fechas
+ * ya pasado el fin del semestre, nunca un número fuera de rango).
+ *
+ * Revisada 2026-08-29: antes esta función tenía su propia fórmula de
+ * "días desde fecha_inicio / 7" con `new Date(string)` directo — el mismo
+ * tipo de bug de zona horaria que ya se había resuelto en horario.js (ver
+ * comentario de calcularFechaDelDia ahí) y sin el anclaje-a-lunes que ese
+ * otro cálculo sí usa, así que para un fecha_inicio que no cae lunes podía
+ * dar una semana distinta a la que calcula Horario para la misma fecha.
+ * Ahora delega el cálculo crudo (sin acotar) en
+ * calcularNumeroSemanaSinAcotarParaFecha (horario/horario-modal.js, vía
+ * horario.js) y solo agrega el acotado que esta función sí necesita para
+ * mostrar en pantalla — una sola fórmula real en el proyecto, no dos.
  */
 function calcularNumeroSemanaParaFecha(semestre, fecha) {
-  const inicio = new Date(semestre.fecha_inicio);
-  const semanasTranscurridas = isNaN(inicio.getTime())
-    ? 0
-    : Math.floor((fecha.getTime() - inicio.getTime()) / (7 * 24 * 60 * 60 * 1000));
   const total = Number(semestre.duracion_semanas) || 16;
-  return Math.min(Math.max(semanasTranscurridas + 1, 1), total);
+  const numeroSemanaReal = calcularNumeroSemanaSinAcotarParaFecha(semestre, fecha);
+  if (numeroSemanaReal == null) return 1;
+  return Math.min(Math.max(numeroSemanaReal, 1), total);
 }
 
 /**
- * Ajustes vista Calendario — punto 1: `calcularNumeroSemanaParaFecha` hace
- * CLAMP del número de semana entre 1 y `duracion_semanas` A PROPÓSITO (lo
- * sigue necesitando "Semana N" en el header/detalle, que debe seguir
- * mostrando la última semana real incluso para fechas ya pasado el fin del
- * semestre). Por eso acá se recalcula el número de semana SIN clamp, nada
- * más para decidir si la fecha cae DESPUÉS del fin del semestre — pedido
- * puntual del spec ("no mostrar clases en fechas posteriores al fin del
- * semestre"), no dice nada de fechas antes del inicio, así que esas se
- * dejan con el comportamiento de siempre (clampeadas a semana 1).
+ * Ajustes vista Calendario — punto 1: `calcularNumeroSemanaParaFecha` (de
+ * arriba) acota el número de semana entre 1 y `duracion_semanas` A
+ * PROPÓSITO, así que no sirve para detectar "esta fecha ya pasó el fin del
+ * semestre" (una fecha bien pasado el final se ve igual que la última
+ * semana real). Por eso acá se usa la versión SIN acotar directamente —
+ * pedido puntual del spec ("no mostrar clases en fechas posteriores al fin
+ * del semestre"), no dice nada de fechas antes del inicio, así que esas se
+ * dejan con el comportamiento de siempre (clampeadas a semana 1 más
+ * arriba).
  */
 function fechaSuperaFinSemestre(semestre, fecha) {
-  const inicio = new Date(semestre.fecha_inicio);
-  if (isNaN(inicio.getTime())) return false;
   const total = Number(semestre.duracion_semanas) || 16;
-  const semanasTranscurridas = Math.floor((fecha.getTime() - inicio.getTime()) / (7 * 24 * 60 * 60 * 1000));
-  return semanasTranscurridas + 1 > total;
+  const numeroSemanaReal = calcularNumeroSemanaSinAcotarParaFecha(semestre, fecha);
+  return numeroSemanaReal != null && numeroSemanaReal > total;
 }
 
 /**
