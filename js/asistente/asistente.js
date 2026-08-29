@@ -71,7 +71,120 @@ const NOMBRES_DIA_SEMANA = ["domingo", "lunes", "martes", "miércoles", "jueves"
 // string suelto sin chequearlo contra esto.
 const MODALIDADES_VALIDAS_ASISTENTE = ["presencial", "virtual", "asincronica", "sin_clase"];
 
-const MENSAJE_FALLBACK = 'No entendí, ¿podés reformular? Por ejemplo: "tengo examen de anatomía el jueves a las 2pm".';
+/**
+ * Personalidad de Wapper (2026-08-29). Separada A PROPÓSITO del prompt de
+ * extracción (construirSystemInstruction/ESQUEMA_RESPUESTA_GEMINI, que
+ * sigue frío y preciso, sin tocar) — ver comentario de
+ * generarRespuestaConversacionalWapper más abajo para dónde se usa
+ * realmente este system prompt.
+ */
+const PROMPT_PERSONALIDAD_WAPPER = `Eres Wapper, un asistente académico simple, cálido y amable. Ayudas a organizar tareas, exámenes y eventos. Habla de forma clara y cercana, sin jerga ni modismos regionales de ningún país, sin exagerar el entusiasmo. Diríjete al usuario siempre de tú, nunca de vos ni de usted. Mantente siempre dentro de tu propósito académico, no te desvíes a otros temas, y no inventes información que no tienes.`;
+
+/** Punto 4 del brief de personalidad: saludo simple → respuesta fija, sin llamar a Gemini. */
+const MENSAJE_SALUDO_WAPPER = "¡Hola! ¿En qué te ayudo hoy?";
+
+/** Reemplaza al antiguo MENSAJE_FALLBACK (voseo) — ahora en tuteo, y solo se usa como
+ *  red de seguridad si generarRespuestaConversacionalWapper no devuelve nada. */
+const MENSAJE_FALLBACK_WAPPER =
+  'No logré identificar una tarea, examen o evento en tu mensaje. ¿Puedes darme más detalles? Por ejemplo: "tengo examen de anatomía el jueves a las 2pm".';
+
+/**
+ * Mensaje de bienvenida fijo (punto 2 del brief) — el texto en sí NO lleva
+ * personalidad extra más allá de lo pedido textual, para no reinterpretarlo.
+ */
+const MENSAJE_BIENVENIDA_WAPPER =
+  "¡Hola! Soy Wapper 👋, tu asistente académico personal. \nDime, ¿tienes alguna tarea, examen o evento que quieras agregar?";
+
+/**
+ * Las 12 plantillas de ejemplo del brief, tal cual, salvo "Agregale" →
+ * "Agrégale" (punto 5: tuteo en todo texto de interfaz — la plantilla tal
+ * como se pidió traía esa única forma en voseo). Cada `{materia}` se
+ * reemplaza en construirEjemplosBienvenida rotando entre las materias
+ * reales matriculadas (o los genéricos de respaldo si no hay ninguna) —
+ * cada OCURRENCIA cuenta como un turno de la rotación, no cada plantilla
+ * (la #11 tiene dos ocurrencias propias).
+ */
+const PLANTILLAS_EJEMPLOS_BIENVENIDA_WAPPER = [
+  "Tengo examen de {materia} el jueves a las 2pm",
+  "Recuérdame entregar el ensayo de {materia} el lunes",
+  "Mañana tengo proyecto de {materia}, no quiero que se me olvide",
+  "Quiz de {materia} en dos semanas",
+  "Reunión de grupo de {materia} el sábado a las 10am",
+  "Se me olvida siempre, ponme una tarea de {materia} para el viernes",
+  "El próximo martes hay entrega de proyecto final de {materia}",
+  "Cumpleaños de mi compañera de cuarto el 15",
+  "Examen final de {materia} la otra semana, todavía no sé el día exacto",
+  "Tengo que estudiar para el parcial de {materia} el 3 de setiembre",
+  "Agrégale que tengo tarea de {materia} para la próxima clase y examen de {materia} en semana 7",
+  "Ponle que para mañana hay quiz de {materia} a las 9am y 3 horas después tengo que ir a una reunión.",
+];
+
+/** Genéricos de respaldo (punto 2, "caso sin materias matriculadas"). */
+const MATERIAS_GENERICAS_RESPALDO = ["Anatomía", "Historia", "Química", "Cálculo", "Estadística", "Física"];
+
+/**
+ * Nombres a usar en los ejemplos de bienvenida: materias REALES
+ * matriculadas del usuario si tiene (mismo criterio/fuente que ya usa
+ * construirSystemInstruction para saber qué materias existen —
+ * obtenerMateriasVinculablesAgenda, agenda-utils.js — no se inventa una
+ * lectura nueva de semestres.js aparte), o si no tiene ninguna, los 6
+ * genéricos de respaldo. Nunca se mezclan a medias entre sí.
+ */
+function obtenerNombresMateriasParaEjemplosBienvenida() {
+  const nombresReales = obtenerMateriasVinculablesAgenda()
+    .map((m) => m.nombre)
+    .filter(Boolean);
+  return nombresReales.length > 0 ? nombresReales : MATERIAS_GENERICAS_RESPALDO;
+}
+
+/**
+ * Sustituye cada `{materia}` de las plantillas rotando entre los nombres
+ * disponibles (si hay menos nombres que huecos, se repiten en el mismo
+ * orden — nunca se deja un hueco sin nombre ni se completa con genéricos a
+ * medias, ver comentario de arriba).
+ */
+function construirEjemplosBienvenida() {
+  const nombres = obtenerNombresMateriasParaEjemplosBienvenida();
+  let indice = 0;
+  return PLANTILLAS_EJEMPLOS_BIENVENIDA_WAPPER.map((plantilla) =>
+    plantilla.replace(/\{materia\}/g, () => nombres[indice++ % nombres.length])
+  );
+}
+
+/**
+ * Punto 4 del brief: si el usuario SOLO saluda, no se intenta extraer nada
+ * (ni siquiera se llama a Gemini) — se normaliza el texto (sin acentos,
+ * sin puntuación, colapsando repeticiones de letra como "holaaa") y se
+ * compara contra un set cerrado de saludos completos. Un mensaje que
+ * ADEMÁS de saludar trae contenido real ("hola, tengo examen el jueves")
+ * NO matchea ninguno de estos patrones completos, así que sigue el camino
+ * normal de extracción.
+ */
+const PATRONES_SALUDO_SIMPLE = [
+  /^h+o+l+a+( wapper)?$/,
+  /^hey+$/,
+  /^hi$/,
+  /^hello$/,
+  /^buenas$/,
+  /^buenos dias$/,
+  /^buenas tardes$/,
+  /^buenas noches$/,
+  /^que tal$/,
+  /^como estas$/,
+  /^como andas$/,
+];
+
+function esSaludoSimple(textoOriginal) {
+  const normalizado = String(textoOriginal || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[¡!¿?.,;:]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalizado) return false;
+  return PATRONES_SALUDO_SIMPLE.some((patron) => patron.test(normalizado));
+}
 
 // En memoria, la conversación visible AHORA MISMO en el chat — se llena al
 // arrancar (blanco o restaurada desde el historial local) y se persiste a
@@ -286,7 +399,7 @@ function crearBotonVoz(input) {
         grabandoConFallback = true;
         grabandoVoz = true;
         btn.textContent = "🔴";
-        btn.title = "Grabando… tocá para detener";
+        btn.title = "Grabando… toca para detener";
 
         mediaRecorderVoz.ondataavailable = (e) => {
           if (e.data.size > 0) chunksAudioVoz.push(e.data);
@@ -306,7 +419,7 @@ function crearBotonVoz(input) {
             console.warn("[asistente] Error transcribiendo audio con Gemini:", e);
             mostrarToast(
               typeof navigator !== "undefined" && navigator.onLine === false
-                ? "No tenés conexión a internet."
+                ? "No tienes conexión a internet."
                 : "No se pudo transcribir el audio grabado."
             );
           } finally {
@@ -337,7 +450,7 @@ function crearBotonVoz(input) {
     reconocimientoVoz.onstart = () => {
       grabandoVoz = true;
       btn.textContent = "🔴";
-      btn.title = "Grabando… tocá para detener";
+      btn.title = "Grabando… toca para detener";
     };
     reconocimientoVoz.onresult = (e) => {
       huboResultadoEstaVez = true;
@@ -404,7 +517,7 @@ function crearBotonVoz(input) {
           grabandoVoz = false;
           btn.textContent = "🎙️";
           btn.title = "Dictar por voz";
-          mostrarToast("No se pudo mantener la escucha activa. Probá de nuevo.");
+          mostrarToast("No se pudo mantener la escucha activa. Prueba de nuevo.");
           return;
         }
       }
@@ -687,7 +800,7 @@ Si el usuario usa uno de estos apodos SIN aclarar de cuál habla (ej. no
 menciona nada más que lo distinga), NO adivines cuál es: devolvé "items":
 [] y preguntá en "aclaracion" cuál de las dos es, nombrando el nombre
 OFICIAL de cada una (ej. "Le pusiste 'Nata' tanto a Natación como a Vóley
-playa, ¿a cuál te referís?").`;
+playa, ¿a cuál te refieres?").`;
 }
 
 /**
@@ -834,7 +947,7 @@ Regla de "accion" (elegí una sola por mensaje):
     "viernes" pero esa materia no tiene clase los viernes), NO inventes:
     "cambioModalidad": null y explicá el problema en "aclaracion" (ej.
     "Anatomía no tiene clase los viernes según tu Horario — ¿los días que
-    sí tiene clase, cuál es el que querés cambiar?").
+    sí tiene clase, cuál es el que quieres cambiar?").
   - "modalidadNueva": SOLO uno de los 4 valores listados arriba, según lo
     que pida el usuario (virtual/presencial/asincrónica/sin clase o
     equivalentes como "no hay clase", "cancelada", "queda suspendida").
@@ -873,7 +986,7 @@ Reglas de "items" (solo aplican cuando accion es "crear_eventos"):
   "cálculo", sin forma de saber cuál con el resto del mensaje; o usa un
   apodo que está marcado como duplicado más arriba), NO adivines: devolvé
   "items": [] y explicá la duda en "aclaracion" con una pregunta corta y
-  directa (ej. "¿Te referís a Cálculo I o Cálculo II?").
+  directa (ej. "¿Te refieres a Cálculo I o Cálculo II?").
 - "hora": SOLO si el usuario mencionó una hora puntual explícita (ej. "a
   las 2pm", "a las 14:00"). Si no la mencionó, "hora" es null SIEMPRE —
   nunca trates de adivinar a qué hora es una clase, eso no es tu trabajo.
@@ -1093,6 +1206,51 @@ async function extraerEventosDeTexto(texto) {
   return ejecutarGeneracionGemini([{ role: "user", parts: [{ text: texto }] }]);
 }
 
+/**
+ * Punto 3 del brief de personalidad Wapper (2026-08-29): "un system prompt
+ * aparte para las respuestas conversacionales normales" — se usa SOLO
+ * cuando la extracción (llamarGemini, arriba) ya devolvió "items": [] y
+ * "aclaracion": null (charla suelta, sin tarea/examen/evento reconocible
+ * ni cambio de modalidad — ver rama de fallback en
+ * mostrarResultadoEventosEnChat). Llamada COMPLETAMENTE APARTE de la de
+ * extracción: mismo modelo/clave, pero con PROMPT_PERSONALIDAD_WAPPER como
+ * system_instruction en vez de construirSystemInstruction, y SIN
+ * responseSchema (texto libre, no JSON) — así la personalidad nunca se
+ * mezcla con el prompt frío que arma el JSON estructurado, tal como pide
+ * el punto 1 del brief.
+ *
+ * Devuelve el texto de Wapper, o `null` si algo falla (clave inválida, sin
+ * red, respuesta vacía/bloqueada, etc.) — el caller decide el mensaje de
+ * respaldo (MENSAJE_FALLBACK_WAPPER) en ese caso, nunca se propaga un
+ * error acá para no duplicar el manejo de errores que ya tiene
+ * ejecutarGeneracionGemini para la ruta principal.
+ */
+async function generarRespuestaConversacionalWapper(textoUsuario) {
+  const claveApi = estado.datos.configuracion.gemini_api_key;
+  if (!claveApi) return null;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODELO_GEMINI}:generateContent?key=${encodeURIComponent(claveApi)}`;
+  try {
+    const respuesta = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: PROMPT_PERSONALIDAD_WAPPER }] },
+        contents: [{ role: "user", parts: [{ text: textoUsuario }] }],
+        generationConfig: { temperature: 0.6 },
+      }),
+    });
+    if (!respuesta.ok) return null;
+    const datos = await respuesta.json();
+    const candidato = datos.candidates && datos.candidates[0];
+    const parte = candidato && candidato.content && candidato.content.parts && candidato.content.parts[0];
+    const texto = parte && parte.text && parte.text.trim();
+    return texto || null;
+  } catch (e) {
+    return null;
+  }
+}
+
 function mensajeParaError(e) {
   if (e.tipoError === "clave") return "Tu clave de Gemini parece inválida o vencida. Revisala en Ajustes > Asistente IA.";
   if (e.tipoError === "limite") return "Se alcanzó el límite de uso de Gemini por ahora. Esperá un momento y probá de nuevo.";
@@ -1127,11 +1285,11 @@ function resolverMateriaVinculada(nombreMateria) {
  * distinguir grupos/bloques, solo materia+día.
  */
 function resolverCambioModalidad(cambioModalidad) {
-  if (!cambioModalidad) return { ok: false, motivo: "No entendí bien qué cambio de modalidad querés hacer." };
+  if (!cambioModalidad) return { ok: false, motivo: "No entendí bien qué cambio de modalidad quieres hacer." };
 
   const materiaVinculada = resolverMateriaVinculada(cambioModalidad.materia);
   if (!materiaVinculada) {
-    return { ok: false, motivo: "No pude identificar de forma clara a qué materia te referís." };
+    return { ok: false, motivo: "No pude identificar de forma clara a qué materia te refieres." };
   }
 
   const idxDiaSemana = indiceDiaSemanaDesdeNombre(cambioModalidad.dia);
@@ -1336,6 +1494,38 @@ function crearBurbuja(rol, texto, esError = false) {
   `;
   div.textContent = texto;
   return div;
+}
+
+/**
+ * Chip tocable de un ejemplo de bienvenida (punto 2, personalidad Wapper)
+ * — al tocarlo, mete el texto en el input y lo envía directo (mismo
+ * camino que si el usuario lo hubiera escrito y tocado "Enviar"), para que
+ * sirva de verdad como acceso rápido y no solo de referencia visual.
+ */
+function crearChipEjemplo(texto) {
+  const chip = document.createElement("button");
+  chip.type = "button";
+  chip.className = "muted";
+  chip.style.cssText = `
+    text-align: left;
+    padding: 6px 11px;
+    border-radius: 999px;
+    border: 1px solid var(--border-glass, rgba(148,163,184,0.25));
+    background: var(--bg-panel, rgba(148,163,184,0.15));
+    font-size: 0.78rem;
+    line-height: 1.3;
+    cursor: pointer;
+    max-width: 100%;
+    overflow-wrap: break-word;
+  `;
+  chip.textContent = texto;
+  chip.onclick = () => {
+    const input = document.getElementById("input-asistente-mensaje");
+    if (!input) return;
+    input.value = texto;
+    manejarEnvioMensaje();
+  };
+  return chip;
 }
 
 function crearIndicadorEscribiendo() {
@@ -1556,13 +1746,25 @@ function agregarBurbujaAlDom(elemento) {
  * "editar_modalidad", solo que ahora lee/escribe `turno.eventosGuardados`
  * directo en vez de recibirlo/devolverlo como parámetro/retorno aparte.
  */
-function mostrarResultadoEventosEnChat(resultado, turno) {
+async function mostrarResultadoEventosEnChat(resultado, turno, textoUsuario) {
   if (resultado.items.length === 0 && resultado.aclaracion) {
     agregarBurbujaAlDom(crearBurbuja("modelo", resultado.aclaracion));
     return;
   }
   if (resultado.items.length === 0) {
-    agregarBurbujaAlDom(crearBurbuja("modelo", MENSAJE_FALLBACK));
+    // Charla suelta sin tarea/examen/evento reconocible (punto 3,
+    // personalidad Wapper): respuesta en su voz, generada aparte de la
+    // extracción (ver generarRespuestaConversacionalWapper). Se genera UNA
+    // sola vez por turno y se congela en `turno.respuestaConversacional`
+    // (mismo criterio que `eventosGuardados`/`cambioModalidadResuelto`) —
+    // si `textoUsuario` no viene (reconstrucción desde historial), nunca
+    // se vuelve a llamar a Gemini, se usa directo el respaldo estático.
+    if (typeof turno.respuestaConversacional !== "string") {
+      turno.respuestaConversacional = textoUsuario
+        ? (await generarRespuestaConversacionalWapper(textoUsuario)) || MENSAJE_FALLBACK_WAPPER
+        : MENSAJE_FALLBACK_WAPPER;
+    }
+    agregarBurbujaAlDom(crearBurbuja("modelo", turno.respuestaConversacional));
     return;
   }
 
@@ -1653,12 +1855,20 @@ function mostrarResultadoModalidadEnChat(resultado, turno) {
  * guardarHistorialLocal() los persista tal cual, sin un valor de retorno
  * aparte que el caller tenga que acordarse de pegar de vuelta.
  */
-function mostrarResultadoEnChat(resultado, turno) {
+async function mostrarResultadoEnChat(resultado, turno, textoUsuario) {
+  if (resultado.accion === "saludo") {
+    // Punto 4, personalidad Wapper: nunca llega acá vía Gemini (el schema
+    // solo admite "crear_eventos"/"editar_modalidad") — es un marcador
+    // puramente local para el saludo simple, ver esSaludoSimple/
+    // manejarEnvioMensaje.
+    agregarBurbujaAlDom(crearBurbuja("modelo", MENSAJE_SALUDO_WAPPER));
+    return;
+  }
   if (resultado.accion === "editar_modalidad") {
     mostrarResultadoModalidadEnChat(resultado, turno);
     return;
   }
-  mostrarResultadoEventosEnChat(resultado, turno);
+  await mostrarResultadoEventosEnChat(resultado, turno, textoUsuario);
 }
 
 /* ===================== Envío de mensajes ===================== */
@@ -1691,31 +1901,52 @@ async function manejarEnvioMensaje() {
 
   enviandoMensaje = true;
   actualizarEstadoEnvio();
-  const indicador = crearIndicadorEscribiendo();
-  agregarBurbujaAlDom(indicador);
 
   try {
-    const resultado = await llamarGemini(texto);
-    indicador.remove();
-    // El turno se pushea ANTES de renderizar (no después, como antes de
-    // "editar_modalidad") porque mostrarResultadoEnChat ahora muta este
-    // mismo objeto por referencia (eventosGuardados / cambioModalidadResuelto
-    // / estadoModalidad) — la tarjeta de modalidad necesita un turno real
-    // ya en conversacionActual para poder actualizarlo al tocar Aplicar/
-    // Cancelar y volver a guardar el historial en ese momento.
-    const turno = { rol: "modelo", texto: resultado.crudo, crudo: resultado.crudo };
-    conversacionActual.push(turno);
-    mostrarResultadoEnChat(resultado, turno);
-    guardarHistorialLocal();
-  } catch (e) {
-    indicador.remove();
-    // Un error de Gemini NO se guarda como intercambio real (ver
-    // guardarHistorialLocal: exige un turno de cada rol) — se saca el
-    // turno de usuario que quedó sin respuesta real, para que el próximo
-    // intento no le mande a Gemini una pregunta huérfana sin su
-    // respuesta como contexto.
-    conversacionActual.pop();
-    agregarBurbujaAlDom(crearBurbuja("modelo", mensajeParaError(e), true));
+    // Punto 4, personalidad Wapper: saludo simple → respuesta fija, SIN
+    // intentar extraer nada (ni siquiera se llama a Gemini). El turno se
+    // guarda igual que cualquier otro ("crudo" con un accion:"saludo"
+    // puramente local, ver esSaludoSimple) para que el historial y su
+    // reconstrucción lo traten parejo con el resto de turnos "modelo".
+    if (esSaludoSimple(texto)) {
+      const turno = { rol: "modelo", texto: MENSAJE_SALUDO_WAPPER, crudo: JSON.stringify({ accion: "saludo" }) };
+      conversacionActual.push(turno);
+      await mostrarResultadoEnChat({ accion: "saludo" }, turno, texto);
+      guardarHistorialLocal();
+      return;
+    }
+
+    const indicador = crearIndicadorEscribiendo();
+    agregarBurbujaAlDom(indicador);
+
+    try {
+      const resultado = await llamarGemini(texto);
+      indicador.remove();
+      // El turno se pushea ANTES de renderizar (no después, como antes de
+      // "editar_modalidad") porque mostrarResultadoEnChat ahora muta este
+      // mismo objeto por referencia (eventosGuardados / cambioModalidadResuelto
+      // / estadoModalidad / respuestaConversacional) — la tarjeta de
+      // modalidad necesita un turno real ya en conversacionActual para
+      // poder actualizarlo al tocar Aplicar/Cancelar y volver a guardar el
+      // historial en ese momento.
+      const turno = { rol: "modelo", texto: resultado.crudo, crudo: resultado.crudo };
+      conversacionActual.push(turno);
+      // Se pasa `texto` (el mensaje original del usuario) para que, si
+      // resultado.items viene vacío sin aclaración, la rama conversacional
+      // de Wapper tenga con qué generar la respuesta (ver
+      // generarRespuestaConversacionalWapper).
+      await mostrarResultadoEnChat(resultado, turno, texto);
+      guardarHistorialLocal();
+    } catch (e) {
+      indicador.remove();
+      // Un error de Gemini NO se guarda como intercambio real (ver
+      // guardarHistorialLocal: exige un turno de cada rol) — se saca el
+      // turno de usuario que quedó sin respuesta real, para que el próximo
+      // intento no le mande a Gemini una pregunta huérfana sin su
+      // respuesta como contexto.
+      conversacionActual.pop();
+      agregarBurbujaAlDom(crearBurbuja("modelo", mensajeParaError(e), true));
+    }
   } finally {
     enviandoMensaje = false;
     actualizarEstadoEnvio();
@@ -1937,13 +2168,20 @@ function instalarObservadorVisibilidadAsistente(tarjeta) {
   observadorVisibilidadAsistente.observe(tarjeta);
 }
 
+/**
+ * Punto 2 del brief de personalidad Wapper (2026-08-29): texto fijo +
+ * ejemplos tocables debajo, con materias REALES del usuario (o genéricos
+ * de respaldo si todavía no matriculó ninguna) — ver
+ * construirEjemplosBienvenida/crearChipEjemplo arriba.
+ */
 function mostrarSaludoInicial() {
-  agregarBurbujaAlDom(
-    crearBurbuja(
-      "modelo",
-      'Contame qué tarea, examen o evento querés agregar y lo guardo directo en tu Agenda. Por ejemplo: "tengo examen de anatomía el jueves a las 2pm".'
-    )
-  );
+  agregarBurbujaAlDom(crearBurbuja("modelo", MENSAJE_BIENVENIDA_WAPPER));
+
+  const contenedorEjemplos = document.createElement("div");
+  contenedorEjemplos.className = "stack";
+  contenedorEjemplos.style.cssText = "align-self: flex-start; max-width: 88%; gap: 6px; margin-top: 2px;";
+  construirEjemplosBienvenida().forEach((texto) => contenedorEjemplos.appendChild(crearChipEjemplo(texto)));
+  agregarBurbujaAlDom(contenedorEjemplos);
 }
 
 /**
@@ -1962,9 +2200,16 @@ function reconstruirChatDesdeHistorial(historial) {
       // Mismo shape que arma ejecutarGeneracionGemini en vivo — un turno de
       // un historial guardado ANTES de "editar_modalidad" no tiene `accion`
       // en el crudo (undefined) y cae a "crear_eventos" por defecto, igual
-      // que en vivo.
+      // que en vivo. "saludo" (personalidad Wapper, 2026-08-29) es un
+      // marcador puramente local que nunca devuelve Gemini — solo aparece
+      // acá si el turno se generó vía el atajo de esSaludoSimple.
       const resultado = {
-        accion: parseado.accion === "editar_modalidad" ? "editar_modalidad" : "crear_eventos",
+        accion:
+          parseado.accion === "editar_modalidad"
+            ? "editar_modalidad"
+            : parseado.accion === "saludo"
+            ? "saludo"
+            : "crear_eventos",
         items: Array.isArray(parseado.items) ? parseado.items : [],
         cambioModalidad: parseado.cambioModalidad || null,
         aclaracion: parseado.aclaracion || null,
