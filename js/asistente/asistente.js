@@ -1157,17 +1157,41 @@ Regla de "accion" (elegí una sola por mensaje):
     para saber que existe, pero NO calcules fechas vos, eso lo hace el
     sistema con el número). Si no menciona ninguna semana puntual (ej.
     "esta semana", "esta nueva semana", o no dice nada), "semana" es null
-    (el sistema asume la semana actual).
+    (el sistema asume la semana actual) — EXCEPTO si aplica "alcance":
+    "todo" (ver abajo), en cuyo caso "semana" se ignora igual.
+  - "alcance" (solo aplica a "tareas_eventos", 2026-08-31): "todo" SOLO si
+    el usuario pide EXPLÍCITAMENTE que no se limite a ninguna semana (ej.
+    "todos mis exámenes", "todo lo que tengo pendiente", "todo el
+    semestre", "todos los futuros exámenes", "cualquier tarea sin importar
+    la semana", o insiste después de una respuesta limitada a una semana
+    con algo como "no, TODO"/"de todo el semestre"). En ese caso "semana"
+    se ignora (el sistema no aplica ningún filtro de fecha, trae TODO lo
+    guardado que matchee materia/tipoItem). Si no lo pide explícitamente,
+    "alcance" es null (comportamiento normal, limitado a una semana).
   - "materia" (opcional en "tareas_eventos"/"buscar_evento", para filtrar
     por una materia puntual si el usuario lo pide; SIEMPRE requerido en
-    "modalidad_clase"): mismo criterio de nombre oficial exacto / apodo que
-    en "items" (incluye nombrar solo PARTE del nombre oficial, ej. "el
-    parcial de derecho" con "Derecho Informático Y Mercantil" en la lista →
-    "materia": "Derecho Informático Y Mercantil" — se aplica el mismo
-    criterio de "coincide claramente con una sola" aunque la pregunta sea
-    "¿cuánto falta...?" en vez de "tengo...") — si no matchea claro con una
-    sola materia, NO adivines: "consulta": null, "items": [], y preguntá en
-    "aclaracion" cuál es.
+    "modalidad_clase"): el nombre OFICIAL exacto de la lista de arriba —
+    pero puede llegar por varios caminos, todos válidos mientras resuelva
+    a UNA SOLA materia sin ambigüedad:
+    * nombre oficial completo o apodo (como siempre);
+    * nombrar solo PARTE del nombre oficial (ej. "el parcial de derecho"
+      con "Derecho Informático Y Mercantil" en la lista → "materia":
+      "Derecho Informático Y Mercantil");
+    * una palabra truncada/abreviada obvia de una palabra del nombre
+      oficial (ej. "admin de proyectos" → "administración" truncado a
+      "admin" — si SOLO una materia de la lista empieza con "Admin...",
+      es "Administración de Proyectos 2", no hace falta el nombre
+      completo);
+    * las INICIALES mostradas entre paréntesis junto a cada materia (ej.
+      "AP2" o simplemente "ap" → la materia que muestre "(iniciales: AP2)"
+      en la lista de arriba) — estas iniciales las calcula el sistema, no
+      son un apodo que el usuario haya puesto, así que reconocelas igual.
+    Estos tres caminos son igual de válidos que un nombre completo — NO
+    son "adivinar", son lectura normal de una abreviatura obvia. Lo que
+    SIGUE prohibido es elegir entre dos o más materias que podrían encajar
+    igual de bien (ahí sí es ambigüedad real): si no matchea claro con una
+    sola materia por NINGUNO de estos caminos, NO adivines: "consulta":
+    null, "items": [], y preguntá en "aclaracion" cuál es.
   - "dia" (solo aplica a "modalidad_clase"): SOLO si el usuario nombra un
     día puntual (ej. "los jueves de bd"). Si pregunta por "la próxima
     clase" sin nombrar día, "dia" es null (el sistema busca la próxima
@@ -1183,10 +1207,22 @@ Regla de "accion" (elegí una sola por mensaje):
     I" → 1, "el parcial II" → 2, "examen III" → 3). Convertí a número tanto
     los ordinales en palabras como los números romanos. null si no
     menciona ninguno.
-  - "palabrasClave" (solo aplica a "buscar_evento"): las palabras del
-    título del ítem que busca, SIN el número/ordinal (eso va aparte en
-    "numeroOrdinal") ni el nombre de la materia (eso va en "materia") —
-    ej. para "el tercer parcial de cálculo", "palabrasClave" es "parcial".
+  - "proximo" (solo aplica a "buscar_evento", 2026-08-31): true SOLO si el
+    usuario pregunta por "el PRÓXIMO"/"el SIGUIENTE" ítem de una materia (y
+    opcionalmente un tipo) SIN nombrar un título puntual ni un número/
+    ordinal — ej. "cuándo es el próximo examen de AP2", "cuánto falta para
+    el siguiente parcial de física", "cuál es mi próxima tarea de bd". En
+    ese caso "numeroOrdinal" y "palabrasClave" van en null (el sistema
+    busca el ítem más cercano en el futuro que matchee materia/tipoItem,
+    no hace falta más pista). Si el usuario SÍ da un título/ordinal
+    puntual (ej. "el tercer parcial", "el laboratorio 4"), "proximo" es
+    null/false — ese caso sigue siendo "numeroOrdinal"/"palabrasClave"
+    como siempre, NO "proximo".
+  - "palabrasClave" (solo aplica a "buscar_evento", y solo cuando "proximo"
+    NO es true): las palabras del título del ítem que busca, SIN el
+    número/ordinal (eso va aparte en "numeroOrdinal") ni el nombre de la
+    materia (eso va en "materia") — ej. para "el tercer parcial de
+    cálculo", "palabrasClave" es "parcial".
 - "editar_modalidad": el usuario pide CAMBIAR la modalidad de una clase que
   YA existe en su Horario (ej. "cambiá mi clase de anatomía del jueves a
   virtual", "la clase de cálculo ahora es presencial", "poné asincrónica la
@@ -1234,20 +1270,27 @@ Reglas de "items" (solo aplican cuando accion es "crear_eventos"):
 - "nombre": SOLO el título de la tarea/examen/evento en sí (ej. "Prueba
   1", "Proyecto final", "Entrega de laboratorio"). NUNCA metas el nombre
   de la materia acá — eso va aparte, en "materia".
-- "materia": si el mensaje nombra una materia —por su nombre OFICIAL o por
+- "materia": si el mensaje nombra una materia —por su nombre OFICIAL, por
   su APODO (el que el usuario le puso en Horario, mostrado entre
-  paréntesis en la lista de arriba)— que coincide claramente con una de la
-  lista, usá SIEMPRE el nombre OFICIAL exacto de la lista en "materia",
-  NUNCA el apodo (ej. si dice "tarea de natación" y en la lista está
-  "Educación Física II (apodo: Natación)", "materia" es "Educación Física
-  II", no "Natación"). Si no se menciona materia o no hay forma de saber
-  cuál, "materia" es null.
+  paréntesis en la lista de arriba), por sus INICIALES calculadas por el
+  sistema (también entre paréntesis en la lista, ej. "AP2" para
+  "Administración de Proyectos 2" — no son un apodo, las calcula el
+  sistema, pero se reconocen igual), o por una palabra truncada/abreviada
+  obvia de una palabra del nombre oficial (ej. "admin de proyectos" →
+  "admin" truncado de "Administración")— que coincide claramente con UNA
+  SOLA de la lista, usá SIEMPRE el nombre OFICIAL exacto de la lista en
+  "materia", nunca el apodo/iniciales/abreviatura (ej. si dice "tarea de
+  natación" y en la lista está "Educación Física II (apodo: Natación)",
+  "materia" es "Educación Física II", no "Natación"). Estos caminos son
+  igual de válidos que un nombre completo — no son "adivinar", son lectura
+  normal de una abreviatura obvia. Si no se menciona materia o no hay
+  forma de saber cuál, "materia" es null.
 - Si el mensaje es realmente ambiguo entre 2 o más materias de la lista
   (ej. existen "Cálculo I" y "Cálculo II" y el usuario solo dijo
   "cálculo", sin forma de saber cuál con el resto del mensaje; o usa un
-  apodo que está marcado como duplicado más arriba), NO adivines: devolvé
-  "items": [] y explicá la duda en "aclaracion" con una pregunta corta y
-  directa (ej. "¿Te refieres a Cálculo I o Cálculo II?").
+  apodo/inicial/abreviatura que podría ser de más de una), NO adivines:
+  devolvé "items": [] y explicá la duda en "aclaracion" con una pregunta
+  corta y directa (ej. "¿Te refieres a Cálculo I o Cálculo II?").
 - "hora": SOLO si el usuario mencionó una hora puntual explícita (ej. "a
   las 2pm", "a las 14:00"). Si no la mencionó, "hora" es null SIEMPRE —
   nunca trates de adivinar a qué hora es una clase, eso no es tu trabajo.
@@ -1334,6 +1377,15 @@ const ESQUEMA_RESPUESTA_GEMINI = {
         tipoItem: { type: "STRING", enum: ["examen", "tarea", "evento"], nullable: true },
         numeroOrdinal: { type: "NUMBER", nullable: true },
         palabrasClave: { type: "STRING", nullable: true },
+        // "alcance" (2026-08-31, bug real: "todos los exámenes"/"todo el
+        // semestre" seguía devolviendo solo la semana actual porque no
+        // había forma de pedir "sin límite de fecha") — solo aplica a
+        // "tareas_eventos", ver instrucciones abajo.
+        alcance: { type: "STRING", enum: ["todo"], nullable: true },
+        // "proximo" (2026-08-31, bug real: "cuánto falta para el próximo
+        // examen de AP" no tenía forma de pedirse sin nombrar un
+        // título/ordinal puntual) — solo aplica a "buscar_evento".
+        proximo: { type: "BOOLEAN", nullable: true },
       },
       required: ["tipo"],
     },
