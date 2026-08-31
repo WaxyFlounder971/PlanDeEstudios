@@ -1367,38 +1367,58 @@ async function ejecutarGeneracionGemini(contents) {
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODELO_GEMINI}:generateContent?key=${encodeURIComponent(claveApi)}`;
 
+  // Bug real reportado (2026-08-31): "modalidad de la próxima clase de
+  // inglés"/"¿tengo que ir presencial?" cayeron en "Algo salió mal de mi
+  // lado" — la consola mostraba 503 de generativelanguage.googleapis.com
+  // (servidor de Gemini saturado momentáneamente, no un error de la app).
+  // Un 503/UNAVAILABLE es por definición transitorio, así que antes de
+  // rendirse con tipoError "desconocido" se reintenta un par de veces con
+  // una pausa corta — un error real (clave inválida, límite, etc.) nunca
+  // entra acá porque esos códigos no cuentan como transitorios.
+  const MAX_REINTENTOS_GEMINI_TRANSITORIO = 2;
+  const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
   let respuesta;
-  try {
-    respuesta = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: construirSystemInstruction() }] },
-        contents,
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: ESQUEMA_RESPUESTA_GEMINI,
-          temperature: 0.2,
-        },
-      }),
-    });
-  } catch (e) {
-    const err = new Error("No se pudo conectar con Gemini.");
-    err.tipoError = "red";
-    throw err;
-  }
-
   let datos;
-  try {
-    datos = await respuesta.json();
-  } catch (e) {
-    const err = new Error("Gemini devolvió una respuesta inválida.");
-    err.tipoError = "desconocido";
-    throw err;
-  }
+  for (let intento = 0; ; intento++) {
+    try {
+      respuesta = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: construirSystemInstruction() }] },
+          contents,
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: ESQUEMA_RESPUESTA_GEMINI,
+            temperature: 0.2,
+          },
+        }),
+      });
+    } catch (e) {
+      const err = new Error("No se pudo conectar con Gemini.");
+      err.tipoError = "red";
+      throw err;
+    }
 
-  if (!respuesta.ok) {
+    try {
+      datos = await respuesta.json();
+    } catch (e) {
+      const err = new Error("Gemini devolvió una respuesta inválida.");
+      err.tipoError = "desconocido";
+      throw err;
+    }
+
+    if (respuesta.ok) break;
+
     const codigo = datos && datos.error && datos.error.code;
+    const estadoError = datos && datos.error && datos.error.status;
+    const esTransitorio = codigo === 503 || codigo === 500 || estadoError === "UNAVAILABLE";
+    if (esTransitorio && intento < MAX_REINTENTOS_GEMINI_TRANSITORIO) {
+      await esperar(700 * (intento + 1)); // 700ms, luego 1400ms
+      continue;
+    }
+
     const err = new Error((datos && datos.error && datos.error.message) || "Error de Gemini");
     err.tipoError = codigo === 400 || codigo === 401 || codigo === 403 ? "clave" : codigo === 429 ? "limite" : "desconocido";
     throw err;
@@ -1538,7 +1558,20 @@ function mensajeParaError(e) {
  */
 function resolverMateriaVinculada(nombreMateria) {
   if (!nombreMateria) return null;
-  return obtenerMateriasVinculablesAgenda().find((m) => m.nombre === nombreMateria) || null;
+  const materias = obtenerMateriasVinculablesAgenda();
+  const exacta = materias.find((m) => m.nombre === nombreMateria);
+  if (exacta) return exacta;
+  // Red de seguridad (2026-08-31): Gemini debe devolver el nombre oficial
+  // EXACTO de la lista que se le pasó, pero un espacio de más, una
+  // mayúscula distinta o un acento que se comió por el camino no debería
+  // tirar "no pude identificar la materia" si en realidad es clarísimo cuál
+  // es — match normalizado (sin acentos, minúsculas, espacios colapsados)
+  // SOLO si resuelve a una única materia sin ambigüedad.
+  const normalizada = normalizarTexto(nombreMateria).replace(/\s+/g, " ").trim();
+  const candidatas = materias.filter(
+    (m) => normalizarTexto(m.nombre).replace(/\s+/g, " ").trim() === normalizada
+  );
+  return candidatas.length === 1 ? candidatas[0] : null;
 }
 
 /**
