@@ -275,6 +275,80 @@ function esSaludoSimple(textoOriginal) {
   return PATRONES_SALUDO_SIMPLE.some((patron) => patron.test(normalizado));
 }
 
+/**
+ * Punto 7 del brief (2026-08-31): capacidades reales de Wapper, como
+ * estructura mantenible (no texto fijo enterrado en el prompt) — para sumar
+ * una capacidad nueva en el futuro (ej. Tiempo de Estudio) alcanza con
+ * agregar una entrada acá, sin reescribir construirMensajeCapacidadesWapper
+ * ni el mensaje entero. Cada entrada es una capacidad YA implementada (no
+ * aspiracional), con un ejemplo concreto y real de uso.
+ */
+const CAPACIDADES_WAPPER = [
+  {
+    descripcion: "Crear tareas, exámenes y eventos",
+    ejemplo: "tengo examen de anatomía el jueves",
+  },
+  {
+    descripcion: "Cambiar la modalidad de una clase en tu Cronograma",
+    ejemplo: "la clase de física del martes va virtual",
+  },
+  {
+    descripcion: "Consultar qué tareas o exámenes tienes en una semana puntual",
+    ejemplo: "qué exámenes tengo esta semana",
+  },
+  {
+    descripcion: "Buscar un examen o tarea puntual y cuánto falta para esa fecha",
+    ejemplo: "cuándo es el segundo parcial de cálculo",
+  },
+  {
+    descripcion: "Consultar si una clase próxima es virtual o presencial",
+    ejemplo: "mi próxima clase de bases de datos es virtual o presencial",
+  },
+  {
+    descripcion: "Cambiar cómo me dirijo a ti",
+    ejemplo: "llámame Fer",
+  },
+];
+
+/** Arma el texto de "Puedo ayudarte con: ..." a partir de CAPACIDADES_WAPPER. */
+function construirMensajeCapacidadesWapper() {
+  const items = CAPACIDADES_WAPPER.map((c) => `* ${c.descripcion}. Ejemplo: "${c.ejemplo}"`).join("\n");
+  return `Puedo ayudarte con:\n\n${items}`;
+}
+
+/**
+ * Detecta una pregunta por las capacidades del asistente ("¿qué podés
+ * hacer?", "¿para qué servís?", "ayuda", etc.) — mismo criterio que
+ * esSaludoSimple: SOLO matchea si el mensaje es (casi) exclusivamente eso,
+ * para no interceptar un mensaje real que de paso mencione "ayuda" (ej.
+ * "ayúdame a poner un examen el jueves" sigue el camino normal de
+ * extracción). Se acepta tanto voseo como tuteo en la ENTRADA del usuario
+ * (el texto de salida de Wapper sigue siendo siempre tuteo, sin cambios).
+ */
+const PATRONES_PREGUNTA_CAPACIDADES = [
+  /^que (podes|puedes) hacer( wapper)?$/,
+  /^que sabes hacer$/,
+  /^para que (servis|sirves)$/,
+  /^en que (me )?(podes|puedes) ayudar$/,
+  /^ayuda$/,
+  /^help$/,
+  /^que haces$/,
+  /^cuales son tus (funciones|capacidades)$/,
+  /^que funciones tenes$/,
+];
+
+function esPreguntaCapacidades(textoOriginal) {
+  const normalizado = String(textoOriginal || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[¡!¿?.,;:]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalizado) return false;
+  return PATRONES_PREGUNTA_CAPACIDADES.some((patron) => patron.test(normalizado));
+}
+
 // En memoria, la conversación visible AHORA MISMO en el chat — se llena al
 // arrancar (blanco o restaurada desde el historial local) y se persiste a
 // localStorage después de cada intercambio real completo.
@@ -2515,6 +2589,14 @@ async function mostrarResultadoEnChat(resultado, turno, textoUsuario) {
     agregarBurbujaAlDom(crearBurbuja("modelo", construirMensajeSaludoWapper()));
     return;
   }
+  if (resultado.accion === "capacidades") {
+    // Punto 7 del brief: mismo mecanismo que "saludo" — marcador puramente
+    // local (nunca lo devuelve Gemini), ver esPreguntaCapacidades/
+    // manejarEnvioMensaje. Texto armado en vivo desde CAPACIDADES_WAPPER,
+    // así que ya incluye cualquier capacidad agregada después.
+    agregarBurbujaAlDom(crearBurbuja("modelo", construirMensajeCapacidadesWapper()));
+    return;
+  }
   if (resultado.accion === "editar_modalidad") {
     mostrarResultadoModalidadEnChat(resultado, turno);
     return;
@@ -2571,6 +2653,20 @@ async function manejarEnvioMensaje() {
       const turno = { rol: "modelo", texto: construirMensajeSaludoWapper(), crudo: JSON.stringify({ accion: "saludo" }) };
       conversacionActual.push(turno);
       await mostrarResultadoEnChat({ accion: "saludo" }, turno, texto);
+      guardarHistorialLocal();
+      return;
+    }
+
+    // Punto 7 del brief: "¿qué podés hacer?"/"ayuda"/etc. → lista de
+    // capacidades, SIN llamar a Gemini (mismo atajo que esSaludoSimple).
+    if (esPreguntaCapacidades(texto)) {
+      const turno = {
+        rol: "modelo",
+        texto: construirMensajeCapacidadesWapper(),
+        crudo: JSON.stringify({ accion: "capacidades" }),
+      };
+      conversacionActual.push(turno);
+      await mostrarResultadoEnChat({ accion: "capacidades" }, turno, texto);
       guardarHistorialLocal();
       return;
     }
@@ -2836,6 +2932,10 @@ function instalarObservadorVisibilidadAsistente(tarjeta) {
 function mostrarSaludoInicial() {
   agregarBurbujaAlDom(crearBurbuja("modelo", construirMensajeBienvenidaWapper()));
   agregarBurbujaAlDom(crearBurbuja("modelo", `Ejemplo: ${elegirEjemploBienvenidaAlAzar()}`));
+  // Punto 8 del brief (2026-08-31): agregado, no reemplazo, del ejemplo de
+  // arriba — invita a descubrir el resto de capacidades (punto 7) sin tener
+  // que adivinar. En tuteo, como el resto de la interfaz de Wapper.
+  agregarBurbujaAlDom(crearBurbuja("modelo", "¿No sabes por dónde empezar? Pregúntame qué puedo hacer."));
 }
 
 /**
@@ -2868,6 +2968,8 @@ function reconstruirChatDesdeHistorial(historial) {
             ? "actualizar_nombre"
             : parseado.accion === "saludo"
             ? "saludo"
+            : parseado.accion === "capacidades"
+            ? "capacidades"
             : "crear_eventos",
         items: Array.isArray(parseado.items) ? parseado.items : [],
         cambioModalidad: parseado.cambioModalidad || null,
