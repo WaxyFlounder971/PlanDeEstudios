@@ -283,14 +283,21 @@ function esSaludoSimple(textoOriginal) {
  * ni el mensaje entero. Cada entrada es una capacidad YA implementada (no
  * aspiracional), con un ejemplo concreto y real de uso.
  */
+/**
+ * Apodos de ejemplo para la capacidad "actualizar_nombre" — al menos 20,
+ * pedido explícito, para que el ejemplo salga distinto cada vez que se
+ * muestra la lista de capacidades en vez de repetir siempre "Fer".
+ */
+const APODOS_EJEMPLO_CAPACIDADES = [
+  "Fer", "Pipo", "Juanjo", "Male", "Vale", "Santi", "Naty", "Pao", "Andy",
+  "Nacho", "Kike", "Meli", "Fabi", "Caro", "Tavo", "Rodri", "Gaby", "Chepe",
+  "Mafe", "Toño", "Vicky", "Lalo",
+];
+
 const CAPACIDADES_WAPPER = [
   {
     descripcion: "Crear tareas, exámenes y eventos",
     ejemplo: "tengo examen de anatomía el jueves",
-  },
-  {
-    descripcion: "Cambiar la modalidad de una clase en tu Cronograma",
-    ejemplo: "la clase de física del martes va virtual",
   },
   {
     descripcion: "Consultar qué tareas o exámenes tienes en una semana puntual",
@@ -305,14 +312,31 @@ const CAPACIDADES_WAPPER = [
     ejemplo: "mi próxima clase de bases de datos es virtual o presencial",
   },
   {
+    descripcion: "Cambiar la modalidad de una clase en tu Cronograma",
+    ejemplo: "la clase de física del martes va virtual",
+  },
+  {
     descripcion: "Cambiar cómo me dirijo a ti",
-    ejemplo: "llámame Fer",
+    // "ejemplo" es una FUNCIÓN acá en vez de un string fijo — se resuelve al
+    // vuelo (ver construirMensajeCapacidadesWapper) para que cada vez que
+    // se muestre la lista salga un apodo al azar de APODOS_EJEMPLO_CAPACIDADES,
+    // en vez de repetir siempre el mismo.
+    ejemplo: () => `llámame ${APODOS_EJEMPLO_CAPACIDADES[Math.floor(Math.random() * APODOS_EJEMPLO_CAPACIDADES.length)]}`,
   },
 ];
 
-/** Arma el texto de "Puedo ayudarte con: ..." a partir de CAPACIDADES_WAPPER. */
+/**
+ * Arma el texto de "Puedo ayudarte con: ..." a partir de CAPACIDADES_WAPPER
+ * — viñeta "•", con el ejemplo en su propia línea debajo de la descripción
+ * (ajuste 2026-08-31, pedido explícito de formato). `c.ejemplo` puede ser
+ * un string fijo o una función (ver "Cambiar cómo me dirijo a ti" arriba)
+ * que se resuelve en cada llamada, nunca cacheada.
+ */
 function construirMensajeCapacidadesWapper() {
-  const items = CAPACIDADES_WAPPER.map((c) => `* ${c.descripcion}. Ejemplo: "${c.ejemplo}"`).join("\n");
+  const items = CAPACIDADES_WAPPER.map((c) => {
+    const ejemplo = typeof c.ejemplo === "function" ? c.ejemplo() : c.ejemplo;
+    return `• ${c.descripcion}.\nEjemplo: "${ejemplo}"`;
+  }).join("\n\n");
   return `Puedo ayudarte con:\n\n${items}`;
 }
 
