@@ -289,9 +289,9 @@ function esSaludoSimple(textoOriginal) {
  * muestra la lista de capacidades en vez de repetir siempre "Fer".
  */
 const APODOS_EJEMPLO_CAPACIDADES = [
-  "Fer", "Pipo", "Juanjo", "Male", "Vale", "Santi", "Naty", "Pao", "Andy",
+  "Fer", "Pipo", "Juanjo", "Male", "Santi", "Naty", "Pao", "Andy",
   "Nacho", "Kike", "Meli", "Fabi", "Caro", "Tavo", "Rodri", "Gaby", "Chepe",
-  "Mafe", "Toño", "Vicky", "Lalo",
+  "Mafe", "Toño", "Vicky", "Lalo", "Beto",
 ];
 
 const CAPACIDADES_WAPPER = [
@@ -1825,15 +1825,33 @@ function fraseDemostrativaTipoItem(tipoItem, cantidad) {
  * solo texto aparte.
  */
 function resolverConsultaTareasEventos(consulta) {
-  const rango = resolverRangoConsulta(consulta.semana || null);
-  if (!rango) {
-    return { ok: false, motivo: "No tienes un semestre activo seleccionado para calcular esa semana." };
-  }
   const materiaVinculada = consulta.materia ? resolverMateriaVinculada(consulta.materia) : null;
   if (consulta.materia && !materiaVinculada) {
     return { ok: false, motivo: "No pude identificar de forma clara a qué materia te refieres." };
   }
   const tipoItem = ["examen", "tarea", "evento"].includes(consulta.tipoItem) ? consulta.tipoItem : null;
+
+  // "alcance": "todo" (2026-08-31, bug real: "todos los exámenes"/"todo el
+  // semestre" seguía devolviendo solo la semana actual porque este resolver
+  // nunca leía el campo — quedó agregado al schema/prompt en la ronda
+  // anterior pero no conectado acá). Cuando aplica, se ignora
+  // resolverRangoConsulta por completo (nunca se llama: no hay "semana" que
+  // resolver) y se trae TODO estado.datos.agenda sin filtro de fecha, tal
+  // cual pide el usuario con "TODO" — incluye pasado y futuro a propósito,
+  // el filtro de materia/tipo sigue aplicando igual.
+  if (consulta.alcance === "todo") {
+    const eventos = (estado.datos.agenda || [])
+      .filter((ev) => !materiaVinculada || ev.materiaMatriculadaId === materiaVinculada.mmId)
+      .filter((ev) => !tipoItem || ev.tipo === tipoItem)
+      .sort((a, b) => `${a.fecha} ${a.hora || ""}`.localeCompare(`${b.fecha} ${b.hora || ""}`));
+    const rango = { inicio: null, fin: null, numeroSemana: null, etiqueta: "todo el semestre" };
+    return { ok: true, rango, materiaVinculada, tipoItem, eventos };
+  }
+
+  const rango = resolverRangoConsulta(consulta.semana || null);
+  if (!rango) {
+    return { ok: false, motivo: "No tienes un semestre activo seleccionado para calcular esa semana." };
+  }
 
   const inicioIso = fechaISODesdeLocal(rango.inicio);
   const finIso = fechaISODesdeLocal(rango.fin);
@@ -1941,6 +1959,21 @@ function resolverBusquedaEvento(consulta) {
   }
 
   eventos = eventos.slice().sort((a, b) => `${a.fecha} ${a.hora || ""}`.localeCompare(`${b.fecha} ${b.hora || ""}`));
+
+  // "proximo" (2026-08-31, bug real: "cuánto falta para el próximo examen de
+  // AP2" devolvía TODOS los exámenes de AP2 — pasados incluidos — porque
+  // este resolver nunca leía el campo, aunque ya estaba en el schema/prompt
+  // desde la ronda anterior. Acotar a partir de HOY (fecha de hoy incluida:
+  // un examen de hoy sigue siendo "el próximo") y quedarse con el más
+  // cercano — mismo criterio anti-alucinación de siempre: JS decide cuál es
+  // "el próximo" comparando fechas reales, Gemini nunca lo calcula, solo
+  // marca la intención.
+  if (consulta.proximo) {
+    const hoyIso = obtenerContextoFechaHoy().iso;
+    eventos = eventos.filter((ev) => ev.fecha >= hoyIso);
+    if (eventos.length > 0) eventos = eventos.slice(0, 1);
+  }
+
   return { ok: true, materiaVinculada, eventos };
 }
 
@@ -2602,7 +2635,12 @@ function mostrarResultadoConsultaEnChat(resultado, turno) {
       turno.consultaEsBusqueda = esBusqueda;
       if (!esBusqueda) {
         turno.consultaTipoItem = resuelto.tipoItem || null;
-        turno.consultaRangoTexto = `${resuelto.rango.etiqueta} (${formatearRangoConsulta(resuelto.rango.inicio, resuelto.rango.fin)})`;
+        // "alcance: todo" no tiene rango de fechas real (ver
+        // resolverConsultaTareasEventos) — no hay "X - Y" que mostrar, solo
+        // la etiqueta "todo el semestre" sola.
+        turno.consultaRangoTexto = resuelto.rango.inicio
+          ? `${resuelto.rango.etiqueta} (${formatearRangoConsulta(resuelto.rango.inicio, resuelto.rango.fin)})`
+          : resuelto.rango.etiqueta;
       }
     }
   }
