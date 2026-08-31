@@ -91,8 +91,83 @@ const MODALIDADES_VALIDAS_ASISTENTE = ["presencial", "virtual", "asincronica", "
  */
 const PROMPT_PERSONALIDAD_WAPPER = `Eres Wapper, un asistente académico simple, cálido y amable. Ayudas a organizar tareas, exámenes y eventos. Habla de forma clara y cercana, sin jerga ni modismos regionales de ningún país, sin exagerar el entusiasmo. Diríjete al usuario siempre de tú, nunca de vos ni de usted. Mantente siempre dentro de tu propósito académico, no te desvíes a otros temas, y no inventes información que no tienes.`;
 
+/**
+ * Nombre por el que Wapper se dirige al usuario (2026-08-29, trato
+ * cercano): por defecto el primer nombre de su cuenta de Google (el mismo
+ * que ya se muestra en el sidebar — ASUNCIÓN a confirmar: se lee de
+ * `estado.perfil.nombre`, dato de sesión vivo igual que `estado.token`,
+ * nunca de `estado.datos` que es el JSON sincronizado — si el campo real
+ * es otro, hay que ajustar SOLO obtenerNombrePerfilGoogleCrudo, el resto
+ * de esta sección no depende de dónde venga). Si el usuario le pide a
+ * Wapper que lo llame de otra forma (accion "actualizar_nombre" más abajo),
+ * ese apodo queda GUARDADO PERMANENTE en
+ * estado.datos.configuracion.asistente_nombre_preferido — a propósito
+ * separado del nombre de cuenta real: pedido explícito de que "cambiar
+ * nombre desde Asistente" nunca toque el nombre que se ve en el sidebar,
+ * solo cómo se dirige Wapper al usuario.
+ */
+function obtenerNombrePerfilGoogleCrudo() {
+  return (estado.perfil && estado.perfil.nombre) || null;
+}
+
+/** "Fernanda Rodríguez Solano" → "Fernanda" — para un trato cercano no hace
+ * falta el nombre completo. */
+function obtenerPrimerNombre(nombreCompleto) {
+  const limpio = String(nombreCompleto || "").trim();
+  if (!limpio) return null;
+  return limpio.split(/\s+/)[0];
+}
+
+/** El nombre/apodo con el que Wapper se dirige al usuario ahora mismo: el
+ * que el usuario pidió explícitamente (permanente, ver arriba) si hay uno,
+ * si no el primer nombre de su cuenta de Google, si no null (Wapper sigue
+ * funcionando igual sin nombre, solo no lo usa). */
+function obtenerNombreParaDirigirse() {
+  const preferido = estado.datos && estado.datos.configuracion && estado.datos.configuracion.asistente_nombre_preferido;
+  if (preferido && String(preferido).trim()) return String(preferido).trim();
+  return obtenerPrimerNombre(obtenerNombrePerfilGoogleCrudo());
+}
+
+/**
+ * Resuelve accion "actualizar_nombre": guarda el apodo pedido en
+ * estado.datos.configuracion.asistente_nombre_preferido (PERMANENTE, se
+ * sincroniza igual que cualquier otro cambio de configuración — pedido
+ * explícito: queda así hasta que el usuario pida cambiarlo de nuevo, nunca
+ * se resetea solo) y dispara marcarCambioPendiente(), mismo mecanismo que
+ * ya usa guardarItemExtraidoComoEvento para persistir cambios reales. A
+ * propósito NUNCA toca estado.perfil (el nombre de cuenta de Google que se
+ * ve en el sidebar) — esto es solo cómo se dirige Wapper al usuario.
+ */
+function resolverActualizacionNombre(nombreNuevo) {
+  const limpio = String(nombreNuevo || "").trim();
+  if (!limpio) return { ok: false, motivo: "No entendí bien qué nombre quieres que use." };
+  if (limpio.length > 40) return { ok: false, motivo: "Ese nombre es un poco largo — dame algo más cortito." };
+  estado.datos.configuracion = estado.datos.configuracion || {};
+  estado.datos.configuracion.asistente_nombre_preferido = limpio;
+  marcarCambioPendiente();
+  return { ok: true, nombreNuevo: limpio };
+}
+
+/**
+ * System prompt de personalidad + el nombre del usuario, armado en cada
+ * llamada (nunca se cachea: si el usuario acaba de pedir un apodo nuevo,
+ * la siguiente respuesta conversacional ya debe usarlo). El texto base
+ * (PROMPT_PERSONALIDAD_WAPPER) queda intacto — esto solo le agrega una
+ * frase aparte con el nombre y dos instrucciones puntuales (humor liviano
+ * si el nombre es gracioso/tipo apodo, y qué contestar si preguntan de
+ * dónde salió el nombre), nunca se reescribe el prompt base.
+ */
+function construirPromptPersonalidadWapper() {
+  const nombre = obtenerNombreParaDirigirse();
+  if (!nombre) return PROMPT_PERSONALIDAD_WAPPER;
+  return `${PROMPT_PERSONALIDAD_WAPPER} El usuario se llama ${nombre} — puedes usar ese nombre de vez en cuando para un trato más cercano, sin forzarlo en cada respuesta; si te parece un nombre gracioso o con onda de apodo, puedes seguirle la broma con humor liviano y cariñoso, nunca burlón. Si te pregunta de dónde sacaste su nombre, dile que lo tomaste de su cuenta de Google.`;
+}
+
 /** Punto 4 del brief de personalidad: saludo simple → respuesta fija, sin llamar a Gemini. */
-const MENSAJE_SALUDO_WAPPER = "¡Hola! ¿En qué te ayudo hoy?";
+function construirMensajeSaludoWapper() {
+  const nombre = obtenerNombreParaDirigirse();
+  return nombre ? `¡Hola ${nombre}! ¿En qué te ayudo hoy?` : "¡Hola! ¿En qué te ayudo hoy?";
+}
 
 /** Reemplaza al antiguo MENSAJE_FALLBACK (voseo) — ahora en tuteo, y solo se usa como
  *  red de seguridad si generarRespuestaConversacionalWapper no devuelve nada. */
@@ -100,11 +175,16 @@ const MENSAJE_FALLBACK_WAPPER =
   'No logré identificar una tarea, examen o evento en tu mensaje. ¿Puedes darme más detalles? Por ejemplo: "tengo examen de anatomía el jueves a las 2pm".';
 
 /**
- * Mensaje de bienvenida fijo (punto 2 del brief) — el texto en sí NO lleva
- * personalidad extra más allá de lo pedido textual, para no reinterpretarlo.
+ * Mensaje de bienvenida (punto 2 del brief) — el texto base NO lleva
+ * personalidad extra más allá de lo pedido textual, para no reinterpretarlo;
+ * 2026-08-29 lo único que se agrega es el nombre al inicio si se conoce.
  */
-const MENSAJE_BIENVENIDA_WAPPER =
-  "¡Hola! Soy Wapper 👋, tu asistente académico personal. \nDime, ¿tienes alguna tarea, examen o evento que quieras agregar?";
+function construirMensajeBienvenidaWapper() {
+  const nombre = obtenerNombreParaDirigirse();
+  return nombre
+    ? `¡Hola ${nombre}! Soy Wapper 👋, tu asistente académico personal. \n¿Tienes alguna tarea, examen o evento que quieras agregar?`
+    : "¡Hola! Soy Wapper 👋, tu asistente académico personal. \nDime, ¿tienes alguna tarea, examen o evento que quieras agregar?";
+}
 
 /**
  * Las 12 plantillas de ejemplo del brief, tal cual, salvo "Agregale" →
@@ -919,7 +999,7 @@ ${listaMaterias}${avisoApodosDuplicados}${contextoDiasModalidad}
 
 Devolvé ÚNICAMENTE un JSON con esta forma exacta:
 {
-  "accion": "crear_eventos" | "editar_modalidad" | "consultar",
+  "accion": "crear_eventos" | "editar_modalidad" | "consultar" | "actualizar_nombre",
   "items": [
     {
       "tipo": "evento" | "tarea" | "examen",
@@ -945,11 +1025,21 @@ Devolvé ÚNICAMENTE un JSON con esta forma exacta:
     "numeroOrdinal": number | null,
     "palabrasClave": "string" | null
   } | null,
+  "nombrePreferido": "string" | null,
   "aclaracion": "string" | null
 }
 
 Regla de "accion" (elegí una sola por mensaje):
-- "consultar": el usuario PREGUNTA por algo que ya existe (nunca pide crear
+- "actualizar_nombre": el usuario pide EXPLÍCITAMENTE que lo llames de otra
+  forma (ej. "llámame Fer", "decime Pipo de ahora en más", "ya no me digas
+  Juan, decime Juanjo", "prefiero que me digas..."). "items": [],
+  "cambioModalidad": null, "consulta": null, "aclaracion": null, y
+  "nombrePreferido" lleva el nombre/apodo EXACTO que pidió usar, tal como
+  lo dijo (con mayúscula inicial si aplica). Una pregunta SOBRE el nombre
+  (ej. "¿de dónde sacaste mi nombre?", "¿cómo sabes cómo me llamo?") NO es
+  esto — no pide cambiar nada, cae al default de "crear_eventos" con
+  "items": [] más abajo (se responde por el otro lado, conversacional).
+- "consulta": el usuario PREGUNTA por algo que ya existe (nunca pide crear
   ni cambiar nada) — ej. "qué tareas tengo para esta semana", "qué tengo
   para la semana 8", "qué exámenes hay esta semana", "qué modalidad es mi
   próxima clase de bases de datos", "los jueves de historia son
@@ -975,15 +1065,22 @@ Regla de "accion" (elegí una sola por mensaje):
   - "materia" (opcional en "tareas_eventos"/"buscar_evento", para filtrar
     por una materia puntual si el usuario lo pide; SIEMPRE requerido en
     "modalidad_clase"): mismo criterio de nombre oficial exacto / apodo que
-    en "items" — si no matchea claro con una sola materia, NO adivines:
-    "consulta": null, "items": [], y preguntá en "aclaracion" cuál es.
+    en "items" (incluye nombrar solo PARTE del nombre oficial, ej. "el
+    parcial de derecho" con "Derecho Informático Y Mercantil" en la lista →
+    "materia": "Derecho Informático Y Mercantil" — se aplica el mismo
+    criterio de "coincide claramente con una sola" aunque la pregunta sea
+    "¿cuánto falta...?" en vez de "tengo...") — si no matchea claro con una
+    sola materia, NO adivines: "consulta": null, "items": [], y preguntá en
+    "aclaracion" cuál es.
   - "dia" (solo aplica a "modalidad_clase"): SOLO si el usuario nombra un
     día puntual (ej. "los jueves de bd"). Si pregunta por "la próxima
     clase" sin nombrar día, "dia" es null (el sistema busca la próxima
     clase real de esa materia, igual que para crear_eventos).
-  - "tipoItem" (solo aplica a "buscar_evento"): "examen" | "tarea" |
-    "evento" si se puede inferir del pedido (ej. "parcial"/"quiz" →
-    "examen", "laboratorio"/"tarea" → "tarea"), o null si no está claro.
+  - "tipoItem" (aplica a "tareas_eventos" Y a "buscar_evento"): "examen" |
+    "tarea" | "evento" si el usuario pidió explícitamente un tipo puntual
+    (ej. "qué EXÁMENES tengo esta semana" → "examen"; "parcial"/"quiz" →
+    "examen"; "laboratorio"/"tarea" → "tarea"), o null si pidió todo sin
+    distinguir tipo (ej. "qué TENGO esta semana").
   - "numeroOrdinal" (solo aplica a "buscar_evento"): SOLO si el usuario
     menciona un número u ordinal identificando cuál ítem es (ej. "el
     TERCER parcial" → 3, "laboratorio 4" → 4, "cotidiano 4" → 4, "Parcial
@@ -1018,9 +1115,11 @@ Regla de "accion" (elegí una sola por mensaje):
     que pida el usuario (virtual/presencial/asincrónica/sin clase o
     equivalentes como "no hay clase", "cancelada", "queda suspendida").
 - "crear_eventos": cualquier otro pedido de agendar una tarea/examen/
-  evento — "items" lleva el detalle como siempre, "cambioModalidad" y
-  "consulta" van en null. Es el valor por defecto para todo lo que no sea
-  explícitamente una consulta o un cambio de modalidad.
+  evento — "items" lleva el detalle como siempre, "cambioModalidad",
+  "consulta" y "nombrePreferido" van en null. Es el valor por defecto para
+  todo lo que no sea explícitamente un cambio de nombre, una consulta o un
+  cambio de modalidad (incluye charla suelta, preguntas generales y
+  preguntas SOBRE el nombre — "items" queda en [] en esos casos).
 
 Reglas de "items" (solo aplican cuando accion es "crear_eventos"):
 - Si el mensaje menciona una "semana N" (semana 5, semana 8, etc.), es
@@ -1086,7 +1185,7 @@ Reglas de "items" (solo aplican cuando accion es "crear_eventos"):
 const ESQUEMA_RESPUESTA_GEMINI = {
   type: "OBJECT",
   properties: {
-    accion: { type: "STRING", enum: ["crear_eventos", "editar_modalidad", "consultar"] },
+    accion: { type: "STRING", enum: ["crear_eventos", "editar_modalidad", "consultar", "actualizar_nombre"] },
     items: {
       type: "ARRAY",
       items: {
@@ -1142,6 +1241,7 @@ const ESQUEMA_RESPUESTA_GEMINI = {
       },
       required: ["tipo"],
     },
+    nombrePreferido: { type: "STRING", nullable: true },
     aclaracion: { type: "STRING", nullable: true },
   },
   required: ["accion", "items"],
@@ -1261,10 +1361,13 @@ async function ejecutarGeneracionGemini(contents) {
         ? "editar_modalidad"
         : parseado.accion === "consultar"
         ? "consultar"
+        : parseado.accion === "actualizar_nombre"
+        ? "actualizar_nombre"
         : "crear_eventos",
     items: Array.isArray(parseado.items) ? parseado.items : [],
     cambioModalidad: parseado.cambioModalidad || null,
     consulta: parseado.consulta || null,
+    nombrePreferido: parseado.nombrePreferido || null,
     aclaracion: parseado.aclaracion || null,
     crudo: texto,
   };
@@ -1330,7 +1433,7 @@ async function generarRespuestaConversacionalWapper(textoUsuario) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        system_instruction: { parts: [{ text: PROMPT_PERSONALIDAD_WAPPER }] },
+        system_instruction: { parts: [{ text: construirPromptPersonalidadWapper() }] },
         contents: [{ role: "user", parts: [{ text: textoUsuario }] }],
         generationConfig: { temperature: 0.6 },
       }),
@@ -1501,12 +1604,41 @@ function formatearRangoConsulta(inicio, fin) {
 }
 
 /**
+ * Nombres/género de cada tipo de ítem, para armar frases naturales en el
+ * encabezado de "tareas_eventos" cuando el usuario pidió un tipo puntual
+ * (2026-08-29: "tengo EXÁMENES para semana 8" → "tienes estos exámenes",
+ * no el genérico "tienes estas 4 cosas" que antes mezclaba tareas y
+ * exámenes sin distinguir).
+ */
+const FRASES_TIPO_ITEM = {
+  examen: { singular: "examen", plural: "exámenes", genero: "m" },
+  tarea: { singular: "tarea", plural: "tareas", genero: "f" },
+  evento: { singular: "evento", plural: "eventos", genero: "m" },
+};
+const FRASES_TIPO_ITEM_PLURAL = Object.fromEntries(
+  Object.entries(FRASES_TIPO_ITEM).map(([tipo, f]) => [tipo, f.plural])
+);
+
+/** "estos exámenes" / "esta tarea" / "este evento" — null si tipoItem es
+ * null (caso genérico, "qué tengo" sin distinguir tipo). */
+function fraseDemostrativaTipoItem(tipoItem, cantidad) {
+  const f = FRASES_TIPO_ITEM[tipoItem];
+  if (!f) return null;
+  const plural = cantidad !== 1;
+  const sustantivo = plural ? f.plural : f.singular;
+  const demostrativo = f.genero === "f" ? (plural ? "estas" : "esta") : plural ? "estos" : "este";
+  return `${demostrativo} ${sustantivo}`;
+}
+
+/**
  * Resuelve accion "consultar", tipo "tareas_eventos": lee DIRECTO
  * estado.datos.agenda (nunca se le pasa esta lista a Gemini — ver
  * comentario del schema) filtrando por el rango de fechas real
- * (resolverRangoConsulta) y, si el usuario pidió una materia puntual, por
- * esa materia (resolverMateriaVinculada, mismo criterio anti-alucinación
- * de siempre). Devuelve los eventos ordenados por fecha/hora — la UI
+ * (resolverRangoConsulta), opcionalmente por materia (resolverMateriaVinculada,
+ * mismo criterio anti-alucinación de siempre) y opcionalmente por tipo de
+ * ítem (2026-08-29: "tengo EXÁMENES para semana 8" no debía traer tareas
+ * también — mismo campo "tipoItem" que ya usaba "buscar_evento"). Devuelve
+ * los eventos ordenados por fecha/hora — la UI
  * (mostrarResultadoConsultaEnChat) los pinta con crearTarjetaEventoGuardado,
  * la MISMA tarjeta editable/borrable que usa la creación, no una vista de
  * solo texto aparte.
@@ -1520,15 +1652,17 @@ function resolverConsultaTareasEventos(consulta) {
   if (consulta.materia && !materiaVinculada) {
     return { ok: false, motivo: "No pude identificar de forma clara a qué materia te refieres." };
   }
+  const tipoItem = ["examen", "tarea", "evento"].includes(consulta.tipoItem) ? consulta.tipoItem : null;
 
   const inicioIso = fechaISODesdeLocal(rango.inicio);
   const finIso = fechaISODesdeLocal(rango.fin);
   const eventos = (estado.datos.agenda || [])
     .filter((ev) => ev.fecha >= inicioIso && ev.fecha <= finIso)
     .filter((ev) => !materiaVinculada || ev.materiaMatriculadaId === materiaVinculada.mmId)
+    .filter((ev) => !tipoItem || ev.tipo === tipoItem)
     .sort((a, b) => `${a.fecha} ${a.hora || ""}`.localeCompare(`${b.fecha} ${b.hora || ""}`));
 
-  return { ok: true, rango, materiaVinculada, eventos };
+  return { ok: true, rango, materiaVinculada, tipoItem, eventos };
 }
 
 /**
@@ -1573,6 +1707,19 @@ function nombreEventoMencionaNumero(nombreEvento, numero) {
   const romano = NUMEROS_A_ROMANO[numero];
   return !!romano && new RegExp(`\\b${romano}\\b`, "i").test(nombreEvento || "");
 }
+
+/**
+ * "buscar_evento" busca UN ítem puntual por diseño — si aun así el filtro
+ * no logra acotar a pocos candidatos (2026-08-29, bug real reportado: "el
+ * primer parcial de derecho" devolvió 8 resultados de materias/tipos que no
+ * tenían nada que ver, porque Gemini no resolvió bien "materia"/
+ * "numeroOrdinal" en ese turno), NO se le muestran todos al usuario — se le
+ * pide precisar en vez de volcarle una lista larga (pedido explícito: "no
+ * quiero que me muestre todos si solo le pedí uno específico"). Esto es una
+ * red de seguridad en JS, no reemplaza que Gemini resuelva bien materia/
+ * número — solo evita el peor caso cuando no lo logra.
+ */
+const LIMITE_RESULTADOS_BUSQUEDA_EVENTO = 3;
 
 /**
  * Resuelve accion "consultar", tipo "buscar_evento" (2026-08-29, bug real:
@@ -2258,26 +2405,47 @@ function mostrarResultadoConsultaEnChat(resultado, turno) {
   // Gemini omitió "tipo" por algún motivo) — mismo render de tarjetas para
   // ambos, solo cambia cómo se resuelve la lista y el texto del encabezado.
   const esBusqueda = consulta.tipo === "buscar_evento";
-  if (!Array.isArray(turno.consultaEventoIds)) {
+  if (!Array.isArray(turno.consultaEventoIds) && !turno.consultaBusquedaDemasiados) {
     const resuelto = esBusqueda ? resolverBusquedaEvento(consulta) : resolverConsultaTareasEventos(consulta);
     if (!resuelto.ok) {
       agregarBurbujaAlDom(crearBurbuja("modelo", resuelto.motivo));
       return;
     }
-    turno.consultaEventoIds = resuelto.eventos.map((ev) => ev.id);
-    turno.consultaEsBusqueda = esBusqueda;
-    if (!esBusqueda) {
-      turno.consultaRangoTexto = `${resuelto.rango.etiqueta} (${formatearRangoConsulta(resuelto.rango.inicio, resuelto.rango.fin)})`;
+    // Ver comentario de LIMITE_RESULTADOS_BUSQUEDA_EVENTO — "buscar_evento"
+    // es por diseño UN ítem puntual, así que si igual salen demasiados
+    // candidatos no se listan todos, se le pide precisar al usuario.
+    if (esBusqueda && resuelto.eventos.length > LIMITE_RESULTADOS_BUSQUEDA_EVENTO) {
+      turno.consultaBusquedaDemasiados = resuelto.eventos.length;
+    } else {
+      turno.consultaEventoIds = resuelto.eventos.map((ev) => ev.id);
+      turno.consultaEsBusqueda = esBusqueda;
+      if (!esBusqueda) {
+        turno.consultaTipoItem = resuelto.tipoItem || null;
+        turno.consultaRangoTexto = `${resuelto.rango.etiqueta} (${formatearRangoConsulta(resuelto.rango.inicio, resuelto.rango.fin)})`;
+      }
     }
+  }
+
+  if (turno.consultaBusquedaDemasiados) {
+    agregarBurbujaAlDom(
+      crearBurbuja(
+        "modelo",
+        `Encontré ${turno.consultaBusquedaDemasiados} coincidencias con eso — dime la materia o el nombre/número exacto para ubicar la que buscas.`
+      )
+    );
+    return;
   }
 
   const eventosGuardados = turno.consultaEventoIds;
   if (eventosGuardados.length === 0) {
+    const etiquetaTipoVacio = FRASES_TIPO_ITEM_PLURAL[turno.consultaTipoItem] || null;
     agregarBurbujaAlDom(
       crearBurbuja(
         "modelo",
         turno.consultaEsBusqueda
           ? "No encontré nada con ese nombre en tu Agenda — revisa si está escrito distinto, o dime la materia."
+          : etiquetaTipoVacio
+          ? `¡Buenas noticias! No tienes ${etiquetaTipoVacio} para ${turno.consultaRangoTexto || "esa semana"} 🎉`
           : `No tienes nada guardado para ${turno.consultaRangoTexto || "esa semana"}.`
       )
     );
@@ -2294,7 +2462,10 @@ function mostrarResultadoConsultaEnChat(resultado, turno) {
       textoEncabezado = `Encontré ${eventosGuardados.length} coincidencias:`;
     }
   } else {
-    textoEncabezado = `Para ${turno.consultaRangoTexto} tienes ${eventosGuardados.length === 1 ? "esto" : `estas ${eventosGuardados.length} cosas`}:`;
+    const fraseTipo = fraseDemostrativaTipoItem(turno.consultaTipoItem, eventosGuardados.length);
+    textoEncabezado = `Para ${turno.consultaRangoTexto} tienes ${
+      fraseTipo || (eventosGuardados.length === 1 ? "esto" : `estas ${eventosGuardados.length} cosas`)
+    }:`;
   }
   agregarBurbujaAlDom(crearBurbuja("modelo", textoEncabezado));
   eventosGuardados.forEach((id) => agregarBurbujaAlDom(crearTarjetaEventoGuardado(id)));
@@ -2315,13 +2486,35 @@ function mostrarResultadoConsultaEnChat(resultado, turno) {
  * guardarHistorialLocal() los persista tal cual, sin un valor de retorno
  * aparte que el caller tenga que acordarse de pegar de vuelta.
  */
+/**
+ * Rama "actualizar_nombre" de mostrarResultadoEnChat — el cambio ya se
+ * aplicó (o falló) en resolverActualizacionNombre, esta función solo
+ * confirma en el chat. `turno.nombrePreferidoAplicado` congela el nombre
+ * ya aplicado para que reabrir el chat (reconstruirChatDesdeHistorial)
+ * muestre la MISMA confirmación sin volver a escribir en
+ * estado.datos.configuracion ni disparar marcarCambioPendiente() de nuevo
+ * (mismo principio que cambioModalidadResuelto: no repetir side-effects al
+ * reconstruir).
+ */
+function mostrarResultadoActualizarNombreEnChat(resultado, turno) {
+  if (!turno.nombrePreferidoAplicado) {
+    const resuelto = resolverActualizacionNombre(resultado.nombrePreferido);
+    if (!resuelto.ok) {
+      agregarBurbujaAlDom(crearBurbuja("modelo", resuelto.motivo));
+      return;
+    }
+    turno.nombrePreferidoAplicado = resuelto.nombreNuevo;
+  }
+  agregarBurbujaAlDom(crearBurbuja("modelo", `¡Listo! De ahora en más te digo ${turno.nombrePreferidoAplicado} 😊`));
+}
+
 async function mostrarResultadoEnChat(resultado, turno, textoUsuario) {
   if (resultado.accion === "saludo") {
     // Punto 4, personalidad Wapper: nunca llega acá vía Gemini (el schema
-    // solo admite "crear_eventos"/"editar_modalidad"/"consultar") — es un
-    // marcador puramente local para el saludo simple, ver
-    // esSaludoSimple/manejarEnvioMensaje.
-    agregarBurbujaAlDom(crearBurbuja("modelo", MENSAJE_SALUDO_WAPPER));
+    // solo admite "crear_eventos"/"editar_modalidad"/"consultar"/
+    // "actualizar_nombre") — es un marcador puramente local para el saludo
+    // simple, ver esSaludoSimple/manejarEnvioMensaje.
+    agregarBurbujaAlDom(crearBurbuja("modelo", construirMensajeSaludoWapper()));
     return;
   }
   if (resultado.accion === "editar_modalidad") {
@@ -2330,6 +2523,10 @@ async function mostrarResultadoEnChat(resultado, turno, textoUsuario) {
   }
   if (resultado.accion === "consultar") {
     mostrarResultadoConsultaEnChat(resultado, turno);
+    return;
+  }
+  if (resultado.accion === "actualizar_nombre") {
+    mostrarResultadoActualizarNombreEnChat(resultado, turno);
     return;
   }
   await mostrarResultadoEventosEnChat(resultado, turno, textoUsuario);
@@ -2373,7 +2570,7 @@ async function manejarEnvioMensaje() {
     // puramente local, ver esSaludoSimple) para que el historial y su
     // reconstrucción lo traten parejo con el resto de turnos "modelo".
     if (esSaludoSimple(texto)) {
-      const turno = { rol: "modelo", texto: MENSAJE_SALUDO_WAPPER, crudo: JSON.stringify({ accion: "saludo" }) };
+      const turno = { rol: "modelo", texto: construirMensajeSaludoWapper(), crudo: JSON.stringify({ accion: "saludo" }) };
       conversacionActual.push(turno);
       await mostrarResultadoEnChat({ accion: "saludo" }, turno, texto);
       guardarHistorialLocal();
@@ -2639,7 +2836,7 @@ function instalarObservadorVisibilidadAsistente(tarjeta) {
  * todavía no matriculó ninguna).
  */
 function mostrarSaludoInicial() {
-  agregarBurbujaAlDom(crearBurbuja("modelo", MENSAJE_BIENVENIDA_WAPPER));
+  agregarBurbujaAlDom(crearBurbuja("modelo", construirMensajeBienvenidaWapper()));
   agregarBurbujaAlDom(crearBurbuja("modelo", `Ejemplo: ${elegirEjemploBienvenidaAlAzar()}`));
 }
 
@@ -2669,12 +2866,15 @@ function reconstruirChatDesdeHistorial(historial) {
             ? "editar_modalidad"
             : parseado.accion === "consultar"
             ? "consultar"
+            : parseado.accion === "actualizar_nombre"
+            ? "actualizar_nombre"
             : parseado.accion === "saludo"
             ? "saludo"
             : "crear_eventos",
         items: Array.isArray(parseado.items) ? parseado.items : [],
         cambioModalidad: parseado.cambioModalidad || null,
         consulta: parseado.consulta || null,
+        nombrePreferido: parseado.nombrePreferido || null,
         aclaracion: parseado.aclaracion || null,
       };
       // `turno` es el objeto real de historial.turnos (ver más abajo,
