@@ -1115,10 +1115,12 @@ Devolvé ÚNICAMENTE un JSON con esta forma exacta:
   "consulta": {
     "tipo": "tareas_eventos" | "modalidad_clase" | "buscar_evento",
     "semana": number | null,
+    "alcance": "todo" | null,
     "materia": "nombre EXACTO de la lista de arriba, o null",
     "dia": "lunes" | "martes" | "miércoles" | "jueves" | "viernes" | "sábado" | "domingo" | null,
     "tipoItem": "examen" | "tarea" | "evento" | null,
     "numeroOrdinal": number | null,
+    "proximo": true | false | null,
     "palabrasClave": "string" | null
   } | null,
   "nombrePreferido": "string" | null,
@@ -1208,16 +1210,22 @@ Regla de "accion" (elegí una sola por mensaje):
     los ordinales en palabras como los números romanos. null si no
     menciona ninguno.
   - "proximo" (solo aplica a "buscar_evento", 2026-08-31): true SOLO si el
-    usuario pregunta por "el PRÓXIMO"/"el SIGUIENTE" ítem de una materia (y
-    opcionalmente un tipo) SIN nombrar un título puntual ni un número/
-    ordinal — ej. "cuándo es el próximo examen de AP2", "cuánto falta para
-    el siguiente parcial de física", "cuál es mi próxima tarea de bd". En
-    ese caso "numeroOrdinal" y "palabrasClave" van en null (el sistema
-    busca el ítem más cercano en el futuro que matchee materia/tipoItem,
-    no hace falta más pista). Si el usuario SÍ da un título/ordinal
-    puntual (ej. "el tercer parcial", "el laboratorio 4"), "proximo" es
-    null/false — ese caso sigue siendo "numeroOrdinal"/"palabrasClave"
-    como siempre, NO "proximo".
+    usuario pregunta por "el PRÓXIMO"/"el SIGUIENTE" ítem (opcionalmente de
+    una materia puntual, y opcionalmente un tipo) SIN nombrar un título
+    puntual ni un número/ordinal — ej. "cuándo es el próximo examen de
+    AP2", "cuánto falta para el siguiente parcial de física", "cuál es mi
+    próxima tarea de bd", pero TAMBIÉN sin mencionar ninguna materia, ej.
+    "cuánto falta para el próximo examen" (a secas, cualquier materia) o
+    "cuál es mi próxima tarea" — en ese caso "materia" simplemente queda
+    null como siempre que no se menciona una, "proximo" sigue siendo true
+    igual, NUNCA caigas a tratar "examen"/"tarea" como si fueran
+    "palabrasClave" del título solo porque no hay materia. En cualquiera de
+    los dos casos "numeroOrdinal" y "palabrasClave" van en null (el sistema
+    busca el ítem más cercano en el futuro que matchee materia/tipoItem, no
+    hace falta más pista). Si el usuario SÍ da un título/ordinal puntual
+    (ej. "el tercer parcial", "el laboratorio 4"), "proximo" es null/false
+    — ese caso sigue siendo "numeroOrdinal"/"palabrasClave" como siempre,
+    NO "proximo".
   - "palabrasClave" (solo aplica a "buscar_evento", y solo cuando "proximo"
     NO es true): las palabras del título del ítem que busca, SIN el
     número/ordinal (eso va aparte en "numeroOrdinal") ni el nombre de la
@@ -1974,7 +1982,7 @@ function resolverBusquedaEvento(consulta) {
     if (eventos.length > 0) eventos = eventos.slice(0, 1);
   }
 
-  return { ok: true, materiaVinculada, eventos };
+  return { ok: true, materiaVinculada, tipoItem, proximo: !!consulta.proximo, eventos };
 }
 
 /**
@@ -2633,7 +2641,16 @@ function mostrarResultadoConsultaEnChat(resultado, turno) {
     } else {
       turno.consultaEventoIds = resuelto.eventos.map((ev) => ev.id);
       turno.consultaEsBusqueda = esBusqueda;
-      if (!esBusqueda) {
+      if (esBusqueda) {
+        // Para el caso "proximo" (ver resolverBusquedaEvento) el mensaje de
+        // "no encontré nada" genérico ("revisa si está escrito distinto")
+        // es engañoso cuando en realidad SÍ se entendió bien la pregunta y
+        // simplemente no quedan ítems futuros — se guardan estos datos para
+        // armar un mensaje correcto en ese caso puntual (ver abajo).
+        turno.consultaBusquedaProximo = !!resuelto.proximo;
+        turno.consultaTipoItem = resuelto.tipoItem || null;
+        turno.consultaMateriaNombre = resuelto.materiaVinculada ? resuelto.materiaVinculada.nombre : null;
+      } else {
         turno.consultaTipoItem = resuelto.tipoItem || null;
         // "alcance: todo" no tiene rango de fechas real (ver
         // resolverConsultaTareasEventos) — no hay "X - Y" que mostrar, solo
@@ -2658,16 +2675,25 @@ function mostrarResultadoConsultaEnChat(resultado, turno) {
   const eventosGuardados = turno.consultaEventoIds;
   if (eventosGuardados.length === 0) {
     const etiquetaTipoVacio = FRASES_TIPO_ITEM_PLURAL[turno.consultaTipoItem] || null;
-    agregarBurbujaAlDom(
-      crearBurbuja(
-        "modelo",
-        turno.consultaEsBusqueda
-          ? "No encontré nada con ese nombre en tu Agenda — revisa si está escrito distinto, o dime la materia."
-          : etiquetaTipoVacio
-          ? `¡Buenas noticias! No tienes ${etiquetaTipoVacio} para ${turno.consultaRangoTexto || "esa semana"} 🎉`
-          : `No tienes nada guardado para ${turno.consultaRangoTexto || "esa semana"}.`
-      )
-    );
+    let mensajeVacio;
+    if (turno.consultaEsBusqueda && turno.consultaBusquedaProximo) {
+      // "proximo" sin resultados futuros: a diferencia de una búsqueda por
+      // nombre que no matcheó nada (posible error de tipeo), acá SÍ se
+      // entendió bien la pregunta — simplemente no queda ningún ítem futuro
+      // que cumpla el filtro. Mismo tono positivo que ya usa la rama
+      // "tareas_eventos" para su caso vacío, en vez de sugerir revisar la
+      // ortografía.
+      const etiquetaTipo = FRASES_TIPO_ITEM_PLURAL[turno.consultaTipoItem] || "cosas";
+      const sufijoMateria = turno.consultaMateriaNombre ? ` de ${turno.consultaMateriaNombre}` : "";
+      mensajeVacio = `¡Buenas noticias! No tienes más ${etiquetaTipo}${sufijoMateria} pendientes 🎉`;
+    } else if (turno.consultaEsBusqueda) {
+      mensajeVacio = "No encontré nada con ese nombre en tu Agenda — revisa si está escrito distinto, o dime la materia.";
+    } else if (etiquetaTipoVacio) {
+      mensajeVacio = `¡Buenas noticias! No tienes ${etiquetaTipoVacio} para ${turno.consultaRangoTexto || "esa semana"} 🎉`;
+    } else {
+      mensajeVacio = `No tienes nada guardado para ${turno.consultaRangoTexto || "esa semana"}.`;
+    }
+    agregarBurbujaAlDom(crearBurbuja("modelo", mensajeVacio));
     return;
   }
 
