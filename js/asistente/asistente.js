@@ -94,20 +94,18 @@ const PROMPT_PERSONALIDAD_WAPPER = `Eres Wapper, un asistente académico simple,
 /**
  * Nombre por el que Wapper se dirige al usuario (2026-08-29, trato
  * cercano): por defecto el primer nombre de su cuenta de Google (el mismo
- * que ya se muestra en el sidebar — ASUNCIÓN a confirmar: se lee de
- * `estado.perfil.nombre`, dato de sesión vivo igual que `estado.token`,
- * nunca de `estado.datos` que es el JSON sincronizado — si el campo real
- * es otro, hay que ajustar SOLO obtenerNombrePerfilGoogleCrudo, el resto
- * de esta sección no depende de dónde venga). Si el usuario le pide a
- * Wapper que lo llame de otra forma (accion "actualizar_nombre" más abajo),
- * ese apodo queda GUARDADO PERMANENTE en
- * estado.datos.configuracion.asistente_nombre_preferido — a propósito
- * separado del nombre de cuenta real: pedido explícito de que "cambiar
- * nombre desde Asistente" nunca toque el nombre que se ve en el sidebar,
- * solo cómo se dirige Wapper al usuario.
+ * que ya se muestra en el sidebar — confirmado con main.js:
+ * estado.datos.perfil.nombre, lo pone obtenerPerfilGoogle/auth.js justo
+ * después del login). Si el usuario le pide a Wapper que lo llame de otra
+ * forma (accion "actualizar_nombre" más abajo), ese apodo queda GUARDADO
+ * PERMANENTE en estado.datos.configuracion.asistente_nombre_preferido —
+ * a propósito en una clave DISTINTA a estado.datos.perfil.nombre: pedido
+ * explícito de que "cambiar nombre desde Asistente" nunca toque el nombre
+ * que se ve en el sidebar (ese sigue siendo 100% el de la cuenta de
+ * Google), solo cómo se dirige Wapper al usuario.
  */
 function obtenerNombrePerfilGoogleCrudo() {
-  return (estado.perfil && estado.perfil.nombre) || null;
+  return (estado.datos && estado.datos.perfil && estado.datos.perfil.nombre) || null;
 }
 
 /** "Fernanda Rodríguez Solano" → "Fernanda" — para un trato cercano no hace
