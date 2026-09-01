@@ -72,6 +72,12 @@
        de Estudios está activo. Se muestra/oculta desde plan-modo-edicion.js. -->
   <div id="badge-modo-edicion" class="badge-modo-edicion-fijo oculto" aria-hidden="true">✏️ Modo edición</div>
 
+  <!-- Tiempo de Estudio (Parte 1): indicador persistente de sesión activa —
+       visible en CUALQUIER pantalla mientras hay un timer corriendo, no
+       solo dentro de la sección. Contenido y visibilidad los maneja
+       tiempo-estudio.js (suscrito al motor de tiempo-estudio-timer.js). -->
+  <button type="button" id="badge-tiempo-estudio" class="badge-tiempo-estudio-fijo oculto" aria-hidden="true"></button>
+
   <!-- Bug 1 (v8): aviso de reconexión — aparece cuando la sesión con Google
        Drive se venció o el refresco automático/silencioso falló. El botón
        "Reconectar" se dispara desde un click real para evitar el bloqueo de
@@ -124,6 +130,11 @@
         <button id="nav-resumen" class="btn btn-secondary btn-block btn-nav" data-seccion="resumen" title="Resumen">🏠 <span class="texto-nav">Resumen</span></button>
         <button id="nav-agenda" class="btn btn-secondary btn-block btn-nav" data-seccion="agenda" title="Agenda">📖 <span class="texto-nav">Agenda</span></button>
         <button id="nav-horario" class="btn btn-secondary btn-block btn-nav" data-seccion="horario" title="Horario">🗓️ <span class="texto-nav">Horario</span></button>
+        <!-- Tiempo de Estudio (Parte 1): sin gate de existencia (no depende
+             de ninguna clave), siempre visible — mismo criterio que
+             Agenda/Horario/Semestres. Entra después de Horario (confirmado
+             con Wagner). -->
+        <button id="nav-tiempo-estudio" class="btn btn-secondary btn-block btn-nav" data-seccion="tiempo-estudio" title="Tiempo de Estudio">⏱️ <span class="texto-nav">Tiempo de Estudio</span></button>
         <button id="nav-semestres" class="btn btn-secondary btn-block btn-nav" data-seccion="semestres" title="Semestres">📅 <span class="texto-nav">Semestres</span></button>
         <button id="nav-comunidad" class="btn btn-secondary btn-block btn-nav" data-seccion="comunidad" title="Comunidad">👥 <span class="texto-nav">Comunidad</span></button>
         <button id="nav-finanzas" class="btn btn-secondary btn-block btn-nav" data-seccion="finanzas" title="Finanzas">💰 <span class="texto-nav">Finanzas</span></button>
@@ -610,6 +621,15 @@
           <div id="horario-grid"></div>
         </section>
       </div>
+
+      <!-- ===================== SECCIÓN: Tiempo de Estudio (Parte 1) ===================== -->
+      <!-- Contenido construido 100% dinámicamente por
+           js/tiempo-estudio/tiempo-estudio.js (mismo criterio que
+           #seccion-semestres/#seccion-comunidad) — tarjetas por materia,
+           pantalla de detalle con timer, y su modal de configuración
+           (js/tiempo-estudio/tiempo-estudio-config.js) se inyectan todos
+           desde JS, sin markup fijo acá. -->
+      <div id="seccion-tiempo-estudio" class="stack oculto"></div>
 
       <!-- MODAL: selector de semestre (tap en el nombre del semestre) -->
       <div id="modal-selector-semestre" class="modal-overlay oculto">
