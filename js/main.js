@@ -31,6 +31,7 @@ import { renderizarSemestres } from "./semestres/semestres.js";
 import { inicializarResumen, renderizarResumen } from "./resumen/resumen.js";
 import { inicializarAgenda, renderizarAgenda } from "./agenda/agenda.js";
 import { inicializarHorario, renderizarHorario } from "./horario/horario.js";
+import { inicializarTiempoEstudio, renderizarTiempoEstudio } from "./tiempo-estudio/tiempo-estudio.js";
 import { procesarAsociacionPendienteDeAmigo, iniciarRefrescoPeriodicoAmigos } from "./horario/horario-amigos.js";
 // Asistente IA (Gemini): mismo patrón que horario.js/agenda.js arriba —
 // este import no se usa directo acá, existe para que el navegador cargue
@@ -354,6 +355,12 @@ window.addEventListener("DOMContentLoaded", () => {
   inicializarResumen();
   inicializarAgenda();
   inicializarHorario();
+  // Tiempo de Estudio (Parte 1): se inicializa acá (junto al resto de
+  // secciones) y no de forma lazy, porque el indicador persistente
+  // (badge-tiempo-estudio) debe quedar suscrito al motor del timer desde el
+  // arranque — tiene que poder aparecer en CUALQUIER sección, no solo
+  // cuando se entra a "Tiempo de Estudio" por primera vez.
+  inicializarTiempoEstudio();
   inicializarBotonesCerrarModal();
   inicializarAutoScrollSelectoresEnModales();
   inicializarPullToRefresh();
@@ -886,6 +893,7 @@ function mostrarSeccion(nombre) {
     finanzas: "seccion-finanzas",
     agenda: "seccion-agenda",
     horario: "seccion-horario",
+    "tiempo-estudio": "seccion-tiempo-estudio",
     asistente: "seccion-asistente",
   };
   Object.entries(secciones).forEach(([clave, idEl]) => {
@@ -906,6 +914,10 @@ function mostrarSeccion(nombre) {
   // editan en otras secciones), más el hecho de que "hoy"/"esta semana"
   // pueden haber cambiado si la pestaña quedó abierta de un día para otro.
   if (nombre === "agenda") window.renderizarAgenda?.();
+  // Tiempo de Estudio: mismo motivo que Agenda/Horario arriba (meta y
+  // sesiones se pueden haber editado en otra pestaña/dispositivo) — se
+  // re-renderiza fresco cada vez que se entra a la sección.
+  if (nombre === "tiempo-estudio") window.renderizarTiempoEstudio?.();
   // Resumen: agrega datos de Agenda/Horario/Semestres, así que le aplican
   // los mismos motivos de arriba (datos editados en otras secciones, más
   // "hoy" pudiendo haber cambiado) — se re-renderiza fresco cada vez que se
@@ -967,7 +979,7 @@ window.mostrarSeccion = mostrarSeccion;
  * que la limpieza se sincronice y no reaparezca en otros dispositivos con
  * el dato viejo.
  */
-const DEFAULT_ORDEN_NAV = ["agenda", "horario", "semestres", "comunidad", "finanzas", "plan-estudios", "asistente"];
+const DEFAULT_ORDEN_NAV = ["agenda", "horario", "tiempo-estudio", "semestres", "comunidad", "finanzas", "plan-estudios", "asistente"];
 
 function obtenerOrdenNavegacionEfectivo() {
   const crudo = estado.datos.configuracion.navegacion_orden || [];
