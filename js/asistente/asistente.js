@@ -168,9 +168,13 @@ function construirMensajeSaludoWapper() {
 }
 
 /** Reemplaza al antiguo MENSAJE_FALLBACK (voseo) — ahora en tuteo, y solo se usa como
- *  red de seguridad si generarRespuestaConversacionalWapper no devuelve nada. */
-const MENSAJE_FALLBACK_WAPPER =
-  'No logré identificar una tarea, examen o evento en tu mensaje. ¿Puedes darme más detalles? Por ejemplo: "tengo examen de anatomía el jueves a las 2pm".';
+ *  red de seguridad si generarRespuestaConversacionalWapper no devuelve nada.
+ *  Función (2026-08-31, mismo motivo que CAPACIDADES_WAPPER más abajo) para
+ *  que el ejemplo nombre una materia REAL matriculada del usuario en vez de
+ *  "anatomía" fija, sea cual sea. */
+function construirMensajeFallbackWapper() {
+  return `No logré identificar una tarea, examen o evento en tu mensaje. ¿Puedes darme más detalles? Por ejemplo: "tengo examen de ${elegirNombreMateriaEjemplo()} el jueves a las 2pm".`;
+}
 
 /**
  * Mensaje de bienvenida (punto 2 del brief) — el texto base NO lleva
@@ -294,10 +298,24 @@ const APODOS_EJEMPLO_CAPACIDADES = [
   "Mafe", "Toño", "Vicky", "Lalo", "Beto",
 ];
 
+/**
+ * Nombre de materia al azar para un ejemplo de capacidad — reutiliza
+ * obtenerNombresMateriasParaEjemplosBienvenida (mismo criterio que ya usa
+ * la pantalla de bienvenida más arriba: materias REALES matriculadas del
+ * usuario si tiene, o si no tiene ninguna — caso raro — los genéricos de
+ * MATERIAS_GENERICAS_RESPALDO). 2026-08-31, pedido explícito: los ejemplos
+ * de CAPACIDADES_WAPPER usaban nombres genéricos inventados ("anatomía",
+ * "física"...) sin importar si el usuario los llevaba o no.
+ */
+function elegirNombreMateriaEjemplo() {
+  const nombres = obtenerNombresMateriasParaEjemplosBienvenida();
+  return nombres[Math.floor(Math.random() * nombres.length)];
+}
+
 const CAPACIDADES_WAPPER = [
   {
     descripcion: "Crear tareas, exámenes y eventos",
-    ejemplo: "tengo examen de anatomía el jueves",
+    ejemplo: () => `tengo examen de ${elegirNombreMateriaEjemplo()} el jueves`,
   },
   {
     descripcion: "Consultar qué tareas o exámenes tienes en una semana puntual",
@@ -305,15 +323,15 @@ const CAPACIDADES_WAPPER = [
   },
   {
     descripcion: "Buscar un examen o tarea puntual y cuánto falta para esa fecha",
-    ejemplo: "cuándo es el segundo parcial de cálculo",
+    ejemplo: () => `cuándo es el segundo parcial de ${elegirNombreMateriaEjemplo()}`,
   },
   {
     descripcion: "Consultar si una clase próxima es virtual o presencial",
-    ejemplo: "mi próxima clase de bases de datos es virtual o presencial",
+    ejemplo: () => `mi próxima clase de ${elegirNombreMateriaEjemplo()} es virtual o presencial`,
   },
   {
     descripcion: "Cambiar la modalidad de una clase en tu Cronograma",
-    ejemplo: "la clase de física del martes va virtual",
+    ejemplo: () => `la clase de ${elegirNombreMateriaEjemplo()} del martes va virtual`,
   },
   {
     descripcion: "Cambiar cómo me dirijo a ti",
@@ -329,8 +347,8 @@ const CAPACIDADES_WAPPER = [
  * Arma el texto de "Puedo ayudarte con: ..." a partir de CAPACIDADES_WAPPER
  * — viñeta "•", con el ejemplo en su propia línea debajo de la descripción
  * (ajuste 2026-08-31, pedido explícito de formato). `c.ejemplo` puede ser
- * un string fijo o una función (ver "Cambiar cómo me dirijo a ti" arriba)
- * que se resuelve en cada llamada, nunca cacheada.
+ * un string fijo o una función que se resuelve en cada llamada, nunca
+ * cacheada — ver elegirNombreMateriaEjemplo arriba para el caso de materia.
  */
 function construirMensajeCapacidadesWapper() {
   const items = CAPACIDADES_WAPPER.map((c) => {
@@ -901,6 +919,133 @@ horario real):\n${filas.join("\n")}`;
 }
 
 /**
+ * Bug real reportado (2026-08-31): el prompt (más abajo, regla de "materia")
+ * le dice a Gemini desde siempre que puede reconocer iniciales como "AP2"
+ * porque "las muestra el sistema entre paréntesis junto a cada materia
+ * (iniciales: AP2)" — pero esa anotación NUNCA se generaba de verdad, la
+ * lista de materias (construirListaMateriasConApodos, abajo) solo mostraba
+ * apodos. Gemini terminaba adivinando la abreviatura por su cuenta, lo cual
+ * funcionaba a veces y fallaba otras (ej. "administracion de proyectos",
+ * "ap2", "segundo parcial de ap2" — mismo curso — devolviendo "materia":
+ * null en algunos turnos). Esta función calcula las iniciales de verdad,
+ * para que la promesa del prompt sea cierta.
+ *
+ * Algoritmo: por palabra del nombre oficial, ignorando conectores comunes
+ * ("de", "del", "la", "el", "los", "las", "y", "e", "en", "a", "al", "con",
+ * "por", "para", "un", "una") — un número romano al final (II, III, IV...)
+ * se convierte a dígito en vez de tomar su inicial (ej. "Administración De
+ * Proyectos II" → "A" + "P" + "2" = "AP2", igual que ya se ve en la UI de
+ * Horario/Agenda); un número ya en dígito se deja tal cual; el resto usa su
+ * primera letra en mayúscula. Se omite (retorna "") si el resultado queda
+ * en menos de 2 caracteres — una sola letra no sirve como abreviatura
+ * reconocible y solo agregaría ruido/ambigüedad al prompt.
+ */
+const ROMANO_A_NUMERO_INICIALES = {
+  I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10, XI: 11, XII: 12,
+};
+const CONECTORES_INICIALES = new Set([
+  "de", "del", "la", "el", "los", "las", "y", "e", "en", "a", "al", "con", "por", "para", "un", "una",
+]);
+function calcularInicialesMateria(nombreOficial) {
+  const palabras = String(nombreOficial || "").trim().split(/\s+/);
+  const partes = [];
+  palabras.forEach((palabraCruda) => {
+    const palabra = palabraCruda.replace(/[^\p{L}\p{N}]/gu, "");
+    if (!palabra) return;
+    if (CONECTORES_INICIALES.has(palabra.toLowerCase())) return;
+    const comoRomano = ROMANO_A_NUMERO_INICIALES[palabra.toUpperCase()];
+    if (comoRomano) {
+      partes.push(String(comoRomano));
+      return;
+    }
+    if (/^\d+$/.test(palabra)) {
+      partes.push(palabra);
+      return;
+    }
+    partes.push(palabra.charAt(0).toUpperCase());
+  });
+  const resultado = partes.join("");
+  return resultado.length >= 2 ? resultado : "";
+}
+
+/**
+ * Alias reales de una materia vinculada para reconocerla en texto libre:
+ * su nombre oficial normalizado, sus apodos (si tiene) y sus iniciales
+ * calculadas — los mismos tres caminos que ya describe el prompt como
+ * válidos para "materia". Se usa tanto para mostrarle la lista a Gemini
+ * como para la red de seguridad en JS (ver intentarResolverMateriaPorTexto)
+ * que reconoce una materia aunque Gemini no haya llenado bien el campo.
+ */
+function calcularAliasesMateria(materiaVinculada, apodosPorMateria) {
+  const aliases = new Set();
+  aliases.add(normalizarTexto(materiaVinculada.nombre));
+  const apodos = apodosPorMateria.get(materiaVinculada.nombre);
+  if (apodos) apodos.forEach((apodo) => aliases.add(normalizarTexto(apodo)));
+  const iniciales = calcularInicialesMateria(materiaVinculada.nombre);
+  if (iniciales) aliases.add(normalizarTexto(iniciales));
+  return aliases;
+}
+
+/**
+ * Red de seguridad en JS (2026-08-31, bug real: "administracion de
+ * proyectos"/"segundo parcial de ap2" devolvían 8 coincidencias sin filtrar
+ * por materia, y "examen 2 administracion de proyectos" devolvía 0 —
+ * Gemini a veces deja "materia" en null y el nombre de la materia queda
+ * suelto en "palabrasClave", que busca ese texto LITERAL en el título del
+ * evento, donde nunca va a aparecer). Cuando `resolverMateriaVinculada`
+ * no tiene nada que resolver (Gemini no llenó "materia"), se intenta acá
+ * reconocer una materia real dentro de un texto libre (normalmente
+ * `consulta.palabrasClave`) contra los mismos alias reales de
+ * `calcularAliasesMateria` — nombre oficial, apodos e iniciales. Solo
+ * devuelve algo si hay UNA sola materia candidata (mismo criterio
+ * anti-ambigüedad de siempre); si matchean dos o más, no adivina.
+ */
+function intentarResolverMateriaPorTexto(texto, materiasVinculables) {
+  const normalizado = normalizarTexto(texto).trim();
+  if (!normalizado) return null;
+  const palabrasTexto = normalizado.split(/\s+/).filter((p) => p && !CONECTORES_INICIALES.has(p));
+  if (palabrasTexto.length === 0) return null;
+  const apodosPorMateria = construirMapaApodosMaterias(materiasVinculables);
+
+  const candidatas = materiasVinculables.filter((m) => {
+    // 1) Nombre oficial PARCIAL (ej. "administracion de proyectos" o incluso
+    //    "examen 2 administracion de proyectos" para "Administración De
+    //    Proyectos II"): NO exige que TODAS las palabras del texto
+    //    matcheen — el usuario (o un campo mal separado por Gemini) puede
+    //    traer ruido de más ("examen", números). Alcanza con que 2 o más
+    //    palabras reales del nombre coincidan (o la única, si el nombre
+    //    solo tiene una palabra significativa) para considerarlo un match
+    //    seguro sin caer en falsos positivos de una sola palabra suelta.
+    const palabrasNombre = normalizarTexto(m.nombre)
+      .split(/\s+/)
+      .filter((p) => p && !CONECTORES_INICIALES.has(p));
+    const coincidencias = palabrasNombre.filter((pn) =>
+      palabrasTexto.some((palabra) => pn.includes(palabra) || palabra.includes(pn))
+    );
+    const minimoNecesario = Math.min(2, palabrasNombre.length);
+    if (coincidencias.length > 0 && coincidencias.length >= minimoNecesario) return true;
+
+    // 2) Apodo o iniciales: coincidencia de TOKEN completo dentro del
+    //    texto. Incluye también las iniciales sin el dígito/número final
+    //    ("ap" además de "ap2") — misma regla que ya describe el prompt:
+    //    el usuario puede omitir el número de nivel y sigue siendo obvio a
+    //    cuál materia se refiere.
+    const aliasesCortos = new Set();
+    const apodos = apodosPorMateria.get(m.nombre);
+    if (apodos) apodos.forEach((apodo) => aliasesCortos.add(normalizarTexto(apodo)));
+    const iniciales = calcularInicialesMateria(m.nombre);
+    if (iniciales) {
+      aliasesCortos.add(normalizarTexto(iniciales));
+      const sinDigitoFinal = iniciales.replace(/\d+$/, "");
+      if (sinDigitoFinal.length >= 2) aliasesCortos.add(normalizarTexto(sinDigitoFinal));
+    }
+    return Array.from(aliasesCortos).some((alias) => palabrasTexto.includes(alias));
+  });
+
+  return candidatas.length === 1 ? candidatas[0] : null;
+}
+
+/**
  * Bug real reportado (2026-08-22): el usuario le puso un apodo a una
  * materia en Horario (ej. "Natación" para "Educación Física II", ver
  * campo `apodo` de crearBloqueHorario/obtenerNombreBloque en
@@ -934,10 +1079,12 @@ function construirMapaApodosMaterias(materiasVinculables) {
 }
 
 /**
- * Lista de materias para el prompt, con apodo(s) entre paréntesis cuando
- * la materia tiene alguno. Gemini sigue devolviendo SIEMPRE el nombre
- * OFICIAL en "materia" (nunca el apodo) — esto solo lo ayuda a identificar
- * a cuál materia se refiere el usuario cuando usa el apodo.
+ * Lista de materias para el prompt, con apodo(s) e iniciales calculadas
+ * entre paréntesis cuando aplica (ver calcularInicialesMateria arriba —
+ * antes esta lista solo mostraba apodos, aunque el prompt ya prometía
+ * mostrar iniciales). Gemini sigue devolviendo SIEMPRE el nombre OFICIAL en
+ * "materia" (nunca el apodo/iniciales) — esto solo lo ayuda a identificar a
+ * cuál materia se refiere el usuario cuando usa una abreviatura.
  */
 function construirListaMateriasConApodos(materiasVinculables) {
   if (materiasVinculables.length === 0) {
@@ -947,8 +1094,14 @@ function construirListaMateriasConApodos(materiasVinculables) {
   return materiasVinculables
     .map((m) => {
       const apodos = apodosPorMateria.get(m.nombre);
-      if (!apodos || apodos.size === 0) return `- ${m.nombre}`;
-      return `- ${m.nombre} (${apodos.size === 1 ? "apodo" : "apodos"}: ${Array.from(apodos).join(", ")})`;
+      const iniciales = calcularInicialesMateria(m.nombre);
+      const detalles = [];
+      if (apodos && apodos.size > 0) {
+        detalles.push(`${apodos.size === 1 ? "apodo" : "apodos"}: ${Array.from(apodos).join(", ")}`);
+      }
+      if (iniciales) detalles.push(`iniciales: ${iniciales}`);
+      if (detalles.length === 0) return `- ${m.nombre}`;
+      return `- ${m.nombre} (${detalles.join("; ")})`;
     })
     .join("\n");
 }
@@ -988,6 +1141,39 @@ menciona nada más que lo distinga), NO adivines cuál es: devolvé "items":
 [] y preguntá en "aclaracion" cuál de las dos es, nombrando el nombre
 OFICIAL de cada una (ej. "Le pusiste 'Nata' tanto a Natación como a Vóley
 playa, ¿a cuál te refieres?").`;
+}
+
+/**
+ * Mismo caso límite que construirAvisoApodosDuplicados, pero para iniciales
+ * CALCULADAS (2026-08-31, ver calcularInicialesMateria): si dos materias
+ * distintas reducen a las mismas iniciales (ej. "Cálculo Integral" y
+ * "Cálculo Diferencial" podrían calcular ambas a algo parecido), no hay
+ * forma de saber cuál quiso decir el usuario con solo la abreviatura.
+ */
+function construirAvisoInicialesDuplicadas(materiasVinculables) {
+  const materiasPorIniciales = new Map();
+
+  materiasVinculables.forEach((m) => {
+    const iniciales = calcularInicialesMateria(m.nombre);
+    if (!iniciales) return;
+    const clave = iniciales.toLowerCase();
+    if (!materiasPorIniciales.has(clave)) materiasPorIniciales.set(clave, { iniciales, materias: [] });
+    materiasPorIniciales.get(clave).materias.push(m.nombre);
+  });
+
+  const duplicados = Array.from(materiasPorIniciales.values()).filter((entrada) => entrada.materias.length > 1);
+  if (duplicados.length === 0) return "";
+
+  const filas = duplicados
+    .map((d) => `- "${d.iniciales}" coincide con ${d.materias.join(" y ")}`)
+    .join("\n");
+
+  return `\n\n⚠️ Iniciales duplicadas (dos o más materias calculan a las mismas iniciales):
+${filas}
+Si el usuario usa unas iniciales de esta lista SIN aclarar de cuál habla,
+NO adivines cuál es: devolvé "items": [] (o "consulta": null /
+"cambioModalidad": null, según corresponda) y preguntá en "aclaracion"
+cuál de las dos es, nombrando el nombre OFICIAL de cada una.`;
 }
 
 /**
@@ -1073,6 +1259,7 @@ function construirSystemInstruction() {
   const materiasVinculables = obtenerMateriasVinculablesAgenda();
   const listaMaterias = construirListaMateriasConApodos(materiasVinculables);
   const avisoApodosDuplicados = construirAvisoApodosDuplicados(materiasVinculables);
+  const avisoInicialesDuplicadas = construirAvisoInicialesDuplicadas(materiasVinculables);
   const contextoDiasModalidad = construirContextoDiasModalidadMaterias(materiasVinculables);
 
   return `Sos el Asistente IA de una app académica. Tu función es leer un
@@ -1089,9 +1276,9 @@ martes durante 3 semanas seguidas"), devolvé UN ítem por cada ocurrencia
 real, cada uno con su propia fecha.${construirContextoSemanasSemestres()}${construirContextoProximasClases()}
 
 Materias matriculadas reales del usuario ahora mismo (nombre oficial —
-entre paréntesis, el/los apodo(s) que el usuario le puso en Horario, si
-tiene):
-${listaMaterias}${avisoApodosDuplicados}${contextoDiasModalidad}
+entre paréntesis, el/los apodo(s) que el usuario le puso en Horario (si
+tiene) y las iniciales que calcula el sistema a partir del nombre oficial):
+${listaMaterias}${avisoApodosDuplicados}${avisoInicialesDuplicadas}${contextoDiasModalidad}
 
 Devolvé ÚNICAMENTE un JSON con esta forma exacta:
 {
@@ -1595,7 +1782,7 @@ async function extraerEventosDeTexto(texto) {
  *
  * Devuelve el texto de Wapper, o `null` si algo falla (clave inválida, sin
  * red, respuesta vacía/bloqueada, etc.) — el caller decide el mensaje de
- * respaldo (MENSAJE_FALLBACK_WAPPER) en ese caso, nunca se propaga un
+ * respaldo (construirMensajeFallbackWapper) en ese caso, nunca se propaga un
  * error acá para no duplicar el manejo de errores que ya tiene
  * ejecutarGeneracionGemini para la ruta principal.
  */
@@ -1832,8 +2019,30 @@ function fraseDemostrativaTipoItem(tipoItem, cantidad) {
  * la MISMA tarjeta editable/borrable que usa la creación, no una vista de
  * solo texto aparte.
  */
+/**
+ * Envoltorio sobre resolverMateriaVinculada (2026-08-31): primero intenta
+ * el match estricto de siempre (nombre oficial exacto o normalizado), y
+ * SOLO si eso falla intenta la red de seguridad por alias reales (nombre/
+ * apodo/iniciales, ver intentarResolverMateriaPorTexto) contra el mismo
+ * texto — cubre el caso real en que Gemini devolvió algo en "materia" que
+ * no matchea ni por asomo el nombre oficial (ej. "administracion de
+ * proyectos" en vez de "Administración De Proyectos II") pero sí es
+ * reconocible por sus alias. Nunca reemplaza la resolución normal, solo
+ * evita un "no pude identificar" innecesario cuando en realidad sí es
+ * clarísimo cuál es.
+ */
+function resolverMateriaConRedDeSeguridad(materiaTexto, materiasVinculables) {
+  if (!materiaTexto) return null;
+  const exacta = resolverMateriaVinculada(materiaTexto);
+  if (exacta) return exacta;
+  return intentarResolverMateriaPorTexto(materiaTexto, materiasVinculables);
+}
+
 function resolverConsultaTareasEventos(consulta) {
-  const materiaVinculada = consulta.materia ? resolverMateriaVinculada(consulta.materia) : null;
+  const materiasVinculables = obtenerMateriasVinculablesAgenda();
+  const materiaVinculada = consulta.materia
+    ? resolverMateriaConRedDeSeguridad(consulta.materia, materiasVinculables)
+    : null;
   if (consulta.materia && !materiaVinculada) {
     return { ok: false, motivo: "No pude identificar de forma clara a qué materia te refieres." };
   }
@@ -1948,13 +2157,36 @@ const LIMITE_RESULTADOS_BUSQUEDA_EVENTO = 3;
  * desempate por número no lo reconozca).
  */
 function resolverBusquedaEvento(consulta) {
-  const materiaVinculada = consulta.materia ? resolverMateriaVinculada(consulta.materia) : null;
+  const materiasVinculables = obtenerMateriasVinculablesAgenda();
+  let materiaVinculada = consulta.materia
+    ? resolverMateriaConRedDeSeguridad(consulta.materia, materiasVinculables)
+    : null;
   if (consulta.materia && !materiaVinculada) {
     return { ok: false, motivo: "No pude identificar de forma clara a qué materia te refieres." };
   }
   const tipoItem = ["examen", "tarea", "evento"].includes(consulta.tipoItem) ? consulta.tipoItem : null;
-  const palabrasClave = normalizarTexto(consulta.palabrasClave).split(/\s+/).filter(Boolean);
+  let palabrasClave = normalizarTexto(consulta.palabrasClave).split(/\s+/).filter(Boolean);
   const numeroOrdinal = Number.isFinite(consulta.numeroOrdinal) ? consulta.numeroOrdinal : null;
+
+  // Red de seguridad (2026-08-31, bug real: "administracion de proyectos"/
+  // "segundo parcial de ap2" devolvían TODOS los exámenes sin filtrar por
+  // materia, y "examen 2 administracion de proyectos" devolvía 0 — Gemini a
+  // veces deja "materia" en null y el nombre de la materia queda suelto en
+  // "palabrasClave", que se compara LITERAL contra el título del evento
+  // ("Segundo Parcial" nunca va a contener "administracion"/"proyectos").
+  // Si no vino materia, se intenta reconocer una acá dentro del texto de
+  // "palabrasClave" por sus alias reales — y se sacan del filtro de
+  // palabras clave los tokens que en realidad eran el nombre de la
+  // materia, para no exigir que el título del evento también los tenga.
+  if (!materiaVinculada && consulta.palabrasClave) {
+    const materiaDetectada = intentarResolverMateriaPorTexto(consulta.palabrasClave, materiasVinculables);
+    if (materiaDetectada) {
+      materiaVinculada = materiaDetectada;
+      const apodosPorMateria = construirMapaApodosMaterias(materiasVinculables);
+      const aliases = Array.from(calcularAliasesMateria(materiaDetectada, apodosPorMateria));
+      palabrasClave = palabrasClave.filter((palabra) => !aliases.some((alias) => alias.includes(palabra)));
+    }
+  }
 
   let eventos = (estado.datos.agenda || [])
     .filter((ev) => !materiaVinculada || ev.materiaMatriculadaId === materiaVinculada.mmId)
@@ -2467,8 +2699,8 @@ async function mostrarResultadoEventosEnChat(resultado, turno, textoUsuario) {
     // se vuelve a llamar a Gemini, se usa directo el respaldo estático.
     if (typeof turno.respuestaConversacional !== "string") {
       turno.respuestaConversacional = textoUsuario
-        ? (await generarRespuestaConversacionalWapper(textoUsuario)) || MENSAJE_FALLBACK_WAPPER
-        : MENSAJE_FALLBACK_WAPPER;
+        ? (await generarRespuestaConversacionalWapper(textoUsuario)) || construirMensajeFallbackWapper()
+        : construirMensajeFallbackWapper();
     }
     agregarBurbujaAlDom(crearBurbuja("modelo", turno.respuestaConversacional));
     return;
