@@ -892,6 +892,14 @@ function fusionarDatos(datosLocal, datosRemoto) {
     datosRemoto._eliminados_finanzas_semestre
   );
   const tumbasGastosU = fusionarTumbas(datosLocal._eliminados_gastos_u, datosRemoto._eliminados_gastos_u);
+  // Tiempo de Estudio (Parte 1): colección plana de nivel superior, mismo
+  // patrón exacto que finanzas_semestre/gastos_u — fusionarColeccion ya
+  // sabe fundir por _actualizadoEn y respetar tumbas, no hace falta ninguna
+  // función de fusión nueva.
+  const tumbasSesionesEstudio = fusionarTumbas(
+    datosLocal._eliminados_sesiones_estudio,
+    datosRemoto._eliminados_sesiones_estudio
+  );
   const tumbasEnlaces = fusionarTumbas(
     datosLocal.configuracion && datosLocal.configuracion._eliminados_enlaces,
     datosRemoto.configuracion && datosRemoto.configuracion._eliminados_enlaces
@@ -953,6 +961,12 @@ function fusionarDatos(datosLocal, datosRemoto) {
       "registro financiero de semestre"
     ),
     gastos_u: fusionarColeccion(datosLocal.gastos_u, datosRemoto.gastos_u, tumbasGastosU, "gasto general U"),
+    sesiones_estudio: fusionarColeccion(
+      datosLocal.sesiones_estudio,
+      datosRemoto.sesiones_estudio,
+      tumbasSesionesEstudio,
+      "sesión de estudio"
+    ),
     // Horario entre Amigos — Parte 1 (bug fix de esta ronda, ver comentario
     // arriba): ahora sí se funde por entidad en vez de heredar el reemplazo
     // total del spread de más abajo.
@@ -971,6 +985,7 @@ function fusionarDatos(datosLocal, datosRemoto) {
     _eliminados_finanzas_semestre: tumbasFinanzasSemestre,
     _eliminados_gastos_u: tumbasGastosU,
     _eliminados_horario_enlaces: tumbasHorarioEnlaces,
+    _eliminados_sesiones_estudio: tumbasSesionesEstudio,
   };
 }
 

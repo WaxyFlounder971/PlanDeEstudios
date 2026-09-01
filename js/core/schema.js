@@ -311,6 +311,19 @@ function crearDatosUsuarioNuevo() {
     ],
     _eliminados_finanzas_semestre: [],
     _eliminados_gastos_u: [],
+
+    // Tiempo de Estudio (Parte 1): colección plana de nivel superior, mismo
+    // patrón exacto que finanzas_semestre/gastos_u/agenda — una sesión de
+    // estudio se vincula a una materia matriculada concreta por
+    // materia_matriculada_id (nunca por materia_id directo, así dos
+    // matrículas distintas de la misma materia repetida jamás mezclan sus
+    // sesiones — ver crearSesionEstudio). Se funde con una sola llamada a
+    // fusionarColeccion (ver fusionarDatos en storage-merge.js), nada de
+    // lógica de fusión nueva que escribir.
+    sesiones_estudio: [
+      /* ver crearSesionEstudio() */
+    ],
+    _eliminados_sesiones_estudio: [],
   };
 }
 
@@ -1346,6 +1359,60 @@ function crearMateriaMatriculada({ materiaId, planEstudioId }) {
     // Tumba de criterios borrados de esta matrícula (regla obligatoria de
     // sincronización) — ver fusionarMateriaMatriculada en storage-merge.js.
     _eliminados_criterios: [],
+
+    // Tiempo de Estudio (Parte 1): configuración de esta matrícula puntual
+    // (nunca de la materia del plan) — cada repetición de una materia tiene
+    // su propia meta y su propio Pomodoro, igual que sus propias sesiones.
+    // meta_horas_semana: null = sin configurar (la tarjeta principal
+    // muestra el estado "sin configurar" en vez de una barra vacía, ver
+    // tiempo-estudio.js). pomodoro: null = "no configurado, usar timer
+    // simple sin ciclos"; si el usuario activa el toggle "usar Pomodoro"
+    // pasa a ser un objeto { duracion_bloque_min, cantidad_bloques,
+    // descanso_corto_min, descanso_largo_min } — ver
+    // crearConfigPomodoroDefault().
+    tiempo_estudio: {
+      meta_horas_semana: null,
+      pomodoro: null,
+    },
+  });
+}
+
+/**
+ * Tiempo de Estudio (Parte 1): defaults de Pomodoro (25/4/5/10) — el modal
+ * de configuración (tiempo-estudio-config.js) precarga estos valores en
+ * cuanto el usuario activa el toggle "usar Pomodoro", pero quedan 100%
+ * editables. Se centraliza acá (en vez de hardcodear el objeto en el modal)
+ * para que Parte 2 (motor de Pomodoro real) tenga un único punto de verdad
+ * de cuáles son los defaults, igual que crearBackupDriveDefault() arriba.
+ */
+function crearConfigPomodoroDefault() {
+  return {
+    duracion_bloque_min: 25,
+    cantidad_bloques: 4,
+    descanso_corto_min: 5,
+    descanso_largo_min: 10,
+  };
+}
+
+/**
+ * Tiempo de Estudio (Parte 1): crea una sesión de estudio ya cerrada (con
+ * inicio Y fin conocidos — no hay "sesión en curso" en el modelo de datos,
+ * el timer en curso vive solo en memoria, ver estado.timerEstudioActivo en
+ * tiempo-estudio-timer.js). `duracionMinutos` se calcula acá mismo a partir
+ * de inicio/fin, nunca se recibe como parámetro, para que nunca pueda
+ * quedar desincronizada de los timestamps reales.
+ * `origen`: "timer" (Parte 1, cronómetro simple) | "pomodoro" (Parte 2) |
+ * "manual" (Parte 3, registro manual/retroactivo).
+ */
+function crearSesionEstudio({ materiaMatriculadaId, inicio, fin, origen }) {
+  const duracionMinutos = Math.max(0, Math.round((Number(fin) - Number(inicio)) / 60000));
+  return sellarTimestamp({
+    id: "sesest_" + crypto.randomUUID(),
+    materia_matriculada_id: materiaMatriculadaId,
+    inicio, // epoch ms
+    fin, // epoch ms
+    duracion_minutos: duracionMinutos,
+    origen: origen || "timer",
   });
 }
 
@@ -3013,6 +3080,11 @@ function migrarDatosAntiguos(datos) {
   if (!Array.isArray(datos._eliminados_finanzas_semestre)) datos._eliminados_finanzas_semestre = [];
   if (!Array.isArray(datos._eliminados_gastos_u)) datos._eliminados_gastos_u = [];
 
+  // Tiempo de Estudio (Parte 1): mismo relleno defensivo — cuentas cuyo
+  // JSON en Drive se guardó antes de que existiera esta sección.
+  if (!Array.isArray(datos.sesiones_estudio)) datos.sesiones_estudio = [];
+  if (!Array.isArray(datos._eliminados_sesiones_estudio)) datos._eliminados_sesiones_estudio = [];
+
   // Finanzas (v2.8.8, 2026-08-11): se simplificó el registro financiero de
   // semestre — costo_total/beca_activa/porcentaje_beca/pago_confirmado/
   // pago_confirmado_manual desaparecen, reemplazados por costo_matricula +
@@ -3075,6 +3147,13 @@ function migrarDatosAntiguos(datos) {
         if (mm.profesor_id !== undefined) delete mm.profesor_id;
         if (mm.calificacion_profesor === undefined) mm.calificacion_profesor = null;
         if (mm.volveria_a_llevar_profesor === undefined) mm.volveria_a_llevar_profesor = null;
+        // Tiempo de Estudio (Parte 1): mismo relleno defensivo — mm creadas
+        // antes de este feature no traen el campo en absoluto.
+        if (!mm.tiempo_estudio || typeof mm.tiempo_estudio !== "object") {
+          mm.tiempo_estudio = { meta_horas_semana: null, pomodoro: null };
+        }
+        if (mm.tiempo_estudio.meta_horas_semana === undefined) mm.tiempo_estudio.meta_horas_semana = null;
+        if (mm.tiempo_estudio.pomodoro === undefined) mm.tiempo_estudio.pomodoro = null;
       });
     });
   }
@@ -3368,4 +3447,6 @@ export {
   SEPARADOR_ID_RECORDATORIO_OFFSET,
   NOMBRE_CALENDARIO_SECUNDARIO,
   COLOR_ID_GOOGLE_CALENDAR_POR_TIPO,
+  crearSesionEstudio,
+  crearConfigPomodoroDefault,
 };
