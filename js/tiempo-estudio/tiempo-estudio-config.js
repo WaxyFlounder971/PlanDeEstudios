@@ -5,7 +5,7 @@
    en semestres.js) en vez de markup fijo en index.html.
    ========================================================================= */
 
-import { crearConfigPomodoroDefault, sellarTimestamp } from "../core/schema.js";
+import { COLOR_TIEMPO_ESTUDIO_DEFAULT, crearConfigPomodoroDefault, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { mostrarToast } from "../ui/componentes.js";
 
@@ -40,6 +40,12 @@ function abrirModalConfigTiempoEstudio(mm, nombreMateria, onGuardar) {
       <span class="form-label">Meta de horas semanales</span>
       <input type="number" id="te-config-meta" class="form-input" min="0" step="0.5"
         value="${mm.tiempo_estudio.meta_horas_semana ?? ""}" placeholder="Ej. 4">
+    </div>
+
+    <div class="row-between" style="align-items:center;">
+      <span class="form-label" style="margin:0;">Color de la materia</span>
+      <input type="color" id="te-config-color" class="form-input"
+        value="${mm.tiempo_estudio.color || COLOR_TIEMPO_ESTUDIO_DEFAULT}" style="height:40px; width:64px; padding:4px;">
     </div>
 
     <div class="row-between" style="align-items:center;">
@@ -97,6 +103,7 @@ function abrirModalConfigTiempoEstudio(mm, nombreMateria, onGuardar) {
     const metaCruda = caja.querySelector("#te-config-meta").value;
     const meta = metaCruda === "" ? null : Math.max(0, Number(metaCruda));
     mm.tiempo_estudio.meta_horas_semana = Number.isFinite(meta) ? meta : null;
+    mm.tiempo_estudio.color = caja.querySelector("#te-config-color").value || null;
 
     if (togglePomodoro.checked) {
       mm.tiempo_estudio.pomodoro = {
