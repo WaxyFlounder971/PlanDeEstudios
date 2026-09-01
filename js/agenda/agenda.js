@@ -341,6 +341,18 @@ function alternarCompletadaEvento(eventoId) {
  * registrarPresionLargaSeleccion/alternarSeleccionAgenda más abajo.
  */
 function construirItemEvento(evento) {
+  // FIX crash "Cannot read properties of undefined (reading 'includes')":
+  // esta función se reutiliza desde Resumen (ver comentario más abajo,
+  // "construirItemEvento reutilizado"), que puede renderizarse ANTES de que
+  // Agenda se haya inicializado alguna vez en la sesión (p.ej. si Resumen es
+  // la sección con la que arranca la app). asegurarEstadoAgendaBaseInicializado()
+  // hasta ahora solo se llamaba desde renderizarAgenda(), así que
+  // estado.agendaSeleccionIds/estado.agendaModoSeleccion podían no existir
+  // todavía cuando Resumen construye sus items. Es idempotente (cada línea
+  // de adentro ya revisa `typeof ... === "undefined"`), así que llamarla acá
+  // también no pisa nada si Agenda ya se inicializó antes.
+  asegurarEstadoAgendaBaseInicializado();
+
   const estilo = obtenerEstiloEvento(evento);
 
   const item = document.createElement("div");
