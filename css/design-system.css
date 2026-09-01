@@ -4375,22 +4375,23 @@ html.exportar-tema-default[data-mode="dark"] {
   .badge-tiempo-estudio-fijo { bottom: 16px; left: 16px; padding: 9px 14px; font-size: 0.8rem; }
 }
 
+/* Encabezado (B.1): misma tarjeta que el resto, título + switch Todo/Activos. */
+.te-encabezado { flex-wrap: wrap; }
+
 /* Tarjeta de materia — lista vertical (no grid), mismo lenguaje visual que
    las tarjetas de Semestres (.glass-card). El ancho completo es lo que le
    da a la barra de progreso espacio legible para el texto "X h Y min de
-   Z h" debajo. */
+   Z h" al lado.
+   border-color se pisa por JS (color elegido por el usuario, o el default
+   violeta) — acá solo se define el grosor/estilo para que el borde
+   siempre ocupe el mismo espacio, tenga o no color propio. */
 .te-tarjeta-materia {
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 16px 18px;
   cursor: pointer;
-}
-.te-tarjeta-materia-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  border: 2px solid transparent;
 }
 .te-tarjeta-materia-nombre {
   font-weight: 700;
@@ -4399,10 +4400,25 @@ html.exportar-tema-default[data-mode="dark"] {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Línea 2 (B.2): barra centrada (crece con flex) + tiempo anclado a la
+   derecha — o, sin meta, el mismo placeholder ocupando el mismo alto, así
+   la tarjeta nunca cambia de tamaño entre estados. */
+.te-tarjeta-materia-linea2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 22px;
+}
+.te-tarjeta-materia-tiempo {
+  font-size: 0.82rem;
+  flex-shrink: 0;
+  margin-left: auto;
+}
 /* Barra de progreso: fondo --bg-panel (mismo que el resto de la app),
-   relleno con degradado de acento, esquinas tipo pill. */
+   relleno con el color de la materia (inline, por JS) o el degradado de
+   acento como respaldo si por algo no llegó ningún color. */
 .te-barra-progreso {
-  width: 100%;
+  flex: 1 1 auto;
   height: 10px;
   border-radius: var(--radius-pill);
   background: var(--bg-panel);
@@ -4414,24 +4430,34 @@ html.exportar-tema-default[data-mode="dark"] {
   background: var(--gradient-accent);
   transition: width var(--transition-fast) ease;
 }
-/* Si se pasó de la meta, el relleno no se corta antes del 100% visual, pero
-   cambia de color para marcar que ya llegó/superó el objetivo. */
-.te-barra-progreso-fill.te-completada { background: var(--gradient-accent-alt, var(--gradient-accent)); }
+/* Si se pasó de la meta, un brillo extra marca que ya llegó/superó el
+   objetivo sin pisar el color elegido por el usuario (que ya viene inline). */
+.te-barra-progreso-fill.te-completada { box-shadow: 0 0 6px 0 currentColor inset; filter: brightness(1.15); }
 
-/* Estado "sin meta configurada": mismo tamaño de tarjeta, sin barra vacía
-   rara — solo texto + botón. */
-.te-tarjeta-sin-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-/* Botón de inicio rápido dentro de la tarjeta — no debe disparar el click
-   de la tarjeta entera (que navega al detalle), ver stopPropagation en
-   tiempo-estudio.js. */
-.te-btn-inicio-rapido {
+/* Botones solo-ícono de la tarjeta (B.2): mismo tamaño exacto entre sí —
+   comparten padding/font-size con .btn-icono-fantasma (el engranaje ya usa
+   esa clase tal cual); acá solo se agrega el tratamiento de color según
+   estado para el de iniciar/detener. */
+.te-btn-icono {
+  padding: 6px 10px;
+  font-size: 1.05rem;
+  line-height: 1;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+.te-btn-icono-iniciar { background: var(--gradient-accent); color: var(--on-accent); }
+.te-btn-icono-iniciar:hover { filter: brightness(1.08); }
+.te-btn-icono-detener { background: var(--color-danger, #ef4444); color: #fff; }
+.te-btn-icono-detener:hover { filter: brightness(1.08); }
+
+/* Encabezado de detalle (D.1): flecha / nombre centrado / engranaje. */
+.te-encabezado-detalle-nombre {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Pantalla de detalle: timer grande centrado. */
