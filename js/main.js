@@ -790,7 +790,7 @@ function mostrarApp() {
   // Bug 3: antes mostrarSeccion() solo se llamaba desde clics del nav, así que
   // tras un refresh la sección de Plan de Estudios se quedaba con la clase
   // "oculto" del HTML aunque su contenido sí se hubiera renderizado.
-  mostrarSeccion(localStorage.getItem(CLAVE_SECCION_ACTIVA) || "agenda");
+  mostrarSeccion(localStorage.getItem(CLAVE_SECCION_ACTIVA) || "resumen");
   // Deep links por query param — ambos se limpian enseguida para que un
   // refresh posterior no vuelva a saltar de sección solo:
   //   "?abrir=agenda"  — notificación push vieja (Web Push, dada de baja
