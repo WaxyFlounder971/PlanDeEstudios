@@ -1370,9 +1370,15 @@ function crearMateriaMatriculada({ materiaId, planEstudioId }) {
     // pasa a ser un objeto { duracion_bloque_min, cantidad_bloques,
     // descanso_corto_min, descanso_largo_min } — ver
     // crearConfigPomodoroDefault().
+    // color: null = sin elegir todavía (la tarjeta usa el color por
+    // defecto "#a78bfa", mismo fallback que ya usa obtenerColorBloque() en
+    // horario.js). Un solo campo, reusado para el borde de la tarjeta Y el
+    // relleno de la barra de progreso — mismo criterio que horario.js, que
+    // nunca separa "color de fondo" de "color de borde" para un bloque.
     tiempo_estudio: {
       meta_horas_semana: null,
       pomodoro: null,
+      color: null,
     },
   });
 }
@@ -1385,6 +1391,15 @@ function crearMateriaMatriculada({ materiaId, planEstudioId }) {
  * para que Parte 2 (motor de Pomodoro real) tenga un único punto de verdad
  * de cuáles son los defaults, igual que crearBackupDriveDefault() arriba.
  */
+/**
+ * Tiempo de Estudio: color de respaldo cuando la materia todavía no tiene
+ * uno elegido (`tiempo_estudio.color === null`). Mismo hex que ya usa
+ * obtenerColorBloque() en horario.js como último fallback ("#a78bfa"), para
+ * que una materia sin color propio se vea igual acá y en Horario en vez de
+ * dos violetas ligeramente distintos.
+ */
+const COLOR_TIEMPO_ESTUDIO_DEFAULT = "#a78bfa";
+
 function crearConfigPomodoroDefault() {
   return {
     duracion_bloque_min: 25,
@@ -3154,6 +3169,9 @@ function migrarDatosAntiguos(datos) {
         }
         if (mm.tiempo_estudio.meta_horas_semana === undefined) mm.tiempo_estudio.meta_horas_semana = null;
         if (mm.tiempo_estudio.pomodoro === undefined) mm.tiempo_estudio.pomodoro = null;
+        // Parte A (color por materia): mm creadas antes de este campo no lo
+        // traen — igual criterio que meta_horas_semana/pomodoro arriba.
+        if (mm.tiempo_estudio.color === undefined) mm.tiempo_estudio.color = null;
       });
     });
   }
@@ -3449,4 +3467,5 @@ export {
   COLOR_ID_GOOGLE_CALENDAR_POR_TIPO,
   crearSesionEstudio,
   crearConfigPomodoroDefault,
+  COLOR_TIEMPO_ESTUDIO_DEFAULT,
 };
