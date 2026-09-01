@@ -272,7 +272,7 @@ function esSaludoSimple(textoOriginal) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[¡!¿?.,;:]/g, "")
+    .replace(/[¡!¿?.,;:'"´`]/g, "")
     .replace(/\s+/g, " ")
     .trim();
   if (!normalizado) return false;
@@ -384,7 +384,7 @@ function esPreguntaCapacidades(textoOriginal) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[¡!¿?.,;:]/g, "")
+    .replace(/[¡!¿?.,;:'"´`]/g, "")
     .replace(/\s+/g, " ")
     .trim();
   if (!normalizado) return false;
@@ -2188,10 +2188,37 @@ function resolverBusquedaEvento(consulta) {
     }
   }
 
-  let eventos = (estado.datos.agenda || [])
-    .filter((ev) => !materiaVinculada || ev.materiaMatriculadaId === materiaVinculada.mmId)
-    .filter((ev) => !tipoItem || ev.tipo === tipoItem)
-    .filter((ev) => palabrasClave.every((palabra) => normalizarTexto(ev.nombre).includes(palabra)));
+  // Filtrado PROGRESIVO y "suave" (2026-08-31, bug real: "Cuánto falta para
+  // II Parcial de Derecho Informático Y Mercantil" devolvía 0 resultados —
+  // la materia SÍ existe y tiene justo un "II Parcial", pero como los 4
+  // filtros (materia + tipoItem + palabrasClave + numeroOrdinal) se
+  // aplicaban todos con AND en un solo paso, bastaba con que Gemini errara
+  // en UNO solo — ej. dejara "ii"/"parcial" sueltos en palabrasClave con un
+  // acento/formato que no calzara exacto contra el título real del evento
+  // — para que el combinado diera 0, aunque materia+ordinal solos ya
+  // apuntaban sin ninguna duda a un único evento real. Mismo criterio que
+  // YA se usaba para numeroOrdinal más abajo (nunca lo aplica si vacía el
+  // resultado): cada filtro se prueba y SOLO se comete si dejó algo — si
+  // vació todo, se descarta ese filtro puntual y se sigue con el conjunto
+  // anterior, más ancho pero no vacío. La materia es la única excepción
+  // que se aplica SIEMPRE aunque vacíe (es la señal más confiable de
+  // todas — si el usuario nombró una materia real y no hay nada de esa
+  // materia, no hay nada que mostrar, no tiene sentido ignorarla).
+  let eventos = (estado.datos.agenda || []).filter(
+    (ev) => !materiaVinculada || ev.materiaMatriculadaId === materiaVinculada.mmId
+  );
+
+  if (tipoItem) {
+    const angostadoTipo = eventos.filter((ev) => ev.tipo === tipoItem);
+    if (angostadoTipo.length > 0) eventos = angostadoTipo;
+  }
+
+  if (palabrasClave.length > 0) {
+    const angostadoPalabras = eventos.filter((ev) =>
+      palabrasClave.every((palabra) => normalizarTexto(ev.nombre).includes(palabra))
+    );
+    if (angostadoPalabras.length > 0) eventos = angostadoPalabras;
+  }
 
   if (numeroOrdinal !== null && eventos.length > 1) {
     const angostado = eventos.filter((ev) => nombreEventoMencionaNumero(ev.nombre, numeroOrdinal));
@@ -2823,12 +2850,38 @@ function formatearDiasFaltantes(fechaEventoIso) {
  * restantes — no hace daño mostrarla de más y cubre ambos casos con una
  * sola rama de código.
  */
-function mostrarResultadoConsultaEnChat(resultado, turno) {
+function mostrarResultadoConsultaEnChat(resultado, turno, textoUsuario) {
   if (resultado.aclaracion) {
     agregarBurbujaAlDom(crearBurbuja("modelo", resultado.aclaracion));
     return;
   }
   const consulta = resultado.consulta || {};
+
+  // Red de seguridad por regex (2026-08-31, bug real: "cuando es el proximo
+  // examen?" seguía devolviendo TODOS los exámenes en vez de acotar al más
+  // cercano — Gemini no estaba marcando "proximo": true de forma
+  // confiable, ni siquiera con la instrucción del prompt ya corregida para
+  // cubrir el caso sin materia). En vez de depender 100% de que Gemini
+  // marque el campo bien, se detecta acá mismo con una palabra clave
+  // directa sobre el mensaje TAL CUAL lo escribió el usuario — mucho más
+  // confiable que esperar que un booleano salga bien siempre. Solo aplica
+  // si: es una búsqueda puntual (`buscar_evento`, nunca a `tareas_eventos`/
+  // `modalidad_clase`, que no tienen este concepto), Gemini no lo había
+  // marcado ya, y no hay un número/ordinal puntual (`numeroOrdinal`) — si
+  // el usuario dio un número puntual quiere ESE, no "el próximo" genérico,
+  // esa combinación no tiene sentido forzarla. `textoUsuario` no viene al
+  // reconstruir desde historial (ver reconstruirChatDesdeHistorial) — en
+  // ese caso ya no hace falta, `consulta` viene tal cual se resolvió la
+  // primera vez.
+  if (
+    textoUsuario &&
+    consulta.tipo === "buscar_evento" &&
+    !consulta.proximo &&
+    consulta.numeroOrdinal == null &&
+    /\bpr[oó]xim[oa]\b|\bsiguiente\b/i.test(textoUsuario)
+  ) {
+    consulta.proximo = true;
+  }
 
   if (consulta.tipo === "modalidad_clase") {
     if (!turno.consultaModalidadResuelto) {
@@ -3007,7 +3060,7 @@ async function mostrarResultadoEnChat(resultado, turno, textoUsuario) {
     return;
   }
   if (resultado.accion === "consultar") {
-    mostrarResultadoConsultaEnChat(resultado, turno);
+    mostrarResultadoConsultaEnChat(resultado, turno, textoUsuario);
     return;
   }
   if (resultado.accion === "actualizar_nombre") {
