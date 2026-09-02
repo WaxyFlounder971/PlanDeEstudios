@@ -716,8 +716,15 @@ function construirTarjetaMateriaHistorial(materia, plan) {
     (categoria ? ` box-shadow: inset 4px 0 0 0 ${categoria.color};` : "");
 
   const nombre = document.createElement("span");
+  // Fix centrado vertical (ajuste pedido): .materia-nombre trae
+  // "position:relative; top:-3px" calibrado para cuando comparte fila con
+  // .materia-prefijo (la luz + código, con otra métrica de línea) — acá el
+  // nombre va SOLO en la tarjetita, sin prefijo al lado, así que ese offset
+  // ya no compensa nada y lo deja visualmente descentrado. Se resetea acá
+  // mismo (no en la clase compartida, que sigue siendo correcta en el resto
+  // de usos de .materia-nombre).
   nombre.className = "materia-nombre truncada";
-  nombre.style.cssText = "display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+  nombre.style.cssText = "display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; top:0;";
   nombre.textContent = aplicarFormatoTexto(materia.nombre);
   mini.appendChild(nombre);
 
