@@ -4,14 +4,17 @@
    semanal), pantalla de detalle con timer simple, e indicador persistente
    de sesión activa (visible en cualquier pantalla de la app).
 
-   Parte A/B (este ajuste): color por materia (borde de tarjeta + relleno
-   de barra, un solo valor, mismo criterio que horario.js), tarjeta de
-   tamaño fijo con nombre sin código + botones solo-ícono, orden
-   configuradas-primero, encabezado con switch Todo/Activos, y encabezado
-   de detalle en una sola tarjeta (flecha/nombre/engranaje). El componente
-   "Buscar materia en..." (Parte C) y su conexión al nombre clickeable de
-   detalle (D.1) y a la tarjeta vieja de Plan de Estudios (D.2) quedan para
-   cuando estén disponibles plan-detalle.js/plan-esquema.js/comunidad.js.
+   Rediseño visual (Parte A/B, iteración final): tarjetas delgadas estilo
+   Semestres/Plan de Estudios (.materia-card + código/nombre en línea 1),
+   franja de color SOLO a la izquierda (nunca todo el borde), color por
+   defecto = el mismo que ya usa Horario para esa materia (color de
+   categoría), editable por el usuario. Filtro Todo/Activos como pills
+   (mismo componente que Lista/Calendario/Cronograma de Agenda). Encabezado
+   de detalle con franja de color horizontal arriba, y timer → barra de
+   progreso → texto simple, en ese orden. El componente "Buscar materia
+   en..." (Parte C) y su conexión al nombre clickeable de detalle (D.1) y a
+   la tarjeta vieja de Plan de Estudios (D.2) quedan para cuando estén
+   disponibles agenda.js/plan-esquema.js.
 
    Materias disponibles: solo las de obtenerSemestresActuales() (mismo
    criterio que Agenda/Horario) — cada materia matriculada (mm) es una
@@ -133,10 +136,19 @@ function calcularMinutosEstudiadosEstaSemana(materiaMatriculadaId) {
     .reduce((acc, s) => acc + (Number(s.duracion_minutos) || 0), 0);
 }
 
-/** Color elegido para la materia, o el violeta por defecto (mismo fallback
- * que horario.js) si todavía no eligió ninguno. */
-function obtenerColorMateria(mm) {
-  return mm.tiempo_estudio.color || COLOR_TIEMPO_ESTUDIO_DEFAULT;
+/**
+ * Color efectivo de una materia (rediseño): mismo criterio EXACTO que
+ * obtenerColorBloque() en horario.js — 1) el color propio que el usuario
+ * eligió en tiempo_estudio.color (override, opcional), 2) si no eligió
+ * ninguno, el color de la CATEGORÍA de la materia en el plan (el mismo que
+ * ya usan Horario y Agenda para esa materia, así no hay dos violetas
+ * distintos por accidente), 3) el violeta por defecto si la materia no
+ * tiene categoría con color.
+ */
+function obtenerColorMateria(mm, materia, plan) {
+  if (mm.tiempo_estudio.color) return mm.tiempo_estudio.color;
+  const categoria = plan.categorias.find((c) => c.id === materia.categoria_id);
+  return (categoria && categoria.color) || COLOR_TIEMPO_ESTUDIO_DEFAULT;
 }
 
 function formatearHorasMin(minutosTotales) {
@@ -190,62 +202,54 @@ function manejarBotonIniciarDetener(materiaMatriculadaId, nombreMateria) {
 /* ===================== Vista principal (tarjetas) ===================== */
 
 /**
- * Tarjeta de materia (Parte B, rediseño): estructura ÚNICA sin importar si
- * la materia tiene meta configurada o no — solo cambia el contenido de la
- * línea 2 (barra+tiempo vs. placeholder "Sin meta configurada"), nunca el
- * alto de la tarjeta ni qué botones aparecen. El color elegido para la
- * materia (o el default violeta si no eligió ninguno, ver
- * obtenerColorMateria) se usa a la vez para el borde de la tarjeta y para
- * el relleno de la barra — mismo criterio de "un solo color" que
- * horario.js.
+ * Tarjeta de materia (rediseño: copia el lenguaje visual de las tarjetas de
+ * Semestres/Plan de Estudios). Delgada (.materia-card), línea 1 con
+ * código+nombre (mismas clases .materia-linea1/.materia-codigo/
+ * .materia-nombre que ya usa el resto de la app — el nombre resalta, el
+ * código queda chico pero visible, sirve para diferenciar repeticiones),
+ * línea 2 con el tiempo anclado a la izquierda y engranaje+play/pausa
+ * agrupados y anclados a la derecha, del mismo tamaño exacto (36×36, ver
+ * .te-btn-icono). Sin barra de progreso acá — esa vive en el detalle. La
+ * franja de color va SOLO a la izquierda (box-shadow inset), nunca
+ * alrededor de toda la tarjeta.
  */
 function construirTarjetaMateria(item) {
-  const { mm, nombreMateria, nombreMateriaCorto } = item;
+  const { mm, materia, plan, nombreMateria, nombreMateriaCorto } = item;
   const meta = mm.tiempo_estudio.meta_horas_semana;
   const tieneMeta = meta !== null && meta !== undefined;
-  const color = obtenerColorMateria(mm);
+  const color = obtenerColorMateria(mm, materia, plan);
 
   const tarjeta = document.createElement("div");
-  tarjeta.className = "glass-card te-tarjeta-materia";
-  tarjeta.style.borderColor = color;
+  tarjeta.className = "glass-card materia-card te-tarjeta-materia";
+  tarjeta.style.boxShadow = `var(--shadow-glass), inset 4px 0 0 0 ${color}`;
   tarjeta.addEventListener("click", () => {
     materiaDetalleActivaId = mm.id;
     renderizarTiempoEstudio();
   });
 
-  // Línea 1: nombre sin código (B.2). Línea 2: barra centrada + tiempo
-  // anclado a la derecha si hay meta, o el mismo alto en placeholder si no.
-  let lineaDos;
-  if (tieneMeta) {
-    const minutosEstudiados = calcularMinutosEstudiadosEstaSemana(mm.id);
-    const metaMinutos = meta * 60;
-    const completada = metaMinutos > 0 && minutosEstudiados >= metaMinutos;
-    const porcentaje = metaMinutos > 0 ? Math.min(100, (minutosEstudiados / metaMinutos) * 100) : minutosEstudiados > 0 ? 100 : 0;
-    lineaDos = `
-      <div class="te-barra-progreso">
-        <div class="te-barra-progreso-fill ${completada ? "te-completada" : ""}" style="width:${porcentaje}%; background:${color};"></div>
-      </div>
-      <span class="muted te-tarjeta-materia-tiempo">${formatearHorasMin(minutosEstudiados)} de ${meta} h</span>
-    `;
-  } else {
-    lineaDos = `<span class="muted te-tarjeta-materia-tiempo">Sin meta configurada</span>`;
-  }
+  const textoTiempo = tieneMeta
+    ? `${formatearHorasMin(calcularMinutosEstudiadosEstaSemana(mm.id))} de ${meta} h`
+    : "Sin meta configurada";
 
   tarjeta.innerHTML = `
-    <div class="te-tarjeta-materia-nombre">${nombreMateriaCorto}</div>
-    <div class="te-tarjeta-materia-linea2">${lineaDos}</div>
+    <div class="materia-linea1">
+      <span class="materia-codigo">${materia.codigo}</span>
+      <span class="materia-nombre truncada">${nombreMateriaCorto}</span>
+    </div>
+    <div class="te-tarjeta-materia-linea2">
+      <span class="te-tarjeta-materia-tiempo">${textoTiempo}</span>
+    </div>
   `;
 
   const filaBotones = document.createElement("div");
-  filaBotones.className = "row-between";
-  filaBotones.style.cssText = "gap:8px; align-items:center;";
+  filaBotones.className = "te-tarjeta-materia-botones";
 
   const btnConfig = document.createElement("button");
   btnConfig.type = "button";
-  btnConfig.className = "btn-icono-fantasma te-btn-icono";
+  btnConfig.className = "te-btn-icono te-btn-icono-fantasma";
   btnConfig.title = "Configurar";
   btnConfig.setAttribute("aria-label", "Configurar");
-  btnConfig.textContent = "⚙";
+  btnConfig.textContent = "⚙️";
   btnConfig.addEventListener("click", (e) => {
     e.stopPropagation();
     abrirModalConfigTiempoEstudio(mm, nombreMateria, () => renderizarTiempoEstudio());
@@ -266,17 +270,16 @@ function construirTarjetaMateria(item) {
 
   filaBotones.appendChild(btnConfig);
   filaBotones.appendChild(btnInicio);
-  tarjeta.appendChild(filaBotones);
+  tarjeta.querySelector(".te-tarjeta-materia-linea2").appendChild(filaBotones);
 
   return tarjeta;
 }
 
 /**
- * Encabezado (B.1): tarjetita con el título y el switch "Todo"/"Activos".
- * "Activos" filtra las mm sin tiempo_estudio.meta_horas_semana configurado
- * (las que el usuario no marcó como que necesitan estudio). El switch
- * re-renderiza toda la vista principal al cambiar, para que el filtro se
- * aplique de una — ver obtenerFiltroVista/guardarFiltroVista arriba.
+ * Encabezado (B.1): tarjetita con el título y el filtro "Todo"/"Activos"
+ * como pills (mismo componente .pill-group/.pill-item que ya usa Agenda
+ * para Lista/Calendario/Cronograma), no un switch on/off. "Activos" filtra
+ * las mm sin tiempo_estudio.meta_horas_semana configurado.
  */
 function construirEncabezado(cont) {
   const encabezado = document.createElement("div");
@@ -289,22 +292,21 @@ function construirEncabezado(cont) {
   titulo.textContent = "Tiempo de Estudio";
   encabezado.appendChild(titulo);
 
-  const filtroActivo = obtenerFiltroVista() === "activos";
-  const filaSwitch = document.createElement("div");
-  filaSwitch.style.cssText = "display:flex; align-items:center; gap:8px;";
-  filaSwitch.innerHTML = `
-    <span class="muted" style="font-size:0.82rem;">${filtroActivo ? "Activos" : "Todo"}</span>
-    <label class="switch switch-tema">
-      <input type="checkbox" id="te-switch-filtro" ${filtroActivo ? "checked" : ""}>
-      <span class="track"><span class="thumb"></span></span>
-    </label>
+  const filtroActual = obtenerFiltroVista();
+  const pills = document.createElement("div");
+  pills.className = "pill-group te-filtro-pills";
+  pills.innerHTML = `
+    <button type="button" class="pill-item ${filtroActual === "todo" ? "active" : ""}" data-filtro="todo">Todo</button>
+    <button type="button" class="pill-item ${filtroActual === "activos" ? "active" : ""}" data-filtro="activos">Activos</button>
   `;
-  encabezado.appendChild(filaSwitch);
+  encabezado.appendChild(pills);
   cont.appendChild(encabezado);
 
-  filaSwitch.querySelector("#te-switch-filtro").addEventListener("change", (e) => {
-    guardarFiltroVista(e.target.checked ? "activos" : "todo");
-    renderizarTiempoEstudio();
+  pills.querySelectorAll(".pill-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      guardarFiltroVista(btn.dataset.filtro);
+      renderizarTiempoEstudio();
+    });
   });
 }
 
@@ -352,17 +354,19 @@ function construirVistaPrincipal(cont) {
  * mismo en cuanto esa parte esté lista, sin tener que tocar el resto de
  * este encabezado.
  */
-function construirEncabezadoDetalle(cont, mm, nombreMateria) {
+function construirEncabezadoDetalle(cont, mm, materia, plan, nombreMateria) {
+  const color = obtenerColorMateria(mm, materia, plan);
+
   const tarjeta = document.createElement("div");
   tarjeta.className = "glass-card te-encabezado-detalle";
-  tarjeta.style.cssText = "display:flex; align-items:center; gap:10px;";
+  tarjeta.style.cssText = `display:flex; align-items:center; gap:10px; --te-color-materia:${color};`;
 
   const btnVolver = document.createElement("button");
   btnVolver.type = "button";
-  btnVolver.className = "btn-icono-fantasma te-btn-icono";
+  btnVolver.className = "te-btn-icono te-btn-icono-fantasma";
   btnVolver.title = "Volver";
   btnVolver.setAttribute("aria-label", "Volver");
-  btnVolver.textContent = "←";
+  btnVolver.textContent = "◀";
   btnVolver.addEventListener("click", () => {
     materiaDetalleActivaId = null;
     renderizarTiempoEstudio();
@@ -375,10 +379,10 @@ function construirEncabezadoDetalle(cont, mm, nombreMateria) {
 
   const btnConfig = document.createElement("button");
   btnConfig.type = "button";
-  btnConfig.className = "btn-icono-fantasma te-btn-icono";
+  btnConfig.className = "te-btn-icono te-btn-icono-fantasma";
   btnConfig.title = "Configurar";
   btnConfig.setAttribute("aria-label", "Configurar");
-  btnConfig.textContent = "⚙";
+  btnConfig.textContent = "⚙️";
   btnConfig.addEventListener("click", () => {
     abrirModalConfigTiempoEstudio(mm, nombreMateria, () => renderizarTiempoEstudio());
   });
@@ -390,26 +394,12 @@ function construirEncabezadoDetalle(cont, mm, nombreMateria) {
 }
 
 function construirPantallaDetalle(cont, item) {
-  const { mm, nombreMateria } = item;
+  const { mm, materia, plan, nombreMateria } = item;
 
-  construirEncabezadoDetalle(cont, mm, nombreMateria);
+  construirEncabezadoDetalle(cont, mm, materia, plan, nombreMateria);
 
   const meta = mm.tiempo_estudio.meta_horas_semana;
   const minutosEstudiados = calcularMinutosEstudiadosEstaSemana(mm.id);
-
-  const panelMeta = document.createElement("div");
-  panelMeta.className = "glass-panel te-detalle-meta";
-  panelMeta.style.padding = "12px";
-  if (meta === null || meta === undefined) {
-    panelMeta.innerHTML = `<span class="muted">Sin meta configurada esta semana.</span>`;
-  } else {
-    const restanteMin = Math.max(0, meta * 60 - minutosEstudiados);
-    panelMeta.innerHTML =
-      restanteMin > 0
-        ? `<span>Te faltan <strong>${formatearHorasMin(restanteMin)}</strong> para tu meta de ${meta} h esta semana.</span>`
-        : `<span>🎉 Ya llegaste a tu meta de ${meta} h esta semana (${formatearHorasMin(minutosEstudiados)}).</span>`;
-  }
-  cont.appendChild(panelMeta);
 
   const panelTimer = document.createElement("div");
   panelTimer.className = "glass-card stack";
@@ -425,6 +415,32 @@ function construirPantallaDetalle(cont, item) {
   panelTimer.appendChild(btnAccion);
 
   cont.appendChild(panelTimer);
+
+  // Barra de progreso (rediseño): ahora va DEBAJO del timer, alargada, con
+  // un solo renglón de texto centrado debajo — reemplaza al panel de texto
+  // largo ("Te faltan X h para tu meta de Y h esta semana") que antes iba
+  // arriba del timer.
+  if (meta !== null && meta !== undefined) {
+    const metaMinutos = meta * 60;
+    const completada = metaMinutos > 0 && minutosEstudiados >= metaMinutos;
+    const porcentaje = metaMinutos > 0 ? Math.min(100, (minutosEstudiados / metaMinutos) * 100) : minutosEstudiados > 0 ? 100 : 0;
+    const restanteMin = Math.max(0, metaMinutos - minutosEstudiados);
+
+    const panelProgreso = document.createElement("div");
+    panelProgreso.className = "te-detalle-progreso";
+    panelProgreso.innerHTML = `
+      <div class="te-barra-progreso">
+        <div class="te-barra-progreso-fill ${completada ? "te-completada" : ""}" style="width:${porcentaje}%; background:${obtenerColorMateria(mm, materia, plan)};"></div>
+      </div>
+      <span class="te-detalle-meta">${completada ? `🎉 Meta cumplida (${formatearHorasMin(minutosEstudiados)})` : `Faltan ${formatearHorasMin(restanteMin)}`}</span>
+    `;
+    cont.appendChild(panelProgreso);
+  } else {
+    const sinMeta = document.createElement("p");
+    sinMeta.className = "te-detalle-meta";
+    sinMeta.textContent = "Sin meta configurada esta semana.";
+    cont.appendChild(sinMeta);
+  }
 
   function pintar(activo) {
     const esEstaMateria = Boolean(activo && activo.materiaMatriculadaId === mm.id);
