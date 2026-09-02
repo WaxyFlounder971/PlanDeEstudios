@@ -4375,92 +4375,97 @@ html.exportar-tema-default[data-mode="dark"] {
   .badge-tiempo-estudio-fijo { bottom: 16px; left: 16px; padding: 9px 14px; font-size: 0.8rem; }
 }
 
-/* Encabezado (B.1): misma tarjeta que el resto, título + switch Todo/Activos. */
+/* Encabezado (B.1): misma tarjeta que el resto, título + pills Todo/Activos. */
 .te-encabezado { flex-wrap: wrap; }
+.te-filtro-pills { flex-shrink: 0; }
 
-/* Tarjeta de materia — lista vertical (no grid), mismo lenguaje visual que
-   las tarjetas de Semestres (.glass-card). El ancho completo es lo que le
-   da a la barra de progreso espacio legible para el texto "X h Y min de
-   Z h" al lado.
-   border-color se pisa por JS (color elegido por el usuario, o el default
-   violeta) — acá solo se define el grosor/estilo para que el borde
-   siempre ocupe el mismo espacio, tenga o no color propio. */
+/* Tarjeta de materia (rediseño: "copiá el diseño de las tarjetas de
+   Semestres") — mismo .materia-card delgado (12px 14px) + línea1 con
+   código+nombre (.materia-linea1/.materia-codigo/.materia-nombre, ya
+   definidas para Plan de Estudios/Semestres, reusadas tal cual acá) en vez
+   del bloque ancho de antes. Franja de color SOLO a la izquierda (mismo
+   criterio que la franja de categoría en Agenda/Plan de Estudios: box-shadow
+   inset, no un borde completo alrededor) — el color viene por JS: el que
+   eligió el usuario o, si no eligió ninguno, el mismo que ya resuelve
+   Horario para esa materia (color de categoría, ver obtenerColorMateria). */
 .te-tarjeta-materia {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px 18px;
+  gap: 6px;
   cursor: pointer;
-  border: 2px solid transparent;
 }
-.te-tarjeta-materia-nombre {
-  font-weight: 700;
-  font-size: 0.98rem;
+/* Línea 2: tiempo anclado a la izquierda, botones (engranaje + play/pausa)
+   agrupados y anclados a la derecha — sin barra de progreso acá (esa se
+   mudó a la pantalla de detalle, más abajo), para que la tarjeta quede
+   delgada de verdad. */
+.te-tarjeta-materia-linea2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.te-tarjeta-materia-tiempo {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Línea 2 (B.2): barra centrada (crece con flex) + tiempo anclado a la
-   derecha — o, sin meta, el mismo placeholder ocupando el mismo alto, así
-   la tarjeta nunca cambia de tamaño entre estados. */
-.te-tarjeta-materia-linea2 {
+.te-tarjeta-materia-botones {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 22px;
-}
-.te-tarjeta-materia-tiempo {
-  font-size: 0.82rem;
+  gap: 4px;
   flex-shrink: 0;
-  margin-left: auto;
 }
-/* Barra de progreso: fondo --bg-panel (mismo que el resto de la app),
-   relleno con el color de la materia (inline, por JS) o el degradado de
-   acento como respaldo si por algo no llegó ningún color. */
-.te-barra-progreso {
-  flex: 1 1 auto;
-  height: 10px;
-  border-radius: var(--radius-pill);
-  background: var(--bg-panel);
-  overflow: hidden;
-}
-.te-barra-progreso-fill {
-  height: 100%;
-  border-radius: var(--radius-pill);
-  background: var(--gradient-accent);
-  transition: width var(--transition-fast) ease;
-}
-/* Si se pasó de la meta, un brillo extra marca que ya llegó/superó el
-   objetivo sin pisar el color elegido por el usuario (que ya viene inline). */
-.te-barra-progreso-fill.te-completada { box-shadow: 0 0 6px 0 currentColor inset; filter: brightness(1.15); }
 
-/* Botones solo-ícono de la tarjeta (B.2): mismo tamaño exacto entre sí —
-   comparten padding/font-size con .btn-icono-fantasma (el engranaje ya usa
-   esa clase tal cual); acá solo se agrega el tratamiento de color según
-   estado para el de iniciar/detener. */
+/* Botones de ícono de Tiempo de Estudio — caja cuadrada fija (36×36, mismo
+   criterio que .agenda-btn-ajustes) con flex centrado de verdad, así el
+   glyph queda centrado sin importar su ancho natural (▶ no es igual de
+   ancho que ⚙️ o ←, por eso antes se veían descentrados con solo
+   padding). Engranaje y flecha son "fantasma" (sin fondo, ni siquiera al
+   hover — pedido explícito: "sin fondo de color raro"); iniciar/detener sí
+   llevan fondo de color para que se note cuál acción hace cada uno. */
 .te-btn-icono {
-  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius-pill);
   font-size: 1.05rem;
   line-height: 1;
-  border: none;
   cursor: pointer;
-  border-radius: var(--radius-sm);
-  flex-shrink: 0;
-  transition: color var(--transition-fast), background var(--transition-fast);
+  transition: color var(--transition-fast), background var(--transition-fast), filter var(--transition-fast);
 }
+.te-btn-icono-fantasma {
+  background: none;
+  color: var(--text-secondary);
+}
+.te-btn-icono-fantasma:hover { color: var(--text-primary); }
 .te-btn-icono-iniciar { background: var(--gradient-accent); color: var(--on-accent); }
 .te-btn-icono-iniciar:hover { filter: brightness(1.08); }
 .te-btn-icono-detener { background: var(--color-danger, #ef4444); color: #fff; }
 .te-btn-icono-detener:hover { filter: brightness(1.08); }
 
-/* Encabezado de detalle (D.1): flecha / nombre centrado / engranaje. */
+/* Encabezado de detalle (D.1): la franja de color acá NO va a la izquierda
+   como en la tarjeta de la lista — recorre TODO el ancho, arriba, en
+   horizontal (pedido explícito), como un acento de cabecera. Mismo truco de
+   box-shadow inset que la franja izquierda, solo que en el otro eje. */
+.te-encabezado-detalle {
+  box-shadow: var(--shadow-glass), inset 0 4px 0 0 var(--te-color-materia, var(--accent-1));
+}
 .te-encabezado-detalle-nombre {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Pantalla de detalle: timer grande centrado. */
+/* Pantalla de detalle: timer grande centrado, barra de progreso alargada
+   debajo (rediseño: antes iba arriba del timer con el texto "Te faltan...
+   para tu meta de..."; ahora la barra va debajo del timer y el texto se
+   simplifica a un solo renglón centrado debajo de la barra). */
 .te-timer-display {
   font-family: var(--font-display, inherit);
   font-size: 3rem;
@@ -4469,7 +4474,29 @@ html.exportar-tema-default[data-mode="dark"] {
   letter-spacing: 1px;
   font-variant-numeric: tabular-nums;
 }
+.te-detalle-progreso {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.te-detalle-progreso .te-barra-progreso {
+  width: 100%;
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-panel);
+  overflow: hidden;
+}
+.te-detalle-progreso .te-barra-progreso-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--gradient-accent);
+  transition: width var(--transition-fast) ease;
+}
+.te-detalle-progreso .te-barra-progreso-fill.te-completada { filter: brightness(1.15); }
 .te-detalle-meta {
   text-align: center;
   color: var(--text-secondary);
+  font-size: 0.9rem;
 }
