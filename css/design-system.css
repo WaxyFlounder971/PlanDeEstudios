@@ -4377,7 +4377,45 @@ html.exportar-tema-default[data-mode="dark"] {
 
 /* Encabezado (B.1): misma tarjeta que el resto, título + pills Todo/Activos. */
 .te-encabezado { flex-wrap: wrap; }
-.te-filtro-pills { flex-shrink: 0; }
+/* Pedido: que ocupe todo el ancho lateral disponible del encabezado (antes
+   quedaba angosta, del tamaño justo de "Todo"/"Activos", porque
+   flex-shrink:0 la deja del ancho de su contenido dentro del row-between).
+   .pill-item ya reparte 50/50 solo (flex:1 1 0, ver arriba) — acá solo hace
+   falta que el contenedor mismo crezca. */
+.te-filtro-pills { flex: 1; }
+
+/* Entrega 4: grupo derecho del encabezado (botón Ajustes + pills), anclado
+   a la derecha del título, compartiendo el espacio lateral disponible —
+   el botón toma su ancho natural, el pill se estira con lo que sobra. */
+.te-encabezado-derecha {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.te-btn-ajustes {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Agenda — Entrega 5: filas de "Estudio para hoy" (fila clickeable, lleva
+   al detalle de esa materia en Tiempo de Estudio). Mismo tratamiento chato
+   que el resto de filas de la tarjeta de día — sin fondo propio, para no
+   competir visualmente con los ítems de tareas/exámenes de abajo. */
+.agenda-estudio-hoy-item {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 4px 2px;
+  cursor: pointer;
+  align-items: center;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+.agenda-estudio-hoy-item:hover { background: var(--bg-panel); }
 
 /* Tarjeta de materia (rediseño: "copiá el diseño de las tarjetas de
    Semestres") — mismo .materia-card delgado (12px 14px) + línea1 con
@@ -4448,6 +4486,12 @@ html.exportar-tema-default[data-mode="dark"] {
 .te-btn-icono-iniciar:hover { filter: brightness(1.08); }
 .te-btn-icono-detener { background: var(--color-danger, #ef4444); color: #fff; }
 .te-btn-icono-detener:hover { filter: brightness(1.08); }
+/* El flex-center por sí solo no alcanza para ▶/⏸: el glyph triangular vive
+   corrido hacia arriba dentro de su propio em-square (le pasa a la fuente,
+   no al layout) — se nota más que en ⚙️/◀ porque esos son más simétricos.
+   Nudge fino solo para este botón, en vez de tocar el centrado general y
+   desalinear a los otros tres que ya estaban bien. */
+.te-btn-icono-iniciar, .te-btn-icono-detener { padding-top: 3px; }
 
 /* Encabezado de detalle (D.1): la franja de color acá NO va a la izquierda
    como en la tarjeta de la lista — recorre TODO el ancho, arriba, en
@@ -4485,7 +4529,11 @@ html.exportar-tema-default[data-mode="dark"] {
   width: 100%;
   height: 12px;
   border-radius: var(--radius-pill);
-  background: var(--bg-panel);
+  /* Pedido: se notaba muy poco contra --bg-panel solo (casi el mismo tono
+     que el fondo de la tarjeta). Se mezcla con el acento de la paleta activa
+     para que el "riel" vacío se note como un gris con tinte de tema, sin
+     llegar a leerse como progreso real. */
+  background: color-mix(in srgb, var(--accent-1) 22%, var(--bg-panel));
   overflow: hidden;
 }
 .te-detalle-progreso .te-barra-progreso-fill {
