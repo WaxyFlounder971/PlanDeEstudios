@@ -4382,7 +4382,11 @@ html.exportar-tema-default[data-mode="dark"] {
    flex-shrink:0 la deja del ancho de su contenido dentro del row-between).
    .pill-item ya reparte 50/50 solo (flex:1 1 0, ver arriba) — acá solo hace
    falta que el contenedor mismo crezca. */
-.te-filtro-pills { flex: 1; }
+/* Ajuste: NO se estira a llenar todo el ancho lateral (eso la dejaba mucho
+   más ancha que lo que necesita "Activos", la palabra más larga del par) —
+   tamaño natural, igual que el resto de pill-group de la app (Lista/
+   Calendario/Cronograma en Agenda), sentado sobre su contenido nomás. */
+.te-filtro-pills { flex: 0 0 auto; }
 
 /* Entrega 4: grupo derecho del encabezado (botón Ajustes + pills), anclado
    a la derecha del título, compartiendo el espacio lateral disponible —
@@ -4391,13 +4395,15 @@ html.exportar-tema-default[data-mode="dark"] {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex: 1;
-  min-width: 0;
 }
-.te-btn-ajustes {
-  flex-shrink: 0;
-  white-space: nowrap;
+/* D.2: badges clickeables (Es requisito / Buscarlo / Cerrar) — mismo
+   tamaño que .badge (padding/font-size/pill), agregando cursor y hover
+   propios de botón. */
+.badge-accion {
+  cursor: pointer;
+  transition: filter var(--transition-fast), background var(--transition-fast);
 }
+.badge-accion:hover { filter: brightness(1.15); }
 
 /* Agenda — Entrega 5: filas de "Estudio para hoy" (fila clickeable, lleva
    al detalle de esa materia en Tiempo de Estudio). Mismo tratamiento chato
@@ -4525,24 +4531,27 @@ html.exportar-tema-default[data-mode="dark"] {
   align-items: center;
   gap: 8px;
 }
-.te-detalle-progreso .te-barra-progreso {
+/* Base: la misma barra de progreso, usada tanto en la tarjeta de la lista
+   (delgada, 6px) como en el detalle (más gruesa, 12px — ver
+   .te-detalle-progreso .te-barra-progreso más abajo, que pisa la altura). */
+.te-barra-progreso {
   width: 100%;
-  height: 12px;
+  height: 6px;
   border-radius: var(--radius-pill);
-  /* Pedido: se notaba muy poco contra --bg-panel solo (casi el mismo tono
-     que el fondo de la tarjeta). Se mezcla con el acento de la paleta activa
-     para que el "riel" vacío se note como un gris con tinte de tema, sin
-     llegar a leerse como progreso real. */
   background: color-mix(in srgb, var(--accent-1) 22%, var(--bg-panel));
   overflow: hidden;
 }
-.te-detalle-progreso .te-barra-progreso-fill {
+.te-barra-progreso-fill {
   height: 100%;
   border-radius: var(--radius-pill);
   background: var(--gradient-accent);
   transition: width var(--transition-fast) ease;
 }
-.te-detalle-progreso .te-barra-progreso-fill.te-completada { filter: brightness(1.15); }
+.te-barra-progreso-fill.te-completada { filter: brightness(1.15); }
+
+.te-detalle-progreso .te-barra-progreso {
+  height: 12px;
+}
 .te-detalle-meta {
   text-align: center;
   color: var(--text-secondary);
