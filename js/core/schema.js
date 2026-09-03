@@ -138,6 +138,23 @@ function crearDatosUsuarioNuevo() {
       modo_hardcore: false,             // si está activo, se combinan hasta 3 Planes de Estudio a la vez
       plan_activo_secundario_id: null,  // 2do Plan de Estudios (solo relevante si modo_hardcore = true)
       plan_activo_terciario_id: null,   // 3er Plan de Estudios (solo relevante si modo_hardcore = true)
+
+      // --- Tiempo de Estudio: Ajustes globales (Entrega 2 y 4) ---
+      // Pomodoro "de fábrica" para toda la cuenta: null hasta que el
+      // usuario lo edite una vez desde Ajustes → Ajustar pomodoro
+      // predeterminado. Cuando una materia activa Pomodoro por primera vez
+      // (sin tener ya uno propio guardado), se le precarga ESTE valor en
+      // vez de los fijos (25/4/5/10) de crearConfigPomodoroDefault() — ver
+      // obtenerPomodoroPredeterminado() más abajo.
+      tiempo_estudio_pomodoro_default: null,
+      // Switch "¿Mostrar tiempos de estudio en Agenda?" (Entrega 4/5):
+      // agrega una sección "Estudio para hoy" a cada día de Agenda Lista.
+      // Sigue el mismo patrón que agenda_mostrar_clases (nunca declarado
+      // acá, leído con `!== false` para que el default sea "activado" sin
+      // tener que tocar cuentas viejas) — PERO acá el default es
+      // explícitamente `false` (activar tiempos de estudio en Agenda es
+      // opt-in, no algo que aparezca solo la primera vez que alguien entra).
+      mostrar_tiempo_estudio_en_agenda: false,
     },
 
     // Un usuario puede tener más de un Plan de Estudios (ej. cambio de carrera/universidad).
@@ -2817,6 +2834,15 @@ function migrarDatosAntiguos(datos) {
   // forma consistente en todos lados) y confundiría al selector de 3 botones.
   if (datos.configuracion && datos.configuracion.plan_activo_terciario_id === undefined) {
     datos.configuracion.plan_activo_terciario_id = null;
+  }
+
+  // Tiempo de Estudio — Ajustes globales (Entrega 2/4): mismo relleno
+  // defensivo para cuentas creadas antes de que existieran estos 2 campos.
+  if (datos.configuracion && datos.configuracion.tiempo_estudio_pomodoro_default === undefined) {
+    datos.configuracion.tiempo_estudio_pomodoro_default = null;
+  }
+  if (datos.configuracion && datos.configuracion.mostrar_tiempo_estudio_en_agenda === undefined) {
+    datos.configuracion.mostrar_tiempo_estudio_en_agenda = false;
   }
 
   // Universidad — separación en nombre completo + siglas (2026-08-22):
