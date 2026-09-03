@@ -20,6 +20,7 @@ import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
 import { renderizarCalendarioAgenda } from "./agenda-calendario.js";
 import { inicializarMateriaAgenda, renderizarMateriaAgenda } from "./agenda-materia.js";
 import { construirSeccionMateriasDia, calcularNumeroSemanaParaFecha } from "./agenda-clases.js";
+import { obtenerEstudioParaHoy, irADetalleMateriaTiempoEstudio, formatearHorasMin } from "../tiempo-estudio/tiempo-estudio.js";
 import { abrirModalEventoAgenda, abrirTarjetaInfoEventoAgenda, inicializarModalAgendaEvento } from "./agenda-modal.js";
 // Sincronización con Google Calendar (2026-08-25, reemplaza Web Push): al
 // completar/des-completar desde el checkbox de la lista hay que espejar la
@@ -705,6 +706,36 @@ function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios, 
     ? construirSeccionMateriasDia(semestresSeleccionados, diaInfo.fecha, diaInfo.abrevDefault)
     : null;
   if (seccionMaterias) bloque.appendChild(seccionMaterias);
+
+  // Entrega 5: "Estudio para hoy" — solo en la tarjeta de HOY (no tiene
+  // sentido mostrar "estudio para hoy" en la tarjeta de otro día) y solo
+  // con el switch de Ajustes → Tiempo de Estudio activado. Va entre
+  // Materias y Tareas/Exámenes, mismo orden en que se pidió.
+  if (hoy && estado.datos.configuracion.mostrar_tiempo_estudio_en_agenda === true) {
+    const estudioHoy = obtenerEstudioParaHoy();
+    if (estudioHoy.length > 0) {
+      const seccionEstudio = document.createElement("div");
+      seccionEstudio.className = "stack";
+      seccionEstudio.style.gap = "6px";
+      const etiquetaEstudio = document.createElement("span");
+      etiquetaEstudio.className = "muted";
+      etiquetaEstudio.style.cssText = "font-size:0.7rem; text-transform:uppercase; letter-spacing:0.02em;";
+      etiquetaEstudio.textContent = "Estudio para hoy";
+      seccionEstudio.appendChild(etiquetaEstudio);
+      estudioHoy.forEach((item) => {
+        const fila = document.createElement("button");
+        fila.type = "button";
+        fila.className = "row-between agenda-estudio-hoy-item";
+        fila.innerHTML = `
+          <span>${item.nombreMateriaCorto}</span>
+          <span class="muted" style="font-size:0.82rem;">${formatearHorasMin(item.minutosHoy)}</span>
+        `;
+        fila.addEventListener("click", () => irADetalleMateriaTiempoEstudio(item.materiaMatriculadaId));
+        seccionEstudio.appendChild(fila);
+      });
+      bloque.appendChild(seccionEstudio);
+    }
+  }
 
   if (eventosDelDia.length === 0) {
     const vacio = document.createElement("p");
