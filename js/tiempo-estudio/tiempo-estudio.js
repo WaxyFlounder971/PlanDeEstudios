@@ -35,6 +35,7 @@ import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { obtenerSemestresActuales } from "../semestres/semestres.js";
 import { mostrarSeccion } from "../main.js";
 import { abrirModalConfigTiempoEstudio, abrirModalPomodoroPredeterminado } from "./tiempo-estudio-config.js";
+import { abrirBuscarMateriaEn } from "../ui/buscar-materia.js";
 import {
   cambiarTimerEstudio,
   detenerTimerEstudio,
@@ -103,7 +104,7 @@ function obtenerMateriasParaTiempoEstudio() {
       if (!plan || !materia) return;
       const nombreCorto = aplicarFormatoTexto(materia.nombre);
       const nombreMateria = `${materia.codigo} · ${nombreCorto}`;
-      items.push({ mm, materia, plan, nombreMateria, nombreMateriaCorto: nombreCorto });
+      items.push({ mm, materia, plan, semestre, nombreMateria, nombreMateriaCorto: nombreCorto });
     });
   });
   items.sort((a, b) => {
@@ -232,11 +233,30 @@ function construirTarjetaMateria(item) {
     ? `${formatearHorasMin(calcularMinutosEstudiadosEstaSemana(mm.id))} de ${meta} h`
     : "Sin meta configurada";
 
+  // Barra de progreso: SÍ va en la tarjeta de la lista (se había sacado en
+  // una iteración anterior por error de interpretación) — delgada, entre
+  // el nombre y la línea de tiempo/botones. Con meta, se rellena con el
+  // color de la materia; sin meta, no hay nada que proporcionar, así que
+  // no se dibuja (el textoTiempo ya dice "Sin meta configurada").
+  let barraHtml = "";
+  if (tieneMeta) {
+    const minutosEstudiados = calcularMinutosEstudiadosEstaSemana(mm.id);
+    const metaMinutos = meta * 60;
+    const completada = metaMinutos > 0 && minutosEstudiados >= metaMinutos;
+    const porcentaje = metaMinutos > 0 ? Math.min(100, (minutosEstudiados / metaMinutos) * 100) : minutosEstudiados > 0 ? 100 : 0;
+    barraHtml = `
+      <div class="te-barra-progreso">
+        <div class="te-barra-progreso-fill ${completada ? "te-completada" : ""}" style="width:${porcentaje}%; background:${color};"></div>
+      </div>
+    `;
+  }
+
   tarjeta.innerHTML = `
     <div class="materia-linea1">
       <span class="materia-codigo">${materia.codigo}</span>
       <span class="materia-nombre truncada">${nombreMateriaCorto}</span>
     </div>
+    ${barraHtml}
     <div class="te-tarjeta-materia-linea2">
       <span class="te-tarjeta-materia-tiempo">${textoTiempo}</span>
     </div>
@@ -303,8 +323,10 @@ function construirEncabezado(cont) {
 
   const btnAjustes = document.createElement("button");
   btnAjustes.type = "button";
-  btnAjustes.className = "btn btn-secondary te-btn-ajustes";
-  btnAjustes.textContent = "Ajustes de Tiempo de Estudio";
+  btnAjustes.className = "te-btn-icono te-btn-icono-fantasma";
+  btnAjustes.title = "Ajustes de Tiempo de Estudio";
+  btnAjustes.setAttribute("aria-label", "Ajustes de Tiempo de Estudio");
+  btnAjustes.textContent = "⚙️";
   btnAjustes.addEventListener("click", () => abrirModalAjustesTiempoEstudio());
   derecha.appendChild(btnAjustes);
 
@@ -438,7 +460,8 @@ function construirVistaPrincipal(cont) {
  * mismo en cuanto esa parte esté lista, sin tener que tocar el resto de
  * este encabezado.
  */
-function construirEncabezadoDetalle(cont, mm, materia, plan, nombreMateria) {
+function construirEncabezadoDetalle(cont, item) {
+  const { mm, materia, plan, semestre, nombreMateria } = item;
   const color = obtenerColorMateria(mm, materia, plan);
 
   const tarjeta = document.createElement("div");
@@ -456,10 +479,17 @@ function construirEncabezadoDetalle(cont, mm, materia, plan, nombreMateria) {
     renderizarTiempoEstudio();
   });
 
-  const titulo = document.createElement("h2");
-  titulo.className = "texto-encabezado-seccion te-encabezado-detalle-nombre";
-  titulo.style.cssText = "margin:0; text-align:center; flex:1;";
+  // D.1 (Parte C ya conectada): tocar el nombre abre "Buscar materia en...".
+  const titulo = document.createElement("button");
+  titulo.type = "button";
+  titulo.className = "te-encabezado-detalle-nombre";
+  titulo.style.cssText =
+    "margin:0; flex:1; text-align:center; background:none; border:none; cursor:pointer; " +
+    "color:var(--text-primary); font-weight:700; font-size:1.05rem; padding:6px;";
   titulo.textContent = nombreMateria;
+  titulo.addEventListener("click", () => {
+    abrirBuscarMateriaEn({ mm, materia, plan, semestre, nombreMateria, origen: "tiempo-estudio" });
+  });
 
   const btnConfig = document.createElement("button");
   btnConfig.type = "button";
@@ -480,7 +510,7 @@ function construirEncabezadoDetalle(cont, mm, materia, plan, nombreMateria) {
 function construirPantallaDetalle(cont, item) {
   const { mm, materia, plan, nombreMateria } = item;
 
-  construirEncabezadoDetalle(cont, mm, materia, plan, nombreMateria);
+  construirEncabezadoDetalle(cont, item);
 
   const meta = mm.tiempo_estudio.meta_horas_semana;
   const minutosEstudiados = calcularMinutosEstudiadosEstaSemana(mm.id);
