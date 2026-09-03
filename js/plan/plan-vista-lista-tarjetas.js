@@ -515,6 +515,9 @@ function construirTarjetaMateria(fila, esEscritorio, mostrarOrigen) {
 
   const card = document.createElement("div");
   card.className = "glass-panel materia-card" + (estado.modoEdicionPlan ? " modo-edicion-activa" : "");
+  // Buscar materia en... (Parte C): selector estable para scroll+resaltado,
+  // mismo criterio que se agregó en horario.js para sus bloques.
+  card.dataset.materiaId = materia.id;
   if (categoria) card.style.borderLeft = `6px solid ${categoria.color}`;
 
   // Punto 6 (v1.9.6): lápiz de edición — la visibilidad la controla el CSS

@@ -34,7 +34,8 @@ import { aplicarFormatoTexto, estiloBadgeCategoria, formatearHoras, formatearHor
 import { agregarLongPress } from "../ui/componentes.js";
 import { buscarMateriaPorCodigoEnPlanes } from "./plan-esquema.js";
 import { ESTADOS_MATERIA, abrirMenuRapidoCategoria, materiaDisponible, obtenerMateriasQueDesbloquea } from "./plan-vista-lista-tarjetas.js";
-import { navegarASemestre } from "../semestres/semestres.js";
+import { navegarASemestre, obtenerSemestresActuales } from "../semestres/semestres.js";
+import { abrirBuscarMateriaEn } from "../ui/buscar-materia.js";
 
 /** Formatea una nota numérica con máximo 2 decimales SIN redondear (trunca,
  *  no redondea — 8.666 debe mostrar "8.66", no "8.67"). Duplicado a
@@ -151,6 +152,20 @@ function construirLinea1Materia(materia, plan) {
  * para colapsarla, así que ese botón no aplica ahí).
  */
 
+/** ¿Esta materia está matriculada en alguno de los semestres actuales? Si
+ * sí, devuelve {mm, semestre} — lo necesita Buscar materia en... (D.2) para
+ * ofrecer Cronograma/Horario, que solo tienen sentido para una instancia
+ * matriculada real, no para "la materia" en abstracto dentro del plan. */
+function resolverMatriculaActual(materia, plan) {
+  for (const semestre of obtenerSemestresActuales()) {
+    const mm = (semestre.materias_matriculadas || []).find(
+      (m) => m.materia_id === materia.id && m.plan_estudio_id === plan.id
+    );
+    if (mm) return { mm, semestre };
+  }
+  return null;
+}
+
 function construirBotonesFinalesDetalle(materia, plan, opciones) {
   const esModal = !!(opciones && opciones.esModal);
 
@@ -159,8 +174,13 @@ function construirBotonesFinalesDetalle(materia, plan, opciones) {
 
   const btnEsRequisito = document.createElement("button");
   btnEsRequisito.type = "button";
-  // v1.11: mismo estilo que "Cerrar" (btn btn-primary) — ya no link de texto plano.
-  btnEsRequisito.className = "btn btn-primary";
+  // D.2 (rediseño): tamaño de badge en vez de btn-primary de ancho normal
+  // (pedido explícito: "achicar los tres botones a un tamaño similar al de
+  // los badges que ya usa la app") — se reusa la clase .badge tal cual
+  // (mismo padding/font-size que el resto de badges) más .badge-accion
+  // para el look clickeable (cursor, hover), en vez de inventar una clase
+  // de tamaño nueva.
+  btnEsRequisito.className = "badge badge-accion";
   btnEsRequisito.textContent = "Es requisito";
   btnEsRequisito.addEventListener("click", (ev) => {
     ev.stopPropagation();
@@ -179,29 +199,36 @@ function construirBotonesFinalesDetalle(materia, plan, opciones) {
   });
   fila.appendChild(btnEsRequisito);
 
-  const btnHistorial = document.createElement("button");
-  btnHistorial.type = "button";
-  // v1.11: mismo estilo que "Cerrar" (btn btn-primary) — ya no link de texto plano.
-  btnHistorial.className = "btn btn-primary";
-  btnHistorial.textContent = "Historial";
-  btnHistorial.addEventListener("click", (ev) => {
+  // D.2: "Historial" pasa a llamarse "Buscarlo" y ahora abre el menú
+  // "Buscar materia en..." (Parte C) en vez de ir directo al historial —
+  // Semestres (historial) sigue siendo una de las 4 opciones de ese menú.
+  const nombreMateria = `${materia.codigo} · ${aplicarFormatoTexto(materia.nombre)}`;
+  const btnBuscarlo = document.createElement("button");
+  btnBuscarlo.type = "button";
+  btnBuscarlo.className = "badge badge-accion";
+  btnBuscarlo.textContent = "Buscarlo";
+  btnBuscarlo.addEventListener("click", (ev) => {
     ev.stopPropagation();
-    // Bug Mochi (2026-08-21): mismo problema que "Es requisito" arriba —
-    // cerrar #modal-requisito antes de abrir Historial si este botón vive
-    // dentro de ese modal, para no apilar dos overlays. Mismo flag de
-    // "volver" que en "Es requisito" (ver cerrarModalHistorial).
     if (esModal) {
       document.getElementById("modal-requisito").classList.add("oculto");
       volverAModalRequisitoAlCerrar = true;
     }
-    abrirModalHistorial(materia, plan);
+    const matricula = resolverMatriculaActual(materia, plan);
+    abrirBuscarMateriaEn({
+      mm: matricula ? matricula.mm : null,
+      materia,
+      plan,
+      semestre: matricula ? matricula.semestre : null,
+      nombreMateria,
+      origen: "plan-estudios",
+    });
   });
-  fila.appendChild(btnHistorial);
+  fila.appendChild(btnBuscarlo);
 
   if (esModal) {
     const btnCerrar = document.createElement("button");
     btnCerrar.type = "button";
-    btnCerrar.className = "btn btn-primary";
+    btnCerrar.className = "badge badge-accion";
     btnCerrar.textContent = "Cerrar";
     btnCerrar.addEventListener("click", (ev) => {
       ev.stopPropagation();
