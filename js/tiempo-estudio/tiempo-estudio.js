@@ -28,12 +28,13 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
+import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { COLOR_TIEMPO_ESTUDIO_DEFAULT } from "../core/schema.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { obtenerSemestresActuales } from "../semestres/semestres.js";
 import { mostrarSeccion } from "../main.js";
-import { abrirModalConfigTiempoEstudio } from "./tiempo-estudio-config.js";
+import { abrirModalConfigTiempoEstudio, abrirModalPomodoroPredeterminado } from "./tiempo-estudio-config.js";
 import {
   cambiarTimerEstudio,
   detenerTimerEstudio,
@@ -292,6 +293,21 @@ function construirEncabezado(cont) {
   titulo.textContent = "Tiempo de Estudio";
   encabezado.appendChild(titulo);
 
+  // Grupo derecho (Entrega 4): botón "Ajustes de Tiempo de Estudio" +
+  // pills Todo/Activos, ambos anclados a la derecha, el botón inmediato a
+  // la izquierda del pill — un solo contenedor flex así el pill sigue
+  // repartiéndose el espacio lateral que sobra, ahora descontando el ancho
+  // del botón.
+  const derecha = document.createElement("div");
+  derecha.className = "te-encabezado-derecha";
+
+  const btnAjustes = document.createElement("button");
+  btnAjustes.type = "button";
+  btnAjustes.className = "btn btn-secondary te-btn-ajustes";
+  btnAjustes.textContent = "Ajustes de Tiempo de Estudio";
+  btnAjustes.addEventListener("click", () => abrirModalAjustesTiempoEstudio());
+  derecha.appendChild(btnAjustes);
+
   const filtroActual = obtenerFiltroVista();
   const pills = document.createElement("div");
   pills.className = "pill-group te-filtro-pills";
@@ -299,7 +315,9 @@ function construirEncabezado(cont) {
     <button type="button" class="pill-item ${filtroActual === "todo" ? "active" : ""}" data-filtro="todo">Todo</button>
     <button type="button" class="pill-item ${filtroActual === "activos" ? "active" : ""}" data-filtro="activos">Activos</button>
   `;
-  encabezado.appendChild(pills);
+  derecha.appendChild(pills);
+
+  encabezado.appendChild(derecha);
   cont.appendChild(encabezado);
 
   pills.querySelectorAll(".pill-item").forEach((btn) => {
@@ -307,6 +325,72 @@ function construirEncabezado(cont) {
       guardarFiltroVista(btn.dataset.filtro);
       renderizarTiempoEstudio();
     });
+  });
+}
+
+/**
+ * Pantalla de Ajustes de Tiempo de Estudio (Entrega 4) — modal, mismo
+ * patrón que el resto de modales de la app. Por ahora tiene 3 cosas:
+ * 1) Editar el Pomodoro predeterminado global (Entrega 2).
+ * 2) Torneos/Competencias — placeholder, la lógica real es un prompt
+ *    aparte (Parte 4 del plan original).
+ * 3) Switch "Mostrar tiempos de estudio en Agenda" (Entrega 5).
+ */
+function abrirModalAjustesTiempoEstudio() {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.style.cssText =
+    "position:fixed; inset:0; z-index:300; background:rgba(0,0,0,0.55); " +
+    "display:flex; align-items:center; justify-content:center; padding:16px;";
+
+  const caja = document.createElement("div");
+  caja.className = "glass-card modal-card stack";
+  caja.style.cssText = "max-width:440px; width:100%; max-height:85vh; overflow-y:auto; gap:16px;";
+  caja.addEventListener("click", (e) => e.stopPropagation());
+
+  const mostrarEnAgenda = estado.datos.configuracion.mostrar_tiempo_estudio_en_agenda === true;
+
+  caja.innerHTML = `
+    <h2 style="margin:0;">Ajustes de Tiempo de Estudio</h2>
+
+    <button type="button" class="btn btn-secondary" id="te-ajustes-pomodoro" style="width:100%;">
+      Ajustar pomodoro predeterminado
+    </button>
+
+    <div class="glass-panel stack" style="padding:12px; gap:4px;">
+      <span class="form-label" style="margin:0;">Torneos / Competencias</span>
+      <span class="muted" style="font-size:0.82rem;">Próximamente.</span>
+    </div>
+
+    <div class="row-between" style="align-items:center;">
+      <span class="form-label" style="margin:0;">¿Mostrar tiempos de estudio en Agenda?</span>
+      <label class="switch switch-tema">
+        <input type="checkbox" id="te-ajustes-mostrar-agenda" ${mostrarEnAgenda ? "checked" : ""}>
+        <span class="track"><span class="thumb"></span></span>
+      </label>
+    </div>
+
+    <button type="button" class="btn btn-primary" id="te-ajustes-cerrar" style="width:100%;">Listo</button>
+  `;
+
+  overlay.appendChild(caja);
+  document.body.appendChild(overlay);
+
+  function cerrar() {
+    overlay.remove();
+  }
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) cerrar();
+  });
+  caja.querySelector("#te-ajustes-cerrar").addEventListener("click", cerrar);
+
+  caja.querySelector("#te-ajustes-pomodoro").addEventListener("click", () => {
+    abrirModalPomodoroPredeterminado();
+  });
+
+  caja.querySelector("#te-ajustes-mostrar-agenda").addEventListener("change", (e) => {
+    estado.datos.configuracion.mostrar_tiempo_estudio_en_agenda = e.target.checked;
+    marcarCambioPendiente();
   });
 }
 
@@ -510,10 +594,39 @@ function inicializarTiempoEstudio() {
   });
 }
 
+/**
+ * Estudio para hoy (Entrega 5, PROVISIONAL): reparte la meta semanal
+ * parejo entre los 7 días — un cálculo de paso, hasta que la Entrega 3
+ * (elegir qué días se estudia cada materia, como ya hace Horario) permita
+ * un reparto real solo entre los días elegidos. Cuando esa entrega esté
+ * lista, esta función se actualiza para usarla y Agenda no necesita
+ * cambiar nada de su lado (sigue leyendo materiaMatriculadaId/
+ * nombreMateriaCorto/minutosHoy igual). Solo entran acá materias CON meta
+ * configurada — las demás no tienen nada que repartir.
+ */
+function obtenerEstudioParaHoy() {
+  return obtenerMateriasParaTiempoEstudio()
+    .filter((item) => item.mm.tiempo_estudio.meta_horas_semana !== null && item.mm.tiempo_estudio.meta_horas_semana !== undefined)
+    .map((item) => ({
+      materiaMatriculadaId: item.mm.id,
+      nombreMateriaCorto: item.nombreMateriaCorto,
+      minutosHoy: Math.round((item.mm.tiempo_estudio.meta_horas_semana * 60) / 7),
+    }));
+}
+
+/** Punto de entrada para que OTRAS secciones (Agenda, Entrega 5) puedan
+ * llevar directo al detalle de una materia en Tiempo de Estudio, sin
+ * conocer nada de materiaDetalleActivaId (variable privada de este
+ * archivo) — mismo criterio que el resto de navegación entre secciones. */
+function irADetalleMateriaTiempoEstudio(materiaMatriculadaId) {
+  materiaDetalleActivaId = materiaMatriculadaId;
+  mostrarSeccion("tiempo-estudio");
+}
+
 // Ver mostrarSeccion() en main.js: llama a window.renderizarX?.() para
 // varias secciones (agenda/horario/resumen/asistente) en vez del import
 // directo — se expone igual acá por consistencia con ese patrón ya
 // establecido.
 window.renderizarTiempoEstudio = renderizarTiempoEstudio;
 
-export { inicializarTiempoEstudio, renderizarTiempoEstudio };
+export { inicializarTiempoEstudio, renderizarTiempoEstudio, obtenerEstudioParaHoy, irADetalleMateriaTiempoEstudio, formatearHorasMin };
