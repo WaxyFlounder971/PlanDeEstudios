@@ -490,6 +490,9 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minI
     const offsetPx = b.lane * 12;
     const tarjeta = document.createElement("div");
     tarjeta.className = "horario-bloque-tarjeta";
+    // Buscar materia en... (Parte C): permite ubicar el bloque de una
+    // materia puntual con un selector estable, sin depender de posición.
+    if (b.materia_id) tarjeta.dataset.materiaId = b.materia_id;
     // "sin_clase" (Cronograma): la tarjeta sigue ocupando su lugar en el
     // grid (no se oculta, ver obtenerClasesEfectivasSemana en schema.js)
     // pero se atenúa para que salte a la vista que ese día puntual no hay
