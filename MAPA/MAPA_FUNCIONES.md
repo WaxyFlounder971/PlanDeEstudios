@@ -9,7 +9,7 @@ Para la vista de alto nivel (capas, por qué existen los imports circulares, y "
 qué archivo empiezo si me piden X") ver `ARQUITECTURA.md`. Este documento es el
 detalle función-por-función; `ARQUITECTURA.md` es el mapa de decisión.
 
-> **Estado:** 43/44+ archivos `.js` del proyecto documentados (se sumó `asistente/asistente.js`, 2026-08-29; actualizado 2026-08-31 con la lista de capacidades del punto 7 del brief). **1 pendiente detectado en esta ronda:** `asistente/asistente-bandeja.js` — existe (lo referencian los comentarios de exports de `asistente.js`, ronda "Bandeja pendiente / Captura por voz") pero nunca se subió/documentó acá; no se documenta en esta ronda por no tener el archivo a la vista, para no inventar su lista de exports.
+> **Estado:** 46/47+ archivos `.js` del proyecto documentados (se sumó `asistente/asistente.js`, 2026-08-29; actualizado 2026-08-31 con la lista de capacidades del punto 7 del brief; 2026-09-04 se sumó el grupo completo `js/tiempo-estudio/` — `tiempo-estudio.js`, `tiempo-estudio-config.js`, `tiempo-estudio-timer.js` — tras la Parte 2 del motor de Pomodoro/salvavidas). **1 pendiente detectado en esta ronda:** `asistente/asistente-bandeja.js` — existe (lo referencian los comentarios de exports de `asistente.js`, ronda "Bandeja pendiente / Captura por voz") pero nunca se subió/documentó acá; no se documenta en esta ronda por no tener el archivo a la vista, para no inventar su lista de exports.
 
 ---
 
@@ -25,6 +25,7 @@ detalle función-por-función; `ARQUITECTURA.md` es el mapa de decisión.
 - [`js/horario/`](#js--horario) — Horario y horario entre amigos (4 archivos)
 - [`js/agenda/`](#js--agenda) — Agenda (5 archivos)
 - [`js/asistente/`](#js--asistente) — Asistente IA (1 archivo documentado; ver nota sobre `asistente-bandeja.js` pendiente)
+- [`js/tiempo-estudio/`](#js--tiempo-de-estudio) — Tiempo de Estudio (3 archivos)
 - [`js/resumen/`](#js--resumen) — Resumen (1 archivo)
 - [`js/main.js`](#jsmainjs) — arranque (1 archivo)
 
@@ -835,6 +836,51 @@ Exporta:
 * `mostrarResultadoEnChat`/`mostrarResultadoEventosEnChat` — ahora `async`, con una rama nueva `accion === "saludo"` (marcador puramente local, nunca lo devuelve Gemini — el schema solo admite `crear_eventos`/`editar_modalidad`) y la rama de fallback reescrita para usar `generarRespuestaConversacionalWapper` en vez de un mensaje estático fijo.
 
 **Archivo relacionado no documentado en esta ronda:** `asistente/asistente-bandeja.js` (Bandeja pendiente / Captura por voz, 2026-08-23) — consume `transcribirBase64ConGemini`, `extraerEventosDeTexto` y `guardarItemExtraidoComoEvento` de este archivo. No subido en esta sesión; pendiente de documentar cuando se revise. Nota: no se sabe si ya usa alguna respuesta de Wapper para su propio flujo — al revisarlo, confirmar si conviene que la Bandeja también hable en su voz o si debe seguir siendo puramente silenciosa (sin turno de chat visible).
+
+---
+
+## JS — Tiempo de Estudio
+
+### tiempo-estudio/tiempo-estudio.js
+Propósito: núcleo de la sección Tiempo de Estudio — vista principal (filtro "Esta semana / Todas", tarjetas por materia matriculada con barra de meta + acceso al timer), pantalla de detalle por materia (timer + progreso en vivo) y el modal de ajustes globales de la sección. Las materias disponibles son SIEMPRE las de `obtenerSemestresActuales()` (`semestres/semestres.js`) — cada materia matriculada (`mm`) tiene su propia config/sesiones, aunque sea una repetición de la misma materia del Plan.
+Depende de: core/storage.js, core/storage-sync.js, core/utils.js, core/schema.js (`COLOR_TIEMPO_ESTUDIO_DEFAULT`), ui/componentes.js, ui/buscar-materia.js, semestres/semestres.js, main.js, tiempo-estudio/tiempo-estudio-config.js, tiempo-estudio/tiempo-estudio-timer.js
+Exporta:
+* `inicializarTiempoEstudio()` — cablea el badge/click de acceso rápido y, **desde la Parte 2**, llama primero que nada a `revisarSesionOlvidadaAlAbrir()` (tiempo-estudio-timer.js) — el chequeo del salvavidas corre una sola vez al arrancar la app, antes de que exista ningún DOM propio de esta sección (no depende del badge).
+* `renderizarTiempoEstudio()` — entrypoint de render de toda la sección (vista principal o detalle, según `estado.tiempoEstudioDetalleId` o similar); también expuesta como `window.renderizarTiempoEstudio` para refrescar desde otros módulos sin import circular (mismo patrón que Agenda/Horario).
+* `obtenerEstudioParaHoy()` — usado por el switch "¿Mostrar tiempos de estudio en Agenda?" (`configuracion.mostrar_tiempo_estudio_en_agenda`) para la sección "Estudio para hoy" de Agenda Lista.
+* `irADetalleMateriaTiempoEstudio(materiaMatriculadaId)` — navega directo a la pantalla de detalle de una materia; es la acción de la opción "Tiempo de Estudio" en el menú `abrirBuscarMateriaEn()` (`ui/buscar-materia.js`).
+* `formatearHorasMin(minutosTotales)` — helper de formato ("2h 15m" / "45m") reusado por las tarjetas, el detalle y el panel de progreso en vivo.
+
+Cambios de comportamiento de la Parte 2 (sin tocar el diseño ya aprobado):
+* `manejarBotonIniciarDetener` distingue el toast según lo que devuelva `detenerTimerEstudio()` — `"Sesión guardada"` si cerró un bloque de trabajo/timer simple, `"Descanso descartado (no se guardó nada)"` si lo que se detuvo fue un descanso de Pomodoro (los descansos nunca generan sesión).
+* `construirPantallaDetalle` agrega una etiqueta de fase de Pomodoro ("Bloque 2 de 4 · Descanso corto", misma clase `.muted` ya usada en el resto del panel) y convierte el panel de progreso en una función `pintarProgreso()` que se repinta en cada tick del timer (antes se calculaba una sola vez al entrar a la pantalla) — necesario para el excedente en vivo sobre la meta semanal mientras el timer sigue corriendo.
+
+### tiempo-estudio/tiempo-estudio-config.js
+Propósito: modales de configuración de Tiempo de Estudio — meta de horas + Pomodoro opcional por materia matriculada, y el Pomodoro predeterminado global de la cuenta (semilla para la primera vez que cualquier materia activa Pomodoro). Modales 100% construidos en JS (mismo patrón que el alta/edición de semestre), sin markup fijo en `index.html`.
+Depende de: core/schema.js (`COLOR_TIEMPO_ESTUDIO_DEFAULT`, `crearConfigPomodoroDefault`, `sellarTimestamp`), core/storage-sync.js, core/storage.js, ui/componentes.js (`mostrarToast`)
+Exporta:
+* `abrirModalConfigTiempoEstudio(mm, nombreMateria, onGuardar)` — modal por materia: meta semanal, color, y toggle "Usar Pomodoro" con sus 4 campos (duración de bloque, cantidad de bloques, descanso corto, descanso largo). La primera vez que una materia activa el toggle, precarga el Pomodoro predeterminado de la cuenta (`obtenerPomodoroPredeterminado()`); de ahí en más cada materia guarda su propia copia independiente. `onGuardar` se llama sin argumentos después de guardar, para que quien abrió el modal re-renderice sin que este archivo necesite saber de tarjetas/detalle.
+* `abrirModalPomodoroPredeterminado(onGuardar)` — modal del Pomodoro "de fábrica" de la cuenta (Ajustes → Ajustar pomodoro predeterminado). Sin meta/color/toggle: siempre está "activo" porque ES el default. Cambiarlo acá no afecta materias que ya tienen su propia config guardada.
+
+### tiempo-estudio/tiempo-estudio-timer.js
+Propósito: motor del timer — **único punto de entrada real** para iniciar/detener un timer de estudio; la regla de "una sola sesión activa a la vez" se hace cumplir acá adentro, no confiando en que cada botón de la UI la respete por su cuenta. Parte 1 fue un cronómetro simple en memoria; **Parte 2 (2026-09-04)** agregó el motor de Pomodoro, las alertas de cambio de bloque, el excedente en vivo sobre la meta semanal y el salvavidas de sesión olvidada.
+Depende de: core/schema.js (`crearSesionEstudio`), core/storage-sync.js (`marcarCambioPendiente`), core/storage.js (`estado`), ui/componentes.js (`mostrarToast`)
+Exporta:
+* `hayTimerActivo()` — `true`/`false` según si hay un timer corriendo (para cualquier materia).
+* `obtenerTimerActivo()` — el objeto `timerActivo` completo o `null`: `{ materiaMatriculadaId, origen: "timer"|"pomodoro", sesionInicio, inicioFase, pomodoro: null|{config, bloqueActual, fase}, metaAlarmaDisparada }`. `fase` es `"trabajo"|"descanso_corto"|"descanso_largo"`.
+* `segundosTranscurridos()` — segundos transcurridos de la **fase actual** (para timer simple es toda la sesión, igual que en Parte 1; para Pomodoro es el avance del bloque/descanso en curso — cambio de comportamiento respecto a Parte 1, que medía siempre la sesión completa).
+* `iniciarTimerEstudio(materiaMatriculadaId)` — arranca un timer; `false` sin hacer nada si ya hay uno corriendo (de cualquier materia). Resuelve internamente si la materia tiene Pomodoro configurado (`mm.tiempo_estudio.pomodoro`) buscando la `mm` en `estado.datos.semestres` — la UI no necesita pasar esa config. Si arranca en modo Pomodoro, pide permiso de `Notification` si todavía está en `"default"` (aprovechando que el click que dispara esto ya es el gesto de usuario que el navegador exige).
+* `detenerTimerEstudio()` — detiene el timer activo. Solo crea y guarda una `sesion_estudio` si la fase en curso "cuenta" como estudio real (timer simple siempre; Pomodoro solo si estaba en fase de trabajo) — detener a mitad de un descanso no genera sesión, igual que si ese descanso hubiera terminado solo. Devuelve la sesión creada o `null`.
+* `cambiarTimerEstudio(materiaMatriculadaIdNueva)` — detiene el timer actual (guardando lo que corresponda) y arranca uno nuevo para la materia indicada; usado por el diálogo "ya hay un timer activo en \<Materia X\>, ¿querés cambiar?".
+* `suscribirseATimer(cb)` — se suscribe a cada tick (1/seg mientras hay timer activo, más un valor inmediato al suscribirse); devuelve función para darse de baja. Usado por el indicador persistente y la pantalla de detalle — un solo `setInterval` compartido, nunca 2+ en paralelo por tener 2 pantallas abiertas.
+* `formatearDuracion(segundosTotales)` — `"MM:SS"` si dura menos de una hora, `"H:MM:SS"` si dura una hora o más.
+* `revisarSesionOlvidadaAlAbrir()` — **(Parte 2)** se llama una sola vez al arrancar la app (`inicializarTiempoEstudio()`). Lee el snapshot local (`localStorage`, clave `te_timer_activo_v1`, NUNCA sincronizado a Drive) del último timer activo; si la fase en curso llevaba 3+ horas sin cerrarse (`SALVAVIDAS_HORAS_LIMITE`, constante fácil de ajustar) Y esa fase "cuenta" como estudio (timer simple, o Pomodoro en trabajo), abre un modal propio para corregir la duración real (horas + minutos) antes de guardarla como sesión, o descartarla. Una sesión corta (recarga normal de página) o que quedó a mitad de un descanso se descarta en silencio.
+
+Notas internas de implementación (no exportadas, pero relevantes para quien toque este archivo después):
+* El timer activo se persiste en `localStorage` (no en `estado.datos`) porque es puramente local al dispositivo — igual que `CLAVE_SIDEBAR_COLAPSADA` en `ui/componentes.js` o `CLAVE_FILTRO_VISTA_TE` en `tiempo-estudio.js`. Es lo único que permite detectar, al reabrir la app, que quedó una sesión sin detener.
+* Las alertas (`dispararAlerta`) combinan un beep generado con Web Audio (`OscillatorNode`, sin archivo de audio propio que mantener), un `mostrarToast()`, y una `Notification` local (nunca push/Worker) solo si la pestaña está oculta y ya hay permiso concedido.
+* `buscarMateriaMatriculada()` y `calcularMinutosEstaSemana()` duplican lógica equivalente que ya existe en `tiempo-estudio.js` — duplicado a propósito para no crear un import circular (`tiempo-estudio.js` ya importa de este archivo). Si el criterio de "inicio de semana" llega a cambiar (ej. día configurable), hay que actualizar los dos lugares a la vez.
+* El ciclo de Pomodoro es indefinido: trabajo(1) → descanso corto → trabajo(2) → ... → trabajo(N) → descanso largo → trabajo(1) de nuevo, hasta que el usuario detiene el timer a mano — no se corta solo al completar `cantidad_bloques` una vez.
 
 ---
 
