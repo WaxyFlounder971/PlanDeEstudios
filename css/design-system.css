@@ -4384,36 +4384,13 @@ html.exportar-tema-default[data-mode="dark"] {
   .badge-tiempo-estudio-fijo { bottom: 16px; left: 16px; padding: 9px 14px; font-size: 0.8rem; }
 }
 
-/* Encabezado (B.1): misma tarjeta que el resto, título + pills Todo/Activos. */
+/* Encabezado (B.1): título + engranaje de Ajustes (el filtro Todo/Activos
+   se mudó adentro del modal de Ajustes). */
 .te-encabezado { flex-wrap: wrap; }
-/* Pedido: que ocupe todo el ancho lateral disponible del encabezado (antes
-   quedaba angosta, del tamaño justo de "Todo"/"Activos", porque
-   flex-shrink:0 la deja del ancho de su contenido dentro del row-between).
-   .pill-item ya reparte 50/50 solo (flex:1 1 0, ver arriba) — acá solo hace
-   falta que el contenedor mismo crezca. */
-/* Ajuste: NO se estira a llenar todo el ancho lateral (eso la dejaba mucho
-   más ancha que lo que necesita "Activos", la palabra más larga del par) —
-   tamaño natural, igual que el resto de pill-group de la app (Lista/
-   Calendario/Cronograma en Agenda), sentado sobre su contenido nomás. */
-.te-filtro-pills { flex: 0 0 auto; }
 
 .te-codigo-clickeable { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
 .te-codigo-clickeable:hover { color: var(--text-primary); }
 
-/* Ajuste: el pill "Activos" (la palabra más larga del par) quedaba
-   clippeado con el padding por defecto de .pill-item — un poco más de
-   aire horizontal y vertical, solo acá, sin tocar el resto de pill-group
-   de la app (Lista/Calendario/Cronograma de Agenda, que están bien así). */
-.te-filtro-pills .pill-item { padding: 8px 16px; }
-
-/* Entrega 4: grupo derecho del encabezado (botón Ajustes + pills), anclado
-   a la derecha del título, compartiendo el espacio lateral disponible —
-   el botón toma su ancho natural, el pill se estira con lo que sobra. */
-.te-encabezado-derecha {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
 /* D.2: badges clickeables (Es requisito / Buscarlo / Cerrar) — mismo
    tamaño que .badge (padding/font-size/pill), pero .badge sola no trae
    color propio (viene de badge-success/warning/danger/neutral, pensados
@@ -4507,12 +4484,13 @@ html.exportar-tema-default[data-mode="dark"] {
   cursor: pointer;
   transition: color var(--transition-fast), background var(--transition-fast), filter var(--transition-fast);
 }
-/* Engranaje de la tarjeta: al doble de tamaño (pedido explícito) — la caja
-   crece proporcional al glyph para que siga centrado, no solo el texto. */
+/* Engranaje de la tarjeta (66% del tamaño anterior, 52px→34px) — la misma
+   clase la usa también el engranaje del encabezado (pedido: mismo tamaño
+   entre los dos). */
 .te-btn-icono-grande {
-  width: 52px;
-  height: 52px;
-  font-size: 2.1rem;
+  width: 34px;
+  height: 34px;
+  font-size: 1.4rem;
 }
 .te-btn-icono-fantasma {
   background: none;
