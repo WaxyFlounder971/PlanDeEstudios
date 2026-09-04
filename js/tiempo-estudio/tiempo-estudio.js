@@ -360,9 +360,9 @@ function abrirModalAjustesTiempoEstudio() {
   caja.innerHTML = `
     <h2 style="margin:0;">Ajustes de Tiempo de Estudio</h2>
 
-    <div class="row-between" style="align-items:center;">
+    <div class="stack" style="gap:6px;">
       <span class="form-label" style="margin:0;">Mostrar</span>
-      <div class="pill-group" id="te-ajustes-filtro-pills">
+      <div class="pill-group" id="te-ajustes-filtro-pills" style="width:100%;">
         <button type="button" class="pill-item ${filtroActual === "todo" ? "active" : ""}" data-filtro="todo">Todo</button>
         <button type="button" class="pill-item ${filtroActual === "activos" ? "active" : ""}" data-filtro="activos">Activos</button>
       </div>
