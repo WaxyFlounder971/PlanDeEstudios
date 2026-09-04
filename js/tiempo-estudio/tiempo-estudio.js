@@ -216,7 +216,7 @@ function manejarBotonIniciarDetener(materiaMatriculadaId, nombreMateria) {
  * alrededor de toda la tarjeta.
  */
 function construirTarjetaMateria(item) {
-  const { mm, materia, plan, nombreMateria, nombreMateriaCorto } = item;
+  const { mm, materia, plan, semestre, nombreMateria, nombreMateriaCorto } = item;
   const meta = mm.tiempo_estudio.meta_horas_semana;
   const tieneMeta = meta !== null && meta !== undefined;
   const color = obtenerColorMateria(mm, materia, plan);
@@ -233,11 +233,8 @@ function construirTarjetaMateria(item) {
     ? `${formatearHorasMin(calcularMinutosEstudiadosEstaSemana(mm.id))} de ${meta} h`
     : "Sin meta configurada";
 
-  // Barra de progreso: SÍ va en la tarjeta de la lista (se había sacado en
-  // una iteración anterior por error de interpretación) — delgada, entre
-  // el nombre y la línea de tiempo/botones. Con meta, se rellena con el
-  // color de la materia; sin meta, no hay nada que proporcionar, así que
-  // no se dibuja (el textoTiempo ya dice "Sin meta configurada").
+  // Orden pedido: nombre → tiempo/botones → barra AL FINAL (antes iba en
+  // el medio). Sin meta, no hay nada que proporcionar, no se dibuja barra.
   let barraHtml = "";
   if (tieneMeta) {
     const minutosEstudiados = calcularMinutosEstudiadosEstaSemana(mm.id);
@@ -253,21 +250,29 @@ function construirTarjetaMateria(item) {
 
   tarjeta.innerHTML = `
     <div class="materia-linea1">
-      <span class="materia-codigo">${materia.codigo}</span>
+      <span class="materia-codigo te-codigo-clickeable">${materia.codigo}</span>
       <span class="materia-nombre truncada">${nombreMateriaCorto}</span>
     </div>
-    ${barraHtml}
     <div class="te-tarjeta-materia-linea2">
       <span class="te-tarjeta-materia-tiempo">${textoTiempo}</span>
     </div>
+    ${barraHtml}
   `;
+
+  // El código, como en Plan de Estudios, abre "Buscar materia en..." en vez
+  // de mandar al detalle (que es lo que hace el resto de la tarjeta) — sin
+  // esto, el click se colaba al listener de la tarjeta entera de arriba.
+  tarjeta.querySelector(".te-codigo-clickeable").addEventListener("click", (e) => {
+    e.stopPropagation();
+    abrirBuscarMateriaEn({ mm, materia, plan, semestre, nombreMateria, origen: "tiempo-estudio" });
+  });
 
   const filaBotones = document.createElement("div");
   filaBotones.className = "te-tarjeta-materia-botones";
 
   const btnConfig = document.createElement("button");
   btnConfig.type = "button";
-  btnConfig.className = "te-btn-icono te-btn-icono-fantasma";
+  btnConfig.className = "te-btn-icono te-btn-icono-fantasma te-btn-icono-grande";
   btnConfig.title = "Configurar";
   btnConfig.setAttribute("aria-label", "Configurar");
   btnConfig.textContent = "⚙️";
