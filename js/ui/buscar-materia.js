@@ -34,6 +34,7 @@ import { mostrarSeccion } from "../main.js";
 import { desplazarYResaltarElemento } from "./componentes.js";
 import { abrirModalHistorial } from "../plan/plan-detalle.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
+import { irADetalleMateriaTiempoEstudio } from "../tiempo-estudio/tiempo-estudio.js";
 
 /** ¿Esta materia tiene al menos un bloque en Horario, en el semestre
  * dado? Mismo criterio de datos que usa horario.js (semestre.bloques_horario,
@@ -53,6 +54,16 @@ function existeEnHorario(semestre, materiaId) {
  */
 function abrirBuscarMateriaEn({ mm, materia, plan, semestre, nombreMateria, origen }) {
   const opciones = [];
+
+  // Faltaba del todo (bug reportado): ninguna de las 4 opciones originales
+  // llevaba a Tiempo de Estudio. Mismo criterio que Cronograma/Horario:
+  // necesita una instancia matriculada real (mm).
+  if (mm && origen !== "tiempo-estudio") {
+    opciones.push({
+      etiqueta: "Tiempo de Estudio",
+      accion: () => irADetalleMateriaTiempoEstudio(mm.id),
+    });
+  }
 
   // Cronograma y Horario necesitan una instancia matriculada real (mm +
   // semestre) — si quien invoca no la tiene a mano (ej. D.2, donde la
