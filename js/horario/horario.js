@@ -177,6 +177,15 @@ function obtenerNombreBloque(bloqueEfectivo) {
   return (materia && materia.nombre) || "Materia";
 }
 
+/** Código de materia del bloque (Parte C / ajuste), o "" si es un bloque
+ * personalizado (sin materia_id) — no hay código que mostrar en ese caso. */
+function obtenerCodigoBloque(bloqueEfectivo) {
+  if (!bloqueEfectivo.materia_id) return "";
+  const plan = obtenerPlanPorId(bloqueEfectivo.plan_estudio_id);
+  const materia = plan && plan.materias.find((m) => m.id === bloqueEfectivo.materia_id);
+  return (materia && materia.codigo) || "";
+}
+
 /**
  * "Para no gastar espacio": primer nombre + primer apellido completos,
  * cualquier palabra extra (segundo nombre, segundo apellido) se reduce a
@@ -571,8 +580,9 @@ function abrirTarjetaInfoBloque(semestre, numeroSemana, b) {
   overlay.innerHTML = `
     <div class="glass-panel modal-card" style="padding:0; overflow:hidden;">
       <div style="height:8px; background:${b.color};"></div>
-      <button type="button" class="modal-x-close" id="horario-info-cerrar">✕</button>
+      <button type="button" class="modal-x-close horario-info-x-plana" id="horario-info-cerrar">✕</button>
       <div style="padding:20px;">
+        ${obtenerCodigoBloque(b) ? `<div class="muted" style="font-size:0.78rem;">${obtenerCodigoBloque(b)}</div>` : ""}
         <div style="font-size:1.05rem; font-weight:700; padding-right:28px; overflow-wrap:break-word;">${b.nombreCorto}</div>
         <div class="muted" style="font-size:0.78rem; margin-bottom:16px;">Semana ${numeroSemana}</div>
         <div class="stack" style="gap:12px;">
