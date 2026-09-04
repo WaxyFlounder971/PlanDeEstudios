@@ -318,50 +318,29 @@ function construirEncabezado(cont) {
   titulo.textContent = "Tiempo de Estudio";
   encabezado.appendChild(titulo);
 
-  // Grupo derecho (Entrega 4): botón "Ajustes de Tiempo de Estudio" +
-  // pills Todo/Activos, ambos anclados a la derecha, el botón inmediato a
-  // la izquierda del pill — un solo contenedor flex así el pill sigue
-  // repartiéndose el espacio lateral que sobra, ahora descontando el ancho
-  // del botón.
-  const derecha = document.createElement("div");
-  derecha.className = "te-encabezado-derecha";
-
+  // El pill Todo/Activos se mudó adentro del modal de Ajustes (pedido) —
+  // acá solo queda el engranaje, mismo tamaño exacto que el de las
+  // tarjetas (te-btn-icono-grande, ver design-system.css).
   const btnAjustes = document.createElement("button");
   btnAjustes.type = "button";
-  btnAjustes.className = "te-btn-icono te-btn-icono-fantasma";
+  btnAjustes.className = "te-btn-icono te-btn-icono-fantasma te-btn-icono-grande";
   btnAjustes.title = "Ajustes de Tiempo de Estudio";
   btnAjustes.setAttribute("aria-label", "Ajustes de Tiempo de Estudio");
   btnAjustes.textContent = "⚙️";
   btnAjustes.addEventListener("click", () => abrirModalAjustesTiempoEstudio());
-  derecha.appendChild(btnAjustes);
+  encabezado.appendChild(btnAjustes);
 
-  const filtroActual = obtenerFiltroVista();
-  const pills = document.createElement("div");
-  pills.className = "pill-group te-filtro-pills";
-  pills.innerHTML = `
-    <button type="button" class="pill-item ${filtroActual === "todo" ? "active" : ""}" data-filtro="todo">Todo</button>
-    <button type="button" class="pill-item ${filtroActual === "activos" ? "active" : ""}" data-filtro="activos">Activos</button>
-  `;
-  derecha.appendChild(pills);
-
-  encabezado.appendChild(derecha);
   cont.appendChild(encabezado);
-
-  pills.querySelectorAll(".pill-item").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      guardarFiltroVista(btn.dataset.filtro);
-      renderizarTiempoEstudio();
-    });
-  });
 }
 
 /**
  * Pantalla de Ajustes de Tiempo de Estudio (Entrega 4) — modal, mismo
- * patrón que el resto de modales de la app. Por ahora tiene 3 cosas:
- * 1) Editar el Pomodoro predeterminado global (Entrega 2).
- * 2) Torneos/Competencias — placeholder, la lógica real es un prompt
+ * patrón que el resto de modales de la app. Tiene 4 cosas:
+ * 1) Filtro Todo/Activos (se mudó acá adentro desde el encabezado).
+ * 2) Editar el Pomodoro predeterminado global (Entrega 2).
+ * 3) Torneos/Competencias — placeholder, la lógica real es un prompt
  *    aparte (Parte 4 del plan original).
- * 3) Switch "Mostrar tiempos de estudio en Agenda" (Entrega 5).
+ * 4) Switch "Mostrar tiempos de estudio en Agenda" (Entrega 5).
  */
 function abrirModalAjustesTiempoEstudio() {
   const overlay = document.createElement("div");
@@ -376,9 +355,18 @@ function abrirModalAjustesTiempoEstudio() {
   caja.addEventListener("click", (e) => e.stopPropagation());
 
   const mostrarEnAgenda = estado.datos.configuracion.mostrar_tiempo_estudio_en_agenda === true;
+  const filtroActual = obtenerFiltroVista();
 
   caja.innerHTML = `
     <h2 style="margin:0;">Ajustes de Tiempo de Estudio</h2>
+
+    <div class="row-between" style="align-items:center;">
+      <span class="form-label" style="margin:0;">Mostrar</span>
+      <div class="pill-group" id="te-ajustes-filtro-pills">
+        <button type="button" class="pill-item ${filtroActual === "todo" ? "active" : ""}" data-filtro="todo">Todo</button>
+        <button type="button" class="pill-item ${filtroActual === "activos" ? "active" : ""}" data-filtro="activos">Activos</button>
+      </div>
+    </div>
 
     <button type="button" class="btn btn-secondary" id="te-ajustes-pomodoro" style="width:100%;">
       Ajustar pomodoro predeterminado
@@ -410,6 +398,17 @@ function abrirModalAjustesTiempoEstudio() {
     if (e.target === overlay) cerrar();
   });
   caja.querySelector("#te-ajustes-cerrar").addEventListener("click", cerrar);
+
+  // El cambio de filtro re-renderiza la lista de atrás (el modal es un
+  // overlay aparte en <body>, no vive dentro de #seccion-tiempo-estudio,
+  // así que re-renderizarla no lo toca ni lo cierra).
+  caja.querySelectorAll("#te-ajustes-filtro-pills .pill-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      guardarFiltroVista(btn.dataset.filtro);
+      caja.querySelectorAll("#te-ajustes-filtro-pills .pill-item").forEach((b) => b.classList.toggle("active", b === btn));
+      renderizarTiempoEstudio();
+    });
+  });
 
   caja.querySelector("#te-ajustes-pomodoro").addEventListener("click", () => {
     abrirModalPomodoroPredeterminado();
