@@ -43,6 +43,7 @@ import {
   hayTimerActivo,
   iniciarTimerEstudio,
   obtenerTimerActivo,
+  revisarSesionOlvidadaAlAbrir,
   segundosTranscurridos,
   suscribirseATimer,
 } from "./tiempo-estudio-timer.js";
@@ -174,8 +175,12 @@ function manejarBotonIniciarDetener(materiaMatriculadaId, nombreMateria) {
   const activo = obtenerTimerActivo();
 
   if (activo && activo.materiaMatriculadaId === materiaMatriculadaId) {
-    detenerTimerEstudio();
-    mostrarToast("Sesión guardada");
+    // Parte 2: detenerTimerEstudio() ahora puede devolver null si lo que se
+    // detuvo fue un descanso de Pomodoro (los descansos nunca generan
+    // sesión) — el toast avisa eso en vez de decir "Sesión guardada" cuando
+    // en realidad no se guardó nada.
+    const sesion = detenerTimerEstudio();
+    mostrarToast(sesion ? "Sesión guardada" : "Descanso descartado (no se guardó nada)");
     renderizarTiempoEstudio();
     return;
   }
@@ -517,11 +522,21 @@ function construirPantallaDetalle(cont, item) {
   construirEncabezadoDetalle(cont, item);
 
   const meta = mm.tiempo_estudio.meta_horas_semana;
-  const minutosEstudiados = calcularMinutosEstudiadosEstaSemana(mm.id);
 
   const panelTimer = document.createElement("div");
   panelTimer.className = "glass-card stack";
   panelTimer.style.cssText = "align-items:center; gap:16px; text-align:center;";
+
+  // Parte 2: etiqueta de fase de Pomodoro ("Bloque 2 de 4 · Descanso
+  // corto") — vacía/invisible salvo que el timer activo de ESTA materia
+  // sea de origen "pomodoro". No es un elemento nuevo de diseño, solo un
+  // renglón de texto chico (misma clase .muted que ya se usa en el resto
+  // del panel) para poder ver en qué fase está sin depender solo de las
+  // alertas sonoras/visuales del punto 2.
+  const faseLabel = document.createElement("p");
+  faseLabel.className = "muted";
+  faseLabel.style.cssText = "margin:0; font-size:0.85rem;";
+  panelTimer.appendChild(faseLabel);
 
   const display = document.createElement("div");
   display.className = "te-timer-display";
@@ -534,37 +549,74 @@ function construirPantallaDetalle(cont, item) {
 
   cont.appendChild(panelTimer);
 
-  // Barra de progreso (rediseño): ahora va DEBAJO del timer, alargada, con
-  // un solo renglón de texto centrado debajo — reemplaza al panel de texto
-  // largo ("Te faltan X h para tu meta de Y h esta semana") que antes iba
-  // arriba del timer.
-  if (meta !== null && meta !== undefined) {
+  // Barra de progreso (rediseño, sin cambios de estructura/clases): se crea
+  // una sola vez acá y de ahí en más se repinta su contenido en cada tick
+  // vía pintarProgreso() — necesario para el punto 3 (excedente en vivo
+  // mientras el timer sigue corriendo, no solo al detenerlo).
+  const panelProgreso = document.createElement("div");
+  cont.appendChild(panelProgreso);
+
+  function pintarProgreso(activo) {
+    if (meta === null || meta === undefined) {
+      panelProgreso.className = "";
+      panelProgreso.innerHTML = `<p class="te-detalle-meta">Sin meta configurada esta semana.</p>`;
+      return;
+    }
+
+    const esEstaMateria = Boolean(activo && activo.materiaMatriculadaId === mm.id);
+    const minutosGuardados = calcularMinutosEstudiadosEstaSemana(mm.id);
+    // Mientras el timer de ESTA materia está corriendo, se suma el tramo en
+    // vivo (todavía no guardado como sesión) — timer simple: toda la
+    // sesión; Pomodoro: solo si está en fase de trabajo (los descansos no
+    // suman, punto 1). Sin esto el excedente en vivo del punto 3 no se
+    // vería hasta detener el timer y volver a entrar al detalle.
+    let minutosEnVivo = 0;
+    if (esEstaMateria) {
+      if (activo.origen === "timer") {
+        minutosEnVivo = (Date.now() - activo.sesionInicio) / 60000;
+      } else if (activo.pomodoro && activo.pomodoro.fase === "trabajo") {
+        minutosEnVivo = (Date.now() - activo.inicioFase) / 60000;
+      }
+    }
+    const minutosEstudiados = minutosGuardados + minutosEnVivo;
+
     const metaMinutos = meta * 60;
     const completada = metaMinutos > 0 && minutosEstudiados >= metaMinutos;
     const porcentaje = metaMinutos > 0 ? Math.min(100, (minutosEstudiados / metaMinutos) * 100) : minutosEstudiados > 0 ? 100 : 0;
     const restanteMin = Math.max(0, metaMinutos - minutosEstudiados);
+    const excedenteMin = Math.max(0, minutosEstudiados - metaMinutos);
 
-    const panelProgreso = document.createElement("div");
+    const texto = !completada
+      ? `Faltan ${formatearHorasMin(restanteMin)}`
+      : excedenteMin > 0
+      ? `🎉 Meta cumplida · excedente +${formatearHorasMin(excedenteMin)}`
+      : `🎉 Meta cumplida (${formatearHorasMin(minutosEstudiados)})`;
+
     panelProgreso.className = "te-detalle-progreso";
     panelProgreso.innerHTML = `
       <div class="te-barra-progreso">
         <div class="te-barra-progreso-fill ${completada ? "te-completada" : ""}" style="width:${porcentaje}%; background:${obtenerColorMateria(mm, materia, plan)};"></div>
       </div>
-      <span class="te-detalle-meta">${completada ? `🎉 Meta cumplida (${formatearHorasMin(minutosEstudiados)})` : `Faltan ${formatearHorasMin(restanteMin)}`}</span>
+      <span class="te-detalle-meta">${texto}</span>
     `;
-    cont.appendChild(panelProgreso);
-  } else {
-    const sinMeta = document.createElement("p");
-    sinMeta.className = "te-detalle-meta";
-    sinMeta.textContent = "Sin meta configurada esta semana.";
-    cont.appendChild(sinMeta);
   }
+  pintarProgreso(obtenerTimerActivo());
 
   function pintar(activo) {
     const esEstaMateria = Boolean(activo && activo.materiaMatriculadaId === mm.id);
     display.textContent = esEstaMateria ? formatearDuracion(segundosTranscurridos()) : "00:00";
     btnAccion.textContent = esEstaMateria ? "Detener" : "Iniciar";
     btnAccion.className = "btn " + (esEstaMateria ? "btn-danger" : "btn-primary");
+
+    if (esEstaMateria && activo.pomodoro) {
+      const nombreFaseLegible =
+        activo.pomodoro.fase === "trabajo" ? "Bloque de trabajo" : activo.pomodoro.fase === "descanso_corto" ? "Descanso corto" : "Descanso largo";
+      faseLabel.textContent = `Bloque ${activo.pomodoro.bloqueActual} de ${activo.pomodoro.config.cantidad_bloques} · ${nombreFaseLegible}`;
+    } else {
+      faseLabel.textContent = "";
+    }
+
+    pintarProgreso(activo);
   }
   desuscribirTimerDetalle = suscribirseATimer(pintar);
 
@@ -606,6 +658,13 @@ function renderizarTiempoEstudio() {
  * en CUALQUIER sección, no solo al entrar a Tiempo de Estudio.
  */
 function inicializarTiempoEstudio() {
+  // Parte 2 (punto 4, salvavidas): se revisa una sola vez al arrancar, no
+  // en cuanto se cumplen las 3 horas — si quedó una sesión sin detener por
+  // más de SALVAVIDAS_HORAS_LIMITE, abre el modal para corregir la
+  // duración real antes de guardarla. Va ANTES del `if (!badge) return`
+  // de abajo porque no depende del badge para nada.
+  revisarSesionOlvidadaAlAbrir();
+
   const badge = document.getElementById("badge-tiempo-estudio");
   if (!badge) return;
 
