@@ -91,16 +91,33 @@ async function asegurarTokenValido() {
       if (refreshTokenNuevo) guardarRefreshTokenGoogle(refreshTokenNuevo);
       establecerTokenActivo(token, expiresIn);
       ocultarAvisoReconexion();
+      intentosReconexionFallidosSeguidos = 0; // reconectó de verdad: se reinicia el contador
       if (estado.pendienteSync) intentarSincronizar();
       return true;
     })
     .catch((e) => {
       console.warn("No se pudo refrescar el token vía el Worker:", e);
-      // El refresh_token que había ya no sirve (revocado desde la cuenta
-      // de Google, o venció por el límite de 7 días en modo Prueba) — se
-      // borra para no seguir reintentando contra algo que Google ya no va
-      // a aceptar nunca; el próximo "Reconectar" hace el login completo.
-      borrarRefreshTokenGoogle();
+      // FIX sync (Bug 2 — "reconexión tras perder internet no sincroniza
+      // sola, obliga a cerrar sesión y volver a entrar"): antes se borraba
+      // el refresh_token acá SIEMPRE, sin mirar la causa del fallo. Un
+      // corte de internet real (fetchConTimeout rechaza sin que el Worker
+      // llegue a responder nada — sin e.invalidGrant, ver
+      // refrescarAccessTokenViaWorker en auth.js) se trataba exactamente
+      // igual que un refresh_token realmente revocado/vencido: se borraba
+      // igual. Resultado: en cuanto la conexión volvía, este dispositivo ya
+      // no tenía NINGÚN refresh_token guardado — leerRefreshTokenGoogle()
+      // devolvía null y ya no había nada que "reconectar en silencio" (ver
+      // el primer if de esta función, arriba); la única salida real era
+      // cerrar sesión y loguearse de nuevo a mano, exactamente el síntoma
+      // reportado. Ahora solo se borra cuando el Worker mismo confirmó
+      // "invalid_grant" (revocado/vencido de verdad) — cualquier otro fallo
+      // (red caída, timeout, error temporal del Worker) deja el
+      // refresh_token intacto para que el próximo reintento automático (ver
+      // evento "online" y manejarFalloReconexion más abajo) recupere la
+      // sesión solo, sin pedirle nada al usuario.
+      if (e.invalidGrant) {
+        borrarRefreshTokenGoogle();
+      }
       mostrarAvisoReconexion();
       return false;
     })
@@ -166,6 +183,116 @@ function programarRefrescoProactivo(expiresInSegundos) {
   temporizadorRefrescoProactivo = setTimeout(() => {
     asegurarTokenValido();
   }, esperaMs);
+}
+
+/**
+ * FIX sync (Bug 2, puntos 1-3 — reconexión automática al volver internet):
+ * la causa raíz real (borrarRefreshTokenGoogle() incondicional, ver arriba)
+ * ya está resuelta, pero el prompt pide además 3 cosas concretas:
+ *  1. Reintentar solo apenas vuelve la conexión — se agrega el listener
+ *     "online" (ver inicializarReconexionAlVolverOnline más abajo), que
+ *     hasta ahora NO existía (varios comentarios de este archivo lo daban
+ *     por hecho, pero nunca se llegó a registrar).
+ *  2. Si falla varias veces SEGUIDAS pese a haber conexión real, forzar el
+ *     cierre de sesión mostrando la razón exacta antes de cerrar — nunca en
+ *     silencio (ver forzarCierreSesionPorFalloDeReconexion).
+ *  3. navigator.onLine no es confiable del todo — antes de contar un
+ *     intento como fallido "de verdad", se confirma con un ping chico (ver
+ *     probarConexionReal) que no se trata simplemente de que este
+ *     dispositivo sigue sin internet (eso no debe gastar reintentos).
+ */
+const MAX_INTENTOS_RECONEXION_SEGUIDOS = 4; // dentro del rango 3-5 que pide el prompt
+let intentosReconexionFallidosSeguidos = 0;
+
+const hooksCierreSesionForzado = [];
+
+/**
+ * Mismo patrón que hooksPostFusion/hooksPostGuardado (ver arriba): este
+ * archivo no debería importar cerrarSesion() de main.js (import circular),
+ * así que main.js registra su propia función acá en vez de que este motor
+ * la conozca de antemano.
+ */
+function registrarHookCierreSesionForzado(fn) {
+  hooksCierreSesionForzado.push(fn);
+}
+
+/** Ping chico y barato contra un recurso propio (mismo origen, sin CORS)
+ *  para confirmar conexión real — navigator.onLine solo informa si el SO
+ *  tiene alguna interfaz de red activa, no si en verdad llega a internet
+ *  (ej. wifi conectado a un router sin salida real). Cualquier respuesta
+ *  (incluso un 404) confirma que el request viajó y volvió; solo un
+ *  rechazo de fetch (o el timeout) cuenta como "sin conexión real". */
+async function probarConexionReal() {
+  const controlador = new AbortController();
+  const idTimeout = setTimeout(() => controlador.abort(), 5000);
+  try {
+    await fetch(`manifest.json?ping=${Date.now()}`, {
+      method: "GET",
+      cache: "no-store",
+      signal: controlador.signal,
+    });
+    return true;
+  } catch (e) {
+    return false;
+  } finally {
+    clearTimeout(idTimeout);
+  }
+}
+
+function forzarCierreSesionPorFalloDeReconexion() {
+  intentosReconexionFallidosSeguidos = 0;
+  // Punto 2: nunca en silencio — se muestra la razón exacta ANTES de cerrar.
+  mostrarToast(
+    "⚠️ No pudimos reconectar tu cuenta después de varios intentos. Iniciá sesión de nuevo."
+  );
+  hooksCierreSesionForzado.forEach((hook) => {
+    try {
+      hook();
+    } catch (e) {
+      console.warn("Error en hook de cierre de sesión forzado:", e);
+    }
+  });
+}
+
+/**
+ * Punto de entrada único para cualquier catch con `e.reconexionFallida`
+ * (sincronizarAhora, sondearCambiosRemotos, sincronizarAlIniciar,
+ * intentarSincronizar) — reemplaza el `mostrarAvisoReconexion()` suelto que
+ * tenía cada uno, agregando el conteo de intentos + ping de conexión real.
+ */
+async function manejarFalloReconexion() {
+  mostrarAvisoReconexion();
+
+  const hayConexionReal = await probarConexionReal();
+  if (!hayConexionReal) {
+    // Punto 3: sin conexión real confirmada, esto no es un fallo de sync
+    // — es simplemente que este dispositivo sigue sin internet. No cuenta
+    // contra el límite de reintentos (el próximo evento "online", el
+    // sondeo de 9s, o el retry de 45s lo van a volver a intentar solos).
+    return;
+  }
+
+  intentosReconexionFallidosSeguidos++;
+  if (intentosReconexionFallidosSeguidos >= MAX_INTENTOS_RECONEXION_SEGUIDOS) {
+    forzarCierreSesionPorFalloDeReconexion();
+  }
+}
+
+let listenerOnlineRegistrado = false;
+
+/** Punto 1: apenas el navegador confirma que la conexión volvió, se
+ *  reintenta sincronizar sin que el usuario tenga que hacer nada — ni
+ *  tocar el botón 🔄 ni cerrar/abrir sesión. Se registra una sola vez. */
+function inicializarReconexionAlVolverOnline() {
+  if (listenerOnlineRegistrado) return;
+  listenerOnlineRegistrado = true;
+  window.addEventListener("online", () => {
+    intentosReconexionFallidosSeguidos = 0; // el propio evento ya confirma conexión real
+    asegurarTokenValido().finally(() => {
+      sondearCambiosRemotos();
+      if (estado.pendienteSync) intentarSincronizar();
+    });
+  });
 }
 
 function mostrarAvisoReconexion() {
@@ -489,7 +616,10 @@ async function sincronizarAhora() {
       // v9.1 (punto 4): el token no se pudo renovar solo ni con el
       // reintento — se refleja el 3er estado real del indicador en vez de
       // un toast genérico. Los datos locales no se tocan ni se pierden.
-      mostrarAvisoReconexion();
+      // Bug 2: pasa por manejarFalloReconexion() para que este intento
+      // también cuente (si corresponde) para el límite de reintentos
+      // seguidos antes de forzar el cierre de sesión.
+      manejarFalloReconexion();
     } else {
       mostrarToast("No se pudo actualizar. Intenta de nuevo.");
     }
@@ -702,7 +832,11 @@ async function sondearCambiosRemotos() {
       // acceso, o el navegador bloquea el flujo de terceros en segundo
       // plano): se refleja el 3er estado real del indicador en vez de
       // seguir sondeando en silencio sin que el usuario se entere nunca.
-      mostrarAvisoReconexion();
+      // Bug 2: este sondeo corre cada 9s, así que es el camino más
+      // frecuente por el que se detecta que la conexión volvió — pasa por
+      // manejarFalloReconexion() para contar el intento (si hay conexión
+      // real) hacia el límite antes de forzar el cierre de sesión.
+      manejarFalloReconexion();
     }
     console.warn("No se pudo sondear cambios remotos de Drive:", e);
   }
@@ -736,7 +870,7 @@ async function sincronizarAlIniciar() {
     aplicarDatosRemotosFrescos(datosFrescos);
   } catch (e) {
     if (e.reconexionFallida) {
-      mostrarAvisoReconexion();
+      manejarFalloReconexion();
     }
     console.warn("No se pudo hacer el pull inicial desde Drive:", e);
   } finally {
@@ -1022,6 +1156,7 @@ async function intentarSincronizar() {
     estado.pendienteSync = false;
     if (meta && meta.modifiedTime) estado.ultimoModifiedTimeConocido = meta.modifiedTime;
     ocultarAvisoReconexion();
+    intentosReconexionFallidosSeguidos = 0; // sync exitoso: confirma que la reconexión ya funcionó
     actualizarIndicadorSync();
     // Backup rotativo a Drive (Ajustes): fire-and-forget a propósito — no
     // se espera (sin await) para no demorar el indicador de "Todo
@@ -1053,7 +1188,10 @@ async function intentarSincronizar() {
       // El token venció y el refresco silencioso (más el reintento único)
       // también falló: se refleja el 3er estado real del indicador. Los
       // cambios locales siguen en caché y marcados como pendientes.
-      mostrarAvisoReconexion();
+      // Bug 2: este es el catch de intentarSincronizar() — el que sube
+      // cambios locales pendientes — así que también pasa por
+      // manejarFalloReconexion() para el conteo de reintentos seguidos.
+      manejarFalloReconexion();
     }
   }
 }
@@ -1204,6 +1342,7 @@ export {
   forzarBackupManual,
   forzarSincronizacion,
   inicializarPullToRefresh,
+  inicializarReconexionAlVolverOnline,
   inicializarSondeoAlVolver,
   intentarSincronizar,
   marcarCambioPendiente,
@@ -1213,6 +1352,7 @@ export {
   ocultarAvisoReconexion,
   ocultarCargando,
   programarRefrescoProactivo,
+  registrarHookCierreSesionForzado,
   registrarHookPostFusion,
   registrarHookPostGuardado,
   sincronizarAhora,

@@ -77,12 +77,52 @@ function esMasReciente(a, b) {
 // Metadatos de sincronización propios de CADA dispositivo — nunca describen
 // una edición real, así que nunca deberían decidir por sí solos si dos
 // versiones "son distintas". Se usa en la Guarda 1 de abajo.
-const CAMPOS_META_SELLADO = ["_actualizadoEn", "_version_base", "_dispositivoId"];
+//
+// FIX sync (2026-09-04 — "choque de versión con contenido byte-idéntico,
+// 27 casos en Semestres"): causa raíz confirmada con test aislado (ver
+// reporte). _conflicto y _version_alterna son bookkeeping de UNA ronda de
+// fusión anterior — no describen el contenido real de la entidad — pero
+// antes NO estaban en esta lista. Resultado: una entidad que ya había
+// quedado marcada _conflicto:true en algún sync viejo nunca podía volver a
+// compararse como "igual" contra una versión remota sin esas marcas, aunque
+// el contenido sustantivo (nombre, estado, fechas, etc.) fuera IDÉNTICO —
+// la Guarda 1 (deep-equal) las veía como objetos distintos solo por esas 2
+// llaves de más, hayConflictoReal cae al chequeo de _version_base, las
+// bases ya coinciden (es la misma entidad, sincronizada muchas veces) y
+// se re-marca conflicto en CADA sync, para siempre, sin que el usuario
+// pueda "resolverlo" de verdad — de ahí el modal diciendo "es seguro
+// mantener ambas" con dos versiones iguales. Con estas 2 llaves excluidas
+// acá, una entidad con marcas de conflicto viejas SÍ puede volver a
+// compararse como igual en cuanto el contenido converge.
+const CAMPOS_META_SELLADO = ["_actualizadoEn", "_version_base", "_dispositivoId", "_conflicto", "_version_alterna"];
 
 function despojarMetaSellado(obj) {
   const copia = { ...obj };
   CAMPOS_META_SELLADO.forEach((campo) => delete copia[campo]);
   return copia;
+}
+
+/**
+ * Complemento del fix de arriba: excluir _conflicto/_version_alterna de la
+ * COMPARACIÓN (hayConflictoReal) resuelve que no se vuelva a marcar un
+ * choque falso, pero por sí solo NO borra una marca _conflicto:true que ya
+ * quedó pegada en el objeto de una ronda anterior — si esa entidad gana la
+ * comparación de "más reciente" tal cual, seguiría cargando el flag viejo
+ * (y el badge/modal la seguiría mostrando) aunque hayConflictoReal ya haya
+ * determinado que no hay nada real que resolver. Se usa en todo punto de
+ * "no hubo conflicto real, así que se elige un ganador" (fusionarColeccion,
+ * fusionarBloqueUnico, fusionarPlan, fusionarSemestre, fusionarCriterio,
+ * fusionarMateriaMatriculada, fusionarBloqueHorario) para que una entidad
+ * con marcas viejas se "limpie" en cuanto deja de haber un choque real,
+ * sin que el usuario tenga que resolverla a mano. Devuelve el mismo objeto
+ * sin copiar si no hay nada que limpiar (caso normal, sin costo extra).
+ */
+function limpiarMarcasConflictoObsoletas(entidad) {
+  if (!entidad || (!entidad._conflicto && entidad._version_alterna === undefined)) return entidad;
+  const limpia = { ...entidad };
+  delete limpia._conflicto;
+  delete limpia._version_alterna;
+  return limpia;
 }
 
 /**
@@ -313,7 +353,7 @@ function fusionarColeccion(coleccionLocal, coleccionRemota, tumbas, etiqueta) {
           `a favor de la remota (contador ${Number(item._actualizadoEn) || 0}).`,
         { local: existente, remota: item }
       );
-      porId.set(item.id, item);
+      porId.set(item.id, limpiarMarcasConflictoObsoletas(item));
     } else if (esMasReciente(existente, item)) {
       console.warn(
         `[fusión] Conflicto en ${etiqueta} id="${item.id}": se conserva la versión local ` +
@@ -321,10 +361,15 @@ function fusionarColeccion(coleccionLocal, coleccionRemota, tumbas, etiqueta) {
           `sobre la remota (contador ${Number(item._actualizadoEn) || 0}).`,
         { local: existente, remota: item }
       );
+      porId.set(item.id, limpiarMarcasConflictoObsoletas(existente));
+    } else {
+      // Ninguna es "más reciente" (contador y dispositivo iguales): se
+      // asume que son la misma edición vista desde los dos lados. No hay
+      // nada que resolver — pero si "existente" venía con marcas de
+      // conflicto viejas ya sin vigencia (ver limpiarMarcasConflictoObsoletas
+      // arriba), se limpian igual acá.
+      porId.set(item.id, limpiarMarcasConflictoObsoletas(existente));
     }
-    // Si ninguna es "más reciente" (contador y dispositivo iguales), se
-    // asume que son la misma edición vista desde los dos lados: no hay nada
-    // que resolver, se deja la que ya está.
   });
 
   // Los borrados ganan sobre cualquier entidad que llegue con ese id, sin
@@ -369,9 +414,9 @@ function fusionarBloqueUnico(local, remoto, etiqueta) {
       `[fusión] "${etiqueta}": se usa la versión remota (más reciente).`,
       { local, remoto }
     );
-    return remoto;
+    return limpiarMarcasConflictoObsoletas(remoto);
   }
-  return local;
+  return limpiarMarcasConflictoObsoletas(local);
 }
 
 /** Fusiona las tumbas de ambos lados (unión simple: un borrado nunca se pierde). */
@@ -455,13 +500,13 @@ function fusionarPlan(planLocal, planRemoto) {
     };
   }
 
-  const base = esMasReciente(planRemoto, planLocal) ? planRemoto : planLocal;
-  const otro = base === planRemoto ? planLocal : planRemoto;
+  const ganadorEsRemoto = esMasReciente(planRemoto, planLocal);
+  const base = limpiarMarcasConflictoObsoletas(ganadorEsRemoto ? planRemoto : planLocal);
 
-  if (base !== otro) {
+  if (planLocal !== planRemoto) {
     console.warn(
       `[fusión] Plan "${planLocal.id}": metadatos generales tomados de la versión ` +
-        `${base === planRemoto ? "remota" : "local"} (más reciente); las materias se funden aparte.`
+        `${ganadorEsRemoto ? "remota" : "local"} (más reciente); las materias se funden aparte.`
     );
   }
 
@@ -598,7 +643,9 @@ function fusionarSemestre(semestreLocal, semestreRemoto) {
   } = semestreRemoto;
 
   const conConflicto = marcarConflictoSiCorresponde(semestreLocalPlano, semestreRemotoPlano, "semestre");
-  const base = conConflicto || (esMasReciente(semestreRemoto, semestreLocal) ? semestreRemoto : semestreLocal);
+  const base =
+    conConflicto ||
+    limpiarMarcasConflictoObsoletas(esMasReciente(semestreRemoto, semestreLocal) ? semestreRemoto : semestreLocal);
 
   return {
     ...base,
@@ -650,7 +697,9 @@ function fusionarCriterio(criterioLocal, criterioRemoto) {
   const { asignaciones: _aRemoto, _eliminados_asignaciones: _taRemoto, ...criterioRemotoPlano } = criterioRemoto;
 
   const conConflicto = marcarConflictoSiCorresponde(criterioLocalPlano, criterioRemotoPlano, "criterio");
-  const base = conConflicto || (esMasReciente(criterioRemoto, criterioLocal) ? criterioRemoto : criterioLocal);
+  const base =
+    conConflicto ||
+    limpiarMarcasConflictoObsoletas(esMasReciente(criterioRemoto, criterioLocal) ? criterioRemoto : criterioLocal);
 
   return {
     ...base,
@@ -718,7 +767,8 @@ function fusionarMateriaMatriculada(mmLocal, mmRemoto) {
   const { criterios: _cRemoto, _eliminados_criterios: _tcRemoto, ...mmRemotoPlano } = mmRemoto;
 
   const conConflicto = marcarConflictoSiCorresponde(mmLocalPlano, mmRemotoPlano, "materia matriculada");
-  const base = conConflicto || (esMasReciente(mmRemoto, mmLocal) ? mmRemoto : mmLocal);
+  const base =
+    conConflicto || limpiarMarcasConflictoObsoletas(esMasReciente(mmRemoto, mmLocal) ? mmRemoto : mmLocal);
 
   return {
     ...base,
@@ -787,7 +837,9 @@ function fusionarBloqueHorario(bloqueLocal, bloqueRemoto) {
   const { excepciones_semana: _eRemoto, _eliminados_excepciones_semana: _teRemoto, ...bloqueRemotoPlano } = bloqueRemoto;
 
   const conConflicto = marcarConflictoSiCorresponde(bloqueLocalPlano, bloqueRemotoPlano, "bloque de horario");
-  const base = conConflicto || (esMasReciente(bloqueRemoto, bloqueLocal) ? bloqueRemoto : bloqueLocal);
+  const base =
+    conConflicto ||
+    limpiarMarcasConflictoObsoletas(esMasReciente(bloqueRemoto, bloqueLocal) ? bloqueRemoto : bloqueLocal);
 
   return {
     ...base,
