@@ -9,7 +9,7 @@ import { inicializarModalEnlace, renderizarEnlacesRapidos } from "./config/confi
 import { buscarOCrearArchivoDatos, cerrarSesionGoogle, inicializarGoogleAuth, iniciarSesionConGoogle, obtenerMetadatosArchivo, obtenerPerfilGoogle } from "./core/auth.js";
 import { migrarDatosAntiguos, sellarTimestamp } from "./core/schema.js";
 import { fusionarDatos } from "./core/storage-merge.js";
-import { actualizarIndicadorSync, asegurarTokenValido, forzarSincronizacion, inicializarPullToRefresh, inicializarSondeoAlVolver, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
+import { actualizarIndicadorSync, asegurarTokenValido, forzarSincronizacion, inicializarPullToRefresh, inicializarReconexionAlVolverOnline, inicializarSondeoAlVolver, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, registrarHookCierreSesionForzado, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
 import { CLAVE_CACHE_LOCAL, borrarTokenCache, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
 import { obtenerIniciales } from "./core/utils.js";
 // Sincronización con Google Calendar (2026-08-25, reemplaza Web Push) —
@@ -403,6 +403,16 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // Bug 2 (2026-09-04 — "reconexión tras perder internet no sincroniza
+  // sola, obliga a cerrar sesión"): el cierre de sesión forzado vive en
+  // storage-sync.js (no puede importar cerrarSesion de acá sin crear un
+  // import circular — mismo patrón que registrarHookPostFusion/
+  // registrarHookPostGuardado), así que este archivo registra su propia
+  // función para que storage-sync.js la llame solo cuando de verdad haga
+  // falta (varios intentos fallidos seguidos, con conexión real
+  // confirmada — ver manejarFalloReconexion).
+  registrarHookCierreSesionForzado(cerrarSesion);
+
   // Bug 1 (v8): reintento periódico — antes, si un intento de sincronización
   // fallaba (token vencido, red inestable, etc.), no volvía a intentarse
   // hasta el próximo cambio del usuario o el próximo evento "online". Esto
@@ -427,6 +437,15 @@ window.addEventListener("DOMContentLoaded", () => {
   // evita que datos viejos en memoria pisen lo último guardado desde otro
   // dispositivo mientras esta pestaña estuvo minimizada/en segundo plano.
   inicializarSondeoAlVolver();
+
+  // Bug 2, punto 1 (2026-09-04): el comentario de arriba ("hasta el próximo
+  // evento 'online'") daba por hecho que este listener ya existía — nunca
+  // se había llegado a registrar. Sin esto, recuperar la conexión no
+  // disparaba nada por sí solo: había que esperar hasta 45s (el retry
+  // periódico) o 9s (el sondeo) para que la app se enterara. Ahora se
+  // reintenta apenas el navegador confirma que la conexión volvió, sin que
+  // el usuario tenga que tocar nada.
+  inicializarReconexionAlVolverOnline();
 });
 
 /* ============== Arranque de los módulos del Plan de Estudios ==============
