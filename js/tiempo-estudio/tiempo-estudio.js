@@ -332,20 +332,31 @@ function construirEncabezado(cont) {
   titulo.textContent = "Tiempo de Estudio";
   encabezado.appendChild(titulo);
 
-  // Parte 3: acceso al registro manual, mismo tamaño que el engranaje.
+  // Grupo de botones a la derecha. Van en su propio contenedor (y no
+  // sueltos como hijos directos del row-between) porque row-between reparte
+  // el espacio entre TODOS sus hijos por igual — con 3 hijos sueltos (título,
+  // +, ⚙️) el + quedaba flotando a mitad de camino en vez de pegado al
+  // engranaje. Agrupándolos, row-between solo reparte título vs grupo.
+  const grupoBotones = document.createElement("div");
+  grupoBotones.style.cssText = "display:flex; align-items:center; gap:8px;";
+
+  // Parte 3: acceso al registro manual, a la izquierda del engranaje.
   // Vive acá (nivel superior) y no adentro de una materia puntual porque
   // el propio formulario ya elige la materia — un solo punto de entrada
   // sin importar en qué pill (Materias/Estadísticas) estés parado.
+  // Mismo estilo relleno que el botón de play de las tarjetas
+  // (te-btn-icono-iniciar) para que combinen, en vez del fantasma que usa
+  // el engranaje — así no se pierde visualmente en el encabezado.
   const btnRegistroManual = document.createElement("button");
   btnRegistroManual.type = "button";
-  btnRegistroManual.className = "te-btn-icono te-btn-icono-fantasma te-btn-icono-grande";
+  btnRegistroManual.className = "te-btn-icono te-btn-icono-iniciar te-btn-icono-grande";
   btnRegistroManual.title = "Registrar sesión pasada";
   btnRegistroManual.setAttribute("aria-label", "Registrar sesión pasada");
   btnRegistroManual.textContent = "＋";
   btnRegistroManual.addEventListener("click", () => {
     abrirModalRegistroManual(obtenerMateriasParaTiempoEstudio(), () => renderizarTiempoEstudio());
   });
-  encabezado.appendChild(btnRegistroManual);
+  grupoBotones.appendChild(btnRegistroManual);
 
   // El pill Todo/Activos se mudó adentro del modal de Ajustes (pedido) —
   // acá solo queda el engranaje, mismo tamaño exacto que el de las
@@ -357,8 +368,9 @@ function construirEncabezado(cont) {
   btnAjustes.setAttribute("aria-label", "Ajustes de Tiempo de Estudio");
   btnAjustes.textContent = "⚙️";
   btnAjustes.addEventListener("click", () => abrirModalAjustesTiempoEstudio());
-  encabezado.appendChild(btnAjustes);
+  grupoBotones.appendChild(btnAjustes);
 
+  encabezado.appendChild(grupoBotones);
   cont.appendChild(encabezado);
 }
 
