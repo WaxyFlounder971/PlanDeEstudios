@@ -21,7 +21,7 @@
    perdía ese tiempo en silencio, como aclaraba su propio comentario.
    ========================================================================= */
 
-import { crearSesionEstudio } from "../core/schema.js";
+import { crearSesionEstudio, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { mostrarToast } from "../ui/componentes.js";
@@ -104,6 +104,76 @@ function guardarSnapshotLocal() {
   } catch (e) {
     console.error("[tiempo-estudio-timer] no se pudo guardar el snapshot local:", e);
   }
+}
+
+/** Epoch ms del lunes 00:00 de la semana que contiene "ahora" — mismo
+ * cálculo que usa `calcularMinutosEstaSemana` de arriba, extraído aparte
+ * porque acá solo hace falta el límite inferior. */
+function calcularInicioSemanaActual() {
+  const ahora = new Date();
+  const diasDesdeLunes = (ahora.getDay() + 6) % 7;
+  const lunes = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() - diasDesdeLunes, 0, 0, 0, 0);
+  return lunes.getTime();
+}
+
+/**
+ * Overlay de felicitación (Parte 3, punto 3) — auto-cierra solo a los
+ * 3.5s, o al tocar en cualquier lado. Se muestra una sola vez por
+ * materia por semana (ver revisarFelicitacionMeta), sin importar cuántas
+ * veces se abra la app esa semana.
+ */
+function mostrarFelicitacionMeta() {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.style.cssText =
+    "position:fixed; inset:0; z-index:500; background:rgba(0,0,0,0.45); " + "display:flex; align-items:center; justify-content:center; padding:16px;";
+
+  const caja = document.createElement("div");
+  caja.className = "glass-card stack";
+  caja.style.cssText = "max-width:320px; width:100%; gap:6px; text-align:center; padding:28px 20px;";
+  caja.innerHTML = `
+    <div style="font-size:2.4rem;">🎉</div>
+    <h2 style="margin:0; font-size:1.1rem;">¡Meta semanal cumplida!</h2>
+    <p class="muted" style="margin:0; font-size:0.85rem;">Ya completaste tu meta de estudio de esta semana.</p>
+  `;
+  overlay.appendChild(caja);
+  document.body.appendChild(overlay);
+
+  function cerrar() {
+    overlay.remove();
+  }
+  overlay.addEventListener("click", cerrar);
+  setTimeout(cerrar, 3500);
+}
+
+/**
+ * Revisa si `materiaMatriculadaId` cruzó su meta semanal (sumando todas
+ * sus sesiones YA GUARDADAS de la semana — se llama siempre DESPUÉS de
+ * guardar la sesión que podría haber cruzado el umbral, nunca antes) y, si
+ * es así Y todavía no se felicitó por la semana actual, muestra el
+ * overlay y marca `mm.tiempo_estudio.ultima_semana_felicitada` para que no
+ * se repita en cada apertura de la app (punto 3 del plan). Se llama desde
+ * los 3 lugares donde puede cerrarse una sesión real: detenerTimerEstudio,
+ * avanzarFasePomodoro (bloque de trabajo), abrirAvisoSesionOlvidada, y
+ * desde tiempo-estudio-registro.js tras un registro manual.
+ */
+function revisarFelicitacionMeta(materiaMatriculadaId) {
+  const mm = buscarMateriaMatriculada(materiaMatriculadaId);
+  if (!mm) return;
+  const meta = mm.tiempo_estudio.meta_horas_semana;
+  if (meta === null || meta === undefined || meta <= 0) return;
+
+  const metaMinutos = meta * 60;
+  const minutos = calcularMinutosEstaSemana(materiaMatriculadaId);
+  if (minutos < metaMinutos) return;
+
+  const inicioSemana = calcularInicioSemanaActual();
+  if (mm.tiempo_estudio.ultima_semana_felicitada === inicioSemana) return; // ya felicitada esta semana
+
+  mm.tiempo_estudio.ultima_semana_felicitada = inicioSemana;
+  sellarTimestamp(mm);
+  marcarCambioPendiente();
+  mostrarFelicitacionMeta();
 }
 
 /* ===================== Alertas (punto 2) ===================== */
@@ -201,6 +271,7 @@ function avanzarFasePomodoro() {
     const sesion = crearSesionEstudio({ materiaMatriculadaId, inicio, fin, origen: "pomodoro" });
     estado.datos.sesiones_estudio.push(sesion);
     marcarCambioPendiente();
+    revisarFelicitacionMeta(materiaMatriculadaId);
 
     const esUltimoBloque = pomodoro.bloqueActual >= config.cantidad_bloques;
     pomodoro.fase = esUltimoBloque ? "descanso_largo" : "descanso_corto";
@@ -343,6 +414,7 @@ function detenerTimerEstudio() {
     sesion = crearSesionEstudio({ materiaMatriculadaId, inicio: inicioFase, fin, origen });
     estado.datos.sesiones_estudio.push(sesion);
     marcarCambioPendiente();
+    revisarFelicitacionMeta(materiaMatriculadaId);
   }
 
   timerActivo = null;
@@ -433,6 +505,7 @@ function abrirAvisoSesionOlvidada(snapshot) {
       const sesion = crearSesionEstudio({ materiaMatriculadaId: snapshot.materiaMatriculadaId, inicio, fin, origen: snapshot.origen });
       estado.datos.sesiones_estudio.push(sesion);
       marcarCambioPendiente();
+      revisarFelicitacionMeta(snapshot.materiaMatriculadaId);
       mostrarToast("Sesión guardada");
     }
     cerrar();
@@ -487,4 +560,5 @@ export {
   suscribirseATimer,
   formatearDuracion,
   revisarSesionOlvidadaAlAbrir,
+  revisarFelicitacionMeta,
 };

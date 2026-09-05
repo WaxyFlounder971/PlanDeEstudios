@@ -35,6 +35,8 @@ import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { obtenerSemestresActuales } from "../semestres/semestres.js";
 import { mostrarSeccion } from "../main.js";
 import { abrirModalConfigTiempoEstudio, abrirModalPomodoroPredeterminado } from "./tiempo-estudio-config.js";
+import { abrirModalRegistroManual } from "./tiempo-estudio-registro.js";
+import { construirVistaEstadisticas } from "./tiempo-estudio-estadisticas.js";
 import { abrirBuscarMateriaEn } from "../ui/buscar-materia.js";
 import {
   cambiarTimerEstudio,
@@ -50,6 +52,13 @@ import {
 
 // mm.id de la materia en pantalla de detalle, o null = vista de tarjetas.
 let materiaDetalleActivaId = null;
+// Parte 3: "materias" (lo que ya existía) | "estadisticas" (nuevo) — pill
+// arriba del encabezado principal. Solo aplica al nivel superior, nunca
+// dentro de la pantalla de detalle de una materia puntual (Estadísticas es
+// un agregado de TODAS las materias, no tiene sentido adentro del detalle
+// de una sola). Módulo-nivel, mismo criterio que materiaDetalleActivaId:
+// no se persiste, se resetea solo si se recarga la página.
+let vistaSeccionTE = "materias";
 // Cleanup del suscribirseATimer de la pantalla de detalle actualmente
 // montada (si hay una) — se limpia y re-crea en cada render para nunca
 // dejar 2+ suscriptores duplicados de una visita anterior.
@@ -323,6 +332,21 @@ function construirEncabezado(cont) {
   titulo.textContent = "Tiempo de Estudio";
   encabezado.appendChild(titulo);
 
+  // Parte 3: acceso al registro manual, mismo tamaño que el engranaje.
+  // Vive acá (nivel superior) y no adentro de una materia puntual porque
+  // el propio formulario ya elige la materia — un solo punto de entrada
+  // sin importar en qué pill (Materias/Estadísticas) estés parado.
+  const btnRegistroManual = document.createElement("button");
+  btnRegistroManual.type = "button";
+  btnRegistroManual.className = "te-btn-icono te-btn-icono-fantasma te-btn-icono-grande";
+  btnRegistroManual.title = "Registrar sesión pasada";
+  btnRegistroManual.setAttribute("aria-label", "Registrar sesión pasada");
+  btnRegistroManual.textContent = "＋";
+  btnRegistroManual.addEventListener("click", () => {
+    abrirModalRegistroManual(obtenerMateriasParaTiempoEstudio(), () => renderizarTiempoEstudio());
+  });
+  encabezado.appendChild(btnRegistroManual);
+
   // El pill Todo/Activos se mudó adentro del modal de Ajustes (pedido) —
   // acá solo queda el engranaje, mismo tamaño exacto que el de las
   // tarjetas (te-btn-icono-grande, ver design-system.css).
@@ -336,6 +360,30 @@ function construirEncabezado(cont) {
   encabezado.appendChild(btnAjustes);
 
   cont.appendChild(encabezado);
+}
+
+/**
+ * Pill Materias/Estadísticas (Parte 3) — vive SIEMPRE arriba del contenido
+ * de nivel superior (nunca dentro del detalle de una materia puntual, ver
+ * renderizarTiempoEstudio). "Materias" es la vista de tarjetas que ya
+ * existía; "Estadísticas" es la vista nueva de tiempo-estudio-estadisticas.js.
+ */
+function construirPillVistaSeccion(cont) {
+  const grupo = document.createElement("div");
+  grupo.className = "pill-group";
+  grupo.style.cssText = "width:100%;";
+  grupo.innerHTML = `
+    <button type="button" class="pill-item ${vistaSeccionTE === "materias" ? "active" : ""}" data-vista="materias">Materias</button>
+    <button type="button" class="pill-item ${vistaSeccionTE === "estadisticas" ? "active" : ""}" data-vista="estadisticas">Estadísticas</button>
+  `;
+  grupo.querySelectorAll(".pill-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (vistaSeccionTE === btn.dataset.vista) return;
+      vistaSeccionTE = btn.dataset.vista;
+      renderizarTiempoEstudio();
+    });
+  });
+  cont.appendChild(grupo);
 }
 
 /**
@@ -426,8 +474,6 @@ function abrirModalAjustesTiempoEstudio() {
 }
 
 function construirVistaPrincipal(cont) {
-  construirEncabezado(cont);
-
   let items = obtenerMateriasParaTiempoEstudio();
   if (items.length === 0) {
     const vacio = document.createElement("p");
@@ -648,7 +694,18 @@ function renderizarTiempoEstudio() {
     materiaDetalleActivaId = null;
   }
 
-  construirVistaPrincipal(cont);
+  // Parte 3: encabezado + pill Materias/Estadísticas son comunes a las 2
+  // vistas de nivel superior — se arman acá UNA sola vez, y de ahí en más
+  // cada vista solo dibuja su contenido propio (ver nota en
+  // construirVistaPrincipal/construirVistaEstadisticas).
+  construirEncabezado(cont);
+  construirPillVistaSeccion(cont);
+
+  if (vistaSeccionTE === "estadisticas") {
+    construirVistaEstadisticas(cont, renderizarTiempoEstudio);
+  } else {
+    construirVistaPrincipal(cont);
+  }
 }
 
 /**
@@ -722,4 +779,4 @@ function irADetalleMateriaTiempoEstudio(materiaMatriculadaId) {
 // establecido.
 window.renderizarTiempoEstudio = renderizarTiempoEstudio;
 
-export { inicializarTiempoEstudio, renderizarTiempoEstudio, obtenerEstudioParaHoy, irADetalleMateriaTiempoEstudio, formatearHorasMin };
+export { inicializarTiempoEstudio, renderizarTiempoEstudio, obtenerEstudioParaHoy, irADetalleMateriaTiempoEstudio, formatearHorasMin, obtenerMateriasParaTiempoEstudio };
