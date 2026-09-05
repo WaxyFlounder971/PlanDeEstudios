@@ -1396,6 +1396,14 @@ function crearMateriaMatriculada({ materiaId, planEstudioId }) {
       meta_horas_semana: null,
       pomodoro: null,
       color: null,
+      // Parte 3 (felicitación por meta cumplida): epoch ms del lunes de la
+      // última semana en la que YA se felicitó a esta materia por cruzar su
+      // meta — null = nunca felicitada. Se compara contra el lunes de la
+      // semana actual (mismo cálculo que obtenerRangoSemanaActual) para que
+      // la felicitación aparezca una sola vez por semana por materia, sin
+      // importar cuántas veces se abra la app esa semana. Ver
+      // revisarFelicitacionMeta() en tiempo-estudio-timer.js.
+      ultima_semana_felicitada: null,
     },
   });
 }
@@ -3198,6 +3206,7 @@ function migrarDatosAntiguos(datos) {
         // Parte A (color por materia): mm creadas antes de este campo no lo
         // traen — igual criterio que meta_horas_semana/pomodoro arriba.
         if (mm.tiempo_estudio.color === undefined) mm.tiempo_estudio.color = null;
+        if (mm.tiempo_estudio.ultima_semana_felicitada === undefined) mm.tiempo_estudio.ultima_semana_felicitada = null;
       });
     });
   }
