@@ -35,8 +35,8 @@ import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { obtenerSemestresActuales } from "../semestres/semestres.js";
 import { mostrarSeccion } from "../main.js";
 import { abrirModalConfigTiempoEstudio, abrirModalPomodoroPredeterminado } from "./tiempo-estudio-config.js";
-import { abrirModalRegistroManual } from "./tiempo-estudio-registro.js";
-import { construirVistaEstadisticas } from "./tiempo-estudio-estadisticas.js";
+import { abrirModalRegistroManual, construirListaSesiones } from "./tiempo-estudio-registro.js";
+import { construirVistaEstadisticas, construirEstadisticasMateria } from "./tiempo-estudio-estadisticas.js";
 import { abrirBuscarMateriaEn } from "../ui/buscar-materia.js";
 import {
   cambiarTimerEstudio,
@@ -45,6 +45,8 @@ import {
   hayTimerActivo,
   iniciarTimerEstudio,
   obtenerTimerActivo,
+  pausarTimerEstudio,
+  reanudarTimerEstudio,
   revisarSesionOlvidadaAlAbrir,
   segundosTranscurridos,
   suscribirseATimer,
@@ -297,19 +299,54 @@ function construirTarjetaMateria(item) {
 
   const activo = obtenerTimerActivo();
   const esEstaActiva = Boolean(activo && activo.materiaMatriculadaId === mm.id);
-  const btnInicio = document.createElement("button");
-  btnInicio.type = "button";
-  btnInicio.className = "te-btn-icono " + (esEstaActiva ? "te-btn-icono-detener" : "te-btn-icono-iniciar");
-  btnInicio.title = esEstaActiva ? "Detener" : "Iniciar";
-  btnInicio.setAttribute("aria-label", esEstaActiva ? "Detener" : "Iniciar");
-  btnInicio.textContent = esEstaActiva ? "⏸" : "▶";
-  btnInicio.addEventListener("click", (e) => {
-    e.stopPropagation();
-    manejarBotonIniciarDetener(mm.id, nombreMateria);
-  });
 
   filaBotones.appendChild(btnConfig);
-  filaBotones.appendChild(btnInicio);
+
+  if (esEstaActiva) {
+    // Activa: botón play/pause (pausa sin cerrar la sesión) + botón
+    // aparte para detener (cierra y guarda). Pedido 2026-09-07 — antes
+    // había un solo botón que hacía de las dos cosas a la vez.
+    const pausado = Boolean(activo.pausado);
+    const btnPausa = document.createElement("button");
+    btnPausa.type = "button";
+    btnPausa.className = "te-btn-icono te-btn-icono-iniciar";
+    btnPausa.title = pausado ? "Reanudar" : "Pausar";
+    btnPausa.setAttribute("aria-label", pausado ? "Reanudar" : "Pausar");
+    btnPausa.textContent = pausado ? "▶" : "⏸";
+    btnPausa.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (pausado) reanudarTimerEstudio();
+      else pausarTimerEstudio();
+      renderizarTiempoEstudio();
+    });
+
+    const btnDetener = document.createElement("button");
+    btnDetener.type = "button";
+    btnDetener.className = "te-btn-icono te-btn-icono-detener";
+    btnDetener.title = "Detener sesión";
+    btnDetener.setAttribute("aria-label", "Detener sesión");
+    btnDetener.textContent = "⏹";
+    btnDetener.addEventListener("click", (e) => {
+      e.stopPropagation();
+      manejarBotonIniciarDetener(mm.id, nombreMateria);
+    });
+
+    filaBotones.appendChild(btnPausa);
+    filaBotones.appendChild(btnDetener);
+  } else {
+    const btnInicio = document.createElement("button");
+    btnInicio.type = "button";
+    btnInicio.className = "te-btn-icono te-btn-icono-iniciar";
+    btnInicio.title = "Iniciar";
+    btnInicio.setAttribute("aria-label", "Iniciar");
+    btnInicio.textContent = "▶";
+    btnInicio.addEventListener("click", (e) => {
+      e.stopPropagation();
+      manejarBotonIniciarDetener(mm.id, nombreMateria);
+    });
+    filaBotones.appendChild(btnInicio);
+  }
+
   tarjeta.querySelector(".te-tarjeta-materia-linea2").appendChild(filaBotones);
 
   return tarjeta;
@@ -335,12 +372,27 @@ function construirEncabezado(cont) {
   // Grupo de botones a la derecha. Van en su propio contenedor (y no
   // sueltos como hijos directos del row-between) porque row-between reparte
   // el espacio entre TODOS sus hijos por igual — con 3 hijos sueltos (título,
-  // +, ⚙️) el + quedaba flotando a mitad de camino en vez de pegado al
+  // ⚙️, +) el + quedaba flotando a mitad de camino en vez de pegado al
   // engranaje. Agrupándolos, row-between solo reparte título vs grupo.
+  // align-items:center + align-self:center en cada botón (abajo) los
+  // centra verticalmente respecto a la tarjeta del encabezado, sin importar
+  // la altura real del título al lado.
   const grupoBotones = document.createElement("div");
   grupoBotones.style.cssText = "display:flex; align-items:center; gap:8px;";
 
-  // Parte 3: acceso al registro manual, a la izquierda del engranaje.
+  // El pill Todo/Activos se mudó adentro del modal de Ajustes (pedido) —
+  // orden: engranaje primero, + después (pedido).
+  const btnAjustes = document.createElement("button");
+  btnAjustes.type = "button";
+  btnAjustes.className = "te-btn-icono te-btn-icono-fantasma te-btn-icono-grande";
+  btnAjustes.style.alignSelf = "center";
+  btnAjustes.title = "Ajustes de Tiempo de Estudio";
+  btnAjustes.setAttribute("aria-label", "Ajustes de Tiempo de Estudio");
+  btnAjustes.textContent = "⚙️";
+  btnAjustes.addEventListener("click", () => abrirModalAjustesTiempoEstudio());
+  grupoBotones.appendChild(btnAjustes);
+
+  // Parte 3: acceso al registro manual, ahora a la derecha del engranaje.
   // Vive acá (nivel superior) y no adentro de una materia puntual porque
   // el propio formulario ya elige la materia — un solo punto de entrada
   // sin importar en qué pill (Materias/Estadísticas) estés parado.
@@ -350,6 +402,7 @@ function construirEncabezado(cont) {
   const btnRegistroManual = document.createElement("button");
   btnRegistroManual.type = "button";
   btnRegistroManual.className = "te-btn-icono te-btn-icono-iniciar te-btn-icono-grande";
+  btnRegistroManual.style.alignSelf = "center";
   btnRegistroManual.title = "Registrar sesión pasada";
   btnRegistroManual.setAttribute("aria-label", "Registrar sesión pasada");
   btnRegistroManual.textContent = "＋";
@@ -357,18 +410,6 @@ function construirEncabezado(cont) {
     abrirModalRegistroManual(obtenerMateriasParaTiempoEstudio(), () => renderizarTiempoEstudio());
   });
   grupoBotones.appendChild(btnRegistroManual);
-
-  // El pill Todo/Activos se mudó adentro del modal de Ajustes (pedido) —
-  // acá solo queda el engranaje, mismo tamaño exacto que el de las
-  // tarjetas (te-btn-icono-grande, ver design-system.css).
-  const btnAjustes = document.createElement("button");
-  btnAjustes.type = "button";
-  btnAjustes.className = "te-btn-icono te-btn-icono-fantasma te-btn-icono-grande";
-  btnAjustes.title = "Ajustes de Tiempo de Estudio";
-  btnAjustes.setAttribute("aria-label", "Ajustes de Tiempo de Estudio");
-  btnAjustes.textContent = "⚙️";
-  btnAjustes.addEventListener("click", () => abrirModalAjustesTiempoEstudio());
-  grupoBotones.appendChild(btnAjustes);
 
   encabezado.appendChild(grupoBotones);
   cont.appendChild(encabezado);
@@ -600,10 +641,41 @@ function construirPantallaDetalle(cont, item) {
   display.className = "te-timer-display";
   panelTimer.appendChild(display);
 
-  const btnAccion = document.createElement("button");
-  btnAccion.type = "button";
-  btnAccion.style.minWidth = "160px";
-  panelTimer.appendChild(btnAccion);
+  // Fila de acción: cuando ESTA materia tiene el timer activo, se
+  // muestran 2 botones (play/pause + detener aparte); si no, un solo
+  // botón "Iniciar" (pedido 2026-09-07).
+  const filaAccion = document.createElement("div");
+  filaAccion.style.cssText = "display:flex; gap:10px; justify-content:center; flex-wrap:wrap;";
+
+  const btnIniciar = document.createElement("button");
+  btnIniciar.type = "button";
+  btnIniciar.className = "btn btn-primary";
+  btnIniciar.style.minWidth = "160px";
+  btnIniciar.textContent = "Iniciar";
+  btnIniciar.addEventListener("click", () => manejarBotonIniciarDetener(mm.id, nombreMateria));
+
+  const btnPausa = document.createElement("button");
+  btnPausa.type = "button";
+  btnPausa.className = "btn btn-secondary";
+  btnPausa.style.minWidth = "120px";
+  btnPausa.addEventListener("click", () => {
+    const activo = obtenerTimerActivo();
+    if (!activo || activo.materiaMatriculadaId !== mm.id) return;
+    if (activo.pausado) reanudarTimerEstudio();
+    else pausarTimerEstudio();
+  });
+
+  const btnDetener = document.createElement("button");
+  btnDetener.type = "button";
+  btnDetener.className = "btn btn-danger";
+  btnDetener.style.minWidth = "120px";
+  btnDetener.textContent = "Detener sesión";
+  btnDetener.addEventListener("click", () => manejarBotonIniciarDetener(mm.id, nombreMateria));
+
+  filaAccion.appendChild(btnIniciar);
+  filaAccion.appendChild(btnPausa);
+  filaAccion.appendChild(btnDetener);
+  panelTimer.appendChild(filaAccion);
 
   cont.appendChild(panelTimer);
 
@@ -663,8 +735,16 @@ function construirPantallaDetalle(cont, item) {
   function pintar(activo) {
     const esEstaMateria = Boolean(activo && activo.materiaMatriculadaId === mm.id);
     display.textContent = esEstaMateria ? formatearDuracion(segundosTranscurridos()) : "00:00";
-    btnAccion.textContent = esEstaMateria ? "Detener" : "Iniciar";
-    btnAccion.className = "btn " + (esEstaMateria ? "btn-danger" : "btn-primary");
+
+    // Iniciar solo se ve si NADIE está corriendo en esta materia;
+    // pausa/detener solo se ven si ESTA materia es la que está corriendo.
+    btnIniciar.style.display = esEstaMateria ? "none" : "";
+    btnPausa.style.display = esEstaMateria ? "" : "none";
+    btnDetener.style.display = esEstaMateria ? "" : "none";
+    if (esEstaMateria) {
+      const pausado = Boolean(activo.pausado);
+      btnPausa.textContent = pausado ? "▶ Reanudar" : "⏸ Pausar";
+    }
 
     if (esEstaMateria && activo.pomodoro) {
       const nombreFaseLegible =
@@ -677,10 +757,18 @@ function construirPantallaDetalle(cont, item) {
     pintarProgreso(activo);
   }
   desuscribirTimerDetalle = suscribirseATimer(pintar);
-
-  btnAccion.addEventListener("click", () => manejarBotonIniciarDetener(mm.id, nombreMateria));
   // El botón "Configurar meta y Pomodoro" que vivía acá se movió al
   // engranaje del encabezado (D.1) — mismo modal, un solo punto de entrada.
+
+  // Pedido 2026-09-07: gráficas + resumen individual de la materia
+  // (resumen de meta como líneas, horas trabajadas como barras del color
+  // propio de la materia, y el bloque final de totales/día más
+  // productivo/sesiones/promedio), seguido de la lista editable de
+  // sesiones de ESTA matrícula puntual (nunca las de otra repetición de
+  // la misma materia).
+  const color = obtenerColorMateria(mm, materia, plan);
+  construirEstadisticasMateria(cont, mm, color, () => renderizarTiempoEstudio());
+  construirListaSesiones(cont, mm.id, color, () => renderizarTiempoEstudio());
 }
 
 /* ===================== Entrypoints ===================== */

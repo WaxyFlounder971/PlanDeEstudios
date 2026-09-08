@@ -256,11 +256,21 @@ function calcularEscalaAgradable(valorMax) {
   return { max, paso };
 }
 
-/** `puntos`: [{ etiqueta, minutos }]. Barras de un solo color (violeta,
- * agregado de todas las materias) — a diferencia del donut, esta gráfica
- * no separa por materia (ver nota de cabecera). */
-function construirGraficaBarras(puntos) {
+/** `puntos`: [{ etiqueta, minutos }]. Barras de un solo color: violeta
+ * (agregado de todas las materias) en la vista global, o el color propio
+ * de la materia cuando se llama desde `construirGraficaBarrasMateria`
+ * (pedido 2026-09-07: "el gráfico de barras debe ser del color respectivo
+ * de la materia estudiada") — a diferencia del donut, esta gráfica no
+ * separa por materia dentro de un mismo corte (ver nota de cabecera). */
+function construirGraficaBarras(puntos, color) {
   const n = puntos.length;
+  if (n === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.margin = "0";
+    vacio.textContent = "No hay datos para graficar en este período.";
+    return vacio;
+  }
   const anchoUtil = VB_ANCHO - MARGEN_IZQ - MARGEN_DER;
   const altoUtil = VB_ALTO - MARGEN_SUP - MARGEN_INF;
 
@@ -311,7 +321,7 @@ function construirGraficaBarras(puntos) {
     barra.setAttribute("width", String(anchoBarra));
     barra.setAttribute("height", String(Math.max(0, alturaBarra)));
     barra.setAttribute("rx", "3");
-    barra.setAttribute("fill", COLOR_BARRA_TOTAL);
+    barra.setAttribute("fill", color || COLOR_BARRA_TOTAL);
     svg.appendChild(barra);
 
     const etiquetaX = document.createElementNS(NS, "text");
@@ -597,7 +607,385 @@ function construirSeccionBarras(cont, refrescar) {
   }
 
   sec.appendChild(construirGraficaBarras(puntos));
+  // Mejora 2026-09-07: si el corte elegido no tiene NINGUNA sesión, la
+  // gráfica igual dibuja ejes con todas las barras en 0 — visualmente
+  // indistinguible de "no funciona" (el reporte original de "en modo
+  // semestre no muestra nada" probablemente era esto: un semestre
+  // vigente sin sesiones cargadas todavía, no un bug de renderizado).
+  // Este aviso lo deja explícito en vez de dejar que se vea vacío sin
+  // explicación.
+  if (puntos.length > 0 && puntos.every((p) => p.minutos === 0)) {
+    const aviso = document.createElement("p");
+    aviso.className = "muted";
+    aviso.style.cssText = "margin:-4px 0 0; font-size:0.78rem; text-align:center;";
+    aviso.textContent = "Sin sesiones registradas en este período — probá con el navegador ‹ › de arriba.";
+    sec.appendChild(aviso);
+  }
   cont.appendChild(sec);
+}
+
+/* =========================================================================
+   Estadísticas INDIVIDUALES por materia (pedido 2026-09-07) — a diferencia
+   de todo lo de arriba (agregado de TODAS las materias, vista
+   "Estadísticas" de nivel superior), esto vive dentro de la pantalla de
+   DETALLE de una materia puntual (tiempo-estudio.js), filtrado siempre por
+   `materia_matriculada_id` — cada repetición de una materia tiene sus
+   propias gráficas, nunca mezcladas con otra matrícula de la misma
+   materia. Reusa los helpers de arriba (construirPillGroup,
+   construirNavegadorPeriodo, calcularEscalaAgradable, formatearMinutos,
+   obtenerRangoSemana/obtenerRangoSemestre, NOMBRES_*) sin duplicarlos —
+   están en el mismo módulo, no hace falta exportarlos.
+   ========================================================================= */
+
+let corteBarrasMateria = "semana"; // "semana" | "semestre"
+let offsetSemanaBarrasMateria = 0;
+let indiceSemestreBarrasMateria = null;
+
+function calcularMinutosMateriaEnRango(materiaMatriculadaId, inicio, fin) {
+  return (estado.datos.sesiones_estudio || []).reduce(
+    (acc, s) => (s.materia_matriculada_id === materiaMatriculadaId && s.inicio >= inicio && s.inicio < fin ? acc + (Number(s.duracion_minutos) || 0) : acc),
+    0
+  );
+}
+
+/* ===================== Gráfica de líneas (Resumen de metas) ===================== */
+
+/**
+ * `series`: [{ valores: number[], color, discontinua? }] — todas contra el
+ * mismo eje X (`etiquetas`). Se generaliza a N series (acá se usan 2:
+ * trabajado y meta) con el mismo sistema de coordenadas que
+ * construirGraficaBarras, para que ambas gráficas se vean del mismo
+ * "tamaño" una debajo de la otra.
+ */
+function construirGraficaLineas(series, etiquetas) {
+  const n = etiquetas.length;
+  if (n === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.margin = "0";
+    vacio.textContent = "No hay datos para graficar en este período.";
+    return vacio;
+  }
+  const anchoUtil = VB_ANCHO - MARGEN_IZQ - MARGEN_DER;
+  const altoUtil = VB_ALTO - MARGEN_SUP - MARGEN_INF;
+
+  const valorMaxCrudo = Math.max(0, ...series.flatMap((s) => s.valores));
+  const { max: valorMax, paso } = calcularEscalaAgradable(valorMaxCrudo);
+
+  const x = (i) => (n <= 1 ? MARGEN_IZQ + anchoUtil / 2 : MARGEN_IZQ + (anchoUtil / (n - 1)) * i);
+  const y = (valor) => MARGEN_SUP + altoUtil - (valor / valorMax) * altoUtil;
+
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${VB_ANCHO} ${VB_ALTO}`);
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  svg.style.cssText = "display:block; width:100%; height:auto;";
+
+  const cantidadPasos = Math.round(valorMax / paso) || 1;
+  for (let paso_i = 0; paso_i <= cantidadPasos; paso_i++) {
+    const valor = paso_i * paso;
+    const yPos = y(valor);
+    const grid = document.createElementNS(NS, "line");
+    grid.setAttribute("x1", String(MARGEN_IZQ));
+    grid.setAttribute("x2", String(VB_ANCHO - MARGEN_DER));
+    grid.setAttribute("y1", String(yPos));
+    grid.setAttribute("y2", String(yPos));
+    grid.setAttribute("stroke", "var(--border-glass)");
+    grid.setAttribute("stroke-width", "1");
+    if (paso_i !== 0) grid.setAttribute("stroke-dasharray", "3 3");
+    svg.appendChild(grid);
+
+    const etiquetaY = document.createElementNS(NS, "text");
+    etiquetaY.setAttribute("x", String(MARGEN_IZQ - 8));
+    etiquetaY.setAttribute("y", String(yPos + 3));
+    etiquetaY.setAttribute("text-anchor", "end");
+    etiquetaY.setAttribute("font-size", "9.5");
+    etiquetaY.setAttribute("fill", "var(--text-muted)");
+    etiquetaY.textContent = formatearMinutos(valor);
+    svg.appendChild(etiquetaY);
+  }
+
+  etiquetas.forEach((etiqueta, i) => {
+    const etiquetaX = document.createElementNS(NS, "text");
+    etiquetaX.setAttribute("x", String(x(i)));
+    etiquetaX.setAttribute("y", String(VB_ALTO - MARGEN_INF + 16));
+    etiquetaX.setAttribute("text-anchor", "middle");
+    etiquetaX.setAttribute("font-size", "10");
+    etiquetaX.setAttribute("fill", "var(--text-muted)");
+    etiquetaX.textContent = etiqueta;
+    svg.appendChild(etiquetaX);
+  });
+
+  series.forEach((serie) => {
+    const puntosStr = serie.valores.map((v, i) => `${x(i)},${y(v)}`).join(" ");
+    const linea = document.createElementNS(NS, "polyline");
+    linea.setAttribute("points", puntosStr);
+    linea.setAttribute("fill", "none");
+    linea.setAttribute("stroke", serie.color);
+    linea.setAttribute("stroke-width", "2.5");
+    linea.setAttribute("stroke-linejoin", "round");
+    linea.setAttribute("stroke-linecap", "round");
+    if (serie.discontinua) linea.setAttribute("stroke-dasharray", "5 4");
+    svg.appendChild(linea);
+
+    serie.valores.forEach((v, i) => {
+      const punto = document.createElementNS(NS, "circle");
+      punto.setAttribute("cx", String(x(i)));
+      punto.setAttribute("cy", String(y(v)));
+      punto.setAttribute("r", "3");
+      punto.setAttribute("fill", serie.color);
+      svg.appendChild(punto);
+    });
+  });
+
+  const ejeX = document.createElementNS(NS, "line");
+  ejeX.setAttribute("x1", String(MARGEN_IZQ));
+  ejeX.setAttribute("x2", String(VB_ANCHO - MARGEN_DER));
+  ejeX.setAttribute("y1", String(y(0)));
+  ejeX.setAttribute("y2", String(y(0)));
+  ejeX.setAttribute("stroke", "var(--text-muted)");
+  ejeX.setAttribute("stroke-width", "1.2");
+  svg.appendChild(ejeX);
+
+  return svg;
+}
+
+/**
+ * "Resumen de metas": trabajado por día de ESTA semana (línea del color
+ * propio de la materia) vs. la meta diaria pareja (meta_horas_semana / 7,
+ * línea gris punteada) — mismo reparto parejo que ya usa
+ * obtenerEstudioParaHoy() en tiempo-estudio.js, para no inventar un
+ * segundo criterio de "cuánto tocaría hoy". Debajo, 2 contadores con el
+ * total de la semana de cada línea (pedido: "un contador que diga debajo
+ * de ambos, x h x min").
+ */
+function construirSeccionResumenMetas(cont, mm, color) {
+  const sec = document.createElement("section");
+  sec.className = "glass-card stack";
+  sec.style.gap = "12px";
+  sec.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Resumen de metas</h3>`;
+
+  const meta = mm.tiempo_estudio.meta_horas_semana;
+  if (meta === null || meta === undefined || meta <= 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.margin = "0";
+    vacio.textContent = "Configurá una meta semanal para esta materia para ver este resumen.";
+    sec.appendChild(vacio);
+    cont.appendChild(sec);
+    return;
+  }
+
+  const { lunes } = obtenerRangoSemana(0);
+  const metaDiariaMin = (meta * 60) / 7;
+  const trabajadoPorDia = NOMBRES_DIA_CORTO.map((_, i) => {
+    const dia = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i, 0, 0, 0, 0);
+    const diaSiguiente = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i + 1, 0, 0, 0, 0);
+    return calcularMinutosMateriaEnRango(mm.id, dia.getTime(), diaSiguiente.getTime());
+  });
+
+  sec.appendChild(
+    construirGraficaLineas(
+      [
+        { valores: trabajadoPorDia, color },
+        { valores: NOMBRES_DIA_CORTO.map(() => metaDiariaMin), color: "var(--text-muted)", discontinua: true },
+      ],
+      NOMBRES_DIA_CORTO
+    )
+  );
+
+  const totalTrabajado = trabajadoPorDia.reduce((acc, m) => acc + m, 0);
+  const contadores = document.createElement("div");
+  contadores.style.cssText = "display:flex; gap:18px; justify-content:center; flex-wrap:wrap;";
+  contadores.innerHTML = `
+    <span style="font-size:0.85rem;"><span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:${color}; margin-right:6px;"></span>Trabajado: <strong>${formatearMinutos(totalTrabajado)}</strong></span>
+    <span style="font-size:0.85rem;"><span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--text-muted); margin-right:6px;"></span>Meta semana: <strong>${formatearMinutos(meta * 60)}</strong></span>
+  `;
+  sec.appendChild(contadores);
+
+  cont.appendChild(sec);
+}
+
+/* ===================== "Horas trabajadas" (tendencia de esta materia) ===================== */
+
+function construirSeccionBarrasMateria(cont, mm, color, refrescar) {
+  const sec = document.createElement("section");
+  sec.className = "glass-card stack";
+  sec.style.gap = "14px";
+  sec.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Horas trabajadas</h3>`;
+
+  sec.appendChild(
+    construirPillGroup(
+      [
+        { valor: "semana", etiqueta: "Semana" },
+        { valor: "semestre", etiqueta: "Semestre" },
+      ],
+      corteBarrasMateria,
+      (valor) => {
+        corteBarrasMateria = valor;
+        refrescar();
+      }
+    )
+  );
+
+  const semestres = obtenerTodosLosSemestresOrdenados();
+  if (indiceSemestreBarrasMateria === null) indiceSemestreBarrasMateria = obtenerIndiceSemestreVigente(semestres);
+
+  let puntos = [];
+
+  if (corteBarrasMateria === "semana") {
+    const { lunes } = obtenerRangoSemana(offsetSemanaBarrasMateria);
+    sec.appendChild(
+      construirNavegadorPeriodo(
+        etiquetaRangoSemana(lunes),
+        () => {
+          offsetSemanaBarrasMateria -= 1;
+          refrescar();
+        },
+        () => {
+          offsetSemanaBarrasMateria += 1;
+          refrescar();
+        },
+        offsetSemanaBarrasMateria >= 0
+      )
+    );
+    puntos = NOMBRES_DIA_CORTO.map((etiqueta, i) => {
+      const dia = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i, 0, 0, 0, 0);
+      const diaSiguiente = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i + 1, 0, 0, 0, 0);
+      return { etiqueta, minutos: calcularMinutosMateriaEnRango(mm.id, dia.getTime(), diaSiguiente.getTime()) };
+    });
+  } else {
+    if (semestres.length === 0) {
+      const vacio = document.createElement("p");
+      vacio.className = "muted";
+      vacio.style.margin = "0";
+      vacio.textContent = "Todavía no hay semestres cargados.";
+      sec.appendChild(vacio);
+      cont.appendChild(sec);
+      return;
+    }
+    indiceSemestreBarrasMateria = Math.max(0, Math.min(semestres.length - 1, indiceSemestreBarrasMateria));
+    const semestre = semestres[indiceSemestreBarrasMateria];
+    sec.appendChild(
+      construirNavegadorPeriodo(
+        semestre.nombre,
+        () => {
+          indiceSemestreBarrasMateria = Math.max(0, indiceSemestreBarrasMateria - 1);
+          refrescar();
+        },
+        () => {
+          indiceSemestreBarrasMateria = Math.min(semestres.length - 1, indiceSemestreBarrasMateria + 1);
+          refrescar();
+        },
+        indiceSemestreBarrasMateria >= semestres.length - 1
+      )
+    );
+
+    // Mismo recorrido mes a mes que construirSeccionBarras (global) — se
+    // duplica acá (en vez de compartir función) solo porque el cálculo de
+    // minutos de cada mes tiene que filtrar por materia
+    // (calcularMinutosMateriaEnRango en vez de calcularMinutosTotalesEnRango).
+    const inicioSemestre = new Date(`${semestre.fecha_inicio}T00:00:00`);
+    const finSemestre = new Date(`${semestre.fecha_fin}T23:59:59`);
+    const cursor = new Date(inicioSemestre.getFullYear(), inicioSemestre.getMonth(), 1);
+    while (cursor <= finSemestre) {
+      const inicioMes = new Date(Math.max(cursor.getTime(), inicioSemestre.getTime()));
+      const finMesCalendario = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+      const finMes = new Date(Math.min(finMesCalendario.getTime(), finSemestre.getTime() + 1));
+      puntos.push({
+        etiqueta: NOMBRES_MES_CORTO[cursor.getMonth()],
+        minutos: calcularMinutosMateriaEnRango(mm.id, inicioMes.getTime(), finMes.getTime()),
+      });
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+  }
+
+  sec.appendChild(construirGraficaBarras(puntos, color));
+  if (puntos.length > 0 && puntos.every((p) => p.minutos === 0)) {
+    const aviso = document.createElement("p");
+    aviso.className = "muted";
+    aviso.style.cssText = "margin:-4px 0 0; font-size:0.78rem; text-align:center;";
+    aviso.textContent = "Sin sesiones registradas en este período — probá con el navegador ‹ › de arriba.";
+    sec.appendChild(aviso);
+  }
+  cont.appendChild(sec);
+}
+
+/* ===================== Resumen final (totales de siempre) ===================== */
+
+const NOMBRES_DIA_LARGO = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+
+/** Recorre TODAS las sesiones históricas de esta matrícula (sin filtrar
+ * por período — "de siempre") para los 4 totales pedidos: horas totales,
+ * día más productivo, sesiones totales y sesión promedio. */
+function calcularResumenTotalesMateria(materiaMatriculadaId) {
+  const sesiones = (estado.datos.sesiones_estudio || []).filter((s) => s.materia_matriculada_id === materiaMatriculadaId);
+  const totalMinutos = sesiones.reduce((acc, s) => acc + (Number(s.duracion_minutos) || 0), 0);
+  const totalSesiones = sesiones.length;
+  const promedioMinutos = totalSesiones > 0 ? totalMinutos / totalSesiones : 0;
+
+  const porDia = new Map();
+  sesiones.forEach((s) => {
+    const f = new Date(s.inicio);
+    const clave = `${f.getFullYear()}-${f.getMonth()}-${f.getDate()}`;
+    porDia.set(clave, { minutos: (porDia.get(clave)?.minutos || 0) + (Number(s.duracion_minutos) || 0), fecha: f });
+  });
+  let diaTop = null;
+  porDia.forEach((valor) => {
+    if (!diaTop || valor.minutos > diaTop.minutos) diaTop = valor;
+  });
+  const diaTopTexto = diaTop ? `${NOMBRES_DIA_LARGO[diaTop.fecha.getDay()]} ${diaTop.fecha.getDate()} ${NOMBRES_MES_CORTO[diaTop.fecha.getMonth()]}` : null;
+
+  return { totalMinutos, totalSesiones, promedioMinutos, diaTopTexto, diaTopMinutos: diaTop ? diaTop.minutos : 0 };
+}
+
+function construirSeccionResumenFinal(cont, materiaMatriculadaId) {
+  const sec = document.createElement("section");
+  sec.className = "glass-card stack";
+  sec.style.gap = "8px";
+  sec.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Resumen</h3>`;
+
+  const { totalMinutos, totalSesiones, promedioMinutos, diaTopTexto, diaTopMinutos } = calcularResumenTotalesMateria(materiaMatriculadaId);
+
+  if (totalSesiones === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.margin = "0";
+    vacio.textContent = "Todavía no hay sesiones registradas en esta materia.";
+    sec.appendChild(vacio);
+    cont.appendChild(sec);
+    return;
+  }
+
+  const filas = [
+    ["Horas totales estudiadas", formatearMinutos(totalMinutos)],
+    ["Día más productivo", `${diaTopTexto} · ${formatearMinutos(diaTopMinutos)}`],
+    ["Sesiones totales", String(totalSesiones)],
+    ["Sesión promedio", formatearMinutos(promedioMinutos)],
+  ];
+  filas.forEach(([etiqueta, valor]) => {
+    const fila = document.createElement("div");
+    fila.className = "row-between";
+    fila.style.cssText = "align-items:center;";
+    fila.innerHTML = `<span class="muted" style="font-size:0.85rem;">${etiqueta}</span><strong style="font-size:0.9rem;">${valor}</strong>`;
+    sec.appendChild(fila);
+  });
+
+  cont.appendChild(sec);
+}
+
+/**
+ * Punto de entrada — llamado desde `construirPantallaDetalle` en
+ * tiempo-estudio.js, DESPUÉS de la barra de progreso semanal y ANTES de
+ * la lista editable de sesiones (`construirListaSesiones` en
+ * tiempo-estudio-registro.js). `color` es el mismo color efectivo que ya
+ * calcula `obtenerColorMateria()` en tiempo-estudio.js (propio > categoría
+ * > default) — se recibe por parámetro para no duplicar esa cadena de
+ * fallbacks acá.
+ */
+function construirEstadisticasMateria(cont, mm, color, refrescar) {
+  construirSeccionResumenMetas(cont, mm, color);
+  construirSeccionBarrasMateria(cont, mm, color, refrescar);
+  construirSeccionResumenFinal(cont, mm.id);
 }
 
 /* ===================== Ensamblado ===================== */
@@ -616,4 +1004,4 @@ function construirVistaEstadisticas(cont, refrescar) {
   construirSeccionBarras(cont, refrescar);
 }
 
-export { construirVistaEstadisticas };
+export { construirVistaEstadisticas, construirEstadisticasMateria };

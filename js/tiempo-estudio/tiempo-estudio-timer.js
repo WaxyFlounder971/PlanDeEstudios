@@ -43,8 +43,20 @@ const CLAVE_TIMER_ACTIVO = "te_timer_activo_v1";
  *   inicioFase,      // epoch ms — inicio del bloque/descanso actual (== sesionInicio si origen "timer")
  *   pomodoro: null | { config: {duracion_bloque_min, cantidad_bloques, descanso_corto_min, descanso_largo_min}, bloqueActual, fase },
  *   metaAlarmaDisparada, // timer simple: para que la vibración de "llegaste a la meta" dispare 1 sola vez por sesión
+ *   pausado,         // Pausa (pedido 2026-09-07): true mientras está en pausa
+ *   msPausaInicio,   // epoch ms en que empezó la pausa actual, o null si no está pausado
  * } | null
  * `fase` es "trabajo" | "descanso_corto" | "descanso_largo".
+ *
+ * Mecánica de pausa (pedido 2026-09-07, "necesito play/pause y botón de
+ * detener sesión aparte"): en vez de llevar un acumulador de ms pausados
+ * aparte, al REANUDAR se corren `sesionInicio` e `inicioFase` hacia
+ * adelante exactamente la duración de la pausa. Así, mientras está
+ * pausado, ningún reloj se mueve (ni el del bloque ni el de la meta) y al
+ * reanudar todo el resto del código (tick, revisarMetaSimple,
+ * avanzarFasePomodoro, detenerTimerEstudio) sigue funcionando exactamente
+ * igual que si la pausa nunca hubiera pasado, sin tener que sumar/restar
+ * un acumulador en cada lugar donde se usa sesionInicio/inicioFase.
  */
 let timerActivo = null;
 let intervaloId = null;
@@ -99,6 +111,8 @@ function guardarSnapshotLocal() {
         sesionInicio: timerActivo.sesionInicio,
         inicioFase: timerActivo.inicioFase,
         pomodoro: timerActivo.pomodoro,
+        pausado: timerActivo.pausado,
+        msPausaInicio: timerActivo.msPausaInicio,
       })
     );
   } catch (e) {
@@ -319,6 +333,11 @@ function revisarMetaSimple() {
 
 function tick() {
   if (timerActivo === null) return;
+  // Pausa: ningún reloj avanza mientras está pausado — ni fase de
+  // Pomodoro ni la revisión de meta simple. inicioFase/sesionInicio se
+  // corren hacia adelante recién al reanudar (ver reanudarTimerEstudio),
+  // así que no hace falta tocar nada acá, solo no procesar este tick.
+  if (timerActivo.pausado) return;
   if (timerActivo.pomodoro) {
     // Bucle acotado: si la pestaña estuvo en 2do plano y el intervalo se
     // atrasó más de una fase completa, avanza todas las fases que
@@ -368,7 +387,11 @@ function obtenerTimerActivo() {
  * mostrar en el cronómetro de la pantalla de detalle. */
 function segundosTranscurridos() {
   if (timerActivo === null) return 0;
-  return Math.max(0, Math.floor((Date.now() - timerActivo.inicioFase) / 1000));
+  // Pausado: se congela en el instante en que empezó la pausa, en vez de
+  // seguir avanzando con Date.now() — es lo que hace que el display se
+  // vea "detenido" mientras está en pausa.
+  const referencia = timerActivo.pausado ? timerActivo.msPausaInicio : Date.now();
+  return Math.max(0, Math.floor((referencia - timerActivo.inicioFase) / 1000));
 }
 
 function iniciarTimerEstudio(materiaMatriculadaId) {
@@ -385,6 +408,8 @@ function iniciarTimerEstudio(materiaMatriculadaId) {
     inicioFase: ahora,
     pomodoro: pomodoroConfig ? { config: { ...pomodoroConfig }, bloqueActual: 1, fase: "trabajo" } : null,
     metaAlarmaDisparada: false,
+    pausado: false,
+    msPausaInicio: null,
   };
 
   if (pomodoroConfig) pedirPermisoNotificacionSiHaceFalta();
@@ -396,25 +421,67 @@ function iniciarTimerEstudio(materiaMatriculadaId) {
 }
 
 /**
+ * Pausa/reanuda (pedido 2026-09-07): "necesito que si le doy iniciar salga
+ * botón tipo play/pause y botón de detener sesión" — separado del botón
+ * de detener, que sigue siendo el único que cierra y guarda la sesión.
+ * Aplica igual para timer simple y Pomodoro (pausar a mitad de un
+ * descanso también congela ese descanso, no solo los bloques de trabajo).
+ * No hace nada si no hay timer activo o si ya está en el estado pedido
+ * (pausar dos veces, reanudar sin estar pausado).
+ */
+function pausarTimerEstudio() {
+  if (timerActivo === null || timerActivo.pausado) return false;
+  timerActivo.pausado = true;
+  timerActivo.msPausaInicio = Date.now();
+  guardarSnapshotLocal();
+  notificar();
+  return true;
+}
+
+function reanudarTimerEstudio() {
+  if (timerActivo === null || !timerActivo.pausado) return false;
+  // Correr sesionInicio/inicioFase hacia adelante la duración exacta de
+  // la pausa — ver nota de cabecera sobre por qué no se usa un
+  // acumulador aparte.
+  const duracionPausaMs = Date.now() - timerActivo.msPausaInicio;
+  timerActivo.inicioFase += duracionPausaMs;
+  timerActivo.sesionInicio += duracionPausaMs;
+  timerActivo.pausado = false;
+  timerActivo.msPausaInicio = null;
+  guardarSnapshotLocal();
+  notificar();
+  return true;
+}
+
+function timerEstaPausado() {
+  return Boolean(timerActivo && timerActivo.pausado);
+}
+
+/**
  * Detiene el timer activo (si hay uno). Solo guarda una sesión si la fase
  * en curso "cuenta" como estudio real: timer simple siempre, Pomodoro solo
  * si estaba en fase de trabajo — detener a mitad de un descanso nunca
  * genera sesión, igual que si ese descanso hubiera terminado solo.
- * Devuelve la sesión creada, o `null` si no había timer corriendo o si lo
- * que se detuvo fue un descanso (nada que guardar).
+ * Si se detiene mientras está en pausa, el fin de la sesión guardada es el
+ * instante en que empezó la pausa (no Date.now()) — el tiempo pausado
+ * nunca cuenta como estudiado.
+ * Devuelve la sesión creada, o `null` si no había timer corriendo, si lo
+ * que se detuvo fue un descanso, o si la duración resultante es 0.
  */
 function detenerTimerEstudio() {
   if (timerActivo === null) return null;
-  const { materiaMatriculadaId, origen, pomodoro, inicioFase } = timerActivo;
+  const { materiaMatriculadaId, origen, pomodoro, inicioFase, pausado, msPausaInicio } = timerActivo;
 
   const cuentaComoTrabajo = origen === "timer" || (pomodoro && pomodoro.fase === "trabajo");
   let sesion = null;
   if (cuentaComoTrabajo) {
-    const fin = Date.now();
-    sesion = crearSesionEstudio({ materiaMatriculadaId, inicio: inicioFase, fin, origen });
-    estado.datos.sesiones_estudio.push(sesion);
-    marcarCambioPendiente();
-    revisarFelicitacionMeta(materiaMatriculadaId);
+    const fin = pausado ? msPausaInicio : Date.now();
+    if (fin > inicioFase) {
+      sesion = crearSesionEstudio({ materiaMatriculadaId, inicio: inicioFase, fin, origen });
+      estado.datos.sesiones_estudio.push(sesion);
+      marcarCambioPendiente();
+      revisarFelicitacionMeta(materiaMatriculadaId);
+    }
   }
 
   timerActivo = null;
@@ -539,7 +606,11 @@ function revisarSesionOlvidadaAlAbrir() {
     return;
   }
 
-  const horasEnFaseActual = (Date.now() - snapshot.inicioFase) / 3600000;
+  // Si quedó pausado, el reloj de referencia es el instante en que empezó
+  // la pausa (mismo criterio que detenerTimerEstudio) — el tiempo pausado
+  // no debe empujar a esta sesión hacia el salvavidas.
+  const referencia = snapshot.pausado ? snapshot.msPausaInicio || Date.now() : Date.now();
+  const horasEnFaseActual = (referencia - snapshot.inicioFase) / 3600000;
   const faseActualCuenta = snapshot.origen === "timer" || (snapshot.pomodoro && snapshot.pomodoro.fase === "trabajo");
 
   if (horasEnFaseActual < SALVAVIDAS_HORAS_LIMITE || !faseActualCuenta) {
@@ -556,6 +627,9 @@ export {
   segundosTranscurridos,
   iniciarTimerEstudio,
   detenerTimerEstudio,
+  pausarTimerEstudio,
+  reanudarTimerEstudio,
+  timerEstaPausado,
   cambiarTimerEstudio,
   suscribirseATimer,
   formatearDuracion,
