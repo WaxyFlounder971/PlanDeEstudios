@@ -366,6 +366,27 @@ function construirPillGroup(opciones, valorActual, onCambiar) {
 
 /** Fila "< etiqueta >" reusada por semana y semestre, tanto en el donut
  * como en la gráfica de barras. */
+/**
+ * Número de semana ISO-8601 (semana que contiene el primer jueves del
+ * año es la semana 1) de la semana que empieza en `lunes`. Pedido
+ * 2026-09-07: reemplaza el rango de fechas como título principal del
+ * navegador ("Semana 36" en vez de "31 Ago - 6 Sep") — el rango de fechas
+ * no desaparece, baja a subtítulo (ver `construirNavegadorPeriodo`).
+ */
+function calcularNumeroSemanaISO(lunes) {
+  const d = new Date(Date.UTC(lunes.getFullYear(), lunes.getMonth(), lunes.getDate()));
+  const diaIso = d.getUTCDay() || 7; // domingo=0 -> 7, para que lunes=1...domingo=7
+  d.setUTCDate(d.getUTCDate() + 4 - diaIso); // jueves de esa misma semana ISO
+  const inicioAno = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil(((d - inicioAno) / 86400000 + 1) / 7);
+}
+
+/**
+ * `etiqueta` acepta un string (semestres — una sola línea, ej.
+ * "Semestre I 2026") o `{ titulo, subtitulo }` (semanas — pedido
+ * 2026-09-07: título en letra normal tipo "Semana 36", con el rango de
+ * fechas de siempre debajo en chico, en vez del rango como único texto).
+ */
 function construirNavegadorPeriodo(etiqueta, onAnterior, onSiguiente, deshabilitarSiguiente) {
   const fila = document.createElement("div");
   fila.className = "row-between";
@@ -378,9 +399,24 @@ function construirNavegadorPeriodo(etiqueta, onAnterior, onSiguiente, deshabilit
   btnAnterior.setAttribute("aria-label", "Período anterior");
   btnAnterior.addEventListener("click", onAnterior);
 
-  const texto = document.createElement("span");
-  texto.style.cssText = "font-weight:700; font-size:0.9rem; text-align:center; flex:1;";
-  texto.textContent = etiqueta;
+  const texto = document.createElement("div");
+  texto.style.cssText = "flex:1; text-align:center; line-height:1.3;";
+  if (etiqueta && typeof etiqueta === "object") {
+    const titulo = document.createElement("div");
+    titulo.style.cssText = "font-weight:700; font-size:0.9rem;";
+    titulo.textContent = etiqueta.titulo;
+    texto.appendChild(titulo);
+    if (etiqueta.subtitulo) {
+      const subtitulo = document.createElement("div");
+      subtitulo.className = "muted";
+      subtitulo.style.cssText = "font-size:0.74rem;";
+      subtitulo.textContent = etiqueta.subtitulo;
+      texto.appendChild(subtitulo);
+    }
+  } else {
+    texto.style.cssText += "font-weight:700; font-size:0.9rem;";
+    texto.textContent = etiqueta;
+  }
 
   const btnSiguiente = document.createElement("button");
   btnSiguiente.type = "button";
@@ -404,6 +440,21 @@ function etiquetaRangoSemana(lunes) {
   const domingo = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + 6);
   const fmt = (d) => `${d.getDate()} ${NOMBRES_MES_CORTO[d.getMonth()]}`;
   return `${fmt(lunes)} – ${fmt(domingo)}`;
+}
+
+/**
+ * Pedido 2026-09-07 (completado ahora — `calcularNumeroSemanaISO` estaba
+ * escrita pero nunca se conectaba a los 3 navegadores): título en letra
+ * normal "Semana N" arriba, rango de fechas de siempre como subtítulo
+ * chico debajo. Reemplaza los usos directos de `etiquetaRangoSemana(lunes)`
+ * como `etiqueta` de `construirNavegadorPeriodo` en donut, barras
+ * globales y barras por materia.
+ */
+function etiquetaSemanaConSubtitulo(lunes) {
+  return {
+    titulo: `Semana ${calcularNumeroSemanaISO(lunes)}`,
+    subtitulo: etiquetaRangoSemana(lunes),
+  };
 }
 
 /* ===================== Sección 1: donut "Horas por proyecto" ===================== */
@@ -452,7 +503,7 @@ function construirSeccionDonut(cont, refrescar) {
     fin = f;
     sec.appendChild(
       construirNavegadorPeriodo(
-        etiquetaRangoSemana(lunes),
+        etiquetaSemanaConSubtitulo(lunes),
         () => {
           offsetSemanaDonut -= 1;
           refrescar();
@@ -547,7 +598,7 @@ function construirSeccionBarras(cont, refrescar) {
     const { lunes } = obtenerRangoSemana(offsetSemanaBarras);
     sec.appendChild(
       construirNavegadorPeriodo(
-        etiquetaRangoSemana(lunes),
+        etiquetaSemanaConSubtitulo(lunes),
         () => {
           offsetSemanaBarras -= 1;
           refrescar();
@@ -836,7 +887,7 @@ function construirSeccionBarrasMateria(cont, mm, color, refrescar) {
     const { lunes } = obtenerRangoSemana(offsetSemanaBarrasMateria);
     sec.appendChild(
       construirNavegadorPeriodo(
-        etiquetaRangoSemana(lunes),
+        etiquetaSemanaConSubtitulo(lunes),
         () => {
           offsetSemanaBarrasMateria -= 1;
           refrescar();
