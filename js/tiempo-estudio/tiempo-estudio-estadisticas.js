@@ -690,6 +690,7 @@ function construirSeccionBarras(cont, refrescar) {
 
 let corteBarrasMateria = "semana"; // "semana" | "semestre"
 let offsetSemanaBarrasMateria = 0;
+let offsetSemanaMetas = 0; // pedido 2026-09-08: "Resumen de metas" también navega semanas, no solo la actual
 let indiceSemestreBarrasMateria = null;
 
 function calcularMinutosMateriaEnRango(materiaMatriculadaId, inicio, fin) {
@@ -809,7 +810,7 @@ function construirGraficaLineas(series, etiquetas) {
  * total de la semana de cada línea (pedido: "un contador que diga debajo
  * de ambos, x h x min").
  */
-function construirSeccionResumenMetas(cont, mm, color) {
+function construirSeccionResumenMetas(cont, mm, color, refrescar) {
   const sec = document.createElement("section");
   sec.className = "glass-card stack";
   sec.style.gap = "12px";
@@ -826,7 +827,21 @@ function construirSeccionResumenMetas(cont, mm, color) {
     return;
   }
 
-  const { lunes } = obtenerRangoSemana(0);
+  const { lunes } = obtenerRangoSemana(offsetSemanaMetas);
+  sec.appendChild(
+    construirNavegadorPeriodo(
+      etiquetaSemanaConSubtitulo(lunes),
+      () => {
+        offsetSemanaMetas -= 1;
+        refrescar();
+      },
+      () => {
+        offsetSemanaMetas += 1;
+        refrescar();
+      },
+      offsetSemanaMetas >= 0 // no tiene sentido navegar semanas futuras más allá de la actual
+    )
+  );
   const metaDiariaMin = (meta * 60) / 7;
   const trabajadoPorDia = NOMBRES_DIA_CORTO.map((_, i) => {
     const dia = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i, 0, 0, 0, 0);
@@ -1034,7 +1049,7 @@ function construirSeccionResumenFinal(cont, materiaMatriculadaId) {
  * fallbacks acá.
  */
 function construirEstadisticasMateria(cont, mm, color, refrescar) {
-  construirSeccionResumenMetas(cont, mm, color);
+  construirSeccionResumenMetas(cont, mm, color, refrescar);
   construirSeccionBarrasMateria(cont, mm, color, refrescar);
   construirSeccionResumenFinal(cont, mm.id);
 }
