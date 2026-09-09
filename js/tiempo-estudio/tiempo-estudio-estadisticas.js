@@ -821,7 +821,7 @@ function construirGraficaLineas(series, etiquetas) {
  * total de la semana de cada línea (pedido: "un contador que diga debajo
  * de ambos, x h x min").
  */
-function construirSeccionResumenMetas(cont, mm, semestre, color, refrescar) {
+function construirSeccionResumenMetas(cont, mm, color, refrescar) {
   const sec = document.createElement("section");
   sec.className = "glass-card stack";
   sec.style.gap = "12px";
@@ -841,7 +841,7 @@ function construirSeccionResumenMetas(cont, mm, semestre, color, refrescar) {
   const { lunes } = obtenerRangoSemana(offsetSemanaMetas);
   sec.appendChild(
     construirNavegadorPeriodo(
-      etiquetaSemanaConSubtitulo(lunes, semestre),
+      etiquetaSemanaConSubtitulo(lunes, obtenerSemestreVigenteParaSemana()),
       () => {
         offsetSemanaMetas -= 1;
         refrescar();
@@ -884,7 +884,7 @@ function construirSeccionResumenMetas(cont, mm, semestre, color, refrescar) {
 
 /* ===================== "Horas trabajadas" (tendencia de esta materia) ===================== */
 
-function construirSeccionBarrasMateria(cont, mm, semestre, color, refrescar) {
+function construirSeccionBarrasMateria(cont, mm, color, refrescar) {
   const sec = document.createElement("section");
   sec.className = "glass-card stack";
   sec.style.gap = "14px";
@@ -913,7 +913,7 @@ function construirSeccionBarrasMateria(cont, mm, semestre, color, refrescar) {
     const { lunes } = obtenerRangoSemana(offsetSemanaBarrasMateria);
     sec.appendChild(
       construirNavegadorPeriodo(
-        etiquetaSemanaConSubtitulo(lunes, semestre),
+        etiquetaSemanaConSubtitulo(lunes, obtenerSemestreVigenteParaSemana()),
         () => {
           offsetSemanaBarrasMateria -= 1;
           refrescar();
@@ -1074,10 +1074,10 @@ function construirSeccionResumenFinal(cont, materiaMatriculadaId) {
  * si una falla, las otras 2 igual se renderizan, y la que falló muestra
  * un aviso en vez de dejar toda la pantalla a medio actualizar.
  */
-function construirEstadisticasMateria(cont, mm, semestre, color, refrescar) {
+function construirEstadisticasMateria(cont, mm, color, refrescar) {
   const secciones = [
-    ["Resumen de metas", () => construirSeccionResumenMetas(cont, mm, semestre, color, refrescar)],
-    ["Horas trabajadas", () => construirSeccionBarrasMateria(cont, mm, semestre, color, refrescar)],
+    ["Resumen de metas", () => construirSeccionResumenMetas(cont, mm, color, refrescar)],
+    ["Horas trabajadas", () => construirSeccionBarrasMateria(cont, mm, color, refrescar)],
     ["Resumen final", () => construirSeccionResumenFinal(cont, mm.id)],
   ];
   secciones.forEach(([nombre, construir]) => {
