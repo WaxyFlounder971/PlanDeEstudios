@@ -274,7 +274,20 @@ function eliminarSesion(sesion, refrescar) {
       // Tumba (regla obligatoria de sync, ver MAPA_FUNCIONES.md "Borrado =
       // tumba"): se agrega el id acá y se filtra del arreglo vivo arriba,
       // para que la fusión sepa que el borrado fue intencional.
-      estado.datos._eliminados_sesiones_estudio.push(sesion.id);
+      //
+      // FIX 2026-09-08 (bug real: "borrar no se mantenía guardado"): esto
+      // empujaba `sesion.id` PELADO en vez de un objeto tumba. fusionarTumbas
+      // y fusionarColeccion (storage-merge.js) esperan `{ id, eliminadoEn }`
+      // — con un valor plano, `t.id` da `undefined` para toda entrada, así
+      // que fusionarColeccion nunca reconocía el id como borrado (el Set de
+      // eliminados quedaba lleno de `undefined`) y fusionarTumbas directamente
+      // descartaba la entrada entera (`t.id === undefined`). Resultado: en
+      // cuanto marcarCambioPendiente() disparaba el próximo sync — que
+      // primero BAJA lo de Drive y funde antes de subir (ver
+      // intentarSincronizar en storage-sync.js) — la sesión, todavía viva del
+      // lado remoto, resucitaba en el fusionado. Mismo patrón que ya usa
+      // agenda.js al borrar un evento (`_eliminados_agenda.push({ id, eliminadoEn })`).
+      estado.datos._eliminados_sesiones_estudio.push({ id: sesion.id, eliminadoEn: Date.now() });
       marcarCambioPendiente();
       mostrarToast("Sesión borrada");
       if (refrescar) refrescar();
