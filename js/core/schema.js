@@ -1753,6 +1753,18 @@ function obtenerClasesEfectivasSemana(bloque, numeroSemana) {
  * de Horario ("mostrado de forma clara y visible"). Clampeado entre 1 y
  * duracion_semanas — antes de que arranque el semestre muestra semana 1,
  * después de que termine se queda pegado en la última.
+ *
+ * Resuelve la semana de HOY únicamente — para una fecha arbitraria (pasada
+ * o futura, ej. un navegador ‹ › de semanas) usar en cambio
+ * `agenda/agenda-clases.js#calcularNumeroSemanaParaFecha(semestre, fecha)`
+ * (que a su vez delega el cálculo crudo, con anclaje correcto de zona
+ * horaria a `fecha_inicio` real, en `horario/horario.js#calcularNumeroSemanaSinAcotarParaFecha`).
+ * No duplicar esa lógica acá — 2026-09-08: se había agregado por error un
+ * segundo parámetro `fechaReferencia` a esta función con una fórmula propia
+ * (`new Date(fecha_inicio)` + floor de días/7 sin anclar al día real de la
+ * semana), reintroduciendo el mismo bug de zona horaria que ya se había
+ * corregido en horario.js. Revertido: para "semana de una fecha cualquiera"
+ * siempre usar la función de agenda-clases.js, nunca esta.
  */
 function calcularNumeroSemanaSemestre(semestre) {
   const inicio = new Date(semestre.fecha_inicio);
