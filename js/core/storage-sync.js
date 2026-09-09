@@ -138,10 +138,33 @@ async function asegurarTokenValido() {
  * resolverConflicto en storage-merge.js (recibe sellarTimestamp como
  * parámetro en vez de importar schema.js), generalizado a una lista.
  */
-const hooksPostFusion = [];
-
+/**
+ * FIX 2026-09-08 (causa raíz real del ReferenceError "Cannot access
+ * 'hooksPostGuardado'/'hooksPostFusion' before initialization"): estos 3
+ * arreglos vivían en un `const` de módulo. Eso funciona SIEMPRE que nadie
+ * llame a `registrarHook...()` antes de que el motor de ESTE archivo
+ * termine de evaluar su propio cuerpo — pero con imports circulares (este
+ * archivo importa `main.js` en la línea de arriba del todo, y `main.js`
+ * termina, transitivamente, cargando `horario-amigos.js`, que llama a
+ * `registrarHookPostGuardado()` en su propio nivel de módulo, es decir
+ * "al importarse", NO dentro de una función) eso puede pasar antes de que
+ * este archivo llegue a ejecutar su propio `const hooksPostGuardado = []`
+ * — TODOS los imports de un módulo se resuelven antes que cualquier
+ * código propio del módulo, sin importar en qué línea del archivo esté
+ * escrito ese `const`. El resultado es la TDZ (temporal dead zone) de
+ * `let`/`const`: el binding existe pero todavía no se puede leer.
+ *
+ * La lista ya no vive en un `const` de módulo — vive como propiedad lazy
+ * de la propia función `registrarHook...`. Las funciones declaradas con
+ * `function` (a diferencia de un `const fn = () => {}`) SÍ están
+ * completamente disponibles desde el instante en que arranca la
+ * evaluación del módulo (hoisting completo, sin TDZ), así que no importa
+ * en qué momento del ciclo de imports circulares se las llame — nunca
+ * van a estar "sin inicializar". `??=` crea el arreglo la primera vez que
+ * alguien empuja algo, sea quien sea el primero en llamar.
+ */
 function registrarHookPostFusion(fn) {
-  hooksPostFusion.push(fn);
+  (registrarHookPostFusion.lista ??= []).push(fn);
 }
 
 /**
@@ -154,11 +177,13 @@ function registrarHookPostFusion(fn) {
  * este corre tras SUBIR datos exitosamente — es el punto que necesita
  * horario-amigos.js para mantener los archivos públicos de Drive al día
  * cada vez que algo se sincroniza, no solo cuando baja algo nuevo.
+ *
+ * Ver el comentario grande sobre `registrarHookPostFusion` unas líneas
+ * arriba: mismo fix de TDZ (2026-09-08) — lista como propiedad lazy de la
+ * función en vez de `const` de módulo.
  */
-const hooksPostGuardado = [];
-
 function registrarHookPostGuardado(fn) {
-  hooksPostGuardado.push(fn);
+  (registrarHookPostGuardado.lista ??= []).push(fn);
 }
 
 /**
@@ -204,16 +229,16 @@ function programarRefrescoProactivo(expiresInSegundos) {
 const MAX_INTENTOS_RECONEXION_SEGUIDOS = 4; // dentro del rango 3-5 que pide el prompt
 let intentosReconexionFallidosSeguidos = 0;
 
-const hooksCierreSesionForzado = [];
-
 /**
  * Mismo patrón que hooksPostFusion/hooksPostGuardado (ver arriba): este
  * archivo no debería importar cerrarSesion() de main.js (import circular),
  * así que main.js registra su propia función acá en vez de que este motor
- * la conozca de antemano.
+ * la conozca de antemano. Mismo fix de TDZ (2026-09-08, ver comentario
+ * grande sobre registrarHookPostFusion): lista como propiedad lazy de la
+ * función en vez de `const` de módulo.
  */
 function registrarHookCierreSesionForzado(fn) {
-  hooksCierreSesionForzado.push(fn);
+  (registrarHookCierreSesionForzado.lista ??= []).push(fn);
 }
 
 /** Ping chico y barato contra un recurso propio (mismo origen, sin CORS)
@@ -245,7 +270,7 @@ function forzarCierreSesionPorFalloDeReconexion() {
   mostrarToast(
     "⚠️ No pudimos reconectar tu cuenta después de varios intentos. Iniciá sesión de nuevo."
   );
-  hooksCierreSesionForzado.forEach((hook) => {
+  (registrarHookCierreSesionForzado.lista ?? []).forEach((hook) => {
     try {
       hook();
     } catch (e) {
@@ -731,7 +756,7 @@ function aplicarDatosRemotosFrescos(datosFrescos) {
   // offline no llegó a borrar. Se dispara sin await (no bloquea el render
   // de la UI por housekeeping que al usuario no le importa ver) y cada
   // hook se protege solo (un hook roto no debe tirar abajo los demás).
-  hooksPostFusion.forEach((hook) => {
+  (registrarHookPostFusion.lista ?? []).forEach((hook) => {
     try {
       Promise.resolve(hook()).catch((e) => console.warn("Error en hook post-fusión:", e));
     } catch (e) {
@@ -1169,7 +1194,7 @@ async function intentarSincronizar() {
     // hooksPostFusion (ver aplicarDatosRemotosFrescos) pero disparado tras
     // cada SUBIDA exitosa — cada hook se protege solo, uno roto no debe
     // tirar abajo los demás ni bloquear el resto de intentarSincronizar.
-    hooksPostGuardado.forEach((hook) => {
+    (registrarHookPostGuardado.lista ?? []).forEach((hook) => {
       try {
         Promise.resolve(hook()).catch((e) => console.warn("Error en hook post-guardado:", e));
       } catch (e) {
