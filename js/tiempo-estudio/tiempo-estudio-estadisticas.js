@@ -29,6 +29,7 @@
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { COLOR_TIEMPO_ESTUDIO_DEFAULT } from "../core/schema.js";
+import { calcularNumeroSemanaParaFecha } from "../agenda/agenda-clases.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const COLOR_BARRA_TOTAL = COLOR_TIEMPO_ESTUDIO_DEFAULT;
@@ -367,18 +368,17 @@ function construirPillGroup(opciones, valorActual, onCambiar) {
 /** Fila "< etiqueta >" reusada por semana y semestre, tanto en el donut
  * como en la gráfica de barras. */
 /**
- * Número de semana ISO-8601 (semana que contiene el primer jueves del
- * año es la semana 1) de la semana que empieza en `lunes`. Pedido
- * 2026-09-07: reemplaza el rango de fechas como título principal del
- * navegador ("Semana 36" en vez de "31 Ago - 6 Sep") — el rango de fechas
- * no desaparece, baja a subtítulo (ver `construirNavegadorPeriodo`).
+ * Semestre "vigente" para los navegadores GLOBALES (donut y "Horas
+ * trabajadas" sin filtrar por materia) — no hay una sola materia de la
+ * que colgarse acá, así que se usa el mismo semestre que ya calcula
+ * `obtenerIndiceSemestreVigente` (el último que ya arrancó). Si el
+ * usuario no tiene semestres cargados, `null` — el navegador cae de
+ * vuelta a mostrar solo "Semana" sin número (ver `etiquetaSemanaConSubtitulo`).
  */
-function calcularNumeroSemanaISO(lunes) {
-  const d = new Date(Date.UTC(lunes.getFullYear(), lunes.getMonth(), lunes.getDate()));
-  const diaIso = d.getUTCDay() || 7; // domingo=0 -> 7, para que lunes=1...domingo=7
-  d.setUTCDate(d.getUTCDate() + 4 - diaIso); // jueves de esa misma semana ISO
-  const inicioAno = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil(((d - inicioAno) / 86400000 + 1) / 7);
+function obtenerSemestreVigenteParaSemana() {
+  const lista = obtenerTodosLosSemestresOrdenados();
+  const idx = obtenerIndiceSemestreVigente(lista);
+  return idx >= 0 ? lista[idx] : null;
 }
 
 /**
@@ -443,16 +443,27 @@ function etiquetaRangoSemana(lunes) {
 }
 
 /**
- * Pedido 2026-09-07 (completado ahora — `calcularNumeroSemanaISO` estaba
- * escrita pero nunca se conectaba a los 3 navegadores): título en letra
- * normal "Semana N" arriba, rango de fechas de siempre como subtítulo
- * chico debajo. Reemplaza los usos directos de `etiquetaRangoSemana(lunes)`
- * como `etiqueta` de `construirNavegadorPeriodo` en donut, barras
- * globales y barras por materia.
+ * Pedido 2026-09-08 (corrige el 2026-09-07: la primera versión usaba
+ * semana ISO del año calendario — "Semana 36" — en vez de la semana
+ * DENTRO del semestre que ya usan Horario y Agenda). Corregido otra vez
+ * el mismo día: la primera corrección reusaba `calcularNumeroSemanaSemestre`
+ * de schema.js con un parámetro de fecha agregado a mano, duplicando (con
+ * el mismo bug de zona horaria ya resuelto ahí) una función que YA existe
+ * para justo este caso: `calcularNumeroSemanaParaFecha(semestre, fecha)`
+ * de `agenda/agenda-clases.js` — arbitraria (no solo "hoy"), acotada entre
+ * 1 y duracion_semanas, y con el anclaje correcto al día real de
+ * `fecha_inicio` (delega el cálculo crudo en
+ * `horario/horario.js#calcularNumeroSemanaSinAcotarParaFecha`). Se le pasa
+ * el lunes de la semana mostrada — el número coincide con el que ya ves
+ * en Horario/Agenda para esa misma semana, sea la actual, una pasada o
+ * una futura. `semestre` puede venir null (materia sin semestre resoluble,
+ * o usuario sin semestres) — en ese caso se cae a "Semana" sin número,
+ * mismo criterio que ya usa agenda.js en construirSubheaderSemanal.
  */
-function etiquetaSemanaConSubtitulo(lunes) {
+function etiquetaSemanaConSubtitulo(lunes, semestre) {
+  const numero = semestre ? calcularNumeroSemanaParaFecha(semestre, lunes) : null;
   return {
-    titulo: `Semana ${calcularNumeroSemanaISO(lunes)}`,
+    titulo: numero ? `Semana ${numero}` : "Semana",
     subtitulo: etiquetaRangoSemana(lunes),
   };
 }
@@ -503,7 +514,7 @@ function construirSeccionDonut(cont, refrescar) {
     fin = f;
     sec.appendChild(
       construirNavegadorPeriodo(
-        etiquetaSemanaConSubtitulo(lunes),
+        etiquetaSemanaConSubtitulo(lunes, obtenerSemestreVigenteParaSemana()),
         () => {
           offsetSemanaDonut -= 1;
           refrescar();
@@ -598,7 +609,7 @@ function construirSeccionBarras(cont, refrescar) {
     const { lunes } = obtenerRangoSemana(offsetSemanaBarras);
     sec.appendChild(
       construirNavegadorPeriodo(
-        etiquetaSemanaConSubtitulo(lunes),
+        etiquetaSemanaConSubtitulo(lunes, obtenerSemestreVigenteParaSemana()),
         () => {
           offsetSemanaBarras -= 1;
           refrescar();
@@ -810,7 +821,7 @@ function construirGraficaLineas(series, etiquetas) {
  * total de la semana de cada línea (pedido: "un contador que diga debajo
  * de ambos, x h x min").
  */
-function construirSeccionResumenMetas(cont, mm, color, refrescar) {
+function construirSeccionResumenMetas(cont, mm, semestre, color, refrescar) {
   const sec = document.createElement("section");
   sec.className = "glass-card stack";
   sec.style.gap = "12px";
@@ -830,7 +841,7 @@ function construirSeccionResumenMetas(cont, mm, color, refrescar) {
   const { lunes } = obtenerRangoSemana(offsetSemanaMetas);
   sec.appendChild(
     construirNavegadorPeriodo(
-      etiquetaSemanaConSubtitulo(lunes),
+      etiquetaSemanaConSubtitulo(lunes, semestre),
       () => {
         offsetSemanaMetas -= 1;
         refrescar();
@@ -873,7 +884,7 @@ function construirSeccionResumenMetas(cont, mm, color, refrescar) {
 
 /* ===================== "Horas trabajadas" (tendencia de esta materia) ===================== */
 
-function construirSeccionBarrasMateria(cont, mm, color, refrescar) {
+function construirSeccionBarrasMateria(cont, mm, semestre, color, refrescar) {
   const sec = document.createElement("section");
   sec.className = "glass-card stack";
   sec.style.gap = "14px";
@@ -902,7 +913,7 @@ function construirSeccionBarrasMateria(cont, mm, color, refrescar) {
     const { lunes } = obtenerRangoSemana(offsetSemanaBarrasMateria);
     sec.appendChild(
       construirNavegadorPeriodo(
-        etiquetaSemanaConSubtitulo(lunes),
+        etiquetaSemanaConSubtitulo(lunes, semestre),
         () => {
           offsetSemanaBarrasMateria -= 1;
           refrescar();
@@ -1048,9 +1059,9 @@ function construirSeccionResumenFinal(cont, materiaMatriculadaId) {
  * > default) — se recibe por parámetro para no duplicar esa cadena de
  * fallbacks acá.
  */
-function construirEstadisticasMateria(cont, mm, color, refrescar) {
-  construirSeccionResumenMetas(cont, mm, color, refrescar);
-  construirSeccionBarrasMateria(cont, mm, color, refrescar);
+function construirEstadisticasMateria(cont, mm, semestre, color, refrescar) {
+  construirSeccionResumenMetas(cont, mm, semestre, color, refrescar);
+  construirSeccionBarrasMateria(cont, mm, semestre, color, refrescar);
   construirSeccionResumenFinal(cont, mm.id);
 }
 
