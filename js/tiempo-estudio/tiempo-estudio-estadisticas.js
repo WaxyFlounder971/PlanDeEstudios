@@ -1059,10 +1059,38 @@ function construirSeccionResumenFinal(cont, materiaMatriculadaId) {
  * > default) — se recibe por parámetro para no duplicar esa cadena de
  * fallbacks acá.
  */
+/**
+ * FIX 2026-09-08 (reporte: "semana 1 en la semana antepasada, no me deja
+ * moverme" + el pill Semana/Semestre de 'Horas trabajadas' tampoco
+ * respondía): las 3 secciones se llamaban en cadena, sin aislar errores.
+ * Si `construirSeccionResumenMetas` tira una excepción (sospecha: algún
+ * caso puntual de `calcularNumeroSemanaParaFecha` en agenda-clases.js/
+ * horario.js para cierta combinación semestre+semana — todavía sin
+ * confirmar, faltan esos 2 archivos para verlo), el `refrescar()` entero
+ * se corta ahí — `construirSeccionBarrasMateria` (más abajo, dueña del
+ * pill Semana/Semestre que dejó de responder) nunca llega a ejecutarse de
+ * nuevo, y la pantalla queda con el DOM de la versión anterior (de ahí la
+ * sensación de "no me deja moverme"). Cada sección ahora corre aislada:
+ * si una falla, las otras 2 igual se renderizan, y la que falló muestra
+ * un aviso en vez de dejar toda la pantalla a medio actualizar.
+ */
 function construirEstadisticasMateria(cont, mm, semestre, color, refrescar) {
-  construirSeccionResumenMetas(cont, mm, semestre, color, refrescar);
-  construirSeccionBarrasMateria(cont, mm, semestre, color, refrescar);
-  construirSeccionResumenFinal(cont, mm.id);
+  const secciones = [
+    ["Resumen de metas", () => construirSeccionResumenMetas(cont, mm, semestre, color, refrescar)],
+    ["Horas trabajadas", () => construirSeccionBarrasMateria(cont, mm, semestre, color, refrescar)],
+    ["Resumen final", () => construirSeccionResumenFinal(cont, mm.id)],
+  ];
+  secciones.forEach(([nombre, construir]) => {
+    try {
+      construir();
+    } catch (err) {
+      console.error(`[tiempo-estudio-estadisticas] "${nombre}" falló al renderizar:`, err);
+      const aviso = document.createElement("section");
+      aviso.className = "glass-card stack";
+      aviso.innerHTML = `<p class="muted" style="margin:0; font-size:0.82rem;">No se pudo mostrar "${nombre}" (${err.message || "error desconocido"}).</p>`;
+      cont.appendChild(aviso);
+    }
+  });
 }
 
 /* ===================== Ensamblado ===================== */
