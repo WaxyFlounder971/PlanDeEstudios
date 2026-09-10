@@ -952,6 +952,17 @@ function fusionarDatos(datosLocal, datosRemoto) {
     datosLocal._eliminados_sesiones_estudio,
     datosRemoto._eliminados_sesiones_estudio
   );
+  // Competencias — Parte 1 (2026-09-09): mismo patrón exacto que
+  // sesiones_estudio — colección plana de nivel superior, se funde por id
+  // + tumba, sin lógica nueva. Lo que fusionarColeccion NO sabe (y no le
+  // corresponde saber) es sincronizar el ESTADO del lado del Worker — esta
+  // fusión es solo sobre la lista LOCAL de "a qué competencias estoy
+  // unido", no sobre las horas/ranking, que viven en el Worker y se piden
+  // por API, no por Drive.
+  const tumbasCompetenciasUnidas = fusionarTumbas(
+    datosLocal._eliminados_competencias_unidas,
+    datosRemoto._eliminados_competencias_unidas
+  );
   const tumbasEnlaces = fusionarTumbas(
     datosLocal.configuracion && datosLocal.configuracion._eliminados_enlaces,
     datosRemoto.configuracion && datosRemoto.configuracion._eliminados_enlaces
@@ -1019,6 +1030,12 @@ function fusionarDatos(datosLocal, datosRemoto) {
       tumbasSesionesEstudio,
       "sesión de estudio"
     ),
+    competencias_unidas: fusionarColeccion(
+      datosLocal.competencias_unidas,
+      datosRemoto.competencias_unidas,
+      tumbasCompetenciasUnidas,
+      "competencia unida"
+    ),
     // Horario entre Amigos — Parte 1 (bug fix de esta ronda, ver comentario
     // arriba): ahora sí se funde por entidad en vez de heredar el reemplazo
     // total del spread de más abajo.
@@ -1038,6 +1055,7 @@ function fusionarDatos(datosLocal, datosRemoto) {
     _eliminados_gastos_u: tumbasGastosU,
     _eliminados_horario_enlaces: tumbasHorarioEnlaces,
     _eliminados_sesiones_estudio: tumbasSesionesEstudio,
+    _eliminados_competencias_unidas: tumbasCompetenciasUnidas,
   };
 }
 

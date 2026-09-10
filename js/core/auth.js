@@ -55,6 +55,12 @@ const CLAVE_REFRESH_TOKEN = "google_refresh_token";
 // notificaciones-push.js) — se duplica el literal acá en vez de importarlo
 // cruzado entre archivos, mismo criterio que CLIENT_ID_GOOGLE duplicado en
 // el Worker (ver comentario ahí).
+//
+// 2026-09-09 (Competencias, Parte 1): se exporta más abajo — el Worker
+// gana rutas nuevas (`/competencias/...`) que no son OAuth, así que el
+// nombre ya no describe 100% su alcance, pero se deja tal cual para no
+// tocar el resto de este archivo; `tiempo-estudio-competencias.js` la
+// importa bajo este mismo nombre.
 const URL_WORKER_OAUTH = "https://worker-notificaciones-agenda.appacademica.workers.dev";
 
 // (2026-08-26) FIX: "carga infinita" — un fetch() sin timeout que se cuelga
@@ -1110,6 +1116,7 @@ async function buscarInstanciaEventoCalendar(token, calendarId, eventId, timeMin
 
 export {
   NOMBRE_CARPETA_BACKUP,
+  URL_WORKER_OAUTH,
   crearArchivoJsonEnDrive,
   crearPermisoPublicoLectura,
   eliminarPermisoDrive,

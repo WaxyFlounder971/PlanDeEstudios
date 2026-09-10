@@ -341,6 +341,36 @@ function crearDatosUsuarioNuevo() {
       /* ver crearSesionEstudio() */
     ],
     _eliminados_sesiones_estudio: [],
+
+    // Competencias — Parte 1 (2026-09-09): a diferencia de todo lo demás en
+    // este archivo, una "competencia" NO es un dato propio del usuario —
+    // vive en el Worker (`worker-notificaciones-agenda`, ver
+    // core/auth.js#URL_WORKER_OAUTH), compartida entre varios usuarios que
+    // ni siquiera son "amigos" entre sí en el sentido de Drive. Esta
+    // colección es solo la lista LOCAL de "a qué competencias me uní" —
+    // cada entrada es un puntero (id de la competencia + mi propio apodo +
+    // mi participante_id ahí) para no tener que preguntarle al Worker
+    // "¿a cuáles pertenezco?" en cada carga (esa pregunta ni siquiera
+    // tiene sentido para el Worker, que no guarda "usuarios", solo
+    // participantes por competencia). Sí sincroniza vía Drive (como todo
+    // `estado.datos`) para que la lista de competencias unidas sobreviva a
+    // reinstalar la app o cambiar de celular — ver
+    // tiempo-estudio/tiempo-estudio-competencias.js.
+    //
+    // Forma de cada entrada: { id, participante_id, apodo, nombre,
+    // es_creador, _actualizadoEn, _version_base, _dispositivoId } — igual
+    // que cualquier otra colección con `sellarTimestamp()`, para que
+    // `fusionarColeccion` la trate exactamente igual que sesiones_estudio.
+    //
+    // El `token_creador` (permiso de "solo quien creó puede borrar la
+    // competencia entera del lado del Worker") NO vive acá — vive nada
+    // más que en `localStorage` de ESE dispositivo (mismo criterio que
+    // `dispositivo_id`): es un secreto de un solo uso administrativo, no
+    // hace falta que viaje sincronizado, y si se pierde en un dispositivo
+    // la competencia simplemente queda sin poder borrarse desde ahí
+    // (aceptable — sigue existiendo y siendo usable para participar).
+    competencias_unidas: [],
+    _eliminados_competencias_unidas: [],
   };
 }
 
@@ -3159,6 +3189,10 @@ function migrarDatosAntiguos(datos) {
   // JSON en Drive se guardó antes de que existiera esta sección.
   if (!Array.isArray(datos.sesiones_estudio)) datos.sesiones_estudio = [];
   if (!Array.isArray(datos._eliminados_sesiones_estudio)) datos._eliminados_sesiones_estudio = [];
+
+  // Competencias (Parte 1, 2026-09-09): mismo relleno defensivo.
+  if (!Array.isArray(datos.competencias_unidas)) datos.competencias_unidas = [];
+  if (!Array.isArray(datos._eliminados_competencias_unidas)) datos._eliminados_competencias_unidas = [];
 
   // Finanzas (v2.8.8, 2026-08-11): se simplificó el registro financiero de
   // semestre — costo_total/beca_activa/porcentaje_beca/pago_confirmado/
