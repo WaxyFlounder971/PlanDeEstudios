@@ -4,12 +4,14 @@
    plan/universidad, formato de texto.
    ========================================================================= */
 
+import { inicializarBotonGoogleTasksBuscar } from "../agenda/agenda-google-tasks-ui.js";
 import { ESCALAS_DISPONIBLES, FRECUENCIAS_BACKUP_DRIVE, MONEDAS_DISPONIBLES, OFFSETS_RECORDATORIO_AGENDA, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, crearBackupDriveDefault, migrarDatosAntiguos, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
 import { actualizarIndicadorSync, forzarBackupManual, marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
+import { copiarPromptConAviso } from "../core/clipboard.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
-import { abrirConfirmacion, construirSelectorChipsMultiple, mostrarToast } from "../ui/componentes.js";
+import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta } from "../ui/tema.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
 import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
@@ -20,17 +22,17 @@ import {
   eliminarAdjuntosDeTareasDeSemestre,
   hayAdjuntosGuardados,
 } from "../core/storage-adjuntos.js";
-// Sincronización con Google Calendar (Ajustes Avanzados), 2026-08-25 —
-// reemplaza a Web Push (ver core/notificaciones-calendario.js, antes
-// core/notificaciones-push.js). Este archivo solo dibuja el switch y
-// delega toda la lógica de creación del calendario secundario/sync en
-// lote a esas funciones.
+// Notificaciones push reales (Ajustes Avanzados) — ver
+// core/notificaciones-push.js. Este archivo solo dibuja el switch y
+// delega toda la lógica de permiso/suscripción/(des)programación en lote
+// a esas funciones.
 import {
-  activarSincronizacionCalendario,
-  desactivarSincronizacionCalendario,
-  sincronizacionCalendarActiva,
+  activarNotificacionesPush,
+  desactivarNotificacionesPush,
+  notificacionesPushActivas,
   sincronizarResumenDiario,
-} from "../core/notificaciones-calendario.js";
+  soportaNotificacionesPush,
+} from "../core/notificaciones-push.js";
 
 /* ------------------------------ Ajustes ------------------------------ */
 
@@ -128,6 +130,182 @@ function inicializarAsistenteAjustes() {
 }
 
 /**
+ * Captura por voz (Atajo de Siri), 2026-08-23: switch opt-in en Ajustes
+ * (default apagado — ver crearDatosUsuarioNuevo/migrarDatosAntiguos en
+ * schema.js, configuracion.bandeja_voz). Al activar por PRIMERA vez
+ * (id_bandeja todavía null) se genera un UUID local con
+ * crypto.randomUUID() — mismo mecanismo que obtenerDispositivoId
+ * (schema.js), pero este SÍ se sella y sincroniza por Drive como
+ * cualquier otro campo de configuracion: a diferencia del id de
+ * dispositivo (puramente local, distinto por aparato), todos los
+ * dispositivos del usuario deben terminar viendo el MISMO id_bandeja, o
+ * el Atajo de un iPhone nuevo no encontraría el buzón de siempre.
+ *
+ * id_bandeja se conserva aunque se apague el switch después — desactivar
+ * solo oculta el bloque de "Copiar" en la UI, no borra la dirección, así
+ * reactivar más adelante reusa el mismo buzón en vez de generar uno nuevo
+ * y dejar huérfano lo que hubiera quedado pendiente con el viejo.
+ *
+ * Usa el mismo antirrebote que el resto de switches simples de esta
+ * pantalla (dispararSyncConAntirrebote) — el toggle visual y la
+ * generación del UUID (si aplica) son instantáneos, solo el
+ * sellado+sync se retrasa 400ms por si el usuario prende/apaga varias
+ * veces seguidas.
+ */
+function inicializarBandejaVozAjustes() {
+  const chk = document.getElementById("switch-bandeja-voz");
+  const bloqueId = document.getElementById("bloque-bandeja-id");
+  const textoId = document.getElementById("texto-bandeja-id");
+  const btnCopiar = document.getElementById("btn-copiar-bandeja-id");
+  if (!chk || !bloqueId || !textoId || !btnCopiar) return;
+
+  // Relleno defensivo en memoria (mismo criterio que backup_drive más
+  // abajo) — no debería hacer falta si migrarDatosAntiguos ya corrió,
+  // pero evita un throw si por lo que sea llegara sin el campo.
+  const cfg = estado.datos.configuracion.bandeja_voz || { activo: false, id_bandeja: null };
+  estado.datos.configuracion.bandeja_voz = cfg;
+
+  chk.checked = Boolean(cfg.activo);
+  bloqueId.classList.toggle("oculto", !cfg.activo);
+  textoId.textContent = cfg.id_bandeja || "";
+
+  chk.onchange = () => {
+    cfg.activo = chk.checked;
+    if (cfg.activo && !cfg.id_bandeja) {
+      cfg.id_bandeja = crypto.randomUUID();
+    }
+    bloqueId.classList.toggle("oculto", !cfg.activo);
+    textoId.textContent = cfg.id_bandeja || "";
+    dispararSyncConAntirrebote();
+  };
+
+  btnCopiar.onclick = () => {
+    if (cfg.id_bandeja) copiarPromptConAviso(cfg.id_bandeja);
+  };
+}
+
+/**
+ * Google Tasks (2026-08-23): switch opt-in + selector de lista. A
+ * diferencia del resto de switches simples de esta pantalla, activar este
+ * SÍ requiere una acción de red bloqueante (pedir el permiso de Google y
+ * traer las listas) antes de poder dejar el switch prendido de verdad — si
+ * cualquiera de los dos pasos falla, el switch se revierte y se muestra el
+ * motivo en `error-google-tasks`, nunca se deja "activado" a medias sin
+ * lista_id.
+ */
+function inicializarGoogleTasksAjustes() {
+  const chk = document.getElementById("switch-google-tasks");
+  const bloqueLista = document.getElementById("bloque-google-tasks-lista");
+  const contSelect = document.getElementById("select-google-tasks-lista");
+  const error = document.getElementById("error-google-tasks");
+  if (!chk || !bloqueLista || !contSelect || !error) return;
+
+  const cfg = estado.datos.configuracion.google_tasks_sync || { activo: false, lista_id: null, ids_procesados: [] };
+  estado.datos.configuracion.google_tasks_sync = cfg;
+
+  chk.checked = Boolean(cfg.activo);
+  bloqueLista.classList.toggle("oculto", !cfg.activo);
+  error.classList.add("oculto");
+
+  // FIX (2026-08-23 — "se ve default"): esto era un <select> nativo, por
+  // eso no tomaba los colores del tema a diferencia del resto de
+  // selectores de Ajustes (ver Rango de horas de Horario, unas funciones
+  // más abajo). Ahora arma el mismo componente construirSelectCustomAjustes
+  // que ya usa ese selector — mismo look, mismos colores de acento.
+  let listasCacheadas = [];
+
+  function pintarSelectorListas() {
+    contSelect.innerHTML = "";
+    if (listasCacheadas.length === 0) return;
+    const valorInicial = listasCacheadas.some((l) => l.id === cfg.lista_id) ? cfg.lista_id : listasCacheadas[0].id;
+    cfg.lista_id = valorInicial;
+    contSelect.appendChild(construirSelectCustomAjustes({
+      opciones: listasCacheadas.map((l) => ({ valor: l.id, etiqueta: l.title })),
+      valorInicial,
+      onCambiar: (valor) => {
+        cfg.lista_id = valor;
+        sellarTimestamp(estado.datos.configuracion);
+        marcarCambioPendiente();
+      },
+    }));
+  }
+
+  async function poblarSelectorListas(tokenParaListar) {
+    const { listarListasGoogleTasks } = await import("../agenda/agenda-google-tasks.js");
+    listasCacheadas = await listarListasGoogleTasks(tokenParaListar);
+    // Si ya había una lista elegida de antes (ej. se apagó y se vuelve a
+    // prender el switch) y sigue existiendo, se re-selecciona — evita que
+    // reactivar el switch resetee la elección a la primera lista sin razón.
+    // (La resolución real de cuál valor queda seleccionado vive en
+    // pintarSelectorListas, para no duplicarla acá.)
+    pintarSelectorListas();
+    return listasCacheadas;
+  }
+
+  chk.onchange = async () => {
+    error.classList.add("oculto");
+
+    if (!chk.checked) {
+      cfg.activo = false;
+      bloqueLista.classList.toggle("oculto", true);
+      sellarTimestamp(estado.datos.configuracion);
+      marcarCambioPendiente();
+      return;
+    }
+
+    chk.disabled = true;
+    try {
+      const { pedirAccessTokenGoogleTasks } = await import("../core/auth.js");
+      // interactivo:true — primera vez que se pide ESTE permiso puntual
+      // (aunque el usuario ya haya iniciado sesión con Drive antes), ver
+      // comentario completo en pedirAccessTokenGoogleTasks (auth.js).
+      const token = await pedirAccessTokenGoogleTasks({ interactivo: true });
+      if (!token) {
+        throw new Error("No se otorgó el permiso de Google Tasks.");
+      }
+
+      const listas = await poblarSelectorListas(token);
+      if (listas.length === 0) {
+        throw new Error("Tu cuenta de Google no tiene ninguna lista de Tasks todavía.");
+      }
+
+      cfg.activo = true;
+      bloqueLista.classList.toggle("oculto", false);
+      sellarTimestamp(estado.datos.configuracion);
+      marcarCambioPendiente();
+      mostrarToast("Google Tasks conectado");
+    } catch (e) {
+      console.warn("No se pudo activar Google Tasks:", e);
+      chk.checked = false;
+      cfg.activo = false;
+      bloqueLista.classList.toggle("oculto", true);
+      error.textContent = e.message || "No se pudo conectar con Google Tasks. Intentá de nuevo.";
+      error.classList.remove("oculto");
+    } finally {
+      chk.disabled = false;
+    }
+  };
+
+  // Si el switch ya estaba activo (Ajustes se re-renderiza, o se entra con
+  // la sincronización ya prendida de antes) y todavía no se pobló el
+  // selector en ESTA carga, se trae la lista de nuevo con un token
+  // silencioso — sin esto, el selector quedaría vacío hasta la próxima vez
+  // que el usuario tocara el switch a mano.
+  if (cfg.activo && listasCacheadas.length === 0) {
+    (async () => {
+      try {
+        const { pedirAccessTokenGoogleTasks } = await import("../core/auth.js");
+        const token = await pedirAccessTokenGoogleTasks({ interactivo: false });
+        if (token) await poblarSelectorListas(token);
+      } catch (e) {
+        console.warn("No se pudo refrescar la lista de Google Tasks en Ajustes (no crítico):", e);
+      }
+    })();
+  }
+  inicializarBotonGoogleTasksBuscar();
+}
+
+/**
  * v1.14.1: aplica (o quita) el atributo data-rendimiento en <html>, mismo
  * patrón que data-palette/data-mode. Se exporta para poder llamarla también
  * al iniciar la app (antes de que el usuario entre a Ajustes), leyendo
@@ -185,14 +363,16 @@ function dispararSyncConAntirrebote() {
 }
 
 /**
- * Notificaciones — Recordatorios por tipo (2026-08-20): un grupo de chips
- * (ver construirSelectorChipsMultiple en ui/componentes.js) por cada tipo
- * de evento de Agenda (tarea/examen/evento/feriado), en ese orden fijo.
- * Cada grupo lee/escribe estado.datos.configuracion.notificaciones_recordatorios[tipo]
- * (arreglo de ids de OFFSETS_RECORDATORIO_AGENDA, ver core/schema.js).
- * Solo tiene sentido con el switch general de sincronización con Google
- * Calendar activo — si está apagado, el bloque completo queda atenuado y
- * sin interacción
+ * Notificaciones — Recordatorios por tipo (2026-08-20, migrado a select
+ * único 2026-08-24): un select estilizado (construirSelectCustomAjustes,
+ * mismo patrón que Backup y Rango de horas) por cada tipo de evento de
+ * Agenda (tarea/examen/evento/feriado), en ese orden fijo.
+ * Cada select lee/escribe estado.datos.configuracion.notificaciones_recordatorios[tipo]
+ * — un solo id de OFFSETS_RECORDATORIO_AGENDA (ver core/schema.js), como
+ * string plano; la migración a este formato (desde el arreglo viejo de
+ * cuando el selector era multi-chip) la hace migrarDatosAntiguos en
+ * schema.js. Solo tiene sentido con el switch general de notificaciones push activo —
+ * si está apagado, el bloque completo queda atenuado y sin interacción
  * (mismo criterio visual que el resto de bloques dependientes de un switch
  * en esta pantalla), pero los valores elegidos NO se pierden: siguen
  * guardados, listos para cuando el usuario vuelva a prender el switch
@@ -216,10 +396,10 @@ function renderizarNotificacionesRecordatorios() {
 
   const cfg = estado.datos.configuracion;
   if (!cfg.notificaciones_recordatorios || typeof cfg.notificaciones_recordatorios !== "object") {
-    cfg.notificaciones_recordatorios = { tarea: ["1_dia"], examen: ["1_dia"], evento: ["1_dia"], feriado: ["1_dia"] };
+    cfg.notificaciones_recordatorios = { tarea: "1_dia", examen: "1_dia", evento: "1_dia", feriado: "1_dia" };
   }
 
-  const habilitado = sincronizacionCalendarActiva();
+  const habilitado = notificacionesPushActivas();
   contenedor.innerHTML = "";
   contenedor.style.opacity = habilitado ? "" : "0.5";
   contenedor.style.pointerEvents = habilitado ? "" : "none";
@@ -234,15 +414,16 @@ function renderizarNotificacionesRecordatorios() {
     titulo.textContent = etiqueta;
     fila.appendChild(titulo);
 
-    const { elemento } = construirSelectorChipsMultiple(
-      OFFSETS_RECORDATORIO_AGENDA,
-      cfg.notificaciones_recordatorios[tipo],
-      (valoresActuales) => {
-        cfg.notificaciones_recordatorios[tipo] = valoresActuales;
+    const valorActual = cfg.notificaciones_recordatorios[tipo] || "1_dia";
+    const elemento = construirSelectCustomAjustes({
+      opciones: OFFSETS_RECORDATORIO_AGENDA.map((o) => ({ valor: o.id, etiqueta: o.etiqueta })),
+      valorInicial: valorActual,
+      onCambiar: (valor) => {
+        cfg.notificaciones_recordatorios[tipo] = valor;
         sellarTimestamp(cfg);
         marcarCambioPendiente();
-      }
-    );
+      },
+    });
     fila.appendChild(elemento);
     contenedor.appendChild(fila);
   });
@@ -254,11 +435,10 @@ function renderizarNotificacionesRecordatorios() {
  * horas del Horario más arriba) para
  * estado.datos.configuracion.notificaciones_resumen_diario ({ activo,
  * hora }). Cada cambio (switch u hora) llama a sincronizarResumenDiario()
- * en core/notificaciones-calendario.js (2026-08-25: antes avisaba al
- * Worker, ahora crea/actualiza directo el evento recurrente único en
- * Google Calendar — Parte C.1 del spec) — acá solo se guarda localmente y
- * se dispara esa sincronización, siguiendo el mismo criterio best-effort
- * (si Calendar no responde, no se revierte nada en la UI).
+ * en core/notificaciones-push.js, que es quien realmente avisa al Worker —
+ * acá solo se guarda localmente y se dispara esa sincronización, siguiendo
+ * el mismo criterio best-effort del resto de notificaciones push (si el
+ * Worker no responde, no se revierte nada en la UI).
  */
 function renderizarNotificacionesResumenDiario() {
   const chkResumen = document.getElementById("switch-notificaciones-resumen-diario");
@@ -272,7 +452,7 @@ function renderizarNotificacionesResumenDiario() {
   }
   const cfgResumen = cfg.notificaciones_resumen_diario;
 
-  const habilitado = sincronizacionCalendarActiva();
+  const habilitado = notificacionesPushActivas();
   chkResumen.disabled = !habilitado;
   chkResumen.checked = !!cfgResumen.activo;
   bloqueHora.classList.toggle("oculto", !cfgResumen.activo);
@@ -359,16 +539,38 @@ function renderizarConfigDiasHorario() {
     });
   }
 
-  // Días visibles (switch por día). Guardia: no se permite dejar 0 días
-  // visibles, mismo criterio que "nunca quedarse sin nav visible" en main.js.
-  const listaVisibles = document.getElementById("lista-dias-visibles");
-  if (listaVisibles) {
-    listaVisibles.innerHTML = "";
+  // Días de la semana — unificado (2026-08-23, pedido explícito): antes
+  // eran 2 listas separadas ("Días visibles" con switch, "Nombres
+  // personalizados" con input) que repetían el nombre del día 2 veces.
+  // Ahora es una sola fila por día con 3 columnas (Día | Palabra |
+  // Visibilidad) — el día queda anclado a la izquierda, palabra y
+  // visibilidad a la derecha, en el mismo orden que sus encabezados
+  // (#lista-dias-horario / .tabla-dias-horario-header en index.html
+  // comparten el mismo grid-template-columns, ver design-system.css).
+  const listaDias = document.getElementById("lista-dias-horario");
+  if (listaDias) {
+    listaDias.innerHTML = "";
     DIAS_SEMANA_CONFIG.forEach((dia) => {
       const fila = document.createElement("div");
-      fila.className = "row-between";
+      fila.className = "tabla-dias-horario-fila";
+
       const span = document.createElement("span");
       span.textContent = dia.etiqueta;
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "form-input";
+      input.maxLength = 3;
+      input.placeholder = dia.abrevDefault;
+      input.value = cfg.nombres_dias_personalizados[dia.id] || "";
+      input.addEventListener("change", () => {
+        const valor = input.value.trim().slice(0, 3);
+        if (valor) cfg.nombres_dias_personalizados[dia.id] = valor;
+        else delete cfg.nombres_dias_personalizados[dia.id];
+        sellarTimestamp(cfg);
+        marcarCambioPendiente();
+      });
+
       const label = document.createElement("label");
       label.className = "switch switch-tema";
       const chk = document.createElement("input");
@@ -388,38 +590,11 @@ function renderizarConfigDiasHorario() {
       };
       label.appendChild(chk);
       label.insertAdjacentHTML("beforeend", '<span class="track"><span class="thumb"></span></span>');
-      fila.appendChild(span);
-      fila.appendChild(label);
-      listaVisibles.appendChild(fila);
-    });
-  }
 
-  // Nombres personalizados (máx 3 caracteres, opcional por día)
-  const listaNombres = document.getElementById("lista-nombres-dias");
-  if (listaNombres) {
-    listaNombres.innerHTML = "";
-    DIAS_SEMANA_CONFIG.forEach((dia) => {
-      const fila = document.createElement("div");
-      fila.className = "row-between";
-      const span = document.createElement("span");
-      span.textContent = dia.etiqueta;
-      const input = document.createElement("input");
-      input.type = "text";
-      input.className = "form-input";
-      input.style.maxWidth = "70px";
-      input.maxLength = 3;
-      input.placeholder = dia.abrevDefault;
-      input.value = cfg.nombres_dias_personalizados[dia.id] || "";
-      input.addEventListener("change", () => {
-        const valor = input.value.trim().slice(0, 3);
-        if (valor) cfg.nombres_dias_personalizados[dia.id] = valor;
-        else delete cfg.nombres_dias_personalizados[dia.id];
-        sellarTimestamp(cfg);
-        marcarCambioPendiente();
-      });
       fila.appendChild(span);
       fila.appendChild(input);
-      listaNombres.appendChild(fila);
+      fila.appendChild(label);
+      listaDias.appendChild(fila);
     });
   }
 }
@@ -584,6 +759,16 @@ const SECCIONES_TOGGLEABLES = [
   { id: "comunidad", etiqueta: "Comunidad", icono: "👥" },
   { id: "finanzas", etiqueta: "Finanzas", icono: "💰" },
   { id: "plan-estudios", etiqueta: "Plan de Estudios", icono: "📚" },
+  // 2026-09-09 (pedido explícito): Tiempo de Estudio entra al mismo
+  // sistema de mostrar/ocultar/reordenar que el resto del nav — no
+  // necesita ningún gate de existencia como "asistente" (Gemini), es una
+  // sección que ya existe siempre para cualquier usuario. `id` tiene que
+  // coincidir EXACTO con el `data-seccion` del botón real del nav en
+  // index.html/main.js (se usa "tiempo-estudio", mismo criterio kebab-case
+  // que "plan-estudios" — si el botón real usa otro id, hay que igualar
+  // este valor al de ahí, si no el switch queda huérfano y no controla
+  // nada).
+  { id: "tiempo-estudio", etiqueta: "Tiempo de Estudio", icono: "⏱️" },
   { id: "asistente", etiqueta: "Asistente", icono: "✨" },
 ];
 
@@ -850,6 +1035,8 @@ function inicializarAccordionAjustes() {
 function renderizarAjustes() {
   inicializarAccordionAjustes();
   inicializarAsistenteAjustes();
+  inicializarBandejaVozAjustes();
+  inicializarGoogleTasksAjustes();
 
   // Paletas — cada cuadro muestra su propio color real (punto 3)
   const grid = document.getElementById("grid-paletas");
@@ -940,44 +1127,35 @@ function renderizarAjustes() {
     };
   }
 
-  // Sincronizar con Google Calendar — switch en Ajustes Avanzados,
-  // 2026-08-25 (reemplaza al viejo "Activar notificaciones push"). Se
-  // acepte o no en el onboarding (ver ofrecerActivarSincronizacionCalendario
-  // en main.js), queda disponible acá para prender/apagar en cualquier
-  // momento. Todo el trabajo real (crear el calendario secundario,
-  // (des)sincronizar cada evento contra la API de Calendar) vive en
-  // core/notificaciones-calendario.js; este switch solo dispara esas
-  // funciones y refleja su resultado.
-  //
-  // *** index.html debe actualizarse a mano (no se subió en esta sesión):
-  // el id del checkbox pasa de "switch-notificaciones-push" a
-  // "switch-sync-calendario", y su label visible de "Activar notificaciones
-  // push" a "Sincronizar recordatorios con Google Calendar" (texto exacto
-  // sugerido en el spec, Parte D.2). El bloque #aviso-notificaciones-sin-
-  // soporte ya NO aplica — a diferencia de Web Push, la sincronización con
-  // Calendar no depende de que el navegador soporte notificaciones (ver
-  // por qué se eliminó soportaNotificacionesPush() en
-  // notificaciones-calendario.js) — puede quitarse del HTML. ***
-  const chkSyncCalendario = document.getElementById("switch-sync-calendario");
-  if (chkSyncCalendario) {
-    chkSyncCalendario.checked = sincronizacionCalendarActiva();
-    chkSyncCalendario.onchange = async () => {
-      // Se deshabilita mientras se resuelve la creación del calendario
-      // secundario/el sync en lote (puede tardar un instante y no tiene
-      // sentido dejar el switch clickeable a mitad de camino) — vuelve a
-      // habilitarse pase lo que pase.
-      chkSyncCalendario.disabled = true;
-      if (chkSyncCalendario.checked) {
-        const activado = await activarSincronizacionCalendario();
-        // Si no se pudo crear el calendario secundario (o falta el scope
-        // de Calendar), activarSincronizacionCalendario ya avisó con un
-        // toast — acá solo se destilda el switch para que la UI quede
-        // consistente con lo que realmente pasó.
-        if (!activado) chkSyncCalendario.checked = false;
+  // Notificaciones push reales — switch en Ajustes Avanzados. Se acepte o
+  // no en el onboarding (ver ofrecerActivarNotificacionesPush en main.js),
+  // queda disponible acá para prender/apagar en cualquier momento. Todo el
+  // trabajo real (permiso del navegador, suscripción, (des)programar cada
+  // recordatorio contra el Worker) vive en core/notificaciones-push.js;
+  // este switch solo dispara esas funciones y refleja su resultado.
+  const chkNotificaciones = document.getElementById("switch-notificaciones-push");
+  const avisoSinSoporte = document.getElementById("aviso-notificaciones-sin-soporte");
+  if (chkNotificaciones) {
+    const soportado = soportaNotificacionesPush();
+    chkNotificaciones.disabled = !soportado;
+    avisoSinSoporte?.classList.toggle("oculto", soportado);
+    chkNotificaciones.checked = notificacionesPushActivas();
+    chkNotificaciones.onchange = async () => {
+      // Se deshabilita mientras se resuelve el permiso/suscripción (puede
+      // tardar un instante y no tiene sentido dejar el switch clickeable a
+      // mitad de camino) — vuelve a habilitarse pase lo que pase.
+      chkNotificaciones.disabled = true;
+      if (chkNotificaciones.checked) {
+        const activado = await activarNotificacionesPush();
+        // Si el usuario rechazó el permiso del navegador (o algo falló),
+        // activarNotificacionesPush ya avisó con un toast — acá solo se
+        // destilda el switch para que la UI quede consistente con lo que
+        // realmente pasó.
+        if (!activado) chkNotificaciones.checked = false;
       } else {
-        await desactivarSincronizacionCalendario();
+        await desactivarNotificacionesPush();
       }
-      chkSyncCalendario.disabled = false;
+      chkNotificaciones.disabled = false;
       // El switch general habilita/deshabilita los bloques de abajo — se
       // vuelven a pintar acá para que reflejen el nuevo estado al toque,
       // sin esperar a que el usuario navegue fuera y vuelva a Ajustes.
@@ -1117,94 +1295,47 @@ function renderizarSelectorMoneda() {
   botonMoneda.className = "form-input select-custom-boton";
   const monedaInicial = MONEDAS_DISPONIBLES.find((m) => m.id === selectMoneda.value);
   botonMoneda.textContent = monedaInicial ? `${monedaInicial.simbolo} ${monedaInicial.etiqueta}` : "Elegir moneda";
-
-  // v2.9.2 (2026-08-26, pedido explícito): con 50 monedas en la lista
-  // (37 de antes + las 14 LatAm/Senegal agregadas en este mismo cambio,
-  // ver MONEDAS_DISPONIBLES en schema.js) desplazarse a mano hasta la
-  // deseada es lento — se agrega un buscador de texto arriba de la lista.
-  // Reparenta a document.body el WRAPPER completo (buscador + <ul>) en vez
-  // de solo el <ul> como antes, para que el input viaje pegado a la lista
-  // cuando se abre; la clase ".select-custom-lista" (fondo/borde/sombra/
-  // scroll) se mueve del <ul> a este wrapper, y el <ul> queda como lista
-  // interna simple sin esa clase.
-  const wrapperListaMoneda = document.createElement("div");
-  wrapperListaMoneda.className = "select-custom-lista oculto";
-
-  const inputBuscarMoneda = document.createElement("input");
-  inputBuscarMoneda.type = "text";
-  inputBuscarMoneda.className = "form-input";
-  inputBuscarMoneda.placeholder = "Buscar moneda...";
-  inputBuscarMoneda.autocomplete = "off";
-  inputBuscarMoneda.style.cssText = "position:sticky; top:0; margin-bottom:6px;";
-  wrapperListaMoneda.appendChild(inputBuscarMoneda);
-
   const listaMoneda = document.createElement("ul");
-  listaMoneda.style.cssText = "list-style:none; margin:0; padding:0;";
-  wrapperListaMoneda.appendChild(listaMoneda);
+  listaMoneda.className = "select-custom-lista oculto";
 
   function posicionarListaMoneda() {
     const r = botonMoneda.getBoundingClientRect();
-    wrapperListaMoneda.style.position = "fixed";
-    wrapperListaMoneda.style.top = `${r.bottom + 6}px`;
-    wrapperListaMoneda.style.left = `${r.left}px`;
-    wrapperListaMoneda.style.width = `${r.width}px`;
+    listaMoneda.style.position = "fixed";
+    listaMoneda.style.top = `${r.bottom + 6}px`;
+    listaMoneda.style.left = `${r.left}px`;
+    listaMoneda.style.width = `${r.width}px`;
   }
   function cerrarListaMoneda() {
-    wrapperListaMoneda.classList.add("oculto");
+    listaMoneda.classList.add("oculto");
     botonMoneda.setAttribute("aria-expanded", "false");
-    if (wrapperListaMoneda.parentElement === document.body) dropdownMoneda.appendChild(wrapperListaMoneda);
+    if (listaMoneda.parentElement === document.body) dropdownMoneda.appendChild(listaMoneda);
     window.removeEventListener("scroll", cerrarSiScrollExternoMoneda, true);
     window.removeEventListener("resize", cerrarListaMoneda);
   }
   function cerrarSiScrollExternoMoneda(e) {
-    if (wrapperListaMoneda.contains(e.target)) return;
+    if (listaMoneda.contains(e.target)) return;
     cerrarListaMoneda();
   }
   function abrirListaMoneda() {
     document.querySelectorAll(".select-custom-lista").forEach((l) => {
-      if (l !== wrapperListaMoneda) {
+      if (l !== listaMoneda) {
         l.classList.add("oculto");
         if (l.parentElement === document.body && l._volverA) l._volverA.appendChild(l);
       }
     });
-    wrapperListaMoneda._volverA = dropdownMoneda;
-    document.body.appendChild(wrapperListaMoneda);
+    listaMoneda._volverA = dropdownMoneda;
+    document.body.appendChild(listaMoneda);
     posicionarListaMoneda();
-    wrapperListaMoneda.classList.remove("oculto");
+    listaMoneda.classList.remove("oculto");
     botonMoneda.setAttribute("aria-expanded", "true");
-    // Buscador siempre arranca limpio y con todas las opciones visibles
-    // cada vez que se abre — evita el caso confuso de "abrí, ya había un
-    // filtro puesto de la vez pasada, no veo la moneda que busco".
-    inputBuscarMoneda.value = "";
-    filtrarListaMoneda();
-    inputBuscarMoneda.focus();
     window.addEventListener("scroll", cerrarSiScrollExternoMoneda, true);
     window.addEventListener("resize", cerrarListaMoneda);
   }
-
-  /** Filtra las opciones visibles por coincidencia de texto (símbolo, nombre o código ISO), sin distinguir mayúsculas/acentos. */
-  function normalizarTextoBusqueda(texto) {
-    return texto
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
-  }
-  function filtrarListaMoneda() {
-    const consulta = normalizarTextoBusqueda(inputBuscarMoneda.value.trim());
-    listaMoneda.querySelectorAll(".select-custom-opcion").forEach((item) => {
-      const coincide = consulta === "" || normalizarTextoBusqueda(item.dataset.busqueda).includes(consulta);
-      item.style.display = coincide ? "" : "none";
-    });
-  }
-  inputBuscarMoneda.addEventListener("input", filtrarListaMoneda);
-  // No cerrar el dropdown al hacer click/teclear dentro del buscador.
-  inputBuscarMoneda.addEventListener("click", (e) => e.stopPropagation());
 
   MONEDAS_DISPONIBLES.forEach((moneda) => {
     const item = document.createElement("li");
     item.className = "select-custom-opcion";
     item.textContent = `${moneda.simbolo} ${moneda.etiqueta}`;
-    item.dataset.busqueda = `${moneda.simbolo} ${moneda.etiqueta} ${moneda.id}`;
     if (moneda.id === selectMoneda.value) item.classList.add("activa");
     item.addEventListener("click", () => {
       selectMoneda.value = moneda.id;
@@ -1219,11 +1350,11 @@ function renderizarSelectorMoneda() {
   botonMoneda.setAttribute("aria-expanded", "false");
   botonMoneda.addEventListener("click", (e) => {
     e.stopPropagation();
-    if (wrapperListaMoneda.classList.contains("oculto")) abrirListaMoneda();
+    if (listaMoneda.classList.contains("oculto")) abrirListaMoneda();
     else cerrarListaMoneda();
   });
   document.addEventListener("click", (e) => {
-    if (!dropdownMoneda.contains(e.target) && !wrapperListaMoneda.contains(e.target)) {
+    if (!dropdownMoneda.contains(e.target) && !listaMoneda.contains(e.target)) {
       cerrarListaMoneda();
     }
   });
@@ -1234,7 +1365,7 @@ function renderizarSelectorMoneda() {
   });
 
   dropdownMoneda.appendChild(botonMoneda);
-  dropdownMoneda.appendChild(wrapperListaMoneda);
+  dropdownMoneda.appendChild(listaMoneda);
   dropdownMoneda.appendChild(selectMoneda);
   contenedor.appendChild(dropdownMoneda);
 }
@@ -1248,25 +1379,21 @@ function renderizarSelectorMoneda() {
  * un backup a mano, solo lee/escribe la preferencia y muestra el estado.
  */
 function renderizarSeccionBackupDrive() {
-  const grupoFrecuencia = document.getElementById("pill-frecuencia-backup");
-  if (grupoFrecuencia) {
-    grupoFrecuencia.innerHTML = "";
+  const contFrecuencia = document.getElementById("pill-frecuencia-backup");
+  if (contFrecuencia) {
+    contFrecuencia.innerHTML = "";
     const cfgBackup = estado.datos.configuracion.backup_drive || crearBackupDriveDefault();
-    FRECUENCIAS_BACKUP_DRIVE.forEach((frecuencia) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "pill-item" + (frecuencia.id === (cfgBackup.frecuencia || "semanal") ? " active" : "");
-      btn.textContent = frecuencia.etiqueta;
-      btn.addEventListener("click", () => {
+    contFrecuencia.appendChild(construirSelectCustomAjustes({
+      opciones: FRECUENCIAS_BACKUP_DRIVE.map((f) => ({ valor: f.id, etiqueta: f.etiqueta })),
+      valorInicial: cfgBackup.frecuencia || "semanal",
+      onCambiar: (valor) => {
         estado.datos.configuracion.backup_drive =
           estado.datos.configuracion.backup_drive || crearBackupDriveDefault();
-        estado.datos.configuracion.backup_drive.frecuencia = frecuencia.id;
+        estado.datos.configuracion.backup_drive.frecuencia = valor;
         sellarTimestamp(estado.datos.configuracion);
         marcarCambioPendiente();
-        renderizarSeccionBackupDrive();
-      });
-      grupoFrecuencia.appendChild(btn);
-    });
+      },
+    }));
   }
 
   const elEstado = document.getElementById("texto-ultimo-backup");
@@ -1560,15 +1687,14 @@ function renderizarSeccionLiberarEspacio() {
     etiquetaSelector.textContent = "Por semestre:";
     filaSelector.appendChild(etiquetaSelector);
 
-    const selectSemestre = document.createElement("select");
-    selectSemestre.className = "input";
-    semestres.forEach((semestre) => {
-      const opt = document.createElement("option");
-      opt.value = semestre.id;
-      opt.textContent = semestre.nombre;
-      selectSemestre.appendChild(opt);
-    });
-    filaSelector.appendChild(selectSemestre);
+    const selectSemestre = { value: semestres[0]?.id || null };
+    filaSelector.appendChild(construirSelectCustomAjustes({
+      opciones: semestres.map((s) => ({ valor: s.id, etiqueta: s.nombre })),
+      valorInicial: selectSemestre.value,
+      onCambiar: (valor) => {
+        selectSemestre.value = valor;
+      },
+    }));
 
     const filaBotonesSemestre = document.createElement("div");
     filaBotonesSemestre.style.cssText = "display:flex; gap:8px; flex-wrap:wrap;";
