@@ -1396,6 +1396,20 @@ function crearMateriaMatriculada({ materiaId, planEstudioId }) {
       meta_horas_semana: null,
       pomodoro: null,
       color: null,
+      // Pedido 2026-09-09: qué días de la semana se estudia esta materia —
+      // mismo código de día que usa toda la app (DIAS_SEMANA_CONFIG,
+      // "L"|"K"|"M"|"J"|"V"|"S"|"D", ver horario.js). null = sin configurar
+      // todavía → se interpreta como "todos los días" (retrocompatible con
+      // materias que ya tenían una meta puesta antes de que existiera este
+      // campo). Array vacío ([]) es un estado real y distinto de null: "esta
+      // materia no tiene días de estudio asignados" (ej. el usuario los
+      // sacó todos a propósito) — no debe caer al mismo fallback de "todos
+      // los días" que null. El picker vive en tiempo-estudio-config.js;
+      // consumido en tiempo-estudio-estadisticas.js (redistribución de la
+      // meta diaria en "Resumen de metas") y en Agenda (mostrar solo las
+      // materias que tocan ese día, si mostrar_tiempo_estudio_en_agenda
+      // está activo).
+      dias_estudio: null,
       // Parte 3 (felicitación por meta cumplida): epoch ms del lunes de la
       // última semana en la que YA se felicitó a esta materia por cruzar su
       // meta — null = nunca felicitada. Se compara contra el lunes de la
@@ -3219,6 +3233,13 @@ function migrarDatosAntiguos(datos) {
         // traen — igual criterio que meta_horas_semana/pomodoro arriba.
         if (mm.tiempo_estudio.color === undefined) mm.tiempo_estudio.color = null;
         if (mm.tiempo_estudio.ultima_semana_felicitada === undefined) mm.tiempo_estudio.ultima_semana_felicitada = null;
+        // Pedido 2026-09-09 (días de estudio): mismo relleno defensivo —
+        // mm creadas antes de este campo no lo traen. `undefined` (nunca
+        // existió) se rellena a `null` ("sin configurar" → todos los
+        // días); OJO, un `[]` real ya guardado (usuario sacó todos los
+        // días a propósito) NO debe tocarse acá, es un estado válido
+        // distinto de "sin configurar".
+        if (mm.tiempo_estudio.dias_estudio === undefined) mm.tiempo_estudio.dias_estudio = null;
       });
     });
   }
