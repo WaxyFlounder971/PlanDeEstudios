@@ -37,6 +37,7 @@ import { mostrarSeccion } from "../main.js";
 import { abrirModalConfigTiempoEstudio, abrirModalPomodoroPredeterminado } from "./tiempo-estudio-config.js";
 import { abrirModalRegistroManual, construirListaSesiones } from "./tiempo-estudio-registro.js";
 import { construirVistaEstadisticas, construirEstadisticasMateria, calcularMetaDiariaMateria } from "./tiempo-estudio-estadisticas.js";
+import { construirVistaCompetencias } from "./tiempo-estudio-competencias.js";
 import { abrirBuscarMateriaEn } from "../ui/buscar-materia.js";
 import {
   cambiarTimerEstudio,
@@ -428,6 +429,7 @@ function construirPillVistaSeccion(cont) {
   grupo.innerHTML = `
     <button type="button" class="pill-item ${vistaSeccionTE === "materias" ? "active" : ""}" data-vista="materias">Materias</button>
     <button type="button" class="pill-item ${vistaSeccionTE === "estadisticas" ? "active" : ""}" data-vista="estadisticas">Estadísticas</button>
+    <button type="button" class="pill-item ${vistaSeccionTE === "competencias" ? "active" : ""}" data-vista="competencias">Competencias</button>
   `;
   grupo.querySelectorAll(".pill-item").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -803,6 +805,8 @@ function renderizarTiempoEstudio() {
 
   if (vistaSeccionTE === "estadisticas") {
     construirVistaEstadisticas(cont, renderizarTiempoEstudio);
+  } else if (vistaSeccionTE === "competencias") {
+    construirVistaCompetencias(cont, renderizarTiempoEstudio);
   } else {
     construirVistaPrincipal(cont);
   }
