@@ -9,6 +9,7 @@ import { COLOR_TIEMPO_ESTUDIO_DEFAULT, crearConfigPomodoroDefault, sellarTimesta
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { mostrarToast } from "../ui/componentes.js";
+import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 
 /**
  * Pomodoro "de fábrica" de la cuenta (Entrega 2): el que eligió el usuario
@@ -57,6 +58,55 @@ function leerCamposPomodoro(caja, idPrefijo) {
 }
 
 /**
+ * Pedido 2026-09-09 ("Entrega 3"): pill-group de 7 días (mismo código de
+ * día que Horario, DIAS_SEMANA_CONFIG) para elegir qué días de la semana
+ * se estudia esta materia — consumido por calcularMetaDiariaMateria() en
+ * tiempo-estudio-estadisticas.js (reparte la meta diaria SOLO entre estos
+ * días) y por obtenerEstudioParaHoy() en tiempo-estudio.js (si hoy no es
+ * uno de estos días, la materia ni aparece en el widget/Agenda).
+ *
+ * `null` en `mm.tiempo_estudio.dias_estudio` = nunca configurado → arranca
+ * con los 7 marcados (mismo comportamiento de siempre, retrocompatible).
+ * Igual que `dias_visibles` en config-ajustes.js: no se permite dejar 0
+ * días marcados — una meta sin ningún día para cumplirla no tiene sentido,
+ * así que el último día activo no se puede destildar.
+ */
+function construirPillDiasEstudio(diasEstudioActuales) {
+  const cont = document.createElement("div");
+  cont.className = "pill-group";
+  cont.style.cssText = "width:100%; flex-wrap:wrap;";
+
+  const seleccionados = new Set(
+    diasEstudioActuales === null || diasEstudioActuales === undefined
+      ? DIAS_SEMANA_CONFIG.map((d) => d.abrevDefault)
+      : diasEstudioActuales
+  );
+
+  DIAS_SEMANA_CONFIG.forEach((dia) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pill-item" + (seleccionados.has(dia.abrevDefault) ? " active" : "");
+    btn.textContent = dia.abrevDefault;
+    btn.title = dia.etiqueta;
+    btn.dataset.codigo = dia.abrevDefault;
+    btn.addEventListener("click", () => {
+      const yaActivo = seleccionados.has(dia.abrevDefault);
+      if (yaActivo && seleccionados.size === 1) return; // no se puede dejar en 0 días
+      if (yaActivo) seleccionados.delete(dia.abrevDefault);
+      else seleccionados.add(dia.abrevDefault);
+      btn.classList.toggle("active", !yaActivo);
+    });
+    cont.appendChild(btn);
+  });
+
+  // Guarda la referencia al Set vivo en el propio elemento para que el
+  // handler de "Guardar" del modal lo lea sin tener que reconstruirlo
+  // recorriendo las clases "active" de cada botón.
+  cont._seleccionados = seleccionados;
+  return cont;
+}
+
+/**
  * Abre el modal de configuración para la materia matriculada `mm`.
  * `onGuardar` se llama después de guardar (sin argumentos) para que quien
  * abrió el modal (tiempo-estudio.js) pueda re-renderizar la tarjeta/detalle
@@ -89,6 +139,11 @@ function abrirModalConfigTiempoEstudio(mm, nombreMateria, onGuardar) {
         value="${mm.tiempo_estudio.meta_horas_semana ?? ""}" placeholder="Ej. 4">
     </div>
 
+    <div class="stack" style="gap:6px;">
+      <span class="form-label" style="margin:0;">Días de estudio</span>
+      <div id="te-config-dias"></div>
+    </div>
+
     <div class="row-between" style="align-items:center;">
       <span class="form-label" style="margin:0;">Color de la materia</span>
       <input type="color" id="te-config-color" class="form-input"
@@ -117,6 +172,9 @@ function abrirModalConfigTiempoEstudio(mm, nombreMateria, onGuardar) {
   overlay.appendChild(caja);
   document.body.appendChild(overlay);
 
+  const pillDias = construirPillDiasEstudio(mm.tiempo_estudio.dias_estudio);
+  caja.querySelector("#te-config-dias").appendChild(pillDias);
+
   const togglePomodoro = caja.querySelector("#te-config-pomodoro-toggle");
   const camposPomodoro = caja.querySelector("#te-config-pomodoro-campos");
   togglePomodoro.addEventListener("change", () => {
@@ -136,6 +194,14 @@ function abrirModalConfigTiempoEstudio(mm, nombreMateria, onGuardar) {
     const meta = metaCruda === "" ? null : Math.max(0, Number(metaCruda));
     mm.tiempo_estudio.meta_horas_semana = Number.isFinite(meta) ? meta : null;
     mm.tiempo_estudio.color = caja.querySelector("#te-config-color").value || null;
+    // Orden canónico L→D (el mismo de DIAS_SEMANA_CONFIG), no el orden en
+    // que el usuario los clickeó — calcularMetaDiariaMateria() solo hace
+    // .includes(), así que el orden no le afecta a ESA función, pero
+    // mantenerlo canónico evita sorpresas si algo más adelante llega a
+    // asumir orden (ej. mostrarlo de vuelta en una UI futura).
+    mm.tiempo_estudio.dias_estudio = DIAS_SEMANA_CONFIG.map((d) => d.abrevDefault).filter((c) =>
+      pillDias._seleccionados.has(c)
+    );
 
     if (togglePomodoro.checked) {
       mm.tiempo_estudio.pomodoro = leerCamposPomodoro(caja, "te-config-pom");

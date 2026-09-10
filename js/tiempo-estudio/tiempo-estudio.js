@@ -36,7 +36,7 @@ import { obtenerSemestresActuales } from "../semestres/semestres.js";
 import { mostrarSeccion } from "../main.js";
 import { abrirModalConfigTiempoEstudio, abrirModalPomodoroPredeterminado } from "./tiempo-estudio-config.js";
 import { abrirModalRegistroManual, construirListaSesiones } from "./tiempo-estudio-registro.js";
-import { construirVistaEstadisticas, construirEstadisticasMateria } from "./tiempo-estudio-estadisticas.js";
+import { construirVistaEstadisticas, construirEstadisticasMateria, calcularMetaDiariaMateria } from "./tiempo-estudio-estadisticas.js";
 import { abrirBuscarMateriaEn } from "../ui/buscar-materia.js";
 import {
   cambiarTimerEstudio,
@@ -845,23 +845,38 @@ function inicializarTiempoEstudio() {
 }
 
 /**
- * Estudio para hoy (Entrega 5, PROVISIONAL): reparte la meta semanal
- * parejo entre los 7 días — un cálculo de paso, hasta que la Entrega 3
- * (elegir qué días se estudia cada materia, como ya hace Horario) permita
- * un reparto real solo entre los días elegidos. Cuando esa entrega esté
- * lista, esta función se actualiza para usarla y Agenda no necesita
- * cambiar nada de su lado (sigue leyendo materiaMatriculadaId/
- * nombreMateriaCorto/minutosHoy igual). Solo entran acá materias CON meta
- * configurada — las demás no tienen nada que repartir.
+ * Estudio para hoy — Entrega 3 (2026-09-09): ya NO reparte la meta
+ * semanal parejo entre los 7 días. Usa `calcularMetaDiariaMateria()` de
+ * tiempo-estudio-estadisticas.js — la MISMA cuenta que ve el usuario en
+ * "Resumen de metas" — para que Agenda y Tiempo de Estudio nunca muestren
+ * dos números distintos para "cuánto toca hoy" de una misma materia.
+ *
+ * Además, las materias con `dias_estudio` configurado que NO incluye el
+ * día de hoy quedan afuera del todo (antes entraban todas las que tenían
+ * meta, sin importar qué día era) — así Agenda, que solo lee esta lista,
+ * automáticamente termina mostrando nada más que las materias que
+ * corresponde estudiar hoy, sin que agenda.js necesite saber nada de
+ * `dias_estudio`.
  */
 function obtenerEstudioParaHoy() {
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
   return obtenerMateriasParaTiempoEstudio()
-    .filter((item) => item.mm.tiempo_estudio.meta_horas_semana !== null && item.mm.tiempo_estudio.meta_horas_semana !== undefined)
-    .map((item) => ({
-      materiaMatriculadaId: item.mm.id,
-      nombreMateriaCorto: item.nombreMateriaCorto,
-      minutosHoy: Math.round((item.mm.tiempo_estudio.meta_horas_semana * 60) / 7),
-    }));
+    .map((item) => {
+      const calculo = calcularMetaDiariaMateria(item.mm, 0);
+      if (!calculo) return null; // sin meta configurada, nada que repartir
+      const msPorDia = 24 * 60 * 60 * 1000;
+      const idxHoy = Math.round((hoy.getTime() - calculo.lunes.getTime()) / msPorDia);
+      const infoHoy = calculo.infoDias[idxHoy];
+      if (!infoHoy || !infoHoy.esDiaEstudio) return null; // hoy no es día de estudio para esta materia
+      return {
+        materiaMatriculadaId: item.mm.id,
+        nombreMateriaCorto: item.nombreMateriaCorto,
+        minutosHoy: Math.round(calculo.metaDiariaPorDia[idxHoy]),
+      };
+    })
+    .filter((x) => x !== null);
 }
 
 /** Punto de entrada para que OTRAS secciones (Agenda, Entrega 5) puedan

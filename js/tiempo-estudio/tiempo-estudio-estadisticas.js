@@ -30,6 +30,7 @@ import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { COLOR_TIEMPO_ESTUDIO_DEFAULT } from "../core/schema.js";
 import { calcularNumeroSemanaParaFecha } from "../agenda/agenda-clases.js";
+import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const COLOR_BARRA_TOTAL = COLOR_TIEMPO_ESTUDIO_DEFAULT;
@@ -814,13 +815,62 @@ function construirGraficaLineas(series, etiquetas) {
 
 /**
  * "Resumen de metas": trabajado por día de ESTA semana (línea del color
- * propio de la materia) vs. la meta diaria pareja (meta_horas_semana / 7,
- * línea gris punteada) — mismo reparto parejo que ya usa
- * obtenerEstudioParaHoy() en tiempo-estudio.js, para no inventar un
- * segundo criterio de "cuánto tocaría hoy". Debajo, 2 contadores con el
- * total de la semana de cada línea (pedido: "un contador que diga debajo
- * de ambos, x h x min").
+ * propio de la materia) vs. la meta diaria REAL (ver
+ * `calcularMetaDiariaMateria` justo abajo — ya no es meta_horas_semana/7
+ * parejo). Debajo, 2 contadores con el total de la semana de cada línea
+ * (pedido: "un contador que diga debajo de ambos, x h x min").
  */
+/**
+ * Pedido 2026-09-09 ("Entrega 3", ver el comentario PROVISIONAL en
+ * obtenerEstudioParaHoy() de tiempo-estudio.js): calcula, para una
+ * materia y un offset de semana dado, el reparto real de la meta diaria
+ * — respeta `dias_estudio` (qué días de la semana se estudia esta
+ * materia; null = todos, retrocompatible) y pone en 0 los días que ya
+ * pasaron, repartiendo lo que falta de la meta semanal solo entre los
+ * días de estudio pendientes (hoy inclusive). Exportada para que
+ * `obtenerEstudioParaHoy()` en tiempo-estudio.js (el widget que alimenta
+ * a Agenda) use EXACTAMENTE el mismo número que ve el usuario acá en
+ * "Resumen de metas" — sin esto, Agenda y Tiempo de Estudio podrían
+ * mostrar dos metas distintas para el mismo día.
+ *
+ * Devuelve `null` si la materia no tiene meta configurada (nada que
+ * repartir). `lunes` va incluido en el resultado porque el caller
+ * necesita ubicar "hoy" dentro de la semana (índice 0-6) sin repetir la
+ * cuenta acá.
+ */
+function calcularMetaDiariaMateria(mm, offsetSemana = 0) {
+  const meta = mm.tiempo_estudio.meta_horas_semana;
+  if (meta === null || meta === undefined || meta <= 0) return null;
+
+  const { lunes } = obtenerRangoSemana(offsetSemana);
+  const metaSemanaMin = meta * 60;
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const diasEstudio = mm.tiempo_estudio.dias_estudio; // null = todos los días
+
+  const trabajadoPorDia = NOMBRES_DIA_CORTO.map((_, i) => {
+    const dia = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i, 0, 0, 0, 0);
+    const diaSiguiente = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i + 1, 0, 0, 0, 0);
+    return calcularMinutosMateriaEnRango(mm.id, dia.getTime(), diaSiguiente.getTime());
+  });
+  const infoDias = NOMBRES_DIA_CORTO.map((_, i) => {
+    const fecha = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i);
+    const codigo = DIAS_SEMANA_CONFIG[i]?.abrevDefault;
+    return {
+      codigo,
+      esDiaEstudio: diasEstudio === null || diasEstudio === undefined ? true : diasEstudio.includes(codigo),
+      esPasado: fecha.getTime() < hoy.getTime(),
+    };
+  });
+  const trabajadoEnDiasPasados = trabajadoPorDia.reduce((acc, min, i) => acc + (infoDias[i].esPasado ? min : 0), 0);
+  const metaRestanteMin = Math.max(0, metaSemanaMin - trabajadoEnDiasPasados);
+  const diasPendientesEstudio = infoDias.filter((d) => d.esDiaEstudio && !d.esPasado).length;
+  const metaPorDiaPendienteMin = diasPendientesEstudio > 0 ? metaRestanteMin / diasPendientesEstudio : 0;
+  const metaDiariaPorDia = infoDias.map((d) => (d.esDiaEstudio && !d.esPasado ? metaPorDiaPendienteMin : 0));
+
+  return { lunes, trabajadoPorDia, infoDias, metaDiariaPorDia, metaSemanaMin };
+}
+
 function construirSeccionResumenMetas(cont, mm, color, refrescar) {
   const sec = document.createElement("section");
   sec.className = "glass-card stack";
@@ -838,7 +888,7 @@ function construirSeccionResumenMetas(cont, mm, color, refrescar) {
     return;
   }
 
-  const { lunes } = obtenerRangoSemana(offsetSemanaMetas);
+  const { lunes, trabajadoPorDia, metaDiariaPorDia, metaSemanaMin } = calcularMetaDiariaMateria(mm, offsetSemanaMetas);
   sec.appendChild(
     construirNavegadorPeriodo(
       etiquetaSemanaConSubtitulo(lunes, obtenerSemestreVigenteParaSemana()),
@@ -853,18 +903,12 @@ function construirSeccionResumenMetas(cont, mm, color, refrescar) {
       offsetSemanaMetas >= 0 // no tiene sentido navegar semanas futuras más allá de la actual
     )
   );
-  const metaDiariaMin = (meta * 60) / 7;
-  const trabajadoPorDia = NOMBRES_DIA_CORTO.map((_, i) => {
-    const dia = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i, 0, 0, 0, 0);
-    const diaSiguiente = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i + 1, 0, 0, 0, 0);
-    return calcularMinutosMateriaEnRango(mm.id, dia.getTime(), diaSiguiente.getTime());
-  });
 
   sec.appendChild(
     construirGraficaLineas(
       [
         { valores: trabajadoPorDia, color },
-        { valores: NOMBRES_DIA_CORTO.map(() => metaDiariaMin), color: "var(--text-muted)", discontinua: true },
+        { valores: metaDiariaPorDia, color: "var(--text-muted)", discontinua: true },
       ],
       NOMBRES_DIA_CORTO
     )
@@ -875,7 +919,7 @@ function construirSeccionResumenMetas(cont, mm, color, refrescar) {
   contadores.style.cssText = "display:flex; gap:18px; justify-content:center; flex-wrap:wrap;";
   contadores.innerHTML = `
     <span style="font-size:0.85rem;"><span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:${color}; margin-right:6px;"></span>Trabajado: <strong>${formatearMinutos(totalTrabajado)}</strong></span>
-    <span style="font-size:0.85rem;"><span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--text-muted); margin-right:6px;"></span>Meta semana: <strong>${formatearMinutos(meta * 60)}</strong></span>
+    <span style="font-size:0.85rem;"><span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--text-muted); margin-right:6px;"></span>Meta semana: <strong>${formatearMinutos(metaSemanaMin)}</strong></span>
   `;
   sec.appendChild(contadores);
 
@@ -1109,4 +1153,4 @@ function construirVistaEstadisticas(cont, refrescar) {
   construirSeccionBarras(cont, refrescar);
 }
 
-export { construirVistaEstadisticas, construirEstadisticasMateria };
+export { construirVistaEstadisticas, construirEstadisticasMateria, calcularMetaDiariaMateria };
