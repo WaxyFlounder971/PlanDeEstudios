@@ -513,6 +513,160 @@ async function cargarMarcadorEnTarjeta(competencia, contMarcador) {
 }
 
 /**
+ * Estilos de la fila de botones de acción de cada tarjeta de competencia
+ * (Enlace/Clasificación/Borrar/Salir) — se inyectan una sola vez (guard
+ * por id) porque este archivo no tiene una hoja .css propia y no vale la
+ * pena crear una solo para esto. `data-total`/`data-cols`/`data-compacto`
+ * los maneja `construirFilaBotonesCompetencia` en JS según lo que mide.
+ */
+function asegurarEstilosBotonesCompetencia() {
+  if (document.getElementById("te-estilos-botones-competencia")) return;
+  const estilo = document.createElement("style");
+  estilo.id = "te-estilos-botones-competencia";
+  estilo.textContent = `
+    .te-fila-botones-competencia {
+      display: grid;
+      gap: 8px;
+    }
+    .te-fila-botones-competencia[data-total="4"] { grid-template-columns: repeat(4, 1fr); }
+    .te-fila-botones-competencia[data-total="3"] { grid-template-columns: repeat(3, 1fr); }
+    .te-fila-botones-competencia[data-total="4"][data-cols="2x2"] { grid-template-columns: repeat(2, 1fr); }
+    .te-fila-botones-competencia[data-total="3"][data-compacto="1"] { grid-template-columns: min-content 1fr 1fr; }
+    .te-btn-competencia {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 9px 8px;
+      border-radius: 10px;
+      border: 1px solid var(--borde-sutil, rgba(255,255,255,0.12));
+      background: var(--fondo-sutil, rgba(255,255,255,0.05));
+      color: inherit;
+      font: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+    }
+    .te-btn-competencia:hover { background: var(--fondo-hover, rgba(255,255,255,0.1)); }
+    .te-btn-competencia:active { transform: scale(0.96); }
+    .te-btn-competencia-peligro:hover {
+      background: rgba(239,68,68,0.16);
+      border-color: rgba(239,68,68,0.45);
+    }
+    .te-btn-competencia-emoji { font-size: 1rem; line-height: 1; flex: none; }
+    .te-btn-competencia-etiqueta { overflow: hidden; text-overflow: ellipsis; }
+    .te-btn-competencia-compacto { padding-left: 0; padding-right: 0; }
+    .te-btn-competencia-compacto .te-btn-competencia-etiqueta { display: none; }
+  `;
+  document.head.appendChild(estilo);
+}
+
+/** Un botón de acción de competencia: emoji + etiqueta, mismo look para los 4. */
+function crearBotonCompetencia({ emoji, etiqueta, titulo, peligro, onClick }) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "te-btn-competencia" + (peligro ? " te-btn-competencia-peligro" : "");
+  btn.title = titulo;
+  btn.setAttribute("aria-label", titulo);
+  btn.innerHTML = `<span class="te-btn-competencia-emoji">${emoji}</span><span class="te-btn-competencia-etiqueta">${etiqueta}</span>`;
+  btn.addEventListener("click", onClick);
+  return btn;
+}
+
+/**
+ * Fila de botones de una tarjeta de competencia — Enlace/Clasificación/
+ * Salir, más Borrar si `competencia.es_creador` (4 en total; 3 si no).
+ *
+ * Pedido explícito: los 4 (o 3) del mismo tamaño. Si entran con su
+ * etiqueta completa en una sola fila, van en una sola fila; si los 4 NO
+ * entran, pasan a grid 2x2 (nunca 3+1). Con 3 botones NUNCA se envuelve a
+ * una segunda línea — si no entran con etiqueta completa, se sacrifica
+ * primero el de Enlace, dejándolo solo con el emoji (angosto) para que
+ * los otros 2 sigan en la misma línea. Se mide con `scrollWidth` (el
+ * ancho natural del contenido, `white-space:nowrap` evita que se ajuste
+ * aunque la caja ya esté angosta por el grid) contra el ancho real
+ * disponible, y se re-mide con ResizeObserver porque el espacio puede
+ * cambiar (rotar el teléfono, redimensionar la ventana).
+ */
+function construirFilaBotonesCompetencia(competencia, refrescar) {
+  asegurarEstilosBotonesCompetencia();
+
+  const fila = document.createElement("div");
+  fila.className = "te-fila-botones-competencia";
+
+  const btnEnlace = crearBotonCompetencia({
+    emoji: "🔗",
+    etiqueta: "Enlace",
+    titulo: "Copiar link de invitación",
+    onClick: () => copiarLinkInvitacion(competencia),
+  });
+  const btnClasificacion = crearBotonCompetencia({
+    emoji: "🏆",
+    etiqueta: "Clasificación",
+    titulo: "Ver historial de ganadores",
+    onClick: () => abrirModalHistorial(competencia),
+  });
+  const btnSalir = crearBotonCompetencia({
+    emoji: "🚪",
+    etiqueta: "Salir",
+    titulo: "Salir de esta competencia",
+    onClick: () => salirDeCompetencia(competencia, refrescar),
+  });
+
+  const botones = [btnEnlace, btnClasificacion];
+  if (competencia.es_creador) {
+    botones.push(
+      crearBotonCompetencia({
+        emoji: "💥",
+        etiqueta: "Borrar",
+        titulo: "Borrar para todos",
+        peligro: true,
+        onClick: () => borrarCompetenciaEntera(competencia, refrescar),
+      })
+    );
+  }
+  botones.push(btnSalir);
+  botones.forEach((b) => fila.appendChild(b));
+
+  const total = botones.length; // 4 si es creador, 3 si no
+  fila.dataset.total = String(total);
+
+  function reacomodar() {
+    // Se resetea a "todo entra completo" antes de medir, si no la
+    // medición siguiente arrastra el estado angosto de la corrida
+    // anterior (ej. veníamos de un ancho chico y ahora hay más lugar).
+    fila.removeAttribute("data-cols");
+    fila.removeAttribute("data-compacto");
+    btnEnlace.classList.remove("te-btn-competencia-compacto");
+
+    const anchoDisponible = fila.clientWidth;
+    if (!anchoDisponible) return; // todavía no está en el DOM medible
+    const anchoNecesario = botones.reduce((suma, b) => suma + b.scrollWidth, 0) + 8 * (total - 1);
+    if (anchoNecesario <= anchoDisponible) return; // entra bien en una fila pareja
+
+    if (total === 4) {
+      fila.setAttribute("data-cols", "2x2");
+      return;
+    }
+
+    // total === 3: nunca se envuelve — se sacrifica el botón de Enlace.
+    btnEnlace.classList.add("te-btn-competencia-compacto");
+    fila.setAttribute("data-compacto", "1");
+  }
+
+  // clientWidth/scrollWidth de un nodo recién creado (todavía no
+  // insertado en el DOM real) dan 0 — un rAF alcanza porque el caller
+  // appendea `fila` de forma síncrona antes de que corra.
+  requestAnimationFrame(reacomodar);
+  new ResizeObserver(reacomodar).observe(fila);
+
+  return fila;
+}
+
+/**
  * Punto de entrada — llamado desde tiempo-estudio.js cuando el pill
  * superior está en "Competencias". `refrescar` es el mismo callback sin
  * argumentos (`renderizarTiempoEstudio`) que ya usan Materias/Estadísticas.
@@ -580,47 +734,7 @@ function construirVistaCompetencias(cont, refrescar) {
     tarjeta.appendChild(contMarcador);
     cargarMarcadorEnTarjeta(competencia, contMarcador);
 
-    const filaBotones = document.createElement("div");
-    filaBotones.style.cssText = "display:flex; gap:8px; flex-wrap:wrap;";
-
-    const btnCopiar = document.createElement("button");
-    btnCopiar.type = "button";
-    btnCopiar.className = "btn btn-secondary";
-    btnCopiar.style.flex = "1";
-    btnCopiar.textContent = "Copiar invitación";
-    btnCopiar.addEventListener("click", () => copiarLinkInvitacion(competencia));
-    filaBotones.appendChild(btnCopiar);
-
-    const btnHistorial = document.createElement("button");
-    btnHistorial.type = "button";
-    btnHistorial.className = "te-btn-icono te-btn-icono-fantasma";
-    btnHistorial.title = "Ver historial de ganadores";
-    btnHistorial.setAttribute("aria-label", "Ver historial de ganadores");
-    btnHistorial.textContent = "🏆";
-    btnHistorial.addEventListener("click", () => abrirModalHistorial(competencia));
-    filaBotones.appendChild(btnHistorial);
-
-    if (competencia.es_creador) {
-      const btnBorrar = document.createElement("button");
-      btnBorrar.type = "button";
-      btnBorrar.className = "te-btn-icono te-btn-icono-fantasma";
-      btnBorrar.title = "Borrar para todos";
-      btnBorrar.setAttribute("aria-label", "Borrar competencia para todos");
-      btnBorrar.textContent = "💥";
-      btnBorrar.addEventListener("click", () => borrarCompetenciaEntera(competencia, refrescar));
-      filaBotones.appendChild(btnBorrar);
-    }
-
-    const btnSalir = document.createElement("button");
-    btnSalir.type = "button";
-    btnSalir.className = "te-btn-icono te-btn-icono-fantasma";
-    btnSalir.title = "Salir";
-    btnSalir.setAttribute("aria-label", "Salir de esta competencia");
-    btnSalir.textContent = "🚪";
-    btnSalir.addEventListener("click", () => salirDeCompetencia(competencia, refrescar));
-    filaBotones.appendChild(btnSalir);
-
-    tarjeta.appendChild(filaBotones);
+    tarjeta.appendChild(construirFilaBotonesCompetencia(competencia, refrescar));
     lista.appendChild(tarjeta);
   });
 
