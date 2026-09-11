@@ -669,6 +669,7 @@ function construirSeccionDonut(cont, refrescar) {
   if (corteDonut === "dia") {
     const inputFecha = document.createElement("input");
     inputFecha.type = "date";
+    inputFecha.autocomplete = "off";
     inputFecha.className = "form-input";
     inputFecha.value = fechaDiaDonut;
     inputFecha.addEventListener("change", () => {
