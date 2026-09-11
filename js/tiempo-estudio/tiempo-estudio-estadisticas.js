@@ -1153,4 +1153,4 @@ function construirVistaEstadisticas(cont, refrescar) {
   construirSeccionBarras(cont, refrescar);
 }
 
-export { construirVistaEstadisticas, construirEstadisticasMateria, calcularMetaDiariaMateria };
+export { construirVistaEstadisticas, construirEstadisticasMateria, calcularMetaDiariaMateria, calcularMinutosTotalesEnRango, obtenerRangoSemana };

@@ -25,6 +25,7 @@ import { crearSesionEstudio, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { mostrarToast } from "../ui/componentes.js";
+import { sincronizarHorasCompetencias } from "./tiempo-estudio-competencias.js";
 
 // Fácil de ajustar para pruebas (ver caso de prueba del plan) — límite de
 // horas sin detenerse antes de considerar una sesión "olvidada".
@@ -286,6 +287,7 @@ function avanzarFasePomodoro() {
     estado.datos.sesiones_estudio.push(sesion);
     marcarCambioPendiente();
     revisarFelicitacionMeta(materiaMatriculadaId);
+    sincronizarHorasCompetencias();
 
     const esUltimoBloque = pomodoro.bloqueActual >= config.cantidad_bloques;
     pomodoro.fase = esUltimoBloque ? "descanso_largo" : "descanso_corto";
@@ -481,6 +483,7 @@ function detenerTimerEstudio() {
       estado.datos.sesiones_estudio.push(sesion);
       marcarCambioPendiente();
       revisarFelicitacionMeta(materiaMatriculadaId);
+      sincronizarHorasCompetencias();
     }
   }
 
@@ -573,6 +576,7 @@ function abrirAvisoSesionOlvidada(snapshot) {
       estado.datos.sesiones_estudio.push(sesion);
       marcarCambioPendiente();
       revisarFelicitacionMeta(snapshot.materiaMatriculadaId);
+      sincronizarHorasCompetencias();
       mostrarToast("Sesión guardada");
     }
     cerrar();

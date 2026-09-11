@@ -16,6 +16,7 @@ import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { revisarFelicitacionMeta } from "./tiempo-estudio-timer.js";
+import { sincronizarHorasCompetencias } from "./tiempo-estudio-competencias.js";
 
 /**
  * Abre el modal. `items` es el mismo arreglo que ya arma
@@ -117,6 +118,7 @@ function abrirModalRegistroManual(items, onGuardar) {
     marcarCambioPendiente();
     mostrarToast("Sesión registrada");
     revisarFelicitacionMeta(materiaMatriculadaId);
+    sincronizarHorasCompetencias();
 
     cerrar();
     if (onGuardar) onGuardar();
@@ -256,6 +258,7 @@ function abrirModalEditarSesion(sesion, refrescar) {
     marcarCambioPendiente();
     revisarFelicitacionMeta(sesion.materia_matriculada_id);
     mostrarToast("Sesión actualizada");
+    sincronizarHorasCompetencias();
 
     cerrar();
     if (refrescar) refrescar();
@@ -290,6 +293,7 @@ function eliminarSesion(sesion, refrescar) {
       estado.datos._eliminados_sesiones_estudio.push({ id: sesion.id, eliminadoEn: Date.now() });
       marcarCambioPendiente();
       mostrarToast("Sesión borrada");
+      sincronizarHorasCompetencias();
       if (refrescar) refrescar();
     },
   });

@@ -1,47 +1,32 @@
 /* =========================================================================
-   TIEMPO DE ESTUDIO — Competencias (Parte 1)
+   TIEMPO DE ESTUDIO — Competencias (Parte 1 + Parte 2)
    -------------------------------------------------------------------------
-   Una "competencia" es un grupo de horas-de-estudio compartido entre
-   varias personas (no necesariamente "amigos" en el sentido de Drive) —
-   vive del lado del Worker (`worker-notificaciones-agenda`), NO en el
-   Drive de cada usuario. Esta app es la que crea/consulta esa competencia
-   vía HTTP; lo único que persiste localmente (y sincroniza por Drive,
-   como el resto de estado.datos) es la LISTA de a qué competencias este
-   usuario está unido — ver `competencias_unidas` en core/schema.js.
+   2026-09-09: contrato reescrito de cero contra el Worker REAL
+   (worker-notificaciones-agenda/src/index.js, "Competencias — Parte 4/4
+   del spec de Tiempo de Estudio", ya desplegado con 3 tablas D1 y cron de
+   cierre semanal) — la versión anterior de este archivo había ADIVINADO
+   un contrato distinto (POST /competencias/crear con Bearer token) antes
+   de que el Worker existiera. Diferencias clave con lo adivinado:
+     - Sin Authorization: Bearer — el Worker no valida el access_token de
+       Google en absoluto, solo el Origin (CORS gate). La "identidad" que
+       usa para todo es `identificador_usuario` (el correo de Google,
+       `estado.datos.perfil.correo`) viajando en el BODY de cada request.
+     - Rutas y campos en snake_case tal cual la tabla D1: `token_creador`,
+       `participante_id`, `horas_semana_actual`, `offset_minutos_utc`.
+     - POST /competencias/:id/unirse NO devuelve `nombre` — hay que pedirlo
+       aparte con GET /competencias/:id.
+     - Una competencia es sobre horas TOTALES de la semana (todas las
+       materias juntas), no una materia puntual — ver
+       `sincronizarHorasCompetencias()` más abajo.
+     - El corte semanal lo cierra el propio Worker con un cron por hora,
+       anclado a la hora local del CREADOR (`offset_minutos_utc` que se
+       manda al crear) — el cliente nunca resetea nada, solo lee/escribe
+       `horas_semana_actual` tal cual está en cada momento.
 
-   ALCANCE DE ESTA PARTE (1/2): crear una competencia, unirse a una vía
-   link/código, ver la lista de las que ya te uniste, copiar el link de
-   invitación. Lo que queda para la Parte 2: la tabla de posiciones en sí
-   (GET horas normalizadas por semana de cada participante) y el envío
-   periódico de horas trabajadas (POST /competencias/:id/actualizar-horas,
-   que dispararía cada vez que se guarda una sesión — mismo punto donde hoy
-   se llama revisarFelicitacionMeta() en tiempo-estudio-timer.js/
-   tiempo-estudio-registro.js).
-
-   ⚠️ CONTRATO CON EL WORKER — TODAVÍA NO EXISTE DEL LADO SERVIDOR:
-   `worker-notificaciones-agenda` hoy (ver core/auth.js) solo tiene
-   `/oauth/exchange` y `/oauth/refresh`. Las 2 rutas que este archivo
-   necesita son nuevas y hay que agregarlas en ESE proyecto (repo aparte,
-   no incluido acá) antes de que "Crear"/"Unirse" funcionen de verdad:
-
-   POST /competencias/crear
-     body:     { nombre, apodo, correo }
-     response: { id, tokenCreador, participanteId }
-     201 si se creó bien. `tokenCreador` es un secreto de un solo uso que
-     el cliente guarda en localStorage (nunca en estado.datos — ver
-     comentario de competencias_unidas en schema.js) para poder borrar la
-     competencia entera más adelante (Parte 2).
-
-   POST /competencias/:id/unirse
-     body:     { apodo, correo }
-     response: { participanteId, nombre }
-     200 si se unió bien, 404 si el id no existe. `nombre` en la respuesta
-     es el nombre real de la competencia (el que puso quien la creó) — el
-     cliente nunca lo inventa, lo pide.
-
-   Ambas rutas van con header `Authorization: Bearer <estado.token>` —
-   mismo access_token de Google que ya usa el resto de la app (no hace
-   falta un login separado); el Worker lo valida contra la misma cuenta.
+   Sigue siendo Parte 1 (crear/unirse/ver lista/copiar invitación/salir) +
+   ahora también Parte 2 (marcador en vivo vía GET, salón de la fama vía
+   GET /historial, y el envío de horas vía POST /actualizar-horas después
+   de cada sesión).
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
@@ -50,19 +35,15 @@ import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { URL_WORKER_OAUTH } from "../core/auth.js";
 import { mostrarToast, abrirConfirmacion } from "../ui/componentes.js";
 import { copiarAlPortapapelesBlindado, abrirModalCopiaManualPortapapeles } from "../core/clipboard.js";
+import { calcularMinutosTotalesEnRango, obtenerRangoSemana } from "./tiempo-estudio-estadisticas.js";
 
 const TIMEOUT_MS = 12000;
 const CLAVE_TOKEN_CREADOR_PREFIJO = "tokenCreadorCompetencia_"; // + id, ver nota en schema.js
 
-/**
- * Mismo blindaje de timeout que ya usa core/auth.js (`fetchConTimeout`,
- * privada allá) — un `fetch()` sin timeout que se cuelga deja a la persona
- * mirando un botón "Creando..." para siempre si el Worker no responde. Se
- * duplica acá en vez de importar la versión privada de auth.js (no está
- * exportada, y agregarla a su export list para una sola función interna no
- * vale la pena — mismo criterio que URL_WORKER_OAUTH, que si se exportó,
- * porque a esa sí la necesitan 2 archivos distintos con el mismo literal).
- */
+/** Mismo blindaje de timeout que ya usa core/auth.js (`fetchConTimeout`,
+ * privada allá) — se duplica acá por el mismo motivo que URL_WORKER_OAUTH
+ * se exportó: no vale la pena tocar el export list de auth.js por una
+ * función interna de 10 líneas. */
 async function fetchConTimeout(url, opciones = {}) {
   const controlador = new AbortController();
   const idTimeout = setTimeout(() => controlador.abort(), TIMEOUT_MS);
@@ -78,15 +59,42 @@ async function fetchConTimeout(url, opciones = {}) {
   }
 }
 
-function guardarTokenCreador(competenciaId, token) {
+/**
+ * El Worker espera `offset_minutos_utc` = local menos UTC en minutos
+ * (offset > 0 = adelantado respecto a UTC — ver calcularUltimoLunesLocalUtcMs
+ * en index.js). `Date.prototype.getTimezoneOffset()` de JS usa la
+ * convención EXACTAMENTE opuesta (UTC menos local), de ahí el signo
+ * invertido acá.
+ */
+function obtenerOffsetMinutosUtc() {
+  return -new Date().getTimezoneOffset();
+}
+
+function formatearHoras(horas) {
+  const totalMin = Math.max(0, Math.round((Number(horas) || 0) * 60));
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h > 0 && m > 0) return `${h} h ${m} min`;
+  if (h > 0) return `${h} h`;
+  return `${m} min`;
+}
+
+function guardarTokenCreador(competenciaId, tokenCreador) {
   try {
-    localStorage.setItem(CLAVE_TOKEN_CREADOR_PREFIJO + competenciaId, token);
+    localStorage.setItem(CLAVE_TOKEN_CREADOR_PREFIJO + competenciaId, tokenCreador);
   } catch (e) {
     // localStorage puede fallar en modo privado agresivo de algunos
-    // navegadores — no es crítico para Parte 1 (solo afecta poder borrar
-    // la competencia más adelante, Parte 2), así que no se interrumpe el
-    // flujo de creación por esto.
+    // navegadores — no crítico para poder participar, solo afecta poder
+    // borrar la competencia entera más adelante desde ESTE dispositivo.
     console.warn("[competencias] No se pudo guardar el token de creador:", e);
+  }
+}
+
+function leerTokenCreador(competenciaId) {
+  try {
+    return localStorage.getItem(CLAVE_TOKEN_CREADOR_PREFIJO + competenciaId);
+  } catch (e) {
+    return null;
   }
 }
 
@@ -98,10 +106,7 @@ function construirLinkInvitacion(competenciaId) {
   return url.toString();
 }
 
-/**
- * Acepta tanto un link completo (con "?comp=<id>") como el id pelado —
- * la persona puede pegar cualquiera de los dos en el modal de "Unirse".
- */
+/** Acepta tanto un link completo (con "?comp=<id>") como el id pelado. */
 function extraerIdCompetenciaDeTexto(texto) {
   const limpio = String(texto || "").trim();
   if (!limpio) return null;
@@ -110,51 +115,140 @@ function extraerIdCompetenciaDeTexto(texto) {
     const id = url.searchParams.get("comp");
     if (id) return id;
   } catch (e) {
-    // no era una URL válida — se interpreta como id pelado, sigue abajo
+    // no era una URL válida — se interpreta como id pelado
   }
   return limpio;
 }
 
-/**
- * Copia el link de invitación con el mismo blindaje de 2 capas que ya usa
- * el flujo "Enviar a Claude" (core/clipboard.js): si falla la copia
- * automática por cualquier motivo, abre el modal de copia manual en vez
- * de dejar a la persona sin ninguna pista.
- */
 async function copiarLinkInvitacion(competencia) {
   const link = construirLinkInvitacion(competencia.id);
   const exito = await copiarAlPortapapelesBlindado(link);
-  if (exito) {
-    mostrarToast("✓ Link de invitación copiado");
-  } else {
-    abrirModalCopiaManualPortapapeles(link);
-  }
+  if (exito) mostrarToast("✓ Link de invitación copiado");
+  else abrirModalCopiaManualPortapapeles(link);
 }
 
 /**
- * Deja de ver esta competencia en ESTE dispositivo (y, tras sincronizar,
- * en todos los del usuario) — NO borra la competencia del lado del Worker
- * ni afecta a los demás participantes. Borrar la competencia entera es
- * Parte 2 (necesita el tokenCreador y solo lo puede hacer quien la creó).
+ * Envía a cada competencia unida el total de horas estudiadas ESTA semana
+ * (todas las materias juntas — una competencia es sobre horas totales,
+ * no una materia puntual, ver `calcularMinutosTotalesEnRango` en
+ * tiempo-estudio-estadisticas.js). Llamar después de crear, editar o
+ * borrar cualquier sesión — ver los 6 puntos que la llaman en
+ * tiempo-estudio-timer.js y tiempo-estudio-registro.js.
+ *
+ * Best-effort A PROPÓSITO (mismo criterio que documenta el propio Worker
+ * en `manejarActualizarHoras`): nunca bloquea al usuario ni muestra un
+ * error si falla, y manda el TOTAL recalculado (no un delta) — así, si
+ * una llamada se pierde por un corte de red puntual, la siguiente sesión
+ * guardada autocorrige el número sola, sin necesidad de reintentar acá.
  */
+async function sincronizarHorasCompetencias() {
+  const competencias = estado.datos.competencias_unidas;
+  if (!competencias || competencias.length === 0) return;
+
+  const { inicio, fin } = obtenerRangoSemana(0);
+  const horas = calcularMinutosTotalesEnRango(inicio, fin) / 60;
+  const identificador_usuario = estado.datos.perfil.correo;
+
+  await Promise.all(
+    competencias.map(async (competencia) => {
+      try {
+        const respuesta = await fetchConTimeout(
+          `${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}/actualizar-horas`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ identificador_usuario, horas_semana_actual: horas }),
+          }
+        );
+        if (!respuesta.ok) {
+          console.warn(`[competencias] actualizar-horas respondió ${respuesta.status} para "${competencia.nombre}" — se autocorrige con la próxima sesión.`);
+        }
+      } catch (e) {
+        console.warn(`[competencias] Falló actualizar-horas para "${competencia.nombre}" — se autocorrige con la próxima sesión:`, e);
+      }
+    })
+  );
+}
+
 function salirDeCompetencia(competencia, refrescar) {
   abrirConfirmacion({
-    titulo: "Dejar de ver esta competencia",
+    titulo: "Salir de la competencia",
     mensaje: competencia.es_creador
-      ? `¿Dejar de ver "${competencia.nombre}" en este dispositivo? Vos la creaste — esto NO la borra para los demás participantes, solo deja de aparecer acá.`
-      : `¿Dejar de ver "${competencia.nombre}" en este dispositivo? Podés volver a unirte más tarde con el mismo link.`,
-    textoConfirmar: "Dejar de ver",
+      ? `¿Salir de "${competencia.nombre}"? Vos la creaste — esto NO la borra para los demás participantes, solo te saca a vos. Si querés borrarla entera para todos, usá "Borrar para todos".`
+      : `¿Salir de "${competencia.nombre}"? Podés volver a unirte más tarde con el mismo link.`,
+    textoConfirmar: "Salir",
     claseConfirmar: "btn-danger",
-    onConfirmar: () => {
+    onConfirmar: async () => {
+      try {
+        const respuesta = await fetchConTimeout(
+          `${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}/participantes/${encodeURIComponent(competencia.participante_id)}`,
+          {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ identificador_usuario: estado.datos.perfil.correo }),
+          }
+        );
+        if (!respuesta.ok && respuesta.status !== 404) {
+          // 404 = el Worker ya no lo tiene como participante por lo que
+          // sea (ej. ya se había salido desde otro dispositivo) — igual
+          // se saca de la lista local, no tiene sentido bloquear por eso.
+          throw new Error(`El Worker respondió ${respuesta.status}`);
+        }
+      } catch (e) {
+        console.warn("[competencias] No se pudo avisarle al Worker de la salida (se saca igual de la lista local):", e);
+      }
+
       const idx = estado.datos.competencias_unidas.findIndex((c) => c.id === competencia.id);
       if (idx !== -1) estado.datos.competencias_unidas.splice(idx, 1);
       // Tumba (regla obligatoria de sync, ver MAPA_FUNCIONES.md "Borrado =
-      // tumba" — y el bug de 2026-09-08 en tiempo-estudio-registro.js que
-      // costó un round de debugging entero por empujar el id pelado en vez
-      // de este objeto: {id, eliminadoEn} es la forma correcta, siempre).
+      // tumba"): {id, eliminadoEn}, nunca el id pelado (ver el bug de
+      // 2026-09-08 en tiempo-estudio-registro.js).
       estado.datos._eliminados_competencias_unidas.push({ id: competencia.id, eliminadoEn: Date.now() });
       marcarCambioPendiente();
-      mostrarToast("Competencia ocultada");
+      mostrarToast("Saliste de la competencia");
+      if (refrescar) refrescar();
+    },
+  });
+}
+
+/**
+ * Solo para `es_creador` — borra la competencia ENTERA del lado del
+ * Worker (todos los participantes, todo el historial) usando el
+ * `token_creador` guardado en localStorage. Si ese token se perdió en
+ * este dispositivo (ej. se limpió el storage del navegador), no hay forma
+ * de recuperarlo — el Worker nunca lo vuelve a exponer después de crearla.
+ */
+function borrarCompetenciaEntera(competencia, refrescar) {
+  const tokenCreador = leerTokenCreador(competencia.id);
+  if (!tokenCreador) {
+    mostrarToast("No se encontró el permiso de borrado en este dispositivo — probá salir en vez de borrar.");
+    return;
+  }
+
+  abrirConfirmacion({
+    titulo: "Borrar competencia para todos",
+    mensaje: `¿Borrar "${competencia.nombre}" para TODOS los participantes? Se pierde el historial de ganadores. No se puede deshacer.`,
+    textoConfirmar: "Borrar para todos",
+    claseConfirmar: "btn-danger",
+    onConfirmar: async () => {
+      try {
+        const respuesta = await fetchConTimeout(`${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token_creador: tokenCreador }),
+        });
+        if (!respuesta.ok && respuesta.status !== 404) throw new Error(`El Worker respondió ${respuesta.status}`);
+      } catch (e) {
+        console.error("[competencias] Falló borrar la competencia:", e);
+        mostrarToast("No se pudo borrar la competencia. Revisá tu conexión e intentá de nuevo.");
+        return;
+      }
+
+      const idx = estado.datos.competencias_unidas.findIndex((c) => c.id === competencia.id);
+      if (idx !== -1) estado.datos.competencias_unidas.splice(idx, 1);
+      estado.datos._eliminados_competencias_unidas.push({ id: competencia.id, eliminadoEn: Date.now() });
+      marcarCambioPendiente();
+      mostrarToast("Competencia borrada");
       if (refrescar) refrescar();
     },
   });
@@ -171,7 +265,6 @@ function construirCajaModal() {
   caja.className = "glass-card modal-card stack";
   caja.style.cssText = "max-width:440px; width:100%; max-height:85vh; overflow-y:auto; gap:16px;";
   caja.addEventListener("click", (e) => e.stopPropagation());
-
   overlay.appendChild(caja);
 
   function cerrar() {
@@ -184,11 +277,7 @@ function construirCajaModal() {
   return { overlay, caja, cerrar };
 }
 
-/**
- * Modal "Crear competencia": nombre + tu apodo → POST /competencias/crear.
- * Al terminar bien, ofrece copiar el link de invitación de una — no tiene
- * sentido crear una competencia y no invitar a nadie.
- */
+/** Modal "Crear competencia": nombre + apodo → POST /competencias. */
 function abrirModalCrearCompetencia(refrescar) {
   const { overlay, caja, cerrar } = construirCajaModal();
 
@@ -196,8 +285,8 @@ function abrirModalCrearCompetencia(refrescar) {
     <div>
       <h2 style="margin:0;">Crear competencia</h2>
       <p class="muted" style="margin:4px 0 0; font-size:0.85rem;">
-        Vos y quien invites compiten por horas de estudio. Podés invitar
-        gente después copiando el link.
+        Vos y quien invites compiten por horas de estudio de la semana.
+        Podés invitar gente después copiando el link.
       </p>
     </div>
     <div>
@@ -229,32 +318,35 @@ function abrirModalCrearCompetencia(refrescar) {
     btnGuardar.disabled = true;
     btnGuardar.textContent = "Creando…";
     try {
-      const respuesta = await fetchConTimeout(`${URL_WORKER_OAUTH}/competencias/crear`, {
+      const respuesta = await fetchConTimeout(`${URL_WORKER_OAUTH}/competencias`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${estado.token}`,
-        },
-        body: JSON.stringify({ nombre, apodo, correo: estado.datos.perfil.correo }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre,
+          apodo,
+          identificador_usuario: estado.datos.perfil.correo,
+          offset_minutos_utc: obtenerOffsetMinutosUtc(),
+        }),
       });
       if (!respuesta.ok) throw new Error(`El Worker respondió ${respuesta.status}`);
-      const datos = await respuesta.json();
+      const datos = await respuesta.json(); // { id, token_creador, participante_id }
 
       const entrada = sellarTimestamp({
         id: datos.id,
-        participante_id: datos.participanteId,
+        participante_id: datos.participante_id,
         apodo,
         nombre,
         es_creador: true,
       });
       estado.datos.competencias_unidas.push(entrada);
-      guardarTokenCreador(datos.id, datos.tokenCreador);
+      guardarTokenCreador(datos.id, datos.token_creador);
       marcarCambioPendiente();
 
       cerrar();
       mostrarToast("✓ Competencia creada");
       if (refrescar) refrescar();
       copiarLinkInvitacion(entrada);
+      sincronizarHorasCompetencias(); // por si ya venía estudiando esta semana antes de crearla
     } catch (e) {
       console.error("[competencias] Falló crear competencia:", e);
       mostrarToast("No se pudo crear la competencia. Revisá tu conexión e intentá de nuevo.");
@@ -265,9 +357,10 @@ function abrirModalCrearCompetencia(refrescar) {
 }
 
 /**
- * Modal "Unirse a competencia": pega un link (o el id pelado) + tu apodo
- * → POST /competencias/:id/unirse. El nombre de la competencia lo devuelve
- * el Worker — nunca se inventa del lado del cliente.
+ * Modal "Unirse a competencia": pega un link (o el id pelado) + apodo →
+ * POST /competencias/:id/unirse. Esa respuesta NO trae el nombre (ver
+ * contrato real arriba) — se pide aparte con un GET antes de cerrar el
+ * modal, así la tarjeta ya aparece con el nombre real desde el vamos.
  */
 function abrirModalUnirseCompetencia(refrescar) {
   const { overlay, caja, cerrar } = construirCajaModal();
@@ -275,9 +368,7 @@ function abrirModalUnirseCompetencia(refrescar) {
   caja.innerHTML = `
     <div>
       <h2 style="margin:0;">Unirse a una competencia</h2>
-      <p class="muted" style="margin:4px 0 0; font-size:0.85rem;">
-        Pegá el link (o el código) que te compartieron.
-      </p>
+      <p class="muted" style="margin:4px 0 0; font-size:0.85rem;">Pegá el link (o el código) que te compartieron.</p>
     </div>
     <div>
       <span class="form-label">Link o código de invitación</span>
@@ -312,32 +403,41 @@ function abrirModalUnirseCompetencia(refrescar) {
     btnGuardar.disabled = true;
     btnGuardar.textContent = "Uniéndote…";
     try {
-      const respuesta = await fetchConTimeout(`${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(idCompetencia)}/unirse`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${estado.token}`,
-        },
-        body: JSON.stringify({ apodo, correo: estado.datos.perfil.correo }),
-      });
-      if (respuesta.status === 404) throw new Error("Esa competencia no existe (¿el link está completo?)");
-      if (!respuesta.ok) throw new Error(`El Worker respondió ${respuesta.status}`);
-      const datos = await respuesta.json();
+      const respuestaUnirse = await fetchConTimeout(
+        `${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(idCompetencia)}/unirse`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            apodo,
+            identificador_usuario: estado.datos.perfil.correo,
+            offset_minutos_utc: obtenerOffsetMinutosUtc(),
+          }),
+        }
+      );
+      if (respuestaUnirse.status === 404) throw new Error("Esa competencia no existe (¿el link está completo?)");
+      if (respuestaUnirse.status === 409) throw new Error("Ya sos parte de esta competencia (desde otro dispositivo).");
+      if (!respuestaUnirse.ok) throw new Error(`El Worker respondió ${respuestaUnirse.status}`);
+      const { participante_id } = await respuestaUnirse.json();
+
+      // El nombre real no vino en la respuesta de /unirse — se pide aparte.
+      let nombre = "(competencia)";
+      try {
+        const respuestaGet = await fetchConTimeout(`${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(idCompetencia)}`);
+        if (respuestaGet.ok) nombre = (await respuestaGet.json()).nombre;
+      } catch (e) {
+        console.warn("[competencias] Te uniste bien pero no se pudo traer el nombre todavía:", e);
+      }
 
       estado.datos.competencias_unidas.push(
-        sellarTimestamp({
-          id: idCompetencia,
-          participante_id: datos.participanteId,
-          apodo,
-          nombre: datos.nombre,
-          es_creador: false,
-        })
+        sellarTimestamp({ id: idCompetencia, participante_id, apodo, nombre, es_creador: false })
       );
       marcarCambioPendiente();
 
       cerrar();
-      mostrarToast(`✓ Te uniste a "${datos.nombre}"`);
+      mostrarToast(`✓ Te uniste a "${nombre}"`);
       if (refrescar) refrescar();
+      sincronizarHorasCompetencias(); // por si ya venía estudiando esta semana antes de unirse
     } catch (e) {
       console.error("[competencias] Falló unirse a competencia:", e);
       mostrarToast(e.message || "No se pudo unir a la competencia.");
@@ -345,6 +445,71 @@ function abrirModalUnirseCompetencia(refrescar) {
       btnGuardar.textContent = "Unirme";
     }
   });
+}
+
+/** Modal "Salón de la fama": GET /competencias/:id/historial. */
+async function abrirModalHistorial(competencia) {
+  const { overlay, caja, cerrar } = construirCajaModal();
+  caja.innerHTML = `
+    <div>
+      <h2 style="margin:0;">🏆 Historial — ${competencia.nombre}</h2>
+      <p class="muted" style="margin:4px 0 0; font-size:0.85rem;">Ganador de cada semana cerrada, más reciente primero.</p>
+    </div>
+    <div id="comp-historial-lista" class="stack" style="gap:8px;"><p class="muted">Cargando…</p></div>
+    <button type="button" class="btn btn-secondary" id="comp-historial-cerrar">Cerrar</button>
+  `;
+  document.body.appendChild(overlay);
+  caja.querySelector("#comp-historial-cerrar").addEventListener("click", cerrar);
+
+  const cont = caja.querySelector("#comp-historial-lista");
+  try {
+    const respuesta = await fetchConTimeout(`${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}/historial`);
+    if (!respuesta.ok) throw new Error(`El Worker respondió ${respuesta.status}`);
+    const { historial } = await respuesta.json();
+    cont.innerHTML = "";
+    if (!historial || historial.length === 0) {
+      cont.innerHTML = `<p class="muted">Todavía no se cerró ninguna semana.</p>`;
+      return;
+    }
+    historial.forEach((fila) => {
+      const item = document.createElement("div");
+      item.className = "row-between";
+      const fecha = new Date(fila.semana_cerrada_en).toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric" });
+      item.innerHTML = `<span>🏆 ${fila.apodo}</span><span class="muted" style="font-size:0.85rem;">${formatearHoras(fila.horas)} · ${fecha}</span>`;
+      cont.appendChild(item);
+    });
+  } catch (e) {
+    console.error("[competencias] Falló cargar el historial:", e);
+    cont.innerHTML = `<p class="muted">No se pudo cargar el historial. Revisá tu conexión.</p>`;
+  }
+}
+
+/**
+ * Carga el marcador en vivo (GET /competencias/:id) DENTRO de la tarjeta
+ * ya pintada — se llama después de armar el DOM sincrónico de cada
+ * tarjeta, para no bloquear el render de toda la lista esperando a las N
+ * competencias a la vez (cada una carga a su propio ritmo).
+ */
+async function cargarMarcadorEnTarjeta(competencia, contMarcador) {
+  try {
+    const respuesta = await fetchConTimeout(`${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}`);
+    if (!respuesta.ok) throw new Error(`El Worker respondió ${respuesta.status}`);
+    const datos = await respuesta.json(); // { id, nombre, participantes: [{id, apodo, horas_semana_actual}] }
+
+    contMarcador.innerHTML = "";
+    (datos.participantes || []).forEach((p, i) => {
+      const esYo = p.id === competencia.participante_id;
+      const fila = document.createElement("div");
+      fila.className = "row-between";
+      fila.style.cssText = `padding:4px 0;${esYo ? " font-weight:600;" : ""}`;
+      const medalla = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
+      fila.innerHTML = `<span>${medalla} ${p.apodo}${esYo ? " (vos)" : ""}</span><span>${formatearHoras(p.horas_semana_actual)}</span>`;
+      contMarcador.appendChild(fila);
+    });
+  } catch (e) {
+    console.error("[competencias] Falló cargar el marcador:", e);
+    contMarcador.innerHTML = `<p class="muted" style="margin:0; font-size:0.82rem;">No se pudo cargar el marcador. Revisá tu conexión.</p>`;
+  }
 }
 
 /**
@@ -395,7 +560,7 @@ function construirVistaCompetencias(cont, refrescar) {
   competencias.forEach((competencia) => {
     const tarjeta = document.createElement("div");
     tarjeta.className = "glass-card";
-    tarjeta.style.cssText = "padding:14px 16px; display:flex; flex-direction:column; gap:8px;";
+    tarjeta.style.cssText = "padding:14px 16px; display:flex; flex-direction:column; gap:10px;";
 
     const fila = document.createElement("div");
     fila.className = "row-between";
@@ -408,32 +573,58 @@ function construirVistaCompetencias(cont, refrescar) {
     `;
     tarjeta.appendChild(fila);
 
-    // Tabla de posiciones en sí — Parte 2 (necesita GET al Worker con las
-    // horas normalizadas de cada participante). Por ahora la tarjeta solo
-    // confirma que estás adentro y deja copiar/salir.
+    const contMarcador = document.createElement("div");
+    contMarcador.className = "stack";
+    contMarcador.style.cssText = "gap:2px; border-top:1px solid var(--borde-sutil, rgba(255,255,255,0.08)); padding-top:8px;";
+    contMarcador.innerHTML = `<p class="muted" style="margin:0; font-size:0.82rem;">Cargando marcador…</p>`;
+    tarjeta.appendChild(contMarcador);
+    cargarMarcadorEnTarjeta(competencia, contMarcador);
+
     const filaBotones = document.createElement("div");
-    filaBotones.style.cssText = "display:flex; gap:8px;";
+    filaBotones.style.cssText = "display:flex; gap:8px; flex-wrap:wrap;";
+
     const btnCopiar = document.createElement("button");
     btnCopiar.type = "button";
     btnCopiar.className = "btn btn-secondary";
     btnCopiar.style.flex = "1";
     btnCopiar.textContent = "Copiar invitación";
     btnCopiar.addEventListener("click", () => copiarLinkInvitacion(competencia));
+    filaBotones.appendChild(btnCopiar);
+
+    const btnHistorial = document.createElement("button");
+    btnHistorial.type = "button";
+    btnHistorial.className = "te-btn-icono te-btn-icono-fantasma";
+    btnHistorial.title = "Ver historial de ganadores";
+    btnHistorial.setAttribute("aria-label", "Ver historial de ganadores");
+    btnHistorial.textContent = "🏆";
+    btnHistorial.addEventListener("click", () => abrirModalHistorial(competencia));
+    filaBotones.appendChild(btnHistorial);
+
+    if (competencia.es_creador) {
+      const btnBorrar = document.createElement("button");
+      btnBorrar.type = "button";
+      btnBorrar.className = "te-btn-icono te-btn-icono-fantasma";
+      btnBorrar.title = "Borrar para todos";
+      btnBorrar.setAttribute("aria-label", "Borrar competencia para todos");
+      btnBorrar.textContent = "💥";
+      btnBorrar.addEventListener("click", () => borrarCompetenciaEntera(competencia, refrescar));
+      filaBotones.appendChild(btnBorrar);
+    }
+
     const btnSalir = document.createElement("button");
     btnSalir.type = "button";
     btnSalir.className = "te-btn-icono te-btn-icono-fantasma";
-    btnSalir.title = "Dejar de ver";
-    btnSalir.setAttribute("aria-label", "Dejar de ver esta competencia");
-    btnSalir.textContent = "🗑️";
+    btnSalir.title = "Salir";
+    btnSalir.setAttribute("aria-label", "Salir de esta competencia");
+    btnSalir.textContent = "🚪";
     btnSalir.addEventListener("click", () => salirDeCompetencia(competencia, refrescar));
-    filaBotones.appendChild(btnCopiar);
     filaBotones.appendChild(btnSalir);
-    tarjeta.appendChild(filaBotones);
 
+    tarjeta.appendChild(filaBotones);
     lista.appendChild(tarjeta);
   });
 
   cont.appendChild(lista);
 }
 
-export { construirVistaCompetencias };
+export { construirVistaCompetencias, sincronizarHorasCompetencias };
