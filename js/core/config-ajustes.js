@@ -4,7 +4,6 @@
    plan/universidad, formato de texto.
    ========================================================================= */
 
-import { inicializarBotonGoogleTasksBuscar } from "../agenda/agenda-google-tasks-ui.js";
 import { ESCALAS_DISPONIBLES, FRECUENCIAS_BACKUP_DRIVE, MONEDAS_DISPONIBLES, OFFSETS_RECORDATORIO_AGENDA, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, crearBackupDriveDefault, migrarDatosAntiguos, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
 import { actualizarIndicadorSync, forzarBackupManual, marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
@@ -185,125 +184,18 @@ function inicializarBandejaVozAjustes() {
 }
 
 /**
- * Google Tasks (2026-08-23): switch opt-in + selector de lista. A
- * diferencia del resto de switches simples de esta pantalla, activar este
- * SÍ requiere una acción de red bloqueante (pedir el permiso de Google y
- * traer las listas) antes de poder dejar el switch prendido de verdad — si
- * cualquiera de los dos pasos falla, el switch se revierte y se muestra el
- * motivo en `error-google-tasks`, nunca se deja "activado" a medias sin
- * lista_id.
+ * 2026-09-10: Google Tasks se descartó por completo del proyecto (daba
+ * demasiados problemas) — el HTML del switch/selector ya se había sacado
+ * de index.html, pero esta función y el import estático de
+ * agenda-google-tasks-ui.js (arriba del archivo) se habían quedado atrás,
+ * causando un crash al cargar la página entera:
+ * "agenda-google-tasks.js: does not provide an export named
+ * 'haySesionGoogleTasksEnMemoria'" — ese archivo (y su -ui.js) quedaron
+ * desactualizados contra auth.js y ya no se importan desde acá para nada.
+ * Si el HTML ya no tiene esos ids, el `if (!chk || ...) return;` de más
+ * abajo hacía que la función en sí fuera inofensiva — el crash real venía
+ * pura y exclusivamente del import estático de arriba, no de este cuerpo.
  */
-function inicializarGoogleTasksAjustes() {
-  const chk = document.getElementById("switch-google-tasks");
-  const bloqueLista = document.getElementById("bloque-google-tasks-lista");
-  const contSelect = document.getElementById("select-google-tasks-lista");
-  const error = document.getElementById("error-google-tasks");
-  if (!chk || !bloqueLista || !contSelect || !error) return;
-
-  const cfg = estado.datos.configuracion.google_tasks_sync || { activo: false, lista_id: null, ids_procesados: [] };
-  estado.datos.configuracion.google_tasks_sync = cfg;
-
-  chk.checked = Boolean(cfg.activo);
-  bloqueLista.classList.toggle("oculto", !cfg.activo);
-  error.classList.add("oculto");
-
-  // FIX (2026-08-23 — "se ve default"): esto era un <select> nativo, por
-  // eso no tomaba los colores del tema a diferencia del resto de
-  // selectores de Ajustes (ver Rango de horas de Horario, unas funciones
-  // más abajo). Ahora arma el mismo componente construirSelectCustomAjustes
-  // que ya usa ese selector — mismo look, mismos colores de acento.
-  let listasCacheadas = [];
-
-  function pintarSelectorListas() {
-    contSelect.innerHTML = "";
-    if (listasCacheadas.length === 0) return;
-    const valorInicial = listasCacheadas.some((l) => l.id === cfg.lista_id) ? cfg.lista_id : listasCacheadas[0].id;
-    cfg.lista_id = valorInicial;
-    contSelect.appendChild(construirSelectCustomAjustes({
-      opciones: listasCacheadas.map((l) => ({ valor: l.id, etiqueta: l.title })),
-      valorInicial,
-      onCambiar: (valor) => {
-        cfg.lista_id = valor;
-        sellarTimestamp(estado.datos.configuracion);
-        marcarCambioPendiente();
-      },
-    }));
-  }
-
-  async function poblarSelectorListas(tokenParaListar) {
-    const { listarListasGoogleTasks } = await import("../agenda/agenda-google-tasks.js");
-    listasCacheadas = await listarListasGoogleTasks(tokenParaListar);
-    // Si ya había una lista elegida de antes (ej. se apagó y se vuelve a
-    // prender el switch) y sigue existiendo, se re-selecciona — evita que
-    // reactivar el switch resetee la elección a la primera lista sin razón.
-    // (La resolución real de cuál valor queda seleccionado vive en
-    // pintarSelectorListas, para no duplicarla acá.)
-    pintarSelectorListas();
-    return listasCacheadas;
-  }
-
-  chk.onchange = async () => {
-    error.classList.add("oculto");
-
-    if (!chk.checked) {
-      cfg.activo = false;
-      bloqueLista.classList.toggle("oculto", true);
-      sellarTimestamp(estado.datos.configuracion);
-      marcarCambioPendiente();
-      return;
-    }
-
-    chk.disabled = true;
-    try {
-      const { pedirAccessTokenGoogleTasks } = await import("../core/auth.js");
-      // interactivo:true — primera vez que se pide ESTE permiso puntual
-      // (aunque el usuario ya haya iniciado sesión con Drive antes), ver
-      // comentario completo en pedirAccessTokenGoogleTasks (auth.js).
-      const token = await pedirAccessTokenGoogleTasks({ interactivo: true });
-      if (!token) {
-        throw new Error("No se otorgó el permiso de Google Tasks.");
-      }
-
-      const listas = await poblarSelectorListas(token);
-      if (listas.length === 0) {
-        throw new Error("Tu cuenta de Google no tiene ninguna lista de Tasks todavía.");
-      }
-
-      cfg.activo = true;
-      bloqueLista.classList.toggle("oculto", false);
-      sellarTimestamp(estado.datos.configuracion);
-      marcarCambioPendiente();
-      mostrarToast("Google Tasks conectado");
-    } catch (e) {
-      console.warn("No se pudo activar Google Tasks:", e);
-      chk.checked = false;
-      cfg.activo = false;
-      bloqueLista.classList.toggle("oculto", true);
-      error.textContent = e.message || "No se pudo conectar con Google Tasks. Intentá de nuevo.";
-      error.classList.remove("oculto");
-    } finally {
-      chk.disabled = false;
-    }
-  };
-
-  // Si el switch ya estaba activo (Ajustes se re-renderiza, o se entra con
-  // la sincronización ya prendida de antes) y todavía no se pobló el
-  // selector en ESTA carga, se trae la lista de nuevo con un token
-  // silencioso — sin esto, el selector quedaría vacío hasta la próxima vez
-  // que el usuario tocara el switch a mano.
-  if (cfg.activo && listasCacheadas.length === 0) {
-    (async () => {
-      try {
-        const { pedirAccessTokenGoogleTasks } = await import("../core/auth.js");
-        const token = await pedirAccessTokenGoogleTasks({ interactivo: false });
-        if (token) await poblarSelectorListas(token);
-      } catch (e) {
-        console.warn("No se pudo refrescar la lista de Google Tasks en Ajustes (no crítico):", e);
-      }
-    })();
-  }
-  inicializarBotonGoogleTasksBuscar();
-}
 
 /**
  * v1.14.1: aplica (o quita) el atributo data-rendimiento en <html>, mismo
@@ -759,6 +651,13 @@ const SECCIONES_TOGGLEABLES = [
   { id: "comunidad", etiqueta: "Comunidad", icono: "👥" },
   { id: "finanzas", etiqueta: "Finanzas", icono: "💰" },
   { id: "plan-estudios", etiqueta: "Plan de Estudios", icono: "📚" },
+  // 2026-09-09 (pedido explícito): Tiempo de Estudio entra al mismo
+  // sistema de mostrar/ocultar/reordenar que el resto del nav — sin gate
+  // de existencia como "asistente" (Gemini), ya existe siempre para
+  // cualquier usuario. `id` confirmado contra main.js/index.html:
+  // coincide exacto con el data-seccion real del botón de nav, y ya
+  // estaba en DEFAULT_ORDEN_NAV de main.js.
+  { id: "tiempo-estudio", etiqueta: "Tiempo de Estudio", icono: "⏱️" },
   { id: "asistente", etiqueta: "Asistente", icono: "✨" },
 ];
 
@@ -1026,7 +925,6 @@ function renderizarAjustes() {
   inicializarAccordionAjustes();
   inicializarAsistenteAjustes();
   inicializarBandejaVozAjustes();
-  inicializarGoogleTasksAjustes();
 
   // Paletas — cada cuadro muestra su propio color real (punto 3)
   const grid = document.getElementById("grid-paletas");
