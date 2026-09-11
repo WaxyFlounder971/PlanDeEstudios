@@ -71,6 +71,25 @@ function obtenerIndiceSemestreVigente(lista) {
   return idx;
 }
 
+/**
+ * Pedido 2026-09-10 ("no se ven las horas estudiadas, se ve la gráfica
+ * vacía"): el picker "Semestre" de una materia puntual arrancaba siempre
+ * en `obtenerIndiceSemestreVigente()` — el semestre vigente por FECHA DE
+ * HOY, sin importar en cuál está matriculada realmente esa materia. Si la
+ * matrícula es de un semestre distinto al vigente (uno viejo, o uno
+ * cargado a futuro), el filtro por fecha no encuentra sus sesiones ahí y
+ * el gráfico arranca en cero — mismo síntoma reportado ("Semestre VI no
+ * trae nada"). Mismo patrón de búsqueda que ya usa `resolverInfoMateria`
+ * (recorrer `estado.datos.semestres` buscando la matrícula por id) para
+ * ubicar el semestre REAL de esta `mm` y devolver su índice dentro de la
+ * lista ORDENADA que ya usa el picker — si no se encuentra (matrícula
+ * borrada, plan eliminado), cae de vuelta al vigente por fecha. */
+function encontrarIndiceSemestreDeMateria(materiaMatriculadaId, listaOrdenada) {
+  const semestrePropio = (estado.datos.semestres || []).find((s) => (s.materias_matriculadas || []).some((m) => m.id === materiaMatriculadaId));
+  if (!semestrePropio) return -1;
+  return listaOrdenada.findIndex((s) => s.id === semestrePropio.id);
+}
+
 /** Busca la materia matriculada en TODOS los semestres (no solo actuales) y
  * resuelve nombre corto + color efectivo — mismo criterio de color que
  * obtenerColorMateria() en tiempo-estudio.js (propio > categoría > default).
@@ -401,7 +420,15 @@ function construirGraficaBarrasDesplazable(puntos, color, anchoMinBarra = 34) {
   const anchoSvg = Math.max(VB_ANCHO, anchoNecesario);
 
   const svg = construirSvgBarras(puntos, color, anchoSvg);
-  svg.style.width = `${anchoSvg}px`;
+  // clave del bug "no ocupa todo el ancho": antes quedaba SIEMPRE fijo en
+  // `anchoSvg`px (incluso si el contenedor real era más ancho, ej.
+  // desktop con pocas semanas todavía), dejando un hueco vacío a la
+  // derecha. width:100% + min-width:anchoSvg → si el contenedor entra
+  // holgado, la gráfica se estira a ocupar todo (mismo comportamiento que
+  // construirGraficaBarras); si no entra, min-width fuerza el overflow
+  // que habilita el scroll horizontal.
+  svg.style.width = "100%";
+  svg.style.minWidth = `${anchoSvg}px`;
   svg.style.flexShrink = "0";
 
   const wrap = document.createElement("div");
@@ -1056,7 +1083,10 @@ function construirSeccionBarrasMateria(cont, mm, color, refrescar) {
   );
 
   const semestres = obtenerTodosLosSemestresOrdenados();
-  if (indiceSemestreBarrasMateria === null) indiceSemestreBarrasMateria = obtenerIndiceSemestreVigente(semestres);
+  if (indiceSemestreBarrasMateria === null) {
+    const idxPropio = encontrarIndiceSemestreDeMateria(mm.id, semestres);
+    indiceSemestreBarrasMateria = idxPropio >= 0 ? idxPropio : obtenerIndiceSemestreVigente(semestres);
+  }
 
   let puntos = [];
 
