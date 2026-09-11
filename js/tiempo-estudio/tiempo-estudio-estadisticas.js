@@ -578,6 +578,40 @@ function etiquetaRangoSemana(lunes) {
 }
 
 /**
+ * Pedido 2026-09-10 ("en general no se ve ni el gráfico vacío ni nada"):
+ * `MAPA_FUNCIONES.md` ya venía con una sospecha sin confirmar de que
+ * `calcularNumeroSemanaParaFecha` (agenda/agenda-clases.js, archivo que
+ * NO tenemos a la vista acá) puede tirar una excepción para cierta
+ * combinación semestre+fecha puntual. Esa función se llama desde ACÁ en
+ * los 4 navegadores de semana (donut y "Tendencia" globales, y las 2
+ * secciones por materia) + ahora también desde el cálculo nuevo de
+ * semanas de "Horas estudiadas". El problema es que `construirVistaEstadisticas`
+ * (la vista GENERAL, agregado de todas las materias) es la única que NO
+ * tiene aislamiento de errores por sección (a diferencia de
+ * `construirEstadisticasMateria`, que desde 2026-09-08 corre cada sección
+ * en su propio try/catch) — si esa función revienta ahí, nada de la vista
+ * general llega a insertarse en el DOM, ni gráfico ni aviso, solo vacío.
+ * Esta envoltura evita que revierta CUALQUIER llamada (acá y en las 2
+ * secciones por materia) — si falla, cae a un cálculo aproximado propio
+ * (días desde `fecha_inicio` / 7, acotado 1..duracion_semanas) en vez de
+ * cortar el render entero. Sumado al try/catch nuevo en
+ * `construirVistaEstadisticas` (ver esa función) como segunda red de
+ * seguridad por si el problema real termina siendo otro, no este.
+ */
+function calcularNumeroSemanaSegura(semestre, fecha) {
+  try {
+    return calcularNumeroSemanaParaFecha(semestre, fecha);
+  } catch (err) {
+    console.error("[tiempo-estudio-estadisticas] calcularNumeroSemanaParaFecha falló, uso fallback aproximado:", err);
+    const inicio = new Date(`${semestre.fecha_inicio}T00:00:00`);
+    const dias = Math.floor((fecha.getTime() - inicio.getTime()) / 86400000);
+    const bruta = Math.floor(dias / 7) + 1;
+    const tope = semestre.duracion_semanas || bruta;
+    return Math.max(1, Math.min(tope, bruta));
+  }
+}
+
+/**
  * Pedido 2026-09-08 (corrige el 2026-09-07: la primera versión usaba
  * semana ISO del año calendario — "Semana 36" — en vez de la semana
  * DENTRO del semestre que ya usan Horario y Agenda). Corregido otra vez
@@ -596,7 +630,7 @@ function etiquetaRangoSemana(lunes) {
  * mismo criterio que ya usa agenda.js en construirSubheaderSemanal.
  */
 function etiquetaSemanaConSubtitulo(lunes, semestre) {
-  const numero = semestre ? calcularNumeroSemanaParaFecha(semestre, lunes) : null;
+  const numero = semestre ? calcularNumeroSemanaSegura(semestre, lunes) : null;
   return {
     titulo: numero ? `Semana ${numero}` : "Semana",
     subtitulo: etiquetaRangoSemana(lunes),
@@ -1170,7 +1204,7 @@ function construirSeccionBarrasMateria(cont, mm, color, refrescar) {
     }
 
     const fechaReferencia = hoy > finSemestre ? finSemestre : hoy;
-    const semanaVigente = calcularNumeroSemanaParaFecha(semestre, fechaReferencia);
+    const semanaVigente = calcularNumeroSemanaSegura(semestre, fechaReferencia);
 
     for (let i = 1; i <= semanaVigente; i++) {
       const inicioSemana = new Date(inicioSemestre.getFullYear(), inicioSemestre.getMonth(), inicioSemestre.getDate() + (i - 1) * 7, 0, 0, 0, 0);
@@ -1326,10 +1360,33 @@ function construirEstadisticasMateria(cont, mm, color, refrescar) {
  * — este archivo no re-renderiza su propio contenido en aislado, deja que
  * el padre reconstruya toda la sección (mismo patrón que ya usa el filtro
  * Todo/Activos en tiempo-estudio.js).
+ *
+ * FIX 2026-09-10 (reporte: "en general no se ve ni el gráfico vacío ni
+ * nada"): a diferencia de `construirEstadisticasMateria` (que desde
+ * 2026-09-08 aísla cada sección en su propio try/catch), esta función
+ * llamaba a las 2 secciones directo — si cualquiera de las 2 tiraba una
+ * excepción, ninguna llegaba a insertarse en `cont` y la vista quedaba
+ * completamente vacía, sin ni siquiera un aviso de error. Mismo criterio
+ * aplicado acá ahora: cada sección corre aislada, y si una falla, la otra
+ * igual se renderiza mientras la que falló muestra un aviso en vez de
+ * dejar todo en blanco sin explicación.
  */
 function construirVistaEstadisticas(cont, refrescar) {
-  construirSeccionDonut(cont, refrescar);
-  construirSeccionBarras(cont, refrescar);
+  const secciones = [
+    ["Horas por proyecto", () => construirSeccionDonut(cont, refrescar)],
+    ["Tendencia", () => construirSeccionBarras(cont, refrescar)],
+  ];
+  secciones.forEach(([nombre, construir]) => {
+    try {
+      construir();
+    } catch (err) {
+      console.error(`[tiempo-estudio-estadisticas] "${nombre}" falló al renderizar:`, err);
+      const aviso = document.createElement("section");
+      aviso.className = "glass-card stack";
+      aviso.innerHTML = `<p class="muted" style="margin:0; font-size:0.82rem;">No se pudo mostrar "${nombre}" (${err.message || "error desconocido"}).</p>`;
+      cont.appendChild(aviso);
+    }
+  });
 }
 
 export { construirVistaEstadisticas, construirEstadisticasMateria, calcularMetaDiariaMateria, calcularMinutosTotalesEnRango, obtenerRangoSemana };
