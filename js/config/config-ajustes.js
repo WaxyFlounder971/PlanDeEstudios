@@ -451,6 +451,7 @@ function renderizarConfigDiasHorario() {
 
       const input = document.createElement("input");
       input.type = "text";
+      input.autocomplete = "off";
       input.className = "form-input";
       input.maxLength = 3;
       input.placeholder = dia.abrevDefault;
@@ -1950,6 +1951,7 @@ function renderizarNotasAprobacion() {
     labelAprobacion.style.cssText = "display:block; font-size:0.75rem; margin-bottom:4px;";
     const inputAprobacion = document.createElement("input");
     inputAprobacion.type = "number";
+    inputAprobacion.autocomplete = "off";
     inputAprobacion.className = "form-input";
     inputAprobacion.style.width = "100%";
 
@@ -2009,6 +2011,7 @@ function renderizarNotasAprobacion() {
     labelRaspando.textContent = "Pasás raspando con";
     const inputRaspando = document.createElement("input");
     inputRaspando.type = "number";
+    inputRaspando.autocomplete = "off";
     inputRaspando.className = "form-input";
     inputRaspando.style.width = "100%";
     bloqueRaspando.appendChild(labelRaspando);
