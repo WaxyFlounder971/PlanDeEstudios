@@ -31,7 +31,7 @@
 
 import { estado } from "../core/storage.js";
 import { sellarTimestamp } from "../core/schema.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
+import { marcarCambioPendiente, intentarSincronizar } from "../core/storage-sync.js";
 import { URL_WORKER_OAUTH } from "../core/auth.js";
 import { mostrarToast, abrirConfirmacion } from "../ui/componentes.js";
 import { copiarAlPortapapelesBlindado, abrirModalCopiaManualPortapapeles } from "../core/clipboard.js";
@@ -140,10 +140,28 @@ async function copiarLinkInvitacion(competencia) {
  * error si falla, y manda el TOTAL recalculado (no un delta) — así, si
  * una llamada se pierde por un corte de red puntual, la siguiente sesión
  * guardada autocorrige el número sola, sin necesidad de reintentar acá.
+ *
+ * FIX 2026-09-11 (bug real: una competencia "perdió" sus horas guardadas
+ * frente a una stakeholder, tras agregar una sesión de 1 minuto): esto
+ * calculaba el total leyendo `estado.datos.sesiones_estudio` de inmediato,
+ * en paralelo a la bajada+fusión que `marcarCambioPendiente()` ya había
+ * disparado un instante antes (siempre se llama justo después, ver los 6
+ * puntos) — sin esperarla. Si el estado local de ESTE dispositivo todavía
+ * no tenía fusionado algo que ya había en Drive (otra sesión de esta
+ * semana, de este u otro dispositivo), el total salía chico y, como el
+ * Worker manda el TOTAL sin comparar contra nada (a propósito, ver arriba),
+ * pisaba el valor real que ya estaba guardado — indistinguible de "se
+ * borró lo que tenía". Ahora se espera a que termine esa sincronización
+ * ANTES de calcular: `intentarSincronizar()` está deduplicada del lado de
+ * storage-sync.js (mismo patrón que `asegurarTokenValido`), así que este
+ * `await` se "sube" a la sincronización que `marcarCambioPendiente()` ya
+ * había arrancado en vez de disparar una segunda en paralelo.
  */
 async function sincronizarHorasCompetencias() {
   const competencias = estado.datos.competencias_unidas;
   if (!competencias || competencias.length === 0) return;
+
+  await intentarSincronizar();
 
   const { inicio, fin } = obtenerRangoSemana(0);
   const horas = calcularMinutosTotalesEnRango(inicio, fin) / 60;
