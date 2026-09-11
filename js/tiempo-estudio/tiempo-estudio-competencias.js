@@ -465,6 +465,158 @@ function abrirModalUnirseCompetencia(refrescar) {
   });
 }
 
+let _yaProcesadoLinkInvitacion = false; // se llama una sola vez desde DOMContentLoaded en main.js
+
+/**
+ * Deep link de invitación: si la URL actual trae "?comp=<id>" (el mismo
+ * link que arma `construirLinkInvitacion`), muestra un modal de
+ * confirmación con el nombre de la competencia y el marcador ANTES de
+ * unirse, en vez de obligar a copiar/pegar el link a mano en el modal
+ * "Unirse a competencia" (`abrirModalUnirseCompetencia`, que sigue
+ * existiendo tal cual para el caso de pegar un código a mano).
+ *
+ * Llamar una sola vez desde el DOMContentLoaded de main.js, DESPUÉS de
+ * que `estado` ya haya terminado de cargar (usa `estado.datos.perfil.correo`
+ * y `estado.datos.competencias_unidas` para no duplicar altas).
+ *
+ * El "comp" se saca de la URL con replaceState apenas se lee, así un F5
+ * posterior no vuelve a abrir el modal ni reintenta unirse solo.
+ */
+async function revisarLinkInvitacionAlCargar(refrescar) {
+  if (_yaProcesadoLinkInvitacion) return;
+  _yaProcesadoLinkInvitacion = true;
+
+  const url = new URL(location.href);
+  const id = url.searchParams.get("comp");
+  if (!id) return;
+
+  url.searchParams.delete("comp");
+  history.replaceState(null, "", url.toString());
+
+  if (estado.datos.competencias_unidas.some((c) => c.id === id)) {
+    mostrarToast("Ya sos parte de esta competencia");
+    return;
+  }
+
+  abrirModalInvitacionRecibida(id, refrescar);
+}
+
+/**
+ * Modal que dispara `revisarLinkInvitacionAlCargar`: GET /competencias/:id
+ * para traer nombre + marcador ANTES de decidir, y recién ahí unirse (mismo
+ * POST /unirse que usa `abrirModalUnirseCompetencia`, con el id ya fijo —
+ * acá no hace falta pegar nada, solo poner el apodo).
+ */
+async function abrirModalInvitacionRecibida(id, refrescar) {
+  const { overlay, caja, cerrar } = construirCajaModal();
+  caja.innerHTML = `
+    <div>
+      <h2 style="margin:0;">Te invitaron a una competencia</h2>
+      <p class="muted" style="margin:4px 0 0; font-size:0.85rem;">Cargando…</p>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  let datos;
+  try {
+    const respuesta = await fetchConTimeout(`${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(id)}`);
+    if (respuesta.status === 404) throw new Error("Esa competencia ya no existe (¿el link venció?)");
+    if (!respuesta.ok) throw new Error(`El Worker respondió ${respuesta.status}`);
+    datos = await respuesta.json(); // { id, nombre, participantes: [{id, apodo, horas_semana_actual}] }
+  } catch (e) {
+    console.error("[competencias] Falló cargar la invitación:", e);
+    caja.innerHTML = `
+      <div>
+        <h2 style="margin:0;">No se pudo abrir la invitación</h2>
+        <p class="muted" style="margin:4px 0 0; font-size:0.85rem;">${e.message || "Revisá tu conexión e intentá de nuevo."}</p>
+      </div>
+      <button type="button" class="btn btn-secondary" id="comp-invitacion-cerrar">Cerrar</button>
+    `;
+    caja.querySelector("#comp-invitacion-cerrar").addEventListener("click", cerrar);
+    return;
+  }
+
+  // Ordenado por horas de esta semana, igual criterio que el marcador de
+  // la tarjeta (`cargarMarcadorEnTarjeta`) — el Worker ya lo devuelve así,
+  // pero se ordena de nuevo acá por las dudas (no depender de ese detalle).
+  const participantes = [...(datos.participantes || [])].sort(
+    (a, b) => (b.horas_semana_actual || 0) - (a.horas_semana_actual || 0)
+  );
+
+  const listaHtml = participantes.length
+    ? participantes
+        .map((p, i) => {
+          const medalla = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
+          return `<div class="row-between" style="padding:3px 0;"><span>${medalla} ${p.apodo}</span><span class="muted" style="font-size:0.85rem;">${formatearHoras(p.horas_semana_actual)}</span></div>`;
+        })
+        .join("")
+    : `<p class="muted" style="margin:0; font-size:0.82rem;">Todavía nadie tiene horas esta semana.</p>`;
+
+  caja.innerHTML = `
+    <div>
+      <h2 style="margin:0;">${datos.nombre}</h2>
+      <p class="muted" style="margin:4px 0 0; font-size:0.85rem;">¿Deseas unirte?</p>
+    </div>
+    <div class="stack" style="gap:2px;">
+      <p class="muted" style="margin:0 0 4px; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.03em;">Miembros actuales</p>
+      ${listaHtml}
+    </div>
+    <div>
+      <span class="form-label">Tu apodo (así te van a ver los demás)</span>
+      <input type="text" id="comp-invitacion-apodo" class="form-input" placeholder="Ej. Wagner" maxlength="30" autocomplete="off">
+    </div>
+    <div class="row-between" style="gap:10px;">
+      <button type="button" class="btn btn-secondary" id="comp-invitacion-cancelar" style="flex:1;">Ahora no</button>
+      <button type="button" class="btn btn-primary" id="comp-invitacion-unirme" style="flex:1;">Unirme</button>
+    </div>
+  `;
+  caja.querySelector("#comp-invitacion-cancelar").addEventListener("click", cerrar);
+
+  const btnUnirme = caja.querySelector("#comp-invitacion-unirme");
+  btnUnirme.addEventListener("click", async () => {
+    const apodo = caja.querySelector("#comp-invitacion-apodo").value.trim();
+    if (!apodo) {
+      mostrarToast("Completá tu apodo");
+      return;
+    }
+
+    btnUnirme.disabled = true;
+    btnUnirme.textContent = "Uniéndote…";
+    try {
+      const respuestaUnirse = await fetchConTimeout(
+        `${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(id)}/unirse`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            apodo,
+            identificador_usuario: estado.datos.perfil.correo,
+            offset_minutos_utc: obtenerOffsetMinutosUtc(),
+          }),
+        }
+      );
+      if (respuestaUnirse.status === 409) throw new Error("Ya sos parte de esta competencia (desde otro dispositivo).");
+      if (!respuestaUnirse.ok) throw new Error(`El Worker respondió ${respuestaUnirse.status}`);
+      const { participante_id } = await respuestaUnirse.json();
+
+      estado.datos.competencias_unidas.push(
+        sellarTimestamp({ id, participante_id, apodo, nombre: datos.nombre, es_creador: false })
+      );
+      marcarCambioPendiente();
+
+      cerrar();
+      mostrarToast(`✓ Te uniste a "${datos.nombre}"`);
+      if (refrescar) refrescar();
+      sincronizarHorasCompetencias(); // por si ya venía estudiando esta semana antes de unirse
+    } catch (e) {
+      console.error("[competencias] Falló unirse desde la invitación:", e);
+      mostrarToast(e.message || "No se pudo unir a la competencia.");
+      btnUnirme.disabled = false;
+      btnUnirme.textContent = "Unirme";
+    }
+  });
+}
+
 /** Modal "Salón de la fama": GET /competencias/:id/historial. */
 async function abrirModalHistorial(competencia) {
   const { overlay, caja, cerrar } = construirCajaModal();
@@ -759,4 +911,4 @@ function construirVistaCompetencias(cont, refrescar) {
   cont.appendChild(lista);
 }
 
-export { construirVistaCompetencias, sincronizarHorasCompetencias };
+export { construirVistaCompetencias, sincronizarHorasCompetencias, revisarLinkInvitacionAlCargar };
