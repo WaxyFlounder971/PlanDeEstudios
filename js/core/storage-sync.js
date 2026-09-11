@@ -1142,9 +1142,41 @@ function marcarCambioPendiente() {
   if (navigator.onLine) intentarSincronizar();
 }
 
+let promesaSincronizacionEnCurso = null;
+
+/**
+ * FIX 2026-09-11 (bug real: una competencia de Tiempo de Estudio "perdió"
+ * sus horas frente a una stakeholder). Causa raíz: `marcarCambioPendiente()`
+ * dispara esto sin esperarlo (fire-and-forget, ver más abajo), y
+ * `sincronizarHorasCompetencias()` (tiempo-estudio-competencias.js) corría
+ * justo después, leyendo `estado.datos.sesiones_estudio` ANTES de que la
+ * bajada+fusión de acá terminara — si el estado local todavía no tenía
+ * fusionado algo que ya había en Drive, el total salía chico y pisaba el
+ * valor real ya guardado (el Worker manda el TOTAL, no un delta, a
+ * propósito, así que no hay nada del lado del servidor que lo evite).
+ *
+ * La solución de fondo es dejar que cualquier llamador pueda hacer
+ * `await intentarSincronizar()` con la garantía de que, cuando resuelve,
+ * `estado.datos` ya tiene fusionado lo último de Drive — pero llamar
+ * ESTA función una segunda vez en paralelo (mientras la de
+ * `marcarCambioPendiente()` sigue en vuelo) arrancaría una SEGUNDA
+ * bajada+fusión+subida corriendo a la vez sobre el mismo `estado.datos`,
+ * con red duplicada. Mismo patrón que ya usa `asegurarTokenValido()`
+ * (`refrescoEnCurso`, más arriba) para el mismo problema con el refresco
+ * de token: si ya hay una sincronización en vuelo, cualquier llamador
+ * nuevo se "sube" a esa MISMA promesa en vez de arrancar una propia.
+ */
 async function intentarSincronizar() {
+  if (promesaSincronizacionEnCurso) return promesaSincronizacionEnCurso;
   if (!estado.pendienteSync || !estado.fileId) return;
 
+  promesaSincronizacionEnCurso = ejecutarUnaSincronizacion().finally(() => {
+    promesaSincronizacionEnCurso = null;
+  });
+  return promesaSincronizacionEnCurso;
+}
+
+async function ejecutarUnaSincronizacion() {
   // v9 (punto 5 — condición de carrera): nunca intentar nada antes de saber
   // si esta carga terminó de resolver si hay o no un token de Drive. Antes
   // era posible que un intento se disparara (ej. desde el setInterval de
