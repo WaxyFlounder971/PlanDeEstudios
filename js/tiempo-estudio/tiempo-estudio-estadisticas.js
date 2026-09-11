@@ -264,16 +264,14 @@ function calcularEscalaAgradable(valorMax) {
  * (pedido 2026-09-07: "el gráfico de barras debe ser del color respectivo
  * de la materia estudiada") — a diferencia del donut, esta gráfica no
  * separa por materia dentro de un mismo corte (ver nota de cabecera). */
-function construirGraficaBarras(puntos, color) {
+/** Núcleo compartido de dibujo: separado de `construirGraficaBarras` para
+ * poder reusarlo también en `construirGraficaBarrasDesplazable` con un
+ * ancho de SVG distinto (mayor al del contenedor) cuando hay demasiados
+ * puntos para caber legibles en el ancho fijo normal — ver esa función
+ * para el porqué (pedido: semanas 1..N de un semestre entero). */
+function construirSvgBarras(puntos, color, anchoSvg) {
   const n = puntos.length;
-  if (n === 0) {
-    const vacio = document.createElement("p");
-    vacio.className = "muted";
-    vacio.style.margin = "0";
-    vacio.textContent = "No hay datos para graficar en este período.";
-    return vacio;
-  }
-  const anchoUtil = VB_ANCHO - MARGEN_IZQ - MARGEN_DER;
+  const anchoUtil = anchoSvg - MARGEN_IZQ - MARGEN_DER;
   const altoUtil = VB_ALTO - MARGEN_SUP - MARGEN_INF;
 
   const valorMaxCrudo = Math.max(0, ...puntos.map((p) => p.minutos));
@@ -284,9 +282,9 @@ function construirGraficaBarras(puntos, color) {
   const anchoBarra = Math.min(38, (anchoUtil / n) * 0.55);
 
   const svg = document.createElementNS(NS, "svg");
-  svg.setAttribute("viewBox", `0 0 ${VB_ANCHO} ${VB_ALTO}`);
+  svg.setAttribute("viewBox", `0 0 ${anchoSvg} ${VB_ALTO}`);
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-  svg.style.cssText = "display:block; width:100%; height:auto;";
+  svg.style.cssText = "display:block; height:auto;";
 
   // ----- Eje Y: líneas guía + etiquetas en pasos redondos -----
   const cantidadPasos = Math.round(valorMax / paso) || 1;
@@ -296,7 +294,7 @@ function construirGraficaBarras(puntos, color) {
 
     const grid = document.createElementNS(NS, "line");
     grid.setAttribute("x1", String(MARGEN_IZQ));
-    grid.setAttribute("x2", String(VB_ANCHO - MARGEN_DER));
+    grid.setAttribute("x2", String(anchoSvg - MARGEN_DER));
     grid.setAttribute("y1", String(yPos));
     grid.setAttribute("y2", String(yPos));
     grid.setAttribute("stroke", "var(--border-glass)");
@@ -339,7 +337,7 @@ function construirGraficaBarras(puntos, color) {
   // ----- Eje X: línea base -----
   const ejeX = document.createElementNS(NS, "line");
   ejeX.setAttribute("x1", String(MARGEN_IZQ));
-  ejeX.setAttribute("x2", String(VB_ANCHO - MARGEN_DER));
+  ejeX.setAttribute("x2", String(anchoSvg - MARGEN_DER));
   ejeX.setAttribute("y1", String(y(0)));
   ejeX.setAttribute("y2", String(y(0)));
   ejeX.setAttribute("stroke", "var(--text-muted)");
@@ -347,6 +345,115 @@ function construirGraficaBarras(puntos, color) {
   svg.appendChild(ejeX);
 
   return svg;
+}
+
+/** `puntos`: [{ etiqueta, minutos }]. Barras de un solo color: violeta
+ * (agregado de todas las materias) en la vista global, o el color propio
+ * de la materia cuando se llama desde las secciones por materia (pedido
+ * 2026-09-07: "el gráfico de barras debe ser del color respectivo de la
+ * materia estudiada") — a diferencia del donut, esta gráfica no separa
+ * por materia dentro de un mismo corte (ver nota de cabecera). Ancho fijo
+ * al 100% del contenedor — usar `construirGraficaBarrasDesplazable` en
+ * vez de esta cuando `puntos` puede crecer mucho (semanas de un semestre
+ * entero) y las barras quedarían demasiado angostas para leerse. */
+function construirGraficaBarras(puntos, color) {
+  if (puntos.length === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.margin = "0";
+    vacio.textContent = "No hay datos para graficar en este período.";
+    return vacio;
+  }
+  const svg = construirSvgBarras(puntos, color, VB_ANCHO);
+  svg.style.width = "100%";
+  return svg;
+}
+
+/**
+ * Pedido 2026-09-10: la vista "Semestre" de una materia puntual pasó de
+ * mostrar meses (ilegible/vacío para reportar progreso real) a mostrar
+ * TODAS las semanas de la 1 a la N (la semana vigente del semestre, o la
+ * última si el semestre ya terminó) — eso puede ser 15-20+ barras, muchas
+ * más de las que entran legibles en el ancho fijo de `construirGraficaBarras`
+ * (pensado para 7 días o ~6 meses). Esta variante reserva un ancho mínimo
+ * por barra (`anchoMinBarra`) y deja que el SVG crezca más allá del ancho
+ * visible: el contenedor scrollea en X, y se agregan 2 botones ‹ › a los
+ * costados (mismo componente visual que ya usa `construirNavegadorPeriodo`,
+ * `.te-btn-icono.te-btn-icono-fantasma`) que:
+ *   - permiten avanzar/retroceder un tramo con un tap (clave en celular,
+ *     donde el gesto de arrastre dentro de una tarjeta puede confundirse
+ *     con el scroll vertical de toda la pantalla), y
+ *   - se ocultan solas apenas no hace falta seguir para ese lado (o de
+ *     entrada, si el semestre tiene pocas semanas y ya entra completo).
+ * Arranca con el scroll llevado al final (la semana más reciente / actual),
+ * que es la parte que más le importa a alguien mirando su progreso.
+ */
+function construirGraficaBarrasDesplazable(puntos, color, anchoMinBarra = 34) {
+  if (puntos.length === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.margin = "0";
+    vacio.textContent = "No hay datos para graficar en este período.";
+    return vacio;
+  }
+
+  const anchoNecesario = MARGEN_IZQ + MARGEN_DER + puntos.length * anchoMinBarra;
+  const anchoSvg = Math.max(VB_ANCHO, anchoNecesario);
+
+  const svg = construirSvgBarras(puntos, color, anchoSvg);
+  svg.style.width = `${anchoSvg}px`;
+  svg.style.flexShrink = "0";
+
+  const wrap = document.createElement("div");
+  wrap.style.cssText = "position:relative;";
+
+  const scroller = document.createElement("div");
+  scroller.style.cssText = "overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch;";
+  scroller.appendChild(svg);
+  wrap.appendChild(scroller);
+
+  const crearTab = (lado) => {
+    const tab = document.createElement("button");
+    tab.type = "button";
+    tab.className = "te-btn-icono te-btn-icono-fantasma";
+    tab.textContent = lado === "izq" ? "‹" : "›";
+    tab.setAttribute("aria-label", lado === "izq" ? "Ver semanas anteriores" : "Ver semanas siguientes");
+    tab.style.cssText = `position:absolute; top:50%; transform:translateY(-50%); ${lado === "izq" ? "left:2px;" : "right:2px;"} z-index:2; box-shadow:0 1px 6px rgba(0,0,0,0.3); transition:opacity 0.15s;`;
+    tab.addEventListener("click", () => {
+      scroller.scrollBy({ left: lado === "izq" ? -anchoSvg * 0.4 : anchoSvg * 0.4, behavior: "smooth" });
+    });
+    return tab;
+  };
+  const tabIzq = crearTab("izq");
+  const tabDer = crearTab("der");
+  wrap.appendChild(tabIzq);
+  wrap.appendChild(tabDer);
+
+  const actualizarTabs = () => {
+    const haceFaltaScroll = scroller.scrollWidth > scroller.clientWidth + 4;
+    if (!haceFaltaScroll) {
+      tabIzq.style.display = "none";
+      tabDer.style.display = "none";
+      return;
+    }
+    const puedeIzq = scroller.scrollLeft > 4;
+    const puedeDer = scroller.scrollLeft < scroller.scrollWidth - scroller.clientWidth - 4;
+    tabIzq.style.display = "flex";
+    tabDer.style.display = "flex";
+    tabIzq.style.opacity = puedeIzq ? "1" : "0";
+    tabIzq.style.pointerEvents = puedeIzq ? "auto" : "none";
+    tabDer.style.opacity = puedeDer ? "1" : "0";
+    tabDer.style.pointerEvents = puedeDer ? "auto" : "none";
+  };
+  scroller.addEventListener("scroll", actualizarTabs);
+  // clientWidth/scrollWidth solo son reales después del primer paint —
+  // ahí mismo se lleva el scroll al final (semana más reciente).
+  requestAnimationFrame(() => {
+    scroller.scrollLeft = scroller.scrollWidth;
+    actualizarTabs();
+  });
+
+  return wrap;
 }
 
 /* ===================== Controles: pills + navegador </> ===================== */
@@ -369,8 +476,8 @@ function construirPillGroup(opciones, valorActual, onCambiar) {
 /** Fila "< etiqueta >" reusada por semana y semestre, tanto en el donut
  * como en la gráfica de barras. */
 /**
- * Semestre "vigente" para los navegadores GLOBALES (donut y "Horas
- * trabajadas" sin filtrar por materia) — no hay una sola materia de la
+ * Semestre "vigente" para los navegadores GLOBALES (donut y "Tendencia"
+ * sin filtrar por materia) — no hay una sola materia de la
  * que colgarse acá, así que se usa el mismo semestre que ya calcula
  * `obtenerIndiceSemestreVigente` (el último que ya arrancó). Si el
  * usuario no tiene semestres cargados, `null` — el navegador cae de
@@ -918,7 +1025,7 @@ function construirSeccionResumenMetas(cont, mm, color, refrescar) {
   const contadores = document.createElement("div");
   contadores.style.cssText = "display:flex; gap:18px; justify-content:center; flex-wrap:wrap;";
   contadores.innerHTML = `
-    <span style="font-size:0.85rem;"><span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:${color}; margin-right:6px;"></span>Trabajado: <strong>${formatearMinutos(totalTrabajado)}</strong></span>
+    <span style="font-size:0.85rem;"><span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:${color}; margin-right:6px;"></span>Estudiado: <strong>${formatearMinutos(totalTrabajado)}</strong></span>
     <span style="font-size:0.85rem;"><span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--text-muted); margin-right:6px;"></span>Meta semana: <strong>${formatearMinutos(metaSemanaMin)}</strong></span>
   `;
   sec.appendChild(contadores);
@@ -926,13 +1033,13 @@ function construirSeccionResumenMetas(cont, mm, color, refrescar) {
   cont.appendChild(sec);
 }
 
-/* ===================== "Horas trabajadas" (tendencia de esta materia) ===================== */
+/* ===================== "Horas estudiadas" (tendencia de esta materia) ===================== */
 
 function construirSeccionBarrasMateria(cont, mm, color, refrescar) {
   const sec = document.createElement("section");
   sec.className = "glass-card stack";
   sec.style.gap = "14px";
-  sec.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Horas trabajadas</h3>`;
+  sec.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Horas estudiadas</h3>`;
 
   sec.appendChild(
     construirPillGroup(
@@ -1001,26 +1108,56 @@ function construirSeccionBarrasMateria(cont, mm, color, refrescar) {
       )
     );
 
-    // Mismo recorrido mes a mes que construirSeccionBarras (global) — se
-    // duplica acá (en vez de compartir función) solo porque el cálculo de
-    // minutos de cada mes tiene que filtrar por materia
-    // (calcularMinutosMateriaEnRango en vez de calcularMinutosTotalesEnRango).
+    /**
+     * Pedido 2026-09-10 ("semestre no trae nada" + "deben salir TODAS las
+     * semanas ... desde semana 1 hasta la semana N"): esto ANTES agrupaba
+     * por mes (una barra = un mes completo, mismo recorrido que
+     * construirSeccionBarras global). Se reemplaza por una barra POR
+     * SEMANA del semestre — semana 1 hasta la semana vigente (o la última,
+     * si el semestre ya terminó) — que es lo que se pidió y además se
+     * actualiza solo en cada render porque `hoy` se recalcula acá mismo,
+     * nunca queda pisado en un valor viejo.
+     *
+     * El número de semanas a mostrar se delega por completo en
+     * `calcularNumeroSemanaParaFecha(semestre, fecha)` (ya importada, ya
+     * acotada 1..duracion_semanas, ya tiene resuelto el anclaje real a
+     * fecha_inicio) en vez de recalcular esa cuenta a mano acá — mismo
+     * criterio que ya dejó `MAPA_FUNCIONES.md` para esta función: nunca
+     * duplicarla con una fórmula propia.
+     */
     const inicioSemestre = new Date(`${semestre.fecha_inicio}T00:00:00`);
     const finSemestre = new Date(`${semestre.fecha_fin}T23:59:59`);
-    const cursor = new Date(inicioSemestre.getFullYear(), inicioSemestre.getMonth(), 1);
-    while (cursor <= finSemestre) {
-      const inicioMes = new Date(Math.max(cursor.getTime(), inicioSemestre.getTime()));
-      const finMesCalendario = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
-      const finMes = new Date(Math.min(finMesCalendario.getTime(), finSemestre.getTime() + 1));
+    const hoy = new Date();
+
+    if (hoy < inicioSemestre) {
+      const vacio = document.createElement("p");
+      vacio.className = "muted";
+      vacio.style.margin = "0";
+      vacio.textContent = "Este semestre todavía no empieza.";
+      sec.appendChild(vacio);
+      cont.appendChild(sec);
+      return;
+    }
+
+    const fechaReferencia = hoy > finSemestre ? finSemestre : hoy;
+    const semanaVigente = calcularNumeroSemanaParaFecha(semestre, fechaReferencia);
+
+    for (let i = 1; i <= semanaVigente; i++) {
+      const inicioSemana = new Date(inicioSemestre.getFullYear(), inicioSemestre.getMonth(), inicioSemestre.getDate() + (i - 1) * 7, 0, 0, 0, 0);
+      const finSemanaCalendario = new Date(inicioSemana.getFullYear(), inicioSemana.getMonth(), inicioSemana.getDate() + 7, 0, 0, 0, 0);
+      const finSemana = new Date(Math.min(finSemanaCalendario.getTime(), finSemestre.getTime() + 1));
       puntos.push({
-        etiqueta: NOMBRES_MES_CORTO[cursor.getMonth()],
-        minutos: calcularMinutosMateriaEnRango(mm.id, inicioMes.getTime(), finMes.getTime()),
+        etiqueta: `S${i}`,
+        minutos: calcularMinutosMateriaEnRango(mm.id, inicioSemana.getTime(), finSemana.getTime()),
       });
-      cursor.setMonth(cursor.getMonth() + 1);
     }
   }
 
-  sec.appendChild(construirGraficaBarras(puntos, color));
+  // Semana = 7 barras, siempre entran cómodas. Semestre = hasta
+  // duracion_semanas barras (15-20+), ahí es donde hace falta la versión
+  // desplazable con las pestañitas ‹ › (pedido explícito, pensado sobre
+  // todo para celular).
+  sec.appendChild(corteBarrasMateria === "semestre" ? construirGraficaBarrasDesplazable(puntos, color) : construirGraficaBarras(puntos, color));
   if (puntos.length > 0 && puntos.every((p) => p.minutos === 0)) {
     const aviso = document.createElement("p");
     aviso.className = "muted";
@@ -1077,19 +1214,31 @@ function construirSeccionResumenFinal(cont, materiaMatriculadaId) {
     return;
   }
 
-  const filas = [
+  // Pedido 2026-09-10: "hazlo como 4 tarjetitas en grid para que no se vea
+  // tan simplón" — antes eran 4 filas apiladas tipo lista; ahora son 4
+  // tarjetas en grid 2x2 (mismo layout que se lee bien tanto en celular
+  // angosto como en pantallas más anchas, a diferencia de forzar las 4 en
+  // una sola fila).
+  const tarjetas = [
     ["Horas totales estudiadas", formatearMinutos(totalMinutos)],
     ["Día más productivo", `${diaTopTexto} · ${formatearMinutos(diaTopMinutos)}`],
     ["Sesiones totales", String(totalSesiones)],
     ["Sesión promedio", formatearMinutos(promedioMinutos)],
   ];
-  filas.forEach(([etiqueta, valor]) => {
-    const fila = document.createElement("div");
-    fila.className = "row-between";
-    fila.style.cssText = "align-items:center;";
-    fila.innerHTML = `<span class="muted" style="font-size:0.85rem;">${etiqueta}</span><strong style="font-size:0.9rem;">${valor}</strong>`;
-    sec.appendChild(fila);
+
+  const grid = document.createElement("div");
+  grid.style.cssText = "display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;";
+  tarjetas.forEach(([etiqueta, valor]) => {
+    const tarjeta = document.createElement("div");
+    tarjeta.className = "stack";
+    tarjeta.style.cssText = "gap:4px; padding:12px 10px; border-radius:14px; border:1px solid var(--border-glass); background:rgba(255,255,255,0.03); text-align:center;";
+    tarjeta.innerHTML = `
+      <span class="muted" style="font-size:0.72rem; line-height:1.25;">${etiqueta}</span>
+      <strong style="font-size:1.05rem; font-variant-numeric:tabular-nums;">${valor}</strong>
+    `;
+    grid.appendChild(tarjeta);
   });
+  sec.appendChild(grid);
 
   cont.appendChild(sec);
 }
@@ -1105,7 +1254,7 @@ function construirSeccionResumenFinal(cont, materiaMatriculadaId) {
  */
 /**
  * FIX 2026-09-08 (reporte: "semana 1 en la semana antepasada, no me deja
- * moverme" + el pill Semana/Semestre de 'Horas trabajadas' tampoco
+ * moverme" + el pill Semana/Semestre de 'Horas estudiadas' tampoco
  * respondía): las 3 secciones se llamaban en cadena, sin aislar errores.
  * Si `construirSeccionResumenMetas` tira una excepción (sospecha: algún
  * caso puntual de `calcularNumeroSemanaParaFecha` en agenda-clases.js/
@@ -1121,7 +1270,7 @@ function construirSeccionResumenFinal(cont, materiaMatriculadaId) {
 function construirEstadisticasMateria(cont, mm, color, refrescar) {
   const secciones = [
     ["Resumen de metas", () => construirSeccionResumenMetas(cont, mm, color, refrescar)],
-    ["Horas trabajadas", () => construirSeccionBarrasMateria(cont, mm, color, refrescar)],
+    ["Horas estudiadas", () => construirSeccionBarrasMateria(cont, mm, color, refrescar)],
     ["Resumen final", () => construirSeccionResumenFinal(cont, mm.id)],
   ];
   secciones.forEach(([nombre, construir]) => {
