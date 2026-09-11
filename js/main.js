@@ -32,6 +32,7 @@ import { inicializarResumen, renderizarResumen } from "./resumen/resumen.js";
 import { inicializarAgenda, renderizarAgenda } from "./agenda/agenda.js";
 import { inicializarHorario, renderizarHorario } from "./horario/horario.js";
 import { inicializarTiempoEstudio, renderizarTiempoEstudio } from "./tiempo-estudio/tiempo-estudio.js";
+import { revisarLinkInvitacionAlCargar } from "./tiempo-estudio/tiempo-estudio-competencias.js";
 import { procesarAsociacionPendienteDeAmigo, iniciarRefrescoPeriodicoAmigos } from "./horario/horario-amigos.js";
 // Asistente IA (Gemini): mismo patrón que horario.js/agenda.js arriba —
 // este import no se usa directo acá, existe para que el navegador cargue
@@ -837,6 +838,20 @@ function mostrarApp() {
   } else if (parametroAbrir === "resumen") {
     mostrarSeccion("resumen");
     window.history.replaceState({}, "", window.location.pathname);
+  }
+  // Deep link "?comp=<id>" — invitación a una competencia de Tiempo de
+  // Estudio (ver construirLinkInvitacion en tiempo-estudio-competencias.js,
+  // es lo que arma el botón "Enlace" de cada tarjeta). Mismo criterio que
+  // los "?abrir=..." de arriba, pero la limpieza del query param y el chequeo
+  // de "ya soy parte" quedan DENTRO de revisarLinkInvitacionAlCargar() (así
+  // esa función sigue siendo llamable sola, sin depender de este bloque, si
+  // el archivo de competencias necesita re-chequear en otro momento). Se
+  // manda a la sección de Tiempo de Estudio de una vez, así la persona ve el
+  // resultado (la competencia ya en su lista) apenas cierra el modal, en vez
+  // de quedarse en "resumen" sin contexto de qué pasó.
+  if (new URLSearchParams(window.location.search).get("comp")) {
+    mostrarSeccion("tiempo-estudio");
+    revisarLinkInvitacionAlCargar(renderizarTiempoEstudio);
   }
   // Universidad — separación nombre_completo/siglas (2026-08-22): va AL
   // FINAL de mostrarApp() a propósito, después de todos los renders de
