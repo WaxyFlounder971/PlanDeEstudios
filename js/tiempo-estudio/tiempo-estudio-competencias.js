@@ -291,11 +291,11 @@ function abrirModalCrearCompetencia(refrescar) {
     </div>
     <div>
       <span class="form-label">Nombre de la competencia</span>
-      <input type="text" id="comp-crear-nombre" class="form-input" placeholder="Ej. Parciales de setiembre" maxlength="60">
+      <input type="text" id="comp-crear-nombre" class="form-input" placeholder="Ej. Parciales de setiembre" maxlength="60" autocomplete="off">
     </div>
     <div>
       <span class="form-label">Tu apodo (así te van a ver los demás)</span>
-      <input type="text" id="comp-crear-apodo" class="form-input" placeholder="Ej. Wagner" maxlength="30">
+      <input type="text" id="comp-crear-apodo" class="form-input" placeholder="Ej. Wagner" maxlength="30" autocomplete="off">
     </div>
     <div class="row-between" style="gap:10px;">
       <button type="button" class="btn btn-secondary" id="comp-crear-cancelar" style="flex:1;">Cancelar</button>
@@ -372,11 +372,11 @@ function abrirModalUnirseCompetencia(refrescar) {
     </div>
     <div>
       <span class="form-label">Link o código de invitación</span>
-      <input type="text" id="comp-unirse-link" class="form-input" placeholder="Pegá acá el link">
+      <input type="text" id="comp-unirse-link" class="form-input" placeholder="Pegá acá el link" autocomplete="off">
     </div>
     <div>
       <span class="form-label">Tu apodo (así te van a ver los demás)</span>
-      <input type="text" id="comp-unirse-apodo" class="form-input" placeholder="Ej. Wagner" maxlength="30">
+      <input type="text" id="comp-unirse-apodo" class="form-input" placeholder="Ej. Wagner" maxlength="30" autocomplete="off">
     </div>
     <div class="row-between" style="gap:10px;">
       <button type="button" class="btn btn-secondary" id="comp-unirse-cancelar" style="flex:1;">Cancelar</button>

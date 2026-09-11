@@ -542,11 +542,11 @@ function abrirAvisoSesionOlvidada(snapshot) {
     <div class="row-between" style="gap:10px;">
       <div style="flex:1;">
         <span class="form-label">Horas</span>
-        <input type="number" id="te-olvidada-horas" class="form-input" min="0" value="0">
+        <input type="number" id="te-olvidada-horas" class="form-input" min="0" value="0" autocomplete="off">
       </div>
       <div style="flex:1;">
         <span class="form-label">Minutos</span>
-        <input type="number" id="te-olvidada-minutos" class="form-input" min="0" max="59" value="0">
+        <input type="number" id="te-olvidada-minutos" class="form-input" min="0" max="59" value="0" autocomplete="off">
       </div>
     </div>
     <p class="muted" style="font-size:0.78rem; margin:0;">Empezó a las ${inicioLegible}.</p>

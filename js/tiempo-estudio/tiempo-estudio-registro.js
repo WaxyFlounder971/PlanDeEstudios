@@ -58,22 +58,22 @@ function abrirModalRegistroManual(items, onGuardar) {
     <div class="row-between" style="gap:10px;">
       <div style="flex:1;">
         <span class="form-label">Fecha</span>
-        <input type="date" id="te-manual-fecha" class="form-input" value="${fechaHoyStr}">
+        <input type="date" id="te-manual-fecha" class="form-input" value="${fechaHoyStr}" autocomplete="off">
       </div>
       <div style="flex:1;">
         <span class="form-label">Hora de inicio</span>
-        <input type="time" id="te-manual-hora" class="form-input" value="${horaHoyStr}">
+        <input type="time" id="te-manual-hora" class="form-input" value="${horaHoyStr}" autocomplete="off">
       </div>
     </div>
 
     <div class="row-between" style="gap:10px;">
       <div style="flex:1;">
         <span class="form-label">Horas</span>
-        <input type="number" id="te-manual-horas" class="form-input" min="0" value="0">
+        <input type="number" id="te-manual-horas" class="form-input" min="0" value="0" autocomplete="off">
       </div>
       <div style="flex:1;">
         <span class="form-label">Minutos</span>
-        <input type="number" id="te-manual-minutos" class="form-input" min="0" max="59" value="30">
+        <input type="number" id="te-manual-minutos" class="form-input" min="0" max="59" value="30" autocomplete="off">
       </div>
     </div>
 
@@ -199,16 +199,16 @@ function abrirModalEditarSesion(sesion, refrescar) {
     <div class="stack" style="gap:6px;">
       <span class="form-label" style="margin:0;">Inicio</span>
       <div class="row-between" style="gap:10px;">
-        <input type="date" id="te-editar-fecha-inicio" class="form-input" style="flex:1;" value="${fechaInputReg(sesion.inicio)}">
-        <input type="time" id="te-editar-hora-inicio" class="form-input" style="flex:1;" value="${horaInputReg(sesion.inicio)}">
+        <input type="date" id="te-editar-fecha-inicio" class="form-input" style="flex:1;" value="${fechaInputReg(sesion.inicio)}" autocomplete="off">
+        <input type="time" id="te-editar-hora-inicio" class="form-input" style="flex:1;" value="${horaInputReg(sesion.inicio)}" autocomplete="off">
       </div>
     </div>
 
     <div class="stack" style="gap:6px;">
       <span class="form-label" style="margin:0;">Fin</span>
       <div class="row-between" style="gap:10px;">
-        <input type="date" id="te-editar-fecha-fin" class="form-input" style="flex:1;" value="${fechaInputReg(sesion.fin)}">
-        <input type="time" id="te-editar-hora-fin" class="form-input" style="flex:1;" value="${horaInputReg(sesion.fin)}">
+        <input type="date" id="te-editar-fecha-fin" class="form-input" style="flex:1;" value="${fechaInputReg(sesion.fin)}" autocomplete="off">
+        <input type="time" id="te-editar-hora-fin" class="form-input" style="flex:1;" value="${horaInputReg(sesion.fin)}" autocomplete="off">
       </div>
     </div>
     <p class="muted" style="margin:0; font-size:0.78rem;">
