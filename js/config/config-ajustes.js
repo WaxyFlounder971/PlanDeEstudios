@@ -10,7 +10,7 @@ import { estado } from "../core/storage.js";
 import { copiarPromptConAviso } from "../core/clipboard.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
-import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
+import { abrirConfirmacion, construirPillSwitchBinario, mostrarToast } from "../ui/componentes.js";
 import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta } from "../ui/tema.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
 import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
@@ -658,7 +658,12 @@ const SECCIONES_TOGGLEABLES = [
   // cualquier usuario. `id` confirmado contra main.js/index.html:
   // coincide exacto con el data-seccion real del botón de nav, y ya
   // estaba en DEFAULT_ORDEN_NAV de main.js.
-  { id: "tiempo-estudio", etiqueta: "Tiempo de Estudio", icono: "⏱️" },
+  //
+  // Rename 2026-09-12 (pedido explícito): la etiqueta pasa de "Tiempo de
+  // Estudio" a "Pomodoro" porque se cortaba en este listado — se cambia
+  // SOLO el texto mostrado, `id` se deja intacto ("tiempo-estudio") para
+  // no romper la coincidencia con main.js/index.html descrita arriba.
+  { id: "tiempo-estudio", etiqueta: "Pomodoro", icono: "⏱️" },
   { id: "asistente", etiqueta: "Asistente", icono: "✨" },
 ];
 
@@ -922,6 +927,38 @@ function inicializarAccordionAjustes() {
   });
 }
 
+/**
+ * Punto 4 (ronda visual, 2026-09-12): monta un pill switch (ver
+ * construirPillSwitchBinario en ui/componentes.js) en el lugar donde hoy
+ * vive un checkbox on/off estático de index.html, SIN tener que tocar
+ * index.html — se ubica el checkbox viejo por id, se reemplaza su
+ * envoltorio (el <label class="switch">...</label> que lo estiliza como
+ * interruptor) por el pill switch nuevo la primera vez que corre.
+ *
+ * Es IDEMPOTENTE a propósito: renderizarAjustes() puede volver a llamarse
+ * varias veces en la misma sesión (cambiar de paleta, editar otro campo,
+ * etc.), y para ese momento el checkbox de `idViejo` ya no existe en el
+ * DOM (se reemplazó la primera vez) — en vez de fallar silenciosamente o
+ * reconstruir el pill switch de cero (perdiendo el listener/nodo y
+ * parpadeando), en las llamadas siguientes solo se actualiza cuál opción
+ * queda marcada .active, buscando el grupo ya montado por `dataAtributo`.
+ */
+function montarPillSwitch(idViejo, dataAtributo, opciones, valorActivo, onCambiar) {
+  const existente = document.querySelector(`[data-pill-switch="${dataAtributo}"]`);
+  if (existente) {
+    existente.querySelectorAll(".pill-item").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.valor === valorActivo);
+    });
+    return;
+  }
+  const chkViejo = document.getElementById(idViejo);
+  if (!chkViejo) return;
+  const contenedorViejo = chkViejo.closest(".switch") || chkViejo.parentElement;
+  const pillSwitch = construirPillSwitchBinario(opciones, valorActivo, onCambiar);
+  pillSwitch.dataset.pillSwitch = dataAtributo;
+  contenedorViejo.replaceWith(pillSwitch);
+}
+
 function renderizarAjustes() {
   inicializarAccordionAjustes();
   inicializarAsistenteAjustes();
@@ -1003,18 +1040,30 @@ function renderizarAjustes() {
   // existentes (ver rendimiento_default_v2_aplicado en core/schema.js).
   // Reaplicado 2026-08-23 sobre la rama del antirrebote — se había perdido
   // en esa rama porque partió de una copia anterior al fix v1.16.1.
-  const chkRendimiento = document.getElementById("switch-rendimiento");
-  if (chkRendimiento) {
-    chkRendimiento.checked = !estado.datos.configuracion.modo_rendimiento;
-    chkRendimiento.onchange = () => {
-      // Estado en memoria + efecto visual: instantáneo, sin antirrebote (ver
-      // dispararSyncConAntirrebote más arriba para el porqué).
-      const fancyActivo = chkRendimiento.checked;
+  //
+  // Punto 4 (ronda visual, 2026-09-12): pasa de checkbox on/off a pill
+  // switch de 2 opciones siempre visibles — "Rendimiento" se renombra a
+  // "Optimizado" solo en la ETIQUETA (pedido explícito: no hace falta
+  // renombrar el campo modo_rendimiento ni nada del modelo de datos). Se
+  // monta reemplazando el checkbox viejo por DOM en vez de tocar
+  // index.html — ver montarPillSwitch más abajo para el porqué del patrón
+  // idempotente (esta función puede volver a correr en cada render de
+  // Ajustes).
+  montarPillSwitch(
+    "switch-rendimiento",
+    "pill-switch-diseno",
+    [
+      { valor: "optimizado", texto: "Optimizado" },
+      { valor: "fancy", texto: "Fancy" },
+    ],
+    estado.datos.configuracion.modo_rendimiento ? "optimizado" : "fancy",
+    (valor) => {
+      const fancyActivo = valor === "fancy";
       estado.datos.configuracion.modo_rendimiento = !fancyActivo;
       aplicarModoRendimiento(!fancyActivo);
       dispararSyncConAntirrebote();
-    };
-  }
+    }
+  );
 
   // Notificaciones push reales — switch en Ajustes Avanzados. Se acepte o
   // no en el onboarding (ver ofrecerActivarNotificacionesPush en main.js),
@@ -1063,21 +1112,28 @@ function renderizarAjustes() {
   // sección global. Los campos de configuracion siguen siendo los mismos,
   // solo cambió DÓNDE se editan.
 
-  // Modo claro/oscuro
-  const chkModo = document.getElementById("switch-modo");
-  chkModo.checked = estado.datos.configuracion.modo === "light";
-  chkModo.onchange = () => {
-    // Mismo criterio que switch-rendimiento: estado en memoria + repintado de
-    // paleta instantáneos, solo el sello+sync va con antirrebote.
-    const nuevoModo = chkModo.checked ? "light" : "dark";
-    estado.datos.configuracion.modo = nuevoModo;
-    aplicarPaleta(
-      estado.datos.configuracion.paleta,
-      nuevoModo,
-      estado.datos.configuracion.paleta === "personalizada" ? personalizada.colores : undefined
-    );
-    dispararSyncConAntirrebote();
-  };
+  // Modo claro/oscuro — punto 4: mismo pill switch, ver montarPillSwitch.
+  montarPillSwitch(
+    "switch-modo",
+    "pill-switch-modo",
+    [
+      { valor: "dark", texto: "Oscuro" },
+      { valor: "light", texto: "Claro" },
+    ],
+    estado.datos.configuracion.modo === "light" ? "light" : "dark",
+    (nuevoModo) => {
+      // Mismo criterio que el pill switch de arriba: estado en memoria +
+      // repintado de paleta instantáneos, solo el sello+sync va con
+      // antirrebote.
+      estado.datos.configuracion.modo = nuevoModo;
+      aplicarPaleta(
+        estado.datos.configuracion.paleta,
+        nuevoModo,
+        estado.datos.configuracion.paleta === "personalizada" ? personalizada.colores : undefined
+      );
+      dispararSyncConAntirrebote();
+    }
+  );
 
   // Ajustes por Universidad (2026-08-08): el selector de escala global que
   // vivía acá (#pill-escala-notas, leyendo/escribiendo
