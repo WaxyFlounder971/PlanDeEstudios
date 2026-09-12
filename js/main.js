@@ -32,7 +32,7 @@ import { inicializarResumen, renderizarResumen } from "./resumen/resumen.js";
 import { inicializarAgenda, renderizarAgenda } from "./agenda/agenda.js";
 import { inicializarHorario, renderizarHorario } from "./horario/horario.js";
 import { inicializarTiempoEstudio, renderizarTiempoEstudio } from "./tiempo-estudio/tiempo-estudio.js";
-import { revisarLinkInvitacionAlCargar } from "./tiempo-estudio/tiempo-estudio-competencias.js";
+import { revisarLinkInvitacionAlCargar, revisarLinkDelegacionAlCargar } from "./tiempo-estudio/tiempo-estudio-competencias.js";
 import { procesarAsociacionPendienteDeAmigo, iniciarRefrescoPeriodicoAmigos } from "./horario/horario-amigos.js";
 // Asistente IA (Gemini): mismo patrón que horario.js/agenda.js arriba —
 // este import no se usa directo acá, existe para que el navegador cargue
@@ -852,6 +852,12 @@ function mostrarApp() {
   if (new URLSearchParams(window.location.search).get("comp")) {
     mostrarSeccion("tiempo-estudio");
     revisarLinkInvitacionAlCargar(renderizarTiempoEstudio);
+  } else if (new URLSearchParams(window.location.search).get("delegar")) {
+    // Deep link "?delegar=<id>&token=<nuevo>" — recibe el permiso de
+    // borrado que le pasó otro creador antes de salir (ver
+    // abrirModalDelegarAntesDeSalir en tiempo-estudio-competencias.js).
+    mostrarSeccion("tiempo-estudio");
+    revisarLinkDelegacionAlCargar(renderizarTiempoEstudio);
   }
   // Universidad — separación nombre_completo/siglas (2026-08-22): va AL
   // FINAL de mostrarApp() a propósito, después de todos los renders de
