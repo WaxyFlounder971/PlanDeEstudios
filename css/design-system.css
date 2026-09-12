@@ -24,6 +24,15 @@
      primer pintado; cada paleta lo sobreescribe con su propio valor
      "aplanado" (ver bloques [data-palette=...] más abajo). */
   --bg-header-solido: #101114;
+
+  /* Punto 3 — ver el comentario largo junto a [data-mode="light"] más
+     abajo. Este es el valor por defecto (oscuro / sin --bg-card-jerarquia
+     definido todavía): sin ajuste, igual a --bg-card/--bg-panel. Tiene que
+     estar ANTES de [data-mode="light"] en el archivo (misma especificidad,
+     gana el último) para que el ajuste de claro no quede pisado por este
+     fallback. */
+  --bg-card-jerarquia: var(--bg-card);
+  --bg-panel-jerarquia: var(--bg-panel);
 }
 
 /* Punto 6 (2026-08-23): en modo claro la sombra negra plana ("rgba(0,0,0,x)")
@@ -41,7 +50,37 @@
   --shadow-tinte-claro: color-mix(in srgb, var(--accent-1) 25%, black 75%);
   --shadow-glass: 0 20px 40px color-mix(in srgb, var(--shadow-tinte-claro) 35%, transparent);
   --shadow-float: 0 8px 20px color-mix(in srgb, var(--shadow-tinte-claro) 40%, transparent);
+
+  /* Punto 3 (2026-09-12): jerarquía de blancos. --bg-card en modo claro es
+     blanco (puro o casi) con alfa, pensado para mezclarse con --bg-canvas
+     — pero --bg-canvas en TODAS las paletas claras ya está a solo 1-14
+     valores de 255 (ej. #FAFAFA, #F7F8FA). Blanco mezclado con un fondo ya
+     casi blanco da una diferencia de pocos puntos, invisible a simple
+     vista — de ahí "todo se ve del mismo blanco, sin jerarquía". No es un
+     problema de una paleta puntual: es estructural a mezclar colores cerca
+     del extremo claro, y por eso NO pasa en oscuro (ahí el mismo % de
+     mezcla, pero cerca del negro, sí da un salto grande y visible — no se
+     toca nada de oscuro).
+
+     Se define UNA variable derivada acá (nunca reasignando --bg-card en sí
+     mismo — reasignar una custom property en términos de sí misma across
+     cascada es un ciclo inválido en CSS, no un "override" como en Sass) que
+     oscurece --bg-card/--bg-panel ~15% hacia gris. Cualquier paleta —las
+     13 fijas o una personalizada armada por el usuario— hereda esto
+     automáticamente sin tocarla a mano. Usar --bg-card-jerarquia /
+     --bg-panel-jerarquia (no var(--bg-card) directo) en cualquier regla
+     nueva de tarjeta/panel que necesite distinguirse del fondo. */
+  --bg-card-jerarquia: color-mix(in srgb, var(--bg-card) 85%, black 15%);
+  --bg-panel-jerarquia: color-mix(in srgb, var(--bg-panel) 85%, black 15%);
 }
+/* Fallback fuera de modo claro (oscuro no necesita el ajuste — ya tiene
+   buen contraste — así que la "jerarquía" es sencillamente el valor
+   normal sin tocar). Va en el :root de arriba (línea 8), ANTES de
+   [data-mode="light"] en el archivo — con la misma especificidad
+   (0,1,0) en ambos, gana el que está último en el código, así que este
+   orden es intencional: si se reordena el archivo, hay que mantener
+   este bloque antes que [data-mode="light"] o se pierde el ajuste de
+   jerarquía en claro. */
 /* Mismo fix que arriba, pero para los valores reducidos de Modo Rendimiento
    (ver bloque [data-rendimiento="reducido"] más abajo) — sin esto, apenas se
    activa el modo por defecto (rendimiento) la sombra clara volvía a salir
@@ -108,7 +147,10 @@ a { color: var(--accent-1); }
 
 /* ---- Tarjeta de vidrio (glassmorphism) ---- */
 .glass-card {
-  background: var(--bg-card);
+  /* Punto 3: usa la variable de jerarquía (igual a --bg-card en oscuro,
+     ~15% más gris en claro), no --bg-card directo — ver el comentario
+     largo junto a [data-mode="light"] cerca del inicio del archivo. */
+  background: var(--bg-card-jerarquia);
   border: 1px solid var(--border-glass);
   border-radius: var(--radius-lg);
   backdrop-filter: blur(16px);
@@ -118,7 +160,7 @@ a { color: var(--accent-1); }
 }
 
 .glass-panel {
-  background: var(--bg-panel);
+  background: var(--bg-panel-jerarquia);
   border: 1px solid var(--border-glass);
   border-radius: var(--radius-md);
   backdrop-filter: blur(10px);
@@ -3235,6 +3277,24 @@ img, svg { max-width: 100%; }
 .vista-card:-webkit-full-screen {
   width: 100vw;
   height: 100vh;
+  /* REGRESIÓN (corregida de nuevo, 2026-09-12): en móvil real, 100vh se
+     calcula sobre el viewport MÁS GRANDE (con la barra del navegador
+     oculta), que es más alto que lo que de verdad se ve en pantalla
+     mientras esa barra sigue visible — la tarjeta terminaba más alta que
+     el área visible real, y la parte de abajo (mapa/controles) quedaba
+     literalmente por debajo del borde inferior de la pantalla en vez de
+     ocupar/mostrarse por encima como corresponde a pantalla completa.
+     100dvh (alto real visible en cada momento) YA se usa para exactamente
+     este mismo problema en .app-sidebar y el drawer móvil (ver esas 2
+     reglas) — ahí se arregló el 2026-08-23 pero nunca se replicó acá,
+     así que el mismo bug reaparecía en este tercer lugar. Los 3 casos de
+     "ocupar toda la pantalla real" del proyecto son: .app-sidebar, el
+     drawer móvil de Enlaces rápidos, y este .vista-card:fullscreen — si
+     agregás un CUARTO elemento con esta misma necesidad, replicá el
+     mismo par vh/dvh (nunca solo uno de los tres existentes). Se declara
+     DESPUÉS de 100vh (nunca antes) para que actúe como mejora progresiva
+     sin romper nada en navegadores sin soporte de dvh. */
+  height: 100dvh;
   max-width: none;
   border-radius: 0;
   background: var(--bg-canvas);
@@ -3497,37 +3557,58 @@ html.exportar-tema-default[data-mode="dark"] {
   background-attachment: scroll;
 }
 
-/* 1. backdrop-filter: blur(...) fuera; el mismo tono de fondo sube de
-   opacidad (color-mix con el canvas) para que la tarjeta se siga viendo
-   diferenciada del fondo, sin el costo de GPU del difuminado.
+/* 1. backdrop-filter: blur(...) fuera. Antes esto subía de "opacidad" con
+   color-mix(var(--bg-card) 90%, var(--bg-canvas) 10%) — pero --bg-card y
+   --bg-panel YA son semitransparentes en casi todas las paletas (ver los
+   bloques [data-palette=...]: rgba(255,255,255,0.05) en oscuro es típico,
+   incluso 0.75 en claro). color-mix combina TAMBIÉN el canal alfa, así
+   que "90% de un color con alfa 0.05" da un resultado con alfa ≈ 0.9*0.05
+   + 0.1*1 = 0.145 — apenas 14.5% opaco, NO el 90% que el nombre de la
+   variable y los comentarios anteriores asumían. Este es el motivo real
+   por el que el reporte de transparencia volvió 3 veces (50% → 22.5% →
+   10% "de transparencia") sin que nunca mejorara de forma consistente:
+   se ajustaba el porcentaje de la mezcla, pero la mezcla en sí nunca
+   garantizaba opacidad real cuando el color de entrada ya venía con
+   alfa bajo.
 
-   FIX (reporte de stakeholder Dayi, uso en teléfono + Modo Rendimiento):
-   "en los menus o ventanas a veces se ven MUY transparentes... bájale la
-   transparencia en un 50%". Bajo este modo, todo lo de acá (tarjetas,
-   paneles/menús, la topbar, el fondo oscuro detrás de modales, el aviso de
-   reconexión y el overlay de carga) usa una porción "transparente" (el %
-   que deja ver lo que hay detrás, sea color-mix hacia --bg-canvas o alpha
-   en rgba).
-
-   AJUSTE (2026-08-23, feedback repetido de que "sigue siendo demasiada la
-   transparencia en los menus"): el recorte a la mitad (45% → 22.5%) seguía
-   dejando ver demasiado el fondo. Se baja directo a 10% de transparencia
-   (90% sólido) en cada una de estas reglas — nada de esto toca el modo
-   normal, solo vive bajo [data-rendimiento="reducido"]). */
+   REGRESIÓN (2026-09-12) — FIX DE RAÍZ: pedido explícito de que la
+   transparencia baje a 0% exacto en este modo (ya no "10%" ni ningún
+   porcentaje chico), y que quede reservada por completo al modo Fancy.
+   En vez de seguir ajustando el porcentaje de color-mix (que nunca fue
+   la pieza rota), se compone el fondo en 2 capas DENTRO del mismo
+   elemento: una capa sólida (--bg-canvas, sin alfa) por debajo y el tono
+   de --bg-card/--bg-panel (con su alfa normal) encima, como
+   background-image. El navegador aplana esas 2 capas del propio
+   elemento ANTES de pintarlas sobre lo que sea que haya detrás en la
+   página — el resultado siempre queda 100% opaco sin importar cuál sea
+   el alfa real de --bg-card/--bg-panel en cada paleta (actual o
+   cualquiera que se agregue a futuro), así que este mismo patrón queda
+   centralizado acá y no depende de mantener un porcentaje "mágico"
+   sincronizado a mano con 24 valores de paleta distintos.
+   IMPORTANTE: no reemplazar esto por color-mix(var(--bg-card) X%,
+   var(--bg-canvas) Y%) de nuevo — ver el párrafo de arriba, ese enfoque
+   NUNCA garantiza opacidad real. */
 [data-rendimiento="reducido"] .glass-card {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  background: color-mix(in srgb, var(--bg-card) 90%, var(--bg-canvas) 10%);
+  background-color: var(--bg-canvas);
+  /* --bg-card-jerarquia (no --bg-card directo): mismo tono que ya usa
+     .glass-card en modo fancy (ver punto 3 / jerarquía de blancos), para
+     que Optimizado y Fancy muestren la MISMA jerarquía de tonos y solo
+     cambien en si hay o no transparencia de fondo. */
+  background-image: linear-gradient(var(--bg-card-jerarquia), var(--bg-card-jerarquia));
 }
 [data-rendimiento="reducido"] .glass-panel {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  background: color-mix(in srgb, var(--bg-panel) 90%, var(--bg-canvas) 10%);
+  background-color: var(--bg-canvas);
+  background-image: linear-gradient(var(--bg-panel-jerarquia), var(--bg-panel-jerarquia));
 }
 [data-rendimiento="reducido"] .mobile-topbar {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  background: color-mix(in srgb, var(--bg-panel) 90%, var(--bg-canvas) 10%);
+  background-color: var(--bg-canvas);
+  background-image: linear-gradient(var(--bg-panel-jerarquia), var(--bg-panel-jerarquia));
 }
 [data-rendimiento="reducido"] .modal-overlay {
   backdrop-filter: none;
@@ -3573,12 +3654,28 @@ html.exportar-tema-default[data-mode="dark"] {
    transparencia plana de un glass-panel normal — de ahí que pasara de
    "transparencia ligera (como en fancy)" a "casi total". Se reincorpora el
    mismo linear-gradient de la regla base, solo con el color-mix (sin
-   backdrop-filter) como capa de fondo en vez de --bg-panel puro. */
+   backdrop-filter) como capa de fondo en vez de --bg-panel puro.
+
+   REGRESIÓN (2026-09-12) — mismo bug de fondo que en .glass-card/.glass-
+   panel de arriba: color-mix(var(--bg-panel) 90%, var(--bg-canvas) 10%)
+   nunca daba 90% de opacidad real cuando --bg-panel ya venía con alfa
+   bajo (ver el comentario largo junto a [data-rendimiento="reducido"]
+   .glass-card, misma causa exacta). Se reemplaza con el mismo patrón de
+   2 capas dentro del elemento (sólido abajo + tinte encima) para llegar
+   a 0% de transparencia real, sin tocar la capa de gradiente extra del
+   sidebar (esa sigue igual, es una capa aparte con su propio propósito
+   visual, no la fuente del bug). */
 [data-rendimiento="reducido"][data-mode="dark"] #app-sidebar {
-  background: linear-gradient(rgba(0,0,0,0.16), rgba(0,0,0,0.16)), color-mix(in srgb, var(--bg-panel) 90%, var(--bg-canvas) 10%);
+  background-color: var(--bg-canvas);
+  background-image:
+    linear-gradient(rgba(0,0,0,0.16), rgba(0,0,0,0.16)),
+    linear-gradient(var(--bg-panel-jerarquia), var(--bg-panel-jerarquia));
 }
 [data-rendimiento="reducido"][data-mode="light"] #app-sidebar {
-  background: linear-gradient(rgba(255,255,255,0.16), rgba(255,255,255,0.16)), color-mix(in srgb, var(--bg-panel) 90%, var(--bg-canvas) 10%);
+  background-color: var(--bg-canvas);
+  background-image:
+    linear-gradient(rgba(255,255,255,0.16), rgba(255,255,255,0.16)),
+    linear-gradient(var(--bg-panel-jerarquia), var(--bg-panel-jerarquia));
 }
 
 /* 2. Glow del botón primario en hover y de la "luz" de disponibilidad:
