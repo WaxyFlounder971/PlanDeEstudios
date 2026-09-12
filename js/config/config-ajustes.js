@@ -943,20 +943,61 @@ function inicializarAccordionAjustes() {
  * parpadeando), en las llamadas siguientes solo se actualiza cuál opción
  * queda marcada .active, buscando el grupo ya montado por `dataAtributo`.
  */
-function montarPillSwitch(idViejo, dataAtributo, opciones, valorActivo, onCambiar) {
+/**
+ * Punto 4 (ronda visual, 2026-09-12): monta un pill switch (ver
+ * construirPillSwitchBinario en ui/componentes.js) en el lugar donde hoy
+ * vive un checkbox on/off estático de index.html, SIN tener que tocar
+ * index.html.
+ *
+ * Ronda 2 (mismo día, feedback directo): "Modo"/"Calidad" ya no van al
+ * lado del switch (fila "etiqueta ... switch chico a la derecha", que es
+ * como venía el checkbox original) — van APILADOS arriba de un switch que
+ * ocupa todo el ancho de la tarjeta ("Solo debe decir: Modo / switch").
+ * Para lograr esto sin tocar index.html se sube un nivel más: en vez de
+ * reemplazar solo el `<label class="switch">`, se reemplaza toda la FILA
+ * que lo contiene (`.closest('.switch').parentElement`, asumiendo que esa
+ * fila hoy tiene la etiqueta de texto vieja + el switch como únicos 2
+ * hijos — es la estructura típica de estos checkboxes en el proyecto) por
+ * una fila nueva (.fila-pill-switch, ver design-system.css) con un caption
+ * chico arriba y el pill switch abajo, ancho completo.
+ *
+ * Sigue siendo IDEMPOTENTE: renderizarAjustes() puede volver a llamarse
+ * varias veces en la misma sesión, y para ese momento el checkbox de
+ * `idViejo` ya no existe (se reemplazó la primera vez) — en las llamadas
+ * siguientes solo se actualiza cuál opción queda .active y la posición del
+ * thumb, buscando el grupo ya montado por `dataAtributo`, en vez de
+ * reconstruir todo de cero (que perdería el listener y parpadearía).
+ */
+function montarPillSwitch(idViejo, dataAtributo, tituloCorto, opciones, valorActivo, onCambiar) {
   const existente = document.querySelector(`[data-pill-switch="${dataAtributo}"]`);
   if (existente) {
     existente.querySelectorAll(".pill-item").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.valor === valorActivo);
     });
+    const indiceActivo = opciones.findIndex((o) => o.valor === valorActivo);
+    existente
+      .querySelector(".pill-switch-thumb")
+      ?.classList.toggle("pill-switch-thumb--derecha", indiceActivo === 1);
     return;
   }
   const chkViejo = document.getElementById(idViejo);
   if (!chkViejo) return;
-  const contenedorViejo = chkViejo.closest(".switch") || chkViejo.parentElement;
+  const switchViejo = chkViejo.closest(".switch") || chkViejo;
+  const fila = switchViejo.parentElement || switchViejo;
+
+  const filaNueva = document.createElement("div");
+  filaNueva.className = "fila-pill-switch";
+
+  const titulo = document.createElement("span");
+  titulo.className = "fila-pill-switch-titulo";
+  titulo.textContent = tituloCorto;
+
   const pillSwitch = construirPillSwitchBinario(opciones, valorActivo, onCambiar);
   pillSwitch.dataset.pillSwitch = dataAtributo;
-  contenedorViejo.replaceWith(pillSwitch);
+
+  filaNueva.appendChild(titulo);
+  filaNueva.appendChild(pillSwitch);
+  fila.replaceWith(filaNueva);
 }
 
 function renderizarAjustes() {
@@ -1049,9 +1090,13 @@ function renderizarAjustes() {
   // index.html — ver montarPillSwitch más abajo para el porqué del patrón
   // idempotente (esta función puede volver a correr en cada render de
   // Ajustes).
+  //
+  // Ronda 2 (mismo día): el título de la fila pasa de "Diseño" a "Calidad"
+  // (pedido explícito).
   montarPillSwitch(
     "switch-rendimiento",
     "pill-switch-diseno",
+    "Calidad",
     [
       { valor: "optimizado", texto: "Optimizado" },
       { valor: "fancy", texto: "Fancy" },
@@ -1116,6 +1161,7 @@ function renderizarAjustes() {
   montarPillSwitch(
     "switch-modo",
     "pill-switch-modo",
+    "Modo",
     [
       { valor: "dark", texto: "Oscuro" },
       { valor: "light", texto: "Claro" },
