@@ -98,6 +98,31 @@ function leerTokenCreador(competenciaId) {
   }
 }
 
+/** Se usa al delegar el permiso de borrado a otro participante — quien
+ * delega deja de tener un token válido apenas el Worker pisa la columna
+ * (ver manejarDelegarBorrado), así que no tiene sentido dejarlo dando
+ * vueltas en localStorage de este dispositivo. */
+function borrarTokenCreador(competenciaId) {
+  try {
+    localStorage.removeItem(CLAVE_TOKEN_CREADOR_PREFIJO + competenciaId);
+  } catch (e) {
+    // no crítico — a lo sumo queda un token viejo e inútil dando vueltas.
+  }
+}
+
+/** Link de "reclamo" de `token_creador` — mismo patrón que
+ * construirLinkInvitacion, pero con "?delegar=<id>&token=<nuevo>". Lo abre
+ * la persona ELEGIDA en su propio dispositivo (ver
+ * revisarLinkDelegacionAlCargar) para quedar con el permiso de borrado. */
+function construirLinkDelegacion(competenciaId, tokenCreador) {
+  const url = new URL(location.href);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("delegar", competenciaId);
+  url.searchParams.set("token", tokenCreador);
+  return url.toString();
+}
+
 function construirLinkInvitacion(competenciaId) {
   const url = new URL(location.href);
   url.search = "";
@@ -188,44 +213,208 @@ async function sincronizarHorasCompetencias() {
   );
 }
 
+/**
+ * Punto de entrada del botón "Salir". Si quien se va NO es el creador,
+ * es el flujo de siempre. Si SÍ lo es, primero hay que ver si hay alguien
+ * más adentro a quien delegarle el permiso de borrado — ver
+ * verificarSiHaceFaltaDelegarAntesDeSalir.
+ */
 function salirDeCompetencia(competencia, refrescar) {
+  if (competencia.es_creador) {
+    verificarSiHaceFaltaDelegarAntesDeSalir(competencia, refrescar);
+    return;
+  }
+  confirmarYEjecutarSalida(competencia, refrescar);
+}
+
+/**
+ * Solo se llama cuando `competencia.es_creador` es true. Se fija con un
+ * GET /competencias/:id (trae el marcador completo) si hay otros
+ * participantes: si está solo, no hay a quién delegarle nada y sale
+ * derecho. Si hay más gente, el "Borrar para todos" quedaría huérfano
+ * para siempre si se va sin delegar (el Worker nunca vuelve a exponer
+ * `token_creador` fuera de este flujo, ver manejarBorrarCompetencia) — se
+ * lo manda primero a abrirModalDelegarAntesDeSalir.
+ */
+async function verificarSiHaceFaltaDelegarAntesDeSalir(competencia, refrescar) {
+  let participantes = [];
+  try {
+    const respuesta = await fetchConTimeout(`${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}`);
+    if (respuesta.ok) {
+      const datos = await respuesta.json();
+      participantes = datos.participantes || [];
+    }
+  } catch (e) {
+    console.warn("[competencias] No se pudo chequear participantes antes de salir:", e);
+  }
+
+  const otros = participantes.filter((p) => p.id !== competencia.participante_id);
+  if (otros.length === 0) {
+    confirmarYEjecutarSalida(competencia, refrescar);
+    return;
+  }
+
+  abrirModalDelegarAntesDeSalir(competencia, otros, refrescar);
+}
+
+function confirmarYEjecutarSalida(competencia, refrescar) {
   abrirConfirmacion({
     titulo: "Salir de la competencia",
     mensaje: competencia.es_creador
-      ? `¿Salir de "${competencia.nombre}"? Vos la creaste — esto NO la borra para los demás participantes, solo te saca a vos. Si querés borrarla entera para todos, usá "Borrar para todos".`
+      ? `¿Salir de "${competencia.nombre}"? Ya delegaste el permiso de borrado — esto solo te saca a vos, la competencia sigue igual para los demás.`
       : `¿Salir de "${competencia.nombre}"? Podés volver a unirte más tarde con el mismo link.`,
     textoConfirmar: "Salir",
     claseConfirmar: "btn-danger",
-    onConfirmar: async () => {
-      try {
-        const respuesta = await fetchConTimeout(
-          `${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}/participantes/${encodeURIComponent(competencia.participante_id)}`,
-          {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ identificador_usuario: estado.datos.perfil.correo }),
-          }
-        );
-        if (!respuesta.ok && respuesta.status !== 404) {
-          // 404 = el Worker ya no lo tiene como participante por lo que
-          // sea (ej. ya se había salido desde otro dispositivo) — igual
-          // se saca de la lista local, no tiene sentido bloquear por eso.
-          throw new Error(`El Worker respondió ${respuesta.status}`);
-        }
-      } catch (e) {
-        console.warn("[competencias] No se pudo avisarle al Worker de la salida (se saca igual de la lista local):", e);
-      }
+    onConfirmar: () => ejecutarSalidaCompetencia(competencia, refrescar),
+  });
+}
 
-      const idx = estado.datos.competencias_unidas.findIndex((c) => c.id === competencia.id);
-      if (idx !== -1) estado.datos.competencias_unidas.splice(idx, 1);
-      // Tumba (regla obligatoria de sync, ver MAPA_FUNCIONES.md "Borrado =
-      // tumba"): {id, eliminadoEn}, nunca el id pelado (ver el bug de
-      // 2026-09-08 en tiempo-estudio-registro.js).
-      estado.datos._eliminados_competencias_unidas.push({ id: competencia.id, eliminadoEn: Date.now() });
-      marcarCambioPendiente();
-      mostrarToast("Saliste de la competencia");
-      if (refrescar) refrescar();
-    },
+/** El DELETE real + limpieza local — compartido por el flujo directo
+ * (confirmarYEjecutarSalida) y por el que pasa primero por la delegación
+ * (abrirModalDelegarAntesDeSalir). */
+async function ejecutarSalidaCompetencia(competencia, refrescar) {
+  try {
+    const respuesta = await fetchConTimeout(
+      `${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}/participantes/${encodeURIComponent(competencia.participante_id)}`,
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identificador_usuario: estado.datos.perfil.correo }),
+      }
+    );
+    if (!respuesta.ok && respuesta.status !== 404) {
+      // 404 = el Worker ya no lo tiene como participante por lo que
+      // sea (ej. ya se había salido desde otro dispositivo) — igual
+      // se saca de la lista local, no tiene sentido bloquear por eso.
+      throw new Error(`El Worker respondió ${respuesta.status}`);
+    }
+  } catch (e) {
+    console.warn("[competencias] No se pudo avisarle al Worker de la salida (se saca igual de la lista local):", e);
+  }
+
+  const idx = estado.datos.competencias_unidas.findIndex((c) => c.id === competencia.id);
+  if (idx !== -1) estado.datos.competencias_unidas.splice(idx, 1);
+  // Tumba (regla obligatoria de sync, ver MAPA_FUNCIONES.md "Borrado =
+  // tumba"): {id, eliminadoEn}, nunca el id pelado (ver el bug de
+  // 2026-09-08 en tiempo-estudio-registro.js).
+  estado.datos._eliminados_competencias_unidas.push({ id: competencia.id, eliminadoEn: Date.now() });
+  marcarCambioPendiente();
+  mostrarToast("Saliste de la competencia");
+  if (refrescar) refrescar();
+}
+
+/**
+ * Se abre en vez del confirm de "Salir" cuando quien se quiere ir ES el
+ * creador Y hay más gente en la competencia. Primero elige a quién
+ * delegarle `token_creador` (POST .../delegar-borrado invalida el viejo
+ * de una), después arma un link de "reclamo" (mismo patrón que el link de
+ * invitación, pero con "?delegar=<id>&token=<nuevo>") para que la persona
+ * elegida lo abra en SU dispositivo — recién ahí queda guardado en su
+ * localStorage (ver revisarLinkDelegacionAlCargar). Solo cuando ese paso
+ * ya se hizo se ofrece salir de verdad, para no dejar a nadie a mitad de
+ * camino sin haber mandado el link.
+ */
+function abrirModalDelegarAntesDeSalir(competencia, otrosParticipantes, refrescar) {
+  const { overlay, caja, cerrar } = construirCajaModal();
+
+  const opcionesHtml = otrosParticipantes
+    .map(
+      (p, i) => `<label class="row-between" style="padding:4px 0; cursor:pointer;">
+      <span><input type="radio" name="comp-delegar-elegido" value="${p.id}" ${i === 0 ? "checked" : ""}> ${p.apodo}</span>
+      <span class="muted" style="font-size:0.85rem;">${formatearHoras(p.horas_semana_actual)}</span>
+    </label>`
+    )
+    .join("");
+
+  caja.innerHTML = `
+    <div>
+      <h2 style="margin:0;">Delegá antes de salir</h2>
+      <p class="muted" style="margin:4px 0 0; font-size:0.85rem;">
+        Sos quien puede borrar "${competencia.nombre}" para todos. Si te vas sin pasarle ese permiso a alguien más, la competencia queda sin nadie que la pueda borrar nunca.
+      </p>
+    </div>
+    <div class="stack" style="gap:2px;">
+      <p class="muted" style="margin:0 0 4px; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.03em;">Elegí a quién delegarle</p>
+      ${opcionesHtml}
+    </div>
+    <div class="row-between" style="gap:10px;">
+      <button type="button" class="btn btn-secondary" id="comp-delegar-cancelar" style="flex:1;">Ahora no</button>
+      <button type="button" class="btn btn-primary" id="comp-delegar-confirmar" style="flex:1;">Delegar</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  caja.querySelector("#comp-delegar-cancelar").addEventListener("click", cerrar);
+
+  const btnConfirmar = caja.querySelector("#comp-delegar-confirmar");
+  btnConfirmar.addEventListener("click", async () => {
+    const elegido = caja.querySelector('input[name="comp-delegar-elegido"]:checked');
+    if (!elegido) {
+      mostrarToast("Elegí a alguien primero");
+      return;
+    }
+    const participanteId = elegido.value;
+    const apodoElegido = otrosParticipantes.find((p) => p.id === participanteId)?.apodo || "esa persona";
+
+    const tokenCreador = leerTokenCreador(competencia.id);
+    if (!tokenCreador) {
+      mostrarToast("No se encontró el permiso de borrado en este dispositivo — no se puede delegar desde acá.");
+      return;
+    }
+
+    btnConfirmar.disabled = true;
+    btnConfirmar.textContent = "Delegando…";
+    let tokenNuevo;
+    try {
+      const respuesta = await fetchConTimeout(
+        `${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}/delegar-borrado`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token_creador: tokenCreador, participante_id: participanteId }),
+        }
+      );
+      if (!respuesta.ok) throw new Error(`El Worker respondió ${respuesta.status}`);
+      ({ token_creador: tokenNuevo } = await respuesta.json());
+    } catch (e) {
+      console.error("[competencias] Falló delegar el borrado:", e);
+      mostrarToast("No se pudo delegar. Revisá tu conexión e intentá de nuevo.");
+      btnConfirmar.disabled = false;
+      btnConfirmar.textContent = "Delegar";
+      return;
+    }
+
+    // Éxito: el token viejo de este dispositivo ya no sirve (el Worker lo
+    // pisó), así que se limpia acá mismo y se le saca la corona local a la
+    // competencia — si el refresco de la tarjeta llega a correr mientras
+    // este modal sigue abierto, no debe seguir mostrando "Borrar".
+    borrarTokenCreador(competencia.id);
+    const entradaLocal = estado.datos.competencias_unidas.find((c) => c.id === competencia.id);
+    if (entradaLocal) entradaLocal.es_creador = false;
+    marcarCambioPendiente();
+    if (refrescar) refrescar();
+
+    const link = construirLinkDelegacion(competencia.id, tokenNuevo);
+    caja.innerHTML = `
+      <div>
+        <h2 style="margin:0;">Delegado ✓</h2>
+        <p class="muted" style="margin:4px 0 0; font-size:0.85rem;">
+          Mandale este link a <strong>${apodoElegido}</strong> y que lo abra en SU celular — así queda con el permiso de borrado. Es de un solo uso.
+        </p>
+      </div>
+      <div class="form-input" style="word-break:break-all; font-size:0.8rem; user-select:all;">${link}</div>
+      <div class="row-between" style="gap:10px;">
+        <button type="button" class="btn btn-secondary" id="comp-delegar-copiar" style="flex:1;">Copiar link</button>
+        <button type="button" class="btn btn-danger" id="comp-delegar-salir-ahora" style="flex:1;">Ya se lo mandé, salir</button>
+      </div>
+    `;
+    caja.querySelector("#comp-delegar-copiar").addEventListener("click", async () => {
+      const exito = await copiarAlPortapapelesBlindado(link);
+      mostrarToast(exito ? "✓ Link copiado" : "No se pudo copiar — seleccionalo y copialo a mano");
+    });
+    caja.querySelector("#comp-delegar-salir-ahora").addEventListener("click", () => {
+      cerrar();
+      ejecutarSalidaCompetencia({ ...competencia, es_creador: false }, refrescar);
+    });
   });
 }
 
@@ -463,6 +652,49 @@ function abrirModalUnirseCompetencia(refrescar) {
       btnGuardar.textContent = "Unirme";
     }
   });
+}
+
+let _yaProcesadoLinkDelegacion = false; // se llama una sola vez desde DOMContentLoaded en main.js
+
+/**
+ * Deep link "?delegar=<id>&token=<tokenNuevo>" armado por
+ * abrirModalDelegarAntesDeSalir(). El Worker ya hizo el cambio real
+ * cuando generó este link (ver manejarDelegarBorrado: pisó
+ * `token_creador` en D1) — acá del lado del cliente solo hace falta
+ * GUARDAR ese token nuevo en localStorage de ESTE dispositivo y, si la
+ * competencia ya estaba en la lista local, marcarla como propia
+ * (es_creador=true). No hace falta llamar a ningún endpoint más.
+ *
+ * Llamar una sola vez desde el DOMContentLoaded de main.js, igual que
+ * revisarLinkInvitacionAlCargar (mismo motivo: necesita `estado` cargado).
+ */
+function revisarLinkDelegacionAlCargar(refrescar) {
+  if (_yaProcesadoLinkDelegacion) return;
+  _yaProcesadoLinkDelegacion = true;
+
+  const url = new URL(location.href);
+  const id = url.searchParams.get("delegar");
+  const token = url.searchParams.get("token");
+  if (!id || !token) return;
+
+  url.searchParams.delete("delegar");
+  url.searchParams.delete("token");
+  history.replaceState(null, "", url.toString());
+
+  guardarTokenCreador(id, token);
+
+  const entradaLocal = estado.datos.competencias_unidas.find((c) => c.id === id);
+  if (entradaLocal) {
+    entradaLocal.es_creador = true;
+    marcarCambioPendiente();
+    mostrarToast(`✓ Ahora sos quien puede borrar "${entradaLocal.nombre}" para todos`);
+    if (refrescar) refrescar();
+  } else {
+    // Raro (implica que este dispositivo nunca sincronizó esta competencia
+    // en su lista local), pero el token igual queda guardado — se resuelve
+    // solo la próxima vez que sincronice y la competencia le aparezca.
+    mostrarToast("Permiso de borrado guardado. Si la competencia todavía no te aparece, sincronizá y volvé a intentar.");
+  }
 }
 
 let _yaProcesadoLinkInvitacion = false; // se llama una sola vez desde DOMContentLoaded en main.js
@@ -911,4 +1143,9 @@ function construirVistaCompetencias(cont, refrescar) {
   cont.appendChild(lista);
 }
 
-export { construirVistaCompetencias, sincronizarHorasCompetencias, revisarLinkInvitacionAlCargar };
+export {
+  construirVistaCompetencias,
+  sincronizarHorasCompetencias,
+  revisarLinkInvitacionAlCargar,
+  revisarLinkDelegacionAlCargar,
+};
