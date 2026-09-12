@@ -899,6 +899,113 @@ function fusionarSemestres(local, remoto, tumbas) {
 
 
 /**
+ * Becas y Pagos de Matrícula — Parte A: mismo patrón exacto que
+ * fusionarSemestre — dos colecciones anidadas dentro de un registro de
+ * `finanzas_semestre` (`pagos_matricula`, `ingresos_beca`), cada una con
+ * su propia tumba guardada DENTRO del registro mismo. Ninguna de las dos
+ * tiene sub-colección propia (son hojas, igual que `excepciones_semana`
+ * dentro de un bloque de horario), así que se funden directo con
+ * fusionarColeccion genérica — no hace falta un fusionarPago/
+ * fusionarIngresoBeca dedicado.
+ *
+ * Decisión de diseño (para no perder datos de usuarios que ya venían
+ * usando costo_matricula/beca_monto antes de este cambio, ni de quienes
+ * ya migraron a listas): igual que materias_matriculadas/bloques_horario
+ * en fusionarSemestre, ambas colecciones se EXCLUYEN de la comparación de
+ * "foto plana" del registro contenedor antes de decidir si hay conflicto
+ * real a ese nivel. Sin esto, agregar un pago en el teléfono mientras se
+ * edita cualquier otro campo del mismo registro en la PC (ambos sin
+ * conocerse) se marcaría como choque real cuando en realidad son dos
+ * cambios independientes que fusionarColeccion ya sabe combinar bien por
+ * su cuenta, ítem por ítem, sin perder ninguno. costo_matricula y
+ * beca_monto (campos viejos, pre-migración) quedan dentro de la "foto
+ * plana" y se siguen fundiendo por _actualizadoEn como cualquier otro
+ * campo — un registro que un dispositivo todavía no migró no pierde esos
+ * valores solo por fundirse contra uno que sí migró.
+ */
+function fusionarFinanzasSemestre(finSemLocal, finSemRemoto) {
+  if (!finSemLocal) return finSemRemoto;
+  if (!finSemRemoto) return finSemLocal;
+  if (finSemLocal === finSemRemoto) return finSemLocal;
+
+  const tumbasPagos = fusionarTumbas(
+    finSemLocal._eliminados_pagos_matricula,
+    finSemRemoto._eliminados_pagos_matricula
+  );
+  const pagosFundidos = fusionarColeccion(
+    finSemLocal.pagos_matricula,
+    finSemRemoto.pagos_matricula,
+    tumbasPagos,
+    "pago de matrícula"
+  );
+
+  const tumbasBecas = fusionarTumbas(
+    finSemLocal._eliminados_ingresos_beca,
+    finSemRemoto._eliminados_ingresos_beca
+  );
+  const becasFundidas = fusionarColeccion(
+    finSemLocal.ingresos_beca,
+    finSemRemoto.ingresos_beca,
+    tumbasBecas,
+    "ingreso de beca"
+  );
+
+  const {
+    pagos_matricula: _pmLocal,
+    _eliminados_pagos_matricula: _tpmLocal,
+    ingresos_beca: _ibLocal,
+    _eliminados_ingresos_beca: _tibLocal,
+    ...finSemLocalPlano
+  } = finSemLocal;
+  const {
+    pagos_matricula: _pmRemoto,
+    _eliminados_pagos_matricula: _tpmRemoto,
+    ingresos_beca: _ibRemoto,
+    _eliminados_ingresos_beca: _tibRemoto,
+    ...finSemRemotoPlano
+  } = finSemRemoto;
+
+  const conConflicto = marcarConflictoSiCorresponde(
+    finSemLocalPlano,
+    finSemRemotoPlano,
+    "registro financiero de semestre"
+  );
+  const base =
+    conConflicto ||
+    limpiarMarcasConflictoObsoletas(esMasReciente(finSemRemoto, finSemLocal) ? finSemRemoto : finSemLocal);
+
+  return {
+    ...base,
+    pagos_matricula: pagosFundidos,
+    _eliminados_pagos_matricula: tumbasPagos,
+    ingresos_beca: becasFundidas,
+    _eliminados_ingresos_beca: tumbasBecas,
+  };
+}
+
+/** Equivalente de fusionarSemestres pero para la colección `finanzas_semestre`. */
+function fusionarFinanzasSemestres(local, remoto, tumbas) {
+  const listaLocal = Array.isArray(local) ? local : [];
+  const listaRemota = Array.isArray(remoto) ? remoto : [];
+  const idsEliminados = new Set(tumbas.map((t) => t.id));
+
+  const porId = new Map();
+  listaLocal.forEach((f) => porId.set(f.id, f));
+  listaRemota.forEach((f) => {
+    observarEntidadRemota(f);
+    const existente = porId.get(f.id);
+    porId.set(f.id, existente ? fusionarFinanzasSemestre(existente, f) : f);
+  });
+
+  const resultado = [];
+  porId.forEach((finSem, id) => {
+    if (!idsEliminados.has(id)) resultado.push(finSem);
+  });
+  return resultado;
+}
+
+
+/**
  * Punto de entrada principal. Sustituye cualquier `estado.datos = X`
  * directo desde una fuente remota o de caché — a partir de ahora, TODA
  * lectura de datos externos (Drive, caché local del teléfono) pasa por
@@ -1017,11 +1124,15 @@ function fusionarDatos(datosLocal, datosRemoto) {
     companeros: fusionarColeccion(datosLocal.companeros, datosRemoto.companeros, tumbasCompaneros, "compañero"),
     agenda: fusionarColeccion(datosLocal.agenda, datosRemoto.agenda, tumbasAgenda, "evento de agenda"),
     adjuntos: fusionarColeccion(datosLocal.adjuntos, datosRemoto.adjuntos, tumbasAdjuntos, "adjunto"),
-    finanzas_semestre: fusionarColeccion(
+    // Becas y Pagos de Matrícula — Parte A: ya no es una colección plana
+    // como profesores/companeros/adjuntos — cada registro funde sus propias
+    // listas de pagos_matricula/ingresos_beca por separado (ver
+    // fusionarFinanzasSemestre), para no perder ítems agregados en
+    // dispositivos distintos sin conocerse entre sí.
+    finanzas_semestre: fusionarFinanzasSemestres(
       datosLocal.finanzas_semestre,
       datosRemoto.finanzas_semestre,
-      tumbasFinanzasSemestre,
-      "registro financiero de semestre"
+      tumbasFinanzasSemestre
     ),
     gastos_u: fusionarColeccion(datosLocal.gastos_u, datosRemoto.gastos_u, tumbasGastosU, "gasto general U"),
     sesiones_estudio: fusionarColeccion(
@@ -1076,4 +1187,6 @@ export {
   fusionarCriterios,
   fusionarBloqueHorario,
   fusionarBloquesHorario,
+  fusionarFinanzasSemestre,
+  fusionarFinanzasSemestres,
 };

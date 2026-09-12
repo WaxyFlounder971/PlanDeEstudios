@@ -576,38 +576,100 @@ function crearEventoAgenda({ tipo, nombre, fecha, hora, materiaMatriculadaId, se
  * dentro del semestre) — así un semestre puede no tener registro todavía
  * sin que crearSemestre tenga que saber nada de dinero.
  *
- * v2.8.8: se sacó el flujo de switch de beca + porcentaje + autocálculo de
- * neto (costo_total/beca_activa/porcentaje_beca/pago_confirmado/
- * pago_confirmado_manual desaparecen por completo). Ahora son DOS montos
- * directos, sin ninguna fórmula entre ellos — el usuario los escribe a
- * mano, cada uno por su lado:
- *   - `costo_matricula`: lo que efectivamente pagaste de matrícula.
- *   - `beca_monto`: lo que cayó de beca. Funciona como INGRESO/ahorro
- *     dentro de las estadísticas generales (Resumen), no como un gasto
- *     más — ver calcularTotalesResumenFinanzas en finanzas.js.
- * Cambiar uno de los dos campos NUNCA recalcula el otro.
+ * Becas y Pagos de Matrícula — Parte A (reemplaza el modelo v2.8.8 de
+ * "un solo monto de costo + un solo monto de beca"): ni la matrícula ni la
+ * beca caen siempre en un monto fijo ni en fecha fija — la matrícula se
+ * puede pagar en varias partes, y la beca cae en depósitos sueltos que
+ * nunca coinciden con el monto ni la fecha de otro. Por eso ahora son DOS
+ * LISTAS (`pagos_matricula`, `ingresos_beca`), cada una con su propia
+ * tumba (`_eliminados_pagos_matricula`, `_eliminados_ingresos_beca`) para
+ * poder fundirse item por item entre dispositivos sin perder ninguno (ver
+ * fusionarFinanzasSemestre en storage-merge.js). Los totales (total
+ * pagado en matrícula, total de beca recibida) se calculan SIEMPRE sumando
+ * estas listas (ver calcularTotalPagosMatricula/calcularTotalIngresosBeca
+ * más abajo) — nunca se guardan como número aparte, para no arriesgar que
+ * queden desincronizados de la lista real.
  *
- * `desglose_mensual` sigue aplicando sobre `costo_matricula` (para
- * semestres pagados en varias cuotas/pagos, no de una sola vez) — no se
- * movió de lugar. `desglose_mensual.modo` guarda cuál de los dos modos se
- * usó para poder re-editar después con el mismo modo por defecto (manual:
- * array cargado mes por mes; automatico: total repartido entre
- * `automatico_cantidad_meses`, con el residuo de la división absorbido por
- * el último mes para que la suma de los meses siempre cuadre exacto con
- * el total).
+ * `costo_matricula`/`beca_monto`/`desglose_mensual` (el modelo viejo) ya
+ * NO se escriben para registros nuevos — ver migrarDatosAntiguos para la
+ * migración de una sola vez de cuentas que ya tenían un registro con el
+ * modelo anterior. El parámetro `costoMatricula`/`becaMonto` de esta
+ * función se conserva solo por compatibilidad con el call site existente
+ * en finanzas-semestres.js (crea un registro nuevo con un pago/ingreso
+ * inicial ya cargado, en vez de arrancar con las listas vacías) — se
+ * elimina en cuanto Parte B reemplace ese formulario por las tarjetas.
  */
-function crearRegistroFinancieroSemestre({ semestreId, costoMatricula, becaMonto }) {
-  return sellarTimestamp({
+function crearRegistroFinancieroSemestre({ semestreId, costoMatricula, becaMonto } = {}) {
+  const registro = sellarTimestamp({
     id: "finsem_" + crypto.randomUUID(),
     semestre_id: semestreId,
-    costo_matricula: Number(costoMatricula) || 0,
-    beca_monto: Number(becaMonto) || 0,
-    desglose_mensual: {
-      modo: "manual", // "manual" | "automatico"
-      meses: [], // [{ id, mes: "Enero"/"2026-01"/lo que el usuario escriba, monto }]
-      automatico_cantidad_meses: null, // solo relevante si modo === "automatico"
-    },
+    pagos_matricula: [],
+    ingresos_beca: [],
+    _eliminados_pagos_matricula: [],
+    _eliminados_ingresos_beca: [],
   });
+  const costo = Number(costoMatricula) || 0;
+  if (costo > 0) {
+    registro.pagos_matricula.push(crearPagoMatricula({ descripcion: "Matrícula", monto: costo }));
+  }
+  const beca = Number(becaMonto) || 0;
+  if (beca > 0) {
+    registro.ingresos_beca.push(crearIngresoBeca({ descripcion: "Beca", monto: beca }));
+  }
+  return registro;
+}
+
+/**
+ * Becas y Pagos de Matrícula — Parte A: un pago individual de matrícula
+ * dentro de `finanzas_semestre.pagos_matricula`. `descripcion` es opcional
+ * (ej. "Pago 1 de 3", "Enero", o vacío si el usuario no quiere etiquetarlo)
+ * y `fecha` también (la matrícula no siempre se paga en una fecha que valga
+ * la pena registrar) — ninguno de los dos afecta el total, que siempre sale
+ * de sumar `monto` de toda la lista.
+ */
+function crearPagoMatricula({ descripcion, monto, fecha } = {}) {
+  return sellarTimestamp({
+    id: "pagomat_" + crypto.randomUUID(),
+    descripcion: descripcion || null,
+    monto: Number(monto) || 0,
+    fecha: fecha || null, // "YYYY-MM-DD" | null
+  });
+}
+
+/**
+ * Becas y Pagos de Matrícula — Parte A: un depósito individual de beca
+ * dentro de `finanzas_semestre.ingresos_beca`. Mismo shape exacto que
+ * crearPagoMatricula a propósito (descripcion/monto/fecha, ambos opcionales
+ * salvo monto) — la beca nunca cae en un monto ni fecha fija, así que cada
+ * depósito se registra aparte, igual razón que los pagos de matrícula.
+ */
+function crearIngresoBeca({ descripcion, monto, fecha } = {}) {
+  return sellarTimestamp({
+    id: "ingbeca_" + crypto.randomUUID(),
+    descripcion: descripcion || null,
+    monto: Number(monto) || 0,
+    fecha: fecha || null, // "YYYY-MM-DD" | null
+  });
+}
+
+/**
+ * Becas y Pagos de Matrícula — Parte A: único punto de verdad para "cuánto
+ * se ha pagado de matrícula en este semestre" — SIEMPRE suma
+ * `pagos_matricula`, nunca lee un campo aparte, para que no pueda existir
+ * un total desincronizado de la lista real.
+ */
+function calcularTotalPagosMatricula(registro) {
+  const lista = registro && Array.isArray(registro.pagos_matricula) ? registro.pagos_matricula : [];
+  return lista.reduce((acc, p) => acc + (Number(p.monto) || 0), 0);
+}
+
+/**
+ * Becas y Pagos de Matrícula — Parte A: equivalente de
+ * calcularTotalPagosMatricula pero para `ingresos_beca`.
+ */
+function calcularTotalIngresosBeca(registro) {
+  const lista = registro && Array.isArray(registro.ingresos_beca) ? registro.ingresos_beca : [];
+  return lista.reduce((acc, i) => acc + (Number(i.monto) || 0), 0);
 }
 
 /**
@@ -3222,6 +3284,71 @@ function migrarDatosAntiguos(datos) {
     }
   });
 
+  // Becas y Pagos de Matrícula — Parte A.2 (2026-09-12): costo_matricula/
+  // beca_monto/desglose_mensual (el modelo de "un solo monto cada uno")
+  // se reemplazan por pagos_matricula/ingresos_beca (listas). Se detecta un
+  // registro viejo por la AUSENCIA de pagos_matricula (campo que no existía
+  // antes de esta migración) y se migra una única vez. Corre DESPUÉS del
+  // bloque de arriba (costo_total → costo_matricula) a propósito: así un
+  // registro viejísimo (de antes incluso de v2.8.8) ya llega con
+  // costo_matricula poblado por esa migración anterior antes de que esta
+  // lo lea, en la misma pasada.
+  //
+  //   - Si desglose_mensual.meses tiene entradas (modo manual o
+  //     automático): cada mes se convierte en su propio pago_matricula
+  //     (usa el mes como descripción) — es más fiel a la data real, que ya
+  //     venía granular, que colapsarla a un solo pago genérico.
+  //   - Caso borde: el modo manual solo validaba que la suma de meses no
+  //     SOBREPASARA costo_matricula (ver finanzas-semestres.js), así que
+  //     puede haber un desglose parcial (ej. 2 de 3 cuotas cargadas) donde
+  //     costo_matricula ya refleja el total. Si sobra remanente sin
+  //     repartir, se agrega un pago_matricula extra "Resto" con la
+  //     diferencia — para no perderlo silenciosamente en la migración.
+  //   - Si desglose_mensual.meses está vacío (nunca se usó el desglose): un
+  //     único pago_matricula, descripción "Matrícula", monto =
+  //     costo_matricula.
+  //   - beca_monto: nunca existió como lista de depósitos separados (no
+  //     hay desglose de beca en ningún lado del modelo viejo) — siempre se
+  //     migra como un único ingreso_beca con el total, descripción
+  //     "Beca (migrada)".
+  //   - Montos en 0 no generan ninguna entrada (nada real que registrar).
+  datos.finanzas_semestre.forEach((registro) => {
+    if (Array.isArray(registro.pagos_matricula)) return; // ya migrado
+
+    const costoMatricula = Number(registro.costo_matricula) || 0;
+    const meses =
+      registro.desglose_mensual && Array.isArray(registro.desglose_mensual.meses)
+        ? registro.desglose_mensual.meses
+        : [];
+
+    const pagosMigrados = [];
+    if (meses.length > 0) {
+      let sumaMeses = 0;
+      meses.forEach((mesEntry) => {
+        const monto = Number(mesEntry.monto) || 0;
+        sumaMeses += monto;
+        pagosMigrados.push(crearPagoMatricula({ descripcion: mesEntry.mes || null, monto }));
+      });
+      const restante = costoMatricula - sumaMeses;
+      if (restante > 0.005) {
+        pagosMigrados.push(crearPagoMatricula({ descripcion: "Resto", monto: restante }));
+      }
+    } else if (costoMatricula > 0) {
+      pagosMigrados.push(crearPagoMatricula({ descripcion: "Matrícula", monto: costoMatricula }));
+    }
+    registro.pagos_matricula = pagosMigrados;
+    registro._eliminados_pagos_matricula = [];
+
+    const becaMonto = Number(registro.beca_monto) || 0;
+    registro.ingresos_beca =
+      becaMonto > 0 ? [crearIngresoBeca({ descripcion: "Beca (migrada)", monto: becaMonto })] : [];
+    registro._eliminados_ingresos_beca = [];
+
+    delete registro.costo_matricula;
+    delete registro.beca_monto;
+    delete registro.desglose_mensual;
+  });
+
   // Gastos generales U (v2.8.8, 2026-08-11): relleno defensivo de los dos
   // campos nuevos — vínculo opcional a semestre y pago recurrente, ambos
   // ausentes en cuentas guardadas antes de este cambio.
@@ -3551,6 +3678,10 @@ export {
   calcularEstadisticasAprobacion,
   calcularDetallePorEstado,
   crearRegistroFinancieroSemestre,
+  crearPagoMatricula,
+  crearIngresoBeca,
+  calcularTotalPagosMatricula,
+  calcularTotalIngresosBeca,
   crearGastoU,
   calcularPagosRecurrentesTranscurridos,
   MODALIDADES_HORARIO,
