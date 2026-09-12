@@ -22,7 +22,7 @@
    calcularSerieFinancieraPorSemestre) y el dibujo.
    ========================================================================= */
 
-import { calcularPagosRecurrentesTranscurridos } from "../core/schema.js";
+import { calcularPagosRecurrentesTranscurridos, calcularTotalPagosMatricula, calcularTotalIngresosBeca } from "../core/schema.js";
 import { estado } from "../core/storage.js";
 import { obtenerTodosLosSemestres } from "./finanzas-gastos.js";
 import { formatearMonto, obtenerSimboloMonedaActual } from "./finanzas.js";
@@ -81,8 +81,8 @@ function calcularSerieFinancieraPorSemestre() {
     const huboMovimiento = registro !== null || gastosVinculados.length > 0;
     if (!huboMovimiento) return;
 
-    const beca = registro ? Number(registro.beca_monto) || 0 : 0;
-    let gasto = registro ? Number(registro.costo_matricula) || 0 : 0;
+    const beca = registro ? calcularTotalIngresosBeca(registro) : 0;
+    let gasto = registro ? calcularTotalPagosMatricula(registro) : 0;
     let ingresoPropio = 0;
     gastosVinculados.forEach((g) => {
       const monto = costoDeGastoUAlaFecha(g);

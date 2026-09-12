@@ -7,10 +7,17 @@
    automático, para semestres pagados en varias cuotas).
    ========================================================================= */
 
-import { crearRegistroFinancieroSemestre, sellarTimestamp } from "../core/schema.js";
+import {
+  crearRegistroFinancieroSemestre,
+  crearPagoMatricula,
+  crearIngresoBeca,
+  calcularTotalPagosMatricula,
+  calcularTotalIngresosBeca,
+  sellarTimestamp,
+} from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
-import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
+import { abrirConfirmacion } from "../ui/componentes.js";
 import { obtenerSemestresActuales, obtenerSemestresPasados } from "../semestres/semestres.js";
 import { formatearFechaLarga, formatearMonto } from "./finanzas.js";
 
@@ -20,6 +27,13 @@ import { formatearFechaLarga, formatearMonto } from "./finanzas.js";
  * el total no divide exacto) se lo lleva el último mes, para que la suma
  * de los meses siempre cuadre EXACTO con el total, sin importar cuántos
  * meses sean.
+ *
+ * Becas y Pagos de Matrícula — Parte A (2026-09-12): esta función queda
+ * SIN USO en este archivo por ahora (el desglose mensual del modelo viejo
+ * se retira más abajo, ver notas junto al modal) — se deja intacta a
+ * propósito porque es exactamente la lógica que pide la Parte B.2 ("Dividir
+ * un monto en varias partes" al agregar un pago), solo que ahí generará
+ * `pagos_matricula` en vez de entradas de `desglose_mensual.meses`.
  */
 function repartirMontoEnMeses(total, cantidadMeses) {
   const n = Math.max(1, Math.floor(Number(cantidadMeses)) || 1);
@@ -74,16 +88,19 @@ function renderizarPestanaSemestresFinanzas(contenedor) {
       columnaMontos.className = "stack";
       columnaMontos.style.cssText = "gap:4px; align-items:flex-end;";
 
+      const totalMatricula = calcularTotalPagosMatricula(registro);
+      const totalBeca = calcularTotalIngresosBeca(registro);
+
       const badgeMatricula = document.createElement("span");
       badgeMatricula.className = "badge badge-danger";
-      badgeMatricula.textContent = formatearMonto(registro.costo_matricula);
+      badgeMatricula.textContent = formatearMonto(totalMatricula);
       columnaMontos.appendChild(badgeMatricula);
 
-      if (Number(registro.beca_monto) > 0) {
+      if (totalBeca > 0) {
         const badgeBeca = document.createElement("span");
         badgeBeca.className = "badge badge-success";
         badgeBeca.title = "Beca";
-        badgeBeca.textContent = formatearMonto(registro.beca_monto);
+        badgeBeca.textContent = formatearMonto(totalBeca);
         columnaMontos.appendChild(badgeBeca);
       }
       derecha.appendChild(columnaMontos);
@@ -132,7 +149,7 @@ function abrirModalRegistroFinanciero(semestre, registroExistente, contenedorLis
   inputCosto.type = "number";
   inputCosto.step = "0.01";
   inputCosto.className = "form-input";
-  inputCosto.value = registroExistente ? registroExistente.costo_matricula : "";
+  inputCosto.value = registroExistente ? calcularTotalPagosMatricula(registroExistente) : "";
   bloqueCosto.appendChild(inputCosto);
   caja.appendChild(bloqueCosto);
 
@@ -148,188 +165,27 @@ function abrirModalRegistroFinanciero(semestre, registroExistente, contenedorLis
   inputBeca.step = "0.01";
   inputBeca.min = "0";
   inputBeca.className = "form-input";
-  inputBeca.value = registroExistente ? registroExistente.beca_monto : "";
+  inputBeca.value = registroExistente ? calcularTotalIngresosBeca(registroExistente) : "";
   bloqueBeca.appendChild(inputBeca);
   caja.appendChild(bloqueBeca);
 
-  // ----- Desglose mensual (v2.8.8: se queda donde estaba — sobre el pago
-  // de matrícula, no se movió — solo se le agrega texto aclaratorio de
-  // para qué sirve: pagar el semestre en varias cuotas en vez de un solo
-  // monto. v2.8.9: se saca "cayó" del texto (quedaba raro) y se agrega un
-  // resumen en vivo de cuánto llevás repartido / cuánto queda, con
-  // validación real: no se puede guardar un desglose manual que reparta
-  // más de lo que cuesta la matrícula. -----
-  const bloqueDesglose = document.createElement("div");
-  bloqueDesglose.className = "stack";
-  bloqueDesglose.innerHTML = `
-    <span class="form-label">Desglose mensual del pago</span>
-    <p class="muted" style="font-size:0.78rem; margin:2px 0 6px;">En caso de que pagués el semestre por pagos: indicá cuántos pagos hiciste y el monto de cada uno.</p>
-  `;
-
-  const pillModo = document.createElement("div");
-  pillModo.className = "pill-group";
-  pillModo.innerHTML = `
-    <button type="button" class="pill-item" data-valor="manual">Manual</button>
-    <button type="button" class="pill-item" data-valor="automatico">Automático</button>
-  `;
-  bloqueDesglose.appendChild(pillModo);
-
-  let desgloseActual = registroExistente
-    ? JSON.parse(JSON.stringify(registroExistente.desglose_mensual))
-    : { modo: "manual", meses: [], automatico_cantidad_meses: null };
-
-  const contenedorDesglose = document.createElement("div");
-  contenedorDesglose.className = "stack";
-  bloqueDesglose.appendChild(contenedorDesglose);
-
-  // Resumen en vivo de "cuánto llevás repartido / cuánto queda" — solo
-  // aplica al modo manual (el automático siempre reparte EXACTO el total
-  // que tenía inputCosto en el momento de tocar "Repartir", por
-  // construcción de repartirMontoEnMeses, así que nunca puede pasarse).
-  // Persiste fuera de contenedorDesglose para no perderse entre
-  // re-renders del modo, y devuelve `false` cuando el desglose manual se
-  // pasa del costo de matrícula — eso es lo que btnGuardar consulta al
-  // hacer click para bloquear el guardado (ver más abajo).
-  const resumenReparto = document.createElement("p");
-  resumenReparto.className = "muted";
-  resumenReparto.style.cssText = "font-size:0.82rem; margin:6px 0 0;";
-  bloqueDesglose.appendChild(resumenReparto);
-  caja.appendChild(bloqueDesglose);
-
-  function estaDesgloseManualSobrepasado() {
-    if (desgloseActual.modo !== "manual") {
-      resumenReparto.textContent = "";
-      return false;
-    }
-    const costoMatricula = Number(inputCosto.value) || 0;
-    const sumaRepartida = desgloseActual.meses.reduce((acc, m) => acc + (Number(m.monto) || 0), 0);
-    const restante = costoMatricula - sumaRepartida;
-    if (restante < -0.005) {
-      resumenReparto.innerHTML = `Repartiste ${formatearMonto(sumaRepartida)} de ${formatearMonto(costoMatricula)} — <strong style="color:#f87171;">te pasaste por ${formatearMonto(Math.abs(restante))}</strong>. No podés repartir más de lo que cuesta la matrícula.`;
-      return true;
-    }
-    resumenReparto.innerHTML = `Repartiste ${formatearMonto(sumaRepartida)} de ${formatearMonto(costoMatricula)} — queda <strong>${formatearMonto(restante)}</strong> por repartir.`;
-    return false;
-  }
-
-  function marcarPillActivo() {
-    pillModo.querySelectorAll(".pill-item").forEach((p) => p.classList.toggle("active", p.dataset.valor === desgloseActual.modo));
-  }
-
-  function renderizarFilasManual() {
-    contenedorDesglose.innerHTML = "";
-    desgloseActual.meses.forEach((mesEntry, idx) => {
-      const fila = document.createElement("div");
-      fila.className = "row";
-      const inputMes = document.createElement("input");
-      inputMes.type = "text";
-      inputMes.className = "form-input";
-      inputMes.style.flex = "1";
-      inputMes.placeholder = "Ej. Enero";
-      inputMes.value = mesEntry.mes;
-      inputMes.addEventListener("input", () => (mesEntry.mes = inputMes.value));
-
-      const inputMonto = document.createElement("input");
-      inputMonto.type = "number";
-      inputMonto.step = "0.01";
-      inputMonto.className = "form-input";
-      inputMonto.style.width = "120px";
-      inputMonto.value = mesEntry.monto;
-      inputMonto.addEventListener("input", () => {
-        mesEntry.monto = Number(inputMonto.value) || 0;
-        estaDesgloseManualSobrepasado();
-      });
-
-      const btnQuitar = document.createElement("button");
-      btnQuitar.type = "button";
-      btnQuitar.className = "btn btn-danger";
-      btnQuitar.textContent = "✕";
-      btnQuitar.addEventListener("click", () => {
-        desgloseActual.meses.splice(idx, 1);
-        renderizarFilasManual();
-      });
-
-      fila.appendChild(inputMes);
-      fila.appendChild(inputMonto);
-      fila.appendChild(btnQuitar);
-      contenedorDesglose.appendChild(fila);
-    });
-
-    const btnAgregar = document.createElement("button");
-    btnAgregar.type = "button";
-    btnAgregar.className = "btn btn-secondary btn-block";
-    btnAgregar.textContent = "+ Agregar pago";
-    btnAgregar.addEventListener("click", () => {
-      desgloseActual.meses.push({ id: "dm_" + crypto.randomUUID(), mes: "", monto: 0 });
-      renderizarFilasManual();
-    });
-    contenedorDesglose.appendChild(btnAgregar);
-
-    estaDesgloseManualSobrepasado();
-  }
-
-  function renderizarBloqueAutomatico() {
-    contenedorDesglose.innerHTML = "";
-    resumenReparto.textContent = "";
-    const filaCantidad = document.createElement("div");
-    filaCantidad.className = "row";
-    const inputCantidad = document.createElement("input");
-    inputCantidad.type = "number";
-    inputCantidad.min = "1";
-    inputCantidad.className = "form-input";
-    inputCantidad.placeholder = "Cantidad de pagos";
-    inputCantidad.value = desgloseActual.automatico_cantidad_meses || "";
-    const btnRepartir = document.createElement("button");
-    btnRepartir.type = "button";
-    btnRepartir.className = "btn btn-primary";
-    btnRepartir.textContent = "Repartir";
-    btnRepartir.addEventListener("click", () => {
-      const cantidad = Number(inputCantidad.value) || 0;
-      if (cantidad < 1) return;
-      desgloseActual.automatico_cantidad_meses = cantidad;
-      // v2.8.8: se reparte el costo de matrícula (único monto de pago que
-      // queda), ya no "pago confirmado" (campo que desapareció).
-      desgloseActual.meses = repartirMontoEnMeses(inputCosto.value, cantidad);
-      renderizarBloqueAutomatico();
-    });
-    filaCantidad.appendChild(inputCantidad);
-    filaCantidad.appendChild(btnRepartir);
-    contenedorDesglose.appendChild(filaCantidad);
-
-    if (desgloseActual.meses.length > 0) {
-      const lista = document.createElement("div");
-      lista.className = "stack";
-      lista.style.gap = "4px";
-      desgloseActual.meses.forEach((m) => {
-        const l = document.createElement("p");
-        l.className = "muted";
-        l.style.margin = "0";
-        l.textContent = `${m.mes}: ${formatearMonto(m.monto)}`;
-        lista.appendChild(l);
-      });
-      contenedorDesglose.appendChild(lista);
-    }
-  }
-
-  function renderizarSegunModo() {
-    marcarPillActivo();
-    if (desgloseActual.modo === "manual") renderizarFilasManual();
-    else renderizarBloqueAutomatico();
-  }
-
-  pillModo.querySelectorAll(".pill-item").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      desgloseActual.modo = btn.dataset.valor;
-      renderizarSegunModo();
-    });
-  });
-
-  // Cambiar el costo de matrícula también recalcula en vivo cuánto queda
-  // por repartir (si el desglose es manual) — sin reconstruir las filas,
-  // para no perder el foco de lo que la persona esté editando.
-  inputCosto.addEventListener("input", estaDesgloseManualSobrepasado);
-
-  renderizarSegunModo();
+  // ----- Desglose mensual: RETIRADO en Parte A (2026-09-12) -----
+  // `desglose_mensual` era la estructura que este bloque editaba — dejó de
+  // existir en el modelo tras la migración de Parte A.2 (se convirtió en
+  // entradas de `pagos_matricula`, ver migrarDatosAntiguos en schema.js).
+  // Este modal entero es transitorio: sigue editando "un solo monto" de
+  // matrícula y uno de beca (mapeado sobre el primer ítem de cada lista,
+  // ver btnGuardar más abajo) hasta que la Parte B lo reemplace por las
+  // tarjetas individuales de pagos_matricula/ingresos_beca. La Parte B.2
+  // ("Dividir un monto en varias partes") es la que retoma esta idea de
+  // repartir un pago en cuotas — ya sobre pagos_matricula reales, no sobre
+  // esta estructura vieja — reutilizando repartirMontoEnMeses de arriba.
+  const notaDesgloseRetirado = document.createElement("p");
+  notaDesgloseRetirado.className = "muted";
+  notaDesgloseRetirado.style.cssText = "font-size:0.78rem; margin:0;";
+  notaDesgloseRetirado.textContent =
+    "El pago por cuotas se va a poder dividir de nuevo (y editar cada cuota por separado) en la próxima entrega.";
+  caja.appendChild(notaDesgloseRetirado);
 
   // ----- Botones -----
   const filaBotones = document.createElement("div");
@@ -379,17 +235,26 @@ function abrirModalRegistroFinanciero(semestre, registroExistente, contenedorLis
   btnGuardar.style.flex = "1";
   btnGuardar.textContent = "Guardar";
   btnGuardar.addEventListener("click", () => {
-    if (estaDesgloseManualSobrepasado()) {
-      mostrarToast("El desglose manual reparte más de lo que cuesta la matrícula — ajustalo antes de guardar.");
-      return;
-    }
     const costoMatricula = Number(inputCosto.value) || 0;
     const becaMonto = Number(inputBeca.value) || 0;
 
     if (registroExistente) {
-      registroExistente.costo_matricula = costoMatricula;
-      registroExistente.beca_monto = becaMonto;
-      registroExistente.desglose_mensual = desgloseActual;
+      // Becas y Pagos de Matrícula — Parte A (transitorio): este modal
+      // todavía edita "un solo monto" de cada lado — se mapea sobre el
+      // PRIMER ítem de cada lista (se crea uno si no existía todavía).
+      // Parte B reemplaza esto por tarjetas individuales de verdad.
+      if (registroExistente.pagos_matricula.length > 0) {
+        registroExistente.pagos_matricula[0].monto = costoMatricula;
+        sellarTimestamp(registroExistente.pagos_matricula[0]);
+      } else if (costoMatricula > 0) {
+        registroExistente.pagos_matricula.push(crearPagoMatricula({ descripcion: "Matrícula", monto: costoMatricula }));
+      }
+      if (registroExistente.ingresos_beca.length > 0) {
+        registroExistente.ingresos_beca[0].monto = becaMonto;
+        sellarTimestamp(registroExistente.ingresos_beca[0]);
+      } else if (becaMonto > 0) {
+        registroExistente.ingresos_beca.push(crearIngresoBeca({ descripcion: "Beca", monto: becaMonto }));
+      }
       sellarTimestamp(registroExistente);
     } else {
       const nuevo = crearRegistroFinancieroSemestre({
@@ -397,7 +262,6 @@ function abrirModalRegistroFinanciero(semestre, registroExistente, contenedorLis
         costoMatricula,
         becaMonto,
       });
-      nuevo.desglose_mensual = desgloseActual;
       if (!Array.isArray(estado.datos.finanzas_semestre)) estado.datos.finanzas_semestre = [];
       estado.datos.finanzas_semestre.push(nuevo);
     }

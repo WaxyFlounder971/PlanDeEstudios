@@ -7,7 +7,7 @@
    calcula los totales del Resumen — nada de CRUD acá.
    ========================================================================= */
 
-import { MONEDAS_DISPONIBLES, calcularPagosRecurrentesTranscurridos } from "../core/schema.js";
+import { MONEDAS_DISPONIBLES, calcularPagosRecurrentesTranscurridos, calcularTotalPagosMatricula, calcularTotalIngresosBeca } from "../core/schema.js";
 import { estado } from "../core/storage.js";
 import { construirGraficasResumenFinanzas } from "./finanzas-graficas.js";
 import { renderizarPestanaBeneficios, renderizarPestanaGastosU } from "./finanzas-gastos.js";
@@ -102,14 +102,18 @@ function formatearMonto(numero) {
  * día otra pantalla necesita el mismo número (ej. un widget en Configuración).
  *
  * v2.8.8: ya no existe un "neto por semestre" auto-calculado — costo_matricula
- * y beca_monto son dos montos directos e independientes por registro:
- *   - totalGastado = suma de costo_matricula (todos los semestres) + costo
- *     de cada gasto_u de tipo "gasto" (los simples: `costo`; los
- *     recurrentes: lo ya pagado hasta hoy vía
- *     calcularPagosRecurrentesTranscurridos, nunca lo que falte pagar a
- *     futuro).
- *   - totalBecas = suma de beca_monto — funciona como INGRESO/ahorro, no
- *     como un gasto más.
+ * y beca_monto eran dos montos directos e independientes por registro.
+ *
+ * Becas y Pagos de Matrícula — Parte A (2026-09-12): costo_matricula/
+ * beca_monto se retiraron del modelo (ver migrarDatosAntiguos en
+ * schema.js) — ahora:
+ *   - totalGastado = suma de calcularTotalPagosMatricula() de cada
+ *     registro (todos los semestres) + costo de cada gasto_u de tipo
+ *     "gasto" (los simples: `costo`; los recurrentes: lo ya pagado hasta
+ *     hoy vía calcularPagosRecurrentesTranscurridos, nunca lo que falte
+ *     pagar a futuro).
+ *   - totalBecas = suma de calcularTotalIngresosBeca() de cada registro —
+ *     funciona como INGRESO/ahorro, no como un gasto más.
  *
  * v2.9.2 (ingresos, pedido explícito de Krys): se agrega totalIngresos,
  * el mismo cálculo "a la fecha" que ya usaba totalGastado pero para los
@@ -145,8 +149,8 @@ function calcularTotalesResumenFinanzas() {
   let totalIngresos = 0;
 
   registros.forEach((r) => {
-    totalGastado += Number(r.costo_matricula) || 0;
-    totalBecas += Number(r.beca_monto) || 0;
+    totalGastado += calcularTotalPagosMatricula(r);
+    totalBecas += calcularTotalIngresosBeca(r);
   });
 
   gastos.forEach((g) => {
