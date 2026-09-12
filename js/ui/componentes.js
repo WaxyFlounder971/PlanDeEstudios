@@ -565,9 +565,43 @@ const ETIQUETAS_MODALIDAD_HORARIO = {
  * caller decide dónde montarlo (ver montarPillSwitch en config-ajustes.js,
  * que lo inserta reemplazando al checkbox viejo sin tocar index.html).
  */
+/**
+ * Switch binario tipo "píldora" (punto 4, ronda visual 2026-09-12):
+ * reemplazo genérico para un checkbox on/off cuyas 2 opciones tienen
+ * nombre propio (ej. "Oscuro"/"Claro") — en vez de un interruptor que hay
+ * que adivinar, muestra ambas opciones siempre visibles y resalta la
+ * activa. Reusa el MISMO patrón visual que el resto de pill-group del
+ * proyecto (.pill-group + .pill-item + .active, ver design-system.css y
+ * construirSelectorModalidad más abajo en este archivo), con la variante
+ * .pill-switch-binario agregada al lado de .pill-group-fijo (ver ese
+ * bloque en design-system.css) para el thumb que se desliza suave en vez
+ * de que los 2 botones prendan/apaguen su fondo de golpe.
+ *
+ * `opciones` es un array de EXACTAMENTE 2 { valor, texto } — el ORDEN
+ * importa acá (a diferencia del resto de los pill-group): el primero es
+ * "izquierda" y el segundo "derecha", el thumb se desliza entre esas 2
+ * posiciones nada más, así que no sirve para 3+ opciones. `valorActivo` es
+ * el `valor` de la opción seleccionada al montar. `onCambiar(valor)` se
+ * dispara al tocar la opción que no estaba activa (tocar la ya activa no
+ * hace nada, igual que cualquier otro pill-group del proyecto).
+ *
+ * Devuelve el elemento contenedor listo para insertar en el DOM — el
+ * caller decide dónde montarlo (ver montarPillSwitch en config-ajustes.js,
+ * que lo inserta reemplazando al checkbox viejo sin tocar index.html).
+ */
 function construirPillSwitchBinario(opciones, valorActivo, onCambiar) {
   const grupo = document.createElement("div");
-  grupo.className = "pill-group pill-group-fijo";
+  grupo.className = "pill-group pill-group-fijo pill-switch-binario";
+
+  const thumb = document.createElement("div");
+  thumb.className = "pill-switch-thumb";
+  grupo.appendChild(thumb);
+
+  function actualizarThumb(valor) {
+    const indice = opciones.findIndex((o) => o.valor === valor);
+    thumb.classList.toggle("pill-switch-thumb--derecha", indice === 1);
+  }
+
   opciones.forEach(({ valor, texto }) => {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -578,10 +612,13 @@ function construirPillSwitchBinario(opciones, valorActivo, onCambiar) {
       if (btn.classList.contains("active")) return;
       grupo.querySelectorAll(".pill-item").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
+      actualizarThumb(valor);
       onCambiar(valor);
     });
     grupo.appendChild(btn);
   });
+
+  actualizarThumb(valorActivo);
   return grupo;
 }
 
