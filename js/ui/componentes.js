@@ -546,6 +546,46 @@ const ETIQUETAS_MODALIDAD_HORARIO = {
 };
 
 /**
+ * Switch binario tipo "píldora" (punto 4, ronda visual 2026-09-12):
+ * reemplazo genérico para un checkbox on/off cuyas 2 opciones tienen
+ * nombre propio (ej. "Oscuro"/"Claro") — en vez de un interruptor que hay
+ * que adivinar, muestra ambas opciones siempre visibles y resalta la
+ * activa. Reusa el MISMO patrón visual que el resto de pill-group del
+ * proyecto (.pill-group + .pill-item + .active, ver design-system.css y
+ * construirSelectorModalidad más abajo en este archivo) — no es un
+ * componente nuevo, es este mismo patrón con exactamente 2 opciones fijas
+ * (por eso usa .pill-group-fijo: nunca necesita scroll ni flechitas).
+ *
+ * `opciones` es un array de EXACTAMENTE 2 { valor, texto }. `valorActivo`
+ * es el `valor` de la opción seleccionada al montar. `onCambiar(valor)` se
+ * dispara al tocar la opción que no estaba activa (tocar la ya activa no
+ * hace nada, igual que cualquier otro pill-group del proyecto).
+ *
+ * Devuelve el elemento contenedor listo para insertar en el DOM — el
+ * caller decide dónde montarlo (ver montarPillSwitch en config-ajustes.js,
+ * que lo inserta reemplazando al checkbox viejo sin tocar index.html).
+ */
+function construirPillSwitchBinario(opciones, valorActivo, onCambiar) {
+  const grupo = document.createElement("div");
+  grupo.className = "pill-group pill-group-fijo";
+  opciones.forEach(({ valor, texto }) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pill-item" + (valor === valorActivo ? " active" : "");
+    btn.dataset.valor = valor;
+    btn.textContent = texto;
+    btn.addEventListener("click", () => {
+      if (btn.classList.contains("active")) return;
+      grupo.querySelectorAll(".pill-item").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      onCambiar(valor);
+    });
+    grupo.appendChild(btn);
+  });
+  return grupo;
+}
+
+/**
  * Horario — Núcleo: selector de modalidad (Presencial/Semipresencial/
  * Virtual/Personalizado), reutilizable en el modal de creación/edición de
  * bloque Y en el editor de excepción por semana (mismo campo en los dos
@@ -814,6 +854,7 @@ export {
   cerrarConfirmacion,
   cerrarDrawerEnlacesMovil,
   cerrarSidebarMovil,
+  construirPillSwitchBinario,
   construirSelectorChipsMultiple,
   construirSelectorModalidad,
   desplazarYResaltarElemento,
