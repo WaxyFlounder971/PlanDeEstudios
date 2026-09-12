@@ -110,19 +110,6 @@ function borrarTokenCreador(competenciaId) {
   }
 }
 
-/** Link de "reclamo" de `token_creador` — mismo patrón que
- * construirLinkInvitacion, pero con "?delegar=<id>&token=<nuevo>". Lo abre
- * la persona ELEGIDA en su propio dispositivo (ver
- * revisarLinkDelegacionAlCargar) para quedar con el permiso de borrado. */
-function construirLinkDelegacion(competenciaId, tokenCreador) {
-  const url = new URL(location.href);
-  url.search = "";
-  url.hash = "";
-  url.searchParams.set("delegar", competenciaId);
-  url.searchParams.set("token", tokenCreador);
-  return url.toString();
-}
-
 function construirLinkInvitacion(competenciaId) {
   const url = new URL(location.href);
   url.search = "";
@@ -192,6 +179,8 @@ async function sincronizarHorasCompetencias() {
   const horas = calcularMinutosTotalesEnRango(inicio, fin) / 60;
   const identificador_usuario = estado.datos.perfil.correo;
 
+  let huboDelegacionRecibida = false;
+
   await Promise.all(
     competencias.map(async (competencia) => {
       try {
@@ -205,12 +194,30 @@ async function sincronizarHorasCompetencias() {
         );
         if (!respuesta.ok) {
           console.warn(`[competencias] actualizar-horas respondió ${respuesta.status} para "${competencia.nombre}" — se autocorrige con la próxima sesión.`);
+          return;
+        }
+
+        // Buzón de delegación (ver manejarActualizarHoras en el Worker):
+        // si alguien nos delegó el permiso de borrado de esta competencia
+        // (abrirModalDelegarAntesDeSalir), viaja acá solo, sin que
+        // tengamos que hacer nada — se guarda en este dispositivo y se le
+        // pone la corona local a la competencia.
+        const datos = await respuesta.json();
+        if (datos.token_creador_delegado) {
+          guardarTokenCreador(competencia.id, datos.token_creador_delegado);
+          competencia.es_creador = true;
+          huboDelegacionRecibida = true;
         }
       } catch (e) {
         console.warn(`[competencias] Falló actualizar-horas para "${competencia.nombre}" — se autocorrige con la próxima sesión:`, e);
       }
     })
   );
+
+  if (huboDelegacionRecibida) {
+    marcarCambioPendiente();
+    mostrarToast("✓ Ahora tenés permiso para borrar una de tus competencias para todos");
+  }
 }
 
 /**
@@ -308,14 +315,20 @@ async function ejecutarSalidaCompetencia(competencia, refrescar) {
  * creador Y hay más gente en la competencia. Primero elige a quién
  * delegarle `token_creador` (POST .../delegar-borrado invalida el viejo
  * de una), después arma un link de "reclamo" (mismo patrón que el link de
- * invitación, pero con "?delegar=<id>&token=<nuevo>") para que la persona
- * elegida lo abra en SU dispositivo — recién ahí queda guardado en su
- * localStorage (ver revisarLinkDelegacionAlCargar). Solo cuando ese paso
- * ya se hizo se ofrece salir de verdad, para no dejar a nadie a mitad de
- * camino sin haber mandado el link.
+ * invitación con "?comp="): POST .../delegar-borrado deja el token nuevo
+ * "estacionado" en el Worker (columna `token_creador_pendiente` de la fila
+ * del participante elegido) y su propio dispositivo lo recoge solo en su
+ * próxima sincronización (ver sincronizarHorasCompetencias) — cero acción
+ * manual de esa persona, no hace falta armar ni mandar ningún link.
+ *
+ * Por eso "Delegar" y "Salir" son un solo botón: una vez que el Worker
+ * confirmó la delegación no queda nada más por hacer del lado de quien se
+ * va, así que se sale de una. El modal bloquea el cierre por click afuera
+ * (`bloquearClickAfuera`) — la única forma de salir sin delegar es el
+ * botón explícito "Ahora no".
  */
 function abrirModalDelegarAntesDeSalir(competencia, otrosParticipantes, refrescar) {
-  const { overlay, caja, cerrar } = construirCajaModal();
+  const { overlay, caja, cerrar } = construirCajaModal({ bloquearClickAfuera: true });
 
   const opcionesHtml = otrosParticipantes
     .map(
@@ -339,13 +352,14 @@ function abrirModalDelegarAntesDeSalir(competencia, otrosParticipantes, refresca
     </div>
     <div class="row-between" style="gap:10px;">
       <button type="button" class="btn btn-secondary" id="comp-delegar-cancelar" style="flex:1;">Ahora no</button>
-      <button type="button" class="btn btn-primary" id="comp-delegar-confirmar" style="flex:1;">Delegar</button>
+      <button type="button" class="btn btn-danger" id="comp-delegar-confirmar" style="flex:1;">Delegar y salir</button>
     </div>
   `;
   document.body.appendChild(overlay);
   caja.querySelector("#comp-delegar-cancelar").addEventListener("click", cerrar);
 
   const btnConfirmar = caja.querySelector("#comp-delegar-confirmar");
+  const btnCancelar = caja.querySelector("#comp-delegar-cancelar");
   btnConfirmar.addEventListener("click", async () => {
     const elegido = caja.querySelector('input[name="comp-delegar-elegido"]:checked');
     if (!elegido) {
@@ -353,7 +367,6 @@ function abrirModalDelegarAntesDeSalir(competencia, otrosParticipantes, refresca
       return;
     }
     const participanteId = elegido.value;
-    const apodoElegido = otrosParticipantes.find((p) => p.id === participanteId)?.apodo || "esa persona";
 
     const tokenCreador = leerTokenCreador(competencia.id);
     if (!tokenCreador) {
@@ -361,9 +374,12 @@ function abrirModalDelegarAntesDeSalir(competencia, otrosParticipantes, refresca
       return;
     }
 
+    // Se bloquean los dos botones (no solo el de confirmar) mientras el
+    // pedido está en vuelo — con el click afuera ya bloqueado, es la
+    // única forma que quedaba de "escaparse" a mitad de camino.
     btnConfirmar.disabled = true;
+    btnCancelar.disabled = true;
     btnConfirmar.textContent = "Delegando…";
-    let tokenNuevo;
     try {
       const respuesta = await fetchConTimeout(
         `${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}/delegar-borrado`,
@@ -374,47 +390,22 @@ function abrirModalDelegarAntesDeSalir(competencia, otrosParticipantes, refresca
         }
       );
       if (!respuesta.ok) throw new Error(`El Worker respondió ${respuesta.status}`);
-      ({ token_creador: tokenNuevo } = await respuesta.json());
     } catch (e) {
       console.error("[competencias] Falló delegar el borrado:", e);
       mostrarToast("No se pudo delegar. Revisá tu conexión e intentá de nuevo.");
       btnConfirmar.disabled = false;
-      btnConfirmar.textContent = "Delegar";
+      btnCancelar.disabled = false;
+      btnConfirmar.textContent = "Delegar y salir";
       return;
     }
 
     // Éxito: el token viejo de este dispositivo ya no sirve (el Worker lo
-    // pisó), así que se limpia acá mismo y se le saca la corona local a la
-    // competencia — si el refresco de la tarjeta llega a correr mientras
-    // este modal sigue abierto, no debe seguir mostrando "Borrar".
+    // pisó), se limpia acá. La competencia está a punto de sacarse de la
+    // lista local de una (ejecutarSalidaCompetencia), así que no hace
+    // falta tocar `es_creador` a mano.
     borrarTokenCreador(competencia.id);
-    const entradaLocal = estado.datos.competencias_unidas.find((c) => c.id === competencia.id);
-    if (entradaLocal) entradaLocal.es_creador = false;
-    marcarCambioPendiente();
-    if (refrescar) refrescar();
-
-    const link = construirLinkDelegacion(competencia.id, tokenNuevo);
-    caja.innerHTML = `
-      <div>
-        <h2 style="margin:0;">Delegado ✓</h2>
-        <p class="muted" style="margin:4px 0 0; font-size:0.85rem;">
-          Mandale este link a <strong>${apodoElegido}</strong> y que lo abra en SU celular — así queda con el permiso de borrado. Es de un solo uso.
-        </p>
-      </div>
-      <div class="form-input" style="word-break:break-all; font-size:0.8rem; user-select:all;">${link}</div>
-      <div class="row-between" style="gap:10px;">
-        <button type="button" class="btn btn-secondary" id="comp-delegar-copiar" style="flex:1;">Copiar link</button>
-        <button type="button" class="btn btn-danger" id="comp-delegar-salir-ahora" style="flex:1;">Ya se lo mandé, salir</button>
-      </div>
-    `;
-    caja.querySelector("#comp-delegar-copiar").addEventListener("click", async () => {
-      const exito = await copiarAlPortapapelesBlindado(link);
-      mostrarToast(exito ? "✓ Link copiado" : "No se pudo copiar — seleccionalo y copialo a mano");
-    });
-    caja.querySelector("#comp-delegar-salir-ahora").addEventListener("click", () => {
-      cerrar();
-      ejecutarSalidaCompetencia({ ...competencia, es_creador: false }, refrescar);
-    });
+    cerrar();
+    ejecutarSalidaCompetencia(competencia, refrescar);
   });
 }
 
@@ -461,7 +452,14 @@ function borrarCompetenciaEntera(competencia, refrescar) {
   });
 }
 
-function construirCajaModal() {
+/**
+ * `bloquearClickAfuera`: si es true, NO se cierra al tocar fuera de la
+ * caja — solo queda la salida explícita que arme cada modal (botón
+ * "Cancelar"/"Ahora no", etc). Se usa en flujos donde cerrar por accidente
+ * puede dejar al usuario a mitad de camino sin darse cuenta (ver
+ * abrirModalDelegarAntesDeSalir).
+ */
+function construirCajaModal({ bloquearClickAfuera = false } = {}) {
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.style.cssText =
@@ -477,9 +475,11 @@ function construirCajaModal() {
   function cerrar() {
     overlay.remove();
   }
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) cerrar();
-  });
+  if (!bloquearClickAfuera) {
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) cerrar();
+    });
+  }
 
   return { overlay, caja, cerrar };
 }
@@ -652,49 +652,6 @@ function abrirModalUnirseCompetencia(refrescar) {
       btnGuardar.textContent = "Unirme";
     }
   });
-}
-
-let _yaProcesadoLinkDelegacion = false; // se llama una sola vez desde DOMContentLoaded en main.js
-
-/**
- * Deep link "?delegar=<id>&token=<tokenNuevo>" armado por
- * abrirModalDelegarAntesDeSalir(). El Worker ya hizo el cambio real
- * cuando generó este link (ver manejarDelegarBorrado: pisó
- * `token_creador` en D1) — acá del lado del cliente solo hace falta
- * GUARDAR ese token nuevo en localStorage de ESTE dispositivo y, si la
- * competencia ya estaba en la lista local, marcarla como propia
- * (es_creador=true). No hace falta llamar a ningún endpoint más.
- *
- * Llamar una sola vez desde el DOMContentLoaded de main.js, igual que
- * revisarLinkInvitacionAlCargar (mismo motivo: necesita `estado` cargado).
- */
-function revisarLinkDelegacionAlCargar(refrescar) {
-  if (_yaProcesadoLinkDelegacion) return;
-  _yaProcesadoLinkDelegacion = true;
-
-  const url = new URL(location.href);
-  const id = url.searchParams.get("delegar");
-  const token = url.searchParams.get("token");
-  if (!id || !token) return;
-
-  url.searchParams.delete("delegar");
-  url.searchParams.delete("token");
-  history.replaceState(null, "", url.toString());
-
-  guardarTokenCreador(id, token);
-
-  const entradaLocal = estado.datos.competencias_unidas.find((c) => c.id === id);
-  if (entradaLocal) {
-    entradaLocal.es_creador = true;
-    marcarCambioPendiente();
-    mostrarToast(`✓ Ahora sos quien puede borrar "${entradaLocal.nombre}" para todos`);
-    if (refrescar) refrescar();
-  } else {
-    // Raro (implica que este dispositivo nunca sincronizó esta competencia
-    // en su lista local), pero el token igual queda guardado — se resuelve
-    // solo la próxima vez que sincronice y la competencia le aparezca.
-    mostrarToast("Permiso de borrado guardado. Si la competencia todavía no te aparece, sincronizá y volvé a intentar.");
-  }
 }
 
 let _yaProcesadoLinkInvitacion = false; // se llama una sola vez desde DOMContentLoaded en main.js
@@ -1074,6 +1031,12 @@ function construirFilaBotonesCompetencia(competencia, refrescar) {
  * argumentos (`renderizarTiempoEstudio`) que ya usan Materias/Estadísticas.
  */
 function construirVistaCompetencias(cont, refrescar) {
+  // Fire-and-forget: además de correr tras cada sesión de estudio, se
+  // pincha acá para que una delegación pendiente (ver
+  // abrirModalDelegarAntesDeSalir) llegue apenas alguien abre esta
+  // pestaña, sin tener que esperar a la próxima vez que estudie.
+  sincronizarHorasCompetencias();
+
   const encabezado = document.createElement("div");
   encabezado.className = "row-between";
   encabezado.style.cssText = "align-items:center; margin-bottom:12px;";
@@ -1143,9 +1106,4 @@ function construirVistaCompetencias(cont, refrescar) {
   cont.appendChild(lista);
 }
 
-export {
-  construirVistaCompetencias,
-  sincronizarHorasCompetencias,
-  revisarLinkInvitacionAlCargar,
-  revisarLinkDelegacionAlCargar,
-};
+export { construirVistaCompetencias, sincronizarHorasCompetencias, revisarLinkInvitacionAlCargar };
