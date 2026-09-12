@@ -420,6 +420,85 @@ a { color: var(--accent-1); }
   text-overflow: unset;
 }
 
+/* ---- Pill switch binario (punto 4, ronda visual 2026-09-12): variante de
+   .pill-group-fijo para el caso "switch de exactamente 2 opciones" (Modo:
+   Oscuro/Claro, Calidad: Optimizado/Fancy — ver construirPillSwitchBinario
+   en ui/componentes.js). Dos pedidos juntos acá:
+
+   1. Ancho completo de la tarjeta: .pill-group ya reparte sus pill-item con
+      flex:1 (ver arriba), así que solo hace falta que el CONTENEDOR mismo
+      ocupe el 100% en vez de encogerse al contenido — por defecto un div en
+      flujo normal ya lo hace, pero se deja explícito acá para que no
+      dependa de qué layout tenga la fila que lo envuelve en cada lugar
+      donde se use.
+
+   2. Transición suave tipo "thumb deslizante" en vez del salto brusco de
+      fondo entre botones (feedback: "se ve muy brusco"). En vez de que cada
+      .pill-item prenda/apague su propio fondo con la transición genérica de
+      0.18s que ya trae .pill-item (pensada para pills sueltos, no para este
+      caso), acá hay un único thumb (.pill-switch-thumb) que se desliza de
+      un lado al otro con transform — se ve y se siente como un switch
+      real, no como 2 botones independientes cambiando de color a la vez.
+      Los .pill-item de acá quedan con fondo transparente incluso en
+      .active (el color lo da el thumb de abajo), así que no compite/parpadea
+      contra el fondo del thumb. */
+.pill-switch-binario {
+  position: relative;
+  width: 100%;
+  gap: 0;
+}
+.pill-switch-thumb {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  /* Ver el cálculo en el comentario de arriba: con padding fijo de 4px en
+     .pill-group y exactamente 2 opciones de ancho igual, "calc(50% - 4px)"
+     da el ancho exacto de CUALQUIERA de los 2 botones sin importar el
+     ancho real de la tarjeta — y por eso mover el thumb "su propio 100%"
+     (translateX(100%), relativo a SU PROPIO ancho, no al del contenedor)
+     lo deja pegado exacto contra el botón de la derecha. */
+  width: calc(50% - 4px);
+  border-radius: var(--radius-pill);
+  background: var(--gradient-accent-alt, var(--gradient-accent));
+  box-shadow: var(--shadow-float);
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: 0;
+  pointer-events: none;
+}
+.pill-switch-thumb.pill-switch-thumb--derecha {
+  transform: translateX(100%);
+}
+.pill-switch-binario .pill-item {
+  position: relative;
+  z-index: 1;
+  /* El color de fondo lo da el thumb, no el propio botón — si se dejara
+     el fondo normal de .pill-item.active acá, se vería doble (el thumb
+     deslizándose Y un segundo fondo prendiéndose/apagándose de golpe
+     encima), exactamente el "brusco" que se quiere evitar. La transición
+     de color de texto (heredada de .pill-item) sigue andando normal. */
+  background: transparent !important;
+  box-shadow: none !important;
+  transition: color var(--transition-fast);
+}
+
+/* Fila "Modo" / "Calidad" + su pill switch de ancho completo, apilados
+   (caption arriba, switch abajo) — reemplaza la fila anterior en línea de
+   "etiqueta ..... switch chico a la derecha" (ver montarPillSwitch en
+   config-ajustes.js, que reconstruye la fila entera con esta estructura). */
+.fila-pill-switch {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+}
+.fila-pill-switch .fila-pill-switch-titulo {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
 /* ---- v2.8.9: grid de 2 columnas para grupos de opciones tipo switch con
    etiquetas que no caben cómodas en una sola fila horizontal sin cortarse
    (ej. Frecuencia de un gasto recurrente: Semanal/Quincenal/Mensual/Anual/
