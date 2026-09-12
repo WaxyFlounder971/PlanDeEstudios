@@ -190,7 +190,15 @@ function actualizarControlesPantallaCompleta() {
   // layout normal fuera de fullscreen).
   if (cardRef && cardRef.isConnected) {
     cardRef.style.overflowY = activo ? "auto" : "";
+    // REGRESIÓN (2026-09-12): mismo bug de siempre con 100vh en móvil real
+    // (ver el comentario largo junto a .vista-card:fullscreen en
+    // design-system.css) — acá se duplica la misma mejora progresiva
+    // vh→dvh que ya usa esa regla CSS, para que el maxHeight puesto por
+    // JS no reintroduzca el problema por su cuenta. Si el navegador no
+    // soporta "dvh", la segunda asignación es inválida y el navegador
+    // simplemente la ignora, quedando con el valor "100vh" de la primera.
     cardRef.style.maxHeight = activo ? "100vh" : "";
+    if (activo) cardRef.style.maxHeight = "100dvh";
   }
   // Al SALIR de pantalla completa, se fuerza todo visible de nuevo — afuera
   // nunca queda nada oculto (pedido explícito original).
@@ -596,7 +604,11 @@ function construirTarjetaVista(plan) {
     // haya un instante con contenido recortado al reconstruir la tarjeta
     // (ej. al cambiar "Tamaño"/"Tema") mientras ya se está en fullscreen.
     card.style.overflowY = "auto";
+    // Ver comentario en actualizarControlesPantallaCompleta() sobre por
+    // qué esto necesita el mismo vh→dvh que .vista-card:fullscreen en
+    // design-system.css (regresión de nuevo el 2026-09-12).
     card.style.maxHeight = "100vh";
+    card.style.maxHeight = "100dvh";
   }
   const titulo = document.createElement("h2");
   titulo.className = "texto-encabezado-seccion";
