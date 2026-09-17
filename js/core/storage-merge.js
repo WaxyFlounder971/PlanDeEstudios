@@ -263,10 +263,28 @@ function marcarConflictoSiCorresponde(entidadLocal, entidadRemota, etiqueta) {
       `Se necesita que el usuario elija cuál dejar.`,
     { local: entidadLocal, remoto: entidadRemota }
   );
+  // FIX blindaje 2026-09-17 (punto 2.1 de la auditoría — "¿el desempate es
+  // determinístico o depende de quién sincronizó primero?"): antes se
+  // conservaba SIEMPRE `entidadLocal` como versión visible y la otra iba a
+  // `_version_alterna`. Como "local" y "remota" son etiquetas relativas a
+  // qué dispositivo está fundiendo, el MISMO choque quedaba al revés en
+  // cada dispositivo: el teléfono mostraba su versión y la PC la suya,
+  // ambos con el badge de conflicto, y hasta que alguien resolviera, cada
+  // pantalla mostraba un valor distinto (y cada uno subía el suyo, así que
+  // la foto "vigente" en Drive dependía de quién sincronizó último). Ahora
+  // el par se ordena con el MISMO criterio determinista que ya usa todo el
+  // motor (esMasReciente: contador lógico y, si empata, _dispositivoId),
+  // así que los dos dispositivos llegan exactamente al mismo objeto —
+  // misma versión visible y misma `_version_alterna`— sin importar el orden
+  // de llegada. No se pierde nada: las dos versiones siguen enteras, solo
+  // cambia cuál queda "arriba" mientras el usuario decide.
+  const remotaGana = esMasReciente(entidadRemota, entidadLocal);
+  const principal = remotaGana ? entidadRemota : entidadLocal;
+  const alterna = remotaGana ? entidadLocal : entidadRemota;
   return {
-    ...entidadLocal,
+    ...principal,
     _conflicto: true,
-    _version_alterna: { ...entidadRemota },
+    _version_alterna: { ...alterna },
   };
 }
 
@@ -555,6 +573,25 @@ function fusionarPlanesEstudio(local, remoto, tumbas) {
   const porId = new Map();
   listaLocal.forEach((p) => porId.set(p.id, p));
   listaRemota.forEach((p) => {
+    // FIX blindaje 2026-09-17 (hallazgo de la auditoría, no pedido por
+    // ningún punto puntual — paridad con TODAS sus funciones hermanas:
+    // fusionarSemestres, fusionarCriterios, fusionarMateriasMatriculadas,
+    // fusionarBloquesHorario y fusionarFinanzasSemestres ya llaman a
+    // observarEntidadRemota() sobre CADA entidad remota, exista o no del
+    // lado local — esta era la única que no lo hacía). Cuando `existente`
+    // SÍ existe, fusionarPlan() ya llama a observarEntidadRemota() por su
+    // cuenta (llamarlo acá también es inofensivo: observarRelojLogico solo
+    // toma el máximo). El caso real que esto arregla es cuando el plan
+    // llega SOLO del lado remoto (!existente, ej. un plan nuevo creado en
+    // otro dispositivo): antes entraba "gratis" sin que el reloj lógico de
+    // este dispositivo se enterara de su contador. Si el usuario editaba
+    // ESE MISMO plan en este dispositivo poco después (antes de que
+    // ninguna otra entidad remota le hiciera avanzar el reloj sin
+    // querer), `sellarTimestamp` podía sellar con un contador MÁS BAJO que
+    // el que el otro dispositivo ya conocía — en el siguiente sync,
+    // `esMasReciente` habría preferido erróneamente al remoto viejo sobre
+    // la edición local nueva, perdiéndola en silencio.
+    observarEntidadRemota(p);
     const existente = porId.get(p.id);
     porId.set(p.id, existente ? fusionarPlan(existente, p) : p);
   });

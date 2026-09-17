@@ -265,6 +265,28 @@ async function probarConexionReal() {
 }
 
 function forzarCierreSesionPorFalloDeReconexion() {
+  // FIX blindaje 2026-09-17 (punto 3.3 de la auditoría — el riesgo de
+  // pérdida de datos más serio que apareció en toda esta ronda): el hook
+  // registrado acá es `cerrarSesion` (main.js), que hace
+  // `localStorage.removeItem(CLAVE_CACHE_LOCAL)`. O sea: este camino
+  // BORRA la caché local. Si el usuario tiene cambios que todavía no
+  // pudieron subir —que es exactamente la situación en la que este camino
+  // se dispara, 4 fallos seguidos de reconexión con internet confirmado—
+  // esos cambios se pierden para siempre, y un toast no es una
+  // confirmación. Con cambios pendientes ya no se cierra nada: se deja el
+  // aviso de reconexión visible, se reinicia el contador para que los
+  // reintentos automáticos sigan (evento "online", sondeo de 9s, retry de
+  // 45s) y el usuario conserva la posibilidad de reconectar a mano desde
+  // el aviso (btn-reconectar-sesion) sin perder nada.
+  if (estado.pendienteSync) {
+    intentosReconexionFallidosSeguidos = 0;
+    mostrarAvisoReconexion();
+    mostrarToast(
+      "⚠️ No pudimos reconectar tu cuenta y tenés cambios sin sincronizar. No cerramos la sesión para no perderlos: reconectá desde el aviso de arriba."
+    );
+    return;
+  }
+
   intentosReconexionFallidosSeguidos = 0;
   // Punto 2: nunca en silencio — se muestra la razón exacta ANTES de cerrar.
   mostrarToast(
@@ -318,6 +340,120 @@ function inicializarReconexionAlVolverOnline() {
       if (estado.pendienteSync) intentarSincronizar();
     });
   });
+}
+
+/* ------------------ Canal entre pestañas del mismo navegador ------------------ */
+
+/**
+ * BLINDAJE 2026-09-17 (puntos 1.3 y 3.4 de la auditoría de choques).
+ *
+ * El motor de sync estaba pensado para MULTI-DISPOSITIVO (sondeo de
+ * modifiedTime cada ~9s + fusión antes de subir). Eso cubre bien "PC vs
+ * teléfono", pero deja dos huecos propios de DOS PESTAÑAS DEL MISMO
+ * navegador:
+ *
+ *  1. `sondearCambiosRemotos()` se corta de entrada si `document.hidden`
+ *     (ahorro de cuota), así que la pestaña de atrás puede quedarse horas
+ *     con un `estado.datos` viejo en memoria mientras la de adelante sube
+ *     cambio tras cambio. Nada se pierde en Drive (todo guardado pasa por
+ *     bajar+fundir antes de subir, ver ejecutarUnaSincronizacion), pero la
+ *     pestaña de atrás muestra datos viejos y, si el usuario vuelve a ella
+ *     y edita, esa edición parte de una base vieja — que es justo la
+ *     receta de un choque real evitable.
+ *  2. Si en una pestaña se cierra sesión, la otra sigue con `estado.token`
+ *     en memoria e intenta sincronizar con una sesión que ya no existe.
+ *
+ * Nota importante (hallazgo documentado, no un bug): dos pestañas del MISMO
+ * navegador comparten `localStorage`, así que comparten el reloj lógico
+ * (CLAVE_RELOJ_LOGICO) y el `_dispositivoId` (ver schema.js). Compartir el
+ * reloj es bueno (los contadores nunca empatan entre pestañas salvo carrera
+ * exacta de lectura/escritura), pero compartir el dispositivoId significa
+ * que el desempate de `esMasReciente` no puede distinguirlas: entre dos
+ * pestañas, el choque se resuelve por contador (gana la edición posterior)
+ * y no se marca `_conflicto`. Es aceptable a propósito — son la misma
+ * persona en el mismo navegador — y este canal reduce todavía más la
+ * ventana en que puede pasar.
+ *
+ * BroadcastChannel no está en todos los navegadores viejos: si no existe,
+ * todo esto queda en no-op y el comportamiento es exactamente el de antes
+ * (degradación segura, nunca un throw).
+ */
+const NOMBRE_CANAL_PESTANAS = "app_academica_sync";
+let canalPestanas = null;
+
+function inicializarCanalEntrePestanas() {
+  if (canalPestanas || typeof BroadcastChannel === "undefined") return;
+  try {
+    canalPestanas = new BroadcastChannel(NOMBRE_CANAL_PESTANAS);
+  } catch (e) {
+    canalPestanas = null;
+    return;
+  }
+  canalPestanas.addEventListener("message", (evento) => {
+    const mensaje = evento && evento.data;
+    if (!mensaje || typeof mensaje !== "object") return;
+
+    if (mensaje.tipo === "sesion-cerrada") {
+      // Punto 3.4: la otra pestaña cerró sesión (o se le revocó el token).
+      // NO se borra nada local acá a propósito (eso lo hizo la pestaña que
+      // cerró, y solo después de su propia confirmación): esta pestaña
+      // simplemente deja de sincronizar con un token muerto, para no
+      // quedar en un loop de reintentos ni subir con una sesión que ya no
+      // existe.
+      sesionCerradaEnOtraPestana = true;
+      estado.token = null;
+      mostrarAvisoReconexion();
+      return;
+    }
+
+    if (mensaje.tipo === "datos-subidos") {
+      // Punto 1.3: otra pestaña acaba de dejar una versión nueva en Drive.
+      if (estado.pendienteSync) return; // lo propio primero, ya se funde al subir
+      if (!estado.token || !estado.fileId) return;
+      if (mensaje.modifiedTime && mensaje.modifiedTime === estado.ultimoModifiedTimeConocido) return;
+      refrescarPorAvisoDeOtraPestana();
+    }
+  });
+}
+
+function avisarDatosSubidosAOtrasPestanas() {
+  if (!canalPestanas) return;
+  try {
+    canalPestanas.postMessage({ tipo: "datos-subidos", modifiedTime: estado.ultimoModifiedTimeConocido });
+  } catch (e) {
+    // Canal cerrado o mensaje no clonable: nunca debe afectar al sync real.
+  }
+}
+
+/**
+ * Punto 3.4: lo llama cerrarSesion() (main.js) para que las demás pestañas
+ * de este navegador dejen de usar la sesión que se acaba de cerrar.
+ */
+function avisarCierreSesionAOtrasPestanas() {
+  if (!canalPestanas) return;
+  try {
+    canalPestanas.postMessage({ tipo: "sesion-cerrada" });
+  } catch (e) {
+    // Ídem: un aviso perdido no puede romper el cierre de sesión en sí.
+  }
+}
+
+/**
+ * Bajada + fusión disparada por el aviso de otra pestaña. Es deliberadamente
+ * una función aparte de sondearCambiosRemotos(): esa se corta si
+ * `document.hidden`, y acá justamente interesa refrescar la pestaña de
+ * atrás. Sigue pasando por aplicarDatosRemotosFrescos (fusión por entidad,
+ * nunca reemplazo total), así que no puede pisar nada local.
+ */
+async function refrescarPorAvisoDeOtraPestana() {
+  try {
+    const datosFrescos = await conReintentoSi401(() => leerDatos(estado.token, estado.fileId));
+    aplicarDatosRemotosFrescos(datosFrescos);
+    const meta = await conReintentoSi401(() => obtenerMetadatosArchivo(estado.token, estado.fileId));
+    estado.ultimoModifiedTimeConocido = meta.modifiedTime;
+  } catch (e) {
+    console.warn("No se pudo refrescar tras el aviso de otra pestaña:", e);
+  }
 }
 
 function mostrarAvisoReconexion() {
@@ -828,6 +964,7 @@ function marcarUltimaSincronizacionConfirmada() {
 
 async function sondearCambiosRemotos() {
   await authListo; // nunca sondear antes de saber si hay token (punto 5, condición de carrera)
+  if (sesionCerradaEnOtraPestana) return; // punto 3.4: la sesión se cerró en otra pestaña
   if (document.hidden) return; // ahorra cuota de la API si la pestaña no está visible
   if (!estado.token || !estado.fileId) return;
   // Si hay cambios locales sin subir todavía, se deja que intentarSincronizar()
@@ -1138,11 +1275,31 @@ async function forzarBackupManual() {
 function marcarCambioPendiente() {
   guardarCacheLocal();
   estado.pendienteSync = true;
+  // FIX blindaje 2026-09-17 (punto 1.1/1.2 de la auditoría): cada cambio
+  // local sube este contador. `ejecutarUnaSincronizacion()` lo fotografía
+  // JUSTO ANTES de llamar a guardarDatos() y lo vuelve a mirar cuando la
+  // subida confirmó — ver el comentario grande allá abajo. Sin esto, un
+  // cambio hecho MIENTRAS la subida estaba en vuelo quedaba marcado como
+  // "ya sincronizado" sin haber viajado nunca (guardarDatos serializa el
+  // JSON en el momento de la llamada, así que ese cambio no iba en el
+  // cuerpo del PATCH).
+  contadorCambiosLocales++;
   actualizarIndicadorSync();
   if (navigator.onLine) intentarSincronizar();
 }
 
 let promesaSincronizacionEnCurso = null;
+let contadorCambiosLocales = 0;
+// Punto 1.1: si llega un disparo de sync mientras ya hay uno en vuelo, no se
+// lanza un segundo ciclo en paralelo (bajada+fusión+subida duplicadas sobre
+// el mismo estado.datos) ni se descarta el disparo en silencio: se deja
+// anotado que hay que volver a correr UNA vez cuando el ciclo actual
+// termine.
+let resincronizarAlTerminar = false;
+// Punto 3.4: si otra pestaña del mismo navegador cerró sesión, esta deja de
+// intentar sincronizar con un token que ya está muerto (ver
+// inicializarCanalEntrePestanas más abajo).
+let sesionCerradaEnOtraPestana = false;
 
 /**
  * FIX 2026-09-11 (bug real: una competencia de Tiempo de Estudio "perdió"
@@ -1167,11 +1324,33 @@ let promesaSincronizacionEnCurso = null;
  * nuevo se "sube" a esa MISMA promesa en vez de arrancar una propia.
  */
 async function intentarSincronizar() {
-  if (promesaSincronizacionEnCurso) return promesaSincronizacionEnCurso;
+  if (promesaSincronizacionEnCurso) {
+    // FIX blindaje 2026-09-17 (punto 1.1): antes, el llamador nuevo se
+    // "subía" a la promesa en vuelo y listo. Eso alcanza para no duplicar
+    // red, pero NO para el caso real que dispara este prompt: el usuario
+    // edita 3 campos en 2 segundos (o los 6 puntos que llaman a
+    // sincronizarHorasCompetencias disparan casi juntos) y los cambios 2 y
+    // 3 llegan cuando el ciclo ya pasó por guardarDatos — ese ciclo sube
+    // una foto vieja y el llamador cree que su cambio viajó. Ahora queda
+    // anotado que hay que correr otra vez al terminar (una sola vez, por
+    // más disparos que se acumulen: el segundo ciclo sube el estado
+    // completo, no un delta).
+    resincronizarAlTerminar = true;
+    return promesaSincronizacionEnCurso;
+  }
   if (!estado.pendienteSync || !estado.fileId) return;
+  if (sesionCerradaEnOtraPestana) return; // punto 3.4
 
   promesaSincronizacionEnCurso = ejecutarUnaSincronizacion().finally(() => {
     promesaSincronizacionEnCurso = null;
+    if (resincronizarAlTerminar) {
+      resincronizarAlTerminar = false;
+      // Sin await a propósito: quien esperaba ESTE ciclo ya tiene lo suyo
+      // fusionado; el ciclo nuevo arranca solo y vuelve a protegerse con
+      // el mismo flag. La guarda de `estado.pendienteSync` de arriba evita
+      // que se encadenen ciclos vacíos si ya no quedaba nada por subir.
+      if (estado.pendienteSync) intentarSincronizar();
+    }
   });
   return promesaSincronizacionEnCurso;
 }
@@ -1209,9 +1388,36 @@ async function ejecutarUnaSincronizacion() {
     // usan las lecturas (leerDatos/obtenerMetadatosArchivo en
     // sincronizarAhora y sondearCambiosRemotos), en vez de duplicar aquí a
     // mano la misma lógica de refresco+reintento.
+    // FIX blindaje 2026-09-17 (punto 1.2): la foto del contador se toma
+    // ANTES de la subida. guardarDatos() serializa `estado.datos` en el
+    // instante de la llamada (JSON.stringify en el body del PATCH), así que
+    // cualquier marcarCambioPendiente() que ocurra durante el await NO
+    // viaja en este PATCH. Antes se ponía pendienteSync=false igual: ese
+    // cambio quedaba marcado como sincronizado sin haber llegado nunca a
+    // Drive, viviendo solo en este dispositivo hasta que el usuario editara
+    // otra cosa sin relación (exactamente el mismo síntoma que ya se
+    // documentó para guardarCacheLocal en storage.js).
+    const cambiosAlSubir = contadorCambiosLocales;
     const meta = await conReintentoSi401(() => guardarDatos(estado.token, estado.fileId, estado.datos));
-    estado.pendienteSync = false;
+    if (contadorCambiosLocales === cambiosAlSubir) {
+      estado.pendienteSync = false;
+      // La caché local guarda pendienteSync (ver storage.js): sin este
+      // guardado, una recarga inmediata después de un sync exitoso volvía a
+      // arrancar con pendienteSync=true y re-subía todo sin necesidad.
+      guardarCacheLocal();
+    } else {
+      // Hubo al menos una edición mientras subíamos: sigue pendiente y se
+      // reintenta enseguida (ver resincronizarAlTerminar en
+      // intentarSincronizar).
+      estado.pendienteSync = true;
+      resincronizarAlTerminar = true;
+    }
     if (meta && meta.modifiedTime) estado.ultimoModifiedTimeConocido = meta.modifiedTime;
+    // Punto 1.3: avisar a las demás pestañas de este mismo navegador que ya
+    // hay una versión nueva en Drive, para que no sigan trabajando (y
+    // después escribiendo) sobre un estado.datos viejo hasta su próximo
+    // sondeo — el sondeo periódico no corre en pestañas ocultas.
+    avisarDatosSubidosAOtrasPestanas();
     ocultarAvisoReconexion();
     intentosReconexionFallidosSeguidos = 0; // sync exitoso: confirma que la reconexión ya funcionó
     actualizarIndicadorSync();
@@ -1392,6 +1598,9 @@ export {
   // "conseguir un access_token que sirva" para toda la app (reemplaza a
   // intentarReconexionSilenciosa, eliminada):
   asegurarTokenValido,
+  // Canal entre pestañas (blindaje 2026-09-17, puntos 1.3 y 3.4):
+  avisarCierreSesionAOtrasPestanas,
+  inicializarCanalEntrePestanas,
   conReintentoSi401,
   contadorCargando,
   contarConflictosGlobales,
