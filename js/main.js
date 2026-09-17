@@ -9,7 +9,7 @@ import { inicializarModalEnlace, renderizarEnlacesRapidos } from "./config/confi
 import { buscarOCrearArchivoDatos, cerrarSesionGoogle, inicializarGoogleAuth, iniciarSesionConGoogle, obtenerMetadatosArchivo, obtenerPerfilGoogle } from "./core/auth.js";
 import { migrarDatosAntiguos, sellarTimestamp } from "./core/schema.js";
 import { fusionarDatos } from "./core/storage-merge.js";
-import { actualizarIndicadorSync, asegurarTokenValido, forzarSincronizacion, inicializarPullToRefresh, inicializarReconexionAlVolverOnline, inicializarSondeoAlVolver, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, registrarHookCierreSesionForzado, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
+import { actualizarIndicadorSync, asegurarTokenValido, avisarCierreSesionAOtrasPestanas, forzarSincronizacion, inicializarCanalEntrePestanas, inicializarPullToRefresh, inicializarReconexionAlVolverOnline, inicializarSondeoAlVolver, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, registrarHookCierreSesionForzado, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
 import { CLAVE_CACHE_LOCAL, borrarTokenCache, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
 import { obtenerIniciales } from "./core/utils.js";
 // Sincronización con Google Calendar (2026-08-25, reemplaza Web Push) —
@@ -447,6 +447,14 @@ window.addEventListener("DOMContentLoaded", () => {
   // reintenta apenas el navegador confirma que la conexión volvió, sin que
   // el usuario tenga que tocar nada.
   inicializarReconexionAlVolverOnline();
+
+  // Blindaje 2026-09-17 (puntos 1.3 y 3.4): canal entre pestañas del mismo
+  // navegador — una pestaña avisa a las demás cuando sube datos nuevos a
+  // Drive (para que la de atrás no siga editando sobre un estado viejo) y
+  // cuando se cierra sesión (para que ninguna quede sincronizando con un
+  // token muerto). Degrada a no-op si el navegador no tiene
+  // BroadcastChannel, ver storage-sync.js.
+  inicializarCanalEntrePestanas();
 });
 
 /* ============== Arranque de los módulos del Plan de Estudios ==============
@@ -881,13 +889,38 @@ if ("serviceWorker" in navigator) {
 
 function pedirConfirmacionCerrarSesion() {
   togglePerfilPopover(true);
-  if (!estado.pendienteSync) {
+  // FIX blindaje 2026-09-17 (punto 3.5 de la auditoría): una sesión de
+  // estudio EN CURSO no está en `estado.datos` todavía —
+  // detenerTimerEstudio() es lo que la escribe en
+  // `estado.datos.sesiones_estudio` (ver tiempo-estudio-timer.js), y
+  // mientras corre solo existe como snapshot en localStorage de ESTE
+  // dispositivo. Por eso `estado.pendienteSync` era false y se podía cerrar
+  // sesión con el cronómetro corriendo sin ningún aviso, perdiendo lo
+  // estudiado hasta ese momento. Se consulta por `window` a propósito (mismo
+  // patrón que window.renderizarTiempoEstudio y compañía) para no meter un
+  // import nuevo entre main.js y el módulo del timer — este archivo ya
+  // arrastró bugs de import circular/TDZ antes.
+  const hayTimerCorriendo = typeof window.hayTimerActivo === "function" && window.hayTimerActivo();
+
+  if (!estado.pendienteSync && !hayTimerCorriendo) {
     cerrarSesion();
     return;
   }
+
+  let mensaje;
+  if (estado.pendienteSync && hayTimerCorriendo) {
+    mensaje =
+      "Tienes cambios sin sincronizar y además una sesión de estudio en curso (el cronómetro sigue corriendo y todavía no se guardó). Si cierras sesión ahora, se perderán de este dispositivo. ¿Deseas continuar?";
+  } else if (hayTimerCorriendo) {
+    mensaje =
+      "Tienes una sesión de estudio en curso: el cronómetro sigue corriendo y todavía no se guardó. Deténlo primero para no perder lo estudiado. ¿Deseas cerrar sesión de todas formas?";
+  } else {
+    mensaje = "Tienes cambios sin sincronizar. Si cierras sesión ahora, se perderán del dispositivo. ¿Deseas continuar?";
+  }
+
   abrirConfirmacion({
-    titulo: "⚠️ Cambios sin sincronizar",
-    mensaje: "Tienes cambios sin sincronizar. Si cierras sesión ahora, se perderán del dispositivo. ¿Deseas continuar?",
+    titulo: hayTimerCorriendo && !estado.pendienteSync ? "⚠️ Sesión de estudio en curso" : "⚠️ Cambios sin sincronizar",
+    mensaje,
     textoConfirmar: "Cerrar sesión de todas formas",
     onConfirmar: cerrarSesion,
   });
@@ -895,6 +928,11 @@ function pedirConfirmacionCerrarSesion() {
 
 function cerrarSesion() {
   clearTimeout(temporizadorRefrescoProactivo);
+  // Punto 3.4: antes de borrar nada, avisar a las demás pestañas de este
+  // navegador para que dejen de sincronizar con un token que ya está muerto
+  // (si no, quedan reintentando en loop y mostrando datos de una sesión
+  // cerrada). Ver inicializarCanalEntrePestanas en storage-sync.js.
+  avisarCierreSesionAOtrasPestanas();
   cerrarSesionGoogle();
   localStorage.removeItem(CLAVE_CACHE_LOCAL);
   borrarTokenCache();
