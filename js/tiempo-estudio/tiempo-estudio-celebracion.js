@@ -198,7 +198,12 @@ function lanzarConfeti(contenedor, tipo) {
 
   const gravedad = esVictoria ? 0.32 : 0.02;
   const inicio = Date.now();
-  const duracionMs = esVictoria ? 5000 : 7000;
+  // Victoria: se apaga sola a los 5s con fundido (así estaba y así queda).
+  // Derrota: dura infinito — la lluvia sigue reciclando gotas hasta que el
+  // usuario cierra el overlay a mano (detener() corta el rAF desde afuera).
+  // Con duracionMs = Infinity, la resta de abajo también da Infinity, así
+  // que el fundido nunca se dispara y la condición del rAF nunca es falsa.
+  const duracionMs = esVictoria ? 5000 : Infinity;
   let rafId = null;
   let vivo = true;
 
@@ -206,7 +211,8 @@ function lanzarConfeti(contenedor, tipo) {
     if (!vivo) return;
     const transcurrido = Date.now() - inicio;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // Se desvanece al final en vez de cortarse de golpe.
+    // Se desvanece al final en vez de cortarse de golpe (solo aplica a
+    // victoria — en derrota duracionMs es Infinity y esto siempre da 1).
     ctx.globalAlpha = Math.max(0, Math.min(1, (duracionMs - transcurrido) / 900));
 
     particulas.forEach((p) => {
