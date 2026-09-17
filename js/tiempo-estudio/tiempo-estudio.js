@@ -49,6 +49,7 @@ import {
   pausarTimerEstudio,
   reanudarTimerEstudio,
   revisarSesionOlvidadaAlAbrir,
+  saltarDescansoPomodoro,
   segundosTranscurridos,
   suscribirseATimer,
 } from "./tiempo-estudio-timer.js";
@@ -367,7 +368,7 @@ function construirEncabezado(cont) {
   const titulo = document.createElement("h2");
   titulo.className = "texto-encabezado-seccion";
   titulo.style.margin = "0";
-  titulo.textContent = "Tiempo de Estudio";
+  titulo.textContent = "Tiempo";
   encabezado.appendChild(titulo);
 
   // Grupo de botones a la derecha. Van en su propio contenedor (y no
@@ -387,8 +388,8 @@ function construirEncabezado(cont) {
   btnAjustes.type = "button";
   btnAjustes.className = "te-btn-icono te-btn-icono-fantasma te-btn-icono-grande";
   btnAjustes.style.alignSelf = "center";
-  btnAjustes.title = "Ajustes de Tiempo de Estudio";
-  btnAjustes.setAttribute("aria-label", "Ajustes de Tiempo de Estudio");
+  btnAjustes.title = "Ajustes de Tiempo";
+  btnAjustes.setAttribute("aria-label", "Ajustes de Tiempo");
   btnAjustes.textContent = "⚙️";
   btnAjustes.addEventListener("click", () => abrirModalAjustesTiempoEstudio());
   grupoBotones.appendChild(btnAjustes);
@@ -466,7 +467,7 @@ function abrirModalAjustesTiempoEstudio() {
   const filtroActual = obtenerFiltroVista();
 
   caja.innerHTML = `
-    <h2 style="margin:0;">Ajustes de Tiempo de Estudio</h2>
+    <h2 style="margin:0;">Ajustes de Tiempo</h2>
 
     <div class="stack" style="gap:6px;">
       <span class="form-label" style="margin:0;">Mostrar</span>
@@ -499,12 +500,11 @@ function abrirModalAjustesTiempoEstudio() {
   overlay.appendChild(caja);
   document.body.appendChild(overlay);
 
+  // Pedido 2.2 (2026-09-17): en la sección Tiempo, tocar el fondo NO
+  // cierra ningún modal — solo el botón explícito ("Listo" acá).
   function cerrar() {
     overlay.remove();
   }
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) cerrar();
-  });
   caja.querySelector("#te-ajustes-cerrar").addEventListener("click", cerrar);
 
   // El cambio de filtro re-renderiza la lista de atrás (el modal es un
@@ -667,6 +667,21 @@ function construirPantallaDetalle(cont, item) {
     else pausarTimerEstudio();
   });
 
+  // Punto 1.4 (2026-09-17): "Saltar descanso" — solo visible mientras el
+  // timer de ESTA materia está en una fase de descanso de Pomodoro (ver
+  // pintar() más abajo). Vuelve de inmediato al bloque de trabajo sin
+  // esperar a que se cumpla el tiempo configurado de descanso.
+  const btnSaltarDescanso = document.createElement("button");
+  btnSaltarDescanso.type = "button";
+  btnSaltarDescanso.className = "btn btn-secondary";
+  btnSaltarDescanso.style.minWidth = "140px";
+  btnSaltarDescanso.textContent = "⏭ Saltar descanso";
+  btnSaltarDescanso.addEventListener("click", () => {
+    const activo = obtenerTimerActivo();
+    if (!activo || activo.materiaMatriculadaId !== mm.id) return;
+    saltarDescansoPomodoro();
+  });
+
   const btnDetener = document.createElement("button");
   btnDetener.type = "button";
   btnDetener.className = "btn btn-danger";
@@ -676,6 +691,7 @@ function construirPantallaDetalle(cont, item) {
 
   filaAccion.appendChild(btnIniciar);
   filaAccion.appendChild(btnPausa);
+  filaAccion.appendChild(btnSaltarDescanso);
   filaAccion.appendChild(btnDetener);
   panelTimer.appendChild(filaAccion);
 
@@ -747,6 +763,10 @@ function construirPantallaDetalle(cont, item) {
       const pausado = Boolean(activo.pausado);
       btnPausa.textContent = pausado ? "▶ Reanudar" : "⏸ Pausar";
     }
+    // "Saltar descanso" solo tiene sentido en una fase de descanso de
+    // Pomodoro de esta misma materia — en cualquier otro caso se esconde.
+    const enDescanso = Boolean(esEstaMateria && activo.pomodoro && activo.pomodoro.fase !== "trabajo");
+    btnSaltarDescanso.style.display = enDescanso ? "" : "none";
 
     if (esEstaMateria && activo.pomodoro) {
       const nombreFaseLegible =

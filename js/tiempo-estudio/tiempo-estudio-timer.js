@@ -19,12 +19,46 @@
    lo único que permite detectar, al reabrir la app, que quedó una sesión
    corriendo sin detenerse (punto 4) — sin esto la Parte 1 simplemente
    perdía ese tiempo en silencio, como aclaraba su propio comentario.
+
+   -------------------------------------------------------------------------
+   RONDA 2026-09-17 — bugfix de pérdida de tiempo + avisos en 2do plano
+   -------------------------------------------------------------------------
+   BUG REAL (reporte: "inicié a las 2pm, detuve a las 10pm, estuve afuera de
+   la app entre 5pm y 7pm, y solo contó 3 horas"). Causa raíz: el snapshot
+   de localStorage se usaba ÚNICAMENTE para el salvavidas — no existía en
+   ningún lado la operación inversa de "volver a levantar el timer en
+   memoria al reabrir la app". Los 3 caminos de
+   `revisarSesionOlvidadaAlAbrir()` terminaban en `removeItem()`:
+     a) fase de menos de 3 h  → se borraba el snapshot EN SILENCIO y la
+        sesión desaparecía entera (recarga de pestaña, el navegador móvil
+        descartando la pestaña por memoria, cerrar y volver a abrir).
+     b) fase de 3+ h          → se abría el modal de corrección… pero
+        precargado en 0h 0m, sin restaurar el timer; al cerrarlo (o al
+        tocar fuera del modal, que también descartaba) el timer ya no
+        existía, así que el "Detener" de las 10pm no tenía nada que cerrar.
+     c) descanso de Pomodoro  → se descartaba en silencio.
+   En el escenario reportado se dio (b): a las 7pm la app arrancó de cero,
+   el modal apareció, quedaron registradas las ~3 h que la persona escribió
+   a mano (o las que se descartaron), y de 7pm a 10pm el timer directamente
+   no estaba corriendo.
+
+   FIX: `restaurarTimerDesdeSnapshot()` — al arrancar la app, el timer se
+   vuelve a levantar SIEMPRE tal cual estaba (mismos `sesionInicio` /
+   `inicioFase` / fase de Pomodoro / estado de pausa). El salvavidas dejó
+   de ser destructivo: ya no descarta nada, solo PREGUNTA cuando la fase
+   venía corriendo hace 3+ horas, con la duración real precargada y con
+   "Seguir contando" como opción (ver abrirAvisoSesionOlvidada).
+
+   Ojo con la expectativa del reporte: bajo el modelo timestamp-inicio/fin
+   (que es el diseñado y el que pide el punto 1.2), estar fuera de la app
+   NO descuenta tiempo — 2pm→10pm son 8 h, no 6. Las 2 h "afuera" cuentan
+   igual; lo que había que arreglar era la pérdida total, no el descuento.
    ========================================================================= */
 
 import { crearSesionEstudio, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
-import { mostrarToast } from "../ui/componentes.js";
+import { mostrarToast, abrirConfirmacion } from "../ui/componentes.js";
 import { sincronizarHorasCompetencias } from "./tiempo-estudio-competencias.js";
 
 // Fácil de ajustar para pruebas (ver caso de prueba del plan) — límite de
@@ -112,12 +146,22 @@ function guardarSnapshotLocal() {
         sesionInicio: timerActivo.sesionInicio,
         inicioFase: timerActivo.inicioFase,
         pomodoro: timerActivo.pomodoro,
+        // 2026-09-17: antes NO se guardaba, así que al restaurar el timer
+        // (restaurarTimerDesdeSnapshot) la alarma de "llegaste a la meta"
+        // se volvía a disparar en la misma sesión.
+        metaAlarmaDisparada: timerActivo.metaAlarmaDisparada,
         pausado: timerActivo.pausado,
         msPausaInicio: timerActivo.msPausaInicio,
       })
     );
   } catch (e) {
     console.error("[tiempo-estudio-timer] no se pudo guardar el snapshot local:", e);
+  } finally {
+    // Esta función se llama exactamente en los 6 momentos en que cambia el
+    // estado del timer (iniciar, avanzar fase, saltar descanso, pausar,
+    // reanudar, detener), así que es el único lugar donde hace falta
+    // reprogramar la alarma de fin de fase — ver programarAlarmaFase().
+    programarAlarmaFase();
   }
 }
 
@@ -219,8 +263,11 @@ function reproducirBeep() {
 }
 
 /** Si el permiso de Notification todavía está en "default" (nunca se
- * preguntó), lo pide — se llama solo al iniciar un timer con Pomodoro
- * (click de "Iniciar" ya es el gesto del usuario que el navegador exige).
+ * preguntó), lo pide — se llama al iniciar CUALQUIER timer (2026-09-17:
+ * antes solo con Pomodoro, así que el aviso de "llegaste a la meta" del
+ * timer simple nunca podía llegar en 2do plano si la persona jamás había
+ * usado Pomodoro). El click de "Iniciar" ya es el gesto del usuario que
+ * el navegador exige para poder preguntar.
  * Si el usuario nunca lo concede, simplemente no hay notificación del
  * sistema y queda el aviso visual+sonido de cuando vuelve a la pestaña. */
 function pedirPermisoNotificacionSiHaceFalta() {
@@ -230,16 +277,71 @@ function pedirPermisoNotificacionSiHaceFalta() {
   }
 }
 
-/** Notification API local (nunca push/Worker) — solo si la pestaña está
- * en 2do plano Y ya hay permiso concedido. */
+/**
+ * 2026-09-17 (reporte: "el aviso de fin de bloque solo me funciona con la
+ * app abierta adelante"). Notification API LOCAL — nunca push, nunca
+ * Worker, sigue sin haber backend de por medio.
+ *
+ * Tres cambios respecto a la versión anterior:
+ *  1) Se dispara si la pestaña está oculta O si simplemente no tiene el
+ *     foco (`document.hasFocus()` falso) — el caso "la ventana se ve pero
+ *     estoy en otra app/pestaña" no es `visibilityState === "hidden"` en
+ *     escritorio, y era justo el que la usuaria reportó.
+ *  2) Prioriza `registration.showNotification()` del Service Worker sobre
+ *     `new Notification(...)`: en Chrome de Android el constructor
+ *     directo TIRA una excepción ("Illegal constructor"), así que en
+ *     celular la notificación nunca llegaba aunque hubiera permiso. El
+ *     SW ya está registrado en esta app (ver main.js / el listener de
+ *     `serviceWorker` que salta a Agenda al tocar una notificación).
+ *  3) `tag` fijo + `renotify`: si llegan 2 cambios de fase seguidos no se
+ *     apilan 2 notificaciones, se reemplaza la anterior.
+ *
+ * LIMITACIÓN REAL DE PLATAFORMA, no se puede resolver del todo sin
+ * backend (documentada también en el resumen del prompt): esto depende de
+ * que el proceso del navegador siga vivo. Mientras la pestaña esté nada
+ * más que en 2do plano, funciona. Si el sistema operativo SUSPENDE o
+ * descarta la pestaña —iOS/Safari lo hace bastante rápido al minimizar,
+ * Android lo hace bajo presión de memoria— no corre JS ninguno, así que
+ * ni este aviso ni ningún otro puede dispararse a tiempo. La única forma
+ * de garantizarlo sería Web Push con un backend que programe el envío
+ * (justamente lo que se le sacó al Worker en 2026-08-25). Lo que sí está
+ * garantizado es que NO se pierde tiempo: al volver, `tick()` se pone al
+ * día con todas las fases atrasadas (ver `tick` y el listener de
+ * visibilitychange al final del archivo).
+ */
 function notificarSistemaSiCorresponde(cuerpo) {
   if (typeof Notification === "undefined") return;
-  if (typeof document !== "undefined" && document.visibilityState !== "hidden") return;
   if (Notification.permission !== "granted") return;
+
+  const enPrimerPlano =
+    typeof document !== "undefined" &&
+    document.visibilityState === "visible" &&
+    (typeof document.hasFocus !== "function" || document.hasFocus());
+  if (enPrimerPlano) return; // ya lo ve: alcanza con el toast + beep
+
+  const opciones = {
+    body: cuerpo,
+    tag: "tiempo-estudio-fase",
+    renotify: true,
+    silent: false,
+  };
+
+  // Camino preferido: Service Worker (único que funciona en Android).
+  if (typeof navigator !== "undefined" && navigator.serviceWorker && navigator.serviceWorker.ready) {
+    navigator.serviceWorker.ready
+      .then((registro) => registro.showNotification("Tiempo", opciones))
+      .catch(() => notificarConConstructorDirecto(cuerpo, opciones));
+    return;
+  }
+  notificarConConstructorDirecto(cuerpo, opciones);
+}
+
+/** Fallback de escritorio para cuando no hay Service Worker disponible. */
+function notificarConConstructorDirecto(cuerpo, opciones) {
   try {
-    new Notification("Tiempo de Estudio", { body: cuerpo });
+    new Notification("Tiempo", opciones);
   } catch (e) {
-    console.error("[tiempo-estudio-timer] no se pudo mostrar la notificación:", e);
+    console.warn("[tiempo-estudio-timer] no se pudo mostrar la notificación:", e);
   }
 }
 
@@ -365,6 +467,45 @@ function detenerIntervaloSiNoHaceFalta() {
     clearInterval(intervaloId);
     intervaloId = null;
   }
+  if (timerActivo === null) cancelarAlarmaFase();
+}
+
+/* ===== Alarma de fin de fase en 2do plano (2026-09-17, punto 1.3) ===== */
+
+let alarmaFaseId = null;
+
+function cancelarAlarmaFase() {
+  if (alarmaFaseId !== null) {
+    clearTimeout(alarmaFaseId);
+    alarmaFaseId = null;
+  }
+}
+
+/**
+ * `setInterval(tick, 1000)` alcanza de sobra con la pestaña adelante, pero
+ * los navegadores lo estrangulan fuerte en 2do plano (Chrome lo lleva a
+ * 1 vez por minuto tras unos minutos ocultos), así que el aviso de fin de
+ * bloque podía llegar con bastante atraso — parte del reporte de la
+ * usuaria. Un `setTimeout` ÚNICO apuntado al instante exacto en que
+ * termina la fase actual sobrevive mucho mejor a ese estrangulamiento (el
+ * navegador lo alinea al próximo despertar, no lo pospone un minuto
+ * entero), así que se usan los dos en paralelo: el intervalo para pintar
+ * el cronómetro y esta alarma para que el aviso salga a tiempo.
+ *
+ * NO detiene ni corta nada (punto 1.2): lo único que hace es llamar a
+ * `tick()`, que es exactamente lo mismo que hubiera pasado con la pestaña
+ * adelante.
+ */
+function programarAlarmaFase() {
+  cancelarAlarmaFase();
+  if (timerActivo === null || timerActivo.pausado || !timerActivo.pomodoro) return;
+
+  const faltaMs = timerActivo.inicioFase + duracionFaseMs(timerActivo.pomodoro) - Date.now();
+  if (faltaMs <= 0) return; // ya venció: el tick del bucle acotado lo levanta
+  alarmaFaseId = setTimeout(() => {
+    alarmaFaseId = null;
+    tick();
+  }, faltaMs);
 }
 
 /* ===================== API pública ===================== */
@@ -414,7 +555,10 @@ function iniciarTimerEstudio(materiaMatriculadaId) {
     msPausaInicio: null,
   };
 
-  if (pomodoroConfig) pedirPermisoNotificacionSiHaceFalta();
+  // 2026-09-17: se pide SIEMPRE, no solo con Pomodoro — el aviso de
+  // "llegaste a la meta" del timer simple también tiene que poder llegar
+  // con la app en 2do plano (punto 1.3).
+  pedirPermisoNotificacionSiHaceFalta();
 
   guardarSnapshotLocal();
   asegurarIntervalo();
@@ -494,6 +638,46 @@ function detenerTimerEstudio() {
   return sesion;
 }
 
+/**
+ * "Saltar descanso" (pedido 1.4, 2026-09-17): corta el descanso en curso y
+ * vuelve YA al bloque de trabajo siguiente, sin esperar a que se cumpla el
+ * tiempo configurado. No hace nada si no hay timer, si no es Pomodoro, o
+ * si ya está en fase de trabajo (el botón ni se muestra en esos casos,
+ * pero se blinda igual acá — este archivo es el único punto de entrada
+ * real del motor, no confía en que la UI respete la regla).
+ *
+ * Es exactamente la misma transición que hace `avanzarFasePomodoro()` en
+ * su rama de "descanso → trabajo" (incluido el conteo de bloques y el
+ * reinicio del ciclo después de un descanso largo); lo único distinto es
+ * que no se espera a que venza el reloj y que el aviso dice otra cosa.
+ * Nunca genera sesión de estudio: los descansos no suman, se salten o no.
+ */
+function saltarDescansoPomodoro() {
+  if (timerActivo === null || !timerActivo.pomodoro) return false;
+  const { pomodoro } = timerActivo;
+  if (pomodoro.fase === "trabajo") return false;
+
+  const eraDescansoLargo = pomodoro.fase === "descanso_largo";
+  pomodoro.fase = "trabajo";
+  pomodoro.bloqueActual = eraDescansoLargo ? 1 : pomodoro.bloqueActual + 1;
+
+  // Si estaba pausado a mitad del descanso, se reanuda solo: pedir
+  // "saltar el descanso" y quedar congelado igual sería confuso. Se corre
+  // `sesionInicio` igual que en reanudarTimerEstudio para que el tiempo
+  // pausado no cuente como sesión.
+  if (timerActivo.pausado) {
+    timerActivo.sesionInicio += Date.now() - timerActivo.msPausaInicio;
+    timerActivo.pausado = false;
+    timerActivo.msPausaInicio = null;
+  }
+  timerActivo.inicioFase = Date.now();
+
+  guardarSnapshotLocal();
+  mostrarToast("⏭ Descanso salteado — volviste al bloque de trabajo");
+  notificar();
+  return true;
+}
+
 function cambiarTimerEstudio(materiaMatriculadaIdNueva) {
   detenerTimerEstudio();
   return iniciarTimerEstudio(materiaMatriculadaIdNueva);
@@ -521,6 +705,13 @@ function formatearDuracion(segundosTotales) {
  */
 function abrirAvisoSesionOlvidada(snapshot) {
   const inicioLegible = new Date(snapshot.sesionInicio).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  // 2026-09-17: se precarga la duración REAL transcurrida en vez de 0h 0m.
+  // Con 0 precargado, el camino de menor resistencia ("Guardar" sin tocar
+  // nada) descartaba toda la sesión sin que se notara — parte del bug de
+  // pérdida de tiempo reportado.
+  const minutosReales = Math.max(0, Math.floor((Date.now() - snapshot.inicioFase) / 60000));
+  const horasPrecargadas = Math.floor(minutosReales / 60);
+  const minutosPrecargados = minutosReales % 60;
 
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
@@ -534,42 +725,73 @@ function abrirAvisoSesionOlvidada(snapshot) {
 
   caja.innerHTML = `
     <div>
-      <h2 style="margin:0;">Dejaste una sesión corriendo</h2>
+      <h2 style="margin:0;">Seguís con una sesión corriendo</h2>
       <p class="muted" style="margin:6px 0 0; font-size:0.85rem;">
-        Parece que iniciaste el timer y no lo detuviste. ¿Cuánto estudiaste en realidad?
+        El timer arrancó a las ${inicioLegible} y sigue contando (salir de la app no lo corta).
+        Si te olvidaste de detenerlo, podés cerrarlo acá con la duración real.
       </p>
     </div>
     <div class="row-between" style="gap:10px;">
       <div style="flex:1;">
         <span class="form-label">Horas</span>
-        <input type="number" id="te-olvidada-horas" class="form-input" min="0" value="0" autocomplete="off">
+        <input type="number" id="te-olvidada-horas" class="form-input" min="0" value="${horasPrecargadas}" autocomplete="off">
       </div>
       <div style="flex:1;">
         <span class="form-label">Minutos</span>
-        <input type="number" id="te-olvidada-minutos" class="form-input" min="0" max="59" value="0" autocomplete="off">
+        <input type="number" id="te-olvidada-minutos" class="form-input" min="0" max="59" value="${minutosPrecargados}" autocomplete="off">
       </div>
     </div>
-    <p class="muted" style="font-size:0.78rem; margin:0;">Empezó a las ${inicioLegible}.</p>
+    <p class="muted" style="font-size:0.78rem; margin:0;">
+      Viene precargado el tiempo real transcurrido. Cambialo solo si de verdad estudiaste menos.
+    </p>
+    <button type="button" class="btn btn-primary" id="te-olvidada-seguir" style="width:100%;">Seguir contando</button>
     <div class="row-between" style="gap:10px;">
-      <button type="button" class="btn btn-secondary" id="te-olvidada-descartar" style="flex:1;">Descartar sesión</button>
-      <button type="button" class="btn btn-primary" id="te-olvidada-guardar" style="flex:1;">Guardar</button>
+      <button type="button" class="btn btn-secondary" id="te-olvidada-descartar" style="flex:1;">Descartar</button>
+      <button type="button" class="btn btn-secondary" id="te-olvidada-guardar" style="flex:1;">Guardar y detener</button>
     </div>
   `;
 
+  // Pedido 2.2 (y, antes que eso, blindaje contra pérdida de datos): tocar
+  // fuera del modal NO lo cierra. Con el comportamiento anterior, un toque
+  // al descuido en el fondo descartaba la sesión entera en silencio.
   function cerrar() {
     overlay.remove();
-    localStorage.removeItem(CLAVE_TIMER_ACTIVO);
   }
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) cerrar();
+
+  // "Seguir contando": no toca nada — el timer ya quedó restaurado y
+  // corriendo por restaurarTimerDesdeSnapshot() antes de abrir esto.
+  caja.querySelector("#te-olvidada-seguir").addEventListener("click", cerrar);
+
+  caja.querySelector("#te-olvidada-descartar").addEventListener("click", () => {
+    abrirConfirmacion({
+      titulo: "Descartar la sesión",
+      mensaje: "Se pierde todo el tiempo de esta sesión sin guardarlo. ¿Seguro?",
+      textoConfirmar: "Descartar",
+      claseConfirmar: "btn-danger",
+      onConfirmar: () => {
+        timerActivo = null;
+        guardarSnapshotLocal();
+        detenerIntervaloSiNoHaceFalta();
+        notificar();
+        cerrar();
+      },
+    });
   });
-  caja.querySelector("#te-olvidada-descartar").addEventListener("click", cerrar);
 
   caja.querySelector("#te-olvidada-guardar").addEventListener("click", () => {
     const h = Math.max(0, Number(caja.querySelector("#te-olvidada-horas").value) || 0);
     const m = Math.max(0, Number(caja.querySelector("#te-olvidada-minutos").value) || 0);
     const minutosTotales = h * 60 + m;
-    if (minutosTotales > 0) {
+
+    // El timer vivo se corta SIEMPRE acá (es un "detener" explícito), haya
+    // o no minutos que guardar.
+    timerActivo = null;
+    guardarSnapshotLocal();
+    detenerIntervaloSiNoHaceFalta();
+    notificar();
+
+    const cuentaComoTrabajo = snapshot.origen === "timer" || (snapshot.pomodoro && snapshot.pomodoro.fase === "trabajo");
+    if (minutosTotales > 0 && cuentaComoTrabajo) {
       const inicio = snapshot.inicioFase;
       const fin = inicio + minutosTotales * 60000;
       const sesion = crearSesionEstudio({ materiaMatriculadaId: snapshot.materiaMatriculadaId, inicio, fin, origen: snapshot.origen });
@@ -587,13 +809,52 @@ function abrirAvisoSesionOlvidada(snapshot) {
 }
 
 /**
+ * Vuelve a poner en memoria el timer que describe `snapshot`, tal cual
+ * estaba: mismos `sesionInicio`/`inicioFase` (o sea, el tiempo que pasó
+ * con la app cerrada cuenta igual — punto 1.2), misma fase de Pomodoro,
+ * mismo estado de pausa.
+ *
+ * `congelarAhora` (usado solo por el salvavidas): en vez de restaurarlo
+ * corriendo, lo deja PAUSADO en este instante. Sirve para no dejar que
+ * `tick()` avance de golpe 40 fases de Pomodoro —creando 40 sesiones de
+ * estudio falsas— antes de que la persona alcance a decidir qué hacer con
+ * una sesión de 3+ horas que quedó abierta. Si elige "Seguir contando",
+ * reanudarTimerEstudio() lo destraba sin haber perdido nada.
+ */
+function restaurarTimerDesdeSnapshot(snapshot, { congelarAhora = false } = {}) {
+  const ahora = Date.now();
+  timerActivo = {
+    materiaMatriculadaId: snapshot.materiaMatriculadaId,
+    origen: snapshot.origen === "pomodoro" ? "pomodoro" : "timer",
+    sesionInicio: snapshot.sesionInicio || snapshot.inicioFase,
+    inicioFase: snapshot.inicioFase,
+    pomodoro: snapshot.pomodoro || null,
+    metaAlarmaDisparada: Boolean(snapshot.metaAlarmaDisparada),
+    pausado: Boolean(snapshot.pausado) || congelarAhora,
+    msPausaInicio: snapshot.pausado ? snapshot.msPausaInicio || ahora : congelarAhora ? ahora : null,
+  };
+
+  guardarSnapshotLocal();
+  asegurarIntervalo();
+  notificar();
+}
+
+/**
  * Se llama UNA vez al arrancar la app (ver inicializarTiempoEstudio en
- * tiempo-estudio.js). Si el snapshot local indica que quedó una fase que
- * "cuenta" como estudio (timer simple, o Pomodoro en trabajo) corriendo
- * por más de SALVAVIDAS_HORAS_LIMITE horas, abre el modal de corrección.
- * Una sesión corta (recarga normal de página) o que quedó a mitad de un
- * descanso se descarta en silencio — no hay nada que valga la pena
- * preguntar en esos casos.
+ * tiempo-estudio.js).
+ *
+ * REESCRITA 2026-09-17 — ver la nota de cabecera del archivo. Antes, los
+ * 3 caminos de esta función terminaban borrando el snapshot sin restaurar
+ * nada, o sea que cerrar/recargar la app MATABA la sesión activa en
+ * silencio; esa era la causa real del reporte de "perdí horas". Ahora:
+ *
+ *   - Siempre que haya un snapshot válido, el timer se restaura y sigue
+ *     corriendo desde donde estaba (incluidos los descansos de Pomodoro,
+ *     que antes se descartaban).
+ *   - El salvavidas dejó de ser destructivo: si la fase venía corriendo
+ *     hace SALVAVIDAS_HORAS_LIMITE o más, se restaura CONGELADA y se abre
+ *     el modal para decidir (seguir / guardar la duración real precargada
+ *     / descartar a mano). Nunca descarta por su cuenta.
  */
 function revisarSesionOlvidadaAlAbrir() {
   let snapshot = null;
@@ -609,20 +870,42 @@ function revisarSesionOlvidadaAlAbrir() {
     localStorage.removeItem(CLAVE_TIMER_ACTIVO);
     return;
   }
+  // Ya hay un timer vivo en memoria (esta función se llamó dos veces, o la
+  // app se re-inicializó sin recargar): no se pisa nada.
+  if (timerActivo !== null) return;
 
   // Si quedó pausado, el reloj de referencia es el instante en que empezó
   // la pausa (mismo criterio que detenerTimerEstudio) — el tiempo pausado
   // no debe empujar a esta sesión hacia el salvavidas.
   const referencia = snapshot.pausado ? snapshot.msPausaInicio || Date.now() : Date.now();
   const horasEnFaseActual = (referencia - snapshot.inicioFase) / 3600000;
-  const faseActualCuenta = snapshot.origen === "timer" || (snapshot.pomodoro && snapshot.pomodoro.fase === "trabajo");
 
-  if (horasEnFaseActual < SALVAVIDAS_HORAS_LIMITE || !faseActualCuenta) {
-    localStorage.removeItem(CLAVE_TIMER_ACTIVO);
+  if (horasEnFaseActual >= SALVAVIDAS_HORAS_LIMITE && !snapshot.pausado) {
+    restaurarTimerDesdeSnapshot(snapshot, { congelarAhora: true });
+    abrirAvisoSesionOlvidada(snapshot);
     return;
   }
 
-  abrirAvisoSesionOlvidada(snapshot);
+  restaurarTimerDesdeSnapshot(snapshot);
+}
+
+/**
+ * Punto 1.2 (a) — VERIFICADO: no existe en todo el proyecto ningún
+ * listener de `visibilitychange`, `blur`, `pagehide` ni `beforeunload` que
+ * detenga una sesión activa, ni ningún corte por inactividad. Este es el
+ * único listener de visibilidad de Tiempo, y hace lo contrario: cuando la
+ * pestaña vuelve a primer plano fuerza un `tick()` inmediato para ponerse
+ * al día con todas las fases de Pomodoro que hayan vencido mientras el
+ * navegador tenía el temporizador estrangulado, en vez de esperar hasta un
+ * minuto al próximo tick natural. Nunca detiene ni descarta nada.
+ */
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && timerActivo !== null) {
+      tick();
+      programarAlarmaFase();
+    }
+  });
 }
 
 export {
@@ -633,6 +916,7 @@ export {
   detenerTimerEstudio,
   pausarTimerEstudio,
   reanudarTimerEstudio,
+  saltarDescansoPomodoro,
   timerEstaPausado,
   cambiarTimerEstudio,
   suscribirseATimer,

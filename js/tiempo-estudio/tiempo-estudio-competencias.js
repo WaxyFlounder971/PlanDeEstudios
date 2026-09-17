@@ -36,6 +36,11 @@ import { URL_WORKER_OAUTH } from "../core/auth.js";
 import { mostrarToast, abrirConfirmacion } from "../ui/componentes.js";
 import { copiarAlPortapapelesBlindado, abrirModalCopiaManualPortapapeles } from "../core/clipboard.js";
 import { calcularMinutosTotalesEnRango, obtenerRangoSemana } from "./tiempo-estudio-estadisticas.js";
+// 2026-09-17 — Partes 3/4/5. Los dos son imports circulares intencionales
+// con este archivo (gestion importa helpers de acá); seguros porque nada
+// se usa en el nivel superior del archivo, solo adentro de funciones.
+import { abrirModalGestionCompetencia, construirRegistroCompetencias } from "./tiempo-estudio-competencias-gestion.js";
+import { construirAvisosResultados, construirBotonesSimulacion } from "./tiempo-estudio-celebracion.js";
 
 const TIMEOUT_MS = 12000;
 const CLAVE_TOKEN_CREADOR_PREFIJO = "tokenCreadorCompetencia_"; // + id, ver nota en schema.js
@@ -170,8 +175,11 @@ async function copiarLinkInvitacion(competencia) {
  * había arrancado en vez de disparar una segunda en paralelo.
  */
 async function sincronizarHorasCompetencias() {
-  const competencias = estado.datos.competencias_unidas;
-  if (!competencias || competencias.length === 0) return;
+  // 2026-09-17 (punto 4.3): una competencia `finalizada` deja de aceptar
+  // horas nuevas. El Worker igual las ignora (ver manejarActualizarHoras),
+  // pero filtrarlas acá evita N requests inútiles en cada sesión guardada.
+  const competencias = (estado.datos.competencias_unidas || []).filter((c) => c.estado !== "finalizada");
+  if (competencias.length === 0) return;
 
   await intentarSincronizar();
 
@@ -328,7 +336,7 @@ async function ejecutarSalidaCompetencia(competencia, refrescar) {
  * botón explícito "Ahora no".
  */
 function abrirModalDelegarAntesDeSalir(competencia, otrosParticipantes, refrescar) {
-  const { overlay, caja, cerrar } = construirCajaModal({ bloquearClickAfuera: true });
+  const { overlay, caja, cerrar } = construirCajaModal();
 
   const opcionesHtml = otrosParticipantes
     .map(
@@ -453,13 +461,21 @@ function borrarCompetenciaEntera(competencia, refrescar) {
 }
 
 /**
- * `bloquearClickAfuera`: si es true, NO se cierra al tocar fuera de la
- * caja — solo queda la salida explícita que arme cada modal (botón
- * "Cancelar"/"Ahora no", etc). Se usa en flujos donde cerrar por accidente
- * puede dejar al usuario a mitad de camino sin darse cuenta (ver
- * abrirModalDelegarAntesDeSalir).
+ * PEDIDO 2.2 (2026-09-17): tocar fuera del modal ya NO cierra NINGÚN modal
+ * de la sección Tiempo. El parámetro `bloquearClickAfuera` quedó invertido
+ * de default (antes `false`, ahora siempre bloqueado) y se conserva
+ * solamente para no romper las llamadas que ya lo pasaban explícito, como
+ * `abrirModalDelegarAntesDeSalir`.
+ *
+ * Como algunos de estos modales tienen estados donde todavía no hay
+ * botones dibujados (ej. el "Cargando…" de abrirModalInvitacionRecibida o
+ * de abrirModalSacarUsuario), y sin el clic afuera quedarían sin ninguna
+ * salida, se agrega acá una "✕" propia en la esquina — mismo rol que la
+ * que `inicializarBotonesCerrarModal()` (ui/componentes.js) le pone a los
+ * modales fijos de index.html, que a estos no los alcanza porque se crean
+ * dinámicamente.
  */
-function construirCajaModal({ bloquearClickAfuera = false } = {}) {
+function construirCajaModal() {
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.style.cssText =
@@ -468,18 +484,29 @@ function construirCajaModal({ bloquearClickAfuera = false } = {}) {
 
   const caja = document.createElement("div");
   caja.className = "glass-card modal-card stack";
-  caja.style.cssText = "max-width:440px; width:100%; max-height:85vh; overflow-y:auto; gap:16px;";
+  caja.style.cssText = "position:relative; max-width:440px; width:100%; max-height:85vh; overflow-y:auto; gap:16px;";
   caja.addEventListener("click", (e) => e.stopPropagation());
   overlay.appendChild(caja);
 
   function cerrar() {
     overlay.remove();
   }
-  if (!bloquearClickAfuera) {
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) cerrar();
-    });
-  }
+
+  const btnX = document.createElement("button");
+  btnX.type = "button";
+  btnX.className = "modal-x-close";
+  btnX.setAttribute("aria-label", "Cerrar");
+  btnX.textContent = "✕";
+  btnX.style.cssText = "position:absolute; top:8px; right:8px; z-index:2;";
+  btnX.addEventListener("click", cerrar);
+  // Se re-inserta al principio cada vez que el modal se repinta con
+  // innerHTML (varios de estos reemplazan el contenido entero después de
+  // un fetch), así la "✕" nunca se pierde en el camino.
+  const observador = new MutationObserver(() => {
+    if (!caja.contains(btnX)) caja.prepend(btnX);
+  });
+  observador.observe(caja, { childList: true });
+  caja.prepend(btnX);
 
   return { overlay, caja, cerrar };
 }
@@ -544,6 +571,10 @@ function abrirModalCrearCompetencia(refrescar) {
         apodo,
         nombre,
         es_creador: true,
+        // 2026-09-17 (punto 4.3): caché local del estado de la competencia
+        // — la verdad vive en D1, esto solo permite separar activas de
+        // archivadas sin esperar a la red (ver cargarMarcadorEnTarjeta).
+        estado: "activa",
       });
       estado.datos.competencias_unidas.push(entrada);
       guardarTokenCreador(datos.id, datos.token_creador);
@@ -637,7 +668,7 @@ function abrirModalUnirseCompetencia(refrescar) {
       }
 
       estado.datos.competencias_unidas.push(
-        sellarTimestamp({ id: idCompetencia, participante_id, apodo, nombre, es_creador: false })
+        sellarTimestamp({ id: idCompetencia, participante_id, apodo, nombre, es_creador: false, estado: "activa" })
       );
       marcarCambioPendiente();
 
@@ -789,7 +820,7 @@ async function abrirModalInvitacionRecibida(id, refrescar) {
       const { participante_id } = await respuestaUnirse.json();
 
       estado.datos.competencias_unidas.push(
-        sellarTimestamp({ id, participante_id, apodo, nombre: datos.nombre, es_creador: false })
+        sellarTimestamp({ id, participante_id, apodo, nombre: datos.nombre, es_creador: false, estado: "activa" })
       );
       marcarCambioPendiente();
 
@@ -853,7 +884,25 @@ async function cargarMarcadorEnTarjeta(competencia, contMarcador) {
   try {
     const respuesta = await fetchConTimeout(`${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}`);
     if (!respuesta.ok) throw new Error(`El Worker respondió ${respuesta.status}`);
-    const datos = await respuesta.json(); // { id, nombre, participantes: [{id, apodo, horas_semana_actual}] }
+    const datos = await respuesta.json(); // { id, nombre, estado, participantes: [{id, apodo, horas_semana_actual}] }
+
+    // 2026-09-17 (Parte 4/5): `nombre` y `estado` viven del lado del Worker
+    // pero se cachean en `competencias_unidas` para poder pintar la lista
+    // (y separar activas de archivadas) sin esperar a la red. Acá se
+    // reconcilia ese caché con la verdad: si alguien renombró o finalizó la
+    // competencia desde otro dispositivo, esta es la vuelta en que se
+    // entera. Solo se re-renderiza si algo cambió de verdad, así no entra
+    // en un bucle de refrescos.
+    const estadoRemoto = datos.estado === "finalizada" ? "finalizada" : "activa";
+    const viva = estado.datos.competencias_unidas.find((c) => c.id === competencia.id);
+    if (viva && (viva.nombre !== datos.nombre || viva.estado !== estadoRemoto)) {
+      viva.nombre = datos.nombre;
+      viva.estado = estadoRemoto;
+      sellarTimestamp(viva);
+      marcarCambioPendiente();
+      if (typeof window.renderizarTiempoEstudio === "function") window.renderizarTiempoEstudio();
+      return;
+    }
 
     contMarcador.innerHTML = "";
     (datos.participantes || []).forEach((p, i) => {
@@ -873,10 +922,9 @@ async function cargarMarcadorEnTarjeta(competencia, contMarcador) {
 
 /**
  * Estilos de la fila de botones de acción de cada tarjeta de competencia
- * (Enlace/Clasificación/Borrar/Salir) — se inyectan una sola vez (guard
- * por id) porque este archivo no tiene una hoja .css propia y no vale la
- * pena crear una solo para esto. `data-total`/`data-cols`/`data-compacto`
- * los maneja `construirFilaBotonesCompetencia` en JS según lo que mide.
+ * (Enlace/Clasificación/Gestionar) — se inyectan una sola vez (guard por
+ * id) porque este archivo no tiene una hoja .css propia y no vale la pena
+ * crear una solo para esto.
  */
 function asegurarEstilosBotonesCompetencia() {
   if (document.getElementById("te-estilos-botones-competencia")) return;
@@ -887,10 +935,9 @@ function asegurarEstilosBotonesCompetencia() {
       display: grid;
       gap: 8px;
     }
-    .te-fila-botones-competencia[data-total="4"] { grid-template-columns: repeat(4, 1fr); }
+    /* 2026-09-17: siempre 3 botones parejos (Enlace/Clasificación/Gestionar)
+       — las variantes de 4 y el modo compacto se fueron con el pedido 4.1. */
     .te-fila-botones-competencia[data-total="3"] { grid-template-columns: repeat(3, 1fr); }
-    .te-fila-botones-competencia[data-total="4"][data-cols="2x2"] { grid-template-columns: repeat(2, 1fr); }
-    .te-fila-botones-competencia[data-total="3"][data-compacto="1"] { grid-template-columns: min-content 1fr 1fr; }
     .te-btn-competencia {
       display: flex;
       align-items: center;
@@ -917,8 +964,6 @@ function asegurarEstilosBotonesCompetencia() {
     }
     .te-btn-competencia-emoji { font-size: 1rem; line-height: 1; flex: none; }
     .te-btn-competencia-etiqueta { overflow: hidden; text-overflow: ellipsis; }
-    .te-btn-competencia-compacto { padding-left: 0; padding-right: 0; }
-    .te-btn-competencia-compacto .te-btn-competencia-etiqueta { display: none; }
   `;
   document.head.appendChild(estilo);
 }
@@ -936,91 +981,57 @@ function crearBotonCompetencia({ emoji, etiqueta, titulo, peligro, onClick }) {
 }
 
 /**
- * Fila de botones de una tarjeta de competencia — Enlace/Clasificación/
- * Salir, más Borrar si `competencia.es_creador` (4 en total; 3 si no).
+ * Fila de botones de una tarjeta de competencia.
  *
- * Pedido explícito: los 4 (o 3) del mismo tamaño. Si entran con su
- * etiqueta completa en una sola fila, van en una sola fila; si los 4 NO
- * entran, pasan a grid 2x2 (nunca 3+1). Con 3 botones NUNCA se envuelve a
- * una segunda línea — si no entran con etiqueta completa, se sacrifica
- * primero el de Enlace, dejándolo solo con el emoji (angosto) para que
- * los otros 2 sigan en la misma línea. Se mide con `scrollWidth` (el
- * ancho natural del contenido, `white-space:nowrap` evita que se ajuste
- * aunque la caja ya esté angosta por el grid) contra el ancho real
- * disponible, y se re-mide con ResizeObserver porque el espacio puede
- * cambiar (rotar el teléfono, redimensionar la ventana).
+ * PEDIDO 4.1 (2026-09-17): los botones sueltos de "Borrar" y "Salir"
+ * desaparecieron de la tarjeta — ahora hay un único "Gestionar" que abre
+ * el menú con las 6 acciones (renombrar / cambiar apodo / finalizar /
+ * sacar usuario / salir / borrar), ya filtradas por permiso adentro de
+ * `abrirModalGestionCompetencia` (tiempo-estudio-competencias-gestion.js).
+ * Quedan 3 botones fijos para todo el mundo, así que se cayó toda la
+ * gimnasia de medición 4-vs-3 con ResizeObserver que tenía esta función:
+ * con 3 columnas parejas entran siempre, y si el ancho aprieta, el CSS
+ * recorta la etiqueta con ellipsis.
  */
 function construirFilaBotonesCompetencia(competencia, refrescar) {
   asegurarEstilosBotonesCompetencia();
 
   const fila = document.createElement("div");
   fila.className = "te-fila-botones-competencia";
+  fila.dataset.total = "3";
 
-  const btnEnlace = crearBotonCompetencia({
-    emoji: "🔗",
-    etiqueta: "Enlace",
-    titulo: "Copiar link de invitación",
-    onClick: () => copiarLinkInvitacion(competencia),
-  });
-  const btnClasificacion = crearBotonCompetencia({
-    emoji: "🏆",
-    etiqueta: "Clasificación",
-    titulo: "Ver historial de ganadores",
-    onClick: () => abrirModalHistorial(competencia),
-  });
-  const btnSalir = crearBotonCompetencia({
-    emoji: "🚪",
-    etiqueta: "Salir",
-    titulo: "Salir de esta competencia",
-    onClick: () => salirDeCompetencia(competencia, refrescar),
-  });
+  const finalizada = competencia.estado === "finalizada";
 
-  const botones = [btnEnlace, btnClasificacion];
-  if (competencia.es_creador) {
-    botones.push(
-      crearBotonCompetencia({
-        emoji: "💥",
-        etiqueta: "Borrar",
-        titulo: "Borrar para todos",
-        peligro: true,
-        onClick: () => borrarCompetenciaEntera(competencia, refrescar),
-      })
-    );
-  }
-  botones.push(btnSalir);
-  botones.forEach((b) => fila.appendChild(b));
-
-  const total = botones.length; // 4 si es creador, 3 si no
-  fila.dataset.total = String(total);
-
-  function reacomodar() {
-    // Se resetea a "todo entra completo" antes de medir, si no la
-    // medición siguiente arrastra el estado angosto de la corrida
-    // anterior (ej. veníamos de un ancho chico y ahora hay más lugar).
-    fila.removeAttribute("data-cols");
-    fila.removeAttribute("data-compacto");
-    btnEnlace.classList.remove("te-btn-competencia-compacto");
-
-    const anchoDisponible = fila.clientWidth;
-    if (!anchoDisponible) return; // todavía no está en el DOM medible
-    const anchoNecesario = botones.reduce((suma, b) => suma + b.scrollWidth, 0) + 8 * (total - 1);
-    if (anchoNecesario <= anchoDisponible) return; // entra bien en una fila pareja
-
-    if (total === 4) {
-      fila.setAttribute("data-cols", "2x2");
-      return;
-    }
-
-    // total === 3: nunca se envuelve — se sacrifica el botón de Enlace.
-    btnEnlace.classList.add("te-btn-competencia-compacto");
-    fila.setAttribute("data-compacto", "1");
-  }
-
-  // clientWidth/scrollWidth de un nodo recién creado (todavía no
-  // insertado en el DOM real) dan 0 — un rAF alcanza porque el caller
-  // appendea `fila` de forma síncrona antes de que corra.
-  requestAnimationFrame(reacomodar);
-  new ResizeObserver(reacomodar).observe(fila);
+  fila.appendChild(
+    crearBotonCompetencia({
+      emoji: "🔗",
+      etiqueta: "Enlace",
+      titulo: finalizada ? "Esta competencia está finalizada" : "Copiar link de invitación",
+      onClick: () => {
+        if (finalizada) {
+          mostrarToast("La competencia está finalizada — no acepta gente nueva");
+          return;
+        }
+        copiarLinkInvitacion(competencia);
+      },
+    })
+  );
+  fila.appendChild(
+    crearBotonCompetencia({
+      emoji: "🏆",
+      etiqueta: "Clasificación",
+      titulo: "Ver historial de ganadores",
+      onClick: () => abrirModalHistorial(competencia),
+    })
+  );
+  fila.appendChild(
+    crearBotonCompetencia({
+      emoji: "⚙️",
+      etiqueta: "Gestionar",
+      titulo: "Gestionar esta competencia",
+      onClick: () => abrirModalGestionCompetencia(competencia, refrescar),
+    })
+  );
 
   return fila;
 }
@@ -1059,8 +1070,21 @@ function construirVistaCompetencias(cont, refrescar) {
   encabezado.appendChild(botones);
   cont.appendChild(encabezado);
 
-  const competencias = estado.datos.competencias_unidas;
-  if (competencias.length === 0) {
+  // Punto 3.3: los avisos de resultado nuevo van arriba de todo, y son el
+  // ÚNICO camino a la pantalla de celebración con sonido. Nada suena solo.
+  construirAvisosResultados(cont, refrescar);
+
+  // BOTÓN TEMPORAL DE PRUEBA - remover cuando el diseño de celebración esté aprobado
+  // (punto 3.1) — encolan un aviso falso de victoria/derrota para poder
+  // ajustar el diseño sin esperar a un cierre de semana real.
+  construirBotonesSimulacion(cont, refrescar);
+
+  const todas = estado.datos.competencias_unidas;
+  // Parte 5: las finalizadas salen de la lista principal y se muestran en
+  // "Registro de competencias", abajo y colapsado.
+  const activas = todas.filter((c) => c.estado !== "finalizada");
+
+  if (todas.length === 0) {
     const vacio = document.createElement("div");
     vacio.className = "glass-card stack";
     vacio.style.cssText = "text-align:center; padding:24px 16px;";
@@ -1072,11 +1096,19 @@ function construirVistaCompetencias(cont, refrescar) {
     return;
   }
 
+  if (activas.length === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.cssText = "margin:0 0 4px; font-size:0.85rem;";
+    vacio.textContent = "No tenés competencias activas — mirá el registro más abajo.";
+    cont.appendChild(vacio);
+  }
+
   const lista = document.createElement("div");
   lista.className = "stack";
   lista.style.gap = "10px";
 
-  competencias.forEach((competencia) => {
+  activas.forEach((competencia) => {
     const tarjeta = document.createElement("div");
     tarjeta.className = "glass-card";
     tarjeta.style.cssText = "padding:14px 16px; display:flex; flex-direction:column; gap:10px;";
@@ -1104,6 +1136,24 @@ function construirVistaCompetencias(cont, refrescar) {
   });
 
   cont.appendChild(lista);
+
+  // Parte 5 — sección "Registro de competencias" (no dibuja nada si no hay
+  // ninguna finalizada).
+  construirRegistroCompetencias(cont, refrescar);
 }
 
-export { construirVistaCompetencias, sincronizarHorasCompetencias, revisarLinkInvitacionAlCargar };
+export {
+  construirVistaCompetencias,
+  sincronizarHorasCompetencias,
+  revisarLinkInvitacionAlCargar,
+  // Helpers compartidos con tiempo-estudio-competencias-gestion.js
+  // (2026-09-17, ver la nota de cabecera de ese archivo sobre por qué se
+  // partió en dos). No son API pública de la sección: nadie fuera de ese
+  // archivo debería importarlos.
+  construirCajaModal,
+  fetchConTimeout,
+  formatearHoras,
+  leerTokenCreador,
+  salirDeCompetencia,
+  borrarCompetenciaEntera,
+};

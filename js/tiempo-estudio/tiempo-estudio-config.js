@@ -184,9 +184,10 @@ function abrirModalConfigTiempoEstudio(mm, nombreMateria, onGuardar) {
   function cerrar() {
     overlay.remove();
   }
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) cerrar();
-  });
+  // Pedido 2.2 (2026-09-17): en toda la sección Tiempo, tocar el fondo del
+  // overlay NO cierra el modal — se cierra únicamente con su botón
+  // explícito de Cancelar/Cerrar, para no perder lo tipeado de un toque al
+  // descuido. (El handler de "clic afuera" que había acá se removió.)
   caja.querySelector("#te-config-cancelar").addEventListener("click", cerrar);
 
   caja.querySelector("#te-config-guardar").addEventListener("click", () => {
@@ -262,9 +263,10 @@ function abrirModalPomodoroPredeterminado(onGuardar) {
   function cerrar() {
     overlay.remove();
   }
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) cerrar();
-  });
+  // Pedido 2.2 (2026-09-17): en toda la sección Tiempo, tocar el fondo del
+  // overlay NO cierra el modal — se cierra únicamente con su botón
+  // explícito de Cancelar/Cerrar, para no perder lo tipeado de un toque al
+  // descuido. (El handler de "clic afuera" que había acá se removió.)
   caja.querySelector("#te-default-pom-cancelar").addEventListener("click", cerrar);
 
   caja.querySelector("#te-default-pom-guardar").addEventListener("click", () => {
