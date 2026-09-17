@@ -520,6 +520,18 @@ function hayTimerActivo() {
   return timerActivo !== null;
 }
 
+/**
+ * Blindaje 2026-09-17 (punto 3.5 de la auditoría): puente por `window`, el
+ * mismo patrón que ya usa el proyecto para llamadas cruzadas entre módulos
+ * sin crear imports circulares (window.renderizarTiempoEstudio,
+ * window.renderizarHorario, etc. — ver mostrarSeccion en main.js).
+ * `pedirConfirmacionCerrarSesion()` (main.js) lo consulta para no dejar
+ * cerrar sesión en silencio con una sesión de estudio corriendo: lo que
+ * lleva el cronómetro todavía NO está en `estado.datos` (recién lo escribe
+ * detenerTimerEstudio), así que `estado.pendienteSync` no lo refleja.
+ */
+if (typeof window !== "undefined") window.hayTimerActivo = hayTimerActivo;
+
 function obtenerTimerActivo() {
   return timerActivo;
 }

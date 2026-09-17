@@ -178,10 +178,12 @@ function horaInputReg(ms) {
  * Modal de edición — fecha+hora de inicio Y fecha+hora de fin por
  * separado (a diferencia del registro manual de arriba, que solo pide
  * una fecha + duración), justamente para poder mover una punta a otro
- * día sin perder precisión. Guarda in-place sobre el objeto `sesion` (ya
- * está en `estado.datos.sesiones_estudio`, no hace falta buscarlo de
- * nuevo) y re-sella su timestamp para que la sincronización sepa que
- * cambió.
+ * día sin perder precisión. `sesion` llega del render que abrió el modal
+ * y puede quedar vieja si en el medio corrió un sync (relectura de
+ * entidad viva, ver fix 2026-09-17 más abajo): al guardar se releé por
+ * id en `estado.datos.sesiones_estudio` y se muta esa referencia fresca,
+ * nunca el objeto del closure directamente. Re-sella su timestamp para
+ * que la sincronización sepa que cambió.
  */
 function abrirModalEditarSesion(sesion, refrescar) {
   const overlay = document.createElement("div");
@@ -253,12 +255,28 @@ function abrirModalEditarSesion(sesion, refrescar) {
       return;
     }
 
-    sesion.inicio = inicio;
-    sesion.fin = fin;
-    sesion.duracion_minutos = Math.max(0, Math.round((fin - inicio) / 60000));
-    sellarTimestamp(sesion);
+    // FIX (relectura de entidad viva, auditoría 2026-09-17 punto 2.3): antes
+    // se mutaba directo el `sesion` capturado en el closure, que puede venir
+    // de un render viejo. Si en el medio bajó un sync (BroadcastChannel de
+    // otra pestaña, sondeo remoto, o incluso el borrado de esta misma
+    // sesión desde otro lado) esa referencia queda huérfana y el guardado
+    // pisaba datos que ya no correspondían al estado real. Se relee por id
+    // en estado.datos.sesiones_estudio justo antes de tocar nada, mismo
+    // patrón que ya usan los 4 flujos de Gestionar Competencias.
+    const sesionViva = estado.datos.sesiones_estudio.find((s) => s.id === sesion.id);
+    if (!sesionViva) {
+      mostrarToast("Esta sesión ya no existe (se borró o cambió en otro lado)");
+      cerrar();
+      if (refrescar) refrescar();
+      return;
+    }
+
+    sesionViva.inicio = inicio;
+    sesionViva.fin = fin;
+    sesionViva.duracion_minutos = Math.max(0, Math.round((fin - inicio) / 60000));
+    sellarTimestamp(sesionViva);
     marcarCambioPendiente();
-    revisarFelicitacionMeta(sesion.materia_matriculada_id);
+    revisarFelicitacionMeta(sesionViva.materia_matriculada_id);
     mostrarToast("Sesión actualizada");
     sincronizarHorasCompetencias();
 
