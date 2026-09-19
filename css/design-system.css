@@ -4511,40 +4511,214 @@ html.exportar-tema-default[data-mode="dark"] {
 
 /* ===================== Tiempo de Estudio (Parte 1) ===================== */
 
-/* Indicador persistente de sesión activa — mismo patrón que
-   .badge-modo-edicion-fijo (fijo, pill, --gradient-accent), pero en la
-   esquina inferior IZQUIERDA para no chocar con Modo Edición, que ya vive
-   abajo-derecha. Muestra "⏱ <Materia> · MM:SS" en vivo y navega al detalle
-   de esa materia al tocarlo (ver tiempo-estudio.js). */
-.badge-tiempo-estudio-fijo {
-  position: fixed;
-  bottom: 20px;
-  left: 20px;
-  background: var(--gradient-accent);
-  color: var(--on-accent);
-  padding: 10px 18px;
-  border-radius: var(--radius-pill);
-  font-weight: 700;
-  font-size: 0.85rem;
-  box-shadow: var(--shadow-float);
-  z-index: 80;
-  border: none;
-  cursor: pointer;
+/* ---- Indicador de sesión activa (rediseño 2026-09-19) ----
+   Reemplaza al badge fijo de la esquina inferior izquierda (.badge-tiempo-
+   estudio-fijo, ya eliminado), que tapaba el perfil de la barra lateral.
+   Una lucecita que parpadea del COLOR DE LA MATERIA + su nombre (sin
+   código) + el tiempo. Es UN solo componente con 3 presentaciones, y el CSS
+   muestra la que corresponde al ancho de pantalla (mismos cortes que ya usa
+   el resto del layout: 900px y 1500px):
+
+     >= 1500px   .timer-indicador--lateral   tarjeta al fondo de .columna-derecha
+     900–1499px  .timer-indicador--flotante  tarjeta fija abajo-derecha, sobre
+                                             el botón flotante de Enlaces
+     < 900px     .timer-indicador--linea     2ª línea bajo el nombre de la app
+                                             en .mobile-topbar
+
+   El color llega por la variable --te-color (la pone tiempo-estudio-
+   indicador.js en línea, con el color de la materia); el valor de acá abajo
+   es solo el respaldo. Nada de hex fijos: fondo y borde son mezclas de
+   --te-color con las variables de la paleta, así que funciona en las 13
+   paletas y en claro/oscuro. */
+.timer-indicador {
+  --te-color: var(--accent-1);
+  --timer-fondo: color-mix(in srgb, var(--te-color) 13%, var(--bg-panel));
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--te-color) 42%, transparent);
+  background: var(--timer-fondo);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: transform var(--transition-fast), border-color var(--transition-fast);
+}
+.timer-indicador:hover { border-color: color-mix(in srgb, var(--te-color) 80%, transparent); }
+.timer-indicador:active { transform: scale(0.98); }
+.timer-indicador:focus-visible { outline: 2px solid var(--te-color); outline-offset: 2px; }
+[data-rendimiento="reducido"] .timer-indicador {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background-color: var(--bg-canvas);
+  background-image: linear-gradient(var(--timer-fondo), var(--timer-fondo));
+}
+
+/* La lucecita: parpadea suave mientras corre; en pausa se queda fija y
+   atenuada. prefers-reduced-motion ya apaga toda animación más arriba. */
+.timer-luz {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--te-color);
+  box-shadow: 0 0 9px 1px var(--te-color);
+  animation: timer-luz-parpadeo 1.7s ease-in-out infinite;
+}
+@keyframes timer-luz-parpadeo {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.22; box-shadow: 0 0 2px 0 var(--te-color); }
+}
+.timer-en-pausa .timer-luz { animation: none; opacity: 0.5; box-shadow: none; }
+
+.timer-textos {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.timer-materia {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 0.85rem;
+  line-height: 1.25;
+}
+.timer-sep { display: none; }
+.timer-fila-tiempo { display: flex; align-items: baseline; gap: 6px; }
+.timer-tiempo {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 1.15rem;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+.timer-estado {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.timer-estado[hidden] { display: none; }
+
+/* -- >= 1500px: tarjeta anclada al fondo de la columna derecha --
+   La columna mide el alto de la pantalla (menos los 20px de aire arriba y
+   abajo) y se queda pegada al hacer scroll, igual que hacía el panel de
+   enlaces solo. Los enlaces van arriba; la tarjeta baja al fondo con
+   margin-top:auto (como el perfil en la barra lateral). Si los enlaces son
+   tantos que no caben, el PANEL DE ENLACES se encoge y hace scroll por
+   dentro (flex: 0 1 auto + min-height:0) — la tarjeta del timer no se
+   encoge, así que nunca queda tapada ni fuera de pantalla. */
+.columna-derecha {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  width: 260px;
+  flex-shrink: 0;
+  align-self: flex-start;
+  position: sticky;
+  top: 20px;
+  height: calc(100vh - 40px);
+  height: calc(100dvh - 40px);
+}
+@media (min-width: 1500px) {
+  .columna-derecha { display: flex; }
+}
+.columna-derecha > .enlaces-lateral {
+  position: static;
+  width: 100%;
+  max-height: none;
+  flex: 0 1 auto;
+  min-height: 0;
+  align-self: stretch;
+}
+.timer-indicador--lateral {
+  flex: none;
+  width: 100%;
+  margin-top: auto;
+  padding: 13px 15px;
+  border-radius: var(--radius-md);
+}
+
+/* Choque con "Modo edición": ese badge fijo (.badge-modo-edicion-fijo) vive
+   abajo-derecha, en el mismo rincón donde ahora está la tarjeta del timer.
+   Antes el timer estaba abajo-IZQUIERDA justamente para no chocar con él.
+   Mientras el badge está visible (Plan de Estudios en modo edición), la
+   columna derecha se acorta 52px por abajo para que la tarjeta quede justo
+   encima. (:has() — mismo nivel de soporte que el color-mix que ya usa todo
+   este archivo.) En 900–1499px la tarjeta flotante ya está a 88px del fondo,
+   por encima del badge, así que no necesita ajuste. */
+#app-shell:has(#badge-modo-edicion:not(.oculto)) .columna-derecha {
+  height: calc(100vh - 92px);
+  height: calc(100dvh - 92px);
+}
+
+/* -- 900–1499px: sin columna derecha ni barra superior — tarjeta fija abajo
+   a la derecha, por encima del botón flotante de Enlaces (52px + 24px de
+   margen). Solo existe en ese rango; fuera de él se oculta. -- */
+.timer-indicador--flotante {
+  display: none;
+  position: fixed;
+  right: 24px;
+  bottom: 88px;
+  z-index: 80;
+  width: max-content;
+  max-width: min(260px, calc(100vw - 48px));
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-float);
   animation: badge-tiempo-estudio-in var(--transition-fast) ease;
+}
+@media (min-width: 900px) and (max-width: 1499.98px) {
+  .timer-indicador--flotante { display: flex; }
 }
 @keyframes badge-tiempo-estudio-in {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
-/* En pantallas chicas, si algún día coincide con otro badge fijo abajo,
-   dejamos algo de aire respecto al borde para que no quede pegado al notch
-   de gestos de iOS/Android. */
-@media (max-width: 480px) {
-  .badge-tiempo-estudio-fijo { bottom: 16px; left: 16px; padding: 9px 14px; font-size: 0.8rem; }
+
+/* -- < 900px: segunda línea bajo "App Académica" en la barra superior.
+   Sin tarjeta ni fondo (es una línea de texto), para no engordar la barra.
+   El nombre de la materia se recorta con "…" si no cabe; el tiempo nunca. -- */
+.mobile-topbar-centro {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
 }
+.mobile-topbar .mobile-topbar-centro h3 { flex: none; }
+.timer-indicador--linea {
+  max-width: 100%;
+  gap: 6px;
+  padding: 1px 6px;
+  border: none;
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.timer-indicador--linea .timer-luz { width: 7px; height: 7px; box-shadow: 0 0 7px 1px var(--te-color); }
+.timer-indicador--linea.timer-en-pausa .timer-luz { box-shadow: none; }
+.timer-indicador--linea .timer-textos { flex-direction: row; align-items: baseline; gap: 5px; }
+.timer-indicador--linea .timer-materia {
+  flex: 0 1 auto;
+  font-size: 0.74rem;
+  font-weight: 500;
+}
+.timer-indicador--linea .timer-sep { display: inline; flex: none; font-size: 0.74rem; color: var(--text-muted); }
+.timer-indicador--linea .timer-fila-tiempo { flex: none; gap: 5px; }
+.timer-indicador--linea .timer-tiempo { font-size: 0.74rem; }
+.timer-indicador--linea .timer-estado { font-size: 0.68rem; }
 
 /* Encabezado (B.1): título + engranaje de Ajustes (el filtro Todo/Activos
    se mudó adentro del modal de Ajustes). */
