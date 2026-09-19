@@ -286,7 +286,18 @@ function confirmarYEjecutarSalida(competencia, refrescar) {
 
 /** El DELETE real + limpieza local — compartido por el flujo directo
  * (confirmarYEjecutarSalida) y por el que pasa primero por la delegación
- * (abrirModalDelegarAntesDeSalir). */
+ * (abrirModalDelegarAntesDeSalir).
+ *
+ * FIX 2026-09-19 (Parte A, punto 3): antes CUALQUIER fallo del DELETE
+ * (sin red, timeout, 5xx) se tragaba con un `console.warn` y la
+ * competencia se sacaba igual de la lista local. Resultado: la fila del
+ * participante quedaba VIVA en D1 (con sus horas viejas) y en el cliente
+ * ya no había ningún puntero a ella — un "fantasma" que aparecía en el
+ * marcador de los demás y hacía fallar el siguiente "Unirse" con 409.
+ * Ahora solo se saca de la lista local si el Worker CONFIRMÓ que la fila ya
+ * no está (2xx, o 404 = ya no existía). Ante cualquier otro resultado se
+ * deja todo como estaba y se avisa, para que se pueda reintentar.
+ * Devuelve true si efectivamente salió. */
 async function ejecutarSalidaCompetencia(competencia, refrescar) {
   try {
     const respuesta = await fetchConTimeout(
@@ -298,13 +309,14 @@ async function ejecutarSalidaCompetencia(competencia, refrescar) {
       }
     );
     if (!respuesta.ok && respuesta.status !== 404) {
-      // 404 = el Worker ya no lo tiene como participante por lo que
-      // sea (ej. ya se había salido desde otro dispositivo) — igual
-      // se saca de la lista local, no tiene sentido bloquear por eso.
+      // 404 = el Worker ya no lo tiene como participante (ej. ya se había
+      // salido desde otro dispositivo): el estado deseado ya se cumple.
       throw new Error(`El Worker respondió ${respuesta.status}`);
     }
   } catch (e) {
-    console.warn("[competencias] No se pudo avisarle al Worker de la salida (se saca igual de la lista local):", e);
+    console.warn("[competencias] No se pudo confirmar la salida con el Worker — se mantiene en la lista local:", e);
+    mostrarToast("No se pudo salir de la competencia. Revisá tu conexión e intentá de nuevo.");
+    return false;
   }
 
   const idx = estado.datos.competencias_unidas.findIndex((c) => c.id === competencia.id);
@@ -316,6 +328,7 @@ async function ejecutarSalidaCompetencia(competencia, refrescar) {
   marcarCambioPendiente();
   mostrarToast("Saliste de la competencia");
   if (refrescar) refrescar();
+  return true;
 }
 
 /**
@@ -413,7 +426,22 @@ function abrirModalDelegarAntesDeSalir(competencia, otrosParticipantes, refresca
     // falta tocar `es_creador` a mano.
     borrarTokenCreador(competencia.id);
     cerrar();
-    ejecutarSalidaCompetencia(competencia, refrescar);
+    const salio = await ejecutarSalidaCompetencia(competencia, refrescar);
+    if (!salio) {
+      // FIX 2026-09-19 (Parte A, punto 3): la delegación YA se hizo pero el
+      // DELETE falló y la competencia sigue en la lista local. Sin este
+      // paso, un reintento de "Salir" volvería a abrir este modal y chocaría
+      // con "no se encontró el permiso de borrado" (el token ya se limpió
+      // arriba). Como el permiso efectivamente ya no es de esta persona, se
+      // deja de marcarla como creadora (relectura de entidad viva) y el
+      // reintento va por el flujo directo.
+      const viva = estado.datos.competencias_unidas.find((c) => c.id === competencia.id);
+      if (viva && viva.es_creador) {
+        viva.es_creador = false;
+        sellarTimestamp(viva);
+        marcarCambioPendiente();
+      }
+    }
   });
 }
 
@@ -575,6 +603,10 @@ function abrirModalCrearCompetencia(refrescar) {
         // — la verdad vive en D1, esto solo permite separar activas de
         // archivadas sin esperar a la red (ver cargarMarcadorEnTarjeta).
         estado: "activa",
+        // FIX 2026-09-19 (Parte A, estado fantasma): momento del alta, en ms.
+        // Es lo que le permite a `fusionarDatos` distinguir esta membresía de
+        // una tumba VIEJA con el mismo id (ver `podarTumbasSuperadasPorAltas`).
+        unido_en: Date.now(),
       });
       estado.datos.competencias_unidas.push(entrada);
       guardarTokenCreador(datos.id, datos.token_creador);
@@ -668,7 +700,7 @@ function abrirModalUnirseCompetencia(refrescar) {
       }
 
       estado.datos.competencias_unidas.push(
-        sellarTimestamp({ id: idCompetencia, participante_id, apodo, nombre, es_creador: false, estado: "activa" })
+        sellarTimestamp({ id: idCompetencia, participante_id, apodo, nombre, es_creador: false, estado: "activa", unido_en: Date.now() })
       );
       marcarCambioPendiente();
 
@@ -820,7 +852,7 @@ async function abrirModalInvitacionRecibida(id, refrescar) {
       const { participante_id } = await respuestaUnirse.json();
 
       estado.datos.competencias_unidas.push(
-        sellarTimestamp({ id, participante_id, apodo, nombre: datos.nombre, es_creador: false, estado: "activa" })
+        sellarTimestamp({ id, participante_id, apodo, nombre: datos.nombre, es_creador: false, estado: "activa", unido_en: Date.now() })
       );
       marcarCambioPendiente();
 

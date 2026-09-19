@@ -28,7 +28,7 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
+import { marcarCambioPendiente, registrarHookPostFusion } from "../core/storage-sync.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { COLOR_TIEMPO_ESTUDIO_DEFAULT } from "../core/schema.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
@@ -247,9 +247,18 @@ function construirTarjetaMateria(item) {
     renderizarTiempoEstudio();
   });
 
+  // FIX 2026-09-19 (Parte B): sin meta, la tarjeta decía SOLO "Sin meta
+  // configurada" — registrar o cronometrar tiempo en una materia así no
+  // dejaba ninguna señal visible en la vista principal, y era lo que
+  // llevaba a pensar que "no se guardó". Ahora, si esta semana hay tiempo
+  // estudiado, se muestra igual (solo se agrega el dato; sin barra, porque
+  // no hay meta contra la cual proporcionarla).
+  const minutosEstaSemana = calcularMinutosEstudiadosEstaSemana(mm.id);
   const textoTiempo = tieneMeta
-    ? `${formatearHorasMin(calcularMinutosEstudiadosEstaSemana(mm.id))} de ${meta} h`
-    : "Sin meta configurada";
+    ? `${formatearHorasMin(minutosEstaSemana)} de ${meta} h`
+    : minutosEstaSemana > 0
+      ? `${formatearHorasMin(minutosEstaSemana)} esta semana · sin meta`
+      : "Sin meta configurada";
 
   // Orden pedido: nombre → tiempo/botones → barra AL FINAL (antes iba en
   // el medio). Sin meta, no hay nada que proporcionar, no se dibuja barra.
@@ -838,7 +847,25 @@ function renderizarTiempoEstudio() {
  * suscrito al motor del timer desde el arranque, para que pueda aparecer
  * en CUALQUIER sección, no solo al entrar a Tiempo de Estudio.
  */
+let _hookRepintadoTiempoRegistrado = false;
+
 function inicializarTiempoEstudio() {
+  // FIX 2026-09-19 (Parte B, "sesión desaparecida"): `aplicarDatosRemotosFrescos`
+  // (storage-sync.js) repinta Semestres, Finanzas, Plan de Estudios, etc.
+  // tras CADA fusión remota (sondeo de ~9 s, pull-to-refresh, otra pestaña
+  // vía BroadcastChannel, login) — pero nunca repintaba Tiempo. Una sesión
+  // guardada en otro dispositivo o pestaña llegaba bien a `estado.datos`
+  // (por eso un F5 la mostraba) y el DOM de esta sección se quedaba
+  // congelado con los datos viejos: la persona veía "no se guardó", la
+  // volvía a cargar a mano y terminaba con dos. Mismo bug ya corregido para
+  // Semestres y Finanzas; acá se resuelve por el mecanismo genérico de
+  // hooks post-fusión (no hace falta que storage-sync.js importe este
+  // archivo). El scroll lo protege el propio lote de aplicarDatosRemotosFrescos.
+  if (!_hookRepintadoTiempoRegistrado) {
+    _hookRepintadoTiempoRegistrado = true;
+    registrarHookPostFusion(() => renderizarTiempoEstudio());
+  }
+
   // Parte 2 (punto 4, salvavidas): se revisa una sola vez al arrancar, no
   // en cuanto se cumplen las 3 horas — si quedó una sesión sin detener por
   // más de SALVAVIDAS_HORAS_LIMITE, abre el modal para corregir la

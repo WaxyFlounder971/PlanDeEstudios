@@ -112,12 +112,23 @@ function abrirModalRegistroManual(items, onGuardar) {
       return;
     }
 
-    const inicio = new Date(`${fecha}T${hora}:00`).getTime();
+    const inicio = construirTimestampLocalReg(fecha, hora);
+    if (!Number.isFinite(inicio)) {
+      mostrarToast("La fecha u hora no es válida — revisala e intentá de nuevo");
+      return;
+    }
     const fin = inicio + minutosTotales * 60000;
     const sesion = crearSesionEstudio({ materiaMatriculadaId, inicio, fin, origen: "manual" });
     estado.datos.sesiones_estudio.push(sesion);
     marcarCambioPendiente();
-    mostrarToast("Sesión registrada");
+    // FIX 2026-09-19 (Parte B): antes el aviso era solo "Sesión registrada".
+    // Si la sesión no cae en la semana en curso, o la materia no tiene meta,
+    // la vista de tarjetas no cambia en nada y la persona no tenía cómo
+    // saber si se guardó (y la volvía a cargar). Ahora el aviso dice CUÁL
+    // materia, QUÉ día y cuánto — y dónde verla.
+    const itemElegido = items.find((it) => it.mm.id === materiaMatriculadaId);
+    const nombreElegido = itemElegido ? itemElegido.nombreMateriaCorto || itemElegido.nombreMateria : "la materia";
+    mostrarToast(`✓ Registrada: ${formatearMinutosReg(minutosTotales)} de ${nombreElegido} · ${formatearFechaHoraReg(inicio)}. La ves en el detalle de la materia.`);
     revisarFelicitacionMeta(materiaMatriculadaId);
     sincronizarHorasCompetencias();
 
@@ -156,6 +167,7 @@ function formatearMinutosReg(minutosTotales) {
 
 /** "lun 7 sep · 22:00" — usado para inicio y fin de la fila de una sesión. */
 function formatearFechaHoraReg(ms) {
+  if (!Number.isFinite(ms)) return "fecha inválida";
   const d = new Date(ms);
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
@@ -172,6 +184,29 @@ function fechaInputReg(ms) {
 function horaInputReg(ms) {
   const d = new Date(ms);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/**
+ * FIX 2026-09-19 (Parte B): construye el epoch ms de una fecha+hora LOCAL a
+ * partir de los valores de un <input type="date"> y uno <input type="time">,
+ * o `NaN` si alguno no se puede interpretar.
+ *
+ * Antes se armaba con `new Date(`${fecha}T${hora}:00`)`, que da "Invalid
+ * Date" si el navegador entrega la hora CON segundos ("09:30:00" →
+ * "09:30:00:00"). Y como ni el registro manual ni la edición validaban el
+ * resultado, la sesión se guardaba con `inicio = NaN`: quedaba en
+ * `sesiones_estudio` pero ningún filtro por fecha la encontraba
+ * (`NaN >= x` siempre es false) — no contaba en ninguna estadística ni
+ * meta, y en el historial aparecía como "undefined NaN". Justo el caso
+ * "la registré y no aparece". Acá se parsea a mano y se ignoran los
+ * segundos si vienen.
+ */
+function construirTimestampLocalReg(fechaStr, horaStr) {
+  const f = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(fechaStr || "").trim());
+  const h = /^(\d{1,2}):(\d{2})/.exec(String(horaStr || "").trim());
+  if (!f || !h) return NaN;
+  const ms = new Date(Number(f[1]), Number(f[2]) - 1, Number(f[3]), Number(h[1]), Number(h[2]), 0, 0).getTime();
+  return Number.isFinite(ms) ? ms : NaN;
 }
 
 /**
@@ -247,8 +282,16 @@ function abrirModalEditarSesion(sesion, refrescar) {
       return;
     }
 
-    const inicio = new Date(`${fechaInicio}T${horaInicio}:00`).getTime();
-    const fin = new Date(`${fechaFin}T${horaFin}:00`).getTime();
+    const inicio = construirTimestampLocalReg(fechaInicio, horaInicio);
+    const fin = construirTimestampLocalReg(fechaFin, horaFin);
+
+    // FIX 2026-09-19 (Parte B): con NaN, `fin <= inicio` da false y la
+    // validación de abajo se saltaba — se guardaba una sesión con fechas
+    // inválidas. Se valida primero que ambas sean fechas reales.
+    if (!Number.isFinite(inicio) || !Number.isFinite(fin)) {
+      mostrarToast("Alguna fecha u hora no es válida — revisala e intentá de nuevo");
+      return;
+    }
 
     if (fin <= inicio) {
       mostrarToast("El fin tiene que ser después del inicio (¿te faltó mover la fecha de fin al día siguiente?)");
@@ -334,7 +377,12 @@ function construirListaSesiones(cont, materiaMatriculadaId, color, refrescar) {
 
   const sesiones = (estado.datos.sesiones_estudio || [])
     .filter((s) => s.materia_matriculada_id === materiaMatriculadaId)
-    .sort((a, b) => b.inicio - a.inicio);
+    // FIX 2026-09-19 (Parte B): una sesión con `inicio` inválido (NaN — ver
+    // construirTimestampLocalReg) hacía que `b.inicio - a.inicio` diera NaN y
+    // el orden de TODA la lista quedara indefinido. Las inválidas van al
+    // final, y se siguen mostrando (con "fecha inválida") para poder
+    // editarlas o borrarlas en vez de quedar invisibles.
+    .sort((a, b) => (Number.isFinite(b.inicio) ? b.inicio : -Infinity) - (Number.isFinite(a.inicio) ? a.inicio : -Infinity) || 0);
 
   if (sesiones.length === 0) {
     const vacio = document.createElement("p");

@@ -1,6 +1,8 @@
 /* =========================================================================
    TIEMPO DE ESTUDIO — Estadísticas (Parte 3, punto 2)
-   2 visualizaciones, mismo lenguaje visual que finanzas/finanzas-graficas.js
+   0) (2026-09-19, Parte C) "Horas totales": 4 tarjetitas con el total de todas
+      las materias sumadas — hoy, esta semana, este mes, este año calendario.
+   Más 2 visualizaciones, mismo lenguaje visual que finanzas/finanzas-graficas.js
    (SVG a mano, sin librería — se miró ese archivo como referencia antes de
    escribir esto, no se importa directo porque su lógica es 100% específica
    de Finanzas):
@@ -42,7 +44,12 @@ const COLOR_BARRA_TOTAL = COLOR_TIEMPO_ESTUDIO_DEFAULT;
 
 let corteDonut = "semana"; // "dia" | "semana" | "semestre"
 let offsetSemanaDonut = 0; // 0 = semana actual, -1 = anterior, +1 = siguiente
-let fechaDiaDonut = null; // "YYYY-MM-DD", se inicializa a hoy la primera vez
+let fechaDiaDonut = null; // "YYYY-MM-DD" (hora LOCAL)
+// FIX 2026-09-19: `fechaDiaDonut` se fijaba UNA vez (la primera vez que se abría
+// Estadísticas) y ahí quedaba aunque la app siguiera abierta al día
+// siguiente. Ahora solo se respeta si la persona la eligió a mano en el
+// selector; si no, cada render usa la fecha de hoy.
+let fechaDiaDonutElegidaAMano = false;
 let indiceSemestreDonut = null; // índice dentro de obtenerTodosLosSemestresOrdenados()
 
 let corteBarras = "semana"; // "semana" | "semestre"
@@ -55,6 +62,20 @@ let indiceSemestreBarras = null;
    simples de 1-2 líneas) para no crear un import circular de 3 puntas
    entre este archivo, tiempo-estudio.js y tiempo-estudio-timer.js. */
 
+/* ===================== Fecha LOCAL de hoy =====================
+   FIX 2026-09-19 (Parte B, "la sesión del lunes no aparece"): dos lugares de
+   este archivo usaban `new Date().toISOString().slice(0, 10)` para "hoy".
+   `toISOString()` devuelve la fecha en UTC, no la local: en Costa Rica
+   (UTC-6) desde las 6 pm ya devuelve el día SIGUIENTE. Efecto visible: al
+   abrir Estadísticas de noche, el corte "Día" de "Horas por proyecto"
+   arrancaba en mañana (0 min) y la sesión estudiada hoy parecía no existir
+   — justo el horario en que más se estudia. Todo lo demás de esta sección
+   (rangos de semana/día, tarjetas, registro manual) ya trabajaba en hora
+   local; esto era lo único que no. */
+function fechaLocalStr(fecha = new Date()) {
+  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
+}
+
 function obtenerTodosLosSemestresOrdenados() {
   return (estado.datos.semestres || []).slice().sort((a, b) => (a.fecha_inicio || "").localeCompare(b.fecha_inicio || ""));
 }
@@ -63,7 +84,7 @@ function obtenerTodosLosSemestresOrdenados() {
  * cuyo fecha_inicio ya llegó — si ninguno arrancó todavía, el primero. */
 function obtenerIndiceSemestreVigente(lista) {
   if (lista.length === 0) return -1;
-  const hoyStr = new Date().toISOString().slice(0, 10);
+  const hoyStr = fechaLocalStr();
   let idx = 0;
   lista.forEach((s, i) => {
     if ((s.fecha_inicio || "") <= hoyStr) idx = i;
@@ -126,8 +147,7 @@ function obtenerRangoDia(fechaStr) {
   return { inicio: new Date(y, mo - 1, d, 0, 0, 0, 0).getTime(), fin: new Date(y, mo - 1, d + 1, 0, 0, 0, 0).getTime() };
 }
 
-function obtenerRangoSemana(offsetSemanas) {
-  const ahora = new Date();
+function obtenerRangoSemana(offsetSemanas, ahora = new Date()) {
   const diasDesdeLunes = (ahora.getDay() + 6) % 7;
   const lunesActual = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() - diasDesdeLunes, 0, 0, 0, 0);
   const lunes = new Date(lunesActual.getFullYear(), lunesActual.getMonth(), lunesActual.getDate() + offsetSemanas * 7, 0, 0, 0, 0);
@@ -662,7 +682,7 @@ function construirSeccionDonut(cont, refrescar) {
 
   const semestres = obtenerTodosLosSemestresOrdenados();
   if (indiceSemestreDonut === null) indiceSemestreDonut = obtenerIndiceSemestreVigente(semestres);
-  if (!fechaDiaDonut) fechaDiaDonut = new Date().toISOString().slice(0, 10);
+  if (!fechaDiaDonut || !fechaDiaDonutElegidaAMano) fechaDiaDonut = fechaLocalStr();
 
   let inicio, fin;
 
@@ -674,6 +694,7 @@ function construirSeccionDonut(cont, refrescar) {
     inputFecha.value = fechaDiaDonut;
     inputFecha.addEventListener("change", () => {
       fechaDiaDonut = inputFecha.value || fechaDiaDonut;
+      fechaDiaDonutElegidaAMano = true;
       refrescar();
     });
     sec.appendChild(inputFecha);
@@ -1233,6 +1254,89 @@ function construirSeccionBarrasMateria(cont, mm, color, refrescar) {
   cont.appendChild(sec);
 }
 
+/* ===================== Horas totales (Parte C, 2026-09-19) =====================
+   Total AGREGADO — todas las materias sumadas — para hoy, esta semana,
+   este mes y este año calendario. Antes solo existía el desglose por
+   materia (donut/lista) y la tendencia por día/mes dentro de UN corte;
+   no había un número único de "cuánto estudié en total" por período.
+
+   Mismo criterio de atribución que el resto de Estadísticas: cada sesión
+   cuenta entera en el período donde EMPIEZA (`inicio`), en hora local. Una
+   sesión que cruza medianoche o fin de mes se suma completa al día/mes
+   donde arrancó. Incluye sesiones de materias ya borradas o de semestres
+   pasados (igual que la Tendencia): no dependen de qué materias sean
+   "actuales" hoy. La semana es lunes-domingo, igual que en todo Tiempo. */
+
+function obtenerRangoMes(ahora = new Date()) {
+  return {
+    inicio: new Date(ahora.getFullYear(), ahora.getMonth(), 1, 0, 0, 0, 0).getTime(),
+    fin: new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1, 0, 0, 0, 0).getTime(),
+  };
+}
+
+function obtenerRangoAnio(ahora = new Date()) {
+  return {
+    inicio: new Date(ahora.getFullYear(), 0, 1, 0, 0, 0, 0).getTime(),
+    fin: new Date(ahora.getFullYear() + 1, 0, 1, 0, 0, 0, 0).getTime(),
+  };
+}
+
+/** Minutos totales (todas las materias) de hoy / esta semana / este mes / este
+ * año calendario, en hora local. `ahora` es solo para poder probarlo. */
+function calcularHorasTotalesPeriodos(ahora = new Date()) {
+  const rangos = {
+    hoy: obtenerRangoDia(fechaLocalStr(ahora)),
+    semana: obtenerRangoSemana(0, ahora),
+    mes: obtenerRangoMes(ahora),
+    anio: obtenerRangoAnio(ahora),
+  };
+  const resultado = {};
+  Object.entries(rangos).forEach(([clave, { inicio, fin }]) => {
+    resultado[clave] = { minutos: calcularMinutosTotalesEnRango(inicio, fin), inicio, fin };
+  });
+  return resultado;
+}
+
+function construirSeccionHorasTotales(cont) {
+  const ahora = new Date();
+  const totales = calcularHorasTotalesPeriodos(ahora);
+
+  const sec = document.createElement("section");
+  sec.className = "glass-card stack";
+  sec.style.gap = "10px";
+  sec.innerHTML = `
+    <h3 class="texto-encabezado-seccion" style="margin:0;">Horas totales</h3>
+    <p class="muted" style="margin:0; font-size:0.78rem;">Todas las materias sumadas</p>
+  `;
+
+  const { lunes } = obtenerRangoSemana(0, ahora);
+  const diaTexto = `${NOMBRES_DIA_CORTO[(ahora.getDay() + 6) % 7]} ${ahora.getDate()} ${NOMBRES_MES_CORTO[ahora.getMonth()]}`;
+  const tarjetas = [
+    ["Hoy", totales.hoy.minutos, diaTexto],
+    ["Esta semana", totales.semana.minutos, etiquetaRangoSemana(lunes)],
+    ["Este mes", totales.mes.minutos, `${NOMBRES_MES_CORTO[ahora.getMonth()]} ${ahora.getFullYear()}`],
+    ["Este año", totales.anio.minutos, String(ahora.getFullYear())],
+  ];
+
+  // Mismo grid 2x2 y misma tarjetita que "Resumen" de cada materia
+  // (construirSeccionResumenFinal) — un solo lenguaje visual en Estadísticas.
+  const grid = document.createElement("div");
+  grid.style.cssText = "display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;";
+  tarjetas.forEach(([etiqueta, minutos, detalle]) => {
+    const tarjeta = document.createElement("div");
+    tarjeta.className = "stack";
+    tarjeta.style.cssText = "gap:4px; padding:12px 10px; border-radius:14px; border:1px solid var(--border-glass); background:rgba(255,255,255,0.03); text-align:center;";
+    tarjeta.innerHTML = `
+      <span class="muted" style="font-size:0.72rem; line-height:1.25;">${etiqueta}</span>
+      <strong style="font-size:1.05rem; font-variant-numeric:tabular-nums;">${formatearMinutos(minutos)}</strong>
+      <span class="muted" style="font-size:0.68rem; line-height:1.2;">${detalle}</span>
+    `;
+    grid.appendChild(tarjeta);
+  });
+  sec.appendChild(grid);
+  cont.appendChild(sec);
+}
+
 /* ===================== Resumen final (totales de siempre) ===================== */
 
 const NOMBRES_DIA_LARGO = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
@@ -1374,6 +1478,10 @@ function construirEstadisticasMateria(cont, mm, color, refrescar) {
  */
 function construirVistaEstadisticas(cont, refrescar) {
   const secciones = [
+    // Parte C (2026-09-19): total agregado arriba de todo — lo primero que
+    // se ve al abrir Estadísticas. No lleva `refrescar`: no tiene pills ni
+    // navegación, siempre muestra los períodos en curso.
+    ["Horas totales", () => construirSeccionHorasTotales(cont)],
     ["Horas por proyecto", () => construirSeccionDonut(cont, refrescar)],
     ["Tendencia", () => construirSeccionBarras(cont, refrescar)],
   ];
@@ -1390,4 +1498,4 @@ function construirVistaEstadisticas(cont, refrescar) {
   });
 }
 
-export { construirVistaEstadisticas, construirEstadisticasMateria, calcularMetaDiariaMateria, calcularMinutosTotalesEnRango, obtenerRangoSemana };
+export { construirVistaEstadisticas, construirEstadisticasMateria, calcularMetaDiariaMateria, calcularMinutosTotalesEnRango, calcularHorasTotalesPeriodos, obtenerRangoSemana };
