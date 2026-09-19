@@ -51,7 +51,8 @@ import {
   reanudarTimerEstudio,
   revisarSesionOlvidadaAlAbrir,
   saltarDescansoPomodoro,
-  segundosTranscurridos,
+  iniciarDescansoPomodoro,
+  tiempoDeFase,
   suscribirseATimer,
 } from "./tiempo-estudio-timer.js";
 
@@ -654,6 +655,22 @@ function construirPantallaDetalle(cont, item) {
   display.className = "te-timer-display";
   panelTimer.appendChild(display);
 
+  // Tiempo extra (pedido 2026-09-19): el cronómetro principal se queda
+  // clavado en la duración configurada (ej. 40:00) y lo que se pasa cuenta
+  // ACÁ, en su propio renglón debajo. Solo existe con Pomodoro; en cuanto
+  // está activo reserva su espacio (invisible hasta que hay extra) para que
+  // el cronómetro principal nunca se corra cuando aparece.
+  const extra = document.createElement("div");
+  extra.className = "te-timer-extra";
+  extra.hidden = true;
+  const extraEtiqueta = document.createElement("span");
+  extraEtiqueta.className = "te-timer-extra-etiqueta";
+  extraEtiqueta.textContent = "Tiempo extra";
+  const extraValor = document.createElement("span");
+  extraValor.className = "te-timer-extra-valor";
+  extra.append(extraEtiqueta, extraValor);
+  panelTimer.appendChild(extra);
+
   // Fila de acción: cuando ESTA materia tiene el timer activo, se
   // muestran 2 botones (play/pause + detener aparte); si no, un solo
   // botón "Iniciar" (pedido 2026-09-07).
@@ -678,10 +695,28 @@ function construirPantallaDetalle(cont, item) {
     else pausarTimerEstudio();
   });
 
+  // Pedido 2026-09-19: el bloque de trabajo ya NO pasa solo a descanso.
+  // Cuando cumple su tiempo sigue corriendo como tiempo extra y este botón
+  // (solo visible entonces, ver pintar() más abajo) es lo único que
+  // guarda la sesión completa y arranca el descanso.
+  const btnDescanso = document.createElement("button");
+  btnDescanso.type = "button";
+  btnDescanso.className = "btn btn-primary";
+  btnDescanso.style.minWidth = "140px";
+  btnDescanso.addEventListener("click", () => {
+    const activo = obtenerTimerActivo();
+    if (!activo || activo.materiaMatriculadaId !== mm.id) return;
+    iniciarDescansoPomodoro();
+    renderizarTiempoEstudio();
+  });
+
   // Punto 1.4 (2026-09-17): "Saltar descanso" — solo visible mientras el
   // timer de ESTA materia está en una fase de descanso de Pomodoro (ver
   // pintar() más abajo). Vuelve de inmediato al bloque de trabajo sin
   // esperar a que se cumpla el tiempo configurado de descanso.
+  // 2026-09-19: cuando el descanso ya cumplió su tiempo (y sigue corriendo
+  // como extra) el mismo botón pasa a decir "Terminar descanso": es la
+  // única forma de salir de él, el descanso no termina solo.
   const btnSaltarDescanso = document.createElement("button");
   btnSaltarDescanso.type = "button";
   btnSaltarDescanso.className = "btn btn-secondary";
@@ -691,6 +726,7 @@ function construirPantallaDetalle(cont, item) {
     const activo = obtenerTimerActivo();
     if (!activo || activo.materiaMatriculadaId !== mm.id) return;
     saltarDescansoPomodoro();
+    renderizarTiempoEstudio();
   });
 
   const btnDetener = document.createElement("button");
@@ -702,6 +738,7 @@ function construirPantallaDetalle(cont, item) {
 
   filaAccion.appendChild(btnIniciar);
   filaAccion.appendChild(btnPausa);
+  filaAccion.appendChild(btnDescanso);
   filaAccion.appendChild(btnSaltarDescanso);
   filaAccion.appendChild(btnDetener);
   panelTimer.appendChild(filaAccion);
@@ -763,7 +800,18 @@ function construirPantallaDetalle(cont, item) {
 
   function pintar(activo) {
     const esEstaMateria = Boolean(activo && activo.materiaMatriculadaId === mm.id);
-    display.textContent = esEstaMateria ? formatearDuracion(segundosTranscurridos()) : "00:00";
+    const tf = esEstaMateria ? tiempoDeFase() : null;
+    // El principal llega a la duración configurada y se queda ahí; lo que
+    // pase de eso va en `extra` (ver tiempoDeFase en el motor).
+    display.textContent = esEstaMateria ? formatearDuracion(tf.transcurridos) : "00:00";
+
+    const esPomodoro = Boolean(esEstaMateria && activo.pomodoro);
+    extra.hidden = !esPomodoro;
+    if (esPomodoro) {
+      const hayExtra = tf.extra > 0;
+      extra.classList.toggle("te-timer-extra--visible", hayExtra);
+      extraValor.textContent = `+${formatearDuracion(tf.extra)}`;
+    }
 
     // Iniciar solo se ve si NADIE está corriendo en esta materia;
     // pausa/detener solo se ven si ESTA materia es la que está corriendo.
@@ -778,11 +826,24 @@ function construirPantallaDetalle(cont, item) {
     // Pomodoro de esta misma materia — en cualquier otro caso se esconde.
     const enDescanso = Boolean(esEstaMateria && activo.pomodoro && activo.pomodoro.fase !== "trabajo");
     btnSaltarDescanso.style.display = enDescanso ? "" : "none";
+    if (enDescanso) {
+      btnSaltarDescanso.textContent = tf.completa ? "✔ Terminar descanso" : "⏭ Saltar descanso";
+      btnSaltarDescanso.className = tf.completa ? "btn btn-primary" : "btn btn-secondary";
+    }
+
+    // "Descanso" solo aparece cuando el bloque de trabajo ya cumplió su
+    // tiempo (mientras tanto sigue sumando extra).
+    const bloqueCumplido = Boolean(esPomodoro && activo.pomodoro.fase === "trabajo" && tf.completa);
+    btnDescanso.style.display = bloqueCumplido ? "" : "none";
+    if (bloqueCumplido) {
+      const esUltimoBloque = activo.pomodoro.bloqueActual >= activo.pomodoro.config.cantidad_bloques;
+      btnDescanso.textContent = esUltimoBloque ? "☕ Descanso largo" : "☕ Descanso";
+    }
 
     if (esEstaMateria && activo.pomodoro) {
       const nombreFaseLegible =
         activo.pomodoro.fase === "trabajo" ? "Bloque de trabajo" : activo.pomodoro.fase === "descanso_corto" ? "Descanso corto" : "Descanso largo";
-      faseLabel.textContent = `Bloque ${activo.pomodoro.bloqueActual} de ${activo.pomodoro.config.cantidad_bloques} · ${nombreFaseLegible}`;
+      faseLabel.textContent = `Bloque ${activo.pomodoro.bloqueActual} de ${activo.pomodoro.config.cantidad_bloques} · ${nombreFaseLegible}${tf.completa ? " completado" : ""}`;
     } else {
       faseLabel.textContent = "";
     }
@@ -905,12 +966,18 @@ function inicializarTiempoEstudio() {
 function resolverInfoIndicadorTimer(activo) {
   const item = obtenerMateriasParaTiempoEstudio().find((x) => x.mm.id === activo.materiaMatriculadaId);
   const enDescanso = Boolean(activo.pomodoro && activo.pomodoro.fase !== "trabajo");
+  // Pasada la duración configurada el tiempo principal queda clavado (ej.
+  // 40:00) y el extra se agrega al lado ("40:00 +05:12"). El `estado` nunca
+  // depende de los segundos (la etiqueta accesible del indicador cambia con
+  // él), solo del tipo de fase.
+  const tf = tiempoDeFase();
+  const enExtra = tf.extra > 0;
   return {
     nombre: item ? item.nombreMateriaCorto : "Materia",
     color: item ? obtenerColorMateria(item.mm, item.materia, item.plan) : COLOR_TIEMPO_ESTUDIO_DEFAULT,
-    tiempo: formatearDuracion(segundosTranscurridos()),
+    tiempo: formatearDuracion(tf.transcurridos) + (enExtra ? ` +${formatearDuracion(tf.extra)}` : ""),
     pausado: Boolean(activo.pausado),
-    estado: activo.pausado ? "En pausa" : enDescanso ? "Descanso" : "",
+    estado: activo.pausado ? "En pausa" : enDescanso ? "Descanso" : enExtra ? "Extra" : "",
   };
 }
 

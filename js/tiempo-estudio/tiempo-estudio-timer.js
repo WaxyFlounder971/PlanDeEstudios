@@ -53,6 +53,29 @@
    (que es el diseñado y el que pide el punto 1.2), estar fuera de la app
    NO descuenta tiempo — 2pm→10pm son 8 h, no 6. Las 2 h "afuera" cuentan
    igual; lo que había que arreglar era la pérdida total, no el descuento.
+
+   -------------------------------------------------------------------------
+   CAMBIO DE COMPORTAMIENTO 2026-09-19 — "las fases ya NO avanzan solas"
+   -------------------------------------------------------------------------
+   Antes: al cumplirse el tiempo de un bloque el motor guardaba la sesión y
+   arrancaba el descanso solo; al cumplirse el descanso volvía solo al
+   trabajo. Resultado: revisar la app y encontrarla en un descanso que nadie
+   pidió (o saltando de fase sin que la persona estuviera ahí).
+
+   Ahora el tiempo configurado es un HITO, no un corte:
+     · Cuando el bloque (o el descanso) llega a su duración, suena UN aviso
+       y la fase SIGUE corriendo. Lo que pasa de ahí en más es "tiempo
+       extra" (ver tiempoDeFase: el cronómetro principal se queda clavado
+       en la duración configurada, ej. 40:00, y el extra cuenta aparte).
+     · El tiempo extra de un bloque de TRABAJO sí es estudio: al tocar
+       "Descanso" (iniciarDescansoPomodoro) la sesión se guarda completa,
+       bloque + extra.
+     · El tiempo extra de un DESCANSO nunca suma (igual que el descanso
+       mismo). Se sale con "Terminar descanso" (saltarDescansoPomodoro).
+     · Nada cambia de fase sin un toque de la persona. Por eso ya no existe
+       `avanzarFasePomodoro` ni el bucle de "ponerse al día" de tick().
+   El aviso de fin de fase se dispara una sola vez por fase
+   (`avisoFaseDisparado`, va en el snapshot para que recargar no lo repita).
    ========================================================================= */
 
 import { crearSesionEstudio, sellarTimestamp } from "../core/schema.js";
@@ -80,6 +103,7 @@ const CLAVE_TIMER_ACTIVO = "te_timer_activo_v1";
  *   metaAlarmaDisparada, // timer simple: para que la vibración de "llegaste a la meta" dispare 1 sola vez por sesión
  *   pausado,         // Pausa (pedido 2026-09-07): true mientras está en pausa
  *   msPausaInicio,   // epoch ms en que empezó la pausa actual, o null si no está pausado
+ *   avisoFaseDisparado, // Pomodoro: true una vez que ya sonó el aviso de "se cumplió el tiempo" de la fase actual
  * } | null
  * `fase` es "trabajo" | "descanso_corto" | "descanso_largo".
  *
@@ -89,7 +113,7 @@ const CLAVE_TIMER_ACTIVO = "te_timer_activo_v1";
  * adelante exactamente la duración de la pausa. Así, mientras está
  * pausado, ningún reloj se mueve (ni el del bloque ni el de la meta) y al
  * reanudar todo el resto del código (tick, revisarMetaSimple,
- * avanzarFasePomodoro, detenerTimerEstudio) sigue funcionando exactamente
+ * iniciarDescansoPomodoro, detenerTimerEstudio) sigue funcionando exactamente
  * igual que si la pausa nunca hubiera pasado, sin tener que sumar/restar
  * un acumulador en cada lugar donde se usa sesionInicio/inicioFase.
  */
@@ -152,14 +176,15 @@ function guardarSnapshotLocal() {
         metaAlarmaDisparada: timerActivo.metaAlarmaDisparada,
         pausado: timerActivo.pausado,
         msPausaInicio: timerActivo.msPausaInicio,
+        avisoFaseDisparado: timerActivo.avisoFaseDisparado,
       })
     );
   } catch (e) {
     console.error("[tiempo-estudio-timer] no se pudo guardar el snapshot local:", e);
   } finally {
-    // Esta función se llama exactamente en los 6 momentos en que cambia el
-    // estado del timer (iniciar, avanzar fase, saltar descanso, pausar,
-    // reanudar, detener), así que es el único lugar donde hace falta
+    // Esta función se llama en cada momento en que cambia el estado del
+    // timer (iniciar, empezar/terminar descanso, aviso de fin de fase,
+    // pausar, reanudar, detener), así que es el único lugar donde hace falta
     // reprogramar la alarma de fin de fase — ver programarAlarmaFase().
     programarAlarmaFase();
   }
@@ -213,7 +238,7 @@ function mostrarFelicitacionMeta() {
  * overlay y marca `mm.tiempo_estudio.ultima_semana_felicitada` para que no
  * se repita en cada apertura de la app (punto 3 del plan). Se llama desde
  * los 3 lugares donde puede cerrarse una sesión real: detenerTimerEstudio,
- * avanzarFasePomodoro (bloque de trabajo), abrirAvisoSesionOlvidada, y
+ * iniciarDescansoPomodoro (bloque de trabajo), abrirAvisoSesionOlvidada, y
  * desde tiempo-estudio-registro.js tras un registro manual.
  */
 function revisarFelicitacionMeta(materiaMatriculadaId) {
@@ -305,8 +330,9 @@ function pedirPermisoNotificacionSiHaceFalta() {
  * ni este aviso ni ningún otro puede dispararse a tiempo. La única forma
  * de garantizarlo sería Web Push con un backend que programe el envío
  * (justamente lo que se le sacó al Worker en 2026-08-25). Lo que sí está
- * garantizado es que NO se pierde tiempo: al volver, `tick()` se pone al
- * día con todas las fases atrasadas (ver `tick` y el listener de
+ * garantizado es que NO se pierde tiempo: los tiempos salen de timestamps,
+ * y desde 2026-09-19 ninguna fase cambia sola, así que al volver el
+ * cronómetro y el tiempo extra ya están al día (ver el listener de
  * visibilitychange al final del archivo).
  */
 function notificarSistemaSiCorresponde(cuerpo) {
@@ -371,38 +397,99 @@ function duracionFaseMs(pomodoro) {
 }
 
 /**
- * Cierra la fase de Pomodoro actual y arranca la siguiente. Solo un
- * bloque de TRABAJO genera sesión de estudio real — los descansos (corto
- * y largo) nunca suman a la meta ni a competencias (punto 1 del plan).
- * Ciclo: trabajo(1) → descanso corto → trabajo(2) → ... → trabajo(N) →
- * descanso largo → trabajo(1) [arranca de nuevo], indefinidamente hasta
- * que el usuario detiene el timer a mano.
+ * Estado del cronómetro de la FASE actual, listo para pintar.
+ *   · `transcurridos`: segundos de la fase, TOPADOS a la duración
+ *     configurada — el cronómetro principal llega a 40:00 y se queda ahí.
+ *   · `extra`: segundos pasados de la duración (siempre 0 en timer simple,
+ *     que no tiene duración fija).
+ *   · `duracion`: segundos configurados de la fase (0 en timer simple).
+ *   · `completa`: la fase ya cumplió su duración (habilita "Descanso" /
+ *     "Terminar descanso" en la UI y en el motor).
+ * Respeta la pausa (usa segundosTranscurridos, que se congela).
  */
-function avanzarFasePomodoro() {
-  const { materiaMatriculadaId, pomodoro } = timerActivo;
-  const { config } = pomodoro;
+function tiempoDeFase() {
+  if (timerActivo === null) return { transcurridos: 0, extra: 0, duracion: 0, completa: false };
+  const total = segundosTranscurridos();
+  if (!timerActivo.pomodoro) return { transcurridos: total, extra: 0, duracion: 0, completa: false };
+  const duracion = Math.round(duracionFaseMs(timerActivo.pomodoro) / 1000);
+  return {
+    transcurridos: Math.min(total, duracion),
+    extra: Math.max(0, total - duracion),
+    duracion,
+    completa: total >= duracion,
+  };
+}
+
+/**
+ * Suena UN aviso cuando la fase de Pomodoro cumple su duración. NO cambia de
+ * fase (ver cabecera): solo avisa y deja la fase corriendo como tiempo
+ * extra. Si está en pausa no avisa (el reloj no avanza).
+ */
+function avisarFinDeFaseSiCorresponde() {
+  const pomodoro = timerActivo && timerActivo.pomodoro;
+  if (!pomodoro || timerActivo.avisoFaseDisparado || timerActivo.pausado) return;
+  if (!tiempoDeFase().completa) return;
+
+  timerActivo.avisoFaseDisparado = true;
+  guardarSnapshotLocal();
 
   if (pomodoro.fase === "trabajo") {
-    const inicio = timerActivo.inicioFase;
-    const fin = inicio + config.duracion_bloque_min * 60000;
-    const sesion = crearSesionEstudio({ materiaMatriculadaId, inicio, fin, origen: "pomodoro" });
+    const esUltimoBloque = pomodoro.bloqueActual >= pomodoro.config.cantidad_bloques;
+    dispararAlerta(
+      esUltimoBloque
+        ? "🎉 Completaste el ciclo — tocá «Descanso» cuando quieras. Mientras tanto suma tiempo extra"
+        : "✅ Bloque terminado — tocá «Descanso» cuando quieras. Mientras tanto suma tiempo extra"
+    );
+  } else {
+    dispararAlerta("⏱ Se cumplió el tiempo de descanso — tocá «Terminar descanso» cuando estés listo");
+  }
+}
+
+/**
+ * "Descanso" (pedido 2026-09-19): cierra el bloque de TRABAJO y arranca el
+ * descanso. Es lo único que saca a un bloque de la fase de trabajo. La
+ * sesión guardada va desde el inicio del bloque hasta AHORA, o sea incluye
+ * el tiempo extra (es estudio real). Si estaba pausado, el fin es el
+ * instante en que empezó la pausa y el descanso arranca corriendo (mismo
+ * criterio que saltarDescansoPomodoro).
+ *
+ * Solo procede si el bloque ya cumplió su duración: el tiempo que la
+ * persona configuró se respeta; para cortar antes está "Detener sesión".
+ * `false` sin hacer nada si no hay timer, no es Pomodoro, no está en fase
+ * de trabajo o el bloque todavía no termina.
+ * Ciclo: trabajo(1) → descanso corto → trabajo(2) → ... → trabajo(N) →
+ * descanso largo → trabajo(1), todo a toque de la persona.
+ */
+function iniciarDescansoPomodoro() {
+  if (timerActivo === null || !timerActivo.pomodoro) return false;
+  const { materiaMatriculadaId, pomodoro, inicioFase, pausado, msPausaInicio } = timerActivo;
+  if (pomodoro.fase !== "trabajo" || !tiempoDeFase().completa) return false;
+
+  const ahora = Date.now();
+  const fin = pausado ? msPausaInicio : ahora;
+  if (fin > inicioFase) {
+    const sesion = crearSesionEstudio({ materiaMatriculadaId, inicio: inicioFase, fin, origen: "pomodoro" });
     estado.datos.sesiones_estudio.push(sesion);
     marcarCambioPendiente();
     revisarFelicitacionMeta(materiaMatriculadaId);
     sincronizarHorasCompetencias();
-
-    const esUltimoBloque = pomodoro.bloqueActual >= config.cantidad_bloques;
-    pomodoro.fase = esUltimoBloque ? "descanso_largo" : "descanso_corto";
-    dispararAlerta(esUltimoBloque ? "🎉 Completaste el ciclo — arrancó el descanso largo" : "✅ Bloque terminado — arrancó el descanso");
-  } else {
-    const eraDescansoLargo = pomodoro.fase === "descanso_largo";
-    pomodoro.fase = "trabajo";
-    pomodoro.bloqueActual = eraDescansoLargo ? 1 : pomodoro.bloqueActual + 1;
-    dispararAlerta("⏱ Descanso terminado — volviste al bloque de trabajo");
   }
 
-  timerActivo.inicioFase = Date.now();
+  const esUltimoBloque = pomodoro.bloqueActual >= pomodoro.config.cantidad_bloques;
+  pomodoro.fase = esUltimoBloque ? "descanso_largo" : "descanso_corto";
+
+  if (pausado) {
+    timerActivo.sesionInicio += ahora - msPausaInicio;
+    timerActivo.pausado = false;
+    timerActivo.msPausaInicio = null;
+  }
+  timerActivo.inicioFase = ahora;
+  timerActivo.avisoFaseDisparado = false;
+
   guardarSnapshotLocal();
+  mostrarToast(esUltimoBloque ? "🎉 Ciclo completo guardado — arrancó el descanso largo" : "☕ Bloque guardado — arrancó el descanso");
+  notificar();
+  return true;
 }
 
 /**
@@ -443,14 +530,9 @@ function tick() {
   // así que no hace falta tocar nada acá, solo no procesar este tick.
   if (timerActivo.pausado) return;
   if (timerActivo.pomodoro) {
-    // Bucle acotado: si la pestaña estuvo en 2do plano y el intervalo se
-    // atrasó más de una fase completa, avanza todas las fases que
-    // corresponda en vez de quedar "una fase atrás" hasta el próximo tick.
-    let seguridad = 0;
-    while (timerActivo && Date.now() - timerActivo.inicioFase >= duracionFaseMs(timerActivo.pomodoro) && seguridad < 500) {
-      avanzarFasePomodoro();
-      seguridad++;
-    }
+    // Ya NO avanza de fase: solo avisa una vez que se cumplió el tiempo
+    // (ver cabecera). Pasarse de la duración es tiempo extra, no un corte.
+    avisarFinDeFaseSiCorresponde();
   } else {
     revisarMetaSimple();
   }
@@ -494,14 +576,15 @@ function cancelarAlarmaFase() {
  *
  * NO detiene ni corta nada (punto 1.2): lo único que hace es llamar a
  * `tick()`, que es exactamente lo mismo que hubiera pasado con la pestaña
- * adelante.
+ * adelante (o sea, sacar el aviso de "se cumplió el tiempo"; la fase no
+ * cambia sola).
  */
 function programarAlarmaFase() {
   cancelarAlarmaFase();
-  if (timerActivo === null || timerActivo.pausado || !timerActivo.pomodoro) return;
+  if (timerActivo === null || timerActivo.pausado || !timerActivo.pomodoro || timerActivo.avisoFaseDisparado) return;
 
   const faltaMs = timerActivo.inicioFase + duracionFaseMs(timerActivo.pomodoro) - Date.now();
-  if (faltaMs <= 0) return; // ya venció: el tick del bucle acotado lo levanta
+  if (faltaMs <= 0) return; // ya venció: el próximo tick lo avisa
   alarmaFaseId = setTimeout(() => {
     alarmaFaseId = null;
     tick();
@@ -565,6 +648,7 @@ function iniciarTimerEstudio(materiaMatriculadaId) {
     metaAlarmaDisparada: false,
     pausado: false,
     msPausaInicio: null,
+    avisoFaseDisparado: false,
   };
 
   // 2026-09-17: se pide SIEMPRE, no solo con Pomodoro — el aviso de
@@ -658,10 +742,11 @@ function detenerTimerEstudio() {
  * pero se blinda igual acá — este archivo es el único punto de entrada
  * real del motor, no confía en que la UI respete la regla).
  *
- * Es exactamente la misma transición que hace `avanzarFasePomodoro()` en
- * su rama de "descanso → trabajo" (incluido el conteo de bloques y el
- * reinicio del ciclo después de un descanso largo); lo único distinto es
- * que no se espera a que venza el reloj y que el aviso dice otra cosa.
+ * Desde 2026-09-19 es TAMBIÉN el "Terminar descanso": el descanso ya no
+ * termina solo, así que cuando se cumple el tiempo y sigue corriendo como
+ * extra, esta es la única salida (la UI cambia el texto del botón según
+ * `tiempoDeFase().completa`). Incluye el conteo de bloques y el reinicio
+ * del ciclo después de un descanso largo.
  * Nunca genera sesión de estudio: los descansos no suman, se salten o no.
  */
 function saltarDescansoPomodoro() {
@@ -669,6 +754,9 @@ function saltarDescansoPomodoro() {
   const { pomodoro } = timerActivo;
   if (pomodoro.fase === "trabajo") return false;
 
+  // Se lee ANTES de cambiar de fase: distingue "Terminar descanso" (ya se
+  // había cumplido el tiempo) de "Saltar descanso" (se corta antes).
+  const descansoCumplido = tiempoDeFase().completa;
   const eraDescansoLargo = pomodoro.fase === "descanso_largo";
   pomodoro.fase = "trabajo";
   pomodoro.bloqueActual = eraDescansoLargo ? 1 : pomodoro.bloqueActual + 1;
@@ -683,9 +771,10 @@ function saltarDescansoPomodoro() {
     timerActivo.msPausaInicio = null;
   }
   timerActivo.inicioFase = Date.now();
+  timerActivo.avisoFaseDisparado = false;
 
   guardarSnapshotLocal();
-  mostrarToast("⏭ Descanso salteado — volviste al bloque de trabajo");
+  mostrarToast(descansoCumplido ? "⏱ Descanso terminado — volviste al bloque de trabajo" : "⏭ Descanso salteado — volviste al bloque de trabajo");
   notificar();
   return true;
 }
@@ -827,11 +916,9 @@ function abrirAvisoSesionOlvidada(snapshot) {
  * mismo estado de pausa.
  *
  * `congelarAhora` (usado solo por el salvavidas): en vez de restaurarlo
- * corriendo, lo deja PAUSADO en este instante. Sirve para no dejar que
- * `tick()` avance de golpe 40 fases de Pomodoro —creando 40 sesiones de
- * estudio falsas— antes de que la persona alcance a decidir qué hacer con
- * una sesión de 3+ horas que quedó abierta. Si elige "Seguir contando",
- * reanudarTimerEstudio() lo destraba sin haber perdido nada.
+ * corriendo, lo deja PAUSADO en este instante, hasta que la persona decida
+ * qué hacer con una sesión de 3+ horas que quedó abierta. Si elige "Seguir
+ * contando", reanudarTimerEstudio() lo destraba sin haber perdido nada.
  */
 function restaurarTimerDesdeSnapshot(snapshot, { congelarAhora = false } = {}) {
   const ahora = Date.now();
@@ -844,7 +931,15 @@ function restaurarTimerDesdeSnapshot(snapshot, { congelarAhora = false } = {}) {
     metaAlarmaDisparada: Boolean(snapshot.metaAlarmaDisparada),
     pausado: Boolean(snapshot.pausado) || congelarAhora,
     msPausaInicio: snapshot.pausado ? snapshot.msPausaInicio || ahora : congelarAhora ? ahora : null,
+    avisoFaseDisparado: Boolean(snapshot.avisoFaseDisparado),
   };
+
+  // Si la fase ya había cumplido su tiempo mientras la app estaba cerrada
+  // (o el snapshot es de antes de este campo), NO se hace sonar el aviso al
+  // reabrir: la persona ve el tiempo extra corriendo y listo.
+  if (timerActivo.pomodoro && !timerActivo.avisoFaseDisparado && tiempoDeFase().completa) {
+    timerActivo.avisoFaseDisparado = true;
+  }
 
   guardarSnapshotLocal();
   asegurarIntervalo();
@@ -906,10 +1001,10 @@ function revisarSesionOlvidadaAlAbrir() {
  * listener de `visibilitychange`, `blur`, `pagehide` ni `beforeunload` que
  * detenga una sesión activa, ni ningún corte por inactividad. Este es el
  * único listener de visibilidad de Tiempo, y hace lo contrario: cuando la
- * pestaña vuelve a primer plano fuerza un `tick()` inmediato para ponerse
- * al día con todas las fases de Pomodoro que hayan vencido mientras el
- * navegador tenía el temporizador estrangulado, en vez de esperar hasta un
- * minuto al próximo tick natural. Nunca detiene ni descarta nada.
+ * pestaña vuelve a primer plano fuerza un `tick()` inmediato para sacar
+ * el aviso de fin de fase que haya vencido mientras el navegador tenía el
+ * temporizador estrangulado, en vez de esperar hasta un minuto al próximo
+ * tick natural. Nunca detiene, descarta ni cambia de fase.
  */
 if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => {
@@ -924,11 +1019,13 @@ export {
   hayTimerActivo,
   obtenerTimerActivo,
   segundosTranscurridos,
+  tiempoDeFase,
   iniciarTimerEstudio,
   detenerTimerEstudio,
   pausarTimerEstudio,
   reanudarTimerEstudio,
   saltarDescansoPomodoro,
+  iniciarDescansoPomodoro,
   timerEstaPausado,
   cambiarTimerEstudio,
   suscribirseATimer,
