@@ -38,6 +38,7 @@ import { abrirModalConfigTiempoEstudio, abrirModalPomodoroPredeterminado } from 
 import { abrirModalRegistroManual, construirListaSesiones } from "./tiempo-estudio-registro.js";
 import { construirVistaEstadisticas, construirEstadisticasMateria, calcularMetaDiariaMateria } from "./tiempo-estudio-estadisticas.js";
 import { construirVistaCompetencias } from "./tiempo-estudio-competencias.js";
+import { montarIndicadoresTimer } from "./tiempo-estudio-indicador.js";
 import { abrirBuscarMateriaEn } from "../ui/buscar-materia.js";
 import {
   cambiarTimerEstudio,
@@ -98,11 +99,12 @@ function obtenerPlanPorId(planId) {
  * borrado), en vez de romper el render.
  *
  * Dos variantes de nombre (Parte B.2, ajuste 2026): `nombreMateria` (con
- * código, ej. "IC-1010 · Cálculo I") se sigue usando en toast/badge
- * persistente/título de detalle, donde ayuda a diferenciar dos matrículas
- * repetidas de la misma materia. `nombreMateriaCorto` (sin código) es SOLO
- * para la línea 1 de la tarjeta en la vista principal, que B.2 pide sin
- * código de materia.
+ * código, ej. "IC-1010 · Cálculo I") se sigue usando en toast/título de
+ * detalle, donde ayuda a diferenciar dos matrículas repetidas de la misma
+ * materia. `nombreMateriaCorto` (sin código) es para la línea 1 de la
+ * tarjeta en la vista principal (B.2) y, desde 2026-09-19, para el
+ * indicador de sesión activa (tiempo-estudio-indicador.js), que también se
+ * pidió sin código.
  *
  * Orden: materias con meta configurada primero (en el orden en que ya
  * vienen), sin configurar al fondo — Array#sort es estable en todos los
@@ -873,26 +875,58 @@ function inicializarTiempoEstudio() {
   // de abajo porque no depende del badge para nada.
   revisarSesionOlvidadaAlAbrir();
 
-  const badge = document.getElementById("badge-tiempo-estudio");
-  if (!badge) return;
-
-  badge.addEventListener("click", () => {
-    const activo = obtenerTimerActivo();
-    if (!activo) return;
-    materiaDetalleActivaId = activo.materiaMatriculadaId;
-    mostrarSeccion("tiempo-estudio");
+  // Rediseño 2026-09-19: el badge fijo de abajo-izquierda pasó a ser un
+  // indicador con 3 presentaciones (columna derecha / flotante / barra
+  // superior) — ver tiempo-estudio-indicador.js. Los 3 contenedores están en
+  // index.html y el CSS decide cuál se ve según el ancho de pantalla; acá
+  // se alimentan los 3 a la vez con el mismo dato.
+  const pintarIndicadores = montarIndicadoresTimer({
+    elementos: [
+      document.getElementById("timer-tarjeta-lateral"),
+      document.getElementById("badge-tiempo-estudio"),
+      document.getElementById("timer-linea-topbar"),
+    ],
+    resolverInfo: resolverInfoIndicadorTimer,
+    alTocar: irAMateriaDelTimerActivo,
   });
+  if (!pintarIndicadores) return;
 
-  suscribirseATimer((activo) => {
-    if (!activo) {
-      badge.classList.add("oculto");
-      badge.textContent = "";
-      return;
-    }
-    const nombre = obtenerNombreMateriaPorMmId(activo.materiaMatriculadaId) || "Materia";
-    badge.textContent = `⏱ ${nombre} · ${formatearDuracion(segundosTranscurridos())}`;
-    badge.classList.remove("oculto");
-  });
+  suscribirseATimer(pintarIndicadores);
+}
+
+/**
+ * Lo que muestra el indicador de sesión activa: nombre de la materia SIN
+ * código, su color (mismo criterio que Horario/Agenda, ver
+ * obtenerColorMateria), el tiempo de la fase en curso (lo mismo que ve la
+ * pantalla de detalle) y un estado corto. Si la materia del timer ya no
+ * está entre las de los semestres actuales (ej. se cambió el semestre con
+ * el timer corriendo) se cae a un texto y color genéricos en vez de romper.
+ */
+function resolverInfoIndicadorTimer(activo) {
+  const item = obtenerMateriasParaTiempoEstudio().find((x) => x.mm.id === activo.materiaMatriculadaId);
+  const enDescanso = Boolean(activo.pomodoro && activo.pomodoro.fase !== "trabajo");
+  return {
+    nombre: item ? item.nombreMateriaCorto : "Materia",
+    color: item ? obtenerColorMateria(item.mm, item.materia, item.plan) : COLOR_TIEMPO_ESTUDIO_DEFAULT,
+    tiempo: formatearDuracion(segundosTranscurridos()),
+    pausado: Boolean(activo.pausado),
+    estado: activo.pausado ? "En pausa" : enDescanso ? "Descanso" : "",
+  };
+}
+
+/** Click en cualquiera de las 3 presentaciones: abre el detalle de la materia
+ * que se está estudiando (ahí están pausar/reanudar/detener). Si ya se está
+ * viendo ese detalle no se repinta, para no perder lo que la persona esté
+ * haciendo en esa pantalla. */
+function irAMateriaDelTimerActivo() {
+  const activo = obtenerTimerActivo();
+  if (!activo) return;
+  const yaEnEseDetalle = materiaDetalleActivaId === activo.materiaMatriculadaId;
+  materiaDetalleActivaId = activo.materiaMatriculadaId;
+  mostrarSeccion("tiempo-estudio");
+  // Si ya se estaba dentro de Tiempo de Estudio (en otra vista), no hay
+  // garantía de que mostrarSeccion repinte: se fuerza acá.
+  if (!yaEnEseDetalle) renderizarTiempoEstudio();
 }
 
 /**
