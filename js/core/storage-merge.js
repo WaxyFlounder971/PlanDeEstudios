@@ -453,6 +453,49 @@ function fusionarTumbas(tumbasLocal, tumbasRemota) {
 }
 
 /**
+ * FIX 2026-09-19 (Parte A, "estado fantasma al salir de una competencia").
+ * Descarta las tumbas que una ALTA POSTERIOR ya dejó obsoletas.
+ *
+ * Problema que resuelve: `fusionarColeccion` deja ganar a la tumba SIEMPRE
+ * (sin comparar tiempos) y `fusionarTumbas` es una unión que nunca purga.
+ * Eso está bien cuando cada entidad tiene un id único de por vida (una
+ * sesión de estudio, un gasto): borrada una vez, no vuelve. Pero las
+ * entradas de `competencias_unidas` usan como `id` el de la COMPETENCIA, no
+ * el de la membresía — salir y volver a unirse con el mismo link reutiliza
+ * ese id, y la tumba de la salida anterior mataba la alta nueva en el
+ * siguiente sync, en todos los dispositivos, para siempre.
+ *
+ * Regla: una tumba `{ id, eliminadoEn }` queda obsoleta si existe, de
+ * cualquiera de los dos lados, una entrada con ese `id` cuyo `unido_en`
+ * (Date.now() del alta, misma escala que `eliminadoEn`) sea POSTERIOR. Una
+ * entrada sin `unido_en` (altas anteriores a este fix) nunca supera una
+ * tumba — comportamiento idéntico al de siempre. Si después se sale otra
+ * vez, la tumba nueva trae un `eliminadoEn` mayor (fusionarTumbas se queda
+ * con el más alto por id) y vuelve a ganar como corresponde.
+ *
+ * Al no devolverla, la tumba obsoleta además se purga de los datos
+ * guardados: al subirse el resultado fusionado a Drive, desaparece de
+ * todos los dispositivos.
+ */
+function podarTumbasSuperadasPorAltas(tumbas, ...colecciones) {
+  const altasPorId = new Map(); // id -> unido_en más reciente visto en cualquiera de los lados
+  colecciones.forEach((coleccion) => {
+    (Array.isArray(coleccion) ? coleccion : []).forEach((item) => {
+      if (!item || item.id === undefined) return;
+      const unidoEn = Number(item.unido_en);
+      if (!Number.isFinite(unidoEn)) return;
+      const previo = altasPorId.get(item.id);
+      if (previo === undefined || unidoEn > previo) altasPorId.set(item.id, unidoEn);
+    });
+  });
+  return (Array.isArray(tumbas) ? tumbas : []).filter((t) => {
+    if (!t || t.id === undefined) return false;
+    const unidoEn = altasPorId.get(t.id);
+    return !(unidoEn !== undefined && unidoEn > Number(t.eliminadoEn));
+  });
+}
+
+/**
  * Fusiona un plan de estudios individual: sus colecciones internas
  * (materias, categorías, optativas_disponibles, materias_revisar) se
  * funden por separado, con sus propias tumbas (guardadas dentro del plan
@@ -1103,9 +1146,18 @@ function fusionarDatos(datosLocal, datosRemoto) {
   // fusión es solo sobre la lista LOCAL de "a qué competencias estoy
   // unido", no sobre las horas/ranking, que viven en el Worker y se piden
   // por API, no por Drive.
-  const tumbasCompetenciasUnidas = fusionarTumbas(
-    datosLocal._eliminados_competencias_unidas,
-    datosRemoto._eliminados_competencias_unidas
+  // FIX 2026-09-19 (Parte A): a diferencia de sesiones_estudio, el `id` de
+  // estas entradas es el de la competencia y se REUTILIZA al volver a
+  // unirse — por eso, antes de aplicar las tumbas, se descartan las que una
+  // alta posterior (`unido_en`) ya dejó obsoletas. Ver
+  // `podarTumbasSuperadasPorAltas`.
+  const tumbasCompetenciasUnidas = podarTumbasSuperadasPorAltas(
+    fusionarTumbas(
+      datosLocal._eliminados_competencias_unidas,
+      datosRemoto._eliminados_competencias_unidas
+    ),
+    datosLocal.competencias_unidas,
+    datosRemoto.competencias_unidas
   );
   const tumbasEnlaces = fusionarTumbas(
     datosLocal.configuracion && datosLocal.configuracion._eliminados_enlaces,
@@ -1214,6 +1266,7 @@ export {
   fusionarDatos,
   fusionarPlan,
   fusionarTumbas,
+  podarTumbasSuperadasPorAltas,
   hayConflictoReal,
   resolverConflicto,
   fusionarSemestre,

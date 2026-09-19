@@ -358,9 +358,17 @@ function crearDatosUsuarioNuevo() {
     // tiempo-estudio/tiempo-estudio-competencias.js.
     //
     // Forma de cada entrada: { id, participante_id, apodo, nombre,
-    // es_creador, _actualizadoEn, _version_base, _dispositivoId } — igual
-    // que cualquier otra colección con `sellarTimestamp()`, para que
-    // `fusionarColeccion` la trate exactamente igual que sesiones_estudio.
+    // es_creador, estado, unido_en, _actualizadoEn, _version_base,
+    // _dispositivoId } — igual que cualquier otra colección con
+    // `sellarTimestamp()`, para que `fusionarColeccion` la trate exactamente
+    // igual que sesiones_estudio.
+    //
+    // `unido_en` (ms, Date.now(), 2026-09-19): momento del alta. El `id` de
+    // la entrada es el de la COMPETENCIA, no el de la membresía, así que
+    // salir y volver a unirse reutiliza el mismo id — sin este campo, la
+    // tumba de la salida anterior mataba para siempre la alta nueva (ver
+    // `podarTumbasSuperadasPorAltas` en storage-merge.js). Las entradas
+    // viejas sin `unido_en` siguen funcionando igual que antes.
     //
     // El `token_creador` (permiso de "solo quien creó puede borrar la
     // competencia entera del lado del Worker") NO vive acá — vive nada
