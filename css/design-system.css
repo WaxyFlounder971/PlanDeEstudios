@@ -4594,8 +4594,12 @@ html.exportar-tema-default[data-mode="dark"] {
   line-height: 1.25;
 }
 .timer-sep { display: none; }
-.timer-fila-tiempo { display: flex; align-items: baseline; gap: 6px; }
+/* wrap: en la tarjeta (260px) "05:00 +1:02:03" + estado puede no caber en un
+   renglón; en vez de desbordar, el estado baja. La variante --linea lo
+   vuelve a fijar en un solo renglón. */
+.timer-fila-tiempo { display: flex; align-items: baseline; gap: 2px 6px; flex-wrap: wrap; }
 .timer-tiempo {
+  white-space: nowrap; /* "40:00 +05:12" nunca se parte en 2 renglones */
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   font-size: 1.15rem;
@@ -4603,6 +4607,7 @@ html.exportar-tema-default[data-mode="dark"] {
   line-height: 1.2;
 }
 .timer-estado {
+  white-space: nowrap;
   font-size: 0.72rem;
   font-weight: 600;
   color: var(--text-secondary);
@@ -4716,7 +4721,7 @@ html.exportar-tema-default[data-mode="dark"] {
   font-weight: 500;
 }
 .timer-indicador--linea .timer-sep { display: inline; flex: none; font-size: 0.74rem; color: var(--text-muted); }
-.timer-indicador--linea .timer-fila-tiempo { flex: none; gap: 5px; }
+.timer-indicador--linea .timer-fila-tiempo { flex: none; flex-wrap: nowrap; gap: 5px; }
 .timer-indicador--linea .timer-tiempo { font-size: 0.74rem; }
 .timer-indicador--linea .timer-estado { font-size: 0.68rem; }
 
@@ -4868,6 +4873,41 @@ html.exportar-tema-default[data-mode="dark"] {
   text-align: center;
   letter-spacing: 1px;
   font-variant-numeric: tabular-nums;
+}
+/* Tiempo extra (2026-09-19): renglón propio debajo del cronómetro, en una
+   pastilla suave con los colores de acento del tema. Con Pomodoro activo
+   reserva su alto desde el inicio (opacity, no display) para que cuando
+   aparece el extra el cronómetro principal NO se mueva ni se descentre. */
+.te-timer-extra {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  min-height: 2.1rem;
+  padding: 4px 16px;
+  border-radius: 999px;
+  background: var(--accent-1-10);
+  border: 1px solid var(--accent-1-20);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.te-timer-extra[hidden] { display: none; }
+.te-timer-extra--visible { opacity: 1; transform: none; }
+.te-timer-extra-etiqueta {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.te-timer-extra-valor {
+  font-family: var(--font-display, inherit);
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
 }
 .te-detalle-progreso {
   width: 100%;
