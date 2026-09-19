@@ -75,8 +75,14 @@
   <!-- Tiempo de Estudio (Parte 1): indicador persistente de sesión activa —
        visible en CUALQUIER pantalla mientras hay un timer corriendo, no
        solo dentro de la sección. Contenido y visibilidad los maneja
-       tiempo-estudio.js (suscrito al motor de tiempo-estudio-timer.js). -->
-  <button type="button" id="badge-tiempo-estudio" class="badge-tiempo-estudio-fijo oculto" aria-hidden="true"></button>
+       tiempo-estudio.js (suscrito al motor de tiempo-estudio-timer.js).
+       Rediseño 2026-09-19: hay 3 presentaciones del MISMO indicador y el CSS
+       muestra solo la que corresponde al ancho de pantalla (ver
+       tiempo-estudio-indicador.js): este botón es la FLOTANTE (900–1499px:
+       ni columna derecha ni barra superior); la de >=1500px vive dentro de
+       .columna-derecha (más abajo) y la de <900px dentro de .mobile-topbar.
+       Ya no lleva aria-hidden: es un botón real y lo anuncia su aria-label. -->
+  <button type="button" id="badge-tiempo-estudio" class="timer-indicador timer-indicador--flotante oculto"></button>
 
   <!-- Bug 1 (v8): aviso de reconexión — aparece cuando la sesión con Google
        Drive se venció o el refresco automático/silencioso falló. El botón
@@ -90,7 +96,13 @@
   <!-- Barra superior solo-móvil -->
   <div class="mobile-topbar">
     <button id="btn-hamburguesa" class="btn-topbar-icono" aria-label="Abrir menú">☰</button>
-    <h3 style="display:flex; align-items:center; gap:6px; justify-content:center;"><img src="imagenes/LogoApp.png" alt="Logo App Académica" style="height:1.2em; width:auto; vertical-align:middle;"> App Académica</h3>
+    <!-- 2026-09-19: el <h3> ahora vive dentro de .mobile-topbar-centro para
+         poder apilar debajo la línea del timer (#timer-linea-topbar), que
+         solo aparece mientras hay una sesión corriendo. -->
+    <div class="mobile-topbar-centro">
+      <h3 style="display:flex; align-items:center; gap:6px; justify-content:center;"><img src="imagenes/LogoApp.png" alt="Logo App Académica" style="height:1.2em; width:auto; vertical-align:middle;"> App Académica</h3>
+      <button type="button" id="timer-linea-topbar" class="timer-indicador timer-indicador--linea oculto"></button>
+    </div>
     <!-- Acceso directo a Enlaces rápidos en móvil (2026-08-07): antes solo se
          llegaba entrando a Ajustes. Mismo estilo "símbolo limpio" sin borde
          ni fondo que la hamburguesa — ver .btn-topbar-icono en design-system.css. -->
@@ -650,11 +662,19 @@
 
     </main>
 
-    <!-- Enlaces Rápidos fijos, solo visibles con espacio libre a la derecha (v5 #2) -->
-    <aside id="panel-enlaces-lateral" class="glass-panel enlaces-lateral">
-      <h3 style="margin:0 0 10px;">Enlaces rápidos</h3>
-      <div id="lista-enlaces-lateral" class="stack" style="gap:8px;"></div>
-    </aside>
+    <!-- Enlaces Rápidos fijos, solo visibles con espacio libre a la derecha (v5 #2).
+         2026-09-19: ahora dentro de .columna-derecha, una columna de alto de
+         pantalla con los enlaces arriba y la tarjeta del timer de estudio
+         ANCLADA AL FONDO (mismo criterio que el perfil en la barra lateral):
+         con muchos enlaces, la lista es la que hace scroll por dentro y el
+         timer nunca se tapa ni se sale de la pantalla. -->
+    <div class="columna-derecha">
+      <aside id="panel-enlaces-lateral" class="glass-panel enlaces-lateral">
+        <h3 style="margin:0 0 10px;">Enlaces rápidos</h3>
+        <div id="lista-enlaces-lateral" class="stack" style="gap:8px;"></div>
+      </aside>
+      <button type="button" id="timer-tarjeta-lateral" class="timer-indicador timer-indicador--lateral oculto"></button>
+    </div>
   </div>
 </div>
 
