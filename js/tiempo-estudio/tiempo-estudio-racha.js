@@ -81,6 +81,44 @@ function esLunes(idx) {
 }
 
 /**
+ * Una sola pasada: minutos por día LOCAL (Map índice→minutos) y el primer día
+ * con datos. Ignora `inicio` corrupto, duración ≤ 0, sesiones "del futuro" y
+ * (si `desdeIdx`) todo lo anterior a ese día. Lo usan calcularRacha y
+ * minutosSemana, así los dos leen exactamente las mismas reglas.
+ */
+function agruparMinutosPorDia(sesiones, hoy, desdeIdx) {
+  const porDia = new Map();
+  let primero = Infinity;
+  if (Array.isArray(sesiones)) {
+    for (const s of sesiones) {
+      const inicio = Number(s && s.inicio);
+      if (!Number.isFinite(inicio) || inicio < INICIO_MINIMO_VALIDO_MS) continue;
+      let min = Number(s.duracion_minutos);
+      if (!Number.isFinite(min)) min = Math.round((Number(s.fin) - inicio) / 60000);
+      if (!Number.isFinite(min) || min <= 0) continue;
+      const dia = indiceDia(inicio);
+      if (dia > hoy) continue; // una sesión "del futuro" no cuenta
+      if (desdeIdx !== null && desdeIdx !== undefined && dia < desdeIdx) continue;
+      porDia.set(dia, (porDia.get(dia) || 0) + min);
+      if (dia < primero) primero = dia;
+    }
+  }
+  return { porDia, primero };
+}
+
+/**
+ * Los 7 días (lunes→domingo) de la semana de `ahora` con sus minutos: sirve
+ * para dibujar la semana en la ventana de la racha. Días futuros → 0 min.
+ * @returns {Array<{idx:number, min:number}>}
+ */
+export function minutosSemana(sesiones, { ahora = Date.now() } = {}) {
+  const hoy = indiceDia(ahora);
+  const lunes = hoy - ((((hoy + 3) % 7) + 7) % 7);
+  const { porDia } = agruparMinutosPorDia(sesiones, hoy, null);
+  return Array.from({ length: 7 }, (_, i) => ({ idx: lunes + i, min: porDia.get(lunes + i) || 0 }));
+}
+
+/**
  * @param {Array} sesiones  `estado.datos.sesiones_estudio` (campos usados:
  *                          `inicio` epoch ms y `duracion_minutos`).
  * @param {Object} [opciones]
@@ -98,22 +136,7 @@ export function calcularRacha(sesiones, { ahora = Date.now(), desdeIdx = null } 
   const hoy = indiceDia(ahora);
 
   // 1) Minutos por día — una sola pasada sobre las sesiones.
-  const porDia = new Map();
-  let primero = Infinity;
-  if (Array.isArray(sesiones)) {
-    for (const s of sesiones) {
-      const inicio = Number(s && s.inicio);
-      if (!Number.isFinite(inicio) || inicio < INICIO_MINIMO_VALIDO_MS) continue;
-      let min = Number(s.duracion_minutos);
-      if (!Number.isFinite(min)) min = Math.round((Number(s.fin) - inicio) / 60000);
-      if (!Number.isFinite(min) || min <= 0) continue;
-      const dia = indiceDia(inicio);
-      if (dia > hoy) continue; // una sesión "del futuro" no cuenta
-      if (desdeIdx !== null && dia < desdeIdx) continue;
-      porDia.set(dia, (porDia.get(dia) || 0) + min);
-      if (dia < primero) primero = dia;
-    }
-  }
+  const { porDia, primero } = agruparMinutosPorDia(sesiones, hoy, desdeIdx);
 
   const minutosHoy = porDia.get(hoy) || 0;
   const hoyCumplido = minutosHoy >= MINUTOS_DIA_CUMPLIDO;

@@ -7,7 +7,9 @@
      2) dibuja el chip 🔥 + número del encabezado de la sección Tiempo;
      3) muestra los avisos: "Has iniciado una racha", "¡Racha recuperada!" y
         "¿Quieres recuperar tu racha?";
-     4) decide CUÁNDO celebrar.
+     4) decide CUÁNDO celebrar;
+     5) al tocar el chip abre la ventana de detalle (tipo "detalle": llama
+        animada, minutos de hoy, semana día por día, descansos restantes).
 
    CUÁNDO CELEBRA (lo importante del diseño): solo reacciona al evento
    `te:sesiones-actualizadas` (lo disparan los puntos que ESCRIBEN sesiones en
@@ -44,6 +46,7 @@ import {
   RACHA_DESDE_ISO,
   calcularRacha,
   indiceDesdeISO,
+  minutosSemana,
 } from "./tiempo-estudio-racha.js";
 
 const NS_SVG = "http://www.w3.org/2000/svg";
@@ -88,7 +91,7 @@ function textoMinutos(min) {
   return m ? `${h} h ${m} min` : `${h} h`;
 }
 
-/** Frase corta con el estado — sirve de tooltip, de etiqueta accesible y de toast al tocar el chip. */
+/** Frase corta con el estado — sirve de tooltip, de etiqueta accesible del chip y de toast de avance. */
 export function describirEstadoRacha(est) {
   if (est.recuperable) {
     const r = est.recuperable;
@@ -243,8 +246,19 @@ export function construirChipRacha() {
     chip.appendChild(crearElemento("span", "te-racha-num", String(est.racha)));
   }
 
-  chip.addEventListener("click", () => mostrarToast(describirEstadoRacha(obtenerEstadoRacha()), 4800));
+  chip.addEventListener("click", abrirDetalleRacha);
   return chip;
+}
+
+/**
+ * Tocar el chip: ventana con el detalle de la racha (antes era un toast). Si hay
+ * una racha larga recuperable HOY, se abre directamente la oferta de recuperar
+ * (es lo más importante que hay para decirle); si no, el detalle.
+ */
+export function abrirDetalleRacha() {
+  const est = obtenerEstadoRacha();
+  if (est.recuperable) return abrirOverlayRacha({ tipo: "oferta", est });
+  return abrirOverlayRacha({ tipo: "detalle", est, desde: 0, hasta: est.racha });
 }
 
 /* ------------------------- Avisos a pantalla completa ------------------------- */
@@ -292,6 +306,19 @@ const CONTENIDO_AVISO = {
     texto: (n) => `Tu racha de ${textoDias(n - 1)} sigue en pie y hoy sumó un día más. ¡Sigue así!`,
     boton: "Aceptar",
   },
+  detalle: {
+    titulo: (est) =>
+      !est.activa ? "Aún no tienes racha" : est.hoyCumplido ? "¡Hoy ya cumpliste!" : est.enRiesgo ? "¡Hoy es clave!" : "Hoy falta estudiar",
+    texto: (n, est) =>
+      !est.activa
+        ? `Estudia ${MINUTOS_DIA_CUMPLIDO} minutos hoy para iniciar tu racha.`
+        : est.hoyCumplido
+          ? "Tu racha está a salvo por hoy. ¡Sigue así!"
+          : est.enRiesgo
+            ? `Ya usaste tus ${DESCANSOS_POR_SEMANA} descansos de la semana: estudia ${MINUTOS_DIA_CUMPLIDO} minutos hoy para no perderla.`
+            : `Estudia ${MINUTOS_DIA_CUMPLIDO} minutos hoy para sumar un día más.`,
+    boton: "Cerrar",
+  },
   oferta: {
     titulo: "¿Quieres recuperar tu racha?",
     texto: (n) => `Perdiste tu racha de ${textoDias(n)}. Estudia 1 hora y media hoy para recuperarla.`,
@@ -304,6 +331,8 @@ const CONTENIDO_AVISO = {
  *   "inicio"     → número sube desde `desde` (0) hasta `hasta`, texto de reglas
  *                  y casilla "No volver a mostrar".
  *   "recuperada" → número sube de 0 a la racha restaurada.
+ *   "detalle"    → (al tocar el chip) llama viva si hay racha, número que rueda,
+ *                  semana día por día, minutos de hoy y descansos restantes.
  *   "oferta"     → llama apagada, número fijo (la longitud perdida), avance de hoy.
  * Como el resto de los modales de Tiempo, NO se cierra al tocar fuera: solo
  * con el botón (o Escape).
@@ -320,13 +349,15 @@ export function abrirOverlayRacha({ tipo, est, desde = 0, hasta }) {
   overlay.setAttribute("role", "dialog");
   overlay.setAttribute("aria-modal", "true");
   overlay.setAttribute("aria-labelledby", idTitulo);
-  const card = crearElemento("div", `glass-card modal-card te-racha-card te-racha-card--${tipo}`);
+  const apagada = tipo === "detalle" && !est.activa;
+  const card = crearElemento("div", `glass-card modal-card te-racha-card te-racha-card--${tipo}${apagada ? " te-racha-card--apagada" : ""}`);
 
   // Escena: halo + llama + chispas
   const escena = crearElemento("div", "te-racha-escena");
   escena.appendChild(crearElemento("div", "te-racha-halo"));
   escena.appendChild(crearLlama("te-llama--grande"));
-  if (tipo !== "oferta") escena.appendChild(crearChispas());
+  const conChispas = tipo === "inicio" || tipo === "recuperada" || (tipo === "detalle" && est.activa && est.hoyCumplido);
+  if (conChispas) escena.appendChild(crearChispas());
   card.appendChild(escena);
 
   // Número + unidad
@@ -336,10 +367,10 @@ export function abrirOverlayRacha({ tipo, est, desde = 0, hasta }) {
   fila.appendChild(crearElemento("span", "te-racha-unidad", numero === 1 ? "día de racha" : "días de racha"));
   card.appendChild(fila);
 
-  const titulo = crearElemento("h2", "te-racha-titulo", cfg.titulo);
+  const titulo = crearElemento("h2", "te-racha-titulo", typeof cfg.titulo === "function" ? cfg.titulo(est) : cfg.titulo);
   titulo.id = idTitulo;
   card.appendChild(titulo);
-  card.appendChild(crearElemento("p", "te-racha-texto", cfg.texto(numero)));
+  card.appendChild(crearElemento("p", "te-racha-texto", cfg.texto(numero, est)));
 
   if (tipo === "oferta") {
     const r = est.recuperable;
@@ -354,6 +385,8 @@ export function abrirOverlayRacha({ tipo, est, desde = 0, hasta }) {
     );
     card.appendChild(avance);
   }
+
+  if (tipo === "detalle") card.appendChild(construirDetalleRacha(est));
 
   // Casilla "No volver a mostrar" (solo el aviso de inicio)
   let casilla = null;
@@ -398,6 +431,114 @@ export function abrirOverlayRacha({ tipo, est, desde = 0, hasta }) {
   boton.focus();
   if (tipo === "inicio" && est && est.inicioISO) persistirPreferenciasInicio({ inicioISO: est.inicioISO });
   return overlay;
+}
+
+/* ------------------------- Detalle (al tocar el chip) ------------------------- */
+
+const LETRAS_SEMANA = ["L", "M", "X", "J", "V", "S", "D"];
+const NOMBRES_DIA = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
+const DESCRIPCION_TIPO_DIA = { cumplido: "cumplido", descanso: "día de descanso", hoy: "hoy, pendiente", riesgo: "hoy, clave", futuro: "por venir", previo: "sin racha" };
+
+/**
+ * Estado de cada día de la semana en curso para dibujarlo:
+ *   cumplido / descanso / hoy (pendiente) / riesgo (hoy y sin descansos) /
+ *   futuro / previo (antes de que naciera la racha).
+ * Los descansos dibujados nunca superan `descansosUsados` (si la racha se
+ * restauró, las faltas de antes de la ruptura no se cuentan).
+ */
+function estadosSemana(est, semana) {
+  const dias = semana.map((d, i) => {
+    let tipo;
+    if (d.idx > est.hoyIdx) tipo = "futuro";
+    else if (est.activa && d.idx < est.inicioIdx) tipo = "previo";
+    else if (d.min >= MINUTOS_DIA_CUMPLIDO) tipo = "cumplido";
+    else if (d.idx === est.hoyIdx) tipo = est.enRiesgo ? "riesgo" : "hoy";
+    else tipo = est.activa ? "descanso" : "previo";
+    return { ...d, tipo, letra: LETRAS_SEMANA[i], nombre: NOMBRES_DIA[i] };
+  });
+  let exceso = dias.filter((d) => d.tipo === "descanso").length - (est.descansosUsados || 0);
+  for (const d of dias) {
+    if (exceso > 0 && d.tipo === "descanso") {
+      d.tipo = "previo";
+      exceso--;
+    }
+  }
+  return dias;
+}
+
+function formatearDiaISO(iso) {
+  const [a, m, d] = String(iso).split("-").map(Number);
+  return new Date(a, (m || 1) - 1, d || 1).toLocaleDateString("es", { weekday: "short", day: "numeric", month: "short" });
+}
+
+function crearFilaDetalle(etiqueta, valor) {
+  const fila = crearElemento("div", "te-racha-fila");
+  fila.appendChild(crearElemento("span", "te-racha-fila-etiqueta", etiqueta));
+  const v = crearElemento("span", "te-racha-fila-valor");
+  if (typeof valor === "string") v.textContent = valor;
+  else v.appendChild(valor);
+  fila.appendChild(v);
+  return fila;
+}
+
+/** Cuerpo de la ventana de detalle: semana + filas (Hoy, Esta semana, Días de descanso restantes, Racha iniciada). */
+function construirDetalleRacha(est) {
+  const cont = crearElemento("div", "te-racha-detalle");
+  let cumplidosSemana = 0;
+
+  if (est.activa) {
+    const semana = estadosSemana(est, minutosSemana(estado.datos.sesiones_estudio, { ahora: Date.now() }));
+    cumplidosSemana = semana.filter((d) => d.tipo === "cumplido").length;
+    const tira = crearElemento("div", "te-racha-semana");
+    tira.setAttribute("role", "list");
+    semana.forEach((d, i) => {
+      const celda = crearElemento("div", `te-racha-dia te-racha-dia--${d.tipo}`);
+      celda.setAttribute("role", "listitem");
+      celda.setAttribute("aria-label", `${d.nombre}: ${DESCRIPCION_TIPO_DIA[d.tipo]}`);
+      celda.style.setProperty("--n", String(i));
+      celda.appendChild(crearElemento("span", "te-racha-dia-letra", d.letra));
+      const marca = crearElemento("span", "te-racha-dia-marca");
+      if (d.tipo === "cumplido") marca.appendChild(crearLlama("te-llama--mini"));
+      else if (d.tipo === "descanso") marca.textContent = "☾";
+      celda.appendChild(marca);
+      tira.appendChild(celda);
+    });
+    cont.appendChild(tira);
+    const leyenda = crearElemento("div", "te-racha-leyenda");
+    leyenda.appendChild(crearElemento("span", "", "🔥 Cumplido"));
+    leyenda.appendChild(crearElemento("span", "", "☾ Descanso"));
+    cont.appendChild(leyenda);
+  }
+
+  const lista = crearElemento("div", "te-racha-filas");
+
+  // Hoy: minutos + barra
+  lista.appendChild(
+    crearFilaDetalle("Hoy", est.hoyCumplido ? `✓ ${textoMinutos(est.minutosHoy)}` : `${textoMinutos(est.minutosHoy)} de ${MINUTOS_DIA_CUMPLIDO} min`)
+  );
+  const barra = crearElemento("div", "te-barra-progreso te-racha-barra-hoy");
+  const relleno = crearElemento("div", "te-barra-progreso-fill" + (est.hoyCumplido ? " te-completada" : ""));
+  relleno.style.width = `${Math.min(100, Math.round((est.minutosHoy / MINUTOS_DIA_CUMPLIDO) * 100))}%`;
+  barra.appendChild(relleno);
+  lista.appendChild(barra);
+
+  if (est.activa) {
+    lista.appendChild(crearFilaDetalle("Esta semana", `${cumplidosSemana} de 5 días`));
+
+    const valorDescansos = crearElemento("span", "te-racha-descansos");
+    valorDescansos.appendChild(crearElemento("span", "", `${est.descansosRestantes} de ${DESCANSOS_POR_SEMANA}`));
+    const pips = crearElemento("span", "te-racha-pips");
+    pips.setAttribute("aria-hidden", "true");
+    for (let i = 0; i < DESCANSOS_POR_SEMANA; i++) {
+      pips.appendChild(crearElemento("span", "te-racha-pip" + (i < est.descansosRestantes ? " te-racha-pip--llena" : "")));
+    }
+    valorDescansos.appendChild(pips);
+    lista.appendChild(crearFilaDetalle("Días de descanso restantes", valorDescansos));
+
+    lista.appendChild(crearFilaDetalle("Racha iniciada", formatearDiaISO(est.inicioISO)));
+  }
+  cont.appendChild(lista);
+  return cont;
 }
 
 /* ------------------------- Cuándo celebrar ------------------------- */
