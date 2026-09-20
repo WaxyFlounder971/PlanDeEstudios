@@ -155,6 +155,15 @@ function crearDatosUsuarioNuevo() {
       // explícitamente `false` (activar tiempos de estudio en Agenda es
       // opt-in, no algo que aparezca solo la primera vez que alguien entra).
       mostrar_tiempo_estudio_en_agenda: false,
+      // Racha de estudio (2026-09-19). La racha en sí es DERIVADA de
+      // sesiones_estudio (ver tiempo-estudio-racha.js) y no se guarda; solo
+      // estas 2 preferencias del aviso "Has iniciado una racha":
+      //  - racha_aviso_inicio_oculto: casilla "No volver a mostrar".
+      //  - racha_ultimo_inicio_avisado: ISO ("YYYY-MM-DD") del día en que
+      //    empezó la racha que ya se anunció, para no repetir el aviso en
+      //    cada apertura. Viajan por Drive con el resto de `configuracion`.
+      racha_aviso_inicio_oculto: false,
+      racha_ultimo_inicio_avisado: null,
     },
 
     // Un usuario puede tener más de un Plan de Estudios (ej. cambio de carrera/universidad).
@@ -2977,6 +2986,13 @@ function migrarDatosAntiguos(datos) {
   }
   if (datos.configuracion && datos.configuracion.mostrar_tiempo_estudio_en_agenda === undefined) {
     datos.configuracion.mostrar_tiempo_estudio_en_agenda = false;
+  }
+  // Racha de estudio (2026-09-19): mismo relleno defensivo para cuentas viejas.
+  if (datos.configuracion && datos.configuracion.racha_aviso_inicio_oculto === undefined) {
+    datos.configuracion.racha_aviso_inicio_oculto = false;
+  }
+  if (datos.configuracion && datos.configuracion.racha_ultimo_inicio_avisado === undefined) {
+    datos.configuracion.racha_ultimo_inicio_avisado = null;
   }
 
   // Universidad — separación en nombre completo + siglas (2026-08-22):
