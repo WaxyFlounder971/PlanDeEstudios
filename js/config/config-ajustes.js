@@ -663,7 +663,11 @@ const SECCIONES_TOGGLEABLES = [
   // Estudio" a "Pomodoro" porque se cortaba en este listado — se cambia
   // SOLO el texto mostrado, `id` se deja intacto ("tiempo-estudio") para
   // no romper la coincidencia con main.js/index.html descrita arriba.
-  { id: "tiempo-estudio", etiqueta: "Pomodoro", icono: "⏱️" },
+  //
+  // Rename 2026-09-20 (pedido explícito): "Pomodoro" -> "Tiempo", para que
+  // coincida con el botón del sidebar (index.html) y con el título de la
+  // sección (tiempo-estudio.js). `id` intacto.
+  { id: "tiempo-estudio", etiqueta: "Tiempo", icono: "⏱️" },
   { id: "asistente", etiqueta: "Asistente", icono: "✨" },
 ];
 
