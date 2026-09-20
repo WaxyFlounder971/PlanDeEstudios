@@ -42,7 +42,24 @@ const RUTA_AUDIO_VICTORIA = "audio/ganador.mp3";
 const RUTA_AUDIO_DERROTA = "audio/perdedor.mp3";
 
 /**
- * Resultados "de prueba" encolados por los botones temporales de 3.1. Viven
+ * INTERRUPTOR DE LOS BOTONES DE PRUEBA ("Simular victoria (prueba)" y
+ * "Simular derrota (prueba)", arriba de la lista de competencias).
+ *
+ *   false → no aparecen (lo normal). Con esto apagado NO se puede encolar
+ *           ningún resultado falso: la celebración solo sale de un cierre
+ *           de semana real.
+ *   true  → aparecen, para volver a ver o ajustar las animaciones sin
+ *           esperar a que el Worker cierre una semana.
+ *
+ * Es lo ÚNICO que hay que tocar. tiempo-estudio-competencias.js sigue
+ * llamando a `construirBotonesSimulacion()` siempre, y esa función decide
+ * sola si dibuja algo (mismo criterio de "el módulo dueño de la
+ * funcionalidad es el que decide si se muestra").
+ */
+const MOSTRAR_BOTONES_PRUEBA = false;
+
+/**
+ * Resultados "de prueba" encolados por los botones de prueba (3.1). Viven
  * en memoria y a nivel de módulo (no en localStorage, no en estado.datos):
  * sobreviven a un re-render de la sección pero se van solos al recargar la
  * página, que es exactamente lo que se quiere de algo temporal de prueba.
@@ -687,7 +704,7 @@ function mostrarCelebracionResultado(resultado) {
 /* ===================== Botones de prueba (punto 3.1) ===================== */
 
 /**
- * BOTÓN TEMPORAL DE PRUEBA - remover cuando el diseño de celebración esté aprobado
+ * BOTONES DE PRUEBA — solo funciona con MOSTRAR_BOTONES_PRUEBA en true.
  *
  * Encola un resultado FALSO como si el Worker hubiera cerrado una semana.
  * Respeta el punto 3.3 igual que un resultado real: no abre la celebración
@@ -695,6 +712,7 @@ function mostrarCelebracionResultado(resultado) {
  * quiera (y así se prueba también el aviso, no solo el confeti).
  */
 function simularResultado(tipo, nombreCompetencia) {
+  if (!MOSTRAR_BOTONES_PRUEBA) return;
   resultadosDePrueba.push({
     id: `prueba_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     tipo,
@@ -706,13 +724,15 @@ function simularResultado(tipo, nombreCompetencia) {
 }
 
 /**
- * BOTÓN TEMPORAL DE PRUEBA - remover cuando el diseño de celebración esté aprobado
+ * BOTONES DE PRUEBA — se dibujan solo con MOSTRAR_BOTONES_PRUEBA en true; con
+ * false esta función no hace nada (quien la llama no tiene que enterarse).
  *
- * Los 2 botones en sí. Se marcan como prueba de 3 formas para que nadie los
+ * Los 2 botones en sí. Se marcan como prueba de 2 formas para que nadie los
  * confunda con funcionalidad real: estilo "outline" propio (no usa .btn del
- * resto de la app), la etiqueta "(prueba)" en el texto, y este comentario.
+ * resto de la app) y la etiqueta "(prueba)" en el texto.
  */
 function construirBotonesSimulacion(cont, refrescar) {
+  if (!MOSTRAR_BOTONES_PRUEBA) return;
   asegurarEstilosBotonesPrueba();
 
   const fila = document.createElement("div");
@@ -736,7 +756,7 @@ function construirBotonesSimulacion(cont, refrescar) {
   cont.appendChild(fila);
 }
 
-/** BOTÓN TEMPORAL DE PRUEBA - remover cuando el diseño de celebración esté aprobado */
+/** BOTONES DE PRUEBA — estilos; solo se inyectan si el interruptor está en true. */
 function asegurarEstilosBotonesPrueba() {
   if (document.getElementById("te-estilos-botones-prueba")) return;
   const estilo = document.createElement("style");
