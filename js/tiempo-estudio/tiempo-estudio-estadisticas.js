@@ -10,14 +10,13 @@
         (Día/Semana/Semestre, con navegación </> en semana y semestre, o
         selector de fecha puntual en día) + lista debajo con una barra por
         materia normalizada contra la más grande.
-     2) Gráfica de barras con su propio pill (Semana/Semestre, sin Día — no
-        tiene sentido una tendencia de un solo día): en semana, eje X = los
-        7 días de esa semana; en semestre, eje X = los meses de ese
-        semestre (una barra por semana sería ilegible en un semestre
-        entero). Valor = minutos totales estudiados ESE día/mes, sumando
-        todas las materias — a diferencia del donut, acá no se separa por
-        materia (el plan no lo pedía y una gráfica apilada de 6+ materias
-        por 7 días deja de ser legible).
+     2) Gráfica de barras "Tendencia" con su propio pill (Semana/Semestre,
+        sin Día): en semana, eje X = los 7 días; en semestre, eje X = las
+        semanas S1…S-actual (2026-09-19; antes eran meses). Cada barra va
+        APILADA por materia, con el color de cada una (propio > categoría >
+        violeta por defecto) y una leyenda debajo.
+   3) (2026-09-19) TIEMPO REAL: las gráficas se repintan solas al guardar una
+      sesión y crecen en vivo con el timer en curso (ver "Tiempo real").
 
    A propósito NO restringido a obtenerSemestresActuales(): una sesión
    vieja de un semestre que ya no es "actual" tiene que poder seguir
@@ -33,6 +32,10 @@ import { aplicarFormatoTexto } from "../core/utils.js";
 import { COLOR_TIEMPO_ESTUDIO_DEFAULT } from "../core/schema.js";
 import { calcularNumeroSemanaParaFecha } from "../agenda/agenda-clases.js";
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
+// Import circular intencional (timer → competencias → estadísticas → timer):
+// seguro porque estos 3 nombres solo se usan DENTRO de funciones, nunca en el
+// nivel superior de este archivo (mismo criterio documentado en ARQUITECTURA.md).
+import { obtenerTimerActivo, suscribirseATimer, notificarSesionesEstudioActualizadas } from "./tiempo-estudio-timer.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const COLOR_BARRA_TOTAL = COLOR_TIEMPO_ESTUDIO_DEFAULT;
@@ -56,44 +59,146 @@ let corteBarras = "semana"; // "semana" | "semestre"
 let offsetSemanaBarras = 0;
 let indiceSemestreBarras = null;
 
-/* ===================== Tiempo real: repintar solo cuando cambian datos =====================
+/* ===================== Tiempo real =====================
    Pedido 2026-09-19 ("necesito que se actualice en tiempo real, siempre
-   que se agreguen datos"): ni `construirVistaEstadisticas` ni
-   `construirEstadisticasMateria` se re-disparan solos — dependen de que
-   el padre llame de nuevo a `refrescar()` (ver los comentarios de cabecera
-   de cada uno). Hasta ahora eso solo pasaba al tocar un pill o el
-   navegador ‹ ›, nunca al guardar una sesión nueva. Se agrega acá un
-   broadcast por evento: cualquier archivo que guarde/edite/borre una
-   sesión de estudio (parar el timer, tocar "Descanso", registro manual en
-   tiempo-estudio-registro.js) debe llamar a
-   `notificarSesionesEstudioActualizadas()` (exportada al final de este
-   archivo) justo después de escribir en `estado.datos.sesiones_estudio`
-   — eso dispara `te:sesiones-actualizadas` en `window`, y el listener de
-   acá llama al `refrescar()` de lo que esté abierto en ese momento. El
-   listener se registra UNA sola vez (con `sesionesListenerRegistrado`) y
-   no en cada render, para no ir acumulando listeners duplicados cada vez
-   que el padre reconstruye toda la sección.
-   NOTA: esto repinta apenas una sesión queda GUARDADA. Para que la barra
-   del día/semana en curso crezca en vivo mientras el timer sigue
-   corriendo (antes de guardar), hace falta leer el estado del timer
-   activo — eso vive en tiempo-estudio-timer.js, que no tengo a la vista
-   todavía; si lo querés, pasame ese archivo y lo agrego. */
-let refrescarActivo = null;
-let sesionesListenerRegistrado = false;
+   que se agreguen datos"). Tres mecanismos, todos en ESTE archivo (el
+   resto solo dispara el evento):
 
-function asegurarListenerSesionesActualizadas() {
-  if (sesionesListenerRegistrado) return;
-  sesionesListenerRegistrado = true;
-  window.addEventListener("te:sesiones-actualizadas", () => {
-    if (typeof refrescarActivo === "function") refrescarActivo();
+   1) EVENTO al guardar/editar/borrar una sesión. Quien escribe en
+      `estado.datos.sesiones_estudio` (parar el timer, "Descanso", salvavidas,
+      registro manual, editar, borrar) llama a
+      `notificarSesionesEstudioActualizadas()` (definida en
+      tiempo-estudio-timer.js y re-exportada acá) → `te:sesiones-actualizadas`
+      en `window` → se repintan las gráficas que estén a la vista.
+
+   2) SESIÓN EN CURSO. Mientras el timer corre en una fase de estudio, su
+      tramo (desde `inicioFase` hasta ahora, o hasta el instante de la
+      pausa) se suma a lo que dibujan las gráficas como una sesión
+      "virtual" (`obtenerSesionEnCursoVirtual`). NO se guarda nada en
+      `estado.datos`: al detener, la sesión real reemplaza a la virtual
+      sin salto. Si por un instante existieran las dos (misma materia y
+      mismo `inicio`), la virtual se descarta para no contar doble.
+
+   3) LATIDO POR MINUTO. Un único suscriptor al timer repinta cuando cambia
+      el minuto entero de la sesión en curso (no cada segundo: las
+      gráficas solo muestran minutos).
+
+   El repintado es EN EL SITIO: cada sección se reconstruye y reemplaza a
+   su propio nodo (`repintarSeccionesEnVivo`), sin pasar por el
+   `refrescar()` del padre (que reconstruiría toda la pantalla y movería el
+   scroll). Se conserva el scroll horizontal de la gráfica semestral (salvo
+   que estuviera al final, donde sigue pegada a la semana más reciente) y no
+   se toca una sección en la que la persona tiene el foco en un campo (ej.
+   el selector de fecha del donut abierto).
+
+   IMPORTANTE: `calcularMinutosTotalesEnRango` (exportada, la usa
+   `sincronizarHorasCompetencias`) sigue leyendo SOLO sesiones guardadas —
+   `detenerTimerEstudio` sincroniza competencias antes de vaciar el timer, y
+   sumar la virtual ahí contaría la sesión dos veces. Lo "en vivo" es opt-in
+   (`incluirEnCurso`) y solo lo pide la propia pantalla. */
+let seccionesMontadas = []; // [{ nombre, construir, nodo }] de lo que hay pintado ahora
+let tiempoRealActivo = false;
+let ultimoMinutoVivo = -1;
+let scrollXPendiente = null; // lo consume la gráfica desplazable al rearmarse
+
+/** Sesión "virtual" con lo que lleva corriendo el timer en una fase de
+ * estudio, o `null`. Misma regla que `detenerTimerEstudio` para decidir qué
+ * cuenta como trabajo (timer simple siempre; Pomodoro solo en "trabajo") y
+ * misma referencia de fin (instante de la pausa si está pausado). */
+function obtenerSesionEnCursoVirtual() {
+  const t = obtenerTimerActivo();
+  if (!t) return null;
+  const cuentaComoTrabajo = t.origen === "timer" || (t.pomodoro && t.pomodoro.fase === "trabajo");
+  if (!cuentaComoTrabajo) return null;
+  const fin = t.pausado ? t.msPausaInicio : Date.now();
+  if (!(fin > t.inicioFase)) return null;
+  return {
+    id: "__en_curso__",
+    materia_matriculada_id: t.materiaMatriculadaId,
+    inicio: t.inicioFase,
+    fin,
+    duracion_minutos: (fin - t.inicioFase) / 60000,
+    _enCurso: true,
+  };
+}
+
+/** Sesiones guardadas + la del timer en curso (si hay). Solo para PINTAR. */
+function obtenerSesionesParaGraficas() {
+  const guardadas = estado.datos.sesiones_estudio || [];
+  const vivo = obtenerSesionEnCursoVirtual();
+  if (!vivo) return guardadas;
+  if (guardadas.some((s) => s.materia_matriculada_id === vivo.materia_matriculada_id && s.inicio === vivo.inicio)) return guardadas;
+  return [...guardadas, vivo];
+}
+
+function minutoEnVivoActual() {
+  const vivo = obtenerSesionEnCursoVirtual();
+  return vivo ? Math.floor(vivo.duracion_minutos) : -1;
+}
+
+function intentarConstruirSeccion(nombre, construir) {
+  const tmp = document.createElement("div");
+  try {
+    construir(tmp);
+    return { nodo: tmp.firstElementChild, fallo: false };
+  } catch (err) {
+    console.error(`[tiempo-estudio-estadisticas] "${nombre}" falló al renderizar:`, err);
+    const aviso = document.createElement("section");
+    aviso.className = "glass-card stack";
+    aviso.innerHTML = `<p class="muted" style="margin:0; font-size:0.82rem;">No se pudo mostrar "${nombre}" (${err.message || "error desconocido"}).</p>`;
+    return { nodo: aviso, fallo: true };
+  }
+}
+
+/** Construye una sección aislada (si revienta, las demás siguen), la
+ * inserta en `cont` y la registra para poder repintarla en vivo. Cada
+ * `construir(dest)` agrega EXACTAMENTE un nodo a `dest`. */
+function montarSeccion(cont, nombre, construir) {
+  const { nodo } = intentarConstruirSeccion(nombre, construir);
+  if (!nodo) return;
+  cont.appendChild(nodo);
+  seccionesMontadas.push({ nombre, construir, nodo });
+}
+
+/** Cada vez que el padre reconstruye la pantalla entera se parte de cero. */
+function reiniciarSeccionesMontadas() {
+  seccionesMontadas = [];
+  ultimoMinutoVivo = minutoEnVivoActual();
+  asegurarTiempoRealActivo();
+}
+
+function repintarSeccionesEnVivo() {
+  seccionesMontadas = seccionesMontadas.filter((s) => s.nodo.isConnected);
+  seccionesMontadas.forEach((entrada) => {
+    const activo = document.activeElement;
+    if (activo && entrada.nodo.contains(activo) && /^(INPUT|SELECT|TEXTAREA)$/.test(activo.tagName)) return;
+
+    const scroller = entrada.nodo.querySelector("[data-te-scroll-x]");
+    const alFinal = scroller ? scroller.scrollLeft >= scroller.scrollWidth - scroller.clientWidth - 4 : true;
+    scrollXPendiente = scroller && !alFinal ? scroller.scrollLeft : null;
+
+    const { nodo, fallo } = intentarConstruirSeccion(entrada.nombre, entrada.construir);
+    scrollXPendiente = null;
+    if (fallo || !nodo) return; // se deja la versión anterior en pantalla
+    entrada.nodo.replaceWith(nodo);
+    entrada.nodo = nodo;
   });
 }
 
-/** Llamar después de guardar, editar o borrar una sesión de estudio (parar
- * timer, "Descanso", registro manual) para que Estadísticas se repinte al
- * toque, sin esperar a que la persona toque un pill o navegue. */
-function notificarSesionesEstudioActualizadas() {
-  window.dispatchEvent(new Event("te:sesiones-actualizadas"));
+function asegurarTiempoRealActivo() {
+  if (tiempoRealActivo) return;
+  tiempoRealActivo = true;
+  window.addEventListener("te:sesiones-actualizadas", () => {
+    ultimoMinutoVivo = minutoEnVivoActual();
+    repintarSeccionesEnVivo();
+  });
+  suscribirseATimer(() => {
+    if (seccionesMontadas.length === 0) return;
+    const minuto = minutoEnVivoActual();
+    if (minuto === ultimoMinutoVivo) return;
+    ultimoMinutoVivo = minuto;
+    repintarSeccionesEnVivo();
+  });
 }
 
 /* ===================== Helpers de datos (duplicados a propósito) =====================
@@ -205,15 +310,16 @@ function obtenerRangoSemestre(semestre) {
 
 function calcularMinutosPorMateriaEnRango(inicio, fin) {
   const mapa = new Map();
-  (estado.datos.sesiones_estudio || []).forEach((s) => {
+  obtenerSesionesParaGraficas().forEach((s) => {
     if (s.inicio < inicio || s.inicio >= fin) return;
     mapa.set(s.materia_matriculada_id, (mapa.get(s.materia_matriculada_id) || 0) + (Number(s.duracion_minutos) || 0));
   });
   return mapa;
 }
 
-function calcularMinutosTotalesEnRango(inicio, fin) {
-  return (estado.datos.sesiones_estudio || []).reduce((acc, s) => (s.inicio >= inicio && s.inicio < fin ? acc + (Number(s.duracion_minutos) || 0) : acc), 0);
+function calcularMinutosTotalesEnRango(inicio, fin, incluirEnCurso = false) {
+  const fuente = incluirEnCurso ? obtenerSesionesParaGraficas() : estado.datos.sesiones_estudio || [];
+  return fuente.reduce((acc, s) => (s.inicio >= inicio && s.inicio < fin ? acc + (Number(s.duracion_minutos) || 0) : acc), 0);
 }
 
 /* ===================== Donut multi-segmento (N materias) =====================
@@ -496,6 +602,7 @@ function construirGraficaBarrasDesplazable(puntos, color, anchoMinBarra = 34) {
 
   const scroller = document.createElement("div");
   scroller.style.cssText = "overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch;";
+  scroller.setAttribute("data-te-scroll-x", "");
   scroller.appendChild(svg);
   wrap.appendChild(scroller);
 
@@ -535,8 +642,11 @@ function construirGraficaBarrasDesplazable(puntos, color, anchoMinBarra = 34) {
   scroller.addEventListener("scroll", actualizarTabs);
   // clientWidth/scrollWidth solo son reales después del primer paint —
   // ahí mismo se lleva el scroll al final (semana más reciente).
+  // `scrollXPendiente` lo fija `repintarSeccionesEnVivo` para que un repintado
+  // por minuto no te devuelva al final mientras mirabas semanas viejas.
+  const scrollInicial = scrollXPendiente;
   requestAnimationFrame(() => {
-    scroller.scrollLeft = scroller.scrollWidth;
+    scroller.scrollLeft = scrollInicial !== null ? scrollInicial : scroller.scrollWidth;
     actualizarTabs();
   });
 
@@ -692,6 +802,7 @@ function construirGraficaBarrasApiladasDesplazable(puntos, anchoMinBarra = 34) {
 
   const scroller = document.createElement("div");
   scroller.style.cssText = "overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch;";
+  scroller.setAttribute("data-te-scroll-x", "");
   scroller.appendChild(svg);
   wrap.appendChild(scroller);
 
@@ -729,8 +840,11 @@ function construirGraficaBarrasApiladasDesplazable(puntos, anchoMinBarra = 34) {
     tabDer.style.pointerEvents = puedeDer ? "auto" : "none";
   };
   scroller.addEventListener("scroll", actualizarTabs);
+  // `scrollXPendiente` lo fija `repintarSeccionesEnVivo` para que un repintado
+  // por minuto no te devuelva al final mientras mirabas semanas viejas.
+  const scrollInicial = scrollXPendiente;
   requestAnimationFrame(() => {
-    scroller.scrollLeft = scroller.scrollWidth;
+    scroller.scrollLeft = scrollInicial !== null ? scrollInicial : scroller.scrollWidth;
     actualizarTabs();
   });
 
@@ -1138,7 +1252,7 @@ function construirSeccionBarras(cont, refrescar) {
        misma función que ya numera la semana en el navegador de arriba —
        nunca una ventana de fecha propia que pueda desalinearse. */
     const porSemana = new Map(); // numero de semana -> Map(materiaId -> minutos)
-    (estado.datos.sesiones_estudio || []).forEach((s) => {
+    obtenerSesionesParaGraficas().forEach((s) => {
       if (s.inicio < inicioSemestre.getTime() || s.inicio > finSemestre.getTime()) return;
       const numero = calcularNumeroSemanaSegura(semestre, new Date(s.inicio));
       if (numero < 1 || numero > semanaVigente) return;
@@ -1217,7 +1331,7 @@ let offsetSemanaMetas = 0; // pedido 2026-09-08: "Resumen de metas" también nav
 let indiceSemestreBarrasMateria = null;
 
 function calcularMinutosMateriaEnRango(materiaMatriculadaId, inicio, fin) {
-  return (estado.datos.sesiones_estudio || []).reduce(
+  return obtenerSesionesParaGraficas().reduce(
     (acc, s) => (s.materia_matriculada_id === materiaMatriculadaId && s.inicio >= inicio && s.inicio < fin ? acc + (Number(s.duracion_minutos) || 0) : acc),
     0
   );
@@ -1564,7 +1678,7 @@ function construirSeccionBarrasMateria(cont, mm, color, refrescar) {
        la misma función que ya le pone el número a la semana en todos
        lados, en vez de reconstruir la ventana de fechas acá. */
     const porSemana = new Map(); // numero de semana -> minutos
-    (estado.datos.sesiones_estudio || []).forEach((s) => {
+    obtenerSesionesParaGraficas().forEach((s) => {
       if (s.materia_matriculada_id !== mm.id) return;
       if (s.inicio < inicioSemestre.getTime() || s.inicio > finSemestre.getTime()) return;
       const numero = calcularNumeroSemanaSegura(semestre, new Date(s.inicio));
@@ -1621,7 +1735,7 @@ function obtenerRangoAnio(ahora = new Date()) {
 
 /** Minutos totales (todas las materias) de hoy / esta semana / este mes / este
  * año calendario, en hora local. `ahora` es solo para poder probarlo. */
-function calcularHorasTotalesPeriodos(ahora = new Date()) {
+function calcularHorasTotalesPeriodos(ahora = new Date(), incluirEnCurso = false) {
   const rangos = {
     hoy: obtenerRangoDia(fechaLocalStr(ahora)),
     semana: obtenerRangoSemana(0, ahora),
@@ -1630,14 +1744,14 @@ function calcularHorasTotalesPeriodos(ahora = new Date()) {
   };
   const resultado = {};
   Object.entries(rangos).forEach(([clave, { inicio, fin }]) => {
-    resultado[clave] = { minutos: calcularMinutosTotalesEnRango(inicio, fin), inicio, fin };
+    resultado[clave] = { minutos: calcularMinutosTotalesEnRango(inicio, fin, incluirEnCurso), inicio, fin };
   });
   return resultado;
 }
 
 function construirSeccionHorasTotales(cont) {
   const ahora = new Date();
-  const totales = calcularHorasTotalesPeriodos(ahora);
+  const totales = calcularHorasTotalesPeriodos(ahora, true); // true = suma lo que lleva el timer en curso
 
   const sec = document.createElement("section");
   sec.className = "glass-card stack";
@@ -1683,7 +1797,7 @@ const NOMBRES_DIA_LARGO = ["domingo", "lunes", "martes", "miércoles", "jueves",
  * por período — "de siempre") para los 4 totales pedidos: horas totales,
  * día más productivo, sesiones totales y sesión promedio. */
 function calcularResumenTotalesMateria(materiaMatriculadaId) {
-  const sesiones = (estado.datos.sesiones_estudio || []).filter((s) => s.materia_matriculada_id === materiaMatriculadaId);
+  const sesiones = obtenerSesionesParaGraficas().filter((s) => s.materia_matriculada_id === materiaMatriculadaId);
   const totalMinutos = sesiones.reduce((acc, s) => acc + (Number(s.duracion_minutos) || 0), 0);
   const totalSesiones = sesiones.length;
   const promedioMinutos = totalSesiones > 0 ? totalMinutos / totalSesiones : 0;
@@ -1775,24 +1889,24 @@ function construirSeccionResumenFinal(cont, materiaMatriculadaId) {
  * un aviso en vez de dejar toda la pantalla a medio actualizar.
  */
 function construirEstadisticasMateria(cont, mm, color, refrescar) {
-  refrescarActivo = refrescar;
-  asegurarListenerSesionesActualizadas();
+  reiniciarSeccionesMontadas();
+  // Relectura de entidad viva: un repintado en vivo puede ocurrir minutos
+  // después del render, y un sync remoto pudo reemplazar la matrícula.
+  const mmVivo = () => buscarMatriculaViva(mm.id) || mm;
   const secciones = [
-    ["Resumen de metas", () => construirSeccionResumenMetas(cont, mm, color, refrescar)],
-    ["Horas estudiadas", () => construirSeccionBarrasMateria(cont, mm, color, refrescar)],
-    ["Resumen final", () => construirSeccionResumenFinal(cont, mm.id)],
+    ["Resumen de metas", (dest) => construirSeccionResumenMetas(dest, mmVivo(), color, refrescar)],
+    ["Horas estudiadas", (dest) => construirSeccionBarrasMateria(dest, mmVivo(), color, refrescar)],
+    ["Resumen final", (dest) => construirSeccionResumenFinal(dest, mm.id)],
   ];
-  secciones.forEach(([nombre, construir]) => {
-    try {
-      construir();
-    } catch (err) {
-      console.error(`[tiempo-estudio-estadisticas] "${nombre}" falló al renderizar:`, err);
-      const aviso = document.createElement("section");
-      aviso.className = "glass-card stack";
-      aviso.innerHTML = `<p class="muted" style="margin:0; font-size:0.82rem;">No se pudo mostrar "${nombre}" (${err.message || "error desconocido"}).</p>`;
-      cont.appendChild(aviso);
-    }
-  });
+  secciones.forEach(([nombre, construir]) => montarSeccion(cont, nombre, construir));
+}
+
+function buscarMatriculaViva(materiaMatriculadaId) {
+  for (const semestre of estado.datos.semestres || []) {
+    const mm = (semestre.materias_matriculadas || []).find((m) => m.id === materiaMatriculadaId);
+    if (mm) return mm;
+  }
+  return null;
 }
 
 /* ===================== Ensamblado ===================== */
@@ -1817,27 +1931,16 @@ function construirEstadisticasMateria(cont, mm, color, refrescar) {
  * dejar todo en blanco sin explicación.
  */
 function construirVistaEstadisticas(cont, refrescar) {
-  refrescarActivo = refrescar;
-  asegurarListenerSesionesActualizadas();
+  reiniciarSeccionesMontadas();
   const secciones = [
     // Parte C (2026-09-19): total agregado arriba de todo — lo primero que
     // se ve al abrir Estadísticas. No lleva `refrescar`: no tiene pills ni
     // navegación, siempre muestra los períodos en curso.
-    ["Horas totales", () => construirSeccionHorasTotales(cont)],
-    ["Horas por proyecto", () => construirSeccionDonut(cont, refrescar)],
-    ["Tendencia", () => construirSeccionBarras(cont, refrescar)],
+    ["Horas totales", (dest) => construirSeccionHorasTotales(dest)],
+    ["Horas por proyecto", (dest) => construirSeccionDonut(dest, refrescar)],
+    ["Tendencia", (dest) => construirSeccionBarras(dest, refrescar)],
   ];
-  secciones.forEach(([nombre, construir]) => {
-    try {
-      construir();
-    } catch (err) {
-      console.error(`[tiempo-estudio-estadisticas] "${nombre}" falló al renderizar:`, err);
-      const aviso = document.createElement("section");
-      aviso.className = "glass-card stack";
-      aviso.innerHTML = `<p class="muted" style="margin:0; font-size:0.82rem;">No se pudo mostrar "${nombre}" (${err.message || "error desconocido"}).</p>`;
-      cont.appendChild(aviso);
-    }
-  });
+  secciones.forEach(([nombre, construir]) => montarSeccion(cont, nombre, construir));
 }
 
 export {

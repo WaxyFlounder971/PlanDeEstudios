@@ -389,6 +389,30 @@ function notificar() {
   });
 }
 
+/**
+ * Avisa a Estadísticas (y a lo que se sume) que `estado.datos.sesiones_estudio`
+ * cambió — o que el timer dejó de aportar su tramo en curso — para que
+ * repinte al instante (pedido 2026-09-19, "en tiempo real, siempre que se
+ * agreguen datos"). Es solo un `CustomEvent`-like en `window`
+ * (`te:sesiones-actualizadas`): este archivo no importa nada de
+ * Estadísticas, quien escucha vive allá (ver "Tiempo real" en
+ * tiempo-estudio-estadisticas.js). Vive acá y no allá porque
+ * tiempo-estudio-registro.js YA importa de este archivo, así que no hace
+ * falta ningún import nuevo para que también lo dispare.
+ *
+ * Regla: llamarla DESPUÉS de dejar el estado final (timer ya vaciado o ya
+ * en la fase nueva), nunca entre el push de la sesión y el cambio del
+ * timer, para que Estadísticas no vea la sesión guardada Y la virtual.
+ */
+function notificarSesionesEstudioActualizadas() {
+  if (typeof window === "undefined") return;
+  try {
+    window.dispatchEvent(new Event("te:sesiones-actualizadas"));
+  } catch (e) {
+    console.error("[tiempo-estudio-timer] no se pudo avisar el cambio de sesiones:", e);
+  }
+}
+
 function duracionFaseMs(pomodoro) {
   const { config, fase } = pomodoro;
   const minutos =
@@ -489,6 +513,7 @@ function iniciarDescansoPomodoro() {
   guardarSnapshotLocal();
   mostrarToast(esUltimoBloque ? "🎉 Ciclo completo guardado — arrancó el descanso largo" : "☕ Bloque guardado — arrancó el descanso");
   notificar();
+  notificarSesionesEstudioActualizadas(); // la sesión ya está guardada y el timer ya está en descanso
   return true;
 }
 
@@ -731,6 +756,7 @@ function detenerTimerEstudio() {
   guardarSnapshotLocal();
   detenerIntervaloSiNoHaceFalta();
   notificar();
+  notificarSesionesEstudioActualizadas(); // ya con el timer vaciado: la sesión real reemplaza a la "en curso"
   return sesion;
 }
 
@@ -874,6 +900,7 @@ function abrirAvisoSesionOlvidada(snapshot) {
         guardarSnapshotLocal();
         detenerIntervaloSiNoHaceFalta();
         notificar();
+        notificarSesionesEstudioActualizadas(); // el tramo en curso deja de contar en las gráficas
         cerrar();
       },
     });
@@ -902,6 +929,7 @@ function abrirAvisoSesionOlvidada(snapshot) {
       sincronizarHorasCompetencias();
       mostrarToast("Sesión guardada");
     }
+    notificarSesionesEstudioActualizadas(); // haya o no minutos guardados, el timer en curso ya no existe
     cerrar();
   });
 
@@ -1032,4 +1060,5 @@ export {
   formatearDuracion,
   revisarSesionOlvidadaAlAbrir,
   revisarFelicitacionMeta,
+  notificarSesionesEstudioActualizadas,
 };

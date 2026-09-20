@@ -15,7 +15,7 @@ import { crearSesionEstudio, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
-import { revisarFelicitacionMeta } from "./tiempo-estudio-timer.js";
+import { revisarFelicitacionMeta, notificarSesionesEstudioActualizadas } from "./tiempo-estudio-timer.js";
 import { sincronizarHorasCompetencias } from "./tiempo-estudio-competencias.js";
 
 /**
@@ -131,6 +131,7 @@ function abrirModalRegistroManual(items, onGuardar) {
     mostrarToast(`✓ Registrada: ${formatearMinutosReg(minutosTotales)} de ${nombreElegido} · ${formatearFechaHoraReg(inicio)}. La ves en el detalle de la materia.`);
     revisarFelicitacionMeta(materiaMatriculadaId);
     sincronizarHorasCompetencias();
+    notificarSesionesEstudioActualizadas(); // repinta Estadísticas al instante (registro manual)
 
     cerrar();
     if (onGuardar) onGuardar();
@@ -322,6 +323,7 @@ function abrirModalEditarSesion(sesion, refrescar) {
     revisarFelicitacionMeta(sesionViva.materia_matriculada_id);
     mostrarToast("Sesión actualizada");
     sincronizarHorasCompetencias();
+    notificarSesionesEstudioActualizadas(); // repinta Estadísticas al instante (edición)
 
     cerrar();
     if (refrescar) refrescar();
@@ -357,6 +359,7 @@ function eliminarSesion(sesion, refrescar) {
       marcarCambioPendiente();
       mostrarToast("Sesión borrada");
       sincronizarHorasCompetencias();
+      notificarSesionesEstudioActualizadas(); // repinta Estadísticas al instante (borrado)
       if (refrescar) refrescar();
     },
   });
