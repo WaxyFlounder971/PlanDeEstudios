@@ -4980,18 +4980,18 @@ html.exportar-tema-default[data-mode="dark"] {
 }
 
 .te-racha-chip--encendida .te-llama,
-.te-racha-card:not(.te-racha-card--oferta) .te-llama--grande {
+.te-racha-card:not(.te-racha-card--oferta):not(.te-racha-card--apagada) .te-llama--grande {
   animation: te-llama-flicker 1.6s ease-in-out infinite;
 }
 .te-racha-chip--encendida .te-llama-capa--medio,
-.te-racha-card:not(.te-racha-card--oferta) .te-llama-capa--medio {
+.te-racha-card:not(.te-racha-card--oferta):not(.te-racha-card--apagada) .te-llama-capa--medio {
   animation: te-llama-capa-vaiven 1.1s ease-in-out infinite;
 }
 .te-racha-chip--encendida .te-llama-capa--nucleo,
-.te-racha-card:not(.te-racha-card--oferta) .te-llama-capa--nucleo {
+.te-racha-card:not(.te-racha-card--oferta):not(.te-racha-card--apagada) .te-llama-capa--nucleo {
   animation: te-llama-capa-vaiven 0.8s ease-in-out infinite reverse;
 }
-.te-racha-card:not(.te-racha-card--oferta) .te-llama--grande {
+.te-racha-card:not(.te-racha-card--oferta):not(.te-racha-card--apagada) .te-llama--grande {
   animation: te-llama-entrada 0.9s cubic-bezier(0.2, 1.3, 0.4, 1) both,
              te-llama-flicker 1.6s ease-in-out 0.9s infinite;
 }
@@ -5129,11 +5129,13 @@ html.exportar-tema-default[data-mode="dark"] {
   100% { opacity: 0; transform: translate(var(--dx, 0), var(--dy, -90px)) scale(0.2); }
 }
 /* Oferta de recuperación: llama apagada, sin fuegos artificiales. */
-.te-racha-card--oferta .te-racha-halo {
+.te-racha-card--oferta .te-racha-halo,
+.te-racha-card--apagada .te-racha-halo {
   background: radial-gradient(circle, color-mix(in srgb, var(--text-muted) 35%, transparent) 0%, transparent 70%);
   animation: none;
 }
-.te-racha-card--oferta .te-llama--grande { filter: grayscale(1); opacity: 0.6; }
+.te-racha-card--oferta .te-llama--grande,
+.te-racha-card--apagada .te-llama--grande { filter: grayscale(1); opacity: 0.6; }
 
 .te-racha-numero { display: flex; align-items: center; justify-content: center; gap: 10px; font-family: var(--font-display); }
 .te-racha-numero .te-odo { font-size: 3.6rem; font-weight: 800; color: var(--text-primary); }
@@ -5158,6 +5160,92 @@ html.exportar-tema-default[data-mode="dark"] {
 }
 .te-racha-check input:focus-visible + .box { outline: 2px solid var(--accent-2); outline-offset: 2px; }
 .te-racha-aceptar { margin-top: 6px; }
+
+/* ---- Ventana de detalle (al tocar el chip) ---- */
+.te-llama--mini { height: 17px; }
+.te-racha-card--detalle .te-racha-escena { height: 112px; }
+.te-racha-card--detalle .te-llama--grande { height: 88px; }
+.te-racha-card--detalle .te-racha-halo { width: 112px; height: 112px; }
+.te-racha-card--detalle .te-racha-numero .te-odo { font-size: 3.1rem; }
+.te-racha-detalle { width: 100%; display: flex; flex-direction: column; gap: 10px; margin-top: 4px; text-align: left; }
+
+/* Semana lun→dom */
+.te-racha-semana { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.te-racha-dia {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  animation: te-racha-dia-in 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  animation-delay: calc(0.45s + var(--n, 0) * 70ms);
+}
+@keyframes te-racha-dia-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.6); }
+  to   { opacity: 1; transform: none; }
+}
+.te-racha-dia-letra { font-size: 0.72rem; font-weight: 600; color: var(--text-muted); }
+.te-racha-dia-marca {
+  width: 100%;
+  max-width: 38px;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-glass);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1;
+}
+.te-racha-dia--cumplido .te-racha-dia-marca {
+  border-color: color-mix(in srgb, #ff8a1f 60%, transparent);
+  background: color-mix(in srgb, #ff8a1f 18%, var(--bg-panel));
+}
+.te-racha-dia--descanso .te-racha-dia-marca {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--accent-1) 10%, var(--bg-panel));
+}
+.te-racha-dia--hoy .te-racha-dia-marca { border: 2px dashed var(--accent-2); }
+.te-racha-dia--riesgo .te-racha-dia-marca {
+  border: 2px dashed var(--color-danger);
+  animation: te-racha-riesgo 1.8s ease-in-out infinite;
+}
+.te-racha-dia--hoy .te-racha-dia-letra,
+.te-racha-dia--riesgo .te-racha-dia-letra,
+.te-racha-dia--cumplido .te-racha-dia-letra { color: var(--text-primary); }
+.te-racha-dia--futuro .te-racha-dia-marca,
+.te-racha-dia--previo .te-racha-dia-marca { opacity: 0.4; border-color: transparent; }
+.te-racha-leyenda { display: flex; justify-content: center; gap: 16px; font-size: 0.72rem; color: var(--text-muted); }
+
+/* Filas de datos */
+.te-racha-filas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md, 14px);
+  border: 1px solid var(--border-glass);
+  background: var(--bg-panel);
+}
+.te-racha-fila { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 0.9rem; }
+.te-racha-fila-etiqueta { color: var(--text-secondary); }
+.te-racha-fila-valor { font-weight: 700; color: var(--text-primary); text-align: right; }
+.te-racha-barra-hoy { height: 8px; }
+.te-racha-descansos { display: inline-flex; align-items: center; gap: 8px; }
+.te-racha-pips { display: inline-flex; gap: 5px; }
+.te-racha-pip {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-glass);
+  background: transparent;
+}
+.te-racha-pip--llena {
+  border-color: transparent;
+  background: linear-gradient(135deg, #ffb420, #ff6a1a);
+  box-shadow: 0 0 6px rgba(255, 140, 30, 0.6);
+}
 
 /* Rendimiento reducido: sin destellos ni halo animado; el número igual rueda. */
 [data-rendimiento="reducido"] .te-racha-halo,
