@@ -136,106 +136,144 @@ function reproducirAudioSeguro(ruta) {
   };
 }
 
-/* ===================== Confeti / animación ===================== */
+/* ===================== Confeti / animación =====================
+   Dos rutas, misma firma (`lanzarConfeti(contenedor, tipo)` → `{ detener }`):
+
+     victoria → DOS CAÑONES 🎉 (uno en cada esquina de abajo). Guion:
+                  1) entran deslizándose desde afuera de la pantalla, con
+                     un pequeño rebote al llegar;
+                  2) se AGITAN cada vez más fuerte (cargando);
+                  3) ¡PUUUM! — retroceso del cañón, destello en la boca y el
+                     confeti sale en abanico hacia el centro-arriba, en dos
+                     tandas (una grande y una chica un instante después);
+                  4) el confeti flota y cae; los canones se retiran solos.
+     derrota  → lluvia lenta y apagada que no para (como estaba).
+
+   Todo se dibuja en UN solo <canvas> que va DETRÁS de la tarjeta (el
+   overlay lo agrega antes que la caja): canones, destello y confeti quedan
+   por debajo de ella.
+
+   Por qué ya no se ve "un cuadrado" al empezar: antes las 140 piezas nacían
+   en el mismo cuadro, en un mismo rectángulo y con velocidades parecidas.
+   Ahora nacen en la BOCA del cañón, repartidas durante ~160 ms, cada una con
+   su ángulo (abanico) y su velocidad (de lenta a muy rápida), y con
+   resistencia del aire: salen disparadas, frenan en seco y flotan.
+   La física usa tiempo real (dt), no "por cuadro": en una pantalla de
+   120 Hz se ve igual que en una de 60 Hz. */
 
 const COLORES_CONFETI = ["#f59e0b", "#ef4444", "#22c55e", "#3b82f6", "#a855f7", "#ec4899"];
+const EMOJI_CANON = "🎉";
+const FUENTE_EMOJI = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+
+// Guion de la victoria (ms desde que se abre la celebración).
+const T_ENTRADA = 550; // los canones se deslizan hasta su esquina
+const T_AGITE = 800; // se agitan, cada vez más fuerte
+const T_DISPARO = T_ENTRADA + T_AGITE; // ¡PUUUM!
+const T_RETIRADA = T_DISPARO + 1800; // los canones se van…
+const T_RETIRADA_DUR = 500; // …en este tiempo
+const T_TOTAL = T_DISPARO + 5000; // fin de todo (con fundido)
+const T_FUNDIDO = 900;
+
+// Física del confeti (por segundo). Velocidad final de caída = GRAVEDAD /
+// ARRASTRE ≈ 250 px/s: cae flotando, no como piedra.
+const ARRASTRE = 1.5;
+const GRAVEDAD = 380;
+
+function limitar(x, min, max) {
+  return Math.max(min, Math.min(max, x));
+}
+
+/** Se pasa un poquito y vuelve — da el "rebote" al llegar del cañón. */
+function easeOutBack(x) {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+}
 
 /**
- * Confeti en un <canvas> a pantalla completa, sin ninguna librería — misma
- * política que el resto del proyecto (las gráficas de Estadísticas también
- * son SVG a mano). `tipo` cambia el carácter de la animación:
- *   victoria → estallido hacia arriba, colores vivos, mucha rotación
- *   derrota  → caída lenta y apagada, gris/azul, sin estallido
- *
- * Devuelve `detener()` para cortar el requestAnimationFrame cuando se
- * cierra el overlay (si no, el rAF sigue vivo con el canvas ya removido).
+ * Crea el <canvas> (a resolución real de pantalla, para que el emoji y el
+ * confeti no se vean borrosos en pantallas de alta densidad) y devuelve lo
+ * necesario para dibujar, o `null` si el navegador no tiene canvas (la
+ * tarjeta se ve igual, solo sin confeti).
  */
-function lanzarConfeti(contenedor, tipo) {
+function prepararCanvas(contenedor) {
   const canvas = document.createElement("canvas");
   canvas.style.cssText = "position:absolute; inset:0; width:100%; height:100%; pointer-events:none;";
   contenedor.appendChild(canvas);
 
   const ctx = canvas.getContext && canvas.getContext("2d");
-  if (!ctx) return { detener() {} }; // navegador sin canvas: la tarjeta se ve igual
+  if (!ctx) return null;
 
+  const tam = { ancho: 0, alto: 0 };
   function ajustarTamano() {
-    canvas.width = contenedor.clientWidth || window.innerWidth;
-    canvas.height = contenedor.clientHeight || window.innerHeight;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    tam.ancho = contenedor.clientWidth || window.innerWidth;
+    tam.alto = contenedor.clientHeight || window.innerHeight;
+    canvas.width = Math.round(tam.ancho * dpr);
+    canvas.height = Math.round(tam.alto * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // asignar width reinicia la transformación
   }
   ajustarTamano();
   window.addEventListener("resize", ajustarTamano);
 
-  const esVictoria = tipo === "victoria";
-  const cantidad = esVictoria ? 140 : 70;
+  return { ctx, tam, quitarResize: () => window.removeEventListener("resize", ajustarTamano) };
+}
+
+/* ---------- Derrota: lluvia lenta y apagada ---------- */
+
+function lanzarLluvia(contenedor) {
+  const base = prepararCanvas(contenedor);
+  if (!base) return { detener() {} };
+  const { ctx, tam, quitarResize } = base;
+
   const particulas = [];
-  for (let i = 0; i < cantidad; i++) {
-    particulas.push(
-      esVictoria
-        ? {
-            x: canvas.width / 2 + (Math.random() - 0.5) * canvas.width * 0.4,
-            y: canvas.height * 0.55,
-            vx: (Math.random() - 0.5) * 9,
-            vy: -Math.random() * 13 - 4,
-            ancho: 6 + Math.random() * 6,
-            alto: 8 + Math.random() * 8,
-            giro: Math.random() * Math.PI,
-            velGiro: (Math.random() - 0.5) * 0.3,
-            color: COLORES_CONFETI[i % COLORES_CONFETI.length],
-          }
-        : {
-            x: Math.random() * canvas.width,
-            y: -Math.random() * canvas.height,
-            vx: (Math.random() - 0.5) * 0.6,
-            vy: 1 + Math.random() * 1.6,
-            ancho: 3 + Math.random() * 3,
-            alto: 3 + Math.random() * 3,
-            giro: Math.random() * Math.PI,
-            velGiro: (Math.random() - 0.5) * 0.05,
-            color: "rgba(148,163,184,0.55)",
-          }
-    );
+  for (let i = 0; i < 70; i++) {
+    particulas.push({
+      x: Math.random() * tam.ancho,
+      y: -Math.random() * tam.alto,
+      vx: (Math.random() - 0.5) * 0.6,
+      vy: 1 + Math.random() * 1.6,
+      ancho: 3 + Math.random() * 3,
+      alto: 3 + Math.random() * 3,
+      giro: Math.random() * Math.PI,
+      velGiro: (Math.random() - 0.5) * 0.05,
+    });
   }
 
-  const gravedad = esVictoria ? 0.32 : 0.02;
-  const inicio = Date.now();
-  // Victoria: se apaga sola a los 5s con fundido (así estaba y así queda).
-  // Derrota: dura infinito — la lluvia sigue reciclando gotas hasta que el
-  // usuario cierra el overlay a mano (detener() corta el rAF desde afuera).
-  // Con duracionMs = Infinity, la resta de abajo también da Infinity, así
-  // que el fundido nunca se dispara y la condición del rAF nunca es falsa.
-  const duracionMs = esVictoria ? 5000 : Infinity;
+  // Dura infinito: la lluvia sigue reciclando gotas hasta que se cierra el
+  // overlay (detener() corta el rAF desde afuera).
   let rafId = null;
   let vivo = true;
+  let ultimo = Date.now();
 
   function cuadro() {
     if (!vivo) return;
-    const transcurrido = Date.now() - inicio;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // Se desvanece al final en vez de cortarse de golpe (solo aplica a
-    // victoria — en derrota duracionMs es Infinity y esto siempre da 1).
-    ctx.globalAlpha = Math.max(0, Math.min(1, (duracionMs - transcurrido) / 900));
+    const ahora = Date.now();
+    // Las constantes de abajo están pensadas "por cuadro a 60 Hz"; `f` las
+    // escala al tiempo real para que en 120 Hz no caiga al doble de rápido.
+    const f = limitar((ahora - ultimo) / (1000 / 60), 0, 3);
+    ultimo = ahora;
 
+    ctx.clearRect(0, 0, tam.ancho, tam.alto);
+    ctx.fillStyle = "rgba(148,163,184,0.55)";
     particulas.forEach((p) => {
-      p.vy += gravedad;
-      p.x += p.vx;
-      p.y += p.vy;
-      p.giro += p.velGiro;
-      // La lluvia de derrota da la vuelta por arriba: cae sin parar.
-      if (!esVictoria && p.y > canvas.height) {
+      p.vy += 0.02 * f;
+      p.x += p.vx * f;
+      p.y += p.vy * f;
+      p.giro += p.velGiro * f;
+      // Da la vuelta por arriba: cae sin parar.
+      if (p.y > tam.alto) {
         p.y = -10;
-        p.x = Math.random() * canvas.width;
+        p.x = Math.random() * tam.ancho;
         p.vy = 1 + Math.random() * 1.6;
       }
       ctx.save();
       ctx.translate(p.x, p.y);
       ctx.rotate(p.giro);
-      ctx.fillStyle = p.color;
       ctx.fillRect(-p.ancho / 2, -p.alto / 2, p.ancho, p.alto);
       ctx.restore();
     });
-
-    if (transcurrido < duracionMs) rafId = requestAnimationFrame(cuadro);
-    else ctx.clearRect(0, 0, canvas.width, canvas.height);
+    rafId = requestAnimationFrame(cuadro);
   }
   rafId = requestAnimationFrame(cuadro);
 
@@ -243,9 +281,258 @@ function lanzarConfeti(contenedor, tipo) {
     detener() {
       vivo = false;
       if (rafId !== null) cancelAnimationFrame(rafId);
-      window.removeEventListener("resize", ajustarTamano);
+      quitarResize();
     },
   };
+}
+
+/* ---------- Victoria: dos canones 🎉 ---------- */
+
+/**
+ * Dónde está y cómo se ve un cañón en el instante `t` (ms). `lado` = 1 es el
+ * de la izquierda (boca hacia arriba-derecha, el 🎉 tal cual), -1 el de la
+ * derecha (el mismo emoji espejado). Cada cañón se gira para apuntar hacia
+ * arriba del centro de la pantalla: en un celular angosto queda casi
+ * vertical, en una pantalla ancha más tendido.
+ */
+function estadoCanon(lado, t, tam, s) {
+  const margen = s * 0.45;
+  const cx0 = lado > 0 ? margen + s / 2 : tam.ancho - margen - s / 2;
+  const cy0 = tam.alto - margen - s / 2;
+
+  const ejeNatural = lado > 0 ? -Math.PI / 4 : (-3 * Math.PI) / 4; // hacia dónde "mira" el emoji
+  const apuntado = Math.atan2(tam.alto * 0.3 - cy0, tam.ancho / 2 - cx0);
+  let rot = limitar(apuntado - ejeNatural, -0.45, 0.45);
+  let dx = 0;
+  let dy = 0;
+  let escala = 1;
+  let alfa = 1;
+
+  // 1) Entrada: desliza desde afuera de la esquina y rebota un poco al llegar.
+  const k = 1 - easeOutBack(limitar(t / T_ENTRADA, 0, 1)); // 1 → 0 (pasa a negativo un instante)
+  dx = -lado * k * s * 1.6;
+  dy = k * s * 3.2;
+
+  if (t >= T_ENTRADA && t < T_DISPARO) {
+    // 2) Agite: cada vez más fuerte, y se "hincha" un poco cargando. 7 ciclos
+    //    exactos, así que termina justo en el ángulo de reposo (sin salto).
+    const u = (t - T_ENTRADA) / T_AGITE;
+    rot += (0.04 + 0.16 * u * u) * Math.sin(u * Math.PI * 2 * 7);
+    dx += Math.sin(u * Math.PI * 2 * 11) * s * 0.03 * u;
+    escala = 1 + 0.12 * u;
+  } else if (t >= T_DISPARO) {
+    // 3) Retroceso: un resorte que oscila hacia atrás sobre su propio eje y
+    //    se asienta, más una patada de giro que se apaga.
+    const tau = (t - T_DISPARO) / 1000;
+    const amortiguado = Math.exp(-9 * tau);
+    const retroceso = amortiguado * Math.cos(24 * tau);
+    const ejeReal = ejeNatural + rot;
+    dx -= Math.cos(ejeReal) * s * 0.34 * retroceso;
+    dy -= Math.sin(ejeReal) * s * 0.34 * retroceso;
+    rot -= lado * 0.18 * amortiguado * Math.sin(20 * tau);
+    escala = 1 + 0.12 * Math.exp(-14 * tau);
+  }
+
+  // 4) Retirada: baja y se desvanece.
+  if (t > T_RETIRADA) {
+    const r = limitar((t - T_RETIRADA) / T_RETIRADA_DUR, 0, 1);
+    alfa = 1 - r;
+    dy += r * r * s * 2.5;
+  }
+
+  const x = cx0 + dx;
+  const y = cy0 + dy;
+  const eje = ejeNatural + rot; // hacia dónde apunta AHORA
+  const boca = { x: x + Math.cos(eje) * s * 0.4, y: y + Math.sin(eje) * s * 0.4 };
+  return { x, y, rot, escala, alfa, eje, boca };
+}
+
+function dibujarCanon(ctx, lado, e, s) {
+  if (e.alfa <= 0) return;
+  ctx.save();
+  ctx.globalAlpha *= e.alfa;
+  ctx.translate(e.x, e.y);
+  ctx.rotate(e.rot);
+  ctx.scale(lado * e.escala, e.escala); // lado = -1 espeja el emoji
+  ctx.font = `${Math.round(s)}px ${FUENTE_EMOJI}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(EMOJI_CANON, 0, 0);
+  ctx.restore();
+}
+
+/** Destello del disparo: un anillo que se expande y un resplandor cálido. */
+function dibujarDestello(ctx, boca, tau, s) {
+  const duracion = 0.35;
+  if (tau < 0 || tau >= duracion) return;
+  const p = tau / duracion;
+  const salida = 1 - Math.pow(1 - p, 3);
+
+  const radioBrillo = s * (0.3 + 1.5 * salida);
+  const brillo = ctx.createRadialGradient(boca.x, boca.y, 0, boca.x, boca.y, radioBrillo);
+  brillo.addColorStop(0, `rgba(255,236,170,${0.75 * (1 - p)})`);
+  brillo.addColorStop(1, "rgba(255,200,80,0)");
+  ctx.fillStyle = brillo;
+  ctx.beginPath();
+  ctx.arc(boca.x, boca.y, radioBrillo, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = `rgba(255,255,255,${0.5 * (1 - p)})`;
+  ctx.lineWidth = 3 * (1 - p) + 0.5;
+  ctx.beginPath();
+  ctx.arc(boca.x, boca.y, s * (0.2 + 1.4 * salida), 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+function crearPiezaConfeti(boca, angulo, velocidad, escalaTam, avanceMs) {
+  const azar = Math.random();
+  const forma = azar < 0.5 ? "rect" : azar < 0.8 ? "tira" : "circulo";
+  const p = {
+    x: boca.x + (Math.random() - 0.5) * 6,
+    y: boca.y + (Math.random() - 0.5) * 6,
+    vx: Math.cos(angulo) * velocidad,
+    vy: Math.sin(angulo) * velocidad,
+    forma,
+    ancho: (forma === "tira" ? 3 : 6 + Math.random() * 4) * escalaTam,
+    alto: (forma === "tira" ? 12 + Math.random() * 6 : 9 + Math.random() * 5) * escalaTam,
+    radio: (3 + Math.random() * 1.6) * escalaTam,
+    giro: Math.random() * Math.PI * 2,
+    velGiro: (Math.random() - 0.5) * 14,
+    volteo: Math.random() * Math.PI * 2, // el "dar la vuelta" en 3D: achata y estira la pieza
+    velVolteo: 5 + Math.random() * 9,
+    swayFase: Math.random() * Math.PI * 2,
+    swayFreq: 2 + Math.random() * 3,
+    swayAmp: 30 + Math.random() * 50,
+    color: COLORES_CONFETI[Math.floor(Math.random() * COLORES_CONFETI.length)],
+  };
+  // Las que nacen "a mitad de cuadro" ya avanzaron un poco: así la emisión es
+  // un chorro continuo y no una tanda de piezas todas en la misma posición.
+  const adelanto = (avanceMs / 1000) * Math.random();
+  p.x += p.vx * adelanto;
+  p.y += p.vy * adelanto;
+  return p;
+}
+
+function lanzarCanones(contenedor) {
+  const base = prepararCanvas(contenedor);
+  if (!base) return { detener() {} };
+  const { ctx, tam, quitarResize } = base;
+
+  const lados = [1, -1];
+  const piezas = [];
+  // Tandas: cada una emite `total` piezas por cañón repartidas en `durMs`.
+  const tandas = [
+    { desde: T_DISPARO, durMs: 160, total: 95, abanico: 0.42, fuerza: 1 }, // el PUUUM
+    { desde: T_DISPARO + 200, durMs: 120, total: 35, abanico: 0.6, fuerza: 0.6 }, // el "pop" de remate
+  ].map((t) => ({ ...t, emitidas: { 1: 0, "-1": 0 } }));
+  const destellos = {}; // boca de cada cañón en el instante del disparo
+
+  const inicio = Date.now();
+  let ultimo = inicio;
+  let rafId = null;
+  let vivo = true;
+
+  function cuadro() {
+    if (!vivo) return;
+    const ahora = Date.now();
+    const t = ahora - inicio;
+    const dt = Math.min(0.05, (ahora - ultimo) / 1000);
+    const dtMs = dt * 1000;
+    ultimo = ahora;
+
+    const s = limitar(tam.ancho * 0.09, 48, 96); // tamaño del cañón
+    const escalaTam = limitar(Math.min(tam.ancho, tam.alto) / 700, 0.8, 1.3);
+
+    ctx.clearRect(0, 0, tam.ancho, tam.alto);
+    ctx.globalAlpha = limitar((T_TOTAL - t) / T_FUNDIDO, 0, 1);
+
+    const estados = { 1: estadoCanon(1, t, tam, s), "-1": estadoCanon(-1, t, tam, s) };
+
+    // --- Emisión ---
+    tandas.forEach((tanda) => {
+      if (t < tanda.desde) return;
+      const avance = limitar((t - tanda.desde) / tanda.durMs, 0, 1);
+      lados.forEach((lado) => {
+        const debidas = Math.round(tanda.total * avance);
+        const canon = estados[lado];
+        const objetivoX = tam.ancho / 2;
+        const objetivoY = tam.alto * 0.3;
+        const distancia = Math.hypot(objetivoX - canon.boca.x, objetivoY - canon.boca.y);
+        const vMax = distancia * ARRASTRE * 1.9 * tanda.fuerza;
+        while (tanda.emitidas[lado] < debidas) {
+          tanda.emitidas[lado] += 1;
+          const desvio = Math.random() + Math.random() - 1; // triangular: más piezas al centro del abanico
+          const velocidad = vMax * (0.28 + 0.72 * Math.pow(Math.random(), 0.65));
+          piezas.push(crearPiezaConfeti(canon.boca, canon.eje + desvio * tanda.abanico, velocidad, escalaTam, dtMs));
+        }
+      });
+    });
+
+    // Guardar dónde estaba la boca justo al disparar, para el destello.
+    if (t >= T_DISPARO && !destellos.listo) {
+      lados.forEach((lado) => {
+        destellos[lado] = { ...estados[lado].boca };
+      });
+      destellos.listo = true;
+    }
+
+    // --- Dibujo: canones, destello y, encima, el confeti ---
+    lados.forEach((lado) => dibujarCanon(ctx, lado, estados[lado], s));
+    if (destellos.listo) lados.forEach((lado) => dibujarDestello(ctx, destellos[lado], (t - T_DISPARO) / 1000, s));
+
+    const seg = t / 1000;
+    const arrastre = Math.exp(-ARRASTRE * dt);
+    for (let i = piezas.length - 1; i >= 0; i--) {
+      const p = piezas[i];
+      p.vx *= arrastre;
+      p.vy = p.vy * arrastre + GRAVEDAD * dt;
+      const lento = limitar(1 - Math.hypot(p.vx, p.vy) / 500, 0, 1); // el vaivén solo cuando ya flota
+      p.x += (p.vx + Math.sin(seg * p.swayFreq + p.swayFase) * p.swayAmp * lento) * dt;
+      p.y += p.vy * dt;
+      p.giro += p.velGiro * dt;
+      p.volteo += p.velVolteo * dt;
+
+      if (p.y > tam.alto + 30) {
+        piezas.splice(i, 1);
+        continue;
+      }
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.giro);
+      ctx.scale(1, Math.cos(p.volteo));
+      ctx.fillStyle = p.color;
+      if (p.forma === "circulo") {
+        ctx.beginPath();
+        ctx.arc(0, 0, p.radio, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillRect(-p.ancho / 2, -p.alto / 2, p.ancho, p.alto);
+      }
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+
+    if (t < T_TOTAL) rafId = requestAnimationFrame(cuadro);
+    else ctx.clearRect(0, 0, tam.ancho, tam.alto);
+  }
+  rafId = requestAnimationFrame(cuadro);
+
+  return {
+    detener() {
+      vivo = false;
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      quitarResize();
+    },
+  };
+}
+
+/**
+ * Punto de entrada. `tipo` "victoria" → canones; cualquier otro → lluvia.
+ * Devuelve `detener()` para cortar el requestAnimationFrame cuando se cierra
+ * el overlay (si no, el rAF sigue vivo con el canvas ya removido).
+ */
+function lanzarConfeti(contenedor, tipo) {
+  return tipo === "victoria" ? lanzarCanones(contenedor) : lanzarLluvia(contenedor);
 }
 
 /** Keyframes de la animación de entrada de la tarjeta — se inyectan una
