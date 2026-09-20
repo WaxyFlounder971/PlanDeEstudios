@@ -146,11 +146,11 @@ function reproducirAudioSeguro(ruta) {
                   3) ¡PUUUM! — retroceso del cañón, destello en la boca y el
                      confeti sale en abanico hacia el centro-arriba, en dos
                      tandas (una grande y una chica un instante después);
-                  4) el confeti flota y cae; los canones se retiran solos.
-     derrota  → lluvia lenta y apagada que no para (como estaba).
+                  4) el confeti flota y cae; los cañones se retiran solos.
+     derrota  → llovizna lenta azul-grisácea bajo una neblina, que no para.
 
    Todo se dibuja en UN solo <canvas> que va DETRÁS de la tarjeta (el
-   overlay lo agrega antes que la caja): canones, destello y confeti quedan
+   overlay lo agrega antes que la caja): cañones, destello y confeti quedan
    por debajo de ella.
 
    Por qué ya no se ve "un cuadrado" al empezar: antes las 140 piezas nacían
@@ -166,10 +166,10 @@ const EMOJI_CANON = "🎉";
 const FUENTE_EMOJI = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
 
 // Guion de la victoria (ms desde que se abre la celebración).
-const T_ENTRADA = 550; // los canones se deslizan hasta su esquina
+const T_ENTRADA = 550; // los cañones se deslizan hasta su esquina
 const T_AGITE = 800; // se agitan, cada vez más fuerte
 const T_DISPARO = T_ENTRADA + T_AGITE; // ¡PUUUM!
-const T_RETIRADA = T_DISPARO + 1800; // los canones se van…
+const T_RETIRADA = T_DISPARO + 1800; // los cañones se van…
 const T_RETIRADA_DUR = 500; // …en este tiempo
 const T_TOTAL = T_DISPARO + 5000; // fin de todo (con fundido)
 const T_FUNDIDO = 900;
@@ -219,60 +219,83 @@ function prepararCanvas(contenedor) {
   return { ctx, tam, quitarResize: () => window.removeEventListener("resize", ajustarTamano) };
 }
 
-/* ---------- Derrota: lluvia lenta y apagada ---------- */
+/* ---------- Derrota: llovizna lenta y apagada ---------- */
 
+/**
+ * Gotas azul-grisáceas que caen despacio, con un vaivén leve, bajo una
+ * neblina que oscurece un poco la parte de arriba. Todo aparece con un
+ * fundido lento (no de golpe) y no termina hasta que se cierra el overlay.
+ *
+ * Antes eran cuadritos grises con una gravedad que se acumulaba: cuanto más
+ * tiempo llevaban cayendo, más rápido iban (por eso "se veía apurada"). Acá
+ * cada gota cae a UNA velocidad constante y baja (45–95 px/s), y el tiempo es
+ * real (dt), así que se ve igual en 60 Hz y en 120 Hz.
+ */
 function lanzarLluvia(contenedor) {
   const base = prepararCanvas(contenedor);
   if (!base) return { detener() {} };
   const { ctx, tam, quitarResize } = base;
 
-  const particulas = [];
-  for (let i = 0; i < 70; i++) {
-    particulas.push({
+  const FUNDIDO_ENTRADA_MS = 1800;
+  const gotas = [];
+  for (let i = 0; i < 85; i++) {
+    gotas.push({
       x: Math.random() * tam.ancho,
-      y: -Math.random() * tam.alto,
-      vx: (Math.random() - 0.5) * 0.6,
-      vy: 1 + Math.random() * 1.6,
-      ancho: 3 + Math.random() * 3,
-      alto: 3 + Math.random() * 3,
-      giro: Math.random() * Math.PI,
-      velGiro: (Math.random() - 0.5) * 0.05,
+      y: Math.random() * (tam.alto + 20) - 20, // repartidas por toda la pantalla; el fundido de entrada evita el golpe
+      vy: 45 + Math.random() * 50,
+      swayFase: Math.random() * Math.PI * 2,
+      swayFreq: 0.5 + Math.random() * 0.7,
+      swayAmp: 5 + Math.random() * 9,
+      ancho: 2.4 + Math.random() * 1.8,
+      alto: 11 + Math.random() * 8,
+      alfa: 0.35 + Math.random() * 0.35,
     });
   }
 
-  // Dura infinito: la lluvia sigue reciclando gotas hasta que se cierra el
-  // overlay (detener() corta el rAF desde afuera).
+  const inicio = Date.now();
+  let ultimo = inicio;
   let rafId = null;
   let vivo = true;
-  let ultimo = Date.now();
 
   function cuadro() {
     if (!vivo) return;
     const ahora = Date.now();
-    // Las constantes de abajo están pensadas "por cuadro a 60 Hz"; `f` las
-    // escala al tiempo real para que en 120 Hz no caiga al doble de rápido.
-    const f = limitar((ahora - ultimo) / (1000 / 60), 0, 3);
+    const dt = Math.min(0.05, (ahora - ultimo) / 1000);
     ultimo = ahora;
+    const seg = (ahora - inicio) / 1000;
 
     ctx.clearRect(0, 0, tam.ancho, tam.alto);
-    ctx.fillStyle = "rgba(148,163,184,0.55)";
-    particulas.forEach((p) => {
-      p.vy += 0.02 * f;
-      p.x += p.vx * f;
-      p.y += p.vy * f;
-      p.giro += p.velGiro * f;
+    ctx.globalAlpha = limitar((ahora - inicio) / FUNDIDO_ENTRADA_MS, 0, 1);
+
+    // Neblina: un velo frío que se disuelve hacia abajo.
+    const velo = ctx.createLinearGradient(0, 0, 0, tam.alto * 0.55);
+    velo.addColorStop(0, "rgba(71,85,105,0.32)");
+    velo.addColorStop(1, "rgba(71,85,105,0)");
+    ctx.fillStyle = velo;
+    ctx.fillRect(0, 0, tam.ancho, tam.alto * 0.55);
+
+    gotas.forEach((g) => {
+      g.y += g.vy * dt;
+      const vaiven = Math.sin(seg * g.swayFreq + g.swayFase);
+      g.x += vaiven * g.swayAmp * dt;
       // Da la vuelta por arriba: cae sin parar.
-      if (p.y > tam.alto) {
-        p.y = -10;
-        p.x = Math.random() * tam.ancho;
-        p.vy = 1 + Math.random() * 1.6;
+      if (g.y > tam.alto + 20) {
+        g.y = -20 - Math.random() * tam.alto * 0.3;
+        g.x = Math.random() * tam.ancho;
       }
       ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.rotate(p.giro);
-      ctx.fillRect(-p.ancho / 2, -p.alto / 2, p.ancho, p.alto);
+      ctx.translate(g.x, g.y);
+      ctx.rotate(vaiven * 0.12); // se inclina apenas con el vaivén
+      ctx.fillStyle = `rgba(125,150,190,${g.alfa})`;
+      // Gota: punta arriba, panza redonda abajo.
+      ctx.beginPath();
+      ctx.moveTo(0, -g.alto / 2);
+      ctx.bezierCurveTo(g.ancho * 0.9, -g.alto * 0.05, g.ancho * 0.7, g.alto / 2, 0, g.alto / 2);
+      ctx.bezierCurveTo(-g.ancho * 0.7, g.alto / 2, -g.ancho * 0.9, -g.alto * 0.05, 0, -g.alto / 2);
+      ctx.fill();
       ctx.restore();
     });
+    ctx.globalAlpha = 1;
     rafId = requestAnimationFrame(cuadro);
   }
   rafId = requestAnimationFrame(cuadro);
@@ -286,7 +309,7 @@ function lanzarLluvia(contenedor) {
   };
 }
 
-/* ---------- Victoria: dos canones 🎉 ---------- */
+/* ---------- Victoria: dos cañones 🎉 ---------- */
 
 /**
  * Dónde está y cómo se ve un cañón en el instante `t` (ms). `lado` = 1 es el
@@ -476,7 +499,7 @@ function lanzarCanones(contenedor) {
       destellos.listo = true;
     }
 
-    // --- Dibujo: canones, destello y, encima, el confeti ---
+    // --- Dibujo: cañones, destello y, encima, el confeti ---
     lados.forEach((lado) => dibujarCanon(ctx, lado, estados[lado], s));
     if (destellos.listo) lados.forEach((lado) => dibujarDestello(ctx, destellos[lado], (t - T_DISPARO) / 1000, s));
 
@@ -527,7 +550,7 @@ function lanzarCanones(contenedor) {
 }
 
 /**
- * Punto de entrada. `tipo` "victoria" → canones; cualquier otro → lluvia.
+ * Punto de entrada. `tipo` "victoria" → cañones; cualquier otro → lluvia.
  * Devuelve `detener()` para cortar el requestAnimationFrame cuando se cierra
  * el overlay (si no, el rAF sigue vivo con el canvas ya removido).
  */
