@@ -25,8 +25,10 @@
        que ya venía estudiando esta semana), le muestra "Has iniciado una
        racha" una vez, con el número subiendo desde 0.
 
-   Preferencias que se sincronizan (en `configuracion`, mismo patrón que
-   `mostrar_tiempo_estudio_en_agenda`):
+   Preferencias (en `configuracion`, mismo patrón que
+   `mostrar_tiempo_estudio_en_agenda`). `configuracion` se funde entera por
+   `_actualizadoEn` y, sin sellar, en empate gana el local: en la práctica
+   son por dispositivo (ver nota en schema.js):
      - racha_aviso_inicio_oculto   → casilla "No volver a mostrar".
      - racha_ultimo_inicio_avisado → ISO del día en que empezó la racha ya
                                      anunciada (así el aviso sale una vez por
