@@ -4942,3 +4942,226 @@ html.exportar-tema-default[data-mode="dark"] {
   color: var(--text-secondary);
   font-size: 0.9rem;
 }
+
+/* =========================================================================
+   Racha de estudio (2026-09-19) — chip del encabezado de Tiempo, llama SVG,
+   odómetro (número que rueda) y avisos a pantalla completa.
+   Los colores de la LLAMA son fijos a propósito (el fuego es naranja en
+   cualquier paleta); todo lo demás sale de las variables de la paleta.
+   prefers-reduced-motion ya apaga toda animación/transición más arriba, así
+   que sin movimiento el odómetro salta directo al valor final.
+   ========================================================================= */
+
+.te-encabezado-titulo-grupo { display: flex; align-items: center; gap: 10px; min-width: 0; }
+
+/* ---- Llama (SVG de 3 capas) ---- */
+.te-llama { display: block; width: auto; overflow: visible; transform-origin: 50% 100%; }
+.te-llama--chip { height: 22px; }
+.te-llama--grande { height: 104px; }
+.te-llama-capa { transform-box: fill-box; transform-origin: 50% 100%; }
+.te-llama-capa--exterior { fill: #ff6a1a; }
+.te-llama-capa--medio { fill: #ffb420; }
+.te-llama-capa--nucleo { fill: #fff2b0; }
+
+@keyframes te-llama-flicker {
+  0%, 100% { transform: scale(1, 1) rotate(0deg); }
+  25%      { transform: scale(0.96, 1.05) rotate(-1.6deg); }
+  50%      { transform: scale(1.03, 0.97) rotate(1deg); }
+  75%      { transform: scale(0.98, 1.04) rotate(-0.6deg); }
+}
+@keyframes te-llama-capa-vaiven {
+  0%, 100% { transform: scale(1, 1); }
+  50%      { transform: scale(0.92, 1.1); }
+}
+@keyframes te-llama-entrada {
+  0%   { transform: scale(0.15) rotate(-14deg); opacity: 0; }
+  60%  { transform: scale(1.18) rotate(4deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+.te-racha-chip--encendida .te-llama,
+.te-racha-card:not(.te-racha-card--oferta) .te-llama--grande {
+  animation: te-llama-flicker 1.6s ease-in-out infinite;
+}
+.te-racha-chip--encendida .te-llama-capa--medio,
+.te-racha-card:not(.te-racha-card--oferta) .te-llama-capa--medio {
+  animation: te-llama-capa-vaiven 1.1s ease-in-out infinite;
+}
+.te-racha-chip--encendida .te-llama-capa--nucleo,
+.te-racha-card:not(.te-racha-card--oferta) .te-llama-capa--nucleo {
+  animation: te-llama-capa-vaiven 0.8s ease-in-out infinite reverse;
+}
+.te-racha-card:not(.te-racha-card--oferta) .te-llama--grande {
+  animation: te-llama-entrada 0.9s cubic-bezier(0.2, 1.3, 0.4, 1) both,
+             te-llama-flicker 1.6s ease-in-out 0.9s infinite;
+}
+
+/* ---- Chip del encabezado ---- */
+.te-racha-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 3px 11px 3px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-glass);
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
+}
+.te-racha-chip:active { transform: scale(0.96); }
+.te-racha-chip:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.te-racha-num { display: inline-flex; align-items: center; font-size: 1.05rem; min-width: 0.6em; }
+.te-racha-num .te-odo { font-size: 1.05rem; }
+
+/* Encendida: hoy ya cumplió. */
+.te-racha-chip--encendida {
+  border-color: color-mix(in srgb, #ff8a1f 55%, transparent);
+  background: color-mix(in srgb, #ff8a1f 14%, var(--bg-panel));
+}
+/* Pendiente: la racha vive, hoy falta estudiar (llama "dormida"). */
+.te-racha-chip--pendiente .te-llama { filter: grayscale(0.85); opacity: 0.85; }
+.te-racha-chip--pendiente .te-racha-num { color: var(--text-secondary); }
+/* Riesgo: ya usó los 2 descansos de la semana — hoy es clave. */
+.te-racha-chip--riesgo {
+  border-color: color-mix(in srgb, var(--color-danger) 65%, transparent);
+  animation: te-racha-riesgo 1.8s ease-in-out infinite;
+}
+.te-racha-chip--riesgo .te-llama { filter: grayscale(0.3); opacity: 1; }
+@keyframes te-racha-riesgo {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-danger) 45%, transparent); }
+  50%      { box-shadow: 0 0 0 5px transparent; }
+}
+/* Apagada: sin racha (o con una recuperable, borde punteado). */
+.te-racha-chip--apagada { color: var(--text-muted); }
+.te-racha-chip--apagada .te-llama { filter: grayscale(1); opacity: 0.5; }
+.te-racha-chip--recuperable { border-style: dashed; }
+
+/* Pop cuando la racha sube. */
+.te-racha-chip--pop { animation: te-racha-pop 0.8s cubic-bezier(0.3, 1.4, 0.5, 1) both; }
+@keyframes te-racha-pop {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.28); }
+  60%  { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+/* ---- Odómetro: cada dígito es una columna con una tira 0–9 que rueda ----
+   Las celdas miden 1.3em (no 1em) y el margen negativo devuelve la altura de
+   línea a 1em: con celdas justas, la tinta del dígito vecino de la tira se
+   asomaba como un filo bajo el número. */
+.te-odo {
+  --odo-h: 1.3em;
+  display: inline-flex;
+  height: var(--odo-h);
+  margin: calc((1em - var(--odo-h)) / 2) 0;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.te-odo-col { position: relative; display: block; width: 0.62em; height: var(--odo-h); overflow: hidden; }
+.te-odo-tira {
+  display: flex;
+  flex-direction: column;
+  transform: translateY(calc(var(--i, 0) * var(--odo-h) * -1));
+  transition: transform var(--odo-dur, 1200ms) cubic-bezier(0.16, 1, 0.3, 1.06) var(--odo-retraso, 0ms);
+  will-change: transform;
+}
+.te-odo-tira > span { display: block; height: var(--odo-h); line-height: var(--odo-h); text-align: center; }
+.te-odo--giro .te-odo-tira { transition-timing-function: cubic-bezier(0.22, 0.8, 0.2, 1.05); }
+.te-odo-col--nueva { opacity: 0; transition: opacity 0.6s ease var(--odo-retraso, 0ms); }
+.te-odo-col--nueva.te-odo-col--visible { opacity: 1; }
+
+/* ---- Avisos a pantalla completa ---- */
+.te-racha-overlay { z-index: 330; animation: te-racha-fondo 0.3s ease both; }
+@keyframes te-racha-fondo { from { opacity: 0; } to { opacity: 1; } }
+.te-racha-card {
+  width: min(400px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 24px 22px;
+  text-align: center;
+  overflow-x: hidden;
+  animation: te-racha-entra 0.45s cubic-bezier(0.2, 1.2, 0.4, 1) both;
+}
+@keyframes te-racha-entra {
+  from { opacity: 0; transform: translateY(18px) scale(0.94); }
+  to   { opacity: 1; transform: none; }
+}
+.te-racha-escena { position: relative; width: 150px; height: 130px; display: grid; place-items: center; margin-top: 2px; }
+.te-racha-escena > .te-racha-halo,
+.te-racha-escena > .te-llama { grid-area: 1 / 1; }
+.te-racha-halo {
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 140, 30, 0.55) 0%, rgba(255, 140, 30, 0.18) 45%, transparent 70%);
+  animation: te-racha-halo 2.4s ease-in-out infinite;
+}
+@keyframes te-racha-halo {
+  0%, 100% { transform: scale(0.9); opacity: 0.75; }
+  50%      { transform: scale(1.08); opacity: 1; }
+}
+.te-racha-chispas { position: absolute; left: 50%; bottom: 24px; width: 0; height: 0; pointer-events: none; }
+.te-racha-chispa {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: var(--tam, 4px);
+  height: var(--tam, 4px);
+  margin-left: calc(var(--tam, 4px) / -2);
+  border-radius: 50%;
+  background: #ffc247;
+  box-shadow: 0 0 6px 1px rgba(255, 150, 30, 0.8);
+  opacity: 0;
+  animation: te-racha-chispa 2.2s ease-out var(--retraso, 0s) infinite;
+}
+@keyframes te-racha-chispa {
+  0%   { opacity: 0; transform: translate(0, 0) scale(1); }
+  12%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx, 0), var(--dy, -90px)) scale(0.2); }
+}
+/* Oferta de recuperación: llama apagada, sin fuegos artificiales. */
+.te-racha-card--oferta .te-racha-halo {
+  background: radial-gradient(circle, color-mix(in srgb, var(--text-muted) 35%, transparent) 0%, transparent 70%);
+  animation: none;
+}
+.te-racha-card--oferta .te-llama--grande { filter: grayscale(1); opacity: 0.6; }
+
+.te-racha-numero { display: flex; align-items: center; justify-content: center; gap: 10px; font-family: var(--font-display); }
+.te-racha-numero .te-odo { font-size: 3.6rem; font-weight: 800; color: var(--text-primary); }
+.te-racha-unidad { font-size: 1rem; font-weight: 600; color: var(--text-secondary); }
+.te-racha-titulo { margin: 4px 0 0; font-size: 1.35rem; }
+.te-racha-texto { margin: 0; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5; }
+.te-racha-avance { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 2px; }
+
+/* Casilla "No volver a mostrar": el input global es display:none (no recibe
+   foco con Tab); acá queda invisible pero enfocable, encima de la caja. */
+.te-racha-check { position: relative; margin-top: 6px; }
+.te-racha-check input {
+  display: block;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.te-racha-check input:focus-visible + .box { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.te-racha-aceptar { margin-top: 6px; }
+
+/* Rendimiento reducido: sin destellos ni halo animado; el número igual rueda. */
+[data-rendimiento="reducido"] .te-racha-halo,
+[data-rendimiento="reducido"] .te-racha-chispa,
+[data-rendimiento="reducido"] .te-racha-chip--riesgo { animation: none; }
+[data-rendimiento="reducido"] .te-racha-chispas { display: none; }
+[data-rendimiento="reducido"] .te-racha-overlay { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(0, 0, 0, 0.8); }
