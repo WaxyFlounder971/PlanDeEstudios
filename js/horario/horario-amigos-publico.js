@@ -1,5 +1,5 @@
 /* =========================================================================
-   HORARIO ENTRE AMIGOS — Parte 2: vista pública (amigos.html)
+   HORARIO ENTRE AMIGOS - Parte 2: vista pública (amigos.html)
    -------------------------------------------------------------------------
    A propósito NO importa nada de js/core ni js/horario del resto de la
    app: esta página la abre gente SIN sesión, así que no debe cargar el
@@ -8,16 +8,16 @@
    portado acá mismo, en versión de solo lectura.
 
    NO incluye todavía (prompt aparte): la escritura real de
-   horario_amigos_vinculados — eso pasa en index.html/main.js después del
+   horario_amigos_vinculados - eso pasa en index.html/main.js después del
    redirect de "Asociar a mi cuenta" (ver el bloque al final de este
    archivo, y el localStorage que se deja para que lo recoja esa parte).
    ========================================================================= */
 
 // Restringida por dominio a este mismo GitHub Pages y a Drive API
-// únicamente (ver nota del prompt) — es seguro que viva en el cliente.
+// únicamente (ver nota del prompt) - es seguro que viva en el cliente.
 const API_KEY = "AIzaSyDfpExr25F972ur_fztdELmU6MCxJOVBmg";
 
-// Mismo listado que DIAS_SEMANA_CONFIG en js/config/config-ajustes.js —
+// Mismo listado que DIAS_SEMANA_CONFIG en js/config/config-ajustes.js -
 // duplicado a propósito (ver cabecera del archivo, esta página no importa
 // nada del resto de la app). Si ese archivo cambia, replicar acá también.
 const DIAS_SEMANA_CONFIG = [
@@ -58,7 +58,7 @@ function calcularNumeroSemanaSemestre(fechaInicio, duracionSemanas) {
 
 // Idéntico a calcularFechaDelDia en horario.js: ANCLADA al día de la
 // semana REAL de fecha_inicio (vía Date.getDay()), no a la config de
-// "inicio de semana" — si no, una fecha_inicio que no cae justo en el día
+// "inicio de semana" - si no, una fecha_inicio que no cae justo en el día
 // configurado como inicio deja toda la fila de encabezados corrida.
 function calcularFechaDelDia(fechaInicio, numeroSemana, diaCodigo) {
   const inicio = fechaLocalDesdeISO(fechaInicio);
@@ -66,7 +66,7 @@ function calcularFechaDelDia(fechaInicio, numeroSemana, diaCodigo) {
   const idxCanonico = DIAS_SEMANA_CONFIG.findIndex((d) => d.abrevDefault === diaCodigo);
   if (idxCanonico === -1) return null;
   // DIAS_SEMANA_CONFIG va lunes→domingo (índices 0-6); Date.getDay() usa
-  // domingo=0..sábado=6 — de ahí el +1 % 7 para pasar de un sistema al otro.
+  // domingo=0..sábado=6 - de ahí el +1 % 7 para pasar de un sistema al otro.
   const pesoObjetivo = (idxCanonico + 1) % 7;
   const diffDentroDeSemana = (pesoObjetivo - inicio.getDay() + 7) % 7;
   const fecha = new Date(inicio);
@@ -86,6 +86,26 @@ function obtenerEmojiModalidad(modalidad) {
   if (normalizado.startsWith("virtual")) return "💻";
   if (normalizado.startsWith("asincron")) return "📖";
   return "";
+}
+
+/**
+ * FIX (bug real reportado: una tarjeta de clase en Horario compartido
+ * mostraba "[object Object]" en vez de la universidad). `modalidad` en
+ * core/schema.js es un objeto (`crearModalidadHorario(tipo, textoPersonalizado)`),
+ * no un string plano - y algo equivalente puede pasar con `universidad`
+ * si en algún punto del snapshot llega como el objeto
+ * {nombre_completo, siglas} en vez de texto ya resuelto (ver el mismo
+ * bug corregido en semestres/semestres-dashboard.js). Esta página es de
+ * solo lectura de un snapshot ajeno - no controla cómo se armó ese JSON -
+ * así que este helper defiende la vista sin importar qué forma traiga el
+ * campo. Devuelve null (no texto) si no hay nada que mostrar, para que el
+ * `cabeExtra && b.universidad` de construirColumnaDia seguya ocultando la
+ * línea entera cuando no aplica, igual que antes.
+ */
+function obtenerTextoUniversidad(universidad) {
+  if (!universidad) return null;
+  if (typeof universidad === "string") return universidad;
+  return universidad.siglas || universidad.nombre_completo || null;
 }
 
 function obtenerDiasVisiblesOrdenados(configDias) {
@@ -170,14 +190,14 @@ function construirLineasHorarias(pxPorMin, minInicioRango, minFinRango) {
   return stops.join(",\n");
 }
 
-/* Línea de "hora actual" — Núcleo, portada de horario.js. Mismo criterio:
+/* Línea de "hora actual" - Núcleo, portada de horario.js. Mismo criterio:
    abarca TODO el ancho del grid de días (no solo el día de hoy), se
    posiciona relativa a filaGrid (padre real, ver position:relative que se
    le agrega en renderizarGridPublico), y usa la MISMA clase CSS
    (.horario-linea-hora-actual, definida en design-system.css, compartida
-   con el horario propio) — así hereda el glow "brillante pero discreta"
+   con el horario propio) - así hereda el glow "brillante pero discreta"
    sin duplicar esos estilos acá.
-   OJO: el left offset es 38px, NO 28px como en horario.js — esta página
+   OJO: el left offset es 38px, NO 28px como en horario.js - esta página
    tiene su propia columna de horas con OTRO ancho (ver
    construirColumnaHoras más arriba: width:38px). Copiar el 28px de la app
    principal a ciegas volvería a meter la línea encima de los números de
@@ -197,7 +217,7 @@ function construirLineaHoraActualGrid(pxPorMin, minInicioRango, minFinRango) {
 
 /* Mueve la línea cada 60s sin re-renderizar todo el grid (mismo motivo que
    en horario.js: perdería la posición de scroll del usuario). Guarda el
-   rango de horas en un closure porque acá no hay "estado" global — se
+   rango de horas en un closure porque acá no hay "estado" global - se
    arma una sola vez en iniciar() con el rango del snapshot ya cargado. */
 function actualizarPosicionLineaHoraActualPublico(minInicioRango, minFinRango, pxPorMin) {
   const linea = document.querySelector(".horario-linea-hora-actual");
@@ -219,12 +239,12 @@ function construirColumnaDia(dia, bloquesDia, pxPorMin, altoGrid, minInicioRango
   const conLanes = calcularLanesDia(bloquesDia);
   // Antes, cuando 2+ clases se cruzaban en horario (lanes>0), cada una se
   // dibujaba con el MISMO ancho que la columna completa, solo corrida
-  // offsetPx a la derecha (12px) y con más z-index — la de encima terminaba
+  // offsetPx a la derecha (12px) y con más z-index - la de encima terminaba
   // tapando casi todo el nombre de la que quedaba debajo (se veía como si
   // el nombre se hubiera "cortado a la mitad"). Ahora se reparte el ancho
   // real de la columna entre TODAS las lanes que se usan ese día (mismo
   // criterio visual que Google Calendar: clases que se cruzan quedan una
-  // al lado de la otra, no una tapando a la otra) — cada lane ve
+  // al lado de la otra, no una tapando a la otra) - cada lane ve
   // completo su propio nombre, aunque la tarjeta quede más angosta.
   const totalLanes = conLanes.length > 0 ? Math.max(...conLanes.map((b) => b.lane)) + 1 : 1;
   conLanes.forEach((b) => {
@@ -266,7 +286,7 @@ function construirColumnaDia(dia, bloquesDia, pxPorMin, altoGrid, minInicioRango
 /* ===================== Fetch del snapshot público ===================== */
 
 function obtenerFileIdDesdeHash() {
-  // Fragmento (#fileId=...), NUNCA query param — así nunca se envía a
+  // Fragmento (#fileId=...), NUNCA query param - así nunca se envía a
   // ningún servidor ni queda indexable (ver nota de privacidad del prompt).
   const hash = window.location.hash.replace(/^#/, "");
   const params = new URLSearchParams(hash);
@@ -333,13 +353,15 @@ function renderizarGridPublico(snapshot) {
         color: c.color || "#a78bfa",
         nombreCorto: c.nombre || "Materia",
         aula: c.aula,
-        universidad: c.universidad,
+        // FIX (bug real: "[object Object]" en vez de la universidad en la
+        // tarjeta de clase) - ver obtenerTextoUniversidad() más arriba.
+        universidad: obtenerTextoUniversidad(c.universidad),
         modalidad: c.modalidad,
       }));
     filaGrid.appendChild(construirColumnaDia(dia, bloquesDia, PX_POR_MIN, altoGrid, minInicioRango, minFinRango));
   });
   // Línea de hora actual: solo si "hoy" es uno de los días de ESTA semana
-  // que se está mostrando (mismo criterio que horario.js) — se agrega
+  // que se está mostrando (mismo criterio que horario.js) - se agrega
   // DESPUÉS de las columnas para que su z-index quede por encima en el
   // orden natural del DOM.
   if (semanaIncluyeHoy) {
@@ -371,7 +393,7 @@ function inicializarFlujoAsociar(fileId, snapshot) {
   // HTML (no se appendea desde JS como los otros modales de la app), así
   // que si por lo que sea el CSS no lo tapa bien (caché vieja del deploy,
   // orden de reglas, etc.) igual queda garantizado que no bloquea/blurea
-  // el horario al entrar — solo se vuelve visible/clickeable con el click
+  // el horario al entrar - solo se vuelve visible/clickeable con el click
   // explícito en "+ Asociar a mi cuenta".
   function cerrarModalAsociar() {
     modal.classList.add("oculto");
@@ -393,7 +415,7 @@ function inicializarFlujoAsociar(fileId, snapshot) {
     const apodo = input.value.trim().slice(0, 30) || "Amigo";
     // Se deja el pendiente en localStorage (NUNCA en la URL) para que
     // main.js lo recoja apenas termine de cargar los datos del usuario
-    // (con o sin sesión ya abierta) — ver Horario entre Amigos, Parte 3.
+    // (con o sin sesión ya abierta) - ver Horario entre Amigos, Parte 3.
     // guardado_en sirve para que esa parte descarte el pendiente si pasó
     // demasiado tiempo desde que se generó (evita una asociación sorpresa
     // si la persona vuelve a abrir la app días después por otro motivo).
@@ -410,11 +432,11 @@ function inicializarFlujoAsociar(fileId, snapshot) {
 
 /* Mismo patrón que btnPantallaCompleta en horario.js: toggle sobre el
    contenedor con scroll (acá #amigos-grid-contenedor, que en el HTML
-   arranca con max-height:70vh fijo — inline, no en la clase CSS). En
+   arranca con max-height:70vh fijo - inline, no en la clase CSS). En
    fullscreen se cambia a 100vh para aprovechar toda la pantalla real, y al
    salir se vuelve al 70vh original. No hace falta re-renderizar el grid
    (a diferencia del horario propio, acá el ancho de columna no depende del
-   alto disponible — es de solo lectura, sin auto-scroll a "la clase más
+   alto disponible - es de solo lectura, sin auto-scroll a "la clase más
    temprana").
 */
 function inicializarPantallaCompletaPublico() {
@@ -428,7 +450,7 @@ function inicializarPantallaCompletaPublico() {
 
   // FIX (mismo problema que horario.js): `btn` (el ⛶ de arriba, dentro de
   // la glass-card del encabezado) vive AFUERA de `contenedor` (ver
-  // amigos.html) — al entrar a fullscreen sobre `contenedor`, ese botón
+  // amigos.html) - al entrar a fullscreen sobre `contenedor`, ese botón
   // queda fuera del árbol de document.fullscreenElement y se vuelve
   // invisible/inaccesible, sin forma de salir salvo Esc. Se agrega un
   // botón aparte, chico y discreto, colgado directo de `contenedor` para
@@ -484,7 +506,7 @@ async function iniciar() {
     inicializarFlujoAsociar(fileId, snapshot);
     // Línea de hora actual: se mueve sola cada minuto, mismo patrón que
     // inicializarHorario() en horario.js (setInterval de 60s, sin
-    // re-renderizar el grid — eso perdería la posición de scroll). Acá no
+    // re-renderizar el grid - eso perdería la posición de scroll). Acá no
     // hay que chequear visibilidad de sección (esta página SOLO muestra
     // el horario, no hay otras pestañas de la app que tapen esto).
     setInterval(() => actualizarPosicionLineaHoraActualPublico(minInicioRango, minFinRango, PX_POR_MIN), 60000);
