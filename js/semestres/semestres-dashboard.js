@@ -1,22 +1,22 @@
 /* =========================================================================
-   SEMESTRES — Historial académico (pestaña contraíble)
+   SEMESTRES - Historial académico (pestaña contraíble)
    Vive al inicio de la sección Semestres, colapsada por default (no debe
    empujar el contenido normal hacia abajo al entrar a Semestres). Adentro,
    un selector tipo pestañas alterna entre 2 vistas:
-     1) Estadísticas — % de cursos aprobados/reprobados (barra dividida) +
+     1) Estadísticas - % de cursos aprobados/reprobados (barra dividida) +
         detalle por estado (Aprobada/Cursando/Reprobada/Pendiente), fusionados
         en una sola pestaña (2026-08-07, antes eran 2 separadas).
-     a/b) Promedio ponderado — por semestre+universidad, y por plan/carrera
+     a/b) Promedio ponderado - por semestre+universidad, y por plan/carrera
 
    Nivel (c) del promedio ponderado (combinado de TODO junto, mezclando
-   universidades/carreras) queda EXPLÍCITAMENTE fuera de esta entrega — ver
+   universidades/carreras) queda EXPLÍCITAMENTE fuera de esta entrega - ver
    el comentario dedicado en schema.js, justo donde iría esa función. (a) y
    (b) son la prioridad pedida y debían quedar sólidos primero.
 
    Mismo patrón que el resto de la app: Map en `estado` para expandido/
    colapsado + encabezado clickeable con ▲▼ (ver construirTarjetaSemestre
    en semestres-tarjetas.js), y pill-group para el selector de vista (ver
-   construirPillsFiltroEstado en semestres.js) — nada de componentes nuevos
+   construirPillsFiltroEstado en semestres.js) - nada de componentes nuevos
    inventados, mismo lenguaje visual de siempre.
    ========================================================================= */
 
@@ -35,7 +35,7 @@ import {
 /**
  * FIX (mismo bug de arranque "Cannot access 'estado' before initialization"
  * ya visto en el resto de la app): estas 3 líneas estaban a nivel de
- * módulo, leyendo Y escribiendo `estado.X` en el mismo statement — se
+ * módulo, leyendo Y escribiendo `estado.X` en el mismo statement - se
  * mueven a una función lazy, llamada desde construirDashboardAcademico
  * (único punto de entrada exportado de este archivo).
  */
@@ -45,10 +45,10 @@ function inicializarEstadoDashboardAcademicoSiHaceFalta() {
   if (typeof estado.dashboardAcademicoPlanFiltro === "undefined") estado.dashboardAcademicoPlanFiltro = null; // null = todos los planes (global)
 }
 
-// FIX (2026-08-07 — rediseño "Historial académico"): antes había 3
+// FIX (2026-08-07 - rediseño "Historial académico"): antes había 3
 // pestañas (Promedio Ponderado / Aprobados-Reprobados / Detalle por
 // Estado). Las últimas dos se fusionaron en una sola "Estadísticas"
-// (ver construirVistaEstadisticas) — quedan solo 2 pestañas, Estadísticas
+// (ver construirVistaEstadisticas) - quedan solo 2 pestañas, Estadísticas
 // primero.
 const VISTAS_DASHBOARD = [
   { valor: "estadisticas", texto: "Estadísticas" },
@@ -57,6 +57,27 @@ const VISTAS_DASHBOARD = [
 
 function obtenerPlanPorId(planId) {
   return (estado.datos.planes_estudio || []).find((p) => p.id === planId) || null;
+}
+
+/**
+ * FIX (bug real reportado: "Promedio general por carrera" mostraba
+ * "[object Object]" en vez de las siglas/nombre de la universidad).
+ * Desde la separación nombre_completo/siglas (2026-08-22, ver
+ * core/schema.js#crearPlanEstudio), `plan.universidad` dejó de ser un
+ * string plano y pasó a ser `{ nombre_completo, siglas }` - los 2 puntos
+ * de este archivo que todavía interpolaban `plan.universidad`/`p.universidad`
+ * directo (heredado de cuando sí era un string) quedaron mostrando el
+ * objeto crudo. Único punto de conversión para todo el archivo; mismo
+ * criterio de fallback que ya usa calcularPromedioPorSemestreYUniversidad/
+ * obtenerUniversidadesDeProfesor en schema.js (siglas > nombre_completo >
+ * "Sin universidad"). Contempla también `universidad` como string plano
+ * por las dudas (datos viejos sin migrar), aunque en teoría
+ * migrarDatosAntiguos ya no debería dejar pasar ese caso.
+ */
+function obtenerTextoUniversidad(universidad) {
+  if (!universidad) return "Sin universidad";
+  if (typeof universidad === "string") return universidad;
+  return universidad.siglas || universidad.nombre_completo || "Sin universidad";
 }
 
 /* ===================== Encabezado (título + flecha ▲▼) ===================== */
@@ -115,7 +136,7 @@ function construirSelectorVista(onCambiar) {
 }
 
 /**
- * Selector de plan opcional (usado por la vista de aprobación) — mismo
+ * Selector de plan opcional (usado por la vista de aprobación) - mismo
  * patrón de carrusel simple que ya usa la app para elegir entre pocas
  * opciones (pill-group scrolleable). "Todos" siempre es la primera opción.
  */
@@ -137,7 +158,7 @@ function construirSelectorPlanFiltro(onCambiar) {
   grupo.className = "pill-group";
   grupo.style.cssText = "display:flex; gap:6px;";
 
-  const opciones = [{ id: null, texto: "Todos" }, ...planes.map((p) => ({ id: p.id, texto: `${p.universidad} · ${aplicarFormatoTexto(p.nombre_carrera)}` }))];
+  const opciones = [{ id: null, texto: "Todos" }, ...planes.map((p) => ({ id: p.id, texto: `${obtenerTextoUniversidad(p.universidad)} · ${aplicarFormatoTexto(p.nombre_carrera)}` }))];
   opciones.forEach(({ id, texto }) => {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -159,9 +180,9 @@ function construirSelectorPlanFiltro(onCambiar) {
 /* ===================== Vista (a)/(b): Promedio ponderado ===================== */
 
 function formatearPromedio(valor) {
-  if (valor === null || valor === undefined) return "—";
+  if (valor === null || valor === undefined) return "-";
   // letras-safe: convertirDesde100 puede devolver una letra ("B+", etc.)
-  // cuando la escala activa del plan es "letras" — mismo patrón que
+  // cuando la escala activa del plan es "letras" - mismo patrón que
   // formatearNotaCruda en semestres-tarjetas.js, sin pasar por toFixed.
   return typeof valor === "string" ? valor : valor.toFixed(2);
 }
@@ -210,7 +231,7 @@ function construirVistaPromedioPonderado() {
 
   const porPlan = calcularPromedioPorPlan(estado.datos);
 
-  /* ---------- Nivel (c): combinado de TODO junto — primero, es el
+  /* ---------- Nivel (c): combinado de TODO junto - primero, es el
      resumen más general de todos. Solo tiene sentido mostrarlo cuando hay
      2+ carreras/planes con historial real; con 0-1 plan sería un número
      idéntico al de (b) de abajo, redundante. ---------- */
@@ -268,7 +289,7 @@ function construirVistaPromedioPonderado() {
       seccionB.appendChild(
         construirFilaPromedio({
           etiquetaIzquierda: aplicarFormatoTexto(plan.nombre_carrera),
-          etiquetaDerecha: plan.universidad,
+          etiquetaDerecha: obtenerTextoUniversidad(plan.universidad),
           promedio: promedioMostrado,
           creditos,
           materias,
@@ -279,9 +300,9 @@ function construirVistaPromedioPonderado() {
   cont.appendChild(seccionB);
 
   /* ---------- Nivel (a): por semestre, separado por universidad ----------
-     RESUELTO (antes "PENDIENTE — coherencia de escala"): schema.js ya
+     RESUELTO (antes "PENDIENTE - coherencia de escala"): schema.js ya
      devuelve `escalaId` por cada grupo de universidad (null si los planes
-     agrupados no comparten una sola escala — ver calcularPromedioPorSemestreYUniversidad),
+     agrupados no comparten una sola escala - ver calcularPromedioPorSemestreYUniversidad),
      así que este nivel ahora convierte igual que el (b) de arriba. */
   const seccionA = document.createElement("div");
   seccionA.className = "stack";
@@ -311,20 +332,26 @@ function construirVistaPromedioPonderado() {
       bloqueSemestre.appendChild(nombreSemestre);
 
       // Modo Hardcore: si el semestre tiene más de una universidad, cada
-      // una queda como su propia fila independiente — nunca se mezclan.
-      // FIX (coherencia de escala — "promedio por semestre NO se muestra
+      // una queda como su propia fila independiente - nunca se mezclan.
+      // FIX (coherencia de escala - "promedio por semestre NO se muestra
       // según la escala seleccionada"): schema.js YA calculaba y devolvía
       // `escalaId` por cada grupo de universidad (ver
       // calcularPromedioPorSemestreYUniversidad, comentario "escalaId
       // 2026-08-08") desde una sesión anterior, pero este archivo nunca
-      // llegó a leerlo — se quedó mostrando el promedio crudo en 0-100 sin
+      // llegó a leerlo - se quedó mostrando el promedio crudo en 0-100 sin
       // convertir, mismo bug que ya se había resuelto para el nivel (b) de
       // arriba. Mismo patrón exacto que (b): si escalaId es null (los
       // planes agrupados bajo esta universidad no comparten una sola
       // escala), obtenerEscalaPorId(null) no encuentra coincidencia y cae
-      // sola al fallback de 0-100 — mostrar el crudo sin convertir sigue
+      // sola al fallback de 0-100 - mostrar el crudo sin convertir sigue
       // siendo lo correcto en ese caso borde, no hace falta un chequeo
       // aparte acá.
+      //
+      // Nota: `universidad` acá ya llega como STRING resuelto (no el
+      // objeto {nombre_completo, siglas}) - calcularPromedioPorSemestreYUniversidad
+      // (core/schema.js) agrupa por plan.universidad.siglas/nombre_completo
+      // internamente y devuelve la clave de agrupación ya como texto. No
+      // pasa por obtenerTextoUniversidad() a propósito: no hace falta.
       universidades.forEach(({ universidad, escalaId, promedio, creditos, materias }) => {
         const escalaGrupo = obtenerEscalaPorId(escalaId ?? 100);
         const promedioMostrado = promedio === null || promedio === undefined ? promedio : convertirDesde100(promedio, escalaGrupo);
@@ -357,17 +384,17 @@ const ESTADOS_DETALLE_CONFIG = [
 
 /**
  * Fusión (2026-08-07, pedido explícito "que este todo junto"): antes eran
- * dos pestañas separadas — "Aprobados/Reprobados" (barra + paneles) y
- * "Detalle por Estado" (grid 2x2) — ahora es una sola vista, con la barra
+ * dos pestañas separadas - "Aprobados/Reprobados" (barra + paneles) y
+ * "Detalle por Estado" (grid 2x2) - ahora es una sola vista, con la barra
  * arriba y el grid debajo, compartiendo el mismo selector de plan.
  *
- * FIX (2026-08-07 — "reprobados NO debe sacarse de plan de estudios, debe
+ * FIX (2026-08-07 - "reprobados NO debe sacarse de plan de estudios, debe
  * sacarse de semestres"): el grid de abajo mostraba "Reprobada" contando
- * materia.estado del PLAN (calcularDetallePorEstado) — el estado FINAL de
+ * materia.estado del PLAN (calcularDetallePorEstado) - el estado FINAL de
  * cada materia, así que una materia repetida y luego aprobada perdía su
  * historial de reprobadas. Acá se pisa esa celda con
  * stats.reprobadas.cantidad (mismo número que ya usa el panel de arriba,
- * calculado desde semestres/mm.resultado) — así CADA intento reprobado
+ * calculado desde semestres/mm.resultado) - así CADA intento reprobado
  * cuenta, sin importar si esa materia se terminó aprobando después.
  * "Aprobada"/"Cursando"/"Pendiente" siguen viniendo del Plan, sin cambios
  * (decisión confirmada: esas están bien como están).
@@ -411,7 +438,7 @@ function construirVistaEstadisticas(onCambiar) {
 
     seccionAprobacion.appendChild(barra);
 
-    /* ---------- Detalle a cada lado — 3 líneas separadas (cursos /
+    /* ---------- Detalle a cada lado - 3 líneas separadas (cursos /
        créditos / promedio), sin redundancia con el título del panel ---------- */
     const filaDetalle = document.createElement("div");
     filaDetalle.style.cssText = "display:grid; grid-template-columns:1fr 1fr; gap:10px;";
@@ -493,7 +520,7 @@ function construirVistaEstadisticas(onCambiar) {
     cont.appendChild(grid);
   } else if (stats.totalCursos > 0) {
     // Caso borde: hay cursos cerrados (aprobación ya se mostró arriba) pero
-    // el plan filtrado no tiene materias registradas en absoluto — no hace
+    // el plan filtrado no tiene materias registradas en absoluto - no hace
     // falta otro mensaje vacío redundante.
   } else {
     const vacio = document.createElement("p");
@@ -510,7 +537,7 @@ function construirVistaEstadisticas(onCambiar) {
 
 /**
  * Construye la pestaña completa del dashboard. `onCambiar` es el mismo
- * renderizarSemestres de siempre — cualquier interacción interna
+ * renderizarSemestres de siempre - cualquier interacción interna
  * (expandir/colapsar, cambiar de vista, cambiar filtro de plan) vuelve a
  * llamar a la reconstrucción completa de #seccion-semestres, igual patrón
  * que el resto del archivo semestres.js.
