@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Horario compartido — App Académica</title>
+<title>Horario compartido - App Académica</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/design-system.css">
@@ -11,7 +11,7 @@
 </head>
 <body>
 
-<!-- amigos.html — Horario entre Amigos, Parte 2: vista pública sin sesión.
+<!-- amigos.html - Horario entre Amigos, Parte 2: vista pública sin sesión.
      Standalone a propósito: NO importa nada de js/core ni js/horario de la
      app (ver horario-amigos-publico.js) para no arrastrar el stack de
      auth/sync solo para mostrarle un horario a alguien sin cuenta. -->
@@ -48,14 +48,14 @@
              mi cuenta": position:absolute + translate(-50%,-50%) sobre el
              contenedor relativo de arriba, en vez de un truco con
              margin:auto (que con justify-content:space-between y 3 hijos da
-             resultados impredecibles — un auto-margin en un item anula
+             resultados impredecibles - un auto-margin en un item anula
              space-between para TODA la fila, empujando el botón "Asociar"
              fuera de su lugar). Así el ícono queda en el centro geométrico
              exacto de la fila sin importar cuánto texto tenga el título del
              semestre. El handler de click (toggle sobre
              #amigos-grid-contenedor, mismo patrón que
              btn-horario-pantalla-completa en horario.js) va en
-             horario-amigos-publico.js — pendiente, no subido todavía. -->
+             horario-amigos-publico.js - pendiente, no subido todavía. -->
         <button type="button" id="btn-amigos-pantalla-completa" class="btn-icono-fantasma" style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);" title="Pantalla completa" aria-label="Pantalla completa">⛶</button>
         <button type="button" id="btn-asociar-amigo" class="btn btn-primary" style="font-size:0.85rem;">+ Asociar</button>
       </div>
