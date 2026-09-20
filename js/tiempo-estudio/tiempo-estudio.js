@@ -39,6 +39,7 @@ import { abrirModalRegistroManual, construirListaSesiones } from "./tiempo-estud
 import { construirVistaEstadisticas, construirEstadisticasMateria, calcularMetaDiariaMateria } from "./tiempo-estudio-estadisticas.js";
 import { construirVistaCompetencias } from "./tiempo-estudio-competencias.js";
 import { montarIndicadoresTimer } from "./tiempo-estudio-indicador.js";
+import { construirChipRacha, inicializarRacha, alFusionarDatosRacha } from "./tiempo-estudio-racha-ui.js";
 import { abrirBuscarMateriaEn } from "../ui/buscar-materia.js";
 import {
   cambiarTimerEstudio,
@@ -377,11 +378,20 @@ function construirEncabezado(cont) {
   encabezado.className = "glass-card row-between te-encabezado";
   encabezado.style.cssText = "align-items:center; gap:10px;";
 
+  // Racha de estudio (2026-09-19): chip 🔥 + número pegado a la derecha del
+  // título. Van en su propio grupo por la misma razón que los botones de la
+  // derecha (row-between reparte el espacio entre TODOS sus hijos). A la
+  // izquierda quedan los estados, a la derecha las acciones (＋ y ⚙️).
+  const grupoTitulo = document.createElement("div");
+  grupoTitulo.className = "te-encabezado-titulo-grupo";
+
   const titulo = document.createElement("h2");
   titulo.className = "texto-encabezado-seccion";
   titulo.style.margin = "0";
   titulo.textContent = "Tiempo";
-  encabezado.appendChild(titulo);
+  grupoTitulo.appendChild(titulo);
+  grupoTitulo.appendChild(construirChipRacha());
+  encabezado.appendChild(grupoTitulo);
 
   // Grupo de botones a la derecha. Van en su propio contenedor (y no
   // sueltos como hijos directos del row-between) porque row-between reparte
@@ -927,7 +937,19 @@ function inicializarTiempoEstudio() {
   if (!_hookRepintadoTiempoRegistrado) {
     _hookRepintadoTiempoRegistrado = true;
     registrarHookPostFusion(() => renderizarTiempoEstudio());
+    // Racha: tras cada fusión refresca en silencio su referencia (lo que llega
+    // de otro dispositivo nunca celebra) y hace la revisión única "al abrir"
+    // del día. Va DESPUÉS del repintado para que el chip ya tenga datos nuevos.
+    registrarHookPostFusion(() => alFusionarDatosRacha());
   }
+
+  // Racha de estudio: escucha `te:sesiones-actualizadas` (celebra solo lo
+  // escrito en ESTE dispositivo). El respaldo de abajo cubre a quien abre la
+  // app sin conexión (sin fusión no hay hook): se espera unos segundos para
+  // no revisar con datos viejos antes de que llegue la primera sincronización
+  // y es idempotente — si el hook ya hizo la revisión de hoy, no repite nada.
+  inicializarRacha();
+  setTimeout(() => alFusionarDatosRacha(), 12000);
 
   // Parte 2 (punto 4, salvavidas): se revisa una sola vez al arrancar, no
   // en cuanto se cumplen las 3 horas — si quedó una sesión sin detener por
