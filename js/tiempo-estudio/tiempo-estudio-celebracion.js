@@ -147,7 +147,7 @@ function reproducirAudioSeguro(ruta) {
                      confeti sale en abanico hacia el centro-arriba, en dos
                      tandas (una grande y una chica un instante después);
                   4) el confeti flota y cae; los cañones se retiran solos.
-     derrota  → llovizna lenta azul-grisácea bajo una neblina, que no para.
+     derrota  → lluvia inclinada hacia la izquierda, bajo una neblina, que no para.
 
    Todo se dibuja en UN solo <canvas> que va DETRÁS de la tarjeta (el
    overlay lo agrega antes que la caja): cañones, destello y confeti quedan
@@ -219,38 +219,52 @@ function prepararCanvas(contenedor) {
   return { ctx, tam, quitarResize: () => window.removeEventListener("resize", ajustarTamano) };
 }
 
-/* ---------- Derrota: llovizna lenta y apagada ---------- */
+/* ---------- Derrota: lluvia inclinada ---------- */
 
 /**
- * Gotas azul-grisáceas que caen despacio, con un vaivén leve, bajo una
- * neblina que oscurece un poco la parte de arriba. Todo aparece con un
- * fundido lento (no de golpe) y no termina hasta que se cierra el overlay.
+ * Lluvia de verdad: rayitas azul-grisáceas que caen en diagonal hacia la
+ * IZQUIERDA (como empujadas por el viento), bajo una neblina fría arriba.
  *
- * Antes eran cuadritos grises con una gravedad que se acumulaba: cuanto más
- * tiempo llevaban cayendo, más rápido iban (por eso "se veía apurada"). Acá
- * cada gota cae a UNA velocidad constante y baja (45–95 px/s), y el tiempo es
- * real (dt), así que se ve igual en 60 Hz y en 120 Hz.
+ *   - Dos "distancias" mezcladas: las lejanas son más cortas, lentas y
+ *     tenues; las cercanas más largas, rápidas y nítidas. Eso da profundidad.
+ *   - Velocidad constante por gota (≈290–520 px/s): rápida como lluvia, pero
+ *     sin llegar a ser un chubasco. Ya no hay gravedad acumulativa (antes las
+ *     piezas aceleraban cuanto más caían).
+ *   - La cantidad sigue al tamaño de la pantalla (más pantalla, más gotas).
+ *   - Tiempo real (`dt`): se ve igual en 60 Hz y en 120 Hz.
+ *   - Entra con un fundido de 1,2 s y no termina hasta que se cierra el
+ *     overlay (`detener()` corta el rAF desde afuera).
  */
 function lanzarLluvia(contenedor) {
   const base = prepararCanvas(contenedor);
   if (!base) return { detener() {} };
   const { ctx, tam, quitarResize } = base;
 
-  const FUNDIDO_ENTRADA_MS = 1800;
-  const gotas = [];
-  for (let i = 0; i < 85; i++) {
-    gotas.push({
-      x: Math.random() * tam.ancho,
-      y: Math.random() * (tam.alto + 20) - 20, // repartidas por toda la pantalla; el fundido de entrada evita el golpe
-      vy: 45 + Math.random() * 50,
-      swayFase: Math.random() * Math.PI * 2,
-      swayFreq: 0.5 + Math.random() * 0.7,
-      swayAmp: 5 + Math.random() * 9,
-      ancho: 2.4 + Math.random() * 1.8,
-      alto: 11 + Math.random() * 8,
-      alfa: 0.35 + Math.random() * 0.35,
-    });
+  const INCLINACION = 0.3; // rad (~17°) desde la vertical, cayendo hacia la izquierda
+  const tangente = Math.tan(INCLINACION);
+  const FUNDIDO_ENTRADA_MS = 1200;
+
+  // Las gotas nacen en una franja más ancha que la pantalla hacia la derecha:
+  // como derivan a la izquierda, así la esquina de arriba-derecha no queda vacía.
+  const anchoEmision = () => tam.ancho + tam.alto * tangente + 40;
+  const cantidad = limitar(Math.round((tam.ancho * tam.alto) / 6000), 90, 320);
+
+  function crearGota(alturaInicial) {
+    const z = 0.55 + 0.45 * Math.random(); // 0.55 = lejana · 1 = cercana
+    const vy = 520 * z;
+    return {
+      x: Math.random() * anchoEmision(),
+      y: alturaInicial,
+      vy,
+      vx: -vy * tangente,
+      largo: (18 + Math.random() * 14) * z,
+      grosor: 0.9 + 0.9 * z,
+      alfa: 0.22 + 0.38 * z,
+    };
   }
+
+  const gotas = [];
+  for (let i = 0; i < cantidad; i++) gotas.push(crearGota(Math.random() * (tam.alto + 20) - 20));
 
   const inicio = Date.now();
   let ultimo = inicio;
@@ -262,7 +276,6 @@ function lanzarLluvia(contenedor) {
     const ahora = Date.now();
     const dt = Math.min(0.05, (ahora - ultimo) / 1000);
     ultimo = ahora;
-    const seg = (ahora - inicio) / 1000;
 
     ctx.clearRect(0, 0, tam.ancho, tam.alto);
     ctx.globalAlpha = limitar((ahora - inicio) / FUNDIDO_ENTRADA_MS, 0, 1);
@@ -274,26 +287,21 @@ function lanzarLluvia(contenedor) {
     ctx.fillStyle = velo;
     ctx.fillRect(0, 0, tam.ancho, tam.alto * 0.55);
 
-    gotas.forEach((g) => {
+    ctx.lineCap = "round";
+    gotas.forEach((g, i) => {
+      g.x += g.vx * dt;
       g.y += g.vy * dt;
-      const vaiven = Math.sin(seg * g.swayFreq + g.swayFase);
-      g.x += vaiven * g.swayAmp * dt;
-      // Da la vuelta por arriba: cae sin parar.
-      if (g.y > tam.alto + 20) {
-        g.y = -20 - Math.random() * tam.alto * 0.3;
-        g.x = Math.random() * tam.ancho;
-      }
-      ctx.save();
-      ctx.translate(g.x, g.y);
-      ctx.rotate(vaiven * 0.12); // se inclina apenas con el vaivén
-      ctx.fillStyle = `rgba(125,150,190,${g.alfa})`;
-      // Gota: punta arriba, panza redonda abajo.
+      // Sale por abajo o por la izquierda → vuelve a nacer arriba.
+      if (g.y - g.largo > tam.alto || g.x < -30) gotas[i] = crearGota(-g.largo - Math.random() * 60);
+
+      // La rayita va a lo largo de la dirección de caída: la cola queda arriba a la derecha.
+      const velocidad = Math.hypot(g.vx, g.vy);
+      ctx.strokeStyle = `rgba(150,175,215,${g.alfa})`;
+      ctx.lineWidth = g.grosor;
       ctx.beginPath();
-      ctx.moveTo(0, -g.alto / 2);
-      ctx.bezierCurveTo(g.ancho * 0.9, -g.alto * 0.05, g.ancho * 0.7, g.alto / 2, 0, g.alto / 2);
-      ctx.bezierCurveTo(-g.ancho * 0.7, g.alto / 2, -g.ancho * 0.9, -g.alto * 0.05, 0, -g.alto / 2);
-      ctx.fill();
-      ctx.restore();
+      ctx.moveTo(g.x, g.y);
+      ctx.lineTo(g.x - (g.vx / velocidad) * g.largo, g.y - (g.vy / velocidad) * g.largo);
+      ctx.stroke();
     });
     ctx.globalAlpha = 1;
     rafId = requestAnimationFrame(cuadro);
