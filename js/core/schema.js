@@ -161,7 +161,13 @@ function crearDatosUsuarioNuevo() {
       //  - racha_aviso_inicio_oculto: casilla "No volver a mostrar".
       //  - racha_ultimo_inicio_avisado: ISO ("YYYY-MM-DD") del día en que
       //    empezó la racha que ya se anunció, para no repetir el aviso en
-      //    cada apertura. Viajan por Drive con el resto de `configuracion`.
+      //    cada apertura.
+      // OJO: `configuracion` se funde ENTERA por `_actualizadoEn` (todo o
+      // nada, ver fusionarBloqueUnico en storage-merge.js). Si nada sella
+      // `configuracion`, ambos lados valen 0 y en el empate gana el LOCAL:
+      // estas 2 preferencias (igual que mostrar_tiempo_estudio_en_agenda)
+      // quedan de hecho POR DISPOSITIVO. Costo: el aviso de inicio puede
+      // salir una vez por dispositivo; nada se pierde ni se rompe.
       racha_aviso_inicio_oculto: false,
       racha_ultimo_inicio_avisado: null,
     },
