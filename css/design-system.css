@@ -2877,6 +2877,40 @@ img, svg { max-width: 100%; }
 [data-mode="light"] .agenda-filtro-estado-feriado.active    { color: #047857; }
 [data-mode="light"] .agenda-filtro-estado-clase.active      { color: #9d174d; }
 
+/* ---- Estado "Perdido" de una tarea (2026-09-21) ----
+   Tercer estado explícito junto a completada (ver `perdida` en
+   crearEventoAgenda, schema.js): rojo MUY oscuro (#7f1d1d), a propósito
+   distinto del rojo de "Examen" (#ef4444). La raya del tachado se pinta
+   inline desde JS (#dc2626, COLOR_PERDIDA_RAYA en agenda-utils.js) porque
+   con el oscuro casi no se vería. Sólidos (no
+   translúcidos como el resto de badges) para que se lean igual en modo
+   oscuro y claro. */
+.badge-perdida { background: #7f1d1d; border-color: #7f1d1d; color: #fecaca; }
+.agenda-check-completada.perdida { background: #7f1d1d; border-color: #7f1d1d; }
+.agenda-check-completada.perdida::after {
+  content: "✕";
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: #fecaca; font-size: 11px; font-weight: 700; line-height: 1;
+}
+.agenda-filtro-estado-perdida.active { background: #7f1d1d; border-color: #7f1d1d; color: #fecaca; }
+[data-mode="light"] .agenda-filtro-estado-perdida.active { color: #fecaca; }
+
+/* Ventanita "Completado / Perdido" (agenda-modal.js, se arma por JS al tocar
+   el círculo de una tarea vencida). */
+.agenda-selector-estado-card { max-width: 340px; }
+.agenda-selector-estado-acciones { display: flex; gap: 10px; margin-top: 4px; }
+.agenda-selector-estado-btn {
+  flex: 1; padding: 12px 10px; border-radius: 12px;
+  border: 1px solid transparent; font-weight: 700; font-size: 0.95rem;
+  cursor: pointer; color: #fff;
+  transition: transform var(--transition-fast), filter var(--transition-fast);
+}
+.agenda-selector-estado-btn:hover { filter: brightness(1.1); }
+.agenda-selector-estado-btn:active { transform: scale(0.98); }
+.agenda-selector-estado-btn.completado { background: #3b82f6; }
+.agenda-selector-estado-btn.perdido { background: #7f1d1d; color: #fecaca; }
+
 /* Feature "modo selección" (mantener presionado sobre una tarjeta de Agenda,
    cualquier tipo, activa selección múltiple para borrar varias a la vez) —
    pedido explícito: "se resaltarán como con una luz en el borde en lugar de
