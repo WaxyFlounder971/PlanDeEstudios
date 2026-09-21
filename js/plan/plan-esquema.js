@@ -7,7 +7,7 @@
 
 import { NOMBRES_UNIVERSIDAD_PRESET, PARAMETROS_UNIVERSIDAD_DEFAULT, crearMateria, crearPlanEstudio, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { confirmarUniversidadNoInvertida } from "../ui/componentes.js";
+import { confirmarUniversidadNoInvertida } from "../ui/aviso-universidad.js";
 import { estado } from "../core/storage.js";
 import { abrirModalGestionPlanes, renderizarModoHardcore, renderizarSelectorPlan } from "./plan-gestionar.js";
 import { derivarTiposHorasDeHorasColumnas, importarCSVEnPlan, materiaPareceOptativa, obtenerPalabraOptativa, parsearRequisitoArbol, serializarRequisitoArbol } from "./plan-importacion-csv.js";
@@ -328,9 +328,8 @@ function inicializarModalCrearPlan() {
       }
       // Validación de siglas/nombre invertidos: si las siglas son más largas
       // que el nombre completo, aviso bloqueante de 5 s con opción de
-      // intercambiarlos (ver confirmarUniversidadNoInvertida, componentes.js).
-      // El botón se deshabilita mientras dura el aviso para evitar un doble
-      // guardado.
+      // intercambiarlos (ver ui/aviso-universidad.js). El botón se
+      // deshabilita mientras dura el aviso para evitar un doble guardado.
       const btnConfirmarCrear = document.getElementById("btn-confirmar-crear-plan");
       btnConfirmarCrear.disabled = true;
       let revisada;

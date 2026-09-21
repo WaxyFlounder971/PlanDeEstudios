@@ -8,7 +8,8 @@ import { sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
-import { abrirConfirmacion, confirmarUniversidadNoInvertida } from "../ui/componentes.js";
+import { abrirConfirmacion } from "../ui/componentes.js";
+import { confirmarUniversidadNoInvertida } from "../ui/aviso-universidad.js";
 import { LIMITE_PLANES_ESTUDIO } from "./plan-esquema.js";
 import { exportarPlanACSV, renderizarPlanEstudios } from "./plan-vista-lista.js";
 
@@ -440,9 +441,9 @@ function inicializarModalEditarPlanInfo() {
     }
 
     // Validación de siglas/nombre invertidos (aviso bloqueante de 5 s, ver
-    // confirmarUniversidadNoInvertida en componentes.js). Va DESPUÉS de las
-    // validaciones de campos vacíos para que el aviso solo aparezca cuando
-    // el resto del formulario ya está listo para guardarse.
+    // ui/aviso-universidad.js). Va DESPUÉS de las validaciones de campos
+    // vacíos para que el aviso solo aparezca cuando el resto del
+    // formulario ya está listo para guardarse.
     const btnGuardarInfo = document.getElementById("btn-guardar-editar-plan-info");
     btnGuardarInfo.disabled = true;
     let universidadRevisada;
