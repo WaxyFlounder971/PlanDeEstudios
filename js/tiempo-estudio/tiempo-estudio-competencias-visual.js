@@ -281,14 +281,17 @@ function podioHTML(ordenados, modo, T, yoId) {
     const yo = card && p.id === yoId;
     const dn = dj + (i === 0 ? 0.6 : 0.55);
     const tonos = tonosDeColor(p.color);
-    const vars = `${varsDeColor(tonos)}--cp-dp:${seg(t.ped[i])};--cp-dj:${seg(dj)};--cp-dn:${seg(dn)};--cp-dc:${seg(dj + 0.95)};--cp-ds:${card && i === 0 ? seg(dj + 1) : "0s"}`;
+    // El brillo y las chispas del 1.º solo entran una vez que el podio (pedestal + salto/caída) ya terminó de aparecer.
+    const dg = i === 0 ? seg(dj + (card ? 0.85 : 0.45)) : "0s";
+    const ds = i === 0 ? seg(dj + (card ? 1.3 : 0.6)) : "0s";
+    const vars = `${varsDeColor(tonos)}--cp-dp:${seg(t.ped[i])};--cp-dj:${seg(dj)};--cp-dn:${seg(dn)};--cp-dc:${seg(dj + 0.95)};--cp-dg:${dg};--cp-ds:${ds}`;
+    const brillo = i === 0 ? `<i class="cp-glow"></i>` : "";
     const chispas =
       i === 0
         ? `<i class="cp-sp" style="left:-30px;top:6px;--cp-d:.2s"></i><i class="cp-sp" style="right:-28px;top:26px;--cp-d:1s"></i><i class="cp-sp" style="left:-16px;top:52px;--cp-d:1.7s;width:6px;height:6px"></i><i class="cp-sp" style="right:-12px;top:-4px;--cp-d:2.2s;width:6px;height:6px"></i>`
         : "";
-    const ondas = card && i === 0 ? `<i class="cp-rip" style="--cp-r:${seg(dj + 0.58)}"></i><i class="cp-rip" style="--cp-r:${seg(dj + 0.93)}"></i>` : "";
     return `<div class="cp-pc ${cls}${yo ? " cp-me-halo" : ""}${tonos ? " cp-tinted" : ""}" style="${vars}">
-      ${ondas}
+      ${brillo}
       <span class="cp-avw">${i === 0 ? CORONA : ""}${chispas}${avatarHTML(p)}</span>
       <div class="cp-pn">${esc(p.apodo)}</div>
       <div class="cp-pt">${fmtHoras(p.horas)}</div>

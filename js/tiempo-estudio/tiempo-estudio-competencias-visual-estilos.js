@@ -106,9 +106,10 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-wk.cp-hero{--cp-u:1.14}
   .cp-podium{position:relative;display:grid;grid-template-columns:1fr 1.2fr 1fr;align-items:end;gap:6px;padding:26px 4px 0}
   .cp-comp .cp-podium{padding-top:32px}
-  .cp-wk.cp-hero .cp-podium::before,.cp-comp .cp-podium::before{content:"";position:absolute;left:50%;top:6px;width:80%;height:78%;transform:translateX(-50%);
-    background:radial-gradient(closest-side,rgba(245,185,66,.3),rgba(245,185,66,0));pointer-events:none}
   .cp-pc{position:relative;display:flex;flex-direction:column;align-items:center;min-width:0;text-align:center}
+  .cp-pc.cp-p1 .cp-glow{position:absolute;left:50%;bottom:0;width:130%;height:80%;transform:translateX(-50%);
+    background:radial-gradient(closest-side,var(--cp-uc,var(--cp-gold)),transparent 72%);opacity:0;pointer-events:none;filter:blur(1px);z-index:0}
+  .cp-pc.cp-p1 > *:not(.cp-glow){position:relative;z-index:1}
   .cp-pc .cp-pn{font-weight:800;font-size:13.5px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:9px}
   .cp-pc.cp-p1 .cp-pn{font-size:15px}
   .cp-pc .cp-pt{font-size:12px;font-weight:700;color:var(--cp-muted);font-variant-numeric:tabular-nums;margin:1px 0 9px;white-space:nowrap}
@@ -131,10 +132,8 @@ const CSS_COMPETENCIAS_VISUAL = `
   /* chispas */
   .cp-sp{position:absolute;width:9px;height:9px;background:#ffe28f;clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%);opacity:0}
   .cp-comp .cp-sp{animation:cp-twinkle 2.8s ease-in-out infinite;animation-delay:calc(var(--cp-d,0s) + var(--cp-ds,0s))}
-  .cp-wk.cp-hero.cp-open .cp-sp{animation:cp-twinkle 2.8s ease-in-out infinite;animation-delay:var(--cp-d,0s)}
+  .cp-wk.cp-hero.cp-open .cp-sp{animation:cp-twinkle 2.8s ease-in-out infinite;animation-delay:calc(var(--cp-d,0s) + var(--cp-ds,0s))}
   .cp-wk:not(.cp-hero) .cp-sp{display:none}
-  .cp-rip{position:absolute;left:50%;width:34px;height:34px;margin-left:-17px;bottom:calc(96px*var(--cp-u) - 17px);border-radius:50%;
-    border:3px solid rgba(255,214,110,.95);opacity:0;pointer-events:none}
 
   /* ---------- ANIMACIÓN DE ENTRADA DE LA TARJETA ---------- */
   .cp-comp.cp-anim .cp-c-head{animation:cp-fadeUp .5s ease both}
@@ -149,7 +148,7 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-comp.cp-anim .cp-p2 .cp-avw,.cp-comp.cp-anim .cp-p3 .cp-avw{animation:cp-jump .85s cubic-bezier(.3,.7,.4,1) var(--cp-dj,0s) both}
   .cp-comp.cp-anim .cp-p1 .cp-avw{animation:cp-jumpKing 1.25s cubic-bezier(.3,.6,.4,1) var(--cp-dj,0s) both}
   .cp-comp.cp-anim .cp-pc .cp-pn,.cp-comp.cp-anim .cp-pc .cp-pt{animation:cp-fadeUp .4s ease var(--cp-dn,0s) both}
-  .cp-comp.cp-anim .cp-rip{animation:cp-ripple .9s ease-out var(--cp-r,0s) both}
+  .cp-comp.cp-anim .cp-pc.cp-p1 .cp-glow{animation:cp-glowIn 1s ease var(--cp-dg,0s) both}
   .cp-comp.cp-anim .cp-podium.cp-card{animation:cp-thud .35s ease var(--cp-k1,0s),cp-thud .4s ease var(--cp-k2,0s)}
 
   /* ---------- aviso de resultado ---------- */
@@ -207,7 +206,7 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-sh-head > div:nth-child(2){flex:1;min-width:0}
   .cp-x{width:34px;height:34px;border-radius:50%;border:1px solid var(--cp-line);background:rgba(255,255,255,.06);display:grid;place-items:center;flex:none}
   .cp-x svg{width:14px;height:14px;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;fill:none}
-  .cp-sh-body{overflow-y:auto;padding:4px 14px 18px;display:grid;gap:8px;align-content:start;overscroll-behavior:contain}
+  .cp-sh-body{overflow-y:auto;overflow-x:hidden;padding:4px 14px 18px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px;align-content:start;overscroll-behavior:contain}
   .cp-grp{font-size:12px;font-weight:700;color:var(--cp-muted);padding:10px 6px 2px}
   .cp-grp:first-child{padding-top:2px}
 
@@ -233,6 +232,8 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-wk.cp-open .cp-p1 .cp-ped::after{animation:cp-sheen 1.4s ease-out 1s both}
   .cp-wk.cp-open .cp-pc .cp-avw,.cp-wk.cp-open .cp-pc .cp-pn,.cp-wk.cp-open .cp-pc .cp-pt{animation:cp-drop .55s cubic-bezier(.2,.9,.3,1.2) var(--cp-dj,0s) both}
   .cp-wk.cp-open .cp-p1 .cp-crown{animation:cp-bob 3s ease-in-out 1.4s infinite}
+  .cp-wk.cp-hero.cp-open .cp-pc.cp-p1 .cp-glow{animation:cp-glowIn 1s ease var(--cp-dg,0s) both}
+  .cp-wk:not(.cp-hero) .cp-glow{display:none}
 
   .cp-rest{display:grid;gap:6px;margin-top:12px;padding-top:12px;border-top:1px solid var(--cp-line)}
   .cp-rrow{display:grid;grid-template-columns:26px auto minmax(0,1fr) auto;align-items:center;gap:11px;padding:2px 4px}
@@ -240,15 +241,15 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-rrow .cp-time{font-size:13px;color:var(--cp-muted)}
 
   /* Gestionar */
-  .cp-lk{border-radius:18px;padding:14px;border:1px solid rgba(169,156,255,.35);background:linear-gradient(135deg,rgba(108,92,240,.25),rgba(108,92,240,.06))}
-  .cp-lk-top{display:flex;gap:12px;align-items:center}
+  .cp-lk{min-width:0;border-radius:18px;padding:14px;border:1px solid rgba(169,156,255,.35);background:linear-gradient(135deg,rgba(108,92,240,.25),rgba(108,92,240,.06))}
+  .cp-lk-top{display:flex;gap:12px;align-items:center;min-width:0}
   .cp-lk-ic{width:38px;height:38px;border-radius:12px;background:rgba(169,156,255,.18);display:grid;place-items:center;flex:none}
   .cp-lk-ic svg{width:18px;height:18px;stroke:var(--cp-accent2);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
   .cp-lk-t{font-weight:800;font-size:14.5px}
   .cp-lk-s{font-size:12px;color:var(--cp-muted);margin-top:1px}
-  .cp-lk-row{display:flex;align-items:center;gap:8px;margin-top:12px;padding:6px 6px 6px 12px;border-radius:12px;background:rgba(0,0,0,.28)}
+  .cp-lk-row{display:flex;align-items:center;gap:8px;margin-top:12px;padding:6px 6px 6px 12px;border-radius:12px;background:rgba(0,0,0,.28);min-width:0}
   .cp-lk-row code{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;color:#dcd8ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .cp-lk-copy{border:0;height:32px;padding:0 14px;border-radius:9px;font-weight:800;font-size:12.5px;background:linear-gradient(135deg,#5b4de0,#8f83ff);color:#fff;min-width:84px}
+  .cp-lk-copy{border:0;height:32px;padding:0 14px;border-radius:9px;font-weight:800;font-size:12.5px;background:linear-gradient(135deg,#5b4de0,#8f83ff);color:#fff;min-width:84px;flex:none}
   .cp-ghost-box{margin-top:6px;padding:16px;border-radius:16px;border:1px dashed rgba(255,255,255,.16);font-size:12.5px;color:var(--cp-muted);text-align:center;line-height:1.5}
 
   /* ---------- keyframes ---------- */
@@ -287,7 +288,7 @@ const CSS_COMPETENCIAS_VISUAL = `
     60%{opacity:1;transform:translateX(-50%) translateY(3px) rotate(-6deg) scale(1.12)}
     100%{opacity:1;transform:translateX(-50%) rotate(-9deg)}
   }
-  @keyframes cp-ripple{0%{opacity:.95;transform:scale(.4,.12)}100%{opacity:0;transform:scale(6.5,1.9)}}
+  @keyframes cp-glowIn{from{opacity:0}to{opacity:.4}}
   @keyframes cp-thud{0%,100%{transform:none}25%{transform:translateY(3px)}55%{transform:translateY(-1px)}}
   @keyframes cp-resIn{from{opacity:0;transform:translateY(-16px) scale(.95)}to{opacity:1;transform:none}}
   @keyframes cp-pop{from{opacity:0;transform:scale(0) rotate(-40deg)}to{opacity:1;transform:none}}
@@ -300,7 +301,7 @@ const CSS_COMPETENCIAS_VISUAL = `
 
   @media (prefers-reduced-motion: reduce){
     *,*::before,*::after{animation:none !important;transition:none !important}
-    .cp-sp,.cp-cf,.cp-rip{display:none}
+    .cp-sp,.cp-cf,.cp-glow{display:none}
   }
 
 
