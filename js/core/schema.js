@@ -555,6 +555,12 @@ const SEPARADOR_ID_RECORDATORIO_OFFSET = "::";
  * completada desde el alta). Se deja el campo presente en los 3 tipos (en
  * vez de solo en "tarea") para no tener que ramificar el objeto según tipo
  * en cada lugar que lo lea; simplemente se ignora en "evento"/"examen".
+ * `perdida` (2026-09-21, estado "Perdido"): tercer estado EXPLÍCITO de una
+ * tarea, junto a `completada`. Es una decisión manual de la persona ("ya no
+ * la voy a completar"), nunca se calcula sola. Solo tiene sentido en tipo
+ * "tarea" y es EXCLUSIVA con `completada` (nunca las dos en true a la vez).
+ * Nace siempre en `false`. Una tarea perdida deja de contar como pendiente
+ * y como vencida (ver esTareaVencida/tareaVenceHoy en agenda-utils.js).
  * `esFeriado` (rediseño núcleo Agenda): solo tiene sentido para tipo
  * "evento" (subtipo especial, se pinta distinto — ver design-system.css).
  * Mismo criterio: presente siempre, se ignora fuera de "evento". Si el tipo
@@ -586,6 +592,7 @@ function crearEventoAgenda({ tipo, nombre, fecha, hora, materiaMatriculadaId, se
     semestre_id: vinculada ? semestreId : null,
     notas: notas || "",
     completada: false,
+    perdida: false,
     es_feriado: tipoValido === "evento" ? Boolean(esFeriado) : false,
     google_calendar_event_id: null,
   });
@@ -3257,6 +3264,12 @@ function migrarDatosAntiguos(datos) {
     // crearEventoAgenda) por si algún dato viejo/corrupto trae ambas cosas
     // juntas.
     if (ev.completada === undefined) ev.completada = false;
+    // Estado "Perdido" (2026-09-21): tareas guardadas antes de este campo
+    // arrancan en false (sin migración destructiva). Exclusiva con
+    // `completada` y solo válida en tipo "tarea": si un dato corrupto trae
+    // ambas o un tipo distinto, se descarta `perdida`.
+    if (ev.perdida === undefined) ev.perdida = false;
+    if (ev.perdida && (ev.completada || ev.tipo !== "tarea")) ev.perdida = false;
     if (ev.es_feriado === undefined) ev.es_feriado = false;
     if (ev.tipo !== "evento") ev.es_feriado = false;
     // Calendario Secundario de Google (2026-08-25): eventos creados antes

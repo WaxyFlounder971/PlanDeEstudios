@@ -243,9 +243,11 @@ async function asegurarCalendarioSecundario() {
  *   - El usuario nunca otorgó el scope de Calendar (login viejo, o lo
  *     destildó en el consentimiento).
  *   - El evento no tiene fecha.
- * Si el evento está completado, se elimina su espejo en vez de
- * actualizarlo (mismo criterio que el archivo viejo con
- * cancelarRecordatorioPush).
+ * Si el evento está completado o PERDIDO (2026-09-21, estado "Perdido" de
+ * Agenda), se elimina su espejo en vez de actualizarlo (mismo criterio que
+ * el archivo viejo con cancelarRecordatorioPush): una tarea que la persona
+ * ya no va a hacer no debe seguir avisando en Calendar. Al restaurarla a
+ * pendiente este mismo camino la vuelve a crear (insert/update).
  *
  * Best-effort (Parte B.4): cualquier fallo de red/API queda en
  * console.warn, nunca se propaga — el EventoAgenda ya está guardado en la
@@ -254,7 +256,7 @@ async function asegurarCalendarioSecundario() {
 async function sincronizarEventoCalendario(evento) {
   if (!sincronizacionCalendarActiva()) return;
   if (!tieneScopeCalendarOtorgado()) return;
-  if (evento.completada) return eliminarEventoCalendarizado(evento);
+  if (evento.completada || evento.perdida) return eliminarEventoCalendarizado(evento);
   if (!evento.fecha) return;
 
   try {
@@ -318,7 +320,7 @@ async function eliminarEventoCalendarizado(evento) {
 async function resincronizarTodaLaAgendaConCalendar() {
   const eventos = estado.datos.agenda || [];
   for (const evento of eventos) {
-    if (evento.completada) continue;
+    if (evento.completada || evento.perdida) continue;
     await sincronizarEventoCalendario(evento);
   }
 }
@@ -449,7 +451,7 @@ async function sincronizarResumenDiario() {
  * vacío sin necesidad.
  */
 function generarTextoResumenHoy() {
-  const eventos = (estado.datos.agenda || []).filter((e) => !e.completada && e.fecha);
+  const eventos = (estado.datos.agenda || []).filter((e) => !e.completada && !e.perdida && e.fecha);
   const hoyIso = new Date().toISOString().slice(0, 10);
   const mañanaDate = new Date();
   mañanaDate.setDate(mañanaDate.getDate() + 1);
