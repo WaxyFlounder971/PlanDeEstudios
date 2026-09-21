@@ -19,6 +19,12 @@
        cableados), reutilizado para tareas/exámenes/eventos.
    Tocar cualquier ítem abre la misma tarjeta de solo-info que ya existe en
    Agenda/Horario para ese tipo — no hay edición posible desde acá.
+
+   Fechas (2026-09-21): TODO ítem con fecha en Resumen lleva, justo antes de
+   su tarjeta, una fila con la fecha real anclada a la izquierda y, a la
+   derecha bajo la etiqueta "Faltante", el texto relativo de
+   formatearFechaRelativa (agenda-utils.js — única fuente de esa escala).
+   Va POR ÍTEM: nunca como encabezado de grupo que reemplace la fecha real.
    ========================================================================= */
 
 import { calcularNumeroSemanaSemestre, obtenerEstadoEfectivoSemestre } from "../core/schema.js";
@@ -28,6 +34,7 @@ import { construirSeccionMateriasDia } from "../agenda/agenda-clases.js";
 import {
   esTareaVencida,
   formatearFechaISO,
+  formatearFechaRelativa,
   obtenerCodigoDiaSemana,
   obtenerSemestreActivoAgenda,
   obtenerSemestresSeleccionadosAgenda,
@@ -64,53 +71,74 @@ function construirBloqueSeccion(titulo, contenidoEl) {
   return seccion;
 }
 
+const DIAS_SEMANA_CORTOS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+/** "Lun 15 sep" — fecha real de un ítem, con el año solo si NO es el actual
+ *  ("Lun 15 sep 2027"). Armada a mano (no con Intl) para que el formato sea
+ *  idéntico en cualquier navegador/idioma. Usa fechaLocalDesdeISO
+ *  (horario.js), mismo criterio que el resto de la app, sin desfase de
+ *  timezone. */
+function formatearFechaRealItem(fechaISO) {
+  const f = fechaLocalDesdeISO(fechaISO);
+  if (Number.isNaN(f.getTime())) return String(fechaISO || "");
+  const base = `${DIAS_SEMANA_CORTOS[f.getDay()]} ${f.getDate()} ${MESES_CORTOS[f.getMonth()]}`;
+  return f.getFullYear() === new Date().getFullYear() ? base : `${base} ${f.getFullYear()}`;
+}
+
+/** Fila que va ANTES de la tarjeta de cada ítem: fecha real a la izquierda
+ *  (siempre visible, sin importar qué tan relativa sea) y a la derecha, bajo
+ *  la etiqueta "Faltante", el texto relativo ("Hoy", "Mañana", "En 5 días",
+ *  "Ayer", "Hace 3 días"…). En ítems del pasado (Tareas vencidas) se lee
+ *  "Faltante: Hace N días", literal a la escala pedida. */
+function construirFilaFechaItem(fechaISO) {
+  const fila = document.createElement("div");
+  fila.className = "resumen-fecha-item";
+  fila.style.cssText = "display:flex; justify-content:space-between; align-items:flex-end; gap:12px; padding:0 4px;";
+
+  const real = document.createElement("span");
+  real.className = "resumen-fecha-real";
+  real.style.cssText = "font-size:0.85rem; font-weight:600;";
+  real.textContent = formatearFechaRealItem(fechaISO);
+
+  const faltante = document.createElement("span");
+  faltante.className = "resumen-fecha-faltante";
+  faltante.style.cssText = "display:flex; flex-direction:column; align-items:flex-end; line-height:1.15; text-align:right;";
+
+  const etiqueta = document.createElement("span");
+  etiqueta.className = "muted";
+  etiqueta.style.cssText = "font-size:0.66rem; text-transform:uppercase; letter-spacing:0.05em;";
+  etiqueta.textContent = "Faltante";
+
+  const relativo = document.createElement("span");
+  relativo.className = "muted";
+  relativo.style.cssText = "font-size:0.82rem; white-space:nowrap;";
+  relativo.textContent = formatearFechaRelativa(fechaISO);
+
+  faltante.appendChild(etiqueta);
+  faltante.appendChild(relativo);
+  fila.appendChild(real);
+  fila.appendChild(faltante);
+  return fila;
+}
+
 /** Lista vertical de eventos ya renderizados con construirItemEvento
- *  (agenda.js) — mismo look, mismo checkbox funcional, mismo click-to-info. */
+ *  (agenda.js) — mismo look, mismo checkbox funcional, mismo click-to-info —
+ *  cada uno precedido de su propia fila de fecha (construirFilaFechaItem).
+ *  Es la ÚNICA lista de ítems de Resumen: Exámenes próximos, Tareas de hoy,
+ *  Tareas vencidas, Próximas tareas y Próximo evento pasan todas por acá,
+ *  así ningún bloque puede quedar sin fecha relativa. */
 function construirListaEventos(eventos) {
   const lista = document.createElement("div");
   lista.className = "stack";
-  lista.style.gap = "8px";
-  eventos.forEach((evento) => lista.appendChild(construirItemEvento(evento)));
-  return lista;
-}
-
-/** "Mañana", o "Lun 25 ago" — encabezado chico de fecha para agrupar
- *  ítems de distintos días dentro de una misma sección (ej. "Próximas
- *  tareas"). Usa fechaLocalDesdeISO (horario.js) para parsear, mismo
- *  criterio que el resto de la app, sin desfase de timezone. */
-function formatearEncabezadoDia(fechaISO, hoyISO) {
-  const mananaISO = fechaISOMasDias(fechaLocalDesdeISO(hoyISO), 1);
-  if (fechaISO === mananaISO) return "Mañana";
-  const fecha = fechaLocalDesdeISO(fechaISO);
-  const texto = new Intl.DateTimeFormat("es-CR", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  }).format(fecha);
-  return texto.charAt(0).toUpperCase() + texto.slice(1);
-}
-
-/** Como construirListaEventos, pero intercala un encabezado chico ("Hoy",
- *  "Mañana", "Lun 25 ago"...) cada vez que cambia la fecha entre un ítem y
- *  el siguiente — para secciones como "Próximas tareas" que pueden mezclar
- *  ítems de varios días distintos y conviene saber de cuál es cada uno.
- *  Asume `eventos` ya viene ordenado por fecha (ordenarPorFechaYHora). */
-function construirListaEventosAgrupadaPorFecha(eventos, hoyISO) {
-  const lista = document.createElement("div");
-  lista.className = "stack";
-  lista.style.gap = "8px";
-  let fechaAnterior = null;
+  lista.style.gap = "14px";
   eventos.forEach((evento) => {
-    if (evento.fecha !== fechaAnterior) {
-      const encabezado = document.createElement("p");
-      encabezado.className = "muted resumen-fecha-subencabezado";
-      encabezado.style.cssText =
-        "margin:4px 0 0; font-size:0.78em; text-transform:uppercase; letter-spacing:0.02em;";
-      encabezado.textContent = formatearEncabezadoDia(evento.fecha, hoyISO);
-      lista.appendChild(encabezado);
-      fechaAnterior = evento.fecha;
-    }
-    lista.appendChild(construirItemEvento(evento));
+    const par = document.createElement("div");
+    par.className = "stack resumen-item-con-fecha";
+    par.style.gap = "4px";
+    par.appendChild(construirFilaFechaItem(evento.fecha));
+    par.appendChild(construirItemEvento(evento));
+    lista.appendChild(par);
   });
   return lista;
 }
@@ -241,6 +269,26 @@ function medirAnchoTexto(texto, elementoReferencia) {
   return ctx.measureText(texto).width;
 }
 
+/** Tarjeta compacta "Tareas perdidas  N" — mismo rojo muy oscuro del badge
+ *  "Perdida" de Agenda (badge-perdida, ver design-system.css). */
+function construirTarjetaPerdidas(cantidad) {
+  const tarjeta = document.createElement("section");
+  tarjeta.className = "glass-card resumen-perdidas-tarjeta";
+  tarjeta.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 18px;";
+
+  const texto = document.createElement("span");
+  texto.className = "muted";
+  texto.textContent = cantidad === 1 ? "Tarea perdida" : "Tareas perdidas";
+
+  const badge = document.createElement("span");
+  badge.className = "badge badge-perdida";
+  badge.textContent = String(cantidad);
+
+  tarjeta.appendChild(texto);
+  tarjeta.appendChild(badge);
+  return tarjeta;
+}
+
 function renderizarResumen() {
   const cont = document.getElementById("seccion-resumen");
   if (!cont || !estado.datos) return;
@@ -311,13 +359,12 @@ function renderizarResumen() {
   // fecha === hoy con hora puntual ya pasada. Sin tope de cantidad (a
   // diferencia de "Próximas tareas") porque ocultar vencidas por un límite
   // arbitrario sería contraproducente para el propósito de la sección.
-  // Agrupadas por fecha con el mismo formatearEncabezadoDia que "Próximas
-  // tareas", ya que pueden acumularse vencidas de varios días distintos.
+  // Cada ítem lleva su propia fecha real + "Faltante" (ya no hay encabezado
+  // de grupo por día, que ocultaba la fecha real). Las tareas PERDIDAS no
+  // llegan acá: esTareaVencida ya devuelve false para ellas.
   const tareasVencidas = eventos.filter((ev) => esTareaVencida(ev)).sort(ordenarPorFechaYHora);
   if (tareasVencidas.length > 0) {
-    cont.appendChild(
-      construirBloqueSeccion("Tareas vencidas", construirListaEventosAgrupadaPorFecha(tareasVencidas, hoyISO))
-    );
+    cont.appendChild(construirBloqueSeccion("Tareas vencidas", construirListaEventos(tareasVencidas)));
     huboContenido = true;
   }
 
@@ -328,13 +375,11 @@ function renderizarResumen() {
   // cuenten como una sola bolsa de 3 (pudiendo repetir tareas de hoy acá
   // también), es una condición para sacar.
   const proximasTareas = eventos
-    .filter((ev) => ev.tipo === "tarea" && !ev.completada && ev.fecha > hoyISO)
+    .filter((ev) => ev.tipo === "tarea" && !ev.completada && !ev.perdida && ev.fecha > hoyISO)
     .sort(ordenarPorFechaYHora)
     .slice(0, CANTIDAD_PROXIMAS_TAREAS);
   if (proximasTareas.length > 0) {
-    cont.appendChild(
-      construirBloqueSeccion("Próximas tareas", construirListaEventosAgrupadaPorFecha(proximasTareas, hoyISO))
-    );
+    cont.appendChild(construirBloqueSeccion("Próximas tareas", construirListaEventos(proximasTareas)));
     huboContenido = true;
   }
 
@@ -353,6 +398,17 @@ function renderizarResumen() {
   // dejar la vista en blanco.
   if (!huboContenido) {
     cont.appendChild(construirEstadoVacio());
+  }
+
+  // 7. Tareas perdidas (2026-09-21) — cómo se "reflejan" en Resumen: la app
+  // no tiene ningún porcentaje de cumplimiento, así que solo se muestra el
+  // total de tareas que la persona dio por perdidas en los semestres
+  // seleccionados. Va DESPUÉS del mensaje de "todo tranquilo" y no cuenta
+  // como contenido pendiente (una perdida ya no es una obligación abierta).
+  // Solo aparece si hay al menos una.
+  const cantidadPerdidas = eventos.filter((ev) => ev.tipo === "tarea" && ev.perdida).length;
+  if (cantidadPerdidas > 0) {
+    cont.appendChild(construirTarjetaPerdidas(cantidadPerdidas));
   }
 }
 
