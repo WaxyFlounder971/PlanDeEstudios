@@ -17,7 +17,7 @@
 <body>
 
 <!-- ==================== PANTALLA DE CARGA DE SESIÓN ====================
-     2026-08-19: visible por defecto (antes de que corra cualquier JS) -
+     2026-08-19: visible por defecto (antes de que corra cualquier JS) —
      tapa a #pantalla-login mientras la app todavía no sabe si puede
      restaurar la sesión sola. Antes, en cada carga (incluso con sesión ya
      guardada) se alcanzaba a ver un destello de la tarjeta de login con el
@@ -58,7 +58,7 @@
     <span class="pull-refresh-flecha">↓</span>
   </div>
 
-  <!-- v8.3: overlay de carga reutilizable - 3 puntitos rebotando en cadena
+  <!-- v8.3: overlay de carga reutilizable — 3 puntitos rebotando en cadena
        (efecto "ola"), centrados en pantalla. Se muestra/oculta desde JS con
        mostrarCargando()/ocultarCargando() en cualquier espera de la app
        (sincronizar al deslizar, cargar datos al iniciar sesión, etc.). -->
@@ -72,7 +72,7 @@
        de Estudios está activo. Se muestra/oculta desde plan-modo-edicion.js. -->
   <div id="badge-modo-edicion" class="badge-modo-edicion-fijo oculto" aria-hidden="true">✏️ Modo edición</div>
 
-  <!-- Tiempo de Estudio (Parte 1): indicador persistente de sesión activa -
+  <!-- Tiempo de Estudio (Parte 1): indicador persistente de sesión activa —
        visible en CUALQUIER pantalla mientras hay un timer corriendo, no
        solo dentro de la sección. Contenido y visibilidad los maneja
        tiempo-estudio.js (suscrito al motor de tiempo-estudio-timer.js).
@@ -84,7 +84,7 @@
        Ya no lleva aria-hidden: es un botón real y lo anuncia su aria-label. -->
   <button type="button" id="badge-tiempo-estudio" class="timer-indicador timer-indicador--flotante oculto"></button>
 
-  <!-- Bug 1 (v8): aviso de reconexión - aparece cuando la sesión con Google
+  <!-- Bug 1 (v8): aviso de reconexión — aparece cuando la sesión con Google
        Drive se venció o el refresco automático/silencioso falló. El botón
        "Reconectar" se dispara desde un click real para evitar el bloqueo de
        popups que sí puede afectar al refresco silencioso automático. -->
@@ -105,7 +105,7 @@
     </div>
     <!-- Acceso directo a Enlaces rápidos en móvil (2026-08-07): antes solo se
          llegaba entrando a Ajustes. Mismo estilo "símbolo limpio" sin borde
-         ni fondo que la hamburguesa - ver .btn-topbar-icono en design-system.css. -->
+         ni fondo que la hamburguesa — ver .btn-topbar-icono en design-system.css. -->
     <button id="btn-topbar-enlaces" class="btn-topbar-icono" aria-label="Enlaces rápidos" title="Enlaces rápidos">🔗</button>
   </div>
 
@@ -113,7 +113,7 @@
   <div id="sidebar-overlay" class="sidebar-overlay"></div>
 
   <!-- Drawer de Enlaces rápidos en móvil (2026-08-07): overlay propio,
-       independiente del de arriba - así abrir/cerrar uno no interfiere con
+       independiente del de arriba — así abrir/cerrar uno no interfiere con
        el otro (nunca están abiertos a la vez, ver componentes.js). -->
   <div id="enlaces-movil-overlay" class="sidebar-overlay"></div>
   <aside id="drawer-enlaces-movil" class="glass-panel drawer-enlaces-movil">
@@ -126,7 +126,7 @@
 
   <!-- Botón flotante de Enlaces rápidos (2026-08-26, pedido de Krys):
        visible solo entre 900px y 1499px vía CSS (ver .btn-flotante-enlaces
-       en design-system.css) - rango en el que .enlaces-lateral todavía no
+       en design-system.css) — rango en el que .enlaces-lateral todavía no
        tiene espacio (recién aparece desde 1500px) y el botón de la topbar
        móvil ya está oculto. Abre el MISMO drawer de arriba, no uno nuevo. -->
   <button id="btn-flotante-enlaces" class="btn-flotante-enlaces" aria-label="Enlaces rápidos" title="Enlaces rápidos">🔗</button>
@@ -143,7 +143,7 @@
         <button id="nav-agenda" class="btn btn-secondary btn-block btn-nav" data-seccion="agenda" title="Agenda">📖 <span class="texto-nav">Agenda</span></button>
         <button id="nav-horario" class="btn btn-secondary btn-block btn-nav" data-seccion="horario" title="Horario">🗓️ <span class="texto-nav">Horario</span></button>
         <!-- Tiempo de Estudio (Parte 1): sin gate de existencia (no depende
-             de ninguna clave), siempre visible - mismo criterio que
+             de ninguna clave), siempre visible — mismo criterio que
              Agenda/Horario/Semestres. Entra después de Horario (confirmado
              con Wagner). -->
         <button id="nav-tiempo-estudio" class="btn btn-secondary btn-block btn-nav" data-seccion="tiempo-estudio" title="Tiempo">⏱️ <span class="texto-nav">Tiempo</span></button>
@@ -154,7 +154,7 @@
         <!-- Asistente IA (Gemini), 2026-08-22 (revisado 2026-08-22): el botón
              participa del mismo sistema de navegacion_oculta/navegacion_orden
              que el resto (ver DEFAULT_ORDEN_NAV/SECCIONES_TOGGLEABLES en
-             main.js/config-ajustes.js) - el usuario lo puede ocultar o mover
+             main.js/config-ajustes.js) — el usuario lo puede ocultar o mover
              desde Ajustes > Navegación como a cualquier otra sección. La
              única diferencia real es un gate de EXISTENCIA por encima de eso:
              sin clave de Gemini guardada, el botón (y su fila en Ajustes)
@@ -195,7 +195,7 @@
       <!-- ===================== SECCIÓN: Resumen ===================== -->
       <!-- Contenido construido dinámicamente por js/resumen/resumen.js.
            Vista de solo lectura: semana actual, clases de hoy, tareas de
-           hoy, próximas tareas, exámenes próximos y próximo evento - todo
+           hoy, próximas tareas, exámenes próximos y próximo evento — todo
            reutilizado de Agenda/Horario/Semestres, sin modelo de datos
            propio. -->
       <div id="seccion-resumen" class="stack oculto"></div>
@@ -204,7 +204,7 @@
       <!-- Contenido construido dinámicamente por js/asistente/asistente.js.
            Mismo patrón que seccion-resumen: div vacío, todo el DOM lo arma
            el JS. Solo es alcanzable si nav-asistente está visible (hay
-           clave de Gemini guardada) - ver mostrarSeccion()/
+           clave de Gemini guardada) — ver mostrarSeccion()/
            aplicarVisibilidadBotonAsistente() en main.js. -->
       <div id="seccion-asistente" class="stack oculto"></div>
 
@@ -238,7 +238,7 @@
         </section>
 
         <!-- Asistente IA (Gemini), 2026-08-22: la clave se guarda en
-             estado.datos.configuracion.gemini_api_key - mismo nivel de
+             estado.datos.configuracion.gemini_api_key — mismo nivel de
              confianza que cualquier otro dato del usuario, sincroniza por
              Drive como todo lo demás (ver inicializarAsistenteAjustes en
              config-ajustes.js). -->
@@ -285,15 +285,15 @@
           <div class="ajuste-seccion-cuerpo">
 
           <!-- Sincronización con Google Calendar (2026-08-25, reemplaza a
-               Web Push) - ver core/notificaciones-calendario.js. Switch
+               Web Push) — ver core/notificaciones-calendario.js. Switch
                general: apagarlo borra de Calendar TODO lo de acá abajo
                (eventos espejados + el evento recurrente del resumen
                diario). El Worker de Cloudflare (worker-notificaciones-
-               agenda/, proyecto aparte) ya NO participa de nada de esto -
+               agenda/, proyecto aparte) ya NO participa de nada de esto —
                solo sigue vivo para /oauth/exchange y /oauth/refresh.
                A diferencia del viejo switch, este NO depende de que el
                navegador soporte notificaciones push (se eliminó el aviso
-               "Tu navegador no soporta notificaciones push" - Calendar usa
+               "Tu navegador no soporta notificaciones push" — Calendar usa
                la alarma nativa del propio calendario del sistema, no la
                API de Notification del navegador). -->
           <div class="row-between">
@@ -307,10 +307,10 @@
           <!-- Recordatorios configurables por tipo (2026-08-20): un
                conjunto de chips (selección múltiple, ver
                construirSelectorChipsMultiple en ui/componentes.js) por
-               cada tipo de evento de Agenda. Contenedor vacío - se llena
+               cada tipo de evento de Agenda. Contenedor vacío — se llena
                dinámicamente en config-ajustes.js (uno por tipo, en el
                orden tarea/examen/evento/feriado). Solo tiene sentido con
-               el switch de arriba activo - config-ajustes.js lo
+               el switch de arriba activo — config-ajustes.js lo
                deshabilita/atenúa visualmente si está apagado, mismo
                criterio que el resto de bloques dependientes de un switch
                en esta pantalla. -->
@@ -319,7 +319,7 @@
           <!-- Resumen diario (2026-08-20; 2026-08-25 pasa a ser UN solo
                evento recurrente en el calendario secundario de Google, ver
                sincronizarResumenDiario en core/notificaciones-calendario.js
-               - antes era un aviso condicional del Worker). El selector de
+               — antes era un aviso condicional del Worker). El selector de
                hora reutiliza el mismo patrón de "select-custom" que ya
                arma construirSelectCustomAjustes para el rango de horas de
                Horario (contenedor vacío, se llena en config-ajustes.js). -->
@@ -371,9 +371,9 @@
           </div>
         </section>
 
-        <!-- Ronda de ajustes visuales - punto 3: la sección "Agenda" que vivía
+        <!-- Ronda de ajustes visuales — punto 3: la sección "Agenda" que vivía
              acá (mostrar días sin eventos ni tareas / mostrar clases ese día)
-             se sacó de Ajustes global - ahora vive únicamente en el modal de
+             se sacó de Ajustes global — ahora vive únicamente en el modal de
              Ajustes de Agenda (#modal-agenda-ajustes), accesible solo desde
              el engranaje del header de Agenda. Ver agenda.js
              (inicializarFiltrosAgenda) y config-ajustes.js. -->
@@ -414,22 +414,22 @@
             </div>
           </div>
 
-          <!-- Horario entre Amigos - Parte 1: enlaces que compartiste
-               (obligatorio #4 del prompt - historial completo, no solo el
+          <!-- Horario entre Amigos — Parte 1: enlaces que compartiste
+               (obligatorio #4 del prompt — historial completo, no solo el
                más reciente). Se llega acá también con un atajo desde el
                panel "Amigos" en Horario (ver desplazarYResaltarElemento en
-               horario-amigos.js) - id y clases de colapso sin tocar,
+               horario-amigos.js) — id y clases de colapso sin tocar,
                #closest(".ajuste-seccion") encuentra esta sub-sección
                (la más cercana) sin importar que ahora esté anidada dentro
                de la sección Horario en vez de ser un card aparte. Unificado
-               acá dentro (2026-08-23, pedido explícito) - ya no es su
+               acá dentro (2026-08-23, pedido explícito) — ya no es su
                propio glass-card para no duplicar el panel de vidrio dentro
                de otro; el borde superior (.ajuste-subseccion) marca la
                separación en su lugar. -->
           <div class="ajuste-subseccion stack ajuste-seccion colapsada" id="ajuste-seccion-horario-enlaces">
             <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion" style="font-size:16px;">Horario compartido</h2><span class="ajuste-seccion-chevron">▾</span></button>
             <div class="ajuste-seccion-cuerpo">
-            <p class="muted" style="font-size:0.82rem; margin:2px 0 6px;">Enlaces de tu horario que compartiste alguna vez - revisá cuáles siguen activos y revocá cualquiera cuando quieras.</p>
+            <p class="muted" style="font-size:0.82rem; margin:2px 0 6px;">Enlaces de tu horario que compartiste alguna vez — revisá cuáles siguen activos y revocá cualquiera cuando quieras.</p>
             <div id="lista-horario-enlaces-compartidos" class="stack" style="gap:8px;"></div>
             </div>
           </div>
@@ -469,19 +469,19 @@
           <div id="seccion-datos-respaldo" class="stack"></div>
 
           <!-- Liberar espacio: borrar en lote los archivos/enlaces adjuntos
-               (Cronograma de materia y/o tareas) de un semestre puntual -
+               (Cronograma de materia y/o tareas) de un semestre puntual —
                ver storage-adjuntos.js. Solo se muestra si hay algo que
                borrar (ver hayAdjuntosGuardados en renderizarSeccionLiberarEspacio). -->
           <div id="seccion-liberar-espacio" class="stack oculto" style="gap:8px; margin-top:4px;"></div>
           </div>
         </section>
 
-        <!-- Créditos - tarjeta colapsable, mismo patrón .ajuste-seccion que
+        <!-- Créditos — tarjeta colapsable, mismo patrón .ajuste-seccion que
              el resto de Ajustes (cabecera-botón + chevron, colapsada por
              default), ubicada justo después de "Datos". Estilo "créditos de
              película" dentro del cuerpo: centrado, etiqueta chica y nombre
              grande. Contenido 100% estático, no depende de estado.datos, así
-             que no requiere JS para pintarse - solo el toggle del acordeón,
+             que no requiere JS para pintarse — solo el toggle del acordeón,
              que ya delega en inicializarAccordionAjustes() (config-ajustes.js)
              sobre #seccion-configuracion. El botón de feedback es un mailto:
              directo, sin backend propio. -->
@@ -521,12 +521,12 @@
           </div>
         </section>
 
-        <!-- Número de versión - SOLO texto informativo, fuera de cualquier
+        <!-- Número de versión — SOLO texto informativo, fuera de cualquier
              tarjeta, centrado, al final del todo de Configuración. Arranca
              vacío a propósito: main.js le pide la versión al Service
              Worker apenas carga la página y la escribe acá (ver
              GET_VERSION en main.js / service-worker.js). Para cambiar de
-             versión NO se toca este archivo - se edita la constante
+             versión NO se toca este archivo — se edita la constante
              VERSION en service-worker.js, nada más. -->
         <p id="pie-version" class="muted" style="text-align:center; font-size:0.75rem; margin:20px 0 4px;"></p>
 
@@ -555,7 +555,7 @@
            modal de alta/edición (más abajo, junto al resto de modales fijos
            del HTML). -->
       <div id="seccion-agenda" class="stack oculto">
-        <!-- Ronda de ajustes visuales #2 - punto A: Lista/Calendario sale del
+        <!-- Ronda de ajustes visuales #2 — punto A: Lista/Calendario sale del
              panel de encabezado y pasa a ser el primer elemento de la
              sección, arriba de todo (antes vivía adentro de #agenda-header,
              compitiendo visualmente con el nombre del semestre). -->
@@ -565,14 +565,14 @@
           <button type="button" class="pill-item" data-vista="materia">Cronograma</button>
         </div>
 
-        <!-- Ronda de ajustes visuales #3 - punto A: encabezado a 3 líneas
+        <!-- Ronda de ajustes visuales #3 — punto A: encabezado a 3 líneas
              bien aprovechadas. Línea 1: nombre(s) del/los semestre(s),
-             centrado, tocable (abre #modal-agenda-semestres - idea "varios
+             centrado, tocable (abre #modal-agenda-semestres — idea "varios
              semestres a la vez": ya no es un popover de lista simple, ver
              agenda.js). Líneas 2-3: una sola fila (row-between) con Agregar
              ("+", ahora solo ícono) y Ajustes (⚙️, sin cambios) a los
              costados, flanqueando #agenda-subheader-dinamico en el centro
-             - ese bloque central ocupa esas mismas 2 líneas (Semana N
+             — ese bloque central ocupa esas mismas 2 líneas (Semana N
              arriba, rango+Hoy abajo; ver construirSubheaderSemanal en
              agenda.js), y los botones de los costados quedan centrados
              verticalmente contra esa altura, no apilados aparte como
@@ -593,7 +593,7 @@
 
         <div id="agenda-vista-calendario" class="stack oculto"></div>
 
-        <!-- Pedido nuevo: 3er tab "Materia" - selector (mismo patrón
+        <!-- Pedido nuevo: 3er tab "Materia" — selector (mismo patrón
              .select-custom que el resto de la app) + vista semana-a-semana
              de lo pendiente de la materia elegida. Construido 100%
              dinámico por agenda-materia.js, mismo criterio que
@@ -637,7 +637,7 @@
       <!-- ===================== SECCIÓN: Tiempo de Estudio (Parte 1) ===================== -->
       <!-- Contenido construido 100% dinámicamente por
            js/tiempo-estudio/tiempo-estudio.js (mismo criterio que
-           #seccion-semestres/#seccion-comunidad) - tarjetas por materia,
+           #seccion-semestres/#seccion-comunidad) — tarjetas por materia,
            pantalla de detalle con timer, y su modal de configuración
            (js/tiempo-estudio/tiempo-estudio-config.js) se inyectan todos
            desde JS, sin markup fijo acá. -->
@@ -769,7 +769,7 @@
     </div>
 
     <!-- v1.12: el bloque de "Tipos de horas personalizados"/"No aplica" que
-         vivía acá se eliminó - tipos_horas ahora se detecta automáticamente
+         vivía acá se eliminó — tipos_horas ahora se detecta automáticamente
          desde HORAS_COLUMNAS al importar (ver PARTE B/C del rediseño de
          requisitos), en vez de preguntársele al usuario por adelantado. -->
 
@@ -811,7 +811,7 @@
 <!-- ===================== MODAL: Requisito / Correquisito (detalle unificado, v8 punto 2) ===================== -->
 <div id="modal-requisito" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
-    <!-- v1.11: Línea 1 (Bloque·Código + Categoría, en una sola fila) - va
+    <!-- v1.11: Línea 1 (Bloque·Código + Categoría, en una sola fila) — va
          ANTES del título/Nombre. Contenedor vacío, se llena dinámicamente
          en plan-detalle.js (construirLinea1Materia). -->
     <div id="requisito-linea1"></div>
@@ -874,7 +874,7 @@
 <div id="modal-gestion-planes" class="modal-overlay oculto">
   <div class="glass-card modal-card modal-card-ancha stack">
     <h2 style="margin:0;">Gestionar Planes de Estudio</h2>
-    <p class="muted">Arrastra para reordenar - el primero es tu plan favorito/principal.</p>
+    <p class="muted">Arrastra para reordenar — el primero es tu plan favorito/principal.</p>
     <div id="lista-gestion-planes" class="stack"></div>
     <p id="aviso-limite-planes" class="muted oculto">Límite de 3 planes alcanzado.</p>
     <button id="btn-agregar-plan-gestion" class="btn btn-primary btn-block">+ Nuevo Plan</button>
@@ -888,7 +888,7 @@
     </div>
 
 
-    <!-- Semestres y Notas - Fase 1: Hardcore pasó de 2 a hasta 3 planes
+    <!-- Semestres y Notas — Fase 1: Hardcore pasó de 2 a hasta 3 planes
          simultáneos (principal + secundario + terciario). -->
     <p class="muted">Para quienes llevan varias carreras a la vez: activa hasta 2 Planes de Estudio más en paralelo. Al desactivarlo no se borra nada, solo se deja de combinar.</p>
     <div id="bloque-plan-secundario" class="oculto">
@@ -953,7 +953,7 @@
     <p id="error-modal-materia-manual" class="muted oculto" style="color:var(--color-danger);"></p>
 
     <div class="row-between">
-      <!-- v1.12: solo visible en modo edición (ver abrirModalMateriaManual) - al "+ Añadir materia" no hay nada que borrar todavía. -->
+      <!-- v1.12: solo visible en modo edición (ver abrirModalMateriaManual) — al "+ Añadir materia" no hay nada que borrar todavía. -->
       <button id="btn-borrar-materia-manual" class="btn btn-danger oculto">Borrar materia</button>
       <div class="row" style="justify-content:flex-end;">
         <button id="btn-cancelar-materia-manual" class="btn btn-secondary">Cancelar</button>
@@ -1015,7 +1015,7 @@
 
     <!-- v1.14.1: parámetros académicos del plan (antes solo se fijaban una
          vez al crearlo, sin forma de corregirlos después). NO incluye los
-         tipos de horas (Teoría/Práctica/etc.) - cambiar eso con materias ya
+         tipos de horas (Teoría/Práctica/etc.) — cambiar eso con materias ya
          guardadas rompería las llaves de materia.horas existentes; si hace
          falta, es un flujo aparte con su propia migración. -->
     <div class="row" style="flex-wrap:wrap;">
@@ -1049,7 +1049,7 @@
 </div>
 
 <!-- ===================== MODAL: Completar universidades (2026-08-22) =====================
-     Bloqueante - sin botón cancelar, sin click-afuera, sin Esc. Aparece al
+     Bloqueante — sin botón cancelar, sin click-afuera, sin Esc. Aparece al
      arrancar la app (ver revisarUniversidadesIncompletas en main.js) si
      algún plan quedó con `universidad.siglas === ""` tras la migración de
      universidad de string plano a {nombre_completo, siglas} (ver
@@ -1059,7 +1059,7 @@
 <div id="modal-completar-universidades" class="modal-overlay oculto">
   <div class="glass-card modal-card stack" style="position:relative; z-index:1;">
     <h2 style="margin:0;">Completá tus universidades</h2>
-    <p class="muted">Separamos "universidad" en nombre completo y siglas para mostrar badges más cortos. Completá las siglas que falten antes de seguir - esto no se puede posponer.</p>
+    <p class="muted">Separamos "universidad" en nombre completo y siglas para mostrar badges más cortos. Completá las siglas que falten antes de seguir — esto no se puede posponer.</p>
     <div id="lista-completar-universidades" class="stack"></div>
     <div class="row" style="justify-content:flex-end;">
       <button id="btn-guardar-completar-universidades" class="btn btn-primary" disabled>Guardar</button>
@@ -1067,14 +1067,14 @@
   </div>
 </div>
 
-<!-- Falta permiso de Calendar (2026-08-26) - modal BLOQUEANTE, mismo
+<!-- Falta permiso de Calendar (2026-08-26) — modal BLOQUEANTE, mismo
      patrón exacto que modal-completar-universidades de arriba: sin "X"
      (ver exclusión en inicializarBotonesCerrarModal, ui/componentes.js),
      sin click-afuera (ese listener nunca se registra para este modal,
      ver avisarFaltaPermisoCalendar en core/notificaciones-calendario.js),
      un solo botón de acción. Aparece cuando una cuenta que inició sesión
      ANTES de la migración a Calendar (o que destildó ese permiso en el
-     consentimiento) intenta activar la sincronización - no hay forma de
+     consentimiento) intenta activar la sincronización — no hay forma de
      pedir el scope adicional sin un login completo, así que la única
      salida es cerrar sesión y volver a entrar aceptando el permiso. -->
 <div id="modal-permiso-calendario" class="modal-overlay oculto">
@@ -1109,7 +1109,7 @@
   </div>
 </div>
 
-<!-- ===================== MODAL: Agenda - alta/edición ===================== -->
+<!-- ===================== MODAL: Agenda — alta/edición ===================== -->
 <div id="modal-agenda-evento" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
     <h2 id="titulo-modal-agenda-evento" style="margin:0;">Agregar a Agenda</h2>
@@ -1120,14 +1120,14 @@
       <button type="button" class="pill-item" data-valor="evento">Evento</button>
     </div>
 
-    <!-- Ronda de ajustes visuales #6 - foco 100% en que "Es feriado" NUNCA
+    <!-- Ronda de ajustes visuales #6 — foco 100% en que "Es feriado" NUNCA
          se corte: se probaron 3 técnicas de animación (display:none
          instantáneo -> max-height fijo animado -> CSS Grid 0fr/1fr
-         animado) y las 3 terminaron cortando el switch en algún momento -
+         animado) y las 3 terminaron cortando el switch en algún momento —
          la de Grid incluso lo cortaba VISIBLEMENTE a media animación. El
          denominador común de las 3 es que TODAS animan un tamaño que
          cambia con el layout dentro de un contenedor con overflow-y:auto
-         (#modal-body más abajo/.modal-card) - ese es exactamente el
+         (#modal-body más abajo/.modal-card) — ese es exactamente el
          combo donde WebKit/iOS tiene bugs de repintado conocidos. La
          única forma de garantizar 100% que nunca se corte es sacar la
          animación de tamaño de la ecuación por completo: esta fila
@@ -1171,13 +1171,13 @@
 
     <div>
       <label class="form-label" for="btn-agenda-materia-boton">Materia vinculada (opcional)</label>
-      <!-- Ronda de ajustes visuales #4 - reemplaza el <select> nativo por
+      <!-- Ronda de ajustes visuales #4 — reemplaza el <select> nativo por
            el dropdown propio del proyecto (.select-custom, ver
-           design-system.css - mismo patrón que "Escala de notas" en
+           design-system.css — mismo patrón que "Escala de notas" en
            config-ajustes.js): el popup nativo de <option> ignora el CSS de
            la app en varios navegadores/SO (queda blanco con texto blanco),
            porque ese popup lo pinta el sistema operativo, no el navegador.
-           El <select> real sigue existiendo pero oculto - es la única
+           El <select> real sigue existiendo pero oculto — es la única
            fuente de verdad del valor (guardarEventoAgenda sigue leyendo
            select.value sin cambios); el botón+lista de acá es 100% la
            parte visible, sincronizada a mano en agenda-modal.js. -->
@@ -1195,11 +1195,11 @@
       <textarea id="input-agenda-notas" class="form-textarea" rows="3"></textarea>
     </div>
 
-    <!-- Adjuntar archivos/imágenes/enlaces a este evento/tarea - mismo
+    <!-- Adjuntar archivos/imágenes/enlaces a este evento/tarea — mismo
          sistema unificado que Cronograma (Drive del usuario, ver
          core/storage-adjuntos.js + ui/adjuntos-ui.js), ya no base64. Un
          evento nuevo (sin id todavía) usa un id "pendiente" generado al
-         abrir el modal - ver comentario en agenda-modal.js. -->
+         abrir el modal — ver comentario en agenda-modal.js. -->
     <div>
       <div class="row-between" style="align-items:center;">
         <label class="form-label" style="margin:0;">Adjuntos</label>
@@ -1221,15 +1221,15 @@
   </div>
 </div>
 
-<!-- Rediseño núcleo Agenda - punto 10: Filtros de sesión (Semanal/Todo,
+<!-- Rediseño núcleo Agenda — punto 10: Filtros de sesión (Semanal/Todo,
      Mostrar materias). Ambos controles aplican al toque, sin botón
-     "Aplicar" separado - ver inicializarFiltrosAgenda en agenda.js. -->
-<!-- Ronda de ajustes visuales - punto 3: único modal de ajustes de Agenda,
+     "Aplicar" separado — ver inicializarFiltrosAgenda en agenda.js. -->
+<!-- Ronda de ajustes visuales — punto 3: único modal de ajustes de Agenda,
      accesible solo desde el engranaje del header (#btn-agenda-ajustes).
      Combina los 2 controles de SESIÓN que antes vivían acá (modo Semanal/
      Todo, mostrar materias) con los 2 controles PERSISTENTES que antes
      vivían sueltos en Ajustes → Agenda (mostrar clases ese día, mostrar
-     días sin eventos ni tareas) - esa sección ya no existe en Ajustes
+     días sin eventos ni tareas) — esa sección ya no existe en Ajustes
      global, ver config-ajustes.js. -->
 <div id="modal-agenda-ajustes" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
@@ -1252,12 +1252,12 @@
       </label>
     </div>
 
-    <!-- Ronda de ajustes visuales #2 - punto D: se quita "Mostrar clases ese
-         día" (agenda_mostrar_clases) - pedido explícito, no tenía un
+    <!-- Ronda de ajustes visuales #2 — punto D: se quita "Mostrar clases ese
+         día" (agenda_mostrar_clases) — pedido explícito, no tenía un
          propósito claro para la persona usuaria. El campo de configuracion
          sigue existiendo en el schema (por compatibilidad con datos viejos)
          pero ya no hay UI para tocarlo, así que efectivamente queda fijo en
-         su comportamiento default (mostrar) - ver agenda.js. -->
+         su comportamiento default (mostrar) — ver agenda.js. -->
 
     <div class="row-between">
       <span>Mostrar días sin eventos ni tareas</span>
@@ -1283,7 +1283,7 @@
     </div>
 
     <!-- Pedido nuevo: qué mostrar en la columna derecha de un pendiente
-         cuando "vence hoy" - 2 switches INDEPENDIENTES (ya no un grupo de
+         cuando "vence hoy" — 2 switches INDEPENDIENTES (ya no un grupo de
          radio con "Ambos"), ambos default ON. Con los 2 activos se ve la
          hora y el tiempo restante juntos (antes era el modo "ambos"); se
          puede apagar cualquiera de los 2 por separado, incluso los 2 a la
@@ -1311,12 +1311,12 @@
 </div>
 
 <!-- Idea "varios semestres a la vez": modal con tarjetas multi-selección
-     (reemplaza al popover de lista simple que había antes) - permite tener
+     (reemplaza al popover de lista simple que había antes) — permite tener
      VARIOS semestres activos en la Agenda al mismo tiempo (eventos y
      materias de todos los seleccionados se muestran juntos, unidos). Tocar
      el nombre del semestre en el header de Agenda (#agenda-nombre-semestre)
      abre esto. Cada tarjeta es un botón toggle (aplica al toque, sin botón
-     "Aplicar" - mismo patrón instant-apply que el resto de Agenda) - ver
+     "Aplicar" — mismo patrón instant-apply que el resto de Agenda) — ver
      poblarModalSemestresAgenda/alternarSeleccionSemestreAgenda en
      agenda.js. Por default vienen marcados los semestres "actuales" (o el
      más reciente si no hay ninguno marcado como actual); si la persona los
@@ -1325,14 +1325,14 @@
 <div id="modal-agenda-semestres" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
     <h2 style="margin:0;">Semestres en Agenda</h2>
-    <p class="muted" style="font-size:0.82rem; margin:-6px 0 4px;">Elegí uno o varios - los eventos y materias de todos los que marques se muestran juntos.</p>
+    <p class="muted" style="font-size:0.82rem; margin:-6px 0 4px;">Elegí uno o varios — los eventos y materias de todos los que marques se muestran juntos.</p>
     <div id="agenda-semestres-tarjetas" class="stack" style="gap:8px;"></div>
   </div>
 </div>
 
-<!-- Rediseño núcleo Agenda - punto 11: tarjeta de info al tocar una tarea/
+<!-- Rediseño núcleo Agenda — punto 11: tarjeta de info al tocar una tarea/
      examen/evento (en vez del editor directo). "Editar" es el único camino
-     hacia modal-agenda-evento para un evento ya existente - ver
+     hacia modal-agenda-evento para un evento ya existente — ver
      agenda-modal.js. -->
 <div id="modal-agenda-info" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
@@ -1379,7 +1379,7 @@
   </div>
 </div>
 
-<!-- ===================== MODAL: Horario entre Amigos - panel principal (botón "Amigos" del header de Horario) ===================== -->
+<!-- ===================== MODAL: Horario entre Amigos — panel principal (botón "Amigos" del header de Horario) ===================== -->
 <div id="modal-panel-amigos" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
     <h2 style="margin:0;">👥 Horario entre Amigos</h2>
@@ -1396,7 +1396,7 @@
   </div>
 </div>
 
-<!-- ===================== MODAL: Horario entre Amigos - aviso de privacidad obligatorio ===================== -->
+<!-- ===================== MODAL: Horario entre Amigos — aviso de privacidad obligatorio ===================== -->
 <div id="modal-aviso-privacidad-horario" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
     <h2 style="margin:0;">⚠️ Antes de compartir tu horario</h2>
@@ -1415,7 +1415,7 @@
   </div>
 </div>
 
-<!-- ===================== MODAL: Horario entre Amigos - enlace ya generado ===================== -->
+<!-- ===================== MODAL: Horario entre Amigos — enlace ya generado ===================== -->
 <div id="modal-enlace-horario-generado" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
     <h2 style="margin:0;">✓ Enlace generado</h2>
@@ -1431,7 +1431,7 @@
   </div>
 </div>
 
-<!-- ===================== MODAL: Horario entre Amigos - confirmar asociar (Parte 3) ===================== -->
+<!-- ===================== MODAL: Horario entre Amigos — confirmar asociar (Parte 3) ===================== -->
 <!-- Se abre desde procesarAsociacionPendienteDeAmigo() (horario-amigos.js), tras
      volver de amigos.html con un pendiente en localStorage. -->
 <div id="modal-confirmar-asociar-amigo" class="modal-overlay oculto">
@@ -1453,7 +1453,7 @@
 <div id="modal-capturas-pdf" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
     <h2 style="margin:0;">Convertir capturas a PDF</h2>
-    <p class="muted">Sube todas las imágenes que muestren tu plan de estudios - el orden en que las selecciones será el orden de las páginas del PDF.</p>
+    <p class="muted">Sube todas las imágenes que muestren tu plan de estudios — el orden en que las selecciones será el orden de las páginas del PDF.</p>
     <input type="file" id="input-capturas-pdf" accept="image/*" multiple class="form-input">
     <p id="error-modal-capturas-pdf" class="muted oculto" style="color:var(--color-danger);"></p>
     <div class="row" style="justify-content:flex-end;">
@@ -1466,18 +1466,18 @@
 <style>
 .oculto { display: none !important; }
 
-/* v1.12.14: pills "Bloques ▲▼" / "Materias ▲▼" del buscador - en PC se ven
+/* v1.12.14: pills "Bloques ▲▼" / "Materias ▲▼" del buscador — en PC se ven
    completas de siempre (no cambia nada ahí, hay espacio de sobra).
    v1.12.13 usaba 2 media queries con breakpoints fijos (480px / 360px) y en
    la práctica se superponían en celulares angostos comunes (~360px de
    ancho), disparando las dos reglas A LA VEZ y rompiendo el orden (Materias
    se apilaba encima de Bloques en vez de quedar a su derecha). Se reemplaza
-   por un wrap NATURAL de flexbox (flex-basis con crecimiento) - sin ningún
+   por un wrap NATURAL de flexbox (flex-basis con crecimiento) — sin ningún
    breakpoint fijo: cada .pill-group (Bloques / Materias) pide un mínimo
    razonable y crece para repartirse el ancho; si ambos entran en la fila,
    quedan lado a lado (Bloques primero, Materias a su derecha); si no entran
    ambos, el navegador solo pasa a Materias a la fila siguiente, y como ahí
-   queda solo, su flex-grow lo estira a ocupar todo el ancho disponible -
+   queda solo, su flex-grow lo estira a ocupar todo el ancho disponible —
    esto se ajusta solo a CUALQUIER ancho real de pantalla, sin adivinar un
    pixel exacto de corte. La palabra ("Bloques"/"Materias") se esconde por
    separado en pantallas angostas para dejarle más margen a que quepan
