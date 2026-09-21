@@ -21,15 +21,20 @@ import { renderizarCalendarioAgenda } from "./agenda-calendario.js";
 import { inicializarMateriaAgenda, renderizarMateriaAgenda } from "./agenda-materia.js";
 import { construirSeccionMateriasDia, calcularNumeroSemanaParaFecha } from "./agenda-clases.js";
 import { obtenerEstudioParaHoy, irADetalleMateriaTiempoEstudio, formatearHorasMin } from "../tiempo-estudio/tiempo-estudio.js";
-import { abrirModalEventoAgenda, abrirTarjetaInfoEventoAgenda, inicializarModalAgendaEvento } from "./agenda-modal.js";
-// Sincronización con Google Calendar (2026-08-25, reemplaza Web Push): al
-// completar/des-completar desde el checkbox de la lista hay que espejar la
-// misma sincronización que ya maneja agenda-modal.js
-// (sincronizarEventoCalendario elimina el espejo si queda completada, o lo
-// recrea/actualiza si vuelve a quedar pendiente) — ver
-// core/notificaciones-calendario.js.
-import { eliminarEventoCalendarizado, sincronizarEventoCalendario } from "../core/notificaciones-calendario.js";
 import {
+  abrirModalEventoAgenda,
+  abrirTarjetaInfoEventoAgenda,
+  inicializarModalAgendaEvento,
+  manejarToqueCheckTarea,
+} from "./agenda-modal.js";
+// Sincronización con Google Calendar (2026-08-25, reemplaza Web Push): acá
+// solo se usa al BORRAR en lote (modo selección). Completar/perder/restaurar
+// una tarea desde el círculo ahora vive entero en agenda-modal.js
+// (manejarToqueCheckTarea -> aplicarEstadoTarea), que ya sincroniza el
+// espejo según el estado — ver core/notificaciones-calendario.js.
+import { eliminarEventoCalendarizado } from "../core/notificaciones-calendario.js";
+import {
+  COLOR_PERDIDA_RAYA,
   esHoyFecha,
   esTareaVencida,
   formatearFechaISO,
@@ -52,8 +57,9 @@ const ETIQUETA_TIPO = { evento: "Eventos", tarea: "Tareas", examen: "Exámenes" 
 const ORDEN_TIPO = ["examen", "tarea", "evento"];
 
 /**
- * Feature "filtro por estado" — pedido nuevo: 6 badges debajo del
- * encabezado de semana (Semanal y Todo), en este orden exacto. "Clase" no
+ * Feature "filtro por estado" — pedido nuevo: 7 badges (eran 6; se sumó
+ * "Perdida" el 2026-09-21) debajo del encabezado de semana (Semanal y
+ * Todo), en este orden exacto. "Clase" no
  * es un `tipo` real de EventoAgenda (ver TIPOS_EVENTO_AGENDA en schema.js)
  * — es la sección de materias inline (construirSeccionMateriasDia); se
  * incluye acá igual porque el pedido es "un vistazo de qué se lleva" y las
@@ -63,13 +69,14 @@ const ORDEN_TIPO = ["examen", "tarea", "evento"];
 const ESTADOS_FILTRO_AGENDA = [
   { id: "clase", etiqueta: "Clase" },
   { id: "completado", etiqueta: "Completado" },
+  { id: "perdida", etiqueta: "Perdida" },
   { id: "pendiente", etiqueta: "Pendiente" },
   { id: "examen", etiqueta: "Examen" },
   { id: "evento", etiqueta: "Evento" },
   { id: "feriado", etiqueta: "Feriado" },
 ];
 
-/** Set de ids activos ahora mismo — los 6 si `agendaFiltroEstados` sigue en
+/** Set de ids activos ahora mismo — todos si `agendaFiltroEstados` sigue en
  * `null` ("en reposo"), o exactamente el array explícito ya tocado. */
 function obtenerEstadosFiltroActivos() {
   if (Array.isArray(estado.agendaFiltroEstados)) return new Set(estado.agendaFiltroEstados);
@@ -77,20 +84,25 @@ function obtenerEstadosFiltroActivos() {
 }
 
 /**
- * `evento.completada` solo existe en `tarea` (ver comentario del campo en
- * schema.js) — Examen/Evento/Feriado no tienen estado de completado, así
- * que Completado/Pendiente no les aplica: se filtran únicamente por su
- * propio badge (Examen/Evento/Feriado), sin importar esos otros 2.
+ * `evento.completada`/`evento.perdida` solo existen en `tarea` (ver
+ * comentario de los campos en schema.js) — Examen/Evento/Feriado no tienen
+ * estado de completado, así que Completado/Perdida/Pendiente no les aplica:
+ * se filtran únicamente por su propio badge (Examen/Evento/Feriado), sin
+ * importar esos otros 3.
  */
 function eventoPasaFiltroEstados(evento, activos) {
-  if (evento.tipo === "tarea") return activos.has(evento.completada ? "completado" : "pendiente");
+  // Una tarea cae en EXACTAMENTE uno de 3 estados (2026-09-21): perdida no
+  // cuenta como pendiente ni como completada.
+  if (evento.tipo === "tarea") {
+    return activos.has(evento.perdida ? "perdida" : evento.completada ? "completado" : "pendiente");
+  }
   if (evento.tipo === "examen") return activos.has("examen");
   if (evento.tipo === "evento") return activos.has(evento.es_feriado ? "feriado" : "evento");
   return true;
 }
 
 /**
- * Primer toque mientras está "en reposo" (los 6 activos, nadie tocó nada
+ * Primer toque mientras está "en reposo" (todos activos, nadie tocó nada
  * todavía) AÍSLA — deja solo ese badge activo. Cualquier toque posterior
  * (ya con un array explícito, así termine con los 6 marcados de nuevo a
  * mano) es un toggle independiente de siempre: no vuelve a aislar. Mismo
@@ -115,7 +127,7 @@ function alternarFiltroEstadoAgenda(id) {
 }
 
 /**
- * Los 6 badges, todos con el mismo ancho (el del más largo — "Completado"),
+ * Los 7 badges, todos con el mismo ancho (el del más largo — "Completado"),
  * centrados. El ancho se ecualiza DESPUÉS de insertarse en el DOM (ver
  * llamador) porque necesita el ancho real ya renderizado de cada uno.
  * "Clase" lleva su propia clase (rosa, ver estilo inyectado en
@@ -167,10 +179,10 @@ function asegurarEstadoAgendaBaseInicializado() {
   // `null`/`undefined` = "automático". Un array (incluso vacío) es una
   // selección EXPLÍCITA.
   if (typeof estado.agendaSemestresSeleccionados === "undefined") estado.agendaSemestresSeleccionados = null;
-  // Feature "filtro por estado" (Clase/Completado/Pendiente/Examen/Evento/
-  // Feriado, ver ESTADOS_FILTRO_AGENDA): `null` = "en reposo", los 6 están
-  // activos y el PRÓXIMO toque sobre cualquier badge aísla ese uno solo
-  // (ver alternarFiltroEstadoAgenda). Un array (incluso con los 6 ids
+  // Feature "filtro por estado" (Clase/Completado/Perdida/Pendiente/Examen/
+  // Evento/Feriado, ver ESTADOS_FILTRO_AGENDA): `null` = "en reposo", todos
+  // están activos y el PRÓXIMO toque sobre cualquier badge aísla ese uno solo
+  // (ver alternarFiltroEstadoAgenda). Un array (incluso con todos los ids
   // adentro) es una selección explícita — a partir de ahí cada toque es un
   // toggle normal, independiente del resto (pedido: "si pongo todos
   // marcados y quito uno no deben quitarse los demás"). Mismo patrón de
@@ -257,45 +269,6 @@ function construirBadgeAdjuntos(evento) {
 }
 
 /**
- * Punto 5: toggle del checkbox circular de "completada" — vive acá (no en
- * agenda-modal.js) porque no abre ningún modal, solo muta el campo y
- * refresca en el lugar; mismo patrón de "releer la entidad viva por id
- * antes de mutar" que usa agenda-modal.js (por si un sondeo remoto
- * reemplazó estado.datos mientras tanto).
- *
- * Ajustes vista Calendario — punto 4 (fix): antes llamaba directo a
- * renderizarAgendaInterno() (el render INTERNO de Lista nada más), a secas
- * porque hasta ahora el checkbox de "completada" solo vivía en items de
- * Lista. Ahora construirItemEvento (con este mismo checkbox) también se
- * reutiliza desde el detalle de día del Calendario (ver construirDetalleDia
- * en agenda-calendario.js) — tocar el check desde ahí con la llamada vieja
- * mutaba el dato pero refrescaba Lista (oculta) en vez del Calendario
- * (visible), dejando la UI desactualizada hasta el próximo render. Ahora usa
- * el despachador renderizarAgenda(), que ya sabe re-renderizar la vista que
- * esté activa en cada momento (mismo criterio que refrescarAgenda() en
- * agenda-modal.js tras guardar/borrar desde el modal).
- */
-function alternarCompletadaEvento(eventoId) {
-  const vivo = buscarEventoAgendaVivo(eventoId);
-  if (!vivo) return;
-  vivo.completada = !vivo.completada;
-  sellarTimestamp(vivo);
-  marcarCambioPendiente();
-  renderizarAgenda();
-  // FIX (bug reportado: "se muestran los elementos pero no sirve el check"
-  // en Resumen): esto solo refrescaba Agenda. El dato SÍ se guardaba bien
-  // (vivo.completada cambia acá arriba), pero cuando el checkbox tocado
-  // vive dentro de una tarjeta de Resumen (construirItemEvento reutilizado
-  // tal cual desde resumen.js), renderizarAgenda() no toca el DOM de
-  // Resumen — así que ese checkbox concreto se quedaba visualmente igual
-  // (sin la clase "marcada", sin el tachado) y parecía que el click no
-  // hacía nada. Mismo patrón que refrescarAgenda() en agenda-modal.js
-  // (llamado tras guardar/borrar desde el modal), que sí refresca los 2.
-  window.renderizarResumen?.();
-  sincronizarEventoCalendario(vivo);
-}
-
-/**
  * Ronda de ajustes visuales — punto 1: layout de tarjeta en 2 columnas
  * explícitas.
  *
@@ -318,7 +291,7 @@ function alternarCompletadaEvento(eventoId) {
  * toque cerca del borde (el círculo además es chico — de ahí el pedido de
  * agrandar el hitbox) a veces se resuelve contra el `<button>` ANCESTRO
  * (`item`) en vez del hijo (`check`). Ahí `check` nunca recibe el click,
- * nunca corre `alternarCompletadaEvento`, y en cambio se dispara el click de
+ * nunca corre `manejarToqueCheckTarea`, y en cambio se dispara el click de
  * `item`, que abre la tarjeta de info sin haber completado nada — de ahí que
  * la persona tuviera que entrar al detalle y completarla desde ahí (ese
  * checkbox sí es 100% confiable: es un único botón fijo del modal, no
@@ -341,6 +314,20 @@ function alternarCompletadaEvento(eventoId) {
  * revisan `estado.agendaModoSeleccion` al toque — ver
  * registrarPresionLargaSeleccion/alternarSeleccionAgenda más abajo.
  */
+/**
+ * CSS inline del nombre de un ítem según su estado (2026-09-21):
+ *   - completada: tachado normal + texto atenuado (como siempre);
+ *   - perdida: tachado con raya roja gruesa y el texto SIN atenuar;
+ *   - resto: sin decoración.
+ */
+function estiloNombreEvento(evento, estilo) {
+  if (estilo.esPerdida) {
+    return `text-decoration:line-through; text-decoration-color:${COLOR_PERDIDA_RAYA}; text-decoration-thickness:2px;`;
+  }
+  if (evento.completada) return "text-decoration:line-through; opacity:0.7;";
+  return "";
+}
+
 function construirItemEvento(evento) {
   // FIX crash "Cannot read properties of undefined (reading 'includes')":
   // esta función se reutiliza desde Resumen (ver comentario más abajo,
@@ -367,15 +354,31 @@ function construirItemEvento(evento) {
   if (evento.tipo === "tarea") {
     const check = document.createElement("button");
     check.type = "button";
-    check.className = "agenda-check-completada" + (evento.completada ? " marcada" : "");
-    check.title = evento.completada ? "Marcar como pendiente" : "Marcar como completada";
+    // 3 estados (2026-09-21): pendiente | completada (.marcada, azul) |
+    // perdida (.perdida, rojo muy oscuro con ✕ — ver el bloque "Estado
+    // Perdido" de design-system.css).
+    check.className =
+      "agenda-check-completada" + (evento.completada ? " marcada" : "") + (evento.perdida ? " perdida" : "");
+    check.title = evento.perdida
+      ? "Perdida — tocar para restaurar a pendiente"
+      : evento.completada
+        ? "Marcar como pendiente"
+        : esTareaVencida(evento)
+          ? "Marcar como completada o perdida"
+          : "Marcar como completada";
     check.addEventListener("click", (ev) => {
       ev.stopPropagation();
       if (estado.agendaModoSeleccion) {
         alternarSeleccionAgenda(evento.id);
         return;
       }
-      alternarCompletadaEvento(evento.id);
+      // Punto 5 + "Perdido": el toggle (y la ventanita Completado/Perdido si
+      // la tarea está vencida) vive en agenda-modal.js — lo comparte con la
+      // tarjeta de info. Ya refresca Agenda, Resumen y el espejo de
+      // Calendar; releer la entidad viva por id antes de mutar también se
+      // hace allá. Refrescar Resumen ahí es el fix de "el check no responde
+      // en Resumen" que antes estaba a mano en este archivo.
+      manejarToqueCheckTarea(evento.id);
     });
     item.appendChild(check);
   }
@@ -384,7 +387,7 @@ function construirItemEvento(evento) {
   const izquierda = document.createElement("span");
   izquierda.style.cssText = "flex:1; min-width:0; text-align:left; overflow-wrap:break-word;";
   izquierda.innerHTML = `
-    <div style="font-weight:600; ${evento.completada ? "text-decoration:line-through; opacity:0.7;" : ""}">${evento.nombre || "(sin nombre)"}</div>
+    <div style="font-weight:600; ${estiloNombreEvento(evento, estilo)}">${evento.nombre || "(sin nombre)"}</div>
     <div style="display:flex; align-items:center; gap:6px;">${construirBadgeMateria(evento)}${construirBadgeAdjuntos(evento)}</div>
   `;
   item.appendChild(izquierda);
@@ -665,7 +668,24 @@ function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios, 
     .filter((ev) => eventoPasaFiltroEstados(ev, activosFiltro))
     .sort((a, b) => String(a.hora || "99:99").localeCompare(String(b.hora || "99:99")));
 
-  if (!mostrarDiasVacios && eventosDelDia.length === 0) return null;
+  // FIX (2026-09-21) "filtrar solo por Clase no muestra nada": la sección de
+  // materias se construía DESPUÉS del descarte de días vacíos, y ese descarte
+  // solo miraba `eventosDelDia`. Con "Clase" como único filtro activo,
+  // eventosDelDia queda siempre vacío (el filtro deja fuera tareas/exámenes/
+  // eventos), así que con "Mostrar días sin eventos ni tareas" apagado TODOS
+  // los días se descartaban antes de llegar a las clases y aparecía "Nada
+  // pendiente en este rango". Combinado con otro badge sí funcionaba porque
+  // ese otro filtro dejaba eventos y el día sobrevivía. Ahora las clases se
+  // resuelven ANTES y cuentan como contenido: un día solo es "vacío" si no
+  // tiene ni eventos ni clases visibles.
+  //
+  // Se respetan AMBOS controles de clases, igual que antes: el ajuste de
+  // "Mostrar materias en la agenda" y el badge "Clase" de esta sesión.
+  const seccionMaterias = estado.agendaFiltroMostrarMaterias && activosFiltro.has("clase")
+    ? construirSeccionMateriasDia(semestresSeleccionados, diaInfo.fecha, diaInfo.abrevDefault)
+    : null;
+
+  if (!mostrarDiasVacios && eventosDelDia.length === 0 && !seccionMaterias) return null;
 
   const bloque = document.createElement("section");
   // Punto 5 (2026-08-23): antes usaba "glass-panel" (mismo tono reservado
@@ -695,16 +715,9 @@ function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios, 
   `;
   bloque.appendChild(header);
 
-  // FIX: el badge "Clase" del filtro (activosFiltro.has("clase")) no hacía
-  // nada — eventoPasaFiltroEstados solo filtra estado.datos.agenda (tarea/
-  // examen/evento/feriado); las materias vienen de un camino de render
-  // aparte (construirSeccionMateriasDia) que antes se llamaba sin condición
-  // ninguna. Ahora respeta AMBOS: el ajuste persistente de Ajustes →
-  // Agenda (agendaFiltroMostrarMaterias, "siempre que Clase se muestre en
-  // Agenda según ajustes") Y el badge de esta sesión.
-  const seccionMaterias = estado.agendaFiltroMostrarMaterias && activosFiltro.has("clase")
-    ? construirSeccionMateriasDia(semestresSeleccionados, diaInfo.fecha, diaInfo.abrevDefault)
-    : null;
+  // Las clases ya se resolvieron arriba (seccionMaterias, ver el FIX de
+  // "Clase" solo) — respetan AMBOS controles: el ajuste persistente de
+  // Ajustes → Agenda (agendaFiltroMostrarMaterias) Y el badge de la sesión.
   if (seccionMaterias) bloque.appendChild(seccionMaterias);
 
   // Entrega 5: "Estudio para hoy" — solo en la tarjeta de HOY (no tiene
@@ -737,12 +750,21 @@ function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios, 
     }
   }
 
+  // "Sin pendientes." solo tiene sentido si el filtro deja ver algún tipo de
+  // evento: con "Clase" como único badge activo (2026-09-21) la persona ocultó
+  // tareas/exámenes/eventos a propósito, y decirle "Sin pendientes" bajo sus
+  // clases sería engañoso. Con los badges por defecto no cambia nada.
+  const filtroDejaVerEventos = ["completado", "perdida", "pendiente", "examen", "evento", "feriado"].some((id) =>
+    activosFiltro.has(id)
+  );
   if (eventosDelDia.length === 0) {
-    const vacio = document.createElement("p");
-    vacio.className = "muted";
-    vacio.style.cssText = "font-size:0.8rem; margin:2px 0 0;";
-    vacio.textContent = "Sin pendientes.";
-    bloque.appendChild(vacio);
+    if (filtroDejaVerEventos) {
+      const vacio = document.createElement("p");
+      vacio.className = "muted";
+      vacio.style.cssText = "font-size:0.8rem; margin:2px 0 0;";
+      vacio.textContent = "Sin pendientes.";
+      bloque.appendChild(vacio);
+    }
   } else {
     ORDEN_TIPO.forEach((tipo) => {
       const delTipo = eventosDelDia.filter((ev) => ev.tipo === tipo);

@@ -10,6 +10,7 @@ import { aplicarFormatoTexto } from "../core/utils.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { fechaLocalDesdeISO } from "../horario/horario.js";
 import {
+  COLOR_PERDIDA_RAYA,
   esTareaVencida,
   formatearHoraAmPm,
   formatearTiempoRestanteHoy,
@@ -377,8 +378,24 @@ function guardarEventoAgenda(eventoExistente) {
     // (vive en el checkbox circular de la lista/tarjeta de info — punto 5
     // del rediseño), así que una edición del resto de los campos nunca debe
     // pisarla con un valor por defecto.
+    //
+    // `perdida` (2026-09-21) tampoco se edita acá, pero SÍ se revalida: solo
+    // existe mientras la tarea siga vencida. Si se cambió el tipo a algo que
+    // no es tarea, o se movió la fecha/hora al futuro, "Perdida" ya no tiene
+    // sentido y la tarea vuelve a pendiente (con aviso, para que no parezca
+    // que el cambio de fecha borró el estado en silencio). Mover la fecha a
+    // otra fecha igualmente pasada la deja perdida.
+    let volvioAPendiente = false;
+    if (viva.perdida) {
+      const sigueVencida = viva.tipo === "tarea" && esTareaVencida({ ...viva, perdida: false });
+      if (!sigueVencida) {
+        viva.perdida = false;
+        volvioAPendiente = viva.tipo === "tarea";
+      }
+    }
     sellarTimestamp(viva);
     eventoGuardado = viva;
+    if (volvioAPendiente) mostrarToast("La tarea volvió a pendiente: su fecha ya no está vencida");
   } else {
     const nuevo = crearEventoAgenda({
       tipo,
@@ -474,26 +491,120 @@ function obtenerNombreMateriaEvento(evento) {
 }
 
 /**
- * Punto 5 + 11: mismo toggle de completada que el checkbox de la lista
- * (agenda.js), pero disparado desde la tarjeta de info — se relee la
- * entidad viva por id antes de mutar (mismo patrón que el resto del
- * archivo). Refresca la lista de atrás vía window.renderizarAgenda (mismo
- * mecanismo que refrescarAgenda) y vuelve a pintar la tarjeta de info en el
- * lugar, sin cerrarla, para que el checkbox y el nombre tachado respondan
- * al toque sin que la persona pierda el contexto que estaba mirando.
+ * Único punto que cambia el estado de una tarea entre "pendiente" |
+ * "completada" | "perdida" (2026-09-21). Los 2 booleanos son mutuamente
+ * excluyentes: se escriben siempre juntos acá para que nunca queden ambos
+ * en true. Relee la entidad viva por id antes de mutar (mismo patrón de
+ * siempre, por si un sondeo remoto reemplazó estado.datos mientras tanto).
  */
-function alternarCompletadaDesdeInfo(evento) {
-  const viva = buscarEventoVivoPorId(evento.id);
-  if (!viva) return;
-  viva.completada = !viva.completada;
+function aplicarEstadoTarea(eventoId, nuevoEstado, alTerminar) {
+  const viva = buscarEventoVivoPorId(eventoId);
+  if (!viva || viva.tipo !== "tarea") return;
+  viva.completada = nuevoEstado === "completada";
+  viva.perdida = nuevoEstado === "perdida";
   sellarTimestamp(viva);
   marcarCambioPendiente();
   refrescarAgenda();
-  renderizarTarjetaInfoEventoAgenda(viva);
-  // Al completar se elimina el espejo en Google Calendar; al des-completar
-  // se recrea/actualiza (sincronizarEventoCalendario ya distingue ambos
-  // casos según viva.completada — ver core/notificaciones-calendario.js).
   sincronizarEventoCalendario(viva);
+  if (typeof alTerminar === "function") alTerminar(viva);
+}
+
+/**
+ * Ventanita "Completado / Perdido" — solo aparece al tocar el círculo de una
+ * tarea VENCIDA y aún pendiente. Se arma dinámicamente (sin depender de
+ * index.html) y se descarta al cerrarla. Tocar afuera, "Cancelar" o Escape
+ * no cambian nada.
+ */
+function abrirSelectorEstadoTareaVencida(evento, alElegir) {
+  document.getElementById("agenda-selector-estado")?.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "agenda-selector-estado";
+  overlay.className = "modal-overlay";
+
+  const card = document.createElement("div");
+  card.className = "glass-card modal-card stack agenda-selector-estado-card";
+  card.style.gap = "10px";
+
+  const titulo = document.createElement("h3");
+  titulo.style.margin = "0";
+  titulo.textContent = "Esta tarea ya venció";
+
+  const nombre = document.createElement("p");
+  nombre.className = "muted";
+  nombre.style.cssText = "margin:0; overflow-wrap:break-word;";
+  nombre.textContent = evento.nombre || "(sin nombre)";
+
+  const pregunta = document.createElement("p");
+  pregunta.style.margin = "0";
+  pregunta.textContent = "¿La completaste o ya no la vas a hacer?";
+
+  const acciones = document.createElement("div");
+  acciones.className = "agenda-selector-estado-acciones";
+
+  const cerrar = () => {
+    document.removeEventListener("keydown", alTeclear);
+    overlay.remove();
+  };
+  const alTeclear = (ev) => {
+    if (ev.key === "Escape") cerrar();
+  };
+  const elegir = (valor) => {
+    cerrar();
+    alElegir(valor);
+  };
+
+  const btnCompletado = document.createElement("button");
+  btnCompletado.type = "button";
+  btnCompletado.className = "agenda-selector-estado-btn completado";
+  btnCompletado.textContent = "Completado";
+  btnCompletado.addEventListener("click", () => elegir("completada"));
+
+  const btnPerdido = document.createElement("button");
+  btnPerdido.type = "button";
+  btnPerdido.className = "agenda-selector-estado-btn perdido";
+  btnPerdido.textContent = "Perdido";
+  btnPerdido.addEventListener("click", () => elegir("perdida"));
+
+  acciones.appendChild(btnCompletado);
+  acciones.appendChild(btnPerdido);
+
+  const btnCancelar = document.createElement("button");
+  btnCancelar.type = "button";
+  btnCancelar.className = "btn-discreto";
+  btnCancelar.textContent = "Cancelar";
+  btnCancelar.addEventListener("click", cerrar);
+
+  card.append(titulo, nombre, pregunta, acciones, btnCancelar);
+  overlay.appendChild(card);
+  overlay.addEventListener("click", (ev) => {
+    if (ev.target === overlay) cerrar();
+  });
+  document.addEventListener("keydown", alTeclear);
+  document.body.appendChild(overlay);
+}
+
+/**
+ * Toque sobre el círculo de una tarea — lo comparten la lista/Resumen
+ * (agenda.js) y la tarjeta de info (acá abajo), para que los 3 lugares se
+ * comporten IGUAL (2026-09-21, reemplaza al viejo toggle de solo completada):
+ *   - ya completada o perdida  -> vuelve a pendiente (reversible);
+ *   - pendiente y VENCIDA       -> ventanita "Completado / Perdido";
+ *   - pendiente y no vencida    -> completada directo, como siempre.
+ * `alTerminar(viva)` es opcional (la tarjeta de info lo usa para repintarse).
+ */
+function manejarToqueCheckTarea(eventoId, alTerminar) {
+  const viva = buscarEventoVivoPorId(eventoId);
+  if (!viva || viva.tipo !== "tarea") return;
+  if (viva.completada || viva.perdida) {
+    aplicarEstadoTarea(eventoId, "pendiente", alTerminar);
+    return;
+  }
+  if (esTareaVencida(viva)) {
+    abrirSelectorEstadoTareaVencida(viva, (elegido) => aplicarEstadoTarea(eventoId, elegido, alTerminar));
+    return;
+  }
+  aplicarEstadoTarea(eventoId, "completada", alTerminar);
 }
 
 function renderizarTarjetaInfoEventoAgenda(evento) {
@@ -506,7 +617,12 @@ function renderizarTarjetaInfoEventoAgenda(evento) {
 
   const nombreEl = document.getElementById("info-agenda-nombre");
   nombreEl.textContent = evento.nombre || "(sin nombre)";
-  nombreEl.style.textDecoration = evento.completada ? "line-through" : "none";
+  // "Perdida": tachado con raya roja y texto SIN atenuar (a diferencia de
+  // "Completada", que va tachado normal y a 0.7 de opacidad).
+  const esPerdida = evento.tipo === "tarea" && Boolean(evento.perdida);
+  nombreEl.style.textDecoration = esPerdida || evento.completada ? "line-through" : "none";
+  nombreEl.style.textDecorationColor = esPerdida ? COLOR_PERDIDA_RAYA : "";
+  nombreEl.style.textDecorationThickness = esPerdida ? "2px" : "";
   nombreEl.style.opacity = evento.completada ? "0.7" : "1";
 
   document.getElementById("info-agenda-fecha").textContent = fechaLocalDesdeISO(evento.fecha).toLocaleDateString("es-CR", {
@@ -565,10 +681,15 @@ function renderizarTarjetaInfoEventoAgenda(evento) {
   filaCompletada.classList.toggle("oculto", evento.tipo !== "tarea");
   const check = document.getElementById("info-agenda-check-completada");
   check.classList.toggle("marcada", Boolean(evento.completada));
-  check.onclick = () => alternarCompletadaDesdeInfo(evento);
-  document.getElementById("info-agenda-completada-texto").textContent = evento.completada
-    ? "Completada"
-    : "Marcar como completada";
+  check.classList.toggle("perdida", esPerdida);
+  check.onclick = () => manejarToqueCheckTarea(evento.id, (viva) => renderizarTarjetaInfoEventoAgenda(viva));
+  document.getElementById("info-agenda-completada-texto").textContent = esPerdida
+    ? "Perdida — toca para restaurar"
+    : evento.completada
+      ? "Completada"
+      : esTareaVencida(evento)
+        ? "Marcar como completada o perdida"
+        : "Marcar como completada";
 
   document.getElementById("btn-agenda-info-editar").onclick = () => {
     cerrarTarjetaInfoEventoAgenda();
@@ -635,5 +756,6 @@ export {
   abrirTarjetaInfoEventoAgenda,
   confirmarBorrarEventoAgenda,
   inicializarModalAgendaEvento,
+  manejarToqueCheckTarea,
   obtenerNombreMateriaEvento,
 };

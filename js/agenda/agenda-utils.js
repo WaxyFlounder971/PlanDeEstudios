@@ -282,6 +282,64 @@ function formatearHoraAmPm(horaStr) {
   return `${h12}:${String(m).padStart(2, "0")} ${periodo}`;
 }
 
+// Estado "Perdido" (2026-09-21): rojo muy oscuro (red-900) del borde/badge, y
+// rojo más vivo para la raya del tachado (con el oscuro la raya casi no se
+// vería sobre el fondo oscuro de la app). Los estilos viven en
+// design-system.css ("Estado Perdido"); estos 2 hex deben coincidir con él.
+const COLOR_PERDIDA_BORDE = "#7f1d1d";
+const COLOR_PERDIDA_RAYA = "#dc2626";
+
+/**
+ * Días de calendario entre HOY y `fecha` (positivo = futuro, negativo =
+ * pasado, 0 = hoy), o `null` si `fecha` no es válida. Acepta un Date o un
+ * string "YYYY-MM-DD".
+ *
+ * Compara SOLO fechas (año/mes/día locales), nunca horas: se pasan ambos
+ * lados a Date.UTC de sus componentes locales, así ni la cercanía a
+ * medianoche ni un cambio de horario de verano pueden correr el resultado
+ * un día (la resta de dos medianoches locales no siempre da múltiplos
+ * exactos de 24h).
+ */
+function calcularDiasDesdeHoy(fecha, hoy = new Date()) {
+  let y;
+  let m;
+  let d;
+  if (fecha instanceof Date) {
+    if (Number.isNaN(fecha.getTime())) return null;
+    y = fecha.getFullYear();
+    m = fecha.getMonth();
+    d = fecha.getDate();
+  } else {
+    const partes = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(fecha || ""));
+    if (!partes) return null;
+    y = Number(partes[1]);
+    m = Number(partes[2]) - 1;
+    d = Number(partes[3]);
+  }
+  const diff = Date.UTC(y, m, d) - Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  return Math.round(diff / 86400000);
+}
+
+/**
+ * Fecha relativa a hoy (2026-09-21) — ÚNICO lugar donde vive la escala, para
+ * que ningún bloque de Resumen (ni nada futuro) invente su propio texto.
+ *   Futuro: "Hoy", "Mañana", "Pasado Mañana", "En 3 días", "En X días"…
+ *   Pasado: "Ayer", "Antier", "Hace 3 días", "Hace X días"…
+ * Sin tope de días (X es siempre el número real). Devuelve "" si la fecha no
+ * es válida. `hoy` es solo para poder probarla con una fecha fija.
+ */
+function formatearFechaRelativa(fecha, hoy = new Date()) {
+  const dias = calcularDiasDesdeHoy(fecha, hoy);
+  if (dias === null) return "";
+  if (dias === 0) return "Hoy";
+  if (dias === 1) return "Mañana";
+  if (dias === 2) return "Pasado Mañana";
+  if (dias > 2) return `En ${dias} días`;
+  if (dias === -1) return "Ayer";
+  if (dias === -2) return "Antier";
+  return `Hace ${-dias} días`;
+}
+
 /**
  * Rediseño núcleo Agenda — punto 4: mapa único de "cómo se pinta cada
  * combinación tipo/estado", para que badge (clase) y borde (hex, mismo tono
@@ -295,6 +353,13 @@ function formatearHoraAmPm(horaStr) {
  * DE agenda-modal.js para abrir sus modales).
  */
 function obtenerEstiloEvento(evento) {
+  // Estado "Perdido" (2026-09-21): rojo muy oscuro, aparte del rojo de
+  // "Examen" (#ef4444) a propósito para que nunca se confundan. `esPerdida`
+  // lo leen construirItemEvento y la tarjeta de info para pintar el tachado
+  // con raya roja (el texto NO se atenúa, a diferencia de "Completada").
+  if (evento.tipo === "tarea" && evento.perdida) {
+    return { etiqueta: "Perdida", claseBadge: "badge-perdida", colorBorde: COLOR_PERDIDA_BORDE, esPerdida: true };
+  }
   if (evento.tipo === "tarea" && evento.completada) {
     return { etiqueta: "Completada", claseBadge: "badge-info", colorBorde: "#3b82f6" };
   }
@@ -325,7 +390,10 @@ function obtenerEstiloEvento(evento) {
  * al cambiar el día).
  */
 function esTareaVencida(evento) {
-  if (evento.tipo !== "tarea" || evento.completada) return false;
+  // Una tarea "Perdida" ya no cuenta como vencida (2026-09-21): la persona
+  // reconoció que no la va a completar, así que sale de "Tareas vencidas",
+  // del badge "⚠ Vencida" y de cualquier conteo de pendientes.
+  if (evento.tipo !== "tarea" || evento.completada || evento.perdida) return false;
   const hoyISO = formatearFechaISO(new Date());
   if (evento.fecha < hoyISO) return true;
   if (evento.fecha === hoyISO && evento.hora) {
@@ -340,7 +408,7 @@ function esTareaVencida(evento) {
 }
 
 function tareaVenceHoy(evento) {
-  if (evento.tipo !== "tarea" || evento.completada) return false;
+  if (evento.tipo !== "tarea" || evento.completada || evento.perdida) return false;
   if (evento.fecha !== formatearFechaISO(new Date())) return false;
   return !esTareaVencida(evento);
 }
@@ -447,9 +515,11 @@ function obtenerRangoDiasAgendaTodo(semestre, diasAtras = 0) {
 }
 
 export {
+  COLOR_PERDIDA_RAYA,
   esHoyFecha,
   esTareaVencida,
   formatearFechaISO,
+  formatearFechaRelativa,
   formatearHoraAmPm,
   formatearRangoSemanaAgenda,
   formatearTiempoRestanteHoy,
