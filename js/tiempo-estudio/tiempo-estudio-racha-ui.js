@@ -20,6 +20,10 @@
    cumplir" a "cumplido"; editar o cargar un día viejo cambia el chip pero no
    dispara ningún aviso.
 
+   Para volver a ver la animación de "Has perdido tu racha": con la racha en
+   cero, mantener pulsado el chip 3 segundos (es una vista previa: no toca
+   ninguna preferencia ni gasta el aviso real). Con racha viva no hace nada.
+
    Al abrir la app (primera fusión con datos reales) hay una revisión única:
      - si hay una racha larga recién perdida y hoy es el día de recuperarla,
        muestra la oferta (una vez por día y por dispositivo);
@@ -60,6 +64,7 @@ import {
 const NS_SVG = "http://www.w3.org/2000/svg";
 const CLAVE_OFERTA_VISTA = "te_racha_oferta_dia_v1"; // por dispositivo, a propósito
 const CLAVE_PERDIDA_VISTA = "te_racha_perdida_dia_v1"; // respaldo por si `configuracion` no guarda la clave nueva
+const DURACION_PULSACION_LARGA_MS = 3000; // mantener el chip con racha cero → repite la animación de racha perdida
 const TIRA_DIGITOS = 30; // 3 vueltas de 0–9: alcanza para el giro más largo
 
 /* ------------------------- Estado de módulo ------------------------- */
@@ -72,6 +77,7 @@ let diaRevisado = null;
 let overlayAbierto = false;
 let animacionChip = null; // { desde, hasta, vence } — la consume el próximo chip que se dibuje
 let contadorIds = 0;
+let pulsacionLargaHecha = false; // la pulsación larga ya abrió la animación: el "click" que sigue se ignora
 
 /* ------------------------- Lectura del estado ------------------------- */
 
@@ -186,17 +192,17 @@ function crearLlamaQueSeApaga() {
 // tenerlos en el CSS, copia el texto tal cual. Solo usa animaciones de
 // transform/opacity/filter, sin ids ni dependencias del tema.
 const CSS_LLAMA_APAGADA = `
-.te-racha-card--perdida .te-racha-escena { position: relative; }
-.te-perd-fuego { position: relative; display: inline-flex; justify-content: center; align-items: flex-end; }
-.te-perd-caja { display: inline-flex; transform-origin: 50% 100%; will-change: transform, filter, opacity;
+.te-perd-fuego, .te-perd-caja { position: absolute; inset: 0; pointer-events: none; }
+.te-perd-caja { display: flex; justify-content: center; align-items: center;
+  transform-origin: var(--fx, 50%) var(--fb, 100%); will-change: transform, filter, opacity;
   animation: te-perd-apagar 3.4s cubic-bezier(.4, 0, .6, 1) .6s both; }
 .te-racha-card--perdida .te-racha-halo { animation: te-perd-halo 3.2s ease-in .6s both; }
-.te-perd-brasa { position: absolute; left: 50%; bottom: 1px; width: 12px; height: 12px; margin-left: -6px;
-  border-radius: 50%; opacity: 0; pointer-events: none;
+.te-perd-brasa { position: absolute; left: var(--fx, 50%); top: var(--fb, 100%); width: 12px; height: 12px;
+  margin: -9px 0 0 -6px; border-radius: 50%; opacity: 0;
   background: radial-gradient(circle, #ffc07a 0%, #ff6a1f 42%, rgba(255, 106, 31, 0) 72%);
   animation: te-perd-brasa 3.4s ease-out 2.9s both; }
-.te-perd-humo { position: absolute; left: 50%; bottom: 6px; width: 14px; height: 34px; margin-left: -7px;
-  border-radius: 50%; opacity: 0; filter: blur(3px); pointer-events: none;
+.te-perd-humo { position: absolute; left: var(--fx, 50%); top: var(--fb, 100%); width: 14px; height: 34px;
+  margin: -40px 0 0 -7px; border-radius: 50%; opacity: 0; filter: blur(3px);
   background: radial-gradient(ellipse at 50% 80%, rgba(165, 170, 180, .6), rgba(165, 170, 180, 0) 70%);
   animation: te-perd-humo 3.2s ease-out calc(2.9s + var(--i) * .75s) 2 both; }
 @keyframes te-perd-apagar {
@@ -228,6 +234,24 @@ const CSS_LLAMA_APAGADA = `
   .te-perd-brasa, .te-perd-humo { animation: none; opacity: 0; }
 }
 `;
+
+/**
+ * Mide dónde quedó la llama dentro de la escena (en %) para que la brasa, el
+ * humo y el punto desde donde se encoge coincidan con su base, sea cual sea el
+ * CSS de la llama. Usa proporciones, así no le afecta la animación de entrada
+ * de la tarjeta. Se llama con el aviso ya insertado en el documento.
+ */
+function ubicarLlamaApagada(escena) {
+  const fuego = escena.querySelector(".te-perd-fuego");
+  const svg = fuego && fuego.querySelector(".te-llama");
+  if (!svg) return;
+  if (getComputedStyle(escena).position === "static") escena.style.position = "relative";
+  const e = escena.getBoundingClientRect();
+  const l = svg.getBoundingClientRect();
+  if (!e.width || !e.height || !l.width) return;
+  fuego.style.setProperty("--fx", `${(((l.left + l.width / 2 - e.left) / e.width) * 100).toFixed(2)}%`);
+  fuego.style.setProperty("--fb", `${(((l.bottom - e.top) / e.height) * 100).toFixed(2)}%`);
+}
 
 function asegurarEstilosLlamaApagada() {
   if (document.getElementById("te-racha-perdida-css")) return;
@@ -334,8 +358,48 @@ export function construirChipRacha() {
     chip.appendChild(crearElemento("span", "te-racha-num", String(est.racha)));
   }
 
-  chip.addEventListener("click", abrirDetalleRacha);
+  chip.addEventListener("click", (e) => {
+    // Si el toque fue una pulsación larga que ya abrió la animación, no abrir además el detalle.
+    if (pulsacionLargaHecha) {
+      pulsacionLargaHecha = false;
+      e.preventDefault();
+      return;
+    }
+    abrirDetalleRacha();
+  });
+  activarPulsacionLargaRachaCero(chip);
   return chip;
+}
+
+/**
+ * Repetir la animación de "Has perdido tu racha": mantener pulsado el chip
+ * 3 segundos, solo cuando la racha está en cero. Es una vista previa: no
+ * cambia ninguna preferencia ni cuenta como el aviso real. Soltar antes, o
+ * mover el dedo/mouse fuera del chip, cancela; un toque normal sigue
+ * abriendo el detalle.
+ */
+function activarPulsacionLargaRachaCero(chip) {
+  let timer = null;
+  const cancelar = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+  };
+  chip.style.webkitTouchCallout = "none"; // sin menú de "mantener pulsado" en iOS
+  chip.style.userSelect = "none";
+  chip.addEventListener("contextmenu", (e) => e.preventDefault()); // ni en Android/escritorio
+  chip.addEventListener("pointerdown", (e) => {
+    pulsacionLargaHecha = false;
+    if (e.button !== undefined && e.button > 0) return; // solo botón principal
+    cancelar();
+    timer = setTimeout(() => {
+      timer = null;
+      const est = obtenerEstadoRacha();
+      if (est.activa) return; // con racha viva no hace nada: el toque normal sigue igual
+      pulsacionLargaHecha = true;
+      abrirOverlayRacha({ tipo: "perdida", est: { ...est, rachaPerdida: null } });
+    }, DURACION_PULSACION_LARGA_MS);
+  });
+  for (const ev of ["pointerup", "pointerleave", "pointercancel"]) chip.addEventListener(ev, cancelar);
 }
 
 /**
@@ -525,6 +589,7 @@ export function abrirOverlayRacha({ tipo, est, desde = 0, hasta }) {
   document.addEventListener("keydown", alTeclear, true);
 
   document.body.appendChild(overlay);
+  if (tipo === "perdida") ubicarLlamaApagada(escena);
   boton.focus();
   if (tipo === "inicio" && est && est.inicioISO) persistirPreferenciasInicio({ inicioISO: est.inicioISO });
   if (tipo === "perdida" && est && est.rachaPerdida) marcarPerdidaAvisada(est.rachaPerdida.diaISO);
