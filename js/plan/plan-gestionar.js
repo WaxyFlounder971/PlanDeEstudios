@@ -1,5 +1,5 @@
 /* =========================================================================
-   PLAN DE ESTUDIOS — GESTIONAR PLANES
+   PLAN DE ESTUDIOS - GESTIONAR PLANES
    Selector de plan activo, Modo Hardcore, y el modal de gestión
    (reordenar, eliminar, favorito).
    ========================================================================= */
@@ -8,7 +8,7 @@ import { sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
-import { abrirConfirmacion } from "../ui/componentes.js";
+import { abrirConfirmacion, confirmarUniversidadNoInvertida } from "../ui/componentes.js";
 import { LIMITE_PLANES_ESTUDIO } from "./plan-esquema.js";
 import { exportarPlanACSV, renderizarPlanEstudios } from "./plan-vista-lista.js";
 
@@ -17,20 +17,20 @@ import { exportarPlanACSV, renderizarPlanEstudios } from "./plan-vista-lista.js"
 /** REDISEÑO (reporte de usuario): con Modo Hardcore encendido, el usuario
  *  NO elige a mano cuál es el plan secundario/terciario. Se asume que
  *  TODOS los planes que no son el principal (★, plan_activo_id) participan
- *  automáticamente — en el orden en que aparecen en Gestionar Planes.
+ *  automáticamente - en el orden en que aparecen en Gestionar Planes.
  *
  *  Esto reemplaza la selección manual por pill que existía antes, la cual
  *  tenía dos bugs reales:
  *  1) Una vez presionada una pill de plan secundario, no había forma de
  *     "despresionarla" (no existía handler para desmarcar).
  *  2) Reordenar los planes (drag-and-drop) no actualizaba quién era el
- *     secundario — quedaba pegado al que se había presionado a mano,
+ *     secundario - quedaba pegado al que se había presionado a mano,
  *     aunque ya no tuviera sentido con el nuevo orden.
  *
  *  recalcularPlanesHardcore() es ahora el ÚNICO lugar que escribe
  *  plan_activo_secundario_id / plan_activo_terciario_id. Se llama cada vez
  *  que algo pudo cambiar quiénes son "los demás planes": prender/apagar
- *  Hardcore, cambiar el plan principal, reordenar, o borrar un plan — y
+ *  Hardcore, cambiar el plan principal, reordenar, o borrar un plan - y
  *  también, de forma defensiva, al abrir el modal de Gestionar Planes, para
  *  auto-corregir datos viejos (ej. un plan_activo_secundario_id en null de
  *  antes de este cambio, o traído así por una fusión de sync vieja).
@@ -74,7 +74,7 @@ function renderizarSelectorPlan() {
       // acompañantes (ver recalcularPlanesHardcore arriba).
       recalcularPlanesHardcore(cfg);
       // FIX sync: configuracion se funde entera por _actualizadoEn
-      // (fusionarBloqueUnico) — sin sellar, el campo se quedaba en 0 y
+      // (fusionarBloqueUnico) - sin sellar, el campo se quedaba en 0 y
       // cada sondeo de ~9s decidía el ganador por _dispositivoId, no por
       // quién editó de verdad más reciente. Ver storage-merge.js.
       sellarTimestamp(cfg);
@@ -92,9 +92,9 @@ function renderizarSelectorPlan() {
 /* --------------------------- Modo Hardcore 💀 --------------------------- */
 
 function renderizarModoHardcore() {
-  // FIX sync (bug real de raíz — reporte de usuario "elegí el plan
+  // FIX sync (bug real de raíz - reporte de usuario "elegí el plan
   // secundario y quedó en null"): esta función NUNCA cachea `cfg` en una
-  // variable de módulo — cada handler lee estado.datos.configuracion
+  // variable de módulo - cada handler lee estado.datos.configuracion
   // FRESCO en el momento del evento, porque storage-sync.js puede
   // reemplazar estado.datos entero en cualquier sondeo (~9s) y una
   // referencia vieja capturada de antemano queda desconectada en silencio.
@@ -108,7 +108,7 @@ function renderizarModoHardcore() {
   chk.onchange = () => {
     const cfgActual = estado.datos.configuracion;
     cfgActual.modo_hardcore = chk.checked;
-    // REDISEÑO: ya no hay nada que elegir a mano — prender/apagar Hardcore
+    // REDISEÑO: ya no hay nada que elegir a mano - prender/apagar Hardcore
     // recalcula solo quiénes son los acompañantes (ver
     // recalcularPlanesHardcore arriba).
     recalcularPlanesHardcore(cfgActual);
@@ -119,7 +119,7 @@ function renderizarModoHardcore() {
     if (typeof renderizarPlanEstudios === "function") renderizarPlanEstudios();
   };
 
-  // REDISEÑO: ya no es un selector interactivo — es un texto informativo.
+  // REDISEÑO: ya no es un selector interactivo - es un texto informativo.
   // Con Hardcore encendido, TODOS los planes que no son el ★ principal
   // participan automáticamente (recalcularPlanesHardcore ya los asignó).
   const cont = document.getElementById("selector-plan-secundario");
@@ -153,7 +153,7 @@ function inicializarEstadoGestionPlanesSiHaceFalta() {
   if (typeof estado.editarPlanInfoId === "undefined") estado.editarPlanInfoId = null; // qué plan.id está abierto en este modal
 }
 
-/* ===================== B.4 — Gestión de Planes de Estudio (máximo 3) ===================== */
+/* ===================== B.4 - Gestión de Planes de Estudio (máximo 3) ===================== */
 
 function abrirModalGestionPlanes() {
   inicializarEstadoGestionPlanesSiHaceFalta();
@@ -173,13 +173,13 @@ function abrirModalGestionPlanes() {
   document.getElementById("modal-gestion-planes").classList.remove("oculto");
 }
 
-/** v5 1.4: tarjetas arrastrables para reordenar los planes — la primera del
+/** v5 1.4: tarjetas arrastrables para reordenar los planes - la primera del
  *  orden es automáticamente la favorita/principal (estrella a la derecha,
  *  sin botón de estrella aparte).
  *
- *  FIX (reporte de usuario — "arrastro para poner un plan como principal y
+ *  FIX (reporte de usuario - "arrastro para poner un plan como principal y
  *  solo cambia visualmente, abajo sigue el secundario de antes"): antes
- *  reordenar la lista NUNCA tocaba `plan_activo_id` — la estrella se movía
+ *  reordenar la lista NUNCA tocaba `plan_activo_id` - la estrella se movía
  *  pero el carrusel del encabezado / Modo Hardcore seguían leyendo el
  *  `plan_activo_id` viejo, así que en la práctica "hacerlo principal"
  *  arrastrando no hacía nada funcional, solo visual. Ahora la posición 0
@@ -209,14 +209,14 @@ function renderizarListaGestionPlanes() {
     info.textContent =
       `${plan.universidad.siglas} · ${aplicarFormatoTexto(plan.nombre_carrera)}` +
       (plan.codigo_plan ? ` (${plan.codigo_plan})` : "") +
-      (plan.materias.length === 0 ? " — sin materias" : ` — ${plan.materias.length} materias`);
+      (plan.materias.length === 0 ? " - sin materias" : ` - ${plan.materias.length} materias`);
     fila.appendChild(info);
 
     const derecha = document.createElement("div");
     derecha.className = "row";
 
     // v1.14.1: editar nombre de carrera/universidad/código/tipo de título de
-    // este plan puntual — no cambia su estructura académica (bloques, tipos
+    // este plan puntual - no cambia su estructura académica (bloques, tipos
     // de horas), solo los datos de cabecera. Ver abrirModalEditarPlanInfo.
     const btnEditarInfo = document.createElement("button");
     btnEditarInfo.className = "btn btn-secondary";
@@ -238,7 +238,7 @@ function renderizarListaGestionPlanes() {
     });
     derecha.appendChild(btnEliminar);
 
-    // v1.9.8: exporta este plan puntual (no necesariamente el activo) —
+    // v1.9.8: exporta este plan puntual (no necesariamente el activo) -
     // exportarPlanACSV ya soporta recibir un plan explícito para este caso.
     const btnExportar = document.createElement("button");
     btnExportar.className = "btn btn-secondary";
@@ -285,10 +285,10 @@ function renderizarListaGestionPlanes() {
 
       // La posición 0 manda sobre plan_activo_id (el ★). Y con Modo
       // Hardcore encendido, el resto del orden manda sobre quién es
-      // secundario/terciario — SIEMPRE se recalcula en cada reorden, no
+      // secundario/terciario - SIEMPRE se recalcula en cada reorden, no
       // solo cuando cambia el principal. Este era justo el bug reportado:
       // "por más que cambiaba el orden de los planes, el que había
-      // presionado se quedaba como secundario" — porque antes la elección
+      // presionado se quedaba como secundario" - porque antes la elección
       // era manual y el reorden no la tocaba. Ahora no hay elección manual;
       // el orden ES la fuente de verdad.
       const cfg = estado.datos.configuracion;
@@ -316,10 +316,10 @@ function renderizarListaGestionPlanes() {
 function eliminarPlanEstudio(planId) {
   const cfg = estado.datos.configuracion;
   estado.datos.planes_estudio = estado.datos.planes_estudio.filter((p) => p.id !== planId);
-  // FIX crítico (v1.17 — borrados que "resucitaban" al fundir con otro
+  // FIX crítico (v1.17 - borrados que "resucitaban" al fundir con otro
   // dispositivo, en bucle infinito): antes esta función solo quitaba el
   // plan del arreglo local. fusionarDatos() (storage-merge.js) NUNCA se
-  // enteraba de que hubo un borrado — para la fusión, un plan que "ya no
+  // enteraba de que hubo un borrado - para la fusión, un plan que "ya no
   // está" es indistinguible de uno que nunca cambió, así que la regla "lo
   // que existe en un lado se conserva" lo traía de vuelta desde Drive (o
   // desde el otro dispositivo) en cuanto llegaba su copia vieja. Ahora se
@@ -358,30 +358,30 @@ function inicializarModalGestionPlanes() {
     document.getElementById("modal-gestion-planes").classList.add("oculto");
     estado.csvPendienteDeImportar = null;
     estado.reabrirGestionPlanesTrasCrear = true;
-    // v1.10.1 (punto 1): ya no se abre abrirModalCrearPlan() directo — primero
+    // v1.10.1 (punto 1): ya no se abre abrirModalCrearPlan() directo - primero
     // se fuerza el panel de importación (construirPanelImportacion, el mismo
     // que ve un usuario nuevo). El modal de carrera/universidad/código recién
     // se abre después, dentro de manejarClickImportar, una vez que ya se
-    // pegó/subió el CSV — igual que en el flujo del primer plan.
+    // pegó/subió el CSV - igual que en el flujo del primer plan.
     estado.mostrarPanelImportacionNuevoPlan = true;
     renderizarPlanEstudios();
   });
 }
 
-/* ===================== v1.14.1 — Editar info de la carrera ===================== *
+/* ===================== v1.14.1 - Editar info de la carrera ===================== *
  * Lapicito por fila en Gestionar Planes: edita SOLO los datos de cabecera
  * (nombre_carrera, universidad, codigo_plan, tipo_titulo) de un plan que ya
- * existe — nunca su estructura académica (bloques, tipos de horas, etc.),
+ * existe - nunca su estructura académica (bloques, tipos de horas, etc.),
  * eso sigue viviendo en Crear Plan / la importación. */
 
 // FIX (mismo bug de arranque): `estado.editarPlanInfoId = null;` también
-// estaba a nivel de módulo — se agrega a la guardia lazy de arriba.
+// estaba a nivel de módulo - se agrega a la guardia lazy de arriba.
 
 function abrirModalEditarPlanInfo(plan) {
   inicializarEstadoGestionPlanesSiHaceFalta();
   estado.editarPlanInfoId = plan.id;
   document.getElementById("input-editar-plan-nombre-carrera").value = plan.nombre_carrera || "";
-  // Universidad — separación nombre_completo/siglas (2026-08-22): 2 campos
+  // Universidad - separación nombre_completo/siglas (2026-08-22): 2 campos
   // independientes en vez del input único de antes.
   document.getElementById("input-editar-plan-universidad-nombre").value = plan.universidad.nombre_completo || "";
   document.getElementById("input-editar-plan-universidad-siglas").value = plan.universidad.siglas || "";
@@ -407,7 +407,7 @@ function inicializarModalEditarPlanInfo() {
     if (e.target.id === "modal-editar-plan-info") cerrarModalEditarPlanInfo();
   });
 
-  document.getElementById("btn-guardar-editar-plan-info").addEventListener("click", () => {
+  document.getElementById("btn-guardar-editar-plan-info").addEventListener("click", async () => {
     const plan = estado.datos.planes_estudio.find((p) => p.id === estado.editarPlanInfoId);
     const error = document.getElementById("error-editar-plan-info");
     if (!plan) {
@@ -416,7 +416,7 @@ function inicializarModalEditarPlanInfo() {
     }
 
     const nombreCarrera = document.getElementById("input-editar-plan-nombre-carrera").value.trim();
-    // Universidad — separación nombre_completo/siglas (2026-08-22): 2
+    // Universidad - separación nombre_completo/siglas (2026-08-22): 2
     // campos independientes, ambos obligatorios (mismo criterio que el
     // modal bloqueante de completar universidades y que "Nuevo Plan").
     const universidadNombre = document.getElementById("input-editar-plan-universidad-nombre").value.trim();
@@ -439,8 +439,21 @@ function inicializarModalEditarPlanInfo() {
       return;
     }
 
+    // Validación de siglas/nombre invertidos (aviso bloqueante de 5 s, ver
+    // confirmarUniversidadNoInvertida en componentes.js). Va DESPUÉS de las
+    // validaciones de campos vacíos para que el aviso solo aparezca cuando
+    // el resto del formulario ya está listo para guardarse.
+    const btnGuardarInfo = document.getElementById("btn-guardar-editar-plan-info");
+    btnGuardarInfo.disabled = true;
+    let universidadRevisada;
+    try {
+      universidadRevisada = await confirmarUniversidadNoInvertida({ siglas: universidadSiglas, nombre_completo: universidadNombre, nombrePlan: nombreCarrera });
+    } finally {
+      btnGuardarInfo.disabled = false;
+    }
+
     plan.nombre_carrera = nombreCarrera;
-    plan.universidad = { nombre_completo: universidadNombre, siglas: universidadSiglas };
+    plan.universidad = { nombre_completo: universidadRevisada.nombre_completo, siglas: universidadRevisada.siglas };
     plan.codigo_plan = codigoPlan || null;
     plan.tipo_titulo = tipoTitulo || null;
     plan.parametros_universidad.nombre_bloque = nombreBloque;
@@ -449,7 +462,7 @@ function inicializarModalEditarPlanInfo() {
     plan.parametros_universidad.horario_duracion_bloque_min = duracion;
 
     // FIX sync (hallazgo aparte, misma clase de bug): esta edición toca
-    // el objeto `plan`, no `configuracion` — fusionarPlan también decide
+    // el objeto `plan`, no `configuracion` - fusionarPlan también decide
     // por _actualizadoEn (storage-merge.js), así que necesita su propio
     // sello, igual que ya se hace para materias/semestres/criterios.
     sellarTimestamp(plan);

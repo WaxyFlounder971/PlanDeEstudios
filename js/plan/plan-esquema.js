@@ -1,5 +1,5 @@
 /* =========================================================================
-   PLAN DE ESTUDIOS — ESQUEMA
+   PLAN DE ESTUDIOS - ESQUEMA
    Crear/gestionar la estructura de un Plan de Estudios (universidad,
    tipos_horas), añadir materias manualmente, y los getters básicos de
    acceso a los planes/materias visibles.
@@ -7,6 +7,7 @@
 
 import { NOMBRES_UNIVERSIDAD_PRESET, PARAMETROS_UNIVERSIDAD_DEFAULT, crearMateria, crearPlanEstudio, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
+import { confirmarUniversidadNoInvertida } from "../ui/componentes.js";
 import { estado } from "../core/storage.js";
 import { abrirModalGestionPlanes, renderizarModoHardcore, renderizarSelectorPlan } from "./plan-gestionar.js";
 import { derivarTiposHorasDeHorasColumnas, importarCSVEnPlan, materiaPareceOptativa, obtenerPalabraOptativa, parsearRequisitoArbol, serializarRequisitoArbol } from "./plan-importacion-csv.js";
@@ -40,7 +41,7 @@ const LIMITE_PLANES_ESTUDIO = 3;
  * estaban `estado.X = null;` a nivel de módulo, ejecutándose apenas se
  * cargaba este archivo. Con el ciclo de imports real eso podía correr
  * antes de que `const estado` terminara de inicializarse en storage.js.
- * Se mueven a una función lazy — no hace falta llamarla en ningún lugar
+ * Se mueven a una función lazy - no hace falta llamarla en ningún lugar
  * nuevo: abrirModalMateriaManual() ya escribe ambos campos de forma
  * incondicional antes de que nada los lea, así que esta guardia es solo
  * una red de seguridad por si algo llegara a leerlos antes de esa
@@ -65,12 +66,12 @@ function obtenerPlanSecundario() {
   // esta función devolvía el plan acompañante de Modo Hardcore siempre que
   // cfg.modo_hardcore estuviera activo, y ESE plan secundario terminaba
   // fusionado dentro de obtenerMateriasVisibles/obtenerOptativasDisponibles/
-  // obtenerMateriasRevisar/abrirModalMateriaManual — mezclando materias de
+  // obtenerMateriasRevisar/abrirModalMateriaManual - mezclando materias de
   // dos planes en una sola vista. Eso pisaba el propósito del selector de
   // plan (las pills / las flechas ‹ › en el encabezado): cambiar de plan
   // debe mostrar SOLO las materias de ese plan, nunca combinadas con otro.
   // Se corta acá, en el único punto de origen del plan secundario, en vez
-  // de tocar cada función que lo consume — así ninguna vista vuelve a
+  // de tocar cada función que lo consume - así ninguna vista vuelve a
   // mezclar planes, sin necesidad de tocar el modelo de datos de Modo
   // Hardcore (cfg.modo_hardcore / plan_activo_secundario_id siguen
   // existiendo por si en el futuro se usan para otra cosa que no sea
@@ -92,16 +93,16 @@ function obtenerMateriasVisibles() {
 /**
  * C.4 (v9): equivalente a obtenerMateriasVisibles() pero para las electivas
  * detectadas al importar que todavía NO se agregaron formalmente a la malla
- * (viven en plan.optativas_disponibles, nunca en plan.materias — así nunca
+ * (viven en plan.optativas_disponibles, nunca en plan.materias - así nunca
  * cuentan en ningún total mientras estén aquí). La consume el bloque
  * especial "Optativas" en plan-vista-lista-tarjetas.js.
  *
- * FIX (v1.9.6): esta función faltaba por completo — se importaba desde
+ * FIX (v1.9.6): esta función faltaba por completo - se importaba desde
  * plan-vista-lista-tarjetas.js pero nunca se definió ni exportó acá, lo cual
  * es un import roto en ES modules: al no poder resolverse, el navegador
  * rechaza cargar el módulo main.js completo, así que NINGÚN JavaScript de
  * la app llegaba a ejecutarse (ni siquiera el listener del botón de login)
- * — esta era la causa raíz de "toco el botón y no pasa nada".
+ * - esta era la causa raíz de "toco el botón y no pasa nada".
  */
 
 function obtenerOptativasDisponibles() {
@@ -115,7 +116,7 @@ function obtenerOptativasDisponibles() {
 
 /**
  * v1.12.15: equivalente a obtenerOptativasDisponibles() pero para el bloque
- * especial "Revisar" — materias que el import no pudo ubicar en un bloque
+ * especial "Revisar" - materias que el import no pudo ubicar en un bloque
  * numérico claro y que tampoco parecen optativa/electiva (viven en
  * plan.materias_revisar, nunca en plan.materias, así nunca cuentan en
  * ningún total mientras estén aquí). La consume el bloque especial
@@ -156,7 +157,7 @@ function filasFiltradas() {
 /* ===================== Modal: crear Plan de Estudios ===================== */
 
 /** v6 #2: aplica un ejemplo al azar (de EJEMPLOS_PLACEHOLDER_PLAN, ya
- *  definido más arriba) como placeholder de Carrera/Código — nunca como
+ *  definido más arriba) como placeholder de Carrera/Código - nunca como
  *  valor real precargado. Antes existía elegirPlaceholderPlan() pero nunca
  *  se llamaba desde ningún lado; esto es lo que faltaba conectar. */
 
@@ -192,10 +193,10 @@ function abrirModalCrearPlan(paraSecundario, metadatosDetectados) {
   if (metadatos.codigo_plan) inputCodigo.value = metadatos.codigo_plan;
 
   // v1.12: se guarda el HORAS_COLUMNAS crudo detectado por la IA (si vino)
-  // para que btn-confirmar-crear-plan lo use al armar tipos_horas — ya no
+  // para que btn-confirmar-crear-plan lo use al armar tipos_horas - ya no
   // se le pregunta al usuario por adelantado (ver PARTE B/C).
   estado.horasColumnasDetectadasPlan = metadatos.horas_columnas || null;
-  // v1.12.5: mismo patrón para TIPO_TITULO — se guarda tal cual lo detectó
+  // v1.12.5: mismo patrón para TIPO_TITULO - se guarda tal cual lo detectó
   // la IA para que btn-confirmar-crear-plan lo persista en el plan (antes
   // se leía y se descartaba, sin quedar disponible para la exportación CSV).
   estado.tipoTituloDetectadoPlan = metadatos.tipo_titulo || null;
@@ -219,14 +220,14 @@ function abrirModalCrearPlan(paraSecundario, metadatosDetectados) {
   const bloqueUniOtraNombre = document.getElementById("bloque-universidad-otra-nombre");
   const inputUniOtraNombre = document.getElementById("input-universidad-otra-nombre");
   // Siglas (2026-08-22, separación nombre_completo/siglas): segundo campo
-  // del bloque "Otra" — obligatorio junto al nombre para poder guardar
+  // del bloque "Otra" - obligatorio junto al nombre para poder guardar
   // (ver validación en btn-confirmar-crear-plan más abajo).
   const inputUniOtraSiglas = document.getElementById("input-universidad-otra-siglas");
   // Limpieza (2026-08-22): antes acá se precargaba desde
   // estado.nombreUniversidadImportacion/siglasUniversidadImportacion, pero
   // ninguna de las dos se asigna en ningún lado desde v1.12 (quedaron
   // muertas cuando se eliminó el selector manual de universidad antes de
-  // importar) — siempre resolvían a "". Se arranca vacío directamente; el
+  // importar) - siempre resolvían a "". Se arranca vacío directamente; el
   // bloque de abajo (metadatos.universidad/siglas_universidad) es la única
   // fuente real de precarga para "Otra".
   inputUniOtraNombre.value = "";
@@ -239,7 +240,7 @@ function abrirModalCrearPlan(paraSecundario, metadatosDetectados) {
       inputUniOtraNombre.value = metadatos.universidad;
     }
     // Siglas detectadas por la IA (línea SIGLAS_UNIVERSIDAD: del CSV, ver
-    // extraerMetadatosImportacion en plan-importacion.js) — solo aplica en
+    // extraerMetadatosImportacion en plan-importacion.js) - solo aplica en
     // reimportaciones de un archivo que esta misma app ya exportó antes
     // con fidelidad completa; un CSV nuevo/externo no la trae y el campo
     // queda vacío para completar a mano.
@@ -262,7 +263,7 @@ function aplicarDefaultsUniversidad(universidad) {
   document.getElementById("input-plan-duracion").value = defaults.horario_duracion_bloque_min;
 }
 
-/* v1.12: leerTiposHorasDelModalCrearPlan() fue eliminada — tipos_horas ya
+/* v1.12: leerTiposHorasDelModalCrearPlan() fue eliminada - tipos_horas ya
  * no se lee de un selector manual (TEC/UCR/Otra + "No aplica"), se deriva de
  * estado.horasColumnasDetectadasPlan (ver abrirModalCrearPlan más arriba y
  * el handler de btn-confirmar-crear-plan más abajo). */
@@ -295,7 +296,7 @@ function inicializarModalCrearPlan() {
     }
   });
 
-  document.getElementById("btn-confirmar-crear-plan").addEventListener("click", () => {
+  document.getElementById("btn-confirmar-crear-plan").addEventListener("click", async () => {
     const nombreCarrera = document.getElementById("input-plan-nombre-carrera").value.trim();
     if (!nombreCarrera) {
       const err = document.getElementById("error-modal-crear-plan");
@@ -310,9 +311,9 @@ function inicializarModalCrearPlan() {
       return;
     }
     const universidadPill = document.getElementById("pill-plan-universidad").querySelector(".pill-item.active").dataset.valor;
-    // Universidad — separación nombre_completo/siglas (2026-08-22): TEC/UCR
+    // Universidad - separación nombre_completo/siglas (2026-08-22): TEC/UCR
     // arman el objeto solos (nombre completo real + sigla fija, cero input
-    // manual); "Otra" exige que el usuario haya llenado AMBOS campos —
+    // manual); "Otra" exige que el usuario haya llenado AMBOS campos -
     // mismo criterio que el modal bloqueante de completar universidades
     // (main.js), nunca se guarda un plan con siglas vacías.
     let universidad;
@@ -325,11 +326,24 @@ function inicializarModalCrearPlan() {
         err.classList.remove("oculto");
         return;
       }
-      universidad = { nombre_completo: nombreCompletoOtra, siglas: siglasOtra };
+      // Validación de siglas/nombre invertidos: si las siglas son más largas
+      // que el nombre completo, aviso bloqueante de 5 s con opción de
+      // intercambiarlos (ver confirmarUniversidadNoInvertida, componentes.js).
+      // El botón se deshabilita mientras dura el aviso para evitar un doble
+      // guardado.
+      const btnConfirmarCrear = document.getElementById("btn-confirmar-crear-plan");
+      btnConfirmarCrear.disabled = true;
+      let revisada;
+      try {
+        revisada = await confirmarUniversidadNoInvertida({ siglas: siglasOtra, nombre_completo: nombreCompletoOtra, nombrePlan: nombreCarrera });
+      } finally {
+        btnConfirmarCrear.disabled = false;
+      }
+      universidad = { nombre_completo: revisada.nombre_completo, siglas: revisada.siglas };
     } else {
       universidad = { nombre_completo: NOMBRES_UNIVERSIDAD_PRESET[universidadPill], siglas: universidadPill };
     }
-    // v1.12: tipos_horas ya no se lee de un selector manual — se deriva de
+    // v1.12: tipos_horas ya no se lee de un selector manual - se deriva de
     // lo que la IA haya detectado en HORAS_COLUMNAS (guardado en
     // abrirModalCrearPlan). Si no hay nada detectado (ej. "+ Nuevo Plan" sin
     // pasar por un import), se usa ["Horas"] como default genérico editable
@@ -364,7 +378,7 @@ function inicializarModalCrearPlan() {
     // FIX sync (mismo bug de plan-gestionar.js, misma causa raíz): esto
     // también escribe en estado.datos.configuracion, que se funde entera
     // por su propio _actualizadoEn (fusionarBloqueUnico en storage-merge.js)
-    // — sin sellar acá, crear un plan y activarlo de una vez podía perder
+    // - sin sellar acá, crear un plan y activarlo de una vez podía perder
     // esa asignación en el próximo sync igual que el switch de Modo Hardcore.
     sellarTimestamp(estado.datos.configuracion);
 
@@ -401,11 +415,11 @@ function inicializarModalCrearPlan() {
   });
 }
 
-/* ===================== B.5 — Añadir materia manualmente ===================== */
+/* ===================== B.5 - Añadir materia manualmente ===================== */
 
 /**
- * Punto 6 (v1.9.6) — Modo Edición: si se pasan `materiaExistente` y
- * `planDeLaMateria`, el modal se abre en modo edición — precargado con los
+ * Punto 6 (v1.9.6) - Modo Edición: si se pasan `materiaExistente` y
+ * `planDeLaMateria`, el modal se abre en modo edición - precargado con los
  * datos de esa materia y, al guardar, actualiza la materia en vez de crear
  * una nueva (ver inicializarModalMateriaManual). Sin argumentos, funciona
  * exactamente igual que antes ("+ Añadir materia").
@@ -488,7 +502,7 @@ function abrirModalMateriaManual(materiaExistente = null, planDeLaMateria = null
 /**
  * Genera un <input type="number"> por cada tipo de hora definido en el plan
  * elegido (1 si es TEC, 4 si es UCR, o los que tenga una universidad
- * personalizada) — nunca asume nombres de campos fijos. Cada input queda
+ * personalizada) - nunca asume nombres de campos fijos. Cada input queda
  * con id `input-materia-horas-<índice>` y su tipo guardado en un data-attr
  * para poder leerlo de vuelta al guardar.
  */
@@ -531,10 +545,10 @@ function inicializarModalMateriaManual() {
   });
 
   /**
-   * v1.12: "Borrar materia" — solo existe estando en modo edición
+   * v1.12: "Borrar materia" - solo existe estando en modo edición
    * (estado.materiaManualEditando ya trae planId + codigoOriginal, ver
    * abrirModalMateriaManual). Pide confirmación con el `confirm()` nativo
-   * del navegador antes de borrar — no usa el modal de confirmación propio
+   * del navegador antes de borrar - no usa el modal de confirmación propio
    * del sistema de diseño (`abrirConfirmacion()` de ui/componentes.js)
    * porque ese archivo no está disponible en esta sesión; si lo compartís
    * se puede cambiar por ese, para que se vea igual al resto de la app.
@@ -555,7 +569,7 @@ function inicializarModalMateriaManual() {
     plan.materias = plan.materias.filter((m) => m !== materia);
     // FIX crítico (mismo bug que en eliminarPlanEstudio, plan-gestionar.js):
     // borrar una materia solo del arreglo local no la registra como
-    // borrada ante fusionarDatos()/fusionarPlan() — la fusión la trae de
+    // borrada ante fusionarDatos()/fusionarPlan() - la fusión la trae de
     // vuelta en cuanto llega la copia vieja desde otro dispositivo. Se usa
     // materia.id si existe (crearMateria en schema.js) y si no, cae en
     // .codigo, que es como se identifica esta materia en el resto de este
@@ -630,25 +644,25 @@ function inicializarModalMateriaManual() {
   });
 }
 
-/* ===================== v1.12.15 — Agregar al plan de estudios =====================
+/* ===================== v1.12.15 - Agregar al plan de estudios =====================
  * Antes (v1.12.5), presionar "Añadir al plan" sobre una materia de "Optativas"
  * abría un modal con 3 formas (reemplazar cupo / bloque aparte / bloque
  * específico). v1.12.15 lo simplifica a 2 opciones, siempre visibles a la vez
  * (sin selector de modo previo), y lo reutiliza tal cual desde los DOS
- * bloques especiales — "Optativas" y "Revisar" — con el mismo botón único
+ * bloques especiales - "Optativas" y "Revisar" - con el mismo botón único
  * "Agregar al plan de estudios" (ver plan-vista-lista-tarjetas.js):
- *   1. "Agregar a bloque"            — el usuario elige a mano a cuál bloque
+ *   1. "Agregar a bloque"            - el usuario elige a mano a cuál bloque
  *                                       numerado ya existente pertenece;
  *                                       queda pendiente, como cualquier otra
  *                                       materia formal de ese bloque.
- *   2. "Reemplazar por otra materia" — reemplaza un espacio de electiva/
+ *   2. "Reemplazar por otra materia" - reemplaza un espacio de electiva/
  *                                       optativa que ya existe dentro de un
  *                                       bloque numerado del plan (ver
  *                                       obtenerCuposOptativaEnPlan /
  *                                       materiaPareceOptativa), con
  *                                       confirmación explícita.
  * En ambos casos, la materia sale de su arreglo especial de origen
- * (`optativas_disponibles` o `materias_revisar`, según `origen` — ver
+ * (`optativas_disponibles` o `materias_revisar`, según `origen` - ver
  * abrirModalVincularOptativa) al vincularse, y ya no vuelve a él. */
 
 // FIX (mismo bug de arranque): `estado.vincularOptativaContexto = null;`
@@ -656,18 +670,18 @@ function inicializarModalMateriaManual() {
 // inicializarEstadoMateriaManualSiHaceFalta() más arriba, ver ese comentario.
 
 /** Cupos = materias que YA están dentro de un bloque numerado del plan
- *  (nunca en optativas_disponibles) marcadas como sin_definir=true — un
+ *  (nunca en optativas_disponibles) marcadas como sin_definir=true - un
  *  espacio reservado de electiva/optativa sin materia real elegida todavía
  *  (ver materiaPareceOptativa, reutilizado tal cual desde
- *  plan-importacion-csv.js — nunca se detecta adivinando por el código).
+ *  plan-importacion-csv.js - nunca se detecta adivinando por el código).
  *
- * v1.12.16 (fix bug crítico): devuelve `{ materia, indice }` — `indice` es
+ * v1.12.16 (fix bug crítico): devuelve `{ materia, indice }` - `indice` es
  * la posición real dentro de `plan.materias`, la única identidad que nunca
  * se puede repetir entre dos cupos distintos. Antes se pasaba solo el
  * objeto `materia`; en la práctica, varios cupos genéricos sin definir
  * comparten el mismo nombre (y a veces hasta el mismo código, ya que
  * "código real" para un espacio sin definir suele venir vacío o repetido
- * desde el documento fuente) — al identificarlos por esos campos en vez de
+ * desde el documento fuente) - al identificarlos por esos campos en vez de
  * por su posición, "Reemplazar" terminaba operando sobre el cupo
  * equivocado, o afectando a varios cupos de distintos bloques a la vez. */
 function obtenerCuposOptativaEnPlan(plan) {
@@ -693,9 +707,9 @@ function obtenerBloquesEnPlan(plan) {
 }
 
 /**
- * `origen` indica de cuál arreglo especial viene la materia — "optativa"
+ * `origen` indica de cuál arreglo especial viene la materia - "optativa"
  * (plan.optativas_disponibles, bloque "Optativas") o "revisar"
- * (plan.materias_revisar, bloque "Revisar") — así, al vincularla, se quita
+ * (plan.materias_revisar, bloque "Revisar") - así, al vincularla, se quita
  * del arreglo correcto (ver quitarDeOrigenEspecialOptativa más abajo).
  */
 function abrirModalVincularOptativa(materiaTemplate, plan, origen = "optativa") {
@@ -705,16 +719,16 @@ function abrirModalVincularOptativa(materiaTemplate, plan, origen = "optativa") 
   document.getElementById("nombre-vincular-optativa").textContent = materiaTemplate.nombre;
   document.getElementById("error-vincular-optativa").classList.add("oculto");
   // v1.16 (fix bug de distinción Optativas/Revisar): el texto ya no es
-  // idéntico para los dos orígenes — "optativa" deja claro que es una
+  // idéntico para los dos orígenes - "optativa" deja claro que es una
   // elección voluntaria, "revisar" deja claro que la materia ya es parte
   // confirmada del plan y solo falta decidir su ubicación.
   document.getElementById("explicacion-vincular-optativa").textContent =
     origen === "revisar"
-      ? "Esta materia ya es parte confirmada de tu plan — el import no pudo determinar en qué bloque va. Elige una de estas dos formas de ubicarla."
+      ? "Esta materia ya es parte confirmada de tu plan - el import no pudo determinar en qué bloque va. Elige una de estas dos formas de ubicarla."
       : "Esta es una materia opcional. Si vas a cursarla, elige una de estas dos formas de sumarla a tu plan de estudios.";
 
   // v1.12.15: el selector de modo (3 pills) del diseño anterior ya no se usa
-  // — las 2 opciones se muestran siempre juntas dentro del modal (ver
+  // - las 2 opciones se muestran siempre juntas dentro del modal (ver
   // renderizarContenidoVincularOptativa). Se oculta por si el HTML todavía
   // lo trae, sin depender de tocar index.html para este cambio.
   const pillModo = document.getElementById("pill-vincular-optativa-modo");
@@ -733,7 +747,7 @@ function cerrarModalVincularOptativa() {
  *  ctx.origen), para que deje de aparecer ahí una vez vinculada.
  *
  * v1.16 (fix bug crítico): antes filtraba por `m.codigo !== materiaTemplate.codigo`
- * — como ahora el import SÍ deja convivir varias optativas/revisar con el
+ * - como ahora el import SÍ deja convivir varias optativas/revisar con el
  * mismo código (ver fix de importarCSVEnPlan en plan-importacion-csv.js, que
  * ya no las fusiona), filtrar por código borraba TODAS las que compartieran
  * ese código de un solo golpe al vincular solo una. `materiaTemplate` es
@@ -759,7 +773,7 @@ function renderizarContenidoVincularOptativa() {
   // ---- Opción 1: Agregar a bloque ----
   const seccionBloque = document.createElement("div");
   seccionBloque.className = "stack";
-  seccionBloque.innerHTML = `<p style="margin:0;"><strong>1. Agregar a bloque</strong></p><p class="muted" style="margin-top:2px;">Elige a cuál ${plan.parametros_universidad.nombre_bloque.toLowerCase()} numerado pertenece — quedará como una materia pendiente más de ese bloque.</p>`;
+  seccionBloque.innerHTML = `<p style="margin:0;"><strong>1. Agregar a bloque</strong></p><p class="muted" style="margin-top:2px;">Elige a cuál ${plan.parametros_universidad.nombre_bloque.toLowerCase()} numerado pertenece - quedará como una materia pendiente más de ese bloque.</p>`;
 
   const bloques = obtenerBloquesEnPlan(plan);
   if (bloques.length === 0) {
@@ -769,20 +783,20 @@ function renderizarContenidoVincularOptativa() {
     seccionBloque.appendChild(p);
   } else {
     // v1.12.16 (Ajuste 1): antes era un pill-group horizontal que truncaba
-    // cada opción a "C." y no dejaba distinguir un bloque de otro — se
+    // cada opción a "C." y no dejaba distinguir un bloque de otro - se
     // reemplaza por un <select> normal, que siempre muestra el nombre
     // completo de cada bloque y escala bien aunque haya muchos.
     const selectBloque = document.createElement("select");
     selectBloque.className = "form-select";
     // v1.16.1 (fix bug crítico de contraste, sigue): `color-scheme` por sí
-    // solo no bastó — varios navegadores solo respetan esa propiedad para
+    // solo no bastó - varios navegadores solo respetan esa propiedad para
     // dibujar el popup nativo en oscuro si además el <select>/<option> no
     // tiene ya un fondo/texto propio "claro" heredado del CSS de la app
     // (`.form-select` probablemente define background/color pensados para el
     // combo CERRADO, y ese mismo estilo se filtra al popup, pisando lo que
     // `color-scheme` intentaba corregir). Se fuerzan colores explícitos e
     // inline (máxima prioridad, sin depender de variables CSS que no tengo a
-    // la vista) tanto en el <select> como en CADA <option> — el navegador
+    // la vista) tanto en el <select> como en CADA <option> - el navegador
     // solo respeta el fondo/texto de un <option> si viene puesto en el
     // propio <option>, no alcanza con ponerlo únicamente en el <select>.
     const esModoClaro = estado.datos.configuracion.modo === "light";
@@ -816,7 +830,7 @@ function renderizarContenidoVincularOptativa() {
 
     selectBloque.addEventListener("change", () => {
       if (!selectBloque.value) return;
-      // los bloques pueden ser numéricos o texto — se recupera el valor
+      // los bloques pueden ser numéricos o texto - se recupera el valor
       // original (no el string del <option>) para no perder su tipo.
       const bloqueElegido = bloques.find((b) => String(b) === selectBloque.value);
       asignarOptativaABloqueEspecifico(materiaTemplate, plan, bloqueElegido);
@@ -848,13 +862,13 @@ function renderizarContenidoVincularOptativa() {
       btn.type = "button";
       btn.className = "btn btn-secondary btn-block";
       btn.style.textAlign = "left";
-      btn.textContent = `${plan.parametros_universidad.nombre_bloque} ${cupoMateria.bloque} — reemplazar ${obtenerPalabraOptativa(cupoMateria)}: "${cupoMateria.nombre}"`;
+      btn.textContent = `${plan.parametros_universidad.nombre_bloque} ${cupoMateria.bloque} - reemplazar ${obtenerPalabraOptativa(cupoMateria)}: "${cupoMateria.nombre}"`;
       btn.addEventListener("click", () => {
         const confirmado = window.confirm(
           `¿Quieres poner "${materiaTemplate.nombre}" dentro del plan, reemplazando a "${cupoMateria.nombre}" del ${plan.parametros_universidad.nombre_bloque.toLowerCase()} ${cupoMateria.bloque}?`
         );
         // v1.12.16: se identifica al cupo por su índice real dentro de
-        // plan.materias (indice), nunca por nombre/código — así, si hay
+        // plan.materias (indice), nunca por nombre/código - así, si hay
         // varios cupos con el mismo nombre genérico en distintos bloques
         // (ej. "Repertorio" en el Bloque 8, 9 y 10), reemplazar uno nunca
         // toca a los otros.
@@ -870,13 +884,13 @@ function renderizarContenidoVincularOptativa() {
  * Opción 2 ("Reemplazar por otra materia"): la entrada genérica del cupo (ej. OPT-B7/ELEC-B9) se
  * sustituye por los datos reales de la materia elegida (código, nombre,
  * créditos, horas, requisitos, correquisitos), pero conserva el `bloque` del
- * cupo que reemplazó, además de su `categoria_id` y `estado` ya asignados —
+ * cupo que reemplazó, además de su `categoria_id` y `estado` ya asignados -
  * nunca se pierde su posición. El objeto `cupo` se muta in-place: nunca se
  * agrega una fila nueva a plan.materias para esto (y la fila vieja no queda
  * duplicada).
  *
  * v1.12.16: `indiceCupo` es la posición del cupo dentro de `plan.materias`
- * (ver obtenerCuposOptativaEnPlan) — se resuelve el objeto real en ese
+ * (ver obtenerCuposOptativaEnPlan) - se resuelve el objeto real en ese
  * índice al momento del clic, nunca por nombre/código, así reemplazar un
  * cupo nunca afecta a otro cupo con el mismo nombre genérico en otro bloque.
  */
@@ -888,7 +902,7 @@ function reemplazarCupoOptativa(materiaTemplate, plan, indiceCupo) {
   quitarDeOrigenEspecialOptativa(plan, materiaTemplate, ctx ? ctx.origen : "optativa");
 
   // Ajuste 2 (v1.12.16): antes de perder el nombre genérico del cupo, se
-  // guarda — se muestra luego en la tarjeta de la materia real, debajo de
+  // guarda - se muestra luego en la tarjeta de la materia real, debajo de
   // Requisitos (ver construirBloqueCompletoRequisitos en plan-detalle.js).
   cupo.cupo_generico_original = cupo.nombre;
 
@@ -906,7 +920,7 @@ function reemplazarCupoOptativa(materiaTemplate, plan, indiceCupo) {
 
   // FIX sync (mismo patrón que la edición manual de materias más arriba en
   // este archivo): este bloque muta `cupo` in-place con datos nuevos
-  // (código, nombre, créditos, horas, requisitos) pero nunca lo sellaba —
+  // (código, nombre, créditos, horas, requisitos) pero nunca lo sellaba -
   // fusionarColeccion en storage-merge.js decide por _actualizadoEn, así
   // que sin esto el reemplazo podía perderse en el próximo sync como
   // cualquier otra edición sin sellar.
@@ -918,7 +932,7 @@ function reemplazarCupoOptativa(materiaTemplate, plan, indiceCupo) {
 }
 
 /** Opción 1 ("Agregar a bloque"): se asigna manualmente a un bloque numérico
- *  ya existente del plan — se agrega como una materia formal más de ese
+ *  ya existente del plan - se agrega como una materia formal más de ese
  *  bloque (no queda marcada es_optativa, igual que si reemplazara un cupo;
  *  estado inicial "pendiente", ya el default de crearMateria). */
 function asignarOptativaABloqueEspecifico(materiaTemplate, plan, bloque) {
@@ -927,7 +941,7 @@ function asignarOptativaABloqueEspecifico(materiaTemplate, plan, bloque) {
   materiaTemplate.es_optativa = false;
   materiaTemplate.bloque = bloque;
   // FIX sync (mismo caso que reemplazarCupoOptativa, arriba): se editan
-  // es_optativa y bloque antes de que la materia entre a plan.materias —
+  // es_optativa y bloque antes de que la materia entre a plan.materias -
   // sin sellar, esta asignación corre el mismo riesgo de perderse en el
   // próximo sync que cualquier otra edición sin sellar en este archivo.
   sellarTimestamp(materiaTemplate);
@@ -938,7 +952,7 @@ function asignarOptativaABloqueEspecifico(materiaTemplate, plan, bloque) {
 }
 
 function inicializarModalVincularOptativa() {
-  // v1.12.15: ya no hay pills de modo que inicializar — el modal siempre
+  // v1.12.15: ya no hay pills de modo que inicializar - el modal siempre
   // muestra las 2 opciones juntas (ver renderizarContenidoVincularOptativa).
   document.getElementById("btn-cancelar-vincular-optativa").addEventListener("click", cerrarModalVincularOptativa);
   document.getElementById("modal-vincular-optativa").addEventListener("click", (e) => {
