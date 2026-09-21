@@ -7,6 +7,13 @@
 import { togglePerfilPopover } from "../main.js";
 import { MODALIDADES_HORARIO, crearModalidadHorario } from "../core/schema.js";
 
+// Compatibilidad: la validación de siglas/nombre invertidos vive en su propio
+// módulo (ui/aviso-universidad.js) para no mezclarse con este archivo. Esta
+// línea la re-exporta desde acá también, así cualquier archivo que la importe
+// desde "../ui/componentes.js" (plan-esquema.js, plan-gestionar.js, main.js)
+// funciona sin importar de cuál de los dos módulos la pida.
+export { confirmarUniversidadNoInvertida } from "./aviso-universidad.js";
+
 const CLAVE_SIDEBAR_COLAPSADA = "sidebar_colapsada";
 
 /**
