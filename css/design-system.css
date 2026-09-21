@@ -2877,39 +2877,44 @@ img, svg { max-width: 100%; }
 [data-mode="light"] .agenda-filtro-estado-feriado.active    { color: #047857; }
 [data-mode="light"] .agenda-filtro-estado-clase.active      { color: #9d174d; }
 
-/* ---- Estado "Perdido" de una tarea (2026-09-21) ----
+/* ---- Estado "Perdido" de una tarea (2026-09-21, ajustado) ----
    Tercer estado explícito junto a completada (ver `perdida` en
-   crearEventoAgenda, schema.js): rojo MUY oscuro (#7f1d1d), a propósito
-   distinto del rojo de "Examen" (#ef4444). La raya del tachado se pinta
-   inline desde JS (#dc2626, COLOR_PERDIDA_RAYA en agenda-utils.js) porque
-   con el oscuro casi no se vería. Sólidos (no
-   translúcidos como el resto de badges) para que se lean igual en modo
-   oscuro y claro. */
-.badge-perdida { background: #7f1d1d; border-color: #7f1d1d; color: #fecaca; }
-.agenda-check-completada.perdida { background: #7f1d1d; border-color: #7f1d1d; }
+   crearEventoAgenda, schema.js). GRIS (#6b7280) a propósito, distinto del
+   rojo de "Examen" (#ef4444), y en estilo "outline" como el resto de
+   badges/filtros (relleno translúcido + borde + texto en el color propio),
+   NO sólido. La raya del tachado se pinta inline desde JS (#9ca3af,
+   COLOR_PERDIDA_RAYA en agenda-utils.js); estos hex deben coincidir con
+   COLOR_PERDIDA_BORDE / COLOR_PERDIDA_RAYA de ese archivo. */
+.badge-perdida { background: rgba(107, 114, 128, 0.18); border-color: #6b7280; color: #d1d5db; }
+.agenda-check-completada.perdida { background: rgba(107, 114, 128, 0.18); border-color: #6b7280; }
 .agenda-check-completada.perdida::after {
   content: "✕";
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  color: #fecaca; font-size: 11px; font-weight: 700; line-height: 1;
+  color: #d1d5db; font-size: 11px; font-weight: 700; line-height: 1;
 }
-.agenda-filtro-estado-perdida.active { background: #7f1d1d; border-color: #7f1d1d; color: #fecaca; }
-[data-mode="light"] .agenda-filtro-estado-perdida.active { color: #fecaca; }
+.agenda-filtro-estado-perdida.active { background: rgba(107, 114, 128, 0.18); border-color: #6b7280; color: #d1d5db; }
+[data-mode="light"] .badge-perdida { color: #4b5563; }
+[data-mode="light"] .agenda-check-completada.perdida::after { color: #4b5563; }
+[data-mode="light"] .agenda-filtro-estado-perdida.active { color: #4b5563; }
 
 /* Ventanita "Completado / Perdido" (agenda-modal.js, se arma por JS al tocar
-   el círculo de una tarea vencida). */
+   el círculo de una tarea vencida). Botones en estilo outline (relleno
+   translúcido + borde + texto de color), igual que los badges y el filtro. */
 .agenda-selector-estado-card { max-width: 340px; }
 .agenda-selector-estado-acciones { display: flex; gap: 10px; margin-top: 4px; }
 .agenda-selector-estado-btn {
   flex: 1; padding: 12px 10px; border-radius: 12px;
   border: 1px solid transparent; font-weight: 700; font-size: 0.95rem;
-  cursor: pointer; color: #fff;
+  cursor: pointer; color: var(--text-muted);
   transition: transform var(--transition-fast), filter var(--transition-fast);
 }
-.agenda-selector-estado-btn:hover { filter: brightness(1.1); }
+.agenda-selector-estado-btn:hover { filter: brightness(1.15); }
 .agenda-selector-estado-btn:active { transform: scale(0.98); }
-.agenda-selector-estado-btn.completado { background: #3b82f6; }
-.agenda-selector-estado-btn.perdido { background: #7f1d1d; color: #fecaca; }
+.agenda-selector-estado-btn.completado { background: rgba(59, 130, 246, 0.15); border-color: #3b82f6; color: #60a5fa; }
+.agenda-selector-estado-btn.perdido { background: rgba(107, 114, 128, 0.18); border-color: #6b7280; color: #d1d5db; }
+[data-mode="light"] .agenda-selector-estado-btn.completado { color: #1d4ed8; }
+[data-mode="light"] .agenda-selector-estado-btn.perdido { color: #4b5563; }
 
 /* Feature "modo selección" (mantener presionado sobre una tarjeta de Agenda,
    cualquier tipo, activa selección múltiple para borrar varias a la vez) —
