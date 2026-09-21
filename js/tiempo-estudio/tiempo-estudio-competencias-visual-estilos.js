@@ -303,6 +303,23 @@ const CSS_COMPETENCIAS_VISUAL = `
     .cp-sp,.cp-cf,.cp-rip{display:none}
   }
 
+
+  /* ---- Color propio de cada persona (2.ª ronda, 2026-09-21) ----
+     Las variables --cp-uc* las pone el JS inline (ver varsDeColor). Sin
+     color (dispositivo viejo) no hay clase .cp-tinted y todo se ve como
+     antes: dorado/plata/bronce. En el podio el PEDESTAL toma el color de la
+     persona y el borde superior conserva el metal del puesto (oro/plata/
+     bronce), así el 1.º/2.º/3.º se sigue leyendo aunque los colores se
+     parezcan. */
+  .cp-pc.cp-tinted .cp-ped{background:linear-gradient(180deg,var(--cp-uc-l),var(--cp-uc) 55%,var(--cp-uc-d))}
+  .cp-pc.cp-tinted.cp-p1 .cp-ped{box-shadow:inset 0 3px 0 #ffd45c}
+  .cp-pc.cp-tinted.cp-p2 .cp-ped{box-shadow:inset 0 3px 0 #e6e9fb}
+  .cp-pc.cp-tinted.cp-p3 .cp-ped{box-shadow:inset 0 3px 0 #e6a878}
+  .cp-pc.cp-tinted .cp-ped b{color:var(--cp-uc-num);text-shadow:none}
+  .cp-pc.cp-tinted .cp-av{box-shadow:0 0 0 2px var(--cp-bgring),0 0 0 4px var(--cp-uc)}
+  .cp-row.cp-tinted .cp-av{box-shadow:0 0 0 2px var(--cp-bgring),0 0 0 3px var(--cp-uc)}
+  .cp-row.cp-tinted .cp-bar i{background:linear-gradient(90deg,var(--cp-uc-d),var(--cp-uc-l))}
+
 `;
 
 export { CSS_COMPETENCIAS_VISUAL };

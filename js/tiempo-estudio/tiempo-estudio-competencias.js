@@ -33,7 +33,9 @@
        gestion.js).
      - Foto: se manda `foto_url` (la de `estado.datos.perfil`) al crear y al
        unirse, y si cambia se refresca sola con POST .../participantes/:id/
-       foto (ver `sincronizarFotoPropia`). Sin foto → inicial de color.
+       foto y color (ver `sincronizarPerfilPropio`). Sin foto → inicial de color.
+     - Color: el color de acento de la paleta de cada usuario (`--accent-1`)
+       pinta su pedestal, su aro y su barra en el podio de todos.
 
    Sigue siendo Parte 1 (crear/unirse/ver lista/copiar invitación/salir) +
    ahora también Parte 2 (marcador en vivo vía GET, salón de la fama vía
@@ -60,6 +62,7 @@ import { construirAvisosResultados, construirBotonesSimulacion } from "./tiempo-
 import {
   esc,
   normalizarFotoUrl,
+  leerColorAcentoActual,
   leerVistaPreferida,
   guardarVistaPreferida,
   pintarTarjeta,
@@ -121,31 +124,45 @@ function obtenerMiFotoUrl() {
   return normalizarFotoUrl(p.foto_url || p.foto || p.picture || p.imagen || "");
 }
 
-// Combinaciones "competencia|url" que ya se mandaron en esta sesión: evita
-// repetir el POST cada vez que se redibuja la tarjeta.
-const fotosSincronizadas = new Set();
+/**
+ * Color de acento de la paleta activa (2.ª ronda, 2026-09-21): es el color
+ * "favorito" de esta persona en el podio y en las barras. Sale de la
+ * variable `--accent-1` de la app (ver leerColorAcentoActual), así que
+ * acompaña a las 13 paletas, a la personalizada y al modo claro/oscuro.
+ */
+function obtenerMiColor() {
+  return leerColorAcentoActual();
+}
 
-/** Best-effort: si la foto guardada en el Worker no es la actual, la sube. */
-async function sincronizarFotoPropia(competencia, fotoUrl) {
-  const clave = `${competencia.id}|${fotoUrl}`;
-  if (fotosSincronizadas.has(clave)) return;
-  fotosSincronizadas.add(clave);
+// Combinaciones "competencia|foto|color" que ya se mandaron en esta sesión:
+// evita repetir el POST cada vez que se redibuja la tarjeta.
+const perfilesSincronizados = new Set();
+
+/**
+ * Best-effort: si lo que guarda el Worker (foto y/o color) no es lo actual,
+ * lo sube con un solo POST /perfil. `cambios` = { foto_url?, color? } con
+ * SOLO lo que difiere.
+ */
+async function sincronizarPerfilPropio(competencia, cambios) {
+  const clave = `${competencia.id}|${JSON.stringify(cambios)}`;
+  if (perfilesSincronizados.has(clave)) return;
+  perfilesSincronizados.add(clave);
   try {
     const respuesta = await fetchConTimeout(
-      `${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}/participantes/${encodeURIComponent(competencia.participante_id)}/foto`,
+      `${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}/participantes/${encodeURIComponent(competencia.participante_id)}/perfil`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identificador_usuario: estado.datos.perfil.correo, foto_url: fotoUrl }),
+        body: JSON.stringify({ identificador_usuario: estado.datos.perfil.correo, ...cambios }),
       }
     );
     if (!respuesta.ok) {
-      fotosSincronizadas.delete(clave); // se reintenta la próxima vez
-      console.warn(`[competencias] No se pudo actualizar la foto (${respuesta.status}) en "${competencia.nombre}".`);
+      perfilesSincronizados.delete(clave); // se reintenta la próxima vez
+      console.warn(`[competencias] No se pudo actualizar foto/color (${respuesta.status}) en "${competencia.nombre}".`);
     }
   } catch (e) {
-    fotosSincronizadas.delete(clave);
-    console.warn("[competencias] Falló actualizar la foto — se reintenta la próxima vez:", e);
+    perfilesSincronizados.delete(clave);
+    console.warn("[competencias] Falló actualizar foto/color — se reintenta la próxima vez:", e);
   }
 }
 
@@ -655,6 +672,7 @@ function abrirModalCrearCompetencia(refrescar) {
           identificador_usuario: estado.datos.perfil.correo,
           offset_minutos_utc: obtenerOffsetMinutosUtc(),
           foto_url: obtenerMiFotoUrl(),
+          color: obtenerMiColor(),
         }),
       });
       if (!respuesta.ok) throw new Error(`El Worker respondió ${respuesta.status}`);
@@ -750,6 +768,7 @@ function abrirModalUnirseCompetencia(refrescar) {
             identificador_usuario: estado.datos.perfil.correo,
             offset_minutos_utc: obtenerOffsetMinutosUtc(),
             foto_url: obtenerMiFotoUrl(),
+            color: obtenerMiColor(),
           }),
         }
       );
@@ -913,6 +932,7 @@ async function abrirModalInvitacionRecibida(id, refrescar) {
             identificador_usuario: estado.datos.perfil.correo,
             offset_minutos_utc: obtenerOffsetMinutosUtc(),
             foto_url: obtenerMiFotoUrl(),
+            color: obtenerMiColor(),
           }),
         }
       );
@@ -1016,16 +1036,23 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar) {
       id: p.id,
       apodo: p.apodo,
       foto_url: p.foto_url || null,
+      color: p.color || null,
       horas: p.horas_semana_actual || 0,
     }));
 
-    // Foto propia: si el Worker tiene otra (o ninguna), se sube la actual y
-    // mientras tanto se muestra la de este dispositivo.
+    // Foto y color propios: si el Worker tiene otros (o ninguno), se sube lo
+    // actual de este dispositivo y mientras tanto se muestra directamente.
     const miFoto = obtenerMiFotoUrl();
+    const miColor = obtenerMiColor();
     const yo = participantes.find((p) => p.id === competencia.participante_id);
-    if (yo && miFoto && yo.foto_url !== miFoto) {
-      yo.foto_url = miFoto;
-      sincronizarFotoPropia(competencia, miFoto);
+    if (yo) {
+      const cambios = {};
+      if (miFoto && yo.foto_url !== miFoto) cambios.foto_url = miFoto;
+      if (miColor && yo.color !== miColor) cambios.color = miColor;
+      if (Object.keys(cambios).length > 0) {
+        Object.assign(yo, cambios);
+        sincronizarPerfilPropio(competencia, cambios);
+      }
     }
 
     let vista = vistaGuardada;

@@ -64,6 +64,86 @@ function normalizarFotoUrl(valor) {
   }
 }
 
+/**
+ * Color en formato #rrggbb (minúsculas) o null. Acepta #rgb, #rrggbb y
+ * rgb()/rgba(). Es la ÚNICA puerta por la que un color de otra persona
+ * llega a un estilo inline, así que nada raro pasa.
+ */
+function normalizarColorHex(valor) {
+  if (typeof valor !== "string") return null;
+  const v = valor.trim().toLowerCase();
+  let m = /^#([0-9a-f]{6})$/.exec(v);
+  if (m) return `#${m[1]}`;
+  m = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/.exec(v);
+  if (m) return `#${m[1]}${m[1]}${m[2]}${m[2]}${m[3]}${m[3]}`;
+  m = /^rgba?\(\s*(\d{1,3})[\s,]+(\d{1,3})[\s,]+(\d{1,3})/.exec(v);
+  if (m) {
+    const [r, g, b] = [m[1], m[2], m[3]].map((n) => Math.min(255, Number(n)));
+    return "#" + [r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("");
+  }
+  return null;
+}
+
+/**
+ * Color de acento de la paleta ACTIVA del usuario (variable `--accent-1` de
+ * la app: vale para las paletas fijas, la personalizada y claro/oscuro). Se
+ * resuelve con un elemento temporal para que el navegador lo convierta a
+ * rgb() aunque la variable sea var()/hsl()/color-mix(). null si falla.
+ */
+function leerColorAcentoActual() {
+  try {
+    const el = document.createElement("span");
+    el.style.cssText = "position:absolute;visibility:hidden;pointer-events:none;color:var(--accent-1)";
+    document.body.appendChild(el);
+    const rgb = getComputedStyle(el).color;
+    el.remove();
+    return normalizarColorHex(rgb);
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * A partir del color de una persona saca los tonos del pedestal/aro/barra.
+ * Se acotan saturación y luminosidad para que SIEMPRE se lea (un color muy
+ * claro u oscuro no deja el número del pedestal invisible). null si no hay
+ * color válido → se usan los dorado/plata/bronce de siempre.
+ */
+function tonosDeColor(color) {
+  const hex = normalizarColorHex(color);
+  if (!hex) return null;
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  let h = 0;
+  if (d) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+  }
+  h = Math.round(((h * 60) + 360) % 360);
+  const l0 = (max + min) / 2;
+  const s0 = d ? d / (1 - Math.abs(2 * l0 - 1)) : 0;
+  const acotar = (x, a, z) => Math.min(z, Math.max(a, x));
+  const sat = Math.round(acotar(s0, 0.25, 0.9) * 100);
+  const medio = acotar(l0, 0.4, 0.6);
+  const hsl = (l) => `hsl(${h} ${sat}% ${Math.round(l * 100)}%)`;
+  return {
+    medio: hsl(medio),
+    claro: hsl(acotar(medio + 0.16, 0.55, 0.78)),
+    oscuro: hsl(acotar(medio - 0.16, 0.24, 0.4)),
+    numero: medio > 0.52 ? "rgba(20,12,50,.55)" : "rgba(255,255,255,.7)",
+  };
+}
+
+/** Variables CSS inline con los tonos de la persona (cadena vacía si no hay). */
+function varsDeColor(tonos) {
+  return tonos ? `--cp-uc:${tonos.medio};--cp-uc-l:${tonos.claro};--cp-uc-d:${tonos.oscuro};--cp-uc-num:${tonos.numero};` : "";
+}
+
 function tonoDeApodo(apodo) {
   let h = 0;
   for (const c of String(apodo || "?")) h = (h * 31 + c.codePointAt(0)) % 360;
@@ -75,7 +155,8 @@ function inicialDe(apodo) {
   return (primero || "?").toUpperCase();
 }
 
-function fondoIniciales(h) {
+function fondoIniciales(h, tonos) {
+  if (tonos) return `linear-gradient(135deg,${tonos.claro},${tonos.oscuro})`;
   return `linear-gradient(135deg,hsl(${h} 88% 62%),hsl(${(h + 28) % 360} 80% 48%))`;
 }
 
@@ -118,7 +199,7 @@ const CORONA = '<svg class="cp-crown" viewBox="0 0 24 24" aria-hidden="true"><pa
 /* ===================== Avatares ===================== */
 
 /**
- * `persona` = { apodo, foto_url }. `tam` = diámetro en px (opcional; el CSS
+ * `persona` = { apodo, foto_url, color? }. `tam` = diámetro en px (opcional; el CSS
  * trae 40 por defecto y el podio lo escala solo).
  */
 function avatarHTML(persona, tam) {
@@ -126,11 +207,12 @@ function avatarHTML(persona, tam) {
   const apodo = persona && persona.apodo;
   const h = tonoDeApodo(apodo);
   const inicial = esc(inicialDe(apodo));
+  const fondo = fondoIniciales(h, tonosDeColor(persona && persona.color));
   const url = normalizarFotoUrl(persona && persona.foto_url);
   if (!url) {
-    return `<span class="cp-av"${st}><span class="cp-ini" style="background:${fondoIniciales(h)}">${inicial}</span></span>`;
+    return `<span class="cp-av"${st}><span class="cp-ini" style="background:${fondo}">${inicial}</span></span>`;
   }
-  return `<span class="cp-av"${st}><img class="cp-av-img" src="${esc(url)}" alt="" referrerpolicy="no-referrer" decoding="async" data-cp-ini="${inicial}" data-cp-h="${h}"></span>`;
+  return `<span class="cp-av"${st}><img class="cp-av-img" src="${esc(url)}" alt="" referrerpolicy="no-referrer" decoding="async" data-cp-ini="${inicial}" data-cp-fondo="${esc(fondo)}"></span>`;
 }
 
 /** Cambia por la inicial cualquier foto que no cargue. Llamar después de
@@ -144,7 +226,7 @@ function activarFallbackAvatares(raiz) {
       if (!img.isConnected) return;
       const ini = document.createElement("span");
       ini.className = "cp-ini";
-      ini.style.background = fondoIniciales(Number(img.dataset.cpH) || 0);
+      ini.style.background = img.dataset.cpFondo || fondoIniciales(0);
       ini.textContent = img.dataset.cpIni || "?";
       img.replaceWith(ini);
     };
@@ -171,9 +253,10 @@ function filaHTML(p, i, ordenados, d, yoId) {
   const yo = p.id === yoId;
   const tope = ordenados[0].horas || 0;
   const pct = tope ? Math.round(((p.horas || 0) / tope) * 100) : 0;
-  const cls = ["cp-row", lider ? "cp-lead" : "", yo ? "cp-me-halo" : "", !p.horas ? "cp-zero" : ""].filter(Boolean).join(" ");
+  const tonos = tonosDeColor(p.color);
+  const cls = ["cp-row", lider ? "cp-lead" : "", yo ? "cp-me-halo" : "", !p.horas ? "cp-zero" : "", tonos ? "cp-tinted" : ""].filter(Boolean).join(" ");
   const rk = `<span class="cp-rk ${rank <= 3 ? "cp-r" + rank : ""}">${rank}</span>`;
-  return `<div class="${cls}" style="--cp-d:${seg(d)};--cp-bd:${seg(d + 0.25)};--cp-dc:${seg(d + 0.6)}">
+  return `<div class="${cls}" style="${varsDeColor(tonos)}--cp-d:${seg(d)};--cp-bd:${seg(d + 0.25)};--cp-dc:${seg(d + 0.6)}">
     ${rk}
     <span class="cp-avw">${lider ? CORONA : ""}${avatarHTML(p, lider ? 48 : 40)}</span>
     <div class="cp-who"><div class="cp-name">${esc(p.apodo)}</div>
@@ -197,13 +280,14 @@ function podioHTML(ordenados, modo, T, yoId) {
     const dj = t.jump[i];
     const yo = card && p.id === yoId;
     const dn = dj + (i === 0 ? 0.6 : 0.55);
-    const vars = `--cp-dp:${seg(t.ped[i])};--cp-dj:${seg(dj)};--cp-dn:${seg(dn)};--cp-dc:${seg(dj + 0.95)};--cp-ds:${card && i === 0 ? seg(dj + 1) : "0s"}`;
+    const tonos = tonosDeColor(p.color);
+    const vars = `${varsDeColor(tonos)}--cp-dp:${seg(t.ped[i])};--cp-dj:${seg(dj)};--cp-dn:${seg(dn)};--cp-dc:${seg(dj + 0.95)};--cp-ds:${card && i === 0 ? seg(dj + 1) : "0s"}`;
     const chispas =
       i === 0
         ? `<i class="cp-sp" style="left:-30px;top:6px;--cp-d:.2s"></i><i class="cp-sp" style="right:-28px;top:26px;--cp-d:1s"></i><i class="cp-sp" style="left:-16px;top:52px;--cp-d:1.7s;width:6px;height:6px"></i><i class="cp-sp" style="right:-12px;top:-4px;--cp-d:2.2s;width:6px;height:6px"></i>`
         : "";
     const ondas = card && i === 0 ? `<i class="cp-rip" style="--cp-r:${seg(dj + 0.58)}"></i><i class="cp-rip" style="--cp-r:${seg(dj + 0.93)}"></i>` : "";
-    return `<div class="cp-pc ${cls}${yo ? " cp-me-halo" : ""}" style="${vars}">
+    return `<div class="cp-pc ${cls}${yo ? " cp-me-halo" : ""}${tonos ? " cp-tinted" : ""}" style="${vars}">
       ${ondas}
       <span class="cp-avw">${i === 0 ? CORONA : ""}${chispas}${avatarHTML(p)}</span>
       <div class="cp-pn">${esc(p.apodo)}</div>
@@ -345,7 +429,7 @@ function abrirHoja({ icono, tono, titulo, subtitulo, cuerpoHTML }) {
 
 /** Normaliza un podio del Worker (`/podios`) al formato interno. */
 function normalizarResultados(podio) {
-  return (podio.resultados || []).map((r) => ({ id: r.participante_id, apodo: r.apodo, foto_url: r.foto_url, horas: r.horas }));
+  return (podio.resultados || []).map((r) => ({ id: r.participante_id, apodo: r.apodo, foto_url: r.foto_url, color: r.color, horas: r.horas }));
 }
 
 function semanaHTML(podio, idx, abierta, yoId) {
@@ -516,6 +600,8 @@ export {
   esc,
   fmtHoras,
   normalizarFotoUrl,
+  normalizarColorHex,
+  leerColorAcentoActual,
   leerVistaPreferida,
   guardarVistaPreferida,
   avatarHTML,
