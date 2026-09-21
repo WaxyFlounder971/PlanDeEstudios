@@ -21,10 +21,10 @@ function agregarLongPress(el, callback, duracionMs = 500) {
   let timer = null;
   let origenX = 0;
   let origenY = 0;
-  // FIX (2026-08-06 — "el hold también dispara el click de golpe, se
+  // FIX (2026-08-06 - "el hold también dispara el click de golpe, se
   // buguea"): el navegador SIEMPRE manda un "click" normal justo después
   // del pointerup/touchend, sin importar que el timer del hold ya haya
-  // disparado su propio callback antes — agregarLongPress nunca escuchaba
+  // disparado su propio callback antes - agregarLongPress nunca escuchaba
   // ni bloqueaba ese click, así que el listener de "click" que cada
   // elemento ya tenía por su cuenta (ej. expandir la tarjeta) se
   // ejecutaba igual, ENCIMA de lo que el hold acababa de abrir. Esta
@@ -33,7 +33,7 @@ function agregarLongPress(el, callback, duracionMs = 500) {
   let disparadoPorHold = false;
   // Si el dedo se mueve más que esto antes de cumplirse el tiempo, es un
   // scroll o un intento de arrastre normal, no una intención de long-press
-  // — se cancela para no disparar el menú por accidente en medio de un scroll.
+  // - se cancela para no disparar el menú por accidente en medio de un scroll.
   const UMBRAL_MOVIMIENTO_PX = 10;
 
   const cancelar = () => {
@@ -60,7 +60,7 @@ function agregarLongPress(el, callback, duracionMs = 500) {
   el.addEventListener("pointerleave", cancelar);
   // FIX (2026-08-05): en touch, cuando el navegador decide que el gesto es
   // un scroll (no una presión quieta), dispara `pointercancel` en vez de
-  // `pointerup`/`pointerleave` — sin escuchar esto, el timer seguía vivo y
+  // `pointerup`/`pointerleave` - sin escuchar esto, el timer seguía vivo y
   // el callback (menú rápido / "Reordenar") podía disparar solo, después,
   // aunque la persona ya se hubiera ido a hacer scroll a otro lado. Esto es
   // casi seguro la causa de que el long-press se sintiera poco confiable
@@ -76,7 +76,7 @@ function agregarLongPress(el, callback, duracionMs = 500) {
   // antes que cualquier otro listener de "click" que ya exista sobre este
   // mismo elemento (ej. el que expande/colapsa la tarjeta) y poder
   // cancelarlo con stopPropagation antes de que corra. Solo actúa la
-  // primera vez después de un hold — el resto de los clics normales
+  // primera vez después de un hold - el resto de los clics normales
   // (sin hold de por medio) siguen funcionando exactamente igual que
   // siempre.
   el.addEventListener(
@@ -114,7 +114,7 @@ function abrirConfirmacion({ titulo, mensaje, textoConfirmar, claseConfirmar, on
   // abre un modal dinámico DESPUÉS (ej. cualquier crearModalDinamico, o el
   // overlay de alta de semestre), ese overlay queda más abajo en el DOM y,
   // con el mismo z-index de ".modal-overlay", gana el empate y tapa a este
-  // — la confirmación quedaba atrapada detrás, sin poder tocarla, y la
+  // - la confirmación quedaba atrapada detrás, sin poder tocarla, y la
   // única salida era recargar la página. Reinsertarlo al final de <body>
   // cada vez que se abre lo pone siempre último en el DOM (arriba de
   // cualquier overlay ya abierto) sin depender de tocar su CSS.
@@ -141,6 +141,139 @@ function inicializarModalConfirmacion() {
   });
 }
 
+/* ===================== Validación: siglas y nombre completo invertidos ===================== */
+
+const SEGUNDOS_AVISO_UNIVERSIDAD_INVERTIDA = 5;
+
+/**
+ * Universidad (siglas + nombre completo): detecta cuando la persona
+ * escribió los dos campos al revés. Señal fuerte: las siglas son MÁS LARGAS
+ * que el nombre completo (ej. "Instituto Tecnológico de Costa Rica" en
+ * Siglas y "TEC" en Nombre completo).
+ *
+ * Uso (desde cualquier formulario que guarde una universidad):
+ *   const revisada = await confirmarUniversidadNoInvertida({ siglas, nombre_completo, nombrePlan });
+ *   plan.universidad = { nombre_completo: revisada.nombre_completo, siglas: revisada.siglas };
+ *
+ * - Si NO hay señal de inversión, resuelve al instante con los valores
+ *   tal cual (sin ningún modal).
+ * - Si la hay, muestra un aviso BLOQUEANTE: sin "X", sin click afuera y sin
+ *   Esc. Los dos botones arrancan deshabilitados y se habilitan recién
+ *   pasados SEGUNDOS_AVISO_UNIVERSIDAD_INVERTIDA segundos, para asegurar
+ *   que se lea el aviso antes de poder decidir.
+ *     "Sí, me equivoqué"  -> resuelve con los dos valores intercambiados.
+ *     "No, así está bien" -> resuelve con lo que la persona escribió.
+ * `nombrePlan` es opcional: solo se muestra como contexto (útil cuando el
+ * aviso aparece por cada plan en el modal de completar universidades).
+ */
+function confirmarUniversidadNoInvertida({ siglas, nombre_completo, nombrePlan } = {}) {
+  const s = String(siglas || "").trim();
+  const n = String(nombre_completo || "").trim();
+  const talCual = { siglas: s, nombre_completo: n };
+  if (s.length <= n.length) return Promise.resolve(talCual);
+
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.style.zIndex = "100000";
+    overlay.setAttribute("role", "alertdialog");
+    overlay.setAttribute("aria-modal", "true");
+
+    const card = document.createElement("div");
+    card.className = "glass-card modal-card stack";
+    card.tabIndex = -1;
+
+    const titulo = document.createElement("h2");
+    titulo.style.margin = "0";
+    titulo.textContent = "¿Escribiste las siglas y el nombre al revés?";
+    card.appendChild(titulo);
+
+    if (nombrePlan) {
+      const plan = document.createElement("p");
+      plan.className = "muted";
+      plan.style.cssText = "margin:0; font-size:0.8rem;";
+      plan.textContent = `Plan: ${nombrePlan}`;
+      card.appendChild(plan);
+    }
+
+    const cuerpo = document.createElement("p");
+    cuerpo.style.margin = "0";
+    cuerpo.textContent =
+      `Pusiste "${s}" en Siglas y "${n}" en Nombre completo. ` +
+      "Normalmente las siglas son más cortas que el nombre completo, así que parece que quedaron invertidas.";
+    card.appendChild(cuerpo);
+
+    const consecuencia = document.createElement("p");
+    consecuencia.className = "muted";
+    consecuencia.style.margin = "0";
+    consecuencia.textContent = `Si las intercambio, se guardaría como Siglas: "${n}" y Nombre completo: "${s}".`;
+    card.appendChild(consecuencia);
+
+    const fila = document.createElement("div");
+    fila.className = "row";
+    fila.style.justifyContent = "flex-end";
+
+    const btnNo = document.createElement("button");
+    btnNo.type = "button";
+    btnNo.className = "btn btn-secondary";
+    const btnSi = document.createElement("button");
+    btnSi.type = "button";
+    btnSi.className = "btn btn-primary";
+    btnNo.disabled = true;
+    btnSi.disabled = true;
+    fila.append(btnNo, btnSi);
+    card.appendChild(fila);
+    overlay.appendChild(card);
+
+    // Sin Esc: se intercepta en captura mientras el aviso esté abierto.
+    const bloquearEsc = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    document.addEventListener("keydown", bloquearEsc, true);
+
+    let restantes = SEGUNDOS_AVISO_UNIVERSIDAD_INVERTIDA;
+    const pintarBotones = () => {
+      const sufijo = restantes > 0 ? ` (${restantes})` : "";
+      btnSi.textContent = `Sí, me equivoqué${sufijo}`;
+      btnNo.textContent = `No, así está bien${sufijo}`;
+    };
+    pintarBotones();
+
+    const temporizador = setInterval(() => {
+      restantes -= 1;
+      pintarBotones();
+      if (restantes <= 0) {
+        clearInterval(temporizador);
+        btnSi.disabled = false;
+        btnNo.disabled = false;
+      }
+    }, 1000);
+
+    const cerrarConResultado = (resultado) => {
+      clearInterval(temporizador);
+      document.removeEventListener("keydown", bloquearEsc, true);
+      overlay.remove();
+      resolve(resultado);
+    };
+    btnSi.addEventListener("click", () => {
+      if (btnSi.disabled) return;
+      cerrarConResultado({ siglas: n, nombre_completo: s });
+    });
+    btnNo.addEventListener("click", () => {
+      if (btnNo.disabled) return;
+      cerrarConResultado(talCual);
+    });
+
+    document.body.appendChild(overlay);
+    // Foco al card (no a un botón) para que Enter/Espacio no acepten nada
+    // por accidente mientras corre la cuenta regresiva.
+    card.focus();
+  });
+}
+
 /* ===================== Layout responsivo (puntos 1 y 5) ===================== */
 
 function inicializarLayoutResponsivo() {
@@ -153,7 +286,7 @@ function inicializarLayoutResponsivo() {
     sidebar.classList.add("abierta");
     overlay.classList.add("abierta");
     // C.6 (v9): con el drawer abierto en móvil, se bloquea el scroll de la
-    // página de fondo — sin esto, aunque el drawer en sí queda con
+    // página de fondo - sin esto, aunque el drawer en sí queda con
     // `position: fixed` (anclado a la pantalla), la página detrás se sigue
     // pudiendo desplazar con el dedo, lo cual en la práctica se siente como
     // que "todo se mueve" y rompe la sensación de panel anclado, igual que
@@ -165,7 +298,7 @@ function inicializarLayoutResponsivo() {
 
   // Acceso directo a Enlaces rápidos en móvil (2026-08-07): drawer propio,
   // independiente del sidebar principal, que se desliza desde la derecha.
-  // A propósito NO navega a la sección Configuración — así el usuario no
+  // A propósito NO navega a la sección Configuración - así el usuario no
   // pierde la pantalla en la que estaba (ej. a mitad de una tarjeta de
   // Semestres) solo por querer abrir un enlace.
   const btnTopbarEnlaces = document.getElementById("btn-topbar-enlaces");
@@ -176,7 +309,7 @@ function inicializarLayoutResponsivo() {
     btnTopbarEnlaces.addEventListener("click", abrirDrawerEnlacesMovil);
   }
   // Segundo disparador del mismo drawer, solo visible entre 900px y 1499px
-  // vía CSS (.btn-flotante-enlaces) — ver comentario en design-system.css.
+  // vía CSS (.btn-flotante-enlaces) - ver comentario en design-system.css.
   const btnFlotanteEnlaces = document.getElementById("btn-flotante-enlaces");
   if (btnFlotanteEnlaces) {
     btnFlotanteEnlaces.addEventListener("click", abrirDrawerEnlacesMovil);
@@ -213,7 +346,7 @@ function inicializarLayoutResponsivo() {
       cerrarSidebarMovil();
     }
     // El drawer de Enlaces ahora también se abre en escritorio (900-1499px)
-    // desde el botón flotante — ver .btn-flotante-enlaces en
+    // desde el botón flotante - ver .btn-flotante-enlaces en
     // design-system.css. Solo se auto-cierra al llegar a 1500px, donde
     // .enlaces-lateral (panel fijo) lo reemplaza y el botón flotante se
     // oculta; por debajo de eso (incluido el rango de escritorio sin
@@ -258,7 +391,7 @@ function restaurarEstadoSidebar() {
 /**
  * Algunos modales tienen lógica extra al cerrarse (ej. limpiar un CSV en
  * espera). Para no duplicar esa lógica, el botón X simplemente dispara un
- * click sintético sobre el propio overlay del modal — reutilizando los
+ * click sintético sobre el propio overlay del modal - reutilizando los
  * listeners de "clic afuera cierra" que cada modal ya tiene registrados
  * (todos comparan `e.target === modal`/`e.target.id === "..."`).
  */
@@ -266,17 +399,17 @@ function restaurarEstadoSidebar() {
 function inicializarBotonesCerrarModal() {
   document.querySelectorAll(".modal-overlay").forEach((overlay) => {
     // v8 punto 2 / B (v9): #modal-requisito ya trae su propio botón "Cerrar"
-    // agrupado al final del bloque de detalle — el "X" de la esquina se
+    // agrupado al final del bloque de detalle - el "X" de la esquina se
     // elimina ahí para no duplicar la acción.
     if (overlay.id === "modal-requisito") return;
-    // Completar universidades (2026-08-22): modal BLOQUEANTE a propósito —
+    // Completar universidades (2026-08-22): modal BLOQUEANTE a propósito -
     // no puede tener ninguna forma de cerrarse sin guardar (ver
     // modal-completar-universidades en index.html / revisarUniversidadesIncompletas
     // en main.js), así que se excluye de la "X" automática igual que
     // modal-requisito arriba.
     if (overlay.id === "modal-completar-universidades") return;
     // Falta permiso de Calendar (2026-08-26): mismo criterio bloqueante
-    // que modal-completar-universidades — ver modal-permiso-calendario en
+    // que modal-completar-universidades - ver modal-permiso-calendario en
     // index.html / avisarFaltaPermisoCalendar en
     // core/notificaciones-calendario.js. Solo tiene una salida (cerrar
     // sesión), así que tampoco lleva "X".
@@ -300,7 +433,7 @@ function inicializarBotonesCerrarModal() {
 /** Toast breve reutilizable (ej. "✓ Prompt copiado en el portapapeles", v5 #1.3). */
 
 /**
- * v2.8.9: segundo parámetro opcional de duración — el toast por defecto
+ * v2.8.9: segundo parámetro opcional de duración - el toast por defecto
  * (2400ms) es corto a propósito para avisos rápidos, pero el flujo de
  * "copiar prompt de Beneficios y enviar a Claude" (ver finanzas-gastos.js)
  * necesita que el mensaje quede visible los 3 segundos completos antes de
@@ -317,12 +450,12 @@ function mostrarToast(mensaje, duracionMs = 2400) {
 }
 
 /**
- * PWA (2026-08-15): variante de mostrarToast() que NO se autodestruye —
+ * PWA (2026-08-15): variante de mostrarToast() que NO se autodestruye -
  * queda fija en pantalla hasta que el usuario decide algo, con un botón de
  * acción y un cierre discreto (✕) para descartarla sin actuar. Mismo
  * lenguaje visual que .toast-app (misma esquina, mismo estilo de "pill"),
  * pero con su propia clase (.toast-app-accion) porque .toast-app trae una
- * animación CSS que la desvanece sola a los 2.4s pase lo que pase —
+ * animación CSS que la desvanece sola a los 2.4s pase lo que pase -
  * incompatible con algo que necesita quedarse hasta que el usuario le dé
  * al botón. Pensado hoy para el aviso de "hay una actualización
  * disponible" (ver main.js), pero queda genérico por si algún otro flujo
@@ -439,7 +572,7 @@ function envolverConFlechasScroll(elementoScroll) {
  *
  * Como el destino típicamente recién se pintó (mostrarSeccion + un
  * render de golpe antes de llamar a esto), el elemento puede no existir
- * todavía en el primer frame — reintenta unos cuantos frames antes de
+ * todavía en el primer frame - reintenta unos cuantos frames antes de
  * rendirse en silencio (nunca revienta si el elemento nunca aparece, ej.
  * un id que ya no existe).
  */
@@ -456,7 +589,7 @@ function desplazarYResaltarElemento(selector, intentosRestantes = 15) {
   // dos veces seguidas al mismo elemento: sin este reset la animación no
   // se reinicia (CSS ignora agregar una clase que ya está puesta).
   el.classList.remove("destello-resaltado");
-  // Fuerza un reflow entre quitar y volver a poner la clase — mismo truco
+  // Fuerza un reflow entre quitar y volver a poner la clase - mismo truco
   // que se necesita en cualquier re-disparo de animación CSS por clase.
   void el.offsetWidth;
   el.classList.add("destello-resaltado");
@@ -467,7 +600,7 @@ function desplazarYResaltarElemento(selector, intentosRestantes = 15) {
 
 // Misma clave de localStorage que CLAVE_SECCION_ACTIVA en main.js. No se
 // importa directo de ahí (evitaría un import circular real: main.js ya
-// importa este archivo) — es solo el nombre de la llave, no lógica, así
+// importa este archivo) - es solo el nombre de la llave, no lógica, así
 // que duplicar el string puntual es más seguro que forzar una dependencia
 // nueva solo para esto.
 const CLAVE_SECCION_ACTIVA_MOUSE = "seccion_activa_v1";
@@ -475,28 +608,28 @@ const CLAVE_SECCION_ACTIVA_MOUSE = "seccion_activa_v1";
 /**
  * v2.8.9 (pedido explícito): los botones "atrás"/"adelante" de un mouse de
  * 5 botones (MouseEvent.button 3 y 4) navegan entre las secciones del nav
- * principal, en vez de disparar el historial NATIVO del navegador — que
+ * principal, en vez de disparar el historial NATIVO del navegador - que
  * sin este listener cierra la pestaña (si no hay historial previo) o deja
  * la app en un estado roto/mostrando HTML crudo (si sí lo hay, ej.
  * volviendo a un estado servido desde bfcache). Se engancha sobre
  * "mouseup" (no "click": los botones 4/5 no disparan evento click en
  * todos los navegadores) y llama a preventDefault() en cuanto detecta
- * botón 3 o 4, haya o no una sección a la que efectivamente navegar — así
+ * botón 3 o 4, haya o no una sección a la que efectivamente navegar - así
  * el navegador nunca llega a intentar su propia navegación de historial
  * para esos botones, sin importar el resultado de acá adentro.
  *
  * Reutiliza el MISMO mecanismo de navegación que ya existe
  * (window.mostrarSeccion, ver main.js) en vez de inventar un historial
- * paralelo — se expone en window por el mismo motivo que
+ * paralelo - se expone en window por el mismo motivo que
  * aplicarVisibilidadNavegacion/obtenerOrdenNavegacion ya se exponen así
  * (main.js importa este archivo, así que este archivo no puede importar
  * de vuelta a main.js para esto sin crear un ciclo).
  *
  * El orden a recorrer es el de las secciones REALMENTE visibles en el nav
- * en este momento — se lee directo del DOM (.btn-nav[data-seccion] ya
+ * en este momento - se lee directo del DOM (.btn-nav[data-seccion] ya
  * filtrados/ordenados por aplicarVisibilidadNavegacion, que corre en cada
  * mostrarApp() y en cada cambio de Ajustes) en vez de recalcular acá la
- * lista lógica de nuevo — así nunca se desincroniza de lo que la persona
+ * lista lógica de nuevo - así nunca se desincroniza de lo que la persona
  * ve realmente en el sidebar, sea cual sea su configuración de
  * orden/ocultas.
  */
@@ -515,7 +648,7 @@ function inicializarNavegacionBotonesMouse() {
     if (indiceActual === -1) indiceActual = 0;
 
     // Botón 3 = "atrás" (sección anterior en la lista); botón 4 =
-    // "adelante" (siguiente) — mismo sentido que el historial de un
+    // "adelante" (siguiente) - mismo sentido que el historial de un
     // navegador normal. No da la vuelta circular (se queda quieto en la
     // punta): ir "más atrás" que la primera sección o "más adelante" que
     // la última no tiene a dónde navegar, en vez de saltar sorpresivamente
@@ -529,14 +662,14 @@ function inicializarNavegacionBotonesMouse() {
 
   // Algunos navegadores (Chrome en Windows, sobre todo) además disparan su
   // propia navegación de historial sobre "auxclick" para estos mismos
-  // botones — se bloquea también acá por las dudas, para cubrir el caso de
+  // botones - se bloquea también acá por las dudas, para cubrir el caso de
   // que el navegador actúe sobre auxclick en vez de (o además de) mouseup.
   document.addEventListener("auxclick", (e) => {
     if (e.button === 3 || e.button === 4) e.preventDefault();
   });
 }
 
-/* ===================== Horario — Selector de modalidad ===================== */
+/* ===================== Horario - Selector de modalidad ===================== */
 
 const ETIQUETAS_MODALIDAD_HORARIO = {
   presencial: "Presencial",
@@ -546,90 +679,13 @@ const ETIQUETAS_MODALIDAD_HORARIO = {
 };
 
 /**
- * Switch binario tipo "píldora" (punto 4, ronda visual 2026-09-12):
- * reemplazo genérico para un checkbox on/off cuyas 2 opciones tienen
- * nombre propio (ej. "Oscuro"/"Claro") — en vez de un interruptor que hay
- * que adivinar, muestra ambas opciones siempre visibles y resalta la
- * activa. Reusa el MISMO patrón visual que el resto de pill-group del
- * proyecto (.pill-group + .pill-item + .active, ver design-system.css y
- * construirSelectorModalidad más abajo en este archivo) — no es un
- * componente nuevo, es este mismo patrón con exactamente 2 opciones fijas
- * (por eso usa .pill-group-fijo: nunca necesita scroll ni flechitas).
- *
- * `opciones` es un array de EXACTAMENTE 2 { valor, texto }. `valorActivo`
- * es el `valor` de la opción seleccionada al montar. `onCambiar(valor)` se
- * dispara al tocar la opción que no estaba activa (tocar la ya activa no
- * hace nada, igual que cualquier otro pill-group del proyecto).
- *
- * Devuelve el elemento contenedor listo para insertar en el DOM — el
- * caller decide dónde montarlo (ver montarPillSwitch en config-ajustes.js,
- * que lo inserta reemplazando al checkbox viejo sin tocar index.html).
- */
-/**
- * Switch binario tipo "píldora" (punto 4, ronda visual 2026-09-12):
- * reemplazo genérico para un checkbox on/off cuyas 2 opciones tienen
- * nombre propio (ej. "Oscuro"/"Claro") — en vez de un interruptor que hay
- * que adivinar, muestra ambas opciones siempre visibles y resalta la
- * activa. Reusa el MISMO patrón visual que el resto de pill-group del
- * proyecto (.pill-group + .pill-item + .active, ver design-system.css y
- * construirSelectorModalidad más abajo en este archivo), con la variante
- * .pill-switch-binario agregada al lado de .pill-group-fijo (ver ese
- * bloque en design-system.css) para el thumb que se desliza suave en vez
- * de que los 2 botones prendan/apaguen su fondo de golpe.
- *
- * `opciones` es un array de EXACTAMENTE 2 { valor, texto } — el ORDEN
- * importa acá (a diferencia del resto de los pill-group): el primero es
- * "izquierda" y el segundo "derecha", el thumb se desliza entre esas 2
- * posiciones nada más, así que no sirve para 3+ opciones. `valorActivo` es
- * el `valor` de la opción seleccionada al montar. `onCambiar(valor)` se
- * dispara al tocar la opción que no estaba activa (tocar la ya activa no
- * hace nada, igual que cualquier otro pill-group del proyecto).
- *
- * Devuelve el elemento contenedor listo para insertar en el DOM — el
- * caller decide dónde montarlo (ver montarPillSwitch en config-ajustes.js,
- * que lo inserta reemplazando al checkbox viejo sin tocar index.html).
- */
-function construirPillSwitchBinario(opciones, valorActivo, onCambiar) {
-  const grupo = document.createElement("div");
-  grupo.className = "pill-group pill-group-fijo pill-switch-binario";
-
-  const thumb = document.createElement("div");
-  thumb.className = "pill-switch-thumb";
-  grupo.appendChild(thumb);
-
-  function actualizarThumb(valor) {
-    const indice = opciones.findIndex((o) => o.valor === valor);
-    thumb.classList.toggle("pill-switch-thumb--derecha", indice === 1);
-  }
-
-  opciones.forEach(({ valor, texto }) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "pill-item" + (valor === valorActivo ? " active" : "");
-    btn.dataset.valor = valor;
-    btn.textContent = texto;
-    btn.addEventListener("click", () => {
-      if (btn.classList.contains("active")) return;
-      grupo.querySelectorAll(".pill-item").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      actualizarThumb(valor);
-      onCambiar(valor);
-    });
-    grupo.appendChild(btn);
-  });
-
-  actualizarThumb(valorActivo);
-  return grupo;
-}
-
-/**
- * Horario — Núcleo: selector de modalidad (Presencial/Semipresencial/
+ * Horario - Núcleo: selector de modalidad (Presencial/Semipresencial/
  * Virtual/Personalizado), reutilizable en el modal de creación/edición de
  * bloque Y en el editor de excepción por semana (mismo campo en los dos
  * lugares). No existía un componente de "pill-group con opción que revela
  * un input de texto libre" en el proyecto (comunidad.js tiene
  * construirGrupoPills, pero es puramente visual: no maneja estado propio ni
- * reacciona a la opción elegida) — este sí lleva su propio estado interno,
+ * reacciona a la opción elegida) - este sí lleva su propio estado interno,
  * por eso vive acá en vez de ser una llamada más a ese helper.
  *
  * `valorInicial` es un objeto modalidad completo (ver crearModalidadHorario
@@ -638,7 +694,7 @@ function construirPillSwitchBinario(opciones, valorActivo, onCambiar) {
  * mecanismo que el resto de la app) salvo que la opción activa sea
  * "personalizado".
  *
- * Devuelve { elemento, obtenerValor() } — mismo contrato que
+ * Devuelve { elemento, obtenerValor() } - mismo contrato que
  * construirSelectorCustom en comunidad.js, así el caller no necesita leer
  * el DOM a mano para saber el valor final al guardar el modal.
  */
@@ -693,7 +749,7 @@ function construirSelectorModalidad(valorInicial, onCambiar) {
 
   // FIX previsible ("el texto personalizado se borra al tocar otro campo"):
   // el input actualiza valorActual en cada tecleo, no solo al cerrar el
-  // modal — así el objeto que devuelve obtenerValor() siempre está al día,
+  // modal - así el objeto que devuelve obtenerValor() siempre está al día,
   // sin depender de un evento "blur" que el usuario podría no disparar
   // antes de guardar.
   inputPersonalizado.addEventListener("input", () => {
@@ -712,12 +768,12 @@ function construirSelectorModalidad(valorInicial, onCambiar) {
   };
 }
 
-/* ===================== Notificaciones — Selector de chips múltiple ===================== */
+/* ===================== Notificaciones - Selector de chips múltiple ===================== */
 
 /**
- * Notificaciones — Recordatorios configurables (2026-08-20): grupo de
+ * Notificaciones - Recordatorios configurables (2026-08-20): grupo de
  * chips de selección MÚLTIPLE (a diferencia de un pill-group normal, que
- * es de selección única) — usado para elegir qué offsets ("15 min antes",
+ * es de selección única) - usado para elegir qué offsets ("15 min antes",
  * "1 día antes", etc.) están activos para un tipo de evento dado. Mismo
  * contrato { elemento, obtenerValor() } que construirSelectorModalidad,
  * así el caller (config-ajustes.js) no necesita leer el DOM a mano.
@@ -727,12 +783,12 @@ function construirSelectorModalidad(valorInicial, onCambiar) {
  * `onCambiar(valoresActuales)`: se llama en cada toggle con el arreglo
  * actualizado completo (mismo patrón notificar-en-cada-cambio que
  * construirSelectorModalidad), para que quien llama pueda guardar en el
- * momento sin depender de un botón "Guardar" aparte — consistente con el
+ * momento sin depender de un botón "Guardar" aparte - consistente con el
  * resto de Ajustes, que aplica todo al toque.
  *
  * No permite dejar el grupo completamente vacío: si el usuario destilda el
  * último chip activo, ese último click se ignora (el chip vuelve a quedar
- * marcado) — un tipo de evento sin ningún offset activo equivale a "nunca
+ * marcado) - un tipo de evento sin ningún offset activo equivale a "nunca
  * avisar nada de este tipo", que si se quiere de verdad ya existe como
  * comportamiento normal con el switch general de Ajustes apagado; dentro
  * de este selector puntual, vacío se lee más como un estado accidental
@@ -781,8 +837,8 @@ function construirSelectorChipsMultiple(opciones, valoresIniciales, onCambiar) {
 
 /**
  * Pedido de Wagner (17/08): en selectores largos dentro de ventanas
- * emergentes — el pill-group de modalidad cuando "Personalizado" queda al
- * final, la lista de semestres, cualquier selector con scroll propio — el
+ * emergentes - el pill-group de modalidad cuando "Personalizado" queda al
+ * final, la lista de semestres, cualquier selector con scroll propio - el
  * ítem ya elegido podía quedar fuera de la vista inicial, obligando a
  * scrollear a ciegas solo para confirmar qué estaba seleccionado. Pedido
  * explícito: que sea parejo "en todos los semestres" (o sea, en toda la
@@ -792,17 +848,17 @@ function construirSelectorChipsMultiple(opciones, valoresIniciales, onCambiar) {
  * distintos, ver abrirSelectorSemestre acá mismo o abrirModalEventoAgenda
  * en agenda-modal.js), se detecta genéricamente CUALQUIER apertura de
  * `.modal-overlay` con un único observer acá, y se hace scroll instantáneo
- * (sin animación — tiene que verse así desde el primer frame, no
+ * (sin animación - tiene que verse así desde el primer frame, no
  * "deslizarse" después de que la persona ya lo vio vacío) hasta el ítem
  * `.active`/`.selected` de cualquier selector adentro. Cubre los 2 patrones
  * que ya existen en el código:
  *   1. Modales fijos en el HTML que solo alternan la clase "oculto" (la
- *      inmensa mayoría — ver inicializarBotonesCerrarModal más arriba,
+ *      inmensa mayoría - ver inicializarBotonesCerrarModal más arriba,
  *      mismo criterio de selector `.modal-overlay`).
  *   2. Modales armados al vuelo con document.createElement + appendChild
  *      (ej. abrirTarjetaInfoBloque en horario.js), que nacen visibles de
  *      una y nunca pasan por un cambio de clase que el observer pueda
- *      detectar por sí solo — por eso también se observa childList.
+ *      detectar por sí solo - por eso también se observa childList.
  */
 function enfocarSelectoresActivosDeModal(overlay) {
   if (!overlay || !overlay.classList || overlay.classList.contains("oculto")) return;
@@ -810,21 +866,21 @@ function enfocarSelectoresActivosDeModal(overlay) {
     const activo = cont.querySelector(".active, .selected, [aria-selected='true']");
     // block/inline "nearest": solo mueve el scroll del contenedor propio
     // del selector (ej. el pill-group con overflow-x:auto) lo mínimo
-    // necesario para que el ítem quede visible — nunca desplaza además la
+    // necesario para que el ítem quede visible - nunca desplaza además la
     // página entera o el modal completo de arrastre.
     if (activo) activo.scrollIntoView({ block: "nearest", inline: "nearest" });
   });
 }
 
 /**
- * Pantalla de carga de sesión (2026-08-19 — reporte "se abre y cierra sola
+ * Pantalla de carga de sesión (2026-08-19 - reporte "se abre y cierra sola
  * una ventana de Google" + pedido explícito "no quiero ver el login de
  * una, quiero una pantalla de carga bonita"): overlay de marca propia,
  * separado a propósito del overlay-cargando genérico (los "3 puntitos",
  * pensado para esperas cortas dentro de la app ya abierta) porque este
  * cubre dos momentos puntuales del arranque/login:
  *   1. Mientras la app todavía no sabe si puede restaurar la sesión sola
- *      (leyendo caché/token, esperando a que cargue el script de Google) —
+ *      (leyendo caché/token, esperando a que cargue el script de Google) -
  *      antes esto mostraba de entrada la tarjeta de "Iniciar sesión con
  *      Google" (con el botón ya visible) aunque en la enorme mayoría de las
  *      cargas ese botón nunca hacía falta tocarlo.
@@ -855,7 +911,7 @@ function inicializarAutoScrollSelectoresEnModales() {
           // requestAnimationFrame: se espera al próximo frame para que el
           // contenido dinámico que cada modal arma recién al abrirse
           // (innerHTML, pills con .active, etc.) ya esté pintado en el DOM
-          // — mismo motivo que ya usa desplazarYResaltarElemento más
+          // - mismo motivo que ya usa desplazarYResaltarElemento más
           // arriba para reintentar hasta que el destino exista.
           requestAnimationFrame(() => enfocarSelectoresActivosDeModal(el));
         }
@@ -891,7 +947,7 @@ export {
   cerrarConfirmacion,
   cerrarDrawerEnlacesMovil,
   cerrarSidebarMovil,
-  construirPillSwitchBinario,
+  confirmarUniversidadNoInvertida,
   construirSelectorChipsMultiple,
   construirSelectorModalidad,
   desplazarYResaltarElemento,
