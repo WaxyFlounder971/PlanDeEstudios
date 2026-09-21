@@ -22,7 +22,7 @@
 
    Fechas (2026-09-21): TODO ítem con fecha en Resumen lleva, justo antes de
    su tarjeta, una fila con la fecha real anclada a la izquierda y, a la
-   derecha bajo la etiqueta "Faltante", el texto relativo de
+   derecha el texto relativo de
    formatearFechaRelativa (agenda-utils.js — única fuente de esa escala).
    Va POR ÍTEM: nunca como encabezado de grupo que reemplace la fecha real.
    ========================================================================= */
@@ -87,38 +87,26 @@ function formatearFechaRealItem(fechaISO) {
 }
 
 /** Fila que va ANTES de la tarjeta de cada ítem: fecha real a la izquierda
- *  (siempre visible, sin importar qué tan relativa sea) y a la derecha, bajo
- *  la etiqueta "Faltante", el texto relativo ("Hoy", "Mañana", "En 5 días",
- *  "Ayer", "Hace 3 días"…). En ítems del pasado (Tareas vencidas) se lee
- *  "Faltante: Hace N días", literal a la escala pedida. */
+ *  (siempre visible, sin importar qué tan relativa sea) y a la derecha el
+ *  texto relativo ("Hoy", "Mañana", "En 5 días", "Ayer", "Hace 3 días"…),
+ *  sin etiqueta (se quitó "Faltante" por innecesaria). */
 function construirFilaFechaItem(fechaISO) {
   const fila = document.createElement("div");
   fila.className = "resumen-fecha-item";
-  fila.style.cssText = "display:flex; justify-content:space-between; align-items:flex-end; gap:12px; padding:0 4px;";
+  fila.style.cssText = "display:flex; justify-content:space-between; align-items:baseline; gap:12px; padding:0 4px;";
 
   const real = document.createElement("span");
   real.className = "resumen-fecha-real";
   real.style.cssText = "font-size:0.85rem; font-weight:600;";
   real.textContent = formatearFechaRealItem(fechaISO);
 
-  const faltante = document.createElement("span");
-  faltante.className = "resumen-fecha-faltante";
-  faltante.style.cssText = "display:flex; flex-direction:column; align-items:flex-end; line-height:1.15; text-align:right;";
-
-  const etiqueta = document.createElement("span");
-  etiqueta.className = "muted";
-  etiqueta.style.cssText = "font-size:0.66rem; text-transform:uppercase; letter-spacing:0.05em;";
-  etiqueta.textContent = "Faltante";
-
   const relativo = document.createElement("span");
-  relativo.className = "muted";
-  relativo.style.cssText = "font-size:0.82rem; white-space:nowrap;";
+  relativo.className = "muted resumen-fecha-relativo";
+  relativo.style.cssText = "font-size:0.82rem; white-space:nowrap; text-align:right;";
   relativo.textContent = formatearFechaRelativa(fechaISO);
 
-  faltante.appendChild(etiqueta);
-  faltante.appendChild(relativo);
   fila.appendChild(real);
-  fila.appendChild(faltante);
+  fila.appendChild(relativo);
   return fila;
 }
 
@@ -359,7 +347,7 @@ function renderizarResumen() {
   // fecha === hoy con hora puntual ya pasada. Sin tope de cantidad (a
   // diferencia de "Próximas tareas") porque ocultar vencidas por un límite
   // arbitrario sería contraproducente para el propósito de la sección.
-  // Cada ítem lleva su propia fecha real + "Faltante" (ya no hay encabezado
+  // Cada ítem lleva su propia fecha real + texto relativo (ya no hay encabezado
   // de grupo por día, que ocultaba la fecha real). Las tareas PERDIDAS no
   // llegan acá: esTareaVencida ya devuelve false para ellas.
   const tareasVencidas = eventos.filter((ev) => esTareaVencida(ev)).sort(ordenarPorFechaYHora);
