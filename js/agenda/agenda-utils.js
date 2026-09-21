@@ -282,12 +282,14 @@ function formatearHoraAmPm(horaStr) {
   return `${h12}:${String(m).padStart(2, "0")} ${periodo}`;
 }
 
-// Estado "Perdido" (2026-09-21): rojo muy oscuro (red-900) del borde/badge, y
-// rojo más vivo para la raya del tachado (con el oscuro la raya casi no se
-// vería sobre el fondo oscuro de la app). Los estilos viven en
-// design-system.css ("Estado Perdido"); estos 2 hex deben coincidir con él.
-const COLOR_PERDIDA_BORDE = "#7f1d1d";
-const COLOR_PERDIDA_RAYA = "#dc2626";
+// Estado "Perdido": GRIS (2026-09-21, ajuste) en vez del rojo oscuro de la
+// primera versión — el rojo se parecía demasiado al de "Examen" (#ef4444).
+// BORDE = gray-500 (borde del ítem, badge y círculo ✕); RAYA = gray-400, un
+// poco más claro para que el tachado se vea sobre el fondo oscuro de la app.
+// Los estilos viven en design-system.css ("Estado Perdido"); estos 2 hex
+// deben coincidir con él.
+const COLOR_PERDIDA_BORDE = "#6b7280";
+const COLOR_PERDIDA_RAYA = "#9ca3af";
 
 /**
  * Días de calendario entre HOY y `fecha` (positivo = futuro, negativo =
@@ -353,10 +355,10 @@ function formatearFechaRelativa(fecha, hoy = new Date()) {
  * DE agenda-modal.js para abrir sus modales).
  */
 function obtenerEstiloEvento(evento) {
-  // Estado "Perdido" (2026-09-21): rojo muy oscuro, aparte del rojo de
-  // "Examen" (#ef4444) a propósito para que nunca se confundan. `esPerdida`
+  // Estado "Perdido" (2026-09-21): gris, aparte del rojo de "Examen"
+  // (#ef4444) a propósito para que nunca se confundan. `esPerdida`
   // lo leen construirItemEvento y la tarjeta de info para pintar el tachado
-  // con raya roja (el texto NO se atenúa, a diferencia de "Completada").
+  // con raya gris (el texto NO se atenúa, a diferencia de "Completada").
   if (evento.tipo === "tarea" && evento.perdida) {
     return { etiqueta: "Perdida", claseBadge: "badge-perdida", colorBorde: COLOR_PERDIDA_BORDE, esPerdida: true };
   }
@@ -465,17 +467,21 @@ function agendaVenceHoyMuestraRestante() {
 
 /**
  * Rediseño núcleo Agenda — punto 10 (modo "Todo" del filtro "Mostrar"):
- * TODOS los días desde HOY hasta el fin del semestre activo, +2 semanas de
- * margen (pedido explícito del punto 12, "por si se alarga"). Sin
+ * TODOS los días desde el INICIO DE LA SEMANA ACTUAL (2026-09-21: antes
+ * arrancaba en hoy; ahora los días de esta semana anteriores a hoy también
+ * entran al rango, para poder agruparlos en la pestaña "N días anteriores",
+ * igual que en el modo Semanal) hasta el fin del semestre activo, +2 semanas
+ * de margen (pedido explícito del punto 12, "por si se alarga"). Sin
  * `semestre` (o con `fecha_inicio` inválida), cae a un rango fijo de ~8
  * semanas desde hoy — no hay forma de saber "fin de semestre" sin uno, pero
  * tampoco tiene sentido dejar el modo "Todo" sin ningún rango.
  *
- * `diasAtras` (ajuste visual, punto 4): cantidad de días ANTERIORES a hoy a
- * incluir también al principio del rango — 0 (default) es el comportamiento
- * original, sin días previos. Lo usa el control "Ver días anteriores" del
- * subheader de modo Todo (ver construirSubheaderTodo en agenda.js) para ir
- * extendiendo el rango hacia atrás sin tocar el final calculado.
+ * `diasAtras` (ajuste visual, punto 4): cantidad de días EXTRA anteriores al
+ * inicio de la semana actual a incluir también al principio del rango — 0
+ * (default) = solo la semana actual completa. Lo usa el control "Ver una
+ * semana más" de la pestaña de días anteriores del modo Todo (ver
+ * construirControlSemanasAnterioresTodo en agenda.js) para ir extendiendo el
+ * rango hacia atrás sin tocar el final calculado.
  */
 function obtenerRangoDiasAgendaTodo(semestre, diasAtras = 0) {
   const hoy = new Date();
@@ -504,7 +510,7 @@ function obtenerRangoDiasAgendaTodo(semestre, diasAtras = 0) {
   });
 
   const dias = [];
-  const cursor = new Date(hoy);
+  const cursor = obtenerFechaInicioSemanaAgenda(0);
   if (diasAtras > 0) cursor.setDate(cursor.getDate() - diasAtras);
   while (cursor.getTime() <= fin.getTime()) {
     const codigo = obtenerCodigoDiaSemana(cursor);
