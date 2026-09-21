@@ -40,7 +40,8 @@ import { procesarAsociacionPendienteDeAmigo, iniciarRefrescoPeriodicoAmigos } fr
 // se ejecute (mostrarSeccion() más abajo la llama vía window, no vía
 // import directo, para no acoplar main.js a cada sección una por una).
 import "./asistente/asistente.js";
-import { abrirConfirmacion, agregarLongPress, confirmarUniversidadNoInvertida, inicializarAutoScrollSelectoresEnModales, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, mostrarPantallaCargaSesion, mostrarToastAccion, ocultarPantallaCargaSesion, restaurarEstadoSidebar } from "./ui/componentes.js";
+import { abrirConfirmacion, agregarLongPress, inicializarAutoScrollSelectoresEnModales, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, mostrarPantallaCargaSesion, mostrarToastAccion, ocultarPantallaCargaSesion, restaurarEstadoSidebar } from "./ui/componentes.js";
+import { confirmarUniversidadNoInvertida } from "./ui/aviso-universidad.js";
 import { aplicarPaleta, aplicarTemaGuardadoLocalmente } from "./ui/tema.js";
 
 /* ===================== PWA: registro del Service Worker ===================== */
@@ -681,11 +682,10 @@ function inicializarModalCompletarUniversidades() {
     const filas = Array.from(document.querySelectorAll("#lista-completar-universidades .fila-completar-universidad"));
 
     // Validación de siglas/nombre invertidos (aviso bloqueante de 5 s, ver
-    // confirmarUniversidadNoInvertida en ui/componentes.js). Se revisan TODAS
-    // las filas una por una ANTES de escribir nada en los planes, así el
-    // guardado sigue siendo de una sola vez (todo o nada) aunque haya varios
-    // avisos seguidos. El botón se deshabilita mientras tanto contra dobles
-    // clicks.
+    // ui/aviso-universidad.js). Se revisan TODAS las filas una por una ANTES
+    // de escribir nada en los planes, así el guardado sigue siendo de una
+    // sola vez (todo o nada) aunque haya varios avisos seguidos. El botón se
+    // deshabilita mientras tanto contra dobles clicks.
     const resueltas = [];
     btnGuardar.disabled = true;
     try {
