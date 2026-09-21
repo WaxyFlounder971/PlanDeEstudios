@@ -23,6 +23,18 @@
        manda al crear) — el cliente nunca resetea nada, solo lee/escribe
        `horas_semana_actual` tal cual está en cada momento.
 
+   2026-09-21 — REDISEÑO VISUAL (prototipo-competencias-v2.html):
+     - La tarjeta ahora es marcador con podio/lista (selector arriba a la
+       derecha, la elección se recuerda), avatares con la foto de Google y
+       dos íconos en la cabecera: trofeo → Historial (podio de cada semana
+       cerrada, desde GET /competencias/:id/podios) y engranaje → Gestionar.
+     - El botón "Enlace" salió de la tarjeta: la invitación vive ahora
+       arriba de todo en el menú Gestionar (tiempo-estudio-competencias-
+       gestion.js).
+     - Foto: se manda `foto_url` (la de `estado.datos.perfil`) al crear y al
+       unirse, y si cambia se refresca sola con POST .../participantes/:id/
+       foto (ver `sincronizarFotoPropia`). Sin foto → inicial de color.
+
    Sigue siendo Parte 1 (crear/unirse/ver lista/copiar invitación/salir) +
    ahora también Parte 2 (marcador en vivo vía GET, salón de la fama vía
    GET /historial, y el envío de horas vía POST /actualizar-horas después
@@ -41,6 +53,19 @@ import { calcularMinutosTotalesEnRango, obtenerRangoSemana } from "./tiempo-estu
 // se usa en el nivel superior del archivo, solo adentro de funciones.
 import { abrirModalGestionCompetencia, construirRegistroCompetencias } from "./tiempo-estudio-competencias-gestion.js";
 import { construirAvisosResultados, construirBotonesSimulacion } from "./tiempo-estudio-celebracion.js";
+// 2026-09-21 — Rediseño (prototipo-competencias-v2): todo lo que se dibuja
+// (avatares con foto, podio, tarjeta, hoja modal, historial) vive en el
+// módulo visual, que no importa nada de acá (sin ciclos). Acá queda la
+// lógica: red, estado y permisos.
+import {
+  esc,
+  normalizarFotoUrl,
+  leerVistaPreferida,
+  guardarVistaPreferida,
+  pintarTarjeta,
+  abrirHoja,
+  pintarHistorial,
+} from "./tiempo-estudio-competencias-visual.js";
 
 const TIMEOUT_MS = 12000;
 const CLAVE_TOKEN_CREADOR_PREFIJO = "tokenCreadorCompetencia_"; // + id, ver nota en schema.js
@@ -82,6 +107,46 @@ function formatearHoras(horas) {
   if (h > 0 && m > 0) return `${h} h ${m} min`;
   if (h > 0) return `${h} h`;
   return `${m} min`;
+}
+
+/**
+ * URL de la foto de Google del usuario, o null. `obtenerPerfilGoogle`
+ * (core/auth.js) devuelve `{ nombre, foto_url }` y `estado.datos.perfil`
+ * guarda el perfil; se prueban varios nombres de campo por si el guardado
+ * usa otro (SUPUESTO — sin auth.js/main.js a la vista no pude confirmar
+ * cuál es; si ninguno coincide, simplemente no hay foto y se ve la inicial).
+ */
+function obtenerMiFotoUrl() {
+  const p = (estado.datos && estado.datos.perfil) || {};
+  return normalizarFotoUrl(p.foto_url || p.foto || p.picture || p.imagen || "");
+}
+
+// Combinaciones "competencia|url" que ya se mandaron en esta sesión: evita
+// repetir el POST cada vez que se redibuja la tarjeta.
+const fotosSincronizadas = new Set();
+
+/** Best-effort: si la foto guardada en el Worker no es la actual, la sube. */
+async function sincronizarFotoPropia(competencia, fotoUrl) {
+  const clave = `${competencia.id}|${fotoUrl}`;
+  if (fotosSincronizadas.has(clave)) return;
+  fotosSincronizadas.add(clave);
+  try {
+    const respuesta = await fetchConTimeout(
+      `${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}/participantes/${encodeURIComponent(competencia.participante_id)}/foto`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identificador_usuario: estado.datos.perfil.correo, foto_url: fotoUrl }),
+      }
+    );
+    if (!respuesta.ok) {
+      fotosSincronizadas.delete(clave); // se reintenta la próxima vez
+      console.warn(`[competencias] No se pudo actualizar la foto (${respuesta.status}) en "${competencia.nombre}".`);
+    }
+  } catch (e) {
+    fotosSincronizadas.delete(clave);
+    console.warn("[competencias] Falló actualizar la foto — se reintenta la próxima vez:", e);
+  }
 }
 
 function guardarTokenCreador(competenciaId, tokenCreador) {
@@ -142,6 +207,7 @@ async function copiarLinkInvitacion(competencia) {
   const exito = await copiarAlPortapapelesBlindado(link);
   if (exito) mostrarToast("✓ Link de invitación copiado");
   else abrirModalCopiaManualPortapapeles(link);
+  return Boolean(exito); // 2026-09-21: el menú Gestionar cambia el botón a "¡Copiado!"
 }
 
 /**
@@ -588,6 +654,7 @@ function abrirModalCrearCompetencia(refrescar) {
           apodo,
           identificador_usuario: estado.datos.perfil.correo,
           offset_minutos_utc: obtenerOffsetMinutosUtc(),
+          foto_url: obtenerMiFotoUrl(),
         }),
       });
       if (!respuesta.ok) throw new Error(`El Worker respondió ${respuesta.status}`);
@@ -682,6 +749,7 @@ function abrirModalUnirseCompetencia(refrescar) {
             apodo,
             identificador_usuario: estado.datos.perfil.correo,
             offset_minutos_utc: obtenerOffsetMinutosUtc(),
+            foto_url: obtenerMiFotoUrl(),
           }),
         }
       );
@@ -799,14 +867,14 @@ async function abrirModalInvitacionRecibida(id, refrescar) {
     ? participantes
         .map((p, i) => {
           const medalla = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
-          return `<div class="row-between" style="padding:3px 0;"><span>${medalla} ${p.apodo}</span><span class="muted" style="font-size:0.85rem;">${formatearHoras(p.horas_semana_actual)}</span></div>`;
+          return `<div class="row-between" style="padding:3px 0;"><span>${medalla} ${esc(p.apodo)}</span><span class="muted" style="font-size:0.85rem;">${formatearHoras(p.horas_semana_actual)}</span></div>`;
         })
         .join("")
     : `<p class="muted" style="margin:0; font-size:0.82rem;">Todavía nadie tiene horas esta semana.</p>`;
 
   caja.innerHTML = `
     <div>
-      <h2 style="margin:0;">${datos.nombre}</h2>
+      <h2 style="margin:0;">${esc(datos.nombre)}</h2>
       <p class="muted" style="margin:4px 0 0; font-size:0.85rem;">¿Deseas unirte?</p>
     </div>
     <div class="stack" style="gap:2px;">
@@ -844,6 +912,7 @@ async function abrirModalInvitacionRecibida(id, refrescar) {
             apodo,
             identificador_usuario: estado.datos.perfil.correo,
             offset_minutos_utc: obtenerOffsetMinutosUtc(),
+            foto_url: obtenerMiFotoUrl(),
           }),
         }
       );
@@ -869,40 +938,29 @@ async function abrirModalInvitacionRecibida(id, refrescar) {
   });
 }
 
-/** Modal "Salón de la fama": GET /competencias/:id/historial. */
-async function abrirModalHistorial(competencia) {
-  const { overlay, caja, cerrar } = construirCajaModal();
-  caja.innerHTML = `
-    <div>
-      <h2 style="margin:0;">🏆 Historial — ${competencia.nombre}</h2>
-      <p class="muted" style="margin:4px 0 0; font-size:0.85rem;">Ganador de cada semana cerrada, más reciente primero.</p>
-    </div>
-    <div id="comp-historial-lista" class="stack" style="gap:8px;"><p class="muted">Cargando…</p></div>
-    <button type="button" class="btn btn-secondary" id="comp-historial-cerrar">Cerrar</button>
-  `;
-  document.body.appendChild(overlay);
-  caja.querySelector("#comp-historial-cerrar").addEventListener("click", cerrar);
-
-  const cont = caja.querySelector("#comp-historial-lista");
+/**
+ * Historial (trofeo de la tarjeta): el podio COMPLETO de cada semana
+ * cerrada, en hojas desplegables — GET /competencias/:id/podios (2026-09-21;
+ * antes: solo el ganador, GET /historial). `abrirEn` (opcional) =
+ * semana_cerrada_en a desplegar de entrada, para que el aviso de resultado
+ * abra directo la semana que anuncia.
+ */
+async function abrirModalHistorial(competencia, abrirEn) {
+  const hoja = abrirHoja({
+    icono: "trophy",
+    tono: "",
+    titulo: "Historial",
+    subtitulo: competencia.nombre,
+    cuerpoHTML: `<p class="cp-msg">Cargando…</p>`,
+  });
   try {
-    const respuesta = await fetchConTimeout(`${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}/historial`);
+    const respuesta = await fetchConTimeout(`${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}/podios`);
     if (!respuesta.ok) throw new Error(`El Worker respondió ${respuesta.status}`);
-    const { historial } = await respuesta.json();
-    cont.innerHTML = "";
-    if (!historial || historial.length === 0) {
-      cont.innerHTML = `<p class="muted">Todavía no se cerró ninguna semana.</p>`;
-      return;
-    }
-    historial.forEach((fila) => {
-      const item = document.createElement("div");
-      item.className = "row-between";
-      const fecha = new Date(fila.semana_cerrada_en).toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric" });
-      item.innerHTML = `<span>🏆 ${fila.apodo}</span><span class="muted" style="font-size:0.85rem;">${formatearHoras(fila.horas)} · ${fecha}</span>`;
-      cont.appendChild(item);
-    });
+    const { podios } = await respuesta.json();
+    pintarHistorial(hoja, podios, competencia.participante_id, abrirEn);
   } catch (e) {
     console.error("[competencias] Falló cargar el historial:", e);
-    cont.innerHTML = `<p class="muted">No se pudo cargar el historial. Revisá tu conexión.</p>`;
+    hoja.cuerpo.innerHTML = `<p class="cp-msg">No se pudo cargar el historial. Revisá tu conexión.</p>`;
   }
 }
 
@@ -912,11 +970,27 @@ async function abrirModalHistorial(competencia) {
  * tarjeta, para no bloquear el render de toda la lista esperando a las N
  * competencias a la vez (cada una carga a su propio ritmo).
  */
-async function cargarMarcadorEnTarjeta(competencia, contMarcador) {
+async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar) {
+  const vistaGuardada = leerVistaPreferida();
+  const base = {
+    nombre: competencia.nombre,
+    esCreador: Boolean(competencia.es_creador),
+    apodo: competencia.apodo,
+    yoId: competencia.participante_id,
+    vista: vistaGuardada,
+  };
+  const cb = {
+    alHistorial: () => abrirModalHistorial(competencia),
+    alGestionar: () => abrirModalGestionCompetencia(competencia, refrescar),
+    alCambiarVista: null, // se asigna abajo, cuando ya hay participantes
+  };
+
+  pintarTarjeta(tarjeta, { ...base, participantes: null, estadoCuerpo: "cargando", animar: false }, cb);
+
   try {
     const respuesta = await fetchConTimeout(`${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}`);
     if (!respuesta.ok) throw new Error(`El Worker respondió ${respuesta.status}`);
-    const datos = await respuesta.json(); // { id, nombre, estado, participantes: [{id, apodo, horas_semana_actual}] }
+    const datos = await respuesta.json(); // { id, nombre, estado, participantes: [{id, apodo, horas_semana_actual, foto_url}] }
 
     // 2026-09-17 (Parte 4/5): `nombre` y `estado` viven del lado del Worker
     // pero se cachean en `competencias_unidas` para poder pintar la lista
@@ -936,136 +1010,37 @@ async function cargarMarcadorEnTarjeta(competencia, contMarcador) {
       return;
     }
 
-    contMarcador.innerHTML = "";
-    (datos.participantes || []).forEach((p, i) => {
-      const esYo = p.id === competencia.participante_id;
-      const fila = document.createElement("div");
-      fila.className = "row-between";
-      fila.style.cssText = `padding:4px 0;${esYo ? " font-weight:600;" : ""}`;
-      const medalla = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
-      fila.innerHTML = `<span>${medalla} ${p.apodo}${esYo ? " (vos)" : ""}</span><span>${formatearHoras(p.horas_semana_actual)}</span>`;
-      contMarcador.appendChild(fila);
-    });
+    // El Worker guarda `horas_semana_actual` en HORAS; el módulo visual
+    // trabaja con `horas` a secas.
+    const participantes = (datos.participantes || []).map((p) => ({
+      id: p.id,
+      apodo: p.apodo,
+      foto_url: p.foto_url || null,
+      horas: p.horas_semana_actual || 0,
+    }));
+
+    // Foto propia: si el Worker tiene otra (o ninguna), se sube la actual y
+    // mientras tanto se muestra la de este dispositivo.
+    const miFoto = obtenerMiFotoUrl();
+    const yo = participantes.find((p) => p.id === competencia.participante_id);
+    if (yo && miFoto && yo.foto_url !== miFoto) {
+      yo.foto_url = miFoto;
+      sincronizarFotoPropia(competencia, miFoto);
+    }
+
+    let vista = vistaGuardada;
+    const dibujar = (animar) =>
+      pintarTarjeta(tarjeta, { ...base, vista, participantes, estadoCuerpo: "ok", animar }, cb);
+    cb.alCambiarVista = (nueva) => {
+      vista = nueva;
+      guardarVistaPreferida(nueva);
+      dibujar(false);
+    };
+    dibujar(true);
   } catch (e) {
     console.error("[competencias] Falló cargar el marcador:", e);
-    contMarcador.innerHTML = `<p class="muted" style="margin:0; font-size:0.82rem;">No se pudo cargar el marcador. Revisá tu conexión.</p>`;
+    pintarTarjeta(tarjeta, { ...base, participantes: null, estadoCuerpo: "error", animar: false }, cb);
   }
-}
-
-/**
- * Estilos de la fila de botones de acción de cada tarjeta de competencia
- * (Enlace/Clasificación/Gestionar) — se inyectan una sola vez (guard por
- * id) porque este archivo no tiene una hoja .css propia y no vale la pena
- * crear una solo para esto.
- */
-function asegurarEstilosBotonesCompetencia() {
-  if (document.getElementById("te-estilos-botones-competencia")) return;
-  const estilo = document.createElement("style");
-  estilo.id = "te-estilos-botones-competencia";
-  estilo.textContent = `
-    .te-fila-botones-competencia {
-      display: grid;
-      gap: 8px;
-    }
-    /* 2026-09-17: siempre 3 botones parejos (Enlace/Clasificación/Gestionar)
-       — las variantes de 4 y el modo compacto se fueron con el pedido 4.1. */
-    .te-fila-botones-competencia[data-total="3"] { grid-template-columns: repeat(3, 1fr); }
-    .te-btn-competencia {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      padding: 9px 8px;
-      border-radius: 10px;
-      border: 1px solid var(--borde-sutil, rgba(255,255,255,0.12));
-      background: var(--fondo-sutil, rgba(255,255,255,0.05));
-      color: inherit;
-      font: inherit;
-      font-size: 0.8rem;
-      font-weight: 600;
-      white-space: nowrap;
-      overflow: hidden;
-      cursor: pointer;
-      transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
-    }
-    .te-btn-competencia:hover { background: var(--fondo-hover, rgba(255,255,255,0.1)); }
-    .te-btn-competencia:active { transform: scale(0.96); }
-    .te-btn-competencia-peligro:hover {
-      background: rgba(239,68,68,0.16);
-      border-color: rgba(239,68,68,0.45);
-    }
-    .te-btn-competencia-emoji { font-size: 1rem; line-height: 1; flex: none; }
-    .te-btn-competencia-etiqueta { overflow: hidden; text-overflow: ellipsis; }
-  `;
-  document.head.appendChild(estilo);
-}
-
-/** Un botón de acción de competencia: emoji + etiqueta, mismo look para los 4. */
-function crearBotonCompetencia({ emoji, etiqueta, titulo, peligro, onClick }) {
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "te-btn-competencia" + (peligro ? " te-btn-competencia-peligro" : "");
-  btn.title = titulo;
-  btn.setAttribute("aria-label", titulo);
-  btn.innerHTML = `<span class="te-btn-competencia-emoji">${emoji}</span><span class="te-btn-competencia-etiqueta">${etiqueta}</span>`;
-  btn.addEventListener("click", onClick);
-  return btn;
-}
-
-/**
- * Fila de botones de una tarjeta de competencia.
- *
- * PEDIDO 4.1 (2026-09-17): los botones sueltos de "Borrar" y "Salir"
- * desaparecieron de la tarjeta — ahora hay un único "Gestionar" que abre
- * el menú con las 6 acciones (renombrar / cambiar apodo / finalizar /
- * sacar usuario / salir / borrar), ya filtradas por permiso adentro de
- * `abrirModalGestionCompetencia` (tiempo-estudio-competencias-gestion.js).
- * Quedan 3 botones fijos para todo el mundo, así que se cayó toda la
- * gimnasia de medición 4-vs-3 con ResizeObserver que tenía esta función:
- * con 3 columnas parejas entran siempre, y si el ancho aprieta, el CSS
- * recorta la etiqueta con ellipsis.
- */
-function construirFilaBotonesCompetencia(competencia, refrescar) {
-  asegurarEstilosBotonesCompetencia();
-
-  const fila = document.createElement("div");
-  fila.className = "te-fila-botones-competencia";
-  fila.dataset.total = "3";
-
-  const finalizada = competencia.estado === "finalizada";
-
-  fila.appendChild(
-    crearBotonCompetencia({
-      emoji: "🔗",
-      etiqueta: "Enlace",
-      titulo: finalizada ? "Esta competencia está finalizada" : "Copiar link de invitación",
-      onClick: () => {
-        if (finalizada) {
-          mostrarToast("La competencia está finalizada — no acepta gente nueva");
-          return;
-        }
-        copiarLinkInvitacion(competencia);
-      },
-    })
-  );
-  fila.appendChild(
-    crearBotonCompetencia({
-      emoji: "🏆",
-      etiqueta: "Clasificación",
-      titulo: "Ver historial de ganadores",
-      onClick: () => abrirModalHistorial(competencia),
-    })
-  );
-  fila.appendChild(
-    crearBotonCompetencia({
-      emoji: "⚙️",
-      etiqueta: "Gestionar",
-      titulo: "Gestionar esta competencia",
-      onClick: () => abrirModalGestionCompetencia(competencia, refrescar),
-    })
-  );
-
-  return fila;
 }
 
 /**
@@ -1104,7 +1079,7 @@ function construirVistaCompetencias(cont, refrescar) {
 
   // Punto 3.3: los avisos de resultado nuevo van arriba de todo, y son el
   // ÚNICO camino a la pantalla de celebración con sonido. Nada suena solo.
-  construirAvisosResultados(cont, refrescar);
+  construirAvisosResultados(cont, refrescar, abrirModalHistorial);
 
   // BOTÓN TEMPORAL DE PRUEBA - remover cuando el diseño de celebración esté aprobado
   // (punto 3.1) — encolan un aviso falso de victoria/derrota para poder
@@ -1138,33 +1113,15 @@ function construirVistaCompetencias(cont, refrescar) {
 
   const lista = document.createElement("div");
   lista.className = "stack";
-  lista.style.gap = "10px";
+  lista.style.gap = "14px";
 
   activas.forEach((competencia) => {
-    const tarjeta = document.createElement("div");
-    tarjeta.className = "glass-card";
-    tarjeta.style.cssText = "padding:14px 16px; display:flex; flex-direction:column; gap:10px;";
-
-    const fila = document.createElement("div");
-    fila.className = "row-between";
-    fila.style.alignItems = "center";
-    fila.innerHTML = `
-      <div>
-        <p style="margin:0; font-weight:600;">${competencia.nombre}${competencia.es_creador ? " 👑" : ""}</p>
-        <p class="muted" style="margin:2px 0 0; font-size:0.8rem;">Tu apodo ahí: ${competencia.apodo}</p>
-      </div>
-    `;
-    tarjeta.appendChild(fila);
-
-    const contMarcador = document.createElement("div");
-    contMarcador.className = "stack";
-    contMarcador.style.cssText = "gap:2px; border-top:1px solid var(--borde-sutil, rgba(255,255,255,0.08)); padding-top:8px;";
-    contMarcador.innerHTML = `<p class="muted" style="margin:0; font-size:0.82rem;">Cargando marcador…</p>`;
-    tarjeta.appendChild(contMarcador);
-    cargarMarcadorEnTarjeta(competencia, contMarcador);
-
-    tarjeta.appendChild(construirFilaBotonesCompetencia(competencia, refrescar));
+    // 2026-09-21: la tarjeta entera (cabecera, íconos, podio/lista) la
+    // dibuja el módulo visual; `cargarMarcadorEnTarjeta` la pinta primero
+    // "cargando" y luego con los datos del Worker.
+    const tarjeta = document.createElement("article");
     lista.appendChild(tarjeta);
+    cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar);
   });
 
   cont.appendChild(lista);
@@ -1185,6 +1142,9 @@ export {
   construirCajaModal,
   fetchConTimeout,
   formatearHoras,
+  construirLinkInvitacion,
+  copiarLinkInvitacion,
+  abrirModalHistorial,
   leerTokenCreador,
   salirDeCompetencia,
   borrarCompetenciaEntera,

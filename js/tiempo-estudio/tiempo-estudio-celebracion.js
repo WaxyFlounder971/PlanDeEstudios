@@ -28,6 +28,14 @@
    CLAVE_RESULTADO_VISTO). Si avanzó, hay resultado nuevo: victoria si el
    `participante_id` ganador es el propio, derrota si no.
 
+   2026-09-21 (rediseño): el aviso ahora se pinta con el diseño del
+   prototipo (medalla, "Quedaste 2.º · a 1 h 20 min de Iva"). Para saber
+   el puesto se pide GET /competencias/:id/podios (podio completo); si el
+   Worker no lo tiene o no hay datos de ESTE usuario en esa semana, se cae
+   al aviso de siempre con /historial. La pantalla de celebración NO se
+   tocó: sigue siendo lo que abre el aviso, y al cerrarla se puede abrir el
+   podio de esa semana (gancho opcional `alCerrar`).
+
    El "ya lo vi" es local al dispositivo a propósito (mismo criterio que el
    snapshot del timer): que te avise en el celular y en la notebook no es un
    bug, es lo esperable — el resultado es el mismo.
@@ -35,6 +43,9 @@
 
 import { estado } from "../core/storage.js";
 import { URL_WORKER_OAUTH } from "../core/auth.js";
+// 2026-09-21 — Rediseño: el aviso con posición/podio lo dibuja el módulo visual
+// (sin ciclos: ese módulo no importa nada de este proyecto).
+import { construirAvisoPodio, resumenPosicion } from "./tiempo-estudio-competencias-visual.js";
 
 const TIMEOUT_MS = 12000;
 const CLAVE_RESULTADO_VISTO = "te_comp_resultado_visto_"; // + id de competencia
@@ -56,7 +67,7 @@ const RUTA_AUDIO_DERROTA = "audio/perdedor.mp3";
  * sola si dibuja algo (mismo criterio de "el módulo dueño de la
  * funcionalidad es el que decide si se muestra").
  */
-const MOSTRAR_BOTONES_PRUEBA = false;
+const MOSTRAR_BOTONES_PRUEBA = true; // 2026-09-21: activados para probar el rediseño — volver a false al aprobarlo
 
 /**
  * Resultados "de prueba" encolados por los botones de prueba (3.1). Viven
@@ -645,8 +656,10 @@ function asegurarEstilosCelebracion() {
  * nunca automáticamente al abrir la app.
  *
  * `resultado`: { tipo, nombreCompetencia, apodoGanador, horas, esPrueba }
+ * `alCerrar` (opcional, 2026-09-21): se llama al tocar "Listo", cuando la
+ * pantalla ya se fue — el aviso lo usa para abrir el podio de esa semana.
  */
-function mostrarCelebracionResultado(resultado) {
+function mostrarCelebracionResultado(resultado, alCerrar) {
   asegurarEstilosCelebracion();
   const esVictoria = resultado.tipo === "victoria";
 
@@ -695,6 +708,7 @@ function mostrarCelebracionResultado(resultado) {
     confeti.detener();
     audio.detener();
     overlay.remove();
+    if (typeof alCerrar === "function") alCerrar();
   }
   // Pedido 2.2: tocar el fondo no cierra — solo el botón "Listo". (Además
   // acá evita que un toque al azar corte el audio a los 2 segundos.)
@@ -702,6 +716,20 @@ function mostrarCelebracionResultado(resultado) {
 }
 
 /* ===================== Botones de prueba (punto 3.1) ===================== */
+
+/** Podio inventado para los avisos de prueba: en victoria el usuario queda 1.º,
+ * en derrota 2.º. `prueba_yo` es el id que se le pasa al aviso como "yo". */
+function podioDePrueba(tipo) {
+  const yo = { participante_id: "prueba_yo", apodo: "Vos", horas: tipo === "victoria" ? 7.5 : 6.5, foto_url: null };
+  const otro = { participante_id: "prueba_2", apodo: "Otra persona", horas: tipo === "victoria" ? 5.25 : 9.25, foto_url: null };
+  const tercero = { participante_id: "prueba_3", apodo: "Tercero", horas: 2, foto_url: null };
+  const lista = tipo === "victoria" ? [yo, otro, tercero] : [otro, yo, tercero];
+  return {
+    semana_cerrada_en: Date.now(),
+    completa: true,
+    resultados: lista.map((r, i) => ({ ...r, puesto: i + 1 })),
+  };
+}
 
 /**
  * BOTONES DE PRUEBA — solo funciona con MOSTRAR_BOTONES_PRUEBA en true.
@@ -720,6 +748,9 @@ function simularResultado(tipo, nombreCompetencia) {
     apodoGanador: tipo === "victoria" ? "Vos" : "Otra persona",
     horas: tipo === "victoria" ? 7.5 : 9.25,
     esPrueba: true,
+    // 2026-09-21: podio inventado para el aviso nuevo (yo = "prueba_yo").
+    semanaCerradaEn: Date.now(),
+    podio: podioDePrueba(tipo),
   });
 }
 
@@ -817,26 +848,38 @@ function construirAvisoResultado(resultado, alTocar) {
  *     por eso se agregan después, sin bloquear el render de la sección
  *     (mismo criterio que `cargarMarcadorEnTarjeta`).
  */
-function construirAvisosResultados(cont, refrescar) {
+function construirAvisosResultados(cont, refrescar, abrirHistorial) {
   const caja = document.createElement("div");
   caja.className = "stack";
   caja.style.cssText = "gap:8px; margin-bottom:12px;";
   cont.appendChild(caja);
 
   resultadosDePrueba.forEach((resultado) => {
-    caja.appendChild(
-      construirAvisoResultado(resultado, () => {
-        resultadosDePrueba = resultadosDePrueba.filter((r) => r.id !== resultado.id);
-        mostrarCelebracionResultado(resultado);
-        if (refrescar) refrescar();
-      })
+    const quitar = () => {
+      resultadosDePrueba = resultadosDePrueba.filter((r) => r.id !== resultado.id);
+    };
+    const aviso = construirAvisoPodio(
+      { podio: resultado.podio, yoId: "prueba_yo", nombreCompetencia: `${resultado.nombreCompetencia} (prueba)`, cta: "Ver resultado" },
+      {
+        alAbrir: () => {
+          quitar();
+          mostrarCelebracionResultado(resultado);
+          if (refrescar) refrescar();
+        },
+        alDescartar: quitar,
+      }
     );
+    caja.appendChild(aviso || construirAvisoResultado(resultado, () => {
+      quitar();
+      mostrarCelebracionResultado(resultado);
+      if (refrescar) refrescar();
+    }));
   });
 
-  cargarAvisosReales(caja, refrescar);
+  cargarAvisosReales(caja, refrescar, abrirHistorial);
 }
 
-async function cargarAvisosReales(caja, refrescar) {
+async function cargarAvisosReales(caja, refrescar, abrirHistorial) {
   const competencias = estado.datos.competencias_unidas || [];
   if (competencias.length === 0) return;
 
@@ -854,32 +897,73 @@ async function cargarAvisosReales(caja, refrescar) {
       }
       if (!resultado || !caja.isConnected) return;
 
-      caja.appendChild(
-        construirAvisoResultado(resultado, () => {
-          marcarResultadoVisto(competencia.id, resultado.semanaCerradaEn);
-          mostrarCelebracionResultado(resultado);
-          if (refrescar) refrescar();
-        })
-      );
+      // Al tocar el aviso: se marca visto, se muestra la celebración de
+      // siempre y, al cerrarla, se abre el podio de esa semana (si hay).
+      const alAbrir = () => {
+        marcarResultadoVisto(competencia.id, resultado.semanaCerradaEn);
+        mostrarCelebracionResultado(
+          resultado,
+          resultado.podio && abrirHistorial ? () => abrirHistorial(competencia, resultado.semanaCerradaEn) : undefined
+        );
+        if (refrescar) refrescar();
+      };
+
+      // Aviso nuevo (con puesto y brecha) si hay podio; si no, el de siempre.
+      const aviso = resultado.podio
+        ? construirAvisoPodio(
+            { podio: resultado.podio, yoId: competencia.participante_id, nombreCompetencia: competencia.nombre, cta: "Ver resultado" },
+            {
+              alAbrir,
+              // Descartar = "ya lo vi" sin celebración ni sonido.
+              alDescartar: () => marcarResultadoVisto(competencia.id, resultado.semanaCerradaEn),
+            }
+          )
+        : null;
+      caja.appendChild(aviso || construirAvisoResultado(resultado, alAbrir));
     })
   );
 }
 
 /**
- * `null` si no hay nada nuevo que avisar. Compara la entrada más reciente
- * de `historial_ganadores` contra lo último que este dispositivo ya mostró.
+ * `null` si no hay nada nuevo que avisar. Compara la semana cerrada más
+ * reciente contra lo último que este dispositivo ya mostró.
+ *
+ * 2026-09-21: primero se intenta GET /podios (podio completo → puesto y
+ * brecha para el aviso nuevo). Si el Worker no responde bien ahí, o el
+ * usuario no figura en esa semana (se unió después), se usa el camino de
+ * siempre con /historial (solo ganador) y el aviso clásico.
  */
 async function detectarResultadoNuevo(competencia) {
-  const respuesta = await fetchConTimeout(
-    `${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}/historial`
-  );
-  if (!respuesta.ok) return null;
-  const { historial } = await respuesta.json();
-  if (!historial || historial.length === 0) return null;
-
-  // El Worker ya devuelve ordenado por semana_cerrada_en DESC.
-  const ultima = historial[0];
   const yaVisto = leerResultadoVisto(competencia.id);
+
+  let podioReciente = null;
+  try {
+    const rp = await fetchConTimeout(`${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}/podios`);
+    if (rp.ok) {
+      const { podios } = await rp.json();
+      if (podios && podios.length > 0) podioReciente = podios[0]; // el Worker ya ordena por semana DESC
+    }
+  } catch (e) {
+    // se sigue con /historial
+  }
+
+  let ultima;
+  let podio = null;
+  if (podioReciente && podioReciente.resultados && podioReciente.resultados.length > 0) {
+    const g = podioReciente.resultados[0];
+    ultima = { semana_cerrada_en: podioReciente.semana_cerrada_en, participante_id: g.participante_id, apodo: g.apodo, horas: g.horas };
+    // Solo sirve para el aviso nuevo si este usuario figura en esa semana.
+    if (resumenPosicion(podioReciente, competencia.participante_id)) podio = podioReciente;
+  } else {
+    const respuesta = await fetchConTimeout(
+      `${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}/historial`
+    );
+    if (!respuesta.ok) return null;
+    const { historial } = await respuesta.json();
+    if (!historial || historial.length === 0) return null;
+    ultima = historial[0]; // El Worker ya devuelve ordenado por semana_cerrada_en DESC.
+  }
+
   if (!(ultima.semana_cerrada_en > yaVisto)) return null;
 
   // Primera vez que este dispositivo mira esta competencia (yaVisto === 0)
@@ -899,6 +983,7 @@ async function detectarResultadoNuevo(competencia) {
     apodoGanador: ultima.apodo,
     horas: ultima.horas,
     semanaCerradaEn: ultima.semana_cerrada_en,
+    podio,
     esPrueba: false,
   };
 }

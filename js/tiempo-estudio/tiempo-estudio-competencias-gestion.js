@@ -36,7 +36,11 @@ import {
   leerTokenCreador,
   salirDeCompetencia,
   borrarCompetenciaEntera,
+  copiarLinkInvitacion,
+  construirLinkInvitacion,
 } from "./tiempo-estudio-competencias.js";
+// 2026-09-21 — Rediseño: el menú Gestionar usa la hoja del módulo visual.
+import { abrirHoja, esc, ICONO } from "./tiempo-estudio-competencias-visual.js";
 
 /* ===================== Menú "Gestionar" (punto 4.1) ===================== */
 
@@ -77,39 +81,72 @@ function opcionesGestion(competencia) {
 }
 
 /**
- * Reemplaza a los botones sueltos de "Borrar" y "Salir" que tenía cada
- * tarjeta (punto 4.1). Una sola ventanita con la lista de acciones; cada
- * una abre su propio sub-modal o dispara directo la acción.
+ * Menú Gestionar (rediseño 2026-09-21). Una hoja con dos bloques:
+ *   1. Invitar — el enlace de invitación (antes era el botón "Enlace" de la
+ *      tarjeta; ahora vive acá, arriba de todo).
+ *   2. Opciones — las mismas acciones de siempre, ya filtradas por permiso
+ *      (`opcionesGestion`); cada una cierra la hoja antes de abrir lo que
+ *      sigue (los sub-modales siguen siendo los de siempre).
+ * Una competencia finalizada no acepta gente nueva: en vez del enlace se
+ * explica por qué (mismo criterio que tenía el botón "Enlace").
  */
 function abrirModalGestionCompetencia(competencia, refrescar) {
   asegurarEstilosGestion();
-  const { overlay, caja, cerrar } = construirCajaModal();
+  const finalizada = competencia.estado === "finalizada";
 
-  caja.innerHTML = `
-    <div>
-      <h2 style="margin:0;">Gestionar</h2>
-      <p class="muted" style="margin:4px 0 0; font-size:0.85rem;">
-        ${competencia.nombre}${competencia.estado === "finalizada" ? " · finalizada" : ""}
-      </p>
-    </div>
-    <div class="stack" id="comp-gestion-opciones" style="gap:6px;"></div>
-    <button type="button" class="btn btn-secondary" id="comp-gestion-cerrar" style="width:100%;">Cerrar</button>
-  `;
-  document.body.appendChild(overlay);
-  caja.querySelector("#comp-gestion-cerrar").addEventListener("click", cerrar);
+  const bloqueInvitar = finalizada
+    ? `<div class="cp-lk">
+         <div class="cp-lk-top">
+           <div class="cp-lk-ic">${ICONO.link}</div>
+           <div><div class="cp-lk-t">Enlace de invitación</div>
+           <div class="cp-lk-s">Esta competencia está finalizada — no acepta gente nueva.</div></div>
+         </div>
+       </div>`
+    : `<div class="cp-lk">
+         <div class="cp-lk-top">
+           <div class="cp-lk-ic">${ICONO.link}</div>
+           <div><div class="cp-lk-t">Enlace de invitación</div>
+           <div class="cp-lk-s">Quien lo abra puede unirse a la competencia.</div></div>
+         </div>
+         <div class="cp-lk-row"><code>${esc(construirLinkInvitacion(competencia.id))}</code><button type="button" class="cp-lk-copy" data-cp="copiar">Copiar</button></div>
+       </div>`;
 
-  const contOpciones = caja.querySelector("#comp-gestion-opciones");
-  opcionesGestion(competencia).forEach((opcion) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "te-opcion-gestion" + (opcion.peligro ? " te-opcion-gestion-peligro" : "");
-    btn.innerHTML = `<span class="te-opcion-gestion-emoji">${opcion.emoji}</span><span>${opcion.etiqueta}</span>`;
-    btn.addEventListener("click", () => {
-      cerrar(); // el menú siempre se va antes de abrir lo que sigue
-      ejecutarOpcionGestion(opcion.id, competencia, refrescar);
-    });
-    contOpciones.appendChild(btn);
+  const opciones = opcionesGestion(competencia);
+  const hoja = abrirHoja({
+    icono: "gear",
+    tono: "acc",
+    titulo: "Gestionar",
+    subtitulo: competencia.nombre + (finalizada ? " · finalizada" : ""),
+    cuerpoHTML: `
+      <div class="cp-grp">Invitar</div>
+      ${bloqueInvitar}
+      <div class="cp-grp">Opciones</div>
+      ${opciones
+        .map(
+          (o) =>
+            `<button type="button" class="cp-opt${o.peligro ? " cp-peligro" : ""}" data-opcion="${o.id}"><span class="cp-opt-emoji">${o.emoji}</span><span>${esc(o.etiqueta)}</span></button>`
+        )
+        .join("")}`,
   });
+
+  const btnCopiar = hoja.cuerpo.querySelector('[data-cp="copiar"]');
+  if (btnCopiar) {
+    btnCopiar.addEventListener("click", async () => {
+      const copiado = await copiarLinkInvitacion(competencia);
+      if (!copiado) return; // se abrió el modal de copia manual; la hoja se queda debajo
+      btnCopiar.textContent = "¡Copiado!";
+      setTimeout(() => {
+        if (btnCopiar.isConnected) btnCopiar.textContent = "Copiar";
+      }, 1600);
+    });
+  }
+
+  hoja.cuerpo.querySelectorAll("[data-opcion]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      hoja.cerrar(); // el menú siempre se va antes de abrir lo que sigue
+      ejecutarOpcionGestion(btn.dataset.opcion, competencia, refrescar);
+    })
+  );
 }
 
 function ejecutarOpcionGestion(id, competencia, refrescar) {
