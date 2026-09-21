@@ -1,16 +1,16 @@
 /* =========================================================================
-   HORARIO ENTRE AMIGOS — Parte 1: flujo de compartir
+   HORARIO ENTRE AMIGOS - Parte 1: flujo de compartir
    -------------------------------------------------------------------------
    Compartir el horario propio por enlace público de solo lectura vía
    Google Drive, sin que quien lo recibe necesite cuenta. Esta entrega
    cubre: aviso de privacidad obligatorio, creación del archivo público en
    Drive, generación/copia del enlace, y la lista de "enlaces que
-   generaste" (con revocar individual) — los 4 puntos obligatorios del
+   generaste" (con revocar individual) - los 4 puntos obligatorios del
    prompt.
 
    NO incluye todavía (prompts aparte): la vista pública sin sesión
    (amigos.html), ni "Asociar a mi cuenta"/"Horarios Activos" (vincular el
-   horario de un AMIGO al propio — dirección opuesta de este mismo feature,
+   horario de un AMIGO al propio - dirección opuesta de este mismo feature,
    ver horario_amigos_vinculados en el prompt original).
    ========================================================================= */
 
@@ -26,25 +26,25 @@ import { obtenerSemestreHorarioActual, obtenerColorBloque, obtenerNombreBloque, 
 // armado en horario-amigos.js/horario.js. El patrón más parecido en toda
 // la app es este helper de modal dinámico 100% en JS (overlay +
 // .glass-card.modal-card), que ya usan todos los modales de
-// semestres-tarjetas.js — se reusa tal cual en vez de duplicarlo.
+// semestres-tarjetas.js - se reusa tal cual en vez de duplicarlo.
 import { crearModalDinamico, agregarCampoModal } from "../semestres/semestres-tarjetas.js";
 
-// Restringido por dominio en Google Cloud a este mismo GitHub Pages — ver
+// Restringido por dominio en Google Cloud a este mismo GitHub Pages - ver
 // nota de configuración del prompt. amigos.html vive en la raíz del repo,
 // hermano de index.html.
 const BASE_URL_AMIGOS = "https://waxyflounder971.github.io/PlanDeEstudios/amigos.html";
 
 // Misma API key restringida por dominio + Drive API que ya usa amigos.html
-// (ver nota de configuración del prompt) — se usa acá TAMBIÉN, no solo en
+// (ver nota de configuración del prompt) - se usa acá TAMBIÉN, no solo en
 // la página pública. Motivo (bug real reportado: "el enlace está 100%
 // funcional pero dice caído"): leer el horario de un AMIGO con TU propio
 // token OAuth (leerDatos) puede devolver 403 aunque el archivo sea público,
 // porque el scope de Drive de esta app probablemente solo alcanza para
-// archivos que la app propia creó — un archivo AJENO, aunque tenga permiso
+// archivos que la app propia creó - un archivo AJENO, aunque tenga permiso
 // "cualquiera con el enlace", queda fuera de ese scope igual. La lectura
 // pública sin sesión (misma vía que amigos.html: fetch directo + API key,
 // sin token) no tiene ese problema porque no depende de ningún scope de
-// usuario — es exactamente el mecanismo que el usuario ya confirmó que
+// usuario - es exactamente el mecanismo que el usuario ya confirmó que
 // funciona siempre.
 const API_KEY_LECTURA_AMIGOS = "AIzaSyDfpExr25F972ur_fztdELmU6MCxJOVBmg";
 
@@ -59,19 +59,47 @@ async function leerSnapshotPublicoAmigo(fileId) {
   return resp.json();
 }
 
+/* ===================== Universidad del snapshot (siglas + nombre completo) ===================== */
+
+/**
+ * `universidad` en el snapshot es plan.universidad = { nombre_completo,
+ * siglas } (desde la separación de 2026-08-22), pero snapshots subidos por
+ * versiones anteriores de la app traen un string plano, y cualquiera de los
+ * dos campos puede venir vacío. Este helper acepta las tres formas y
+ * devuelve SIEMPRE algo que se puede pintar sin riesgo de "[object Object]":
+ *   { siglas: texto corto a mostrar, nombreCompleto: aclaración o null }
+ * o null si no hay nada que mostrar.
+ * `siglas` cae al nombre completo si no hay siglas (nunca queda vacío si
+ * existe alguno de los dos). `nombreCompleto` solo se devuelve cuando hay
+ * siglas Y un nombre distinto, para usarlo como aclaración (tooltip) sin
+ * repetir el mismo texto.
+ */
+function resolverUniversidadParaMostrar(universidad) {
+  if (!universidad) return null;
+  if (typeof universidad === "string") {
+    const texto = universidad.trim();
+    return texto ? { siglas: texto, nombreCompleto: null } : null;
+  }
+  const siglas = String(universidad.siglas || "").trim();
+  const nombre = String(universidad.nombre_completo || "").trim();
+  const texto = siglas || nombre;
+  if (!texto) return null;
+  return { siglas: texto, nombreCompleto: siglas && nombre && nombre !== siglas ? nombre : null };
+}
+
 /* ===================== Snapshot público (privacidad: mínimo indispensable) ===================== */
 
 /**
  * Arma el JSON que se sube a Drive como archivo público. A propósito NO es
  * un recorte de estado.datos: es un objeto nuevo con SOLO lo que se
  * autoriza a exponer (bloques, días, horas, nombres/apodo ya resueltos,
- * aula y universidad) — nunca profesor, enlace de clase ni notas, aunque
+ * aula y universidad) - nunca profesor, enlace de clase ni notas, aunque
  * esos campos sí vivan en el bloque real. Motivo: un horario ya es
  * sensible de por sí (revela dónde está una persona cada semana); exponer
  * de más "porque ya estaba ahí" sería fácil pero innecesario.
  *
  * `nombre`/`color` van RESUELTOS (no materia_id/plan_estudio_id) porque
- * quien abre el enlace nunca tiene sesión — no hay plan/categorías propias
+ * quien abre el enlace nunca tiene sesión - no hay plan/categorías propias
  * contra qué resolverlos del otro lado.
  */
 function construirSnapshotHorarioCompartido(semestre, apodoPropietario) {
@@ -82,7 +110,7 @@ function construirSnapshotHorarioCompartido(semestre, apodoPropietario) {
     version: 1,
     generado_en: new Date().toISOString(),
     // Opcional, escrito a mano por quien comparte (nunca autocompletado con
-    // su nombre real de cuenta) — amigos.html lo usa como default editable
+    // su nombre real de cuenta) - amigos.html lo usa como default editable
     // al asociar. Puede ser null: el snapshot sigue sin ningún dato de
     // identidad si el usuario lo deja vacío.
     apodo_propietario: apodoPropietario || null,
@@ -100,7 +128,7 @@ function construirSnapshotHorarioCompartido(semestre, apodoPropietario) {
       nombre: obtenerNombreBloque(bloque),
       color: obtenerColorBloque(bloque),
       // universidad sí es fija para todo el semestre (viene del plan, no
-      // del bloque) — se resuelve una sola vez acá. aula YA NO es fija:
+      // del bloque) - se resuelve una sola vez acá. aula YA NO es fija:
       // pasó a ser por día (2026-08-26, mismo pedido/patrón que modalidad),
       // así que ahora se resuelve adentro de cada entrada de `dias` más
       // abajo, no acá arriba.
@@ -114,7 +142,7 @@ function construirSnapshotHorarioCompartido(semestre, apodoPropietario) {
       })),
       // Se conserva el cronograma de excepciones puntuales (ej. "virtual
       // solo esta semana") para que la vista pública no se vea distinta de
-      // la real — solo lleva numero_semana/dia/modalidad, nada nuevo.
+      // la real - solo lleva numero_semana/dia/modalidad, nada nuevo.
       cronograma_dias: (bloque.cronograma_dias || []).map((cd) => ({
         numero_semana: cd.numero_semana,
         dia: cd.dia,
@@ -128,7 +156,7 @@ function construirSnapshotHorarioCompartido(semestre, apodoPropietario) {
 
 // Solo en memoria de esta sesión (no persistido): evita subir a Drive un
 // contenido idéntico al que ya se subió la última vez, en cada ciclo de
-// sync que corre por CUALQUIER cambio (no solo uno de Horario) — importante
+// sync que corre por CUALQUIER cambio (no solo uno de Horario) - importante
 // porque no hay billing vinculada al proyecto de Drive (ver nota del
 // prompt): si se excede la cuota gratis, las peticiones fallan solas, así
 // que conviene no gastarla en subidas que no cambian nada.
@@ -136,7 +164,7 @@ const cacheUltimoContenidoPorEnlace = new Map();
 
 /**
  * Se registra como hook post-guardado (ver registrarHookPostGuardado en
- * storage-sync.js) — corre solo, después de cada subida exitosa a Drive,
+ * storage-sync.js) - corre solo, después de cada subida exitosa a Drive,
  * sin que storage-sync.js tenga que importar este archivo (evita el import
  * circular: este archivo sí importa cosas de storage-sync.js). Así, editar
  * el horario compartido actualiza el/los archivo(s) públicos activos casi
@@ -261,7 +289,7 @@ function mostrarModalEnlaceGenerado(url) {
 
   input.value = url;
   // El share sheet nativo no existe en todos los navegadores (ej. la
-  // mayoría de escritorio) — el botón solo se ofrece cuando sí hay algo
+  // mayoría de escritorio) - el botón solo se ofrece cuando sí hay algo
   // real que abrir.
   btnCompartir.classList.toggle("oculto", !navigator.share);
   btnCompartir.onclick = () => {
@@ -272,7 +300,7 @@ function mostrarModalEnlaceGenerado(url) {
     if (ok) {
       mostrarToast("✓ Enlace copiado");
     } else {
-      mostrarToast("No se pudo copiar — seleccionalo a mano");
+      mostrarToast("No se pudo copiar - seleccionalo a mano");
       input.focus();
       input.select();
     }
@@ -326,9 +354,9 @@ async function revocarEnlaceCompartido(enlaceId) {
 }
 
 /**
- * FIX (bug real reportado — causa confirmada): el botón "Copiar enlace" de
+ * FIX (bug real reportado - causa confirmada): el botón "Copiar enlace" de
  * la lista de "Ver mis enlaces compartidos" (Ajustes) llamaba a esta
- * función, pero nunca se había escrito en ningún lado del archivo — era una
+ * función, pero nunca se había escrito en ningún lado del archivo - era una
  * llamada a una función fantasma, tiraba ReferenceError apenas se
  * clickeaba. El modal de "enlace recién generado" (mostrarModalEnlaceGenerado,
  * más arriba) estaba bien, ese no era el problema.
@@ -336,7 +364,7 @@ async function revocarEnlaceCompartido(enlaceId) {
  * Reconstruye la misma URL que se generó en su momento (mismo formato que
  * generarEnlaceCompartido: BASE_URL_AMIGOS + #fileId=) y usa el mismo
  * blindaje de copia de dos capas + fallback de copia manual que ya usa el
- * resto de la app (ver core/clipboard.js) — así este botón queda con
+ * resto de la app (ver core/clipboard.js) - así este botón queda con
  * exactamente el mismo comportamiento que el de copiar recién generado.
  */
 async function copiarEnlaceExistente(fileId) {
@@ -359,7 +387,7 @@ async function copiarEnlaceExistente(fileId) {
  * FIX (tumba faltante): esta función filtraba el array local pero nunca
  * escribía en _eliminados_horario_enlaces. Sin tumba, fusionarColeccion
  * (storage-merge.js) no tiene forma de saber que este id se borró a
- * propósito — en la próxima fusión, el lado remoto (que todavía no se
+ * propósito - en la próxima fusión, el lado remoto (que todavía no se
  * enteró del borrado) lo vuelve a traer y el registro "resucita". Mismo
  * patrón que _eliminados_materias en plan-esquema.js: id + eliminadoEn
  * (reloj de pared, no el contador de Lamport de sellarTimestamp).
@@ -485,7 +513,7 @@ function inicializarPanelAmigos() {
 
   // Horario conjunto: solo visible cuando ya hay al menos un amigo
   // vinculado (ver renderizarListaAmigosVinculados, que hace el toggle
-  // real cada vez que se abre este panel) — acá solo se cablea el click.
+  // real cada vez que se abre este panel) - acá solo se cablea el click.
   const btnConjunto = document.getElementById("btn-horario-conjunto");
   if (btnConjunto) {
     btnConjunto.addEventListener("click", () => {
@@ -499,7 +527,7 @@ function inicializarPanelAmigos() {
       cerrarPanelAmigos();
       // Navegación cruzada Horario → Ajustes: mismo patrón que el resto de
       // la app (window.mostrarSeccion + desplazarYResaltarElemento, ver
-      // componentes.js) — se abre la tarjeta si estaba colapsada y se hace
+      // componentes.js) - se abre la tarjeta si estaba colapsada y se hace
       // scroll + destello para que sea imposible no verla.
       if (typeof window.mostrarSeccion === "function") window.mostrarSeccion("configuracion");
       const seccion = document.getElementById("ajuste-seccion-horario-enlaces");
@@ -514,7 +542,7 @@ function inicializarPanelAmigos() {
   });
 
   // Refresca la lista cada vez que el usuario abre esta tarjeta puntual de
-  // Ajustes a mano (no solo al cargar la app) — así un cambio hecho desde
+  // Ajustes a mano (no solo al cargar la app) - así un cambio hecho desde
   // otro dispositivo (ej. revocar un enlace en el teléfono) se ve
   // actualizado al volver a entrar acá en la PC, sin depender de un F5.
   const cabeceraAjustes = document.querySelector("#ajuste-seccion-horario-enlaces .ajuste-seccion-cabecera");
@@ -535,12 +563,12 @@ function inicializarHorarioAmigos() {
 /* ===================== Parte 3: asociar el horario de un amigo (localStorage → cuenta) ===================== */
 
 const KEY_LOCALSTORAGE_PENDIENTE = "horario_amigo_pendiente";
-const MS_EXPIRACION_PENDIENTE = 60 * 60 * 1000; // 1h — ver amigos.html/horario-amigos-publico.js
+const MS_EXPIRACION_PENDIENTE = 60 * 60 * 1000; // 1h - ver amigos.html/horario-amigos-publico.js
 const MAX_AMIGOS_VINCULADOS = 10;
 
 // Paleta fija, no colores random en cada carga: así el color de un amigo se
 // mantiene estable a través del tiempo (se elige UNA vez, al vincular, con
-// un hash determinístico de su id — ver crearAmigoVinculado en schema.js —
+// un hash determinístico de su id - ver crearAmigoVinculado en schema.js -
 // y de ahí en adelante ese amigo siempre se ve con el mismo color, sin
 // depender del orden en que se vincularon los demás).
 const PALETA_COLORES_AMIGOS = [
@@ -567,7 +595,7 @@ function abrirModalConfirmarAsociarAmigo(apodoDefault, onConfirmar) {
 
   input.value = apodoDefault || "";
   // .onclick (no addEventListener): mismo motivo que el resto de los
-  // modales de este archivo — este también puede reabrirse (aunque en la
+  // modales de este archivo - este también puede reabrirse (aunque en la
   // práctica solo debería disparar una vez por login, no está de más).
   btnCancelar.onclick = () => modal.classList.add("oculto");
   modal.onclick = (e) => { if (e.target === modal) modal.classList.add("oculto"); };
@@ -586,7 +614,7 @@ function abrirModalConfirmarAsociarAmigo(apodoDefault, onConfirmar) {
  * pedido por Wagner). Modal dinámico (crearModalDinamico/agregarCampoModal,
  * reusados de semestres-tarjetas.js) en vez de uno estático en el HTML,
  * porque acá no hace falta tocar index.html para agregar un modal nuevo.
- * Color: <input type="color"> nativo — es el único selector de color que
+ * Color: <input type="color"> nativo - es el único selector de color que
  * existe en toda la app (el mismo que usa #modal-categoria para categorías
  * de materias), no se inventa uno nuevo.
  */
@@ -617,12 +645,12 @@ function abrirModalEditarAmigoVinculado(amigo) {
       return;
     }
     // Se vuelve a buscar el amigo vivo justo antes de escribir (mismo
-    // criterio que buscarMmVivaPorId en semestres-tarjetas.js) — por si la
+    // criterio que buscarMmVivaPorId en semestres-tarjetas.js) - por si la
     // lista cambió (ej. se desvinculó desde otro dispositivo) mientras el
     // modal estaba abierto.
     const vivo = (estado.datos.configuracion.horario_amigos_vinculados || []).find((a) => a.id === amigoId);
     if (!vivo) {
-      mostrarToast("Este amigo se desvinculó desde otro dispositivo — no se pudo guardar");
+      mostrarToast("Este amigo se desvinculó desde otro dispositivo - no se pudo guardar");
       overlay.remove();
       renderizarListaAmigosVinculados();
       return;
@@ -640,7 +668,7 @@ function abrirModalEditarAmigoVinculado(amigo) {
 }
 
 /**
- * Se llama una vez por carga, desde mostrarApp() (main.js) — NO desde
+ * Se llama una vez por carga, desde mostrarApp() (main.js) - NO desde
  * inicializarHorarioAmigos(), porque esa corre en el primer DOMContentLoaded,
  * antes de que estado.datos exista (ver inicializarHorario() en horario.js,
  * que se llama antes del login). Acá ya hay datos cargados sí o sí.
@@ -648,7 +676,7 @@ function abrirModalEditarAmigoVinculado(amigo) {
 function procesarAsociacionPendienteDeAmigo() {
   const crudo = localStorage.getItem(KEY_LOCALSTORAGE_PENDIENTE);
   if (!crudo) return;
-  // Se limpia siempre de una vez, se resuelva o no — así nunca vuelve a
+  // Se limpia siempre de una vez, se resuelva o no - así nunca vuelve a
   // preguntar por el mismo pendiente en la próxima carga (ej. si la
   // persona cierra el modal sin decidir, o si ya expiró).
   localStorage.removeItem(KEY_LOCALSTORAGE_PENDIENTE);
@@ -739,12 +767,12 @@ const cacheSnapshotsAmigos = new Map();
 // FIX (reporte: "algo pasó con horario de amigos, no carga"): antes, CUALQUIER
 // fallo de refrescarSnapshotsAmigos (sin wifi, Drive caído, un timeout suelto)
 // pisaba el snapshot en memoria con `null` exactamente igual que un 404/403
-// real — el amigo desaparecía del grid aunque el enlace siguiera 100%
+// real - el amigo desaparecía del grid aunque el enlace siguiera 100%
 // vigente, hasta el próximo refresco exitoso. Copia de respaldo en
 // localStorage (por file_id) para que un fallo transitorio (sin red, o el
 // primer render de la sesión antes de que el fetch resuelva) siga mostrando
 // la última versión conocida en vez de dejar el horario vacío. Solo se borra
-// el respaldo cuando se CONFIRMA que el acceso fue revocado (404/403) — ver
+// el respaldo cuando se CONFIRMA que el acceso fue revocado (404/403) - ver
 // refrescarSnapshotsAmigos más abajo.
 const KEY_LOCALSTORAGE_BACKUP_SNAPSHOTS = "horario_amigos_snapshots_backup_v1";
 
@@ -781,7 +809,7 @@ function eliminarBackupSnapshotAmigo(fileId) {
 
 /**
  * Precarga cacheSnapshotsAmigos con el respaldo local ANTES de que corra el
- * primer fetch de la sesión — así, si la persona abre la app sin wifi (o el
+ * primer fetch de la sesión - así, si la persona abre la app sin wifi (o el
  * primer refresco tarda/falla), el grid ya tiene algo que dibujar en vez de
  * quedar vacío, en lugar de esperar a un refresco exitoso.
  */
@@ -815,11 +843,11 @@ async function refrescarSnapshotsAmigos() {
         // - Revocado de verdad: se descarta el respaldo local también (ya
         //   no hace sentido mostrar algo que el dueño dejó de compartir) y
         //   se marca "caída" para avisar en el panel. El vínculo en sí NO
-        //   se borra solo — desvincular sigue siendo decisión explícita de
+        //   se borra solo - desvincular sigue siendo decisión explícita de
         //   la persona.
         // - Fallo transitorio: se conserva lo que ya había en memoria (que
         //   puede venir del respaldo local precargado) en vez de pisarlo
-        //   con null — así el horario del amigo no desaparece del grid solo
+        //   con null - así el horario del amigo no desaparece del grid solo
         //   porque un refresco puntual no pudo completarse.
         const status = e && e.status;
         const revocadoConfirmado = status === 404 || status === 403;
@@ -833,7 +861,7 @@ async function refrescarSnapshotsAmigos() {
           cacheSnapshotsAmigos.set(amigo.file_id, { snapshot: null, caida: false });
         }
         // Si ya había algo en cacheSnapshotsAmigos (memoria o backup
-        // precargado), se deja tal cual — no se toca.
+        // precargado), se deja tal cual - no se toca.
         console.warn(`No se pudo refrescar el horario de ${amigo.nombre}:`, e);
       }
     })
@@ -861,7 +889,7 @@ function iniciarRefrescoPeriodicoAmigos() {
 /**
  * Snapshot crudo (+ estado "caída") de UN amigo puntual, tal cual está en
  * caché ahora mismo. Usado por la vista individual en pantalla completa
- * (horario.js) para no duplicar el Map privado acá — solo se expone un
+ * (horario.js) para no duplicar el Map privado acá - solo se expone un
  * getter de lectura, el caché en sí sigue siendo interno de este archivo.
  */
 function obtenerSnapshotAmigoPorId(fileId) {
@@ -871,7 +899,7 @@ function obtenerSnapshotAmigoPorId(fileId) {
 /**
  * Punto 3 del prompt: unión de TODOS los códigos de día ("L","K","M"...)
  * en los que CUALQUIER amigo vinculado tiene al menos un bloque configurado
- * — a propósito NO filtra por obtenerFileIdsOcultos() (esa preferencia es
+ * - a propósito NO filtra por obtenerFileIdsOcultos() (esa preferencia es
  * solo para la superposición del grid propio) ni por ninguna configuración
  * de días visibles (ni la propia del usuario que mira, ni la que el amigo
  * tenía guardada al compartir): la vista compartida debe poder mostrar
@@ -977,7 +1005,7 @@ function minutosDesdeHoraAmigo(horaStr) {
  * Horario conjunto: a diferencia de obtenerBloquesAmigosPorDia (que
  * devuelve todo MEZCLADO en una sola lista, pensado para superponerse
  * sobre el grid propio), esta función devuelve los bloques SEPARADOS por
- * amigo — una entrada por cada amigo vinculado, con su propia lista de
+ * amigo - una entrada por cada amigo vinculado, con su propia lista de
  * bloques de ese día. A propósito NO respeta obtenerFileIdsOcultos() (esa
  * preferencia es solo para la superposición del grid propio): acá se listan
  * TODOS los vinculados, se hayan ocultado o no en esa vista, porque el
@@ -1013,7 +1041,11 @@ function obtenerListaAmigosParaDiaConjunto(fecha, diaCodigo) {
         color: bloque.color || amigo.color,
         nombreBloque: bloque.nombre,
         aula: diaBase.aula || null,
-        universidad: bloque.universidad || null,
+        // Siglas como texto principal y nombre completo aparte como
+        // aclaración (tooltip en la tarjeta, ver horario.js): antes se
+        // pasaba el objeto crudo y la tarjeta mostraba "[object Object]".
+        universidad: (resolverUniversidadParaMostrar(bloque.universidad) || {}).siglas || null,
+        universidadNombreCompleto: (resolverUniversidadParaMostrar(bloque.universidad) || {}).nombreCompleto || null,
         modalidad,
       });
     });
@@ -1029,7 +1061,7 @@ function renderizarListaAmigosVinculados() {
 
   const vinculados = estado.datos.configuracion?.horario_amigos_vinculados || [];
 
-  // "Horario conjunto" solo tiene sentido si hay algo que mezclar — se
+  // "Horario conjunto" solo tiene sentido si hay algo que mezclar - se
   // oculta/muestra acá porque esta función ya corre cada vez que se abre
   // el panel de Amigos (fresco, no solo una vez al cargar la app).
   const btnConjunto = document.getElementById("btn-horario-conjunto");
@@ -1061,6 +1093,31 @@ function renderizarListaAmigosVinculados() {
     controles.className = "row";
     controles.style.cssText = "align-items:center; gap:8px; flex-shrink:0;";
 
+    // Click en TODA la tarjeta del amigo (2026-09): abre su horario
+    // individual SIN pantalla completa (antes la única forma era el botón
+    // ⛶, que siempre entra en pantalla completa y obliga a salir para verlo
+    // normal). Los controles de la propia tarjeta (⛶, ✎, switch,
+    // Desvincular) quedan excluidos con closest(): siguen haciendo solo lo
+    // suyo. También accesible con teclado (Enter / Espacio).
+    const abrirHorarioDelAmigoNormal = () => {
+      cerrarPanelAmigos();
+      abrirVistaIndividualAmigo(amigo.file_id, { pantallaCompleta: false });
+    };
+    fila.style.cursor = "pointer";
+    fila.tabIndex = 0;
+    fila.title = `Ver el horario de ${amigo.nombre}`;
+    fila.addEventListener("click", (e) => {
+      if (e.target.closest("button, label, input, a, select")) return;
+      abrirHorarioDelAmigoNormal();
+    });
+    fila.addEventListener("keydown", (e) => {
+      if (e.target !== fila) return;
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        abrirHorarioDelAmigoNormal();
+      }
+    });
+
     // Punto 2 del prompt: ver el horario de ESTE amigo solo, en pantalla
     // completa (no mezclado con los demás en el modo conjunto). Se cierra
     // el panel de Amigos antes de entrar, mismo patrón que "Horario
@@ -1074,12 +1131,12 @@ function renderizarListaAmigosVinculados() {
     btnVerIndividual.textContent = "⛶";
     btnVerIndividual.addEventListener("click", () => {
       cerrarPanelAmigos();
-      abrirVistaIndividualAmigo(amigo.file_id);
+      abrirVistaIndividualAmigo(amigo.file_id, { pantallaCompleta: true });
     });
     controles.appendChild(btnVerIndividual);
 
     // Punto 3 del ajuste chico (Wagner): editar nombre/color de un amigo ya
-    // vinculado — botón nuevo, mismo estilo/tamaño que btnVerIndividual de
+    // vinculado - botón nuevo, mismo estilo/tamaño que btnVerIndividual de
     // arriba, ubicado justo al lado.
     const btnEditarAmigo = document.createElement("button");
     btnEditarAmigo.type = "button";
@@ -1129,7 +1186,7 @@ function confirmarDesvincularAmigo(fileId, nombre) {
       // sin esto, un amigo desvinculado en un dispositivo volvía a aparecer
       // vinculado tras la próxima fusión con un dispositivo que todavía no
       // se había enterado del desvínculo. La tumba usa el id del amigo
-      // vinculado (amigo.id, no el file_id — file_id se repite si el mismo
+      // vinculado (amigo.id, no el file_id - file_id se repite si el mismo
       // amigo se vuelve a vincular después).
       estado.datos.configuracion._eliminados_horario_amigos_vinculados =
         estado.datos.configuracion._eliminados_horario_amigos_vinculados || [];

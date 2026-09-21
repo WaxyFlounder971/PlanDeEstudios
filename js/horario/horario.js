@@ -1,5 +1,5 @@
 /* =========================================================================
-   HORARIO — Núcleo (grid semanal, navegación entre semanas, config de días)
+   HORARIO - Núcleo (grid semanal, navegación entre semanas, config de días)
    No incluye "Horario entre Amigos" (prompt aparte).
    ========================================================================= */
 
@@ -14,7 +14,7 @@ import {
   abrirModalBloqueHorario,
   construirZonaCronograma,
   // Re-exportada más abajo para agenda-clases.js (ver comentario en ese
-  // export) — vive en horario-modal.js porque es el inverso de
+  // export) - vive en horario-modal.js porque es el inverso de
   // calcularFechaClaseSemana, que ya está ahí.
   calcularNumeroSemanaSinAcotarParaFecha,
 } from "./horario-modal.js";
@@ -31,7 +31,7 @@ import {
   // preferencia pero nada la leía (la franja superpuesta en el horario
   // propio, que sí la respetaba, se había quitado en otro cambio). Ahora
   // controla si el amigo aparece en Horario conjunto y en su vista
-  // individual — ver renderizarConjuntoModoDia/Semana y
+  // individual - ver renderizarConjuntoModoDia/Semana y
   // renderizarVistaIndividualAmigoInterno más abajo.
   obtenerFileIdsOcultos,
 } from "./horario-amigos.js";
@@ -59,7 +59,7 @@ function obtenerRangoHorasHorario() {
  * FIX (mismo bug de arranque "Cannot access 'estado' before initialization"
  * visto en el resto de la app): estas 8 líneas estaban a nivel de módulo.
  * Se mueven a una guardia lazy, llamada desde CADA punto de entrada
- * exportado que las toca — no alcanza con ponerla solo en
+ * exportado que las toca - no alcanza con ponerla solo en
  * renderizarHorario/inicializarHorario porque obtenerSemestreHorarioActual,
  * activarModoConjunto (alias abrirHorarioConjunto) y
  * activarVistaIndividualAmigo (alias abrirVistaIndividualAmigo) también
@@ -72,14 +72,14 @@ function inicializarEstadoHorarioSiHaceFalta() {
   if (typeof estado.horarioSemestreId === "undefined") estado.horarioSemestreId = null;
   if (typeof estado.horarioNumeroSemana === "undefined") estado.horarioNumeroSemana = null;
   if (typeof estado.horarioExpandido === "undefined") estado.horarioExpandido = false;
-  // Horario conjunto: NO es un modal — reemplaza temporalmente el contenido
+  // Horario conjunto: NO es un modal - reemplaza temporalmente el contenido
   // de #horario-grid (ver renderizarHorarioInterno). horarioModoConjunto
   // indica si está activo ahora mismo; horarioConjuntoDiaIdx es el índice
   // (dentro de obtenerDiasVisiblesOrdenados) del día que se está mostrando
   // ahí. null = todavía no se activó esta sesión.
   if (typeof estado.horarioModoConjunto === "undefined") estado.horarioModoConjunto = false;
   if (typeof estado.horarioConjuntoDiaIdx === "undefined") estado.horarioConjuntoDiaIdx = null;
-  // "dia" | "semana" — se resetea a "dia" en cada carga de página a
+  // "dia" | "semana" - se resetea a "dia" en cada carga de página a
   // propósito, no se persiste ninguna preferencia.
   if (typeof estado.horarioConjuntoVista === "undefined") estado.horarioConjuntoVista = "dia";
   // Nivel de zoom del modo Semana.
@@ -131,7 +131,7 @@ function minutosDesdeHora(horaStr) {
 /**
  * Parsea "YYYY-MM-DD" como fecha LOCAL (medianoche en el huso horario del
  * usuario), no UTC. `new Date("YYYY-MM-DD")` interpreta el string como UTC
- * medianoche — en cualquier huso horario negativo (ej. Costa Rica, UTC-6)
+ * medianoche - en cualquier huso horario negativo (ej. Costa Rica, UTC-6)
  * eso cae en el día anterior a las 6pm local, y de ahí en adelante toda
  * cuenta basada en .getDate()/.setDate() queda corrida un día. Este era el
  * bug de "hoy es jueves y aparece marcado/mostrado como viernes".
@@ -144,10 +144,10 @@ function fechaLocalDesdeISO(str) {
 }
 
 /**
- * Línea de hora actual — Núcleo: inverso de fechaLocalDesdeISO, para poder
+ * Línea de hora actual - Núcleo: inverso de fechaLocalDesdeISO, para poder
  * marcar cada columna del grid con su fecha real ("YYYY-MM-DD") sin
  * problemas de zona horaria (Date#toISOString usa UTC, que puede correrse
- * un día — mismo bug de fondo que ya se cazó en TeamPeachesHub con
+ * un día - mismo bug de fondo que ya se cazó en TeamPeachesHub con
  * cumpleaños/recordatorios). El actualizador periódico de la línea
  * (actualizarPosicionLineaHoraActual) compara contra esto para saber en
  * cuál columna corresponde dibujarla SIN tener que recalcular fechas de
@@ -178,7 +178,7 @@ function obtenerNombreBloque(bloqueEfectivo) {
 }
 
 /** Código de materia del bloque (Parte C / ajuste), o "" si es un bloque
- * personalizado (sin materia_id) — no hay código que mostrar en ese caso. */
+ * personalizado (sin materia_id) - no hay código que mostrar en ese caso. */
 function obtenerCodigoBloque(bloqueEfectivo) {
   if (!bloqueEfectivo.materia_id) return "";
   const plan = obtenerPlanPorId(bloqueEfectivo.plan_estudio_id);
@@ -210,7 +210,7 @@ function obtenerNombreProfesor(profesorId) {
  * en el caso más común). Virtual y Asincrónico sí se marcan en la esquina
  * inferior derecha para que salte a la vista de un vistazo. "sin_clase"
  * (Cronograma, reemplaza al viejo switch `cancelada`) es ahora un valor de
- * modalidad más — viene resuelto ya en el campo `modalidad` de cada clase
+ * modalidad más - viene resuelto ya en el campo `modalidad` de cada clase
  * efectiva (ver obtenerClasesEfectivasSemana en schema.js), así que esta
  * función ya no necesita un segundo parámetro aparte.
  */
@@ -226,7 +226,7 @@ function obtenerEmojiModalidad(modalidad) {
 }
 
 /**
- * Rediseño ronda #4 — bug "Sin clase" en las materias inline de Agenda: se
+ * Rediseño ronda #4 - bug "Sin clase" en las materias inline de Agenda: se
  * mostraba como "Presencial" porque agenda-clases.js armaba el texto con
  * aplicarFormatoTexto (pensado para nombres de materia, no para valores de
  * modalidad) en vez de esta tabla, que ya es la fuente única de verdad para
@@ -242,7 +242,7 @@ function obtenerEtiquetaModalidad(modalidad) {
 
 /**
  * TODOS los 7 días, ordenados según "día de inicio de semana" (Ajustes →
- * Horario) y con la etiqueta corta personalizada aplicada — sin filtrar por
+ * Horario) y con la etiqueta corta personalizada aplicada - sin filtrar por
  * "días visibles". Antes esto vivía mezclado dentro de
  * obtenerDiasVisiblesOrdenados(); se separa acá porque el punto 3 del
  * prompt (vista compartida ignora los días ocultos de MI configuración
@@ -269,7 +269,7 @@ function obtenerDiasVisiblesOrdenados() {
  * menos un bloque configurado, a partir de una lista de bloques con la
  * misma forma que semestre.bloques_horario o snapshot.bloques (ambos traen
  * `.dias` con `.dia` = código). Reutilizable para "mi" semestre y para el
- * snapshot de un amigo — es la base del punto 3 (mostrar todos los días
+ * snapshot de un amigo - es la base del punto 3 (mostrar todos los días
  * que ESE horario tenga clases, sin importar configuraciones de
  * visibilidad de nadie).
  */
@@ -286,7 +286,7 @@ function obtenerCodigosDiaConClase(bloques) {
 /**
  * Fecha calendario real de un día dentro de la semana mostrada. ANCLADA al
  * día de la semana REAL de fecha_inicio (vía Date.getDay()), no a la
- * posición que ese día ocupe en la config de "inicio de semana" — antes se
+ * posición que ese día ocupe en la config de "inicio de semana" - antes se
  * asumía que fecha_inicio caía justo en el día configurado como inicio de
  * semana (ej. lunes), pero nada obliga eso al crear un semestre, y cuando
  * no se cumplía TODA la fila de encabezados del grid quedaba corrida
@@ -300,7 +300,7 @@ function calcularFechaDelDia(semestre, numeroSemana, diaCodigo) {
   const idxCanonico = DIAS_SEMANA_CONFIG.findIndex((d) => d.abrevDefault === diaCodigo);
   if (idxCanonico === -1) return null;
   // DIAS_SEMANA_CONFIG va lunes→domingo (índices 0-6); Date.getDay() usa
-  // domingo=0..sábado=6 — de ahí el +1 % 7 para pasar de un sistema al otro.
+  // domingo=0..sábado=6 - de ahí el +1 % 7 para pasar de un sistema al otro.
   const pesoObjetivo = (idxCanonico + 1) % 7;
   const diffDentroDeSemana = (pesoObjetivo - inicio.getDay() + 7) % 7;
   const fecha = new Date(inicio);
@@ -336,7 +336,7 @@ function calcularLanesDia(bloquesDia) {
 
 /**
  * Lista PLANA de clases efectivas de la semana: una entrada por cada día
- * puntual de cada bloque (no un bloque con .dias anidado como antes) — así
+ * puntual de cada bloque (no un bloque con .dias anidado como antes) - así
  * cada día ya trae su propia Modalidad resuelta (ver
  * obtenerClasesEfectivasSemana en schema.js, que fusiona la plantilla con
  * el Cronograma de esa semana puntual).
@@ -364,7 +364,7 @@ function construirColumnaHoras(pxPorMin, altoGrid, minInicioRango, minFinRango) 
     const etiqueta = document.createElement("div");
     etiqueta.className = "muted";
     // right:2px (antes 6px): ese margen extra era espacio muerto entre el
-    // número y el borde de la primera columna de día, sin aportar nada —
+    // número y el borde de la primera columna de día, sin aportar nada -
     // se recorta al mínimo para que quepa más grid en pantalla, dejando
     // apenas el aire justo para que el texto no se pegue a la línea.
     etiqueta.style.cssText = `position:absolute; top:${top}px; right:2px; transform:translateY(-50%); text-align:center; line-height:1.1;`;
@@ -385,14 +385,14 @@ function construirLineasHorarias(pxPorMin, minInicioRango, minFinRango) {
 }
 
 /**
- * Línea de hora actual — Núcleo: mismo indicador que Google Calendar, pero
+ * Línea de hora actual - Núcleo: mismo indicador que Google Calendar, pero
  * pedido explícito: abarca TODO el ancho del grid (todos los días a la
- * vez), no solo la columna de hoy — se posiciona relativa a filaGrid
+ * vez), no solo la columna de hoy - se posiciona relativa a filaGrid
  * (padre real), con left = ancho de la columna de horas (28px, ver
  * construirColumnaHoras) para no invadir esa columna ni salirse del borde
  * derecho del grid. z-index 35 (ver design-system.css): por encima de las
  * tarjetas de clase (10 + lane) pero por debajo del header sticky (z:50) y
- * de la barra de expandir (z:40) — nunca las tapa.
+ * de la barra de expandir (z:40) - nunca las tapa.
  */
 function construirLineaHoraActualGrid(pxPorMin, minInicioRango, minFinRango) {
   const ahora = new Date();
@@ -402,11 +402,11 @@ function construirLineaHoraActualGrid(pxPorMin, minInicioRango, minFinRango) {
   const linea = document.createElement("div");
   linea.className = "horario-linea-hora-actual";
   linea.style.top = `${top}px`;
-  // 28px: mismo ancho que .horario-col-horas (ver construirColumnaHoras) —
+  // 28px: mismo ancho que .horario-col-horas (ver construirColumnaHoras) -
   // sin esto la línea arranca en left:0 de filaGrid (default de la clase
   // CSS), que es el borde IZQUIERDO de la columna de horas, invadiéndola.
   // Con este offset arranca justo donde arranca el primer día, y con
-  // right:0 (CSS) llega exacto hasta el borde derecho del último día —
+  // right:0 (CSS) llega exacto hasta el borde derecho del último día -
   // nunca se sale de las líneas de borde laterales del grid de días.
   linea.style.left = "28px";
   linea.innerHTML = `<span class="horario-linea-hora-actual-punto"></span>`;
@@ -416,7 +416,7 @@ function construirLineaHoraActualGrid(pxPorMin, minInicioRango, minFinRango) {
 /**
  * Mueve la línea cada 60s sin re-renderizar todo el grid (eso perdería la
  * posición de scroll). Ya no hace falta decidir "cuál columna es hoy" acá
- * (la línea siempre abarca el grid entero) — solo si sigue siendo válido
+ * (la línea siempre abarca el grid entero) - solo si sigue siendo válido
  * mostrarla: que exista (se dibujó porque la semana visible incluye hoy) y
  * que la hora actual siga dentro del rango configurado.
  */
@@ -436,13 +436,13 @@ function actualizarPosicionLineaHoraActual() {
 }
 
 // Nota: el horario default (grid semanal de siempre) ya NO muestra nada de
-// amigos superpuesto — la franja lateral con los bloques ajenos que vivía
+// amigos superpuesto - la franja lateral con los bloques ajenos que vivía
 // acá se quitó porque ahora existe una vista dedicada para eso ("Horario
 // conjunto", ver más abajo), y mezclar los dos conceptos en la misma
 // pantalla generaba ruido visual innecesario en el uso del día a día.
 
 /**
- * Oculta el botón "Entrar" de una tarjeta SOLO si de verdad no cabe — se
+ * Oculta el botón "Entrar" de una tarjeta SOLO si de verdad no cabe - se
  * llama DESPUÉS de que el grid ya está en el DOM, así getBoundingClientRect()
  * da el tamaño real ya renderizado (fuente, padding, ancho de columna real)
  * en vez de adivinar con un breakpoint de pantalla, que escondía el botón
@@ -450,14 +450,14 @@ function actualizarPosicionLineaHoraActual() {
  * columna más ancha → nunca chocan).
  *
  * El límite derecho es el MISMO para todas las tarjetas del grid, tengan o
- * no tengan emoji de modalidad — antes se comparaba cada tarjeta contra SU
+ * no tengan emoji de modalidad - antes se comparaba cada tarjeta contra SU
  * PROPIO emoji (o su propio borde si no tenía ninguno), y como sin emoji
  * sobra casi toda la tarjeta libre, el botón prácticamente nunca chocaba
  * ahí: en la práctica solo se ocultaba en las materias CON emoji, que son
  * justo las que más necesitan el link (suelen ser las virtuales). Ahora se
- * reserva el mismo ancho de "espacio para emoji" en TODAS las tarjetas —
+ * reserva el mismo ancho de "espacio para emoji" en TODAS las tarjetas -
  * medido del emoji real de cualquier materia que sí lo tenga en este grid,
- * para no hardcodear un número que se desincronice si cambia el font-size —
+ * para no hardcodear un número que se desincronice si cambia el font-size -
  * así el criterio de "cabe o no cabe" es uno solo para toda la semana.
  */
 function ocultarBotonesEntrarQueChocan(cont) {
@@ -514,13 +514,13 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minI
     // Tamaños en rem (no px fijo) para que respeten el mismo escalado que el
     // resto de la app (0.85rem para el nombre, igual que la mayoría del
     // texto "normal" del sistema; 0.72rem para los datos secundarios, igual
-    // que las etiquetas pequeñas como .materia-codigo) — antes eran px fijos
+    // que las etiquetas pequeñas como .materia-codigo) - antes eran px fijos
     // más grandes que el resto de la UI y en pantallas angostas cortaban
     // palabras. word-break + overflow-wrap dejan que el texto se ajuste en
     // vez de cortarse a la mitad de una palabra.
     const emojiModalidad = obtenerEmojiModalidad(b.modalidad);
     // Botón "Entrar" solo si la tarjeta tiene alto real para mostrarlo sin
-    // pisar el nombre/profesor/aula — antes se dibujaba siempre que hubiera
+    // pisar el nombre/profesor/aula - antes se dibujaba siempre que hubiera
     // b.enlace, y en tarjetas cortas (típico en teléfono, donde pxPorMin es
     // menor) quedaba superpuesto sobre el resto del texto, generando clicks
     // erróneos. Se estima el alto que ya ocupa el contenido de texto
@@ -534,7 +534,7 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minI
     // tiene un ajuste puntual" se sacó de acá (pedido explícito). Se
     // confirmó que no se usa/muestra en ningún otro lugar (ni Agenda ni
     // otro archivo referencian tieneExcepcionEstaSemana), así que se quita
-    // del todo en vez de moverlo — no queda ninguna referencia visual a la
+    // del todo en vez de moverlo - no queda ninguna referencia visual a la
     // excepción en el grid de Horario.
     tarjeta.innerHTML = `
       <div style="font-size:0.85rem; font-weight:600; line-height:1.15; display:flex; align-items:center; gap:4px; margin-bottom:2px; overflow-wrap:break-word; word-break:break-word;">
@@ -567,7 +567,7 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minI
 
 /**
  * Antes, tocar una tarjeta ya existente abría directo el editor. Ahora abre
- * primero esta tarjeta de solo-lectura con los datos de la clase — el
+ * primero esta tarjeta de solo-lectura con los datos de la clase - el
  * editor real queda un tap más allá, en el botón "Editar" de acá abajo.
  */
 function abrirTarjetaInfoBloque(semestre, numeroSemana, b) {
@@ -657,7 +657,7 @@ function mostrarBloqueFlotante(semestre, dia, minutosInicio, clientX, clientY) {
     <div id="horario-flotante-tarjeta" class="glass-panel" style="position:fixed; z-index:200; padding:8px 12px; border-radius:10px;
       width:${ANCHO_TARJETA}px; backdrop-filter:blur(14px); border:1px solid rgba(255,255,255,0.3); cursor:pointer;
       box-shadow:0 6px 20px rgba(0,0,0,0.35); top:${top}px; left:${left}px;">
-      <div style="font-weight:600; font-size:0.85rem;">Nuevo bloque — ${dia.etiqueta}</div>
+      <div style="font-weight:600; font-size:0.85rem;">Nuevo bloque - ${dia.etiqueta}</div>
       <div class="muted" style="font-size:0.75rem;">${horaInicio} – ${horaFin} · tocá para completar</div>
     </div>
     <div id="horario-flotante-fondo" style="position:fixed; inset:0; z-index:199;"></div>
@@ -686,7 +686,7 @@ function abrirSelectorSemestre() {
   const modal = document.getElementById("modal-selector-semestre");
   const cont = document.getElementById("selector-semestre-contenido");
   if (!modal || !cont) return;
-  // obtenerSemestresOrdenCronologico() es ascendente (más viejo primero) —
+  // obtenerSemestresOrdenCronologico() es ascendente (más viejo primero) -
   // otras partes del código dependen de ese orden (ej. obtenerSemestreHorarioActual
   // usa el último del arreglo como "el más reciente"), así que no se toca
   // esa función; para este listado se usa una copia invertida, solo para
@@ -711,7 +711,7 @@ function abrirSelectorSemestre() {
     finEstimado.setDate(inicio.getDate() + (Number(s.duracion_semanas) || 16) * 7);
     const fmt = (d) => (isNaN(d.getTime()) ? "" : d.toLocaleDateString("es-CR", { day: "numeric", month: "short", year: "numeric" }));
     // Antes no tenía color propio y heredaba negro por defecto (ilegible
-    // en modo oscuro) — se fija al color de texto normal del tema, y el
+    // en modo oscuro) - se fija al color de texto normal del tema, y el
     // nombre queda 20% más grande (0.95rem ≈ 1.2 × 0.78rem, el tamaño base
     // que ya traía la fecha de abajo) tal como se pidió.
     item.innerHTML = `<div style="font-weight:600; font-size:0.95rem; color:var(--text-primary);">${s.nombre}</div><div class="muted" style="font-size:0.78rem;">${fmt(inicio)} – ${fmt(finEstimado)}</div>`;
@@ -735,7 +735,7 @@ function renderizarHeaderHorario(semestre, numeroSemana) {
   const fechaEl = document.getElementById("horario-fecha-actual");
   if (!semestre) {
     if (nombreEl) nombreEl.textContent = "Sin semestres";
-    if (semanaEl) semanaEl.textContent = "—";
+    if (semanaEl) semanaEl.textContent = "-";
     if (fechaEl) fechaEl.textContent = "";
     return;
   }
@@ -749,7 +749,7 @@ function renderizarHeaderHorario(semestre, numeroSemana) {
 function centrarVistaInicial(contenedor, minutosClases, pxPorMin, minInicioRango, minFinRango) {
   const hoy = new Date();
   // Antes solo miraba las clases de HOY (y si hoy no había, caía a la hora
-  // actual) — por eso casi nunca arrancaba en la primera clase real: si hoy
+  // actual) - por eso casi nunca arrancaba en la primera clase real: si hoy
   // no tenías clase a esa hora, se iba a la hora del reloj en vez de a la
   // materia más temprana. Ahora se recibe ya armada la lista de minutos de
   // inicio a considerar (arma esa lista cada llamador: el grid semanal pasa
@@ -762,7 +762,7 @@ function centrarVistaInicial(contenedor, minutosClases, pxPorMin, minInicioRango
   // Recorta la referencia al rango visible configurado, si no el destino de
   // scroll podría caer fuera del alto real del grid.
   const minutoReferencia = Math.min(Math.max(minutoReferenciaCrudo, minInicioRango), minFinRango);
-  // Antes restaba 80px de "aire" arriba de la clase — con el zoom actual
+  // Antes restaba 80px de "aire" arriba de la clase - con el zoom actual
   // (pxPorMin ≈ 0.84) eso son ~95 minutos, así que una clase a las 9:30
   // terminaba mostrando la vista arrancando cerca de las 8:00. Se deja un
   // margen chico (~14px, un par de líneas de grid) en vez de casi 1h35.
@@ -784,18 +784,56 @@ function centrarVistaInicial(contenedor, minutosClases, pxPorMin, minInicioRango
 // otro botón y se ve roto"): antes vivía con position:absolute; top:8px;
 // right:8px colgado directo de #horario-grid-contenedor, flotando sobre
 // TODO el contenido (incluida la fila de días, ancha, sin margen
-// reservado) — por eso tapaba/pisaba el día más a la derecha en la vista
+// reservado) - por eso tapaba/pisaba el día más a la derecha en la vista
 // propia. Ahora se ancla DENTRO de la fila de título/navegación angosta de
 // cada una de las 3 vistas (propia, conjunto, individual de amigo), que sí
 // tiene aire libre a la derecha de su contenido centrado. Se reutiliza
 // siempre el MISMO nodo (creado una sola vez en inicializarHorario) para no
-// perder su listener de click al reubicarlo — appendChild solo lo mueve,
+// perder su listener de click al reubicarlo - appendChild solo lo mueve,
 // nunca lo clona.
+//
+// FIX 2 (2026-09, "el botón de salir de pantalla completa se pierde"): dos
+// causas reales, ambas corregidas acá:
+//  a) renderizarHorarioInterno() vacía #horario-grid con innerHTML = "" en
+//     CADA render, y el botón vivía dentro de la fila de la vista anterior:
+//     al vaciar, el botón quedaba DESCONECTADO del documento y
+//     document.getElementById() ya no lo encontraba, así que esta función
+//     retornaba en la primera línea y el botón nunca volvía a aparecer (el
+//     render que dispara fullscreenchange justo al entrar a pantalla completa
+//     era suficiente para perderlo). Ahora el nodo del botón y su ancla se
+//     guardan en referencias de módulo, que sobreviven a cualquier
+//     innerHTML = "" y se reenganchan en cada render.
+//  b) Con la fila ancha (más días que pantalla, scroll horizontal), el botón
+//     pegado al borde derecho DE LA FILA quedaba fuera de la pantalla. Ahora
+//     va dentro de un ancla que ocupa la fila entera (sin capturar clicks) y
+//     el botón usa position:sticky con right, así se queda siempre pegado a
+//     la esquina superior derecha VISIBLE, sin importar cuánto se haya
+//     scrolleado en horizontal.
+let refBtnSalirFS = null;
+let refAnclaSalirFS = null;
+
 function anclarBotonSalirFSEnFila(fila) {
-  const btn = document.getElementById("btn-horario-salir-pantalla-completa");
-  if (!btn || !fila) return;
+  if (!refBtnSalirFS || !fila) return;
+  if (!refAnclaSalirFS) {
+    refAnclaSalirFS = document.createElement("div");
+    refAnclaSalirFS.style.cssText =
+      "position:absolute; top:0; right:0; bottom:0; left:0; display:flex; align-items:center; " +
+      "justify-content:flex-end; pointer-events:none; z-index:5;";
+  }
+  if (refBtnSalirFS.parentElement !== refAnclaSalirFS) refAnclaSalirFS.appendChild(refBtnSalirFS);
   fila.style.position = "relative";
-  if (btn.parentElement !== fila) fila.appendChild(btn);
+  if (refAnclaSalirFS.parentElement !== fila) fila.appendChild(refAnclaSalirFS);
+}
+
+// Para los renders que devuelven solo un mensaje (sin fila de título donde
+// anclar el botón): en pantalla completa se antepone una barra delgada
+// vacía y se ancla ahí, para que igual haya siempre una salida a mano.
+function anclarBotonSalirFSEnBarraVacia(cont) {
+  if (!document.fullscreenElement) return;
+  const barra = document.createElement("div");
+  barra.style.cssText = "position:sticky; top:0; z-index:50; height:34px; background:var(--bg-header-solido);";
+  cont.prepend(barra);
+  anclarBotonSalirFSEnFila(barra);
 }
 
 /* ===================== Render principal ===================== */
@@ -826,7 +864,7 @@ function renderizarHorarioInterno() {
   const clasesEfectivas = construirClasesEfectivasSemana(semestre, numeroSemana);
 
   // Ya no se comprime el día completo para que "quepa" (se veía feo y
-  // amontonado) — siempre se usa el tamaño legible normal. Lo que cambia
+  // amontonado) - siempre se usa el tamaño legible normal. Lo que cambia
   // según el modo es cuánto se ve sin scroll:
   //  - Fullscreen: recorta a 100vh, scroll vertical propio.
   //  - Expandido (barra abierta): sin recorte, scrollea la página entera.
@@ -841,7 +879,7 @@ function renderizarHorarioInterno() {
   // pantalla, que no siempre coincidía con el chrome real arriba del grid
   // (header de horario, nav, etc. cambian de alto según la pantalla). Ahora
   // se mide la posición real del contenedor y se usa TODO el espacio que
-  // queda hasta el fondo — así el cuadro siempre llega hasta el final de la
+  // queda hasta el fondo - así el cuadro siempre llega hasta el final de la
   // pantalla sin tener que abrir el modo expandido.
   const paddingInferior = window.innerWidth <= 768 ? 16 : 28;
   const alturaDisponibleReal = window.innerHeight - contenedor.getBoundingClientRect().top - paddingInferior;
@@ -860,7 +898,7 @@ function renderizarHorarioInterno() {
   // El propio contenedor maneja AMBOS ejes de scroll (antes el scroll
   // horizontal vivía en un div anidado aparte, lo que hacía que el header
   // sticky "top:0" quedara pegado a ESE div en vez del contenedor real que
-  // scrollea verticalmente — se despegaba de la pantalla al hacer scroll).
+  // scrollea verticalmente - se despegaba de la pantalla al hacer scroll).
   // Con un solo contenedor para los dos ejes, el header queda siempre
   // visible arriba Y perfectamente sincronizado con las columnas al
   // scrollear de lado.
@@ -868,12 +906,12 @@ function renderizarHorarioInterno() {
 
   // Horario conjunto (mezcla propio + amigos, un día a la vez, columnas por
   // persona) NO es una ventana aparte: reemplaza TEMPORALMENTE este mismo
-  // contenido, reutilizando el mismo contenedor/tamaño/scroll de siempre —
+  // contenido, reutilizando el mismo contenedor/tamaño/scroll de siempre -
   // ver activarModoConjunto/desactivarModoConjunto más abajo.
   if (estado.horarioModoConjunto) {
     renderizarHorarioConjuntoInterno(cont, semestre, numeroSemana);
   } else if (estado.horarioVistaIndividualAmigoFileId) {
-    // Vista individual de un amigo (punto 2 del prompt) — NO es una ventana
+    // Vista individual de un amigo (punto 2 del prompt) - NO es una ventana
     // aparte, reemplaza TEMPORALMENTE este mismo contenido, igual criterio
     // que el Horario conjunto de la rama de arriba.
     renderizarVistaIndividualAmigoInterno(cont, semestre, numeroSemana);
@@ -890,13 +928,13 @@ function renderizarHorarioInterno() {
     // superpondrían entre sí al scrollear en vez de apilarse).
     const headerWrap = document.createElement("div");
     // Fondo SÓLIDO (no --bg-panel, que es semitransparente en todas las
-    // paletas — ver mismo patrón en .mapa-nodo dentro de design-system.css)
+    // paletas - ver mismo patrón en .mapa-nodo dentro de design-system.css)
     // para que las tarjetas de materia no se transparenten al pasar detrás.
     // z-index por encima del rango de las tarjetas (10 + lane) para que el
     // header quede siempre POR ENCIMA, nunca tapado por una tarjeta.
     // --bg-header-solido: mismo color que se ve al mirar una tarjeta común
     // (--bg-card) sobre el fondo (--bg-canvas), pero ya "aplanado" a un color
-    // sólido para esta paleta — se agregó junto a los demás tokens en
+    // sólido para esta paleta - se agregó junto a los demás tokens en
     // design-system.css. No es transparente, así que nunca se ve nada de
     // lo que scrollea por debajo.
     headerWrap.style.cssText = "position:sticky; top:0; z-index:50; background:var(--bg-header-solido); border-bottom:1px solid rgba(150,150,170,0.15);";
@@ -906,7 +944,7 @@ function renderizarHorarioInterno() {
     // queda fuera de document.fullscreenElement (solo #horario-grid-contenedor
     // entra a pantalla completa) y se vuelve inaccesible. Esta fila
     // reproduce esa misma navegación DENTRO del grid, visible solo mientras
-    // se está en pantalla completa — así nunca hace falta salir de ese modo
+    // se está en pantalla completa - así nunca hace falta salir de ese modo
     // para cambiar de semana. Reusa irASemanaAnterior/irASemanaSiguiente,
     // las mismas funciones que ya usan los botones del header de siempre.
     if (document.fullscreenElement) {
@@ -961,7 +999,7 @@ function renderizarHorarioInterno() {
       const fecha = calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault);
       if (esHoy(fecha)) semanaIncluyeHoy = true;
       // clasesEfectivas ya viene PLANA (una entrada por día puntual, ver
-      // obtenerClasesEfectivasSemana en schema.js) — no hay .dias anidado que
+      // obtenerClasesEfectivasSemana en schema.js) - no hay .dias anidado que
       // filtrar/recorrer, cada item ya es la clase de un día concreto.
       const bloquesDia = clasesEfectivas
         .filter((c) => c.dia === dia.abrevDefault)
@@ -979,9 +1017,9 @@ function renderizarHorarioInterno() {
         }));
       filaGrid.appendChild(construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minInicioRango, minFinRango));
     });
-    // Línea de hora actual — Núcleo: se agrega DESPUÉS de las columnas (así
+    // Línea de hora actual - Núcleo: se agrega DESPUÉS de las columnas (así
     // su z-index queda por encima en el orden natural del DOM) solo si la
-    // semana que se está mostrando incluye el día de hoy — mostrarla en una
+    // semana que se está mostrando incluye el día de hoy - mostrarla en una
     // semana pasada/futura no tendría sentido.
     if (semanaIncluyeHoy) {
       const linea = construirLineaHoraActualGrid(pxPorMin, minInicioRango, minFinRango);
@@ -1013,7 +1051,7 @@ function renderizarHorarioInterno() {
   // entre TODOS los días visibles de la semana. El modo conjunto y la vista
   // individual de un amigo tienen su propio auto-scroll (disparado desde
   // adentro de renderizarHorarioConjuntoInterno / renderizarVistaIndividualAmigoInterno)
-  // — no aplica acá.
+  // - no aplica acá.
   if (!estado.horarioModoConjunto && !estado.horarioVistaIndividualAmigoFileId) {
     const diasAbrevVisibles = new Set(dias.map((d) => d.abrevDefault));
     const minutosClasesSemana = clasesEfectivas
@@ -1033,7 +1071,7 @@ function renderizarHorario() {
 
 // IDs de los modales que viven fuera de #horario-grid-contenedor en el HTML
 // (normalmente colgando directo de <body>). El API de Fullscreen SOLO pinta
-// en pantalla document.fullscreenElement y sus descendientes — cualquier
+// en pantalla document.fullscreenElement y sus descendientes - cualquier
 // modal que quede afuera de ese árbol se vuelve invisible mientras el
 // horario está en pantalla completa (aunque siga "abierto" en el DOM). Por
 // eso se reubican adentro al entrar, y de vuelta a <body> al salir.
@@ -1051,7 +1089,7 @@ function sincronizarModalesConPantallaCompleta() {
 
 /* =========================================================================
    Horario conjunto: mezcla del horario propio + el de todos los amigos
-   vinculados, en columnas (una por persona) en vez de por día — se ve un
+   vinculados, en columnas (una por persona) en vez de por día - se ve un
    solo día a la vez, con navegación "‹ Lunes ›", y scroll horizontal si hay
    muchas columnas. Reutiliza las mismas piezas de construcción del grid
    semanal (construirColumnaHoras, construirLineasHorarias, calcularLanesDia)
@@ -1061,10 +1099,10 @@ function sincronizarModalesConPantallaCompleta() {
 /**
  * Punto 3 del prompt: días navegables/mostrados en el Horario conjunto
  * (tanto modo Día como modo Semana). Es la UNIÓN de:
- *  - mis días visibles (Ajustes → Horario) — mi configuración personal
+ *  - mis días visibles (Ajustes → Horario) - mi configuración personal
  *    sigue aplicando a MI propio horario, tal como antes;
  *  - cualquier día en el que ALGÚN amigo vinculado tenga clase, sin
- *    importar si yo lo tengo oculto — así un día que solo un amigo usa
+ *    importar si yo lo tengo oculto - así un día que solo un amigo usa
  *    nunca queda invisible por una preferencia mía que no tiene nada que
  *    ver con su horario.
  * No filtra por si YO tengo o no clase ese día (mi columna simplemente
@@ -1099,7 +1137,7 @@ function activarModoConjunto() {
 
   // Best-effort: refresca los snapshots de amigos por si cambió algo desde
   // el último sondeo de 5 min (ver iniciarRefrescoPeriodicoAmigos en
-  // horario-amigos.js) — no bloquea la entrada al modo, se re-renderiza
+  // horario-amigos.js) - no bloquea la entrada al modo, se re-renderiza
   // sola al terminar (solo si seguimos en modo conjunto: pudo cerrarse
   // mientras la petición estaba en vuelo).
   refrescarSnapshotsAmigos()
@@ -1121,17 +1159,24 @@ function desactivarModoConjunto() {
    Vista individual de un amigo en pantalla completa (punto 2 del prompt):
    a diferencia del Horario conjunto (mezcla TODOS los amigos), esta vista
    muestra el horario de UN SOLO amigo, en un grid semanal normal (como
-   amigos.html) con TODOS los días que ESE horario tenga clases (punto 3 —
+   amigos.html) con TODOS los días que ESE horario tenga clases (punto 3 -
    nunca limitado por mi configuración personal de días visibles). Entra
    automáticamente a pantalla completa (Fullscreen API sobre el mismo
-   #horario-grid-contenedor que ya usa el botón ⛶ del header) — el botón
+   #horario-grid-contenedor que ya usa el botón ⛶ del header) - el botón
    "✕ Cerrar" vive DENTRO del propio grid (ver
    renderizarVistaIndividualAmigoInterno), no en el header: el header queda
    fuera del árbol de pantalla completa (ver comentario en
    IDS_MODALES_GLOBALES más abajo) y por lo tanto invisible mientras dura.
    ========================================================================= */
 
-function activarVistaIndividualAmigo(fileId) {
+/**
+ * Abre la vista individual del horario de UN amigo vinculado.
+ * `opciones.pantallaCompleta` (default true, así el botón ⛶ de siempre no
+ * cambia): con false se abre "normal", dentro de la página, con el botón
+ * "← Cerrar horario" del header como salida. Es lo que usa el click sobre
+ * la tarjeta completa del amigo en el panel de Amigos (horario-amigos.js).
+ */
+function activarVistaIndividualAmigo(fileId, { pantallaCompleta = true } = {}) {
   inicializarEstadoHorarioSiHaceFalta();
   const vinculados = estado.datos?.configuracion?.horario_amigos_vinculados || [];
   if (!vinculados.some((a) => a.file_id === fileId)) return;
@@ -1139,7 +1184,7 @@ function activarVistaIndividualAmigo(fileId) {
 
   estado.horarioVistaIndividualAmigoFileId = fileId;
   // Mismo par de botones que usa el modo conjunto (ver activarModoConjunto)
-  // — fallback por si Fullscreen no está disponible/falla (ej. algunos
+  // - fallback por si Fullscreen no está disponible/falla (ej. algunos
   // navegadores en iframe): con el header todavía visible, esto sigue
   // dando una salida además del ✕ propio de adentro del grid.
   document.getElementById("btn-horario-agregar")?.classList.add("oculto");
@@ -1150,11 +1195,13 @@ function activarVistaIndividualAmigo(fileId) {
   }
   renderizarHorarioInterno();
 
-  const contenedor = document.getElementById("horario-grid-contenedor");
-  contenedor?.requestFullscreen?.().catch(() => {
-    // Sin soporte o el navegador lo bloqueó — la vista sigue activa igual,
-    // solo sin el modo pantalla completa nativo.
-  });
+  if (pantallaCompleta) {
+    const contenedor = document.getElementById("horario-grid-contenedor");
+    contenedor?.requestFullscreen?.().catch(() => {
+      // Sin soporte o el navegador lo bloqueó - la vista sigue activa igual,
+      // solo sin el modo pantalla completa nativo.
+    });
+  }
 
   // Best-effort, mismo criterio que activarModoConjunto: refresca el
   // snapshot por si cambió desde el último sondeo de 5 min.
@@ -1168,7 +1215,7 @@ function activarVistaIndividualAmigo(fileId) {
 /**
  * Grid semanal normal (mismo criterio visual que el grid propio de siempre:
  * columnas por día, header con fecha, línea de hora actual) pero READ-ONLY
- * y con el snapshot de UN SOLO amigo en vez de mis propias clases — las
+ * y con el snapshot de UN SOLO amigo en vez de mis propias clases - las
  * columnas de persona se construyen con construirColumnaPersonaConjunto
  * (misma pieza que ya usa el Horario conjunto, sin click-to-editar, a
  * diferencia de construirColumnaDia que es para MI horario editable).
@@ -1179,10 +1226,10 @@ function activarVistaIndividualAmigo(fileId) {
  * que el amigo tenía guardada al compartir.
  *
  * `semestre`/`numeroSemana` son MI semestre/semana actual (el mismo contexto
- * que ya se está mirando en el resto de la app) — de ahí se saca la fecha
+ * que ya se está mirando en el resto de la app) - de ahí se saca la fecha
  * calendario real de cada día, y desde esa fecha se traduce a la semana
  * PROPIA del snapshot del amigo (calcularNumeroSemanaAmigo, vía
- * obtenerListaAmigosParaDiaConjunto) — mismo mecanismo que usa el Horario
+ * obtenerListaAmigosParaDiaConjunto) - mismo mecanismo que usa el Horario
  * conjunto para alinear dos semestres con fechas de inicio distintas.
  */
 function renderizarVistaIndividualAmigoInterno(cont, semestre, numeroSemana) {
@@ -1191,6 +1238,7 @@ function renderizarVistaIndividualAmigoInterno(cont, semestre, numeroSemana) {
   const amigo = vinculados.find((a) => a.file_id === fileId);
   if (!amigo) {
     cont.innerHTML = `<p class="muted" style="padding:16px;">Este horario ya no está vinculado.</p>`;
+    anclarBotonSalirFSEnBarraVacia(cont);
     return;
   }
 
@@ -1198,9 +1246,10 @@ function renderizarVistaIndividualAmigoInterno(cont, semestre, numeroSemana) {
   // con un amigo oculto (el botón ⛶ que dispara esta vista queda
   // deshabilitado para amigos ocultos, ver renderizarListaAmigosVinculados),
   // pero se puede quedar oculto un amigo cuya vista individual ya estaba
-  // abierta — este chequeo cubre ese caso también.
+  // abierta - este chequeo cubre ese caso también.
   if (obtenerFileIdsOcultos().has(fileId)) {
     cont.innerHTML = `<p class="muted" style="padding:16px;">${amigo.nombre} está oculto. Activá el switch en el panel de Amigos para volver a verlo.</p>`;
+    anclarBotonSalirFSEnBarraVacia(cont);
     return;
   }
 
@@ -1209,6 +1258,7 @@ function renderizarVistaIndividualAmigoInterno(cont, semestre, numeroSemana) {
     cont.innerHTML = `<p class="muted" style="padding:16px;">${
       entrada?.caida ? "El enlace de este horario está caído." : `Cargando el horario de ${amigo.nombre}…`
     }</p>`;
+    anclarBotonSalirFSEnBarraVacia(cont);
     return;
   }
   const snapshot = entrada.snapshot;
@@ -1248,7 +1298,7 @@ function renderizarVistaIndividualAmigoInterno(cont, semestre, numeroSemana) {
     return;
   }
 
-  // Mismo ancho (130px, flex:1) en el header y en las columnas de abajo —
+  // Mismo ancho (130px, flex:1) en el header y en las columnas de abajo -
   // construirColumnaPersonaConjunto usa ese ancho, así que el header tiene
   // que matchear o los días quedan desalineados con sus propias columnas.
   const headerFila = document.createElement("div");
@@ -1292,7 +1342,7 @@ function renderizarVistaIndividualAmigoInterno(cont, semestre, numeroSemana) {
   cont.appendChild(columnaAncha);
 
   // Auto-scroll a la clase más temprana entre todos los días mostrados de
-  // este amigo — mismo criterio que el grid propio (centrarVistaInicial).
+  // este amigo - mismo criterio que el grid propio (centrarVistaInicial).
   const minutosClasesSemana = bloquesPorDia.flatMap(({ bloques }) => bloques.map((b) => b.inicioMin));
   const contenedorScroll = document.getElementById("horario-grid-contenedor");
   if (contenedorScroll) {
@@ -1314,7 +1364,7 @@ function desactivarVistaIndividualAmigo() {
 }
 
 // Cablea el botón "‹ Salir del modo conjunto" (ver index.html, junto a
-// btn-horario-agregar) — hoy sirve como salida de DOS vistas especiales
+// btn-horario-agregar) - hoy sirve como salida de DOS vistas especiales
 // (modo conjunto Y, de respaldo si Fullscreen falla, la vista individual de
 // un amigo), así que decide cuál desactivar según cuál esté activa. Se
 // llama una sola vez desde inicializarHorario(); activarModoConjunto() y
@@ -1336,6 +1386,19 @@ function moverDiaConjunto(delta) {
   const actual = estado.horarioConjuntoDiaIdx ?? 0;
   estado.horarioConjuntoDiaIdx = (actual + delta + dias.length) % dias.length;
   renderizarHorarioInterno();
+}
+
+// Texto que viene del snapshot de OTRA persona (universidad, etc.) y se
+// inserta vía innerHTML: se escapa para que un valor con "<" o comillas no
+// rompa la tarjeta ni pueda inyectar HTML.
+function escaparHtmlHorario(texto) {
+  return String(texto ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+function escaparAtributoHorario(texto) {
+  return escaparHtmlHorario(texto).replace(/"/g, "&quot;");
 }
 
 /** Una columna de persona: igual criterio visual que construirColumnaDia,
@@ -1370,7 +1433,7 @@ function construirColumnaPersonaConjunto(bloques, pxPorMin, altoGrid, minInicioR
     tarjeta.innerHTML = `
       <div style="font-size:0.8rem; font-weight:600; line-height:1.15; overflow-wrap:break-word; word-break:break-word;">${b.nombreBloque}</div>
       ${cabeExtra && b.profesorNombre ? `<div style="font-size:0.68rem; opacity:0.9; overflow-wrap:break-word; word-break:break-word;">${b.profesorNombre}</div>` : ""}
-      ${cabeExtra && b.universidad ? `<div style="font-size:0.68rem; opacity:0.9; overflow-wrap:break-word; word-break:break-word;">${b.universidad}</div>` : ""}
+      ${cabeExtra && b.universidad ? `<div${b.universidadNombreCompleto ? ` title="${escaparAtributoHorario(b.universidadNombreCompleto)}"` : ""} style="font-size:0.68rem; opacity:0.9; overflow-wrap:break-word; word-break:break-word;">${escaparHtmlHorario(b.universidad)}</div>` : ""}
       ${cabeExtra && b.aula ? `<div style="font-size:0.68rem; opacity:0.85; overflow-wrap:break-word; word-break:break-word;">${b.aula}</div>` : ""}
       ${emojiModalidad ? `<span title="${b.modalidad}" style="position:absolute; right:4px; bottom:2px; font-size:1rem; line-height:1;">${emojiModalidad}</span>` : ""}
     `;
@@ -1380,7 +1443,7 @@ function construirColumnaPersonaConjunto(bloques, pxPorMin, altoGrid, minInicioR
   return col;
 }
 
-/** Switch "Día / Semana" del Horario conjunto (punto 4 del prompt) — el
+/** Switch "Día / Semana" del Horario conjunto (punto 4 del prompt) - el
  *  mismo pill-group visual que ya usa el resto de la app (ver Agenda). */
 function construirSwitchDiaSemanaConjunto() {
   const grupo = document.createElement("div");
@@ -1404,12 +1467,12 @@ function construirSwitchDiaSemanaConjunto() {
 /**
  * Reemplaza TEMPORALMENTE el contenido de #horario-grid mientras
  * estado.horarioModoConjunto esté activo (ver renderizarHorarioInterno,
- * que decide cuál de las dos ramas renderizar) — no es una ventana/modal
+ * que decide cuál de las dos ramas renderizar) - no es una ventana/modal
  * aparte, es el mismo grid de siempre con otro contenido adentro. Dentro de
  * este modo hay a su vez dos vistas (switch Día/Semana, punto 4 del
  * prompt): modo Día (columnas por persona, un día a la vez, ya existía) y
  * modo Semana (todos los días navegables uno al lado del otro, punto 4
- * nuevo) — cada una en su propia función de render más abajo.
+ * nuevo) - cada una en su propia función de render más abajo.
  */
 function renderizarHorarioConjuntoInterno(cont, semestre, numeroSemana) {
   cont.innerHTML = "";
@@ -1419,7 +1482,7 @@ function renderizarHorarioConjuntoInterno(cont, semestre, numeroSemana) {
   }
 
   // Punto 3 del prompt: días fusionados (mis días visibles + días donde
-  // algún amigo tiene clase), no solo mi configuración personal — ver
+  // algún amigo tiene clase), no solo mi configuración personal - ver
   // obtenerDiasModoConjunto.
   const dias = obtenerDiasModoConjunto();
   if (dias.length === 0) {
@@ -1463,12 +1526,12 @@ function renderizarConjuntoModoDia(cont, semestre, numeroSemana, dias) {
       modalidad: c.modalidad,
     }));
 
-  // fechaDia puede venir null (semestre sin fecha_inicio válida) — en ese
+  // fechaDia puede venir null (semestre sin fecha_inicio válida) - en ese
   // caso obtenerListaAmigosParaDiaConjunto ya sabe devolver todo vacío en
   // vez de reventar (ver el chequeo isNaN ahí mismo).
   // FIX (switch de ocultar amigo): obtenerListaAmigosParaDiaConjunto a
   // propósito devuelve TODOS los vinculados (la vista individual necesita
-  // poder encontrar a cualquiera por fileId, oculto o no — ver
+  // poder encontrar a cualquiera por fileId, oculto o no - ver
   // renderizarVistaIndividualAmigoInterno). Acá, en Horario conjunto, sí se
   // filtra por lo que diga el switch de cada amigo.
   const ocultosConjunto = obtenerFileIdsOcultos();
@@ -1480,7 +1543,7 @@ function renderizarConjuntoModoDia(cont, semestre, numeroSemana, dias) {
   columnaAncha.style.cssText = "display:flex; flex-direction:column; min-width:100%; width:max-content;";
 
   // Encabezado sticky de TRES filas: switch Día/Semana, nav de día, nombres
-  // de persona — un solo wrapper sticky (no cada fila por separado) para no
+  // de persona - un solo wrapper sticky (no cada fila por separado) para no
   // tener que adivinar el alto de las filas de arriba con un top:Npx fijo.
   const encabezado = document.createElement("div");
   encabezado.style.cssText = "position:sticky; top:0; z-index:50; background:var(--bg-header-solido);";
@@ -1561,7 +1624,7 @@ function renderizarConjuntoModoDia(cont, semestre, numeroSemana, dias) {
   cont.appendChild(columnaAncha);
 
   // Auto-scroll a la clase más temprana del día ENTRE TODAS LAS COLUMNAS
-  // (mía + cada amigo), no solo la mía — si yo no tengo clase a esa hora
+  // (mía + cada amigo), no solo la mía - si yo no tengo clase a esa hora
   // pero un amigo sí, igual hay que arrancar ahí. Se recalcula en cada
   // render de este modo, así que al navegar de día con ‹ › (que vuelve a
   // llamar a esta función) se re-enfoca solo, sin acción extra del user.
@@ -1581,13 +1644,13 @@ function renderizarConjuntoModoDia(cont, semestre, numeroSemana, dias) {
  * obtenerDiasModoConjunto) uno al lado del otro, cada uno con sus propias
  * sub-columnas (Yo + cada amigo). Las columnas mantienen el mismo ancho
  * natural que tendrían en un horario normal (no se achican para que
- * quepan) — el contenido desborda horizontalmente y se recorre con el
+ * quepan) - el contenido desborda horizontalmente y se recorre con el
  * MISMO estilo de scroll que ya usa el Mapa del Plan de Estudios: scroll
  * nativo libre en ambos ejes (reutiliza .mapa-scroll/.mapa-sizer/
  * .mapa-track de design-system.css, sin CSS nuevo) + pellizco táctil y
  * Ctrl+rueda para zoom, con su PROPIO nivel de zoom independiente
  * (estado.horarioConjuntoSemanaZoom) para no interferir con el zoom del
- * mapa — mismo mecanismo que aplicarZoomMapa/ajustarZoomMapa en
+ * mapa - mismo mecanismo que aplicarZoomMapa/ajustarZoomMapa en
  * plan-mapa.js, adaptado acá con sus propias funciones.
  */
 function renderizarConjuntoModoSemana(cont, semestre, numeroSemana, dias) {
@@ -1651,7 +1714,7 @@ function renderizarConjuntoModoSemana(cont, semestre, numeroSemana, dias) {
   trackDiv.style.cssText = "display:flex; align-items:flex-start; gap:18px; padding:4px 6px 10px;";
 
   // FIX (switch de ocultar amigo): mismo criterio que renderizarConjuntoModoDia
-  // — obtenerListaAmigosParaDiaConjunto trae a todos los vinculados a
+  // - obtenerListaAmigosParaDiaConjunto trae a todos los vinculados a
   // propósito, y acá se filtra según el switch de cada amigo.
   const ocultosConjunto = obtenerFileIdsOcultos();
 
@@ -1737,7 +1800,7 @@ function renderizarConjuntoModoSemana(cont, semestre, numeroSemana, dias) {
   requestAnimationFrame(() => {
     aplicarZoomConjuntoSemana();
     // Auto-scroll horizontal al bloque de hoy, si está entre los días
-    // mostrados — igual espíritu que el auto-scroll del modo Día, pero acá
+    // mostrados - igual espíritu que el auto-scroll del modo Día, pero acá
     // es horizontal (de qué bloque de día partir) en vez de vertical (a
     // qué hora partir); el vertical se deja arriba del todo, cada bloque es
     // angosto y ya se ve completo casi siempre sin desplazamiento extra.
@@ -1747,7 +1810,7 @@ function renderizarConjuntoModoSemana(cont, semestre, numeroSemana, dias) {
     }
   });
 
-  // Ctrl + rueda del mouse = zoom (sin Ctrl, la rueda hace scroll normal) —
+  // Ctrl + rueda del mouse = zoom (sin Ctrl, la rueda hace scroll normal) -
   // mismo criterio que el Mapa.
   scrollDiv.addEventListener(
     "wheel",
@@ -1759,7 +1822,7 @@ function renderizarConjuntoModoSemana(cont, semestre, numeroSemana, dias) {
     { passive: false }
   );
 
-  // Pellizco táctil = zoom — mismo criterio que el Mapa.
+  // Pellizco táctil = zoom - mismo criterio que el Mapa.
   let distanciaInicialToque = null;
   let zoomInicialToque = 1;
   const distanciaEntreToques = (toques) => Math.hypot(toques[0].clientX - toques[1].clientX, toques[0].clientY - toques[1].clientY);
@@ -1790,7 +1853,7 @@ function renderizarConjuntoModoSemana(cont, semestre, numeroSemana, dias) {
 }
 
 /** Recalcula el tamaño real del track del modo Semana y aplica el zoom
- *  actual (transform: scale) — mismo mecanismo que aplicarZoomMapa en
+ *  actual (transform: scale) - mismo mecanismo que aplicarZoomMapa en
  *  plan-mapa.js, adaptado a estado._refsConjuntoSemanaActual. */
 function aplicarZoomConjuntoSemana() {
   const refs = estado._refsConjuntoSemanaActual;
@@ -1808,7 +1871,7 @@ function aplicarZoomConjuntoSemana() {
 }
 
 /** Botones +/- de zoom del modo Semana (no re-renderiza nada, conserva
- *  scroll) — mismo mecanismo que ajustarZoomMapa en plan-mapa.js. */
+ *  scroll) - mismo mecanismo que ajustarZoomMapa en plan-mapa.js. */
 function ajustarZoomConjuntoSemana(delta, etiquetaEl) {
   estado.horarioConjuntoSemanaZoom = Math.min(2, Math.max(0.5, Math.round((estado.horarioConjuntoSemanaZoom + delta) * 100) / 100));
   aplicarZoomConjuntoSemana();
@@ -1819,7 +1882,7 @@ function ajustarZoomConjuntoSemana(delta, etiquetaEl) {
 
 const FONT_CANVAS = "Inter, 'Segoe UI', system-ui, sans-serif";
 
-/** Lee un color real de la paleta activa (CSS custom property) en vez de hardcodear colores — la imagen exportada respeta la paleta que el usuario tenga puesta (son 15+, ver ui/paleta-personalizada.js). */
+/** Lee un color real de la paleta activa (CSS custom property) en vez de hardcodear colores - la imagen exportada respeta la paleta que el usuario tenga puesta (son 15+, ver ui/paleta-personalizada.js). */
 function obtenerVarCSS(nombre, fallback) {
   const valor = getComputedStyle(document.documentElement).getPropertyValue(nombre).trim();
   return valor || fallback;
@@ -1836,7 +1899,7 @@ function truncarTextoCanvas(ctx, texto, maxAncho) {
 
 /**
  * Envuelve `texto` en hasta `maxLineas` líneas que quepan en `maxAncho`
- * (con el font YA seteado en `ctx` antes de llamar) — mismo espíritu que el
+ * (con el font YA seteado en `ctx` antes de llamar) - mismo espíritu que el
  * word-wrap de la tarjeta viva (overflow-wrap/word-break en CSS), que el
  * canvas no tiene gratis. Antes el nombre de la materia siempre se dibujaba
  * en una sola línea con truncarTextoCanvas, así que cualquier nombre que
@@ -1845,7 +1908,7 @@ function truncarTextoCanvas(ctx, texto, maxAncho) {
  *
  * Una vez alcanzado el límite de líneas, TODAS las palabras que sobran se
  * amontonan en la última línea a la fuerza, y esa última línea se recorta
- * con "…" al final (vía truncarTextoCanvas) si sigue sin entrar — así el
+ * con "…" al final (vía truncarTextoCanvas) si sigue sin entrar - así el
  * único lugar donde de verdad se pierde texto es la última línea, nunca una
  * de las de arriba.
  */
@@ -1886,8 +1949,8 @@ function dibujarRectRedondeado(ctx, x, y, w, h, r) {
 }
 
 /**
- * Descargar horario — Núcleo: se genera dibujando a mano en un <canvas> en
- * vez de con html2canvas/similar — evita sumar una librería externa (pesada
+ * Descargar horario - Núcleo: se genera dibujando a mano en un <canvas> en
+ * vez de con html2canvas/similar - evita sumar una librería externa (pesada
  * y con sus propias rarezas capturando gradientes/box-shadow) solo para
  * esto, y da control total sobre el resultado: una imagen 16:9 fija, con
  * TODO el rango de horas visible (nunca un recorte forzado que corte una
@@ -1898,7 +1961,7 @@ function dibujarRectRedondeado(ctx, x, y, w, h, r) {
  */
 function generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas) {
   const ANCHO = 1600;
-  const ALTO = 900; // 16:9 por default — puede crecer, ver altoFinal más abajo
+  const ALTO = 900; // 16:9 por default - puede crecer, ver altoFinal más abajo
 
   const colorFondo = obtenerVarCSS("--bg-canvas", "#101114");
   const colorBorde = obtenerVarCSS("--border-glass", "rgba(255,255,255,0.10)");
@@ -1913,11 +1976,11 @@ function generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas) {
   const minInicioConfig = horaInicio * 60;
   const minFinConfig = horaFin * 60;
 
-  // Bug 3 (texto cortado en la imagen descargada) — causa real: la imagen
+  // Bug 3 (texto cortado en la imagen descargada) - causa real: la imagen
   // SIEMPRE usaba el rango de horas completo configurado en Ajustes →
   // Horario (ej. 6am-11pm) para repartir los 900px de alto entre TODAS esas
   // horas, aunque las clases reales de la semana ocuparan solo una franja
-  // angosta (ej. 7am-3pm) — el resto quedaba vacío y las tarjetas con clase
+  // angosta (ej. 7am-3pm) - el resto quedaba vacío y las tarjetas con clase
   // recibían una fracción mínima del alto disponible, por lo que el texto
   // (título/profesor/aula) no entraba y se truncaba agresivamente. Acá se
   // recorta el rango vertical a lo que realmente usan las clases de esta
@@ -1944,7 +2007,7 @@ function generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas) {
   const yGridInicio = cursorY + 42;
   // Además de recortar el rango (arriba), se garantiza una densidad mínima
   // de px/min igual a la que usa el grid en pantalla (PX_POR_MIN_EXPANDIDO
-  // = 0.84) — sin esto, un rango recortado que todavía sea angosto en
+  // = 0.84) - sin esto, un rango recortado que todavía sea angosto en
   // minutos (agenda muy apretada, o rango configurado ya angosto de por sí)
   // podía seguir dejando tarjetas chicas. En el caso común, el alto fijo de
   // 900px (16:9) ya alcanza esa densidad sobre el rango recortado y el
@@ -1993,7 +2056,7 @@ function generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas) {
   ctx.textAlign = "left";
 
   // Líneas horarias + etiquetas de hora (cada hora en punto, para no
-  // amontonar texto — el grid en vivo sí marca cada 30min pero acá el
+  // amontonar texto - el grid en vivo sí marca cada 30min pero acá el
   // espacio es fijo y limitado)
   ctx.strokeStyle = colorBorde;
   ctx.lineWidth = 1;
@@ -2020,7 +2083,7 @@ function generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas) {
     ctx.stroke();
   }
 
-  // Bloques de clase — mismo criterio de lanes/recorte que el grid en vivo
+  // Bloques de clase - mismo criterio de lanes/recorte que el grid en vivo
   // (calcularLanesDia + clamp al rango de horas configurado).
   dias.forEach((dia, i) => {
     const xCol = xGridInicio + i * anchoColumna;
@@ -2074,7 +2137,7 @@ function generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas) {
       });
 
       // Espacio real que queda después del título (que ahora puede ocupar
-      // 1, 2 o 3 líneas) — reemplaza los umbrales fijos `alto > 30`/`alto >
+      // 1, 2 o 3 líneas) - reemplaza los umbrales fijos `alto > 30`/`alto >
       // 44` de antes, que asumían el título siempre en una sola línea y por
       // eso ya no reflejaban el alto real disponible.
       if (b.profesorNombre && top + alto - ty >= 12) {
@@ -2090,7 +2153,7 @@ function generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas) {
 
       if (b.emoji) {
         // Dibujado FUERA del clip del rect redondeado (a diferencia de
-        // antes) — pegado a la esquina inferior derecha, la curva del
+        // antes) - pegado a la esquina inferior derecha, la curva del
         // borde (radius 6) le recortaba un pedazo al emoji. Con 8px de
         // margen (antes 5px) además queda lejos de la zona curva. Mismo
         // lugar relativo que ocupa en la tarjeta viva (esquina inferior
@@ -2098,14 +2161,14 @@ function generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas) {
         //
         // save()/restore() en vez de resetear los valores a mano: textAlign
         // se devolvía a "left" pero textBaseline se quedaba en "alphabetic"
-        // para el resto del dibujo (bug real reportado — "primera línea
+        // para el resto del dibujo (bug real reportado - "primera línea
         // cortada" en casi todas las tarjetas menos la primera dibujada).
         // Todo el código de arriba asume textBaseline "top" (seteado una
         // sola vez al principio de la función) para calcular `ty`; con el
         // baseline roto a "alphabetic", esa misma coordenada pasa a ser la
         // línea de base en vez del tope del texto, así que el cuerpo de la
         // letra se dibuja hacia ARRIBA de `ty` y el clip del rect redondeado
-        // le corta el pedazo que se sale del bloque — de ahí el corte "a la
+        // le corta el pedazo que se sale del bloque - de ahí el corte "a la
         // mitad" en el nombre de la materia.
         ctx.save();
         ctx.textAlign = "right";
@@ -2141,7 +2204,7 @@ function descargarHorarioComoImagen() {
   const canvas = generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas);
   // toDataURL es SÍNCRONO (a diferencia de toBlob). El click del link de
   // descarga tiene que dispararse todavía dentro de la ventana de "user
-  // activation" que abrió el click original del botón — con toBlob, para
+  // activation" que abrió el click original del botón - con toBlob, para
   // cuando el callback async resuelve, esa ventana ya cerró y navegadores
   // de escritorio (Firefox, Chrome en modo estricto) bloquean la descarga
   // programática silenciosamente. Mobile es más laxo con esto, por eso
@@ -2161,7 +2224,7 @@ function descargarHorarioComoImagen() {
 // semana" a estas dos funciones top-level (antes vivía inline, solo dentro
 // de los listeners de los botones ‹ › del header) para poder reusarla desde
 // la barra de navegación que ahora también se dibuja DENTRO del modo
-// pantalla completa (ver headerWrap en renderizarHorarioInterno) — antes,
+// pantalla completa (ver headerWrap en renderizarHorarioInterno) - antes,
 // una vez en fullscreen, esos botones del header quedaban fuera del árbol
 // de document.fullscreenElement y por lo tanto inaccesibles/invisibles, sin
 // forma de cambiar de semana sin salir del modo pantalla completa primero.
@@ -2226,7 +2289,7 @@ function inicializarHorario() {
     // completa siempre visible en horario normal, horario compartido y
     // todo, que no tape, que sea discreto pero que siempre esté ahí a
     // mano"): btnPantallaCompleta (el ⛶ de arriba) vive en #horario-header,
-    // que es HERMANO de `contenedor` — al entrar a fullscreen sobre
+    // que es HERMANO de `contenedor` - al entrar a fullscreen sobre
     // `contenedor`, #horario-header queda fuera del árbol de
     // document.fullscreenElement (mismo motivo que obliga a reubicar
     // IDS_MODALES_GLOBALES vía sincronizarModalesConPantallaCompleta) y se
@@ -2235,7 +2298,7 @@ function inicializarHorario() {
     // acá (no en cada renderizarHorarioInterno) y luego renderizarHorarioInterno
     // lo reancla, vía anclarBotonSalirFSEnFila, dentro de la fila de
     // título/navegación de la vista que corresponda en cada render (propio /
-    // Horario conjunto / individual de un amigo) — nunca se recrea, así no
+    // Horario conjunto / individual de un amigo) - nunca se recrea, así no
     // pierde su listener de click al moverse de una fila a otra.
     if (contenedor) {
       const btnSalirFS = document.createElement("button");
@@ -2244,7 +2307,7 @@ function inicializarHorario() {
       btnSalirFS.className = "btn-icono-fantasma oculto";
       btnSalirFS.title = "Salir de pantalla completa";
       btnSalirFS.setAttribute("aria-label", "Salir de pantalla completa");
-      // Ícono "contraer pantalla" (fullscreen_exit — cuatro flechas en L
+      // Ícono "contraer pantalla" (fullscreen_exit - cuatro flechas en L
       // apuntando hacia adentro) en vez de la "✕" anterior: el usuario pidió
       // específicamente "el cuadradito de cerrar pantalla completa, no una
       // X", sin relación visual con el ⛶ (expandir) que ya existe.
@@ -2255,9 +2318,14 @@ function inicializarHorario() {
       // Discreto: translúcido hasta hacer hover/tap. Anclado con
       // position:absolute pero YA NO relativo a `contenedor` (todo el
       // grid) sino a la fila angosta de título/navegación que lo reciba en
-      // cada vista vía anclarBotonSalirFSEnFila — ver ahí el porqué del fix.
+      // cada vista vía anclarBotonSalirFSEnFila - ver ahí el porqué del fix.
+      // FIX 2: ya no position:absolute con top:50%/translateY (se iba fuera
+      // de pantalla con el scroll horizontal): position:sticky + right lo
+      // mantiene pegado al borde derecho visible, dentro del ancla que
+      // arma anclarBotonSalirFSEnFila (pointer-events:auto porque el ancla
+      // deja pasar los clicks).
       btnSalirFS.style.cssText =
-        "position:absolute; right:6px; top:50%; transform:translateY(-50%); z-index:5; " +
+        "position:sticky; right:6px; margin-right:6px; pointer-events:auto; " +
         "padding:3px 5px; opacity:0.65; transition:opacity 0.15s;";
       btnSalirFS.addEventListener("mouseenter", () => { btnSalirFS.style.opacity = "1"; });
       btnSalirFS.addEventListener("mouseleave", () => { btnSalirFS.style.opacity = "0.65"; });
@@ -2265,15 +2333,18 @@ function inicializarHorario() {
         if (document.fullscreenElement) document.exitFullscreen();
       });
       // Fallback hasta el primer render de una vista (que lo reancla en su
-      // fila correspondiente vía anclarBotonSalirFSEnFila) — oculto igual,
+      // fila correspondiente vía anclarBotonSalirFSEnFila) - oculto igual,
       // no se ve flotando suelto acá ni un instante.
+      refBtnSalirFS = btnSalirFS;
       contenedor.appendChild(btnSalirFS);
     }
 
     document.addEventListener("fullscreenchange", () => {
       sincronizarModalesConPantallaCompleta();
-      const btnSalirFS = document.getElementById("btn-horario-salir-pantalla-completa");
-      if (btnSalirFS) btnSalirFS.classList.toggle("oculto", document.fullscreenElement !== contenedor);
+      // Por referencia de módulo, no por getElementById: el botón puede estar
+      // momentáneamente desconectado del documento entre dos renders (ver
+      // FIX 2 en anclarBotonSalirFSEnFila).
+      if (refBtnSalirFS) refBtnSalirFS.classList.toggle("oculto", document.fullscreenElement !== contenedor);
       requestAnimationFrame(() => renderizarHorarioInterno());
     });
   }
@@ -2283,7 +2354,7 @@ function inicializarHorario() {
 
   // Línea de hora actual: se mueve sola cada minuto sin re-renderizar todo
   // el grid (ver actualizarPosicionLineaHoraActual). Solo cuando la sección
-  // está realmente visible — sin costo mientras el usuario está en otra
+  // está realmente visible - sin costo mientras el usuario está en otra
   // pestaña de la app.
   setInterval(() => {
     if (!document.getElementById("seccion-horario")?.classList.contains("oculto")) {
@@ -2294,13 +2365,13 @@ function inicializarHorario() {
 
 // Se expone en window para que horario-modal.js pueda refrescar el grid tras
 // guardar/borrar sin crear un import circular (horario.js ya importa DE
-// horario-modal.js) — mismo patrón que mostrarSeccion en main.js.
+// horario-modal.js) - mismo patrón que mostrarSeccion en main.js.
 window.renderizarHorario = renderizarHorario;
 
-// Horario entre Amigos — Parte 1: se exportan estos 3 helpers (ya existían,
+// Horario entre Amigos - Parte 1: se exportan estos 3 helpers (ya existían,
 // uso interno nada más) para que horario-amigos.js arme el snapshot público
 // con exactamente el mismo color/nombre resuelto y el mismo rango de horas
-// que ya se ven en el grid propio — sin duplicar esta lógica en otro
+// que ya se ven en el grid propio - sin duplicar esta lógica en otro
 // archivo, lo que tarde o temprano se hubiera desincronizado del original.
 export {
   inicializarHorario,
@@ -2314,12 +2385,12 @@ export {
   // abrirHorarioConjunto cuando esto era un modal aparte; el nombre externo
   // se mantiene igual para no tocar el import de horario-amigos.js).
   activarModoConjunto as abrirHorarioConjunto,
-  // Punto 2 del prompt: mismo criterio de alias que la línea de arriba — el
+  // Punto 2 del prompt: mismo criterio de alias que la línea de arriba - el
   // nombre externo que horario-amigos.js ya importa ("abrir...") describe
   // la ACCIÓN desde afuera, mientras que acá adentro el nombre real
   // ("activar...") describe el cambio de estado interno.
   activarVistaIndividualAmigo as abrirVistaIndividualAmigo,
-  // Agenda — Núcleo: la tarjetita "Mostrar clases" (agenda-clases.js)
+  // Agenda - Núcleo: la tarjetita "Mostrar clases" (agenda-clases.js)
   // reutiliza el MISMO modal de info de materia que usa el grid de Horario
   // (pedido explícito del spec: "reutilizar el mismo componente/modal de
   // info que ya existe en horario.js"), en vez de crear uno paralelo. Estos
@@ -2331,7 +2402,7 @@ export {
   obtenerEtiquetaModalidad,
   obtenerNombreProfesor,
   fechaLocalDesdeISO,
-  // Agenda — Núcleo (2026-08-29): agenda-clases.js reusa esta para el
+  // Agenda - Núcleo (2026-08-29): agenda-clases.js reusa esta para el
   // cálculo crudo (sin acotar) de su propia calcularNumeroSemanaParaFecha,
   // en vez de mantener una segunda fórmula de "días desde fecha_inicio /
   // 7" que ya venía sin el anclaje-a-lunes ni el parseo seguro de fecha

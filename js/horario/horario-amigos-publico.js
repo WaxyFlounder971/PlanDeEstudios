@@ -104,8 +104,31 @@ function obtenerEmojiModalidad(modalidad) {
  */
 function obtenerTextoUniversidad(universidad) {
   if (!universidad) return null;
-  if (typeof universidad === "string") return universidad;
-  return universidad.siglas || universidad.nombre_completo || null;
+  if (typeof universidad === "string") return universidad.trim() || null;
+  return String(universidad.siglas || "").trim() || String(universidad.nombre_completo || "").trim() || null;
+}
+
+/**
+ * Nombre completo para usar como aclaración (tooltip) junto a las siglas.
+ * Solo devuelve algo cuando hay siglas Y un nombre completo distinto -
+ * si solo hay uno de los dos, ya es lo que muestra obtenerTextoUniversidad
+ * y repetirlo como aclaración no aporta nada.
+ */
+function obtenerNombreCompletoUniversidad(universidad) {
+  if (!universidad || typeof universidad === "string") return null;
+  const siglas = String(universidad.siglas || "").trim();
+  const nombre = String(universidad.nombre_completo || "").trim();
+  return siglas && nombre && nombre !== siglas ? nombre : null;
+}
+
+// Este snapshot lo armó OTRA persona y se inserta vía innerHTML: se escapa
+// lo que se muestra (universidad) para que un valor con "<" o comillas no
+// rompa la tarjeta ni inyecte HTML.
+function escaparHtml(texto) {
+  return String(texto ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function escaparAtributo(texto) {
+  return escaparHtml(texto).replace(/"/g, "&quot;");
 }
 
 function obtenerDiasVisiblesOrdenados(configDias) {
@@ -273,7 +296,7 @@ function construirColumnaDia(dia, bloquesDia, pxPorMin, altoGrid, minInicioRango
       <div style="font-size:0.85rem; font-weight:600; line-height:1.15; display:flex; align-items:center; gap:4px; overflow-wrap:break-word; word-break:break-word;">
         <span>${b.nombreCorto}</span>
       </div>
-      ${cabeExtra && b.universidad ? `<div style="font-size:0.72rem; opacity:0.9; overflow-wrap:break-word; word-break:break-word;">${b.universidad}</div>` : ""}
+      ${cabeExtra && b.universidad ? `<div${b.universidadNombreCompleto ? ` title="${escaparAtributo(b.universidadNombreCompleto)}"` : ""} style="font-size:0.72rem; opacity:0.9; overflow-wrap:break-word; word-break:break-word;">${escaparHtml(b.universidad)}</div>` : ""}
       ${cabeExtra && b.aula ? `<div style="font-size:0.72rem; opacity:0.85; overflow-wrap:break-word; word-break:break-word;">${b.aula}</div>` : ""}
       ${emojiModalidad ? `<span title="${b.modalidad}" style="position:absolute; right:5px; bottom:3px; font-size:1.17rem; line-height:1;">${emojiModalidad}</span>` : ""}
     `;
@@ -322,8 +345,23 @@ function renderizarGridPublico(snapshot) {
   const columnaAncha = document.createElement("div");
   columnaAncha.style.cssText = "display:flex; flex-direction:column; min-width:100%; width:max-content;";
 
+  // headerWrap: envoltorio sticky UNICO (antes lo era headerFila sola) para
+  // que la fila de título de pantalla completa y la fila de días peguen
+  // juntas como un solo bloque. La fila de título (filaTituloFS) arranca
+  // oculta y solo se muestra en pantalla completa: ahí vive el botón de
+  // salir (ver inicializarPantallaCompletaPublico), en una fila con aire
+  // libre a la derecha en vez de flotando encima de los días.
+  const headerWrap = document.createElement("div");
+  headerWrap.style.cssText = "position:sticky; top:0; z-index:50; background:var(--bg-header-solido); border-bottom:1px solid rgba(150,150,170,0.15);";
+  const filaTituloFS = document.createElement("div");
+  filaTituloFS.id = "amigos-fila-titulo-fs";
+  filaTituloFS.style.cssText = "display:none; position:relative; align-items:center; justify-content:center; padding:6px 0; min-height:34px; border-bottom:1px solid rgba(150,150,170,0.12); font-size:0.78rem; font-weight:600;";
+  filaTituloFS.textContent = `${snapshot.semestre_nombre || "Horario"} · Semana ${numeroSemana}`;
+  headerWrap.appendChild(filaTituloFS);
+
   const headerFila = document.createElement("div");
-  headerFila.style.cssText = "display:flex; position:sticky; top:0; z-index:50; background:var(--bg-header-solido); border-bottom:1px solid rgba(150,150,170,0.15);";
+  headerFila.style.cssText = "display:flex;";
+  headerWrap.appendChild(headerFila);
   const espaciador = document.createElement("div");
   espaciador.style.cssText = "width:38px; flex-shrink:0;";
   headerFila.appendChild(espaciador);
@@ -356,6 +394,8 @@ function renderizarGridPublico(snapshot) {
         // FIX (bug real: "[object Object]" en vez de la universidad en la
         // tarjeta de clase) - ver obtenerTextoUniversidad() más arriba.
         universidad: obtenerTextoUniversidad(c.universidad),
+        // Nombre completo como aclaración (tooltip) de las siglas.
+        universidadNombreCompleto: obtenerNombreCompletoUniversidad(c.universidad),
         modalidad: c.modalidad,
       }));
     filaGrid.appendChild(construirColumnaDia(dia, bloquesDia, PX_POR_MIN, altoGrid, minInicioRango, minFinRango));
@@ -369,7 +409,7 @@ function renderizarGridPublico(snapshot) {
     if (linea) filaGrid.appendChild(linea);
   }
 
-  columnaAncha.appendChild(headerFila);
+  columnaAncha.appendChild(headerWrap);
   columnaAncha.appendChild(filaGrid);
   cont.appendChild(columnaAncha);
 
@@ -453,34 +493,50 @@ function inicializarPantallaCompletaPublico() {
   // amigos.html) - al entrar a fullscreen sobre `contenedor`, ese botón
   // queda fuera del árbol de document.fullscreenElement y se vuelve
   // invisible/inaccesible, sin forma de salir salvo Esc. Se agrega un
-  // botón aparte, chico y discreto, colgado directo de `contenedor` para
-  // que sobreviva dentro del árbol de fullscreen.
-  contenedor.style.position = "relative";
+  // botón aparte, colgado de `contenedor` para que sobreviva dentro del
+  // árbol de fullscreen.
+  //
+  // FIX 2 (2026-09, "el botón de salir se pierde"): antes era un botón
+  // position:absolute colgado directo de `contenedor`, que es el elemento
+  // CON SCROLL: al scrollear (vertical u horizontal) el botón se iba con el
+  // contenido y desaparecía de la pantalla. Ahora vive en la fila de título
+  // del header sticky (filaTituloFS, ver renderizarGridPublico), que no
+  // scrollea en vertical, y usa position:sticky + right dentro de un ancla
+  // que ocupa toda la fila (pointer-events:none), así tampoco se pierde con
+  // el scroll horizontal: queda siempre pegado a la esquina superior
+  // derecha VISIBLE. Mismo ícono "contraer pantalla" que el Horario de la
+  // app (horario.js).
+  const filaTituloFS = document.getElementById("amigos-fila-titulo-fs");
+  if (!filaTituloFS) return;
+  const anclaSalirFS = document.createElement("div");
+  anclaSalirFS.style.cssText =
+    "position:absolute; top:0; right:0; bottom:0; left:0; display:flex; align-items:center; " +
+    "justify-content:flex-end; pointer-events:none;";
   const btnSalirFS = document.createElement("button");
   btnSalirFS.type = "button";
   btnSalirFS.id = "amigos-btn-salir-pantalla-completa";
-  btnSalirFS.className = "btn-icono-fantasma oculto";
+  btnSalirFS.className = "btn-icono-fantasma";
   btnSalirFS.title = "Salir de pantalla completa";
   btnSalirFS.setAttribute("aria-label", "Salir de pantalla completa");
-  btnSalirFS.textContent = "✕";
+  btnSalirFS.innerHTML =
+    '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+    '<path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>' +
+    "</svg>";
   btnSalirFS.style.cssText =
-    "position:absolute; top:8px; right:8px; z-index:60; font-size:1rem; width:30px; height:30px; " +
-    "display:flex; align-items:center; justify-content:center; border-radius:50%; " +
-    "background:var(--bg-header-solido); opacity:0.55; transition:opacity 0.15s;";
+    "position:sticky; right:6px; margin-right:6px; pointer-events:auto; padding:3px 5px; " +
+    "opacity:0.65; transition:opacity 0.15s;";
   btnSalirFS.addEventListener("mouseenter", () => { btnSalirFS.style.opacity = "1"; });
-  btnSalirFS.addEventListener("mouseleave", () => { btnSalirFS.style.opacity = "0.55"; });
+  btnSalirFS.addEventListener("mouseleave", () => { btnSalirFS.style.opacity = "0.65"; });
   btnSalirFS.addEventListener("click", () => {
     if (document.fullscreenElement) document.exitFullscreen();
   });
-  contenedor.appendChild(btnSalirFS);
+  anclaSalirFS.appendChild(btnSalirFS);
+  filaTituloFS.appendChild(anclaSalirFS);
 
   document.addEventListener("fullscreenchange", () => {
-    if (document.fullscreenElement === contenedor) {
-      contenedor.style.maxHeight = "100vh";
-    } else {
-      contenedor.style.maxHeight = "70vh";
-    }
-    btnSalirFS.classList.toggle("oculto", document.fullscreenElement !== contenedor);
+    const enFS = document.fullscreenElement === contenedor;
+    contenedor.style.maxHeight = enFS ? "100vh" : "70vh";
+    filaTituloFS.style.display = enFS ? "flex" : "none";
   });
 }
 
