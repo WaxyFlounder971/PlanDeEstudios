@@ -25,7 +25,13 @@
        muestra la oferta (una vez por día y por dispositivo);
      - si la persona ya tiene una racha viva que nunca vio anunciada (la gente
        que ya venía estudiando esta semana), le muestra "Has iniciado una
-       racha" una vez, con el número subiendo desde 0.
+       racha" una vez, con el número subiendo desde 0;
+     - si perdió su racha y ya no hay vuelta atrás (`rachaPerdida` del
+       cálculo), le muestra la llama extinguiéndose con "Has perdido tu racha".
+       Sale UNA sola vez por pérdida: se identifica por el día en que se rompió
+       y se recuerda en `racha_perdida_avisada` (más un respaldo en
+       localStorage). Si la racha era recuperable, primero va la oferta y este
+       aviso llega recién cuando la oferta venció.
 
    Preferencias (en `configuracion`, mismo patrón que
    `mostrar_tiempo_estudio_en_agenda`). `configuracion` se funde entera por
@@ -35,6 +41,8 @@
      - racha_ultimo_inicio_avisado → ISO del día en que empezó la racha ya
                                      anunciada (así el aviso sale una vez por
                                      racha, no en cada apertura).
+     - racha_perdida_avisada       → ISO del día en que se rompió la última
+                                     racha cuya pérdida ya se mostró.
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
@@ -51,6 +59,7 @@ import {
 
 const NS_SVG = "http://www.w3.org/2000/svg";
 const CLAVE_OFERTA_VISTA = "te_racha_oferta_dia_v1"; // por dispositivo, a propósito
+const CLAVE_PERDIDA_VISTA = "te_racha_perdida_dia_v1"; // respaldo por si `configuracion` no guarda la clave nueva
 const TIRA_DIGITOS = 30; // 3 vueltas de 0–9: alcanza para el giro más largo
 
 /* ------------------------- Estado de módulo ------------------------- */
@@ -147,6 +156,85 @@ function crearLlama(clase) {
     svg.appendChild(path);
   }
   return svg;
+}
+
+/**
+ * Llama que se extingue (aviso "Has perdido tu racha"). La llama de siempre va
+ * dentro de una caja que es lo único que se anima —así no se pisa con el
+ * parpadeo propio de la llama—: se encoge peleando por seguir encendida, se
+ * va poniendo gris, y al final queda una brasa que late y se apaga con un
+ * hilo de humo. Todo ocurre una sola vez (~6 s) y termina en reposo.
+ */
+function crearLlamaQueSeApaga() {
+  asegurarEstilosLlamaApagada();
+  const fuego = crearElemento("div", "te-perd-fuego");
+  fuego.setAttribute("aria-hidden", "true");
+  const caja = crearElemento("div", "te-perd-caja");
+  caja.appendChild(crearLlama("te-llama--grande"));
+  fuego.appendChild(caja);
+  fuego.appendChild(crearElemento("span", "te-perd-brasa"));
+  for (let i = 0; i < 3; i++) {
+    const humo = crearElemento("span", "te-perd-humo");
+    humo.style.setProperty("--i", String(i));
+    fuego.appendChild(humo);
+  }
+  return fuego;
+}
+
+// Estilos de la animación. Van aquí (y no en la hoja de estilos de Tiempo)
+// para que el aviso funcione con solo estos dos archivos; si prefieres
+// tenerlos en el CSS, copia el texto tal cual. Solo usa animaciones de
+// transform/opacity/filter, sin ids ni dependencias del tema.
+const CSS_LLAMA_APAGADA = `
+.te-racha-card--perdida .te-racha-escena { position: relative; }
+.te-perd-fuego { position: relative; display: inline-flex; justify-content: center; align-items: flex-end; }
+.te-perd-caja { display: inline-flex; transform-origin: 50% 100%; will-change: transform, filter, opacity;
+  animation: te-perd-apagar 3.4s cubic-bezier(.4, 0, .6, 1) .6s both; }
+.te-racha-card--perdida .te-racha-halo { animation: te-perd-halo 3.2s ease-in .6s both; }
+.te-perd-brasa { position: absolute; left: 50%; bottom: 1px; width: 12px; height: 12px; margin-left: -6px;
+  border-radius: 50%; opacity: 0; pointer-events: none;
+  background: radial-gradient(circle, #ffc07a 0%, #ff6a1f 42%, rgba(255, 106, 31, 0) 72%);
+  animation: te-perd-brasa 3.4s ease-out 2.9s both; }
+.te-perd-humo { position: absolute; left: 50%; bottom: 6px; width: 14px; height: 34px; margin-left: -7px;
+  border-radius: 50%; opacity: 0; filter: blur(3px); pointer-events: none;
+  background: radial-gradient(ellipse at 50% 80%, rgba(165, 170, 180, .6), rgba(165, 170, 180, 0) 70%);
+  animation: te-perd-humo 3.2s ease-out calc(2.9s + var(--i) * .75s) 2 both; }
+@keyframes te-perd-apagar {
+  0%   { transform: scale(1, 1); filter: grayscale(0) brightness(1); opacity: 1; }
+  14%  { transform: scale(.97, .86); }
+  26%  { transform: scale(1, .96); }
+  48%  { transform: scale(.9, .6); filter: grayscale(.35) brightness(.85); }
+  60%  { transform: scale(.94, .72); }
+  82%  { transform: scale(.7, .24); filter: grayscale(.9) brightness(.55); opacity: .8; }
+  100% { transform: scale(.4, .04); filter: grayscale(1) brightness(.4); opacity: 0; }
+}
+@keyframes te-perd-halo { to { opacity: 0; transform: scale(.55); } }
+@keyframes te-perd-brasa {
+  0%   { opacity: 0; transform: scale(.4); }
+  16%  { opacity: 1; transform: scale(1); }
+  40%  { opacity: .7; transform: scale(.85); }
+  64%  { opacity: .95; transform: scale(1); }
+  100% { opacity: 0; transform: scale(.3); }
+}
+@keyframes te-perd-humo {
+  0%   { opacity: 0; transform: translate(0, 0) scale(.6, .6); }
+  20%  { opacity: .6; }
+  60%  { transform: translate(calc(var(--i) * 6px - 6px), -34px) scale(1.1, 1.2); }
+  100% { opacity: 0; transform: translate(calc(var(--i) * -8px + 8px), -78px) scale(1.5, 1.6); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .te-perd-caja { animation: none; transform: none; filter: grayscale(1) brightness(.55); opacity: .5; }
+  .te-racha-card--perdida .te-racha-halo { animation: none; opacity: 0; }
+  .te-perd-brasa, .te-perd-humo { animation: none; opacity: 0; }
+}
+`;
+
+function asegurarEstilosLlamaApagada() {
+  if (document.getElementById("te-racha-perdida-css")) return;
+  const style = document.createElement("style");
+  style.id = "te-racha-perdida-css";
+  style.textContent = CSS_LLAMA_APAGADA;
+  document.head.appendChild(style);
 }
 
 /**
@@ -324,6 +412,11 @@ const CONTENIDO_AVISO = {
     texto: (n) => `Perdiste tu racha de ${textoDias(n)}. Estudia 1 hora y media hoy para recuperarla.`,
     boton: "Entendido",
   },
+  perdida: {
+    titulo: "Has perdido tu racha 🥀",
+    texto: () => "Pero no te desanimes, empieza una nueva estudiando y echándole ganas al semestre :D",
+    boton: "Entendido",
+  },
 };
 
 /**
@@ -334,6 +427,8 @@ const CONTENIDO_AVISO = {
  *   "detalle"    → (al tocar el chip) llama viva si hay racha, número que rueda,
  *                  semana día por día, minutos de hoy y descansos restantes.
  *   "oferta"     → llama apagada, número fijo (la longitud perdida), avance de hoy.
+ *   "perdida"    → la llama se extingue (una vez) y queda una brasa con humo;
+ *                  sin número. Recuerda que ya se mostró (ver marcarPerdidaAvisada).
  * Como el resto de los modales de Tiempo, NO se cierra al tocar fuera: solo
  * con el botón (o Escape).
  */
@@ -355,17 +450,19 @@ export function abrirOverlayRacha({ tipo, est, desde = 0, hasta }) {
   // Escena: halo + llama + chispas
   const escena = crearElemento("div", "te-racha-escena");
   escena.appendChild(crearElemento("div", "te-racha-halo"));
-  escena.appendChild(crearLlama("te-llama--grande"));
+  escena.appendChild(tipo === "perdida" ? crearLlamaQueSeApaga() : crearLlama("te-llama--grande"));
   const conChispas = tipo === "inicio" || tipo === "recuperada" || (tipo === "detalle" && est.activa && est.hoyCumplido);
   if (conChispas) escena.appendChild(crearChispas());
   card.appendChild(escena);
 
   // Número + unidad
-  const fila = crearElemento("div", "te-racha-numero");
-  if (tipo === "oferta") fila.appendChild(construirOdometro(numero, numero));
-  else fila.appendChild(construirOdometro(desde, numero, { retrasoMs: 650, giro: true }));
-  fila.appendChild(crearElemento("span", "te-racha-unidad", numero === 1 ? "día de racha" : "días de racha"));
-  card.appendChild(fila);
+  if (tipo !== "perdida") {
+    const fila = crearElemento("div", "te-racha-numero");
+    if (tipo === "oferta") fila.appendChild(construirOdometro(numero, numero));
+    else fila.appendChild(construirOdometro(desde, numero, { retrasoMs: 650, giro: true }));
+    fila.appendChild(crearElemento("span", "te-racha-unidad", numero === 1 ? "día de racha" : "días de racha"));
+    card.appendChild(fila);
+  }
 
   const titulo = crearElemento("h2", "te-racha-titulo", typeof cfg.titulo === "function" ? cfg.titulo(est) : cfg.titulo);
   titulo.id = idTitulo;
@@ -430,6 +527,7 @@ export function abrirOverlayRacha({ tipo, est, desde = 0, hasta }) {
   document.body.appendChild(overlay);
   boton.focus();
   if (tipo === "inicio" && est && est.inicioISO) persistirPreferenciasInicio({ inicioISO: est.inicioISO });
+  if (tipo === "perdida" && est && est.rachaPerdida) marcarPerdidaAvisada(est.rachaPerdida.diaISO);
   return overlay;
 }
 
@@ -609,6 +707,31 @@ function repintarChipSiEstaVisible() {
   }
 }
 
+/** ¿Ya se le mostró la pérdida de la racha que se rompió el día `diaISO`? */
+function perdidaYaAvisada(diaISO) {
+  const cfg = estado && estado.datos && estado.datos.configuracion;
+  if (cfg && cfg.racha_perdida_avisada === diaISO) return true;
+  try {
+    return localStorage.getItem(CLAVE_PERDIDA_VISTA) === diaISO;
+  } catch (_) {
+    return false;
+  }
+}
+
+/** Recuerda (en `configuracion` y en localStorage) que esta pérdida ya se mostró. */
+function marcarPerdidaAvisada(diaISO) {
+  const cfg = estado && estado.datos && estado.datos.configuracion;
+  if (cfg && cfg.racha_perdida_avisada !== diaISO) {
+    cfg.racha_perdida_avisada = diaISO;
+    marcarCambioPendiente();
+  }
+  try {
+    localStorage.setItem(CLAVE_PERDIDA_VISTA, diaISO);
+  } catch (_) {
+    /* sin almacenamiento: puede repetirse, no es grave */
+  }
+}
+
 function ofertaYaVistaHoy(hoyIdx) {
   try {
     return localStorage.getItem(CLAVE_OFERTA_VISTA) === String(hoyIdx);
@@ -629,6 +752,11 @@ function revisarAlAbrir(est) {
     if (ofertaYaVistaHoy(est.hoyIdx)) return;
     marcarOfertaVista(est.hoyIdx);
     abrirOverlayRacha({ tipo: "oferta", est });
+    return;
+  }
+  // Racha perdida sin vuelta atrás: la animación sale una sola vez por pérdida.
+  if (est.rachaPerdida) {
+    if (!perdidaYaAvisada(est.rachaPerdida.diaISO)) abrirOverlayRacha({ tipo: "perdida", est });
     return;
   }
   const p = preferencias();

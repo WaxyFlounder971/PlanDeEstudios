@@ -31,6 +31,10 @@
      90 min la restaura, con ese día contando como uno más (largo + 1). Pasado
      ese día la oferta expira. Es derivado y sin estado guardado: no hay nada
      que aceptar ni que sincronizar entre dispositivos.
+   - RACHA PERDIDA: una racha de CUALQUIER largo que se rompió y ya no tiene
+     vuelta atrás (no hay racha viva y tampoco una oferta de recuperación
+     abierta) se expone en `rachaPerdida`, con el día en que se rompió. La UI
+     usa ese día como identificador para avisar una sola vez por pérdida.
 
    CONSECUENCIA CONOCIDA de "2 descansos por SEMANA": los descansos se
    cuentan por semana calendario, así que 2 al final de una semana y 2 al
@@ -129,8 +133,12 @@ export function minutosSemana(sesiones, { ahora = Date.now() } = {}) {
  *   minutosHoy:number, inicioIdx:(number|null), inicioISO:(string|null),
  *   descansosUsados:(number|null), descansosRestantes:(number|null),
  *   enRiesgo:boolean, restauradaHoy:boolean,
- *   recuperable:(null|{longitud:number, minutosNecesarios:number, minutosHoy:number})
+ *   recuperable:(null|{longitud:number, minutosNecesarios:number, minutosHoy:number}),
+ *   rachaPerdida:(null|{longitud:number, diaIdx:number, diaISO:string, inicioIdx:number, inicioISO:string})
  * }}
+ * `rachaPerdida` = la última racha rota (cualquier largo) mientras no haya una
+ * racha viva ni una oferta de recuperación abierta; `diaIdx`/`diaISO` es el día
+ * en que se rompió (el 3.er día sin cumplir de esa semana).
  */
 export function calcularRacha(sesiones, { ahora = Date.now(), desdeIdx = null } = {}) {
   const hoy = indiceDia(ahora);
@@ -153,6 +161,7 @@ export function calcularRacha(sesiones, { ahora = Date.now(), desdeIdx = null } 
     enRiesgo: false,
     restauradaHoy: false,
     recuperable: null,
+    rachaPerdida: null,
   };
   if (!porDia.size) return vacio;
 
@@ -162,6 +171,7 @@ export function calcularRacha(sesiones, { ahora = Date.now(), desdeIdx = null } 
   let faltas = 0; // días sin cumplir de ESTA semana, ya terminados, con la racha viva
   let inicio = null;
   let perdida = null; // { longitud, dia, inicio } de la última racha recuperable
+  let ultimaRota = null; // { longitud, dia, inicio } de la última racha rota, de cualquier largo
   let restauradaHoy = false;
 
   for (let d = primero; d <= hoy; d++) {
@@ -176,6 +186,7 @@ export function calcularRacha(sesiones, { ahora = Date.now(), desdeIdx = null } 
       faltas = 0;
       inicio = perdida.inicio;
       perdida = null;
+      ultimaRota = null; // restaurada: esa pérdida quedó deshecha
       if (esHoy) restauradaHoy = true;
       continue;
     }
@@ -192,6 +203,7 @@ export function calcularRacha(sesiones, { ahora = Date.now(), desdeIdx = null } 
       // Día ya terminado sin cumplir: gasta un descanso de la semana.
       faltas++;
       if (faltas > DESCANSOS_POR_SEMANA) {
+        ultimaRota = { longitud: racha, dia: d, inicio };
         perdida = racha >= RACHA_MINIMA_RECUPERABLE ? { longitud: racha, dia: d, inicio } : null;
         activa = false;
         racha = 0;
@@ -205,6 +217,18 @@ export function calcularRacha(sesiones, { ahora = Date.now(), desdeIdx = null } 
   const recuperable =
     perdida && hoy === perdida.dia + 1 && minutosHoy < MINUTOS_PARA_RECUPERAR
       ? { longitud: perdida.longitud, minutosNecesarios: MINUTOS_PARA_RECUPERAR, minutosHoy }
+      : null;
+
+  // Perdida "de verdad": sin racha viva y sin oferta de recuperación abierta.
+  const rachaPerdida =
+    ultimaRota && !activa && !recuperable
+      ? {
+          longitud: ultimaRota.longitud,
+          diaIdx: ultimaRota.dia,
+          diaISO: isoDesdeIndice(ultimaRota.dia),
+          inicioIdx: ultimaRota.inicio,
+          inicioISO: isoDesdeIndice(ultimaRota.inicio),
+        }
       : null;
 
   return {
@@ -222,5 +246,6 @@ export function calcularRacha(sesiones, { ahora = Date.now(), desdeIdx = null } 
     enRiesgo: activa && !hoyCumplido && faltas >= DESCANSOS_POR_SEMANA,
     restauradaHoy,
     recuperable,
+    rachaPerdida,
   };
 }
