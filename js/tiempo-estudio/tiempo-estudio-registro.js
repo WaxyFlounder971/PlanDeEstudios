@@ -41,32 +41,61 @@ function abrirModalRegistroManual(items, onGuardar) {
   caja.style.cssText = "max-width:420px; width:100%; max-height:85vh; overflow-y:auto; gap:14px;";
   caja.addEventListener("click", (e) => e.stopPropagation());
 
-  const opcionesMateria = items.map((item) => `<option value="${item.mm.id}">${item.nombreMateria}</option>`).join("");
-
   const ahora = new Date();
   const fechaHoyStr = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")}`;
   const horaHoyStr = `${String(ahora.getHours()).padStart(2, "0")}:${String(ahora.getMinutes()).padStart(2, "0")}`;
+  const finDefault = new Date(ahora.getTime() + 30 * 60000);
+  const horaFinDefaultStr = `${String(finDefault.getHours()).padStart(2, "0")}:${String(finDefault.getMinutes()).padStart(2, "0")}`;
+
+  // Rediseño 2026-09-22 (pedido explícito): reemplaza el <select> nativo
+  // (se veía gris/roto sobre fondo oscuro) por tarjetas seleccionables —
+  // mismo patrón visual que .agenda-semestre-tarjeta (design-system.css),
+  // pero de selección ÚNICA: un solo click cambia cuál tarjeta queda
+  // .active, nunca se acumulan varias marcadas.
+  const tarjetasMateria = items
+    .map(
+      (item, i) => `
+      <button type="button" class="agenda-semestre-tarjeta${i === 0 ? " active" : ""}" data-materia-id="${item.mm.id}">
+        <span class="agenda-semestre-tarjeta-check">✓</span>
+        <span>${item.nombreMateria}</span>
+      </button>`
+    )
+    .join("");
 
   caja.innerHTML = `
     <h2 style="margin:0;">Registrar sesión pasada</h2>
 
     <div>
       <span class="form-label">Materia</span>
-      <select id="te-manual-materia" class="form-input">${opcionesMateria}</select>
+      <div class="stack" id="te-manual-materia-lista" style="gap:6px; max-height:200px; overflow-y:auto;">${tarjetasMateria}</div>
     </div>
 
-    <div class="row-between" style="gap:10px;">
-      <div style="flex:1;">
-        <span class="form-label">Fecha</span>
-        <input type="date" id="te-manual-fecha" class="form-input" value="${fechaHoyStr}" autocomplete="off">
-      </div>
-      <div style="flex:1;">
-        <span class="form-label">Hora de inicio</span>
-        <input type="time" id="te-manual-hora" class="form-input" value="${horaHoyStr}" autocomplete="off">
+    <div>
+      <span class="form-label">Fecha</span>
+      <input type="date" id="te-manual-fecha" class="form-input" value="${fechaHoyStr}" autocomplete="off">
+    </div>
+
+    <div class="fila-pill-switch">
+      <span class="fila-pill-switch-titulo">¿Cómo lo cargás?</span>
+      <div class="pill-group pill-switch-binario" id="te-manual-modo-switch">
+        <div class="pill-switch-thumb" id="te-manual-modo-thumb"></div>
+        <button type="button" class="pill-item active" data-modo="hora">Hora</button>
+        <button type="button" class="pill-item" data-modo="tiempo">Tiempo</button>
       </div>
     </div>
 
-    <div class="row-between" style="gap:10px;">
+    <div class="row-between" style="gap:10px;" id="te-manual-campos-hora">
+      <div style="flex:1;">
+        <span class="form-label">Hora inicio</span>
+        <input type="time" id="te-manual-hora-inicio" class="form-input" value="${horaHoyStr}" autocomplete="off">
+      </div>
+      <div style="flex:1;">
+        <span class="form-label">Hora fin</span>
+        <input type="time" id="te-manual-hora-fin" class="form-input" value="${horaFinDefaultStr}" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="row-between oculto" style="gap:10px;" id="te-manual-campos-tiempo">
       <div style="flex:1;">
         <span class="form-label">Horas</span>
         <input type="number" id="te-manual-horas" class="form-input" min="0" value="0" autocomplete="off">
@@ -75,6 +104,19 @@ function abrirModalRegistroManual(items, onGuardar) {
         <span class="form-label">Minutos</span>
         <input type="number" id="te-manual-minutos" class="form-input" min="0" max="59" value="30" autocomplete="off">
       </div>
+    </div>
+
+    <div class="oculto" id="te-manual-toggle-hora-inicio-wrap">
+      <label class="checkbox">
+        <input type="checkbox" id="te-manual-toggle-hora-inicio">
+        <span class="box"></span>
+        <span>Agregar hora de inicio</span>
+      </label>
+    </div>
+
+    <div class="oculto" id="te-manual-campo-hora-inicio-opcional">
+      <span class="form-label">Hora de inicio</span>
+      <input type="time" id="te-manual-hora-inicio-opcional" class="form-input" value="${horaHoyStr}" autocomplete="off">
     </div>
 
     <div class="row-between" style="gap:10px;">
@@ -86,6 +128,46 @@ function abrirModalRegistroManual(items, onGuardar) {
   overlay.appendChild(caja);
   document.body.appendChild(overlay);
 
+  // ---- Selección de materia (única) ----
+  let materiaSeleccionadaId = items[0].mm.id;
+  const listaMateria = caja.querySelector("#te-manual-materia-lista");
+  listaMateria.querySelectorAll(".agenda-semestre-tarjeta").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      materiaSeleccionadaId = btn.dataset.materiaId;
+      listaMateria.querySelectorAll(".agenda-semestre-tarjeta").forEach((b) => b.classList.toggle("active", b === btn));
+    });
+  });
+
+  // ---- Pill switch Hora / Tiempo ----
+  let modo = "hora";
+  const switchModo = caja.querySelector("#te-manual-modo-switch");
+  const thumbModo = caja.querySelector("#te-manual-modo-thumb");
+  const camposHora = caja.querySelector("#te-manual-campos-hora");
+  const camposTiempo = caja.querySelector("#te-manual-campos-tiempo");
+  const toggleHoraInicioWrap = caja.querySelector("#te-manual-toggle-hora-inicio-wrap");
+  const campoHoraInicioOpcional = caja.querySelector("#te-manual-campo-hora-inicio-opcional");
+  const checkHoraInicioOpcional = caja.querySelector("#te-manual-toggle-hora-inicio");
+
+  function sincronizarModo() {
+    thumbModo.classList.toggle("pill-switch-thumb--derecha", modo === "tiempo");
+    switchModo.querySelectorAll(".pill-item").forEach((b) => b.classList.toggle("active", b.dataset.modo === modo));
+    camposHora.classList.toggle("oculto", modo !== "hora");
+    camposTiempo.classList.toggle("oculto", modo !== "tiempo");
+    // El toggle "Agregar hora de inicio" solo existe en modo Tiempo — en
+    // modo Hora, la hora de inicio ya se pide en su propio campo de arriba.
+    toggleHoraInicioWrap.classList.toggle("oculto", modo !== "tiempo");
+    campoHoraInicioOpcional.classList.toggle("oculto", !(modo === "tiempo" && checkHoraInicioOpcional.checked));
+  }
+
+  switchModo.querySelectorAll(".pill-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      modo = btn.dataset.modo;
+      sincronizarModo();
+    });
+  });
+  checkHoraInicioOpcional.addEventListener("change", sincronizarModo);
+  sincronizarModo();
+
   function cerrar() {
     overlay.remove();
   }
@@ -96,28 +178,55 @@ function abrirModalRegistroManual(items, onGuardar) {
   caja.querySelector("#te-manual-cancelar").addEventListener("click", cerrar);
 
   caja.querySelector("#te-manual-guardar").addEventListener("click", () => {
-    const materiaMatriculadaId = caja.querySelector("#te-manual-materia").value;
+    const materiaMatriculadaId = materiaSeleccionadaId;
     const fecha = caja.querySelector("#te-manual-fecha").value;
-    const hora = caja.querySelector("#te-manual-hora").value;
-    const h = Math.max(0, Number(caja.querySelector("#te-manual-horas").value) || 0);
-    const m = Math.max(0, Number(caja.querySelector("#te-manual-minutos").value) || 0);
-    const minutosTotales = h * 60 + m;
 
-    if (!fecha || !hora) {
-      mostrarToast("Completá la fecha y la hora de inicio");
-      return;
-    }
-    if (minutosTotales <= 0) {
-      mostrarToast("La duración tiene que ser mayor a 0");
+    if (!fecha) {
+      mostrarToast("Completá la fecha");
       return;
     }
 
-    const inicio = construirTimestampLocalReg(fecha, hora);
-    if (!Number.isFinite(inicio)) {
-      mostrarToast("La fecha u hora no es válida — revisala e intentá de nuevo");
-      return;
+    let inicio, fin, minutosTotales;
+
+    if (modo === "hora") {
+      // Modo "Hora": la duración se calcula sola a partir de inicio y fin.
+      const horaInicio = caja.querySelector("#te-manual-hora-inicio").value;
+      const horaFin = caja.querySelector("#te-manual-hora-fin").value;
+      if (!horaInicio || !horaFin) {
+        mostrarToast("Completá la hora de inicio y de fin");
+        return;
+      }
+      inicio = construirTimestampLocalReg(fecha, horaInicio);
+      fin = construirTimestampLocalReg(fecha, horaFin);
+      if (!Number.isFinite(inicio) || !Number.isFinite(fin)) {
+        mostrarToast("La fecha u hora no es válida — revisala e intentá de nuevo");
+        return;
+      }
+      if (fin <= inicio) {
+        mostrarToast("La hora de fin tiene que ser después de la de inicio");
+        return;
+      }
+      minutosTotales = Math.round((fin - inicio) / 60000);
+    } else {
+      // Modo "Tiempo": duración directa, sin calcular nada. La hora de
+      // inicio opcional es puramente informativa — nunca se usa para
+      // derivar una hora de fin ni afecta la duración cargada.
+      const h = Math.max(0, Number(caja.querySelector("#te-manual-horas").value) || 0);
+      const m = Math.max(0, Number(caja.querySelector("#te-manual-minutos").value) || 0);
+      minutosTotales = h * 60 + m;
+      if (minutosTotales <= 0) {
+        mostrarToast("La duración tiene que ser mayor a 0");
+        return;
+      }
+      const horaInicio = checkHoraInicioOpcional.checked ? caja.querySelector("#te-manual-hora-inicio-opcional").value : horaHoyStr;
+      inicio = construirTimestampLocalReg(fecha, horaInicio);
+      if (!Number.isFinite(inicio)) {
+        mostrarToast("La hora de inicio no es válida — revisala e intentá de nuevo");
+        return;
+      }
+      fin = inicio + minutosTotales * 60000;
     }
-    const fin = inicio + minutosTotales * 60000;
+
     const sesion = crearSesionEstudio({ materiaMatriculadaId, inicio, fin, origen: "manual" });
     estado.datos.sesiones_estudio.push(sesion);
     marcarCambioPendiente();
