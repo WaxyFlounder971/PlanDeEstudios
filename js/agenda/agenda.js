@@ -1219,6 +1219,8 @@ function construirControlSemanasAnterioresTodo() {
   }
   return wrap;
 }
+
+/**
  * Ronda de ajustes visuales #5 — punto D: mismo cálculo de "milisegundos a
  * días" que usa el resto del proyecto para diffs de fecha, pero
  * normalizando a medianoche local primero — `dia.fecha` e
