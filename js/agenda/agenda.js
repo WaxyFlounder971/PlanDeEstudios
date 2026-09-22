@@ -1428,14 +1428,20 @@ function renderizarAgenda() {
   if (vista === "lista") {
     renderizarAgendaInterno();
   } else {
-    // Calendario y Materia arman su propia navegación adentro de su propio
-    // contenedor (agenda-calendario.js / agenda-materia.js) — acá el bloque
-    // dinámico del header solo necesita el atajo "Hoy", compartido entre los
-    // 3 modos (ver irAHoyAgenda).
+    // Pedido: el encabezado de arriba (Semana N + rango + Hoy) debe verse
+    // IGUAL en las 3 pestañas — Calendario y Cronograma (vista "materia")
+    // arman su propia navegación adentro de su propio contenedor
+    // (agenda-calendario.js / agenda-materia.js), pero el bloque dinámico
+    // del header comparte el mismo componente que usa Lista en modo Todo:
+    // semana ACTUAL, sin flechas (cada vista navega la suya por su cuenta,
+    // más abajo).
     const subCont = document.getElementById("agenda-subheader-dinamico");
     if (subCont) {
       subCont.innerHTML = "";
-      subCont.appendChild(construirEnlaceHoyAgenda());
+      const semestreReferencia = obtenerSemestreActivoAgenda();
+      subCont.appendChild(
+        construirSubheaderSemanal(obtenerDiasSemanaAgenda(0), semestreReferencia, { navegable: false, offsetSemana: 0 })
+      );
     }
     if (vista === "calendario") renderizarCalendarioAgenda();
     else renderizarMateriaAgenda();
