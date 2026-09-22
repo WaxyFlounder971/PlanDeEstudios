@@ -988,10 +988,140 @@ async function detectarResultadoNuevo(competencia) {
   };
 }
 
+/* ===================== Animación de unión a competencia ===================== */
+
+/** Keyframes/estilos de los "chips" de apodos que aparecen uno por uno —
+ * aparte de asegurarEstilosCelebracion (que ya define .te-celebracion-caja/
+ * -emoji, reusados acá) porque son propios de esta pantalla, no de la de
+ * resultado. Mismo guard-por-id que el resto del archivo. */
+function asegurarEstilosUnion() {
+  if (document.getElementById("te-estilos-union")) return;
+  const estilo = document.createElement("style");
+  estilo.id = "te-estilos-union";
+  estilo.textContent = `
+    @keyframes te-union-chip-entrada {
+      0%   { opacity: 0; transform: scale(0.4) translateY(6px); }
+      70%  { opacity: 1; transform: scale(1.15) translateY(0); }
+      100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .te-union-chips {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      padding: 4px 0;
+    }
+    .te-union-chip {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1rem;
+      background: var(--fondo-sutil, rgba(255,255,255,0.08));
+      border: 1px solid var(--borde-sutil, rgba(255,255,255,0.16));
+      opacity: 0;
+      animation: te-union-chip-entrada 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28) both;
+    }
+    .te-union-chip-extra { font-size: 0.85rem; background: transparent; }
+    .te-union-chip-propio {
+      background: var(--accent-1, #6c5cf0);
+      border-color: transparent;
+      color: #fff;
+      box-shadow: 0 0 0 3px rgba(108, 92, 240, 0.25);
+    }
+  `;
+  document.head.appendChild(estilo);
+}
+
+/**
+ * Overlay corto para cuando alguien se une a una competencia que YA
+ * existía (2026-09-22, pedido "algo que motive"). Se dispara desde los 2
+ * puntos reales donde eso pasa en tiempo-estudio-competencias.js —
+ * `abrirModalUnirseCompetencia` (pegar link/código) y
+ * `abrirModalInvitacionRecibida` (deep link) — justo después del
+ * `POST /unirse` exitoso. A propósito NO se dispara al CREAR una
+ * competencia (`abrirModalCrearCompetencia`): ahí no hay ningún equipo
+ * al que sumarse todavía, sigue con su toast + copiar invitación de
+ * siempre.
+ *
+ * A propósito tampoco es la pantalla de `mostrarCelebracionResultado`:
+ * unirse no es ganar. Reusa el mismo cañón de confeti (misma familia
+ * visual) pero cortado antes (2.2 s) y con la tarjeta enfocada en el
+ * EQUIPO en vez del resultado: los apodos de quienes ya estaban aparecen
+ * primero, uno por uno, y el propio cierra la fila — "así queda el grupo
+ * con vos adentro".
+ *
+ * `datos`: { nombreCompetencia, apodoPropio, participantes }, con
+ * `participantes` la lista cruda que ya devuelve el Worker en
+ * GET /competencias/:id (`[{ apodo, ... }]`) — puede venir vacía o no
+ * traer nada, la pantalla igual funciona (solo se ve el chip propio).
+ */
+function mostrarAnimacionUnirseCompetencia(datos) {
+  asegurarEstilosCelebracion();
+  asegurarEstilosUnion();
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.style.cssText =
+    "position:fixed; inset:0; z-index:600; background:rgba(0,0,0,0.72); " +
+    "display:flex; align-items:center; justify-content:center; padding:16px; overflow:hidden;";
+
+  const confeti = lanzarConfeti(overlay, "victoria");
+  // Unirse es un empujón de energía, no el clímax de ganar — se corta
+  // antes que la duración completa del cañón para no competir con el
+  // resto de la tarjeta.
+  const corteConfeti = setTimeout(() => confeti.detener(), 2200);
+
+  const caja = document.createElement("div");
+  caja.className = "glass-card modal-card stack te-celebracion-caja te-union-caja";
+  caja.style.cssText =
+    "position:relative; max-width:380px; width:100%; gap:14px; text-align:center; padding:30px 22px;";
+  caja.addEventListener("click", (e) => e.stopPropagation());
+
+  const apodoPropio = (datos.apodoPropio || "Vos").trim();
+  const yaEstaban = (datos.participantes || []).filter((p) => (p.apodo || "").trim() !== apodoPropio);
+  const inicial = (texto) => (texto ? texto.trim().slice(0, 1).toUpperCase() : "?");
+
+  const chipsPrevios = yaEstaban
+    .slice(0, 6) // hasta 6 avatares; el resto se resume en un chip "+N"
+    .map((p, i) => `<span class="te-union-chip" style="animation-delay:${(0.12 * i).toFixed(2)}s;" title="${p.apodo || ""}">${inicial(p.apodo)}</span>`)
+    .join("");
+  const cantidadVisible = Math.min(yaEstaban.length, 6);
+  const chipExtra =
+    yaEstaban.length > 6
+      ? `<span class="te-union-chip te-union-chip-extra" style="animation-delay:${(0.12 * cantidadVisible).toFixed(2)}s;">+${yaEstaban.length - 6}</span>`
+      : "";
+  const delayPropio = (0.12 * cantidadVisible + (yaEstaban.length > 6 ? 0.12 : 0) + 0.2).toFixed(2);
+  const chipPropio = `<span class="te-union-chip te-union-chip-propio" style="animation-delay:${delayPropio}s;" title="${apodoPropio}">${inicial(apodoPropio)}</span>`;
+
+  caja.innerHTML = `
+    <div class="te-celebracion-emoji" style="animation-delay:${(Number(delayPropio) + 0.4).toFixed(2)}s;">🤝</div>
+    <h2 style="margin:0; font-size:1.3rem;">¡Sumado al equipo!</h2>
+    <p class="muted" style="margin:0; font-size:0.9rem;">${datos.nombreCompetencia || "Competencia"}</p>
+    <div class="te-union-chips">${chipsPrevios}${chipExtra}${chipPropio}</div>
+    <p class="muted" style="margin:0; font-size:0.82rem;">A ver quién estudia más esta semana 👀</p>
+    <button type="button" class="btn btn-primary" id="te-union-cerrar" style="width:100%; margin-top:4px;">Vamos</button>
+  `;
+
+  overlay.appendChild(caja);
+  document.body.appendChild(overlay);
+
+  function cerrar() {
+    clearTimeout(corteConfeti);
+    confeti.detener();
+    overlay.remove();
+  }
+  caja.querySelector("#te-union-cerrar").addEventListener("click", cerrar);
+}
+
 export {
   mostrarCelebracionResultado,
   construirAvisosResultados,
   construirBotonesSimulacion,
   simularResultado,
   marcarResultadoVisto,
+  mostrarAnimacionUnirseCompetencia,
 };
