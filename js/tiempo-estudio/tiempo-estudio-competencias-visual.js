@@ -451,7 +451,7 @@ function semanaHTML(podio, idx, abierta, yoId) {
         )
         .join("")}</div>`
     : "";
-  const nota = podio.completa === false ? `<p class="cp-nota">Semana anterior a los podios completos: solo se guardó quién ganó.</p>` : "";
+  const nota = podio.completa === false ? `<p class="cp-nota">Datos incompletos: vuelve más tarde y tal vez ya estén cargados.</p>` : "";
   return `<div class="cp-wk ${abierta ? "cp-open" : ""} ${idx === 0 ? "cp-hero" : ""}" data-semana="${esc(podio.semana_cerrada_en)}">
     <button type="button" class="cp-wk-head" aria-expanded="${abierta}">
       <span class="cp-w-who">${avatarHTML(ganador, 30)}<span class="cp-name">${esc(ganador.apodo)}</span></span>

@@ -1178,7 +1178,8 @@ function construirVistaCompetencias(cont, refrescar) {
   cont.appendChild(lista);
 
   // Parte 5 — sección "Registro de competencias" (no dibuja nada si no hay
-  // ninguna finalizada).
+  // ninguna finalizada; el botón "Recuperar historial" que tuvo brevemente
+  // se sacó, no aportaba nada al caso de uso real).
   construirRegistroCompetencias(cont, refrescar);
 }
 

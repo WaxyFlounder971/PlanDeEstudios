@@ -492,86 +492,22 @@ async function abrirModalSacarUsuario(competencia, refrescar) {
 let registroAbierto = false;
 
 /**
- * "Recuperar historial" (2026-09-22) — repuebla `competencias_unidas` con
- * lo que el Worker sabe que sos vos (`GET /identificadores/:correo/
- * competencias`, nuevo endpoint de solo lectura) y que el puntero LOCAL
- * perdió en el camino: una tumba vieja de antes del fix de
- * `podarTumbasSuperadasPorAltas` (2026-09-19), un dispositivo nuevo, o
- * cualquier otro bug de sync — el contenido de una competencia siempre
- * vivió 100% en D1, lo único que puede perderse es el puntero.
- *
- * A propósito es SOLO ADITIVO: agrega lo que el Worker devuelve y que no
- * está ya en la lista local por `id`; nunca pisa ni borra nada existente.
- * No hay forma de distinguir acá "salí a propósito de esta" vs. "se perdió
- * el puntero" (el Worker no guarda eso), así que en teoría una competencia
- * de la que alguien salió hace mucho y cuya tumba ya se purgó podría
- * reaparecer - aceptable para el caso de uso real (grupo de amigos, salir
- * de nuevo es un botón), y muchísimo mejor que perder el historial de
- * verdad. Las recuperadas entran sin `token_creador` (no lo tiene este
- * endpoint) y por lo tanto sin permisos de creador acá — mismo criterio de
- * siempre: el Worker es la autoridad real, esconder botones es comodidad.
- */
-async function recuperarCompetenciasPerdidas(refrescar) {
-  const correo = estado.datos.perfil && estado.datos.perfil.correo;
-  if (!correo) {
-    mostrarToast("No se encontró tu correo. Iniciá sesión de nuevo e intentá otra vez.");
-    return;
-  }
-
-  let datos;
-  try {
-    const respuesta = await fetchConTimeout(
-      `${URL_WORKER_OAUTH}/identificadores/${encodeURIComponent(correo)}/competencias`
-    );
-    if (!respuesta.ok) throw new Error(`El Worker respondió ${respuesta.status}`);
-    datos = await respuesta.json();
-  } catch (e) {
-    console.error("[competencias] Falló recuperar historial:", e);
-    mostrarToast("No se pudo buscar el historial. Revisá tu conexión e intentá de nuevo.");
-    return;
-  }
-
-  const remotas = datos.competencias || [];
-  const idsLocales = new Set((estado.datos.competencias_unidas || []).map((c) => c.id));
-  const nuevas = remotas.filter((c) => !idsLocales.has(c.id));
-
-  if (nuevas.length === 0) {
-    mostrarToast("No había ninguna competencia perdida para recuperar.");
-    return;
-  }
-
-  nuevas.forEach((c) => {
-    estado.datos.competencias_unidas.push(
-      sellarTimestamp({
-        id: c.id,
-        nombre: c.nombre,
-        apodo: c.apodo,
-        participante_id: c.participante_id,
-        estado: c.estado,
-        es_creador: false,
-        unido_en: Date.now(),
-      })
-    );
-  });
-  marcarCambioPendiente();
-
-  mostrarToast(`Se recuperaron ${nuevas.length} competencia${nuevas.length === 1 ? "" : "s"}.`);
-  if (refrescar) refrescar();
-}
-
-/**
  * Sección "Registro de competencias": una tarjeta chica por cada
  * competencia `finalizada`, con SOLO su nombre. Al tocar una se abre el
  * modal con todas sus semanas y el resumen general
  * (`abrirModalCompetenciaFinalizada`).
  *
- * 2026-09-22: la sección ahora se dibuja SIEMPRE (antes: nada si no había
- * ninguna finalizada localmente). Es la única entrada a "Recuperar
- * historial" - si dependiera de ya tener algo localmente, quien perdió el
- * puntero nunca vería el botón para recuperarlo.
+ * 2026-09-22 (revertido el mismo día, a pedido explícito): había pasado a
+ * dibujarse SIEMPRE para dar entrada a "Recuperar historial" — se sacó
+ * ese botón (no tenía nada que ver con lo que la persona esperaba ver acá,
+ * y con una sola competencia activa y ninguna finalizada era puro ruido:
+ * un "0", "No hay ninguna localmente." y un botón sin sentido para el
+ * caso de uso real). Vuelve al comportamiento original: nada que dibujar
+ * si no hay ninguna finalizada.
  */
 function construirRegistroCompetencias(cont, refrescar) {
   const finalizadas = (estado.datos.competencias_unidas || []).filter((c) => c.estado === "finalizada");
+  if (finalizadas.length === 0) return;
 
   asegurarEstilosGestion();
 
@@ -594,43 +530,18 @@ function construirRegistroCompetencias(cont, refrescar) {
   seccion.appendChild(cabecera);
 
   if (registroAbierto) {
-    if (finalizadas.length > 0) {
-      const lista = document.createElement("div");
-      lista.className = "stack";
-      lista.style.gap = "6px";
-      finalizadas.forEach((competencia) => {
-        const tarjeta = document.createElement("button");
-        tarjeta.type = "button";
-        tarjeta.className = "te-registro-item";
-        tarjeta.innerHTML = `<span style="flex:1; text-align:left;">${competencia.nombre}</span><span class="muted">›</span>`;
-        tarjeta.addEventListener("click", () => abrirModalCompetenciaFinalizada(competencia, refrescar));
-        lista.appendChild(tarjeta);
-      });
-      seccion.appendChild(lista);
-    } else {
-      const vacio = document.createElement("p");
-      vacio.className = "muted";
-      vacio.style.cssText = "margin:0; font-size:0.85rem;";
-      vacio.textContent = "No hay ninguna localmente.";
-      seccion.appendChild(vacio);
-    }
-
-    const btnRecuperar = document.createElement("button");
-    btnRecuperar.type = "button";
-    btnRecuperar.className = "te-registro-item";
-    btnRecuperar.style.cssText = "justify-content:center; font-size:0.82rem; opacity:0.85;";
-    btnRecuperar.innerHTML = `<span>🔄 Recuperar historial</span>`;
-    btnRecuperar.addEventListener("click", () => {
-      btnRecuperar.disabled = true;
-      btnRecuperar.innerHTML = `<span>Buscando…</span>`;
-      recuperarCompetenciasPerdidas(refrescar).finally(() => {
-        if (btnRecuperar.isConnected) {
-          btnRecuperar.disabled = false;
-          btnRecuperar.innerHTML = `<span>🔄 Recuperar historial</span>`;
-        }
-      });
+    const lista = document.createElement("div");
+    lista.className = "stack";
+    lista.style.gap = "6px";
+    finalizadas.forEach((competencia) => {
+      const tarjeta = document.createElement("button");
+      tarjeta.type = "button";
+      tarjeta.className = "te-registro-item";
+      tarjeta.innerHTML = `<span style="flex:1; text-align:left;">${competencia.nombre}</span><span class="muted">›</span>`;
+      tarjeta.addEventListener("click", () => abrirModalCompetenciaFinalizada(competencia, refrescar));
+      lista.appendChild(tarjeta);
     });
-    seccion.appendChild(btnRecuperar);
+    seccion.appendChild(lista);
   }
 
   cont.appendChild(seccion);
