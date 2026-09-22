@@ -620,6 +620,7 @@ export {
   guardarVistaPreferida,
   avatarHTML,
   activarFallbackAvatares,
+  asegurarEstilosCompetenciasVisual,
   pintarTarjeta,
   abrirHoja,
   pintarHistorial,

@@ -83,6 +83,7 @@ import {
   pintarHistorial,
   avatarHTML,
   activarFallbackAvatares,
+  asegurarEstilosCompetenciasVisual,
   COLOR_PALETA_DEFAULT,
 } from "./tiempo-estudio-competencias-visual.js";
 
@@ -886,6 +887,7 @@ async function revisarLinkInvitacionAlCargar(refrescar) {
  * acá no hace falta pegar nada, solo poner el apodo).
  */
 async function abrirModalInvitacionRecibida(id, refrescar) {
+  asegurarEstilosCompetenciasVisual(); // por si esta invitación se abre antes de que pintarTarjeta() haya corrido
   const { overlay, caja, cerrar } = construirCajaModal();
   caja.innerHTML = `
     <div>

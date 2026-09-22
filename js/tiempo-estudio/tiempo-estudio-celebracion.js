@@ -45,7 +45,13 @@ import { estado } from "../core/storage.js";
 import { URL_WORKER_OAUTH } from "../core/auth.js";
 // 2026-09-21 — Rediseño: el aviso con posición/podio lo dibuja el módulo visual
 // (sin ciclos: ese módulo no importa nada de este proyecto).
-import { construirAvisoPodio, resumenPosicion, avatarHTML, activarFallbackAvatares } from "./tiempo-estudio-competencias-visual.js";
+import {
+  construirAvisoPodio,
+  resumenPosicion,
+  avatarHTML,
+  activarFallbackAvatares,
+  asegurarEstilosCompetenciasVisual,
+} from "./tiempo-estudio-competencias-visual.js";
 
 const TIMEOUT_MS = 12000;
 const CLAVE_RESULTADO_VISTO = "te_comp_resultado_visto_"; // + id de competencia
@@ -1064,6 +1070,7 @@ function asegurarEstilosUnion() {
 function mostrarAnimacionUnirseCompetencia(datos) {
   asegurarEstilosCelebracion();
   asegurarEstilosUnion();
+  asegurarEstilosCompetenciasVisual(); // los avatares (avatarHTML) necesitan el CSS de .cp-av — mismo motivo que en el modal de invitación
 
   // SIN confeti a propósito (2026-09-22): el cañón de `lanzarConfeti` es
   // el clímax de GANAR la semana (mostrarCelebracionResultado) — unirse a
