@@ -83,6 +83,7 @@ import {
   pintarHistorial,
   avatarHTML,
   activarFallbackAvatares,
+  COLOR_PALETA_DEFAULT,
 } from "./tiempo-estudio-competencias-visual.js";
 
 const TIMEOUT_MS = 12000;
@@ -139,11 +140,6 @@ function obtenerMiFotoUrl() {
   return normalizarFotoUrl(p.foto_url || p.foto || p.picture || p.imagen || "");
 }
 
-// Violeta de MARCA de la app (mismo valor que --cp-accent en el módulo
-// visual): es lo que sale de `--accent-1` cuando la persona sigue con la
-// paleta default y JAMÁS tocó nada — no es "su" color, es el de nadie.
-const COLOR_PALETA_DEFAULT = "#6c5cf0";
-
 /**
  * Color de acento de la paleta activa (2.ª ronda, 2026-09-21): es el color
  * "favorito" de esta persona en el podio y en las barras. Sale de la
@@ -154,6 +150,9 @@ const COLOR_PALETA_DEFAULT = "#6c5cf0";
  * propio" (null) — ver la nota grande de cabecera del archivo. Así el
  * podio de alguien que nunca eligió paleta se sigue viendo con el dorado/
  * plata/bronce de siempre, en vez de un violeta que en realidad no eligió.
+ * (COLOR_PALETA_DEFAULT vive en tiempo-estudio-competencias-visual.js
+ * desde el 2026-09-22 — es el mismo filtro que usa tonosDeColor() al
+ * PINTAR el color de cualquier participante, no solo al mandar el propio.)
  */
 function obtenerMiColor() {
   const color = leerColorAcentoActual();

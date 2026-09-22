@@ -103,15 +103,26 @@ function leerColorAcentoActual() {
   }
 }
 
+// Violeta de MARCA de la app (2026-09-22): es lo que sale de --accent-1
+// cuando alguien sigue con la paleta default y JAMÁS tocó nada — no es
+// "su" color, es el de nadie. Se filtra ACÁ (en tonosDeColor, el único
+// punto por el que pasa cualquier color antes de pintarse: pedestal, aro
+// y avatar de CUALQUIER participante), no solo al mandar el propio color
+// — así se ve bien para todos apenas se despliega esto, sin depender de
+// que cada persona vuelva a abrir la app para "autolimpiar" su registro
+// viejo en D1 (ver misma constante en tiempo-estudio-competencias.js).
+const COLOR_PALETA_DEFAULT = "#6c5cf0";
+
 /**
  * A partir del color de una persona saca los tonos del pedestal/aro/barra.
  * Se acotan saturación y luminosidad para que SIEMPRE se lea (un color muy
  * claro u oscuro no deja el número del pedestal invisible). null si no hay
- * color válido → se usan los dorado/plata/bronce de siempre.
+ * color válido, o si es el violeta de marca (nadie lo "eligió") → se usan
+ * los dorado/plata/bronce de siempre.
  */
 function tonosDeColor(color) {
   const hex = normalizarColorHex(color);
-  if (!hex) return null;
+  if (!hex || hex === COLOR_PALETA_DEFAULT) return null;
   const r = parseInt(hex.slice(1, 3), 16) / 255;
   const g = parseInt(hex.slice(3, 5), 16) / 255;
   const b = parseInt(hex.slice(5, 7), 16) / 255;
@@ -614,4 +625,5 @@ export {
   pintarHistorial,
   resumenPosicion,
   construirAvisoPodio,
+  COLOR_PALETA_DEFAULT,
 };
