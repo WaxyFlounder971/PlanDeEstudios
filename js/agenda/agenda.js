@@ -1121,8 +1121,15 @@ function cerrarModalSemestresAgenda() {
  * mostrarse cada uno suelto — al presionarlo se expanden todos juntos.
  * Recibe los bloques YA construidos (no fechas) porque el llamador ya tuvo
  * que decidir cuáles cuentan como "pasados" para el resto del layout.
+ *
+ * 2026-09-21: el modo "Todo" usa también este componente. Ahí la lista de
+ * `bloquesPasados` puede traer, además de los bloques de día, los
+ * encabezados "Semana N" de las semanas anteriores (por eso `cantidad`
+ * aparte: el conteo del texto son solo los DÍAS), y `encabezadoCuerpo` es un
+ * nodo opcional que va arriba del cuerpo (el control "Ver una semana más").
+ * Con `cantidad` 0 el texto es "Días anteriores" (sin número).
  */
-function construirColapsoDiasPasados(bloquesPasados) {
+function construirColapsoDiasPasados(bloquesPasados, { cantidad = bloquesPasados.length, encabezadoCuerpo = null } = {}) {
   const cont = document.createElement("div");
   cont.className = "stack";
   cont.style.gap = "10px";
@@ -1130,15 +1137,17 @@ function construirColapsoDiasPasados(bloquesPasados) {
   const boton = document.createElement("button");
   boton.type = "button";
   boton.className = "agenda-colapso-pasados";
-  const plural = bloquesPasados.length === 1 ? "día anterior" : "días anteriores";
+  const textoBoton =
+    cantidad === 0 ? "Días anteriores" : `${cantidad} ${cantidad === 1 ? "día anterior" : "días anteriores"}`;
   boton.innerHTML = `
     <span class="agenda-colapso-pasados-flecha">‹</span>
-    <span>${bloquesPasados.length} ${plural}</span>
+    <span>${textoBoton}</span>
   `;
 
   const cuerpo = document.createElement("div");
   cuerpo.className = "stack" + (estado.agendaDiasPasadosExpandido ? "" : " oculto");
   cuerpo.style.gap = "14px";
+  if (encabezadoCuerpo) cuerpo.appendChild(encabezadoCuerpo);
   bloquesPasados.forEach((b) => cuerpo.appendChild(b));
 
   const flecha = boton.querySelector(".agenda-colapso-pasados-flecha");
@@ -1157,51 +1166,59 @@ function construirColapsoDiasPasados(bloquesPasados) {
 
 /**
  * Punto 10 (modo "Todo"): acá no hay "semana navegada" que retroceder/
- * avanzar, es un scroll libre continuo desde hoy.
+ * avanzar, es un scroll libre continuo.
  *
- * Ronda de ajustes visuales — punto 4: en vez de informar el rango con
- * texto fijo ("Desde hoy hasta el..."), hay un control "Ver días
- * anteriores" que suma semanas hacia atrás (estado.agendaTodoDiasAtras,
- * consumido por obtenerRangoDiasAgendaTodo — ver agenda-utils.js) cada vez
- * que se toca.
+ * 2026-09-21 — rediseño para que se parezca al modo Semanal:
+ *   - El encabezado de arriba es el MISMO de Semanal ("Semana N" de la semana
+ *     ACTUAL + rango de fechas + "Hoy"), sin flechas (ver
+ *     construirSubheaderSemanal, opción `navegable: false`).
+ *   - Los días anteriores a hoy ya NO se piden con un enlace suelto "Ver días
+ *     anteriores" arriba: van agrupados en la MISMA pestaña colapsable
+ *     "N días anteriores" que usa Semanal (construirColapsoDiasPasados), ahora
+ *     debajo de los badges del filtro. Adentro están los días de esta semana
+ *     anteriores a hoy y, si la persona quiere ir más atrás, el control
+ *     "Ver una semana más" (construirControlSemanasAnterioresTodo) suma 7 días
+ *     por toque (estado.agendaTodoDiasAtras, consumido por
+ *     obtenerRangoDiasAgendaTodo en agenda-utils.js).
  *
- * Ronda de ajustes visuales #2 — punto E (fix): antes solo se podía
- * expandir, sin forma de volver atrás — agrega un segundo botón "Ocultar
- * días anteriores" (solo visible una vez que ya se expandió algo) que
- * colapsa de nuevo a 0. Ambos botones comparten ajustarDiasAtrasTodo(), que
- * hace el mismo ajuste de scroll en los 2 sentidos (agrandar arriba corre
- * todo hacia abajo, achicar arriba lo corre hacia arriba — misma resta,
- * signo distinto).
+ * Como lo que se agrega queda DENTRO de la pestaña (debajo de su botón), ya no
+ * hace falta la compensación de scroll que hacía el viejo
+ * ajustarDiasAtrasTodo: nada se inserta por encima de lo que la persona está
+ * mirando.
  */
-function ajustarDiasAtrasTodo(nuevoValor) {
-  const cont = document.getElementById("agenda-lista-dias");
-  const scrollEl = document.scrollingElement || document.documentElement;
-  const scrollAntes = scrollEl.scrollTop;
-  const altoAntes = cont?.scrollHeight || 0;
+function construirControlSemanasAnterioresTodo() {
+  const wrap = document.createElement("div");
+  wrap.className = "row";
+  wrap.style.cssText = "justify-content:center; flex-wrap:wrap; gap:6px 16px;";
 
-  estado.agendaTodoDiasAtras = Math.max(0, nuevoValor);
-  renderizarAgendaInterno();
-
-  // El contenido nuevo/quitado se agrega o saca por ARRIBA de lo que ya
-  // estaba, así que sin esto el navegador mantiene el mismo scrollTop en
-  // píxeles y todo lo que la persona tenía a la vista se corre — se
-  // compensa sumando exactamente lo que cambió el contenedor por encima
-  // (positivo al expandir, negativo al colapsar).
-  requestAnimationFrame(() => {
-    const altoDespues = cont?.scrollHeight || 0;
-    scrollEl.scrollTop = scrollAntes + (altoDespues - altoAntes);
+  const btnMas = document.createElement("button");
+  btnMas.type = "button";
+  btnMas.className = "btn-discreto";
+  btnMas.style.fontSize = "0.8rem";
+  btnMas.textContent = "‹ Ver una semana más";
+  btnMas.addEventListener("click", () => {
+    estado.agendaTodoDiasAtras += 7;
+    // Si la persona pidió más semanas es porque quiere verlas: la pestaña
+    // queda abierta tras el re-render.
+    estado.agendaDiasPasadosExpandido = true;
+    renderizarAgendaInterno();
   });
-}
+  wrap.appendChild(btnMas);
 
-/**
- * Ronda de ajustes visuales #4 — fix: antes se agregaba "Ver días
- * anteriores" SIEMPRE y "Ocultar días anteriores" se sumaba aparte cuando
- * ya había algo expandido, así que una vez expandido quedaban los DOS
- * botones a la vez. Ahora es un solo botón que cambia de texto/acción
- * según el estado — mismo patrón if/else que el resto del proyecto usa
- * para alternar entre 2 acciones mutuamente excluyentes.
- */
-/**
+  if (estado.agendaTodoDiasAtras > 0) {
+    const btnRestablecer = document.createElement("button");
+    btnRestablecer.type = "button";
+    btnRestablecer.className = "btn-discreto";
+    btnRestablecer.style.fontSize = "0.8rem";
+    btnRestablecer.textContent = "› Ocultar semanas anteriores";
+    btnRestablecer.addEventListener("click", () => {
+      estado.agendaTodoDiasAtras = 0;
+      renderizarAgendaInterno();
+    });
+    wrap.appendChild(btnRestablecer);
+  }
+  return wrap;
+}
  * Ronda de ajustes visuales #5 — punto D: mismo cálculo de "milisegundos a
  * días" que usa el resto del proyecto para diffs de fecha, pero
  * normalizando a medianoche local primero — `dia.fecha` e
@@ -1229,28 +1246,6 @@ function construirEncabezadoSemanaTodo(semestreActivo, offsetSemana) {
   encabezado.className = "agenda-todo-encabezado-semana";
   encabezado.textContent = numeroSemana ? `Semana ${numeroSemana}` : "Semana";
   return encabezado;
-}
-
-function construirSubheaderTodo() {
-  const wrap = document.createElement("div");
-  wrap.className = "row";
-  wrap.style.cssText = "justify-content:center; flex-wrap:wrap; gap:6px 16px;";
-
-  const boton = document.createElement("button");
-  boton.type = "button";
-  boton.className = "btn-discreto";
-  boton.style.fontSize = "0.8rem";
-
-  if (estado.agendaTodoDiasAtras > 0) {
-    boton.textContent = "› Ocultar días anteriores";
-    boton.addEventListener("click", () => ajustarDiasAtrasTodo(0));
-  } else {
-    boton.textContent = "‹ Ver días anteriores";
-    boton.addEventListener("click", () => ajustarDiasAtrasTodo(estado.agendaTodoDiasAtras + 7));
-  }
-  wrap.appendChild(boton);
-
-  return wrap;
 }
 
 function renderizarAgendaInterno() {
@@ -1291,24 +1286,20 @@ function renderizarAgendaInterno() {
   // en la práctica siempre) — rompía el render completo de Lista.
   const activosFiltro = obtenerEstadosFiltroActivos();
 
-  // Punto 10: en modo "Todo" el rango arranca siempre en HOY (nunca hay
-  // días previos a colapsar — ver obtenerRangoDiasAgendaTodo), así que el
-  // colapso de días pasados del punto 8 es exclusivo del modo "Semanal".
+  // Punto 10 (actualizado 2026-09-21): en modo "Todo" el rango arranca al
+  // inicio de la semana ACTUAL (ver obtenerRangoDiasAgendaTodo), así que los
+  // días anteriores a hoy también se agrupan en la pestaña "N días
+  // anteriores" del punto 8, igual que en Semanal.
   const dias = modoTodo
     ? obtenerRangoDiasAgendaTodo(semestreReferencia, estado.agendaTodoDiasAtras)
     : obtenerDiasSemanaAgenda(estado.agendaOffsetSemana);
 
   if (subCont) {
     if (modoTodo) {
-      // Mismo encabezado que Semanal (Semana N + rango + Hoy), fijo en la
-      // semana actual y sin flechas — la semana que se rotula es siempre la
-      // de HOY (offsetSemana: 0), no la primera del rango extendido que
-      // arma obtenerRangoDiasAgendaTodo. El toggle "Ver/Ocultar días
-      // anteriores" sigue viviendo aparte, debajo.
+      // Mismo encabezado que Semanal, fijo en la semana actual y sin flechas.
       subCont.appendChild(
         construirSubheaderSemanal(obtenerDiasSemanaAgenda(0), semestreReferencia, { navegable: false, offsetSemana: 0 })
       );
-      subCont.appendChild(construirSubheaderTodo());
     } else {
       subCont.appendChild(construirSubheaderSemanal(dias, semestreReferencia));
     }
@@ -1329,39 +1320,61 @@ function renderizarAgendaInterno() {
 
   if (modoTodo) {
     // Ronda de ajustes visuales #5 — punto D: el modo "Todo" es una lista
-    // continua (no paginada semana a semana como el modo Semanal), pero
-    // seguía sin ningún corte visual entre semanas, lo que hacía difícil
-    // ubicarse en un rango largo. Se inserta un encabezado "Semana N" cada
-    // vez que el offset de semana (contra HOY, mismo criterio que usa el
-    // modo Semanal vía obtenerFechaInicioSemanaAgenda) cambia respecto al
-    // día anterior — como `dias` ya viene ordenado cronológicamente, esto
-    // agrupa automáticamente sin tener que re-calcular nada por bloques.
-    const frag = document.createDocumentFragment();
+    // continua (no paginada semana a semana como el modo Semanal), y se
+    // inserta un encabezado "Semana N" cada vez que el offset de semana
+    // (contra HOY, mismo criterio que usa el modo Semanal vía
+    // obtenerFechaInicioSemanaAgenda) cambia respecto al día anterior — como
+    // `dias` ya viene ordenado cronológicamente, esto agrupa automáticamente.
+    //
+    // 2026-09-21: `dias` ahora arranca al inicio de la semana actual, y los
+    // días anteriores a hoy se apartan en la pestaña colapsable "N días
+    // anteriores" (mismo componente que Semanal). La semana ACTUAL no lleva
+    // encabezado en la lista (ya está rotulada arriba, en el subheader); las
+    // semanas anteriores llevan el suyo DENTRO de la pestaña y las futuras
+    // en la lista, como siempre.
     const inicioSemanaHoy = obtenerFechaInicioSemanaAgenda(0);
+    const hoyISOTodo = formatearFechaISO(new Date());
+    const nodosPasados = [];
+    const nodosDesdeHoy = [];
+    let cantidadDiasPasados = 0;
+    let huboContenidoDesdeHoy = false;
     let offsetSemanaAnterior = null;
-    let huboContenido = false;
 
     dias.forEach((dia) => {
       const bloque = construirBloqueDia(dia, semestresSeleccionados, mostrarDiasVacios, activosFiltro);
       if (!bloque) return;
-      huboContenido = true;
+
+      const esPasado = formatearFechaISO(dia.fecha) < hoyISOTodo;
+      const destino = esPasado ? nodosPasados : nodosDesdeHoy;
+      if (esPasado) cantidadDiasPasados += 1;
+      else huboContenidoDesdeHoy = true;
 
       const offsetSemana = calcularOffsetSemana(dia.fecha, inicioSemanaHoy);
       if (offsetSemana !== offsetSemanaAnterior) {
-        frag.appendChild(construirEncabezadoSemanaTodo(semestreReferencia, offsetSemana));
+        if (offsetSemana !== 0) destino.push(construirEncabezadoSemanaTodo(semestreReferencia, offsetSemana));
         offsetSemanaAnterior = offsetSemana;
       }
-      frag.appendChild(bloque);
+      destino.push(bloque);
     });
 
-    if (!huboContenido) {
+    // La pestaña se muestra SIEMPRE en modo Todo (aunque esta semana no tenga
+    // días anteriores con contenido): adentro vive el control para ir más
+    // atrás, y sin la pestaña esa opción desaparecería.
+    cont.appendChild(
+      construirColapsoDiasPasados(nodosPasados, {
+        cantidad: cantidadDiasPasados,
+        encabezadoCuerpo: construirControlSemanasAnterioresTodo(),
+      })
+    );
+
+    if (!huboContenidoDesdeHoy) {
       const vacio = document.createElement("p");
       vacio.className = "muted";
       vacio.style.textAlign = "center";
       vacio.textContent = "Nada pendiente en este rango.";
       cont.appendChild(vacio);
     } else {
-      cont.appendChild(frag);
+      nodosDesdeHoy.forEach((n) => cont.appendChild(n));
     }
     return;
   }
