@@ -37,6 +37,19 @@
      - Color: el color de acento de la paleta de cada usuario (`--accent-1`)
        pinta su pedestal, su aro y su barra en el podio de todos.
 
+   2026-09-22 — FIX pedido por el dueño del proyecto: `obtenerMiColor()`
+   mandaba SIEMPRE el `--accent-1` computado, incluso cuando esa persona
+   nunca tocó nada y sigue con la paleta default de la app (que es
+   justamente el mismo violeta `#6c5cf0` que ya usan como "color de marca"
+   .cp-accent/.cp-me-halo en todo este módulo). Resultado visible: alguien
+   que jamás eligió un color de competencia terminaba con el podio pintado
+   de violeta igual, como si SÍ tuviera uno propio — indistinguible, a
+   simple vista, de alguien que realmente configuró ese tono. Ahora se
+   trata la paleta default como "sin color propio" (null, mismo camino que
+   ya usaba `tonosDeColor()` para dorado/plata/bronce de siempre) y el
+   violeta pasa a verse SOLO cuando alguien de verdad eligió esa paleta a
+   propósito entre las otras 12 o la personalizada.
+
    Sigue siendo Parte 1 (crear/unirse/ver lista/copiar invitación/salir) +
    ahora también Parte 2 (marcador en vivo vía GET, salón de la fama vía
    GET /historial, y el envío de horas vía POST /actualizar-horas después
@@ -124,14 +137,25 @@ function obtenerMiFotoUrl() {
   return normalizarFotoUrl(p.foto_url || p.foto || p.picture || p.imagen || "");
 }
 
+// Violeta de MARCA de la app (mismo valor que --cp-accent en el módulo
+// visual): es lo que sale de `--accent-1` cuando la persona sigue con la
+// paleta default y JAMÁS tocó nada — no es "su" color, es el de nadie.
+const COLOR_PALETA_DEFAULT = "#6c5cf0";
+
 /**
  * Color de acento de la paleta activa (2.ª ronda, 2026-09-21): es el color
  * "favorito" de esta persona en el podio y en las barras. Sale de la
  * variable `--accent-1` de la app (ver leerColorAcentoActual), así que
  * acompaña a las 13 paletas, a la personalizada y al modo claro/oscuro.
+ *
+ * FIX 2026-09-22: la paleta DEFAULT de la app se trata como "sin color
+ * propio" (null) — ver la nota grande de cabecera del archivo. Así el
+ * podio de alguien que nunca eligió paleta se sigue viendo con el dorado/
+ * plata/bronce de siempre, en vez de un violeta que en realidad no eligió.
  */
 function obtenerMiColor() {
-  return leerColorAcentoActual();
+  const color = leerColorAcentoActual();
+  return color === COLOR_PALETA_DEFAULT ? null : color;
 }
 
 // Combinaciones "competencia|foto|color" que ya se mandaron en esta sesión:

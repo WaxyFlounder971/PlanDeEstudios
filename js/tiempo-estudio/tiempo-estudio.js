@@ -1031,6 +1031,14 @@ function irAMateriaDelTimerActivo() {
  * automáticamente termina mostrando nada más que las materias que
  * corresponde estudiar hoy, sin que agenda.js necesite saber nada de
  * `dias_estudio`.
+ *
+ * 2026-09-22 (tarjeta con barra de progreso en Agenda): cada item ahora
+ * trae `metaMinutosHoy` (antes `minutosHoy`, renombrado para no
+ * confundirlo con lo ya hecho), `hechoMinutosHoy` (lo YA estudiado hoy de
+ * esa materia) y `color` (mismo criterio que Horario/el indicador de
+ * timer) — así Agenda puede armar una barra real de progreso sin volver
+ * a calcular nada por su cuenta ni importar `calcularMetaDiariaMateria`
+ * directamente.
  */
 function obtenerEstudioParaHoy() {
   const hoy = new Date();
@@ -1047,7 +1055,18 @@ function obtenerEstudioParaHoy() {
       return {
         materiaMatriculadaId: item.mm.id,
         nombreMateriaCorto: item.nombreMateriaCorto,
-        minutosHoy: Math.round(calculo.metaDiariaPorDia[idxHoy]),
+        // Meta de reparto real de hoy (como antes, solo que renombrada para
+        // no confundirla con lo ya hecho) + lo YA estudiado hoy de esta
+        // materia (mismo `calculo`, mismo índice — `trabajadoPorDia` ya
+        // contaba TODAS las sesiones del día, incluida la que el timer
+        // tenga en curso ahora mismo) + el color efectivo de la materia
+        // (mismo criterio que Horario/el indicador: propio > categoría >
+        // default). 2026-09-22: antes solo se devolvía la meta pelada —
+        // sin lo ya hecho, Agenda no tenía con qué armar una barra de
+        // progreso real, solo mostrar el número de meta.
+        metaMinutosHoy: Math.round(calculo.metaDiariaPorDia[idxHoy]),
+        hechoMinutosHoy: Math.round(calculo.trabajadoPorDia[idxHoy]),
+        color: obtenerColorMateria(item.mm, item.materia, item.plan),
       };
     })
     .filter((x) => x !== null);
