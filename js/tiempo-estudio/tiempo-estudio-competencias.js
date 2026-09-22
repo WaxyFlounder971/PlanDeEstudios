@@ -67,7 +67,7 @@ import { calcularMinutosTotalesEnRango, obtenerRangoSemana } from "./tiempo-estu
 // con este archivo (gestion importa helpers de acá); seguros porque nada
 // se usa en el nivel superior del archivo, solo adentro de funciones.
 import { abrirModalGestionCompetencia, construirRegistroCompetencias } from "./tiempo-estudio-competencias-gestion.js";
-import { construirAvisosResultados, construirBotonesSimulacion } from "./tiempo-estudio-celebracion.js";
+import { construirAvisosResultados, construirBotonesSimulacion, mostrarAnimacionUnirseCompetencia } from "./tiempo-estudio-celebracion.js";
 // 2026-09-21 — Rediseño (prototipo-competencias-v2): todo lo que se dibuja
 // (avatares con foto, podio, tarjeta, hoja modal, historial) vive en el
 // módulo visual, que no importa nada de acá (sin ciclos). Acá queda la
@@ -802,10 +802,18 @@ function abrirModalUnirseCompetencia(refrescar) {
       const { participante_id } = await respuestaUnirse.json();
 
       // El nombre real no vino en la respuesta de /unirse — se pide aparte.
+      // Ese mismo GET ya trae "participantes" (mismo shape que usa
+      // abrirModalInvitacionRecibida más abajo), así que se reusa acá para
+      // la animación de unión en vez de pedirlo de nuevo.
       let nombre = "(competencia)";
+      let participantes = [];
       try {
         const respuestaGet = await fetchConTimeout(`${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(idCompetencia)}`);
-        if (respuestaGet.ok) nombre = (await respuestaGet.json()).nombre;
+        if (respuestaGet.ok) {
+          const datosCompetencia = await respuestaGet.json();
+          nombre = datosCompetencia.nombre;
+          participantes = datosCompetencia.participantes || [];
+        }
       } catch (e) {
         console.warn("[competencias] Te uniste bien pero no se pudo traer el nombre todavía:", e);
       }
@@ -816,8 +824,8 @@ function abrirModalUnirseCompetencia(refrescar) {
       marcarCambioPendiente();
 
       cerrar();
-      mostrarToast(`✓ Te uniste a "${nombre}"`);
       if (refrescar) refrescar();
+      mostrarAnimacionUnirseCompetencia({ nombreCompetencia: nombre, apodoPropio: apodo, participantes });
       sincronizarHorasCompetencias(); // por si ya venía estudiando esta semana antes de unirse
     } catch (e) {
       console.error("[competencias] Falló unirse a competencia:", e);
@@ -970,8 +978,8 @@ async function abrirModalInvitacionRecibida(id, refrescar) {
       marcarCambioPendiente();
 
       cerrar();
-      mostrarToast(`✓ Te uniste a "${datos.nombre}"`);
       if (refrescar) refrescar();
+      mostrarAnimacionUnirseCompetencia({ nombreCompetencia: datos.nombre, apodoPropio: apodo, participantes: datos.participantes });
       sincronizarHorasCompetencias(); // por si ya venía estudiando esta semana antes de unirse
     } catch (e) {
       console.error("[competencias] Falló unirse desde la invitación:", e);
@@ -1066,13 +1074,22 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar) {
 
     // Foto y color propios: si el Worker tiene otros (o ninguno), se sube lo
     // actual de este dispositivo y mientras tanto se muestra directamente.
+    //
+    // FIX 2026-09-22 (parte 2, la que faltaba): el color SÍ tiene que poder
+    // sincronizarse a `null` — a diferencia de la foto (que nunca se borra
+    // con un valor vacío), alguien que YA tenía el violeta de marca guardado
+    // en D1 de ANTES de que `obtenerMiColor()` empezara a devolver `null`
+    // para la paleta default necesita que ese `null` viaje para limpiarlo.
+    // Con el guard viejo (`if (miColor && ...)`) esa limpieza nunca se
+    // mandaba — el violeta quedaba pegado para siempre en el podio de esa
+    // persona aunque el fix ya estuviera activo del lado local.
     const miFoto = obtenerMiFotoUrl();
     const miColor = obtenerMiColor();
     const yo = participantes.find((p) => p.id === competencia.participante_id);
     if (yo) {
       const cambios = {};
       if (miFoto && yo.foto_url !== miFoto) cambios.foto_url = miFoto;
-      if (miColor && yo.color !== miColor) cambios.color = miColor;
+      if (yo.color !== miColor) cambios.color = miColor;
       if (Object.keys(cambios).length > 0) {
         Object.assign(yo, cambios);
         sincronizarPerfilPropio(competencia, cambios);
