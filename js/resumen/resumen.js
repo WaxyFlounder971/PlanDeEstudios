@@ -41,6 +41,7 @@ import {
   tareaVenceHoy,
 } from "../agenda/agenda-utils.js";
 import { fechaLocalDesdeISO } from "../horario/horario.js";
+import { obtenerEstudioParaHoy, formatearHorasMin } from "../tiempo-estudio/tiempo-estudio.js";
 
 // Ventanas de tiempo de cada sección (ver prompt de diseño): exámenes hasta
 // 2 semanas adelante, próximo evento hasta 7 días adelante.
@@ -277,6 +278,58 @@ function construirTarjetaPerdidas(cantidad) {
   return tarjeta;
 }
 
+/** Tarjeta compacta "Estudio de hoy" — total ya estudiado hoy vs. meta de
+ *  hoy, sumando TODAS las materias que corresponde estudiar hoy (mismo
+ *  criterio y misma fuente que la sección homónima de Agenda Lista,
+ *  `obtenerEstudioParaHoy()` de tiempo-estudio.js — ya filtra por
+ *  `dias_estudio` y ya reparte la meta real del día, no un `/7` parejo).
+ *  Acá se agrega en un solo total en vez de una fila por materia (Resumen
+ *  es de un vistazo, no el lugar para desglosar por materia — para eso
+ *  está la propia sección de Tiempo de Estudio / Agenda). Misma paleta de
+ *  color que ya usa `construirTarjetaSemana` en este archivo
+ *  (`var(--color-primario, #7c9eff)`, fondo `rgba(255,255,255,0.14)`),
+ *  para no mezclar 2 lenguajes visuales de barra de progreso en el mismo
+ *  módulo. Si la meta de hoy ya está en 0 (se cumplió con lo estudiado en
+ *  días anteriores de la semana), se muestra la barra llena y "Meta
+ *  cumplida ✅" en vez de una cifra "x de 0". */
+function construirTarjetaEstudioHoy(totalHechoMin, totalMetaMin) {
+  const cumplida = totalMetaMin <= 0;
+  const porcentaje = cumplida
+    ? 100
+    : Math.max(0, Math.min(100, Math.round((totalHechoMin / totalMetaMin) * 100)));
+
+  const tarjeta = document.createElement("section");
+  tarjeta.className = "glass-card stack resumen-estudio-hoy-tarjeta";
+  tarjeta.style.cssText = "gap:8px; padding:14px 18px;";
+
+  const fila = document.createElement("div");
+  fila.style.cssText = "display:flex; align-items:baseline; justify-content:space-between; gap:12px;";
+  const titulo = document.createElement("h2");
+  titulo.className = "texto-encabezado-seccion";
+  titulo.style.margin = "0";
+  titulo.textContent = "Estudio de hoy";
+  const cifra = document.createElement("span");
+  cifra.className = "muted";
+  cifra.style.cssText = "font-size:0.85rem; white-space:nowrap;";
+  cifra.textContent = cumplida
+    ? `${formatearHorasMin(totalHechoMin)} · Meta cumplida ✅`
+    : `${formatearHorasMin(totalHechoMin)} de ${formatearHorasMin(totalMetaMin)}`;
+  fila.appendChild(titulo);
+  fila.appendChild(cifra);
+
+  const barraCont = document.createElement("div");
+  barraCont.title = `${porcentaje}% de la meta de hoy`;
+  barraCont.style.cssText = "height:8px; border-radius:999px; background:rgba(255,255,255,0.14); overflow:hidden;";
+  const barraFill = document.createElement("div");
+  barraFill.style.cssText =
+    "height:100%; width:" + porcentaje + "%; border-radius:999px; background:var(--color-primario, #7c9eff); transition:width 0.25s ease;";
+  barraCont.appendChild(barraFill);
+
+  tarjeta.appendChild(fila);
+  tarjeta.appendChild(barraCont);
+  return tarjeta;
+}
+
 function renderizarResumen() {
   const cont = document.getElementById("seccion-resumen");
   if (!cont || !estado.datos) return;
@@ -318,6 +371,18 @@ function renderizarResumen() {
   if (seccionMaterias) {
     cont.appendChild(construirBloqueSeccion("Clases de hoy", seccionMaterias));
     huboContenido = true;
+  }
+
+  // 2.5. Estudio de hoy — mismo criterio y fuente que la sección homónima
+  // de Agenda Lista (dias_estudio + meta diaria real ya resueltos ahí, ver
+  // construirTarjetaEstudioHoy más arriba). No cuenta para huboContenido:
+  // es un vistazo informativo, no una obligación pendiente — mismo criterio
+  // que la tarjeta de Semana más arriba, que tampoco cuenta.
+  const estudioHoy = obtenerEstudioParaHoy();
+  if (estudioHoy.length > 0) {
+    const totalHechoMin = estudioHoy.reduce((acc, item) => acc + item.hechoMinutosHoy, 0);
+    const totalMetaMin = estudioHoy.reduce((acc, item) => acc + item.metaMinutosHoy, 0);
+    cont.appendChild(construirTarjetaEstudioHoy(totalHechoMin, totalMetaMin));
   }
 
   const eventos = obtenerEventosDeSemestres(semestresSeleccionados);
