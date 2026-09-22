@@ -75,6 +75,7 @@ import { construirAvisosResultados, construirBotonesSimulacion, mostrarAnimacion
 import {
   esc,
   normalizarFotoUrl,
+  normalizarColorHex,
   leerColorAcentoActual,
   leerVistaPreferida,
   guardarVistaPreferida,
@@ -1094,6 +1095,24 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar) {
       color: p.color || null,
       horas: p.horas_semana_actual || 0,
     }));
+
+    // ===== DEBUG TEMPORAL (2026-09-22) — BORRAR después de mirar la consola =====
+    // Muestra el color CRUDO de cada participante tal cual llega del Worker,
+    // y si tonosDeColor() lo reconoce como "sin color propio" o no. Abrí la
+    // consola (F12), recargá con Ctrl+Shift+R y buscá la fila de Mochi.
+    console.log(
+      `[DEBUG color] "${competencia.nombre}":`,
+      participantes.map((p) => {
+        const normalizado = normalizarColorHex(p.color);
+        return {
+          apodo: p.apodo,
+          color_crudo: JSON.stringify(p.color),
+          color_normalizado: normalizado,
+          se_va_a_pintar_como_default: normalizado === null || normalizado === COLOR_PALETA_DEFAULT,
+        };
+      })
+    );
+    // ===== FIN DEBUG TEMPORAL =====
 
     // Foto y color propios: si el Worker tiene otros (o ninguno), se sube lo
     // actual de este dispositivo y mientras tanto se muestra directamente.
