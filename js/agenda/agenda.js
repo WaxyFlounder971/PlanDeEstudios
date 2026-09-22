@@ -823,15 +823,9 @@ function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios, 
   `;
   bloque.appendChild(header);
 
-  // Las clases ya se resolvieron arriba (seccionMaterias, ver el FIX de
-  // "Clase" solo) — respetan AMBOS controles: el ajuste persistente de
-  // Ajustes → Agenda (agendaFiltroMostrarMaterias) Y el badge de la sesión.
-  if (seccionMaterias) bloque.appendChild(seccionMaterias);
-
-  // Entrega 5: "Estudio para hoy" — solo en la tarjeta de HOY (no tiene
-  // sentido mostrar "estudio para hoy" en la tarjeta de otro día) y solo
-  // con el switch de Ajustes → Tiempo de Estudio activado. Va entre
-  // Materias y Tareas/Exámenes, mismo orden en que se pidió.
+  // Pedido: "Estudio para hoy" va primero, antes que Materias y el resto —
+  // solo en la tarjeta de HOY (no tiene sentido mostrarlo en la de otro
+  // día) y solo con el switch de Ajustes → Tiempo de Estudio activado.
   if (hoy && estado.datos.configuracion.mostrar_tiempo_estudio_en_agenda === true) {
     const estudioHoy = obtenerEstudioParaHoy();
     if (estudioHoy.length > 0) {
@@ -848,6 +842,11 @@ function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios, 
       bloque.appendChild(seccionEstudio);
     }
   }
+
+  // Las clases ya se resolvieron arriba (seccionMaterias, ver el FIX de
+  // "Clase" solo) — respetan AMBOS controles: el ajuste persistente de
+  // Ajustes → Agenda (agendaFiltroMostrarMaterias) Y el badge de la sesión.
+  if (seccionMaterias) bloque.appendChild(seccionMaterias);
 
   // "Sin pendientes." solo tiene sentido si el filtro deja ver algún tipo de
   // evento: con "Clase" como único badge activo (2026-09-21) la persona ocultó
