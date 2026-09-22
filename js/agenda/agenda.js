@@ -931,44 +931,54 @@ function construirEnlaceHoyAgenda() {
  * a rodear "Semana N" (no el rango), el rango de fechas queda como texto
  * informativo debajo, y "Hoy" cierra el bloque — mismo layout que pidió el
  * spec.
+ *
+ * 2026-09-21: el modo "Todo" reutiliza este mismo encabezado (pedido: que se
+ * parezca al de Semanal) con `navegable: false` — muestra la semana ACTUAL
+ * ("Semana N" + rango + "Hoy") sin flechas ‹ ›, porque "Todo" es una lista
+ * continua, no paginada semana a semana. `offsetSemana` permite fijar cuál
+ * semana se rotula (Todo pasa 0); por defecto sigue a la que navega Semanal.
  */
-function construirSubheaderSemanal(dias, semestreActivo) {
+function construirSubheaderSemanal(dias, semestreActivo, { navegable = true, offsetSemana = estado.agendaOffsetSemana } = {}) {
   const frag = document.createDocumentFragment();
 
   const filaSemana = document.createElement("div");
   filaSemana.className = "row";
   filaSemana.style.cssText = "align-items:center; justify-content:center; gap:6px;";
 
-  const btnAnterior = document.createElement("button");
-  btnAnterior.type = "button";
-  btnAnterior.className = "btn-icono-fantasma";
-  btnAnterior.style.fontSize = "1.3rem";
-  btnAnterior.textContent = "‹";
-  btnAnterior.addEventListener("click", () => {
-    estado.agendaOffsetSemana -= 1;
-    renderizarAgenda();
-  });
-
   const numeroSemana = semestreActivo
-    ? calcularNumeroSemanaParaFecha(semestreActivo, obtenerFechaInicioSemanaAgenda(estado.agendaOffsetSemana))
+    ? calcularNumeroSemanaParaFecha(semestreActivo, obtenerFechaInicioSemanaAgenda(offsetSemana))
     : null;
   const etiquetaSemana = document.createElement("span");
   etiquetaSemana.className = "texto-encabezado-seccion";
   etiquetaSemana.textContent = numeroSemana ? `Semana ${numeroSemana}` : "Semana";
 
-  const btnSiguiente = document.createElement("button");
-  btnSiguiente.type = "button";
-  btnSiguiente.className = "btn-icono-fantasma";
-  btnSiguiente.style.fontSize = "1.3rem";
-  btnSiguiente.textContent = "›";
-  btnSiguiente.addEventListener("click", () => {
-    estado.agendaOffsetSemana += 1;
-    renderizarAgenda();
-  });
+  if (navegable) {
+    const btnAnterior = document.createElement("button");
+    btnAnterior.type = "button";
+    btnAnterior.className = "btn-icono-fantasma";
+    btnAnterior.style.fontSize = "1.3rem";
+    btnAnterior.textContent = "‹";
+    btnAnterior.addEventListener("click", () => {
+      estado.agendaOffsetSemana -= 1;
+      renderizarAgenda();
+    });
 
-  filaSemana.appendChild(btnAnterior);
-  filaSemana.appendChild(etiquetaSemana);
-  filaSemana.appendChild(btnSiguiente);
+    const btnSiguiente = document.createElement("button");
+    btnSiguiente.type = "button";
+    btnSiguiente.className = "btn-icono-fantasma";
+    btnSiguiente.style.fontSize = "1.3rem";
+    btnSiguiente.textContent = "›";
+    btnSiguiente.addEventListener("click", () => {
+      estado.agendaOffsetSemana += 1;
+      renderizarAgenda();
+    });
+
+    filaSemana.appendChild(btnAnterior);
+    filaSemana.appendChild(etiquetaSemana);
+    filaSemana.appendChild(btnSiguiente);
+  } else {
+    filaSemana.appendChild(etiquetaSemana);
+  }
 
   // Ronda de ajustes visuales #3: rango de fechas y "Hoy" ahora comparten
   // una sola línea (antes eran 2 líneas sueltas) para que el bloque
@@ -1290,8 +1300,15 @@ function renderizarAgendaInterno() {
 
   if (subCont) {
     if (modoTodo) {
+      // Mismo encabezado que Semanal (Semana N + rango + Hoy), fijo en la
+      // semana actual y sin flechas — la semana que se rotula es siempre la
+      // de HOY (offsetSemana: 0), no la primera del rango extendido que
+      // arma obtenerRangoDiasAgendaTodo. El toggle "Ver/Ocultar días
+      // anteriores" sigue viviendo aparte, debajo.
+      subCont.appendChild(
+        construirSubheaderSemanal(obtenerDiasSemanaAgenda(0), semestreReferencia, { navegable: false, offsetSemana: 0 })
+      );
       subCont.appendChild(construirSubheaderTodo());
-      subCont.appendChild(construirEnlaceHoyAgenda());
     } else {
       subCont.appendChild(construirSubheaderSemanal(dias, semestreReferencia));
     }
