@@ -45,7 +45,7 @@ import { estado } from "../core/storage.js";
 import { URL_WORKER_OAUTH } from "../core/auth.js";
 // 2026-09-21 — Rediseño: el aviso con posición/podio lo dibuja el módulo visual
 // (sin ciclos: ese módulo no importa nada de este proyecto).
-import { construirAvisoPodio, resumenPosicion } from "./tiempo-estudio-competencias-visual.js";
+import { construirAvisoPodio, resumenPosicion, avatarHTML, activarFallbackAvatares } from "./tiempo-estudio-competencias-visual.js";
 
 const TIMEOUT_MS = 12000;
 const CLAVE_RESULTADO_VISTO = "te_comp_resultado_visto_"; // + id de competencia
@@ -1020,17 +1020,19 @@ function asegurarEstilosUnion() {
       justify-content: center;
       font-weight: 700;
       font-size: 1rem;
-      background: var(--fondo-sutil, rgba(255,255,255,0.08));
-      border: 1px solid var(--borde-sutil, rgba(255,255,255,0.16));
       opacity: 0;
       animation: te-union-chip-entrada 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28) both;
     }
+    /* Chips con avatar real (avatarHTML): el círculo/color/foto ya los pone
+       .cp-av — acá solo se cubre el caso sin foto (el emoji "+N" resumen). */
+    .te-union-chip:not(.te-union-chip-extra) {
+      background: var(--fondo-sutil, rgba(255,255,255,0.08));
+      border: 1px solid var(--borde-sutil, rgba(255,255,255,0.16));
+    }
     .te-union-chip-extra { font-size: 0.85rem; background: transparent; }
     .te-union-chip-propio {
-      background: var(--accent-1, #6c5cf0);
       border-color: transparent;
-      color: #fff;
-      box-shadow: 0 0 0 3px rgba(108, 92, 240, 0.25);
+      box-shadow: 0 0 0 3px var(--accent-1, #6c5cf0);
     }
   `;
   document.head.appendChild(estilo);
@@ -1063,17 +1065,20 @@ function mostrarAnimacionUnirseCompetencia(datos) {
   asegurarEstilosCelebracion();
   asegurarEstilosUnion();
 
+  // SIN confeti a propósito (2026-09-22): el cañón de `lanzarConfeti` es
+  // el clímax de GANAR la semana (mostrarCelebracionResultado) — unirse a
+  // un equipo no es un resultado, es solo el arranque. Reusarlo acá era
+  // además la causa del "se quedó pausado": ese canvas corre con un guion
+  // de tiempos (T_ENTRADA/T_AGITE/T_DISPARO/T_RETIRADA…) pensado para
+  // durar toda la pantalla de resultado, y acá se lo cortaba a mitad de
+  // guion con un setTimeout — si el tab perdía foco justo en ese corte
+  // (el navegador pausa rAF en segundo plano), el canvas quedaba con el
+  // último cuadro dibujado y sin seguir animando al volver.
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.style.cssText =
     "position:fixed; inset:0; z-index:600; background:rgba(0,0,0,0.72); " +
-    "display:flex; align-items:center; justify-content:center; padding:16px; overflow:hidden;";
-
-  const confeti = lanzarConfeti(overlay, "victoria");
-  // Unirse es un empujón de energía, no el clímax de ganar — se corta
-  // antes que la duración completa del cañón para no competir con el
-  // resto de la tarjeta.
-  const corteConfeti = setTimeout(() => confeti.detener(), 2200);
+    "display:flex; align-items:center; justify-content:center; padding:16px;";
 
   const caja = document.createElement("div");
   caja.className = "glass-card modal-card stack te-celebracion-caja te-union-caja";
@@ -1083,11 +1088,13 @@ function mostrarAnimacionUnirseCompetencia(datos) {
 
   const apodoPropio = (datos.apodoPropio || "Vos").trim();
   const yaEstaban = (datos.participantes || []).filter((p) => (p.apodo || "").trim() !== apodoPropio);
-  const inicial = (texto) => (texto ? texto.trim().slice(0, 1).toUpperCase() : "?");
 
   const chipsPrevios = yaEstaban
     .slice(0, 6) // hasta 6 avatares; el resto se resume en un chip "+N"
-    .map((p, i) => `<span class="te-union-chip" style="animation-delay:${(0.12 * i).toFixed(2)}s;" title="${p.apodo || ""}">${inicial(p.apodo)}</span>`)
+    .map(
+      (p, i) =>
+        `<span class="te-union-chip" style="animation-delay:${(0.12 * i).toFixed(2)}s;" title="${p.apodo || ""}">${avatarHTML(p, 40)}</span>`
+    )
     .join("");
   const cantidadVisible = Math.min(yaEstaban.length, 6);
   const chipExtra =
@@ -1095,7 +1102,8 @@ function mostrarAnimacionUnirseCompetencia(datos) {
       ? `<span class="te-union-chip te-union-chip-extra" style="animation-delay:${(0.12 * cantidadVisible).toFixed(2)}s;">+${yaEstaban.length - 6}</span>`
       : "";
   const delayPropio = (0.12 * cantidadVisible + (yaEstaban.length > 6 ? 0.12 : 0) + 0.2).toFixed(2);
-  const chipPropio = `<span class="te-union-chip te-union-chip-propio" style="animation-delay:${delayPropio}s;" title="${apodoPropio}">${inicial(apodoPropio)}</span>`;
+  const yo = { apodo: apodoPropio, foto_url: datos.miFoto, color: datos.miColor };
+  const chipPropio = `<span class="te-union-chip te-union-chip-propio" style="animation-delay:${delayPropio}s;" title="${apodoPropio}">${avatarHTML(yo, 40)}</span>`;
 
   caja.innerHTML = `
     <div class="te-celebracion-emoji" style="animation-delay:${(Number(delayPropio) + 0.4).toFixed(2)}s;">🤝</div>
@@ -1105,13 +1113,12 @@ function mostrarAnimacionUnirseCompetencia(datos) {
     <p class="muted" style="margin:0; font-size:0.82rem;">A ver quién estudia más esta semana 👀</p>
     <button type="button" class="btn btn-primary" id="te-union-cerrar" style="width:100%; margin-top:4px;">Vamos</button>
   `;
+  activarFallbackAvatares(caja);
 
   overlay.appendChild(caja);
   document.body.appendChild(overlay);
 
   function cerrar() {
-    clearTimeout(corteConfeti);
-    confeti.detener();
     overlay.remove();
   }
   caja.querySelector("#te-union-cerrar").addEventListener("click", cerrar);

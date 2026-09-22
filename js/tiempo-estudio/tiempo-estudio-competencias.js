@@ -81,6 +81,8 @@ import {
   pintarTarjeta,
   abrirHoja,
   pintarHistorial,
+  avatarHTML,
+  activarFallbackAvatares,
 } from "./tiempo-estudio-competencias-visual.js";
 
 const TIMEOUT_MS = 12000;
@@ -825,7 +827,13 @@ function abrirModalUnirseCompetencia(refrescar) {
 
       cerrar();
       if (refrescar) refrescar();
-      mostrarAnimacionUnirseCompetencia({ nombreCompetencia: nombre, apodoPropio: apodo, participantes });
+      mostrarAnimacionUnirseCompetencia({
+        nombreCompetencia: nombre,
+        apodoPropio: apodo,
+        miFoto: obtenerMiFotoUrl(),
+        miColor: obtenerMiColor(),
+        participantes,
+      });
       sincronizarHorasCompetencias(); // por si ya venía estudiando esta semana antes de unirse
     } catch (e) {
       console.error("[competencias] Falló unirse a competencia:", e);
@@ -918,7 +926,14 @@ async function abrirModalInvitacionRecibida(id, refrescar) {
     ? participantes
         .map((p, i) => {
           const medalla = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
-          return `<div class="row-between" style="padding:3px 0;"><span>${medalla} ${esc(p.apodo)}</span><span class="muted" style="font-size:0.85rem;">${formatearHoras(p.horas_semana_actual)}</span></div>`;
+          return `<div class="row-between" style="padding:4px 0; align-items:center; gap:8px;">
+            <span style="display:flex; align-items:center; gap:8px; min-width:0;">
+              <span class="muted" style="font-size:0.8rem; width:16px; text-align:center; flex-shrink:0;">${medalla}</span>
+              ${avatarHTML({ apodo: p.apodo, foto_url: p.foto_url, color: p.color }, 26)}
+              <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(p.apodo)}</span>
+            </span>
+            <span class="muted" style="font-size:0.85rem; flex-shrink:0;">${formatearHoras(p.horas_semana_actual)}</span>
+          </div>`;
         })
         .join("")
     : `<p class="muted" style="margin:0; font-size:0.82rem;">Todavía nadie tiene horas esta semana.</p>`;
@@ -941,6 +956,7 @@ async function abrirModalInvitacionRecibida(id, refrescar) {
       <button type="button" class="btn btn-primary" id="comp-invitacion-unirme" style="flex:1;">Unirme</button>
     </div>
   `;
+  activarFallbackAvatares(caja);
   caja.querySelector("#comp-invitacion-cancelar").addEventListener("click", cerrar);
 
   const btnUnirme = caja.querySelector("#comp-invitacion-unirme");
@@ -979,7 +995,13 @@ async function abrirModalInvitacionRecibida(id, refrescar) {
 
       cerrar();
       if (refrescar) refrescar();
-      mostrarAnimacionUnirseCompetencia({ nombreCompetencia: datos.nombre, apodoPropio: apodo, participantes: datos.participantes });
+      mostrarAnimacionUnirseCompetencia({
+        nombreCompetencia: datos.nombre,
+        apodoPropio: apodo,
+        miFoto: obtenerMiFotoUrl(),
+        miColor: obtenerMiColor(),
+        participantes: datos.participantes,
+      });
       sincronizarHorasCompetencias(); // por si ya venía estudiando esta semana antes de unirse
     } catch (e) {
       console.error("[competencias] Falló unirse desde la invitación:", e);
