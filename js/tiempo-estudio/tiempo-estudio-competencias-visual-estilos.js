@@ -19,15 +19,42 @@
    color pegada arriba. Sin color propio (.cp-tinted ausente) no cambia
    nada: se sigue usando oro/plata/bronce de siempre.
 
-   2026-09-22 (2) — FIX "el cuadro de vos siempre sale morado": el halo de
-   "esta posición sos vos" (.cp-me-halo, tanto la fila como el podio) tenía
-   el violeta de marca escrito DIRECTO en rgba() dentro de @keyframes
-   cp-halo y en el fondo de .cp-me-halo.cp-row, en vez de leer --cp-uc (el
-   color propio ya calculado por tonosDeColor() en el JS). Por eso, sin
-   importar el color real de cada persona (cian, verde, lo que sea), el
-   anillo/fondo de "sos vos" siempre se pintaba violeta encima. Ahora usa
-   var(--cp-uc, ...) con el violeta de siempre solo como fallback para
-   quien todavía no tiene color propio — mismo patrón que .cp-tinted.
+   2026-09-22 (2) — FIX "el cuadro de vos siempre sale morado" (participante):
+   el halo de "esta posición sos vos" (.cp-me-halo, tanto la fila como el
+   podio) tenía el violeta de marca escrito DIRECTO en rgba() dentro de
+   @keyframes cp-halo y en el fondo de .cp-me-halo.cp-row, en vez de leer
+   --cp-uc (el color propio ya calculado por tonosDeColor() en el JS). Por
+   eso, sin importar el color real de cada persona (cian, verde, lo que
+   sea), el anillo/fondo de "sos vos" siempre se pintaba violeta encima.
+   Ahora usa var(--cp-uc, ...) con el violeta de siempre solo como fallback
+   para quien todavía no tiene color propio — mismo patrón que .cp-tinted.
+
+   2026-09-22 (3) — FIX "el cuadro de TODA la competencia sale morado": el
+   reporte anterior (2) resolvía el color de cada PERSONA dentro de la
+   tarjeta, pero el bug real que se seguía viendo era otro: la tarjeta en
+   sí (fondo, aro detrás de los avatares, selector de vista, punto "sos
+   vos", chip de acento del modal, tarjeta de "Gestionar", botón "Copiar
+   link"...) tenía el violeta de marca (#6c5cf0/#a99cff y sus rgba)
+   escrito DIRECTO en un montón de reglas sueltas — nunca leía el color de
+   paleta que cada usuario tiene elegido en el resto de la app (variable
+   `--accent-1`/`--accent-2`, la misma que ya usa el botón "+Crear" o la
+   pestaña "Competencias"). Por diseño original esto era a propósito ("no
+   pisa ningún token de la app", ver el comentario de arriba) — pero el
+   dueño del proyecto pidió lo contrario: que el CASCARÓN de la tarjeta
+   también seleccionara con la paleta de cada quien, igual que el resto de
+   la app. Fix: `--cp-accent`/`--cp-accent2` (las dos variables de las que
+   cuelga TODO el violeta de este archivo) ahora leen `var(--accent-1)`/
+   `var(--accent-2)` de la app, con el violeta de siempre solo de
+   fallback. Como `.cp-scope`/`.cp-overlay` viven dentro del DOM normal de
+   la app (no shadow DOM), heredan `--accent-1`/`--accent-2` de `<html
+   data-palette="...">` sin ningún cambio de JS — es un fix 100% CSS, en
+   un solo punto, igual que ya se hizo con tonosDeColor(). Cada rgba()
+   hardcodeada de acento en el resto del archivo se reemplazó por
+   color-mix() sobre estas dos variables, para que TODAS cambien juntas si
+   el violeta de marca cambia algún día. Los dorado/plata/bronce del
+   podio y el banner de resultado semanal NO se tocaron: esos son
+   jerarquía universal (1º/2º/3º lugar), no "tu color", y deben verse
+   igual para todos sin importar la paleta de quien mira.
    ========================================================================= */
 
 const CSS_COMPETENCIAS_VISUAL = `
@@ -36,7 +63,7 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-scope, .cp-overlay {
     color-scheme: dark;
     --cp-bg:#0a0920; --cp-card:#1a1846; --cp-line:rgba(255,255,255,.09);
-    --cp-text:#f3f2ff; --cp-muted:#9b98c8; --cp-accent:#6c5cf0; --cp-accent2:#a99cff;
+    --cp-text:#f3f2ff; --cp-muted:#9b98c8; --cp-accent:var(--accent-1,#6c5cf0); --cp-accent2:var(--accent-2,#a99cff);
     --cp-gold:#f5b942; --cp-silver:#c9cde6; --cp-bronze:#d18a58;
     color: var(--cp-text);
   }
@@ -55,8 +82,10 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-opt-emoji { font-size: 17px; line-height: 1; flex: none; }
   .cp-lk-fin { font-size: 12.5px; color: var(--cp-muted); }
 /* ---------- tarjeta de competencia ---------- */
-  .cp-comp{--cp-u:1.08;--cp-bgring:#221f5c;padding:16px 16px 18px;border-radius:22px;border:1px solid var(--cp-line);
-    background:linear-gradient(180deg,rgba(40,37,104,.7),rgba(24,22,66,.85))}
+  .cp-comp{--cp-u:1.08;--cp-bgring:color-mix(in srgb,var(--cp-accent) 32%,#0a0920 68%);
+    --cp-wash:color-mix(in srgb,var(--cp-accent) 30%,#1a1846 70%);
+    padding:16px 16px 18px;border-radius:22px;border:1px solid var(--cp-line);
+    background:linear-gradient(180deg,color-mix(in srgb,var(--cp-wash) 70%,transparent),color-mix(in srgb,var(--cp-wash) 85%,transparent))}
   .cp-c-head{position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding-bottom:18px;border-bottom:1px solid var(--cp-line);margin-bottom:18px}
   .cp-comp[data-layout="filas"] .cp-c-head{margin-bottom:28px}
   .cp-c-title{font-weight:800;font-size:15px;line-height:1.3;padding-top:2px}
@@ -70,7 +99,7 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-ico svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 
   /* selector de vista, montado sobre la línea divisoria */
-  .cp-vt{position:absolute;right:0;bottom:-15px;display:flex;gap:2px;padding:3px;border-radius:99px;background:#1f1c52;border:1px solid var(--cp-line)}
+  .cp-vt{position:absolute;right:0;bottom:-15px;display:flex;gap:2px;padding:3px;border-radius:99px;background:var(--cp-bgring);border:1px solid var(--cp-line)}
   .cp-vt button{width:30px;height:22px;border-radius:99px;border:0;background:none;color:var(--cp-muted);display:grid;place-items:center;transition:background .2s,color .2s}
   .cp-vt button[aria-pressed="true"]{background:var(--cp-accent);color:#fff}
   .cp-vt svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
@@ -89,14 +118,14 @@ const CSS_COMPETENCIAS_VISUAL = `
 
   /* avatares */
   .cp-avw{position:relative;flex:none}
-  .cp-av{display:block;width:var(--cp-s,40px);height:var(--cp-s,40px);border-radius:50%;overflow:hidden;position:relative;background:#2a2765}
+  .cp-av{display:block;width:var(--cp-s,40px);height:var(--cp-s,40px);border-radius:50%;overflow:hidden;position:relative;background:color-mix(in srgb,var(--cp-accent) 34%,#0a0920 66%)}
   .cp-av svg,.cp-av .cp-ini{width:100%;height:100%;display:grid;place-items:center}
   .cp-av .cp-ini{font-weight:800;font-size:calc(var(--cp-s,40px)*.42);color:#fff}
   .cp-crown{position:absolute;left:50%;top:-13px;width:24px;transform:translateX(-50%) rotate(-9deg);filter:drop-shadow(0 2px 4px rgba(245,185,66,.55));z-index:2}
   .cp-lead .cp-av{box-shadow:0 0 0 2px var(--cp-bgring),0 0 0 4px var(--cp-gold)}
   .cp-comp .cp-crown{animation:cp-bob 3s ease-in-out infinite}
-  .cp-dot{position:absolute;right:-2px;bottom:-2px;width:14px;height:14px;border-radius:50%;background:linear-gradient(135deg,#a99cff,#6c5cf0);border:2.5px solid var(--cp-bgring);z-index:2}
-  .cp-dot::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:2px solid rgba(169,156,255,.7);animation:cp-ping 2s ease-out infinite}
+  .cp-dot{position:absolute;right:-2px;bottom:-2px;width:14px;height:14px;border-radius:50%;background:linear-gradient(135deg,var(--cp-accent2),var(--cp-accent));border:2.5px solid var(--cp-bgring);z-index:2}
+  .cp-dot::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:2px solid color-mix(in srgb,var(--cp-accent2) 70%,transparent);animation:cp-ping 2s ease-out infinite}
 
   /* fila */
   .cp-row{display:grid;grid-template-columns:26px auto minmax(0,1fr) auto;align-items:center;gap:12px;
@@ -108,7 +137,7 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-lead .cp-name{font-size:16px;font-weight:800}
   .cp-sub{height:16px;display:flex;align-items:center}
   .cp-bar{width:100%;height:4px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}
-  .cp-bar i{display:block;height:100%;width:var(--cp-w);border-radius:inherit;background:linear-gradient(90deg,#5b4de0,#a99cff);transform-origin:left}
+  .cp-bar i{display:block;height:100%;width:var(--cp-w);border-radius:inherit;background:linear-gradient(90deg,var(--cp-accent),var(--cp-accent2));transform-origin:left}
   .cp-lead .cp-bar i{background:linear-gradient(90deg,#e8a524,#ffe28f)}
   .cp-time{font-weight:800;font-size:14px;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
   .cp-lead .cp-time{color:var(--cp-gold);font-size:15px}
@@ -119,15 +148,15 @@ const CSS_COMPETENCIAS_VISUAL = `
      alpha .32/.08/.55/.9 en vez de pintar el color propio a full opacidad);
      el violeta de marca queda solo de fallback para quien no tiene color
      propio guardado (ver FIX 2026-09-22 (2) arriba). */
-  .cp-me-halo.cp-row{background:linear-gradient(100deg,color-mix(in srgb,var(--cp-uc,#6c5cf0) 32%,transparent),color-mix(in srgb,var(--cp-uc,#6c5cf0) 8%,transparent));
-    box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cp-uc-l,#a99cff) 55%,transparent),0 10px 26px -12px color-mix(in srgb,var(--cp-uc,#6c5cf0) 90%,transparent)}
+  .cp-me-halo.cp-row{background:linear-gradient(100deg,color-mix(in srgb,var(--cp-uc,var(--cp-accent)) 32%,transparent),color-mix(in srgb,var(--cp-uc,var(--cp-accent)) 8%,transparent));
+    box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cp-uc-l,var(--cp-accent2)) 55%,transparent),0 10px 26px -12px color-mix(in srgb,var(--cp-uc,var(--cp-accent)) 90%,transparent)}
   .cp-me-halo .cp-av{animation:cp-halo 2.6s ease-in-out infinite}
   /* Tu posición · Punto */
-  .cp-me-punto.cp-row{background:linear-gradient(100deg,rgba(108,92,240,.2),rgba(255,255,255,.04) 70%)}
-  .cp-me-punto.cp-row::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 3px 3px 0;background:linear-gradient(180deg,#a99cff,#6c5cf0)}
+  .cp-me-punto.cp-row{background:linear-gradient(100deg,color-mix(in srgb,var(--cp-accent) 20%,transparent),rgba(255,255,255,.04) 70%)}
+  .cp-me-punto.cp-row::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 3px 3px 0;background:linear-gradient(180deg,var(--cp-accent2),var(--cp-accent))}
 
   /* ---------- podio (tarjeta y modal comparten diseño) ---------- */
-  .cp-wk{--cp-u:1;--cp-bgring:#171540}
+  .cp-wk{--cp-u:1;--cp-bgring:color-mix(in srgb,var(--cp-accent) 22%,#0a0920 78%)}
   .cp-wk.cp-hero{--cp-u:1.14}
   .cp-podium{position:relative;display:grid;grid-template-columns:1fr 1.2fr 1fr;align-items:end;gap:6px;padding:26px 4px 0}
   .cp-comp .cp-podium{padding-top:32px}
@@ -217,14 +246,14 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-overlay[hidden]{display:none}
   .cp-overlay.cp-show{opacity:1}
   .cp-sheet{width:min(100%,440px);max-height:min(88vh,760px);display:flex;flex-direction:column;border-radius:26px;overflow:hidden;
-    border:1px solid var(--cp-line);background:linear-gradient(180deg,#1d1b4e,#100e2e);
+    border:1px solid var(--cp-line);background:linear-gradient(180deg,color-mix(in srgb,var(--cp-accent) 24%,#1a1846 76%),color-mix(in srgb,var(--cp-accent) 12%,#0a0920 88%));
     box-shadow:0 30px 80px -20px rgba(0,0,0,.8);transform:translateY(14px) scale(.98);transition:transform .35s cubic-bezier(.2,.9,.3,1)}
   .cp-overlay.cp-show .cp-sheet{transform:none}
   .cp-sh-head{display:flex;align-items:center;gap:12px;padding:18px 18px 12px}
   .cp-tchip{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;flex:none;
     background:linear-gradient(145deg,rgba(245,185,66,.3),rgba(245,185,66,.08));box-shadow:inset 0 0 0 1px rgba(245,185,66,.35)}
   .cp-tchip svg{width:20px;height:20px;fill:none;stroke:var(--cp-gold);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-  .cp-tchip.cp-acc{background:linear-gradient(145deg,rgba(108,92,240,.4),rgba(108,92,240,.1));box-shadow:inset 0 0 0 1px rgba(169,156,255,.4)}
+  .cp-tchip.cp-acc{background:linear-gradient(145deg,color-mix(in srgb,var(--cp-accent) 40%,transparent),color-mix(in srgb,var(--cp-accent) 10%,transparent));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cp-accent2) 40%,transparent)}
   .cp-tchip.cp-acc svg{stroke:var(--cp-accent2)}
   .cp-sh-head h2{font-size:19px;font-weight:800;letter-spacing:-.01em}
   .cp-sh-head p{font-size:12.5px;color:var(--cp-muted);margin-top:2px}
@@ -266,22 +295,22 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-rrow .cp-time{font-size:13px;color:var(--cp-muted)}
 
   /* Gestionar */
-  .cp-lk{min-width:0;border-radius:18px;padding:14px;border:1px solid rgba(169,156,255,.35);background:linear-gradient(135deg,rgba(108,92,240,.25),rgba(108,92,240,.06))}
+  .cp-lk{min-width:0;border-radius:18px;padding:14px;border:1px solid color-mix(in srgb,var(--cp-accent2) 35%,transparent);background:linear-gradient(135deg,color-mix(in srgb,var(--cp-accent) 25%,transparent),color-mix(in srgb,var(--cp-accent) 6%,transparent))}
   .cp-lk-top{display:flex;gap:12px;align-items:center;min-width:0}
-  .cp-lk-ic{width:38px;height:38px;border-radius:12px;background:rgba(169,156,255,.18);display:grid;place-items:center;flex:none}
+  .cp-lk-ic{width:38px;height:38px;border-radius:12px;background:color-mix(in srgb,var(--cp-accent2) 18%,transparent);display:grid;place-items:center;flex:none}
   .cp-lk-ic svg{width:18px;height:18px;stroke:var(--cp-accent2);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
   .cp-lk-t{font-weight:800;font-size:14.5px}
   .cp-lk-s{font-size:12px;color:var(--cp-muted);margin-top:1px}
   .cp-lk-row{display:flex;align-items:center;gap:8px;margin-top:12px;padding:6px 6px 6px 12px;border-radius:12px;background:rgba(0,0,0,.28);min-width:0}
   .cp-lk-row code{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;color:#dcd8ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .cp-lk-copy{border:0;height:32px;padding:0 14px;border-radius:9px;font-weight:800;font-size:12.5px;background:linear-gradient(135deg,#5b4de0,#8f83ff);color:#fff;min-width:84px;flex:none}
+  .cp-lk-copy{border:0;height:32px;padding:0 14px;border-radius:9px;font-weight:800;font-size:12.5px;background:linear-gradient(135deg,var(--cp-accent),var(--cp-accent2));color:#fff;min-width:84px;flex:none}
   .cp-ghost-box{margin-top:6px;padding:16px;border-radius:16px;border:1px dashed rgba(255,255,255,.16);font-size:12.5px;color:var(--cp-muted);text-align:center;line-height:1.5}
 
   /* ---------- keyframes ---------- */
   /* cp-halo: anillo de "sos vos" en el avatar. Usa tu color propio
      (--cp-uc) cuando existe; --cp-accent2 (violeta de marca) queda solo de
      fallback para quien no tiene color propio (ver FIX 2026-09-22 (2)). */
-  @keyframes cp-halo{0%,100%{box-shadow:0 0 0 2px var(--cp-bgring),0 0 0 4px var(--cp-uc,var(--cp-accent2)),0 0 8px color-mix(in srgb,var(--cp-uc,#a99cff) 35%,transparent)}50%{box-shadow:0 0 0 2px var(--cp-bgring),0 0 0 4px var(--cp-uc,var(--cp-accent2)),0 0 22px color-mix(in srgb,var(--cp-uc,#a99cff) 85%,transparent)}}
+  @keyframes cp-halo{0%,100%{box-shadow:0 0 0 2px var(--cp-bgring),0 0 0 4px var(--cp-uc,var(--cp-accent2)),0 0 8px color-mix(in srgb,var(--cp-uc,var(--cp-accent2)) 35%,transparent)}50%{box-shadow:0 0 0 2px var(--cp-bgring),0 0 0 4px var(--cp-uc,var(--cp-accent2)),0 0 22px color-mix(in srgb,var(--cp-uc,var(--cp-accent2)) 85%,transparent)}}
   @keyframes cp-ping{0%{transform:scale(.6);opacity:.9}100%{transform:scale(1.5);opacity:0}}
   @keyframes cp-grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
   @keyframes cp-fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
