@@ -110,6 +110,39 @@ async function fetchConTimeout(url, opciones = {}) {
   }
 }
 
+// 2026-09-23 — easter egg pedido por el dueño: los "botones de simulación"
+// (construirBotonesSimulacion, tiempo-estudio-celebracion.js) dejaron de
+// mostrarse por defecto — quedan solo para quien sabe que existen. Mantener
+// presionado 5s el título "Competencias" los revela para esa carga de la
+// pestaña; no se persiste entre visitas (ni localStorage ni estado global
+// entre re-renders de construirVistaCompetencias) — cada vez que se vuelve
+// a entrar a la pestaña hay que repetir el long-press, a propósito.
+const DURACION_LONGPRESS_SIMULACION_MS = 5000;
+
+/**
+ * Cuelga un long-press de `duracionMs` sobre `elemento`. `alCompletar` se
+ * llama una sola vez si el press se sostiene el tiempo completo (se cancela
+ * con soltar, salir del elemento, o el cancel nativo de pointer events —
+ * cubre mouse y touch por igual, sin listeners separados).
+ */
+function activarLongPress(elemento, duracionMs, alCompletar) {
+  let temporizador = null;
+  const cancelar = () => {
+    if (temporizador === null) return;
+    clearTimeout(temporizador);
+    temporizador = null;
+  };
+  elemento.addEventListener("pointerdown", (e) => {
+    if (e.button !== undefined && e.button !== 0) return; // solo click primario / touch
+    cancelar();
+    temporizador = setTimeout(() => {
+      temporizador = null;
+      alCompletar();
+    }, duracionMs);
+  });
+  ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => elemento.addEventListener(ev, cancelar));
+}
+
 /**
  * El Worker espera `offset_minutos_utc` = local menos UTC en minutos
  * (offset > 0 = adelantado respecto a UTC — ver calcularUltimoLunesLocalUtcMs
@@ -1169,6 +1202,7 @@ function construirVistaCompetencias(cont, refrescar) {
   encabezado.className = "row-between";
   encabezado.style.cssText = "align-items:center; margin-bottom:12px;";
   encabezado.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Competencias</h3>`;
+  const tituloCompetencias = encabezado.querySelector("h3");
 
   const botones = document.createElement("div");
   botones.style.cssText = "display:flex; gap:8px;";
@@ -1191,10 +1225,22 @@ function construirVistaCompetencias(cont, refrescar) {
   // ÚNICO camino a la pantalla de celebración con sonido. Nada suena solo.
   construirAvisosResultados(cont, refrescar, abrirModalHistorial);
 
-  // BOTÓN TEMPORAL DE PRUEBA - remover cuando el diseño de celebración esté aprobado
-  // (punto 3.1) — encolan un aviso falso de victoria/derrota para poder
-  // ajustar el diseño sin esperar a un cierre de semana real.
-  construirBotonesSimulacion(cont, refrescar);
+  // 2026-09-23 — los botones de simulación (encolan un aviso falso de
+  // victoria/derrota para ajustar el diseño de celebración sin esperar a un
+  // cierre de semana real) ya NO se muestran por defecto: quedan ocultos
+  // detrás de un easter egg — mantener presionado 5s el título "Competencias"
+  // los revela para desarrollador. Sin ese gesto, este contenedor queda
+  // vacío y nadie los ve.
+  const contenedorSimulacion = document.createElement("div");
+  cont.appendChild(contenedorSimulacion);
+  let simulacionRevelada = false;
+  if (tituloCompetencias) {
+    activarLongPress(tituloCompetencias, DURACION_LONGPRESS_SIMULACION_MS, () => {
+      if (simulacionRevelada) return;
+      simulacionRevelada = true;
+      construirBotonesSimulacion(contenedorSimulacion, refrescar);
+    });
+  }
 
   const todas = estado.datos.competencias_unidas;
   // Parte 5: las finalizadas salen de la lista principal y se muestran en
