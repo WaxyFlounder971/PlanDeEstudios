@@ -30,6 +30,16 @@
    UNIDADES: las horas llegan como el Worker las guarda
    (`horas_semana_actual`, en HORAS con decimales); acá se muestran con
    `fmtHoras`, igual que `formatearHoras` de tiempo-estudio-competencias.js.
+
+   2026-09-26 — FIX "letra invisible en modo claro": se agregó
+   `ajustarContrasteCpScope()` (ver su comentario, junto a
+   `leerColorAcentoActual`) y se la llama al final de `pintarTarjeta`,
+   `construirAvisoPodio` y `abrirHoja` — los tres puntos que crean un
+   `.cp-scope`/`.cp-overlay` nuevo. Mide el color real de
+   `--bg-header-solido` y, si es claro, fija texto oscuro inline; si es
+   oscuro, no toca nada (quedan los valores claros de siempre). El detalle
+   completo del porqué está en la cabecera de
+   tiempo-estudio-competencias-visual-estilos.js (entrada 2026-09-26 (2)).
    ========================================================================= */
 
 import { CSS_COMPETENCIAS_VISUAL } from "./tiempo-estudio-competencias-visual-estilos.js";
@@ -101,6 +111,51 @@ function leerColorAcentoActual() {
   } catch (e) {
     return null;
   }
+}
+
+/**
+ * 2026-09-26 — FIX "el texto de la tarjeta queda invisible en modo claro"
+ * (blanco sobre blanco): el fondo (`--cp-bg`) sí sigue el tema real de la
+ * app porque lee `--bg-header-solido`, pero el texto no tenía forma de
+ * saber si ese fondo terminó siendo claro u oscuro — un intento previo
+ * con `light-dark()`/`color-scheme` fallaba porque esa función sigue la
+ * preferencia del SISTEMA OPERATIVO, no el toggle manual de la app, y
+ * podían quedar cada uno en un "modo" distinto.
+ *
+ * En vez de adivinar CÓMO decide la app su tema, se MIDE el resultado: se
+ * resuelve `--bg-header-solido` con un elemento temporal (mismo truco que
+ * `leerColorAcentoActual` de acá arriba usa para `--accent-1` — el
+ * navegador lo resuelve aunque adentro haya var()/hsl()/color-mix()) y se
+ * calcula su luminosidad. Fondo claro → letra oscura fija; fondo oscuro →
+ * no se toca nada (quedan los valores claros de siempre, definidos en la
+ * hoja de estilos).
+ */
+function leerLuminosidadFondoHeader() {
+  try {
+    const el = document.createElement("span");
+    el.style.cssText = "position:absolute;visibility:hidden;pointer-events:none;background:var(--bg-header-solido, #0a0920)";
+    document.body.appendChild(el);
+    const rgb = getComputedStyle(el).backgroundColor; // ya resuelto a "rgb(r, g, b)"
+    el.remove();
+    const m = /rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/.exec(rgb);
+    if (!m) return null;
+    const [r, g, b] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255; // 0 = negro, 1 = blanco
+  } catch (e) {
+    return null; // best-effort: si falla, se quedan los valores oscuros de la hoja de estilos
+  }
+}
+
+/** Aplica sobre `el` (un `.cp-scope`/`.cp-overlay` recién pintado) el fix
+ * de arriba: solo pisa --cp-text/--cp-muted/--cp-line si el fondo medido
+ * dio claro. Llamar una vez por cada tarjeta/aviso/hoja que se pinte. */
+function ajustarContrasteCpScope(el) {
+  if (!el) return;
+  const lum = leerLuminosidadFondoHeader();
+  if (lum === null || lum <= 0.6) return; // sin medición o fondo oscuro: no tocar nada
+  el.style.setProperty("--cp-text", "#1b1a2e");
+  el.style.setProperty("--cp-muted", "#5b5876");
+  el.style.setProperty("--cp-line", "rgba(10,9,32,.14)");
 }
 
 // Violeta de MARCA de la app (2026-09-22): es lo que sale de --accent-1
@@ -377,6 +432,7 @@ function pintarTarjeta(tarjeta, o, cb) {
     ${cuerpo}`;
 
   activarFallbackAvatares(tarjeta);
+  ajustarContrasteCpScope(tarjeta);
   tarjeta.querySelector('[data-cp="historial"]').addEventListener("click", () => cb.alHistorial && cb.alHistorial());
   tarjeta.querySelector('[data-cp="gestionar"]').addEventListener("click", () => cb.alGestionar && cb.alGestionar());
   tarjeta.querySelectorAll(".cp-vt button").forEach((b) =>
@@ -433,6 +489,7 @@ function abrirHoja({ icono, tono, titulo, subtitulo, cuerpoHTML }) {
   document.addEventListener("keydown", alTeclear);
   document.body.style.overflow = "hidden";
   document.body.appendChild(overlay);
+  ajustarContrasteCpScope(overlay);
   requestAnimationFrame(() => overlay.classList.add("cp-show"));
   overlay.querySelector('[data-cp="cerrar"]').focus();
   activarFallbackAvatares(overlay);
@@ -590,6 +647,7 @@ function construirAvisoPodio(datos, cb) {
       </div>
     </div>`;
   activarFallbackAvatares(wrap);
+  ajustarContrasteCpScope(wrap);
   wrap.querySelector('[data-cp="abrir"]').addEventListener("click", () => cb.alAbrir && cb.alAbrir());
   wrap.querySelector('[data-cp="descartar"]').addEventListener("click", () => {
     wrap.classList.add("cp-gone");

@@ -127,16 +127,55 @@
    etc. — pensados solo para fondo oscuro; en fondo claro se van a ver
    pálidos/poco visibles aunque ya no ilegibles. Si se nota en modo claro,
    es la siguiente ronda.
+
+   2026-09-26 — el fondo YA se adapta bien (confirmado con capturas: la
+   tarjeta pasa a blanco en modo claro), pero el texto se quedó invisible
+   ahí — blanco sobre blanco. Causa probable: `light-dark()` no sigue el
+   toggle MANUAL de la app, sigue el `color-scheme` heredado (que si no
+   está fijado explícitamente en algún ancestro, el navegador lo resuelve
+   por preferencia del SISTEMA OPERATIVO, no por el toggle de la app) —
+   por eso el fondo (que sí lee una variable propia de la app,
+   `--bg-header-solido`) y el texto (que dependía de `color-scheme`)
+   podían quedar cada uno en un "modo" distinto. Se sacó el
+   `color-scheme: light dark` forzado de acá para que, si la app fija su
+   propio `color-scheme` en algún ancestro al togglear tema, se herede
+   correcto. Es la hipótesis más probable, pero sin ver
+   `tiempo-estudio-competencias-visual.js` (donde vive `pintarTarjeta`,
+   el módulo que realmente pinta `.cp-scope` en el DOM) no hay forma de
+   confirmarlo ni de armar el fix a prueba de balas — ver mensaje del
+   dueño del proyecto. El plan si esto no alcanza: en vez de confiar en
+   CSS puro, leer en JS (con `getComputedStyle`) el color YA renderizado
+   de `--cp-bg` en el momento de pintar la tarjeta, calcular su
+   luminancia, y fijar `--cp-text`/`--cp-muted`/`--cp-line` inline según
+   ESO — funciona sin importar cómo la app implemente su propio toggle de
+   tema, porque mide el resultado real en vez de adivinar la causa.
+
+   2026-09-26 (2) — con `tiempo-estudio-competencias-visual.js` ya en
+   mano, se implementó justo ese plan: `light-dark()` se sacó de acá
+   (dependía del `color-scheme` que resuelve el navegador, no del toggle
+   real de la app — la causa confirmada de "fondo claro pero letra
+   blanca invisible"). `--cp-text`/`--cp-muted`/`--cp-line` vuelven a ser
+   fijas (valores de siempre, para fondo oscuro) y ahora es
+   `ajustarContrasteCpScope()` —nueva función en el archivo visual, mismo
+   truco que ya usa `leerColorAcentoActual()` para `--accent-1`— quien las
+   pisa inline en cada `.cp-scope` que se pinta, SOLO cuando mide que
+   `--cp-bg` (que sí sigue el tema real via `--bg-header-solido`) resultó
+   claro. Determinístico, no depende de heurísticas del navegador.
    ========================================================================= */
 
 const CSS_COMPETENCIAS_VISUAL = `
   /* Paleta propia (oscura, como el prototipo). Vive en .cp-scope/.cp-overlay,
      nunca en :root: no pisa ningún token de la app. */
   .cp-scope, .cp-overlay {
-    color-scheme: light dark;
-    --cp-bg:var(--bg-header-solido, #0a0920); --cp-card:#1a1846;
-    --cp-line:light-dark(rgba(10,9,32,.12), rgba(255,255,255,.09));
-    --cp-text:light-dark(#1b1a2e, #f3f2ff); --cp-muted:light-dark(#5b5876, #9b98c8); --cp-accent:var(--accent-1,#6c5cf0); --cp-accent2:var(--accent-2,#a99cff);
+    /* 2026-09-26 — ver nota de cabecera: el fondo (--cp-bg) sí sigue el
+       tema real de la app via --bg-header-solido. El texto NO se resuelve
+       más acá con light-dark() (dependía del color-scheme del navegador,
+       no del toggle real de la app — ver nota) — se queda en estos
+       valores fijos (pensados para fondo oscuro, el caso de siempre) y es
+       ajustarContrasteCpScope() en tiempo-estudio-competencias-visual.js
+       quien los pisa inline cuando mide que --cp-bg quedó claro. */
+    --cp-bg:var(--bg-header-solido, #0a0920); --cp-card:#1a1846; --cp-line:rgba(255,255,255,.09);
+    --cp-text:#f3f2ff; --cp-muted:#9b98c8; --cp-accent:var(--accent-1,#6c5cf0); --cp-accent2:var(--accent-2,#a99cff);
     --cp-gold:#f5b942; --cp-silver:#c9cde6; --cp-bronze:#d18a58;
     color: var(--cp-text);
   }

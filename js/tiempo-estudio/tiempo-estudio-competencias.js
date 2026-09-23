@@ -1198,6 +1198,21 @@ function construirVistaCompetencias(cont, refrescar) {
   // pestaña, sin tener que esperar a la próxima vez que estudie.
   sincronizarHorasCompetencias();
 
+  // 2026-09-26 — FIX "queda demasiado gap" (entre el título+botones
+  // "Competencias" y la primera tarjeta): ese espacio NO lo pone nada de
+  // este archivo — lo pone el gap del contenedor `cont` que nos pasa el
+  // caller (tiempo-estudio.js), la misma clase "stack" que usan Materias/
+  // Estadísticas. Achicarla ahí afectaría a esas otras pestañas también.
+  // Fix: en vez de colgar cada pieza (encabezado, avisos, lista, registro)
+  // directo de `cont`, se cuelgan de un `envoltorio` propio — así `cont`
+  // solo tiene UN hijo directo (no cuenta gap entre hermanos que no
+  // existen) y el espaciado interno de Competencias se controla acá,
+  // sin tocar la clase compartida. 8px ~ 60% menos que el gap de "stack"
+  // que traía por herencia.
+  const envoltorio = document.createElement("div");
+  envoltorio.className = "stack";
+  envoltorio.style.gap = "8px";
+
   const encabezado = document.createElement("div");
   encabezado.className = "row-between";
   encabezado.style.cssText = "align-items:center;";
@@ -1219,11 +1234,11 @@ function construirVistaCompetencias(cont, refrescar) {
   botones.appendChild(btnUnirse);
   botones.appendChild(btnCrear);
   encabezado.appendChild(botones);
-  cont.appendChild(encabezado);
+  envoltorio.appendChild(encabezado);
 
   // Punto 3.3: los avisos de resultado nuevo van arriba de todo, y son el
   // ÚNICO camino a la pantalla de celebración con sonido. Nada suena solo.
-  construirAvisosResultados(cont, refrescar, abrirModalHistorial);
+  construirAvisosResultados(envoltorio, refrescar, abrirModalHistorial);
 
   // 2026-09-23 — los botones de simulación (encolan un aviso falso de
   // victoria/derrota para ajustar el diseño de celebración sin esperar a un
@@ -1235,7 +1250,7 @@ function construirVistaCompetencias(cont, refrescar) {
   // deja un hueco cuando el easter egg no se activó. El <div> real recién se
   // crea e inserta si el long-press se completa.
   const marcaSimulacion = document.createComment("cp-sim-anchor");
-  cont.appendChild(marcaSimulacion);
+  envoltorio.appendChild(marcaSimulacion);
   let simulacionRevelada = false;
   if (tituloCompetencias) {
     activarLongPress(tituloCompetencias, DURACION_LONGPRESS_SIMULACION_MS, () => {
@@ -1260,7 +1275,8 @@ function construirVistaCompetencias(cont, refrescar) {
       <p class="muted" style="margin:0;">Todavía no te uniste a ninguna competencia.</p>
       <p class="muted" style="margin:0; font-size:0.82rem;">Creá una y compartí el link, o unite con uno que te pasen.</p>
     `;
-    cont.appendChild(vacio);
+    envoltorio.appendChild(vacio);
+    cont.appendChild(envoltorio);
     return;
   }
 
@@ -1269,7 +1285,7 @@ function construirVistaCompetencias(cont, refrescar) {
     vacio.className = "muted";
     vacio.style.cssText = "margin:0 0 4px; font-size:0.85rem;";
     vacio.textContent = "No tenés competencias activas — mirá el registro más abajo.";
-    cont.appendChild(vacio);
+    envoltorio.appendChild(vacio);
   }
 
   const lista = document.createElement("div");
@@ -1285,12 +1301,14 @@ function construirVistaCompetencias(cont, refrescar) {
     cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar);
   });
 
-  cont.appendChild(lista);
+  envoltorio.appendChild(lista);
 
   // Parte 5 — sección "Registro de competencias" (no dibuja nada si no hay
   // ninguna finalizada; el botón "Recuperar historial" que tuvo brevemente
   // se sacó, no aportaba nada al caso de uso real).
-  construirRegistroCompetencias(cont, refrescar);
+  construirRegistroCompetencias(envoltorio, refrescar);
+
+  cont.appendChild(envoltorio);
 }
 
 export {
