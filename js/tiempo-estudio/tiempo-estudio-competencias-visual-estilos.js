@@ -247,7 +247,6 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-res-av .cp-crown{top:-15px;width:26px}
   .cp-res-week{font-size:11.5px;font-weight:600;color:var(--cp-muted)}
   .cp-res-title{font-size:17px;font-weight:800;letter-spacing:-.01em;margin-top:1px;line-height:1.2}
-  .cp-res-1 .cp-res-title{background:linear-gradient(90deg,#fff1bd,#f5b942);-webkit-background-clip:text;background-clip:text;color:transparent}
   .cp-res-sub{font-size:12.5px;color:var(--cp-tx);margin-top:3px;line-height:1.35}
   .cp-res-end{display:grid;justify-items:end;gap:3px;margin-top:14px}
   .cp-res-time{font-weight:800;font-size:15px;color:rgb(var(--cp-t));font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -397,6 +396,32 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-pc.cp-tinted .cp-av{box-shadow:0 0 0 2px var(--cp-bgring),0 0 0 4px var(--cp-uc)}
   .cp-row.cp-tinted .cp-av{box-shadow:0 0 0 2px var(--cp-bgring),0 0 0 3px var(--cp-uc)}
   .cp-row.cp-tinted .cp-bar i{background:linear-gradient(90deg,var(--cp-uc-d),var(--cp-uc-l))}
+
+  /* 2026-09-23 — FIX pedido por el dueño: el destacado del 1er lugar EN LA
+     LISTA (.cp-row.cp-lead: borde, fondo tibio, aro del avatar y hora) era
+     oro fijo sin importar quién iba primero — "se sienta propio" pedía que
+     use el color de esa persona en vez del oro de marca. Solo se toca
+     cuando el líder SÍ tiene color propio (.cp-tinted); sin color propio
+     sigue oro, como siempre. El podio (top 3 con pedestal) y el badge
+     numerado de rango NO se tocan — esos siguen siendo oro/plata/bronce
+     universal, igual que antes; esto es solo el resaltado del 1er puesto
+     en la vista de lista. */
+  .cp-row.cp-lead.cp-tinted{border-color:color-mix(in srgb,var(--cp-uc) 45%,transparent);
+    background:linear-gradient(100deg,color-mix(in srgb,var(--cp-uc) 22%,transparent),color-mix(in srgb,var(--cp-uc) 4%,transparent) 65%)}
+  .cp-row.cp-lead.cp-tinted .cp-av{box-shadow:0 0 0 2px var(--cp-bgring),0 0 0 4px var(--cp-uc)}
+  .cp-row.cp-lead.cp-tinted .cp-time{color:var(--cp-uc-l)}
+
+  /* 2026-09-23 — mismo pedido, para el aviso "¡Ganaste la semana!": cuando
+     GANASTE (tier 1), el aviso usa TU propio color de paleta (--cp-accent,
+     el mismo --accent-1 de la app) en vez del oro fijo, para que se sienta
+     personalizado. Los avisos de 2º/3º/4º+ (no ganaste) quedan igual que
+     siempre — no se tocan. */
+  .cp-res.cp-res-1{border-color:color-mix(in srgb,var(--cp-accent) 40%,transparent);
+    background:radial-gradient(120% 170% at 0% 0%,color-mix(in srgb,var(--cp-accent) 30%,transparent),color-mix(in srgb,var(--cp-accent) 5%,transparent) 58%),linear-gradient(180deg,#201d54,#171542)}
+  .cp-res-1 .cp-res-av .cp-av{box-shadow:0 0 0 2px #1a1848,0 0 0 4px var(--cp-accent)}
+  .cp-res-1 .cp-res-title{background:linear-gradient(90deg,var(--cp-accent2),var(--cp-accent));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .cp-res-1 .cp-res-time{color:var(--cp-accent)}
+  .cp-res-1 .cp-sp{background:var(--cp-accent)}
 
 `;
 
