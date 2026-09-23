@@ -98,15 +98,45 @@
    ("piezas de marca", independiente del tema de la app) — mientras que
    el tinte por paleta de cada persona (`--cp-accent`) sigue funcionando
    igual que antes, solo que anclado a un fondo que ya no cambia solo.
+
+   2026-09-25 — el fix 2026-09-24 estaba MAL: volver a fijo (#0a0920 sin
+   variable) es ocultar el problema, no resolverlo — el dueño del proyecto
+   lo rechazó explícitamente ("jamás en la vida... mismo color de fondo
+   sea el color que sea, blanco o oscuro"). El pedido real es que esta
+   pieza se comporte IGUAL que el encabezado y el resto de la app: mismo
+   fondo (claro u oscuro según corresponda) Y letra que se adapte con él,
+   en vez de elegir uno de los dos y sacrificar el otro. Fix definitivo:
+   Primero, las 7 apariciones de `#0a0920` vuelven a
+   `var(--bg-header-solido, #0a0920)` (se restaura el fix 5). Segundo,
+   `--cp-text`/`--cp-muted`/`--cp-line` — que eran fijas en tonos claros pensados solo para fondo
+   oscuro, la causa real del texto lavado — ahora usan `light-dark()` con
+   un par oscuro/claro para cada una, así el contraste se recalcula solo
+   sin importar qué tan clara u oscura termine siendo `--bg-header-solido`
+   en esa paleta/tema. Para que `light-dark()` responda al tema REAL de la
+   app (y no al modo del sistema operativo, que puede no coincidir si hay
+   un toggle manual), `color-scheme` deja de estar forzado en `dark` y
+   pasa a `light dark` en `.cp-scope`/`.cp-overlay` — así hereda el
+   `color-scheme` real que ya use `<html>`/`:root` si la app lo define
+   junto a su propio toggle de tema; si la app no lo define, cae de vuelta
+   al modo del sistema operativo (mismo comportamiento que antes, no es
+   una regresión). NOTA para el dueño: esto cubre el fondo principal y el
+   texto, que era lo reportado. Quedan sin tocar (a propósito, mismo
+   criterio de "una cosa por ronda" de todo este archivo) varios overlays
+   decorativos en rgba(255,255,255,.04–.17) — bordes finos y fondos de
+   botones en el selector de vista, "Gestionar", el modal de Historial,
+   etc. — pensados solo para fondo oscuro; en fondo claro se van a ver
+   pálidos/poco visibles aunque ya no ilegibles. Si se nota en modo claro,
+   es la siguiente ronda.
    ========================================================================= */
 
 const CSS_COMPETENCIAS_VISUAL = `
   /* Paleta propia (oscura, como el prototipo). Vive en .cp-scope/.cp-overlay,
      nunca en :root: no pisa ningún token de la app. */
   .cp-scope, .cp-overlay {
-    color-scheme: dark;
-    --cp-bg:#0a0920; --cp-card:#1a1846; --cp-line:rgba(255,255,255,.09);
-    --cp-text:#f3f2ff; --cp-muted:#9b98c8; --cp-accent:var(--accent-1,#6c5cf0); --cp-accent2:var(--accent-2,#a99cff);
+    color-scheme: light dark;
+    --cp-bg:var(--bg-header-solido, #0a0920); --cp-card:#1a1846;
+    --cp-line:light-dark(rgba(10,9,32,.12), rgba(255,255,255,.09));
+    --cp-text:light-dark(#1b1a2e, #f3f2ff); --cp-muted:light-dark(#5b5876, #9b98c8); --cp-accent:var(--accent-1,#6c5cf0); --cp-accent2:var(--accent-2,#a99cff);
     --cp-gold:#f5b942; --cp-silver:#c9cde6; --cp-bronze:#d18a58;
     color: var(--cp-text);
   }
@@ -125,9 +155,9 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-opt-emoji { font-size: 17px; line-height: 1; flex: none; }
   .cp-lk-fin { font-size: 12.5px; color: var(--cp-muted); }
 /* ---------- tarjeta de competencia ---------- */
-  .cp-comp{--cp-u:1.08;--cp-bgring:color-mix(in srgb,var(--cp-accent) 18%,#0a0920 82%);
+  .cp-comp{--cp-u:1.08;--cp-bgring:color-mix(in srgb,var(--cp-accent) 18%,var(--bg-header-solido, #0a0920) 82%);
     padding:16px 16px 18px;border-radius:22px;border:1px solid var(--cp-line);
-    background:linear-gradient(180deg,color-mix(in srgb,var(--cp-accent) 14%,#0a0920 86%),#0a0920)}
+    background:linear-gradient(180deg,color-mix(in srgb,var(--cp-accent) 14%,var(--bg-header-solido, #0a0920) 86%),var(--bg-header-solido, #0a0920))}
   .cp-c-head{position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding-bottom:18px;border-bottom:1px solid var(--cp-line);margin-bottom:18px}
   .cp-comp[data-layout="filas"] .cp-c-head{margin-bottom:28px}
   .cp-c-title{font-weight:800;font-size:15px;line-height:1.3;padding-top:2px}
@@ -160,7 +190,7 @@ const CSS_COMPETENCIAS_VISUAL = `
 
   /* avatares */
   .cp-avw{position:relative;flex:none}
-  .cp-av{display:block;width:var(--cp-s,40px);height:var(--cp-s,40px);border-radius:50%;overflow:hidden;position:relative;background:color-mix(in srgb,var(--cp-accent) 22%,#0a0920 78%)}
+  .cp-av{display:block;width:var(--cp-s,40px);height:var(--cp-s,40px);border-radius:50%;overflow:hidden;position:relative;background:color-mix(in srgb,var(--cp-accent) 22%,var(--bg-header-solido, #0a0920) 78%)}
   .cp-av svg,.cp-av .cp-ini{width:100%;height:100%;display:grid;place-items:center}
   .cp-av .cp-ini{font-weight:800;font-size:calc(var(--cp-s,40px)*.42);color:#fff}
   .cp-crown{position:absolute;left:50%;top:-13px;width:24px;transform:translateX(-50%) rotate(-9deg);filter:drop-shadow(0 2px 4px rgba(245,185,66,.55));z-index:2}
@@ -198,7 +228,7 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-me-punto.cp-row::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 3px 3px 0;background:linear-gradient(180deg,var(--cp-accent2),var(--cp-accent))}
 
   /* ---------- podio (tarjeta y modal comparten diseño) ---------- */
-  .cp-wk{--cp-u:1;--cp-bgring:color-mix(in srgb,var(--cp-accent) 16%,#0a0920 84%)}
+  .cp-wk{--cp-u:1;--cp-bgring:color-mix(in srgb,var(--cp-accent) 16%,var(--bg-header-solido, #0a0920) 84%)}
   .cp-wk.cp-hero{--cp-u:1.14}
   .cp-podium{position:relative;display:grid;grid-template-columns:1fr 1.2fr 1fr;align-items:end;gap:6px;padding:26px 4px 0}
   .cp-comp .cp-podium{padding-top:32px}
@@ -287,7 +317,7 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-overlay[hidden]{display:none}
   .cp-overlay.cp-show{opacity:1}
   .cp-sheet{width:min(100%,440px);max-height:min(88vh,760px);display:flex;flex-direction:column;border-radius:26px;overflow:hidden;
-    border:1px solid var(--cp-line);background:linear-gradient(180deg,color-mix(in srgb,var(--cp-accent) 16%,#0a0920 84%),#0a0920);
+    border:1px solid var(--cp-line);background:linear-gradient(180deg,color-mix(in srgb,var(--cp-accent) 16%,var(--bg-header-solido, #0a0920) 84%),var(--bg-header-solido, #0a0920));
     box-shadow:0 30px 80px -20px rgba(0,0,0,.8);transform:translateY(14px) scale(.98);transition:transform .35s cubic-bezier(.2,.9,.3,1)}
   .cp-overlay.cp-show .cp-sheet{transform:none}
   .cp-sh-head{display:flex;align-items:center;gap:12px;padding:18px 18px 12px}
