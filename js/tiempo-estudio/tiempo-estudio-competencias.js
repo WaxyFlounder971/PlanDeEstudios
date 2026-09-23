@@ -1200,7 +1200,7 @@ function construirVistaCompetencias(cont, refrescar) {
 
   const encabezado = document.createElement("div");
   encabezado.className = "row-between";
-  encabezado.style.cssText = "align-items:center; margin-bottom:6px;";
+  encabezado.style.cssText = "align-items:center;";
   encabezado.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Competencias</h3>`;
   const tituloCompetencias = encabezado.querySelector("h3");
 

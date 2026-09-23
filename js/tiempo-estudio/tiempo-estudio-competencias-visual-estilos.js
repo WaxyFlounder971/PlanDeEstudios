@@ -77,6 +77,27 @@
    14-18% de `--cp-accent` mezclado encima para que no se vea gris plano
    sino con el tinte de cada quien. Se ve igual de oscuro que el
    encabezado para cualquier paleta, no solo para "azucarado".
+   2026-09-24 — FIX "no se adapta para nada al modo claro" (en realidad el
+   bug era lo opuesto: SÍ se adaptaba, y ahí estaba el problema): el fix (5)
+   asumió que `--bg-header-solido` es SIEMPRE oscura, algo cierto para
+   cualquiera de las 13 paletas pero falso apenas la app está en modo
+   CLARO — ahí esa variable pasa a ser clara/blanca (el encabezado de la
+   app también se aclara). Resultado: la tarjeta, el podio, el aro de
+   avatares y la hoja de Historial se pintaban con fondo claro en modo
+   claro, pero el texto (`--cp-text`, `--cp-muted`, etc.) seguía fijo en
+   tonos casi blancos pensados para fondo oscuro — todo quedaba lavado e
+   ilegible (ver capturas del dueño). El aviso "¡Ganaste/Perdiste la
+   semana!" (`.cp-res`) nunca tuvo este bug porque su fondo SIEMPRE fue
+   fijo (`#201d54`/`#171542`, sin variable de la app) — es la prueba de
+   que "fijo siempre oscuro" es como tiene que verse esta pieza, en
+   cualquier tema. Fix: las 7 apariciones de `var(--bg-header-solido,
+   #0a0920)` vuelven a `#0a0920` fijo (mismo valor que ya era el fallback),
+   sin leer la variable de la app en absoluto. La tarjeta, el podio, el
+   aro y el modal quedan otra vez con la paleta oscura propia, igual en
+   modo claro y oscuro — que es el diseño original documentado arriba
+   ("piezas de marca", independiente del tema de la app) — mientras que
+   el tinte por paleta de cada persona (`--cp-accent`) sigue funcionando
+   igual que antes, solo que anclado a un fondo que ya no cambia solo.
    ========================================================================= */
 
 const CSS_COMPETENCIAS_VISUAL = `
@@ -104,9 +125,9 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-opt-emoji { font-size: 17px; line-height: 1; flex: none; }
   .cp-lk-fin { font-size: 12.5px; color: var(--cp-muted); }
 /* ---------- tarjeta de competencia ---------- */
-  .cp-comp{--cp-u:1.08;--cp-bgring:color-mix(in srgb,var(--cp-accent) 18%,var(--bg-header-solido,#0a0920) 82%);
+  .cp-comp{--cp-u:1.08;--cp-bgring:color-mix(in srgb,var(--cp-accent) 18%,#0a0920 82%);
     padding:16px 16px 18px;border-radius:22px;border:1px solid var(--cp-line);
-    background:linear-gradient(180deg,color-mix(in srgb,var(--cp-accent) 14%,var(--bg-header-solido,#0a0920) 86%),var(--bg-header-solido,#0a0920))}
+    background:linear-gradient(180deg,color-mix(in srgb,var(--cp-accent) 14%,#0a0920 86%),#0a0920)}
   .cp-c-head{position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding-bottom:18px;border-bottom:1px solid var(--cp-line);margin-bottom:18px}
   .cp-comp[data-layout="filas"] .cp-c-head{margin-bottom:28px}
   .cp-c-title{font-weight:800;font-size:15px;line-height:1.3;padding-top:2px}
@@ -139,7 +160,7 @@ const CSS_COMPETENCIAS_VISUAL = `
 
   /* avatares */
   .cp-avw{position:relative;flex:none}
-  .cp-av{display:block;width:var(--cp-s,40px);height:var(--cp-s,40px);border-radius:50%;overflow:hidden;position:relative;background:color-mix(in srgb,var(--cp-accent) 22%,var(--bg-header-solido,#0a0920) 78%)}
+  .cp-av{display:block;width:var(--cp-s,40px);height:var(--cp-s,40px);border-radius:50%;overflow:hidden;position:relative;background:color-mix(in srgb,var(--cp-accent) 22%,#0a0920 78%)}
   .cp-av svg,.cp-av .cp-ini{width:100%;height:100%;display:grid;place-items:center}
   .cp-av .cp-ini{font-weight:800;font-size:calc(var(--cp-s,40px)*.42);color:#fff}
   .cp-crown{position:absolute;left:50%;top:-13px;width:24px;transform:translateX(-50%) rotate(-9deg);filter:drop-shadow(0 2px 4px rgba(245,185,66,.55));z-index:2}
@@ -177,7 +198,7 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-me-punto.cp-row::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 3px 3px 0;background:linear-gradient(180deg,var(--cp-accent2),var(--cp-accent))}
 
   /* ---------- podio (tarjeta y modal comparten diseño) ---------- */
-  .cp-wk{--cp-u:1;--cp-bgring:color-mix(in srgb,var(--cp-accent) 16%,var(--bg-header-solido,#0a0920) 84%)}
+  .cp-wk{--cp-u:1;--cp-bgring:color-mix(in srgb,var(--cp-accent) 16%,#0a0920 84%)}
   .cp-wk.cp-hero{--cp-u:1.14}
   .cp-podium{position:relative;display:grid;grid-template-columns:1fr 1.2fr 1fr;align-items:end;gap:6px;padding:26px 4px 0}
   .cp-comp .cp-podium{padding-top:32px}
@@ -266,7 +287,7 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-overlay[hidden]{display:none}
   .cp-overlay.cp-show{opacity:1}
   .cp-sheet{width:min(100%,440px);max-height:min(88vh,760px);display:flex;flex-direction:column;border-radius:26px;overflow:hidden;
-    border:1px solid var(--cp-line);background:linear-gradient(180deg,color-mix(in srgb,var(--cp-accent) 16%,var(--bg-header-solido,#0a0920) 84%),var(--bg-header-solido,#0a0920));
+    border:1px solid var(--cp-line);background:linear-gradient(180deg,color-mix(in srgb,var(--cp-accent) 16%,#0a0920 84%),#0a0920);
     box-shadow:0 30px 80px -20px rgba(0,0,0,.8);transform:translateY(14px) scale(.98);transition:transform .35s cubic-bezier(.2,.9,.3,1)}
   .cp-overlay.cp-show .cp-sheet{transform:none}
   .cp-sh-head{display:flex;align-items:center;gap:12px;padding:18px 18px 12px}
