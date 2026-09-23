@@ -55,6 +55,16 @@
    podio y el banner de resultado semanal NO se tocaron: esos son
    jerarquía universal (1º/2º/3º lugar), no "tu color", y deben verse
    igual para todos sin importar la paleta de quien mira.
+   2026-09-22 (4) — el fix (3) sí seguía la paleta, pero se veía "lavado":
+   usaba `--accent-1` (un color PLANO) diluido al ~30% contra el fondo
+   oscuro. El pill de "Competencias" y el botón "+Crear" con los que se
+   comparó no usan ese plano — usan `--gradient-accent` (el degradé de dos
+   tonos completo, SIN diluir). Native fix: el fondo de la tarjeta y del
+   modal ahora usan `var(--gradient-accent)` tal cual, con un velo oscuro
+   semitransparente ENCIMA (dos capas de `background`, no un color-mix
+   hacia gris) solo para que el texto blanco siga siendo legible sobre
+   cualquier paleta — así el tono es el mismo que el del encabezado, no
+   una versión descolorida de él.
    ========================================================================= */
 
 const CSS_COMPETENCIAS_VISUAL = `
@@ -82,10 +92,9 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-opt-emoji { font-size: 17px; line-height: 1; flex: none; }
   .cp-lk-fin { font-size: 12.5px; color: var(--cp-muted); }
 /* ---------- tarjeta de competencia ---------- */
-  .cp-comp{--cp-u:1.08;--cp-bgring:color-mix(in srgb,var(--cp-accent) 32%,#0a0920 68%);
-    --cp-wash:color-mix(in srgb,var(--cp-accent) 30%,#1a1846 70%);
+  .cp-comp{--cp-u:1.08;--cp-bgring:color-mix(in srgb,var(--cp-accent) 42%,#0a0920 58%);
     padding:16px 16px 18px;border-radius:22px;border:1px solid var(--cp-line);
-    background:linear-gradient(180deg,color-mix(in srgb,var(--cp-wash) 70%,transparent),color-mix(in srgb,var(--cp-wash) 85%,transparent))}
+    background:linear-gradient(180deg,rgba(10,9,32,.55),rgba(10,9,32,.82)),var(--gradient-accent)}
   .cp-c-head{position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding-bottom:18px;border-bottom:1px solid var(--cp-line);margin-bottom:18px}
   .cp-comp[data-layout="filas"] .cp-c-head{margin-bottom:28px}
   .cp-c-title{font-weight:800;font-size:15px;line-height:1.3;padding-top:2px}
@@ -156,7 +165,7 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-me-punto.cp-row::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 3px 3px 0;background:linear-gradient(180deg,var(--cp-accent2),var(--cp-accent))}
 
   /* ---------- podio (tarjeta y modal comparten diseño) ---------- */
-  .cp-wk{--cp-u:1;--cp-bgring:color-mix(in srgb,var(--cp-accent) 22%,#0a0920 78%)}
+  .cp-wk{--cp-u:1;--cp-bgring:color-mix(in srgb,var(--cp-accent) 30%,#0a0920 70%)}
   .cp-wk.cp-hero{--cp-u:1.14}
   .cp-podium{position:relative;display:grid;grid-template-columns:1fr 1.2fr 1fr;align-items:end;gap:6px;padding:26px 4px 0}
   .cp-comp .cp-podium{padding-top:32px}
@@ -246,7 +255,7 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-overlay[hidden]{display:none}
   .cp-overlay.cp-show{opacity:1}
   .cp-sheet{width:min(100%,440px);max-height:min(88vh,760px);display:flex;flex-direction:column;border-radius:26px;overflow:hidden;
-    border:1px solid var(--cp-line);background:linear-gradient(180deg,color-mix(in srgb,var(--cp-accent) 24%,#1a1846 76%),color-mix(in srgb,var(--cp-accent) 12%,#0a0920 88%));
+    border:1px solid var(--cp-line);background:linear-gradient(180deg,rgba(10,9,32,.62),rgba(10,9,32,.88)),var(--gradient-accent);
     box-shadow:0 30px 80px -20px rgba(0,0,0,.8);transform:translateY(14px) scale(.98);transition:transform .35s cubic-bezier(.2,.9,.3,1)}
   .cp-overlay.cp-show .cp-sheet{transform:none}
   .cp-sh-head{display:flex;align-items:center;gap:12px;padding:18px 18px 12px}
