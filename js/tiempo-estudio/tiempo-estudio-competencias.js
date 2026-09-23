@@ -1229,15 +1229,20 @@ function construirVistaCompetencias(cont, refrescar) {
   // victoria/derrota para ajustar el diseño de celebración sin esperar a un
   // cierre de semana real) ya NO se muestran por defecto: quedan ocultos
   // detrás de un easter egg — mantener presionado 5s el título "Competencias"
-  // los revela para desarrollador. Sin ese gesto, este contenedor queda
-  // vacío y nadie los ve.
-  const contenedorSimulacion = document.createElement("div");
-  cont.appendChild(contenedorSimulacion);
+  // los revela para desarrollador.
+  // Ancla de comentario (no un <div>): un nodo de comentario no genera caja
+  // de render, así que no cuenta como hijo para el `gap` del contenedor y no
+  // deja un hueco cuando el easter egg no se activó. El <div> real recién se
+  // crea e inserta si el long-press se completa.
+  const marcaSimulacion = document.createComment("cp-sim-anchor");
+  cont.appendChild(marcaSimulacion);
   let simulacionRevelada = false;
   if (tituloCompetencias) {
     activarLongPress(tituloCompetencias, DURACION_LONGPRESS_SIMULACION_MS, () => {
       if (simulacionRevelada) return;
       simulacionRevelada = true;
+      const contenedorSimulacion = document.createElement("div");
+      marcaSimulacion.parentNode.insertBefore(contenedorSimulacion, marcaSimulacion.nextSibling);
       construirBotonesSimulacion(contenedorSimulacion, refrescar);
     });
   }
