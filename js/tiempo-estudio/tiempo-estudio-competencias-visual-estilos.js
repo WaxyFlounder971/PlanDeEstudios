@@ -18,6 +18,16 @@
    pedestal — le da el "borde con textura" en vez de una franja de otro
    color pegada arriba. Sin color propio (.cp-tinted ausente) no cambia
    nada: se sigue usando oro/plata/bronce de siempre.
+
+   2026-09-22 (2) — FIX "el cuadro de vos siempre sale morado": el halo de
+   "esta posición sos vos" (.cp-me-halo, tanto la fila como el podio) tenía
+   el violeta de marca escrito DIRECTO en rgba() dentro de @keyframes
+   cp-halo y en el fondo de .cp-me-halo.cp-row, en vez de leer --cp-uc (el
+   color propio ya calculado por tonosDeColor() en el JS). Por eso, sin
+   importar el color real de cada persona (cian, verde, lo que sea), el
+   anillo/fondo de "sos vos" siempre se pintaba violeta encima. Ahora usa
+   var(--cp-uc, ...) con el violeta de siempre solo como fallback para
+   quien todavía no tiene color propio — mismo patrón que .cp-tinted.
    ========================================================================= */
 
 const CSS_COMPETENCIAS_VISUAL = `
@@ -104,9 +114,13 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-lead .cp-time{color:var(--cp-gold);font-size:15px}
   .cp-zero .cp-time{color:var(--cp-muted);font-weight:700}
 
-  /* Tu posición · Halo (por defecto) */
-  .cp-me-halo.cp-row{background:linear-gradient(100deg,rgba(108,92,240,.32),rgba(108,92,240,.08));
-    box-shadow:inset 0 0 0 1px rgba(169,156,255,.55),0 10px 26px -12px rgba(108,92,240,.9)}
+  /* Tu posición · Halo (por defecto). Usa tu color propio (--cp-uc) cuando
+     existe, con la misma transparencia que antes (color-mix conserva el
+     alpha .32/.08/.55/.9 en vez de pintar el color propio a full opacidad);
+     el violeta de marca queda solo de fallback para quien no tiene color
+     propio guardado (ver FIX 2026-09-22 (2) arriba). */
+  .cp-me-halo.cp-row{background:linear-gradient(100deg,color-mix(in srgb,var(--cp-uc,#6c5cf0) 32%,transparent),color-mix(in srgb,var(--cp-uc,#6c5cf0) 8%,transparent));
+    box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cp-uc-l,#a99cff) 55%,transparent),0 10px 26px -12px color-mix(in srgb,var(--cp-uc,#6c5cf0) 90%,transparent)}
   .cp-me-halo .cp-av{animation:cp-halo 2.6s ease-in-out infinite}
   /* Tu posición · Punto */
   .cp-me-punto.cp-row{background:linear-gradient(100deg,rgba(108,92,240,.2),rgba(255,255,255,.04) 70%)}
@@ -264,7 +278,10 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-ghost-box{margin-top:6px;padding:16px;border-radius:16px;border:1px dashed rgba(255,255,255,.16);font-size:12.5px;color:var(--cp-muted);text-align:center;line-height:1.5}
 
   /* ---------- keyframes ---------- */
-  @keyframes cp-halo{0%,100%{box-shadow:0 0 0 2px var(--cp-bgring),0 0 0 4px var(--cp-accent2),0 0 8px rgba(169,156,255,.35)}50%{box-shadow:0 0 0 2px var(--cp-bgring),0 0 0 4px var(--cp-accent2),0 0 22px rgba(169,156,255,.85)}}
+  /* cp-halo: anillo de "sos vos" en el avatar. Usa tu color propio
+     (--cp-uc) cuando existe; --cp-accent2 (violeta de marca) queda solo de
+     fallback para quien no tiene color propio (ver FIX 2026-09-22 (2)). */
+  @keyframes cp-halo{0%,100%{box-shadow:0 0 0 2px var(--cp-bgring),0 0 0 4px var(--cp-uc,var(--cp-accent2)),0 0 8px color-mix(in srgb,var(--cp-uc,#a99cff) 35%,transparent)}50%{box-shadow:0 0 0 2px var(--cp-bgring),0 0 0 4px var(--cp-uc,var(--cp-accent2)),0 0 22px color-mix(in srgb,var(--cp-uc,#a99cff) 85%,transparent)}}
   @keyframes cp-ping{0%{transform:scale(.6);opacity:.9}100%{transform:scale(1.5);opacity:0}}
   @keyframes cp-grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
   @keyframes cp-fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
