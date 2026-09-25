@@ -1768,26 +1768,39 @@ a:hover .enlace-rapido-nombre {
   margin-top: 4px;
 }
 
-/* ---- Bug 1 (v8): aviso de reconexión de sesión con Drive ---- */
-.aviso-reconexion {
-  position: sticky;
-  top: 0;
-  z-index: 50;
+/* ---- 2026-09-24: píldora "Sin conexión" (reemplaza al banner fijo
+   .aviso-reconexion de antes — offline no es un error, así que ya no
+   interrumpe con una alarma en toda la pantalla). Vive DENTRO de
+   .mobile-topbar-centro, arriba del <h3>, mismo criterio de columna
+   centrada que ya usa #timer-linea-topbar debajo del título — ver ese
+   bloque más abajo. Solo existe en <900px (hereda el display:none de
+   .mobile-topbar por defecto); en >=900px el sidebar ya tiene su propio
+   aviso discreto en #indicador-sync, sin banner ni píldora. Colores
+   tomados de .badge-warning pero MÁS apagados (menos opacidad, sin
+   fondo sólido, sin sombra) para leerse como "estado", no como alerta. */
+.pill-sin-conexion {
+  align-self: center;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 10px 16px;
-  background: rgba(245, 158, 11, 0.18);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid #f59e0b;
-  color: #fde68a;
-  font-size: 0.85rem;
-  text-align: center;
+  gap: 5px;
+  margin: 0;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  background: rgba(245, 158, 11, 0.10);
+  color: #fbbf24;
+  font-family: var(--font-body);
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
 }
-[data-mode="light"] .aviso-reconexion { color: #92400e; }
-.aviso-reconexion .btn { padding: 6px 14px; font-size: 0.8rem; flex-shrink: 0; }
+.pill-sin-conexion:hover,
+.pill-sin-conexion:focus-visible { background: rgba(245, 158, 11, 0.16); border-color: rgba(245, 158, 11, 0.5); }
+.pill-sin-conexion:active { transform: scale(0.97); }
+.pill-sin-conexion svg { width: 12px; height: 12px; flex-shrink: 0; }
+[data-mode="light"] .pill-sin-conexion { color: #92400e; }
 
 /* ---- Utilidad genérica: nada debe forzar overflow horizontal ---- */
 img, svg { max-width: 100%; }
@@ -3721,11 +3734,6 @@ html.exportar-tema-default[data-mode="dark"] {
 }
 [data-mode="light"][data-rendimiento="reducido"] .modal-overlay {
   background: rgba(30, 41, 59, 0.67);
-}
-[data-rendimiento="reducido"] .aviso-reconexion {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  background: rgba(245, 158, 11, 0.67);
 }
 [data-rendimiento="reducido"] .overlay-cargando {
   backdrop-filter: none;
