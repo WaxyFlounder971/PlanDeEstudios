@@ -383,8 +383,9 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 
   document.getElementById("btn-reconectar-sesion").addEventListener("click", () => {
-    // MIGRACIÓN 2026-08-25: este banner ahora solo puede aparecer en dos
-    // casos - (a) el refresh_token guardado ya falló de verdad contra
+    // MIGRACIÓN 2026-08-25: este botón (hoy vive dentro de #modal-sin-
+    // conexion, ver 2026-09-24 más abajo) solo puede aparecer en dos casos -
+    // (a) el refresh_token guardado ya falló de verdad contra
     // /oauth/refresh (revocado, o vencido por el límite de 7 días en modo
     // Prueba), o (b) todavía no hay ningún refresh_token guardado en este
     // dispositivo (cuenta migrando desde el flujo viejo, ver B.5). En
@@ -392,17 +393,34 @@ window.addEventListener("DOMContentLoaded", () => {
     // hace falta el login completo con popup real. Se llama de forma
     // DIRECTA (sin async antes) para no romper el gesto de usuario en
     // navegadores móviles, igual que el botón de login normal.
-    document.getElementById("aviso-reconexion").classList.add("oculto"); // ocultamiento visual inmediato, optimista
+    // 2026-09-24: ocultamiento optimista de la píldora Y del modal (antes
+    // solo existía el banner) - si el usuario tocó "Reconectar" desde
+    // adentro del modal, ambos deben desaparecer de una, sin esperar a que
+    // el resultado real de iniciarSesionConGoogle() vuelva.
+    document.getElementById("pill-sin-conexion").classList.add("oculto");
+    document.getElementById("modal-sin-conexion").classList.add("oculto");
     iniciarSesionConGoogle();
   });
 
-  // Punto 4: el indicador mismo también sirve de botón de reconexión cuando
-  // está en el 3er estado ("Sin conexión con Drive - toca para reconectar"),
-  // sin depender únicamente del banner separado.
+  // Punto 4: el indicador del sidebar (>=900px) también sirve de botón de
+  // reconexión directo cuando está en el 3er estado ("Sin conexión con
+  // Drive - toca para reconectar"), sin pasar por ningún modal - ahí ya es
+  // chico y discreto de por sí, no hace falta la explicación extra.
   document.getElementById("indicador-sync").addEventListener("click", () => {
     if (estado.conexionDrive === "desconectado") {
       document.getElementById("btn-reconectar-sesion").click();
     }
+  });
+
+  // 2026-09-24: la píldora de móvil, en cambio, abre el modal con la
+  // explicación tranquila en vez de reconectar directo al primer toque -
+  // pedido explícito (que "sentirse offline" no dé la sensación de que algo
+  // se rompió). "Reconectar" real queda un toque más adentro, en el modal.
+  document.getElementById("pill-sin-conexion").addEventListener("click", () => {
+    document.getElementById("modal-sin-conexion").classList.remove("oculto");
+  });
+  document.getElementById("btn-cerrar-modal-sin-conexion").addEventListener("click", () => {
+    document.getElementById("modal-sin-conexion").classList.add("oculto");
   });
 
   // Bug 2 (2026-09-04 - "reconexión tras perder internet no sincroniza
