@@ -324,8 +324,14 @@ window.addEventListener("DOMContentLoaded", () => {
   // Ajuste 1: ya no hay botón separado de sincronizar; el propio indicador
   // reacciona a mantener-presionado (~500ms) o clic derecho.
   agregarLongPress(document.getElementById("indicador-sync"), forzarSincronizacion);
-
-  window.addEventListener("online", intentarSincronizar);
+  // FIX 2026-09-27: este archivo tenía su PROPIO listener de "online" acá,
+  // duplicado con el que ya registra inicializarReconexionAlVolverOnline()
+  // (storage-sync.js, ver más abajo). El de acá llamaba a
+  // intentarSincronizar() directo, sin pasar por mostrarIndicadorConexion -
+  // así que al reconectar, el indicador se saltaba el amarillo
+  // "Reconectando" y podía terminar en cualquier estado según cuál de los
+  // 2 listeners terminara corriendo último. Se deja un solo punto de
+  // verdad para "qué pasa cuando vuelve la conexión".
 
   // Aviso NATIVO del navegador (no personalizable, restricción de seguridad)
   // si se intenta recargar/cerrar la pestaña con cambios sin sincronizar.
@@ -389,11 +395,11 @@ window.addEventListener("DOMContentLoaded", () => {
     // quedaba ningún refresh_token utilizable, así que iba derecho al login
     // interactivo con popup real. Eso dejó de ser cierto: desde el fix de
     // manejarFalloDeRed (storage-sync.js), la píldora también se prende
-    // ante CUALQUIER fallo de red pasajero — casos en los que el
+    // ante CUALQUIER fallo de red pasajero - casos en los que el
     // refresh_token sigue perfecto y ni hace falta molestar a Google. Ahora
     // se chequea primero (haySesionGuardada(), síncrono, sin red): si hay
     // sesión guardada, se reintenta en silencio (asegurarTokenValido, nunca
-    // abre ventanas) y listo — sin popup, sin "Continuar". Solo si de
+    // abre ventanas) y listo - sin popup, sin "Continuar". Solo si de
     // verdad no queda ninguna sesión guardada (o el Worker ya la invalidó,
     // ver borrarRefreshTokenGoogle en asegurarTokenValido) se cae al login
     // completo, llamado de forma DIRECTA (sin await antes) para no romper
