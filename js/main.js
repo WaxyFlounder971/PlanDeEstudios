@@ -462,9 +462,20 @@ window.addEventListener("DOMContentLoaded", () => {
   // hasta el próximo cambio del usuario o el próximo evento "online". Esto
   // cubre el caso de que la app se quede abierta sin que el usuario edite
   // nada más, pero con cambios (o una reconexión) todavía pendientes.
+  // FIX 2026-09-28 (pedido explícito: "máximo máximo 30 segundos para
+  // actualizar, nunca diferencias entre dispositivos"): 45s por sí solo ya
+  // superaba el tope pedido en el peor caso (un fallo justo después de un
+  // tick espera casi los 45s completos hasta el próximo). Bajado a 20s.
+  // Además, antes este tick solo reintentaba la SUBIDA (intentarSincronizar);
+  // si lo que fallaba era la BAJADA (ej. este dispositivo no tiene cambios
+  // propios pendientes, pero tampoco se enteró de un cambio remoto por lo
+  // que sea), no había ninguna red de contención acá - dependía enteramente
+  // del sondeo de 9s. Ahora este tick también sondea, como respaldo
+  // adicional con un timer independiente.
   setInterval(() => {
     if (estado.pendienteSync || !estado.token) intentarSincronizar();
-  }, 45000);
+    sondearCambiosRemotos();
+  }, 20000);
 
   // v9 (punto 5 - sondeo multi-dispositivo): cada ~9s revisa SOLO el
   // modifiedTime del archivo en Drive (llamada barata, ver
