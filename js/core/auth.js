@@ -498,9 +498,21 @@ async function eliminarPermisoDrive(token, fileId, permissionId) {
 }
 
 async function leerDatos(token, fileId) {
+  // FIX 2026-09-28 (causa raíz real de "el dato se guarda pero no se
+  // refleja en el otro dispositivo hasta salir y volver a entrar"): esta
+  // función se llama con la MISMA URL exacta una y otra vez durante toda
+  // la sesión (cada sondeo, cada pull-to-refresh, cada ciclo de sync) - el
+  // patrón de libro de texto para que un fetch() sin `cache` explícito
+  // termine sirviéndose de la caché HTTP del navegador en vez de ir a la
+  // red de verdad, sobre todo en sesiones largas (la pestaña queda abierta
+  // horas). `probarConexionReal()` (storage-sync.js) ya usaba `cache:
+  // "no-store"` a propósito por este mismo motivo - acá faltaba. Se suma
+  // además un parámetro que cambia en cada llamada (`_=timestamp`) como
+  // segunda barrera, por si algún proxy/capa intermedia (no el navegador)
+  // decidiera cachear igual por URL.
   const respuesta = await fetch(
-    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
-    { headers: { Authorization: `Bearer ${token}` } }
+    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&_=${Date.now()}`,
+    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
   );
   if (!respuesta.ok) {
     const cuerpo = await respuesta.text().catch(() => "");
@@ -520,9 +532,15 @@ async function leerDatos(token, fileId) {
  * innecesariamente en archivos que pueden pesar bastante con el tiempo.
  */
 async function obtenerMetadatosArchivo(token, fileId) {
+  // FIX 2026-09-28: esta es la llamada de MAYOR frecuencia de toda la app
+  // (cada 9-20s, sondearCambiosRemotos en storage-sync.js) contra la misma
+  // URL exacta durante toda la sesión - la más expuesta de todas a quedar
+  // sirviéndose de una respuesta cacheada en vez de preguntarle a Drive de
+  // verdad. Ver el mismo fix, con la misma explicación completa, en
+  // leerDatos() más abajo.
   const respuesta = await fetch(
-    `https://www.googleapis.com/drive/v3/files/${fileId}?fields=modifiedTime`,
-    { headers: { Authorization: `Bearer ${token}` } }
+    `https://www.googleapis.com/drive/v3/files/${fileId}?fields=modifiedTime&_=${Date.now()}`,
+    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
   );
   if (!respuesta.ok) {
     const cuerpo = await respuesta.text().catch(() => "");
