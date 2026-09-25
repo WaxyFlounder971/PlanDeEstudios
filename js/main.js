@@ -9,7 +9,7 @@ import { inicializarModalEnlace, renderizarEnlacesRapidos } from "./config/confi
 import { buscarOCrearArchivoDatos, cerrarSesionGoogle, inicializarGoogleAuth, iniciarSesionConGoogle, obtenerMetadatosArchivo, obtenerPerfilGoogle } from "./core/auth.js";
 import { migrarDatosAntiguos, sellarTimestamp } from "./core/schema.js";
 import { fusionarDatos } from "./core/storage-merge.js";
-import { actualizarIndicadorSync, asegurarTokenValido, avisarCierreSesionAOtrasPestanas, forzarSincronizacion, inicializarCanalEntrePestanas, inicializarPullToRefresh, inicializarReconexionAlVolverOnline, inicializarSondeoAlVolver, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, registrarHookCierreSesionForzado, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
+import { actualizarIndicadorSync, asegurarTokenValido, avisarCierreSesionAOtrasPestanas, forzarSincronizacion, haySesionGuardada, inicializarCanalEntrePestanas, inicializarPullToRefresh, inicializarReconexionAlVolverOnline, inicializarSondeoAlVolver, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
 import { CLAVE_CACHE_LOCAL, borrarTokenCache, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
 import { obtenerIniciales } from "./core/utils.js";
 // Sincronización con Google Calendar (2026-08-25, reemplaza Web Push) -
@@ -40,7 +40,7 @@ import { procesarAsociacionPendienteDeAmigo, iniciarRefrescoPeriodicoAmigos } fr
 // se ejecute (mostrarSeccion() más abajo la llama vía window, no vía
 // import directo, para no acoplar main.js a cada sección una por una).
 import "./asistente/asistente.js";
-import { abrirConfirmacion, agregarLongPress, inicializarAutoScrollSelectoresEnModales, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, mostrarPantallaCargaSesion, mostrarToastAccion, ocultarPantallaCargaSesion, restaurarEstadoSidebar } from "./ui/componentes.js";
+import { abrirConfirmacion, agregarLongPress, inicializarAutoScrollSelectoresEnModales, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, mostrarPantallaCargaSesion, mostrarToast, mostrarToastAccion, ocultarPantallaCargaSesion, restaurarEstadoSidebar } from "./ui/componentes.js";
 import { confirmarUniversidadNoInvertida } from "./ui/aviso-universidad.js";
 import { aplicarPaleta, aplicarTemaGuardadoLocalmente } from "./ui/tema.js";
 
@@ -383,22 +383,43 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 
   document.getElementById("btn-reconectar-sesion").addEventListener("click", () => {
-    // MIGRACIÓN 2026-08-25: este botón (hoy vive dentro de #modal-sin-
-    // conexion, ver 2026-09-24 más abajo) solo puede aparecer en dos casos -
-    // (a) el refresh_token guardado ya falló de verdad contra
-    // /oauth/refresh (revocado, o vencido por el límite de 7 días en modo
-    // Prueba), o (b) todavía no hay ningún refresh_token guardado en este
-    // dispositivo (cuenta migrando desde el flujo viejo, ver B.5). En
-    // NINGUNO de los dos casos otro refresco silencioso serviría de algo -
-    // hace falta el login completo con popup real. Se llama de forma
-    // DIRECTA (sin async antes) para no romper el gesto de usuario en
-    // navegadores móviles, igual que el botón de login normal.
-    // 2026-09-24: ocultamiento optimista de la píldora Y del modal (antes
-    // solo existía el banner) - si el usuario tocó "Reconectar" desde
-    // adentro del modal, ambos deben desaparecer de una, sin esperar a que
-    // el resultado real de iniciarSesionConGoogle() vuelva.
-    document.getElementById("pill-sin-conexion").classList.add("oculto");
+    // FIX 2026-09-25 v2 (pedido explícito: "sin tener que estar dándole a
+    // Google continuar... que se guarde la sesión"): MIGRACIÓN 2026-08-25
+    // asumía que este botón solo podía aparecer cuando de verdad no
+    // quedaba ningún refresh_token utilizable, así que iba derecho al login
+    // interactivo con popup real. Eso dejó de ser cierto: desde el fix de
+    // manejarFalloDeRed (storage-sync.js), la píldora también se prende
+    // ante CUALQUIER fallo de red pasajero — casos en los que el
+    // refresh_token sigue perfecto y ni hace falta molestar a Google. Ahora
+    // se chequea primero (haySesionGuardada(), síncrono, sin red): si hay
+    // sesión guardada, se reintenta en silencio (asegurarTokenValido, nunca
+    // abre ventanas) y listo — sin popup, sin "Continuar". Solo si de
+    // verdad no queda ninguna sesión guardada (o el Worker ya la invalidó,
+    // ver borrarRefreshTokenGoogle en asegurarTokenValido) se cae al login
+    // completo, llamado de forma DIRECTA (sin await antes) para no romper
+    // el gesto de usuario en navegadores móviles.
     document.getElementById("modal-sin-conexion").classList.add("oculto");
+
+    if (haySesionGuardada()) {
+      mostrarToast("Reconectando…");
+      asegurarTokenValido().then((ok) => {
+        if (ok) {
+          if (estado.pendienteSync) intentarSincronizar();
+          else sondearCambiosRemotos();
+        } else {
+          mostrarToast("Seguimos sin poder conectar con Drive. Te avisamos apenas se pueda.");
+        }
+        // Si falló, la píldora se queda encendida sola (mostrarAvisoReconexion
+        // ya corrió dentro de asegurarTokenValido) y los reintentos
+        // automáticos (online/9s/45s) van a seguir probando sin más toques.
+      });
+      return;
+    }
+
+    // Sin refresh_token guardado: no hay nada que reintentar en silencio,
+    // hace falta el login completo. Acá sí se oculta la píldora de una,
+    // porque el popup de Google va a reemplazar la pantalla por completo.
+    document.getElementById("pill-sin-conexion").classList.add("oculto");
     iniciarSesionConGoogle();
   });
 
@@ -423,15 +444,12 @@ window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("modal-sin-conexion").classList.add("oculto");
   });
 
-  // Bug 2 (2026-09-04 - "reconexión tras perder internet no sincroniza
-  // sola, obliga a cerrar sesión"): el cierre de sesión forzado vive en
-  // storage-sync.js (no puede importar cerrarSesion de acá sin crear un
-  // import circular - mismo patrón que registrarHookPostFusion/
-  // registrarHookPostGuardado), así que este archivo registra su propia
-  // función para que storage-sync.js la llame solo cuando de verdad haga
-  // falta (varios intentos fallidos seguidos, con conexión real
-  // confirmada - ver manejarFalloReconexion).
-  registrarHookCierreSesionForzado(cerrarSesion);
+  // FIX 2026-09-25 v2 (pedido explícito: "que se guarde la sesión"): antes
+  // acá se registraba cerrarSesion() como hook para que storage-sync.js
+  // pudiera forzar un cierre de sesión automático tras varios fallos
+  // seguidos de reconexión. Ese mecanismo se quitó (ver manejarFalloReconexion
+  // en storage-sync.js): ya nunca se cierra la sesión sola por reintentos
+  // fallidos, así que este registro ya no hace falta.
 
   // Bug 1 (v8): reintento periódico - antes, si un intento de sincronización
   // fallaba (token vencido, red inestable, etc.), no volvía a intentarse
