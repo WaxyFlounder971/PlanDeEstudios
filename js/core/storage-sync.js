@@ -456,17 +456,33 @@ async function refrescarPorAvisoDeOtraPestana() {
   }
 }
 
+/**
+ * 2026-09-24: antes mostraba/ocultaba el banner grande y fijo
+ * (#aviso-reconexion) — se reemplaza por la píldora chica de la topbar
+ * móvil (#pill-sin-conexion, ver index.html), que solo se muestra/oculta,
+ * sin abrir el modal sola (el modal #modal-sin-conexion se abre recién si
+ * el usuario TOCA la píldora - ver main.js). En >=900px no hay elemento
+ * que mostrar/ocultar acá: el sidebar ya refleja este mismo
+ * estado.conexionDrive a través de actualizarIndicadorSync() más abajo, sin
+ * necesitar su propio show/hide explícito.
+ */
 function mostrarAvisoReconexion() {
   estado.conexionDrive = "desconectado";
-  const aviso = document.getElementById("aviso-reconexion");
-  if (aviso) aviso.classList.remove("oculto");
+  const pill = document.getElementById("pill-sin-conexion");
+  if (pill) pill.classList.remove("oculto");
   actualizarIndicadorSync();
 }
 
 function ocultarAvisoReconexion() {
   estado.conexionDrive = "ok";
-  const aviso = document.getElementById("aviso-reconexion");
-  if (aviso) aviso.classList.add("oculto");
+  const pill = document.getElementById("pill-sin-conexion");
+  if (pill) pill.classList.add("oculto");
+  // 2026-09-24: si el modal quedó abierto (el usuario lo dejó abierto y la
+  // conexión volvió sola, ej. sondeo/evento "online") se cierra solo - no
+  // tiene sentido dejar un modal de "estás sin conexión" abierto cuando ya
+  // se reconectó.
+  const modal = document.getElementById("modal-sin-conexion");
+  if (modal) modal.classList.add("oculto");
   actualizarIndicadorSync();
 }
 
