@@ -325,6 +325,53 @@ async function manejarFalloReconexion() {
   }
 }
 
+/**
+ * FIX 2026-09-25 (segundo arreglo — reporte real: "apagué wifi... dice ya
+ * sincronizado y puras mentirotas"): sondearCambiosRemotos, sincronizarAhora,
+ * sincronizarAlIniciar y ejecutarUnaSincronizacion solo pasaban por
+ * manejarFalloReconexion()/mostrarAvisoReconexion() cuando el error traía
+ * `reconexionFallida` (un 401 que ni el refresco silencioso pudo arreglar).
+ * Un corte de wifi liso y llano no es un 401: es un `fetch` que rechaza
+ * ANTES de llegar a ningún servidor (TypeError "Failed to fetch" o
+ * similar), así que `e.reconexionFallida` nunca queda seteado — el error
+ * cae en el console.warn de cada función y el indicador se queda pegado en
+ * lo último que decía, mintiendo mientras tanto. El listener "offline" de
+ * arriba ayuda, pero no es infalible (ej. wifi apagado con datos móviles
+ * fantasma, o el navegador tarda en notificarlo) — la única señal
+ * verdaderamente confiable de que Drive no respondió es que la llamada
+ * misma haya fallado, sea cual sea la razón.
+ *
+ * manejarFalloDeRed() es el punto único para CUALQUIER catch de estas 4
+ * funciones: si fue un 401 sin renovar, delega en manejarFalloReconexion()
+ * (cuenta hacia el cierre de sesión forzado, como ya hacía). Si fue
+ * cualquier otro error (el caso real más común: sin conexión), igual
+ * prende el aviso, pero SIN sumar al contador de cierre forzado — eso está
+ * reservado para cuando ya se confirmó conexión real y aun así falla la
+ * sesión (ver probarConexionReal/manejarFalloReconexion).
+ */
+function manejarFalloDeRed(e) {
+  if (e && e.reconexionFallida) {
+    manejarFalloReconexion();
+  } else {
+    mostrarAvisoReconexion();
+  }
+}
+
+/**
+ * Contraparte de manejarFalloDeRed(): antes SOLO ejecutarUnaSincronizacion
+ * (la subida) apagaba el aviso al tener éxito. sondearCambiosRemotos,
+ * sincronizarAhora y sincronizarAlIniciar son de solo lectura y nunca lo
+ * hacían — así que si el aviso llegaba a prenderse por un fallo pasajero,
+ * un sondeo exitoso inmediatamente después no lo apagaba, y la píldora
+ * podía quedar encendida indefinidamente pese a que la conexión ya había
+ * vuelto. Se llama apenas cualquiera de las 4 funciones confirma que una
+ * llamada a Drive SÍ volvió con éxito.
+ */
+function confirmarConexionOk() {
+  intentosReconexionFallidosSeguidos = 0;
+  if (estado.conexionDrive === "desconectado") ocultarAvisoReconexion();
+}
+
 let listenerOnlineRegistrado = false;
 
 /** Punto 1: apenas el navegador confirma que la conexión volvió, se
@@ -339,6 +386,19 @@ function inicializarReconexionAlVolverOnline() {
       sondearCambiosRemotos();
       if (estado.pendienteSync) intentarSincronizar();
     });
+  });
+  // FIX 2026-09-25 (reporte real: "apagué wifi pero no veo ningún aviso de
+  // desconexión"): antes NO había ningún listener para "offline" — la única
+  // forma en que el indicador se enteraba de que no había conexión era que
+  // algún intento de red fallara PRIMERO (el sondeo de 9s, un sync, etc.),
+  // y varios de esos caminos ni siquiera reflejaban ese fallo en la UI (ver
+  // los 3 fixes de más abajo en sondearCambiosRemotos/sincronizarAhora/
+  // ejecutarUnaSincronizacion) — con wifi apagado y sin cambios locales
+  // pendientes, podían pasar minutos sin que NADA disparara el aviso. El
+  // evento "offline" del navegador es inmediato y no depende de que
+  // ninguna llamada a Drive llegue a fallar primero.
+  window.addEventListener("offline", () => {
+    mostrarAvisoReconexion();
   });
 }
 
@@ -779,6 +839,7 @@ async function sincronizarAhora() {
     // en silencio y se reintenta una vez antes de rendirse.
     const datosFrescos = await conReintentoSi401(() => leerDatos(estado.token, estado.fileId));
     aplicarDatosRemotosFrescos(datosFrescos);
+    confirmarConexionOk(); // FIX 2026-09-25: esta lectura sí llegó a Drive, apaga el aviso si estaba prendido
     try {
       const meta = await conReintentoSi401(() => obtenerMetadatosArchivo(estado.token, estado.fileId));
       estado.ultimoModifiedTimeConocido = meta.modifiedTime;
@@ -789,15 +850,13 @@ async function sincronizarAhora() {
     mostrarToast("✓ Datos actualizados");
   } catch (e) {
     console.warn("No se pudo actualizar los datos:", e);
-    if (e.reconexionFallida) {
-      // v9.1 (punto 4): el token no se pudo renovar solo ni con el
-      // reintento — se refleja el 3er estado real del indicador en vez de
-      // un toast genérico. Los datos locales no se tocan ni se pierden.
-      // Bug 2: pasa por manejarFalloReconexion() para que este intento
-      // también cuente (si corresponde) para el límite de reintentos
-      // seguidos antes de forzar el cierre de sesión.
-      manejarFalloReconexion();
-    } else {
+    // FIX 2026-09-25 (segundo arreglo): antes solo un 401 sin renovar
+    // prendía el aviso (manejarFalloReconexion); cualquier otro error de
+    // red (el caso real más común: sin internet) solo mostraba este toast
+    // genérico sin tocar el indicador, que seguía diciendo "conectado" pese
+    // a que esta misma llamada acababa de fallar por eso.
+    manejarFalloDeRed(e);
+    if (!e.reconexionFallida) {
       mostrarToast("No se pudo actualizar. Intenta de nuevo.");
     }
   } finally {
@@ -995,6 +1054,7 @@ async function sondearCambiosRemotos() {
     // entrar de nuevo. Ahora se intenta un refresco silencioso y un
     // reintento único, igual que en sincronizarAhora().
     const meta = await conReintentoSi401(() => obtenerMetadatosArchivo(estado.token, estado.fileId));
+    confirmarConexionOk(); // FIX 2026-09-25: esta llamada sí volvió con éxito, apaga el aviso si estaba prendido
     if (!estado.ultimoModifiedTimeConocido) {
       estado.ultimoModifiedTimeConocido = meta.modifiedTime; // primera vez: solo fija la base de comparación
       return;
@@ -1005,17 +1065,19 @@ async function sondearCambiosRemotos() {
     const datosFrescos = await conReintentoSi401(() => leerDatos(estado.token, estado.fileId));
     aplicarDatosRemotosFrescos(datosFrescos);
   } catch (e) {
-    if (e.reconexionFallida) {
-      // El refresco silencioso también falló (ej. el usuario revocó el
-      // acceso, o el navegador bloquea el flujo de terceros en segundo
-      // plano): se refleja el 3er estado real del indicador en vez de
-      // seguir sondeando en silencio sin que el usuario se entere nunca.
-      // Bug 2: este sondeo corre cada 9s, así que es el camino más
-      // frecuente por el que se detecta que la conexión volvió — pasa por
-      // manejarFalloReconexion() para contar el intento (si hay conexión
-      // real) hacia el límite antes de forzar el cierre de sesión.
-      manejarFalloReconexion();
-    }
+    // FIX 2026-09-25 (segundo arreglo, causa raíz real de "dice ya
+    // sincronizado y puras mentirotas"): antes solo un 401 sin renovar
+    // (e.reconexionFallida) prendía el aviso acá. Este sondeo corre cada 9s
+    // en silencio; un corte de wifi liso y llano hace que
+    // obtenerMetadatosArchivo rechace con un error común (sin status 401,
+    // sin reconexionFallida) — antes eso caía derecho al console.warn de
+    // abajo sin tocar el indicador, que se quedaba mintiendo "Todo
+    // sincronizado" mientras el sondeo fallaba en silencio ciclo tras
+    // ciclo. Ahora CUALQUIER fallo de este sondeo prende el aviso;
+    // manejarFalloDeRed() decide adentro si además cuenta para el límite de
+    // reintentos antes de forzar el cierre de sesión (solo si fue
+    // reconexionFallida).
+    manejarFalloDeRed(e);
     console.warn("No se pudo sondear cambios remotos de Drive:", e);
   }
 }
@@ -1046,10 +1108,12 @@ async function sincronizarAlIniciar() {
     estado.ultimoModifiedTimeConocido = meta.modifiedTime;
     const datosFrescos = await conReintentoSi401(() => leerDatos(estado.token, estado.fileId));
     aplicarDatosRemotosFrescos(datosFrescos);
+    confirmarConexionOk(); // FIX 2026-09-25: pull inicial exitoso, apaga el aviso si estaba prendido
   } catch (e) {
-    if (e.reconexionFallida) {
-      manejarFalloReconexion();
-    }
+    // FIX 2026-09-25 (segundo arreglo): mismo problema que en
+    // sondearCambiosRemotos — antes solo reconexionFallida prendía el
+    // aviso; un fallo de red plano en el pull inicial quedaba invisible.
+    manejarFalloDeRed(e);
     console.warn("No se pudo hacer el pull inicial desde Drive:", e);
   } finally {
     // Se sube lo pendiente después del pull (y no antes), para no pisar en
@@ -1434,8 +1498,7 @@ async function ejecutarUnaSincronizacion() {
     // después escribiendo) sobre un estado.datos viejo hasta su próximo
     // sondeo — el sondeo periódico no corre en pestañas ocultas.
     avisarDatosSubidosAOtrasPestanas();
-    ocultarAvisoReconexion();
-    intentosReconexionFallidosSeguidos = 0; // sync exitoso: confirma que la reconexión ya funcionó
+    confirmarConexionOk(); // FIX 2026-09-25: sync exitoso, apaga el aviso si estaba prendido
     actualizarIndicadorSync();
     // Backup rotativo a Drive (Ajustes): fire-and-forget a propósito — no
     // se espera (sin await) para no demorar el indicador de "Todo
@@ -1463,15 +1526,16 @@ async function ejecutarUnaSincronizacion() {
       `No se pudo sincronizar (status: ${e.status ?? "desconocido"}). Se reintentará más tarde.`,
       e.body || e.message || e
     );
-    if (e.reconexionFallida) {
-      // El token venció y el refresco silencioso (más el reintento único)
-      // también falló: se refleja el 3er estado real del indicador. Los
-      // cambios locales siguen en caché y marcados como pendientes.
-      // Bug 2: este es el catch de intentarSincronizar() — el que sube
-      // cambios locales pendientes — así que también pasa por
-      // manejarFalloReconexion() para el conteo de reintentos seguidos.
-      manejarFalloReconexion();
-    }
+    // FIX 2026-09-25 (segundo arreglo — el caso más grave de los 4): este es
+    // el catch de la SUBIDA de cambios locales pendientes. Antes, un fallo
+    // de red plano (sin internet) durante la subida no prendía ningún
+    // aviso — los cambios quedaban a salvo en caché (pendienteSync sigue en
+    // true, nada se pierde), pero el usuario no tenía forma de saber que
+    // la subida venía fallando en silencio salvo mirando el badge del
+    // sidebar en ≥900px. manejarFalloDeRed() cubre tanto reconexionFallida
+    // (token vencido sin poder renovar — cuenta para el cierre forzado)
+    // como cualquier otro fallo de red (no cuenta, es solo "sin conexión").
+    manejarFalloDeRed(e);
   }
 }
 
