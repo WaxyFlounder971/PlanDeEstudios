@@ -24,20 +24,9 @@ function crearDatosUsuarioNuevo() {
 
     configuracion: {
       paleta: "azul",              // una de las 10 paletas
-      modo: "dark",                 // "dark" | "light"
       paleta_personalizada: null,   // v1.13: { basadaEn, colores: { fondoCanvas, fondoCard, borde, accent1, accent2, luz } }
                                      // v1.15: colores también incluye degradado: { activo, color, intensidad (0-100, % del stop medio), angulo (0-360) }
       formato_texto_nombres: "titulo", // "titulo" | "mayusculas" | "oracion" (v5 #9)
-      // v1.16 (2026-08-21): "Modo rendimiento" pasa a ser el default para
-      // TODOS los usuarios nuevos (antes había que activarlo a mano). El
-      // modo "normal" de siempre se renombra a "fancy" de cara al usuario
-      // y queda como la opción manual, en el mismo switch pero invertido
-      // (ver el bloque del switch en config-ajustes.js). El nombre interno
-      // del campo se mantiene igual para no tocar el modelo de datos ni el
-      // merge de sync — ver migrarDatosAntiguos más abajo para el flip
-      // equivalente en cuentas ya existentes.
-      modo_rendimiento: true,       // v1.14.1: reduce blur/sombras/animaciones para laptops con GPU integrada
-
       // Selector de moneda (Ajustes generales, 2026-08-10): preferencia
       // GLOBAL del usuario (NO por universidad/plan) — la usa Finanzas para
       // formatear montos con el símbolo/formato correspondiente. Ver
@@ -356,6 +345,12 @@ function crearDatosUsuarioNuevo() {
       /* ver crearSesionEstudio() */
     ],
     _eliminados_sesiones_estudio: [],
+
+    // Entradas propias de Tiempo, sin matrícula ni relación con planes o
+    // semestres. Se sincronizan como datos de Tiempo; cada sesión enlaza a
+    // esta colección con `materia_independiente_id`.
+    tiempo_estudio_materias: [],
+    _eliminados_tiempo_estudio_materias: [],
 
     // Competencias — Parte 1 (2026-09-09): a diferencia de todo lo demás en
     // este archivo, una "competencia" NO es un dato propio del usuario —
@@ -1580,15 +1575,33 @@ function crearConfigPomodoroDefault() {
  * `origen`: "timer" (Parte 1, cronómetro simple) | "pomodoro" (Parte 2) |
  * "manual" (Parte 3, registro manual/retroactivo).
  */
-function crearSesionEstudio({ materiaMatriculadaId, inicio, fin, origen }) {
+function crearSesionEstudio({ materiaMatriculadaId, materiaIndependienteId, inicio, fin, origen }) {
   const duracionMinutos = Math.max(0, Math.round((Number(fin) - Number(inicio)) / 60000));
   return sellarTimestamp({
     id: "sesest_" + crypto.randomUUID(),
-    materia_matriculada_id: materiaMatriculadaId,
+    materia_matriculada_id: materiaIndependienteId ? null : materiaMatriculadaId,
+    materia_independiente_id: materiaIndependienteId || null,
     inicio, // epoch ms
     fin, // epoch ms
     duracion_minutos: duracionMinutos,
     origen: origen || "timer",
+  });
+}
+
+function crearMateriaEstudioIndependiente(nombre) {
+  const texto = String(nombre || "").trim();
+  if (!texto) throw new Error("La materia necesita un nombre.");
+  return sellarTimestamp({
+    id: "tei_" + crypto.randomUUID(),
+    tipo: "independiente",
+    nombre: texto,
+    tiempo_estudio: {
+      meta_horas_semana: null,
+      pomodoro: null,
+      color: null,
+      dias_estudio: null,
+      ultima_semana_felicitada: null,
+    },
   });
 }
 
@@ -2968,6 +2981,42 @@ const MAPEO_HORAS_VIEJO_A_NUEVO = {
 function migrarDatosAntiguos(datos) {
   if (!datos) return datos;
 
+  // Modo Claro/Oscuro y Optimizado/Fancy pertenecen a este dispositivo.
+  // Las cuentas anteriores los guardaban en `configuracion`, sincronizada
+  // por Drive. En equipos que ya usaban la app se conserva primero la
+  // preferencia local existente; si faltaba, se migra una sola vez el valor
+  // antiguo. Un navegador sin huellas locales de la app arranca con el tema
+  // del sistema y Optimizado, aunque Drive todavía tenga valores legacy.
+  const cfgVisual = datos.configuracion;
+  if (cfgVisual) {
+    try {
+      const legacyLocal = localStorage.getItem("tema_paleta") !== null || localStorage.getItem("tema_modo") !== null;
+      const temaGuardado = localStorage.getItem("tema_modo");
+      if (temaGuardado !== "light" && temaGuardado !== "dark") {
+        let temaInicial = "dark";
+        if (legacyLocal && (cfgVisual.modo === "light" || cfgVisual.modo === "dark")) {
+          temaInicial = cfgVisual.modo;
+        } else {
+          try {
+            temaInicial = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+          } catch (_e) {}
+        }
+        localStorage.setItem("tema_modo", temaInicial);
+      }
+      if (localStorage.getItem("modo_diseno_local_v1") === null) {
+        const disenoInicial = legacyLocal && cfgVisual.modo_rendimiento === false ? "fancy" : "optimizado";
+        localStorage.setItem("modo_diseno_local_v1", disenoInicial);
+      }
+    } catch (_e) {
+      // Si el navegador bloquea localStorage, la UI usa los defaults en memoria.
+    }
+    // Quitar las claves viejas antes de fusionar o volver a guardar el
+    // bloque: los clientes nuevos ya no deben enviarlas a Drive.
+    delete cfgVisual.modo;
+    delete cfgVisual.modo_rendimiento;
+    delete cfgVisual.rendimiento_default_v2_aplicado;
+  }
+
   // v1.15 (Parte 2): relleno defensivo para paletas personalizadas creadas
   // antes de que existiera el degradado configurable — quedan con
   // degradado.activo=false (blanco sólido, el mismo comportamiento de
@@ -3294,6 +3343,8 @@ function migrarDatosAntiguos(datos) {
   // JSON en Drive se guardó antes de que existiera esta sección.
   if (!Array.isArray(datos.sesiones_estudio)) datos.sesiones_estudio = [];
   if (!Array.isArray(datos._eliminados_sesiones_estudio)) datos._eliminados_sesiones_estudio = [];
+  if (!Array.isArray(datos.tiempo_estudio_materias)) datos.tiempo_estudio_materias = [];
+  if (!Array.isArray(datos._eliminados_tiempo_estudio_materias)) datos._eliminados_tiempo_estudio_materias = [];
 
   // Competencias (Parte 1, 2026-09-09): mismo relleno defensivo.
   if (!Array.isArray(datos.competencias_unidas)) datos.competencias_unidas = [];
@@ -3629,22 +3680,6 @@ function migrarDatosAntiguos(datos) {
     }
   }
 
-  // Modo Rendimiento como default (v1.16, 2026-08-21): cuentas creadas
-  // ANTES de este cambio tienen modo_rendimiento GUARDADO explícitamente
-  // (false, el default viejo) — a diferencia del resto de esta función,
-  // acá no alcanza con "el campo no existe" para detectar quién falta
-  // migrar, porque el campo siempre existió con un valor real. Por eso se
-  // usa una bandera aparte (mismo patrón que
-  // configuracion.backup_drive.archivo_vigente_migrado más arriba): se
-  // fuerza rendimiento=true UNA sola vez por cuenta, y a partir de ahí la
-  // bandera queda en true para siempre, así que cualquier cambio manual
-  // que la persona haga después (activar "fancy" desde Ajustes) nunca se
-  // vuelve a pisar en la próxima sincronización/carga.
-  if (datos.configuracion && datos.configuracion.rendimiento_default_v2_aplicado !== true) {
-    datos.configuracion.modo_rendimiento = true;
-    datos.configuracion.rendimiento_default_v2_aplicado = true;
-  }
-
   return datos;
 }
 
@@ -3744,4 +3779,5 @@ export {
   crearSesionEstudio,
   crearConfigPomodoroDefault,
   COLOR_TIEMPO_ESTUDIO_DEFAULT,
+  crearMateriaEstudioIndependiente,
 };

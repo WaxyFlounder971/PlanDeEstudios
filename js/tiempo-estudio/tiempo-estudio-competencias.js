@@ -88,6 +88,35 @@ import {
   COLOR_PALETA_DEFAULT,
 } from "./tiempo-estudio-competencias-visual.js";
 
+const CLAVE_CACHE_COMPETENCIA = "te_comp_marcador_cache_v1:";
+
+function guardarCacheMarcador(competenciaId, datos) {
+  try {
+    localStorage.setItem(CLAVE_CACHE_COMPETENCIA + competenciaId, JSON.stringify({
+      actualizadoEn: Date.now(),
+      nombre: datos.nombre,
+      estado: datos.estado,
+      participantes: datos.participantes,
+    }));
+  } catch (_e) {
+    // La caché es best-effort; no debe impedir ver el marcador en vivo.
+  }
+}
+
+function leerCacheMarcador(competenciaId) {
+  try {
+    const guardado = JSON.parse(localStorage.getItem(CLAVE_CACHE_COMPETENCIA + competenciaId) || "null");
+    return guardado && Array.isArray(guardado.participantes) && Number(guardado.actualizadoEn) > 0 ? guardado : null;
+  } catch (_e) {
+    return null;
+  }
+}
+
+function textoCacheDesactualizada(actualizadoEn) {
+  const fecha = new Date(actualizadoEn).toLocaleString("es-CR", { dateStyle: "medium", timeStyle: "short" });
+  return `${navigator.onLine === false ? "Sin conexión" : "No se pudo actualizar"}. Mostrando datos de ${fecha}.`;
+}
+
 const TIMEOUT_MS = 12000;
 const CLAVE_TOKEN_CREADOR_PREFIJO = "tokenCreadorCompetencia_"; // + id, ver nota en schema.js
 
@@ -904,7 +933,7 @@ async function revisarLinkInvitacionAlCargar(refrescar) {
   if (!id) return;
 
   url.searchParams.delete("comp");
-  history.replaceState(null, "", url.toString());
+  history.replaceState({ ...(history.state || {}), appNav: true, appSeccion: "tiempo-estudio" }, "", url.toString());
 
   if (estado.datos.competencias_unidas.some((c) => c.id === id)) {
     mostrarToast("Ya sos parte de esta competencia");
@@ -1115,6 +1144,17 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar) {
       viva.estado = estadoRemoto;
       sellarTimestamp(viva);
       marcarCambioPendiente();
+      guardarCacheMarcador(competencia.id, {
+        nombre: datos.nombre || competencia.nombre,
+        estado: estadoRemoto,
+        participantes: (datos.participantes || []).map((p) => ({
+          id: p.id,
+          apodo: p.apodo,
+          foto_url: p.foto_url || null,
+          color: p.color || null,
+          horas: p.horas_semana_actual || 0,
+        })),
+      });
       if (typeof window.renderizarTiempoEstudio === "function") window.renderizarTiempoEstudio();
       return;
     }
@@ -1171,9 +1211,15 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar) {
       }
     }
 
+    guardarCacheMarcador(competencia.id, {
+      nombre: datos.nombre || competencia.nombre,
+      estado: estadoRemoto,
+      participantes,
+    });
+
     let vista = vistaGuardada;
     const dibujar = (animar) =>
-      pintarTarjeta(tarjeta, { ...base, vista, participantes, estadoCuerpo: "ok", animar }, cb);
+      pintarTarjeta(tarjeta, { ...base, vista, participantes, estadoCuerpo: "ok", mensajeDesactualizado: null, animar }, cb);
     cb.alCambiarVista = (nueva) => {
       vista = nueva;
       guardarVistaPreferida(nueva);
@@ -1182,7 +1228,27 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar) {
     dibujar(true);
   } catch (e) {
     console.error("[competencias] Falló cargar el marcador:", e);
-    pintarTarjeta(tarjeta, { ...base, participantes: null, estadoCuerpo: "error", animar: false }, cb);
+    const cache = leerCacheMarcador(competencia.id);
+    if (cache) {
+      let vista = vistaGuardada;
+      const dibujar = (animar) => pintarTarjeta(tarjeta, {
+        ...base,
+        nombre: cache.nombre || base.nombre,
+        vista,
+        participantes: cache.participantes,
+        estadoCuerpo: "ok",
+        mensajeDesactualizado: textoCacheDesactualizada(cache.actualizadoEn),
+        animar,
+      }, cb);
+      cb.alCambiarVista = (nueva) => {
+        vista = nueva;
+        guardarVistaPreferida(nueva);
+        dibujar(false);
+      };
+      dibujar(false);
+    } else {
+      pintarTarjeta(tarjeta, { ...base, participantes: null, estadoCuerpo: "error", animar: false }, cb);
+    }
   }
 }
 

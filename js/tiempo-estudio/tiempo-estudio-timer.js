@@ -134,7 +134,21 @@ function buscarMateriaMatriculada(materiaMatriculadaId) {
     const mm = (semestre.materias_matriculadas || []).find((m) => m.id === materiaMatriculadaId);
     if (mm) return mm;
   }
+  const independiente = (estado.datos.tiempo_estudio_materias || []).find((m) => m.id === materiaMatriculadaId && m.tipo === "independiente");
+  if (independiente) return independiente;
   return null;
+}
+
+function crearSesionDeMateria({ materiaMatriculadaId, inicio, fin, origen }) {
+  const materia = buscarMateriaMatriculada(materiaMatriculadaId);
+  const esIndependiente = materia && materia.tipo === "independiente";
+  return crearSesionEstudio({
+    materiaMatriculadaId: esIndependiente ? null : materiaMatriculadaId,
+    materiaIndependienteId: esIndependiente ? materiaMatriculadaId : null,
+    inicio,
+    fin,
+    origen,
+  });
 }
 
 /** Mismo cálculo de "lunes 00:00 → domingo 24:00" que ya usa
@@ -150,7 +164,7 @@ function calcularMinutosEstaSemana(materiaMatriculadaId) {
   const inicio = lunes.getTime();
   const fin = inicioSemanaSiguiente.getTime();
   return (estado.datos.sesiones_estudio || [])
-    .filter((s) => s.materia_matriculada_id === materiaMatriculadaId && s.inicio >= inicio && s.inicio < fin)
+    .filter((s) => (s.materia_independiente_id || s.materia_matriculada_id) === materiaMatriculadaId && s.inicio >= inicio && s.inicio < fin)
     .reduce((acc, s) => acc + (Number(s.duracion_minutos) || 0), 0);
 }
 
@@ -492,7 +506,7 @@ function iniciarDescansoPomodoro() {
   const ahora = Date.now();
   const fin = pausado ? msPausaInicio : ahora;
   if (fin > inicioFase) {
-    const sesion = crearSesionEstudio({ materiaMatriculadaId, inicio: inicioFase, fin, origen: "pomodoro" });
+    const sesion = crearSesionDeMateria({ materiaMatriculadaId, inicio: inicioFase, fin, origen: "pomodoro" });
     estado.datos.sesiones_estudio.push(sesion);
     marcarCambioPendiente();
     revisarFelicitacionMeta(materiaMatriculadaId);
@@ -666,6 +680,7 @@ function iniciarTimerEstudio(materiaMatriculadaId) {
 
   timerActivo = {
     materiaMatriculadaId,
+    materiaIndependiente: Boolean(mm && mm.tipo === "independiente"),
     origen: pomodoroConfig ? "pomodoro" : "timer",
     sesionInicio: ahora,
     inicioFase: ahora,
@@ -744,7 +759,7 @@ function detenerTimerEstudio() {
   if (cuentaComoTrabajo) {
     const fin = pausado ? msPausaInicio : Date.now();
     if (fin > inicioFase) {
-      sesion = crearSesionEstudio({ materiaMatriculadaId, inicio: inicioFase, fin, origen });
+      sesion = crearSesionDeMateria({ materiaMatriculadaId, inicio: inicioFase, fin, origen });
       estado.datos.sesiones_estudio.push(sesion);
       marcarCambioPendiente();
       revisarFelicitacionMeta(materiaMatriculadaId);
@@ -922,7 +937,7 @@ function abrirAvisoSesionOlvidada(snapshot) {
     if (minutosTotales > 0 && cuentaComoTrabajo) {
       const inicio = snapshot.inicioFase;
       const fin = inicio + minutosTotales * 60000;
-      const sesion = crearSesionEstudio({ materiaMatriculadaId: snapshot.materiaMatriculadaId, inicio, fin, origen: snapshot.origen });
+      const sesion = crearSesionDeMateria({ materiaMatriculadaId: snapshot.materiaMatriculadaId, inicio, fin, origen: snapshot.origen });
       estado.datos.sesiones_estudio.push(sesion);
       marcarCambioPendiente();
       revisarFelicitacionMeta(snapshot.materiaMatriculadaId);
@@ -952,6 +967,7 @@ function restaurarTimerDesdeSnapshot(snapshot, { congelarAhora = false } = {}) {
   const ahora = Date.now();
   timerActivo = {
     materiaMatriculadaId: snapshot.materiaMatriculadaId,
+    materiaIndependiente: Boolean(buscarMateriaMatriculada(snapshot.materiaMatriculadaId)?.tipo === "independiente"),
     origen: snapshot.origen === "pomodoro" ? "pomodoro" : "timer",
     sesionInicio: snapshot.sesionInicio || snapshot.inicioFase,
     inicioFase: snapshot.inicioFase,

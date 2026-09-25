@@ -30,7 +30,7 @@
 import { estado } from "../core/storage.js";
 import { marcarCambioPendiente, registrarHookPostFusion } from "../core/storage-sync.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
-import { COLOR_TIEMPO_ESTUDIO_DEFAULT } from "../core/schema.js";
+import { COLOR_TIEMPO_ESTUDIO_DEFAULT, crearMateriaEstudioIndependiente, sellarTimestamp } from "../core/schema.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { obtenerSemestresActuales } from "../semestres/semestres.js";
 import { mostrarSeccion } from "../main.js";
@@ -125,6 +125,19 @@ function obtenerMateriasParaTiempoEstudio() {
       items.push({ mm, materia, plan, semestre, nombreMateria, nombreMateriaCorto: nombreCorto });
     });
   });
+  (estado.datos.tiempo_estudio_materias || []).forEach((mm) => {
+    if (mm.tipo !== "independiente") return;
+    const nombre = aplicarFormatoTexto(mm.nombre || "Materia propia");
+    items.push({
+      mm,
+      materia: { id: mm.id, codigo: "", nombre, categoria_id: null },
+      plan: null,
+      semestre: null,
+      nombreMateria: nombre,
+      nombreMateriaCorto: nombre,
+      esIndependiente: true,
+    });
+  });
   items.sort((a, b) => {
     const aConfigurada = a.mm.tiempo_estudio.meta_horas_semana !== null && a.mm.tiempo_estudio.meta_horas_semana !== undefined;
     const bConfigurada = b.mm.tiempo_estudio.meta_horas_semana !== null && b.mm.tiempo_estudio.meta_horas_semana !== undefined;
@@ -152,7 +165,7 @@ function obtenerRangoSemanaActual() {
 function calcularMinutosEstudiadosEstaSemana(materiaMatriculadaId) {
   const { inicio, fin } = obtenerRangoSemanaActual();
   return (estado.datos.sesiones_estudio || [])
-    .filter((s) => s.materia_matriculada_id === materiaMatriculadaId && s.inicio >= inicio && s.inicio < fin)
+    .filter((s) => (s.materia_independiente_id || s.materia_matriculada_id) === materiaMatriculadaId && s.inicio >= inicio && s.inicio < fin)
     .reduce((acc, s) => acc + (Number(s.duracion_minutos) || 0), 0);
 }
 
@@ -167,6 +180,7 @@ function calcularMinutosEstudiadosEstaSemana(materiaMatriculadaId) {
  */
 function obtenerColorMateria(mm, materia, plan) {
   if (mm.tiempo_estudio.color) return mm.tiempo_estudio.color;
+  if (mm.tipo === "independiente" || !materia || !plan) return COLOR_TIEMPO_ESTUDIO_DEFAULT;
   const categoria = plan.categorias.find((c) => c.id === materia.categoria_id);
   return (categoria && categoria.color) || COLOR_TIEMPO_ESTUDIO_DEFAULT;
 }
@@ -281,7 +295,7 @@ function construirTarjetaMateria(item) {
 
   tarjeta.innerHTML = `
     <div class="materia-linea1">
-      <span class="materia-codigo te-codigo-clickeable">${materia.codigo}</span>
+      <span class="materia-codigo${item.esIndependiente ? "" : " te-codigo-clickeable"}">${item.esIndependiente ? "Propia" : materia.codigo}</span>
       <span class="materia-nombre truncada">${nombreMateriaCorto}</span>
     </div>
     <div class="te-tarjeta-materia-linea2">
@@ -293,7 +307,7 @@ function construirTarjetaMateria(item) {
   // El código, como en Plan de Estudios, abre "Buscar materia en..." en vez
   // de mandar al detalle (que es lo que hace el resto de la tarjeta) — sin
   // esto, el click se colaba al listener de la tarjeta entera de arriba.
-  tarjeta.querySelector(".te-codigo-clickeable").addEventListener("click", (e) => {
+  if (!item.esIndependiente) tarjeta.querySelector(".te-codigo-clickeable").addEventListener("click", (e) => {
     e.stopPropagation();
     abrirBuscarMateriaEn({ mm, materia, plan, semestre, nombreMateria, origen: "tiempo-estudio" });
   });
@@ -435,8 +449,52 @@ function construirEncabezado(cont) {
   });
   grupoBotones.appendChild(btnRegistroManual);
 
+  const btnNuevaMateria = document.createElement("button");
+  btnNuevaMateria.type = "button";
+  btnNuevaMateria.className = "btn btn-secondary";
+  btnNuevaMateria.style.cssText = "align-self:center; padding:8px 12px; font-size:.82rem; white-space:nowrap;";
+  btnNuevaMateria.textContent = "+ Materia propia";
+  btnNuevaMateria.addEventListener("click", abrirModalNuevaMateriaIndependiente);
+  grupoBotones.appendChild(btnNuevaMateria);
+
   encabezado.appendChild(grupoBotones);
   cont.appendChild(encabezado);
+}
+
+function abrirModalNuevaMateriaIndependiente() {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.style.cssText = "position:fixed; inset:0; z-index:300; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; padding:16px;";
+  const caja = document.createElement("div");
+  caja.className = "glass-card modal-card stack";
+  caja.style.cssText = "max-width:420px; width:100%; gap:14px;";
+  caja.innerHTML = `
+    <h2 style="margin:0">Agregar materia propia</h2>
+    <p class="muted" style="margin:0">Esta entrada existe solo en Tiempo y no se vincula a Plan de Estudios ni a Semestres.</p>
+    <label class="stack" style="gap:6px"><span class="form-label">Nombre</span><input id="te-materia-propia-nombre" class="form-input" maxlength="80" placeholder="Ej. Tesis o Italiano"></label>
+    <div class="row-between" style="gap:10px"><button type="button" class="btn btn-secondary" data-accion="cancelar" style="flex:1">Cancelar</button><button type="button" class="btn btn-primary" data-accion="crear" style="flex:1">Crear</button></div>`;
+  caja.addEventListener("click", (evento) => evento.stopPropagation());
+  overlay.appendChild(caja);
+  document.body.appendChild(overlay);
+  const input = caja.querySelector("#te-materia-propia-nombre");
+  const cerrar = () => overlay.remove();
+  caja.querySelector('[data-accion="cancelar"]').addEventListener("click", cerrar);
+  caja.querySelector('[data-accion="crear"]').addEventListener("click", () => {
+    const nombre = input.value.trim();
+    if (!nombre) {
+      input.focus();
+      mostrarToast("Escribí un nombre para la materia");
+      return;
+    }
+    const materia = crearMateriaEstudioIndependiente(nombre);
+    estado.datos.tiempo_estudio_materias.push(materia);
+    sellarTimestamp(materia);
+    marcarCambioPendiente();
+    cerrar();
+    mostrarToast("Materia propia agregada");
+    renderizarTiempoEstudio();
+  });
+  input.focus();
 }
 
 /**
@@ -612,14 +670,14 @@ function construirEncabezadoDetalle(cont, item) {
   });
 
   // D.1 (Parte C ya conectada): tocar el nombre abre "Buscar materia en...".
-  const titulo = document.createElement("button");
+  const titulo = document.createElement(item.esIndependiente ? "span" : "button");
   titulo.type = "button";
   titulo.className = "te-encabezado-detalle-nombre";
   titulo.style.cssText =
     "margin:0; flex:1; text-align:center; background:none; border:none; cursor:pointer; " +
     "color:var(--text-primary); font-weight:700; font-size:1.05rem; padding:6px;";
   titulo.textContent = nombreMateria;
-  titulo.addEventListener("click", () => {
+  if (!item.esIndependiente) titulo.addEventListener("click", () => {
     abrirBuscarMateriaEn({ mm, materia, plan, semestre, nombreMateria, origen: "tiempo-estudio" });
   });
 

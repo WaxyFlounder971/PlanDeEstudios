@@ -2245,6 +2245,7 @@ function inicializarHorario() {
   const btnSiguiente = document.getElementById("btn-horario-semestre-siguiente");
   const btnAgregar = document.getElementById("btn-horario-agregar");
   const btnAmigos = document.getElementById("btn-horario-amigos");
+  const btnCronograma = document.getElementById("btn-horario-cronograma");
   const btnPantallaCompleta = document.getElementById("btn-horario-pantalla-completa");
   const btnDescargar = document.getElementById("btn-horario-descargar");
   const nombreSemestreEl = document.getElementById("horario-nombre-semestre");
@@ -2271,6 +2272,12 @@ function inicializarHorario() {
   }
   if (btnAmigos) {
     btnAmigos.addEventListener("click", () => abrirPanelAmigos());
+  }
+  if (btnCronograma) {
+    btnCronograma.addEventListener("click", () => {
+      window.mostrarSeccion?.("agenda");
+      window.abrirCronogramaAgenda?.();
+    });
   }
   inicializarHorarioAmigos();
   inicializarHorarioConjunto();

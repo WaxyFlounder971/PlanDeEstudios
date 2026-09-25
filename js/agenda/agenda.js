@@ -1455,6 +1455,13 @@ function renderizarAgenda() {
   sincronizarBarraSeleccionAgenda();
 }
 
+/** Abre directamente la vista Cronograma (Agenda > Materia). */
+function abrirCronogramaAgenda() {
+  asegurarEstadoAgendaBaseInicializado();
+  estado.agendaVistaActiva = "materia";
+  renderizarAgenda();
+}
+
 /**
  * Idea "varios semestres a la vez": wiring del selector de semestres —
  * tocar el nombre en el header abre el modal de tarjetas
@@ -1672,6 +1679,7 @@ function inicializarSwitchesVenceHoyAgenda() {
 // intencional, igual que main.js <-> semestres.js): lo necesita en el mismo
 // tick del click del usuario sobre una celda del grid.
 window.renderizarAgenda = renderizarAgenda;
+window.abrirCronogramaAgenda = abrirCronogramaAgenda;
 
 // Ajustes vista Calendario — punto 4: construirItemEvento, ETIQUETA_TIPO y
 // limpiarIntervalosVenceHoy se exportan para que el detalle de día del
@@ -1682,4 +1690,4 @@ window.renderizarAgenda = renderizarAgenda;
 // 2 archivos (agenda.js -> agenda-calendario.js vía renderizarCalendarioAgenda,
 // ver comentario más arriba) — agenda-calendario.js pasa a importar también
 // DE acá.
-export { inicializarAgenda, renderizarAgenda, construirItemEvento, ETIQUETA_TIPO, limpiarIntervalosVenceHoy };
+export { inicializarAgenda, renderizarAgenda, abrirCronogramaAgenda, construirItemEvento, ETIQUETA_TIPO, limpiarIntervalosVenceHoy };

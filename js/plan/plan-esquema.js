@@ -9,6 +9,7 @@ import { NOMBRES_UNIVERSIDAD_PRESET, PARAMETROS_UNIVERSIDAD_DEFAULT, crearMateri
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { confirmarUniversidadNoInvertida } from "../ui/aviso-universidad.js";
 import { estado } from "../core/storage.js";
+import { obtenerModoTemaLocal } from "../ui/tema.js";
 import { abrirModalGestionPlanes, renderizarModoHardcore, renderizarSelectorPlan } from "./plan-gestionar.js";
 import { derivarTiposHorasDeHorasColumnas, importarCSVEnPlan, materiaPareceOptativa, obtenerPalabraOptativa, parsearRequisitoArbol, serializarRequisitoArbol } from "./plan-importacion-csv.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
@@ -798,7 +799,7 @@ function renderizarContenidoVincularOptativa() {
     // la vista) tanto en el <select> como en CADA <option> - el navegador
     // solo respeta el fondo/texto de un <option> si viene puesto en el
     // propio <option>, no alcanza con ponerlo únicamente en el <select>.
-    const esModoClaro = estado.datos.configuracion.modo === "light";
+    const esModoClaro = obtenerModoTemaLocal() === "light";
     const colorSchemeActual = esModoClaro ? "light" : "dark";
     const fondoSelect = esModoClaro ? "#ffffff" : "#1e1e2a";
     const textoSelect = esModoClaro ? "#1a1a1a" : "#f2f2f5";

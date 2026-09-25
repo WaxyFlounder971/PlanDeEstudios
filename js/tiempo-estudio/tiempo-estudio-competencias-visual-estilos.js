@@ -185,6 +185,7 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-scope button:focus-visible, .cp-overlay button:focus-visible { outline: 2px solid var(--cp-accent2); outline-offset: 2px; }
   .cp-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .cp-msg { font-size: 13px; color: var(--cp-muted); text-align: center; padding: 14px 6px; }
+  .cp-msg.cp-stale { margin: 8px 10px 0; padding: 8px 10px; border-radius: 10px; color: var(--cp-text); background: rgba(245,185,66,.13); border: 1px solid rgba(245,185,66,.35); }
   .cp-nota { font-size: 11.5px; color: var(--cp-muted); text-align: center; padding-top: 10px; }
   .cp-opt { display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:12px 14px; border-radius:16px;
     border:1px solid var(--cp-line); background:rgba(255,255,255,.045); font-size:14px; font-weight:700; transition:background .2s, transform .1s; }

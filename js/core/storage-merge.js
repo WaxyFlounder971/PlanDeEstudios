@@ -1139,6 +1139,10 @@ function fusionarDatos(datosLocal, datosRemoto) {
     datosLocal._eliminados_sesiones_estudio,
     datosRemoto._eliminados_sesiones_estudio
   );
+  const tumbasTiempoEstudioMaterias = fusionarTumbas(
+    datosLocal._eliminados_tiempo_estudio_materias,
+    datosRemoto._eliminados_tiempo_estudio_materias
+  );
   // Competencias — Parte 1 (2026-09-09): mismo patrón exacto que
   // sesiones_estudio — colección plana de nivel superior, se funde por id
   // + tumba, sin lógica nueva. Lo que fusionarColeccion NO sabe (y no le
@@ -1230,6 +1234,12 @@ function fusionarDatos(datosLocal, datosRemoto) {
       tumbasSesionesEstudio,
       "sesión de estudio"
     ),
+    tiempo_estudio_materias: fusionarColeccion(
+      datosLocal.tiempo_estudio_materias,
+      datosRemoto.tiempo_estudio_materias,
+      tumbasTiempoEstudioMaterias,
+      "materia independiente de Tiempo"
+    ),
     competencias_unidas: fusionarColeccion(
       datosLocal.competencias_unidas,
       datosRemoto.competencias_unidas,
@@ -1255,6 +1265,7 @@ function fusionarDatos(datosLocal, datosRemoto) {
     _eliminados_gastos_u: tumbasGastosU,
     _eliminados_horario_enlaces: tumbasHorarioEnlaces,
     _eliminados_sesiones_estudio: tumbasSesionesEstudio,
+    _eliminados_tiempo_estudio_materias: tumbasTiempoEstudioMaterias,
     _eliminados_competencias_unidas: tumbasCompetenciasUnidas,
   };
 }

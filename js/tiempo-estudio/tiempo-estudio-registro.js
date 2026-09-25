@@ -227,7 +227,14 @@ function abrirModalRegistroManual(items, onGuardar) {
       fin = inicio + minutosTotales * 60000;
     }
 
-    const sesion = crearSesionEstudio({ materiaMatriculadaId, inicio, fin, origen: "manual" });
+    const itemElegido = items.find((it) => it.mm.id === materiaMatriculadaId);
+    const sesion = crearSesionEstudio({
+      materiaMatriculadaId: itemElegido?.esIndependiente ? null : materiaMatriculadaId,
+      materiaIndependienteId: itemElegido?.esIndependiente ? materiaMatriculadaId : null,
+      inicio,
+      fin,
+      origen: "manual",
+    });
     estado.datos.sesiones_estudio.push(sesion);
     marcarCambioPendiente();
     // FIX 2026-09-19 (Parte B): antes el aviso era solo "Sesión registrada".
@@ -235,7 +242,6 @@ function abrirModalRegistroManual(items, onGuardar) {
     // la vista de tarjetas no cambia en nada y la persona no tenía cómo
     // saber si se guardó (y la volvía a cargar). Ahora el aviso dice CUÁL
     // materia, QUÉ día y cuánto — y dónde verla.
-    const itemElegido = items.find((it) => it.mm.id === materiaMatriculadaId);
     const nombreElegido = itemElegido ? itemElegido.nombreMateriaCorto || itemElegido.nombreMateria : "la materia";
     mostrarToast(`✓ Registrada: ${formatearMinutosReg(minutosTotales)} de ${nombreElegido} · ${formatearFechaHoraReg(inicio)}. La ves en el detalle de la materia.`);
     revisarFelicitacionMeta(materiaMatriculadaId);
@@ -429,7 +435,7 @@ function abrirModalEditarSesion(sesion, refrescar) {
     sesionViva.duracion_minutos = Math.max(0, Math.round((fin - inicio) / 60000));
     sellarTimestamp(sesionViva);
     marcarCambioPendiente();
-    revisarFelicitacionMeta(sesionViva.materia_matriculada_id);
+    revisarFelicitacionMeta(sesionViva.materia_independiente_id || sesionViva.materia_matriculada_id);
     mostrarToast("Sesión actualizada");
     sincronizarHorasCompetencias();
     notificarSesionesEstudioActualizadas(); // repinta Estadísticas al instante (edición)
@@ -488,7 +494,7 @@ function construirListaSesiones(cont, materiaMatriculadaId, color, refrescar) {
   sec.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Sesiones registradas</h3>`;
 
   const sesiones = (estado.datos.sesiones_estudio || [])
-    .filter((s) => s.materia_matriculada_id === materiaMatriculadaId)
+    .filter((s) => (s.materia_independiente_id || s.materia_matriculada_id) === materiaMatriculadaId)
     // FIX 2026-09-19 (Parte B): una sesión con `inicio` inválido (NaN — ver
     // construirTimestampLocalReg) hacía que `b.inicio - a.inicio` diera NaN y
     // el orden de TODA la lista quedara indefinido. Las inválidas van al

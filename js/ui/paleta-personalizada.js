@@ -19,6 +19,7 @@ import {
   hexAHsl,
   hslAHex,
   mezclarHex,
+  obtenerModoTemaLocal,
 } from "./tema.js";
 
 /* ------------------------------ Construcción de UI ------------------------------ */
@@ -520,7 +521,7 @@ function cerrarOverlay(overlay) {
  *  para no dejar la app pintada con una paleta de referencia a medias). */
 function restaurarPaletaGuardada() {
   const cfg = estado.datos.configuracion;
-  aplicarPaleta(cfg.paleta, cfg.modo, cfg.paleta_personalizada ? cfg.paleta_personalizada.colores : undefined);
+  aplicarPaleta(cfg.paleta, obtenerModoTemaLocal(), cfg.paleta_personalizada ? cfg.paleta_personalizada.colores : undefined);
 }
 
 /**
@@ -722,14 +723,14 @@ function abrirPanelDeEdicion(overlay, panel, paletaBase, alGuardar, coloresExist
       // distinta sin ninguna razón para el usuario. (Esta rama nunca se
       // alcanza en el flujo "Editar actual", ver `tocado` más arriba.)
       estado.datos.configuracion.paleta = paletaBase;
-      aplicarPaleta(paletaBase, estado.datos.configuracion.modo);
+      aplicarPaleta(paletaBase, obtenerModoTemaLocal());
     } else {
       estado.datos.configuracion.paleta_personalizada = {
         basadaEn: paletaBase,
         colores: { ...colores },
       };
       estado.datos.configuracion.paleta = "personalizada";
-      aplicarPaleta("personalizada", estado.datos.configuracion.modo, colores);
+      aplicarPaleta("personalizada", obtenerModoTemaLocal(), colores);
     }
     // BUG FIX v1.15.3 (Parte 1): faltaba sellarTimestamp() acá — sin sellar,
     // este cambio queda con _actualizadoEn desactualizado y el próximo merge
@@ -784,7 +785,7 @@ function abrirPasoElegirBase(overlay, panel, alGuardar) {
 
   PALETAS_DISPONIBLES.forEach((paleta) => {
     grid.appendChild(crearSwatchBase(paleta, (paletaElegida) => {
-      aplicarPaleta(paletaElegida, estado.datos.configuracion.modo);
+      aplicarPaleta(paletaElegida, obtenerModoTemaLocal());
       abrirPanelDeEdicion(overlay, panel, paletaElegida, alGuardar);
     }));
   });

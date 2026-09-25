@@ -14,7 +14,7 @@ import { renderizarSemestres } from "../semestres/semestres.js";
 import { abrirModalTodosLosConflictos } from "../semestres/semestres-tarjetas.js";
 import { renderizarFinanzas } from "../finanzas/finanzas.js";
 import { mostrarToast } from "../ui/componentes.js";
-import { aplicarPaleta } from "../ui/tema.js";
+import { aplicarPaleta, obtenerModoTemaLocal } from "../ui/tema.js";
 import {
   NOMBRE_CARPETA_BACKUP,
   buscarArchivoEnCarpeta,
@@ -996,7 +996,7 @@ function aplicarDatosRemotosFrescos(datosFrescos) {
   // ver tema.js) en el próximo ciclo de sync después de guardarla.
   aplicarPaleta(
     estado.datos.configuracion.paleta,
-    estado.datos.configuracion.modo,
+    obtenerModoTemaLocal(),
     estado.datos.configuracion.paleta === "personalizada" ? estado.datos.configuracion.paleta_personalizada?.colores : undefined
   );
   renderizarSelectorPlan();

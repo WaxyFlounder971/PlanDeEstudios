@@ -114,7 +114,8 @@ function obtenerSesionEnCursoVirtual() {
   if (!(fin > t.inicioFase)) return null;
   return {
     id: "__en_curso__",
-    materia_matriculada_id: t.materiaMatriculadaId,
+    materia_matriculada_id: t.materiaIndependiente ? null : t.materiaMatriculadaId,
+    materia_independiente_id: t.materiaIndependiente ? t.materiaMatriculadaId : null,
     inicio: t.inicioFase,
     fin,
     duracion_minutos: (fin - t.inicioFase) / 60000,
@@ -122,12 +123,16 @@ function obtenerSesionEnCursoVirtual() {
   };
 }
 
+function idMateriaSesion(sesion) {
+  return sesion.materia_independiente_id || sesion.materia_matriculada_id;
+}
+
 /** Sesiones guardadas + la del timer en curso (si hay). Solo para PINTAR. */
 function obtenerSesionesParaGraficas() {
   const guardadas = estado.datos.sesiones_estudio || [];
   const vivo = obtenerSesionEnCursoVirtual();
   if (!vivo) return guardadas;
-  if (guardadas.some((s) => s.materia_matriculada_id === vivo.materia_matriculada_id && s.inicio === vivo.inicio)) return guardadas;
+  if (guardadas.some((s) => idMateriaSesion(s) === idMateriaSesion(vivo) && s.inicio === vivo.inicio)) return guardadas;
   return [...guardadas, vivo];
 }
 
@@ -312,7 +317,8 @@ function calcularMinutosPorMateriaEnRango(inicio, fin) {
   const mapa = new Map();
   obtenerSesionesParaGraficas().forEach((s) => {
     if (s.inicio < inicio || s.inicio >= fin) return;
-    mapa.set(s.materia_matriculada_id, (mapa.get(s.materia_matriculada_id) || 0) + (Number(s.duracion_minutos) || 0));
+    const id = idMateriaSesion(s);
+    mapa.set(id, (mapa.get(id) || 0) + (Number(s.duracion_minutos) || 0));
   });
   return mapa;
 }
@@ -1258,7 +1264,8 @@ function construirSeccionBarras(cont, refrescar) {
       if (numero < 1 || numero > semanaVigente) return;
       if (!porSemana.has(numero)) porSemana.set(numero, new Map());
       const porMateria = porSemana.get(numero);
-      porMateria.set(s.materia_matriculada_id, (porMateria.get(s.materia_matriculada_id) || 0) + (Number(s.duracion_minutos) || 0));
+      const id = idMateriaSesion(s);
+      porMateria.set(id, (porMateria.get(id) || 0) + (Number(s.duracion_minutos) || 0));
     });
 
     for (let i = 1; i <= semanaVigente; i++) {
@@ -1332,7 +1339,7 @@ let indiceSemestreBarrasMateria = null;
 
 function calcularMinutosMateriaEnRango(materiaMatriculadaId, inicio, fin) {
   return obtenerSesionesParaGraficas().reduce(
-    (acc, s) => (s.materia_matriculada_id === materiaMatriculadaId && s.inicio >= inicio && s.inicio < fin ? acc + (Number(s.duracion_minutos) || 0) : acc),
+    (acc, s) => (idMateriaSesion(s) === materiaMatriculadaId && s.inicio >= inicio && s.inicio < fin ? acc + (Number(s.duracion_minutos) || 0) : acc),
     0
   );
 }
@@ -1559,9 +1566,11 @@ function construirSeccionBarrasMateria(cont, mm, color, refrescar) {
   sec.style.gap = "14px";
   sec.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Horas estudiadas</h3>`;
 
+  const esIndependiente = mm.tipo === "independiente";
+  if (esIndependiente) corteBarrasMateria = "semana";
   sec.appendChild(
     construirPillGroup(
-      [
+      esIndependiente ? [{ valor: "semana", etiqueta: "Semana" }] : [
         { valor: "semana", etiqueta: "Semana" },
         { valor: "semestre", etiqueta: "Semestre" },
       ],
@@ -1679,7 +1688,7 @@ function construirSeccionBarrasMateria(cont, mm, color, refrescar) {
        lados, en vez de reconstruir la ventana de fechas acá. */
     const porSemana = new Map(); // numero de semana -> minutos
     obtenerSesionesParaGraficas().forEach((s) => {
-      if (s.materia_matriculada_id !== mm.id) return;
+      if (idMateriaSesion(s) !== mm.id) return;
       if (s.inicio < inicioSemestre.getTime() || s.inicio > finSemestre.getTime()) return;
       const numero = calcularNumeroSemanaSegura(semestre, new Date(s.inicio));
       if (numero < 1 || numero > semanaVigente) return;
@@ -1797,7 +1806,7 @@ const NOMBRES_DIA_LARGO = ["domingo", "lunes", "martes", "miércoles", "jueves",
  * por período — "de siempre") para los 4 totales pedidos: horas totales,
  * día más productivo, sesiones totales y sesión promedio. */
 function calcularResumenTotalesMateria(materiaMatriculadaId) {
-  const sesiones = obtenerSesionesParaGraficas().filter((s) => s.materia_matriculada_id === materiaMatriculadaId);
+  const sesiones = obtenerSesionesParaGraficas().filter((s) => idMateriaSesion(s) === materiaMatriculadaId);
   const totalMinutos = sesiones.reduce((acc, s) => acc + (Number(s.duracion_minutos) || 0), 0);
   const totalSesiones = sesiones.length;
   const promedioMinutos = totalSesiones > 0 ? totalMinutos / totalSesiones : 0;
@@ -1892,7 +1901,7 @@ function construirEstadisticasMateria(cont, mm, color, refrescar) {
   reiniciarSeccionesMontadas();
   // Relectura de entidad viva: un repintado en vivo puede ocurrir minutos
   // después del render, y un sync remoto pudo reemplazar la matrícula.
-  const mmVivo = () => buscarMatriculaViva(mm.id) || mm;
+  const mmVivo = () => buscarMatriculaViva(mm.id) || (mm.tipo === "independiente" ? (estado.datos.tiempo_estudio_materias || []).find((m) => m.id === mm.id) : null) || mm;
   const secciones = [
     ["Resumen de metas", (dest) => construirSeccionResumenMetas(dest, mmVivo(), color, refrescar)],
     ["Horas estudiadas", (dest) => construirSeccionBarrasMateria(dest, mmVivo(), color, refrescar)],

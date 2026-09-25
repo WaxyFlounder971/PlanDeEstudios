@@ -11,7 +11,7 @@ import { copiarPromptConAviso } from "../core/clipboard.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 import { abrirConfirmacion, construirPillSwitchBinario, mostrarToast } from "../ui/componentes.js";
-import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta } from "../ui/tema.js";
+import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta, obtenerModoDisenoLocal, obtenerModoTemaLocal, guardarModoDisenoLocal, guardarModoTemaLocal } from "../ui/tema.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
 import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
 import {
@@ -1023,7 +1023,7 @@ function renderizarAjustes() {
     sw.textContent = paleta;
     sw.addEventListener("click", () => {
       estado.datos.configuracion.paleta = paleta;
-      aplicarPaleta(paleta, estado.datos.configuracion.modo);
+      aplicarPaleta(paleta, obtenerModoTemaLocal());
       sellarTimestamp(estado.datos.configuracion);
       marcarCambioPendiente();
       renderizarAjustes();
@@ -1049,7 +1049,7 @@ function renderizarAjustes() {
       // cualquier otro cuadro del grid — para editarla de nuevo desde cero
       // se vuelve a entrar por el flujo completo con el botón de abajo.
       estado.datos.configuracion.paleta = "personalizada";
-      aplicarPaleta("personalizada", estado.datos.configuracion.modo, personalizada.colores);
+      aplicarPaleta("personalizada", obtenerModoTemaLocal(), personalizada.colores);
       sellarTimestamp(estado.datos.configuracion);
       marcarCambioPendiente();
       renderizarAjustes();
@@ -1105,12 +1105,11 @@ function renderizarAjustes() {
       { valor: "optimizado", texto: "Optimizado" },
       { valor: "fancy", texto: "Fancy" },
     ],
-    estado.datos.configuracion.modo_rendimiento ? "optimizado" : "fancy",
+    obtenerModoDisenoLocal(),
     (valor) => {
       const fancyActivo = valor === "fancy";
-      estado.datos.configuracion.modo_rendimiento = !fancyActivo;
+      guardarModoDisenoLocal(fancyActivo ? "fancy" : "optimizado");
       aplicarModoRendimiento(!fancyActivo);
-      dispararSyncConAntirrebote();
     }
   );
 
@@ -1170,18 +1169,14 @@ function renderizarAjustes() {
       { valor: "dark", texto: "Oscuro" },
       { valor: "light", texto: "Claro" },
     ],
-    estado.datos.configuracion.modo === "light" ? "light" : "dark",
+    obtenerModoTemaLocal(),
     (nuevoModo) => {
-      // Mismo criterio que el pill switch de arriba: estado en memoria +
-      // repintado de paleta instantáneos, solo el sello+sync va con
-      // antirrebote.
-      estado.datos.configuracion.modo = nuevoModo;
+      guardarModoTemaLocal(nuevoModo);
       aplicarPaleta(
         estado.datos.configuracion.paleta,
         nuevoModo,
         estado.datos.configuracion.paleta === "personalizada" ? personalizada.colores : undefined
       );
-      dispararSyncConAntirrebote();
     }
   );
 

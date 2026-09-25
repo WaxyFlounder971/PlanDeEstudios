@@ -41,6 +41,37 @@ const TEXTO_PREVIEW_PALETA = {
   blanco: "#1E293B",
 };
 
+// Tema y calidad visual son preferencias del dispositivo: se aplican desde
+// localStorage y nunca se leen de configuración sincronizada.
+const CLAVE_TEMA_LOCAL = "tema_modo";
+const CLAVE_DISENO_LOCAL = "modo_diseno_local_v1";
+
+function obtenerModoTemaLocal() {
+  const guardado = localStorage.getItem(CLAVE_TEMA_LOCAL);
+  if (guardado === "light" || guardado === "dark") return guardado;
+  try {
+    return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  } catch (_e) {
+    return "dark";
+  }
+}
+
+function guardarModoTemaLocal(modo) {
+  const normalizado = modo === "light" ? "light" : "dark";
+  localStorage.setItem(CLAVE_TEMA_LOCAL, normalizado);
+  return normalizado;
+}
+
+function obtenerModoDisenoLocal() {
+  return localStorage.getItem(CLAVE_DISENO_LOCAL) === "fancy" ? "fancy" : "optimizado";
+}
+
+function guardarModoDisenoLocal(modo) {
+  const normalizado = modo === "fancy" ? "fancy" : "optimizado";
+  localStorage.setItem(CLAVE_DISENO_LOCAL, normalizado);
+  return normalizado;
+}
+
 /* =========================================================================
    v1.13: UTILIDADES DE COLOR
    Funciones puras de conversión/mezcla, usadas para derivar automáticamente
@@ -404,6 +435,7 @@ function actualizarThemeColorMeta() {
 }
 
 function aplicarPaleta(paleta, modo, coloresPersonalizados) {
+  modo = guardarModoTemaLocal(modo);
   document.documentElement.setAttribute("data-palette", paleta);
   document.documentElement.setAttribute("data-mode", modo);
   localStorage.setItem("tema_paleta", paleta);
@@ -420,7 +452,7 @@ function aplicarPaleta(paleta, modo, coloresPersonalizados) {
 
 function aplicarTemaGuardadoLocalmente() {
   const paleta = localStorage.getItem("tema_paleta") || "azul";
-  const modo = localStorage.getItem("tema_modo") || "dark";
+  const modo = obtenerModoTemaLocal();
   document.documentElement.setAttribute("data-palette", paleta);
   document.documentElement.setAttribute("data-mode", modo);
 
@@ -444,6 +476,10 @@ export {
   aplicarPaleta,
   aplicarTemaGuardadoLocalmente,
   actualizarThemeColorMeta,
+  obtenerModoTemaLocal,
+  guardarModoTemaLocal,
+  obtenerModoDisenoLocal,
+  guardarModoDisenoLocal,
   // v1.13 — utilidades de color y derivación (usadas por ui/paleta-personalizada.js)
   hexARgb,
   colorARgb,

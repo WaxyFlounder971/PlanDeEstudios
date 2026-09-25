@@ -42,7 +42,7 @@ import { procesarAsociacionPendienteDeAmigo, iniciarRefrescoPeriodicoAmigos } fr
 import "./asistente/asistente.js";
 import { abrirConfirmacion, agregarLongPress, inicializarAutoScrollSelectoresEnModales, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, mostrarPantallaCargaSesion, mostrarToast, mostrarToastAccion, ocultarPantallaCargaSesion, restaurarEstadoSidebar } from "./ui/componentes.js";
 import { confirmarUniversidadNoInvertida } from "./ui/aviso-universidad.js";
-import { aplicarPaleta, aplicarTemaGuardadoLocalmente } from "./ui/tema.js";
+import { aplicarPaleta, aplicarTemaGuardadoLocalmente, obtenerModoTemaLocal, obtenerModoDisenoLocal } from "./ui/tema.js";
 
 /* ===================== PWA: registro del Service Worker ===================== */
 /*
@@ -858,7 +858,7 @@ function mostrarApp() {
   // cuando el dato en sí seguía intacto en estado.datos. Mismo patrón que
   // el bug de abajo en storage-sync.js.
   const cfg = estado.datos.configuracion;
-  aplicarPaleta(cfg.paleta, cfg.modo, cfg.paleta === "personalizada" ? cfg.paleta_personalizada?.colores : undefined);
+  aplicarPaleta(cfg.paleta, obtenerModoTemaLocal(), cfg.paleta === "personalizada" ? cfg.paleta_personalizada?.colores : undefined);
   // Fix v1.16.1 (2026-08-23 - "switch de fancy necesita varios clicks"):
   // aplicarModoRendimiento() solo se llamaba desde el onchange del switch
   // en Ajustes, nunca al arrancar. El atributo [data-rendimiento] en <html>
@@ -869,7 +869,7 @@ function mostrarApp() {
   // notaba. Mismo lugar y mismo criterio que aplicarPaleta arriba: se
   // aplica acá, apenas se conocen los datos reales del usuario, ANTES de
   // que pueda entrar a Ajustes.
-  aplicarModoRendimiento(!!cfg.modo_rendimiento);
+  aplicarModoRendimiento(obtenerModoDisenoLocal() !== "fancy");
   renderizarSelectorPlan();
   renderizarAjustes();
   renderizarModoHardcore();
@@ -918,10 +918,10 @@ function mostrarApp() {
   const parametroAbrir = new URLSearchParams(window.location.search).get("abrir");
   if (parametroAbrir === "agenda") {
     mostrarSeccion("agenda");
-    window.history.replaceState({}, "", window.location.pathname);
+    window.history.replaceState({ ...(window.history.state || {}), appNav: true, appSeccion: "agenda" }, "", window.location.pathname);
   } else if (parametroAbrir === "resumen") {
     mostrarSeccion("resumen");
-    window.history.replaceState({}, "", window.location.pathname);
+    window.history.replaceState({ ...(window.history.state || {}), appNav: true, appSeccion: "resumen" }, "", window.location.pathname);
   }
   // Deep link "?comp=<id>" - invitación a una competencia de Tiempo de
   // Estudio (ver construirLinkInvitacion en tiempo-estudio-competencias.js,
@@ -1029,9 +1029,15 @@ function inicializarNavegacionSecciones() {
   document.querySelectorAll(".btn-nav[data-seccion]").forEach((btn) => {
     btn.addEventListener("click", () => mostrarSeccion(btn.dataset.seccion));
   });
+  window.addEventListener("popstate", (evento) => {
+    const destino = evento.state && evento.state.appNav && evento.state.appSeccion;
+    if (destino) mostrarSeccion(destino, { desdeHistorial: true });
+  });
 }
 
-function mostrarSeccion(nombre) {
+let seccionNavegacionActual = null;
+
+function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
   const secciones = {
     resumen: "seccion-resumen",
     configuracion: "seccion-configuracion",
@@ -1044,6 +1050,16 @@ function mostrarSeccion(nombre) {
     "tiempo-estudio": "seccion-tiempo-estudio",
     asistente: "seccion-asistente",
   };
+  if (!Object.prototype.hasOwnProperty.call(secciones, nombre)) return;
+  if (window.history && !desdeHistorial) {
+    const estadoEntrada = { ...(window.history.state || {}), appNav: true, appSeccion: nombre };
+    if (seccionNavegacionActual === null) {
+      window.history.replaceState(estadoEntrada, "", window.location.href);
+    } else if (seccionNavegacionActual !== nombre) {
+      window.history.pushState(estadoEntrada, "", window.location.href);
+    }
+  }
+  seccionNavegacionActual = nombre;
   Object.entries(secciones).forEach(([clave, idEl]) => {
     const el = document.getElementById(idEl);
     if (el) el.classList.toggle("oculto", clave !== nombre);

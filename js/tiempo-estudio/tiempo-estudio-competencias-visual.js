@@ -409,6 +409,7 @@ function pintarTarjeta(tarjeta, o, cb) {
   else if (o.estadoCuerpo === "error") cuerpo = `<p class="cp-msg">No se pudo cargar el marcador. Revisá tu conexión.</p>`;
   else if (!o.participantes || o.participantes.length === 0) cuerpo = `<p class="cp-msg">Todavía no hay nadie en el marcador.</p>`;
   else cuerpo = cuerpoTarjetaHTML(o.participantes, o.vista, o.yoId);
+  if (o.mensajeDesactualizado) cuerpo = `<p class="cp-msg cp-stale" role="status">${esc(o.mensajeDesactualizado)}</p>${cuerpo}`;
 
   const coronaTitulo = o.esCreador
     ? `<svg viewBox="0 0 24 24" role="img" aria-label="Sos el creador"><path d="M3 8l4.6 4.2L12 4.5l4.4 7.7L21 8l-1.9 11H4.9L3 8z" fill="#ffc94d" stroke="#b97b12" stroke-width="1.2" stroke-linejoin="round"/></svg>`
