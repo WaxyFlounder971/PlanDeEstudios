@@ -413,7 +413,16 @@ window.addEventListener("DOMContentLoaded", () => {
           if (estado.pendienteSync) intentarSincronizar();
           else sondearCambiosRemotos();
         } else {
-          mostrarToast("Seguimos sin poder conectar con Drive. Te avisamos apenas se pueda.");
+          // Si Google confirmó invalid_grant, asegurarTokenValido ya quitó
+          // el refresh_token. En ese caso los reintentos automáticos no
+          // pueden recuperar esta sesión: hay que pedir una autorización
+          // interactiva en un nuevo toque (el popup debe nacer de un gesto
+          // directo para que navegadores móviles no lo bloqueen).
+          mostrarToast(
+            haySesionGuardada()
+              ? "No se pudo conectar con Drive ahora. La app seguirá intentando cuando vuelva la conexión."
+              : "La sesión de Google venció. Toca Reconectar otra vez para volver a autorizar Drive."
+          );
         }
         // Si falló, la píldora se queda encendida sola (mostrarAvisoReconexion
         // ya corrió dentro de asegurarTokenValido) y los reintentos
@@ -1070,6 +1079,13 @@ function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
     btn.classList.toggle("btn-secondary", !activo);
   });
   localStorage.setItem(CLAVE_SECCION_ACTIVA, nombre);
+  if (nombre === "plan-estudios") {
+    // Cada entrada al Plan parte con bloques abiertos y materias cerradas.
+    // Esta preferencia de presentación vive en memoria en cada dispositivo.
+    estado.bloquesColapsados = new Set();
+    estado.materiasExpandidas = new Map();
+    renderizarPlanEstudios();
+  }
   // Horario depende de datos que se editan en otras pestañas (nombre/fechas
   // de semestre, materias matriculadas) - se re-renderiza al entrar para
   // que nunca se vea desactualizado.

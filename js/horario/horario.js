@@ -574,6 +574,9 @@ function abrirTarjetaInfoBloque(semestre, numeroSemana, b) {
   document.getElementById("horario-info-overlay")?.remove();
 
   const emojiModalidad = obtenerEmojiModalidad(b.modalidad);
+  const materiaMatriculada = b.materia_id
+    ? (semestre.materias_matriculadas || []).find((mm) => mm.materia_id === b.materia_id)
+    : null;
   const overlay = document.createElement("div");
   overlay.id = "horario-info-overlay";
   overlay.className = "modal-overlay";
@@ -608,7 +611,10 @@ function abrirTarjetaInfoBloque(semestre, numeroSemana, b) {
             </div>` : ""}
         </div>
         <div id="horario-info-cronograma-cont"></div>
-        <button type="button" class="btn-discreto" id="horario-info-editar" style="width:100%; margin-top:20px; text-align:center;">✎ Editar</button>
+        <div style="display:flex; justify-content:space-between; gap:10px; margin-top:20px;">
+          ${materiaMatriculada ? `<button type="button" class="btn btn-secondary" id="horario-info-cronograma" style="flex:0 0 calc(50% - 5px);">Ir a Cronograma</button>` : ""}
+          <button type="button" class="btn btn-secondary" id="horario-info-editar" style="flex:0 0 calc(50% - 5px); ${materiaMatriculada ? "" : "margin-left:auto;"}">✎ Editar</button>
+        </div>
       </div>
     </div>
   `;
@@ -628,6 +634,14 @@ function abrirTarjetaInfoBloque(semestre, numeroSemana, b) {
   const cerrar = () => overlay.remove();
   overlay.addEventListener("click", (ev) => { if (ev.target === overlay) cerrar(); });
   document.getElementById("horario-info-cerrar").addEventListener("click", cerrar);
+  const btnCronogramaMateria = document.getElementById("horario-info-cronograma");
+  if (btnCronogramaMateria) {
+    btnCronogramaMateria.addEventListener("click", () => {
+      cerrar();
+      window.mostrarSeccion?.("agenda");
+      window.abrirCronogramaAgenda?.(semestre.id, materiaMatriculada.id);
+    });
+  }
   document.getElementById("horario-info-editar").addEventListener("click", () => {
     cerrar();
     abrirModalBloqueHorario({ semestreId: semestre.id, bloqueId: b.bloqueOriginalId, numeroSemanaVista: numeroSemana });
@@ -1005,6 +1019,7 @@ function renderizarHorarioInterno() {
         .filter((c) => c.dia === dia.abrevDefault)
         .map((c) => ({
           bloqueOriginalId: c.id,
+          materia_id: c.materia_id || null,
           inicioMin: minutosDesdeHora(c.hora_inicio),
           finMin: minutosDesdeHora(c.hora_fin),
           color: obtenerColorBloque(c),
@@ -2245,7 +2260,6 @@ function inicializarHorario() {
   const btnSiguiente = document.getElementById("btn-horario-semestre-siguiente");
   const btnAgregar = document.getElementById("btn-horario-agregar");
   const btnAmigos = document.getElementById("btn-horario-amigos");
-  const btnCronograma = document.getElementById("btn-horario-cronograma");
   const btnPantallaCompleta = document.getElementById("btn-horario-pantalla-completa");
   const btnDescargar = document.getElementById("btn-horario-descargar");
   const nombreSemestreEl = document.getElementById("horario-nombre-semestre");
@@ -2272,12 +2286,6 @@ function inicializarHorario() {
   }
   if (btnAmigos) {
     btnAmigos.addEventListener("click", () => abrirPanelAmigos());
-  }
-  if (btnCronograma) {
-    btnCronograma.addEventListener("click", () => {
-      window.mostrarSeccion?.("agenda");
-      window.abrirCronogramaAgenda?.();
-    });
   }
   inicializarHorarioAmigos();
   inicializarHorarioConjunto();

@@ -449,14 +449,6 @@ function construirEncabezado(cont) {
   });
   grupoBotones.appendChild(btnRegistroManual);
 
-  const btnNuevaMateria = document.createElement("button");
-  btnNuevaMateria.type = "button";
-  btnNuevaMateria.className = "btn btn-secondary";
-  btnNuevaMateria.style.cssText = "align-self:center; padding:8px 12px; font-size:.82rem; white-space:nowrap;";
-  btnNuevaMateria.textContent = "+ Materia propia";
-  btnNuevaMateria.addEventListener("click", abrirModalNuevaMateriaIndependiente);
-  grupoBotones.appendChild(btnNuevaMateria);
-
   encabezado.appendChild(grupoBotones);
   cont.appendChild(encabezado);
 }
@@ -490,6 +482,9 @@ function abrirModalNuevaMateriaIndependiente() {
     estado.datos.tiempo_estudio_materias.push(materia);
     sellarTimestamp(materia);
     marcarCambioPendiente();
+    // La materia nueva empieza sin meta, por lo que no aparece en el filtro
+    // "Activas". Pasar a "Todo" permite verla de inmediato para configurarla.
+    if (obtenerFiltroVista() === "activos") guardarFiltroVista("todo");
     cerrar();
     mostrarToast("Materia propia agregada");
     renderizarTiempoEstudio();
@@ -524,12 +519,10 @@ function construirPillVistaSeccion(cont) {
 
 /**
  * Pantalla de Ajustes de Tiempo de Estudio (Entrega 4) — modal, mismo
- * patrón que el resto de modales de la app. Tiene 4 cosas:
+ * patrón que el resto de modales de la app. Tiene 3 cosas:
  * 1) Filtro Todo/Activos (se mudó acá adentro desde el encabezado).
  * 2) Editar el Pomodoro predeterminado global (Entrega 2).
- * 3) Torneos/Competencias — placeholder, la lógica real es un prompt
- *    aparte (Parte 4 del plan original).
- * 4) Switch "Mostrar tiempos de estudio en Agenda" (Entrega 5).
+ * 3) Switch "Mostrar tiempos de estudio en Agenda" (Entrega 5).
  */
 function abrirModalAjustesTiempoEstudio() {
   const overlay = document.createElement("div");
@@ -560,11 +553,6 @@ function abrirModalAjustesTiempoEstudio() {
     <button type="button" class="btn btn-secondary" id="te-ajustes-pomodoro" style="width:100%;">
       Ajustar pomodoro predeterminado
     </button>
-
-    <div class="glass-panel stack" style="padding:12px; gap:4px;">
-      <span class="form-label" style="margin:0;">Torneos / Competencias</span>
-      <span class="muted" style="font-size:0.82rem;">Próximamente.</span>
-    </div>
 
     <div class="row-between" style="align-items:center;">
       <span class="form-label" style="margin:0;">¿Mostrar tiempos de estudio en Agenda?</span>
@@ -610,14 +598,7 @@ function abrirModalAjustesTiempoEstudio() {
 
 function construirVistaPrincipal(cont) {
   let items = obtenerMateriasParaTiempoEstudio();
-  if (items.length === 0) {
-    const vacio = document.createElement("p");
-    vacio.className = "muted";
-    vacio.textContent = "No tenés materias matriculadas en tus semestres actuales.";
-    cont.appendChild(vacio);
-    return;
-  }
-
+  const hayMaterias = items.length > 0;
   if (obtenerFiltroVista() === "activos") {
     items = items.filter((item) => item.mm.tiempo_estudio.meta_horas_semana !== null && item.mm.tiempo_estudio.meta_horas_semana !== undefined);
   }
@@ -625,16 +606,40 @@ function construirVistaPrincipal(cont) {
   if (items.length === 0) {
     const vacio = document.createElement("p");
     vacio.className = "muted";
-    vacio.textContent = "Ninguna materia tiene tiempo de estudio configurado todavía.";
+    vacio.textContent = hayMaterias
+      ? "Ninguna materia tiene una meta configurada todavía."
+      : "No hay materias matriculadas en semestres actuales. Puedes crear una materia propia abajo.";
     cont.appendChild(vacio);
-    return;
+  } else {
+    const lista = document.createElement("div");
+    lista.className = "stack";
+    lista.style.gap = "12px";
+    items.forEach((item) => lista.appendChild(construirTarjetaMateria(item)));
+    cont.appendChild(lista);
   }
 
-  const lista = document.createElement("div");
-  lista.className = "stack";
-  lista.style.gap = "12px";
-  items.forEach((item) => lista.appendChild(construirTarjetaMateria(item)));
-  cont.appendChild(lista);
+  const acciones = document.createElement("div");
+  acciones.className = "te-pestanas-finales-materias";
+
+  const filtroActual = obtenerFiltroVista();
+  const btnFiltro = document.createElement("button");
+  btnFiltro.type = "button";
+  btnFiltro.className = "te-pestana-final-materias";
+  btnFiltro.textContent = filtroActual === "activos" ? "Mostrar más materias" : "Mostrar solo activas";
+  btnFiltro.setAttribute("aria-label", btnFiltro.textContent);
+  btnFiltro.addEventListener("click", () => {
+    guardarFiltroVista(filtroActual === "activos" ? "todo" : "activos");
+    renderizarTiempoEstudio();
+  });
+
+  const btnNueva = document.createElement("button");
+  btnNueva.type = "button";
+  btnNueva.className = "te-pestana-final-materias";
+  btnNueva.textContent = "Nueva Materia";
+  btnNueva.addEventListener("click", abrirModalNuevaMateriaIndependiente);
+
+  acciones.append(btnFiltro, btnNueva);
+  cont.appendChild(acciones);
 }
 
 /* ===================== Pantalla de detalle ===================== */

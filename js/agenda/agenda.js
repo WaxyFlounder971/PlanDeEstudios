@@ -1455,9 +1455,11 @@ function renderizarAgenda() {
   sincronizarBarraSeleccionAgenda();
 }
 
-/** Abre directamente la vista Cronograma (Agenda > Materia). */
-function abrirCronogramaAgenda() {
+/** Abre Cronograma (Agenda > Materia), opcionalmente enfocado en una matrícula. */
+function abrirCronogramaAgenda(semestreId = null, materiaMatriculadaId = null) {
   asegurarEstadoAgendaBaseInicializado();
+  if (semestreId) estado.agendaSemestresSeleccionados = [semestreId];
+  if (materiaMatriculadaId) estado.agendaMateriaSeleccionadaId = materiaMatriculadaId;
   estado.agendaVistaActiva = "materia";
   renderizarAgenda();
 }

@@ -1474,7 +1474,7 @@ body.scroll-bloqueado {
   padding-top: 12px;
   margin-top: 8px;
   border-top: 1px solid var(--border-glass);
-  background: inherit;
+  background: transparent;
   flex-shrink: 0;
 }
 .perfil-fila {
@@ -5300,3 +5300,32 @@ html.exportar-tema-default[data-mode="dark"] {
 [data-rendimiento="reducido"] .te-racha-chip--riesgo { animation: none; }
 [data-rendimiento="reducido"] .te-racha-chispas { display: none; }
 [data-rendimiento="reducido"] .te-racha-overlay { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(0, 0, 0, 0.8); }
+
+/* Acciones de cierre de la lista de Tiempo: dos pestañas anchas, discretas,
+   con toda su celda como área táctil. */
+.te-pestanas-finales-materias {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border-glass);
+}
+.te-pestana-final-materias {
+  width: 100%;
+  min-height: 60px;
+  padding: 12px 8px;
+  border: 0;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: center;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.te-pestana-final-materias:hover,
+.te-pestana-final-materias:focus-visible {
+  background: var(--bg-panel);
+  color: var(--text-primary);
+}

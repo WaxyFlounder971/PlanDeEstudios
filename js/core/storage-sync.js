@@ -985,6 +985,10 @@ function aplicarDatosRemotosFrescos(datosFrescos) {
   // funde por entidad, con la misma función y las mismas reglas que ya usa
   // el login (nada se pierde por omisión; gana el más reciente por id).
   estado.datos = fusionarDatos(estado.datos, remotoMigrado);
+  // Los ajustes de visibilidad también se sincronizan por Drive. Aplicar
+  // el estado recién fundido hace que un cambio hecho en otro dispositivo
+  // actualice el menú lateral en esta sesión.
+  window.aplicarVisibilidadNavegacion?.();
   guardarCacheLocal();
   // BUG FIX v1.15.4 (causa raíz real de "funcionó, se aplicó la paleta...
   // pero a los segundos se fue"): faltaba el 3er argumento acá también.

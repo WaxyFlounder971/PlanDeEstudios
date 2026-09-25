@@ -319,7 +319,7 @@ function construirTarjetaEstudioHoy(totalHechoMin, totalMetaMin) {
 
   const barraCont = document.createElement("div");
   barraCont.title = `${porcentaje}% de la meta de hoy`;
-  barraCont.style.cssText = "height:8px; border-radius:999px; background:rgba(255,255,255,0.14); overflow:hidden;";
+  barraCont.style.cssText = "height:8px; border-radius:999px; background:color-mix(in srgb, var(--accent-1) 18%, var(--bg-panel)); overflow:hidden;";
   const barraFill = document.createElement("div");
   barraFill.style.cssText =
     "height:100%; width:" + porcentaje + "%; border-radius:999px; background:var(--color-primario, #7c9eff); transition:width 0.25s ease;";
@@ -364,16 +364,7 @@ function renderizarResumen() {
     }
   }
 
-  // 2. Clases de hoy — el mismo bloque "Materias" que arma Agenda para un
-  // día puntual (agenda-clases.js ya devuelve null si no hay nada, así que
-  // la sección se auto-oculta sin lógica extra acá).
-  const seccionMaterias = construirSeccionMateriasDia(semestresSeleccionados, hoy, diaCodigoHoy);
-  if (seccionMaterias) {
-    cont.appendChild(construirBloqueSeccion("Clases de hoy", seccionMaterias));
-    huboContenido = true;
-  }
-
-  // 2.5. Estudio de hoy — mismo criterio y fuente que la sección homónima
+  // 2. Estudio de hoy — mismo criterio y fuente que la sección homónima
   // de Agenda Lista (dias_estudio + meta diaria real ya resueltos ahí, ver
   // construirTarjetaEstudioHoy más arriba). No cuenta para huboContenido:
   // es un vistazo informativo, no una obligación pendiente — mismo criterio
@@ -383,6 +374,14 @@ function renderizarResumen() {
     const totalHechoMin = estudioHoy.reduce((acc, item) => acc + item.hechoMinutosHoy, 0);
     const totalMetaMin = estudioHoy.reduce((acc, item) => acc + item.metaMinutosHoy, 0);
     cont.appendChild(construirTarjetaEstudioHoy(totalHechoMin, totalMetaMin));
+  }
+
+  // 3. Clases de hoy — después de Estudio de hoy; se auto-oculta si no hay
+  // clases programadas para la fecha actual.
+  const seccionMaterias = construirSeccionMateriasDia(semestresSeleccionados, hoy, diaCodigoHoy);
+  if (seccionMaterias) {
+    cont.appendChild(construirBloqueSeccion("Clases de hoy", seccionMaterias));
+    huboContenido = true;
   }
 
   const eventos = obtenerEventosDeSemestres(semestresSeleccionados);

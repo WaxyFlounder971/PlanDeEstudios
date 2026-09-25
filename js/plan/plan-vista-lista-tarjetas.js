@@ -492,7 +492,7 @@ const ESTADOS_MATERIA_MANUALES = ESTADOS_MATERIA.filter((e) => e.valor !== "curs
 
 function estaExpandida(codigo, esEscritorio) {
   if (estado.materiasExpandidas.has(codigo)) return estado.materiasExpandidas.get(codigo);
-  return esEscritorio;
+  return false;
 }
 
 /**
