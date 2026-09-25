@@ -378,7 +378,10 @@ function inicializarReconexionAlVolverOnline() {
     // cuanto el primer intento real tenga éxito (ver confirmarConexionOk).
     mostrarIndicadorConexion("reconectando");
     asegurarTokenValido().finally(() => {
-      sondearCambiosRemotos();
+      // FIX 2026-09-28: forzado (true) - ver comentario grande en
+      // sondearCambiosRemotos. Este es justo el camino que el reporte
+      // "no se actualizó después de recuperar" señala como roto.
+      sondearCambiosRemotos(true);
       if (estado.pendienteSync) intentarSincronizar();
     });
   });
@@ -1100,15 +1103,38 @@ function marcarUltimaSincronizacionConfirmada() {
  * toast, para no interrumpir al usuario con algo que no pidió.
  */
 
-async function sondearCambiosRemotos() {
+async function sondearCambiosRemotos(forzar = false) {
+  // FIX 2026-09-28 (causa raíz real de "no se actualizó después de
+  // reconectar", reportado varias veces): este `if (document.hidden)
+  // return;` cortaba la ÚNICA función que trae cambios de Drive apenas la
+  // pestaña/app no estaba en primer plano - que es el caso NORMAL en
+  // celular (pantalla bloqueada, app minimizada). El problema no era solo
+  // "no sondea cada 9s en 2do plano" (aceptable) sino que el listener de
+  // "online" (inicializarReconexionAlVolverOnline, más arriba) LLAMA A
+  // ESTA MISMA FUNCIÓN para recuperar todo solo al volver la conexión - si
+  // reconectabas con la app en 2do plano (el caso más común: se restaura
+  // el wifi con el teléfono bloqueado), ese intento de recuperación se
+  // auto-cancelaba acá mismo, en silencio, y el único salvavidas que
+  // quedaba era que `visibilitychange` disparara un sondeo real al volver
+  // a abrir la app - si esa segunda red de contención fallaba por lo que
+  // sea, no quedaba nada. Ya no se corta por visibilidad: el chequeo de
+  // metadatos es una sola llamada chica (no descarga el archivo), el costo
+  // de quota de seguir corriendo en 2do plano es mínimo comparado con el
+  // costo real de mostrar datos desactualizados o distintos entre
+  // dispositivos.
   await authListo; // nunca sondear antes de saber si hay token (punto 5, condición de carrera)
   if (sesionCerradaEnOtraPestana) return; // punto 3.4: la sesión se cerró en otra pestaña
-  if (document.hidden) return; // ahorra cuota de la API si la pestaña no está visible
   if (!estado.token || !estado.fileId) return;
-  // Si hay cambios locales sin subir todavía, se deja que intentarSincronizar()
-  // (el reintento cada 45s, o el próximo cambio del usuario) suba eso primero -
-  // pisar aquí con lo remoto arriesgaría perder esos cambios locales.
-  if (estado.pendienteSync) return;
+  // FIX 2026-09-28: antes, si había cambios locales sin subir, este sondeo
+  // se cortaba entero - incluida la BAJADA de cambios remotos, no solo la
+  // subida. Eso no hacía falta: aplicarDatosRemotosFrescos ya funde por
+  // entidad (fusionarDatos, con reloj lógico) en vez de reemplazar
+  // estado.datos entero, así que bajar y fundir acá es tan seguro como en
+  // cualquier otro punto de sync - nunca pisa una edición local sin subir.
+  // Cortar acá solo agregaba demora extra a que este dispositivo se entere
+  // de cambios de OTROS dispositivos mientras el suyo propio seguía
+  // pendiente de subir (que es exactamente cuando más importa recibir el
+  // resto de los cambios remotos).
 
   try {
     // v9.1 (punto 4): antes, un 401 aquí solo limpiaba estado.token y
@@ -1122,7 +1148,14 @@ async function sondearCambiosRemotos() {
       estado.ultimoModifiedTimeConocido = meta.modifiedTime; // primera vez: solo fija la base de comparación
       return;
     }
-    if (meta.modifiedTime === estado.ultimoModifiedTimeConocido) return; // sin cambios desde el último sondeo
+    // FIX 2026-09-28 (`forzar`): los caminos de recuperación (evento
+    // "online", volver a la pestaña tras estar oculta) pasan `true` acá
+    // para saltar el atajo barato de comparar modifiedTime y traer/fundir
+    // sí o sí una vez - por si el modifiedTime quedó desalineado en algún
+    // punto (ej. este mismo dispositivo subió algo mientras estaba
+    // "offline" para el resto de la app mas no para Drive, o hubo un ciclo
+    // que falló a mitad de camino sin actualizar la base de comparación).
+    if (!forzar && meta.modifiedTime === estado.ultimoModifiedTimeConocido) return; // sin cambios desde el último sondeo
 
     estado.ultimoModifiedTimeConocido = meta.modifiedTime;
     const datosFrescos = await conReintentoSi401(() => leerDatos(estado.token, estado.fileId));
@@ -1221,10 +1254,25 @@ let sondeoAlVolverRegistrado = false;
 function inicializarSondeoAlVolver() {
   if (sondeoAlVolverRegistrado) return; // se llama una sola vez desde DOMContentLoaded en main.js
   sondeoAlVolverRegistrado = true;
-  document.addEventListener("visibilitychange", () => {
+
+  // FIX 2026-09-28: forzado (true) - al volver a primer plano puede haber
+  // pasado cualquier cantidad de tiempo en 2do plano (donde, aunque ya no
+  // se corta por document.hidden, el navegador igual puede haber
+  // suspendido/limitado los timers) - se salta el atajo de modifiedTime y
+  // se confirma contra Drive de una.
+  const recuperarAlVolver = () => {
     if (document.hidden) return;
-    asegurarTokenFrescoAlVolver().finally(() => sondearCambiosRemotos());
-  });
+    asegurarTokenFrescoAlVolver().finally(() => sondearCambiosRemotos(true));
+  };
+  document.addEventListener("visibilitychange", recuperarAlVolver);
+  // FIX 2026-09-28: red de contención extra - en algunos navegadores/PWA
+  // instaladas, sobre todo en iOS, "visibilitychange" no siempre dispara
+  // de forma confiable al volver del todo a la app (ej. multitarea, splitview,
+  // notificaciones que traen la app al frente). "focus" es una señal
+  // distinta y complementaria; si ambas disparan para el mismo regreso, la
+  // segunda llamada es barata (solo metadata) y sondearCambiosRemotos ya es
+  // segura de llamar dos veces seguidas.
+  window.addEventListener("focus", recuperarAlVolver);
 }
 
 /**
