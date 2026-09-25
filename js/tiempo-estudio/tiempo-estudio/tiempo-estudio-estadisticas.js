@@ -1,0 +1,1963 @@
+/* =========================================================================
+   TIEMPO DE ESTUDIO — Estadísticas (Parte 3, punto 2)
+   0) (2026-09-19, Parte C) "Horas totales": 4 tarjetitas con el total de todas
+      las materias sumadas — hoy, esta semana, este mes, este año calendario.
+   Más 2 visualizaciones, mismo lenguaje visual que finanzas/finanzas-graficas.js
+   (SVG a mano, sin librería — se miró ese archivo como referencia antes de
+   escribir esto, no se importa directo porque su lógica es 100% específica
+   de Finanzas):
+     1) Donut "Horas por proyecto" (= por materia) del corte elegido
+        (Día/Semana/Semestre, con navegación </> en semana y semestre, o
+        selector de fecha puntual en día) + lista debajo con una barra por
+        materia normalizada contra la más grande.
+     2) Gráfica de barras "Tendencia" con su propio pill (Semana/Semestre,
+        sin Día): en semana, eje X = los 7 días; en semestre, eje X = las
+        semanas S1…S-actual (2026-09-19; antes eran meses). Cada barra va
+        APILADA por materia, con el color de cada una (propio > categoría >
+        violeta por defecto) y una leyenda debajo.
+   3) (2026-09-19) TIEMPO REAL: las gráficas se repintan solas al guardar una
+      sesión y crecen en vivo con el timer en curso (ver "Tiempo real").
+
+   A propósito NO restringido a obtenerSemestresActuales(): una sesión
+   vieja de un semestre que ya no es "actual" tiene que poder seguir
+   viéndose acá (mismo criterio que finanzas-graficas.js, que sí mira TODOS
+   los semestres vía obtenerTodosLosSemestres) — por eso resolverInfoMateria
+   y el navegador de semestre recorren estado.datos.semestres completo, no
+   el resultado de obtenerSemestresActuales() que usa el resto del archivo
+   hermano tiempo-estudio.js.
+   ========================================================================= */
+
+import { estado } from "../core/storage.js";
+import { aplicarFormatoTexto } from "../core/utils.js";
+import { COLOR_TIEMPO_ESTUDIO_DEFAULT } from "../core/schema.js";
+import { calcularNumeroSemanaParaFecha } from "../agenda/agenda-clases.js";
+import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
+// Import circular intencional (timer → competencias → estadísticas → timer):
+// seguro porque estos 3 nombres solo se usan DENTRO de funciones, nunca en el
+// nivel superior de este archivo (mismo criterio documentado en ARQUITECTURA.md).
+import { obtenerTimerActivo, suscribirseATimer, notificarSesionesEstudioActualizadas } from "./tiempo-estudio-timer.js";
+
+const NS = "http://www.w3.org/2000/svg";
+const COLOR_BARRA_TOTAL = COLOR_TIEMPO_ESTUDIO_DEFAULT;
+
+/* ===================== Estado de la vista (pills + navegación) =====================
+   Módulo-nivel, igual que materiaDetalleActivaId en tiempo-estudio.js — se
+   mantiene mientras la app sigue abierta, no se persiste ni sincroniza
+   (es solo "qué estás mirando ahora", no un dato real). */
+
+let corteDonut = "semana"; // "dia" | "semana" | "semestre"
+let offsetSemanaDonut = 0; // 0 = semana actual, -1 = anterior, +1 = siguiente
+let fechaDiaDonut = null; // "YYYY-MM-DD" (hora LOCAL)
+// FIX 2026-09-19: `fechaDiaDonut` se fijaba UNA vez (la primera vez que se abría
+// Estadísticas) y ahí quedaba aunque la app siguiera abierta al día
+// siguiente. Ahora solo se respeta si la persona la eligió a mano en el
+// selector; si no, cada render usa la fecha de hoy.
+let fechaDiaDonutElegidaAMano = false;
+let indiceSemestreDonut = null; // índice dentro de obtenerTodosLosSemestresOrdenados()
+
+let corteBarras = "semana"; // "semana" | "semestre"
+let offsetSemanaBarras = 0;
+let indiceSemestreBarras = null;
+
+/* ===================== Tiempo real =====================
+   Pedido 2026-09-19 ("necesito que se actualice en tiempo real, siempre
+   que se agreguen datos"). Tres mecanismos, todos en ESTE archivo (el
+   resto solo dispara el evento):
+
+   1) EVENTO al guardar/editar/borrar una sesión. Quien escribe en
+      `estado.datos.sesiones_estudio` (parar el timer, "Descanso", salvavidas,
+      registro manual, editar, borrar) llama a
+      `notificarSesionesEstudioActualizadas()` (definida en
+      tiempo-estudio-timer.js y re-exportada acá) → `te:sesiones-actualizadas`
+      en `window` → se repintan las gráficas que estén a la vista.
+
+   2) SESIÓN EN CURSO. Mientras el timer corre en una fase de estudio, su
+      tramo (desde `inicioFase` hasta ahora, o hasta el instante de la
+      pausa) se suma a lo que dibujan las gráficas como una sesión
+      "virtual" (`obtenerSesionEnCursoVirtual`). NO se guarda nada en
+      `estado.datos`: al detener, la sesión real reemplaza a la virtual
+      sin salto. Si por un instante existieran las dos (misma materia y
+      mismo `inicio`), la virtual se descarta para no contar doble.
+
+   3) LATIDO POR MINUTO. Un único suscriptor al timer repinta cuando cambia
+      el minuto entero de la sesión en curso (no cada segundo: las
+      gráficas solo muestran minutos).
+
+   El repintado es EN EL SITIO: cada sección se reconstruye y reemplaza a
+   su propio nodo (`repintarSeccionesEnVivo`), sin pasar por el
+   `refrescar()` del padre (que reconstruiría toda la pantalla y movería el
+   scroll). Se conserva el scroll horizontal de la gráfica semestral (salvo
+   que estuviera al final, donde sigue pegada a la semana más reciente) y no
+   se toca una sección en la que la persona tiene el foco en un campo (ej.
+   el selector de fecha del donut abierto).
+
+   IMPORTANTE: `calcularMinutosTotalesEnRango` (exportada, la usa
+   `sincronizarHorasCompetencias`) sigue leyendo SOLO sesiones guardadas —
+   `detenerTimerEstudio` sincroniza competencias antes de vaciar el timer, y
+   sumar la virtual ahí contaría la sesión dos veces. Lo "en vivo" es opt-in
+   (`incluirEnCurso`) y solo lo pide la propia pantalla. */
+let seccionesMontadas = []; // [{ nombre, construir, nodo }] de lo que hay pintado ahora
+let tiempoRealActivo = false;
+let ultimoMinutoVivo = -1;
+let scrollXPendiente = null; // lo consume la gráfica desplazable al rearmarse
+
+/** Sesión "virtual" con lo que lleva corriendo el timer en una fase de
+ * estudio, o `null`. Misma regla que `detenerTimerEstudio` para decidir qué
+ * cuenta como trabajo (timer simple siempre; Pomodoro solo en "trabajo") y
+ * misma referencia de fin (instante de la pausa si está pausado). */
+function obtenerSesionEnCursoVirtual() {
+  const t = obtenerTimerActivo();
+  if (!t) return null;
+  const cuentaComoTrabajo = t.origen === "timer" || (t.pomodoro && t.pomodoro.fase === "trabajo");
+  if (!cuentaComoTrabajo) return null;
+  const fin = t.pausado ? t.msPausaInicio : Date.now();
+  if (!(fin > t.inicioFase)) return null;
+  return {
+    id: "__en_curso__",
+    materia_matriculada_id: t.materiaIndependiente ? null : t.materiaMatriculadaId,
+    materia_independiente_id: t.materiaIndependiente ? t.materiaMatriculadaId : null,
+    inicio: t.inicioFase,
+    fin,
+    duracion_minutos: (fin - t.inicioFase) / 60000,
+    _enCurso: true,
+  };
+}
+
+function idMateriaSesion(sesion) {
+  return sesion.materia_independiente_id || sesion.materia_matriculada_id;
+}
+
+/** Sesiones guardadas + la del timer en curso (si hay). Solo para PINTAR. */
+function obtenerSesionesParaGraficas() {
+  const guardadas = estado.datos.sesiones_estudio || [];
+  const vivo = obtenerSesionEnCursoVirtual();
+  if (!vivo) return guardadas;
+  if (guardadas.some((s) => idMateriaSesion(s) === idMateriaSesion(vivo) && s.inicio === vivo.inicio)) return guardadas;
+  return [...guardadas, vivo];
+}
+
+function minutoEnVivoActual() {
+  const vivo = obtenerSesionEnCursoVirtual();
+  return vivo ? Math.floor(vivo.duracion_minutos) : -1;
+}
+
+function intentarConstruirSeccion(nombre, construir) {
+  const tmp = document.createElement("div");
+  try {
+    construir(tmp);
+    return { nodo: tmp.firstElementChild, fallo: false };
+  } catch (err) {
+    console.error(`[tiempo-estudio-estadisticas] "${nombre}" falló al renderizar:`, err);
+    const aviso = document.createElement("section");
+    aviso.className = "glass-card stack";
+    aviso.innerHTML = `<p class="muted" style="margin:0; font-size:0.82rem;">No se pudo mostrar "${nombre}" (${err.message || "error desconocido"}).</p>`;
+    return { nodo: aviso, fallo: true };
+  }
+}
+
+/** Construye una sección aislada (si revienta, las demás siguen), la
+ * inserta en `cont` y la registra para poder repintarla en vivo. Cada
+ * `construir(dest)` agrega EXACTAMENTE un nodo a `dest`. */
+function montarSeccion(cont, nombre, construir) {
+  const { nodo } = intentarConstruirSeccion(nombre, construir);
+  if (!nodo) return;
+  cont.appendChild(nodo);
+  seccionesMontadas.push({ nombre, construir, nodo });
+}
+
+/** Cada vez que el padre reconstruye la pantalla entera se parte de cero. */
+function reiniciarSeccionesMontadas() {
+  seccionesMontadas = [];
+  ultimoMinutoVivo = minutoEnVivoActual();
+  asegurarTiempoRealActivo();
+}
+
+function repintarSeccionesEnVivo() {
+  seccionesMontadas = seccionesMontadas.filter((s) => s.nodo.isConnected);
+  seccionesMontadas.forEach((entrada) => {
+    const activo = document.activeElement;
+    if (activo && entrada.nodo.contains(activo) && /^(INPUT|SELECT|TEXTAREA)$/.test(activo.tagName)) return;
+
+    const scroller = entrada.nodo.querySelector("[data-te-scroll-x]");
+    const alFinal = scroller ? scroller.scrollLeft >= scroller.scrollWidth - scroller.clientWidth - 4 : true;
+    scrollXPendiente = scroller && !alFinal ? scroller.scrollLeft : null;
+
+    const { nodo, fallo } = intentarConstruirSeccion(entrada.nombre, entrada.construir);
+    scrollXPendiente = null;
+    if (fallo || !nodo) return; // se deja la versión anterior en pantalla
+    entrada.nodo.replaceWith(nodo);
+    entrada.nodo = nodo;
+  });
+}
+
+function asegurarTiempoRealActivo() {
+  if (tiempoRealActivo) return;
+  tiempoRealActivo = true;
+  window.addEventListener("te:sesiones-actualizadas", () => {
+    ultimoMinutoVivo = minutoEnVivoActual();
+    repintarSeccionesEnVivo();
+  });
+  suscribirseATimer(() => {
+    if (seccionesMontadas.length === 0) return;
+    const minuto = minutoEnVivoActual();
+    if (minuto === ultimoMinutoVivo) return;
+    ultimoMinutoVivo = minuto;
+    repintarSeccionesEnVivo();
+  });
+}
+
+/* ===================== Helpers de datos (duplicados a propósito) =====================
+   buscarMateriaMatriculada/obtenerPlanPorId equivalentes ya existen en
+   tiempo-estudio.js y tiempo-estudio-timer.js — se duplican acá (recorridos
+   simples de 1-2 líneas) para no crear un import circular de 3 puntas
+   entre este archivo, tiempo-estudio.js y tiempo-estudio-timer.js. */
+
+/* ===================== Fecha LOCAL de hoy =====================
+   FIX 2026-09-19 (Parte B, "la sesión del lunes no aparece"): dos lugares de
+   este archivo usaban `new Date().toISOString().slice(0, 10)` para "hoy".
+   `toISOString()` devuelve la fecha en UTC, no la local: en Costa Rica
+   (UTC-6) desde las 6 pm ya devuelve el día SIGUIENTE. Efecto visible: al
+   abrir Estadísticas de noche, el corte "Día" de "Horas por proyecto"
+   arrancaba en mañana (0 min) y la sesión estudiada hoy parecía no existir
+   — justo el horario en que más se estudia. Todo lo demás de esta sección
+   (rangos de semana/día, tarjetas, registro manual) ya trabajaba en hora
+   local; esto era lo único que no. */
+function fechaLocalStr(fecha = new Date()) {
+  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
+}
+
+function obtenerTodosLosSemestresOrdenados() {
+  return (estado.datos.semestres || []).slice().sort((a, b) => (a.fecha_inicio || "").localeCompare(b.fecha_inicio || ""));
+}
+
+/** Índice del semestre "vigente" dentro de la lista ordenada: el último
+ * cuyo fecha_inicio ya llegó — si ninguno arrancó todavía, el primero. */
+function obtenerIndiceSemestreVigente(lista) {
+  if (lista.length === 0) return -1;
+  const hoyStr = fechaLocalStr();
+  let idx = 0;
+  lista.forEach((s, i) => {
+    if ((s.fecha_inicio || "") <= hoyStr) idx = i;
+  });
+  return idx;
+}
+
+/**
+ * Pedido 2026-09-10 ("no se ven las horas estudiadas, se ve la gráfica
+ * vacía"): el picker "Semestre" de una materia puntual arrancaba siempre
+ * en `obtenerIndiceSemestreVigente()` — el semestre vigente por FECHA DE
+ * HOY, sin importar en cuál está matriculada realmente esa materia. Si la
+ * matrícula es de un semestre distinto al vigente (uno viejo, o uno
+ * cargado a futuro), el filtro por fecha no encuentra sus sesiones ahí y
+ * el gráfico arranca en cero — mismo síntoma reportado ("Semestre VI no
+ * trae nada"). Mismo patrón de búsqueda que ya usa `resolverInfoMateria`
+ * (recorrer `estado.datos.semestres` buscando la matrícula por id) para
+ * ubicar el semestre REAL de esta `mm` y devolver su índice dentro de la
+ * lista ORDENADA que ya usa el picker — si no se encuentra (matrícula
+ * borrada, plan eliminado), cae de vuelta al vigente por fecha. */
+function encontrarIndiceSemestreDeMateria(materiaMatriculadaId, listaOrdenada) {
+  const semestrePropio = (estado.datos.semestres || []).find((s) => (s.materias_matriculadas || []).some((m) => m.id === materiaMatriculadaId));
+  if (!semestrePropio) return -1;
+  return listaOrdenada.findIndex((s) => s.id === semestrePropio.id);
+}
+
+/** Busca la materia matriculada en TODOS los semestres (no solo actuales) y
+ * resuelve nombre corto + color efectivo — mismo criterio de color que
+ * obtenerColorMateria() en tiempo-estudio.js (propio > categoría > default).
+ * Si la matrícula, el plan o la materia ya no existen (borrados), cae a un
+ * fallback en vez de romper el render — las sesiones viejas no desaparecen
+ * solo porque su materia ya no está. */
+function resolverInfoMateria(materiaMatriculadaId) {
+  for (const semestre of estado.datos.semestres || []) {
+    const mm = (semestre.materias_matriculadas || []).find((m) => m.id === materiaMatriculadaId);
+    if (!mm) continue;
+    const plan = (estado.datos.planes_estudio || []).find((p) => p.id === mm.plan_estudio_id);
+    const materia = plan && plan.materias.find((m) => m.id === mm.materia_id);
+    if (!plan || !materia) return { nombreCorto: "Materia eliminada", color: COLOR_TIEMPO_ESTUDIO_DEFAULT };
+    const categoria = plan.categorias.find((c) => c.id === materia.categoria_id);
+    const color = mm.tiempo_estudio.color || (categoria && categoria.color) || COLOR_TIEMPO_ESTUDIO_DEFAULT;
+    return { nombreCorto: aplicarFormatoTexto(materia.nombre), color };
+  }
+  return { nombreCorto: "Materia eliminada", color: COLOR_TIEMPO_ESTUDIO_DEFAULT };
+}
+
+function formatearMinutos(minutosTotales) {
+  const totales = Math.max(0, Math.round(minutosTotales));
+  const h = Math.floor(totales / 60);
+  const m = totales % 60;
+  if (h > 0 && m > 0) return `${h} h ${m} min`;
+  if (h > 0) return `${h} h`;
+  return `${m} min`;
+}
+
+/* ===================== Rangos de fecha por corte ===================== */
+
+function obtenerRangoDia(fechaStr) {
+  const [y, mo, d] = fechaStr.split("-").map(Number);
+  return { inicio: new Date(y, mo - 1, d, 0, 0, 0, 0).getTime(), fin: new Date(y, mo - 1, d + 1, 0, 0, 0, 0).getTime() };
+}
+
+function obtenerRangoSemana(offsetSemanas, ahora = new Date()) {
+  const diasDesdeLunes = (ahora.getDay() + 6) % 7;
+  const lunesActual = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() - diasDesdeLunes, 0, 0, 0, 0);
+  const lunes = new Date(lunesActual.getFullYear(), lunesActual.getMonth(), lunesActual.getDate() + offsetSemanas * 7, 0, 0, 0, 0);
+  const domingoSiguiente = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + 7, 0, 0, 0, 0);
+  return { inicio: lunes.getTime(), fin: domingoSiguiente.getTime(), lunes };
+}
+
+function obtenerRangoSemestre(semestre) {
+  const inicio = new Date(`${semestre.fecha_inicio}T00:00:00`).getTime();
+  const fin = new Date(`${semestre.fecha_fin}T23:59:59`).getTime() + 1;
+  return { inicio, fin };
+}
+
+/* ===================== Agregación: minutos por materia en un rango ===================== */
+
+function calcularMinutosPorMateriaEnRango(inicio, fin) {
+  const mapa = new Map();
+  obtenerSesionesParaGraficas().forEach((s) => {
+    if (s.inicio < inicio || s.inicio >= fin) return;
+    const id = idMateriaSesion(s);
+    mapa.set(id, (mapa.get(id) || 0) + (Number(s.duracion_minutos) || 0));
+  });
+  return mapa;
+}
+
+function calcularMinutosTotalesEnRango(inicio, fin, incluirEnCurso = false) {
+  const fuente = incluirEnCurso ? obtenerSesionesParaGraficas() : estado.datos.sesiones_estudio || [];
+  return fuente.reduce((acc, s) => (s.inicio >= inicio && s.inicio < fin ? acc + (Number(s.duracion_minutos) || 0) : acc), 0);
+}
+
+/* ===================== Donut multi-segmento (N materias) =====================
+   finanzas-graficas.js solo dibuja 2 segmentos (gastado/disponible) — acá
+   se generaliza el mismo truco de stroke-dasharray + stroke-dashoffset
+   acumulado a cualquier cantidad de segmentos. */
+
+function construirDonutHorasPorMateria(segmentos) {
+  const total = segmentos.reduce((acc, s) => acc + s.minutos, 0);
+  const RADIO = 54;
+  const GROSOR = 16;
+  const CIRC = 2 * Math.PI * RADIO;
+
+  const bloque = document.createElement("div");
+  bloque.className = "donut-bloque";
+  bloque.style.flexShrink = "0";
+
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 140 140");
+  svg.setAttribute("width", "140");
+  svg.setAttribute("height", "140");
+
+  const pista = document.createElementNS(NS, "circle");
+  pista.setAttribute("cx", "70");
+  pista.setAttribute("cy", "70");
+  pista.setAttribute("r", String(RADIO));
+  pista.setAttribute("fill", "none");
+  pista.setAttribute("stroke", "var(--border-glass)");
+  pista.setAttribute("stroke-width", String(GROSOR));
+  svg.appendChild(pista);
+
+  if (total > 0) {
+    let acumulado = 0;
+    segmentos.forEach((seg) => {
+      if (seg.minutos <= 0) return;
+      const largo = (seg.minutos / total) * CIRC;
+      const arco = document.createElementNS(NS, "circle");
+      arco.setAttribute("cx", "70");
+      arco.setAttribute("cy", "70");
+      arco.setAttribute("r", String(RADIO));
+      arco.setAttribute("fill", "none");
+      arco.setAttribute("stroke", seg.color);
+      arco.setAttribute("stroke-width", String(GROSOR));
+      arco.setAttribute("stroke-dasharray", `${largo} ${CIRC - largo}`);
+      arco.setAttribute("stroke-dashoffset", String(-acumulado));
+      arco.setAttribute("transform", "rotate(-90 70 70)");
+      svg.appendChild(arco);
+      acumulado += largo;
+    });
+  }
+
+  bloque.appendChild(svg);
+  return bloque;
+}
+
+/** Fila por materia debajo del donut: barra a ancho completo normalizada
+ * contra la materia con más minutos de este corte (esa llega al 100%), con
+ * las horas ancladas a la derecha al mismo nivel — pedido explícito: "no
+ * tanto de tanto, si no solo tanto" (sin meta de por medio, a diferencia de
+ * la barra de la tarjeta principal). */
+function construirListaHorasPorMateria(segmentos) {
+  const cont = document.createElement("div");
+  cont.className = "stack";
+  cont.style.gap = "10px";
+
+  if (segmentos.length === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.margin = "0";
+    vacio.textContent = "Sin sesiones de estudio en este período.";
+    cont.appendChild(vacio);
+    return cont;
+  }
+
+  const maxMinutos = Math.max(0, ...segmentos.map((s) => s.minutos));
+  segmentos.forEach((seg) => {
+    const porcentaje = maxMinutos > 0 ? (seg.minutos / maxMinutos) * 100 : 0;
+    const fila = document.createElement("div");
+    fila.className = "stack";
+    fila.style.gap = "4px";
+    fila.innerHTML = `
+      <div class="row-between" style="align-items:center; gap:8px;">
+        <span style="font-size:0.85rem;">${seg.nombreCorto}</span>
+        <span style="font-size:0.85rem; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap;">${formatearMinutos(seg.minutos)}</span>
+      </div>
+      <div class="te-barra-progreso">
+        <div class="te-barra-progreso-fill" style="width:${porcentaje}%; background:${seg.color};"></div>
+      </div>
+    `;
+    cont.appendChild(fila);
+  });
+  return cont;
+}
+
+/* ===================== Gráfica de barras (trend agregado) ===================== */
+
+const VB_ANCHO = 640;
+const VB_ALTO = 220;
+const MARGEN_IZQ = 46;
+const MARGEN_DER = 14;
+const MARGEN_SUP = 16;
+const MARGEN_INF = 34;
+
+/** Mismo algoritmo de "nice numbers" que finanzas-graficas.js
+ * (calcularEscalaAgradable) — redondea el paso del eje Y al 1/2/5×10^n más
+ * cercano en vez de cortes feos. Acá trabaja sobre minutos en vez de
+ * montos. */
+function calcularEscalaAgradable(valorMax) {
+  if (valorMax <= 0) return { max: 60, paso: 15 };
+  const objetivoPasos = 4;
+  const bruto = valorMax / objetivoPasos;
+  const magnitud = Math.pow(10, Math.floor(Math.log10(bruto)));
+  const normalizado = bruto / magnitud;
+  let pasoNormalizado;
+  if (normalizado <= 1) pasoNormalizado = 1;
+  else if (normalizado <= 2) pasoNormalizado = 2;
+  else if (normalizado <= 5) pasoNormalizado = 5;
+  else pasoNormalizado = 10;
+  const paso = pasoNormalizado * magnitud;
+  const max = Math.ceil(valorMax / paso) * paso;
+  return { max, paso };
+}
+
+/** `puntos`: [{ etiqueta, minutos }]. Barras de un solo color: violeta
+ * (agregado de todas las materias) en la vista global, o el color propio
+ * de la materia cuando se llama desde `construirGraficaBarrasMateria`
+ * (pedido 2026-09-07: "el gráfico de barras debe ser del color respectivo
+ * de la materia estudiada") — a diferencia del donut, esta gráfica no
+ * separa por materia dentro de un mismo corte (ver nota de cabecera). */
+/** Núcleo compartido de dibujo: separado de `construirGraficaBarras` para
+ * poder reusarlo también en `construirGraficaBarrasDesplazable` con un
+ * ancho de SVG distinto (mayor al del contenedor) cuando hay demasiados
+ * puntos para caber legibles en el ancho fijo normal — ver esa función
+ * para el porqué (pedido: semanas 1..N de un semestre entero). */
+function construirSvgBarras(puntos, color, anchoSvg) {
+  const n = puntos.length;
+  const anchoUtil = anchoSvg - MARGEN_IZQ - MARGEN_DER;
+  const altoUtil = VB_ALTO - MARGEN_SUP - MARGEN_INF;
+
+  const valorMaxCrudo = Math.max(0, ...puntos.map((p) => p.minutos));
+  const { max: valorMax, paso } = calcularEscalaAgradable(valorMaxCrudo);
+
+  const x = (i) => MARGEN_IZQ + (anchoUtil / n) * (i + 0.5);
+  const y = (valor) => MARGEN_SUP + altoUtil - (valor / valorMax) * altoUtil;
+  const anchoBarra = Math.min(38, (anchoUtil / n) * 0.55);
+
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${anchoSvg} ${VB_ALTO}`);
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  svg.style.cssText = "display:block; height:auto;";
+
+  // ----- Eje Y: líneas guía + etiquetas en pasos redondos -----
+  const cantidadPasos = Math.round(valorMax / paso) || 1;
+  for (let paso_i = 0; paso_i <= cantidadPasos; paso_i++) {
+    const valor = paso_i * paso;
+    const yPos = y(valor);
+
+    const grid = document.createElementNS(NS, "line");
+    grid.setAttribute("x1", String(MARGEN_IZQ));
+    grid.setAttribute("x2", String(anchoSvg - MARGEN_DER));
+    grid.setAttribute("y1", String(yPos));
+    grid.setAttribute("y2", String(yPos));
+    grid.setAttribute("stroke", "var(--border-glass)");
+    grid.setAttribute("stroke-width", "1");
+    if (paso_i !== 0) grid.setAttribute("stroke-dasharray", "3 3");
+    svg.appendChild(grid);
+
+    const etiquetaY = document.createElementNS(NS, "text");
+    etiquetaY.setAttribute("x", String(MARGEN_IZQ - 8));
+    etiquetaY.setAttribute("y", String(yPos + 3));
+    etiquetaY.setAttribute("text-anchor", "end");
+    etiquetaY.setAttribute("font-size", "9.5");
+    etiquetaY.setAttribute("fill", "var(--text-muted)");
+    etiquetaY.textContent = formatearMinutos(valor);
+    svg.appendChild(etiquetaY);
+  }
+
+  // ----- Barras + etiqueta del eje X (sin rotar: "Lun"/"Ene" son cortas) -----
+  puntos.forEach((p, i) => {
+    const alturaBarra = (p.minutos / valorMax) * altoUtil;
+    const barra = document.createElementNS(NS, "rect");
+    barra.setAttribute("x", String(x(i) - anchoBarra / 2));
+    barra.setAttribute("y", String(y(p.minutos)));
+    barra.setAttribute("width", String(anchoBarra));
+    barra.setAttribute("height", String(Math.max(0, alturaBarra)));
+    barra.setAttribute("rx", "3");
+    barra.setAttribute("fill", color || COLOR_BARRA_TOTAL);
+    svg.appendChild(barra);
+
+    const etiquetaX = document.createElementNS(NS, "text");
+    etiquetaX.setAttribute("x", String(x(i)));
+    etiquetaX.setAttribute("y", String(VB_ALTO - MARGEN_INF + 16));
+    etiquetaX.setAttribute("text-anchor", "middle");
+    etiquetaX.setAttribute("font-size", "10");
+    etiquetaX.setAttribute("fill", "var(--text-muted)");
+    etiquetaX.textContent = p.etiqueta;
+    svg.appendChild(etiquetaX);
+  });
+
+  // ----- Eje X: línea base -----
+  const ejeX = document.createElementNS(NS, "line");
+  ejeX.setAttribute("x1", String(MARGEN_IZQ));
+  ejeX.setAttribute("x2", String(anchoSvg - MARGEN_DER));
+  ejeX.setAttribute("y1", String(y(0)));
+  ejeX.setAttribute("y2", String(y(0)));
+  ejeX.setAttribute("stroke", "var(--text-muted)");
+  ejeX.setAttribute("stroke-width", "1.2");
+  svg.appendChild(ejeX);
+
+  return svg;
+}
+
+/** `puntos`: [{ etiqueta, minutos }]. Barras de un solo color: violeta
+ * (agregado de todas las materias) en la vista global, o el color propio
+ * de la materia cuando se llama desde las secciones por materia (pedido
+ * 2026-09-07: "el gráfico de barras debe ser del color respectivo de la
+ * materia estudiada") — a diferencia del donut, esta gráfica no separa
+ * por materia dentro de un mismo corte (ver nota de cabecera). Ancho fijo
+ * al 100% del contenedor — usar `construirGraficaBarrasDesplazable` en
+ * vez de esta cuando `puntos` puede crecer mucho (semanas de un semestre
+ * entero) y las barras quedarían demasiado angostas para leerse. */
+function construirGraficaBarras(puntos, color) {
+  if (puntos.length === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.margin = "0";
+    vacio.textContent = "No hay datos para graficar en este período.";
+    return vacio;
+  }
+  const svg = construirSvgBarras(puntos, color, VB_ANCHO);
+  svg.style.width = "100%";
+  return svg;
+}
+
+/**
+ * Pedido 2026-09-10: la vista "Semestre" de una materia puntual pasó de
+ * mostrar meses (ilegible/vacío para reportar progreso real) a mostrar
+ * TODAS las semanas de la 1 a la N (la semana vigente del semestre, o la
+ * última si el semestre ya terminó) — eso puede ser 15-20+ barras, muchas
+ * más de las que entran legibles en el ancho fijo de `construirGraficaBarras`
+ * (pensado para 7 días o ~6 meses). Esta variante reserva un ancho mínimo
+ * por barra (`anchoMinBarra`) y deja que el SVG crezca más allá del ancho
+ * visible: el contenedor scrollea en X, y se agregan 2 botones ‹ › a los
+ * costados (mismo componente visual que ya usa `construirNavegadorPeriodo`,
+ * `.te-btn-icono.te-btn-icono-fantasma`) que:
+ *   - permiten avanzar/retroceder un tramo con un tap (clave en celular,
+ *     donde el gesto de arrastre dentro de una tarjeta puede confundirse
+ *     con el scroll vertical de toda la pantalla), y
+ *   - se ocultan solas apenas no hace falta seguir para ese lado (o de
+ *     entrada, si el semestre tiene pocas semanas y ya entra completo).
+ * Arranca con el scroll llevado al final (la semana más reciente / actual),
+ * que es la parte que más le importa a alguien mirando su progreso.
+ */
+function construirGraficaBarrasDesplazable(puntos, color, anchoMinBarra = 34) {
+  if (puntos.length === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.margin = "0";
+    vacio.textContent = "No hay datos para graficar en este período.";
+    return vacio;
+  }
+
+  const anchoNecesario = MARGEN_IZQ + MARGEN_DER + puntos.length * anchoMinBarra;
+  const anchoSvg = Math.max(VB_ANCHO, anchoNecesario);
+
+  const svg = construirSvgBarras(puntos, color, anchoSvg);
+  // clave del bug "no ocupa todo el ancho": antes quedaba SIEMPRE fijo en
+  // `anchoSvg`px (incluso si el contenedor real era más ancho, ej.
+  // desktop con pocas semanas todavía), dejando un hueco vacío a la
+  // derecha. width:100% + min-width:anchoSvg → si el contenedor entra
+  // holgado, la gráfica se estira a ocupar todo (mismo comportamiento que
+  // construirGraficaBarras); si no entra, min-width fuerza el overflow
+  // que habilita el scroll horizontal.
+  svg.style.width = "100%";
+  svg.style.minWidth = `${anchoSvg}px`;
+  svg.style.flexShrink = "0";
+
+  const wrap = document.createElement("div");
+  wrap.style.cssText = "position:relative;";
+
+  const scroller = document.createElement("div");
+  scroller.style.cssText = "overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch;";
+  scroller.setAttribute("data-te-scroll-x", "");
+  scroller.appendChild(svg);
+  wrap.appendChild(scroller);
+
+  const crearTab = (lado) => {
+    const tab = document.createElement("button");
+    tab.type = "button";
+    tab.className = "te-btn-icono te-btn-icono-fantasma";
+    tab.textContent = lado === "izq" ? "‹" : "›";
+    tab.setAttribute("aria-label", lado === "izq" ? "Ver semanas anteriores" : "Ver semanas siguientes");
+    tab.style.cssText = `position:absolute; top:50%; transform:translateY(-50%); ${lado === "izq" ? "left:2px;" : "right:2px;"} z-index:2; box-shadow:0 1px 6px rgba(0,0,0,0.3); transition:opacity 0.15s;`;
+    tab.addEventListener("click", () => {
+      scroller.scrollBy({ left: lado === "izq" ? -anchoSvg * 0.4 : anchoSvg * 0.4, behavior: "smooth" });
+    });
+    return tab;
+  };
+  const tabIzq = crearTab("izq");
+  const tabDer = crearTab("der");
+  wrap.appendChild(tabIzq);
+  wrap.appendChild(tabDer);
+
+  const actualizarTabs = () => {
+    const haceFaltaScroll = scroller.scrollWidth > scroller.clientWidth + 4;
+    if (!haceFaltaScroll) {
+      tabIzq.style.display = "none";
+      tabDer.style.display = "none";
+      return;
+    }
+    const puedeIzq = scroller.scrollLeft > 4;
+    const puedeDer = scroller.scrollLeft < scroller.scrollWidth - scroller.clientWidth - 4;
+    tabIzq.style.display = "flex";
+    tabDer.style.display = "flex";
+    tabIzq.style.opacity = puedeIzq ? "1" : "0";
+    tabIzq.style.pointerEvents = puedeIzq ? "auto" : "none";
+    tabDer.style.opacity = puedeDer ? "1" : "0";
+    tabDer.style.pointerEvents = puedeDer ? "auto" : "none";
+  };
+  scroller.addEventListener("scroll", actualizarTabs);
+  // clientWidth/scrollWidth solo son reales después del primer paint —
+  // ahí mismo se lleva el scroll al final (semana más reciente).
+  // `scrollXPendiente` lo fija `repintarSeccionesEnVivo` para que un repintado
+  // por minuto no te devuelva al final mientras mirabas semanas viejas.
+  const scrollInicial = scrollXPendiente;
+  requestAnimationFrame(() => {
+    scroller.scrollLeft = scrollInicial !== null ? scrollInicial : scroller.scrollWidth;
+    actualizarTabs();
+  });
+
+  return wrap;
+}
+
+/* ===================== Gráfica de barras APILADAS (una materia por tramo) =====================
+   Pedido 2026-09-19 ("en tendencia se muestra un color genérico en lugar
+   de mostrarse dividido por color de cada materia"): a diferencia de
+   `construirSvgBarras` (una sola barra sólida, usada en "Horas estudiadas"
+   por materia, donde SÍ tiene sentido un solo color), acá cada barra de
+   "Tendencia" (agregado de todas las materias) se divide en tantos tramos
+   como materias tuvieron sesiones ese día/semana, cada tramo con el color
+   efectivo de su materia (mismo criterio que el donut: propio > categoría
+   > default). Comparte el mismo sistema de coordenadas y "nice numbers"
+   que `construirSvgBarras` para que ambas gráficas midan igual. */
+function construirSvgBarrasApiladas(puntos, anchoSvg) {
+  const n = puntos.length;
+  const anchoUtil = anchoSvg - MARGEN_IZQ - MARGEN_DER;
+  const altoUtil = VB_ALTO - MARGEN_SUP - MARGEN_INF;
+
+  const valorMaxCrudo = Math.max(0, ...puntos.map((p) => p.totalMinutos));
+  const { max: valorMax, paso } = calcularEscalaAgradable(valorMaxCrudo);
+
+  const x = (i) => MARGEN_IZQ + (anchoUtil / n) * (i + 0.5);
+  const y = (valor) => MARGEN_SUP + altoUtil - (valor / valorMax) * altoUtil;
+  const anchoBarra = Math.min(38, (anchoUtil / n) * 0.55);
+
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${anchoSvg} ${VB_ALTO}`);
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  svg.style.cssText = "display:block; height:auto;";
+
+  const cantidadPasos = Math.round(valorMax / paso) || 1;
+  for (let paso_i = 0; paso_i <= cantidadPasos; paso_i++) {
+    const valor = paso_i * paso;
+    const yPos = y(valor);
+
+    const grid = document.createElementNS(NS, "line");
+    grid.setAttribute("x1", String(MARGEN_IZQ));
+    grid.setAttribute("x2", String(anchoSvg - MARGEN_DER));
+    grid.setAttribute("y1", String(yPos));
+    grid.setAttribute("y2", String(yPos));
+    grid.setAttribute("stroke", "var(--border-glass)");
+    grid.setAttribute("stroke-width", "1");
+    if (paso_i !== 0) grid.setAttribute("stroke-dasharray", "3 3");
+    svg.appendChild(grid);
+
+    const etiquetaY = document.createElementNS(NS, "text");
+    etiquetaY.setAttribute("x", String(MARGEN_IZQ - 8));
+    etiquetaY.setAttribute("y", String(yPos + 3));
+    etiquetaY.setAttribute("text-anchor", "end");
+    etiquetaY.setAttribute("font-size", "9.5");
+    etiquetaY.setAttribute("fill", "var(--text-muted)");
+    etiquetaY.textContent = formatearMinutos(valor);
+    svg.appendChild(etiquetaY);
+  }
+
+  puntos.forEach((p, i) => {
+    let acumuladoMin = 0;
+    p.segmentos.forEach((seg) => {
+      if (seg.minutos <= 0) return;
+      const yTramoInf = y(acumuladoMin);
+      const yTramoSup = y(acumuladoMin + seg.minutos);
+      const tramo = document.createElementNS(NS, "rect");
+      tramo.setAttribute("x", String(x(i) - anchoBarra / 2));
+      tramo.setAttribute("y", String(yTramoSup));
+      tramo.setAttribute("width", String(anchoBarra));
+      tramo.setAttribute("height", String(Math.max(0, yTramoInf - yTramoSup)));
+      tramo.setAttribute("fill", seg.color);
+      svg.appendChild(tramo);
+      acumuladoMin += seg.minutos;
+    });
+    // Redondeo solo en la punta superior del apilado (no por tramo, para no
+    // ver cortes redondeados ENTRE materias dentro de una misma barra): un
+    // rect angosto extra del color del último tramo con datos, con `rx` —
+    // más barato que armar un <path> a mano para un solo caso.
+    if (p.totalMinutos > 0) {
+      const ultimoConDatos = [...p.segmentos].reverse().find((s) => s.minutos > 0);
+      if (ultimoConDatos) {
+        const tapa = document.createElementNS(NS, "rect");
+        tapa.setAttribute("x", String(x(i) - anchoBarra / 2));
+        tapa.setAttribute("y", String(y(p.totalMinutos)));
+        tapa.setAttribute("width", String(anchoBarra));
+        tapa.setAttribute("height", "3");
+        tapa.setAttribute("rx", "1.5");
+        tapa.setAttribute("fill", ultimoConDatos.color);
+        svg.appendChild(tapa);
+      }
+    }
+
+    const etiquetaX = document.createElementNS(NS, "text");
+    etiquetaX.setAttribute("x", String(x(i)));
+    etiquetaX.setAttribute("y", String(VB_ALTO - MARGEN_INF + 16));
+    etiquetaX.setAttribute("text-anchor", "middle");
+    etiquetaX.setAttribute("font-size", "10");
+    etiquetaX.setAttribute("fill", "var(--text-muted)");
+    etiquetaX.textContent = p.etiqueta;
+    svg.appendChild(etiquetaX);
+  });
+
+  const ejeX = document.createElementNS(NS, "line");
+  ejeX.setAttribute("x1", String(MARGEN_IZQ));
+  ejeX.setAttribute("x2", String(anchoSvg - MARGEN_DER));
+  ejeX.setAttribute("y1", String(y(0)));
+  ejeX.setAttribute("y2", String(y(0)));
+  ejeX.setAttribute("stroke", "var(--text-muted)");
+  ejeX.setAttribute("stroke-width", "1.2");
+  svg.appendChild(ejeX);
+
+  return svg;
+}
+
+/** Versión ancho-fijo (7 días de una semana, siempre entran cómodos) —
+ * hermana de `construirGraficaBarras` pero apilada por materia. */
+function construirGraficaBarrasApiladas(puntos) {
+  if (puntos.length === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.margin = "0";
+    vacio.textContent = "No hay datos para graficar en este período.";
+    return vacio;
+  }
+  const svg = construirSvgBarrasApiladas(puntos, VB_ANCHO);
+  svg.style.width = "100%";
+  return svg;
+}
+
+/** Versión desplazable (semanas de un semestre entero, 15-20+ barras) —
+ * hermana de `construirGraficaBarrasDesplazable` pero apilada por materia.
+ * Mismo componente de scroll + tabs ‹ › (ver esa función para el detalle
+ * de cada pieza; se duplica acá para no acoplar ambas variantes con un
+ * parámetro extra "¿apilada o no?" pasado por todos lados). */
+function construirGraficaBarrasApiladasDesplazable(puntos, anchoMinBarra = 34) {
+  if (puntos.length === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.margin = "0";
+    vacio.textContent = "No hay datos para graficar en este período.";
+    return vacio;
+  }
+
+  const anchoNecesario = MARGEN_IZQ + MARGEN_DER + puntos.length * anchoMinBarra;
+  const anchoSvg = Math.max(VB_ANCHO, anchoNecesario);
+
+  const svg = construirSvgBarrasApiladas(puntos, anchoSvg);
+  svg.style.width = "100%";
+  svg.style.minWidth = `${anchoSvg}px`;
+  svg.style.flexShrink = "0";
+
+  const wrap = document.createElement("div");
+  wrap.style.cssText = "position:relative;";
+
+  const scroller = document.createElement("div");
+  scroller.style.cssText = "overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch;";
+  scroller.setAttribute("data-te-scroll-x", "");
+  scroller.appendChild(svg);
+  wrap.appendChild(scroller);
+
+  const crearTab = (lado) => {
+    const tab = document.createElement("button");
+    tab.type = "button";
+    tab.className = "te-btn-icono te-btn-icono-fantasma";
+    tab.textContent = lado === "izq" ? "‹" : "›";
+    tab.setAttribute("aria-label", lado === "izq" ? "Ver semanas anteriores" : "Ver semanas siguientes");
+    tab.style.cssText = `position:absolute; top:50%; transform:translateY(-50%); ${lado === "izq" ? "left:2px;" : "right:2px;"} z-index:2; box-shadow:0 1px 6px rgba(0,0,0,0.3); transition:opacity 0.15s;`;
+    tab.addEventListener("click", () => {
+      scroller.scrollBy({ left: lado === "izq" ? -anchoSvg * 0.4 : anchoSvg * 0.4, behavior: "smooth" });
+    });
+    return tab;
+  };
+  const tabIzq = crearTab("izq");
+  const tabDer = crearTab("der");
+  wrap.appendChild(tabIzq);
+  wrap.appendChild(tabDer);
+
+  const actualizarTabs = () => {
+    const haceFaltaScroll = scroller.scrollWidth > scroller.clientWidth + 4;
+    if (!haceFaltaScroll) {
+      tabIzq.style.display = "none";
+      tabDer.style.display = "none";
+      return;
+    }
+    const puedeIzq = scroller.scrollLeft > 4;
+    const puedeDer = scroller.scrollLeft < scroller.scrollWidth - scroller.clientWidth - 4;
+    tabIzq.style.display = "flex";
+    tabDer.style.display = "flex";
+    tabIzq.style.opacity = puedeIzq ? "1" : "0";
+    tabIzq.style.pointerEvents = puedeIzq ? "auto" : "none";
+    tabDer.style.opacity = puedeDer ? "1" : "0";
+    tabDer.style.pointerEvents = puedeDer ? "auto" : "none";
+  };
+  scroller.addEventListener("scroll", actualizarTabs);
+  // `scrollXPendiente` lo fija `repintarSeccionesEnVivo` para que un repintado
+  // por minuto no te devuelva al final mientras mirabas semanas viejas.
+  const scrollInicial = scrollXPendiente;
+  requestAnimationFrame(() => {
+    scroller.scrollLeft = scrollInicial !== null ? scrollInicial : scroller.scrollWidth;
+    actualizarTabs();
+  });
+
+  return wrap;
+}
+
+/** Leyenda debajo de la gráfica apilada: un punto de color + nombre por
+ * cada materia que aparece en el corte mostrado, en el mismo orden (mayor
+ * a menor minutos totales del corte) en que se apilan los tramos dentro de
+ * cada barra — así el orden visual de la leyenda coincide con el de la
+ * pila, sin tener que ir buscando de qué color es cada tramo. */
+function construirLeyendaMaterias(lista) {
+  const cont = document.createElement("div");
+  cont.style.cssText = "display:flex; flex-wrap:wrap; gap:10px 16px; justify-content:center;";
+  lista.forEach(({ nombreCorto, color }) => {
+    const item = document.createElement("span");
+    item.style.cssText = "display:inline-flex; align-items:center; gap:6px; font-size:0.78rem;";
+    const punto = document.createElement("span");
+    punto.style.cssText = `display:inline-block; width:9px; height:9px; border-radius:50%; background:${color}; flex-shrink:0;`;
+    item.appendChild(punto);
+    item.appendChild(document.createTextNode(nombreCorto));
+    cont.appendChild(item);
+  });
+  return cont;
+}
+
+/* ===================== Controles: pills + navegador </> ===================== */
+
+function construirPillGroup(opciones, valorActual, onCambiar) {
+  const grupo = document.createElement("div");
+  grupo.className = "pill-group";
+  grupo.style.width = "100%";
+  opciones.forEach(({ valor, etiqueta }) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pill-item" + (valorActual === valor ? " active" : "");
+    btn.textContent = etiqueta;
+    btn.addEventListener("click", () => onCambiar(valor));
+    grupo.appendChild(btn);
+  });
+  return grupo;
+}
+
+/** Fila "< etiqueta >" reusada por semana y semestre, tanto en el donut
+ * como en la gráfica de barras. */
+/**
+ * Semestre "vigente" para los navegadores GLOBALES (donut y "Tendencia"
+ * sin filtrar por materia) — no hay una sola materia de la
+ * que colgarse acá, así que se usa el mismo semestre que ya calcula
+ * `obtenerIndiceSemestreVigente` (el último que ya arrancó). Si el
+ * usuario no tiene semestres cargados, `null` — el navegador cae de
+ * vuelta a mostrar solo "Semana" sin número (ver `etiquetaSemanaConSubtitulo`).
+ */
+function obtenerSemestreVigenteParaSemana() {
+  const lista = obtenerTodosLosSemestresOrdenados();
+  const idx = obtenerIndiceSemestreVigente(lista);
+  return idx >= 0 ? lista[idx] : null;
+}
+
+/**
+ * `etiqueta` acepta un string (semestres — una sola línea, ej.
+ * "Semestre I 2026") o `{ titulo, subtitulo }` (semanas — pedido
+ * 2026-09-07: título en letra normal tipo "Semana 36", con el rango de
+ * fechas de siempre debajo en chico, en vez del rango como único texto).
+ */
+function construirNavegadorPeriodo(etiqueta, onAnterior, onSiguiente, deshabilitarSiguiente) {
+  const fila = document.createElement("div");
+  fila.className = "row-between";
+  fila.style.cssText = "align-items:center; gap:10px;";
+
+  const btnAnterior = document.createElement("button");
+  btnAnterior.type = "button";
+  btnAnterior.className = "te-btn-icono te-btn-icono-fantasma";
+  btnAnterior.textContent = "‹";
+  btnAnterior.setAttribute("aria-label", "Período anterior");
+  btnAnterior.addEventListener("click", onAnterior);
+
+  const texto = document.createElement("div");
+  texto.style.cssText = "flex:1; text-align:center; line-height:1.3;";
+  if (etiqueta && typeof etiqueta === "object") {
+    const titulo = document.createElement("div");
+    titulo.style.cssText = "font-weight:700; font-size:0.9rem;";
+    titulo.textContent = etiqueta.titulo;
+    texto.appendChild(titulo);
+    if (etiqueta.subtitulo) {
+      const subtitulo = document.createElement("div");
+      subtitulo.className = "muted";
+      subtitulo.style.cssText = "font-size:0.74rem;";
+      subtitulo.textContent = etiqueta.subtitulo;
+      texto.appendChild(subtitulo);
+    }
+  } else {
+    texto.style.cssText += "font-weight:700; font-size:0.9rem;";
+    texto.textContent = etiqueta;
+  }
+
+  const btnSiguiente = document.createElement("button");
+  btnSiguiente.type = "button";
+  btnSiguiente.className = "te-btn-icono te-btn-icono-fantasma";
+  btnSiguiente.textContent = "›";
+  btnSiguiente.setAttribute("aria-label", "Período siguiente");
+  btnSiguiente.disabled = Boolean(deshabilitarSiguiente);
+  btnSiguiente.style.opacity = deshabilitarSiguiente ? "0.4" : "1";
+  btnSiguiente.addEventListener("click", onSiguiente);
+
+  fila.appendChild(btnAnterior);
+  fila.appendChild(texto);
+  fila.appendChild(btnSiguiente);
+  return fila;
+}
+
+const NOMBRES_MES_CORTO = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+const NOMBRES_DIA_CORTO = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+
+function etiquetaRangoSemana(lunes) {
+  const domingo = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + 6);
+  const fmt = (d) => `${d.getDate()} ${NOMBRES_MES_CORTO[d.getMonth()]}`;
+  return `${fmt(lunes)} – ${fmt(domingo)}`;
+}
+
+/**
+ * Pedido 2026-09-10 ("en general no se ve ni el gráfico vacío ni nada"):
+ * `MAPA_FUNCIONES.md` ya venía con una sospecha sin confirmar de que
+ * `calcularNumeroSemanaParaFecha` (agenda/agenda-clases.js, archivo que
+ * NO tenemos a la vista acá) puede tirar una excepción para cierta
+ * combinación semestre+fecha puntual. Esa función se llama desde ACÁ en
+ * los 4 navegadores de semana (donut y "Tendencia" globales, y las 2
+ * secciones por materia) + ahora también desde el cálculo nuevo de
+ * semanas de "Horas estudiadas". El problema es que `construirVistaEstadisticas`
+ * (la vista GENERAL, agregado de todas las materias) es la única que NO
+ * tiene aislamiento de errores por sección (a diferencia de
+ * `construirEstadisticasMateria`, que desde 2026-09-08 corre cada sección
+ * en su propio try/catch) — si esa función revienta ahí, nada de la vista
+ * general llega a insertarse en el DOM, ni gráfico ni aviso, solo vacío.
+ * Esta envoltura evita que revierta CUALQUIER llamada (acá y en las 2
+ * secciones por materia) — si falla, cae a un cálculo aproximado propio
+ * (días desde `fecha_inicio` / 7, acotado 1..duracion_semanas) en vez de
+ * cortar el render entero. Sumado al try/catch nuevo en
+ * `construirVistaEstadisticas` (ver esa función) como segunda red de
+ * seguridad por si el problema real termina siendo otro, no este.
+ */
+function calcularNumeroSemanaSegura(semestre, fecha) {
+  try {
+    return calcularNumeroSemanaParaFecha(semestre, fecha);
+  } catch (err) {
+    console.error("[tiempo-estudio-estadisticas] calcularNumeroSemanaParaFecha falló, uso fallback aproximado:", err);
+    const inicio = new Date(`${semestre.fecha_inicio}T00:00:00`);
+    const dias = Math.floor((fecha.getTime() - inicio.getTime()) / 86400000);
+    const bruta = Math.floor(dias / 7) + 1;
+    const tope = semestre.duracion_semanas || bruta;
+    return Math.max(1, Math.min(tope, bruta));
+  }
+}
+
+/**
+ * Pedido 2026-09-08 (corrige el 2026-09-07: la primera versión usaba
+ * semana ISO del año calendario — "Semana 36" — en vez de la semana
+ * DENTRO del semestre que ya usan Horario y Agenda). Corregido otra vez
+ * el mismo día: la primera corrección reusaba `calcularNumeroSemanaSemestre`
+ * de schema.js con un parámetro de fecha agregado a mano, duplicando (con
+ * el mismo bug de zona horaria ya resuelto ahí) una función que YA existe
+ * para justo este caso: `calcularNumeroSemanaParaFecha(semestre, fecha)`
+ * de `agenda/agenda-clases.js` — arbitraria (no solo "hoy"), acotada entre
+ * 1 y duracion_semanas, y con el anclaje correcto al día real de
+ * `fecha_inicio` (delega el cálculo crudo en
+ * `horario/horario.js#calcularNumeroSemanaSinAcotarParaFecha`). Se le pasa
+ * el lunes de la semana mostrada — el número coincide con el que ya ves
+ * en Horario/Agenda para esa misma semana, sea la actual, una pasada o
+ * una futura. `semestre` puede venir null (materia sin semestre resoluble,
+ * o usuario sin semestres) — en ese caso se cae a "Semana" sin número,
+ * mismo criterio que ya usa agenda.js en construirSubheaderSemanal.
+ */
+function etiquetaSemanaConSubtitulo(lunes, semestre) {
+  const numero = semestre ? calcularNumeroSemanaSegura(semestre, lunes) : null;
+  return {
+    titulo: numero ? `Semana ${numero}` : "Semana",
+    subtitulo: etiquetaRangoSemana(lunes),
+  };
+}
+
+/* ===================== Sección 1: donut "Horas por proyecto" ===================== */
+
+function construirSeccionDonut(cont, refrescar) {
+  const sec = document.createElement("section");
+  sec.className = "glass-card stack";
+  sec.style.gap = "14px";
+  sec.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Horas por proyecto</h3>`;
+
+  sec.appendChild(
+    construirPillGroup(
+      [
+        { valor: "dia", etiqueta: "Día" },
+        { valor: "semana", etiqueta: "Semana" },
+        { valor: "semestre", etiqueta: "Semestre" },
+      ],
+      corteDonut,
+      (valor) => {
+        corteDonut = valor;
+        refrescar();
+      }
+    )
+  );
+
+  const semestres = obtenerTodosLosSemestresOrdenados();
+  if (indiceSemestreDonut === null) indiceSemestreDonut = obtenerIndiceSemestreVigente(semestres);
+  if (!fechaDiaDonut || !fechaDiaDonutElegidaAMano) fechaDiaDonut = fechaLocalStr();
+
+  let inicio, fin;
+
+  if (corteDonut === "dia") {
+    const inputFecha = document.createElement("input");
+    inputFecha.type = "date";
+    inputFecha.autocomplete = "off";
+    inputFecha.className = "form-input";
+    inputFecha.value = fechaDiaDonut;
+    inputFecha.addEventListener("change", () => {
+      fechaDiaDonut = inputFecha.value || fechaDiaDonut;
+      fechaDiaDonutElegidaAMano = true;
+      refrescar();
+    });
+    sec.appendChild(inputFecha);
+    ({ inicio, fin } = obtenerRangoDia(fechaDiaDonut));
+  } else if (corteDonut === "semana") {
+    const { inicio: i, fin: f, lunes } = obtenerRangoSemana(offsetSemanaDonut);
+    inicio = i;
+    fin = f;
+    sec.appendChild(
+      construirNavegadorPeriodo(
+        etiquetaSemanaConSubtitulo(lunes, obtenerSemestreVigenteParaSemana()),
+        () => {
+          offsetSemanaDonut -= 1;
+          refrescar();
+        },
+        () => {
+          offsetSemanaDonut += 1;
+          refrescar();
+        },
+        offsetSemanaDonut >= 0 // no tiene sentido navegar semanas futuras más allá de la actual
+      )
+    );
+  } else {
+    if (semestres.length === 0) {
+      const vacio = document.createElement("p");
+      vacio.className = "muted";
+      vacio.style.margin = "0";
+      vacio.textContent = "Todavía no hay semestres cargados.";
+      sec.appendChild(vacio);
+      cont.appendChild(sec);
+      return;
+    }
+    indiceSemestreDonut = Math.max(0, Math.min(semestres.length - 1, indiceSemestreDonut));
+    const semestre = semestres[indiceSemestreDonut];
+    ({ inicio, fin } = obtenerRangoSemestre(semestre));
+    sec.appendChild(
+      construirNavegadorPeriodo(
+        semestre.nombre,
+        () => {
+          indiceSemestreDonut = Math.max(0, indiceSemestreDonut - 1);
+          refrescar();
+        },
+        () => {
+          indiceSemestreDonut = Math.min(semestres.length - 1, indiceSemestreDonut + 1);
+          refrescar();
+        },
+        indiceSemestreDonut >= semestres.length - 1
+      )
+    );
+  }
+
+  const minutosPorMateria = calcularMinutosPorMateriaEnRango(inicio, fin);
+  const segmentos = Array.from(minutosPorMateria.entries())
+    .map(([materiaMatriculadaId, minutos]) => ({ ...resolverInfoMateria(materiaMatriculadaId), minutos }))
+    .filter((seg) => seg.minutos > 0)
+    .sort((a, b) => b.minutos - a.minutos);
+
+  if (segmentos.length === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.margin = "0";
+    vacio.textContent = "Sin sesiones de estudio en este período.";
+    sec.appendChild(vacio);
+  } else {
+    const filaDonut = document.createElement("div");
+    filaDonut.style.cssText = "display:flex; align-items:center; justify-content:center;";
+    filaDonut.appendChild(construirDonutHorasPorMateria(segmentos));
+    sec.appendChild(filaDonut);
+    sec.appendChild(construirListaHorasPorMateria(segmentos));
+  }
+
+  cont.appendChild(sec);
+}
+
+/* ===================== Sección 2: gráfica de barras (tendencia) ===================== */
+
+function construirSeccionBarras(cont, refrescar) {
+  const sec = document.createElement("section");
+  sec.className = "glass-card stack";
+  sec.style.gap = "14px";
+  sec.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Tendencia</h3>`;
+
+  sec.appendChild(
+    construirPillGroup(
+      [
+        { valor: "semana", etiqueta: "Semana" },
+        { valor: "semestre", etiqueta: "Semestre" },
+      ],
+      corteBarras,
+      (valor) => {
+        corteBarras = valor;
+        refrescar();
+      }
+    )
+  );
+
+  const semestres = obtenerTodosLosSemestresOrdenados();
+  if (indiceSemestreBarras === null) indiceSemestreBarras = obtenerIndiceSemestreVigente(semestres);
+
+  // etiquetas[i] = texto del eje X de ese punto; mapasPorPunto[i] =
+  // Map(materiaId -> minutos) de ese mismo punto. Se separan de "puntos"
+  // (que se arma más abajo, ya con colores) para poder calcular primero el
+  // orden global de materias sobre TODOS los puntos del corte.
+  let etiquetas = [];
+  let mapasPorPunto = [];
+
+  if (corteBarras === "semana") {
+    const { lunes } = obtenerRangoSemana(offsetSemanaBarras);
+    sec.appendChild(
+      construirNavegadorPeriodo(
+        etiquetaSemanaConSubtitulo(lunes, obtenerSemestreVigenteParaSemana()),
+        () => {
+          offsetSemanaBarras -= 1;
+          refrescar();
+        },
+        () => {
+          offsetSemanaBarras += 1;
+          refrescar();
+        },
+        offsetSemanaBarras >= 0
+      )
+    );
+    etiquetas = NOMBRES_DIA_CORTO.slice();
+    mapasPorPunto = NOMBRES_DIA_CORTO.map((_, i) => {
+      const dia = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i, 0, 0, 0, 0);
+      const diaSiguiente = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i + 1, 0, 0, 0, 0);
+      return calcularMinutosPorMateriaEnRango(dia.getTime(), diaSiguiente.getTime());
+    });
+  } else {
+    if (semestres.length === 0) {
+      const vacio = document.createElement("p");
+      vacio.className = "muted";
+      vacio.style.margin = "0";
+      vacio.textContent = "Todavía no hay semestres cargados.";
+      sec.appendChild(vacio);
+      cont.appendChild(sec);
+      return;
+    }
+    indiceSemestreBarras = Math.max(0, Math.min(semestres.length - 1, indiceSemestreBarras));
+    const semestre = semestres[indiceSemestreBarras];
+    sec.appendChild(
+      construirNavegadorPeriodo(
+        semestre.nombre,
+        () => {
+          indiceSemestreBarras = Math.max(0, indiceSemestreBarras - 1);
+          refrescar();
+        },
+        () => {
+          indiceSemestreBarras = Math.min(semestres.length - 1, indiceSemestreBarras + 1);
+          refrescar();
+        },
+        indiceSemestreBarras >= semestres.length - 1
+      )
+    );
+
+    const inicioSemestre = new Date(`${semestre.fecha_inicio}T00:00:00`);
+    const finSemestre = new Date(`${semestre.fecha_fin}T23:59:59`);
+    const hoy = new Date();
+
+    if (hoy < inicioSemestre) {
+      const vacio = document.createElement("p");
+      vacio.className = "muted";
+      vacio.style.margin = "0";
+      vacio.textContent = "Este semestre todavía no empieza.";
+      sec.appendChild(vacio);
+      cont.appendChild(sec);
+      return;
+    }
+
+    const fechaReferencia = hoy > finSemestre ? finSemestre : hoy;
+    const semanaVigente = calcularNumeroSemanaSegura(semestre, fechaReferencia);
+
+    /* FIX 2026-09-19 ("no carga bien, no se ponen las estadísticas por
+       semana en el gráfico semestral" + "necesito ... todas las semanas
+       ya transcurridas del semestre"): esto ANTES agrupaba por MES,
+       calculando los límites de cada mes a mano — nunca mostraba S1..SN.
+       Al pasar a agrupar por semana, la tentación es reconstruir la
+       ventana [inicio, fin) de cada semana igual que se hacía con los
+       meses (`fecha_inicio + (i-1)*7 días`), pero esa es justo la causa
+       real del bug "semestre sin datos" de "Horas estudiadas" (ver el
+       mismo FIX en `construirSeccionBarrasMateria`, más abajo): si
+       `fecha_inicio` no cae un lunes, esos bloques de 7 días quedan
+       corridos respecto a la semana que `calcularNumeroSemanaParaFecha`
+       (agenda-clases.js) le asigna a cada sesión, y las horas terminan
+       contadas en la barra equivocada o en ninguna. Por eso acá cada
+       SESIÓN se clasifica directo con `calcularNumeroSemanaSegura`, la
+       misma función que ya numera la semana en el navegador de arriba —
+       nunca una ventana de fecha propia que pueda desalinearse. */
+    const porSemana = new Map(); // numero de semana -> Map(materiaId -> minutos)
+    obtenerSesionesParaGraficas().forEach((s) => {
+      if (s.inicio < inicioSemestre.getTime() || s.inicio > finSemestre.getTime()) return;
+      const numero = calcularNumeroSemanaSegura(semestre, new Date(s.inicio));
+      if (numero < 1 || numero > semanaVigente) return;
+      if (!porSemana.has(numero)) porSemana.set(numero, new Map());
+      const porMateria = porSemana.get(numero);
+      const id = idMateriaSesion(s);
+      porMateria.set(id, (porMateria.get(id) || 0) + (Number(s.duracion_minutos) || 0));
+    });
+
+    for (let i = 1; i <= semanaVigente; i++) {
+      etiquetas.push(`S${i}`);
+      mapasPorPunto.push(porSemana.get(i) || new Map());
+    }
+  }
+
+  // ----- Orden y color de materias, compartido entre todas las barras -----
+  // Pedido 2026-09-19 ("se muestra un color genérico en lugar de mostrarse
+  // dividido por color de cada materia"): antes cada barra era un único
+  // rect violeta con el total agregado. Ahora cada barra lleva un tramo
+  // por materia (mismo color efectivo que ya usa el donut de arriba:
+  // propio > categoría > default), siempre apilados en el mismo orden
+  // (mayor a menor minutos del corte completo) para que la leyenda de
+  // abajo coincida con el orden visual de la pila.
+  const totalesPorMateria = new Map();
+  mapasPorPunto.forEach((mapa) => {
+    mapa.forEach((minutos, materiaId) => {
+      totalesPorMateria.set(materiaId, (totalesPorMateria.get(materiaId) || 0) + minutos);
+    });
+  });
+  const ordenMateria = Array.from(totalesPorMateria.entries())
+    .filter(([, minutos]) => minutos > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([materiaId]) => ({ materiaId, ...resolverInfoMateria(materiaId) }));
+
+  const puntos = etiquetas.map((etiqueta, i) => {
+    const mapa = mapasPorPunto[i];
+    const segmentos = ordenMateria.map(({ materiaId, color }) => ({ minutos: mapa.get(materiaId) || 0, color }));
+    const totalMinutos = segmentos.reduce((acc, s) => acc + s.minutos, 0);
+    return { etiqueta, segmentos, totalMinutos };
+  });
+
+  sec.appendChild(corteBarras === "semestre" ? construirGraficaBarrasApiladasDesplazable(puntos) : construirGraficaBarrasApiladas(puntos));
+
+  if (ordenMateria.length > 0) {
+    sec.appendChild(construirLeyendaMaterias(ordenMateria));
+  }
+
+  // Mejora 2026-09-07: si el corte elegido no tiene NINGUNA sesión, la
+  // gráfica igual dibuja ejes con todas las barras en 0 — visualmente
+  // indistinguible de "no funciona". Este aviso lo deja explícito.
+  if (puntos.length > 0 && puntos.every((p) => p.totalMinutos === 0)) {
+    const aviso = document.createElement("p");
+    aviso.className = "muted";
+    aviso.style.cssText = "margin:-4px 0 0; font-size:0.78rem; text-align:center;";
+    aviso.textContent = "Sin sesiones registradas en este período — probá con el navegador ‹ › de arriba.";
+    sec.appendChild(aviso);
+  }
+  cont.appendChild(sec);
+}
+
+/* =========================================================================
+   Estadísticas INDIVIDUALES por materia (pedido 2026-09-07) — a diferencia
+   de todo lo de arriba (agregado de TODAS las materias, vista
+   "Estadísticas" de nivel superior), esto vive dentro de la pantalla de
+   DETALLE de una materia puntual (tiempo-estudio.js), filtrado siempre por
+   `materia_matriculada_id` — cada repetición de una materia tiene sus
+   propias gráficas, nunca mezcladas con otra matrícula de la misma
+   materia. Reusa los helpers de arriba (construirPillGroup,
+   construirNavegadorPeriodo, calcularEscalaAgradable, formatearMinutos,
+   obtenerRangoSemana/obtenerRangoSemestre, NOMBRES_*) sin duplicarlos —
+   están en el mismo módulo, no hace falta exportarlos.
+   ========================================================================= */
+
+let corteBarrasMateria = "semana"; // "semana" | "semestre"
+let offsetSemanaBarrasMateria = 0;
+let offsetSemanaMetas = 0; // pedido 2026-09-08: "Resumen de metas" también navega semanas, no solo la actual
+let indiceSemestreBarrasMateria = null;
+
+function calcularMinutosMateriaEnRango(materiaMatriculadaId, inicio, fin) {
+  return obtenerSesionesParaGraficas().reduce(
+    (acc, s) => (idMateriaSesion(s) === materiaMatriculadaId && s.inicio >= inicio && s.inicio < fin ? acc + (Number(s.duracion_minutos) || 0) : acc),
+    0
+  );
+}
+
+/* ===================== Gráfica de líneas (Resumen de metas) ===================== */
+
+/**
+ * `series`: [{ valores: number[], color, discontinua? }] — todas contra el
+ * mismo eje X (`etiquetas`). Se generaliza a N series (acá se usan 2:
+ * trabajado y meta) con el mismo sistema de coordenadas que
+ * construirGraficaBarras, para que ambas gráficas se vean del mismo
+ * "tamaño" una debajo de la otra.
+ */
+function construirGraficaLineas(series, etiquetas) {
+  const n = etiquetas.length;
+  if (n === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.margin = "0";
+    vacio.textContent = "No hay datos para graficar en este período.";
+    return vacio;
+  }
+  const anchoUtil = VB_ANCHO - MARGEN_IZQ - MARGEN_DER;
+  const altoUtil = VB_ALTO - MARGEN_SUP - MARGEN_INF;
+
+  const valorMaxCrudo = Math.max(0, ...series.flatMap((s) => s.valores));
+  const { max: valorMax, paso } = calcularEscalaAgradable(valorMaxCrudo);
+
+  const x = (i) => (n <= 1 ? MARGEN_IZQ + anchoUtil / 2 : MARGEN_IZQ + (anchoUtil / (n - 1)) * i);
+  const y = (valor) => MARGEN_SUP + altoUtil - (valor / valorMax) * altoUtil;
+
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${VB_ANCHO} ${VB_ALTO}`);
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  svg.style.cssText = "display:block; width:100%; height:auto;";
+
+  const cantidadPasos = Math.round(valorMax / paso) || 1;
+  for (let paso_i = 0; paso_i <= cantidadPasos; paso_i++) {
+    const valor = paso_i * paso;
+    const yPos = y(valor);
+    const grid = document.createElementNS(NS, "line");
+    grid.setAttribute("x1", String(MARGEN_IZQ));
+    grid.setAttribute("x2", String(VB_ANCHO - MARGEN_DER));
+    grid.setAttribute("y1", String(yPos));
+    grid.setAttribute("y2", String(yPos));
+    grid.setAttribute("stroke", "var(--border-glass)");
+    grid.setAttribute("stroke-width", "1");
+    if (paso_i !== 0) grid.setAttribute("stroke-dasharray", "3 3");
+    svg.appendChild(grid);
+
+    const etiquetaY = document.createElementNS(NS, "text");
+    etiquetaY.setAttribute("x", String(MARGEN_IZQ - 8));
+    etiquetaY.setAttribute("y", String(yPos + 3));
+    etiquetaY.setAttribute("text-anchor", "end");
+    etiquetaY.setAttribute("font-size", "9.5");
+    etiquetaY.setAttribute("fill", "var(--text-muted)");
+    etiquetaY.textContent = formatearMinutos(valor);
+    svg.appendChild(etiquetaY);
+  }
+
+  etiquetas.forEach((etiqueta, i) => {
+    const etiquetaX = document.createElementNS(NS, "text");
+    etiquetaX.setAttribute("x", String(x(i)));
+    etiquetaX.setAttribute("y", String(VB_ALTO - MARGEN_INF + 16));
+    etiquetaX.setAttribute("text-anchor", "middle");
+    etiquetaX.setAttribute("font-size", "10");
+    etiquetaX.setAttribute("fill", "var(--text-muted)");
+    etiquetaX.textContent = etiqueta;
+    svg.appendChild(etiquetaX);
+  });
+
+  series.forEach((serie) => {
+    const puntosStr = serie.valores.map((v, i) => `${x(i)},${y(v)}`).join(" ");
+    const linea = document.createElementNS(NS, "polyline");
+    linea.setAttribute("points", puntosStr);
+    linea.setAttribute("fill", "none");
+    linea.setAttribute("stroke", serie.color);
+    linea.setAttribute("stroke-width", "2.5");
+    linea.setAttribute("stroke-linejoin", "round");
+    linea.setAttribute("stroke-linecap", "round");
+    if (serie.discontinua) linea.setAttribute("stroke-dasharray", "5 4");
+    svg.appendChild(linea);
+
+    serie.valores.forEach((v, i) => {
+      const punto = document.createElementNS(NS, "circle");
+      punto.setAttribute("cx", String(x(i)));
+      punto.setAttribute("cy", String(y(v)));
+      punto.setAttribute("r", "3");
+      punto.setAttribute("fill", serie.color);
+      svg.appendChild(punto);
+    });
+  });
+
+  const ejeX = document.createElementNS(NS, "line");
+  ejeX.setAttribute("x1", String(MARGEN_IZQ));
+  ejeX.setAttribute("x2", String(VB_ANCHO - MARGEN_DER));
+  ejeX.setAttribute("y1", String(y(0)));
+  ejeX.setAttribute("y2", String(y(0)));
+  ejeX.setAttribute("stroke", "var(--text-muted)");
+  ejeX.setAttribute("stroke-width", "1.2");
+  svg.appendChild(ejeX);
+
+  return svg;
+}
+
+/**
+ * "Resumen de metas": trabajado por día de ESTA semana (línea del color
+ * propio de la materia) vs. la meta diaria REAL (ver
+ * `calcularMetaDiariaMateria` justo abajo — ya no es meta_horas_semana/7
+ * parejo). Debajo, 2 contadores con el total de la semana de cada línea
+ * (pedido: "un contador que diga debajo de ambos, x h x min").
+ */
+/**
+ * Pedido 2026-09-09 ("Entrega 3", ver el comentario PROVISIONAL en
+ * obtenerEstudioParaHoy() de tiempo-estudio.js): calcula, para una
+ * materia y un offset de semana dado, el reparto real de la meta diaria
+ * — respeta `dias_estudio` (qué días de la semana se estudia esta
+ * materia; null = todos, retrocompatible) y pone en 0 los días que ya
+ * pasaron, repartiendo lo que falta de la meta semanal solo entre los
+ * días de estudio pendientes (hoy inclusive). Exportada para que
+ * `obtenerEstudioParaHoy()` en tiempo-estudio.js (el widget que alimenta
+ * a Agenda) use EXACTAMENTE el mismo número que ve el usuario acá en
+ * "Resumen de metas" — sin esto, Agenda y Tiempo de Estudio podrían
+ * mostrar dos metas distintas para el mismo día.
+ *
+ * Devuelve `null` si la materia no tiene meta configurada (nada que
+ * repartir). `lunes` va incluido en el resultado porque el caller
+ * necesita ubicar "hoy" dentro de la semana (índice 0-6) sin repetir la
+ * cuenta acá.
+ */
+function calcularMetaDiariaMateria(mm, offsetSemana = 0) {
+  const meta = mm.tiempo_estudio.meta_horas_semana;
+  if (meta === null || meta === undefined || meta <= 0) return null;
+
+  const { lunes } = obtenerRangoSemana(offsetSemana);
+  const metaSemanaMin = meta * 60;
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const diasEstudio = mm.tiempo_estudio.dias_estudio; // null = todos los días
+
+  const trabajadoPorDia = NOMBRES_DIA_CORTO.map((_, i) => {
+    const dia = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i, 0, 0, 0, 0);
+    const diaSiguiente = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i + 1, 0, 0, 0, 0);
+    return calcularMinutosMateriaEnRango(mm.id, dia.getTime(), diaSiguiente.getTime());
+  });
+  const infoDias = NOMBRES_DIA_CORTO.map((_, i) => {
+    const fecha = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i);
+    const codigo = DIAS_SEMANA_CONFIG[i]?.abrevDefault;
+    return {
+      codigo,
+      esDiaEstudio: diasEstudio === null || diasEstudio === undefined ? true : diasEstudio.includes(codigo),
+      esPasado: fecha.getTime() < hoy.getTime(),
+    };
+  });
+  const trabajadoEnDiasPasados = trabajadoPorDia.reduce((acc, min, i) => acc + (infoDias[i].esPasado ? min : 0), 0);
+  const metaRestanteMin = Math.max(0, metaSemanaMin - trabajadoEnDiasPasados);
+  const diasPendientesEstudio = infoDias.filter((d) => d.esDiaEstudio && !d.esPasado).length;
+  const metaPorDiaPendienteMin = diasPendientesEstudio > 0 ? metaRestanteMin / diasPendientesEstudio : 0;
+  const metaDiariaPorDia = infoDias.map((d) => (d.esDiaEstudio && !d.esPasado ? metaPorDiaPendienteMin : 0));
+
+  return { lunes, trabajadoPorDia, infoDias, metaDiariaPorDia, metaSemanaMin };
+}
+
+function construirSeccionResumenMetas(cont, mm, color, refrescar) {
+  const sec = document.createElement("section");
+  sec.className = "glass-card stack";
+  sec.style.gap = "12px";
+  sec.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Resumen de metas</h3>`;
+
+  const meta = mm.tiempo_estudio.meta_horas_semana;
+  if (meta === null || meta === undefined || meta <= 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.margin = "0";
+    vacio.textContent = "Configurá una meta semanal para esta materia para ver este resumen.";
+    sec.appendChild(vacio);
+    cont.appendChild(sec);
+    return;
+  }
+
+  const { lunes, trabajadoPorDia, metaDiariaPorDia, metaSemanaMin } = calcularMetaDiariaMateria(mm, offsetSemanaMetas);
+  sec.appendChild(
+    construirNavegadorPeriodo(
+      etiquetaSemanaConSubtitulo(lunes, obtenerSemestreVigenteParaSemana()),
+      () => {
+        offsetSemanaMetas -= 1;
+        refrescar();
+      },
+      () => {
+        offsetSemanaMetas += 1;
+        refrescar();
+      },
+      offsetSemanaMetas >= 0 // no tiene sentido navegar semanas futuras más allá de la actual
+    )
+  );
+
+  sec.appendChild(
+    construirGraficaLineas(
+      [
+        { valores: trabajadoPorDia, color },
+        { valores: metaDiariaPorDia, color: "var(--text-muted)", discontinua: true },
+      ],
+      NOMBRES_DIA_CORTO
+    )
+  );
+
+  const totalTrabajado = trabajadoPorDia.reduce((acc, m) => acc + m, 0);
+  const contadores = document.createElement("div");
+  contadores.style.cssText = "display:flex; gap:18px; justify-content:center; flex-wrap:wrap;";
+  contadores.innerHTML = `
+    <span style="font-size:0.85rem;"><span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:${color}; margin-right:6px;"></span>Estudiado: <strong>${formatearMinutos(totalTrabajado)}</strong></span>
+    <span style="font-size:0.85rem;"><span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--text-muted); margin-right:6px;"></span>Meta semana: <strong>${formatearMinutos(metaSemanaMin)}</strong></span>
+  `;
+  sec.appendChild(contadores);
+
+  cont.appendChild(sec);
+}
+
+/* ===================== "Horas estudiadas" (tendencia de esta materia) ===================== */
+
+function construirSeccionBarrasMateria(cont, mm, color, refrescar) {
+  const sec = document.createElement("section");
+  sec.className = "glass-card stack";
+  sec.style.gap = "14px";
+  sec.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Horas estudiadas</h3>`;
+
+  const esIndependiente = mm.tipo === "independiente";
+  if (esIndependiente) corteBarrasMateria = "semana";
+  sec.appendChild(
+    construirPillGroup(
+      esIndependiente ? [{ valor: "semana", etiqueta: "Semana" }] : [
+        { valor: "semana", etiqueta: "Semana" },
+        { valor: "semestre", etiqueta: "Semestre" },
+      ],
+      corteBarrasMateria,
+      (valor) => {
+        corteBarrasMateria = valor;
+        refrescar();
+      }
+    )
+  );
+
+  const semestres = obtenerTodosLosSemestresOrdenados();
+  if (indiceSemestreBarrasMateria === null) {
+    const idxPropio = encontrarIndiceSemestreDeMateria(mm.id, semestres);
+    indiceSemestreBarrasMateria = idxPropio >= 0 ? idxPropio : obtenerIndiceSemestreVigente(semestres);
+  }
+
+  let puntos = [];
+
+  if (corteBarrasMateria === "semana") {
+    const { lunes } = obtenerRangoSemana(offsetSemanaBarrasMateria);
+    sec.appendChild(
+      construirNavegadorPeriodo(
+        etiquetaSemanaConSubtitulo(lunes, obtenerSemestreVigenteParaSemana()),
+        () => {
+          offsetSemanaBarrasMateria -= 1;
+          refrescar();
+        },
+        () => {
+          offsetSemanaBarrasMateria += 1;
+          refrescar();
+        },
+        offsetSemanaBarrasMateria >= 0
+      )
+    );
+    puntos = NOMBRES_DIA_CORTO.map((etiqueta, i) => {
+      const dia = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i, 0, 0, 0, 0);
+      const diaSiguiente = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i + 1, 0, 0, 0, 0);
+      return { etiqueta, minutos: calcularMinutosMateriaEnRango(mm.id, dia.getTime(), diaSiguiente.getTime()) };
+    });
+  } else {
+    if (semestres.length === 0) {
+      const vacio = document.createElement("p");
+      vacio.className = "muted";
+      vacio.style.margin = "0";
+      vacio.textContent = "Todavía no hay semestres cargados.";
+      sec.appendChild(vacio);
+      cont.appendChild(sec);
+      return;
+    }
+    indiceSemestreBarrasMateria = Math.max(0, Math.min(semestres.length - 1, indiceSemestreBarrasMateria));
+    const semestre = semestres[indiceSemestreBarrasMateria];
+    sec.appendChild(
+      construirNavegadorPeriodo(
+        semestre.nombre,
+        () => {
+          indiceSemestreBarrasMateria = Math.max(0, indiceSemestreBarrasMateria - 1);
+          refrescar();
+        },
+        () => {
+          indiceSemestreBarrasMateria = Math.min(semestres.length - 1, indiceSemestreBarrasMateria + 1);
+          refrescar();
+        },
+        indiceSemestreBarrasMateria >= semestres.length - 1
+      )
+    );
+
+    /**
+     * Pedido 2026-09-10 ("semestre no trae nada" + "deben salir TODAS las
+     * semanas ... desde semana 1 hasta la semana N"): esto ANTES agrupaba
+     * por mes (una barra = un mes completo, mismo recorrido que
+     * construirSeccionBarras global). Se reemplaza por una barra POR
+     * SEMANA del semestre — semana 1 hasta la semana vigente (o la última,
+     * si el semestre ya terminó) — que es lo que se pidió y además se
+     * actualiza solo en cada render porque `hoy` se recalcula acá mismo,
+     * nunca queda pisado en un valor viejo.
+     *
+     * El número de semanas a mostrar se delega por completo en
+     * `calcularNumeroSemanaParaFecha(semestre, fecha)` (ya importada, ya
+     * acotada 1..duracion_semanas, ya tiene resuelto el anclaje real a
+     * fecha_inicio) en vez de recalcular esa cuenta a mano acá — mismo
+     * criterio que ya dejó `MAPA_FUNCIONES.md` para esta función: nunca
+     * duplicarla con una fórmula propia.
+     */
+    const inicioSemestre = new Date(`${semestre.fecha_inicio}T00:00:00`);
+    const finSemestre = new Date(`${semestre.fecha_fin}T23:59:59`);
+    const hoy = new Date();
+
+    if (hoy < inicioSemestre) {
+      const vacio = document.createElement("p");
+      vacio.className = "muted";
+      vacio.style.margin = "0";
+      vacio.textContent = "Este semestre todavía no empieza.";
+      sec.appendChild(vacio);
+      cont.appendChild(sec);
+      return;
+    }
+
+    const fechaReferencia = hoy > finSemestre ? finSemestre : hoy;
+    const semanaVigente = calcularNumeroSemanaSegura(semestre, fechaReferencia);
+
+    /* FIX 2026-09-19 ("no carga bien, no se ponen las estadísticas por
+       semana en el gráfico semestral" / "sin sesiones registradas" pese a
+       haber 3h43min reales en el Resumen de abajo): esto armaba la
+       ventana [inicio, fin) de cada semana a mano, como bloques de 7 días
+       arrancando justo en `fecha_inicio` del semestre. Si `fecha_inicio`
+       no cae un lunes (el ancla real que usa Agenda/Horario), esos
+       bloques quedan corridos respecto a la semana que
+       `calcularNumeroSemanaParaFecha` le asigna a cada sesión — el
+       número "S3" de esta barra y la "Semana 3" real de Agenda podían no
+       ser la misma ventana de fechas, y las sesiones quedaban contadas en
+       la barra equivocada (o en el hueco entre dos ventanas desalineadas,
+       es decir: en ninguna). Se reemplaza por clasificar cada SESIÓN con
+       la misma función que ya le pone el número a la semana en todos
+       lados, en vez de reconstruir la ventana de fechas acá. */
+    const porSemana = new Map(); // numero de semana -> minutos
+    obtenerSesionesParaGraficas().forEach((s) => {
+      if (idMateriaSesion(s) !== mm.id) return;
+      if (s.inicio < inicioSemestre.getTime() || s.inicio > finSemestre.getTime()) return;
+      const numero = calcularNumeroSemanaSegura(semestre, new Date(s.inicio));
+      if (numero < 1 || numero > semanaVigente) return;
+      porSemana.set(numero, (porSemana.get(numero) || 0) + (Number(s.duracion_minutos) || 0));
+    });
+
+    for (let i = 1; i <= semanaVigente; i++) {
+      puntos.push({ etiqueta: `S${i}`, minutos: porSemana.get(i) || 0 });
+    }
+  }
+
+  // Semana = 7 barras, siempre entran cómodas. Semestre = hasta
+  // duracion_semanas barras (15-20+), ahí es donde hace falta la versión
+  // desplazable con las pestañitas ‹ › (pedido explícito, pensado sobre
+  // todo para celular).
+  sec.appendChild(corteBarrasMateria === "semestre" ? construirGraficaBarrasDesplazable(puntos, color) : construirGraficaBarras(puntos, color));
+  if (puntos.length > 0 && puntos.every((p) => p.minutos === 0)) {
+    const aviso = document.createElement("p");
+    aviso.className = "muted";
+    aviso.style.cssText = "margin:-4px 0 0; font-size:0.78rem; text-align:center;";
+    aviso.textContent = "Sin sesiones registradas en este período — probá con el navegador ‹ › de arriba.";
+    sec.appendChild(aviso);
+  }
+  cont.appendChild(sec);
+}
+
+/* ===================== Horas totales (Parte C, 2026-09-19) =====================
+   Total AGREGADO — todas las materias sumadas — para hoy, esta semana,
+   este mes y este año calendario. Antes solo existía el desglose por
+   materia (donut/lista) y la tendencia por día/mes dentro de UN corte;
+   no había un número único de "cuánto estudié en total" por período.
+
+   Mismo criterio de atribución que el resto de Estadísticas: cada sesión
+   cuenta entera en el período donde EMPIEZA (`inicio`), en hora local. Una
+   sesión que cruza medianoche o fin de mes se suma completa al día/mes
+   donde arrancó. Incluye sesiones de materias ya borradas o de semestres
+   pasados (igual que la Tendencia): no dependen de qué materias sean
+   "actuales" hoy. La semana es lunes-domingo, igual que en todo Tiempo. */
+
+function obtenerRangoMes(ahora = new Date()) {
+  return {
+    inicio: new Date(ahora.getFullYear(), ahora.getMonth(), 1, 0, 0, 0, 0).getTime(),
+    fin: new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1, 0, 0, 0, 0).getTime(),
+  };
+}
+
+function obtenerRangoAnio(ahora = new Date()) {
+  return {
+    inicio: new Date(ahora.getFullYear(), 0, 1, 0, 0, 0, 0).getTime(),
+    fin: new Date(ahora.getFullYear() + 1, 0, 1, 0, 0, 0, 0).getTime(),
+  };
+}
+
+/** Minutos totales (todas las materias) de hoy / esta semana / este mes / este
+ * año calendario, en hora local. `ahora` es solo para poder probarlo. */
+function calcularHorasTotalesPeriodos(ahora = new Date(), incluirEnCurso = false) {
+  const rangos = {
+    hoy: obtenerRangoDia(fechaLocalStr(ahora)),
+    semana: obtenerRangoSemana(0, ahora),
+    mes: obtenerRangoMes(ahora),
+    anio: obtenerRangoAnio(ahora),
+  };
+  const resultado = {};
+  Object.entries(rangos).forEach(([clave, { inicio, fin }]) => {
+    resultado[clave] = { minutos: calcularMinutosTotalesEnRango(inicio, fin, incluirEnCurso), inicio, fin };
+  });
+  return resultado;
+}
+
+function construirSeccionHorasTotales(cont) {
+  const ahora = new Date();
+  const totales = calcularHorasTotalesPeriodos(ahora, true); // true = suma lo que lleva el timer en curso
+
+  const sec = document.createElement("section");
+  sec.className = "glass-card stack";
+  sec.style.gap = "10px";
+  sec.innerHTML = `
+    <h3 class="texto-encabezado-seccion" style="margin:0;">Horas totales</h3>
+    <p class="muted" style="margin:0; font-size:0.78rem;">Todas las materias sumadas</p>
+  `;
+
+  const { lunes } = obtenerRangoSemana(0, ahora);
+  const diaTexto = `${NOMBRES_DIA_CORTO[(ahora.getDay() + 6) % 7]} ${ahora.getDate()} ${NOMBRES_MES_CORTO[ahora.getMonth()]}`;
+  const tarjetas = [
+    ["Hoy", totales.hoy.minutos, diaTexto],
+    ["Esta semana", totales.semana.minutos, etiquetaRangoSemana(lunes)],
+    ["Este mes", totales.mes.minutos, `${NOMBRES_MES_CORTO[ahora.getMonth()]} ${ahora.getFullYear()}`],
+    ["Este año", totales.anio.minutos, String(ahora.getFullYear())],
+  ];
+
+  // Mismo grid 2x2 y misma tarjetita que "Resumen" de cada materia
+  // (construirSeccionResumenFinal) — un solo lenguaje visual en Estadísticas.
+  const grid = document.createElement("div");
+  grid.style.cssText = "display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;";
+  tarjetas.forEach(([etiqueta, minutos, detalle]) => {
+    const tarjeta = document.createElement("div");
+    tarjeta.className = "stack";
+    tarjeta.style.cssText = "gap:4px; padding:12px 10px; border-radius:14px; border:1px solid var(--border-glass); background:rgba(255,255,255,0.03); text-align:center;";
+    tarjeta.innerHTML = `
+      <span class="muted" style="font-size:0.72rem; line-height:1.25;">${etiqueta}</span>
+      <strong style="font-size:1.05rem; font-variant-numeric:tabular-nums;">${formatearMinutos(minutos)}</strong>
+      <span class="muted" style="font-size:0.68rem; line-height:1.2;">${detalle}</span>
+    `;
+    grid.appendChild(tarjeta);
+  });
+  sec.appendChild(grid);
+  cont.appendChild(sec);
+}
+
+/* ===================== Resumen final (totales de siempre) ===================== */
+
+const NOMBRES_DIA_LARGO = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+
+/** Recorre TODAS las sesiones históricas de esta matrícula (sin filtrar
+ * por período — "de siempre") para los 4 totales pedidos: horas totales,
+ * día más productivo, sesiones totales y sesión promedio. */
+function calcularResumenTotalesMateria(materiaMatriculadaId) {
+  const sesiones = obtenerSesionesParaGraficas().filter((s) => idMateriaSesion(s) === materiaMatriculadaId);
+  const totalMinutos = sesiones.reduce((acc, s) => acc + (Number(s.duracion_minutos) || 0), 0);
+  const totalSesiones = sesiones.length;
+  const promedioMinutos = totalSesiones > 0 ? totalMinutos / totalSesiones : 0;
+
+  const porDia = new Map();
+  sesiones.forEach((s) => {
+    const f = new Date(s.inicio);
+    const clave = `${f.getFullYear()}-${f.getMonth()}-${f.getDate()}`;
+    porDia.set(clave, { minutos: (porDia.get(clave)?.minutos || 0) + (Number(s.duracion_minutos) || 0), fecha: f });
+  });
+  let diaTop = null;
+  porDia.forEach((valor) => {
+    if (!diaTop || valor.minutos > diaTop.minutos) diaTop = valor;
+  });
+  const diaTopTexto = diaTop ? `${NOMBRES_DIA_LARGO[diaTop.fecha.getDay()]} ${diaTop.fecha.getDate()} ${NOMBRES_MES_CORTO[diaTop.fecha.getMonth()]}` : null;
+
+  return { totalMinutos, totalSesiones, promedioMinutos, diaTopTexto, diaTopMinutos: diaTop ? diaTop.minutos : 0 };
+}
+
+function construirSeccionResumenFinal(cont, materiaMatriculadaId) {
+  const sec = document.createElement("section");
+  sec.className = "glass-card stack";
+  sec.style.gap = "8px";
+  sec.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Resumen</h3>`;
+
+  const { totalMinutos, totalSesiones, promedioMinutos, diaTopTexto, diaTopMinutos } = calcularResumenTotalesMateria(materiaMatriculadaId);
+
+  if (totalSesiones === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.margin = "0";
+    vacio.textContent = "Todavía no hay sesiones registradas en esta materia.";
+    sec.appendChild(vacio);
+    cont.appendChild(sec);
+    return;
+  }
+
+  // Pedido 2026-09-10: "hazlo como 4 tarjetitas en grid para que no se vea
+  // tan simplón" — antes eran 4 filas apiladas tipo lista; ahora son 4
+  // tarjetas en grid 2x2 (mismo layout que se lee bien tanto en celular
+  // angosto como en pantallas más anchas, a diferencia de forzar las 4 en
+  // una sola fila).
+  const tarjetas = [
+    ["Horas totales estudiadas", formatearMinutos(totalMinutos)],
+    ["Día más productivo", `${diaTopTexto} · ${formatearMinutos(diaTopMinutos)}`],
+    ["Sesiones totales", String(totalSesiones)],
+    ["Sesión promedio", formatearMinutos(promedioMinutos)],
+  ];
+
+  const grid = document.createElement("div");
+  grid.style.cssText = "display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;";
+  tarjetas.forEach(([etiqueta, valor]) => {
+    const tarjeta = document.createElement("div");
+    tarjeta.className = "stack";
+    tarjeta.style.cssText = "gap:4px; padding:12px 10px; border-radius:14px; border:1px solid var(--border-glass); background:rgba(255,255,255,0.03); text-align:center;";
+    tarjeta.innerHTML = `
+      <span class="muted" style="font-size:0.72rem; line-height:1.25;">${etiqueta}</span>
+      <strong style="font-size:1.05rem; font-variant-numeric:tabular-nums;">${valor}</strong>
+    `;
+    grid.appendChild(tarjeta);
+  });
+  sec.appendChild(grid);
+
+  cont.appendChild(sec);
+}
+
+/**
+ * Punto de entrada — llamado desde `construirPantallaDetalle` en
+ * tiempo-estudio.js, DESPUÉS de la barra de progreso semanal y ANTES de
+ * la lista editable de sesiones (`construirListaSesiones` en
+ * tiempo-estudio-registro.js). `color` es el mismo color efectivo que ya
+ * calcula `obtenerColorMateria()` en tiempo-estudio.js (propio > categoría
+ * > default) — se recibe por parámetro para no duplicar esa cadena de
+ * fallbacks acá.
+ */
+/**
+ * FIX 2026-09-08 (reporte: "semana 1 en la semana antepasada, no me deja
+ * moverme" + el pill Semana/Semestre de 'Horas estudiadas' tampoco
+ * respondía): las 3 secciones se llamaban en cadena, sin aislar errores.
+ * Si `construirSeccionResumenMetas` tira una excepción (sospecha: algún
+ * caso puntual de `calcularNumeroSemanaParaFecha` en agenda-clases.js/
+ * horario.js para cierta combinación semestre+semana — todavía sin
+ * confirmar, faltan esos 2 archivos para verlo), el `refrescar()` entero
+ * se corta ahí — `construirSeccionBarrasMateria` (más abajo, dueña del
+ * pill Semana/Semestre que dejó de responder) nunca llega a ejecutarse de
+ * nuevo, y la pantalla queda con el DOM de la versión anterior (de ahí la
+ * sensación de "no me deja moverme"). Cada sección ahora corre aislada:
+ * si una falla, las otras 2 igual se renderizan, y la que falló muestra
+ * un aviso en vez de dejar toda la pantalla a medio actualizar.
+ */
+function construirEstadisticasMateria(cont, mm, color, refrescar) {
+  reiniciarSeccionesMontadas();
+  // Relectura de entidad viva: un repintado en vivo puede ocurrir minutos
+  // después del render, y un sync remoto pudo reemplazar la matrícula.
+  const mmVivo = () => buscarMatriculaViva(mm.id) || (mm.tipo === "independiente" ? (estado.datos.tiempo_estudio_materias || []).find((m) => m.id === mm.id) : null) || mm;
+  const secciones = [
+    ["Resumen de metas", (dest) => construirSeccionResumenMetas(dest, mmVivo(), color, refrescar)],
+    ["Horas estudiadas", (dest) => construirSeccionBarrasMateria(dest, mmVivo(), color, refrescar)],
+    ["Resumen final", (dest) => construirSeccionResumenFinal(dest, mm.id)],
+  ];
+  secciones.forEach(([nombre, construir]) => montarSeccion(cont, nombre, construir));
+}
+
+function buscarMatriculaViva(materiaMatriculadaId) {
+  for (const semestre of estado.datos.semestres || []) {
+    const mm = (semestre.materias_matriculadas || []).find((m) => m.id === materiaMatriculadaId);
+    if (mm) return mm;
+  }
+  return null;
+}
+
+/* ===================== Ensamblado ===================== */
+
+/**
+ * Punto de entrada — llamado desde tiempo-estudio.js cuando el pill
+ * superior "Materias/Estadísticas" está en "Estadísticas". `refrescar` es
+ * un callback sin argumentos (normalmente `renderizarTiempoEstudio` del
+ * archivo que llama) que se dispara ante cualquier cambio de pill/navegador
+ * — este archivo no re-renderiza su propio contenido en aislado, deja que
+ * el padre reconstruya toda la sección (mismo patrón que ya usa el filtro
+ * Todo/Activos en tiempo-estudio.js).
+ *
+ * FIX 2026-09-10 (reporte: "en general no se ve ni el gráfico vacío ni
+ * nada"): a diferencia de `construirEstadisticasMateria` (que desde
+ * 2026-09-08 aísla cada sección en su propio try/catch), esta función
+ * llamaba a las 2 secciones directo — si cualquiera de las 2 tiraba una
+ * excepción, ninguna llegaba a insertarse en `cont` y la vista quedaba
+ * completamente vacía, sin ni siquiera un aviso de error. Mismo criterio
+ * aplicado acá ahora: cada sección corre aislada, y si una falla, la otra
+ * igual se renderiza mientras la que falló muestra un aviso en vez de
+ * dejar todo en blanco sin explicación.
+ */
+function construirVistaEstadisticas(cont, refrescar) {
+  reiniciarSeccionesMontadas();
+  const secciones = [
+    // Parte C (2026-09-19): total agregado arriba de todo — lo primero que
+    // se ve al abrir Estadísticas. No lleva `refrescar`: no tiene pills ni
+    // navegación, siempre muestra los períodos en curso.
+    ["Horas totales", (dest) => construirSeccionHorasTotales(dest)],
+    ["Horas por proyecto", (dest) => construirSeccionDonut(dest, refrescar)],
+    ["Tendencia", (dest) => construirSeccionBarras(dest, refrescar)],
+  ];
+  secciones.forEach(([nombre, construir]) => montarSeccion(cont, nombre, construir));
+}
+
+export {
+  construirVistaEstadisticas,
+  construirEstadisticasMateria,
+  calcularMetaDiariaMateria,
+  calcularMinutosTotalesEnRango,
+  calcularHorasTotalesPeriodos,
+  obtenerRangoSemana,
+  notificarSesionesEstudioActualizadas,
+};
