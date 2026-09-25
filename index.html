@@ -84,22 +84,35 @@
        Ya no lleva aria-hidden: es un botón real y lo anuncia su aria-label. -->
   <button type="button" id="badge-tiempo-estudio" class="timer-indicador timer-indicador--flotante oculto"></button>
 
-  <!-- Bug 1 (v8): aviso de reconexión — aparece cuando la sesión con Google
-       Drive se venció o el refresco automático/silencioso falló. El botón
-       "Reconectar" se dispara desde un click real para evitar el bloqueo de
-       popups que sí puede afectar al refresco silencioso automático. -->
-  <div id="aviso-reconexion" class="aviso-reconexion oculto" role="alert">
-    <span>⚠️ Se perdió la conexión con tu Google Drive. Tus cambios se están guardando localmente, pero no se sincronizarán hasta reconectar.</span>
-    <button id="btn-reconectar-sesion" class="btn btn-primary">Reconectar</button>
-  </div>
-
   <!-- Barra superior solo-móvil -->
   <div class="mobile-topbar">
     <button id="btn-hamburguesa" class="btn-topbar-icono" aria-label="Abrir menú">☰</button>
     <!-- 2026-09-19: el <h3> ahora vive dentro de .mobile-topbar-centro para
          poder apilar debajo la línea del timer (#timer-linea-topbar), que
-         solo aparece mientras hay una sesión corriendo. -->
+         solo aparece mientras hay una sesión corriendo.
+         2026-09-24: reemplaza al banner grande y fijo de "Se perdió la
+         conexión..." — estar offline no es un error, así que ya no
+         interrumpe con una alarma en toda la pantalla. Ahora es esta
+         píldora chica ARRIBA del título (#pill-sin-conexion), que
+         aparece/desaparece con el mismo estado.conexionDrive de siempre
+         (ver mostrarAvisoReconexion/ocultarAvisoReconexion en storage-
+         sync.js) y, al tocarla, abre #modal-sin-conexion con la
+         explicación tranquila + el botón de reconectar real. En >=900px
+         no hace falta: el sidebar ya tiene su propio aviso discreto en
+         #indicador-sync (mismo criterio de siempre, sin banner ni modal). -->
     <div class="mobile-topbar-centro">
+      <button type="button" id="pill-sin-conexion" class="pill-sin-conexion oculto" aria-label="Sin conexión con Google Drive — toca para más información">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="1" y1="1" x2="23" y2="23"></line>
+          <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path>
+          <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"></path>
+          <path d="M10.71 5.05A16 16 0 0 1 22.58 9"></path>
+          <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"></path>
+          <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+          <line x1="12" y1="20" x2="12.01" y2="20"></line>
+        </svg>
+        <span>Sin conexión</span>
+      </button>
       <h3 style="display:flex; align-items:center; gap:6px; justify-content:center;"><img src="imagenes/LogoApp.png" alt="Logo App Académica" style="height:1.2em; width:auto; vertical-align:middle;"> App Académica</h3>
       <button type="button" id="timer-linea-topbar" class="timer-indicador timer-indicador--linea oculto"></button>
     </div>
@@ -1093,6 +1106,22 @@
     <div id="lista-modal-desbloquea" class="stack"></div>
     <div class="row" style="justify-content:flex-end;">
       <button id="btn-cerrar-desbloquea" class="btn btn-primary">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: Sin conexión (2026-09-24) =====================
+     Se abre al tocar #pill-sin-conexion (móvil) — reemplaza al banner fijo
+     que interrumpía toda la pantalla. #btn-reconectar-sesion conserva el
+     mismo id de siempre: el listener real sigue viviendo en main.js sin
+     cambios de lógica, solo cambió dónde vive el botón en el HTML. -->
+<div id="modal-sin-conexion" class="modal-overlay oculto">
+  <div class="glass-card modal-card stack" style="position:relative;">
+    <button type="button" class="modal-x-close" id="btn-cerrar-modal-sin-conexion" aria-label="Cerrar">✕</button>
+    <h2 style="margin:0; display:flex; align-items:center; gap:8px;">📡 Estás sin conexión</h2>
+    <p class="muted">Tranquilo, no pasa nada: tus cambios se están guardando en este dispositivo. En cuanto vuelvas a tener internet, se sincronizan solos con tu Google Drive — no hace falta que hagas nada.</p>
+    <div class="row" style="justify-content:flex-end;">
+      <button id="btn-reconectar-sesion" class="btn btn-primary">Reconectar</button>
     </div>
   </div>
 </div>
