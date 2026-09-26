@@ -1,0 +1,1293 @@
+/* =========================================================================
+   FUSIÓN DE DATOS ENTRE DISPOSITIVOS
+   -------------------------------------------------------------------------
+   Bug crítico (v1.15): al no comparar por fecha, cualquier lectura remota
+   (login, pull-to-refresh, sondeo) sobrescribía TODO estado.datos con el
+   blob completo de Drive o de la caché local — el que "llegara último" a
+   escribir ganaba siempre, sin importar cuál era realmente más reciente.
+   En el peor caso (abrir la app en el teléfono con datos viejos en su
+   caché local, después de trabajar mucho en PC) esto borraba trabajo real.
+
+   Este archivo reemplaza ese "reemplazo total" por una FUSIÓN por entidad:
+   cada materia, semestre, profesor, evento de agenda, enlace rápido, plan
+   y categoría se compara individualmente por su `_actualizadoEn` (ver
+   sellarTimestamp en schema.js) — nunca se descarta una entidad completa
+   solo porque el otro lado "llegó después" a nivel de archivo.
+
+   Reglas:
+   1. Una entidad que existe solo en un lado (local o remoto) SIEMPRE se
+      conserva — nunca se pierde por omisión.
+   2. Una entidad que existe en ambos lados con el mismo id: gana la de
+      `_actualizadoEn` más reciente. La que pierde se descarta pero se
+      loguea en consola (nunca queda visible en la UI, a petición del
+      usuario — ver conversación del 2026-07-28).
+   3. Los BORRADOS son explícitos: borrar algo no es "dejar de mandarlo",
+      es agregar su id a una lista de tumbas (`_eliminados`) con su propio
+      timestamp. Sin esto, cualquier fusión "resucitaría" lo borrado en
+      cuanto el otro dispositivo mandara su copia vieja.
+   4. configuracion y perfil son objetos únicos (no colecciones) — se
+      funden campo por campo, cada uno con su propio timestamp implícito
+      a nivel de objeto completo (ver fusionarBloqueUnico).
+   ========================================================================= */
+
+import { observarRelojLogico, migrarDatosAntiguos } from "./schema.js";
+
+/**
+ * Compara dos entidades por su contador lógico de última modificación
+ * (_actualizadoEn — ver REVISIÓN 2 en schema.js: ya NO es Date.now(), es un
+ * reloj de Lamport). Nunca debería haber contadores iguales entre
+ * dispositivos distintos (el _dispositivoId desempata como último recurso,
+ * de forma determinista y arbitraria, solo para que el resultado sea
+ * estable y no dependa del orden de fusión).
+ */
+function esMasReciente(a, b) {
+  const ta = Number(a && a._actualizadoEn) || 0;
+  const tb = Number(b && b._actualizadoEn) || 0;
+  if (ta !== tb) return ta > tb;
+  const da = String((a && a._dispositivoId) || "");
+  const db = String((b && b._dispositivoId) || "");
+  return da > db; // desempate arbitrario pero determinista
+}
+
+/**
+ * REVISIÓN 2 (detección de conflicto real — caso "cambié el estado a Y en
+ * el teléfono y a Z en la PC casi al mismo tiempo, offline"): esMasReciente
+ * decide un ganador SIEMPRE, incluso cuando en la realidad ninguna edición
+ * "vino después" de la otra — fueron dos ediciones concurrentes genuinas,
+ * hechas cada una sin saber de la otra. Adivinar un ganador ahí (por
+ * timestamp o por dispositivo) es descartar en silencio un cambio real que
+ * el usuario hizo a propósito.
+ *
+ * La forma de distinguir "A es una evolución real de B" de "A y B son dos
+ * ramas distintas que parten del mismo punto" es comparar `_version_base`
+ * (ver sellarTimestamp en schema.js): cada entidad guarda de qué contador
+ * partió al editarse. Si local.base === remoto.base pero
+ * local._actualizadoEn !== remoto._actualizadoEn, ambas ediciones partieron
+ * EXACTAMENTE del mismo punto y terminaron distinto — eso es un choque real
+ * (el equivalente a un merge conflict de Git), no una simple carrera de
+ * timestamps. En ese caso no se elige ganador: se conserva la versión "base"
+ * (la que ya estaba, para no romper nada en la UI que no sabe de conflictos)
+ * y se adjunta la otra en `_version_alterna` + `_conflicto: true`, para que
+ * la UI se lo muestre al usuario y él decida — nunca se pierde el dato.
+ *
+ * Si las bases son distintas (el caso normal: una edición sí partió de una
+ * versión más nueva que la otra, aunque sea por segundos), no hay conflicto
+ * real — es una línea causal continua y esMasReciente() decide bien.
+ */
+// Metadatos de sincronización propios de CADA dispositivo — nunca describen
+// una edición real, así que nunca deberían decidir por sí solos si dos
+// versiones "son distintas". Se usa en la Guarda 1 de abajo.
+//
+// FIX sync (2026-09-04 — "choque de versión con contenido byte-idéntico,
+// 27 casos en Semestres"): causa raíz confirmada con test aislado (ver
+// reporte). _conflicto y _version_alterna son bookkeeping de UNA ronda de
+// fusión anterior — no describen el contenido real de la entidad — pero
+// antes NO estaban en esta lista. Resultado: una entidad que ya había
+// quedado marcada _conflicto:true en algún sync viejo nunca podía volver a
+// compararse como "igual" contra una versión remota sin esas marcas, aunque
+// el contenido sustantivo (nombre, estado, fechas, etc.) fuera IDÉNTICO —
+// la Guarda 1 (deep-equal) las veía como objetos distintos solo por esas 2
+// llaves de más, hayConflictoReal cae al chequeo de _version_base, las
+// bases ya coinciden (es la misma entidad, sincronizada muchas veces) y
+// se re-marca conflicto en CADA sync, para siempre, sin que el usuario
+// pueda "resolverlo" de verdad — de ahí el modal diciendo "es seguro
+// mantener ambas" con dos versiones iguales. Con estas 2 llaves excluidas
+// acá, una entidad con marcas de conflicto viejas SÍ puede volver a
+// compararse como igual en cuanto el contenido converge.
+const CAMPOS_META_SELLADO = ["_actualizadoEn", "_version_base", "_dispositivoId", "_conflicto", "_version_alterna"];
+
+function despojarMetaSellado(obj) {
+  const copia = { ...obj };
+  CAMPOS_META_SELLADO.forEach((campo) => delete copia[campo]);
+  return copia;
+}
+
+/**
+ * Complemento del fix de arriba: excluir _conflicto/_version_alterna de la
+ * COMPARACIÓN (hayConflictoReal) resuelve que no se vuelva a marcar un
+ * choque falso, pero por sí solo NO borra una marca _conflicto:true que ya
+ * quedó pegada en el objeto de una ronda anterior — si esa entidad gana la
+ * comparación de "más reciente" tal cual, seguiría cargando el flag viejo
+ * (y el badge/modal la seguiría mostrando) aunque hayConflictoReal ya haya
+ * determinado que no hay nada real que resolver. Se usa en todo punto de
+ * "no hubo conflicto real, así que se elige un ganador" (fusionarColeccion,
+ * fusionarBloqueUnico, fusionarPlan, fusionarSemestre, fusionarCriterio,
+ * fusionarMateriaMatriculada, fusionarBloqueHorario) para que una entidad
+ * con marcas viejas se "limpie" en cuanto deja de haber un choque real,
+ * sin que el usuario tenga que resolverla a mano. Devuelve el mismo objeto
+ * sin copiar si no hay nada que limpiar (caso normal, sin costo extra).
+ */
+function limpiarMarcasConflictoObsoletas(entidad) {
+  if (!entidad || (!entidad._conflicto && entidad._version_alterna === undefined)) return entidad;
+  const limpia = { ...entidad };
+  delete limpia._conflicto;
+  delete limpia._version_alterna;
+  return limpia;
+}
+
+/**
+ * FIX sync (2026-08-09 — "Profesor Ids... la única diferencia es el formato
+ * pero sigue siendo exactamente igual"): la Guarda 1 de abajo comparaba con
+ * JSON.stringify(a) === JSON.stringify(b). Eso es sensible al ORDEN de las
+ * llaves de un objeto — dos objetos con el mismo contenido pero construidos
+ * por caminos distintos (ej. `{...base, x}` en un dispositivo vs. el mismo
+ * objeto reconstruido desde otro orden de spread/lectura en el otro) generan
+ * JSON distinto aunque el contenido sea idéntico. Eso es exactamente lo que
+ * reportó el usuario: "Profesor Ids" mostraba el mismo array en ambos lados
+ * y aun así se marcaba como choque. JSON.stringify nunca debió usarse para
+ * decidir igualdad de contenido — solo sirve para display. Esta función
+ * compara profundamente, ignorando el orden de las llaves de un objeto
+ * (compara por conjunto de llaves + valor, no por posición). Los arreglos sí
+ * respetan su orden posicional (índice a índice), salvo que sean arreglos de
+ * solo primitivos (strings/números/booleanos) — ahí el orden no representa
+ * una edición real (ej. profesor_ids), así que se comparan como conjunto.
+ * undefined y "llave ausente" se tratan como equivalentes en ambos lados,
+ * para que un spread que agrega una llave con valor undefined no cuente
+ * como diferencia real.
+ */
+function sonValoresEquivalentes(a, b) {
+  if (a === b) return true;
+  if (typeof a === "number" && typeof b === "number" && Number.isNaN(a) && Number.isNaN(b)) return true;
+  if (a === null || b === null || a === undefined || b === undefined) return a === b;
+  if (typeof a !== typeof b) return false;
+
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b)) return false;
+    if (a.length !== b.length) return false;
+    const soloPrimitivos = (arr) => arr.every((v) => v === null || (typeof v !== "object" && typeof v !== "function"));
+    if (soloPrimitivos(a) && soloPrimitivos(b)) {
+      // Arreglo de ids/valores sueltos: el orden no es una edición con
+      // significado, es un detalle de cómo cada dispositivo lo reconstruyó.
+      const copiaA = [...a].sort();
+      const copiaB = [...b].sort();
+      return copiaA.every((v, i) => sonValoresEquivalentes(v, copiaB[i]));
+    }
+    // Arreglo de objetos/arreglos anidados: sí respeta el orden posicional
+    // (reordenar elementos complejos normalmente SÍ es una edición real).
+    return a.every((v, i) => sonValoresEquivalentes(v, b[i]));
+  }
+
+  if (typeof a === "object") {
+    const llaves = new Set([...Object.keys(a), ...Object.keys(b)]);
+    for (const llave of llaves) {
+      if (!sonValoresEquivalentes(a[llave], b[llave])) return false;
+    }
+    return true;
+  }
+
+  return false;
+}
+
+function hayConflictoReal(local, remoto) {
+  if (!local || !remoto) return false;
+
+  // Guarda 1 (ajuste 2026-08-02, reforzada 2026-08-09 — "cuando ambas
+  // versiones sean exactamente iguales este aviso no tiene que salir para
+  // nada"): antes se comparaba JSON.stringify(local) contra
+  // JSON.stringify(remoto) TAL CUAL, metadatos de sellado incluidos. Eso
+  // fallaba en dos casos reales: (a) dos dispositivos que editan el mismo
+  // campo y terminan escribiendo EXACTAMENTE el mismo valor (ej. ambos
+  // marcan "Aprobada" a mano, cada uno en su momento) sellan cada uno con su
+  // propio _actualizadoEn/_dispositivoId; y (b) el orden de las llaves del
+  // objeto puede diferir entre dispositivos sin que el contenido cambie en
+  // nada (ver sonValoresEquivalentes arriba — esto fue lo que causó el falso
+  // choque de "Profesor Ids" reportado). JSON.stringify es sensible a ambos
+  // casos aunque no haya NADA que resolver de verdad. Ahora se usa una
+  // igualdad profunda que ignora metadatos de sellado y orden de llaves.
+  if (sonValoresEquivalentes(despojarMetaSellado(local), despojarMetaSellado(remoto))) return false;
+
+  // Guarda 2: _version_base solo tiene sentido para entidades que SÍ pasan
+  // por sellarTimestamp() (materias, categorías, planes). Objetos que nunca
+  // se sellan (ej. perfil/configuracion en archivos que no gestionan este
+  // proyecto todavía) tendrían _version_base undefined en ambos lados, y
+  // `Number(undefined) || 0` colapsaría ambos a 0 — marcando conflicto en
+  // CUALQUIER par de objetos distintos sin sellar, incluso sin que haya
+  // habido nunca una edición doble real. Sin metadata real de sellado en
+  // ninguno de los dos lados, no hay forma honesta de detectar conflicto:
+  // se cae al comportamiento anterior (gana el más "reciente" por
+  // esMasReciente, o si tampoco hay eso, es indistinguible y se deja como
+  // estaba). Mejor un desempate arbitrario ocasional que un falso conflicto
+  // permanente en cada sync.
+  const localTieneVersion = local._version_base !== undefined;
+  const remotoTieneVersion = remoto._version_base !== undefined;
+  if (!localTieneVersion || !remotoTieneVersion) return false;
+
+  const baseLocal = Number(local._version_base) || 0;
+  const baseRemota = Number(remoto._version_base) || 0;
+
+  // Guarda 3 (fix 2026-08-02 — "TODAS las materias salieron en conflicto sin
+  // razón"): base=0 NO es un punto de partida real que ambos dispositivos
+  // hayan visto — es el valor por defecto de sellarTimestamp() para
+  // cualquier entidad que nunca se había sellado antes de ESTA edición (dato
+  // viejo de antes de que existiera este motor, o entidad recién creada).
+  // Casi toda la base de datos histórica de un usuario cae en ese caso. Dos
+  // ediciones que comparten base=0 no partieron necesariamente del MISMO
+  // estado real — solo significa que ninguna de las dos tenía historial
+  // confiable todavía, y pudieron haber pasado en momentos completamente
+  // distintos, no simultáneos. Tratar ese "sin historial" compartido como
+  // "mismo punto de partida" (la lógica anterior) marcaba como choque real a
+  // CUALQUIER materia/mm/criterio viejo que se tocara en ambos dispositivos,
+  // sin importar cuándo. Con base > 0 sí es señal confiable (ambos
+  // dispositivos partieron de un _actualizadoEn real, ya sincronizado al
+  // menos una vez) y ahí el choque real se sigue detectando igual que antes.
+  // Sin conflicto detectado acá, la fusión no pierde nada: cae en el camino
+  // normal (esMasReciente elige la más nueva, la otra se descarta pero se
+  // loguea en consola — mismo comportamiento ya usado en cualquier edición
+  // no conflictiva del proyecto).
+  if (baseLocal === 0 && baseRemota === 0) return false;
+
+  // Mismo punto de partida real (base > 0 en ambos) = ambas son ediciones
+  // directas de la MISMA versión previa ya sincronizada, hechas sin que
+  // ninguna conociera a la otra — eso sí es un choque real (equivalente a un
+  // merge conflict de Git). La única señal confiable de "es la misma
+  // edición, no hay nada que resolver" es que sean literalmente el mismo
+  // objeto (ver el `existente === item` en fusionarColeccion, que ya se
+  // revisa ANTES de llegar aquí) o tener contenido idéntico (Guarda 1, arriba).
+  return baseLocal === baseRemota;
+}
+
+/**
+ * Construye la entidad resultante cuando hay un conflicto real: conserva
+ * los campos de `base` tal cual (para que nada que no sepa de conflictos —
+ * cálculos, filtros, exportación — se rompa por un campo inesperado) y le
+ * agrega la marca de conflicto + la alternativa completa para que la UI
+ * decida qué mostrar. `_conflicto` nunca se sincroniza como "resuelto"
+ * solo — se limpia explícitamente cuando el usuario elige (ver
+ * resolverConflicto más abajo).
+ */
+function marcarConflictoSiCorresponde(entidadLocal, entidadRemota, etiqueta) {
+  if (!hayConflictoReal(entidadLocal, entidadRemota)) return null;
+  console.warn(
+    `[conflicto real] ${etiqueta} id="${entidadLocal.id}": se editó de forma distinta en dos ` +
+      `dispositivos a partir de la misma versión (base=${entidadLocal._version_base}). ` +
+      `Se necesita que el usuario elija cuál dejar.`,
+    { local: entidadLocal, remoto: entidadRemota }
+  );
+  // FIX blindaje 2026-09-17 (punto 2.1 de la auditoría — "¿el desempate es
+  // determinístico o depende de quién sincronizó primero?"): antes se
+  // conservaba SIEMPRE `entidadLocal` como versión visible y la otra iba a
+  // `_version_alterna`. Como "local" y "remota" son etiquetas relativas a
+  // qué dispositivo está fundiendo, el MISMO choque quedaba al revés en
+  // cada dispositivo: el teléfono mostraba su versión y la PC la suya,
+  // ambos con el badge de conflicto, y hasta que alguien resolviera, cada
+  // pantalla mostraba un valor distinto (y cada uno subía el suyo, así que
+  // la foto "vigente" en Drive dependía de quién sincronizó último). Ahora
+  // el par se ordena con el MISMO criterio determinista que ya usa todo el
+  // motor (esMasReciente: contador lógico y, si empata, _dispositivoId),
+  // así que los dos dispositivos llegan exactamente al mismo objeto —
+  // misma versión visible y misma `_version_alterna`— sin importar el orden
+  // de llegada. No se pierde nada: las dos versiones siguen enteras, solo
+  // cambia cuál queda "arriba" mientras el usuario decide.
+  const remotaGana = esMasReciente(entidadRemota, entidadLocal);
+  const principal = remotaGana ? entidadRemota : entidadLocal;
+  const alterna = remotaGana ? entidadLocal : entidadRemota;
+  return {
+    ...principal,
+    _conflicto: true,
+    _version_alterna: { ...alterna },
+  };
+}
+
+/**
+ * Se llama sobre CUALQUIER entidad remota que se procese al fusionar
+ * (gane o pierda la comparación) — mantiene el reloj lógico de este
+ * dispositivo siempre por delante de todo lo que ya vio, que es la regla
+ * que hace que un reloj de Lamport funcione (ver observarRelojLogico en
+ * schema.js). Sin esto, el reloj local podría quedar "atrás" del remoto y
+ * la próxima edición local terminaría con un contador más bajo que algo
+ * que este mismo dispositivo ya sabía que existía.
+ */
+function observarEntidadRemota(entidad) {
+  if (entidad && entidad._actualizadoEn !== undefined) {
+    observarRelojLogico(entidad._actualizadoEn);
+  }
+}
+
+/**
+ * Resuelve un conflicto marcado por el usuario: aplica la versión elegida
+ * (local o alterna) y la re-sella como una edición nueva y limpia (sin
+ * _conflicto ni _version_alterna), para que en el próximo sync esta
+ * resolución se propague como cualquier otra edición normal — nunca queda
+ * "medio resuelta" ni puede volver a chocar contra la misma base vieja.
+ * `entidad` es la que tiene `_conflicto: true`; `cual` es "local" o
+ * "alterna". Requiere `sellarTimestamp` de schema.js — se recibe como
+ * parámetro para no crear un import circular entre este archivo y schema.js.
+ */
+function resolverConflicto(entidadConConflicto, cual, sellarTimestampFn) {
+  const elegida = cual === "alterna" ? entidadConConflicto._version_alterna : entidadConConflicto;
+  const limpia = { ...elegida };
+  delete limpia._conflicto;
+  delete limpia._version_alterna;
+  return sellarTimestampFn(limpia);
+}
+
+/**
+ * Fusiona dos colecciones (arreglos de entidades con `id` propio),
+ * respetando las tumbas de ambos lados. Devuelve el arreglo fusionado.
+ * `etiqueta` es solo para los logs de consola (ej. "materia", "semestre").
+ */
+function fusionarColeccion(coleccionLocal, coleccionRemota, tumbas, etiqueta) {
+  const local = Array.isArray(coleccionLocal) ? coleccionLocal : [];
+  const remota = Array.isArray(coleccionRemota) ? coleccionRemota : [];
+  const idsEliminados = new Set(tumbas.map((t) => t.id));
+
+  const porId = new Map();
+
+  local.forEach((item) => {
+    if (item && item.id !== undefined) porId.set(item.id, item);
+  });
+
+  remota.forEach((item) => {
+    if (!item || item.id === undefined) return;
+    // Regla de Lamport: este dispositivo acaba de VER el contador de una
+    // entidad remota — su propio reloj se adelanta si hace falta, sin
+    // importar si esta entidad en particular gana, pierde o entra en
+    // conflicto. Necesario para que la próxima edición LOCAL nunca quede
+    // con un contador más bajo que algo que este dispositivo ya conoce.
+    observarEntidadRemota(item);
+
+    const existente = porId.get(item.id);
+    if (!existente) {
+      porId.set(item.id, item);
+      return;
+    }
+    if (existente === item) return; // mismo objeto, nada que decidir
+
+    // REVISIÓN 2: antes de dejar que esMasReciente() elija un ganador a
+    // ciegas, se revisa si esto es un conflicto REAL (ambas ediciones
+    // parten de la misma base — ver hayConflictoReal). Si lo es, no se
+    // adivina: se conserva marcado con ambas versiones para que el usuario
+    // decida (ver marcarConflictoSiCorresponde).
+    const conConflicto = marcarConflictoSiCorresponde(existente, item, etiqueta);
+    if (conConflicto) {
+      porId.set(item.id, conConflicto);
+      return;
+    }
+
+    if (esMasReciente(item, existente)) {
+      console.warn(
+        `[fusión] Conflicto en ${etiqueta} id="${item.id}": se descarta la versión local ` +
+          `(contador ${Number(existente._actualizadoEn) || 0}) ` +
+          `a favor de la remota (contador ${Number(item._actualizadoEn) || 0}).`,
+        { local: existente, remota: item }
+      );
+      porId.set(item.id, limpiarMarcasConflictoObsoletas(item));
+    } else if (esMasReciente(existente, item)) {
+      console.warn(
+        `[fusión] Conflicto en ${etiqueta} id="${item.id}": se conserva la versión local ` +
+          `(contador ${Number(existente._actualizadoEn) || 0}) ` +
+          `sobre la remota (contador ${Number(item._actualizadoEn) || 0}).`,
+        { local: existente, remota: item }
+      );
+      porId.set(item.id, limpiarMarcasConflictoObsoletas(existente));
+    } else {
+      // Ninguna es "más reciente" (contador y dispositivo iguales): se
+      // asume que son la misma edición vista desde los dos lados. No hay
+      // nada que resolver — pero si "existente" venía con marcas de
+      // conflicto viejas ya sin vigencia (ver limpiarMarcasConflictoObsoletas
+      // arriba), se limpian igual acá.
+      porId.set(item.id, limpiarMarcasConflictoObsoletas(existente));
+    }
+  });
+
+  // Los borrados ganan sobre cualquier entidad que llegue con ese id, sin
+  // importar cuál timestamp traiga — un borrado es una decisión explícita
+  // del usuario y no debe poder "resucitarse" con una edición vieja que
+  // todavía no se había sincronizado en el otro dispositivo.
+  const resultado = [];
+  porId.forEach((item, id) => {
+    if (idsEliminados.has(id)) return;
+    resultado.push(item);
+  });
+  return resultado;
+}
+
+/**
+ * configuracion y perfil no son colecciones con id — son objetos únicos.
+ * Se funden completos por su propio `_actualizadoEn` (todo o nada dentro
+ * de ese bloque): no tiene sentido, por ejemplo, mezclar la paleta de un
+ * lado con el modo oscuro del otro campo por campo, porque el usuario
+ * probablemente cambió varias cosas juntas en la misma sesión de ajustes.
+ */
+function fusionarBloqueUnico(local, remoto, etiqueta) {
+  if (!local) return remoto;
+  if (!remoto) return local;
+
+  observarEntidadRemota(remoto);
+
+  // FIX sync (paridad con fusionarColeccion): antes esta función solo
+  // llamaba a esMasReciente() a ciegas, nunca a marcarConflictoSiCorresponde
+  // — un cambio de config real y concurrente en dos dispositivos (ej. modo
+  // oscuro en uno, paleta nueva en el otro, ambos sin haber visto el cambio
+  // del otro) se resolvía adivinando un ganador y el otro cambio se perdía
+  // en silencio, igual que le pasaba a materias antes del fix. Por ahora
+  // esto queda sin efecto práctico mientras nada llame a sellarTimestamp()
+  // sobre configuracion/perfil (ver Guarda 2 en hayConflictoReal), pero deja
+  // el motor listo para el día que sí se selle (ver config-ajustes.js).
+  const conConflicto = marcarConflictoSiCorresponde(local, remoto, etiqueta);
+  if (conConflicto) return conConflicto;
+
+  if (esMasReciente(remoto, local)) {
+    console.warn(
+      `[fusión] "${etiqueta}": se usa la versión remota (más reciente).`,
+      { local, remoto }
+    );
+    return limpiarMarcasConflictoObsoletas(remoto);
+  }
+  return limpiarMarcasConflictoObsoletas(local);
+}
+
+/** Fusiona las tumbas de ambos lados (unión simple: un borrado nunca se pierde). */
+function fusionarTumbas(tumbasLocal, tumbasRemota) {
+  const local = Array.isArray(tumbasLocal) ? tumbasLocal : [];
+  const remota = Array.isArray(tumbasRemota) ? tumbasRemota : [];
+  const porId = new Map();
+  [...local, ...remota].forEach((t) => {
+    if (!t || t.id === undefined) return;
+    const existente = porId.get(t.id);
+    if (!existente || Number(t.eliminadoEn) > Number(existente.eliminadoEn)) {
+      porId.set(t.id, t);
+    }
+  });
+  return Array.from(porId.values());
+}
+
+/**
+ * FIX 2026-09-19 (Parte A, "estado fantasma al salir de una competencia").
+ * Descarta las tumbas que una ALTA POSTERIOR ya dejó obsoletas.
+ *
+ * Problema que resuelve: `fusionarColeccion` deja ganar a la tumba SIEMPRE
+ * (sin comparar tiempos) y `fusionarTumbas` es una unión que nunca purga.
+ * Eso está bien cuando cada entidad tiene un id único de por vida (una
+ * sesión de estudio, un gasto): borrada una vez, no vuelve. Pero las
+ * entradas de `competencias_unidas` usan como `id` el de la COMPETENCIA, no
+ * el de la membresía — salir y volver a unirse con el mismo link reutiliza
+ * ese id, y la tumba de la salida anterior mataba la alta nueva en el
+ * siguiente sync, en todos los dispositivos, para siempre.
+ *
+ * Regla: una tumba `{ id, eliminadoEn }` queda obsoleta si existe, de
+ * cualquiera de los dos lados, una entrada con ese `id` cuyo `unido_en`
+ * (Date.now() del alta, misma escala que `eliminadoEn`) sea POSTERIOR. Una
+ * entrada sin `unido_en` (altas anteriores a este fix) nunca supera una
+ * tumba — comportamiento idéntico al de siempre. Si después se sale otra
+ * vez, la tumba nueva trae un `eliminadoEn` mayor (fusionarTumbas se queda
+ * con el más alto por id) y vuelve a ganar como corresponde.
+ *
+ * Al no devolverla, la tumba obsoleta además se purga de los datos
+ * guardados: al subirse el resultado fusionado a Drive, desaparece de
+ * todos los dispositivos.
+ */
+function podarTumbasSuperadasPorAltas(tumbas, ...colecciones) {
+  const altasPorId = new Map(); // id -> unido_en más reciente visto en cualquiera de los lados
+  colecciones.forEach((coleccion) => {
+    (Array.isArray(coleccion) ? coleccion : []).forEach((item) => {
+      if (!item || item.id === undefined) return;
+      const unidoEn = Number(item.unido_en);
+      if (!Number.isFinite(unidoEn)) return;
+      const previo = altasPorId.get(item.id);
+      if (previo === undefined || unidoEn > previo) altasPorId.set(item.id, unidoEn);
+    });
+  });
+  return (Array.isArray(tumbas) ? tumbas : []).filter((t) => {
+    if (!t || t.id === undefined) return false;
+    const unidoEn = altasPorId.get(t.id);
+    return !(unidoEn !== undefined && unidoEn > Number(t.eliminadoEn));
+  });
+}
+
+/**
+ * Fusiona un plan de estudios individual: sus colecciones internas
+ * (materias, categorías, optativas_disponibles, materias_revisar) se
+ * funden por separado, con sus propias tumbas (guardadas dentro del plan
+ * mismo, en plan._eliminados_materias, etc. — ver schema.js).
+ */
+function fusionarPlan(planLocal, planRemoto) {
+  if (!planLocal) return planRemoto;
+  if (!planRemoto) return planLocal;
+
+  // FIX sync (hallazgo de auditoría — paridad con fusionarColeccion y
+  // fusionarBloqueUnico): esta función decidía el ganador de los metadatos
+  // del plan (nombre_carrera, universidad, codigo_plan, parametros_
+  // universidad, etc.) llamando a esMasReciente() directo, sin las dos
+  // cosas que ya hace el resto del motor de fusión:
+  //  1. observarEntidadRemota(): si se salta, el reloj de Lamport de este
+  //     dispositivo puede quedar atrasado respecto de un plan remoto que
+  //     "pierde" la comparación, y la próxima edición local de ESE plan
+  //     terminaría con un contador más bajo que algo que el otro
+  //     dispositivo ya conocía.
+  //  2. marcarConflictoSiCorresponde(): sin esto, dos ediciones concurrentes
+  //     reales a los metadatos del plan (ej. universidad cambiada en un
+  //     dispositivo y nombre_carrera en otro, ambas partiendo de la misma
+  //     versión, offline) no se detectaban como choque — se elegía un
+  //     ganador a ciegas y el otro cambio se perdía sin avisar, a
+  //     diferencia de materias/semestres/configuracion que sí lo hacen.
+  observarEntidadRemota(planRemoto);
+
+  const conConflicto = marcarConflictoSiCorresponde(planLocal, planRemoto, "plan");
+  if (conConflicto) {
+    console.warn(
+      `[conflicto real] Plan "${planLocal.id}": metadatos generales editados de forma ` +
+        `distinta en dos dispositivos a partir de la misma versión; las materias se ` +
+        `funden aparte, sin verse afectadas por este conflicto.`
+    );
+    return {
+      ...conConflicto,
+      materias: fusionarColeccion(
+        planLocal.materias,
+        planRemoto.materias,
+        fusionarTumbas(planLocal._eliminados_materias, planRemoto._eliminados_materias),
+        "materia"
+      ),
+      categorias: fusionarColeccion(
+        planLocal.categorias,
+        planRemoto.categorias,
+        fusionarTumbas(planLocal._eliminados_categorias, planRemoto._eliminados_categorias),
+        "categoría"
+      ),
+      optativas_disponibles: fusionarColeccion(
+        planLocal.optativas_disponibles,
+        planRemoto.optativas_disponibles,
+        fusionarTumbas(planLocal._eliminados_materias, planRemoto._eliminados_materias),
+        "optativa disponible"
+      ),
+      materias_revisar: fusionarColeccion(
+        planLocal.materias_revisar,
+        planRemoto.materias_revisar,
+        fusionarTumbas(planLocal._eliminados_materias, planRemoto._eliminados_materias),
+        "materia por revisar"
+      ),
+      _eliminados_materias: fusionarTumbas(planLocal._eliminados_materias, planRemoto._eliminados_materias),
+      _eliminados_categorias: fusionarTumbas(planLocal._eliminados_categorias, planRemoto._eliminados_categorias),
+    };
+  }
+
+  const ganadorEsRemoto = esMasReciente(planRemoto, planLocal);
+  const base = limpiarMarcasConflictoObsoletas(ganadorEsRemoto ? planRemoto : planLocal);
+
+  if (planLocal !== planRemoto) {
+    console.warn(
+      `[fusión] Plan "${planLocal.id}": metadatos generales tomados de la versión ` +
+        `${ganadorEsRemoto ? "remota" : "local"} (más reciente); las materias se funden aparte.`
+    );
+  }
+
+  const tumbasMaterias = fusionarTumbas(planLocal._eliminados_materias, planRemoto._eliminados_materias);
+  // FIX sync (bug real encontrado en esta ronda de auditoría): antes las
+  // categorías se fundían con `fusionarColeccion(..., [], "categoría")` —
+  // un tercer argumento vacío en duro, a diferencia de materias/optativas
+  // que sí usan su propia tumba. Sin tumba real, borrar una categoría en un
+  // dispositivo no dejaba ningún rastro explícito: en el próximo sync, si
+  // el otro dispositivo todavía traía esa categoría en su copia (porque no
+  // había bajado el borrado todavía), fusionarColeccion no tenía forma de
+  // saber que debía excluirla — la categoría "resucitaba".
+  const tumbasCategorias = fusionarTumbas(planLocal._eliminados_categorias, planRemoto._eliminados_categorias);
+
+  return {
+    ...base,
+    materias: fusionarColeccion(planLocal.materias, planRemoto.materias, tumbasMaterias, "materia"),
+    categorias: fusionarColeccion(planLocal.categorias, planRemoto.categorias, tumbasCategorias, "categoría"),
+    optativas_disponibles: fusionarColeccion(
+      planLocal.optativas_disponibles,
+      planRemoto.optativas_disponibles,
+      tumbasMaterias,
+      "optativa disponible"
+    ),
+    materias_revisar: fusionarColeccion(
+      planLocal.materias_revisar,
+      planRemoto.materias_revisar,
+      tumbasMaterias,
+      "materia por revisar"
+    ),
+    _eliminados_materias: tumbasMaterias,
+    _eliminados_categorias: tumbasCategorias,
+  };
+}
+
+/**
+ * Fusiona los planes de estudio (colección de nivel superior) — cada plan
+ * se identifica por su `id` y, si existe en ambos lados, se funde con
+ * fusionarPlan() en vez de que gane uno completo sobre el otro.
+ */
+function fusionarPlanesEstudio(local, remoto, tumbas) {
+  const listaLocal = Array.isArray(local) ? local : [];
+  const listaRemota = Array.isArray(remoto) ? remoto : [];
+  const idsEliminados = new Set(tumbas.map((t) => t.id));
+
+  const porId = new Map();
+  listaLocal.forEach((p) => porId.set(p.id, p));
+  listaRemota.forEach((p) => {
+    // FIX blindaje 2026-09-17 (hallazgo de la auditoría, no pedido por
+    // ningún punto puntual — paridad con TODAS sus funciones hermanas:
+    // fusionarSemestres, fusionarCriterios, fusionarMateriasMatriculadas,
+    // fusionarBloquesHorario y fusionarFinanzasSemestres ya llaman a
+    // observarEntidadRemota() sobre CADA entidad remota, exista o no del
+    // lado local — esta era la única que no lo hacía). Cuando `existente`
+    // SÍ existe, fusionarPlan() ya llama a observarEntidadRemota() por su
+    // cuenta (llamarlo acá también es inofensivo: observarRelojLogico solo
+    // toma el máximo). El caso real que esto arregla es cuando el plan
+    // llega SOLO del lado remoto (!existente, ej. un plan nuevo creado en
+    // otro dispositivo): antes entraba "gratis" sin que el reloj lógico de
+    // este dispositivo se enterara de su contador. Si el usuario editaba
+    // ESE MISMO plan en este dispositivo poco después (antes de que
+    // ninguna otra entidad remota le hiciera avanzar el reloj sin
+    // querer), `sellarTimestamp` podía sellar con un contador MÁS BAJO que
+    // el que el otro dispositivo ya conocía — en el siguiente sync,
+    // `esMasReciente` habría preferido erróneamente al remoto viejo sobre
+    // la edición local nueva, perdiéndola en silencio.
+    observarEntidadRemota(p);
+    const existente = porId.get(p.id);
+    porId.set(p.id, existente ? fusionarPlan(existente, p) : p);
+  });
+
+  const resultado = [];
+  porId.forEach((plan, id) => {
+    if (!idsEliminados.has(id)) resultado.push(plan);
+  });
+  return resultado;
+}
+
+
+/**
+ * Semestres y Notas — Fase 1: mismo patrón que fusionarPlan (arriba) pero
+ * para un Semestre — su única colección anidada por ahora es
+ * materias_matriculadas, con su propia tumba
+ * (_eliminados_materias_matriculadas, ver crearSemestre en schema.js). Se
+ * reutiliza el mismo mecanismo probado en vez de inventar uno aparte, tal
+ * como pide la regla obligatoria de este prompt.
+ */
+function fusionarSemestre(semestreLocal, semestreRemoto) {
+  if (!semestreLocal) return semestreRemoto;
+  if (!semestreRemoto) return semestreLocal;
+  if (semestreLocal === semestreRemoto) return semestreLocal;
+
+  const tumbasMatriculadas = fusionarTumbas(
+    semestreLocal._eliminados_materias_matriculadas,
+    semestreRemoto._eliminados_materias_matriculadas
+  );
+  const matriculadasFundidas = fusionarMateriasMatriculadas(
+    semestreLocal.materias_matriculadas,
+    semestreRemoto.materias_matriculadas,
+    tumbasMatriculadas
+  );
+
+  // Horario — Núcleo: mismo motivo exacto que materias_matriculadas arriba
+  // — colección anidada propia del semestre, con su propia tumba, fundida
+  // aparte para no perder bloques creados/editados en cada lado.
+  const tumbasBloquesHorario = fusionarTumbas(
+    semestreLocal._eliminados_bloques_horario,
+    semestreRemoto._eliminados_bloques_horario
+  );
+  const bloquesHorarioFundidos = fusionarBloquesHorario(
+    semestreLocal.bloques_horario,
+    semestreRemoto.bloques_horario,
+    tumbasBloquesHorario
+  );
+
+  // FIX sync (Entrega 3 — el badge de conflicto de semestre existía en la
+  // UI desde la Fase 1 pero nunca podía dispararse: esta función elegía un
+  // ganador a ciegas con esMasReciente, sin pasar nunca por
+  // marcarConflictoSiCorresponde, así que semestre._conflicto jamás se
+  // llegaba a marcar. Ahora sigue el mismo patrón que fusionarColeccion.
+  //
+  // FIX sync (2026-08-02 — "todos los semestres salen como editados en dos
+  // dispositivos" cuando en realidad no había choque): marcarConflictoSiCorresponde
+  // recibía el semestre COMPLETO, materias_matriculadas incluido. Esa
+  // colección ya se funde aparte arriba (fusionarMateriasMatriculadas, con
+  // su propio detector de conflicto por mm) y cambia todo el tiempo por
+  // razones legítimas — pero editar una mm nunca sella el timestamp del
+  // semestre contenedor (eso solo pasa si se toca semestre.estado_manual).
+  // Resultado: dos semestres con ediciones de mm distintas en cada
+  // dispositivo llegaban con el MISMO _version_base a nivel semestre pero
+  // contenido distinto (por la mm) — hayConflictoReal lo leía como choque
+  // real (misma base, resultado distinto) aunque las mm no chocaran entre
+  // sí en absoluto. Se compara solo la "foto plana" del semestre (sin
+  // materias_matriculadas ni su tumba) para que este chequeo represente de
+  // verdad lo que pertenece a ESTE nivel (nombre, fechas, estado_manual,
+  // etc.), y no lo que ya se resuelve por separado un nivel más abajo.
+  // Horario — Núcleo: bloques_horario se excluye por el mismo motivo exacto
+  // (se resella en cada edición de un bloque/excepción, sin tocar el
+  // semestre en sí).
+  const {
+    materias_matriculadas: _mmLocal,
+    _eliminados_materias_matriculadas: _tumbaLocal,
+    bloques_horario: _bhLocal,
+    _eliminados_bloques_horario: _tbhLocal,
+    ...semestreLocalPlano
+  } = semestreLocal;
+  const {
+    materias_matriculadas: _mmRemoto,
+    _eliminados_materias_matriculadas: _tumbaRemoto,
+    bloques_horario: _bhRemoto,
+    _eliminados_bloques_horario: _tbhRemoto,
+    ...semestreRemotoPlano
+  } = semestreRemoto;
+
+  const conConflicto = marcarConflictoSiCorresponde(semestreLocalPlano, semestreRemotoPlano, "semestre");
+  const base =
+    conConflicto ||
+    limpiarMarcasConflictoObsoletas(esMasReciente(semestreRemoto, semestreLocal) ? semestreRemoto : semestreLocal);
+
+  return {
+    ...base,
+    materias_matriculadas: matriculadasFundidas,
+    _eliminados_materias_matriculadas: tumbasMatriculadas,
+    bloques_horario: bloquesHorarioFundidos,
+    _eliminados_bloques_horario: tumbasBloquesHorario,
+  };
+}
+
+
+/**
+ * Fase 6: mismo patrón que fusionarCriterio/fusionarPlan — funde un
+ * criterio individual junto con su colección anidada de asignaciones y su
+ * propia tumba (_eliminados_asignaciones, ver crearCriterio en schema.js).
+ */
+function fusionarCriterio(criterioLocal, criterioRemoto) {
+  if (!criterioLocal) return criterioRemoto;
+  if (!criterioRemoto) return criterioLocal;
+  if (criterioLocal === criterioRemoto) return criterioLocal;
+
+  const tumbasAsignaciones = fusionarTumbas(
+    criterioLocal._eliminados_asignaciones,
+    criterioRemoto._eliminados_asignaciones
+  );
+  const asignacionesFundidas = fusionarColeccion(
+    criterioLocal.asignaciones,
+    criterioRemoto.asignaciones,
+    tumbasAsignaciones,
+    "asignación"
+  );
+
+  // Entrega 3: antes esta función elegía un ganador a ciegas con
+  // esMasReciente, sin pasar por marcarConflictoSiCorresponde — dos
+  // ediciones concurrentes reales del mismo criterio (ej. cambiar el
+  // nombre en un dispositivo y el valor_total en el otro, ambas partiendo
+  // de la misma base) se resolvían adivinando en vez de marcarse para que
+  // la persona elija, igual que ya pasa con materias/categorías.
+  //
+  // FIX sync (2026-08-02, mismo patrón que fusionarSemestre/
+  // fusionarMateriaMatriculada): criterio se resella en CADA edición de una
+  // asignación (agregar, editar, borrar — ver semestres-tarjetas.js), así
+  // que dos dispositivos tocando asignaciones DISTINTAS del mismo criterio
+  // sin conocerse entre sí terminan con el mismo _version_base y contenido
+  // distinto. asignacionesFundidas ya las combinó bien arriba; comparar de
+  // nuevo el arreglo completo acá solo duplica un conflicto que no existe
+  // en realidad.
+  const { asignaciones: _aLocal, _eliminados_asignaciones: _taLocal, ...criterioLocalPlano } = criterioLocal;
+  const { asignaciones: _aRemoto, _eliminados_asignaciones: _taRemoto, ...criterioRemotoPlano } = criterioRemoto;
+
+  const conConflicto = marcarConflictoSiCorresponde(criterioLocalPlano, criterioRemotoPlano, "criterio");
+  const base =
+    conConflicto ||
+    limpiarMarcasConflictoObsoletas(esMasReciente(criterioRemoto, criterioLocal) ? criterioRemoto : criterioLocal);
+
+  return {
+    ...base,
+    asignaciones: asignacionesFundidas,
+    _eliminados_asignaciones: tumbasAsignaciones,
+  };
+}
+
+/** Equivalente de fusionarPlanesEstudio pero para la colección `criterios`. */
+function fusionarCriterios(local, remoto, tumbas) {
+  const listaLocal = Array.isArray(local) ? local : [];
+  const listaRemota = Array.isArray(remoto) ? remoto : [];
+  const idsEliminados = new Set(tumbas.map((t) => t.id));
+
+  const porId = new Map();
+  listaLocal.forEach((c) => porId.set(c.id, c));
+  listaRemota.forEach((c) => {
+    observarEntidadRemota(c);
+    const existente = porId.get(c.id);
+    porId.set(c.id, existente ? fusionarCriterio(existente, c) : c);
+  });
+
+  const resultado = [];
+  porId.forEach((criterio, id) => {
+    if (!idsEliminados.has(id)) resultado.push(criterio);
+  });
+  return resultado;
+}
+
+/**
+ * Fase 6 / Entrega 3: funde una materia matriculada individual — sus
+ * criterios se funden por separado (con sus propias tumbas), igual que
+ * fusionarPlan hace con materias/categorías.
+ *
+ * FIX sync (el hueco que dejaba pendiente la Entrega 2): mientras mm no
+ * tenía campos mutables reales (solo materia_id/profesor_id), elegir un
+ * ganador a ciegas con esMasReciente no perdía nada importante. Ahora que
+ * criterios/nota_final/nota_final_manual son editables de verdad, dos
+ * ediciones concurrentes en dos dispositivos (ej. activar el override
+ * manual en uno y agregar un criterio en el otro, ambas sin conocer la
+ * edición del otro) deben poder marcarse como conflicto real — antes se
+ * perdía una en silencio. Esto es lo que conecta abrirModalResolverConflicto
+ * (mismo patrón reutilizado, ver semestres-tarjetas.js) con datos reales
+ * para comparar; antes de esto solo mostraba un toast genérico porque
+ * mm._conflicto nunca se llegaba a marcar.
+ */
+function fusionarMateriaMatriculada(mmLocal, mmRemoto) {
+  if (!mmLocal) return mmRemoto;
+  if (!mmRemoto) return mmLocal;
+  if (mmLocal === mmRemoto) return mmLocal;
+
+  const tumbasCriterios = fusionarTumbas(mmLocal._eliminados_criterios, mmRemoto._eliminados_criterios);
+  const criteriosFundidos = fusionarCriterios(mmLocal.criterios, mmRemoto.criterios, tumbasCriterios);
+
+  // FIX sync (2026-08-02, mismo patrón que fusionarSemestre): mm se resella
+  // en CADA edición de un criterio (ver persistirCambioMateria en
+  // semestres-tarjetas.js), así que dos dispositivos agregando/editando
+  // criterios DISTINTOS a la misma mm sin conocerse entre sí terminan con
+  // el mismo _version_base y contenido distinto — hayConflictoReal lo lee
+  // como choque real aunque criteriosFundidos ya los combinó bien arriba,
+  // sin problema, elemento por elemento. Se compara solo la foto plana de
+  // la mm (sin criterios ni su tumba) para no duplicar acá un conflicto que
+  // ya se resuelve, correctamente, un nivel más abajo.
+  const { criterios: _cLocal, _eliminados_criterios: _tcLocal, ...mmLocalPlano } = mmLocal;
+  const { criterios: _cRemoto, _eliminados_criterios: _tcRemoto, ...mmRemotoPlano } = mmRemoto;
+
+  const conConflicto = marcarConflictoSiCorresponde(mmLocalPlano, mmRemotoPlano, "materia matriculada");
+  const base =
+    conConflicto || limpiarMarcasConflictoObsoletas(esMasReciente(mmRemoto, mmLocal) ? mmRemoto : mmLocal);
+
+  return {
+    ...base,
+    criterios: criteriosFundidos,
+    _eliminados_criterios: tumbasCriterios,
+  };
+}
+
+/** Equivalente de fusionarSemestres pero para `materias_matriculadas`. */
+function fusionarMateriasMatriculadas(local, remoto, tumbas) {
+  const listaLocal = Array.isArray(local) ? local : [];
+  const listaRemota = Array.isArray(remoto) ? remoto : [];
+  const idsEliminados = new Set(tumbas.map((t) => t.id));
+
+  const porId = new Map();
+  listaLocal.forEach((m) => porId.set(m.id, m));
+  listaRemota.forEach((m) => {
+    observarEntidadRemota(m);
+    const existente = porId.get(m.id);
+    porId.set(m.id, existente ? fusionarMateriaMatriculada(existente, m) : m);
+  });
+
+  const resultado = [];
+  porId.forEach((mm, id) => {
+    if (!idsEliminados.has(id)) resultado.push(mm);
+  });
+  return resultado;
+}
+
+
+/**
+ * Horario — Núcleo: mismo patrón exacto que fusionarMateriaMatriculada/
+ * fusionarCriterio — funde un bloque de horario individual junto con su
+ * colección anidada de excepciones_semana y su propia tumba
+ * (_eliminados_excepciones_semana, ver crearBloqueHorario en schema.js).
+ * excepciones_semana no tiene NINGUNA sub-colección propia (a diferencia de
+ * mm→criterios→asignaciones), así que se funde directo con
+ * fusionarColeccion genérica — no hace falta un fusionarExcepcionSemana
+ * dedicado, igual que profesores/companeros/agenda tampoco lo necesitan.
+ *
+ * Igual que fusionarSemestre/fusionarMateriaMatriculada: un bloque se
+ * resella en CADA edición de una excepción de semana (crear/editar/borrar),
+ * así que dos dispositivos tocando SEMANAS DISTINTAS del mismo bloque sin
+ * conocerse entre sí terminarían con el mismo _version_base y contenido
+ * distinto si se comparara el bloque completo — por eso la detección de
+ * conflicto real se hace solo sobre la "foto plana" (sin
+ * excepciones_semana ni su tumba), que ya se resuelve aparte arriba.
+ */
+function fusionarBloqueHorario(bloqueLocal, bloqueRemoto) {
+  if (!bloqueLocal) return bloqueRemoto;
+  if (!bloqueRemoto) return bloqueLocal;
+  if (bloqueLocal === bloqueRemoto) return bloqueLocal;
+
+  const tumbasExcepciones = fusionarTumbas(
+    bloqueLocal._eliminados_excepciones_semana,
+    bloqueRemoto._eliminados_excepciones_semana
+  );
+  const excepcionesFundidas = fusionarColeccion(
+    bloqueLocal.excepciones_semana,
+    bloqueRemoto.excepciones_semana,
+    tumbasExcepciones,
+    "excepción de horario por semana"
+  );
+
+  const { excepciones_semana: _eLocal, _eliminados_excepciones_semana: _teLocal, ...bloqueLocalPlano } = bloqueLocal;
+  const { excepciones_semana: _eRemoto, _eliminados_excepciones_semana: _teRemoto, ...bloqueRemotoPlano } = bloqueRemoto;
+
+  const conConflicto = marcarConflictoSiCorresponde(bloqueLocalPlano, bloqueRemotoPlano, "bloque de horario");
+  const base =
+    conConflicto ||
+    limpiarMarcasConflictoObsoletas(esMasReciente(bloqueRemoto, bloqueLocal) ? bloqueRemoto : bloqueLocal);
+
+  return {
+    ...base,
+    excepciones_semana: excepcionesFundidas,
+    _eliminados_excepciones_semana: tumbasExcepciones,
+  };
+}
+
+/** Equivalente de fusionarMateriasMatriculadas pero para `bloques_horario`. */
+function fusionarBloquesHorario(local, remoto, tumbas) {
+  const listaLocal = Array.isArray(local) ? local : [];
+  const listaRemota = Array.isArray(remoto) ? remoto : [];
+  const idsEliminados = new Set(tumbas.map((t) => t.id));
+
+  const porId = new Map();
+  listaLocal.forEach((b) => porId.set(b.id, b));
+  listaRemota.forEach((b) => {
+    observarEntidadRemota(b);
+    const existente = porId.get(b.id);
+    porId.set(b.id, existente ? fusionarBloqueHorario(existente, b) : b);
+  });
+
+  const resultado = [];
+  porId.forEach((bloque, id) => {
+    if (!idsEliminados.has(id)) resultado.push(bloque);
+  });
+  return resultado;
+}
+
+
+/**
+ * Semestres y Notas — Fase 1: equivalente de fusionarPlanesEstudio (arriba)
+ * pero para la colección de nivel superior `semestres` — cada semestre se
+ * identifica por su `id` y, si existe en ambos lados, se funde con
+ * fusionarSemestre() en vez de que gane uno completo sobre el otro.
+ */
+function fusionarSemestres(local, remoto, tumbas) {
+  const listaLocal = Array.isArray(local) ? local : [];
+  const listaRemota = Array.isArray(remoto) ? remoto : [];
+  const idsEliminados = new Set(tumbas.map((t) => t.id));
+
+  const porId = new Map();
+  listaLocal.forEach((s) => porId.set(s.id, s));
+  listaRemota.forEach((s) => {
+    observarEntidadRemota(s);
+    const existente = porId.get(s.id);
+    porId.set(s.id, existente ? fusionarSemestre(existente, s) : s);
+  });
+
+  const resultado = [];
+  porId.forEach((semestre, id) => {
+    if (!idsEliminados.has(id)) resultado.push(semestre);
+  });
+  return resultado;
+}
+
+
+
+/**
+ * Becas y Pagos de Matrícula — Parte A: mismo patrón exacto que
+ * fusionarSemestre — dos colecciones anidadas dentro de un registro de
+ * `finanzas_semestre` (`pagos_matricula`, `ingresos_beca`), cada una con
+ * su propia tumba guardada DENTRO del registro mismo. Ninguna de las dos
+ * tiene sub-colección propia (son hojas, igual que `excepciones_semana`
+ * dentro de un bloque de horario), así que se funden directo con
+ * fusionarColeccion genérica — no hace falta un fusionarPago/
+ * fusionarIngresoBeca dedicado.
+ *
+ * Decisión de diseño (para no perder datos de usuarios que ya venían
+ * usando costo_matricula/beca_monto antes de este cambio, ni de quienes
+ * ya migraron a listas): igual que materias_matriculadas/bloques_horario
+ * en fusionarSemestre, ambas colecciones se EXCLUYEN de la comparación de
+ * "foto plana" del registro contenedor antes de decidir si hay conflicto
+ * real a ese nivel. Sin esto, agregar un pago en el teléfono mientras se
+ * edita cualquier otro campo del mismo registro en la PC (ambos sin
+ * conocerse) se marcaría como choque real cuando en realidad son dos
+ * cambios independientes que fusionarColeccion ya sabe combinar bien por
+ * su cuenta, ítem por ítem, sin perder ninguno. costo_matricula y
+ * beca_monto (campos viejos, pre-migración) quedan dentro de la "foto
+ * plana" y se siguen fundiendo por _actualizadoEn como cualquier otro
+ * campo — un registro que un dispositivo todavía no migró no pierde esos
+ * valores solo por fundirse contra uno que sí migró.
+ */
+function fusionarFinanzasSemestre(finSemLocal, finSemRemoto) {
+  if (!finSemLocal) return finSemRemoto;
+  if (!finSemRemoto) return finSemLocal;
+  if (finSemLocal === finSemRemoto) return finSemLocal;
+
+  const tumbasPagos = fusionarTumbas(
+    finSemLocal._eliminados_pagos_matricula,
+    finSemRemoto._eliminados_pagos_matricula
+  );
+  const pagosFundidos = fusionarColeccion(
+    finSemLocal.pagos_matricula,
+    finSemRemoto.pagos_matricula,
+    tumbasPagos,
+    "pago de matrícula"
+  );
+
+  const tumbasBecas = fusionarTumbas(
+    finSemLocal._eliminados_ingresos_beca,
+    finSemRemoto._eliminados_ingresos_beca
+  );
+  const becasFundidas = fusionarColeccion(
+    finSemLocal.ingresos_beca,
+    finSemRemoto.ingresos_beca,
+    tumbasBecas,
+    "ingreso de beca"
+  );
+
+  const {
+    pagos_matricula: _pmLocal,
+    _eliminados_pagos_matricula: _tpmLocal,
+    ingresos_beca: _ibLocal,
+    _eliminados_ingresos_beca: _tibLocal,
+    ...finSemLocalPlano
+  } = finSemLocal;
+  const {
+    pagos_matricula: _pmRemoto,
+    _eliminados_pagos_matricula: _tpmRemoto,
+    ingresos_beca: _ibRemoto,
+    _eliminados_ingresos_beca: _tibRemoto,
+    ...finSemRemotoPlano
+  } = finSemRemoto;
+
+  const conConflicto = marcarConflictoSiCorresponde(
+    finSemLocalPlano,
+    finSemRemotoPlano,
+    "registro financiero de semestre"
+  );
+  const base =
+    conConflicto ||
+    limpiarMarcasConflictoObsoletas(esMasReciente(finSemRemoto, finSemLocal) ? finSemRemoto : finSemLocal);
+
+  return {
+    ...base,
+    pagos_matricula: pagosFundidos,
+    _eliminados_pagos_matricula: tumbasPagos,
+    ingresos_beca: becasFundidas,
+    _eliminados_ingresos_beca: tumbasBecas,
+  };
+}
+
+/** Equivalente de fusionarSemestres pero para la colección `finanzas_semestre`. */
+function fusionarFinanzasSemestres(local, remoto, tumbas) {
+  const listaLocal = Array.isArray(local) ? local : [];
+  const listaRemota = Array.isArray(remoto) ? remoto : [];
+  const idsEliminados = new Set(tumbas.map((t) => t.id));
+
+  const porId = new Map();
+  listaLocal.forEach((f) => porId.set(f.id, f));
+  listaRemota.forEach((f) => {
+    observarEntidadRemota(f);
+    const existente = porId.get(f.id);
+    porId.set(f.id, existente ? fusionarFinanzasSemestre(existente, f) : f);
+  });
+
+  const resultado = [];
+  porId.forEach((finSem, id) => {
+    if (!idsEliminados.has(id)) resultado.push(finSem);
+  });
+  return resultado;
+}
+
+
+/**
+ * Punto de entrada principal. Sustituye cualquier `estado.datos = X`
+ * directo desde una fuente remota o de caché — a partir de ahora, TODA
+ * lectura de datos externos (Drive, caché local del teléfono) pasa por
+ * aquí antes de aplicarse. Si uno de los dos lados no existe (primera
+ * carga, sin caché local todavía), se devuelve el otro tal cual, sin
+ * fusión (no hay nada con qué comparar).
+ */
+function fusionarDatos(datosLocal, datosRemoto) {
+  if (!datosLocal) return datosRemoto;
+  if (!datosRemoto) return datosLocal;
+
+  // FIX sync (2026-08-02): se normalizan los dos lados con la MISMA
+  // migración antes de comparar nada, sin confiar en que quien haya cargado
+  // datosLocal/datosRemoto ya lo hizo. Si uno de los dos lados todavía trae
+  // el formato viejo (ej. remoto recién bajado de Drive, guardado por una
+  // sesión que nunca renderizó esa materia), sin esto los defaults que un
+  // lado sí tiene y el otro no se veían como una edición real y disparaban
+  // un conflicto falso en hayConflictoReal — pasaba con cualquier materia
+  // matriculada creada antes del motor de notas. migrarDatosAntiguos es
+  // seguro de llamar más de una vez: no toca nada que ya esté migrado.
+  migrarDatosAntiguos(datosLocal);
+  migrarDatosAntiguos(datosRemoto);
+
+  const tumbasPlanes = fusionarTumbas(datosLocal._eliminados_planes, datosRemoto._eliminados_planes);
+  const tumbasSemestres = fusionarTumbas(datosLocal._eliminados_semestres, datosRemoto._eliminados_semestres);
+  const tumbasProfesores = fusionarTumbas(datosLocal._eliminados_profesores, datosRemoto._eliminados_profesores);
+  // Comunidad — Parte 1: companeros es colección plana (sin sub-colecciones
+  // propias, a diferencia de plan/semestre) — fusionarColeccion genérica
+  // alcanza igual que con profesores, comparando por _actualizadoEn entero
+  // del objeto completo.
+  const tumbasCompaneros = fusionarTumbas(datosLocal._eliminados_companeros, datosRemoto._eliminados_companeros);
+  const tumbasAgenda = fusionarTumbas(datosLocal._eliminados_agenda, datosRemoto._eliminados_agenda);
+  // Adjuntos (2026-08-08): colección plana de nivel superior, igual patrón
+  // que profesores/companeros/agenda — fusionarColeccion ya sabe fundir por
+  // _actualizadoEn y respetar tumbas, no hace falta ninguna función nueva.
+  const tumbasAdjuntos = fusionarTumbas(datosLocal._eliminados_adjuntos, datosRemoto._eliminados_adjuntos);
+  // Finanzas (2026-08-10): dos colecciones planas de nivel superior, mismo
+  // patrón exacto que profesores/companeros/adjuntos — fusionarColeccion ya
+  // sabe fundir por _actualizadoEn y respetar tumbas, no hace falta ninguna
+  // función de fusión nueva.
+  const tumbasFinanzasSemestre = fusionarTumbas(
+    datosLocal._eliminados_finanzas_semestre,
+    datosRemoto._eliminados_finanzas_semestre
+  );
+  const tumbasGastosU = fusionarTumbas(datosLocal._eliminados_gastos_u, datosRemoto._eliminados_gastos_u);
+  // Tiempo de Estudio (Parte 1): colección plana de nivel superior, mismo
+  // patrón exacto que finanzas_semestre/gastos_u — fusionarColeccion ya
+  // sabe fundir por _actualizadoEn y respetar tumbas, no hace falta ninguna
+  // función de fusión nueva.
+  const tumbasSesionesEstudio = fusionarTumbas(
+    datosLocal._eliminados_sesiones_estudio,
+    datosRemoto._eliminados_sesiones_estudio
+  );
+  const tumbasTiempoEstudioMaterias = fusionarTumbas(
+    datosLocal._eliminados_tiempo_estudio_materias,
+    datosRemoto._eliminados_tiempo_estudio_materias
+  );
+  // Competencias — Parte 1 (2026-09-09): mismo patrón exacto que
+  // sesiones_estudio — colección plana de nivel superior, se funde por id
+  // + tumba, sin lógica nueva. Lo que fusionarColeccion NO sabe (y no le
+  // corresponde saber) es sincronizar el ESTADO del lado del Worker — esta
+  // fusión es solo sobre la lista LOCAL de "a qué competencias estoy
+  // unido", no sobre las horas/ranking, que viven en el Worker y se piden
+  // por API, no por Drive.
+  // FIX 2026-09-19 (Parte A): a diferencia de sesiones_estudio, el `id` de
+  // estas entradas es el de la competencia y se REUTILIZA al volver a
+  // unirse — por eso, antes de aplicar las tumbas, se descartan las que una
+  // alta posterior (`unido_en`) ya dejó obsoletas. Ver
+  // `podarTumbasSuperadasPorAltas`.
+  const tumbasCompetenciasUnidas = podarTumbasSuperadasPorAltas(
+    fusionarTumbas(
+      datosLocal._eliminados_competencias_unidas,
+      datosRemoto._eliminados_competencias_unidas
+    ),
+    datosLocal.competencias_unidas,
+    datosRemoto.competencias_unidas
+  );
+  const tumbasEnlaces = fusionarTumbas(
+    datosLocal.configuracion && datosLocal.configuracion._eliminados_enlaces,
+    datosRemoto.configuracion && datosRemoto.configuracion._eliminados_enlaces
+  );
+  // Horario entre Amigos — Parte 1/3: dos colecciones distintas, cada una
+  // con su propia tumba. horario_enlaces_compartidos es top-level (BUG
+  // encontrado en esta ronda: quedó fuera de fusionarDatos desde la Parte
+  // 1 — sin esto, el spread `...datosLocal, ...datosRemoto` de más abajo
+  // hacía que el lado remoto ganara ENTERO sobre esa colección en cualquier
+  // fusión real, en vez de fundirse por entidad como el resto). horario_
+  // amigos_vinculados vive dentro de configuracion, mismo patrón que
+  // enlaces_rapidos (tumba también dentro de configuracion).
+  const tumbasHorarioEnlaces = fusionarTumbas(datosLocal._eliminados_horario_enlaces, datosRemoto._eliminados_horario_enlaces);
+  const tumbasHorarioAmigosVinculados = fusionarTumbas(
+    datosLocal.configuracion && datosLocal.configuracion._eliminados_horario_amigos_vinculados,
+    datosRemoto.configuracion && datosRemoto.configuracion._eliminados_horario_amigos_vinculados
+  );
+
+  const configuracionFundida = fusionarBloqueUnico(datosLocal.configuracion, datosRemoto.configuracion, "configuración");
+  // enlaces_rapidos vive DENTRO de configuracion pero se funde como
+  // colección aparte (no tiene sentido que todo el bloque de configuración
+  // "gane" y de paso descarte un enlace nuevo que el otro lado sí tenía).
+  configuracionFundida.enlaces_rapidos = fusionarColeccion(
+    datosLocal.configuracion && datosLocal.configuracion.enlaces_rapidos,
+    datosRemoto.configuracion && datosRemoto.configuracion.enlaces_rapidos,
+    tumbasEnlaces,
+    "enlace rápido"
+  );
+  configuracionFundida._eliminados_enlaces = tumbasEnlaces;
+  // Horario entre Amigos — Parte 3: mismo criterio que enlaces_rapidos
+  // arriba — se funde como colección propia por id, no como parte del
+  // "todo o nada" de fusionarBloqueUnico.
+  configuracionFundida.horario_amigos_vinculados = fusionarColeccion(
+    datosLocal.configuracion && datosLocal.configuracion.horario_amigos_vinculados,
+    datosRemoto.configuracion && datosRemoto.configuracion.horario_amigos_vinculados,
+    tumbasHorarioAmigosVinculados,
+    "horario de amigo vinculado"
+  );
+  configuracionFundida._eliminados_horario_amigos_vinculados = tumbasHorarioAmigosVinculados;
+
+  return {
+    ...datosLocal,
+    ...datosRemoto,
+    version_esquema: Math.max(Number(datosLocal.version_esquema) || 1, Number(datosRemoto.version_esquema) || 1),
+    perfil: fusionarBloqueUnico(datosLocal.perfil, datosRemoto.perfil, "perfil"),
+    configuracion: configuracionFundida,
+    planes_estudio: fusionarPlanesEstudio(datosLocal.planes_estudio, datosRemoto.planes_estudio, tumbasPlanes),
+    // Semestres y Notas — Fase 1: ya no es una colección plana — cada
+    // semestre funde su propia matrícula por separado (ver fusionarSemestre).
+    semestres: fusionarSemestres(datosLocal.semestres, datosRemoto.semestres, tumbasSemestres),
+    profesores: fusionarColeccion(datosLocal.profesores, datosRemoto.profesores, tumbasProfesores, "profesor"),
+    companeros: fusionarColeccion(datosLocal.companeros, datosRemoto.companeros, tumbasCompaneros, "compañero"),
+    agenda: fusionarColeccion(datosLocal.agenda, datosRemoto.agenda, tumbasAgenda, "evento de agenda"),
+    adjuntos: fusionarColeccion(datosLocal.adjuntos, datosRemoto.adjuntos, tumbasAdjuntos, "adjunto"),
+    // Becas y Pagos de Matrícula — Parte A: ya no es una colección plana
+    // como profesores/companeros/adjuntos — cada registro funde sus propias
+    // listas de pagos_matricula/ingresos_beca por separado (ver
+    // fusionarFinanzasSemestre), para no perder ítems agregados en
+    // dispositivos distintos sin conocerse entre sí.
+    finanzas_semestre: fusionarFinanzasSemestres(
+      datosLocal.finanzas_semestre,
+      datosRemoto.finanzas_semestre,
+      tumbasFinanzasSemestre
+    ),
+    gastos_u: fusionarColeccion(datosLocal.gastos_u, datosRemoto.gastos_u, tumbasGastosU, "gasto general U"),
+    sesiones_estudio: fusionarColeccion(
+      datosLocal.sesiones_estudio,
+      datosRemoto.sesiones_estudio,
+      tumbasSesionesEstudio,
+      "sesión de estudio"
+    ),
+    tiempo_estudio_materias: fusionarColeccion(
+      datosLocal.tiempo_estudio_materias,
+      datosRemoto.tiempo_estudio_materias,
+      tumbasTiempoEstudioMaterias,
+      "materia independiente de Tiempo"
+    ),
+    competencias_unidas: fusionarColeccion(
+      datosLocal.competencias_unidas,
+      datosRemoto.competencias_unidas,
+      tumbasCompetenciasUnidas,
+      "competencia unida"
+    ),
+    // Horario entre Amigos — Parte 1 (bug fix de esta ronda, ver comentario
+    // arriba): ahora sí se funde por entidad en vez de heredar el reemplazo
+    // total del spread de más abajo.
+    horario_enlaces_compartidos: fusionarColeccion(
+      datosLocal.horario_enlaces_compartidos,
+      datosRemoto.horario_enlaces_compartidos,
+      tumbasHorarioEnlaces,
+      "enlace de horario compartido"
+    ),
+    _eliminados_planes: tumbasPlanes,
+    _eliminados_semestres: tumbasSemestres,
+    _eliminados_profesores: tumbasProfesores,
+    _eliminados_companeros: tumbasCompaneros,
+    _eliminados_agenda: tumbasAgenda,
+    _eliminados_adjuntos: tumbasAdjuntos,
+    _eliminados_finanzas_semestre: tumbasFinanzasSemestre,
+    _eliminados_gastos_u: tumbasGastosU,
+    _eliminados_horario_enlaces: tumbasHorarioEnlaces,
+    _eliminados_sesiones_estudio: tumbasSesionesEstudio,
+    _eliminados_tiempo_estudio_materias: tumbasTiempoEstudioMaterias,
+    _eliminados_competencias_unidas: tumbasCompetenciasUnidas,
+  };
+}
+
+export {
+  esMasReciente,
+  sonValoresEquivalentes,
+  fusionarColeccion,
+  fusionarDatos,
+  fusionarPlan,
+  fusionarTumbas,
+  podarTumbasSuperadasPorAltas,
+  hayConflictoReal,
+  resolverConflicto,
+  fusionarSemestre,
+  fusionarSemestres,
+  fusionarMateriaMatriculada,
+  fusionarMateriasMatriculadas,
+  fusionarCriterio,
+  fusionarCriterios,
+  fusionarBloqueHorario,
+  fusionarBloquesHorario,
+  fusionarFinanzasSemestre,
+  fusionarFinanzasSemestres,
+};

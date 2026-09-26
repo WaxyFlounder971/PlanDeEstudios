@@ -1,0 +1,570 @@
+/* =========================================================================
+   SEMESTRES - Historial académico (pestaña contraíble)
+   Vive al inicio de la sección Semestres, colapsada por default (no debe
+   empujar el contenido normal hacia abajo al entrar a Semestres). Adentro,
+   un selector tipo pestañas alterna entre 2 vistas:
+     1) Estadísticas - % de cursos aprobados/reprobados (barra dividida) +
+        detalle por estado (Aprobada/Cursando/Reprobada/Pendiente), fusionados
+        en una sola pestaña (2026-08-07, antes eran 2 separadas).
+     a/b) Promedio ponderado - por semestre+universidad, y por plan/carrera
+
+   Nivel (c) del promedio ponderado (combinado de TODO junto, mezclando
+   universidades/carreras) queda EXPLÍCITAMENTE fuera de esta entrega - ver
+   el comentario dedicado en schema.js, justo donde iría esa función. (a) y
+   (b) son la prioridad pedida y debían quedar sólidos primero.
+
+   Mismo patrón que el resto de la app: Map en `estado` para expandido/
+   colapsado + encabezado clickeable con ▲▼ (ver construirTarjetaSemestre
+   en semestres-tarjetas.js), y pill-group para el selector de vista (ver
+   construirPillsFiltroEstado en semestres.js) - nada de componentes nuevos
+   inventados, mismo lenguaje visual de siempre.
+   ========================================================================= */
+
+import { estado } from "../core/storage.js";
+import { aplicarFormatoTexto } from "../core/utils.js";
+import {
+  calcularPromedioPorSemestreYUniversidad,
+  calcularPromedioPorPlan,
+  calcularPromedioTotalCombinado,
+  calcularEstadisticasAprobacion,
+  calcularDetallePorEstado,
+  obtenerEscalaPorId,
+  convertirDesde100,
+} from "../core/schema.js";
+
+/**
+ * FIX (mismo bug de arranque "Cannot access 'estado' before initialization"
+ * ya visto en el resto de la app): estas 3 líneas estaban a nivel de
+ * módulo, leyendo Y escribiendo `estado.X` en el mismo statement - se
+ * mueven a una función lazy, llamada desde construirDashboardAcademico
+ * (único punto de entrada exportado de este archivo).
+ */
+function inicializarEstadoDashboardAcademicoSiHaceFalta() {
+  if (typeof estado.dashboardAcademicoAbierto === "undefined") estado.dashboardAcademicoAbierto = false;
+  if (typeof estado.dashboardAcademicoVista === "undefined") estado.dashboardAcademicoVista = "estadisticas";
+  if (typeof estado.dashboardAcademicoPlanFiltro === "undefined") estado.dashboardAcademicoPlanFiltro = null; // null = todos los planes (global)
+}
+
+// FIX (2026-08-07 - rediseño "Historial académico"): antes había 3
+// pestañas (Promedio Ponderado / Aprobados-Reprobados / Detalle por
+// Estado). Las últimas dos se fusionaron en una sola "Estadísticas"
+// (ver construirVistaEstadisticas) - quedan solo 2 pestañas, Estadísticas
+// primero.
+const VISTAS_DASHBOARD = [
+  { valor: "estadisticas", texto: "Estadísticas" },
+  { valor: "ponderado", texto: "Promedio Ponderado" },
+];
+
+function obtenerPlanPorId(planId) {
+  return (estado.datos.planes_estudio || []).find((p) => p.id === planId) || null;
+}
+
+/**
+ * FIX (bug real reportado: "Promedio general por carrera" mostraba
+ * "[object Object]" en vez de las siglas/nombre de la universidad).
+ * Desde la separación nombre_completo/siglas (2026-08-22, ver
+ * core/schema.js#crearPlanEstudio), `plan.universidad` dejó de ser un
+ * string plano y pasó a ser `{ nombre_completo, siglas }` - los 2 puntos
+ * de este archivo que todavía interpolaban `plan.universidad`/`p.universidad`
+ * directo (heredado de cuando sí era un string) quedaron mostrando el
+ * objeto crudo. Único punto de conversión para todo el archivo; mismo
+ * criterio de fallback que ya usa calcularPromedioPorSemestreYUniversidad/
+ * obtenerUniversidadesDeProfesor en schema.js (siglas > nombre_completo >
+ * "Sin universidad"). Contempla también `universidad` como string plano
+ * por las dudas (datos viejos sin migrar), aunque en teoría
+ * migrarDatosAntiguos ya no debería dejar pasar ese caso.
+ */
+function obtenerTextoUniversidad(universidad) {
+  if (!universidad) return "Sin universidad";
+  if (typeof universidad === "string") return universidad;
+  return universidad.siglas || universidad.nombre_completo || "Sin universidad";
+}
+
+/* ===================== Encabezado (título + flecha ▲▼) ===================== */
+
+function construirEncabezadoDashboard(onCambiar) {
+  const encabezado = document.createElement("div");
+  encabezado.style.cssText =
+    "display:flex; align-items:center; justify-content:space-between; gap:8px; cursor:pointer; " +
+    "user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;";
+  encabezado.title = "Clic para ver tus promedios y estadísticas";
+  encabezado.addEventListener("click", () => {
+    estado.dashboardAcademicoAbierto = !estado.dashboardAcademicoAbierto;
+    onCambiar();
+  });
+
+  const izquierda = document.createElement("div");
+  izquierda.className = "row";
+  izquierda.style.cssText = "gap:8px; align-items:center;";
+  const titulo = document.createElement("h3");
+  titulo.className = "texto-encabezado-seccion";
+  titulo.style.margin = "0";
+  titulo.textContent = "Historial académico";
+  izquierda.appendChild(titulo);
+  encabezado.appendChild(izquierda);
+
+  const iconoExpandir = document.createElement("span");
+  iconoExpandir.className = "materia-expandir";
+  iconoExpandir.textContent = estado.dashboardAcademicoAbierto ? "▲" : "▼";
+  encabezado.appendChild(iconoExpandir);
+
+  return encabezado;
+}
+
+/* ===================== Selector de vista (pills) ===================== */
+
+function construirSelectorVista(onCambiar) {
+  const grupo = document.createElement("div");
+  grupo.className = "pill-group";
+  grupo.style.cssText = "display:flex; width:100%; gap:6px; margin-top:10px;";
+
+  VISTAS_DASHBOARD.forEach(({ valor, texto }) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pill-item" + (estado.dashboardAcademicoVista === valor ? " active" : "");
+    btn.textContent = texto;
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (estado.dashboardAcademicoVista === valor) return;
+      estado.dashboardAcademicoVista = valor;
+      onCambiar();
+    });
+    grupo.appendChild(btn);
+  });
+
+  return grupo;
+}
+
+/**
+ * Selector de plan opcional (usado por la vista de aprobación) - mismo
+ * patrón de carrusel simple que ya usa la app para elegir entre pocas
+ * opciones (pill-group scrolleable). "Todos" siempre es la primera opción.
+ */
+function construirSelectorPlanFiltro(onCambiar) {
+  const planes = estado.datos.planes_estudio || [];
+  if (planes.length <= 1) return null; // con 0-1 plan no hay nada que filtrar
+
+  const wrap = document.createElement("div");
+  wrap.className = "stack";
+  wrap.style.cssText = "gap:4px; margin-top:10px;";
+
+  const etiqueta = document.createElement("span");
+  etiqueta.className = "muted";
+  etiqueta.style.fontSize = "0.78rem";
+  etiqueta.textContent = "Filtrar por plan:";
+  wrap.appendChild(etiqueta);
+
+  const grupo = document.createElement("div");
+  grupo.className = "pill-group";
+  grupo.style.cssText = "display:flex; gap:6px;";
+
+  const opciones = [{ id: null, texto: "Todos" }, ...planes.map((p) => ({ id: p.id, texto: `${obtenerTextoUniversidad(p.universidad)} · ${aplicarFormatoTexto(p.nombre_carrera)}` }))];
+  opciones.forEach(({ id, texto }) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pill-item" + (estado.dashboardAcademicoPlanFiltro === id ? " active" : "");
+    btn.textContent = texto;
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (estado.dashboardAcademicoPlanFiltro === id) return;
+      estado.dashboardAcademicoPlanFiltro = id;
+      onCambiar();
+    });
+    grupo.appendChild(btn);
+  });
+  wrap.appendChild(grupo);
+
+  return wrap;
+}
+
+/* ===================== Vista (a)/(b): Promedio ponderado ===================== */
+
+function formatearPromedio(valor) {
+  if (valor === null || valor === undefined) return "-";
+  // letras-safe: convertirDesde100 puede devolver una letra ("B+", etc.)
+  // cuando la escala activa del plan es "letras" - mismo patrón que
+  // formatearNotaCruda en semestres-tarjetas.js, sin pasar por toFixed.
+  return typeof valor === "string" ? valor : valor.toFixed(2);
+}
+
+function construirFilaPromedio({ etiquetaIzquierda, promedio, creditos, materias, etiquetaDerecha }) {
+  const fila = document.createElement("div");
+  fila.className = "glass-panel";
+  fila.style.cssText = "padding:10px 12px; display:flex; align-items:center; justify-content:space-between; gap:10px;";
+
+  const izq = document.createElement("div");
+  izq.className = "stack";
+  izq.style.cssText = "gap:1px; min-width:0;";
+  const nombre = document.createElement("strong");
+  nombre.style.cssText = "font-size:0.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+  nombre.textContent = etiquetaIzquierda;
+  izq.appendChild(nombre);
+  if (etiquetaDerecha) {
+    const sub = document.createElement("span");
+    sub.className = "muted";
+    sub.style.fontSize = "0.75rem";
+    sub.textContent = etiquetaDerecha;
+    izq.appendChild(sub);
+  }
+  fila.appendChild(izq);
+
+  const der = document.createElement("div");
+  der.style.cssText = "text-align:right; flex-shrink:0;";
+  const valorPromedio = document.createElement("div");
+  valorPromedio.style.cssText = "font-size:1.1rem; font-weight:800;";
+  valorPromedio.textContent = formatearPromedio(promedio);
+  der.appendChild(valorPromedio);
+  const detalle = document.createElement("div");
+  detalle.className = "muted";
+  detalle.style.fontSize = "0.72rem";
+  detalle.textContent = materias > 0 ? `${materias} ${materias === 1 ? "materia" : "materias"} · ${creditos} créd.` : "Sin notas todavía";
+  der.appendChild(detalle);
+  fila.appendChild(der);
+
+  return fila;
+}
+
+function construirVistaPromedioPonderado() {
+  const cont = document.createElement("div");
+  cont.className = "stack";
+  cont.style.cssText = "gap:16px; margin-top:14px;";
+
+  const porPlan = calcularPromedioPorPlan(estado.datos);
+
+  /* ---------- Nivel (c): combinado de TODO junto - primero, es el
+     resumen más general de todos. Solo tiene sentido mostrarlo cuando hay
+     2+ carreras/planes con historial real; con 0-1 plan sería un número
+     idéntico al de (b) de abajo, redundante. ---------- */
+  if (porPlan.length > 1) {
+    // PENDIENTE (coherencia de escala): "Total general" mezcla materias de
+    // planes que pueden tener escalas de notas distintas (0-100 vs 0-10 vs
+    // letras), así que no existe UNA escala correcta a la cual convertir
+    // este número sin ser arbitrario. Se deja en 0-100 crudo a propósito
+    // hasta que se defina qué mostrar acá (¿0-100 siempre, con una nota
+    // aclaratoria en la UI? ¿la escala del plan principal?).
+    const seccionC = document.createElement("div");
+    seccionC.className = "stack";
+    seccionC.style.gap = "8px";
+    const tituloC = document.createElement("p");
+    tituloC.style.cssText = "font-weight:700; margin:0; font-size:0.88rem;";
+    tituloC.textContent = "Promedio combinado (todas las carreras)";
+    seccionC.appendChild(tituloC);
+
+    const combinado = calcularPromedioTotalCombinado(estado.datos);
+    seccionC.appendChild(
+      construirFilaPromedio({
+        etiquetaIzquierda: "Total general",
+        etiquetaDerecha: `${porPlan.length} carreras combinadas`,
+        promedio: combinado.promedio,
+        creditos: combinado.creditos,
+        materias: combinado.materias,
+      })
+    );
+    cont.appendChild(seccionC);
+  }
+
+  /* ---------- Nivel (b): por plan/carrera ---------- */
+  const seccionB = document.createElement("div");
+  seccionB.className = "stack";
+  seccionB.style.gap = "8px";
+  const tituloB = document.createElement("p");
+  tituloB.style.cssText = "font-weight:700; margin:0; font-size:0.88rem;";
+  tituloB.textContent = "Promedio general por carrera";
+  seccionB.appendChild(tituloB);
+
+  if (porPlan.length === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.cssText = "font-size:0.85rem; margin:0;";
+    vacio.textContent = "Todavía no hay materias matriculadas con nota para calcular un promedio.";
+    seccionB.appendChild(vacio);
+  } else {
+    porPlan.forEach(({ plan, promedio, creditos, materias }) => {
+      // FIX (misma coherencia de escala que semestres-tarjetas.js): promedio
+      // viene siempre 0-100 internamente (calcularPromedioPorPlan pondera
+      // notas_final crudas). Acá SÍ hay un plan concreto por fila, así que
+      // se puede convertir sin ambigüedad a la escala de ESE plan.
+      const escalaPlan = obtenerEscalaPorId((plan.parametros_universidad || {}).escala_notas ?? 100);
+      const promedioMostrado = promedio === null || promedio === undefined ? promedio : convertirDesde100(promedio, escalaPlan);
+      seccionB.appendChild(
+        construirFilaPromedio({
+          etiquetaIzquierda: aplicarFormatoTexto(plan.nombre_carrera),
+          etiquetaDerecha: obtenerTextoUniversidad(plan.universidad),
+          promedio: promedioMostrado,
+          creditos,
+          materias,
+        })
+      );
+    });
+  }
+  cont.appendChild(seccionB);
+
+  /* ---------- Nivel (a): por semestre, separado por universidad ----------
+     RESUELTO (antes "PENDIENTE - coherencia de escala"): schema.js ya
+     devuelve `escalaId` por cada grupo de universidad (null si los planes
+     agrupados no comparten una sola escala - ver calcularPromedioPorSemestreYUniversidad),
+     así que este nivel ahora convierte igual que el (b) de arriba. */
+  const seccionA = document.createElement("div");
+  seccionA.className = "stack";
+  seccionA.style.gap = "8px";
+  const tituloA = document.createElement("p");
+  tituloA.style.cssText = "font-weight:700; margin:0; font-size:0.88rem;";
+  tituloA.textContent = "Promedio por semestre";
+  seccionA.appendChild(tituloA);
+
+  const porSemestre = calcularPromedioPorSemestreYUniversidad(estado.datos);
+  if (porSemestre.length === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.cssText = "font-size:0.85rem; margin:0;";
+    vacio.textContent = "Todavía no hay semestres con materias matriculadas.";
+    seccionA.appendChild(vacio);
+  } else {
+    porSemestre.forEach(({ semestre, universidades }) => {
+      const bloqueSemestre = document.createElement("div");
+      bloqueSemestre.className = "stack";
+      bloqueSemestre.style.gap = "6px";
+
+      const nombreSemestre = document.createElement("p");
+      nombreSemestre.className = "muted";
+      nombreSemestre.style.cssText = "font-size:0.78rem; font-weight:700; margin:0;";
+      nombreSemestre.textContent = semestre.nombre;
+      bloqueSemestre.appendChild(nombreSemestre);
+
+      // Modo Hardcore: si el semestre tiene más de una universidad, cada
+      // una queda como su propia fila independiente - nunca se mezclan.
+      // FIX (coherencia de escala - "promedio por semestre NO se muestra
+      // según la escala seleccionada"): schema.js YA calculaba y devolvía
+      // `escalaId` por cada grupo de universidad (ver
+      // calcularPromedioPorSemestreYUniversidad, comentario "escalaId
+      // 2026-08-08") desde una sesión anterior, pero este archivo nunca
+      // llegó a leerlo - se quedó mostrando el promedio crudo en 0-100 sin
+      // convertir, mismo bug que ya se había resuelto para el nivel (b) de
+      // arriba. Mismo patrón exacto que (b): si escalaId es null (los
+      // planes agrupados bajo esta universidad no comparten una sola
+      // escala), obtenerEscalaPorId(null) no encuentra coincidencia y cae
+      // sola al fallback de 0-100 - mostrar el crudo sin convertir sigue
+      // siendo lo correcto en ese caso borde, no hace falta un chequeo
+      // aparte acá.
+      //
+      // Nota: `universidad` acá ya llega como STRING resuelto (no el
+      // objeto {nombre_completo, siglas}) - calcularPromedioPorSemestreYUniversidad
+      // (core/schema.js) agrupa por plan.universidad.siglas/nombre_completo
+      // internamente y devuelve la clave de agrupación ya como texto. No
+      // pasa por obtenerTextoUniversidad() a propósito: no hace falta.
+      universidades.forEach(({ universidad, escalaId, promedio, creditos, materias }) => {
+        const escalaGrupo = obtenerEscalaPorId(escalaId ?? 100);
+        const promedioMostrado = promedio === null || promedio === undefined ? promedio : convertirDesde100(promedio, escalaGrupo);
+        bloqueSemestre.appendChild(
+          construirFilaPromedio({
+            etiquetaIzquierda: universidad,
+            promedio: promedioMostrado,
+            creditos,
+            materias,
+          })
+        );
+      });
+
+      seccionA.appendChild(bloqueSemestre);
+    });
+  }
+  cont.appendChild(seccionA);
+
+  return cont;
+}
+
+/* ===================== Vista "Estadísticas": aprobados/reprobados + detalle por estado ===================== */
+
+const ESTADOS_DETALLE_CONFIG = [
+  { clave: "aprobado", texto: "Aprobada", color: "#10b981" },
+  { clave: "cursando", texto: "Cursando", color: "#38bdf8" },
+  { clave: "reprobado", texto: "Reprobada", color: "#ef4444" },
+  { clave: "pendiente", texto: "Pendiente", color: "#94a3b8" },
+];
+
+/**
+ * Fusión (2026-08-07, pedido explícito "que este todo junto"): antes eran
+ * dos pestañas separadas - "Aprobados/Reprobados" (barra + paneles) y
+ * "Detalle por Estado" (grid 2x2) - ahora es una sola vista, con la barra
+ * arriba y el grid debajo, compartiendo el mismo selector de plan.
+ *
+ * FIX (2026-08-07 - "reprobados NO debe sacarse de plan de estudios, debe
+ * sacarse de semestres"): el grid de abajo mostraba "Reprobada" contando
+ * materia.estado del PLAN (calcularDetallePorEstado) - el estado FINAL de
+ * cada materia, así que una materia repetida y luego aprobada perdía su
+ * historial de reprobadas. Acá se pisa esa celda con
+ * stats.reprobadas.cantidad (mismo número que ya usa el panel de arriba,
+ * calculado desde semestres/mm.resultado) - así CADA intento reprobado
+ * cuenta, sin importar si esa materia se terminó aprobando después.
+ * "Aprobada"/"Cursando"/"Pendiente" siguen viniendo del Plan, sin cambios
+ * (decisión confirmada: esas están bien como están).
+ */
+function construirVistaEstadisticas(onCambiar) {
+  const cont = document.createElement("div");
+  cont.className = "stack";
+  cont.style.cssText = "gap:16px; margin-top:14px;";
+
+  const selectorPlan = construirSelectorPlanFiltro(onCambiar);
+  if (selectorPlan) cont.appendChild(selectorPlan);
+
+  const stats = calcularEstadisticasAprobacion(estado.datos, estado.dashboardAcademicoPlanFiltro);
+
+  /* ---------- Aprobados / Reprobados: barra + paneles de 3 líneas ---------- */
+  if (stats.totalCursos === 0) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.cssText = "font-size:0.85rem; margin:8px 0 0;";
+    vacio.textContent = "Todavía no hay semestres terminados con resultado (Aprobada/Reprobada) para calcular esto.";
+    cont.appendChild(vacio);
+  } else {
+    const seccionAprobacion = document.createElement("div");
+    seccionAprobacion.className = "stack";
+    seccionAprobacion.style.gap = "10px";
+
+    const barra = document.createElement("div");
+    barra.style.cssText =
+      "display:flex; width:100%; height:22px; border-radius:var(--radius-pill); overflow:hidden; " +
+      "border:1px solid var(--border-glass);";
+
+    const segAprobados = document.createElement("div");
+    segAprobados.style.cssText = `width:${stats.aprobadas.porcentaje}%; background:#10b981;`;
+    segAprobados.title = `${stats.aprobadas.porcentaje}% aprobados`;
+    barra.appendChild(segAprobados);
+
+    const segReprobados = document.createElement("div");
+    segReprobados.style.cssText = `width:${stats.reprobadas.porcentaje}%; background:#ef4444;`;
+    segReprobados.title = `${stats.reprobadas.porcentaje}% reprobados`;
+    barra.appendChild(segReprobados);
+
+    seccionAprobacion.appendChild(barra);
+
+    /* ---------- Detalle a cada lado - 3 líneas separadas (cursos /
+       créditos / promedio), sin redundancia con el título del panel ---------- */
+    const filaDetalle = document.createElement("div");
+    filaDetalle.style.cssText = "display:grid; grid-template-columns:1fr 1fr; gap:10px;";
+
+    const construirLadoDetalle = (titulo, datosLado, colorHex) => {
+      const panel = document.createElement("div");
+      panel.className = "glass-panel";
+      panel.style.cssText = `padding:10px 12px; border-left:4px solid ${colorHex};`;
+
+      const pct = document.createElement("div");
+      pct.style.cssText = `font-size:1.3rem; font-weight:800; color:${colorHex};`;
+      pct.textContent = `${datosLado.porcentaje}%`;
+      panel.appendChild(pct);
+
+      const label = document.createElement("div");
+      label.style.cssText = "font-size:0.8rem; font-weight:600; margin-top:2px;";
+      label.textContent = titulo;
+      panel.appendChild(label);
+
+      const filaTexto = document.createElement("div");
+      filaTexto.className = "muted";
+      filaTexto.style.cssText = "font-size:0.75rem; margin-top:4px; line-height:1.5;";
+
+      const lineaCursos = document.createElement("div");
+      lineaCursos.textContent = `${datosLado.cantidad} ${datosLado.cantidad === 1 ? "curso" : "cursos"}`;
+      filaTexto.appendChild(lineaCursos);
+
+      const lineaCreditos = document.createElement("div");
+      lineaCreditos.textContent = `${datosLado.creditos} ${datosLado.creditos === 1 ? "crédito" : "créditos"}`;
+      filaTexto.appendChild(lineaCreditos);
+
+      if (datosLado.promedio !== null) {
+        const lineaPromedio = document.createElement("div");
+        lineaPromedio.textContent = `${formatearPromedio(datosLado.promedio)} promedio`;
+        filaTexto.appendChild(lineaPromedio);
+      }
+
+      panel.appendChild(filaTexto);
+      return panel;
+    };
+
+    filaDetalle.appendChild(construirLadoDetalle("Aprobados", stats.aprobadas, "#10b981"));
+    filaDetalle.appendChild(construirLadoDetalle("Reprobados", stats.reprobadas, "#ef4444"));
+    seccionAprobacion.appendChild(filaDetalle);
+
+    cont.appendChild(seccionAprobacion);
+  }
+
+  /* ---------- Detalle por estado: grid 2x2, "todo junto" debajo ---------- */
+  const conteo = calcularDetallePorEstado(estado.datos, estado.dashboardAcademicoPlanFiltro);
+  // Ver comentario grande arriba de la función: reprobado se pisa con el
+  // conteo real por intento (semestres), no con el estado final del Plan.
+  conteo.reprobado = stats.reprobadas.cantidad;
+  const total = conteo.aprobado + conteo.cursando + conteo.reprobado + conteo.pendiente;
+
+  if (total > 0) {
+    const grid = document.createElement("div");
+    grid.style.cssText = "display:grid; grid-template-columns:1fr 1fr; gap:10px;";
+
+    ESTADOS_DETALLE_CONFIG.forEach(({ clave, texto, color }) => {
+      const cantidad = conteo[clave];
+      const panel = document.createElement("div");
+      panel.className = "glass-panel";
+      panel.style.cssText = `padding:10px 12px; border-left:4px solid ${color};`;
+
+      const numero = document.createElement("div");
+      numero.style.cssText = `font-size:1.3rem; font-weight:800; color:${color};`;
+      numero.textContent = String(cantidad);
+      panel.appendChild(numero);
+
+      const label = document.createElement("div");
+      label.style.cssText = "font-size:0.8rem; font-weight:600;";
+      label.textContent = texto;
+      panel.appendChild(label);
+
+      grid.appendChild(panel);
+    });
+
+    cont.appendChild(grid);
+  } else if (stats.totalCursos > 0) {
+    // Caso borde: hay cursos cerrados (aprobación ya se mostró arriba) pero
+    // el plan filtrado no tiene materias registradas en absoluto - no hace
+    // falta otro mensaje vacío redundante.
+  } else {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.cssText = "font-size:0.85rem; margin:8px 0 0;";
+    vacio.textContent = "Este plan todavía no tiene materias.";
+    cont.appendChild(vacio);
+  }
+
+  return cont;
+}
+
+/* ===================== Ensamblado principal ===================== */
+
+/**
+ * Construye la pestaña completa del dashboard. `onCambiar` es el mismo
+ * renderizarSemestres de siempre - cualquier interacción interna
+ * (expandir/colapsar, cambiar de vista, cambiar filtro de plan) vuelve a
+ * llamar a la reconstrucción completa de #seccion-semestres, igual patrón
+ * que el resto del archivo semestres.js.
+ */
+function construirDashboardAcademico(onCambiar) {
+  inicializarEstadoDashboardAcademicoSiHaceFalta();
+  const card = document.createElement("section");
+  card.className = "glass-card stack";
+  card.style.cssText = "gap:0;";
+
+  card.appendChild(construirEncabezadoDashboard(onCambiar));
+
+  if (!estado.dashboardAcademicoAbierto) {
+    return card; // colapsada: solo el encabezado, no empuja nada hacia abajo
+  }
+
+  card.appendChild(construirSelectorVista(onCambiar));
+
+  let vistaContenido;
+  if (estado.dashboardAcademicoVista === "estadisticas") {
+    vistaContenido = construirVistaEstadisticas(onCambiar);
+  } else {
+    vistaContenido = construirVistaPromedioPonderado();
+  }
+  card.appendChild(vistaContenido);
+
+  return card;
+}
+
+export { construirDashboardAcademico };
