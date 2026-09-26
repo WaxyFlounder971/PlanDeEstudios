@@ -4889,12 +4889,10 @@ html.exportar-tema-default[data-mode="dark"] {
 .te-btn-icono-iniciar:hover { filter: brightness(1.08); }
 .te-btn-icono-detener { background: var(--color-danger, #ef4444); color: #fff; }
 .te-btn-icono-detener:hover { filter: brightness(1.08); }
-/* El flex-center por sí solo no alcanza para ▶/⏸: el glyph triangular vive
-   corrido hacia arriba dentro de su propio em-square (le pasa a la fuente,
-   no al layout) — se nota más que en ⚙️/◀ porque esos son más simétricos.
-   Nudge fino solo para este botón, en vez de tocar el centrado general y
-   desalinear a los otros tres que ya estaban bien. */
-.te-btn-icono-iniciar, .te-btn-icono-detener { padding: 3px 0 0 3px; }
+/* Mantener los símbolos centrados en su caja. El cuadrado de detener necesita
+   un poco más de tamaño visual para igualar el peso de las barras de pausa. */
+.te-btn-icono-iniciar, .te-btn-icono-detener { padding: 0; }
+.te-btn-icono-detener { font-size: 1.3rem; }
 
 /* Encabezado de detalle (D.1): la franja de color acá NO va a la izquierda
    como en la tarjeta de la lista — recorre TODO el ancho, arriba, en

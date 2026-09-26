@@ -843,7 +843,7 @@ function asegurarEstilosTimerCircularDetalle() {
     }
     .te-timer-circular-wrap {
       position: relative;
-      width: 100%;
+      width: 75%;
       aspect-ratio: 1;
       margin: 0;
     }
