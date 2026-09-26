@@ -23,7 +23,6 @@ import {
   descargarAdjunto,
   editarAdjunto,
   eliminarAdjunto,
-  fijarActivoAdjunto,
   obtenerAdjuntosDe,
   reordenarAdjuntos,
 } from "../core/storage-adjuntos.js";
@@ -469,7 +468,14 @@ function abrirModalEditarAdjunto(adjunto, onListo) {
         .map((a) => (a.id === adjunto.id ? nuevo.id : a.id))
         .filter((id) => (vistos.has(id) ? false : (vistos.add(id), true)));
 
-      fijarActivoAdjunto(nuevo.id, adjunto.activo !== false);
+      // fijarActivoAdjunto (estado EXACTO) todavía no existe en
+      // storage-adjuntos.js — hasta que se agregue, se logra lo mismo acá:
+      // alternarActivoAdjunto solo NIEGA el valor actual, así que se
+      // compara contra el estado deseado y se llama solo si hace falta
+      // cambiarlo (nunca 2 veces, nunca "a ciegas").
+      const estadoDeseado = adjunto.activo !== false;
+      const estadoActualNuevo = nuevo.activo !== false;
+      if (estadoActualNuevo !== estadoDeseado) alternarActivoAdjunto(nuevo.id);
       await eliminarAdjunto(adjunto.id);
       reordenarAdjuntos(idsFinal);
 
