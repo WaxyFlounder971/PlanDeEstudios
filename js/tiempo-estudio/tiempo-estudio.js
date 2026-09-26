@@ -342,7 +342,7 @@ function construirTarjetaMateria(item) {
     btnPausa.className = "te-btn-icono te-btn-icono-iniciar";
     btnPausa.title = pausado ? "Reanudar" : "Pausar";
     btnPausa.setAttribute("aria-label", pausado ? "Reanudar" : "Pausar");
-    btnPausa.textContent = pausado ? "▶" : "⏸";
+    btnPausa.textContent = pausado ? "▶" : "Ⅱ";
     btnPausa.addEventListener("click", (e) => {
       e.stopPropagation();
       if (pausado) reanudarTimerEstudio();
@@ -1306,7 +1306,7 @@ function construirPantallaDetalle(cont, item) {
     btnDetener.style.display = esEstaMateria ? "" : "none";
     if (esEstaMateria) {
       const pausado = Boolean(activo.pausado);
-      btnPausa.textContent = pausado ? "▶ Reanudar" : "⏸ Pausar";
+      btnPausa.textContent = pausado ? "▶ Reanudar" : "Ⅱ Pausar";
     }
     // "Saltar descanso" solo tiene sentido en una fase de descanso de
     // Pomodoro de esta misma materia — en cualquier otro caso se esconde.
