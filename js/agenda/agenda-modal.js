@@ -24,7 +24,7 @@ import { abrirAdjunto, abrirMenuAdjuntos, abrirModalAdjuntar } from "../ui/adjun
 // ver core/notificaciones-calendario.js. Ambas llamadas son "best-effort":
 // si Calendar no responde, no bloquean ni revierten el guardado/borrado
 // del evento (ver comentario al inicio de ese archivo).
-import { eliminarEventoCalendarizado, sincronizarEventoCalendario } from "../core/notificaciones-calendario.js";
+import { eliminarEventoCalendarizado, sincronizarEventoCalendario, sincronizarResumenParaFechaEvento } from "../core/notificaciones-calendario.js";
 
 const PLACEHOLDER_NOMBRE = {
   evento: "Ej. Charla de RRHH",
@@ -353,6 +353,13 @@ function guardarEventoAgenda(eventoExistente) {
   // recordatorio push DESPUÉS de que quede guardado — ver el bloque justo
   // antes de cerrarModalEventoAgenda() más abajo.
   let eventoGuardado;
+  // FIX 2026-09-26 (Resumen Diario reactivo): fecha del evento ANTES de
+  // esta edición, si había una — solo se llena en la rama de edición, justo
+  // antes de pisarla (ver más abajo). Se usa después de guardar para
+  // recalcular aparte el Resumen Diario del día anterior a la fecha VIEJA,
+  // si la edición movió el evento a otra fecha (ver
+  // sincronizarResumenParaFechaEvento en core/notificaciones-calendario.js).
+  let fechaAnteriorEvento = null;
 
   if (eventoExistente) {
     // Se relee la entidad viva por id antes de mutar (mismo patrón que el
@@ -366,6 +373,8 @@ function guardarEventoAgenda(eventoExistente) {
       refrescarAgenda();
       return;
     }
+    // Se guarda ANTES de pisarla (línea de abajo, `viva.fecha = fecha`).
+    fechaAnteriorEvento = viva.fecha;
     viva.tipo = TIPOS_EVENTO_AGENDA.includes(tipo) ? tipo : "evento";
     viva.nombre = nombre;
     viva.fecha = fecha;
@@ -429,6 +438,19 @@ function guardarEventoAgenda(eventoExistente) {
   // hace nada si el switch de Ajustes está desactivado, y nunca bloquea el
   // guardado si falla.
   sincronizarEventoCalendario(eventoGuardado);
+
+  // FIX 2026-09-26 (Resumen Diario reactivo): si esta edición movió el
+  // evento a otra fecha, sincronizarEventoCalendario ya recalculó el
+  // Resumen Diario de la fecha NUEVA (ve `eventoGuardado.fecha`, que ya
+  // está actualizada) — pero la fecha VIEJA no tiene forma de enterarse
+  // desde adentro de ese archivo (el objeto le llega ya mutado). Acá sí se
+  // conocen las dos, así que se dispara aparte para la vieja: si a esa
+  // fecha ya no le queda ningún evento pendiente, su instancia se cancela
+  // en vez de quedar con un listado desactualizado hasta que le tocara el
+  // turno solo.
+  if (fechaAnteriorEvento && fechaAnteriorEvento !== eventoGuardado.fecha) {
+    sincronizarResumenParaFechaEvento(fechaAnteriorEvento);
+  }
 
   marcarCambioPendiente();
   cerrarModalEventoAgenda();
