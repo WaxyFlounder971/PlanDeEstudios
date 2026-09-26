@@ -43,6 +43,11 @@ import "./asistente/asistente.js";
 import { abrirConfirmacion, agregarLongPress, inicializarAutoScrollSelectoresEnModales, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, mostrarPantallaCargaSesion, mostrarToast, mostrarToastAccion, ocultarPantallaCargaSesion, restaurarEstadoSidebar } from "./ui/componentes.js";
 import { confirmarUniversidadNoInvertida } from "./ui/aviso-universidad.js";
 import { aplicarPaleta, aplicarTemaGuardadoLocalmente, obtenerModoTemaLocal, obtenerModoDisenoLocal } from "./ui/tema.js";
+import { inicializarIdiomas } from "./core/i18n.js";
+
+// Idioma de interfaz local al dispositivo. El idioma español estático es
+// el respaldo si el archivo de traducción elegido no existe o está incompleto.
+inicializarIdiomas();
 
 /* ===================== PWA: registro del Service Worker ===================== */
 /*

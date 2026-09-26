@@ -40,7 +40,7 @@
 //      y main.js NUNCA hardcodean el número — siempre lo leen de acá, así
 //      que actualizar la versión en toda la app es cambiar ESTA línea y
 //      nada más.
-const VERSION = "v3.20.4"; // <-- subir en cada despliegue
+const VERSION = "v3.21.1"; // <-- subir en cada despliegue
 const CACHE_NAME = `app-academica-${VERSION}`;
 const PREFIJO_CACHE = "app-academica-";
 
@@ -58,6 +58,8 @@ const CASCARON_MINIMO = [
   "./",
   "index.html",
   "manifest.json",
+  "idiomas/lista.json",
+  "idiomas/espanol.json",
   "css/design-system.css",
   "js/main.js",
   "imagenes/LogoApp.png",

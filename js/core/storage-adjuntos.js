@@ -199,6 +199,17 @@ function alternarActivoAdjunto(adjuntoId) {
   marcarCambioPendiente();
 }
 
+/** Fija el estado visible de un adjunto, útil al reemplazarlo por otro tipo. */
+function fijarActivoAdjunto(adjuntoId, activo) {
+  const referencia = (estado.datos.adjuntos || []).find((a) => a.id === adjuntoId);
+  if (!referencia) return;
+  const nuevoEstado = activo !== false;
+  if (referencia.activo === nuevoEstado) return;
+  referencia.activo = nuevoEstado;
+  sellarTimestamp(referencia);
+  marcarCambioPendiente();
+}
+
 /** Reintenta cualquier subida pendiente — se llama sola tras adjuntarArchivo,
  *  y conviene engancharla también al evento 'online' (ver abajo) y, si
  *  querés, a un intervalo corto desde main.js, mismo patrón que ya usa
@@ -533,6 +544,7 @@ export {
   descargarAdjunto,
   editarAdjunto,
   eliminarAdjunto,
+  fijarActivoAdjunto,
   eliminarAdjuntosDeCronogramaDeSemestre,
   eliminarAdjuntosDeEventosSueltos,
   eliminarAdjuntosDeSemestre,

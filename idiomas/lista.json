@@ -1,0 +1,9 @@
+{
+  "idiomas": [
+    {
+      "id": "es",
+      "nombre": "Español",
+      "archivo": "espanol.json"
+    }
+  ]
+}
