@@ -123,20 +123,38 @@ function tipoEfectivoParaNotificaciones(evento) {
 }
 
 /**
- * Arma reminders.overrides a partir de los offsets configurados (multi-
- * selección por tipo, ver configuracion.notificaciones_recordatorios) —
- * cada offset activo es un popup separado, tal como pedía B.2. Offsets
- * fuera de OFFSETS_RECORDATORIO_AGENDA se ignoran en silencio, mismo
- * criterio que ya documentaba schema.js para el mecanismo viejo.
+ * Arma reminders.overrides a partir de los offsets configurados para este
+ * tipo (configuracion.notificaciones_recordatorios[tipoEfectivo]).
+ *
+ * FIX 2026-09-25 (auditoría de Ajustes — "se guarda pero no actualiza"):
+ * esta función ya esperaba un ARREGLO de ids con `.map()` directo, y eso
+ * es correcto — CONFIRMADO contra core/schema.js que el formato real y
+ * vigente de `notificaciones_recordatorios[tipo]` es un arreglo (default
+ * en `crearDatosUsuarioNuevo`, y `migrarDatosAntiguos` lo fuerza a
+ * arreglo en cada carga, local o remota). El bug real estaba del otro
+ * lado: config/config-ajustes.js, al migrar de chips (arreglo) a un
+ * <select> único, había quedado escribiendo un STRING plano en vez de un
+ * arreglo de un elemento. Ese string sobrevivía en memoria durante la
+ * sesión (parecía "guardarse"), pero `migrarDatosAntiguos` lo detectaba
+ * en la siguiente carga/sync y lo reseteaba a `["1_dia"]` — de ahí "se
+ * guarda pero no actualiza". Mientras tanto, acá, ese mismo string hacía
+ * fallar `.map()` (TypeError, atrapado en silencio por el try/catch de
+ * sincronizarEventoCalendario) y el evento tampoco reflejaba el offset
+ * elegido en Calendar. Fix real aplicado en config-ajustes.js (vuelve a
+ * escribir `[valor]`); acá solo se suma tolerancia defensiva a un string
+ * suelto, por si quedara algún dato a medio migrar en el momento exacto
+ * de la carga.
  */
 function construirRecordatoriosGoogle(tipoEfectivo) {
-  const offsetsActivos = estado.datos?.configuracion?.notificaciones_recordatorios?.[tipoEfectivo] || [];
-  const overrides = offsetsActivos
+  const valorGuardado = estado.datos?.configuracion?.notificaciones_recordatorios?.[tipoEfectivo];
+  const idsOffset = Array.isArray(valorGuardado) ? valorGuardado : valorGuardado ? [valorGuardado] : [];
+
+  const overrides = idsOffset
     .map((offsetId) => OFFSETS_RECORDATORIO_AGENDA.find((o) => o.id === offsetId))
     .filter(Boolean)
     .map((offset) => ({ method: "popup", minutes: offset.minutosAntes }));
 
-  // Sin ningún offset activo para este tipo: se manda igual
+  // Sin ningún offset configurado para este tipo: se manda igual
   // reminders.useDefault=false con overrides vacío — así el evento NO
   // hereda los recordatorios default del calendario (que podrían no
   // coincidir con lo que el usuario configuró), en vez de dejarlo con
