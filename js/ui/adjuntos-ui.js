@@ -23,6 +23,7 @@ import {
   descargarAdjunto,
   editarAdjunto,
   eliminarAdjunto,
+  fijarActivoAdjunto,
   obtenerAdjuntosDe,
   reordenarAdjuntos,
 } from "../core/storage-adjuntos.js";
@@ -59,7 +60,19 @@ async function abrirAdjunto(adjunto) {
 
 /* ------------------------------ Modal "Adjuntar" ------------------------------ */
 
-function crearOverlayModalChico(tituloTexto) {
+/**
+ * `cerrarAlTocarAfuera` (pedido explícito, "que cuando toco afuera no se
+ * salga"): antes SIEMPRE se cerraba al tocar fuera de la tarjeta, sin
+ * excepción — perdiendo lo que la persona llevaba escrito a medio llenar
+ * un formulario (nombre/enlace/emoji) con un toque afuera sin querer.
+ * Los modales de FORMULARIO (abrirModalAdjuntar, abrirModalEditarAdjunto)
+ * lo pasan en `false`: la única forma de salir es la ✕ o guardando/
+ * cancelando. El menú de gestión (abrirMenuAdjuntos) no tiene texto a
+ * medio escribir — cada acción (switch, editar, borrar, reordenar) ya
+ * queda guardada al toque, así que ese sigue cerrando al tocar afuera
+ * (valor por defecto, sin cambios de comportamiento ahí).
+ */
+function crearOverlayModalChico(tituloTexto, { cerrarAlTocarAfuera = true } = {}) {
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   const card = document.createElement("div");
@@ -82,9 +95,11 @@ function crearOverlayModalChico(tituloTexto) {
   }
 
   overlay.appendChild(card);
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) overlay.remove();
-  });
+  if (cerrarAlTocarAfuera) {
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+  }
   document.body.appendChild(overlay);
   return { overlay, card };
 }
@@ -169,7 +184,7 @@ function crearCampoEmojiModal(card, valorInicial) {
  * para el botón/pill que va a mostrarla después.
  */
 function abrirModalAdjuntar({ entidadTipo, entidadId, onListo }) {
-  const { overlay, card } = crearOverlayModalChico("Adjuntar");
+  const { overlay, card } = crearOverlayModalChico("Adjuntar", { cerrarAlTocarAfuera: false });
 
   const vistaInicial = document.createElement("div");
   vistaInicial.className = "stack";
@@ -274,21 +289,128 @@ function abrirModalAdjuntar({ entidadTipo, entidadId, onListo }) {
  * no había forma de corregir un nombre, el enlace o el emoji sin borrar el
  * adjunto entero y crearlo de nuevo). Mismo modal chico y mismos campos que
  * abrirModalAdjuntar (crearCampoModal/crearCampoEmojiModal) — se siente
- * como el mismo formulario, ahora pre-llenado. El campo "Enlace" solo
- * aparece si el adjunto es de tipo "enlace" — un archivo no tiene URL
- * editable (ver comentario de editarAdjunto en core/storage-adjuntos.js).
+ * como el mismo formulario, ahora pre-llenado.
+ *
+ * Cambiar de tipo (pedido explícito, 2026-09-26: "poder editar enlaces o
+ * cambiar a archivos y viceversa"): arriba de todo hay ahora un selector
+ * Enlace/Archivo. Mientras se deja en el tipo original, esto sigue siendo
+ * la edición liviana de siempre (editarAdjunto — nombre/url/emoji, sin
+ * tocar Drive). Si se cambia de tipo, por debajo NO hay forma de
+ * "convertir" un archivo real de Drive en una URL ni viceversa (ver
+ * editarAdjunto en storage-adjuntos.js) — se hace un reemplazo completo:
+ * primero se crea el adjunto nuevo (con el archivo elegido o la URL
+ * escrita) y RECIÉN si eso sale bien se borra el original, en ese orden,
+ * para no perder el adjunto original si la URL es inválida o el archivo
+ * pesa de más. El reemplazo queda en el mismo lugar del orden y con el
+ * mismo estado activo/inactivo que tenía el original, para que el cambio
+ * de tipo no se note "por debajo" más que en su ícono/comportamiento.
  */
 function abrirModalEditarAdjunto(adjunto, onListo) {
-  const { overlay, card } = crearOverlayModalChico("Editar adjunto");
+  const { overlay, card } = crearOverlayModalChico("Editar adjunto", { cerrarAlTocarAfuera: false });
+
+  const tipoOriginal = adjunto.tipo === "enlace" ? "enlace" : "archivo";
+  let tipoElegido = tipoOriginal;
+  let archivoElegido = null;
+
+  const selectorTipo = document.createElement("div");
+  selectorTipo.style.cssText = "display:flex; gap:8px;";
+  const btnTipoEnlace = document.createElement("button");
+  btnTipoEnlace.type = "button";
+  btnTipoEnlace.textContent = "🔗 Enlace";
+  const btnTipoArchivo = document.createElement("button");
+  btnTipoArchivo.type = "button";
+  btnTipoArchivo.textContent = "📄 Archivo";
+  selectorTipo.append(btnTipoEnlace, btnTipoArchivo);
+  card.appendChild(selectorTipo);
 
   const inputNombre = crearCampoModal(card, "Nombre", "text", "Ej. Libro del curso");
   inputNombre.value = adjunto.nombre || "";
 
+  // Zona de campos que cambia según tipoElegido — se reconstruye entera
+  // cada vez que se toca una pestaña (más simple que llevar 2 juegos de
+  // inputs escondidos con display:none a la vez).
+  const zonaTipo = document.createElement("div");
+  card.appendChild(zonaTipo);
+
   let inputUrl = null;
-  if (adjunto.tipo === "enlace") {
-    inputUrl = crearCampoModal(card, "Enlace", "url", "https://…");
-    inputUrl.value = adjunto.url || "";
+  let inputFileOculto = null;
+
+  function pintarSelectorTipo() {
+    btnTipoEnlace.className = "btn btn-block " + (tipoElegido === "enlace" ? "btn-primary" : "btn-secondary");
+    btnTipoArchivo.className = "btn btn-block " + (tipoElegido === "archivo" ? "btn-primary" : "btn-secondary");
   }
+
+  function pintarZonaTipo() {
+    zonaTipo.innerHTML = "";
+    inputUrl = null;
+    inputFileOculto = null;
+
+    if (tipoElegido === "enlace") {
+      inputUrl = crearCampoModal(zonaTipo, "Enlace", "url", "https://…");
+      // Si ya era un enlace y no se cambió de pestaña, precarga la URL
+      // actual; si se está convirtiendo desde un archivo, arranca vacío —
+      // no hay URL previa que ofrecer.
+      inputUrl.value = tipoOriginal === "enlace" ? adjunto.url || "" : "";
+      return;
+    }
+
+    const wrapArchivo = document.createElement("div");
+    wrapArchivo.className = "stack";
+    wrapArchivo.style.gap = "6px";
+
+    const siguoSiendoArchivo = tipoOriginal === "archivo";
+    const etiquetaArchivo = document.createElement("p");
+    etiquetaArchivo.className = "muted";
+    etiquetaArchivo.style.cssText = "margin:0; font-size:0.82rem;";
+    etiquetaArchivo.textContent = siguoSiendoArchivo
+      ? "El archivo ya subido se mantiene igual — esto solo edita nombre/emoji."
+      : "Elegí el archivo para este adjunto.";
+    wrapArchivo.appendChild(etiquetaArchivo);
+
+    // Solo hace falta elegir un archivo nuevo cuando se está CONVIRTIENDO
+    // desde un enlace — no hay contenido previo del que partir. Si el
+    // adjunto ya era un archivo y no se cambió de pestaña, no se ofrece acá
+    // "reemplazar el archivo" (eso sigue fuera de alcance, ver editarAdjunto)
+    // — solo nombre/emoji, como siempre.
+    if (!siguoSiendoArchivo) {
+      const btnElegirArchivo = document.createElement("button");
+      btnElegirArchivo.type = "button";
+      btnElegirArchivo.className = "btn btn-secondary btn-block";
+      btnElegirArchivo.textContent = archivoElegido ? `📄 ${archivoElegido.name}` : "📄 Elegir archivo";
+      wrapArchivo.appendChild(btnElegirArchivo);
+
+      inputFileOculto = document.createElement("input");
+      inputFileOculto.type = "file";
+      inputFileOculto.style.display = "none";
+      inputFileOculto.addEventListener("change", () => {
+        archivoElegido = inputFileOculto.files[0] || null;
+        if (archivoElegido) {
+          btnElegirArchivo.textContent = `📄 ${archivoElegido.name}`;
+          if (!inputNombre.value.trim()) inputNombre.value = archivoElegido.name;
+        }
+      });
+      wrapArchivo.appendChild(inputFileOculto);
+      btnElegirArchivo.addEventListener("click", () => inputFileOculto.click());
+    }
+
+    zonaTipo.appendChild(wrapArchivo);
+  }
+
+  btnTipoEnlace.addEventListener("click", () => {
+    if (tipoElegido === "enlace") return;
+    tipoElegido = "enlace";
+    pintarSelectorTipo();
+    pintarZonaTipo();
+  });
+  btnTipoArchivo.addEventListener("click", () => {
+    if (tipoElegido === "archivo") return;
+    tipoElegido = "archivo";
+    pintarSelectorTipo();
+    pintarZonaTipo();
+  });
+
+  pintarSelectorTipo();
+  pintarZonaTipo();
 
   const inputEmoji = crearCampoEmojiModal(card, adjunto.emoji || "");
 
@@ -296,13 +418,61 @@ function abrirModalEditarAdjunto(adjunto, onListo) {
   btnGuardar.type = "button";
   btnGuardar.className = "btn btn-primary btn-block";
   btnGuardar.textContent = "Guardar";
-  btnGuardar.addEventListener("click", () => {
+  btnGuardar.addEventListener("click", async () => {
+    const nombreLimpio = inputNombre.value.trim();
+    const emojiLimpio = inputEmoji.value.trim();
+
+    if (tipoElegido === tipoOriginal) {
+      // Mismo tipo de siempre: edición liviana in situ, sin tocar Drive ni
+      // el orden — el camino de siempre.
+      try {
+        editarAdjunto(adjunto.id, {
+          nombre: nombreLimpio,
+          url: inputUrl ? inputUrl.value.trim() : undefined,
+          emoji: emojiLimpio,
+        });
+        overlay.remove();
+        onListo?.();
+      } catch (e) {
+        mostrarToast(e.message);
+      }
+      return;
+    }
+
+    // Cambia de tipo: se crea el reemplazo PRIMERO — si la URL es inválida
+    // o el archivo pesa de más, ambas funciones tiran error ACÁ, antes de
+    // tocar el original para nada.
     try {
-      editarAdjunto(adjunto.id, {
-        nombre: inputNombre.value.trim(),
-        url: inputUrl ? inputUrl.value.trim() : undefined,
-        emoji: inputEmoji.value.trim(),
-      });
+      let nuevo;
+      if (tipoElegido === "archivo") {
+        if (!archivoElegido) throw new Error("Elegí un archivo.");
+        nuevo = adjuntarArchivo(archivoElegido, adjunto.entidadTipo, adjunto.entidadId, nombreLimpio, emojiLimpio);
+      } else {
+        nuevo = agregarEnlaceAdjunto({
+          nombre: nombreLimpio,
+          url: inputUrl.value.trim(),
+          entidadTipo: adjunto.entidadTipo,
+          entidadId: adjunto.entidadId,
+          emoji: emojiLimpio,
+        });
+      }
+
+      // Mismo lugar en el orden que tenía el original (sustituyéndolo en
+      // la misma posición, no al final de la lista) + mismo estado activo/
+      // inactivo. En este punto obtenerAdjuntosDe todavía trae AMBOS (el
+      // viejo, que se borra recién abajo, y el nuevo, recién creado al
+      // final) — se reemplaza el id viejo por el nuevo en su lugar y se
+      // descarta la aparición extra del nuevo al final con el Set.
+      const vistos = new Set();
+      const idsFinal = obtenerAdjuntosDe(adjunto.entidadTipo, adjunto.entidadId)
+        .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))
+        .map((a) => (a.id === adjunto.id ? nuevo.id : a.id))
+        .filter((id) => (vistos.has(id) ? false : (vistos.add(id), true)));
+
+      fijarActivoAdjunto(nuevo.id, adjunto.activo !== false);
+      await eliminarAdjunto(adjunto.id);
+      reordenarAdjuntos(idsFinal);
+
       overlay.remove();
       onListo?.();
     } catch (e) {
