@@ -890,12 +890,14 @@ function asegurarEstilosTimerCircularDetalle() {
       position: absolute;
       inset: 0;
       pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      padding: 0 24px; /* no choca contra el trazo del anillo en pantallas chicas */
     }
     .te-timer-circular-centro .te-timer-display {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
       font-family: var(--font-display);
       font-weight: 700;
       font-size: 2.1rem;
@@ -906,8 +908,8 @@ function asegurarEstilosTimerCircularDetalle() {
     }
     .te-timer-extra {
       display: block;
-      min-height: 1.5rem;
-      margin-top: 5px;
+      min-height: 1.1rem;
+      margin: 0;
       padding: 0;
       border: 0;
       border-radius: 0;
@@ -1066,11 +1068,12 @@ function construirPantallaDetalle(cont, item) {
   display.className = "te-timer-display";
   centro.appendChild(display);
 
-  // Renglón fijo debajo de la rueda (mismo lugar, nunca mueve el
-  // cronómetro central): mientras hay timer corriendo en esta materia
-  // muestra "Estudiando"/"Descanso" según la fase; en cuanto la fase entra
-  // en tiempo extra, ese texto se reemplaza por el valor +M:SS en el color
-  // propio de la materia — nunca los dos a la vez, siempre el mismo hueco.
+  // Va PEGADO al cronómetro, dentro del anillo (no debajo de la rueda):
+  // mientras hay timer corriendo en esta materia muestra
+  // "Estudiando"/"Descanso" según la fase; en cuanto la fase entra en
+  // tiempo extra, ese texto se reemplaza por el valor +M:SS en el color
+  // propio de la materia — nunca los dos a la vez, siempre el mismo hueco,
+  // como complemento chico del número grande, no como pieza aparte.
   const extra = document.createElement("div");
   extra.className = "te-timer-extra";
   extra.hidden = true;
@@ -1080,9 +1083,11 @@ function construirPantallaDetalle(cont, item) {
   extraValor.className = "te-timer-extra-valor";
   extraValor.hidden = true;
   extra.append(estadoTexto, extraValor);
+  centro.appendChild(extra);
+
   const colReloj = document.createElement("div");
   colReloj.className = "te-timer-col-reloj";
-  colReloj.append(anilloWrap, extra);
+  colReloj.appendChild(anilloWrap);
   layout.appendChild(colReloj);
 
   // Columna de botones — mismos 5 botones de siempre, ahora en su propia
