@@ -393,40 +393,82 @@ async function resincronizarTodaLaAgendaConCalendar() {
   await limpiarEventosCalendarHuerfanos();
 }
 
+/** Por encima de esta cantidad de borrados "reales" detectados en una sola
+ *  pasada, limpiarEventosCalendarHuerfanos() NO borra nada solo — pide
+ *  confirmación explícita (ver FIX 2026-09-26 más abajo). Unos pocos
+ *  huérfanos/duplicados sueltos son el caso normal y se limpian solos, sin
+ *  friccionar al usuario; un número grande de golpe es la señal de que algo
+ *  sistémico está mal (un bug, un id que dejó de guardarse para muchos
+ *  eventos a la vez, una lectura incompleta de la agenda, etc.) y ahí es
+ *  preferible parar y mostrar qué se iba a borrar antes que confiar en la
+ *  heurística a ciegas. */
+const UMBRAL_CONFIRMACION_BORRADO_MASIVO = 5;
+
 /**
- * Reconciliación completa (Parte del fix 2026-09-25 de arriba): borra de
- * Calendar cualquier evento del calendario secundario que no corresponda a
- * un id que la app reconozca AHORA MISMO como vigente — ni un
- * EventoAgenda ya borrado o completado/perdido, ni una copia duplicada de
- * uno que sí sigue vivo (la copia "de más" nunca quedó guardada en
- * `google_calendar_event_id`, así que no está en el set de válidos y cae
- * en la limpieza igual que un huérfano real). El evento recurrente del
- * Resumen Diario se preserva por su id guardado en
- * `google_calendar_resumen_evento_id`.
+ * Reconciliación completa (fix 2026-09-25): borra de Calendar cualquier
+ * evento del calendario secundario que no corresponda a un EventoAgenda
+ * vigente. El evento recurrente del Resumen Diario se preserva por su id
+ * guardado en `google_calendar_resumen_evento_id`.
+ *
+ * FIX 2026-09-26 (reportado: "pedí que se limpiaran duplicados/huérfanos y
+ * de repente desaparecieron LA MAYORÍA de los eventos de Calendar — pero
+ * siguen en la app"). Causa raíz: la versión anterior consideraba
+ * "huérfano" a todo lo que no matcheara por `google_calendar_event_id`
+ * guardado LOCALMENTE — y ese campo se puede perder sin que el evento deje
+ * de ser real (falla de red a medio guardar, dato viejo de antes de algún
+ * fix anterior, etc.). Un EventoAgenda perfectamente vigente cuyo id local
+ * se perdió era indistinguible de un huérfano de verdad, y se borraba su
+ * espejo en Calendar igual — de ahí "sigue en la app pero no en Calendar".
+ *
+ * Esta versión reconcilia por DOS caminos en vez de uno solo:
+ *   1. `google_calendar_event_id` guardado (camino normal, rápido).
+ *   2. `extendedProperties.private.app_evento_id` que
+ *      `construirEventoGoogleDesdeAgenda()` ya graba en cada evento que crea
+ *      — una referencia estable al EventoAgenda que sobrevive aunque el id
+ *      local se pierda. Si un item de Calendar no matchea por (1) pero SÍ
+ *      corresponde por (2) a un EventoAgenda vivo, NO se borra: se
+ *      **reconecta** (se reescribe `evento.google_calendar_event_id`) y se
+ *      sigue de largo. Recién si ninguno de los dos caminos lo reconoce, o
+ *      si ya existe otro item reconectado con el mismo `app_evento_id`
+ *      (duplicado real), se lo marca para borrar.
+ *
+ * Las reconexiones se aplican siempre (no destruyen nada). El borrado, en
+ * cambio, pasa por un freno de emergencia: si hay más de
+ * UMBRAL_CONFIRMACION_BORRADO_MASIVO candidatos a borrar en la misma
+ * pasada, no se borra nada automáticamente — se le pide confirmación
+ * explícita al usuario mostrando cuántos y cuáles, precisamente para que un
+ * bug futuro (o una lectura parcial de la agenda, ej. antes de que
+ * terminara de cargar) no pueda volver a borrar "la mayoría" de un saque
+ * sin que nadie se entere hasta después.
  *
  * No borra nada si el calendario secundario ni siquiera existe todavía
- * (`google_calendar_id` sin setear) — no hay nada que reconciliar. Sin
- * scope de Calendar, tampoco intenta nada (no podría listar ni borrar).
- *
- * Paginado vía listarEventosCalendarSecundario (auth.js) — un calendario
- * con muchos eventos "de más" acumulados puede necesitar varias páginas.
- * Best-effort de punta a punta: cualquier fallo (de listar, o de borrar un
- * item puntual) queda en console.warn y sigue con el resto, nunca
- * interrumpe el resto de la app.
+ * (`google_calendar_id` sin setear). Sin scope de Calendar, tampoco intenta
+ * nada. Paginado vía listarEventosCalendarSecundario (auth.js). Best-effort:
+ * un fallo puntual (de listar, reconectar o borrar un item) queda en
+ * console.warn y no interrumpe el resto.
  */
 async function limpiarEventosCalendarHuerfanos() {
   if (!tieneScopeCalendarOtorgado()) return;
   const calendarId = estado.datos?.configuracion?.google_calendar_id;
   if (!calendarId) return;
 
-  const idsValidos = new Set();
+  // --- Paso 1: qué reconoce la app AHORA MISMO como vigente, por los dos
+  // caminos posibles (id de Google guardado, y app_evento_id estable). ---
+  const idsValidosPorGoogleId = new Set();
+  const eventosVivosPorAppId = new Map();
   for (const evento of estado.datos.agenda || []) {
-    if (evento.google_calendar_event_id && !evento.completada && !evento.perdida) {
-      idsValidos.add(evento.google_calendar_event_id);
-    }
+    if (evento.completada || evento.perdida) continue;
+    if (evento.google_calendar_event_id) idsValidosPorGoogleId.add(evento.google_calendar_event_id);
+    eventosVivosPorAppId.set(evento.id, evento);
   }
   const idResumen = estado.datos?.configuracion?.google_calendar_resumen_evento_id;
-  if (idResumen) idsValidos.add(idResumen);
+  if (idResumen) idsValidosPorGoogleId.add(idResumen);
+
+  // --- Paso 2: recorrer TODO Calendar y clasificar cada item, sin borrar
+  // todavía nada — separar "reparar" de "borrar" antes de tocar nada. ---
+  const aReconectar = []; // { item, evento } — evento real, le faltaba el id local
+  const aBorrar = []; // { item, motivo } — huérfano real o duplicado de más
+  const yaReconectadoPorAppId = new Map(); // app_evento_id -> item ya aceptado en esta pasada
 
   let pageToken;
   try {
@@ -434,17 +476,86 @@ async function limpiarEventosCalendarHuerfanos() {
       const pagina = await conTokenValido((token) => listarEventosCalendarSecundario(token, calendarId, pageToken));
       pageToken = pagina.nextPageToken;
       for (const item of pagina.items || []) {
-        if (item.status === "cancelled" || idsValidos.has(item.id)) continue;
-        try {
-          await conTokenValido((token) => eliminarEventoCalendar(token, calendarId, item.id));
-        } catch (e) {
-          console.warn(`No se pudo borrar el evento huérfano "${item.id}" de Calendar (no crítico):`, e);
+        if (item.status === "cancelled" || idsValidosPorGoogleId.has(item.id)) continue;
+
+        const appEventoId = item.extendedProperties?.private?.app_evento_id;
+        const eventoVivo = appEventoId ? eventosVivosPorAppId.get(appEventoId) : null;
+
+        if (!eventoVivo) {
+          aBorrar.push({ item, motivo: "no corresponde a ningún evento vigente de la app" });
+        } else if (yaReconectadoPorAppId.has(appEventoId)) {
+          aBorrar.push({ item, motivo: `copia duplicada de "${eventoVivo.nombre}" (id app ${appEventoId})` });
+        } else {
+          yaReconectadoPorAppId.set(appEventoId, item);
+          aReconectar.push({ item, evento: eventoVivo });
         }
       }
     } while (pageToken);
   } catch (e) {
     console.warn("No se pudo completar la limpieza de eventos huérfanos en Calendar (no crítico):", e);
+    return;
   }
+
+  // --- Paso 3: reconectar primero — nunca se pierde nada acá. ---
+  if (aReconectar.length) {
+    for (const { item, evento } of aReconectar) {
+      evento.google_calendar_event_id = item.id;
+      console.info(
+        `Calendar: reconectado "${evento.nombre}" (id app ${evento.id}) con el evento existente "${item.id}" — le faltaba el id local, no era un huérfano real.`
+      );
+    }
+    sellarTimestamp(estado.datos);
+    marcarCambioPendiente();
+  }
+
+  if (!aBorrar.length) return;
+
+  // --- Paso 4: borrar, pero con freno de emergencia por encima del umbral. ---
+  const ejecutarBorrado = async () => {
+    let borrados = 0;
+    for (const { item, motivo } of aBorrar) {
+      try {
+        await conTokenValido((token) => eliminarEventoCalendar(token, calendarId, item.id));
+        borrados++;
+      } catch (e) {
+        console.warn(`No se pudo borrar el evento huérfano "${item.id}" (${motivo}) de Calendar (no crítico):`, e);
+      }
+    }
+    console.info(
+      `Calendar: limpieza terminada — ${aReconectar.length} reconectado(s), ${borrados}/${aBorrar.length} huérfano(s)/duplicado(s) real(es) eliminado(s).`
+    );
+    mostrarToast(
+      aReconectar.length
+        ? `Calendar: se reconectaron ${aReconectar.length} evento(s) y se limpiaron ${borrados} huérfano(s).`
+        : `Calendar: se limpiaron ${borrados} evento(s) que ya no correspondían.`
+    );
+  };
+
+  if (aBorrar.length <= UMBRAL_CONFIRMACION_BORRADO_MASIVO) {
+    await ejecutarBorrado();
+    return;
+  }
+
+  // Más de UMBRAL_CONFIRMACION_BORRADO_MASIVO de golpe: no se asume nada,
+  // se muestra la lista (acotada) y se espera confirmación explícita.
+  const detalle = aBorrar
+    .slice(0, 10)
+    .map(({ item }) => `• ${item.summary || item.id}`)
+    .join("\n");
+  const resto = aBorrar.length > 10 ? `\n… y ${aBorrar.length - 10} más.` : "";
+  console.warn(
+    `Calendar: se detectaron ${aBorrar.length} eventos para borrar en una sola pasada (por encima del umbral de ${UMBRAL_CONFIRMACION_BORRADO_MASIVO}) — se pausó el borrado automático y se pidió confirmación al usuario.`,
+    aBorrar
+  );
+  abrirConfirmacion({
+    titulo: "Revisar antes de borrar en Calendar",
+    mensaje:
+      `Se detectaron ${aBorrar.length} eventos en Google Calendar que no corresponden a ningún evento vigente de la app. ` +
+      `Es más de lo normal para una limpieza de rutina, así que se pausó el borrado automático por seguridad.\n\n${detalle}${resto}\n\n` +
+      "¿Confirmás que estos ya no existen en la app y se pueden borrar de Calendar?",
+    textoConfirmar: `Borrar los ${aBorrar.length}`,
+    onConfirmar: () => ejecutarBorrado(),
+  });
 }
 
 /** Contraparte de arriba — se usa al desactivar el switch de Ajustes: borra
