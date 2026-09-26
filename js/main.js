@@ -206,7 +206,12 @@ window.addEventListener("DOMContentLoaded", () => {
       // tanto iniciarSesionConGoogle() nunca se llama - sin esto, estado.token
       // se quedaba en null para siempre y la sincronización con Drive jamás
       // se intentaba (fallaba en silencio, sin ningún error en consola).
-      if (habiaCacheAlCargar) {
+      // La caché de datos y la sesión de Google son persistencias distintas.
+      // Si el navegador limpia app_academica_cache (p. ej. al liberar espacio)
+      // pero conserva google_refresh_token, no mostrar el login: recuperar la
+      // sesión silenciosamente y volver a cargar los datos desde Drive.
+      const haySesionPrevia = habiaCacheAlCargar || haySesionGuardada();
+      if (haySesionPrevia) {
         // v9 (punto 2): antes de pedirle nada a Google, se revisa si ya
         // había un access_token cacheado que todavía no expiró. Si lo hay,
         // se usa directamente - CERO llamadas a Google en esta carga. Esto
@@ -224,12 +229,33 @@ window.addEventListener("DOMContentLoaded", () => {
           // pendientes, nunca bajaba lo que ya hubiera de nuevo en Drive
           // desde otro dispositivo. sincronizarAlIniciar() hace el pull real
           // (y sigue subiendo lo pendiente después, si corresponde).
-          sincronizarAlIniciar();
-        } else {
-          asegurarTokenValido().finally(() => {
-            resolverAuthListo();
+          if (habiaCacheAlCargar) {
             sincronizarAlIniciar();
+          } else {
+            onLoginExitoso(tokenCache.token, Math.round((tokenCache.expiraEn - Date.now()) / 1000));
+          }
+        } else {
+          const recuperarSesionGuardada = () => asegurarTokenValido().then((ok) => {
+            resolverAuthListo();
+            if (ok) {
+              if (habiaCacheAlCargar) sincronizarAlIniciar();
+              else {
+                const tokenRenovado = leerTokenCacheValido();
+                if (tokenRenovado) onLoginExitoso(tokenRenovado.token, Math.round((tokenRenovado.expiraEn - Date.now()) / 1000));
+              }
+            } else if (!habiaCacheAlCargar) {
+              if (haySesionGuardada()) {
+                // Un fallo temporal del Worker/red NO equivale a cerrar la
+                // sesión. Mantener la pantalla de recuperación y reintentar
+                // sin obligar a autorizar Google otra vez.
+                setTimeout(recuperarSesionGuardada, 15000);
+              } else {
+                ocultarPantallaCargaSesion();
+                document.getElementById("pantalla-login").classList.remove("oculto");
+              }
+            }
           });
+          recuperarSesionGuardada();
         }
       } else {
         // No había sesión en caché: recién ACÁ se confirma que de verdad

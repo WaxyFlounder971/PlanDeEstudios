@@ -342,7 +342,7 @@ function construirTarjetaMateria(item) {
     btnPausa.className = "te-btn-icono te-btn-icono-iniciar";
     btnPausa.title = pausado ? "Reanudar" : "Pausar";
     btnPausa.setAttribute("aria-label", pausado ? "Reanudar" : "Pausar");
-    btnPausa.textContent = pausado ? "▶" : "Ⅱ";
+    btnPausa.textContent = pausado ? "▷" : "❚❚";
     btnPausa.addEventListener("click", (e) => {
       e.stopPropagation();
       if (pausado) reanudarTimerEstudio();
@@ -355,7 +355,7 @@ function construirTarjetaMateria(item) {
     btnDetener.className = "te-btn-icono te-btn-icono-detener";
     btnDetener.title = "Detener";
     btnDetener.setAttribute("aria-label", "Detener");
-    btnDetener.textContent = "⏹";
+    btnDetener.textContent = "■";
     btnDetener.addEventListener("click", (e) => {
       e.stopPropagation();
       manejarBotonIniciarDetener(mm.id, nombreMateria);
@@ -1101,7 +1101,7 @@ function construirPantallaDetalle(cont, item) {
   const btnIniciar = document.createElement("button");
   btnIniciar.type = "button";
   btnIniciar.className = "btn btn-primary";
-  btnIniciar.textContent = "Iniciar";
+  btnIniciar.textContent = "▷ Iniciar";
   btnIniciar.addEventListener("click", () => manejarBotonIniciarDetener(mm.id, nombreMateria));
 
   const btnPausa = document.createElement("button");
@@ -1149,7 +1149,7 @@ function construirPantallaDetalle(cont, item) {
   const btnDetener = document.createElement("button");
   btnDetener.type = "button";
   btnDetener.className = "btn btn-danger";
-  btnDetener.textContent = "Detener";
+  btnDetener.textContent = "■ Detener";
   btnDetener.addEventListener("click", () => manejarBotonIniciarDetener(mm.id, nombreMateria));
 
   colBtns.appendChild(btnIniciar);
@@ -1306,7 +1306,7 @@ function construirPantallaDetalle(cont, item) {
     btnDetener.style.display = esEstaMateria ? "" : "none";
     if (esEstaMateria) {
       const pausado = Boolean(activo.pausado);
-      btnPausa.textContent = pausado ? "▶ Reanudar" : "Ⅱ Pausar";
+      btnPausa.textContent = pausado ? "▷ Reanudar" : "❚❚ Pausar";
     }
     // "Saltar descanso" solo tiene sentido en una fase de descanso de
     // Pomodoro de esta misma materia — en cualquier otro caso se esconde.
