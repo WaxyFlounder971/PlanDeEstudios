@@ -64,6 +64,7 @@ import {
   eliminarEventoCalendar,
   parchearEventoCalendar,
   buscarInstanciaEventoCalendar,
+  listarEventosCalendarSecundario,
 } from "./auth.js";
 
 // *** VER NOTA DE INTEGRACIÓN ARRIBA *** — confirmar contra el ruteo real.
@@ -315,9 +316,20 @@ async function sincronizarEventoCalendario(evento) {
  * id — ver nota de integración al inicio del archivo: agenda.js/
  * agenda-modal.js deben llamar a esto ANTES de sacar el evento de
  * estado.datos.agenda.
+ *
+ * FIX 2026-09-25 (reportado: "borré muchos y no se borraron de Calendar,
+ * aunque según la app ni servía porque salía bloqueado"): esta función
+ * cortaba de entrada con `if (!sincronizacionCalendarActiva()) return;` —
+ * si el switch general estaba (o parecía estar) apagado en el momento del
+ * borrado, el evento de Calendar quedaba huérfano PARA SIEMPRE, sin
+ * ningún mecanismo que lo volviera a intentar después (a diferencia de
+ * sincronizarEventoCalendario, donde no sincronizar mientras está apagado
+ * es el comportamiento correcto). Borrar un espejo ya existente debe
+ * intentarse SIEMPRE que haya un id guardado, sin importar el estado del
+ * switch — el switch controla si se crean/actualizan eventos nuevos, no si
+ * se limpian los que ya no deberían existir. Se saca el guard.
  */
 async function eliminarEventoCalendarizado(evento) {
-  if (!sincronizacionCalendarActiva()) return;
   if (!evento || !evento.google_calendar_event_id) return;
   try {
     const calendarId = await asegurarCalendarioSecundario();
@@ -334,12 +346,86 @@ async function eliminarEventoCalendarizado(evento) {
  * eventos pendientes. Se llama una única vez, justo después de activar el
  * switch de Ajustes — antes de eso no había calendario secundario contra
  * el cual sincronizar nada.
+ *
+ * FIX 2026-09-25 (reportado: "hay muchos eventos en Calendar que no
+ * concuerdan con lo que está en la app... algunas se duplicaron y nada que
+ * ver"): antes esta función solo recorría eventos NO completados/perdidos
+ * (`continue` para el resto) — nunca limpiaba el espejo de uno que sí lo
+ * estuviera, y nunca detectaba nada que existiera en Calendar sin
+ * corresponder a NINGÚN EventoAgenda vivo (huérfanos de borrados viejos, o
+ * duplicados de una re-sincronización fallida que insertó de más — ver el
+ * fix de eliminarEventoCalendarizado más arriba, causa directa de los
+ * huérfanos). Ahora, además de sincronizar lo vigente: (a) limpia el
+ * espejo de cualquier evento completado/perdido que todavía tuviera uno
+ * (arrastrado de cuando el guard roto de arriba lo dejaba pasar), y (b) al
+ * final llama a limpiarEventosCalendarHuerfanos(), que compara TODO lo que
+ * hay en el calendario secundario contra la app y borra cualquier cosa que
+ * no corresponda — la app es la única fuente de verdad, si algo no existe
+ * acá no debería existir en Calendar.
  */
 async function resincronizarTodaLaAgendaConCalendar() {
   const eventos = estado.datos.agenda || [];
   for (const evento of eventos) {
-    if (evento.completada || evento.perdida) continue;
+    if (evento.completada || evento.perdida) {
+      if (evento.google_calendar_event_id) await eliminarEventoCalendarizado(evento);
+      continue;
+    }
     await sincronizarEventoCalendario(evento);
+  }
+  await limpiarEventosCalendarHuerfanos();
+}
+
+/**
+ * Reconciliación completa (Parte del fix 2026-09-25 de arriba): borra de
+ * Calendar cualquier evento del calendario secundario que no corresponda a
+ * un id que la app reconozca AHORA MISMO como vigente — ni un
+ * EventoAgenda ya borrado o completado/perdido, ni una copia duplicada de
+ * uno que sí sigue vivo (la copia "de más" nunca quedó guardada en
+ * `google_calendar_event_id`, así que no está en el set de válidos y cae
+ * en la limpieza igual que un huérfano real). El evento recurrente del
+ * Resumen Diario se preserva por su id guardado en
+ * `google_calendar_resumen_evento_id`.
+ *
+ * No borra nada si el calendario secundario ni siquiera existe todavía
+ * (`google_calendar_id` sin setear) — no hay nada que reconciliar. Sin
+ * scope de Calendar, tampoco intenta nada (no podría listar ni borrar).
+ *
+ * Paginado vía listarEventosCalendarSecundario (auth.js) — un calendario
+ * con muchos eventos "de más" acumulados puede necesitar varias páginas.
+ * Best-effort de punta a punta: cualquier fallo (de listar, o de borrar un
+ * item puntual) queda en console.warn y sigue con el resto, nunca
+ * interrumpe el resto de la app.
+ */
+async function limpiarEventosCalendarHuerfanos() {
+  if (!tieneScopeCalendarOtorgado()) return;
+  const calendarId = estado.datos?.configuracion?.google_calendar_id;
+  if (!calendarId) return;
+
+  const idsValidos = new Set();
+  for (const evento of estado.datos.agenda || []) {
+    if (evento.google_calendar_event_id && !evento.completada && !evento.perdida) {
+      idsValidos.add(evento.google_calendar_event_id);
+    }
+  }
+  const idResumen = estado.datos?.configuracion?.google_calendar_resumen_evento_id;
+  if (idResumen) idsValidos.add(idResumen);
+
+  let pageToken;
+  try {
+    do {
+      const pagina = await conTokenValido((token) => listarEventosCalendarSecundario(token, calendarId, pageToken));
+      pageToken = pagina.nextPageToken;
+      for (const item of pagina.items || []) {
+        if (item.status === "cancelled" || idsValidos.has(item.id)) continue;
+        try {
+          await conTokenValido((token) => eliminarEventoCalendar(token, calendarId, item.id));
+        } catch (e) {
+          console.warn(`No se pudo borrar el evento huérfano "${item.id}" de Calendar (no crítico):`, e);
+        }
+      }
+    } while (pageToken);
+  } catch (e) {
+    console.warn("No se pudo completar la limpieza de eventos huérfanos en Calendar (no crítico):", e);
   }
 }
 
@@ -381,6 +467,32 @@ async function eliminarTodosLosEventosCalendarizados() {
  */
 const HORIZONTE_DIAS_RESUMEN = 120; // ~4 meses de recurrencia visible a la vez
 
+/**
+ * FIX 2026-09-26 (reportado: "toca y no pasa nada / no muestra info real"):
+ * las 4 fechas "de hoy"/"de mañana" de esta sección se calculaban con
+ * `new Date().toISOString().slice(0, 10)` — eso da la fecha en UTC, NO la
+ * fecha local. Para cualquier huso horario negativo (Costa Rica, UTC-6),
+ * entre las 18:00 y la medianoche hora local el reloj UTC ya cruzó a "mañana"
+ * — exactamente la ventana en la que suena la alarma del Resumen Diario (el
+ * ejemplo reportado era a las 8pm). Efecto real: `actualizarResumenDiarioDelDia`
+ * calculaba `hoyIso` ya adelantado un día, armaba la ventana de búsqueda
+ * (`timeMin`/`timeMax`) para la instancia de MAÑANA en vez de la de HOY, no
+ * encontraba coincidencia (o parcheaba la instancia equivocada) — la
+ * instancia de hoy, la que el usuario tenía adelante tocando la
+ * notificación, se quedaba para siempre con el texto genérico de fallback.
+ * Mismo bug afectaba a `generarTextoResumenHoy` (calculaba mal "mañana", por
+ * lo que el listado de tareas podía corresponder al día equivocado) y a
+ * `construirCuerpoResumenDiario` (fecha de anclaje del evento). Se reemplaza
+ * por este helper, que usa los getters LOCALES de Date (getFullYear/
+ * getMonth/getDate) en vez de convertir a UTC primero.
+ */
+function fechaLocalISO(fecha = new Date()) {
+  const y = fecha.getFullYear();
+  const m = String(fecha.getMonth() + 1).padStart(2, "0");
+  const d = String(fecha.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 /** Arma el body de events.insert/update para el evento recurrente del
  *  Resumen Diario. `descripcion` es opcional — si no se pasa, usa el texto
  *  genérico de fallback (lo que ve cualquier día que la app no se haya
@@ -388,7 +500,7 @@ const HORIZONTE_DIAS_RESUMEN = 120; // ~4 meses de recurrencia visible a la vez
 function construirCuerpoResumenDiario(cfgResumen, descripcion) {
   const zonaHoraria = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const hora = cfgResumen.hora || "20:00";
-  const hoyIso = new Date().toISOString().slice(0, 10);
+  const hoyIso = fechaLocalISO();
   const [h, m] = hora.split(":").map(Number);
   const finDate = new Date(`${hoyIso}T00:00:00`);
   finDate.setHours(h, m + 15, 0, 0);
@@ -470,10 +582,10 @@ async function sincronizarResumenDiario() {
  */
 function generarTextoResumenHoy() {
   const eventos = (estado.datos.agenda || []).filter((e) => !e.completada && !e.perdida && e.fecha);
-  const hoyIso = new Date().toISOString().slice(0, 10);
+  const hoyIso = fechaLocalISO();
   const mañanaDate = new Date();
   mañanaDate.setDate(mañanaDate.getDate() + 1);
-  const mañanaIso = mañanaDate.toISOString().slice(0, 10);
+  const mañanaIso = fechaLocalISO(mañanaDate);
 
   const formateadorFecha = new Intl.DateTimeFormat("es-CR", { weekday: "long", day: "numeric", month: "long" });
   const formatearFecha = (fechaIso) => formateadorFecha.format(new Date(`${fechaIso}T00:00:00`));
@@ -520,7 +632,7 @@ async function actualizarResumenDiarioDelDia() {
   const idEvento = estado.datos?.configuracion?.google_calendar_resumen_evento_id;
   if (!idEvento) return;
 
-  const hoyIso = new Date().toISOString().slice(0, 10);
+  const hoyIso = fechaLocalISO();
   if (estado.datos.configuracion.resumen_diario_actualizado_el === hoyIso) return; // ya se hizo hoy
 
   try {
@@ -688,6 +800,7 @@ export {
   desactivarSincronizacionCalendario,
   eliminarEventoCalendarizado,
   inicializarModalPermisoCalendario,
+  limpiarEventosCalendarHuerfanos,
   ofrecerActivarSincronizacionCalendario,
   sincronizacionCalendarActiva,
   sincronizarEventoCalendario,

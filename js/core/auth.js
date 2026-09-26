@@ -1132,6 +1132,37 @@ async function buscarInstanciaEventoCalendar(token, calendarId, eventId, timeMin
   return (datos.items && datos.items[0]) || null;
 }
 
+/**
+ * events.list — lista los eventos del calendario secundario (sin expandir
+ * recurrencias: el evento recurrente del Resumen Diario vuelve como UN
+ * solo item maestro, no como cada instancia futura). Paginado vía
+ * pageToken, mismo patrón que el resto de listados de Drive en este
+ * archivo (buscarArchivoEnCarpeta, etc.) pero para Calendar.
+ *
+ * Usado por notificaciones-calendario.js para la reconciliación completa
+ * (Calendar debe reflejar EXACTAMENTE lo que hay en la app, ni más ni
+ * menos) — sin este helper no había forma de detectar eventos huérfanos
+ * (de un EventoAgenda ya borrado) ni duplicados (de una re-sincronización
+ * fallida que insertó de más), solo se podía crear/actualizar/borrar un id
+ * puntual ya conocido de antemano.
+ */
+async function listarEventosCalendarSecundario(token, calendarId, pageToken) {
+  const params = new URLSearchParams({ maxResults: "250", singleEvents: "false" });
+  if (pageToken) params.set("pageToken", pageToken);
+  const respuesta = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!respuesta.ok) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Calendar respondió ${respuesta.status} al listar eventos: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+  return respuesta.json();
+}
+
 export {
   NOMBRE_CARPETA_BACKUP,
   URL_WORKER_OAUTH,
@@ -1166,4 +1197,5 @@ export {
   eliminarEventoCalendar,
   parchearEventoCalendar,
   buscarInstanciaEventoCalendar,
+  listarEventosCalendarSecundario,
 };
