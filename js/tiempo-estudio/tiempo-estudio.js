@@ -867,15 +867,17 @@ function asegurarEstilosTimerCircularDetalle() {
     .te-timer-circular-progress--completa {
       stroke: color-mix(in srgb, var(--te-color-materia, var(--text-primary)) 65%, #22c55e 35%);
     }
-    /* Vuelta extra: una vez la meta semanal está cumplida, el anillo base
-       queda lleno (arriba) y esta segunda vuelta, más fina y en un color
-       distinto (ámbar), se dibuja encima arrancando del mismo punto de las
-       12 — su longitud es el excedente (módulo de la meta, para que si se
-       excede varias veces la meta vuelva a dar la vuelta en vez de crecer
-       sin límite) y la punta redondeada es justo lo que se nota distinto. */
+    /* Vuelta extra: una vez se pasa la duración de la fase (o de la meta
+       semanal, en modo semanal), el anillo base queda lleno y esta segunda
+       vuelta, más fina, se dibuja encima arrancando del mismo punto de las
+       12 — mismo tono que el anillo base (un tinte más claro, no un color
+       nuevo) para que se note la diferencia sin salirse de la paleta de la
+       materia; su longitud es el excedente (módulo de la duración/meta,
+       para que si se excede varias veces vuelva a dar la vuelta en vez de
+       crecer sin límite) y la punta redondeada es justo lo que se nota. */
     .te-timer-circular-progress-extra {
       fill: none;
-      stroke: color-mix(in srgb, var(--te-color-materia, var(--text-primary)) 30%, #f59e0b 70%);
+      stroke: color-mix(in srgb, var(--te-color-materia, var(--text-primary)) 55%, white 45%);
       stroke-width: 7;
       stroke-linecap: round;
       opacity: 0;
@@ -917,11 +919,27 @@ function asegurarEstilosTimerCircularDetalle() {
       transition: none;
     }
     .te-timer-extra[hidden] { display: none; }
-    .te-timer-circular-centro .te-timer-extra-valor {
+    /* "Estudiando"/"Descanso" — etiqueta discreta, no compite con el
+       cronómetro. Mismo hueco que el valor +M:SS (ver abajo), nunca los
+       dos visibles a la vez. */
+    .te-timer-estado-texto {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: color-mix(in srgb, var(--te-color-materia, var(--text-muted)) 45%, var(--text-muted) 55%);
+    }
+    .te-timer-estado-texto[hidden] { display: none; }
+    .te-timer-extra-valor {
+      display: inline-block;
       font-weight: 700;
       font-family: var(--font-display);
+      font-size: 0.95rem;
+      font-variant-numeric: tabular-nums;
       color: var(--te-color-materia, var(--text-primary));
     }
+    .te-timer-extra-valor[hidden] { display: none; }
   `;
   document.head.appendChild(style);
 }
@@ -1048,14 +1066,20 @@ function construirPantallaDetalle(cont, item) {
   display.className = "te-timer-display";
   centro.appendChild(display);
 
-  // El tiempo extra se presenta como un valor breve debajo de la rueda,
-  // sin añadir otro anillo ni superponer información al cronómetro.
+  // Renglón fijo debajo de la rueda (mismo lugar, nunca mueve el
+  // cronómetro central): mientras hay timer corriendo en esta materia
+  // muestra "Estudiando"/"Descanso" según la fase; en cuanto la fase entra
+  // en tiempo extra, ese texto se reemplaza por el valor +M:SS en el color
+  // propio de la materia — nunca los dos a la vez, siempre el mismo hueco.
   const extra = document.createElement("div");
   extra.className = "te-timer-extra";
   extra.hidden = true;
+  const estadoTexto = document.createElement("span");
+  estadoTexto.className = "te-timer-estado-texto";
   const extraValor = document.createElement("span");
   extraValor.className = "te-timer-extra-valor";
-  extra.appendChild(extraValor);
+  extraValor.hidden = true;
+  extra.append(estadoTexto, extraValor);
   const colReloj = document.createElement("div");
   colReloj.className = "te-timer-col-reloj";
   colReloj.append(anilloWrap, extra);
@@ -1108,7 +1132,7 @@ function construirPantallaDetalle(cont, item) {
   const btnSaltarDescanso = document.createElement("button");
   btnSaltarDescanso.type = "button";
   btnSaltarDescanso.className = "btn btn-secondary";
-  btnSaltarDescanso.textContent = "⏭ Saltar descanso";
+  btnSaltarDescanso.textContent = "⏭ Descanso";
   btnSaltarDescanso.addEventListener("click", () => {
     const activo = obtenerTimerActivo();
     if (!activo || activo.materiaMatriculadaId !== mm.id) return;
@@ -1155,7 +1179,11 @@ function construirPantallaDetalle(cont, item) {
       const tf = tiempoDeFase();
       const fraccion = tf.duracion > 0 ? Math.min(1, tf.transcurridos / tf.duracion) : 0;
       circuloProgreso.style.strokeDashoffset = String(CIRCUNFERENCIA_ANILLO - fraccion * CIRCUNFERENCIA_ANILLO);
-      circuloProgreso.classList.toggle("te-timer-circular-progress--completa", tf.completa);
+      // Sin tinte verde acá a propósito: ese "completa" es para festejar la
+      // meta SEMANAL (ver más abajo), no para una fase de Pomodoro — el
+      // anillo se queda en el tono propio de la materia durante toda la
+      // fase, solo la vuelta extra (más clara) marca que ya se pasó.
+      circuloProgreso.classList.remove("te-timer-circular-progress--completa");
       if (tf.extra > 0 && tf.duracion > 0) {
         const fraccionExtra = (tf.extra % tf.duracion) / tf.duracion || 1;
         circuloExtra.style.strokeDashoffset = String(CIRCUNFERENCIA_ANILLO - fraccionExtra * CIRCUNFERENCIA_ANILLO);
@@ -1249,8 +1277,21 @@ function construirPantallaDetalle(cont, item) {
 
     const esPomodoro = Boolean(esEstaMateria && activo.pomodoro);
     const hayExtra = Boolean(esPomodoro && tf.extra > 0);
-    extra.hidden = !hayExtra;
-    if (hayExtra) extraValor.textContent = `+${formatearDuracion(tf.extra)}`;
+    // Mismo renglón siempre: sin nadie corriendo esta materia, oculto del
+    // todo; corriendo y en tiempo extra, el valor +M:SS en el color de la
+    // materia; corriendo sin extra, la fase en texto ("Estudiando" para
+    // timer simple o bloque de trabajo; "Descanso" en fase de descanso).
+    extra.hidden = !esEstaMateria;
+    if (esEstaMateria) {
+      extraValor.hidden = !hayExtra;
+      estadoTexto.hidden = hayExtra;
+      if (hayExtra) {
+        extraValor.textContent = `+${formatearDuracion(tf.extra)}`;
+      } else {
+        const enDescanso = Boolean(esPomodoro && activo.pomodoro.fase !== "trabajo");
+        estadoTexto.textContent = enDescanso ? "Descanso" : "Estudiando";
+      }
+    }
 
     // Iniciar solo se ve si NADIE está corriendo en esta materia;
     // pausa/detener solo se ven si ESTA materia es la que está corriendo.
@@ -1266,7 +1307,7 @@ function construirPantallaDetalle(cont, item) {
     const enDescanso = Boolean(esEstaMateria && activo.pomodoro && activo.pomodoro.fase !== "trabajo");
     btnSaltarDescanso.style.display = enDescanso ? "" : "none";
     if (enDescanso) {
-      btnSaltarDescanso.textContent = tf.completa ? "✔ Terminar descanso" : "⏭ Saltar descanso";
+      btnSaltarDescanso.textContent = tf.completa ? "✔ Terminar descanso" : "⏭ Descanso";
       btnSaltarDescanso.className = tf.completa ? "btn btn-primary" : "btn btn-secondary";
     }
 
