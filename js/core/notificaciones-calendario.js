@@ -176,13 +176,31 @@ function construirRecordatoriosGoogle(tipoEfectivo) {
  * — es una limitación conocida de reusar los mismos offsets para ambos
  * casos, no algo que el spec haya pedido resolver de otra forma.
  */
+/**
+ * FIX 2026-09-25 (reportado: "recibo una notificación pero no me dice
+ * cuándo es y me confunde"): con varios offsets configurados para el mismo
+ * tipo (ej. "3 días antes" + "1 día antes"), el MISMO evento dispara varias
+ * notificaciones con el summary a secas — sin ninguna pista de a qué fecha
+ * corresponde cada una, así que dos avisos de tareas distintas (o dos
+ * avisos del mismo evento en momentos distintos) se ven idénticos en la
+ * notificación del sistema. Se mete la fecha (y la hora, si el evento la
+ * tiene) directo en el summary — así la notificación es autocontenida sin
+ * depender de si el cliente de Calendar decide mostrar o no esa info por
+ * su cuenta.
+ */
+function formatearFechaCortaEvento(evento) {
+  const formateador = new Intl.DateTimeFormat("es-CR", { weekday: "short", day: "numeric", month: "short" });
+  const texto = formateador.format(new Date(`${evento.fecha}T00:00:00`));
+  return evento.hora ? `${texto}, ${evento.hora}` : texto;
+}
+
 function construirEventoGoogleDesdeAgenda(evento) {
   const tipoEfectivo = tipoEfectivoParaNotificaciones(evento);
   const nombreMateria = resolverNombreMateriaEvento(evento);
   const zonaHoraria = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const cuerpo = {
-    summary: evento.nombre || "Evento de Agenda",
+    summary: `${evento.nombre || "Evento de Agenda"} · ${formatearFechaCortaEvento(evento)}`,
     description: [nombreMateria, evento.notas].filter(Boolean).join("\n\n"),
     colorId: COLOR_ID_GOOGLE_CALENDAR_POR_TIPO[tipoEfectivo] || undefined,
     reminders: {
@@ -580,30 +598,31 @@ async function sincronizarResumenDiario() {
  * pendiente más cercano en cualquier fecha futura para no dejar el aviso
  * vacío sin necesidad.
  */
+/**
+ * FIX 2026-09-25 (pedido explícito: "la idea de esto es que te diga cómo,
+ * tienes x pendientes para mañana y si no tiene pendientes ni decirle
+ * nada"): antes, sin nada para mañana, igual devolvía un texto (el
+ * "próximo evento en cualquier fecha futura", o un "🎉 no tenés nada" a
+ * secas) — texto real pero no la información que se pidió, y en ningún
+ * caso "nada". Ahora esta función SOLO mira mañana: si hay algo, devuelve
+ * el conteo + listado; si no hay nada, devuelve `null` explícito para que
+ * quien la llama (actualizarResumenDiarioDelDia) sepa que no debe avisar
+ * nada ese día — no hay más fallback "para no dejarlo vacío".
+ */
 function generarTextoResumenHoy() {
   const eventos = (estado.datos.agenda || []).filter((e) => !e.completada && !e.perdida && e.fecha);
-  const hoyIso = fechaLocalISO();
   const mañanaDate = new Date();
   mañanaDate.setDate(mañanaDate.getDate() + 1);
   const mañanaIso = fechaLocalISO(mañanaDate);
 
-  const formateadorFecha = new Intl.DateTimeFormat("es-CR", { weekday: "long", day: "numeric", month: "long" });
-  const formatearFecha = (fechaIso) => formateadorFecha.format(new Date(`${fechaIso}T00:00:00`));
-
   const deManana = eventos.filter((e) => e.fecha === mañanaIso);
-  if (deManana.length > 0) {
-    const nombres = deManana.map((e) => e.nombre || "Evento de Agenda");
-    const listado =
-      nombres.length === 1 ? nombres[0] : `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
-    return `Mañana tenés: ${listado} 📌`;
-  }
+  if (deManana.length === 0) return null;
 
-  const proximo = eventos.filter((e) => e.fecha > hoyIso).sort((a, b) => a.fecha.localeCompare(b.fecha))[0];
-  if (proximo) {
-    return `Para mañana no tenés nada. Tu próximo evento es "${proximo.nombre || "Evento de Agenda"}" el ${formatearFecha(proximo.fecha)}.`;
-  }
-
-  return "Para mañana no tenés nada pendiente en la Agenda 🎉";
+  const nombres = deManana.map((e) => e.nombre || "Evento de Agenda");
+  const listado =
+    nombres.length === 1 ? nombres[0] : `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
+  const etiquetaCantidad = deManana.length === 1 ? "1 pendiente" : `${deManana.length} pendientes`;
+  return `Tenés ${etiquetaCantidad} para mañana: ${listado} 📌`;
 }
 
 /**
@@ -647,9 +666,21 @@ async function actualizarResumenDiarioDelDia() {
 
     if (instancia) {
       const descripcion = generarTextoResumenHoy();
-      await conTokenValido((token) =>
-        parchearEventoCalendar(token, calendarId, instancia.id, { description: descripcion })
-      );
+      if (descripcion) {
+        await conTokenValido((token) =>
+          parchearEventoCalendar(token, calendarId, instancia.id, { description: descripcion })
+        );
+      } else {
+        // FIX 2026-09-25 (pedido explícito: "si no tiene pendientes ni
+        // decirle nada"): sin nada para mañana, la alarma de HOY no aporta
+        // nada - en vez de dejarla sonar con el texto genérico de
+        // fallback, se cancela SOLO esta ocurrencia puntual. events.delete
+        // sobre el id de una INSTANCIA (no del evento maestro) cancela
+        // nada más que el día de hoy - la recurrencia sigue intacta, mañana
+        // se vuelve a evaluar de cero (con contenido real, o cancelada de
+        // nuevo si tampoco hay nada pasado mañana).
+        await conTokenValido((token) => eliminarEventoCalendar(token, calendarId, instancia.id));
+      }
     }
 
     estado.datos.configuracion.resumen_diario_actualizado_el = hoyIso;
