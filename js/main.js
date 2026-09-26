@@ -631,6 +631,10 @@ async function onLoginExitoso(token, expiresIn) {
     } else {
       estado.datos = remotoMigrado;
     }
+    // Recupera el timer global tras autenticar y fundir el estado de Drive.
+    // Su reloj usa timestamps y sobrevive al cierre de sesión en este
+    // dispositivo, así que se reconcilia sin detenerlo ni reiniciarlo.
+    window.sincronizarTimerDesdeDatosCompartidos?.();
 
     // Punto 6: nombre + foto de perfil de Google.
     const perfilGoogle = await obtenerPerfilGoogle(token);
@@ -1038,10 +1042,9 @@ function pedirConfirmacionCerrarSesion() {
   let mensaje;
   if (estado.pendienteSync && hayTimerCorriendo) {
     mensaje =
-      "Tienes cambios sin sincronizar y además una sesión de estudio en curso (el cronómetro sigue corriendo y todavía no se guardó). Si cierras sesión ahora, se perderán de este dispositivo. ¿Deseas continuar?";
+      "Tienes cambios sin sincronizar y una sesión de estudio en curso. Cerrar sesión no detendrá el timer; se reanudará con el mismo timestamp cuando vuelvas a entrar. Los otros cambios pendientes sí podrían perderse. ¿Deseas continuar?";
   } else if (hayTimerCorriendo) {
-    mensaje =
-      "Tienes una sesión de estudio en curso: el cronómetro sigue corriendo y todavía no se guardó. Deténlo primero para no perder lo estudiado. ¿Deseas cerrar sesión de todas formas?";
+    mensaje = "La sesión de estudio seguirá corriendo aunque cierres sesión. El timer se basa en sus timestamps y podrás detenerlo cuando vuelvas a entrar. ¿Deseas cerrar sesión?";
   } else {
     mensaje = "Tienes cambios sin sincronizar. Si cierras sesión ahora, se perderán del dispositivo. ¿Deseas continuar?";
   }

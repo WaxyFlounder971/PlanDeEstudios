@@ -51,6 +51,7 @@ import {
   pausarTimerEstudio,
   reanudarTimerEstudio,
   revisarSesionOlvidadaAlAbrir,
+  sincronizarTimerDesdeDatosCompartidos,
   saltarDescansoPomodoro,
   iniciarDescansoPomodoro,
   tiempoDeFase,
@@ -1402,6 +1403,7 @@ function inicializarTiempoEstudio() {
   // archivo). El scroll lo protege el propio lote de aplicarDatosRemotosFrescos.
   if (!_hookRepintadoTiempoRegistrado) {
     _hookRepintadoTiempoRegistrado = true;
+    registrarHookPostFusion(() => sincronizarTimerDesdeDatosCompartidos());
     registrarHookPostFusion(() => renderizarTiempoEstudio());
     // Racha: tras cada fusión refresca en silencio su referencia (lo que llega
     // de otro dispositivo nunca celebra) y hace la revisión única "al abrir"

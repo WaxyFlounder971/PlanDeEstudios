@@ -5,20 +5,15 @@
      1) Motor de Pomodoro (bloques de trabajo + descansos, cíclico).
      2) Alertas de cambio de bloque (beep + toast + Notification API local).
      3) Excedente en vivo al llegar a la meta semanal (timer simple).
-     4) Salvavidas de sesión olvidada (>3h sin detenerse, se pregunta al
-        reabrir la app).
 
    Sigue siendo el ÚNICO punto de entrada real para iniciar/detener un
    timer — la regla de "una sola sesión activa" se sigue haciendo cumplir
    acá adentro, no en la UI.
 
-   Persistencia del timer activo (nuevo en esta parte): se guarda un
-   snapshot en localStorage (CLAVE_TIMER_ACTIVO), LOCAL a este dispositivo
-   — nunca se sincroniza vía estado.datos/storage-sync, mismo criterio que
-   CLAVE_SIDEBAR_COLAPSADA o CLAVE_FILTRO_VISTA_TE en tiempo-estudio.js. Es
-   lo único que permite detectar, al reabrir la app, que quedó una sesión
-   corriendo sin detenerse (punto 4) — sin esto la Parte 1 simplemente
-   perdía ese tiempo en silencio, como aclaraba su propio comentario.
+   Persistencia del timer activo: el snapshot de timestamps se guarda en
+   localStorage para recuperación inmediata y en estado.datos para que
+   teléfono y computadora compartan la misma sesión. Cerrar sesión no la
+   detiene; solo los botones explícitos de pausar/detener cambian su estado.
 
    -------------------------------------------------------------------------
    RONDA 2026-09-17 — bugfix de pérdida de tiempo + avisos en 2do plano
@@ -84,10 +79,6 @@ import { estado } from "../core/storage.js";
 import { mostrarToast, abrirConfirmacion } from "../ui/componentes.js";
 import { sincronizarHorasCompetencias } from "./tiempo-estudio-competencias.js";
 
-// Fácil de ajustar para pruebas (ver caso de prueba del plan) — límite de
-// horas sin detenerse antes de considerar una sesión "olvidada".
-const SALVAVIDAS_HORAS_LIMITE = 3;
-
 // Clave de localStorage del snapshot del timer activo — local al
 // dispositivo, ver nota de cabecera.
 const CLAVE_TIMER_ACTIVO = "te_timer_activo_v1";
@@ -120,6 +111,11 @@ const CLAVE_TIMER_ACTIVO = "te_timer_activo_v1";
 let timerActivo = null;
 let intervaloId = null;
 const suscriptores = new Set();
+let timerActualizadoEn = 0;
+
+function crearIdSesionTimer() {
+  return `te_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+}
 
 /* ===================== Helpers de datos ===================== */
 
@@ -130,11 +126,11 @@ const suscriptores = new Set();
  * búsqueda simple de un solo campo, no vale la pena romper el ciclo por
  * esto. */
 function buscarMateriaMatriculada(materiaMatriculadaId) {
-  for (const semestre of estado.datos.semestres || []) {
+  for (const semestre of estado.datos?.semestres || []) {
     const mm = (semestre.materias_matriculadas || []).find((m) => m.id === materiaMatriculadaId);
     if (mm) return mm;
   }
-  const independiente = (estado.datos.tiempo_estudio_materias || []).find((m) => m.id === materiaMatriculadaId && m.tipo === "independiente");
+  const independiente = (estado.datos?.tiempo_estudio_materias || []).find((m) => m.id === materiaMatriculadaId && m.tipo === "independiente");
   if (independiente) return independiente;
   return null;
 }
@@ -163,36 +159,46 @@ function calcularMinutosEstaSemana(materiaMatriculadaId) {
   const inicioSemanaSiguiente = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + 7, 0, 0, 0, 0);
   const inicio = lunes.getTime();
   const fin = inicioSemanaSiguiente.getTime();
-  return (estado.datos.sesiones_estudio || [])
+  return (estado.datos?.sesiones_estudio || [])
     .filter((s) => (s.materia_independiente_id || s.materia_matriculada_id) === materiaMatriculadaId && s.inicio >= inicio && s.inicio < fin)
     .reduce((acc, s) => acc + (Number(s.duracion_minutos) || 0), 0);
 }
 
 /* ===================== Persistencia local (salvavidas) ===================== */
 
-function guardarSnapshotLocal() {
+function guardarSnapshotLocal({ compartir = true, actualizadoEn = Date.now() } = {}) {
   try {
+    timerActualizadoEn = Math.max(timerActualizadoEn, Number(actualizadoEn) || 0);
+    const snapshot = timerActivo === null
+      ? { activo: false, actualizadoEn: timerActualizadoEn }
+      : {
+          activo: true,
+          materiaMatriculadaId: timerActivo.materiaMatriculadaId,
+          origen: timerActivo.origen,
+          sesionInicio: timerActivo.sesionInicio,
+          inicioFase: timerActivo.inicioFase,
+          pomodoro: timerActivo.pomodoro,
+          idSesionFase: timerActivo.idSesionFase,
+          actualizadoEn: timerActualizadoEn,
+          metaAlarmaDisparada: timerActivo.metaAlarmaDisparada,
+          pausado: timerActivo.pausado,
+          msPausaInicio: timerActivo.msPausaInicio,
+          avisoFaseDisparado: timerActivo.avisoFaseDisparado,
+        };
+    if (timerActivo !== null) timerActivo.actualizadoEn = timerActualizadoEn;
+
     if (timerActivo === null) {
       localStorage.removeItem(CLAVE_TIMER_ACTIVO);
-      return;
+    } else {
+      localStorage.setItem(CLAVE_TIMER_ACTIVO, JSON.stringify(snapshot));
     }
-    localStorage.setItem(
-      CLAVE_TIMER_ACTIVO,
-      JSON.stringify({
-        materiaMatriculadaId: timerActivo.materiaMatriculadaId,
-        origen: timerActivo.origen,
-        sesionInicio: timerActivo.sesionInicio,
-        inicioFase: timerActivo.inicioFase,
-        pomodoro: timerActivo.pomodoro,
-        // 2026-09-17: antes NO se guardaba, así que al restaurar el timer
-        // (restaurarTimerDesdeSnapshot) la alarma de "llegaste a la meta"
-        // se volvía a disparar en la misma sesión.
-        metaAlarmaDisparada: timerActivo.metaAlarmaDisparada,
-        pausado: timerActivo.pausado,
-        msPausaInicio: timerActivo.msPausaInicio,
-        avisoFaseDisparado: timerActivo.avisoFaseDisparado,
-      })
-    );
+    if (compartir && estado.datos) {
+      const compartido = estado.datos.timer_estudio_activo;
+      if (!compartido || timerActualizadoEn >= (Number(compartido.actualizadoEn) || 0)) {
+        estado.datos.timer_estudio_activo = snapshot;
+        marcarCambioPendiente();
+      }
+    }
   } catch (e) {
     console.error("[tiempo-estudio-timer] no se pudo guardar el snapshot local:", e);
   } finally {
@@ -507,6 +513,7 @@ function iniciarDescansoPomodoro() {
   const fin = pausado ? msPausaInicio : ahora;
   if (fin > inicioFase) {
     const sesion = crearSesionDeMateria({ materiaMatriculadaId, inicio: inicioFase, fin, origen: "pomodoro" });
+    sesion.id = timerActivo.idSesionFase;
     estado.datos.sesiones_estudio.push(sesion);
     marcarCambioPendiente();
     revisarFelicitacionMeta(materiaMatriculadaId);
@@ -515,6 +522,7 @@ function iniciarDescansoPomodoro() {
 
   const esUltimoBloque = pomodoro.bloqueActual >= pomodoro.config.cantidad_bloques;
   pomodoro.fase = esUltimoBloque ? "descanso_largo" : "descanso_corto";
+  timerActivo.idSesionFase = null;
 
   if (pausado) {
     timerActivo.sesionInicio += ahora - msPausaInicio;
@@ -538,7 +546,7 @@ function iniciarDescansoPomodoro() {
  * sigue contando de largo, nunca se detiene solo (punto 3 del plan).
  */
 function revisarMetaSimple() {
-  if (timerActivo.origen !== "timer" || timerActivo.metaAlarmaDisparada) return;
+  if (!estado.datos || timerActivo.origen !== "timer" || timerActivo.metaAlarmaDisparada) return;
   const mm = buscarMateriaMatriculada(timerActivo.materiaMatriculadaId);
   const meta = mm && mm.tiempo_estudio.meta_horas_semana;
   if (meta === null || meta === undefined) return;
@@ -684,6 +692,7 @@ function iniciarTimerEstudio(materiaMatriculadaId) {
     origen: pomodoroConfig ? "pomodoro" : "timer",
     sesionInicio: ahora,
     inicioFase: ahora,
+    idSesionFase: crearIdSesionTimer(),
     pomodoro: pomodoroConfig ? { config: { ...pomodoroConfig }, bloqueActual: 1, fase: "trabajo" } : null,
     metaAlarmaDisparada: false,
     pausado: false,
@@ -760,6 +769,7 @@ function detenerTimerEstudio() {
     const fin = pausado ? msPausaInicio : Date.now();
     if (fin > inicioFase) {
       sesion = crearSesionDeMateria({ materiaMatriculadaId, inicio: inicioFase, fin, origen });
+      sesion.id = timerActivo.idSesionFase;
       estado.datos.sesiones_estudio.push(sesion);
       marcarCambioPendiente();
       revisarFelicitacionMeta(materiaMatriculadaId);
@@ -812,6 +822,7 @@ function saltarDescansoPomodoro() {
     timerActivo.msPausaInicio = null;
   }
   timerActivo.inicioFase = Date.now();
+  timerActivo.idSesionFase = crearIdSesionTimer();
   timerActivo.avisoFaseDisparado = false;
 
   guardarSnapshotLocal();
@@ -963,7 +974,7 @@ function abrirAvisoSesionOlvidada(snapshot) {
  * qué hacer con una sesión de 3+ horas que quedó abierta. Si elige "Seguir
  * contando", reanudarTimerEstudio() lo destraba sin haber perdido nada.
  */
-function restaurarTimerDesdeSnapshot(snapshot, { congelarAhora = false } = {}) {
+function restaurarTimerDesdeSnapshot(snapshot) {
   const ahora = Date.now();
   timerActivo = {
     materiaMatriculadaId: snapshot.materiaMatriculadaId,
@@ -971,12 +982,15 @@ function restaurarTimerDesdeSnapshot(snapshot, { congelarAhora = false } = {}) {
     origen: snapshot.origen === "pomodoro" ? "pomodoro" : "timer",
     sesionInicio: snapshot.sesionInicio || snapshot.inicioFase,
     inicioFase: snapshot.inicioFase,
+    idSesionFase: snapshot.idSesionFase || `te_${snapshot.materiaMatriculadaId}_${snapshot.sesionInicio || snapshot.inicioFase}`,
     pomodoro: snapshot.pomodoro || null,
     metaAlarmaDisparada: Boolean(snapshot.metaAlarmaDisparada),
-    pausado: Boolean(snapshot.pausado) || congelarAhora,
-    msPausaInicio: snapshot.pausado ? snapshot.msPausaInicio || ahora : congelarAhora ? ahora : null,
+    pausado: Boolean(snapshot.pausado),
+    msPausaInicio: snapshot.pausado ? snapshot.msPausaInicio || ahora : null,
     avisoFaseDisparado: Boolean(snapshot.avisoFaseDisparado),
+    actualizadoEn: Number(snapshot.actualizadoEn) || Number(snapshot.inicioFase) || ahora,
   };
+  timerActualizadoEn = timerActivo.actualizadoEn;
 
   // Si la fase ya había cumplido su tiempo mientras la app estaba cerrada
   // (o el snapshot es de antes de este campo), NO se hace sonar el aviso al
@@ -985,7 +999,7 @@ function restaurarTimerDesdeSnapshot(snapshot, { congelarAhora = false } = {}) {
     timerActivo.avisoFaseDisparado = true;
   }
 
-  guardarSnapshotLocal();
+  guardarSnapshotLocal({ compartir: false, actualizadoEn: timerActivo.actualizadoEn });
   asegurarIntervalo();
   notificar();
 }
@@ -994,18 +1008,9 @@ function restaurarTimerDesdeSnapshot(snapshot, { congelarAhora = false } = {}) {
  * Se llama UNA vez al arrancar la app (ver inicializarTiempoEstudio en
  * tiempo-estudio.js).
  *
- * REESCRITA 2026-09-17 — ver la nota de cabecera del archivo. Antes, los
- * 3 caminos de esta función terminaban borrando el snapshot sin restaurar
- * nada, o sea que cerrar/recargar la app MATABA la sesión activa en
- * silencio; esa era la causa real del reporte de "perdí horas". Ahora:
- *
- *   - Siempre que haya un snapshot válido, el timer se restaura y sigue
- *     corriendo desde donde estaba (incluidos los descansos de Pomodoro,
- *     que antes se descartaban).
- *   - El salvavidas dejó de ser destructivo: si la fase venía corriendo
- *     hace SALVAVIDAS_HORAS_LIMITE o más, se restaura CONGELADA y se abre
- *     el modal para decidir (seguir / guardar la duración real precargada
- *     / descartar a mano). Nunca descarta por su cuenta.
+ * Restaura cualquier snapshot válido con sus timestamps originales. Nunca
+ * pausa ni cierra una sesión por su duración: recargar, cerrar sesión o
+ * dejar la app en segundo plano no detiene el timer.
  */
 function revisarSesionOlvidadaAlAbrir() {
   let snapshot = null;
@@ -1025,19 +1030,44 @@ function revisarSesionOlvidadaAlAbrir() {
   // app se re-inicializó sin recargar): no se pisa nada.
   if (timerActivo !== null) return;
 
-  // Si quedó pausado, el reloj de referencia es el instante en que empezó
-  // la pausa (mismo criterio que detenerTimerEstudio) — el tiempo pausado
-  // no debe empujar a esta sesión hacia el salvavidas.
-  const referencia = snapshot.pausado ? snapshot.msPausaInicio || Date.now() : Date.now();
-  const horasEnFaseActual = (referencia - snapshot.inicioFase) / 3600000;
+  // Un timer usa timestamps y sigue transcurriendo aunque se cierre la
+  // pestaña o la sesión. No se pausa ni se cierra por llevar muchas horas.
+  restaurarTimerDesdeSnapshot(snapshot);
+}
 
-  if (horasEnFaseActual >= SALVAVIDAS_HORAS_LIMITE && !snapshot.pausado) {
-    restaurarTimerDesdeSnapshot(snapshot, { congelarAhora: true });
-    abrirAvisoSesionOlvidada(snapshot);
+/** Adopta el último snapshot compartido por Drive. Un cierre explícito en
+ * otro dispositivo también se replica mediante `activo:false`; si el dato
+ * local es más reciente, se vuelve a publicar en vez de sustituirlo por uno
+ * viejo. */
+function sincronizarTimerDesdeDatosCompartidos() {
+  if (!estado.datos) return;
+  const remoto = estado.datos.timer_estudio_activo;
+  if (!remoto) {
+    if (timerActualizadoEn > 0) guardarSnapshotLocal({ actualizadoEn: timerActualizadoEn });
     return;
   }
+  const actualizadoRemoto = Number(remoto.actualizadoEn) || 0;
+  if (actualizadoRemoto < timerActualizadoEn) {
+    guardarSnapshotLocal({ actualizadoEn: timerActualizadoEn });
+    return;
+  }
+  if (actualizadoRemoto === timerActualizadoEn && Boolean(remoto.activo) === Boolean(timerActivo)) return;
 
-  restaurarTimerDesdeSnapshot(snapshot);
+  timerActualizadoEn = actualizadoRemoto;
+  if (!remoto.activo) {
+    timerActivo = null;
+    try { localStorage.removeItem(CLAVE_TIMER_ACTIVO); } catch (e) { /* no crítico */ }
+    detenerIntervaloSiNoHaceFalta();
+    notificar();
+    notificarSesionesEstudioActualizadas();
+    return;
+  }
+  if (!remoto.materiaMatriculadaId || !remoto.inicioFase) return;
+  restaurarTimerDesdeSnapshot(remoto);
+}
+
+if (typeof window !== "undefined") {
+  window.sincronizarTimerDesdeDatosCompartidos = sincronizarTimerDesdeDatosCompartidos;
 }
 
 /**
@@ -1075,6 +1105,7 @@ export {
   suscribirseATimer,
   formatearDuracion,
   revisarSesionOlvidadaAlAbrir,
+  sincronizarTimerDesdeDatosCompartidos,
   revisarFelicitacionMeta,
   notificarSesionesEstudioActualizadas,
 };

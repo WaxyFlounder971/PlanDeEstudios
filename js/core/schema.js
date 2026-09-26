@@ -345,6 +345,10 @@ function crearDatosUsuarioNuevo() {
       /* ver crearSesionEstudio() */
     ],
     _eliminados_sesiones_estudio: [],
+    // Timer activo único de la cuenta, compartido entre dispositivos por
+    // timestamps. `activo:false` es una marca de cierre explícito que evita
+    // que una copia vieja lo reactive en otra pantalla.
+    timer_estudio_activo: null,
 
     // Entradas propias de Tiempo, sin matrícula ni relación con planes o
     // semestres. Se sincronizan como datos de Tiempo; cada sesión enlaza a
@@ -3343,6 +3347,7 @@ function migrarDatosAntiguos(datos) {
   // JSON en Drive se guardó antes de que existiera esta sección.
   if (!Array.isArray(datos.sesiones_estudio)) datos.sesiones_estudio = [];
   if (!Array.isArray(datos._eliminados_sesiones_estudio)) datos._eliminados_sesiones_estudio = [];
+  if (datos.timer_estudio_activo === undefined) datos.timer_estudio_activo = null;
   if (!Array.isArray(datos.tiempo_estudio_materias)) datos.tiempo_estudio_materias = [];
   if (!Array.isArray(datos._eliminados_tiempo_estudio_materias)) datos._eliminados_tiempo_estudio_materias = [];
 

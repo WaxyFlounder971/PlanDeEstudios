@@ -1558,6 +1558,9 @@
     "sep": "Sep",
     "oct": "Oct",
     "nov": "Nov",
-    "dic": "Dec"
+    "dic": "Dec",
+    "Estudiando": "Studying",
+    "Detener": "Stop",
+    "⏭ Descanso": "⏭ Break"
   }
 }

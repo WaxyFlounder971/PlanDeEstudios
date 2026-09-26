@@ -1093,6 +1093,16 @@ function fusionarFinanzasSemestres(local, remoto, tumbas) {
  * carga, sin caché local todavía), se devuelve el otro tal cual, sin
  * fusión (no hay nada con qué comparar).
  */
+function fusionarTimerActivo(local, remoto) {
+  if (!local) return remoto || null;
+  if (!remoto) return local;
+  const tiempoLocal = Number(local.actualizadoEn) || 0;
+  const tiempoRemoto = Number(remoto.actualizadoEn) || 0;
+  if (tiempoLocal !== tiempoRemoto) return tiempoLocal > tiempoRemoto ? local : remoto;
+  // Desempate estable si dos acciones ocurrieron en el mismo milisegundo.
+  return JSON.stringify(local) >= JSON.stringify(remoto) ? local : remoto;
+}
+
 function fusionarDatos(datosLocal, datosRemoto) {
   if (!datosLocal) return datosRemoto;
   if (!datosRemoto) return datosLocal;
@@ -1234,6 +1244,7 @@ function fusionarDatos(datosLocal, datosRemoto) {
       tumbasSesionesEstudio,
       "sesión de estudio"
     ),
+    timer_estudio_activo: fusionarTimerActivo(datosLocal.timer_estudio_activo, datosRemoto.timer_estudio_activo),
     tiempo_estudio_materias: fusionarColeccion(
       datosLocal.tiempo_estudio_materias,
       datosRemoto.tiempo_estudio_materias,
