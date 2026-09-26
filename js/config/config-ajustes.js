@@ -10,7 +10,7 @@ import { estado } from "../core/storage.js";
 import { copiarPromptConAviso } from "../core/clipboard.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
-import { abrirConfirmacion, construirSelectorChipsMultiple, mostrarToast } from "../ui/componentes.js";
+import { abrirConfirmacion, construirPillSwitchBinario, mostrarToast } from "../ui/componentes.js";
 import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta } from "../ui/tema.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
 import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
@@ -21,18 +21,17 @@ import {
   eliminarAdjuntosDeTareasDeSemestre,
   hayAdjuntosGuardados,
 } from "../core/storage-adjuntos.js";
-// FIX 2026-09-25 (auditoría de Ajustes — "no deja activarlas ni usarlas
-// bien, se guarda pero no actualiza"): este bloque importaba de
-// core/notificaciones-push.js (Web Push + Worker con VAPID/Cron), dado de
-// baja el 2026-08-25 (el Worker perdió esos endpoints — ver
-// MAPA_FUNCIONES.md). El switch general de esta pantalla llamaba a
-// activarNotificacionesPush(), que habla con un Worker que ya no responde
-// a eso: fallaba en silencio pero IGUAL escribía
-// `notificaciones_push_activas = true` y marcaba el cambio pendiente — de
-// ahí que pareciera "guardarse" sin que nada funcionara de verdad. El
-// switch real (`sincronizar_calendario_google`) y el Resumen Diario real
-// viven en core/notificaciones-calendario.js desde esa misma migración;
-// este archivo nunca se actualizó para hablar con el módulo correcto.
+// FIX (2026-09-26, ronda 3): este import había vuelto a apuntar a
+// core/notificaciones-push.js — el módulo Web Push retirado el
+// 2026-08-25 (ver MAPA_FUNCIONES.md). Es el MISMO bug ya diagnosticado y
+// resuelto antes ("no deja activarlas ni usarlas bien"), que volvió a
+// aparecer — si notificaciones-push.js ya no existe de verdad en el
+// árbol, este import rompía la carga de TODO el módulo, y eso a su vez
+// explica por qué Personalizar se veía con switches simples en vez de
+// los pill switch de montarPillSwitch más abajo: si el import de arriba
+// tira error, renderizarAjustes() nunca llega a correr, así que ningún
+// checkbox de index.html se reemplaza por nada. Reconectado a
+// core/notificaciones-calendario.js, que es el módulo real y vigente.
 import {
   activarSincronizacionCalendario,
   desactivarSincronizacionCalendario,
@@ -263,47 +262,30 @@ function dispararSyncConAntirrebote() {
 
 /**
  * Notificaciones — Recordatorios por tipo (2026-08-20, migrado a select
- * único 2026-08-24, REVERTIDO A CHIPS DE SELECCIÓN MÚLTIPLE 2026-09-26 a
- * pedido explícito): un grupo de chips (construirSelectorChipsMultiple,
- * ui/componentes.js) por cada tipo de evento de Agenda (tarea/examen/
- * evento/feriado), en ese orden fijo — permite tener MÁS de un offset
- * activo por tipo a la vez (ej. "1 día antes" Y "1 hora antes" para
- * exámenes), a diferencia del select único que solo dejaba elegir uno.
+ * único 2026-08-24, REVERTIDO A CHIPS 2026-09-26 ronda 2, Y REVERTIDO DE
+ * NUEVO A SELECT 2026-09-26 ronda 3 — esta vez un select de SELECCIÓN
+ * MÚLTIPLE, a pedido explícito: "que se muestren como select, no como
+ * botones porque se corta"): un `construirSelectMultipleAjustes` (ver más
+ * abajo, mismo patrón visual/posicionamiento que construirSelectCustomAjustes
+ * — botón + lista propia reparentada a document.body) por cada tipo de
+ * evento de Agenda (tarea/examen/evento/feriado), en ese orden fijo. A
+ * diferencia de construirSelectCustomAjustes (un solo valor a la vez), este
+ * permite tildar más de un offset por tipo (ej. "1 día antes" Y "1 hora
+ * antes" para exámenes) sin depender de una fila de botones que se corta
+ * en pantallas angostas — el botón cerrado solo muestra un resumen corto,
+ * la lista con las opciones vive en un popup vertical.
  *
- * FIX 2026-09-25 (auditoría de Ajustes — "no deja activarlas ni usarlas
- * bien, se guarda pero no actualiza"): CONFIRMADO contra core/schema.js
- * que el formato real y vigente de `notificaciones_recordatorios[tipo]`
- * es un ARREGLO (ver el default en `crearDatosUsuarioNuevo` y, sobre
- * todo, `migrarDatosAntiguos`, que en CADA carga de datos — local o
- * remota, ver main.js — fuerza a arreglo cualquier valor que no lo sea,
- * reseteándolo a `["1_dia"]`). Ese formato de arreglo es justo lo que
- * `construirSelectorChipsMultiple` produce y consume de forma nativa —
- * revertir a chips 2026-09-26 no solo devuelve la funcionalidad de
- * selección múltiple, sino que además elimina de raíz el bug de
- * 2026-08-24 (el select único escribía un string plano, que
- * `migrarDatosAntiguos` pisaba en silencio con el default en cada carga):
- * con chips ya no hay forma de escribir otra cosa que un arreglo, así que
- * ese bug puntual queda estructuralmente imposible, no solo parchado.
- *
- * `construirSelectorChipsMultiple` recibe `opciones` como
- * `{ id, etiqueta }[]` — mismo shape que ya trae OFFSETS_RECORDATORIO_AGENDA
- * (core/schema.js) tal cual, sin necesidad de mapear `valor`/`etiqueta`
- * como sí hacía falta para construirSelectCustomAjustes. No permite dejar
- * el grupo completamente vacío (ver el propio componente en
- * ui/componentes.js) — un tipo de evento sin ningún offset activo se
- * resuelve apagando el switch general, no vaciando este grupo.
- *
- * Solo tiene sentido con el switch general de sincronización con Google
- * Calendar activo — si está apagado, el bloque completo queda atenuado y
- * sin interacción (mismo criterio visual que el resto de bloques
- * dependientes de un switch en esta pantalla), pero los valores elegidos
- * NO se pierden: siguen guardados, listos para cuando el usuario vuelva a
- * prender el switch general.
- *
- * Reincorporada 2026-08-23 tras perderse (junto con
- * renderizarNotificacionesResumenDiario) al fusionar esta ronda de fixes
- * con la rama que traía el filtro anti-spam de arriba — ver
- * MAPA_FUNCIONES.md para el detalle de por qué se había perdido antes.
+ * Cada select lee/escribe estado.datos.configuracion.notificaciones_recordatorios[tipo]
+ * como un ARREGLO de ids de OFFSETS_RECORDATORIO_AGENDA (ver core/schema.js)
+ * — mismo formato que ya espera migrarDatosAntiguos en schema.js, tolerante
+ * además a un string suelto de un dato viejo a medio migrar (se normaliza a
+ * arreglo de 1 antes de pasarlo al componente). Solo tiene sentido con el
+ * switch general de sincronización con Google Calendar activo — si está
+ * apagado, el bloque completo queda atenuado y sin interacción (mismo
+ * criterio visual que el resto de bloques dependientes de un switch en
+ * esta pantalla), pero los valores elegidos NO se pierden: siguen
+ * guardados, listos para cuando el usuario vuelva a prender el switch
+ * general.
  */
 const ETIQUETAS_TIPOS_RECORDATORIO_AGENDA = [
   { tipo: "tarea", etiqueta: "Tareas" },
@@ -336,23 +318,22 @@ function renderizarNotificacionesRecordatorios() {
     titulo.textContent = etiqueta;
     fila.appendChild(titulo);
 
-    // Tolerante a un string suelto (dato a medio migrar de una versión muy
-    // vieja) además del arreglo esperado — construirSelectorChipsMultiple
-    // solo entiende arreglos, así que se normaliza acá antes de pasarlo.
+    // Tolerante a un string suelto (dato a medio migrar de una versión
+    // vieja) además del arreglo esperado.
     const valorGuardado = cfg.notificaciones_recordatorios[tipo];
     const valoresIniciales = Array.isArray(valorGuardado)
       ? valorGuardado
       : [valorGuardado || "1_dia"];
 
-    const { elemento } = construirSelectorChipsMultiple(
-      OFFSETS_RECORDATORIO_AGENDA,
+    const elemento = construirSelectMultipleAjustes({
+      opciones: OFFSETS_RECORDATORIO_AGENDA,
       valoresIniciales,
-      (valoresActuales) => {
+      onCambiar: (valoresActuales) => {
         cfg.notificaciones_recordatorios[tipo] = valoresActuales;
         sellarTimestamp(cfg);
         marcarCambioPendiente();
-      }
-    );
+      },
+    });
     fila.appendChild(elemento);
     contenedor.appendChild(fila);
   });
@@ -488,6 +469,7 @@ function renderizarConfigDiasHorario() {
 
       const input = document.createElement("input");
       input.type = "text";
+      input.autocomplete = "off";
       input.className = "form-input";
       input.maxLength = 3;
       input.placeholder = dia.abrevDefault;
@@ -642,6 +624,150 @@ function construirSelectCustomAjustes({ opciones, valorInicial, onCambiar }) {
   return dropdown;
 }
 
+/**
+ * Notificaciones — Recordatorios por tipo (2026-09-26, ronda 3): variante
+ * de selección MÚLTIPLE de construirSelectCustomAjustes de acá arriba —
+ * mismo look & feel (botón .select-custom-boton + lista propia
+ * reparentada a document.body con position:fixed, mismo mecanismo de
+ * abrir/cerrar/posicionar) en vez de la fila de chips/botones
+ * (construirSelectorChipsMultiple, ui/componentes.js) que se usó antes:
+ * con 5 opciones por tipo, esa fila de botones se corta en pantallas
+ * angostas — acá el botón cerrado solo muestra un resumen corto, sin
+ * depender de que 5 etiquetas quepan una al lado de la otra.
+ *
+ * A diferencia del select de un solo valor, la lista NO se cierra al
+ * tocar una opción (tiene sentido tildar varias antes de cerrar) y cada
+ * `<li>` lleva su propio check visual (independiente de estilos de
+ * `.activa` en design-system.css, para que se note incluso si esa clase
+ * no trae ningún indicador propio en un contexto multi-selección).
+ *
+ * `opciones`: arreglo de { id, etiqueta } (OFFSETS_RECORDATORIO_AGENDA,
+ * core/schema.js, mismo shape que ya usaba construirSelectorChipsMultiple
+ * — sin mapeo). `valoresIniciales`: arreglo de ids ya activos.
+ * `onCambiar(valoresActuales)`: arreglo completo actualizado en cada
+ * toggle, mismo criterio de "aplicar al toque" que el resto de Ajustes.
+ *
+ * No permite dejar todo destildado (mismo criterio que
+ * construirSelectorChipsMultiple): un tipo de evento sin ningún offset
+ * activo se resuelve apagando el switch general, no vaciando este
+ * selector — el último click sobre el único chip activo se ignora.
+ */
+function construirSelectMultipleAjustes({ opciones, valoresIniciales, onCambiar }) {
+  let valoresActuales = Array.isArray(valoresIniciales) && valoresIniciales.length > 0
+    ? [...valoresIniciales]
+    : [opciones[0]?.id].filter(Boolean);
+
+  function textoResumen() {
+    const etiquetas = opciones
+      .filter((o) => valoresActuales.includes(o.id))
+      .map((o) => o.etiqueta);
+    if (etiquetas.length === 0) return "Elegir";
+    const unido = etiquetas.join(", ");
+    // Mismo umbral que el ancho típico de .select-custom-boton (ver
+    // Backup/Rango de horas) — más de eso y en vez de cortarse a la mitad
+    // se resume como cantidad, que es justo lo que este componente existe
+    // para evitar en las etiquetas individuales.
+    return unido.length > 26 ? `${etiquetas.length} seleccionados` : unido;
+  }
+
+  const dropdown = document.createElement("div");
+  dropdown.className = "select-custom";
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.className = "form-input select-custom-boton";
+  boton.textContent = textoResumen();
+  const lista = document.createElement("ul");
+  lista.className = "select-custom-lista oculto";
+
+  function posicionar() {
+    const r = boton.getBoundingClientRect();
+    lista.style.position = "fixed";
+    lista.style.top = `${r.bottom + 6}px`;
+    lista.style.left = `${r.left}px`;
+    lista.style.width = `${r.width}px`;
+  }
+  function cerrar() {
+    lista.classList.add("oculto");
+    boton.setAttribute("aria-expanded", "false");
+    if (lista.parentElement === document.body) dropdown.appendChild(lista);
+    window.removeEventListener("scroll", cerrarSiScrollExterno, true);
+    window.removeEventListener("resize", cerrar);
+  }
+  function cerrarSiScrollExterno(e) {
+    if (lista.contains(e.target)) return;
+    cerrar();
+  }
+  function abrir() {
+    document.querySelectorAll(".select-custom-lista").forEach((l) => {
+      if (l !== lista) {
+        l.classList.add("oculto");
+        if (l.parentElement === document.body && l._volverA) l._volverA.appendChild(l);
+      }
+    });
+    lista._volverA = dropdown;
+    document.body.appendChild(lista);
+    posicionar();
+    lista.classList.remove("oculto");
+    boton.setAttribute("aria-expanded", "true");
+    window.addEventListener("scroll", cerrarSiScrollExterno, true);
+    window.addEventListener("resize", cerrar);
+  }
+
+  function repintar() {
+    lista.querySelectorAll(".select-custom-opcion").forEach((li) => {
+      const activa = valoresActuales.includes(li.dataset.id);
+      li.classList.toggle("activa", activa);
+      const check = li.querySelector(".select-custom-opcion-check");
+      if (check) check.textContent = activa ? "✓" : "";
+    });
+    boton.textContent = textoResumen();
+  }
+
+  opciones.forEach(({ id, etiqueta }) => {
+    const item = document.createElement("li");
+    item.className = "select-custom-opcion" + (valoresActuales.includes(id) ? " activa" : "");
+    item.dataset.id = id;
+
+    const check = document.createElement("span");
+    check.className = "select-custom-opcion-check";
+    check.style.cssText = "display:inline-block; width:1.2em;";
+    check.textContent = valoresActuales.includes(id) ? "✓" : "";
+
+    const texto = document.createElement("span");
+    texto.textContent = etiqueta;
+
+    item.appendChild(check);
+    item.appendChild(texto);
+    item.addEventListener("click", () => {
+      const yaActiva = valoresActuales.includes(id);
+      if (yaActiva && valoresActuales.length === 1) return; // no permite vaciar del todo, ver comentario arriba
+      valoresActuales = yaActiva
+        ? valoresActuales.filter((v) => v !== id)
+        : [...valoresActuales, id];
+      repintar();
+      onCambiar([...valoresActuales]);
+      // A propósito NO se cierra acá (a diferencia de
+      // construirSelectCustomAjustes): es selección múltiple, tiene
+      // sentido tildar más de una antes de cerrar.
+    });
+    lista.appendChild(item);
+  });
+
+  boton.setAttribute("aria-expanded", "false");
+  boton.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (lista.classList.contains("oculto")) abrir();
+    else cerrar();
+  });
+  document.addEventListener("click", (e) => {
+    if (!dropdown.contains(e.target) && !lista.contains(e.target)) cerrar();
+  });
+
+  dropdown.appendChild(boton);
+  dropdown.appendChild(lista);
+  return dropdown;
+}
+
 function renderizarConfigRangoHorasHorario() {
   const cfg = estado.datos.configuracion;
   // Mismos defaults que el fallback de obtenerRangoHorasHorario en
@@ -694,7 +820,16 @@ const SECCIONES_TOGGLEABLES = [
   // cualquier usuario. `id` confirmado contra main.js/index.html:
   // coincide exacto con el data-seccion real del botón de nav, y ya
   // estaba en DEFAULT_ORDEN_NAV de main.js.
-  { id: "tiempo-estudio", etiqueta: "Tiempo de Estudio", icono: "⏱️" },
+  //
+  // Rename 2026-09-12 (pedido explícito): la etiqueta pasa de "Tiempo de
+  // Estudio" a "Pomodoro" porque se cortaba en este listado — se cambia
+  // SOLO el texto mostrado, `id` se deja intacto ("tiempo-estudio") para
+  // no romper la coincidencia con main.js/index.html descrita arriba.
+  //
+  // Rename 2026-09-20 (pedido explícito): "Pomodoro" -> "Tiempo", para que
+  // coincida con el botón del sidebar (index.html) y con el título de la
+  // sección (tiempo-estudio.js). `id` intacto.
+  { id: "tiempo-estudio", etiqueta: "Tiempo", icono: "⏱️" },
   { id: "asistente", etiqueta: "Asistente", icono: "✨" },
 ];
 
@@ -958,6 +1093,79 @@ function inicializarAccordionAjustes() {
   });
 }
 
+/**
+ * Punto 4 (ronda visual, 2026-09-12): monta un pill switch (ver
+ * construirPillSwitchBinario en ui/componentes.js) en el lugar donde hoy
+ * vive un checkbox on/off estático de index.html, SIN tener que tocar
+ * index.html — se ubica el checkbox viejo por id, se reemplaza su
+ * envoltorio (el <label class="switch">...</label> que lo estiliza como
+ * interruptor) por el pill switch nuevo la primera vez que corre.
+ *
+ * Es IDEMPOTENTE a propósito: renderizarAjustes() puede volver a llamarse
+ * varias veces en la misma sesión (cambiar de paleta, editar otro campo,
+ * etc.), y para ese momento el checkbox de `idViejo` ya no existe en el
+ * DOM (se reemplazó la primera vez) — en vez de fallar silenciosamente o
+ * reconstruir el pill switch de cero (perdiendo el listener/nodo y
+ * parpadeando), en las llamadas siguientes solo se actualiza cuál opción
+ * queda marcada .active, buscando el grupo ya montado por `dataAtributo`.
+ */
+/**
+ * Punto 4 (ronda visual, 2026-09-12): monta un pill switch (ver
+ * construirPillSwitchBinario en ui/componentes.js) en el lugar donde hoy
+ * vive un checkbox on/off estático de index.html, SIN tener que tocar
+ * index.html.
+ *
+ * Ronda 2 (mismo día, feedback directo): "Modo"/"Calidad" ya no van al
+ * lado del switch (fila "etiqueta ... switch chico a la derecha", que es
+ * como venía el checkbox original) — van APILADOS arriba de un switch que
+ * ocupa todo el ancho de la tarjeta ("Solo debe decir: Modo / switch").
+ * Para lograr esto sin tocar index.html se sube un nivel más: en vez de
+ * reemplazar solo el `<label class="switch">`, se reemplaza toda la FILA
+ * que lo contiene (`.closest('.switch').parentElement`, asumiendo que esa
+ * fila hoy tiene la etiqueta de texto vieja + el switch como únicos 2
+ * hijos — es la estructura típica de estos checkboxes en el proyecto) por
+ * una fila nueva (.fila-pill-switch, ver design-system.css) con un caption
+ * chico arriba y el pill switch abajo, ancho completo.
+ *
+ * Sigue siendo IDEMPOTENTE: renderizarAjustes() puede volver a llamarse
+ * varias veces en la misma sesión, y para ese momento el checkbox de
+ * `idViejo` ya no existe (se reemplazó la primera vez) — en las llamadas
+ * siguientes solo se actualiza cuál opción queda .active y la posición del
+ * thumb, buscando el grupo ya montado por `dataAtributo`, en vez de
+ * reconstruir todo de cero (que perdería el listener y parpadearía).
+ */
+function montarPillSwitch(idViejo, dataAtributo, tituloCorto, opciones, valorActivo, onCambiar) {
+  const existente = document.querySelector(`[data-pill-switch="${dataAtributo}"]`);
+  if (existente) {
+    existente.querySelectorAll(".pill-item").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.valor === valorActivo);
+    });
+    const indiceActivo = opciones.findIndex((o) => o.valor === valorActivo);
+    existente
+      .querySelector(".pill-switch-thumb")
+      ?.classList.toggle("pill-switch-thumb--derecha", indiceActivo === 1);
+    return;
+  }
+  const chkViejo = document.getElementById(idViejo);
+  if (!chkViejo) return;
+  const switchViejo = chkViejo.closest(".switch") || chkViejo;
+  const fila = switchViejo.parentElement || switchViejo;
+
+  const filaNueva = document.createElement("div");
+  filaNueva.className = "fila-pill-switch";
+
+  const titulo = document.createElement("span");
+  titulo.className = "fila-pill-switch-titulo";
+  titulo.textContent = tituloCorto;
+
+  const pillSwitch = construirPillSwitchBinario(opciones, valorActivo, onCambiar);
+  pillSwitch.dataset.pillSwitch = dataAtributo;
+
+  filaNueva.appendChild(titulo);
+  filaNueva.appendChild(pillSwitch);
+  fila.replaceWith(filaNueva);
+}
+
 function renderizarAjustes() {
   inicializarAccordionAjustes();
   inicializarAsistenteAjustes();
@@ -1039,56 +1247,64 @@ function renderizarAjustes() {
   // existentes (ver rendimiento_default_v2_aplicado en core/schema.js).
   // Reaplicado 2026-08-23 sobre la rama del antirrebote — se había perdido
   // en esa rama porque partió de una copia anterior al fix v1.16.1.
-  const chkRendimiento = document.getElementById("switch-rendimiento");
-  if (chkRendimiento) {
-    chkRendimiento.checked = !estado.datos.configuracion.modo_rendimiento;
-    chkRendimiento.onchange = () => {
-      // Estado en memoria + efecto visual: instantáneo, sin antirrebote (ver
-      // dispararSyncConAntirrebote más arriba para el porqué).
-      const fancyActivo = chkRendimiento.checked;
+  //
+  // Punto 4 (ronda visual, 2026-09-12): pasa de checkbox on/off a pill
+  // switch de 2 opciones siempre visibles — "Rendimiento" se renombra a
+  // "Optimizado" solo en la ETIQUETA (pedido explícito: no hace falta
+  // renombrar el campo modo_rendimiento ni nada del modelo de datos). Se
+  // monta reemplazando el checkbox viejo por DOM en vez de tocar
+  // index.html — ver montarPillSwitch más abajo para el porqué del patrón
+  // idempotente (esta función puede volver a correr en cada render de
+  // Ajustes).
+  //
+  // Ronda 2 (mismo día): el título de la fila pasa de "Diseño" a "Calidad"
+  // (pedido explícito).
+  montarPillSwitch(
+    "switch-rendimiento",
+    "pill-switch-diseno",
+    "Calidad",
+    [
+      { valor: "optimizado", texto: "Optimizado" },
+      { valor: "fancy", texto: "Fancy" },
+    ],
+    estado.datos.configuracion.modo_rendimiento ? "optimizado" : "fancy",
+    (valor) => {
+      const fancyActivo = valor === "fancy";
       estado.datos.configuracion.modo_rendimiento = !fancyActivo;
       aplicarModoRendimiento(!fancyActivo);
       dispararSyncConAntirrebote();
-    };
-  }
+    }
+  );
 
-  // FIX 2026-09-25: switch general de sincronización con Google Calendar
-  // (Ajustes Avanzados) — antes llamaba a activarNotificacionesPush()/
-  // desactivarNotificacionesPush() (Web Push, módulo dado de baja) Y
-  // buscaba el elemento por un id viejo (`switch-notificaciones-push`)
-  // que ya no existe en index.html: el HTML ya se había actualizado al id
-  // real (`switch-sync-calendario`, ver comentario ahí mismo) pero este
-  // archivo se quedó atrás, así que `document.getElementById` devolvía
-  // `null` y el `if (chkNotificaciones)` de abajo nunca corría — el switch
-  // general literalmente no tenía ningún handler enganchado, ni reflejaba
-  // el estado real al abrir Ajustes. Esto es la causa más directa de "no
-  // deja activarlas ni usarlas bien".
-  //
-  // Ahora dispara activarSincronizacionCalendario()/
-  // desactivarSincronizacionCalendario() (core/notificaciones-calendario.js),
-  // que crean/borran el calendario secundario y (re)sincronizan Agenda +
-  // Resumen Diario en lote. El aviso "tu navegador no soporta
-  // notificaciones push" también se eliminó de index.html (ya no aplica:
-  // Calendar entrega el recordatorio nativo del propio calendario, sin
-  // pedir permiso de push del navegador) — se saca esa lógica de acá
-  // también, en vez de dejar código muerto buscando un elemento que ya no
-  // existe.
+  // Switch general de sincronización con Google Calendar (Ajustes
+  // Avanzados). Se acepte o no en el onboarding (ver
+  // ofrecerActivarSincronizacionCalendario en main.js), queda disponible
+  // acá para prender/apagar en cualquier momento. Todo el trabajo real
+  // (crear/borrar el calendario secundario, (re)sincronizar Agenda +
+  // Resumen Diario en lote) vive en core/notificaciones-calendario.js;
+  // este switch solo dispara esas funciones y refleja su resultado.
+  // FIX (2026-09-26, ronda 3): volvía a buscar el id viejo
+  // "switch-notificaciones-push" (ya no existe en index.html, el real es
+  // "switch-sync-calendario") y a llamar a las funciones de Web Push
+  // retiradas — mismo bug ya resuelto antes, que volvió a aparecer. Ya no
+  // aplica el chequeo de "el navegador no soporta notificaciones push":
+  // Calendar entrega el recordatorio nativo del propio calendario.
   const chkNotificaciones = document.getElementById("switch-sync-calendario");
   if (chkNotificaciones) {
     chkNotificaciones.disabled = false;
     chkNotificaciones.checked = sincronizacionCalendarActiva();
     chkNotificaciones.onchange = async () => {
       // Se deshabilita mientras se resuelve la llamada a Google (crear el
-      // calendario secundario / borrar lo espejado puede tardar) — vuelve a
-      // habilitarse pase lo que pase.
+      // calendario secundario / borrar lo espejado puede tardar) — vuelve
+      // a habilitarse pase lo que pase.
       chkNotificaciones.disabled = true;
       if (chkNotificaciones.checked) {
         const activado = await activarSincronizacionCalendario();
-        // Si falta el scope de Calendar, activarSincronizacionCalendario ya
-        // mostró el modal bloqueante correspondiente (avisarFaltaPermisoCalendar);
-        // si falló por otra razón, ya mostró un toast. Acá solo se destilda
-        // el switch para que la UI quede consistente con lo que realmente
-        // pasó.
+        // Si falta el scope de Calendar, activarSincronizacionCalendario
+        // ya mostró el modal bloqueante correspondiente
+        // (avisarFaltaPermisoCalendar); si falló por otra razón, ya
+        // mostró un toast. Acá solo se destilda el switch para que la UI
+        // quede consistente con lo que realmente pasó.
         if (!activado) chkNotificaciones.checked = false;
       } else {
         await desactivarSincronizacionCalendario();
@@ -1112,21 +1328,29 @@ function renderizarAjustes() {
   // sección global. Los campos de configuracion siguen siendo los mismos,
   // solo cambió DÓNDE se editan.
 
-  // Modo claro/oscuro
-  const chkModo = document.getElementById("switch-modo");
-  chkModo.checked = estado.datos.configuracion.modo === "light";
-  chkModo.onchange = () => {
-    // Mismo criterio que switch-rendimiento: estado en memoria + repintado de
-    // paleta instantáneos, solo el sello+sync va con antirrebote.
-    const nuevoModo = chkModo.checked ? "light" : "dark";
-    estado.datos.configuracion.modo = nuevoModo;
-    aplicarPaleta(
-      estado.datos.configuracion.paleta,
-      nuevoModo,
-      estado.datos.configuracion.paleta === "personalizada" ? personalizada.colores : undefined
-    );
-    dispararSyncConAntirrebote();
-  };
+  // Modo claro/oscuro — punto 4: mismo pill switch, ver montarPillSwitch.
+  montarPillSwitch(
+    "switch-modo",
+    "pill-switch-modo",
+    "Modo",
+    [
+      { valor: "dark", texto: "Oscuro" },
+      { valor: "light", texto: "Claro" },
+    ],
+    estado.datos.configuracion.modo === "light" ? "light" : "dark",
+    (nuevoModo) => {
+      // Mismo criterio que el pill switch de arriba: estado en memoria +
+      // repintado de paleta instantáneos, solo el sello+sync va con
+      // antirrebote.
+      estado.datos.configuracion.modo = nuevoModo;
+      aplicarPaleta(
+        estado.datos.configuracion.paleta,
+        nuevoModo,
+        estado.datos.configuracion.paleta === "personalizada" ? personalizada.colores : undefined
+      );
+      dispararSyncConAntirrebote();
+    }
+  );
 
   // Ajustes por Universidad (2026-08-08): el selector de escala global que
   // vivía acá (#pill-escala-notas, leyendo/escribiendo
@@ -2000,6 +2224,7 @@ function renderizarNotasAprobacion() {
     labelAprobacion.style.cssText = "display:block; font-size:0.75rem; margin-bottom:4px;";
     const inputAprobacion = document.createElement("input");
     inputAprobacion.type = "number";
+    inputAprobacion.autocomplete = "off";
     inputAprobacion.className = "form-input";
     inputAprobacion.style.width = "100%";
 
@@ -2059,6 +2284,7 @@ function renderizarNotasAprobacion() {
     labelRaspando.textContent = "Pasás raspando con";
     const inputRaspando = document.createElement("input");
     inputRaspando.type = "number";
+    inputRaspando.autocomplete = "off";
     inputRaspando.className = "form-input";
     inputRaspando.style.width = "100%";
     bloqueRaspando.appendChild(labelRaspando);
