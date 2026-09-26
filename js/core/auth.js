@@ -1111,12 +1111,30 @@ async function parchearEventoCalendar(token, calendarId, eventId, campos) {
  * events.instances — lista las ocurrencias REALES de un evento recurrente
  * dentro de una ventana de tiempo (a diferencia del evento maestro, que no
  * tiene una fecha concreta por sí solo). Se usa para encontrar el id
- * puntual de la instancia de HOY del Resumen Diario, que es lo que hace
- * falta para poder parchear (ver arriba) solo ese día sin tocar el resto
- * de la recurrencia.
+ * puntual de una fecha puntual del Resumen Diario, que es lo que hace falta
+ * para poder parchear (ver arriba) solo ese día sin tocar el resto de la
+ * recurrencia.
+ *
+ * FIX 2026-09-26 (Resumen Diario reactivo, ver
+ * sincronizarResumenParaFechaEvento en notificaciones-calendario.js):
+ * `showDeleted: "true"` — por default la API excluye instancias que ya se
+ * cancelaron puntualmente (ej. un día donde no había nada pendiente, ver
+ * actualizarResumenDiarioDelDia, cancela SOLO esa ocurrencia). Sin este
+ * parámetro, si algo cambia después para esa misma fecha (se agrega un
+ * evento nuevo que sí cae ahí) esta función no encontraba nada para
+ * "revivir" — devolvía `null` como si la fecha estuviera fuera del
+ * horizonte de la recurrencia, en vez de la instancia cancelada que
+ * hacía falta reactivar. Quien llama a esto ya decide qué hacer según
+ * `instancia.status` (parchear con `status: "confirmed"` para reactivarla,
+ * o dejarla cancelada si de verdad no hay nada).
  */
 async function buscarInstanciaEventoCalendar(token, calendarId, eventId, timeMinIso, timeMaxIso) {
-  const params = new URLSearchParams({ timeMin: timeMinIso, timeMax: timeMaxIso, maxResults: "1" });
+  const params = new URLSearchParams({
+    timeMin: timeMinIso,
+    timeMax: timeMaxIso,
+    maxResults: "1",
+    showDeleted: "true",
+  });
   const respuesta = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}/instances?${params}`,
     { headers: { Authorization: `Bearer ${token}` } }
