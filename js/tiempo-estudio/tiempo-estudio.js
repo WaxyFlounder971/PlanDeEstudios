@@ -702,16 +702,122 @@ function construirEncabezadoDetalle(cont, item) {
   cont.appendChild(tarjeta);
 }
 
+/**
+ * Timer circular (rediseño, SOLO en esta pantalla de detalle — la lista de
+ * materias en construirTarjetaMateria sigue con su barra lineal chica, no
+ * cambia). Reemplaza el cronómetro-en-texto-plano + la barra lineal de meta
+ * semanal que vivían acá como dos piezas sueltas: ahora es un solo anillo
+ * SVG dentro de la misma tarjeta (`.glass-card`, mismo lenguaje visual de
+ * siempre) — el arco de color es cuánto de la meta semanal ya está
+ * estudiado, y el centro del anillo sigue mostrando el cronómetro de la
+ * fase en vivo, igual que antes. CSS inyectado una sola vez (guard por id),
+ * mismo criterio que ya usa el proyecto para piezas autosuficientes (ver
+ * asegurarEstilosEstudioHoyAgenda en agenda.js) — usa color-mix() contra
+ * `--bg-panel` con el color de la materia (misma técnica, variables reales
+ * del proyecto: --text-primary, --text-muted, --bg-panel, --font-display).
+ */
+function asegurarEstilosTimerCircularDetalle() {
+  if (document.getElementById("estilos-te-timer-circular")) return;
+  const style = document.createElement("style");
+  style.id = "estilos-te-timer-circular";
+  style.textContent = `
+    .te-panel-timer-circular { padding: 20px 16px; }
+    .te-timer-circular-wrap {
+      position: relative;
+      width: 200px;
+      max-width: 62vw;
+      aspect-ratio: 1;
+      margin: 2px auto 0;
+    }
+    .te-timer-circular-svg {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+      display: block;
+    }
+    .te-timer-circular-track {
+      fill: none;
+      stroke: color-mix(in srgb, var(--te-color-materia, var(--text-muted)) 16%, var(--bg-panel));
+      stroke-width: 14;
+    }
+    .te-timer-circular-progress {
+      fill: none;
+      stroke: var(--te-color-materia, var(--text-primary));
+      stroke-width: 14;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.6s ease, stroke 0.3s ease;
+    }
+    .te-timer-circular-progress--completa {
+      stroke: color-mix(in srgb, var(--te-color-materia, var(--text-primary)) 65%, #22c55e 35%);
+    }
+    .te-timer-circular-centro {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      text-align: center;
+      padding: 0 10px;
+    }
+    .te-timer-circular-centro .te-timer-display {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 1.9rem;
+      line-height: 1.15;
+      color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
+    }
+    .te-timer-circular-centro .te-timer-extra {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+      opacity: 0;
+      transform: translateY(-2px);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    .te-timer-circular-centro .te-timer-extra--visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .te-timer-circular-centro .te-timer-extra-valor {
+      font-weight: 700;
+      font-family: var(--font-display);
+      color: var(--te-color-materia, var(--text-primary));
+    }
+    .te-timer-circular-chip {
+      margin: 4px 0 0;
+      padding: 5px 14px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: color-mix(in srgb, var(--te-color-materia, var(--text-muted)) 14%, var(--bg-panel));
+      color: var(--text-primary);
+    }
+    .te-timer-circular-chip.te-completada {
+      background: color-mix(in srgb, var(--te-color-materia, var(--text-primary)) 26%, var(--bg-panel));
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 function construirPantallaDetalle(cont, item) {
   const { mm, materia, plan, nombreMateria } = item;
+  const color = obtenerColorMateria(mm, materia, plan);
 
   construirEncabezadoDetalle(cont, item);
+  asegurarEstilosTimerCircularDetalle();
 
   const meta = mm.tiempo_estudio.meta_horas_semana;
 
   const panelTimer = document.createElement("div");
-  panelTimer.className = "glass-card stack";
-  panelTimer.style.cssText = "align-items:center; gap:16px; text-align:center;";
+  panelTimer.className = "glass-card stack te-panel-timer-circular";
+  panelTimer.style.cssText = `align-items:center; gap:14px; text-align:center; --te-color-materia:${color};`;
 
   // Parte 2: etiqueta de fase de Pomodoro ("Bloque 2 de 4 · Descanso
   // corto") — vacía/invisible salvo que el timer activo de ESTA materia
@@ -724,15 +830,39 @@ function construirPantallaDetalle(cont, item) {
   faseLabel.style.cssText = "margin:0; font-size:0.85rem;";
   panelTimer.appendChild(faseLabel);
 
-  const display = document.createElement("div");
+  // Anillo (radio/circunferencia fijos, calza con el viewBox 0 0 200 200
+  // de abajo) — un solo elemento visual hace las dos cosas que antes eran
+  // dos piezas sueltas: el arco de color es la meta semanal (cuánto se ha
+  // estudiado / cuánto falta, ver pintarProgreso), el centro es el
+  // cronómetro de la fase en vivo (ver pintar).
+  const RADIO_ANILLO = 80;
+  const CIRCUNFERENCIA_ANILLO = 2 * Math.PI * RADIO_ANILLO;
+
+  const anilloWrap = document.createElement("div");
+  anilloWrap.className = "te-timer-circular-wrap";
+  anilloWrap.innerHTML = `
+    <svg class="te-timer-circular-svg" viewBox="0 0 200 200" aria-hidden="true">
+      <circle class="te-timer-circular-track" cx="100" cy="100" r="${RADIO_ANILLO}"></circle>
+      <circle class="te-timer-circular-progress" cx="100" cy="100" r="${RADIO_ANILLO}"
+        stroke-dasharray="${CIRCUNFERENCIA_ANILLO}" stroke-dashoffset="${CIRCUNFERENCIA_ANILLO}"></circle>
+    </svg>
+  `;
+  const circuloProgreso = anilloWrap.querySelector(".te-timer-circular-progress");
+
+  const centro = document.createElement("div");
+  centro.className = "te-timer-circular-centro";
+  anilloWrap.appendChild(centro);
+
+  const display = document.createElement("span");
   display.className = "te-timer-display";
-  panelTimer.appendChild(display);
+  centro.appendChild(display);
 
   // Tiempo extra (pedido 2026-09-19): el cronómetro principal se queda
   // clavado en la duración configurada (ej. 40:00) y lo que se pasa cuenta
-  // ACÁ, en su propio renglón debajo. Solo existe con Pomodoro; en cuanto
-  // está activo reserva su espacio (invisible hasta que hay extra) para que
-  // el cronómetro principal nunca se corra cuando aparece.
+  // ACÁ, debajo del cronómetro, dentro del mismo centro del anillo. Solo
+  // existe con Pomodoro; en cuanto está activo reserva su espacio
+  // (invisible hasta que hay extra) para que el cronómetro principal nunca
+  // se corra cuando aparece.
   const extra = document.createElement("div");
   extra.className = "te-timer-extra";
   extra.hidden = true;
@@ -742,7 +872,17 @@ function construirPantallaDetalle(cont, item) {
   const extraValor = document.createElement("span");
   extraValor.className = "te-timer-extra-valor";
   extra.append(extraEtiqueta, extraValor);
-  panelTimer.appendChild(extra);
+  centro.appendChild(extra);
+
+  panelTimer.appendChild(anilloWrap);
+
+  // Chip de meta semanal (antes era un <span class="te-detalle-meta"> suelto
+  // debajo de una barra lineal aparte — ver pintarProgreso) — ahora vive
+  // pegado al anillo, dentro de la misma tarjeta, como una píldora chica
+  // (mismo lenguaje de "pill" que ya usa el resto de la app).
+  const chipMeta = document.createElement("p");
+  chipMeta.className = "te-detalle-meta te-timer-circular-chip";
+  panelTimer.appendChild(chipMeta);
 
   // Fila de acción: cuando ESTA materia tiene el timer activo, se
   // muestran 2 botones (play/pause + detener aparte); si no, un solo
@@ -818,17 +958,17 @@ function construirPantallaDetalle(cont, item) {
 
   cont.appendChild(panelTimer);
 
-  // Barra de progreso (rediseño, sin cambios de estructura/clases): se crea
-  // una sola vez acá y de ahí en más se repinta su contenido en cada tick
-  // vía pintarProgreso() — necesario para el punto 3 (excedente en vivo
-  // mientras el timer sigue corriendo, no solo al detenerlo).
-  const panelProgreso = document.createElement("div");
-  cont.appendChild(panelProgreso);
-
+  // Pinta el anillo + el chip de meta semanal — se repinta en cada tick vía
+  // pintarProgreso() (mismo motivo de siempre: punto 3, excedente en vivo
+  // mientras el timer sigue corriendo, no solo al detenerlo). Sin meta
+  // configurada, el anillo se queda en su pista vacía (0%, sin arco de
+  // color) y el chip lo dice en texto — no hay nada que "llenar" todavía.
   function pintarProgreso(activo) {
     if (meta === null || meta === undefined) {
-      panelProgreso.className = "";
-      panelProgreso.innerHTML = `<p class="te-detalle-meta">Sin meta configurada esta semana.</p>`;
+      circuloProgreso.style.strokeDashoffset = String(CIRCUNFERENCIA_ANILLO);
+      circuloProgreso.classList.remove("te-timer-circular-progress--completa");
+      chipMeta.classList.remove("te-completada");
+      chipMeta.textContent = "Sin meta configurada esta semana.";
       return;
     }
 
@@ -855,19 +995,15 @@ function construirPantallaDetalle(cont, item) {
     const restanteMin = Math.max(0, metaMinutos - minutosEstudiados);
     const excedenteMin = Math.max(0, minutosEstudiados - metaMinutos);
 
-    const texto = !completada
+    circuloProgreso.style.strokeDashoffset = String(CIRCUNFERENCIA_ANILLO - (porcentaje / 100) * CIRCUNFERENCIA_ANILLO);
+    circuloProgreso.classList.toggle("te-timer-circular-progress--completa", completada);
+
+    chipMeta.classList.toggle("te-completada", completada);
+    chipMeta.textContent = !completada
       ? `Faltan ${formatearHorasMin(restanteMin)}`
       : excedenteMin > 0
       ? `🎉 Meta cumplida · excedente +${formatearHorasMin(excedenteMin)}`
       : `🎉 Meta cumplida (${formatearHorasMin(minutosEstudiados)})`;
-
-    panelProgreso.className = "te-detalle-progreso";
-    panelProgreso.innerHTML = `
-      <div class="te-barra-progreso">
-        <div class="te-barra-progreso-fill ${completada ? "te-completada" : ""}" style="width:${porcentaje}%; background:${obtenerColorMateria(mm, materia, plan)};"></div>
-      </div>
-      <span class="te-detalle-meta">${texto}</span>
-    `;
   }
   pintarProgreso(obtenerTimerActivo());
 
@@ -933,7 +1069,6 @@ function construirPantallaDetalle(cont, item) {
   // productivo/sesiones/promedio), seguido de la lista editable de
   // sesiones de ESTA matrícula puntual (nunca las de otra repetición de
   // la misma materia).
-  const color = obtenerColorMateria(mm, materia, plan);
   construirEstadisticasMateria(cont, mm, color, () => renderizarTiempoEstudio());
   construirListaSesiones(cont, mm.id, color, () => renderizarTiempoEstudio());
 }
