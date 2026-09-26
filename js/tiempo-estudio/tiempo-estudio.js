@@ -779,6 +779,15 @@ function asegurarEstilosTimerCircularDetalle() {
       justify-content: center;
     }
     .te-timer-col-botones .btn { min-width: 0; width: 100%; }
+    .te-timer-col-reloj {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 250px;
+      max-width: 100%;
+      flex: 0 1 250px;
+      order: 2;
+    }
     .te-bloques-progreso {
       display: flex;
       justify-content: center;
@@ -816,7 +825,7 @@ function asegurarEstilosTimerCircularDetalle() {
        completa debajo — siguen en horizontal mientras el número y la
        etiqueta de cada una entren en un solo renglón. */
     @container te-timer15 (max-width: 640px) {
-      .te-timer-circular-wrap { order: 1; width: 150px; }
+      .te-timer-col-reloj { order: 1; }
       .te-timer-col-botones { order: 2; flex-direction: row; flex-wrap: wrap; width: auto; justify-content: center; }
       .te-timer-col-botones .btn { width: auto; min-width: 120px; }
       .te-timer-col-stats { order: 3; flex-basis: 100%; width: 100%; flex-direction: row; justify-content: center; }
@@ -828,14 +837,14 @@ function asegurarEstilosTimerCircularDetalle() {
     @container te-timer15 (max-width: 420px) {
       .te-timer-col-stats { flex-direction: column; }
       .te-timer-col-stats .te-timer-stat { white-space: normal; }
+      .te-timer-col-botones { flex-direction: column; width: min(100%, 250px); }
+      .te-timer-col-botones .btn { width: 100%; min-width: 0; min-height: 44px; }
     }
     .te-timer-circular-wrap {
       position: relative;
-      width: 200px;
-      max-width: 62vw;
+      width: 100%;
       aspect-ratio: 1;
       margin: 0;
-      order: 2;
     }
     .te-timer-circular-svg {
       width: 100%;
@@ -858,23 +867,6 @@ function asegurarEstilosTimerCircularDetalle() {
     .te-timer-circular-progress--completa {
       stroke: color-mix(in srgb, var(--te-color-materia, var(--text-primary)) 65%, #22c55e 35%);
     }
-    .te-timer-circular-extra-track,
-    .te-timer-circular-extra-progress {
-      fill: none;
-      opacity: 0;
-      transition: stroke-dashoffset 0.6s ease, opacity 0.25s ease;
-    }
-    .te-timer-circular-extra-track {
-      stroke: color-mix(in srgb, var(--text-primary) 9%, transparent);
-      stroke-width: 5;
-    }
-    .te-timer-circular-extra-progress {
-      stroke: color-mix(in srgb, var(--te-color-materia, var(--accent-1)) 72%, var(--text-primary));
-      stroke-width: 5;
-      stroke-linecap: round;
-    }
-    .te-timer-circular-extra--visible .te-timer-circular-extra-track,
-    .te-timer-circular-extra--visible .te-timer-circular-extra-progress { opacity: 1; }
     .te-timer-circular-centro {
       position: absolute;
       inset: 0;
@@ -892,29 +884,22 @@ function asegurarEstilosTimerCircularDetalle() {
       color: var(--text-primary);
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
-      transition: top 0.2s ease;
     }
-    .te-timer-circular-centro .te-timer-extra {
-      position: absolute;
-      left: 50%;
-      top: calc(50% + 25px);
-      transform: translate(-50%, -2px);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 1px;
-      font-size: 0.62rem;
-      color: var(--text-muted);
-      opacity: 0;
-      transition: opacity 0.2s ease, transform 0.2s ease;
-    }
-    .te-timer-circular-centro .te-timer-extra--visible {
+    .te-timer-extra {
+      display: block;
+      min-height: 1.5rem;
+      margin-top: 5px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: none;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
       opacity: 1;
-      transform: translate(-50%, 0);
+      transform: none;
+      transition: none;
     }
-    .te-timer-circular-wrap.te-tiempo-extra-activo .te-timer-display {
-      top: calc(50% - 9px);
-    }
+    .te-timer-extra[hidden] { display: none; }
     .te-timer-circular-centro .te-timer-extra-valor {
       font-weight: 700;
       font-family: var(--font-display);
@@ -981,8 +966,6 @@ function construirPantallaDetalle(cont, item) {
   // cronómetro de la fase en vivo (ver pintar).
   const RADIO_ANILLO = 80;
   const CIRCUNFERENCIA_ANILLO = 2 * Math.PI * RADIO_ANILLO;
-  const RADIO_EXTRA = 62;
-  const CIRCUNFERENCIA_EXTRA = 2 * Math.PI * RADIO_EXTRA;
 
   // Layout: columna de stats | anillo | columna de botones — los 3 al
   // mismo nivel, centrados como una sola fila (ver container queries de
@@ -1030,13 +1013,9 @@ function construirPantallaDetalle(cont, item) {
       <circle class="te-timer-circular-track" cx="100" cy="100" r="${RADIO_ANILLO}"></circle>
       <circle class="te-timer-circular-progress" cx="100" cy="100" r="${RADIO_ANILLO}"
         stroke-dasharray="${CIRCUNFERENCIA_ANILLO}" stroke-dashoffset="${CIRCUNFERENCIA_ANILLO}"></circle>
-      <circle class="te-timer-circular-extra-track" cx="100" cy="100" r="${RADIO_EXTRA}"></circle>
-      <circle class="te-timer-circular-extra-progress" cx="100" cy="100" r="${RADIO_EXTRA}"
-        stroke-dasharray="${CIRCUNFERENCIA_EXTRA}" stroke-dashoffset="${CIRCUNFERENCIA_EXTRA}"></circle>
     </svg>
   `;
   const circuloProgreso = anilloWrap.querySelector(".te-timer-circular-progress");
-  const circuloExtra = anilloWrap.querySelector(".te-timer-circular-extra-progress");
 
   const centro = document.createElement("div");
   centro.className = "te-timer-circular-centro";
@@ -1046,20 +1025,18 @@ function construirPantallaDetalle(cont, item) {
   display.className = "te-timer-display";
   centro.appendChild(display);
 
-  // El excedente se lee debajo del tiempo principal; el anillo interior
-  // muestra su avance dentro de la primera hora extra.
+  // El tiempo extra se presenta como un valor breve debajo de la rueda,
+  // sin añadir otro anillo ni superponer información al cronómetro.
   const extra = document.createElement("div");
   extra.className = "te-timer-extra";
   extra.hidden = true;
-  const extraEtiqueta = document.createElement("span");
-  extraEtiqueta.className = "te-timer-extra-etiqueta";
-  extraEtiqueta.textContent = "Tiempo extra";
   const extraValor = document.createElement("span");
   extraValor.className = "te-timer-extra-valor";
-  extra.append(extraValor, extraEtiqueta);
-  centro.appendChild(extra);
-
-  layout.appendChild(anilloWrap);
+  extra.appendChild(extraValor);
+  const colReloj = document.createElement("div");
+  colReloj.className = "te-timer-col-reloj";
+  colReloj.append(anilloWrap, extra);
+  layout.appendChild(colReloj);
 
   // Columna de botones — mismos 5 botones de siempre, ahora en su propia
   // columna (se acomoda sola en fila cuando el layout pasa a modo tablet,
@@ -1200,20 +1177,9 @@ function construirPantallaDetalle(cont, item) {
     display.textContent = esEstaMateria ? formatearDuracion(tf.transcurridos) : "00:00";
 
     const esPomodoro = Boolean(esEstaMateria && activo.pomodoro);
-    extra.hidden = !esPomodoro;
-    if (esPomodoro) {
-      const hayExtra = tf.extra > 0;
-      extra.classList.toggle("te-timer-extra--visible", hayExtra);
-      extraValor.textContent = `+${formatearDuracion(tf.extra)}`;
-      anilloWrap.classList.toggle("te-timer-circular-extra--visible", hayExtra);
-      anilloWrap.classList.toggle("te-tiempo-extra-activo", hayExtra);
-      const avanceExtra = Math.min(1, tf.extra / 3600);
-      circuloExtra.style.strokeDashoffset = String(CIRCUNFERENCIA_EXTRA * (1 - avanceExtra));
-    } else {
-      anilloWrap.classList.remove("te-timer-circular-extra--visible");
-      anilloWrap.classList.remove("te-tiempo-extra-activo");
-      circuloExtra.style.strokeDashoffset = String(CIRCUNFERENCIA_EXTRA);
-    }
+    const hayExtra = Boolean(esPomodoro && tf.extra > 0);
+    extra.hidden = !hayExtra;
+    if (hayExtra) extraValor.textContent = `+${formatearDuracion(tf.extra)}`;
 
     // Iniciar solo se ve si NADIE está corriendo en esta materia;
     // pausa/detener solo se ven si ESTA materia es la que está corriendo.
