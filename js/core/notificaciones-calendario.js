@@ -864,17 +864,15 @@ async function actualizarResumenDiarioDelDia() {
  * instancia había quedado cancelada de una pasada anterior, se reactiva
  * (`status: "confirmed"`) en el mismo PATCH.
  *
- * Limitación que NO se resuelve acá: si un evento CAMBIA de fecha (una
- * edición que lo mueve de día), esto arregla la instancia de la fecha
- * NUEVA, pero no tiene forma de saber cuál era la fecha VIEJA para
- * recalcular esa otra instancia — sincronizarEventoCalendario recibe el
- * evento ya con la fecha nueva puesta, sin rastro de la anterior (haría
- * falta que agenda-modal.js la pasara explícitamente, y ese archivo no
- * forma parte de esta sesión). Esa instancia vieja queda con el listado de
- * antes hasta que: (a) llegue su día y actualizarResumenDiarioDelDia la
- * recalcule de cero al abrir la app, o (b) algún OTRO evento de esa misma
- * fecha vieja dispare este mismo camino antes. Es el mismo tipo de
- * ventana que ya existía, solo que más chica.
+ * FIX 2026-09-26 (parte 2, ya con agenda-modal.js a la vista): la fecha
+ * VIEJA de un evento que se edita moviéndolo de día YA NO queda huérfana —
+ * esta función se exporta puntualmente para que guardarEventoAgenda
+ * (agenda-modal.js) capture `viva.fecha` ANTES de pisarla con la fecha
+ * nueva, y llame a esto una segunda vez con la fecha vieja después de
+ * guardar. La limitación documentada en el fix anterior (esta función no
+ * puede adivinar la fecha vieja por sí sola, porque el evento le llega ya
+ * mutado) sigue siendo cierta — lo que cambió es que ahora hay un llamador
+ * que sí conoce las dos fechas y hace las dos llamadas.
  *
  * No hace nada si el switch general, el scope, o el Resumen Diario en
  * particular están apagados, ni si la fecha del evento ya pasó (no hay
@@ -1067,4 +1065,5 @@ export {
   sincronizacionCalendarActiva,
   sincronizarEventoCalendario,
   sincronizarResumenDiario,
+  sincronizarResumenParaFechaEvento,
 };
