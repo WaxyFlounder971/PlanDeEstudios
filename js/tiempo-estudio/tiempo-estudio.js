@@ -721,13 +721,88 @@ function asegurarEstilosTimerCircularDetalle() {
   const style = document.createElement("style");
   style.id = "estilos-te-timer-circular";
   style.textContent = `
-    .te-panel-timer-circular { padding: 20px 16px; }
+    .te-panel-timer-circular { padding: 20px 16px; container-type: inline-size; container-name: te-timer15; }
+    /* Fila principal: stats | anillo | botones. Ancho ancho = las 3 columnas
+       una al lado de otra; container-query decide cuándo ya no entran (ver
+       abajo), NO el ancho de pantalla, para que se comporte igual sin
+       importar dónde viva esta tarjeta dentro del layout general. Todo
+       centrado con justify-content: center (nunca space-between, que
+       empuja anillo/botones a los extremos cuando quedan solo esos dos). */
+    .te-timer-layout {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      width: 100%;
+    }
+    .te-timer-col-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 140px;
+      flex-shrink: 0;
+      order: 1;
+    }
+    .te-timer-stat {
+      background: color-mix(in srgb, var(--te-color-materia, var(--text-muted)) 12%, var(--bg-panel));
+      border-radius: 12px;
+      padding: 8px 12px;
+      text-align: center;
+    }
+    .te-timer-stat .te-timer-stat-n {
+      display: block;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.92rem;
+      color: var(--text-primary);
+    }
+    .te-timer-stat.te-completada .te-timer-stat-n {
+      color: color-mix(in srgb, var(--te-color-materia, var(--text-primary)) 65%, #22c55e 35%);
+    }
+    .te-timer-stat .te-timer-stat-l {
+      display: block;
+      font-size: 0.66rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .te-timer-sin-meta { margin: 0; font-size: 0.85rem; color: var(--text-muted); text-align: center; }
+    .te-timer-col-botones {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+      width: 150px;
+      flex-shrink: 0;
+      order: 3;
+      justify-content: center;
+    }
+    .te-timer-col-botones .btn { min-width: 0; width: 100%; }
+    /* Ancho medio ("tablet"): anillo + botones se quedan arriba uno al lado
+       del otro (más chicos), y las 3 tarjetas de stats bajan como una fila
+       completa debajo — siguen en horizontal mientras el número y la
+       etiqueta de cada una entren en un solo renglón. */
+    @container te-timer15 (max-width: 640px) {
+      .te-timer-circular-wrap { order: 1; width: 150px; }
+      .te-timer-col-botones { order: 2; flex-direction: row; flex-wrap: wrap; width: auto; justify-content: center; }
+      .te-timer-col-botones .btn { width: auto; min-width: 120px; }
+      .te-timer-col-stats { order: 3; flex-basis: 100%; width: 100%; flex-direction: row; justify-content: center; }
+      .te-timer-col-stats .te-timer-stat { white-space: nowrap; }
+    }
+    /* Angosto ("celular"): a esta altura una fila de 3 tarjetas ya cortaría
+       el texto en 2 renglones — en vez de eso se apilan completas, una
+       debajo de otra, ancho completo. */
+    @container te-timer15 (max-width: 420px) {
+      .te-timer-col-stats { flex-direction: column; }
+      .te-timer-col-stats .te-timer-stat { white-space: normal; }
+    }
     .te-timer-circular-wrap {
       position: relative;
       width: 200px;
       max-width: 62vw;
       aspect-ratio: 1;
-      margin: 2px auto 0;
+      margin: 0;
+      order: 2;
     }
     .te-timer-circular-svg {
       width: 100%;
@@ -790,18 +865,6 @@ function asegurarEstilosTimerCircularDetalle() {
       font-family: var(--font-display);
       color: var(--te-color-materia, var(--text-primary));
     }
-    .te-timer-circular-chip {
-      margin: 4px 0 0;
-      padding: 5px 14px;
-      border-radius: 999px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      background: color-mix(in srgb, var(--te-color-materia, var(--text-muted)) 14%, var(--bg-panel));
-      color: var(--text-primary);
-    }
-    .te-timer-circular-chip.te-completada {
-      background: color-mix(in srgb, var(--te-color-materia, var(--text-primary)) 26%, var(--bg-panel));
-    }
   `;
   document.head.appendChild(style);
 }
@@ -837,6 +900,45 @@ function construirPantallaDetalle(cont, item) {
   // cronómetro de la fase en vivo (ver pintar).
   const RADIO_ANILLO = 80;
   const CIRCUNFERENCIA_ANILLO = 2 * Math.PI * RADIO_ANILLO;
+
+  // Layout: columna de stats | anillo | columna de botones — los 3 al
+  // mismo nivel, centrados como una sola fila (ver container queries de
+  // asegurarEstilosTimerCircularDetalle para cómo se reacomodan cuando no
+  // entran los 3 de corrido).
+  const layout = document.createElement("div");
+  layout.className = "te-timer-layout";
+  panelTimer.appendChild(layout);
+
+  // Columna de stats (reemplaza el chip único de antes) — 3 tarjetas
+  // chicas, siempre en el mismo orden: Estudiado, Faltan, Meta.
+  const colStats = document.createElement("div");
+  colStats.className = "te-timer-col-stats";
+  function crearStat(etiqueta) {
+    const stat = document.createElement("div");
+    stat.className = "te-timer-stat";
+    const n = document.createElement("span");
+    n.className = "te-timer-stat-n";
+    const l = document.createElement("span");
+    l.className = "te-timer-stat-l";
+    l.textContent = etiqueta;
+    stat.append(n, l);
+    colStats.appendChild(stat);
+    return { stat, n };
+  }
+  const statEstudiado = crearStat("Estudiado");
+  const statFaltan = crearStat("Faltan");
+  const statMeta = crearStat("Meta");
+  layout.appendChild(colStats);
+
+  // Mensaje cuando no hay meta configurada — ocupa el lugar de colStats
+  // (mismo order:1, mismo flex-basis en las 2 container queries de abajo)
+  // en vez de dejar 3 tarjetas vacías sin sentido.
+  const sinMetaMsg = document.createElement("p");
+  sinMetaMsg.className = "te-timer-sin-meta";
+  sinMetaMsg.style.order = "1";
+  sinMetaMsg.style.flexBasis = "100%";
+  sinMetaMsg.textContent = "Sin meta configurada esta semana.";
+  layout.appendChild(sinMetaMsg);
 
   const anilloWrap = document.createElement("div");
   anilloWrap.className = "te-timer-circular-wrap";
@@ -874,33 +976,24 @@ function construirPantallaDetalle(cont, item) {
   extra.append(extraEtiqueta, extraValor);
   centro.appendChild(extra);
 
-  panelTimer.appendChild(anilloWrap);
+  layout.appendChild(anilloWrap);
 
-  // Chip de meta semanal (antes era un <span class="te-detalle-meta"> suelto
-  // debajo de una barra lineal aparte — ver pintarProgreso) — ahora vive
-  // pegado al anillo, dentro de la misma tarjeta, como una píldora chica
-  // (mismo lenguaje de "pill" que ya usa el resto de la app).
-  const chipMeta = document.createElement("p");
-  chipMeta.className = "te-detalle-meta te-timer-circular-chip";
-  panelTimer.appendChild(chipMeta);
-
-  // Fila de acción: cuando ESTA materia tiene el timer activo, se
-  // muestran 2 botones (play/pause + detener aparte); si no, un solo
-  // botón "Iniciar" (pedido 2026-09-07).
-  const filaAccion = document.createElement("div");
-  filaAccion.style.cssText = "display:flex; gap:10px; justify-content:center; flex-wrap:wrap;";
+  // Columna de botones — mismos 5 botones de siempre, ahora en su propia
+  // columna (se acomoda sola en fila cuando el layout pasa a modo tablet,
+  // ver container query).
+  const colBtns = document.createElement("div");
+  colBtns.className = "te-timer-col-botones";
+  layout.appendChild(colBtns);
 
   const btnIniciar = document.createElement("button");
   btnIniciar.type = "button";
   btnIniciar.className = "btn btn-primary";
-  btnIniciar.style.minWidth = "160px";
   btnIniciar.textContent = "Iniciar";
   btnIniciar.addEventListener("click", () => manejarBotonIniciarDetener(mm.id, nombreMateria));
 
   const btnPausa = document.createElement("button");
   btnPausa.type = "button";
   btnPausa.className = "btn btn-secondary";
-  btnPausa.style.minWidth = "120px";
   btnPausa.addEventListener("click", () => {
     const activo = obtenerTimerActivo();
     if (!activo || activo.materiaMatriculadaId !== mm.id) return;
@@ -915,7 +1008,6 @@ function construirPantallaDetalle(cont, item) {
   const btnDescanso = document.createElement("button");
   btnDescanso.type = "button";
   btnDescanso.className = "btn btn-primary";
-  btnDescanso.style.minWidth = "140px";
   btnDescanso.addEventListener("click", () => {
     const activo = obtenerTimerActivo();
     if (!activo || activo.materiaMatriculadaId !== mm.id) return;
@@ -933,7 +1025,6 @@ function construirPantallaDetalle(cont, item) {
   const btnSaltarDescanso = document.createElement("button");
   btnSaltarDescanso.type = "button";
   btnSaltarDescanso.className = "btn btn-secondary";
-  btnSaltarDescanso.style.minWidth = "140px";
   btnSaltarDescanso.textContent = "⏭ Saltar descanso";
   btnSaltarDescanso.addEventListener("click", () => {
     const activo = obtenerTimerActivo();
@@ -945,16 +1036,14 @@ function construirPantallaDetalle(cont, item) {
   const btnDetener = document.createElement("button");
   btnDetener.type = "button";
   btnDetener.className = "btn btn-danger";
-  btnDetener.style.minWidth = "120px";
   btnDetener.textContent = "Detener sesión";
   btnDetener.addEventListener("click", () => manejarBotonIniciarDetener(mm.id, nombreMateria));
 
-  filaAccion.appendChild(btnIniciar);
-  filaAccion.appendChild(btnPausa);
-  filaAccion.appendChild(btnDescanso);
-  filaAccion.appendChild(btnSaltarDescanso);
-  filaAccion.appendChild(btnDetener);
-  panelTimer.appendChild(filaAccion);
+  colBtns.appendChild(btnIniciar);
+  colBtns.appendChild(btnPausa);
+  colBtns.appendChild(btnDescanso);
+  colBtns.appendChild(btnSaltarDescanso);
+  colBtns.appendChild(btnDetener);
 
   cont.appendChild(panelTimer);
 
@@ -967,10 +1056,12 @@ function construirPantallaDetalle(cont, item) {
     if (meta === null || meta === undefined) {
       circuloProgreso.style.strokeDashoffset = String(CIRCUNFERENCIA_ANILLO);
       circuloProgreso.classList.remove("te-timer-circular-progress--completa");
-      chipMeta.classList.remove("te-completada");
-      chipMeta.textContent = "Sin meta configurada esta semana.";
+      colStats.style.display = "none";
+      sinMetaMsg.style.display = "";
       return;
     }
+    colStats.style.display = "";
+    sinMetaMsg.style.display = "none";
 
     const esEstaMateria = Boolean(activo && activo.materiaMatriculadaId === mm.id);
     const minutosGuardados = calcularMinutosEstudiadosEstaSemana(mm.id);
@@ -998,12 +1089,23 @@ function construirPantallaDetalle(cont, item) {
     circuloProgreso.style.strokeDashoffset = String(CIRCUNFERENCIA_ANILLO - (porcentaje / 100) * CIRCUNFERENCIA_ANILLO);
     circuloProgreso.classList.toggle("te-timer-circular-progress--completa", completada);
 
-    chipMeta.classList.toggle("te-completada", completada);
-    chipMeta.textContent = !completada
-      ? `Faltan ${formatearHorasMin(restanteMin)}`
-      : excedenteMin > 0
-      ? `🎉 Meta cumplida · excedente +${formatearHorasMin(excedenteMin)}`
-      : `🎉 Meta cumplida (${formatearHorasMin(minutosEstudiados)})`;
+    // Estudiado y Meta son siempre esos 2 datos; la tercera tarjeta
+    // (Faltan) pasa a mostrar el excedente y ponerse en verde apenas se
+    // cumple la meta — mismo criterio de color que ya tenía el anillo
+    // (--te-color-materia mezclado con verde), ver
+    // .te-timer-stat.te-completada en asegurarEstilosTimerCircularDetalle.
+    statEstudiado.n.textContent = formatearHorasMin(minutosEstudiados);
+    statMeta.n.textContent = formatearHorasMin(metaMinutos);
+    statEstudiado.stat.classList.toggle("te-completada", completada);
+    if (!completada) {
+      statFaltan.stat.classList.remove("te-completada");
+      statFaltan.stat.querySelector(".te-timer-stat-l").textContent = "Faltan";
+      statFaltan.n.textContent = formatearHorasMin(restanteMin);
+    } else {
+      statFaltan.stat.classList.add("te-completada");
+      statFaltan.stat.querySelector(".te-timer-stat-l").textContent = excedenteMin > 0 ? "🎉 Extra" : "🎉 Meta";
+      statFaltan.n.textContent = excedenteMin > 0 ? `+${formatearHorasMin(excedenteMin)}` : "Cumplida";
+    }
   }
   pintarProgreso(obtenerTimerActivo());
 
