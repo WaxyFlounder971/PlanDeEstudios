@@ -10,7 +10,7 @@ import { estado } from "../core/storage.js";
 import { copiarPromptConAviso } from "../core/clipboard.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
-import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
+import { abrirConfirmacion, construirSelectorChipsMultiple, mostrarToast } from "../ui/componentes.js";
 import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta } from "../ui/tema.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
 import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
@@ -263,9 +263,12 @@ function dispararSyncConAntirrebote() {
 
 /**
  * Notificaciones — Recordatorios por tipo (2026-08-20, migrado a select
- * único 2026-08-24): un select estilizado (construirSelectCustomAjustes,
- * mismo patrón que Backup y Rango de horas) por cada tipo de evento de
- * Agenda (tarea/examen/evento/feriado), en ese orden fijo.
+ * único 2026-08-24, REVERTIDO A CHIPS DE SELECCIÓN MÚLTIPLE 2026-09-26 a
+ * pedido explícito): un grupo de chips (construirSelectorChipsMultiple,
+ * ui/componentes.js) por cada tipo de evento de Agenda (tarea/examen/
+ * evento/feriado), en ese orden fijo — permite tener MÁS de un offset
+ * activo por tipo a la vez (ej. "1 día antes" Y "1 hora antes" para
+ * exámenes), a diferencia del select único que solo dejaba elegir uno.
  *
  * FIX 2026-09-25 (auditoría de Ajustes — "no deja activarlas ni usarlas
  * bien, se guarda pero no actualiza"): CONFIRMADO contra core/schema.js
@@ -273,25 +276,22 @@ function dispararSyncConAntirrebote() {
  * es un ARREGLO (ver el default en `crearDatosUsuarioNuevo` y, sobre
  * todo, `migrarDatosAntiguos`, que en CADA carga de datos — local o
  * remota, ver main.js — fuerza a arreglo cualquier valor que no lo sea,
- * reseteándolo a `["1_dia"]`). El comentario anterior de este bloque
- * decía lo contrario ("string plano, migrado desde arreglo") — afirmación
- * nunca verificada contra schema.js, y errónea. La migración real hace
- * exactamente lo opuesto: descarta cualquier string y lo pisa con el
- * default.
+ * reseteándolo a `["1_dia"]`). Ese formato de arreglo es justo lo que
+ * `construirSelectorChipsMultiple` produce y consume de forma nativa —
+ * revertir a chips 2026-09-26 no solo devuelve la funcionalidad de
+ * selección múltiple, sino que además elimina de raíz el bug de
+ * 2026-08-24 (el select único escribía un string plano, que
+ * `migrarDatosAntiguos` pisaba en silencio con el default en cada carga):
+ * con chips ya no hay forma de escribir otra cosa que un arreglo, así que
+ * ese bug puntual queda estructuralmente imposible, no solo parchado.
  *
- * Ese es el bug real: al pasar de chips (multi-selección, arreglo) a este
- * select único, `onCambiar` quedó escribiendo un STRING plano. Se
- * guardaba en memoria y PARECÍA andar durante la misma sesión, pero en
- * cuanto la app volvía a cargar datos (refresh, login en otro dispositivo,
- * o simplemente el siguiente ciclo de sync trayendo de vuelta los datos
- * "confirmados" de Drive) `migrarDatosAntiguos` lo encontraba, veía que
- * no era un arreglo, y lo reseteaba silenciosamente a `["1_dia"]` — de
- * ahí "se guarda pero no actualiza" / "no deja activarlas ni usarlas
- * bien". 🔧 Ahora el select sigue siendo de una sola opción a la vez (así
- * lo rediseñaste), pero lee/escribe un arreglo de UN elemento
- * (`[valor]`), consistente con el formato real de schema.js — así
- * migrarDatosAntiguos ya no tiene nada que "corregir" y el valor
- * persiste de verdad entre sesiones y dispositivos.
+ * `construirSelectorChipsMultiple` recibe `opciones` como
+ * `{ id, etiqueta }[]` — mismo shape que ya trae OFFSETS_RECORDATORIO_AGENDA
+ * (core/schema.js) tal cual, sin necesidad de mapear `valor`/`etiqueta`
+ * como sí hacía falta para construirSelectCustomAjustes. No permite dejar
+ * el grupo completamente vacío (ver el propio componente en
+ * ui/componentes.js) — un tipo de evento sin ningún offset activo se
+ * resuelve apagando el switch general, no vaciando este grupo.
  *
  * Solo tiene sentido con el switch general de sincronización con Google
  * Calendar activo — si está apagado, el bloque completo queda atenuado y
@@ -336,24 +336,23 @@ function renderizarNotificacionesRecordatorios() {
     titulo.textContent = etiqueta;
     fila.appendChild(titulo);
 
-    // Tolerante a un string suelto (dato a medio migrar, o carga en curso)
-    // además del arreglo esperado — nunca debería pasar en la práctica
-    // porque migrarDatosAntiguos ya normaliza esto en cada carga, pero
-    // evita que el select quede vacío si por lo que sea llegara distinto.
+    // Tolerante a un string suelto (dato a medio migrar de una versión muy
+    // vieja) además del arreglo esperado — construirSelectorChipsMultiple
+    // solo entiende arreglos, así que se normaliza acá antes de pasarlo.
     const valorGuardado = cfg.notificaciones_recordatorios[tipo];
-    const valorActual = (Array.isArray(valorGuardado) ? valorGuardado[0] : valorGuardado) || "1_dia";
-    const elemento = construirSelectCustomAjustes({
-      opciones: OFFSETS_RECORDATORIO_AGENDA.map((o) => ({ valor: o.id, etiqueta: o.etiqueta })),
-      valorInicial: valorActual,
-      onCambiar: (valor) => {
-        // Arreglo de un solo elemento — formato real de schema.js (ver
-        // migrarDatosAntiguos). Escribir un string plano acá es lo que
-        // causaba el bug: se revertía solo al próximo load/sync.
-        cfg.notificaciones_recordatorios[tipo] = [valor];
+    const valoresIniciales = Array.isArray(valorGuardado)
+      ? valorGuardado
+      : [valorGuardado || "1_dia"];
+
+    const { elemento } = construirSelectorChipsMultiple(
+      OFFSETS_RECORDATORIO_AGENDA,
+      valoresIniciales,
+      (valoresActuales) => {
+        cfg.notificaciones_recordatorios[tipo] = valoresActuales;
         sellarTimestamp(cfg);
         marcarCambioPendiente();
-      },
-    });
+      }
+    );
     fila.appendChild(elemento);
     contenedor.appendChild(fila);
   });
