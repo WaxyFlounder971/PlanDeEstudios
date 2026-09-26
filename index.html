@@ -238,11 +238,13 @@
           </div>
 
           <div>
-            <label class="form-label" for="selector-idioma">Idioma</label>
-            <select id="selector-idioma" class="form-input" aria-describedby="ayuda-selector-idioma">
-              <option value="es">Español</option>
-            </select>
-            <p id="ayuda-selector-idioma" class="muted" style="font-size:0.78rem; margin:2px 0 6px;">Los idiomas disponibles se cargan desde la carpeta idiomas.</p>
+            <span class="form-label" id="label-selector-idioma">Idioma</span>
+            <div class="select-custom" id="selector-idioma">
+              <button type="button" id="selector-idioma-boton" class="form-input select-custom-boton" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="label-selector-idioma selector-idioma-valor">
+                <span id="selector-idioma-valor" data-i18n-keep>Español</span>
+              </button>
+              <ul id="selector-idioma-lista" class="select-custom-lista oculto" role="listbox"></ul>
+            </div>
           </div>
 
           <div>

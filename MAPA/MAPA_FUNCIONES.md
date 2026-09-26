@@ -29,7 +29,7 @@ Para la vista de alto nivel (capas, por qué existen los imports circulares, y "
 qué archivo empiezo si me piden X") ver `ARQUITECTURA.md`. Este documento es el
 detalle función-por-función; `ARQUITECTURA.md` es el mapa de decisión.
 
-> **Estado:** la copia v3.20.0 contiene 66 archivos `.js`; el índice de esta entrega se contrastó contra ese inventario y las modificaciones actuales se resumen en "Revisión funcional v3.20.0" más abajo. Las fechas y notas de las rondas anteriores se conservan como historial, no como estado vigente.
+> **Estado vigente:** la copia v3.21.2 contiene 67 archivos `.js`; este mapa incluye el módulo de idiomas, el flujo seguro para añadir traducciones y la presentación actual de Tiempo/Pomodoro. Las revisiones v3.20.0 y anteriores se conservan como historial.
 
 **2026-09-17 - Ronda de bugs del timer + Competencias (Partes 1 a 5 del prompt).** **Bug real de pérdida de tiempo, resuelto:** `revisarSesionOlvidadaAlAbrir()` (tiempo-estudio-timer.js) nunca volvía a levantar el timer en memoria al reabrir la app - sus 3 caminos terminaban en `localStorage.removeItem()`, así que cerrar/recargar la pestaña mataba la sesión activa en silencio; ahora existe `restaurarTimerDesdeSnapshot()` y el salvavidas dejó de ser destructivo. Además: avisos de fin de bloque que sí llegan con la app en 2do plano (Service Worker + alarma de fase), `saltarDescansoPomodoro()`, "Tiempo de Estudio" → "Tiempo" en la interfaz, ningún modal de la sección se cierra al tocar fuera, y 2 archivos nuevos - `tiempo-estudio-celebracion.js` (confeti/audio/aviso previo) y `tiempo-estudio-competencias-gestion.js` (menú Gestionar + Registro de finalizadas, separado porque `tiempo-estudio-competencias.js` ya pasaba las 1100 líneas). Del lado del Worker: 4 endpoints nuevos + 2 columnas D1 (`competencias.estado`, `participantes.horas_totales_historicas`, ver `migracion_competencias_gestion.sql`).
 
@@ -76,7 +76,7 @@ La versión visible/caché del PWA se fija en `service-worker.js` (`v3.20.0-beta
 
 ## Índice de carpetas
 
-- [`js/core/`](#js--core) - datos, sesión, sincronización (12 archivos)
+- [`js/core/`](#js--core) - datos, sesión, sincronización (13 archivos)
 - [`js/ui/`](#js--ui) - componentes de interfaz genéricos (6 archivos)
 - [`js/config/`](#js--config) - sección Configuración (2 archivos)
 - [`js/plan/`](#js--plan) - Plan de Estudios (10 archivos)
@@ -93,6 +93,23 @@ La versión visible/caché del PWA se fija en `service-worker.js` (`v3.20.0-beta
 ---
 
 ## JS - core
+
+### core/i18n.js
+Propósito: aplica el idioma de interfaz guardado en este dispositivo y traduce texto visible del DOM, incluidos elementos que se renderizan después del arranque. El código y los datos de la app conservan el español como fuente; no modifica los datos de Drive.
+Depende de: `idiomas/lista.json`, los JSON de `idiomas/` y el DOM.
+Exporta:
+* `inicializarIdiomas()` - carga el registro de idiomas, restaura `idioma_interfaz_v1` desde `localStorage` (predeterminado `es`) y activa la traducción reactiva.
+
+**Reglas para agregar o editar traducciones sin romper la app:**
+1. Mantén los textos originales de la interfaz en español dentro de HTML/JavaScript. El traductor busca esos textos; no traduzcas nombres de funciones, ids, clases, claves de datos, valores guardados ni nombres de archivo.
+2. `idiomas/espanol.json` y cada archivo de idioma tienen `{ "id", "nombre", "locale", "traducciones" }`. `traducciones` es un diccionario `"frase original en español": "texto en el idioma elegido"`. La frase original es la clave estable para emparejar; nunca la traduzcas ni la cambies solo en un idioma.
+3. Al agregar o cambiar un texto visible, actualiza la clave fuente en `espanol.json` y la misma clave en cada idioma. Si falta una traducción, la app conserva el texto español como respaldo.
+4. Conserva `{variable}` en el mismo orden dentro de cada traducción. El módulo lo usa para insertar valores dinámicos, como nombres, cantidades o tiempos; no lo traduzcas ni lo borres.
+5. Para agregar un idioma, copia `espanol.json`, traduce los valores, cambia `id`/`nombre`/`locale`, y agrega `{ "id", "nombre", "archivo" }` a `idiomas/lista.json`. El navegador no puede descubrir archivos de una carpeta sin este registro.
+6. El idioma solo se guarda en el navegador/dispositivo, no en Drive. Los archivos de idioma son la fuente de verdad en ejecución; el Excel de traducción es opcional y sus IDs no son claves del sistema. Si se usa, convierte cada fila al JSON con la columna **Español (original)** como clave.
+7. El service worker precarga `lista.json` y `espanol.json`; otros idiomas se cachean al descargarse. Al desplegar cambios, incrementa `VERSION` en `service-worker.js`.
+
+### core/storage-adjuntos.js
 
 ### core/auth.js
 Propósito: toda la integración con Google (login/token) y con las API de Google Drive y Google Calendar - es la única capa que habla HTTP con Google.
@@ -276,6 +293,7 @@ Exporta:
 * `eliminarAdjunto(adjuntoId)` - tumba la referencia en el JSON + intenta borrar el binario real de Drive (best-effort, no crítico si falla).
 * `procesarTumbasDriveHuerfanas()` - recorre tumbas de adjuntos buscando archivos de Drive que quedaron huérfanos (borrado registrado pero binario no borrado) y los limpia. Se engancha como hook post-fusión.
 * `obtenerAdjuntosDe(entidadTipo, entidadId)` - helper de renderizado: adjuntos vigentes de una entidad puntual.
+* `fijarActivoAdjunto(adjuntoId, activo)` - fija el estado visible del adjunto, usado al sustituirlo por otro tipo conservando si estaba activo o desactivado.
 
 ### core/storage.js
 Propósito: estado global compartido (`estado`) por toda la app, caché offline en localStorage, y manejo del access_token de Google (guardar/leer/borrar con expiración).
@@ -386,6 +404,11 @@ Función interna (no exportada) relevante:
 ---
 
 ## JS - ui
+
+### ui/adjuntos-ui.js
+Propósito: interfaz compartida para adjuntar, abrir, reordenar, activar/desactivar, editar y borrar archivos o enlaces.
+Depende de: `core/storage-adjuntos.js`, `ui/componentes.js`.
+Integración vigente: el formulario de edición puede cambiar entre enlace y archivo. Si cambia el tipo, primero crea el reemplazo; solo tras crearlo correctamente elimina el anterior, y conserva su posición y estado activo. Los formularios no se cierran al tocar fuera para evitar perder cambios.
 
 ### ui/componentes.js
 Propósito: componentes de UI reutilizables en toda la app - modal de confirmación genérico, toasts, long-press, flechas de scroll horizontal, layout responsivo del sidebar/drawer, selector de modalidad de horario.
@@ -968,12 +991,12 @@ Exporta:
 ## JS - Tiempo de Estudio
 
 ### tiempo-estudio/tiempo-estudio.js
-Propósito: núcleo de la sección Tiempo de Estudio - vista principal (filtro "Esta semana / Todas", tarjetas por materia matriculada con barra de meta + acceso al timer), pantalla de detalle por materia (timer + progreso en vivo) y el modal de ajustes globales de la sección. Las materias disponibles son SIEMPRE las de `obtenerSemestresActuales()` (`semestres/semestres.js`) - cada materia matriculada (`mm`) tiene su propia config/sesiones, aunque sea una repetición de la misma materia del Plan.
+Propósito: núcleo de la sección Tiempo de Estudio - vista principal (filtro "Esta semana / Todas", tarjetas por materia matriculada con barra de meta + acceso al timer), pantalla de detalle por materia (timer circular con progreso semanal, estadísticas de meta en vivo) y el modal de ajustes globales de la sección. Las materias disponibles son SIEMPRE las de `obtenerSemestresActuales()` (`semestres/semestres.js`) - cada materia matriculada (`mm`) tiene su propia config/sesiones, aunque sea una repetición de la misma materia del Plan. Los nuevos textos del timer también deben agregarse a `idiomas/espanol.json` para mantenerlos traducibles.
 Depende de: core/storage.js, core/storage-sync.js, core/utils.js, core/schema.js (`COLOR_TIEMPO_ESTUDIO_DEFAULT`), ui/componentes.js, ui/buscar-materia.js, semestres/semestres.js, main.js, tiempo-estudio/tiempo-estudio-config.js, tiempo-estudio/tiempo-estudio-timer.js, tiempo-estudio/tiempo-estudio-registro.js (Parte 3), tiempo-estudio/tiempo-estudio-estadisticas.js (Parte 3), tiempo-estudio/tiempo-estudio-racha-ui.js (racha, 2026-09-19)
 Exporta:
 * `inicializarTiempoEstudio()` - cablea el badge/click de acceso rápido y, **desde la Parte 2**, llama primero que nada a `revisarSesionOlvidadaAlAbrir()` (tiempo-estudio-timer.js) - el chequeo del salvavidas corre una sola vez al arrancar la app, antes de que exista ningún DOM propio de esta sección (no depende del badge).
   * **(2026-09-19, rediseño del indicador)** el cableado del badge viejo se reemplazó por `montarIndicadoresTimer(...)` (tiempo-estudio-indicador.js) alimentando los 3 contenedores a la vez, suscrito con `suscribirseATimer`. Funciones nuevas *(internas)* en `tiempo-estudio.js`: `resolverInfoIndicadorTimer(activo)` - busca la materia entre las de los semestres ACTUALES y devuelve `{ nombre: nombreMateriaCorto (sin código), color: obtenerColorMateria(...), tiempo: formatearDuracion(segundosTranscurridos()) (la FASE en curso, lo mismo que ve el detalle), pausado, estado: "En pausa" | "Descanso" | "" }`; si la materia ya no está entre las actuales cae a "Materia" + color por defecto en vez de romper. `irAMateriaDelTimerActivo()` - abre el detalle de la materia del timer (`materiaDetalleActivaId` + `mostrarSeccion("tiempo-estudio")`), y solo fuerza `renderizarTiempoEstudio()` si no se estaba ya en ese detalle (para no perder lo que se esté haciendo ahí).
-  * **(2026-09-19, tiempo extra)** `construirPantallaDetalle` suma el renglón `.te-timer-extra` bajo el cronómetro (oculto sin Pomodoro; con Pomodoro reserva su alto), el botón "☕ Descanso" y el "Terminar/Saltar descanso" dinámico; la etiqueta de fase agrega "completado". `resolverInfoIndicadorTimer` muestra `40:00 +05:12` con estado "Extra" / "Descanso" (el `estado` no cambia con los segundos, para no mover la etiqueta accesible).
+  * **(2026-09-19, tiempo extra)** `construirPantallaDetalle` suma el tiempo excedente bajo el cronómetro, el botón "☕ Descanso" y el "Terminar/Saltar descanso" dinámico. `resolverInfoIndicadorTimer` muestra `40:00 +05:12` con estado "Extra" / "Descanso" (el `estado` no cambia con los segundos, para no mover la etiqueta accesible). La representación visual actual está descrita en "Comportamiento y presentación actual de la Parte 2" abajo.
   * **(2026-09-19, Parte B)** registra UNA vez (bandera `_hookRepintadoTiempoRegistrado`) un hook con `registrarHookPostFusion` (storage-sync.js) que llama a `renderizarTiempoEstudio()` tras CADA fusión remota (sondeo ~9 s, pull-to-refresh, otra pestaña vía BroadcastChannel, login, y también los syncs propios). Antes `aplicarDatosRemotosFrescos` repintaba Semestres/Finanzas/Plan pero nunca Tiempo: una sesión guardada en otro dispositivo llegaba a `estado.datos` pero el DOM quedaba congelado. El scroll lo protege la reafirmación del propio lote de `aplicarDatosRemotosFrescos`. Costo conocido: estando en la vista Competencias, cada sync vuelve a pedir el marcador.
   * **(2026-09-19, Parte B)** `construirTarjetaMateria`: una materia SIN meta ahora muestra `"1 h 30 min esta semana · sin meta"` si hay tiempo estudiado esta semana (antes solo "Sin meta configurada"); sin sesiones sigue igual, con meta el formato no cambia. No se dibuja barra sin meta.
 * **2026-09-07 (pausa + historial editable + estadísticas individuales):** la pantalla de detalle y la tarjeta de materia ahora muestran, mientras el timer de ESA materia está activo, 2 controles separados en vez de un solo botón: play/pause (`pausarTimerEstudio`/`reanudarTimerEstudio` de `tiempo-estudio-timer.js`, pausa sin cerrar la sesión) y "Detener sesión" (cierra y guarda, el mismo `manejarBotonIniciarDetener` de siempre). Además, `construirPantallaDetalle` ahora llama, después del panel de progreso: `construirEstadisticasMateria()` (tiempo-estudio-estadisticas.js - resumen de metas en líneas, tendencia de horas trabajadas en barras del color propio de la materia, y el bloque final de totales/día más productivo/sesiones/promedio) y `construirListaSesiones()` (tiempo-estudio-registro.js - historial de sesiones de ESA matrícula puntual, cada una editable con fecha+hora de inicio/fin por separado -admite cruzar medianoche/varios días- y borrable con tumba).
@@ -984,9 +1007,9 @@ Exporta:
 * `formatearHorasMin(minutosTotales)` - helper de formato ("2h 15m" / "45m") reusado por las tarjetas, el detalle y el panel de progreso en vivo.
 * `obtenerMateriasParaTiempoEstudio()` - **(exportada desde Parte 3)** recorre las materias matriculadas de los semestres actuales y las materias independientes propias de Tiempo, resolviendo sus datos sin incorporarlas a Plan/Semestres; ya existía como helper privado, se exporta para que `tiempo-estudio-registro.js` reciba la lista sin recalcularla ni crear un import circular de 3 puntas. Incluye las entradas independientes creadas en Tiempo.
 
-Cambios de comportamiento de la Parte 2 (sin tocar el diseño ya aprobado):
+Comportamiento y presentación actual de la Parte 2:
 * `manejarBotonIniciarDetener` distingue el toast según lo que devuelva `detenerTimerEstudio()` - `"Sesión guardada"` si cerró un bloque de trabajo/timer simple, `"Descanso descartado (no se guardó nada)"` si lo que se detuvo fue un descanso de Pomodoro (los descansos nunca generan sesión).
-* `construirPantallaDetalle` agrega una etiqueta de fase de Pomodoro ("Bloque 2 de 4 · Descanso corto", misma clase `.muted` ya usada en el resto del panel) y convierte el panel de progreso en una función `pintarProgreso()` que se repinta en cada tick del timer (antes se calculaba una sola vez al entrar a la pantalla) - necesario para el excedente en vivo sobre la meta semanal mientras el timer sigue corriendo.
+* `construirPantallaDetalle` muestra el avance de Pomodoro como una línea por bloque (relleno para completados, acento tenue para el actual), sin el renglón "Bloque X de Y · fase". El anillo exterior conserva el avance de la meta semanal; el aro interior muestra el tiempo extra hasta 60 minutos, y el valor extra aparece debajo del cronómetro centrado. Las tarjetas de Estudiado/Faltan/Meta usan un fondo neutro del tema para que no adopten el color de materia. `pintarProgreso()` y el indicador de bloques se actualizan en cada tick.
 
 Cambios de la Parte 3:
 * `construirEncabezado` suma un botón "＋" (mismo tamaño que el engranaje) que abre `abrirModalRegistroManual()` - único punto de entrada al registro manual, visible sin importar en qué pill estés parado.
@@ -1243,4 +1266,5 @@ Exporta:
   - **`manejarActualizarHoras` (punto 4.5):** el chequeo de `estado === "finalizada"` vivía en un `SELECT` separado del `UPDATE` de las horas - si la competencia se finalizaba justo en el medio de esas dos llamadas, las horas se escribían igual (el filtro del lado del cliente no alcanza por sí solo, porque decide con una foto de antes de que el servidor cambiara de estado). Ahora es un único `UPDATE ... WHERE id = ? AND (SELECT estado FROM competencias WHERE id = ?) != 'finalizada'` - sin ninguna ventana entre leer y escribir.
 - **Worker de Cloudflare (proyecto separado, `worker-notificaciones-agenda`):** 2026-08-25 - se le quitó TODO lo de Web Push/recordatorios/resumen diario/D1/Cron; solo le queda el relevo de OAuth (`/oauth/exchange`, `/oauth/refresh`). La sincronización de Agenda con Google Calendar ya no pasa por él - el cliente habla directo con la API de Calendar (ver `core/notificaciones-calendario.js`, `core/auth.js`).
 - **Índice vivo:** cualquier prompt que cree un archivo nuevo o agregue/quite funciones exportadas a uno existente debe actualizar también su entrada correspondiente acá, en `MAPA_FUNCIONES.md` (y en `ARQUITECTURA.md` si cambia una capa o el cheat-sheet de "¿dónde va cada cosa?").
+
 

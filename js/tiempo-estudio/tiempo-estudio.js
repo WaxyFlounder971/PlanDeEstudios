@@ -745,7 +745,8 @@ function asegurarEstilosTimerCircularDetalle() {
       order: 1;
     }
     .te-timer-stat {
-      background: color-mix(in srgb, var(--te-color-materia, var(--text-muted)) 12%, var(--bg-panel));
+      background: color-mix(in srgb, var(--bg-panel) 92%, var(--text-primary));
+      border: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
       border-radius: 12px;
       padding: 8px 12px;
       text-align: center;
@@ -778,6 +779,38 @@ function asegurarEstilosTimerCircularDetalle() {
       justify-content: center;
     }
     .te-timer-col-botones .btn { min-width: 0; width: 100%; }
+    .te-bloques-progreso {
+      display: flex;
+      justify-content: center;
+      gap: 7px;
+      width: min(100%, 360px);
+      min-height: 8px;
+      margin: 0 auto;
+    }
+    .te-bloques-progreso[hidden] { display: none; }
+    .te-bloque-indicador {
+      flex: 1 1 0;
+      max-width: 110px;
+      height: 7px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--text-primary) 7%, transparent);
+      transition: background 0.25s ease, opacity 0.25s ease;
+    }
+    .te-bloque-indicador::after {
+      content: "";
+      display: block;
+      width: var(--te-bloque-avance, 0%);
+      height: 100%;
+      border-radius: inherit;
+      background: var(--te-color-materia, var(--accent-1));
+      transition: width 0.35s ease;
+    }
+    .te-bloque-indicador--actual {
+      background: color-mix(in srgb, var(--te-color-materia, var(--text-primary)) 30%, var(--bg-panel));
+    }
+    .te-bloque-indicador--completado {
+      background: var(--te-color-materia, var(--accent-1));
+    }
     /* Ancho medio ("tablet"): anillo + botones se quedan arriba uno al lado
        del otro (más chicos), y las 3 tarjetas de stats bajan como una fila
        completa debajo — siguen en horizontal mientras el número y la
@@ -825,40 +858,62 @@ function asegurarEstilosTimerCircularDetalle() {
     .te-timer-circular-progress--completa {
       stroke: color-mix(in srgb, var(--te-color-materia, var(--text-primary)) 65%, #22c55e 35%);
     }
+    .te-timer-circular-extra-track,
+    .te-timer-circular-extra-progress {
+      fill: none;
+      opacity: 0;
+      transition: stroke-dashoffset 0.6s ease, opacity 0.25s ease;
+    }
+    .te-timer-circular-extra-track {
+      stroke: color-mix(in srgb, var(--text-primary) 9%, transparent);
+      stroke-width: 5;
+    }
+    .te-timer-circular-extra-progress {
+      stroke: color-mix(in srgb, var(--te-color-materia, var(--accent-1)) 72%, var(--text-primary));
+      stroke-width: 5;
+      stroke-linecap: round;
+    }
+    .te-timer-circular-extra--visible .te-timer-circular-extra-track,
+    .te-timer-circular-extra--visible .te-timer-circular-extra-progress { opacity: 1; }
     .te-timer-circular-centro {
       position: absolute;
       inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 2px;
-      text-align: center;
-      padding: 0 10px;
+      pointer-events: none;
     }
     .te-timer-circular-centro .te-timer-display {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
       font-family: var(--font-display);
       font-weight: 700;
-      font-size: 1.9rem;
+      font-size: 2.1rem;
       line-height: 1.15;
       color: var(--text-primary);
       font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      transition: top 0.2s ease;
     }
     .te-timer-circular-centro .te-timer-extra {
+      position: absolute;
+      left: 50%;
+      top: calc(50% + 25px);
+      transform: translate(-50%, -2px);
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 0;
-      font-size: 0.68rem;
+      gap: 1px;
+      font-size: 0.62rem;
       color: var(--text-muted);
-      margin-top: 2px;
       opacity: 0;
-      transform: translateY(-2px);
       transition: opacity 0.2s ease, transform 0.2s ease;
     }
     .te-timer-circular-centro .te-timer-extra--visible {
       opacity: 1;
-      transform: translateY(0);
+      transform: translate(-50%, 0);
+    }
+    .te-timer-circular-wrap.te-tiempo-extra-activo .te-timer-display {
+      top: calc(50% - 9px);
     }
     .te-timer-circular-centro .te-timer-extra-valor {
       font-weight: 700;
@@ -882,16 +937,42 @@ function construirPantallaDetalle(cont, item) {
   panelTimer.className = "glass-card stack te-panel-timer-circular";
   panelTimer.style.cssText = `align-items:center; gap:14px; text-align:center; --te-color-materia:${color};`;
 
-  // Parte 2: etiqueta de fase de Pomodoro ("Bloque 2 de 4 · Descanso
-  // corto") — vacía/invisible salvo que el timer activo de ESTA materia
-  // sea de origen "pomodoro". No es un elemento nuevo de diseño, solo un
-  // renglón de texto chico (misma clase .muted que ya se usa en el resto
-  // del panel) para poder ver en qué fase está sin depender solo de las
-  // alertas sonoras/visuales del punto 2.
-  const faseLabel = document.createElement("p");
-  faseLabel.className = "muted";
-  faseLabel.style.cssText = "margin:0; font-size:0.85rem;";
-  panelTimer.appendChild(faseLabel);
+  // Avance por bloque: indicadores discretos que sustituyen el renglón
+  // textual de fase. Cada marca se completa al terminar el bloque.
+  const bloquesProgreso = document.createElement("div");
+  bloquesProgreso.className = "te-bloques-progreso";
+  bloquesProgreso.hidden = true;
+  bloquesProgreso.setAttribute("role", "img");
+  panelTimer.appendChild(bloquesProgreso);
+  let cantidadIndicadores = 0;
+  function pintarBloques(activo, tf) {
+    const esPomodoro = Boolean(activo && activo.materiaMatriculadaId === mm.id && activo.pomodoro);
+    bloquesProgreso.hidden = !esPomodoro;
+    if (!esPomodoro) return;
+    const pomodoro = activo.pomodoro;
+    const cantidad = Math.max(1, Number(pomodoro.config.cantidad_bloques) || 1);
+    if (cantidadIndicadores !== cantidad) {
+      bloquesProgreso.replaceChildren();
+      for (let i = 0; i < cantidad; i += 1) {
+        const marca = document.createElement("span");
+        marca.className = "te-bloque-indicador";
+        marca.setAttribute("aria-hidden", "true");
+        bloquesProgreso.appendChild(marca);
+      }
+      cantidadIndicadores = cantidad;
+    }
+    const trabajoCumplido = pomodoro.fase === "trabajo" && tf && tf.completa;
+    const cantidadCompletada = pomodoro.fase === "trabajo" && !trabajoCumplido ? pomodoro.bloqueActual - 1 : pomodoro.bloqueActual;
+    [...bloquesProgreso.children].forEach((marca, i) => {
+      marca.classList.toggle("te-bloque-indicador--completado", i < cantidadCompletada);
+      marca.classList.toggle("te-bloque-indicador--actual", i === pomodoro.bloqueActual - 1 && pomodoro.fase === "trabajo");
+      const porcentajeActual = i === pomodoro.bloqueActual - 1 && pomodoro.fase === "trabajo" && tf && tf.duracion > 0
+        ? Math.min(100, (tf.transcurridos / tf.duracion) * 100)
+        : i < cantidadCompletada ? 100 : 0;
+      marca.style.setProperty("--te-bloque-avance", `${porcentajeActual}%`);
+    });
+    bloquesProgreso.setAttribute("aria-label", `Pomodoro: ${cantidadCompletada}/${cantidad}; ${pomodoro.bloqueActual}/${cantidad}`);
+  }
 
   // Anillo (radio/circunferencia fijos, calza con el viewBox 0 0 200 200
   // de abajo) — un solo elemento visual hace las dos cosas que antes eran
@@ -900,6 +981,8 @@ function construirPantallaDetalle(cont, item) {
   // cronómetro de la fase en vivo (ver pintar).
   const RADIO_ANILLO = 80;
   const CIRCUNFERENCIA_ANILLO = 2 * Math.PI * RADIO_ANILLO;
+  const RADIO_EXTRA = 62;
+  const CIRCUNFERENCIA_EXTRA = 2 * Math.PI * RADIO_EXTRA;
 
   // Layout: columna de stats | anillo | columna de botones — los 3 al
   // mismo nivel, centrados como una sola fila (ver container queries de
@@ -947,9 +1030,13 @@ function construirPantallaDetalle(cont, item) {
       <circle class="te-timer-circular-track" cx="100" cy="100" r="${RADIO_ANILLO}"></circle>
       <circle class="te-timer-circular-progress" cx="100" cy="100" r="${RADIO_ANILLO}"
         stroke-dasharray="${CIRCUNFERENCIA_ANILLO}" stroke-dashoffset="${CIRCUNFERENCIA_ANILLO}"></circle>
+      <circle class="te-timer-circular-extra-track" cx="100" cy="100" r="${RADIO_EXTRA}"></circle>
+      <circle class="te-timer-circular-extra-progress" cx="100" cy="100" r="${RADIO_EXTRA}"
+        stroke-dasharray="${CIRCUNFERENCIA_EXTRA}" stroke-dashoffset="${CIRCUNFERENCIA_EXTRA}"></circle>
     </svg>
   `;
   const circuloProgreso = anilloWrap.querySelector(".te-timer-circular-progress");
+  const circuloExtra = anilloWrap.querySelector(".te-timer-circular-extra-progress");
 
   const centro = document.createElement("div");
   centro.className = "te-timer-circular-centro";
@@ -959,12 +1046,8 @@ function construirPantallaDetalle(cont, item) {
   display.className = "te-timer-display";
   centro.appendChild(display);
 
-  // Tiempo extra (pedido 2026-09-19): el cronómetro principal se queda
-  // clavado en la duración configurada (ej. 40:00) y lo que se pasa cuenta
-  // ACÁ, debajo del cronómetro, dentro del mismo centro del anillo. Solo
-  // existe con Pomodoro; en cuanto está activo reserva su espacio
-  // (invisible hasta que hay extra) para que el cronómetro principal nunca
-  // se corra cuando aparece.
+  // El excedente se lee debajo del tiempo principal; el anillo interior
+  // muestra su avance dentro de la primera hora extra.
   const extra = document.createElement("div");
   extra.className = "te-timer-extra";
   extra.hidden = true;
@@ -973,7 +1056,7 @@ function construirPantallaDetalle(cont, item) {
   extraEtiqueta.textContent = "Tiempo extra";
   const extraValor = document.createElement("span");
   extraValor.className = "te-timer-extra-valor";
-  extra.append(extraEtiqueta, extraValor);
+  extra.append(extraValor, extraEtiqueta);
   centro.appendChild(extra);
 
   layout.appendChild(anilloWrap);
@@ -1122,6 +1205,14 @@ function construirPantallaDetalle(cont, item) {
       const hayExtra = tf.extra > 0;
       extra.classList.toggle("te-timer-extra--visible", hayExtra);
       extraValor.textContent = `+${formatearDuracion(tf.extra)}`;
+      anilloWrap.classList.toggle("te-timer-circular-extra--visible", hayExtra);
+      anilloWrap.classList.toggle("te-tiempo-extra-activo", hayExtra);
+      const avanceExtra = Math.min(1, tf.extra / 3600);
+      circuloExtra.style.strokeDashoffset = String(CIRCUNFERENCIA_EXTRA * (1 - avanceExtra));
+    } else {
+      anilloWrap.classList.remove("te-timer-circular-extra--visible");
+      anilloWrap.classList.remove("te-tiempo-extra-activo");
+      circuloExtra.style.strokeDashoffset = String(CIRCUNFERENCIA_EXTRA);
     }
 
     // Iniciar solo se ve si NADIE está corriendo en esta materia;
@@ -1151,14 +1242,7 @@ function construirPantallaDetalle(cont, item) {
       btnDescanso.textContent = esUltimoBloque ? "☕ Descanso largo" : "☕ Descanso";
     }
 
-    if (esEstaMateria && activo.pomodoro) {
-      const nombreFaseLegible =
-        activo.pomodoro.fase === "trabajo" ? "Bloque de trabajo" : activo.pomodoro.fase === "descanso_corto" ? "Descanso corto" : "Descanso largo";
-      faseLabel.textContent = `Bloque ${activo.pomodoro.bloqueActual} de ${activo.pomodoro.config.cantidad_bloques} · ${nombreFaseLegible}${tf.completa ? " completado" : ""}`;
-    } else {
-      faseLabel.textContent = "";
-    }
-
+    pintarBloques(activo, tf);
     pintarProgreso(activo);
   }
   desuscribirTimerDetalle = suscribirseATimer(pintar);

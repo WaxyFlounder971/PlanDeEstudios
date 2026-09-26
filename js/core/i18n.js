@@ -157,8 +157,7 @@ async function aplicarIdioma(idioma, { guardar = true } = {}) {
     if (guardar) localStorage.setItem(CLAVE_IDIOMA, "es");
   }
 
-  const selector = document.getElementById("selector-idioma");
-  if (selector) selector.value = idiomaActual;
+  actualizarSelectorIdioma();
   traducirDocumento();
 }
 
@@ -179,17 +178,111 @@ async function cargarListaIdiomas() {
 
 function renderizarSelector() {
   const selector = document.getElementById("selector-idioma");
-  if (!selector) return;
-  selector.replaceChildren();
+  const boton = document.getElementById("selector-idioma-boton");
+  const lista = document.getElementById("selector-idioma-lista");
+  if (!selector || !boton || !lista) return;
+  lista.replaceChildren();
   for (const idioma of idiomasDisponibles) {
-    const opcion = document.createElement("option");
-    opcion.value = idioma.id;
+    const opcion = document.createElement("li");
+    opcion.className = "select-custom-opcion";
     opcion.textContent = idioma.nombre;
     opcion.dataset.i18nKeep = "";
-    selector.append(opcion);
+    opcion.setAttribute("role", "option");
+    opcion.tabIndex = -1;
+    opcion.addEventListener("click", async () => {
+      await aplicarIdioma(idioma.id);
+      cerrarListaIdiomas();
+      boton.focus();
+    });
+    lista.append(opcion);
   }
-  selector.value = idiomaActual;
-  selector.onchange = () => aplicarIdioma(selector.value);
+
+  lista._volverA = selector;
+  boton.setAttribute("aria-controls", lista.id);
+  boton.onclick = (evento) => {
+    evento.stopPropagation();
+    if (lista.classList.contains("oculto")) abrirListaIdiomas();
+    else cerrarListaIdiomas();
+  };
+  boton.onkeydown = (evento) => {
+    if (evento.key !== "ArrowDown" && evento.key !== "Enter" && evento.key !== " ") return;
+    evento.preventDefault();
+    abrirListaIdiomas();
+    lista.querySelector("[role='option']")?.focus();
+  };
+  lista.onkeydown = (evento) => {
+    const opciones = [...lista.querySelectorAll("[role='option']")];
+    const actual = opciones.indexOf(document.activeElement);
+    if (evento.key === "Escape") {
+      evento.preventDefault();
+      cerrarListaIdiomas();
+      boton.focus();
+    } else if (evento.key === "ArrowDown" || evento.key === "ArrowUp") {
+      evento.preventDefault();
+      const direccion = evento.key === "ArrowDown" ? 1 : -1;
+      opciones[(actual + direccion + opciones.length) % opciones.length]?.focus();
+    } else if (evento.key === "Enter" || evento.key === " ") {
+      evento.preventDefault();
+      document.activeElement?.click();
+    }
+  };
+  document.addEventListener("click", (evento) => {
+    if (!selector.contains(evento.target) && !lista.contains(evento.target)) cerrarListaIdiomas();
+  });
+  actualizarSelectorIdioma();
+}
+
+function actualizarSelectorIdioma() {
+  const selector = document.getElementById("selector-idioma");
+  const boton = document.getElementById("selector-idioma-boton");
+  const texto = document.getElementById("selector-idioma-valor");
+  const lista = document.getElementById("selector-idioma-lista");
+  if (!selector || !boton || !texto || !lista) return;
+  const seleccionado = idiomasDisponibles.find((idioma) => idioma.id === idiomaActual);
+  texto.textContent = seleccionado?.nombre || "Español";
+  lista.querySelectorAll("[role='option']").forEach((opcion, indice) => {
+    const idioma = idiomasDisponibles[indice];
+    const activa = idioma?.id === idiomaActual;
+    opcion.classList.toggle("activa", activa);
+    opcion.setAttribute("aria-selected", String(activa));
+  });
+}
+
+function abrirListaIdiomas() {
+  const selector = document.getElementById("selector-idioma");
+  const boton = document.getElementById("selector-idioma-boton");
+  const lista = document.getElementById("selector-idioma-lista");
+  if (!selector || !boton || !lista) return;
+
+  document.querySelectorAll(".select-custom-lista").forEach((otraLista) => {
+    if (otraLista === lista) return;
+    otraLista.classList.add("oculto");
+    if (otraLista.parentElement === document.body && otraLista._volverA) otraLista._volverA.appendChild(otraLista);
+  });
+
+  lista._volverA = selector;
+  document.body.appendChild(lista);
+  const rect = boton.getBoundingClientRect();
+  lista.style.position = "fixed";
+  lista.style.top = `${rect.bottom + 6}px`;
+  lista.style.left = `${rect.left}px`;
+  lista.style.width = `${rect.width}px`;
+  lista.classList.remove("oculto");
+  boton.setAttribute("aria-expanded", "true");
+  window.addEventListener("resize", cerrarListaIdiomas);
+  window.addEventListener("scroll", cerrarListaIdiomas, true);
+}
+
+function cerrarListaIdiomas() {
+  const selector = document.getElementById("selector-idioma");
+  const boton = document.getElementById("selector-idioma-boton");
+  const lista = document.getElementById("selector-idioma-lista");
+  if (!selector || !lista) return;
+  lista.classList.add("oculto");
+  boton?.setAttribute("aria-expanded", "false");
+  if (lista.parentElement === document.body) selector.appendChild(lista);
+  window.removeEventListener("resize", cerrarListaIdiomas);
+  window.removeEventListener("scroll", cerrarListaIdiomas, true);
 }
 
 export async function inicializarIdiomas() {
