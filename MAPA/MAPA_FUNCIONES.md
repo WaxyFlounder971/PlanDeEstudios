@@ -29,7 +29,7 @@ Para la vista de alto nivel (capas, por qué existen los imports circulares, y "
 qué archivo empiezo si me piden X") ver `ARQUITECTURA.md`. Este documento es el
 detalle función-por-función; `ARQUITECTURA.md` es el mapa de decisión.
 
-> **Estado vigente:** la copia v3.21.3 contiene 67 archivos `.js`; este mapa incluye el módulo de idiomas, el flujo seguro para añadir traducciones y la presentación actual de Tiempo/Pomodoro. Las revisiones v3.20.0 y anteriores se conservan como historial.
+> **Estado vigente:** la copia v3.21.5 contiene 67 archivos `.js`; este mapa incluye el módulo de idiomas, el flujo seguro para añadir traducciones y la presentación actual de Tiempo/Pomodoro. Las revisiones v3.20.0 y anteriores se conservan como historial.
 
 **2026-09-17 - Ronda de bugs del timer + Competencias (Partes 1 a 5 del prompt).** **Bug real de pérdida de tiempo, resuelto:** `revisarSesionOlvidadaAlAbrir()` (tiempo-estudio-timer.js) nunca volvía a levantar el timer en memoria al reabrir la app - sus 3 caminos terminaban en `localStorage.removeItem()`, así que cerrar/recargar la pestaña mataba la sesión activa en silencio; ahora existe `restaurarTimerDesdeSnapshot()` y el salvavidas dejó de ser destructivo. Además: avisos de fin de bloque que sí llegan con la app en 2do plano (Service Worker + alarma de fase), `saltarDescansoPomodoro()`, "Tiempo de Estudio" → "Tiempo" en la interfaz, ningún modal de la sección se cierra al tocar fuera, y 2 archivos nuevos - `tiempo-estudio-celebracion.js` (confeti/audio/aviso previo) y `tiempo-estudio-competencias-gestion.js` (menú Gestionar + Registro de finalizadas, separado porque `tiempo-estudio-competencias.js` ya pasaba las 1100 líneas). Del lado del Worker: 4 endpoints nuevos + 2 columnas D1 (`competencias.estado`, `participantes.horas_totales_historicas`, ver `migracion_competencias_gestion.sql`).
 
@@ -94,6 +94,8 @@ La versión visible/caché del PWA se fija en `service-worker.js` (`v3.20.0-beta
 
 ## JS - core
 
+Nota de traducción: el módulo conserva el español como texto fuente y aplica los catálogos JSON a texto y atributos visibles. También localiza fechas españolas (día, mes y año) al inglés. Si se agregan etiquetas de modalidad o palabras nuevas en el código, registra la frase española como clave y su traducción inglesa en `idiomas/ingles.json`. Los nombres propios y datos que ingresa el usuario se mantienen como fueron escritos. El prompt de descuentos se genera en el idioma activo.
+
 ### core/i18n.js
 Propósito: aplica el idioma de interfaz guardado en este dispositivo y traduce texto visible del DOM, incluidos elementos que se renderizan después del arranque. El código y los datos de la app conservan el español como fuente; no modifica los datos de Drive.
 Depende de: `idiomas/lista.json`, los JSON de `idiomas/` y el DOM.
@@ -119,6 +121,7 @@ Exporta:
 * `URL_WORKER_OAUTH` - **(2026-09-09, recién exportada - antes vivía privada del archivo)** URL del Worker de Cloudflare, `https://worker-notificaciones-agenda.appacademica.workers.dev`. Se exportó para que `tiempo-estudio/tiempo-estudio-competencias.js` la reuse en vez de duplicar el literal - el Worker gana rutas nuevas ahí (`/competencias/...`) que no son OAuth, el nombre ya no describe 100% su alcance pero se dejó tal cual para no tocar el resto de este archivo.
 * `inicializarGoogleAuth({ alObtenerToken, alListo, alFallar, alRechazarPermiso })` - arranca el CodeClient de Google Identity al cargar la página; llama a los callbacks según el resultado.
 * `iniciarSesionConGoogle()` - dispara la ventana de login/consentimiento de Google (debe llamarse directo desde un click, sin await antes). 2026-08-25: migrado de `initTokenClient` a `initCodeClient` (flujo de código) - ver `tieneScopeCalendarOtorgado` más abajo.
+* solicitarPermisoCalendar() - solicita el permiso opcional de Calendar con consentimiento incremental, sin cerrar la sesión ni borrar datos locales.
 * `obtenerPerfilGoogle(token)` - pide nombre y foto de perfil a Google. Devuelve `{ nombre, foto_url }` o `null` si falla.
 * `cerrarSesionGoogle()` - revoca el token en memoria y borra el refresh_token guardado (`borrarRefreshTokenGoogle()`) - no borra datos locales, eso lo hace storage.js/main.js.
 * `buscarOCrearArchivoDatos(token)` - busca el JSON central de la app en Drive; si no existe lo crea con datos de fábrica. Devuelve `{ fileId, datos }`.
