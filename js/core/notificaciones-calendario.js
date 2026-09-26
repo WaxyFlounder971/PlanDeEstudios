@@ -62,8 +62,6 @@ import {
   insertarEventoCalendar,
   actualizarEventoCalendar,
   eliminarEventoCalendar,
-  parchearEventoCalendar,
-  buscarInstanciaEventoCalendar,
   listarEventosCalendarSecundario,
 } from "./auth.js";
 
@@ -425,8 +423,10 @@ const UMBRAL_CONFIRMACION_BORRADO_MASIVO = 5;
 /**
  * Reconciliación completa (fix 2026-09-25): borra de Calendar cualquier
  * evento del calendario secundario que no corresponda a un EventoAgenda
- * vigente. El evento recurrente del Resumen Diario se preserva por su id
- * guardado en `google_calendar_resumen_evento_id`.
+ * vigente. Los eventos del Resumen Diario (uno por noche con contenido
+ * real, ver rediseño 2026-09-26 más abajo) se preservan tanto por sus ids
+ * guardados en `google_calendar_resumen_eventos` como por la marca
+ * `extendedProperties.private.es_resumen_diario` de cada uno.
  *
  * FIX 2026-09-26 (reportado: "pedí que se limpiaran duplicados/huérfanos y
  * de repente desaparecieron LA MAYORÍA de los eventos de Calendar — pero
@@ -479,8 +479,14 @@ async function limpiarEventosCalendarHuerfanos() {
     if (evento.google_calendar_event_id) idsValidosPorGoogleId.add(evento.google_calendar_event_id);
     eventosVivosPorAppId.set(evento.id, evento);
   }
-  const idResumen = estado.datos?.configuracion?.google_calendar_resumen_evento_id;
-  if (idResumen) idsValidosPorGoogleId.add(idResumen);
+  // Legado: si por algún motivo la migración a eventos individuales
+  // (migrarResumenRecurrenteAntiguo) no llegó a correr todavía, no se debe
+  // tratar el viejo evento recurrente como huérfano mientras tanto.
+  const idResumenViejo = estado.datos?.configuracion?.google_calendar_resumen_evento_id;
+  if (idResumenViejo) idsValidosPorGoogleId.add(idResumenViejo);
+  for (const id of Object.values(estado.datos?.configuracion?.google_calendar_resumen_eventos || {})) {
+    idsValidosPorGoogleId.add(id);
+  }
 
   // --- Paso 2: recorrer TODO Calendar y clasificar cada item, sin borrar
   // todavía nada — separar "reparar" de "borrar" antes de tocar nada. ---
@@ -495,6 +501,12 @@ async function limpiarEventosCalendarHuerfanos() {
       pageToken = pagina.nextPageToken;
       for (const item of pagina.items || []) {
         if (item.status === "cancelled" || idsValidosPorGoogleId.has(item.id)) continue;
+        // Eventos individuales del Resumen Diario: se reconocen por esta
+        // marca aunque por algún motivo no aparecieran en el mapa guardado
+        // (ej. una escritura de estado.datos.configuracion que no llegó a
+        // guardarse) — nunca son huérfanos de Agenda, los gestiona aparte
+        // sincronizarResumenDiario/sincronizarResumenParaFechaEvento.
+        if (item.extendedProperties?.private?.es_resumen_diario) continue;
 
         const appEventoId = item.extendedProperties?.private?.app_evento_id;
         const eventoVivo = appEventoId ? eventosVivosPorAppId.get(appEventoId) : null;
@@ -597,22 +609,76 @@ async function eliminarTodosLosEventosCalendarizados() {
 }
 
 /**
- * Notificaciones — Resumen diario (Parte C): UN solo evento recurrente
- * (RRULE:FREQ=DAILY) en vez de un evento por día — si el usuario cambia la
- * hora, se actualiza ESE MISMO evento (events.update), nunca se crea uno
- * nuevo (Parte C.1).
+ * REDISEÑO 2026-09-26 (reportado: "no tiene un resumen real y además se
+ * pone a diario aunque no exista nada" — pedido explícito: "que el aviso
+ * sea 'tienes pendientes para mañana' y solo aparezca cuando EN SERIO haya
+ * algo pendiente").
  *
- * 2026-08-26 (reportado: "llena todo el calendario hasta que me muera"):
- * antes la recurrencia no tenía fin (`RRULE:FREQ=DAILY` a secas), así que
- * Google/Samsung Calendar la mostraban repitiéndose literalmente para
- * siempre al scrollear hacia adelante. Ahora lleva un `UNTIL` acotado a
- * HORIZONTE_DIAS_RESUMEN días — y se renueva solo, sin que el usuario lo
- * note, cada vez que actualizarResumenDiarioDelDia() corre (una vez por
- * día, al abrir la app): como sigue siendo un PUT completo contra el MISMO
- * id de evento, "renovar" es simplemente volver a llamar a esta función,
- * que recalcula el UNTIL desde hoy.
+ * Se abandona por completo el diseño anterior de UN evento recurrente
+ * (RRULE:FREQ=DAILY) con texto genérico de fallback + parcheo puntual de la
+ * instancia de hoy. Ese diseño tenía un defecto de fondo, no solo un bug: la
+ * recurrencia hacía que CUALQUIER día dentro del horizonte (120 días)
+ * apareciera visible por default con el texto genérico ("Toca para ver tu
+ * resumen académico de hoy") — solo el día puntual en que la persona
+ * abriera la app se corregía (con contenido real, o cancelándose si no
+ * había nada). Todos los demás días quedaban con la alarma genérica
+ * sonando igual, sin corresponder a nada real. No era arreglable con un
+ * parche chico: mientras exista una recurrencia diaria, "no aparecer
+ * cuando no hay nada" y "aparecer automáticamente sin depender de que se
+ * abra la app ese día puntual" son objetivos en tensión directa.
+ *
+ * Diseño nuevo: NADA de recurrencia. Un evento INDIVIDUAL (sin RRULE) por
+ * cada fecha que de verdad tiene algo pendiente para el día siguiente — se
+ * crea solo cuando corresponde, se borra solo cuando deja de corresponder,
+ * y su texto siempre es el contenido real (nunca un texto genérico de
+ * relleno, porque si no hay contenido real directamente no se crea nada).
+ *
+ * `estado.datos.configuracion.google_calendar_resumen_eventos` reemplaza al
+ * viejo campo único `google_calendar_resumen_evento_id`: ahora es un mapa
+ * `{ "AAAA-MM-DD" (fecha de la ALARMA, la noche anterior) -> id de Google }`,
+ * uno por cada noche que efectivamente tiene un evento creado.
+ *
+ * Dos caminos alimentan este mapa, y se complementan (no se reemplazan):
+ *   - sincronizarResumenParaFechaEvento(fechaEventoIso), reactivo: se sigue
+ *     llamando desde sincronizarEventoCalendario/eliminarEventoCalendarizado
+ *     (agenda.js/agenda-modal.js) cada vez que se crea/edita/completa/borra
+ *     un EventoAgenda — recalcula DE UNA la noche anterior a ESA fecha
+ *     puntual, sin esperar a que llegue el día.
+ *   - sincronizarResumenDiario(), resync completo: recorre TODAS las fechas
+ *     con algo pendiente de hoy en adelante (más las que ya tuviéramos
+ *     guardadas, para poder detectar las que dejaron de tener contenido) y
+ *     reconcilia cada una — se sigue llamando desde config-ajustes.js al
+ *     tocar el switch/hora del Resumen, y ahora también una vez por día
+ *     (ver actualizarResumenDiarioDelDia) como red de seguridad genérica
+ *     (cubre cambios de hora, arrastres de una sesión vieja, etc.), ya que
+ *     al no depender de una recurrencia no hace falta "renovar horizonte"
+ *     — cada fecha es un evento independiente.
  */
-const HORIZONTE_DIAS_RESUMEN = 120; // ~4 meses de recurrencia visible a la vez
+
+/** Migración única: si queda el evento recurrente del diseño viejo
+ *  (`google_calendar_resumen_evento_id`), se borra de Calendar — ya no se
+ *  renueva ni se mantiene, y dejarlo suelto sería justo el bug reportado
+ *  (sigue sonando a diario con texto genérico para siempre). Se llama al
+ *  principio de sincronizarResumenDiario, así corre sola la primera vez que
+ *  esta versión toca el Resumen Diario de una cuenta existente, sin pedirle
+ *  nada al usuario. */
+async function migrarResumenRecurrenteAntiguo() {
+  const idViejo = estado.datos?.configuracion?.google_calendar_resumen_evento_id;
+  if (!idViejo) return;
+  try {
+    const calendarId = await asegurarCalendarioSecundario();
+    await conTokenValido((token) => eliminarEventoCalendar(token, calendarId, idViejo));
+    console.info(
+      "Calendar: se borró el viejo evento recurrente del Resumen Diario (reemplazado por eventos individuales por fecha, solo cuando hay contenido real)."
+    );
+  } catch (e) {
+    console.warn("No se pudo borrar el viejo evento recurrente del Resumen Diario durante la migración (no crítico):", e);
+  } finally {
+    estado.datos.configuracion.google_calendar_resumen_evento_id = null;
+    sellarTimestamp(estado.datos.configuracion);
+    marcarCambioPendiente();
+  }
+}
 
 /**
  * FIX 2026-09-26 (reportado: "toca y no pasa nada / no muestra info real"):
@@ -644,188 +710,242 @@ function fechaLocalISO(fecha = new Date()) {
  *  Resumen Diario. `descripcion` es opcional — si no se pasa, usa el texto
  *  genérico de fallback (lo que ve cualquier día que la app no se haya
  *  abierto antes de que suene la alarma, ver generarTextoResumenHoy). */
-function construirCuerpoResumenDiario(cfgResumen, descripcion) {
+function construirCuerpoResumenIndividual(cfgResumen, fechaAlarmaIso, resumen) {
   const zonaHoraria = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const hora = cfgResumen.hora || "20:00";
-  const hoyIso = fechaLocalISO();
   const [h, m] = hora.split(":").map(Number);
-  const finDate = new Date(`${hoyIso}T00:00:00`);
+  const finDate = new Date(`${fechaAlarmaIso}T00:00:00`);
   finDate.setHours(h, m + 15, 0, 0);
   const finHora = `${String(finDate.getHours()).padStart(2, "0")}:${String(finDate.getMinutes()).padStart(2, "0")}:00`;
 
-  // UNTIL en formato RFC5545 (YYYYMMDDTHHMMSSZ, UTC) — Google lo exige así
-  // para eventos con dateTime (a diferencia de eventos de día completo,
-  // que usarían YYYYMMDD a secas).
-  const untilDate = new Date(`${hoyIso}T${hora}:00`);
-  untilDate.setDate(untilDate.getDate() + HORIZONTE_DIAS_RESUMEN);
-  const untilStr = untilDate.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-
   return {
-    summary: "📚 Tu resumen académico de hoy",
-    description: descripcion || "Toca para ver tu resumen académico de hoy 👋",
-    start: { dateTime: `${hoyIso}T${hora}:00`, timeZone: zonaHoraria },
-    end: { dateTime: `${hoyIso}T${finHora}`, timeZone: zonaHoraria },
-    recurrence: [`RRULE:FREQ=DAILY;UNTIL=${untilStr}`],
+    summary: resumen.summary,
+    description: resumen.description,
+    start: { dateTime: `${fechaAlarmaIso}T${hora}:00`, timeZone: zonaHoraria },
+    end: { dateTime: `${fechaAlarmaIso}T${finHora}`, timeZone: zonaHoraria },
     reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 0 }] },
     source: { url: DEEP_LINK_RESUMEN, title: "Resumen académico" },
+    // Marca este evento como "Resumen Diario" de forma estable — la usa
+    // limpiarEventosCalendarHuerfanos() para reconocerlo y no tratarlo
+    // nunca como huérfano de Agenda (no tiene app_evento_id porque no
+    // corresponde a ningún EventoAgenda puntual), sin depender únicamente
+    // de tener su id anotado en el mapa local.
+    extendedProperties: { private: { es_resumen_diario: "1", fecha_alarma: fechaAlarmaIso } },
   };
 }
 
 /**
- * Se llama desde renderizarNotificacionesResumenDiario en config-ajustes.js
- * cada vez que cambia el switch o la hora elegida — mismo punto de entrada
- * que tenía el archivo viejo. También la reusa internamente
- * actualizarResumenDiarioDelDia() (ver abajo) para renovar el horizonte de
- * la recurrencia una vez por día, con el texto genérico (el contenido real
- * del día lo pisa después esa misma función, parcheando SOLO la instancia
- * de hoy).
+ * Arma el resumen real de lo pendiente para `fechaEventoIso` (2026-08-26 —
+ * antes era siempre el mismo texto genérico "Toca para ver tu resumen
+ * académico de hoy"; 2026-09-25 — pedido explícito: "que te diga tienes x
+ * pendientes para mañana y si no tiene pendientes ni decirle nada", ahora
+ * cumplido de raíz: si no hay nada, no se devuelve texto — no se crea
+ * ningún evento en Calendar, en vez de un evento con contenido de relleno).
+ * Devuelve `null` si no hay nada pendiente esa fecha; si no, un
+ * `{ summary, description }` listo para el evento de Calendar — el summary
+ * ya dice "Tenés pendientes para mañana" (visible en la notificación sin
+ * tener que tocarla), y la descripción trae el listado completo.
  */
-async function sincronizarResumenDiario() {
-  const idGuardado = estado.datos?.configuracion?.google_calendar_resumen_evento_id;
-
-  if (!sincronizacionCalendarActiva() || !tieneScopeCalendarOtorgado()) {
-    // La sincronización general está apagada (o nunca se autorizó
-    // Calendar): si había un evento recurrente de una activación previa,
-    // se borra igual acá (no depende de cfgResumen.activo) — si no,
-    // quedaría huérfano en Calendar sin que el switch general lo sepa.
-    if (idGuardado) await eliminarEventoResumenSiExiste();
-    return;
-  }
-
-  const cfgResumen = estado.datos?.configuracion?.notificaciones_resumen_diario;
-  if (!cfgResumen) return;
-
-  try {
-    if (!cfgResumen.activo) {
-      await eliminarEventoResumenSiExiste();
-      return;
-    }
-
-    const calendarId = await asegurarCalendarioSecundario();
-    const cuerpo = construirCuerpoResumenDiario(cfgResumen);
-
-    if (idGuardado) {
-      await conTokenValido((token) => actualizarEventoCalendar(token, calendarId, idGuardado, cuerpo));
-      return;
-    }
-
-    const creado = await conTokenValido((token) => insertarEventoCalendar(token, calendarId, cuerpo));
-    estado.datos.configuracion.google_calendar_resumen_evento_id = creado.id;
-    sellarTimestamp(estado.datos.configuracion);
-    marcarCambioPendiente();
-  } catch (e) {
-    console.warn("No se pudo sincronizar el Resumen Diario con Google Calendar (no crítico):", e);
-  }
-}
-
-/**
- * Arma el texto real del Resumen Diario de HOY (2026-08-26 — antes era
- * siempre el mismo texto genérico "Toca para ver tu resumen académico de
- * hoy"). Mira los eventos de MAÑANA — la alarma suena hoy en la
- * tarde/noche, así que avisar lo que se viene tiene más sentido que
- * repetir lo de hoy — y si no hay nada mañana, busca el próximo evento
- * pendiente más cercano en cualquier fecha futura para no dejar el aviso
- * vacío sin necesidad.
- */
-/**
- * FIX 2026-09-25 (pedido explícito: "la idea de esto es que te diga cómo,
- * tienes x pendientes para mañana y si no tiene pendientes ni decirle
- * nada"): antes, sin nada para mañana, igual devolvía un texto (el
- * "próximo evento en cualquier fecha futura", o un "🎉 no tenés nada" a
- * secas) — texto real pero no la información que se pidió, y en ningún
- * caso "nada". Ahora esta función SOLO mira mañana: si hay algo, devuelve
- * el conteo + listado; si no hay nada, devuelve `null` explícito para que
- * quien la llama (actualizarResumenDiarioDelDia) sepa que no debe avisar
- * nada ese día — no hay más fallback "para no dejarlo vacío".
- */
-/**
- * FIX 2026-09-26 (Resumen Diario reactivo): generalizada de "siempre
- * mañana respecto de hoy" a "los pendientes de CUALQUIER fecha puntual" —
- * sigue usándose para el caso de siempre (mañana respecto de hoy, ver
- * actualizarResumenDiarioDelDia) pero ahora también la reusa
- * sincronizarResumenParaFechaEvento para recalcular la instancia del día
- * anterior a un evento recién creado/editado/completado, sin esperar a que
- * llegue esa fecha. Recalcular siempre desde cero contra TODOS los eventos
- * de `fechaIso` (no solo el que disparó el cambio) es lo que hace que "ya
- * había otro evento ese día" simplemente funcione, sin ningún caso
- * especial: la próxima llamada ve los dos y arma el listado con ambos.
- */
-function generarTextoResumenParaFecha(fechaIso) {
-  const deEsaFecha = (estado.datos.agenda || []).filter((e) => !e.completada && !e.perdida && e.fecha === fechaIso);
+function generarResumenParaFecha(fechaEventoIso) {
+  const deEsaFecha = (estado.datos.agenda || []).filter((e) => !e.completada && !e.perdida && e.fecha === fechaEventoIso);
   if (deEsaFecha.length === 0) return null;
 
   const nombres = deEsaFecha.map((e) => e.nombre || "Evento de Agenda");
   const listado =
     nombres.length === 1 ? nombres[0] : `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
   const etiquetaCantidad = deEsaFecha.length === 1 ? "1 pendiente" : `${deEsaFecha.length} pendientes`;
-  return `Tenés ${etiquetaCantidad} para mañana: ${listado} 📌`;
+  return {
+    summary: `📌 Tenés ${etiquetaCantidad} para mañana`,
+    description: `${listado} 👋`,
+  };
+}
+
+/**
+ * Núcleo del Resumen Diario nuevo: reconcilia UNA fecha de alarma puntual
+ * (`fechaAlarmaIso`, la noche en la que sonaría) contra lo que de verdad
+ * está pendiente para el día siguiente (`fechaEventoIso`) —
+ * `estado.datos.configuracion.google_calendar_resumen_eventos` guarda el
+ * mapa `fechaAlarmaIso -> id de Google` de los eventos individuales creados
+ * hasta ahora.
+ *
+ *   - Si hay algo pendiente: crea el evento individual de esa noche si no
+ *     existía, o lo actualiza (PUT completo — cubre también un cambio de
+ *     hora en Ajustes) si ya existía.
+ *   - Si NO hay nada pendiente: si había un evento de una pasada anterior
+ *     (ej. la tarea que lo generó se completó o se borró después), se
+ *     borra; si nunca hubo nada que mostrar esa noche, no se toca Calendar
+ *     para nada — este es el caso que antes "aparecía igual" y ahora
+ *     directamente nunca llega a crear un evento.
+ *
+ * No hace nada si el switch general, el scope, o el Resumen Diario en
+ * particular están apagados, ni si `fechaAlarmaIso` ya pasó (no hay alarma
+ * que ajustar). Best-effort: nunca bloquea el guardado real de lo que haya
+ * disparado la llamada, que ya ocurrió antes de llegar acá.
+ */
+async function sincronizarResumenParaFechaAlarma(fechaAlarmaIso, fechaEventoIso) {
+  if (!sincronizacionCalendarActiva() || !tieneScopeCalendarOtorgado()) return;
+  const cfgResumen = estado.datos?.configuracion?.notificaciones_resumen_diario;
+  if (!cfgResumen?.activo) return;
+  if (fechaAlarmaIso < fechaLocalISO()) return; // esa alarma ya pasó, no hay nada que ajustar
+
+  const idsGuardados = (estado.datos.configuracion.google_calendar_resumen_eventos ||= {});
+  const idExistente = idsGuardados[fechaAlarmaIso];
+  const resumen = generarResumenParaFecha(fechaEventoIso);
+
+  try {
+    const calendarId = await asegurarCalendarioSecundario();
+
+    if (!resumen) {
+      if (!idExistente) return; // nunca hubo nada que mostrar esa noche, nada que borrar
+      await conTokenValido((token) => eliminarEventoCalendar(token, calendarId, idExistente));
+      delete idsGuardados[fechaAlarmaIso];
+      sellarTimestamp(estado.datos.configuracion);
+      marcarCambioPendiente();
+      return;
+    }
+
+    const cuerpo = construirCuerpoResumenIndividual(cfgResumen, fechaAlarmaIso, resumen);
+
+    if (idExistente) {
+      try {
+        await conTokenValido((token) => actualizarEventoCalendar(token, calendarId, idExistente, cuerpo));
+        return;
+      } catch (e) {
+        // El evento fue borrado del lado de Calendar por fuera de la app —
+        // se limpia el id guardado y se cae al insert de abajo para
+        // recrearlo, mismo criterio que sincronizarEventoCalendario.
+        if (!(e && (e.status === 404 || e.status === 410))) throw e;
+        delete idsGuardados[fechaAlarmaIso];
+      }
+    }
+
+    const creado = await conTokenValido((token) => insertarEventoCalendar(token, calendarId, cuerpo));
+    idsGuardados[fechaAlarmaIso] = creado.id;
+    sellarTimestamp(estado.datos.configuracion);
+    marcarCambioPendiente();
+  } catch (e) {
+    console.warn(`No se pudo sincronizar el Resumen Diario del ${fechaAlarmaIso} (no crítico):`, e);
+  }
+}
+
+/** Borra TODOS los eventos individuales del Resumen Diario creados hasta
+ *  ahora y vacía el mapa — reemplaza a la vieja eliminarEventoResumenSiExiste
+ *  (que borraba un único evento recurrente). Se usa cuando se apaga el
+ *  switch general o el del Resumen en particular. */
+async function eliminarTodosLosResumenes() {
+  const idsGuardados = estado.datos?.configuracion?.google_calendar_resumen_eventos;
+  if (!idsGuardados || !Object.keys(idsGuardados).length) return;
+  try {
+    const calendarId = await asegurarCalendarioSecundario();
+    for (const [fecha, id] of Object.entries(idsGuardados)) {
+      try {
+        await conTokenValido((token) => eliminarEventoCalendar(token, calendarId, id));
+      } catch (e) {
+        console.warn(`No se pudo borrar el Resumen Diario del ${fecha} (no crítico):`, e);
+      }
+    }
+  } catch (e) {
+    console.warn("No se pudieron borrar los eventos del Resumen Diario (no crítico):", e);
+  } finally {
+    estado.datos.configuracion.google_calendar_resumen_eventos = {};
+    sellarTimestamp(estado.datos.configuracion);
+    marcarCambioPendiente();
+  }
+}
+
+/**
+ * Se llama desde renderizarNotificacionesResumenDiario en config-ajustes.js
+ * cada vez que cambia el switch o la hora elegida — mismo punto de entrada
+ * que tenía el archivo viejo — y también una vez por día desde
+ * actualizarResumenDiarioDelDia() como resync completo de red de seguridad
+ * (ya no hace falta "renovar un horizonte de recurrencia": cada fecha es un
+ * evento independiente, así que barrer todas las fechas relevantes y
+ * reconciliar cada una alcanza).
+ *
+ * Recorre dos conjuntos de fechas de alarma: las que ya teníamos guardadas
+ * (para poder detectar y borrar las que dejaron de tener contenido, o
+ * quedaron vencidas) y las que corresponden a la noche anterior a cada
+ * fecha con algo pendiente de hoy en adelante (para crear las que falten).
+ * Además corre, una única vez, la migración del viejo evento recurrente si
+ * quedó alguno de una versión anterior de la app.
+ */
+async function sincronizarResumenDiario() {
+  await migrarResumenRecurrenteAntiguo();
+
+  if (!sincronizacionCalendarActiva() || !tieneScopeCalendarOtorgado()) {
+    await eliminarTodosLosResumenes();
+    return;
+  }
+
+  const cfgResumen = estado.datos?.configuracion?.notificaciones_resumen_diario;
+  if (!cfgResumen?.activo) {
+    await eliminarTodosLosResumenes();
+    return;
+  }
+
+  const idsGuardados = (estado.datos.configuracion.google_calendar_resumen_eventos ||= {});
+  const hoyIso = fechaLocalISO();
+
+  const fechasConPendientes = new Set(
+    (estado.datos.agenda || [])
+      .filter((e) => !e.completada && !e.perdida && e.fecha && e.fecha >= hoyIso)
+      .map((e) => e.fecha)
+  );
+
+  const fechasAlarma = new Set(Object.keys(idsGuardados));
+  for (const fechaEvento of fechasConPendientes) {
+    const d = new Date(`${fechaEvento}T00:00:00`);
+    d.setDate(d.getDate() - 1);
+    fechasAlarma.add(fechaLocalISO(d));
+  }
+
+  for (const fechaAlarmaIso of fechasAlarma) {
+    if (fechaAlarmaIso < hoyIso) {
+      // Quedó vieja (esa noche ya pasó): se limpia la referencia, y si el
+      // evento puntual todavía existiera en Calendar por algún motivo
+      // (ej. la app estuvo cerrada y nadie llegó a borrarlo a tiempo), se
+      // borra también en vez de dejarlo suelto para siempre.
+      const idViejo = idsGuardados[fechaAlarmaIso];
+      if (idViejo) {
+        try {
+          const calendarId = await asegurarCalendarioSecundario();
+          await conTokenValido((token) => eliminarEventoCalendar(token, calendarId, idViejo));
+        } catch (e) {
+          console.warn(`No se pudo borrar el Resumen Diario vencido del ${fechaAlarmaIso} (no crítico):`, e);
+        }
+        delete idsGuardados[fechaAlarmaIso];
+        sellarTimestamp(estado.datos.configuracion);
+        marcarCambioPendiente();
+      }
+      continue;
+    }
+    const d = new Date(`${fechaAlarmaIso}T00:00:00`);
+    d.setDate(d.getDate() + 1);
+    const fechaEventoIso = fechaLocalISO(d);
+    await sincronizarResumenParaFechaAlarma(fechaAlarmaIso, fechaEventoIso);
+  }
 }
 
 /**
  * Se llama UNA vez por día, la primera vez que la app arranca ese día (ver
  * main.js, justo después de mostrarApp()) — deduplicada contra
  * configuracion.resumen_diario_actualizado_el para no pegarle a la API de
- * Calendar en cada carga. Hace 2 cosas, ambas "mejor esfuerzo" (mismo
- * criterio que el resto del archivo):
- *
- *   1. Renueva el horizonte de la recurrencia (vía sincronizarResumenDiario
- *      — mismo id de evento, así que es un PUT que solo extiende el UNTIL,
- *      nunca crea uno nuevo).
- *   2. Busca la instancia de HOY del evento recurrente y le parchea SOLO
- *      la descripción con el contenido real del día (events.patch) — el
- *      evento maestro sigue con el texto genérico de fallback, para
- *      cualquier día en que la app no se haya abierto antes de que suene
- *      la alarma (limitación conocida: sin un disparador del lado del
- *      servidor —que es justo lo que esta migración eliminó a propósito—
- *      no hay forma de garantizar el contenido real si el usuario no abre
- *      la app ese día).
+ * Calendar en cada carga. Ahora es solo el wrapper de deduplicación diaria
+ * sobre sincronizarResumenDiario() (resync completo) — ya no hace falta
+ * ninguna lógica propia acá, porque al no haber recurrencia el resync
+ * completo YA cubre "hoy/mañana" como un caso más entre todas las fechas
+ * con contenido pendiente.
  */
 async function actualizarResumenDiarioDelDia() {
   if (!sincronizacionCalendarActiva() || !tieneScopeCalendarOtorgado()) return;
   const cfgResumen = estado.datos?.configuracion?.notificaciones_resumen_diario;
   if (!cfgResumen?.activo) return;
-  const idEvento = estado.datos?.configuracion?.google_calendar_resumen_evento_id;
-  if (!idEvento) return;
 
   const hoyIso = fechaLocalISO();
   if (estado.datos.configuracion.resumen_diario_actualizado_el === hoyIso) return; // ya se hizo hoy
 
   try {
-    await sincronizarResumenDiario(); // 1) renueva el horizonte
-
-    const calendarId = await asegurarCalendarioSecundario();
-    const mañanaDate = new Date(`${hoyIso}T00:00:00`);
-    mañanaDate.setDate(mañanaDate.getDate() + 1);
-    const mañanaIso = fechaLocalISO(mañanaDate);
-    const timeMin = new Date(`${hoyIso}T00:00:00`).toISOString();
-    const timeMax = new Date(`${hoyIso}T23:59:59`).toISOString();
-    const instancia = await conTokenValido((token) =>
-      buscarInstanciaEventoCalendar(token, calendarId, idEvento, timeMin, timeMax)
-    );
-
-    if (instancia) {
-      const descripcion = generarTextoResumenParaFecha(mañanaIso);
-      if (descripcion) {
-        // status: "confirmed" por si esta instancia ya había quedado
-        // cancelada (ver sincronizarResumenParaFechaEvento) y ahora sí hay
-        // algo pendiente para mañana — sin esto, un PATCH de solo
-        // description no necesariamente la reactiva.
-        await conTokenValido((token) =>
-          parchearEventoCalendar(token, calendarId, instancia.id, { description: descripcion, status: "confirmed" })
-        );
-      } else {
-        // FIX 2026-09-25 (pedido explícito: "si no tiene pendientes ni
-        // decirle nada"): sin nada para mañana, la alarma de HOY no aporta
-        // nada - en vez de dejarla sonar con el texto genérico de
-        // fallback, se cancela SOLO esta ocurrencia puntual. events.delete
-        // sobre el id de una INSTANCIA (no del evento maestro) cancela
-        // nada más que el día de hoy - la recurrencia sigue intacta, mañana
-        // se vuelve a evaluar de cero (con contenido real, o cancelada de
-        // nuevo si tampoco hay nada pasado mañana).
-        await conTokenValido((token) => eliminarEventoCalendar(token, calendarId, instancia.id));
-      }
-    }
-
+    await sincronizarResumenDiario();
     estado.datos.configuracion.resumen_diario_actualizado_el = hoyIso;
     sellarTimestamp(estado.datos.configuracion);
     marcarCambioPendiente();
@@ -835,108 +955,26 @@ async function actualizarResumenDiarioDelDia() {
 }
 
 /**
- * FIX 2026-09-26 (pedido explícito: "el resumen sigue sin ser útil...
- * cuando creas algo se cree el resumen el día anterior y si ya existía es
- * porque hay más de un evento"). Hasta acá, el contenido REAL de una
- * instancia del Resumen Diario solo se calculaba una vez por día, la
- * primera vez que se abría la app ESE día puntual
- * (actualizarResumenDiarioDelDia, arriba) — si la persona no abría la app
- * justo el día anterior a un evento, esa alarma sonaba para siempre con el
- * texto genérico de fallback (limitación que sigue documentada arriba,
- * porque no desaparece del todo: ver el aviso al final de este comentario).
+ * Reactivo: se sigue llamando desde sincronizarEventoCalendario y
+ * eliminarEventoCalendarizado (agenda.js/agenda-modal.js) cada vez que se
+ * crea, edita, completa o borra un EventoAgenda con fecha — recalcula DE
+ * UNA la noche anterior a ESA fecha puntual, sin esperar al resync diario.
+ * También la llama guardarEventoAgenda (agenda-modal.js) con la fecha VIEJA
+ * de un evento que se movió de día, para que esa noche también se
+ * recalcule (por si ese evento era el único pendiente que le quedaba).
  *
- * Ahora, además de eso, esto se llama cada vez que se crea, edita, completa
- * o borra un EventoAgenda con fecha (ver sincronizarEventoCalendario y
- * eliminarEventoCalendarizado, los dos únicos puntos de entrada desde
- * agenda.js/agenda-modal.js) — apenas pasa cualquiera de esas cosas, se
- * recalcula DE UNA la instancia del Resumen Diario correspondiente al DÍA
- * ANTERIOR a la fecha de ESE evento, sin esperar a que llegue ese día.
- *
- * El recálculo siempre vuelve a mirar TODOS los eventos pendientes de esa
- * fecha (generarTextoResumenParaFecha), no solo el que disparó el cambio —
- * por eso "si ya existía es porque hay más de un evento" no necesita ningún
- * caso especial: sea el primer evento de esa fecha o el quinto, el
- * resultado siempre es el listado completo y correcto de ese día. Si el
- * recálculo da `null` (ej. se completó el único evento que quedaba
- * pendiente para esa fecha), la instancia se cancela puntualmente en vez de
- * dejarla con contenido viejo — mismo criterio que
- * actualizarResumenDiarioDelDia. Si en cambio SÍ hay contenido y la
- * instancia había quedado cancelada de una pasada anterior, se reactiva
- * (`status: "confirmed"`) en el mismo PATCH.
- *
- * FIX 2026-09-26 (parte 2, ya con agenda-modal.js a la vista): la fecha
- * VIEJA de un evento que se edita moviéndolo de día YA NO queda huérfana —
- * esta función se exporta puntualmente para que guardarEventoAgenda
- * (agenda-modal.js) capture `viva.fecha` ANTES de pisarla con la fecha
- * nueva, y llame a esto una segunda vez con la fecha vieja después de
- * guardar. La limitación documentada en el fix anterior (esta función no
- * puede adivinar la fecha vieja por sí sola, porque el evento le llega ya
- * mutado) sigue siendo cierta — lo que cambió es que ahora hay un llamador
- * que sí conoce las dos fechas y hace las dos llamadas.
- *
- * No hace nada si el switch general, el scope, o el Resumen Diario en
- * particular están apagados, ni si la fecha del evento ya pasó (no hay
- * alarma que ajustar). Best-effort: nunca bloquea el guardado real del
- * EventoAgenda, que ya ocurrió antes de llegar acá.
+ * El recálculo (generarResumenParaFecha, adentro de
+ * sincronizarResumenParaFechaAlarma) siempre vuelve a mirar TODOS los
+ * eventos pendientes de `fechaEventoIso`, no solo el que disparó el cambio
+ * — por eso "ya había otro evento ese día" no necesita ningún caso
+ * especial: la próxima llamada arma el listado completo con todos.
  */
 async function sincronizarResumenParaFechaEvento(fechaEventoIso) {
   if (!fechaEventoIso) return;
-  if (!sincronizacionCalendarActiva() || !tieneScopeCalendarOtorgado()) return;
-
-  const cfgResumen = estado.datos?.configuracion?.notificaciones_resumen_diario;
-  if (!cfgResumen?.activo) return;
-
-  const idEvento = estado.datos?.configuracion?.google_calendar_resumen_evento_id;
-  if (!idEvento) return; // el resumen recién se crea la próxima vez que corra sincronizarResumenDiario/actualizarResumenDiarioDelDia
-
   const fechaAlarmaDate = new Date(`${fechaEventoIso}T00:00:00`);
   fechaAlarmaDate.setDate(fechaAlarmaDate.getDate() - 1);
   const fechaAlarmaIso = fechaLocalISO(fechaAlarmaDate);
-
-  if (fechaAlarmaIso < fechaLocalISO()) return; // esa alarma ya pasó, no hay nada que ajustar
-
-  try {
-    const calendarId = await asegurarCalendarioSecundario();
-    const timeMin = new Date(`${fechaAlarmaIso}T00:00:00`).toISOString();
-    const timeMax = new Date(`${fechaAlarmaIso}T23:59:59`).toISOString();
-    const instancia = await conTokenValido((token) =>
-      buscarInstanciaEventoCalendar(token, calendarId, idEvento, timeMin, timeMax)
-    );
-    // null típicamente significa que esa fecha todavía está fuera del
-    // horizonte de la recurrencia (UNTIL) — se corrige solo la próxima vez
-    // que sincronizarResumenDiario renueve el horizonte (una vez por día).
-    if (!instancia) return;
-
-    const descripcion = generarTextoResumenParaFecha(fechaEventoIso);
-    if (descripcion) {
-      await conTokenValido((token) =>
-        parchearEventoCalendar(token, calendarId, instancia.id, { description: descripcion, status: "confirmed" })
-      );
-    } else if (instancia.status !== "cancelled") {
-      await conTokenValido((token) => eliminarEventoCalendar(token, calendarId, instancia.id));
-    }
-  } catch (e) {
-    console.warn(`No se pudo actualizar el Resumen Diario del ${fechaAlarmaIso} (no crítico):`, e);
-  }
-}
-
-/** Borra el evento recurrente del Resumen Diario si existe, y limpia el id
- *  guardado — factoreado aparte porque sincronizarResumenDiario lo llama
- *  desde 2 casos distintos (switch general apagado, o switch de resumen
- *  apagado en particular). */
-async function eliminarEventoResumenSiExiste() {
-  const idGuardado = estado.datos?.configuracion?.google_calendar_resumen_evento_id;
-  if (!idGuardado) return;
-  try {
-    const calendarId = await asegurarCalendarioSecundario();
-    await conTokenValido((token) => eliminarEventoCalendar(token, calendarId, idGuardado));
-  } catch (e) {
-    console.warn("No se pudo borrar el evento recurrente del Resumen Diario (no crítico):", e);
-  } finally {
-    estado.datos.configuracion.google_calendar_resumen_evento_id = null;
-    sellarTimestamp(estado.datos.configuracion);
-    marcarCambioPendiente();
-  }
+  await sincronizarResumenParaFechaAlarma(fechaAlarmaIso, fechaEventoIso);
 }
 
 /**
@@ -998,7 +1036,7 @@ async function desactivarSincronizacionCalendario() {
   sellarTimestamp(estado.datos.configuracion);
   marcarCambioPendiente();
 
-  await eliminarEventoResumenSiExiste();
+  await eliminarTodosLosResumenes();
   await eliminarTodosLosEventosCalendarizados();
 }
 
