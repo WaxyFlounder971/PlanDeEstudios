@@ -352,8 +352,8 @@ function construirTarjetaMateria(item) {
     const btnDetener = document.createElement("button");
     btnDetener.type = "button";
     btnDetener.className = "te-btn-icono te-btn-icono-detener";
-    btnDetener.title = "Detener sesión";
-    btnDetener.setAttribute("aria-label", "Detener sesión");
+    btnDetener.title = "Detener";
+    btnDetener.setAttribute("aria-label", "Detener");
     btnDetener.textContent = "⏹";
     btnDetener.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -783,9 +783,9 @@ function asegurarEstilosTimerCircularDetalle() {
       display: flex;
       flex-direction: column;
       align-items: center;
-      width: 250px;
+      width: 390px;
       max-width: 100%;
-      flex: 0 1 250px;
+      flex: 0 1 390px;
       order: 2;
     }
     .te-bloques-progreso {
@@ -866,6 +866,23 @@ function asegurarEstilosTimerCircularDetalle() {
     }
     .te-timer-circular-progress--completa {
       stroke: color-mix(in srgb, var(--te-color-materia, var(--text-primary)) 65%, #22c55e 35%);
+    }
+    /* Vuelta extra: una vez la meta semanal está cumplida, el anillo base
+       queda lleno (arriba) y esta segunda vuelta, más fina y en un color
+       distinto (ámbar), se dibuja encima arrancando del mismo punto de las
+       12 — su longitud es el excedente (módulo de la meta, para que si se
+       excede varias veces la meta vuelva a dar la vuelta en vez de crecer
+       sin límite) y la punta redondeada es justo lo que se nota distinto. */
+    .te-timer-circular-progress-extra {
+      fill: none;
+      stroke: color-mix(in srgb, var(--te-color-materia, var(--text-primary)) 30%, #f59e0b 70%);
+      stroke-width: 7;
+      stroke-linecap: round;
+      opacity: 0;
+      transition: stroke-dashoffset 0.6s ease, opacity 0.3s ease;
+    }
+    .te-timer-circular-progress-extra--visible {
+      opacity: 1;
     }
     .te-timer-circular-centro {
       position: absolute;
@@ -960,10 +977,13 @@ function construirPantallaDetalle(cont, item) {
   }
 
   // Anillo (radio/circunferencia fijos, calza con el viewBox 0 0 200 200
-  // de abajo) — un solo elemento visual hace las dos cosas que antes eran
-  // dos piezas sueltas: el arco de color es la meta semanal (cuánto se ha
-  // estudiado / cuánto falta, ver pintarProgreso), el centro es el
-  // cronómetro de la fase en vivo (ver pintar).
+  // de abajo). Con Pomodoro corriendo en esta materia, el arco de color
+  // sigue la fase en curso (se llena hacia la duración configurada del
+  // bloque, como cualquier timer Pomodoro); sin Pomodoro, sigue la meta
+  // semanal (cuánto se ha estudiado / cuánto falta, ver pintarProgreso).
+  // El centro del anillo siempre muestra el cronómetro de la fase en vivo
+  // (ver pintar). Las 3 tarjetas de stats (Estudiado/Faltan/Meta) son
+  // siempre semanales, sin importar qué esté mostrando el anillo.
   const RADIO_ANILLO = 80;
   const CIRCUNFERENCIA_ANILLO = 2 * Math.PI * RADIO_ANILLO;
 
@@ -1013,9 +1033,12 @@ function construirPantallaDetalle(cont, item) {
       <circle class="te-timer-circular-track" cx="100" cy="100" r="${RADIO_ANILLO}"></circle>
       <circle class="te-timer-circular-progress" cx="100" cy="100" r="${RADIO_ANILLO}"
         stroke-dasharray="${CIRCUNFERENCIA_ANILLO}" stroke-dashoffset="${CIRCUNFERENCIA_ANILLO}"></circle>
+      <circle class="te-timer-circular-progress-extra" cx="100" cy="100" r="${RADIO_ANILLO}"
+        stroke-dasharray="${CIRCUNFERENCIA_ANILLO}" stroke-dashoffset="${CIRCUNFERENCIA_ANILLO}"></circle>
     </svg>
   `;
   const circuloProgreso = anilloWrap.querySelector(".te-timer-circular-progress");
+  const circuloExtra = anilloWrap.querySelector(".te-timer-circular-progress-extra");
 
   const centro = document.createElement("div");
   centro.className = "te-timer-circular-centro";
@@ -1096,7 +1119,7 @@ function construirPantallaDetalle(cont, item) {
   const btnDetener = document.createElement("button");
   btnDetener.type = "button";
   btnDetener.className = "btn btn-danger";
-  btnDetener.textContent = "Detener sesión";
+  btnDetener.textContent = "Detener";
   btnDetener.addEventListener("click", () => manejarBotonIniciarDetener(mm.id, nombreMateria));
 
   colBtns.appendChild(btnIniciar);
@@ -1112,10 +1135,42 @@ function construirPantallaDetalle(cont, item) {
   // mientras el timer sigue corriendo, no solo al detenerlo). Sin meta
   // configurada, el anillo se queda en su pista vacía (0%, sin arco de
   // color) y el chip lo dice en texto — no hay nada que "llenar" todavía.
+  //
+  // Qué dibuja el ANILLO (distinto de lo que muestran las 3 tarjetas de
+  // stats, que son SIEMPRE semanales): con Pomodoro corriendo en ESTA
+  // materia, el anillo sigue la fase en curso (se llena de 0 a 100% según
+  // tf.transcurridos/tf.duracion, igual que cualquier timer Pomodoro de
+  // toda la vida) — antes seguía la meta semanal incluso durante una
+  // sesión, así que con una meta de varias horas el anillo prácticamente
+  // no se movía en una sesión de 25-50 min y parecía roto/estancado. Sin
+  // Pomodoro (timer simple, o nadie corriendo en esta materia) el anillo
+  // vuelve a mostrar el avance de la meta semanal, que es lo único que
+  // tiene sentido mostrar ahí en ese caso. La vuelta extra en ámbar
+  // (módulo del divisor que corresponda) se aplica igual en los dos modos.
   function pintarProgreso(activo) {
+    const esEstaMateria = Boolean(activo && activo.materiaMatriculadaId === mm.id);
+    const esPomodoroActivo = Boolean(esEstaMateria && activo.pomodoro);
+
+    if (esPomodoroActivo) {
+      const tf = tiempoDeFase();
+      const fraccion = tf.duracion > 0 ? Math.min(1, tf.transcurridos / tf.duracion) : 0;
+      circuloProgreso.style.strokeDashoffset = String(CIRCUNFERENCIA_ANILLO - fraccion * CIRCUNFERENCIA_ANILLO);
+      circuloProgreso.classList.toggle("te-timer-circular-progress--completa", tf.completa);
+      if (tf.extra > 0 && tf.duracion > 0) {
+        const fraccionExtra = (tf.extra % tf.duracion) / tf.duracion || 1;
+        circuloExtra.style.strokeDashoffset = String(CIRCUNFERENCIA_ANILLO - fraccionExtra * CIRCUNFERENCIA_ANILLO);
+        circuloExtra.classList.add("te-timer-circular-progress-extra--visible");
+      } else {
+        circuloExtra.classList.remove("te-timer-circular-progress-extra--visible");
+      }
+    }
+
     if (meta === null || meta === undefined) {
-      circuloProgreso.style.strokeDashoffset = String(CIRCUNFERENCIA_ANILLO);
-      circuloProgreso.classList.remove("te-timer-circular-progress--completa");
+      if (!esPomodoroActivo) {
+        circuloProgreso.style.strokeDashoffset = String(CIRCUNFERENCIA_ANILLO);
+        circuloProgreso.classList.remove("te-timer-circular-progress--completa");
+        circuloExtra.classList.remove("te-timer-circular-progress-extra--visible");
+      }
       colStats.style.display = "none";
       sinMetaMsg.style.display = "";
       return;
@@ -1123,7 +1178,6 @@ function construirPantallaDetalle(cont, item) {
     colStats.style.display = "";
     sinMetaMsg.style.display = "none";
 
-    const esEstaMateria = Boolean(activo && activo.materiaMatriculadaId === mm.id);
     const minutosGuardados = calcularMinutosEstudiadosEstaSemana(mm.id);
     // Mientras el timer de ESTA materia está corriendo, se suma el tramo en
     // vivo (todavía no guardado como sesión) — timer simple: toda la
@@ -1146,8 +1200,25 @@ function construirPantallaDetalle(cont, item) {
     const restanteMin = Math.max(0, metaMinutos - minutosEstudiados);
     const excedenteMin = Math.max(0, minutosEstudiados - metaMinutos);
 
-    circuloProgreso.style.strokeDashoffset = String(CIRCUNFERENCIA_ANILLO - (porcentaje / 100) * CIRCUNFERENCIA_ANILLO);
-    circuloProgreso.classList.toggle("te-timer-circular-progress--completa", completada);
+    // El anillo solo sigue la meta semanal cuando NO hay Pomodoro corriendo
+    // en esta materia (arriba ya lo dejó en modo "fase" si corresponde).
+    if (!esPomodoroActivo) {
+      circuloProgreso.style.strokeDashoffset = String(CIRCUNFERENCIA_ANILLO - (porcentaje / 100) * CIRCUNFERENCIA_ANILLO);
+      circuloProgreso.classList.toggle("te-timer-circular-progress--completa", completada);
+
+      // Vuelta extra: el anillo base ya está lleno (arriba); esta segunda
+      // vuelta, más fina y en ámbar, arranca del mismo punto (las 12) y
+      // avanza según el excedente — con módulo de la meta, así que si se
+      // duplica o triplica la meta la vuelta se reinicia en vez de intentar
+      // dibujar más de una circunferencia de largo.
+      if (excedenteMin > 0 && metaMinutos > 0) {
+        const fraccionExtra = (excedenteMin % metaMinutos) / metaMinutos || 1;
+        circuloExtra.style.strokeDashoffset = String(CIRCUNFERENCIA_ANILLO - fraccionExtra * CIRCUNFERENCIA_ANILLO);
+        circuloExtra.classList.add("te-timer-circular-progress-extra--visible");
+      } else {
+        circuloExtra.classList.remove("te-timer-circular-progress-extra--visible");
+      }
+    }
 
     // Estudiado y Meta son siempre esos 2 datos; la tercera tarjeta
     // (Faltan) pasa a mostrar el excedente y ponerse en verde apenas se
@@ -1204,8 +1275,7 @@ function construirPantallaDetalle(cont, item) {
     const bloqueCumplido = Boolean(esPomodoro && activo.pomodoro.fase === "trabajo" && tf.completa);
     btnDescanso.style.display = bloqueCumplido ? "" : "none";
     if (bloqueCumplido) {
-      const esUltimoBloque = activo.pomodoro.bloqueActual >= activo.pomodoro.config.cantidad_bloques;
-      btnDescanso.textContent = esUltimoBloque ? "☕ Descanso largo" : "☕ Descanso";
+      btnDescanso.textContent = "☕ Descanso";
     }
 
     pintarBloques(activo, tf);
