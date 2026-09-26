@@ -850,6 +850,61 @@ function revisarUniversidadesIncompletas() {
   document.getElementById("modal-completar-universidades").classList.remove("oculto");
 }
 
+/**
+ * Deep links por query param - ambos se limpian enseguida (`replaceState`)
+ * para que un refresh posterior no vuelva a saltar de sección solo:
+ *   "?abrir=agenda"  - notificación push vieja (Web Push, dada de baja
+ *                       2026-08-25, ver 'notificationclick' en
+ *                       service-worker.js - ese archivo no se revisó en
+ *                       esta sesión, puede tener código muerto si seguía
+ *                       generando este link).
+ *   "?abrir=resumen" - (2026-08-25) el `source.url` del evento recurrente
+ *                       del Resumen Diario en el calendario secundario de
+ *                       Google (ver sincronizarResumenDiario en
+ *                       core/notificaciones-calendario.js) - al tocar la
+ *                       alarma nativa del calendario, el sistema operativo
+ *                       abre esta URL en el navegador.
+ *
+ * FIX 2026-09-26 (reportado: "toco 'Ver origen' en la notificación de
+ * Calendar y no pasa absolutamente nada"): esta lógica vivía SOLO adentro
+ * de mostrarApp(), que corre una única vez al arrancar la página (caché o
+ * login). En Android, tocar el link de una notificación con la PWA/pestaña
+ * de esta app ya abierta de fondo normalmente NO dispara una carga nueva
+ * de página (ni DOMContentLoaded ni un mostrarApp() nuevo) - el sistema
+ * simplemente trae al frente la pestaña/actividad ya existente, que sigue
+ * viva con la URL vieja en memoria y nunca se entera de que se tocó un
+ * link con un query param distinto. Se factorea esta lógica a su propia
+ * función para poder volver a llamarla, además de desde mostrarApp(),
+ * desde los listeners de 'pageshow' y 'visibilitychange' agregados más
+ * abajo - ambos SÍ disparan cuando una pestaña/actividad ya abierta vuelve
+ * a primer plano, con `window.location.search` ya actualizado si el
+ * navegador llegó a procesar la navegación (aunque sea sin recarga
+ * completa). Si el sistema operativo directamente ignora el link y ni
+ * siquiera actualiza la URL de la pestaña existente, esto no alcanza a
+ * arreglarlo - es una limitación del lado del SO/navegador, no de este
+ * código; lo único adicional que se podría intentar es registrar un
+ * Web Share Target / intent-filter más agresivo del lado del manifest,
+ * fuera del alcance de este archivo.
+ */
+function procesarDeepLinkAbrir() {
+  const parametroAbrir = new URLSearchParams(window.location.search).get("abrir");
+  if (parametroAbrir === "agenda") {
+    mostrarSeccion("agenda");
+    window.history.replaceState({ ...(window.history.state || {}), appNav: true, appSeccion: "agenda" }, "", window.location.pathname);
+  } else if (parametroAbrir === "resumen") {
+    mostrarSeccion("resumen");
+    window.history.replaceState({ ...(window.history.state || {}), appNav: true, appSeccion: "resumen" }, "", window.location.pathname);
+  }
+}
+
+// Re-chequeo defensivo del deep link (ver comentario de procesarDeepLinkAbrir
+// arriba) para cuando la pestaña/PWA ya estaba abierta y el tap de la
+// notificación solo la trae al frente sin recargar la página entera.
+window.addEventListener("pageshow", procesarDeepLinkAbrir);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") procesarDeepLinkAbrir();
+});
+
 function mostrarApp() {
   // Cubre los 2 caminos que llegan acá: sesión restaurada desde caché
   // (mostrarApp() se llama casi de inmediato al arrancar, ver
@@ -911,27 +966,10 @@ function mostrarApp() {
   // tras un refresh la sección de Plan de Estudios se quedaba con la clase
   // "oculto" del HTML aunque su contenido sí se hubiera renderizado.
   mostrarSeccion(localStorage.getItem(CLAVE_SECCION_ACTIVA) || "resumen");
-  // Deep links por query param - ambos se limpian enseguida para que un
-  // refresh posterior no vuelva a saltar de sección solo:
-  //   "?abrir=agenda"  - notificación push vieja (Web Push, dada de baja
-  //                       2026-08-25, ver 'notificationclick' en
-  //                       service-worker.js - ese archivo no se revisó en
-  //                       esta sesión, puede tener código muerto si seguía
-  //                       generando este link).
-  //   "?abrir=resumen" - (2026-08-25, NUEVO) el `source.url` del evento
-  //                       recurrente del Resumen Diario en el calendario
-  //                       secundario de Google (ver sincronizarResumenDiario
-  //                       en core/notificaciones-calendario.js) - al tocar
-  //                       la alarma nativa del calendario, el sistema
-  //                       operativo abre esta URL en el navegador.
-  const parametroAbrir = new URLSearchParams(window.location.search).get("abrir");
-  if (parametroAbrir === "agenda") {
-    mostrarSeccion("agenda");
-    window.history.replaceState({ ...(window.history.state || {}), appNav: true, appSeccion: "agenda" }, "", window.location.pathname);
-  } else if (parametroAbrir === "resumen") {
-    mostrarSeccion("resumen");
-    window.history.replaceState({ ...(window.history.state || {}), appNav: true, appSeccion: "resumen" }, "", window.location.pathname);
-  }
+  // Deep links por query param — extraído a procesarDeepLinkAbrir() (ver
+  // esa función, definida más abajo) para poder re-chequearlo también
+  // desde 'pageshow'/'visibilitychange', no solo acá.
+  procesarDeepLinkAbrir();
   // Deep link "?comp=<id>" - invitación a una competencia de Tiempo de
   // Estudio (ver construirLinkInvitacion en tiempo-estudio-competencias.js,
   // es lo que arma el botón "Enlace" de cada tarjeta). Mismo criterio que
