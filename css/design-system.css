@@ -4893,6 +4893,33 @@ html.exportar-tema-default[data-mode="dark"] {
    un poco más de tamaño visual para igualar el peso de las barras de pausa. */
 .te-btn-icono-iniciar, .te-btn-icono-detener { padding: 0; }
 .te-btn-icono-detener { font-size: 1.3rem; }
+/* Símbolos geométricos en CSS: la fuente del teléfono dibuja ■ desplazado
+   hacia abajo. Estas formas tienen caja propia y quedan centradas por flex,
+   independientemente de la fuente o del sistema operativo. */
+.te-btn-control-pausa,
+.te-btn-icono-detener { font-size: 0; position: relative; padding: 0; }
+.te-btn-control-pausa::before,
+.te-btn-icono-detener::before {
+  content: "";
+  display: block;
+  flex: 0 0 auto;
+  background: currentColor;
+}
+.te-btn-control-pausa[data-estado="corriendo"]::before {
+  width: 13px;
+  height: 14px;
+  background: linear-gradient(to right, currentColor 0 35%, transparent 35% 65%, currentColor 65% 100%);
+}
+.te-btn-control-pausa[data-estado="pausado"]::before {
+  width: 0;
+  height: 0;
+  background: transparent;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 12px solid currentColor;
+  transform: translateX(1px);
+}
+.te-btn-icono-detener::before { width: 13px; height: 13px; }
 
 /* Encabezado de detalle (D.1): la franja de color acá NO va a la izquierda
    como en la tarjeta de la lista — recorre TODO el ancho, arriba, en

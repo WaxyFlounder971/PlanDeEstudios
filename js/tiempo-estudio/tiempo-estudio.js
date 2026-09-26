@@ -339,7 +339,8 @@ function construirTarjetaMateria(item) {
     const pausado = Boolean(activo.pausado);
     const btnPausa = document.createElement("button");
     btnPausa.type = "button";
-    btnPausa.className = "te-btn-icono te-btn-icono-iniciar";
+    btnPausa.className = "te-btn-icono te-btn-icono-iniciar te-btn-control-pausa";
+    btnPausa.dataset.estado = pausado ? "pausado" : "corriendo";
     btnPausa.title = pausado ? "Reanudar" : "Pausar";
     btnPausa.setAttribute("aria-label", pausado ? "Reanudar" : "Pausar");
     btnPausa.textContent = pausado ? "▷" : "❚❚";
