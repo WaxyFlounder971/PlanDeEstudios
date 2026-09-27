@@ -1,6 +1,7 @@
 {
   "idioma_origen": "es",
-  "actualizacion": "Correcciones de textos dinámicos en resumen, agenda y plan de estudios",
+  "actualizacion": "Corrección del idioma en textos dinámicos del resumen, agenda y beneficios",
+  "correccion_tecnica": "El traductor del DOM conservaba el texto fuente, pero descartaba las traducciones alternativas de textos dinámicos. Ahora mantiene la alternativa del idioma activo al insertar el contenido, y conserva el original para permitir cambiar de idioma sin recargar.",
   "cambios": [
     {
       "clave": "Horas: {variable}",

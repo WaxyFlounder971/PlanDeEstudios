@@ -102,7 +102,12 @@ export function traducirTextoInterfaz(texto, traduccionAlternativa = null) {
   }
   if (resultado !== original) {
     if (textosDirectos.size > 4000) textosDirectos.clear();
-    textosDirectos.set(resultado, original);
+    textosDirectos.set(resultado, {
+      original,
+      traduccionAlternativa: idiomaActual === "en" && traduccionAlternativa !== null
+        ? String(traduccionAlternativa)
+        : null,
+    });
   }
   return resultado;
 }
@@ -112,14 +117,16 @@ function procesarNodoTexto(nodo) {
   const ultimoAplicado = textosAplicados.get(nodo);
   const textoDirecto = idiomaActual !== "es" ? textosDirectos.get(actual) : undefined;
   const original = textoDirecto !== undefined
-    ? textoDirecto
+    ? textoDirecto.original
     : ultimoAplicado !== undefined && actual === ultimoAplicado
     ? textosOriginales.get(nodo)
     : actual;
   if (original === undefined) return;
   textosOriginales.set(nodo, original);
 
-  const nuevo = traducir(original);
+  const nuevo = idiomaActual === "en" && textoDirecto?.traduccionAlternativa
+    ? textoDirecto.traduccionAlternativa
+    : traducir(original);
   if (nuevo !== actual) nodo.nodeValue = nuevo;
   textosAplicados.set(nodo, nuevo);
 }
