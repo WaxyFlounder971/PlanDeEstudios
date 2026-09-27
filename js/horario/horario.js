@@ -5,6 +5,7 @@
 
 import { calcularNumeroSemanaSemestre, obtenerClasesEfectivasSemana, crearDiaCronograma, sellarTimestamp } from "../core/schema.js";
 import { estado } from "../core/storage.js";
+import { obtenerIdiomaActual, obtenerLocaleInterfaz } from "../core/i18n.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
@@ -255,7 +256,11 @@ function obtenerDiasOrdenados() {
   const inicioId = cfg.dia_inicio_semana || "lunes";
   const idxInicio = Math.max(0, DIAS_SEMANA_CONFIG.findIndex((d) => d.id === inicioId));
   const rotado = [...DIAS_SEMANA_CONFIG.slice(idxInicio), ...DIAS_SEMANA_CONFIG.slice(0, idxInicio)];
-  return rotado.map((d) => ({ ...d, etiquetaCorta: nombres[d.id] || d.abrevDefault }));
+  const abreviaturasIngles = { lunes: "Mon", martes: "Tue", miercoles: "Wed", jueves: "Thu", viernes: "Fri", sabado: "Sat", domingo: "Sun" };
+  return rotado.map((d) => ({
+    ...d,
+    etiquetaCorta: nombres[d.id] || (obtenerIdiomaActual() === "en" ? abreviaturasIngles[d.id] : d.abrevDefault),
+  }));
 }
 
 function obtenerDiasVisiblesOrdenados() {
@@ -606,7 +611,7 @@ function abrirTarjetaInfoBloque(semestre, numeroSemana, b) {
           ${b.enlace ? `<a href="${b.enlace}" target="_blank" rel="noopener" class="horario-btn-entrar-clase" style="display:inline-block; width:fit-content; background:${b.color}; color:#fff;">Entrar</a>` : ""}
           ${b.notas ? `
             <div>
-              <div class="muted" style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.02em;">Notas</div>
+              <div class="muted" style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.02em;">Apuntes</div>
               <div style="white-space:pre-wrap; overflow-wrap:break-word;">${b.notas}</div>
             </div>` : ""}
         </div>
@@ -723,7 +728,7 @@ function abrirSelectorSemestre() {
     const inicio = fechaLocalDesdeISO(s.fecha_inicio);
     const finEstimado = new Date(inicio);
     finEstimado.setDate(inicio.getDate() + (Number(s.duracion_semanas) || 16) * 7);
-    const fmt = (d) => (isNaN(d.getTime()) ? "" : d.toLocaleDateString("es-CR", { day: "numeric", month: "short", year: "numeric" }));
+    const fmt = (d) => (isNaN(d.getTime()) ? "" : d.toLocaleDateString(obtenerLocaleInterfaz(), { day: "numeric", month: "short", year: "numeric" }));
     // Antes no tenía color propio y heredaba negro por defecto (ilegible
     // en modo oscuro) - se fija al color de texto normal del tema, y el
     // nombre queda 20% más grande (0.95rem ≈ 1.2 × 0.78rem, el tamaño base
@@ -755,7 +760,7 @@ function renderizarHeaderHorario(semestre, numeroSemana) {
   }
   if (nombreEl) nombreEl.textContent = semestre.nombre || "";
   if (semanaEl) semanaEl.textContent = `Semana ${numeroSemana}`;
-  if (fechaEl) fechaEl.textContent = new Date().toLocaleDateString("es-CR", { day: "numeric", month: "short" });
+  if (fechaEl) fechaEl.textContent = new Date().toLocaleDateString(obtenerLocaleInterfaz(), { day: "numeric", month: "short" });
 }
 
 /* ===================== Vista inicial (centra en la clase más temprana / hora actual) ===================== */
@@ -999,7 +1004,7 @@ function renderizarHorarioInterno() {
       h.style.cssText = "flex:1; min-width:56px; text-align:center; padding:4px 0;";
       h.innerHTML = `
         <div class="${esHoy(fecha) ? "horario-dia-actual-glow" : ""}" style="font-size:0.72rem; font-weight:600;">${dia.etiquetaCorta}</div>
-        <div class="muted" style="font-size:0.6rem;">${fecha ? fecha.toLocaleDateString("es-CR", { day: "numeric", month: "short" }) : ""}</div>
+        <div class="muted" style="font-size:0.6rem;">${fecha ? fecha.toLocaleDateString(obtenerLocaleInterfaz(), { day: "numeric", month: "short" }) : ""}</div>
       `;
       headerFila.appendChild(h);
     });
@@ -1332,7 +1337,7 @@ function renderizarVistaIndividualAmigoInterno(cont, semestre, numeroSemana) {
     h.style.cssText = "flex:1; min-width:130px; text-align:center; padding:4px 0;";
     h.innerHTML = `
       <div class="${fecha && esHoy(fecha) ? "horario-dia-actual-glow" : ""}" style="font-size:0.72rem; font-weight:600;">${dia.etiquetaCorta}</div>
-      <div class="muted" style="font-size:0.6rem;">${fecha ? fecha.toLocaleDateString("es-CR", { day: "numeric", month: "short" }) : ""}</div>
+      <div class="muted" style="font-size:0.6rem;">${fecha ? fecha.toLocaleDateString(obtenerLocaleInterfaz(), { day: "numeric", month: "short" }) : ""}</div>
     `;
     headerFila.appendChild(h);
 
@@ -1761,7 +1766,7 @@ function renderizarConjuntoModoSemana(cont, semestre, numeroSemana, dias) {
     tituloDia.style.cssText = "text-align:center; padding:2px 0 4px;";
     tituloDia.innerHTML = `
       <div class="${esHoyDia ? "horario-dia-actual-glow" : ""}" style="font-size:0.78rem; font-weight:700;">${dia.etiqueta || dia.etiquetaCorta}</div>
-      <div class="muted" style="font-size:0.6rem;">${fecha ? fecha.toLocaleDateString("es-CR", { day: "numeric", month: "short" }) : ""}</div>
+      <div class="muted" style="font-size:0.6rem;">${fecha ? fecha.toLocaleDateString(obtenerLocaleInterfaz(), { day: "numeric", month: "short" }) : ""}</div>
     `;
     bloqueDia.appendChild(tituloDia);
 
@@ -2066,7 +2071,7 @@ function generarImagenHorario(semestre, numeroSemana, dias, clasesEfectivas) {
     ctx.fillText(dia.etiquetaCorta, x, cursorY);
     ctx.fillStyle = colorTextoSec;
     ctx.font = "400 11px " + FONT_CANVAS;
-    ctx.fillText(fecha ? fecha.toLocaleDateString("es-CR", { day: "numeric", month: "short" }) : "", x, cursorY + 18);
+    ctx.fillText(fecha ? fecha.toLocaleDateString(obtenerLocaleInterfaz(), { day: "numeric", month: "short" }) : "", x, cursorY + 18);
   });
   ctx.textAlign = "left";
 

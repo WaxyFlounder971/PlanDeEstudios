@@ -10,6 +10,7 @@
 
 import { fechaLocalDesdeISO } from "../horario/horario.js";
 import { estado } from "../core/storage.js";
+import { obtenerLocaleInterfaz } from "../core/i18n.js";
 import { desplazarYResaltarElemento } from "../ui/componentes.js";
 import { calcularNumeroSemanaParaFecha, construirSeccionMateriasDia } from "./agenda-clases.js";
 import { construirItemEvento, ETIQUETA_TIPO, limpiarIntervalosVenceHoy, renderizarAgenda } from "./agenda.js";
@@ -238,7 +239,7 @@ function construirDetalleDia(fecha, semestresSeleccionados, semestreReferencia) 
   panel.id = "agenda-cal-detalle-dia";
 
   const numeroSemana = semestreReferencia ? calcularNumeroSemanaParaFecha(semestreReferencia, fecha) : null;
-  const fechaTexto = fecha.toLocaleDateString("es-CR", { weekday: "long", day: "numeric", month: "short" });
+  const fechaTexto = fecha.toLocaleDateString(obtenerLocaleInterfaz(), { weekday: "long", day: "numeric", month: "short" });
 
   const header = document.createElement("div");
   header.className = "row-between";
@@ -316,7 +317,7 @@ function construirGridMensual(semestresSeleccionados) {
     cursor.setDate(cursor.getDate() + 1);
   }
   cont.appendChild(grid);
-  return { cont, tituloRango: baseMes.toLocaleDateString("es-CR", { month: "long", year: "numeric" }) };
+  return { cont, tituloRango: baseMes.toLocaleDateString(obtenerLocaleInterfaz(), { month: "long", year: "numeric" }) };
 }
 
 function construirGridSemanal(semestresSeleccionados) {
@@ -338,8 +339,8 @@ function construirGridSemanal(semestresSeleccionados) {
   const ultimo = dias[dias.length - 1].fecha;
   const mismoMes = primero.getMonth() === ultimo.getMonth();
   const tituloRango = mismoMes
-    ? `${primero.getDate()} - ${ultimo.getDate()} ${ultimo.toLocaleDateString("es-CR", { month: "short" })}`
-    : `${primero.toLocaleDateString("es-CR", { day: "numeric", month: "short" })} - ${ultimo.toLocaleDateString("es-CR", { day: "numeric", month: "short" })}`;
+    ? `${primero.getDate()} - ${ultimo.getDate()} ${ultimo.toLocaleDateString(obtenerLocaleInterfaz(), { month: "short" })}`
+    : `${primero.toLocaleDateString(obtenerLocaleInterfaz(), { day: "numeric", month: "short" })} - ${ultimo.toLocaleDateString(obtenerLocaleInterfaz(), { day: "numeric", month: "short" })}`;
   return { cont, tituloRango };
 }
 

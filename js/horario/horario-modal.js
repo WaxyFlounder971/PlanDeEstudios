@@ -13,6 +13,7 @@ import {
 } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
+import { obtenerLocaleInterfaz } from "../core/i18n.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 import { buscarSemestreVivoPorId, vincularProfesorAMateriaMatriculada } from "../semestres/semestres.js";
@@ -941,7 +942,7 @@ function renderizarZonaCronograma(zona, chevron, semestre, bloque, estadoLocal, 
             const diaInfo = DIAS_SEMANA_CONFIG.find((x) => x.abrevDefault === c.dia);
             const nombreDia = (diaInfo && diaInfo.etiqueta) || c.dia;
             const fecha = calcularFechaClaseSemana(semestre, semanaAbierta, c.dia);
-            const fechaTxt = fecha && !isNaN(fecha.getTime()) ? fecha.toLocaleDateString("es-CR", { day: "numeric", month: "short" }) : "";
+            const fechaTxt = fecha && !isNaN(fecha.getTime()) ? fecha.toLocaleDateString(obtenerLocaleInterfaz(), { day: "numeric", month: "short" }) : "";
             const clave = `${semanaAbierta}-${c.dia}`;
             const editando = estadoLocal._cronogramaEditando === clave;
             return `

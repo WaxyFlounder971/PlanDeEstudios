@@ -15,6 +15,7 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
+import { obtenerLocaleInterfaz } from "../core/i18n.js";
 import { marcarCambioPendiente, mostrarCargando, ocultarCargando, registrarHookPostGuardado } from "../core/storage-sync.js";
 import { crearEnlaceHorarioCompartido, crearAmigoVinculado, sellarTimestamp } from "../core/schema.js";
 import { crearArchivoJsonEnDrive, crearPermisoPublicoLectura, eliminarPermisoDrive, guardarDatos } from "../core/auth.js";
@@ -437,7 +438,7 @@ function renderizarListaEnlacesCompartidos() {
   cont.innerHTML = "";
   enlaces.forEach((enlace) => {
     const semestre = (estado.datos.semestres || []).find((s) => s.id === enlace.semestre_id);
-    const fecha = new Date(enlace.fecha_creacion).toLocaleDateString("es-CR", {
+    const fecha = new Date(enlace.fecha_creacion).toLocaleDateString(obtenerLocaleInterfaz(), {
       day: "numeric",
       month: "short",
       year: "numeric",

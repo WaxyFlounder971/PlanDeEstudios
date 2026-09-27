@@ -8,6 +8,7 @@
 
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 import { estado } from "../core/storage.js";
+import { obtenerIdiomaActual, obtenerLocaleInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { fechaLocalDesdeISO, obtenerPlanPorId } from "../horario/horario.js";
 import { buscarSemestreVivoPorId, obtenerSemestresActuales, obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
@@ -151,6 +152,7 @@ function obtenerDiasSemanaOrdenAgenda() {
   const inicioId = cfg.dia_inicio_semana || "lunes";
   const idxInicio = Math.max(0, DIAS_SEMANA_CONFIG.findIndex((d) => d.id === inicioId));
   const nombres = cfg.nombres_dias_personalizados || {};
+  const abreviaturasIngles = { lunes: "Mon", martes: "Tue", miercoles: "Wed", jueves: "Thu", viernes: "Fri", sabado: "Sat", domingo: "Sun" };
   return [...DIAS_SEMANA_CONFIG.slice(idxInicio), ...DIAS_SEMANA_CONFIG.slice(0, idxInicio)].map((d) => ({
     ...d,
     // Mismo criterio que obtenerDiasVisiblesOrdenados en horario.js: nombre
@@ -158,7 +160,7 @@ function obtenerDiasSemanaOrdenAgenda() {
     // abreviatura por defecto (L, K, M...) — se comparte la misma
     // configuración entre Horario y Agenda a propósito, es la MISMA idea de
     // "cómo le decís vos a este día", no algo que deba configurarse dos veces.
-    etiquetaCorta: nombres[d.id] || d.abrevDefault,
+    etiquetaCorta: nombres[d.id] || (obtenerIdiomaActual() === "en" ? abreviaturasIngles[d.id] : d.abrevDefault),
   }));
 }
 
@@ -262,10 +264,10 @@ function formatearRangoSemanaAgenda(dias) {
   const mismoMes = primero.getMonth() === ultimo.getMonth();
   const opcionesCorto = { day: "numeric", month: "short" };
   if (mismoMes) {
-    const mes = ultimo.toLocaleDateString("es-CR", { month: "short" });
+    const mes = ultimo.toLocaleDateString(obtenerLocaleInterfaz(), { month: "short" });
     return `${primero.getDate()} - ${ultimo.getDate()} ${mes}`;
   }
-  return `${primero.toLocaleDateString("es-CR", opcionesCorto)} - ${ultimo.toLocaleDateString("es-CR", opcionesCorto)}`;
+  return `${primero.toLocaleDateString(obtenerLocaleInterfaz(), opcionesCorto)} - ${ultimo.toLocaleDateString(obtenerLocaleInterfaz(), opcionesCorto)}`;
 }
 
 /**
@@ -333,6 +335,15 @@ function calcularDiasDesdeHoy(fecha, hoy = new Date()) {
 function formatearFechaRelativa(fecha, hoy = new Date()) {
   const dias = calcularDiasDesdeHoy(fecha, hoy);
   if (dias === null) return "";
+  if (obtenerIdiomaActual() === "en") {
+    if (dias === 0) return "Today";
+    if (dias === 1) return "Tomorrow";
+    if (dias === 2) return "In 2 days";
+    if (dias > 2) return `In ${dias} days`;
+    if (dias === -1) return "Yesterday";
+    if (dias === -2) return "2 days ago";
+    return `${-dias} days ago`;
+  }
   if (dias === 0) return "Hoy";
   if (dias === 1) return "Mañana";
   if (dias === 2) return "Pasado Mañana";

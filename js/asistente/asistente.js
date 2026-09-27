@@ -35,6 +35,7 @@ import { obtenerClasesEfectivasSemana } from "../core/schema.js";
 // llama a lo mismo que ya existe.
 import { aplicarModalidadDia, calcularNumeroSemanaSinAcotarParaFecha } from "../horario/horario-modal.js";
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
+import { obtenerIdiomaActual, obtenerLocaleInterfaz } from "../core/i18n.js";
 
 /**
  * Modelo de Gemini (revisado 2026-08-22, bug real en producción):
@@ -90,6 +91,11 @@ const MODALIDADES_VALIDAS_ASISTENTE = ["presencial", "virtual", "asincronica", "
  * realmente este system prompt.
  */
 const PROMPT_PERSONALIDAD_WAPPER = `Eres Wapper, un asistente académico simple, cálido y amable. Ayudas a organizar tareas, exámenes y eventos. Habla de forma clara y cercana, sin jerga ni modismos regionales de ningún país, sin exagerar el entusiasmo. Diríjete al usuario siempre de tú, nunca de vos ni de usted. Mantente siempre dentro de tu propósito académico, no te desvíes a otros temas, y no inventes información que no tienes.`;
+const PROMPT_PERSONALIDAD_WAPPER_EN = `You are Wapper, a clear, warm, and friendly academic assistant. You help students organize assignments, exams, and events. Speak naturally and concisely, without slang, regional idioms, or exaggerated enthusiasm. Stay focused on academic matters and never invent information. Reply in English when the user writes in English, and otherwise follow the language they use. Preserve the user's intent, distinctions, dates, and level of certainty; ask a concise follow-up when essential details are missing. Treat official course names and saved user data as exact proper names.`;
+
+function textoAsistente(es, en) {
+  return obtenerIdiomaActual() === "en" ? en : es;
+}
 
 /**
  * Nombre por el que Wapper se dirige al usuario (2026-08-29, trato
@@ -138,7 +144,7 @@ function obtenerNombreParaDirigirse() {
  */
 function resolverActualizacionNombre(nombreNuevo) {
   const limpio = String(nombreNuevo || "").trim();
-  if (!limpio) return { ok: false, motivo: "No entendí bien qué nombre quieres que use." };
+  if (!limpio) return { ok: false, motivo: textoAsistente("No entendí bien qué nombre quieres que use.", "I didn't catch the name you'd like me to use.") };
   if (limpio.length > 40) return { ok: false, motivo: "Ese nombre es un poco largo — dame algo más cortito." };
   estado.datos.configuracion = estado.datos.configuracion || {};
   estado.datos.configuracion.asistente_nombre_preferido = limpio;
@@ -157,13 +163,18 @@ function resolverActualizacionNombre(nombreNuevo) {
  */
 function construirPromptPersonalidadWapper() {
   const nombre = obtenerNombreParaDirigirse();
-  if (!nombre) return PROMPT_PERSONALIDAD_WAPPER;
-  return `${PROMPT_PERSONALIDAD_WAPPER} El usuario se llama ${nombre} — puedes usar ese nombre de vez en cuando para un trato más cercano, sin forzarlo en cada respuesta; si te parece un nombre gracioso o con onda de apodo, puedes seguirle la broma con humor liviano y cariñoso, nunca burlón. Si te pregunta de dónde sacaste su nombre, dile que lo tomaste de su cuenta de Google.`;
+  const ingles = obtenerIdiomaActual() === "en";
+  const base = ingles ? PROMPT_PERSONALIDAD_WAPPER_EN : PROMPT_PERSONALIDAD_WAPPER;
+  if (!nombre) return base;
+  return ingles
+    ? `${base} The user's preferred name is ${nombre}. Use it occasionally and naturally, never in every reply. If asked where you got it, explain that it comes from their Google account.`
+    : `${base} El usuario se llama ${nombre} — puedes usar ese nombre de vez en cuando para un trato más cercano, sin forzarlo en cada respuesta; si te parece un nombre gracioso o con onda de apodo, puedes seguirle la broma con humor liviano y cariñoso, nunca burlón. Si te pregunta de dónde sacaste su nombre, dile que lo tomaste de su cuenta de Google.`;
 }
 
 /** Punto 4 del brief de personalidad: saludo simple → respuesta fija, sin llamar a Gemini. */
 function construirMensajeSaludoWapper() {
   const nombre = obtenerNombreParaDirigirse();
+  if (obtenerIdiomaActual() === "en") return nombre ? `Hi, ${nombre}! How can I help today?` : "Hi! How can I help today?";
   return nombre ? `¡Hola ${nombre}! ¿En qué te ayudo hoy?` : "¡Hola! ¿En qué te ayudo hoy?";
 }
 
@@ -173,6 +184,7 @@ function construirMensajeSaludoWapper() {
  *  que el ejemplo nombre una materia REAL matriculada del usuario en vez de
  *  "anatomía" fija, sea cual sea. */
 function construirMensajeFallbackWapper() {
+  if (obtenerIdiomaActual() === "en") return `I couldn't identify an assignment, exam, or event in your message. Could you add a little more detail? For example: "I have an exam for ${elegirNombreMateriaEjemplo()} on Thursday at 2 p.m."`;
   return `No logré identificar una tarea, examen o evento en tu mensaje. ¿Puedes darme más detalles? Por ejemplo: "tengo examen de ${elegirNombreMateriaEjemplo()} el jueves a las 2pm".`;
 }
 
@@ -183,6 +195,9 @@ function construirMensajeFallbackWapper() {
  */
 function construirMensajeBienvenidaWapper() {
   const nombre = obtenerNombreParaDirigirse();
+  if (obtenerIdiomaActual() === "en") return nombre
+    ? `Hello, ${nombre}! I'm Wapper 👋, your personal academic companion.\nDo you have an assignment, exam, or event you'd like to add?`
+    : "Hello! I'm Wapper 👋, your personal academic companion.\nDo you have an assignment, exam, or event you'd like to add?";
   return nombre
     ? `¡Hola ${nombre}! Soy Wapper 👋, tu asistente académico personal. \n¿Tienes alguna tarea, examen o evento que quieras agregar?`
     : "¡Hola! Soy Wapper 👋, tu asistente académico personal. \nDime, ¿tienes alguna tarea, examen o evento que quieras agregar?";
@@ -238,6 +253,23 @@ function obtenerNombresMateriasParaEjemplosBienvenida() {
  */
 function construirEjemplosBienvenida() {
   const nombres = obtenerNombresMateriasParaEjemplosBienvenida();
+  if (obtenerIdiomaActual() === "en") {
+    const plantillas = [
+      "I have an exam for {materia} on Thursday at 2 p.m.",
+      "Remind me to submit the {materia} essay on Monday",
+      "I have a {materia} project tomorrow; remind me",
+      "Quiz for {materia} in two weeks",
+      "Study group meeting for {materia} on Saturday at 10 a.m.",
+      "Add an assignment for {materia} this Friday",
+      "The {materia} final project is due next Tuesday",
+      "My roommate's birthday is on the 15th",
+      "I have a {materia} final exam next week, but I don't know the exact day yet",
+      "I need to study for the {materia} midterm on September 3",
+      "Add an assignment for {materia} next class and an exam for {materia} in week 7",
+      "I have a {materia} quiz tomorrow at 9 a.m., then a meeting three hours later",
+    ];
+    return plantillas.map((plantilla, indice) => plantilla.replace(/\{materia\}/g, () => nombres[indice % nombres.length]));
+  }
   let indice = 0;
   return PLANTILLAS_EJEMPLOS_BIENVENIDA_WAPPER.map((plantilla) =>
     plantilla.replace(/\{materia\}/g, () => nombres[indice++ % nombres.length])
@@ -351,6 +383,10 @@ const CAPACIDADES_WAPPER = [
  * cacheada — ver elegirNombreMateriaEjemplo arriba para el caso de materia.
  */
 function construirMensajeCapacidadesWapper() {
+  if (obtenerIdiomaActual() === "en") {
+    const nombreMateria = elegirNombreMateriaEjemplo();
+    return `I can help you with:\n\n• Add assignments, exams, and events.\nExample: "I have an exam for ${nombreMateria} on Thursday."\n\n• Check what assignments or exams you have in a specific week.\nExample: "What exams do I have this week?"\n\n• Find a saved assignment or exam and its due date.\nExample: "When is the second ${nombreMateria} midterm?"\n\n• Check whether an upcoming class is online or in person.\nExample: "Is my next ${nombreMateria} class online or in person?"\n\n• Change a class's format in your schedule.\nExample: "Set my ${nombreMateria} class on Tuesday to online."\n\n• Change what I call you.\nExample: "Call me Alex."`;
+  }
   const items = CAPACIDADES_WAPPER.map((c) => {
     const ejemplo = typeof c.ejemplo === "function" ? c.ejemplo() : c.ejemplo;
     return `• ${c.descripcion}.\nEjemplo: "${ejemplo}"`;
@@ -1262,7 +1298,7 @@ function construirSystemInstruction() {
   const avisoInicialesDuplicadas = construirAvisoInicialesDuplicadas(materiasVinculables);
   const contextoDiasModalidad = construirContextoDiasModalidadMaterias(materiasVinculables);
 
-  return `Sos el Asistente IA de una app académica. Tu función es leer un
+  return `${obtenerIdiomaActual() === "en" ? `The app interface is in English. Interpret the user's request in whichever language they use. Write any user-facing clarification in English. Keep exact official course names and all JSON field names, action names, type values, and weekday values in the Spanish forms specified below; the application depends on those exact values. Never guess missing dates, times, courses, or facts.\n\n` : ""}Sos el Asistente IA de una app académica. Tu función es leer un
 mensaje en lenguaje natural de un estudiante universitario y, según lo que
 pida, extraer tareas/exámenes/eventos para su Agenda, detectar un pedido de
 cambiar la modalidad de una clase puntual en su Horario, o reconocer una
@@ -1813,6 +1849,12 @@ async function generarRespuestaConversacionalWapper(textoUsuario) {
 }
 
 function mensajeParaError(e) {
+  if (obtenerIdiomaActual() === "en") {
+    if (e.tipoError === "clave") return "Your Gemini API key appears to be invalid or expired. Check it in Settings > AI Assistant.";
+    if (e.tipoError === "limite") return "Gemini's usage limit has been reached for now. Wait a moment and try again.";
+    if (e.tipoError === "red") return "Couldn't connect to Gemini. Check your connection and try again.";
+    return "Something went wrong on my end. Please try again in a moment.";
+  }
   if (e.tipoError === "clave") return "Tu clave de Gemini parece inválida o vencida. Revisala en Ajustes > Asistente IA.";
   if (e.tipoError === "limite") return "Se alcanzó el límite de uso de Gemini por ahora. Esperá un momento y probá de nuevo.";
   if (e.tipoError === "red") return "No se pudo conectar con Gemini. Revisá tu conexión e intentá de nuevo.";
@@ -1859,16 +1901,16 @@ function resolverMateriaVinculada(nombreMateria) {
  * distinguir grupos/bloques, solo materia+día.
  */
 function resolverCambioModalidad(cambioModalidad) {
-  if (!cambioModalidad) return { ok: false, motivo: "No entendí bien qué cambio de modalidad quieres hacer." };
+  if (!cambioModalidad) return { ok: false, motivo: textoAsistente("No entendí bien qué cambio de modalidad quieres hacer.", "I didn't understand what class format you'd like to change.") };
 
   const materiaVinculada = resolverMateriaVinculada(cambioModalidad.materia);
   if (!materiaVinculada) {
-    return { ok: false, motivo: "No pude identificar de forma clara a qué materia te refieres." };
+    return { ok: false, motivo: textoAsistente("No pude identificar de forma clara a qué materia te refieres.", "I couldn't clearly identify which course you mean.") };
   }
 
   const idxDiaSemana = indiceDiaSemanaDesdeNombre(cambioModalidad.dia);
   if (idxDiaSemana === null) {
-    return { ok: false, motivo: "No reconocí el día que mencionaste." };
+    return { ok: false, motivo: textoAsistente("No reconocí el día que mencionaste.", "I couldn't identify the day you mentioned.") };
   }
   const diaCodigo = DIAS_SEMANA_CONFIG[(idxDiaSemana + 6) % 7].abrevDefault;
 
@@ -1876,19 +1918,23 @@ function resolverCambioModalidad(cambioModalidad) {
     ? cambioModalidad.modalidadNueva
     : null;
   if (!modalidadNueva) {
-    return { ok: false, motivo: "No reconocí la modalidad nueva que pediste." };
+    return { ok: false, motivo: textoAsistente("No reconocí la modalidad nueva que pediste.", "I couldn't identify the new class format you requested.") };
   }
 
   const semestre = (estado.datos.semestres || []).find((s) => s.id === materiaVinculada.semestreId);
   const mm = semestre && (semestre.materias_matriculadas || []).find((m) => m.id === materiaVinculada.mmId);
   if (!semestre || !mm) {
-    return { ok: false, motivo: "Esa materia ya no está matriculada en el semestre actual." };
+    return { ok: false, motivo: textoAsistente("Esa materia ya no está matriculada en el semestre actual.", "That course is no longer enrolled in the current semester.") };
   }
 
   const bloque = (semestre.bloques_horario || []).find(
     (b) => b.materia_id === mm.materia_id && b.plan_estudio_id === mm.plan_estudio_id && (b.dias || []).some((d) => d.dia === diaCodigo)
   );
   if (!bloque) {
+    if (obtenerIdiomaActual() === "en") {
+      const dia = new Intl.DateTimeFormat(obtenerLocaleInterfaz(), { weekday: "long" }).format(new Date(2024, 0, 7 + idxDiaSemana));
+      return { ok: false, motivo: `${materiaVinculada.nombre} has no class on ${dia} according to your schedule.` };
+    }
     return { ok: false, motivo: `${materiaVinculada.nombre} no tiene clase los ${cambioModalidad.dia} según tu Horario.` };
   }
   const diaPlantilla = bloque.dias.find((d) => d.dia === diaCodigo);
@@ -1908,12 +1954,12 @@ function resolverCambioModalidad(cambioModalidad) {
     }
   }
   if (!fechaObjetivo) {
-    return { ok: false, motivo: "No pude calcular la próxima fecha de esa clase." };
+    return { ok: false, motivo: textoAsistente("No pude calcular la próxima fecha de esa clase.", "I couldn't calculate the next date for that class.") };
   }
 
   const numeroSemana = calcularNumeroSemanaSinAcotarParaFecha(semestre, fechaObjetivo);
   if (numeroSemana == null || numeroSemana < 1) {
-    return { ok: false, motivo: "Esa fecha cae fuera del rango de semanas del semestre." };
+    return { ok: false, motivo: textoAsistente("Esa fecha cae fuera del rango de semanas del semestre.", "That date falls outside the semester's week range.") };
   }
 
   return {
@@ -1974,8 +2020,8 @@ function resolverRangoConsulta(numeroSemana) {
 /** "1 sep." — "7 sep." — para el encabezado de una consulta por semana. */
 function formatearRangoConsulta(inicio, fin) {
   const opciones = { day: "numeric", month: "short" };
-  const textoInicio = inicio.toLocaleDateString("es-CR", opciones).replace(/\.$/, "");
-  const textoFin = fin.toLocaleDateString("es-CR", opciones).replace(/\.$/, "");
+  const textoInicio = inicio.toLocaleDateString(obtenerLocaleInterfaz(), opciones).replace(/\.$/, "");
+  const textoFin = fin.toLocaleDateString(obtenerLocaleInterfaz(), opciones).replace(/\.$/, "");
   return `${textoInicio} - ${textoFin}`;
 }
 
@@ -2403,7 +2449,7 @@ function resolverHoraDefaultDesdeHorario(materiaVinculada, fechaIso) {
 /** "2026-08-22" -> "Martes 22 de agosto del 2026" — nunca el ISO crudo. */
 function formatearFechaLarga(fechaIso) {
   const fecha = fechaLocalDesdeISO(fechaIso);
-  const texto = fecha.toLocaleDateString("es-CR", { weekday: "long", day: "numeric", month: "long" }).replace(",", "");
+  const texto = fecha.toLocaleDateString(obtenerLocaleInterfaz(), { weekday: "long", day: "numeric", month: "long" }).replace(",", "");
   return `${texto.charAt(0).toUpperCase()}${texto.slice(1)} del ${fecha.getFullYear()}`;
 }
 
@@ -2666,7 +2712,7 @@ function crearTarjetaConfirmacionModalidad(resuelto, estadoInicial, onDecision) 
       const btnCancelar = document.createElement("button");
       btnCancelar.className = "btn-discreto";
       btnCancelar.style.flex = "none";
-      btnCancelar.textContent = "Cancelar";
+      btnCancelar.textContent = textoAsistente("Cancelar", "Cancel");
       btnCancelar.onclick = () => {
         pintarEstado("cancelado");
         onDecision("cancelado");
@@ -2676,7 +2722,7 @@ function crearTarjetaConfirmacionModalidad(resuelto, estadoInicial, onDecision) 
       const btnAplicar = document.createElement("button");
       btnAplicar.className = "btn btn-primary";
       btnAplicar.style.flex = "none";
-      btnAplicar.textContent = "Aplicar cambio";
+      btnAplicar.textContent = textoAsistente("Aplicar cambio", "Apply change");
       btnAplicar.onclick = () => {
         aplicarModalidadDia(resuelto.bloqueId, resuelto.semestreId, resuelto.numeroSemana, resuelto.diaCodigo, resuelto.modalidadNueva);
         pintarEstado("aplicado");
@@ -2690,7 +2736,9 @@ function crearTarjetaConfirmacionModalidad(resuelto, estadoInicial, onDecision) 
     const p = document.createElement("div");
     p.className = "muted";
     p.style.fontSize = "0.82rem";
-    p.textContent = estado === "aplicado" ? "✅ Cambio aplicado" : "Cambio cancelado";
+      p.textContent = estado === "aplicado"
+        ? textoAsistente("✅ Cambio aplicado", "✅ Change applied")
+        : textoAsistente("Cambio cancelado", "Change canceled");
     zonaAccion.appendChild(p);
   }
 
@@ -2733,7 +2781,9 @@ async function mostrarResultadoEventosEnChat(resultado, turno, textoUsuario) {
     return;
   }
 
-  const resumen = resultado.items.length === 1 ? "Guardé esto en tu Agenda:" : `Guardé ${resultado.items.length} cosas en tu Agenda:`;
+  const resumen = resultado.items.length === 1
+    ? textoAsistente("Guardé esto en tu Agenda:", "Added this to your Agenda:")
+    : (obtenerIdiomaActual() === "en" ? `Added ${resultado.items.length} items to your Agenda:` : `Guardé ${resultado.items.length} cosas en tu Agenda:`);
   agregarBurbujaAlDom(crearBurbuja("modelo", resumen));
 
   // Array.isArray(turno.eventosGuardados): CRÍTICO para no duplicar
@@ -2834,10 +2884,12 @@ function formatearDiasFaltantes(fechaEventoIso) {
   hoy.setHours(0, 0, 0, 0);
   const fechaEvento = fechaLocalDesdeISO(fechaEventoIso);
   const diffDias = Math.round((fechaEvento - hoy) / 86400000);
-  if (diffDias === 0) return "es hoy";
-  if (diffDias > 0) return `falta${diffDias === 1 ? "" : "n"} ${diffDias} día${diffDias === 1 ? "" : "s"}`;
+  if (diffDias === 0) return textoAsistente("es hoy", "it's today");
+  if (diffDias > 0) return obtenerIdiomaActual() === "en"
+    ? `in ${diffDias} day${diffDias === 1 ? "" : "s"}`
+    : `falta${diffDias === 1 ? "" : "n"} ${diffDias} día${diffDias === 1 ? "" : "s"}`;
   const dias = Math.abs(diffDias);
-  return `fue hace ${dias} día${dias === 1 ? "" : "s"}`;
+  return obtenerIdiomaActual() === "en" ? `${dias} day${dias === 1 ? "" : "s"} ago` : `fue hace ${dias} día${dias === 1 ? "" : "s"}`;
 }
 
 /**
@@ -3389,11 +3441,12 @@ function instalarObservadorVisibilidadAsistente(tarjeta) {
  */
 function mostrarSaludoInicial() {
   agregarBurbujaAlDom(crearBurbuja("modelo", construirMensajeBienvenidaWapper()));
-  agregarBurbujaAlDom(crearBurbuja("modelo", `Ejemplo: ${elegirEjemploBienvenidaAlAzar()}`));
+  const ingles = obtenerIdiomaActual() === "en";
+  agregarBurbujaAlDom(crearBurbuja("modelo", `${ingles ? "Example" : "Ejemplo"}: ${elegirEjemploBienvenidaAlAzar()}`));
   // Punto 8 del brief (2026-08-31): agregado, no reemplazo, del ejemplo de
   // arriba — invita a descubrir el resto de capacidades (punto 7) sin tener
   // que adivinar. En tuteo, como el resto de la interfaz de Wapper.
-  agregarBurbujaAlDom(crearBurbuja("modelo", "¿No sabes por dónde empezar? Pregúntame qué puedo hacer."));
+  agregarBurbujaAlDom(crearBurbuja("modelo", ingles ? "Not sure where to start? Ask me what I can do." : "¿No sabes por dónde empezar? Pregúntame qué puedo hacer."));
 }
 
 /**

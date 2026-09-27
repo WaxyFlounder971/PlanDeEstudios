@@ -6,6 +6,7 @@
 import { TIPOS_EVENTO_AGENDA, crearEventoAgenda, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
+import { obtenerLocaleInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { fechaLocalDesdeISO } from "../horario/horario.js";
@@ -647,7 +648,7 @@ function renderizarTarjetaInfoEventoAgenda(evento) {
   nombreEl.style.textDecorationThickness = esPerdida ? "2px" : "";
   nombreEl.style.opacity = evento.completada ? "0.7" : "1";
 
-  document.getElementById("info-agenda-fecha").textContent = fechaLocalDesdeISO(evento.fecha).toLocaleDateString("es-CR", {
+  document.getElementById("info-agenda-fecha").textContent = fechaLocalDesdeISO(evento.fecha).toLocaleDateString(obtenerLocaleInterfaz(), {
     weekday: "long",
     day: "numeric",
     month: "long",

@@ -28,6 +28,7 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
+import { obtenerIdiomaActual } from "../core/i18n.js";
 import { marcarCambioPendiente, registrarHookPostFusion } from "../core/storage-sync.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { COLOR_TIEMPO_ESTUDIO_DEFAULT, crearMateriaEstudioIndependiente, sellarTimestamp } from "../core/schema.js";
@@ -190,8 +191,9 @@ function formatearHorasMin(minutosTotales) {
   const totales = Math.max(0, Math.round(minutosTotales));
   const h = Math.floor(totales / 60);
   const m = totales % 60;
-  if (h > 0 && m > 0) return `${h} h ${m} min`;
-  if (h > 0) return `${h} h`;
+  const sufijoHora = obtenerIdiomaActual() === "en" ? (h === 1 ? " hr" : " hrs") : " h";
+  if (h > 0 && m > 0) return `${h}${sufijoHora} ${m} min`;
+  if (h > 0) return `${h}${sufijoHora}`;
   return `${m} min`;
 }
 

@@ -17,6 +17,14 @@ let tablaTraducciones = new Map();
 let patronesTraduccion = [];
 let observador = null;
 
+export function obtenerIdiomaActual() {
+  return idiomaActual;
+}
+
+export function obtenerLocaleInterfaz() {
+  return idiomaActual === "en" ? "en-US" : "es-CR";
+}
+
 const FECHAS_ES_EN = new Map([
   ["lunes", "Monday"], ["martes", "Tuesday"], ["miércoles", "Wednesday"], ["miercoles", "Wednesday"],
   ["jueves", "Thursday"], ["viernes", "Friday"], ["sábado", "Saturday"], ["sabado", "Saturday"], ["domingo", "Sunday"],

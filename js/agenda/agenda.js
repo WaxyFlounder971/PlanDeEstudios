@@ -14,6 +14,7 @@
 import { obtenerEstadoEfectivoSemestre, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
+import { obtenerLocaleInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { abrirConfirmacion, desplazarYResaltarElemento } from "../ui/componentes.js";
 import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
@@ -817,7 +818,7 @@ function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios, 
   header.innerHTML = `
     <div class="row" style="gap:8px;">
       <span style="font-weight:700;">${diaInfo.etiqueta}</span>
-      <span class="muted" style="font-size:0.82rem;">${diaInfo.fecha.toLocaleDateString("es-CR", { day: "numeric", month: "short" })}</span>
+      <span class="muted" style="font-size:0.82rem;">${diaInfo.fecha.toLocaleDateString(obtenerLocaleInterfaz(), { day: "numeric", month: "short" })}</span>
     </div>
     ${hoy ? `<span class="badge badge-accent">Hoy</span>` : ""}
   `;
@@ -1045,7 +1046,7 @@ function construirTarjetaSemestreAgenda(semestre, seleccionado) {
 
   const esActual = obtenerEstadoEfectivoSemestre(semestre) === "actual";
   const inicio = new Date(semestre.fecha_inicio);
-  const fechaTexto = isNaN(inicio.getTime()) ? "" : inicio.toLocaleDateString("es-CR", { month: "short", year: "numeric" });
+  const fechaTexto = isNaN(inicio.getTime()) ? "" : inicio.toLocaleDateString(obtenerLocaleInterfaz(), { month: "short", year: "numeric" });
   const subtitulo = [fechaTexto, esActual ? "Actual" : ""].filter(Boolean).join(" · ");
 
   btn.innerHTML = `

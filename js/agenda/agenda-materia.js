@@ -33,6 +33,7 @@ import {
 } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
+import { obtenerLocaleInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import {
   fechaLocalDesdeISO,
@@ -572,7 +573,7 @@ function construirFilaClaseMateria(claseEfectiva, semestre, numeroSemana) {
   const emoji = obtenerEmojiModalidad(claseEfectiva.modalidad);
   const fechaClase = obtenerFechaClaseEnSemana(semestre, numeroSemana, claseEfectiva.dia);
   const etiquetaDiaFecha = fechaClase
-    ? fechaClase.toLocaleDateString("es-CR", { weekday: "long", day: "numeric", month: "short" })
+    ? fechaClase.toLocaleDateString(obtenerLocaleInterfaz(), { weekday: "long", day: "numeric", month: "short" })
     : ETIQUETA_DIA_CODIGO[claseEfectiva.dia] || claseEfectiva.dia;
 
   const fila = document.createElement("button");
@@ -640,7 +641,7 @@ function construirSeccionSemanaMateria(semestre, materiaId, numeroSemana, evento
     const etiquetaDia = document.createElement("span");
     etiquetaDia.className = "muted";
     etiquetaDia.style.cssText = "font-size:0.72rem; text-transform:capitalize;";
-    etiquetaDia.textContent = fechaLocalDesdeISO(ev.fecha).toLocaleDateString("es-CR", {
+    etiquetaDia.textContent = fechaLocalDesdeISO(ev.fecha).toLocaleDateString(obtenerLocaleInterfaz(), {
       weekday: "long",
       day: "numeric",
       month: "short",
