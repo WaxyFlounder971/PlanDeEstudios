@@ -50,6 +50,7 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
+import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { mostrarToast } from "../ui/componentes.js";
 import {
@@ -617,7 +618,11 @@ function estadosSemana(est, semana) {
     else if (d.min >= MINUTOS_DIA_CUMPLIDO) tipo = "cumplido";
     else if (d.idx === est.hoyIdx) tipo = est.enRiesgo ? "riesgo" : "hoy";
     else tipo = est.activa ? "descanso" : "previo";
-    return { ...d, tipo, letra: LETRAS_SEMANA[i], nombre: NOMBRES_DIA[i] };
+    const fechaNombre = new Date(2024, 0, 1 + i);
+    const nombre = obtenerIdiomaActual() === "en"
+      ? fechaNombre.toLocaleDateString(obtenerLocaleInterfaz(), { weekday: "long" })
+      : NOMBRES_DIA[i];
+    return { ...d, tipo, letra: LETRAS_SEMANA[i], nombre };
   });
   let exceso = dias.filter((d) => d.tipo === "descanso").length - (est.descansosUsados || 0);
   for (const d of dias) {
@@ -631,7 +636,7 @@ function estadosSemana(est, semana) {
 
 function formatearDiaISO(iso) {
   const [a, m, d] = String(iso).split("-").map(Number);
-  return new Date(a, (m || 1) - 1, d || 1).toLocaleDateString("es", { weekday: "short", day: "numeric", month: "short" });
+  return new Date(a, (m || 1) - 1, d || 1).toLocaleDateString(obtenerLocaleInterfaz(), { weekday: "short", day: "numeric", month: "short" });
 }
 
 function crearFilaDetalle(etiqueta, valor) {
@@ -657,7 +662,7 @@ function construirDetalleRacha(est) {
     semana.forEach((d, i) => {
       const celda = crearElemento("div", `te-racha-dia te-racha-dia--${d.tipo}`);
       celda.setAttribute("role", "listitem");
-      celda.setAttribute("aria-label", `${d.nombre}: ${DESCRIPCION_TIPO_DIA[d.tipo]}`);
+      celda.setAttribute("aria-label", `${d.nombre}: ${traducirTextoInterfaz(DESCRIPCION_TIPO_DIA[d.tipo])}`);
       celda.style.setProperty("--n", String(i));
       celda.appendChild(crearElemento("span", "te-racha-dia-letra", d.letra));
       const marca = crearElemento("span", "te-racha-dia-marca");

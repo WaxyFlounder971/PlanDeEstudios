@@ -8,6 +8,7 @@ import { arbolContieneCodigo, evaluarNodoRequisito, obtenerEstadoEfectivoMateria
 import { resolverConflicto, sonValoresEquivalentes } from "../core/storage-merge.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
+import { traducirTextoInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto, formatearHoras } from "../core/utils.js";
 import { agregarLongPress, envolverConFlechasScroll } from "../ui/componentes.js";
 import { abrirModalRequisito, construirBloqueCompletoRequisitos, construirCuerpoDetalleMateria, construirLinea2Materia } from "./plan-detalle.js";
@@ -282,7 +283,7 @@ function construirTarjetaOptativaDisponible(materiaTemplate, plan) {
   linea2.appendChild(badgeTipo);
   const badgeCreditos = document.createElement("span");
   badgeCreditos.className = "badge badge-accent";
-  badgeCreditos.textContent = `Créditos: ${materiaTemplate.creditos}`;
+  badgeCreditos.textContent = traducirTextoInterfaz(`Créditos: ${materiaTemplate.creditos}`);
   linea2.appendChild(badgeCreditos);
   card.appendChild(linea2);
 
@@ -409,7 +410,7 @@ function construirTarjetaParaRevisar(materiaTemplate, plan) {
   linea2.appendChild(badgeTipo);
   const badgeCreditos = document.createElement("span");
   badgeCreditos.className = "badge badge-accent";
-  badgeCreditos.textContent = `Créditos: ${materiaTemplate.creditos}`;
+  badgeCreditos.textContent = traducirTextoInterfaz(`Créditos: ${materiaTemplate.creditos}`);
   linea2.appendChild(badgeCreditos);
   card.appendChild(linea2);
 

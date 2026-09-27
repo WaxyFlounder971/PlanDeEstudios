@@ -35,7 +35,7 @@ import { obtenerClasesEfectivasSemana } from "../core/schema.js";
 // llama a lo mismo que ya existe.
 import { aplicarModalidadDia, calcularNumeroSemanaSinAcotarParaFecha } from "../horario/horario-modal.js";
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
-import { obtenerIdiomaActual, obtenerLocaleInterfaz } from "../core/i18n.js";
+import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 
 /**
  * Modelo de Gemini (revisado 2026-08-22, bug real en producción):
@@ -91,10 +91,59 @@ const MODALIDADES_VALIDAS_ASISTENTE = ["presencial", "virtual", "asincronica", "
  * realmente este system prompt.
  */
 const PROMPT_PERSONALIDAD_WAPPER = `Eres Wapper, un asistente académico simple, cálido y amable. Ayudas a organizar tareas, exámenes y eventos. Habla de forma clara y cercana, sin jerga ni modismos regionales de ningún país, sin exagerar el entusiasmo. Diríjete al usuario siempre de tú, nunca de vos ni de usted. Mantente siempre dentro de tu propósito académico, no te desvíes a otros temas, y no inventes información que no tienes.`;
-const PROMPT_PERSONALIDAD_WAPPER_EN = `You are Wapper, a clear, warm, and friendly academic assistant. You help students organize assignments, exams, and events. Speak naturally and concisely, without slang, regional idioms, or exaggerated enthusiasm. Stay focused on academic matters and never invent information. Reply in English when the user writes in English, and otherwise follow the language they use. Preserve the user's intent, distinctions, dates, and level of certainty; ask a concise follow-up when essential details are missing. Treat official course names and saved user data as exact proper names.`;
+const PROMPT_PERSONALIDAD_WAPPER_EN = `You are Wapper, a clear, warm, and friendly academic assistant. You help students organize assignments, exams, and events. Speak naturally and concisely, without slang, regional idioms, or exaggerated enthusiasm. Stay focused on academic matters and never invent information. Reply in English when the user writes in English, and otherwise follow the language they use. Preserve the user's intent, distinctions, dates, and level of certainty; ask a concise follow-up when essential details are missing. Treat official course names and saved user data as exact proper names. Answer only what the user asks; do not volunteer a generic list of capabilities or explain how you know personal information unless asked. When formatting helps, use clean Markdown with short paragraphs and properly separated bullet points.`;
 
 function textoAsistente(es, en) {
   return obtenerIdiomaActual() === "en" ? en : es;
+}
+
+function agregarTextoInlineSeguro(contenedor, texto) {
+  const regex = /\*\*(.+?)\*\*/g;
+  let desde = 0;
+  let coincidencia;
+  while ((coincidencia = regex.exec(texto))) {
+    contenedor.appendChild(document.createTextNode(texto.slice(desde, coincidencia.index)));
+    const fuerte = document.createElement("strong");
+    fuerte.textContent = coincidencia[1];
+    contenedor.appendChild(fuerte);
+    desde = regex.lastIndex;
+  }
+  contenedor.appendChild(document.createTextNode(texto.slice(desde)));
+}
+
+function renderizarTextoAsistente(contenedor, texto) {
+  const normalizado = String(texto || "")
+    .replace(/\\\*\s+/g, "\n- ")
+    .replace(/\\([*_#])/g, "$1")
+    .trim();
+  const lineas = normalizado.split(/\r?\n/);
+  let parrafo = null;
+  let lista = null;
+  for (const lineaOriginal of lineas) {
+    const linea = lineaOriginal.trim();
+    if (!linea) { parrafo = null; lista = null; continue; }
+    const item = linea.match(/^(?:[-*•])\s+(.+)$/);
+    if (item) {
+      parrafo = null;
+      if (!lista) { lista = document.createElement("ul"); lista.style.cssText = "margin:0; padding-left:1.25rem;"; contenedor.appendChild(lista); }
+      const li = document.createElement("li");
+      agregarTextoInlineSeguro(li, item[1]);
+      lista.appendChild(li);
+      continue;
+    }
+    lista = null;
+    if (/^#{1,3}\s/.test(linea)) {
+      const encabezado = document.createElement("strong");
+      encabezado.style.display = "block";
+      agregarTextoInlineSeguro(encabezado, linea.replace(/^#{1,3}\s+/, ""));
+      contenedor.appendChild(encabezado);
+      parrafo = null;
+      continue;
+    }
+    if (!parrafo) { parrafo = document.createElement("p"); parrafo.style.margin = "0"; contenedor.appendChild(parrafo); }
+    else parrafo.appendChild(document.createElement("br"));
+    agregarTextoInlineSeguro(parrafo, linea);
+  }
 }
 
 /**
@@ -2450,7 +2499,8 @@ function resolverHoraDefaultDesdeHorario(materiaVinculada, fechaIso) {
 function formatearFechaLarga(fechaIso) {
   const fecha = fechaLocalDesdeISO(fechaIso);
   const texto = fecha.toLocaleDateString(obtenerLocaleInterfaz(), { weekday: "long", day: "numeric", month: "long" }).replace(",", "");
-  return `${texto.charAt(0).toUpperCase()}${texto.slice(1)} del ${fecha.getFullYear()}`;
+  const fechaMayuscula = `${texto.charAt(0).toUpperCase()}${texto.slice(1)}`;
+  return obtenerIdiomaActual() === "en" ? `${fechaMayuscula}, ${fecha.getFullYear()}` : `${fechaMayuscula} del ${fecha.getFullYear()}`;
 }
 
 /**
@@ -2459,7 +2509,8 @@ function formatearFechaLarga(fechaIso) {
  * en el prompt, nunca inventa notas) va en la línea de abajo.
  */
 function construirNotasFinal(notasUsuario) {
-  return notasUsuario ? `Agregado por asistente\n${notasUsuario}` : "Agregado por asistente";
+  const etiqueta = textoAsistente("Agregado por asistente", "Added by the assistant");
+  return notasUsuario ? `${etiqueta}\n${notasUsuario}` : etiqueta;
 }
 
 /**
@@ -2509,6 +2560,9 @@ function crearBurbuja(rol, texto, esError = false) {
   const div = document.createElement("div");
   const esUsuario = rol === "usuario";
   div.style.cssText = `
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     max-width: 82%;
     padding: 9px 13px;
     border-radius: 14px;
@@ -2521,7 +2575,8 @@ function crearBurbuja(rol, texto, esError = false) {
     border-bottom-right-radius: ${esUsuario ? "4px" : "14px"};
     border-bottom-left-radius: ${esUsuario ? "14px" : "4px"};
   `;
-  div.textContent = texto;
+  if (esUsuario) div.textContent = texto;
+  else renderizarTextoAsistente(div, texto);
   return div;
 }
 
@@ -2589,7 +2644,7 @@ function crearTarjetaEventoGuardado(eventoId) {
   detalle.className = "muted";
   detalle.style.fontSize = "0.85rem";
   const partes = [formatearFechaLarga(evento.fecha), evento.hora ? formatearHoraAmPm(evento.hora) : "Todo el día"];
-  if (evento.esFeriado) partes.push("Feriado");
+  if (evento.esFeriado) partes.push(traducirTextoInterfaz("Feriado"));
   const nombreMateria = obtenerNombreMateriaEvento(evento);
   if (nombreMateria) partes.push(nombreMateria);
   detalle.textContent = partes.join(" · ");

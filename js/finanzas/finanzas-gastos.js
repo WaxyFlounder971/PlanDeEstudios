@@ -15,6 +15,7 @@
 import { calcularPagosRecurrentesTranscurridos, crearGastoU, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
+import { traducirTextoInterfaz } from "../core/i18n.js";
 import { copiarPromptConAviso } from "../core/clipboard.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { obtenerPlanActivo } from "../plan/plan-esquema.js";
@@ -800,7 +801,9 @@ FORMATO DE RESPUESTA QUE NECESITO (esto es muy importante, seguilo al pie de la 
 
 Mostrame SOLO los beneficios que SÍ encontraste y confirmaste. No escribas ninguna línea de "esto no existe" intercalada entre los resultados positivos. Organizá lo positivo por categoría, con títulos bien marcados. Para cada beneficio: qué es, qué descuento exacto da, qué se necesita para acceder (usualmente el carné vigente), y si es nacional, limitado a alguna sede, o internacional. Usá viñetas cortas, no párrafos densos. No omitas ningún beneficio real por considerarlo poco importante. Al final de TODO, un solo resumen corto (unas pocas líneas) de qué categorías no dieron resultado confiable y cuáles beneficios convendría confirmar directamente. Priorizá fuentes oficiales sobre foros.`;
 
-const PLANTILLA_PROMPT_DESCUENTOS_EN = `Actively use your web-search tool to answer with current, real information. Do not rely on general knowledge or assume you cannot browse the web—you can, and I need you to. Do not give me warnings such as "I can't verify this in real time" or hold back out of caution. Search thoroughly, confirm what you find, and tell me plainly if something cannot be confirmed, without unnecessary hedging or apologies.
+const PLANTILLA_PROMPT_DESCUENTOS_EN = `OUTPUT LANGUAGE: Write your entire response in English, including the opening, headings, findings, and final summary. Never answer in Spanish, even if a source is in Spanish; translate your explanation while preserving official names and quotations accurately.
+
+Actively use your web-search tool to answer with current, real information. Do not rely on general knowledge or assume you cannot browse the web—you can, and I need you to. Do not give me warnings such as "I can't verify this in real time" or hold back out of caution. Search thoroughly, confirm what you find, and tell me plainly if something cannot be confirmed, without unnecessary hedging or apologies.
 
 Take the time and run all the searches needed to do this properly. Do not rush or settle for the first page. At the same time, work efficiently: do not repeat nearly identical searches or spend searches on facts you have already confirmed. For each category, first look for a direct official source (for example, for AI, search "GitHub Student Pack benefits" and then "Claude student discount" separately instead of using one broad search). If an official source states a requirement (such as an institutional email, a valid student ID, or verification through SheerID or another service), include it explicitly rather than describing it vaguely. If {UNIVERSIDAD}'s official site has a page about agreements or student benefits, review the full page; do not rely only on the search result. For Costa Rican chains or businesses, first check whether they have a specific student-discount page or post before concluding that no offer exists.
 
@@ -901,20 +904,20 @@ function renderizarPestanaBeneficios(contenedor) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "btn btn-primary btn-block";
-    btn.textContent = `Buscar descuentos para estudiantes de ${universidades[0]}`;
+      btn.textContent = traducirTextoInterfaz(`Buscar descuentos para estudiantes de ${universidades[0]}`);
     btn.addEventListener("click", () => generarYCopiarPromptDescuentos(universidades[0]));
     sec.appendChild(btn);
   } else {
     const aviso = document.createElement("p");
     aviso.className = "muted";
     aviso.style.margin = "0";
-    aviso.textContent = "Modo Hardcore activo con más de una universidad — elegí de cuál generar el prompt:";
+    aviso.textContent = traducirTextoInterfaz("Modo Hardcore activo con más de una universidad — elegí de cuál generar el prompt:");
     sec.appendChild(aviso);
     universidades.forEach((uni) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "btn btn-secondary btn-block";
-      btn.textContent = `Buscar descuentos para estudiantes de ${uni}`;
+      btn.textContent = traducirTextoInterfaz(`Buscar descuentos para estudiantes de ${uni}`);
       btn.addEventListener("click", () => generarYCopiarPromptDescuentos(uni));
       sec.appendChild(btn);
     });

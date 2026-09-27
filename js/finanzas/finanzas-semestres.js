@@ -27,6 +27,7 @@ import {
 } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
+import { traducirTextoInterfaz } from "../core/i18n.js";
 import { abrirConfirmacion, construirPillSwitchBinario, mostrarToast } from "../ui/componentes.js";
 import { obtenerSemestresActuales, obtenerSemestresPasados } from "../semestres/semestres.js";
 import { formatearFechaLarga, formatearMonto } from "./finanzas.js";
@@ -119,7 +120,7 @@ function construirTarjetaSemestreFinanzas(semestre, contenedorLista) {
 
   const info = document.createElement("div");
   info.innerHTML = `
-    <p style="margin:0; font-weight:600;">${semestre.nombre}</p>
+    <p style="margin:0; font-weight:600;">${traducirTextoInterfaz(semestre.nombre)}</p>
     <p class="muted" style="margin:2px 0 0;">${formatearFechaLarga(semestre.fecha_inicio)}</p>
   `;
 
@@ -204,8 +205,8 @@ function construirPanelDetalleFinanzasSemestre(semestre, registro, contenedorLis
   grid.appendChild(
     construirColumnaListaFinanzas({
       tipo: "matricula",
-      titulo: "Pagos de matrícula",
-      textoAgregar: "+ Agregar pago",
+      titulo: traducirTextoInterfaz("Pagos de matrícula"),
+      textoAgregar: traducirTextoInterfaz("+ Agregar pago"),
       claseBadge: "badge-danger",
       textoVacio: "Todavía no hay pagos cargados.",
       registro,
@@ -217,8 +218,8 @@ function construirPanelDetalleFinanzasSemestre(semestre, registro, contenedorLis
   grid.appendChild(
     construirColumnaListaFinanzas({
       tipo: "beca",
-      titulo: "Ingresos de beca",
-      textoAgregar: "+ Agregar ingreso",
+      titulo: traducirTextoInterfaz("Ingresos de beca"),
+      textoAgregar: traducirTextoInterfaz("+ Agregar ingreso"),
       claseBadge: "badge-success",
       textoVacio: "Todavía no hay ingresos de beca cargados.",
       registro,
@@ -270,7 +271,7 @@ function construirColumnaListaFinanzas({ tipo, titulo, textoAgregar, claseBadge,
   const esMatricula = tipo === "matricula";
   const lista = registro ? (esMatricula ? registro.pagos_matricula : registro.ingresos_beca) : [];
   const total = registro ? (esMatricula ? calcularTotalPagosMatricula(registro) : calcularTotalIngresosBeca(registro)) : 0;
-  const etiquetaTotal = esMatricula ? "Total matrícula" : "Total beca";
+  const etiquetaTotal = traducirTextoInterfaz(esMatricula ? "Total matrícula" : "Total beca");
 
   const columna = document.createElement("div");
   columna.className = "stack";
@@ -278,7 +279,7 @@ function construirColumnaListaFinanzas({ tipo, titulo, textoAgregar, claseBadge,
 
   const encabezado = document.createElement("div");
   encabezado.innerHTML = `
-    <p style="margin:0; font-weight:600;">${titulo}</p>
+    <p style="margin:0; font-weight:600;">${traducirTextoInterfaz(titulo)}</p>
     <p class="muted" style="margin:2px 0 0; font-size:0.85rem;">${etiquetaTotal}: ${formatearMonto(total)}</p>
   `;
   columna.appendChild(encabezado);
@@ -287,7 +288,7 @@ function construirColumnaListaFinanzas({ tipo, titulo, textoAgregar, claseBadge,
     const vacio = document.createElement("p");
     vacio.className = "muted";
     vacio.style.cssText = "margin:0; font-size:0.85rem;";
-    vacio.textContent = textoVacio;
+    vacio.textContent = traducirTextoInterfaz(textoVacio);
     columna.appendChild(vacio);
   } else {
     lista.forEach((item) => {
@@ -301,7 +302,7 @@ function construirColumnaListaFinanzas({ tipo, titulo, textoAgregar, claseBadge,
   btnAgregar.type = "button";
   btnAgregar.className = "btn-discreto";
   btnAgregar.style.cssText = "align-self:flex-start;";
-  btnAgregar.textContent = textoAgregar;
+  btnAgregar.textContent = traducirTextoInterfaz(textoAgregar);
   btnAgregar.addEventListener("click", () =>
     abrirModalItemFinanzas({ tipo, semestre, registro, itemExistente: null, contenedorLista })
   );

@@ -29,6 +29,7 @@
 
 import { calcularNumeroSemanaSemestre, obtenerEstadoEfectivoSemestre } from "../core/schema.js";
 import { estado } from "../core/storage.js";
+import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { construirItemEvento } from "../agenda/agenda.js";
 import { construirSeccionMateriasDia } from "../agenda/agenda-clases.js";
 import {
@@ -83,6 +84,12 @@ const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "s
 function formatearFechaRealItem(fechaISO) {
   const f = fechaLocalDesdeISO(fechaISO);
   if (Number.isNaN(f.getTime())) return String(fechaISO || "");
+  if (obtenerIdiomaActual() === "en") {
+    return f.toLocaleDateString(obtenerLocaleInterfaz(), {
+      weekday: "short", day: "numeric", month: "short",
+      ...(f.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }),
+    });
+  }
   const base = `${DIAS_SEMANA_CORTOS[f.getDay()]} ${f.getDate()} ${MESES_CORTOS[f.getMonth()]}`;
   return f.getFullYear() === new Date().getFullYear() ? base : `${base} ${f.getFullYear()}`;
 }
@@ -200,13 +207,13 @@ function construirTarjetaSemana(semestreActivo, numeroSemana, hoy) {
     "flex:1; min-width:0; margin:0; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:clip;";
   centro.dataset.textoCompleto = `Semana ${numeroSemana} de ${semestreActivo.duracion_semanas}`;
   centro.dataset.textoCorto = `Semana ${numeroSemana}`;
-  centro.textContent = centro.dataset.textoCompleto;
+  centro.textContent = traducirTextoInterfaz(centro.dataset.textoCompleto);
 
   // Derecha: días restantes, anclado.
   const faltan = document.createElement("span");
   faltan.className = "muted resumen-semana-faltan";
   faltan.style.cssText = "flex:0 0 auto; white-space:nowrap;";
-  faltan.textContent = diasRestantes === 0 ? "Último día" : `Faltan ${diasRestantes} días`;
+  faltan.textContent = traducirTextoInterfaz(diasRestantes === 0 ? "Último día" : `Faltan ${diasRestantes} días`);
 
   tarjeta.appendChild(barraCont);
   tarjeta.appendChild(centro);
@@ -242,8 +249,9 @@ function ajustarTarjetaSemana(tarjeta) {
   // texto completo (medido con canvas, no con layout/clip).
   const disponible = centro.getBoundingClientRect().width;
   const anchoCompleto = medirAnchoTexto(centro.dataset.textoCompleto, centro);
-  centro.textContent =
-    anchoCompleto > disponible ? centro.dataset.textoCorto : centro.dataset.textoCompleto;
+  centro.textContent = traducirTextoInterfaz(
+    anchoCompleto > disponible ? centro.dataset.textoCorto : centro.dataset.textoCompleto
+  );
 }
 
 /** Ancho en píxeles que ocuparía `texto` si se pintara con la misma

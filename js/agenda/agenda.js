@@ -14,7 +14,7 @@
 import { obtenerEstadoEfectivoSemestre, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
-import { obtenerLocaleInterfaz } from "../core/i18n.js";
+import { obtenerLocaleInterfaz, obtenerIdiomaActual, traducirTextoInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { abrirConfirmacion, desplazarYResaltarElemento } from "../ui/componentes.js";
 import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
@@ -142,7 +142,7 @@ function construirBarraFiltroEstadosAgenda() {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = `agenda-filtro-estado-btn agenda-filtro-estado-${id}` + (activos.has(id) ? " active" : "");
-    btn.textContent = etiqueta;
+    btn.textContent = traducirTextoInterfaz(etiqueta);
     btn.addEventListener("click", () => alternarFiltroEstadoAgenda(id));
     barra.appendChild(btn);
     return btn;
@@ -750,8 +750,8 @@ function construirTarjetaEstudioHoy(item) {
       <span class="agenda-estudio-hoy-nombre">${item.nombreMateriaCorto}</span>
       <span class="agenda-estudio-hoy-cifras">${
         cumplida
-          ? `${formatearHorasMin(item.hechoMinutosHoy)} · Meta de hoy cumplida ✅`
-          : `${formatearHorasMin(item.hechoMinutosHoy)} de ${formatearHorasMin(item.metaMinutosHoy)}`
+          ? `${formatearHorasMin(item.hechoMinutosHoy)} · ${traducirTextoInterfaz("Meta de hoy cumplida")} ✅`
+          : traducirTextoInterfaz(`${formatearHorasMin(item.hechoMinutosHoy)} de ${formatearHorasMin(item.metaMinutosHoy)}`)
       }</span>
     </div>
     <div class="agenda-estudio-hoy-barra">
@@ -874,7 +874,7 @@ function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios, 
       const etiqueta = document.createElement("span");
       etiqueta.className = "muted";
       etiqueta.style.cssText = "font-size:0.7rem; text-transform:uppercase; letter-spacing:0.02em;";
-      etiqueta.textContent = ETIQUETA_TIPO[tipo];
+          etiqueta.textContent = traducirTextoInterfaz(ETIQUETA_TIPO[tipo]);
       grupo.appendChild(etiqueta);
       delTipo.forEach((ev) => grupo.appendChild(construirItemEvento(ev)));
       bloque.appendChild(grupo);
@@ -950,7 +950,7 @@ function construirSubheaderSemanal(dias, semestreActivo, { navegable = true, off
     : null;
   const etiquetaSemana = document.createElement("span");
   etiquetaSemana.className = "texto-encabezado-seccion";
-  etiquetaSemana.textContent = numeroSemana ? `Semana ${numeroSemana}` : "Semana";
+  etiquetaSemana.textContent = traducirTextoInterfaz(numeroSemana ? `Semana ${numeroSemana}` : "Semana");
 
   if (navegable) {
     const btnAnterior = document.createElement("button");
@@ -1246,7 +1246,7 @@ function construirEncabezadoSemanaTodo(semestreActivo, offsetSemana) {
   const numeroSemana = semestreActivo ? calcularNumeroSemanaParaFecha(semestreActivo, inicioSemana) : null;
   const encabezado = document.createElement("div");
   encabezado.className = "agenda-todo-encabezado-semana";
-  encabezado.textContent = numeroSemana ? `Semana ${numeroSemana}` : "Semana";
+  encabezado.textContent = traducirTextoInterfaz(numeroSemana ? `Semana ${numeroSemana}` : "Semana");
   return encabezado;
 }
 

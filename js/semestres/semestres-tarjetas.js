@@ -4,6 +4,7 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
+import { traducirTextoInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto, obtenerIniciales } from "../core/utils.js";
 import { agregarLongPress, mostrarToast, abrirConfirmacion } from "../ui/componentes.js";
 import {
@@ -3298,7 +3299,7 @@ function construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambi
   function crearBadgeCreditos() {
     const badgeCreditos = document.createElement("span");
     badgeCreditos.className = "badge badge-accent";
-    badgeCreditos.textContent = `Créditos: ${materia.creditos}`;
+    badgeCreditos.textContent = traducirTextoInterfaz(`Créditos: ${materia.creditos}`);
     return badgeCreditos;
   }
 
@@ -3508,7 +3509,7 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEdita
 
   const badgeCreditos = document.createElement("span");
   badgeCreditos.className = "badge badge-accent";
-  badgeCreditos.textContent = `Créditos: ${creditosTotalesSemestre(semestre, obtenerPlanPorId)}`;
+  badgeCreditos.textContent = traducirTextoInterfaz(`Créditos: ${creditosTotalesSemestre(semestre, obtenerPlanPorId)}`);
   derecha.appendChild(badgeCreditos);
 
   if (semestre._conflicto) {

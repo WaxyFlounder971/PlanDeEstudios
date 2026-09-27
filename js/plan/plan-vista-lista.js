@@ -7,6 +7,7 @@
 import { sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
+import { traducirTextoInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { construirPanelCategorias } from "./plan-categorias.js";
 import { abrirModalMateriaManual, obtenerMateriasVisibles, obtenerPlanActivo } from "./plan-esquema.js";
@@ -635,7 +636,7 @@ function construirPanelEstadisticas(plan) {
       bloqueCreditos.appendChild(construirAnilloDonut(pctCreditos, "#10b981"));
       const etiquetaC = document.createElement("span");
       etiquetaC.className = "donut-etiqueta";
-      etiquetaC.textContent = "Créditos";
+      etiquetaC.textContent = traducirTextoInterfaz("Créditos");
       const subEtiquetaC = document.createElement("span");
       subEtiquetaC.className = "donut-subetiqueta";
       subEtiquetaC.textContent = `${creditosAprobados} de ${totalCreditos} aprobados`;

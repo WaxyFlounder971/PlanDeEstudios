@@ -59,6 +59,7 @@ const textosOriginales = new WeakMap();
 const textosAplicados = new WeakMap();
 const atributosOriginales = new WeakMap();
 const atributosAplicados = new WeakMap();
+const textosDirectos = new Map();
 
 function compilarPatrones(traducciones) {
   const patrones = [];
@@ -93,10 +94,26 @@ function traducir(texto) {
   return traducirFecha(texto);
 }
 
+export function traducirTextoInterfaz(texto, traduccionAlternativa = null) {
+  const original = String(texto ?? "");
+  let resultado = traducir(original);
+  if (idiomaActual !== "es" && resultado === original && traduccionAlternativa !== null) {
+    resultado = String(traduccionAlternativa);
+  }
+  if (resultado !== original) {
+    if (textosDirectos.size > 4000) textosDirectos.clear();
+    textosDirectos.set(resultado, original);
+  }
+  return resultado;
+}
+
 function procesarNodoTexto(nodo) {
   const actual = nodo.nodeValue;
   const ultimoAplicado = textosAplicados.get(nodo);
-  const original = ultimoAplicado !== undefined && actual === ultimoAplicado
+  const textoDirecto = idiomaActual !== "es" ? textosDirectos.get(actual) : undefined;
+  const original = textoDirecto !== undefined
+    ? textoDirecto
+    : ultimoAplicado !== undefined && actual === ultimoAplicado
     ? textosOriginales.get(nodo)
     : actual;
   if (original === undefined) return;

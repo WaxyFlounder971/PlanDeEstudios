@@ -9,6 +9,7 @@
 
 import { MONEDAS_DISPONIBLES, calcularPagosRecurrentesTranscurridos, calcularTotalPagosMatricula, calcularTotalIngresosBeca } from "../core/schema.js";
 import { estado } from "../core/storage.js";
+import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { construirGraficasResumenFinanzas } from "./finanzas-graficas.js";
 import { renderizarPestanaBeneficios, renderizarPestanaGastosU } from "./finanzas-gastos.js";
 import { renderizarPestanaSemestresFinanzas } from "./finanzas-semestres.js";
@@ -58,6 +59,11 @@ function formatearFechaLarga(fechaIso) {
   const [anio, mes, dia] = fechaIso.split("-");
   const nombreMes = MESES_LARGOS[Number(mes) - 1];
   if (!nombreMes) return fechaIso; // formato inesperado — mejor mostrar algo que nada
+  if (obtenerIdiomaActual() === "en") {
+    return new Date(Number(anio), Number(mes) - 1, Number(dia)).toLocaleDateString(obtenerLocaleInterfaz(), {
+      month: "long", day: "numeric", year: "numeric",
+    });
+  }
   return `${Number(dia)} de ${nombreMes} de ${anio}`;
 }
 
@@ -94,7 +100,7 @@ function obtenerSimboloMonedaActual() {
 function formatearMonto(numero) {
   const n = Number(numero) || 0;
   const signo = n < 0 ? "-" : "";
-  return signo + obtenerSimboloMonedaActual() + Math.abs(n).toLocaleString("es-CR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return signo + obtenerSimboloMonedaActual() + Math.abs(n).toLocaleString(obtenerLocaleInterfaz(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /**
@@ -183,7 +189,7 @@ function construirTabsFinanzas() {
     btn.type = "button";
     btn.className = "pill-item" + (estado.finanzasVistaActiva === pestana.id ? " active" : "");
     btn.dataset.valor = pestana.id;
-    btn.textContent = pestana.etiqueta;
+    btn.textContent = traducirTextoInterfaz(pestana.etiqueta);
     btn.style.cssText =
       "flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; " +
       "text-align:center; font-size:clamp(0.65rem,2.6vw,0.92rem); padding:clamp(6px,2vw,10px) clamp(4px,1.2vw,10px);";
@@ -214,8 +220,9 @@ function construirResumenFinanzas() {
     const vacio = document.createElement("p");
     vacio.className = "muted";
     vacio.style.margin = "0";
-    vacio.textContent =
-      "Todavía no hay ningún registro financiero. Entrá a la pestaña Semestres o Gastos para empezar.";
+    vacio.textContent = traducirTextoInterfaz(
+      "Todavía no hay ningún registro financiero. Entrá a la pestaña Semestres o Gastos para empezar."
+    );
     sec.appendChild(vacio);
   } else {
     // Gráficas del Resumen — donut (con leyenda) y línea de ingresos/gastos

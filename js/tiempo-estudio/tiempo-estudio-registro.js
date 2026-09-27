@@ -14,6 +14,7 @@
 import { crearSesionEstudio, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
+import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { revisarFelicitacionMeta, notificarSesionesEstudioActualizadas } from "./tiempo-estudio-timer.js";
 import { sincronizarHorasCompetencias } from "./tiempo-estudio-competencias.js";
@@ -276,9 +277,9 @@ function formatearMinutosReg(minutosTotales) {
   const totales = Math.max(0, Math.round(minutosTotales));
   const h = Math.floor(totales / 60);
   const m = totales % 60;
-  if (h > 0 && m > 0) return `${h} h ${m} min`;
-  if (h > 0) return `${h} h`;
-  return `${m} min`;
+  const es = h > 0 && m > 0 ? `${h} h ${m} min` : h > 0 ? `${h} h` : `${m} min`;
+  const en = h > 0 && m > 0 ? `${h} ${h === 1 ? "hr" : "hrs"} ${m} min` : h > 0 ? `${h} ${h === 1 ? "hr" : "hrs"}` : `${m} min`;
+  return traducirTextoInterfaz(es, en);
 }
 
 /** "lun 7 sep · 22:00" — usado para inicio y fin de la fila de una sesión. */
@@ -287,7 +288,10 @@ function formatearFechaHoraReg(ms) {
   const d = new Date(ms);
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${NOMBRES_DIA_CORTO_REG[d.getDay()]} ${d.getDate()} ${NOMBRES_MES_CORTO_REG[d.getMonth()]} · ${hh}:${mm}`;
+  const fechaEs = `${NOMBRES_DIA_CORTO_REG[d.getDay()]} ${d.getDate()} ${NOMBRES_MES_CORTO_REG[d.getMonth()]}`;
+  const fechaEn = d.toLocaleDateString(obtenerLocaleInterfaz(), { weekday: "short", month: "short", day: "numeric" });
+  const fecha = traducirTextoInterfaz(fechaEs, fechaEn);
+  return `${fecha} · ${hh}:${mm}`;
 }
 
 /** Valor para un <input type="date">, en hora local. */

@@ -25,6 +25,7 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
+import { traducirTextoInterfaz } from "../core/i18n.js";
 import { sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { URL_WORKER_OAUTH } from "../core/auth.js";
@@ -614,7 +615,7 @@ function construirHtmlSemanas(historial) {
         year: "numeric",
       });
       return `<div class="row-between" style="padding:3px 0;">
-        <span><span class="muted" style="font-size:0.8rem;">Semana ${i + 1}</span> · 🏆 ${fila.apodo}</span>
+        <span><span class="muted" style="font-size:0.8rem;">${traducirTextoInterfaz(`Semana ${i + 1}`)}</span> · 🏆 ${fila.apodo}</span>
         <span class="muted" style="font-size:0.82rem;">${formatearHoras(fila.horas)} · ${fecha}</span>
       </div>`;
     })

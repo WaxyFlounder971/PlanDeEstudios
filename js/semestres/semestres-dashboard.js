@@ -21,6 +21,7 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
+import { traducirTextoInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import {
   calcularPromedioPorSemestreYUniversidad,
@@ -197,13 +198,13 @@ function construirFilaPromedio({ etiquetaIzquierda, promedio, creditos, materias
   izq.style.cssText = "gap:1px; min-width:0;";
   const nombre = document.createElement("strong");
   nombre.style.cssText = "font-size:0.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
-  nombre.textContent = etiquetaIzquierda;
+  nombre.textContent = traducirTextoInterfaz(etiquetaIzquierda);
   izq.appendChild(nombre);
   if (etiquetaDerecha) {
     const sub = document.createElement("span");
     sub.className = "muted";
     sub.style.fontSize = "0.75rem";
-    sub.textContent = etiquetaDerecha;
+    sub.textContent = traducirTextoInterfaz(etiquetaDerecha);
     izq.appendChild(sub);
   }
   fila.appendChild(izq);
@@ -217,7 +218,7 @@ function construirFilaPromedio({ etiquetaIzquierda, promedio, creditos, materias
   const detalle = document.createElement("div");
   detalle.className = "muted";
   detalle.style.fontSize = "0.72rem";
-  detalle.textContent = materias > 0 ? `${materias} ${materias === 1 ? "materia" : "materias"} · ${creditos} créd.` : "Sin notas todavía";
+  detalle.textContent = traducirTextoInterfaz(materias > 0 ? `${materias} ${materias === 1 ? "materia" : "materias"} · ${creditos} créd.` : "Sin notas todavía");
   der.appendChild(detalle);
   fila.appendChild(der);
 
@@ -309,7 +310,7 @@ function construirVistaPromedioPonderado() {
   seccionA.style.gap = "8px";
   const tituloA = document.createElement("p");
   tituloA.style.cssText = "font-weight:700; margin:0; font-size:0.88rem;";
-  tituloA.textContent = "Promedio por semestre";
+  tituloA.textContent = traducirTextoInterfaz("Promedio por semestre");
   seccionA.appendChild(tituloA);
 
   const porSemestre = calcularPromedioPorSemestreYUniversidad(estado.datos);
@@ -328,7 +329,7 @@ function construirVistaPromedioPonderado() {
       const nombreSemestre = document.createElement("p");
       nombreSemestre.className = "muted";
       nombreSemestre.style.cssText = "font-size:0.78rem; font-weight:700; margin:0;";
-      nombreSemestre.textContent = semestre.nombre;
+      nombreSemestre.textContent = traducirTextoInterfaz(semestre.nombre);
       bloqueSemestre.appendChild(nombreSemestre);
 
       // Modo Hardcore: si el semestre tiene más de una universidad, cada
@@ -455,7 +456,7 @@ function construirVistaEstadisticas(onCambiar) {
 
       const label = document.createElement("div");
       label.style.cssText = "font-size:0.8rem; font-weight:600; margin-top:2px;";
-      label.textContent = titulo;
+      label.textContent = traducirTextoInterfaz(titulo);
       panel.appendChild(label);
 
       const filaTexto = document.createElement("div");
@@ -463,11 +464,11 @@ function construirVistaEstadisticas(onCambiar) {
       filaTexto.style.cssText = "font-size:0.75rem; margin-top:4px; line-height:1.5;";
 
       const lineaCursos = document.createElement("div");
-      lineaCursos.textContent = `${datosLado.cantidad} ${datosLado.cantidad === 1 ? "curso" : "cursos"}`;
+      lineaCursos.textContent = traducirTextoInterfaz(`${datosLado.cantidad} ${datosLado.cantidad === 1 ? "curso" : "cursos"}`);
       filaTexto.appendChild(lineaCursos);
 
       const lineaCreditos = document.createElement("div");
-      lineaCreditos.textContent = `${datosLado.creditos} ${datosLado.creditos === 1 ? "crédito" : "créditos"}`;
+      lineaCreditos.textContent = traducirTextoInterfaz(`${datosLado.creditos} ${datosLado.creditos === 1 ? "crédito" : "créditos"}`);
       filaTexto.appendChild(lineaCreditos);
 
       if (datosLado.promedio !== null) {
@@ -511,7 +512,7 @@ function construirVistaEstadisticas(onCambiar) {
 
       const label = document.createElement("div");
       label.style.cssText = "font-size:0.8rem; font-weight:600;";
-      label.textContent = texto;
+      label.textContent = traducirTextoInterfaz(texto);
       panel.appendChild(label);
 
       grid.appendChild(panel);

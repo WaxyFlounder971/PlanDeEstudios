@@ -28,7 +28,7 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
-import { obtenerIdiomaActual } from "../core/i18n.js";
+import { obtenerIdiomaActual, traducirTextoInterfaz } from "../core/i18n.js";
 import { marcarCambioPendiente, registrarHookPostFusion } from "../core/storage-sync.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { COLOR_TIEMPO_ESTUDIO_DEFAULT, crearMateriaEstudioIndependiente, sellarTimestamp } from "../core/schema.js";
@@ -191,10 +191,9 @@ function formatearHorasMin(minutosTotales) {
   const totales = Math.max(0, Math.round(minutosTotales));
   const h = Math.floor(totales / 60);
   const m = totales % 60;
-  const sufijoHora = obtenerIdiomaActual() === "en" ? (h === 1 ? " hr" : " hrs") : " h";
-  if (h > 0 && m > 0) return `${h}${sufijoHora} ${m} min`;
-  if (h > 0) return `${h}${sufijoHora}`;
-  return `${m} min`;
+  const es = h > 0 && m > 0 ? `${h} h ${m} min` : h > 0 ? `${h} h` : `${m} min`;
+  const en = h > 0 && m > 0 ? `${h} ${h === 1 ? "hr" : "hrs"} ${m} min` : h > 0 ? `${h} ${h === 1 ? "hr" : "hrs"}` : `${m} min`;
+  return traducirTextoInterfaz(es, en);
 }
 
 /* ===================== Regla de una sola sesión activa ===================== */
@@ -276,7 +275,7 @@ function construirTarjetaMateria(item) {
   // no hay meta contra la cual proporcionarla).
   const minutosEstaSemana = calcularMinutosEstudiadosEstaSemana(mm.id);
   const textoTiempo = tieneMeta
-    ? `${formatearHorasMin(minutosEstaSemana)} de ${meta} h`
+    ? traducirTextoInterfaz(`${formatearHorasMin(minutosEstaSemana)} de ${meta} h`)
     : minutosEstaSemana > 0
       ? `${formatearHorasMin(minutosEstaSemana)} esta semana · sin meta`
       : "Sin meta configurada";
@@ -343,8 +342,8 @@ function construirTarjetaMateria(item) {
     btnPausa.type = "button";
     btnPausa.className = "te-btn-icono te-btn-icono-iniciar te-btn-control-pausa";
     btnPausa.dataset.estado = pausado ? "pausado" : "corriendo";
-    btnPausa.title = pausado ? "Reanudar" : "Pausar";
-    btnPausa.setAttribute("aria-label", pausado ? "Reanudar" : "Pausar");
+    btnPausa.title = obtenerIdiomaActual() === "en" ? (pausado ? "Resume" : "Pause") : (pausado ? "Reanudar" : "Pausar");
+    btnPausa.setAttribute("aria-label", obtenerIdiomaActual() === "en" ? (pausado ? "Resume" : "Pause") : (pausado ? "Reanudar" : "Pausar"));
     btnPausa.textContent = pausado ? "▷" : "❚❚";
     btnPausa.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -1309,7 +1308,7 @@ function construirPantallaDetalle(cont, item) {
     btnDetener.style.display = esEstaMateria ? "" : "none";
     if (esEstaMateria) {
       const pausado = Boolean(activo.pausado);
-      btnPausa.textContent = pausado ? "▷ Reanudar" : "❚❚ Pausar";
+      btnPausa.textContent = obtenerIdiomaActual() === "en" ? (pausado ? "▷ Resume" : "❚❚ Pause") : (pausado ? "▷ Reanudar" : "❚❚ Pausar");
     }
     // "Saltar descanso" solo tiene sentido en una fase de descanso de
     // Pomodoro de esta misma materia — en cualquier otro caso se esconde.

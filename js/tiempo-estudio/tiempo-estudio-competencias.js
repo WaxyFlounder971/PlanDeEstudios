@@ -57,6 +57,7 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
+import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente, intentarSincronizar } from "../core/storage-sync.js";
 import { URL_WORKER_OAUTH } from "../core/auth.js";
@@ -113,7 +114,7 @@ function leerCacheMarcador(competenciaId) {
 }
 
 function textoCacheDesactualizada(actualizadoEn) {
-  const fecha = new Date(actualizadoEn).toLocaleString("es-CR", { dateStyle: "medium", timeStyle: "short" });
+  const fecha = new Date(actualizadoEn).toLocaleString(obtenerLocaleInterfaz(), { dateStyle: "medium", timeStyle: "short" });
   return `${navigator.onLine === false ? "Sin conexión" : "No se pudo actualizar"}. Mostrando datos de ${fecha}.`;
 }
 
@@ -187,9 +188,9 @@ function formatearHoras(horas) {
   const totalMin = Math.max(0, Math.round((Number(horas) || 0) * 60));
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
-  if (h > 0 && m > 0) return `${h} h ${m} min`;
-  if (h > 0) return `${h} h`;
-  return `${m} min`;
+  const es = h > 0 && m > 0 ? `${h} h ${m} min` : h > 0 ? `${h} h` : `${m} min`;
+  const en = h > 0 && m > 0 ? `${h} ${h === 1 ? "hr" : "hrs"} ${m} min` : h > 0 ? `${h} ${h === 1 ? "hr" : "hrs"}` : `${m} min`;
+  return traducirTextoInterfaz(es, en);
 }
 
 /**

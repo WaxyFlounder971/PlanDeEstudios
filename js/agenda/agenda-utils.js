@@ -8,7 +8,7 @@
 
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 import { estado } from "../core/storage.js";
-import { obtenerIdiomaActual, obtenerLocaleInterfaz } from "../core/i18n.js";
+import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { fechaLocalDesdeISO, obtenerPlanPorId } from "../horario/horario.js";
 import { buscarSemestreVivoPorId, obtenerSemestresActuales, obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
@@ -335,22 +335,13 @@ function calcularDiasDesdeHoy(fecha, hoy = new Date()) {
 function formatearFechaRelativa(fecha, hoy = new Date()) {
   const dias = calcularDiasDesdeHoy(fecha, hoy);
   if (dias === null) return "";
-  if (obtenerIdiomaActual() === "en") {
-    if (dias === 0) return "Today";
-    if (dias === 1) return "Tomorrow";
-    if (dias === 2) return "In 2 days";
-    if (dias > 2) return `In ${dias} days`;
-    if (dias === -1) return "Yesterday";
-    if (dias === -2) return "2 days ago";
-    return `${-dias} days ago`;
-  }
-  if (dias === 0) return "Hoy";
-  if (dias === 1) return "Mañana";
-  if (dias === 2) return "Pasado Mañana";
-  if (dias > 2) return `En ${dias} días`;
-  if (dias === -1) return "Ayer";
-  if (dias === -2) return "Antier";
-  return `Hace ${-dias} días`;
+  if (dias === 0) return traducirTextoInterfaz("Hoy");
+  if (dias === 1) return traducirTextoInterfaz("Mañana");
+  if (dias === 2) return traducirTextoInterfaz("Pasado Mañana", "In 2 days");
+  if (dias > 2) return traducirTextoInterfaz(`En ${dias} días`);
+  if (dias === -1) return traducirTextoInterfaz("Ayer");
+  if (dias === -2) return traducirTextoInterfaz("Antier", "2 days ago");
+  return traducirTextoInterfaz(`Hace ${-dias} días`);
 }
 
 /**
@@ -383,7 +374,7 @@ function obtenerEstiloEvento(evento) {
     return { etiqueta: "Examen", claseBadge: "badge-danger", colorBorde: "#ef4444" };
   }
   if (evento.tipo === "evento" && evento.es_feriado) {
-    return { etiqueta: "Feriado", claseBadge: "badge-success", colorBorde: "#10b981" };
+    return { etiqueta: traducirTextoInterfaz("Feriado"), claseBadge: "badge-success", colorBorde: "#10b981" };
   }
   return { etiqueta: "Evento", claseBadge: "badge-purple", colorBorde: "#a855f7" };
 }
@@ -452,7 +443,9 @@ function formatearTiempoRestanteHoy(fechaISO, horaStr) {
   const minutosTotales = Math.floor(msRestantes / 60000);
   const horas = Math.floor(minutosTotales / 60);
   const minutos = minutosTotales % 60;
-  return horas > 0 ? `⏳ ${horas}h ${minutos}min restantes` : `⏳ ${minutos}min restantes`;
+  const es = horas > 0 ? `⏳ ${horas}h ${minutos}min restantes` : `⏳ ${minutos}min restantes`;
+  const en = horas > 0 ? `⏳ ${horas} hr ${minutos} min remaining` : `⏳ ${minutos} min remaining`;
+  return traducirTextoInterfaz(es, en);
 }
 
 /**

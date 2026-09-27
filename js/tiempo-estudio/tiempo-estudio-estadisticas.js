@@ -28,6 +28,7 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
+import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { COLOR_TIEMPO_ESTUDIO_DEFAULT } from "../core/schema.js";
 import { calcularNumeroSemanaParaFecha } from "../agenda/agenda-clases.js";
@@ -285,9 +286,9 @@ function formatearMinutos(minutosTotales) {
   const totales = Math.max(0, Math.round(minutosTotales));
   const h = Math.floor(totales / 60);
   const m = totales % 60;
-  if (h > 0 && m > 0) return `${h} h ${m} min`;
-  if (h > 0) return `${h} h`;
-  return `${m} min`;
+  const es = h > 0 && m > 0 ? `${h} h ${m} min` : h > 0 ? `${h} h` : `${m} min`;
+  const en = h > 0 && m > 0 ? `${h} ${h === 1 ? "hr" : "hrs"} ${m} min` : h > 0 ? `${h} ${h === 1 ? "hr" : "hrs"}` : `${m} min`;
+  return traducirTextoInterfaz(es, en);
 }
 
 /* ===================== Rangos de fecha por corte ===================== */
@@ -963,11 +964,16 @@ function construirNavegadorPeriodo(etiqueta, onAnterior, onSiguiente, deshabilit
 }
 
 const NOMBRES_MES_CORTO = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-const NOMBRES_DIA_CORTO = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+const NOMBRES_DIA_CORTO_ES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+const NOMBRES_DIA_CORTO_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const NOMBRES_DIA_CORTO = () => obtenerIdiomaActual() === "en" ? NOMBRES_DIA_CORTO_EN : NOMBRES_DIA_CORTO_ES;
+const formatearMesCorto = (fecha) => fecha.toLocaleDateString(obtenerLocaleInterfaz(), { month: "short" });
 
 function etiquetaRangoSemana(lunes) {
   const domingo = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + 6);
-  const fmt = (d) => `${d.getDate()} ${NOMBRES_MES_CORTO[d.getMonth()]}`;
+  const fmt = (d) => obtenerIdiomaActual() === "en"
+    ? `${formatearMesCorto(d)} ${d.getDate()}`
+    : `${d.getDate()} ${NOMBRES_MES_CORTO[d.getMonth()]}`;
   return `${fmt(lunes)} – ${fmt(domingo)}`;
 }
 
@@ -1026,7 +1032,7 @@ function calcularNumeroSemanaSegura(semestre, fecha) {
 function etiquetaSemanaConSubtitulo(lunes, semestre) {
   const numero = semestre ? calcularNumeroSemanaSegura(semestre, lunes) : null;
   return {
-    titulo: numero ? `Semana ${numero}` : "Semana",
+    titulo: traducirTextoInterfaz(numero ? `Semana ${numero}` : "Semana"),
     subtitulo: etiquetaRangoSemana(lunes),
   };
 }
@@ -1191,8 +1197,8 @@ function construirSeccionBarras(cont, refrescar) {
         offsetSemanaBarras >= 0
       )
     );
-    etiquetas = NOMBRES_DIA_CORTO.slice();
-    mapasPorPunto = NOMBRES_DIA_CORTO.map((_, i) => {
+    etiquetas = NOMBRES_DIA_CORTO().slice();
+    mapasPorPunto = NOMBRES_DIA_CORTO().map((_, i) => {
       const dia = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i, 0, 0, 0, 0);
       const diaSiguiente = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i + 1, 0, 0, 0, 0);
       return calcularMinutosPorMateriaEnRango(dia.getTime(), diaSiguiente.getTime());
@@ -1480,12 +1486,12 @@ function calcularMetaDiariaMateria(mm, offsetSemana = 0) {
   hoy.setHours(0, 0, 0, 0);
   const diasEstudio = mm.tiempo_estudio.dias_estudio; // null = todos los días
 
-  const trabajadoPorDia = NOMBRES_DIA_CORTO.map((_, i) => {
+  const trabajadoPorDia = NOMBRES_DIA_CORTO().map((_, i) => {
     const dia = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i, 0, 0, 0, 0);
     const diaSiguiente = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i + 1, 0, 0, 0, 0);
     return calcularMinutosMateriaEnRango(mm.id, dia.getTime(), diaSiguiente.getTime());
   });
-  const infoDias = NOMBRES_DIA_CORTO.map((_, i) => {
+  const infoDias = NOMBRES_DIA_CORTO().map((_, i) => {
     const fecha = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i);
     const codigo = DIAS_SEMANA_CONFIG[i]?.abrevDefault;
     return {
@@ -1542,7 +1548,7 @@ function construirSeccionResumenMetas(cont, mm, color, refrescar) {
         { valores: trabajadoPorDia, color },
         { valores: metaDiariaPorDia, color: "var(--text-muted)", discontinua: true },
       ],
-      NOMBRES_DIA_CORTO
+      NOMBRES_DIA_CORTO()
     )
   );
 
@@ -1606,7 +1612,7 @@ function construirSeccionBarrasMateria(cont, mm, color, refrescar) {
         offsetSemanaBarrasMateria >= 0
       )
     );
-    puntos = NOMBRES_DIA_CORTO.map((etiqueta, i) => {
+    puntos = NOMBRES_DIA_CORTO().map((etiqueta, i) => {
       const dia = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i, 0, 0, 0, 0);
       const diaSiguiente = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i + 1, 0, 0, 0, 0);
       return { etiqueta, minutos: calcularMinutosMateriaEnRango(mm.id, dia.getTime(), diaSiguiente.getTime()) };
@@ -1766,17 +1772,17 @@ function construirSeccionHorasTotales(cont) {
   sec.className = "glass-card stack";
   sec.style.gap = "10px";
   sec.innerHTML = `
-    <h3 class="texto-encabezado-seccion" style="margin:0;">Horas totales</h3>
-    <p class="muted" style="margin:0; font-size:0.78rem;">Todas las materias sumadas</p>
+    <h3 class="texto-encabezado-seccion" style="margin:0;">${traducirTextoInterfaz("Horas totales")}</h3>
+    <p class="muted" style="margin:0; font-size:0.78rem;">${traducirTextoInterfaz("Todas las materias sumadas")}</p>
   `;
 
   const { lunes } = obtenerRangoSemana(0, ahora);
-  const diaTexto = `${NOMBRES_DIA_CORTO[(ahora.getDay() + 6) % 7]} ${ahora.getDate()} ${NOMBRES_MES_CORTO[ahora.getMonth()]}`;
+  const diaTexto = ahora.toLocaleDateString(obtenerLocaleInterfaz(), { weekday: "short", day: "numeric", month: "short" });
   const tarjetas = [
     ["Hoy", totales.hoy.minutos, diaTexto],
-    ["Esta semana", totales.semana.minutos, etiquetaRangoSemana(lunes)],
-    ["Este mes", totales.mes.minutos, `${NOMBRES_MES_CORTO[ahora.getMonth()]} ${ahora.getFullYear()}`],
-    ["Este año", totales.anio.minutos, String(ahora.getFullYear())],
+    [traducirTextoInterfaz("Esta semana"), totales.semana.minutos, etiquetaRangoSemana(lunes)],
+    [traducirTextoInterfaz("Este mes"), totales.mes.minutos, ahora.toLocaleDateString(obtenerLocaleInterfaz(), { month: "short", year: "numeric" })],
+    [traducirTextoInterfaz("Este año"), totales.anio.minutos, String(ahora.getFullYear())],
   ];
 
   // Mismo grid 2x2 y misma tarjetita que "Resumen" de cada materia
@@ -1800,8 +1806,6 @@ function construirSeccionHorasTotales(cont) {
 
 /* ===================== Resumen final (totales de siempre) ===================== */
 
-const NOMBRES_DIA_LARGO = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
-
 /** Recorre TODAS las sesiones históricas de esta matrícula (sin filtrar
  * por período — "de siempre") para los 4 totales pedidos: horas totales,
  * día más productivo, sesiones totales y sesión promedio. */
@@ -1821,7 +1825,9 @@ function calcularResumenTotalesMateria(materiaMatriculadaId) {
   porDia.forEach((valor) => {
     if (!diaTop || valor.minutos > diaTop.minutos) diaTop = valor;
   });
-  const diaTopTexto = diaTop ? `${NOMBRES_DIA_LARGO[diaTop.fecha.getDay()]} ${diaTop.fecha.getDate()} ${NOMBRES_MES_CORTO[diaTop.fecha.getMonth()]}` : null;
+  const diaTopTexto = diaTop
+    ? diaTop.fecha.toLocaleDateString(obtenerLocaleInterfaz(), { weekday: "long", day: "numeric", month: "short" })
+    : null;
 
   return { totalMinutos, totalSesiones, promedioMinutos, diaTopTexto, diaTopMinutos: diaTop ? diaTop.minutos : 0 };
 }
@@ -1850,10 +1856,10 @@ function construirSeccionResumenFinal(cont, materiaMatriculadaId) {
   // angosto como en pantallas más anchas, a diferencia de forzar las 4 en
   // una sola fila).
   const tarjetas = [
-    ["Horas totales estudiadas", formatearMinutos(totalMinutos)],
-    ["Día más productivo", `${diaTopTexto} · ${formatearMinutos(diaTopMinutos)}`],
-    ["Sesiones totales", String(totalSesiones)],
-    ["Sesión promedio", formatearMinutos(promedioMinutos)],
+    [traducirTextoInterfaz("Horas totales estudiadas"), formatearMinutos(totalMinutos)],
+    [traducirTextoInterfaz("Día más productivo"), traducirTextoInterfaz(`${diaTopTexto} · ${formatearMinutos(diaTopMinutos)}`)],
+    [traducirTextoInterfaz("Sesiones totales"), String(totalSesiones)],
+    [traducirTextoInterfaz("Sesión promedio"), formatearMinutos(promedioMinutos)],
   ];
 
   const grid = document.createElement("div");

@@ -24,6 +24,7 @@
 
 import { calcularPagosRecurrentesTranscurridos, calcularTotalPagosMatricula, calcularTotalIngresosBeca } from "../core/schema.js";
 import { estado } from "../core/storage.js";
+import { obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { obtenerTodosLosSemestres } from "./finanzas-gastos.js";
 import { formatearMonto, obtenerSimboloMonedaActual } from "./finanzas.js";
 
@@ -221,8 +222,8 @@ function construirLeyendaDonut(totalEntradas, totalGastado) {
     leyenda.appendChild(montoEl);
   };
 
-  construirFila(COLOR_GASTO, pctGasto, "Gastado", totalGastado);
-  construirFila(disponible >= 0 ? COLOR_INGRESO : COLOR_GASTO, pctDisponible, "Disponible", disponible);
+  construirFila(COLOR_GASTO, pctGasto, traducirTextoInterfaz("Gastado"), totalGastado);
+  construirFila(disponible >= 0 ? COLOR_INGRESO : COLOR_GASTO, pctDisponible, traducirTextoInterfaz("Disponible"), disponible);
 
   return leyenda;
 }
@@ -247,8 +248,8 @@ function construirComposicionIngresos(totalBecas, totalIngresos) {
     return chip;
   };
 
-  fila.appendChild(construirChip(COLOR_INGRESO, "Beca", totalBecas));
-  fila.appendChild(construirChip(COLOR_INGRESO_PROPIO, "Ingresos", totalIngresos));
+  fila.appendChild(construirChip(COLOR_INGRESO, traducirTextoInterfaz("Beca"), totalBecas));
+  fila.appendChild(construirChip(COLOR_INGRESO_PROPIO, traducirTextoInterfaz("Ingresos"), totalIngresos));
 
   return fila;
 }
@@ -258,7 +259,7 @@ function construirBalanceTotal(balanceNeto) {
   const el = document.createElement("div");
   el.style.cssText = "text-align:center;";
   const color = balanceNeto >= 0 ? COLOR_INGRESO : COLOR_GASTO;
-  el.innerHTML = `<span class="muted" style="font-size:0.85rem;">Balance total: </span><span style="font-weight:800; font-size:1rem; color:${color};">${formatearMonto(balanceNeto)}</span>`;
+  el.innerHTML = `<span class="muted" style="font-size:0.85rem;">${traducirTextoInterfaz("Balance total:")} </span><span style="font-weight:800; font-size:1rem; color:${color};">${formatearMonto(balanceNeto)}</span>`;
   return el;
 }
 
@@ -524,9 +525,9 @@ function construirSeccionLineaIngresosGastos(puntos) {
   // "ingreso" (verde) pasa a llamarse "Beca" para que quede claro que es
   // específicamente la beca y no se confunda con la serie nueva.
   const series = [
-    { clave: "gasto", color: COLOR_GASTO, etiqueta: "Gastos" },
-    { clave: "beca", color: COLOR_INGRESO, etiqueta: "Beca" },
-    { clave: "ingresoPropio", color: COLOR_INGRESO_PROPIO, etiqueta: "Ingresos" },
+    { clave: "gasto", color: COLOR_GASTO, etiqueta: traducirTextoInterfaz("Gastos") },
+    { clave: "beca", color: COLOR_INGRESO, etiqueta: traducirTextoInterfaz("Beca") },
+    { clave: "ingresoPropio", color: COLOR_INGRESO_PROPIO, etiqueta: traducirTextoInterfaz("Ingresos") },
   ];
   sec.appendChild(construirGraficaLinea(puntos, series));
   sec.appendChild(construirLeyendaSeries(series));

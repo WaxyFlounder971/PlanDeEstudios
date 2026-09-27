@@ -33,7 +33,7 @@ import {
 } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
-import { obtenerLocaleInterfaz } from "../core/i18n.js";
+import { obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import {
   fechaLocalDesdeISO,
@@ -605,7 +605,7 @@ function construirSeccionSemanaMateria(semestre, materiaId, numeroSemana, evento
 
   const titulo = document.createElement("span");
   titulo.style.fontWeight = "700";
-  titulo.textContent = `Semana ${numeroSemana}`;
+  titulo.textContent = traducirTextoInterfaz(`Semana ${numeroSemana}`);
   bloque.appendChild(titulo);
 
   const clasesDeEstaSemana = (semestre.bloques_horario || [])

@@ -10,7 +10,7 @@
 
 import { fechaLocalDesdeISO } from "../horario/horario.js";
 import { estado } from "../core/storage.js";
-import { obtenerLocaleInterfaz } from "../core/i18n.js";
+import { obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { desplazarYResaltarElemento } from "../ui/componentes.js";
 import { calcularNumeroSemanaParaFecha, construirSeccionMateriasDia } from "./agenda-clases.js";
 import { construirItemEvento, ETIQUETA_TIPO, limpiarIntervalosVenceHoy, renderizarAgenda } from "./agenda.js";
@@ -245,7 +245,7 @@ function construirDetalleDia(fecha, semestresSeleccionados, semestreReferencia) 
   header.className = "row-between";
   header.innerHTML = `
     <div class="stack" style="gap:2px;">
-      ${numeroSemana ? `<span style="font-weight:700;">Semana ${numeroSemana}</span>` : ""}
+      ${numeroSemana ? `<span style="font-weight:700;">${traducirTextoInterfaz(`Semana ${numeroSemana}`)}</span>` : ""}
       <span class="muted" style="font-size:0.8rem; text-transform:capitalize;">${fechaTexto}</span>
     </div>
   `;
