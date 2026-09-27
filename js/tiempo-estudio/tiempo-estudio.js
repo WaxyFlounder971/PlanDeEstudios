@@ -196,6 +196,23 @@ function formatearHorasMin(minutosTotales) {
   return traducirTextoInterfaz(es, en);
 }
 
+/** Compara minutos estudiados con la meta sin mezclar el idioma de las unidades. */
+export function formatearEstudioDeMeta(minutosEstudiados, minutosMeta) {
+  const formatear = (minutos, ingles) => {
+    const total = Math.max(0, Math.round(Number(minutos) || 0));
+    const horas = Math.floor(total / 60);
+    const resto = total % 60;
+    const unidadHora = ingles ? (horas === 1 ? "hr" : "hrs") : "h";
+    if (horas > 0 && resto > 0) return `${horas} ${unidadHora} ${resto} min`;
+    if (horas > 0) return `${horas} ${unidadHora}`;
+    return `${resto} min`;
+  };
+  return traducirTextoInterfaz(
+    `${formatear(minutosEstudiados, false)} de ${formatear(minutosMeta, false)}`,
+    `${formatear(minutosEstudiados, true)} of ${formatear(minutosMeta, true)}`
+  );
+}
+
 /* ===================== Regla de una sola sesión activa ===================== */
 
 /**

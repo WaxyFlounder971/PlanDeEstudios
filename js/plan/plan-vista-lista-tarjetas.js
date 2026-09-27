@@ -274,7 +274,7 @@ function construirTarjetaOptativaDisponible(materiaTemplate, plan) {
   linea2.className = "materia-linea2";
   const spanHoras = document.createElement("span");
   spanHoras.className = "materia-linea2-horas";
-  spanHoras.textContent = formatearHoras(materiaTemplate);
+  spanHoras.textContent = traducirTextoInterfaz(formatearHoras(materiaTemplate));
   linea2.appendChild(spanHoras);
   const badgeTipo = document.createElement("span");
   badgeTipo.className = "badge badge-accent";
@@ -400,7 +400,7 @@ function construirTarjetaParaRevisar(materiaTemplate, plan) {
   linea2.className = "materia-linea2";
   const spanHoras = document.createElement("span");
   spanHoras.className = "materia-linea2-horas";
-  spanHoras.textContent = formatearHoras(materiaTemplate);
+  spanHoras.textContent = traducirTextoInterfaz(formatearHoras(materiaTemplate));
   linea2.appendChild(spanHoras);
   const badgeTipo = document.createElement("span");
   badgeTipo.className = "badge";

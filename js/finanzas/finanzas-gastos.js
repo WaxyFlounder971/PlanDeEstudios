@@ -904,7 +904,10 @@ function renderizarPestanaBeneficios(contenedor) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "btn btn-primary btn-block";
-      btn.textContent = traducirTextoInterfaz(`Buscar descuentos para estudiantes de ${universidades[0]}`);
+      btn.textContent = traducirTextoInterfaz(
+        `Buscar descuentos para estudiantes de ${universidades[0]}`,
+        `Search for student discounts at ${universidades[0]}`
+      );
     btn.addEventListener("click", () => generarYCopiarPromptDescuentos(universidades[0]));
     sec.appendChild(btn);
   } else {
@@ -917,7 +920,10 @@ function renderizarPestanaBeneficios(contenedor) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "btn btn-secondary btn-block";
-      btn.textContent = traducirTextoInterfaz(`Buscar descuentos para estudiantes de ${uni}`);
+      btn.textContent = traducirTextoInterfaz(
+        `Buscar descuentos para estudiantes de ${uni}`,
+        `Search for student discounts at ${uni}`
+      );
       btn.addEventListener("click", () => generarYCopiarPromptDescuentos(uni));
       sec.appendChild(btn);
     });

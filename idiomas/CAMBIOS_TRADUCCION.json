@@ -1,0 +1,57 @@
+{
+  "idioma_origen": "es",
+  "actualizacion": "Correcciones de textos dinámicos en resumen, agenda y plan de estudios",
+  "cambios": [
+    {
+      "clave": "Horas: {variable}",
+      "accion": "agregada",
+      "es": "Horas: {variable}",
+      "en": "Hours: {variable}"
+    },
+    {
+      "clave": "{variable} día anterior",
+      "accion": "modificada",
+      "es": "{variable} día anterior",
+      "en_anterior": "{variable} day earlier",
+      "en_nuevo": "Previous {variable} day"
+    },
+    {
+      "clave": "{variable} días anteriores",
+      "accion": "modificada",
+      "es": "{variable} días anteriores",
+      "en_anterior": "{variable} days earlier",
+      "en_nuevo": "Previous {variable} days"
+    }
+  ],
+  "claves_para_locales_nuevos": [
+    { "clave": "Semana {variable} de {variable}", "es": "Semana {variable} de {variable}", "en": "Week {variable} of {variable}" },
+    { "clave": "Faltan {variable} días", "es": "Faltan {variable} días", "en": "{variable} days left" },
+    { "clave": "Estudio de hoy", "es": "Estudio de hoy", "en": "Today's study" },
+    { "clave": "{variable} de {variable}", "es": "{variable} de {variable}", "en": "{variable} of {variable}" },
+    { "clave": "En {variable} días", "es": "En {variable} días", "en": "In {variable} days" },
+    { "clave": "Hace {variable} días", "es": "Hace {variable} días", "en": "{variable} days ago" },
+    { "clave": "Días anteriores", "es": "Días anteriores", "en": "Previous days" },
+    { "clave": "Materias", "es": "Materias", "en": "Subjects" },
+    { "clave": "Créditos", "es": "Créditos", "en": "Credits" },
+    { "clave": "{variable} de {variable} aprobadas", "es": "{variable} de {variable} aprobadas", "en": "{variable} of {variable} passed" },
+    { "clave": "{variable} de {variable} aprobados", "es": "{variable} de {variable} aprobados", "en": "{variable} of {variable} passed" },
+    { "clave": "Horas: {variable}", "es": "Horas: {variable}", "en": "Hours: {variable}" },
+    { "clave": "Buscar descuentos para estudiantes", "es": "Buscar descuentos para estudiantes", "en": "Search for student discounts" },
+    { "clave": "Copia un prompt listo para pegar en una sesión nueva de Claude, que investiga descuentos, beneficios y tarifas estudiantiles reales para tu universidad.", "es": "Copia un prompt listo para pegar en una sesión nueva de Claude, que investiga descuentos, beneficios y tarifas estudiantiles reales para tu universidad.", "en": "Copies a ready-to-paste prompt for a new Claude session, which researches real student discounts, benefits, and rates for your university." },
+    { "clave": "Buscar descuentos para estudiantes de {variable}", "es": "Buscar descuentos para estudiantes de {variable}", "en": "Search for student discounts at {variable}" },
+    { "clave": "Modalidad", "es": "Modalidad", "en": "Class format" },
+    { "clave": "Presencial", "es": "Presencial", "en": "In person" },
+    { "clave": "Virtual", "es": "Virtual", "en": "Online" },
+    { "clave": "Asincrónica", "es": "Asincrónica", "en": "Asynchronous" },
+    { "clave": "Sin clase", "es": "Sin clase", "en": "No class" },
+    { "clave": "Aula", "es": "Aula", "en": "Classroom" },
+    { "clave": "Profesor", "es": "Profesor", "en": "Professor" },
+    { "clave": "Apuntes", "es": "Apuntes", "en": "Notes" },
+    { "clave": "Entrar", "es": "Entrar", "en": "Join" }
+  ],
+  "datos_que_se_conservan_sin_traducir": [
+    "Nombres de materias, profesores, aulas y apuntes escritos por el usuario.",
+    "Abreviaturas personalizadas de días de la semana configuradas por el usuario."
+  ],
+  "nota": "Los textos de claves y valores pueden agregarse al catálogo del nuevo idioma; no reemplaces el archivo completo del idioma ni traduzcas datos personales ingresados en la aplicación."
+}

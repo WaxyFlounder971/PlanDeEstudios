@@ -97,7 +97,7 @@ function traducir(texto) {
 export function traducirTextoInterfaz(texto, traduccionAlternativa = null) {
   const original = String(texto ?? "");
   let resultado = traducir(original);
-  if (idiomaActual !== "es" && resultado === original && traduccionAlternativa !== null) {
+  if (idiomaActual === "en" && traduccionAlternativa !== null) {
     resultado = String(traduccionAlternativa);
   }
   if (resultado !== original) {

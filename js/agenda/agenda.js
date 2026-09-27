@@ -21,7 +21,7 @@ import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
 import { renderizarCalendarioAgenda } from "./agenda-calendario.js";
 import { inicializarMateriaAgenda, renderizarMateriaAgenda } from "./agenda-materia.js";
 import { construirSeccionMateriasDia, calcularNumeroSemanaParaFecha } from "./agenda-clases.js";
-import { obtenerEstudioParaHoy, irADetalleMateriaTiempoEstudio, formatearHorasMin } from "../tiempo-estudio/tiempo-estudio.js";
+import { obtenerEstudioParaHoy, irADetalleMateriaTiempoEstudio, formatearHorasMin, formatearEstudioDeMeta } from "../tiempo-estudio/tiempo-estudio.js";
 import {
   abrirModalEventoAgenda,
   abrirTarjetaInfoEventoAgenda,
@@ -751,7 +751,7 @@ function construirTarjetaEstudioHoy(item) {
       <span class="agenda-estudio-hoy-cifras">${
         cumplida
           ? `${formatearHorasMin(item.hechoMinutosHoy)} · ${traducirTextoInterfaz("Meta de hoy cumplida")} ✅`
-          : traducirTextoInterfaz(`${formatearHorasMin(item.hechoMinutosHoy)} de ${formatearHorasMin(item.metaMinutosHoy)}`)
+          : formatearEstudioDeMeta(item.hechoMinutosHoy, item.metaMinutosHoy)
       }</span>
     </div>
     <div class="agenda-estudio-hoy-barra">
@@ -1137,8 +1137,12 @@ function construirColapsoDiasPasados(bloquesPasados, { cantidad = bloquesPasados
   const boton = document.createElement("button");
   boton.type = "button";
   boton.className = "agenda-colapso-pasados";
-  const textoBoton =
+  const textoBotonEs =
     cantidad === 0 ? "Días anteriores" : `${cantidad} ${cantidad === 1 ? "día anterior" : "días anteriores"}`;
+  const textoBoton = traducirTextoInterfaz(
+    textoBotonEs,
+    cantidad === 0 ? "Previous days" : `Previous ${cantidad} ${cantidad === 1 ? "day" : "days"}`
+  );
   boton.innerHTML = `
     <span class="agenda-colapso-pasados-flecha">‹</span>
     <span>${textoBoton}</span>

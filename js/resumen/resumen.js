@@ -42,7 +42,7 @@ import {
   tareaVenceHoy,
 } from "../agenda/agenda-utils.js";
 import { fechaLocalDesdeISO } from "../horario/horario.js";
-import { obtenerEstudioParaHoy, formatearHorasMin } from "../tiempo-estudio/tiempo-estudio.js";
+import { obtenerEstudioParaHoy, formatearHorasMin, formatearEstudioDeMeta } from "../tiempo-estudio/tiempo-estudio.js";
 
 // Ventanas de tiempo de cada sección (ver prompt de diseño): exámenes hasta
 // 2 semanas adelante, próximo evento hasta 7 días adelante.
@@ -213,7 +213,10 @@ function construirTarjetaSemana(semestreActivo, numeroSemana, hoy) {
   const faltan = document.createElement("span");
   faltan.className = "muted resumen-semana-faltan";
   faltan.style.cssText = "flex:0 0 auto; white-space:nowrap;";
-  faltan.textContent = traducirTextoInterfaz(diasRestantes === 0 ? "Último día" : `Faltan ${diasRestantes} días`);
+  faltan.textContent = traducirTextoInterfaz(
+    diasRestantes === 0 ? "Último día" : `Faltan ${diasRestantes} días`,
+    diasRestantes === 0 ? "Last day" : `${diasRestantes} days left`
+  );
 
   tarjeta.appendChild(barraCont);
   tarjeta.appendChild(centro);
@@ -321,7 +324,7 @@ function construirTarjetaEstudioHoy(totalHechoMin, totalMetaMin) {
   cifra.style.cssText = "font-size:0.85rem; white-space:nowrap;";
   cifra.textContent = cumplida
     ? `${formatearHorasMin(totalHechoMin)} · Meta cumplida ✅`
-    : `${formatearHorasMin(totalHechoMin)} de ${formatearHorasMin(totalMetaMin)}`;
+    : formatearEstudioDeMeta(totalHechoMin, totalMetaMin);
   fila.appendChild(titulo);
   fila.appendChild(cifra);
 

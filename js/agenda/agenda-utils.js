@@ -338,10 +338,10 @@ function formatearFechaRelativa(fecha, hoy = new Date()) {
   if (dias === 0) return traducirTextoInterfaz("Hoy");
   if (dias === 1) return traducirTextoInterfaz("Mañana");
   if (dias === 2) return traducirTextoInterfaz("Pasado Mañana", "In 2 days");
-  if (dias > 2) return traducirTextoInterfaz(`En ${dias} días`);
+  if (dias > 2) return traducirTextoInterfaz(`En ${dias} días`, `In ${dias} days`);
   if (dias === -1) return traducirTextoInterfaz("Ayer");
   if (dias === -2) return traducirTextoInterfaz("Antier", "2 days ago");
-  return traducirTextoInterfaz(`Hace ${-dias} días`);
+  return traducirTextoInterfaz(`Hace ${-dias} días`, `${-dias} days ago`);
 }
 
 /**

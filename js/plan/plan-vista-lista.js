@@ -624,10 +624,13 @@ function construirPanelEstadisticas(plan) {
       bloqueMaterias.appendChild(construirAnilloDonut(pctMaterias, "#10b981"));
       const etiquetaM = document.createElement("span");
       etiquetaM.className = "donut-etiqueta";
-      etiquetaM.textContent = "Materias";
+      etiquetaM.textContent = traducirTextoInterfaz("Materias");
       const subEtiquetaM = document.createElement("span");
       subEtiquetaM.className = "donut-subetiqueta";
-      subEtiquetaM.textContent = `${materiasAprobadas} de ${totalMaterias} aprobadas`;
+      subEtiquetaM.textContent = traducirTextoInterfaz(
+        `${materiasAprobadas} de ${totalMaterias} aprobadas`,
+        `${materiasAprobadas} of ${totalMaterias} passed`
+      );
       bloqueMaterias.appendChild(etiquetaM);
       bloqueMaterias.appendChild(subEtiquetaM);
 
@@ -639,7 +642,10 @@ function construirPanelEstadisticas(plan) {
       etiquetaC.textContent = traducirTextoInterfaz("Créditos");
       const subEtiquetaC = document.createElement("span");
       subEtiquetaC.className = "donut-subetiqueta";
-      subEtiquetaC.textContent = `${creditosAprobados} de ${totalCreditos} aprobados`;
+      subEtiquetaC.textContent = traducirTextoInterfaz(
+        `${creditosAprobados} de ${totalCreditos} aprobados`,
+        `${creditosAprobados} of ${totalCreditos} passed`
+      );
       bloqueCreditos.appendChild(etiquetaC);
       bloqueCreditos.appendChild(subEtiquetaC);
 

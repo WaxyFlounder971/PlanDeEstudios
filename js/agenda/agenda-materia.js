@@ -511,7 +511,7 @@ function construirTarjetaResumenMateria(mm, materia, plan, semestre, onCambiar) 
 
   const badgeCreditos = document.createElement("span");
   badgeCreditos.className = "badge badge-accent";
-  badgeCreditos.textContent = `Créditos: ${materia.creditos}`;
+  badgeCreditos.textContent = traducirTextoInterfaz(`Créditos: ${materia.creditos}`);
   colDerecha.appendChild(badgeCreditos);
 
   const btnIrA = document.createElement("button");

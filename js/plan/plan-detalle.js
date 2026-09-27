@@ -78,7 +78,7 @@ function construirLinea2Materia(materia, compacto, plan) {
 
   const spanHoras = document.createElement("span");
   spanHoras.className = "materia-linea2-horas";
-  spanHoras.textContent = compacto ? formatearHorasCompactoIniciales(materia) : formatearHoras(materia);
+  spanHoras.textContent = traducirTextoInterfaz(compacto ? formatearHorasCompactoIniciales(materia) : formatearHoras(materia));
   linea2.appendChild(spanHoras);
 
   const badgeCreditos = document.createElement("span");
