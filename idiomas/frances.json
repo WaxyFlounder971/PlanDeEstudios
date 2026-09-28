@@ -1528,6 +1528,9 @@
     "Meta cumplida ✅": "Objectif atteint ✅",
     "Vence en instantes": "Échéance imminente",
     "⏳ {variable}h {variable}min restantes": "⏳ {variable} h {variable} min restantes",
-    "⏳ {variable}min restantes": "⏳ {variable} min restantes"
+    "⏳ {variable}min restantes": "⏳ {variable} min restantes",
+    "Días anteriores": "Jours précédents",
+    "{variable} día anterior": "{variable} jour précédent",
+    "{variable} días anteriores": "{variable} jours précédents"
   }
 }
