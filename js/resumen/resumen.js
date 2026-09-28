@@ -67,7 +67,7 @@ function construirBloqueSeccion(titulo, contenidoEl) {
   seccion.className = "glass-card stack resumen-bloque";
   const encabezado = document.createElement("h2");
   encabezado.className = "texto-encabezado-seccion";
-  encabezado.textContent = titulo;
+  encabezado.textContent = traducirTextoInterfaz(titulo);
   seccion.appendChild(encabezado);
   seccion.appendChild(contenidoEl);
   return seccion;
@@ -84,7 +84,7 @@ const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "s
 function formatearFechaRealItem(fechaISO) {
   const f = fechaLocalDesdeISO(fechaISO);
   if (Number.isNaN(f.getTime())) return String(fechaISO || "");
-  if (obtenerIdiomaActual() === "en") {
+  if (obtenerIdiomaActual() !== "es") {
     return f.toLocaleDateString(obtenerLocaleInterfaz(), {
       weekday: "short", day: "numeric", month: "short",
       ...(f.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }),

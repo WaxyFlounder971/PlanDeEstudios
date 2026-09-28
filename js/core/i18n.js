@@ -22,7 +22,7 @@ export function obtenerIdiomaActual() {
 }
 
 export function obtenerLocaleInterfaz() {
-  return idiomaActual === "en" ? "en-US" : "es-CR";
+  return ({ en: "en-US", it: "it-IT", fr: "fr-FR", pt: "pt-BR", de: "de-DE", ja: "ja-JP" })[idiomaActual] || "es-CR";
 }
 
 const FECHAS_ES_EN = new Map([
@@ -67,9 +67,13 @@ function compilarPatrones(traducciones) {
     if (!origen.includes("{variable}")) continue;
     const partes = origen.split("{variable}");
     const expresion = new RegExp(`^${partes.map(escaparRegex).join("([\\s\\S]+?)")}$`);
-    patrones.push({ expresion, destino, cantidad: partes.length - 1 });
+    const especificidad = partes.reduce((total, parte) => total + parte.length, 0);
+    patrones.push({ expresion, destino, cantidad: partes.length - 1, especificidad });
   }
-  return patrones;
+  // Las plantillas específicas (p. ej. una frase sobre cursos aprobados)
+  // deben probarse antes que las genéricas como "{variable} de {variable}",
+  // que de otro modo capturan el sufijo entero y dejan palabras sin traducir.
+  return patrones.sort((a, b) => b.especificidad - a.especificidad);
 }
 
 function escaparRegex(texto) {

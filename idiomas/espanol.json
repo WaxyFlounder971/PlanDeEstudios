@@ -1511,6 +1511,23 @@
     "Ya tenías vinculado este horario.": "Ya tenías vinculado este horario.",
     "Ya tienes el máximo de {variable} planes.": "Ya tienes el máximo de {variable} planes.",
     "Ya vinculada a este": "Ya vinculada a este",
-    "Yo": "Yo"
+    "Yo": "Yo",
+    "Semana {variable} de {variable}": "Semana {variable} de {variable}",
+    "Exámenes próximos": "Exámenes próximos",
+    "Tareas de hoy": "Tareas de hoy",
+    "Tareas vencidas": "Tareas vencidas",
+    "Próximas tareas": "Próximas tareas",
+    "Próximo evento": "Próximo evento",
+    "Clases de hoy": "Clases de hoy",
+    "En {variable} días": "En {variable} días",
+    "Hace {variable} días": "Hace {variable} días",
+    "Mañana": "Mañana",
+    "Ayer": "Ayer",
+    "Pasado Mañana": "Pasado Mañana",
+    "Antier": "Antier",
+    "Meta cumplida ✅": "Meta cumplida ✅",
+    "Vence en instantes": "Vence en instantes",
+    "⏳ {variable}h {variable}min restantes": "⏳ {variable}h {variable}min restantes",
+    "⏳ {variable}min restantes": "⏳ {variable}min restantes"
   }
 }

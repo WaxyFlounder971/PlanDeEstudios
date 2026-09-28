@@ -90,11 +90,21 @@ const MODALIDADES_VALIDAS_ASISTENTE = ["presencial", "virtual", "asincronica", "
  * generarRespuestaConversacionalWapper más abajo para dónde se usa
  * realmente este system prompt.
  */
-const PROMPT_PERSONALIDAD_WAPPER = `Eres Wapper, un asistente académico simple, cálido y amable. Ayudas a organizar tareas, exámenes y eventos. Habla de forma clara y cercana, sin jerga ni modismos regionales de ningún país, sin exagerar el entusiasmo. Diríjete al usuario siempre de tú, nunca de vos ni de usted. Mantente siempre dentro de tu propósito académico, no te desvíes a otros temas, y no inventes información que no tienes.`;
-const PROMPT_PERSONALIDAD_WAPPER_EN = `You are Wapper, a clear, warm, and friendly academic assistant. You help students organize assignments, exams, and events. Speak naturally and concisely, without slang, regional idioms, or exaggerated enthusiasm. Stay focused on academic matters and never invent information. Reply in English when the user writes in English, and otherwise follow the language they use. Preserve the user's intent, distinctions, dates, and level of certainty; ask a concise follow-up when essential details are missing. Treat official course names and saved user data as exact proper names. Answer only what the user asks; do not volunteer a generic list of capabilities or explain how you know personal information unless asked. When formatting helps, use clean Markdown with short paragraphs and properly separated bullet points.`;
+const PROMPT_PERSONALIDAD_WAPPER = `You are Wapper, a clear, warm, concise academic assistant. Help organize assignments, exams, and events, and answer a brief question outside that scope when the user asks one. Always answer in the language of the user's latest message, even if earlier assistant messages used another language. If the user explicitly asks to use a language, use it. When the message is too short to identify a language, use the app's selected language. Support every language offered by the app, including Spanish, English, Italian, and French. Never say that you prefer another language, ask the user to switch languages, or claim that you cannot speak a supported language. If asked whether you can speak a language, answer briefly in that language. Preserve the user's intent, distinctions, dates, and level of certainty; ask a concise follow-up only when essential details are missing. Treat official course names and saved user data as exact proper names. Answer only what was asked; do not add unrelated small talk, generic capability lists, or personal observations. Never comment on the user's name, its meaning, origin, uniqueness, or resemblance to a famous person unless the user explicitly asks about it. Do not infer personal traits from a name. Use clean Markdown only when it helps.`;
+
+function obtenerNombreIdiomaAsistente() {
+  return ({ es: "Spanish", en: "English", it: "Italian", fr: "French", pt: "Portuguese", de: "German", ja: "Japanese" })[obtenerIdiomaActual()] || "the language of the user's latest message";
+}
 
 function textoAsistente(es, en) {
-  return obtenerIdiomaActual() === "en" ? en : es;
+  const idioma = obtenerIdiomaActual();
+  if (idioma === "en") return en;
+  if (idioma === "it" || idioma === "fr") return traducirTextoInterfaz(es);
+  return es;
+}
+
+function textoAsistentePorIdioma(textos) {
+  return textos[obtenerIdiomaActual()] || textos.es;
 }
 
 function agregarTextoInlineSeguro(contenedor, texto) {
@@ -147,38 +157,21 @@ function renderizarTextoAsistente(contenedor, texto) {
 }
 
 /**
- * Nombre por el que Wapper se dirige al usuario (2026-08-29, trato
- * cercano): por defecto el primer nombre de su cuenta de Google (el mismo
- * que ya se muestra en el sidebar — confirmado con main.js:
- * estado.datos.perfil.nombre, lo pone obtenerPerfilGoogle/auth.js justo
- * después del login). Si el usuario le pide a Wapper que lo llame de otra
- * forma (accion "actualizar_nombre" más abajo), ese apodo queda GUARDADO
+ * Apodo que el usuario pidió explícitamente para el Asistente. No se usa
+ * automáticamente el nombre del perfil de Google ni se hacen comentarios
+ * sobre su origen, significado o singularidad.
+ * Si el usuario le pide a Wapper que lo llame de otra forma, ese apodo queda GUARDADO
  * PERMANENTE en estado.datos.configuracion.asistente_nombre_preferido —
  * a propósito en una clave DISTINTA a estado.datos.perfil.nombre: pedido
  * explícito de que "cambiar nombre desde Asistente" nunca toque el nombre
  * que se ve en el sidebar (ese sigue siendo 100% el de la cuenta de
  * Google), solo cómo se dirige Wapper al usuario.
  */
-function obtenerNombrePerfilGoogleCrudo() {
-  return (estado.datos && estado.datos.perfil && estado.datos.perfil.nombre) || null;
-}
-
-/** "Fernanda Rodríguez Solano" → "Fernanda" — para un trato cercano no hace
- * falta el nombre completo. */
-function obtenerPrimerNombre(nombreCompleto) {
-  const limpio = String(nombreCompleto || "").trim();
-  if (!limpio) return null;
-  return limpio.split(/\s+/)[0];
-}
-
-/** El nombre/apodo con el que Wapper se dirige al usuario ahora mismo: el
- * que el usuario pidió explícitamente (permanente, ver arriba) si hay uno,
- * si no el primer nombre de su cuenta de Google, si no null (Wapper sigue
- * funcionando igual sin nombre, solo no lo usa). */
+/** Devuelve solo el apodo que el usuario eligió para el Asistente. */
 function obtenerNombreParaDirigirse() {
   const preferido = estado.datos && estado.datos.configuracion && estado.datos.configuracion.asistente_nombre_preferido;
   if (preferido && String(preferido).trim()) return String(preferido).trim();
-  return obtenerPrimerNombre(obtenerNombrePerfilGoogleCrudo());
+  return null;
 }
 
 /**
@@ -211,20 +204,20 @@ function resolverActualizacionNombre(nombreNuevo) {
  * dónde salió el nombre), nunca se reescribe el prompt base.
  */
 function construirPromptPersonalidadWapper() {
-  const nombre = obtenerNombreParaDirigirse();
-  const ingles = obtenerIdiomaActual() === "en";
-  const base = ingles ? PROMPT_PERSONALIDAD_WAPPER_EN : PROMPT_PERSONALIDAD_WAPPER;
-  if (!nombre) return base;
-  return ingles
-    ? `${base} The user's preferred name is ${nombre}. Use it occasionally and naturally, never in every reply. If asked where you got it, explain that it comes from their Google account.`
-    : `${base} El usuario se llama ${nombre} — puedes usar ese nombre de vez en cuando para un trato más cercano, sin forzarlo en cada respuesta; si te parece un nombre gracioso o con onda de apodo, puedes seguirle la broma con humor liviano y cariñoso, nunca burlón. Si te pregunta de dónde sacaste su nombre, dile que lo tomaste de su cuenta de Google.`;
+  const nombrePreferido = obtenerNombreParaDirigirse();
+  const instruccionApodo = nombrePreferido
+    ? ` The user explicitly asked to be called ${nombrePreferido}. You may use this preferred name occasionally when natural, but never comment on its meaning, origin, uniqueness, or resemblance to anyone famous.`
+    : "";
+  return `${PROMPT_PERSONALIDAD_WAPPER} The selected app language, to use only if the user's language is unclear, is ${obtenerNombreIdiomaAsistente()}.${instruccionApodo}`;
 }
 
 /** Punto 4 del brief de personalidad: saludo simple → respuesta fija, sin llamar a Gemini. */
 function construirMensajeSaludoWapper() {
-  const nombre = obtenerNombreParaDirigirse();
-  if (obtenerIdiomaActual() === "en") return nombre ? `Hi, ${nombre}! How can I help today?` : "Hi! How can I help today?";
-  return nombre ? `¡Hola ${nombre}! ¿En qué te ayudo hoy?` : "¡Hola! ¿En qué te ayudo hoy?";
+  const idioma = obtenerIdiomaActual();
+  if (idioma === "en") return "Hi! How can I help today?";
+  if (idioma === "it") return "Ciao! Come posso aiutarti?";
+  if (idioma === "fr") return "Bonjour ! Comment puis-je vous aider ?";
+  return "¡Hola! ¿En qué te ayudo hoy?";
 }
 
 /** Reemplaza al antiguo MENSAJE_FALLBACK (voseo) — ahora en tuteo, y solo se usa como
@@ -234,6 +227,8 @@ function construirMensajeSaludoWapper() {
  *  "anatomía" fija, sea cual sea. */
 function construirMensajeFallbackWapper() {
   if (obtenerIdiomaActual() === "en") return `I couldn't identify an assignment, exam, or event in your message. Could you add a little more detail? For example: "I have an exam for ${elegirNombreMateriaEjemplo()} on Thursday at 2 p.m."`;
+  if (obtenerIdiomaActual() === "it") return `Non ho capito se vuoi aggiungere un compito, un esame o un evento. Puoi darmi qualche dettaglio in più? Per esempio: «Ho un esame di ${elegirNombreMateriaEjemplo()} giovedì alle 14».`;
+  if (obtenerIdiomaActual() === "fr") return `Je n'ai pas compris si vous souhaitez ajouter un devoir, un examen ou un événement. Pouvez-vous préciser ? Par exemple : « J'ai un examen de ${elegirNombreMateriaEjemplo()} jeudi à 14 h. »`;
   return `No logré identificar una tarea, examen o evento en tu mensaje. ¿Puedes darme más detalles? Por ejemplo: "tengo examen de ${elegirNombreMateriaEjemplo()} el jueves a las 2pm".`;
 }
 
@@ -243,13 +238,11 @@ function construirMensajeFallbackWapper() {
  * 2026-08-29 lo único que se agrega es el nombre al inicio si se conoce.
  */
 function construirMensajeBienvenidaWapper() {
-  const nombre = obtenerNombreParaDirigirse();
-  if (obtenerIdiomaActual() === "en") return nombre
-    ? `Hello, ${nombre}! I'm Wapper 👋, your personal academic companion.\nDo you have an assignment, exam, or event you'd like to add?`
-    : "Hello! I'm Wapper 👋, your personal academic companion.\nDo you have an assignment, exam, or event you'd like to add?";
-  return nombre
-    ? `¡Hola ${nombre}! Soy Wapper 👋, tu asistente académico personal. \n¿Tienes alguna tarea, examen o evento que quieras agregar?`
-    : "¡Hola! Soy Wapper 👋, tu asistente académico personal. \nDime, ¿tienes alguna tarea, examen o evento que quieras agregar?";
+  const idioma = obtenerIdiomaActual();
+  if (idioma === "en") return "Hello! I'm Wapper 👋, your academic assistant.\nDo you have an assignment, exam, or event you'd like to add?";
+  if (idioma === "it") return "Ciao! Sono Wapper 👋, il tuo assistente accademico.\nVuoi aggiungere un compito, un esame o un evento?";
+  if (idioma === "fr") return "Bonjour ! Je suis Wapper 👋, votre assistant académique.\nSouhaitez-vous ajouter un devoir, un examen ou un événement ?";
+  return "¡Hola! Soy Wapper 👋, tu asistente académico.\n¿Tienes alguna tarea, examen o evento que quieras agregar?";
 }
 
 /**
@@ -302,8 +295,9 @@ function obtenerNombresMateriasParaEjemplosBienvenida() {
  */
 function construirEjemplosBienvenida() {
   const nombres = obtenerNombresMateriasParaEjemplosBienvenida();
-  if (obtenerIdiomaActual() === "en") {
-    const plantillas = [
+  const idioma = obtenerIdiomaActual();
+  const plantillasPorIdioma = {
+    en: [
       "I have an exam for {materia} on Thursday at 2 p.m.",
       "Remind me to submit the {materia} essay on Monday",
       "I have a {materia} project tomorrow; remind me",
@@ -316,8 +310,38 @@ function construirEjemplosBienvenida() {
       "I need to study for the {materia} midterm on September 3",
       "Add an assignment for {materia} next class and an exam for {materia} in week 7",
       "I have a {materia} quiz tomorrow at 9 a.m., then a meeting three hours later",
-    ];
-    return plantillas.map((plantilla, indice) => plantilla.replace(/\{materia\}/g, () => nombres[indice % nombres.length]));
+    ],
+    it: [
+      "Ho un esame di {materia} giovedì alle 14",
+      "Ricordami di consegnare il saggio di {materia} lunedì",
+      "Domani ho un progetto di {materia}, ricordami di non dimenticarlo",
+      "Quiz di {materia} tra due settimane",
+      "Riunione di gruppo per {materia} sabato alle 10",
+      "Aggiungi un compito di {materia} per venerdì",
+      "Il progetto finale di {materia} va consegnato martedì prossimo",
+      "Il compleanno della mia coinquilina è il 15",
+      "La prossima settimana ho l'esame finale di {materia}, ma non so ancora il giorno",
+      "Devo studiare per l'esame intermedio di {materia} il 3 settembre",
+      "Aggiungi un compito di {materia} per la prossima lezione e un esame di {materia} per la settimana 7",
+      "Domani ho un quiz di {materia} alle 9 e tre ore dopo devo andare a una riunione",
+    ],
+    fr: [
+      "J'ai un examen de {materia} jeudi à 14 h",
+      "Rappelle-moi de rendre la dissertation de {materia} lundi",
+      "J'ai un projet de {materia} demain, rappelle-le-moi",
+      "Quiz de {materia} dans deux semaines",
+      "Réunion de groupe pour {materia} samedi à 10 h",
+      "Ajoute un devoir de {materia} pour vendredi",
+      "Le projet final de {materia} est à rendre mardi prochain",
+      "L'anniversaire de ma colocataire est le 15",
+      "J'ai l'examen final de {materia} la semaine prochaine, mais je ne connais pas encore le jour exact",
+      "Je dois réviser pour le partiel de {materia} le 3 septembre",
+      "Ajoute un devoir de {materia} pour le prochain cours et un examen de {materia} pour la semaine 7",
+      "J'ai un quiz de {materia} demain à 9 h, puis une réunion trois heures plus tard",
+    ],
+  };
+  if (plantillasPorIdioma[idioma]) {
+    return plantillasPorIdioma[idioma].map((plantilla, indice) => plantilla.replace(/\{materia\}/g, () => nombres[indice % nombres.length]));
   }
   let indice = 0;
   return PLANTILLAS_EJEMPLOS_BIENVENIDA_WAPPER.map((plantilla) =>
@@ -346,6 +370,14 @@ const PATRONES_SALUDO_SIMPLE = [
   /^que tal$/,
   /^como estas$/,
   /^como andas$/,
+  /^ciao$/,
+  /^buongiorno$/,
+  /^buonasera$/,
+  /^salve$/,
+  /^bonjour$/,
+  /^salut$/,
+  /^bonsoir$/,
+  /^coucou$/,
 ];
 
 function esSaludoSimple(textoOriginal) {
@@ -432,6 +464,14 @@ const CAPACIDADES_WAPPER = [
  * cacheada — ver elegirNombreMateriaEjemplo arriba para el caso de materia.
  */
 function construirMensajeCapacidadesWapper() {
+  if (obtenerIdiomaActual() === "it") {
+    const materia = elegirNombreMateriaEjemplo();
+    return `Posso aiutarti ad aggiungere compiti, esami ed eventi; consultare ciò che hai salvato nell'Agenda; controllare le prossime lezioni e cambiare la modalità di una lezione nel tuo Orario.\n\nPer esempio: «Ho un esame di ${materia} giovedì alle 14».`;
+  }
+  if (obtenerIdiomaActual() === "fr") {
+    const materia = elegirNombreMateriaEjemplo();
+    return `Je peux vous aider à ajouter des devoirs, des examens et des événements ; à consulter ce que vous avez enregistré dans l'Agenda ; à vérifier vos prochains cours ; à rechercher un devoir ou un examen ; et à modifier le mode d'un cours dans votre emploi du temps.\n\nPar exemple : « J'ai un examen de ${materia} jeudi à 14 h. »`;
+  }
   if (obtenerIdiomaActual() === "en") {
     const nombreMateria = elegirNombreMateriaEjemplo();
     return `I can help you with:\n\n• Add assignments, exams, and events.\nExample: "I have an exam for ${nombreMateria} on Thursday."\n\n• Check what assignments or exams you have in a specific week.\nExample: "What exams do I have this week?"\n\n• Find a saved assignment or exam and its due date.\nExample: "When is the second ${nombreMateria} midterm?"\n\n• Check whether an upcoming class is online or in person.\nExample: "Is my next ${nombreMateria} class online or in person?"\n\n• Change a class's format in your schedule.\nExample: "Set my ${nombreMateria} class on Tuesday to online."\n\n• Change what I call you.\nExample: "Call me Alex."`;
@@ -462,6 +502,14 @@ const PATRONES_PREGUNTA_CAPACIDADES = [
   /^que haces$/,
   /^cuales son tus (funciones|capacidades)$/,
   /^que funciones tenes$/,
+  /^cosa puoi fare( wapper)?$/,
+  /^cosa sai fare$/,
+  /^in cosa mi puoi aiutare$/,
+  /^quali sono le tue (funzioni|capacita)$/,
+  /^que peux tu faire( wapper)?$/,
+  /^que sais tu faire$/,
+  /^en quoi peux tu m aider$/,
+  /^quelles sont tes (fonctions|capacites)$/,
 ];
 
 function esPreguntaCapacidades(textoOriginal) {
@@ -1347,7 +1395,7 @@ function construirSystemInstruction() {
   const avisoInicialesDuplicadas = construirAvisoInicialesDuplicadas(materiasVinculables);
   const contextoDiasModalidad = construirContextoDiasModalidadMaterias(materiasVinculables);
 
-  return `${obtenerIdiomaActual() === "en" ? `The app interface is in English. Interpret the user's request in whichever language they use. Write any user-facing clarification in English. Keep exact official course names and all JSON field names, action names, type values, and weekday values in the Spanish forms specified below; the application depends on those exact values. Never guess missing dates, times, courses, or facts.\n\n` : ""}Sos el Asistente IA de una app académica. Tu función es leer un
+  return `The app interface language is ${obtenerNombreIdiomaAsistente()}. Always write user-facing text (including clarifications and notes) in the language of the user's latest message; if it is unclear, use the selected interface language. Never claim to prefer Spanish or ask the user to change languages. Keep exact official course names and all JSON field names, action names, type values, and weekday values in the Spanish forms specified below; the application depends on those exact values. Never guess missing dates, times, courses, or facts.\n\nSos el Asistente IA de una app académica. Tu función es leer un
 mensaje en lenguaje natural de un estudiante universitario y, según lo que
 pida, extraer tareas/exámenes/eventos para su Agenda, detectar un pedido de
 cambiar la modalidad de una clase puntual en su Horario, o reconocer una
@@ -1904,6 +1952,18 @@ function mensajeParaError(e) {
     if (e.tipoError === "red") return "Couldn't connect to Gemini. Check your connection and try again.";
     return "Something went wrong on my end. Please try again in a moment.";
   }
+  if (obtenerIdiomaActual() === "it") {
+    if (e.tipoError === "clave") return "La chiave API di Gemini sembra non valida o scaduta. Controllala in Impostazioni > Assistente IA.";
+    if (e.tipoError === "limite") return "Il limite di utilizzo di Gemini è stato raggiunto. Attendi un momento e riprova.";
+    if (e.tipoError === "red") return "Impossibile connettersi a Gemini. Controlla la connessione e riprova.";
+    return "Si è verificato un errore. Riprova tra poco.";
+  }
+  if (obtenerIdiomaActual() === "fr") {
+    if (e.tipoError === "clave") return "Votre clé API Gemini semble invalide ou expirée. Vérifiez-la dans Paramètres > Assistant IA.";
+    if (e.tipoError === "limite") return "La limite d'utilisation de Gemini est atteinte pour le moment. Attendez un instant puis réessayez.";
+    if (e.tipoError === "red") return "Impossible de se connecter à Gemini. Vérifiez votre connexion puis réessayez.";
+    return "Une erreur s'est produite. Réessayez dans un instant.";
+  }
   if (e.tipoError === "clave") return "Tu clave de Gemini parece inválida o vencida. Revisala en Ajustes > Asistente IA.";
   if (e.tipoError === "limite") return "Se alcanzó el límite de uso de Gemini por ahora. Esperá un momento y probá de nuevo.";
   if (e.tipoError === "red") return "No se pudo conectar con Gemini. Revisá tu conexión e intentá de nuevo.";
@@ -1980,11 +2040,14 @@ function resolverCambioModalidad(cambioModalidad) {
     (b) => b.materia_id === mm.materia_id && b.plan_estudio_id === mm.plan_estudio_id && (b.dias || []).some((d) => d.dia === diaCodigo)
   );
   if (!bloque) {
-    if (obtenerIdiomaActual() === "en") {
-      const dia = new Intl.DateTimeFormat(obtenerLocaleInterfaz(), { weekday: "long" }).format(new Date(2024, 0, 7 + idxDiaSemana));
-      return { ok: false, motivo: `${materiaVinculada.nombre} has no class on ${dia} according to your schedule.` };
-    }
-    return { ok: false, motivo: `${materiaVinculada.nombre} no tiene clase los ${cambioModalidad.dia} según tu Horario.` };
+    const dia = new Intl.DateTimeFormat(obtenerLocaleInterfaz(), { weekday: "long" }).format(new Date(2024, 0, 7 + idxDiaSemana));
+    const mensajes = {
+      es: `${materiaVinculada.nombre} no tiene clase los ${cambioModalidad.dia} según tu Horario.`,
+      en: `${materiaVinculada.nombre} has no class on ${dia} according to your schedule.`,
+      it: `${materiaVinculada.nombre} non ha lezione il ${dia} secondo il tuo Orario.`,
+      fr: `${materiaVinculada.nombre} n'a pas cours le ${dia} selon votre emploi du temps.`,
+    };
+    return { ok: false, motivo: mensajes[obtenerIdiomaActual()] || mensajes.es };
   }
   const diaPlantilla = bloque.dias.find((d) => d.dia === diaCodigo);
   const modalidadActual = diaPlantilla.modalidad || "presencial";
@@ -2838,7 +2901,12 @@ async function mostrarResultadoEventosEnChat(resultado, turno, textoUsuario) {
 
   const resumen = resultado.items.length === 1
     ? textoAsistente("Guardé esto en tu Agenda:", "Added this to your Agenda:")
-    : (obtenerIdiomaActual() === "en" ? `Added ${resultado.items.length} items to your Agenda:` : `Guardé ${resultado.items.length} cosas en tu Agenda:`);
+    : textoAsistentePorIdioma({
+      es: `Guardé ${resultado.items.length} cosas en tu Agenda:`,
+      en: `Added ${resultado.items.length} items to your Agenda:`,
+      it: `Ho aggiunto ${resultado.items.length} elementi alla tua Agenda:`,
+      fr: `J'ai ajouté ${resultado.items.length} éléments à votre Agenda :`,
+    });
   agregarBurbujaAlDom(crearBurbuja("modelo", resumen));
 
   // Array.isArray(turno.eventosGuardados): CRÍTICO para no duplicar
@@ -2940,11 +3008,18 @@ function formatearDiasFaltantes(fechaEventoIso) {
   const fechaEvento = fechaLocalDesdeISO(fechaEventoIso);
   const diffDias = Math.round((fechaEvento - hoy) / 86400000);
   if (diffDias === 0) return textoAsistente("es hoy", "it's today");
-  if (diffDias > 0) return obtenerIdiomaActual() === "en"
-    ? `in ${diffDias} day${diffDias === 1 ? "" : "s"}`
-    : `falta${diffDias === 1 ? "" : "n"} ${diffDias} día${diffDias === 1 ? "" : "s"}`;
+  const idioma = obtenerIdiomaActual();
+  if (diffDias > 0) {
+    if (idioma === "en") return `in ${diffDias} day${diffDias === 1 ? "" : "s"}`;
+    if (idioma === "it") return `tra ${diffDias} giorn${diffDias === 1 ? "o" : "i"}`;
+    if (idioma === "fr") return `dans ${diffDias} jour${diffDias === 1 ? "" : "s"}`;
+    return `falta${diffDias === 1 ? "" : "n"} ${diffDias} día${diffDias === 1 ? "" : "s"}`;
+  }
   const dias = Math.abs(diffDias);
-  return obtenerIdiomaActual() === "en" ? `${dias} day${dias === 1 ? "" : "s"} ago` : `fue hace ${dias} día${dias === 1 ? "" : "s"}`;
+  if (idioma === "en") return `${dias} day${dias === 1 ? "" : "s"} ago`;
+  if (idioma === "it") return `${dias} giorn${dias === 1 ? "o" : "i"} fa`;
+  if (idioma === "fr") return `il y a ${dias} jour${dias === 1 ? "" : "s"}`;
+  return `fue hace ${dias} día${dias === 1 ? "" : "s"}`;
 }
 
 /**
@@ -3005,11 +3080,13 @@ function mostrarResultadoConsultaEnChat(resultado, turno, textoUsuario) {
       };
     }
     const r = turno.consultaModalidadResuelto;
-    const diaCapitalizado = r.diaNombre.charAt(0).toUpperCase() + r.diaNombre.slice(1);
+    const fecha = fechaLocalDesdeISO(r.fechaObjetivoIso);
+    const diaCapitalizado = new Intl.DateTimeFormat(obtenerLocaleInterfaz(), { weekday: "long" }).format(fecha);
+    const diaFormateado = diaCapitalizado.charAt(0).toUpperCase() + diaCapitalizado.slice(1);
     agregarBurbujaAlDom(
       crearBurbuja(
         "modelo",
-        `📅 ${r.materiaNombre} — ${diaCapitalizado} ${formatearFechaLarga(r.fechaObjetivoIso)}: ${obtenerEtiquetaModalidad(r.modalidad)}`
+        `📅 ${r.materiaNombre} — ${diaFormateado} ${formatearFechaLarga(r.fechaObjetivoIso)}: ${obtenerEtiquetaModalidad(r.modalidad)}`
       )
     );
     return;
@@ -3142,7 +3219,13 @@ function mostrarResultadoActualizarNombreEnChat(resultado, turno) {
     }
     turno.nombrePreferidoAplicado = resuelto.nombreNuevo;
   }
-  agregarBurbujaAlDom(crearBurbuja("modelo", `¡Listo! De ahora en más te digo ${turno.nombrePreferidoAplicado} 😊`));
+  const confirmaciones = {
+    es: `¡Listo! Te llamaré ${turno.nombrePreferidoAplicado}.`,
+    en: `Got it! I'll call you ${turno.nombrePreferidoAplicado}.`,
+    it: `Va bene! Ti chiamerò ${turno.nombrePreferidoAplicado}.`,
+    fr: `D'accord ! Je vous appellerai ${turno.nombrePreferidoAplicado}.`,
+  };
+  agregarBurbujaAlDom(crearBurbuja("modelo", confirmaciones[obtenerIdiomaActual()] || confirmaciones.es));
 }
 
 async function mostrarResultadoEnChat(resultado, turno, textoUsuario) {
@@ -3496,12 +3579,18 @@ function instalarObservadorVisibilidadAsistente(tarjeta) {
  */
 function mostrarSaludoInicial() {
   agregarBurbujaAlDom(crearBurbuja("modelo", construirMensajeBienvenidaWapper()));
-  const ingles = obtenerIdiomaActual() === "en";
-  agregarBurbujaAlDom(crearBurbuja("modelo", `${ingles ? "Example" : "Ejemplo"}: ${elegirEjemploBienvenidaAlAzar()}`));
+  const idioma = obtenerIdiomaActual();
+  const etiquetaEjemplo = ({ en: "Example", it: "Esempio", fr: "Exemple" })[idioma] || "Ejemplo";
+  agregarBurbujaAlDom(crearBurbuja("modelo", `${etiquetaEjemplo}: ${elegirEjemploBienvenidaAlAzar()}`));
   // Punto 8 del brief (2026-08-31): agregado, no reemplazo, del ejemplo de
   // arriba — invita a descubrir el resto de capacidades (punto 7) sin tener
   // que adivinar. En tuteo, como el resto de la interfaz de Wapper.
-  agregarBurbujaAlDom(crearBurbuja("modelo", ingles ? "Not sure where to start? Ask me what I can do." : "¿No sabes por dónde empezar? Pregúntame qué puedo hacer."));
+  const invitacion = ({
+    en: "Not sure where to start? Ask me what I can do.",
+    it: "Non sai da dove iniziare? Chiedimi cosa posso fare.",
+    fr: "Vous ne savez pas par où commencer ? Demandez-moi ce que je peux faire.",
+  })[idioma] || "¿No sabes por dónde empezar? Pregúntame qué puedo hacer.";
+  agregarBurbujaAlDom(crearBurbuja("modelo", invitacion));
 }
 
 /**
