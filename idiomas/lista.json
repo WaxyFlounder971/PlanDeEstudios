@@ -14,11 +14,6 @@
       "id": "it",
       "nombre": "Italiano",
       "archivo": "italiano.json"
-    },
-    {
-      "id": "fr",
-      "nombre": "Français",
-      "archivo": "frances.json"
     }
   ]
 }
