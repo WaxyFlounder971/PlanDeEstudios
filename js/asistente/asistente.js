@@ -107,6 +107,24 @@ function textoAsistentePorIdioma(textos) {
   return textos[obtenerIdiomaActual()] || textos.es;
 }
 
+const MAX_FILAS_INPUT_ASISTENTE = 10;
+
+function ajustarAlturaInputAsistente(input) {
+  if (!input) return;
+  const estilo = getComputedStyle(input);
+  const fuente = Number.parseFloat(estilo.fontSize) || 16;
+  const altoLinea = Number.parseFloat(estilo.lineHeight) || fuente * 1.4;
+  const rellenoVertical = (Number.parseFloat(estilo.paddingTop) || 0) + (Number.parseFloat(estilo.paddingBottom) || 0);
+  const bordeVertical = (Number.parseFloat(estilo.borderTopWidth) || 0) + (Number.parseFloat(estilo.borderBottomWidth) || 0);
+  const alturaMaxima = altoLinea * MAX_FILAS_INPUT_ASISTENTE + rellenoVertical + bordeVertical;
+
+  input.style.maxHeight = `${alturaMaxima}px`;
+  input.style.height = "auto";
+  const alturaContenido = input.scrollHeight + bordeVertical;
+  input.style.height = `${Math.min(alturaContenido, alturaMaxima)}px`;
+  input.style.overflowY = alturaContenido > alturaMaxima ? "auto" : "hidden";
+}
+
 function agregarTextoInlineSeguro(contenedor, texto) {
   const regex = /\*\*(.+?)\*\*/g;
   let desde = 0;
@@ -753,6 +771,7 @@ function crearBotonVoz(input) {
             const blob = new Blob(chunksAudioVoz, { type: mediaRecorderVoz.mimeType || "audio/webm" });
             const texto = await transcribirAudioConGemini(blob);
             input.value = textoPrevioAlInput + texto;
+            ajustarAlturaInputAsistente(input);
           } catch (e) {
             console.warn("[asistente] Error transcribiendo audio con Gemini:", e);
             mostrarToast(
@@ -802,6 +821,7 @@ function crearBotonVoz(input) {
       }
       const transcripcionFinal = colapsarFinalesSuperpuestos(finales).join(" ");
       input.value = textoPrevioAlInput + (transcripcionFinal ? transcripcionFinal + " " : "") + interina;
+      ajustarAlturaInputAsistente(input);
     };
     reconocimientoVoz.onerror = (e) => {
       // Antes esto no quedaba en consola de ninguna forma — el toast
@@ -2137,6 +2157,52 @@ function formatearRangoConsulta(inicio, fin) {
   return `${textoInicio} - ${textoFin}`;
 }
 
+function textoSemanaEnIdioma(numeroSemana, todoElSemestre = false) {
+  const idioma = obtenerIdiomaActual();
+  if (todoElSemestre) {
+    return ({ en: "the whole semester", it: "l'intero semestre", fr: "tout le semestre" })[idioma] || "todo el semestre";
+  }
+  if (!numeroSemana) {
+    return ({ en: "this week", it: "questa settimana", fr: "cette semaine" })[idioma] || "esta semana";
+  }
+  return ({
+    en: `week ${numeroSemana}`,
+    it: `la settimana ${numeroSemana}`,
+    fr: `la semaine ${numeroSemana}`,
+    es: `la semana ${numeroSemana}`,
+  })[idioma] || `la semana ${numeroSemana}`;
+}
+
+function textoRangoConsultaTurno(turno) {
+  const datos = turno.consultaRangoDatos;
+  if (datos?.todoElSemestre) return textoSemanaEnIdioma(null, true);
+  if (datos) {
+    const semana = textoSemanaEnIdioma(datos.numeroSemana);
+    if (!datos.inicioISO || !datos.finISO) return semana;
+    return `${semana} (${formatearRangoConsulta(fechaLocalDesdeISO(datos.inicioISO), fechaLocalDesdeISO(datos.finISO))})`;
+  }
+
+  // Compatibilidad con turnos guardados antes de almacenar el rango en
+  // forma estructurada: traducimos la etiqueta y conservamos sus fechas.
+  const anterior = String(turno.consultaRangoTexto || "esta semana");
+  const partes = anterior.match(/^(.*?)(\s*\([^)]*\))?$/);
+  const etiqueta = (partes?.[1] || anterior).trim();
+  const fechas = partes?.[2] || "";
+  const semana = etiqueta.match(/^(?:la\s+)?semana\s+(\d+)$/i);
+  if (semana) return `${textoSemanaEnIdioma(Number(semana[1]))}${fechas}`;
+  if (/^esta semana$/i.test(etiqueta)) return `${textoSemanaEnIdioma(null)}${fechas}`;
+  if (/^todo el semestre$/i.test(etiqueta)) return textoSemanaEnIdioma(null, true);
+  return anterior;
+}
+
+function construirEncabezadoConsultaSemana(rango, fraseItems) {
+  const idioma = obtenerIdiomaActual();
+  if (idioma === "en") return `For ${rango}, you have ${fraseItems}:`;
+  if (idioma === "it") return `Per ${rango} hai ${fraseItems}:`;
+  if (idioma === "fr") return `Pour ${rango}, tu as ${fraseItems} :`;
+  return `Para ${rango} tienes ${fraseItems}:`;
+}
+
 /**
  * Nombres/género de cada tipo de ítem, para armar frases naturales en el
  * encabezado de "tareas_eventos" cuando el usuario pidió un tipo puntual
@@ -2156,9 +2222,32 @@ const FRASES_TIPO_ITEM_PLURAL = Object.fromEntries(
 /** "estos exámenes" / "esta tarea" / "este evento" — null si tipoItem es
  * null (caso genérico, "qué tengo" sin distinguir tipo). */
 function fraseDemostrativaTipoItem(tipoItem, cantidad) {
+  const idioma = obtenerIdiomaActual();
+  const plural = cantidad !== 1;
+  const frases = {
+    en: {
+      examen: plural ? "these exams" : "this exam",
+      tarea: plural ? "these assignments" : "this assignment",
+      evento: plural ? "these events" : "this event",
+      general: plural ? `these ${cantidad} items` : "this item",
+    },
+    it: {
+      examen: plural ? "questi esami" : "questo esame",
+      tarea: plural ? "queste attività" : "questa attività",
+      evento: plural ? "questi eventi" : "questo evento",
+      general: plural ? `questi ${cantidad} elementi` : "questo elemento",
+    },
+    fr: {
+      examen: plural ? "ces examens" : "cet examen",
+      tarea: plural ? "ces devoirs" : "ce devoir",
+      evento: plural ? "ces événements" : "cet événement",
+      general: plural ? `ces ${cantidad} éléments` : "cet élément",
+    },
+  };
+  if (frases[idioma]) return frases[idioma][tipoItem] || frases[idioma].general;
+
   const f = FRASES_TIPO_ITEM[tipoItem];
   if (!f) return null;
-  const plural = cantidad !== 1;
   const sustantivo = plural ? f.plural : f.singular;
   const demostrativo = f.genero === "f" ? (plural ? "estas" : "esta") : plural ? "estos" : "este";
   return `${demostrativo} ${sustantivo}`;
@@ -2900,7 +2989,12 @@ async function mostrarResultadoEventosEnChat(resultado, turno, textoUsuario) {
   }
 
   const resumen = resultado.items.length === 1
-    ? textoAsistente("Guardé esto en tu Agenda:", "Added this to your Agenda:")
+    ? textoAsistentePorIdioma({
+      es: "Guardé esto en tu Agenda:",
+      en: "Added this to your Agenda:",
+      it: "Ho aggiunto questo alla tua Agenda:",
+      fr: "J'ai ajouté ceci à votre Agenda :",
+    })
     : textoAsistentePorIdioma({
       es: `Guardé ${resultado.items.length} cosas en tu Agenda:`,
       en: `Added ${resultado.items.length} items to your Agenda:`,
@@ -3124,9 +3218,14 @@ function mostrarResultadoConsultaEnChat(resultado, turno, textoUsuario) {
         // "alcance: todo" no tiene rango de fechas real (ver
         // resolverConsultaTareasEventos) — no hay "X - Y" que mostrar, solo
         // la etiqueta "todo el semestre" sola.
-        turno.consultaRangoTexto = resuelto.rango.inicio
-          ? `${resuelto.rango.etiqueta} (${formatearRangoConsulta(resuelto.rango.inicio, resuelto.rango.fin)})`
-          : resuelto.rango.etiqueta;
+        turno.consultaRangoDatos = resuelto.rango.inicio
+          ? {
+            numeroSemana: resuelto.rango.numeroSemana,
+            inicioISO: fechaISODesdeLocal(resuelto.rango.inicio),
+            finISO: fechaISODesdeLocal(resuelto.rango.fin),
+          }
+          : { todoElSemestre: true };
+        turno.consultaRangoTexto = textoRangoConsultaTurno(turno);
       }
     }
   }
@@ -3158,9 +3257,9 @@ function mostrarResultadoConsultaEnChat(resultado, turno, textoUsuario) {
     } else if (turno.consultaEsBusqueda) {
       mensajeVacio = "No encontré nada con ese nombre en tu Agenda — revisa si está escrito distinto, o dime la materia.";
     } else if (etiquetaTipoVacio) {
-      mensajeVacio = `¡Buenas noticias! No tienes ${etiquetaTipoVacio} para ${turno.consultaRangoTexto || "esa semana"} 🎉`;
+      mensajeVacio = `¡Buenas noticias! No tienes ${etiquetaTipoVacio} para ${textoRangoConsultaTurno(turno)} 🎉`;
     } else {
-      mensajeVacio = `No tienes nada guardado para ${turno.consultaRangoTexto || "esa semana"}.`;
+      mensajeVacio = `No tienes nada guardado para ${textoRangoConsultaTurno(turno)}.`;
     }
     agregarBurbujaAlDom(crearBurbuja("modelo", mensajeVacio));
     return;
@@ -3177,9 +3276,14 @@ function mostrarResultadoConsultaEnChat(resultado, turno, textoUsuario) {
     }
   } else {
     const fraseTipo = fraseDemostrativaTipoItem(turno.consultaTipoItem, eventosGuardados.length);
-    textoEncabezado = `Para ${turno.consultaRangoTexto} tienes ${
-      fraseTipo || (eventosGuardados.length === 1 ? "esto" : `estas ${eventosGuardados.length} cosas`)
-    }:`;
+    const rango = textoRangoConsultaTurno(turno);
+    const frase = fraseTipo || (eventosGuardados.length === 1
+      ? (obtenerIdiomaActual() === "en" ? "this item" : obtenerIdiomaActual() === "it" ? "questo elemento" : obtenerIdiomaActual() === "fr" ? "cet élément" : "esto")
+      : obtenerIdiomaActual() === "en" ? `these ${eventosGuardados.length} items`
+        : obtenerIdiomaActual() === "it" ? `questi ${eventosGuardados.length} elementi`
+          : obtenerIdiomaActual() === "fr" ? `ces ${eventosGuardados.length} éléments`
+            : `estas ${eventosGuardados.length} cosas`);
+    textoEncabezado = construirEncabezadoConsultaSemana(rango, frase);
   }
   agregarBurbujaAlDom(crearBurbuja("modelo", textoEncabezado));
   eventosGuardados.forEach((id) => agregarBurbujaAlDom(crearTarjetaEventoGuardado(id)));
@@ -3285,6 +3389,7 @@ async function manejarEnvioMensaje() {
   if (!texto) return;
 
   input.value = "";
+  ajustarAlturaInputAsistente(input);
   agregarBurbujaAlDom(crearBurbuja("usuario", texto));
   conversacionActual.push({ rol: "usuario", texto });
 
@@ -3402,12 +3507,18 @@ function construirEsqueletoAsistente(contenedor) {
   filaInput.className = "row";
   filaInput.style.gap = "8px";
   filaInput.style.flexShrink = "0";
-  const input = document.createElement("input");
+  const input = document.createElement("textarea");
   input.id = "input-asistente-mensaje";
   input.className = "form-input";
   input.placeholder = `Ejemplo: ${elegirEjemploBienvenidaAlAzar()}`;
   input.autocomplete = "off";
+  input.rows = 1;
   input.style.flex = "1";
+  input.style.minWidth = "0";
+  input.style.resize = "none";
+  input.style.lineHeight = "1.4";
+  input.style.overflowY = "hidden";
+  input.addEventListener("input", () => ajustarAlturaInputAsistente(input));
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -3429,6 +3540,7 @@ function construirEsqueletoAsistente(contenedor) {
   tarjeta.appendChild(filaInput);
 
   contenedor.appendChild(tarjeta);
+  ajustarAlturaInputAsistente(input);
   instalarObservadorVisibilidadAsistente(tarjeta);
   sincronizarEstadoAsistente();
 }
