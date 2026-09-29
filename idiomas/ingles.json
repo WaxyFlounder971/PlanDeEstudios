@@ -914,7 +914,7 @@
     "Hora": "Time",
     "Hora de inicio": "Start time",
     "Hora de inicio por defecto": "Default start time",
-    "Hora del aviso": "Notice time",
+    "Hora del aviso": "Reminder time",
     "Hora fin": "End time",
     "Hora inicio": "Start time",
     "Horario": "Schedule",
@@ -1669,6 +1669,14 @@
     "Todavía no hay ingresos de beca cargados.": "No scholarship income has been added yet.",
     "{variable} de 5 días": "{variable} of 5 days",
     "Borrar competencia": "Delete competition",
-    "Finalizar competencia": "Finish competition"
+    "Finalizar competencia": "Finish competition",
+    "Al momento": "At the time",
+    "15 min antes": "15 min before",
+    "1 hora antes": "1 hour before",
+    "1 día antes": "1 day before",
+    "3 días antes": "3 days before",
+    "{variable} seleccionados": "{variable} selected",
+    "Semanas anteriores": "Previous weeks",
+    "Entrar": "Join"
   }
 }

@@ -12,7 +12,7 @@ import { aplicarFormatoTexto } from "../core/utils.js";
 import { traducirTextoInterfaz } from "../core/i18n.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 import { abrirConfirmacion, construirPillSwitchBinario, mostrarToast } from "../ui/componentes.js";
-import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta } from "../ui/tema.js";
+import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta, obtenerModoDisenoLocal, obtenerModoTemaLocal, guardarModoDisenoLocal } from "../ui/tema.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
 import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
 import {
@@ -658,19 +658,8 @@ function construirSelectMultipleAjustes({ opciones, valoresIniciales, onCambiar 
     ? [...valoresIniciales]
     : [opciones[0]?.id].filter(Boolean);
 
-  function textoResumen() {
-    const etiquetas = opciones
-      .filter((o) => valoresActuales.includes(o.id))
-      .map((o) => traducirTextoInterfaz(o.etiqueta));
-    if (etiquetas.length === 0) return traducirTextoInterfaz("Elegir");
-    const unido = etiquetas.join(", ");
-    // Mismo umbral que el ancho típico de .select-custom-boton (ver
-    // Backup/Rango de horas) — más de eso y en vez de cortarse a la mitad
-    // se resume como cantidad, que es justo lo que este componente existe
-    // para evitar en las etiquetas individuales.
-    return unido.length > 26
-      ? traducirTextoInterfaz(`${etiquetas.length} seleccionados`)
-      : unido;
+  function opcionesSeleccionadas() {
+    return opciones.filter((o) => valoresActuales.includes(o.id));
   }
 
   const dropdown = document.createElement("div");
@@ -678,7 +667,28 @@ function construirSelectMultipleAjustes({ opciones, valoresIniciales, onCambiar 
   const boton = document.createElement("button");
   boton.type = "button";
   boton.className = "form-input select-custom-boton";
-  boton.textContent = textoResumen();
+  function pintarResumen() {
+    const seleccionadas = opcionesSeleccionadas();
+    boton.replaceChildren();
+    if (!seleccionadas.length) {
+      boton.textContent = traducirTextoInterfaz("Elegir");
+      return;
+    }
+    // Mantener cada etiqueta traducida en un nodo propio evita que el
+    // traductor automático trate toda la combinación como texto desconocido.
+    const etiquetas = seleccionadas.map((o) => traducirTextoInterfaz(o.etiqueta));
+    if (etiquetas.join(", ").length > 26) {
+      boton.textContent = traducirTextoInterfaz(`${etiquetas.length} seleccionados`);
+      return;
+    }
+    etiquetas.forEach((etiqueta, i) => {
+      if (i) boton.appendChild(document.createTextNode(", "));
+      const parte = document.createElement("span");
+      parte.textContent = etiqueta;
+      boton.appendChild(parte);
+    });
+  }
+  pintarResumen();
   const lista = document.createElement("ul");
   lista.className = "select-custom-lista oculto";
 
@@ -723,7 +733,7 @@ function construirSelectMultipleAjustes({ opciones, valoresIniciales, onCambiar 
       const check = li.querySelector(".select-custom-opcion-check");
       if (check) check.textContent = activa ? "✓" : "";
     });
-    boton.textContent = textoResumen();
+    pintarResumen();
   }
 
   opciones.forEach(({ id, etiqueta }) => {
@@ -1197,7 +1207,7 @@ function renderizarAjustes() {
     sw.textContent = paleta;
     sw.addEventListener("click", () => {
       estado.datos.configuracion.paleta = paleta;
-      aplicarPaleta(paleta, estado.datos.configuracion.modo);
+      aplicarPaleta(paleta, obtenerModoTemaLocal());
       sellarTimestamp(estado.datos.configuracion);
       marcarCambioPendiente();
       renderizarAjustes();
@@ -1223,7 +1233,7 @@ function renderizarAjustes() {
       // cualquier otro cuadro del grid — para editarla de nuevo desde cero
       // se vuelve a entrar por el flujo completo con el botón de abajo.
       estado.datos.configuracion.paleta = "personalizada";
-      aplicarPaleta("personalizada", estado.datos.configuracion.modo, personalizada.colores);
+      aplicarPaleta("personalizada", obtenerModoTemaLocal(), personalizada.colores);
       sellarTimestamp(estado.datos.configuracion);
       marcarCambioPendiente();
       renderizarAjustes();
@@ -1246,31 +1256,11 @@ function renderizarAjustes() {
     grid.appendChild(btnEditar);
   }
 
-  // v1.14.1: Modo fancy (id del elemento sigue siendo "switch-rendimiento"
-  // por compatibilidad, pero el switch en pantalla se llama "Modo fancy" —
-  // el dato de fondo (modo_rendimiento) representa lo CONTRARIO de lo que
-  // dice la etiqueta: modo_rendimiento=true significa rendimiento activo,
-  // o sea fancy APAGADO. Fix v1.16.1 (2026-08-23): antes el checkbox
-  // reflejaba modo_rendimiento tal cual, así que el switch se veía
-  // "encendido" (ON) cuando en realidad lo fancy estaba apagado — quedaba
-  // invertido contra su propia etiqueta. Se invierte acá nomás (checked =
-  // fancy activo = !modo_rendimiento) para no tocar el nombre del campo en
-  // el modelo de datos ni la migración que ya corrió para las cuentas
-  // existentes (ver rendimiento_default_v2_aplicado en core/schema.js).
-  // Reaplicado 2026-08-23 sobre la rama del antirrebote — se había perdido
-  // en esa rama porque partió de una copia anterior al fix v1.16.1.
-  //
-  // Punto 4 (ronda visual, 2026-09-12): pasa de checkbox on/off a pill
-  // switch de 2 opciones siempre visibles — "Rendimiento" se renombra a
-  // "Optimizado" solo en la ETIQUETA (pedido explícito: no hace falta
-  // renombrar el campo modo_rendimiento ni nada del modelo de datos). Se
-  // monta reemplazando el checkbox viejo por DOM en vez de tocar
-  // index.html — ver montarPillSwitch más abajo para el porqué del patrón
-  // idempotente (esta función puede volver a correr en cada render de
-  // Ajustes).
-  //
-  // Ronda 2 (mismo día): el título de la fila pasa de "Diseño" a "Calidad"
-  // (pedido explícito).
+  // Modo de calidad visual: los nombres históricos del checkbox se
+  // conservan para localizar y reemplazar su fila en el HTML, pero el valor
+  // real vive en localStorage (ver obtenerModoDisenoLocal y schema.js).
+  // Leer el antiguo campo sincronizado hacía que un repintado tras cualquier
+  // sync devolviera el pill a la opción anterior.
   montarPillSwitch(
     "switch-rendimiento",
     "pill-switch-diseno",
@@ -1279,12 +1269,14 @@ function renderizarAjustes() {
       { valor: "optimizado", texto: "Optimizado" },
       { valor: "fancy", texto: "Fancy" },
     ],
-    estado.datos.configuracion.modo_rendimiento ? "optimizado" : "fancy",
+    obtenerModoDisenoLocal(),
     (valor) => {
-      const fancyActivo = valor === "fancy";
-      estado.datos.configuracion.modo_rendimiento = !fancyActivo;
-      aplicarModoRendimiento(!fancyActivo);
-      dispararSyncConAntirrebote();
+      // Calidad visual es una preferencia local del dispositivo. Si se
+      // guardaba en configuración sincronizada, el siguiente pull fusionaba
+      // el valor anterior y renderizarAjustes devolvía el pill a la opción
+      // opuesta, aunque el cambio visual ya se hubiera aplicado.
+      const modoDiseno = guardarModoDisenoLocal(valor);
+      aplicarModoRendimiento(modoDiseno === "optimizado");
     }
   );
 
@@ -1349,18 +1341,16 @@ function renderizarAjustes() {
       { valor: "dark", texto: "Oscuro" },
       { valor: "light", texto: "Claro" },
     ],
-    estado.datos.configuracion.modo === "light" ? "light" : "dark",
+    obtenerModoTemaLocal(),
     (nuevoModo) => {
-      // Mismo criterio que el pill switch de arriba: estado en memoria +
-      // repintado de paleta instantáneos, solo el sello+sync va con
-      // antirrebote.
-      estado.datos.configuracion.modo = nuevoModo;
+      // El tema también es una preferencia local. No se persiste en la
+      // configuración de Drive: aplicarPaleta guarda el modo local y deja
+      // sincronizar únicamente los datos compartidos de la paleta.
       aplicarPaleta(
         estado.datos.configuracion.paleta,
         nuevoModo,
         estado.datos.configuracion.paleta === "personalizada" ? personalizada.colores : undefined
       );
-      dispararSyncConAntirrebote();
     }
   );
 

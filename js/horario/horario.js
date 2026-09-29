@@ -5,7 +5,7 @@
 
 import { calcularNumeroSemanaSemestre, obtenerClasesEfectivasSemana, crearDiaCronograma, sellarTimestamp } from "../core/schema.js";
 import { estado } from "../core/storage.js";
-import { obtenerIdiomaActual, obtenerLocaleInterfaz } from "../core/i18n.js";
+import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
@@ -548,7 +548,7 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minI
       ${b.profesorNombre ? `<div style="font-size:0.72rem; opacity:0.9; overflow-wrap:break-word; word-break:break-word;">${b.profesorNombre}</div>` : ""}
       ${b.aula ? `<div style="font-size:0.72rem; opacity:0.85; overflow-wrap:break-word; word-break:break-word;">${b.aula}</div>` : ""}
       ${emojiModalidad ? `<span class="horario-emoji-modalidad" title="${b.modalidad}" style="position:absolute; right:5px; bottom:3px; font-size:1.17rem; line-height:1;">${emojiModalidad}</span>` : ""}
-      ${b.enlace && cabeEntrar ? `<a href="${b.enlace}" target="_blank" rel="noopener" class="horario-btn-entrar-clase" style="position:absolute; left:5px; bottom:3px; line-height:1;" onclick="event.stopPropagation()">Entrar</a>` : ""}
+      ${b.enlace && cabeEntrar ? `<a href="${b.enlace}" target="_blank" rel="noopener" class="horario-btn-entrar-clase" style="position:absolute; left:5px; bottom:3px; line-height:1;" onclick="event.stopPropagation()">${traducirTextoInterfaz("Entrar")}</a>` : ""}
     `;
     tarjeta.addEventListener("click", (ev) => {
       ev.stopPropagation();
@@ -608,7 +608,7 @@ function abrirTarjetaInfoBloque(semestre, numeroSemana, b) {
               <div class="muted" style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.02em;">Aula</div>
               <div style="overflow-wrap:break-word;">${b.aula}</div>
             </div>` : ""}
-          ${b.enlace ? `<a href="${b.enlace}" target="_blank" rel="noopener" class="horario-btn-entrar-clase" style="display:inline-block; width:fit-content; background:${b.color}; color:#fff;">Entrar</a>` : ""}
+          ${b.enlace ? `<a href="${b.enlace}" target="_blank" rel="noopener" class="horario-btn-entrar-clase" style="display:inline-block; width:fit-content; background:${b.color}; color:#fff;">${traducirTextoInterfaz("Entrar")}</a>` : ""}
           ${b.notas ? `
             <div>
               <div class="muted" style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.02em;">Apuntes</div>

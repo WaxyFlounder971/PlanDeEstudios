@@ -911,7 +911,7 @@
     "Hora": "Heure",
     "Hora de inicio": "Heure de début",
     "Hora de inicio por defecto": "Heure de début par défaut",
-    "Hora del aviso": "Temps de préavis",
+    "Hora del aviso": "Heure du rappel",
     "Hora fin": "Heure de fin",
     "Hora inicio": "Heure de début",
     "Horario": "Calendrier",
@@ -1540,7 +1540,7 @@
     "1 hora antes": "1 h avant",
     "1 día antes": "1 jour avant",
     "3 días antes": "3 jours avant",
-    "{variable} seleccionados": "{variable} sélectionnés",
+    "{variable} seleccionados": "{variable} éléments sélectionnés",
     "Lunes": "Lundi",
     "Martes": "Mardi",
     "Miércoles": "Mercredi",
@@ -1567,6 +1567,8 @@
     "Semestre eliminado": "Semestre supprimé",
     "{variable} de 5 días": "{variable} sur 5 jours",
     "Borrar competencia": "Supprimer la compétition",
-    "Finalizar competencia": "Terminer la compétition"
+    "Finalizar competencia": "Terminer la compétition",
+    "Semanas anteriores": "Semaines précédentes",
+    "Entrar": "Rejoindre"
   }
 }

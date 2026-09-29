@@ -43,6 +43,7 @@
    ========================================================================= */
 
 import { CSS_COMPETENCIAS_VISUAL } from "./tiempo-estudio-competencias-visual-estilos.js";
+import { obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 
 const ID_ESTILOS = "te-estilos-competencias-visual";
 const CLAVE_VISTA = "te_comp_vista";
@@ -244,7 +245,7 @@ function guardarVistaPreferida(vista) {
 
 /** Formato corto de la fecha en que cerró la semana: "21 sept". */
 function fechaSemana(ms) {
-  return new Date(ms).toLocaleDateString("es", { day: "numeric", month: "short" });
+  return new Date(ms).toLocaleDateString(obtenerLocaleInterfaz(), { day: "numeric", month: "short" });
 }
 
 /* ===================== Iconos ===================== */
@@ -544,7 +545,7 @@ function pintarHistorial(hoja, podios, yoId, abrirEn) {
   hoja.cuerpo.innerHTML = `
     <div class="cp-grp">Última semana</div>
     ${semanaHTML(podios[0], 0, podios[0].semana_cerrada_en === abrirSem, yoId)}
-    ${podios.length > 1 ? `<div class="cp-grp">Semanas anteriores</div>` : ""}
+    ${podios.length > 1 ? `<div class="cp-grp">${traducirTextoInterfaz("Semanas anteriores")}</div>` : ""}
     ${podios
       .slice(1)
       .map((p, i) => semanaHTML(p, i + 1, p.semana_cerrada_en === abrirSem, yoId))
