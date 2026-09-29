@@ -691,7 +691,10 @@ function construirDetalleRacha(est) {
   lista.appendChild(barra);
 
   if (est.activa) {
-    lista.appendChild(crearFilaDetalle("Esta semana", `${cumplidosSemana} de 5 días`));
+    lista.appendChild(crearFilaDetalle(
+      traducirTextoInterfaz("Esta semana"),
+      traducirTextoInterfaz(`${cumplidosSemana} de 5 días`)
+    ));
 
     const valorDescansos = crearElemento("span", "te-racha-descansos");
     valorDescansos.appendChild(crearElemento("span", "", `${est.descansosRestantes} de ${DESCANSOS_POR_SEMANA}`));
@@ -701,9 +704,9 @@ function construirDetalleRacha(est) {
       pips.appendChild(crearElemento("span", "te-racha-pip" + (i < est.descansosRestantes ? " te-racha-pip--llena" : "")));
     }
     valorDescansos.appendChild(pips);
-    lista.appendChild(crearFilaDetalle("Días de descanso restantes", valorDescansos));
+    lista.appendChild(crearFilaDetalle(traducirTextoInterfaz("Días de descanso restantes"), valorDescansos));
 
-    lista.appendChild(crearFilaDetalle("Racha iniciada", formatearDiaISO(est.inicioISO)));
+    lista.appendChild(crearFilaDetalle(traducirTextoInterfaz("Racha iniciada"), formatearDiaISO(est.inicioISO)));
   }
   cont.appendChild(lista);
   return cont;

@@ -1275,7 +1275,7 @@ function construirSeccionBarras(cont, refrescar) {
     });
 
     for (let i = 1; i <= semanaVigente; i++) {
-      etiquetas.push(`S${i}`);
+      etiquetas.push(`${obtenerIdiomaActual() === "en" ? "W" : "S"}${i}`);
       mapasPorPunto.push(porSemana.get(i) || new Map());
     }
   }
@@ -1702,7 +1702,7 @@ function construirSeccionBarrasMateria(cont, mm, color, refrescar) {
     });
 
     for (let i = 1; i <= semanaVigente; i++) {
-      puntos.push({ etiqueta: `S${i}`, minutos: porSemana.get(i) || 0 });
+      puntos.push({ etiqueta: `${obtenerIdiomaActual() === "en" ? "W" : "S"}${i}`, minutos: porSemana.get(i) || 0 });
     }
   }
 

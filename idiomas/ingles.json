@@ -1666,6 +1666,9 @@
     "Este mes": "This month",
     "Este año": "This year",
     "Todavía no hay pagos cargados.": "No payments have been added yet.",
-    "Todavía no hay ingresos de beca cargados.": "No scholarship income has been added yet."
+    "Todavía no hay ingresos de beca cargados.": "No scholarship income has been added yet.",
+    "{variable} de 5 días": "{variable} of 5 days",
+    "Borrar competencia": "Delete competition",
+    "Finalizar competencia": "Finish competition"
   }
 }

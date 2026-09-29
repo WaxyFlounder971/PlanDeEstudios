@@ -9,6 +9,7 @@ import { actualizarIndicadorSync, forzarBackupManual, marcarCambioPendiente } fr
 import { estado } from "../core/storage.js";
 import { copiarPromptConAviso } from "../core/clipboard.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
+import { traducirTextoInterfaz } from "../core/i18n.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 import { abrirConfirmacion, construirPillSwitchBinario, mostrarToast } from "../ui/componentes.js";
 import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta } from "../ui/tema.js";
@@ -660,14 +661,16 @@ function construirSelectMultipleAjustes({ opciones, valoresIniciales, onCambiar 
   function textoResumen() {
     const etiquetas = opciones
       .filter((o) => valoresActuales.includes(o.id))
-      .map((o) => o.etiqueta);
-    if (etiquetas.length === 0) return "Elegir";
+      .map((o) => traducirTextoInterfaz(o.etiqueta));
+    if (etiquetas.length === 0) return traducirTextoInterfaz("Elegir");
     const unido = etiquetas.join(", ");
     // Mismo umbral que el ancho típico de .select-custom-boton (ver
     // Backup/Rango de horas) — más de eso y en vez de cortarse a la mitad
     // se resume como cantidad, que es justo lo que este componente existe
     // para evitar en las etiquetas individuales.
-    return unido.length > 26 ? `${etiquetas.length} seleccionados` : unido;
+    return unido.length > 26
+      ? traducirTextoInterfaz(`${etiquetas.length} seleccionados`)
+      : unido;
   }
 
   const dropdown = document.createElement("div");
@@ -1137,8 +1140,13 @@ function inicializarAccordionAjustes() {
 function montarPillSwitch(idViejo, dataAtributo, tituloCorto, opciones, valorActivo, onCambiar) {
   const existente = document.querySelector(`[data-pill-switch="${dataAtributo}"]`);
   if (existente) {
+    const filaExistente = existente.closest(".fila-pill-switch");
+    const tituloExistente = filaExistente?.querySelector(".fila-pill-switch-titulo");
+    if (tituloExistente) tituloExistente.textContent = traducirTextoInterfaz(tituloCorto);
     existente.querySelectorAll(".pill-item").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.valor === valorActivo);
+      const opcion = opciones.find((o) => o.valor === btn.dataset.valor);
+      if (opcion) btn.textContent = traducirTextoInterfaz(opcion.texto);
     });
     const indiceActivo = opciones.findIndex((o) => o.valor === valorActivo);
     existente
@@ -1156,9 +1164,13 @@ function montarPillSwitch(idViejo, dataAtributo, tituloCorto, opciones, valorAct
 
   const titulo = document.createElement("span");
   titulo.className = "fila-pill-switch-titulo";
-  titulo.textContent = tituloCorto;
+  titulo.textContent = traducirTextoInterfaz(tituloCorto);
 
-  const pillSwitch = construirPillSwitchBinario(opciones, valorActivo, onCambiar);
+  const pillSwitch = construirPillSwitchBinario(
+    opciones.map((opcion) => ({ ...opcion, texto: traducirTextoInterfaz(opcion.texto) })),
+    valorActivo,
+    onCambiar
+  );
   pillSwitch.dataset.pillSwitch = dataAtributo;
 
   filaNueva.appendChild(titulo);

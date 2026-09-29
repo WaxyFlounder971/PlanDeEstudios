@@ -649,6 +649,10 @@ function abrirTarjetaInfoBloque(semestre, numeroSemana, b) {
   }
   document.getElementById("horario-info-editar").addEventListener("click", () => {
     cerrar();
+    // El modal informativo puede estar dentro del árbol fullscreen, pero el
+    // editor global debe moverse allí también (el listener fullscreenchange
+    // no vuelve a dispararse al abrirlo).
+    sincronizarModalesConPantallaCompleta();
     abrirModalBloqueHorario({ semestreId: semestre.id, bloqueId: b.bloqueOriginalId, numeroSemanaVista: numeroSemana });
   });
 }
@@ -1217,10 +1221,16 @@ function activarVistaIndividualAmigo(fileId, { pantallaCompleta = true } = {}) {
 
   if (pantallaCompleta) {
     const contenedor = document.getElementById("horario-grid-contenedor");
-    contenedor?.requestFullscreen?.().catch(() => {
-      // Sin soporte o el navegador lo bloqueó - la vista sigue activa igual,
-      // solo sin el modo pantalla completa nativo.
-    });
+    try {
+      const solicitud = contenedor?.requestFullscreen?.();
+      if (solicitud && typeof solicitud.catch === "function") {
+        solicitud.catch(() => mostrarToast("No se pudo abrir el horario en pantalla completa"));
+      } else if (!solicitud) {
+        mostrarToast("La pantalla completa no está disponible en este navegador");
+      }
+    } catch (_error) {
+      mostrarToast("No se pudo abrir el horario en pantalla completa");
+    }
   }
 
   // Best-effort, mismo criterio que activarModoConjunto: refresca el
@@ -2302,7 +2312,17 @@ function inicializarHorario() {
     btnPantallaCompleta.addEventListener("click", () => {
       if (!contenedor) return;
       if (document.fullscreenElement) document.exitFullscreen();
-      else contenedor.requestFullscreen?.();
+      else if (contenedor.requestFullscreen) {
+        try {
+          Promise.resolve(contenedor.requestFullscreen()).catch(() => {
+            mostrarToast("No se pudo abrir el horario en pantalla completa");
+          });
+        } catch (_error) {
+          mostrarToast("No se pudo abrir el horario en pantalla completa");
+        }
+      } else {
+        mostrarToast("La pantalla completa no está disponible en este navegador");
+      }
     });
 
     // FIX (pedido explícito: "debe existir un botón de salir de pantalla
