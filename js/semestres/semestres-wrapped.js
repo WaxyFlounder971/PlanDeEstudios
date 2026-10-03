@@ -1,10 +1,31 @@
 import { estado } from "../core/storage.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { sellarTimestamp } from "../core/schema.js";
+import { obtenerEstadoEfectivoSemestre, sellarTimestamp } from "../core/schema.js";
 import { obtenerIdiomaActual, obtenerLocaleInterfaz } from "../core/i18n.js";
 
 const fechaLocal = (iso) => /^\d{4}-\d{2}-\d{2}$/.test(iso || "") ? new Date(`${iso}T00:00:00`) : null;
 const aISO = (fecha) => `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
+
+const TRADUCCIONES_EXTRA = {
+  pt: {
+    "minutos": "minutos", "horas": "horas", "Sin notas registradas": "Sem notas registradas",
+    "Aún no hay notas": "Ainda não há notas", "Tu semestre": "Seu semestre",
+    "Wrapped de": "Resumo do semestre de", "Cerrar Wrapped": "Fechar resumo",
+    "Saltar / cerrar": "Pular / fechar", "Siguiente →": "Próximo →", "Terminar ✓": "Concluir ✓",
+  },
+  de: {
+    "minutos": "Minuten", "horas": "Stunden", "Sin notas registradas": "Keine Noten eingetragen",
+    "Aún no hay notas": "Noch keine Noten", "Tu semestre": "Dein Semester",
+    "Wrapped de": "Semester-Rückblick: ", "Cerrar Wrapped": "Rückblick schließen",
+    "Saltar / cerrar": "Überspringen / schließen", "Siguiente →": "Weiter →", "Terminar ✓": "Fertig ✓",
+  },
+  ja: {
+    "minutos": "分", "horas": "時間", "Sin notas registradas": "記録された成績はありません",
+    "Aún no hay notas": "成績はまだありません", "Tu semestre": "あなたの学期",
+    "Wrapped de": "学期のまとめ：", "Cerrar Wrapped": "まとめを閉じる",
+    "Saltar / cerrar": "スキップ / 閉じる", "Siguiente →": "次へ →", "Terminar ✓": "完了 ✓",
+  },
+};
 
 function rangoSemestre(semestre) {
   const inicio = fechaLocal(semestre?.fecha_inicio);
@@ -76,7 +97,11 @@ function mostrarWrappedSemestre(semestreId, { automatico = false } = {}) {
   if (!semestre) return false;
   const datos = calcularDatosWrappedSemestre(semestre);
   const idioma = obtenerIdiomaActual();
-  const texto = (es, en, it, fr) => ({ es, en, it, fr })[idioma] || es;
+  const texto = (es, en, it, fr) => {
+    const traduccion = ({ es, en, it, fr })[idioma];
+    if (traduccion) return traduccion;
+    return (TRADUCCIONES_EXTRA[idioma] || {})[es] || es;
+  };
   const n = (valor) => new Intl.NumberFormat(obtenerLocaleInterfaz(), { maximumFractionDigits: 1 }).format(valor);
   const tiempo = datos.minutosEstudiados < 60
     ? `${datos.minutosEstudiados} ${texto("minutos", "minutes", "minuti", "minutes")}`
@@ -87,8 +112,8 @@ function mostrarWrappedSemestre(semestreId, { automatico = false } = {}) {
   const diapositivas = [
     [texto("Tu semestre en números", "Your semester in numbers", "Il tuo semestre in numeri", "Votre semestre en chiffres"), String(datos.materias), texto("materias llevadas", "courses taken", "materie seguite", "matières suivies")],
     [texto("El promedio del semestre", "Your semester average", "La media del semestre", "La moyenne du semestre"), promedio, texto("promedio de notas", "grade average", "media dei voti", "moyenne des notes")],
-    [texto("Tu mejor resultado", "Your best result", "Il tuo risultato migliore", "Votre meilleur résultat"), mejor, texto("mejor nota registrada", "highest recorded grade", "voto più alto", "meilleure note enregistrée")],
-    [texto("Un reto para la próxima", "A challenge for next time", "Una sfida per la prossima volta", "Un défi pour la prochaine fois"), peor, texto("nota más baja registrada", "lowest recorded grade", "voto più basso", "note la plus basse")],
+    [texto("Tu mejor resultado", "Your best result", "Il tuo risultato migliore", "Votre meilleur résultat"), mejor, texto("mejor nota registrada", "highest recorded grade", "voto più alto registrato", "meilleure note enregistrée")],
+    [texto("Un reto para la próxima", "A challenge for next time", "Una sfida per la prossima volta", "Un défi pour la prochaine fois"), peor, texto("nota más baja registrada", "lowest recorded grade", "voto più basso registrato", "note la plus basse")],
     [texto("Todo lo que organizaste", "Everything you organized", "Tutto ciò che hai organizzato", "Tout ce que vous avez organisé"), String(datos.tareas), texto("tareas y proyectos", "assignments and projects", "compiti e progetti", "tâches et projets")],
     [texto("Momentos de evaluación", "Assessment moments", "Momenti di valutazione", "Moments d’évaluation"), String(datos.examenes), texto("exámenes", "exams", "esami", "examens")],
     [texto("Cada paso cuenta", "Every step counts", "Ogni passo conta", "Chaque étape compte"), `${datos.completadas} · ${datos.pendientes} · ${datos.perdidas}`, texto("completadas · pendientes · perdidas", "completed · pending · missed", "completati · in sospeso · persi", "terminées · en attente · manquées")],
@@ -112,7 +137,7 @@ function mostrarWrappedSemestre(semestreId, { automatico = false } = {}) {
   const cerrar = document.createElement("button"); cerrar.type = "button"; cerrar.textContent = "×"; cerrar.setAttribute("aria-label", texto("Cerrar Wrapped", "Close Wrapped", "Chiudi Wrapped", "Fermer Wrapped")); cerrar.style.cssText = "font-size:1.8rem;color:inherit;background:transparent;border:0;cursor:pointer;";
   head.append(titleSemestre, cerrar);
   const content = document.createElement("div"); content.setAttribute("aria-live", "polite"); content.style.cssText = "padding:24px 0;animation:wrapped-entrada .35s ease both;";
-  const number = document.createElement("div"); number.style.cssText = "font-size:clamp(3.5rem,13vw,7.5rem);font-weight:900;line-height:1.05;letter-spacing:-.06em;overflow-wrap:anywhere;";
+  const number = document.createElement("div"); number.style.cssText = "font-size:clamp(3.5rem,13vw,7.5rem);font-weight:900;line-height:1.05;letter-spacing:-.06em;overflow-wrap:break-word;word-break:normal;hyphens:auto;";
   const sub = document.createElement("p"); sub.style.cssText = "font-size:clamp(1.1rem,4vw,1.6rem);line-height:1.5;color:#ffffffc7;";
   const kicker = document.createElement("p"); kicker.style.cssText = "text-transform:uppercase;letter-spacing:.16em;color:#c4b5fd;font-size:.82rem;font-weight:700;";
   content.append(kicker, number, sub);
@@ -127,6 +152,9 @@ function mostrarWrappedSemestre(semestreId, { automatico = false } = {}) {
   function pintar() {
     const [titulo, valor, detalle] = diapositivas[indice];
     kicker.textContent = titulo; number.textContent = valor; sub.textContent = detalle;
+    const textoLargo = indice === 2 || indice === 3;
+    number.style.fontSize = textoLargo ? "clamp(1.8rem,7vw,3.25rem)" : "clamp(3.5rem,13vw,7.5rem)";
+    number.style.letterSpacing = textoLargo ? "-.035em" : "-.06em";
     counter.textContent = `${indice + 1} / ${diapositivas.length}`;
     bars.forEach((b, i) => { b.style.background = i <= indice ? "#c4b5fd" : "#ffffff35"; });
     next.textContent = indice === diapositivas.length - 1 ? texto("Terminar ✓", "Finish ✓", "Fine ✓", "Terminer ✓") : texto("Siguiente →", "Next →", "Avanti →", "Suivant →");
@@ -144,6 +172,7 @@ function mostrarWrappedSemestre(semestreId, { automatico = false } = {}) {
 }
 
 function esWrappedPendiente(semestre, hoy = new Date()) {
+  if (!esSemestreActualMasReciente(semestre, hoy)) return false;
   const rango = rangoSemestre(semestre);
   if (!rango || semestre.wrapped_mostrado_en) return false;
   const manana = new Date(hoy); manana.setHours(0, 0, 0, 0);
@@ -152,6 +181,7 @@ function esWrappedPendiente(semestre, hoy = new Date()) {
 }
 
 function semestreFinalizadoParaWrapped(semestre, hoy = new Date()) {
+  if (!esSemestreActualMasReciente(semestre, hoy)) return false;
   const rango = rangoSemestre(semestre);
   if (!rango) return false;
   const fin = new Date(rango.fin); fin.setHours(23, 59, 59, 999);
@@ -172,6 +202,17 @@ function revisarWrappedAutomatico() {
   };
   window.setTimeout(intentar, 900);
   return true;
+}
+
+function esSemestreActualMasReciente(semestre, hoy = new Date()) {
+  const hoyISO = aISO(hoy);
+  const semestres = (estado.datos?.semestres || [])
+    .filter((s) => fechaLocal(s.fecha_inicio) && s.fecha_inicio <= hoyISO);
+  if (!semestres.length) return false;
+  const marcadosActuales = semestres.filter((s) => obtenerEstadoEfectivoSemestre(s) === "actual");
+  const grupo = marcadosActuales.length ? marcadosActuales : semestres;
+  grupo.sort((a, b) => String(b.fecha_inicio).localeCompare(String(a.fecha_inicio)));
+  return grupo[0]?.id === semestre?.id;
 }
 
 function agregarEstilosWrapped() {

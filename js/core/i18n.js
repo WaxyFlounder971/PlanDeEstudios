@@ -247,6 +247,15 @@ function renderizarSelector() {
   const boton = document.getElementById("selector-idioma-boton");
   const lista = document.getElementById("selector-idioma-lista");
   if (!selector || !boton || !lista) return;
+  // El selector debe estar disponible desde cualquier sección y también en
+  // la pantalla de inicio; se ancla al viewport, en la esquina inferior.
+  const contenedor = selector.parentElement;
+  if (contenedor && contenedor.id !== "selector-idioma-global") {
+    contenedor.id = "selector-idioma-global";
+    document.body.appendChild(contenedor);
+  }
+  boton.title = "Idioma";
+  boton.setAttribute("aria-label", "Idioma");
   lista.replaceChildren();
   for (const idioma of idiomasDisponibles) {
     const opcion = document.createElement("li");
