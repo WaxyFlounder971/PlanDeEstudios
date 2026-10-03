@@ -105,6 +105,10 @@
   html { font-size: 14.4px; }
 }
 
+html[data-text-size="pequeno"] { font-size: 14px !important; }
+html[data-text-size="mediano"] { font-size: 16px !important; }
+html[data-text-size="grande"] { font-size: 18px !important; }
+
 html, body {
   margin: 0;
   padding: 0;
@@ -132,6 +136,7 @@ body {
     radial-gradient(circle at 50% 100%, var(--accent-glow-1) 0%, transparent 55%);
   background-attachment: fixed;
   min-height: 100vh;
+  overflow-wrap: anywhere;
 }
 
 h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 700; margin: 0 0 8px; }

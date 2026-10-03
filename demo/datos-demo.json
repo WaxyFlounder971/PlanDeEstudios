@@ -1,0 +1,1048 @@
+{
+  "perfil": {
+    "nombre": "Lucía Mora (demo)",
+    "correo": "lucia.mora@example.invalid",
+    "foto_url": null,
+    "carnet": null
+  },
+  "configuracion": {
+    "paleta": "azul",
+    "plan_activo_id": "ucr-cp-plan5",
+    "gemini_api_key": null,
+    "modo_hardcore": false,
+    "navegacion_oculta": [],
+    "navegacion_orden": [],
+    "mostrar_tiempo_estudio_en_agenda": true
+  },
+  "planes_estudio": [
+    {
+      "id": "ucr-cp-plan5",
+      "nombre_carrera": "Bachillerato y Licenciatura en Ciencias Políticas",
+      "universidad": {
+        "nombre_completo": "Universidad de Costa Rica",
+        "siglas": "UCR"
+      },
+      "codigo_plan": "340301 · Plan 5",
+      "tipo_titulo": "Bachillerato y Licenciatura",
+      "parametros_universidad": {
+        "nombre_bloque": "Ciclo",
+        "semanas_por_bloque": 16,
+        "escala_notas": 100,
+        "formula_ponderado": "creditos",
+        "horario_inicio_default": "07:30",
+        "horario_duracion_bloque_min": 50,
+        "nota_aprobacion": 70,
+        "redondeo_activo": true,
+        "tipos_horas": [
+          "Teoría",
+          "Práctica",
+          "Laboratorio",
+          "Teoría-Práctica"
+        ]
+      },
+      "categorias": [
+        {
+          "id": "cat-obligatorias",
+          "nombre": "Obligatorias",
+          "color": "#6366f1"
+        },
+        {
+          "id": "cat-optativas",
+          "nombre": "Optativas",
+          "color": "#14b8a6"
+        }
+      ],
+      "materias": [
+        {
+          "id": "CP1501",
+          "codigo": "CP-1501",
+          "nombre": "Epistemología y Lógica del Pensamiento para Ciencia Política",
+          "creditos": 3,
+          "horas": {
+            "Teoría": 3,
+            "Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría-Práctica": 0
+          },
+          "bloque": 1,
+          "requisitos": null,
+          "correquisitos": null,
+          "categoria_id": "cat-obligatorias",
+          "estado": "aprobado",
+          "es_optativa": false,
+          "sin_definir": false
+        },
+        {
+          "id": "CP1504",
+          "codigo": "CP-1504",
+          "nombre": "El Poder desde la Ciencia Política",
+          "creditos": 3,
+          "horas": {
+            "Teoría": 3,
+            "Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría-Práctica": 0
+          },
+          "bloque": 1,
+          "estado": "aprobado",
+          "categoria_id": "cat-obligatorias"
+        },
+        {
+          "id": "CP1502",
+          "codigo": "CP-1502",
+          "nombre": "Instituciones Públicas y Comunidad Política en Costa Rica",
+          "creditos": 3,
+          "horas": {
+            "Teoría": 3,
+            "Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría-Práctica": 0
+          },
+          "bloque": 2,
+          "requisitos": {
+            "tipo": "codigo",
+            "valor": "CP-1504"
+          },
+          "estado": "aprobado",
+          "categoria_id": "cat-obligatorias"
+        },
+        {
+          "id": "CP1503",
+          "codigo": "CP-1503",
+          "nombre": "Introducción al Diseño de Investigación",
+          "creditos": 3,
+          "horas": {
+            "Teoría": 0,
+            "Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría-Práctica": 3
+          },
+          "bloque": 2,
+          "requisitos": {
+            "tipo": "codigo",
+            "valor": "CP-1501"
+          },
+          "estado": "aprobado",
+          "categoria_id": "cat-obligatorias"
+        },
+        {
+          "id": "CP2001",
+          "codigo": "CP-2001",
+          "nombre": "Estado y Gestión Pública",
+          "creditos": 3,
+          "horas": {
+            "Teoría": 3,
+            "Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría-Práctica": 0
+          },
+          "bloque": 3,
+          "estado": "aprobado",
+          "categoria_id": "cat-obligatorias"
+        },
+        {
+          "id": "CP2002",
+          "codigo": "CP-2002",
+          "nombre": "Aspectos Políticos de la Macroeconomía",
+          "creditos": 3,
+          "horas": {
+            "Teoría": 3,
+            "Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría-Práctica": 0
+          },
+          "bloque": 3,
+          "estado": "aprobado",
+          "categoria_id": "cat-obligatorias"
+        },
+        {
+          "id": "CP2003",
+          "codigo": "CP-2003",
+          "nombre": "Aspectos Políticos del Derecho Constitucional",
+          "creditos": 3,
+          "horas": {
+            "Teoría": 3,
+            "Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría-Práctica": 0
+          },
+          "bloque": 3,
+          "estado": "aprobado",
+          "categoria_id": "cat-obligatorias"
+        },
+        {
+          "id": "CP2004",
+          "codigo": "CP-2004",
+          "nombre": "Análisis Político Cuantitativo I",
+          "creditos": 3,
+          "horas": {
+            "Teoría": 0,
+            "Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría-Práctica": 3
+          },
+          "bloque": 3,
+          "estado": "cursando",
+          "categoria_id": "cat-obligatorias"
+        },
+        {
+          "id": "CP2005",
+          "codigo": "CP-2005",
+          "nombre": "Ideas Políticas y sus Alcances I",
+          "creditos": 3,
+          "horas": {
+            "Teoría": 3,
+            "Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría-Práctica": 0
+          },
+          "bloque": 3,
+          "estado": "cursando",
+          "categoria_id": "cat-obligatorias"
+        },
+        {
+          "id": "CP2006",
+          "codigo": "CP-2006",
+          "nombre": "Teoría Política Contemporánea",
+          "creditos": 3,
+          "horas": {
+            "Teoría": 3,
+            "Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría-Práctica": 0
+          },
+          "bloque": 4,
+          "estado": "pendiente",
+          "categoria_id": "cat-obligatorias"
+        },
+        {
+          "id": "CP2007",
+          "codigo": "CP-2007",
+          "nombre": "Investigación con Enfoque Cuantitativo II",
+          "creditos": 3,
+          "horas": {
+            "Teoría": 0,
+            "Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría-Práctica": 3
+          },
+          "bloque": 4,
+          "estado": "pendiente",
+          "categoria_id": "cat-obligatorias"
+        },
+        {
+          "id": "CP3001",
+          "codigo": "CP-3001",
+          "nombre": "Investigación con Enfoque Cualitativo I",
+          "creditos": 3,
+          "horas": {
+            "Teoría": 0,
+            "Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría-Práctica": 3
+          },
+          "bloque": 5,
+          "estado": "pendiente",
+          "categoria_id": "cat-obligatorias"
+        },
+        {
+          "id": "CP3002",
+          "codigo": "CP-3002",
+          "nombre": "Cultura Política",
+          "creditos": 3,
+          "horas": {
+            "Teoría": 3,
+            "Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría-Práctica": 0
+          },
+          "bloque": 5,
+          "estado": "pendiente",
+          "categoria_id": "cat-obligatorias"
+        },
+        {
+          "id": "CP3003",
+          "codigo": "CP-3003",
+          "nombre": "Economía Política Global y Desarrollo",
+          "creditos": 3,
+          "horas": {
+            "Teoría": 3,
+            "Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría-Práctica": 0
+          },
+          "bloque": 5,
+          "estado": "pendiente",
+          "categoria_id": "cat-obligatorias"
+        },
+        {
+          "id": "OPT-ID-1",
+          "codigo": "OPT-",
+          "nombre": "Curso Optativo de Idioma · Francés I",
+          "creditos": 4,
+          "horas": {
+            "Teoría": 3,
+            "Práctica": 1,
+            "Laboratorio": 0,
+            "Teoría-Práctica": 0
+          },
+          "bloque": 1,
+          "estado": "pendiente",
+          "es_optativa": true,
+          "categoria_id": "cat-optativas"
+        },
+        {
+          "id": "OPT1019-A",
+          "codigo": "OPT1019",
+          "nombre": "Grupo Optativo Interdisciplinario: Gobernanza y Territorio",
+          "creditos": 3,
+          "horas": {
+            "Teoría": 2,
+            "Práctica": 1,
+            "Laboratorio": 0,
+            "Teoría-Práctica": 0
+          },
+          "bloque": 5,
+          "estado": "pendiente",
+          "es_optativa": true,
+          "categoria_id": "cat-optativas"
+        },
+        {
+          "id": "CP-LARGO",
+          "codigo": "CP-9999",
+          "nombre": "Seminario Integrador sobre Instituciones, Participación Ciudadana, Democracia Local y Políticas Públicas en Contextos de Transformación Social",
+          "creditos": 3,
+          "horas": {
+            "Teoría": 2,
+            "Práctica": 1,
+            "Laboratorio": 0,
+            "Teoría-Práctica": 0
+          },
+          "bloque": 8,
+          "estado": "pendiente",
+          "es_optativa": true,
+          "categoria_id": "cat-optativas"
+        }
+      ],
+      "optativas_disponibles": [
+        {
+          "id": "OPT-ID-2",
+          "codigo": "OPT-",
+          "nombre": "Curso Optativo de Idioma · Italiano I",
+          "creditos": 4,
+          "bloque": 2,
+          "estado": "pendiente",
+          "es_optativa": true,
+          "sin_definir": true
+        }
+      ]
+    }
+  ],
+  "semestres": [
+    {
+      "id": "sem-demo-anterior",
+      "plan_estudio_id": [
+        "ucr-cp-plan5"
+      ],
+      "nombre": "I Ciclo 2026 · cerrado",
+      "fecha_inicio": "2026-03-09",
+      "duracion_semanas": 16,
+      "estado_manual": "pasado",
+      "materias_matriculadas": [
+        {
+          "id": "mm-cp1501",
+          "materia_id": "CP1501",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": 91,
+          "nota_final_manual": false,
+          "resultado": "aprobado",
+          "creditos": 3,
+          "criterios": [],
+          "profesor_ids": [
+            "prof-ines"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": null,
+            "pomodoro": null,
+            "color": null,
+            "dias_estudio": null
+          }
+        },
+        {
+          "id": "mm-cp1504",
+          "materia_id": "CP1504",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": 83,
+          "nota_final_manual": false,
+          "resultado": "aprobado",
+          "creditos": 3,
+          "criterios": [],
+          "profesor_ids": [
+            "prof-marcos"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": null,
+            "pomodoro": null,
+            "color": null,
+            "dias_estudio": null
+          }
+        },
+        {
+          "id": "mm-cp1502",
+          "materia_id": "CP1502",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": 74,
+          "nota_final_manual": false,
+          "resultado": "aprobado",
+          "creditos": 3,
+          "criterios": [],
+          "profesor_ids": [
+            "prof-ines"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": null,
+            "pomodoro": null,
+            "color": null,
+            "dias_estudio": null
+          }
+        },
+        {
+          "id": "mm-cp1503",
+          "materia_id": "CP1503",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": 68,
+          "nota_final_manual": false,
+          "resultado": "reprobado",
+          "creditos": 3,
+          "criterios": [],
+          "profesor_ids": [
+            "prof-elena"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": null,
+            "pomodoro": null,
+            "color": null,
+            "dias_estudio": null
+          }
+        },
+        {
+          "id": "mm-optid",
+          "materia_id": "OPT-ID-1",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": 88,
+          "nota_final_manual": false,
+          "resultado": "aprobado",
+          "creditos": 4,
+          "criterios": [],
+          "profesor_ids": [
+            "prof-marcos"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": null,
+            "pomodoro": null,
+            "color": null,
+            "dias_estudio": null
+          }
+        },
+        {
+          "id": "mm-cp2006",
+          "materia_id": "CP2006",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": 76,
+          "nota_final_manual": false,
+          "resultado": "aprobado",
+          "creditos": 3,
+          "criterios": [],
+          "profesor_ids": [
+            "prof-ines"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": null,
+            "pomodoro": null,
+            "color": null,
+            "dias_estudio": null
+          }
+        },
+        {
+          "id": "mm-cp2007",
+          "materia_id": "CP2007",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": 82,
+          "nota_final_manual": false,
+          "resultado": "aprobado",
+          "creditos": 3,
+          "criterios": [],
+          "profesor_ids": [
+            "prof-ines"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": null,
+            "pomodoro": null,
+            "color": null,
+            "dias_estudio": null
+          }
+        },
+        {
+          "id": "mm-cp3001",
+          "materia_id": "CP3001",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": 89,
+          "nota_final_manual": false,
+          "resultado": "aprobado",
+          "creditos": 3,
+          "criterios": [],
+          "profesor_ids": [
+            "prof-ines"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": null,
+            "pomodoro": null,
+            "color": null,
+            "dias_estudio": null
+          }
+        },
+        {
+          "id": "mm-cp3002",
+          "materia_id": "CP3002",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": 71,
+          "nota_final_manual": false,
+          "resultado": "aprobado",
+          "creditos": 3,
+          "criterios": [],
+          "profesor_ids": [
+            "prof-ines"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": null,
+            "pomodoro": null,
+            "color": null,
+            "dias_estudio": null
+          }
+        },
+        {
+          "id": "mm-cp3003",
+          "materia_id": "CP3003",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": 93,
+          "nota_final_manual": false,
+          "resultado": "aprobado",
+          "creditos": 3,
+          "criterios": [],
+          "profesor_ids": [
+            "prof-ines"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": null,
+            "pomodoro": null,
+            "color": null,
+            "dias_estudio": null
+          }
+        }
+      ],
+      "bloques_horario": []
+    },
+    {
+      "id": "sem-demo-actual",
+      "plan_estudio_id": [
+        "ucr-cp-plan5"
+      ],
+      "nombre": "II Ciclo 2026 · en curso",
+      "fecha_inicio": "2026-08-10",
+      "duracion_semanas": 16,
+      "estado_manual": "actual",
+      "materias_matriculadas": [
+        {
+          "id": "mm-cp2001",
+          "materia_id": "CP2001",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": null,
+          "creditos": 3,
+          "criterios": [
+            {
+              "id": "crit-1",
+              "nombre": "Evaluaciones",
+              "valor_total_porcentaje": 100,
+              "asignaciones": [
+                {
+                  "id": "asig-1",
+                  "nombre": "Ensayo de política pública",
+                  "nota": 88,
+                  "valor_porcentaje": 30
+                },
+                {
+                  "id": "asig-2",
+                  "nombre": "Examen parcial",
+                  "nota": null,
+                  "valor_porcentaje": 30
+                }
+              ]
+            }
+          ],
+          "profesor_ids": [
+            "prof-ines"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": 5,
+            "color": "#6366f1"
+          }
+        },
+        {
+          "id": "mm-cp2002",
+          "materia_id": "CP2002",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": null,
+          "creditos": 3,
+          "criterios": [],
+          "profesor_ids": [
+            "prof-marcos"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": 4,
+            "color": "#14b8a6"
+          }
+        },
+        {
+          "id": "mm-cp2003",
+          "materia_id": "CP2003",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": null,
+          "creditos": 3,
+          "criterios": [],
+          "profesor_ids": [
+            "prof-elena"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": null,
+            "pomodoro": null,
+            "color": null,
+            "dias_estudio": null
+          }
+        },
+        {
+          "id": "mm-cp2004",
+          "materia_id": "CP2004",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": null,
+          "creditos": 3,
+          "criterios": [],
+          "profesor_ids": [
+            "prof-marcos"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": null,
+            "pomodoro": null,
+            "color": null,
+            "dias_estudio": null
+          }
+        },
+        {
+          "id": "mm-cp2005",
+          "materia_id": "CP2005",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": null,
+          "creditos": 3,
+          "criterios": [],
+          "profesor_ids": [
+            "prof-ines"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": null,
+            "pomodoro": null,
+            "color": null,
+            "dias_estudio": null
+          }
+        },
+        {
+          "id": "mm-opt1019",
+          "materia_id": "OPT1019-A",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": null,
+          "creditos": 3,
+          "criterios": [],
+          "profesor_ids": [
+            "prof-elena"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": null,
+            "pomodoro": null,
+            "color": null,
+            "dias_estudio": null
+          }
+        }
+      ],
+      "bloques_horario": [
+        {
+          "id": "bh-1",
+          "materia_id": "CP2001",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "grupo": "02",
+          "profesor_id": "prof-ines",
+          "color": "#6366f1",
+          "dias": [
+            {
+              "dia": "L",
+              "hora_inicio": "08:00",
+              "hora_fin": "09:50",
+              "modalidad": "presencial",
+              "aula": "Aula 204, Facultad de Ciencias Sociales"
+            },
+            {
+              "dia": "J",
+              "hora_inicio": "08:00",
+              "hora_fin": "09:50",
+              "modalidad": "presencial",
+              "aula": "Aula 204, Facultad de Ciencias Sociales"
+            }
+          ]
+        },
+        {
+          "id": "bh-2",
+          "materia_id": "CP2002",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "grupo": "01",
+          "profesor_id": "prof-marcos",
+          "color": "#14b8a6",
+          "dias": [
+            {
+              "dia": "K",
+              "hora_inicio": "10:00",
+              "hora_fin": "11:50",
+              "modalidad": "virtual",
+              "aula": "https://meet.example.invalid/aula-demo"
+            }
+          ]
+        },
+        {
+          "id": "bh-3",
+          "materia_id": "CP2003",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "grupo": "01",
+          "profesor_id": "prof-elena",
+          "color": "#f59e0b",
+          "dias": [
+            {
+              "dia": "M",
+              "hora_inicio": "13:00",
+              "hora_fin": "14:50",
+              "modalidad": "presencial",
+              "aula": "Aula 12, Estudios Generales"
+            }
+          ]
+        },
+        {
+          "id": "bh-4",
+          "materia_id": "CP2004",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "grupo": "03",
+          "profesor_id": "prof-marcos",
+          "color": "#8b5cf6",
+          "dias": [
+            {
+              "dia": "J",
+              "hora_inicio": "15:00",
+              "hora_fin": "16:50",
+              "modalidad": "asincronica",
+              "aula": "Laboratorio de cómputo 3"
+            }
+          ]
+        },
+        {
+          "id": "bh-5",
+          "materia_id": "CP2005",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "grupo": "02",
+          "profesor_id": "prof-ines",
+          "color": "#ec4899",
+          "dias": [
+            {
+              "dia": "V",
+              "hora_inicio": "09:00",
+              "hora_fin": "10:50",
+              "modalidad": "presencial",
+              "aula": "Aula 310, Ciencias Sociales"
+            }
+          ]
+        },
+        {
+          "id": "bh-6",
+          "materia_id": "OPT1019-A",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "grupo": "01",
+          "profesor_id": "prof-elena",
+          "color": "#06b6d4",
+          "dias": [
+            {
+              "dia": "K",
+              "hora_inicio": "14:00",
+              "hora_fin": "15:50",
+              "modalidad": "virtual",
+              "aula": "https://meet.example.invalid/optativa"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "profesores": [
+    {
+      "id": "prof-ines",
+      "nombre": "Dra. Inés Valverde",
+      "materias": [
+        "CP-1501",
+        "CP-1502",
+        "CP-2001",
+        "CP-2005"
+      ],
+      "correo": "ines.valverde@example.invalid",
+      "telefono": null
+    },
+    {
+      "id": "prof-marcos",
+      "nombre": "M.Sc. Marcos Alvarado",
+      "materias": [
+        "CP-1504",
+        "CP-2002",
+        "CP-2004"
+      ],
+      "correo": "marcos.alvarado@example.invalid",
+      "telefono": null
+    },
+    {
+      "id": "prof-elena",
+      "nombre": "Dra. Elena Solís",
+      "materias": [
+        "CP-1503",
+        "CP-2003",
+        "OPT1019"
+      ],
+      "correo": "elena.solis@example.invalid",
+      "telefono": null
+    }
+  ],
+  "companeros": [
+    {
+      "id": "comp-ana",
+      "nombre_completo": "Ana Sofía Rojas",
+      "carnet": "C-00001",
+      "lista": "whitelist",
+      "materias_compartidas": [
+        "mm-cp2001",
+        "mm-cp2004"
+      ],
+      "nota": "Equipo de investigación; suele compartir apuntes."
+    },
+    {
+      "id": "comp-diego",
+      "nombre_completo": "Diego Fernández",
+      "carnet": "C-00002",
+      "lista": "whitelist",
+      "materias_compartidas": [
+        "mm-cp2002",
+        "mm-cp2005"
+      ],
+      "nota": "Compañero ficticio para la vista de Comunidad."
+    },
+    {
+      "id": "comp-caso-largo",
+      "nombre_completo": "María Fernanda del Pilar de la Cruz y Quesada",
+      "carnet": "C-00003",
+      "lista": "blacklist",
+      "materias_compartidas": [
+        "mm-cp2003"
+      ],
+      "nota": "Nombre largo deliberado para probar que la tarjeta se adapte sin cortar texto."
+    }
+  ],
+  "agenda": [
+    {
+      "id": "ag-done",
+      "tipo": "tarea",
+      "tipo_etiqueta_id": "tarea",
+      "nombre": "Lectura comentada: El Estado y sus instituciones",
+      "fecha": "2026-09-18",
+      "hora": null,
+      "materia_matriculada_id": "mm-cp2001",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Entregada en el aula virtual.",
+      "completada": true,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "ag-pending",
+      "tipo": "tarea",
+      "tipo_etiqueta_id": "proyecto",
+      "tipo_etiqueta_nombre": "Proyecto",
+      "tipo_etiqueta_color": "#a855f7",
+      "nombre": "Mapa comparativo de modelos de gobernanza local",
+      "fecha": "2026-10-08",
+      "hora": "23:59",
+      "materia_matriculada_id": "mm-opt1019",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Producto grupal de ejemplo.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "ag-lost",
+      "tipo": "tarea",
+      "tipo_etiqueta_id": "tarea",
+      "nombre": "Comentario de coyuntura política",
+      "fecha": "2026-08-28",
+      "hora": "23:59",
+      "materia_matriculada_id": "mm-cp2005",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Caso vencido hace varias semanas para probar el estado Perdida.",
+      "completada": false,
+      "perdida": true,
+      "es_feriado": false
+    },
+    {
+      "id": "ag-exam",
+      "tipo": "examen",
+      "tipo_etiqueta_id": "examen",
+      "nombre": "Examen parcial · Análisis Político Cuantitativo I",
+      "fecha": "2026-10-16",
+      "hora": "10:00",
+      "materia_matriculada_id": "mm-cp2004",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Aula 105 · llevar calculadora básica.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "ag-quiz",
+      "tipo": "examen",
+      "tipo_etiqueta_id": "quiz",
+      "tipo_etiqueta_nombre": "Quiz",
+      "tipo_etiqueta_color": "#f97316",
+      "nombre": "Quiz corto de conceptos",
+      "fecha": "2026-10-06",
+      "hora": "08:00",
+      "materia_matriculada_id": "mm-cp2001",
+      "semestre_id": "sem-demo-actual",
+      "notas": "",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "ag-long",
+      "tipo": "evento",
+      "tipo_etiqueta_id": "evento",
+      "nombre": "Conversatorio estudiantil sobre participación, representación y desafíos contemporáneos de las instituciones democráticas en comunidades rurales",
+      "fecha": "2026-10-21",
+      "hora": "17:30",
+      "materia_matriculada_id": null,
+      "semestre_id": null,
+      "notas": "Texto de longitud alta a propósito para revisar el ajuste de tarjetas y modales.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    }
+  ],
+  "finanzas_semestre": [
+    {
+      "id": "fin-demo-1",
+      "semestre_id": "sem-demo-actual",
+      "pagos_matricula": [
+        {
+          "id": "pago-1",
+          "descripcion": "Primer tracto",
+          "monto": 46100,
+          "fecha": "2026-08-20"
+        },
+        {
+          "id": "pago-2",
+          "descripcion": "Segundo tracto",
+          "monto": 46100,
+          "fecha": "2026-10-20"
+        }
+      ],
+      "ingresos_beca": [
+        {
+          "id": "beca-1",
+          "descripcion": "Beca socioeconómica · depósito 1",
+          "monto": 46150,
+          "fecha": "2026-08-18"
+        },
+        {
+          "id": "beca-2",
+          "descripcion": "Beca socioeconómica · depósito 2",
+          "monto": 46150,
+          "fecha": "2026-09-18"
+        }
+      ],
+      "_eliminados_pagos_matricula": [],
+      "_eliminados_ingresos_beca": []
+    }
+  ],
+  "gastos_u": [
+    {
+      "id": "gasto-1",
+      "nombre": "Materiales de lectura",
+      "tipo": "gasto",
+      "costo": 12500,
+      "nota": "Antología del curso",
+      "semestre_id": "sem-demo-actual",
+      "recurrente": null
+    },
+    {
+      "id": "gasto-2",
+      "nombre": "Transporte al campus",
+      "tipo": "gasto",
+      "costo": 0,
+      "nota": "Estimación mensual",
+      "semestre_id": null,
+      "recurrente": {
+        "frecuencia": "mensual",
+        "monto_por_pago": 18000,
+        "fecha_inicio": "2026-08-10",
+        "fecha_fin": null,
+        "personalizado": null
+      }
+    },
+    {
+      "id": "gasto-3",
+      "nombre": "Tutorías de estadística",
+      "tipo": "ingreso",
+      "costo": 35000,
+      "nota": "Ingreso ficticio por apoyo académico",
+      "semestre_id": null,
+      "recurrente": null
+    }
+  ],
+  "sesiones_estudio": [
+    {
+      "id": "ses-demo-1",
+      "materia_matriculada_id": "mm-cp2001",
+      "inicio": 1790611200000,
+      "fin": 1790618400000,
+      "duracion_minutos": 120,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-2",
+      "materia_matriculada_id": "mm-cp2004",
+      "inicio": 1790784000000,
+      "fin": 1790789400000,
+      "duracion_minutos": 90,
+      "origen": "manual"
+    }
+  ],
+  "tiempo_estudio_materias": [],
+  "timer_estudio_activo": null,
+  "competencias_locales": [],
+  "adjuntos": [],
+  "enlaces_rapidos": [
+    {
+      "id": "enlace-demo-1",
+      "nombre": "Calendario Académico UCR (demo)",
+      "url": "https://www.ucr.ac.cr/estudiantes/calendario.html",
+      "emoji": "📅"
+    }
+  ]
+}
