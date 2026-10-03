@@ -35,6 +35,7 @@ import {
 import { FRECUENCIAS_BACKUP_DRIVE, crearBackupDriveDefault, migrarDatosAntiguos, sellarTimestamp } from "./schema.js";
 import { fusionarDatos } from "./storage-merge.js";
 import { authListo, establecerTokenActivo, estado, guardarCacheLocal, leerTokenCacheValido } from "./storage.js";
+import { MODO_DEMO } from "./demo-mode.js";
 
 /**
  * MIGRACIÓN 2026-08-25 (reemplaza el flujo implícito + refresco silencioso
@@ -1108,6 +1109,7 @@ function marcarUltimaSincronizacionConfirmada() {
  */
 
 async function sondearCambiosRemotos(forzar = false) {
+  if (MODO_DEMO) return false;
   // FIX 2026-09-28 (causa raíz real de "no se actualizó después de
   // reconectar", reportado varias veces): este `if (document.hidden)
   // return;` cortaba la ÚNICA función que trae cambios de Drive apenas la
@@ -1200,6 +1202,7 @@ async function sondearCambiosRemotos(forzar = false) {
  */
 
 async function sincronizarAlIniciar() {
+  if (MODO_DEMO) return false;
   await authListo; // punto 5, misma condición de carrera que el resto del módulo
   if (!estado.token || !estado.fileId) return;
 
@@ -1468,6 +1471,10 @@ async function forzarBackupManual() {
 /** Se llama cada vez que se modifica algo en `estado.datos`. */
 
 function marcarCambioPendiente() {
+  if (MODO_DEMO) {
+    estado.pendienteSync = false;
+    return;
+  }
   guardarCacheLocal();
   estado.pendienteSync = true;
   // FIX blindaje 2026-09-17 (punto 1.1/1.2 de la auditoría): cada cambio
@@ -1519,6 +1526,7 @@ let sesionCerradaEnOtraPestana = false;
  * nuevo se "sube" a esa MISMA promesa en vez de arrancar una propia.
  */
 async function intentarSincronizar() {
+  if (MODO_DEMO) return false;
   if (promesaSincronizacionEnCurso) {
     // FIX blindaje 2026-09-17 (punto 1.1): antes, el llamador nuevo se
     // "subía" a la promesa en vuelo y listo. Eso alcanza para no duplicar
@@ -1672,6 +1680,7 @@ async function ejecutarUnaSincronizacion() {
  * verde), tenga o no cambios pendientes.
  */
 async function forzarSincronizacion() {
+  if (MODO_DEMO) return false;
   await sincronizarAhora();
 }
 

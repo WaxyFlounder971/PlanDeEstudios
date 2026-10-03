@@ -14,11 +14,9 @@
         aviso: overlay a pantalla completa, confeti (victoria) o lluvia
         apagada (derrota), animación de entrada de la tarjeta, y el audio.
 
-     3) AUDIO CON CARGA SEGURA (punto 3.2) — `audio/ganador.mp3` y
-        `audio/perdedor.mp3`, en la carpeta `audio/` de la raíz del repo. Si
-        el archivo no existe, no carga, o el navegador bloquea la
-        reproducción, la celebración se muestra IGUAL, sin sonido y sin
-        ningún mensaje de error: `reproducirAudioSeguro()` se traga todo.
+     3) AUDIO PERSONAL — cada participante elige archivos propios, guardados
+        como adjuntos privados de su cuenta. La app no incluye audios de
+        victoria/derrota en su código ni los envía a otros participantes.
 
    Cómo se detecta un resultado real: el Worker cierra la semana solo (cron
    por hora, anclado a la hora local del creador) y deja una fila en
@@ -43,6 +41,7 @@
 
 import { estado } from "../core/storage.js";
 import { URL_WORKER_OAUTH } from "../core/auth.js";
+import { reproducirAudioPersonal } from "./tiempo-estudio-audio-competencias.js";
 // 2026-09-21 — Rediseño: el aviso con posición/podio lo dibuja el módulo visual
 // (sin ciclos: ese módulo no importa nada de este proyecto).
 import {
@@ -55,8 +54,6 @@ import {
 
 const TIMEOUT_MS = 12000;
 const CLAVE_RESULTADO_VISTO = "te_comp_resultado_visto_"; // + id de competencia
-const RUTA_AUDIO_VICTORIA = "audio/ganador.mp3";
-const RUTA_AUDIO_DERROTA = "audio/perdedor.mp3";
 
 /**
  * INTERRUPTOR DE LOS BOTONES DE PRUEBA ("Simular victoria (prueba)" y
@@ -122,52 +119,6 @@ function marcarResultadoVisto(competenciaId, semanaCerradaEn) {
     // localStorage bloqueado (modo privado agresivo) — a lo sumo el aviso
     // vuelve a aparecer la próxima vez. No vale la pena molestar con esto.
   }
-}
-
-/* ===================== Audio (punto 3.2) ===================== */
-
-/**
- * Intenta reproducir `ruta`. Devuelve SIEMPRE un objeto con `detener()`,
- * aunque no haya sonado nada — así quien llama no tiene que preguntarse si
- * hubo audio o no.
- *
- * Todo puede fallar y todo está contemplado, en silencio:
- *   - el archivo no existe todavía (404)  → evento "error" del <audio>
- *   - el formato no lo soporta el equipo  → mismo evento
- *   - autoplay bloqueado por el navegador → la promesa de play() rechaza
- * En los 3 casos la celebración ya está en pantalla y se queda ahí; lo
- * único que falta es el sonido. Nunca se le muestra un error al usuario.
- */
-function reproducirAudioSeguro(ruta) {
-  let audio = null;
-  try {
-    audio = new Audio(ruta);
-    audio.volume = 0.7;
-    audio.addEventListener("error", () => {
-      console.warn(`[celebracion] No se pudo cargar ${ruta} — la celebración sigue sin sonido.`);
-    });
-    const promesa = audio.play();
-    if (promesa && typeof promesa.catch === "function") {
-      promesa.catch((e) => {
-        console.warn(`[celebracion] El navegador no dejó reproducir ${ruta}:`, e && e.name);
-      });
-    }
-  } catch (e) {
-    console.warn(`[celebracion] Falló el audio ${ruta} — la celebración sigue sin sonido:`, e);
-    audio = null;
-  }
-
-  return {
-    detener() {
-      if (!audio) return;
-      try {
-        audio.pause();
-        audio.currentTime = 0;
-      } catch (e) {
-        /* nada que hacer */
-      }
-    },
-  };
 }
 
 /* ===================== Confeti / animación =====================
@@ -676,7 +627,7 @@ function mostrarCelebracionResultado(resultado, alCerrar) {
     "display:flex; align-items:center; justify-content:center; padding:16px; overflow:hidden;";
 
   const confeti = lanzarConfeti(overlay, resultado.tipo);
-  const audio = reproducirAudioSeguro(esVictoria ? RUTA_AUDIO_VICTORIA : RUTA_AUDIO_DERROTA);
+  if (resultado.competenciaId) reproducirAudioPersonal(resultado.competenciaId, esVictoria ? "victoria" : "derrota");
 
   const caja = document.createElement("div");
   caja.className = "glass-card modal-card stack te-celebracion-caja";
@@ -985,6 +936,7 @@ async function detectarResultadoNuevo(competencia) {
   return {
     id: `real_${competencia.id}_${ultima.semana_cerrada_en}`,
     tipo: gane ? "victoria" : "derrota",
+    competenciaId: competencia.id,
     nombreCompetencia: competencia.nombre,
     apodoGanador: ultima.apodo,
     horas: ultima.horas,

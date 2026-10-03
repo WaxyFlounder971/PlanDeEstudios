@@ -8,6 +8,7 @@
 
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 import { estado } from "../core/storage.js";
+import { TIPOS_ETIQUETA_AGENDA_DEFAULT } from "../core/schema.js";
 import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { fechaLocalDesdeISO, obtenerPlanPorId } from "../horario/horario.js";
@@ -357,26 +358,41 @@ function formatearFechaRelativa(fecha, hoy = new Date()) {
  * DE agenda-modal.js para abrir sus modales).
  */
 function obtenerEstiloEvento(evento) {
+  const coloresEstado = estado.datos?.configuracion?.agenda_colores_estado || {};
+  const tipos = obtenerTiposEtiquetaAgenda();
+  const idEtiqueta = evento.tipo_etiqueta_id || (evento.tipo === "tarea" ? "tarea" : evento.tipo === "examen" ? "examen" : evento.es_feriado ? "feriado" : "evento");
+  const tipoEtiqueta = tipos.find((t) => t.id === idEtiqueta);
+  const etiquetaTipo = traducirTextoInterfaz(tipoEtiqueta?.nombre || evento.tipo_etiqueta_nombre || (evento.tipo === "tarea" ? "Tarea" : evento.tipo === "examen" ? "Examen" : evento.es_feriado ? "Feriado" : "Evento"));
+  const colorTipo = tipoEtiqueta?.color || evento.tipo_etiqueta_color || (evento.tipo === "tarea" ? "#eab308" : evento.tipo === "examen" ? "#ef4444" : evento.es_feriado ? "#10b981" : "#06b6d4");
   // Estado "Perdido" (2026-09-21): gris, aparte del rojo de "Examen"
   // (#ef4444) a propósito para que nunca se confundan. `esPerdida`
   // lo leen construirItemEvento y la tarjeta de info para pintar el tachado
   // con raya gris (el texto NO se atenúa, a diferencia de "Completada").
   if (evento.tipo === "tarea" && evento.perdida) {
-    return { etiqueta: "Perdida", claseBadge: "badge-perdida", colorBorde: COLOR_PERDIDA_BORDE, esPerdida: true };
+    return { etiqueta: `${etiquetaTipo} · ${traducirTextoInterfaz("Perdida")}`, claseBadge: "badge-perdida", colorBorde: coloresEstado.perdida || COLOR_PERDIDA_BORDE, colorEtiqueta: colorTipo, esPerdida: true };
   }
   if (evento.tipo === "tarea" && evento.completada) {
-    return { etiqueta: "Completada", claseBadge: "badge-info", colorBorde: "#3b82f6" };
+    return { etiqueta: `${etiquetaTipo} · ${traducirTextoInterfaz("Completada")}`, claseBadge: "badge-info", colorBorde: coloresEstado.completado || "#3b82f6", colorEtiqueta: colorTipo };
   }
   if (evento.tipo === "tarea") {
-    return { etiqueta: "Tarea", claseBadge: "badge-warning", colorBorde: "#f59e0b" };
+    return { etiqueta: etiquetaTipo, claseBadge: "badge-warning", colorBorde: coloresEstado.pendiente || colorTipo, colorEtiqueta: colorTipo };
   }
   if (evento.tipo === "examen") {
-    return { etiqueta: "Examen", claseBadge: "badge-danger", colorBorde: "#ef4444" };
+    return { etiqueta: etiquetaTipo, claseBadge: "badge-danger", colorBorde: colorTipo, colorEtiqueta: colorTipo };
   }
   if (evento.tipo === "evento" && evento.es_feriado) {
-    return { etiqueta: traducirTextoInterfaz("Feriado"), claseBadge: "badge-success", colorBorde: "#10b981" };
+    return { etiqueta: etiquetaTipo, claseBadge: "badge-success", colorBorde: colorTipo, colorEtiqueta: colorTipo };
   }
-  return { etiqueta: "Evento", claseBadge: "badge-purple", colorBorde: "#a855f7" };
+  return { etiqueta: etiquetaTipo, claseBadge: "badge-purple", colorBorde: colorTipo, colorEtiqueta: colorTipo };
+}
+
+function obtenerTiposEtiquetaAgenda() {
+  const guardados = estado.datos?.configuracion?.agenda_tipos;
+  return Array.isArray(guardados) ? guardados : TIPOS_ETIQUETA_AGENDA_DEFAULT;
+}
+
+function obtenerTipoEtiquetaAgenda(id) {
+  return obtenerTiposEtiquetaAgenda().find((tipo) => tipo.id === id) || null;
 }
 
 /**
@@ -537,6 +553,8 @@ export {
   obtenerDiasSemanaAgenda,
   obtenerDiasSemanaOrdenAgenda,
   obtenerEstiloEvento,
+  obtenerTiposEtiquetaAgenda,
+  obtenerTipoEtiquetaAgenda,
   obtenerFechaInicioSemanaAgenda,
   obtenerInicioSemanaQueContiene,
   obtenerMateriasVinculablesAgenda,

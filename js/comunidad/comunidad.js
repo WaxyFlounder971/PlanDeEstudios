@@ -3917,6 +3917,9 @@ function inicializarComunidad() {
   // de profesor dentro del popover de Semestres (ver
   // abrirPopoverProfesoresMateria).
   registrarAbrirTarjetaProfesorFlotante(abrirTarjetaProfesorFlotante);
+  // El horario tiene un botón directo de profesor; se expone la misma
+  // tarjeta flotante usada por Semestres para mantener un único flujo.
+  window.abrirTarjetaProfesorDesdeHorario = abrirTarjetaProfesorFlotante;
 }
 
 /**

@@ -36,6 +36,7 @@ import { marcarCambioPendiente, actualizarIndicadorSync } from "../core/storage-
 import { ESTADOS_MATERIA, abrirModalResolverConflicto, abrirModalResolverConflictoGenerico, agregarIndicadorConflicto } from "../plan/plan-vista-lista-tarjetas.js";
 import { abrirModalRequisito, abrirModalAsignarProfesorDesdeHistorial } from "../plan/plan-detalle.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
+import { mostrarWrappedSemestre, semestreFinalizadoParaWrapped } from "./semestres-wrapped.js";
 
 /**
  * 2026-08-09 (pedido explícito): tocar la tarjetita de un profesor DENTRO
@@ -3566,6 +3567,19 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEdita
         card.appendChild(construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambiar));
       });
     }
+  }
+
+  if (semestreFinalizadoParaWrapped(semestre)) {
+    const wrapped = document.createElement("button");
+    wrapped.type = "button";
+    wrapped.className = "btn btn-secondary";
+    wrapped.style.cssText = "width:100%;margin-top:8px;background:linear-gradient(100deg,#7c3aed,#db2777);color:#fff;border:0;";
+    wrapped.textContent = "✨ Ver Wrapped";
+    wrapped.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      mostrarWrappedSemestre(semestre.id);
+    });
+    card.appendChild(wrapped);
   }
 
   return card;

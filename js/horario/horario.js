@@ -9,7 +9,7 @@ import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } fro
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
-import { obtenerSemestresOrdenCronologico, buscarSemestreVivoPorId } from "../semestres/semestres.js";
+import { obtenerSemestresOrdenCronologico, buscarSemestreVivoPorId, navegarAMateriaMatriculada } from "../semestres/semestres.js";
 import { obtenerPlanActivo } from "../plan/plan-esquema.js";
 import {
   abrirModalBloqueHorario,
@@ -542,10 +542,12 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minI
     // del todo en vez de moverlo - no queda ninguna referencia visual a la
     // excepción en el grid de Horario.
     tarjeta.innerHTML = `
-      <div style="font-size:0.85rem; font-weight:600; line-height:1.15; display:flex; align-items:center; gap:4px; margin-bottom:2px; overflow-wrap:break-word; word-break:break-word;">
+      ${obtenerCodigoBloque(b) ? `<div class="materia-codigo" style="font-size:0.72rem; line-height:1.1; overflow-wrap:anywhere;">${obtenerCodigoBloque(b)}</div>` : ""}
+      <div style="font-size:0.85rem; font-weight:600; line-height:1.15; display:flex; align-items:center; gap:4px; margin-bottom:2px; padding-right:${b.profesor_id ? "24px" : "0"}; overflow-wrap:break-word; word-break:break-word;">
         <span>${b.nombreCorto}</span>
       </div>
       ${b.profesorNombre ? `<div style="font-size:0.72rem; opacity:0.9; overflow-wrap:break-word; word-break:break-word;">${b.profesorNombre}</div>` : ""}
+      ${b.profesor_id ? `<button type="button" class="horario-boton-profesor" aria-label="${traducirTextoInterfaz("Ver profesor")}" title="${traducirTextoInterfaz("Ver profesor")}" style="position:absolute; right:5px; top:3px; z-index:2; border:0; border-radius:50%; width:24px; height:24px; padding:0; background:rgba(0,0,0,.22); color:#fff; font:inherit; cursor:pointer;">👤</button>` : ""}
       ${b.aula ? `<div style="font-size:0.72rem; opacity:0.85; overflow-wrap:break-word; word-break:break-word;">${b.aula}</div>` : ""}
       ${emojiModalidad ? `<span class="horario-emoji-modalidad" title="${b.modalidad}" style="position:absolute; right:5px; bottom:3px; font-size:1.17rem; line-height:1;">${emojiModalidad}</span>` : ""}
       ${b.enlace && cabeEntrar ? `<a href="${b.enlace}" target="_blank" rel="noopener" class="horario-btn-entrar-clase" style="position:absolute; left:5px; bottom:3px; line-height:1;" onclick="event.stopPropagation()">${traducirTextoInterfaz("Entrar")}</a>` : ""}
@@ -553,6 +555,11 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minI
     tarjeta.addEventListener("click", (ev) => {
       ev.stopPropagation();
       abrirTarjetaInfoBloque(semestre, cacheNumeroSemana, b);
+    });
+    tarjeta.querySelector(".horario-boton-profesor")?.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const profesor = (estado.datos.profesores || []).find((p) => p.id === b.profesor_id);
+      if (profesor) window.abrirTarjetaProfesorDesdeHorario?.(profesor);
     });
     col.appendChild(tarjeta);
   });
@@ -592,6 +599,7 @@ function abrirTarjetaInfoBloque(semestre, numeroSemana, b) {
       <div style="padding:20px;">
         ${obtenerCodigoBloque(b) ? `<div class="muted" style="font-size:0.78rem;">${obtenerCodigoBloque(b)}</div>` : ""}
         <div style="font-size:1.05rem; font-weight:700; padding-right:28px; overflow-wrap:break-word;">${b.nombreCorto}</div>
+        ${materiaMatriculada ? `<button type="button" class="btn-discreto" id="horario-info-abrir-materia" style="padding:2px 0; text-align:left;">${traducirTextoInterfaz("Abrir materia")}</button>` : ""}
         <div class="muted" style="font-size:0.78rem; margin-bottom:16px;">Semana ${numeroSemana}</div>
         <div class="stack" style="gap:12px;">
           ${b.profesorNombre ? `
@@ -617,8 +625,8 @@ function abrirTarjetaInfoBloque(semestre, numeroSemana, b) {
         </div>
         <div id="horario-info-cronograma-cont"></div>
         <div style="display:flex; justify-content:space-between; gap:10px; margin-top:20px;">
-          ${materiaMatriculada ? `<button type="button" class="btn btn-secondary" id="horario-info-cronograma" style="flex:0 0 calc(50% - 5px);">Ir a Cronograma</button>` : ""}
-          <button type="button" class="btn btn-secondary" id="horario-info-editar" style="flex:0 0 calc(50% - 5px); ${materiaMatriculada ? "" : "margin-left:auto;"}">✎ Editar</button>
+          ${materiaMatriculada ? `<button type="button" class="btn btn-secondary" id="horario-info-cronograma" style="flex:0 0 calc(50% - 5px);">${traducirTextoInterfaz("Ir a Cronograma")}</button>` : ""}
+          <button type="button" class="btn btn-secondary" id="horario-info-editar" style="flex:0 0 calc(50% - 5px); ${materiaMatriculada ? "" : "margin-left:auto;"}">✎ ${traducirTextoInterfaz("Editar")}</button>
         </div>
       </div>
     </div>
@@ -639,6 +647,10 @@ function abrirTarjetaInfoBloque(semestre, numeroSemana, b) {
   const cerrar = () => overlay.remove();
   overlay.addEventListener("click", (ev) => { if (ev.target === overlay) cerrar(); });
   document.getElementById("horario-info-cerrar").addEventListener("click", cerrar);
+  document.getElementById("horario-info-abrir-materia")?.addEventListener("click", () => {
+    cerrar();
+    navegarAMateriaMatriculada(semestre.id, materiaMatriculada.id);
+  });
   const btnCronogramaMateria = document.getElementById("horario-info-cronograma");
   if (btnCronogramaMateria) {
     btnCronogramaMateria.addEventListener("click", () => {
@@ -1034,6 +1046,7 @@ function renderizarHorarioInterno() {
           color: obtenerColorBloque(c),
           nombreCorto: obtenerNombreBloque(c),
           profesorNombre: obtenerNombreProfesor(c.profesor_id),
+          profesor_id: c.profesor_id || null,
           aula: c.aula,
           enlace: c.enlace,
           modalidad: c.modalidad,

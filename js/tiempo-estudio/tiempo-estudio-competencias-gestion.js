@@ -42,6 +42,7 @@ import {
 } from "./tiempo-estudio-competencias.js";
 // 2026-09-21 — Rediseño: el menú Gestionar usa la hoja del módulo visual.
 import { abrirHoja, esc, ICONO } from "./tiempo-estudio-competencias-visual.js";
+import { abrirAjustesAudioCompetencia } from "./tiempo-estudio-audio-competencias.js";
 
 /* ===================== Menú "Gestionar" (punto 4.1) ===================== */
 
@@ -55,6 +56,8 @@ function opcionesGestion(competencia) {
   const esCreador = Boolean(competencia.es_creador);
   const finalizada = competencia.estado === "finalizada";
   const opciones = [];
+
+  opciones.push({ id: "audios", emoji: "🎵", etiqueta: "Mis audios de victoria y derrota" });
 
   if (esCreador) {
     opciones.push({ id: "renombrar", emoji: "✏️", etiqueta: "Renombrar competencia" });
@@ -152,6 +155,9 @@ function abrirModalGestionCompetencia(competencia, refrescar) {
 
 function ejecutarOpcionGestion(id, competencia, refrescar) {
   switch (id) {
+    case "audios":
+      abrirAjustesAudioCompetencia(competencia, refrescar);
+      break;
     case "renombrar":
       abrirModalRenombrarCompetencia(competencia, refrescar);
       break;

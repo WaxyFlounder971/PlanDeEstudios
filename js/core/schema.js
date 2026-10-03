@@ -11,6 +11,15 @@
  * sesión por primera vez. Esto es lo que se guarda como el archivo JSON
  * único dentro de su Google Drive (ver js/auth.js).
  */
+const TIPOS_ETIQUETA_AGENDA_DEFAULT = [
+  { id: "tarea", nombre: "Tarea", base: "tarea", color: "#eab308", activo: true, predeterminado: true },
+  { id: "examen", nombre: "Examen", base: "examen", color: "#ef4444", activo: true, predeterminado: true },
+  { id: "evento", nombre: "Evento", base: "evento", color: "#06b6d4", activo: true, predeterminado: true },
+  { id: "feriado", nombre: "Feriado", base: "evento", color: "#10b981", activo: true, predeterminado: true },
+  { id: "proyecto", nombre: "Proyecto", base: "tarea", color: "#a855f7", activo: true, predeterminado: true },
+  { id: "quiz", nombre: "Quiz", base: "examen", color: "#f97316", activo: true, predeterminado: true },
+];
+
 function crearDatosUsuarioNuevo() {
   return {
     version_esquema: 1,
@@ -32,6 +41,11 @@ function crearDatosUsuarioNuevo() {
       // formatear montos con el símbolo/formato correspondiente. Ver
       // MONEDAS_DISPONIBLES más abajo para la lista completa de opciones.
       moneda_preferida: "CRC",
+      // Etiquetas configurables de Agenda. `base` conserva el comportamiento
+      // real (tarea/examen/evento); la etiqueta solo personaliza clasificación,
+      // color y filtro. Los valores se migran sin borrar las etiquetas viejas.
+      agenda_tipos: TIPOS_ETIQUETA_AGENDA_DEFAULT.map((tipo) => ({ ...tipo })),
+      agenda_tipos_eliminados: [],
 
       // Backup de seguridad rotativo a Drive (Ajustes generales, 2026-08-10):
       // además del archivo vigente que ya se sincroniza (ver auth.js/
@@ -578,12 +592,15 @@ const SEPARADOR_ID_RECORDATORIO_OFFSET = "::";
  * events.insert nuevo en el siguiente intento en vez de seguir apuntando a
  * un id que ya no existe.
  */
-function crearEventoAgenda({ tipo, nombre, fecha, hora, materiaMatriculadaId, semestreId, notas, esFeriado }) {
+function crearEventoAgenda({ tipo, nombre, fecha, hora, materiaMatriculadaId, semestreId, notas, esFeriado, tipoEtiquetaId, tipoEtiquetaNombre, tipoEtiquetaColor }) {
   const tipoValido = TIPOS_EVENTO_AGENDA.includes(tipo) ? tipo : "evento";
   const vinculada = Boolean(materiaMatriculadaId && semestreId);
   return sellarTimestamp({
     id: "ag_" + crypto.randomUUID(),
     tipo: tipoValido,
+    tipo_etiqueta_id: tipoEtiquetaId || tipoValido,
+    tipo_etiqueta_nombre: tipoEtiquetaNombre || null,
+    tipo_etiqueta_color: tipoEtiquetaColor || null,
     nombre: nombre || "",
     fecha, // "YYYY-MM-DD"
     hora: hora || null, // "HH:MM" | null (día completo)
@@ -2985,6 +3002,16 @@ const MAPEO_HORAS_VIEJO_A_NUEVO = {
 function migrarDatosAntiguos(datos) {
   if (!datos) return datos;
 
+  if (datos.configuracion) {
+    const actuales = Array.isArray(datos.configuracion.agenda_tipos) ? datos.configuracion.agenda_tipos : [];
+    const eliminados = Array.isArray(datos.configuracion.agenda_tipos_eliminados) ? datos.configuracion.agenda_tipos_eliminados : [];
+    const porId = new Map(actuales.map((tipo) => [tipo.id, tipo]));
+    datos.configuracion.agenda_tipos = [
+      ...TIPOS_ETIQUETA_AGENDA_DEFAULT.filter((tipo) => !eliminados.includes(tipo.id)).map((tipo) => ({ ...tipo, ...(porId.get(tipo.id) || {}) })),
+      ...actuales.filter((tipo) => !TIPOS_ETIQUETA_AGENDA_DEFAULT.some((base) => base.id === tipo.id)),
+    ];
+  }
+
   // Modo Claro/Oscuro y Optimizado/Fancy pertenecen a este dispositivo.
   // Las cuentas anteriores los guardaban en `configuracion`, sincronizada
   // por Drive. En equipos que ya usaban la app se conserva primero la
@@ -3304,6 +3331,10 @@ function migrarDatosAntiguos(datos) {
   datos.agenda.forEach((ev) => {
     if (!TIPOS_EVENTO_AGENDA.includes(ev.tipo)) ev.tipo = "evento";
     if (ev.nombre === undefined) ev.nombre = ev.titulo || "";
+    if (!ev.tipo_etiqueta_id) ev.tipo_etiqueta_id = ev.tipo === "tarea" ? "tarea" : ev.tipo === "examen" ? "examen" : ev.es_feriado ? "feriado" : "evento";
+    const tipoGuardado = (datos.configuracion?.agenda_tipos || []).find((t) => t.id === ev.tipo_etiqueta_id);
+    if (!ev.tipo_etiqueta_nombre && tipoGuardado) ev.tipo_etiqueta_nombre = tipoGuardado.nombre;
+    if (!ev.tipo_etiqueta_color && tipoGuardado) ev.tipo_etiqueta_color = tipoGuardado.color;
     if (ev.hora === undefined) ev.hora = null;
     if (ev.notas === undefined) ev.notas = "";
     if (ev.materia_matriculada_id === undefined || ev.semestre_id === undefined) {
@@ -3776,6 +3807,7 @@ export {
   crearEnlaceHorarioCompartido,
   crearAmigoVinculado,
   TIPOS_EVENTO_AGENDA,
+  TIPOS_ETIQUETA_AGENDA_DEFAULT,
   crearEventoAgenda,
   OFFSETS_RECORDATORIO_AGENDA,
   SEPARADOR_ID_RECORDATORIO_OFFSET,

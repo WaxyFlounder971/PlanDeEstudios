@@ -1083,6 +1083,21 @@ async function eliminarEventoCalendar(token, calendarId, eventId) {
   }
 }
 
+/** Elimina el calendario secundario que pertenece a App Académica. */
+async function eliminarCalendarioGoogle(token, calendarId) {
+  const respuesta = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}`,
+    { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!respuesta.ok && respuesta.status !== 404) {
+    const cuerpo = await respuesta.text().catch(() => "");
+    const error = new Error(`Calendar respondió ${respuesta.status} al borrar el calendario de la app: ${cuerpo}`);
+    error.status = respuesta.status;
+    error.body = cuerpo;
+    throw error;
+  }
+}
+
 /**
  * events.patch — actualización PARCIAL (a diferencia de actualizarEventoCalendar,
  * que hace un PUT completo y reemplaza el objeto entero). Se usa
@@ -1204,6 +1219,7 @@ export {
   cerrarSesionGoogle,
   descargarArchivoBinarioDeDrive,
   eliminarArchivoDeDriveConId,
+  eliminarCalendarioGoogle,
   guardarDatos,
   inicializarGoogleAuth,
   iniciarSesionConGoogle,

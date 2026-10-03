@@ -76,6 +76,7 @@
 import { crearSesionEstudio, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
+import { MODO_DEMO } from "../core/demo-mode.js";
 import { mostrarToast, abrirConfirmacion } from "../ui/componentes.js";
 import { sincronizarHorasCompetencias } from "./tiempo-estudio-competencias.js";
 
@@ -167,6 +168,21 @@ function calcularMinutosEstaSemana(materiaMatriculadaId) {
 /* ===================== Persistencia local (salvavidas) ===================== */
 
 function guardarSnapshotLocal({ compartir = true, actualizadoEn = Date.now() } = {}) {
+  if (MODO_DEMO) {
+    timerActualizadoEn = Math.max(timerActualizadoEn, Number(actualizadoEn) || 0);
+    if (timerActivo !== null) timerActivo.actualizadoEn = timerActualizadoEn;
+    if (compartir && estado.datos) estado.datos.timer_estudio_activo = timerActivo === null
+      ? { activo: false, actualizadoEn: timerActualizadoEn }
+      : {
+          activo: true, materiaMatriculadaId: timerActivo.materiaMatriculadaId,
+          origen: timerActivo.origen, sesionInicio: timerActivo.sesionInicio,
+          inicioFase: timerActivo.inicioFase, pomodoro: timerActivo.pomodoro,
+          idSesionFase: timerActivo.idSesionFase, actualizadoEn: timerActualizadoEn,
+          metaAlarmaDisparada: timerActivo.metaAlarmaDisparada, pausado: timerActivo.pausado,
+          msPausaInicio: timerActivo.msPausaInicio, avisoFaseDisparado: timerActivo.avisoFaseDisparado,
+        };
+    return;
+  }
   try {
     timerActualizadoEn = Math.max(timerActualizadoEn, Number(actualizadoEn) || 0);
     const snapshot = timerActivo === null
@@ -1013,6 +1029,7 @@ function restaurarTimerDesdeSnapshot(snapshot) {
  * dejar la app en segundo plano no detiene el timer.
  */
 function revisarSesionOlvidadaAlAbrir() {
+  if (MODO_DEMO) return;
   let snapshot = null;
   try {
     const crudo = localStorage.getItem(CLAVE_TIMER_ACTIVO);

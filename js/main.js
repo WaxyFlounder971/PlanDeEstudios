@@ -11,6 +11,7 @@ import { migrarDatosAntiguos, sellarTimestamp } from "./core/schema.js";
 import { fusionarDatos } from "./core/storage-merge.js";
 import { actualizarIndicadorSync, asegurarTokenValido, avisarCierreSesionAOtrasPestanas, forzarSincronizacion, haySesionGuardada, inicializarCanalEntrePestanas, inicializarPullToRefresh, inicializarReconexionAlVolverOnline, inicializarSondeoAlVolver, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
 import { CLAVE_CACHE_LOCAL, borrarTokenCache, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
+import { MODO_DEMO, activarEstadoDemo, cargarDatosDemo } from "./core/demo-mode.js";
 import { obtenerIniciales } from "./core/utils.js";
 // Sincronización con Google Calendar (2026-08-25, reemplaza Web Push) -
 // ver core/notificaciones-calendario.js.
@@ -28,6 +29,7 @@ import { inicializarModalEditarPlanInfo, inicializarModalGestionPlanes, renderiz
 import { inicializarModalCapturasPDF, inicializarModalInstruccionesImportacion } from "./plan/plan-importacion.js";
 import { inicializarResponsivoListaPlan, renderizarPlanEstudios } from "./plan/plan-vista-lista.js";
 import { renderizarSemestres } from "./semestres/semestres.js";
+import { revisarWrappedAutomatico } from "./semestres/semestres-wrapped.js";
 import { inicializarResumen, renderizarResumen } from "./resumen/resumen.js";
 import { inicializarAgenda, renderizarAgenda } from "./agenda/agenda.js";
 import { inicializarHorario, renderizarHorario } from "./horario/horario.js";
@@ -90,7 +92,7 @@ inicializarIdiomas();
         actualización podría tardar en detectarse hasta el próximo cierre
         y apertura real de la app.
 */
-if ("serviceWorker" in navigator) {
+if ("serviceWorker" in navigator && !MODO_DEMO) {
   window.addEventListener("load", () => {
     navigator.serviceWorker
       .register("./service-worker.js")
@@ -160,6 +162,10 @@ if ("serviceWorker" in navigator) {
 const CLAVE_SYNC_CALENDARIO_OFRECIDA = "sincronizacion_calendario_ofrecida_v1";
 
 window.addEventListener("DOMContentLoaded", () => {
+  if (MODO_DEMO) {
+    iniciarAplicacionDemo();
+    return;
+  }
   // v9.2 (ajuste v1.8.7, punto 6 - pull-to-refresh no funciona en teléfono
   // real aunque sí funciona arrastrando con mouse en compu): esto es
   // consecuencia de un mecanismo del NAVEGADOR que compite con el gesto
@@ -385,6 +391,7 @@ window.addEventListener("DOMContentLoaded", () => {
   // app ya esté visible (solo agrega un listener global de document, sin
   // tocar nada del DOM que dependa de haber iniciado sesión).
   inicializarNavegacionBotonesMouse();
+  inicializarGestosNavegacionHorizontal();
   // Comunidad - Parte 3: se inyecta ANTES de inicializarBotonesCerrarModal()
   // (así sus 2 modales dinámicos también reciben el botón "✕" automático) y
   // ANTES del posible mostrarApp() por caché unas líneas más abajo (así
@@ -550,6 +557,75 @@ window.addEventListener("DOMContentLoaded", () => {
   // BroadcastChannel, ver storage-sync.js.
   inicializarCanalEntrePestanas();
 });
+
+async function iniciarAplicacionDemo() {
+  try {
+    const datos = await cargarDatosDemo();
+    activarEstadoDemo(datos);
+    estado.token = null;
+    estado.fileId = null;
+    estado.datos = datos;
+    estado.pendienteSync = false;
+    estado.conexionDrive = "ok";
+    estado.ultimoModifiedTimeConocido = null;
+    // El arranque normal también registra navegación y eventos de cada
+    // módulo. La demo omite deliberadamente auth/sync, así que inicializa
+    // aquí solo las piezas de interfaz que necesita para funcionar.
+    inicializarLayoutResponsivo();
+    inicializarModalEnlace();
+    inicializarModalConfirmacion();
+    inicializarNavegacionSecciones();
+    inicializarNavegacionBotonesMouse();
+    inicializarGestosNavegacionHorizontal();
+    inicializarComunidad();
+    inicializarResumen();
+    inicializarAgenda();
+    inicializarHorario();
+    inicializarTiempoEstudio();
+    inicializarBotonesCerrarModal();
+    inicializarAutoScrollSelectoresEnModales();
+    document.title = "Demo Académico · App Académica";
+    document.getElementById("aviso-modo-demo")?.classList.remove("oculto");
+    document.getElementById("pantalla-login")?.classList.add("oculto");
+    document.querySelectorAll('#app-shell img[alt="Logo App Académica"]').forEach((logo) => {
+      logo.alt = "Logo Demo Académico";
+      const titulo = logo.closest("h3");
+      if (titulo) {
+        titulo.querySelectorAll(".texto").forEach((texto) => { texto.textContent = "Demo Académico"; });
+        titulo.childNodes.forEach((nodo) => { if (nodo.nodeType === Node.TEXT_NODE) nodo.textContent = " Demo Académico"; });
+      }
+    });
+    const panelConfiguracion = document.getElementById("seccion-configuracion");
+    if (panelConfiguracion && !document.getElementById("demo-funciones-simuladas")) {
+      const tarjeta = document.createElement("section");
+      tarjeta.id = "demo-funciones-simuladas";
+      tarjeta.className = "glass-card stack";
+      tarjeta.innerHTML = '<h2 style="margin:0">Funciones de demostración</h2><p class="muted" style="margin:0">Los datos de esta sección son de ejemplo. Los cambios se quedan en esta pestaña y se descartan al recargar.</p><div class="row" style="flex-wrap:wrap;gap:8px"><span class="badge badge-warning">Notificaciones: simuladas</span><span class="badge badge-info">Analítica: muestra ficticia</span><span class="badge badge-purple">Gemini: opcional, clave temporal</span></div><p class="muted" style="margin:0;font-size:.84rem">La demo no envía datos a Google Drive ni a los servicios de la app. Gemini solo se consulta si introduces tu propia clave; esa clave y el historial se borran al recargar.</p>';
+      panelConfiguracion.insertBefore(tarjeta, panelConfiguracion.firstChild);
+    }
+    const btnBorrarDemo = document.getElementById("btn-borrar-cuenta-app");
+    btnBorrarDemo?.closest(".glass-card")?.classList.add("oculto");
+    const backupDemo = document.getElementById("btn-backup-manual");
+    if (backupDemo) { backupDemo.disabled = true; backupDemo.title = "No disponible en modo demo"; }
+    const syncCalendar = document.getElementById("switch-sync-calendario");
+    if (syncCalendar) { syncCalendar.disabled = true; syncCalendar.title = "Simulado en modo demo"; }
+    const indicador = document.getElementById("indicador-sync");
+    if (indicador) { indicador.textContent = "Demo · cambios temporales"; indicador.removeAttribute("title"); }
+    document.getElementById("btn-logout")?.classList.add("oculto");
+    document.getElementById("btn-logout-popover")?.classList.add("oculto");
+    mostrarApp();
+    const indicadorDemo = document.getElementById("indicador-sync");
+    if (indicadorDemo) indicadorDemo.textContent = "Demo · cambios temporales";
+  } catch (error) {
+    console.error("No se pudo iniciar la demo:", error);
+    ocultarPantallaCargaSesion();
+    document.getElementById("app-shell")?.classList.add("oculto");
+    document.getElementById("aviso-modo-demo")?.classList.add("oculto");
+    document.getElementById("pantalla-login")?.classList.remove("oculto");
+    const aviso = document.getElementById("aviso-login-bloqueado");
+    if (aviso) { aviso.textContent = "No se pudo cargar la demo. Recarga la página para volver a intentarlo."; aviso.classList.remove("oculto"); }
+  }
+}
 
 /* ============== Arranque de los módulos del Plan de Estudios ==============
  * v11 (migración a módulos): antes era el propio
@@ -957,7 +1033,7 @@ function mostrarApp() {
   // cuando el dato en sí seguía intacto en estado.datos. Mismo patrón que
   // el bug de abajo en storage-sync.js.
   const cfg = estado.datos.configuracion;
-  aplicarPaleta(cfg.paleta, obtenerModoTemaLocal(), cfg.paleta === "personalizada" ? cfg.paleta_personalizada?.colores : undefined);
+  aplicarPaleta(cfg.paleta, MODO_DEMO ? "dark" : obtenerModoTemaLocal(), cfg.paleta === "personalizada" ? cfg.paleta_personalizada?.colores : undefined);
   // Fix v1.16.1 (2026-08-23 - "switch de fancy necesita varios clicks"):
   // aplicarModoRendimiento() solo se llamaba desde el onchange del switch
   // en Ajustes, nunca al arrancar. El atributo [data-rendimiento] en <html>
@@ -974,7 +1050,7 @@ function mostrarApp() {
   renderizarModoHardcore();
   renderizarEnlacesRapidos();
   renderizarPerfil();
-  restaurarEstadoSidebar();
+  if (!MODO_DEMO) restaurarEstadoSidebar();
   aplicarVisibilidadNavegacion();
   // Asistente IA (revisado 2026-08-22): ya redundante con la línea de
   // arriba (el gate de clave vive dentro de aplicarVisibilidadNavegacion
@@ -995,12 +1071,14 @@ function mostrarApp() {
   // renderizarHorario (disparado por marcarCambioPendiente → sync → re-render,
   // o el de Parte 3b que refresca el overlay) ya tenga el amigo recién
   // vinculado en estado.datos.
-  iniciarRefrescoPeriodicoAmigos();
-  procesarAsociacionPendienteDeAmigo();
+  if (!MODO_DEMO) {
+    iniciarRefrescoPeriodicoAmigos();
+    procesarAsociacionPendienteDeAmigo();
+  }
   // Bug 3: antes mostrarSeccion() solo se llamaba desde clics del nav, así que
   // tras un refresh la sección de Plan de Estudios se quedaba con la clase
   // "oculto" del HTML aunque su contenido sí se hubiera renderizado.
-  mostrarSeccion(localStorage.getItem(CLAVE_SECCION_ACTIVA) || "resumen");
+  mostrarSeccion(MODO_DEMO ? "resumen" : localStorage.getItem(CLAVE_SECCION_ACTIVA) || "resumen");
   // Deep links por query param — extraído a procesarDeepLinkAbrir() (ver
   // esa función, definida más abajo) para poder re-chequearlo también
   // desde 'pageshow'/'visibilitychange', no solo acá.
@@ -1025,6 +1103,7 @@ function mostrarApp() {
   // una app ya completamente pintada, en vez de interrumpir a mitad de
   // los renders con la UI todavía a medio construir.
   revisarUniversidadesIncompletas();
+  if (!MODO_DEMO) revisarWrappedAutomatico();
 }
 
 // Notificaciones push - mismo caso que el query param de arriba, pero para
@@ -1032,7 +1111,7 @@ function mostrarApp() {
 // el service worker no puede navegar una pestaña ya abierta con un query
 // param nuevo sin recargarla, así que en ese caso le manda un mensaje
 // directo (ver 'notificationclick' en service-worker.js) y acá se atiende.
-if ("serviceWorker" in navigator) {
+if ("serviceWorker" in navigator && !MODO_DEMO) {
   navigator.serviceWorker.addEventListener("message", (evento) => {
     if (evento.data && evento.data.tipo === "abrir-agenda") {
       mostrarSeccion("agenda");
@@ -1116,6 +1195,50 @@ function inicializarNavegacionSecciones() {
   });
 }
 
+function inicializarGestosNavegacionHorizontal() {
+  const contenido = document.querySelector("main.app-contenido");
+  if (!contenido || contenido.dataset.gestosHorizontal === "1") return;
+  contenido.dataset.gestosHorizontal = "1";
+  let inicio = null;
+  contenido.addEventListener("touchstart", (ev) => {
+    const toque = ev.touches[0];
+    if (!toque || ev.touches.length !== 1) { inicio = null; return; }
+    const objetivo = ev.target;
+    if (objetivo.closest("input, textarea, select, a, [contenteditable='true'], .modal-overlay, .drawer-enlaces-movil")) { inicio = null; return; }
+    const botonPestana = objetivo.closest("button[data-vista], [role='tab']");
+    if (objetivo.closest("button") && !botonPestana) { inicio = null; return; }
+    inicio = { x: toque.clientX, y: toque.clientY };
+  }, { passive: true });
+  contenido.addEventListener("touchend", (ev) => {
+    if (!inicio) return;
+    const toque = ev.changedTouches[0];
+    const dx = toque.clientX - inicio.x;
+    const dy = toque.clientY - inicio.y;
+    const origen = inicio;
+    inicio = null;
+    if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.45) return;
+
+    const grupo = document.elementFromPoint(origen.x, origen.y)?.closest(".pill-group");
+    const pestañas = grupo
+      ? [...grupo.querySelectorAll("button[data-vista], button[role='tab']")]
+      : [];
+    if (pestañas.length > 1) {
+      const activa = pestañas.findIndex((btn) => btn.classList.contains("active") || btn.getAttribute("aria-selected") === "true");
+      const siguiente = activa + (dx < 0 ? 1 : -1);
+      if (siguiente >= 0 && siguiente < pestañas.length) {
+        pestañas[siguiente].click();
+        return;
+      }
+    }
+
+    // Al llegar al límite de las pestañas, el mismo gesto abre el panel
+    // lateral hacia el que se deslizó: derecha = menú, izquierda = enlaces.
+    if (dx > 0) document.getElementById("btn-hamburguesa")?.click();
+    else (document.getElementById("btn-topbar-enlaces") || document.getElementById("btn-flotante-enlaces"))?.click();
+  }, { passive: true });
+  contenido.addEventListener("touchcancel", () => { inicio = null; }, { passive: true });
+}
+
 let seccionNavegacionActual = null;
 
 function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
@@ -1150,7 +1273,7 @@ function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
     btn.classList.toggle("btn-primary", activo);
     btn.classList.toggle("btn-secondary", !activo);
   });
-  localStorage.setItem(CLAVE_SECCION_ACTIVA, nombre);
+  if (!MODO_DEMO) localStorage.setItem(CLAVE_SECCION_ACTIVA, nombre);
   if (nombre === "plan-estudios") {
     // Cada entrada al Plan parte con bloques abiertos y materias cerradas.
     // Esta preferencia de presentación vive en memoria en cada dispositivo.
@@ -1268,9 +1391,9 @@ function aplicarVisibilidadNavegacion() {
   let seccionActivaOculta = false;
   document.querySelectorAll(".btn-nav[data-seccion]").forEach((btn) => {
     const seccion = btn.dataset.seccion;
-    const oculto = ocultas.has(seccion) || (seccion === "asistente" && !hayClaveGemini);
+    const oculto = ocultas.has(seccion) || (seccion === "asistente" && !hayClaveGemini && !MODO_DEMO);
     btn.classList.toggle("oculto", oculto);
-    if (oculto && seccion === localStorage.getItem(CLAVE_SECCION_ACTIVA)) {
+    if (oculto && seccion === (MODO_DEMO ? null : localStorage.getItem(CLAVE_SECCION_ACTIVA))) {
       seccionActivaOculta = true;
     }
   });

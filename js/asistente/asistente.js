@@ -11,6 +11,8 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
+import { agregarEnlaceAdjunto } from "../core/storage-adjuntos.js";
+import { MODO_DEMO } from "../core/demo-mode.js";
 import { crearEventoAgenda } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { programarRecordatorioPush } from "../core/notificaciones-push.js";
@@ -90,7 +92,22 @@ const MODALIDADES_VALIDAS_ASISTENTE = ["presencial", "virtual", "asincronica", "
  * generarRespuestaConversacionalWapper más abajo para dónde se usa
  * realmente este system prompt.
  */
-const PROMPT_PERSONALIDAD_WAPPER = `You are Wapper, a clear, warm, concise academic assistant. Help organize assignments, exams, and events, and answer a brief question outside that scope when the user asks one. Always answer in the language of the user's latest message, even if earlier assistant messages used another language. If the user explicitly asks to use a language, use it. When the message is too short to identify a language, use the app's selected language. Support every language offered by the app, including Spanish, English, Italian, and French. Never say that you prefer another language, ask the user to switch languages, or claim that you cannot speak a supported language. If asked whether you can speak a language, answer briefly in that language. Preserve the user's intent, distinctions, dates, and level of certainty; ask a concise follow-up only when essential details are missing. Treat official course names and saved user data as exact proper names. Answer only what was asked; do not add unrelated small talk, generic capability lists, or personal observations. Never comment on the user's name, its meaning, origin, uniqueness, or resemblance to a famous person unless the user explicitly asks about it. Do not infer personal traits from a name. Use clean Markdown only when it helps.`;
+const PROMPT_PERSONALIDAD_WAPPER = `You are the user's academic assistant. Help organize assignments, exams, and events, and answer a brief question outside that scope when the user asks one. Users can attach URLs to assignments by including the link in the same message; the app saves it as a clickable link attachment. Never claim that links cannot be attached. Always answer in the language of the user's latest message, even if earlier assistant messages used another language. If the user explicitly asks to use a language, use it. When the message is too short to identify a language, use the app's selected language. Support every language offered by the app, including Spanish, English, Italian, and French. Never say that you prefer another language, ask the user to switch languages, or claim that you cannot speak a supported language. If asked whether you can speak a language, answer briefly in that language. Preserve the user's intent, distinctions, dates, and level of certainty; ask a concise follow-up only when essential details are missing. Treat official course names and saved user data as exact proper names. Answer only what was asked; do not add unrelated small talk, generic capability lists, or personal observations. Never comment on the user's name, its meaning, origin, uniqueness, or resemblance to a famous person unless the user explicitly asks about it. Do not infer personal traits from a name. Use clean Markdown only when it helps.`;
+
+function obtenerNombreAsistentePersonalizado() {
+  const nombre = estado.datos?.configuracion?.asistente_nombre_personalizado;
+  return String(nombre || "Wapper").trim() || "Wapper";
+}
+
+function resolverActualizacionNombreAsistente(nombreNuevo) {
+  const limpio = String(nombreNuevo || "").trim();
+  if (!limpio) return { ok: false, motivo: textoAsistente("No entendí qué nombre quieres ponerme.", "I didn't catch the name you'd like to give me.") };
+  if (limpio.length > 40) return { ok: false, motivo: textoAsistente("Ese nombre es un poco largo. Elige uno de hasta 40 caracteres.", "That name is a little long. Choose one with up to 40 characters.") };
+  estado.datos.configuracion = estado.datos.configuracion || {};
+  estado.datos.configuracion.asistente_nombre_personalizado = limpio;
+  marcarCambioPendiente();
+  return { ok: true, nombreNuevo: limpio };
+}
 
 function obtenerNombreIdiomaAsistente() {
   return ({ es: "Spanish", en: "English", it: "Italian", fr: "French", pt: "Portuguese", de: "German", ja: "Japanese" })[obtenerIdiomaActual()] || "the language of the user's latest message";
@@ -107,7 +124,7 @@ function textoAsistentePorIdioma(textos) {
   return textos[obtenerIdiomaActual()] || textos.es;
 }
 
-const MAX_FILAS_INPUT_ASISTENTE = 10;
+const MAX_FILAS_INPUT_ASISTENTE = 8;
 
 function ajustarAlturaInputAsistente(input) {
   if (!input) return;
@@ -223,10 +240,11 @@ function resolverActualizacionNombre(nombreNuevo) {
  */
 function construirPromptPersonalidadWapper() {
   const nombrePreferido = obtenerNombreParaDirigirse();
+  const nombreAsistente = obtenerNombreAsistentePersonalizado();
   const instruccionApodo = nombrePreferido
     ? ` The user explicitly asked to be called ${nombrePreferido}. You may use this preferred name occasionally when natural, but never comment on its meaning, origin, uniqueness, or resemblance to anyone famous.`
     : "";
-  return `${PROMPT_PERSONALIDAD_WAPPER} The selected app language, to use only if the user's language is unclear, is ${obtenerNombreIdiomaAsistente()}.${instruccionApodo}`;
+  return `${PROMPT_PERSONALIDAD_WAPPER} Your name is ${nombreAsistente}. Use that name when introducing yourself. The selected app language, to use only if the user's language is unclear, is ${obtenerNombreIdiomaAsistente()}.${instruccionApodo}`;
 }
 
 /** Punto 4 del brief de personalidad: saludo simple → respuesta fija, sin llamar a Gemini. */
@@ -257,10 +275,11 @@ function construirMensajeFallbackWapper() {
  */
 function construirMensajeBienvenidaWapper() {
   const idioma = obtenerIdiomaActual();
-  if (idioma === "en") return "Hello! I'm Wapper 👋, your academic assistant.\nDo you have an assignment, exam, or event you'd like to add?";
-  if (idioma === "it") return "Ciao! Sono Wapper 👋, il tuo assistente accademico.\nVuoi aggiungere un compito, un esame o un evento?";
-  if (idioma === "fr") return "Bonjour ! Je suis Wapper 👋, votre assistant académique.\nSouhaitez-vous ajouter un devoir, un examen ou un événement ?";
-  return "¡Hola! Soy Wapper 👋, tu asistente académico.\n¿Tienes alguna tarea, examen o evento que quieras agregar?";
+  const nombre = obtenerNombreAsistentePersonalizado();
+  if (idioma === "en") return `Hello! I'm ${nombre} 👋, your academic assistant.\nDo you have an assignment, exam, or event you'd like to add?`;
+  if (idioma === "it") return `Ciao! Sono ${nombre} 👋, il tuo assistente accademico.\nVuoi aggiungere un compito, un esame o un evento?`;
+  if (idioma === "fr") return `Bonjour ! Je suis ${nombre} 👋, votre assistant académique.\nSouhaitez-vous ajouter un devoir, un examen ou un événement ?`;
+  return `¡Hola! Soy ${nombre} 👋, tu asistente académico.\n¿Tienes alguna tarea, examen o evento que quieras agregar?`;
 }
 
 /**
@@ -465,12 +484,12 @@ const CAPACIDADES_WAPPER = [
     ejemplo: () => `la clase de ${elegirNombreMateriaEjemplo()} del martes va virtual`,
   },
   {
-    descripcion: "Cambiar cómo me dirijo a ti",
+    descripcion: "Cambiar cómo me dirijo a ti o el nombre que uso",
     // "ejemplo" es una FUNCIÓN acá en vez de un string fijo — se resuelve al
     // vuelo (ver construirMensajeCapacidadesWapper) para que cada vez que
     // se muestre la lista salga un apodo al azar de APODOS_EJEMPLO_CAPACIDADES,
     // en vez de repetir siempre el mismo.
-    ejemplo: () => `llámame ${APODOS_EJEMPLO_CAPACIDADES[Math.floor(Math.random() * APODOS_EJEMPLO_CAPACIDADES.length)]}`,
+    ejemplo: () => `llámame ${APODOS_EJEMPLO_CAPACIDADES[Math.floor(Math.random() * APODOS_EJEMPLO_CAPACIDADES.length)]} o quiero llamarte Calamardo`,
   },
 ];
 
@@ -915,6 +934,7 @@ function crearBotonVoz(input) {
 /* ===================== Historial local (device-only) ===================== */
 
 function leerHistorialLocalVigente() {
+  if (MODO_DEMO) return null;
   try {
     const crudo = localStorage.getItem(CLAVE_HISTORIAL_ASISTENTE);
     if (!crudo) return null;
@@ -935,6 +955,7 @@ function leerHistorialLocalVigente() {
 /** Solo persiste si YA hay al menos un turno de cada rol — nunca por solo
  *  entrar y salir de la sección sin escribir nada. */
 function guardarHistorialLocal() {
+  if (MODO_DEMO) return;
   const huboIntercambioReal =
     conversacionActual.some((t) => t.rol === "usuario") && conversacionActual.some((t) => t.rol === "modelo");
   if (!huboIntercambioReal) return;
@@ -945,6 +966,7 @@ function guardarHistorialLocal() {
 }
 
 function borrarHistorialLocal() {
+  if (MODO_DEMO) return;
   localStorage.removeItem(CLAVE_HISTORIAL_ASISTENTE);
 }
 
@@ -1414,6 +1436,10 @@ function construirSystemInstruction() {
   const avisoApodosDuplicados = construirAvisoApodosDuplicados(materiasVinculables);
   const avisoInicialesDuplicadas = construirAvisoInicialesDuplicadas(materiasVinculables);
   const contextoDiasModalidad = construirContextoDiasModalidadMaterias(materiasVinculables);
+  const etiquetasAgenda = (estado.datos.configuracion?.agenda_tipos || []).filter((t) => t.activo !== false && !t.eliminado);
+  const contextoEtiquetasAgenda = etiquetasAgenda.length
+    ? `\n\nEtiquetas de Agenda disponibles: ${etiquetasAgenda.map((t) => `${t.id}=${t.nombre} (base ${t.base})`).join(", ")}. Para quizzes/exámenes usa la etiqueta quiz si existe; para proyectos/tareas tipo proyecto usa proyecto si existe. Si el usuario nombra otra etiqueta válida, úsala cuando encaje.`
+    : "";
 
   return `The app interface language is ${obtenerNombreIdiomaAsistente()}. Always write user-facing text (including clarifications and notes) in the language of the user's latest message; if it is unclear, use the selected interface language. Never claim to prefer Spanish or ask the user to change languages. Keep exact official course names and all JSON field names, action names, type values, and weekday values in the Spanish forms specified below; the application depends on those exact values. Never guess missing dates, times, courses, or facts.\n\nSos el Asistente IA de una app académica. Tu función es leer un
 mensaje en lenguaje natural de un estudiante universitario y, según lo que
@@ -1431,20 +1457,22 @@ real, cada uno con su propia fecha.${construirContextoSemanasSemestres()}${const
 Materias matriculadas reales del usuario ahora mismo (nombre oficial —
 entre paréntesis, el/los apodo(s) que el usuario le puso en Horario (si
 tiene) y las iniciales que calcula el sistema a partir del nombre oficial):
-${listaMaterias}${avisoApodosDuplicados}${avisoInicialesDuplicadas}${contextoDiasModalidad}
+${listaMaterias}${avisoApodosDuplicados}${avisoInicialesDuplicadas}${contextoDiasModalidad}${contextoEtiquetasAgenda}
 
 Devolvé ÚNICAMENTE un JSON con esta forma exacta:
 {
-  "accion": "crear_eventos" | "editar_modalidad" | "consultar" | "actualizar_nombre",
+  "accion": "crear_eventos" | "editar_modalidad" | "consultar" | "actualizar_nombre" | "actualizar_nombre_asistente",
   "items": [
     {
       "tipo": "evento" | "tarea" | "examen",
+      "etiquetaId": "id de una Etiqueta de Agenda disponible, o null",
       "nombre": "string corto, SOLO el título de la tarea/examen/evento",
       "materia": "nombre EXACTO de la lista de arriba, o null",
       "fecha": "YYYY-MM-DD",
       "hora": "HH:MM" | null,
       "notas": "string, vacío salvo que aplique la regla de abajo",
       "esFeriado": true | false
+      ,"enlaces": ["URL completa asociada a esta tarea", ...]
     }
   ],
   "cambioModalidad": {
@@ -1455,7 +1483,9 @@ Devolvé ÚNICAMENTE un JSON con esta forma exacta:
   "consulta": {
     "tipo": "tareas_eventos" | "modalidad_clase" | "buscar_evento",
     "semana": number | null,
-    "alcance": "todo" | null,
+    "alcance": "todo" | "resto_semestre" | null,
+    "fechaExacta": "YYYY-MM-DD" | null,
+    "soloPendientes": true | false | null,
     "materia": "nombre EXACTO de la lista de arriba, o null",
     "dia": "lunes" | "martes" | "miércoles" | "jueves" | "viernes" | "sábado" | "domingo" | null,
     "tipoItem": "examen" | "tarea" | "evento" | null,
@@ -1464,6 +1494,7 @@ Devolvé ÚNICAMENTE un JSON con esta forma exacta:
     "palabrasClave": "string" | null
   } | null,
   "nombrePreferido": "string" | null,
+  "nombreAsistente": "string" | null,
   "aclaracion": "string" | null
 }
 
@@ -1477,6 +1508,14 @@ Regla de "accion" (elegí una sola por mensaje):
   (ej. "¿de dónde sacaste mi nombre?", "¿cómo sabes cómo me llamo?") NO es
   esto — no pide cambiar nada, cae al default de "crear_eventos" con
   "items": [] más abajo (se responde por el otro lado, conversacional).
+- "actualizar_nombre_asistente": el usuario pide explícitamente cambiar el
+  nombre del asistente (ej. "¿y si quiero llamarte Calamardo?", "quiero que
+  te llames Nube", "a partir de ahora te voy a decir Luna"). Devuelve
+  "items": [], "cambioModalidad": null, "consulta": null,
+  "nombrePreferido": null, "aclaracion": null y el nombre solicitado en
+  "nombreAsistente". Distingue esto de "actualizar_nombre", que cambia cómo
+  el asistente se dirige al usuario. Una pregunta hipotética solo cambia el
+  nombre si la persona expresa que quiere usar ese nombre desde ahora.
 - "consulta": el usuario PREGUNTA por algo que ya existe (nunca pide crear
   ni cambiar nada) — ej. "qué tareas tengo para esta semana", "qué tengo
   para la semana 8", "qué exámenes hay esta semana", "qué modalidad es mi
@@ -1510,6 +1549,14 @@ Regla de "accion" (elegí una sola por mensaje):
     se ignora (el sistema no aplica ningún filtro de fecha, trae TODO lo
     guardado que matchee materia/tipoItem). Si no lo pide explícitamente,
     "alcance" es null (comportamiento normal, limitado a una semana).
+    Usa "resto_semestre" si pregunta por lo que queda durante el resto del
+    semestre; va desde hoy hasta el fin del semestre correspondiente.
+  - "fechaExacta": si pregunta por una fecha calendario concreta (ej.
+    "¿tengo algo para el 14 de octubre?"), escribe esa fecha en YYYY-MM-DD
+    con el año vigente/contextual. El sistema buscará solo ese día.
+  - "soloPendientes": true cuando pregunta qué le queda por hacer, qué no
+    ha completado o qué tiene pendiente. En ese caso omite lo completado y
+    lo marcado como perdido.
   - "materia" (opcional en "tareas_eventos"/"buscar_evento", para filtrar
     por una materia puntual si el usuario lo pide; SIEMPRE requerido en
     "modalidad_clase"): el nombre OFICIAL exacto de la lista de arriba —
@@ -1541,7 +1588,7 @@ Regla de "accion" (elegí una sola por mensaje):
   - "tipoItem" (aplica a "tareas_eventos" Y a "buscar_evento"): "examen" |
     "tarea" | "evento" si el usuario pidió explícitamente un tipo puntual
     (ej. "qué EXÁMENES tengo esta semana" → "examen"; "parcial"/"quiz" →
-    "examen"; "laboratorio"/"tarea" → "tarea"), o null si pidió todo sin
+    "examen"; "proyecto"/"tarea" → "tarea"), o null si pidió todo sin
     distinguir tipo (ej. "qué TENGO esta semana").
   - "numeroOrdinal" (solo aplica a "buscar_evento"): SOLO si el usuario
     menciona un número u ordinal identificando cuál ítem es (ej. "el
@@ -1602,6 +1649,8 @@ Regla de "accion" (elegí una sola por mensaje):
   preguntas SOBRE el nombre — "items" queda en [] en esos casos).
 
 Reglas de "items" (solo aplican cuando accion es "crear_eventos"):
+- Si el mismo pedido incluye una URL para la tarea/examen/evento, copia
+  la URL completa en el campo enlaces de ese ítem; nunca la pierdas ni la inventes.
 - Si el mensaje menciona una "semana N" (semana 5, semana 8, etc.), es
   SIEMPRE semana académica del semestre — buscá esa semana en la tabla de
   arriba (si hay una) y calculá la fecha desde ahí, NUNCA contando semanas
@@ -1672,19 +1721,21 @@ Reglas de "items" (solo aplican cuando accion es "crear_eventos"):
 const ESQUEMA_RESPUESTA_GEMINI = {
   type: "OBJECT",
   properties: {
-    accion: { type: "STRING", enum: ["crear_eventos", "editar_modalidad", "consultar", "actualizar_nombre"] },
+    accion: { type: "STRING", enum: ["crear_eventos", "editar_modalidad", "consultar", "actualizar_nombre", "actualizar_nombre_asistente"] },
     items: {
       type: "ARRAY",
       items: {
         type: "OBJECT",
         properties: {
           tipo: { type: "STRING", enum: ["evento", "tarea", "examen"] },
+          etiquetaId: { type: "STRING", nullable: true },
           nombre: { type: "STRING" },
           materia: { type: "STRING", nullable: true },
           fecha: { type: "STRING" },
           hora: { type: "STRING", nullable: true },
           notas: { type: "STRING" },
           esFeriado: { type: "BOOLEAN" },
+          enlaces: { type: "ARRAY", items: { type: "STRING" } },
         },
         required: ["tipo", "nombre", "fecha"],
       },
@@ -1729,7 +1780,9 @@ const ESQUEMA_RESPUESTA_GEMINI = {
         // semestre" seguía devolviendo solo la semana actual porque no
         // había forma de pedir "sin límite de fecha") — solo aplica a
         // "tareas_eventos", ver instrucciones abajo.
-        alcance: { type: "STRING", enum: ["todo"], nullable: true },
+        alcance: { type: "STRING", enum: ["todo", "resto_semestre"], nullable: true },
+        fechaExacta: { type: "STRING", nullable: true },
+        soloPendientes: { type: "BOOLEAN", nullable: true },
         // "proximo" (2026-08-31, bug real: "cuánto falta para el próximo
         // examen de AP" no tenía forma de pedirse sin nombrar un
         // título/ordinal puntual) — solo aplica a "buscar_evento".
@@ -1738,6 +1791,7 @@ const ESQUEMA_RESPUESTA_GEMINI = {
       required: ["tipo"],
     },
     nombrePreferido: { type: "STRING", nullable: true },
+    nombreAsistente: { type: "STRING", nullable: true },
     aclaracion: { type: "STRING", nullable: true },
   },
   required: ["accion", "items"],
@@ -1820,6 +1874,10 @@ async function ejecutarGeneracionGemini(contents) {
         }),
       });
     } catch (e) {
+      if (intento < MAX_REINTENTOS_GEMINI_TRANSITORIO) {
+        await esperar(700 * (intento + 1));
+        continue;
+      }
       const err = new Error("No se pudo conectar con Gemini.");
       err.tipoError = "red";
       throw err;
@@ -1837,20 +1895,20 @@ async function ejecutarGeneracionGemini(contents) {
 
     const codigo = datos && datos.error && datos.error.code;
     const estadoError = datos && datos.error && datos.error.status;
-    const esTransitorio = codigo === 503 || codigo === 500 || estadoError === "UNAVAILABLE";
+    const esTransitorio = [408, 429, 500, 502, 503, 504].includes(codigo) || estadoError === "UNAVAILABLE" || estadoError === "RESOURCE_EXHAUSTED";
     if (esTransitorio && intento < MAX_REINTENTOS_GEMINI_TRANSITORIO) {
       await esperar(700 * (intento + 1)); // 700ms, luego 1400ms
       continue;
     }
 
     const err = new Error((datos && datos.error && datos.error.message) || "Error de Gemini");
-    err.tipoError = codigo === 400 || codigo === 401 || codigo === 403 ? "clave" : codigo === 429 ? "limite" : "desconocido";
+    err.tipoError = codigo === 401 || codigo === 403 || (codigo === 400 && /api.?key|key not valid|invalid argument/i.test(err.message)) ? "clave" : codigo === 429 ? "limite" : "desconocido";
     throw err;
   }
 
   const candidato = datos.candidates && datos.candidates[0];
-  const parte = candidato && candidato.content && candidato.content.parts && candidato.content.parts[0];
-  const texto = parte && parte.text;
+  const partes = candidato && candidato.content && candidato.content.parts;
+  const texto = Array.isArray(partes) ? partes.map((p) => p && p.text || "").filter(Boolean).join("\n") : "";
   if (!texto) {
     const err = new Error("Gemini no devolvió contenido (posible bloqueo de seguridad).");
     err.tipoError = "desconocido";
@@ -1859,7 +1917,7 @@ async function ejecutarGeneracionGemini(contents) {
 
   let parseado;
   try {
-    parseado = JSON.parse(texto);
+    parseado = parsearJsonGeminiTolerante(texto);
   } catch (e) {
     const err = new Error("No se pudo interpretar la respuesta de Gemini.");
     err.tipoError = "desconocido";
@@ -1879,14 +1937,33 @@ async function ejecutarGeneracionGemini(contents) {
         ? "consultar"
         : parseado.accion === "actualizar_nombre"
         ? "actualizar_nombre"
+        : parseado.accion === "actualizar_nombre_asistente"
+        ? "actualizar_nombre_asistente"
         : "crear_eventos",
     items: Array.isArray(parseado.items) ? parseado.items : [],
     cambioModalidad: parseado.cambioModalidad || null,
     consulta: parseado.consulta || null,
     nombrePreferido: parseado.nombrePreferido || null,
+    nombreAsistente: parseado.nombreAsistente || null,
     aclaracion: parseado.aclaracion || null,
     crudo: texto,
   };
+}
+
+function parsearJsonGeminiTolerante(texto) {
+  const limpio = String(texto || "").replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+  try { return JSON.parse(limpio); } catch (_) {}
+  const inicio = limpio.indexOf("{");
+  if (inicio < 0) throw new Error("No se encontró un objeto JSON.");
+  let profundidad = 0, enCadena = false, escape = false;
+  for (let i = inicio; i < limpio.length; i++) {
+    const c = limpio[i];
+    if (enCadena) { if (escape) escape = false; else if (c === "\\") escape = true; else if (c === '"') enCadena = false; continue; }
+    if (c === '"') enCadena = true;
+    else if (c === "{") profundidad++;
+    else if (c === "}" && --profundidad === 0) return JSON.parse(limpio.slice(inicio, i + 1));
+  }
+  throw new Error("El objeto JSON está incompleto.");
 }
 
 /**
@@ -1944,8 +2021,10 @@ async function generarRespuestaConversacionalWapper(textoUsuario) {
   if (!claveApi) return null;
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODELO_GEMINI}:generateContent?key=${encodeURIComponent(claveApi)}`;
-  try {
-    const respuesta = await fetch(url, {
+  let respuesta;
+  for (let intento = 0; intento < 3; intento++) {
+    try {
+      respuesta = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1953,16 +2032,25 @@ async function generarRespuestaConversacionalWapper(textoUsuario) {
         contents: [{ role: "user", parts: [{ text: textoUsuario }] }],
         generationConfig: { temperature: 0.6 },
       }),
-    });
-    if (!respuesta.ok) return null;
+      });
+    } catch (e) {
+      if (intento < 2) { await new Promise((r) => setTimeout(r, 700 * (intento + 1))); continue; }
+      return mensajeParaError({ tipoError: "red" });
+    }
+    if (!respuesta.ok) {
+      if ([408, 429, 500, 502, 503, 504].includes(respuesta.status) && intento < 2) {
+        await new Promise((r) => setTimeout(r, 700 * (intento + 1)));
+        continue;
+      }
+      return mensajeParaError({ tipoError: respuesta.status === 429 ? "limite" : "desconocido" });
+    }
     const datos = await respuesta.json();
     const candidato = datos.candidates && datos.candidates[0];
-    const parte = candidato && candidato.content && candidato.content.parts && candidato.content.parts[0];
-    const texto = parte && parte.text && parte.text.trim();
-    return texto || null;
-  } catch (e) {
-    return null;
+    const partes = candidato && candidato.content && candidato.content.parts;
+    const texto = Array.isArray(partes) ? partes.map((p) => p?.text || "").join("\n").trim() : "";
+    return texto || mensajeParaError({ tipoError: "desconocido" });
   }
+  return mensajeParaError({ tipoError: "desconocido" });
 }
 
 function mensajeParaError(e) {
@@ -2177,6 +2265,11 @@ function textoRangoConsultaTurno(turno) {
   const datos = turno.consultaRangoDatos;
   if (datos?.todoElSemestre) return textoSemanaEnIdioma(null, true);
   if (datos) {
+    if (datos.fechaExacta && datos.inicioISO) return fechaLocalDesdeISO(datos.inicioISO).toLocaleDateString(obtenerLocaleInterfaz(), { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    if (datos.restoSemestre && datos.inicioISO && datos.finISO) {
+      const rango = formatearRangoConsulta(fechaLocalDesdeISO(datos.inicioISO), fechaLocalDesdeISO(datos.finISO));
+      return `${textoAsistente("El resto del semestre", "The rest of the semester")}${datos.semestreNombre ? ` ${datos.semestreNombre}` : ""} (${rango})`;
+    }
     const semana = textoSemanaEnIdioma(datos.numeroSemana);
     if (!datos.inicioISO || !datos.finISO) return semana;
     return `${semana} (${formatearRangoConsulta(fechaLocalDesdeISO(datos.inicioISO), fechaLocalDesdeISO(datos.finISO))})`;
@@ -2294,6 +2387,29 @@ function resolverConsultaTareasEventos(consulta) {
     return { ok: false, motivo: "No pude identificar de forma clara a qué materia te refieres." };
   }
   const tipoItem = ["examen", "tarea", "evento"].includes(consulta.tipoItem) ? consulta.tipoItem : null;
+  const idMateriaEvento = (ev) => ev.materia_matriculada_id || ev.materiaMatriculadaId || null;
+  const pasaPendientes = (ev) => !consulta.soloPendientes || (ev.tipo === "tarea" && !ev.completada && !ev.perdida);
+
+  if (consulta.alcance === "resto_semestre") {
+    const semestre = materiaVinculada
+      ? (estado.datos.semestres || []).find((s) => s.id === materiaVinculada.semestreId)
+      : obtenerSemestreActivoAgenda();
+    if (!semestre?.fecha_inicio) return { ok: false, motivo: "No pude identificar el semestre para calcular lo que queda." };
+    const inicioSemestre = fechaLocalDesdeISO(semestre.fecha_inicio);
+    const finSemestre = new Date(inicioSemestre);
+    finSemestre.setDate(finSemestre.getDate() + (Number(semestre.duracion_semanas) || 16) * 7 - 1);
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const inicioConsulta = hoy > inicioSemestre ? hoy : inicioSemestre;
+    const inicioIso = fechaISODesdeLocal(inicioConsulta);
+    const finIso = fechaISODesdeLocal(finSemestre);
+    const eventos = (estado.datos.agenda || [])
+      .filter((ev) => ev.fecha >= inicioIso && ev.fecha <= finIso)
+      .filter((ev) => !materiaVinculada || idMateriaEvento(ev) === materiaVinculada.mmId)
+      .filter((ev) => !tipoItem || ev.tipo === tipoItem)
+      .filter(pasaPendientes)
+      .sort((a, b) => `${a.fecha} ${a.hora || ""}`.localeCompare(`${b.fecha} ${b.hora || ""}`));
+    return { ok: true, rango: { inicio: inicioConsulta, fin: finSemestre, numeroSemana: null, restoSemestre: true, semestreNombre: semestre.nombre }, materiaVinculada, tipoItem, eventos };
+  }
 
   // "alcance": "todo" (2026-08-31, bug real: "todos los exámenes"/"todo el
   // semestre" seguía devolviendo solo la semana actual porque este resolver
@@ -2305,8 +2421,9 @@ function resolverConsultaTareasEventos(consulta) {
   // el filtro de materia/tipo sigue aplicando igual.
   if (consulta.alcance === "todo") {
     const eventos = (estado.datos.agenda || [])
-      .filter((ev) => !materiaVinculada || ev.materiaMatriculadaId === materiaVinculada.mmId)
+      .filter((ev) => !materiaVinculada || idMateriaEvento(ev) === materiaVinculada.mmId)
       .filter((ev) => !tipoItem || ev.tipo === tipoItem)
+      .filter(pasaPendientes)
       .sort((a, b) => `${a.fecha} ${a.hora || ""}`.localeCompare(`${b.fecha} ${b.hora || ""}`));
     const rango = { inicio: null, fin: null, numeroSemana: null, etiqueta: "todo el semestre" };
     return { ok: true, rango, materiaVinculada, tipoItem, eventos };
@@ -2317,12 +2434,21 @@ function resolverConsultaTareasEventos(consulta) {
     return { ok: false, motivo: "No tienes un semestre activo seleccionado para calcular esa semana." };
   }
 
-  const inicioIso = fechaISODesdeLocal(rango.inicio);
-  const finIso = fechaISODesdeLocal(rango.fin);
+  const fechaExacta = /^\d{4}-\d{2}-\d{2}$/.test(consulta.fechaExacta || "") ? consulta.fechaExacta : null;
+  if (fechaExacta) {
+    const diaExacto = fechaLocalDesdeISO(fechaExacta);
+    rango.inicio = diaExacto;
+    rango.fin = diaExacto;
+    rango.numeroSemana = null;
+    rango.fechaExacta = true;
+  }
+  const inicioIso = fechaExacta || fechaISODesdeLocal(rango.inicio);
+  const finIso = fechaExacta || fechaISODesdeLocal(rango.fin);
   const eventos = (estado.datos.agenda || [])
     .filter((ev) => ev.fecha >= inicioIso && ev.fecha <= finIso)
-    .filter((ev) => !materiaVinculada || ev.materiaMatriculadaId === materiaVinculada.mmId)
+    .filter((ev) => !materiaVinculada || idMateriaEvento(ev) === materiaVinculada.mmId)
     .filter((ev) => !tipoItem || ev.tipo === tipoItem)
+    .filter(pasaPendientes)
     .sort((a, b) => `${a.fecha} ${a.hora || ""}`.localeCompare(`${b.fecha} ${b.hora || ""}`));
 
   return { ok: true, rango, materiaVinculada, tipoItem, eventos };
@@ -2676,10 +2802,19 @@ function construirNotasFinal(notasUsuario) {
 function guardarItemExtraidoComoEvento(item, googleTaskId = null) {
   const materiaVinculada = resolverMateriaVinculada(item.materia);
   const horaFinal = item.hora || resolverHoraDefaultDesdeHorario(materiaVinculada, item.fecha);
+  const etiquetas = estado.datos.configuracion?.agenda_tipos || [];
+  const inferida = item.etiquetaId && etiquetas.find((tag) => tag.id === item.etiquetaId && tag.base === item.tipo && tag.activo !== false && !tag.eliminado)
+    || (/\bquiz\b/i.test(item.nombre || "") && item.tipo === "examen" && etiquetas.find((tag) => tag.id === "quiz" && tag.activo !== false))
+    || (/\bproyecto\b/i.test(item.nombre || "") && item.tipo === "tarea" && etiquetas.find((tag) => tag.id === "proyecto" && tag.activo !== false))
+    || etiquetas.find((tag) => tag.id === (item.tipo === "tarea" ? "tarea" : item.tipo === "examen" ? "examen" : item.esFeriado ? "feriado" : "evento") && tag.activo !== false && !tag.eliminado)
+    || etiquetas.find((tag) => tag.base === item.tipo && tag.activo !== false && !tag.eliminado);
 
   estado.datos.agenda = estado.datos.agenda || [];
   const evento = crearEventoAgenda({
     tipo: item.tipo,
+    tipoEtiquetaId: inferida?.id || item.tipo,
+    tipoEtiquetaNombre: inferida?.nombre || null,
+    tipoEtiquetaColor: inferida?.color || null,
     nombre: item.nombre,
     fecha: item.fecha,
     hora: horaFinal,
@@ -2697,6 +2832,15 @@ function guardarItemExtraidoComoEvento(item, googleTaskId = null) {
     googleTaskId,
   });
   estado.datos.agenda.push(evento);
+
+  // Enlaces de apoyo enviados junto con la tarea: usan el mismo sistema de
+  // adjuntos que la interfaz (sin subir el recurso externo a Drive).
+  const enlaces = Array.isArray(item.enlaces) ? item.enlaces : [];
+  const urls = [...new Set(enlaces.map((e) => typeof e === "string" ? e.trim() : "").filter((e) => /^https?:\/\//i.test(e)))];
+  urls.forEach((url, i) => {
+    try { agregarEnlaceAdjunto({ nombre: `Enlace ${i + 1}`, url, entidadTipo: "evento", entidadId: evento.id }); }
+    catch (error) { console.warn("Wapper omitió un enlace no válido:", error); }
+  });
 
   marcarCambioPendiente();
   programarRecordatorioPush(evento);
@@ -3018,7 +3162,12 @@ async function mostrarResultadoEventosEnChat(resultado, turno, textoUsuario) {
   // VIGENCIA_HISTORIAL_MS), después ya no puede pasar.
   const eventosGuardados = Array.isArray(turno.eventosGuardados)
     ? turno.eventosGuardados
-    : resultado.items.map((item) => guardarItemExtraidoComoEvento(item));
+    : (() => {
+      const urlsSueltas = [...new Set(String(textoUsuario || "").match(/https?:\/\/[^\s<>()]+/gi) || [])];
+      const items = resultado.items.map((item) => ({ ...item }));
+      if (items.length === 1 && urlsSueltas.length && !items[0].enlaces?.length) items[0].enlaces = urlsSueltas;
+      return items.map((item) => guardarItemExtraidoComoEvento(item));
+    })();
   turno.eventosGuardados = eventosGuardados;
 
   eventosGuardados.forEach((id) => agregarBurbujaAlDom(crearTarjetaEventoGuardado(id)));
@@ -3223,6 +3372,9 @@ function mostrarResultadoConsultaEnChat(resultado, turno, textoUsuario) {
             numeroSemana: resuelto.rango.numeroSemana,
             inicioISO: fechaISODesdeLocal(resuelto.rango.inicio),
             finISO: fechaISODesdeLocal(resuelto.rango.fin),
+            fechaExacta: resuelto.rango.fechaExacta === true,
+            restoSemestre: resuelto.rango.restoSemestre === true,
+            semestreNombre: resuelto.rango.semestreNombre || null,
           }
           : { todoElSemestre: true };
         turno.consultaRangoTexto = textoRangoConsultaTurno(turno);
@@ -3332,6 +3484,25 @@ function mostrarResultadoActualizarNombreEnChat(resultado, turno) {
   agregarBurbujaAlDom(crearBurbuja("modelo", confirmaciones[obtenerIdiomaActual()] || confirmaciones.es));
 }
 
+function mostrarResultadoActualizarNombreAsistente(resultado, turno) {
+  if (!turno.nombreAsistenteAplicado) {
+    const resuelto = resolverActualizacionNombreAsistente(resultado.nombreAsistente);
+    if (!resuelto.ok) {
+      agregarBurbujaAlDom(crearBurbuja("modelo", resuelto.motivo));
+      return;
+    }
+    turno.nombreAsistenteAplicado = resuelto.nombreNuevo;
+  }
+  const nombre = turno.nombreAsistenteAplicado;
+  const confirmaciones = {
+    es: `¡Listo! A partir de ahora me llamaré ${nombre}.`,
+    en: `All right! From now on, I'll go by ${nombre}.`,
+    it: `Va bene! Da ora mi chiamerò ${nombre}.`,
+    fr: `D'accord ! À partir de maintenant, je m'appellerai ${nombre}.`,
+  };
+  agregarBurbujaAlDom(crearBurbuja("modelo", confirmaciones[obtenerIdiomaActual()] || confirmaciones.es));
+}
+
 async function mostrarResultadoEnChat(resultado, turno, textoUsuario) {
   if (resultado.accion === "saludo") {
     // Punto 4, personalidad Wapper: nunca llega acá vía Gemini (el schema
@@ -3359,6 +3530,10 @@ async function mostrarResultadoEnChat(resultado, turno, textoUsuario) {
   }
   if (resultado.accion === "actualizar_nombre") {
     mostrarResultadoActualizarNombreEnChat(resultado, turno);
+    return;
+  }
+  if (resultado.accion === "actualizar_nombre_asistente") {
+    mostrarResultadoActualizarNombreAsistente(resultado, turno);
     return;
   }
   await mostrarResultadoEventosEnChat(resultado, turno, textoUsuario);
@@ -3733,6 +3908,8 @@ function reconstruirChatDesdeHistorial(historial) {
             ? "consultar"
             : parseado.accion === "actualizar_nombre"
             ? "actualizar_nombre"
+            : parseado.accion === "actualizar_nombre_asistente"
+            ? "actualizar_nombre_asistente"
             : parseado.accion === "saludo"
             ? "saludo"
             : parseado.accion === "capacidades"
@@ -3742,6 +3919,7 @@ function reconstruirChatDesdeHistorial(historial) {
         cambioModalidad: parseado.cambioModalidad || null,
         consulta: parseado.consulta || null,
         nombrePreferido: parseado.nombrePreferido || null,
+        nombreAsistente: parseado.nombreAsistente || null,
         aclaracion: parseado.aclaracion || null,
       };
       // `turno` es el objeto real de historial.turnos (ver más abajo,

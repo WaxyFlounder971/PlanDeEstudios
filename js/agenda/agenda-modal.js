@@ -6,7 +6,7 @@
 import { TIPOS_EVENTO_AGENDA, crearEventoAgenda, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
-import { obtenerLocaleInterfaz } from "../core/i18n.js";
+import { obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { fechaLocalDesdeISO } from "../horario/horario.js";
@@ -16,6 +16,7 @@ import {
   formatearHoraAmPm,
   formatearTiempoRestanteHoy,
   obtenerEstiloEvento,
+  obtenerTiposEtiquetaAgenda,
   obtenerMateriasVinculablesAgenda,
   tareaVenceHoy,
 } from "./agenda-utils.js";
@@ -34,6 +35,7 @@ const PLACEHOLDER_NOMBRE = {
 };
 
 const ETIQUETA_TIPO = { evento: "Evento", tarea: "Tarea", examen: "Examen" };
+let tipoEtiquetaAgendaSeleccionadaId = null;
 
 // Adjuntos (archivos/imágenes/enlaces) — pedido nuevo: pensado sobre todo
 // para adjuntar el cronograma del semestre u otros documentos importantes a
@@ -219,17 +221,50 @@ function actualizarVisibilidadFeriado(tipo) {
   if (modalCard) void modalCard.offsetHeight;
 }
 
-function seleccionarPillTipo(tipo) {
+function construirPillsTipoAgenda(tipo, etiquetaId) {
+  const cont = document.getElementById("pills-agenda-tipo");
+  if (!cont) return;
+  cont.innerHTML = "";
+  const tipos = obtenerTiposEtiquetaAgenda().filter((t) => (t.activo !== false && !t.eliminado) || t.id === etiquetaId);
+  const tipoInicial = tipos.find((t) => t.id === etiquetaId && t.base === tipo)
+    || tipos.find((t) => t.base === tipo)
+    || tipos[0];
+  tipoEtiquetaAgendaSeleccionadaId = tipoInicial?.id || null;
+  tipos.forEach((tag) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pill-item" + (tag.id === tipoEtiquetaAgendaSeleccionadaId ? " active" : "");
+    btn.dataset.valor = tag.base;
+    btn.dataset.etiquetaId = tag.id;
+  btn.textContent = traducirTextoInterfaz(tag.nombre);
+    btn.style.setProperty("--tag-agenda-color", tag.color || "#8b5cf6");
+    if (tag.id === tipoEtiquetaAgendaSeleccionadaId) {
+      btn.style.borderColor = tag.color || "#8b5cf6";
+      btn.style.color = tag.color || "#8b5cf6";
+      btn.style.background = `color-mix(in srgb, ${tag.color || "#8b5cf6"} 16%, transparent)`;
+    }
+    if (tag.activo === false || tag.eliminado) btn.title = "Etiqueta desactivada; se conserva en este evento";
+    btn.addEventListener("click", () => seleccionarPillTipo(tag.base, tag.id));
+    cont.appendChild(btn);
+  });
+}
+
+function seleccionarPillTipo(tipo, etiquetaId = null) {
+  const tag = obtenerTiposEtiquetaAgenda().find((t) => t.id === etiquetaId)
+    || obtenerTiposEtiquetaAgenda().find((t) => t.base === tipo && t.activo !== false);
+  tipoEtiquetaAgendaSeleccionadaId = tag?.id || null;
   document.querySelectorAll("#pills-agenda-tipo .pill-item").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.valor === tipo);
+    btn.classList.toggle("active", btn.dataset.etiquetaId === tipoEtiquetaAgendaSeleccionadaId);
   });
   actualizarPlaceholderNombre(tipo);
   actualizarVisibilidadFeriado(tipo);
+  const chkFeriado = document.getElementById("chk-agenda-es-feriado");
+  if (chkFeriado && tipo === "evento") chkFeriado.checked = etiquetaId === "feriado";
 }
 
 function obtenerTipoSeleccionado() {
-  const activo = document.querySelector("#pills-agenda-tipo .pill-item.active");
-  return activo ? activo.dataset.valor : "evento";
+  const tag = obtenerTiposEtiquetaAgenda().find((t) => t.id === tipoEtiquetaAgendaSeleccionadaId);
+  return tag?.base || "evento";
 }
 
 /**
@@ -266,7 +301,8 @@ function abrirModalEventoAgenda({ eventoId = null, fechaDefault = null, datosIni
 
   // Orden/default del selector (rediseño núcleo Agenda, punto 1): alta
   // nueva siempre arranca en "tarea" — ya no en "evento".
-  seleccionarPillTipo(datosPrecarga ? datosPrecarga.tipo : "tarea");
+  construirPillsTipoAgenda(datosPrecarga ? datosPrecarga.tipo : "tarea", datosPrecarga?.tipo_etiqueta_id);
+  seleccionarPillTipo(datosPrecarga ? datosPrecarga.tipo : "tarea", datosPrecarga?.tipo_etiqueta_id || tipoEtiquetaAgendaSeleccionadaId);
   document.getElementById("chk-agenda-es-feriado").checked = datosPrecarga ? Boolean(datosPrecarga.es_feriado) : false;
   document.getElementById("input-agenda-nombre").value = datosPrecarga ? datosPrecarga.nombre : "";
   document.getElementById("input-agenda-fecha").value = datosPrecarga
@@ -334,6 +370,7 @@ function guardarEventoAgenda(eventoExistente) {
     return;
   }
   const tipo = obtenerTipoSeleccionado();
+  const tipoEtiqueta = obtenerTiposEtiquetaAgenda().find((t) => t.id === tipoEtiquetaAgendaSeleccionadaId);
   const todoElDia = document.getElementById("chk-agenda-todo-el-dia").checked;
   const hora = todoElDia ? null : document.getElementById("input-agenda-hora").value || null;
   const materiaSelect = document.getElementById("select-agenda-materia");
@@ -377,6 +414,9 @@ function guardarEventoAgenda(eventoExistente) {
     // Se guarda ANTES de pisarla (línea de abajo, `viva.fecha = fecha`).
     fechaAnteriorEvento = viva.fecha;
     viva.tipo = TIPOS_EVENTO_AGENDA.includes(tipo) ? tipo : "evento";
+    viva.tipo_etiqueta_id = tipoEtiqueta?.id || tipo;
+    viva.tipo_etiqueta_nombre = tipoEtiqueta?.nombre || null;
+    viva.tipo_etiqueta_color = tipoEtiqueta?.color || null;
     viva.nombre = nombre;
     viva.fecha = fecha;
     viva.hora = hora;
@@ -409,6 +449,9 @@ function guardarEventoAgenda(eventoExistente) {
   } else {
     const nuevo = crearEventoAgenda({
       tipo,
+      tipoEtiquetaId: tipoEtiqueta?.id || tipo,
+      tipoEtiquetaNombre: tipoEtiqueta?.nombre || null,
+      tipoEtiquetaColor: tipoEtiqueta?.color || null,
       nombre,
       fecha,
       hora,
@@ -635,6 +678,11 @@ function renderizarTarjetaInfoEventoAgenda(evento) {
   const badgeTipo = document.getElementById("info-agenda-badge-tipo");
   badgeTipo.className = `badge ${estilo.claseBadge}`;
   badgeTipo.textContent = estilo.etiqueta;
+  if (/^#[0-9a-f]{6}$/i.test(estilo.colorEtiqueta || "")) {
+    badgeTipo.style.borderColor = estilo.colorEtiqueta;
+    badgeTipo.style.color = estilo.colorEtiqueta;
+    badgeTipo.style.background = `color-mix(in srgb, ${estilo.colorEtiqueta} 15%, transparent)`;
+  }
 
   document.getElementById("info-agenda-badge-vencida").classList.toggle("oculto", !esTareaVencida(evento));
 
@@ -737,9 +785,6 @@ function cerrarTarjetaInfoEventoAgenda() {
 }
 
 function inicializarModalAgendaEvento() {
-  document.querySelectorAll("#pills-agenda-tipo .pill-item").forEach((btn) => {
-    btn.addEventListener("click", () => seleccionarPillTipo(btn.dataset.valor));
-  });
   document.getElementById("chk-agenda-todo-el-dia").addEventListener("change", (ev) => {
     document.getElementById("input-agenda-hora").disabled = ev.target.checked;
   });

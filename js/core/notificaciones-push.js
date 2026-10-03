@@ -24,6 +24,7 @@
 import { sellarTimestamp } from "./schema.js";
 import { marcarCambioPendiente } from "./storage-sync.js";
 import { estado } from "./storage.js";
+import { MODO_DEMO } from "./demo-mode.js";
 import { aplicarFormatoTexto } from "./utils.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 
@@ -215,6 +216,7 @@ async function cancelarTodosLosRecordatoriosPendientes() {
  * Worker sobre por qué hace falta mandarlo.
  */
 async function sincronizarResumenDiario() {
+  if (MODO_DEMO) return false;
   if (!notificacionesPushActivas()) return;
   const cfgResumen = estado.datos?.configuracion?.notificaciones_resumen_diario;
   if (!cfgResumen) return;
@@ -279,6 +281,7 @@ async function enviarNotificacionDePrueba(suscripcion) {
  * como desde el switch de Ajustes Avanzados.
  */
 async function activarNotificacionesPush() {
+  if (MODO_DEMO) { mostrarToast("Las notificaciones están simuladas en la demo."); return false; }
   if (!soportaNotificacionesPush()) {
     mostrarToast("Tu navegador no soporta notificaciones push");
     return false;
@@ -331,6 +334,7 @@ async function activarNotificacionesPush() {
 
 /** Apaga el switch de Ajustes, cancela lo programado y se desuscribe del push. */
 async function desactivarNotificacionesPush() {
+  if (MODO_DEMO) { mostrarToast("Las notificaciones están simuladas en la demo."); return false; }
   estado.datos.configuracion.notificaciones_push_activas = false;
   sellarTimestamp(estado.datos.configuracion);
   marcarCambioPendiente();

@@ -29,6 +29,8 @@ import { crearEventoAgenda, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { programarRecordatorioPush } from "../core/notificaciones-push.js";
 import { pedirAccessTokenGoogleTasks, haySesionGoogleTasksEnMemoria } from "../core/auth.js";
+import { MODO_DEMO } from "../core/demo-mode.js";
+import { mostrarToast } from "../ui/componentes.js";
 
 const API_BASE = "https://tasks.googleapis.com/tasks/v1";
 
@@ -81,6 +83,7 @@ function fechaDesdeDueGoogle(due) {
  * confirmar.
  */
 async function obtenerPropuestasGoogleTasks() {
+  if (MODO_DEMO) { mostrarToast("La conexión con Google Tasks está simulada en la demo."); return []; }
   const cfg = estado.datos?.configuracion?.google_tasks_sync;
   if (!cfg || !cfg.activo || !cfg.lista_id) return [];
 

@@ -7,6 +7,7 @@
 import { ESCALAS_DISPONIBLES, FRECUENCIAS_BACKUP_DRIVE, MONEDAS_DISPONIBLES, OFFSETS_RECORDATORIO_AGENDA, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, crearBackupDriveDefault, migrarDatosAntiguos, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
 import { actualizarIndicadorSync, forzarBackupManual, marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
+import { borrarDatosCuentaApp } from "../core/eliminar-cuenta-app.js";
 import { copiarPromptConAviso } from "../core/clipboard.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { traducirTextoInterfaz } from "../core/i18n.js";
@@ -41,6 +42,86 @@ import {
 } from "../core/notificaciones-calendario.js";
 
 /* ------------------------------ Ajustes ------------------------------ */
+
+function inicializarTamanoTextoAjustes() {
+  const cont = document.getElementById("ajuste-tamano-texto");
+  if (!cont || !estado.datos?.configuracion) return;
+  const config = estado.datos.configuracion;
+  const valores = ["pequeno", "mediano", "grande"];
+  const actual = valores.includes(config.tamano_texto) ? config.tamano_texto : "mediano";
+  document.documentElement.dataset.textSize = actual;
+  cont.querySelectorAll("[data-tamano-texto]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.tamanoTexto === actual);
+    if (btn.dataset.listenerTamanoTexto) return;
+    btn.dataset.listenerTamanoTexto = "1";
+    btn.addEventListener("click", () => {
+      const nuevo = btn.dataset.tamanoTexto;
+      if (!valores.includes(nuevo)) return;
+      config.tamano_texto = nuevo;
+      document.documentElement.dataset.textSize = nuevo;
+      cont.querySelectorAll("[data-tamano-texto]").forEach((otro) => otro.classList.toggle("active", otro === btn));
+      marcarCambioPendiente();
+    });
+  });
+}
+
+function inicializarBorradoCuentaApp() {
+  const btn = document.getElementById("btn-borrar-cuenta-app");
+  if (!btn || btn.dataset.inicializado === "1") return;
+  btn.dataset.inicializado = "1";
+  btn.addEventListener("click", abrirConfirmacionBorradoCuentaApp);
+}
+
+function abrirConfirmacionBorradoCuentaApp() {
+  document.getElementById("modal-borrar-cuenta-app")?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "modal-borrar-cuenta-app";
+  overlay.className = "modal-overlay";
+  overlay.style.zIndex = "900";
+  const caja = document.createElement("div");
+  caja.className = "glass-card modal-card stack";
+  caja.style.cssText = "width:min(100%,440px); gap:14px;";
+  caja.innerHTML = `
+    <h2 style="margin:0;">Borrar todos los datos de la app</h2>
+    <p class="muted" style="margin:0;">Se borrarán tus datos, archivos y calendario de App Académica, y se retirará tu participación de tus competencias. Si creaste una competencia con otras personas, su administración se transferirá a otro miembro. Tu cuenta Google, otros archivos y las competencias de los demás no se borran. Esta acción no se puede deshacer.</p>
+    <label class="stack" style="gap:6px;">
+      <span class="form-label">Escribe exactamente: <strong>BORRAR MI CUENTA</strong></span>
+      <input id="confirmar-borrar-cuenta-app-texto" class="form-input" type="text" autocomplete="off" spellcheck="false">
+    </label>
+    <p id="confirmar-borrar-cuenta-app-error" class="muted oculto" style="margin:0; color:var(--color-danger,#ef4444);"></p>
+    <div class="row" style="gap:10px;">
+      <button type="button" id="confirmar-borrar-cuenta-app-cancelar" class="btn btn-secondary" style="flex:1;">Cancelar</button>
+      <button type="button" id="confirmar-borrar-cuenta-app-final" class="btn btn-secondary" style="flex:1;" disabled>Borrar definitivamente</button>
+    </div>`;
+  overlay.appendChild(caja);
+  document.body.appendChild(overlay);
+  const input = caja.querySelector("#confirmar-borrar-cuenta-app-texto");
+  const final = caja.querySelector("#confirmar-borrar-cuenta-app-final");
+  const btnCancelar = caja.querySelector("#confirmar-borrar-cuenta-app-cancelar");
+  const cancelar = () => overlay.remove();
+  btnCancelar.addEventListener("click", cancelar);
+  overlay.addEventListener("click", (ev) => { if (ev.target === overlay) cancelar(); });
+  input.addEventListener("input", () => { final.disabled = input.value !== "BORRAR MI CUENTA"; });
+  input.addEventListener("keydown", (ev) => { if (ev.key === "Enter") ev.preventDefault(); });
+  final.addEventListener("click", async () => {
+    if (input.value !== "BORRAR MI CUENTA") return;
+    final.disabled = true;
+    btnCancelar.disabled = true;
+    final.textContent = "Borrando…";
+    try {
+      await borrarDatosCuentaApp();
+    } catch (error) {
+      console.error("No se pudo completar el borrado de cuenta:", error);
+      const msg = caja.querySelector("#confirmar-borrar-cuenta-app-error");
+      msg.textContent = error?.message || "No se pudo borrar todo. No cerré tu sesión para que puedas volver a intentarlo.";
+      msg.classList.remove("oculto");
+      final.disabled = false;
+      btnCancelar.disabled = false;
+      final.textContent = "Borrar definitivamente";
+    }
+  });
+  input.focus();
+}
 
 /**
  * Asistente IA (Gemini), revisado 2026-08-22: clave de API propia del
@@ -1189,6 +1270,8 @@ function montarPillSwitch(idViejo, dataAtributo, tituloCorto, opciones, valorAct
 }
 
 function renderizarAjustes() {
+  inicializarTamanoTextoAjustes();
+  inicializarBorradoCuentaApp();
   inicializarAccordionAjustes();
   inicializarAsistenteAjustes();
   inicializarBandejaVozAjustes();

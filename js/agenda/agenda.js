@@ -44,6 +44,7 @@ import {
   formatearTiempoRestanteHoy,
   obtenerDiasSemanaAgenda,
   obtenerEstiloEvento,
+  obtenerTiposEtiquetaAgenda,
   obtenerFechaInicioSemanaAgenda,
   agendaVenceHoyMuestraHora,
   agendaVenceHoyMuestraRestante,
@@ -72,16 +73,124 @@ const ESTADOS_FILTRO_AGENDA = [
   { id: "completado", etiqueta: "Completado" },
   { id: "perdida", etiqueta: "Perdida" },
   { id: "pendiente", etiqueta: "Pendiente" },
-  { id: "examen", etiqueta: "Examen" },
-  { id: "evento", etiqueta: "Evento" },
-  { id: "feriado", etiqueta: "Feriado" },
 ];
+
+function obtenerOpcionesFiltroAgenda() {
+  const colores = estado.datos?.configuracion?.agenda_colores_estado || {};
+  const estados = ESTADOS_FILTRO_AGENDA.map((e) => ({ ...e, color: colores[e.id] || ({ clase: "#ec4899", completado: "#3b82f6", perdida: "#6b7280", pendiente: "#f59e0b" })[e.id] }));
+  return [...estados, ...obtenerTiposEtiquetaAgenda().filter((t) => t.activo !== false).map((t) => ({ id: `tag:${t.id}`, etiqueta: t.nombre, color: t.color, tipoId: t.id }))];
+}
 
 /** Set de ids activos ahora mismo — todos si `agendaFiltroEstados` sigue en
  * `null` ("en reposo"), o exactamente el array explícito ya tocado. */
 function obtenerEstadosFiltroActivos() {
   if (Array.isArray(estado.agendaFiltroEstados)) return new Set(estado.agendaFiltroEstados);
-  return new Set(ESTADOS_FILTRO_AGENDA.map((e) => e.id));
+  const activos = new Set(obtenerOpcionesFiltroAgenda().map((e) => e.id));
+  // Los eventos con etiquetas desactivadas siguen visibles en la lista; lo
+  // que se desactiva es el control para filtrarlos y la opción de asignarla.
+  obtenerTiposEtiquetaAgenda().forEach((t) => activos.add(`tag:${t.id}`));
+  return activos;
+}
+
+function guardarConfiguracionTiposAgenda() {
+  const cfg = estado.datos.configuracion;
+  sellarTimestamp(cfg);
+  marcarCambioPendiente();
+  estado.agendaFiltroEstados = null;
+  renderizarAgenda();
+  renderizarEditorTiposAgenda();
+}
+
+function mostrarDialogoTipoAgenda({ tipo, cantidad, reemplazo, alMover, alConservar, alCancelar }) {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.style.zIndex = "100000";
+  const caja = document.createElement("div"); caja.className = "glass-card modal-card stack"; caja.style.maxWidth = "460px";
+  const titulo = document.createElement("h2"); titulo.textContent = `${tipo.nombre}: ${cantidad} elemento(s) guardado(s)`;
+  const mensaje = document.createElement("p"); mensaje.className = "muted";
+  mensaje.textContent = `¿Quieres cambiar estas etiquetas a “${reemplazo?.nombre || tipo.base}”? Si las conservas, seguirán visibles en Agenda con su etiqueta, pero ya no tendrán filtro ni aparecerán para nuevas entradas.`;
+  const botones = document.createElement("div"); botones.className = "row"; botones.style.cssText = "justify-content:flex-end;flex-wrap:wrap;gap:8px;";
+  const crear = (texto, clase, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = `btn ${clase}`; b.textContent = texto; b.addEventListener("click", () => { overlay.remove(); fn(); }); botones.appendChild(b); };
+  crear("Cancelar", "btn-secondary", alCancelar);
+  crear("Conservar y desactivar", "btn-secondary", alConservar);
+  if (reemplazo) crear(`Cambiar a ${reemplazo.nombre}`, "btn-primary", alMover);
+  caja.append(titulo, mensaje, botones); overlay.appendChild(caja); document.body.appendChild(overlay);
+}
+
+function renderizarEditorTiposAgenda() {
+  const cont = document.getElementById("agenda-tipos-config");
+  if (!cont) return;
+  cont.innerHTML = "";
+  const cfg = estado.datos.configuracion;
+  cfg.agenda_tipos = Array.isArray(cfg.agenda_tipos) ? cfg.agenda_tipos : [];
+  cfg.agenda_colores_estado = cfg.agenda_colores_estado || {};
+  const estadosDefault = { completado: ["Completado", "#3b82f6"], perdida: ["Perdida", "#6b7280"], pendiente: ["Pendiente", "#f59e0b"] };
+  Object.entries(estadosDefault).forEach(([id, [etiqueta, hex]]) => {
+    const fila = document.createElement("div"); fila.className = "row"; fila.style.cssText = "gap:8px;align-items:center;padding:6px 8px;border:1px solid var(--border-glass);border-radius:12px;";
+    const texto = document.createElement("span"); texto.textContent = traducirTextoInterfaz(etiqueta); texto.style.flex = "1";
+    const color = document.createElement("input"); color.type = "color"; color.value = cfg.agenda_colores_estado[id] || hex; color.title = `Color de ${etiqueta}`;
+    color.addEventListener("change", () => { cfg.agenda_colores_estado[id] = color.value; guardarConfiguracionTiposAgenda(); });
+    fila.append(texto, color); cont.appendChild(fila);
+  });
+  cfg.agenda_tipos.filter((t) => !t.eliminado).forEach((tipo) => {
+    const fila = document.createElement("div"); fila.className = "row"; fila.style.cssText = "gap:8px;align-items:center;flex-wrap:wrap;padding:8px;border:1px solid var(--border-glass);border-radius:12px;";
+    const nombre = document.createElement("input"); nombre.className = "form-input"; nombre.value = tipo.nombre; nombre.maxLength = 24; nombre.setAttribute("aria-label", `Nombre de ${tipo.nombre}`); nombre.style.cssText = "flex:1;min-width:110px;";
+    nombre.addEventListener("change", () => { const v = nombre.value.trim(); if (!v) { nombre.value = tipo.nombre; return; } tipo.nombre = v; guardarConfiguracionTiposAgenda(); });
+    const color = document.createElement("input"); color.type = "color"; color.value = /^#[0-9a-f]{6}$/i.test(tipo.color || "") ? tipo.color : "#8b5cf6"; color.title = `Color de ${tipo.nombre}`;
+    color.addEventListener("change", () => { tipo.color = color.value; const valor = nombre.value.trim(); if (valor) tipo.nombre = valor; guardarConfiguracionTiposAgenda(); });
+    const etiquetaActiva = document.createElement("label"); etiquetaActiva.className = "row"; etiquetaActiva.style.cssText = "gap:5px;font-size:.8rem;";
+    const chk = document.createElement("input"); chk.type = "checkbox"; chk.checked = tipo.activo !== false; etiquetaActiva.append(chk, document.createTextNode("Activo"));
+    chk.addEventListener("change", () => {
+      const nuevoEstado = chk.checked;
+      if (nuevoEstado) { tipo.activo = true; guardarConfiguracionTiposAgenda(); return; }
+      if (!cfg.agenda_tipos.some((t) => t.id !== tipo.id && t.activo !== false && !t.eliminado && t.base === tipo.base)) {
+        chk.checked = true;
+        mostrarToast(`Agrega otra etiqueta con comportamiento “${tipo.base}” antes de desactivar la última.`);
+        return;
+      }
+      const vinculados = (estado.datos.agenda || []).filter((ev) => (ev.tipo_etiqueta_id || ev.tipo) === tipo.id);
+      const reemplazo = cfg.agenda_tipos.find((t) => t.id !== tipo.id && t.activo !== false && !t.eliminado && t.base === tipo.base);
+      const conservar = () => { tipo.activo = false; guardarConfiguracionTiposAgenda(); };
+      if (vinculados.length && reemplazo) mostrarDialogoTipoAgenda({ tipo, cantidad: vinculados.length, reemplazo,
+        alMover: () => { vinculados.forEach((ev) => { ev.tipo_etiqueta_id = reemplazo.id; ev.tipo_etiqueta_nombre = reemplazo.nombre; ev.tipo_etiqueta_color = reemplazo.color; sellarTimestamp(ev); }); conservar(); },
+        alConservar: conservar, alCancelar: () => { chk.checked = true; } });
+      else conservar();
+    });
+    const borrar = document.createElement("button"); borrar.type = "button"; borrar.className = "btn btn-secondary"; borrar.textContent = "Eliminar"; borrar.title = "Quitar esta etiqueta de las opciones";
+    borrar.addEventListener("click", () => {
+      if (!cfg.agenda_tipos.some((t) => t.id !== tipo.id && t.activo !== false && !t.eliminado && t.base === tipo.base)) {
+        mostrarToast(`Agrega otra etiqueta con comportamiento “${tipo.base}” antes de eliminar la última.`);
+        return;
+      }
+      const vinculados = (estado.datos.agenda || []).filter((ev) => (ev.tipo_etiqueta_id || ev.tipo) === tipo.id);
+      const reemplazo = cfg.agenda_tipos.find((t) => t.id !== tipo.id && t.activo !== false && !t.eliminado && t.base === tipo.base);
+      const quitar = () => { vinculados.forEach((ev) => { ev.tipo_etiqueta_nombre = tipo.nombre; ev.tipo_etiqueta_color = tipo.color; }); tipo.activo = false; tipo.eliminado = true; if (tipo.predeterminado) { cfg.agenda_tipos_eliminados = cfg.agenda_tipos_eliminados || []; if (!cfg.agenda_tipos_eliminados.includes(tipo.id)) cfg.agenda_tipos_eliminados.push(tipo.id); } guardarConfiguracionTiposAgenda(); };
+      if (vinculados.length) mostrarDialogoTipoAgenda({ tipo, cantidad: vinculados.length, reemplazo,
+        alMover: () => { if (reemplazo) vinculados.forEach((ev) => { ev.tipo_etiqueta_id = reemplazo.id; ev.tipo_etiqueta_nombre = reemplazo.nombre; ev.tipo_etiqueta_color = reemplazo.color; sellarTimestamp(ev); }); quitar(); },
+        alConservar: quitar, alCancelar: () => {} });
+      else quitar();
+    });
+    const base = document.createElement("span"); base.className = "muted"; base.style.fontSize = ".72rem"; base.textContent = `Como ${tipo.base}`;
+    fila.append(nombre, color, etiquetaActiva, borrar, base); cont.appendChild(fila);
+  });
+}
+
+function agregarTipoEtiquetaAgenda() {
+  const nombreEl = document.getElementById("agenda-tipo-nuevo-nombre");
+  const nombre = nombreEl?.value.trim();
+  if (!nombre) return;
+  const tipo = { id: `custom_${crypto.randomUUID()}`, nombre, base: document.getElementById("agenda-tipo-nuevo-base")?.value || "tarea", color: document.getElementById("agenda-tipo-nuevo-color")?.value || "#8b5cf6", activo: true, predeterminado: false };
+  estado.datos.configuracion.agenda_tipos = [...obtenerTiposEtiquetaAgenda(), tipo];
+  if (nombreEl) nombreEl.value = "";
+  guardarConfiguracionTiposAgenda();
+}
+
+function inicializarEditorTiposAgenda() {
+  renderizarEditorTiposAgenda();
+  document.getElementById("agenda-tipo-nuevo-agregar")?.addEventListener("click", agregarTipoEtiquetaAgenda);
+  document.getElementById("agenda-tipo-nuevo-nombre")?.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") { ev.preventDefault(); agregarTipoEtiquetaAgenda(); }
+  });
 }
 
 /**
@@ -92,14 +201,12 @@ function obtenerEstadosFiltroActivos() {
  * importar esos otros 3.
  */
 function eventoPasaFiltroEstados(evento, activos) {
-  // Una tarea cae en EXACTAMENTE uno de 3 estados (2026-09-21): perdida no
-  // cuenta como pendiente ni como completada.
+  const idEtiqueta = evento.tipo_etiqueta_id || (evento.tipo === "tarea" ? "tarea" : evento.tipo === "examen" ? "examen" : evento.es_feriado ? "feriado" : "evento");
+  const pasaTipo = activos.has(`tag:${idEtiqueta}`);
   if (evento.tipo === "tarea") {
-    return activos.has(evento.perdida ? "perdida" : evento.completada ? "completado" : "pendiente");
+    return pasaTipo || activos.has(evento.perdida ? "perdida" : evento.completada ? "completado" : "pendiente");
   }
-  if (evento.tipo === "examen") return activos.has("examen");
-  if (evento.tipo === "evento") return activos.has(evento.es_feriado ? "feriado" : "evento");
-  return true;
+  return pasaTipo;
 }
 
 /**
@@ -138,11 +245,18 @@ function construirBarraFiltroEstadosAgenda() {
   const activos = obtenerEstadosFiltroActivos();
   const barra = document.createElement("div");
   barra.className = "agenda-filtro-estados";
-  const botones = ESTADOS_FILTRO_AGENDA.map(({ id, etiqueta }) => {
+  const opciones = obtenerOpcionesFiltroAgenda();
+  const botones = opciones.map(({ id, etiqueta, color }) => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = `agenda-filtro-estado-btn agenda-filtro-estado-${id}` + (activos.has(id) ? " active" : "");
     btn.textContent = traducirTextoInterfaz(etiqueta);
+    if (color) {
+      btn.style.setProperty("--tipo-agenda-color", color);
+      btn.style.borderColor = activos.has(id) ? color : "";
+      btn.style.color = activos.has(id) ? color : "";
+      btn.style.background = activos.has(id) ? `color-mix(in srgb, ${color} 16%, transparent)` : "";
+    }
     btn.addEventListener("click", () => alternarFiltroEstadoAgenda(id));
     barra.appendChild(btn);
     return btn;
@@ -602,8 +716,9 @@ function construirColumnaDerechaEvento(evento, estilo) {
     filaHoraBadge.style.cssText = "gap:6px; align-items:center; justify-content:flex-end;";
     filaHoraBadge.innerHTML = `
       <span class="muted" style="font-size:0.78rem; white-space:nowrap;">${textoHora}</span>
-      <span class="badge agenda-badge-tipo ${estilo.claseBadge}">${estilo.etiqueta}</span>
+      <span class="badge agenda-badge-tipo ${estilo.claseBadge}">${escaparHtmlAgenda(estilo.etiqueta)}</span>
     `;
+    aplicarColorEtiquetaBadgeAgenda(filaHoraBadge.querySelector(".agenda-badge-tipo"), estilo.colorEtiqueta);
     derecha.appendChild(filaHoraBadge);
 
     const restante = document.createElement("span");
@@ -617,6 +732,7 @@ function construirColumnaDerechaEvento(evento, estilo) {
     const badgeTipo = document.createElement("span");
     badgeTipo.className = `badge agenda-badge-tipo ${estilo.claseBadge}`;
     badgeTipo.textContent = estilo.etiqueta;
+    aplicarColorEtiquetaBadgeAgenda(badgeTipo, estilo.colorEtiqueta);
     derecha.appendChild(badgeTipo);
 
     const linea = document.createElement("span");
@@ -635,6 +751,17 @@ function construirColumnaDerechaEvento(evento, estilo) {
   }
 
   return derecha;
+}
+
+function escaparHtmlAgenda(texto) {
+  return String(texto || "").replace(/[&<>"']/g, (caracter) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[caracter]);
+}
+
+function aplicarColorEtiquetaBadgeAgenda(elemento, color) {
+  if (!elemento || !/^#[0-9a-f]{6}$/i.test(color || "")) return;
+  elemento.style.borderColor = color;
+  elemento.style.color = color;
+  elemento.style.background = `color-mix(in srgb, ${color} 15%, transparent)`;
 }
 
 /**
@@ -853,9 +980,7 @@ function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios, 
   // evento: con "Clase" como único badge activo (2026-09-21) la persona ocultó
   // tareas/exámenes/eventos a propósito, y decirle "Sin pendientes" bajo sus
   // clases sería engañoso. Con los badges por defecto no cambia nada.
-  const filtroDejaVerEventos = ["completado", "perdida", "pendiente", "examen", "evento", "feriado"].some((id) =>
-    activosFiltro.has(id)
-  );
+  const filtroDejaVerEventos = obtenerOpcionesFiltroAgenda().some((opcion) => activosFiltro.has(opcion.id));
   if (eventosDelDia.length === 0) {
     if (filtroDejaVerEventos) {
       const vacio = document.createElement("p");
@@ -865,8 +990,11 @@ function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios, 
       bloque.appendChild(vacio);
     }
   } else {
-    ORDEN_TIPO.forEach((tipo) => {
-      const delTipo = eventosDelDia.filter((ev) => ev.tipo === tipo);
+    const tiposVisibles = obtenerTiposEtiquetaAgenda();
+    const prioridadBase = { examen: 0, tarea: 1, evento: 2 };
+    tiposVisibles.sort((a, b) => prioridadBase[a.base] - prioridadBase[b.base]);
+    tiposVisibles.forEach((tipoEtiqueta) => {
+      const delTipo = eventosDelDia.filter((ev) => (ev.tipo_etiqueta_id || (ev.tipo === "tarea" ? "tarea" : ev.tipo === "examen" ? "examen" : ev.es_feriado ? "feriado" : "evento")) === tipoEtiqueta.id);
       if (delTipo.length === 0) return;
       const grupo = document.createElement("div");
       grupo.className = "stack";
@@ -874,7 +1002,7 @@ function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios, 
       const etiqueta = document.createElement("span");
       etiqueta.className = "muted";
       etiqueta.style.cssText = "font-size:0.7rem; text-transform:uppercase; letter-spacing:0.02em;";
-          etiqueta.textContent = traducirTextoInterfaz(ETIQUETA_TIPO[tipo]);
+      etiqueta.textContent = traducirTextoInterfaz(tipoEtiqueta.nombre);
       grupo.appendChild(etiqueta);
       delTipo.forEach((ev) => grupo.appendChild(construirItemEvento(ev)));
       bloque.appendChild(grupo);
@@ -1546,6 +1674,7 @@ function inicializarFiltrosAgenda() {
   // el mismo concepto, así que no hace falta sumar uno nuevo al schema.
 
   document.getElementById("btn-agenda-ajustes")?.addEventListener("click", () => {
+    renderizarEditorTiposAgenda();
     asegurarFiltroMostrarMateriasInicializado();
     document.querySelectorAll("#pills-agenda-filtro-modo .pill-item").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.valor === estado.agendaFiltroModo);
@@ -1641,6 +1770,7 @@ function inicializarFiltrosAgenda() {
   });
 
   inicializarSwitchesVenceHoyAgenda();
+  inicializarEditorTiposAgenda();
 }
 
 /**

@@ -47,6 +47,7 @@ import {
 } from "./schema.js";
 import { marcarCambioPendiente, asegurarTokenValido, conReintentoSi401 } from "./storage-sync.js";
 import { estado } from "./storage.js";
+import { MODO_DEMO } from "./demo-mode.js";
 import { aplicarFormatoTexto } from "./utils.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import {
@@ -283,6 +284,7 @@ async function asegurarCalendarioSecundario() {
  * fuente de verdad (JSON local/Drive) antes de que esto se llame.
  */
 async function sincronizarEventoCalendario(evento) {
+  if (MODO_DEMO) return false;
   if (!sincronizacionCalendarActiva()) return;
   if (!tieneScopeCalendarOtorgado()) return;
   if (evento.completada || evento.perdida) return eliminarEventoCalendarizado(evento);
@@ -978,6 +980,7 @@ async function sincronizarResumenParaFechaEvento(fechaEventoIso) {
  * el switch de Ajustes Avanzados.
  */
 async function activarSincronizacionCalendario() {
+  if (MODO_DEMO) { mostrarToast("La sincronización con Calendar está simulada en la demo."); return false; }
   if (!tieneScopeCalendarOtorgado()) {
     // A diferencia de Drive (obligatorio desde el primer login), Calendar
     // es un scope agregado en esta migración — una cuenta que inició
@@ -1024,6 +1027,7 @@ async function activarSincronizacionCalendario() {
 /** Apaga el switch de Ajustes y borra todo lo espejado en Calendar
  *  (eventos + el evento recurrente del Resumen Diario). */
 async function desactivarSincronizacionCalendario() {
+  if (MODO_DEMO) { mostrarToast("La sincronización con Calendar está simulada en la demo."); return false; }
   estado.datos.configuracion.sincronizar_calendario_google = false;
   sellarTimestamp(estado.datos.configuracion);
   marcarCambioPendiente();

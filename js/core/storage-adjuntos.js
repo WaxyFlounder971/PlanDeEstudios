@@ -47,6 +47,7 @@ import {
 } from "./auth.js";
 import { conReintentoSi401, marcarCambioPendiente, registrarHookPostFusion } from "./storage-sync.js";
 import { estado } from "./storage.js";
+import { MODO_DEMO } from "./demo-mode.js";
 
 // Fix 2026-08-08: el import de arriba estaba pero nunca se USABA — faltaba
 // esta línea. Sin ella, storage-sync.js nunca se enteraba de que este
@@ -64,6 +65,7 @@ registrarHookPostFusion(procesarTumbasDriveHuerfanas);
 // vez de sueltos en la raíz visible de la app, para que Drive quede
 // ordenado y sea fácil de encontrar/limpiar a mano si hiciera falta.
 const NOMBRE_CARPETA_ADJUNTOS = "ArchivosAdjuntos";
+const archivosDemoEnMemoria = new Map();
 
 // Se resuelve una sola vez por sesión (buscarOCrearCarpetaEnDrive ya es
 // idempotente del lado de Drive, pero cachear acá evita una llamada de red
@@ -138,6 +140,12 @@ function adjuntarArchivo(archivo, entidadTipo, entidadId, nombrePersonalizado, e
   if (!Array.isArray(estado.datos.adjuntos)) estado.datos.adjuntos = [];
   estado.datos.adjuntos.push(nuevo);
   marcarCambioPendiente(); // sube la REFERENCIA (liviana) ya mismo
+
+  if (MODO_DEMO) {
+    archivosDemoEnMemoria.set(nuevo.id, archivo);
+    nuevo.subidaPendiente = false;
+    return nuevo;
+  }
 
   colaSubidaPendiente.push({ adjuntoId: nuevo.id, archivo });
   procesarColaSubidas(); // intenta subir el BINARIO ya mismo, sin esperar
@@ -303,6 +311,11 @@ function editarAdjunto(adjuntoId, { nombre, url, emoji }) {
  * reservada de más si el usuario descarga varios adjuntos en la sesión.
  */
 async function descargarAdjunto(adjunto) {
+  if (MODO_DEMO) {
+    const archivo = archivosDemoEnMemoria.get(adjunto.id);
+    if (!archivo) throw new Error("Este archivo no está disponible en esta sesión de demo.");
+    return URL.createObjectURL(archivo);
+  }
   if (!adjunto.driveFileId) {
     throw new Error("Este adjunto todavía se está subiendo — probá de nuevo en un momento.");
   }
@@ -337,6 +350,10 @@ async function eliminarAdjunto(adjuntoId) {
 
   estado.datos.adjuntos = estado.datos.adjuntos.filter((a) => a.id !== adjuntoId);
   marcarCambioPendiente();
+  if (MODO_DEMO) {
+    archivosDemoEnMemoria.delete(adjuntoId);
+    return;
+  }
 
   // Saca cualquier subida pendiente de este adjunto de la cola — ya no
   // tiene sentido subir el binario de algo recién borrado.

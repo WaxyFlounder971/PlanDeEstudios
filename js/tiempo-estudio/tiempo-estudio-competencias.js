@@ -62,6 +62,8 @@ import { sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente, intentarSincronizar } from "../core/storage-sync.js";
 import { URL_WORKER_OAUTH } from "../core/auth.js";
 import { mostrarToast, abrirConfirmacion } from "../ui/componentes.js";
+import { adjuntarArchivo } from "../core/storage-adjuntos.js";
+import { validarAudio } from "./tiempo-estudio-audio-competencias.js";
 import { copiarAlPortapapelesBlindado, abrirModalCopiaManualPortapapeles } from "../core/clipboard.js";
 import { calcularMinutosTotalesEnRango, obtenerRangoSemana } from "./tiempo-estudio-estadisticas.js";
 // 2026-09-17 — Partes 3/4/5. Los dos son imports circulares intencionales
@@ -1016,6 +1018,13 @@ async function abrirModalInvitacionRecibida(id, refrescar) {
       <span class="form-label">Tu apodo (así te van a ver los demás)</span>
       <input type="text" id="comp-invitacion-apodo" class="form-input" placeholder="Ej. Wagner" maxlength="30" autocomplete="off">
     </div>
+    <details class="stack" style="gap:8px;">
+      <summary style="cursor:pointer;">Personalizar mis audios (opcional)</summary>
+      <label class="stack" style="gap:4px;"><span class="form-label">Victoria</span><input type="file" id="comp-invitacion-audio-victoria" class="form-input" accept="audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac"></label>
+      <label class="stack" style="gap:4px;"><span class="form-label">Derrota</span><input type="file" id="comp-invitacion-audio-derrota" class="form-input" accept="audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac"></label>
+      ${(estado.datos.competencias_unidas || []).length ? `<label class="row" style="align-items:flex-start; gap:8px;"><input type="checkbox" id="comp-invitacion-audio-todos"><span>Usar los audios que elija en todas mis competencias</span></label>` : ""}
+      <p class="muted" style="margin:0; font-size:0.78rem;">Los audios son personales y no se comparten con los demás.</p>
+    </details>
     <div class="row-between" style="gap:10px;">
       <button type="button" class="btn btn-secondary" id="comp-invitacion-cancelar" style="flex:1;">Ahora no</button>
       <button type="button" class="btn btn-primary" id="comp-invitacion-unirme" style="flex:1;">Unirme</button>
@@ -1027,10 +1036,15 @@ async function abrirModalInvitacionRecibida(id, refrescar) {
   const btnUnirme = caja.querySelector("#comp-invitacion-unirme");
   btnUnirme.addEventListener("click", async () => {
     const apodo = caja.querySelector("#comp-invitacion-apodo").value.trim();
+    const archivoVictoria = caja.querySelector("#comp-invitacion-audio-victoria").files?.[0] || null;
+    const archivoDerrota = caja.querySelector("#comp-invitacion-audio-derrota").files?.[0] || null;
     if (!apodo) {
       mostrarToast("Completá tu apodo");
       return;
     }
+    try { if (archivoVictoria) validarAudio(archivoVictoria); if (archivoDerrota) validarAudio(archivoDerrota); }
+    catch (error) { mostrarToast(error.message); return; }
+    const aplicarAudiosATodas = caja.querySelector("#comp-invitacion-audio-todos")?.checked === true;
 
     btnUnirme.disabled = true;
     btnUnirme.textContent = "Uniéndote…";
@@ -1053,9 +1067,17 @@ async function abrirModalInvitacionRecibida(id, refrescar) {
       if (!respuestaUnirse.ok) throw new Error(`El Worker respondió ${respuestaUnirse.status}`);
       const { participante_id } = await respuestaUnirse.json();
 
-      estado.datos.competencias_unidas.push(
-        sellarTimestamp({ id, participante_id, apodo, nombre: datos.nombre, es_creador: false, estado: "activa", unido_en: Date.now() })
-      );
+      const competenciaLocal = sellarTimestamp({ id, participante_id, apodo, nombre: datos.nombre, es_creador: false, estado: "activa", unido_en: Date.now() });
+      estado.datos.competencias_unidas.push(competenciaLocal);
+      if (archivoVictoria) competenciaLocal.audio_victoria_adjunto_id = adjuntarArchivo(archivoVictoria, "competencia-audio", `${id}:victoria`, archivoVictoria.name, "🎵").id;
+      if (archivoDerrota) competenciaLocal.audio_derrota_adjunto_id = adjuntarArchivo(archivoDerrota, "competencia-audio", `${id}:derrota`, archivoDerrota.name, "🎵").id;
+      if (aplicarAudiosATodas) {
+        (estado.datos.competencias_unidas || []).forEach((otra) => {
+          if (otra.id === id) return;
+          if (archivoVictoria) otra.audio_victoria_adjunto_id = competenciaLocal.audio_victoria_adjunto_id;
+          if (archivoDerrota) otra.audio_derrota_adjunto_id = competenciaLocal.audio_derrota_adjunto_id;
+        });
+      }
       marcarCambioPendiente();
 
       cerrar();
