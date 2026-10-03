@@ -5359,3 +5359,26 @@ html.exportar-tema-default[data-mode="dark"] {
   background: var(--bg-panel);
   color: var(--text-primary);
 }
+#selector-idioma-global {
+  position: fixed;
+  right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  z-index: 10020;
+  width: min(172px, calc(100vw - 32px));
+  padding: 8px 10px;
+  border: 1px solid var(--border-glass, #ffffff24);
+  border-radius: 16px;
+  background: var(--bg-panel, #17172bef);
+  box-shadow: 0 8px 26px #0005;
+  backdrop-filter: blur(16px);
+}
+#selector-idioma-global > .form-label {
+  display: block;
+  margin: 0 0 3px;
+  font-size: .7rem;
+}
+#selector-idioma-global .select-custom,
+#selector-idioma-global .select-custom-boton {
+  width: 100%;
+}
+

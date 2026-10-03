@@ -1578,6 +1578,16 @@
     "Semanas anteriores": "Semaines précédentes",
     "Entrar": "Rejoindre",
     "Modo": "Mode",
-    "Calidad": "Qualité"
+    "Calidad": "Qualité",
+    "✨ Probar Demo Académico": "✨ Essayer la démo académique",
+    "Explora con datos ficticios. No necesitas iniciar sesión.": "Explorez avec des données fictives. Aucun compte requis.",
+    "No se pudo cargar la demo. Recarga la página para volver a intentarlo.": "Impossible de charger la démo. Rechargez la page pour réessayer.",
+    "Los datos de esta sección son de ejemplo. Los cambios se quedan en esta pestaña y se descartan al recargar.": "Cette section utilise des données fictives. Les modifications restent dans cet onglet et sont supprimées au rechargement.",
+    "DEMO ACADÉMICO · datos ficticios · no se guarda al recargar": "DÉMO ACADÉMIQUE · données fictives · modifications non enregistrées",
+    "Funciones de demostración": "Fonctions de démonstration",
+    "Notificaciones: simuladas": "Notifications : simulées",
+    "Analítica: muestra ficticia": "Analytique : exemple fictif",
+    "Gemini: opcional, clave temporal": "Gemini : facultatif, clé temporaire",
+    "✨ Ver Wrapped": "✨ Voir le récapitulatif"
   }
 }

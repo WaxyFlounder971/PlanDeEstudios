@@ -1683,6 +1683,16 @@
     "Semanas anteriores": "Previous weeks",
     "Entrar": "Join",
     "Modo": "Mode",
-    "Calidad": "Quality"
+    "Calidad": "Quality",
+    "✨ Probar Demo Académico": "✨ Try the Academic Demo",
+    "Explora con datos ficticios. No necesitas iniciar sesión.": "Explore with sample data. No sign-in required.",
+    "No se pudo cargar la demo. Recarga la página para volver a intentarlo.": "The demo could not be loaded. Reload the page to try again.",
+    "Los datos de esta sección son de ejemplo. Los cambios se quedan en esta pestaña y se descartan al recargar.": "This section uses sample data. Changes stay in this tab and are discarded when you reload.",
+    "DEMO ACADÉMICO · datos ficticios · no se guarda al recargar": "ACADEMIC DEMO · sample data · changes reset on reload",
+    "Funciones de demostración": "Demo features",
+    "Notificaciones: simuladas": "Notifications: simulated",
+    "Analítica: muestra ficticia": "Analytics: sample data",
+    "Gemini: opcional, clave temporal": "Gemini: optional, temporary key",
+    "✨ Ver Wrapped": "✨ View Wrapped"
   }
 }
