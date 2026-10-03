@@ -1767,6 +1767,7 @@ function calcularHorasTotalesPeriodos(ahora = new Date(), incluirEnCurso = false
 function construirSeccionHorasTotales(cont) {
   const ahora = new Date();
   const totales = calcularHorasTotalesPeriodos(ahora, true); // true = suma lo que lleva el timer en curso
+  const minutosHistoricos = calcularMinutosTotalesEnRango(Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY, true);
 
   const sec = document.createElement("section");
   sec.className = "glass-card stack";
@@ -1783,12 +1784,13 @@ function construirSeccionHorasTotales(cont) {
     [traducirTextoInterfaz("Esta semana"), totales.semana.minutos, etiquetaRangoSemana(lunes)],
     [traducirTextoInterfaz("Este mes"), totales.mes.minutos, ahora.toLocaleDateString(obtenerLocaleInterfaz(), { month: "short", year: "numeric" })],
     [traducirTextoInterfaz("Este año"), totales.anio.minutos, String(ahora.getFullYear())],
+    [traducirTextoInterfaz("Todo el historial"), minutosHistoricos, traducirTextoInterfaz("Todas las sesiones guardadas")],
   ];
 
   // Mismo grid 2x2 y misma tarjetita que "Resumen" de cada materia
   // (construirSeccionResumenFinal) — un solo lenguaje visual en Estadísticas.
   const grid = document.createElement("div");
-  grid.style.cssText = "display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;";
+  grid.style.cssText = "display:grid; grid-template-columns:repeat(auto-fit, minmax(125px, 1fr)); gap:10px;";
   tarjetas.forEach(([etiqueta, minutos, detalle]) => {
     const tarjeta = document.createElement("div");
     tarjeta.className = "stack";

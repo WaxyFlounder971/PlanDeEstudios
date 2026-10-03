@@ -247,13 +247,8 @@ function renderizarSelector() {
   const boton = document.getElementById("selector-idioma-boton");
   const lista = document.getElementById("selector-idioma-lista");
   if (!selector || !boton || !lista) return;
-  // El selector debe estar disponible desde cualquier sección y también en
-  // la pantalla de inicio; se ancla al viewport, en la esquina inferior.
-  const contenedor = selector.parentElement;
-  if (contenedor && contenedor.id !== "selector-idioma-global") {
-    contenedor.id = "selector-idioma-global";
-    document.body.appendChild(contenedor);
-  }
+  // El selector vive solo en el inicio de sesión, para no ocupar espacio
+  // en las vistas de la app (en especial en pantallas de teléfono).
   boton.title = "Idioma";
   boton.setAttribute("aria-label", "Idioma");
   lista.replaceChildren();

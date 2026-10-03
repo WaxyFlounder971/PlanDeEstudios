@@ -15,6 +15,7 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
+import { MODO_DEMO } from "../core/demo-mode.js";
 import { obtenerLocaleInterfaz } from "../core/i18n.js";
 import { marcarCambioPendiente, mostrarCargando, ocultarCargando, registrarHookPostGuardado } from "../core/storage-sync.js";
 import { crearEnlaceHorarioCompartido, crearAmigoVinculado, sellarTimestamp } from "../core/schema.js";
@@ -819,6 +820,10 @@ function precargarSnapshotsAmigosDesdeBackup() {
   const backup = leerBackupSnapshotsAmigos();
   vinculados.forEach((amigo) => {
     if (cacheSnapshotsAmigos.has(amigo.file_id)) return; // ya hay algo más fresco en memoria, no pisar
+    if (MODO_DEMO && amigo.demo_snapshot) {
+      cacheSnapshotsAmigos.set(amigo.file_id, { snapshot: amigo.demo_snapshot, caida: false });
+      return;
+    }
     const entrada = backup[amigo.file_id];
     if (entrada && entrada.snapshot) {
       cacheSnapshotsAmigos.set(amigo.file_id, { snapshot: entrada.snapshot, caida: false });

@@ -2954,14 +2954,17 @@ function abrirMenuRapidoEstadoSemestre(semestre, anclaEl, onCambiar) {
 }
 
 function construirBadgeEstadoSemestre(semestre, onCambiar) {
-  const efectivo = obtenerEstadoEfectivoSemestre(semestre);
-  const esManual = semestre.estado_manual === "actual" || semestre.estado_manual === "pasado";
-
   const badge = document.createElement("span");
-  badge.className = "badge " + (efectivo === "actual" ? "badge-success" : "badge-neutral");
-  badge.textContent = (efectivo === "actual" ? "Actual" : "Pasado") + (esManual ? " (manual)" : "");
-  badge.style.cursor = "pointer";
-  badge.title = "Clic para elegir Automático/Actual/Pasado.";
+  // El estado ya se entiende por la ubicación de la tarjeta (semestre
+  // vigente o historial). Se conserva el acceso al ajuste manual, sin
+  // repetir etiquetas como “en curso/cerrado” en cada fila.
+  badge.className = "btn-icono-fantasma";
+  badge.textContent = "⋯";
+  badge.setAttribute("role", "button");
+  badge.setAttribute("tabindex", "0");
+  badge.setAttribute("aria-label", "Opciones de estado del semestre");
+  badge.style.cssText = "display:inline-grid;place-items:center;width:32px;height:32px;font-size:1.2rem;cursor:pointer;";
+  badge.title = "Opciones de estado del semestre";
 
   // Pendiente #4 (2026-08-03): antes requería mantener presionado (o clic
   // derecho) — ahora un solo clic abre el menú, igual que el resto de
@@ -2969,6 +2972,9 @@ function construirBadgeEstadoSemestre(semestre, onCambiar) {
   badge.addEventListener("click", (ev) => {
     ev.stopPropagation();
     abrirMenuRapidoEstadoSemestre(semestre, badge, onCambiar);
+  });
+  badge.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); badge.click(); }
   });
 
   return badge;

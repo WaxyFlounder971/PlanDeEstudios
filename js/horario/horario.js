@@ -532,7 +532,7 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minI
     // (título ~17px + una línea por profesor/aula si existen, más el
     // padding vertical de la tarjeta) y solo se agrega el link si sobra
     // espacio para su propia línea (~16px) sin invadir eso.
-    const lineasTexto = 1 + (b.profesorNombre ? 1 : 0) + (b.aula ? 1 : 0);
+    const lineasTexto = 1;
     const altoTextoEstimado = 6 /* padding vertical */ + lineasTexto * 15;
     const cabeEntrar = alto >= altoTextoEstimado + 16;
     // Punto 4 del ajuste a Horario propio: el ✎ que marcaba "esta semana
@@ -541,25 +541,18 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minI
     // otro archivo referencian tieneExcepcionEstaSemana), así que se quita
     // del todo en vez de moverlo - no queda ninguna referencia visual a la
     // excepción en el grid de Horario.
+    tarjeta.title = [obtenerCodigoBloque(b), b.nombreCorto, b.profesorNombre, b.aula].filter(Boolean).join(" · ");
     tarjeta.innerHTML = `
       ${obtenerCodigoBloque(b) ? `<div class="materia-codigo" style="font-size:0.72rem; line-height:1.1; overflow-wrap:anywhere;">${obtenerCodigoBloque(b)}</div>` : ""}
-      <div style="font-size:0.85rem; font-weight:600; line-height:1.15; display:flex; align-items:center; gap:4px; margin-bottom:2px; padding-right:${b.profesor_id ? "24px" : "0"}; overflow-wrap:break-word; word-break:break-word;">
+      <div style="font-size:0.68rem; font-weight:600; line-height:1.05; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:4; overflow:hidden; margin-bottom:2px; overflow-wrap:anywhere; word-break:normal;">
         <span>${b.nombreCorto}</span>
       </div>
-      ${b.profesorNombre ? `<div style="font-size:0.72rem; opacity:0.9; overflow-wrap:break-word; word-break:break-word;">${b.profesorNombre}</div>` : ""}
-      ${b.profesor_id ? `<button type="button" class="horario-boton-profesor" aria-label="${traducirTextoInterfaz("Ver profesor")}" title="${traducirTextoInterfaz("Ver profesor")}" style="position:absolute; right:5px; top:3px; z-index:2; border:0; border-radius:50%; width:24px; height:24px; padding:0; background:rgba(0,0,0,.22); color:#fff; font:inherit; cursor:pointer;">👤</button>` : ""}
-      ${b.aula ? `<div style="font-size:0.72rem; opacity:0.85; overflow-wrap:break-word; word-break:break-word;">${b.aula}</div>` : ""}
       ${emojiModalidad ? `<span class="horario-emoji-modalidad" title="${b.modalidad}" style="position:absolute; right:5px; bottom:3px; font-size:1.17rem; line-height:1;">${emojiModalidad}</span>` : ""}
       ${b.enlace && cabeEntrar ? `<a href="${b.enlace}" target="_blank" rel="noopener" class="horario-btn-entrar-clase" style="position:absolute; left:5px; bottom:3px; line-height:1;" onclick="event.stopPropagation()">${traducirTextoInterfaz("Entrar")}</a>` : ""}
     `;
     tarjeta.addEventListener("click", (ev) => {
       ev.stopPropagation();
       abrirTarjetaInfoBloque(semestre, cacheNumeroSemana, b);
-    });
-    tarjeta.querySelector(".horario-boton-profesor")?.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      const profesor = (estado.datos.profesores || []).find((p) => p.id === b.profesor_id);
-      if (profesor) window.abrirTarjetaProfesorDesdeHorario?.(profesor);
     });
     col.appendChild(tarjeta);
   });
@@ -606,6 +599,7 @@ function abrirTarjetaInfoBloque(semestre, numeroSemana, b) {
             <div>
               <div class="muted" style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.02em;">Profesor</div>
               <div style="overflow-wrap:break-word;">${b.profesorNombre}</div>
+              ${b.profesor_id ? `<button type="button" class="btn-discreto" id="horario-info-ver-profesor" style="padding:4px 0;">${traducirTextoInterfaz("Ver profesor")}</button>` : ""}
             </div>` : ""}
           <div>
             <div class="muted" style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.02em;">Modalidad</div>
@@ -650,6 +644,12 @@ function abrirTarjetaInfoBloque(semestre, numeroSemana, b) {
   document.getElementById("horario-info-abrir-materia")?.addEventListener("click", () => {
     cerrar();
     navegarAMateriaMatriculada(semestre.id, materiaMatriculada.id);
+  });
+  document.getElementById("horario-info-ver-profesor")?.addEventListener("click", () => {
+    const profesor = (estado.datos.profesores || []).find((p) => p.id === b.profesor_id);
+    if (!profesor) return;
+    cerrar();
+    window.abrirTarjetaProfesorDesdeHorario?.(profesor);
   });
   const btnCronogramaMateria = document.getElementById("horario-info-cronograma");
   if (btnCronogramaMateria) {
@@ -2462,3 +2462,4 @@ export {
   // que esta versión sí tiene (ver comentario grande en horario-modal.js).
   calcularNumeroSemanaSinAcotarParaFecha,
 };
+

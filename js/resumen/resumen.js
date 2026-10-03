@@ -303,7 +303,7 @@ function construirTarjetaPerdidas(cantidad) {
  *  módulo. Si la meta de hoy ya está en 0 (se cumplió con lo estudiado en
  *  días anteriores de la semana), se muestra la barra llena y "Meta
  *  cumplida ✅" en vez de una cifra "x de 0". */
-function construirTarjetaEstudioHoy(totalHechoMin, totalMetaMin) {
+function construirTarjetaEstudioHoy(totalHechoMin, totalMetaMin, materias = []) {
   const cumplida = totalMetaMin <= 0;
   const porcentaje = cumplida
     ? 100
@@ -338,6 +338,26 @@ function construirTarjetaEstudioHoy(totalHechoMin, totalMetaMin) {
 
   tarjeta.appendChild(fila);
   tarjeta.appendChild(barraCont);
+  if (materias.length) {
+    const detalle = document.createElement("div");
+    detalle.className = "stack resumen-estudio-hoy-detalle";
+    detalle.style.cssText = "gap:5px;margin-top:3px;";
+    materias.slice(0, 3).forEach((item) => {
+      const filaMateria = document.createElement("div");
+      filaMateria.className = "row-between";
+      filaMateria.style.cssText = "gap:10px;font-size:.78rem;";
+      const nombre = document.createElement("span");
+      nombre.style.cssText = "min-width:0;overflow-wrap:anywhere;";
+      nombre.textContent = item.nombreMateriaCorto;
+      const tiempo = document.createElement("span");
+      tiempo.className = "muted";
+      tiempo.style.cssText = "white-space:nowrap;";
+      tiempo.textContent = `${formatearHorasMin(item.hechoMinutosHoy)} / ${formatearHorasMin(item.metaMinutosHoy)}`;
+      filaMateria.append(nombre, tiempo);
+      detalle.appendChild(filaMateria);
+    });
+    tarjeta.appendChild(detalle);
+  }
   return tarjeta;
 }
 
@@ -384,7 +404,7 @@ function renderizarResumen() {
   if (estudioHoy.length > 0) {
     const totalHechoMin = estudioHoy.reduce((acc, item) => acc + item.hechoMinutosHoy, 0);
     const totalMetaMin = estudioHoy.reduce((acc, item) => acc + item.metaMinutosHoy, 0);
-    cont.appendChild(construirTarjetaEstudioHoy(totalHechoMin, totalMetaMin));
+    cont.appendChild(construirTarjetaEstudioHoy(totalHechoMin, totalMetaMin, estudioHoy));
   }
 
   // 3. Clases de hoy — después de Estudio de hoy; se auto-oculta si no hay
@@ -448,11 +468,15 @@ function renderizarResumen() {
 
   // 6. Próximo evento (incluye feriados, que son tipo "evento" con
   // esFeriado:true) — el más próximo dentro de los próximos 7 días.
-  const proximoEvento = eventos
+  const proximosEventos = eventos
     .filter((ev) => ev.tipo === "evento" && ev.fecha >= hoyISO && ev.fecha <= limiteEventoISO)
     .sort(ordenarPorFechaYHora)[0];
-  if (proximoEvento) {
-    cont.appendChild(construirBloqueSeccion("Próximo evento", construirListaEventos([proximoEvento])));
+  if (proximosEventos) {
+    const listaEventos = eventos
+      .filter((ev) => ev.tipo === "evento" && ev.fecha >= hoyISO && ev.fecha <= limiteEventoISO)
+      .sort(ordenarPorFechaYHora)
+      .slice(0, 3);
+    cont.appendChild(construirBloqueSeccion("Próximos eventos", construirListaEventos(listaEventos)));
     huboContenido = true;
   }
 

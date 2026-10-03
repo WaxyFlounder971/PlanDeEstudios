@@ -57,6 +57,7 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
+import { MODO_DEMO } from "../core/demo-mode.js";
 import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente, intentarSincronizar } from "../core/storage-sync.js";
@@ -1281,6 +1282,37 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar) {
  * argumentos (`renderizarTiempoEstudio`) que ya usan Materias/Estadísticas.
  */
 function construirVistaCompetencias(cont, refrescar) {
+  if (MODO_DEMO) {
+    const lista = document.createElement("div");
+    lista.className = "stack";
+    lista.style.gap = "10px";
+    const titulo = document.createElement("h3");
+    titulo.className = "texto-encabezado-seccion";
+    titulo.style.margin = "0";
+    titulo.textContent = "Competencias · demostración";
+    lista.appendChild(titulo);
+    (estado.datos.competencias_demo || []).forEach((competencia) => {
+      const tarjeta = document.createElement("section");
+      tarjeta.className = "glass-card stack";
+      const nombre = document.createElement("strong");
+      nombre.textContent = competencia.nombre;
+      const nota = document.createElement("p");
+      nota.className = "muted";
+      nota.style.margin = "0";
+      nota.textContent = `Reto semanal · meta ${competencia.meta_horas} h · marcador ficticio`;
+      const podio = document.createElement("div");
+      podio.className = "stack";
+      (competencia.participantes || []).slice().sort((a,b)=>b.horas-a.horas).forEach((persona,i)=>{
+        const fila=document.createElement("div"); fila.className="row-between";
+        const quien=document.createElement("span"); quien.textContent=`${i+1}. ${persona.nombre}`;
+        const horas=document.createElement("strong"); horas.textContent=`${persona.horas} h`;
+        fila.append(quien,horas); podio.appendChild(fila);
+      });
+      tarjeta.append(nombre,nota,podio); lista.appendChild(tarjeta);
+    });
+    const aviso=document.createElement("p"); aviso.className="muted"; aviso.textContent="Las competencias de esta pantalla son ejemplos y no se conectan con el servicio en línea.";
+    lista.appendChild(aviso); cont.appendChild(lista); return;
+  }
   // Fire-and-forget: además de correr tras cada sesión de estudio, se
   // pincha acá para que una delegación pendiente (ver
   // abrirModalDelegarAntesDeSalir) llegue apenas alguien abre esta

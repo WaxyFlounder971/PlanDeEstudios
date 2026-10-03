@@ -57,7 +57,9 @@ import {
   iniciarDescansoPomodoro,
   tiempoDeFase,
   suscribirseATimer,
+  notificarSesionesEstudioActualizadas,
 } from "./tiempo-estudio-timer.js";
+import { MODO_DEMO } from "../core/demo-mode.js";
 
 // mm.id de la materia en pantalla de detalle, o null = vista de tarjetas.
 let materiaDetalleActivaId = null;
@@ -68,6 +70,10 @@ let materiaDetalleActivaId = null;
 // de una sola). Módulo-nivel, mismo criterio que materiaDetalleActivaId:
 // no se persiste, se resetea solo si se recarga la página.
 let vistaSeccionTE = "materias";
+// Selección temporal (no persistida) para consultar matrículas de semestres
+// anteriores. Las sesiones y estadísticas globales siguen conservando todo
+// el historial; cambiar el selector solo cambia la lista que se está viendo.
+let semestreTiempoEstudioId = null;
 // Cleanup del suscribirseATimer de la pantalla de detalle actualmente
 // montada (si hay una) — se limpia y re-crea en cada render para nunca
 // dejar 2+ suscriptores duplicados de una visita anterior.
@@ -117,7 +123,11 @@ function obtenerPlanPorId(planId) {
  */
 function obtenerMateriasParaTiempoEstudio() {
   const items = [];
-  obtenerSemestresActuales().forEach((semestre) => {
+  const semestres = (estado.datos.semestres || []).slice().sort((a, b) => (a.fecha_inicio || "").localeCompare(b.fecha_inicio || ""));
+  const semestreActivo = obtenerSemestresActuales().slice().sort((a, b) => (b.fecha_inicio || "").localeCompare(a.fecha_inicio || ""))[0];
+  const elegido = semestreTiempoEstudioId || semestreActivo?.id || "todos";
+  const semestresVisibles = elegido === "todos" ? semestres : semestres.filter((s) => s.id === elegido);
+  semestresVisibles.forEach((semestre) => {
     (semestre.materias_matriculadas || []).forEach((mm) => {
       const plan = obtenerPlanPorId(mm.plan_estudio_id);
       const materia = plan && plan.materias.find((m) => m.id === mm.materia_id);
@@ -425,6 +435,30 @@ function construirEncabezado(cont) {
   titulo.textContent = "Tiempo";
   grupoTitulo.appendChild(titulo);
   grupoTitulo.appendChild(construirChipRacha());
+  if (MODO_DEMO) {
+    const accionesRacha = document.createElement("div");
+    accionesRacha.className = "row";
+    accionesRacha.style.cssText = "gap:6px;flex-wrap:wrap;";
+    const agregar = document.createElement("button");
+    agregar.type = "button"; agregar.className = "btn btn-secondary"; agregar.textContent = "Agregar racha";
+    agregar.addEventListener("click", () => {
+      const id = "demo-racha-sesion";
+      estado.datos.sesiones_estudio = estado.datos.sesiones_estudio || [];
+      if (!estado.datos.sesiones_estudio.some((s) => s.id === id)) {
+        const fin = Date.now();
+        estado.datos.sesiones_estudio.push({ id, materia_matriculada_id: obtenerMateriasParaTiempoEstudio()[0]?.mm.id || null, inicio: fin - 35 * 60000, fin, duracion_minutos: 35, origen: "demo" });
+      }
+      notificarSesionesEstudioActualizadas();
+    });
+    const borrar = document.createElement("button");
+    borrar.type = "button"; borrar.className = "btn btn-secondary"; borrar.textContent = "Borrar racha";
+    borrar.addEventListener("click", () => {
+      estado.datos.sesiones_estudio = (estado.datos.sesiones_estudio || []).filter((s) => s.id !== "demo-racha-sesion");
+      notificarSesionesEstudioActualizadas();
+    });
+    accionesRacha.append(agregar,borrar);
+    grupoTitulo.appendChild(accionesRacha);
+  }
   encabezado.appendChild(grupoTitulo);
 
   // Grupo de botones a la derecha. Van en su propio contenedor (y no
@@ -535,6 +569,24 @@ function construirPillVistaSeccion(cont) {
     });
   });
   cont.appendChild(grupo);
+  if (vistaSeccionTE === "materias") {
+    const selectSemestre = document.createElement("select");
+    selectSemestre.className = "form-select";
+    selectSemestre.setAttribute("aria-label", traducirTextoInterfaz("Semestre de Tiempo de Estudio"));
+    selectSemestre.style.cssText = "width:100%;margin-top:8px;";
+    const semestres = (estado.datos.semestres || []).slice().sort((a, b) => (b.fecha_inicio || "").localeCompare(a.fecha_inicio || ""));
+    const vigente = semestres.find((s) => obtenerSemestresActuales().some((actual) => actual.id === s.id));
+    const valorActual = semestreTiempoEstudioId || vigente?.id || "todos";
+    selectSemestre.add(new Option(traducirTextoInterfaz("Todos los semestres"), "todos"));
+    semestres.forEach((s) => selectSemestre.add(new Option(s.nombre || traducirTextoInterfaz("Semestre sin nombre"), s.id)));
+    selectSemestre.value = valorActual;
+    selectSemestre.addEventListener("change", () => {
+      semestreTiempoEstudioId = selectSemestre.value;
+      materiaDetalleActivaId = null;
+      renderizarTiempoEstudio();
+    });
+    cont.appendChild(selectSemestre);
+  }
 }
 
 /**

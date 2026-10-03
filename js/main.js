@@ -581,11 +581,11 @@ async function iniciarAplicacionDemo() {
     inicializarResumen();
     inicializarAgenda();
     inicializarHorario();
+    iniciarRefrescoPeriodicoAmigos();
     inicializarTiempoEstudio();
     inicializarBotonesCerrarModal();
     inicializarAutoScrollSelectoresEnModales();
-    document.title = "Demo Académico · App Académica";
-    document.getElementById("aviso-modo-demo")?.classList.remove("oculto");
+    document.title = "Demo Académico";
     document.getElementById("pantalla-login")?.classList.add("oculto");
     document.querySelectorAll('#app-shell img[alt="Logo App Académica"]').forEach((logo) => {
       logo.alt = "Logo Demo Académico";
@@ -611,8 +611,7 @@ async function iniciarAplicacionDemo() {
     if (syncCalendar) { syncCalendar.disabled = true; syncCalendar.title = "Simulado en modo demo"; }
     const indicador = document.getElementById("indicador-sync");
     if (indicador) { indicador.textContent = "Demo · cambios temporales"; indicador.removeAttribute("title"); }
-    document.getElementById("btn-logout")?.classList.add("oculto");
-    document.getElementById("btn-logout-popover")?.classList.add("oculto");
+    // En demo también debe existir una salida visible; la acción tiene una ruta dedicada que no llama a Google Auth/Drive.
     mostrarApp();
     const indicadorDemo = document.getElementById("indicador-sync");
     if (indicadorDemo) indicadorDemo.textContent = "Demo · cambios temporales";
@@ -620,7 +619,6 @@ async function iniciarAplicacionDemo() {
     console.error("No se pudo iniciar la demo:", error);
     ocultarPantallaCargaSesion();
     document.getElementById("app-shell")?.classList.add("oculto");
-    document.getElementById("aviso-modo-demo")?.classList.add("oculto");
     document.getElementById("pantalla-login")?.classList.remove("oculto");
     const aviso = document.getElementById("aviso-login-bloqueado");
     if (aviso) { aviso.textContent = "No se pudo cargar la demo. Recarga la página para volver a intentarlo."; aviso.classList.remove("oculto"); }
@@ -1125,6 +1123,12 @@ if ("serviceWorker" in navigator && !MODO_DEMO) {
  *  cerrar sesión - perderlos del dispositivo sería irreversible. */
 
 function pedirConfirmacionCerrarSesion() {
+  if (MODO_DEMO) {
+    const destino = new URL(window.location.href);
+    destino.searchParams.delete("demo");
+    window.location.replace(destino.href);
+    return;
+  }
   togglePerfilPopover(true);
   // FIX blindaje 2026-09-17 (punto 3.5 de la auditoría): una sesión de
   // estudio EN CURSO no está en `estado.datos` todavía -
@@ -1521,3 +1525,4 @@ export {
   temporizadorAvisoLogin,
   togglePerfilPopover,
 };
+

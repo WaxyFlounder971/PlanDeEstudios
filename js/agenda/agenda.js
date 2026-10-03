@@ -250,7 +250,13 @@ function construirBarraFiltroEstadosAgenda() {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = `agenda-filtro-estado-btn agenda-filtro-estado-${id}` + (activos.has(id) ? " active" : "");
-    btn.textContent = traducirTextoInterfaz(etiqueta);
+    const punto = document.createElement("span");
+    punto.className = "agenda-filtro-color";
+    punto.setAttribute("aria-hidden", "true");
+    punto.style.background = color || "#8b5cf6";
+    const texto = document.createElement("span");
+    texto.textContent = traducirTextoInterfaz(etiqueta);
+    btn.append(punto, texto);
     if (color) {
       btn.style.setProperty("--tipo-agenda-color", color);
       btn.style.borderColor = activos.has(id) ? color : "";
@@ -1450,7 +1456,12 @@ function renderizarAgendaInterno() {
     document.getElementById("agenda-header")?.insertAdjacentElement("afterend", filtroCont);
   }
   filtroCont.innerHTML = "";
-  filtroCont.appendChild(construirBarraFiltroEstadosAgenda());
+  const detalleTipos = document.createElement("details");
+  detalleTipos.className = "agenda-filtro-colapsable";
+  const resumenTipos = document.createElement("summary");
+  resumenTipos.textContent = traducirTextoInterfaz("Filtros de Agenda");
+  detalleTipos.append(resumenTipos, construirBarraFiltroEstadosAgenda());
+  filtroCont.appendChild(detalleTipos);
 
   if (modoTodo) {
     // Ronda de ajustes visuales #5 — punto D: el modo "Todo" es una lista
