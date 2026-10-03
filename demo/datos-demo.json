@@ -9,10 +9,186 @@
     "paleta": "azul",
     "plan_activo_id": "ucr-cp-plan5",
     "gemini_api_key": null,
-    "modo_hardcore": false,
+    "modo_hardcore": true,
     "navegacion_oculta": [],
     "navegacion_orden": [],
-    "mostrar_tiempo_estudio_en_agenda": true
+    "mostrar_tiempo_estudio_en_agenda": true,
+    "plan_activo_secundario_id": "tec-ati-demo",
+    "agenda_tipos": [
+      {
+        "id": "tarea",
+        "nombre": "Tarea",
+        "base": "tarea",
+        "color": "#3b82f6",
+        "activo": true,
+        "predeterminado": true
+      },
+      {
+        "id": "examen",
+        "nombre": "Examen",
+        "base": "examen",
+        "color": "#ef4444",
+        "activo": true,
+        "predeterminado": true
+      },
+      {
+        "id": "evento",
+        "nombre": "Evento",
+        "base": "evento",
+        "color": "#06b6d4",
+        "activo": true,
+        "predeterminado": true
+      },
+      {
+        "id": "feriado",
+        "nombre": "Feriado",
+        "base": "evento",
+        "color": "#10b981",
+        "activo": true,
+        "predeterminado": true
+      },
+      {
+        "id": "proyecto",
+        "nombre": "Proyecto",
+        "base": "tarea",
+        "color": "#a855f7",
+        "activo": true,
+        "predeterminado": false
+      },
+      {
+        "id": "quiz",
+        "nombre": "Quiz",
+        "base": "examen",
+        "color": "#f97316",
+        "activo": true,
+        "predeterminado": false
+      }
+    ],
+    "horario_amigos_vinculados": [
+      {
+        "id": "demo-hav-1",
+        "file_id": "demo-amigo-1",
+        "nombre": "Camila Vargas",
+        "color": "#fb7185",
+        "activo": true,
+        "fecha_vinculacion": "2026-09-01T12:00:00.000Z",
+        "demo_snapshot": {
+          "version": 1,
+          "semestre_nombre": "II Ciclo 2026",
+          "fecha_inicio": "2026-08-10",
+          "duracion_semanas": 16,
+          "config_dias": {
+            "dia_inicio_semana": "lunes"
+          },
+          "rango_horas": {
+            "horaInicio": "07:00",
+            "horaFin": "19:00"
+          },
+          "bloques": [
+            {
+              "id": "am-b0",
+              "nombre": "Cálculo I",
+              "color": "#fb7185",
+              "universidad": {
+                "nombre_completo": "Universidad de Costa Rica",
+                "siglas": "UCR"
+              },
+              "dias": [
+                {
+                  "dia": "L",
+                  "hora_inicio": "9:00",
+                  "hora_fin": "10:50",
+                  "modalidad": "presencial",
+                  "aula": "Aula 110"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "demo-hav-2",
+        "file_id": "demo-amigo-2",
+        "nombre": "Mateo Solís",
+        "color": "#22c55e",
+        "activo": true,
+        "fecha_vinculacion": "2026-09-01T12:00:00.000Z",
+        "demo_snapshot": {
+          "version": 1,
+          "semestre_nombre": "II Ciclo 2026",
+          "fecha_inicio": "2026-08-10",
+          "duracion_semanas": 16,
+          "config_dias": {
+            "dia_inicio_semana": "lunes"
+          },
+          "rango_horas": {
+            "horaInicio": "07:00",
+            "horaFin": "19:00"
+          },
+          "bloques": [
+            {
+              "id": "am-b1",
+              "nombre": "Bases de Datos",
+              "color": "#22c55e",
+              "universidad": {
+                "nombre_completo": "Universidad de Costa Rica",
+                "siglas": "UCR"
+              },
+              "dias": [
+                {
+                  "dia": "K",
+                  "hora_inicio": "10:00",
+                  "hora_fin": "11:50",
+                  "modalidad": "presencial",
+                  "aula": "Aula 111"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "demo-hav-3",
+        "file_id": "demo-amigo-3",
+        "nombre": "Lucía Méndez",
+        "color": "#fbbf24",
+        "activo": true,
+        "fecha_vinculacion": "2026-09-01T12:00:00.000Z",
+        "demo_snapshot": {
+          "version": 1,
+          "semestre_nombre": "II Ciclo 2026",
+          "fecha_inicio": "2026-08-10",
+          "duracion_semanas": 16,
+          "config_dias": {
+            "dia_inicio_semana": "lunes"
+          },
+          "rango_horas": {
+            "horaInicio": "07:00",
+            "horaFin": "19:00"
+          },
+          "bloques": [
+            {
+              "id": "am-b2",
+              "nombre": "Diseño de Sistemas",
+              "color": "#fbbf24",
+              "universidad": {
+                "nombre_completo": "Universidad de Costa Rica",
+                "siglas": "UCR"
+              },
+              "dias": [
+                {
+                  "dia": "M",
+                  "hora_inicio": "11:00",
+                  "hora_fin": "12:50",
+                  "modalidad": "presencial",
+                  "aula": "Aula 112"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
   },
   "planes_estudio": [
     {
@@ -336,6 +512,97 @@
           "sin_definir": true
         }
       ]
+    },
+    {
+      "id": "tec-ati-demo",
+      "nombre_carrera": "Administración de Tecnologías de Información (ATI)",
+      "universidad": {
+        "nombre_completo": "Instituto Tecnológico de Costa Rica",
+        "siglas": "TEC"
+      },
+      "codigo_plan": "ATI-DEMO-2026",
+      "tipo_titulo": "Bachillerato",
+      "parametros_universidad": {
+        "nombre_bloque": "Semestre",
+        "semanas_por_bloque": 16,
+        "escala_notas": 100,
+        "formula_ponderado": "creditos",
+        "horario_inicio_default": "08:00",
+        "horario_duracion_bloque_min": 50,
+        "nota_aprobacion": 70,
+        "redondeo_activo": true,
+        "tipos_horas": [
+          "Teoría",
+          "Práctica",
+          "Laboratorio"
+        ]
+      },
+      "categorias": [
+        {
+          "id": "ati-obligatorias",
+          "nombre": "Obligatorias",
+          "color": "#0ea5e9"
+        }
+      ],
+      "materias": [
+        {
+          "id": "ATI100",
+          "codigo": "ATI-100",
+          "nombre": "Fundamentos de Sistemas de Información",
+          "creditos": 3,
+          "horas": {
+            "Teoría": 2,
+            "Práctica": 1,
+            "Laboratorio": 0
+          },
+          "bloque": 1,
+          "estado": "cursando",
+          "categoria_id": "ati-obligatorias"
+        },
+        {
+          "id": "ATI120",
+          "codigo": "ATI-120",
+          "nombre": "Introducción a la Programación",
+          "creditos": 4,
+          "horas": {
+            "Teoría": 2,
+            "Práctica": 1,
+            "Laboratorio": 1
+          },
+          "bloque": 1,
+          "estado": "cursando",
+          "categoria_id": "ati-obligatorias"
+        },
+        {
+          "id": "ATI200",
+          "codigo": "ATI-200",
+          "nombre": "Bases de Datos",
+          "creditos": 4,
+          "horas": {
+            "Teoría": 2,
+            "Práctica": 1,
+            "Laboratorio": 1
+          },
+          "bloque": 2,
+          "estado": "pendiente",
+          "categoria_id": "ati-obligatorias"
+        },
+        {
+          "id": "ATI220",
+          "codigo": "ATI-220",
+          "nombre": "Gestión de Proyectos de TI",
+          "creditos": 3,
+          "horas": {
+            "Teoría": 3,
+            "Práctica": 0,
+            "Laboratorio": 0
+          },
+          "bloque": 2,
+          "estado": "pendiente",
+          "categoria_id": "ati-obligatorias"
+        }
+      ],
+      "optativas_disponibles": []
     }
   ],
   "semestres": [
@@ -344,7 +611,7 @@
       "plan_estudio_id": [
         "ucr-cp-plan5"
       ],
-      "nombre": "I Ciclo 2026 · cerrado",
+      "nombre": "I Ciclo 2026",
       "fecha_inicio": "2026-03-09",
       "duracion_semanas": 16,
       "estado_manual": "pasado",
@@ -545,9 +812,10 @@
     {
       "id": "sem-demo-actual",
       "plan_estudio_id": [
-        "ucr-cp-plan5"
+        "ucr-cp-plan5",
+        "tec-ati-demo"
       ],
-      "nombre": "II Ciclo 2026 · en curso",
+      "nombre": "II Ciclo 2026",
       "fecha_inicio": "2026-08-10",
       "duracion_semanas": 16,
       "estado_manual": "actual",
@@ -560,32 +828,48 @@
           "creditos": 3,
           "criterios": [
             {
-              "id": "crit-1",
+              "id": "crit-mm-cp2001",
               "nombre": "Evaluaciones",
               "valor_total_porcentaje": 100,
               "asignaciones": [
                 {
-                  "id": "asig-1",
-                  "nombre": "Ensayo de política pública",
-                  "nota": 88,
-                  "valor_porcentaje": 30
+                  "id": "mm-cp2001-a1",
+                  "nombre": "Control de lectura",
+                  "nota": 95,
+                  "valor_porcentaje": 25
                 },
                 {
-                  "id": "asig-2",
+                  "id": "mm-cp2001-a2",
+                  "nombre": "Trabajo aplicado",
+                  "nota": 91,
+                  "valor_porcentaje": 25
+                },
+                {
+                  "id": "mm-cp2001-a3",
                   "nombre": "Examen parcial",
-                  "nota": null,
-                  "valor_porcentaje": 30
+                  "nota": 94,
+                  "valor_porcentaje": 25
+                },
+                {
+                  "id": "mm-cp2001-a4",
+                  "nombre": "Proyecto de cierre",
+                  "nota": 96,
+                  "valor_porcentaje": 25
                 }
               ]
             }
           ],
           "profesor_ids": [
-            "prof-ines"
+            "prof-cp1"
           ],
           "tiempo_estudio": {
-            "meta_horas_semana": 5,
-            "color": "#6366f1"
-          }
+            "meta_horas_semana": 4,
+            "pomodoro": null,
+            "color": "#6366f1",
+            "dias_estudio": null
+          },
+          "calificacion_profesor": null,
+          "volveria_a_llevar_profesor": null
         },
         {
           "id": "mm-cp2002",
@@ -593,14 +877,50 @@
           "plan_estudio_id": "ucr-cp-plan5",
           "nota_final": null,
           "creditos": 3,
-          "criterios": [],
+          "criterios": [
+            {
+              "id": "crit-mm-cp2002",
+              "nombre": "Evaluaciones",
+              "valor_total_porcentaje": 100,
+              "asignaciones": [
+                {
+                  "id": "mm-cp2002-a1",
+                  "nombre": "Control de lectura",
+                  "nota": 78,
+                  "valor_porcentaje": 25
+                },
+                {
+                  "id": "mm-cp2002-a2",
+                  "nombre": "Trabajo aplicado",
+                  "nota": 72,
+                  "valor_porcentaje": 25
+                },
+                {
+                  "id": "mm-cp2002-a3",
+                  "nombre": "Examen parcial",
+                  "nota": 75,
+                  "valor_porcentaje": 25
+                },
+                {
+                  "id": "mm-cp2002-a4",
+                  "nombre": "Proyecto de cierre",
+                  "nota": 70,
+                  "valor_porcentaje": 25
+                }
+              ]
+            }
+          ],
           "profesor_ids": [
-            "prof-marcos"
+            "prof-cp2"
           ],
           "tiempo_estudio": {
-            "meta_horas_semana": 4,
-            "color": "#14b8a6"
-          }
+            "meta_horas_semana": 5,
+            "pomodoro": null,
+            "color": "#14b8a6",
+            "dias_estudio": null
+          },
+          "calificacion_profesor": null,
+          "volveria_a_llevar_profesor": null
         },
         {
           "id": "mm-cp2003",
@@ -608,16 +928,50 @@
           "plan_estudio_id": "ucr-cp-plan5",
           "nota_final": null,
           "creditos": 3,
-          "criterios": [],
+          "criterios": [
+            {
+              "id": "crit-mm-cp2003",
+              "nombre": "Evaluaciones",
+              "valor_total_porcentaje": 100,
+              "asignaciones": [
+                {
+                  "id": "mm-cp2003-a1",
+                  "nombre": "Control de lectura",
+                  "nota": 58,
+                  "valor_porcentaje": 25
+                },
+                {
+                  "id": "mm-cp2003-a2",
+                  "nombre": "Trabajo aplicado",
+                  "nota": 62,
+                  "valor_porcentaje": 25
+                },
+                {
+                  "id": "mm-cp2003-a3",
+                  "nombre": "Examen parcial",
+                  "nota": 55,
+                  "valor_porcentaje": 25
+                },
+                {
+                  "id": "mm-cp2003-a4",
+                  "nombre": "Proyecto de cierre",
+                  "nota": 60,
+                  "valor_porcentaje": 25
+                }
+              ]
+            }
+          ],
           "profesor_ids": [
-            "prof-elena"
+            "prof-cp3"
           ],
           "tiempo_estudio": {
-            "meta_horas_semana": null,
+            "meta_horas_semana": 6,
             "pomodoro": null,
-            "color": null,
+            "color": "#f59e0b",
             "dias_estudio": null
-          }
+          },
+          "calificacion_profesor": null,
+          "volveria_a_llevar_profesor": null
         },
         {
           "id": "mm-cp2004",
@@ -625,16 +979,50 @@
           "plan_estudio_id": "ucr-cp-plan5",
           "nota_final": null,
           "creditos": 3,
-          "criterios": [],
+          "criterios": [
+            {
+              "id": "crit-mm-cp2004",
+              "nombre": "Evaluaciones",
+              "valor_total_porcentaje": 100,
+              "asignaciones": [
+                {
+                  "id": "mm-cp2004-a1",
+                  "nombre": "Control de lectura",
+                  "nota": 96,
+                  "valor_porcentaje": 25
+                },
+                {
+                  "id": "mm-cp2004-a2",
+                  "nombre": "Trabajo aplicado",
+                  "nota": 92,
+                  "valor_porcentaje": 25
+                },
+                {
+                  "id": "mm-cp2004-a3",
+                  "nombre": "Examen parcial",
+                  "nota": 48,
+                  "valor_porcentaje": 25
+                },
+                {
+                  "id": "mm-cp2004-a4",
+                  "nombre": "Proyecto de cierre",
+                  "nota": 42,
+                  "valor_porcentaje": 25
+                }
+              ]
+            }
+          ],
           "profesor_ids": [
-            "prof-marcos"
+            "prof-cp4"
           ],
           "tiempo_estudio": {
-            "meta_horas_semana": null,
+            "meta_horas_semana": 4,
             "pomodoro": null,
-            "color": null,
+            "color": "#8b5cf6",
             "dias_estudio": null
-          }
+          },
+          "calificacion_profesor": null,
+          "volveria_a_llevar_profesor": null
         },
         {
           "id": "mm-cp2005",
@@ -642,16 +1030,50 @@
           "plan_estudio_id": "ucr-cp-plan5",
           "nota_final": null,
           "creditos": 3,
-          "criterios": [],
+          "criterios": [
+            {
+              "id": "crit-mm-cp2005",
+              "nombre": "Evaluaciones",
+              "valor_total_porcentaje": 100,
+              "asignaciones": [
+                {
+                  "id": "mm-cp2005-a1",
+                  "nombre": "Control de lectura",
+                  "nota": 68,
+                  "valor_porcentaje": 25
+                },
+                {
+                  "id": "mm-cp2005-a2",
+                  "nombre": "Trabajo aplicado",
+                  "nota": 76,
+                  "valor_porcentaje": 25
+                },
+                {
+                  "id": "mm-cp2005-a3",
+                  "nombre": "Examen parcial",
+                  "nota": 84,
+                  "valor_porcentaje": 25
+                },
+                {
+                  "id": "mm-cp2005-a4",
+                  "nombre": "Proyecto de cierre",
+                  "nota": 89,
+                  "valor_porcentaje": 25
+                }
+              ]
+            }
+          ],
           "profesor_ids": [
-            "prof-ines"
+            "prof-cp5"
           ],
           "tiempo_estudio": {
-            "meta_horas_semana": null,
+            "meta_horas_semana": 5,
             "pomodoro": null,
-            "color": null,
+            "color": "#ec4899",
             "dias_estudio": null
-          }
+          },
+          "calificacion_profesor": null,
+          "volveria_a_llevar_profesor": null
         },
         {
           "id": "mm-opt1019",
@@ -659,14 +1081,122 @@
           "plan_estudio_id": "ucr-cp-plan5",
           "nota_final": null,
           "creditos": 3,
-          "criterios": [],
+          "criterios": [
+            {
+              "id": "crit-mm-opt1019",
+              "nombre": "Evaluaciones",
+              "valor_total_porcentaje": 100,
+              "asignaciones": [
+                {
+                  "id": "mm-opt1019-a1",
+                  "nombre": "Control de lectura",
+                  "nota": 82,
+                  "valor_porcentaje": 25
+                },
+                {
+                  "id": "mm-opt1019-a2",
+                  "nombre": "Trabajo aplicado",
+                  "nota": 80,
+                  "valor_porcentaje": 25
+                },
+                {
+                  "id": "mm-opt1019-a3",
+                  "nombre": "Examen parcial",
+                  "nota": 86,
+                  "valor_porcentaje": 25
+                },
+                {
+                  "id": "mm-opt1019-a4",
+                  "nombre": "Proyecto de cierre",
+                  "nota": 83,
+                  "valor_porcentaje": 25
+                }
+              ]
+            }
+          ],
           "profesor_ids": [
-            "prof-elena"
+            "prof-cp1"
           ],
           "tiempo_estudio": {
-            "meta_horas_semana": null,
+            "meta_horas_semana": 6,
             "pomodoro": null,
-            "color": null,
+            "color": "#06b6d4",
+            "dias_estudio": null
+          },
+          "calificacion_profesor": null,
+          "volveria_a_llevar_profesor": null
+        },
+        {
+          "id": "mm-ati100",
+          "materia_id": "ATI100",
+          "plan_estudio_id": "tec-ati-demo",
+          "nota_final": null,
+          "creditos": 3,
+          "criterios": [
+            {
+              "id": "crit-mm-ati100",
+              "nombre": "Evaluaciones",
+              "valor_total_porcentaje": 100,
+              "asignaciones": [
+                {
+                  "id": "mm-ati100-a1",
+                  "nombre": "Práctica aplicada",
+                  "nota": 91,
+                  "valor_porcentaje": 40
+                },
+                {
+                  "id": "mm-ati100-a2",
+                  "nombre": "Examen parcial",
+                  "nota": 88,
+                  "valor_porcentaje": 60
+                }
+              ]
+            }
+          ],
+          "profesor_ids": [
+            "prof-ati1"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": 5,
+            "pomodoro": null,
+            "color": "#0ea5e9",
+            "dias_estudio": null
+          }
+        },
+        {
+          "id": "mm-ati120",
+          "materia_id": "ATI120",
+          "plan_estudio_id": "tec-ati-demo",
+          "nota_final": null,
+          "creditos": 4,
+          "criterios": [
+            {
+              "id": "crit-mm-ati120",
+              "nombre": "Evaluaciones",
+              "valor_total_porcentaje": 100,
+              "asignaciones": [
+                {
+                  "id": "mm-ati120-a1",
+                  "nombre": "Práctica aplicada",
+                  "nota": 86,
+                  "valor_porcentaje": 40
+                },
+                {
+                  "id": "mm-ati120-a2",
+                  "nombre": "Examen parcial",
+                  "nota": 79,
+                  "valor_porcentaje": 60
+                }
+              ]
+            }
+          ],
+          "profesor_ids": [
+            "prof-ati2"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": 5,
+            "pomodoro": null,
+            "color": "#38bdf8",
             "dias_estudio": null
           }
         }
@@ -780,8 +1310,330 @@
               "aula": "https://meet.example.invalid/optativa"
             }
           ]
+        },
+        {
+          "id": "bh-ati-1",
+          "materia_id": "ATI100",
+          "plan_estudio_id": "tec-ati-demo",
+          "grupo": "01",
+          "profesor_id": "prof-ati1",
+          "color": "#0ea5e9",
+          "dias": [
+            {
+              "dia": "L",
+              "hora_inicio": "17:00",
+              "hora_fin": "18:50",
+              "modalidad": "presencial",
+              "aula": "Edificio D, aula 203"
+            }
+          ]
+        },
+        {
+          "id": "bh-ati-2",
+          "materia_id": "ATI120",
+          "plan_estudio_id": "tec-ati-demo",
+          "grupo": "01",
+          "profesor_id": "prof-ati2",
+          "color": "#38bdf8",
+          "dias": [
+            {
+              "dia": "M",
+              "hora_inicio": "16:00",
+              "hora_fin": "17:50",
+              "modalidad": "presencial",
+              "aula": "Laboratorio TI 2"
+            }
+          ]
+        },
+        {
+          "id": "bh-demo-sab-0",
+          "materia_id": "CP2001",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "grupo": "03",
+          "profesor_id": "prof-cp1",
+          "color": "#6366f1",
+          "dias": [
+            {
+              "dia": "S",
+              "hora_inicio": "08:00",
+              "hora_fin": "09:50",
+              "modalidad": "presencial",
+              "aula": "Aula 120"
+            }
+          ]
+        },
+        {
+          "id": "bh-demo-sab-1",
+          "materia_id": "CP2002",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "grupo": "03",
+          "profesor_id": "prof-cp2",
+          "color": "#14b8a6",
+          "dias": [
+            {
+              "dia": "S",
+              "hora_inicio": "10:00",
+              "hora_fin": "11:50",
+              "modalidad": "presencial",
+              "aula": "Aula 121"
+            }
+          ]
+        },
+        {
+          "id": "bh-demo-sab-2",
+          "materia_id": "CP2003",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "grupo": "03",
+          "profesor_id": "prof-cp3",
+          "color": "#f59e0b",
+          "dias": [
+            {
+              "dia": "S",
+              "hora_inicio": "12:00",
+              "hora_fin": "13:50",
+              "modalidad": "presencial",
+              "aula": "Aula 122"
+            }
+          ]
         }
       ]
+    },
+    {
+      "id": "sem-demo-hist-1",
+      "nombre": "I Ciclo 2025",
+      "fecha_inicio": "2025-03-10",
+      "duracion_semanas": 16,
+      "estado_manual": "pasado",
+      "plan_estudio_id": [
+        "ucr-cp-plan5"
+      ],
+      "materias_matriculadas": [
+        {
+          "id": "mm-sem-demo-hist-1-0",
+          "materia_id": "CP1501",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": null,
+          "nota_final_manual": false,
+          "resultado": "aprobado",
+          "creditos": 3,
+          "criterios": [
+            {
+              "id": "crit-sem-demo-hist-1-0",
+              "nombre": "Evaluaciones",
+              "valor_total_porcentaje": 100,
+              "asignaciones": [
+                {
+                  "id": "a-sem-demo-hist-1-0",
+                  "nombre": "Proyecto de semestre",
+                  "nota": 92,
+                  "valor_porcentaje": 100
+                }
+              ]
+            }
+          ],
+          "profesor_ids": [
+            "prof-ines"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": 3,
+            "pomodoro": null,
+            "color": "#6366f1",
+            "dias_estudio": null
+          }
+        },
+        {
+          "id": "mm-sem-demo-hist-1-1",
+          "materia_id": "CP1504",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": null,
+          "nota_final_manual": false,
+          "resultado": "aprobado",
+          "creditos": 3,
+          "criterios": [
+            {
+              "id": "crit-sem-demo-hist-1-1",
+              "nombre": "Evaluaciones",
+              "valor_total_porcentaje": 100,
+              "asignaciones": [
+                {
+                  "id": "a-sem-demo-hist-1-1",
+                  "nombre": "Proyecto de semestre",
+                  "nota": 76,
+                  "valor_porcentaje": 100
+                }
+              ]
+            }
+          ],
+          "profesor_ids": [
+            "prof-marcos"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": 4,
+            "pomodoro": null,
+            "color": "#14b8a6",
+            "dias_estudio": null
+          }
+        }
+      ],
+      "bloques_horario": []
+    },
+    {
+      "id": "sem-demo-hist-2",
+      "nombre": "II Ciclo 2025",
+      "fecha_inicio": "2025-08-11",
+      "duracion_semanas": 16,
+      "estado_manual": "pasado",
+      "plan_estudio_id": [
+        "ucr-cp-plan5"
+      ],
+      "materias_matriculadas": [
+        {
+          "id": "mm-sem-demo-hist-2-0",
+          "materia_id": "CP1504",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": null,
+          "nota_final_manual": false,
+          "resultado": "aprobado",
+          "creditos": 3,
+          "criterios": [
+            {
+              "id": "crit-sem-demo-hist-2-0",
+              "nombre": "Evaluaciones",
+              "valor_total_porcentaje": 100,
+              "asignaciones": [
+                {
+                  "id": "a-sem-demo-hist-2-0",
+                  "nombre": "Proyecto de semestre",
+                  "nota": 76,
+                  "valor_porcentaje": 100
+                }
+              ]
+            }
+          ],
+          "profesor_ids": [
+            "prof-marcos"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": 3,
+            "pomodoro": null,
+            "color": "#6366f1",
+            "dias_estudio": null
+          }
+        },
+        {
+          "id": "mm-sem-demo-hist-2-1",
+          "materia_id": "CP1502",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": null,
+          "nota_final_manual": false,
+          "resultado": "aprobado",
+          "creditos": 3,
+          "criterios": [
+            {
+              "id": "crit-sem-demo-hist-2-1",
+              "nombre": "Evaluaciones",
+              "valor_total_porcentaje": 100,
+              "asignaciones": [
+                {
+                  "id": "a-sem-demo-hist-2-1",
+                  "nombre": "Proyecto de semestre",
+                  "nota": 84,
+                  "valor_porcentaje": 100
+                }
+              ]
+            }
+          ],
+          "profesor_ids": [
+            "prof-ines"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": 4,
+            "pomodoro": null,
+            "color": "#14b8a6",
+            "dias_estudio": null
+          }
+        }
+      ],
+      "bloques_horario": []
+    },
+    {
+      "id": "sem-demo-hist-3",
+      "nombre": "I Ciclo 2024",
+      "fecha_inicio": "2024-03-11",
+      "duracion_semanas": 16,
+      "estado_manual": "pasado",
+      "plan_estudio_id": [
+        "ucr-cp-plan5"
+      ],
+      "materias_matriculadas": [
+        {
+          "id": "mm-sem-demo-hist-3-0",
+          "materia_id": "CP1502",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": null,
+          "nota_final_manual": false,
+          "resultado": "aprobado",
+          "creditos": 3,
+          "criterios": [
+            {
+              "id": "crit-sem-demo-hist-3-0",
+              "nombre": "Evaluaciones",
+              "valor_total_porcentaje": 100,
+              "asignaciones": [
+                {
+                  "id": "a-sem-demo-hist-3-0",
+                  "nombre": "Proyecto de semestre",
+                  "nota": 84,
+                  "valor_porcentaje": 100
+                }
+              ]
+            }
+          ],
+          "profesor_ids": [
+            "prof-ines"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": 3,
+            "pomodoro": null,
+            "color": "#6366f1",
+            "dias_estudio": null
+          }
+        },
+        {
+          "id": "mm-sem-demo-hist-3-1",
+          "materia_id": "CP1501",
+          "plan_estudio_id": "ucr-cp-plan5",
+          "nota_final": null,
+          "nota_final_manual": false,
+          "resultado": "aprobado",
+          "creditos": 3,
+          "criterios": [
+            {
+              "id": "crit-sem-demo-hist-3-1",
+              "nombre": "Evaluaciones",
+              "valor_total_porcentaje": 100,
+              "asignaciones": [
+                {
+                  "id": "a-sem-demo-hist-3-1",
+                  "nombre": "Proyecto de semestre",
+                  "nota": 92,
+                  "valor_porcentaje": 100
+                }
+              ]
+            }
+          ],
+          "profesor_ids": [
+            "prof-ines"
+          ],
+          "tiempo_estudio": {
+            "meta_horas_semana": 4,
+            "pomodoro": null,
+            "color": "#14b8a6",
+            "dias_estudio": null
+          }
+        }
+      ],
+      "bloques_horario": []
     }
   ],
   "profesores": [
@@ -818,6 +1670,69 @@
       ],
       "correo": "elena.solis@example.invalid",
       "telefono": null
+    },
+    {
+      "id": "prof-cp1",
+      "nombre": "Dr. Andrés Solano",
+      "correo": "prof-cp1@example.invalid",
+      "telefono": null,
+      "materias": [],
+      "calificacion": 9.5,
+      "volveria_a_llevar": true
+    },
+    {
+      "id": "prof-cp2",
+      "nombre": "M.Sc. Laura Jiménez",
+      "correo": "prof-cp2@example.invalid",
+      "telefono": null,
+      "materias": [],
+      "calificacion": 8.5,
+      "volveria_a_llevar": true
+    },
+    {
+      "id": "prof-cp3",
+      "nombre": "Lic. Sofía Chacón",
+      "correo": "prof-cp3@example.invalid",
+      "telefono": null,
+      "materias": [],
+      "calificacion": 7,
+      "volveria_a_llevar": true
+    },
+    {
+      "id": "prof-cp4",
+      "nombre": "M.Sc. Esteban Rojas",
+      "correo": "prof-cp4@example.invalid",
+      "telefono": null,
+      "materias": [],
+      "calificacion": 6,
+      "volveria_a_llevar": false
+    },
+    {
+      "id": "prof-cp5",
+      "nombre": "Dra. Valeria Méndez",
+      "correo": "prof-cp5@example.invalid",
+      "telefono": null,
+      "materias": [],
+      "calificacion": 9,
+      "volveria_a_llevar": true
+    },
+    {
+      "id": "prof-ati1",
+      "nombre": "Ing. Natalia Vega",
+      "correo": "prof-ati1@example.invalid",
+      "telefono": null,
+      "materias": [],
+      "calificacion": 9.5,
+      "volveria_a_llevar": true
+    },
+    {
+      "id": "prof-ati2",
+      "nombre": "M.Sc. Pablo Araya",
+      "correo": "prof-ati2@example.invalid",
+      "telefono": null,
+      "materias": [],
+      "calificacion": 8,
+      "volveria_a_llevar": true
     }
   ],
   "companeros": [
@@ -827,10 +1742,9 @@
       "carnet": "C-00001",
       "lista": "whitelist",
       "materias_compartidas": [
-        "mm-cp2001",
-        "mm-cp2004"
+        "mm-cp2001"
       ],
-      "nota": "Equipo de investigación; suele compartir apuntes."
+      "nota": "Estudiante ficticio de demostración."
     },
     {
       "id": "comp-diego",
@@ -838,10 +1752,9 @@
       "carnet": "C-00002",
       "lista": "whitelist",
       "materias_compartidas": [
-        "mm-cp2002",
-        "mm-cp2005"
+        "mm-cp2002"
       ],
-      "nota": "Compañero ficticio para la vista de Comunidad."
+      "nota": "Estudiante ficticio de demostración."
     },
     {
       "id": "comp-caso-largo",
@@ -851,94 +1764,556 @@
       "materias_compartidas": [
         "mm-cp2003"
       ],
-      "nota": "Nombre largo deliberado para probar que la tarjeta se adapte sin cortar texto."
+      "nota": "Estudiante ficticio de demostración."
+    },
+    {
+      "id": "comp-demo-4",
+      "nombre_completo": "Luis Mora",
+      "carnet": "C-00004",
+      "lista": "whitelist",
+      "materias_compartidas": [
+        "mm-cp2004"
+      ],
+      "nota": "Estudiante ficticio de demostración."
+    },
+    {
+      "id": "comp-demo-5",
+      "nombre_completo": "Camila Vargas",
+      "carnet": "C-00005",
+      "lista": "whitelist",
+      "materias_compartidas": [
+        "mm-cp2005"
+      ],
+      "nota": "Estudiante ficticio de demostración."
+    },
+    {
+      "id": "comp-demo-6",
+      "nombre_completo": "José Castro",
+      "carnet": "C-00006",
+      "lista": "whitelist",
+      "materias_compartidas": [
+        "mm-opt1019"
+      ],
+      "nota": "Estudiante ficticio de demostración."
+    },
+    {
+      "id": "comp-demo-7",
+      "nombre_completo": "Valentina León",
+      "carnet": "C-00007",
+      "lista": "whitelist",
+      "materias_compartidas": [
+        "mm-ati100"
+      ],
+      "nota": "Estudiante ficticio de demostración."
+    },
+    {
+      "id": "comp-demo-8",
+      "nombre_completo": "Mateo Pérez",
+      "carnet": "C-00008",
+      "lista": "whitelist",
+      "materias_compartidas": [
+        "mm-ati120"
+      ],
+      "nota": "Estudiante ficticio de demostración."
+    },
+    {
+      "id": "comp-demo-9",
+      "nombre_completo": "Daniela Soto",
+      "carnet": "C-00009",
+      "lista": "whitelist",
+      "materias_compartidas": [
+        "mm-cp2001"
+      ],
+      "nota": "Estudiante ficticio de demostración."
+    },
+    {
+      "id": "comp-demo-10",
+      "nombre_completo": "Gabriel Quesada",
+      "carnet": "C-000010",
+      "lista": "whitelist",
+      "materias_compartidas": [
+        "mm-cp2002"
+      ],
+      "nota": "Estudiante ficticio de demostración."
     }
   ],
   "agenda": [
     {
-      "id": "ag-done",
+      "id": "demo-ag-tarea-1",
       "tipo": "tarea",
       "tipo_etiqueta_id": "tarea",
-      "nombre": "Lectura comentada: El Estado y sus instituciones",
-      "fecha": "2026-09-18",
-      "hora": null,
+      "tipo_etiqueta_nombre": "Tarea",
+      "tipo_etiqueta_color": "#3b82f6",
+      "nombre": "Tarea: lectura y preparación",
+      "fecha": "2026-10-05",
+      "hora": "09:00",
       "materia_matriculada_id": "mm-cp2001",
       "semestre_id": "sem-demo-actual",
-      "notas": "Entregada en el aula virtual.",
+      "notas": "Actividad ficticia para explorar los filtros y estados de Agenda.",
       "completada": true,
       "perdida": false,
       "es_feriado": false
     },
     {
-      "id": "ag-pending",
+      "id": "demo-ag-tarea-2",
       "tipo": "tarea",
-      "tipo_etiqueta_id": "proyecto",
-      "tipo_etiqueta_nombre": "Proyecto",
-      "tipo_etiqueta_color": "#a855f7",
-      "nombre": "Mapa comparativo de modelos de gobernanza local",
-      "fecha": "2026-10-08",
-      "hora": "23:59",
-      "materia_matriculada_id": "mm-opt1019",
+      "tipo_etiqueta_id": "tarea",
+      "tipo_etiqueta_nombre": "Tarea",
+      "tipo_etiqueta_color": "#3b82f6",
+      "nombre": "Tarea: avance grupal",
+      "fecha": "2026-10-12",
+      "hora": "12:00",
+      "materia_matriculada_id": "mm-cp2002",
       "semestre_id": "sem-demo-actual",
-      "notas": "Producto grupal de ejemplo.",
+      "notas": "Actividad ficticia para explorar los filtros y estados de Agenda.",
       "completada": false,
       "perdida": false,
       "es_feriado": false
     },
     {
-      "id": "ag-lost",
+      "id": "demo-ag-tarea-3",
       "tipo": "tarea",
       "tipo_etiqueta_id": "tarea",
-      "nombre": "Comentario de coyuntura política",
-      "fecha": "2026-08-28",
+      "tipo_etiqueta_nombre": "Tarea",
+      "tipo_etiqueta_color": "#3b82f6",
+      "nombre": "Tarea: entrega final",
+      "fecha": "2026-10-19",
       "hora": "23:59",
-      "materia_matriculada_id": "mm-cp2005",
+      "materia_matriculada_id": "mm-cp2003",
       "semestre_id": "sem-demo-actual",
-      "notas": "Caso vencido hace varias semanas para probar el estado Perdida.",
+      "notas": "Actividad ficticia para explorar los filtros y estados de Agenda.",
       "completada": false,
       "perdida": true,
       "es_feriado": false
     },
     {
-      "id": "ag-exam",
+      "id": "demo-ag-examen-1",
       "tipo": "examen",
       "tipo_etiqueta_id": "examen",
-      "nombre": "Examen parcial · Análisis Político Cuantitativo I",
-      "fecha": "2026-10-16",
-      "hora": "10:00",
+      "tipo_etiqueta_nombre": "Examen",
+      "tipo_etiqueta_color": "#ef4444",
+      "nombre": "Examen: lectura y preparación",
+      "fecha": "2026-10-05",
+      "hora": "09:00",
       "materia_matriculada_id": "mm-cp2004",
       "semestre_id": "sem-demo-actual",
-      "notas": "Aula 105 · llevar calculadora básica.",
+      "notas": "Actividad ficticia para explorar los filtros y estados de Agenda.",
       "completada": false,
       "perdida": false,
       "es_feriado": false
     },
     {
-      "id": "ag-quiz",
+      "id": "demo-ag-examen-2",
+      "tipo": "examen",
+      "tipo_etiqueta_id": "examen",
+      "tipo_etiqueta_nombre": "Examen",
+      "tipo_etiqueta_color": "#ef4444",
+      "nombre": "Examen: avance grupal",
+      "fecha": "2026-10-09",
+      "hora": "12:00",
+      "materia_matriculada_id": "mm-cp2005",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Actividad ficticia para explorar los filtros y estados de Agenda.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "demo-ag-examen-3",
+      "tipo": "examen",
+      "tipo_etiqueta_id": "examen",
+      "tipo_etiqueta_nombre": "Examen",
+      "tipo_etiqueta_color": "#ef4444",
+      "nombre": "Examen: entrega final",
+      "fecha": "2026-10-16",
+      "hora": "23:59",
+      "materia_matriculada_id": "mm-opt1019",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Actividad ficticia para explorar los filtros y estados de Agenda.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "demo-ag-evento-1",
+      "tipo": "evento",
+      "tipo_etiqueta_id": "evento",
+      "tipo_etiqueta_nombre": "Evento",
+      "tipo_etiqueta_color": "#06b6d4",
+      "nombre": "Evento: lectura y preparación",
+      "fecha": "2026-10-05",
+      "hora": "09:00",
+      "materia_matriculada_id": "mm-ati100",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Actividad ficticia para explorar los filtros y estados de Agenda.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "demo-ag-evento-2",
+      "tipo": "evento",
+      "tipo_etiqueta_id": "evento",
+      "tipo_etiqueta_nombre": "Evento",
+      "tipo_etiqueta_color": "#06b6d4",
+      "nombre": "Evento: avance grupal",
+      "fecha": "2026-10-12",
+      "hora": "12:00",
+      "materia_matriculada_id": "mm-ati120",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Actividad ficticia para explorar los filtros y estados de Agenda.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "demo-ag-evento-3",
+      "tipo": "evento",
+      "tipo_etiqueta_id": "evento",
+      "tipo_etiqueta_nombre": "Evento",
+      "tipo_etiqueta_color": "#06b6d4",
+      "nombre": "Evento: entrega final",
+      "fecha": "2026-10-19",
+      "hora": "23:59",
+      "materia_matriculada_id": "mm-cp2001",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Actividad ficticia para explorar los filtros y estados de Agenda.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "demo-ag-feriado-1",
+      "tipo": "evento",
+      "tipo_etiqueta_id": "feriado",
+      "tipo_etiqueta_nombre": "Feriado",
+      "tipo_etiqueta_color": "#10b981",
+      "nombre": "Feriado: lectura y preparación",
+      "fecha": "2026-10-05",
+      "hora": "09:00",
+      "materia_matriculada_id": "mm-cp2002",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Actividad ficticia para explorar los filtros y estados de Agenda.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": true
+    },
+    {
+      "id": "demo-ag-feriado-2",
+      "tipo": "evento",
+      "tipo_etiqueta_id": "feriado",
+      "tipo_etiqueta_nombre": "Feriado",
+      "tipo_etiqueta_color": "#10b981",
+      "nombre": "Feriado: avance grupal",
+      "fecha": "2026-10-12",
+      "hora": "12:00",
+      "materia_matriculada_id": "mm-cp2003",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Actividad ficticia para explorar los filtros y estados de Agenda.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": true
+    },
+    {
+      "id": "demo-ag-feriado-3",
+      "tipo": "evento",
+      "tipo_etiqueta_id": "feriado",
+      "tipo_etiqueta_nombre": "Feriado",
+      "tipo_etiqueta_color": "#10b981",
+      "nombre": "Feriado: entrega final",
+      "fecha": "2026-10-19",
+      "hora": "23:59",
+      "materia_matriculada_id": "mm-cp2004",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Actividad ficticia para explorar los filtros y estados de Agenda.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": true
+    },
+    {
+      "id": "demo-ag-proyecto-1",
+      "tipo": "tarea",
+      "tipo_etiqueta_id": "proyecto",
+      "tipo_etiqueta_nombre": "Proyecto",
+      "tipo_etiqueta_color": "#a855f7",
+      "nombre": "Proyecto: lectura y preparación",
+      "fecha": "2026-10-05",
+      "hora": "09:00",
+      "materia_matriculada_id": "mm-cp2005",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Actividad ficticia para explorar los filtros y estados de Agenda.",
+      "completada": true,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "demo-ag-proyecto-2",
+      "tipo": "tarea",
+      "tipo_etiqueta_id": "proyecto",
+      "tipo_etiqueta_nombre": "Proyecto",
+      "tipo_etiqueta_color": "#a855f7",
+      "nombre": "Proyecto: avance grupal",
+      "fecha": "2026-10-12",
+      "hora": "12:00",
+      "materia_matriculada_id": "mm-opt1019",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Actividad ficticia para explorar los filtros y estados de Agenda.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "demo-ag-proyecto-3",
+      "tipo": "tarea",
+      "tipo_etiqueta_id": "proyecto",
+      "tipo_etiqueta_nombre": "Proyecto",
+      "tipo_etiqueta_color": "#a855f7",
+      "nombre": "Proyecto: entrega final",
+      "fecha": "2026-10-19",
+      "hora": "23:59",
+      "materia_matriculada_id": "mm-ati100",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Actividad ficticia para explorar los filtros y estados de Agenda.",
+      "completada": false,
+      "perdida": true,
+      "es_feriado": false
+    },
+    {
+      "id": "demo-ag-quiz-1",
       "tipo": "examen",
       "tipo_etiqueta_id": "quiz",
       "tipo_etiqueta_nombre": "Quiz",
       "tipo_etiqueta_color": "#f97316",
-      "nombre": "Quiz corto de conceptos",
-      "fecha": "2026-10-06",
-      "hora": "08:00",
-      "materia_matriculada_id": "mm-cp2001",
+      "nombre": "Quiz: lectura y preparación",
+      "fecha": "2026-10-05",
+      "hora": "09:00",
+      "materia_matriculada_id": "mm-ati120",
       "semestre_id": "sem-demo-actual",
-      "notas": "",
+      "notas": "Actividad ficticia para explorar los filtros y estados de Agenda.",
       "completada": false,
       "perdida": false,
       "es_feriado": false
     },
     {
-      "id": "ag-long",
+      "id": "demo-ag-quiz-2",
+      "tipo": "examen",
+      "tipo_etiqueta_id": "quiz",
+      "tipo_etiqueta_nombre": "Quiz",
+      "tipo_etiqueta_color": "#f97316",
+      "nombre": "Quiz: avance grupal",
+      "fecha": "2026-10-09",
+      "hora": "12:00",
+      "materia_matriculada_id": "mm-cp2001",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Actividad ficticia para explorar los filtros y estados de Agenda.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "demo-ag-quiz-3",
+      "tipo": "examen",
+      "tipo_etiqueta_id": "quiz",
+      "tipo_etiqueta_nombre": "Quiz",
+      "tipo_etiqueta_color": "#f97316",
+      "nombre": "Quiz: entrega final",
+      "fecha": "2026-10-16",
+      "hora": "23:59",
+      "materia_matriculada_id": "mm-cp2002",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Actividad ficticia para explorar los filtros y estados de Agenda.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "demo-agenda-futura-0",
+      "tipo": "tarea",
+      "tipo_etiqueta_id": "tarea",
+      "tipo_etiqueta_nombre": "Tarea",
+      "tipo_etiqueta_color": "#eab308",
+      "nombre": "Lectura de apoyo: instituciones públicas",
+      "fecha": "2026-10-05",
+      "hora": "12:00",
+      "materia_matriculada_id": "mm-cp2001",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Pendiente ficticio para mostrar la lista de próximas tareas.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "demo-agenda-futura-1",
+      "tipo": "tarea",
+      "tipo_etiqueta_id": "tarea",
+      "tipo_etiqueta_nombre": "Tarea",
+      "tipo_etiqueta_color": "#eab308",
+      "nombre": "Resumen para el debate de clase",
+      "fecha": "2026-10-07",
+      "hora": "12:00",
+      "materia_matriculada_id": "mm-cp2002",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Pendiente ficticio para mostrar la lista de próximas tareas.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "demo-agenda-futura-2",
+      "tipo": "tarea",
+      "tipo_etiqueta_id": "tarea",
+      "tipo_etiqueta_nombre": "Tarea",
+      "tipo_etiqueta_color": "#eab308",
+      "nombre": "Ficha de análisis comparado",
+      "fecha": "2026-10-08",
+      "hora": "23:59",
+      "materia_matriculada_id": "mm-cp2003",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Pendiente ficticio para mostrar la lista de próximas tareas.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "demo-tarea-hoy-0",
+      "tipo": "tarea",
+      "tipo_etiqueta_id": "tarea",
+      "tipo_etiqueta_nombre": "Tarea",
+      "tipo_etiqueta_color": "#eab308",
+      "nombre": "Repasar conceptos de Estado",
+      "fecha": "2026-10-03",
+      "hora": "11:00",
+      "materia_matriculada_id": "mm-cp2001",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Ejemplo ficticio para la vista de Resumen.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "demo-tarea-hoy-1",
+      "tipo": "tarea",
+      "tipo_etiqueta_id": "tarea",
+      "tipo_etiqueta_nombre": "Tarea",
+      "tipo_etiqueta_color": "#eab308",
+      "nombre": "Preparar preguntas para clase",
+      "fecha": "2026-10-03",
+      "hora": "16:00",
+      "materia_matriculada_id": "mm-cp2002",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Ejemplo ficticio para la vista de Resumen.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "demo-tarea-hoy-2",
+      "tipo": "tarea",
+      "tipo_etiqueta_id": "tarea",
+      "tipo_etiqueta_nombre": "Tarea",
+      "tipo_etiqueta_color": "#eab308",
+      "nombre": "Organizar lecturas de la semana",
+      "fecha": "2026-10-03",
+      "hora": "23:59",
+      "materia_matriculada_id": "mm-cp2003",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Ejemplo ficticio para la vista de Resumen.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "demo-evento-proximo-0",
       "tipo": "evento",
       "tipo_etiqueta_id": "evento",
-      "nombre": "Conversatorio estudiantil sobre participación, representación y desafíos contemporáneos de las instituciones democráticas en comunidades rurales",
-      "fecha": "2026-10-21",
-      "hora": "17:30",
+      "tipo_etiqueta_nombre": "Evento",
+      "tipo_etiqueta_color": "#06b6d4",
+      "nombre": "Círculo de debate estudiantil",
+      "fecha": "2026-10-05",
+      "hora": "15:00",
       "materia_matriculada_id": null,
-      "semestre_id": null,
-      "notas": "Texto de longitud alta a propósito para revisar el ajuste de tarjetas y modales.",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Actividad ficticia de demostración.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "demo-evento-proximo-1",
+      "tipo": "evento",
+      "tipo_etiqueta_id": "feriado",
+      "tipo_etiqueta_nombre": "Feriado",
+      "tipo_etiqueta_color": "#10b981",
+      "nombre": "Día de la Interculturalidad",
+      "fecha": "2026-10-08",
+      "hora": null,
+      "materia_matriculada_id": null,
+      "semestre_id": "sem-demo-actual",
+      "notas": "Actividad ficticia de demostración.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": true
+    },
+    {
+      "id": "demo-evento-proximo-2",
+      "tipo": "evento",
+      "tipo_etiqueta_id": "evento",
+      "tipo_etiqueta_nombre": "Evento",
+      "tipo_etiqueta_color": "#06b6d4",
+      "nombre": "Feria de iniciativas universitarias",
+      "fecha": "2026-10-10",
+      "hora": "10:00",
+      "materia_matriculada_id": null,
+      "semestre_id": "sem-demo-actual",
+      "notas": "Actividad ficticia de demostración.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "demo-vencida-0",
+      "tipo": "tarea",
+      "tipo_etiqueta_id": "tarea",
+      "tipo_etiqueta_nombre": "Tarea",
+      "tipo_etiqueta_color": "#eab308",
+      "nombre": "Lectura atrasada de teoría política",
+      "fecha": "2026-09-23",
+      "hora": "23:59",
+      "materia_matriculada_id": "mm-cp2001",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Pendiente vencido ficticio para demostrar esta sección.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "demo-vencida-1",
+      "tipo": "tarea",
+      "tipo_etiqueta_id": "tarea",
+      "tipo_etiqueta_nombre": "Tarea",
+      "tipo_etiqueta_color": "#eab308",
+      "nombre": "Ejercicio de análisis documental",
+      "fecha": "2026-09-27",
+      "hora": "23:59",
+      "materia_matriculada_id": "mm-cp2002",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Pendiente vencido ficticio para demostrar esta sección.",
+      "completada": false,
+      "perdida": false,
+      "es_feriado": false
+    },
+    {
+      "id": "demo-vencida-2",
+      "tipo": "tarea",
+      "tipo_etiqueta_id": "tarea",
+      "tipo_etiqueta_nombre": "Tarea",
+      "tipo_etiqueta_color": "#eab308",
+      "nombre": "Borrador de reflexión semanal",
+      "fecha": "2026-09-30",
+      "hora": "23:59",
+      "materia_matriculada_id": "mm-cp2003",
+      "semestre_id": "sem-demo-actual",
+      "notas": "Pendiente vencido ficticio para demostrar esta sección.",
       "completada": false,
       "perdida": false,
       "es_feriado": false
@@ -978,41 +2353,100 @@
       ],
       "_eliminados_pagos_matricula": [],
       "_eliminados_ingresos_beca": []
+    },
+    {
+      "id": "fin-demo-2",
+      "semestre_id": "sem-demo-hist-1",
+      "pagos_matricula": [
+        {
+          "id": "fin-p-0",
+          "descripcion": "Matrícula ordinaria",
+          "monto": 28000,
+          "fecha": "2025-08-20"
+        }
+      ],
+      "ingresos_beca": [
+        {
+          "id": "fin-b-0",
+          "descripcion": "Beca socioeconómica",
+          "monto": 22000,
+          "fecha": "2025-09-18"
+        }
+      ]
+    },
+    {
+      "id": "fin-demo-3",
+      "semestre_id": "sem-demo-hist-2",
+      "pagos_matricula": [
+        {
+          "id": "fin-p-1",
+          "descripcion": "Cuota de matrícula",
+          "monto": 39700,
+          "fecha": "2026-08-20"
+        }
+      ],
+      "ingresos_beca": [
+        {
+          "id": "fin-b-1",
+          "descripcion": "Beca y apoyo de transporte",
+          "monto": 30400,
+          "fecha": "2026-09-18"
+        }
+      ]
+    },
+    {
+      "id": "fin-demo-4",
+      "semestre_id": "sem-demo-hist-3",
+      "pagos_matricula": [
+        {
+          "id": "fin-p-2",
+          "descripcion": "Cuota de matrícula",
+          "monto": 51400,
+          "fecha": "2027-08-20"
+        }
+      ],
+      "ingresos_beca": [
+        {
+          "id": "fin-b-2",
+          "descripcion": "Beca y apoyo de transporte",
+          "monto": 38800,
+          "fecha": "2027-09-18"
+        }
+      ]
     }
   ],
   "gastos_u": [
     {
-      "id": "gasto-1",
-      "nombre": "Materiales de lectura",
+      "id": "g-demo-1",
+      "nombre": "Almuerzos en campus",
       "tipo": "gasto",
       "costo": 12500,
-      "nota": "Antología del curso",
-      "semestre_id": "sem-demo-actual",
-      "recurrente": null
+      "nota": "Gasto ficticio",
+      "semestre_id": "sem-demo-actual"
     },
     {
-      "id": "gasto-2",
-      "nombre": "Transporte al campus",
+      "id": "g-demo-2",
+      "nombre": "Transporte universitario",
       "tipo": "gasto",
-      "costo": 0,
-      "nota": "Estimación mensual",
-      "semestre_id": null,
-      "recurrente": {
-        "frecuencia": "mensual",
-        "monto_por_pago": 18000,
-        "fecha_inicio": "2026-08-10",
-        "fecha_fin": null,
-        "personalizado": null
-      }
+      "costo": 7800,
+      "nota": "Gasto ficticio",
+      "semestre_id": "sem-demo-anterior"
     },
     {
-      "id": "gasto-3",
-      "nombre": "Tutorías de estadística",
+      "id": "g-demo-3",
+      "nombre": "Venta de apuntes",
       "tipo": "ingreso",
-      "costo": 35000,
-      "nota": "Ingreso ficticio por apoyo académico",
-      "semestre_id": null,
-      "recurrente": null
+      "costo": 21400,
+      "nota": "Ingreso ficticio",
+      "semestre_id": "sem-demo-hist-1"
+    },
+    {
+      "id": "g-demo-4",
+      "nombre": "Materiales y copias",
+      "tipo": "gasto",
+      "costo": 3250,
+      "nota": "Gasto ficticio",
+      "semestre_id": "sem-demo-hist-2"
     }
   ],
   "sesiones_estudio": [
@@ -1031,6 +2465,582 @@
       "fin": 1790789400000,
       "duracion_minutos": 90,
       "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2001-1",
+      "materia_matriculada_id": "mm-cp2001",
+      "inicio": 1788447600000,
+      "fin": 1788450300000,
+      "duracion_minutos": 45,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2001-2",
+      "materia_matriculada_id": "mm-cp2001",
+      "inicio": 1789138800000,
+      "fin": 1789141500000,
+      "duracion_minutos": 45,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2001-3",
+      "materia_matriculada_id": "mm-cp2001",
+      "inicio": 1789830000000,
+      "fin": 1789832700000,
+      "duracion_minutos": 45,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2002-1",
+      "materia_matriculada_id": "mm-cp2002",
+      "inicio": 1788537600000,
+      "fin": 1788541200000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2002-2",
+      "materia_matriculada_id": "mm-cp2002",
+      "inicio": 1789228800000,
+      "fin": 1789232400000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2002-3",
+      "materia_matriculada_id": "mm-cp2002",
+      "inicio": 1789920000000,
+      "fin": 1789923600000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2003-1",
+      "materia_matriculada_id": "mm-cp2003",
+      "inicio": 1788627600000,
+      "fin": 1788632100000,
+      "duracion_minutos": 75,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2003-2",
+      "materia_matriculada_id": "mm-cp2003",
+      "inicio": 1789318800000,
+      "fin": 1789323300000,
+      "duracion_minutos": 75,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2003-3",
+      "materia_matriculada_id": "mm-cp2003",
+      "inicio": 1790010000000,
+      "fin": 1790014500000,
+      "duracion_minutos": 75,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2004-1",
+      "materia_matriculada_id": "mm-cp2004",
+      "inicio": 1788717600000,
+      "fin": 1788720300000,
+      "duracion_minutos": 45,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2004-2",
+      "materia_matriculada_id": "mm-cp2004",
+      "inicio": 1789408800000,
+      "fin": 1789411500000,
+      "duracion_minutos": 45,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2004-3",
+      "materia_matriculada_id": "mm-cp2004",
+      "inicio": 1790100000000,
+      "fin": 1790102700000,
+      "duracion_minutos": 45,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2005-1",
+      "materia_matriculada_id": "mm-cp2005",
+      "inicio": 1788793200000,
+      "fin": 1788796800000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2005-2",
+      "materia_matriculada_id": "mm-cp2005",
+      "inicio": 1789484400000,
+      "fin": 1789488000000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2005-3",
+      "materia_matriculada_id": "mm-cp2005",
+      "inicio": 1790175600000,
+      "fin": 1790179200000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-opt1019-1",
+      "materia_matriculada_id": "mm-opt1019",
+      "inicio": 1788451200000,
+      "fin": 1788455700000,
+      "duracion_minutos": 75,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-opt1019-2",
+      "materia_matriculada_id": "mm-opt1019",
+      "inicio": 1789142400000,
+      "fin": 1789146900000,
+      "duracion_minutos": 75,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-opt1019-3",
+      "materia_matriculada_id": "mm-opt1019",
+      "inicio": 1789833600000,
+      "fin": 1789838100000,
+      "duracion_minutos": 75,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-ati100-1",
+      "materia_matriculada_id": "mm-ati100",
+      "inicio": 1788541200000,
+      "fin": 1788543900000,
+      "duracion_minutos": 45,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-ati100-2",
+      "materia_matriculada_id": "mm-ati100",
+      "inicio": 1789232400000,
+      "fin": 1789235100000,
+      "duracion_minutos": 45,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-ati100-3",
+      "materia_matriculada_id": "mm-ati100",
+      "inicio": 1789923600000,
+      "fin": 1789926300000,
+      "duracion_minutos": 45,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-ati120-1",
+      "materia_matriculada_id": "mm-ati120",
+      "inicio": 1788631200000,
+      "fin": 1788634800000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-ati120-2",
+      "materia_matriculada_id": "mm-ati120",
+      "inicio": 1789322400000,
+      "fin": 1789326000000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-ati120-3",
+      "materia_matriculada_id": "mm-ati120",
+      "inicio": 1790013600000,
+      "fin": 1790017200000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp1501-1",
+      "materia_matriculada_id": "mm-cp1501",
+      "inicio": 1775574000000,
+      "fin": 1775578500000,
+      "duracion_minutos": 75,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp1501-2",
+      "materia_matriculada_id": "mm-cp1501",
+      "inicio": 1776438000000,
+      "fin": 1776442500000,
+      "duracion_minutos": 75,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp1501-3",
+      "materia_matriculada_id": "mm-cp1501",
+      "inicio": 1777302000000,
+      "fin": 1777306500000,
+      "duracion_minutos": 75,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp1504-1",
+      "materia_matriculada_id": "mm-cp1504",
+      "inicio": 1775664000000,
+      "fin": 1775666700000,
+      "duracion_minutos": 45,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp1504-2",
+      "materia_matriculada_id": "mm-cp1504",
+      "inicio": 1776528000000,
+      "fin": 1776530700000,
+      "duracion_minutos": 45,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp1504-3",
+      "materia_matriculada_id": "mm-cp1504",
+      "inicio": 1777392000000,
+      "fin": 1777394700000,
+      "duracion_minutos": 45,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp1502-1",
+      "materia_matriculada_id": "mm-cp1502",
+      "inicio": 1775322000000,
+      "fin": 1775325600000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp1502-2",
+      "materia_matriculada_id": "mm-cp1502",
+      "inicio": 1776186000000,
+      "fin": 1776189600000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp1502-3",
+      "materia_matriculada_id": "mm-cp1502",
+      "inicio": 1777050000000,
+      "fin": 1777053600000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp1503-1",
+      "materia_matriculada_id": "mm-cp1503",
+      "inicio": 1775412000000,
+      "fin": 1775416500000,
+      "duracion_minutos": 75,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp1503-2",
+      "materia_matriculada_id": "mm-cp1503",
+      "inicio": 1776276000000,
+      "fin": 1776280500000,
+      "duracion_minutos": 75,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp1503-3",
+      "materia_matriculada_id": "mm-cp1503",
+      "inicio": 1777140000000,
+      "fin": 1777144500000,
+      "duracion_minutos": 75,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-optid-1",
+      "materia_matriculada_id": "mm-optid",
+      "inicio": 1775487600000,
+      "fin": 1775490300000,
+      "duracion_minutos": 45,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-optid-2",
+      "materia_matriculada_id": "mm-optid",
+      "inicio": 1776351600000,
+      "fin": 1776354300000,
+      "duracion_minutos": 45,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-optid-3",
+      "materia_matriculada_id": "mm-optid",
+      "inicio": 1777215600000,
+      "fin": 1777218300000,
+      "duracion_minutos": 45,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2006-1",
+      "materia_matriculada_id": "mm-cp2006",
+      "inicio": 1775577600000,
+      "fin": 1775581200000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2006-2",
+      "materia_matriculada_id": "mm-cp2006",
+      "inicio": 1776441600000,
+      "fin": 1776445200000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2006-3",
+      "materia_matriculada_id": "mm-cp2006",
+      "inicio": 1777305600000,
+      "fin": 1777309200000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2007-1",
+      "materia_matriculada_id": "mm-cp2007",
+      "inicio": 1775667600000,
+      "fin": 1775672100000,
+      "duracion_minutos": 75,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2007-2",
+      "materia_matriculada_id": "mm-cp2007",
+      "inicio": 1776531600000,
+      "fin": 1776536100000,
+      "duracion_minutos": 75,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp2007-3",
+      "materia_matriculada_id": "mm-cp2007",
+      "inicio": 1777395600000,
+      "fin": 1777400100000,
+      "duracion_minutos": 75,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp3001-1",
+      "materia_matriculada_id": "mm-cp3001",
+      "inicio": 1775325600000,
+      "fin": 1775328300000,
+      "duracion_minutos": 45,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp3001-2",
+      "materia_matriculada_id": "mm-cp3001",
+      "inicio": 1776189600000,
+      "fin": 1776192300000,
+      "duracion_minutos": 45,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp3001-3",
+      "materia_matriculada_id": "mm-cp3001",
+      "inicio": 1777053600000,
+      "fin": 1777056300000,
+      "duracion_minutos": 45,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp3002-1",
+      "materia_matriculada_id": "mm-cp3002",
+      "inicio": 1775401200000,
+      "fin": 1775404800000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp3002-2",
+      "materia_matriculada_id": "mm-cp3002",
+      "inicio": 1776265200000,
+      "fin": 1776268800000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp3002-3",
+      "materia_matriculada_id": "mm-cp3002",
+      "inicio": 1777129200000,
+      "fin": 1777132800000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp3003-1",
+      "materia_matriculada_id": "mm-cp3003",
+      "inicio": 1775491200000,
+      "fin": 1775495700000,
+      "duracion_minutos": 75,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp3003-2",
+      "materia_matriculada_id": "mm-cp3003",
+      "inicio": 1776355200000,
+      "fin": 1776359700000,
+      "duracion_minutos": 75,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-demo-mm-cp3003-3",
+      "materia_matriculada_id": "mm-cp3003",
+      "inicio": 1777219200000,
+      "fin": 1777223700000,
+      "duracion_minutos": 75,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-sem-demo-hist-1-0-0",
+      "materia_matriculada_id": "mm-sem-demo-hist-1-0",
+      "inicio": 1746460800000,
+      "fin": 1746463800000,
+      "duracion_minutos": 50,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-sem-demo-hist-1-0-1",
+      "materia_matriculada_id": "mm-sem-demo-hist-1-0",
+      "inicio": 1747497600000,
+      "fin": 1747500600000,
+      "duracion_minutos": 50,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-sem-demo-hist-1-0-2",
+      "materia_matriculada_id": "mm-sem-demo-hist-1-0",
+      "inicio": 1748534400000,
+      "fin": 1748537400000,
+      "duracion_minutos": 50,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-sem-demo-hist-1-1-0",
+      "materia_matriculada_id": "mm-sem-demo-hist-1-1",
+      "inicio": 1746633600000,
+      "fin": 1746637200000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-sem-demo-hist-1-1-1",
+      "materia_matriculada_id": "mm-sem-demo-hist-1-1",
+      "inicio": 1747670400000,
+      "fin": 1747674000000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-sem-demo-hist-1-1-2",
+      "materia_matriculada_id": "mm-sem-demo-hist-1-1",
+      "inicio": 1748707200000,
+      "fin": 1748710800000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-sem-demo-hist-2-0-0",
+      "materia_matriculada_id": "mm-sem-demo-hist-2-0",
+      "inicio": 1759680000000,
+      "fin": 1759683000000,
+      "duracion_minutos": 50,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-sem-demo-hist-2-0-1",
+      "materia_matriculada_id": "mm-sem-demo-hist-2-0",
+      "inicio": 1760716800000,
+      "fin": 1760719800000,
+      "duracion_minutos": 50,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-sem-demo-hist-2-0-2",
+      "materia_matriculada_id": "mm-sem-demo-hist-2-0",
+      "inicio": 1761753600000,
+      "fin": 1761756600000,
+      "duracion_minutos": 50,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-sem-demo-hist-2-1-0",
+      "materia_matriculada_id": "mm-sem-demo-hist-2-1",
+      "inicio": 1759852800000,
+      "fin": 1759856400000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-sem-demo-hist-2-1-1",
+      "materia_matriculada_id": "mm-sem-demo-hist-2-1",
+      "inicio": 1760889600000,
+      "fin": 1760893200000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-sem-demo-hist-2-1-2",
+      "materia_matriculada_id": "mm-sem-demo-hist-2-1",
+      "inicio": 1761926400000,
+      "fin": 1761930000000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-sem-demo-hist-3-0-0",
+      "materia_matriculada_id": "mm-sem-demo-hist-3-0",
+      "inicio": 1712332800000,
+      "fin": 1712335800000,
+      "duracion_minutos": 50,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-sem-demo-hist-3-0-1",
+      "materia_matriculada_id": "mm-sem-demo-hist-3-0",
+      "inicio": 1713369600000,
+      "fin": 1713372600000,
+      "duracion_minutos": 50,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-sem-demo-hist-3-0-2",
+      "materia_matriculada_id": "mm-sem-demo-hist-3-0",
+      "inicio": 1714406400000,
+      "fin": 1714409400000,
+      "duracion_minutos": 50,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-sem-demo-hist-3-1-0",
+      "materia_matriculada_id": "mm-sem-demo-hist-3-1",
+      "inicio": 1712505600000,
+      "fin": 1712509200000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-sem-demo-hist-3-1-1",
+      "materia_matriculada_id": "mm-sem-demo-hist-3-1",
+      "inicio": 1713542400000,
+      "fin": 1713546000000,
+      "duracion_minutos": 60,
+      "origen": "manual"
+    },
+    {
+      "id": "ses-sem-demo-hist-3-1-2",
+      "materia_matriculada_id": "mm-sem-demo-hist-3-1",
+      "inicio": 1711987200000,
+      "fin": 1711990800000,
+      "duracion_minutos": 60,
+      "origen": "manual"
     }
   ],
   "tiempo_estudio_materias": [],
@@ -1043,6 +3053,48 @@
       "nombre": "Calendario Académico UCR (demo)",
       "url": "https://www.ucr.ac.cr/estudiantes/calendario.html",
       "emoji": "📅"
+    }
+  ],
+  "competencias_demo": [
+    {
+      "id": "demo-comp-1",
+      "nombre": "Reto de estudio semanal",
+      "estado": "activa",
+      "meta_horas": 8,
+      "participantes": [
+        {
+          "nombre": "Tú",
+          "horas": 6.5
+        },
+        {
+          "nombre": "Camila",
+          "horas": 7.25
+        },
+        {
+          "nombre": "Mateo",
+          "horas": 4.75
+        }
+      ]
+    },
+    {
+      "id": "demo-comp-2",
+      "nombre": "Sprint de parciales",
+      "estado": "activa",
+      "meta_horas": 5,
+      "participantes": [
+        {
+          "nombre": "Tú",
+          "horas": 3.5
+        },
+        {
+          "nombre": "Lucía",
+          "horas": 4
+        },
+        {
+          "nombre": "Diego",
+          "horas": 2.25
+        }
+      ]
     }
   ]
 }

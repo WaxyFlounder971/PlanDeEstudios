@@ -2869,6 +2869,9 @@ img, svg { max-width: 100%; }
   gap: 6px;
   margin-top: 8px;
 }
+.agenda-filtro-colapsable { margin: 0 0 10px; }
+.agenda-filtro-colapsable > summary { cursor: pointer; color: var(--text-secondary); font-size: .84rem; padding: 7px 2px; }
+.agenda-filtro-colapsable[open] > summary { margin-bottom: 6px; }
 .agenda-filtro-estado-btn {
   font-size: 0.68rem;
   font-weight: 700;
@@ -2879,8 +2882,13 @@ img, svg { max-width: 100%; }
   color: var(--text-muted);
   cursor: pointer;
   text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
 }
+.agenda-filtro-color { width: 11px; height: 11px; flex: 0 0 11px; border-radius: 50%; border: 0 !important; box-shadow: none !important; }
 .agenda-filtro-estado-btn:hover { border-color: rgba(148, 163, 184, 0.55); }
 .agenda-filtro-estado-completado.active { background: rgba(59, 130, 246, 0.15); border-color: #3b82f6; color: #60a5fa; }
 .agenda-filtro-estado-pendiente.active  { background: rgba(245, 158, 11, 0.15); border-color: #f59e0b; color: #fbbf24; }
@@ -5359,26 +5367,8 @@ html.exportar-tema-default[data-mode="dark"] {
   background: var(--bg-panel);
   color: var(--text-primary);
 }
-#selector-idioma-global {
-  position: fixed;
-  right: 16px;
-  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-  z-index: 10020;
-  width: min(172px, calc(100vw - 32px));
-  padding: 8px 10px;
-  border: 1px solid var(--border-glass, #ffffff24);
-  border-radius: 16px;
-  background: var(--bg-panel, #17172bef);
-  box-shadow: 0 8px 26px #0005;
-  backdrop-filter: blur(16px);
-}
-#selector-idioma-global > .form-label {
-  display: block;
-  margin: 0 0 3px;
-  font-size: .7rem;
-}
-#selector-idioma-global .select-custom,
-#selector-idioma-global .select-custom-boton {
-  width: 100%;
-}
+.selector-idioma-login { width: min(190px, 100%); margin: 4px 0 0 auto; text-align: left; }
+.selector-idioma-login > .form-label { display: block; margin: 0 0 3px; font-size: .7rem; }
+.selector-idioma-login .select-custom,
+.selector-idioma-login .select-custom-boton { width: 100%; }
 
