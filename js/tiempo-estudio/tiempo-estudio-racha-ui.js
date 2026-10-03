@@ -50,6 +50,7 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
+import { MODO_DEMO } from "../core/demo-mode.js";
 import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { mostrarToast } from "../ui/componentes.js";
@@ -848,11 +849,30 @@ function revisarAlAbrir(est) {
 export function alFusionarDatosRacha() {
   if (!datosListos()) return;
   ultimoEstado = obtenerEstadoRacha();
+  // El dataset de demostración tiene sesiones históricas inventadas que no
+  // representan una racha real del visitante. En demo solo las acciones de
+  // prueba muestran animaciones; abrir la app nunca debe anunciar una pérdida.
+  if (MODO_DEMO) {
+    revisionAlAbrirHecha = true;
+    diaRevisado = ultimoEstado.hoyIdx;
+    return;
+  }
   if (revisionAlAbrirHecha && diaRevisado === ultimoEstado.hoyIdx) return;
   if (!estado.datos.sesiones_estudio.length) return;
   revisionAlAbrirHecha = true;
   diaRevisado = ultimoEstado.hoyIdx;
   revisarAlAbrir(ultimoEstado);
+}
+
+/** Reproduce una animación de racha solo en demo, sin alterar preferencias ni historial. */
+export function simularAnimacionRachaDemo(tipo) {
+  if (!MODO_DEMO || !["inicio", "perdida"].includes(tipo)) return;
+  const est = obtenerEstadoRacha();
+  if (tipo === "inicio") {
+    abrirOverlayRacha({ tipo, est: { ...est, racha: 1, inicioISO: null }, desde: 0, hasta: 1 });
+  } else {
+    abrirOverlayRacha({ tipo, est: { ...est, rachaPerdida: null } });
+  }
 }
 
 /** Cablea los listeners (una sola vez). Se llama desde inicializarTiempoEstudio(). */

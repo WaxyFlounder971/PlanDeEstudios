@@ -5,7 +5,9 @@ import { crearDatosUsuarioNuevo } from "./schema.js";
  * que main.js pueda omitir login, lectura de caché, sincronización y APIs.
  */
 const MODO_DEMO = new URLSearchParams(globalThis.location?.search || "").get("demo") === "1";
+const URL_WORKER_ANALITICA_DEMO = "https://worker-notificaciones-agenda.appacademica.workers.dev/analitica/demo-apertura";
 let fetchOriginal = null;
+let aperturaDemoRegistrada = false;
 
 // La demo nunca debe leer ni escribir las preferencias/cachés de la app real
 // que ya existan en este navegador. Las preferencias de esta visita viven
@@ -35,11 +37,22 @@ function bloquearServiciosExternosEnDemo() {
     const solicitudGemini = /(^|\.)generativelanguage\.googleapis\.com$/i.test(url.hostname)
       && Boolean(clave) && url.searchParams.get("key") === clave;
     if (solicitudGemini) return fetchOriginal(recurso, opciones);
+    const metodo = String(opciones?.method || recurso?.method || "GET").toUpperCase();
+    const solicitudConteoDemo = url.href === URL_WORKER_ANALITICA_DEMO && metodo === "POST" && !opciones?.body;
+    if (solicitudConteoDemo) return fetchOriginal(recurso, opciones);
     console.info("Modo demo: se omitió una solicitud a un servicio externo.", url.hostname);
     return new Response(JSON.stringify({ error: "simulado_en_demo" }), {
       status: 503, headers: { "Content-Type": "application/json" },
     });
   };
+}
+
+function registrarAperturaDemo() {
+  if (!MODO_DEMO || aperturaDemoRegistrada || !fetchOriginal) return Promise.resolve(false);
+  aperturaDemoRegistrada = true;
+  return globalThis.fetch(URL_WORKER_ANALITICA_DEMO, { method: "POST", keepalive: true })
+    .then((respuesta) => respuesta.ok)
+    .catch(() => false);
 }
 
 function combinarSemilla(base, semilla) {
@@ -67,4 +80,4 @@ function activarEstadoDemo(datos) {
   document.body.dataset.demo = "true";
 }
 
-export { MODO_DEMO, activarEstadoDemo, bloquearServiciosExternosEnDemo, cargarDatosDemo, esModoDemo };
+export { MODO_DEMO, activarEstadoDemo, bloquearServiciosExternosEnDemo, cargarDatosDemo, esModoDemo, registrarAperturaDemo };

@@ -40,7 +40,7 @@ import { abrirModalRegistroManual, construirListaSesiones } from "./tiempo-estud
 import { construirVistaEstadisticas, construirEstadisticasMateria, calcularMetaDiariaMateria } from "./tiempo-estudio-estadisticas.js";
 import { construirVistaCompetencias } from "./tiempo-estudio-competencias.js";
 import { montarIndicadoresTimer } from "./tiempo-estudio-indicador.js";
-import { construirChipRacha, inicializarRacha, alFusionarDatosRacha } from "./tiempo-estudio-racha-ui.js";
+import { construirChipRacha, inicializarRacha, alFusionarDatosRacha, simularAnimacionRachaDemo } from "./tiempo-estudio-racha-ui.js";
 import { abrirBuscarMateriaEn } from "../ui/buscar-materia.js";
 import {
   cambiarTimerEstudio,
@@ -449,12 +449,16 @@ function construirEncabezado(cont) {
         estado.datos.sesiones_estudio.push({ id, materia_matriculada_id: obtenerMateriasParaTiempoEstudio()[0]?.mm.id || null, inicio: fin - 35 * 60000, fin, duracion_minutos: 35, origen: "demo" });
       }
       notificarSesionesEstudioActualizadas();
+      renderizarTiempoEstudio();
+      simularAnimacionRachaDemo("inicio");
     });
     const borrar = document.createElement("button");
     borrar.type = "button"; borrar.className = "btn btn-secondary"; borrar.textContent = "Borrar racha";
     borrar.addEventListener("click", () => {
       estado.datos.sesiones_estudio = (estado.datos.sesiones_estudio || []).filter((s) => s.id !== "demo-racha-sesion");
       notificarSesionesEstudioActualizadas();
+      renderizarTiempoEstudio();
+      simularAnimacionRachaDemo("perdida");
     });
     accionesRacha.append(agregar,borrar);
     grupoTitulo.appendChild(accionesRacha);

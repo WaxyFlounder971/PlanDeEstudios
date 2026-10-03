@@ -93,6 +93,8 @@ import {
 } from "./tiempo-estudio-competencias-visual.js";
 
 const CLAVE_CACHE_COMPETENCIA = "te_comp_marcador_cache_v1:";
+const vistasDemoPorId = new Map();
+let refrescoCompetenciasAlReconectarInstalado = false;
 
 function guardarCacheMarcador(competenciaId, datos) {
   try {
@@ -119,6 +121,18 @@ function leerCacheMarcador(competenciaId) {
 function textoCacheDesactualizada(actualizadoEn) {
   const fecha = new Date(actualizadoEn).toLocaleString(obtenerLocaleInterfaz(), { dateStyle: "medium", timeStyle: "short" });
   return `${navigator.onLine === false ? "Sin conexión" : "No se pudo actualizar"}. Mostrando datos de ${fecha}.`;
+}
+
+function instalarRefrescoCompetenciasAlReconectar() {
+  if (MODO_DEMO || refrescoCompetenciasAlReconectarInstalado || typeof window === "undefined") return;
+  refrescoCompetenciasAlReconectarInstalado = true;
+  window.addEventListener("online", () => {
+    const seccion = document.getElementById("seccion-tiempo-estudio");
+    if (!seccion || seccion.classList.contains("oculto") || !seccion.querySelector(".cp-comp")) return;
+    // El render pinta primero la última copia local y luego consulta el Worker.
+    // Así el marcador nunca queda vacío mientras vuelve la conexión.
+    if (typeof window.renderizarTiempoEstudio === "function") window.renderizarTiempoEstudio();
+  });
 }
 
 const TIMEOUT_MS = 12000;
@@ -1147,9 +1161,32 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar) {
     alCambiarVista: null, // se asigna abajo, cuando ya hay participantes
   };
 
-  pintarTarjeta(tarjeta, { ...base, participantes: null, estadoCuerpo: "cargando", animar: false }, cb);
+  let vista = vistaGuardada;
+  const cacheInicial = leerCacheMarcador(competencia.id);
+  const dibujarCacheInicial = () => {
+    if (!cacheInicial) return;
+    pintarTarjeta(tarjeta, {
+      ...base,
+      nombre: cacheInicial.nombre || base.nombre,
+      vista,
+      participantes: cacheInicial.participantes,
+      estadoCuerpo: "ok",
+      mensajeDesactualizado: navigator.onLine === false
+        ? "Sin conexión. Mostrando el último marcador guardado en este dispositivo."
+        : "Actualizando marcador con el último guardado en este dispositivo…",
+      animar: false,
+    }, cb);
+  };
+  if (cacheInicial) dibujarCacheInicial();
+  else pintarTarjeta(tarjeta, { ...base, participantes: null, estadoCuerpo: "cargando", animar: false }, cb);
+  cb.alCambiarVista = (nueva) => {
+    vista = nueva;
+    guardarVistaPreferida(nueva);
+    if (cacheInicial) dibujarCacheInicial();
+  };
 
   try {
+    if (navigator.onLine === false) throw new Error("Sin conexión; se muestra el último marcador local.");
     const respuesta = await fetchConTimeout(`${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}`);
     if (!respuesta.ok) throw new Error(`El Worker respondió ${respuesta.status}`);
     const datos = await respuesta.json(); // { id, nombre, estado, participantes: [{id, apodo, horas_semana_actual, foto_url}] }
@@ -1241,7 +1278,6 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar) {
       participantes,
     });
 
-    let vista = vistaGuardada;
     const dibujar = (animar) =>
       pintarTarjeta(tarjeta, { ...base, vista, participantes, estadoCuerpo: "ok", mensajeDesactualizado: null, animar }, cb);
     cb.alCambiarVista = (nueva) => {
@@ -1252,9 +1288,8 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar) {
     dibujar(true);
   } catch (e) {
     console.error("[competencias] Falló cargar el marcador:", e);
-    const cache = leerCacheMarcador(competencia.id);
+    const cache = cacheInicial || leerCacheMarcador(competencia.id);
     if (cache) {
-      let vista = vistaGuardada;
       const dibujar = (animar) => pintarTarjeta(tarjeta, {
         ...base,
         nombre: cache.nombre || base.nombre,
@@ -1282,36 +1317,85 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar) {
  * argumentos (`renderizarTiempoEstudio`) que ya usan Materias/Estadísticas.
  */
 function construirVistaCompetencias(cont, refrescar) {
+  instalarRefrescoCompetenciasAlReconectar();
   if (MODO_DEMO) {
+    asegurarEstilosCompetenciasVisual();
+    const envoltorio = document.createElement("div");
+    envoltorio.className = "stack";
+    envoltorio.style.gap = "8px";
+    const encabezado = document.createElement("div");
+    encabezado.className = "row-between";
+    encabezado.style.cssText = "align-items:center; gap:10px; flex-wrap:wrap;";
+    encabezado.innerHTML = '<h3 class="texto-encabezado-seccion" style="margin:0;">Competencias</h3>';
+    const acciones = document.createElement("div");
+    acciones.style.cssText = "display:flex; gap:8px;";
+    [{ texto: "Unirse", clase: "btn btn-secondary" }, { texto: "+ Crear", clase: "btn btn-primary" }].forEach(({ texto, clase }) => {
+      const boton = document.createElement("button");
+      boton.type = "button"; boton.className = clase; boton.textContent = texto;
+      boton.addEventListener("click", () => {
+        const ejemplo = (estado.datos.competencias_demo || [])[0];
+        if (texto === "Unirse" && ejemplo) {
+          mostrarAnimacionUnirseCompetencia({
+            nombreCompetencia: ejemplo.nombre,
+            apodoPropio: ejemplo.apodo_propio || "Lucía",
+            miFoto: null,
+            miColor: null,
+            participantes: ejemplo.participantes || [],
+          });
+        } else {
+          mostrarToast("La creación se simula en la demo; no crea competencias reales.");
+        }
+      });
+      acciones.appendChild(boton);
+    });
+    encabezado.appendChild(acciones);
+    envoltorio.appendChild(encabezado);
+    construirAvisosResultados(envoltorio, refrescar, () => {});
+    const pruebas = document.createElement("div");
+    construirBotonesSimulacion(pruebas, refrescar);
+    envoltorio.appendChild(pruebas);
     const lista = document.createElement("div");
     lista.className = "stack";
-    lista.style.gap = "10px";
-    const titulo = document.createElement("h3");
-    titulo.className = "texto-encabezado-seccion";
-    titulo.style.margin = "0";
-    titulo.textContent = "Competencias · demostración";
-    lista.appendChild(titulo);
-    (estado.datos.competencias_demo || []).forEach((competencia) => {
-      const tarjeta = document.createElement("section");
-      tarjeta.className = "glass-card stack";
-      const nombre = document.createElement("strong");
-      nombre.textContent = competencia.nombre;
-      const nota = document.createElement("p");
-      nota.className = "muted";
-      nota.style.margin = "0";
-      nota.textContent = `Reto semanal · meta ${competencia.meta_horas} h · marcador ficticio`;
-      const podio = document.createElement("div");
-      podio.className = "stack";
-      (competencia.participantes || []).slice().sort((a,b)=>b.horas-a.horas).forEach((persona,i)=>{
-        const fila=document.createElement("div"); fila.className="row-between";
-        const quien=document.createElement("span"); quien.textContent=`${i+1}. ${persona.nombre}`;
-        const horas=document.createElement("strong"); horas.textContent=`${persona.horas} h`;
-        fila.append(quien,horas); podio.appendChild(fila);
+    lista.style.gap = "14px";
+    (estado.datos.competencias_demo || []).forEach((competencia, indice) => {
+      const tarjeta = document.createElement("article");
+      lista.appendChild(tarjeta);
+      const yoId = competencia.yo_id || `${competencia.id}-yo`;
+      const participantes = (competencia.participantes || []).map((persona, i) => ({
+        id: persona.id || (i === 0 ? yoId : `${competencia.id}-p${i}`),
+        apodo: persona.apodo || persona.nombre || `Estudiante ${i + 1}`,
+        foto_url: persona.foto_url || null,
+        color: persona.color || null,
+        horas: Number(persona.horas) || 0,
+      }));
+      let vista = vistasDemoPorId.get(competencia.id) || "podio";
+      const dibujar = (animar) => pintarTarjeta(tarjeta, {
+        nombre: competencia.nombre,
+        esCreador: indice === 0,
+        apodo: competencia.apodo_propio || "Lucía",
+        yoId,
+        vista,
+        participantes,
+        estadoCuerpo: "ok",
+        animar,
+      }, {
+        alHistorial: () => {
+          const hoja = abrirHoja({ icono: "trophy", tono: "", titulo: "Historial", subtitulo: competencia.nombre, cuerpoHTML: "" });
+          pintarHistorial(hoja, competencia.historial_demo || [], yoId);
+        },
+        alGestionar: () => mostrarToast("La gestión de competencias está simulada en esta demostración."),
+        alCambiarVista: (nueva) => { vista = nueva; vistasDemoPorId.set(competencia.id, nueva); dibujar(false); },
       });
-      tarjeta.append(nombre,nota,podio); lista.appendChild(tarjeta);
+      dibujar(!vistasDemoPorId.has(`animada:${competencia.id}`));
+      vistasDemoPorId.set(`animada:${competencia.id}`, true);
     });
-    const aviso=document.createElement("p"); aviso.className="muted"; aviso.textContent="Las competencias de esta pantalla son ejemplos y no se conectan con el servicio en línea.";
-    lista.appendChild(aviso); cont.appendChild(lista); return;
+    envoltorio.appendChild(lista);
+    const nota = document.createElement("p");
+    nota.className = "muted";
+    nota.textContent = "Podios, cambios de vista y celebraciones de prueba usan los mismos componentes visuales de la app, con datos ficticios.";
+    envoltorio.appendChild(nota);
+    cont.appendChild(envoltorio);
+    return;
   }
   // Fire-and-forget: además de correr tras cada sesión de estudio, se
   // pincha acá para que una delegación pendiente (ver

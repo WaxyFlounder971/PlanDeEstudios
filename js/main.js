@@ -11,7 +11,7 @@ import { migrarDatosAntiguos, sellarTimestamp } from "./core/schema.js";
 import { fusionarDatos } from "./core/storage-merge.js";
 import { actualizarIndicadorSync, asegurarTokenValido, avisarCierreSesionAOtrasPestanas, forzarSincronizacion, haySesionGuardada, inicializarCanalEntrePestanas, inicializarPullToRefresh, inicializarReconexionAlVolverOnline, inicializarSondeoAlVolver, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
 import { CLAVE_CACHE_LOCAL, borrarTokenCache, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
-import { MODO_DEMO, activarEstadoDemo, cargarDatosDemo } from "./core/demo-mode.js";
+import { MODO_DEMO, activarEstadoDemo, cargarDatosDemo, registrarAperturaDemo } from "./core/demo-mode.js";
 import { obtenerIniciales } from "./core/utils.js";
 // Sincronización con Google Calendar (2026-08-25, reemplaza Web Push) -
 // ver core/notificaciones-calendario.js.
@@ -160,6 +160,9 @@ if ("serviceWorker" in navigator && !MODO_DEMO) {
 // esto sincronizara por Drive, alguien que ya vio el aviso en el celular
 // nunca lo vería en la PC aunque ahí nunca haya dado el permiso.
 const CLAVE_SYNC_CALENDARIO_OFRECIDA = "sincronizacion_calendario_ofrecida_v1";
+// El botón de salida de la demo añade este parámetro para que el siguiente
+// arranque muestre el login, aunque exista una sesión real guardada en caché.
+const FORZAR_LOGIN_DESDE_DEMO = new URLSearchParams(window.location.search).get("salir-demo") === "1";
 
 window.addEventListener("DOMContentLoaded", () => {
   if (MODO_DEMO) {
@@ -411,7 +414,12 @@ window.addEventListener("DOMContentLoaded", () => {
   inicializarAutoScrollSelectoresEnModales();
   inicializarPullToRefresh();
 
-  const cache = leerCacheLocal();
+  const cache = FORZAR_LOGIN_DESDE_DEMO ? null : leerCacheLocal();
+  if (FORZAR_LOGIN_DESDE_DEMO) {
+    const destino = new URL(window.location.href);
+    destino.searchParams.delete("salir-demo");
+    window.history.replaceState({}, "", destino.href);
+  }
   if (cache && cache.datos) {
     // Ya había una sesión local: mostramos la app de inmediato (offline-first).
     // estado.token queda en null aquí a propósito - se obtiene en segundo
@@ -562,6 +570,9 @@ async function iniciarAplicacionDemo() {
   try {
     const datos = await cargarDatosDemo();
     activarEstadoDemo(datos);
+    // Métrica agregada: cuenta que se abrió la demo, sin registrar sesión,
+    // cuenta, IP, secciones visitadas ni acciones del visitante.
+    void registrarAperturaDemo();
     estado.token = null;
     estado.fileId = null;
     estado.datos = datos;
@@ -591,8 +602,13 @@ async function iniciarAplicacionDemo() {
       logo.alt = "Logo Demo Académico";
       const titulo = logo.closest("h3");
       if (titulo) {
-        titulo.querySelectorAll(".texto").forEach((texto) => { texto.textContent = "Demo Académico"; });
-        titulo.childNodes.forEach((nodo) => { if (nodo.nodeType === Node.TEXT_NODE) nodo.textContent = " Demo Académico"; });
+        const texto = titulo.querySelector(".texto");
+        if (texto) {
+          texto.textContent = "Demo Académico";
+        } else {
+          const nodoTexto = [...titulo.childNodes].find((nodo) => nodo.nodeType === Node.TEXT_NODE && nodo.textContent.trim());
+          if (nodoTexto) nodoTexto.textContent = " Demo Académico";
+        }
       }
     });
     const panelConfiguracion = document.getElementById("seccion-configuracion");
@@ -600,7 +616,7 @@ async function iniciarAplicacionDemo() {
       const tarjeta = document.createElement("section");
       tarjeta.id = "demo-funciones-simuladas";
       tarjeta.className = "glass-card stack";
-      tarjeta.innerHTML = '<h2 style="margin:0">Funciones de demostración</h2><p class="muted" style="margin:0">Los datos de esta sección son de ejemplo. Los cambios se quedan en esta pestaña y se descartan al recargar.</p><div class="row" style="flex-wrap:wrap;gap:8px"><span class="badge badge-warning">Notificaciones: simuladas</span><span class="badge badge-info">Analítica: muestra ficticia</span><span class="badge badge-purple">Gemini: opcional, clave temporal</span></div><p class="muted" style="margin:0;font-size:.84rem">La demo no envía datos a Google Drive ni a los servicios de la app. Gemini solo se consulta si introduces tu propia clave; esa clave y el historial se borran al recargar.</p>';
+      tarjeta.innerHTML = '<h2 style="margin:0">Funciones de demostración</h2><p class="muted" style="margin:0">Los datos de esta sección son de ejemplo. Los cambios se quedan en esta pestaña y se descartan al recargar.</p><div class="row" style="flex-wrap:wrap;gap:8px"><span class="badge badge-warning">Notificaciones: simuladas</span><span class="badge badge-info">Analítica: solo conteo de aperturas</span><span class="badge badge-purple">Gemini: opcional, clave temporal</span></div><p class="muted" style="margin:0;font-size:.84rem">La demo no envía datos a Google Drive. Solo registra un conteo agregado de aperturas, sin identificar visitantes ni guardar su actividad. Gemini solo se consulta si introduces tu propia clave; esa clave y el historial se borran al recargar.</p>';
       panelConfiguracion.insertBefore(tarjeta, panelConfiguracion.firstChild);
     }
     const btnBorrarDemo = document.getElementById("btn-borrar-cuenta-app");
@@ -611,7 +627,7 @@ async function iniciarAplicacionDemo() {
     if (syncCalendar) { syncCalendar.disabled = true; syncCalendar.title = "Simulado en modo demo"; }
     const indicador = document.getElementById("indicador-sync");
     if (indicador) { indicador.textContent = "Demo · cambios temporales"; indicador.removeAttribute("title"); }
-    // En demo también debe existir una salida visible; la acción tiene una ruta dedicada que no llama a Google Auth/Drive.
+    instalarBotonSalirDemo();
     mostrarApp();
     const indicadorDemo = document.getElementById("indicador-sync");
     if (indicadorDemo) indicadorDemo.textContent = "Demo · cambios temporales";
@@ -1124,9 +1140,7 @@ if ("serviceWorker" in navigator && !MODO_DEMO) {
 
 function pedirConfirmacionCerrarSesion() {
   if (MODO_DEMO) {
-    const destino = new URL(window.location.href);
-    destino.searchParams.delete("demo");
-    window.location.replace(destino.href);
+    salirDeDemo();
     return;
   }
   togglePerfilPopover(true);
@@ -1164,6 +1178,26 @@ function pedirConfirmacionCerrarSesion() {
     textoConfirmar: "Cerrar sesión de todas formas",
     onConfirmar: cerrarSesion,
   });
+}
+
+function salirDeDemo() {
+  const destino = new URL(window.location.href);
+  destino.searchParams.delete("demo");
+  destino.searchParams.set("salir-demo", "1");
+  window.location.replace(destino.href);
+}
+
+function instalarBotonSalirDemo() {
+  const shell = document.getElementById("app-shell");
+  if (!shell || document.getElementById("btn-salir-demo")) return;
+  const boton = document.createElement("button");
+  boton.id = "btn-salir-demo";
+  boton.type = "button";
+  boton.className = "btn btn-danger demo-salir";
+  boton.textContent = "Salir de demo";
+  boton.setAttribute("aria-label", "Salir de Demo Académico y volver al inicio de sesión");
+  boton.addEventListener("click", salirDeDemo);
+  shell.append(boton);
 }
 
 function cerrarSesion() {
