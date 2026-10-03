@@ -624,7 +624,119 @@
           "nota_final_manual": false,
           "resultado": "aprobado",
           "creditos": 3,
-          "criterios": [],
+          "criterios": [
+            {
+              "id": "demo-hist-crit-mm-cp1501-1",
+              "nombre": "Parciales",
+              "valor_total": 40,
+              "orden": 0,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp1501-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 13.333333,
+                  "nota": 87,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1501-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 13.333333,
+                  "nota": 91,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1501-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 13.333334,
+                  "nota": 95,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-cp1501-2",
+              "nombre": "Tareas",
+              "valor_total": 35,
+              "orden": 1,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp1501-2-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 11.666667,
+                  "nota": 87,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1501-2-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 11.666667,
+                  "nota": 91,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1501-2-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 11.666666,
+                  "nota": 95,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-cp1501-3",
+              "nombre": "Exposiciones",
+              "valor_total": 25,
+              "orden": 2,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp1501-3-1",
+                  "nombre": "Exposición individual",
+                  "valor": 8.333333,
+                  "nota": 87,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1501-3-2",
+                  "nombre": "Debate en clase",
+                  "valor": 8.333333,
+                  "nota": 91,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1501-3-3",
+                  "nombre": "Presentación grupal",
+                  "valor": 8.333334,
+                  "nota": 95,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            }
+          ],
           "profesor_ids": [
             "prof-ines"
           ],
@@ -643,7 +755,119 @@
           "nota_final_manual": false,
           "resultado": "aprobado",
           "creditos": 3,
-          "criterios": [],
+          "criterios": [
+            {
+              "id": "demo-hist-crit-mm-cp1504-1",
+              "nombre": "Parciales",
+              "valor_total": 40,
+              "orden": 0,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp1504-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 13.333333,
+                  "nota": 79,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1504-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 13.333333,
+                  "nota": 83,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1504-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 13.333334,
+                  "nota": 87,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-cp1504-2",
+              "nombre": "Tareas",
+              "valor_total": 35,
+              "orden": 1,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp1504-2-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 11.666667,
+                  "nota": 79,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1504-2-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 11.666667,
+                  "nota": 83,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1504-2-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 11.666666,
+                  "nota": 87,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-cp1504-3",
+              "nombre": "Exposiciones",
+              "valor_total": 25,
+              "orden": 2,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp1504-3-1",
+                  "nombre": "Exposición individual",
+                  "valor": 8.333333,
+                  "nota": 79,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1504-3-2",
+                  "nombre": "Debate en clase",
+                  "valor": 8.333333,
+                  "nota": 83,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1504-3-3",
+                  "nombre": "Presentación grupal",
+                  "valor": 8.333334,
+                  "nota": 87,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            }
+          ],
           "profesor_ids": [
             "prof-marcos"
           ],
@@ -662,7 +886,119 @@
           "nota_final_manual": false,
           "resultado": "aprobado",
           "creditos": 3,
-          "criterios": [],
+          "criterios": [
+            {
+              "id": "demo-hist-crit-mm-cp1502-1",
+              "nombre": "Parciales",
+              "valor_total": 40,
+              "orden": 0,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp1502-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 13.333333,
+                  "nota": 70,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1502-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 13.333333,
+                  "nota": 74,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1502-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 13.333334,
+                  "nota": 78,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-cp1502-2",
+              "nombre": "Tareas",
+              "valor_total": 35,
+              "orden": 1,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp1502-2-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 11.666667,
+                  "nota": 70,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1502-2-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 11.666667,
+                  "nota": 74,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1502-2-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 11.666666,
+                  "nota": 78,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-cp1502-3",
+              "nombre": "Exposiciones",
+              "valor_total": 25,
+              "orden": 2,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp1502-3-1",
+                  "nombre": "Exposición individual",
+                  "valor": 8.333333,
+                  "nota": 70,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1502-3-2",
+                  "nombre": "Debate en clase",
+                  "valor": 8.333333,
+                  "nota": 74,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1502-3-3",
+                  "nombre": "Presentación grupal",
+                  "valor": 8.333334,
+                  "nota": 78,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            }
+          ],
           "profesor_ids": [
             "prof-ines"
           ],
@@ -677,11 +1013,123 @@
           "id": "mm-cp1503",
           "materia_id": "CP1503",
           "plan_estudio_id": "ucr-cp-plan5",
-          "nota_final": 68,
+          "nota_final": 67.999999,
           "nota_final_manual": false,
           "resultado": "reprobado",
           "creditos": 3,
-          "criterios": [],
+          "criterios": [
+            {
+              "id": "demo-hist-crit-mm-cp1503-1",
+              "nombre": "Parciales",
+              "valor_total": 40,
+              "orden": 0,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp1503-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 13.333333,
+                  "nota": 64,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1503-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 13.333333,
+                  "nota": 68,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1503-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 13.333334,
+                  "nota": 72,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-cp1503-2",
+              "nombre": "Tareas",
+              "valor_total": 35,
+              "orden": 1,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp1503-2-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 11.666667,
+                  "nota": 64,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1503-2-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 11.666667,
+                  "nota": 68,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1503-2-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 11.666666,
+                  "nota": 72,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-cp1503-3",
+              "nombre": "Exposiciones",
+              "valor_total": 25,
+              "orden": 2,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp1503-3-1",
+                  "nombre": "Exposición individual",
+                  "valor": 8.333333,
+                  "nota": 64,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1503-3-2",
+                  "nombre": "Debate en clase",
+                  "valor": 8.333333,
+                  "nota": 68,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp1503-3-3",
+                  "nombre": "Presentación grupal",
+                  "valor": 8.333334,
+                  "nota": 72,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            }
+          ],
           "profesor_ids": [
             "prof-elena"
           ],
@@ -700,7 +1148,119 @@
           "nota_final_manual": false,
           "resultado": "aprobado",
           "creditos": 4,
-          "criterios": [],
+          "criterios": [
+            {
+              "id": "demo-hist-crit-mm-optid-1",
+              "nombre": "Proyectos",
+              "valor_total": 40,
+              "orden": 0,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-optid-1-1",
+                  "nombre": "Propuesta",
+                  "valor": 13.333333,
+                  "nota": 84,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-optid-1-2",
+                  "nombre": "Avance del proyecto",
+                  "valor": 13.333333,
+                  "nota": 88,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-optid-1-3",
+                  "nombre": "Entrega final",
+                  "valor": 13.333334,
+                  "nota": 92,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-optid-2",
+              "nombre": "Exposiciones",
+              "valor_total": 30,
+              "orden": 1,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-optid-2-1",
+                  "nombre": "Exposición individual",
+                  "valor": 10,
+                  "nota": 84,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-optid-2-2",
+                  "nombre": "Debate en clase",
+                  "valor": 10,
+                  "nota": 88,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-optid-2-3",
+                  "nombre": "Presentación grupal",
+                  "valor": 10,
+                  "nota": 92,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-optid-3",
+              "nombre": "Tareas",
+              "valor_total": 30,
+              "orden": 2,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-optid-3-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 10,
+                  "nota": 84,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-optid-3-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 10,
+                  "nota": 88,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-optid-3-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 10,
+                  "nota": 92,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            }
+          ],
           "profesor_ids": [
             "prof-marcos"
           ],
@@ -719,7 +1279,119 @@
           "nota_final_manual": false,
           "resultado": "aprobado",
           "creditos": 3,
-          "criterios": [],
+          "criterios": [
+            {
+              "id": "demo-hist-crit-mm-cp2006-1",
+              "nombre": "Parciales",
+              "valor_total": 40,
+              "orden": 0,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp2006-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 13.333333,
+                  "nota": 72,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp2006-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 13.333333,
+                  "nota": 76,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp2006-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 13.333334,
+                  "nota": 80,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-cp2006-2",
+              "nombre": "Tareas",
+              "valor_total": 35,
+              "orden": 1,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp2006-2-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 11.666667,
+                  "nota": 72,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp2006-2-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 11.666667,
+                  "nota": 76,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp2006-2-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 11.666666,
+                  "nota": 80,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-cp2006-3",
+              "nombre": "Exposiciones",
+              "valor_total": 25,
+              "orden": 2,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp2006-3-1",
+                  "nombre": "Exposición individual",
+                  "valor": 8.333333,
+                  "nota": 72,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp2006-3-2",
+                  "nombre": "Debate en clase",
+                  "valor": 8.333333,
+                  "nota": 76,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp2006-3-3",
+                  "nombre": "Presentación grupal",
+                  "valor": 8.333334,
+                  "nota": 80,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            }
+          ],
           "profesor_ids": [
             "prof-ines"
           ],
@@ -738,7 +1410,119 @@
           "nota_final_manual": false,
           "resultado": "aprobado",
           "creditos": 3,
-          "criterios": [],
+          "criterios": [
+            {
+              "id": "demo-hist-crit-mm-cp2007-1",
+              "nombre": "Parciales",
+              "valor_total": 45,
+              "orden": 0,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp2007-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 15,
+                  "nota": 78,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp2007-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 15,
+                  "nota": 82,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp2007-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 15,
+                  "nota": 86,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-cp2007-2",
+              "nombre": "Quices",
+              "valor_total": 25,
+              "orden": 1,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp2007-2-1",
+                  "nombre": "Quiz 1",
+                  "valor": 8.333333,
+                  "nota": 78,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp2007-2-2",
+                  "nombre": "Quiz 2",
+                  "valor": 8.333333,
+                  "nota": 82,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp2007-2-3",
+                  "nombre": "Quiz acumulativo",
+                  "valor": 8.333334,
+                  "nota": 86,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-cp2007-3",
+              "nombre": "Tareas",
+              "valor_total": 30,
+              "orden": 2,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp2007-3-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 10,
+                  "nota": 78,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp2007-3-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 10,
+                  "nota": 82,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp2007-3-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 10,
+                  "nota": 86,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            }
+          ],
           "profesor_ids": [
             "prof-ines"
           ],
@@ -757,7 +1541,119 @@
           "nota_final_manual": false,
           "resultado": "aprobado",
           "creditos": 3,
-          "criterios": [],
+          "criterios": [
+            {
+              "id": "demo-hist-crit-mm-cp3001-1",
+              "nombre": "Parciales",
+              "valor_total": 40,
+              "orden": 0,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp3001-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 13.333333,
+                  "nota": 85,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp3001-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 13.333333,
+                  "nota": 89,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp3001-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 13.333334,
+                  "nota": 93,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-cp3001-2",
+              "nombre": "Tareas",
+              "valor_total": 35,
+              "orden": 1,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp3001-2-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 11.666667,
+                  "nota": 85,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp3001-2-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 11.666667,
+                  "nota": 89,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp3001-2-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 11.666666,
+                  "nota": 93,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-cp3001-3",
+              "nombre": "Exposiciones",
+              "valor_total": 25,
+              "orden": 2,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp3001-3-1",
+                  "nombre": "Exposición individual",
+                  "valor": 8.333333,
+                  "nota": 85,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp3001-3-2",
+                  "nombre": "Debate en clase",
+                  "valor": 8.333333,
+                  "nota": 89,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp3001-3-3",
+                  "nombre": "Presentación grupal",
+                  "valor": 8.333334,
+                  "nota": 93,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            }
+          ],
           "profesor_ids": [
             "prof-ines"
           ],
@@ -772,11 +1668,123 @@
           "id": "mm-cp3002",
           "materia_id": "CP3002",
           "plan_estudio_id": "ucr-cp-plan5",
-          "nota_final": 71,
+          "nota_final": 71.000001,
           "nota_final_manual": false,
           "resultado": "aprobado",
           "creditos": 3,
-          "criterios": [],
+          "criterios": [
+            {
+              "id": "demo-hist-crit-mm-cp3002-1",
+              "nombre": "Parciales",
+              "valor_total": 40,
+              "orden": 0,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp3002-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 13.333333,
+                  "nota": 67,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp3002-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 13.333333,
+                  "nota": 71,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp3002-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 13.333334,
+                  "nota": 75,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-cp3002-2",
+              "nombre": "Tareas",
+              "valor_total": 35,
+              "orden": 1,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp3002-2-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 11.666667,
+                  "nota": 67,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp3002-2-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 11.666667,
+                  "nota": 71,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp3002-2-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 11.666666,
+                  "nota": 75,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-cp3002-3",
+              "nombre": "Exposiciones",
+              "valor_total": 25,
+              "orden": 2,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp3002-3-1",
+                  "nombre": "Exposición individual",
+                  "valor": 8.333333,
+                  "nota": 67,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp3002-3-2",
+                  "nombre": "Debate en clase",
+                  "valor": 8.333333,
+                  "nota": 71,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp3002-3-3",
+                  "nombre": "Presentación grupal",
+                  "valor": 8.333334,
+                  "nota": 75,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            }
+          ],
           "profesor_ids": [
             "prof-ines"
           ],
@@ -795,7 +1803,119 @@
           "nota_final_manual": false,
           "resultado": "aprobado",
           "creditos": 3,
-          "criterios": [],
+          "criterios": [
+            {
+              "id": "demo-hist-crit-mm-cp3003-1",
+              "nombre": "Parciales",
+              "valor_total": 40,
+              "orden": 0,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp3003-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 13.333333,
+                  "nota": 89,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp3003-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 13.333333,
+                  "nota": 93,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp3003-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 13.333334,
+                  "nota": 97,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-cp3003-2",
+              "nombre": "Tareas",
+              "valor_total": 35,
+              "orden": 1,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp3003-2-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 11.666667,
+                  "nota": 89,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp3003-2-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 11.666667,
+                  "nota": 93,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp3003-2-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 11.666666,
+                  "nota": 97,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-cp3003-3",
+              "nombre": "Exposiciones",
+              "valor_total": 25,
+              "orden": 2,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-cp3003-3-1",
+                  "nombre": "Exposición individual",
+                  "valor": 8.333333,
+                  "nota": 89,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp3003-3-2",
+                  "nombre": "Debate en clase",
+                  "valor": 8.333333,
+                  "nota": 93,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-cp3003-3-3",
+                  "nombre": "Presentación grupal",
+                  "valor": 8.333334,
+                  "nota": 97,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            }
+          ],
           "profesor_ids": [
             "prof-ines"
           ],
@@ -824,39 +1944,146 @@
           "id": "mm-cp2001",
           "materia_id": "CP2001",
           "plan_estudio_id": "ucr-cp-plan5",
-          "nota_final": null,
+          "nota_final": 83.3375,
           "creditos": 3,
           "criterios": [
             {
-              "id": "crit-mm-cp2001",
-              "nombre": "Evaluaciones",
-              "valor_total_porcentaje": 100,
+              "id": "demo-crit-mm-cp2001-1",
+              "nombre": "Parciales",
+              "valor_total": 40,
+              "orden": 0,
+              "es_extra": false,
               "asignaciones": [
                 {
-                  "id": "mm-cp2001-a1",
-                  "nombre": "Control de lectura",
+                  "id": "demo-asig-mm-cp2001-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 10,
                   "nota": 95,
-                  "valor_porcentaje": 25
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
                 },
                 {
-                  "id": "mm-cp2001-a2",
-                  "nombre": "Trabajo aplicado",
-                  "nota": 91,
-                  "valor_porcentaje": 25
+                  "id": "demo-asig-mm-cp2001-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 10,
+                  "nota": 90,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
                 },
                 {
-                  "id": "mm-cp2001-a3",
-                  "nombre": "Examen parcial",
-                  "nota": 94,
-                  "valor_porcentaje": 25
+                  "id": "demo-asig-mm-cp2001-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 10,
+                  "nota": 92,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
                 },
                 {
-                  "id": "mm-cp2001-a4",
-                  "nombre": "Proyecto de cierre",
-                  "nota": 96,
-                  "valor_porcentaje": 25
+                  "id": "demo-asig-mm-cp2001-1-4",
+                  "nombre": "Examen final",
+                  "valor": 10,
+                  "nota": null,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
                 }
-              ]
+              ],
+              "_eliminados_asignaciones": []
+            },
+            {
+              "id": "demo-crit-mm-cp2001-2",
+              "nombre": "Tareas",
+              "valor_total": 35,
+              "orden": 1,
+              "es_extra": false,
+              "asignaciones": [
+                {
+                  "id": "demo-asig-mm-cp2001-2-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 8.75,
+                  "nota": 88,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-asig-mm-cp2001-2-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 8.75,
+                  "nota": 94,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-asig-mm-cp2001-2-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 8.75,
+                  "nota": 89,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                },
+                {
+                  "id": "demo-asig-mm-cp2001-2-4",
+                  "nombre": "Entrega final",
+                  "valor": 8.75,
+                  "nota": 97,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
+                }
+              ],
+              "_eliminados_asignaciones": []
+            },
+            {
+              "id": "demo-crit-mm-cp2001-3",
+              "nombre": "Exposiciones",
+              "valor_total": 25,
+              "orden": 2,
+              "es_extra": false,
+              "asignaciones": [
+                {
+                  "id": "demo-asig-mm-cp2001-3-1",
+                  "nombre": "Exposición individual",
+                  "valor": 6.25,
+                  "nota": 95,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-asig-mm-cp2001-3-2",
+                  "nombre": "Debate en clase",
+                  "valor": 6.25,
+                  "nota": 91,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-asig-mm-cp2001-3-3",
+                  "nombre": "Presentación grupal",
+                  "valor": 6.25,
+                  "nota": 93,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                },
+                {
+                  "id": "demo-asig-mm-cp2001-3-4",
+                  "nombre": "Defensa final",
+                  "valor": 6.25,
+                  "nota": 96,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
+                }
+              ],
+              "_eliminados_asignaciones": []
             }
           ],
           "profesor_ids": [
@@ -866,48 +2093,159 @@
             "meta_horas_semana": 4,
             "pomodoro": null,
             "color": "#6366f1",
-            "dias_estudio": null
+            "dias_estudio": [
+              "L",
+              "J"
+            ]
           },
           "calificacion_profesor": null,
-          "volveria_a_llevar_profesor": null
+          "volveria_a_llevar_profesor": null,
+          "nota_final_manual": false
         },
         {
           "id": "mm-cp2002",
           "materia_id": "CP2002",
           "plan_estudio_id": "ucr-cp-plan5",
-          "nota_final": null,
+          "nota_final": 68.5125,
           "creditos": 3,
           "criterios": [
             {
-              "id": "crit-mm-cp2002",
-              "nombre": "Evaluaciones",
-              "valor_total_porcentaje": 100,
+              "id": "demo-crit-mm-cp2002-1",
+              "nombre": "Parciales",
+              "valor_total": 45,
+              "orden": 0,
+              "es_extra": false,
               "asignaciones": [
                 {
-                  "id": "mm-cp2002-a1",
-                  "nombre": "Control de lectura",
+                  "id": "demo-asig-mm-cp2002-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 11.25,
+                  "nota": 80,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-asig-mm-cp2002-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 11.25,
+                  "nota": 74,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-asig-mm-cp2002-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 11.25,
                   "nota": 78,
-                  "valor_porcentaje": 25
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
                 },
                 {
-                  "id": "mm-cp2002-a2",
-                  "nombre": "Trabajo aplicado",
-                  "nota": 72,
-                  "valor_porcentaje": 25
-                },
-                {
-                  "id": "mm-cp2002-a3",
-                  "nombre": "Examen parcial",
-                  "nota": 75,
-                  "valor_porcentaje": 25
-                },
-                {
-                  "id": "mm-cp2002-a4",
-                  "nombre": "Proyecto de cierre",
-                  "nota": 70,
-                  "valor_porcentaje": 25
+                  "id": "demo-asig-mm-cp2002-1-4",
+                  "nombre": "Examen final",
+                  "valor": 11.25,
+                  "nota": null,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
                 }
-              ]
+              ],
+              "_eliminados_asignaciones": []
+            },
+            {
+              "id": "demo-crit-mm-cp2002-2",
+              "nombre": "Quices",
+              "valor_total": 25,
+              "orden": 1,
+              "es_extra": false,
+              "asignaciones": [
+                {
+                  "id": "demo-asig-mm-cp2002-2-1",
+                  "nombre": "Quiz 1",
+                  "valor": 6.25,
+                  "nota": 81,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-asig-mm-cp2002-2-2",
+                  "nombre": "Quiz 2",
+                  "valor": 6.25,
+                  "nota": 68,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-asig-mm-cp2002-2-3",
+                  "nombre": "Quiz 3",
+                  "valor": 6.25,
+                  "nota": 75,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                },
+                {
+                  "id": "demo-asig-mm-cp2002-2-4",
+                  "nombre": "Quiz acumulativo",
+                  "valor": 6.25,
+                  "nota": 79,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
+                }
+              ],
+              "_eliminados_asignaciones": []
+            },
+            {
+              "id": "demo-crit-mm-cp2002-3",
+              "nombre": "Tareas",
+              "valor_total": 30,
+              "orden": 2,
+              "es_extra": false,
+              "asignaciones": [
+                {
+                  "id": "demo-asig-mm-cp2002-3-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 7.5,
+                  "nota": 82,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-asig-mm-cp2002-3-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 7.5,
+                  "nota": 70,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-asig-mm-cp2002-3-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 7.5,
+                  "nota": 77,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                },
+                {
+                  "id": "demo-asig-mm-cp2002-3-4",
+                  "nombre": "Entrega final",
+                  "valor": 7.5,
+                  "nota": 84,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
+                }
+              ],
+              "_eliminados_asignaciones": []
             }
           ],
           "profesor_ids": [
@@ -917,48 +2255,159 @@
             "meta_horas_semana": 5,
             "pomodoro": null,
             "color": "#14b8a6",
-            "dias_estudio": null
+            "dias_estudio": [
+              "K",
+              "V"
+            ]
           },
           "calificacion_profesor": null,
-          "volveria_a_llevar_profesor": null
+          "volveria_a_llevar_profesor": null,
+          "nota_final_manual": false
         },
         {
           "id": "mm-cp2003",
           "materia_id": "CP2003",
           "plan_estudio_id": "ucr-cp-plan5",
-          "nota_final": null,
+          "nota_final": 54.25,
           "creditos": 3,
           "criterios": [
             {
-              "id": "crit-mm-cp2003",
-              "nombre": "Evaluaciones",
-              "valor_total_porcentaje": 100,
+              "id": "demo-crit-mm-cp2003-1",
+              "nombre": "Parciales",
+              "valor_total": 45,
+              "orden": 0,
+              "es_extra": false,
               "asignaciones": [
                 {
-                  "id": "mm-cp2003-a1",
-                  "nombre": "Control de lectura",
-                  "nota": 58,
-                  "valor_porcentaje": 25
-                },
-                {
-                  "id": "mm-cp2003-a2",
-                  "nombre": "Trabajo aplicado",
+                  "id": "demo-asig-mm-cp2003-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 11.25,
                   "nota": 62,
-                  "valor_porcentaje": 25
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
                 },
                 {
-                  "id": "mm-cp2003-a3",
-                  "nombre": "Examen parcial",
-                  "nota": 55,
-                  "valor_porcentaje": 25
+                  "id": "demo-asig-mm-cp2003-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 11.25,
+                  "nota": 58,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
                 },
                 {
-                  "id": "mm-cp2003-a4",
-                  "nombre": "Proyecto de cierre",
-                  "nota": 60,
-                  "valor_porcentaje": 25
+                  "id": "demo-asig-mm-cp2003-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 11.25,
+                  "nota": 65,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                },
+                {
+                  "id": "demo-asig-mm-cp2003-1-4",
+                  "nombre": "Examen final",
+                  "valor": 11.25,
+                  "nota": null,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
                 }
-              ]
+              ],
+              "_eliminados_asignaciones": []
+            },
+            {
+              "id": "demo-crit-mm-cp2003-2",
+              "nombre": "Proyectos",
+              "valor_total": 30,
+              "orden": 1,
+              "es_extra": false,
+              "asignaciones": [
+                {
+                  "id": "demo-asig-mm-cp2003-2-1",
+                  "nombre": "Propuesta",
+                  "valor": 7.5,
+                  "nota": 60,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-asig-mm-cp2003-2-2",
+                  "nombre": "Avance del proyecto",
+                  "valor": 7.5,
+                  "nota": 55,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-asig-mm-cp2003-2-3",
+                  "nombre": "Prototipo",
+                  "valor": 7.5,
+                  "nota": 63,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                },
+                {
+                  "id": "demo-asig-mm-cp2003-2-4",
+                  "nombre": "Entrega final",
+                  "valor": 7.5,
+                  "nota": 67,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
+                }
+              ],
+              "_eliminados_asignaciones": []
+            },
+            {
+              "id": "demo-crit-mm-cp2003-3",
+              "nombre": "Tareas",
+              "valor_total": 25,
+              "orden": 2,
+              "es_extra": false,
+              "asignaciones": [
+                {
+                  "id": "demo-asig-mm-cp2003-3-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 6.25,
+                  "nota": 59,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-asig-mm-cp2003-3-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 6.25,
+                  "nota": 61,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-asig-mm-cp2003-3-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 6.25,
+                  "nota": 64,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                },
+                {
+                  "id": "demo-asig-mm-cp2003-3-4",
+                  "nombre": "Entrega final",
+                  "valor": 6.25,
+                  "nota": 57,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
+                }
+              ],
+              "_eliminados_asignaciones": []
             }
           ],
           "profesor_ids": [
@@ -968,48 +2417,159 @@
             "meta_horas_semana": 6,
             "pomodoro": null,
             "color": "#f59e0b",
-            "dias_estudio": null
+            "dias_estudio": [
+              "M",
+              "S"
+            ]
           },
           "calificacion_profesor": null,
-          "volveria_a_llevar_profesor": null
+          "volveria_a_llevar_profesor": null,
+          "nota_final_manual": false
         },
         {
           "id": "mm-cp2004",
           "materia_id": "CP2004",
           "plan_estudio_id": "ucr-cp-plan5",
-          "nota_final": null,
+          "nota_final": 64.7125,
           "creditos": 3,
           "criterios": [
             {
-              "id": "crit-mm-cp2004",
-              "nombre": "Evaluaciones",
-              "valor_total_porcentaje": 100,
+              "id": "demo-crit-mm-cp2004-1",
+              "nombre": "Parciales",
+              "valor_total": 45,
+              "orden": 0,
+              "es_extra": false,
               "asignaciones": [
                 {
-                  "id": "mm-cp2004-a1",
-                  "nombre": "Control de lectura",
-                  "nota": 96,
-                  "valor_porcentaje": 25
+                  "id": "demo-asig-mm-cp2004-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 11.25,
+                  "nota": 98,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
                 },
                 {
-                  "id": "mm-cp2004-a2",
-                  "nombre": "Trabajo aplicado",
+                  "id": "demo-asig-mm-cp2004-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 11.25,
+                  "nota": 95,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-asig-mm-cp2004-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 11.25,
                   "nota": 92,
-                  "valor_porcentaje": 25
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
                 },
                 {
-                  "id": "mm-cp2004-a3",
-                  "nombre": "Examen parcial",
-                  "nota": 48,
-                  "valor_porcentaje": 25
-                },
-                {
-                  "id": "mm-cp2004-a4",
-                  "nombre": "Proyecto de cierre",
-                  "nota": 42,
-                  "valor_porcentaje": 25
+                  "id": "demo-asig-mm-cp2004-1-4",
+                  "nombre": "Examen final",
+                  "valor": 11.25,
+                  "nota": null,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
                 }
-              ]
+              ],
+              "_eliminados_asignaciones": []
+            },
+            {
+              "id": "demo-crit-mm-cp2004-2",
+              "nombre": "Laboratorios",
+              "valor_total": 35,
+              "orden": 1,
+              "es_extra": false,
+              "asignaciones": [
+                {
+                  "id": "demo-asig-mm-cp2004-2-1",
+                  "nombre": "Laboratorio 1",
+                  "valor": 8.75,
+                  "nota": 82,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-asig-mm-cp2004-2-2",
+                  "nombre": "Laboratorio 2",
+                  "valor": 8.75,
+                  "nota": 75,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-asig-mm-cp2004-2-3",
+                  "nombre": "Práctica aplicada",
+                  "valor": 8.75,
+                  "nota": 68,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                },
+                {
+                  "id": "demo-asig-mm-cp2004-2-4",
+                  "nombre": "Proyecto de laboratorio",
+                  "valor": 8.75,
+                  "nota": 55,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
+                }
+              ],
+              "_eliminados_asignaciones": []
+            },
+            {
+              "id": "demo-crit-mm-cp2004-3",
+              "nombre": "Tareas",
+              "valor_total": 20,
+              "orden": 2,
+              "es_extra": false,
+              "asignaciones": [
+                {
+                  "id": "demo-asig-mm-cp2004-3-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 5,
+                  "nota": 42,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-asig-mm-cp2004-3-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 5,
+                  "nota": 38,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-asig-mm-cp2004-3-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 5,
+                  "nota": 35,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                },
+                {
+                  "id": "demo-asig-mm-cp2004-3-4",
+                  "nombre": "Entrega final",
+                  "valor": 5,
+                  "nota": 48,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
+                }
+              ],
+              "_eliminados_asignaciones": []
             }
           ],
           "profesor_ids": [
@@ -1019,48 +2579,159 @@
             "meta_horas_semana": 4,
             "pomodoro": null,
             "color": "#8b5cf6",
-            "dias_estudio": null
+            "dias_estudio": [
+              "J",
+              "D"
+            ]
           },
           "calificacion_profesor": null,
-          "volveria_a_llevar_profesor": null
+          "volveria_a_llevar_profesor": null,
+          "nota_final_manual": false
         },
         {
           "id": "mm-cp2005",
           "materia_id": "CP2005",
           "plan_estudio_id": "ucr-cp-plan5",
-          "nota_final": null,
+          "nota_final": 70.2875,
           "creditos": 3,
           "criterios": [
             {
-              "id": "crit-mm-cp2005",
-              "nombre": "Evaluaciones",
-              "valor_total_porcentaje": 100,
+              "id": "demo-crit-mm-cp2005-1",
+              "nombre": "Parciales",
+              "valor_total": 40,
+              "orden": 0,
+              "es_extra": false,
               "asignaciones": [
                 {
-                  "id": "mm-cp2005-a1",
-                  "nombre": "Control de lectura",
-                  "nota": 68,
-                  "valor_porcentaje": 25
+                  "id": "demo-asig-mm-cp2005-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 10,
+                  "nota": 62,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
                 },
                 {
-                  "id": "mm-cp2005-a2",
-                  "nombre": "Trabajo aplicado",
-                  "nota": 76,
-                  "valor_porcentaje": 25
+                  "id": "demo-asig-mm-cp2005-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 10,
+                  "nota": 70,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
                 },
                 {
-                  "id": "mm-cp2005-a3",
-                  "nombre": "Examen parcial",
-                  "nota": 84,
-                  "valor_porcentaje": 25
+                  "id": "demo-asig-mm-cp2005-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 10,
+                  "nota": 80,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
                 },
                 {
-                  "id": "mm-cp2005-a4",
-                  "nombre": "Proyecto de cierre",
-                  "nota": 89,
-                  "valor_porcentaje": 25
+                  "id": "demo-asig-mm-cp2005-1-4",
+                  "nombre": "Examen final",
+                  "valor": 10,
+                  "nota": null,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
                 }
-              ]
+              ],
+              "_eliminados_asignaciones": []
+            },
+            {
+              "id": "demo-crit-mm-cp2005-2",
+              "nombre": "Quices",
+              "valor_total": 25,
+              "orden": 1,
+              "es_extra": false,
+              "asignaciones": [
+                {
+                  "id": "demo-asig-mm-cp2005-2-1",
+                  "nombre": "Quiz 1",
+                  "valor": 6.25,
+                  "nota": 70,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-asig-mm-cp2005-2-2",
+                  "nombre": "Quiz 2",
+                  "valor": 6.25,
+                  "nota": 78,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-asig-mm-cp2005-2-3",
+                  "nombre": "Quiz 3",
+                  "valor": 6.25,
+                  "nota": 85,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                },
+                {
+                  "id": "demo-asig-mm-cp2005-2-4",
+                  "nombre": "Quiz acumulativo",
+                  "valor": 6.25,
+                  "nota": 75,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
+                }
+              ],
+              "_eliminados_asignaciones": []
+            },
+            {
+              "id": "demo-crit-mm-cp2005-3",
+              "nombre": "Exposiciones",
+              "valor_total": 35,
+              "orden": 2,
+              "es_extra": false,
+              "asignaciones": [
+                {
+                  "id": "demo-asig-mm-cp2005-3-1",
+                  "nombre": "Exposición individual",
+                  "valor": 8.75,
+                  "nota": 80,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-asig-mm-cp2005-3-2",
+                  "nombre": "Debate en clase",
+                  "valor": 8.75,
+                  "nota": 88,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-asig-mm-cp2005-3-3",
+                  "nombre": "Presentación grupal",
+                  "valor": 8.75,
+                  "nota": 82,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                },
+                {
+                  "id": "demo-asig-mm-cp2005-3-4",
+                  "nombre": "Defensa final",
+                  "valor": 8.75,
+                  "nota": 91,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
+                }
+              ],
+              "_eliminados_asignaciones": []
             }
           ],
           "profesor_ids": [
@@ -1070,48 +2741,159 @@
             "meta_horas_semana": 5,
             "pomodoro": null,
             "color": "#ec4899",
-            "dias_estudio": null
+            "dias_estudio": [
+              "V",
+              "D"
+            ]
           },
           "calificacion_profesor": null,
-          "volveria_a_llevar_profesor": null
+          "volveria_a_llevar_profesor": null,
+          "nota_final_manual": false
         },
         {
           "id": "mm-opt1019",
           "materia_id": "OPT1019-A",
           "plan_estudio_id": "ucr-cp-plan5",
-          "nota_final": null,
+          "nota_final": 82.55,
           "creditos": 3,
           "criterios": [
             {
-              "id": "crit-mm-opt1019",
-              "nombre": "Evaluaciones",
-              "valor_total_porcentaje": 100,
+              "id": "demo-crit-mm-opt1019-1",
+              "nombre": "Proyectos",
+              "valor_total": 40,
+              "orden": 0,
+              "es_extra": false,
               "asignaciones": [
                 {
-                  "id": "mm-opt1019-a1",
-                  "nombre": "Control de lectura",
-                  "nota": 82,
-                  "valor_porcentaje": 25
+                  "id": "demo-asig-mm-opt1019-1-1",
+                  "nombre": "Propuesta",
+                  "valor": 10,
+                  "nota": 90,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
                 },
                 {
-                  "id": "mm-opt1019-a2",
-                  "nombre": "Trabajo aplicado",
-                  "nota": 80,
-                  "valor_porcentaje": 25
+                  "id": "demo-asig-mm-opt1019-1-2",
+                  "nombre": "Avance del proyecto",
+                  "valor": 10,
+                  "nota": 88,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
                 },
                 {
-                  "id": "mm-opt1019-a3",
-                  "nombre": "Examen parcial",
-                  "nota": 86,
-                  "valor_porcentaje": 25
+                  "id": "demo-asig-mm-opt1019-1-3",
+                  "nombre": "Prototipo",
+                  "valor": 10,
+                  "nota": 94,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
                 },
                 {
-                  "id": "mm-opt1019-a4",
-                  "nombre": "Proyecto de cierre",
-                  "nota": 83,
-                  "valor_porcentaje": 25
+                  "id": "demo-asig-mm-opt1019-1-4",
+                  "nombre": "Entrega final",
+                  "valor": 10,
+                  "nota": null,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
                 }
-              ]
+              ],
+              "_eliminados_asignaciones": []
+            },
+            {
+              "id": "demo-crit-mm-opt1019-2",
+              "nombre": "Exposiciones",
+              "valor_total": 30,
+              "orden": 1,
+              "es_extra": false,
+              "asignaciones": [
+                {
+                  "id": "demo-asig-mm-opt1019-2-1",
+                  "nombre": "Exposición individual",
+                  "valor": 7.5,
+                  "nota": 85,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-asig-mm-opt1019-2-2",
+                  "nombre": "Debate en clase",
+                  "valor": 7.5,
+                  "nota": 89,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-asig-mm-opt1019-2-3",
+                  "nombre": "Presentación grupal",
+                  "valor": 7.5,
+                  "nota": 92,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                },
+                {
+                  "id": "demo-asig-mm-opt1019-2-4",
+                  "nombre": "Defensa final",
+                  "valor": 7.5,
+                  "nota": 95,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
+                }
+              ],
+              "_eliminados_asignaciones": []
+            },
+            {
+              "id": "demo-crit-mm-opt1019-3",
+              "nombre": "Tareas",
+              "valor_total": 30,
+              "orden": 2,
+              "es_extra": false,
+              "asignaciones": [
+                {
+                  "id": "demo-asig-mm-opt1019-3-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 7.5,
+                  "nota": 97,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-asig-mm-opt1019-3-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 7.5,
+                  "nota": 93,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-asig-mm-opt1019-3-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 7.5,
+                  "nota": 91,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                },
+                {
+                  "id": "demo-asig-mm-opt1019-3-4",
+                  "nombre": "Entrega final",
+                  "valor": 7.5,
+                  "nota": 96,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
+                }
+              ],
+              "_eliminados_asignaciones": []
             }
           ],
           "profesor_ids": [
@@ -1121,36 +2903,158 @@
             "meta_horas_semana": 6,
             "pomodoro": null,
             "color": "#06b6d4",
-            "dias_estudio": null
+            "dias_estudio": [
+              "M"
+            ]
           },
           "calificacion_profesor": null,
-          "volveria_a_llevar_profesor": null
+          "volveria_a_llevar_profesor": null,
+          "nota_final_manual": false
         },
         {
           "id": "mm-ati100",
           "materia_id": "ATI100",
           "plan_estudio_id": "tec-ati-demo",
-          "nota_final": null,
+          "nota_final": 77,
           "creditos": 3,
           "criterios": [
             {
-              "id": "crit-mm-ati100",
-              "nombre": "Evaluaciones",
-              "valor_total_porcentaje": 100,
+              "id": "demo-crit-mm-ati100-1",
+              "nombre": "Parciales",
+              "valor_total": 40,
+              "orden": 0,
+              "es_extra": false,
               "asignaciones": [
                 {
-                  "id": "mm-ati100-a1",
-                  "nombre": "Práctica aplicada",
-                  "nota": 91,
-                  "valor_porcentaje": 40
+                  "id": "demo-asig-mm-ati100-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 10,
+                  "nota": 84,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
                 },
                 {
-                  "id": "mm-ati100-a2",
-                  "nombre": "Examen parcial",
+                  "id": "demo-asig-mm-ati100-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 10,
+                  "nota": 79,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-asig-mm-ati100-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 10,
                   "nota": 88,
-                  "valor_porcentaje": 60
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                },
+                {
+                  "id": "demo-asig-mm-ati100-1-4",
+                  "nombre": "Examen final",
+                  "valor": 10,
+                  "nota": null,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
                 }
-              ]
+              ],
+              "_eliminados_asignaciones": []
+            },
+            {
+              "id": "demo-crit-mm-ati100-2",
+              "nombre": "Proyectos",
+              "valor_total": 35,
+              "orden": 1,
+              "es_extra": false,
+              "asignaciones": [
+                {
+                  "id": "demo-asig-mm-ati100-2-1",
+                  "nombre": "Propuesta",
+                  "valor": 8.75,
+                  "nota": 76,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-asig-mm-ati100-2-2",
+                  "nombre": "Avance del proyecto",
+                  "valor": 8.75,
+                  "nota": 82,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-asig-mm-ati100-2-3",
+                  "nombre": "Prototipo",
+                  "valor": 8.75,
+                  "nota": 91,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                },
+                {
+                  "id": "demo-asig-mm-ati100-2-4",
+                  "nombre": "Entrega final",
+                  "valor": 8.75,
+                  "nota": 87,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
+                }
+              ],
+              "_eliminados_asignaciones": []
+            },
+            {
+              "id": "demo-crit-mm-ati100-3",
+              "nombre": "Asistencia",
+              "valor_total": 25,
+              "orden": 2,
+              "es_extra": false,
+              "asignaciones": [
+                {
+                  "id": "demo-asig-mm-ati100-3-1",
+                  "nombre": "Asistencia agosto",
+                  "valor": 6.25,
+                  "nota": 94,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-asig-mm-ati100-3-2",
+                  "nombre": "Asistencia septiembre",
+                  "valor": 6.25,
+                  "nota": 89,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-asig-mm-ati100-3-3",
+                  "nombre": "Participación en clase",
+                  "valor": 6.25,
+                  "nota": 92,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                },
+                {
+                  "id": "demo-asig-mm-ati100-3-4",
+                  "nombre": "Asistencia octubre",
+                  "valor": 6.25,
+                  "nota": 85,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
+                }
+              ],
+              "_eliminados_asignaciones": []
             }
           ],
           "profesor_ids": [
@@ -1160,34 +3064,156 @@
             "meta_horas_semana": 5,
             "pomodoro": null,
             "color": "#0ea5e9",
-            "dias_estudio": null
-          }
+            "dias_estudio": [
+              "L"
+            ]
+          },
+          "nota_final_manual": false
         },
         {
           "id": "mm-ati120",
           "materia_id": "ATI120",
           "plan_estudio_id": "tec-ati-demo",
-          "nota_final": null,
+          "nota_final": 73.8375,
           "creditos": 4,
           "criterios": [
             {
-              "id": "crit-mm-ati120",
-              "nombre": "Evaluaciones",
-              "valor_total_porcentaje": 100,
+              "id": "demo-crit-mm-ati120-1",
+              "nombre": "Parciales",
+              "valor_total": 40,
+              "orden": 0,
+              "es_extra": false,
               "asignaciones": [
                 {
-                  "id": "mm-ati120-a1",
-                  "nombre": "Práctica aplicada",
-                  "nota": 86,
-                  "valor_porcentaje": 40
+                  "id": "demo-asig-mm-ati120-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 10,
+                  "nota": 70,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
                 },
                 {
-                  "id": "mm-ati120-a2",
-                  "nombre": "Examen parcial",
-                  "nota": 79,
-                  "valor_porcentaje": 60
+                  "id": "demo-asig-mm-ati120-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 10,
+                  "nota": 76,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-asig-mm-ati120-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 10,
+                  "nota": 74,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                },
+                {
+                  "id": "demo-asig-mm-ati120-1-4",
+                  "nombre": "Examen final",
+                  "valor": 10,
+                  "nota": null,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
                 }
-              ]
+              ],
+              "_eliminados_asignaciones": []
+            },
+            {
+              "id": "demo-crit-mm-ati120-2",
+              "nombre": "Laboratorios",
+              "valor_total": 35,
+              "orden": 1,
+              "es_extra": false,
+              "asignaciones": [
+                {
+                  "id": "demo-asig-mm-ati120-2-1",
+                  "nombre": "Laboratorio 1",
+                  "valor": 8.75,
+                  "nota": 81,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-asig-mm-ati120-2-2",
+                  "nombre": "Laboratorio 2",
+                  "valor": 8.75,
+                  "nota": 84,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-asig-mm-ati120-2-3",
+                  "nombre": "Práctica aplicada",
+                  "valor": 8.75,
+                  "nota": 80,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                },
+                {
+                  "id": "demo-asig-mm-ati120-2-4",
+                  "nombre": "Proyecto de laboratorio",
+                  "valor": 8.75,
+                  "nota": 91,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
+                }
+              ],
+              "_eliminados_asignaciones": []
+            },
+            {
+              "id": "demo-crit-mm-ati120-3",
+              "nombre": "Tareas",
+              "valor_total": 25,
+              "orden": 2,
+              "es_extra": false,
+              "asignaciones": [
+                {
+                  "id": "demo-asig-mm-ati120-3-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 6.25,
+                  "nota": 88,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-asig-mm-ati120-3-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 6.25,
+                  "nota": 95,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-asig-mm-ati120-3-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 6.25,
+                  "nota": 86,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                },
+                {
+                  "id": "demo-asig-mm-ati120-3-4",
+                  "nombre": "Entrega final",
+                  "valor": 6.25,
+                  "nota": 90,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 3
+                }
+              ],
+              "_eliminados_asignaciones": []
             }
           ],
           "profesor_ids": [
@@ -1197,8 +3223,12 @@
             "meta_horas_semana": 5,
             "pomodoro": null,
             "color": "#38bdf8",
-            "dias_estudio": null
-          }
+            "dias_estudio": [
+              "K",
+              "S"
+            ]
+          },
+          "nota_final_manual": false
         }
       ],
       "bloques_horario": [
@@ -1412,21 +3442,119 @@
           "id": "mm-sem-demo-hist-1-0",
           "materia_id": "CP1501",
           "plan_estudio_id": "ucr-cp-plan5",
-          "nota_final": null,
+          "nota_final": 0,
           "nota_final_manual": false,
           "resultado": "aprobado",
           "creditos": 3,
           "criterios": [
             {
-              "id": "crit-sem-demo-hist-1-0",
-              "nombre": "Evaluaciones",
-              "valor_total_porcentaje": 100,
+              "id": "demo-hist-crit-mm-sem-demo-hist-1-0-1",
+              "nombre": "Parciales",
+              "valor_total": 40,
+              "orden": 0,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
               "asignaciones": [
                 {
-                  "id": "a-sem-demo-hist-1-0",
-                  "nombre": "Proyecto de semestre",
-                  "nota": 92,
-                  "valor_porcentaje": 100
+                  "id": "demo-hist-asig-mm-sem-demo-hist-1-0-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 13.333333,
+                  "nota": -4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-1-0-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 13.333333,
+                  "nota": 0,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-1-0-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 13.333334,
+                  "nota": 4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-sem-demo-hist-1-0-2",
+              "nombre": "Tareas",
+              "valor_total": 35,
+              "orden": 1,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-1-0-2-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 11.666667,
+                  "nota": -4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-1-0-2-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 11.666667,
+                  "nota": 0,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-1-0-2-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 11.666666,
+                  "nota": 4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-sem-demo-hist-1-0-3",
+              "nombre": "Exposiciones",
+              "valor_total": 25,
+              "orden": 2,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-1-0-3-1",
+                  "nombre": "Exposición individual",
+                  "valor": 8.333333,
+                  "nota": -4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-1-0-3-2",
+                  "nombre": "Debate en clase",
+                  "valor": 8.333333,
+                  "nota": 0,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-1-0-3-3",
+                  "nombre": "Presentación grupal",
+                  "valor": 8.333334,
+                  "nota": 4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
                 }
               ]
             }
@@ -1445,21 +3573,119 @@
           "id": "mm-sem-demo-hist-1-1",
           "materia_id": "CP1504",
           "plan_estudio_id": "ucr-cp-plan5",
-          "nota_final": null,
+          "nota_final": 0,
           "nota_final_manual": false,
           "resultado": "aprobado",
           "creditos": 3,
           "criterios": [
             {
-              "id": "crit-sem-demo-hist-1-1",
-              "nombre": "Evaluaciones",
-              "valor_total_porcentaje": 100,
+              "id": "demo-hist-crit-mm-sem-demo-hist-1-1-1",
+              "nombre": "Parciales",
+              "valor_total": 40,
+              "orden": 0,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
               "asignaciones": [
                 {
-                  "id": "a-sem-demo-hist-1-1",
-                  "nombre": "Proyecto de semestre",
-                  "nota": 76,
-                  "valor_porcentaje": 100
+                  "id": "demo-hist-asig-mm-sem-demo-hist-1-1-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 13.333333,
+                  "nota": -4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-1-1-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 13.333333,
+                  "nota": 0,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-1-1-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 13.333334,
+                  "nota": 4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-sem-demo-hist-1-1-2",
+              "nombre": "Tareas",
+              "valor_total": 35,
+              "orden": 1,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-1-1-2-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 11.666667,
+                  "nota": -4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-1-1-2-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 11.666667,
+                  "nota": 0,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-1-1-2-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 11.666666,
+                  "nota": 4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-sem-demo-hist-1-1-3",
+              "nombre": "Exposiciones",
+              "valor_total": 25,
+              "orden": 2,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-1-1-3-1",
+                  "nombre": "Exposición individual",
+                  "valor": 8.333333,
+                  "nota": -4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-1-1-3-2",
+                  "nombre": "Debate en clase",
+                  "valor": 8.333333,
+                  "nota": 0,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-1-1-3-3",
+                  "nombre": "Presentación grupal",
+                  "valor": 8.333334,
+                  "nota": 4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
                 }
               ]
             }
@@ -1491,21 +3717,119 @@
           "id": "mm-sem-demo-hist-2-0",
           "materia_id": "CP1504",
           "plan_estudio_id": "ucr-cp-plan5",
-          "nota_final": null,
+          "nota_final": 0,
           "nota_final_manual": false,
           "resultado": "aprobado",
           "creditos": 3,
           "criterios": [
             {
-              "id": "crit-sem-demo-hist-2-0",
-              "nombre": "Evaluaciones",
-              "valor_total_porcentaje": 100,
+              "id": "demo-hist-crit-mm-sem-demo-hist-2-0-1",
+              "nombre": "Parciales",
+              "valor_total": 40,
+              "orden": 0,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
               "asignaciones": [
                 {
-                  "id": "a-sem-demo-hist-2-0",
-                  "nombre": "Proyecto de semestre",
-                  "nota": 76,
-                  "valor_porcentaje": 100
+                  "id": "demo-hist-asig-mm-sem-demo-hist-2-0-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 13.333333,
+                  "nota": -4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-2-0-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 13.333333,
+                  "nota": 0,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-2-0-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 13.333334,
+                  "nota": 4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-sem-demo-hist-2-0-2",
+              "nombre": "Tareas",
+              "valor_total": 35,
+              "orden": 1,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-2-0-2-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 11.666667,
+                  "nota": -4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-2-0-2-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 11.666667,
+                  "nota": 0,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-2-0-2-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 11.666666,
+                  "nota": 4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-sem-demo-hist-2-0-3",
+              "nombre": "Exposiciones",
+              "valor_total": 25,
+              "orden": 2,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-2-0-3-1",
+                  "nombre": "Exposición individual",
+                  "valor": 8.333333,
+                  "nota": -4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-2-0-3-2",
+                  "nombre": "Debate en clase",
+                  "valor": 8.333333,
+                  "nota": 0,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-2-0-3-3",
+                  "nombre": "Presentación grupal",
+                  "valor": 8.333334,
+                  "nota": 4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
                 }
               ]
             }
@@ -1524,21 +3848,119 @@
           "id": "mm-sem-demo-hist-2-1",
           "materia_id": "CP1502",
           "plan_estudio_id": "ucr-cp-plan5",
-          "nota_final": null,
+          "nota_final": 0,
           "nota_final_manual": false,
           "resultado": "aprobado",
           "creditos": 3,
           "criterios": [
             {
-              "id": "crit-sem-demo-hist-2-1",
-              "nombre": "Evaluaciones",
-              "valor_total_porcentaje": 100,
+              "id": "demo-hist-crit-mm-sem-demo-hist-2-1-1",
+              "nombre": "Parciales",
+              "valor_total": 40,
+              "orden": 0,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
               "asignaciones": [
                 {
-                  "id": "a-sem-demo-hist-2-1",
-                  "nombre": "Proyecto de semestre",
-                  "nota": 84,
-                  "valor_porcentaje": 100
+                  "id": "demo-hist-asig-mm-sem-demo-hist-2-1-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 13.333333,
+                  "nota": -4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-2-1-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 13.333333,
+                  "nota": 0,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-2-1-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 13.333334,
+                  "nota": 4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-sem-demo-hist-2-1-2",
+              "nombre": "Tareas",
+              "valor_total": 35,
+              "orden": 1,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-2-1-2-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 11.666667,
+                  "nota": -4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-2-1-2-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 11.666667,
+                  "nota": 0,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-2-1-2-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 11.666666,
+                  "nota": 4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-sem-demo-hist-2-1-3",
+              "nombre": "Exposiciones",
+              "valor_total": 25,
+              "orden": 2,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-2-1-3-1",
+                  "nombre": "Exposición individual",
+                  "valor": 8.333333,
+                  "nota": -4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-2-1-3-2",
+                  "nombre": "Debate en clase",
+                  "valor": 8.333333,
+                  "nota": 0,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-2-1-3-3",
+                  "nombre": "Presentación grupal",
+                  "valor": 8.333334,
+                  "nota": 4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
                 }
               ]
             }
@@ -1570,21 +3992,119 @@
           "id": "mm-sem-demo-hist-3-0",
           "materia_id": "CP1502",
           "plan_estudio_id": "ucr-cp-plan5",
-          "nota_final": null,
+          "nota_final": 0,
           "nota_final_manual": false,
           "resultado": "aprobado",
           "creditos": 3,
           "criterios": [
             {
-              "id": "crit-sem-demo-hist-3-0",
-              "nombre": "Evaluaciones",
-              "valor_total_porcentaje": 100,
+              "id": "demo-hist-crit-mm-sem-demo-hist-3-0-1",
+              "nombre": "Parciales",
+              "valor_total": 40,
+              "orden": 0,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
               "asignaciones": [
                 {
-                  "id": "a-sem-demo-hist-3-0",
-                  "nombre": "Proyecto de semestre",
-                  "nota": 84,
-                  "valor_porcentaje": 100
+                  "id": "demo-hist-asig-mm-sem-demo-hist-3-0-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 13.333333,
+                  "nota": -4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-3-0-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 13.333333,
+                  "nota": 0,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-3-0-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 13.333334,
+                  "nota": 4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-sem-demo-hist-3-0-2",
+              "nombre": "Tareas",
+              "valor_total": 35,
+              "orden": 1,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-3-0-2-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 11.666667,
+                  "nota": -4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-3-0-2-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 11.666667,
+                  "nota": 0,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-3-0-2-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 11.666666,
+                  "nota": 4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-sem-demo-hist-3-0-3",
+              "nombre": "Exposiciones",
+              "valor_total": 25,
+              "orden": 2,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-3-0-3-1",
+                  "nombre": "Exposición individual",
+                  "valor": 8.333333,
+                  "nota": -4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-3-0-3-2",
+                  "nombre": "Debate en clase",
+                  "valor": 8.333333,
+                  "nota": 0,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-3-0-3-3",
+                  "nombre": "Presentación grupal",
+                  "valor": 8.333334,
+                  "nota": 4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
                 }
               ]
             }
@@ -1603,21 +4123,119 @@
           "id": "mm-sem-demo-hist-3-1",
           "materia_id": "CP1501",
           "plan_estudio_id": "ucr-cp-plan5",
-          "nota_final": null,
+          "nota_final": 0,
           "nota_final_manual": false,
           "resultado": "aprobado",
           "creditos": 3,
           "criterios": [
             {
-              "id": "crit-sem-demo-hist-3-1",
-              "nombre": "Evaluaciones",
-              "valor_total_porcentaje": 100,
+              "id": "demo-hist-crit-mm-sem-demo-hist-3-1-1",
+              "nombre": "Parciales",
+              "valor_total": 40,
+              "orden": 0,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
               "asignaciones": [
                 {
-                  "id": "a-sem-demo-hist-3-1",
-                  "nombre": "Proyecto de semestre",
-                  "nota": 92,
-                  "valor_porcentaje": 100
+                  "id": "demo-hist-asig-mm-sem-demo-hist-3-1-1-1",
+                  "nombre": "Parcial I",
+                  "valor": 13.333333,
+                  "nota": -4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-3-1-1-2",
+                  "nombre": "Parcial II",
+                  "valor": 13.333333,
+                  "nota": 0,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-3-1-1-3",
+                  "nombre": "Examen corto",
+                  "valor": 13.333334,
+                  "nota": 4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-sem-demo-hist-3-1-2",
+              "nombre": "Tareas",
+              "valor_total": 35,
+              "orden": 1,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-3-1-2-1",
+                  "nombre": "Tarea de análisis",
+                  "valor": 11.666667,
+                  "nota": -4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-3-1-2-2",
+                  "nombre": "Ensayo breve",
+                  "valor": 11.666667,
+                  "nota": 0,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-3-1-2-3",
+                  "nombre": "Estudio de caso",
+                  "valor": 11.666666,
+                  "nota": 4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
+                }
+              ]
+            },
+            {
+              "id": "demo-hist-crit-mm-sem-demo-hist-3-1-3",
+              "nombre": "Exposiciones",
+              "valor_total": 25,
+              "orden": 2,
+              "es_extra": false,
+              "_eliminados_asignaciones": [],
+              "asignaciones": [
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-3-1-3-1",
+                  "nombre": "Exposición individual",
+                  "valor": 8.333333,
+                  "nota": -4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 0
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-3-1-3-2",
+                  "nombre": "Debate en clase",
+                  "valor": 8.333333,
+                  "nota": 0,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 1
+                },
+                {
+                  "id": "demo-hist-asig-mm-sem-demo-hist-3-1-3-3",
+                  "nombre": "Presentación grupal",
+                  "valor": 8.333334,
+                  "nota": 4,
+                  "modo_valor": "automatico",
+                  "modo_calificacion": "nota",
+                  "orden": 2
                 }
               ]
             }
@@ -3063,16 +5681,59 @@
       "meta_horas": 8,
       "participantes": [
         {
-          "nombre": "Tú",
+          "id": "demo-comp-1-yo",
+          "apodo": "Lucía",
+          "foto_url": null,
+          "color": null,
           "horas": 6.5
         },
         {
-          "nombre": "Camila",
+          "id": "demo-comp-1-p1",
+          "apodo": "Camila",
+          "foto_url": null,
+          "color": null,
           "horas": 7.25
         },
         {
-          "nombre": "Mateo",
+          "id": "demo-comp-1-p2",
+          "apodo": "Mateo",
+          "foto_url": null,
+          "color": null,
           "horas": 4.75
+        }
+      ],
+      "yo_id": "demo-comp-1-yo",
+      "apodo_propio": "Lucía",
+      "historial_demo": [
+        {
+          "semana_cerrada_en": "2026-09-26T12:00:00.000Z",
+          "completa": true,
+          "resultados": [
+            {
+              "participante_id": "demo-comp-1-p1",
+              "apodo": "Camila",
+              "horas": 7.25,
+              "foto_url": null,
+              "color": null,
+              "puesto": 1
+            },
+            {
+              "participante_id": "demo-comp-1-yo",
+              "apodo": "Lucía",
+              "horas": 6.5,
+              "foto_url": null,
+              "color": null,
+              "puesto": 2
+            },
+            {
+              "participante_id": "demo-comp-1-p2",
+              "apodo": "Mateo",
+              "horas": 4.75,
+              "foto_url": null,
+              "color": null,
+              "puesto": 3
+            }
+          ]
         }
       ]
     },
@@ -3083,16 +5744,59 @@
       "meta_horas": 5,
       "participantes": [
         {
-          "nombre": "Tú",
+          "id": "demo-comp-2-yo",
+          "apodo": "Lucía",
+          "foto_url": null,
+          "color": null,
           "horas": 3.5
         },
         {
-          "nombre": "Lucía",
+          "id": "demo-comp-2-p1",
+          "apodo": "Lucía",
+          "foto_url": null,
+          "color": null,
           "horas": 4
         },
         {
-          "nombre": "Diego",
+          "id": "demo-comp-2-p2",
+          "apodo": "Diego",
+          "foto_url": null,
+          "color": null,
           "horas": 2.25
+        }
+      ],
+      "yo_id": "demo-comp-2-yo",
+      "apodo_propio": "Lucía",
+      "historial_demo": [
+        {
+          "semana_cerrada_en": "2026-09-26T12:00:00.000Z",
+          "completa": true,
+          "resultados": [
+            {
+              "participante_id": "demo-comp-2-p1",
+              "apodo": "Lucía",
+              "horas": 4,
+              "foto_url": null,
+              "color": null,
+              "puesto": 1
+            },
+            {
+              "participante_id": "demo-comp-2-yo",
+              "apodo": "Lucía",
+              "horas": 3.5,
+              "foto_url": null,
+              "color": null,
+              "puesto": 2
+            },
+            {
+              "participante_id": "demo-comp-2-p2",
+              "apodo": "Diego",
+              "horas": 2.25,
+              "foto_url": null,
+              "color": null,
+              "puesto": 3
+            }
+          ]
         }
       ]
     }

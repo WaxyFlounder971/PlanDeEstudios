@@ -1692,6 +1692,9 @@
     "Funciones de demostración": "Demo features",
     "Notificaciones: simuladas": "Notifications: simulated",
     "Analítica: muestra ficticia": "Analytics: sample data",
+    "Analítica: solo conteo de aperturas": "Analytics: opening count only",
+    "La demo no envía datos a Google Drive.": "The demo does not send data to Google Drive.",
+    "Solo registra un conteo agregado de aperturas, sin identificar visitantes ni guardar su actividad.": "It only records an aggregate opening count, without identifying visitors or saving their activity.",
     "Gemini: opcional, clave temporal": "Gemini: optional, temporary key",
     "✨ Ver Wrapped": "✨ View Wrapped"
   }

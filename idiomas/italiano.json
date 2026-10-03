@@ -1587,6 +1587,9 @@
     "Funciones de demostración": "Funzioni demo",
     "Notificaciones: simuladas": "Notifiche: simulate",
     "Analítica: muestra ficticia": "Analisi: dati di esempio",
+    "Analítica: solo conteo de aperturas": "Analisi: solo conteggio delle aperture",
+    "La demo no envía datos a Google Drive.": "La demo non invia dati a Google Drive.",
+    "Solo registra un conteo agregado de aperturas, sin identificar visitantes ni guardar su actividad.": "Registra solo un conteggio aggregato delle aperture, senza identificare i visitatori né salvare la loro attività.",
     "Gemini: opcional, clave temporal": "Gemini: facoltativo, chiave temporanea",
     "✨ Ver Wrapped": "✨ Guarda il riepilogo"
   }
