@@ -106,4 +106,4 @@ function activarEstadoDemo(datos) {
   document.body.dataset.demo = "true";
 }
 
-export { MODO_DEMO, activarEstadoDemo, bloquearServiciosExternosEnDemo, cargarDatosDemo, esModoDemo, registrarAperturaDemo };
+export { MODO_DEMO, PREVIEW_DEMO, activarEstadoDemo, bloquearServiciosExternosEnDemo, cargarDatosDemo, esModoDemo, registrarAperturaDemo };
