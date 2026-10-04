@@ -121,7 +121,10 @@ function renderizarEditorTiposAgenda() {
   const cont = document.getElementById("agenda-tipos-config");
   if (!cont) return;
   cont.innerHTML = "";
-  const cfg = estado.datos.configuracion;
+  // Agenda se inicializa antes de que algunas rutas terminen de hidratar los
+  // datos. Ajustes se vuelve a renderizar al abrirse, cuando ya hay estado.
+  const cfg = estado.datos?.configuracion;
+  if (!cfg) return;
   cfg.agenda_tipos = Array.isArray(cfg.agenda_tipos) ? cfg.agenda_tipos : [];
   cfg.agenda_colores_estado = cfg.agenda_colores_estado || {};
   const estadosDefault = { completado: ["Completado", "#3b82f6"], perdida: ["Perdida", "#6b7280"], pendiente: ["Pendiente", "#f59e0b"] };
@@ -1690,12 +1693,6 @@ function inicializarAgenda() {
   document.getElementById("btn-agenda-agregar")?.addEventListener("click", () => {
     abrirModalEventoAgenda({ fechaDefault: new Date().toISOString().slice(0, 10) });
   });
-  document.getElementById("btn-agenda-seleccionar")?.addEventListener("click", () => {
-    estado.agendaModoSeleccion = true;
-    estado.agendaSeleccionIds = [];
-    renderizarAgenda();
-  });
-
   document.querySelectorAll("#pills-agenda-vista .pill-item").forEach((btn) => {
     btn.addEventListener("click", () => {
       cambiarVistaAgendaConGesto(btn.dataset.vista);

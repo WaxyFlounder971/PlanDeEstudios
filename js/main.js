@@ -11,7 +11,7 @@ import { migrarDatosAntiguos, sellarTimestamp } from "./core/schema.js";
 import { fusionarDatos } from "./core/storage-merge.js";
 import { actualizarIndicadorSync, asegurarTokenValido, avisarCierreSesionAOtrasPestanas, forzarSincronizacion, haySesionGuardada, inicializarCanalEntrePestanas, inicializarPullToRefresh, inicializarReconexionAlVolverOnline, inicializarSondeoAlVolver, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
 import { CLAVE_CACHE_LOCAL, borrarTokenCache, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
-import { MODO_DEMO, activarEstadoDemo, cargarDatosDemo, registrarAperturaDemo } from "./core/demo-mode.js";
+import { MODO_DEMO, PREVIEW_DEMO, activarEstadoDemo, cargarDatosDemo, registrarAperturaDemo } from "./core/demo-mode.js";
 import { configurarCorreoAnalitica, inicializarAnaliticaUso, registrarAnaliticaUso } from "./core/analitica.js";
 import { inicializarTutorialDesdeAjustes, mostrarOnboardingNuevoUsuario } from "./core/onboarding.js";
 import { aplicarLogoApp } from "./core/marca.js";
@@ -609,23 +609,23 @@ async function iniciarAplicacionDemo() {
     inicializarTiempoEstudio();
     inicializarBotonesCerrarModal();
     inicializarAutoScrollSelectoresEnModales();
-    document.title = "Demo Académico";
+    document.title = PREVIEW_DEMO ? "App Académica" : "Demo Académico";
     document.getElementById("pantalla-login")?.classList.add("oculto");
     document.querySelectorAll('#app-shell img[alt="Logo App Académica"]').forEach((logo) => {
-      logo.alt = "Logo Demo Académico";
+      logo.alt = PREVIEW_DEMO ? "Logo App Académica" : "Logo Demo Académico";
       const titulo = logo.closest("h3");
       if (titulo) {
         const texto = titulo.querySelector(".texto");
         if (texto) {
-          texto.textContent = "Demo Académico";
+          texto.textContent = PREVIEW_DEMO ? "App Académica" : "Demo Académico";
         } else {
           const nodoTexto = [...titulo.childNodes].find((nodo) => nodo.nodeType === Node.TEXT_NODE && nodo.textContent.trim());
-          if (nodoTexto) nodoTexto.textContent = " Demo Académico";
+          if (nodoTexto) nodoTexto.textContent = PREVIEW_DEMO ? " App Académica" : " Demo Académico";
         }
       }
     });
     const panelConfiguracion = document.getElementById("seccion-configuracion");
-    if (panelConfiguracion && !document.getElementById("demo-funciones-simuladas")) {
+    if (!PREVIEW_DEMO && panelConfiguracion && !document.getElementById("demo-funciones-simuladas")) {
       const tarjeta = document.createElement("section");
       tarjeta.id = "demo-funciones-simuladas";
       tarjeta.className = "glass-card stack";

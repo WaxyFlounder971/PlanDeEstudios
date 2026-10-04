@@ -102,6 +102,7 @@ function activarEstadoDemo(datos) {
   globalThis.__appDemoDatos = datos;
   bloquearServiciosExternosEnDemo();
   document.documentElement.dataset.demo = "true";
+  document.documentElement.dataset.demoPreview = String(PREVIEW_DEMO);
   document.body.dataset.demo = "true";
 }
 

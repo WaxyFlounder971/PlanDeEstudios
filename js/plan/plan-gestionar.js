@@ -228,7 +228,9 @@ function renderizarListaGestionPlanes() {
 
     const btnEliminar = document.createElement("button");
     btnEliminar.className = "btn btn-danger";
-    btnEliminar.textContent = "Eliminar";
+    btnEliminar.textContent = "🗑️";
+    btnEliminar.title = `Eliminar ${plan.nombre_carrera}`;
+    btnEliminar.setAttribute("aria-label", `Eliminar ${plan.nombre_carrera}`);
     btnEliminar.addEventListener("click", () => {
       abrirConfirmacion({
         titulo: "Eliminar Plan de Estudios",
@@ -243,9 +245,9 @@ function renderizarListaGestionPlanes() {
     // exportarPlanACSV ya soporta recibir un plan explícito para este caso.
     const btnExportar = document.createElement("button");
     btnExportar.className = "btn btn-secondary";
-    btnExportar.textContent = "Exportar CSV";
+    btnExportar.textContent = "CSV";
     btnExportar.title = `Exportar "${plan.nombre_carrera}" a CSV`;
-    btnExportar.addEventListener("click", () => exportarPlanACSV(plan));
+    btnExportar.addEventListener("click", () => abrirOpcionesExportarPlan(plan));
     derecha.appendChild(btnExportar);
 
     if (indice === 0) {
@@ -312,6 +314,30 @@ function renderizarListaGestionPlanes() {
   const alcanzoLimite = planes.length >= LIMITE_PLANES_ESTUDIO;
   btnAgregar.disabled = alcanzoLimite;
   aviso.classList.toggle("oculto", !alcanzoLimite);
+}
+
+function abrirOpcionesExportarPlan(plan) {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay plan-exportar-overlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  const caja = document.createElement("section");
+  caja.className = "glass-card modal-card stack";
+  caja.style.cssText = "width:min(520px,calc(100vw - 32px));gap:14px;";
+  const titulo = document.createElement("h2"); titulo.textContent = "Exportar plan de estudios";
+  const explicacion = document.createElement("p"); explicacion.className="muted"; explicacion.textContent="Elige si quieres conservar tu avance personal o compartir una malla limpia.";
+  const conDatos = document.createElement("button"); conDatos.type="button"; conDatos.className="btn btn-primary"; conDatos.textContent="Exportar con mis datos";
+  const detalleConDatos = document.createElement("small"); detalleConDatos.className="muted"; detalleConDatos.textContent="Incluye estados y categorías que tienes registrados en este plan.";
+  const limpio = document.createElement("button"); limpio.type="button"; limpio.className="btn btn-secondary"; limpio.textContent="Exportar plan de estudios en limpio";
+  const detalleLimpio = document.createElement("small"); detalleLimpio.className="muted"; detalleLimpio.textContent="Incluye materias, créditos y requisitos; deja vacíos los estados y categorías personales.";
+  const cerrar = document.createElement("button"); cerrar.type="button"; cerrar.className="btn btn-secondary"; cerrar.textContent="Cancelar";
+  const salir = () => overlay.remove();
+  conDatos.addEventListener("click", () => { salir(); exportarPlanACSV(plan); });
+  limpio.addEventListener("click", () => { salir(); exportarPlanACSV(plan, { limpio: true }); });
+  cerrar.addEventListener("click", salir);
+  overlay.addEventListener("click", (ev) => { if (ev.target === overlay) salir(); });
+  caja.append(titulo, explicacion, conDatos, detalleConDatos, limpio, detalleLimpio, cerrar);
+  overlay.append(caja); document.body.append(overlay); cerrar.focus();
 }
 
 function eliminarPlanEstudio(planId) {

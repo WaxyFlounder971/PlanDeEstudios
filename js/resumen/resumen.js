@@ -344,16 +344,19 @@ function construirTarjetaEstudioHoy(totalHechoMin, totalMetaMin, materias = []) 
     detalle.style.cssText = "gap:5px;margin-top:3px;";
     materias.slice(0, 3).forEach((item) => {
       const filaMateria = document.createElement("div");
-      filaMateria.className = "row-between";
-      filaMateria.style.cssText = "gap:10px;font-size:.78rem;";
+      filaMateria.className = "resumen-estudio-materia";
       const nombre = document.createElement("span");
-      nombre.style.cssText = "min-width:0;overflow-wrap:anywhere;";
+      nombre.className = "resumen-estudio-materia-nombre";
       nombre.textContent = item.nombreMateriaCorto;
       const tiempo = document.createElement("span");
       tiempo.className = "muted";
-      tiempo.style.cssText = "white-space:nowrap;";
-      tiempo.textContent = `${formatearHorasMin(item.hechoMinutosHoy)} / ${formatearHorasMin(item.metaMinutosHoy)}`;
-      filaMateria.append(nombre, tiempo);
+      tiempo.className = "resumen-estudio-materia-tiempo muted";
+      tiempo.textContent = item.metaMinutosHoy > 0
+        ? `${formatearHorasMin(item.hechoMinutosHoy)} estudiados · meta ${formatearHorasMin(item.metaMinutosHoy)}`
+        : `${formatearHorasMin(item.hechoMinutosHoy)} estudiados`;
+      const progreso = document.createElement("div"); progreso.className="resumen-estudio-materia-barra";
+      const avance = document.createElement("span"); avance.style.width=`${item.metaMinutosHoy>0?Math.max(0,Math.min(100,item.hechoMinutosHoy/item.metaMinutosHoy*100)):100}%`; progreso.append(avance);
+      filaMateria.append(nombre, tiempo, progreso);
       detalle.appendChild(filaMateria);
     });
     tarjeta.appendChild(detalle);

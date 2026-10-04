@@ -468,7 +468,7 @@ function construirFilaCSVMateria(materia, tipos, bloqueOverride) {
  * regrese a `optativas_disponibles` tal cual estaban al reimportar este
  * mismo archivo.
  */
-function exportarPlanACSV(planParam) {
+function exportarPlanACSV(planParam, { limpio = false } = {}) {
   const principal = planParam || obtenerPlanActivo();
   if (!principal) return;
 
@@ -493,11 +493,12 @@ function exportarPlanACSV(planParam) {
 
   const encabezado = `${construirEncabezadoCSV(tipos)},Estado,CategoriaId`;
 
-  const filas = principal.materias.map((m) => construirFilaCSVMateria(m, tipos));
+  const preparar = (m) => limpio ? { ...m, estado: "", categoria_id: "" } : m;
+  const filas = principal.materias.map((m) => construirFilaCSVMateria(preparar(m), tipos));
 
   const filasOptativasDisponibles = (principal.optativas_disponibles || []).map((m) => {
     const palabra = obtenerPalabraOptativa(m) === "electiva" ? "ELECTIVA" : "OPTATIVA";
-    return construirFilaCSVMateria(m, tipos, palabra);
+    return construirFilaCSVMateria(preparar(m), tipos, palabra);
   });
 
   const csv = [...metadatos, encabezado, ...filas, ...filasOptativasDisponibles].join("\n");

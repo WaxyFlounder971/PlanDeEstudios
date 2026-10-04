@@ -947,6 +947,7 @@ function construirMiniPanelImportacion(plan) {
         : `<p class="muted" style="color:#34d399;">¡Listo! ${materias.length + electivas.length + paraRevisar.length} materias procesadas.</p>`;
       estado.panelImportacionAbierto = false;
       renderizarPlanEstudios();
+      if (materias.length + electivas.length + paraRevisar.length > 0) window.continuarTutorialDespuesDeImportarPlan?.();
     };
 
     btnImportar.addEventListener("click", () => {

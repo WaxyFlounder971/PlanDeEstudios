@@ -59,7 +59,7 @@ import {
   suscribirseATimer,
   notificarSesionesEstudioActualizadas,
 } from "./tiempo-estudio-timer.js";
-import { MODO_DEMO } from "../core/demo-mode.js";
+import { MODO_DEMO, PREVIEW_DEMO } from "../core/demo-mode.js";
 
 // mm.id de la materia en pantalla de detalle, o null = vista de tarjetas.
 let materiaDetalleActivaId = null;
@@ -432,10 +432,10 @@ function construirEncabezado(cont) {
   const titulo = document.createElement("h2");
   titulo.className = "texto-encabezado-seccion";
   titulo.style.margin = "0";
-  titulo.textContent = "Tiempo";
+  titulo.textContent = traducirTextoInterfaz("Tiempo de estudio");
   grupoTitulo.appendChild(titulo);
   grupoTitulo.appendChild(construirChipRacha());
-  if (MODO_DEMO) {
+  if (MODO_DEMO && !PREVIEW_DEMO) {
     const accionesRacha = document.createElement("div");
     accionesRacha.className = "row";
     accionesRacha.style.cssText = "gap:6px;flex-wrap:wrap;";
@@ -508,6 +508,12 @@ function construirEncabezado(cont) {
   grupoBotones.appendChild(btnRegistroManual);
 
   encabezado.appendChild(grupoBotones);
+  if (PREVIEW_DEMO) {
+    const numeroRacha = grupoTitulo.querySelector(".te-racha-num");
+    if (numeroRacha) numeroRacha.textContent = "16";
+    const chip = grupoTitulo.querySelector(".te-racha-chip");
+    if (chip) { chip.classList.remove("te-racha-chip--apagada"); chip.classList.add("te-racha-chip--encendida"); chip.title = "Racha de ejemplo: 16 días"; }
+  }
   cont.appendChild(encabezado);
 }
 

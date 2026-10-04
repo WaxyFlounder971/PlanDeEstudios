@@ -260,10 +260,15 @@ function construirPromptPersonalidadWapper() {
 /** Punto 4 del brief de personalidad: saludo simple → respuesta fija, sin llamar a Gemini. */
 function construirMensajeSaludoWapper() {
   const idioma = obtenerIdiomaActual();
-  if (idioma === "en") return "Hi! How can I help today?";
-  if (idioma === "it") return "Ciao! Come posso aiutarti?";
-  if (idioma === "fr") return "Bonjour ! Comment puis-je vous aider ?";
-  return "¡Hola! ¿En qué te ayudo hoy?";
+  const nombre = obtenerNombreParaDirigirse()
+    || estado.datos?.perfil?.nombre_preferido
+    || estado.datos?.perfil?.nombre
+    || "";
+  const saludo = nombre.trim() ? `, ${nombre.trim()}` : "";
+  if (idioma === "en") return `Hi${saludo}! How can I help today?`;
+  if (idioma === "it") return `Ciao${saludo}! Come posso aiutarti?`;
+  if (idioma === "fr") return `Bonjour${saludo} ! Comment puis-je vous aider ?`;
+  return `¡Hola${saludo}! ¿En qué te ayudo hoy?`;
 }
 
 /** Reemplaza al antiguo MENSAJE_FALLBACK (voseo) — ahora en tuteo, y solo se usa como
