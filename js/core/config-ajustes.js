@@ -1064,19 +1064,16 @@ function renderizarAjustes() {
 
   // Modo claro/oscuro
   const chkModo = document.getElementById("switch-modo");
-  chkModo.checked = estado.datos.configuracion.modo === "light";
-  chkModo.onchange = () => {
-    // Mismo criterio que switch-rendimiento: estado en memoria + repintado de
-    // paleta instantáneos, solo el sello+sync va con antirrebote.
-    const nuevoModo = chkModo.checked ? "light" : "dark";
-    estado.datos.configuracion.modo = nuevoModo;
-    aplicarPaleta(
-      estado.datos.configuracion.paleta,
-      nuevoModo,
-      estado.datos.configuracion.paleta === "personalizada" ? personalizada.colores : undefined
-    );
-    dispararSyncConAntirrebote();
-  };
+  if (chkModo) {
+    chkModo.checked = estado.datos.configuracion.modo === "light";
+    chkModo.onchange = () => {
+      const nuevoModo = chkModo.checked ? "light" : "dark";
+      estado.datos.configuracion.modo = nuevoModo;
+      aplicarPaleta(estado.datos.configuracion.paleta, nuevoModo,
+        estado.datos.configuracion.paleta === "personalizada" ? personalizada.colores : undefined);
+      dispararSyncConAntirrebote();
+    };
+  }
 
   // Ajustes por Universidad (2026-08-08): el selector de escala global que
   // vivía acá (#pill-escala-notas, leyendo/escribiendo

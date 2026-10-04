@@ -29,9 +29,18 @@ async function instalarAppAcademica() {
   return false;
 }
 
-function mostrarInvitacionInstalacion() {
+async function appYaInstalada() {
+  if (navigator.standalone === true || window.matchMedia?.("(display-mode: standalone)")?.matches || window.matchMedia?.("(display-mode: minimal-ui)")?.matches) return true;
+  if (typeof navigator.getInstalledRelatedApps === "function") {
+    try { return (await navigator.getInstalledRelatedApps()).some((app) => !app.platform || app.platform === "webapp"); } catch (_) { /* API opcional */ }
+  }
+  return false;
+}
+
+async function mostrarInvitacionInstalacion() {
   const boton = document.getElementById("btn-instalar-app-flotante");
-  if (!boton || window.matchMedia?.("(display-mode: standalone)")?.matches) return;
+  if (!boton) return;
+  if (await appYaInstalada()) { boton.classList.add("oculto"); return; }
   temporizadoresBoton.forEach(clearTimeout); temporizadoresBoton = [];
   boton.classList.remove("oculto", "instalar-expandido");
   requestAnimationFrame(() => boton.classList.add("instalar-expandido"));
@@ -48,6 +57,6 @@ function inicializarInstalacionApp() {
   mostrarInvitacionInstalacion();
 }
 
-export { inicializarInstalacionApp, instalarAppAcademica, mostrarInvitacionInstalacion };
+export { inicializarInstalacionApp, instalarAppAcademica, mostrarInvitacionInstalacion, appYaInstalada };
 import { mostrarToast } from "../ui/componentes.js";
 

@@ -267,6 +267,21 @@ function renderizarSelector() {
     lista.append(opcion);
   }
 
+  const selectorAplicacion = document.getElementById("selector-idioma-app");
+  if (selectorAplicacion) {
+    selectorAplicacion.replaceChildren();
+    for (const idioma of idiomasDisponibles) {
+      const opcion = document.createElement("option");
+      opcion.value = idioma.id;
+      opcion.textContent = idioma.nombre;
+      opcion.dataset.i18nKeep = "";
+      selectorAplicacion.append(opcion);
+    }
+    selectorAplicacion.addEventListener("change", async () => {
+      await aplicarIdioma(selectorAplicacion.value);
+    });
+  }
+
   lista._volverA = selector;
   boton.setAttribute("aria-controls", lista.id);
   boton.onclick = (evento) => {
@@ -316,6 +331,8 @@ function actualizarSelectorIdioma() {
     opcion.classList.toggle("activa", activa);
     opcion.setAttribute("aria-selected", String(activa));
   });
+  const selectorAplicacion = document.getElementById("selector-idioma-app");
+  if (selectorAplicacion) selectorAplicacion.value = idiomaActual;
 }
 
 function abrirListaIdiomas() {

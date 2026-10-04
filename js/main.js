@@ -14,6 +14,7 @@ import { CLAVE_CACHE_LOCAL, borrarTokenCache, establecerTokenActivo, estado, gua
 import { MODO_DEMO, activarEstadoDemo, cargarDatosDemo, registrarAperturaDemo } from "./core/demo-mode.js";
 import { configurarCorreoAnalitica, inicializarAnaliticaUso, registrarAnaliticaUso } from "./core/analitica.js";
 import { inicializarTutorialDesdeAjustes, mostrarOnboardingNuevoUsuario } from "./core/onboarding.js";
+import { aplicarLogoApp } from "./core/marca.js";
 import { inicializarInstalacionApp, mostrarInvitacionInstalacion } from "./core/instalacion-app.js";
 import { obtenerIniciales } from "./core/utils.js";
 // Sincronización con Google Calendar (2026-08-25, reemplaza Web Push) -
@@ -653,7 +654,23 @@ async function iniciarAplicacionDemo() {
     document.getElementById("app-shell")?.classList.add("oculto");
     document.getElementById("pantalla-login")?.classList.remove("oculto");
     const aviso = document.getElementById("aviso-login-bloqueado");
-    if (aviso) { aviso.textContent = "No se pudo cargar la demo. Recarga la página para volver a intentarlo."; aviso.classList.remove("oculto"); }
+    if (aviso) {
+      aviso.replaceChildren();
+      const detalle = document.createElement("span");
+      detalle.textContent = `No se pudo cargar la demo: ${error?.message || "error inesperado"}`;
+      const reintentar = document.createElement("button");
+      reintentar.type = "button";
+      reintentar.className = "btn btn-secondary btn-block";
+      reintentar.textContent = "Reintentar demo";
+      reintentar.addEventListener("click", () => {
+        const destino = new URL(window.location.href);
+        destino.searchParams.set("demo", "1");
+        destino.searchParams.delete("salir-demo");
+        window.location.assign(destino.href);
+      });
+      aviso.append(detalle, reintentar);
+      aviso.classList.remove("oculto");
+    }
   }
 }
 
@@ -1069,10 +1086,10 @@ function mostrarApp() {
   // cuando el dato en sí seguía intacto en estado.datos. Mismo patrón que
   // el bug de abajo en storage-sync.js.
   const cfg = estado.datos.configuracion;
-  const iconoApp = document.getElementById("icono-app-usuario");
-  if (iconoApp) iconoApp.textContent = cfg.icono_app || "📘";
   aplicarTamanoTexto(estado.datos);
-  aplicarPaleta(cfg.paleta, MODO_DEMO ? "dark" : obtenerModoTemaLocal(), cfg.paleta === "personalizada" ? cfg.paleta_personalizada?.colores : undefined);
+  const modoVistaDemo = new URLSearchParams(location.search).get("preview") === "1" ? (cfg.modo || "dark") : "dark";
+  aplicarPaleta(cfg.paleta, MODO_DEMO ? modoVistaDemo : obtenerModoTemaLocal(), cfg.paleta === "personalizada" ? cfg.paleta_personalizada?.colores : undefined);
+  aplicarLogoApp();
   // Fix v1.16.1 (2026-08-23 - "switch de fancy necesita varios clicks"):
   // aplicarModoRendimiento() solo se llamaba desde el onchange del switch
   // en Ajustes, nunca al arrancar. El atributo [data-rendimiento] en <html>
@@ -1118,7 +1135,7 @@ function mostrarApp() {
   // Bug 3: antes mostrarSeccion() solo se llamaba desde clics del nav, así que
   // tras un refresh la sección de Plan de Estudios se quedaba con la clase
   // "oculto" del HTML aunque su contenido sí se hubiera renderizado.
-  mostrarSeccion(MODO_DEMO ? "resumen" : localStorage.getItem(CLAVE_SECCION_ACTIVA) || "resumen");
+  mostrarSeccion(MODO_DEMO ? (new URLSearchParams(location.search).get("previewSection") || "resumen") : localStorage.getItem(CLAVE_SECCION_ACTIVA) || "resumen");
   // Deep links por query param — extraído a procesarDeepLinkAbrir() (ver
   // esa función, definida más abajo) para poder re-chequearlo también
   // desde 'pageshow'/'visibilitychange', no solo acá.
@@ -1334,6 +1351,19 @@ function inicializarGestosNavegacionHorizontal() {
 }
 
 let seccionNavegacionActual = null;
+const avisosDeArranquePorSeccion = new Set();
+
+function orientarSobreDependencias(nombre) {
+  if (MODO_DEMO || !estado.datos || !mostrarToastAccion) return;
+  const tieneSemestres = (estado.datos.semestres || []).length > 0;
+  if (!tieneSemestres && ["agenda", "horario", "tiempo-estudio"].includes(nombre) && !avisosDeArranquePorSeccion.has(nombre)) {
+    avisosDeArranquePorSeccion.add(nombre);
+    const mensaje = nombre === "tiempo-estudio"
+      ? "Puedes usar bloques personalizados desde ya. Para iniciar sesiones por materia y ver estadísticas por semestre, crea un semestre primero."
+      : "Esta sección se conecta mejor con tus materias cuando tengas un semestre. Puedes seguir usándola y crear el semestre cuando quieras.";
+    mostrarToastAccion(mensaje, "Ir a Semestres", () => mostrarSeccion("semestres"));
+  }
+}
 
 function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
   const secciones = {
@@ -1404,6 +1434,7 @@ function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
   // mostrarAvisoContinuar en js/asistente/asistente.js). Con más de 1h, o
   // sin conversación guardada, arranca directo en blanco.
   if (nombre === "asistente") window.renderizarAsistente?.();
+  orientarSobreDependencias(nombre);
 }
 // v2.8.9 (punto 10): se expone en window para que ui/componentes.js pueda
 // llamarla desde inicializarNavegacionBotonesMouse() sin crear un import

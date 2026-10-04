@@ -38,6 +38,8 @@ function crearDatosUsuarioNuevo() {
                                      // v1.15: colores también incluye degradado: { activo, color, intensidad (0-100, % del stop medio), angulo (0-360) }
       onboarding_v1_completado: false, // bienvenida modular para cuentas nuevas; se marca al terminar el recorrido
       icono_app: "📘",              // icono personal localizable que acompaña la paleta elegida
+      logo_app: "folder",
+      logo_app_url: null,
       formato_texto_nombres: "titulo", // "titulo" | "mayusculas" | "oracion" (v5 #9)
       // Selector de moneda (Ajustes generales, 2026-08-10): preferencia
       // GLOBAL del usuario (NO por universidad/plan) — la usa Finanzas para

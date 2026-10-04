@@ -14,7 +14,7 @@ Campos clave:
 * `background_color` — `#0A0E17` — color de splash screen al abrir (coincide con `--bg-canvas` de la paleta "azul" oscura, la paleta por defecto).
 * `theme_color` — `#2563EB` — color de la barra de estado/título del navegador (coincide con `--accent-1` de la paleta "azul").
 * `lang` — `"es"`.
-* `icons` — dos tamaños (192×192, 512×512), ambos `purpose: "any"`, apuntando a `imagenes/LogoApp-192.png` y `imagenes/LogoApp-512.png`.
+* `icons` — dos tamaños (192×192, 512×512), ambos `purpose: "any"`, apuntando a `imagenes/LogoAppFolder-192.png` y `imagenes/LogoAppFolder-512.png`. El manifest conserva el logo estándar; el logo elegido en la app se refleja en favicon e interfaz y puede requerir reinstalar la PWA para actualizar el icono del sistema.
 
 ## Patrones transversales (JSON)
 - `background_color` y `theme_color` están pisados a mano con los valores de la paleta "azul"/oscuro — si en algún momento se cambia la paleta o modo **por defecto** de la app, hay que actualizar estos dos valores a mano acá también (no se leen dinámicamente de `design-system.css`).

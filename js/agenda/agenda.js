@@ -264,13 +264,9 @@ function construirBarraFiltroEstadosAgenda() {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = `agenda-filtro-estado-btn agenda-filtro-estado-${id}` + (activos.has(id) ? " active" : "");
-    const punto = document.createElement("span");
-    punto.className = "agenda-filtro-color";
-    punto.setAttribute("aria-hidden", "true");
-    punto.style.background = color || "#8b5cf6";
     const texto = document.createElement("span");
     texto.textContent = traducirTextoInterfaz(etiqueta);
-    btn.append(punto, texto);
+    btn.append(texto);
     if (color) {
       btn.style.setProperty("--tipo-agenda-color", color);
       btn.style.borderColor = activos.has(id) ? color : "";
@@ -680,11 +676,14 @@ function inicializarBarraSeleccionAgenda() {
 function sincronizarBarraSeleccionAgenda() {
   const barra = document.getElementById("agenda-barra-seleccion");
   if (!barra) return;
-  const activa = estado.agendaModoSeleccion && estado.agendaSeleccionIds.length > 0;
+  const activa = Boolean(estado.agendaModoSeleccion);
   barra.classList.toggle("oculto", !activa);
   if (activa) {
     const n = estado.agendaSeleccionIds.length;
-    document.getElementById("agenda-seleccion-contador").textContent = `${n} ${n === 1 ? "seleccionada" : "seleccionadas"}`;
+    const contador = document.getElementById("agenda-seleccion-contador");
+    const borrar = document.getElementById("agenda-seleccion-eliminar");
+    if (contador) contador.textContent = n ? `${n} ${n === 1 ? "seleccionada" : "seleccionadas"}` : "Selecciona elementos";
+    if (borrar) borrar.disabled = n === 0;
   }
 }
 
@@ -1691,6 +1690,11 @@ function inicializarAgenda() {
   document.getElementById("btn-agenda-agregar")?.addEventListener("click", () => {
     abrirModalEventoAgenda({ fechaDefault: new Date().toISOString().slice(0, 10) });
   });
+  document.getElementById("btn-agenda-seleccionar")?.addEventListener("click", () => {
+    estado.agendaModoSeleccion = true;
+    estado.agendaSeleccionIds = [];
+    renderizarAgenda();
+  });
 
   document.querySelectorAll("#pills-agenda-vista .pill-item").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -1716,6 +1720,9 @@ function inicializarAgenda() {
   // sincronizarBarraSeleccionAgenda() (llamada desde renderizarAgenda) no
   // tenía nada que mostrar/ocultar.
   inicializarBarraSeleccionAgenda();
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && estado.agendaModoSeleccion) cancelarSeleccionAgenda();
+  });
 }
 
 /**

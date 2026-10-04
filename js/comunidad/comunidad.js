@@ -179,7 +179,7 @@ const LINKS_MISPROFES = {
 
 // Rediseño: el botón de "ir a MisProfes" ahora es la imagen del logo de la
 // página (imagenes/MisProfes.png, misma carpeta que el resto de assets de
-// la app — ver imagenes/LogoFinal.png en index.html) en vez de texto — pedido
+// la app — ver imagenes/LogoAppFolder.png en index.html) en vez de texto — pedido
 // explícito de no deformar su relación de aspecto (ver <img> más abajo,
 // sin width/height fijos por separado, solo height + width:auto).
 const RUTA_LOGO_MISPROFES = "imagenes/MisProfes.png";
@@ -241,7 +241,9 @@ function buscarCompaneroVivoPorId(id) {
  *  propósito una opción más, nunca la base de datos: si no está disponible
  *  o el usuario cancela, el formulario sigue siendo 100% editable a mano. */
 function contactsPickerDisponible() {
-  return typeof navigator !== "undefined" && "contacts" in navigator && typeof window !== "undefined" && "ContactsManager" in window;
+  return typeof navigator !== "undefined"
+    && typeof navigator.contacts?.select === "function"
+    && typeof navigator.contacts?.getProperties === "function";
 }
 
 /** Abre el picker nativo, y si el usuario elige un contacto, rellena
@@ -251,7 +253,7 @@ function contactsPickerDisponible() {
  *  mecanismo que usa el resto del formulario. */
 async function importarContactoTelefono(inputTelefono, inputNombre) {
   if (!contactsPickerDisponible()) {
-    mostrarToast("Tu navegador no soporta importar contactos acá — escribilo a mano.");
+    mostrarToast("La selección de contactos no está disponible en este navegador. En Android, prueba Chrome; también puedes escribir el teléfono.");
     return;
   }
   try {
@@ -1348,12 +1350,24 @@ function abrirModalAltaProfesor(profesorExistente = null, preseleccionMmId = nul
 
   const bloqueTelefono = document.createElement("div");
   bloqueTelefono.innerHTML = `<span class="form-label">Teléfono / WhatsApp (opcional)</span>`;
+  const filaTelefono = document.createElement("div");
+  filaTelefono.className = "row";
+  filaTelefono.style.gap = "6px";
   const inputTelefono = document.createElement("input");
   inputTelefono.type = "tel";
   inputTelefono.className = "form-input";
   inputTelefono.placeholder = "+506 8888-8888";
+  inputTelefono.style.flex = "1";
   inputTelefono.value = esEdicion ? profesorExistente.telefono || "" : "";
-  bloqueTelefono.appendChild(inputTelefono);
+  filaTelefono.appendChild(inputTelefono);
+  const btnImportarProfesor = document.createElement("button");
+  btnImportarProfesor.type = "button";
+  btnImportarProfesor.className = "btn btn-secondary";
+  btnImportarProfesor.textContent = "Contactos";
+  btnImportarProfesor.setAttribute("aria-label", "Elegir teléfono de contactos");
+  btnImportarProfesor.addEventListener("click", () => importarContactoTelefono(inputTelefono, inputNombre));
+  filaTelefono.appendChild(btnImportarProfesor);
+  bloqueTelefono.appendChild(filaTelefono);
   // Pedido explícito: aclarar que hay que incluir el código de país, porque
   // el enlace de WhatsApp (wa.me) lo necesita para armar el número
   // completo. Podés escribirlo con +, con espacios, con guiones o con
@@ -2005,17 +2019,16 @@ function abrirModalAltaCompanero(companeroExistente = null) {
   inputTelefono.style.flex = "1";
   inputTelefono.value = esEdicion ? companeroExistente.telefono || "" : "";
   filaTelefono.appendChild(inputTelefono);
-  // El botón de importar solo aparece si el navegador lo soporta de verdad
-  // (Contacts Picker API, en la práctica Chrome/Edge Android) — es un atajo
-  // opcional, nunca la única forma de cargar el teléfono.
-  if (contactsPickerDisponible()) {
-    const btnImportar = document.createElement("button");
-    btnImportar.type = "button";
-    btnImportar.className = "btn btn-secondary";
-    btnImportar.textContent = "Importar";
-    btnImportar.addEventListener("click", () => importarContactoTelefono(inputTelefono, inputNombre));
-    filaTelefono.appendChild(btnImportar);
-  }
+  // El acceso queda visible en todos los teléfonos. Los navegadores con
+  // Contact Picker API abren el selector nativo; los demás explican la
+  // limitación y conservan el campo manual.
+  const btnImportar = document.createElement("button");
+  btnImportar.type = "button";
+  btnImportar.className = "btn btn-secondary";
+  btnImportar.textContent = "Contactos";
+  btnImportar.setAttribute("aria-label", "Elegir teléfono de contactos");
+  btnImportar.addEventListener("click", () => importarContactoTelefono(inputTelefono, inputNombre));
+  filaTelefono.appendChild(btnImportar);
   bloqueTelefono.appendChild(filaTelefono);
   // Mismo aviso que en Profesores: el botón de WhatsApp de la tarjeta
   // necesita el código de país para armar el link de wa.me correctamente.

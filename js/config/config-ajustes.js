@@ -10,10 +10,11 @@ import { estado } from "../core/storage.js";
 import { borrarDatosCuentaApp } from "../core/eliminar-cuenta-app.js";
 import { copiarPromptConAviso } from "../core/clipboard.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
+import { aplicarLogoApp, inicializarSelectorLogo } from "../core/marca.js";
 import { traducirTextoInterfaz } from "../core/i18n.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 import { abrirConfirmacion, construirPillSwitchBinario, mostrarToast } from "../ui/componentes.js";
-import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta, obtenerModoDisenoLocal, obtenerModoTemaLocal, guardarModoDisenoLocal } from "../ui/tema.js";
+import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta, obtenerModoDisenoLocal, obtenerModoTemaLocal, guardarModoTemaLocal, guardarModoDisenoLocal } from "../ui/tema.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
 import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
 import {
@@ -1277,6 +1278,20 @@ function renderizarAjustes() {
   inicializarAccordionAjustes();
   inicializarAsistenteAjustes();
   inicializarBandejaVozAjustes();
+  inicializarSelectorLogo();
+  aplicarLogoApp();
+  const inputNombre = document.getElementById("input-nombre-preferido");
+  if (inputNombre) {
+    if (document.activeElement !== inputNombre) inputNombre.value = estado.datos.perfil?.nombre_preferido || "";
+    inputNombre.onchange = () => {
+      const nombre = inputNombre.value.trim().slice(0, 60);
+      if (!nombre) { inputNombre.value = estado.datos.perfil?.nombre_preferido || ""; return; }
+      estado.datos.perfil.nombre_preferido = nombre;
+      sellarTimestamp(estado.datos.perfil);
+      marcarCambioPendiente();
+      window.renderizarPerfil?.();
+    };
+  }
 
   // Paletas — cada cuadro muestra su propio color real (punto 3)
   const grid = document.getElementById("grid-paletas");
@@ -1293,6 +1308,7 @@ function renderizarAjustes() {
     sw.addEventListener("click", () => {
       estado.datos.configuracion.paleta = paleta;
       aplicarPaleta(paleta, obtenerModoTemaLocal());
+      aplicarLogoApp();
       sellarTimestamp(estado.datos.configuracion);
       marcarCambioPendiente();
       renderizarAjustes();
@@ -1319,6 +1335,7 @@ function renderizarAjustes() {
       // se vuelve a entrar por el flujo completo con el botón de abajo.
       estado.datos.configuracion.paleta = "personalizada";
       aplicarPaleta("personalizada", obtenerModoTemaLocal(), personalizada.colores);
+      aplicarLogoApp();
       sellarTimestamp(estado.datos.configuracion);
       marcarCambioPendiente();
       renderizarAjustes();
@@ -1419,27 +1436,21 @@ function renderizarAjustes() {
 
   // Tres apariencias: claro, oscuro cromático (el modo oscuro previo) y
   // oscuro profundo. La preferencia se guarda solo en este dispositivo.
-  montarPillSwitch(
-    "switch-modo",
-    "pill-switch-modo",
-    "Apariencia",
-    [
-      { valor: "light", texto: "Modo claro" },
-      { valor: "dark", texto: "Modo color" },
-      { valor: "true-dark", texto: "Modo oscuro" },
-    ],
-    obtenerModoTemaLocal(),
-    (nuevoModo) => {
-      // El tema también es una preferencia local. No se persiste en la
-      // configuración de Drive: aplicarPaleta guarda el modo local y deja
-      // sincronizar únicamente los datos compartidos de la paleta.
-      aplicarPaleta(
-        estado.datos.configuracion.paleta,
-        nuevoModo,
-        estado.datos.configuracion.paleta === "personalizada" ? personalizada.colores : undefined
-      );
-    }
-  );
+  document.querySelectorAll("#selector-modos-apariencia [data-modo-tema]").forEach((btn) => {
+    const modo = obtenerModoTemaLocal();
+    btn.classList.toggle("active", btn.dataset.modoTema === modo);
+    btn.setAttribute("aria-pressed", String(btn.dataset.modoTema === modo));
+    btn.onclick = () => {
+      guardarModoTemaLocal(btn.dataset.modoTema);
+      aplicarPaleta(estado.datos.configuracion.paleta, btn.dataset.modoTema,
+        estado.datos.configuracion.paleta === "personalizada" ? personalizada?.colores : undefined);
+      aplicarLogoApp();
+      document.querySelectorAll("#selector-modos-apariencia [data-modo-tema]").forEach((b) => {
+        const activo = b === btn; b.classList.toggle("active", activo); b.setAttribute("aria-pressed", String(activo));
+      });
+      dispararSyncConAntirrebote();
+    };
+  });
 
   // Ajustes por Universidad (2026-08-08): el selector de escala global que
   // vivía acá (#pill-escala-notas, leyendo/escribiendo

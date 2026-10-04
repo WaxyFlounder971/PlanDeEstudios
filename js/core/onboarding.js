@@ -1,152 +1,103 @@
 import { estado } from "./storage.js";
 import { marcarCambioPendiente } from "./storage-sync.js";
-import { sellarTimestamp } from "./schema.js";
-import { aplicarPaleta, obtenerModoTemaLocal, guardarModoTemaLocal } from "../ui/tema.js";
+import { sellarTimestamp, PALETAS_DISPONIBLES } from "./schema.js";
+import { aplicarPaleta, obtenerModoTemaLocal, guardarModoTemaLocal, COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO } from "../ui/tema.js";
 import { traducirTextoInterfaz } from "./i18n.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
+import { aplicarLogoApp, prepararImagenLogo } from "./marca.js";
 
 const SECCIONES_TUTORIAL = [
-  { id: "resumen", nombre: "Resumen", detalle: ["Revisa lo que tienes para hoy.", "Consulta clases, tareas y exámenes próximos.", "Personaliza qué información quieres ver primero."] },
-  { id: "agenda", nombre: "Agenda", detalle: ["Guarda tareas, exámenes y eventos.", "Cambia entre Lista, Calendario y Cronograma deslizando.", "Usa filtros para encontrar lo que buscas."] },
-  { id: "horario", nombre: "Horario", detalle: ["Organiza tus clases por día y hora.", "Abre una clase para ver profesor, aula y enlaces.", "Compara horarios con tus amistades."] },
-  { id: "tiempo-estudio", nombre: "Tiempo de Estudio", detalle: ["Inicia una sesión desde una materia.", "Consulta rachas y estadísticas por semestre.", "Únete a competencias si quieres estudiar en grupo."] },
-  { id: "semestres", nombre: "Semestres", detalle: ["Matricula materias en cada semestre.", "Registra criterios y notas de evaluación.", "Proyecta cuánto necesitas en las evaluaciones pendientes."] },
-  { id: "comunidad", nombre: "Comunidad", detalle: ["Guarda profesores y compañeros.", "Consulta valoraciones y datos compartidos.", "Conecta amistades para comparar horarios."] },
-  { id: "finanzas", nombre: "Finanzas", detalle: ["Registra ingresos y gastos.", "Separa tus datos por semestre.", "Revisa gráficos y tendencias."] },
-  { id: "plan-estudios", nombre: "Plan de Estudios", detalle: ["Consulta los requisitos de tu carrera.", "Marca materias aprobadas y pendientes.", "Explora relaciones y rutas de cursos."] },
-  { id: "configuracion", nombre: "Ajustes", detalle: ["Cambia idioma, tema y tamaño de letra.", "Ordena o esconde secciones de navegación.", "Vuelve a abrir este recorrido cuando quieras."] },
+  { id:"resumen", nombre:"Resumen", cuerpo:"Tu punto de partida diario: clases, entregas, exámenes y tiempo de estudio en un mismo vistazo. Los datos aparecen conforme conectas las demás secciones; puedes reorganizar qué módulos ves primero." },
+  { id:"agenda", nombre:"Agenda", cuerpo:"Aquí conviven tareas, exámenes, proyectos, eventos y feriados. Cambia entre lista, calendario y cronograma; filtra por tipo, completa pendientes y abre una tarjeta para editarla. Agenda se vuelve más útil al vincular actividades con una materia y semestre." },
+  { id:"horario", nombre:"Horario", cuerpo:"Arma tus clases por día y hora con profesor, aula, modalidad y enlaces. Abre cada clase para ver sus detalles y, si quieres, compara el horario con amistades. Las materias matriculadas desde Semestres alimentan las opciones." },
+  { id:"tiempo-estudio", nombre:"Tiempo de estudio", cuerpo:"Inicia una sesión de estudio desde una materia: abre la materia y elige iniciar sesión. También puedes crear bloques personalizados sin tener un plan. El historial, rachas y estadísticas conservan sesiones de distintos semestres." },
+  { id:"semestres", nombre:"Semestres", cuerpo:"Crea un semestre y matricula en él materias de tu plan. Registra criterios, asignaciones y notas; la nota final y la proyección se calculan con esos datos. Al terminar un semestre podrás revisar su Wrapped." },
+  { id:"comunidad", nombre:"Comunidad", cuerpo:"Guarda profesores y compañeros, sus contactos y valoraciones, y conecta amistades para comparar horarios. Comunidad es independiente: puedes usarla aunque todavía no tengas plan o semestre." },
+  { id:"finanzas", nombre:"Finanzas", cuerpo:"Registra ingresos y gastos desde el inicio, sin depender de otras secciones. Asociar movimientos a un semestre es opcional y ayuda a comparar tus gastos por periodo." },
+  { id:"plan-estudios", nombre:"Plan de estudios", cuerpo:"Añade una o varias carreras, pega o importa una malla y marca el avance de sus materias. El plan alimenta Semestres, donde decides qué cursos llevas ahora y ahí comienzan las conexiones con Agenda, Horario y estadísticas." },
+  { id:"configuracion", nombre:"Ajustes", cuerpo:"Cambia idioma, apariencia, paleta, tamaño de texto, navegación y preferencias. Puedes regresar a esta bienvenida desde Ajustes generales cuando quieras." },
 ];
 
-function guardarConfiguracionOnboarding() {
+const TEXTO_FLUJO = "El orden recomendado es: 1) agrega uno o más planes; 2) crea un semestre y matricula materias del plan; 3) con esas materias arma Horario y vincula actividades en Agenda; 4) inicia sesiones desde materias para tener estadísticas ordenadas por periodo. Tiempo también admite bloques personalizados. Wapper necesita Agenda y una clave de Gemini para automatizar tareas. Comunidad y Finanzas funcionan por separado; en Finanzas, el semestre es una clasificación opcional.";
+
+function guardar() {
   const cfg = estado.datos?.configuracion;
-  if (!cfg) return;
-  sellarTimestamp(cfg);
+  if (cfg) sellarTimestamp(cfg);
   marcarCambioPendiente();
 }
 
 function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
   if (!estado.datos?.configuracion || estado.datos.configuracion.onboarding_v1_completado !== false) return false;
   const cfg = estado.datos.configuracion;
-  const seccionesTutorial = SECCIONES_TUTORIAL.filter((seccion) => document.getElementById(`seccion-${seccion.id}`));
-  let etapa = "nombre";
-  let indiceTutorial = 0;
-  let detalleAbierto = false;
+  const secciones = SECCIONES_TUTORIAL.filter(({id}) => document.getElementById(`seccion-${id}`));
+  let etapa = "nombre", indice = 0;
   const overlay = document.createElement("div");
-  overlay.className = "modal-overlay onboarding-overlay";
-  overlay.setAttribute("role", "dialog");
-  overlay.setAttribute("aria-modal", "true");
-  overlay.setAttribute("aria-labelledby", "onboarding-titulo");
-  const panel = document.createElement("section");
-  panel.className = "glass-card onboarding-panel stack";
-  const progreso = document.createElement("div"); progreso.className = "onboarding-progreso";
-  const titulo = document.createElement("h2"); titulo.id = "onboarding-titulo";
-  const contenido = document.createElement("div"); contenido.className = "stack onboarding-contenido";
-  const acciones = document.createElement("div"); acciones.className = "row-between onboarding-acciones";
-  panel.append(progreso, titulo, contenido, acciones); overlay.appendChild(panel); document.body.appendChild(overlay);
+  overlay.className = "onboarding-overlay";
+  overlay.setAttribute("role","dialog"); overlay.setAttribute("aria-modal","true"); overlay.setAttribute("aria-labelledby","onboarding-titulo");
+  const panel = document.createElement("section"); panel.className = "onboarding-panel";
+  panel.innerHTML = '<header class="onboarding-top"><span class="onboarding-progreso"></span><button class="onboarding-cerrar" type="button" aria-label="Cerrar">×</button></header><div class="onboarding-layout"><div class="onboarding-copy"><h1 id="onboarding-titulo"></h1><div class="onboarding-contenido"></div></div><div class="onboarding-preview-wrap"><div class="onboarding-preview-caption">Así se ve la app con datos de ejemplo</div><iframe class="onboarding-preview" title="Vista previa real de App Académica" loading="lazy" data-analitica-ignorar></iframe></div></div><footer class="onboarding-acciones"></footer>';
+  overlay.append(panel); document.body.append(overlay);
+  const progreso=panel.querySelector(".onboarding-progreso"), titulo=panel.querySelector("h1"), contenido=panel.querySelector(".onboarding-contenido"), acciones=panel.querySelector(".onboarding-acciones"), preview=panel.querySelector("iframe");
+  const boton=(texto,clase,fn)=>{const b=document.createElement("button");b.type="button";b.className=`btn ${clase}`;b.textContent=traducirTextoInterfaz(texto);b.addEventListener("click",fn);return b;};
+  const texto=(tag,cls,value)=>{const e=document.createElement(tag);if(cls)e.className=cls;e.textContent=traducirTextoInterfaz(value);return e;};
+  const fin=(irAlPlan=false)=>{cfg.onboarding_v1_completado=true;guardar();overlay.remove();if(irAlPlan){navegar?.("plan-estudios");setTimeout(iniciarGuiaPlan,450);}else toast?.(traducirTextoInterfaz("¡Listo! Puedes volver a ver la guía desde Ajustes generales."));};
+  const instalarYa=()=>Boolean(navigator.standalone)||matchMedia("(display-mode: standalone)").matches;
+  const cargarPreview=(seccion="resumen")=>{const u=new URL(location.href);u.search="";u.searchParams.set("demo","1");u.searchParams.set("preview","1");u.searchParams.set("previewSection",seccion);u.searchParams.set("previewPalette",cfg.paleta||"azul");u.searchParams.set("previewMode",obtenerModoTemaLocal());u.searchParams.set("previewLogo",cfg.logo_app||"folder");if(cfg.paleta==="personalizada"&&cfg.paleta_personalizada)u.searchParams.set("previewCustom",JSON.stringify(cfg.paleta_personalizada));if(cfg.logo_app_url)u.searchParams.set("previewLogoData",cfg.logo_app_url);const key=`${seccion}:${u.search}`;if(preview.dataset.loaded!==key){preview.dataset.loaded=key;preview.src=u.href;}};
+  const pintar=()=>{
+    contenido.replaceChildren();acciones.replaceChildren();
+    const esTour=etapa==="tour";panel.classList.toggle("onboarding-con-tour",esTour||etapa==="personalizar");
+    panel.querySelector(".onboarding-cerrar").classList.toggle("oculto",etapa==="nombre"||etapa==="personalizar");
+    const nombres={nombre:"Tu cuenta, a tu manera",personalizar:"Personaliza tu app",instalar:"Llévala contigo",tour:`Conoce ${secciones[indice]?.nombre||"App Académica"}`,flujo:"Todo conectado, paso a paso"};
+    titulo.textContent=etapa==="tour"?`${traducirTextoInterfaz("Conoce")} ${traducirTextoInterfaz(secciones[indice]?.nombre||"App Académica")}`:traducirTextoInterfaz(nombres[etapa]||"App Académica");
+    progreso.textContent=etapa==="tour"?`${indice+1} de ${secciones.length} secciones`:({nombre:"Bienvenida",personalizar:"Personalización",instalar:"Instalación",flujo:"Cómo empezar"}[etapa]||"");
+    preview.closest(".onboarding-preview-wrap").classList.toggle("oculto",!esTour&&etapa!=="personalizar");
+    if(etapa==="nombre"){
+      contenido.append(texto("p","onboarding-lead","¿Cómo te llamas? Puedes cambiarlo después en Ajustes generales."));
+      const input=document.createElement("input");input.className="form-input";input.maxLength=60;input.autocomplete="given-name";input.value=estado.datos.perfil?.nombre_preferido||estado.datos.perfil?.nombre||"";input.setAttribute("aria-label",titulo.textContent);contenido.append(input);
+      acciones.append(boton("Continuar","btn-primary",()=>{const v=input.value.trim();if(!v){input.focus();return;}estado.datos.perfil.nombre_preferido=v;guardar();window.renderizarPerfil?.();etapa="personalizar";pintar();}));requestAnimationFrame(()=>input.focus());return;
+    }
+    if(etapa==="personalizar"){
+      contenido.append(texto("p","onboarding-lead","Elige tema, paleta y logo. Puedes cambiarlos luego en Personalizar."));
+      const modos=document.createElement("div");modos.className="onboarding-modos";
+      [["light","Modo claro"],["dark","Modo color"],["true-dark","Modo oscuro"]].forEach(([v,l])=>{const b=boton(l,obtenerModoTemaLocal()===v?"btn-primary":"btn-secondary",()=>{cfg.modo=v;guardarModoTemaLocal(v);aplicarPaleta(cfg.paleta||"azul",v,cfg.paleta==="personalizada"?cfg.paleta_personalizada?.colores:undefined);aplicarLogoApp();guardar();pintar();});b.setAttribute("aria-pressed",String(obtenerModoTemaLocal()===v));modos.append(b);});
+      const colores=document.createElement("div");colores.className="onboarding-paletas";
+      PALETAS_DISPONIBLES.forEach((p)=>{const b=document.createElement("button");b.type="button";b.className="onboarding-color";b.title=traducirTextoInterfaz(p);b.setAttribute("aria-label",traducirTextoInterfaz(p));b.setAttribute("aria-pressed",String(cfg.paleta===p));const colors=COLORES_PREVIEW_PALETA[p]||[];b.style.background=p==="azucarado"?FONDO_PREVIEW_AZUCARADO:`linear-gradient(135deg,${colors.join(",")})`;b.addEventListener("click",()=>{cfg.paleta=p;aplicarPaleta(p,obtenerModoTemaLocal());aplicarLogoApp();guardar();pintar();});colores.append(b);});
+      const paletaPersonal=document.createElement("button");paletaPersonal.className="btn btn-secondary";paletaPersonal.textContent=traducirTextoInterfaz("Más colores · Crear mi paleta");paletaPersonal.onclick=()=>iniciarFlujoPaletaPersonalizada({alGuardar:()=>{cfg.paleta="personalizada";cfg.paleta_personalizada=estado.datos.configuracion.paleta_personalizada;guardar();aplicarPaleta("personalizada",obtenerModoTemaLocal(),cfg.paleta_personalizada?.colores);aplicarLogoApp();}});
+      const logos=document.createElement("div");logos.className="onboarding-logos";[["folder","imagenes/LogoAppFolder.png","Carpeta"],["birrete","imagenes/LogoAppBirrete.png","Birrete"]].forEach(([v,src,alt])=>{const b=document.createElement("button");b.type="button";b.className="onboarding-logo";b.setAttribute("aria-pressed",String(cfg.logo_app===v&&!cfg.logo_app_url));const img=document.createElement("img");img.src=src;img.alt=alt;b.append(img);b.onclick=()=>{cfg.logo_app=v;cfg.logo_app_url=null;guardar();aplicarLogoApp();pintar();};logos.append(b);});
+      const archivo=document.createElement("input");archivo.type="file";archivo.accept="image/png,image/jpeg,image/webp";archivo.className="form-input";archivo.setAttribute("aria-label","Elegir logo desde archivos");archivo.onchange=async()=>{const url=await prepararImagenLogo(archivo.files?.[0]);if(url){cfg.logo_app="personalizado";cfg.logo_app_url=url;guardar();aplicarLogoApp();pintar();}};
+      contenido.append(modos,colores,paletaPersonal,texto("h3","","Logo de la app"),logos,texto("small","muted","También puedes elegir aquí un archivo LogoApp de Descargas."),archivo);cargarPreview("resumen");
+      acciones.append(boton("Continuar","btn-primary",()=>{etapa=instalarYa()?"tour":"instalar";pintar();}));return;
+    }
+    if(etapa==="instalar"){
+      contenido.append(texto("p","onboarding-lead","Instala App Académica para abrirla como una app en tu teléfono o computadora. Si ya está instalada, este paso se omite."));
+      acciones.append(boton("Ahora no","btn-secondary",()=>{etapa="tour";indice=0;pintar();}),boton("Instalar app","btn-primary",()=>{window.instalarAppAcademica?.();etapa="tour";indice=0;pintar();}));return;
+    }
+    if(etapa==="tour"){
+      const sec=secciones[indice];if(!sec){etapa="flujo";pintar();return;}
+      contenido.append(texto("p","onboarding-lead",sec.cuerpo));
+      if(sec.id==="tiempo-estudio")contenido.append(texto("p","onboarding-callout","Para registrar tiempo por materia, abre una materia y toca Iniciar sesión de estudio. También hay bloques personalizados."));
+      cargarPreview(sec.id);acciones.append(boton("No me interesa","btn-secondary",()=>{cfg.navegacion_oculta=[...new Set([...(cfg.navegacion_oculta||[]),sec.id])];guardar();window.aplicarVisibilidadNavegacion?.();siguiente();}),boton(indice===secciones.length-1?"Seguir":"Lo usaré","btn-primary",siguiente));return;
+    }
+    contenido.append(texto("p","onboarding-lead",TEXTO_FLUJO));
+    const pasos=document.createElement("ol");pasos.className="onboarding-dependencias";["Plan de estudios → Semestres → materias matriculadas.","Semestres → Horario, Agenda vinculada y estadísticas por materia.","Agenda → Wapper puede crear y consultar pendientes con Gemini.","Comunidad y Finanzas funcionan por separado; asociar Finanzas a semestres es opcional.","Tiempo acepta materias y bloques personalizados."].forEach(t=>pasos.append(texto("li","",t)));contenido.append(pasos);
+    acciones.append(boton("Lo haré después","btn-secondary",()=>fin(false)),boton("Agregar plan y ver la guía","btn-primary",()=>fin(true)));
+  };
+  const siguiente=()=>{indice++;if(indice>=secciones.length)etapa="flujo";pintar();};
+  panel.querySelector(".onboarding-cerrar").addEventListener("click",()=>fin(false));
+  pintar();return true;
+}
 
-  const boton = (texto, clase, fn) => {
-    const b = document.createElement("button"); b.type = "button"; b.className = `btn ${clase}`;
-    b.textContent = traducirTextoInterfaz(texto); b.addEventListener("click", fn); return b;
-  };
-  const terminar = () => {
-    cfg.onboarding_v1_completado = true;
-    guardarConfiguracionOnboarding();
-    overlay.remove();
-    toast?.(traducirTextoInterfaz("¡Listo! Puedes volver a ver la guía desde Ajustes."));
-  };
-  const pintar = () => {
-    contenido.replaceChildren(); acciones.replaceChildren();
-    const etiquetaEtapa = etapa === "nombre" ? "1 / 5" : etapa === "apariencia" ? "2 / 5" : etapa === "instalar" ? "3 / 5" : etapa === "plan" ? "4 / 5" : `5 / 5 · ${indiceTutorial + 1}/${Math.max(1, seccionesTutorial.length)}`;
-    progreso.textContent = etiquetaEtapa;
-    if (etapa === "nombre") {
-      titulo.textContent = traducirTextoInterfaz("¿Cómo te llamas?");
-      const descripcion = document.createElement("p"); descripcion.className = "muted"; descripcion.textContent = traducirTextoInterfaz("Así sabremos cómo saludarte. Puedes cambiarlo después.");
-      const nombre = document.createElement("input"); nombre.className = "form-input"; nombre.maxLength = 60; nombre.autocomplete = "given-name"; nombre.value = estado.datos.perfil?.nombre_preferido || estado.datos.perfil?.nombre || ""; nombre.setAttribute("aria-label", titulo.textContent);
-      contenido.append(descripcion, nombre);
-      acciones.append(boton("Continuar", "btn-primary", () => { const v = nombre.value.trim(); if (!v) { nombre.focus(); return; } estado.datos.perfil.nombre_preferido = v; guardarConfiguracionOnboarding(); window.renderizarPerfil?.(); etapa = "apariencia"; pintar(); }));
-      requestAnimationFrame(() => nombre.focus()); return;
-    }
-    if (etapa === "apariencia") {
-      titulo.textContent = traducirTextoInterfaz("Personaliza tu app");
-      const modos = document.createElement("div"); modos.className = "pill-group onboarding-modos";
-      [["light", "Modo claro"], ["dark", "Modo color"], ["true-dark", "Modo oscuro"]].forEach(([valor, texto]) => {
-        const b = boton(texto, obtenerModoTemaLocal() === valor ? "btn-primary" : "btn-secondary", () => {
-          guardarModoTemaLocal(valor);
-          aplicarPaleta(cfg.paleta || "azul", valor, cfg.paleta === "personalizada" ? cfg.paleta_personalizada?.colores : undefined);
-          pintar();
-        }); b.setAttribute("aria-pressed", String(obtenerModoTemaLocal() === valor)); modos.appendChild(b);
-      });
-      const colores = document.createElement("div"); colores.className = "onboarding-colores";
-      const tonos = { rojo: "#ef4444", dorado: "#f97316", amarillo: "#facc15", verde: "#10b981", azul: "#3b82f6", morado: "#8b5cf6" };
-      Object.entries(tonos).forEach(([paleta, color]) => {
-        const b = document.createElement("button"); b.type = "button"; b.className = "onboarding-color"; b.style.setProperty("--onboarding-color", color); b.title = traducirTextoInterfaz(paleta); b.setAttribute("aria-label", traducirTextoInterfaz(paleta)); b.setAttribute("aria-pressed", String(cfg.paleta === paleta));
-        b.addEventListener("click", () => { cfg.paleta = paleta; aplicarPaleta(paleta, obtenerModoTemaLocal()); guardarConfiguracionOnboarding(); pintar(); }); colores.appendChild(b);
-      });
-      const etiquetaIcono = document.createElement("label"); etiquetaIcono.className = "form-label"; etiquetaIcono.textContent = traducirTextoInterfaz("Icono de la app");
-      const iconos = document.createElement("div"); iconos.className = "onboarding-iconos";
-      ["📘", "🎓", "📚", "🗓️", "✨", "🧠"].forEach((icono) => {
-        const b = document.createElement("button"); b.type = "button"; b.className = "onboarding-icono"; b.textContent = icono; b.setAttribute("aria-pressed", String((cfg.icono_app || "📘") === icono));
-        b.addEventListener("click", () => { cfg.icono_app = icono; const iconoNav = document.getElementById("icono-app-usuario"); if (iconoNav) iconoNav.textContent = icono; guardarConfiguracionOnboarding(); pintar(); }); iconos.appendChild(b);
-      });
-      contenido.append(modos, colores, etiquetaIcono, iconos);
-      const mas = boton("Ajustar colores", "btn-secondary", () => {
-        iniciarFlujoPaletaPersonalizada({ alGuardar: () => {
-        cfg.paleta = "personalizada";
-        cfg.paleta_personalizada = estado.datos.configuracion.paleta_personalizada;
-        guardarConfiguracionOnboarding();
-        } });
-        const editor = document.querySelector(".ppz-overlay");
-        if (editor) editor.style.zIndex = "200001";
-      });
-      acciones.append(mas, boton("Continuar", "btn-primary", () => { etapa = "instalar"; pintar(); })); return;
-    }
-    if (etapa === "instalar") {
-      titulo.textContent = traducirTextoInterfaz("Lleva App Académica contigo");
-      const p = document.createElement("p"); p.className = "muted"; p.textContent = traducirTextoInterfaz("Puedes instalarla en tu dispositivo para abrirla como una app. Si tu navegador no ofrece instalación ahora, puedes continuar y hacerlo después."); contenido.appendChild(p);
-      acciones.append(boton("Ahora no", "btn-secondary", () => { etapa = "plan"; pintar(); }), boton("Instalar app", "btn-primary", () => { window.instalarAppAcademica?.(); etapa = "plan"; pintar(); })); return;
-    }
-    if (etapa === "plan") {
-      titulo.textContent = traducirTextoInterfaz("Tu plan de estudios");
-      const p = document.createElement("p"); p.className = "muted"; p.textContent = traducirTextoInterfaz("Añadir tu carrera desbloquea matrículas, horarios y proyecciones de notas. Es muy recomendable, pero puedes hacerlo luego."); contenido.appendChild(p);
-      acciones.append(boton("Lo haré después", "btn-secondary", () => { etapa = "tutorial"; pintar(); }), boton("Agregar plan", "btn-primary", () => { terminar(); navegar?.("plan-estudios"); })); return;
-    }
-    const seccion = seccionesTutorial[indiceTutorial];
-    if (!seccion) { terminar(); return; }
-    titulo.textContent = `${traducirTextoInterfaz("Conoce")} ${traducirTextoInterfaz(seccion.nombre)}`;
-    const intro = document.createElement("p"); intro.className = "muted"; intro.textContent = traducirTextoInterfaz("Esta es una sección de App Académica.");
-    const fuenteReal = document.getElementById(`seccion-${seccion.id}`);
-    const fragmentoReal = fuenteReal?.querySelector("h1, h2, h3, .glass-card, .glass-panel");
-    if (fragmentoReal) {
-      const fragmento = document.createElement("div"); fragmento.className = "onboarding-fragmento";
-      const tituloFragmento = document.createElement("strong"); tituloFragmento.textContent = fragmentoReal.matches("h1, h2, h3") ? fragmentoReal.textContent.trim() : fragmentoReal.querySelector("h1, h2, h3")?.textContent?.trim() || seccion.nombre;
-      const textoFragmento = document.createElement("span");
-      const tarjetaMuestra = fuenteReal.querySelector(".glass-card, .glass-panel");
-      textoFragmento.textContent = tarjetaMuestra?.textContent?.trim().replace(/\s+/g, " ").slice(0, 150) || seccion.detalle[0];
-      fragmento.append(tituloFragmento, textoFragmento); contenido.appendChild(fragmento);
-    }
-    const pasos = document.createElement("ol"); pasos.className = "onboarding-pasos";
-    seccion.detalle.slice(0, detalleAbierto ? 3 : 1).forEach((texto) => { const li = document.createElement("li"); li.textContent = traducirTextoInterfaz(texto); pasos.appendChild(li); });
-    const saberMas = boton(detalleAbierto ? "Ocultar detalles" : "Saber más", "btn-secondary", () => { detalleAbierto = !detalleAbierto; pintar(); });
-    contenido.append(intro, pasos, saberMas);
-    const noMeInteresa = boton("No me interesa", "btn-secondary", () => { cfg.navegacion_oculta = [...new Set([...(cfg.navegacion_oculta || []), seccion.id])]; guardarConfiguracionOnboarding(); window.aplicarVisibilidadNavegacion?.(); siguiente(); });
-    if (seccion.id === "configuracion") noMeInteresa.disabled = true;
-    acciones.append(noMeInteresa, boton("Lo usaré", "btn-primary", siguiente));
-    function siguiente() { indiceTutorial += 1; detalleAbierto = false; if (indiceTutorial >= seccionesTutorial.length) terminar(); else pintar(); }
-  };
-  pintar();
-  return true;
+function iniciarGuiaPlan(){
+  const pasos=[
+    {selector:()=>document.querySelector("#seccion-plan-estudios .glass-card .pill-group"),texto:"Elige cómo traer tu plan: pega el enlace oficial o adjunta un PDF/imagen. Para añadir materias manualmente puedes elegir Empezar en blanco."},
+    {selector:()=>document.getElementById("textarea-csv-importar"),texto:"Cuando tengas el resultado en formato CSV, copia el bloque completo y pégalo en este campo. Después toca Importar y revisa las materias."},
+    {selector:()=>[...document.querySelectorAll("#seccion-plan-estudios button")].find(b=>/^importar$/i.test(b.textContent.trim())),texto:"Pulsa Importar para revisar y guardar las materias del plan. Después podrás añadir más carreras desde Gestionar plan."},
+  ];let i=0;const pop=document.createElement("aside");pop.className="guia-plan-flotante";pop.setAttribute("role","dialog");document.body.append(pop);let resaltado=null;
+  const cerrar=()=>{resaltado?.classList.remove("guia-plan-resaltado");pop.remove();};
+  const pintar=()=>{resaltado?.classList.remove("guia-plan-resaltado");if(i>=pasos.length){cerrar();return;}if(i>0&&!document.getElementById("textarea-csv-importar")){document.querySelector('#seccion-plan-estudios .pill-group button')?.click();setTimeout(pintar,60);return;}resaltado=pasos[i].selector();resaltado?.classList.add("guia-plan-resaltado");resaltado?.scrollIntoView({behavior:"smooth",block:"center"});pop.replaceChildren();const titulo=document.createElement("strong");titulo.textContent=`${i+1} / ${pasos.length}`;const p=document.createElement("p");p.textContent=traducirTextoInterfaz(pasos[i].texto);const extra=document.createElement("p");extra.textContent=traducirTextoInterfaz("Puedes agregar otros planes después desde Gestionar plan.");pop.append(titulo,p,extra);const acciones=document.createElement("div");acciones.className="row";const seguir=document.createElement("button");seguir.className="btn btn-primary";seguir.textContent=traducirTextoInterfaz(i===pasos.length-1?"Entendido":"Siguiente");seguir.onclick=()=>{i++;pintar();};const saltar=document.createElement("button");saltar.className="btn btn-secondary";saltar.textContent=traducirTextoInterfaz("Saltar guía");saltar.onclick=cerrar;acciones.append(seguir,saltar);pop.append(acciones);};pintar();
 }
 
 function inicializarTutorialDesdeAjustes({ navegar, toast } = {}) {
-  const botonAjustes = document.getElementById("btn-repetir-tutorial");
-  if (botonAjustes && !botonAjustes.dataset.inicializado) {
-    botonAjustes.dataset.inicializado = "1";
-    botonAjustes.addEventListener("click", () => {
-      if (!estado.datos?.configuracion) return;
-      estado.datos.configuracion.onboarding_v1_completado = false;
-      mostrarOnboardingNuevoUsuario({ navegar, toast });
-    });
-  }
+  const btn=document.getElementById("btn-repetir-tutorial");if(!btn||btn.dataset.inicializado)return;btn.dataset.inicializado="1";btn.addEventListener("click",()=>{if(!estado.datos?.configuracion)return;estado.datos.configuracion.onboarding_v1_completado=false;mostrarOnboardingNuevoUsuario({navegar,toast});});
 }
-
 export { mostrarOnboardingNuevoUsuario, inicializarTutorialDesdeAjustes };

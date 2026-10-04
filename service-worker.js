@@ -40,7 +40,7 @@
 //      y main.js NUNCA hardcodean el número — siempre lo leen de acá, así
 //      que actualizar la versión en toda la app es cambiar ESTA línea y
 //      nada más.
-const VERSION = "v3.22.9"; // <-- subir en cada despliegue
+const VERSION = "v3.22.11"; // <-- subir en cada despliegue
 const CACHE_NAME = `app-academica-${VERSION}`;
 const PREFIJO_CACHE = "app-academica-";
 
@@ -61,11 +61,15 @@ const CASCARON_MINIMO = [
   "idiomas/lista.json",
   "idiomas/espanol.json",
   "idiomas/ingles.json",
+  "demo/datos-demo.json",
   "css/design-system.css",
   "js/main.js",
-  "imagenes/LogoFinal.png",
-  "imagenes/LogoFinal-192.png",
-  "imagenes/LogoFinal-512.png",
+  "imagenes/LogoAppFolder.png",
+  "imagenes/LogoAppFolder-192.png",
+  "imagenes/LogoAppFolder-512.png",
+  "imagenes/LogoAppBirrete.png",
+  "imagenes/LogoAppBirrete-192.png",
+  "imagenes/LogoAppBirrete-512.png",
   "imagenes/demo/calendario.svg",
   "imagenes/demo/correo.svg",
   "imagenes/demo/documentos.svg",
@@ -153,8 +157,8 @@ self.addEventListener("push", (event) => {
   const titulo = datos.titulo || "Recordatorio de Agenda";
   const opciones = {
     body: datos.cuerpo || "",
-    icon: "imagenes/LogoFinal-192.png",
-    badge: "imagenes/LogoFinal-192.png",
+    icon: "imagenes/LogoAppFolder-192.png",
+    badge: "imagenes/LogoAppFolder-192.png",
     // Mismo tag para todos los recordatorios: si llegan 2 pushes casi
     // juntos y el usuario todavía no vio el primero, el sistema operativo
     // los apila/reemplaza en vez de llenar la bandeja de notificaciones

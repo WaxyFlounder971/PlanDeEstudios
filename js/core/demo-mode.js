@@ -1,4 +1,4 @@
-import { crearDatosUsuarioNuevo } from "./schema.js";
+import { crearDatosUsuarioNuevo, PALETAS_DISPONIBLES } from "./schema.js";
 import { registrarAnaliticaUso } from "./analitica.js";
 
 /**
@@ -6,6 +6,7 @@ import { registrarAnaliticaUso } from "./analitica.js";
  * que main.js pueda omitir login, lectura de caché, sincronización y APIs.
  */
 const MODO_DEMO = new URLSearchParams(globalThis.location?.search || "").get("demo") === "1";
+const PREVIEW_DEMO = new URLSearchParams(globalThis.location?.search || "").get("preview") === "1";
 const URL_WORKER_ANALITICA = "https://worker-notificaciones-agenda.appacademica.workers.dev";
 let fetchOriginal = null;
 let aperturaDemoRegistrada = false;
@@ -52,14 +53,20 @@ function bloquearServiciosExternosEnDemo() {
 }
 
 function registrarAperturaDemo() {
-  if (!MODO_DEMO || aperturaDemoRegistrada) return false;
+  if (!MODO_DEMO || PREVIEW_DEMO || aperturaDemoRegistrada) return false;
   aperturaDemoRegistrada = true;
   registrarAnaliticaUso("demo", "Apertura");
   return true;
 }
 
 function combinarSemilla(base, semilla) {
-  if (Array.isArray(semilla)) return structuredClone(semilla);
+  if (Array.isArray(semilla)) {
+    // El dataset es JSON: este respaldo permite abrir la demo en navegadores
+    // móviles antiguos que todavía no implementan structuredClone.
+    return typeof structuredClone === "function"
+      ? structuredClone(semilla)
+      : JSON.parse(JSON.stringify(semilla));
+  }
   if (!semilla || typeof semilla !== "object") return semilla;
   const salida = base && typeof base === "object" && !Array.isArray(base) ? { ...base } : {};
   for (const [clave, valor] of Object.entries(semilla)) salida[clave] = combinarSemilla(salida[clave], valor);
@@ -72,6 +79,21 @@ async function cargarDatosDemo() {
   const semilla = await respuesta.json();
   const datos = combinarSemilla(crearDatosUsuarioNuevo(), semilla);
   if (datos.configuracion) datos.configuracion.gemini_api_key = null;
+  if (PREVIEW_DEMO && datos.configuracion) {
+    const params = new URLSearchParams(globalThis.location.search);
+    const paleta = params.get("previewPalette");
+    const modo = params.get("previewMode");
+    if (PALETAS_DISPONIBLES.includes(paleta) || paleta === "personalizada") datos.configuracion.paleta = paleta;
+    if (["light", "dark", "true-dark"].includes(modo)) datos.configuracion.modo = modo;
+    const logo = params.get("previewLogo");
+    if (["folder", "birrete"].includes(logo)) datos.configuracion.logo_app = logo;
+    const logoData = params.get("previewLogoData");
+    if (logoData?.startsWith("data:image/webp;base64,") && logoData.length < 90000) {
+      datos.configuracion.logo_app = "personalizado";
+      datos.configuracion.logo_app_url = logoData;
+    }
+    try { if (paleta === "personalizada") datos.configuracion.paleta_personalizada = JSON.parse(params.get("previewCustom") || "null"); } catch (_) {}
+  }
   return datos;
 }
 
