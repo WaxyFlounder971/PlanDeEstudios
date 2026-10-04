@@ -1237,13 +1237,14 @@ function montarPillSwitch(idViejo, dataAtributo, tituloCorto, opciones, valorAct
     if (tituloExistente) tituloExistente.textContent = traducirTextoInterfaz(tituloCorto);
     existente.querySelectorAll(".pill-item").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.valor === valorActivo);
+      btn.setAttribute("aria-pressed", String(btn.dataset.valor === valorActivo));
       const opcion = opciones.find((o) => o.valor === btn.dataset.valor);
       if (opcion) btn.textContent = traducirTextoInterfaz(opcion.texto);
     });
     const indiceActivo = opciones.findIndex((o) => o.valor === valorActivo);
-    existente
-      .querySelector(".pill-switch-thumb")
-      ?.classList.toggle("pill-switch-thumb--derecha", indiceActivo === 1);
+    const thumb = existente.querySelector(".pill-switch-thumb");
+    thumb?.classList.toggle("pill-switch-thumb--derecha", indiceActivo === 1);
+    thumb?.classList.toggle("pill-switch-thumb--tercera", indiceActivo === 2);
     return;
   }
   const chkViejo = document.getElementById(idViejo);
@@ -1416,14 +1417,16 @@ function renderizarAjustes() {
   // sección global. Los campos de configuracion siguen siendo los mismos,
   // solo cambió DÓNDE se editan.
 
-  // Modo claro/oscuro — punto 4: mismo pill switch, ver montarPillSwitch.
+  // Tres apariencias: claro, oscuro cromático (el modo oscuro previo) y
+  // oscuro profundo. La preferencia se guarda solo en este dispositivo.
   montarPillSwitch(
     "switch-modo",
     "pill-switch-modo",
-    "Modo",
+    "Apariencia",
     [
-      { valor: "dark", texto: "Oscuro" },
-      { valor: "light", texto: "Claro" },
+      { valor: "light", texto: "Modo claro" },
+      { valor: "dark", texto: "Modo color" },
+      { valor: "true-dark", texto: "Modo oscuro" },
     ],
     obtenerModoTemaLocal(),
     (nuevoModo) => {

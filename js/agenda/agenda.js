@@ -125,21 +125,34 @@ function renderizarEditorTiposAgenda() {
   cfg.agenda_tipos = Array.isArray(cfg.agenda_tipos) ? cfg.agenda_tipos : [];
   cfg.agenda_colores_estado = cfg.agenda_colores_estado || {};
   const estadosDefault = { completado: ["Completado", "#3b82f6"], perdida: ["Perdida", "#6b7280"], pendiente: ["Pendiente", "#f59e0b"] };
+  const crearControlColor = (valor, titulo) => {
+    const envoltura = document.createElement("label");
+    envoltura.className = "agenda-color-picker";
+    envoltura.title = titulo;
+    envoltura.style.setProperty("--color-selector-agenda", valor);
+    const input = document.createElement("input"); input.type = "color"; input.value = valor; input.setAttribute("aria-label", titulo);
+    input.addEventListener("input", () => envoltura.style.setProperty("--color-selector-agenda", input.value));
+    envoltura.appendChild(input);
+    return { envoltura, input };
+  };
   Object.entries(estadosDefault).forEach(([id, [etiqueta, hex]]) => {
     const fila = document.createElement("div"); fila.className = "row"; fila.style.cssText = "gap:8px;align-items:center;padding:6px 8px;border:1px solid var(--border-glass);border-radius:12px;";
     const texto = document.createElement("span"); texto.textContent = traducirTextoInterfaz(etiqueta); texto.style.flex = "1";
-    const color = document.createElement("input"); color.type = "color"; color.value = cfg.agenda_colores_estado[id] || hex; color.title = `Color de ${etiqueta}`;
-    color.addEventListener("change", () => { cfg.agenda_colores_estado[id] = color.value; guardarConfiguracionTiposAgenda(); });
-    fila.append(texto, color); cont.appendChild(fila);
+    const color = crearControlColor(cfg.agenda_colores_estado[id] || hex, `Color de ${etiqueta}`);
+    color.input.addEventListener("change", () => { cfg.agenda_colores_estado[id] = color.input.value; guardarConfiguracionTiposAgenda(); });
+    fila.append(texto, color.envoltura); cont.appendChild(fila);
   });
   cfg.agenda_tipos.filter((t) => !t.eliminado).forEach((tipo) => {
     const fila = document.createElement("div"); fila.className = "row"; fila.style.cssText = "gap:8px;align-items:center;flex-wrap:wrap;padding:8px;border:1px solid var(--border-glass);border-radius:12px;";
     const nombre = document.createElement("input"); nombre.className = "form-input"; nombre.value = tipo.nombre; nombre.maxLength = 24; nombre.setAttribute("aria-label", `Nombre de ${tipo.nombre}`); nombre.style.cssText = "flex:1;min-width:110px;";
     nombre.addEventListener("change", () => { const v = nombre.value.trim(); if (!v) { nombre.value = tipo.nombre; return; } tipo.nombre = v; guardarConfiguracionTiposAgenda(); });
-    const color = document.createElement("input"); color.type = "color"; color.value = /^#[0-9a-f]{6}$/i.test(tipo.color || "") ? tipo.color : "#8b5cf6"; color.title = `Color de ${tipo.nombre}`;
-    color.addEventListener("change", () => { tipo.color = color.value; const valor = nombre.value.trim(); if (valor) tipo.nombre = valor; guardarConfiguracionTiposAgenda(); });
-    const etiquetaActiva = document.createElement("label"); etiquetaActiva.className = "row"; etiquetaActiva.style.cssText = "gap:5px;font-size:.8rem;";
-    const chk = document.createElement("input"); chk.type = "checkbox"; chk.checked = tipo.activo !== false; etiquetaActiva.append(chk, document.createTextNode("Activo"));
+    const color = crearControlColor(/^#[0-9a-f]{6}$/i.test(tipo.color || "") ? tipo.color : "#8b5cf6", `Color de ${tipo.nombre}`);
+    color.input.addEventListener("change", () => { tipo.color = color.input.value; const valor = nombre.value.trim(); if (valor) tipo.nombre = valor; guardarConfiguracionTiposAgenda(); });
+    const etiquetaActiva = document.createElement("label"); etiquetaActiva.className = "agenda-toggle-activo";
+    const chk = document.createElement("input"); chk.type = "checkbox"; chk.checked = tipo.activo !== false;
+    const pistaActivo = document.createElement("span"); pistaActivo.className = "agenda-toggle-activo-pista";
+    const textoActivo = document.createElement("span"); textoActivo.className = "agenda-toggle-activo-texto"; textoActivo.textContent = traducirTextoInterfaz("Activo");
+    etiquetaActiva.append(chk, pistaActivo, textoActivo);
     chk.addEventListener("change", () => {
       const nuevoEstado = chk.checked;
       if (nuevoEstado) { tipo.activo = true; guardarConfiguracionTiposAgenda(); return; }
@@ -171,7 +184,8 @@ function renderizarEditorTiposAgenda() {
       else quitar();
     });
     const base = document.createElement("span"); base.className = "muted"; base.style.fontSize = ".72rem"; base.textContent = `Como ${tipo.base}`;
-    fila.append(nombre, color, etiquetaActiva, borrar, base); cont.appendChild(fila);
+    fila.classList.add("agenda-tipo-config-fila");
+    fila.append(nombre, color.envoltura, etiquetaActiva, borrar, base); cont.appendChild(fila);
   });
 }
 
@@ -1456,12 +1470,9 @@ function renderizarAgendaInterno() {
     document.getElementById("agenda-header")?.insertAdjacentElement("afterend", filtroCont);
   }
   filtroCont.innerHTML = "";
-  const detalleTipos = document.createElement("details");
-  detalleTipos.className = "agenda-filtro-colapsable";
-  const resumenTipos = document.createElement("summary");
-  resumenTipos.textContent = traducirTextoInterfaz("Filtros de Agenda");
-  detalleTipos.append(resumenTipos, construirBarraFiltroEstadosAgenda());
-  filtroCont.appendChild(detalleTipos);
+  // Los filtros quedan siempre visibles en la vista principal de Agenda;
+  // el editor de tipos sigue contraíble dentro de Ajustes de Agenda.
+  filtroCont.appendChild(construirBarraFiltroEstadosAgenda());
 
   if (modoTodo) {
     // Ronda de ajustes visuales #5 — punto D: el modo "Todo" es una lista
@@ -1569,6 +1580,7 @@ function renderizarAgenda() {
   document.querySelectorAll("#pills-agenda-vista .pill-item").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.vista === vista);
   });
+  inicializarGestosVistasAgenda();
   if (vista === "lista") {
     renderizarAgendaInterno();
   } else {
@@ -1599,6 +1611,52 @@ function renderizarAgenda() {
   sincronizarBarraSeleccionAgenda();
 }
 
+function inicializarGestosVistasAgenda() {
+  const seccion = document.getElementById("seccion-agenda");
+  if (!seccion || seccion.dataset.gestosAgenda === "1") return;
+  seccion.dataset.gestosAgenda = "1";
+  const vistas = ["lista", "calendario", "materia"];
+  let inicio = null;
+  seccion.addEventListener("touchstart", (ev) => {
+    const t = ev.changedTouches?.[0];
+    if (t) inicio = { x: t.clientX, y: t.clientY, target: ev.target };
+  }, { passive: true });
+  seccion.addEventListener("touchend", (ev) => {
+    if (!inicio) return;
+    const t = ev.changedTouches?.[0];
+    const deltaX = t ? t.clientX - inicio.x : 0;
+    const deltaY = t ? t.clientY - inicio.y : 0;
+    const target = inicio.target;
+    inicio = null;
+    if (Math.abs(deltaX) < 72 || Math.abs(deltaY) > Math.abs(deltaX) * 0.75) return;
+    if (target?.closest("input, textarea, select, button, a, [data-no-swipe], .select-custom-lista")) return;
+    const actual = Math.max(0, vistas.indexOf(estado.agendaVistaActiva || "lista"));
+    if (deltaX < 0) {
+      if (actual < vistas.length - 1) cambiarVistaAgendaConGesto(vistas[actual + 1]);
+      else {
+        document.getElementById("drawer-enlaces-movil")?.classList.add("abierta");
+        document.getElementById("enlaces-movil-overlay")?.classList.add("abierta");
+        document.body.classList.add("scroll-bloqueado");
+      }
+    } else if (actual > 0) cambiarVistaAgendaConGesto(vistas[actual - 1]);
+    else {
+      document.getElementById("app-sidebar")?.classList.add("abierta");
+      document.getElementById("sidebar-overlay")?.classList.add("abierta");
+      document.body.classList.add("scroll-bloqueado");
+    }
+  }, { passive: true });
+}
+
+function cambiarVistaAgendaConGesto(vista) {
+  if (vista === estado.agendaVistaActiva) return;
+  estado.agendaVistaActiva = vista;
+  renderizarAgenda();
+  const pane = document.getElementById(vista === "lista" ? "agenda-lista-dias" : vista === "calendario" ? "agenda-vista-calendario" : "agenda-vista-materia");
+  pane?.classList.remove("agenda-vista-entrante");
+  requestAnimationFrame(() => pane?.classList.add("agenda-vista-entrante"));
+  setTimeout(() => pane?.classList.remove("agenda-vista-entrante"), 360);
+}
+
 /** Abre Cronograma (Agenda > Materia), opcionalmente enfocado en una matrícula. */
 function abrirCronogramaAgenda(semestreId = null, materiaMatriculadaId = null) {
   asegurarEstadoAgendaBaseInicializado();
@@ -1627,6 +1685,8 @@ function inicializarSelectorSemestreAgenda() {
 
 function inicializarAgenda() {
   inicializarModalAgendaEvento();
+  const colorNuevo = document.getElementById("agenda-tipo-nuevo-color");
+  colorNuevo?.addEventListener("input", () => colorNuevo.parentElement?.style.setProperty("--color-selector-agenda", colorNuevo.value));
 
   document.getElementById("btn-agenda-agregar")?.addEventListener("click", () => {
     abrirModalEventoAgenda({ fechaDefault: new Date().toISOString().slice(0, 10) });
@@ -1634,8 +1694,18 @@ function inicializarAgenda() {
 
   document.querySelectorAll("#pills-agenda-vista .pill-item").forEach((btn) => {
     btn.addEventListener("click", () => {
-      estado.agendaVistaActiva = btn.dataset.vista;
-      renderizarAgenda();
+      cambiarVistaAgendaConGesto(btn.dataset.vista);
+    });
+  });
+  document.querySelectorAll("#agenda-selector-comportamiento [data-base]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const select = document.getElementById("agenda-tipo-nuevo-base");
+      if (select) select.value = btn.dataset.base;
+      document.querySelectorAll("#agenda-selector-comportamiento [data-base]").forEach((opcion) => {
+        const activa = opcion === btn;
+        opcion.classList.toggle("active", activa);
+        opcion.setAttribute("aria-pressed", String(activa));
+      });
     });
   });
 

@@ -13,6 +13,8 @@ import { actualizarIndicadorSync, asegurarTokenValido, avisarCierreSesionAOtrasP
 import { CLAVE_CACHE_LOCAL, borrarTokenCache, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
 import { MODO_DEMO, activarEstadoDemo, cargarDatosDemo, registrarAperturaDemo } from "./core/demo-mode.js";
 import { configurarCorreoAnalitica, inicializarAnaliticaUso, registrarAnaliticaUso } from "./core/analitica.js";
+import { inicializarTutorialDesdeAjustes, mostrarOnboardingNuevoUsuario } from "./core/onboarding.js";
+import { inicializarInstalacionApp, mostrarInvitacionInstalacion } from "./core/instalacion-app.js";
 import { obtenerIniciales } from "./core/utils.js";
 // Sincronización con Google Calendar (2026-08-25, reemplaza Web Push) -
 // ver core/notificaciones-calendario.js.
@@ -171,6 +173,7 @@ const CLAVE_SYNC_CALENDARIO_OFRECIDA = "sincronizacion_calendario_ofrecida_v1";
 const FORZAR_LOGIN_DESDE_DEMO = new URLSearchParams(window.location.search).get("salir-demo") === "1";
 
 window.addEventListener("DOMContentLoaded", () => {
+  inicializarInstalacionApp();
   if (MODO_DEMO) {
     iniciarAplicacionDemo();
     return;
@@ -1066,6 +1069,8 @@ function mostrarApp() {
   // cuando el dato en sí seguía intacto en estado.datos. Mismo patrón que
   // el bug de abajo en storage-sync.js.
   const cfg = estado.datos.configuracion;
+  const iconoApp = document.getElementById("icono-app-usuario");
+  if (iconoApp) iconoApp.textContent = cfg.icono_app || "📘";
   aplicarTamanoTexto(estado.datos);
   aplicarPaleta(cfg.paleta, MODO_DEMO ? "dark" : obtenerModoTemaLocal(), cfg.paleta === "personalizada" ? cfg.paleta_personalizada?.colores : undefined);
   // Fix v1.16.1 (2026-08-23 - "switch de fancy necesita varios clicks"):
@@ -1081,6 +1086,7 @@ function mostrarApp() {
   aplicarModoRendimiento(obtenerModoDisenoLocal() !== "fancy");
   renderizarSelectorPlan();
   renderizarAjustes();
+  inicializarTutorialDesdeAjustes({ navegar: mostrarSeccion, toast: mostrarToast });
   renderizarModoHardcore();
   renderizarEnlacesRapidos();
   renderizarPerfil();
@@ -1138,6 +1144,12 @@ function mostrarApp() {
   // los renders con la UI todavía a medio construir.
   revisarUniversidadesIncompletas();
   if (!MODO_DEMO) revisarWrappedAutomatico();
+  if (!MODO_DEMO && cfg.onboarding_v1_completado === false) {
+    // La configuración visual/nombre es obligatoria; plan y mini tutorial
+    // ofrecen opciones explícitas para continuar después.
+    mostrarOnboardingNuevoUsuario({ navegar: mostrarSeccion, toast: mostrarToast });
+  }
+  if (!MODO_DEMO) mostrarInvitacionInstalacion();
 }
 
 function aplicarTamanoTexto(datos) {
@@ -1544,10 +1556,11 @@ function renderizarPerfil() {
   const popoverNombre = document.getElementById("perfil-popover-nombre");
   const popoverCorreo = document.getElementById("perfil-popover-correo");
 
-  nombre.textContent = perfil.nombre || "";
-  popoverNombre.textContent = perfil.nombre || "";
+  const nombreVisible = perfil.nombre_preferido || perfil.nombre || "";
+  nombre.textContent = nombreVisible;
+  popoverNombre.textContent = nombreVisible;
   popoverCorreo.textContent = perfil.correo || "";
-  fallback.textContent = obtenerIniciales(perfil.nombre || perfil.correo || "?");
+  fallback.textContent = obtenerIniciales(nombreVisible || perfil.correo || "?");
 
   // Empezamos mostrando el respaldo (iniciales); si la foto real carga bien,
   // la mostramos encima. Así nunca se ve un ícono de imagen rota.
@@ -1564,7 +1577,7 @@ function renderizarPerfil() {
       fallback.classList.remove("oculto");
     };
     foto.src = perfil.foto_url;
-    foto.alt = perfil.nombre || "Foto de perfil";
+    foto.alt = nombreVisible || "Foto de perfil";
   }
 
   wrap.onclick = () => {
@@ -1575,6 +1588,7 @@ function renderizarPerfil() {
     }
   };
 }
+window.renderizarPerfil = renderizarPerfil;
 
 function togglePerfilPopover(forzarCerrado) {
   const popover = document.getElementById("perfil-popover");

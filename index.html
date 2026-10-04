@@ -186,13 +186,14 @@
        tiene espacio (recién aparece desde 1500px) y el botón de la topbar
        móvil ya está oculto. Abre el MISMO drawer de arriba, no uno nuevo. -->
   <button id="btn-flotante-enlaces" class="btn-flotante-enlaces" aria-label="Enlaces rápidos" title="Enlaces rápidos">🔗</button>
+  <button id="btn-instalar-app-flotante" class="btn-instalar-app-flotante oculto" aria-label="Instalar App Académica" title="Instalar App Académica"><span class="instalar-app-icono" aria-hidden="true">⇩</span><span class="instalar-app-texto">Instalar app</span></button>
 
   <div class="app-layout">
 
     <!-- Sidebar -->
     <nav id="app-sidebar" class="glass-panel app-sidebar">
       <button id="btn-colapsar-sidebar" class="btn-colapsar sidebar-cerrar-movil" title="Colapsar menú">⟨⟨</button>
-      <h3 class="sidebar-titulo" style="display:flex; align-items:center; gap:8px;"><img src="imagenes/LogoFinal.png" alt="Logo App Académica" style="height:1.3em; width:auto; vertical-align:middle;"> <span class="texto">App Académica</span></h3>
+      <h3 class="sidebar-titulo" style="display:flex; align-items:center; gap:8px;"><span id="icono-app-usuario" class="icono-app-usuario" aria-hidden="true">📘</span><img src="imagenes/LogoFinal.png" alt="Logo App Académica" style="height:1.3em; width:auto; vertical-align:middle;"> <span class="texto">App Académica</span></h3>
 
       <div class="sidebar-scroll">
         <button id="nav-resumen" class="btn btn-secondary btn-block btn-nav" data-seccion="resumen" title="Resumen">🏠 <span class="texto-nav">Resumen</span></button>
@@ -405,6 +406,7 @@
               <span class="track"><span class="thumb"></span></span>
             </label>
           </div>
+          <button type="button" class="btn btn-secondary btn-block" id="btn-repetir-tutorial">Ver bienvenida y mini tutorial</button>
 
           <div class="row-between">
             <span>Modo fancy</span>
@@ -1336,8 +1338,15 @@
         <label class="form-label" for="agenda-tipo-nuevo-nombre">Nueva etiqueta</label>
         <div class="row" style="gap:8px;flex-wrap:wrap;">
           <input id="agenda-tipo-nuevo-nombre" class="form-input" maxlength="24" placeholder="Ej. Laboratorio" style="flex:1;min-width:130px;">
-          <select id="agenda-tipo-nuevo-base" class="form-select" style="min-width:130px;"><option value="tarea">Se comporta como tarea</option><option value="examen">Se comporta como examen</option><option value="evento">Se comporta como evento</option></select>
-          <input id="agenda-tipo-nuevo-color" type="color" value="#8b5cf6" aria-label="Color de la nueva etiqueta" style="width:48px;min-height:42px;">
+          <select id="agenda-tipo-nuevo-base" class="form-select oculto"><option value="tarea">Tarea</option><option value="examen">Examen</option><option value="evento">Evento</option></select>
+          <div class="agenda-selector-comportamiento" id="agenda-selector-comportamiento" role="group" aria-label="Se comporta como">
+            <button type="button" class="active" data-base="tarea" aria-pressed="true">Tarea</button>
+            <button type="button" data-base="examen" aria-pressed="false">Examen</button>
+            <button type="button" data-base="evento" aria-pressed="false">Evento</button>
+          </div>
+          <label class="agenda-color-picker" style="--color-selector-agenda:#8b5cf6" title="Color de la nueva etiqueta">
+            <input id="agenda-tipo-nuevo-color" type="color" value="#8b5cf6" aria-label="Color de la nueva etiqueta">
+          </label>
           <button type="button" id="agenda-tipo-nuevo-agregar" class="btn btn-primary">Agregar</button>
         </div>
       </div>

@@ -1,5 +1,5 @@
 /* =========================================================================
-   TEMA — PALETAS Y MODO CLARO/OSCURO
+   TEMA — PALETAS Y MODOS CLARO/COLOR/OSCURO PROFUNDO
    ========================================================================= */
 
 /** Colores reales de cada paleta (modo oscuro), tomados de design-system.css.
@@ -48,7 +48,7 @@ const CLAVE_DISENO_LOCAL = "modo_diseno_local_v1";
 
 function obtenerModoTemaLocal() {
   const guardado = localStorage.getItem(CLAVE_TEMA_LOCAL);
-  if (guardado === "light" || guardado === "dark") return guardado;
+  if (guardado === "light" || guardado === "dark" || guardado === "true-dark") return guardado;
   try {
     return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
   } catch (_e) {
@@ -57,7 +57,7 @@ function obtenerModoTemaLocal() {
 }
 
 function guardarModoTemaLocal(modo) {
-  const normalizado = modo === "light" ? "light" : "dark";
+  const normalizado = ["light", "dark", "true-dark"].includes(modo) ? modo : "dark";
   localStorage.setItem(CLAVE_TEMA_LOCAL, normalizado);
   return normalizado;
 }
@@ -376,8 +376,24 @@ function calcularVariablesDerivadas(colores) {
 /** Aplica los colores derivados como propiedades inline sobre :root — tiene
  *  más prioridad que las reglas [data-palette="..."] y no requiere generar
  *  CSS nuevo dinámicamente (ver "Implementación técnica" del prompt). */
-function aplicarColoresPersonalizadosInline(colores) {
+function aplicarColoresPersonalizadosInline(colores, modo = "dark") {
   const derivadas = calcularVariablesDerivadas(colores);
+  if (modo === "true-dark") {
+    derivadas["--bg-canvas"] = "#000000";
+    derivadas["--bg-header-solido"] = "#050505";
+    derivadas["--bg-card"] = "color-mix(in srgb, " + colores.accent1 + " 5%, #090909)";
+    derivadas["--bg-panel"] = "color-mix(in srgb, " + colores.accent1 + " 3%, #050505)";
+    derivadas["--border-glass"] = "color-mix(in srgb, " + colores.accent1 + " 24%, #242424)";
+    derivadas["--text-primary"] = "#F5F5F5";
+    derivadas["--text-secondary"] = "#C4C4C4";
+    derivadas["--text-muted"] = "#929292";
+    derivadas["--accent-glow-1"] = hexARgba(colores.accent1, 0.28);
+    derivadas["--accent-glow-2"] = hexARgba(colores.luz || colores.accent2, 0.18);
+    derivadas["--accent-1-10"] = hexARgba(colores.accent1, 0.12);
+    derivadas["--accent-1-20"] = hexARgba(colores.accent1, 0.28);
+    derivadas["--color-danger"] = "#f87171";
+    derivadas["--badge-bg-solid"] = mezclarHex(colores.accent1, "#000000", 0.85);
+  }
   Object.entries(derivadas).forEach(([variable, valor]) => {
     document.documentElement.style.setProperty(variable, valor);
   });
@@ -442,7 +458,7 @@ function aplicarPaleta(paleta, modo, coloresPersonalizados) {
   localStorage.setItem("tema_modo", modo);
 
   if (paleta === "personalizada" && coloresPersonalizados) {
-    aplicarColoresPersonalizadosInline(coloresPersonalizados);
+    aplicarColoresPersonalizadosInline(coloresPersonalizados, modo);
     localStorage.setItem("tema_paleta_personalizada_colores", JSON.stringify(coloresPersonalizados));
   } else {
     limpiarColoresPersonalizadosInline();
@@ -459,7 +475,7 @@ function aplicarTemaGuardadoLocalmente() {
   if (paleta === "personalizada") {
     try {
       const colores = JSON.parse(localStorage.getItem("tema_paleta_personalizada_colores") || "null");
-      if (colores) aplicarColoresPersonalizadosInline(colores);
+      if (colores) aplicarColoresPersonalizadosInline(colores, modo);
     } catch (_e) {
       // Si el JSON guardado localmente está corrupto, no rompemos el arranque:
       // simplemente se ve el fallback de [data-palette="personalizada"] (ninguno),

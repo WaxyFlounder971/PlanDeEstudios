@@ -547,7 +547,7 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minI
     tarjeta.title = [obtenerCodigoBloque(b), b.nombreCorto, b.profesorNombre, b.aula].filter(Boolean).join(" · ");
     tarjeta.innerHTML = `
       ${obtenerCodigoBloque(b) ? `<div class="materia-codigo" style="font-size:0.72rem; line-height:1.1; overflow-wrap:anywhere;">${obtenerCodigoBloque(b)}</div>` : ""}
-      <div style="font-size:0.68rem; font-weight:600; line-height:1.05; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:4; overflow:hidden; margin-bottom:2px; overflow-wrap:anywhere; word-break:normal;">
+      <div class="horario-bloque-nombre">
         <span>${b.nombreCorto}</span>
       </div>
       ${emojiModalidad ? `<span class="horario-emoji-modalidad" title="${b.modalidad}" style="position:absolute; right:5px; bottom:3px; font-size:1.17rem; line-height:1;">${emojiModalidad}</span>` : ""}

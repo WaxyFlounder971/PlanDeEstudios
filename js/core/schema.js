@@ -26,6 +26,7 @@ function crearDatosUsuarioNuevo() {
 
     perfil: {
       nombre: null,          // viene de la cuenta de Google
+      nombre_preferido: null, // nombre elegido por la persona en su bienvenida
       correo: null,          // viene de la cuenta de Google
       foto_url: null,        // viene de la cuenta de Google (userinfo picture)
       carnet: null,          // dato opcional de perfil, ya NO se usa para iniciar sesión
@@ -35,6 +36,8 @@ function crearDatosUsuarioNuevo() {
       paleta: "azul",              // una de las 10 paletas
       paleta_personalizada: null,   // v1.13: { basadaEn, colores: { fondoCanvas, fondoCard, borde, accent1, accent2, luz } }
                                      // v1.15: colores también incluye degradado: { activo, color, intensidad (0-100, % del stop medio), angulo (0-360) }
+      onboarding_v1_completado: false, // bienvenida modular para cuentas nuevas; se marca al terminar el recorrido
+      icono_app: "📘",              // icono personal localizable que acompaña la paleta elegida
       formato_texto_nombres: "titulo", // "titulo" | "mayusculas" | "oracion" (v5 #9)
       // Selector de moneda (Ajustes generales, 2026-08-10): preferencia
       // GLOBAL del usuario (NO por universidad/plan) — la usa Finanzas para
@@ -3020,12 +3023,18 @@ function migrarDatosAntiguos(datos) {
   // del sistema y Optimizado, aunque Drive todavía tenga valores legacy.
   const cfgVisual = datos.configuracion;
   if (cfgVisual) {
+    if (typeof cfgVisual.onboarding_v1_completado !== "boolean") {
+      const perfilExistente = !!(datos.perfil?.correo || datos.perfil?.nombre);
+      const yaTieneDatos = ["planes_estudio", "semestres", "agenda", "finanzas"].some((clave) => Array.isArray(datos[clave]) && datos[clave].length > 0);
+      cfgVisual.onboarding_v1_completado = perfilExistente || yaTieneDatos;
+    }
+    if (typeof cfgVisual.icono_app !== "string" || !cfgVisual.icono_app) cfgVisual.icono_app = "📘";
     try {
       const legacyLocal = localStorage.getItem("tema_paleta") !== null || localStorage.getItem("tema_modo") !== null;
       const temaGuardado = localStorage.getItem("tema_modo");
-      if (temaGuardado !== "light" && temaGuardado !== "dark") {
+      if (temaGuardado !== "light" && temaGuardado !== "dark" && temaGuardado !== "true-dark") {
         let temaInicial = "dark";
-        if (legacyLocal && (cfgVisual.modo === "light" || cfgVisual.modo === "dark")) {
+        if (legacyLocal && (cfgVisual.modo === "light" || cfgVisual.modo === "dark" || cfgVisual.modo === "true-dark")) {
           temaInicial = cfgVisual.modo;
         } else {
           try {
