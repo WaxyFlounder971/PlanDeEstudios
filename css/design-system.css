@@ -5601,3 +5601,72 @@ select option, select optgroup { background-color: var(--bg-card); color: var(--
 .guia-plan-flotante { z-index:200020; }
 .selector-modos-apariencia { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); }
 .selector-modos-apariencia .pill-item { transition:background .24s cubic-bezier(.2,.8,.2,1),color .24s ease,box-shadow .24s ease; }
+
+/* Correcciones de bienvenida: pantalla opaca real, panel lateral + preview a sangre. */
+.onboarding-overlay { background:var(--bg-app,#10111a)!important; opacity:1!important; }
+.onboarding-panel {
+  display:grid!important; grid-template-columns:minmax(300px,.72fr) minmax(0,1.28fr);
+  grid-template-rows:auto minmax(0,1fr) auto; align-items:stretch; gap:0!important;
+  padding:0!important; overflow:hidden!important; background:var(--bg-app,#10111a)!important;
+}
+.onboarding-panel > .onboarding-top { grid-column:1; grid-row:1; width:auto!important; margin:0!important; padding:20px 28px 8px; }
+.onboarding-panel > .onboarding-layout { grid-column:1/-1; grid-row:2; display:grid; grid-template-columns:minmax(300px,.72fr) minmax(0,1.28fr); gap:0!important; width:100%!important; max-width:none!important; min-height:0; margin:0!important; }
+.onboarding-copy { max-height:100%; overflow:auto; padding:24px clamp(22px,4vw,56px); align-self:stretch; }
+.onboarding-panel > .onboarding-acciones { grid-column:1; grid-row:3; width:auto!important; margin:0!important; padding:12px 28px calc(22px + env(safe-area-inset-bottom)); justify-content:flex-start; }
+.onboarding-preview-wrap { min-height:0!important; height:100%; max-height:none!important; border:0!important; border-radius:0!important; }
+.onboarding-preview { min-height:0!important; height:100%; pointer-events:auto!important; }
+.onboarding-preview-caption { display:none!important; }
+.onboarding-color { border:0!important; outline:1px solid color-mix(in srgb,var(--text-primary) 18%,transparent); outline-offset:2px; }
+.onboarding-color[aria-pressed="true"] { outline:3px solid var(--text-primary); outline-offset:3px; }
+.onboarding-lista { margin:0; padding-left:1.25em; display:grid; gap:10px; line-height:1.55; }
+.guia-plan-resaltado { box-shadow:0 0 0 3px color-mix(in srgb,var(--accent-1) 28%,transparent)!important; }
+@media(max-width:760px) {
+  .onboarding-panel { grid-template-columns:minmax(0,1fr)!important; grid-template-rows:auto minmax(0,1fr) auto!important; overflow:auto!important; }
+  .onboarding-panel > .onboarding-top { grid-column:1; grid-row:1; }
+  .onboarding-panel > .onboarding-layout { grid-column:1; grid-row:2; grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,auto) minmax(28vh,36vh); overflow:auto; }
+  .onboarding-copy { max-height:none; padding:12px 22px 20px; }
+  .onboarding-preview-wrap { height:36vh; min-height:28vh!important; }
+  .onboarding-panel > .onboarding-acciones { grid-column:1; grid-row:3; padding:12px 22px calc(18px + env(safe-area-inset-bottom)); }
+}
+
+
+/* Tarjetas de estudio más cercanas a Agenda: nombre, meta legible y avance propio. */
+.resumen-estudio-materia { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:5px 12px; padding:9px 12px; border-radius:12px; background:color-mix(in srgb,var(--bg-panel) 78%,transparent); border-left:3px solid var(--accent-1); }
+.resumen-estudio-materia-nombre { min-width:0; overflow-wrap:anywhere; font-size:.86rem; font-weight:650; }
+.resumen-estudio-materia-tiempo { white-space:normal; text-align:right; font-size:.78rem; font-variant-numeric:tabular-nums; }
+.resumen-estudio-materia-barra { grid-column:1/-1; height:5px; overflow:hidden; border-radius:99px; background:color-mix(in srgb,var(--accent-1) 17%,var(--bg-panel)); }
+.resumen-estudio-materia-barra span { display:block; height:100%; border-radius:inherit; background:var(--accent-1); transition:width .3s ease; }
+.plan-gestion-fila > .row { align-items:center; flex-wrap:nowrap; gap:6px; }
+.plan-gestion-fila > .row .btn { min-width:40px; min-height:40px; padding:8px 10px; white-space:nowrap; }
+.plan-gestion-fila > .row .btn-danger { width:42px; min-width:42px; padding:8px; font-size:1rem; }
+.plan-gestion-fila > .row .btn-secondary[title^="Exportar"] { min-width:48px; min-height:36px; padding:6px 10px; font-size:.82rem; }
+.te-encabezado { display:grid!important; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center!important; min-height:64px; }
+.te-encabezado-titulo-grupo { display:contents; }
+.te-encabezado-titulo-grupo > h2 { grid-column:2; grid-row:1; justify-self:center; text-align:center; max-width:100%; overflow-wrap:anywhere; }
+.te-encabezado-titulo-grupo > .te-racha-chip { grid-column:1; grid-row:1; justify-self:start; min-height:48px; }
+.te-encabezado-titulo-grupo > .row { grid-column:1; grid-row:2; }
+.te-encabezado > div:last-child { grid-column:3; grid-row:1; justify-self:end; }
+.plan-exportar-overlay { z-index:250000!important; }
+@media(max-width:600px) {
+  .te-encabezado { grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); gap:4px; }
+  .te-encabezado-titulo-grupo > h2 { font-size:1rem; }
+  .te-encabezado-titulo-grupo > .te-racha-chip { min-height:44px; }
+  .resumen-estudio-materia { grid-template-columns:minmax(0,1fr); }
+  .resumen-estudio-materia-tiempo { text-align:left; }
+}
+
+
+.onboarding-file-picker { position:relative; display:inline-flex; align-items:center; justify-content:center; min-height:44px; width:max-content; max-width:100%; padding:10px 16px; border:1px solid color-mix(in srgb,var(--accent-1) 40%,var(--border-glass)); border-radius:14px; cursor:pointer; overflow:hidden; }
+.onboarding-file-input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
+.onboarding-file-picker:focus-within { outline:2px solid var(--accent-1); outline-offset:3px; }
+.modal-overlay:has(.paleta-personalizada), .modal-overlay:has(#paleta-personalizada) { z-index:300000!important; }
+
+.ppz-overlay { z-index:310000!important; }
+
+/* Evita desalinear el encabezado de Agenda cuando crece el texto o cambia el ancho. */
+#agenda-header > .row-between { display:grid!important; grid-template-columns:44px minmax(0,1fr) 44px; align-items:center!important; }
+#agenda-subheader-dinamico { min-width:0; max-width:100%; overflow-wrap:anywhere; }
+#agenda-header #btn-agenda-agregar,#agenda-header #btn-agenda-ajustes { justify-self:center; align-self:center; }
+#agenda-lista-dias,#agenda-vista-calendario,#agenda-vista-materia { min-width:0; overflow-x:auto; overflow-y:visible; overscroll-behavior-x:contain; }
+@media(max-width:520px) { #agenda-header > .row-between { grid-template-columns:40px minmax(0,1fr) 40px; gap:4px!important; } }
+

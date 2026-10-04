@@ -552,12 +552,12 @@
     },
     {
       "id": "tec-ati-demo",
-      "nombre_carrera": "Administración de Tecnologías de Información (ATI)",
+      "nombre_carrera": "Administración de Tecnologías de Información",
       "universidad": {
         "nombre_completo": "Instituto Tecnológico de Costa Rica",
         "siglas": "TEC"
       },
-      "codigo_plan": "ATI-DEMO-2026",
+      "codigo_plan": "2053",
       "tipo_titulo": "Bachillerato",
       "parametros_universidad": {
         "nombre_bloque": "Semestre",
@@ -569,77 +569,1435 @@
         "nota_aprobacion": 70,
         "redondeo_activo": true,
         "tipos_horas": [
-          "Teoría",
-          "Práctica",
-          "Laboratorio"
+          "Horas"
         ]
       },
       "categorias": [
         {
           "id": "ati-obligatorias",
-          "nombre": "Obligatorias",
+          "nombre": "Cursos del plan",
           "color": "#0ea5e9"
+        },
+        {
+          "id": "ati-optativas",
+          "nombre": "Optativas",
+          "color": "#8b5cf6"
         }
       ],
       "materias": [
         {
-          "id": "ATI100",
-          "codigo": "ATI-100",
-          "nombre": "Fundamentos de Sistemas de Información",
-          "creditos": 3,
+          "id": "CI0202",
+          "codigo": "CI0202",
+          "nombre": "Inglés Básico",
+          "creditos": 2.0,
           "horas": {
-            "Teoría": 2,
-            "Práctica": 1,
-            "Laboratorio": 0
+            "Horas": 3.0
+          },
+          "bloque": 0,
+          "requisitos": null,
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "MA0101",
+          "codigo": "MA0101",
+          "nombre": "Matemática General",
+          "creditos": 2.0,
+          "horas": {
+            "Horas": 5.0
+          },
+          "bloque": 0,
+          "requisitos": null,
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "CI1106",
+          "codigo": "CI1106",
+          "nombre": "Comunicación Escrita",
+          "creditos": 2.0,
+          "horas": {
+            "Horas": 6.0
           },
           "bloque": 1,
-          "estado": "cursando",
-          "categoria_id": "ati-obligatorias"
+          "requisitos": null,
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "MA1403",
+          "codigo": "MA1403",
+          "nombre": "Matemática Discreta",
+          "creditos": 4.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 1,
+          "requisitos": null,
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "SE1100",
+          "codigo": "SE1100",
+          "nombre": "Actividad Cultural I",
+          "creditos": 0.0,
+          "horas": {
+            "Horas": 2.0
+          },
+          "bloque": 1,
+          "requisitos": null,
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI1102",
+          "codigo": "TI1102",
+          "nombre": "Información Contable",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 9.0
+          },
+          "bloque": 1,
+          "requisitos": null,
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI1103",
+          "codigo": "TI1103",
+          "nombre": "Modelos Organizacionales y Gestión de TI",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 9.0
+          },
+          "bloque": 1,
+          "requisitos": null,
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
         },
         {
           "id": "ATI120",
-          "codigo": "ATI-120",
+          "codigo": "TI1400",
           "nombre": "Introducción a la Programación",
-          "creditos": 4,
+          "creditos": 3.0,
           "horas": {
-            "Teoría": 2,
-            "Práctica": 1,
-            "Laboratorio": 1
+            "Horas": 4.0
           },
           "bloque": 1,
-          "estado": "cursando",
-          "categoria_id": "ati-obligatorias"
+          "requisitos": null,
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
         },
         {
-          "id": "ATI200",
-          "codigo": "ATI-200",
-          "nombre": "Bases de Datos",
-          "creditos": 4,
+          "id": "TI1401",
+          "codigo": "TI1401",
+          "nombre": "Taller de Programación",
+          "creditos": 3.0,
           "horas": {
-            "Teoría": 2,
-            "Práctica": 1,
-            "Laboratorio": 1
+            "Horas": 4.0
+          },
+          "bloque": 1,
+          "requisitos": null,
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "CI1107",
+          "codigo": "CI1107",
+          "nombre": "Comunicación Oral",
+          "creditos": 1.0,
+          "horas": {
+            "Horas": 3.0
           },
           "bloque": 2,
+          "requisitos": null,
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
           "estado": "pendiente",
-          "categoria_id": "ati-obligatorias"
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "FH1000",
+          "codigo": "FH1000",
+          "nombre": "Centros de Formación Humanística",
+          "creditos": 0.0,
+          "horas": {
+            "Horas": 2.0
+          },
+          "bloque": 2,
+          "requisitos": null,
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "MA1102",
+          "codigo": "MA1102",
+          "nombre": "Cálculo Diferencial e Integral",
+          "creditos": 4.0,
+          "horas": {
+            "Horas": 5.0
+          },
+          "bloque": 2,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "MA0101",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "MA1403",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "SE1200",
+          "codigo": "SE1200",
+          "nombre": "Actividad Deportiva I",
+          "creditos": 0.0,
+          "horas": {
+            "Horas": 2.0
+          },
+          "bloque": 2,
+          "requisitos": null,
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI1201",
+          "codigo": "TI1201",
+          "nombre": "Comportamiento Organizacional y Talento Humano",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 9.0
+          },
+          "bloque": 2,
+          "requisitos": {
+            "valor": "TI1103",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI2402",
+          "codigo": "TI2402",
+          "nombre": "Algoritmos y Estructuras de Datos",
+          "creditos": 4.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 2,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "TI1400",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "TI1401",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI2404",
+          "codigo": "TI2404",
+          "nombre": "Organización y Arquitectura de Computadoras",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 2,
+          "requisitos": {
+            "valor": "TI1401",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI4500",
+          "codigo": "TI4500",
+          "nombre": "Ingeniería de Requerimientos",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 2,
+          "requisitos": {
+            "valor": "TI1400",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "CI3400",
+          "codigo": "CI3400",
+          "nombre": "Inglés 1",
+          "creditos": 2.0,
+          "horas": {
+            "Horas": 6.0
+          },
+          "bloque": 3,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CI0200",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CI0202",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "MA1103",
+          "codigo": "MA1103",
+          "nombre": "Cálculo y Álgebra Lineal",
+          "creditos": 4.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 3,
+          "requisitos": {
+            "valor": "MA1102",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "SE1400",
+          "codigo": "SE1400",
+          "nombre": "Actividad Cultural - Deportiva",
+          "creditos": 0.0,
+          "horas": {
+            "Horas": 2.0
+          },
+          "bloque": 3,
+          "requisitos": null,
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
         },
         {
           "id": "ATI220",
-          "codigo": "ATI-220",
-          "nombre": "Gestión de Proyectos de TI",
-          "creditos": 3,
+          "codigo": "TI2800",
+          "nombre": "Administracion de Proyectos I",
+          "creditos": 3.0,
           "horas": {
-            "Teoría": 3,
-            "Práctica": 0,
-            "Laboratorio": 0
+            "Horas": 9.0
           },
-          "bloque": 2,
+          "bloque": 3,
+          "requisitos": {
+            "valor": "TI4500",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
           "estado": "pendiente",
-          "categoria_id": "ati-obligatorias"
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI3103",
+          "codigo": "TI3103",
+          "nombre": "Costos en Ambientes Informáticos",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 3,
+          "requisitos": {
+            "valor": "TI1102",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "ATI200",
+          "codigo": "TI3600",
+          "nombre": "Base de Datos",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 3,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "MA1403",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "TI2402",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI4200",
+          "codigo": "TI4200",
+          "nombre": "Economía",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 3,
+          "requisitos": {
+            "valor": "MA1102",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "CI4401",
+          "codigo": "CI4401",
+          "nombre": "Inglés II",
+          "creditos": 2.0,
+          "horas": {
+            "Horas": 6.0
+          },
+          "bloque": 4,
+          "requisitos": {
+            "valor": "CI3400",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "MA2404",
+          "codigo": "MA2404",
+          "nombre": "Probabilidades",
+          "creditos": 4.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 4,
+          "requisitos": {
+            "valor": "MA1103",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI2201",
+          "codigo": "TI2201",
+          "nombre": "Programación Orientada a Objetos",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 9.0
+          },
+          "bloque": 4,
+          "requisitos": {
+            "valor": "TI3600",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI3801",
+          "codigo": "TI3801",
+          "nombre": "Administracion de Proyectos II",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 4,
+          "requisitos": {
+            "valor": "TI2800",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI4101",
+          "codigo": "TI4101",
+          "nombre": "Planificación y Presupuesto",
+          "creditos": 2.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 4,
+          "requisitos": {
+            "valor": "TI3103",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI4601",
+          "codigo": "TI4601",
+          "nombre": "Base de Datos Avanzados",
+          "creditos": 4.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 4,
+          "requisitos": {
+            "valor": "TI3600",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "CS3404",
+          "codigo": "CS3404",
+          "nombre": "Seminario de Ética para la Ingeniería",
+          "creditos": 2.0,
+          "horas": {
+            "Horas": 5.0
+          },
+          "bloque": 5,
+          "requisitos": {
+            "valor": "TI3801",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "MA3405",
+          "codigo": "MA3405",
+          "nombre": "Estadística",
+          "creditos": 4.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 5,
+          "requisitos": {
+            "valor": "MA2404",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI3500",
+          "codigo": "TI3500",
+          "nombre": "Mercadeo en la Era Digital",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 9.0
+          },
+          "bloque": 5,
+          "requisitos": {
+            "valor": "MA2404",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI3501",
+          "codigo": "TI3501",
+          "nombre": "Fundamentos de Sistemas Operativos",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 9.0
+          },
+          "bloque": 5,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "TI2201",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "TI2404",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI5100",
+          "codigo": "TI5100",
+          "nombre": "Gestión y Toma de Decisiones Financieras",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 5,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "TI4101",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "TI4200",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI5501",
+          "codigo": "TI5501",
+          "nombre": "Diseño de Software",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 5,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "TI2201",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "TI4500",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "CS2304",
+          "codigo": "CS2304",
+          "nombre": "Derecho Laboral",
+          "creditos": 2.0,
+          "horas": {
+            "Horas": 3.0
+          },
+          "bloque": 6,
+          "requisitos": {
+            "valor": "CS3404",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI3601",
+          "codigo": "TI3601",
+          "nombre": "Modelo de Toma de Deciciones",
+          "creditos": 2.0,
+          "horas": {
+            "Horas": 6.0
+          },
+          "bloque": 6,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "MA3405",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "TI5100",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI3602",
+          "codigo": "TI3602",
+          "nombre": "Producción, Logistica y Calidad",
+          "creditos": 2.0,
+          "horas": {
+            "Horas": 6.0
+          },
+          "bloque": 6,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "MA3405",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "TI5100",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI3603",
+          "codigo": "TI3603",
+          "nombre": "Calidad en Sistemas de Información",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 9.0
+          },
+          "bloque": 6,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "TI3801",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "TI5501",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI3604",
+          "codigo": "TI3604",
+          "nombre": "Fundamento de Redes",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 9.0
+          },
+          "bloque": 6,
+          "requisitos": {
+            "valor": "TI3501",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI6900",
+          "codigo": "TI6900",
+          "nombre": "Inteligencia de Negocios",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 9.0
+          },
+          "bloque": 6,
+          "requisitos": {
+            "valor": "TI4601",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI9003",
+          "codigo": "TI9003",
+          "nombre": "Computación y Sociedad",
+          "creditos": 2.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 6,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CS3404",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "TI1201",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "CS3405",
+          "codigo": "CS3405",
+          "nombre": "Derecho Informático y Mercantil",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 9.0
+          },
+          "bloque": 7,
+          "requisitos": {
+            "valor": "TI1201",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI4701",
+          "codigo": "TI4701",
+          "nombre": "Seguridad en Sistemas de Información",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 9.0
+          },
+          "bloque": 7,
+          "requisitos": {
+            "valor": "TI3604",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI5000",
+          "codigo": "TI5000",
+          "nombre": "Electiva 1",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 7,
+          "requisitos": null,
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI7503",
+          "codigo": "TI7503",
+          "nombre": "Arquitectura de Aplicaciones",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 9.0
+          },
+          "bloque": 7,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "TI3604",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "TI5501",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI7901",
+          "codigo": "TI7901",
+          "nombre": "Negocios Electrónicos",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 7,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "TI3603",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "TI6900",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI8109",
+          "codigo": "TI8109",
+          "nombre": "Formulación y Evaluación de Proyectos de TI",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 7,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "TI3500",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "TI3601",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI6000",
+          "codigo": "TI6000",
+          "nombre": "Electiva 2",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 9.0
+          },
+          "bloque": 8,
+          "requisitos": null,
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI8902",
+          "codigo": "TI8902",
+          "nombre": "Adquisicion de TI",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 8,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "TI7503",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "TI8109",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI8904",
+          "codigo": "TI8904",
+          "nombre": "Administración de Procesos de Negocios",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 9.0
+          },
+          "bloque": 8,
+          "requisitos": {
+            "valor": "TI7503",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI8905",
+          "codigo": "TI8905",
+          "nombre": "Administración de Servicios de Tecnologías de Información I",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 9.0
+          },
+          "bloque": 8,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "TI4701",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "TI7901",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI9805",
+          "codigo": "TI9805",
+          "nombre": "Auditoría de TI",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 8,
+          "requisitos": {
+            "valor": "TI4701",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "ATI100",
+          "codigo": "TI9905",
+          "nombre": "Sistemas de Información Empresarial",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 4.0
+          },
+          "bloque": 8,
+          "requisitos": {
+            "valor": "TI7901",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI5901",
+          "codigo": "TI5901",
+          "nombre": "Espiritu Emprendedor y Creación de Empresas",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 13.0
+          },
+          "bloque": 9,
+          "requisitos": {
+            "valor": "TI8109",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI5902",
+          "codigo": "TI5902",
+          "nombre": "Analítica Empresarial",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 9.0
+          },
+          "bloque": 9,
+          "requisitos": {
+            "valor": "TI9905",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI5903",
+          "codigo": "TI5903",
+          "nombre": "Planificación Estratégica de Tecnología de Información",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 9.0
+          },
+          "bloque": 9,
+          "requisitos": {
+            "valor": "TI8902",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI5904",
+          "codigo": "TI5904",
+          "nombre": "Investigación en Sistemas de Información",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 9.0
+          },
+          "bloque": 9,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "TI8904",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "TI9905",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI5905",
+          "codigo": "TI5905",
+          "nombre": "Fundamentos de Arquitectura Empresarial",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 9.0
+          },
+          "bloque": 9,
+          "requisitos": {
+            "valor": "TI8904",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI9004",
+          "codigo": "TI9004",
+          "nombre": "Administración de Servicios de Tecnologías de Información II",
+          "creditos": 3.0,
+          "horas": {
+            "Horas": 9.0
+          },
+          "bloque": 9,
+          "requisitos": {
+            "valor": "TI8905",
+            "tipo": "codigo"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
+        },
+        {
+          "id": "TI9000",
+          "codigo": "TI9000",
+          "nombre": "Trabajo Final de Graduación",
+          "creditos": 10.0,
+          "horas": {
+            "Horas": 0.0
+          },
+          "bloque": 10,
+          "requisitos": {
+            "tipo": "codigo",
+            "valor": "Bloque 9"
+          },
+          "correquisitos": null,
+          "categoria_id": "ati-obligatorias",
+          "estado": "pendiente",
+          "escala_notas_override": null,
+          "es_optativa": false,
+          "sin_definir": false,
+          "cupo_generico_original": null
         }
       ],
-      "optativas_disponibles": []
+      "optativas_disponibles": [],
+      "materias_revisar": []
     }
   ],
   "semestres": [
