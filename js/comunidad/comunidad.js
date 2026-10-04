@@ -179,7 +179,7 @@ const LINKS_MISPROFES = {
 
 // Rediseño: el botón de "ir a MisProfes" ahora es la imagen del logo de la
 // página (imagenes/MisProfes.png, misma carpeta que el resto de assets de
-// la app — ver imagenes/LogoApp.png en index.html) en vez de texto — pedido
+// la app — ver imagenes/LogoFinal.png en index.html) en vez de texto — pedido
 // explícito de no deformar su relación de aspecto (ver <img> más abajo,
 // sin width/height fijos por separado, solo height + width:auto).
 const RUTA_LOGO_MISPROFES = "imagenes/MisProfes.png";

@@ -94,6 +94,7 @@ function inicializarEstadoHorarioSiHaceFalta() {
 // no tenga que recalcular nada por su cuenta.
 let cacheSemestre = null;
 let cacheNumeroSemana = null;
+let horarioInicializado = false;
 
 /* ===================== Helpers de datos ===================== */
 
@@ -334,6 +335,8 @@ function calcularLanesDia(bloquesDia) {
     }
     b.lane = lane;
   });
+  const cantidadLanes = Math.max(1, finesLane.length);
+  ordenados.forEach((b) => { b.laneCount = cantidadLanes; });
   return ordenados;
 }
 
@@ -501,7 +504,7 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minI
     if (finClamp <= inicioClamp) return;
     const top = Math.max(0, (inicioClamp - minInicioRango) * pxPorMin);
     const alto = Math.max(24, (finClamp - inicioClamp) * pxPorMin);
-    const offsetPx = b.lane * 12;
+    const anchoLanePct = 100 / Math.max(1, b.laneCount || 1);
     const tarjeta = document.createElement("div");
     tarjeta.className = "horario-bloque-tarjeta";
     // Buscar materia en... (Parte C): permite ubicar el bloque de una
@@ -512,7 +515,7 @@ function construirColumnaDia(dia, bloquesDia, semestre, pxPorMin, altoGrid, minI
     // pero se atenúa para que salte a la vista que ese día puntual no hay
     // clase, sin tener que leer el emoji chiquito de la esquina.
     const esSinClase = b.modalidad === "sin_clase";
-    tarjeta.style.cssText = `position:absolute; top:${top}px; left:${offsetPx}px; right:0; height:${alto}px; z-index:${10 + b.lane};
+    tarjeta.style.cssText = `position:absolute; top:${top}px; left:calc(${b.lane * anchoLanePct}% + 2px); width:calc(${anchoLanePct}% - 4px); height:${alto}px; z-index:${10 + b.lane};
       background:${b.color}; color:#fff; border-radius:8px; padding:3px 6px; overflow:hidden;
       box-shadow:0 2px 6px rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.25);
       ${esSinClase ? "opacity:0.45;" : ""}`;
@@ -2283,6 +2286,8 @@ function irASemanaSiguiente() {
 }
 
 function inicializarHorario() {
+  if (horarioInicializado) return;
+  horarioInicializado = true;
   inicializarEstadoHorarioSiHaceFalta();
   const btnAnterior = document.getElementById("btn-horario-semestre-anterior");
   const btnSiguiente = document.getElementById("btn-horario-semestre-siguiente");

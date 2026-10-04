@@ -40,6 +40,7 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
+import { MODO_DEMO } from "../core/demo-mode.js";
 import { URL_WORKER_OAUTH } from "../core/auth.js";
 import { reproducirAudioPersonal } from "./tiempo-estudio-audio-competencias.js";
 // 2026-09-21 — Rediseño: el aviso con posición/podio lo dibuja el módulo visual
@@ -663,7 +664,6 @@ function mostrarCelebracionResultado(resultado, alCerrar) {
 
   function cerrar() {
     confeti.detener();
-    audio.detener();
     overlay.remove();
     if (typeof alCerrar === "function") alCerrar();
   }
@@ -720,7 +720,7 @@ function simularResultado(tipo, nombreCompetencia) {
  * resto de la app) y la etiqueta "(prueba)" en el texto.
  */
 function construirBotonesSimulacion(cont, refrescar) {
-  if (!MOSTRAR_BOTONES_PRUEBA) return;
+  if (!MODO_DEMO || !MOSTRAR_BOTONES_PRUEBA) return;
   asegurarEstilosBotonesPrueba();
 
   const fila = document.createElement("div");

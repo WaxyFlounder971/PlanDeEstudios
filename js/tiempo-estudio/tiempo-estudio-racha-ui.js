@@ -305,7 +305,7 @@ export function construirOdometro(desde, hasta, { retrasoMs = 0, giro = false } 
     for (let n = 0; n < TIRA_DIGITOS; n++) tira.appendChild(crearElemento("span", "", String(n % 10)));
     const desdeDerecha = largo - 1 - i;
     tira.style.setProperty("--i", String(dDesde));
-    tira.style.setProperty("--odo-dur", `${1100 + desdeDerecha * 380}ms`);
+    tira.style.setProperty("--odo-dur", `${760 + desdeDerecha * 150}ms`);
     tira.style.setProperty("--odo-retraso", `${retrasoMs}ms`);
     col.appendChild(tira);
     cont.appendChild(col);

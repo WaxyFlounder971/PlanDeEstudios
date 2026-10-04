@@ -1,11 +1,12 @@
 import { crearDatosUsuarioNuevo } from "./schema.js";
+import { registrarAnaliticaUso } from "./analitica.js";
 
 /**
  * Modo de demostración: el query param se resuelve antes del arranque para
  * que main.js pueda omitir login, lectura de caché, sincronización y APIs.
  */
 const MODO_DEMO = new URLSearchParams(globalThis.location?.search || "").get("demo") === "1";
-const URL_WORKER_ANALITICA_DEMO = "https://worker-notificaciones-agenda.appacademica.workers.dev/analitica/demo-apertura";
+const URL_WORKER_ANALITICA = "https://worker-notificaciones-agenda.appacademica.workers.dev";
 let fetchOriginal = null;
 let aperturaDemoRegistrada = false;
 
@@ -38,8 +39,11 @@ function bloquearServiciosExternosEnDemo() {
       && Boolean(clave) && url.searchParams.get("key") === clave;
     if (solicitudGemini) return fetchOriginal(recurso, opciones);
     const metodo = String(opciones?.method || recurso?.method || "GET").toUpperCase();
-    const solicitudConteoDemo = url.href === URL_WORKER_ANALITICA_DEMO && metodo === "POST" && !opciones?.body;
-    if (solicitudConteoDemo) return fetchOriginal(recurso, opciones);
+    const solicitudAnaliticaAgregada = url.origin === URL_WORKER_ANALITICA
+      && url.pathname === "/analitica/evento" && metodo === "POST";
+    const solicitudConteoDemoLegacy = url.origin === URL_WORKER_ANALITICA
+      && url.pathname === "/analitica/demo-apertura" && metodo === "POST" && !opciones?.body;
+    if (solicitudAnaliticaAgregada || solicitudConteoDemoLegacy) return fetchOriginal(recurso, opciones);
     console.info("Modo demo: se omitió una solicitud a un servicio externo.", url.hostname);
     return new Response(JSON.stringify({ error: "simulado_en_demo" }), {
       status: 503, headers: { "Content-Type": "application/json" },
@@ -48,11 +52,10 @@ function bloquearServiciosExternosEnDemo() {
 }
 
 function registrarAperturaDemo() {
-  if (!MODO_DEMO || aperturaDemoRegistrada || !fetchOriginal) return Promise.resolve(false);
+  if (!MODO_DEMO || aperturaDemoRegistrada) return false;
   aperturaDemoRegistrada = true;
-  return globalThis.fetch(URL_WORKER_ANALITICA_DEMO, { method: "POST", keepalive: true })
-    .then((respuesta) => respuesta.ok)
-    .catch(() => false);
+  registrarAnaliticaUso("demo", "Apertura");
+  return true;
 }
 
 function combinarSemilla(base, semilla) {

@@ -1069,17 +1069,23 @@ function fusionarFinanzasSemestres(local, remoto, tumbas) {
   const listaRemota = Array.isArray(remoto) ? remoto : [];
   const idsEliminados = new Set(tumbas.map((t) => t.id));
 
-  const porId = new Map();
-  listaLocal.forEach((f) => porId.set(f.id, f));
+  const porSemestre = new Map();
+  listaLocal.forEach((f) => {
+    const id = f.semestre_id || f.id;
+    const existente = porSemestre.get(id);
+    const fundido = existente ? fusionarFinanzasSemestre(existente, f) : f;
+    porSemestre.set(id, fundido);
+  });
   listaRemota.forEach((f) => {
     observarEntidadRemota(f);
-    const existente = porId.get(f.id);
-    porId.set(f.id, existente ? fusionarFinanzasSemestre(existente, f) : f);
+    const id = f.semestre_id || f.id;
+    const existente = porSemestre.get(id);
+    porSemestre.set(id, existente ? fusionarFinanzasSemestre(existente, f) : f);
   });
 
   const resultado = [];
-  porId.forEach((finSem, id) => {
-    if (!idsEliminados.has(id)) resultado.push(finSem);
+  porSemestre.forEach((finSem) => {
+    if (!idsEliminados.has(finSem.id)) resultado.push(finSem);
   });
   return resultado;
 }

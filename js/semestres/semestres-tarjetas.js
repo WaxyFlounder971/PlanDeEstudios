@@ -1766,8 +1766,8 @@ function pintarResultadoObjetivo(contenedor, resultado, escalaActiva, objetivo) 
     const notaHipotetica = notaMinimaParaFraccion(resultado.fraccionNecesaria, escalaActiva);
     const notaImposible = notaHipotetica !== null ? formatearNotaCruda(notaHipotetica) : "—";
     p.innerHTML =
-      `Necesitarías un <strong>${notaImposible}</strong> (sobre ${escalaActiva}) en cada pendiente — ` +
-      `lo cual ya ni existe. <br><span style="font-weight:400;">No pos ya valió, no hay por dónde.</span>`;
+      `<strong>Necesitarías un ${notaImposible} (sobre ${escalaActiva}) en cada pendiente...</strong>` +
+      `<br><strong>Lo cual ya ni existe :'(&nbsp;</strong><br><span style="font-weight:400;">No pos ya valió, no hay por dónde.</span>`;
   } else {
     const notaNecesaria = notaMinimaParaFraccion(resultado.fraccionNecesaria, escalaActiva);
     // FIX (2026-08-08 — mismo bug de "37 en vez de 3.7"): objetivo llega en

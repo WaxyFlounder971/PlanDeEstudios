@@ -46,9 +46,8 @@ import {
 function inicializarTamanoTextoAjustes() {
   const cont = document.getElementById("ajuste-tamano-texto");
   if (!cont || !estado.datos?.configuracion) return;
-  const config = estado.datos.configuracion;
   const valores = ["pequeno", "mediano", "grande"];
-  const actual = valores.includes(config.tamano_texto) ? config.tamano_texto : "mediano";
+  const actual = valores.includes(estado.datos.configuracion.tamano_texto) ? estado.datos.configuracion.tamano_texto : "mediano";
   document.documentElement.dataset.textSize = actual;
   cont.querySelectorAll("[data-tamano-texto]").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.tamanoTexto === actual);
@@ -57,7 +56,9 @@ function inicializarTamanoTextoAjustes() {
     btn.addEventListener("click", () => {
       const nuevo = btn.dataset.tamanoTexto;
       if (!valores.includes(nuevo)) return;
-      config.tamano_texto = nuevo;
+      // `estado.datos` puede ser reemplazado por una sincronización mientras
+      // Ajustes permanece abierto; siempre escribir sobre el objeto vigente.
+      estado.datos.configuracion.tamano_texto = nuevo;
       document.documentElement.dataset.textSize = nuevo;
       cont.querySelectorAll("[data-tamano-texto]").forEach((otro) => otro.classList.toggle("active", otro === btn));
       marcarCambioPendiente();

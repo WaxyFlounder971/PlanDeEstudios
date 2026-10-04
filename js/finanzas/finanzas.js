@@ -12,7 +12,7 @@ import { estado } from "../core/storage.js";
 import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { construirGraficasResumenFinanzas } from "./finanzas-graficas.js";
 import { renderizarPestanaBeneficios, renderizarPestanaGastosU } from "./finanzas-gastos.js";
-import { renderizarPestanaSemestresFinanzas } from "./finanzas-semestres.js";
+import { normalizarRegistrosFinancierosPorSemestre, renderizarPestanaSemestresFinanzas } from "./finanzas-semestres.js";
 
 /**
  * FIX (mismo bug de arranque "Cannot access 'estado' before initialization"
@@ -134,6 +134,7 @@ function formatearMonto(numero) {
  *     finanzas-graficas.js).
  */
 function calcularTotalesResumenFinanzas() {
+  normalizarRegistrosFinancierosPorSemestre();
   // FIX (2026-08-27): antes se sumaban TODOS los registros de
   // finanzas_semestre sin chequear si el semestre al que apuntan sigue
   // existiendo — un registro huérfano (semestre borrado antes de que

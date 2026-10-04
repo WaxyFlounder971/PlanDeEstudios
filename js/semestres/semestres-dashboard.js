@@ -218,7 +218,7 @@ function construirFilaPromedio({ etiquetaIzquierda, promedio, creditos, materias
   const detalle = document.createElement("div");
   detalle.className = "muted";
   detalle.style.fontSize = "0.72rem";
-  detalle.textContent = traducirTextoInterfaz(materias > 0 ? `${materias} ${materias === 1 ? "materia" : "materias"} · ${creditos} créd.` : "Sin notas todavía");
+  detalle.textContent = traducirTextoInterfaz(materias > 0 ? `${materias} ${materias === 1 ? "materia" : "materias"} · ${creditos} créditos` : "Sin notas todavía");
   der.appendChild(detalle);
   fila.appendChild(der);
 

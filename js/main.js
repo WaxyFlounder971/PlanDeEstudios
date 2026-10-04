@@ -12,6 +12,7 @@ import { fusionarDatos } from "./core/storage-merge.js";
 import { actualizarIndicadorSync, asegurarTokenValido, avisarCierreSesionAOtrasPestanas, forzarSincronizacion, haySesionGuardada, inicializarCanalEntrePestanas, inicializarPullToRefresh, inicializarReconexionAlVolverOnline, inicializarSondeoAlVolver, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
 import { CLAVE_CACHE_LOCAL, borrarTokenCache, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
 import { MODO_DEMO, activarEstadoDemo, cargarDatosDemo, registrarAperturaDemo } from "./core/demo-mode.js";
+import { configurarCorreoAnalitica, inicializarAnaliticaUso, registrarAnaliticaUso } from "./core/analitica.js";
 import { obtenerIniciales } from "./core/utils.js";
 // Sincronización con Google Calendar (2026-08-25, reemplaza Web Push) -
 // ver core/notificaciones-calendario.js.
@@ -102,12 +103,17 @@ if ("serviceWorker" in navigator && !MODO_DEMO) {
           if (!swInstalando) return;
           swInstalando.addEventListener("statechange", () => {
             if (swInstalando.state === "installed" && navigator.serviceWorker.controller) {
-              mostrarToastAccion("Hay una actualización disponible.", "Recargar", () => {
-                if (registro.waiting) registro.waiting.postMessage({ type: "SKIP_WAITING" });
-              });
+              mostrarAvisoActualizacionObligatoria(registro);
             }
           });
         });
+
+        // Si el navegador ya tenía una versión esperando (por ejemplo, la
+        // pestaña estuvo abierta mientras terminó de instalarse), también
+        // se presenta el aviso bloqueante al volver a abrir la app.
+        if (registro.waiting && navigator.serviceWorker.controller) {
+          mostrarAvisoActualizacionObligatoria(registro);
+        }
 
         setInterval(() => registro.update(), 60 * 60 * 1000); // cada 1h
         document.addEventListener("visibilitychange", () => {
@@ -570,15 +576,18 @@ async function iniciarAplicacionDemo() {
   try {
     const datos = await cargarDatosDemo();
     activarEstadoDemo(datos);
-    // Métrica agregada: cuenta que se abrió la demo, sin registrar sesión,
-    // cuenta, IP, secciones visitadas ni acciones del visitante.
+    // Métricas agregadas: apertura, secciones y categorías de acciones;
+    // nunca contenido ni datos académicos del visitante.
     void registrarAperturaDemo();
+    configurarCorreoAnalitica("");
+    inicializarAnaliticaUso();
     estado.token = null;
     estado.fileId = null;
     estado.datos = datos;
     estado.pendienteSync = false;
     estado.conexionDrive = "ok";
     estado.ultimoModifiedTimeConocido = null;
+    aplicarTamanoTexto(estado.datos);
     // El arranque normal también registra navegación y eventos de cada
     // módulo. La demo omite deliberadamente auth/sync, así que inicializa
     // aquí solo las piezas de interfaz que necesita para funcionar.
@@ -616,7 +625,7 @@ async function iniciarAplicacionDemo() {
       const tarjeta = document.createElement("section");
       tarjeta.id = "demo-funciones-simuladas";
       tarjeta.className = "glass-card stack";
-      tarjeta.innerHTML = '<h2 style="margin:0">Funciones de demostración</h2><p class="muted" style="margin:0">Los datos de esta sección son de ejemplo. Los cambios se quedan en esta pestaña y se descartan al recargar.</p><div class="row" style="flex-wrap:wrap;gap:8px"><span class="badge badge-warning">Notificaciones: simuladas</span><span class="badge badge-info">Analítica: solo conteo de aperturas</span><span class="badge badge-purple">Gemini: opcional, clave temporal</span></div><p class="muted" style="margin:0;font-size:.84rem">La demo no envía datos a Google Drive. Solo registra un conteo agregado de aperturas, sin identificar visitantes ni guardar su actividad. Gemini solo se consulta si introduces tu propia clave; esa clave y el historial se borran al recargar.</p>';
+      tarjeta.innerHTML = '<h2 style="margin:0">Funciones de demostración</h2><p class="muted" style="margin:0">Los datos de esta sección son de ejemplo. Los cambios se quedan en esta pestaña y se descartan al recargar.</p><div class="row" style="flex-wrap:wrap;gap:8px"><span class="badge badge-warning">Notificaciones: simuladas</span><span class="badge badge-info">Analítica: uso agregado por sección</span><span class="badge badge-purple">Gemini: opcional, clave temporal</span></div><p class="muted" style="margin:0;font-size:.84rem">La demo cuenta aperturas, secciones y categorías de acciones de forma agregada, sin asociarlas a una cuenta ni guardar contenido de materias, tareas o mensajes. Gemini solo se consulta si introduces tu propia clave; esa clave y el historial se borran al recargar.</p>';
       panelConfiguracion.insertBefore(tarjeta, panelConfiguracion.firstChild);
     }
     const btnBorrarDemo = document.getElementById("btn-borrar-cuenta-app");
@@ -627,7 +636,11 @@ async function iniciarAplicacionDemo() {
     if (syncCalendar) { syncCalendar.disabled = true; syncCalendar.title = "Simulado en modo demo"; }
     const indicador = document.getElementById("indicador-sync");
     if (indicador) { indicador.textContent = "Demo · cambios temporales"; indicador.removeAttribute("title"); }
-    instalarBotonSalirDemo();
+    // La demo reutiliza las mismas acciones de salida que la app normal.
+    // El arranque de demo omite el bloque de autenticación, así que sus
+    // listeners se conectan aquí y ambos botones regresan al login real.
+    document.getElementById("btn-logout")?.addEventListener("click", salirDeDemo);
+    document.getElementById("btn-logout-popover")?.addEventListener("click", salirDeDemo);
     mostrarApp();
     const indicadorDemo = document.getElementById("indicador-sync");
     if (indicadorDemo) indicadorDemo.textContent = "Demo · cambios temporales";
@@ -1038,6 +1051,12 @@ function mostrarApp() {
   ocultarPantallaCargaSesion();
   document.getElementById("pantalla-login").classList.add("oculto");
   document.getElementById("app-shell").classList.remove("oculto");
+  configurarCorreoAnalitica(MODO_DEMO ? "" : estado.datos?.perfil?.correo || "");
+  inicializarAnaliticaUso();
+  if (!MODO_DEMO && !window.__analiticaAperturaRegistrada) {
+    window.__analiticaAperturaRegistrada = true;
+    registrarAnaliticaUso("resumen", "Apertura");
+  }
   // BUG FIX v1.15.4 (causa raíz de "se aplica y a los segundos vuelve a
   // blanco"): faltaba el 3er argumento acá. aplicarPaleta(paleta, modo)
   // sin coloresPersonalizados, cuando paleta === "personalizada", cae en
@@ -1047,6 +1066,7 @@ function mostrarApp() {
   // cuando el dato en sí seguía intacto en estado.datos. Mismo patrón que
   // el bug de abajo en storage-sync.js.
   const cfg = estado.datos.configuracion;
+  aplicarTamanoTexto(estado.datos);
   aplicarPaleta(cfg.paleta, MODO_DEMO ? "dark" : obtenerModoTemaLocal(), cfg.paleta === "personalizada" ? cfg.paleta_personalizada?.colores : undefined);
   // Fix v1.16.1 (2026-08-23 - "switch de fancy necesita varios clicks"):
   // aplicarModoRendimiento() solo se llamaba desde el onchange del switch
@@ -1120,6 +1140,12 @@ function mostrarApp() {
   if (!MODO_DEMO) revisarWrappedAutomatico();
 }
 
+function aplicarTamanoTexto(datos) {
+  const valores = ["pequeno", "mediano", "grande"];
+  const elegido = datos?.configuracion?.tamano_texto;
+  document.documentElement.dataset.textSize = valores.includes(elegido) ? elegido : "mediano";
+}
+
 // Notificaciones push - mismo caso que el query param de arriba, pero para
 // cuando la app YA estaba abierta en una pestaña al tocar la notificación:
 // el service worker no puede navegar una pestaña ya abierta con un query
@@ -1187,17 +1213,35 @@ function salirDeDemo() {
   window.location.replace(destino.href);
 }
 
-function instalarBotonSalirDemo() {
-  const shell = document.getElementById("app-shell");
-  if (!shell || document.getElementById("btn-salir-demo")) return;
-  const boton = document.createElement("button");
-  boton.id = "btn-salir-demo";
-  boton.type = "button";
-  boton.className = "btn btn-danger demo-salir";
-  boton.textContent = "Salir de demo";
-  boton.setAttribute("aria-label", "Salir de Demo Académico y volver al inicio de sesión");
-  boton.addEventListener("click", salirDeDemo);
-  shell.append(boton);
+function mostrarAvisoActualizacionObligatoria(registro) {
+  if (document.getElementById("aviso-actualizacion-obligatoria")) return;
+  const overlay = document.createElement("div");
+  overlay.id = "aviso-actualizacion-obligatoria";
+  overlay.className = "actualizacion-obligatoria-overlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-labelledby", "actualizacion-obligatoria-titulo");
+  overlay.innerHTML = `
+    <section class="actualizacion-obligatoria-card">
+      <div class="actualizacion-obligatoria-icono" aria-hidden="true">✦</div>
+      <p class="actualizacion-obligatoria-etiqueta">App Académica</p>
+      <h2 id="actualizacion-obligatoria-titulo">Hay una actualización lista</h2>
+      <p>Para seguir usando la app, primero instala la versión más reciente. Tus datos guardados no se borrarán.</p>
+      <button type="button" class="btn btn-primary" id="btn-aplicar-actualizacion">Actualizar ahora</button>
+      <span class="actualizacion-obligatoria-nota">La app se recargará al terminar.</span>
+    </section>`;
+  document.body.appendChild(overlay);
+  const aplicar = () => registro.waiting?.postMessage({ type: "SKIP_WAITING" });
+  overlay.querySelector("#btn-aplicar-actualizacion")?.addEventListener("click", aplicar);
+  // Es una actualización obligatoria: no se cierra al tocar el fondo ni con
+  // Escape. El único camino es aplicar la versión que ya está instalada.
+  overlay.addEventListener("click", (evento) => {
+    if (evento.target === overlay) evento.preventDefault();
+  });
+  document.addEventListener("keydown", (evento) => {
+    if (evento.key === "Escape" && overlay.isConnected) evento.preventDefault();
+  }, true);
+  overlay.querySelector("#btn-aplicar-actualizacion")?.focus();
 }
 
 function cerrarSesion() {
@@ -1293,6 +1337,7 @@ function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
     asistente: "seccion-asistente",
   };
   if (!Object.prototype.hasOwnProperty.call(secciones, nombre)) return;
+  const cambioSeccion = seccionNavegacionActual !== nombre;
   if (window.history && !desdeHistorial) {
     const estadoEntrada = { ...(window.history.state || {}), appNav: true, appSeccion: nombre };
     if (seccionNavegacionActual === null) {
@@ -1302,6 +1347,8 @@ function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
     }
   }
   seccionNavegacionActual = nombre;
+  window.__appSeccionActiva = nombre;
+  if (cambioSeccion) registrarAnaliticaUso(nombre, "Abrir sección");
   Object.entries(secciones).forEach(([clave, idEl]) => {
     const el = document.getElementById(idEl);
     if (el) el.classList.toggle("oculto", clave !== nombre);

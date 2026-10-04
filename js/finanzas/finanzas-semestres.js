@@ -65,7 +65,45 @@ function repartirMontoEnPartes(total, cantidadPartes) {
 }
 
 function obtenerRegistroDeSemestre(semestreId) {
+  normalizarRegistrosFinancierosPorSemestre();
   return (estado.datos.finanzas_semestre || []).find((r) => r.semestre_id === semestreId) || null;
+}
+
+/** Un semestre puede tener como máximo un registro financiero. Consolida
+ * filas duplicadas que llegaran de otra instalación/dispositivo y conserva
+ * todos los pagos e ingresos por su ID antes de quitarlas. */
+function normalizarRegistrosFinancierosPorSemestre() {
+  const registros = estado.datos?.finanzas_semestre;
+  if (!Array.isArray(registros) || registros.length < 2) return false;
+  const porSemestre = new Map();
+  let cambio = false;
+  for (const registro of registros) {
+    if (!registro?.semestre_id) { porSemestre.set(`sin-semestre:${registro?.id || porSemestre.size}`, registro); continue; }
+    const existente = porSemestre.get(registro.semestre_id);
+    if (!existente) { porSemestre.set(registro.semestre_id, registro); continue; }
+    cambio = true;
+    for (const clave of ["pagos_matricula", "ingresos_beca"]) {
+      const items = new Map();
+      for (const item of [...(existente[clave] || []), ...(registro[clave] || [])]) {
+        const id = item?.id || `${clave}:${JSON.stringify(item)}`;
+        if (!items.has(id)) items.set(id, item);
+      }
+      existente[clave] = [...items.values()];
+    }
+    for (const clave of ["_eliminados_pagos_matricula", "_eliminados_ingresos_beca"]) {
+      const tumbas = new Map();
+      for (const tumba of [...(existente[clave] || []), ...(registro[clave] || [])]) {
+        if (tumba?.id && !tumbas.has(tumba.id)) tumbas.set(tumba.id, tumba);
+      }
+      existente[clave] = [...tumbas.values()];
+    }
+    sellarTimestamp(existente);
+  }
+  if (cambio) {
+    estado.datos.finanzas_semestre = [...porSemestre.values()];
+    marcarCambioPendiente();
+  }
+  return cambio;
 }
 
 /**
@@ -667,4 +705,4 @@ function abrirModalItemFinanzas({ tipo, semestre, registro, itemExistente, conte
   document.body.appendChild(overlay);
 }
 
-export { renderizarPestanaSemestresFinanzas };
+export { normalizarRegistrosFinancierosPorSemestre, renderizarPestanaSemestresFinanzas };

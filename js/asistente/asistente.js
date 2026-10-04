@@ -109,6 +109,16 @@ function resolverActualizacionNombreAsistente(nombreNuevo) {
   return { ok: true, nombreNuevo: limpio };
 }
 
+// Las órdenes directas para renombrar al asistente se resuelven localmente:
+// Gemini tendía a pedir aclaración incluso cuando el nombre estaba claro.
+// El valor se guarda en la configuración personal de esta cuenta; el nombre
+// predeterminado del producto sigue siendo Wapper para el resto.
+function extraerNombreAsistenteDirecto(texto) {
+  const match = String(texto || "").match(/\b(?:te voy a llamar|quiero llamarte|quiero que te llames|a partir de ahora te (?:llamare|llamaré)|desde ahora te (?:llamare|llamaré))\s+([\p{L}\p{M}][\p{L}\p{M}'’ -]{0,38})/iu);
+  if (!match) return null;
+  return match[1].replace(/[.!?,;:]+$/, "").trim().replace(/\s+/g, " ");
+}
+
 function obtenerNombreIdiomaAsistente() {
   return ({ es: "Spanish", en: "English", it: "Italian", fr: "French", pt: "Portuguese", de: "German", ja: "Japanese" })[obtenerIdiomaActual()] || "the language of the user's latest message";
 }
@@ -3572,6 +3582,15 @@ async function manejarEnvioMensaje() {
   actualizarEstadoEnvio();
 
   try {
+    const nombreAsistenteDirecto = extraerNombreAsistenteDirecto(texto);
+    if (nombreAsistenteDirecto) {
+      const resultado = { accion: "actualizar_nombre_asistente", nombreAsistente: nombreAsistenteDirecto };
+      const turno = { rol: "modelo", texto: "", crudo: JSON.stringify(resultado) };
+      conversacionActual.push(turno);
+      await mostrarResultadoEnChat(resultado, turno, texto);
+      guardarHistorialLocal();
+      return;
+    }
     // Punto 4, personalidad Wapper: saludo simple → respuesta fija, SIN
     // intentar extraer nada (ni siquiera se llama a Gemini). El turno se
     // guarda igual que cualquier otro ("crudo" con un accion:"saludo"
@@ -3633,6 +3652,10 @@ async function manejarEnvioMensaje() {
   } finally {
     enviandoMensaje = false;
     actualizarEstadoEnvio();
+    requestAnimationFrame(() => {
+      const campo = document.getElementById("input-asistente-mensaje");
+      if (campo && !campo.disabled) campo.focus({ preventScroll: true });
+    });
   }
 }
 
