@@ -71,7 +71,7 @@
         "nombre": "Camila Vargas",
         "color": "#fb7185",
         "activo": true,
-        "fecha_vinculacion": "2026-09-01T12:00:00.000Z",
+        "fecha_vinculacion": "2026-09-01T12:00:00Z",
         "demo_snapshot": {
           "version": 1,
           "semestre_nombre": "II Ciclo 2026",
@@ -112,7 +112,7 @@
         "nombre": "Mateo Solís",
         "color": "#22c55e",
         "activo": true,
-        "fecha_vinculacion": "2026-09-01T12:00:00.000Z",
+        "fecha_vinculacion": "2026-09-01T12:00:00Z",
         "demo_snapshot": {
           "version": 1,
           "semestre_nombre": "II Ciclo 2026",
@@ -153,7 +153,7 @@
         "nombre": "Lucía Méndez",
         "color": "#fbbf24",
         "activo": true,
-        "fecha_vinculacion": "2026-09-01T12:00:00.000Z",
+        "fecha_vinculacion": "2026-09-01T12:00:00Z",
         "demo_snapshot": {
           "version": 1,
           "semestre_nombre": "II Ciclo 2026",
@@ -187,6 +187,43 @@
             }
           ]
         }
+      }
+    ],
+    "enlaces_rapidos": [
+      {
+        "icono_tipo": "imagen",
+        "nombre": "Google Calendar",
+        "icono_valor": "imagenes/demo/calendario.svg",
+        "url": "https://calendar.google.com/",
+        "id": "demo-link-calendar"
+      },
+      {
+        "icono_tipo": "imagen",
+        "nombre": "Universidad de Costa Rica",
+        "icono_valor": "imagenes/demo/mapa.svg",
+        "url": "https://www.ucr.ac.cr/",
+        "id": "demo-link-ucr"
+      },
+      {
+        "icono_tipo": "imagen",
+        "nombre": "Tecnológico de Costa Rica",
+        "icono_valor": "imagenes/demo/documentos.svg",
+        "url": "https://www.tec.ac.cr/",
+        "id": "demo-link-tec"
+      },
+      {
+        "icono_tipo": "imagen",
+        "nombre": "Gmail",
+        "icono_valor": "imagenes/demo/correo.svg",
+        "url": "https://mail.google.com/",
+        "id": "demo-link-gmail"
+      },
+      {
+        "icono_tipo": "imagen",
+        "nombre": "Google Drive",
+        "icono_valor": "imagenes/demo/biblioteca.svg",
+        "url": "https://drive.google.com/",
+        "id": "demo-link-drive"
       }
     ]
   },
@@ -5665,14 +5702,6 @@
   "timer_estudio_activo": null,
   "competencias_locales": [],
   "adjuntos": [],
-  "enlaces_rapidos": [
-    {
-      "id": "enlace-demo-1",
-      "nombre": "Calendario Académico UCR (demo)",
-      "url": "https://www.ucr.ac.cr/estudiantes/calendario.html",
-      "emoji": "📅"
-    }
-  ],
   "competencias_demo": [
     {
       "id": "demo-comp-1",
@@ -5681,57 +5710,87 @@
       "meta_horas": 8,
       "participantes": [
         {
-          "id": "demo-comp-1-yo",
-          "apodo": "Lucía",
           "foto_url": null,
-          "color": null,
-          "horas": 6.5
+          "color": "#8b5cf6",
+          "apodo": "Lucía Mora",
+          "horas": 6.5,
+          "id": "demo-comp-1-yo"
         },
         {
-          "id": "demo-comp-1-p1",
-          "apodo": "Camila",
           "foto_url": null,
-          "color": null,
-          "horas": 7.25
+          "color": "#ec4899",
+          "apodo": "Camila Vargas",
+          "horas": 7.25,
+          "id": "demo-comp-1-p1"
         },
         {
-          "id": "demo-comp-1-p2",
-          "apodo": "Mateo",
           "foto_url": null,
-          "color": null,
-          "horas": 4.75
+          "color": "#06b6d4",
+          "apodo": "Mateo Solís",
+          "horas": 5.75,
+          "id": "demo-comp-1-p2"
+        },
+        {
+          "foto_url": null,
+          "color": "#f59e0b",
+          "apodo": "Andrés Rojas",
+          "horas": 4.25,
+          "id": "demo-comp-1-p3"
+        },
+        {
+          "foto_url": null,
+          "color": "#22c55e",
+          "apodo": "Valeria Chen",
+          "horas": 3.5,
+          "id": "demo-comp-1-p4"
         }
       ],
       "yo_id": "demo-comp-1-yo",
-      "apodo_propio": "Lucía",
+      "apodo_propio": "Lucía Mora",
       "historial_demo": [
         {
-          "semana_cerrada_en": "2026-09-26T12:00:00.000Z",
+          "semana_cerrada_en": "2026-09-26T12:00:00Z",
           "completa": true,
           "resultados": [
             {
-              "participante_id": "demo-comp-1-p1",
-              "apodo": "Camila",
-              "horas": 7.25,
+              "puesto": 1,
               "foto_url": null,
-              "color": null,
-              "puesto": 1
-            },
-            {
-              "participante_id": "demo-comp-1-yo",
-              "apodo": "Lucía",
               "horas": 6.5,
-              "foto_url": null,
-              "color": null,
-              "puesto": 2
+              "participante_id": "demo-comp-1-yo",
+              "apodo": "Lucía Mora",
+              "color": "#8b5cf6"
             },
             {
-              "participante_id": "demo-comp-1-p2",
-              "apodo": "Mateo",
-              "horas": 4.75,
+              "puesto": 2,
               "foto_url": null,
-              "color": null,
-              "puesto": 3
+              "horas": 7.25,
+              "participante_id": "demo-comp-1-p1",
+              "apodo": "Camila Vargas",
+              "color": "#ec4899"
+            },
+            {
+              "puesto": 3,
+              "foto_url": null,
+              "horas": 5.75,
+              "participante_id": "demo-comp-1-p2",
+              "apodo": "Mateo Solís",
+              "color": "#06b6d4"
+            },
+            {
+              "puesto": 4,
+              "foto_url": null,
+              "horas": 4.25,
+              "participante_id": "demo-comp-1-p3",
+              "apodo": "Andrés Rojas",
+              "color": "#f59e0b"
+            },
+            {
+              "puesto": 5,
+              "foto_url": null,
+              "horas": 3.5,
+              "participante_id": "demo-comp-1-p4",
+              "apodo": "Valeria Chen",
+              "color": "#22c55e"
             }
           ]
         }
@@ -5744,57 +5803,162 @@
       "meta_horas": 5,
       "participantes": [
         {
-          "id": "demo-comp-2-yo",
-          "apodo": "Lucía",
           "foto_url": null,
-          "color": null,
-          "horas": 3.5
+          "color": "#8b5cf6",
+          "apodo": "Lucía Mora",
+          "horas": 6.5,
+          "id": "demo-comp-2-yo"
         },
         {
-          "id": "demo-comp-2-p1",
-          "apodo": "Lucía",
           "foto_url": null,
-          "color": null,
-          "horas": 4
+          "color": "#ef4444",
+          "apodo": "Diego Araya",
+          "horas": 5.8,
+          "id": "demo-comp-2-p1"
         },
         {
-          "id": "demo-comp-2-p2",
-          "apodo": "Diego",
           "foto_url": null,
-          "color": null,
-          "horas": 2.25
+          "color": "#14b8a6",
+          "apodo": "Sofía León",
+          "horas": 5.25,
+          "id": "demo-comp-2-p2"
+        },
+        {
+          "foto_url": null,
+          "color": "#f97316",
+          "apodo": "Pablo Jiménez",
+          "horas": 4.9,
+          "id": "demo-comp-2-p3"
+        },
+        {
+          "foto_url": null,
+          "color": "#a855f7",
+          "apodo": "Emma Quesada",
+          "horas": 4.5,
+          "id": "demo-comp-2-p4"
+        },
+        {
+          "foto_url": null,
+          "color": "#3b82f6",
+          "apodo": "Tomás Vega",
+          "horas": 4.1,
+          "id": "demo-comp-2-p5"
+        },
+        {
+          "foto_url": null,
+          "color": "#eab308",
+          "apodo": "Nora Salas",
+          "horas": 3.8,
+          "id": "demo-comp-2-p6"
+        },
+        {
+          "foto_url": null,
+          "color": "#10b981",
+          "apodo": "Gabriel Soto",
+          "horas": 3.4,
+          "id": "demo-comp-2-p7"
+        },
+        {
+          "foto_url": null,
+          "color": "#f43f5e",
+          "apodo": "Mía Campos",
+          "horas": 2.7,
+          "id": "demo-comp-2-p8"
+        },
+        {
+          "foto_url": null,
+          "color": "#6366f1",
+          "apodo": "Samuel Cruz",
+          "horas": 2.1,
+          "id": "demo-comp-2-p9"
         }
       ],
       "yo_id": "demo-comp-2-yo",
-      "apodo_propio": "Lucía",
+      "apodo_propio": "Lucía Mora",
       "historial_demo": [
         {
-          "semana_cerrada_en": "2026-09-26T12:00:00.000Z",
+          "semana_cerrada_en": "2026-09-26T12:00:00Z",
           "completa": true,
           "resultados": [
             {
-              "participante_id": "demo-comp-2-p1",
-              "apodo": "Lucía",
-              "horas": 4,
+              "puesto": 1,
               "foto_url": null,
-              "color": null,
-              "puesto": 1
-            },
-            {
+              "horas": 6.5,
               "participante_id": "demo-comp-2-yo",
-              "apodo": "Lucía",
-              "horas": 3.5,
-              "foto_url": null,
-              "color": null,
-              "puesto": 2
+              "apodo": "Lucía Mora",
+              "color": "#8b5cf6"
             },
             {
-              "participante_id": "demo-comp-2-p2",
-              "apodo": "Diego",
-              "horas": 2.25,
+              "puesto": 2,
               "foto_url": null,
-              "color": null,
-              "puesto": 3
+              "horas": 5.8,
+              "participante_id": "demo-comp-2-p1",
+              "apodo": "Diego Araya",
+              "color": "#ef4444"
+            },
+            {
+              "puesto": 3,
+              "foto_url": null,
+              "horas": 5.25,
+              "participante_id": "demo-comp-2-p2",
+              "apodo": "Sofía León",
+              "color": "#14b8a6"
+            },
+            {
+              "puesto": 4,
+              "foto_url": null,
+              "horas": 4.9,
+              "participante_id": "demo-comp-2-p3",
+              "apodo": "Pablo Jiménez",
+              "color": "#f97316"
+            },
+            {
+              "puesto": 5,
+              "foto_url": null,
+              "horas": 4.5,
+              "participante_id": "demo-comp-2-p4",
+              "apodo": "Emma Quesada",
+              "color": "#a855f7"
+            },
+            {
+              "puesto": 6,
+              "foto_url": null,
+              "horas": 4.1,
+              "participante_id": "demo-comp-2-p5",
+              "apodo": "Tomás Vega",
+              "color": "#3b82f6"
+            },
+            {
+              "puesto": 7,
+              "foto_url": null,
+              "horas": 3.8,
+              "participante_id": "demo-comp-2-p6",
+              "apodo": "Nora Salas",
+              "color": "#eab308"
+            },
+            {
+              "puesto": 8,
+              "foto_url": null,
+              "horas": 3.4,
+              "participante_id": "demo-comp-2-p7",
+              "apodo": "Gabriel Soto",
+              "color": "#10b981"
+            },
+            {
+              "puesto": 9,
+              "foto_url": null,
+              "horas": 2.7,
+              "participante_id": "demo-comp-2-p8",
+              "apodo": "Mía Campos",
+              "color": "#f43f5e"
+            },
+            {
+              "puesto": 10,
+              "foto_url": null,
+              "horas": 2.1,
+              "participante_id": "demo-comp-2-p9",
+              "apodo": "Samuel Cruz",
+              "color": "#6366f1"
             }
           ]
         }

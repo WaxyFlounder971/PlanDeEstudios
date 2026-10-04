@@ -1404,13 +1404,6 @@ body.scroll-bloqueado {
      abajo, ya mayor a cualquier header — ver ese bloque más abajo.) */
   z-index: 60;
 }
-.demo-salir {
-  position: fixed;
-  top: 12px;
-  right: 12px;
-  z-index: 75;
-  box-shadow: var(--shadow-glass);
-}
 /* Un poco menos transparente que el resto de tarjetas de vidrio: se suma
    una capa neutra (oscura en modo oscuro, clara en modo claro) encima del
    fondo translúcido normal, solo para la barra lateral. */
@@ -1736,7 +1729,6 @@ a:hover .enlace-rapido-nombre {
 
   .app-contenido { padding: 16px; }
   .app-contenido > * { max-width: 100%; }
-  .demo-salir { top: 8px; right: 8px; }
 }
 
 @media (min-width: 900px) {
@@ -5137,11 +5129,11 @@ html.exportar-tema-default[data-mode="dark"] {
 .te-racha-chip--recuperable { border-style: dashed; }
 
 /* Pop cuando la racha sube. */
-.te-racha-chip--pop { animation: te-racha-pop 0.8s cubic-bezier(0.3, 1.4, 0.5, 1) both; }
+.te-racha-chip--pop { animation: te-racha-pop 0.72s cubic-bezier(0.22, 1, 0.36, 1) both; }
 @keyframes te-racha-pop {
   0%   { transform: scale(1); }
-  35%  { transform: scale(1.28); }
-  60%  { transform: scale(0.95); }
+  42%  { transform: scale(1.09); }
+  74%  { transform: scale(0.99); }
   100% { transform: scale(1); }
 }
 
@@ -5162,7 +5154,7 @@ html.exportar-tema-default[data-mode="dark"] {
   display: flex;
   flex-direction: column;
   transform: translateY(calc(var(--i, 0) * var(--odo-h) * -1));
-  transition: transform var(--odo-dur, 1200ms) cubic-bezier(0.16, 1, 0.3, 1.06) var(--odo-retraso, 0ms);
+  transition: transform var(--odo-dur, 850ms) cubic-bezier(0.22, 1, 0.36, 1) var(--odo-retraso, 0ms);
   will-change: transform;
 }
 .te-odo-tira > span { display: block; height: var(--odo-h); line-height: var(--odo-h); text-align: center; }
@@ -5375,8 +5367,45 @@ html.exportar-tema-default[data-mode="dark"] {
   background: var(--bg-panel);
   color: var(--text-primary);
 }
-.selector-idioma-login { width: min(190px, 100%); margin: 4px 0 0 auto; text-align: left; }
+.selector-idioma-login { width: 100%; margin: 4px 0 0; text-align: left; }
 .selector-idioma-login > .form-label { display: block; margin: 0 0 3px; font-size: .7rem; }
 .selector-idioma-login .select-custom,
 .selector-idioma-login .select-custom-boton { width: 100%; }
+
+/* Las opciones nativas respetan el tema y conservan contraste al abrir el
+   selector de semestre de Tiempo de Estudio en escritorio. */
+select option, select optgroup { background-color: var(--bg-card); color: var(--text-primary); }
+
+/* Actualización obligatoria: cubre toda la interfaz hasta instalar la nueva
+   versión, con una tarjeta centrada y sin cierre accidental. */
+.actualizacion-obligatoria-overlay {
+  position: fixed; inset: 0; z-index: 12000; display: grid; place-items: center;
+  padding: 22px; background: color-mix(in srgb, var(--bg-canvas) 76%, #05030c 24%);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+}
+.actualizacion-obligatoria-card {
+  width: min(560px, 100%); display: flex; flex-direction: column; align-items: center;
+  gap: 14px; padding: clamp(28px, 7vw, 54px); text-align: center;
+  border: 1px solid color-mix(in srgb, var(--accent-1) 45%, var(--border-glass));
+  border-radius: 28px; background: var(--bg-card);
+  box-shadow: 0 28px 100px rgba(0,0,0,.48), 0 0 80px color-mix(in srgb, var(--accent-1) 22%, transparent);
+  animation: actualizacion-entrada .45s cubic-bezier(.2,.8,.2,1) both;
+}
+.actualizacion-obligatoria-icono { display:grid; place-items:center; width:68px; height:68px; border-radius:22px; color:white; font-size:2rem; background:linear-gradient(135deg,var(--accent-1),var(--accent-2)); box-shadow:0 12px 35px color-mix(in srgb,var(--accent-1) 38%,transparent); }
+.actualizacion-obligatoria-etiqueta { margin:0; color:var(--accent-2); font-size:.78rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
+.actualizacion-obligatoria-card h2 { margin:0; font-size:clamp(1.6rem,5vw,2.35rem); line-height:1.12; }
+.actualizacion-obligatoria-card > p:not(.actualizacion-obligatoria-etiqueta) { max-width:40ch; margin:0 0 4px; line-height:1.6; }
+.actualizacion-obligatoria-card .btn { min-width:min(260px,100%); min-height:50px; }
+.actualizacion-obligatoria-nota { color:var(--text-muted); font-size:.8rem; }
+@keyframes actualizacion-entrada { from { opacity:0; transform:translateY(16px) scale(.98); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion: reduce) { .actualizacion-obligatoria-card { animation:none; } }
+
+/* Resumen: la tarjeta de estudio ocupa menos espacio y separa con claridad
+   el avance general de las materias individuales. */
+.resumen-estudio-hoy-tarjeta { border-left:3px solid var(--accent-1); gap:10px !important; }
+.resumen-estudio-hoy-tarjeta > div:first-child { align-items:center !important; flex-wrap:wrap; }
+.resumen-estudio-hoy-tarjeta > div:first-child h2 { font-size:1rem; }
+.resumen-estudio-hoy-tarjeta > div:first-child > span { font-variant-numeric:tabular-nums; font-weight:700; }
+.resumen-estudio-hoy-detalle { padding-top:2px; }
+.resumen-estudio-hoy-detalle > .row-between { padding:5px 8px; border-radius:8px; background:color-mix(in srgb,var(--bg-panel) 68%,transparent); }
 
