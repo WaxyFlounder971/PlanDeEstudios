@@ -1274,17 +1274,6 @@ a { color: var(--accent-1); }
   --accent-1-10: rgba(168,118,217,0.10); --accent-1-20: rgba(168,118,217,0.22); --color-danger:#dc2626; --on-accent:#2A1E38;
 }
 
-/* Oscuro Fancy: fondo más profundo y superficies gris carbón con un matiz
-   leve de la paleta. Los acentos siguen gobernando botones y estados, y los
-   bordes se mantienen discretos para evitar el aspecto de alto contraste. */
-html[data-mode="dark"][data-palette] {
-  --bg-canvas: color-mix(in srgb, #0b0c10 91%, var(--accent-1) 9%);
-  --bg-header-solido: color-mix(in srgb, #111216 90%, var(--accent-1) 10%);
-  --bg-card: color-mix(in srgb, #24252b 90%, var(--accent-1) 10%);
-  --bg-panel: color-mix(in srgb, #191a1f 92%, var(--accent-1) 8%);
-  --border-glass: color-mix(in srgb, #2d2e34 88%, var(--accent-1) 12%);
-}
-
 /* =========================================================================
    LAYOUT DE LA APP (shell + sidebar) — responsivo real
    Nada aquí depende del ancho de pantalla para decidir colores/paleta;
@@ -5777,26 +5766,6 @@ html:has(.onboarding-overlay), body:has(.onboarding-overlay) { overflow:hidden!i
 .te-racha-card--detalle { max-height:calc(100dvh - 24px); overflow-y:auto; overscroll-behavior:contain; }
 .te-racha-cal-dia--vacio { visibility:hidden; }
 
-/* Recuperación visual de Modo color: conserva la superficie Fancy aunque la
-   optimización esté activa; Claro y Oscuro optimizado mantienen sus ajustes. */
-html[data-mode="dark"][data-rendimiento="reducido"] {
-  --shadow-glass: 0 20px 40px rgba(0,0,0,.35), 0 1px 3px rgba(255,255,255,.035);
-  --shadow-float: 0 8px 20px rgba(0,0,0,.4);
-  --transition-fast: .18s ease;
-  --transition-med: .28s ease;
-}
-html[data-mode="dark"][data-rendimiento="reducido"] body { background-attachment:fixed; }
-html[data-mode="dark"][data-rendimiento="reducido"] .glass-card {
-  background:var(--bg-card); background-image:none; backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); box-shadow:var(--shadow-glass);
-}
-html[data-mode="dark"][data-rendimiento="reducido"] .glass-panel,
-html[data-mode="dark"][data-rendimiento="reducido"] .mobile-topbar {
-  background:var(--bg-panel); background-image:none; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
-}
-html[data-mode="dark"][data-rendimiento="reducido"] #app-sidebar {
-  background:linear-gradient(rgba(0,0,0,.16),rgba(0,0,0,.16)),var(--bg-panel);
-}
-
 /* Calendario de racha: un mes por vista, navegable con flechas. */
 .te-racha-calendario { width:min(100%,390px); display:block; margin:12px auto 0; }
 .te-racha-cal-nav { display:grid; grid-template-columns:42px minmax(0,1fr) 42px; align-items:center; gap:10px; margin-bottom:10px; }
@@ -5818,3 +5787,8 @@ html[data-text-size="grande"] .select-custom-opcion {
 html[data-text-size="grande"] .pill-group { flex-wrap:wrap; overflow-x:visible; overflow-y:visible; }
 html[data-text-size="grande"] .ajuste-seccion-cabecera,
 html[data-text-size="grande"] .ajuste-seccion-cabecera * { min-width:0; white-space:normal; overflow-wrap:anywhere; }
+.tutorial-seccion-acciones { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.tutorial-seccion-acciones > .btn { min-width:0; white-space:normal; }
+.guia-seccion-flotante .guia-seccion-acciones { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; margin-top:12px; }
+.guia-seccion-flotante .guia-seccion-acciones .btn { flex:0 1 auto; min-width:96px; }
+@media(max-width:420px) { .tutorial-seccion-acciones { grid-template-columns:1fr; } .guia-seccion-flotante .guia-seccion-acciones .btn { flex:1 1 100%; } }
