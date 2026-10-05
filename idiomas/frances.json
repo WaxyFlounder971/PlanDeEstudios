@@ -1736,5 +1736,22 @@
   "Mes anterior": "Mois précédent",
   "Mes siguiente": "Mois suivant",
   "Tutorial": "Tutoriel",
-  "Anterior": "Précédent"
+  "Anterior": "Précédent",
+  "Guía": "Guide",
+  "Guía paso a paso para conocer esta sección": "Guide pas à pas de cette section",
+  "Hola, ¿cómo te llamas? Puedes cambiarlo después en Ajustes.": "Bonjour, comment vous appelez-vous ? Vous pourrez le modifier dans les paramètres.",
+  "El modo Fancy puede ser más lento según tu dispositivo.": "Le mode Fancy peut être plus lent selon votre appareil.",
+  "Saltar inicio": "Passer l’introduction",
+  "Wapper usa tu Agenda para crear y consultar pendientes.": "Wapper utilise votre Agenda pour créer et consulter vos tâches.",
+  "Guarda aquí tu clave personal de Gemini para activarlo.": "Enregistrez ici votre clé Gemini personnelle pour l’activer.",
+  "Después podrás dictar tareas, exámenes y eventos desde Asistente.": "Vous pourrez ensuite dicter des tâches, examens et événements dans Assistant.",
+  "Wapper está activo: ya hay una clave de Gemini guardada.": "Wapper est actif : une clé Gemini est déjà enregistrée.",
+  "Wapper necesita una clave personal de Gemini para funcionar.": "Wapper a besoin d’une clé Gemini personnelle pour fonctionner.",
+  "Pega tu clave personal": "Collez votre clé personnelle",
+  "Guardar y activar Wapper": "Enregistrer et activer Wapper",
+  "Continuar con la guía": "Continuer le guide",
+  "Primero agrega o importa tu plan de estudios; después podrás matricular sus materias en un semestre.": "Ajoutez ou importez d’abord votre plan d’études ; vous pourrez ensuite inscrire ses cours dans un semestre.",
+  "Para usar esta sección con tus materias, primero registra un semestre y matricúlalas.": "Pour utiliser cette section avec vos cours, créez d’abord un semestre et inscrivez-les.",
+  "Primero agrega tu plan de estudios. Después registra un semestre para conectar esta sección con tus materias.": "Ajoutez d’abord votre plan d’études. Créez ensuite un semestre pour relier cette section à vos cours.",
+  "Para activar Wapper, guarda tu clave personal de Gemini en Ajustes generales.": "Pour activer Wapper, enregistrez votre clé Gemini dans les paramètres généraux."
 }

@@ -1646,5 +1646,22 @@
   "Mes anterior": "Mes anterior",
   "Mes siguiente": "Mes siguiente",
   "Tutorial": "Tutorial",
-  "Anterior": "Anterior"
+  "Anterior": "Anterior",
+  "Guía": "Guía",
+  "Guía paso a paso para conocer esta sección": "Guía paso a paso para conocer esta sección",
+  "Hola, ¿cómo te llamas? Puedes cambiarlo después en Ajustes.": "Hola, ¿cómo te llamas? Puedes cambiarlo después en Ajustes.",
+  "El modo Fancy puede ser más lento según tu dispositivo.": "El modo Fancy puede ser más lento según tu dispositivo.",
+  "Saltar inicio": "Saltar inicio",
+  "Wapper usa tu Agenda para crear y consultar pendientes.": "Wapper usa tu Agenda para crear y consultar pendientes.",
+  "Guarda aquí tu clave personal de Gemini para activarlo.": "Guarda aquí tu clave personal de Gemini para activarlo.",
+  "Después podrás dictar tareas, exámenes y eventos desde Asistente.": "Después podrás dictar tareas, exámenes y eventos desde Asistente.",
+  "Wapper está activo: ya hay una clave de Gemini guardada.": "Wapper está activo: ya hay una clave de Gemini guardada.",
+  "Wapper necesita una clave personal de Gemini para funcionar.": "Wapper necesita una clave personal de Gemini para funcionar.",
+  "Pega tu clave personal": "Pega tu clave personal",
+  "Guardar y activar Wapper": "Guardar y activar Wapper",
+  "Continuar con la guía": "Continuar con la guía",
+  "Primero agrega o importa tu plan de estudios; después podrás matricular sus materias en un semestre.": "Primero agrega o importa tu plan de estudios; después podrás matricular sus materias en un semestre.",
+  "Para usar esta sección con tus materias, primero registra un semestre y matricúlalas.": "Para usar esta sección con tus materias, primero registra un semestre y matricúlalas.",
+  "Primero agrega tu plan de estudios. Después registra un semestre para conectar esta sección con tus materias.": "Primero agrega tu plan de estudios. Después registra un semestre para conectar esta sección con tus materias.",
+  "Para activar Wapper, guarda tu clave personal de Gemini en Ajustes generales.": "Para activar Wapper, guarda tu clave personal de Gemini en Ajustes generales."
 }

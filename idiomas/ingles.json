@@ -1865,5 +1865,22 @@
   "Mes anterior": "Previous month",
   "Mes siguiente": "Next month",
   "Tutorial": "Tutorial",
-  "Anterior": "Previous"
+  "Anterior": "Previous",
+  "Guía": "Guide",
+  "Guía paso a paso para conocer esta sección": "Step-by-step guide to this section",
+  "Hola, ¿cómo te llamas? Puedes cambiarlo después en Ajustes.": "Hi, what is your name? You can change it later in Settings.",
+  "El modo Fancy puede ser más lento según tu dispositivo.": "Fancy mode may be slower depending on your device.",
+  "Saltar inicio": "Skip intro",
+  "Wapper usa tu Agenda para crear y consultar pendientes.": "Wapper uses your Agenda to create and check tasks.",
+  "Guarda aquí tu clave personal de Gemini para activarlo.": "Save your personal Gemini key here to activate it.",
+  "Después podrás dictar tareas, exámenes y eventos desde Asistente.": "Then you can dictate tasks, exams, and events in Assistant.",
+  "Wapper está activo: ya hay una clave de Gemini guardada.": "Wapper is active: a Gemini key is already saved.",
+  "Wapper necesita una clave personal de Gemini para funcionar.": "Wapper needs a personal Gemini key to work.",
+  "Pega tu clave personal": "Paste your personal key",
+  "Guardar y activar Wapper": "Save and activate Wapper",
+  "Continuar con la guía": "Continue the guide",
+  "Primero agrega o importa tu plan de estudios; después podrás matricular sus materias en un semestre.": "First add or import your study plan; then you can enroll its courses in a semester.",
+  "Para usar esta sección con tus materias, primero registra un semestre y matricúlalas.": "To use this section with your courses, first create a semester and enroll them.",
+  "Primero agrega tu plan de estudios. Después registra un semestre para conectar esta sección con tus materias.": "First add your study plan. Then create a semester to connect this section to your courses.",
+  "Para activar Wapper, guarda tu clave personal de Gemini en Ajustes generales.": "To activate Wapper, save your personal Gemini key in General Settings."
 }

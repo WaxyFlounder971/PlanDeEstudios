@@ -18,7 +18,7 @@
     document.head.appendChild(fonts);
   }
 </script>
-<link rel="stylesheet" href="css/design-system.css?v=3.22.20">
+<link rel="stylesheet" href="css/design-system.css?v=3.22.22">
 <link rel="icon" type="image/png" href="imagenes/LogoAppFolder.png" data-app-favicon>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#2563EB">
@@ -1352,10 +1352,12 @@
       <summary style="cursor:pointer;font-weight:700;">Tipos de Agenda</summary>
       <p class="muted" style="font-size:.78rem;margin:0;">Edita nombres y colores, oculta tipos del filtro o crea etiquetas con el comportamiento de tarea, examen o evento. Las etiquetas ya usadas se conservan.</p>
       <div id="agenda-tipos-config" class="stack" style="gap:8px;"></div>
-      <div class="stack" style="gap:6px;">
-        <label class="form-label" for="agenda-tipo-nuevo-nombre">Nueva etiqueta</label>
-        <div class="row" style="gap:8px;flex-wrap:wrap;">
-          <input id="agenda-tipo-nuevo-nombre" class="form-input" maxlength="24" placeholder="Ej. Laboratorio" style="flex:1;min-width:130px;">
+      <button type="button" id="agenda-tipo-nuevo-abrir" class="btn btn-secondary agenda-tipo-nuevo-abrir" aria-label="Crear nueva etiqueta" title="Crear nueva etiqueta">+</button>
+      <div id="agenda-tipo-nuevo-form" class="stack agenda-tipo-nuevo-form oculto" style="gap:8px;">
+        <label class="form-label" for="agenda-tipo-nuevo-nombre">Nombre de la etiqueta</label>
+        <input id="agenda-tipo-nuevo-nombre" class="form-input" maxlength="24" placeholder="Ej. Laboratorio">
+        <span class="form-label">¿Cómo se debe comportar?</span>
+        <div class="row agenda-tipo-nuevo-opciones" style="gap:8px;flex-wrap:wrap;">
           <select id="agenda-tipo-nuevo-base" class="form-select oculto"><option value="tarea">Tarea</option><option value="examen">Examen</option><option value="evento">Evento</option></select>
           <div class="agenda-selector-comportamiento" id="agenda-selector-comportamiento" role="group" aria-label="Se comporta como">
             <button type="button" class="active" data-base="tarea" aria-pressed="true">Tarea</button>
