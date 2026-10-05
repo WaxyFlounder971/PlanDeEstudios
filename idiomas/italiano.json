@@ -555,7 +555,16 @@
     "Cambiar la modalidad de una clase en tu Cronograma": "Cambia la modalità di una lezione nel tuo Cronoprogramma",
     "Cambiar mi apodo": "Cambia il mio soprannome",
     "Cambio cancelado": "Modifica annullata",
+    "Tamaño de letra": "Dimensione del testo",
+    "Elige un tamaño cómodo. El contenido puede ocupar más espacio para que el texto no se corte.": "Scegli una dimensione comoda. Il contenuto può occupare più spazio per evitare che il testo venga tagliato.",
+    "Fancy puede usar más recursos en algunos dispositivos.": "La modalità Fancy può usare più risorse su alcuni dispositivi.",
     "Cambios sin sincronizar": "Modifiche non sincronizzate",
+    "⚠️ Cambios sin sincronizar": "⚠️ Modifiche non sincronizzate",
+    "⚠️ Sesión de estudio en curso": "⚠️ Sessione di studio in corso",
+    "Cerrar sesión de todas formas": "Esci comunque",
+    "Tienes cambios sin sincronizar. Se guardarán en este dispositivo y se subirán a Drive cuando vuelvas a iniciar sesión con esta misma cuenta. ¿Deseas cerrar sesión?": "Le modifiche non sincronizzate verranno salvate su questo dispositivo e caricate su Drive quando accederai di nuovo con lo stesso account. Vuoi uscire?",
+    "Tienes cambios sin sincronizar y una sesión de estudio en curso. Tus cambios se guardarán en este dispositivo y se subirán cuando vuelvas a iniciar sesión con esta misma cuenta. El tiempo seguirá corriendo. ¿Deseas cerrar sesión?": "Le modifiche non sincronizzate verranno salvate su questo dispositivo e caricate quando accederai di nuovo con lo stesso account. Il timer continuerà. Vuoi uscire?",
+    "La sesión de estudio seguirá corriendo aunque cierres sesión. El timer se basa en sus tiempos y podrás detenerlo cuando vuelvas a entrar. ¿Deseas cerrar sesión?": "La sessione di studio continuerà dopo la disconnessione. Potrai interromperla quando accederai di nuovo. Vuoi uscire?",
     "Cancelar": "Annulla",
     "Cargando horario…": "Caricamento orario…",
     "Cargando inicio de sesión…": "Caricamento accesso…",
@@ -1082,7 +1091,7 @@
     "En Safari, toca Compartir y luego Añadir a pantalla de inicio.": "In Safari, tocca Condividi e poi Aggiungi alla schermata Home.",
     "Abre el menú del navegador y elige Instalar app o Añadir a pantalla principal.": "Apri il menu del browser e scegli Installa app o Aggiungi alla schermata Home.",
     "Abre el menú del navegador y elige Instalar App Académica.": "Apri il menu del browser e scegli Installa App Académica.",
-    "Modo fancy": "Modalità fancy",
+    "Modo fancy": "Modalità Fancy",
     "Modo Hardcore 💀": "Modalità Hardcore 💀",
     "Modo Hardcore activo con más de una universidad — elegí de cuál generar el prompt:": "Modalità Hardcore attiva con più di un'università — scegli per quale generare il prompt:",
     "Modo Hardcore: puedes elegir materias de todos tus planes activos.": "Modalità Hardcore: puoi scegliere materie da tutti i tuoi piani attivi.",
@@ -1697,6 +1706,7 @@
     "Entendido": "Ho capito",
     "Siguiente": "Avanti",
     "Elegir un archivo LogoApp de Descargas": "Scegli un file LogoApp da Download",
-    "Por seguridad, el navegador solo permite leer un archivo si lo eliges aquí.": "Per la tua privacy, il browser può leggere un file solo dopo che lo scegli qui."
+    "Por seguridad, el navegador solo permite leer un archivo si lo eliges aquí.": "Per la tua privacy, il browser può leggere un file solo dopo che lo scegli qui.",
+    "Este dispositivo no pudo guardar una copia local. Mantén la conexión y espera a que aparezca «Todo sincronizado» antes de cerrar o recargar.": "Questo dispositivo non è riuscito a salvare una copia locale. Mantieni la connessione e attendi « Tutto sincronizzato » prima di uscire o ricaricare."
   }
 }

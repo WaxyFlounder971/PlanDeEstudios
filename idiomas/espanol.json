@@ -1030,7 +1030,6 @@
     "Icono de la app": "Icono de la app",
     "Lleva App Académica contigo": "Lleva App Académica contigo",
     "Puedes instalarla en tu dispositivo para abrirla como una app. Si tu navegador no ofrece instalación ahora, puedes continuar y hacerlo después.": "Puedes instalarla en tu dispositivo para abrirla como una app. Si tu navegador no ofrece instalación ahora, puedes continuar y hacerlo después.",
-    "Ahora no": "Ahora no",
     "Instalar app": "Instalar app",
     "Tu plan de estudios": "Tu plan de estudios",
     "Añadir tu carrera desbloquea matrículas, horarios y proyecciones de notas. Es muy recomendable, pero puedes hacerlo luego.": "Añadir tu carrera desbloquea matrículas, horarios y proyecciones de notas. Es muy recomendable, pero puedes hacerlo luego.",
@@ -1617,6 +1616,7 @@
     "personalizada": "personalizada",
     "Activo": "Activo",
     "Revocado": "Revocado",
-    "Semestre eliminado": "Semestre eliminado"
+    "Semestre eliminado": "Semestre eliminado",
+    "Este dispositivo no pudo guardar una copia local. Mantén la conexión y espera a que aparezca «Todo sincronizado» antes de cerrar o recargar.": "Este dispositivo no pudo guardar una copia local. Mantén la conexión y espera a que aparezca «Todo sincronizado» antes de cerrar o recargar."
   }
 }

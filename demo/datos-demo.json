@@ -10,8 +10,8 @@
     "plan_activo_id": "ucr-cp-plan5",
     "gemini_api_key": null,
     "modo_hardcore": true,
-    "navegacion_oculta": [],
-    "navegacion_orden": [],
+    "navegacion_oculta": null,
+    "navegacion_orden": null,
     "mostrar_tiempo_estudio_en_agenda": true,
     "plan_activo_secundario_id": "tec-ati-demo",
     "agenda_tipos": [
@@ -84,26 +84,22 @@
             "horaInicio": "07:00",
             "horaFin": "19:00"
           },
-          "bloques": [
-            {
-              "id": "am-b0",
-              "nombre": "Cálculo I",
-              "color": "#fb7185",
-              "universidad": {
-                "nombre_completo": "Universidad de Costa Rica",
-                "siglas": "UCR"
-              },
-              "dias": [
-                {
-                  "dia": "L",
-                  "hora_inicio": "9:00",
-                  "hora_fin": "10:50",
-                  "modalidad": "presencial",
-                  "aula": "Aula 110"
-                }
-              ]
+          "bloques": {
+            "id": "am-b0",
+            "nombre": "Cálculo I",
+            "color": "#fb7185",
+            "universidad": {
+              "nombre_completo": "Universidad de Costa Rica",
+              "siglas": "UCR"
+            },
+            "dias": {
+              "dia": "L",
+              "hora_inicio": "9:00",
+              "hora_fin": "10:50",
+              "modalidad": "presencial",
+              "aula": "Aula 110"
             }
-          ]
+          }
         }
       },
       {
@@ -125,26 +121,22 @@
             "horaInicio": "07:00",
             "horaFin": "19:00"
           },
-          "bloques": [
-            {
-              "id": "am-b1",
-              "nombre": "Bases de Datos",
-              "color": "#22c55e",
-              "universidad": {
-                "nombre_completo": "Universidad de Costa Rica",
-                "siglas": "UCR"
-              },
-              "dias": [
-                {
-                  "dia": "K",
-                  "hora_inicio": "10:00",
-                  "hora_fin": "11:50",
-                  "modalidad": "presencial",
-                  "aula": "Aula 111"
-                }
-              ]
+          "bloques": {
+            "id": "am-b1",
+            "nombre": "Bases de Datos",
+            "color": "#22c55e",
+            "universidad": {
+              "nombre_completo": "Universidad de Costa Rica",
+              "siglas": "UCR"
+            },
+            "dias": {
+              "dia": "K",
+              "hora_inicio": "10:00",
+              "hora_fin": "11:50",
+              "modalidad": "presencial",
+              "aula": "Aula 111"
             }
-          ]
+          }
         }
       },
       {
@@ -166,26 +158,22 @@
             "horaInicio": "07:00",
             "horaFin": "19:00"
           },
-          "bloques": [
-            {
-              "id": "am-b2",
-              "nombre": "Diseño de Sistemas",
-              "color": "#fbbf24",
-              "universidad": {
-                "nombre_completo": "Universidad de Costa Rica",
-                "siglas": "UCR"
-              },
-              "dias": [
-                {
-                  "dia": "M",
-                  "hora_inicio": "11:00",
-                  "hora_fin": "12:50",
-                  "modalidad": "presencial",
-                  "aula": "Aula 112"
-                }
-              ]
+          "bloques": {
+            "id": "am-b2",
+            "nombre": "Diseño de Sistemas",
+            "color": "#fbbf24",
+            "universidad": {
+              "nombre_completo": "Universidad de Costa Rica",
+              "siglas": "UCR"
+            },
+            "dias": {
+              "dia": "M",
+              "hora_inicio": "11:00",
+              "hora_fin": "12:50",
+              "modalidad": "presencial",
+              "aula": "Aula 112"
             }
-          ]
+          }
         }
       }
     ],
@@ -232,8 +220,8 @@
       "id": "ucr-cp-plan5",
       "nombre_carrera": "Bachillerato y Licenciatura en Ciencias Políticas",
       "universidad": {
-        "nombre_completo": "Universidad de Costa Rica",
-        "siglas": "UCR"
+        "siglas": "UCR",
+        "nombre_completo": "Universidad de Costa Rica"
       },
       "codigo_plan": "340301 · Plan 5",
       "tipo_titulo": "Bachillerato y Licenciatura",
@@ -267,288 +255,2646 @@
       ],
       "materias": [
         {
-          "id": "CP1501",
-          "codigo": "CP-1501",
-          "nombre": "Epistemología y Lógica del Pensamiento para Ciencia Política",
-          "creditos": 3,
           "horas": {
-            "Teoría": 3,
-            "Práctica": 0,
-            "Laboratorio": 0,
-            "Teoría-Práctica": 0
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
           },
+          "codigo": "EG-I",
           "bloque": 1,
-          "requisitos": null,
-          "correquisitos": null,
-          "categoria_id": "cat-obligatorias",
-          "estado": "aprobado",
+          "creditos": 6.0,
+          "sin_definir": false,
           "es_optativa": false,
-          "sin_definir": false
-        },
-        {
-          "id": "CP1504",
-          "codigo": "CP-1504",
-          "nombre": "El Poder desde la Ciencia Política",
-          "creditos": 3,
-          "horas": {
-            "Teoría": 3,
-            "Práctica": 0,
-            "Laboratorio": 0,
-            "Teoría-Práctica": 0
-          },
-          "bloque": 1,
-          "estado": "aprobado",
-          "categoria_id": "cat-obligatorias"
-        },
-        {
-          "id": "CP1502",
-          "codigo": "CP-1502",
-          "nombre": "Instituciones Públicas y Comunidad Política en Costa Rica",
-          "creditos": 3,
-          "horas": {
-            "Teoría": 3,
-            "Práctica": 0,
-            "Laboratorio": 0,
-            "Teoría-Práctica": 0
-          },
-          "bloque": 2,
-          "requisitos": {
-            "tipo": "codigo",
-            "valor": "CP-1504"
-          },
-          "estado": "aprobado",
-          "categoria_id": "cat-obligatorias"
-        },
-        {
-          "id": "CP1503",
-          "codigo": "CP-1503",
-          "nombre": "Introducción al Diseño de Investigación",
-          "creditos": 3,
-          "horas": {
-            "Teoría": 0,
-            "Práctica": 0,
-            "Laboratorio": 0,
-            "Teoría-Práctica": 3
-          },
-          "bloque": 2,
-          "requisitos": {
-            "tipo": "codigo",
-            "valor": "CP-1501"
-          },
-          "estado": "aprobado",
-          "categoria_id": "cat-obligatorias"
-        },
-        {
-          "id": "CP2001",
-          "codigo": "CP-2001",
-          "nombre": "Estado y Gestión Pública",
-          "creditos": 3,
-          "horas": {
-            "Teoría": 3,
-            "Práctica": 0,
-            "Laboratorio": 0,
-            "Teoría-Práctica": 0
-          },
-          "bloque": 3,
-          "estado": "aprobado",
-          "categoria_id": "cat-obligatorias"
-        },
-        {
-          "id": "CP2002",
-          "codigo": "CP-2002",
-          "nombre": "Aspectos Políticos de la Macroeconomía",
-          "creditos": 3,
-          "horas": {
-            "Teoría": 3,
-            "Práctica": 0,
-            "Laboratorio": 0,
-            "Teoría-Práctica": 0
-          },
-          "bloque": 3,
-          "estado": "aprobado",
-          "categoria_id": "cat-obligatorias"
-        },
-        {
-          "id": "CP2003",
-          "codigo": "CP-2003",
-          "nombre": "Aspectos Políticos del Derecho Constitucional",
-          "creditos": 3,
-          "horas": {
-            "Teoría": 3,
-            "Práctica": 0,
-            "Laboratorio": 0,
-            "Teoría-Práctica": 0
-          },
-          "bloque": 3,
-          "estado": "aprobado",
-          "categoria_id": "cat-obligatorias"
-        },
-        {
-          "id": "CP2004",
-          "codigo": "CP-2004",
-          "nombre": "Análisis Político Cuantitativo I",
-          "creditos": 3,
-          "horas": {
-            "Teoría": 0,
-            "Práctica": 0,
-            "Laboratorio": 0,
-            "Teoría-Práctica": 3
-          },
-          "bloque": 3,
-          "estado": "cursando",
-          "categoria_id": "cat-obligatorias"
-        },
-        {
-          "id": "CP2005",
-          "codigo": "CP-2005",
-          "nombre": "Ideas Políticas y sus Alcances I",
-          "creditos": 3,
-          "horas": {
-            "Teoría": 3,
-            "Práctica": 0,
-            "Laboratorio": 0,
-            "Teoría-Práctica": 0
-          },
-          "bloque": 3,
-          "estado": "cursando",
-          "categoria_id": "cat-obligatorias"
-        },
-        {
-          "id": "CP2006",
-          "codigo": "CP-2006",
-          "nombre": "Teoría Política Contemporánea",
-          "creditos": 3,
-          "horas": {
-            "Teoría": 3,
-            "Práctica": 0,
-            "Laboratorio": 0,
-            "Teoría-Práctica": 0
-          },
-          "bloque": 4,
           "estado": "pendiente",
-          "categoria_id": "cat-obligatorias"
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Curso Integrado De Humanidades I",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-egi-b1"
         },
         {
-          "id": "CP2007",
-          "codigo": "CP-2007",
-          "nombre": "Investigación con Enfoque Cuantitativo II",
-          "creditos": 3,
           "horas": {
-            "Teoría": 0,
-            "Práctica": 0,
-            "Laboratorio": 0,
-            "Teoría-Práctica": 3
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
           },
-          "bloque": 4,
-          "estado": "pendiente",
-          "categoria_id": "cat-obligatorias"
-        },
-        {
-          "id": "CP3001",
-          "codigo": "CP-3001",
-          "nombre": "Investigación con Enfoque Cualitativo I",
-          "creditos": 3,
-          "horas": {
-            "Teoría": 0,
-            "Práctica": 0,
-            "Laboratorio": 0,
-            "Teoría-Práctica": 3
-          },
-          "bloque": 5,
-          "estado": "pendiente",
-          "categoria_id": "cat-obligatorias"
-        },
-        {
-          "id": "CP3002",
-          "codigo": "CP-3002",
-          "nombre": "Cultura Política",
-          "creditos": 3,
-          "horas": {
-            "Teoría": 3,
-            "Práctica": 0,
-            "Laboratorio": 0,
-            "Teoría-Práctica": 0
-          },
-          "bloque": 5,
-          "estado": "pendiente",
-          "categoria_id": "cat-obligatorias"
-        },
-        {
-          "id": "CP3003",
-          "codigo": "CP-3003",
-          "nombre": "Economía Política Global y Desarrollo",
-          "creditos": 3,
-          "horas": {
-            "Teoría": 3,
-            "Práctica": 0,
-            "Laboratorio": 0,
-            "Teoría-Práctica": 0
-          },
-          "bloque": 5,
-          "estado": "pendiente",
-          "categoria_id": "cat-obligatorias"
-        },
-        {
-          "id": "OPT-ID-1",
           "codigo": "OPT-",
-          "nombre": "Curso Optativo de Idioma · Francés I",
-          "creditos": 4,
-          "horas": {
-            "Teoría": 3,
-            "Práctica": 1,
-            "Laboratorio": 0,
-            "Teoría-Práctica": 0
-          },
           "bloque": 1,
+          "creditos": 4.0,
+          "sin_definir": true,
+          "es_optativa": false,
           "estado": "pendiente",
-          "es_optativa": true,
-          "categoria_id": "cat-optativas"
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Curso Optativo De Idioma",
+          "categoria_id": "cat-obligatorias",
+          "id": "OPT-ID-1"
         },
         {
-          "id": "OPT1019-A",
-          "codigo": "OPT1019",
-          "nombre": "Grupo Optativo Interdisciplinario: Gobernanza y Territorio",
-          "creditos": 3,
           "horas": {
-            "Teoría": 2,
-            "Práctica": 1,
-            "Laboratorio": 0,
-            "Teoría-Práctica": 0
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
           },
+          "codigo": "EF-",
+          "bloque": 1,
+          "creditos": 0.0,
+          "sin_definir": true,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Actividad Deportiva",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-ef-b1"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-1504",
+          "bloque": 1,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "aprobado",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "El Poder Desde La Ciencia Política",
+          "categoria_id": "cat-obligatorias",
+          "id": "CP1504"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-1501",
+          "bloque": 1,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "aprobado",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Epistemología Y Lógica Del Pensamiento Para Ciencia Política",
+          "categoria_id": "cat-obligatorias",
+          "id": "CP1501"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "EG-II",
+          "bloque": 2,
+          "creditos": 6.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "EG-I",
+            "tipo": "codigo"
+          },
+          "nombre": "Curso Integrado De Humanidades Ii",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-egii-b2"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "OPT-",
+          "bloque": 2,
+          "creditos": 4.0,
+          "sin_definir": true,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Curso Optativo De Idioma",
+          "categoria_id": "cat-obligatorias",
+          "id": "OPT-ID-2"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-1502",
+          "bloque": 2,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "aprobado",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-1504",
+            "tipo": "codigo"
+          },
+          "nombre": "Instituciones Públicas Y Comunidad Política En Costa Rica",
+          "categoria_id": "cat-obligatorias",
+          "id": "CP1502"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 3.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-1503",
+          "bloque": 2,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "aprobado",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-1501",
+            "tipo": "codigo"
+          },
+          "nombre": "Introducción Al Diseño De Investigación",
+          "categoria_id": "cat-obligatorias",
+          "id": "CP1503"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "SR-I",
+          "bloque": 3,
+          "creditos": 2.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "EG-II",
+            "tipo": "codigo"
+          },
+          "nombre": "Seminario De Realidad Nacional I",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-sri-b3"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-2001",
+          "bloque": 3,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "aprobado",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-1502",
+            "tipo": "codigo"
+          },
+          "nombre": "Estado Y Gestión Pública",
+          "categoria_id": "cat-obligatorias",
+          "id": "CP2001"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-2002",
+          "bloque": 3,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "aprobado",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-1502",
+            "tipo": "codigo"
+          },
+          "nombre": "Aspectos Políticos De La Macroeconomía",
+          "categoria_id": "cat-obligatorias",
+          "id": "CP2002"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-2003",
+          "bloque": 3,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "aprobado",
+          "correquisitos": {
+            "valor": "CP-2001",
+            "tipo": "codigo"
+          },
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-1502",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-1503",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Aspectos Políticos Del Derecho Constitucional",
+          "categoria_id": "cat-obligatorias",
+          "id": "CP2003"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 3.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-2004",
+          "bloque": 3,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "cursando",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-1503",
+            "tipo": "codigo"
+          },
+          "nombre": "Análisis Político Cuantitativo I",
+          "categoria_id": "cat-obligatorias",
+          "id": "CP2004"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-2005",
+          "bloque": 3,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "cursando",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-1502",
+            "tipo": "codigo"
+          },
+          "nombre": "Ideas Políticas Y Sus Alcances I",
+          "categoria_id": "cat-obligatorias",
+          "id": "CP2005"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "SR-II",
+          "bloque": 4,
+          "creditos": 2.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "SR-I",
+            "tipo": "codigo"
+          },
+          "nombre": "Seminario De Realidad Nacional Ii",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-srii-b4"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-2006",
+          "bloque": 4,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2001",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2003",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Representación, Procesos Electorales Y Partidos Políticos",
+          "categoria_id": "cat-obligatorias",
+          "id": "CP2006"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 3.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-2007",
+          "bloque": 4,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-2004",
+            "tipo": "codigo"
+          },
+          "nombre": "Análisis Político Cuantitativo Ii",
+          "categoria_id": "cat-obligatorias",
+          "id": "CP2007"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-2008",
+          "bloque": 4,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-2005",
+            "tipo": "codigo"
+          },
+          "nombre": "Ideas Políticas Y Sus Alcances Ii",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp2008-b4"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-2009",
+          "bloque": 4,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-2002",
+            "tipo": "codigo"
+          },
+          "nombre": "Teorías Y Problemas De La Política Internacional",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp2009-b4"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-2010",
+          "bloque": 4,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2001",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2002",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2003",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Políticas Públicas",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp2010-b4"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "EG-",
           "bloque": 5,
+          "creditos": 2.0,
+          "sin_definir": true,
+          "es_optativa": false,
           "estado": "pendiente",
-          "es_optativa": true,
-          "categoria_id": "cat-optativas"
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Curso De Arte",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-eg-b5"
         },
         {
-          "id": "CP-LARGO",
-          "codigo": "CP-9999",
-          "nombre": "Seminario Integrador sobre Instituciones, Participación Ciudadana, Democracia Local y Políticas Públicas en Contextos de Transformación Social",
-          "creditos": 3,
           "horas": {
-            "Teoría": 2,
-            "Práctica": 1,
-            "Laboratorio": 0,
-            "Teoría-Práctica": 0
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
           },
-          "bloque": 8,
+          "codigo": "RP-",
+          "bloque": 5,
+          "creditos": 3.0,
+          "sin_definir": true,
+          "es_optativa": false,
           "estado": "pendiente",
-          "es_optativa": true,
-          "categoria_id": "cat-optativas"
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Repertorio",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-rp-b5"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "OPT-",
+          "bloque": 5,
+          "creditos": 3.0,
+          "sin_definir": true,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Curso Optativo Interdisciplinario",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-opt-b5"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 3.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-3001",
+          "bloque": 5,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-2007",
+            "tipo": "codigo"
+          },
+          "nombre": "Investigación Con Enfoque Cualitativo I",
+          "categoria_id": "cat-obligatorias",
+          "id": "CP3001"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-3002",
+          "bloque": 5,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-2008",
+            "tipo": "codigo"
+          },
+          "nombre": "Cultura Política",
+          "categoria_id": "cat-obligatorias",
+          "id": "CP3002"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-3003",
+          "bloque": 5,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-2009",
+            "tipo": "codigo"
+          },
+          "nombre": "Economía Política Global Y Desarrollo",
+          "categoria_id": "cat-obligatorias",
+          "id": "CP3003"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "OPT-",
+          "bloque": 6,
+          "creditos": 3.0,
+          "sin_definir": true,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Curso Optativo Interdisciplinario",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-opt-b6"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 3.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-3004",
+          "bloque": 6,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-3001",
+            "tipo": "codigo"
+          },
+          "nombre": "Investigación Con Enfoque Cualitativo Ii",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp3004-b6"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-3005",
+          "bloque": 6,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-3002",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-3003",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Ideologías Políticas En América Latina Y Costa Rica",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp3005-b6"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-3006",
+          "bloque": 6,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-3002",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Sistemas Políticos Y Acciones Colectivas",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp3006-b6"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-3007",
+          "bloque": 6,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-3003",
+            "tipo": "codigo"
+          },
+          "nombre": "Centroamérica Y El Caribe En La Geopolítica",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp3007-b6"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 3.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-3008",
+          "bloque": 6,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-3003",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Toma De Decisiones Y Asuntos Públicos",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp3008-b6"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "OPT-",
+          "bloque": 7,
+          "creditos": 3.0,
+          "sin_definir": true,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Curso Optativo Interdisciplinario",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-opt-b7"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 3.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-4000",
+          "bloque": 7,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-3004",
+            "tipo": "codigo"
+          },
+          "nombre": "Método Comparado",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp4000-b7"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-4001",
+          "bloque": 7,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-3005",
+            "tipo": "codigo"
+          },
+          "nombre": "Teoría Política Contemporánea I",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp4001-b7"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-4002",
+          "bloque": 7,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-3007",
+            "tipo": "codigo"
+          },
+          "nombre": "Política Exterior En Las Américas Y El Caribe",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp4002-b7"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 3.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-4003",
+          "bloque": 7,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-3008",
+            "tipo": "codigo"
+          },
+          "nombre": "Negociación Y Manejo De Conflictos Sociopolíticos",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp4003-b7"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-4004",
+          "bloque": 7,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-3004",
+            "tipo": "codigo"
+          },
+          "nombre": "Estudios De Opinión Y Opinión Pública",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp4004-b7"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "OPT-",
+          "bloque": 8,
+          "creditos": 3.0,
+          "sin_definir": true,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Curso Optativo Interdisciplinario",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-opt-b8"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-4005",
+          "bloque": 8,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-4001",
+            "tipo": "codigo"
+          },
+          "nombre": "Teoría Política Contemporánea Ii",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp4005-b8"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-4006",
+          "bloque": 8,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-4004",
+            "tipo": "codigo"
+          },
+          "nombre": "Comunicación Política",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp4006-b8"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 18.0
+          },
+          "codigo": "CP-4007",
+          "bloque": 8,
+          "creditos": 6.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-4000",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-4001",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-4002",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-4003",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-4004",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Práctica Profesional",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp4007-b8"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-4008",
+          "bloque": 8,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-3008",
+            "tipo": "codigo"
+          },
+          "nombre": "Aspectos Políticos Del Derecho Administrativo",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp4008-b8"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "OPT-",
+          "bloque": 9,
+          "creditos": 3.0,
+          "sin_definir": true,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Curso Optativo Interdisciplinario",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-opt-b9"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 4.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-5000",
+          "bloque": 9,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-4007",
+            "tipo": "codigo"
+          },
+          "nombre": "Taller De Investigación I",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp5000-b9"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 4.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-5001",
+          "bloque": 9,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-4007",
+            "tipo": "codigo"
+          },
+          "nombre": "Seminario De Autores",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp5001-b9"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 4.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-5002",
+          "bloque": 9,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-4007",
+            "tipo": "codigo"
+          },
+          "nombre": "Seminario Poder Y Conocimiento En La Ciencia Política",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp5002-b9"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "OPT-",
+          "bloque": 10,
+          "creditos": 3.0,
+          "sin_definir": true,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Curso Optativo Interdisciplinario",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-opt-b10"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 4.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-5003",
+          "bloque": 10,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-5000",
+            "tipo": "codigo"
+          },
+          "nombre": "Taller De Investigación Ii",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp5003-b10"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 4.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-5004",
+          "bloque": 10,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-5001",
+            "tipo": "codigo"
+          },
+          "nombre": "Taller Teorías Y Autores En La Investigación Politológica",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp5004-b10"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 3.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-5005",
+          "bloque": 10,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": false,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "CP-5002",
+            "tipo": "codigo"
+          },
+          "nombre": "Seminario De Asuntos Públicos",
+          "categoria_id": "cat-obligatorias",
+          "id": "demo-cp-cp5005-b10"
         }
       ],
       "optativas_disponibles": [
         {
-          "id": "OPT-ID-2",
-          "codigo": "OPT-",
-          "nombre": "Curso Optativo de Idioma · Italiano I",
-          "creditos": 4,
-          "bloque": 2,
-          "estado": "pendiente",
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-6000",
+          "bloque": null,
+          "creditos": 3.0,
+          "sin_definir": false,
           "es_optativa": true,
-          "sin_definir": true
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2007",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2008",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2009",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Participación Y Movimientos Sociales Contemporáneos",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-cp6000-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-6001",
+          "bloque": null,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2007",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2008",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2009",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Construcción De Ciudadanías En Costa Rica Y Centroamérica",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-cp6001-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-6002",
+          "bloque": null,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2007",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2008",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2009",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Tensiones En El Reconocimiento Y Ejercicio De Los Derechos Humanos",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-cp6002-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-6003",
+          "bloque": null,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2007",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2008",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2009",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "El Desarrollo A Debate",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-cp6003-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-6004",
+          "bloque": null,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2007",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2008",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2009",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Desigualdad Y Exclusión En Costa Rica Y Centroamérica",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-cp6004-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-6005",
+          "bloque": null,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2007",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2008",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2009",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Género Y Equidad",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-cp6005-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-6006",
+          "bloque": null,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2007",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2008",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2009",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Dinámicas Sociales Y Transnacionalismo",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-cp6006-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-6007",
+          "bloque": null,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2007",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2008",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2009",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Estado Y Territorialidad En Costa Rica Y Centroamérica",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-cp6007-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-6008",
+          "bloque": null,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2007",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2008",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2009",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Imaginarios E Identidades Nacionales",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-cp6008-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-6009",
+          "bloque": null,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2007",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2008",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2009",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Política Ambiental En Costa Rica Y Centroamérica",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-cp6009-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-6010",
+          "bloque": null,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2007",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2008",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2009",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Política, Cambio Climático Y Desarrollo",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-cp6010-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-6011",
+          "bloque": null,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2007",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2008",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2009",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Pensamiento Político Verde",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-cp6011-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-6012",
+          "bloque": null,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2007",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2008",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2009",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Gobernanza: Entre Lo Público Y Lo Privado",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-cp6012-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-6013",
+          "bloque": null,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2007",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2008",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2009",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Órganos Públicos Y Organizaciones Públicas",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-cp6013-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-6014",
+          "bloque": null,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2007",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2008",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2009",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Economía Política De Los Servicios Públicos",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-cp6014-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-6015",
+          "bloque": null,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2007",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2008",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2009",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Procesos Parlamentarios",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-cp6015-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 3.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-6016",
+          "bloque": null,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2007",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2008",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2009",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Métodos Alternativos De Investigación Cualitativa",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-cp6016-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 3.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-6017",
+          "bloque": null,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2007",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2008",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2009",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Profundización En Herramientas De Investigación Cuantitativa",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-cp6017-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 3.0
+          },
+          "codigo": "ND-0006",
+          "bloque": null,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Disputas Territoriales Y Socio-Ambientales En Costa Rica: El Caso De Los Monocultivos",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-nd0006-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-0121",
+          "bloque": null,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2007",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2008",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2009",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Teorías, Temas Y Tendencias De Las Ciencias Políticas Y Disciplinas Relacionadas",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-cp0121-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "CP-6018",
+          "bloque": null,
+          "creditos": 3.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "CP-2006",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2007",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2008",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2009",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "CP-2010",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Gobiernos Locales En Costa Rica En Perspectiva Comparada",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-cp6018-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 4.0,
+            "Práctica": 0.0
+          },
+          "codigo": "ND-0007",
+          "bloque": null,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Economía Social Y Solidaria",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-nd0007-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 6.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-1030",
+          "bloque": null,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Estrategias De Lectura En Inglés I (Para Otras Carreras)",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm1030-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 6.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-1032",
+          "bloque": null,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "LM-1030",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "LM-1004",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "O"
+          },
+          "nombre": "Estrategias De Lectura En Inglés Ii (Para Otras Carreras)",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm1032-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-2003",
+          "bloque": null,
+          "creditos": 2.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Francés Básico I",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm2003-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-2004",
+          "bloque": null,
+          "creditos": 2.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "LM-2003",
+            "tipo": "codigo"
+          },
+          "nombre": "Francés Básico Ii",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm2004-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 6.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-2030",
+          "bloque": null,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Comprensión De Lectura En Francés I",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm2030-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 6.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-2032",
+          "bloque": null,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "LM-2004",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "LM-2030",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "O"
+          },
+          "nombre": "Comprensión De Lectura En Francés Ii",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm2032-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-3001",
+          "bloque": null,
+          "creditos": 2.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Alemán Básico I",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm3001-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-3002",
+          "bloque": null,
+          "creditos": 2.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "LM-3001",
+            "tipo": "codigo"
+          },
+          "nombre": "Alemán Básico Ii",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm3002-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 6.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-3030",
+          "bloque": null,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Alemán Intensivo I",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm3030-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 6.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-3032",
+          "bloque": null,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "LM-3030",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "LM-3002",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "O"
+          },
+          "nombre": "Alemán Intensivo Ii",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm3032-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-4001",
+          "bloque": null,
+          "creditos": 2.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Italiano Básico I",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm4001-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-4002",
+          "bloque": null,
+          "creditos": 2.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "LM-4001",
+            "tipo": "codigo"
+          },
+          "nombre": "Italiano Básico Ii",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm4002-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-5001",
+          "bloque": null,
+          "creditos": 2.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Portugués Básico I",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm5001-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-5002",
+          "bloque": null,
+          "creditos": 2.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "LM-5001",
+            "tipo": "codigo"
+          },
+          "nombre": "Portugués Básico Ii",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm5002-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 6.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-5030",
+          "bloque": null,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Portugués Intensivo I",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm5030-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 6.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-5032",
+          "bloque": null,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "hijos": [
+                  {
+                    "valor": "LM-5001",
+                    "tipo": "codigo"
+                  },
+                  {
+                    "valor": "LM-5030",
+                    "tipo": "codigo"
+                  }
+                ],
+                "tipo": "O"
+              },
+              {
+                "hijos": [
+                  {
+                    "valor": "LM-5002",
+                    "tipo": "codigo"
+                  },
+                  {
+                    "valor": "LM-5030",
+                    "tipo": "codigo"
+                  }
+                ],
+                "tipo": "O"
+              }
+            ],
+            "tipo": "Y"
+          },
+          "nombre": "Portugués Intensivo Ii",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm5032-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 6.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-6030",
+          "bloque": null,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Chino Intensivo I",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm6030-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 6.0,
+            "Laboratorio": 0.0,
+            "Teoría": 0.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-6032",
+          "bloque": null,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "hijos": [
+              {
+                "valor": "LM-6002",
+                "tipo": "codigo"
+              },
+              {
+                "valor": "LM-6030",
+                "tipo": "codigo"
+              }
+            ],
+            "tipo": "O"
+          },
+          "nombre": "Chino Intensivo Ii",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm6032-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 6.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-7030",
+          "bloque": null,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Japonés Intensivo I",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm7030-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 6.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-7032",
+          "bloque": null,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "LM-7030",
+            "tipo": "codigo"
+          },
+          "nombre": "Japonés Intensivo Ii",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm7032-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 6.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-7037",
+          "bloque": null,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Coreano Intensivo I",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm7037-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 6.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-7039",
+          "bloque": null,
+          "creditos": 4.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "LM-7037",
+            "tipo": "codigo"
+          },
+          "nombre": "Coreano Intensivo Ii",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm7039-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-8001",
+          "bloque": null,
+          "creditos": 2.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": null,
+          "nombre": "Ruso Básico I",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm8001-opt"
+        },
+        {
+          "horas": {
+            "Teoría-Práctica": 0.0,
+            "Laboratorio": 0.0,
+            "Teoría": 3.0,
+            "Práctica": 0.0
+          },
+          "codigo": "LM-8002",
+          "bloque": null,
+          "creditos": 2.0,
+          "sin_definir": false,
+          "es_optativa": true,
+          "estado": "pendiente",
+          "correquisitos": null,
+          "requisitos": {
+            "valor": "LM-8001",
+            "tipo": "codigo"
+          },
+          "nombre": "Ruso Básico Ii",
+          "categoria_id": "cat-optativas",
+          "id": "demo-cp-lm8002-opt"
         }
-      ]
+      ],
+      "materias_revisar": null
     },
     {
       "id": "tec-ati-demo",
@@ -568,9 +2914,7 @@
         "horario_duracion_bloque_min": 50,
         "nota_aprobacion": 70,
         "redondeo_activo": true,
-        "tipos_horas": [
-          "Horas"
-        ]
+        "tipos_horas": "Horas"
       },
       "categorias": [
         {
@@ -1996,16 +4340,14 @@
           "cupo_generico_original": null
         }
       ],
-      "optativas_disponibles": [],
-      "materias_revisar": []
+      "optativas_disponibles": null,
+      "materias_revisar": null
     }
   ],
   "semestres": [
     {
       "id": "sem-demo-anterior",
-      "plan_estudio_id": [
-        "ucr-cp-plan5"
-      ],
+      "plan_estudio_id": "ucr-cp-plan5",
       "nombre": "I Ciclo 2026",
       "fecha_inicio": "2026-03-09",
       "duracion_semanas": 16,
@@ -2026,7 +4368,7 @@
               "valor_total": 40,
               "orden": 0,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp1501-1-1",
@@ -2063,7 +4405,7 @@
               "valor_total": 35,
               "orden": 1,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp1501-2-1",
@@ -2100,7 +4442,7 @@
               "valor_total": 25,
               "orden": 2,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp1501-3-1",
@@ -2132,9 +4474,7 @@
               ]
             }
           ],
-          "profesor_ids": [
-            "prof-ines"
-          ],
+          "profesor_ids": "prof-ines",
           "tiempo_estudio": {
             "meta_horas_semana": null,
             "pomodoro": null,
@@ -2157,7 +4497,7 @@
               "valor_total": 40,
               "orden": 0,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp1504-1-1",
@@ -2194,7 +4534,7 @@
               "valor_total": 35,
               "orden": 1,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp1504-2-1",
@@ -2231,7 +4571,7 @@
               "valor_total": 25,
               "orden": 2,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp1504-3-1",
@@ -2263,9 +4603,7 @@
               ]
             }
           ],
-          "profesor_ids": [
-            "prof-marcos"
-          ],
+          "profesor_ids": "prof-marcos",
           "tiempo_estudio": {
             "meta_horas_semana": null,
             "pomodoro": null,
@@ -2288,7 +4626,7 @@
               "valor_total": 40,
               "orden": 0,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp1502-1-1",
@@ -2325,7 +4663,7 @@
               "valor_total": 35,
               "orden": 1,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp1502-2-1",
@@ -2362,7 +4700,7 @@
               "valor_total": 25,
               "orden": 2,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp1502-3-1",
@@ -2394,9 +4732,7 @@
               ]
             }
           ],
-          "profesor_ids": [
-            "prof-ines"
-          ],
+          "profesor_ids": "prof-ines",
           "tiempo_estudio": {
             "meta_horas_semana": null,
             "pomodoro": null,
@@ -2419,7 +4755,7 @@
               "valor_total": 40,
               "orden": 0,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp1503-1-1",
@@ -2456,7 +4792,7 @@
               "valor_total": 35,
               "orden": 1,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp1503-2-1",
@@ -2493,7 +4829,7 @@
               "valor_total": 25,
               "orden": 2,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp1503-3-1",
@@ -2525,9 +4861,7 @@
               ]
             }
           ],
-          "profesor_ids": [
-            "prof-elena"
-          ],
+          "profesor_ids": "prof-elena",
           "tiempo_estudio": {
             "meta_horas_semana": null,
             "pomodoro": null,
@@ -2550,7 +4884,7 @@
               "valor_total": 40,
               "orden": 0,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-optid-1-1",
@@ -2587,7 +4921,7 @@
               "valor_total": 30,
               "orden": 1,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-optid-2-1",
@@ -2624,7 +4958,7 @@
               "valor_total": 30,
               "orden": 2,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-optid-3-1",
@@ -2656,9 +4990,7 @@
               ]
             }
           ],
-          "profesor_ids": [
-            "prof-marcos"
-          ],
+          "profesor_ids": "prof-marcos",
           "tiempo_estudio": {
             "meta_horas_semana": null,
             "pomodoro": null,
@@ -2681,7 +5013,7 @@
               "valor_total": 40,
               "orden": 0,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp2006-1-1",
@@ -2718,7 +5050,7 @@
               "valor_total": 35,
               "orden": 1,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp2006-2-1",
@@ -2755,7 +5087,7 @@
               "valor_total": 25,
               "orden": 2,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp2006-3-1",
@@ -2787,9 +5119,7 @@
               ]
             }
           ],
-          "profesor_ids": [
-            "prof-ines"
-          ],
+          "profesor_ids": "prof-ines",
           "tiempo_estudio": {
             "meta_horas_semana": null,
             "pomodoro": null,
@@ -2812,7 +5142,7 @@
               "valor_total": 45,
               "orden": 0,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp2007-1-1",
@@ -2849,7 +5179,7 @@
               "valor_total": 25,
               "orden": 1,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp2007-2-1",
@@ -2886,7 +5216,7 @@
               "valor_total": 30,
               "orden": 2,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp2007-3-1",
@@ -2918,9 +5248,7 @@
               ]
             }
           ],
-          "profesor_ids": [
-            "prof-ines"
-          ],
+          "profesor_ids": "prof-ines",
           "tiempo_estudio": {
             "meta_horas_semana": null,
             "pomodoro": null,
@@ -2943,7 +5271,7 @@
               "valor_total": 40,
               "orden": 0,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp3001-1-1",
@@ -2980,7 +5308,7 @@
               "valor_total": 35,
               "orden": 1,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp3001-2-1",
@@ -3017,7 +5345,7 @@
               "valor_total": 25,
               "orden": 2,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp3001-3-1",
@@ -3049,9 +5377,7 @@
               ]
             }
           ],
-          "profesor_ids": [
-            "prof-ines"
-          ],
+          "profesor_ids": "prof-ines",
           "tiempo_estudio": {
             "meta_horas_semana": null,
             "pomodoro": null,
@@ -3074,7 +5400,7 @@
               "valor_total": 40,
               "orden": 0,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp3002-1-1",
@@ -3111,7 +5437,7 @@
               "valor_total": 35,
               "orden": 1,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp3002-2-1",
@@ -3148,7 +5474,7 @@
               "valor_total": 25,
               "orden": 2,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp3002-3-1",
@@ -3180,9 +5506,7 @@
               ]
             }
           ],
-          "profesor_ids": [
-            "prof-ines"
-          ],
+          "profesor_ids": "prof-ines",
           "tiempo_estudio": {
             "meta_horas_semana": null,
             "pomodoro": null,
@@ -3205,7 +5529,7 @@
               "valor_total": 40,
               "orden": 0,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp3003-1-1",
@@ -3242,7 +5566,7 @@
               "valor_total": 35,
               "orden": 1,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp3003-2-1",
@@ -3279,7 +5603,7 @@
               "valor_total": 25,
               "orden": 2,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-cp3003-3-1",
@@ -3311,9 +5635,7 @@
               ]
             }
           ],
-          "profesor_ids": [
-            "prof-ines"
-          ],
+          "profesor_ids": "prof-ines",
           "tiempo_estudio": {
             "meta_horas_semana": null,
             "pomodoro": null,
@@ -3322,7 +5644,7 @@
           }
         }
       ],
-      "bloques_horario": []
+      "bloques_horario": null
     },
     {
       "id": "sem-demo-actual",
@@ -3386,7 +5708,7 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             },
             {
               "id": "demo-crit-mm-cp2001-2",
@@ -3432,7 +5754,7 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             },
             {
               "id": "demo-crit-mm-cp2001-3",
@@ -3478,12 +5800,10 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             }
           ],
-          "profesor_ids": [
-            "prof-cp1"
-          ],
+          "profesor_ids": "prof-cp1",
           "tiempo_estudio": {
             "meta_horas_semana": 4,
             "pomodoro": null,
@@ -3548,7 +5868,7 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             },
             {
               "id": "demo-crit-mm-cp2002-2",
@@ -3594,7 +5914,7 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             },
             {
               "id": "demo-crit-mm-cp2002-3",
@@ -3640,12 +5960,10 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             }
           ],
-          "profesor_ids": [
-            "prof-cp2"
-          ],
+          "profesor_ids": "prof-cp2",
           "tiempo_estudio": {
             "meta_horas_semana": 5,
             "pomodoro": null,
@@ -3710,7 +6028,7 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             },
             {
               "id": "demo-crit-mm-cp2003-2",
@@ -3756,7 +6074,7 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             },
             {
               "id": "demo-crit-mm-cp2003-3",
@@ -3802,12 +6120,10 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             }
           ],
-          "profesor_ids": [
-            "prof-cp3"
-          ],
+          "profesor_ids": "prof-cp3",
           "tiempo_estudio": {
             "meta_horas_semana": 6,
             "pomodoro": null,
@@ -3872,7 +6188,7 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             },
             {
               "id": "demo-crit-mm-cp2004-2",
@@ -3918,7 +6234,7 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             },
             {
               "id": "demo-crit-mm-cp2004-3",
@@ -3964,12 +6280,10 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             }
           ],
-          "profesor_ids": [
-            "prof-cp4"
-          ],
+          "profesor_ids": "prof-cp4",
           "tiempo_estudio": {
             "meta_horas_semana": 4,
             "pomodoro": null,
@@ -4034,7 +6348,7 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             },
             {
               "id": "demo-crit-mm-cp2005-2",
@@ -4080,7 +6394,7 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             },
             {
               "id": "demo-crit-mm-cp2005-3",
@@ -4126,12 +6440,10 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             }
           ],
-          "profesor_ids": [
-            "prof-cp5"
-          ],
+          "profesor_ids": "prof-cp5",
           "tiempo_estudio": {
             "meta_horas_semana": 5,
             "pomodoro": null,
@@ -4147,7 +6459,7 @@
         },
         {
           "id": "mm-opt1019",
-          "materia_id": "OPT1019-A",
+          "materia_id": "demo-cp-cp6000-opt",
           "plan_estudio_id": "ucr-cp-plan5",
           "nota_final": 82.55,
           "creditos": 3,
@@ -4196,7 +6508,7 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             },
             {
               "id": "demo-crit-mm-opt1019-2",
@@ -4242,7 +6554,7 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             },
             {
               "id": "demo-crit-mm-opt1019-3",
@@ -4288,19 +6600,15 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             }
           ],
-          "profesor_ids": [
-            "prof-cp1"
-          ],
+          "profesor_ids": "prof-cp1",
           "tiempo_estudio": {
             "meta_horas_semana": 6,
             "pomodoro": null,
             "color": "#06b6d4",
-            "dias_estudio": [
-              "M"
-            ]
+            "dias_estudio": "M"
           },
           "calificacion_profesor": null,
           "volveria_a_llevar_profesor": null,
@@ -4357,7 +6665,7 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             },
             {
               "id": "demo-crit-mm-ati100-2",
@@ -4403,7 +6711,7 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             },
             {
               "id": "demo-crit-mm-ati100-3",
@@ -4449,19 +6757,15 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             }
           ],
-          "profesor_ids": [
-            "prof-ati1"
-          ],
+          "profesor_ids": "prof-ati1",
           "tiempo_estudio": {
             "meta_horas_semana": 5,
             "pomodoro": null,
             "color": "#0ea5e9",
-            "dias_estudio": [
-              "L"
-            ]
+            "dias_estudio": "L"
           },
           "nota_final_manual": false
         },
@@ -4516,7 +6820,7 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             },
             {
               "id": "demo-crit-mm-ati120-2",
@@ -4562,7 +6866,7 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             },
             {
               "id": "demo-crit-mm-ati120-3",
@@ -4608,12 +6912,10 @@
                   "orden": 3
                 }
               ],
-              "_eliminados_asignaciones": []
+              "_eliminados_asignaciones": null
             }
           ],
-          "profesor_ids": [
-            "prof-ati2"
-          ],
+          "profesor_ids": "prof-ati2",
           "tiempo_estudio": {
             "meta_horas_semana": 5,
             "pomodoro": null,
@@ -4658,15 +6960,13 @@
           "grupo": "01",
           "profesor_id": "prof-marcos",
           "color": "#14b8a6",
-          "dias": [
-            {
-              "dia": "K",
-              "hora_inicio": "10:00",
-              "hora_fin": "11:50",
-              "modalidad": "virtual",
-              "aula": "https://meet.example.invalid/aula-demo"
-            }
-          ]
+          "dias": {
+            "dia": "K",
+            "hora_inicio": "10:00",
+            "hora_fin": "11:50",
+            "modalidad": "virtual",
+            "aula": "https://meet.example.invalid/aula-demo"
+          }
         },
         {
           "id": "bh-3",
@@ -4675,15 +6975,13 @@
           "grupo": "01",
           "profesor_id": "prof-elena",
           "color": "#f59e0b",
-          "dias": [
-            {
-              "dia": "M",
-              "hora_inicio": "13:00",
-              "hora_fin": "14:50",
-              "modalidad": "presencial",
-              "aula": "Aula 12, Estudios Generales"
-            }
-          ]
+          "dias": {
+            "dia": "M",
+            "hora_inicio": "13:00",
+            "hora_fin": "14:50",
+            "modalidad": "presencial",
+            "aula": "Aula 12, Estudios Generales"
+          }
         },
         {
           "id": "bh-4",
@@ -4692,15 +6990,13 @@
           "grupo": "03",
           "profesor_id": "prof-marcos",
           "color": "#8b5cf6",
-          "dias": [
-            {
-              "dia": "J",
-              "hora_inicio": "15:00",
-              "hora_fin": "16:50",
-              "modalidad": "asincronica",
-              "aula": "Laboratorio de cómputo 3"
-            }
-          ]
+          "dias": {
+            "dia": "J",
+            "hora_inicio": "15:00",
+            "hora_fin": "16:50",
+            "modalidad": "asincronica",
+            "aula": "Laboratorio de cómputo 3"
+          }
         },
         {
           "id": "bh-5",
@@ -4709,32 +7005,28 @@
           "grupo": "02",
           "profesor_id": "prof-ines",
           "color": "#ec4899",
-          "dias": [
-            {
-              "dia": "V",
-              "hora_inicio": "09:00",
-              "hora_fin": "10:50",
-              "modalidad": "presencial",
-              "aula": "Aula 310, Ciencias Sociales"
-            }
-          ]
+          "dias": {
+            "dia": "V",
+            "hora_inicio": "09:00",
+            "hora_fin": "10:50",
+            "modalidad": "presencial",
+            "aula": "Aula 310, Ciencias Sociales"
+          }
         },
         {
           "id": "bh-6",
-          "materia_id": "OPT1019-A",
+          "materia_id": "demo-cp-cp6000-opt",
           "plan_estudio_id": "ucr-cp-plan5",
           "grupo": "01",
           "profesor_id": "prof-elena",
           "color": "#06b6d4",
-          "dias": [
-            {
-              "dia": "K",
-              "hora_inicio": "14:00",
-              "hora_fin": "15:50",
-              "modalidad": "virtual",
-              "aula": "https://meet.example.invalid/optativa"
-            }
-          ]
+          "dias": {
+            "dia": "K",
+            "hora_inicio": "14:00",
+            "hora_fin": "15:50",
+            "modalidad": "virtual",
+            "aula": "https://meet.example.invalid/optativa"
+          }
         },
         {
           "id": "bh-ati-1",
@@ -4743,15 +7035,13 @@
           "grupo": "01",
           "profesor_id": "prof-ati1",
           "color": "#0ea5e9",
-          "dias": [
-            {
-              "dia": "L",
-              "hora_inicio": "17:00",
-              "hora_fin": "18:50",
-              "modalidad": "presencial",
-              "aula": "Edificio D, aula 203"
-            }
-          ]
+          "dias": {
+            "dia": "L",
+            "hora_inicio": "17:00",
+            "hora_fin": "18:50",
+            "modalidad": "presencial",
+            "aula": "Edificio D, aula 203"
+          }
         },
         {
           "id": "bh-ati-2",
@@ -4760,15 +7050,13 @@
           "grupo": "01",
           "profesor_id": "prof-ati2",
           "color": "#38bdf8",
-          "dias": [
-            {
-              "dia": "M",
-              "hora_inicio": "16:00",
-              "hora_fin": "17:50",
-              "modalidad": "presencial",
-              "aula": "Laboratorio TI 2"
-            }
-          ]
+          "dias": {
+            "dia": "M",
+            "hora_inicio": "16:00",
+            "hora_fin": "17:50",
+            "modalidad": "presencial",
+            "aula": "Laboratorio TI 2"
+          }
         },
         {
           "id": "bh-demo-sab-0",
@@ -4777,15 +7065,13 @@
           "grupo": "03",
           "profesor_id": "prof-cp1",
           "color": "#6366f1",
-          "dias": [
-            {
-              "dia": "S",
-              "hora_inicio": "08:00",
-              "hora_fin": "09:50",
-              "modalidad": "presencial",
-              "aula": "Aula 120"
-            }
-          ]
+          "dias": {
+            "dia": "S",
+            "hora_inicio": "08:00",
+            "hora_fin": "09:50",
+            "modalidad": "presencial",
+            "aula": "Aula 120"
+          }
         },
         {
           "id": "bh-demo-sab-1",
@@ -4794,15 +7080,13 @@
           "grupo": "03",
           "profesor_id": "prof-cp2",
           "color": "#14b8a6",
-          "dias": [
-            {
-              "dia": "S",
-              "hora_inicio": "10:00",
-              "hora_fin": "11:50",
-              "modalidad": "presencial",
-              "aula": "Aula 121"
-            }
-          ]
+          "dias": {
+            "dia": "S",
+            "hora_inicio": "10:00",
+            "hora_fin": "11:50",
+            "modalidad": "presencial",
+            "aula": "Aula 121"
+          }
         },
         {
           "id": "bh-demo-sab-2",
@@ -4811,15 +7095,13 @@
           "grupo": "03",
           "profesor_id": "prof-cp3",
           "color": "#f59e0b",
-          "dias": [
-            {
-              "dia": "S",
-              "hora_inicio": "12:00",
-              "hora_fin": "13:50",
-              "modalidad": "presencial",
-              "aula": "Aula 122"
-            }
-          ]
+          "dias": {
+            "dia": "S",
+            "hora_inicio": "12:00",
+            "hora_fin": "13:50",
+            "modalidad": "presencial",
+            "aula": "Aula 122"
+          }
         }
       ]
     },
@@ -4829,9 +7111,7 @@
       "fecha_inicio": "2025-03-10",
       "duracion_semanas": 16,
       "estado_manual": "pasado",
-      "plan_estudio_id": [
-        "ucr-cp-plan5"
-      ],
+      "plan_estudio_id": "ucr-cp-plan5",
       "materias_matriculadas": [
         {
           "id": "mm-sem-demo-hist-1-0",
@@ -4848,7 +7128,7 @@
               "valor_total": 40,
               "orden": 0,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-sem-demo-hist-1-0-1-1",
@@ -4885,7 +7165,7 @@
               "valor_total": 35,
               "orden": 1,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-sem-demo-hist-1-0-2-1",
@@ -4922,7 +7202,7 @@
               "valor_total": 25,
               "orden": 2,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-sem-demo-hist-1-0-3-1",
@@ -4954,9 +7234,7 @@
               ]
             }
           ],
-          "profesor_ids": [
-            "prof-ines"
-          ],
+          "profesor_ids": "prof-ines",
           "tiempo_estudio": {
             "meta_horas_semana": 3,
             "pomodoro": null,
@@ -4979,7 +7257,7 @@
               "valor_total": 40,
               "orden": 0,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-sem-demo-hist-1-1-1-1",
@@ -5016,7 +7294,7 @@
               "valor_total": 35,
               "orden": 1,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-sem-demo-hist-1-1-2-1",
@@ -5053,7 +7331,7 @@
               "valor_total": 25,
               "orden": 2,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-sem-demo-hist-1-1-3-1",
@@ -5085,9 +7363,7 @@
               ]
             }
           ],
-          "profesor_ids": [
-            "prof-marcos"
-          ],
+          "profesor_ids": "prof-marcos",
           "tiempo_estudio": {
             "meta_horas_semana": 4,
             "pomodoro": null,
@@ -5096,7 +7372,7 @@
           }
         }
       ],
-      "bloques_horario": []
+      "bloques_horario": null
     },
     {
       "id": "sem-demo-hist-2",
@@ -5104,9 +7380,7 @@
       "fecha_inicio": "2025-08-11",
       "duracion_semanas": 16,
       "estado_manual": "pasado",
-      "plan_estudio_id": [
-        "ucr-cp-plan5"
-      ],
+      "plan_estudio_id": "ucr-cp-plan5",
       "materias_matriculadas": [
         {
           "id": "mm-sem-demo-hist-2-0",
@@ -5123,7 +7397,7 @@
               "valor_total": 40,
               "orden": 0,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-sem-demo-hist-2-0-1-1",
@@ -5160,7 +7434,7 @@
               "valor_total": 35,
               "orden": 1,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-sem-demo-hist-2-0-2-1",
@@ -5197,7 +7471,7 @@
               "valor_total": 25,
               "orden": 2,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-sem-demo-hist-2-0-3-1",
@@ -5229,9 +7503,7 @@
               ]
             }
           ],
-          "profesor_ids": [
-            "prof-marcos"
-          ],
+          "profesor_ids": "prof-marcos",
           "tiempo_estudio": {
             "meta_horas_semana": 3,
             "pomodoro": null,
@@ -5254,7 +7526,7 @@
               "valor_total": 40,
               "orden": 0,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-sem-demo-hist-2-1-1-1",
@@ -5291,7 +7563,7 @@
               "valor_total": 35,
               "orden": 1,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-sem-demo-hist-2-1-2-1",
@@ -5328,7 +7600,7 @@
               "valor_total": 25,
               "orden": 2,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-sem-demo-hist-2-1-3-1",
@@ -5360,9 +7632,7 @@
               ]
             }
           ],
-          "profesor_ids": [
-            "prof-ines"
-          ],
+          "profesor_ids": "prof-ines",
           "tiempo_estudio": {
             "meta_horas_semana": 4,
             "pomodoro": null,
@@ -5371,7 +7641,7 @@
           }
         }
       ],
-      "bloques_horario": []
+      "bloques_horario": null
     },
     {
       "id": "sem-demo-hist-3",
@@ -5379,9 +7649,7 @@
       "fecha_inicio": "2024-03-11",
       "duracion_semanas": 16,
       "estado_manual": "pasado",
-      "plan_estudio_id": [
-        "ucr-cp-plan5"
-      ],
+      "plan_estudio_id": "ucr-cp-plan5",
       "materias_matriculadas": [
         {
           "id": "mm-sem-demo-hist-3-0",
@@ -5398,7 +7666,7 @@
               "valor_total": 40,
               "orden": 0,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-sem-demo-hist-3-0-1-1",
@@ -5435,7 +7703,7 @@
               "valor_total": 35,
               "orden": 1,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-sem-demo-hist-3-0-2-1",
@@ -5472,7 +7740,7 @@
               "valor_total": 25,
               "orden": 2,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-sem-demo-hist-3-0-3-1",
@@ -5504,9 +7772,7 @@
               ]
             }
           ],
-          "profesor_ids": [
-            "prof-ines"
-          ],
+          "profesor_ids": "prof-ines",
           "tiempo_estudio": {
             "meta_horas_semana": 3,
             "pomodoro": null,
@@ -5529,7 +7795,7 @@
               "valor_total": 40,
               "orden": 0,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-sem-demo-hist-3-1-1-1",
@@ -5566,7 +7832,7 @@
               "valor_total": 35,
               "orden": 1,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-sem-demo-hist-3-1-2-1",
@@ -5603,7 +7869,7 @@
               "valor_total": 25,
               "orden": 2,
               "es_extra": false,
-              "_eliminados_asignaciones": [],
+              "_eliminados_asignaciones": null,
               "asignaciones": [
                 {
                   "id": "demo-hist-asig-mm-sem-demo-hist-3-1-3-1",
@@ -5635,9 +7901,7 @@
               ]
             }
           ],
-          "profesor_ids": [
-            "prof-ines"
-          ],
+          "profesor_ids": "prof-ines",
           "tiempo_estudio": {
             "meta_horas_semana": 4,
             "pomodoro": null,
@@ -5646,7 +7910,7 @@
           }
         }
       ],
-      "bloques_horario": []
+      "bloques_horario": null
     }
   ],
   "profesores": [
@@ -5689,7 +7953,7 @@
       "nombre": "Dr. Andrés Solano",
       "correo": "prof-cp1@example.invalid",
       "telefono": null,
-      "materias": [],
+      "materias": null,
       "calificacion": 9.5,
       "volveria_a_llevar": true
     },
@@ -5698,7 +7962,7 @@
       "nombre": "M.Sc. Laura Jiménez",
       "correo": "prof-cp2@example.invalid",
       "telefono": null,
-      "materias": [],
+      "materias": null,
       "calificacion": 8.5,
       "volveria_a_llevar": true
     },
@@ -5707,7 +7971,7 @@
       "nombre": "Lic. Sofía Chacón",
       "correo": "prof-cp3@example.invalid",
       "telefono": null,
-      "materias": [],
+      "materias": null,
       "calificacion": 7,
       "volveria_a_llevar": true
     },
@@ -5716,7 +7980,7 @@
       "nombre": "M.Sc. Esteban Rojas",
       "correo": "prof-cp4@example.invalid",
       "telefono": null,
-      "materias": [],
+      "materias": null,
       "calificacion": 6,
       "volveria_a_llevar": false
     },
@@ -5725,7 +7989,7 @@
       "nombre": "Dra. Valeria Méndez",
       "correo": "prof-cp5@example.invalid",
       "telefono": null,
-      "materias": [],
+      "materias": null,
       "calificacion": 9,
       "volveria_a_llevar": true
     },
@@ -5734,7 +7998,7 @@
       "nombre": "Ing. Natalia Vega",
       "correo": "prof-ati1@example.invalid",
       "telefono": null,
-      "materias": [],
+      "materias": null,
       "calificacion": 9.5,
       "volveria_a_llevar": true
     },
@@ -5743,7 +8007,7 @@
       "nombre": "M.Sc. Pablo Araya",
       "correo": "prof-ati2@example.invalid",
       "telefono": null,
-      "materias": [],
+      "materias": null,
       "calificacion": 8,
       "volveria_a_llevar": true
     }
@@ -5754,9 +8018,7 @@
       "nombre_completo": "Ana Sofía Rojas",
       "carnet": "C-00001",
       "lista": "whitelist",
-      "materias_compartidas": [
-        "mm-cp2001"
-      ],
+      "materias_compartidas": "mm-cp2001",
       "nota": "Estudiante ficticio de demostración."
     },
     {
@@ -5764,9 +8026,7 @@
       "nombre_completo": "Diego Fernández",
       "carnet": "C-00002",
       "lista": "whitelist",
-      "materias_compartidas": [
-        "mm-cp2002"
-      ],
+      "materias_compartidas": "mm-cp2002",
       "nota": "Estudiante ficticio de demostración."
     },
     {
@@ -5774,9 +8034,7 @@
       "nombre_completo": "María Fernanda del Pilar de la Cruz y Quesada",
       "carnet": "C-00003",
       "lista": "blacklist",
-      "materias_compartidas": [
-        "mm-cp2003"
-      ],
+      "materias_compartidas": "mm-cp2003",
       "nota": "Estudiante ficticio de demostración."
     },
     {
@@ -5784,9 +8042,7 @@
       "nombre_completo": "Luis Mora",
       "carnet": "C-00004",
       "lista": "whitelist",
-      "materias_compartidas": [
-        "mm-cp2004"
-      ],
+      "materias_compartidas": "mm-cp2004",
       "nota": "Estudiante ficticio de demostración."
     },
     {
@@ -5794,9 +8050,7 @@
       "nombre_completo": "Camila Vargas",
       "carnet": "C-00005",
       "lista": "whitelist",
-      "materias_compartidas": [
-        "mm-cp2005"
-      ],
+      "materias_compartidas": "mm-cp2005",
       "nota": "Estudiante ficticio de demostración."
     },
     {
@@ -5804,9 +8058,7 @@
       "nombre_completo": "José Castro",
       "carnet": "C-00006",
       "lista": "whitelist",
-      "materias_compartidas": [
-        "mm-opt1019"
-      ],
+      "materias_compartidas": "mm-opt1019",
       "nota": "Estudiante ficticio de demostración."
     },
     {
@@ -5814,9 +8066,7 @@
       "nombre_completo": "Valentina León",
       "carnet": "C-00007",
       "lista": "whitelist",
-      "materias_compartidas": [
-        "mm-ati100"
-      ],
+      "materias_compartidas": "mm-ati100",
       "nota": "Estudiante ficticio de demostración."
     },
     {
@@ -5824,9 +8074,7 @@
       "nombre_completo": "Mateo Pérez",
       "carnet": "C-00008",
       "lista": "whitelist",
-      "materias_compartidas": [
-        "mm-ati120"
-      ],
+      "materias_compartidas": "mm-ati120",
       "nota": "Estudiante ficticio de demostración."
     },
     {
@@ -5834,9 +8082,7 @@
       "nombre_completo": "Daniela Soto",
       "carnet": "C-00009",
       "lista": "whitelist",
-      "materias_compartidas": [
-        "mm-cp2001"
-      ],
+      "materias_compartidas": "mm-cp2001",
       "nota": "Estudiante ficticio de demostración."
     },
     {
@@ -5844,9 +8090,7 @@
       "nombre_completo": "Gabriel Quesada",
       "carnet": "C-000010",
       "lista": "whitelist",
-      "materias_compartidas": [
-        "mm-cp2002"
-      ],
+      "materias_compartidas": "mm-cp2002",
       "nota": "Estudiante ficticio de demostración."
     }
   ],
@@ -6364,68 +8608,56 @@
           "fecha": "2026-09-18"
         }
       ],
-      "_eliminados_pagos_matricula": [],
-      "_eliminados_ingresos_beca": []
+      "_eliminados_pagos_matricula": null,
+      "_eliminados_ingresos_beca": null
     },
     {
       "id": "fin-demo-2",
       "semestre_id": "sem-demo-hist-1",
-      "pagos_matricula": [
-        {
-          "id": "fin-p-0",
-          "descripcion": "Matrícula ordinaria",
-          "monto": 28000,
-          "fecha": "2025-08-20"
-        }
-      ],
-      "ingresos_beca": [
-        {
-          "id": "fin-b-0",
-          "descripcion": "Beca socioeconómica",
-          "monto": 22000,
-          "fecha": "2025-09-18"
-        }
-      ]
+      "pagos_matricula": {
+        "id": "fin-p-0",
+        "descripcion": "Matrícula ordinaria",
+        "monto": 28000,
+        "fecha": "2025-08-20"
+      },
+      "ingresos_beca": {
+        "id": "fin-b-0",
+        "descripcion": "Beca socioeconómica",
+        "monto": 22000,
+        "fecha": "2025-09-18"
+      }
     },
     {
       "id": "fin-demo-3",
       "semestre_id": "sem-demo-hist-2",
-      "pagos_matricula": [
-        {
-          "id": "fin-p-1",
-          "descripcion": "Cuota de matrícula",
-          "monto": 39700,
-          "fecha": "2026-08-20"
-        }
-      ],
-      "ingresos_beca": [
-        {
-          "id": "fin-b-1",
-          "descripcion": "Beca y apoyo de transporte",
-          "monto": 30400,
-          "fecha": "2026-09-18"
-        }
-      ]
+      "pagos_matricula": {
+        "id": "fin-p-1",
+        "descripcion": "Cuota de matrícula",
+        "monto": 39700,
+        "fecha": "2026-08-20"
+      },
+      "ingresos_beca": {
+        "id": "fin-b-1",
+        "descripcion": "Beca y apoyo de transporte",
+        "monto": 30400,
+        "fecha": "2026-09-18"
+      }
     },
     {
       "id": "fin-demo-4",
       "semestre_id": "sem-demo-hist-3",
-      "pagos_matricula": [
-        {
-          "id": "fin-p-2",
-          "descripcion": "Cuota de matrícula",
-          "monto": 51400,
-          "fecha": "2027-08-20"
-        }
-      ],
-      "ingresos_beca": [
-        {
-          "id": "fin-b-2",
-          "descripcion": "Beca y apoyo de transporte",
-          "monto": 38800,
-          "fecha": "2027-09-18"
-        }
-      ]
+      "pagos_matricula": {
+        "id": "fin-p-2",
+        "descripcion": "Cuota de matrícula",
+        "monto": 51400,
+        "fecha": "2027-08-20"
+      },
+      "ingresos_beca": {
+        "id": "fin-b-2",
+        "descripcion": "Beca y apoyo de transporte",
+        "monto": 38800,
+        "fecha": "2027-09-18"
+      }
     }
   ],
   "gastos_u": [
@@ -7056,10 +9288,10 @@
       "origen": "manual"
     }
   ],
-  "tiempo_estudio_materias": [],
+  "tiempo_estudio_materias": null,
   "timer_estudio_activo": null,
-  "competencias_locales": [],
-  "adjuntos": [],
+  "competencias_locales": null,
+  "adjuntos": null,
   "competencias_demo": [
     {
       "id": "demo-comp-1",
@@ -7105,54 +9337,52 @@
       ],
       "yo_id": "demo-comp-1-yo",
       "apodo_propio": "Lucía Mora",
-      "historial_demo": [
-        {
-          "semana_cerrada_en": "2026-09-26T12:00:00Z",
-          "completa": true,
-          "resultados": [
-            {
-              "puesto": 1,
-              "foto_url": null,
-              "horas": 6.5,
-              "participante_id": "demo-comp-1-yo",
-              "apodo": "Lucía Mora",
-              "color": "#8b5cf6"
-            },
-            {
-              "puesto": 2,
-              "foto_url": null,
-              "horas": 7.25,
-              "participante_id": "demo-comp-1-p1",
-              "apodo": "Camila Vargas",
-              "color": "#ec4899"
-            },
-            {
-              "puesto": 3,
-              "foto_url": null,
-              "horas": 5.75,
-              "participante_id": "demo-comp-1-p2",
-              "apodo": "Mateo Solís",
-              "color": "#06b6d4"
-            },
-            {
-              "puesto": 4,
-              "foto_url": null,
-              "horas": 4.25,
-              "participante_id": "demo-comp-1-p3",
-              "apodo": "Andrés Rojas",
-              "color": "#f59e0b"
-            },
-            {
-              "puesto": 5,
-              "foto_url": null,
-              "horas": 3.5,
-              "participante_id": "demo-comp-1-p4",
-              "apodo": "Valeria Chen",
-              "color": "#22c55e"
-            }
-          ]
-        }
-      ]
+      "historial_demo": {
+        "semana_cerrada_en": "2026-09-26T12:00:00Z",
+        "completa": true,
+        "resultados": [
+          {
+            "puesto": 1,
+            "foto_url": null,
+            "horas": 6.5,
+            "participante_id": "demo-comp-1-yo",
+            "apodo": "Lucía Mora",
+            "color": "#8b5cf6"
+          },
+          {
+            "puesto": 2,
+            "foto_url": null,
+            "horas": 7.25,
+            "participante_id": "demo-comp-1-p1",
+            "apodo": "Camila Vargas",
+            "color": "#ec4899"
+          },
+          {
+            "puesto": 3,
+            "foto_url": null,
+            "horas": 5.75,
+            "participante_id": "demo-comp-1-p2",
+            "apodo": "Mateo Solís",
+            "color": "#06b6d4"
+          },
+          {
+            "puesto": 4,
+            "foto_url": null,
+            "horas": 4.25,
+            "participante_id": "demo-comp-1-p3",
+            "apodo": "Andrés Rojas",
+            "color": "#f59e0b"
+          },
+          {
+            "puesto": 5,
+            "foto_url": null,
+            "horas": 3.5,
+            "participante_id": "demo-comp-1-p4",
+            "apodo": "Valeria Chen",
+            "color": "#22c55e"
+          }
+        ]
+      }
     },
     {
       "id": "demo-comp-2",
@@ -7233,94 +9463,92 @@
       ],
       "yo_id": "demo-comp-2-yo",
       "apodo_propio": "Lucía Mora",
-      "historial_demo": [
-        {
-          "semana_cerrada_en": "2026-09-26T12:00:00Z",
-          "completa": true,
-          "resultados": [
-            {
-              "puesto": 1,
-              "foto_url": null,
-              "horas": 6.5,
-              "participante_id": "demo-comp-2-yo",
-              "apodo": "Lucía Mora",
-              "color": "#8b5cf6"
-            },
-            {
-              "puesto": 2,
-              "foto_url": null,
-              "horas": 5.8,
-              "participante_id": "demo-comp-2-p1",
-              "apodo": "Diego Araya",
-              "color": "#ef4444"
-            },
-            {
-              "puesto": 3,
-              "foto_url": null,
-              "horas": 5.25,
-              "participante_id": "demo-comp-2-p2",
-              "apodo": "Sofía León",
-              "color": "#14b8a6"
-            },
-            {
-              "puesto": 4,
-              "foto_url": null,
-              "horas": 4.9,
-              "participante_id": "demo-comp-2-p3",
-              "apodo": "Pablo Jiménez",
-              "color": "#f97316"
-            },
-            {
-              "puesto": 5,
-              "foto_url": null,
-              "horas": 4.5,
-              "participante_id": "demo-comp-2-p4",
-              "apodo": "Emma Quesada",
-              "color": "#a855f7"
-            },
-            {
-              "puesto": 6,
-              "foto_url": null,
-              "horas": 4.1,
-              "participante_id": "demo-comp-2-p5",
-              "apodo": "Tomás Vega",
-              "color": "#3b82f6"
-            },
-            {
-              "puesto": 7,
-              "foto_url": null,
-              "horas": 3.8,
-              "participante_id": "demo-comp-2-p6",
-              "apodo": "Nora Salas",
-              "color": "#eab308"
-            },
-            {
-              "puesto": 8,
-              "foto_url": null,
-              "horas": 3.4,
-              "participante_id": "demo-comp-2-p7",
-              "apodo": "Gabriel Soto",
-              "color": "#10b981"
-            },
-            {
-              "puesto": 9,
-              "foto_url": null,
-              "horas": 2.7,
-              "participante_id": "demo-comp-2-p8",
-              "apodo": "Mía Campos",
-              "color": "#f43f5e"
-            },
-            {
-              "puesto": 10,
-              "foto_url": null,
-              "horas": 2.1,
-              "participante_id": "demo-comp-2-p9",
-              "apodo": "Samuel Cruz",
-              "color": "#6366f1"
-            }
-          ]
-        }
-      ]
+      "historial_demo": {
+        "semana_cerrada_en": "2026-09-26T12:00:00Z",
+        "completa": true,
+        "resultados": [
+          {
+            "puesto": 1,
+            "foto_url": null,
+            "horas": 6.5,
+            "participante_id": "demo-comp-2-yo",
+            "apodo": "Lucía Mora",
+            "color": "#8b5cf6"
+          },
+          {
+            "puesto": 2,
+            "foto_url": null,
+            "horas": 5.8,
+            "participante_id": "demo-comp-2-p1",
+            "apodo": "Diego Araya",
+            "color": "#ef4444"
+          },
+          {
+            "puesto": 3,
+            "foto_url": null,
+            "horas": 5.25,
+            "participante_id": "demo-comp-2-p2",
+            "apodo": "Sofía León",
+            "color": "#14b8a6"
+          },
+          {
+            "puesto": 4,
+            "foto_url": null,
+            "horas": 4.9,
+            "participante_id": "demo-comp-2-p3",
+            "apodo": "Pablo Jiménez",
+            "color": "#f97316"
+          },
+          {
+            "puesto": 5,
+            "foto_url": null,
+            "horas": 4.5,
+            "participante_id": "demo-comp-2-p4",
+            "apodo": "Emma Quesada",
+            "color": "#a855f7"
+          },
+          {
+            "puesto": 6,
+            "foto_url": null,
+            "horas": 4.1,
+            "participante_id": "demo-comp-2-p5",
+            "apodo": "Tomás Vega",
+            "color": "#3b82f6"
+          },
+          {
+            "puesto": 7,
+            "foto_url": null,
+            "horas": 3.8,
+            "participante_id": "demo-comp-2-p6",
+            "apodo": "Nora Salas",
+            "color": "#eab308"
+          },
+          {
+            "puesto": 8,
+            "foto_url": null,
+            "horas": 3.4,
+            "participante_id": "demo-comp-2-p7",
+            "apodo": "Gabriel Soto",
+            "color": "#10b981"
+          },
+          {
+            "puesto": 9,
+            "foto_url": null,
+            "horas": 2.7,
+            "participante_id": "demo-comp-2-p8",
+            "apodo": "Mía Campos",
+            "color": "#f43f5e"
+          },
+          {
+            "puesto": 10,
+            "foto_url": null,
+            "horas": 2.1,
+            "participante_id": "demo-comp-2-p9",
+            "apodo": "Samuel Cruz",
+            "color": "#6366f1"
+          }
+        ]
+      }
     }
   ]
 }

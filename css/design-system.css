@@ -1277,6 +1277,17 @@ a { color: var(--accent-1); }
   --accent-1-10: rgba(168,118,217,0.10); --accent-1-20: rgba(168,118,217,0.22); --color-danger:#dc2626; --on-accent:#2A1E38;
 }
 
+/* Oscuro Fancy: fondo más profundo y superficies gris carbón con un matiz
+   leve de la paleta. Los acentos siguen gobernando botones y estados, y los
+   bordes se mantienen discretos para evitar el aspecto de alto contraste. */
+html[data-mode="dark"][data-palette] {
+  --bg-canvas: color-mix(in srgb, #0b0c10 91%, var(--accent-1) 9%);
+  --bg-header-solido: color-mix(in srgb, #111216 90%, var(--accent-1) 10%);
+  --bg-card: color-mix(in srgb, #24252b 90%, var(--accent-1) 10%);
+  --bg-panel: color-mix(in srgb, #191a1f 92%, var(--accent-1) 8%);
+  --border-glass: color-mix(in srgb, #2d2e34 88%, var(--accent-1) 12%);
+}
+
 /* =========================================================================
    LAYOUT DE LA APP (shell + sidebar) — responsivo real
    Nada aquí depende del ancho de pantalla para decidir colores/paleta;
@@ -2954,12 +2965,17 @@ img, svg { max-width: 100%; }
 .onboarding-pasos li { animation:agendaVistaEntrada .3s ease both; }
 .onboarding-fragmento { display:flex; flex-direction:column; gap:6px; padding:14px 16px; border:1px solid var(--border-glass); border-left:3px solid var(--accent-1); border-radius:14px; background:var(--bg-card); animation:agendaVistaEntrada .36s cubic-bezier(.2,.75,.25,1) both; }
 .onboarding-fragmento > span { color:var(--text-secondary); font-size:.85rem; line-height:1.45; overflow-wrap:anywhere; }
-.btn-instalar-app-flotante { position:fixed; z-index:1200; right:18px; bottom:18px; display:flex; align-items:center; gap:0; width:48px; height:48px; padding:0 13px; overflow:hidden; border:1px solid color-mix(in srgb,var(--accent-1) 45%,transparent); border-radius:999px; color:var(--on-accent); background:var(--gradient-accent); box-shadow:var(--shadow-float); cursor:pointer; transition:width .34s cubic-bezier(.2,.8,.2,1), opacity .25s ease, transform .25s ease; }
-.btn-instalar-app-flotante.instalar-expandido { width:158px; gap:9px; }
+.btn-instalar-app-flotante { position:fixed; z-index:1200; right:18px; bottom:18px; display:flex; align-items:center; justify-content:center; width:52px; height:52px; padding:0; overflow:hidden; border:1px solid color-mix(in srgb,var(--accent-1) 45%,transparent); border-radius:999px; color:var(--on-accent); background:var(--gradient-accent); box-shadow:var(--shadow-float); cursor:pointer; transition:width .52s cubic-bezier(.22,1,.36,1), opacity .38s ease, transform .52s cubic-bezier(.22,1,.36,1), box-shadow .35s ease; will-change:width,transform; }
+.btn-instalar-app-flotante:hover { transform:translateY(-2px); box-shadow:var(--shadow-float),0 0 0 5px color-mix(in srgb,var(--accent-1) 12%,transparent); }
+.btn-instalar-app-flotante.instalar-expandido { width:176px; }
+.btn-instalar-app-flotante.instalar-ocultando { opacity:0; transform:translateY(8px) scale(.92); pointer-events:none; }
 .btn-instalar-app-flotante.oculto { display:none; }
-.instalar-app-icono { font-size:1.3rem; flex:0 0 auto; }
-.instalar-app-texto { white-space:nowrap; opacity:0; transition:opacity .2s ease; }
-.instalar-expandido .instalar-app-texto { opacity:1; }
+.instalar-app-icono { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); display:grid; place-items:center; width:28px; height:28px; font-size:1.55rem; line-height:1; flex:0 0 auto; transition:left .52s cubic-bezier(.22,1,.36,1),transform .52s cubic-bezier(.22,1,.36,1); }
+.instalar-expandido .instalar-app-icono { left:18px; transform:translateY(-50%); }
+.instalar-app-texto { margin-left:25px; white-space:nowrap; font-size:.98rem; font-weight:750; letter-spacing:.01em; opacity:0; transform:translateX(5px); transition:opacity .28s ease .08s,transform .42s cubic-bezier(.22,1,.36,1) .04s; }
+.instalar-expandido .instalar-app-texto { opacity:1; transform:translateX(0); }
+.ajuste-subtitulo { font-size:.82rem; line-height:1.45; margin:2px 0 6px; }
+@media (prefers-reduced-motion:reduce) { .btn-instalar-app-flotante,.instalar-app-icono,.instalar-app-texto { transition-duration:.01ms !important; animation-duration:.01ms !important; } }
 @media (max-width:600px) { .btn-instalar-app-flotante { right:14px; bottom:calc(14px + env(safe-area-inset-bottom)); } .onboarding-panel { max-height:calc(100dvh - 28px); } }
 
 /* Inicio y bienvenida como pantallas completas, no diálogos flotantes. */
@@ -5603,15 +5619,15 @@ select option, select optgroup { background-color: var(--bg-card); color: var(--
 .selector-modos-apariencia .pill-item { transition:background .24s cubic-bezier(.2,.8,.2,1),color .24s ease,box-shadow .24s ease; }
 
 /* Correcciones de bienvenida: pantalla opaca real, panel lateral + preview a sangre. */
-.onboarding-overlay { background:var(--bg-app,#10111a)!important; opacity:1!important; }
+.onboarding-overlay { background:color-mix(in srgb,var(--bg-app,#10111a) 84%,transparent)!important; backdrop-filter:blur(10px) saturate(.72); opacity:1!important; }
 .onboarding-panel {
   display:grid!important; grid-template-columns:minmax(300px,.72fr) minmax(0,1.28fr);
   grid-template-rows:auto minmax(0,1fr) auto; align-items:stretch; gap:0!important;
-  padding:0!important; overflow:hidden!important; background:var(--bg-app,#10111a)!important;
+  padding:0!important; overflow:hidden!important; background:transparent!important;
 }
 .onboarding-panel > .onboarding-top { grid-column:1; grid-row:1; width:auto!important; margin:0!important; padding:20px 28px 8px; }
 .onboarding-panel > .onboarding-layout { grid-column:1/-1; grid-row:2; display:grid; grid-template-columns:minmax(300px,.72fr) minmax(0,1.28fr); gap:0!important; width:100%!important; max-width:none!important; min-height:0; margin:0!important; }
-.onboarding-copy { max-height:100%; overflow:auto; padding:24px clamp(22px,4vw,56px); align-self:stretch; }
+.onboarding-copy { max-height:100%; overflow:auto; padding:24px clamp(22px,4vw,56px); align-self:stretch; background:color-mix(in srgb,var(--bg-app,#10111a) 90%,transparent); backdrop-filter:blur(12px); }
 .onboarding-panel > .onboarding-acciones { grid-column:1; grid-row:3; width:auto!important; margin:0!important; padding:12px 28px calc(22px + env(safe-area-inset-bottom)); justify-content:flex-start; }
 .onboarding-preview-wrap { min-height:0!important; height:100%; max-height:none!important; border:0!important; border-radius:0!important; }
 .onboarding-preview { min-height:0!important; height:100%; pointer-events:auto!important; }
@@ -5662,6 +5678,53 @@ select option, select optgroup { background-color: var(--bg-card); color: var(--
 .modal-overlay:has(.paleta-personalizada), .modal-overlay:has(#paleta-personalizada) { z-index:300000!important; }
 
 .ppz-overlay { z-index:310000!important; }
+
+/* Onboarding: cambio de personalización/vista previa sin recargar el iframe. */
+html:has(.onboarding-overlay), body:has(.onboarding-overlay) { overflow:hidden!important; }
+.onboarding-logo-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.onboarding-logo-heading h3 { margin:0; }
+.logo-selector-encabezado { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.logo-selector-personalizado { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:6px 12px; border:1px solid var(--border-glass); border-radius:999px; color:var(--text-primary); background:var(--bg-panel); cursor:pointer; }
+#selector-logo-app .onboarding-logos button[data-logo-app] { width:92px; height:92px; border-color:transparent; background:transparent; }
+#selector-logo-app .onboarding-logos button[data-logo-app] img { width:76px; height:76px; background:transparent; object-fit:contain; }
+.onboarding-file-picker { width:auto; min-height:36px; padding:6px 12px; }
+.onboarding-logo { width:96px; height:96px; background:transparent!important; border-color:transparent!important; }
+.onboarding-logo img { width:76px!important; height:76px!important; background:transparent!important; object-fit:contain; }
+.onboarding-paletas { grid-template-columns:repeat(7,minmax(0,1fr))!important; }
+.onboarding-paleta-nueva { width:40px; height:40px; min-height:40px; padding:0; border-radius:50%; font-size:1.35rem; line-height:1; }
+.onboarding-con-tour .onboarding-lista { animation:onboarding-lista-entrada .35s ease both; }
+.onboarding-conoce > button { justify-content:flex-start; width:100%; text-align:left; }
+.onboarding-conoce.plegado .onboarding-lista { display:none; }
+.onboarding-dependencias { list-style:none; counter-reset:flujo; padding:0; display:grid; gap:10px; }
+.onboarding-dependencias li { counter-increment:flujo; position:relative; padding:12px 14px 12px 52px; border-radius:14px; background:color-mix(in srgb,var(--bg-panel) 78%,transparent); line-height:1.45; }
+.onboarding-dependencias li::before { content:counter(flujo); position:absolute; left:13px; top:50%; transform:translateY(-50%); display:grid; place-items:center; width:27px; height:27px; border-radius:50%; color:var(--on-accent); background:var(--accent-1); font-weight:800; }
+.onboarding-dependencias li:not(:last-child)::after { content:""; position:absolute; left:25px; top:calc(100% - 1px); height:12px; border-left:2px solid color-mix(in srgb,var(--accent-1) 55%,transparent); }
+@keyframes onboarding-lista-entrada { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+.guia-plan-resaltado { box-shadow:0 0 0 3px color-mix(in srgb,var(--accent-1) 28%,transparent),0 0 0 9999px rgba(0,0,0,.48)!important; }
+.onboarding-pregunta-plan { position:absolute; inset:0; z-index:5; display:grid; place-items:center; padding:20px; background:rgba(0,0,0,.64); backdrop-filter:blur(8px); }
+.onboarding-pregunta-plan > section { width:min(480px,100%); padding:clamp(22px,5vw,36px); border:1px solid var(--border-glass); border-radius:24px; background:var(--bg-card); box-shadow:var(--shadow-float); }
+.onboarding-pregunta-plan h2 { margin-top:0; }
+.onboarding-pregunta-plan p { color:var(--text-secondary); line-height:1.55; }
+@media(max-width:760px) {
+  .onboarding-overlay { padding:0!important; }
+  .onboarding-panel { width:100vw!important; height:100vh!important; height:100dvh!important; max-height:none!important; border:0!important; border-radius:0!important; }
+  .onboarding-panel > .onboarding-layout { min-height:0!important; grid-template-rows:minmax(0,1fr)!important; overflow:hidden!important; }
+  .onboarding-copy { min-height:0; overflow:auto; }
+  .onboarding-preview-wrap { display:none!important; }
+  .onboarding-mostrar-preview .onboarding-layout { grid-template-rows:minmax(0,1fr)!important; }
+  .onboarding-mostrar-preview .onboarding-copy { display:none!important; }
+  .onboarding-mostrar-preview .onboarding-preview-wrap { display:flex!important; height:100%!important; min-height:0!important; }
+  .onboarding-mostrar-preview .onboarding-preview { min-height:0!important; height:100%!important; }
+  .onboarding-logo-heading { gap:8px; }
+  .onboarding-logo-heading h3 { font-size:1rem; }
+  .onboarding-logos { gap:8px; }
+  .onboarding-paletas { gap:9px!important; }
+  .onboarding-panel:not(.onboarding-con-tour) .onboarding-acciones { justify-content:space-between!important; }
+  .onboarding-con-tour .onboarding-layout { grid-template-rows:minmax(0,.7fr) minmax(0,1fr)!important; }
+  .onboarding-con-tour .onboarding-copy { padding:12px 20px!important; }
+  .onboarding-con-tour .onboarding-preview-wrap { display:flex!important; height:auto!important; min-height:0!important; }
+  .onboarding-con-tour .onboarding-preview { min-height:0!important; }
+}
 
 /* Evita desalinear el encabezado de Agenda cuando crece el texto o cambia el ancho. */
 #agenda-header > .row-between { display:grid!important; grid-template-columns:44px minmax(0,1fr) 44px; align-items:center!important; }
