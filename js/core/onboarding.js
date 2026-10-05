@@ -5,6 +5,7 @@ import { aplicarPaleta, obtenerModoTemaLocal, guardarModoTemaLocal, obtenerModoD
 import { traducirTextoInterfaz } from "./i18n.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
 import { aplicarLogoApp, prepararImagenLogo } from "./marca.js";
+import { MODO_DEMO, PREVIEW_DEMO } from "./demo-mode.js";
 
 const SECCIONES_TUTORIAL = [
   { id:"resumen", nombre:"Resumen", puntos:["Clases, entregas y exámenes próximos.","Avance de estudio del día.","Accesos rápidos a lo que requiere atención."] },
@@ -12,7 +13,7 @@ const SECCIONES_TUTORIAL = [
   { id:"horario", nombre:"Horario", puntos:["Guarda hora, aula, profesor y modalidad.","Abre una clase para ver todos sus detalles.","Compara horarios con tus amistades."] },
   { id:"tiempo-estudio", nombre:"Tiempo de estudio", puntos:["Abre una materia y toca Iniciar sesión.","Usa bloques personalizados aunque no tengas plan.","Consulta historial y estadísticas de todos tus semestres."] },
   { id:"semestres", nombre:"Semestres", puntos:["Matricula materias de tu plan.","Registra criterios, asignaciones y notas.","Revisa proyecciones y el Wrapped al finalizar."] },
-  { id:"comunidad", nombre:"Comunidad", puntos:["Construye tu red académica con compañeros y docentes.","Consulta valoraciones y datos de contacto que la comunidad comparte.","Compara horarios con tus amistades para coordinarse."] },
+  { id:"comunidad", nombre:"Comunidad", puntos:["Organiza compañeros y docentes relacionados con tus materias.","Consulta valoraciones y contactos que otras personas decidieron compartir.","Compara horarios compartidos para encontrar espacios en común."] },
   { id:"finanzas", nombre:"Finanzas", puntos:["Registra ingresos y gastos desde el inicio.","Clasifica movimientos por categoría.","Asociarlos a un semestre es opcional."] },
   { id:"plan-estudios", nombre:"Plan de estudios", puntos:["Añade una o varias carreras.","Pega o importa la malla completa.","El plan alimenta la matrícula de Semestres."] },
   { id:"asistente", nombre:"Wapper", puntos:["Convierte mensajes en tareas, exámenes o eventos de Agenda.","Consulta fechas y pendientes con lenguaje natural.","Actívalo con tu clave personal de Gemini desde Ajustes."] },
@@ -29,16 +30,18 @@ function guardar() {
 }
 
 function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
-  if (!estado.datos?.configuracion || estado.datos.configuracion.onboarding_v1_completado !== false) return false;
+  if (!estado.datos?.configuracion || (estado.datos.configuracion.onboarding_v1_completado !== false && !(MODO_DEMO && !PREVIEW_DEMO))) return false;
   const cfg = estado.datos.configuracion;
   const secciones = SECCIONES_TUTORIAL.filter(({id}) => document.getElementById(`seccion-${id}`));
-  const cuentaConDatos = Object.entries(estado.datos).some(([clave, valor]) =>
+  const cuentaConDatos = !MODO_DEMO && Object.entries(estado.datos).some(([clave, valor]) =>
     Array.isArray(valor) && valor.length > 0 && clave !== "planes_estudio_demo"
   );
   const tienePlanArmado = Boolean(estado.datos.planes_estudio?.some((plan) => plan.materias?.length || plan.optativas_disponibles?.length));
   const faltaNombre = !(estado.datos.perfil?.nombre_preferido || estado.datos.perfil?.nombre || "").trim();
-  let etapa = cuentaConDatos ? (faltaNombre ? "nombre" : (!cfg.paleta || !cfg.modo ? "personalizar" : "tour")) : "nombre", indice = 0;
+  let etapa = MODO_DEMO ? "nombre" : cuentaConDatos ? (faltaNombre ? "nombre" : (!cfg.paleta || !cfg.modo ? "personalizar" : "tour")) : "nombre", indice = 0;
   let panelPersonalizacion = "opciones";
+  let modoPersonalizacion = MODO_DEMO ? (cfg.modo || "dark") : obtenerModoTemaLocal();
+  let calidadPersonalizacion = obtenerModoDisenoLocal();
   const overlay = document.createElement("div");
   overlay.className = "onboarding-overlay";
   overlay.setAttribute("role","dialog"); overlay.setAttribute("aria-modal","true"); overlay.setAttribute("aria-labelledby","onboarding-titulo");
@@ -46,13 +49,33 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
   panel.innerHTML = '<header class="onboarding-top"><span class="onboarding-progreso"></span><button class="onboarding-cerrar" type="button" aria-label="Cerrar">×</button></header><div class="onboarding-layout"><div class="onboarding-copy"><h1 id="onboarding-titulo"></h1><div class="onboarding-contenido"></div></div><div class="onboarding-preview-wrap"><iframe class="onboarding-preview" title="Vista previa real de App Académica" loading="lazy" data-analitica-ignorar></iframe></div></div><footer class="onboarding-acciones"></footer>';
   overlay.append(panel); document.body.append(overlay);
   const progreso=panel.querySelector(".onboarding-progreso"), titulo=panel.querySelector("h1"), contenido=panel.querySelector(".onboarding-contenido"), acciones=panel.querySelector(".onboarding-acciones"), preview=panel.querySelector("iframe");
+  if (MODO_DEMO && !PREVIEW_DEMO) {
+    const saltar=boton("Saltar inicio","btn-secondary",()=>{cfg.tutoriales_secciones_vistas=Object.fromEntries(SECCIONES_TUTORIAL.map(s=>[s.id,true]));fin(false);});
+    saltar.className += " onboarding-saltar-demo";
+    panel.querySelector(".onboarding-top")?.append(saltar);
+  }
   let timersPreview=[], cerrarListaTour=null, temporizadorTour=null;
-  const actualizarPreview=()=>preview.contentWindow?.postMessage({
-    type:"APP_PREVIEW_UPDATE", paleta:cfg.paleta||"azul", modo:obtenerModoTemaLocal(),
-    calidad:obtenerModoDisenoLocal(),
+  const bloquearNavegacionDeResumen=()=>{
+    let doc;try{doc=preview.contentDocument;}catch(_){return;}
+    if(!doc)return;
+    const bloquear=etapa==="tour"&&preview.dataset.seccion==="resumen";
+    doc.querySelectorAll(".btn-nav[data-seccion]").forEach((b)=>{
+      const deshabilitar=bloquear&&b.dataset.seccion!=="resumen";
+      b.disabled=deshabilitar;
+      if(deshabilitar){b.setAttribute("aria-disabled","true");b.title="Durante esta parte de la guía, explora solo Resumen.";}
+      else{b.removeAttribute("aria-disabled");b.removeAttribute("title");}
+    });
+  };
+  const actualizarPreview=()=>{
+    bloquearNavegacionDeResumen();
+    preview.contentWindow?.postMessage({
+    type:"APP_PREVIEW_UPDATE", paleta:cfg.paleta||"azul", modo:modoPersonalizacion,
+    calidad:calidadPersonalizacion,
     colores:cfg.paleta==="personalizada"?cfg.paleta_personalizada?.colores:null,
-    logo:cfg.logo_app||"folder", logoData:cfg.logo_app_url||null
-  },location.origin);
+    logo:cfg.logo_app||"folder", logoData:cfg.logo_app_url||null,
+    geminiKey:etapa==="wapper-config"?(cfg.gemini_api_key||null):null
+    },location.origin);
+  };
   let inicioDeslizamiento=null;
   const comenzarDeslizamiento=(ev)=>{if(ev.touches.length===1)inicioDeslizamiento=ev.touches[0].clientX;};
   const terminarDeslizamiento=(ev)=>{
@@ -65,12 +88,13 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
   panel.addEventListener("touchend",terminarDeslizamiento,{passive:true});
   preview.addEventListener("load",()=>{
     actualizarPreview();
+    bloquearNavegacionDeResumen();
     timersPreview.forEach(clearTimeout);timersPreview=[];
     let docTour;try{docTour=preview.contentDocument;}catch(_){}
     if(docTour){
       docTour.addEventListener("touchstart",comenzarDeslizamiento,{passive:true});
       docTour.addEventListener("touchend",terminarDeslizamiento,{passive:true});
-      const iniciarExploracao=()=>{if(etapa==="tour")cerrarListaTour?.();};
+      const iniciarExploracao=()=>{if(etapa==="tour"&&matchMedia("(orientation:portrait)").matches)cerrarListaTour?.();};
       ["pointerdown","keydown","touchstart","wheel"].forEach(tipo=>docTour.addEventListener(tipo,iniciarExploracao,{once:true,capture:true}));
     }
     if(preview.dataset.seccion==="semestres"){
@@ -86,7 +110,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
   });
   const boton=(texto,clase,fn)=>{const b=document.createElement("button");b.type="button";b.className=`btn ${clase}`;b.textContent=traducirTextoInterfaz(texto);b.addEventListener("click",fn);return b;};
   const texto=(tag,cls,value)=>{const e=document.createElement(tag);if(cls)e.className=cls;e.textContent=traducirTextoInterfaz(value);return e;};
-  const fin=(irAlPlan=false,irASemestres=false)=>{timersPreview.forEach(clearTimeout);timersPreview=[];clearTimeout(temporizadorTour);cfg.onboarding_v1_completado=true;guardar();overlay.remove();if(irAlPlan||irASemestres){const destino=irASemestres?"semestres":"plan-estudios";navegar?.(destino);setTimeout(()=>iniciarGuiaPlan({navegar,posteriorImportacion:irASemestres,yaEnSemestres:irASemestres}),450);}else toast?.(traducirTextoInterfaz("¡Listo! Puedes volver a ver la guía desde Ajustes generales."));};
+  const fin=(irAlPlan=false,irASemestres=false)=>{timersPreview.forEach(clearTimeout);timersPreview=[];clearTimeout(temporizadorTour);cfg.onboarding_v1_completado=true;cfg.tutoriales_secciones_vistas=cfg.tutoriales_secciones_vistas||{};if(irAlPlan)cfg.tutoriales_secciones_vistas["plan-estudios"]=true;if(irASemestres)cfg.tutoriales_secciones_vistas.semestres=true;guardar();overlay.remove();if(irAlPlan||irASemestres){const destino=irASemestres?"semestres":"plan-estudios";navegar?.(destino);setTimeout(()=>iniciarGuiaPlan({navegar,posteriorImportacion:irASemestres,yaEnSemestres:irASemestres}),450);}else toast?.(traducirTextoInterfaz("¡Listo! Puedes volver a ver la guía desde Ajustes generales."));};
   const preguntarPorOtroPlan=()=>{
     const pregunta=document.createElement("div");pregunta.className="onboarding-pregunta-plan";
     const tarjeta=document.createElement("section");tarjeta.setAttribute("role","dialog");tarjeta.setAttribute("aria-modal","true");
@@ -96,37 +120,39 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
     tarjeta.append(botones);pregunta.append(tarjeta);overlay.append(pregunta);
   };
   const instalarYa=()=>Boolean(navigator.standalone)||matchMedia("(display-mode: standalone)").matches;
-  const cargarPreview=(seccion="resumen")=>{const u=new URL(location.href);u.search="";u.searchParams.set("demo","1");u.searchParams.set("preview","1");u.searchParams.set("previewSection",seccion);u.searchParams.set("previewPalette",cfg.paleta||"azul");u.searchParams.set("previewMode",obtenerModoTemaLocal());u.searchParams.set("previewLogo",cfg.logo_app||"folder");if(cfg.paleta==="personalizada"&&cfg.paleta_personalizada)u.searchParams.set("previewCustom",JSON.stringify(cfg.paleta_personalizada));if(cfg.logo_app_url)u.searchParams.set("previewLogoData",cfg.logo_app_url);if(preview.dataset.seccion!==seccion){preview.dataset.seccion=seccion;preview.src=u.href;}else actualizarPreview();};
+  const cargarPreview=(seccion="resumen")=>{const u=new URL(location.href);u.search="";u.searchParams.set("demo","1");u.searchParams.set("preview","1");u.searchParams.set("previewSection",seccion);u.searchParams.set("previewPalette",cfg.paleta||"azul");u.searchParams.set("previewMode",modoPersonalizacion);u.searchParams.set("previewQuality",calidadPersonalizacion);u.searchParams.set("previewLogo",cfg.logo_app||"folder");if(cfg.paleta==="personalizada"&&cfg.paleta_personalizada)u.searchParams.set("previewCustom",JSON.stringify(cfg.paleta_personalizada));if(cfg.logo_app_url)u.searchParams.set("previewLogoData",cfg.logo_app_url);if(preview.dataset.seccion!==seccion){preview.dataset.seccion=seccion;preview.src=u.href;}else actualizarPreview();};
   const pintar=()=>{
     contenido.replaceChildren();acciones.replaceChildren();
-    const esTour=etapa==="tour";panel.classList.toggle("onboarding-con-tour",esTour||etapa==="personalizar");
+    const esTour=etapa==="tour";panel.classList.toggle("onboarding-con-tour",esTour||etapa==="personalizar"||etapa==="wapper-config");
     panel.classList.toggle("onboarding-mostrar-preview",etapa==="personalizar"&&panelPersonalizacion==="preview");
     panel.querySelector(".onboarding-cerrar").classList.toggle("oculto",!cuentaConDatos&&(etapa==="nombre"||etapa==="personalizar"));
     const nombres={nombre:"Tu cuenta, a tu manera",personalizar:"Personaliza tu app",instalar:"Llévala contigo",tour:`Conoce ${secciones[indice]?.nombre||"App Académica"}`,"wapper-config":"Activa Wapper",flujo:"Todo conectado, paso a paso"};
     titulo.textContent=etapa==="tour"?`${traducirTextoInterfaz("Conoce")} ${traducirTextoInterfaz(secciones[indice]?.nombre||"App Académica")}`:traducirTextoInterfaz(nombres[etapa]||"App Académica");
     progreso.textContent=etapa==="tour"?`${indice+1} de ${secciones.length} secciones`:({nombre:"Bienvenida",personalizar:"Personalización",instalar:"Instalación",flujo:"Cómo empezar"}[etapa]||"");
-    preview.closest(".onboarding-preview-wrap").classList.toggle("oculto",!esTour&&etapa!=="personalizar");
+    preview.closest(".onboarding-preview-wrap").classList.toggle("oculto",!esTour&&etapa!=="personalizar"&&etapa!=="wapper-config");
     if(etapa==="nombre"){
-      contenido.append(texto("p","onboarding-lead","¿Cómo te llamas? Puedes cambiarlo después en Ajustes generales."));
-      const input=document.createElement("input");input.className="form-input";input.maxLength=60;input.autocomplete="given-name";input.value=estado.datos.perfil?.nombre_preferido||estado.datos.perfil?.nombre||"";input.setAttribute("aria-label",titulo.textContent);contenido.append(input);
+      contenido.append(texto("p","onboarding-lead","Hola, ¿cómo te llamas? Puedes cambiarlo después en Ajustes."));
+      const input=document.createElement("input");input.className="form-input";input.maxLength=60;input.autocomplete="given-name";input.value=MODO_DEMO?"":estado.datos.perfil?.nombre_preferido||estado.datos.perfil?.nombre||"";input.setAttribute("aria-label",titulo.textContent);contenido.append(input);
       acciones.append(boton("Continuar","btn-primary",()=>{const v=input.value.trim();if(!v){input.focus();return;}estado.datos.perfil.nombre_preferido=v;guardar();window.renderizarPerfil?.();etapa=cuentaConDatos?"tour":"personalizar";pintar();}));requestAnimationFrame(()=>input.focus());return;
     }
     if(etapa==="personalizar"){
       contenido.append(texto("p","onboarding-lead","Elige tema, paleta y logo. Puedes cambiarlos luego en Personalizar."));
       const modos=document.createElement("div");modos.className="onboarding-modos";
-      [["light","Claro"],["dark","Color"],["true-dark","Oscuro"]].forEach(([v,l])=>{const b=boton(l,obtenerModoTemaLocal()===v?"btn-primary":"btn-secondary",()=>{cfg.modo=v;guardarModoTemaLocal(v);aplicarPaleta(cfg.paleta||"azul",v,cfg.paleta==="personalizada"?cfg.paleta_personalizada?.colores:undefined);aplicarLogoApp();guardar();actualizarPreview();pintar();});b.setAttribute("aria-pressed",String(obtenerModoTemaLocal()===v));modos.append(b);});
+      const actualizarSeleccion=(grupo,selector,valor)=>grupo.querySelectorAll(selector).forEach(b=>{const activo=b.dataset.onboardingValor===valor;b.classList.toggle("btn-primary",activo);b.classList.toggle("btn-secondary",!activo);b.setAttribute("aria-pressed",String(activo));});
+      [["light","Claro"],["dark","Color"],["true-dark","Oscuro"]].forEach(([v,l])=>{const b=boton(l,modoPersonalizacion===v?"btn-primary":"btn-secondary",()=>{modoPersonalizacion=v;cfg.modo=v;guardarModoTemaLocal(v);document.documentElement.setAttribute("data-mode",v);aplicarPaleta(cfg.paleta||"azul",v,cfg.paleta==="personalizada"?cfg.paleta_personalizada?.colores:undefined);aplicarLogoApp();guardar();actualizarPreview();actualizarSeleccion(modos,"button",v);});b.dataset.onboardingValor=v;b.setAttribute("aria-pressed",String(modoPersonalizacion===v));modos.append(b);});
       const calidades=document.createElement("div");calidades.className="onboarding-calidades";
-      [["optimizado","Optimizado"],["fancy","Fancy · puede ser más lento"]].forEach(([v,l])=>{const b=boton(l,obtenerModoDisenoLocal()===v?"btn-primary":"btn-secondary",()=>{guardarModoDisenoLocal(v);document.documentElement.setAttribute("data-rendimiento",v==="optimizado"?"reducido":"normal");guardar();actualizarPreview();pintar();});b.setAttribute("aria-pressed",String(obtenerModoDisenoLocal()===v));calidades.append(b);});
+      [["optimizado","Optimizado"],["fancy","Fancy"]].forEach(([v,l])=>{const b=boton(v==="fancy"?"Fancy":l,calidadPersonalizacion===v?"btn-primary":"btn-secondary",()=>{calidadPersonalizacion=guardarModoDisenoLocal(v);document.documentElement.setAttribute("data-rendimiento",v==="optimizado"?"reducido":"normal");guardar();actualizarPreview();actualizarSeleccion(calidades,"button",v);notaFancy.hidden=v!=="fancy";});b.dataset.onboardingValor=v;b.setAttribute("aria-pressed",String(calidadPersonalizacion===v));calidades.append(b);});
+      const notaFancy=texto("p","onboarding-calidad-nota","El modo Fancy puede ser más lento según tu dispositivo.");notaFancy.hidden=calidadPersonalizacion!=="fancy";
       const colores=document.createElement("div");colores.className="onboarding-paletas";
-      PALETAS_DISPONIBLES.forEach((p)=>{const b=document.createElement("button");b.type="button";b.className="onboarding-color";b.title=traducirTextoInterfaz(p);b.setAttribute("aria-label",traducirTextoInterfaz(p));b.setAttribute("aria-pressed",String(cfg.paleta===p));const colors=COLORES_PREVIEW_PALETA[p]||[];b.style.background=p==="azucarado"?FONDO_PREVIEW_AZUCARADO:`linear-gradient(135deg,${colors.join(",")})`;b.addEventListener("click",()=>{cfg.paleta=p;aplicarPaleta(p,obtenerModoTemaLocal());aplicarLogoApp();guardar();actualizarPreview();pintar();});colores.append(b);});
-      const paletaPersonal=document.createElement("button");paletaPersonal.className="btn btn-secondary onboarding-paleta-nueva";paletaPersonal.setAttribute("aria-label",traducirTextoInterfaz("Crear mi paleta"));paletaPersonal.textContent="+";paletaPersonal.onclick=()=>iniciarFlujoPaletaPersonalizada({alGuardar:()=>{cfg.paleta="personalizada";cfg.paleta_personalizada=estado.datos.configuracion.paleta_personalizada;guardar();aplicarPaleta("personalizada",obtenerModoTemaLocal(),cfg.paleta_personalizada?.colores);aplicarLogoApp();actualizarPreview();}});
+      PALETAS_DISPONIBLES.forEach((p)=>{const b=document.createElement("button");b.type="button";b.className="onboarding-color";b.title=traducirTextoInterfaz(p);b.setAttribute("aria-label",traducirTextoInterfaz(p));b.setAttribute("aria-pressed",String(cfg.paleta===p));const colors=COLORES_PREVIEW_PALETA[p]||[];b.style.background=p==="azucarado"?FONDO_PREVIEW_AZUCARADO:`linear-gradient(135deg,${colors.join(",")})`;b.addEventListener("click",()=>{cfg.paleta=p;aplicarPaleta(p,modoPersonalizacion);aplicarLogoApp();guardar();actualizarPreview();pintar();});colores.append(b);});
+      const paletaPersonal=document.createElement("button");paletaPersonal.type="button";paletaPersonal.className="onboarding-color onboarding-paleta-nueva";paletaPersonal.setAttribute("aria-label",traducirTextoInterfaz("Crear mi paleta"));paletaPersonal.title=traducirTextoInterfaz("Crear mi paleta");paletaPersonal.textContent="+";paletaPersonal.onclick=()=>iniciarFlujoPaletaPersonalizada({alGuardar:()=>{cfg.paleta="personalizada";cfg.paleta_personalizada=estado.datos.configuracion.paleta_personalizada;guardar();aplicarPaleta("personalizada",modoPersonalizacion,cfg.paleta_personalizada?.colores);aplicarLogoApp();actualizarPreview();}});
       colores.append(paletaPersonal);
       const logos=document.createElement("div");logos.className="onboarding-logos";[["folder","imagenes/LogoAppFolder.png","Carpeta"],["birrete","imagenes/LogoAppBirrete.png","Birrete"]].forEach(([v,src,alt])=>{const b=document.createElement("button");b.type="button";b.className="onboarding-logo";b.setAttribute("aria-pressed",String(cfg.logo_app===v&&!cfg.logo_app_url));const img=document.createElement("img");img.src=src;img.alt=alt;b.append(img);b.onclick=()=>{cfg.logo_app=v;cfg.logo_app_url=null;guardar();aplicarLogoApp();actualizarPreview();pintar();};logos.append(b);});
       const etiquetaArchivo=document.createElement("label");etiquetaArchivo.className="btn btn-secondary onboarding-file-picker";etiquetaArchivo.append(texto("span","","Personalizado"));
       const archivo=document.createElement("input");archivo.type="file";archivo.accept="image/png,image/jpeg,image/webp";archivo.className="onboarding-file-input";archivo.setAttribute("aria-label","Elegir logo desde archivos");archivo.onchange=async()=>{const url=await prepararImagenLogo(archivo.files?.[0]);if(url){cfg.logo_app="personalizado";cfg.logo_app_url=url;guardar();aplicarLogoApp();pintar();}};etiquetaArchivo.append(archivo);
       const toggleLogos=boton("Logos de la app  ⌄","btn-secondary",()=>{const abierto=toggleLogos.getAttribute("aria-expanded")==="true";toggleLogos.setAttribute("aria-expanded",String(!abierto));toggleLogos.textContent=`Logos de la app  ${abierto?"⌄":"⌃"}`;logos.hidden=abierto;});toggleLogos.setAttribute("aria-expanded","false");logos.hidden=true;
       const filaLogo=document.createElement("div");filaLogo.className="onboarding-logo-heading";filaLogo.append(toggleLogos,etiquetaArchivo);
-      contenido.append(modos,calidades,colores,filaLogo,logos);cargarPreview("resumen");
+      contenido.append(modos,calidades,notaFancy,colores,filaLogo,logos);cargarPreview("resumen");
       const esMovil=matchMedia("(max-width:760px)").matches;
       acciones.append(boton("Atrás","btn-secondary",()=>{if(panelPersonalizacion==="preview"){panelPersonalizacion="opciones";pintar();}else{etapa="nombre";pintar();}}));
       if(esMovil&&panelPersonalizacion==="preview"){
@@ -146,18 +172,24 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
       const lista=document.createElement("ul");lista.className="onboarding-lista";sec.puntos.forEach((p)=>lista.append(texto("li","",p)));bloqueConoce.append(botonConoce,lista);contenido.append(bloqueConoce);
       cerrarListaTour=()=>{clearTimeout(temporizadorTour);bloqueConoce.classList.add("plegado");botonConoce.textContent="Conoce "+sec.nombre+" ⌄";};
       clearTimeout(temporizadorTour);if(matchMedia("(max-width:760px) and (orientation: portrait)").matches)temporizadorTour=setTimeout(()=>{if(etapa==="tour"&&bloqueConoce.isConnected)cerrarListaTour?.();},5000);
-      const detectarInteraccion=()=>{if(etapa==="tour")cerrarListaTour?.();};
+      const detectarInteraccion=(ev)=>{if(etapa==="tour"&&matchMedia("(orientation: portrait)").matches&&!ev.target.closest(".onboarding-conoce"))cerrarListaTour?.();};
       ["pointerdown","keydown","touchstart","wheel"].forEach(tipo=>overlay.addEventListener(tipo,detectarInteraccion,{once:true,capture:true}));
       cargarPreview(sec.id);
       if(indice>0)acciones.append(boton("Atrás","btn-secondary",()=>{indice--;pintar();}));
       const usarSeccion=()=>{cfg.navegacion_oculta=(cfg.navegacion_oculta||[]).filter(id=>id!==sec.id);guardar();window.aplicarVisibilidadNavegacion?.();siguiente();};
-      if(sec.id==="asistente")acciones.append(boton("Configurar Wapper","btn-secondary",()=>{etapa="wapper-config";pintar();}));
+      if(sec.id==="asistente"){
+        const accionesWapper=document.createElement("div");accionesWapper.className="onboarding-wapper-cta-wrap";
+        accionesWapper.append(boton("Configurar Wapper","btn-primary onboarding-wapper-cta",()=>{etapa="wapper-config";pintar();}));contenido.append(accionesWapper);
+      }
       if(indice===0)acciones.append(boton("Atrás","btn-secondary",()=>{etapa="personalizar";pintar();}));
       acciones.append(boton("No me interesa","btn-secondary",()=>{cfg.navegacion_oculta=[...new Set([...(cfg.navegacion_oculta||[]),sec.id])];guardar();window.aplicarVisibilidadNavegacion?.();siguiente();}),boton(indice===secciones.length-1?"Seguir":"Siguiente", "btn-primary",usarSeccion));return;
     }
     if(etapa==="wapper-config"){
-      const pasosWapper=document.createElement("ol");pasosWapper.className="onboarding-dependencias";["Abre Ajustes generales.","Despliega Asistente IA (Gemini).","Pega tu clave personal de Gemini y guárdala.","Vuelve a Wapper para dictar una tarea o consultar tu Agenda."].forEach(t=>pasosWapper.append(texto("li","",t)));contenido.append(pasosWapper);cargarPreview("configuracion");
-      acciones.append(boton("Atrás","btn-secondary",()=>{etapa="tour";pintar();}),boton("Abrir configuración","btn-primary",()=>{cfg.onboarding_v1_completado=true;guardar();overlay.remove();navegar?.("configuracion");setTimeout(()=>{const seccion=[...document.querySelectorAll(".ajuste-seccion")].find(e=>/Asistente IA \(Gemini\)/i.test(e.textContent));const botonAcordeon=seccion?.querySelector(".ajuste-seccion-cabecera");if(botonAcordeon&&seccion.classList.contains("colapsada"))botonAcordeon.click();const input=document.getElementById("input-gemini-key");input?.scrollIntoView({behavior:"smooth",block:"center"});input?.focus();},450)}),boton("Seguir con la guía","btn-secondary",()=>{etapa="tour";siguiente();}));return;
+      const pasosWapper=document.createElement("ol");pasosWapper.className="onboarding-dependencias";["Wapper usa tu Agenda para crear y consultar pendientes.","Guarda aquí tu clave personal de Gemini para activarlo.","Después podrás dictar tareas, exámenes y eventos desde Asistente."].forEach(t=>pasosWapper.append(texto("li","",t)));contenido.append(pasosWapper);
+      contenido.append(texto("p","onboarding-wapper-estado",cfg.gemini_api_key?"Wapper está activo: ya hay una clave de Gemini guardada.":"Wapper necesita una clave personal de Gemini para funcionar."));
+      if(!cfg.gemini_api_key){const label=texto("label","onboarding-wapper-etiqueta","Clave de Gemini");const input=document.createElement("input");input.type="password";input.className="form-input";input.autocomplete="new-password";input.placeholder="Pega tu clave personal";input.setAttribute("aria-label","Clave de Gemini");label.append(input);contenido.append(label);contenido.append(boton("Guardar y activar Wapper","btn-primary onboarding-wapper-cta",()=>{const clave=input.value.trim();if(!clave){input.focus();return;}cfg.gemini_api_key=clave;guardar();window.aplicarVisibilidadBotonAsistente?.();actualizarPreview();pintar();}));}
+      cargarPreview("asistente");
+      acciones.append(boton("Atrás","btn-secondary",()=>{etapa="tour";pintar();}),boton("Continuar con la guía","btn-primary",()=>{etapa="tour";siguiente();}));return;
     }
     const pasos=document.createElement("ol");pasos.className="onboarding-dependencias";["Agrega tu plan de estudios.","Crea un semestre y matricula tus materias.","Usa esas materias en Horario, Agenda y Tiempo.","Wapper trabaja con tu Agenda; Comunidad y Finanzas funcionan por separado."].forEach(t=>pasos.append(texto("li","",t)));contenido.append(pasos);
     acciones.append(boton("Atrás","btn-secondary",()=>{indice=secciones.length-1;etapa="tour";pintar();}),boton("Lo haré después","btn-secondary",()=>fin(false)),boton(tienePlanArmado?"Continuar":"Agregar plan y ver la guía","btn-primary",()=>tienePlanArmado?preguntarPorOtroPlan():fin(true)));
@@ -170,6 +202,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
 function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres = false } = {}){
   const yaTienePlan = Boolean(estado.datos?.planes_estudio?.some((plan) => plan.materias?.length || plan.optativas_disponibles?.length));
   const semestresIniciales=new Set((estado.datos?.semestres||[]).map(s=>s.id));
+  let semestreCreadoEnGuia=false;
   const pasos=[
     ...(posteriorImportacion ? [
       {selector:()=>yaEnSemestres?document.getElementById("seccion-semestres"):document.getElementById("nav-semestres"),texto:"Tu plan ya está guardado. Ahora registra un semestre y matricula las materias que llevarás."},
@@ -184,26 +217,98 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
       {selector:()=>[...document.querySelectorAll("#seccion-plan-estudios button")].find(b=>/^importar$/i.test(b.textContent.trim())),texto:"Pulsa Importar para guardar y revisar las materias. Cuando termine, la guía te llevará a Semestres para continuar."},
     ])
   ];let i=0;const pop=document.createElement("aside");pop.className="guia-plan-flotante";pop.setAttribute("role","dialog");document.body.append(pop);let resaltado=null;let esperaAlta=null;
-  const cerrar=()=>{resaltado?.classList.remove("guia-plan-resaltado");pop.remove();if(cerrarGuiaPlanActiva===cerrar)cerrarGuiaPlanActiva=null;};
+  const cerrar=({continuarSemestres=false}={})=>{resaltado?.classList.remove("guia-plan-resaltado");pop.remove();if(cerrarGuiaPlanActiva===cerrar)cerrarGuiaPlanActiva=null;if(continuarSemestres&&semestreCreadoEnGuia){const info=SECCIONES_TUTORIAL.find(s=>s.id==="semestres");setTimeout(()=>iniciarGuiaSeccion(info),180);}};
   cerrarGuiaPlanActiva=cerrar;
-  const revisarAlta=()=>{if(!pop.isConnected||i!==1)return;const nuevos=(estado.datos?.semestres||[]).filter(s=>!semestresIniciales.has(s.id));if(nuevos.length){const semestre=nuevos.sort((a,b)=>(b._actualizadoEn||0)-(a._actualizadoEn||0))[0];pasos.splice(2,0,{selector:()=>document.querySelector(`[data-semestre-id="${semestre.id}"]`)||document.getElementById("seccion-semestres"),texto:"Listo: el semestre ya está registrado con sus materias. Abre la tarjeta para revisar asignaciones y notas; luego conecta estas materias con Horario, Agenda y Tiempo."});i=2;pintar();return;}if(!document.querySelector(".overlay-alta-semestre")){if(esperaAlta)clearInterval(esperaAlta);esperaAlta=null;setTimeout(pintar,150);return;}setTimeout(revisarAlta,500);};
-  const pintar=()=>{resaltado?.classList.remove("guia-plan-resaltado");if(i>=pasos.length){cerrar();return;}if(!posteriorImportacion&&!yaTienePlan&&i>=1&&!document.getElementById("textarea-csv-importar")){const link=[...document.querySelectorAll("#seccion-plan-estudios .pill-group button")].find(b=>/Pegar link/i.test(b.textContent));if(link)link.click();setTimeout(pintar,80);return;}resaltado=pasos[i].selector();resaltado?.classList.add("guia-plan-resaltado");resaltado?.scrollIntoView({behavior:"smooth",block:"center"});pop.replaceChildren();const titulo=document.createElement("strong");titulo.textContent=`${i+1} / ${pasos.length}`;const p=document.createElement("p");p.textContent=traducirTextoInterfaz(pasos[i].texto);pop.append(titulo,p);const acciones=document.createElement("div");acciones.className="row";const seguir=document.createElement("button");seguir.className="btn btn-primary";seguir.textContent=traducirTextoInterfaz(i===pasos.length-1?"Entendido":"Siguiente");seguir.onclick=()=>{if(posteriorImportacion&&i===0)navegar?.("semestres");if(posteriorImportacion&&i===1){resaltado?.click();pop.classList.add("oculto");esperaAlta=setInterval(()=>{if(!document.querySelector(".overlay-alta-semestre")){clearInterval(esperaAlta);esperaAlta=null;}},500);setTimeout(revisarAlta,500);return;}i++;pintar();};const saltar=document.createElement("button");saltar.className="btn btn-secondary";saltar.textContent=traducirTextoInterfaz("Saltar guía");saltar.onclick=cerrar;acciones.append(seguir,saltar);pop.append(acciones);pop.classList.remove("oculto");};pintar();
-  window.continuarTutorialDespuesDeImportarPlan=()=>{if(!cerrarGuiaPlanActiva)return;cerrar();navegar?.("semestres");setTimeout(()=>iniciarGuiaPlan({navegar,posteriorImportacion:true,yaEnSemestres:true}),350);};
+  const revisarAlta=()=>{if(!pop.isConnected||i!==1)return;const nuevos=(estado.datos?.semestres||[]).filter(s=>!semestresIniciales.has(s.id));if(nuevos.length){semestreCreadoEnGuia=true;estado.datos.configuracion.tutoriales_secciones_vistas=estado.datos.configuracion.tutoriales_secciones_vistas||{};estado.datos.configuracion.tutoriales_secciones_vistas.semestres=true;guardar();const semestre=nuevos.sort((a,b)=>(b._actualizadoEn||0)-(a._actualizadoEn||0))[0];pasos.splice(2,0,{selector:()=>document.querySelector(`[data-semestre-id="${semestre.id}"]`)||document.getElementById("seccion-semestres"),texto:"Listo: el semestre ya está registrado con sus materias. Abre la tarjeta para revisar asignaciones y notas; luego conecta estas materias con Horario, Agenda y Tiempo."});i=2;pintar();return;}if(!document.querySelector(".overlay-alta-semestre")){if(esperaAlta)clearInterval(esperaAlta);esperaAlta=null;setTimeout(pintar,150);return;}setTimeout(revisarAlta,500);};
+  const pintar=()=>{resaltado?.classList.remove("guia-plan-resaltado");if(i>=pasos.length){cerrar({continuarSemestres:posteriorImportacion&&yaEnSemestres});return;}if(!posteriorImportacion&&!yaTienePlan&&i>=1&&!document.getElementById("textarea-csv-importar")){const link=[...document.querySelectorAll("#seccion-plan-estudios .pill-group button")].find(b=>/Pegar link/i.test(b.textContent));if(link)link.click();setTimeout(pintar,80);return;}resaltado=pasos[i].selector();resaltado?.classList.add("guia-plan-resaltado");resaltado?.scrollIntoView({behavior:"smooth",block:"center"});pop.replaceChildren();const titulo=document.createElement("strong");titulo.textContent=`${i+1} / ${pasos.length}`;const p=document.createElement("p");p.textContent=traducirTextoInterfaz(pasos[i].texto);pop.append(titulo,p);const acciones=document.createElement("div");acciones.className="row";const seguir=document.createElement("button");seguir.className="btn btn-primary";seguir.textContent=traducirTextoInterfaz(i===pasos.length-1?"Continuar":"Siguiente");seguir.onclick=()=>{if(posteriorImportacion&&i===0){estado.datos.configuracion.tutoriales_secciones_vistas=estado.datos.configuracion.tutoriales_secciones_vistas||{};estado.datos.configuracion.tutoriales_secciones_vistas.semestres=true;guardar();navegar?.("semestres");}if(posteriorImportacion&&i===1){resaltado?.click();pop.classList.add("oculto");esperaAlta=setInterval(()=>{if(!document.querySelector(".overlay-alta-semestre")){clearInterval(esperaAlta);esperaAlta=null;}},500);setTimeout(revisarAlta,500);return;}i++;pintar();};const saltar=document.createElement("button");saltar.className="btn btn-secondary";saltar.textContent=traducirTextoInterfaz("Saltar guía");saltar.onclick=cerrar;acciones.append(seguir,saltar);pop.append(acciones);pop.classList.remove("oculto");};pintar();
+  window.continuarTutorialDespuesDeImportarPlan=()=>{if(!cerrarGuiaPlanActiva)return;estado.datos.configuracion.tutoriales_secciones_vistas=estado.datos.configuracion.tutoriales_secciones_vistas||{};estado.datos.configuracion.tutoriales_secciones_vistas.semestres=true;guardar();cerrar();navegar?.("semestres");setTimeout(()=>iniciarGuiaPlan({navegar,posteriorImportacion:true,yaEnSemestres:true}),350);};
 }
 
 function inicializarTutorialDesdeAjustes({ navegar, toast } = {}) {
   const btn=document.getElementById("btn-repetir-tutorial");if(!btn||btn.dataset.inicializado)return;btn.dataset.inicializado="1";btn.addEventListener("click",()=>{if(!estado.datos?.configuracion)return;estado.datos.configuracion.onboarding_v1_completado=false;mostrarOnboardingNuevoUsuario({navegar,toast});});
 }
 
+const SELECTORES_GUIA_SECCION = {
+  resumen: [
+    () => document.querySelector("#seccion-resumen .resumen-semana-tarjeta") || document.querySelector("#seccion-resumen .resumen-bloque"),
+    () => document.querySelector("#seccion-resumen .resumen-estudio-hoy-tarjeta") || document.querySelector("#seccion-resumen .resumen-bloque"),
+    () => document.querySelector("#seccion-resumen .resumen-bloque:last-child") || document.getElementById("seccion-resumen"),
+  ],
+  agenda: [
+    () => document.getElementById("pills-agenda-vista"),
+    () => document.getElementById("btn-agenda-agregar"),
+    () => document.getElementById("agenda-lista-dias") || document.getElementById("agenda-vista-calendario"),
+  ],
+  horario: [
+    () => document.getElementById("horario-header"),
+    () => document.getElementById("btn-horario-agregar"),
+    () => document.getElementById("btn-horario-amigos"),
+  ],
+  "tiempo-estudio": [
+    () => document.querySelector("#seccion-tiempo-estudio .te-selector-semestre-tiempo"),
+    () => document.querySelector("#seccion-tiempo-estudio [data-vista='materias']")?.parentElement,
+    () => [...document.querySelectorAll("#seccion-tiempo-estudio button")].find(b => /iniciar/i.test(b.textContent)) || document.getElementById("seccion-tiempo-estudio"),
+  ],
+  semestres: [
+    () => [...document.querySelectorAll("#seccion-semestres button")].find(b => /registrar semestre|crear semestre|agregar semestre/i.test(b.textContent)) || document.getElementById("seccion-semestres"),
+    () => document.querySelector("#seccion-semestres [data-semestre-id]") || document.getElementById("seccion-semestres"),
+    () => [...document.querySelectorAll("#seccion-semestres button")].find(b => /nota|historial|editar/i.test(b.textContent)) || document.querySelector("#seccion-semestres [data-semestre-id]") || document.getElementById("seccion-semestres"),
+  ],
+  comunidad: [
+    () => [...document.querySelectorAll("#seccion-comunidad button")].find(b => /agregar|nuevo|compañero|profesor/i.test(b.textContent)) || document.getElementById("seccion-comunidad"),
+    () => document.querySelector("#seccion-comunidad .glass-card") || document.getElementById("seccion-comunidad"),
+    () => [...document.querySelectorAll("#seccion-comunidad button")].find(b => /horario|contacto|valoraci/i.test(b.textContent)) || document.getElementById("seccion-comunidad"),
+  ],
+  finanzas: [
+    () => document.querySelector("#seccion-finanzas .finanzas-tabs-contenedor") || document.getElementById("seccion-finanzas"),
+    () => [...document.querySelectorAll("#seccion-finanzas button")].find(b => /agregar|nuevo|gasto|ingreso/i.test(b.textContent)) || document.getElementById("seccion-finanzas"),
+    () => document.getElementById("finanzas-contenido") || document.getElementById("seccion-finanzas"),
+  ],
+  asistente: [
+    () => document.querySelector("#seccion-asistente .glass-card") || document.getElementById("seccion-asistente"),
+    () => document.querySelector("#seccion-asistente textarea, #seccion-asistente input:not([type='hidden'])") || document.getElementById("seccion-asistente"),
+    () => document.getElementById("nav-configuracion"),
+  ],
+  configuracion: [
+    () => document.getElementById("ajuste-tamano-texto"),
+    () => document.getElementById("selector-modos-apariencia"),
+    () => document.getElementById("grid-paletas") || document.getElementById("selector-logo-app"),
+  ],
+};
+
+function iniciarGuiaSeccion(info) {
+  const objetivos=SELECTORES_GUIA_SECCION[info.id]||[];
+  let indice=0,resaltado=null;
+  const pop=document.createElement("aside");pop.className="guia-plan-flotante guia-seccion-flotante";pop.setAttribute("role","dialog");pop.setAttribute("aria-live","polite");pop.setAttribute("aria-label",`${traducirTextoInterfaz("Tutorial")}: ${traducirTextoInterfaz(info.nombre)}`);document.body.append(pop);
+  const cerrar=()=>{resaltado?.classList.remove("guia-plan-resaltado");pop.remove();};
+  const pintar=()=>{
+    resaltado?.classList.remove("guia-plan-resaltado");
+    if(indice>=info.puntos.length){cerrar();return;}
+    const buscar=objetivos[indice];resaltado=buscar?.()||document.getElementById(`seccion-${info.id}`);
+    resaltado?.classList.add("guia-plan-resaltado");resaltado?.scrollIntoView({behavior:"smooth",block:"center",inline:"nearest"});
+    pop.replaceChildren();
+    const titulo=document.createElement("strong");titulo.textContent=`${traducirTextoInterfaz(info.nombre)} · ${indice+1}/${info.puntos.length}`;
+    const texto=document.createElement("p");texto.textContent=traducirTextoInterfaz(info.puntos[indice]);
+    const acciones=document.createElement("div");acciones.className="guia-seccion-acciones";
+    if(indice>0){const anterior=document.createElement("button");anterior.type="button";anterior.className="btn btn-secondary";anterior.textContent=traducirTextoInterfaz("Anterior");anterior.onclick=()=>{indice--;pintar();};acciones.append(anterior);}
+    const siguiente=document.createElement("button");siguiente.type="button";siguiente.className="btn btn-primary";siguiente.textContent=traducirTextoInterfaz(indice===info.puntos.length-1?"Entendido":"Siguiente");siguiente.onclick=()=>{indice++;pintar();};
+    const saltar=document.createElement("button");saltar.type="button";saltar.className="btn btn-secondary";saltar.textContent=traducirTextoInterfaz("Saltar guía");saltar.onclick=cerrar;
+    acciones.append(siguiente,saltar);pop.append(titulo,texto,acciones);
+  };
+  pintar();
+}
+
 function mostrarTutorialPrimeraVez(seccion) {
   const cfg=estado.datos?.configuracion;
   const info=SECCIONES_TUTORIAL.find(s=>s.id===seccion);
-  if(!cfg||cfg.onboarding_v1_completado===false||!info||cfg.tutoriales_secciones_vistas?.[seccion]||document.querySelector(".onboarding-overlay,.tutorial-seccion-overlay"))return false;
+  if(!cfg||cfg.onboarding_v1_completado===false||!info||cfg.tutoriales_secciones_vistas?.[seccion]||document.querySelector(".onboarding-overlay,.tutorial-seccion-overlay,.guia-seccion-flotante,.guia-plan-flotante"))return false;
   cfg.tutoriales_secciones_vistas=cfg.tutoriales_secciones_vistas||{};cfg.tutoriales_secciones_vistas[seccion]=true;guardar();
   const overlay=document.createElement("div");overlay.className="modal-overlay tutorial-seccion-overlay";overlay.setAttribute("role","dialog");overlay.setAttribute("aria-modal","true");
   const card=document.createElement("section");card.className="glass-card modal-card stack tutorial-seccion-card";const h=document.createElement("h2");h.textContent=`${traducirTextoInterfaz("Conoce")} ${traducirTextoInterfaz(info.nombre)}`;card.append(h);
   const lista=document.createElement("ul");lista.className="onboarding-lista";info.puntos.forEach(p=>lista.append(textoTutorial("li",p)));card.append(lista);
-  const cerrar=document.createElement("button");cerrar.type="button";cerrar.className="btn btn-primary btn-block";cerrar.textContent=traducirTextoInterfaz("Entendido");cerrar.onclick=()=>overlay.remove();card.append(cerrar);overlay.append(card);document.body.append(overlay);cerrar.focus();return true;
-}
-function textoTutorial(tag,value){const e=document.createElement(tag);e.textContent=traducirTextoInterfaz(value);return e;}
+  const acciones=document.createElement("div");acciones.className="tutorial-seccion-acciones";
+  const tutorial=document.createElement("button");tutorial.type="button";tutorial.className="btn btn-secondary";tutorial.textContent=traducirTextoInterfaz("Guía");tutorial.title=traducirTextoInterfaz("Guía paso a paso para conocer esta sección");tutorial.onclick=()=>{overlay.remove();if(info.id==="plan-estudios")iniciarGuiaPlan({navegar:window.mostrarSeccion});else iniciarGuiaSeccion(info);};
+  const cerrar=document.createElement("button");cerrar.type="button";cerrar.className="btn btn-primary";cerrar.textContent=traducirTextoInterfaz("Entendido");cerrar.onclick=()=>overlay.remove();
+  acciones.append(tutorial,cerrar);card.append(acciones);overlay.append(card);document.body.append(overlay);tutorial.focus();return true;
+}function textoTutorial(tag,value){const e=document.createElement(tag);e.textContent=traducirTextoInterfaz(value);return e;}
 export { mostrarOnboardingNuevoUsuario, inicializarTutorialDesdeAjustes, mostrarTutorialPrimeraVez };

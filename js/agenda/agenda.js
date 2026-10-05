@@ -25,8 +25,10 @@ import { obtenerEstudioParaHoy, irADetalleMateriaTiempoEstudio, formatearHorasMi
 import {
   abrirModalEventoAgenda,
   abrirTarjetaInfoEventoAgenda,
+  confirmarBorrarEventoAgenda,
   inicializarModalAgendaEvento,
   manejarToqueCheckTarea,
+  obtenerNombreMateriaEvento,
 } from "./agenda-modal.js";
 // Sincronización con Google Calendar (2026-08-25, reemplaza Web Push): acá
 // solo se usa al BORRAR en lote (modo selección). Completar/perder/restaurar
@@ -57,6 +59,7 @@ import { eliminarAdjunto, obtenerAdjuntosActivosDe, obtenerAdjuntosDe } from "..
 
 const ETIQUETA_TIPO = { evento: "Eventos", tarea: "Tareas", examen: "Exámenes" };
 const ORDEN_TIPO = ["examen", "tarea", "evento"];
+let idEtiquetaAgendaArrastrada = null;
 
 /**
  * Feature "filtro por estado" — pedido nuevo: 7 badges (eran 6; se sumó
@@ -139,14 +142,14 @@ function renderizarEditorTiposAgenda() {
     return { envoltura, input };
   };
   Object.entries(estadosDefault).forEach(([id, [etiqueta, hex]]) => {
-    const fila = document.createElement("div"); fila.className = "row"; fila.style.cssText = "gap:8px;align-items:center;padding:6px 8px;border:1px solid var(--border-glass);border-radius:12px;";
+    const fila = document.createElement("div"); fila.className = "row agenda-estado-config-fila"; fila.style.cssText = "gap:8px;align-items:center;padding:6px 8px;border:1px solid var(--border-glass);border-radius:12px;";
     const texto = document.createElement("span"); texto.textContent = traducirTextoInterfaz(etiqueta); texto.style.flex = "1";
     const color = crearControlColor(cfg.agenda_colores_estado[id] || hex, `Color de ${etiqueta}`);
     color.input.addEventListener("change", () => { cfg.agenda_colores_estado[id] = color.input.value; guardarConfiguracionTiposAgenda(); });
-    fila.append(texto, color.envoltura); cont.appendChild(fila);
+    fila.append(color.envoltura, texto); cont.appendChild(fila);
   });
   cfg.agenda_tipos.filter((t) => !t.eliminado).forEach((tipo) => {
-    const fila = document.createElement("div"); fila.className = "row"; fila.style.cssText = "gap:8px;align-items:center;flex-wrap:wrap;padding:8px;border:1px solid var(--border-glass);border-radius:12px;";
+    const fila = document.createElement("div"); fila.className = "row agenda-tipo-config-fila"; fila.draggable=true; fila.dataset.tipoId=tipo.id; fila.title="Arrastra para cambiar el orden"; fila.style.cssText = "gap:8px;align-items:center;flex-wrap:wrap;padding:8px;border:1px solid var(--border-glass);border-radius:12px;";
     const nombre = document.createElement("input"); nombre.className = "form-input"; nombre.value = tipo.nombre; nombre.maxLength = 24; nombre.setAttribute("aria-label", `Nombre de ${tipo.nombre}`); nombre.style.cssText = "flex:1;min-width:110px;";
     nombre.addEventListener("change", () => { const v = nombre.value.trim(); if (!v) { nombre.value = tipo.nombre; return; } tipo.nombre = v; guardarConfiguracionTiposAgenda(); });
     const color = crearControlColor(/^#[0-9a-f]{6}$/i.test(tipo.color || "") ? tipo.color : "#8b5cf6", `Color de ${tipo.nombre}`);
@@ -172,7 +175,7 @@ function renderizarEditorTiposAgenda() {
         alConservar: conservar, alCancelar: () => { chk.checked = true; } });
       else conservar();
     });
-    const borrar = document.createElement("button"); borrar.type = "button"; borrar.className = "btn btn-secondary"; borrar.textContent = "Eliminar"; borrar.title = "Quitar esta etiqueta de las opciones";
+    const borrar = document.createElement("button"); borrar.type = "button"; borrar.className = "btn btn-secondary agenda-etiqueta-eliminar"; borrar.textContent = "🗑️"; borrar.setAttribute("aria-label",`Eliminar etiqueta ${tipo.nombre}`); borrar.title = "Quitar esta etiqueta de las opciones";
     borrar.addEventListener("click", () => {
       if (!cfg.agenda_tipos.some((t) => t.id !== tipo.id && t.activo !== false && !t.eliminado && t.base === tipo.base)) {
         mostrarToast(`Agrega otra etiqueta con comportamiento “${tipo.base}” antes de eliminar la última.`);
@@ -188,7 +191,12 @@ function renderizarEditorTiposAgenda() {
     });
     const base = document.createElement("span"); base.className = "muted"; base.style.fontSize = ".72rem"; base.textContent = `Como ${tipo.base}`;
     fila.classList.add("agenda-tipo-config-fila");
-    fila.append(nombre, color.envoltura, etiquetaActiva, borrar, base); cont.appendChild(fila);
+    fila.append(color.envoltura,nombre,etiquetaActiva,borrar,base); cont.appendChild(fila);
+    fila.addEventListener("dragstart",(ev)=>{idEtiquetaAgendaArrastrada=tipo.id;fila.classList.add("arrastrando");ev.dataTransfer?.setData("text/plain",tipo.id);if(ev.dataTransfer)ev.dataTransfer.effectAllowed="move";});
+    fila.addEventListener("dragend",()=>{idEtiquetaAgendaArrastrada=null;fila.classList.remove("arrastrando");cont.querySelectorAll(".agenda-tipo-config-fila").forEach((n)=>n.classList.remove("destino-arrastre"));});
+    fila.addEventListener("dragover",(ev)=>{if(!idEtiquetaAgendaArrastrada||idEtiquetaAgendaArrastrada===tipo.id)return;ev.preventDefault();fila.classList.add("destino-arrastre");});
+    fila.addEventListener("dragleave",()=>fila.classList.remove("destino-arrastre"));
+    fila.addEventListener("drop",(ev)=>{ev.preventDefault();fila.classList.remove("destino-arrastre");const desde=idEtiquetaAgendaArrastrada||ev.dataTransfer?.getData("text/plain");if(!desde||desde===tipo.id)return;const activas=cfg.agenda_tipos.filter((t)=>!t.eliminado);const origen=activas.findIndex((t)=>t.id===desde),destino=activas.findIndex((t)=>t.id===tipo.id);if(origen<0||destino<0)return;const [movida]=activas.splice(origen,1);activas.splice(destino,0,movida);cfg.agenda_tipos=[...activas,...cfg.agenda_tipos.filter((t)=>t.eliminado)];guardarConfiguracionTiposAgenda();});
   });
 }
 
@@ -200,10 +208,16 @@ function agregarTipoEtiquetaAgenda() {
   estado.datos.configuracion.agenda_tipos = [...obtenerTiposEtiquetaAgenda(), tipo];
   if (nombreEl) nombreEl.value = "";
   guardarConfiguracionTiposAgenda();
+  document.getElementById("agenda-tipo-nuevo-form")?.classList.add("oculto");
 }
 
 function inicializarEditorTiposAgenda() {
   renderizarEditorTiposAgenda();
+  document.getElementById("agenda-tipo-nuevo-abrir")?.addEventListener("click",()=>{
+    const form=document.getElementById("agenda-tipo-nuevo-form");
+    form?.classList.toggle("oculto");
+    if(!form?.classList.contains("oculto"))document.getElementById("agenda-tipo-nuevo-nombre")?.focus();
+  });
   document.getElementById("agenda-tipo-nuevo-agregar")?.addEventListener("click", agregarTipoEtiquetaAgenda);
   document.getElementById("agenda-tipo-nuevo-nombre")?.addEventListener("keydown", (ev) => {
     if (ev.key === "Enter") { ev.preventDefault(); agregarTipoEtiquetaAgenda(); }
@@ -277,6 +291,12 @@ function construirBarraFiltroEstadosAgenda() {
       btn.style.background = activos.has(id) ? `color-mix(in srgb, ${color} 16%, transparent)` : "";
     }
     btn.addEventListener("click", () => alternarFiltroEstadoAgenda(id));
+    btn.addEventListener("contextmenu",(ev)=>{
+      ev.preventDefault();
+      const todos=obtenerOpcionesFiltroAgenda().map((o)=>o.id);
+      const seleccion=new Set(estado.agendaFiltroEstados===null?todos:estado.agendaFiltroEstados);
+      seleccion.delete(id);estado.agendaFiltroEstados=[...seleccion];renderizarAgendaInterno();
+    });
     barra.appendChild(btn);
     return btn;
   });
@@ -322,6 +342,7 @@ function asegurarEstadoAgendaBaseInicializado() {
   // marcados y quito uno no deben quitarse los demás"). Mismo patrón de
   // sesión (no persistente) que el resto de estado.agenda* de este bloque.
   if (typeof estado.agendaFiltroEstados === "undefined") estado.agendaFiltroEstados = null;
+  if (typeof estado.agendaBusquedaConsulta === "undefined") estado.agendaBusquedaConsulta = "";
   // Feature "modo selección" (mantener presionado para borrar varias):
   // `agendaModoSeleccion` es el interruptor general, `agendaSeleccionIds`
   // los ids de EventoAgenda marcados mientras dura. Viven en `estado` (no
@@ -527,6 +548,7 @@ function construirItemEvento(evento) {
   item.appendChild(izquierda);
 
   item.appendChild(construirColumnaDerechaEvento(evento, estilo));
+  item.addEventListener("contextmenu",(ev)=>{if(!document.getElementById("seccion-agenda")?.contains(item))return;ev.preventDefault();ev.stopPropagation();mostrarMenuRapidoEvento(evento,ev.clientX,ev.clientY);});
 
   item.addEventListener("click", () => {
     if (estado.agendaModoSeleccion) {
@@ -545,6 +567,62 @@ function construirItemEvento(evento) {
   registrarPresionLargaSeleccion(item, evento.id);
 
   return item;
+}
+
+function mostrarMenuRapidoEvento(evento,x,y) {
+  document.querySelectorAll(".agenda-menu-rapido-evento").forEach((n)=>n.remove());
+  const menu=document.createElement("div");menu.className="agenda-menu-rapido-evento glass-panel";menu.setAttribute("role","menu");
+  menu.style.left=`${Math.max(8,Math.min(x,innerWidth-158))}px`;menu.style.top=`${Math.max(8,Math.min(y,innerHeight-110))}px`;
+  const crear=(texto,accion)=>{const b=document.createElement("button");b.type="button";b.className="btn-discreto";b.textContent=texto;b.setAttribute("role","menuitem");b.addEventListener("click",(ev)=>{ev.stopPropagation();menu.remove();accion();});menu.append(b);};
+  crear("Editar",()=>abrirModalEventoAgenda({eventoId:evento.id}));
+  crear("Borrar",()=>confirmarBorrarEventoAgenda(evento));document.body.append(menu);
+  const tecla=(ev)=>{if(ev.key==="Escape"){menu.remove();limpiar();}};
+  const fuera=(ev)=>{if(!menu.contains(ev.target)){menu.remove();limpiar();}};
+  function limpiar(){document.removeEventListener("pointerdown",fuera,true);document.removeEventListener("keydown",tecla,true);}
+  requestAnimationFrame(()=>{document.addEventListener("pointerdown",fuera,true);document.addEventListener("keydown",tecla,true);});
+}
+
+function distanciaEdicionAgenda(a,b) {
+  if(a===b)return 0;if(!a.length)return b.length;if(!b.length)return a.length;
+  let anterior=Array.from({length:b.length+1},(_,i)=>i);
+  for(let i=1;i<=a.length;i++){const actual=[i];for(let j=1;j<=b.length;j++)actual[j]=Math.min(actual[j-1]+1,anterior[j]+1,anterior[j-1]+(a[i-1]===b[j-1]?0:1));anterior=actual;}
+  return anterior[b.length];
+}
+function normalizarBusquedaAgenda(t) { return String(t||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase().trim(); }
+function puntajeBusquedaAgenda(consulta,cadena) {
+  const tokens=normalizarBusquedaAgenda(consulta).split(/\s+/).filter(Boolean), palabras=normalizarBusquedaAgenda(cadena).split(/[^a-z0-9]+/).filter(Boolean);
+  if(!tokens.length||!palabras.length)return 0;
+  return tokens.reduce((s,t)=>s+Math.max(...palabras.map((p)=>1-distanciaEdicionAgenda(t,p)/Math.max(t.length,p.length,1))),0)/tokens.length;
+}
+function obtenerTextoIndiceEventoAgenda(ev) {
+  const tipo=obtenerTiposEtiquetaAgenda().find((t)=>t.id===(ev.tipo_etiqueta_id||ev.tipo))?.nombre||ev.tipo||"";
+  const fecha=ev.fecha?new Date(`${ev.fecha}T12:00:00`).toLocaleDateString(obtenerLocaleInterfaz(),{weekday:"long",day:"numeric",month:"long",year:"numeric"}):"";
+  const adjuntos=obtenerAdjuntosActivosDe("evento",ev.id).flatMap((a)=>[a.nombre,a.url,a.enlace,a.descripcion].filter(Boolean));
+  return [tipo,ev.nombre,ev.notas,ev.fecha,fecha,ev.hora,obtenerNombreMateriaEvento(ev),...adjuntos].join(" ");
+}
+function renderizarResultadosBusquedaAgenda() {
+  const cont=document.getElementById("agenda-busqueda-resultados"),q=estado.agendaBusquedaConsulta||"";if(!cont)return;
+  const panes=["agenda-lista-dias","agenda-vista-calendario","agenda-vista-materia"].map((id)=>document.getElementById(id)).filter(Boolean);
+  const buscando=Boolean(q.trim());panes.forEach((p)=>p.classList.toggle("oculto",buscando||((p.id==="agenda-lista-dias"?"lista":p.id==="agenda-vista-calendario"?"calendario":"materia")!==estado.agendaVistaActiva)));cont.classList.toggle("oculto",!buscando);cont.replaceChildren();if(!buscando)return;
+  const lista=(estado.datos.agenda||[]).map((ev)=>({ev,puntaje:puntajeBusquedaAgenda(q,obtenerTextoIndiceEventoAgenda(ev))})).filter((x)=>x.puntaje>=.75).sort((a,b)=>b.puntaje-a.puntaje);
+  const exactos=lista.filter((x)=>x.puntaje>=.9),posibles=lista.filter((x)=>x.puntaje<.9);
+  const pintar=(titulo,items)=>{if(!items.length)return;const grupo=document.createElement("section");grupo.className="glass-panel stack agenda-busqueda-grupo";const h=document.createElement("h3");h.textContent=titulo;grupo.append(h);items.forEach(({ev})=>{const wrap=document.createElement("div");wrap.className="stack";const fecha=document.createElement("span");fecha.className="muted agenda-busqueda-fecha";fecha.textContent=ev.fecha||"";wrap.append(fecha,construirItemEvento(ev));grupo.append(wrap);});cont.append(grupo);};
+  pintar("Coincidencias",exactos);pintar("Tal vez buscabas",posibles);
+  if(!lista.length){const p=document.createElement("p");p.className="muted";p.textContent="No se encontraron eventos parecidos.";cont.append(p);}
+}
+
+function asegurarBarraBusquedaAgenda() {
+  let barra=document.getElementById("agenda-busqueda-cont");
+  if(!barra){
+    barra=document.createElement("div");barra.id="agenda-busqueda-cont";barra.className="agenda-busqueda-cont";
+    const input=document.createElement("input");input.type="search";input.id="agenda-busqueda-input";input.className="form-input";input.placeholder="Buscar en toda la Agenda…";input.setAttribute("aria-label","Buscar en toda la Agenda");input.value=estado.agendaBusquedaConsulta||"";
+    input.addEventListener("input",()=>{estado.agendaBusquedaConsulta=input.value;renderizarResultadosBusquedaAgenda();});
+    barra.append(input);
+    const header=document.getElementById("agenda-header");header?.insertAdjacentElement("afterend",barra);
+  }
+  let resultados=document.getElementById("agenda-busqueda-resultados");
+  if(!resultados){resultados=document.createElement("div");resultados.id="agenda-busqueda-resultados";resultados.className="agenda-busqueda-resultados oculto";barra.insertAdjacentElement("afterend",resultados);}
+  return barra;
 }
 
 /**
@@ -1460,6 +1538,7 @@ function renderizarAgendaInterno() {
       subCont.appendChild(construirSubheaderSemanal(dias, semestreReferencia));
     }
   }
+  const busquedaCont=asegurarBarraBusquedaAgenda();
   // Corrección: "los botones deben ir AFUERA de la tarjeta de arriba, justo
   // debajo de esta" — subCont vive ADENTRO de #agenda-header (la tarjeta con
   // Semana N / fecha / Hoy), así que ya no se cuelga ahí. Se arma su propio
@@ -1469,8 +1548,8 @@ function renderizarAgendaInterno() {
   if (!filtroCont) {
     filtroCont = document.createElement("div");
     filtroCont.id = "agenda-filtro-estados-cont";
-    document.getElementById("agenda-header")?.insertAdjacentElement("afterend", filtroCont);
   }
+  busquedaCont.insertAdjacentElement("afterend",filtroCont);
   filtroCont.innerHTML = "";
   // Los filtros quedan siempre visibles en la vista principal de Agenda;
   // el editor de tipos sigue contraíble dentro de Ajustes de Agenda.
@@ -1573,6 +1652,7 @@ function renderizarAgenda() {
   asegurarEstadoAgendaBaseInicializado();
   asegurarFiltroMostrarMateriasInicializado();
   asegurarFiltroModoAgendaInicializado();
+  asegurarBarraBusquedaAgenda();
   renderizarHeaderAgenda();
   const vista = estado.agendaVistaActiva;
   document.getElementById("agenda-lista-dias")?.classList.toggle("oculto", vista !== "lista");
@@ -1611,6 +1691,7 @@ function renderizarAgenda() {
   // sincroniza al final de CADA render (cualquier vista) para que sobreviva
   // a cambiar de vista mientras hay una selección en curso.
   sincronizarBarraSeleccionAgenda();
+  renderizarResultadosBusquedaAgenda();
 }
 
 function inicializarGestosVistasAgenda() {

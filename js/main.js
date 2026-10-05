@@ -57,16 +57,17 @@ if (MODO_DEMO && PREVIEW_DEMO && window.parent !== window) {
   window.addEventListener("message", (evento) => {
     if (evento.origin !== window.location.origin || evento.source !== window.parent
       || evento.data?.type !== "APP_PREVIEW_UPDATE" || !estado.datos?.configuracion) return;
-    const { paleta, modo, colores, logo, logoData, calidad } = evento.data;
+    const { paleta, modo, colores, logo, logoData, calidad, geminiKey } = evento.data;
     const cfg = estado.datos.configuracion;
     if (typeof paleta === "string") cfg.paleta = paleta;
     if (["light", "dark", "true-dark"].includes(modo)) {
       cfg.modo = modo;
       guardarModoTemaLocal(modo);
     }
-    if (colores && Array.isArray(colores)) cfg.paleta_personalizada = { ...(cfg.paleta_personalizada || {}), colores };
+    if (colores && typeof colores === "object" && !Array.isArray(colores)) cfg.paleta_personalizada = { ...(cfg.paleta_personalizada || {}), colores };
     if (["folder", "birrete", "personalizado"].includes(logo)) cfg.logo_app = logo;
     cfg.logo_app_url = typeof logoData === "string" && logoData.startsWith("data:image/") ? logoData : null;
+    if (PREVIEW_DEMO) cfg.gemini_api_key = typeof geminiKey === "string" ? geminiKey : null;
     if (["optimizado", "fancy"].includes(calidad)) aplicarModoRendimiento(calidad === "optimizado");
     aplicarPaleta(cfg.paleta || "azul", cfg.modo || "dark", cfg.paleta_personalizada?.colores);
     aplicarLogoApp();
@@ -1154,7 +1155,8 @@ function mostrarApp() {
   // notaba. Mismo lugar y mismo criterio que aplicarPaleta arriba: se
   // aplica acá, apenas se conocen los datos reales del usuario, ANTES de
   // que pueda entrar a Ajustes.
-  aplicarModoRendimiento(obtenerModoDisenoLocal() !== "fancy");
+  const calidadDemoPreview = PREVIEW_DEMO ? new URLSearchParams(location.search).get("previewQuality") : null;
+  aplicarModoRendimiento(calidadDemoPreview ? calidadDemoPreview === "optimizado" : obtenerModoDisenoLocal() !== "fancy");
   renderizarSelectorPlan();
   renderizarAjustes();
   inicializarTutorialDesdeAjustes({ navegar: mostrarSeccion, toast: mostrarToast });
@@ -1215,7 +1217,7 @@ function mostrarApp() {
   // los renders con la UI todavía a medio construir.
   revisarUniversidadesIncompletas();
   if (!MODO_DEMO) revisarWrappedAutomatico();
-  if (!MODO_DEMO && cfg.onboarding_v1_completado === false) {
+  if ((!MODO_DEMO && cfg.onboarding_v1_completado === false) || (MODO_DEMO && !PREVIEW_DEMO)) {
     // La configuración visual/nombre es obligatoria; plan y mini tutorial
     // ofrecen opciones explícitas para continuar después.
     mostrarOnboardingNuevoUsuario({ navegar: mostrarSeccion, toast: mostrarToast });
@@ -1416,8 +1418,14 @@ let seccionNavegacionActual = null;
 const avisosDeArranquePorSeccion = new Set();
 
 function orientarSobreDependencias(nombre) {
-  if (MODO_DEMO || !estado.datos || !mostrarToastAccion) return;
+  if ((MODO_DEMO && PREVIEW_DEMO) || !estado.datos || !mostrarToastAccion) return null;
   const tieneSemestres = (estado.datos.semestres || []).length > 0;
+  const tienePlan = (estado.datos.planes_estudio || []).some((p) => p.materias?.length || p.optativas_disponibles?.length);
+  if (nombre === "semestres" && !tienePlan) return { destino:"plan-estudios", mensaje:"Primero agrega o importa tu plan de estudios; después podrás matricular sus materias en un semestre." };
+  if (["agenda","horario"].includes(nombre) && !tieneSemestres) return tienePlan
+    ? { destino:"semestres", mensaje:"Para usar esta sección con tus materias, primero registra un semestre y matricúlalas." }
+    : { destino:"plan-estudios", mensaje:"Primero agrega tu plan de estudios. Después registra un semestre para conectar esta sección con tus materias." };
+  if (nombre === "asistente" && !estado.datos.configuracion?.gemini_api_key) return { destino:"configuracion", mensaje:"Para activar Wapper, guarda tu clave personal de Gemini en Ajustes generales." };
   if (!tieneSemestres && ["agenda", "horario", "tiempo-estudio"].includes(nombre) && !avisosDeArranquePorSeccion.has(nombre)) {
     avisosDeArranquePorSeccion.add(nombre);
     const mensaje = nombre === "tiempo-estudio"
@@ -1425,6 +1433,7 @@ function orientarSobreDependencias(nombre) {
       : "Esta sección se conecta mejor con tus materias cuando tengas un semestre. Puedes seguir usándola y crear el semestre cuando quieras.";
     mostrarToastAccion(mensaje, "Ir a Semestres", () => mostrarSeccion("semestres"));
   }
+  return null;
 }
 
 function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
@@ -1441,6 +1450,9 @@ function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
     asistente: "seccion-asistente",
   };
   if (!Object.prototype.hasOwnProperty.call(secciones, nombre)) return;
+  const seccionSolicitada = nombre;
+  const dependencia = orientarSobreDependencias(nombre);
+  if (dependencia) nombre = dependencia.destino;
   const cambioSeccion = seccionNavegacionActual !== nombre;
   if (window.history && !desdeHistorial) {
     const estadoEntrada = { ...(window.history.state || {}), appNav: true, appSeccion: nombre };
@@ -1496,8 +1508,8 @@ function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
   // mostrarAvisoContinuar en js/asistente/asistente.js). Con más de 1h, o
   // sin conversación guardada, arranca directo en blanco.
   if (nombre === "asistente") window.renderizarAsistente?.();
-  orientarSobreDependencias(nombre);
-  if (cambioSeccion && !MODO_DEMO) requestAnimationFrame(() => mostrarTutorialPrimeraVez(nombre));
+  if (dependencia && seccionSolicitada !== nombre) setTimeout(() => mostrarToastAccion(dependencia.mensaje, "Entendido", () => mostrarSeccion(nombre)), 220);
+  if (cambioSeccion && (!MODO_DEMO || !PREVIEW_DEMO) && estado.datos?.configuracion?.onboarding_v1_completado !== false) requestAnimationFrame(() => mostrarTutorialPrimeraVez(nombre));
 }
 // v2.8.9 (punto 10): se expone en window para que ui/componentes.js pueda
 // llamarla desde inicializarNavegacionBotonesMouse() sin crear un import

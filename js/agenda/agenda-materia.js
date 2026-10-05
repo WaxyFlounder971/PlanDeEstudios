@@ -57,7 +57,7 @@ import { ESTADOS_MATERIA } from "../plan/plan-vista-lista-tarjetas.js";
 import { abrirModalRequisito } from "../plan/plan-detalle.js";
 import { calcularNumeroSemanaParaFecha } from "./agenda-clases.js";
 import { construirItemEvento, limpiarIntervalosVenceHoy } from "./agenda.js";
-import { formatearHoraAmPm, obtenerMateriasVinculablesAgenda } from "./agenda-utils.js";
+import { formatearHoraAmPm, obtenerMateriasVinculablesAgenda, obtenerTiposEtiquetaAgenda } from "./agenda-utils.js";
 import { obtenerAdjuntosActivosDe } from "../core/storage-adjuntos.js";
 import { abrirAdjunto, abrirMenuAdjuntos } from "../ui/adjuntos-ui.js";
 
@@ -73,6 +73,53 @@ function inicializarEstadoMateriaAgendaSiHaceFalta() {
   // (ver agenda.js/agenda-calendario.js): qué materia_matriculada_id está
   // elegida ahora mismo en este tab. `null` = ninguna todavía.
   if (typeof estado.agendaMateriaSeleccionadaId === "undefined") estado.agendaMateriaSeleccionadaId = null;
+  if (typeof estado.agendaMateriaFiltroTipos === "undefined") estado.agendaMateriaFiltroTipos = null;
+}
+
+function idTipoEventoAgenda(ev) {
+  return ev.tipo_etiqueta_id || (ev.tipo === "tarea" ? "tarea" : ev.tipo === "examen" ? "examen" : ev.es_feriado ? "feriado" : "evento");
+}
+
+function idsFiltroCronograma(mm, semestre, materiaId, eventos) {
+  const ids = new Set();
+  const total = Number(semestre.duracion_semanas) || 16;
+  const bloques = (semestre.bloques_horario || []).filter((b) => b.materia_id === materiaId);
+  if (bloques.some((b) => Array.from({length:total}, (_, i) => obtenerClasesEfectivasSemana(b, i + 1)).some((lista) => lista.length))) ids.add("clase");
+  eventos.forEach((ev) => {
+    if (ev.tipo === "tarea") ids.add(ev.perdida ? "perdida" : ev.completada ? "completado" : "pendiente");
+    const etiqueta = obtenerTiposEtiquetaAgenda().find((t) => t.id === idTipoEventoAgenda(ev));
+    if (etiqueta) ids.add(`tag:${etiqueta.id}`);
+  });
+  return ids;
+}
+
+function construirFiltrosCronograma(mm, semestre, materiaId, eventos) {
+  const disponibles = idsFiltroCronograma(mm, semestre, materiaId, eventos);
+  const todos = [...(disponibles.has("clase") ? [{id:"clase", nombre:"Clase", color:"#ec4899"}] : []),
+    ...(disponibles.has("completado") ? [{id:"completado", nombre:"Completado", color:"#3b82f6"}] : []),
+    ...(disponibles.has("perdida") ? [{id:"perdida", nombre:"Perdida", color:"#6b7280"}] : []),
+    ...(disponibles.has("pendiente") ? [{id:"pendiente", nombre:"Pendiente", color:"#f59e0b"}] : []),
+    ...obtenerTiposEtiquetaAgenda().filter((t) => disponibles.has(`tag:${t.id}`)).map((t) => ({id:`tag:${t.id}`, nombre:t.nombre, color:t.color}))];
+  const activos = new Set(Array.isArray(estado.agendaMateriaFiltroTipos)
+    ? estado.agendaMateriaFiltroTipos.filter((id) => disponibles.has(id)) : disponibles);
+  const fila = document.createElement("div"); fila.className = "agenda-filtro-estados agenda-filtros-cronograma";
+  todos.forEach((op) => {
+    const b = document.createElement("button"); b.type="button"; b.className="agenda-filtro-estado-btn" + (activos.has(op.id)?" active":""); b.textContent=op.nombre;
+    b.style.setProperty("--tipo-agenda-color",op.color); b.style.borderColor=op.color;
+    if (activos.has(op.id)) { b.style.color=op.color; b.style.background=`color-mix(in srgb,${op.color} 16%,transparent)`; }
+    b.addEventListener("click",()=>{
+      if (!Array.isArray(estado.agendaMateriaFiltroTipos)) estado.agendaMateriaFiltroTipos=[op.id];
+      else {
+        const seleccion=new Set(estado.agendaMateriaFiltroTipos);
+        seleccion.has(op.id)?seleccion.delete(op.id):seleccion.add(op.id);
+        estado.agendaMateriaFiltroTipos=seleccion.size===0||seleccion.size===disponibles.size?null:[...seleccion];
+      }
+      renderizarMateriaAgenda();
+    });
+    b.addEventListener("contextmenu",(ev)=>{ev.preventDefault();activos.delete(op.id);estado.agendaMateriaFiltroTipos=activos.size===disponibles.size?null:[...activos];renderizarMateriaAgenda();});
+    fila.append(b);
+  });
+  return { fila, activos, disponibles };
 }
 
 // Mismo mapeo de código de día ("L"|"K"|"M"|"J"|"V"|"S"|"D") a etiqueta
@@ -598,7 +645,7 @@ function construirFilaClaseMateria(claseEfectiva, semestre, numeroSemana) {
  * que tienen algo, para que se vea de un vistazo el semestre completo de
  * esa materia.
  */
-function construirSeccionSemanaMateria(semestre, materiaId, numeroSemana, eventosMateria) {
+function construirSeccionSemanaMateria(semestre, materiaId, numeroSemana, eventosMateria, filtros) {
   const bloque = document.createElement("section");
   bloque.className = "glass-panel stack";
   bloque.style.padding = "14px";
@@ -608,17 +655,18 @@ function construirSeccionSemanaMateria(semestre, materiaId, numeroSemana, evento
   titulo.textContent = traducirTextoInterfaz(`Semana ${numeroSemana}`);
   bloque.appendChild(titulo);
 
-  const clasesDeEstaSemana = (semestre.bloques_horario || [])
+  const clasesDeEstaSemana = filtros.activos.has("clase") ? (semestre.bloques_horario || [])
     .filter((b) => b.materia_id === materiaId)
     .flatMap((b) => obtenerClasesEfectivasSemana(b, numeroSemana))
     .sort(
       (a, b) =>
         ORDEN_DIAS_SEMANA.indexOf(a.dia) - ORDEN_DIAS_SEMANA.indexOf(b.dia) ||
         String(a.hora_inicio).localeCompare(String(b.hora_inicio))
-    );
+    ) : [];
 
   const deEstaSemana = eventosMateria
     .filter((ev) => calcularNumeroSemanaParaFecha(semestre, fechaLocalDesdeISO(ev.fecha)) === numeroSemana)
+    .filter((ev) => filtros.activos.has(`tag:${idTipoEventoAgenda(ev)}`) || (ev.tipo === "tarea" && filtros.activos.has(ev.perdida ? "perdida" : ev.completada ? "completado" : "pendiente")))
     .sort((a, b) => a.fecha.localeCompare(b.fecha) || String(a.hora || "99:99").localeCompare(String(b.hora || "99:99")));
 
   if (clasesDeEstaSemana.length === 0 && deEstaSemana.length === 0) {
@@ -687,15 +735,17 @@ function construirContenidoMateria(mmVinculable, materias, onCambiar) {
   // clase `.adjuntos-pills-fila` trae un `margin-top` propio (pensado para
   // cuando esta fila va pegada debajo de OTRA cosa, ej. el viejo selector)
   // que acá rompía esa igualdad — se anula puntualmente para este uso.
+  const eventosMateria = (estado.datos.agenda || []).filter((ev) => ev.materia_matriculada_id === mm.id);
+  const filtros = construirFiltrosCronograma(mm, semestre, mm.materia_id, eventosMateria);
+  cont.appendChild(filtros.fila);
   const filaAdjuntos = construirFilaAdjuntosMateria(mm, onCambiar);
   filaAdjuntos.style.marginTop = "0";
   cont.appendChild(filaAdjuntos);
 
-  const eventosMateria = (estado.datos.agenda || []).filter((ev) => ev.materia_matriculada_id === mm.id);
   const totalSemanas = Number(semestre.duracion_semanas) || 16;
 
   for (let semana = 1; semana <= totalSemanas; semana++) {
-    cont.appendChild(construirSeccionSemanaMateria(semestre, mm.materia_id, semana, eventosMateria));
+    cont.appendChild(construirSeccionSemanaMateria(semestre, mm.materia_id, semana, eventosMateria, filtros));
   }
 
   return cont;

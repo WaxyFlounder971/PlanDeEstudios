@@ -271,7 +271,7 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
   // columnas de horas se ubican por POSICIÓN: justo después de Creditos
   // (índice 4), tantas como tiposHoras.length ya fijado para este plan.
   const idxHorasInicio = 4;
-  const cantidadHoras = tipos.length;
+  const cantidadHorasDestino = tipos.length;
   // v1.14.1: +1 al final por la nueva columna SinDefinir (ver rule/columna
   // nueva en construirEncabezadoCSV, plan-importacion.js) — reemplaza la
   // detección por prefijo de código que existía antes.
@@ -293,16 +293,24 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
     encabezado.length >= 2 &&
     ultimasDosEncabezado[0] === "estado" &&
     /^categoria ?id$/.test(ultimasDosEncabezado[1].replace(/_/g, " "));
-  const columnasEsperadas = 4 + cantidadHoras + 2 + 1 + (tieneEstadoCategoria ? 2 : 0); // Bloque,Codigo,Nombre,Creditos + horas + Requisitos,Correquisitos + SinDefinir [+ Estado,CategoriaId]
+  const encabezadoNormalizado = encabezado.map((c) => c.replace(/^\uFEFF/, "").trim().toLowerCase().replace(/[\s_]/g, ""));
+  const tieneSinDefinir = encabezadoNormalizado.includes("sindefinir");
+  // El CSV puede venir de otro perfil con una universidad/configuración que
+  // define otra cantidad de columnas horarias. Para reimportar ese respaldo,
+  // manda el esquema explícito del archivo; la configuración destino solo
+  // sirve para mostrar una advertencia, no para desplazar sus columnas.
+  const cantidadHorasCSV = Math.max(0, encabezado.length - 6 - (tieneSinDefinir ? 1 : 0) - (tieneEstadoCategoria ? 2 : 0));
+  const cantidadHoras = encabezado.length >= 6 ? cantidadHorasCSV : cantidadHorasDestino;
+  const columnasEsperadas = 4 + cantidadHoras + 2 + (tieneSinDefinir ? 1 : 0) + (tieneEstadoCategoria ? 2 : 0); // Compatible con exportaciones antiguas y actuales.
 
   const errores = [];
   // Aviso no-fatal (Parte C, punto 3): si el encabezado real trae una
   // cantidad de columnas de horas distinta a la esperada, no se falla en
   // silencio — se avisa y se sigue intentando parsear con lo que hay.
-  const cantidadHorasEnEncabezado = Math.max(0, encabezado.length - 7 - (tieneEstadoCategoria ? 2 : 0));
-  if (cantidadHorasEnEncabezado !== cantidadHoras) {
+  const cantidadHorasEnEncabezado = cantidadHorasCSV;
+  if (cantidadHorasEnEncabezado !== cantidadHorasDestino) {
     errores.push(
-      `Aviso: se esperaban ${cantidadHoras} columna(s) de horas (${tipos.join(", ") || "ninguna"}) ` +
+      `Aviso: este plan espera ${cantidadHorasDestino} columna(s) de horas (${tipos.join(", ") || "ninguna"}) ` +
       `pero el encabezado del CSV trae ${cantidadHorasEnEncabezado}. Revisa que HORAS_COLUMNAS haya ` +
       `coincidido con las columnas reales — se intentó parsear igual con lo que hay.`
     );
@@ -365,7 +373,7 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
     const correquisitos = columnas[idxHorasInicio + cantidadHoras + 1];
     // v1.14.1: última columna del formato base — reemplaza la detección por
     // prefijo de código.
-    const sinDefinirCruda = columnas[idxHorasInicio + cantidadHoras + 2];
+    const sinDefinirCruda = tieneSinDefinir ? columnas[idxHorasInicio + cantidadHoras + 2] : "";
     const sinDefinir = /^\s*true\s*$/i.test(String(sinDefinirCruda || ""));
 
     // v1.17: solo presentes en el formato extendido de export/backup propio
@@ -374,13 +382,14 @@ function parsearCSVPlanEstudios(textoCrudo, tiposHoras) {
     let estadoValidado;
     let categoriaId;
     if (tieneEstadoCategoria) {
-      const estadoCrudo = String(columnas[idxHorasInicio + cantidadHoras + 3] || "").trim().toLowerCase();
+      const indiceEstado = idxHorasInicio + cantidadHoras + 2 + (tieneSinDefinir ? 1 : 0);
+      const estadoCrudo = String(columnas[indiceEstado] || "").trim().toLowerCase();
       // Solo se acepta un estado de la lista real de la app (ver
       // ESTADOS_MATERIA en plan-vista-lista-tarjetas.js) — cualquier otra
       // cosa (celda vacía, dato corrupto) cae al default "pendiente" de
       // crearMateria en vez de guardar basura.
       estadoValidado = /^(pendiente|cursando|aprobado|reprobado)$/.test(estadoCrudo) ? estadoCrudo : undefined;
-      const categoriaIdCrudo = String(columnas[idxHorasInicio + cantidadHoras + 4] || "").trim();
+      const categoriaIdCrudo = String(columnas[indiceEstado + 1] || "").trim();
       // No se valida contra plan.categorias acá (este parser no recibe el
       // plan) — si el id no existe más en este plan, la UI ya sabe mostrar
       // "Sin categoría" sin romperse; es un caso normal, no un error.
@@ -560,6 +569,11 @@ function importarCSVEnPlan(textoCSV, planDestino) {
   }
 
   const { materias, electivas, paraRevisar, errores, tieneEstadoCategoria } = parsearCSVPlanEstudios(csv, planDestino.parametros_universidad.tipos_horas);
+  if (materias.length + electivas.length + paraRevisar.length === 0) {
+    const mensajes = errores.length ? errores : ["No se encontraron materias importables. El CSV sigue cargado para que puedas revisarlo."];
+    mostrarErroresImportacion(mensajes);
+    return false;
+  }
 
   // v1.18 (blindaje): antes de aplicar nada al plan, se avisa si el propio
   // CSV trae el mismo código repetido en más de una fila — sin esto, el
@@ -661,7 +675,10 @@ function importarCSVEnPlan(textoCSV, planDestino) {
 
   marcarCambioPendiente();
   mostrarErroresImportacion(errores);
+  estado.csvImportacionTexto = estado.csvImportacionTexto || { nuevo:"", actualizar:"" };
+  estado.csvImportacionTexto.nuevo = "";
   renderizarPlanEstudios();
+  return true;
 }
 
 function mostrarErroresImportacion(lista) {
@@ -832,10 +849,15 @@ function construirMiniPanelImportacion(plan) {
 
     const textarea = document.createElement("textarea");
     textarea.className = "form-textarea";
+    textarea.id = "textarea-csv-actualizar-malla";
+    textarea.dataset.csvContexto = "actualizar";
     textarea.rows = 6;
     textarea.placeholder = "Pega aquí el CSV que te devolvió la IA…";
+    estado.csvImportacionTexto = estado.csvImportacionTexto || { nuevo:"", actualizar:"" };
+    textarea.value = estado.csvImportacionTexto.actualizar || "";
+    textarea.addEventListener("input", () => { estado.csvImportacionTexto.actualizar = textarea.value; });
     sec.appendChild(textarea);
-    sec.appendChild(construirInputArchivoCSV(textarea));
+    sec.appendChild(construirInputArchivoCSV(textarea, "actualizar"));
 
     const resultado = document.createElement("div");
     resultado.className = "stack";
@@ -873,6 +895,12 @@ function construirMiniPanelImportacion(plan) {
       }
 
       const { materias, electivas, paraRevisar, errores, tieneEstadoCategoria } = parsearCSVPlanEstudios(csv, plan.parametros_universidad.tipos_horas);
+      const cantidadProcesable = materias.length + electivas.length + paraRevisar.length;
+      if (!cantidadProcesable) {
+        resultado.innerHTML = "<p class=\"muted\" style=\"color:var(--color-danger);\">No se encontraron materias importables. El CSV sigue cargado para que puedas revisarlo.</p>" +
+          errores.map((e) => "<p class=\"muted\" style=\"color:var(--color-danger);\">• " + e + "</p>").join("");
+        return;
+      }
       // v1.18 (blindaje): mismo aviso que importarCSVEnPlan — ver comentario ahí.
       [
         { lista: materias, etiqueta: "materias" },
@@ -941,6 +969,7 @@ function construirMiniPanelImportacion(plan) {
       });
 
       marcarCambioPendiente();
+      estado.csvImportacionTexto.actualizar = "";
       resultado.innerHTML = errores.length
         ? `<p class="muted" style="color:var(--color-danger);">Algunas filas no se pudieron importar:</p>` +
           errores.map((e) => `<p class="muted" style="color:var(--color-danger);">• ${e}</p>`).join("")

@@ -417,7 +417,7 @@ function construirTarjetaMateria(item) {
  * para Lista/Calendario/Cronograma), no un switch on/off. "Activos" filtra
  * las mm sin tiempo_estudio.meta_horas_semana configurado.
  */
-function construirEncabezado(cont) {
+function construirEncabezado(cont, contextoSemestre = null) {
   const encabezado = document.createElement("div");
   encabezado.className = "glass-card row-between te-encabezado";
   encabezado.style.cssText = "align-items:center; gap:10px;";
@@ -464,6 +464,7 @@ function construirEncabezado(cont) {
     grupoTitulo.appendChild(accionesRacha);
   }
   encabezado.appendChild(grupoTitulo);
+  if (contextoSemestre) encabezado.appendChild(contextoSemestre);
 
   // Grupo de botones a la derecha. Van en su propio contenedor (y no
   // sueltos como hijos directos del row-between) porque row-between reparte
@@ -585,13 +586,16 @@ function construirSelectorSemestreTiempo(cont) {
   const semestres=(estado.datos.semestres||[]).slice().sort((a,b)=>(b.fecha_inicio||"").localeCompare(a.fecha_inicio||""));
   const vigente=semestres.find(s=>obtenerSemestresActuales().some(actual=>actual.id===s.id));
   const seleccionado=semestreTiempoEstudioId||vigente?.id||"todos";
-  const selector=document.createElement("select");selector.className="form-select te-selector-semestre-tiempo";
-  selector.setAttribute("aria-label",traducirTextoInterfaz("Semestre de Tiempo de Estudio"));
-  selector.add(new Option(traducirTextoInterfaz("Todos los semestres"),"todos"));
-  semestres.forEach(s=>selector.add(new Option(s.nombre||traducirTextoInterfaz("Semestre sin nombre"),s.id)));
-  selector.value=seleccionado;
-  selector.addEventListener("change",()=>{semestreTiempoEstudioId=selector.value;materiaDetalleActivaId=null;renderizarTiempoEstudio();});
-  cont.append(selector);
+  const contexto=document.createElement("div");contexto.className="te-contexto-semestre";
+  const nombre=seleccionado==="todos"?traducirTextoInterfaz("Todos los semestres"):semestres.find(s=>s.id===seleccionado)?.nombre||traducirTextoInterfaz("Sin semestres");
+  const boton=document.createElement("button");boton.type="button";boton.className="btn-discreto te-contexto-semestre-boton";boton.textContent=nombre;boton.setAttribute("aria-label",`${traducirTextoInterfaz("Semestre de Tiempo de Estudio")}: ${nombre}`);boton.setAttribute("aria-expanded","false");
+  const opciones=document.createElement("div");opciones.className="te-contexto-semestre-opciones oculto";
+  const elegir=(id)=>{semestreTiempoEstudioId=id;materiaDetalleActivaId=null;renderizarTiempoEstudio();};
+  const agregarOpcion=(etiqueta,id)=>{const opcion=document.createElement("button");opcion.type="button";opcion.className="te-contexto-semestre-opcion";opcion.textContent=etiqueta;opcion.setAttribute("aria-pressed",String(seleccionado===id));opcion.addEventListener("click",()=>elegir(id));opciones.append(opcion);};
+  agregarOpcion(traducirTextoInterfaz("Todos los semestres"),"todos");
+  semestres.forEach(s=>agregarOpcion(s.nombre||traducirTextoInterfaz("Semestre sin nombre"),s.id));
+  boton.addEventListener("click",()=>{const abierto=boton.getAttribute("aria-expanded")==="true";boton.setAttribute("aria-expanded",String(!abierto));opciones.classList.toggle("oculto",abierto);});
+  contexto.append(boton,opciones);return contexto;
 }
 
 /**
@@ -1445,8 +1449,8 @@ function renderizarTiempoEstudio() {
   // vistas de nivel superior — se arman acá UNA sola vez, y de ahí en más
   // cada vista solo dibuja su contenido propio (ver nota en
   // construirVistaPrincipal/construirVistaEstadisticas).
-  construirSelectorSemestreTiempo(cont);
-  construirEncabezado(cont);
+  const contextoSemestre = construirSelectorSemestreTiempo(cont);
+  construirEncabezado(cont, contextoSemestre);
   construirPillVistaSeccion(cont);
 
   if (vistaSeccionTE === "estadisticas") {

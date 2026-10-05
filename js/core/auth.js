@@ -626,27 +626,31 @@ async function refrescarAccessTokenViaWorker(refreshToken) {
     throw new Error("No hay refresh_token: hace falta volver a iniciar sesión.");
   }
 
-  const respuesta = await fetchConTimeout(`${URL_WORKER_OAUTH}/oauth/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  });
-  const datos = await respuesta.json().catch(() => ({}));
-
-  if (!respuesta.ok) {
-    const error = new Error(datos.error || `El Worker respondió ${respuesta.status} al refrescar.`);
-    error.status = respuesta.status;
-    error.invalidGrant = Boolean(datos.error && /invalid_grant/i.test(String(datos.error)));
-    throw error;
+  let ultimoError;
+  for (let intento=0; intento<3; intento++) {
+    try {
+      const respuesta = await fetchConTimeout(`${URL_WORKER_OAUTH}/oauth/refresh`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+      const datos = await respuesta.json().catch(() => ({}));
+      if (!respuesta.ok) {
+        const error = new Error(datos.error || `El Worker respondió ${respuesta.status} al refrescar.`);
+        error.status = respuesta.status;
+        error.invalidGrant = Boolean(datos.error && /invalid_grant/i.test(String(datos.error)));
+        if (error.invalidGrant || (respuesta.status < 500 && respuesta.status !== 429)) throw error;
+        ultimoError=error;
+      } else {
+        accessToken = datos.access_token;
+        return { token:accessToken, expiresIn:datos.expires_in, refreshTokenNuevo:datos.refresh_token||null };
+      }
+    } catch(error) {
+      if(error.invalidGrant || (error.status && error.status < 500 && error.status !== 429)) throw error;
+      ultimoError=error;
+    }
+    if(intento<2) await new Promise((resolve)=>setTimeout(resolve,[500,1400][intento]));
   }
-
-  accessToken = datos.access_token;
-  return {
-    token: accessToken,
-    expiresIn: datos.expires_in,
-    // Google rota el refresh_token con poca frecuencia, pero puede pasar.
-    refreshTokenNuevo: datos.refresh_token || null,
-  };
+  throw ultimoError || new Error("No se pudo renovar la sesión de Google después de varios intentos.");
 }
 
 /**

@@ -301,6 +301,7 @@ function extraerMetadatosImportacion(textoCrudo) {
 function inicializarEstadoImportacionPlanSiHaceFalta() {
   if (typeof estado.planImportandoId === "undefined") estado.planImportandoId = null; // "principal" | "secundario", elegido antes de importar (primer plan)
   if (typeof estado.csvPendienteDeImportar === "undefined") estado.csvPendienteDeImportar = null; // texto CSV en espera mientras se crea el plan
+  if (!estado.csvImportacionTexto || typeof estado.csvImportacionTexto !== "object") estado.csvImportacionTexto = { nuevo:"", actualizar:"" };
   if (typeof estado.panelImportacionAbierto === "undefined") estado.panelImportacionAbierto = false; // v5 1.2/1.3: import/actualizar malla, siempre inline
   // ---- B.2: flujo de importación de 3 modos (Link / PDF / Capturas) ----
   // Estas llaves viven en `estado` (no en los datos del usuario) porque son
@@ -516,11 +517,14 @@ function construirPanelImportacion() {
     const textarea = document.createElement("textarea");
     textarea.className = "form-textarea";
     textarea.id = "textarea-csv-importar";
+    textarea.dataset.csvContexto = "nuevo";
     textarea.rows = 8;
     textarea.placeholder = "Pega aquí el CSV que te devolvió la IA…";
+    textarea.value = estado.csvImportacionTexto.nuevo || "";
+    textarea.addEventListener("input", () => { estado.csvImportacionTexto.nuevo = textarea.value; });
     sec.appendChild(textarea);
 
-    sec.appendChild(construirInputArchivoCSV(textarea));
+    sec.appendChild(construirInputArchivoCSV(textarea, "nuevo"));
 
     const errores = document.createElement("div");
     errores.id = "errores-importacion-csv";
@@ -725,30 +729,47 @@ function inicializarModalCapturasPDF() {
  *  archivo .csv — se lee su contenido y se coloca en el textarea indicado,
  *  para que se procese exactamente igual que si se hubiera pegado a mano. */
 
-function construirInputArchivoCSV(textareaDestino) {
+function construirInputArchivoCSV(textareaDestino, contexto = "nuevo") {
   const wrap = document.createElement("div");
-  wrap.className = "stack";
-  wrap.style.gap = "4px";
-
-  const etiqueta = document.createElement("span");
-  etiqueta.className = "muted";
-  etiqueta.textContent = "…o sube directamente el archivo .csv:";
-  wrap.appendChild(etiqueta);
-
+  wrap.className = "csv-archivo-wrap";
+  const etiqueta = document.createElement("label");
+  etiqueta.className = "btn btn-secondary csv-archivo-boton";
+  etiqueta.setAttribute("for", "csv-archivo-" + contexto);
+  const icono = document.createElement("span");
+  icono.className = "csv-archivo-icono";
+  icono.setAttribute("aria-hidden", "true");
+  icono.textContent = "↑";
+  const textoBoton = document.createElement("span");
+  textoBoton.textContent = "Elegir archivo CSV";
+  etiqueta.append(icono, textoBoton);
   const input = document.createElement("input");
+  input.id = "csv-archivo-" + contexto;
   input.type = "file";
-  input.accept = ".csv";
-  input.className = "form-input";
+  input.accept = ".csv,text/csv";
+  input.className = "csv-archivo-input";
+  const nombre = document.createElement("span");
+  nombre.className = "muted csv-archivo-nombre";
+  nombre.textContent = "También puedes pegar el contenido en el campo de arriba.";
   input.addEventListener("change", () => {
     const archivo = input.files && input.files[0];
     if (!archivo) return;
+    nombre.textContent = archivo.name;
     const lector = new FileReader();
-    lector.onload = () => { textareaDestino.value = String(lector.result || ""); };
+    lector.onload = () => {
+      const csv = String(lector.result || "").replace(/^\uFEFF/, "");
+      estado.csvImportacionTexto = estado.csvImportacionTexto || { nuevo:"", actualizar:"" };
+      estado.csvImportacionTexto[contexto] = csv;
+      const textareaActual = document.querySelector('textarea[data-csv-contexto="' + contexto + '"]') || textareaDestino;
+      if (textareaActual && textareaActual.isConnected) {
+        textareaActual.value = csv;
+        textareaActual.dispatchEvent(new Event("input", { bubbles:true }));
+      }
+      nombre.textContent = archivo.name + " listo para importar";
+    };
     lector.onerror = () => { mostrarErroresImportacion(["No se pudo leer el archivo. Intenta pegar el CSV como texto."]); };
-    lector.readAsText(archivo);
+    lector.readAsText(archivo, "UTF-8");
   });
-  wrap.appendChild(input);
-
+  wrap.append(etiqueta, input, nombre);
   return wrap;
 }
 

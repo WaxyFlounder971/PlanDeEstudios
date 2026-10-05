@@ -34,7 +34,7 @@ import {
 } from "./auth.js";
 import { FRECUENCIAS_BACKUP_DRIVE, crearBackupDriveDefault, migrarDatosAntiguos, sellarTimestamp } from "./schema.js";
 import { fusionarDatos } from "./storage-merge.js";
-import { authListo, establecerTokenActivo, estado, guardarCacheLocal, leerTokenCacheValido } from "./storage.js";
+import { authListo, borrarTokenCache, establecerTokenActivo, estado, guardarCacheLocal, leerTokenCacheValido } from "./storage.js";
 import { MODO_DEMO } from "./demo-mode.js";
 
 /**
@@ -245,26 +245,31 @@ function programarRefrescoProactivo(expiresInSegundos) {
  *  (incluso un 404) confirma que el request viajó y volvió; solo un
  *  rechazo de fetch (o el timeout) cuenta como "sin conexión real". */
 async function probarConexionReal() {
-  const controlador = new AbortController();
-  const idTimeout = setTimeout(() => controlador.abort(), 5000);
-  try {
-    // Evita el service worker: si responde con una copia en caché puede
-    // declarar internet disponible estando el teléfono realmente offline.
-    const pingUrl = new URL("manifest.json", window.location.href);
-    pingUrl.searchParams.set("ping", String(Date.now()));
-    await fetch(pingUrl.href, {
-      method: "GET",
-      cache: "no-store",
-      headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
-      mode: "no-cors",
-      signal: controlador.signal,
-    });
-    return true;
-  } catch (e) {
-    return false;
-  } finally {
-    clearTimeout(idTimeout);
-  }
+  // `navigator.onLine` y el propio sitio pueden dar falsos negativos en
+  // móviles al cambiar Wi‑Fi/datos. Probamos en paralelo el origen de la
+  // app, Google, Google APIs y el Worker de OAuth. Una respuesta opaca
+  // (no-cors) también prueba que hubo ida y vuelta de red aunque el endpoint
+  // no permita leer su respuesta desde este origen.
+  const origen = new URL("manifest.json", window.location.href);
+  origen.searchParams.set("ping", String(Date.now()));
+  const destinos = [
+    { url: origen.href, mode: "same-origin" },
+    { url: "https://www.google.com/generate_204", mode: "no-cors" },
+    { url: "https://www.googleapis.com/generate_204", mode: "no-cors" },
+    { url: "https://worker-notificaciones-agenda.appacademica.workers.dev/", mode: "no-cors" },
+  ];
+  const intentos = destinos.map(async ({ url, mode }) => {
+    const controlador = new AbortController();
+    const idTimeout = setTimeout(() => controlador.abort(), 4500);
+    try {
+      await fetch(url, { method:"GET", cache:"no-store", mode, credentials:"omit",
+        headers: mode === "same-origin" ? { "Cache-Control":"no-cache, no-store, must-revalidate" } : undefined,
+        signal:controlador.signal });
+      return true;
+    } finally { clearTimeout(idTimeout); }
+  });
+  try { await Promise.any(intentos); return true; }
+  catch (_) { return false; }
 }
 
 /**
@@ -874,7 +879,11 @@ async function conReintentoSi401(operacion) {
     return await operacion();
   } catch (primerError) {
     if (primerError.status !== 401) throw primerError;
-    estado.token = null; // fuerza que cualquier otro intento pase por reconexión
+    estado.token = null;
+    // Invalidar también el token cacheado: de lo contrario asegurarTokenValido
+    // podía devolver el mismo access_token que Drive acababa de rechazar,
+    // repetir el 401 y no llegar nunca al refresh_token.
+    borrarTokenCache();
     // asegurarTokenValido() ya deja estado.token listo (vía caché o
     // establecerTokenActivo) cuando devuelve true - no hace falta repetir
     // ese trabajo acá, a diferencia del refresco viejo directo contra Google.

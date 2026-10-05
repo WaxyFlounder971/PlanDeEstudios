@@ -386,8 +386,16 @@ function inicializarModalCrearPlan() {
     document.getElementById("modal-crear-plan").classList.add("oculto");
 
     if (estado.csvPendienteDeImportar) {
-      importarCSVEnPlan(estado.csvPendienteDeImportar, nuevoPlan);
-      estado.csvPendienteDeImportar = null;
+      // Conservar el CSV pendiente si el parser no pudo importar ninguna
+      // fila. Así el usuario puede corregir el esquema y reintentar; antes
+      // se descartaba incluso cuando importarCSVEnPlan devolvía false.
+      const importado = importarCSVEnPlan(estado.csvPendienteDeImportar, nuevoPlan);
+      if (importado) estado.csvPendienteDeImportar = null;
+      else {
+        renderizarSelectorPlan();
+        renderizarModoHardcore();
+        renderizarPlanEstudios();
+      }
     } else {
       renderizarSelectorPlan();
       renderizarModoHardcore();

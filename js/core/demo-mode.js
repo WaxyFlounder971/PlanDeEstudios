@@ -78,7 +78,13 @@ async function cargarDatosDemo() {
   if (!respuesta.ok) throw new Error(`No se pudo leer el dataset de demo (${respuesta.status}).`);
   const semilla = await respuesta.json();
   const datos = combinarSemilla(crearDatosUsuarioNuevo(), semilla);
-  if (datos.configuracion) datos.configuracion.gemini_api_key = null;
+  if (datos.configuracion) {
+    datos.configuracion.gemini_api_key = null;
+    if (!PREVIEW_DEMO) {
+      datos.configuracion.onboarding_v1_completado = false;
+      datos.configuracion.tutoriales_secciones_vistas = {};
+    }
+  }
   if (PREVIEW_DEMO && datos.configuracion) {
     const params = new URLSearchParams(globalThis.location.search);
     const paleta = params.get("previewPalette");

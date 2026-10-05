@@ -12,12 +12,12 @@
  * único dentro de su Google Drive (ver js/auth.js).
  */
 const TIPOS_ETIQUETA_AGENDA_DEFAULT = [
-  { id: "tarea", nombre: "Tarea", base: "tarea", color: "#eab308", activo: true, predeterminado: true },
   { id: "examen", nombre: "Examen", base: "examen", color: "#ef4444", activo: true, predeterminado: true },
+  { id: "quiz", nombre: "Quiz", base: "examen", color: "#f97316", activo: true, predeterminado: true },
+  { id: "tarea", nombre: "Tarea", base: "tarea", color: "#eab308", activo: true, predeterminado: true },
+  { id: "proyecto", nombre: "Proyecto", base: "tarea", color: "#a855f7", activo: true, predeterminado: true },
   { id: "evento", nombre: "Evento", base: "evento", color: "#06b6d4", activo: true, predeterminado: true },
   { id: "feriado", nombre: "Feriado", base: "evento", color: "#10b981", activo: true, predeterminado: true },
-  { id: "proyecto", nombre: "Proyecto", base: "tarea", color: "#a855f7", activo: true, predeterminado: true },
-  { id: "quiz", nombre: "Quiz", base: "examen", color: "#f97316", activo: true, predeterminado: true },
 ];
 
 function crearDatosUsuarioNuevo() {
@@ -3016,9 +3016,15 @@ function migrarDatosAntiguos(datos) {
     const actuales = Array.isArray(datos.configuracion.agenda_tipos) ? datos.configuracion.agenda_tipos : [];
     const eliminados = Array.isArray(datos.configuracion.agenda_tipos_eliminados) ? datos.configuracion.agenda_tipos_eliminados : [];
     const porId = new Map(actuales.map((tipo) => [tipo.id, tipo]));
+    // Mantener el orden guardado por la persona (incluido su orden por
+    // arrastre). Completar solo las etiquetas de fábrica que aún no existan.
+    const existentes = actuales
+      .filter((tipo) => !eliminados.includes(tipo.id))
+      .map((tipo) => ({ ...(TIPOS_ETIQUETA_AGENDA_DEFAULT.find((base) => base.id === tipo.id) || {}), ...tipo }));
+    const idsExistentes = new Set(existentes.map((tipo) => tipo.id));
     datos.configuracion.agenda_tipos = [
-      ...TIPOS_ETIQUETA_AGENDA_DEFAULT.filter((tipo) => !eliminados.includes(tipo.id)).map((tipo) => ({ ...tipo, ...(porId.get(tipo.id) || {}) })),
-      ...actuales.filter((tipo) => !TIPOS_ETIQUETA_AGENDA_DEFAULT.some((base) => base.id === tipo.id)),
+      ...existentes,
+      ...TIPOS_ETIQUETA_AGENDA_DEFAULT.filter((tipo) => !eliminados.includes(tipo.id) && !idsExistentes.has(tipo.id)).map((tipo) => ({ ...tipo })),
     ];
   }
 

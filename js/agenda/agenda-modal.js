@@ -211,9 +211,9 @@ function actualizarVisibilidadFeriado(tipo) {
   const fila = document.getElementById("fila-agenda-es-feriado");
   const chk = document.getElementById("chk-agenda-es-feriado");
   if (!fila || !chk) return;
-  const esEvento = tipo === "evento";
-  fila.classList.toggle("oculto", !esEvento);
-  if (!esEvento) chk.checked = false;
+  // Feriado tiene etiqueta propia en el selector; se conserva este campo
+  // oculto solo para leer/escribir datos de eventos antiguos.
+  fila.classList.add("oculto");
   // Fuerza el reflow: leer una propiedad de layout obliga al navegador a
   // recalcular antes de seguir, en vez de arrastrar el estado viejo.
   void fila.offsetHeight;
@@ -225,18 +225,27 @@ function construirPillsTipoAgenda(tipo, etiquetaId) {
   const cont = document.getElementById("pills-agenda-tipo");
   if (!cont) return;
   cont.innerHTML = "";
+  cont.classList.add("agenda-select-tipos");
+  cont.setAttribute("role","group");
+  cont.setAttribute("aria-label",traducirTextoInterfaz("Tipo de evento"));
   const tipos = obtenerTiposEtiquetaAgenda().filter((t) => (t.activo !== false && !t.eliminado) || t.id === etiquetaId);
   const tipoInicial = tipos.find((t) => t.id === etiquetaId && t.base === tipo)
     || tipos.find((t) => t.base === tipo)
     || tipos[0];
   tipoEtiquetaAgendaSeleccionadaId = tipoInicial?.id || null;
-  tipos.forEach((tag) => {
+  const tamanosFilas = tipos.length === 5 ? [2, 3] : Array.from({length:Math.ceil(tipos.length/3)},(_,i)=>Math.min(3,tipos.length-i*3));
+  let indiceFila=0, limiteFila=tamanosFilas[0]||0;
+  const crearFila = () => { const fila=document.createElement("div");fila.className="agenda-select-tipos-fila";cont.append(fila);return fila; };
+  let fila=crearFila();
+  tipos.forEach((tag,index) => {
+    if (index >= limiteFila) { indiceFila++; limiteFila += tamanosFilas[indiceFila]||0; fila=crearFila(); }
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "pill-item" + (tag.id === tipoEtiquetaAgendaSeleccionadaId ? " active" : "");
     btn.dataset.valor = tag.base;
     btn.dataset.etiquetaId = tag.id;
-  btn.textContent = traducirTextoInterfaz(tag.nombre);
+    btn.textContent = traducirTextoInterfaz(tag.nombre);
+    btn.setAttribute("aria-pressed",String(tag.id === tipoEtiquetaAgendaSeleccionadaId));
     btn.style.setProperty("--tag-agenda-color", tag.color || "#8b5cf6");
     if (tag.id === tipoEtiquetaAgendaSeleccionadaId) {
       btn.style.borderColor = tag.color || "#8b5cf6";
@@ -245,7 +254,7 @@ function construirPillsTipoAgenda(tipo, etiquetaId) {
     }
     if (tag.activo === false || tag.eliminado) btn.title = "Etiqueta desactivada; se conserva en este evento";
     btn.addEventListener("click", () => seleccionarPillTipo(tag.base, tag.id));
-    cont.appendChild(btn);
+    fila.appendChild(btn);
   });
 }
 
@@ -255,6 +264,7 @@ function seleccionarPillTipo(tipo, etiquetaId = null) {
   tipoEtiquetaAgendaSeleccionadaId = tag?.id || null;
   document.querySelectorAll("#pills-agenda-tipo .pill-item").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.etiquetaId === tipoEtiquetaAgendaSeleccionadaId);
+    btn.setAttribute("aria-pressed",String(btn.dataset.etiquetaId === tipoEtiquetaAgendaSeleccionadaId));
   });
   actualizarPlaceholderNombre(tipo);
   actualizarVisibilidadFeriado(tipo);
@@ -382,7 +392,7 @@ function guardarEventoAgenda(eventoExistente) {
   // Solo tiene sentido si tipo === "evento" (el checkbox está oculto para
   // los otros 2 tipos y se destildesa solo al ocultarse — ver
   // actualizarVisibilidadFeriado) — se fuerza igual acá por las dudas.
-  const esFeriado = tipo === "evento" && document.getElementById("chk-agenda-es-feriado").checked;
+  const esFeriado = tipo === "evento" && (tipoEtiqueta?.id === "feriado" || document.getElementById("chk-agenda-es-feriado").checked);
 
   estado.datos.agenda = estado.datos.agenda || [];
 
