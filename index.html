@@ -278,6 +278,11 @@
           <input id="input-nombre-preferido" class="form-input" type="text" maxlength="60" autocomplete="given-name" placeholder="Tu nombre">
           <button type="button" class="btn btn-secondary btn-block" id="btn-repetir-tutorial">Ver bienvenida y mini tutorial</button>
 
+          <div class="ajuste-idioma-app">
+            <label class="form-label" for="selector-idioma-app">Idioma</label>
+            <select id="selector-idioma-app" class="form-input" aria-label="Idioma"></select>
+          </div>
+
           <div>
             <span class="form-label">Formato de nombres de materias y carrera</span>
             <div class="pill-group" id="pill-formato-texto">
@@ -405,6 +410,16 @@
           <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Personalizar</h2><span class="ajuste-seccion-chevron">▾</span></button>
           <div class="ajuste-seccion-cuerpo">
 
+          <div id="ajuste-tamano-texto">
+            <span class="form-label">Tamaño de letra</span>
+            <p class="muted ajuste-subtitulo">Elige un tamaño cómodo. El contenido puede ocupar más espacio para que el texto no se corte.</p>
+            <div class="pill-group" role="group" aria-label="Tamaño de letra">
+              <button type="button" class="pill-item" data-tamano-texto="pequeno">Pequeño</button>
+              <button type="button" class="pill-item" data-tamano-texto="mediano">Mediano</button>
+              <button type="button" class="pill-item" data-tamano-texto="grande">Grande</button>
+            </div>
+          </div>
+
           <div>
             <span class="form-label">Apariencia</span>
             <div class="pill-group selector-modos-apariencia" id="selector-modos-apariencia" role="group" aria-label="Apariencia">
@@ -413,48 +428,31 @@
               <button type="button" class="pill-item" data-modo-tema="true-dark">Modo oscuro</button>
             </div>
           </div>
-          <div class="ajuste-idioma-app">
-            <label class="form-label" for="selector-idioma-app">Idioma</label>
-            <select id="selector-idioma-app" class="form-input" aria-label="Idioma"></select>
-          </div>
-          <div id="selector-logo-app" class="stack">
-            <span class="form-label">Logo de la app</span>
-            <div class="onboarding-logos">
-              <button type="button" data-logo-app="folder" aria-label="Logo carpeta"><img src="imagenes/LogoAppFolder.png" alt="Logo con carpeta"></button>
-              <button type="button" data-logo-app="birrete" aria-label="Logo birrete"><img src="imagenes/LogoAppBirrete.png" alt="Logo con birrete"></button>
-            </div>
-            <label class="btn btn-secondary" for="input-logo-app-archivo">Elegir un archivo LogoApp de Descargas</label>
-            <input id="input-logo-app-archivo" class="oculto" type="file" accept="image/png,image/jpeg,image/webp">
-            <small class="muted">Por seguridad, el navegador solo permite leer un archivo si lo eliges aquí.</small>
-          </div>
-
-          <div class="row-between">
-            <span>Modo fancy</span>
-            <label class="switch switch-tema">
-              <input type="checkbox" id="switch-rendimiento">
-              <span class="track"><span class="thumb"></span></span>
-            </label>
+          <div>
+            <span class="form-label">Calidad</span>
+            <p class="muted ajuste-subtitulo">Fancy puede usar más recursos en algunos dispositivos.</p>
+            <div class="row-between"><span>Modo fancy</span><label class="switch switch-tema"><input type="checkbox" id="switch-rendimiento"><span class="track"><span class="thumb"></span></span></label></div>
           </div>
 
           <div>
-            <span>Paleta de color</span>
+            <span class="form-label">Paleta de color</span>
             <div class="palette-grid" id="grid-paletas"></div>
-          </div>
-
-          <div id="ajuste-tamano-texto">
-            <span class="form-label">Tamaño del texto</span>
-            <p class="muted" style="font-size:0.82rem; margin:2px 0 6px;">Elige un tamaño cómodo. El contenido puede ocupar más espacio para que el texto no se corte.</p>
-            <div class="pill-group" role="group" aria-label="Tamaño del texto">
-              <button type="button" class="pill-item" data-tamano-texto="pequeno">Pequeño</button>
-              <button type="button" class="pill-item" data-tamano-texto="mediano">Mediano</button>
-              <button type="button" class="pill-item" data-tamano-texto="grande">Grande</button>
-            </div>
           </div>
 
           <div>
             <span class="form-label">Navegación</span>
-            <p class="muted" style="font-size:0.82rem; margin:2px 0 6px;">Elegí qué secciones mostrar en el menú y arrastrá <span class="handle-mover" style="display:inline; padding:0 2px; cursor:default;">⋮⋮</span> para cambiar el orden. "Resumen" y "Configuración" siempre quedan visibles y fijos arriba/abajo.</p>
+            <p class="muted ajuste-subtitulo">Elegí qué secciones mostrar en el menú y arrastrá <span class="handle-mover" style="display:inline; padding:0 2px; cursor:default;">⋮⋮</span> para cambiar el orden. "Resumen" y "Configuración" siempre quedan visibles y fijos arriba/abajo.</p>
             <div id="lista-nav-oculta" class="stack" style="gap:8px;"></div>
+          </div>
+
+          <div id="selector-logo-app" class="stack">
+            <div class="logo-selector-encabezado"><span class="form-label">Logo de la app</span><label class="logo-selector-personalizado" for="input-logo-app-archivo">Personalizado</label></div>
+            <div class="onboarding-logos">
+              <button type="button" data-logo-app="folder" aria-label="Logo carpeta"><img src="imagenes/LogoAppFolder.png" alt="Logo con carpeta"></button>
+              <button type="button" data-logo-app="birrete" aria-label="Logo birrete"><img src="imagenes/LogoAppBirrete.png" alt="Logo con birrete"></button>
+            </div>
+            <input id="input-logo-app-archivo" class="oculto" type="file" accept="image/png,image/jpeg,image/webp">
+            <small class="muted ajuste-subtitulo">Por seguridad, el navegador solo permite leer un archivo si lo eliges aquí.</small>
           </div>
           </div>
         </section>

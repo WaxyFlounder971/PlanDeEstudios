@@ -1892,8 +1892,13 @@ function crearDiaCronograma({ numeroSemana, dia, modalidad }) {
  */
 function obtenerClasesEfectivasSemana(bloque, numeroSemana) {
   const overridesEstaSemana = (bloque.cronograma_dias || []).filter((cd) => cd.numero_semana === numeroSemana);
+  // Versiones antiguas y snapshots compartidos guardaban un solo día como
+  // objeto. Aceptar ambos formatos evita que un dato legado tumbe Horario.
+  const dias = Array.isArray(bloque.dias)
+    ? bloque.dias
+    : bloque.dias && typeof bloque.dias === "object" ? [bloque.dias] : [];
 
-  return (bloque.dias || []).map((diaBloque) => {
+  return dias.map((diaBloque) => {
     const override = overridesEstaSemana.find((cd) => cd.dia === diaBloque.dia);
     const modalidad = override ? override.modalidad : diaBloque.modalidad || "presencial";
     return {
@@ -3197,6 +3202,9 @@ function migrarDatosAntiguos(datos) {
       if (!Array.isArray(semestre.bloques_horario)) semestre.bloques_horario = [];
       if (!Array.isArray(semestre._eliminados_bloques_horario)) semestre._eliminados_bloques_horario = [];
       semestre.bloques_horario.forEach((bloque) => {
+        if (!Array.isArray(bloque.dias)) {
+          bloque.dias = bloque.dias && typeof bloque.dias === "object" ? [bloque.dias] : [];
+        }
         // Cronograma de clases (2026-08-14): reemplaza excepciones_semana.
         // No hay datos viejos que migrar (ver ARQUITECTURA.md / decisión del
         // prompt), así que este relleno solo cubre bloques creados antes de

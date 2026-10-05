@@ -17,6 +17,33 @@ import { ocultarAvisoReconexion, programarRefrescoProactivo } from "./storage-sy
    ========================================================================= */
 
 const CLAVE_CACHE_LOCAL = "app_academica_cache";
+const PREFIJO_RESPALDO_PENDIENTE = "app_academica_pendiente_";
+
+function claveRespaldoPendiente(correo) {
+  const normalizado = String(correo || "").trim().toLocaleLowerCase("en-US");
+  return normalizado ? `${PREFIJO_RESPALDO_PENDIENTE}${encodeURIComponent(normalizado)}` : null;
+}
+
+function guardarRespaldoPendiente(correo, datos, fileId) {
+  const clave = claveRespaldoPendiente(correo);
+  if (!clave || !datos) return false;
+  try {
+    localStorage.setItem(clave, JSON.stringify({ correo: String(correo).trim().toLocaleLowerCase("en-US"), datos, fileId: fileId || null, guardadoEn: Date.now() }));
+    return true;
+  } catch (error) {
+    console.error("No se pudo respaldar localmente la sincronización pendiente:", error);
+    return false;
+  }
+}
+
+function leerRespaldoPendiente(correo) {
+  const clave = claveRespaldoPendiente(correo);
+  if (!clave) return null;
+  try {
+    const respaldo = JSON.parse(localStorage.getItem(clave) || "null");
+    return respaldo?.datos && respaldo.correo === String(correo).trim().toLocaleLowerCase("en-US") ? respaldo : null;
+  } catch (_) { return null; }
+}
 
 const CLAVE_TOKEN_CACHE = "google_token_cache";
 
@@ -30,7 +57,16 @@ const CLAVE_TOKEN_CACHE = "google_token_cache";
 function guardarTokenCache(token, expiresInSegundos) {
   const segundos = Number(expiresInSegundos) || 3600;
   const expiraEn = Date.now() + segundos * 1000;
-  localStorage.setItem(CLAVE_TOKEN_CACHE, JSON.stringify({ token, expiraEn }));
+  try {
+    localStorage.setItem(CLAVE_TOKEN_CACHE, JSON.stringify({ token, expiraEn }));
+    return true;
+  } catch (error) {
+    // Esta caché agiliza la reconexión, pero el token vivo sigue en memoria.
+    // Un navegador privado o sin espacio no debe convertir un login válido
+    // en una excepción que deje la app a medio iniciar.
+    console.warn("No se pudo guardar el token de sesión en este dispositivo:", error);
+    return false;
+  }
 }
 
 /**
@@ -55,7 +91,13 @@ function leerTokenCacheValido() {
 }
 
 function borrarTokenCache() {
-  localStorage.removeItem(CLAVE_TOKEN_CACHE);
+  try {
+    localStorage.removeItem(CLAVE_TOKEN_CACHE);
+    return true;
+  } catch (error) {
+    console.warn("No se pudo borrar la caché del token de sesión:", error);
+    return false;
+  }
 }
 
 /**
@@ -129,10 +171,29 @@ const authListo = new Promise((resolve) => {
  * `false`). Ahora se guarda y se restaura también ese flag.
  */
 function guardarCacheLocal() {
-  localStorage.setItem(
-    CLAVE_CACHE_LOCAL,
-    JSON.stringify({ fileId: estado.fileId, datos: estado.datos, pendienteSync: estado.pendienteSync })
-  );
+  try {
+    localStorage.setItem(
+      CLAVE_CACHE_LOCAL,
+      JSON.stringify({ fileId: estado.fileId, datos: estado.datos, pendienteSync: estado.pendienteSync })
+    );
+    return true;
+  } catch (error) {
+    // El estado pendiente se mantiene en memoria y el motor aún puede
+    // subirlo a Drive; nunca se interrumpe la acción que acaba de hacer la
+    // persona por un fallo de almacenamiento local.
+    console.error("No se pudo guardar una copia local de los datos:", error);
+    return false;
+  }
+}
+
+function borrarCacheLocal() {
+  try {
+    localStorage.removeItem(CLAVE_CACHE_LOCAL);
+    return true;
+  } catch (error) {
+    console.warn("No se pudo borrar la caché local de la cuenta:", error);
+    return false;
+  }
 }
 
 function leerCacheLocal() {
@@ -154,7 +215,7 @@ function leerCacheLocal() {
     // propio localStorage). Se descarta la caché rota para no quedar
     // atascado intentando leer lo mismo roto en cada carga.
     console.warn("Caché local corrupta, se descarta:", e);
-    localStorage.removeItem(CLAVE_CACHE_LOCAL);
+    try { localStorage.removeItem(CLAVE_CACHE_LOCAL); } catch (_) {}
     return null;
   }
 }
@@ -163,12 +224,15 @@ export {
   CLAVE_CACHE_LOCAL,
   CLAVE_TOKEN_CACHE,
   authListo,
+  borrarCacheLocal,
   borrarTokenCache,
   establecerTokenActivo,
   estado,
   guardarCacheLocal,
   guardarTokenCache,
   leerCacheLocal,
+  leerRespaldoPendiente,
   leerTokenCacheValido,
   resolverAuthListo,
+  guardarRespaldoPendiente,
 };

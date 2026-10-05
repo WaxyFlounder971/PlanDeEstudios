@@ -40,7 +40,7 @@
 //      y main.js NUNCA hardcodean el número — siempre lo leen de acá, así
 //      que actualizar la versión en toda la app es cambiar ESTA línea y
 //      nada más.
-const VERSION = "v3.22.12"; // <-- subir en cada despliegue
+const VERSION = "v3.22.15"; // <-- subir en cada despliegue
 const CACHE_NAME = `app-academica-${VERSION}`;
 const PREFIJO_CACHE = "app-academica-";
 
@@ -201,6 +201,10 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
+
+  // Comprobación de conexión real: debe atravesar la red, nunca responder
+  // desde stale-while-revalidate/cache-first aunque el shell esté offline.
+  if (url.searchParams.has("ping")) return;
 
   // Google (Drive API + auth): bypass total, siempre red.
   if (DOMINIOS_GOOGLE_SIN_CACHE.has(url.hostname)) return;

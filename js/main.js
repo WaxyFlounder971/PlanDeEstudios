@@ -10,7 +10,7 @@ import { buscarOCrearArchivoDatos, cerrarSesionGoogle, inicializarGoogleAuth, in
 import { migrarDatosAntiguos, sellarTimestamp } from "./core/schema.js";
 import { fusionarDatos } from "./core/storage-merge.js";
 import { actualizarIndicadorSync, asegurarTokenValido, avisarCierreSesionAOtrasPestanas, forzarSincronizacion, haySesionGuardada, inicializarCanalEntrePestanas, inicializarPullToRefresh, inicializarReconexionAlVolverOnline, inicializarSondeoAlVolver, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
-import { CLAVE_CACHE_LOCAL, borrarTokenCache, establecerTokenActivo, estado, guardarCacheLocal, leerCacheLocal, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
+import { borrarCacheLocal, borrarTokenCache, establecerTokenActivo, estado, guardarCacheLocal, guardarRespaldoPendiente, leerCacheLocal, leerRespaldoPendiente, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
 import { MODO_DEMO, PREVIEW_DEMO, activarEstadoDemo, cargarDatosDemo, registrarAperturaDemo } from "./core/demo-mode.js";
 import { configurarCorreoAnalitica, inicializarAnaliticaUso, registrarAnaliticaUso } from "./core/analitica.js";
 import { inicializarTutorialDesdeAjustes, mostrarOnboardingNuevoUsuario } from "./core/onboarding.js";
@@ -48,8 +48,29 @@ import { procesarAsociacionPendienteDeAmigo, iniciarRefrescoPeriodicoAmigos } fr
 import "./asistente/asistente.js";
 import { abrirConfirmacion, agregarLongPress, inicializarAutoScrollSelectoresEnModales, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, mostrarPantallaCargaSesion, mostrarToast, mostrarToastAccion, ocultarPantallaCargaSesion, restaurarEstadoSidebar } from "./ui/componentes.js";
 import { confirmarUniversidadNoInvertida } from "./ui/aviso-universidad.js";
-import { aplicarPaleta, aplicarTemaGuardadoLocalmente, obtenerModoTemaLocal, obtenerModoDisenoLocal } from "./ui/tema.js";
-import { inicializarIdiomas } from "./core/i18n.js";
+import { aplicarPaleta, aplicarTemaGuardadoLocalmente, obtenerModoTemaLocal, obtenerModoDisenoLocal, guardarModoTemaLocal } from "./ui/tema.js";
+import { inicializarIdiomas, traducirTextoInterfaz } from "./core/i18n.js";
+
+// La vista embebida del onboarding recibe los cambios visuales en vivo para
+// evitar reiniciar la demo cada vez que se prueba un tema, color o logo.
+if (MODO_DEMO && PREVIEW_DEMO && window.parent !== window) {
+  window.addEventListener("message", (evento) => {
+    if (evento.origin !== window.location.origin || evento.source !== window.parent
+      || evento.data?.type !== "APP_PREVIEW_UPDATE" || !estado.datos?.configuracion) return;
+    const { paleta, modo, colores, logo, logoData } = evento.data;
+    const cfg = estado.datos.configuracion;
+    if (typeof paleta === "string") cfg.paleta = paleta;
+    if (["light", "dark", "true-dark"].includes(modo)) {
+      cfg.modo = modo;
+      guardarModoTemaLocal(modo);
+    }
+    if (colores && Array.isArray(colores)) cfg.paleta_personalizada = { ...(cfg.paleta_personalizada || {}), colores };
+    if (["folder", "birrete", "personalizado"].includes(logo)) cfg.logo_app = logo;
+    cfg.logo_app_url = typeof logoData === "string" && logoData.startsWith("data:image/") ? logoData : null;
+    aplicarPaleta(cfg.paleta || "azul", cfg.modo || "dark", cfg.paleta_personalizada?.colores);
+    aplicarLogoApp();
+  });
+}
 
 // Idioma de interfaz local al dispositivo. El idioma español estático es
 // el respaldo si el archivo de traducción elegido no existe o está incompleto.
@@ -106,7 +127,14 @@ if ("serviceWorker" in navigator && !MODO_DEMO) {
           if (!swInstalando) return;
           swInstalando.addEventListener("statechange", () => {
             if (swInstalando.state === "installed" && navigator.serviceWorker.controller) {
-              mostrarAvisoActualizacionObligatoria(registro);
+              // Solo avisar si esa versión sigue esperando ser activada.
+              // Si ya tomó control o el estado cambió durante la instalación,
+              // el diálogo sería un falso positivo que interrumpe al usuario.
+              setTimeout(() => {
+                if (registro.waiting === swInstalando && navigator.serviceWorker.controller) {
+                  mostrarAvisoActualizacionObligatoria(registro);
+                }
+              }, 0);
             }
           });
         });
@@ -438,6 +466,10 @@ window.addEventListener("DOMContentLoaded", () => {
     habiaCacheAlCargar = true;
     estado.datos = migrarDatosAntiguos(cache.datos);
     estado.fileId = cache.fileId;
+    // storage.js persiste el indicador junto con los datos; restaurarlo es
+    // indispensable para que offline-first no trate cambios locales como
+    // si ya se hubieran guardado en Drive.
+    estado.pendienteSync = Boolean(cache.pendienteSync);
     if (navigator.storage && navigator.storage.persist) {
       navigator.storage.persist().catch(() => {});
     }
@@ -757,9 +789,27 @@ async function onLoginExitoso(token, expiresIn) {
     navigator.storage.persist().catch(() => {});
   }
   try {
+    const datosLocalesPrevios = estado.datos;
+    const fileIdLocalPrevio = estado.fileId;
+    const correoLocalPrevio = String(datosLocalesPrevios?.perfil?.correo || "").trim().toLocaleLowerCase("en-US");
+    const pendientesLocalesPrevios = estado.pendienteSync;
     const { fileId, datos, esArchivoNuevo } = await buscarOCrearArchivoDatos(token);
     estado.fileId = fileId;
     const remotoMigrado = migrarDatosAntiguos(datos);
+    const perfilGoogle = await obtenerPerfilGoogle(token);
+    const correoCuenta = String(perfilGoogle?.correo || "").trim().toLocaleLowerCase("en-US");
+    const cuentaLocalInciertaODistinta = Boolean(correoLocalPrevio && correoLocalPrevio !== correoCuenta);
+    if (cuentaLocalInciertaODistinta) {
+      // Nunca mezclar una caché de otro usuario dentro del archivo Drive de
+      // la cuenta actual. Si tenía cambios, separarlos bajo su propio email
+      // para recuperarlos cuando vuelva esa cuenta.
+      if (pendientesLocalesPrevios) {
+        guardarRespaldoPendiente(correoLocalPrevio, datosLocalesPrevios, fileIdLocalPrevio);
+      }
+      estado.datos = null;
+      estado.pendienteSync = false;
+    }
+    const respaldoPendiente = correoCuenta ? leerRespaldoPendiente(correoCuenta) : null;
 
     // v1.15 (FIX bug crítico "se me borró todo lo de PC al abrir en el
     // teléfono"): antes esta línea era `estado.datos = migrarDatosAntiguos
@@ -775,7 +825,11 @@ async function onLoginExitoso(token, expiresIn) {
     // último a escribir". Si es la primera vez que este usuario entra
     // (archivo recién creado) o este dispositivo no tenía nada cargado
     // todavía, no hay nada con qué fundir y se usa lo remoto tal cual.
-    if (estado.datos && !esArchivoNuevo) {
+    if (respaldoPendiente) {
+      const localPendiente = migrarDatosAntiguos(respaldoPendiente.datos);
+      estado.datos = esArchivoNuevo ? localPendiente : fusionarDatos(localPendiente, remotoMigrado);
+      estado.pendienteSync = true;
+    } else if (estado.datos && !esArchivoNuevo) {
       estado.datos = fusionarDatos(estado.datos, remotoMigrado);
     } else {
       estado.datos = remotoMigrado;
@@ -786,13 +840,13 @@ async function onLoginExitoso(token, expiresIn) {
     window.sincronizarTimerDesdeDatosCompartidos?.();
 
     // Punto 6: nombre + foto de perfil de Google.
-    const perfilGoogle = await obtenerPerfilGoogle(token);
     if (perfilGoogle) {
       estado.datos.perfil.nombre = perfilGoogle.nombre;
       estado.datos.perfil.foto_url = perfilGoogle.foto_url;
       estado.datos.perfil.correo = perfilGoogle.correo || estado.datos.perfil.correo;
     }
 
+    estado.pendienteSync = true;
     guardarCacheLocal();
     // v1.15: si la fusión de arriba encontró entidades locales más
     // recientes que las de Drive (ej. cambios hechos offline en este mismo
@@ -800,7 +854,6 @@ async function onLoginExitoso(token, expiresIn) {
     // estado.datos pero Drive todavía no las tiene - hay que subirlas. Sin
     // esto, quedarían fundidas solo en memoria/caché local y nunca
     // llegarían a Drive ni a los demás dispositivos.
-    estado.pendienteSync = true;
     intentarSincronizar();
 
     // Punto 5: fija la base de comparación del sondeo multi-dispositivo con
@@ -1219,18 +1272,17 @@ function pedirConfirmacionCerrarSesion() {
 
   let mensaje;
   if (estado.pendienteSync && hayTimerCorriendo) {
-    mensaje =
-      "Tienes cambios sin sincronizar y una sesión de estudio en curso. Cerrar sesión no detendrá el timer; se reanudará con el mismo timestamp cuando vuelvas a entrar. Los otros cambios pendientes sí podrían perderse. ¿Deseas continuar?";
+    mensaje = "Tienes cambios sin sincronizar y una sesión de estudio en curso. Tus cambios se guardarán en este dispositivo y se subirán cuando vuelvas a iniciar sesión con esta misma cuenta. El tiempo seguirá corriendo. ¿Deseas cerrar sesión?";
   } else if (hayTimerCorriendo) {
-    mensaje = "La sesión de estudio seguirá corriendo aunque cierres sesión. El timer se basa en sus timestamps y podrás detenerlo cuando vuelvas a entrar. ¿Deseas cerrar sesión?";
+    mensaje = "La sesión de estudio seguirá corriendo aunque cierres sesión. El timer se basa en sus tiempos y podrás detenerlo cuando vuelvas a entrar. ¿Deseas cerrar sesión?";
   } else {
-    mensaje = "Tienes cambios sin sincronizar. Si cierras sesión ahora, se perderán del dispositivo. ¿Deseas continuar?";
+    mensaje = "Tienes cambios sin sincronizar. Se guardarán en este dispositivo y se subirán a Drive cuando vuelvas a iniciar sesión con esta misma cuenta. ¿Deseas cerrar sesión?";
   }
 
   abrirConfirmacion({
-    titulo: hayTimerCorriendo && !estado.pendienteSync ? "⚠️ Sesión de estudio en curso" : "⚠️ Cambios sin sincronizar",
-    mensaje,
-    textoConfirmar: "Cerrar sesión de todas formas",
+    titulo: traducirTextoInterfaz(hayTimerCorriendo && !estado.pendienteSync ? "⚠️ Sesión de estudio en curso" : "⚠️ Cambios sin sincronizar"),
+    mensaje: traducirTextoInterfaz(mensaje),
+    textoConfirmar: traducirTextoInterfaz("Cerrar sesión de todas formas"),
     onConfirmar: cerrarSesion,
   });
 }
@@ -1279,9 +1331,18 @@ function cerrarSesion() {
   // navegador para que dejen de sincronizar con un token que ya está muerto
   // (si no, quedan reintentando en loop y mostrando datos de una sesión
   // cerrada). Ver inicializarCanalEntrePestanas en storage-sync.js.
+  if (estado.pendienteSync && estado.datos) {
+    const correo = estado.datos?.perfil?.correo;
+    if (!guardarRespaldoPendiente(correo, estado.datos, estado.fileId)) {
+      mostrarToast("No se pudo crear el respaldo local. Mantén esta sesión abierta e intenta sincronizar antes de salir.");
+      return;
+    }
+  }
   avisarCierreSesionAOtrasPestanas();
   cerrarSesionGoogle();
-  localStorage.removeItem(CLAVE_CACHE_LOCAL);
+  // El respaldo pendiente queda separado de la caché activa: así los datos
+  // de una cuenta no se mezclan ni se muestran si se inicia otra cuenta.
+  borrarCacheLocal();
   borrarTokenCache();
   estado.token = null;
   estado.fileId = null;

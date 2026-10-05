@@ -34,6 +34,10 @@ const PX_POR_MIN = 0.84; // mismo valor que PX_POR_MIN_EXPANDIDO en horario.js
 
 const KEY_LOCALSTORAGE_PENDIENTE = "horario_amigo_pendiente";
 
+function comoLista(valor) {
+  return Array.isArray(valor) ? valor : valor && typeof valor === "object" ? [valor] : [];
+}
+
 /* ===================== Helpers portados de horario.js (solo lectura) ===================== */
 
 function minutosDesdeHora(horaStr) {
@@ -143,9 +147,9 @@ function obtenerDiasVisiblesOrdenados(configDias) {
 /** Mismo criterio que obtenerClasesEfectivasSemana en schema.js, pero leyendo del snapshot ya resuelto (nombre/color planos, no materia_id). */
 function construirClasesEfectivasSemana(bloques, numeroSemana) {
   const lista = [];
-  (bloques || []).forEach((bloque) => {
+  comoLista(bloques).forEach((bloque) => {
     const overridesEstaSemana = (bloque.cronograma_dias || []).filter((cd) => cd.numero_semana === numeroSemana);
-    (bloque.dias || []).forEach((diaBloque) => {
+    comoLista(bloque.dias).forEach((diaBloque) => {
       const override = overridesEstaSemana.find((cd) => cd.dia === diaBloque.dia);
       const modalidad = override ? override.modalidad : diaBloque.modalidad || "presencial";
       lista.push({

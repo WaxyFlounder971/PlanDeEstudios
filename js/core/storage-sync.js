@@ -248,9 +248,15 @@ async function probarConexionReal() {
   const controlador = new AbortController();
   const idTimeout = setTimeout(() => controlador.abort(), 5000);
   try {
-    await fetch(`manifest.json?ping=${Date.now()}`, {
+    // Evita el service worker: si responde con una copia en caché puede
+    // declarar internet disponible estando el teléfono realmente offline.
+    const pingUrl = new URL("manifest.json", window.location.href);
+    pingUrl.searchParams.set("ping", String(Date.now()));
+    await fetch(pingUrl.href, {
       method: "GET",
       cache: "no-store",
+      headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
+      mode: "no-cors",
       signal: controlador.signal,
     });
     return true;
@@ -399,7 +405,21 @@ function inicializarReconexionAlVolverOnline() {
   // que va DIRECTO a gris - el propio sistema operativo está confirmando
   // que no hay red, no hace falta ningún probarConexionReal() de por medio.
   window.addEventListener("offline", () => {
-    mostrarIndicadorConexion("desconectado");
+    // Algunos navegadores móviles envían `offline` al cambiar de Wi-Fi a
+    // datos aunque el teléfono siga teniendo internet. Confirmar contra la
+    // red antes de presentar un corte definitivo evita ese falso aviso.
+    mostrarIndicadorConexion("reconectando");
+    probarConexionReal().then((hayInternet) => {
+      if (hayInternet) {
+        mostrarIndicadorConexion("reconectando");
+        asegurarTokenValido().finally(() => {
+          sondearCambiosRemotos(true);
+          if (estado.pendienteSync) intentarSincronizar();
+        });
+      } else {
+        mostrarIndicadorConexion("desconectado");
+      }
+    });
   });
 }
 
@@ -1475,8 +1495,14 @@ function marcarCambioPendiente() {
     estado.pendienteSync = false;
     return;
   }
-  guardarCacheLocal();
   estado.pendienteSync = true;
+  const cacheGuardada = guardarCacheLocal();
+  if (cacheGuardada) {
+    avisoCacheLocalNoDisponibleMostrado = false;
+  } else if (!avisoCacheLocalNoDisponibleMostrado) {
+    avisoCacheLocalNoDisponibleMostrado = true;
+    mostrarToast("Este dispositivo no pudo guardar una copia local. Mantén la conexión y espera a que aparezca «Todo sincronizado» antes de cerrar o recargar.");
+  }
   // FIX blindaje 2026-09-17 (punto 1.1/1.2 de la auditoría): cada cambio
   // local sube este contador. `ejecutarUnaSincronizacion()` lo fotografía
   // JUSTO ANTES de llamar a guardarDatos() y lo vuelve a mirar cuando la
@@ -1492,6 +1518,7 @@ function marcarCambioPendiente() {
 
 let promesaSincronizacionEnCurso = null;
 let contadorCambiosLocales = 0;
+let avisoCacheLocalNoDisponibleMostrado = false;
 // Punto 1.1: si llega un disparo de sync mientras ya hay uno en vuelo, no se
 // lanza un segundo ciclo en paralelo (bajada+fusión+subida duplicadas sobre
 // el mismo estado.datos) ni se descarta el disparo en silencio: se deja
@@ -1608,6 +1635,18 @@ async function ejecutarUnaSincronizacion() {
       // guardado, una recarga inmediata después de un sync exitoso volvía a
       // arrancar con pendienteSync=true y re-subía todo sin necesidad.
       guardarCacheLocal();
+      // El respaldo de cierre solo se borra después de confirmar la subida
+      // a Drive. La clave incluye el correo para nunca cruzar cuentas.
+      const correo = String(estado.datos?.perfil?.correo || "").trim().toLocaleLowerCase("en-US");
+      if (correo) {
+        try {
+          localStorage.removeItem(`app_academica_pendiente_${encodeURIComponent(correo)}`);
+        } catch (error) {
+          // La subida ya fue confirmada: si queda esta copia duplicada, una
+          // nueva reconciliación puede resolverla, pero no hay pérdida.
+          console.warn("No se pudo limpiar la copia local ya sincronizada:", error);
+        }
+      }
     } else {
       // Hubo al menos una edición mientras subíamos: sigue pendiente y se
       // reintenta enseguida (ver resincronizarAlTerminar en

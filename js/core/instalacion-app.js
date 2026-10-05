@@ -42,10 +42,11 @@ async function mostrarInvitacionInstalacion() {
   if (!boton) return;
   if (await appYaInstalada()) { boton.classList.add("oculto"); return; }
   temporizadoresBoton.forEach(clearTimeout); temporizadoresBoton = [];
-  boton.classList.remove("oculto", "instalar-expandido");
+  boton.classList.remove("oculto", "instalar-ocultando", "instalar-expandido");
   requestAnimationFrame(() => boton.classList.add("instalar-expandido"));
   temporizadoresBoton.push(setTimeout(() => boton.classList.remove("instalar-expandido"), 10000));
-  temporizadoresBoton.push(setTimeout(() => boton.classList.add("oculto"), 15000));
+  temporizadoresBoton.push(setTimeout(() => boton.classList.add("instalar-ocultando"), 15000));
+  temporizadoresBoton.push(setTimeout(() => boton.classList.add("oculto"), 15400));
 }
 
 function inicializarInstalacionApp() {

@@ -51,7 +51,7 @@
 
 *Datos de usuario y migraciones:*
 * `crearDatosUsuarioNuevo()` — objeto de datos "vacío" para un usuario que inicia sesión por primera vez (estructura completa de fábrica).
-* `migrarDatosAntiguos(datos)` — corre todas las migraciones de esquema necesarias sobre datos ya existentes, de forma idempotente, antes de renderizar nada.
+* `migrarDatosAntiguos(datos)` — corre todas las migraciones de esquema necesarias sobre datos ya existentes, de forma idempotente, antes de renderizar nada. Normaliza también `bloque.dias` cuando una versión antigua lo guardó como objeto individual en vez de arreglo, para evitar que Horario se caiga al abrir.
 * `MAPEO_HORAS_VIEJO_A_NUEVO` — tabla de migración del modelo viejo de horas fijo al modelo dinámico de `tipos_horas`.
 
 *Reloj lógico / sincronización (Lamport):*
@@ -172,8 +172,9 @@
 * `correoConocido()` — correo del perfil ya cargado (si existe), para usar como `login_hint` en refrescos silenciosos.
 * `authListo` — Promise que resuelve una sola vez cuando ya se supo si hay token utilizable (evita condiciones de carrera al iniciar).
 * `resolverAuthListo` — función que resuelve la promesa `authListo`.
-* `guardarCacheLocal()` — persiste `{ fileId, datos, pendienteSync }` en localStorage.
+* `guardarCacheLocal()` — persiste `{ fileId, datos, pendienteSync }` en localStorage y devuelve `false` sin interrumpir la app si el navegador bloquea la escritura. `borrarCacheLocal()` elimina esa caché de forma protegida.
 * `leerCacheLocal()` — lee la caché local; devuelve `null` y la descarta si está corrupta (JSON inválido).
+* `guardarRespaldoPendiente(correo, datos, fileId)` / `leerRespaldoPendiente(correo)` — conservan cambios no sincronizados en una clave aislada por cuenta para restaurarlos después de un cierre de sesión voluntario.
 
 ### js/core/storage-merge.js
 **Propósito:** Toda la lógica de fusión (merge) de datos entre dispositivos al sincronizar — resuelve conflictos usando el reloj lógico de Lamport y respeta tumbas de borrado en cada colección anidada del modelo.

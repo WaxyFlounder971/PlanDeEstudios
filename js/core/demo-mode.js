@@ -1,4 +1,4 @@
-import { crearDatosUsuarioNuevo, PALETAS_DISPONIBLES } from "./schema.js";
+import { crearDatosUsuarioNuevo, migrarDatosAntiguos, PALETAS_DISPONIBLES } from "./schema.js";
 import { registrarAnaliticaUso } from "./analitica.js";
 
 /**
@@ -94,7 +94,10 @@ async function cargarDatosDemo() {
     }
     try { if (paleta === "personalizada") datos.configuracion.paleta_personalizada = JSON.parse(params.get("previewCustom") || "null"); } catch (_) {}
   }
-  return datos;
+  // La demo usa los mismos defaults y migraciones que las cuentas reales:
+  // el dataset puede conservar ejemplos legados, pero nunca debe bloquear
+  // una sección por una forma antigua de los datos.
+  return migrarDatosAntiguos(datos);
 }
 
 function activarEstadoDemo(datos) {

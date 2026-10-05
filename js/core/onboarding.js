@@ -15,6 +15,7 @@ const SECCIONES_TUTORIAL = [
   { id:"comunidad", nombre:"Comunidad", puntos:["Guarda profesores y compañeros.","Añade contactos y valoraciones.","Compara horarios con amistades."] },
   { id:"finanzas", nombre:"Finanzas", puntos:["Registra ingresos y gastos desde el inicio.","Clasifica movimientos por categoría.","Asociarlos a un semestre es opcional."] },
   { id:"plan-estudios", nombre:"Plan de estudios", puntos:["Añade una o varias carreras.","Pega o importa la malla completa.","El plan alimenta la matrícula de Semestres."] },
+  { id:"asistente", nombre:"Wapper", puntos:["Consulta y organiza tareas de tu Agenda con lenguaje natural.","Pregúntale por fechas, pendientes y cambios de modalidad.","Para usar la IA, configura tu clave de Gemini en Ajustes."] },
   { id:"configuracion", nombre:"Ajustes", puntos:["Cambia idioma, apariencia, paleta y tamaño de texto.","Ordena la navegación y tus preferencias.","Puedes volver a esta guía cuando quieras."] },
 ];
 
@@ -37,6 +38,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
   const tienePlanArmado = Boolean(estado.datos.planes_estudio?.some((plan) => plan.materias?.length || plan.optativas_disponibles?.length));
   const faltaNombre = !(estado.datos.perfil?.nombre_preferido || estado.datos.perfil?.nombre || "").trim();
   let etapa = cuentaConDatos ? (faltaNombre ? "nombre" : (!cfg.paleta || !cfg.modo ? "personalizar" : "tour")) : "nombre", indice = 0;
+  let panelPersonalizacion = "opciones";
   const overlay = document.createElement("div");
   overlay.className = "onboarding-overlay";
   overlay.setAttribute("role","dialog"); overlay.setAttribute("aria-modal","true"); overlay.setAttribute("aria-labelledby","onboarding-titulo");
@@ -44,10 +46,33 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
   panel.innerHTML = '<header class="onboarding-top"><span class="onboarding-progreso"></span><button class="onboarding-cerrar" type="button" aria-label="Cerrar">×</button></header><div class="onboarding-layout"><div class="onboarding-copy"><h1 id="onboarding-titulo"></h1><div class="onboarding-contenido"></div></div><div class="onboarding-preview-wrap"><iframe class="onboarding-preview" title="Vista previa real de App Académica" loading="lazy" data-analitica-ignorar></iframe></div></div><footer class="onboarding-acciones"></footer>';
   overlay.append(panel); document.body.append(overlay);
   const progreso=panel.querySelector(".onboarding-progreso"), titulo=panel.querySelector("h1"), contenido=panel.querySelector(".onboarding-contenido"), acciones=panel.querySelector(".onboarding-acciones"), preview=panel.querySelector("iframe");
-  let timersPreview=[];
+  let timersPreview=[], cerrarListaTour=null, temporizadorTour=null;
+  const actualizarPreview=()=>preview.contentWindow?.postMessage({
+    type:"APP_PREVIEW_UPDATE", paleta:cfg.paleta||"azul", modo:obtenerModoTemaLocal(),
+    colores:cfg.paleta==="personalizada"?cfg.paleta_personalizada?.colores:null,
+    logo:cfg.logo_app||"folder", logoData:cfg.logo_app_url||null
+  },location.origin);
+  let inicioDeslizamiento=null;
+  const comenzarDeslizamiento=(ev)=>{if(ev.touches.length===1)inicioDeslizamiento=ev.touches[0].clientX;};
+  const terminarDeslizamiento=(ev)=>{
+    if(inicioDeslizamiento===null)return;
+    const delta=ev.changedTouches[0].clientX-inicioDeslizamiento;inicioDeslizamiento=null;
+    if(!matchMedia("(max-width:760px)").matches||etapa!=="personalizar"||Math.abs(delta)<55)return;
+    panelPersonalizacion=delta<0?"preview":"opciones";pintar();
+  };
+  panel.addEventListener("touchstart",comenzarDeslizamiento,{passive:true});
+  panel.addEventListener("touchend",terminarDeslizamiento,{passive:true});
   preview.addEventListener("load",()=>{
+    actualizarPreview();
     timersPreview.forEach(clearTimeout);timersPreview=[];
-    if(preview.dataset.loaded?.startsWith("semestres:")){
+    let docTour;try{docTour=preview.contentDocument;}catch(_){}
+    if(docTour){
+      docTour.addEventListener("touchstart",comenzarDeslizamiento,{passive:true});
+      docTour.addEventListener("touchend",terminarDeslizamiento,{passive:true});
+      const iniciarExploracao=()=>{if(etapa==="tour")cerrarListaTour?.();};
+      ["pointerdown","keydown","touchstart","wheel"].forEach(tipo=>docTour.addEventListener(tipo,iniciarExploracao,{once:true,capture:true}));
+    }
+    if(preview.dataset.seccion==="semestres"){
       let interaccion=false;let doc;try{doc=preview.contentDocument;}catch(_){return;}
       if(!doc)return;
       ["pointerdown","keydown","touchstart","wheel"].forEach(tipo=>doc.addEventListener(tipo,()=>{interaccion=true;timersPreview.forEach(clearTimeout);timersPreview=[];},{once:true,capture:true}));
@@ -60,12 +85,21 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
   });
   const boton=(texto,clase,fn)=>{const b=document.createElement("button");b.type="button";b.className=`btn ${clase}`;b.textContent=traducirTextoInterfaz(texto);b.addEventListener("click",fn);return b;};
   const texto=(tag,cls,value)=>{const e=document.createElement(tag);if(cls)e.className=cls;e.textContent=traducirTextoInterfaz(value);return e;};
-  const fin=(irAlPlan=false)=>{timersPreview.forEach(clearTimeout);timersPreview=[];cfg.onboarding_v1_completado=true;guardar();overlay.remove();if(irAlPlan){const destino=tienePlanArmado?"semestres":"plan-estudios";navegar?.(destino);setTimeout(()=>iniciarGuiaPlan({navegar,posteriorImportacion:tienePlanArmado,yaEnSemestres:tienePlanArmado}),450);}else toast?.(traducirTextoInterfaz("¡Listo! Puedes volver a ver la guía desde Ajustes generales."));};
+  const fin=(irAlPlan=false,irASemestres=false)=>{timersPreview.forEach(clearTimeout);timersPreview=[];clearTimeout(temporizadorTour);cfg.onboarding_v1_completado=true;guardar();overlay.remove();if(irAlPlan||irASemestres){const destino=irASemestres?"semestres":"plan-estudios";navegar?.(destino);setTimeout(()=>iniciarGuiaPlan({navegar,posteriorImportacion:irASemestres,yaEnSemestres:irASemestres}),450);}else toast?.(traducirTextoInterfaz("¡Listo! Puedes volver a ver la guía desde Ajustes generales."));};
+  const preguntarPorOtroPlan=()=>{
+    const pregunta=document.createElement("div");pregunta.className="onboarding-pregunta-plan";
+    const tarjeta=document.createElement("section");tarjeta.setAttribute("role","dialog");tarjeta.setAttribute("aria-modal","true");
+    tarjeta.append(texto("h2","","Ya tienes un plan guardado"),texto("p","","¿Quieres guardar otro plan de estudios o continuar con el que ya tienes?"));
+    const botones=document.createElement("div");botones.className="onboarding-acciones";
+    botones.append(boton("Guardar otro plan","btn-secondary",()=>fin(true)),boton("Continuar con este plan","btn-primary",()=>fin(false,true)));
+    tarjeta.append(botones);pregunta.append(tarjeta);overlay.append(pregunta);
+  };
   const instalarYa=()=>Boolean(navigator.standalone)||matchMedia("(display-mode: standalone)").matches;
-  const cargarPreview=(seccion="resumen")=>{const u=new URL(location.href);u.search="";u.searchParams.set("demo","1");u.searchParams.set("preview","1");u.searchParams.set("previewSection",seccion);u.searchParams.set("previewPalette",cfg.paleta||"azul");u.searchParams.set("previewMode",obtenerModoTemaLocal());u.searchParams.set("previewLogo",cfg.logo_app||"folder");if(cfg.paleta==="personalizada"&&cfg.paleta_personalizada)u.searchParams.set("previewCustom",JSON.stringify(cfg.paleta_personalizada));if(cfg.logo_app_url)u.searchParams.set("previewLogoData",cfg.logo_app_url);const key=`${seccion}:${u.search}`;if(preview.dataset.loaded!==key){preview.dataset.loaded=key;preview.src=u.href;}};
+  const cargarPreview=(seccion="resumen")=>{const u=new URL(location.href);u.search="";u.searchParams.set("demo","1");u.searchParams.set("preview","1");u.searchParams.set("previewSection",seccion);u.searchParams.set("previewPalette",cfg.paleta||"azul");u.searchParams.set("previewMode",obtenerModoTemaLocal());u.searchParams.set("previewLogo",cfg.logo_app||"folder");if(cfg.paleta==="personalizada"&&cfg.paleta_personalizada)u.searchParams.set("previewCustom",JSON.stringify(cfg.paleta_personalizada));if(cfg.logo_app_url)u.searchParams.set("previewLogoData",cfg.logo_app_url);if(preview.dataset.seccion!==seccion){preview.dataset.seccion=seccion;preview.src=u.href;}else actualizarPreview();};
   const pintar=()=>{
     contenido.replaceChildren();acciones.replaceChildren();
     const esTour=etapa==="tour";panel.classList.toggle("onboarding-con-tour",esTour||etapa==="personalizar");
+    panel.classList.toggle("onboarding-mostrar-preview",etapa==="personalizar"&&panelPersonalizacion==="preview");
     panel.querySelector(".onboarding-cerrar").classList.toggle("oculto",!cuentaConDatos&&(etapa==="nombre"||etapa==="personalizar"));
     const nombres={nombre:"Tu cuenta, a tu manera",personalizar:"Personaliza tu app",instalar:"Llévala contigo",tour:`Conoce ${secciones[indice]?.nombre||"App Académica"}`,flujo:"Todo conectado, paso a paso"};
     titulo.textContent=etapa==="tour"?`${traducirTextoInterfaz("Conoce")} ${traducirTextoInterfaz(secciones[indice]?.nombre||"App Académica")}`:traducirTextoInterfaz(nombres[etapa]||"App Académica");
@@ -79,15 +113,22 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
     if(etapa==="personalizar"){
       contenido.append(texto("p","onboarding-lead","Elige tema, paleta y logo. Puedes cambiarlos luego en Personalizar."));
       const modos=document.createElement("div");modos.className="onboarding-modos";
-      [["light","Modo claro"],["dark","Modo color"],["true-dark","Modo oscuro"]].forEach(([v,l])=>{const b=boton(l,obtenerModoTemaLocal()===v?"btn-primary":"btn-secondary",()=>{cfg.modo=v;guardarModoTemaLocal(v);aplicarPaleta(cfg.paleta||"azul",v,cfg.paleta==="personalizada"?cfg.paleta_personalizada?.colores:undefined);aplicarLogoApp();guardar();pintar();});b.setAttribute("aria-pressed",String(obtenerModoTemaLocal()===v));modos.append(b);});
+      [["light","Claro"],["dark","Color"],["true-dark","Oscuro"]].forEach(([v,l])=>{const b=boton(l,obtenerModoTemaLocal()===v?"btn-primary":"btn-secondary",()=>{cfg.modo=v;guardarModoTemaLocal(v);aplicarPaleta(cfg.paleta||"azul",v,cfg.paleta==="personalizada"?cfg.paleta_personalizada?.colores:undefined);aplicarLogoApp();guardar();actualizarPreview();pintar();});b.setAttribute("aria-pressed",String(obtenerModoTemaLocal()===v));modos.append(b);});
       const colores=document.createElement("div");colores.className="onboarding-paletas";
-      PALETAS_DISPONIBLES.forEach((p)=>{const b=document.createElement("button");b.type="button";b.className="onboarding-color";b.title=traducirTextoInterfaz(p);b.setAttribute("aria-label",traducirTextoInterfaz(p));b.setAttribute("aria-pressed",String(cfg.paleta===p));const colors=COLORES_PREVIEW_PALETA[p]||[];b.style.background=p==="azucarado"?FONDO_PREVIEW_AZUCARADO:`linear-gradient(135deg,${colors.join(",")})`;b.addEventListener("click",()=>{cfg.paleta=p;aplicarPaleta(p,obtenerModoTemaLocal());aplicarLogoApp();guardar();pintar();});colores.append(b);});
-      const paletaPersonal=document.createElement("button");paletaPersonal.className="btn btn-secondary";paletaPersonal.textContent=traducirTextoInterfaz("Más colores · Crear mi paleta");paletaPersonal.onclick=()=>iniciarFlujoPaletaPersonalizada({alGuardar:()=>{cfg.paleta="personalizada";cfg.paleta_personalizada=estado.datos.configuracion.paleta_personalizada;guardar();aplicarPaleta("personalizada",obtenerModoTemaLocal(),cfg.paleta_personalizada?.colores);aplicarLogoApp();}});
-      const logos=document.createElement("div");logos.className="onboarding-logos";[["folder","imagenes/LogoAppFolder.png","Carpeta"],["birrete","imagenes/LogoAppBirrete.png","Birrete"]].forEach(([v,src,alt])=>{const b=document.createElement("button");b.type="button";b.className="onboarding-logo";b.setAttribute("aria-pressed",String(cfg.logo_app===v&&!cfg.logo_app_url));const img=document.createElement("img");img.src=src;img.alt=alt;b.append(img);b.onclick=()=>{cfg.logo_app=v;cfg.logo_app_url=null;guardar();aplicarLogoApp();pintar();};logos.append(b);});
-      const etiquetaArchivo=document.createElement("label");etiquetaArchivo.className="btn btn-secondary onboarding-file-picker";etiquetaArchivo.append(texto("span","","Elegir archivo de logo"));
+      PALETAS_DISPONIBLES.forEach((p)=>{const b=document.createElement("button");b.type="button";b.className="onboarding-color";b.title=traducirTextoInterfaz(p);b.setAttribute("aria-label",traducirTextoInterfaz(p));b.setAttribute("aria-pressed",String(cfg.paleta===p));const colors=COLORES_PREVIEW_PALETA[p]||[];b.style.background=p==="azucarado"?FONDO_PREVIEW_AZUCARADO:`linear-gradient(135deg,${colors.join(",")})`;b.addEventListener("click",()=>{cfg.paleta=p;aplicarPaleta(p,obtenerModoTemaLocal());aplicarLogoApp();guardar();actualizarPreview();pintar();});colores.append(b);});
+      const paletaPersonal=document.createElement("button");paletaPersonal.className="btn btn-secondary onboarding-paleta-nueva";paletaPersonal.setAttribute("aria-label",traducirTextoInterfaz("Crear mi paleta"));paletaPersonal.textContent="+";paletaPersonal.onclick=()=>iniciarFlujoPaletaPersonalizada({alGuardar:()=>{cfg.paleta="personalizada";cfg.paleta_personalizada=estado.datos.configuracion.paleta_personalizada;guardar();aplicarPaleta("personalizada",obtenerModoTemaLocal(),cfg.paleta_personalizada?.colores);aplicarLogoApp();actualizarPreview();}});
+      colores.append(paletaPersonal);
+      const logos=document.createElement("div");logos.className="onboarding-logos";[["folder","imagenes/LogoAppFolder.png","Carpeta"],["birrete","imagenes/LogoAppBirrete.png","Birrete"]].forEach(([v,src,alt])=>{const b=document.createElement("button");b.type="button";b.className="onboarding-logo";b.setAttribute("aria-pressed",String(cfg.logo_app===v&&!cfg.logo_app_url));const img=document.createElement("img");img.src=src;img.alt=alt;b.append(img);b.onclick=()=>{cfg.logo_app=v;cfg.logo_app_url=null;guardar();aplicarLogoApp();actualizarPreview();pintar();};logos.append(b);});
+      const etiquetaArchivo=document.createElement("label");etiquetaArchivo.className="btn btn-secondary onboarding-file-picker";etiquetaArchivo.append(texto("span","","Personalizado"));
       const archivo=document.createElement("input");archivo.type="file";archivo.accept="image/png,image/jpeg,image/webp";archivo.className="onboarding-file-input";archivo.setAttribute("aria-label","Elegir logo desde archivos");archivo.onchange=async()=>{const url=await prepararImagenLogo(archivo.files?.[0]);if(url){cfg.logo_app="personalizado";cfg.logo_app_url=url;guardar();aplicarLogoApp();pintar();}};etiquetaArchivo.append(archivo);
-      contenido.append(modos,colores,paletaPersonal,texto("h3","","Logo de la app"),logos,texto("small","muted","También puedes elegir aquí un archivo LogoApp de Descargas."),etiquetaArchivo);cargarPreview("resumen");
-      acciones.append(boton("Continuar","btn-primary",()=>{cfg.personalizacion_inicial_completada=true;guardar();etapa=instalarYa()?"tour":"instalar";pintar();}));return;
+      const filaLogo=document.createElement("div");filaLogo.className="onboarding-logo-heading";filaLogo.append(texto("h3","","Logo de la app"),etiquetaArchivo);
+      contenido.append(modos,colores,filaLogo,logos);cargarPreview("resumen");
+      const esMovil=matchMedia("(max-width:760px)").matches;
+      if(esMovil&&panelPersonalizacion==="preview"){
+        acciones.append(boton("Cambiar","btn-secondary",()=>{panelPersonalizacion="opciones";pintar();}),boton("Continuar","btn-primary",()=>{cfg.personalizacion_inicial_completada=true;guardar();etapa=instalarYa()?"tour":"instalar";pintar();}));
+      }else{
+        acciones.append(boton("Continuar","btn-primary",()=>{if(esMovil){panelPersonalizacion="preview";actualizarPreview();pintar();return;}cfg.personalizacion_inicial_completada=true;guardar();etapa=instalarYa()?"tour":"instalar";pintar();}));
+      }return;
     }
     if(etapa==="instalar"){
       contenido.append(texto("p","onboarding-lead","Instala App Académica para abrirla como una app en tu teléfono o computadora. Si ya está instalada, este paso se omite."));
@@ -95,11 +136,20 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
     }
     if(etapa==="tour"){
       const sec=secciones[indice];if(!sec){etapa="flujo";pintar();return;}
-      const lista=document.createElement("ul");lista.className="onboarding-lista";sec.puntos.forEach((p)=>lista.append(texto("li","",p)));contenido.append(lista);
-      cargarPreview(sec.id);acciones.append(boton("No me interesa","btn-secondary",()=>{cfg.navegacion_oculta=[...new Set([...(cfg.navegacion_oculta||[]),sec.id])];guardar();window.aplicarVisibilidadNavegacion?.();siguiente();}),boton(indice===secciones.length-1?"Seguir":"Lo usaré","btn-primary",siguiente));return;
+      const bloqueConoce=document.createElement("section");bloqueConoce.className="onboarding-conoce";
+      const botonConoce=boton("Conoce "+sec.nombre+" ⌄","btn-secondary",()=>{bloqueConoce.classList.toggle("plegado");botonConoce.textContent="Conoce "+sec.nombre+" "+(bloqueConoce.classList.contains("plegado")?"⌄":"⌃");});
+      const lista=document.createElement("ul");lista.className="onboarding-lista";sec.puntos.forEach((p)=>lista.append(texto("li","",p)));bloqueConoce.append(botonConoce,lista);contenido.append(bloqueConoce);
+      cerrarListaTour=()=>{clearTimeout(temporizadorTour);bloqueConoce.classList.add("plegado");botonConoce.textContent="Conoce "+sec.nombre+" ⌄";};
+      clearTimeout(temporizadorTour);temporizadorTour=setTimeout(()=>{if(etapa==="tour"&&bloqueConoce.isConnected)cerrarListaTour?.();},5000);
+      const detectarInteraccion=()=>{if(etapa==="tour")cerrarListaTour?.();};
+      ["pointerdown","keydown","touchstart","wheel"].forEach(tipo=>overlay.addEventListener(tipo,detectarInteraccion,{once:true,capture:true}));
+      cargarPreview(sec.id);
+      if(indice>0)acciones.append(boton("Atrás","btn-secondary",()=>{indice--;pintar();}));
+      const usarSeccion=()=>{cfg.navegacion_oculta=(cfg.navegacion_oculta||[]).filter(id=>id!==sec.id);guardar();window.aplicarVisibilidadNavegacion?.();siguiente();};
+      acciones.append(boton("No me interesa","btn-secondary",()=>{cfg.navegacion_oculta=[...new Set([...(cfg.navegacion_oculta||[]),sec.id])];guardar();window.aplicarVisibilidadNavegacion?.();siguiente();}),boton(indice===secciones.length-1?"Seguir":"Siguiente", "btn-primary",usarSeccion));return;
     }
     const pasos=document.createElement("ol");pasos.className="onboarding-dependencias";["Agrega tu plan de estudios.","Crea un semestre y matricula tus materias.","Usa esas materias en Horario, Agenda y Tiempo.","Wapper trabaja con tu Agenda; Comunidad funciona por separado.","Finanzas funciona sola; vincularla a un semestre es opcional."].forEach(t=>pasos.append(texto("li","",t)));contenido.append(pasos);
-    acciones.append(boton("Lo haré después","btn-secondary",()=>fin(false)),boton(tienePlanArmado?"Continuar con Semestres":"Agregar plan y ver la guía","btn-primary",()=>fin(true)));
+    acciones.append(boton("Lo haré después","btn-secondary",()=>fin(false)),boton(tienePlanArmado?"Continuar":"Agregar plan y ver la guía","btn-primary",()=>tienePlanArmado?preguntarPorOtroPlan():fin(true)));
   };
   const siguiente=()=>{indice++;if(indice>=secciones.length)etapa="flujo";pintar();};
   panel.querySelector(".onboarding-cerrar").addEventListener("click",()=>fin(false));

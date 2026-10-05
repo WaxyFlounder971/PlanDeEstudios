@@ -50,6 +50,16 @@ const BASE_URL_AMIGOS = "https://waxyflounder971.github.io/PlanDeEstudios/amigos
 // funciona siempre.
 const API_KEY_LECTURA_AMIGOS = "AIzaSyDfpExr25F972ur_fztdELmU6MCxJOVBmg";
 
+function obtenerDiasDeBloque(bloque) {
+  const dias = bloque?.dias;
+  return Array.isArray(dias) ? dias : dias && typeof dias === "object" ? [dias] : [];
+}
+
+function obtenerBloquesDeSnapshot(snapshot) {
+  const bloques = snapshot?.bloques;
+  return Array.isArray(bloques) ? bloques : bloques && typeof bloques === "object" ? [bloques] : [];
+}
+
 async function leerSnapshotPublicoAmigo(fileId) {
   const url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&key=${API_KEY_LECTURA_AMIGOS}`;
   const resp = await fetch(url);
@@ -135,7 +145,7 @@ function construirSnapshotHorarioCompartido(semestre, apodoPropietario) {
       // así que ahora se resuelve adentro de cada entrada de `dias` más
       // abajo, no acá arriba.
       universidad: (obtenerPlanPorId(bloque.plan_estudio_id) || {}).universidad || null,
-      dias: (bloque.dias || []).map((d) => ({
+      dias: obtenerDiasDeBloque(bloque).map((d) => ({
         dia: d.dia,
         hora_inicio: d.hora_inicio,
         hora_fin: d.hora_fin,
@@ -917,8 +927,8 @@ function obtenerDiasConClaseAmigosVinculados() {
   const set = new Set();
   cacheSnapshotsAmigos.forEach((entrada) => {
     if (!entrada || !entrada.snapshot) return;
-    (entrada.snapshot.bloques || []).forEach((bloque) => {
-      (bloque.dias || []).forEach((d) => {
+    obtenerBloquesDeSnapshot(entrada.snapshot).forEach((bloque) => {
+      obtenerDiasDeBloque(bloque).forEach((d) => {
         if (d && d.dia) set.add(d.dia);
       });
     });
@@ -974,8 +984,8 @@ function obtenerBloquesAmigosPorDia(fecha, diaCodigo) {
     const numeroSemana = calcularNumeroSemanaAmigo(snapshot, fecha);
     if (numeroSemana == null) return;
 
-    (snapshot.bloques || []).forEach((bloque) => {
-      const diaBase = (bloque.dias || []).find((d) => d.dia === diaCodigo);
+    obtenerBloquesDeSnapshot(snapshot).forEach((bloque) => {
+      const diaBase = obtenerDiasDeBloque(bloque).find((d) => d.dia === diaCodigo);
       if (!diaBase) return;
       // Excepción puntual de esa semana (mismo patrón que
       // obtenerClasesEfectivasSemana en schema.js): si existe, su
@@ -1033,8 +1043,8 @@ function obtenerListaAmigosParaDiaConjunto(fecha, diaCodigo) {
     if (numeroSemana == null) return { amigo, bloques: [], caida: false }; // fuera del rango de su semestre
 
     const bloques = [];
-    (snapshot.bloques || []).forEach((bloque) => {
-      const diaBase = (bloque.dias || []).find((d) => d.dia === diaCodigo);
+    obtenerBloquesDeSnapshot(snapshot).forEach((bloque) => {
+      const diaBase = obtenerDiasDeBloque(bloque).find((d) => d.dia === diaCodigo);
       if (!diaBase) return;
       const excepcion = (bloque.cronograma_dias || []).find(
         (cd) => cd.numero_semana === numeroSemana && cd.dia === diaCodigo
