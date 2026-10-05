@@ -813,8 +813,6 @@ function construirSelectMultipleAjustes({ opciones, valoresIniciales, onCambiar 
     lista.querySelectorAll(".select-custom-opcion").forEach((li) => {
       const activa = valoresActuales.includes(li.dataset.id);
       li.classList.toggle("activa", activa);
-      const check = li.querySelector(".select-custom-opcion-check");
-      if (check) check.textContent = activa ? "✓" : "";
     });
     pintarResumen();
   }
@@ -824,15 +822,9 @@ function construirSelectMultipleAjustes({ opciones, valoresIniciales, onCambiar 
     item.className = "select-custom-opcion" + (valoresActuales.includes(id) ? " activa" : "");
     item.dataset.id = id;
 
-    const check = document.createElement("span");
-    check.className = "select-custom-opcion-check";
-    check.style.cssText = "display:inline-block; width:1.2em;";
-    check.textContent = valoresActuales.includes(id) ? "✓" : "";
 
     const texto = document.createElement("span");
     texto.textContent = etiqueta;
-
-    item.appendChild(check);
     item.appendChild(texto);
     item.addEventListener("click", () => {
       const yaActiva = valoresActuales.includes(id);

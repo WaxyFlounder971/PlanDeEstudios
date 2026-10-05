@@ -13,7 +13,7 @@ import { actualizarIndicadorSync, asegurarTokenValido, avisarCierreSesionAOtrasP
 import { borrarCacheLocal, borrarTokenCache, establecerTokenActivo, estado, guardarCacheLocal, guardarRespaldoPendiente, leerCacheLocal, leerRespaldoPendiente, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
 import { MODO_DEMO, PREVIEW_DEMO, activarEstadoDemo, cargarDatosDemo, registrarAperturaDemo } from "./core/demo-mode.js";
 import { configurarCorreoAnalitica, inicializarAnaliticaUso, registrarAnaliticaUso } from "./core/analitica.js";
-import { inicializarTutorialDesdeAjustes, mostrarOnboardingNuevoUsuario } from "./core/onboarding.js";
+import { inicializarTutorialDesdeAjustes, mostrarOnboardingNuevoUsuario, mostrarTutorialPrimeraVez } from "./core/onboarding.js";
 import { aplicarLogoApp } from "./core/marca.js";
 import { inicializarInstalacionApp, mostrarInvitacionInstalacion } from "./core/instalacion-app.js";
 import { obtenerIniciales } from "./core/utils.js";
@@ -57,7 +57,7 @@ if (MODO_DEMO && PREVIEW_DEMO && window.parent !== window) {
   window.addEventListener("message", (evento) => {
     if (evento.origin !== window.location.origin || evento.source !== window.parent
       || evento.data?.type !== "APP_PREVIEW_UPDATE" || !estado.datos?.configuracion) return;
-    const { paleta, modo, colores, logo, logoData } = evento.data;
+    const { paleta, modo, colores, logo, logoData, calidad } = evento.data;
     const cfg = estado.datos.configuracion;
     if (typeof paleta === "string") cfg.paleta = paleta;
     if (["light", "dark", "true-dark"].includes(modo)) {
@@ -67,6 +67,7 @@ if (MODO_DEMO && PREVIEW_DEMO && window.parent !== window) {
     if (colores && Array.isArray(colores)) cfg.paleta_personalizada = { ...(cfg.paleta_personalizada || {}), colores };
     if (["folder", "birrete", "personalizado"].includes(logo)) cfg.logo_app = logo;
     cfg.logo_app_url = typeof logoData === "string" && logoData.startsWith("data:image/") ? logoData : null;
+    if (["optimizado", "fancy"].includes(calidad)) aplicarModoRendimiento(calidad === "optimizado");
     aplicarPaleta(cfg.paleta || "azul", cfg.modo || "dark", cfg.paleta_personalizada?.colores);
     aplicarLogoApp();
   });
@@ -1496,6 +1497,7 @@ function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
   // sin conversación guardada, arranca directo en blanco.
   if (nombre === "asistente") window.renderizarAsistente?.();
   orientarSobreDependencias(nombre);
+  if (cambioSeccion && !MODO_DEMO) requestAnimationFrame(() => mostrarTutorialPrimeraVez(nombre));
 }
 // v2.8.9 (punto 10): se expone en window para que ui/componentes.js pueda
 // llamarla desde inicializarNavegacionBotonesMouse() sin crear un import

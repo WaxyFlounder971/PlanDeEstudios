@@ -579,24 +579,19 @@ function construirPillVistaSeccion(cont) {
     });
   });
   cont.appendChild(grupo);
-  if (vistaSeccionTE === "materias") {
-    const selectSemestre = document.createElement("select");
-    selectSemestre.className = "form-select";
-    selectSemestre.setAttribute("aria-label", traducirTextoInterfaz("Semestre de Tiempo de Estudio"));
-    selectSemestre.style.cssText = "width:100%;margin-top:8px;";
-    const semestres = (estado.datos.semestres || []).slice().sort((a, b) => (b.fecha_inicio || "").localeCompare(a.fecha_inicio || ""));
-    const vigente = semestres.find((s) => obtenerSemestresActuales().some((actual) => actual.id === s.id));
-    const valorActual = semestreTiempoEstudioId || vigente?.id || "todos";
-    selectSemestre.add(new Option(traducirTextoInterfaz("Todos los semestres"), "todos"));
-    semestres.forEach((s) => selectSemestre.add(new Option(s.nombre || traducirTextoInterfaz("Semestre sin nombre"), s.id)));
-    selectSemestre.value = valorActual;
-    selectSemestre.addEventListener("change", () => {
-      semestreTiempoEstudioId = selectSemestre.value;
-      materiaDetalleActivaId = null;
-      renderizarTiempoEstudio();
-    });
-    cont.appendChild(selectSemestre);
-  }
+}
+
+function construirSelectorSemestreTiempo(cont) {
+  const semestres=(estado.datos.semestres||[]).slice().sort((a,b)=>(b.fecha_inicio||"").localeCompare(a.fecha_inicio||""));
+  const vigente=semestres.find(s=>obtenerSemestresActuales().some(actual=>actual.id===s.id));
+  const seleccionado=semestreTiempoEstudioId||vigente?.id||"todos";
+  const selector=document.createElement("select");selector.className="form-select te-selector-semestre-tiempo";
+  selector.setAttribute("aria-label",traducirTextoInterfaz("Semestre de Tiempo de Estudio"));
+  selector.add(new Option(traducirTextoInterfaz("Todos los semestres"),"todos"));
+  semestres.forEach(s=>selector.add(new Option(s.nombre||traducirTextoInterfaz("Semestre sin nombre"),s.id)));
+  selector.value=seleccionado;
+  selector.addEventListener("change",()=>{semestreTiempoEstudioId=selector.value;materiaDetalleActivaId=null;renderizarTiempoEstudio();});
+  cont.append(selector);
 }
 
 /**
@@ -1450,6 +1445,7 @@ function renderizarTiempoEstudio() {
   // vistas de nivel superior — se arman acá UNA sola vez, y de ahí en más
   // cada vista solo dibuja su contenido propio (ver nota en
   // construirVistaPrincipal/construirVistaEstadisticas).
+  construirSelectorSemestreTiempo(cont);
   construirEncabezado(cont);
   construirPillVistaSeccion(cont);
 

@@ -1,5 +1,12 @@
+import { MODO_DEMO, PREVIEW_DEMO } from "./demo-mode.js";
+
 let eventoInstalacionPendiente = null;
 let temporizadoresBoton = [];
+const esModoSoloDemo = MODO_DEMO || PREVIEW_DEMO;
+
+function actualizarEstadoVisualInstalacion(activo) {
+  document.body?.classList.toggle("instalacion-flotante-activa", Boolean(activo) && !esModoSoloDemo);
+}
 
 window.addEventListener("beforeinstallprompt", (evento) => {
   evento.preventDefault();
@@ -9,6 +16,7 @@ window.addEventListener("beforeinstallprompt", (evento) => {
 window.addEventListener("appinstalled", () => {
   eventoInstalacionPendiente = null;
   document.getElementById("btn-instalar-app-flotante")?.classList.add("oculto");
+  actualizarEstadoVisualInstalacion(false);
 });
 
 async function instalarAppAcademica() {
@@ -40,13 +48,15 @@ async function appYaInstalada() {
 async function mostrarInvitacionInstalacion() {
   const boton = document.getElementById("btn-instalar-app-flotante");
   if (!boton) return;
-  if (await appYaInstalada()) { boton.classList.add("oculto"); return; }
+  if (esModoSoloDemo) { boton.classList.add("oculto"); actualizarEstadoVisualInstalacion(false); return; }
+  if (await appYaInstalada()) { boton.classList.add("oculto"); actualizarEstadoVisualInstalacion(false); return; }
   temporizadoresBoton.forEach(clearTimeout); temporizadoresBoton = [];
   boton.classList.remove("oculto", "instalar-ocultando", "instalar-expandido");
+  actualizarEstadoVisualInstalacion(true);
   requestAnimationFrame(() => boton.classList.add("instalar-expandido"));
   temporizadoresBoton.push(setTimeout(() => boton.classList.remove("instalar-expandido"), 10000));
   temporizadoresBoton.push(setTimeout(() => boton.classList.add("instalar-ocultando"), 15000));
-  temporizadoresBoton.push(setTimeout(() => boton.classList.add("oculto"), 15400));
+  temporizadoresBoton.push(setTimeout(() => { boton.classList.add("oculto"); actualizarEstadoVisualInstalacion(false); }, 15400));
 }
 
 function inicializarInstalacionApp() {

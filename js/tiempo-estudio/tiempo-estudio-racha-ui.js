@@ -50,7 +50,7 @@
    ========================================================================= */
 
 import { estado } from "../core/storage.js";
-import { MODO_DEMO } from "../core/demo-mode.js";
+import { MODO_DEMO, PREVIEW_DEMO } from "../core/demo-mode.js";
 import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { mostrarToast } from "../ui/componentes.js";
@@ -59,6 +59,7 @@ import {
   MINUTOS_DIA_CUMPLIDO,
   RACHA_DESDE_ISO,
   calcularRacha,
+  indiceDia,
   indiceDesdeISO,
   minutosSemana,
 } from "./tiempo-estudio-racha.js";
@@ -92,7 +93,18 @@ function datosListos() {
 /** Estado de la racha ahora mismo. `ahora` existe para poder probarlo. */
 export function obtenerEstadoRacha(ahora = Date.now()) {
   const desdeIdx = RACHA_DESDE_ISO ? indiceDesdeISO(RACHA_DESDE_ISO) : null;
-  return calcularRacha(estado && estado.datos ? estado.datos.sesiones_estudio : [], { ahora, desdeIdx });
+  return calcularRacha(sesionesRachaVisibles(ahora), { ahora, desdeIdx });
+}
+
+function sesionesRachaVisibles(ahora = Date.now()) {
+  if (PREVIEW_DEMO) {
+    const hoy = new Date(ahora);
+    return Array.from({length:16},(_,i)=>{
+      const d=i===15?new Date(ahora-35*60000):new Date(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()-(15-i),12,0,0,0);
+      return {id:`racha-preview-${i}`,inicio:d.getTime(),fin:d.getTime()+35*60000,duracion_minutos:35,origen:"preview"};
+    });
+  }
+  return estado?.datos?.sesiones_estudio || [];
 }
 
 /* ------------------------- Textos ------------------------- */
@@ -549,7 +561,14 @@ export function abrirOverlayRacha({ tipo, est, desde = 0, hasta }) {
     card.appendChild(avance);
   }
 
-  if (tipo === "detalle") card.appendChild(construirDetalleRacha(est));
+  if (tipo === "detalle") {
+    card.appendChild(construirDetalleRacha(est));
+    const calendario=document.createElement("div");calendario.className="te-racha-calendario-wrap oculto";
+    const botonCalendario=crearElemento("button","btn btn-secondary btn-block",traducirTextoInterfaz("Ver calendario"));botonCalendario.type="button";
+    botonCalendario.setAttribute("aria-expanded","false");
+    botonCalendario.addEventListener("click",()=>{const abierto=botonCalendario.getAttribute("aria-expanded")==="true";botonCalendario.setAttribute("aria-expanded",String(!abierto));botonCalendario.textContent=traducirTextoInterfaz(abierto?"Ver calendario":"Volver al detalle");card.querySelector(".te-racha-detalle")?.classList.toggle("oculto",!abierto);calendario.classList.toggle("oculto",abierto);});
+    card.append(botonCalendario,calendario);calendario.appendChild(construirCalendarioAnual(est));
+  }
 
   // Casilla "No volver a mostrar" (solo el aviso de inicio)
   let casilla = null;
@@ -656,7 +675,7 @@ function construirDetalleRacha(est) {
   let cumplidosSemana = 0;
 
   if (est.activa) {
-    const semana = estadosSemana(est, minutosSemana(estado.datos.sesiones_estudio, { ahora: Date.now() }));
+    const semana = estadosSemana(est, minutosSemana(sesionesRachaVisibles(), { ahora: Date.now() }));
     cumplidosSemana = semana.filter((d) => d.tipo === "cumplido").length;
     const tira = crearElemento("div", "te-racha-semana");
     tira.setAttribute("role", "list");
@@ -694,7 +713,7 @@ function construirDetalleRacha(est) {
   if (est.activa) {
     lista.appendChild(crearFilaDetalle(
       traducirTextoInterfaz("Esta semana"),
-      traducirTextoInterfaz(`${cumplidosSemana} de 5 días`)
+      traducirTextoInterfaz(`${cumplidosSemana} de 7 días`)
     ));
 
     const valorDescansos = crearElemento("span", "te-racha-descansos");
@@ -713,6 +732,58 @@ function construirDetalleRacha(est) {
   return cont;
 }
 
+function construirCalendarioAnual(est) {
+  const cont=document.createElement("div");
+  const sesiones=sesionesRachaVisibles();
+  const dias=new Map();
+  for(const s of sesiones){
+    const inicio=Number(s?.inicio);let min=Number(s?.duracion_minutos);
+    if(!Number.isFinite(min))min=Math.round((Number(s?.fin)-inicio)/60000);
+    if(!Number.isFinite(inicio)||!Number.isFinite(min)||min<=0)continue;
+    const d=new Date(inicio);const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    dias.set(key,(dias.get(key)||0)+min);
+  }
+  const descansos=new Set();
+  const inicioCadena=est.activa?est.inicioIdx:est.rachaPerdida?.inicioIdx;
+  const finCadena=est.activa?indiceDia(Date.now()):est.rachaPerdida?.diaIdx;
+  if(inicioCadena!==null&&inicioCadena!==undefined&&finCadena!==null&&finCadena!==undefined){
+    let usadosSemana=0;let semana=-1;
+    for(let idx=inicioCadena;idx<finCadena;idx++){
+      const d=new Date(idx*86400000);const lunes=idx-(((d.getDay()+6)%7));if(lunes!==semana){semana=lunes;usadosSemana=0;}
+      const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      if((dias.get(key)||0)>=MINUTOS_DIA_CUMPLIDO)continue;
+      if(usadosSemana<DESCANSOS_POR_SEMANA){descansos.add(key);usadosSemana++;}else break;
+    }
+  }
+  const ahora=new Date();let visible=new Date(ahora.getFullYear(),ahora.getMonth(),1);
+  const calendario=document.createElement("div");calendario.className="te-racha-calendario";
+  const nav=document.createElement("div");nav.className="te-racha-cal-nav";
+  const anterior=crearElemento("button","btn btn-secondary te-racha-cal-nav-btn","‹");anterior.type="button";anterior.setAttribute("aria-label",traducirTextoInterfaz("Mes anterior"));
+  const titulo=crearElemento("h3","te-racha-mes-titulo","");
+  const siguiente=crearElemento("button","btn btn-secondary te-racha-cal-nav-btn","›");siguiente.type="button";siguiente.setAttribute("aria-label",traducirTextoInterfaz("Mes siguiente"));
+  nav.append(anterior,titulo,siguiente);calendario.appendChild(nav);
+  const grid=document.createElement("div");grid.className="te-racha-mes-dias";calendario.appendChild(grid);
+  const locale=obtenerLocaleInterfaz();
+  function pintarMes(){
+    const anio=visible.getFullYear(),mes=visible.getMonth();
+    titulo.textContent=visible.toLocaleDateString(locale,{month:"long",year:"numeric"});grid.replaceChildren();
+    ["L","M","X","J","V","S","D"].forEach(letra=>grid.appendChild(crearElemento("span","te-racha-cal-dia-semana",letra)));
+    const offset=(new Date(anio,mes,1).getDay()+6)%7;for(let i=0;i<offset;i++)grid.appendChild(crearElemento("span","te-racha-cal-dia te-racha-cal-dia--vacio",""));
+    const total=new Date(anio,mes+1,0).getDate();
+    for(let dia=1;dia<=total;dia++){
+      const key=`${anio}-${String(mes+1).padStart(2,"0")}-${String(dia).padStart(2,"0")}`;const valor=dias.get(key)||0;const esHoy=dia===ahora.getDate()&&mes===ahora.getMonth()&&anio===ahora.getFullYear();
+      const celda=crearElemento("span","te-racha-cal-dia",valor>=MINUTOS_DIA_CUMPLIDO?"🔥":esHoy?traducirTextoInterfaz("Hoy"):String(dia));
+      if(valor>=MINUTOS_DIA_CUMPLIDO)celda.classList.add("te-racha-cal-dia--estudio");else if(descansos.has(key))celda.classList.add("te-racha-cal-dia--descanso");
+      if(esHoy)celda.classList.add("te-racha-cal-dia--hoy");
+      celda.title=`${key}: ${traducirTextoInterfaz(valor>=MINUTOS_DIA_CUMPLIDO?"Día estudiado":descansos.has(key)?"Día de descanso usado":"Sin actividad registrada")}`;grid.appendChild(celda);
+    }
+  }
+  anterior.addEventListener("click",()=>{visible=new Date(visible.getFullYear(),visible.getMonth()-1,1);pintarMes();});
+  siguiente.addEventListener("click",()=>{visible=new Date(visible.getFullYear(),visible.getMonth()+1,1);pintarMes();});
+  pintarMes();cont.appendChild(calendario);
+  const leyenda=document.createElement("div");leyenda.className="te-racha-cal-leyenda";leyenda.append(crearElemento("span","","🔥 "+traducirTextoInterfaz("Día estudiado")),crearElemento("span","","◌ "+traducirTextoInterfaz("Día de descanso usado")),crearElemento("span","",traducirTextoInterfaz("Borde destacado: hoy")));cont.appendChild(leyenda);
+  return cont;
+}
 /* ------------------------- Cuándo celebrar ------------------------- */
 
 function preferencias() {
