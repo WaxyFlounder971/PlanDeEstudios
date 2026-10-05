@@ -53,8 +53,7 @@ import {
   obtenerRangoDiasAgendaTodo,
   obtenerSemestreActivoAgenda,
   obtenerSemestresSeleccionadosAgenda,
-  tareaVenceHoy,
-} from "./agenda-utils.js";
+  tareaVenceHoy, ID_FILTRO_OTROS, esEventoHuerfanoAgenda, eventoPasaFiltroTiposAgenda } from "./agenda-utils.js";
 import { eliminarAdjunto, obtenerAdjuntosActivosDe, obtenerAdjuntosDe } from "../core/storage-adjuntos.js";
 
 const ETIQUETA_TIPO = { evento: "Eventos", tarea: "Tareas", examen: "Exámenes" };
@@ -81,7 +80,8 @@ const ESTADOS_FILTRO_AGENDA = [
 function obtenerOpcionesFiltroAgenda() {
   const colores = estado.datos?.configuracion?.agenda_colores_estado || {};
   const estados = ESTADOS_FILTRO_AGENDA.map((e) => ({ ...e, color: colores[e.id] || ({ clase: "#ec4899", completado: "#3b82f6", perdida: "#6b7280", pendiente: "#f59e0b" })[e.id] }));
-  return [...estados, ...obtenerTiposEtiquetaAgenda().filter((t) => t.activo !== false).map((t) => ({ id: `tag:${t.id}`, etiqueta: t.nombre, color: t.color, tipoId: t.id }))];
+  const otros = (estado.datos?.agenda || []).some(esEventoHuerfanoAgenda) ? [{ id: ID_FILTRO_OTROS, etiqueta: "Otros", color: "#94a3b8" }] : [];
+  return [...estados, ...obtenerTiposEtiquetaAgenda().filter((t) => t.activo !== false && !t.eliminado).map((t) => ({ id: `tag:${t.id}`, etiqueta: t.nombre, color: t.color, tipoId: t.id })), ...otros];
 }
 
 /** Set de ids activos ahora mismo — todos si `agendaFiltroEstados` sigue en
@@ -89,9 +89,10 @@ function obtenerOpcionesFiltroAgenda() {
 function obtenerEstadosFiltroActivos() {
   if (Array.isArray(estado.agendaFiltroEstados)) return new Set(estado.agendaFiltroEstados);
   const activos = new Set(obtenerOpcionesFiltroAgenda().map((e) => e.id));
-  // Los eventos con etiquetas desactivadas siguen visibles en la lista; lo
-  // que se desactiva es el control para filtrarlos y la opción de asignarla.
+  // Los eventos con etiquetas desactivadas o borradas siguen visibles en la
+  // lista, agrupados bajo "Otros" (ver esEventoHuerfanoAgenda).
   obtenerTiposEtiquetaAgenda().forEach((t) => activos.add(`tag:${t.id}`));
+  activos.add(ID_FILTRO_OTROS);
   return activos;
 }
 
@@ -232,12 +233,7 @@ function inicializarEditorTiposAgenda() {
  * importar esos otros 3.
  */
 function eventoPasaFiltroEstados(evento, activos) {
-  const idEtiqueta = evento.tipo_etiqueta_id || (evento.tipo === "tarea" ? "tarea" : evento.tipo === "examen" ? "examen" : evento.es_feriado ? "feriado" : "evento");
-  const pasaTipo = activos.has(`tag:${idEtiqueta}`);
-  if (evento.tipo === "tarea") {
-    return pasaTipo || activos.has(evento.perdida ? "perdida" : evento.completada ? "completado" : "pendiente");
-  }
-  return pasaTipo;
+  return eventoPasaFiltroTiposAgenda(evento, activos);
 }
 
 /**
@@ -1080,7 +1076,7 @@ function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios, 
   // evento: con "Clase" como único badge activo (2026-09-21) la persona ocultó
   // tareas/exámenes/eventos a propósito, y decirle "Sin pendientes" bajo sus
   // clases sería engañoso. Con los badges por defecto no cambia nada.
-  const filtroDejaVerEventos = obtenerOpcionesFiltroAgenda().some((opcion) => activosFiltro.has(opcion.id));
+  const filtroDejaVerEventos = obtenerOpcionesFiltroAgenda().some((opcion) => opcion.id !== "clase" && activosFiltro.has(opcion.id));
   if (eventosDelDia.length === 0) {
     if (filtroDejaVerEventos) {
       const vacio = document.createElement("p");
@@ -1090,11 +1086,13 @@ function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios, 
       bloque.appendChild(vacio);
     }
   } else {
-    const tiposVisibles = obtenerTiposEtiquetaAgenda();
+    // Copia: .sort() sobre el array de configuración lo reordenaba en el lugar
+    // y pisaba el orden que la persona arrastró en Ajustes de Agenda.
+    const tiposVisibles = [...obtenerTiposEtiquetaAgenda()];
     const prioridadBase = { examen: 0, tarea: 1, evento: 2 };
     tiposVisibles.sort((a, b) => prioridadBase[a.base] - prioridadBase[b.base]);
     tiposVisibles.forEach((tipoEtiqueta) => {
-      const delTipo = eventosDelDia.filter((ev) => (ev.tipo_etiqueta_id || (ev.tipo === "tarea" ? "tarea" : ev.tipo === "examen" ? "examen" : ev.es_feriado ? "feriado" : "evento")) === tipoEtiqueta.id);
+      const delTipo = eventosDelDia.filter((ev) => !esEventoHuerfanoAgenda(ev)).filter((ev) => (ev.tipo_etiqueta_id || (ev.tipo === "tarea" ? "tarea" : ev.tipo === "examen" ? "examen" : ev.es_feriado ? "feriado" : "evento")) === tipoEtiqueta.id);
       if (delTipo.length === 0) return;
       const grupo = document.createElement("div");
       grupo.className = "stack";
@@ -1107,6 +1105,20 @@ function construirBloqueDia(diaInfo, semestresSeleccionados, mostrarDiasVacios, 
       delTipo.forEach((ev) => grupo.appendChild(construirItemEvento(ev)));
       bloque.appendChild(grupo);
     });
+    // "Otros": eventos cuya etiqueta fue borrada, no existe o está inactiva.
+    const huerfanos = eventosDelDia.filter(esEventoHuerfanoAgenda);
+    if (huerfanos.length > 0) {
+      const grupoOtros = document.createElement("div");
+      grupoOtros.className = "stack";
+      grupoOtros.style.gap = "6px";
+      const etiquetaOtros = document.createElement("span");
+      etiquetaOtros.className = "muted";
+      etiquetaOtros.style.cssText = "font-size:0.7rem; text-transform:uppercase; letter-spacing:0.02em;";
+      etiquetaOtros.textContent = traducirTextoInterfaz("Otros");
+      grupoOtros.appendChild(etiquetaOtros);
+      huerfanos.forEach((ev) => grupoOtros.appendChild(construirItemEvento(ev)));
+      bloque.appendChild(grupoOtros);
+    }
   }
 
   return bloque;

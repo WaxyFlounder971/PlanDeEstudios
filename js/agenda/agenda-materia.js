@@ -57,7 +57,7 @@ import { ESTADOS_MATERIA } from "../plan/plan-vista-lista-tarjetas.js";
 import { abrirModalRequisito } from "../plan/plan-detalle.js";
 import { calcularNumeroSemanaParaFecha } from "./agenda-clases.js";
 import { construirItemEvento, limpiarIntervalosVenceHoy } from "./agenda.js";
-import { formatearHoraAmPm, obtenerMateriasVinculablesAgenda, obtenerTiposEtiquetaAgenda } from "./agenda-utils.js";
+import { ESTADOS_TAREA_FILTRO, ID_FILTRO_OTROS, esEventoHuerfanoAgenda, eventoPasaFiltroTiposAgenda, formatearHoraAmPm, obtenerMateriasVinculablesAgenda, obtenerTiposEtiquetaAgenda } from "./agenda-utils.js";
 import { obtenerAdjuntosActivosDe } from "../core/storage-adjuntos.js";
 import { abrirAdjunto, abrirMenuAdjuntos } from "../ui/adjuntos-ui.js";
 
@@ -87,6 +87,7 @@ function idsFiltroCronograma(mm, semestre, materiaId, eventos) {
   if (bloques.some((b) => Array.from({length:total}, (_, i) => obtenerClasesEfectivasSemana(b, i + 1)).some((lista) => lista.length))) ids.add("clase");
   eventos.forEach((ev) => {
     if (ev.tipo === "tarea") ids.add(ev.perdida ? "perdida" : ev.completada ? "completado" : "pendiente");
+    if (esEventoHuerfanoAgenda(ev)) { ids.add(ID_FILTRO_OTROS); return; }
     const etiqueta = obtenerTiposEtiquetaAgenda().find((t) => t.id === idTipoEventoAgenda(ev));
     if (etiqueta) ids.add(`tag:${etiqueta.id}`);
   });
@@ -99,7 +100,9 @@ function construirFiltrosCronograma(mm, semestre, materiaId, eventos) {
     ...(disponibles.has("completado") ? [{id:"completado", nombre:"Completado", color:"#3b82f6"}] : []),
     ...(disponibles.has("perdida") ? [{id:"perdida", nombre:"Perdida", color:"#6b7280"}] : []),
     ...(disponibles.has("pendiente") ? [{id:"pendiente", nombre:"Pendiente", color:"#f59e0b"}] : []),
-    ...obtenerTiposEtiquetaAgenda().filter((t) => disponibles.has(`tag:${t.id}`)).map((t) => ({id:`tag:${t.id}`, nombre:t.nombre, color:t.color}))];
+    ...obtenerTiposEtiquetaAgenda().filter((t) => disponibles.has(`tag:${t.id}`)).map((t) => ({id:`tag:${t.id}`, nombre:t.nombre, color:t.color})),
+    ...(disponibles.has(ID_FILTRO_OTROS) ? [{id:ID_FILTRO_OTROS, nombre:"Otros", color:"#94a3b8"}] : [])];
+  const estadosReferencia = ESTADOS_TAREA_FILTRO.filter((e) => disponibles.has(e));
   const activos = new Set(Array.isArray(estado.agendaMateriaFiltroTipos)
     ? estado.agendaMateriaFiltroTipos.filter((id) => disponibles.has(id)) : disponibles);
   const fila = document.createElement("div"); fila.className = "agenda-filtro-estados agenda-filtros-cronograma";
@@ -119,7 +122,7 @@ function construirFiltrosCronograma(mm, semestre, materiaId, eventos) {
     b.addEventListener("contextmenu",(ev)=>{ev.preventDefault();activos.delete(op.id);estado.agendaMateriaFiltroTipos=activos.size===disponibles.size?null:[...activos];renderizarMateriaAgenda();});
     fila.append(b);
   });
-  return { fila, activos, disponibles };
+  return { fila, activos, disponibles, estadosReferencia };
 }
 
 // Mismo mapeo de código de día ("L"|"K"|"M"|"J"|"V"|"S"|"D") a etiqueta
@@ -666,7 +669,7 @@ function construirSeccionSemanaMateria(semestre, materiaId, numeroSemana, evento
 
   const deEstaSemana = eventosMateria
     .filter((ev) => calcularNumeroSemanaParaFecha(semestre, fechaLocalDesdeISO(ev.fecha)) === numeroSemana)
-    .filter((ev) => filtros.activos.has(`tag:${idTipoEventoAgenda(ev)}`) || (ev.tipo === "tarea" && filtros.activos.has(ev.perdida ? "perdida" : ev.completada ? "completado" : "pendiente")))
+    .filter((ev) => eventoPasaFiltroTiposAgenda(ev, filtros.activos, filtros.estadosReferencia))
     .sort((a, b) => a.fecha.localeCompare(b.fecha) || String(a.hora || "99:99").localeCompare(String(b.hora || "99:99")));
 
   if (clasesDeEstaSemana.length === 0 && deEstaSemana.length === 0) {

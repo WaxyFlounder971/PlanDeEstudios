@@ -9,7 +9,7 @@ import { inicializarModalEnlace, renderizarEnlacesRapidos } from "./config/confi
 import { buscarOCrearArchivoDatos, cerrarSesionGoogle, inicializarGoogleAuth, iniciarSesionConGoogle, obtenerMetadatosArchivo, obtenerPerfilGoogle } from "./core/auth.js";
 import { migrarDatosAntiguos, sellarTimestamp } from "./core/schema.js";
 import { fusionarDatos } from "./core/storage-merge.js";
-import { actualizarIndicadorSync, asegurarTokenValido, avisarCierreSesionAOtrasPestanas, forzarSincronizacion, haySesionGuardada, inicializarCanalEntrePestanas, inicializarPullToRefresh, inicializarReconexionAlVolverOnline, inicializarSondeoAlVolver, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
+import { actualizarIndicadorSync, asegurarTokenValido, avisarCierreSesionAOtrasPestanas, forzarSincronizacion, haySesionGuardada, recuperarConexionEscalonada, inicializarCanalEntrePestanas, inicializarPullToRefresh, inicializarReconexionAlVolverOnline, inicializarSondeoAlVolver, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
 import { borrarCacheLocal, borrarTokenCache, establecerTokenActivo, estado, guardarCacheLocal, guardarRespaldoPendiente, leerCacheLocal, leerRespaldoPendiente, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
 import { MODO_DEMO, PREVIEW_DEMO, activarEstadoDemo, cargarDatosDemo, registrarAperturaDemo } from "./core/demo-mode.js";
 import { configurarCorreoAnalitica, inicializarAnaliticaUso, registrarAnaliticaUso } from "./core/analitica.js";
@@ -34,6 +34,7 @@ import { inicializarModalCapturasPDF, inicializarModalInstruccionesImportacion }
 import { inicializarResponsivoListaPlan, renderizarPlanEstudios } from "./plan/plan-vista-lista.js";
 import { renderizarSemestres } from "./semestres/semestres.js";
 import { revisarWrappedAutomatico } from "./semestres/semestres-wrapped.js";
+import { inicializarModoDesarrollador } from "./core/modo-desarrollador.js";
 import { inicializarResumen, renderizarResumen } from "./resumen/resumen.js";
 import { inicializarAgenda, renderizarAgenda } from "./agenda/agenda.js";
 import { inicializarHorario, renderizarHorario } from "./horario/horario.js";
@@ -204,6 +205,7 @@ const CLAVE_SYNC_CALENDARIO_OFRECIDA = "sincronizacion_calendario_ofrecida_v1";
 const FORZAR_LOGIN_DESDE_DEMO = new URLSearchParams(window.location.search).get("salir-demo") === "1";
 
 window.addEventListener("DOMContentLoaded", () => {
+  inicializarModoDesarrollador();
   inicializarInstalacionApp();
   if (MODO_DEMO) {
     iniciarAplicacionDemo();
@@ -496,12 +498,23 @@ window.addEventListener("DOMContentLoaded", () => {
     // el gesto de usuario en navegadores móviles.
     document.getElementById("modal-sin-conexion").classList.add("oculto");
 
+    // 2026-10-05: si la recuperación escalonada ya agotó las vías silenciosas,
+    // este toque ES el gesto que Google exige: login directo, sin await antes.
+    if (estado.requiereRenovarLogin) {
+      document.getElementById("pill-sin-conexion").classList.add("oculto");
+      iniciarSesionConGoogle();
+      return;
+    }
+
     if (haySesionGuardada()) {
       mostrarToast("Reconectando…");
-      asegurarTokenValido().then((ok) => {
+      recuperarConexionEscalonada().then((ok) => {
         if (ok) {
           if (estado.pendienteSync) intentarSincronizar();
           else sondearCambiosRemotos();
+        } else if (estado.requiereRenovarLogin) {
+          mostrarToast("Toca Reconectar otra vez para renovar tu sesión de Google.");
+          document.getElementById("modal-sin-conexion").classList.remove("oculto");
         } else {
           // Si Google confirmó invalid_grant, asegurarTokenValido ya quitó
           // el refresh_token. En ese caso los reintentos automáticos no

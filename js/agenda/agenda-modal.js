@@ -233,7 +233,14 @@ function construirPillsTipoAgenda(tipo, etiquetaId) {
     || tipos.find((t) => t.base === tipo)
     || tipos[0];
   tipoEtiquetaAgendaSeleccionadaId = tipoInicial?.id || null;
-  const tamanosFilas = tipos.length === 5 ? [2, 3] : Array.from({length:Math.ceil(tipos.length/3)},(_,i)=>Math.min(3,tipos.length-i*3));
+  // Filas equilibradas de 2 a 3 badges (nunca una fila suelta con 1): 5 -> 2+3, 10 -> 3+3+2+2.
+  const tamanosFilas = (() => {
+    const n = tipos.length;
+    if (n === 5) return [2, 3];
+    const filas = Math.max(1, Math.ceil(n / 3));
+    const base = Math.floor(n / filas), extra = n % filas;
+    return Array.from({ length: filas }, (_, i) => base + (i < extra ? 1 : 0));
+  })();
   let indiceFila=0, limiteFila=tamanosFilas[0]||0;
   const crearFila = () => { const fila=document.createElement("div");fila.className="agenda-select-tipos-fila";cont.append(fila);return fila; };
   let fila=crearFila();

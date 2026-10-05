@@ -1198,7 +1198,7 @@
   <div class="glass-card modal-card stack" style="position:relative;">
     <button type="button" class="modal-x-close" id="btn-cerrar-modal-sin-conexion" aria-label="Cerrar">✕</button>
     <h2 style="margin:0; display:flex; align-items:center; gap:8px;">📡 Estás sin conexión</h2>
-    <p class="muted">Tranquilo, no pasa nada: tus cambios se están guardando en este dispositivo. En cuanto vuelvas a tener internet, se sincronizan solos con tu Google Drive — no hace falta que hagas nada.</p>
+    <p id="texto-modal-sin-conexion" class="muted">Tranquilo, no pasa nada: tus cambios se están guardando en este dispositivo. En cuanto vuelvas a tener internet, se sincronizan solos con tu Google Drive — no hace falta que hagas nada.</p>
     <div class="row" style="justify-content:flex-end;">
       <button id="btn-reconectar-sesion" class="btn btn-primary">Reconectar</button>
     </div>
@@ -1420,14 +1420,14 @@
       <span class="form-label">Cuando algo vence hoy, mostrar</span>
       <div class="stack" style="gap:8px; margin-top:4px;">
         <div class="row-between">
-          <span>Solo la hora de entrega</span>
+          <span>Hora de entrega</span>
           <label class="switch switch-tema">
             <input type="checkbox" id="chk-agenda-vencehoy-hora" checked>
             <span class="track"><span class="thumb"></span></span>
           </label>
         </div>
         <div class="row-between">
-          <span>Solo el tiempo restante</span>
+          <span>Tiempo de entrega</span>
           <label class="switch switch-tema">
             <input type="checkbox" id="chk-agenda-vencehoy-restante" checked>
             <span class="track"><span class="thumb"></span></span>

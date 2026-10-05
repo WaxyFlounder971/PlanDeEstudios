@@ -540,8 +540,52 @@ function obtenerRangoDiasAgendaTodo(semestre, diasAtras = 0) {
   return dias;
 }
 
+
+/**
+ * Filtros de tipo (2026-10-05). Reglas, iguales en Agenda y en Cronograma:
+ *  - "Tarea" (y cualquier etiqueta) apagada oculta sus eventos.
+ *  - Completado / Perdida / Pendiente solo aplican a tareas. Con la etiqueta
+ *    de tarea activa, afinan: si hay estados activos, solo pasan las tareas
+ *    de esos estados; con ninguno activo, pasan todas.
+ *  - Con la etiqueta apagada, un estado activo deja ver las tareas de ese
+ *    estado solo si la persona está eligiendo por estado (no están
+ *    activos TODOS los estados de referencia: ese es el caso de apagar
+ *    "Tarea" con clic derecho, que debe ocultarlas).
+ *  - "Otros" recoge eventos huérfanos: su etiqueta fue borrada, ya no
+ *    existe o está INACTIVA (2026-10-05: decisión del usuario — una etiqueta
+ *    inactiva no tiene badge propio, así que sus eventos viven en "Otros").
+ *    Solo se ofrece como filtro si existe alguno.
+ */
+const ID_FILTRO_OTROS = "otros";
+const ESTADOS_TAREA_FILTRO = ["completado", "perdida", "pendiente"];
+
+function obtenerIdEtiquetaEventoAgenda(ev) {
+  return ev.tipo_etiqueta_id || (ev.tipo === "tarea" ? "tarea" : ev.tipo === "examen" ? "examen" : ev.es_feriado ? "feriado" : "evento");
+}
+
+function esEventoHuerfanoAgenda(ev) {
+  const etiqueta = obtenerTiposEtiquetaAgenda().find((t) => t.id === obtenerIdEtiquetaEventoAgenda(ev));
+  return !etiqueta || etiqueta.eliminado === true || etiqueta.activo === false;
+}
+
+function eventoPasaFiltroTiposAgenda(ev, activos, estadosReferencia = ESTADOS_TAREA_FILTRO) {
+  if (esEventoHuerfanoAgenda(ev)) return activos.has(ID_FILTRO_OTROS);
+  const pasaTipo = activos.has(`tag:${obtenerIdEtiquetaEventoAgenda(ev)}`);
+  if (ev.tipo !== "tarea") return pasaTipo;
+  const estadoId = ev.perdida ? "perdida" : ev.completada ? "completado" : "pendiente";
+  const estadosActivos = estadosReferencia.filter((e) => activos.has(e)).length;
+  if (pasaTipo) return estadosActivos === 0 || activos.has(estadoId);
+  const todosLosEstados = estadosReferencia.length > 0 && estadosActivos === estadosReferencia.length;
+  return activos.has(estadoId) && !todosLosEstados;
+}
+
 export {
   COLOR_PERDIDA_RAYA,
+  ID_FILTRO_OTROS,
+  ESTADOS_TAREA_FILTRO,
+  esEventoHuerfanoAgenda,
+  eventoPasaFiltroTiposAgenda,
+  obtenerIdEtiquetaEventoAgenda,
   esHoyFecha,
   esTareaVencida,
   formatearFechaISO,

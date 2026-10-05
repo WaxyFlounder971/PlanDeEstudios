@@ -132,7 +132,10 @@ async function asegurarTokenValido() {
       if (e.invalidGrant) {
         borrarRefreshTokenGoogle();
       }
-      mostrarAvisoReconexion();
+      // 2026-10-05: ya no se salta directo a gris. La recuperación
+      // escalonada confirma primero si hay internet real y prueba todas las
+      // vías antes de pedir un login nuevo de Google (ver abajo).
+      recuperarConexionEscalonada();
       return false;
     })
     .finally(() => {
@@ -294,6 +297,104 @@ async function probarConexionReal() {
  * el usuario reconecte a mano cuando quiera (botón dentro del modal de la
  * píldora), sin que la app borre nada por su cuenta mientras tanto.
  */
+/**
+ * 2026-10-05 (pedido explícito: "si me sale sin conexión y SÍ tengo
+ * internet, que pruebe de todas las formas posibles de conectarse y, como
+ * última opción, que renueve el token de inicio de sesión de Google").
+ *
+ * Escalera, de lo más barato a lo más caro:
+ *  1. ¿Hay internet real? (probarConexionReal: 4 destinos en paralelo).
+ *     Si no hay, se queda en gris y no se toca nada.
+ *  2. ¿El token en caché sirve? Se prueba contra Drive. Si Drive lo
+ *     rechaza, se descarta la caché para forzar uno nuevo.
+ *  3. Refresh_token vía Worker (asegurarTokenValido), hasta 3 rondas con
+ *     espera creciente, verificando cada vez contra Drive.
+ *  4. ÚLTIMA OPCIÓN: renovar el login de Google. Abre un popup y exige un
+ *     gesto del usuario, por eso no se lanza solo: se deja la bandera
+ *     estado.requiereRenovarLogin y el botón "Reconectar" pasa a ser
+ *     "Renovar sesión de Google" (main.js lo lanza directo al tocarlo).
+ * Si el token es fresco y Drive igual falla, el problema no es la sesión:
+ * se queda en amarillo y siguen los reintentos automáticos de siempre.
+ */
+let recuperacionEnCurso = null;
+
+async function driveResponde() {
+  try {
+    if (!estado.token || !estado.fileId) return false;
+    await obtenerMetadatosArchivo(estado.token, estado.fileId);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function prepararAvisoRenovarLogin(activo) {
+  estado.requiereRenovarLogin = activo;
+  const texto = document.getElementById("texto-modal-sin-conexion");
+  const boton = document.getElementById("btn-reconectar-sesion");
+  if (texto) {
+    if (!texto.dataset.original) texto.dataset.original = texto.textContent;
+    texto.textContent = activo
+      ? "Tienes internet, pero Google necesita renovar tu sesión para volver a conectar con Drive. Tus cambios siguen guardados en este dispositivo. Toca el botón para renovarla."
+      : texto.dataset.original;
+  }
+  if (boton) {
+    if (!boton.dataset.original) boton.dataset.original = boton.textContent;
+    boton.textContent = activo ? "Renovar sesión de Google" : boton.dataset.original;
+  }
+}
+
+function recuperarConexionEscalonada() {
+  if (MODO_DEMO) return Promise.resolve(false);
+  if (recuperacionEnCurso) return recuperacionEnCurso;
+
+  recuperacionEnCurso = (async () => {
+    mostrarIndicadorConexion("reconectando");
+
+    // Paso 1: internet real
+    if (!(await probarConexionReal())) {
+      mostrarIndicadorConexion("desconectado");
+      return false;
+    }
+
+    // Paso 2: token en caché
+    if (leerTokenCacheValido()) {
+      estado.token = leerTokenCacheValido().token;
+      if (await driveResponde()) { confirmarConexionOk(); return true; }
+      borrarTokenCache();
+      estado.token = null;
+    }
+
+    // Paso 3: refresh_token vía Worker, con rondas y espera creciente
+    let tokenFresco = false;
+    for (const espera of [0, 1500, 4000]) {
+      if (!haySesionGuardada()) break; // revocado o inexistente: no hay nada que renovar en silencio
+      if (espera) await new Promise((r) => setTimeout(r, espera));
+      if (await asegurarTokenValido()) {
+        tokenFresco = true;
+        if (await driveResponde()) { confirmarConexionOk(); return true; }
+        break; // token nuevo pero Drive no responde: no es un problema de sesión
+      }
+    }
+
+    if (tokenFresco) {
+      mostrarIndicadorConexion("reconectando");
+      return false; // siguen los reintentos automáticos (online/9s/45s)
+    }
+
+    // Paso 4: última opción, renovar el login de Google (requiere un toque)
+    console.warn("No se pudo reconectar en silencio con internet confirmado. Hace falta renovar el login de Google.");
+    mostrarIndicadorConexion("desconectado");
+    prepararAvisoRenovarLogin(true);
+    mostrarToast("Tu sesión de Google necesita renovarse. Toca «Sin conexión» o «Reconectar».");
+    return false;
+  })().finally(() => {
+    recuperacionEnCurso = null;
+  });
+
+  return recuperacionEnCurso;
+}
+
 async function manejarFalloReconexion() {
   // FIX 2026-09-27 (pedido explícito: 3 estados de verdad, gris/amarillo/
   // verde): antes esto saltaba directo a "desconectado" (gris) apenas
@@ -301,13 +402,9 @@ async function manejarFalloReconexion() {
   // una reconexión con internet real. Ahora entra en "reconectando"
   // (amarillo) primero, y solo baja a "desconectado" (gris) si
   // probarConexionReal() confirma que de verdad no hay señal.
-  mostrarIndicadorConexion("reconectando");
-
-  const hayConexionReal = await probarConexionReal();
-  if (!hayConexionReal) {
-    mostrarIndicadorConexion("desconectado");
-    return;
-  }
+  const recuperada = await recuperarConexionEscalonada();
+  if (recuperada) return;
+  if (estado.requiereRenovarLogin || estado.conexionDrive === "desconectado") return;
 
   // Hay conexión real pero el refresco falló igual: se queda en amarillo
   // (sigue siendo un intento de reconexión en curso, no un corte
@@ -624,6 +721,7 @@ function mostrarAvisoReconexion() {
  *  nada que festejar - se queda oculto sin más (evita un flash verde en
  *  cada apertura normal de la app). */
 function ocultarAvisoReconexion() {
+  if (estado.requiereRenovarLogin) prepararAvisoRenovarLogin(false);
   const modal = document.getElementById("modal-sin-conexion");
   if (modal) modal.classList.add("oculto");
 
@@ -1877,6 +1975,7 @@ export {
   forzarBackupManual,
   forzarSincronizacion,
   haySesionGuardada,
+  recuperarConexionEscalonada,
   inicializarPullToRefresh,
   inicializarReconexionAlVolverOnline,
   inicializarSondeoAlVolver,

@@ -36,7 +36,10 @@ import {
   esTareaVencida,
   formatearFechaISO,
   formatearFechaRelativa,
+  esEventoHuerfanoAgenda,
   obtenerCodigoDiaSemana,
+  obtenerIdEtiquetaEventoAgenda,
+  obtenerTiposEtiquetaAgenda,
   obtenerSemestreActivoAgenda,
   obtenerSemestresSeleccionadosAgenda,
   tareaVenceHoy,
@@ -242,19 +245,50 @@ function ajustarTarjetaSemana(tarjeta) {
   const faltan = tarjeta.querySelector(".resumen-semana-faltan");
   if (!barraCont || !centro || !faltan) return;
 
+  // Idempotente: parte siempre del diseño en una sola fila.
+  tarjeta.style.flexWrap = "nowrap";
+  centro.style.order = "";
+  centro.style.flex = "1";
+  centro.style.minWidth = "0";
+
   const anchoFaltan = faltan.getBoundingClientRect().width;
-  if (anchoFaltan > 0) {
-    barraCont.style.flex = `0 0 ${anchoFaltan}px`;
+  if (anchoFaltan > 0) barraCont.style.flex = `0 0 ${anchoFaltan}px`;
+
+  const entra = (texto) => medirAnchoTexto(texto, centro) <= centro.getBoundingClientRect().width;
+  if (entra(centro.dataset.textoCompleto)) {
+    centro.textContent = traducirTextoInterfaz(centro.dataset.textoCompleto);
+    return;
+  }
+  if (entra(centro.dataset.textoCorto)) {
+    centro.textContent = traducirTextoInterfaz(centro.dataset.textoCorto);
+    return;
   }
 
-  // Con la barra ya en su ancho final, medimos cuánto espacio le queda
-  // realmente al centro y comparamos contra el ancho que ocuparía el
-  // texto completo (medido con canvas, no con layout/clip).
-  const disponible = centro.getBoundingClientRect().width;
-  const anchoCompleto = medirAnchoTexto(centro.dataset.textoCompleto, centro);
+  // Ni "Semana X" cabe completa en la fila: la barra y "Faltan X días" se
+  // quedan arriba (la barra ocupa el espacio libre) y "Semana" baja abajo.
+  tarjeta.style.flexWrap = "wrap";
+  barraCont.style.flex = "1 1 0";
+  barraCont.style.minWidth = "40px";
+  centro.style.order = "3";
+  centro.style.flex = "1 0 100%";
   centro.textContent = traducirTextoInterfaz(
-    anchoCompleto > disponible ? centro.dataset.textoCorto : centro.dataset.textoCompleto
+    entra(centro.dataset.textoCompleto) ? centro.dataset.textoCompleto : centro.dataset.textoCorto
   );
+}
+
+// Reajusta la tarjeta al cambiar el ancho de la ventana (una sola vez).
+let escuchaRedimensionSemana = false;
+function escucharRedimensionSemana() {
+  if (escuchaRedimensionSemana) return;
+  escuchaRedimensionSemana = true;
+  let espera = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(espera);
+    espera = setTimeout(() => {
+      const t = document.querySelector(".resumen-semana-tarjeta");
+      if (t && t.offsetParent) ajustarTarjetaSemana(t);
+    }, 120);
+  });
 }
 
 /** Ancho en píxeles que ocuparía `texto` si se pintara con la misma
@@ -269,24 +303,48 @@ function medirAnchoTexto(texto, elementoReferencia) {
   return ctx.measureText(texto).width;
 }
 
-/** Tarjeta compacta "Tareas perdidas  N" — mismo rojo muy oscuro del badge
- *  "Perdida" de Agenda (badge-perdida, ver design-system.css). */
-function construirTarjetaPerdidas(cantidad) {
-  const tarjeta = document.createElement("section");
-  tarjeta.className = "glass-card resumen-perdidas-tarjeta";
-  tarjeta.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 18px;";
+/** Cuadrícula de conteos (2026-10-05), reemplaza a la tarjeta única de
+ *  "Tareas perdidas". Una tarjetita por cada filtro de Agenda que SÍ tenga
+ *  elementos vinculados en los semestres seleccionados: Completado,
+ *  Perdida, Pendiente (estados de tareas), cada etiqueta con eventos (en el
+ *  orden de Agenda) y "Otros" si hay huérfanos. Nunca se muestra un 0 ni un
+ *  filtro sin elementos. "Clase" no entra: no es un evento vinculado.
+ *  Tres por fila; la última fila queda centrada (3-3-2). */
+function construirCuadriculaConteos(eventos) {
+  const colores = estado.datos?.configuracion?.agenda_colores_estado || {};
+  const tareas = eventos.filter((ev) => ev.tipo === "tarea");
+  const items = [
+    { etiqueta: "Completado", color: colores.completado || "#3b82f6", cantidad: tareas.filter((t) => t.completada && !t.perdida).length },
+    { etiqueta: "Perdida", color: colores.perdida || "#6b7280", cantidad: tareas.filter((t) => t.perdida).length },
+    { etiqueta: "Pendiente", color: colores.pendiente || "#f59e0b", cantidad: tareas.filter((t) => !t.completada && !t.perdida).length },
+  ];
+  obtenerTiposEtiquetaAgenda().filter((t) => !t.eliminado).forEach((t) => {
+    const cantidad = eventos.filter((ev) => !esEventoHuerfanoAgenda(ev) && obtenerIdEtiquetaEventoAgenda(ev) === t.id).length;
+    items.push({ etiqueta: t.nombre, color: t.color || "#8b5cf6", cantidad });
+  });
+  items.push({ etiqueta: "Otros", color: "#94a3b8", cantidad: eventos.filter(esEventoHuerfanoAgenda).length });
 
-  const texto = document.createElement("span");
-  texto.className = "muted";
-  texto.textContent = cantidad === 1 ? "Tarea perdida" : "Tareas perdidas";
+  const visibles = items.filter((it) => it.cantidad > 0);
+  if (visibles.length === 0) return null;
 
-  const badge = document.createElement("span");
-  badge.className = "badge badge-perdida";
-  badge.textContent = String(cantidad);
-
-  tarjeta.appendChild(texto);
-  tarjeta.appendChild(badge);
-  return tarjeta;
+  const grilla = document.createElement("section");
+  grilla.className = "resumen-conteos-grilla";
+  grilla.style.cssText = "display:flex; flex-wrap:wrap; justify-content:center; gap:10px;";
+  visibles.forEach(({ etiqueta, color, cantidad }) => {
+    const tarjeta = document.createElement("div");
+    tarjeta.className = "glass-card resumen-conteo-tarjeta";
+    tarjeta.style.cssText = `flex:1 1 calc(33.333% - 10px); max-width:calc(33.333% - 7px); min-width:92px; box-sizing:border-box; padding:12px 8px; display:flex; flex-direction:column; align-items:center; gap:4px; text-align:center; border-top:3px solid ${color};`;
+    const numero = document.createElement("span");
+    numero.style.cssText = `font-size:1.5rem; font-weight:700; line-height:1.1; color:${color};`;
+    numero.textContent = String(cantidad);
+    const nombre = document.createElement("span");
+    nombre.className = "muted";
+    nombre.style.cssText = "font-size:0.78rem; overflow-wrap:anywhere;";
+    nombre.textContent = traducirTextoInterfaz(etiqueta);
+    tarjeta.append(numero, nombre);
+    grilla.appendChild(tarjeta);
+  });
+  return grilla;
 }
 
 /** Tarjeta compacta "Estudio de hoy" — total ya estudiado hoy vs. meta de
@@ -345,6 +403,9 @@ function construirTarjetaEstudioHoy(totalHechoMin, totalMetaMin, materias = []) 
     materias.slice(0, 3).forEach((item) => {
       const filaMateria = document.createElement("div");
       filaMateria.className = "resumen-estudio-materia";
+      // Color propio de la materia (mismo criterio que Agenda: item.color).
+      const colorMateria = item.color || "var(--accent-1)";
+      filaMateria.style.borderLeftColor = colorMateria;
       const nombre = document.createElement("span");
       nombre.className = "resumen-estudio-materia-nombre";
       nombre.textContent = item.nombreMateriaCorto;
@@ -355,7 +416,7 @@ function construirTarjetaEstudioHoy(totalHechoMin, totalMetaMin, materias = []) 
         ? `${formatearHorasMin(item.hechoMinutosHoy)} estudiados · meta ${formatearHorasMin(item.metaMinutosHoy)}`
         : `${formatearHorasMin(item.hechoMinutosHoy)} estudiados`;
       const progreso = document.createElement("div"); progreso.className="resumen-estudio-materia-barra";
-      const avance = document.createElement("span"); avance.style.width=`${item.metaMinutosHoy>0?Math.max(0,Math.min(100,item.hechoMinutosHoy/item.metaMinutosHoy*100)):100}%`; progreso.append(avance);
+      const avance = document.createElement("span"); avance.style.background = colorMateria; progreso.style.background = `color-mix(in srgb, ${colorMateria} 20%, var(--bg-panel))`; avance.style.width=`${item.metaMinutosHoy>0?Math.max(0,Math.min(100,item.hechoMinutosHoy/item.metaMinutosHoy*100)):100}%`; progreso.append(avance);
       filaMateria.append(nombre, tiempo, progreso);
       detalle.appendChild(filaMateria);
     });
@@ -395,6 +456,7 @@ function renderizarResumen() {
       // X días" para igualar el ancho de la barra y decidir si el texto
       // central entra completo o hay que acortarlo.
       ajustarTarjetaSemana(tarjetaSemana);
+      escucharRedimensionSemana();
     }
   }
 
@@ -490,16 +552,14 @@ function renderizarResumen() {
     cont.appendChild(construirEstadoVacio());
   }
 
-  // 7. Tareas perdidas (2026-09-21) — cómo se "reflejan" en Resumen: la app
+  // 7. Conteos (antes solo "Tareas perdidas", 2026-09-21) — cómo se "reflejan" en Resumen: la app
   // no tiene ningún porcentaje de cumplimiento, así que solo se muestra el
   // total de tareas que la persona dio por perdidas en los semestres
   // seleccionados. Va DESPUÉS del mensaje de "todo tranquilo" y no cuenta
   // como contenido pendiente (una perdida ya no es una obligación abierta).
   // Solo aparece si hay al menos una.
-  const cantidadPerdidas = eventos.filter((ev) => ev.tipo === "tarea" && ev.perdida).length;
-  if (cantidadPerdidas > 0) {
-    cont.appendChild(construirTarjetaPerdidas(cantidadPerdidas));
-  }
+  const conteos = construirCuadriculaConteos(eventos);
+  if (conteos) cont.appendChild(conteos);
 }
 
 /** Sin wiring propio — Resumen no tiene controles ni modales, solo se
