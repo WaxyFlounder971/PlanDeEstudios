@@ -1,5 +1,6 @@
 import { crearDatosUsuarioNuevo, migrarDatosAntiguos, PALETAS_DISPONIBLES } from "./schema.js";
 import { registrarAnaliticaUso } from "./analitica.js";
+import { aplicarPaleta, guardarModoDisenoLocal } from "../ui/tema.js";
 
 /**
  * Modo de demostración: el query param se resuelve antes del arranque para
@@ -13,14 +14,22 @@ let aperturaDemoRegistrada = false;
 
 // La demo nunca debe leer ni escribir las preferencias/cachés de la app real
 // que ya existan en este navegador. Las preferencias de esta visita viven
-// únicamente en memoria y se restablecen al recargar.
+// únicamente en memoria (así el tema elegido se conserva mientras dura la
+// visita) y se restablecen al recargar.
 if (MODO_DEMO && globalThis.Storage?.prototype) {
   const prototipoStorage = globalThis.Storage.prototype;
-  prototipoStorage.getItem = () => null;
-  prototipoStorage.setItem = () => {};
-  prototipoStorage.removeItem = () => {};
-  prototipoStorage.clear = () => {};
-  prototipoStorage.key = () => null;
+  const memoria = new WeakMap();
+  const mapaDe = (almacen) => {
+    let mapa = memoria.get(almacen);
+    if (!mapa) { mapa = new Map(); memoria.set(almacen, mapa); }
+    return mapa;
+  };
+  prototipoStorage.getItem = function (clave) { const m = mapaDe(this); const k = String(clave); return m.has(k) ? m.get(k) : null; };
+  prototipoStorage.setItem = function (clave, valor) { mapaDe(this).set(String(clave), String(valor)); };
+  prototipoStorage.removeItem = function (clave) { mapaDe(this).delete(String(clave)); };
+  prototipoStorage.clear = function () { mapaDe(this).clear(); };
+  prototipoStorage.key = function (indice) { return [...mapaDe(this).keys()][indice] ?? null; };
+  try { Object.defineProperty(prototipoStorage, "length", { get() { return mapaDe(this).size; }, configurable: true }); } catch (_) {}
 }
 
 function esModoDemo() {
@@ -80,6 +89,8 @@ async function cargarDatosDemo() {
   const datos = combinarSemilla(crearDatosUsuarioNuevo(), semilla);
   if (datos.configuracion) {
     datos.configuracion.gemini_api_key = null;
+    // La vista previa embebida nunca debe abrir su propio onboarding.
+    if (PREVIEW_DEMO) datos.configuracion.onboarding_v1_completado = true;
     if (!PREVIEW_DEMO) {
       datos.configuracion.onboarding_v1_completado = false;
       datos.configuracion.tutoriales_secciones_vistas = {};
@@ -91,6 +102,8 @@ async function cargarDatosDemo() {
     const modo = params.get("previewMode");
     if (PALETAS_DISPONIBLES.includes(paleta) || paleta === "personalizada") datos.configuracion.paleta = paleta;
     if (["light", "dark", "true-dark"].includes(modo)) datos.configuracion.modo = modo;
+    const calidad = params.get("previewQuality");
+    if (["optimizado", "fancy"].includes(calidad)) guardarModoDisenoLocal(calidad);
     const logo = params.get("previewLogo");
     if (["folder", "birrete"].includes(logo)) datos.configuracion.logo_app = logo;
     const logoData = params.get("previewLogoData");
@@ -110,6 +123,13 @@ function activarEstadoDemo(datos) {
   if (!MODO_DEMO) return;
   globalThis.__appDemoDatos = datos;
   bloquearServiciosExternosEnDemo();
+  // Con el almacenamiento aislado no hay tema "guardado": se aplica el del dataset
+  // (o el que pida la vista previa) para que la demo nunca arranque sin paleta.
+  const cfg = datos?.configuracion;
+  if (cfg?.paleta && cfg?.modo) {
+    try { aplicarPaleta(cfg.paleta, cfg.modo, cfg.paleta === "personalizada" ? cfg.paleta_personalizada?.colores : undefined); }
+    catch (error) { console.warn("Modo demo: no se pudo aplicar el tema inicial.", error); }
+  }
   document.documentElement.dataset.demo = "true";
   document.documentElement.dataset.demoPreview = String(PREVIEW_DEMO);
   document.body.dataset.demo = "true";
