@@ -40,6 +40,14 @@ function crearDatosUsuarioNuevo() {
       icono_app: "📘",              // icono personal localizable que acompaña la paleta elegida
       logo_app: "folder",
       logo_app_url: null,
+      // Animación de apertura (2026-10-09): folder cuyas pestañas salen y entran
+      // mientras la app carga y que se abre al terminar. false = se usa el
+      // cargador de siempre. Se refleja en localStorage (ver core/intro-apertura.js)
+      // porque al arrancar todavía no hay datos de la cuenta.
+      animacion_apertura: true,
+      // Colores de las 6 pestañas: null = originales, o
+      // { modo: "paleta" | "personalizado", colores: [6 × "#rrggbb"] }.
+      intro_colores: null,
       formato_texto_nombres: "titulo", // "titulo" | "mayusculas" | "oracion" (v5 #9)
       // Selector de moneda (Ajustes generales, 2026-08-10): preferencia
       // GLOBAL del usuario (NO por universidad/plan) — la usa Finanzas para

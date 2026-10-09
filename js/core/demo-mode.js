@@ -32,6 +32,27 @@ if (MODO_DEMO && globalThis.Storage?.prototype) {
   try { Object.defineProperty(prototipoStorage, "length", { get() { return mapaDe(this).size; }, configurable: true }); } catch (_) {}
 }
 
+// En la vista previa del onboarding el tema se aplica en cuanto carga el módulo
+// (antes del primer render), para que no se vea un destello con el tema por defecto.
+if (MODO_DEMO && PREVIEW_DEMO) {
+  try {
+    const params = new URLSearchParams(globalThis.location.search);
+    const paleta = params.get("previewPalette");
+    const modo = params.get("previewMode");
+    const calidad = params.get("previewQuality");
+    if (["optimizado", "fancy"].includes(calidad)) {
+      guardarModoDisenoLocal(calidad);
+      document.documentElement.setAttribute("data-rendimiento", calidad === "optimizado" ? "reducido" : "normal");
+    }
+    if ((PALETAS_DISPONIBLES.includes(paleta) || paleta === "personalizada") && ["light", "dark", "true-dark"].includes(modo)) {
+      let colores;
+      if (paleta === "personalizada") { try { colores = JSON.parse(params.get("previewCustom") || "null")?.colores; } catch (_) {} }
+      aplicarPaleta(paleta, modo, colores);
+      document.documentElement.setAttribute("data-mode", modo);
+    }
+  } catch (error) { console.warn("Modo demo: no se pudo adelantar el tema de la vista previa.", error); }
+}
+
 function esModoDemo() {
   return MODO_DEMO;
 }
