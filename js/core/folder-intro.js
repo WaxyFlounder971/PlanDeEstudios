@@ -124,8 +124,9 @@
     '@keyframes fi-shF{0%{opacity:0}50%,100%{opacity:.55}}',
     '@keyframes fi-shB{0%,50%{opacity:.55}100%{opacity:0}}',
     /* mientras la app carga (bucle de pestañas) todo lo de la apertura queda en pausa; al soltar, sus retardos empiezan a contar */
-    '.fi-hold *,.fi-hold *::before,.fi-hold *::after{animation-play-state:paused}',
-    '.fi-hold .fi-sl.fi-p0{animation-play-state:running,paused}',
+    /* !important: los selectores de cada animación (p. ej. .fi-p0 .fi-front::after) tienen más especificidad y su shorthand `animation` volvía a poner "running" */
+    '.fi-hold *,.fi-hold *::before,.fi-hold *::after{animation-play-state:paused!important}',
+    '.fi-hold .fi-sl.fi-p0{animation-play-state:running,paused!important}',
     shadowKeyframes()
   ].join('\n');
 
