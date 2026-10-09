@@ -5894,3 +5894,28 @@ html,body,#app-shell,.glass-card,.glass-panel,#app-sidebar,.mobile-topbar { tran
   .agenda-tipo-config-fila > .agenda-toggle-activo { font-size:.76rem; }
   .agenda-tipo-config-fila > .agenda-etiqueta-eliminar { width:36px; min-width:36px; }
 }
+
+/* ---------- Animación de apertura (Ajustes → Personalizar) ----------
+   6 bolitas = los colores de las pestañas del folder. Cada una es un
+   <input type="color"> recortado en círculo: tocarla abre el selector nativo. */
+.intro-colores { display: flex; flex-wrap: wrap; gap: 12px; padding: 4px 2px; }
+.intro-color-bolita {
+  position: relative; display: block; width: 38px; height: 38px; border-radius: 50%;
+  overflow: hidden; cursor: pointer; flex-shrink: 0;
+  box-shadow: 0 0 0 2px var(--border-glass), 0 2px 6px rgba(0, 0, 0, 0.25);
+  transition: transform var(--transition-fast);
+}
+.intro-color-bolita:hover { transform: scale(1.08); }
+.intro-color-bolita:focus-within { outline: 2px solid var(--accent-2); outline-offset: 3px; }
+.intro-color-bolita input[type="color"] {
+  position: absolute; inset: -8px; width: calc(100% + 16px); height: calc(100% + 16px);
+  padding: 0; border: 0; background: none; cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+}
+.intro-color-bolita input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.intro-color-bolita input[type="color"]::-webkit-color-swatch { border: 0; }
+.intro-color-bolita input[type="color"]::-moz-color-swatch { border: 0; }
+.intro-colores-acciones { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#btn-intro-colores-paleta[aria-pressed="true"] { border-color: var(--accent-2); color: var(--text-primary); }
+#intro-colores-bloque.deshabilitado { opacity: 0.45; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .intro-color-bolita { transition: none; } }
