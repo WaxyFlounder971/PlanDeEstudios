@@ -15,6 +15,7 @@ import { MODO_DEMO, PREVIEW_DEMO, activarEstadoDemo, cargarDatosDemo, registrarA
 import { configurarCorreoAnalitica, inicializarAnaliticaUso, registrarAnaliticaUso } from "./core/analitica.js";
 import { inicializarTutorialDesdeAjustes, mostrarOnboardingNuevoUsuario, mostrarTutorialPrimeraVez } from "./core/onboarding.js";
 import { aplicarLogoApp } from "./core/marca.js";
+import { abrirIntroCarga, cancelarIntroCarga, iniciarIntroCarga } from "./core/intro-apertura.js";
 import { inicializarInstalacionApp, mostrarInvitacionInstalacion } from "./core/instalacion-app.js";
 import { obtenerIniciales } from "./core/utils.js";
 // Sincronización con Google Calendar (2026-08-25, reemplaza Web Push) -
@@ -47,7 +48,7 @@ import { procesarAsociacionPendienteDeAmigo, iniciarRefrescoPeriodicoAmigos } fr
 // se ejecute (mostrarSeccion() más abajo la llama vía window, no vía
 // import directo, para no acoplar main.js a cada sección una por una).
 import "./asistente/asistente.js";
-import { abrirConfirmacion, agregarLongPress, inicializarAutoScrollSelectoresEnModales, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, mostrarPantallaCargaSesion, mostrarToast, mostrarToastAccion, ocultarPantallaCargaSesion, restaurarEstadoSidebar } from "./ui/componentes.js";
+import { abrirConfirmacion, agregarLongPress, inicializarAutoScrollSelectoresEnModales, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, mostrarPantallaCargaSesion as mostrarPantallaCargaSesionBase, mostrarToast, mostrarToastAccion, ocultarPantallaCargaSesion as ocultarPantallaCargaSesionBase, restaurarEstadoSidebar } from "./ui/componentes.js";
 import { confirmarUniversidadNoInvertida } from "./ui/aviso-universidad.js";
 import { aplicarPaleta, aplicarTemaGuardadoLocalmente, obtenerModoTemaLocal, obtenerModoDisenoLocal, guardarModoTemaLocal } from "./ui/tema.js";
 import { inicializarIdiomas, traducirTextoInterfaz } from "./core/i18n.js";
@@ -192,6 +193,36 @@ if ("serviceWorker" in navigator && !MODO_DEMO) {
 }
 
 /* ---------------------------- Arranque ---------------------------- */
+
+/* --------------------- Intro de apertura (folder) ---------------------
+   El cargador de sesión de siempre (#overlay-carga-sesion) sigue igual: estos
+   dos envoltorios solo le añaden el folder ENCIMA cuando corresponde (ver
+   core/intro-apertura.js). Si la intro está apagada o no aplica, no hacen nada
+   más que llamar a las funciones originales.
+   - mostrarPantallaCargaSesion(): empieza a cargar -> el folder saca y mete
+     sus pestañas en bucle hasta que la app esté lista.
+   - ocultarPantallaCargaSesion(): si se oculta SIN que haya app (login, error)
+     el folder se retira con un fundido. Dentro de mostrarApp() NO se retira:
+     ahí la app sí está lista y es abrirIntroCarga() quien lo abre. */
+let dentroDeMostrarApp = false;
+
+function iniciarIntroDeCarga(configuracion) {
+  iniciarIntroCarga({
+    demo: MODO_DEMO || PREVIEW_DEMO,
+    modoOptimizado: obtenerModoDisenoLocal() !== "fancy",
+    configuracion,
+  });
+}
+
+function mostrarPantallaCargaSesion() {
+  mostrarPantallaCargaSesionBase();
+  iniciarIntroDeCarga(estado.datos?.configuracion);
+}
+
+function ocultarPantallaCargaSesion() {
+  ocultarPantallaCargaSesionBase();
+  if (!dentroDeMostrarApp) cancelarIntroCarga();
+}
 
 // Notificaciones push - flag de "ya se ofreció el diálogo en ESTE
 // dispositivo/navegador" (ver onLoginExitoso más abajo). Va en localStorage
@@ -462,6 +493,10 @@ window.addEventListener("DOMContentLoaded", () => {
     destino.searchParams.delete("salir-demo");
     window.history.replaceState({}, "", destino.href);
   }
+  // Intro de apertura: con sesión previa (caché o guardada) la app va a
+  // cargar sí o sí, así que el folder arranca ya. Sin sesión no se monta: lo
+  // que sigue es la pantalla de login (ahí lo arranca el login real).
+  if ((cache && cache.datos) || haySesionGuardada()) iniciarIntroDeCarga(cache?.datos?.configuracion);
   if (cache && cache.datos) {
     // Ya había una sesión local: mostramos la app de inmediato (offline-first).
     // estado.token queda en null aquí a propósito - se obtiene en segundo
@@ -1132,6 +1167,17 @@ document.addEventListener("visibilitychange", () => {
 });
 
 function mostrarApp() {
+  dentroDeMostrarApp = true;
+  try {
+    mostrarAppInterno();
+  } finally {
+    dentroDeMostrarApp = false;
+    // La app ya está pintada (o falló): se abre el folder, si había uno cargando.
+    abrirIntroCarga();
+  }
+}
+
+function mostrarAppInterno() {
   // Cubre los 2 caminos que llegan acá: sesión restaurada desde caché
   // (mostrarApp() se llama casi de inmediato al arrancar, ver
   // DOMContentLoaded) y login real recién completado (onLoginExitoso) - en
