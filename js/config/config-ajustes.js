@@ -11,6 +11,7 @@ import { borrarDatosCuentaApp } from "../core/eliminar-cuenta-app.js";
 import { copiarPromptConAviso } from "../core/clipboard.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { aplicarLogoApp, inicializarSelectorLogo } from "../core/marca.js";
+import { coloresDePaletaActual, coloresIntroEfectivos, espejarColoresIntroLocal, espejarIntroAperturaLocal, introAperturaActivada, modoColoresIntro, verAnimacionIntro } from "../core/intro-apertura.js";
 import { traducirTextoInterfaz } from "../core/i18n.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 import { abrirConfirmacion, construirPillSwitchBinario, mostrarToast } from "../ui/componentes.js";
@@ -1264,6 +1265,82 @@ function montarPillSwitch(idViejo, dataAtributo, tituloCorto, opciones, valorAct
   fila.replaceWith(filaNueva);
 }
 
+/**
+ * Ajustes → Personalizar → "Animación de apertura": interruptor, 6 bolitas con
+ * los colores de las pestañas del folder, "Usar colores de la paleta",
+ * "Restablecer" y "Ver animación". Todo se guarda en configuracion (se sincroniza
+ * con la cuenta) y se refleja en localStorage para que el arranque lo lea antes
+ * de tener datos (ver core/intro-apertura.js). Idempotente: se llama en cada
+ * renderizarAjustes().
+ */
+function inicializarAjusteIntroApertura() {
+  const interruptor = document.getElementById("switch-intro-apertura");
+  const bloque = document.getElementById("intro-colores-bloque");
+  const bolitas = Array.from(document.querySelectorAll("#intro-colores input[data-intro-color]"));
+  const btnPaleta = document.getElementById("btn-intro-colores-paleta");
+  const btnOriginal = document.getElementById("btn-intro-colores-original");
+  const btnVer = document.getElementById("btn-intro-ver");
+  if (!interruptor || !bloque || bolitas.length !== 6 || !btnPaleta || !btnOriginal || !btnVer) return;
+  const cfg = estado.datos.configuracion;
+
+  // Lo que dice la cuenta manda sobre el espejo local (p. ej. si se cambió en otro dispositivo).
+  if (cfg.animacion_apertura !== undefined) espejarIntroAperturaLocal(cfg.animacion_apertura !== false);
+  if (cfg.intro_colores !== undefined) espejarColoresIntroLocal(cfg.intro_colores);
+
+  const guardarEnCuenta = () => {
+    sellarTimestamp(cfg);
+    marcarCambioPendiente();
+  };
+  const colorActual = () => bolitas.map((el) => el.value);
+  const pintar = () => {
+    const activa = introAperturaActivada(cfg);
+    interruptor.checked = activa;
+    bloque.classList.toggle("deshabilitado", !activa);
+    const colores = coloresIntroEfectivos(cfg);
+    bolitas.forEach((el, i) => {
+      if (document.activeElement !== el) el.value = colores[i];
+      el.parentElement.style.background = colores[i];
+    });
+    btnPaleta.setAttribute("aria-pressed", modoColoresIntro(cfg) === "paleta" ? "true" : "false");
+  };
+
+  interruptor.onchange = () => {
+    cfg.animacion_apertura = interruptor.checked;
+    espejarIntroAperturaLocal(interruptor.checked);
+    guardarEnCuenta();
+    pintar();
+  };
+  bolitas.forEach((el) => {
+    // Mientras se arrastra el selector solo se actualiza lo local; a la cuenta se sube al soltar.
+    el.oninput = () => {
+      cfg.intro_colores = { modo: "personalizado", colores: colorActual() };
+      espejarColoresIntroLocal(cfg.intro_colores);
+      el.parentElement.style.background = el.value;
+      btnPaleta.setAttribute("aria-pressed", "false");
+    };
+    el.onchange = () => {
+      guardarEnCuenta();
+      pintar();
+    };
+  });
+  btnPaleta.onclick = () => {
+    cfg.intro_colores = { modo: "paleta", colores: coloresDePaletaActual() };
+    espejarColoresIntroLocal(cfg.intro_colores);
+    guardarEnCuenta();
+    pintar();
+  };
+  btnOriginal.onclick = () => {
+    cfg.intro_colores = null;
+    espejarColoresIntroLocal(null);
+    guardarEnCuenta();
+    pintar();
+  };
+  btnVer.onclick = () => {
+    verAnimacionIntro(cfg, colorActual());
+  };
+  pintar();
+}
+
 function renderizarAjustes() {
   inicializarTamanoTextoAjustes();
   inicializarBorradoCuentaApp();
@@ -1272,6 +1349,7 @@ function renderizarAjustes() {
   inicializarBandejaVozAjustes();
   inicializarSelectorLogo();
   aplicarLogoApp();
+  inicializarAjusteIntroApertura();
   const inputNombre = document.getElementById("input-nombre-preferido");
   if (inputNombre) {
     if (document.activeElement !== inputNombre) inputNombre.value = estado.datos.perfil?.nombre_preferido || "";
