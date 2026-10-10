@@ -105,6 +105,56 @@ function inyectarEstilosOnboarding() {
 .onb-m-cabecera .btn{pointer-events:none;padding:.3rem .8rem;min-height:0;font-size:.8rem}
 .onb-m-rejilla{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .onb-m-nota{margin:0;font-size:.74rem;opacity:.65}
+.onb-r{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;width:100%;max-width:640px;margin:0 auto;overflow:hidden;font-size:.8rem;line-height:1.25}
+.onb-r b{font-weight:700}
+.onb-r-m{opacity:.65;font-size:.72rem}
+.onb-r-fila{display:flex;align-items:center;gap:8px}
+.onb-r-sp{justify-content:space-between}
+.onb-r-card{display:flex;flex-direction:column;gap:7px}
+.onb-r-dia{margin-top:2px}
+.onb-r-pills{display:flex;gap:4px;padding:3px;border-radius:12px;background:color-mix(in srgb,currentColor 8%,transparent)}
+.onb-r-pills span{flex:1;text-align:center;padding:5px 6px;border-radius:9px;font-weight:600;font-size:.74rem}
+.onb-r-pills .on{background:var(--accent-1,#8b5cf6);color:var(--on-accent,#fff)}
+.onb-r-prog{height:6px;border-radius:4px;background:color-mix(in srgb,currentColor 16%,transparent);overflow:hidden}
+.onb-r-prog i{display:block;height:100%;background:var(--accent-1,#8b5cf6)}
+.onb-r-item{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:10px;background:color-mix(in srgb,currentColor 6%,transparent);border-left:3px solid var(--c,var(--accent-1,#8b5cf6))}
+.onb-r-item>div{flex:1;min-width:0}
+.onb-r-item b,.onb-r-item small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.onb-r-item small{opacity:.65;font-size:.7rem}
+.onb-r-persona{border-left:0}
+.onb-r-tag{flex:none;font-size:.66rem;font-weight:700;padding:1px 7px;border-radius:999px;border:1px solid var(--c,var(--accent-1,#8b5cf6));color:var(--c,var(--accent-1,#8b5cf6))}
+.onb-r-btn{flex:none;padding:6px 14px;border-radius:999px;font-weight:700;font-size:.74rem;background:var(--accent-1,#8b5cf6);color:var(--on-accent,#fff)}
+.onb-r-btn.s{background:color-mix(in srgb,currentColor 10%,transparent);color:inherit}
+.onb-r-av{width:28px;height:28px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:700;font-size:.7rem;background:color-mix(in srgb,var(--c,var(--accent-1,#8b5cf6)) 35%,transparent)}
+.onb-r-cab{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px}
+.onb-r-centro{display:flex;flex-direction:column;align-items:center;text-align:center;gap:1px;flex:1;min-width:0}
+.onb-r-mas{width:30px;height:30px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:1.05rem;font-weight:700;background:var(--accent-1,#8b5cf6);color:var(--on-accent,#fff)}
+.onb-r-eng{font-size:1.1rem;opacity:.75;flex:none;padding:0 4px}
+.onb-r-stat{display:flex;flex-direction:column;align-items:center;gap:2px}
+.onb-r-stat b{font-size:1.05rem}
+.onb-r-estrellas{flex:none;color:var(--amber,#d99a00)}
+.onb-r-mas-v{flex:none;color:#22a06b}.onb-r-menos{flex:none;color:#e5484d}
+.onb-r-horario{padding:6px}
+.onb-r-hor{display:grid;grid-template-columns:34px repeat(5,minmax(0,1fr));grid-template-rows:20px repeat(7,30px);font-size:.62rem;background:repeating-linear-gradient(to bottom,transparent 0 29px,color-mix(in srgb,currentColor 10%,transparent) 29px 30px) 0 20px/100% 30px no-repeat}
+.onb-r-hd{text-align:center;font-weight:700;opacity:.8}
+.onb-r-hh{opacity:.55;padding:2px 4px 0 0;text-align:right}
+.onb-r-blq{margin:1px;padding:2px 4px;border-radius:6px;overflow:hidden;background:color-mix(in srgb,var(--c) 30%,transparent);border-left:3px solid var(--c)}
+.onb-r-blq b,.onb-r-blq small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.onb-r-blq small{opacity:.7}
+.onb-r-aro{position:relative;width:104px;height:104px}
+.onb-r-aro .onb-aro{position:absolute;inset:0}
+.onb-r-tiempo{position:absolute;inset:0;display:grid;place-items:center;font-size:1.25rem;font-weight:800}
+.onb-r-paleta{display:flex;gap:10px}
+.onb-r-paleta i{width:24px;height:24px;border-radius:50%}
+.onb-r-hilo{display:flex;flex-direction:column;gap:7px}
+.onb-r-msg{max-width:80%;padding:7px 11px;border-radius:14px;border-bottom-left-radius:4px;align-self:flex-start;background:color-mix(in srgb,currentColor 10%,transparent)}
+.onb-r-msg.yo{align-self:flex-end;border-radius:14px;border-bottom-right-radius:4px;background:color-mix(in srgb,var(--accent-1,#8b5cf6) 30%,transparent)}
+.onb-r-entrada{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 6px 6px 14px;border-radius:999px;background:color-mix(in srgb,currentColor 8%,transparent)}
+/* Lado izquierdo del onboarding (progreso, texto y botones): fondo PLANO y fijo, igual que en Optimizado.
+   Claro = #fbfbfe · Oscuro = #080808 · Color = el fondo liso de la paleta (--onb-izq, ver colorLadoIzquierdo). No cambia con Fancy. */
+.onboarding-overlay .onboarding-copy,.onboarding-overlay .onboarding-top,.onboarding-overlay .onboarding-acciones{background:var(--onb-izq,#080808)!important;background-image:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none!important}
+.onboarding-overlay .onboarding-copy,.onboarding-overlay .onboarding-copy *{text-shadow:none!important}
+.onboarding-overlay .onboarding-copy h1{background:none!important;-webkit-text-fill-color:currentColor!important;filter:none!important}
 .onb-toca{position:absolute;left:50%;bottom:14px;z-index:4;display:flex;align-items:center;gap:.55rem;padding:.6rem 1.05rem;border-radius:999px;font:inherit;font-size:.86rem;font-weight:700;cursor:pointer;color:var(--text-primary,inherit);background:color-mix(in srgb,var(--bg-panel,#222) 94%,transparent);border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 60%,transparent);box-shadow:0 8px 24px rgba(0,0,0,.3);transform:translateX(-50%);-webkit-tap-highlight-color:transparent}
 .onb-toca:disabled{cursor:progress;opacity:.9}
 .onb-toca i{width:9px;height:9px;border-radius:50%;background:var(--accent-1,#8b5cf6);animation:onb-pulso 1.6s ease-out infinite}
@@ -225,6 +275,19 @@ function leerFondoTarjeta() {
   return salida;
 }
 
+/* Fondo del lado izquierdo: fijo por modo (no depende de Fancy/Optimizado ni de la paleta, salvo en "Color",
+   donde se usa el fondo liso de la paleta elegida: exactamente lo que se ve en Optimizado). */
+function colorLadoIzquierdo() {
+  const modo = document.documentElement.getAttribute("data-mode");
+  if (modo === "light") return "#fbfbfe";
+  if (modo === "true-dark") return "#080808";
+  const raiz = getComputedStyle(document.documentElement);
+  const opaco = (c) => { if (!c) return false; const m = c.match(/^rgba\(([^)]+)\)$/i); if (!m) return true; const p = m[1].split(/[,/\s]+/).filter(Boolean); return p.length < 4 || parseFloat(p[3]) >= 1; };
+  const canvas = raiz.getPropertyValue("--bg-canvas").trim();
+  if (opaco(canvas)) return canvas;
+  return raiz.getPropertyValue("--bg-header-solido").trim() || "#10111a";
+}
+
 function crearSincronizadorFondo(overlay, panel, tarjeta) {
   let raf = 0, timer = 0;
   const aplicar = () => {
@@ -238,11 +301,7 @@ function crearSincronizadorFondo(overlay, panel, tarjeta) {
     const t = leerFondoTarjeta();
     overlay.style.setProperty("--onb-tarjeta", esColorVisible(t.color) ? t.color : "transparent");
     if (esColorVisible(t.borde)) overlay.style.setProperty("--onb-borde", t.borde);
-    if (tarjeta) {
-      if (t.color) tarjeta.style.backgroundColor = t.color;
-      tarjeta.style.backgroundImage = t.imagen;
-      if (esColorVisible(t.borde)) tarjeta.style.borderColor = t.borde;
-    }
+    overlay.style.setProperty("--onb-izq", colorLadoIzquierdo()); // lado izquierdo plano (la tarjeta del texto ya no copia el vidrio de la app)
   };
   // Se relee en el siguiente frame y otra vez tras las transiciones CSS de color.
   const programar = () => { cancelAnimationFrame(raf); clearTimeout(timer); raf = requestAnimationFrame(aplicar); timer = setTimeout(aplicar, 450); };
@@ -279,49 +338,138 @@ function construirMaqueta() {
   return raiz;
 }
 
-function construirEsquema(id, nombre) {
-  const titulo = document.createElement("span"); titulo.textContent = traducirTextoInterfaz(nombre);
-  const marco = elDiv("onb-marco", elDiv("onb-es-top", document.createElement("i"), titulo));
-  const tarjeta = (...h) => elDiv("onb-bloque", ...h);
+/* ── Esquemas de «Conoce…» ─────────────────────────────────────────────────
+   Cada sección se dibuja como se ve de verdad (mismos encabezados, pastillas, tarjetas y etiquetas),
+   pero con datos de ejemplo y SOLO DOM + CSS estático: sin imágenes, sin animaciones y sin cargar la app.
+   Los textos fijos pasan por traducirTextoInterfaz; los nombres de ejemplo (materias, personas) no se traducen. */
+const ACENTO = "var(--accent-1,#8b5cf6)", ROJO = "#e5484d", AMBAR = "#d99a00", VERDE = "#22a06b", AZUL = "#3a7de2", MORADO = "#8b4ae0", NARANJA = "#f28a2b";
+function nodo(tag, clase, texto, hijos) {
+  const e = document.createElement(tag);
+  if (clase) e.className = clase;
+  if (texto != null) e.textContent = traducirTextoInterfaz(texto);
+  (hijos || []).forEach((h) => h && e.append(h));
+  return e;
+}
+const rFila = (clase, ...h) => nodo("div", `onb-r-fila ${clase || ""}`.trim(), null, h);
+const rCard = (...h) => nodo("div", "onb-bloque onb-r-card", null, h);
+const rNegrita = (t) => nodo("b", "", t);
+const rSuave = (t) => nodo("span", "onb-r-m", t);
+const rTag = (t, color) => { const e = nodo("span", "onb-r-tag", t); if (color) e.style.setProperty("--c", color); return e; };
+const rBoton = (t, suave) => nodo("span", suave ? "onb-r-btn s" : "onb-r-btn", t);
+function rProg(pct, color) { const p = nodo("div", "onb-r-prog", null, [document.createElement("i")]); p.firstChild.style.width = `${pct}%`; if (color) p.firstChild.style.background = color; return p; }
+function rPills(opciones, activo) {
+  return nodo("div", "onb-r-pills", null, opciones.map((t, i) => nodo("span", i === activo ? "on" : "", t)));
+}
+function rItem(titulo, sub, color, ...derecha) {
+  const it = nodo("div", "onb-r-item", null, [nodo("div", "", null, [nodo("b", "", titulo), sub ? nodo("small", "", sub) : null]), ...derecha]);
+  if (color) it.style.setProperty("--c", color);
+  return it;
+}
+function rAvatar(iniciales, color) { const a = nodo("span", "onb-r-av", iniciales); a.style.setProperty("--c", color); return a; }
+function rPersona(iniciales, nombre, sub, color, ...derecha) {
+  return nodo("div", "onb-r-item onb-r-persona", null, [rAvatar(iniciales, color), nodo("div", "", null, [nodo("b", "", nombre), nodo("small", "", sub)]), ...derecha]);
+}
+function rStat(valor, etiqueta, color) { const s = nodo("div", "onb-r-stat", null, [nodo("b", "", valor), rSuave(etiqueta)]); if (color) s.firstChild.style.color = color; return s; }
+
+function esquemaHorario() {
+  const g = nodo("div", "onb-r-hor");
+  ["", "Lun", "Mar", "Mié", "Jue", "Vie"].forEach((d, i) => { const c = nodo("span", "onb-r-hd", d); c.style.gridColumn = String(i + 1); c.style.gridRow = "1"; g.append(c); });
+  ["7:00", "8:00", "9:00", "10:00", "11:00", "12:00", "1:00"].forEach((h, i) => { const c = nodo("span", "onb-r-hh", h); c.style.gridColumn = "1"; c.style.gridRow = String(i + 2); g.append(c); });
+  // [columna, fila inicial, fila final, materia, aula, color]
+  [[2, 2, 4, "Cálculo I", "B-201", AZUL], [2, 5, 7, "Programación", "Lab 3", VERDE], [3, 3, 5, "Física", "A-105", ROJO],
+   [4, 2, 4, "Cálculo I", "B-201", AZUL], [4, 5, 7, "Programación", "Virtual", VERDE], [5, 3, 5, "Física", "A-105", ROJO],
+   [5, 6, 8, "Inglés", "C-12", MORADO], [6, 4, 6, "Programación", "Lab 3", VERDE]].forEach(([col, a, b, nombre, aula, color]) => {
+    const bl = nodo("div", "onb-r-blq", null, [nodo("b", "", nombre), nodo("small", "", aula)]);
+    bl.style.gridColumn = String(col); bl.style.gridRow = `${a} / ${b}`; bl.style.setProperty("--c", color); g.append(bl);
+  });
+  return g;
+}
+
+function contenidoEsquema(id) {
+  const c = [];
   switch (id) {
     case "resumen":
-      marco.append(elDiv("onb-fila3", ...repetir(3, (i) => tarjeta(elDiv("onb-stat", elDiv("onb-circulo"), barra(50 + i * 12))))),
-        tarjeta(filaEsquema(80, true), filaEsquema(62, true), filaEsquema(72, true)));
+      c.push(rCard(rFila("onb-r-sp", rNegrita("Semana 9 de 18"), rSuave("Faltan 65 días")), rProg(50)),
+        rCard(rFila("onb-r-sp", rNegrita("Estudio de hoy"), rSuave("45 min de 3 h")), rProg(25),
+          rFila("onb-r-sp", nodo("span", "", "Cálculo I"), rSuave("0 / 1 h")), rFila("onb-r-sp", nodo("span", "", "Programación"), rSuave("0 / 1 h")), rFila("onb-r-sp", nodo("span", "", "Física"), rSuave("0 / 1 h"))),
+        rCard(rNegrita("Clases de hoy"), rItem("9:30 a. m.", "Programación", AZUL, rTag("Virtual", AZUL))),
+        rCard(rNegrita("Próximos exámenes"), rItem("I Parcial", "Cálculo I", ROJO, rSuave("3:00 p. m."), rTag("Examen", ROJO)), rItem("Quiz", "Física", AMBAR, rSuave("9:30 a. m."), rTag("Examen", AMBAR))));
       break;
     case "agenda":
-      marco.append(tarjeta(elDiv("onb-cal", ...repetir(35, (i) => elDiv([3, 9, 12, 17, 24, 30].includes(i) ? "onb-dia marca" : "onb-dia")))),
-        tarjeta(filaEsquema(75, true), filaEsquema(58, true)));
+      c.push(rPills(["Lista", "Calendario", "Cronograma"], 0),
+        nodo("div", "onb-bloque onb-r-cab", null, [nodo("span", "onb-r-mas", "+"), nodo("div", "onb-r-centro", null, [rSuave("Semestre 2026-2"), rNegrita("Semana 9"), rSuave("Hoy")]), nodo("span", "onb-r-eng", "⚙️")]),
+        rFila("onb-r-sp onb-r-dia", rNegrita("Hoy"), rSuave("2 pendientes")),
+        rItem("Taller de integrales", "Cálculo I", ACENTO, rSuave("11:59 p. m."), rTag("Tarea")),
+        rItem("I Parcial", "Programación", ROJO, rSuave("3:00 p. m."), rTag("Examen", ROJO)),
+        rFila("onb-r-sp onb-r-dia", rNegrita("Mañana"), rSuave("2 pendientes")),
+        rItem("Entrega del proyecto final", "Base de datos", AMBAR, rSuave("8:00 a. m."), rTag("Proyecto", AMBAR)),
+        rItem("Charla de empleabilidad", "Universidad", VERDE, rSuave("4:00 p. m."), rTag("Evento", VERDE)));
       break;
     case "horario":
-      marco.append(elDiv("onb-semana", columnaClases(46, 30, 40), columnaClases(34, 52), columnaClases(58, 28), columnaClases(30, 44, 26), columnaClases(50, 36)));
+      c.push(nodo("div", "onb-bloque onb-r-cab", null, [nodo("span", "onb-r-eng", "‹"), nodo("div", "onb-r-centro", null, [rSuave("Semestre 2026-2"), rNegrita("Semana 9")]), nodo("span", "onb-r-eng", "›")]),
+        rFila("onb-r-sp", rBoton("+ Agregar"), rSuave("⬇  ⛶"), rBoton("Amigos", true)),
+        nodo("div", "onb-bloque onb-r-horario", null, [esquemaHorario()]));
       break;
-    case "tiempo-estudio":
-      marco.append(tarjeta(elDiv("onb-centro", elDiv("onb-aro")), barra(60, "acento")), tarjeta(filaEsquema(66), filaEsquema(48), filaEsquema(78)));
+    case "tiempo-estudio": {
+      const aro = nodo("div", "onb-r-aro", null, [nodo("div", "onb-aro"), nodo("span", "onb-r-tiempo", "25:00")]);
+      c.push(rCard(rFila("onb-r-sp", rNegrita("Cálculo I"), rSuave("Sesión de estudio")), nodo("div", "onb-centro", null, [aro]), nodo("div", "onb-r-centro", null, [rBoton("Iniciar sesión")])),
+        rCard(rNegrita("Materias"),
+          rFila("onb-r-sp", nodo("span", "", "Cálculo I"), rSuave("1 h 20 min")), rProg(70, AZUL),
+          rFila("onb-r-sp", nodo("span", "", "Programación"), rSuave("45 min")), rProg(40, VERDE),
+          rFila("onb-r-sp", nodo("span", "", "Física"), rSuave("20 min")), rProg(18, ROJO)));
       break;
+    }
     case "semestres":
-      marco.append(...repetir(2, (i) => tarjeta(barra(50 + i * 14), elDiv("onb-fila", barra(70 - i * 18, "acento"), elDiv("onb-chip")), filaEsquema(40))));
+      c.push(rCard(rFila("onb-r-sp", rNegrita("Semestre 2026-2"), rTag("En curso", VERDE)),
+          nodo("div", "onb-fila3", null, [rStat("5", "Materias"), rStat("16", "Créditos"), rStat("8.7", "Promedio", VERDE)])),
+        rItem("Cálculo I", "4 créditos", AZUL, nodo("b", "", "8.5")), rItem("Programación", "4 créditos", VERDE, nodo("b", "", "9.1")),
+        rItem("Física", "3 créditos", ROJO, nodo("b", "", "7.8")), rItem("Inglés", "2 créditos", MORADO, nodo("b", "", "9.5")));
       break;
     case "comunidad":
-      marco.append(tarjeta(elDiv("onb-fila", ...repetir(4, () => elDiv("onb-circulo")))),
-        ...repetir(3, (i) => tarjeta(elDiv("onb-fila", elDiv("onb-circulo"), barra(72 - i * 10), elDiv("onb-chip")))));
+      c.push(rPills(["Compañeros", "Docentes", "Horarios"], 0),
+        rPersona("AT", "Ana Torres", "Cálculo I · Programación", AZUL, rTag("2 materias")),
+        rPersona("LM", "Luis Mora", "Física", ROJO, rTag("1 materia")),
+        rFila("onb-r-sp onb-r-dia", rNegrita("Docentes"), rSuave("Valoraciones")),
+        rPersona("PR", "Prof. Rivas", "Cálculo I", VERDE, nodo("b", "onb-r-estrellas", "★ 4.6")),
+        rPersona("PS", "Prof. Salas", "Programación", MORADO, nodo("b", "onb-r-estrellas", "★ 4.2")));
       break;
     case "finanzas":
-      marco.append(tarjeta(graficaBarras([40, 62, 48, 80, 55, 70])), elDiv("onb-fila3", tarjeta(barra(70, "acento")), tarjeta(barra(55)), tarjeta(barra(62))),
-        tarjeta(filaEsquema(70, true), filaEsquema(52, true)));
+      c.push(nodo("div", "onb-fila3", null, [rStat("+$450", "Ingresos", VERDE), rStat("−$320", "Gastos", ROJO), rStat("$130", "Balance")].map((s) => rCard(s))),
+        rCard(rNegrita("Movimientos del mes"), graficaBarras([40, 62, 48, 80, 55, 70])),
+        rItem("Beca", "Ingreso", VERDE, nodo("b", "onb-r-mas-v", "+$200")), rItem("Libros", "Educación", ROJO, nodo("b", "onb-r-menos", "−$35")), rItem("Almuerzo", "Comida", ROJO, nodo("b", "onb-r-menos", "−$12")));
       break;
     case "plan-estudios":
-      marco.append(tarjeta(...repetir(6, (i) => filaEsquema(82 - (i % 3) * 14, true))));
+      c.push(rCard(rFila("onb-r-sp", rNegrita("Ingeniería de Sistemas"), rSuave("18 de 45 aprobadas")), rProg(40)),
+        rFila("onb-r-sp onb-r-dia", rNegrita("Nivel 1"), rSuave("Aprobadas")),
+        rItem("Cálculo I", "4 créditos", VERDE, rTag("Aprobada", VERDE)), rItem("Programación I", "4 créditos", VERDE, rTag("Aprobada", VERDE)),
+        rFila("onb-r-sp onb-r-dia", rNegrita("Nivel 2"), rSuave("En curso")),
+        rItem("Cálculo II", "4 créditos", AZUL, rTag("En curso", AZUL)), rItem("Física", "3 créditos", AMBAR, rTag("Pendiente", AMBAR)));
       break;
     case "asistente":
-      marco.append(elDiv("onb-burbuja yo"), elDiv("onb-burbuja"), elDiv("onb-burbuja yo"), elDiv("onb-burbuja"));
+      c.push(nodo("div", "onb-r-hilo", null, [
+        nodo("div", "onb-r-msg yo", "Examen de Cálculo el viernes a las 3 pm"),
+        nodo("div", "onb-r-msg", "Listo, lo agregué a tu Agenda."),
+        rItem("Examen de Cálculo", "Cálculo I · viernes 3:00 p. m.", ROJO, rTag("Examen", ROJO)),
+        nodo("div", "onb-r-msg yo", "¿Qué tengo pendiente esta semana?"),
+        nodo("div", "onb-r-msg", "Tienes 2 tareas y 1 examen.")]),
+        nodo("div", "onb-r-entrada", null, [nodo("span", "onb-r-m", "Escribe un mensaje…"), nodo("span", "onb-r-mas", "➤")]));
       break;
     case "configuracion":
-      marco.append(tarjeta(...repetir(4, (i) => elDiv("onb-fila", barra(60 - i * 6), elDiv("onb-interruptor")))));
+      c.push(rCard(rNegrita("Apariencia"), rPills(["Claro", "Color", "Oscuro"], 1)),
+        rCard(rNegrita("Paleta"), nodo("div", "onb-r-paleta", null, ["azul", "indigo", "morado", "rosado", "rojo", "verde"].map((p) => { const d = document.createElement("i"); d.style.background = (COLORES_PREVIEW_PALETA[p] || ["#8b5cf6"])[0]; return d; }))),
+        rCard(rNegrita("Tamaño del texto"), rPills(["Pequeño", "Mediano", "Grande"], 1)),
+        rCard(rFila("onb-r-sp", nodo("span", "", "Idioma"), rSuave("Español")), rFila("onb-r-sp", nodo("span", "", "Notificaciones"), nodo("span", "onb-interruptor")), rFila("onb-r-sp", nodo("span", "", "Animación de apertura"), nodo("span", "onb-interruptor"))));
       break;
     default:
-      marco.append(...repetir(3, () => tarjeta(filaEsquema(70), filaEsquema(50))));
+      c.push(rCard(rProg(70), rProg(50)));
   }
-  return marco;
+  return c;
+}
+
+function construirEsquema(id, nombre) {
+  const titulo = document.createElement("span"); titulo.textContent = traducirTextoInterfaz(nombre);
+  const cuerpo = nodo("div", "onb-r", null, contenidoEsquema(id));
+  return elDiv("onb-marco", elDiv("onb-es-top", document.createElement("i"), titulo), cuerpo);
 }
 
 function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
@@ -608,7 +756,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
       acciones.append(boton("Atrás","btn-secondary",()=>{etapa="nombre";pintar();}),boton("Continuar","btn-primary",()=>{cfg.personalizacion_inicial_completada=true;guardar();etapa=etapaTrasPersonalizar();indice=0;pintar();}));return;
     }
     if(etapa==="instalar"){
-      contenido.append(texto("p","onboarding-lead","Instala App Académica para abrirla como una app en tu teléfono o computadora. Si ya está instalada, este paso se omite."));
+      contenido.append(texto("p","onboarding-lead","Instala App Académica para abrirla como una app en tu teléfono o computadora."));
       acciones.append(boton("Atrás","btn-secondary",()=>{etapa="personalizar";pintar();}),boton("Ahora no","btn-secondary",()=>{etapa="tour";indice=0;pintar();}),boton("Instalar app","btn-primary",()=>{window.instalarAppAcademica?.();etapa="tour";indice=0;pintar();}));return;
     }
     if(etapa==="tour"){
