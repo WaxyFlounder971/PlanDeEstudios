@@ -5,6 +5,27 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>App Académica</title>
 <script>
+  // Animación de apertura: si el folder va a reemplazar al cargador de siempre, este ni se
+  // pinta (queda solo su fondo). Las mismas claves que core/intro-apertura.js. Si la animación
+  // está apagada o no aplica, no se marca nada y se ve el cargador de siempre. main.js quita la
+  // marca apenas decide que no hay folder; el temporizador es solo un seguro por si el JS no llega.
+  (function () {
+    try {
+      var q = new URLSearchParams(location.search);
+      if (q.get("demo") === "1" || q.has("abrir") || q.has("comp")) return;
+      if (localStorage.getItem("app_intro_apertura_apagada") === "1") return;
+      if (sessionStorage.getItem("app_intro_apertura_vista") === "1") return;
+      if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      var h = document.documentElement;
+      h.classList.add("intro-pend");
+      setTimeout(function () { h.classList.remove("intro-pend"); }, 6000);
+    } catch (e) {}
+  })();
+</script>
+<style>
+  html.intro-pend .overlay-carga-sesion > * { visibility: hidden; }
+</style>
+<script>
   // La demo es autocontenida: conserva las fuentes del sistema y no pide
   // recursos a terceros al abrirla.
   if (new URLSearchParams(location.search).get("demo") !== "1") {
@@ -18,7 +39,7 @@
     document.head.appendChild(fonts);
   }
 </script>
-<link rel="stylesheet" href="css/design-system.css?v=3.22.30">
+<link rel="stylesheet" href="css/design-system.css?v=3.22.31">
 <link rel="icon" type="image/png" href="imagenes/LogoAppFolder.png" data-app-favicon>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#2563EB">
