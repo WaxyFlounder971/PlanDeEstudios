@@ -277,6 +277,7 @@
       abandon: function () {
         if (c.state === 'done' || c.state === 'cancelled' || c.state === 'abandoned') return;
         c.state = 'abandoned'; clearTimeout(c.fadeT); clearTimeout(c.timer); cancelAnimationFrame(c.raf);
+        if (opts.onAbandon) { try { opts.onAbandon(); } catch (e) {} }   // p. ej. devolver el cargador de siempre
         root.style.pointerEvents = 'none'; root.style.transition = 'opacity .3s ease'; root.style.opacity = '0';
         if (cur === c) cur = null;
         var res = c.resolve; c.timer = setTimeout(function () { cleanup(c); if (res) res(false); }, 340);

@@ -46,6 +46,19 @@ export const CLAVE_INTRO_COLORES_LOCAL = "app_intro_colores";          // JSON {
 const CLAVE_INTRO_SESION = "app_intro_apertura_vista";
 const ESPERA_MAXIMA_MS = 20000;
 
+/* El cargador de siempre (#overlay-carga-sesion) está en index.html desde el primer pintado.
+   Mientras la clase "intro-pend" esté en <html>, su contenido (logo, anillo, texto) no se ve:
+   así el folder lo REEMPLAZA en vez de verse los dos. La clase la pone un script de index.html
+   (antes del primer pintado) y se quita en cuanto el folder no aplica, se retira o termina:
+   entonces vuelve a verse el cargador de siempre. */
+function cargadorViejoOculto(oculto) {
+  try {
+    document.documentElement.classList.toggle("intro-pend", Boolean(oculto));
+  } catch (e) {
+    // No crítico.
+  }
+}
+
 /** Colores originales de las 6 pestañas (los del logo). */
 export const COLORES_INTRO_ORIGINALES = ["#e8452a", "#f28a2b", "#e6c52c", "#2fa86b", "#3a7de2", "#8b4ae0"];
 
@@ -201,6 +214,7 @@ function montar(configuracion) {
     app: "#app-shell",
     colors: coloresIntroEfectivos(configuracion),
     maxWait: ESPERA_MAXIMA_MS,
+    onAbandon: () => cargadorViejoOculto(false), // toque o espera máxima: vuelve el cargador de siempre
   });
   const raiz = document.querySelector(".fi-root");
   if (!raiz || l.state === "none") return null;
@@ -234,12 +248,17 @@ function montar(configuracion) {
 export function iniciarIntroCarga(o = {}) {
   try {
     if (carga && (carga.state === "loading" || carga.state === "opening")) return true;
-    if (motivoParaOmitir(o)) return false;
+    if (motivoParaOmitir(o)) {
+      cargadorViejoOculto(false); // no hay folder: se ve el cargador de siempre
+      return false;
+    }
     carga = montar(o.configuracion);
+    cargadorViejoOculto(Boolean(carga));
     return Boolean(carga);
   } catch (error) {
     console.warn("Intro de apertura omitida por un error:", error);
     carga = null;
+    cargadorViejoOculto(false);
     return false;
   }
 }
@@ -254,6 +273,7 @@ export function abrirIntroCarga() {
     return l.open().catch(() => false).finally(() => {
       if (l.__quitarTeclas) l.__quitarTeclas();
       if (carga === l) carga = null;
+      cargadorViejoOculto(false);
     });
   } catch (error) {
     console.warn("Intro de apertura: no se pudo abrir:", error);
@@ -265,10 +285,15 @@ export function abrirIntroCarga() {
 export function cancelarIntroCarga() {
   try {
     const l = carga;
-    if (!l || l.state !== "loading") return;
+    if (!l) {
+      cargadorViejoOculto(false); // nunca hubo folder (p. ej. pantalla de login): nada que esconder
+      return;
+    }
+    if (l.state !== "loading") return;
     l.abandon();
     if (l.__quitarTeclas) l.__quitarTeclas();
     carga = null;
+    cargadorViejoOculto(false);
   } catch (e) {
     // Nada que hacer.
   }
