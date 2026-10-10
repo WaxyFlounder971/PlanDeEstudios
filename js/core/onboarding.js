@@ -135,12 +135,52 @@ function inyectarEstilosOnboarding() {
 .onb-r-estrellas{flex:none;color:var(--amber,#d99a00)}
 .onb-r-mas-v{flex:none;color:#22a06b}.onb-r-menos{flex:none;color:#e5484d}
 .onb-r-horario{padding:6px}
-.onb-r-hor{display:grid;grid-template-columns:34px repeat(5,minmax(0,1fr));grid-template-rows:20px repeat(7,30px);font-size:.62rem;background:repeating-linear-gradient(to bottom,transparent 0 29px,color-mix(in srgb,currentColor 10%,transparent) 29px 30px) 0 20px/100% 30px no-repeat}
-.onb-r-hd{text-align:center;font-weight:700;opacity:.8}
-.onb-r-hh{opacity:.55;padding:2px 4px 0 0;text-align:right}
-.onb-r-blq{margin:1px;padding:2px 4px;border-radius:6px;overflow:hidden;background:color-mix(in srgb,var(--c) 30%,transparent);border-left:3px solid var(--c)}
-.onb-r-blq b,.onb-r-blq small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.onb-r-blq small{opacity:.7}
+.onb-r-hor{display:grid;grid-template-columns:30px repeat(7,minmax(0,1fr));grid-template-rows:34px repeat(8,26px);font-size:.62rem;background:repeating-linear-gradient(to bottom,transparent 0 25px,color-mix(in srgb,currentColor 9%,transparent) 25px 26px) 0 34px/100% 26px no-repeat}
+.onb-r-hd{display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1}
+.onb-r-hd small{opacity:.55;font-size:.56rem}
+.onb-r-hd.hoy b{color:#3b82f6}
+.onb-r-hh{opacity:.5;padding:1px 3px 0 0;text-align:right;font-size:.56rem;line-height:1}
+.onb-r-blq{margin:1px;padding:3px 5px;border-radius:7px;overflow:hidden;color:#fff;font-weight:700;font-size:.58rem;line-height:1.12}
+.onb-r-tit{font-size:1rem;font-weight:700}
+.onb-r-etq{display:block;opacity:.6;font-size:.7rem}
+.onb-r-etq.up{text-transform:uppercase;letter-spacing:.05em;font-size:.6rem;margin-top:2px}
+.onb-r-chip{display:inline-block;flex:none;font-size:.62rem;font-weight:700;padding:2px 9px;border-radius:999px;border:1px solid var(--c);color:var(--c);background:color-mix(in srgb,var(--c) 10%,transparent)}
+.onb-r-chips{display:flex;flex-wrap:wrap;gap:5px}
+.onb-r-buscar{padding:9px 12px;border-radius:12px;border:1px solid color-mix(in srgb,currentColor 14%,transparent);opacity:.7}
+.onb-r-ciclo{color:var(--accent-2,var(--accent-1,#8b5cf6));font-size:.78rem}
+.onb-r-cab3{display:block;padding:8px 12px}
+.onb-r-cab3 .onb-r-fila{width:100%}
+.onb-r-hoy{padding:2px 12px;border:1px solid #3b82f6;color:#3b82f6;border-radius:999px;font-weight:700;font-size:.7rem}
+.onb-r-item.tinte{background:color-mix(in srgb,var(--c) 14%,transparent);border:1px solid color-mix(in srgb,var(--c) 40%,transparent);border-left:3px solid var(--c)}
+.onb-r-prog.fina{height:4px}
+.onb-r-est{flex:1;display:block}
+.onb-r-est b{font-size:.95rem;letter-spacing:1px;background:linear-gradient(90deg,#fbbf24 var(--p),color-mix(in srgb,currentColor 22%,transparent) var(--p));-webkit-background-clip:text;background-clip:text;color:transparent}
+.onb-r-doc{display:flex;align-items:center;gap:10px;padding:10px 12px}
+.onb-r-doc>b{flex:1.3;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.onb-r-svg{width:100%;max-width:440px;max-height:230px;height:auto;display:block;margin:0 auto}
+.onb-r-leyenda{display:flex;justify-content:center;gap:14px;font-size:.66rem;opacity:.85}
+.onb-r-leyenda span::before{content:"";display:inline-block;width:14px;height:3px;margin-right:5px;vertical-align:middle;background:var(--c);border-radius:2px}
+.onb-r-ciclos{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.onb-r-ciclo-col{display:flex;flex-direction:column;gap:6px;min-width:0}
+.onb-r-ciclo-t{text-align:center;padding-bottom:5px;border-bottom:1px solid color-mix(in srgb,currentColor 16%,transparent);font-size:.75rem}
+.onb-r-curso{display:flex;flex-direction:column;gap:2px;padding:6px 7px;border-radius:9px;border:1px solid var(--c,color-mix(in srgb,currentColor 30%,transparent));font-size:.66rem;line-height:1.15}
+.onb-r-curso.ok{--c:#10b981;border-width:2px}.onb-r-curso.cur{--c:#f59e0b;border-width:2px}
+.onb-r-cod{font-family:ui-monospace,monospace;opacity:.65;font-size:.58rem}
+.onb-r-tiempo3{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;padding:14px}
+.onb-r-cajas{display:flex;flex-direction:column;gap:7px;align-items:center}
+.onb-r-caja{width:100%;max-width:96px;text-align:center;padding:6px;border-radius:10px;background:color-mix(in srgb,currentColor 7%,transparent);border:1px solid color-mix(in srgb,currentColor 12%,transparent)}
+.onb-r-caja b{display:block}.onb-r-caja small{opacity:.6;font-size:.62rem}
+.onb-r-anillo{position:relative;width:112px;height:112px;border-radius:50%;box-sizing:border-box;border:11px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 18%,transparent);display:grid;place-items:center;text-align:center}
+.onb-r-anillo::after{content:"";position:absolute;left:50%;top:-12px;width:13px;height:13px;margin-left:-6.5px;border-radius:50%;background:var(--accent-1,#8b5cf6)}
+.onb-r-reloj{font-size:1.35rem;display:block}
+.onb-r-estudiando{color:var(--accent-1,#8b5cf6);font-size:.58rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.onb-r-btn.grande{padding:8px 12px;width:100%;text-align:center;box-sizing:border-box}
+.onb-r-btn.r{background:transparent;border:1px solid #ef4444;color:#f87171}
+.onb-r-curso2{display:flex;flex-direction:column;gap:7px;padding:9px 10px;border-radius:12px;border:1px solid color-mix(in srgb,currentColor 14%,transparent);border-left:4px solid var(--c)}
+.onb-r-nota{display:flex;flex-direction:column;gap:3px;padding:9px 11px}
+.onb-r-acc{display:flex;justify-content:flex-end;gap:14px;font-size:.7rem;font-weight:700}
+.onb-r-acc .e{color:#38bdf8}.onb-r-acc .x{color:#f87171}
+@media (max-width:760px){.onb-r-opc{display:none}.onb-r-ciclos{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .onb-r-aro{position:relative;width:104px;height:104px}
 .onb-r-aro .onb-aro{position:absolute;inset:0}
 .onb-r-tiempo{position:absolute;inset:0;display:grid;place-items:center;font-size:1.25rem;font-weight:800}
@@ -150,6 +190,25 @@ function inyectarEstilosOnboarding() {
 .onb-r-msg{max-width:80%;padding:7px 11px;border-radius:14px;border-bottom-left-radius:4px;align-self:flex-start;background:color-mix(in srgb,currentColor 10%,transparent)}
 .onb-r-msg.yo{align-self:flex-end;border-radius:14px;border-bottom-right-radius:4px;background:color-mix(in srgb,var(--accent-1,#8b5cf6) 30%,transparent)}
 .onb-r-entrada{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 6px 6px 14px;border-radius:999px;background:color-mix(in srgb,currentColor 8%,transparent)}
+/* Teléfono · recorrido: una página por sección (texto arriba, maqueta abajo), barra inferior fija. */
+.onboarding-panel.onb-tour-movil{display:flex!important;flex-direction:column;height:100vh!important;height:100dvh!important;min-height:0!important;max-height:100dvh!important;overflow:hidden!important;padding:0!important;background:var(--onb-izq,#080808)!important}
+.onb-tour-movil>.onboarding-top{position:static!important;width:100%!important;max-width:none!important;flex:none;padding:calc(12px + env(safe-area-inset-top)) 18px 4px!important}
+.onb-tour-movil>.onboarding-layout{flex:1 1 auto;min-height:0!important;width:100%!important;max-width:none!important;height:auto!important;display:flex!important;flex-direction:column;gap:0!important;overflow:hidden!important;grid-template-rows:none!important;background:var(--onb-izq,#080808)!important}
+.onb-tour-movil .onboarding-copy{flex:0 0 auto;height:auto!important;max-height:46%!important;display:block!important;overflow-y:auto!important;padding:2px 20px 12px!important}
+.onb-tour-movil .onboarding-copy h1{font-size:1.5rem!important;line-height:1.15;margin:0 0 8px}
+.onb-tour-movil .onboarding-lista{font-size:.92rem;line-height:1.4;gap:6px;padding-left:1.1em}
+.onb-tour-movil .onboarding-preview-wrap{flex:1 1 0;min-height:0!important;height:auto!important;width:auto!important;margin:0 12px;border-radius:18px!important;overflow:hidden;display:block!important;position:relative}
+.onb-tour-movil .onboarding-preview,.onb-tour-movil .onb-toca,.onb-tour-movil .onb-vivo{display:none!important}
+.onb-tour-movil>.onboarding-acciones{position:static!important;width:100%!important;max-width:none!important;flex:none;display:grid!important;grid-template-columns:auto minmax(0,1fr);gap:6px 10px;padding:6px 16px calc(12px + env(safe-area-inset-bottom))!important}
+.onb-tour-movil .onb-atras{grid-column:1;grid-row:1}
+.onb-tour-movil .onb-sig{grid-column:2;grid-row:1}
+.onb-tour-movil .onb-no{grid-column:1/-1;grid-row:2;background:none!important;border:0!important;box-shadow:none!important;min-height:0;padding:4px;opacity:.75;font-size:.85rem}
+.onb-puntos{display:none}
+.onb-tour-movil>.onb-puntos{display:flex;flex:none;justify-content:center;gap:6px;padding:10px 0 4px;background:var(--onb-izq,#080808)}
+.onb-puntos i{width:6px;height:6px;border-radius:3px;background:color-mix(in srgb,currentColor 30%,transparent)}
+.onb-puntos i.on{width:20px;background:var(--accent-1,#8b5cf6)}
+.onb-esquema>.onb-marco{transform-origin:0 0}
+@media (max-height:700px){.onb-tour-movil .onboarding-lista{font-size:.86rem}.onb-tour-movil .onboarding-copy h1{font-size:1.35rem!important}.onb-tour-movil .onboarding-copy{max-height:50%!important}}
 /* Lado izquierdo del onboarding (progreso, texto y botones): fondo PLANO y fijo, igual que en Optimizado.
    Claro = #fbfbfe · Oscuro = #080808 · Color = el fondo liso de la paleta (--onb-izq, ver colorLadoIzquierdo). No cambia con Fancy. */
 .onboarding-overlay .onboarding-copy,.onboarding-overlay .onboarding-top,.onboarding-overlay .onboarding-acciones{background:var(--onb-izq,#080808)!important;background-image:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none!important}
@@ -371,89 +430,137 @@ function rPersona(iniciales, nombre, sub, color, ...derecha) {
 }
 function rStat(valor, etiqueta, color) { const s = nodo("div", "onb-r-stat", null, [nodo("b", "", valor), rSuave(etiqueta)]); if (color) s.firstChild.style.color = color; return s; }
 
+/* Textos con fecha/hora: salen con Intl en el idioma de la interfaz, así no necesitan catálogo. */
+const idiomaUI = () => (document.documentElement.lang || "es").toLowerCase();
+function fechaUI(y, m, d, opciones) { try { return new Intl.DateTimeFormat(idiomaUI(), opciones).format(new Date(y, m, d)); } catch (e) { return ""; } }
+function svgEl(tag, attrs, texto) {
+  const e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  Object.entries(attrs || {}).forEach(([k, v]) => e.setAttribute(k, v));
+  if (texto != null) e.textContent = texto;
+  return e;
+}
+const PINK = "#ec4899", CIAN = "#06b6d4", NARANJA2 = "#f97316", INDIGO = "#6366f1", TEAL = "#14b8a6", PURPURA = "#a855f7", GRIS = "#6b7280";
+const plano = (tag, clase, s) => { const e = document.createElement(tag); if (clase) e.className = clase; e.textContent = s; return e; };
+function horaUI(h, m) { try { return new Intl.DateTimeFormat(idiomaUI(), { hour: "numeric", minute: "2-digit" }).format(new Date(2026, 9, 9, h, m || 0)); } catch (e) { return `${h}:${String(m || 0).padStart(2, "0")}`; } }
+const mayus = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const rEtiqueta = (t) => nodo("small", "onb-r-etq up", t);
+const rTit = (t) => nodo("b", "onb-r-tit", t);
+function rPildora(t, color) { const e = nodo("span", "onb-r-chip", t); e.style.setProperty("--c", color); return e; }
+function rEstrellas(pct) { const s = nodo("span", "onb-r-est"); const b = nodo("b", "", null); b.textContent = "★★★★★"; b.style.setProperty("--p", `${pct}%`); s.append(b); return s; }
+function rBarraFina(pct, color) { const p = rProg(pct, color); p.classList.add("fina"); return p; }
+
 function esquemaHorario() {
   const g = nodo("div", "onb-r-hor");
-  ["", "Lun", "Mar", "Mié", "Jue", "Vie"].forEach((d, i) => { const c = nodo("span", "onb-r-hd", d); c.style.gridColumn = String(i + 1); c.style.gridRow = "1"; g.append(c); });
-  ["7:00", "8:00", "9:00", "10:00", "11:00", "12:00", "1:00"].forEach((h, i) => { const c = nodo("span", "onb-r-hh", h); c.style.gridColumn = "1"; c.style.gridRow = String(i + 2); g.append(c); });
-  // [columna, fila inicial, fila final, materia, aula, color]
-  [[2, 2, 4, "Cálculo I", "B-201", AZUL], [2, 5, 7, "Programación", "Lab 3", VERDE], [3, 3, 5, "Física", "A-105", ROJO],
-   [4, 2, 4, "Cálculo I", "B-201", AZUL], [4, 5, 7, "Programación", "Virtual", VERDE], [5, 3, 5, "Física", "A-105", ROJO],
-   [5, 6, 8, "Inglés", "C-12", MORADO], [6, 4, 6, "Programación", "Lab 3", VERDE]].forEach(([col, a, b, nombre, aula, color]) => {
-    const bl = nodo("div", "onb-r-blq", null, [nodo("b", "", nombre), nodo("small", "", aula)]);
-    bl.style.gridColumn = String(col); bl.style.gridRow = `${a} / ${b}`; bl.style.setProperty("--c", color); g.append(bl);
+  const lunes = 5;
+  for (let i = 0; i < 7; i++) {
+    const c = nodo("span", `onb-r-hd${i === 4 ? " hoy" : ""}`);
+    c.append(nodo("b", "", null), nodo("small", "", null));
+    c.firstChild.textContent = fechaUI(2026, 9, lunes + i, { weekday: "narrow" }).toUpperCase();
+    c.lastChild.textContent = String(lunes + i);
+    c.style.gridColumn = String(i + 2); c.style.gridRow = "1"; g.append(c);
+  }
+  for (let h = 8; h <= 15; h++) { const c = nodo("span", "onb-r-hh"); try { c.textContent = new Intl.DateTimeFormat(idiomaUI(), { hour: "numeric" }).format(new Date(2026, 9, 5, h)); } catch (e) { c.textContent = String(h); } c.style.gridColumn = "1"; c.style.gridRow = String(h - 6); g.append(c); }
+  // [columna(2-8), fila inicial, fila final, materia, color]
+  [[2, 2, 4, "Cálculo I", INDIGO], [3, 4, 6, "Química", TEAL], [4, 7, 9, "Álgebra", NARANJA], [5, 2, 4, "Cálculo I", INDIGO], [5, 8, 10, "Física", PURPURA],
+   [6, 3, 5, "Inglés", PINK], [7, 2, 4, "Cálculo I", INDIGO], [7, 4, 6, "Química", TEAL]].forEach(([col, a, b, nombre, color]) => {
+    const bl = nodo("div", "onb-r-blq", nombre); bl.style.gridColumn = String(col); bl.style.gridRow = `${a} / ${b}`; bl.style.background = color; g.append(bl);
   });
   return g;
+}
+
+function esquemaFinanzas() {
+  const w = 300, h = 150, xs = [52, 109, 166, 223, 280], base = 124;
+  const svg = svgEl("svg", { viewBox: `0 0 ${w} ${h}`, class: "onb-r-svg", "aria-hidden": "true" });
+  [["150k", 18], ["100k", 52], ["50k", 88], ["0", base]].forEach(([t, y]) => {
+    svg.append(svgEl("text", { x: 2, y: y + 3, "font-size": 8, fill: "currentColor", opacity: ".55" }, t));
+    if (t !== "0") svg.append(svgEl("line", { x1: 30, x2: 292, y1: y, y2: y, stroke: "currentColor", "stroke-opacity": ".18", "stroke-dasharray": "3 3" }));
+  });
+  [[ "#ef4444", [base, base, 120, 117, 30]], ["#10b981", [base, base, base, base, 42]], ["#3b82f6", [base, 96, base, base, base]]].forEach(([color, ys]) => {
+    svg.append(svgEl("polyline", { points: xs.map((x, i) => `${x},${ys[i]}`).join(" "), fill: "none", stroke: color, "stroke-width": 2.6, "stroke-linejoin": "round" }));
+    xs.forEach((x, i) => svg.append(svgEl("circle", { cx: x, cy: ys[i], r: 3.2, fill: color })));
+  });
+  ["2024-1", "2025-1", "2025-2", "2026-1", "2026-2"].forEach((t, i) => svg.append(svgEl("text", { x: xs[i], y: 142, "font-size": 7.5, fill: "currentColor", opacity: ".6", "text-anchor": "middle" }, t)));
+  return svg;
 }
 
 function contenidoEsquema(id) {
   const c = [];
   switch (id) {
     case "resumen":
-      c.push(rCard(rFila("onb-r-sp", rNegrita("Semana 9 de 18"), rSuave("Faltan 65 días")), rProg(50)),
-        rCard(rFila("onb-r-sp", rNegrita("Estudio de hoy"), rSuave("45 min de 3 h")), rProg(25),
-          rFila("onb-r-sp", nodo("span", "", "Cálculo I"), rSuave("0 / 1 h")), rFila("onb-r-sp", nodo("span", "", "Programación"), rSuave("0 / 1 h")), rFila("onb-r-sp", nodo("span", "", "Física"), rSuave("0 / 1 h"))),
-        rCard(rNegrita("Clases de hoy"), rItem("9:30 a. m.", "Programación", AZUL, rTag("Virtual", AZUL))),
-        rCard(rNegrita("Próximos exámenes"), rItem("I Parcial", "Cálculo I", ROJO, rSuave("3:00 p. m."), rTag("Examen", ROJO)), rItem("Quiz", "Física", AMBAR, rSuave("9:30 a. m."), rTag("Examen", AMBAR))));
+      c.push(nodo("div", "onb-bloque onb-r-cab", null, [rProg(55), nodo("b", "onb-r-tit", "Semana 9 de 16"), rSuave("Faltan 52 días")].map((e, i) => { if (i === 0) e.style.width = "60px"; return e; })),
+        rCard(rFila("onb-r-sp", rTit("Estudio de hoy"), nodo("b", "onb-r-m", "0 min de 7 h 30 min")), rProg(0),
+          rItem("Cálculo I", null, TEAL, rSuave("0 min estudiados · meta 5 h")), rItem("Programación", null, PINK, rSuave("0 min estudiados · meta 2 h 30 min"))),
+        rCard(rTit("Clases de hoy"), rEtiqueta("Clases"), rItem(`${horaUI(9)}  ${traducirTextoInterfaz("Programación")}`, null, PINK, rSuave("Presencial"))));
       break;
     case "agenda":
-      c.push(rPills(["Lista", "Calendario", "Cronograma"], 0),
-        nodo("div", "onb-bloque onb-r-cab", null, [nodo("span", "onb-r-mas", "+"), nodo("div", "onb-r-centro", null, [rSuave("Semestre 2026-2"), rNegrita("Semana 9"), rSuave("Hoy")]), nodo("span", "onb-r-eng", "⚙️")]),
-        rFila("onb-r-sp onb-r-dia", rNegrita("Hoy"), rSuave("2 pendientes")),
-        rItem("Taller de integrales", "Cálculo I", ACENTO, rSuave("11:59 p. m."), rTag("Tarea")),
-        rItem("I Parcial", "Programación", ROJO, rSuave("3:00 p. m."), rTag("Examen", ROJO)),
-        rFila("onb-r-sp onb-r-dia", rNegrita("Mañana"), rSuave("2 pendientes")),
-        rItem("Entrega del proyecto final", "Base de datos", AMBAR, rSuave("8:00 a. m."), rTag("Proyecto", AMBAR)),
-        rItem("Charla de empleabilidad", "Universidad", VERDE, rSuave("4:00 p. m."), rTag("Evento", VERDE)));
+      c.push(nodo("div", "onb-bloque onb-r-cab onb-r-cab3", null, [
+          nodo("div", "onb-r-centro", null, [nodo("b", "onb-r-ciclo", "II Ciclo 2026"),
+            rFila("onb-r-sp", nodo("span", "onb-r-mas", "+"), nodo("div", "onb-r-centro", null, [nodo("b", "onb-r-tit", "‹  Semana 9  ›"), plano("span", "onb-r-m", `5 - 11 ${fechaUI(2026, 9, 11, { month: "short" })}  ${traducirTextoInterfaz("Hoy")}`)]), nodo("span", "onb-r-eng", "⚙️"))])]),
+        nodo("div", "onb-r-buscar onb-r-opc", "Buscar en toda la Agenda..."),
+        nodo("div", "onb-r-chips", null, [["Clase", PINK], ["Completado", "#3b82f6"], ["Perdida", GRIS], ["Pendiente", "#f59e0b"], ["Tarea", "#3b82f6"], ["Examen", ROJO], ["Evento", CIAN], ["Feriado", "#10b981"], ["Proyecto", PURPURA], ["Quiz", NARANJA2]].map(([t, col]) => rPildora(t, col))),
+        nodo("div", "onb-bloque onb-r-fila onb-r-opc", null, [rSuave("‹  4 días anteriores")]),
+        rCard(rFila("onb-r-sp", nodo("span", "", null, [plano("b", "onb-r-tit", mayus(fechaUI(2026, 9, 9, { weekday: "long" }))), plano("span", "onb-r-m", `  ${fechaUI(2026, 9, 9, { day: "numeric", month: "short" })}`)]), nodo("span", "onb-r-hoy", "Hoy")),
+          rEtiqueta("Estudio para hoy"),
+          (() => { const e = rItem("Cálculo I", null, "#10b981", rSuave("0 min de 5 h")); e.classList.add("tinte"); return e; })(),
+          rEtiqueta("Clases"), rItem(`${horaUI(9)}  ${traducirTextoInterfaz("Programación")}`, null, PINK, rSuave("Presencial")),
+          rEtiqueta("Examen"), rItem("Examen: avance grupal", "Cálculo I", ROJO, rTag("Examen", ROJO), plano("span", "onb-r-m", horaUI(12)))));
       break;
     case "horario":
-      c.push(nodo("div", "onb-bloque onb-r-cab", null, [nodo("span", "onb-r-eng", "‹"), nodo("div", "onb-r-centro", null, [rSuave("Semestre 2026-2"), rNegrita("Semana 9")]), nodo("span", "onb-r-eng", "›")]),
-        rFila("onb-r-sp", rBoton("+ Agregar"), rSuave("⬇  ⛶"), rBoton("Amigos", true)),
-        nodo("div", "onb-bloque onb-r-horario", null, [esquemaHorario()]));
+      c.push(nodo("div", "onb-bloque onb-r-horario", null, [esquemaHorario()]));
       break;
     case "tiempo-estudio": {
-      const aro = nodo("div", "onb-r-aro", null, [nodo("div", "onb-aro"), nodo("span", "onb-r-tiempo", "25:00")]);
-      c.push(rCard(rFila("onb-r-sp", rNegrita("Cálculo I"), rSuave("Sesión de estudio")), nodo("div", "onb-centro", null, [aro]), nodo("div", "onb-r-centro", null, [rBoton("Iniciar sesión")])),
-        rCard(rNegrita("Materias"),
-          rFila("onb-r-sp", nodo("span", "", "Cálculo I"), rSuave("1 h 20 min")), rProg(70, AZUL),
-          rFila("onb-r-sp", nodo("span", "", "Programación"), rSuave("45 min")), rProg(40, VERDE),
-          rFila("onb-r-sp", nodo("span", "", "Física"), rSuave("20 min")), rProg(18, ROJO)));
+      const anillo = nodo("div", "onb-r-anillo", null, [nodo("div", "", null, [nodo("b", "onb-r-reloj", "00:02"), nodo("small", "onb-r-estudiando", "Estudiando")])]);
+      const caja = (v, t) => nodo("div", "onb-r-caja", null, [nodo("b", "", v), nodo("small", "", t)]);
+      c.push(nodo("div", "onb-bloque onb-r-cab", null, [nodo("span", "onb-r-eng", "◀"), nodo("b", "onb-r-tit", "TI9905 · Sistemas de información"), nodo("span", "onb-r-eng", "⚙️")]),
+        nodo("div", "onb-bloque onb-r-tiempo3", null, [nodo("div", "onb-r-cajas", null, [caja("0 min", "Estudiado"), caja("5 h", "Faltan"), caja("5 h", "Meta")]), anillo,
+          nodo("div", "onb-r-cajas", null, [nodo("span", "onb-r-btn s grande", "❚❚ Pausar"), nodo("span", "onb-r-btn r grande", "■ Detener")])]));
       break;
     }
-    case "semestres":
-      c.push(rCard(rFila("onb-r-sp", rNegrita("Semestre 2026-2"), rTag("En curso", VERDE)),
-          nodo("div", "onb-fila3", null, [rStat("5", "Materias"), rStat("16", "Créditos"), rStat("8.7", "Promedio", VERDE)])),
-        rItem("Cálculo I", "4 créditos", AZUL, nodo("b", "", "8.5")), rItem("Programación", "4 créditos", VERDE, nodo("b", "", "9.1")),
-        rItem("Física", "3 créditos", ROJO, nodo("b", "", "7.8")), rItem("Inglés", "2 créditos", MORADO, nodo("b", "", "9.5")));
+    case "semestres": {
+      const mat = (cod, nombre, nota, color, inst) => nodo("div", "onb-r-curso2", null, [
+        nodo("div", "onb-r-fila onb-r-sp", null, [nodo("span", "", null, [nodo("small", "onb-r-cod", cod), nodo("b", "", `  ${nombre}`)]), nodo("b", "", `Nota: ${nota}`)]),
+        nodo("div", "onb-r-fila onb-r-sp", null, [rPildora("Cursando", "#f59e0b"), rPildora(inst, GRIS), rPildora("Créditos: 3", "#3b82f6")])]);
+      const fila = (m) => { m.style.borderLeftColor = ""; return m; };
+      const m1 = mat("TI1400", "Introducción a la programación", 75, CIAN, "TEC"), m2 = mat("CP-2001", "Estado y gestión", 85, INDIGO, "UCR"), m3 = mat("CP-2002", "Macroeconomía", 70, INDIGO, "UCR");
+      m1.style.setProperty("--c", CIAN); m2.style.setProperty("--c", INDIGO); m3.style.setProperty("--c", INDIGO);
+      c.push(rCard(rTit("Semestre actual"),
+        rCard(rFila("onb-r-sp", nodo("span", "", null, [rTit("II Ciclo 2026"), (() => { const f = nodo("small", "onb-r-etq"); f.textContent = fechaUI(2026, 7, 10, { day: "numeric", month: "long", year: "numeric" }); return f; })()]), rPildora("Créditos: 21", "#3b82f6")), fila(m1), fila(m2), m3)));
       break;
-    case "comunidad":
-      c.push(rPills(["Compañeros", "Docentes", "Horarios"], 0),
-        rPersona("AT", "Ana Torres", "Cálculo I · Programación", AZUL, rTag("2 materias")),
-        rPersona("LM", "Luis Mora", "Física", ROJO, rTag("1 materia")),
-        rFila("onb-r-sp onb-r-dia", rNegrita("Docentes"), rSuave("Valoraciones")),
-        rPersona("PR", "Prof. Rivas", "Cálculo I", VERDE, nodo("b", "onb-r-estrellas", "★ 4.6")),
-        rPersona("PS", "Prof. Salas", "Programación", MORADO, nodo("b", "onb-r-estrellas", "★ 4.2")));
+    }
+    case "comunidad": {
+      const doc = (n, pct, ok) => nodo("div", "onb-bloque onb-r-doc", null, [nodo("b", "", n), rEstrellas(pct), rPildora(ok ? "✓ Recomendado" : "✕ No recomendado", ok ? "#10b981" : ROJO), nodo("span", "onb-r-m", "▼")]);
+      c.push(doc("Prof. Natalia Vega", 92, true), doc("Prof. Sofía Chacón", 70, true), doc("Prof. Esteban Rojas", 60, false), doc("Prof. Laura Jiménez", 84, true), doc("Prof. Pablo Araya", 80, true), doc("Prof. Marcos Alvarado", 0, true));
       break;
+    }
     case "finanzas":
-      c.push(nodo("div", "onb-fila3", null, [rStat("+$450", "Ingresos", VERDE), rStat("−$320", "Gastos", ROJO), rStat("$130", "Balance")].map((s) => rCard(s))),
-        rCard(rNegrita("Movimientos del mes"), graficaBarras([40, 62, 48, 80, 55, 70])),
-        rItem("Beca", "Ingreso", VERDE, nodo("b", "onb-r-mas-v", "+$200")), rItem("Libros", "Educación", ROJO, nodo("b", "onb-r-menos", "−$35")), rItem("Almuerzo", "Comida", ROJO, nodo("b", "onb-r-menos", "−$12")));
+      c.push(rCard(rTit("Por semestre"), esquemaFinanzas(),
+        nodo("div", "onb-r-leyenda", null, [["Gastos", "#ef4444"], ["Beca", "#10b981"], ["Ingresos", "#3b82f6"]].map(([t, col]) => { const e = nodo("span", "", t); e.style.setProperty("--c", col); return e; }))));
       break;
-    case "plan-estudios":
-      c.push(rCard(rFila("onb-r-sp", rNegrita("Ingeniería de Sistemas"), rSuave("18 de 45 aprobadas")), rProg(40)),
-        rFila("onb-r-sp onb-r-dia", rNegrita("Nivel 1"), rSuave("Aprobadas")),
-        rItem("Cálculo I", "4 créditos", VERDE, rTag("Aprobada", VERDE)), rItem("Programación I", "4 créditos", VERDE, rTag("Aprobada", VERDE)),
-        rFila("onb-r-sp onb-r-dia", rNegrita("Nivel 2"), rSuave("En curso")),
-        rItem("Cálculo II", "4 créditos", AZUL, rTag("En curso", AZUL)), rItem("Física", "3 créditos", AMBAR, rTag("Pendiente", AMBAR)));
+    case "plan-estudios": {
+      const cur = (cod, nombre, estado) => { const e = nodo("div", `onb-r-curso ${estado}`, null, [nodo("small", "onb-r-cod", cod), nodo("b", "", nombre)]); return e; };
+      const col = (t, ...cs) => nodo("div", "onb-r-ciclo-col", null, [nodo("b", "onb-r-ciclo-t", t), ...cs]);
+      const cuarta = col("Ciclo 4", cur("CP-2006", "Representación y partidos", "pen"), cur("CP-2007", "Análisis cuantitativo II", "pen"), cur("CP-2008", "Ideas políticas II", "pen"));
+      cuarta.classList.add("onb-r-opc");
+      c.push(nodo("div", "onb-r-ciclos", null, [
+        col("Ciclo 1", cur("EG-I", "Humanidades I", "pen"), cur("OPT-", "Optativo de idioma", "pen"), cur("CP-1504", "El poder desde la ciencia política", "ok"), cur("CP-1501", "Epistemología y lógica", "ok")),
+        col("Ciclo 2", cur("EG-II", "Humanidades II", "pen"), cur("CP-1502", "Instituciones públicas", "ok"), cur("CP-1503", "Diseño de investigación", "ok")),
+        col("Ciclo 3", cur("SR-I", "Realidad nacional I", "pen"), cur("CP-2001", "Estado y gestión pública", "ok"), cur("CP-2004", "Análisis cuantitativo I", "cur"), cur("CP-2005", "Ideas políticas I", "cur")),
+        cuarta]));
       break;
-    case "asistente":
+    }
+    case "asistente": {
+      const burb = (clase, t) => nodo("div", `onb-r-msg ${clase}`.trim(), t);
+      const tarjeta = (emoji, t, sub) => nodo("div", "onb-bloque onb-r-nota", null, [nodo("b", "", `${emoji} ${traducirTextoInterfaz(t)}`), nodo("small", "onb-r-etq", sub),
+        nodo("small", "onb-r-etq", "Agregado por asistente"), nodo("span", "onb-r-acc", null, [nodo("span", "e", "Editar"), nodo("span", "x", "Eliminar")])]);
+      const dia = `${fechaUI(2026, 9, 12, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} · ${traducirTextoInterfaz("Todo el día")}`;
+      const dia2 = `${fechaUI(2026, 9, 16, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} · ${traducirTextoInterfaz("Todo el día")}`;
       c.push(nodo("div", "onb-r-hilo", null, [
-        nodo("div", "onb-r-msg yo", "Examen de Cálculo el viernes a las 3 pm"),
-        nodo("div", "onb-r-msg", "Listo, lo agregué a tu Agenda."),
-        rItem("Examen de Cálculo", "Cálculo I · viernes 3:00 p. m.", ROJO, rTag("Examen", ROJO)),
-        nodo("div", "onb-r-msg yo", "¿Qué tengo pendiente esta semana?"),
-        nodo("div", "onb-r-msg", "Tienes 2 tareas y 1 examen.")]),
-        nodo("div", "onb-r-entrada", null, [nodo("span", "onb-r-m", "Escribe un mensaje…"), nodo("span", "onb-r-mas", "➤")]));
+        burb("", "¡Hola! Soy Wapper 👋, tu asistente académico. ¿Tienes alguna tarea, examen o evento que quieras agregar?"),
+        burb("yo", "Tengo laboratorio la próxima semana y acuérdame del quiz del viernes"),
+        burb("", "Guardé 2 cosas en tu Agenda:"), tarjeta("✅", "Laboratorio", dia), tarjeta("📝", "Quiz", dia2)]),
+        nodo("div", "onb-r-entrada", null, [nodo("span", "onb-r-m", "Ejemplo: Reunión de grupo el sábado a las 10am"), nodo("span", "onb-r-mas", "➤")]));
       break;
+    }
     case "configuracion":
       c.push(rCard(rNegrita("Apariencia"), rPills(["Claro", "Color", "Oscuro"], 1)),
         rCard(rNegrita("Paleta"), nodo("div", "onb-r-paleta", null, ["azul", "indigo", "morado", "rosado", "rojo", "verde"].map((p) => { const d = document.createElement("i"); d.style.background = (COLORES_PREVIEW_PALETA[p] || ["#8b5cf6"])[0]; return d; }))),
@@ -495,6 +602,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
   const panel = document.createElement("section"); panel.className = "onboarding-panel";
   panel.innerHTML = '<header class="onboarding-top"><span class="onboarding-progreso"></span><button class="onboarding-cerrar" type="button" aria-label="Cerrar">×</button></header><div class="onboarding-layout"><div class="onboarding-copy"><h1 id="onboarding-titulo"></h1><div class="onboarding-contenido"></div></div><div class="onboarding-preview-wrap"><iframe class="onboarding-preview" title="Vista previa real de App Académica" data-analitica-ignorar></iframe></div></div><footer class="onboarding-acciones"></footer>';
   overlay.append(panel); document.body.append(overlay);
+  panel.querySelector(".onboarding-cerrar").setAttribute("aria-label",traducirTextoInterfaz("Cerrar"));panel.querySelector("iframe").title=traducirTextoInterfaz("Vista previa real de App Académica");
   inyectarEstilosOnboarding();
   const fondo=crearSincronizadorFondo(overlay,panel,panel.querySelector(".onboarding-copy"));
   const aplicarTemaAhora=()=>{aplicarPaleta(paletaActual(),modoPersonalizacion,coloresActuales());document.documentElement.setAttribute("data-mode",modoPersonalizacion);aplicarLogoApp();fondo.programar();};
@@ -549,7 +657,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
   const puedePrecargar=()=>{
     const c=navigator.connection;
     if(c?.saveData||["slow-2g","2g","3g"].includes(c?.effectiveType))return false;
-    if((navigator.deviceMemory||4)<4||(navigator.hardwareConcurrency||4)<4)return false;
+    if((navigator.deviceMemory||4)<4||(navigator.hardwareConcurrency||4)<4||esMovil())return false;
     return calidadPersonalizacion!=="optimizado";
   };
   const cancelarPrecarga=()=>{if(!idPrecarga)return;if(precargaConIdle&&"cancelIdleCallback" in window)cancelIdleCallback(idPrecarga);else clearTimeout(idPrecarga);idPrecarga=0;};
@@ -599,13 +707,33 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
   // ── Teléfono (≤760px): primero la información; la vista previa es la página siguiente ──
   const consultaMovil=matchMedia("(max-width:760px)");
   const esMovil=()=>consultaMovil.matches;
-  const hayVista=()=>etapa==="personalizar"||etapa==="tour"||etapa==="wapper-config";
+  const hayVista=()=>etapa==="personalizar"||etapa==="wapper-config";
+  let animDir=0;
+  const puntosTour=document.createElement("div");puntosTour.className="onb-puntos";puntosTour.setAttribute("aria-hidden","true");
   let vistaMovil="info",claveVistaMovil="";
   const pager=document.createElement("div");pager.className="onboarding-pager";
   const puntosPager=["info","preview"].map((v)=>{const b=document.createElement("button");b.type="button";b.setAttribute("role","tab");b.setAttribute("aria-label",traducirTextoInterfaz(v==="info"?"Información":"Vista previa"));b.addEventListener("click",()=>cambiarVista(v));return b;});
   const textoPager=document.createElement("span");textoPager.className="onboarding-pager-texto";
-  pager.append(...puntosPager,textoPager);panel.querySelector(".onboarding-acciones").before(pager);
+  pager.append(...puntosPager,textoPager);panel.querySelector(".onboarding-acciones").before(pager,puntosTour);
+  const ajustarEscalaEsquema=()=>{
+    // Teléfono: la maqueta se dibuja a un ancho "de pantalla grande" (440px) y se reduce entera, así se ve completa y proporcionada.
+    const marco=esquema.firstElementChild;if(!marco)return;
+    marco.style.width="";marco.style.height="";marco.style.transform="";
+    if(!esMovil()||esquema.hidden)return;
+    const cuerpo=marco.querySelector(".onb-r");if(!cuerpo)return;
+    const ANCHO=440,dispW=esquema.clientWidth,dispH=esquema.clientHeight;
+    if(!dispW||!dispH)return;
+    marco.style.width=`${ANCHO}px`;
+    const necesita=marco.clientHeight-cuerpo.clientHeight+cuerpo.scrollHeight;
+    const k=Math.max(.5,Math.min(1,dispW/ANCHO,dispH/(necesita||dispH)));
+    if(k>=.995){marco.style.width="";return;}
+    marco.style.width=`${dispW/k}px`;marco.style.height=`${dispH/k}px`;marco.style.transform=`scale(${k})`;
+  };
+  const alRedimensionar=()=>requestAnimationFrame(ajustarEscalaEsquema);
+  addEventListener("resize",alRedimensionar);
   const aplicarVistaMovil=()=>{
+    panel.classList.toggle("onb-tour-movil",esMovil()&&etapa==="tour");
+    requestAnimationFrame(ajustarEscalaEsquema);
     if(!hayVista()){delete panel.dataset.vista;panel.classList.remove("onboarding-mostrar-preview");return;}
     panel.dataset.vista=vistaMovil;
     panel.classList.toggle("onboarding-mostrar-preview",esMovil()&&vistaMovil==="preview");
@@ -619,7 +747,12 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
   const comenzarDeslizamiento=(ev)=>{toque=ev.touches.length===1?{x:ev.touches[0].clientX,y:ev.touches[0].clientY}:null;};
   const terminarDeslizamiento=(ev)=>{
     if(!toque)return;const t=ev.changedTouches[0];const dx=t.clientX-toque.x,dy=t.clientY-toque.y;toque=null;
-    if(!esMovil()||!hayVista()||Math.abs(dx)<60||Math.abs(dx)<Math.abs(dy)*1.6)return;
+    if(!esMovil()||Math.abs(dx)<60||Math.abs(dx)<Math.abs(dy)*1.6)return;
+    if(etapa==="tour"){ // recorrido: izquierda = siguiente sección, derecha = anterior (sin tocar tus preferencias)
+      if(dx<0){animDir=1;siguiente();}else if(indice>0){indice--;animDir=-1;pintar();}else{etapa="personalizar";pintar();}
+      return;
+    }
+    if(!hayVista())return;
     cambiarVista(dx<0?"preview":"info"); // derecha → izquierda abre la vista previa
   };
   // Dentro de la demo interactiva solo se vuelve con un deslizamiento desde el borde izquierdo (no se roba el scroll de la demo).
@@ -677,7 +810,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
     })();
     return chat;
   };
-  const fin=(irAlPlan=false,irASemestres=false)=>{ctrlTour?.abort();fondo.detener();timersChat.forEach(clearTimeout);timersChat=[];cancelarPrecarga();consultaMovil.removeEventListener?.("change",aplicarVistaMovil);clearTimeout(temporizadorReveal);clearTimeout(vigilanteReveal);timersPreview.forEach(clearTimeout);timersPreview=[];clearTimeout(temporizadorTour);cfg.onboarding_v1_completado=true;cfg.tutoriales_secciones_vistas=cfg.tutoriales_secciones_vistas||{};if(irAlPlan)cfg.tutoriales_secciones_vistas["plan-estudios"]=true;if(irASemestres)cfg.tutoriales_secciones_vistas.semestres=true;guardar();overlay.remove();if(irAlPlan||irASemestres){const destino=irASemestres?"semestres":"plan-estudios";navegar?.(destino);setTimeout(()=>iniciarGuiaPlan({navegar,posteriorImportacion:irASemestres,yaEnSemestres:irASemestres}),450);}else toast?.(traducirTextoInterfaz("¡Listo! Puedes volver a ver la guía desde Ajustes generales."));};
+  const fin=(irAlPlan=false,irASemestres=false)=>{ctrlTour?.abort();fondo.detener();timersChat.forEach(clearTimeout);timersChat=[];cancelarPrecarga();consultaMovil.removeEventListener?.("change",aplicarVistaMovil);removeEventListener("resize",alRedimensionar);clearTimeout(temporizadorReveal);clearTimeout(vigilanteReveal);timersPreview.forEach(clearTimeout);timersPreview=[];clearTimeout(temporizadorTour);cfg.onboarding_v1_completado=true;cfg.tutoriales_secciones_vistas=cfg.tutoriales_secciones_vistas||{};if(irAlPlan)cfg.tutoriales_secciones_vistas["plan-estudios"]=true;if(irASemestres)cfg.tutoriales_secciones_vistas.semestres=true;guardar();overlay.remove();if(irAlPlan||irASemestres){const destino=irASemestres?"semestres":"plan-estudios";navegar?.(destino);setTimeout(()=>iniciarGuiaPlan({navegar,posteriorImportacion:irASemestres,yaEnSemestres:irASemestres}),450);}else toast?.(traducirTextoInterfaz("¡Listo! Puedes volver a ver la guía desde Ajustes generales."));};
   if (MODO_DEMO && !PREVIEW_DEMO) {
     const saltar=boton("Saltar inicio","btn-secondary",()=>{cfg.tutoriales_secciones_vistas=Object.fromEntries(SECCIONES_TUTORIAL.map(s=>[s.id,true]));fin(false);});
     saltar.className += " onboarding-saltar-demo";
@@ -714,9 +847,12 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
     panel.querySelector(".onboarding-cerrar").classList.toggle("oculto",!cuentaConDatos&&(etapa==="nombre"||etapa==="personalizar"));
     const nombres={nombre:"Tu cuenta, a tu manera",personalizar:"Personaliza tu app",instalar:"Llévala contigo",tour:`Conoce ${secciones[indice]?.nombre||"App Académica"}`,"wapper-config":"Activa Wapper",flujo:"Todo conectado, paso a paso"};
     titulo.textContent=etapa==="tour"?`${traducirTextoInterfaz("Conoce")} ${traducirTextoInterfaz(secciones[indice]?.nombre||"App Académica")}`:traducirTextoInterfaz(nombres[etapa]||"App Académica");
-    progreso.textContent=etapa==="tour"?`${indice+1} de ${secciones.length} secciones`:({nombre:"Bienvenida",personalizar:"Personalización",instalar:"Instalación",flujo:"Cómo empezar"}[etapa]||"");
+    progreso.textContent=etapa==="tour"?traducirTextoInterfaz(`${indice+1} de ${secciones.length} secciones`):traducirTextoInterfaz({nombre:"Bienvenida",personalizar:"Personalización",instalar:"Instalación",flujo:"Cómo empezar"}[etapa]||"");
     preview.closest(".onboarding-preview-wrap").classList.toggle("oculto",!esTour&&etapa!=="personalizar"&&etapa!=="wapper-config");
     aplicarVistaMovil();
+    puntosTour.replaceChildren(...secciones.map((_,i)=>{const d=document.createElement("i");if(i===indice)d.className="on";return d;}));
+    if(animDir&&esMovil()&&etapa==="tour"&&typeof panel.querySelector(".onboarding-layout").animate==="function"&&!matchMedia("(prefers-reduced-motion: reduce)").matches)panel.querySelector(".onboarding-layout").animate([{opacity:0,transform:`translateX(${animDir*26}px)`},{opacity:1,transform:"none"}],{duration:230,easing:"ease-out"});
+    animDir=0;
     if(etapa==="nombre"){
       contenido.append(texto("p","onboarding-lead","Hola, ¿cómo te llamas? Puedes cambiarlo después en Ajustes."));
       const input=document.createElement("input");input.className="form-input";input.maxLength=60;input.autocomplete="given-name";input.value=MODO_DEMO?"":estado.datos.perfil?.nombre_preferido||estado.datos.perfil?.nombre||"";input.setAttribute("aria-label",titulo.textContent);
@@ -749,8 +885,8 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
       colores.append(paletaPersonal);
       const logos=document.createElement("div");logos.className="onboarding-logos";const marcarLogos=()=>logos.querySelectorAll(".onboarding-logo").forEach(x=>x.setAttribute("aria-pressed",String(cfg.logo_app===x.dataset.logo&&!cfg.logo_app_url)));[["folder","imagenes/LogoAppFolder.png","Carpeta"],["birrete","imagenes/LogoAppBirrete.png","Birrete"]].forEach(([v,src,alt])=>{const b=document.createElement("button");b.type="button";b.className="onboarding-logo";b.dataset.logo=v;b.setAttribute("aria-pressed",String(cfg.logo_app===v&&!cfg.logo_app_url));const img=document.createElement("img");img.src=src;img.alt=alt;b.append(img);b.onclick=()=>{cfg.logo_app=v;cfg.logo_app_url=null;guardar();aplicarLogoApp();actualizarPreview();marcarLogos();};logos.append(b);});
       const etiquetaArchivo=document.createElement("label");etiquetaArchivo.className="btn btn-secondary onboarding-file-picker";etiquetaArchivo.append(texto("span","","Personalizado"));
-      const archivo=document.createElement("input");archivo.type="file";archivo.accept="image/png,image/jpeg,image/webp";archivo.className="onboarding-file-input";archivo.setAttribute("aria-label","Elegir logo desde archivos");archivo.onchange=async()=>{let url=null;try{url=await prepararImagenLogo(archivo.files?.[0]);}catch(_){}if(url){cfg.logo_app="personalizado";cfg.logo_app_url=url;guardar();aplicarLogoApp();actualizarPreview();marcarLogos();}else if(archivo.files?.length)toast?.(traducirTextoInterfaz("No se pudo usar esa imagen. Prueba con PNG, JPG o WebP."));archivo.value="";};etiquetaArchivo.append(archivo);
-      const toggleLogos=boton("Logos de la app  ⌄","btn-secondary",()=>{const abierto=toggleLogos.getAttribute("aria-expanded")==="true";toggleLogos.setAttribute("aria-expanded",String(!abierto));toggleLogos.textContent=`Logos de la app  ${abierto?"⌄":"⌃"}`;logos.hidden=abierto;});toggleLogos.setAttribute("aria-expanded","false");logos.hidden=true;
+      const archivo=document.createElement("input");archivo.type="file";archivo.accept="image/png,image/jpeg,image/webp";archivo.className="onboarding-file-input";archivo.setAttribute("aria-label",traducirTextoInterfaz("Elegir logo desde archivos"));archivo.onchange=async()=>{let url=null;try{url=await prepararImagenLogo(archivo.files?.[0]);}catch(_){}if(url){cfg.logo_app="personalizado";cfg.logo_app_url=url;guardar();aplicarLogoApp();actualizarPreview();marcarLogos();}else if(archivo.files?.length)toast?.(traducirTextoInterfaz("No se pudo usar esa imagen. Prueba con PNG, JPG o WebP."));archivo.value="";};etiquetaArchivo.append(archivo);
+      const toggleLogos=boton("Logos de la app  ⌄","btn-secondary",()=>{const abierto=toggleLogos.getAttribute("aria-expanded")==="true";toggleLogos.setAttribute("aria-expanded",String(!abierto));toggleLogos.textContent=traducirTextoInterfaz(`Logos de la app  ${abierto?"⌄":"⌃"}`);logos.hidden=abierto;});toggleLogos.setAttribute("aria-expanded","false");logos.hidden=true;
       const filaLogo=document.createElement("div");filaLogo.className="onboarding-logo-heading";filaLogo.append(toggleLogos,etiquetaArchivo);
       contenido.append(modos,calidades,notaFancy,colores);if(PERMITIR_LOGO_ONBOARDING)contenido.append(filaLogo,logos);prepararMaqueta();
       acciones.append(boton("Atrás","btn-secondary",()=>{etapa="nombre";pintar();}),boton("Continuar","btn-primary",()=>{cfg.personalizacion_inicial_completada=true;guardar();etapa=etapaTrasPersonalizar();indice=0;pintar();}));return;
@@ -762,27 +898,23 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
     if(etapa==="tour"){
       const sec=secciones[indice];if(!sec){etapa="flujo";pintar();return;}
       const bloqueConoce=document.createElement("section");bloqueConoce.className="onboarding-conoce";
-      const botonConoce=boton("Conoce "+sec.nombre+" ⌄","btn-secondary",()=>{bloqueConoce.classList.toggle("plegado");botonConoce.textContent="Conoce "+sec.nombre+" "+(bloqueConoce.classList.contains("plegado")?"⌄":"⌃");});
-      const lista=document.createElement("ul");lista.className="onboarding-lista";sec.puntos.forEach((p)=>lista.append(texto("li","",p)));bloqueConoce.append(botonConoce,lista);contenido.append(bloqueConoce);const duracionCadena=revelarEnCadena(lista);
-      cerrarListaTour=()=>{clearTimeout(temporizadorTour);bloqueConoce.classList.add("plegado");botonConoce.textContent="Conoce "+sec.nombre+" ⌄";};
-      clearTimeout(temporizadorTour);if(matchMedia("(max-width:760px) and (orientation: portrait)").matches)temporizadorTour=setTimeout(()=>{if(etapa==="tour"&&bloqueConoce.isConnected)cerrarListaTour?.();},5000+duracionCadena);
-      const detectarInteraccion=(ev)=>{if(etapa==="tour"&&matchMedia("(orientation: portrait)").matches&&!ev.target.closest(".onboarding-conoce"))cerrarListaTour?.();};
-      ctrlTour=new AbortController();["pointerdown","keydown","touchstart","wheel"].forEach(tipo=>overlay.addEventListener(tipo,detectarInteraccion,{once:true,capture:true,signal:ctrlTour.signal}));
+      const lista=document.createElement("ul");lista.className="onboarding-lista";sec.puntos.forEach((p)=>lista.append(texto("li","",p)));bloqueConoce.append(lista);contenido.append(bloqueConoce);
+      const duracionCadena=esMovil()?0:revelarEnCadena(lista); // en teléfono se desliza entre secciones: sin esperas
       prepararEsquema(sec.id);
-      if(indice>0)acciones.append(boton("Atrás","btn-secondary",()=>{indice--;pintar();}));
-      const usarSeccion=()=>{cfg.navegacion_oculta=(cfg.navegacion_oculta||[]).filter(id=>id!==sec.id);guardar();window.aplicarVisibilidadNavegacion?.();siguiente();};
+      if(indice>0)acciones.append(boton("Atrás","btn-secondary onb-atras",()=>{indice--;animDir=-1;pintar();}));
+      const usarSeccion=()=>{cfg.navegacion_oculta=(cfg.navegacion_oculta||[]).filter(id=>id!==sec.id);guardar();window.aplicarVisibilidadNavegacion?.();animDir=1;siguiente();};
       if(sec.id==="asistente"){
         // En la demo no tiene sentido pedir la clave de Gemini: se muestra una conversación de ejemplo.
         if(MODO_DEMO)contenido.append(construirChatEjemplo(duracionCadena+300));
         else{const accionesWapper=document.createElement("div");accionesWapper.className="onboarding-wapper-cta-wrap";accionesWapper.append(boton("Configurar Wapper","btn-primary onboarding-wapper-cta",()=>{etapa="wapper-config";pintar();}));contenido.append(accionesWapper);}
       }
-      if(indice===0)acciones.append(boton("Atrás","btn-secondary",()=>{etapa="personalizar";pintar();}));
-      acciones.append(boton("No me interesa","btn-secondary",()=>{cfg.navegacion_oculta=[...new Set([...(cfg.navegacion_oculta||[]),sec.id])];guardar();window.aplicarVisibilidadNavegacion?.();siguiente();}),boton(indice===secciones.length-1?"Seguir":"Siguiente", "btn-primary",usarSeccion));return;
+      if(indice===0)acciones.append(boton("Atrás","btn-secondary onb-atras",()=>{etapa="personalizar";pintar();}));
+      acciones.append(boton("No me interesa","btn-secondary onb-no",()=>{cfg.navegacion_oculta=[...new Set([...(cfg.navegacion_oculta||[]),sec.id])];guardar();window.aplicarVisibilidadNavegacion?.();animDir=1;siguiente();}),boton(indice===secciones.length-1?"Seguir":"Siguiente", "btn-primary onb-sig",usarSeccion));return;
     }
     if(etapa==="wapper-config"){
       const pasosWapper=document.createElement("ol");pasosWapper.className="onboarding-dependencias";["Wapper usa tu Agenda para crear y consultar pendientes.","Guarda aquí tu clave personal de Gemini para activarlo.","Después podrás dictar tareas, exámenes y eventos desde Asistente."].forEach(t=>pasosWapper.append(texto("li","",t)));contenido.append(pasosWapper);
       contenido.append(texto("p","onboarding-wapper-estado",cfg.gemini_api_key?"Wapper está activo: ya hay una clave de Gemini guardada.":"Wapper necesita una clave personal de Gemini para funcionar."));
-      if(!cfg.gemini_api_key){const label=texto("label","onboarding-wapper-etiqueta","Clave de Gemini");const input=document.createElement("input");input.type="password";input.className="form-input";input.autocomplete="new-password";input.placeholder="Pega tu clave personal";input.setAttribute("aria-label","Clave de Gemini");label.append(input);contenido.append(label);contenido.append(boton("Guardar y activar Wapper","btn-primary onboarding-wapper-cta",()=>{const clave=input.value.trim();if(!clave){input.focus();return;}cfg.gemini_api_key=clave;guardar();window.aplicarVisibilidadBotonAsistente?.();actualizarPreview();pintar();}));}
+      if(!cfg.gemini_api_key){const label=texto("label","onboarding-wapper-etiqueta","Clave de Gemini");const input=document.createElement("input");input.type="password";input.className="form-input";input.autocomplete="new-password";input.placeholder=traducirTextoInterfaz("Pega tu clave personal");input.setAttribute("aria-label",traducirTextoInterfaz("Clave de Gemini"));label.append(input);contenido.append(label);contenido.append(boton("Guardar y activar Wapper","btn-primary onboarding-wapper-cta",()=>{const clave=input.value.trim();if(!clave){input.focus();return;}cfg.gemini_api_key=clave;guardar();window.aplicarVisibilidadBotonAsistente?.();actualizarPreview();pintar();}));}
       prepararEsquema("asistente");
       acciones.append(boton("Atrás","btn-secondary",()=>{etapa="tour";pintar();}),boton("Continuar con la guía","btn-primary",()=>{etapa="tour";siguiente();}));return;
     }
