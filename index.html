@@ -54,16 +54,27 @@
   }
 </script>
 <script>
+  // html2canvas y jsPDF pesan ~500 KB y solo se usan al exportar/descargar.
+  // Antes se pedían en el arranque y competían con la carga de la app (justo cuando corre
+  // la animación de apertura). Ahora se cargan cuando el navegador está libre, después de "load".
   if (new URLSearchParams(location.search).get("demo") !== "1") {
-    for (const src of [
-      "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
-      "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
-    ]) {
-      const script = document.createElement("script");
-      script.src = src;
-      script.defer = true;
-      document.head.appendChild(script);
-    }
+    const cargarLibreriasExportar = () => {
+      for (const src of [
+        "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
+        "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+      ]) {
+        const script = document.createElement("script");
+        script.src = src;
+        script.async = true;
+        document.head.appendChild(script);
+      }
+    };
+    const programar = () => {
+      if (window.requestIdleCallback) requestIdleCallback(cargarLibreriasExportar, { timeout: 8000 });
+      else setTimeout(cargarLibreriasExportar, 3000);
+    };
+    if (document.readyState === "complete") programar();
+    else window.addEventListener("load", programar, { once: true });
   }
 </script>
 </head>
