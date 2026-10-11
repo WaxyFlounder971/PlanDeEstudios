@@ -9,11 +9,11 @@ import { MODO_DEMO, PREVIEW_DEMO } from "./demo-mode.js";
 
 const SECCIONES_TUTORIAL = [
   { id:"resumen", nombre:"Resumen", puntos:["Semana actual del semestre y días que faltan.","Avance de estudio del día.","Clases, entregas y exámenes próximos."] },
-  { id:"agenda", nombre:"Agenda", puntos:["Alterna entre lista, calendario y cronograma.","Organiza tareas, exámenes, proyectos y eventos.","Vincula cada actividad con su materia y semestre."] },
+  { id:"agenda", nombre:"Agenda", puntos:["Alterna entre lista, calendario y cronograma.","Toca «+» para crear tareas, exámenes, proyectos o eventos y vincularlos a una materia.","Toca el nombre del semestre para ver uno o varios semestres a la vez."] },
   { id:"horario", nombre:"Horario", puntos:["Guarda hora, aula, profesor y modalidad.","Abre una clase para ver todos sus detalles.","Compara horarios con tus amistades."] },
-  { id:"tiempo-estudio", nombre:"Tiempo de estudio", puntos:["Abre una materia y toca Iniciar sesión.","Usa materias aunque no estén en tu plan: toca «+» para añadir una.","Consulta historial, estadísticas y competencias de todos tus semestres."] },
+  { id:"tiempo-estudio", nombre:"Tiempo de estudio", puntos:["Abre una materia y toca Iniciar sesión.","Usa materias aunque no estén en tu plan: toca «Nueva Materia» al final de la lista.","Consulta historial, estadísticas y competencias de todos tus semestres."] },
   { id:"semestres", nombre:"Semestres", puntos:["Matricula materias de tu plan.","Registra criterios, asignaciones y notas."] },
-  { id:"comunidad", nombre:"Comunidad", puntos:["Organiza compañeros y docentes relacionados con tus materias.","Cada docente lleva tu propia valoración, según tu experiencia.","Compara horarios compartidos para encontrar espacios en común."] },
+  { id:"comunidad", nombre:"Comunidad", puntos:["Organiza compañeros y docentes relacionados con tus materias.","Cada docente lleva tu propia valoración, según tu experiencia."] },
   { id:"finanzas", nombre:"Finanzas", puntos:["Registra ingresos y gastos desde el inicio.","Clasifica movimientos por categoría.","Asociarlos a un semestre es opcional."] },
   { id:"plan-estudios", nombre:"Plan de estudios", puntos:["Añade una o varias carreras.","Pega o importa la malla completa.","El plan alimenta la matrícula de Semestres."] },
   { id:"asistente", nombre:"Wapper", puntos:["Convierte mensajes en tareas, exámenes o eventos de Agenda.","Consulta fechas y pendientes con lenguaje natural.","Actívalo con tu clave personal de Gemini desde Ajustes."] },
@@ -296,6 +296,29 @@ function inyectarEstilosOnboarding() {
    Dibuja el anillo y el oscurecimiento en capas fijas sobre toda la app, así que
    nunca lo recorta el overflow del contenedor del botón. Los cuatro paneles que
    rodean al objetivo capturan los clics: solo el elemento resaltado queda activo. */
+/* Mantiene la tarjeta de la guía fuera del elemento resaltado. Antes solo medía 3 veces
+   (0, 450 y 900 ms): si el scroll suave terminaba después, o el objetivo quedaba al final de
+   la página (p. ej. «Nueva Materia»), la tarjeta lo tapaba. Ahora vuelve a medir mientras
+   dura el scroll y ante cualquier scroll/resize, y elige el lado (abajo o arriba) que no tape. */
+function evitarSolape(pop, el) {
+  const id = (pop._solapeId = (pop._solapeId || 0) + 1);   // un solo "vigilante" por paso
+  const vivo = () => pop.isConnected && el?.isConnected && pop._solapeId === id;
+  const choca = (r, top, bottom) => r.bottom > top - 8 && r.top < bottom + 8;
+  const medir = () => {
+    if (!vivo()) return;
+    pop.style.top = ""; pop.style.bottom = "";
+    const r = el.getBoundingClientRect(), p = pop.getBoundingClientRect();
+    if (!choca(r, p.top, p.bottom)) return;                       // abajo (posición normal) no tapa
+    if (!choca(r, 10, 10 + p.height)) { pop.style.top = "10px"; pop.style.bottom = "auto"; }   // arriba sí libra
+  };
+  const alMover = () => { if (vivo()) medir(); else limpiar(); };
+  const limpiar = () => { removeEventListener("scroll", alMover, true); removeEventListener("resize", alMover); };
+  addEventListener("scroll", alMover, { capture: true, passive: true });
+  addEventListener("resize", alMover);
+  const fin = performance.now() + 2500;
+  const bucle = () => { if (!vivo()) { limpiar(); return; } medir(); if (performance.now() < fin) requestAnimationFrame(bucle); };
+  bucle();
+}
 function asegurarEstiloGuias() {
   if (document.getElementById("onb-guias-css")) return;
   const e = document.createElement("style"); e.id = "onb-guias-css";
@@ -1222,7 +1245,7 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
       i++; pintar();
     };
     const saltar = document.createElement("button"); saltar.className = "btn btn-secondary"; saltar.textContent = traducirTextoInterfaz("Saltar guía"); saltar.onclick = () => cerrar();
-    acciones.append(seguir, saltar); pop.append(acciones); pop.classList.remove("oculto");
+    acciones.append(seguir, saltar); pop.append(acciones); pop.classList.remove("oculto"); evitarSolape(pop, resaltado);
   };
   pintar();
   window.continuarTutorialDespuesDeImportarPlan = () => { if (!cerrarGuiaPlanActiva) return; marcarSemestresVisto(); cerrar(); navegar?.("semestres"); setTimeout(() => iniciarGuiaPlan({ navegar, posteriorImportacion: true, yaEnSemestres: true }), 350); };
@@ -1233,6 +1256,7 @@ function inicializarTutorialDesdeAjustes({ navegar, toast } = {}) {
 }
 
 function botonAgregarSemestre() { return [...document.querySelectorAll("#seccion-semestres button")].find((b) => /registrar semestre|crear semestre|agregar semestre|^\s*\+?\s*agregar\s*$/i.test(b.textContent.trim())); }
+function filaDocenteComunidad() { const raiz = document.getElementById("seccion-comunidad"); if (!raiz) return null; for (const el of raiz.querySelectorAll("*")) { if (el.children.length < 2 || !/[✓✕]/.test(el.textContent || "")) continue; const r = el.getBoundingClientRect(); if (r.height > 20 && r.height < 140) return el; } return null; }
 function tarjetaMateriaTiempo() { const raiz = document.getElementById("seccion-tiempo-estudio"); if (!raiz) return null; for (const el of raiz.querySelectorAll("*")) { if (el.children.length < 2) continue; const t = el.textContent || ""; if (!/\d+\s*min\s*de\s*\d+/i.test(t) || !/[A-Z]{2,4}-\d{3,4}/.test(t)) continue; const r = el.getBoundingClientRect(); if (r.height > 0 && r.height < 220) return el; } return null; }
 const SELECTORES_GUIA_SECCION = {
   resumen: [
@@ -1243,7 +1267,7 @@ const SELECTORES_GUIA_SECCION = {
   agenda: [
     () => document.getElementById("pills-agenda-vista"),
     () => document.getElementById("btn-agenda-agregar"),
-    () => document.getElementById("agenda-lista-dias") || document.getElementById("agenda-vista-calendario"),
+    () => document.getElementById("agenda-nombre-semestre") || document.getElementById("agenda-lista-dias"),
   ],
   horario: [
     () => document.getElementById("btn-horario-agregar"),
@@ -1252,7 +1276,7 @@ const SELECTORES_GUIA_SECCION = {
   ],
   "tiempo-estudio": [
     () => tarjetaMateriaTiempo() || document.getElementById("seccion-tiempo-estudio"),
-    () => [...document.querySelectorAll("#seccion-tiempo-estudio button")].find((b) => b.textContent.trim() === "+") || document.getElementById("seccion-tiempo-estudio"),
+    () => { const t = [...document.querySelectorAll("#seccion-tiempo-estudio *")].find((el) => el.children.length === 0 && /^\+?\s*nueva materia$/i.test(el.textContent.trim())); return t?.closest("button,[role='button'],a") || t || document.getElementById("seccion-tiempo-estudio"); },
     () => [...document.querySelectorAll("#seccion-tiempo-estudio button")].find((b) => /^materias$/i.test(b.textContent.trim()))?.parentElement || document.getElementById("seccion-tiempo-estudio"),
   ],
  semestres: [
@@ -1261,11 +1285,10 @@ const SELECTORES_GUIA_SECCION = {
     () => [...document.querySelectorAll("#seccion-semestres button")].find(b => /nota|historial|editar/i.test(b.textContent)) || document.querySelector("#seccion-semestres [data-semestre-id]") || document.getElementById("seccion-semestres"),
   ],
   comunidad: [
-    () => [...document.querySelectorAll("#seccion-comunidad button")].find(b => /agregar|nuevo|compañero|profesor/i.test(b.textContent)) || document.getElementById("seccion-comunidad"),
-    () => document.querySelector("#seccion-comunidad .glass-card") || document.getElementById("seccion-comunidad"),
-    () => [...document.querySelectorAll("#seccion-comunidad button")].find(b => /horario|contacto|valoraci/i.test(b.textContent)) || document.getElementById("seccion-comunidad"),
+    () => [...document.querySelectorAll("#seccion-comunidad button")].find((b) => /profesores/i.test(b.textContent))?.parentElement || document.getElementById("seccion-comunidad"),
+    () => filaDocenteComunidad() || document.getElementById("seccion-comunidad"),
   ],
-  finanzas: [
+ finanzas: [
     () => document.querySelector("#seccion-finanzas .finanzas-tabs-contenedor") || document.getElementById("seccion-finanzas"),
     () => [...document.querySelectorAll("#seccion-finanzas button")].find(b => /agregar|nuevo|gasto|ingreso/i.test(b.textContent)) || document.getElementById("seccion-finanzas"),
     () => document.getElementById("finanzas-contenido") || document.getElementById("seccion-finanzas"),
@@ -1304,7 +1327,7 @@ function iniciarGuiaSeccion(info) {
       const sec=[...document.querySelectorAll("#seccion-configuracion .ajuste-seccion")].find((x)=>/asistente ia/i.test(x.querySelector("h2")?.textContent||""));
       if(sec){if(sec.classList.contains("colapsada"))sec.querySelector(".ajuste-seccion-cabecera")?.click();setTimeout(()=>sec.scrollIntoView({behavior:"smooth",block:"start"}),150);}
       resaltador.apuntar(sec||document.getElementById("seccion-configuracion"));
-      armar(`${traducirTextoInterfaz(info.nombre)} · ${total}/${total}`,"Pega tu clave de Gemini en el campo y toca «Guardar». Con eso Wapper queda activo.",[btn("Entendido","btn-primary",cerrar)]);
+      armar(`${traducirTextoInterfaz(info.nombre)} · ${total}/${total}`,"Pega tu clave de Gemini en el campo y toca «Guardar». Con eso Wapper queda activo.",[btn("Entendido","btn-primary",cerrar)]);evitarSolape(pop,sec);
     },500);
   };
   const pintar=()=>{
@@ -1315,7 +1338,7 @@ function iniciarGuiaSeccion(info) {
     const botones=[];
     if(indice>0)botones.push(btn("Anterior","btn-secondary",()=>{indice--;pintar();}));
     botones.push(esUltimoWapper?btn("Ir a Ajustes","btn-primary",pasoClave):btn(indice===info.puntos.length-1?"Entendido":"Siguiente","btn-primary",()=>{indice++;pintar();}),btn("Saltar guía","btn-secondary",cerrar));
-    armar(`${traducirTextoInterfaz(info.nombre)} · ${indice+1}/${total}`,info.puntos[indice],botones);
+    armar(`${traducirTextoInterfaz(info.nombre)} · ${indice+1}/${total}`,info.puntos[indice],botones);evitarSolape(pop,resaltado);
   };
   pintar();
 }
