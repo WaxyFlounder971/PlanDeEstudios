@@ -166,7 +166,8 @@ function prefiereMenosMovimiento() {
 function equipoModesto() {
   const nucleos = navigator.hardwareConcurrency;
   const memoriaGB = navigator.deviceMemory; // no existe en Safari/Firefox: ahí no se descarta
-  return Boolean((nucleos && nucleos < 4) || (memoriaGB && memoriaGB < 4));
+  // Antes: <4 núcleos o <4 GB (dejaba fuera a muchos celulares y laptops normales).
+  return Boolean((nucleos && nucleos < 3) || (memoriaGB && memoriaGB < 2));
 }
 
 function entradaPorEnlaceProfundo() {
@@ -193,18 +194,37 @@ function marcarVistaEnEstaSesion() {
 let vistaEnEsteDocumento = false;
 let carga = null; // controlador activo de FolderIntro.load()
 
-function motivoParaOmitir({ demo, modoOptimizado, configuracion }) {
+/* Reglas de omisión. Antes el folder se saltaba (y quedaba el cargador viejo) en demo, con
+   "Modo Optimizado", una vez por sesión de pestaña, y al tocar la pantalla durante la carga.
+   Ahora el folder es liviano (compositor, pocas capas), así que esas reglas se relajaron:
+   - demo y Modo Optimizado YA NO lo apagan (se apaga con el switch de Ajustes).
+   - se repite en cada carga de página (UNA_VEZ_POR_SESION = true devuelve la regla vieja).
+   - un toque durante la carga ya no lo retira (TOQUE_RETIRA_EN_CARGA = true devuelve la vieja).
+   Siguen respetándose: "reducir movimiento" del sistema, equipo realmente modesto,
+   usuario nuevo, enlaces ?abrir= / ?comp=, pestaña oculta y el switch de Ajustes. */
+const UNA_VEZ_POR_SESION = false;
+const TOQUE_RETIRA_EN_CARGA = false;
+
+function motivoParaOmitir({ configuracion }) {
   if (!window.FolderIntro) return "sin-libreria";
-  if (demo) return "demo";
   if (prefiereMenosMovimiento()) return "reducir-movimiento";
   if (document.visibilityState !== "visible") return "pestana-oculta";
   if (!introAperturaActivada(configuracion)) return "apagada";
-  if (modoOptimizado) return "modo-optimizado";
   if (equipoModesto()) return "equipo-modesto";
   if (configuracion && configuracion.onboarding_v1_completado === false) return "usuario-nuevo";
   if (entradaPorEnlaceProfundo()) return "enlace-profundo";
-  if (vistaEnEsteDocumento || yaSeVioEnEstaSesion()) return "ya-vista";
+  if (vistaEnEsteDocumento || (UNA_VEZ_POR_SESION && yaSeVioEnEstaSesion())) return "ya-vista";
   return "";
+}
+
+/* Deja el motivo a la vista: en la consola del navegador escribe window.__introMotivo */
+function registrarMotivo(motivo) {
+  try {
+    window.__introMotivo = motivo;
+    console.info("[intro] omitida:", motivo);
+  } catch (e) {
+    // No crítico.
+  }
 }
 
 /* --------------------------- Montaje y toques --------------------------- */
@@ -224,9 +244,9 @@ function montar(configuracion) {
   // Durante la carga un toque la retira (queda el cargador de siempre);
   // durante la apertura la salta.
   raiz.addEventListener("pointerdown", () => {
-    if (l.state === "loading") l.abandon();
+    if (l.state === "loading") { if (TOQUE_RETIRA_EN_CARGA) l.abandon(); }
     else if (l.state === "opening") l.cancel();
-  });
+  }, { passive: true });
   const alTeclear = (e) => {
     if (l.state === "opening" && (e.key === "Escape" || e.key === "Enter" || e.key === " ")) l.cancel();
   };
@@ -248,11 +268,14 @@ function montar(configuracion) {
 export function iniciarIntroCarga(o = {}) {
   try {
     if (carga && (carga.state === "loading" || carga.state === "opening")) return true;
-    if (motivoParaOmitir(o)) {
+    const motivo = motivoParaOmitir(o);
+    if (motivo) {
+      registrarMotivo(motivo);
       cargadorViejoOculto(false); // no hay folder: se ve el cargador de siempre
       return false;
     }
     carga = montar(o.configuracion);
+    if (!carga) registrarMotivo("no-se-pudo-montar");
     cargadorViejoOculto(Boolean(carga));
     return Boolean(carga);
   } catch (error) {
