@@ -11,8 +11,8 @@ const SECCIONES_TUTORIAL = [
   { id:"resumen", nombre:"Resumen", puntos:["Semana actual del semestre y días que faltan.","Avance de estudio del día.","Clases, entregas y exámenes próximos."] },
   { id:"agenda", nombre:"Agenda", puntos:["Alterna entre lista, calendario y cronograma.","Organiza tareas, exámenes, proyectos y eventos.","Vincula cada actividad con su materia y semestre."] },
   { id:"horario", nombre:"Horario", puntos:["Guarda hora, aula, profesor y modalidad.","Abre una clase para ver todos sus detalles.","Compara horarios con tus amistades."] },
-  { id:"tiempo-estudio", nombre:"Tiempo de estudio", puntos:["Abre una materia y toca Iniciar sesión.","Usa materias aunque no estén en tu plan.","Consulta historial y estadísticas de todos tus semestres."] },
-  { id:"semestres", nombre:"Semestres", puntos:["Matricula materias de tu plan.","Registra criterios, asignaciones y notas.","Revisa proyecciones y el Wrapped al finalizar."] },
+  { id:"tiempo-estudio", nombre:"Tiempo de estudio", puntos:["Abre una materia y toca Iniciar sesión.","Usa materias aunque no estén en tu plan: toca «+» para añadir una.","Consulta historial, estadísticas y competencias de todos tus semestres."] },
+  { id:"semestres", nombre:"Semestres", puntos:["Matricula materias de tu plan.","Registra criterios, asignaciones y notas."] },
   { id:"comunidad", nombre:"Comunidad", puntos:["Organiza compañeros y docentes relacionados con tus materias.","Cada docente lleva tu propia valoración, según tu experiencia.","Compara horarios compartidos para encontrar espacios en común."] },
   { id:"finanzas", nombre:"Finanzas", puntos:["Registra ingresos y gastos desde el inicio.","Clasifica movimientos por categoría.","Asociarlos a un semestre es opcional."] },
   { id:"plan-estudios", nombre:"Plan de estudios", puntos:["Añade una o varias carreras.","Pega o importa la malla completa.","El plan alimenta la matrícula de Semestres."] },
@@ -246,7 +246,14 @@ function inyectarEstilosOnboarding() {
 .onb-r-ajuste{padding:12px 14px}
 .onb-r-cuerpo-aj{gap:8px;padding-top:6px}
 .onb-r-navfila{padding:6px 8px;border-radius:10px;background:color-mix(in srgb,currentColor 6%,transparent)}
-.onb-primario-movil{margin-top:16px;width:100%}.onb-primario-movil .btn{width:100%}
+.onb-primario-movil{margin-top:16px;width:100%}
+.onb-r-aro.g .onb-aro{width:100%;height:100%;-webkit-mask:radial-gradient(circle,transparent 54%,#000 55%);mask:radial-gradient(circle,transparent 54%,#000 55%)}
+.onb-r-semwrap{display:flex;flex-direction:column;gap:6px;padding:8px}
+.onb-r-semfila{padding:4px 2px;gap:8px}.onb-r-semn{flex:1;min-width:0}
+.onb-r-botonesh.dos{gap:8px}.onb-r-botonesh.dos .onb-r-btn{flex:1;text-align:center;padding:9px 8px}
+.onb-r-fin{display:grid;grid-template-columns:3.6em 1fr auto;align-items:center;gap:8px}.onb-r-fin>b:first-child{font-size:1rem}
+.onb-r-balfila{justify-content:center;gap:6px}
+.onb-r-ajuste{flex:1 1 auto;max-height:72px;padding:14px}.onb-primario-movil .btn{width:100%}
 .onb-r-logo{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:color-mix(in srgb,currentColor 10%,transparent)}
 
 @media (max-height:700px){.onb-tour-movil .onboarding-lista{font-size:.86rem}.onb-tour-movil .onboarding-copy h1{font-size:1.35rem!important}.onb-tour-movil .onboarding-copy{max-height:50%!important}}
@@ -289,7 +296,15 @@ function inyectarEstilosOnboarding() {
    Dibuja el anillo y el oscurecimiento en capas fijas sobre toda la app, así que
    nunca lo recorta el overflow del contenedor del botón. Los cuatro paneles que
    rodean al objetivo capturan los clics: solo el elemento resaltado queda activo. */
+function asegurarEstiloGuias() {
+  if (document.getElementById("onb-guias-css")) return;
+  const e = document.createElement("style"); e.id = "onb-guias-css";
+  // Un diálogo que se abra desde la guía debe quedar por ENCIMA de ella, nunca tapado.
+  e.textContent = ".modal-overlay,#modal-bloque-flotante,.overlay-alta-semestre{z-index:2147483300!important}";
+  document.head.append(e);
+}
 function crearResaltador() {
+  asegurarEstiloGuias();
   const raiz = document.createElement("div");
   raiz.className = "guia-resaltador"; raiz.setAttribute("aria-hidden", "true"); raiz.style.display = "none";
   const lados = [0, 1, 2, 3].map(() => { const d = document.createElement("div"); d.className = "guia-resaltador-lado"; return d; });
@@ -486,7 +501,7 @@ const rTit = (t) => nodo("b", "onb-r-tit", t);
 function rPildora(t, color) { const e = nodo("span", "onb-r-chip", t); e.style.setProperty("--c", color); return e; }
 function rEstrellas(pct) { const s = nodo("span", "onb-r-est"); const b = nodo("b", "", null); b.textContent = "★★★★★"; b.style.setProperty("--p", `${pct}%`); s.append(b); return s; }
 function rBarraFina(pct, color) { const p = rProg(pct, color); p.classList.add("fina"); return p; }
-function fmtMonto(n) { try { return "₡" + new Intl.NumberFormat(idiomaUI(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n); } catch (e) { return "₡" + n; } }
+function fmtMonto(n) { try { const i = idiomaUI(); return "₡" + new Intl.NumberFormat(i.startsWith("es") ? "es-CR" : i, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n); } catch (e) { return "₡" + n; } }
 const LETRAS_DIAS_ES = ["L", "K", "M", "J", "V", "S", "D"];
 const letraDia = (i) => idiomaUI().startsWith("es") ? LETRAS_DIAS_ES[i] : fechaUI(2026, 9, 5 + i, { weekday: "narrow" }).toUpperCase();
 
@@ -661,20 +676,27 @@ function contenidoEsquema(id) {
       const caja = (v, t) => nodo("div", "onb-r-caja ancha", null, [nodo("b", "", v), nodo("small", "", t)]);
       base.push(cab, nodo("div", "onb-bloque onb-r-card onb-r-principalte", null, [nodo("div", "onb-r-centro", null, [anillo]), nodo("span", "onb-r-btn grande", "▷ Iniciar"), caja("0 min", "Estudiado"), caja("5 h", "Faltan"), caja("5 h", "Meta")]));
       const ses = (d, dur, m) => rItem(d, m[0], m[1], rSuave(dur));
-      const mat = (m, meta) => { const e = rItem(m[0], meta, m[1], nodo("span", "onb-r-mas", "▶")); return e; };
+      const mat = (m, meta) => rItem(m[0], meta, m[1], nodo("span", "onb-r-mas", "▶"));
+      const stat = (v, t) => nodo("div", "onb-r-caja ancha", null, [plano("b", "", v), nodo("small", "", t)]);
+      const comp = (t, pc, c) => nodo("div", "onb-r-estmat", null, [rFila("onb-r-sp", nodo("span", "", t), plano("span", "onb-r-m", `${pc}%`)), rBarraFina(pc, c)]);
       extras.push(
         rCard(rTit("Resumen de metas"), rNavSemana("Semana 9"), esquemaGraficoMetas(),
           nodo("div", "onb-r-leyenda", null, [["Estudiado: 0 min", "#ef4444"], ["Meta semana: 5 h", GRIS]].map(([t, col]) => { const e = nodo("span", "", t); e.style.setProperty("--c", col); return e; }))),
         rCard(rTit("Horas estudiadas"), rPills(["Semana", "Semestre"], 0), rNavSemana("Semana 9"),
           nodo("div", "onb-r-vacio", "Sin sesiones registradas en este período: prueba con el navegador de arriba.")),
+        rCard(rTit("Estadísticas"), nodo("div", "onb-fila3", null, [stat("🔥 0", "Racha"), stat("0 h", "Total"), stat("0", "Sesiones")])),
+        rLista("Competencias", comp("Constancia", 20, TEAL), comp("Enfoque", 35, AZUL), comp("Cumplimiento de metas", 10, AMBAR)),
         rLista("Sesiones recientes", ses(diaCorto(9), "45 min", M.estado), ses(diaCorto(8), "1 h 20 min", M.prog), ses(diaCorto(7), "30 min", M.derecho)),
         rLista("Materias", mat(M.estado, "0 min de 4 h"), mat(M.macro, "0 min de 5 h"), mat(M.derecho, "0 min de 6 h")));
       break;
     }
     case "semestres": {
-      const sem = (n, cred) => nodo("div", "onb-bloque onb-r-fila onb-r-sp onb-r-semfila", null, [nodo("b", "", n), nodo("span", "onb-r-m", "···"), rPildora(cred, INDIGO), nodo("span", "onb-r-m", "▼")]);
-      const actual = rCard(rTit("Semestre actual"), sem("Semestre VI", "Créditos: 15"), rFila("onb-r-sp onb-r-botonesh", rBoton("+ Agregar", true), rBoton("Editar semestres", true)));
-      const pasados = rCard(rTit("Semestres pasados"), sem("Semestre V", "Créditos: 11"), sem("Verano I", "Créditos: 3"), sem("Semestre IV", "Créditos: 16"));
+      const fila = (n, cred) => nodo("div", "onb-r-fila onb-r-semfila", null, [nodo("b", "onb-r-semn", n), nodo("span", "onb-r-m", "···"), rPildora(cred, INDIGO), nodo("span", "onb-r-m", "▼")]);
+      const caja = (n, cred) => nodo("div", "onb-bloque onb-r-semwrap", null, [fila(n, cred)]);
+      const semActual = caja("II Ciclo 2026", "Créditos: 21");
+      const actual = rCard(rTit("Semestre actual"), semActual, rFila("onb-r-sp onb-r-botonesh dos", rBoton("+ Agregar", true), rBoton("Editar semestres", true)));
+      const p1 = caja("I Ciclo 2026", "Créditos: 18"), p2 = caja("Verano 2025", "Créditos: 6"), p3 = caja("II Ciclo 2025", "Créditos: 20");
+      const pasados = rCard(rTit("Semestres pasados"), p1, p2, p3);
       base.push(nodo("div", "onb-bloque onb-r-fila onb-r-sp", null, [rTit("Historial académico"), nodo("span", "onb-r-m", "▼")]), actual, pasados);
       const mat = (cod, nombre, nota, color, est) => {
         const m = nodo("div", "onb-r-curso2", null, [
@@ -682,24 +704,18 @@ function contenidoEsquema(id) {
           rFila("onb-r-sp", rPildora(est || "Cursando", est ? "#10b981" : "#f59e0b"), rPildora("Créditos: 3", "#3b82f6"))]);
         m.style.setProperty("--c", color); return m;
       };
-      extras.push(
-        rCard(rFila("onb-r-sp", rTit("Semestre VI"), rPildora("Créditos: 15", INDIGO)), mat("CP-2001", M.estado[0], 85, INDIGO), mat("CP-2002", M.macro[0], 70, TEAL), mat("CP-2003", M.derecho[0], 78, AMBAR)),
-        [pasados, sem("Semestre III", "Créditos: 14")], [pasados, sem("Semestre II", "Créditos: 12")],
-        rCard(rFila("onb-r-sp", rTit("Verano I"), rPildora("Créditos: 3", INDIGO)), mat("EG-I", "Humanidades I", 90, PINK, "Aprobada")),
-        rLista("Promedio", rFila("onb-r-sp", nodo("span", "", "Promedio ponderado"), rNegrita("81,4")), rFila("onb-r-sp", nodo("span", "", "Créditos aprobados"), rNegrita("56"))),
-        [pasados, sem("Semestre I", "Créditos: 13")]);
+      extras.push([semActual, mat("CP-2001", M.estado[0], 85, INDIGO)], [semActual, mat("CP-2002", M.macro[0], 70, TEAL)], [semActual, mat("CP-2003", M.derecho[0], 78, AMBAR)],
+        [p1, mat("EG-I", "Humanidades I", 90, PINK, "Aprobada")], [pasados, caja("I Ciclo 2025", "Créditos: 17")], [pasados, caja("II Ciclo 2024", "Créditos: 19")]);
       break;
     }
     case "finanzas": {
       const aro = nodo("div", "onb-aro"); aro.style.background = "conic-gradient(#ef4444 0 82%,color-mix(in srgb,currentColor 16%,transparent) 82% 100%)";
       const anillo = nodo("div", "onb-r-aro g", null, [aro]);
-      const lin = (pct, t, monto, color) => { const f = rFila("onb-r-sp", plano("b", "onb-r-pct", pct), nodo("span", "", t), plano("b", "", monto)); f.firstChild.style.color = color; return f; };
-      const fb = rFila("onb-r-sp", nodo("span", "onb-r-fila", null, [nodo("i", "onb-r-pt"), nodo("span", "", "Beca")]), plano("b", "", fmtMonto(400000)));
-      fb.firstChild.firstChild.style.background = "#10b981";
-      const fi = rFila("onb-r-sp", nodo("span", "onb-r-fila", null, [nodo("i", "onb-r-pt"), nodo("span", "", "Ingresos")]), plano("b", "", fmtMonto(623000)));
-      fi.firstChild.firstChild.style.background = "#3b82f6";
-      const bal = nodo("div", "onb-r-centro", null, [nodo("span", "onb-r-m", "Balance total"), plano("b", "onb-r-tit onb-r-bal", fmtMonto(180700))]);
-      base.push(rCard(rTit("Resumen"), nodo("div", "onb-r-centro", null, [anillo]), lin("82%", "Gastado", fmtMonto(842300), "#ef4444"), lin("18%", "Disponible", fmtMonto(180700), "#10b981"), fb, fi, bal),
+      const lin = (pct, t, monto, color) => { const f = nodo("div", "onb-r-fin", null, [plano("b", "", pct), nodo("span", "", t), plano("b", "", monto)]); f.firstChild.style.color = color; return f; };
+      const par = (t, monto, color) => { const d = nodo("i", "onb-r-pt"); d.style.background = color; return nodo("span", "onb-r-fila", null, [d, nodo("span", "", t), plano("b", "", monto)]); };
+      const bal = nodo("div", "onb-r-fila onb-r-balfila", null, [nodo("span", "onb-r-m", "Balance total:"), plano("b", "onb-r-bal", fmtMonto(180700))]);
+      base.push(rCard(rTit("Resumen"), nodo("div", "onb-r-centro", null, [anillo]), lin("82%", "Gastado", fmtMonto(842300), "#ef4444"), lin("18%", "Disponible", fmtMonto(180700), "#10b981"),
+          rFila("onb-r-sp", par("Beca:", fmtMonto(400000), "#10b981"), par("Ingresos:", fmtMonto(623000), "#3b82f6")), bal),
         rCard(rTit("Por semestre"), esquemaSerieFinanzas(),
           nodo("div", "onb-r-leyenda", null, [["Gastos", "#ef4444"], ["Beca", "#10b981"], ["Ingresos", "#3b82f6"]].map(([t, col]) => { const e = nodo("span", "", t); e.style.setProperty("--c", col); return e; }))));
       const mov = (n, d, monto, col) => rItem(n, diaCorto(d), col, plano("b", "", monto));
@@ -745,20 +761,9 @@ function contenidoEsquema(id) {
       break;
     }
     case "configuracion": {
-      const cuerpo = nodo("div", "onb-r-card onb-r-cuerpo-aj");
-      const pers = nodo("div", "onb-bloque onb-r-card", null, [rFila("onb-r-sp", nodo("b", "", "Personalizar"), nodo("span", "onb-r-m", "▾")), cuerpo]);
-      base.push(rFilaAjuste("Ajustes generales"), rFilaAjuste("Asistente IA (Gemini)"), rFilaAjuste("Notificaciones"), pers,
+      base.push(rFilaAjuste("Ajustes generales"), rFilaAjuste("Asistente IA (Gemini)"), rFilaAjuste("Notificaciones"), rFilaAjuste("Personalizar"),
         rFilaAjuste("Horario"), rFilaAjuste("Plan de Estudios activo"), rFilaAjuste("Enlaces rápidos"), rFilaAjuste("Datos"));
-      const bolitas = (cols) => nodo("div", "onb-r-paleta", null, cols.map((c) => { const d = document.createElement("i"); d.style.background = c; return d; }));
-      const logos = nodo("div", "onb-r-paleta", null, ["📁", "🎓"].map((s) => nodo("span", "onb-r-logo", null, [plano("span", "", s)])));
-      const et = (t) => nodo("span", "onb-r-etq up", t);
-      const toggle = (t) => rFila("onb-r-sp", nodo("span", "", t), nodo("span", "onb-interruptor"));
-      const nav = ["Agenda", "Horario", "Tiempo", "Semestres", "Comunidad", "Finanzas"];
-      const items = [et("Tamaño de letra"), rPills(["Pequeño", "Mediano", "Grande"], 1), et("Apariencia"), rPills(["Modo claro", "Modo color", "Modo oscuro"], 1),
-        et("Calidad"), toggle("Modo fancy"), et("Paleta de color"), bolitas([INDIGO, PINK, CELESTE, TEAL, AMBAR, PURPURA, ROJO, VERDE]),
-        et("Navegación"), ...nav.map(rFilaNav), et("Logo de la app"), logos, et("Animación de apertura"), toggle("Animación de apertura"),
-        bolitas([INDIGO, PINK, CELESTE, TEAL, AMBAR, PURPURA]), nodo("span", "onb-r-btn s grande", "Usar colores de la paleta")];
-      items.forEach((n) => extras.push([cuerpo, n]));
+      extras.push(rFilaAjuste("Créditos"));
       break;
     }
     default:
@@ -785,7 +790,7 @@ function llenarExtras(marco) {
   for (const e of lista) {
     const [padre, n] = Array.isArray(e) ? e : [cuerpo, e];
     padre.append(n);
-    if (cuerpo.scrollHeight > cuerpo.clientHeight + 1) { n.remove(); break; }
+    if (cuerpo.scrollHeight > cuerpo.clientHeight + 1) { n.remove(); continue; }
   }
 }
 
@@ -1145,26 +1150,25 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
     estado.datos.configuracion.tutoriales_secciones_vistas.semestres = true; guardar();
   };
   const botonRegistrarSemestre = botonAgregarSemestre;
-  const pasos = [
-    ...(posteriorImportacion ? [
-      // 1) Solo si aún no estamos en Semestres.
-      ...(yaEnSemestres ? [] : [{ accion: "navegar", selector: () => document.getElementById("nav-semestres"),
-        texto: "Tu plan ya quedó guardado ✓. Ahora falta decirle a la app qué estás cursando este semestre. Toca Semestres para continuar." }]),
-      // 2) El porqué (sin resaltar nada: es una explicación).
-      { selector: () => null,
-        texto: "¿Por qué un semestre? Tu plan es la lista completa de materias de la carrera; el semestre es lo que cursas ahora. Al matricular materias aquí, Horario, Agenda y Tiempo de estudio ya pueden usarlas, y aquí llevarás tus notas y tu promedio." },
-      // 3) El qué hacer, con el botón resaltado.
-      { accion: "abrirAlta", selector: botonRegistrarSemestre,
-        texto: "Toca «+ Agregar» (el botón resaltado). Se abre un formulario: 1) escribe el período, por ejemplo 2026-II; 2) marca las materias que cursas ahora; 3) guarda. Cuando termines, te sigo guiando." },
-    ] : yaTienePlan ? [
-      { selector: () => document.getElementById("btn-gestion-planes") || document.getElementById("btn-gestionar-planes") || document.querySelector("#seccion-plan-estudios button"), texto: "Ya tienes un plan. Puedes revisar sus materias o abrir Gestionar plan para añadir otra carrera." },
-      { selector: () => document.getElementById("nav-semestres"), texto: "El siguiente paso es crear un semestre y matricular materias de ese plan." },
-    ] : [
-      { selector: () => [...document.querySelectorAll("#seccion-plan-estudios .pill-group button")].find((b) => /Pegar link|Adjuntar PDF/i.test(b.textContent)), texto: "Primero elige Pegar link o Adjuntar PDF/Imagen. Luego envía tu plan a Claude para que lo convierta al formato CSV." },
-      { selector: () => document.getElementById("btn-enviar-import-claude"), texto: "Pulsa Enviar a Claude y sigue la guía para adjuntar tu plan. Cuando Claude devuelva el CSV, vuelve a esta app." },
-      { selector: () => document.getElementById("textarea-csv-importar"), texto: "Copia el bloque CSV completo, desde CARRERA hasta la última materia, y pégalo aquí. Luego toca Importar." },
-      { selector: () => [...document.querySelectorAll("#seccion-plan-estudios button")].find((b) => /^importar$/i.test(b.textContent.trim())), texto: "Pulsa Importar para guardar y revisar las materias. Cuando termine, la guía te llevará a Semestres para continuar." },
-    ]),
+  const botonGestionPlan = () => [...document.querySelectorAll("#seccion-plan-estudios button")].find((b) => /gestionar plan/i.test(b.textContent)) || document.getElementById("btn-gestion-planes") || document.getElementById("btn-gestionar-planes");
+  const navVisible = () => { const b = document.getElementById("nav-semestres"); const r = b?.getBoundingClientRect(); return b && r.width && r.left >= 0 && r.right <= innerWidth ? b : null; };
+  const pasosSemestre = [
+    ...(yaEnSemestres ? [] : [{ accion: "navegar", selector: navVisible,
+      texto: "Tu plan ya quedó guardado ✓. Ahora falta decirle a la app qué estás cursando este semestre. Toca Semestres para continuar." }]),
+    { selector: () => null,
+      texto: "¿Por qué un semestre? Tu plan es la lista completa de materias de la carrera; el semestre es lo que cursas ahora. Al matricular materias aquí, Horario, Agenda y Tiempo de estudio ya pueden usarlas, y aquí llevarás tus notas y tu promedio." },
+    { accion: "abrirAlta", selector: botonRegistrarSemestre,
+      texto: "Toca «+ Agregar» (el botón resaltado). Se abre un formulario: 1) escribe el período, por ejemplo 2026-II; 2) marca las materias que cursas ahora; 3) guarda. Cuando termines, te sigo guiando." },
+  ];
+  const flujoSemestre = posteriorImportacion || yaTienePlan;
+  const pasos = posteriorImportacion ? pasosSemestre : yaTienePlan ? [
+    { selector: botonGestionPlan, texto: "Ya tienes un plan. Para añadir otra carrera toca «Gestionar plan» (el botón resaltado)." },
+    ...pasosSemestre,
+  ] : [
+    { selector: () => [...document.querySelectorAll("#seccion-plan-estudios .pill-group button")].find((b) => /Pegar link|Adjuntar PDF/i.test(b.textContent)), texto: "Primero elige Pegar link o Adjuntar PDF/Imagen. Luego envía tu plan a Claude para que lo convierta al formato CSV." },
+    { selector: () => document.getElementById("btn-enviar-import-claude"), texto: "Pulsa Enviar a Claude y sigue la guía para adjuntar tu plan. Cuando Claude devuelva el CSV, vuelve a esta app." },
+    { selector: () => document.getElementById("textarea-csv-importar"), texto: "Copia el bloque CSV completo, desde CARRERA hasta la última materia, y pégalo aquí. Luego toca Importar." },
+    { selector: () => [...document.querySelectorAll("#seccion-plan-estudios button")].find((b) => /^importar$/i.test(b.textContent.trim())), texto: "Pulsa Importar para guardar y revisar las materias. Cuando termine, la guía te llevará a Semestres para continuar." },
   ];
   let i = 0;
   const pop = document.createElement("aside"); pop.className = "guia-plan-flotante"; pop.setAttribute("role", "dialog"); document.body.append(pop);
@@ -1192,7 +1196,7 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
     setTimeout(revisarAlta, 500);
   };
   const pintar = () => {
-    if (i >= pasos.length) { cerrar({ continuarSemestres: posteriorImportacion }); return; }
+    if (i >= pasos.length) { cerrar({ continuarSemestres: flujoSemestre }); return; }
     if (!posteriorImportacion && !yaTienePlan && i >= 1 && !document.getElementById("textarea-csv-importar")) {
       const link = [...document.querySelectorAll("#seccion-plan-estudios .pill-group button")].find((b) => /Pegar link/i.test(b.textContent));
       if (link) link.click(); setTimeout(pintar, 80); return;
@@ -1209,7 +1213,7 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
     const seguir = document.createElement("button"); seguir.className = "btn btn-primary";
     seguir.textContent = traducirTextoInterfaz(paso.accion === "abrirAlta" ? "Abrir formulario" : i === pasos.length - 1 ? "Entendido" : "Siguiente");
     seguir.onclick = () => {
-      if (paso.accion === "navegar") { marcarSemestresVisto(); navegar?.("semestres"); }
+      if (paso.accion === "navegar") { marcarSemestresVisto(); navegar?.("semestres"); i++; setTimeout(pintar, 350); return; }
       if (paso.accion === "abrirAlta") {
         marcarSemestresVisto(); pasoAlta = i; resaltador.ocultar();
         (resaltado || botonRegistrarSemestre())?.click(); pop.classList.add("oculto"); esperandoAlta = true;
@@ -1229,7 +1233,7 @@ function inicializarTutorialDesdeAjustes({ navegar, toast } = {}) {
 }
 
 function botonAgregarSemestre() { return [...document.querySelectorAll("#seccion-semestres button")].find((b) => /registrar semestre|crear semestre|agregar semestre|^\s*\+?\s*agregar\s*$/i.test(b.textContent.trim())); }
-function tarjetaMateriaTiempo() { const b = [...document.querySelectorAll("#seccion-tiempo-estudio button")].find((x) => /iniciar|▶|play/i.test(`${x.textContent} ${x.getAttribute("aria-label") || ""} ${x.title || ""}`)); return b?.closest(".glass-card,[class*='materia'],[class*='card'],[class*='tarjeta']") || null; }
+function tarjetaMateriaTiempo() { const raiz = document.getElementById("seccion-tiempo-estudio"); if (!raiz) return null; for (const el of raiz.querySelectorAll("*")) { if (el.children.length < 2) continue; const t = el.textContent || ""; if (!/\d+\s*min\s*de\s*\d+/i.test(t) || !/[A-Z]{2,4}-\d{3,4}/.test(t)) continue; const r = el.getBoundingClientRect(); if (r.height > 0 && r.height < 220) return el; } return null; }
 const SELECTORES_GUIA_SECCION = {
   resumen: [
     () => document.querySelector("#seccion-resumen .resumen-semana-tarjeta") || document.querySelector("#seccion-resumen .resumen-bloque"),
@@ -1248,10 +1252,10 @@ const SELECTORES_GUIA_SECCION = {
   ],
   "tiempo-estudio": [
     () => tarjetaMateriaTiempo() || document.getElementById("seccion-tiempo-estudio"),
-    () => tarjetaMateriaTiempo()?.parentElement || document.getElementById("seccion-tiempo-estudio"),
-    () => document.querySelector("#seccion-tiempo-estudio [data-vista='materias']")?.parentElement || document.getElementById("seccion-tiempo-estudio"),
+    () => [...document.querySelectorAll("#seccion-tiempo-estudio button")].find((b) => b.textContent.trim() === "+") || document.getElementById("seccion-tiempo-estudio"),
+    () => [...document.querySelectorAll("#seccion-tiempo-estudio button")].find((b) => /^materias$/i.test(b.textContent.trim()))?.parentElement || document.getElementById("seccion-tiempo-estudio"),
   ],
-  semestres: [
+ semestres: [
     () => botonAgregarSemestre() || document.getElementById("seccion-semestres"),
     () => document.querySelector("#seccion-semestres [data-semestre-id]") || document.getElementById("seccion-semestres"),
     () => [...document.querySelectorAll("#seccion-semestres button")].find(b => /nota|historial|editar/i.test(b.textContent)) || document.querySelector("#seccion-semestres [data-semestre-id]") || document.getElementById("seccion-semestres"),
@@ -1269,7 +1273,7 @@ const SELECTORES_GUIA_SECCION = {
   asistente: [
     () => document.querySelector("#seccion-asistente .glass-card") || document.getElementById("seccion-asistente"),
     () => document.querySelector("#seccion-asistente textarea, #seccion-asistente input:not([type='hidden'])") || document.getElementById("seccion-asistente"),
-    () => document.getElementById("nav-configuracion"),
+    () => null,
   ],
   configuracion: [
     () => document.getElementById("ajuste-tamano-texto"),
@@ -1283,19 +1287,35 @@ function iniciarGuiaSeccion(info) {
   let indice=0,resaltado=null;const resaltador=crearResaltador();
   const pop=document.createElement("aside");pop.className="guia-plan-flotante guia-seccion-flotante";pop.setAttribute("role","dialog");pop.setAttribute("aria-live","polite");pop.setAttribute("aria-label",`${traducirTextoInterfaz("Tutorial")}: ${traducirTextoInterfaz(info.nombre)}`);document.body.append(pop);
   const cerrar=()=>{resaltador.quitar();pop.remove();};
+  const total=info.puntos.length+(info.id==="asistente"?1:0);
+  const marcarVista=(id)=>{const c=estado.datos?.configuracion;if(!c)return;c.tutoriales_secciones_vistas=c.tutoriales_secciones_vistas||{};c.tutoriales_secciones_vistas[id]=true;guardar();};
+  const armar=(tituloTxt,cuerpoTxt,botones)=>{
+    pop.replaceChildren();
+    const titulo=document.createElement("strong");titulo.textContent=tituloTxt;
+    const texto=document.createElement("p");texto.textContent=traducirTextoInterfaz(cuerpoTxt);
+    const acciones=document.createElement("div");acciones.className="guia-seccion-acciones";acciones.append(...botones);pop.append(titulo,texto,acciones);
+  };
+  const btn=(txt,clase,fn)=>{const b=document.createElement("button");b.type="button";b.className=`btn ${clase}`;b.textContent=traducirTextoInterfaz(txt);b.onclick=fn;return b;};
+  // Último paso de Wapper: va a Ajustes, baja suave hasta «Asistente IA (Gemini)», abre la tarjeta y la resalta.
+  const pasoClave=()=>{
+    marcarVista("configuracion");resaltador.ocultar();pop.replaceChildren();
+    window.mostrarSeccion?.("configuracion");
+    setTimeout(()=>{
+      const sec=[...document.querySelectorAll("#seccion-configuracion .ajuste-seccion")].find((x)=>/asistente ia/i.test(x.querySelector("h2")?.textContent||""));
+      if(sec){if(sec.classList.contains("colapsada"))sec.querySelector(".ajuste-seccion-cabecera")?.click();setTimeout(()=>sec.scrollIntoView({behavior:"smooth",block:"start"}),150);}
+      resaltador.apuntar(sec||document.getElementById("seccion-configuracion"));
+      armar(`${traducirTextoInterfaz(info.nombre)} · ${total}/${total}`,"Pega tu clave de Gemini en el campo y toca «Guardar». Con eso Wapper queda activo.",[btn("Entendido","btn-primary",cerrar)]);
+    },500);
+  };
   const pintar=()=>{
-    if(MODO_DEMO&&info.id==="tiempo-estudio")document.querySelectorAll("#seccion-tiempo-estudio button").forEach(b=>{if(/(agregar|borrar)\s+racha/i.test(b.textContent))b.style.display="none";});
     if(indice>=info.puntos.length){cerrar();return;}
     const buscar=objetivos[indice];resaltado=buscar?.()||document.getElementById(`seccion-${info.id}`);
     resaltado?.scrollIntoView({behavior:"smooth",block:"center",inline:"nearest"});resaltador.apuntar(resaltado);
-    pop.replaceChildren();
-    const titulo=document.createElement("strong");titulo.textContent=`${traducirTextoInterfaz(info.nombre)} · ${indice+1}/${info.puntos.length}`;
-    const texto=document.createElement("p");texto.textContent=traducirTextoInterfaz(info.puntos[indice]);
-    const acciones=document.createElement("div");acciones.className="guia-seccion-acciones";
-    if(indice>0){const anterior=document.createElement("button");anterior.type="button";anterior.className="btn btn-secondary";anterior.textContent=traducirTextoInterfaz("Anterior");anterior.onclick=()=>{indice--;pintar();};acciones.append(anterior);}
-    const siguiente=document.createElement("button");siguiente.type="button";siguiente.className="btn btn-primary";siguiente.textContent=traducirTextoInterfaz(indice===info.puntos.length-1?"Entendido":"Siguiente");siguiente.onclick=()=>{indice++;pintar();};
-    const saltar=document.createElement("button");saltar.type="button";saltar.className="btn btn-secondary";saltar.textContent=traducirTextoInterfaz("Saltar guía");saltar.onclick=cerrar;
-    acciones.append(siguiente,saltar);pop.append(titulo,texto,acciones);
+    const esUltimoWapper=info.id==="asistente"&&indice===info.puntos.length-1;
+    const botones=[];
+    if(indice>0)botones.push(btn("Anterior","btn-secondary",()=>{indice--;pintar();}));
+    botones.push(esUltimoWapper?btn("Ir a Ajustes","btn-primary",pasoClave):btn(indice===info.puntos.length-1?"Entendido":"Siguiente","btn-primary",()=>{indice++;pintar();}),btn("Saltar guía","btn-secondary",cerrar));
+    armar(`${traducirTextoInterfaz(info.nombre)} · ${indice+1}/${total}`,info.puntos[indice],botones);
   };
   pintar();
 }
@@ -1313,4 +1333,11 @@ function mostrarTutorialPrimeraVez(seccion) {
   const cerrar=document.createElement("button");cerrar.type="button";cerrar.className="btn btn-primary";cerrar.textContent=traducirTextoInterfaz("Entendido");cerrar.onclick=()=>overlay.remove();
   acciones.append(tutorial,cerrar);card.append(acciones);overlay.append(card);document.body.append(overlay);tutorial.focus();return true;
 }function textoTutorial(tag,value){const e=document.createElement(tag);e.textContent=traducirTextoInterfaz(value);return e;}
+if (MODO_DEMO) {
+  // Controles de prueba que no deben verse en la demo (se ocultan por texto; lo ideal es quitarlos de su pantalla de origen).
+  let pendiente = 0;
+  const ocultarControlesDemo = () => { pendiente = 0; document.querySelectorAll("button").forEach((b) => { if (/simular\s+(victoria|derrota)|(agregar|borrar)\s+racha/i.test(b.textContent)) b.style.display = "none"; }); };
+  new MutationObserver(() => { if (!pendiente) pendiente = requestAnimationFrame(ocultarControlesDemo); }).observe(document.documentElement, { childList: true, subtree: true });
+  ocultarControlesDemo();
+}
 export { mostrarOnboardingNuevoUsuario, inicializarTutorialDesdeAjustes, mostrarTutorialPrimeraVez };
