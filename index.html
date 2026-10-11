@@ -12,7 +12,7 @@
   (function () {
     try {
       var q = new URLSearchParams(location.search);
-      if (q.has("abrir") || q.has("comp")) return;
+      if (q.has("abrir") || q.has("comp") || q.get("preview") === "1") return;
       if (localStorage.getItem("app_intro_apertura_apagada") === "1") return;
       if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       var h = document.documentElement;
@@ -32,6 +32,13 @@
     preconnect.rel = "preconnect";
     preconnect.href = "https://fonts.googleapis.com";
     document.head.appendChild(preconnect);
+    // Los archivos de fuente salen de fonts.gstatic.com (otro dominio): conectarse ya ahorra
+    // el handshake cuando el CSS de arriba termina de llegar.
+    const preconnectFuentes = document.createElement("link");
+    preconnectFuentes.rel = "preconnect";
+    preconnectFuentes.href = "https://fonts.gstatic.com";
+    preconnectFuentes.crossOrigin = "anonymous";
+    document.head.appendChild(preconnectFuentes);
     const fonts = document.createElement("link");
     fonts.rel = "stylesheet";
     fonts.href = "https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap";
