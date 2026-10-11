@@ -286,6 +286,11 @@ export function iniciarIntroCarga(o = {}) {
   }
 }
 
+/** true mientras hay un folder cargando o abriéndose (lo usa main.js para no competir con sus cuadros). */
+export function introEnCurso() {
+  return Boolean(carga && (carga.state === "loading" || carga.state === "opening"));
+}
+
 /** La app ya está lista (final de mostrarApp): abre el folder. No hace nada si no hay folder activo. */
 export function abrirIntroCarga() {
   try {

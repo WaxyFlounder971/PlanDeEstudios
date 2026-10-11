@@ -20,6 +20,12 @@
  *  - Las imágenes de página viven en una hoja de estilos (una vez), no en variables CSS
  *    heredadas por cada tira.
  *
+ * Probado y DESCARTADO (medido en Chromium, no mejoraba o empeoraba; no volver a intentarlo a ciegas):
+ *  - Aplanar las tiras 3D mientras la app carga (menos capas en la espera): hace que al abrir el
+ *    folder haya que reconstruir ~40 capas de golpe y el peor fotograma de la apertura casi se duplica.
+ *    Por eso las capas se dejan ya armadas durante la carga (la espera es barata: 0 trabajo en el hilo principal).
+ *  - Quitar la inclinación (fi-tilt) o precalentar las caras traseras: sin diferencia medible.
+ *
  * Es solo una capa por encima: NO toca ni mueve tu app. Respeta prefers-reduced-motion.
  * Sin dependencias.
  */
@@ -117,7 +123,13 @@
     '.fi-hold *:not(.fi-p0){animation:none!important}',
     '.fi-hold .fi-sl.fi-p0{animation-play-state:running,paused!important}',
     /* las caras traseras no se dibujan hasta que la app está lista (fi-warm se pone al llamar open()) */
-    '.fi-hold:not(.fi-warm) .fi-back{display:none}'
+    '.fi-hold:not(.fi-warm) .fi-back{display:none}',
+    /* Mientras la app carga cada pestaña solo muestra su parte derecha (desde el 58%, que queda tapado por
+       la portada hasta su borde en SPLIT). Sin esto, al deslizarse el borde izquierdo de la pestaña pasa por
+       el borde/esquinas de la portada y, con escala de pantalla fraccionaria (Windows 125/150 %), asoma una
+       línea de color ahí = los "flashes" a la izquierda. Es un recorte ESTÁTICO (no se anima por cuadro) y
+       desaparece solo cuando termina la espera (se quita fi-hold), así que no afecta a la apertura. */
+    '.fi-hold .fi-sl.fi-pn{clip-path:inset(-10% -300% -10% 58%)}'
   ].join('\n');
 
   // ---------- utilidades ----------
@@ -187,6 +199,16 @@
   }
   function hex(c, i) { return /^#[0-9a-f]{6}$/i.test(c || '') ? c.toLowerCase() : COLORS[i]; }
 
+  // Calidad según el equipo: cada tira es una capa 3D más (7 hojas x 2 caras), así que en equipos
+  // modestos se usa una menos. La curvatura total no cambia (--fi-bk compensa); solo la "suavidad".
+  //   pantalla chica: 5 tiras (4 en equipo modesto) · pantalla grande: 6 tiras (5 en equipo modesto)
+  // Equipo modesto = 4 núcleos o menos, o 4 GB de RAM o menos (Chrome/Android; Safari no expone la RAM).
+  function autoStrips(small) {
+    var cores = navigator.hardwareConcurrency, mem = navigator.deviceMemory;
+    var weak = !!((cores && cores <= 4) || (mem && mem <= 4));
+    return (small ? 5 : 6) - (weak ? 1 : 0);
+  }
+
   function load(opts) {
     opts = opts || {};
     cancel(); inject();
@@ -204,7 +226,7 @@
     (host || document.body).appendChild(root);
 
     var pw = root.clientWidth, ph = root.clientHeight;
-    var n = Math.max(3, Math.min(BASE_N, opts.strips || (Math.min(pw, ph) < 600 ? 5 : 6)));
+    var n = Math.max(3, Math.min(BASE_N, opts.strips || autoStrips(Math.min(pw, ph) < 600)));
     root.style.setProperty('--fi-bk', String(BASE_N / n));
     var wide = pw / ph > WIDE, g, sw, bw, open = '', close = '', end, bgDiv = '';
     if (wide) {
