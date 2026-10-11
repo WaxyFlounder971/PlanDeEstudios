@@ -208,6 +208,46 @@ function inyectarEstilosOnboarding() {
 .onb-puntos i{width:6px;height:6px;border-radius:3px;background:color-mix(in srgb,currentColor 30%,transparent)}
 .onb-puntos i.on{width:20px;background:var(--accent-1,#8b5cf6)}
 .onb-esquema>.onb-marco{transform-origin:0 0}
+.onb-r-estmat{display:flex;flex-direction:column;gap:3px}
+.onb-r-card.acento{border-left:3px solid var(--accent-1,#8b5cf6)}
+.onb-r-clase{padding:6px 9px}.onb-r-clase>b{flex:none;min-width:3.6em}
+.onb-r-navsem{justify-content:center;gap:12px}
+.onb-r-horario.est{flex:1;min-height:0;display:flex}
+.onb-r-hor2{flex:1;min-height:0;display:grid;grid-template-columns:26px repeat(5,minmax(0,1fr));grid-template-rows:34px repeat(10,minmax(0,1fr));font-size:.6rem;position:relative}
+.onb-r-ln{grid-column:1/-1;border-top:1px solid color-mix(in srgb,currentColor 9%,transparent);pointer-events:none}
+.onb-r-hh2{display:flex;flex-direction:column;align-items:flex-end;padding-right:3px;opacity:.55;line-height:1;font-size:.58rem}
+.onb-r-hh2 small{font-size:.5rem}
+.onb-r-blq2{margin:1px;padding:3px 4px;border-radius:7px;overflow:hidden;color:#fff;display:flex;flex-direction:column;justify-content:space-between;font-size:.56rem;line-height:1.1;word-break:break-word;z-index:1}
+.onb-r-blq2 b{font-weight:700}.onb-r-blq2 span{align-self:flex-end;font-size:.7rem}
+.onb-r-ahora{grid-column:2/-1;align-self:center;border-top:2px solid #3b82f6;z-index:2;pointer-events:none}
+.onb-r-botonesh{padding:0 4px}
+.onb-r-cabte{border-top:3px solid #b91c1c}.onb-r-nomte{flex:1;text-align:center;font-size:.85rem;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.onb-r-principalte{align-items:stretch;gap:9px}
+.onb-r-caja.ancha{max-width:none}
+.onb-r-aro.g{width:128px;height:128px;margin:6px auto}
+.onb-r-aro.g .onb-aro{-webkit-mask:radial-gradient(circle,transparent 62%,#000 63%);mask:radial-gradient(circle,transparent 62%,#000 63%)}
+.onb-r-aro.g .onb-r-tiempo{font-size:1.5rem}
+.onb-r-vacio{opacity:.6;font-size:.66rem;text-align:center;padding:26px 8px 4px}
+.onb-r-semfila{padding:9px 10px}
+.onb-r-cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.onb-r-cal-h{text-align:center;opacity:.55;font-size:.6rem}
+.onb-r-cal-d{aspect-ratio:1;border-radius:7px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;background:color-mix(in srgb,currentColor 7%,transparent);font-size:.62rem}
+.onb-r-cal-d.fuera{opacity:.35}.onb-r-cal-d.hoy{outline:1.5px solid #3b82f6}
+.onb-r-cal-p{display:flex;gap:2px;height:4px}.onb-r-cal-p em{width:4px;height:4px;border-radius:50%}
+.onb-r-chips.centro{justify-content:center}
+.onb-r-mat{display:flex;flex-direction:column;gap:5px;padding:7px 9px;border-radius:10px;background:color-mix(in srgb,currentColor 5%,transparent);border-left:4px solid var(--c)}
+.onb-r-mat-n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.onb-r-mapa{position:relative}
+.onb-r-lineas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.onb-r-ciclos.tres{grid-template-columns:repeat(3,minmax(0,1fr))}
+.onb-r-pct{font-size:1rem;min-width:3.2em}
+.onb-r-pt{width:9px;height:9px;border-radius:50%;flex:none;display:inline-block}
+.onb-r-bal{color:#10b981}
+.onb-r-ajuste{padding:12px 14px}
+.onb-r-cuerpo-aj{gap:8px;padding-top:6px}
+.onb-r-navfila{padding:6px 8px;border-radius:10px;background:color-mix(in srgb,currentColor 6%,transparent)}
+.onb-r-logo{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:color-mix(in srgb,currentColor 10%,transparent)}
+
 @media (max-height:700px){.onb-tour-movil .onboarding-lista{font-size:.86rem}.onb-tour-movil .onboarding-copy h1{font-size:1.35rem!important}.onb-tour-movil .onboarding-copy{max-height:50%!important}}
 /* Lado izquierdo del onboarding (progreso, texto y botones): fondo PLANO y fijo, igual que en Optimizado.
    Claro = #fbfbfe · Oscuro = #080808 · Color = el fondo liso de la paleta (--onb-izq, ver colorLadoIzquierdo). No cambia con Fancy. */
@@ -398,9 +438,10 @@ function construirMaqueta() {
 }
 
 /* ── Esquemas de «Conoce…» ─────────────────────────────────────────────────
-   Cada sección se dibuja como se ve de verdad (mismos encabezados, pastillas, tarjetas y etiquetas),
-   pero con datos de ejemplo y SOLO DOM + CSS estático: sin imágenes, sin animaciones y sin cargar la app.
-   Los textos fijos pasan por traducirTextoInterfaz; los nombres de ejemplo (materias, personas) no se traducen. */
+   Cada sección imita la pantalla real (mismos bloques, orden y textos, estado inicial real) con datos de la cuenta demo.
+   SOLO DOM + CSS estático. Cada una devuelve { base, extras }: la base siempre se muestra y los extras se agregan,
+   de arriba hacia abajo, mientras quepan en el alto disponible (ver llenarExtras). Un extra puede ser [padre, nodo]
+   para insertarse dentro de una tarjeta. Los textos fijos pasan por traducirTextoInterfaz; las fechas/horas/montos salen de Intl. */
 const ACENTO = "var(--accent-1,#8b5cf6)", ROJO = "#e5484d", AMBAR = "#d99a00", VERDE = "#22a06b", AZUL = "#3a7de2", MORADO = "#8b4ae0", NARANJA = "#f28a2b";
 function nodo(tag, clase, texto, hijos) {
   const e = document.createElement(tag);
@@ -425,12 +466,8 @@ function rItem(titulo, sub, color, ...derecha) {
   return it;
 }
 function rAvatar(iniciales, color) { const a = nodo("span", "onb-r-av", iniciales); a.style.setProperty("--c", color); return a; }
-function rPersona(iniciales, nombre, sub, color, ...derecha) {
-  return nodo("div", "onb-r-item onb-r-persona", null, [rAvatar(iniciales, color), nodo("div", "", null, [nodo("b", "", nombre), nodo("small", "", sub)]), ...derecha]);
-}
-function rStat(valor, etiqueta, color) { const s = nodo("div", "onb-r-stat", null, [nodo("b", "", valor), rSuave(etiqueta)]); if (color) s.firstChild.style.color = color; return s; }
 
-/* Textos con fecha/hora: salen con Intl en el idioma de la interfaz, así no necesitan catálogo. */
+/* Textos con fecha/hora/monto: salen con Intl en el idioma de la interfaz, así no necesitan catálogo. */
 const idiomaUI = () => (document.documentElement.lang || "es").toLowerCase();
 function fechaUI(y, m, d, opciones) { try { return new Intl.DateTimeFormat(idiomaUI(), opciones).format(new Date(y, m, d)); } catch (e) { return ""; } }
 function svgEl(tag, attrs, texto) {
@@ -439,7 +476,7 @@ function svgEl(tag, attrs, texto) {
   if (texto != null) e.textContent = texto;
   return e;
 }
-const PINK = "#ec4899", CIAN = "#06b6d4", NARANJA2 = "#f97316", INDIGO = "#6366f1", TEAL = "#14b8a6", PURPURA = "#a855f7", GRIS = "#6b7280";
+const PINK = "#ec4899", CIAN = "#06b6d4", NARANJA2 = "#f97316", INDIGO = "#6366f1", TEAL = "#14b8a6", PURPURA = "#a855f7", GRIS = "#6b7280", CELESTE = "#38bdf8";
 const plano = (tag, clase, s) => { const e = document.createElement(tag); if (clase) e.className = clase; e.textContent = s; return e; };
 function horaUI(h, m) { try { return new Intl.DateTimeFormat(idiomaUI(), { hour: "numeric", minute: "2-digit" }).format(new Date(2026, 9, 9, h, m || 0)); } catch (e) { return `${h}:${String(m || 0).padStart(2, "0")}`; } }
 const mayus = (s) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -448,104 +485,213 @@ const rTit = (t) => nodo("b", "onb-r-tit", t);
 function rPildora(t, color) { const e = nodo("span", "onb-r-chip", t); e.style.setProperty("--c", color); return e; }
 function rEstrellas(pct) { const s = nodo("span", "onb-r-est"); const b = nodo("b", "", null); b.textContent = "★★★★★"; b.style.setProperty("--p", `${pct}%`); s.append(b); return s; }
 function rBarraFina(pct, color) { const p = rProg(pct, color); p.classList.add("fina"); return p; }
+function fmtMonto(n) { try { return "₡" + new Intl.NumberFormat(idiomaUI(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n); } catch (e) { return "₡" + n; } }
+const LETRAS_DIAS_ES = ["L", "K", "M", "J", "V", "S", "D"];
+const letraDia = (i) => idiomaUI().startsWith("es") ? LETRAS_DIAS_ES[i] : fechaUI(2026, 9, 5 + i, { weekday: "narrow" }).toUpperCase();
+
+/* Datos de ejemplo de la cuenta demo (nombres, colores y metas), en un solo lugar. */
+const DEMO = {
+  estado: ["Estado Y Gestión Pública", INDIGO],
+  derecho: ["Aspectos Políticos Del Derecho Constitucional", AMBAR],
+  prog: ["Introducción A La Programación", CELESTE],
+  macro: ["Aspectos Políticos De La Macroeconomía", TEAL],
+  ideas: ["Ideas Políticas Y Sus Autores", PINK],
+  analisis: ["Análisis Político", PURPURA],
+  sistemas: ["Sistemas De Información", "#0e7490"],
+  materia: ["Materia", CIAN],
+};
+
+function rClase(hora, mat) {
+  const it = nodo("div", "onb-r-item onb-r-clase", null, [plano("b", "", hora), nodo("div", "", null, [nodo("b", "", mat[0])]), rSuave("Presencial")]);
+  it.style.setProperty("--c", mat[1]); return it;
+}
+function rNavSemana(texto) { return nodo("div", "onb-r-fila onb-r-navsem", null, [nodo("span", "onb-r-eng", "‹"), nodo("b", "onb-r-tit", texto), nodo("span", "onb-r-eng", "›")]); }
+function rEstudioMateria(mat, meta) {
+  const it = rItem(mat[0], null, mat[1], rSuave(meta));
+  return nodo("div", "onb-r-estmat", null, [it, rBarraFina(0, mat[1])]);
+}
 
 function esquemaHorario() {
-  const g = nodo("div", "onb-r-hor");
-  const lunes = 5;
-  for (let i = 0; i < 7; i++) {
-    const c = nodo("span", `onb-r-hd${i === 4 ? " hoy" : ""}`);
-    c.append(nodo("b", "", null), nodo("small", "", null));
-    c.firstChild.textContent = fechaUI(2026, 9, lunes + i, { weekday: "narrow" }).toUpperCase();
-    c.lastChild.textContent = String(lunes + i);
-    c.style.gridColumn = String(i + 2); c.style.gridRow = "1"; g.append(c);
+  const g = nodo("div", "onb-r-hor2");
+  for (let h = 8; h <= 17; h++) {
+    const ln = nodo("span", "onb-r-ln"); ln.style.gridRow = String(h - 6); g.append(ln);
+    const lab = nodo("span", "onb-r-hh2"); lab.style.gridColumn = "1"; lab.style.gridRow = String(h - 6);
+    let periodo = "";
+    try { periodo = new Intl.DateTimeFormat(idiomaUI(), { hour: "numeric", hour12: true }).formatToParts(new Date(2026, 9, 5, h)).find((p) => p.type === "dayPeriod")?.value || ""; } catch (e) {}
+    lab.append(plano("b", "", String(periodo ? ((h + 11) % 12) + 1 : h)));
+    if (periodo) lab.append(plano("small", "", periodo));
+    g.append(lab);
   }
-  for (let h = 8; h <= 15; h++) { const c = nodo("span", "onb-r-hh"); try { c.textContent = new Intl.DateTimeFormat(idiomaUI(), { hour: "numeric" }).format(new Date(2026, 9, 5, h)); } catch (e) { c.textContent = String(h); } c.style.gridColumn = "1"; c.style.gridRow = String(h - 6); g.append(c); }
-  // [columna(2-8), fila inicial, fila final, materia, color]
-  [[2, 2, 4, "Cálculo I", INDIGO], [3, 4, 6, "Química", TEAL], [4, 7, 9, "Álgebra", NARANJA], [5, 2, 4, "Cálculo I", INDIGO], [5, 8, 10, "Física", PURPURA],
-   [6, 3, 5, "Inglés", PINK], [7, 2, 4, "Cálculo I", INDIGO], [7, 4, 6, "Química", TEAL]].forEach(([col, a, b, nombre, color]) => {
-    const bl = nodo("div", "onb-r-blq", nombre); bl.style.gridColumn = String(col); bl.style.gridRow = `${a} / ${b}`; bl.style.background = color; g.append(bl);
+  [5, 6, 7, 8, 9].forEach((d, i) => {
+    const c = nodo("span", "onb-r-hd");
+    c.append(plano("b", "", letraDia(i)), plano("small", "", fechaUI(2026, 9, d, { day: "numeric", month: "short" })));
+    c.style.gridColumn = String(i + 2); c.style.gridRow = "1"; g.append(c);
   });
+  const M = DEMO;
+  // [columna 1-5, hora inicio, hora fin, materia, ícono]
+  [[1, 8, 10, M.estado], [1, 17, 18, M.sistemas], [2, 10, 12, M.derecho, "💻"], [2, 14, 16, M.materia, "💻"], [3, 13, 15, M.derecho],
+   [3, 16, 18, M.prog], [4, 8, 10, M.estado], [4, 15, 17, M.analisis, "📖"], [5, 9, 11, M.ideas]].forEach(([col, a, b, mat, icono]) => {
+    const bl = nodo("div", "onb-r-blq2", null, [nodo("b", "", mat[0])]);
+    if (icono) bl.append(plano("span", "", icono));
+    bl.style.gridColumn = String(col + 1); bl.style.gridRow = `${a - 6} / ${b - 6}`; bl.style.background = mat[1]; g.append(bl);
+  });
+  const ahora = nodo("span", "onb-r-ahora"); ahora.style.gridRow = "9"; g.append(ahora);
   return g;
 }
 
-function esquemaFinanzas() {
-  const w = 300, h = 150, xs = [52, 109, 166, 223, 280], base = 124;
+function esquemaSerieFinanzas() {
+  const w = 300, h = 140, xs = [40, 88, 136, 184, 232, 280], base = 112;
   const svg = svgEl("svg", { viewBox: `0 0 ${w} ${h}`, class: "onb-r-svg", "aria-hidden": "true" });
-  [["150k", 18], ["100k", 52], ["50k", 88], ["0", base]].forEach(([t, y]) => {
+  [["600k", 18], ["400k", 46], ["200k", 79], ["0", base]].forEach(([t, y]) => {
     svg.append(svgEl("text", { x: 2, y: y + 3, "font-size": 8, fill: "currentColor", opacity: ".55" }, t));
-    if (t !== "0") svg.append(svgEl("line", { x1: 30, x2: 292, y1: y, y2: y, stroke: "currentColor", "stroke-opacity": ".18", "stroke-dasharray": "3 3" }));
+    if (t !== "0") svg.append(svgEl("line", { x1: 28, x2: 292, y1: y, y2: y, stroke: "currentColor", "stroke-opacity": ".15", "stroke-dasharray": "3 3" }));
   });
-  [[ "#ef4444", [base, base, 120, 117, 30]], ["#10b981", [base, base, base, base, 42]], ["#3b82f6", [base, 96, base, base, base]]].forEach(([color, ys]) => {
-    svg.append(svgEl("polyline", { points: xs.map((x, i) => `${x},${ys[i]}`).join(" "), fill: "none", stroke: color, "stroke-width": 2.6, "stroke-linejoin": "round" }));
-    xs.forEach((x, i) => svg.append(svgEl("circle", { cx: x, cy: ys[i], r: 3.2, fill: color })));
+  [["#ef4444", [60, 62, 84, 50, 98, 36]], ["#10b981", [base, base, base, 108, base, 104]], ["#3b82f6", [base, 100, base, 94, 106, base]]].forEach(([color, ys]) => {
+    svg.append(svgEl("polyline", { points: xs.map((x, i) => `${x},${ys[i]}`).join(" "), fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round" }));
+    xs.forEach((x, i) => svg.append(svgEl("circle", { cx: x, cy: ys[i], r: 2.6, fill: color })));
   });
-  ["2024-1", "2025-1", "2025-2", "2026-1", "2026-2"].forEach((t, i) => svg.append(svgEl("text", { x: xs[i], y: 142, "font-size": 7.5, fill: "currentColor", opacity: ".6", "text-anchor": "middle" }, t)));
+  ["2023-1", "2023-2", "2024-1", "2024-2", "2025-1", "2025-2"].forEach((t, i) => svg.append(svgEl("text", { x: xs[i], y: 130, "font-size": 7, fill: "currentColor", opacity: ".6", "text-anchor": "middle" }, t)));
   return svg;
 }
+function esquemaGraficoMetas() {
+  const svg = svgEl("svg", { viewBox: "0 0 300 84", class: "onb-r-svg", "aria-hidden": "true" });
+  [10, 34, 58].forEach((y) => svg.append(svgEl("line", { x1: 20, x2: 292, y1: y, y2: y, stroke: "currentColor", "stroke-opacity": ".15" })));
+  svg.append(svgEl("polyline", { points: "24,70 64,70 104,70 144,70 184,70 224,12 284,12", fill: "none", stroke: "currentColor", "stroke-opacity": ".55", "stroke-width": 1.4, "stroke-dasharray": "4 3" }));
+  svg.append(svgEl("polyline", { points: "24,70 284,70", fill: "none", stroke: "#ef4444", "stroke-width": 1.6 }));
+  return svg;
+}
+function rMiniCalendario() {
+  const card = rCard(nodo("div", "onb-r-centro", null, [plano("b", "onb-r-tit", mayus(fechaUI(2026, 9, 1, { month: "long", year: "numeric" }))), nodo("small", "onb-r-etq", "Volver a hoy")]));
+  const g = nodo("div", "onb-r-cal");
+  LETRAS_DIAS_ES.forEach((_, i) => g.append(plano("span", "onb-r-cal-h", letraDia(i))));
+  const puntos = { 3: [AZUL, VERDE, NARANJA], 5: [ROJO, AZUL, VERDE], 7: [AZUL], 8: [AZUL, VERDE], 9: [ROJO, NARANJA], 10: [CIAN], 12: [AZUL, VERDE, PURPURA], 16: [ROJO, NARANJA], 19: [GRIS, VERDE, CIAN] };
+  [28, 29, 30, ...Array.from({ length: 31 }, (_, i) => i + 1), 1].forEach((n, i) => {
+    const fuera = i < 3 || i === 34;
+    const c = nodo("span", `onb-r-cal-d${fuera ? " fuera" : ""}${n === 10 && !fuera ? " hoy" : ""}`);
+    c.append(plano("b", "", String(n)));
+    if (!fuera && puntos[n]) { const p = nodo("i", "onb-r-cal-p"); puntos[n].forEach((col) => { const d = document.createElement("em"); d.style.background = col; p.append(d); }); c.append(p); }
+    g.append(c);
+  });
+  card.append(g); return card;
+}
+function rMateriaPlan(cod, nombre, color) {
+  const m = nodo("div", "onb-r-mat", null, [
+    rFila("", nodo("span", "onb-punto"), plano("small", "onb-r-cod", cod), nodo("b", "onb-r-mat-n", nombre), nodo("span", "onb-r-m", "▼")),
+    rFila("onb-r-sp", rPildora("Aprobada", "#10b981"), nodo("span", "onb-r-m", "Horas: 6"), rPildora("Créditos: 3", "#6366f1"))]);
+  m.style.setProperty("--c", color); return m;
+}
+function rMapaPlan() {
+  const cur = (cod, nombre, estado) => nodo("div", `onb-r-curso ${estado}`, null, [nodo("small", "onb-r-cod", cod), nodo("b", "", nombre)]);
+  const col = (t, ...cs) => nodo("div", "onb-r-ciclo-col", null, [nodo("b", "onb-r-ciclo-t", t), ...cs]);
+  const cols = nodo("div", "onb-r-ciclos tres", null, [
+    col("Ciclo 1", cur("EG-I", "Humanidades I", "ok"), cur("CP-1504", "El poder desde la ciencia política", "ok"), cur("CP-1501", "Epistemología y lógica", "ok")),
+    col("Ciclo 2", cur("EG-II", "Humanidades II", "ok"), cur("CP-1502", "Instituciones públicas", "ok"), cur("CP-1503", "Diseño de investigación", "ok")),
+    col("Ciclo 3", cur("SR-I", "Realidad nacional I", "pen"), cur("CP-2004", "Análisis cuantitativo I", "cur"), cur("CP-2005", "Ideas políticas I", "cur"))]);
+  const svg = svgEl("svg", { viewBox: "0 0 100 100", preserveAspectRatio: "none", class: "onb-r-lineas", "aria-hidden": "true" });
+  [[31, 38, 36, 38], [31, 62, 36, 66], [64, 30, 69, 30], [64, 62, 69, 54], [64, 80, 69, 84]].forEach(([x1, y1, x2, y2]) =>
+    svg.append(svgEl("line", { x1, y1, x2, y2, stroke: "#3b82f6", "stroke-width": 1.6, "vector-effect": "non-scaling-stroke" })));
+  return nodo("div", "onb-r-mapa", null, [cols, svg]);
+}
+function rFilaAjuste(t) { return nodo("div", "onb-bloque onb-r-fila onb-r-sp onb-r-ajuste", null, [nodo("b", "", t), nodo("span", "onb-r-m", "▾")]); }
+function rFilaNav(t) { return nodo("div", "onb-r-fila onb-r-sp onb-r-navfila", null, [rFila("", nodo("span", "onb-r-m", "⋮⋮"), nodo("span", "", t)), nodo("span", "onb-interruptor")]); }
 
 function contenidoEsquema(id) {
-  const c = [];
+  const base = [], extras = [];
+  const M = DEMO;
   switch (id) {
-    case "resumen":
-      c.push(nodo("div", "onb-bloque onb-r-cab", null, [rProg(55), nodo("b", "onb-r-tit", "Semana 9 de 16"), rSuave("Faltan 52 días")].map((e, i) => { if (i === 0) e.style.width = "60px"; return e; })),
-        rCard(rFila("onb-r-sp", rTit("Estudio de hoy"), nodo("b", "onb-r-m", "0 min de 7 h 30 min")), rProg(0),
-          rItem("Cálculo I", null, TEAL, rSuave("0 min estudiados · meta 5 h")), rItem("Programación", null, PINK, rSuave("0 min estudiados · meta 2 h 30 min"))),
-        rCard(rTit("Clases de hoy"), rEtiqueta("Clases"), rItem(`${horaUI(9)}  ${traducirTextoInterfaz("Programación")}`, null, PINK, rSuave("Presencial"))));
+    case "resumen": {
+      const semana = nodo("div", "onb-bloque onb-r-cab", null, [rProg(55), nodo("b", "onb-r-tit", "Semana 9"), rSuave("Faltan 51 días")]);
+      semana.firstChild.style.width = "56px";
+      const estudio = rCard(rFila("onb-r-sp", rTit("Estudio de hoy"), nodo("b", "onb-r-m", "0 min de 11 h")), rProg(0),
+        rEstudioMateria(M.derecho, "0 min estudiados · meta 6 h"), rEstudioMateria(M.prog, "0 min estudiados · meta 5 h"));
+      estudio.classList.add("acento");
+      base.push(semana, estudio, rCard(rTit("Clases de hoy"), rEtiqueta("Clases"), rClase(horaUI(8), M.estado), rClase(horaUI(10), M.macro), rClase(horaUI(12), M.derecho)));
+      extras.push(
+        rCard(rTit("Exámenes próximos"), rItem(mayus(fechaUI(2026, 9, 16, { weekday: "short", day: "numeric", month: "short" })), "Examen: avance grupal", ROJO, rSuave("En 6 días"))),
+        rCard(rTit("Entregas próximas"), rItem("Informe de lectura", M.ideas[0], AZUL, rSuave("En 3 días")), rItem("Tarea 4", M.prog[0], CELESTE, rSuave("En 5 días"))),
+        rCard(rTit("Requiere atención"), rItem("2 tareas pendientes", null, NARANJA, rSuave("›")), rItem("1 examen esta semana", null, ROJO, rSuave("›"))));
       break;
-    case "agenda":
-      c.push(nodo("div", "onb-bloque onb-r-cab onb-r-cab3", null, [
-          nodo("div", "onb-r-centro", null, [nodo("b", "onb-r-ciclo", "II Ciclo 2026"),
-            rFila("onb-r-sp", nodo("span", "onb-r-mas", "+"), nodo("div", "onb-r-centro", null, [nodo("b", "onb-r-tit", "‹  Semana 9  ›"), plano("span", "onb-r-m", `5 - 11 ${fechaUI(2026, 9, 11, { month: "short" })}  ${traducirTextoInterfaz("Hoy")}`)]), nodo("span", "onb-r-eng", "⚙️"))])]),
-        nodo("div", "onb-r-buscar onb-r-opc", "Buscar en toda la Agenda..."),
-        nodo("div", "onb-r-chips", null, [["Clase", PINK], ["Completado", "#3b82f6"], ["Perdida", GRIS], ["Pendiente", "#f59e0b"], ["Tarea", "#3b82f6"], ["Examen", ROJO], ["Evento", CIAN], ["Feriado", "#10b981"], ["Proyecto", PURPURA], ["Quiz", NARANJA2]].map(([t, col]) => rPildora(t, col))),
-        nodo("div", "onb-bloque onb-r-fila onb-r-opc", null, [rSuave("‹  4 días anteriores")]),
-        rCard(rFila("onb-r-sp", nodo("span", "", null, [plano("b", "onb-r-tit", mayus(fechaUI(2026, 9, 9, { weekday: "long" }))), plano("span", "onb-r-m", `  ${fechaUI(2026, 9, 9, { day: "numeric", month: "short" })}`)]), nodo("span", "onb-r-hoy", "Hoy")),
-          rEtiqueta("Estudio para hoy"),
-          (() => { const e = rItem("Cálculo I", null, "#10b981", rSuave("0 min de 5 h")); e.classList.add("tinte"); return e; })(),
-          rEtiqueta("Clases"), rItem(`${horaUI(9)}  ${traducirTextoInterfaz("Programación")}`, null, PINK, rSuave("Presencial")),
-          rEtiqueta("Examen"), rItem("Examen: avance grupal", "Cálculo I", ROJO, rTag("Examen", ROJO), plano("span", "onb-r-m", horaUI(12)))));
+    }
+    case "agenda": {
+      const cab = nodo("div", "onb-bloque onb-r-cab onb-r-cab3", null, [nodo("div", "onb-r-centro", null, [nodo("b", "onb-r-ciclo", "II Ciclo 2026"),
+        rFila("onb-r-sp", nodo("span", "onb-r-mas", "+"),
+          nodo("div", "onb-r-centro", null, [nodo("div", "onb-r-fila onb-r-navsem", null, [nodo("span", "onb-r-eng", "‹"), nodo("b", "onb-r-tit", "Semana 9"), nodo("span", "onb-r-eng", "›")]),
+            nodo("span", "onb-r-m", null, [plano("span", "", `5 - 11 ${fechaUI(2026, 9, 11, { month: "short" })} · `), nodo("u", "", "Hoy")])]),
+          nodo("span", "onb-r-eng", "⚙️"))])]);
+      base.push(rPills(["Lista", "Calendario", "Cronograma"], 0), cab, nodo("div", "onb-r-buscar", "Buscar en toda la Agenda..."));
+      const dia = rCard(rFila("onb-r-sp", nodo("span", "", null, [plano("b", "onb-r-tit", mayus(fechaUI(2026, 9, 10, { weekday: "long" }))), plano("span", "onb-r-m", `  ${fechaUI(2026, 9, 10, { day: "numeric", month: "short" })}`)]), nodo("span", "onb-r-hoy", "Hoy")),
+        rEtiqueta("Estudio para hoy"),
+        (() => { const e = rItem(M.derecho[0], null, M.derecho[1], rSuave("0 min de 6 h")); e.classList.add("tinte"); return e; })(),
+        (() => { const e = rItem(M.prog[0], null, M.prog[1], rSuave("0 min de 5 h")); e.classList.add("tinte"); return e; })(),
+        rEtiqueta("Clases"), rClase(horaUI(8), M.estado), rClase(horaUI(10), M.macro));
+      extras.push(
+        nodo("div", "onb-r-chips centro", null, [["Clase", PINK], ["Completado", "#3b82f6"], ["Perdida", GRIS], ["Pendiente", "#f59e0b"], ["Tarea", "#3b82f6"], ["Examen", ROJO], ["Evento", CIAN], ["Feriado", "#10b981"], ["Proyecto", PURPURA], ["Quiz", NARANJA2]].map(([t, col]) => rPildora(t, col))),
+        nodo("div", "onb-bloque onb-r-fila", null, [rSuave("‹  5 días anteriores")]), dia, rMiniCalendario());
       break;
-    case "horario":
-      c.push(nodo("div", "onb-bloque onb-r-horario", null, [esquemaHorario()]));
+    }
+    case "horario": {
+      const cab = nodo("div", "onb-bloque onb-r-cab onb-r-cab3", null, [nodo("div", "onb-r-centro", null, [nodo("span", "onb-r-m", "II Ciclo 2026"),
+        nodo("div", "onb-r-fila onb-r-navsem", null, [nodo("span", "onb-r-eng", "‹"), nodo("b", "onb-r-tit", "Semana 9"), nodo("span", "onb-r-eng", "›")]),
+        plano("span", "onb-r-m", fechaUI(2026, 9, 10, { day: "numeric", month: "short" }))])]);
+      const botones = rFila("onb-r-sp onb-r-botonesh", rBoton("+ Agregar"), nodo("span", "onb-r-eng", "⬇"), nodo("span", "onb-r-eng", "⛶"), rBoton("Amigos", true));
+      base.push(cab, botones, nodo("div", "onb-bloque onb-r-horario est", null, [esquemaHorario()]));
       break;
+    }
     case "tiempo-estudio": {
-      const anillo = nodo("div", "onb-r-anillo", null, [nodo("div", "", null, [nodo("b", "onb-r-reloj", "00:02"), nodo("small", "onb-r-estudiando", "Estudiando")])]);
-      const caja = (v, t) => nodo("div", "onb-r-caja", null, [nodo("b", "", v), nodo("small", "", t)]);
-      c.push(nodo("div", "onb-bloque onb-r-cab", null, [nodo("span", "onb-r-eng", "◀"), nodo("b", "onb-r-tit", "TI9905 · Sistemas de información"), nodo("span", "onb-r-eng", "⚙️")]),
-        nodo("div", "onb-bloque onb-r-tiempo3", null, [nodo("div", "onb-r-cajas", null, [caja("0 min", "Estudiado"), caja("5 h", "Faltan"), caja("5 h", "Meta")]), anillo,
-          nodo("div", "onb-r-cajas", null, [nodo("span", "onb-r-btn s grande", "❚❚ Pausar"), nodo("span", "onb-r-btn r grande", "■ Detener")])]));
+      const cab = nodo("div", "onb-bloque onb-r-cab onb-r-cabte", null, [nodo("span", "onb-r-eng", "⏮"), nodo("b", "onb-r-tit onb-r-nomte", "CP-2004 · Análisis cuantitativo I"), nodo("span", "onb-r-eng", "⚙️")]);
+      const aro = nodo("div", "onb-aro"); aro.style.background = "color-mix(in srgb,var(--accent-1,#8b5cf6) 22%,transparent)";
+      const anillo = nodo("div", "onb-r-aro g", null, [aro, nodo("b", "onb-r-tiempo", null)]); anillo.lastChild.textContent = "00:00";
+      const caja = (v, t) => nodo("div", "onb-r-caja ancha", null, [nodo("b", "", v), nodo("small", "", t)]);
+      base.push(cab, nodo("div", "onb-bloque onb-r-card onb-r-principalte", null, [nodo("div", "onb-r-centro", null, [anillo]), nodo("span", "onb-r-btn grande", "▷ Iniciar"), caja("0 min", "Estudiado"), caja("5 h", "Faltan"), caja("5 h", "Meta")]));
+      extras.push(
+        rCard(rTit("Resumen de metas"), rNavSemana("Semana 9"), esquemaGraficoMetas(),
+          nodo("div", "onb-r-leyenda", null, [["Estudiado: 0 min", "#ef4444"], ["Meta semana: 5 h", GRIS]].map(([t, col]) => { const e = nodo("span", "", t); e.style.setProperty("--c", col); return e; }))),
+        rCard(rTit("Horas estudiadas"), rPills(["Semana", "Semestre"], 0), rNavSemana("Semana 9"),
+          nodo("div", "onb-r-vacio", "Sin sesiones registradas en este período: prueba con el navegador de arriba.")));
       break;
     }
     case "semestres": {
-      const mat = (cod, nombre, nota, color, inst) => nodo("div", "onb-r-curso2", null, [
-        nodo("div", "onb-r-fila onb-r-sp", null, [nodo("span", "", null, [nodo("small", "onb-r-cod", cod), nodo("b", "", `  ${nombre}`)]), nodo("b", "", `Nota: ${nota}`)]),
-        nodo("div", "onb-r-fila onb-r-sp", null, [rPildora("Cursando", "#f59e0b"), rPildora(inst, GRIS), rPildora("Créditos: 3", "#3b82f6")])]);
-      const fila = (m) => { m.style.borderLeftColor = ""; return m; };
-      const m1 = mat("TI1400", "Introducción a la programación", 75, CIAN, "TEC"), m2 = mat("CP-2001", "Estado y gestión", 85, INDIGO, "UCR"), m3 = mat("CP-2002", "Macroeconomía", 70, INDIGO, "UCR");
-      m1.style.setProperty("--c", CIAN); m2.style.setProperty("--c", INDIGO); m3.style.setProperty("--c", INDIGO);
-      c.push(rCard(rTit("Semestre actual"),
-        rCard(rFila("onb-r-sp", nodo("span", "", null, [rTit("II Ciclo 2026"), (() => { const f = nodo("small", "onb-r-etq"); f.textContent = fechaUI(2026, 7, 10, { day: "numeric", month: "long", year: "numeric" }); return f; })()]), rPildora("Créditos: 21", "#3b82f6")), fila(m1), fila(m2), m3)));
+      const sem = (n, cred) => nodo("div", "onb-bloque onb-r-fila onb-r-sp onb-r-semfila", null, [nodo("b", "", n), nodo("span", "onb-r-m", "···"), rPildora(cred, INDIGO), nodo("span", "onb-r-m", "▼")]);
+      base.push(nodo("div", "onb-bloque onb-r-fila onb-r-sp", null, [rTit("Historial académico"), nodo("span", "onb-r-m", "▼")]),
+        rCard(rTit("Semestre actual"), sem("Semestre VI", "Créditos: 15"), rFila("onb-r-sp onb-r-botonesh", rBoton("+ Agregar", true), rBoton("Editar semestres", true))),
+        rCard(rTit("Semestres pasados"), sem("Semestre V", "Créditos: 11"), sem("Verano I", "Créditos: 3"), sem("Semestre IV", "Créditos: 16")));
+      const mat = (cod, nombre, nota, color) => {
+        const m = nodo("div", "onb-r-curso2", null, [
+          rFila("onb-r-sp", nodo("span", "", null, [nodo("small", "onb-r-cod", cod), nodo("b", "", `  ${nombre}`)]), nodo("b", "", `Nota: ${nota}`)),
+          rFila("onb-r-sp", rPildora("Cursando", "#f59e0b"), rPildora("Créditos: 3", "#3b82f6"))]);
+        m.style.setProperty("--c", color); return m;
+      };
+      extras.push(rCard(rFila("onb-r-sp", rTit("Semestre VI"), rPildora("Créditos: 15", INDIGO)), mat("CP-2001", M.estado[0], 85, INDIGO), mat("TI1400", M.prog[0], 75, CELESTE), mat("CP-2002", M.macro[0], 70, TEAL)));
+      break;
+    }
+    case "finanzas": {
+      const aro = nodo("div", "onb-aro"); aro.style.background = "conic-gradient(#ef4444 0 82%,color-mix(in srgb,currentColor 16%,transparent) 82% 100%)";
+      const anillo = nodo("div", "onb-r-aro g", null, [aro]);
+      const lin = (pct, t, monto, color) => { const f = rFila("onb-r-sp", plano("b", "onb-r-pct", pct), nodo("span", "", t), plano("b", "", monto)); f.firstChild.style.color = color; return f; };
+      const fb = rFila("onb-r-sp", nodo("span", "onb-r-fila", null, [nodo("i", "onb-r-pt"), nodo("span", "", "Beca")]), plano("b", "", fmtMonto(400000)));
+      fb.firstChild.firstChild.style.background = "#10b981";
+      const fi = rFila("onb-r-sp", nodo("span", "onb-r-fila", null, [nodo("i", "onb-r-pt"), nodo("span", "", "Ingresos")]), plano("b", "", fmtMonto(623000)));
+      fi.firstChild.firstChild.style.background = "#3b82f6";
+      const bal = nodo("div", "onb-r-centro", null, [nodo("span", "onb-r-m", "Balance total"), plano("b", "onb-r-tit onb-r-bal", fmtMonto(180700))]);
+      base.push(rCard(rTit("Resumen"), nodo("div", "onb-r-centro", null, [anillo]), lin("82%", "Gastado", fmtMonto(842300), "#ef4444"), lin("18%", "Disponible", fmtMonto(180700), "#10b981"), fb, fi, bal),
+        rCard(rTit("Por semestre"), esquemaSerieFinanzas(),
+          nodo("div", "onb-r-leyenda", null, [["Gastos", "#ef4444"], ["Beca", "#10b981"], ["Ingresos", "#3b82f6"]].map(([t, col]) => { const e = nodo("span", "", t); e.style.setProperty("--c", col); return e; }))));
+      const mov = (n, f, monto, col) => rItem(n, f, col, plano("b", "", monto));
+      extras.push(rCard(rTit("Movimientos recientes"), mov("Matrícula", fechaUI(2026, 9, 2, { day: "numeric", month: "short" }), `-${fmtMonto(310000)}`, "#ef4444"),
+        mov("Beca", fechaUI(2026, 9, 1, { day: "numeric", month: "short" }), `+${fmtMonto(400000)}`, "#10b981"), mov("Transporte", fechaUI(2026, 8, 28, { day: "numeric", month: "short" }), `-${fmtMonto(24500)}`, "#ef4444")));
+      break;
+    }
+    case "plan-estudios": {
+      const lista = nodo("div", "onb-bloque onb-r-card", null, [rFila("onb-r-sp", rTit("Bloque 1"), nodo("span", "onb-r-m", "▲"))]);
+      base.push(nodo("div", "onb-bloque onb-r-card", null, [rMapaPlan()]), lista);
+      [["EG-I", "Humanidades I", "#f59e0b"], ["EG-II", "Humanidades II", "#dc2626"], ["CP-1501", "Epistemología y lógica", "#d946ef"], ["CP-1502", "Instituciones públicas", "#34d399"], ["CP-1503", "Diseño de investigación", "#a855f7"]]
+        .forEach(([cod, n, col], i) => { const m = rMateriaPlan(cod, n, col); if (i < 2) lista.append(m); else extras.push([lista, m]); });
       break;
     }
     case "comunidad": {
       const doc = (n, pct, ok) => nodo("div", "onb-bloque onb-r-doc", null, [nodo("b", "", n), rEstrellas(pct), rPildora(ok ? "✓ Recomendado" : "✕ No recomendado", ok ? "#10b981" : ROJO), nodo("span", "onb-r-m", "▼")]);
-      c.push(doc("Prof. Natalia Vega", 92, true), doc("Prof. Sofía Chacón", 70, true), doc("Prof. Esteban Rojas", 60, false), doc("Prof. Laura Jiménez", 84, true), doc("Prof. Pablo Araya", 80, true), doc("Prof. Marcos Alvarado", 0, true));
-      break;
-    }
-    case "finanzas":
-      c.push(rCard(rTit("Por semestre"), esquemaFinanzas(),
-        nodo("div", "onb-r-leyenda", null, [["Gastos", "#ef4444"], ["Beca", "#10b981"], ["Ingresos", "#3b82f6"]].map(([t, col]) => { const e = nodo("span", "", t); e.style.setProperty("--c", col); return e; }))));
-      break;
-    case "plan-estudios": {
-      const cur = (cod, nombre, estado) => { const e = nodo("div", `onb-r-curso ${estado}`, null, [nodo("small", "onb-r-cod", cod), nodo("b", "", nombre)]); return e; };
-      const col = (t, ...cs) => nodo("div", "onb-r-ciclo-col", null, [nodo("b", "onb-r-ciclo-t", t), ...cs]);
-      const cuarta = col("Ciclo 4", cur("CP-2006", "Representación y partidos", "pen"), cur("CP-2007", "Análisis cuantitativo II", "pen"), cur("CP-2008", "Ideas políticas II", "pen"));
-      cuarta.classList.add("onb-r-opc");
-      c.push(nodo("div", "onb-r-ciclos", null, [
-        col("Ciclo 1", cur("EG-I", "Humanidades I", "pen"), cur("OPT-", "Optativo de idioma", "pen"), cur("CP-1504", "El poder desde la ciencia política", "ok"), cur("CP-1501", "Epistemología y lógica", "ok")),
-        col("Ciclo 2", cur("EG-II", "Humanidades II", "pen"), cur("CP-1502", "Instituciones públicas", "ok"), cur("CP-1503", "Diseño de investigación", "ok")),
-        col("Ciclo 3", cur("SR-I", "Realidad nacional I", "pen"), cur("CP-2001", "Estado y gestión pública", "ok"), cur("CP-2004", "Análisis cuantitativo I", "cur"), cur("CP-2005", "Ideas políticas I", "cur")),
-        cuarta]));
+      base.push(nodo("div", "onb-r-buscar", "Buscar docentes..."), doc("Prof. Natalia Vega", 92, true), doc("Prof. Sofía Chacón", 70, true), doc("Prof. Esteban Rojas", 60, false));
+      extras.push(doc("Prof. Laura Jiménez", 84, true), doc("Prof. Pablo Araya", 80, true), doc("Prof. Marcos Alvarado", 0, true), doc("Prof. Elena Mora", 76, true));
       break;
     }
     case "asistente": {
@@ -554,29 +700,51 @@ function contenidoEsquema(id) {
         nodo("small", "onb-r-etq", "Agregado por asistente"), nodo("span", "onb-r-acc", null, [nodo("span", "e", "Editar"), nodo("span", "x", "Eliminar")])]);
       const dia = `${fechaUI(2026, 9, 12, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} · ${traducirTextoInterfaz("Todo el día")}`;
       const dia2 = `${fechaUI(2026, 9, 16, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} · ${traducirTextoInterfaz("Todo el día")}`;
-      c.push(nodo("div", "onb-r-hilo", null, [
+      base.push(nodo("div", "onb-r-hilo", null, [
         burb("", "¡Hola! Soy Wapper 👋, tu asistente académico. ¿Tienes alguna tarea, examen o evento que quieras agregar?"),
         burb("yo", "Tengo laboratorio la próxima semana y acuérdame del quiz del viernes"),
         burb("", "Guardé 2 cosas en tu Agenda:"), tarjeta("✅", "Laboratorio", dia), tarjeta("📝", "Quiz", dia2)]),
         nodo("div", "onb-r-entrada", null, [nodo("span", "onb-r-m", "Ejemplo: Reunión de grupo el sábado a las 10am"), nodo("span", "onb-r-mas", "➤")]));
       break;
     }
-    case "configuracion":
-      c.push(rCard(rNegrita("Apariencia"), rPills(["Claro", "Color", "Oscuro"], 1)),
-        rCard(rNegrita("Paleta"), nodo("div", "onb-r-paleta", null, ["azul", "indigo", "morado", "rosado", "rojo", "verde"].map((p) => { const d = document.createElement("i"); d.style.background = (COLORES_PREVIEW_PALETA[p] || ["#8b5cf6"])[0]; return d; }))),
-        rCard(rNegrita("Tamaño del texto"), rPills(["Pequeño", "Mediano", "Grande"], 1)),
-        rCard(rFila("onb-r-sp", nodo("span", "", "Idioma"), rSuave("Español")), rFila("onb-r-sp", nodo("span", "", "Notificaciones"), nodo("span", "onb-interruptor")), rFila("onb-r-sp", nodo("span", "", "Animación de apertura"), nodo("span", "onb-interruptor"))));
+    case "configuracion": {
+      const cuerpoPers = nodo("div", "onb-r-card onb-r-cuerpo-aj");
+      const pers = nodo("div", "onb-bloque onb-r-card", null, [rFila("onb-r-sp", nodo("b", "", "Personalizar"), nodo("span", "onb-r-m", "▾")), cuerpoPers]);
+      base.push(rFilaAjuste("Ajustes generales"), rFilaAjuste("Asistente IA (Gemini)"), rFilaAjuste("Notificaciones"), pers,
+        rFilaAjuste("Horario"), rFilaAjuste("Plan de Estudios activo"), rFilaAjuste("Enlaces rápidos"), rFilaAjuste("Datos"));
+      const bolitas = nodo("div", "onb-r-paleta", null, [INDIGO, PINK, CELESTE, TEAL, AMBAR, PURPURA].map((c) => { const d = document.createElement("i"); d.style.background = c; return d; }));
+      const logos = nodo("div", "onb-r-paleta", null, ["📁", "🎓"].map((s) => nodo("span", "onb-r-logo", null, [plano("span", "", s)])));
+      extras.push([cuerpoPers, nodo("span", "onb-r-etq up", "Navegación")], [cuerpoPers, rFilaNav("Agenda")], [cuerpoPers, rFilaNav("Horario")], [cuerpoPers, rFilaNav("Tiempo")],
+        [cuerpoPers, nodo("span", "onb-r-etq up", "Logo de la app")], [cuerpoPers, logos],
+        [cuerpoPers, nodo("span", "onb-r-etq up", "Animación de apertura")], [cuerpoPers, bolitas], [cuerpoPers, nodo("span", "onb-r-btn s grande", "Usar colores de la paleta")]);
       break;
+    }
     default:
-      c.push(rCard(rProg(70), rProg(50)));
+      base.push(rCard(rProg(70), rProg(50)));
   }
-  return c;
+  return { base, extras };
 }
 
-function construirEsquema(id, nombre) {
-  const titulo = document.createElement("span"); titulo.textContent = traducirTextoInterfaz(nombre);
-  const cuerpo = nodo("div", "onb-r", null, contenidoEsquema(id));
-  return elDiv("onb-marco", elDiv("onb-es-top", document.createElement("i"), titulo), cuerpo);
+function construirEsquema(id, nombre, conEncabezado) {
+  const { base, extras } = contenidoEsquema(id);
+  const cuerpo = nodo("div", "onb-r", null, base);
+  const marco = elDiv("onb-marco");
+  // En teléfono no hay encabezado (era espacio muerto); en pantallas grandes se conserva.
+  if (conEncabezado) { const titulo = document.createElement("span"); titulo.textContent = traducirTextoInterfaz(nombre); marco.append(elDiv("onb-es-top", document.createElement("i"), titulo)); }
+  marco.append(cuerpo);
+  marco._extras = extras;
+  return marco;
+}
+/* Relleno progresivo: agrega extras de arriba hacia abajo mientras quepan en el alto disponible. */
+function llenarExtras(marco) {
+  const cuerpo = marco.querySelector(".onb-r"); if (!cuerpo) return;
+  const lista = marco._extras || [];
+  lista.forEach((e) => (Array.isArray(e) ? e[1] : e).remove());
+  for (const e of lista) {
+    const [padre, n] = Array.isArray(e) ? e : [cuerpo, e];
+    padre.append(n);
+    if (cuerpo.scrollHeight > cuerpo.clientHeight + 1) { n.remove(); break; }
+  }
 }
 
 function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
@@ -672,8 +840,8 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
   const prepararEsquema=(sec)=>{
     if(seccionVista!==sec){ // sección nueva: vuelve al dibujo (la demo anterior queda oculta)
       seccionVista=sec;vivoPedido=false;clearTimeout(vigilanteReveal);clearTimeout(temporizadorReveal);
-      esquema.replaceChildren(construirEsquema(sec,secciones.find(x=>x.id===sec)?.nombre||"App Académica"));
-      aplicarModoVista("esquema");
+      esquema.replaceChildren(construirEsquema(sec,secciones.find(x=>x.id===sec)?.nombre||"App Académica",!esMovil()));
+      aplicarModoVista("esquema");requestAnimationFrame(ajustarEscalaEsquema);
     }
     if(modoVista==="esquema")programarPrecarga(sec);
   };
@@ -716,18 +884,17 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
   const textoPager=document.createElement("span");textoPager.className="onboarding-pager-texto";
   pager.append(...puntosPager,textoPager);panel.querySelector(".onboarding-acciones").before(pager,puntosTour);
   const ajustarEscalaEsquema=()=>{
-    // Teléfono: la maqueta se dibuja a un ancho "de pantalla grande" (440px) y se reduce entera, así se ve completa y proporcionada.
+    // Teléfono: se dibuja a 440px de ancho y se reduce por ANCHO (letra legible); el alto sobrante se llena con extras.
     const marco=esquema.firstElementChild;if(!marco)return;
     marco.style.width="";marco.style.height="";marco.style.transform="";
-    if(!esMovil()||esquema.hidden)return;
-    const cuerpo=marco.querySelector(".onb-r");if(!cuerpo)return;
+    if(esquema.hidden)return;
+    if(!esMovil()){llenarExtras(marco);return;}
     const ANCHO=440,dispW=esquema.clientWidth,dispH=esquema.clientHeight;
     if(!dispW||!dispH)return;
-    marco.style.width=`${ANCHO}px`;
-    const necesita=marco.clientHeight-cuerpo.clientHeight+cuerpo.scrollHeight;
-    const k=Math.max(.5,Math.min(1,dispW/ANCHO,dispH/(necesita||dispH)));
-    if(k>=.995){marco.style.width="";return;}
-    marco.style.width=`${dispW/k}px`;marco.style.height=`${dispH/k}px`;marco.style.transform=`scale(${k})`;
+    const k=Math.max(.6,Math.min(1,dispW/ANCHO));
+    marco.style.width=`${dispW/k}px`;marco.style.height=`${dispH/k}px`;
+    if(k<.995)marco.style.transform=`scale(${k})`;
+    llenarExtras(marco);
   };
   const alRedimensionar=()=>requestAnimationFrame(ajustarEscalaEsquema);
   addEventListener("resize",alRedimensionar);
