@@ -15,7 +15,7 @@ import { MODO_DEMO, PREVIEW_DEMO, activarEstadoDemo, cargarDatosDemo, registrarA
 import { configurarCorreoAnalitica, inicializarAnaliticaUso, registrarAnaliticaUso } from "./core/analitica.js";
 import { inicializarTutorialDesdeAjustes, mostrarOnboardingNuevoUsuario, mostrarTutorialPrimeraVez } from "./core/onboarding.js";
 import { aplicarLogoApp } from "./core/marca.js";
-import { abrirIntroCarga, cancelarIntroCarga, iniciarIntroCarga } from "./core/intro-apertura.js";
+import { abrirIntroCarga, cancelarIntroCarga, iniciarIntroCarga, introEnCurso } from "./core/intro-apertura.js";
 import { inicializarInstalacionApp, mostrarInvitacionInstalacion } from "./core/instalacion-app.js";
 import { obtenerIniciales } from "./core/utils.js";
 // Sincronización con Google Calendar (2026-08-25, reemplaza Web Push) -
@@ -222,6 +222,36 @@ function mostrarPantallaCargaSesion() {
 function ocultarPantallaCargaSesion() {
   ocultarPantallaCargaSesionBase();
   if (!dentroDeMostrarApp) cancelarIntroCarga();
+}
+
+/* Rendimiento de la intro (2026-10-11).
+   El folder se monta y, en el arranque con sesión en caché, mostrarApp() corría EN LA MISMA TAREA:
+   el render de todas las secciones bloqueaba el hilo principal ANTES del primer cuadro, así que el
+   folder ni se pintaba (pantalla en blanco/congelada) y su animación arrancaba justo al final,
+   compitiendo con lo que quedaba por ejecutar. Ahora:
+   - trasPrimerPintado(fn): deja que el folder se pinte (lo anima el compositor, no el hilo principal)
+     y ENTONCES hace el trabajo pesado: se ve el folder desde el primer instante y sigue moviéndose
+     mientras la app se arma. Sin folder activo, fn corre de inmediato (igual que antes).
+   - trasLaIntro(fn): lo que abre diálogos o hace trabajo opcional (universidades incompletas,
+     Wrapped, onboarding, invitación a instalar) espera a que el folder termine de abrirse en vez
+     de competir con sus cuadros. Sin folder activo, fn corre de inmediato (igual que antes). */
+function trasPrimerPintado(fn) {
+  if (!introEnCurso()) { fn(); return; }
+  let hecho = false;
+  const correr = () => { if (hecho) return; hecho = true; fn(); };
+  requestAnimationFrame(() => setTimeout(correr, 0));
+  setTimeout(correr, 150); // si la pestaña pasa a segundo plano rAF no corre: no esperar de más
+}
+
+const pendientesTrasIntro = [];
+function trasLaIntro(fn) {
+  if (introEnCurso()) pendientesTrasIntro.push(fn);
+  else fn();
+}
+function vaciarTrasIntro() {
+  pendientesTrasIntro.splice(0).forEach((fn) => {
+    try { fn(); } catch (error) { console.error("Tarea posterior a la intro falló:", error); }
+  });
 }
 
 // Notificaciones push - flag de "ya se ofreció el diálogo en ESTE
@@ -512,7 +542,7 @@ window.addEventListener("DOMContentLoaded", () => {
     if (navigator.storage && navigator.storage.persist) {
       navigator.storage.persist().catch(() => {});
     }
-    mostrarApp();
+    trasPrimerPintado(mostrarApp);
   }
 
   document.getElementById("btn-reconectar-sesion").addEventListener("click", () => {
@@ -660,6 +690,12 @@ window.addEventListener("DOMContentLoaded", () => {
 
 async function iniciarAplicacionDemo() {
   try {
+    // La demo nunca montaba el folder (solo el flujo con sesión/login lo hacía): por eso en demo
+    // se veía siempre el cargador viejo. Se omite solo en la vista previa embebida (iframe).
+    if (!PREVIEW_DEMO) {
+      iniciarIntroDeCarga();
+      await new Promise(trasPrimerPintado);
+    }
     const datos = await cargarDatosDemo();
     activarEstadoDemo(datos);
     // Métricas agregadas: apertura, secciones y categorías de acciones;
@@ -1173,7 +1209,9 @@ function mostrarApp() {
   } finally {
     dentroDeMostrarApp = false;
     // La app ya está pintada (o falló): se abre el folder, si había uno cargando.
-    abrirIntroCarga();
+    // Cuando termina (o se salta) se ejecuta lo que esperaba (trasLaIntro).
+    Promise.resolve(abrirIntroCarga()).finally(vaciarTrasIntro);
+    setTimeout(vaciarTrasIntro, 6000); // red de seguridad: nada se queda esperando para siempre
   }
 }
 
@@ -1274,14 +1312,17 @@ function mostrarAppInterno() {
   // arriba - así el modal bloqueante (si hace falta) queda por encima de
   // una app ya completamente pintada, en vez de interrumpir a mitad de
   // los renders con la UI todavía a medio construir.
-  revisarUniversidadesIncompletas();
-  if (!MODO_DEMO) revisarWrappedAutomatico();
-  if ((!MODO_DEMO && cfg.onboarding_v1_completado === false) || (MODO_DEMO && !PREVIEW_DEMO)) {
-    // La configuración visual/nombre es obligatoria; plan y mini tutorial
-    // ofrecen opciones explícitas para continuar después.
-    mostrarOnboardingNuevoUsuario({ navegar: mostrarSeccion, toast: mostrarToast });
-  }
-  if (!MODO_DEMO) mostrarInvitacionInstalacion();
+  // Con folder activo estas tareas (diálogos y trabajo opcional) esperan a que termine de abrirse.
+  trasLaIntro(() => {
+    revisarUniversidadesIncompletas();
+    if (!MODO_DEMO) revisarWrappedAutomatico();
+    if ((!MODO_DEMO && cfg.onboarding_v1_completado === false) || (MODO_DEMO && !PREVIEW_DEMO)) {
+      // La configuración visual/nombre es obligatoria; plan y mini tutorial
+      // ofrecen opciones explícitas para continuar después.
+      mostrarOnboardingNuevoUsuario({ navegar: mostrarSeccion, toast: mostrarToast });
+    }
+    if (!MODO_DEMO) mostrarInvitacionInstalacion();
+  });
 }
 
 function aplicarTamanoTexto(datos) {
