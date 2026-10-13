@@ -261,6 +261,7 @@ function inyectarEstilosOnboarding() {
    Claro = #fbfbfe · Oscuro = #080808 · Color = el fondo liso de la paleta (--onb-izq, ver colorLadoIzquierdo). No cambia con Fancy. */
 .onboarding-overlay .onboarding-copy,.onboarding-overlay .onboarding-top,.onboarding-overlay .onboarding-acciones{background:var(--onb-izq,#080808)!important;background-image:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none!important}
 .onboarding-overlay .onboarding-copy,.onboarding-overlay .onboarding-copy *{text-shadow:none!important}
+.onboarding-pregunta-botones{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;margin-top:14px;padding:0;background:none!important;box-shadow:none!important;border:0}
 .onboarding-overlay .onboarding-copy h1{background:none!important;-webkit-text-fill-color:currentColor!important;filter:none!important}
 .onb-toca{position:absolute;left:50%;bottom:14px;z-index:4;display:flex;align-items:center;gap:.55rem;padding:.6rem 1.05rem;border-radius:999px;font:inherit;font-size:.86rem;font-weight:700;cursor:pointer;color:var(--text-primary,inherit);background:color-mix(in srgb,var(--bg-panel,#222) 94%,transparent);border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 60%,transparent);box-shadow:0 8px 24px rgba(0,0,0,.3);transform:translateX(-50%);-webkit-tap-highlight-color:transparent}
 .onb-toca:disabled{cursor:progress;opacity:.9}
@@ -333,11 +334,20 @@ function crearResaltador() {
   const lados = [0, 1, 2, 3].map(() => { const d = document.createElement("div"); d.className = "guia-resaltador-lado"; return d; });
   const anillo = document.createElement("div"); anillo.className = "guia-resaltador-anillo";
   raiz.append(...lados, anillo); document.body.append(raiz);
-  let objetivo = null, raf = 0, ultimo = "", oculto = false;
+  let objetivo = null, raf = 0, ultimo = "", oculto = false, rebuscar = null, ultimaBusqueda = 0;
   const margen = 6;
   const poner = (el, x, y, w, h) => { el.style.left = x + "px"; el.style.top = y + "px"; el.style.width = Math.max(0, w) + "px"; el.style.height = Math.max(0, h) + "px"; };
   const medir = () => {
     raf = requestAnimationFrame(medir);
+    if (objetivo && !oculto && rebuscar && performance.now() - ultimaBusqueda > 150) {
+      // La app puede volver a dibujar la sección (p. ej. al sincronizar) y reemplazar el botón: el anillo debe seguirlo, no desaparecer.
+      const r0 = objetivo.isConnected ? objetivo.getBoundingClientRect() : null;
+      if (!r0 || (!r0.width && !r0.height)) {
+        ultimaBusqueda = performance.now();
+        let nuevo = null; try { nuevo = rebuscar(); } catch (_) {}
+        if (nuevo && nuevo !== objetivo && nuevo.isConnected) { cambiar(nuevo); nuevo.scrollIntoView?.({ behavior: "smooth", block: "center" }); }
+      }
+    }
     if (!objetivo || oculto || !objetivo.isConnected) { raiz.style.display = "none"; ultimo = ""; return; }
     const r = objetivo.getBoundingClientRect();
     if (!r.width && !r.height) { raiz.style.display = "none"; ultimo = ""; return; }
@@ -356,11 +366,15 @@ function crearResaltador() {
     // Un botón puede abrir un diálogo propio: se libera el bloqueo para no taparlo.
     if (ev.target?.closest?.("button,a,[role='button']")) { oculto = true; }
   };
+  const cambiar = (el) => {
+    objetivo?.removeEventListener("click", alClic, true);
+    objetivo = el || null; ultimo = "";
+    objetivo?.addEventListener("click", alClic, true);
+  };
   return {
-    apuntar(el) {
-      objetivo?.removeEventListener("click", alClic, true);
-      objetivo = el || null; oculto = false; ultimo = "";
-      objetivo?.addEventListener("click", alClic, true);
+    apuntar(el, buscar) {
+      rebuscar = typeof buscar === "function" ? buscar : null;
+      cambiar(el); oculto = false;
       if (!raf) raf = requestAnimationFrame(medir);
     },
     ocultar() { oculto = true; },
@@ -626,10 +640,30 @@ function rMapaPlan() {
     col("Ciclo 1", cur("EG-I", "Humanidades I", "ok"), cur("CP-1504", "El poder desde la ciencia política", "ok"), cur("CP-1501", "Epistemología y lógica", "ok")),
     col("Ciclo 2", cur("EG-II", "Humanidades II", "ok"), cur("CP-1502", "Instituciones públicas", "ok"), cur("CP-1503", "Diseño de investigación", "ok")),
     col("Ciclo 3", cur("SR-I", "Realidad nacional I", "pen"), cur("CP-2004", "Análisis cuantitativo I", "cur"), cur("CP-2005", "Ideas políticas I", "cur"))]);
-  const svg = svgEl("svg", { viewBox: "0 0 100 100", preserveAspectRatio: "none", class: "onb-r-lineas", "aria-hidden": "true" });
-  [[31, 38, 36, 38], [31, 62, 36, 66], [64, 30, 69, 30], [64, 62, 69, 54], [64, 80, 69, 84]].forEach(([x1, y1, x2, y2]) =>
-    svg.append(svgEl("line", { x1, y1, x2, y2, stroke: "#3b82f6", "stroke-width": 1.6, "vector-effect": "non-scaling-stroke" })));
-  return nodo("div", "onb-r-mapa", null, [cols, svg]);
+  const svg = svgEl("svg", { class: "onb-r-lineas", "aria-hidden": "true" });
+  const mapa = nodo("div", "onb-r-mapa", null, [cols, svg]);
+  // Las líneas se miden sobre las tarjetas reales (antes eran porcentajes fijos y quedaban torcidas o cruzando texto).
+  const CONEXIONES = [[0, 0, 1, 0], [0, 1, 1, 1], [0, 2, 1, 2], [1, 0, 2, 0], [1, 1, 2, 1]]; // [ciclo, fila] → [ciclo, fila]
+  let pendiente = 0;
+  const dibujar = () => {
+    pendiente = 0;
+    if (!mapa.isConnected || !mapa.offsetWidth || !mapa.offsetHeight) return;
+    const caja = mapa.getBoundingClientRect(), k = caja.width / mapa.offsetWidth || 1;   // k corrige el scale() del teléfono
+    const W = mapa.offsetWidth, H = mapa.offsetHeight;
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.replaceChildren();
+    const tarjeta = (c, f) => cols.children[c]?.querySelectorAll(".onb-r-curso")[f];
+    CONEXIONES.forEach(([c1, f1, c2, f2]) => {
+      const a = tarjeta(c1, f1), b = tarjeta(c2, f2); if (!a || !b) return;
+      const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+      const x1 = (ra.right - caja.left) / k, y1 = (ra.top + ra.height / 2 - caja.top) / k;
+      const x2 = (rb.left - caja.left) / k, y2 = (rb.top + rb.height / 2 - caja.top) / k;
+      if (x2 - x1 < 2) return;
+      svg.append(svgEl("line", { x1, y1, x2, y2, stroke: "#3b82f6", "stroke-width": 1.6, "stroke-linecap": "round" }));
+    });
+  };
+  const programar = () => { if (!pendiente) pendiente = requestAnimationFrame(dibujar); };
+  if (typeof ResizeObserver === "function") new ResizeObserver(programar).observe(mapa); else setTimeout(programar, 60);
+  return mapa;
 }
 function rFilaAjuste(t) { return nodo("div", "onb-bloque onb-r-fila onb-r-sp onb-r-ajuste", null, [nodo("b", "", t), nodo("span", "onb-r-m", "▾")]); }
 function rFilaNav(t) { return nodo("div", "onb-r-fila onb-r-sp onb-r-navfila", null, [rFila("", nodo("span", "onb-r-m", "⋮⋮"), nodo("span", "", t)), nodo("span", "onb-interruptor")]); }
@@ -932,8 +966,17 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
       try{const orig=win.mostrarSeccion;if(typeof orig==="function"&&!orig.__onbEnvuelta){const guardada=function(id,...resto){if(guiaBloqueaNavegacion()&&id!==preview.dataset.seccion)return;return orig.call(this,id,...resto);};guardada.__onbEnvuelta=true;win.mostrarSeccion=guardada;}}catch(_){}
     }
   };
+  // Si ya hay clave real, la vista previa (que corre en memoria, sin guardar nada) debe mostrarla como activa.
+  const sincronizarClaveGeminiPreview=()=>{
+    if(etapa!=="wapper-config"||!cfg.gemini_api_key)return;
+    let win;try{win=preview.contentWindow;void win.document;}catch(_){return;}
+    try{const c=win.estado?.datos?.configuracion;if(c)c.gemini_api_key=cfg.gemini_api_key;}catch(_){}
+    try{win.aplicarVisibilidadBotonAsistente?.();}catch(_){}
+    try{if(typeof win.renderizarAsistente==="function")win.renderizarAsistente();else if(typeof win.mostrarSeccion==="function"&&preview.dataset.seccion==="asistente")win.mostrarSeccion("asistente");}catch(_){}
+  };
   const actualizarPreview=()=>{
     bloquearNavegacionPreview();
+    sincronizarClaveGeminiPreview();
     preview.contentWindow?.postMessage({
     type:"APP_PREVIEW_UPDATE", paleta:paletaActual(), modo:modoPersonalizacion,
     calidad:calidadPersonalizacion,
@@ -1059,7 +1102,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
     const pregunta=document.createElement("div");pregunta.className="onboarding-pregunta-plan";
     const tarjeta=document.createElement("section");tarjeta.setAttribute("role","dialog");tarjeta.setAttribute("aria-modal","true");
     tarjeta.append(texto("h2","","Ya tienes un plan guardado"),texto("p","","¿Quieres guardar otro plan de estudios o continuar con el que ya tienes?"));
-    const botones=document.createElement("div");botones.className="onboarding-acciones";
+    const botones=document.createElement("div");botones.className="onboarding-pregunta-botones";
     botones.append(boton("Guardar otro plan","btn-secondary",()=>fin(true)),boton("Continuar con este plan","btn-primary",()=>fin(false,true)));
     tarjeta.append(botones);pregunta.append(tarjeta);overlay.append(pregunta);
   };
@@ -1227,7 +1270,7 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
     const paso = pasos[i];
     resaltado = paso.selector();
     resaltado?.scrollIntoView({ behavior: "smooth", block: "center" });
-    resaltador.apuntar(resaltado); // anillo + bloqueo de todo lo demás (solo si hay objetivo)
+    resaltador.apuntar(resaltado, paso.selector); // anillo + bloqueo de todo lo demás (solo si hay objetivo)
     pop.replaceChildren();
     const titulo = document.createElement("strong"); titulo.textContent = `${i + 1} / ${pasos.length}`;
     const p = document.createElement("p"); p.textContent = traducirTextoInterfaz(paso.texto);
@@ -1267,7 +1310,7 @@ const SELECTORES_GUIA_SECCION = {
   agenda: [
     () => document.getElementById("pills-agenda-vista"),
     () => document.getElementById("btn-agenda-agregar"),
-    () => document.getElementById("agenda-nombre-semestre") || document.getElementById("agenda-lista-dias"),
+    () => { const n = document.getElementById("agenda-nombre-semestre"); return (n && n.getBoundingClientRect().width ? n : null) || document.getElementById("agenda-header"); },
   ],
   horario: [
     () => document.getElementById("btn-horario-agregar"),
@@ -1333,7 +1376,7 @@ function iniciarGuiaSeccion(info) {
   const pintar=()=>{
     if(indice>=info.puntos.length){cerrar();return;}
     const buscar=objetivos[indice];resaltado=buscar?.()||document.getElementById(`seccion-${info.id}`);
-    resaltado?.scrollIntoView({behavior:"smooth",block:"center",inline:"nearest"});resaltador.apuntar(resaltado);
+    resaltado?.scrollIntoView({behavior:"smooth",block:"center",inline:"nearest"});resaltador.apuntar(resaltado,()=>buscar?.()||document.getElementById(`seccion-${info.id}`));
     const esUltimoWapper=info.id==="asistente"&&indice===info.puntos.length-1;
     const botones=[];
     if(indice>0)botones.push(btn("Anterior","btn-secondary",()=>{indice--;pintar();}));
