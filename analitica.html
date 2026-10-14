@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Analítica · App Académica</title>
+<style>
+  :root { --bg:#f5f6fa; --panel:#fff; --texto:#151a2b; --suave:#6b7390; --borde:#e3e6f0; --acento:#2563eb; --acento2:#7c3aed; --barra:#e8ebf5; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0a0e17; --panel:#131a2b; --texto:#e8ecf8; --suave:#8b94b3; --borde:#222b45; --barra:#1d2640; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--texto); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:1100px; margin:0 auto; padding:20px 16px 60px; }
+  header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:18px; }
+  h1 { margin:0; font-size:1.4rem; } h2 { margin:0 0 12px; font-size:1.05rem; }
+  .sub { color:var(--suave); font-size:.82rem; }
+  .acciones { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  button, .pill { font:inherit; cursor:pointer; border:1px solid var(--borde); background:var(--panel); color:var(--texto); border-radius:999px; padding:7px 14px; }
+  button.primario { background:var(--acento); border-color:var(--acento); color:#fff; }
+  .pill.activa { background:var(--acento); border-color:var(--acento); color:#fff; }
+  label.chk { display:flex; gap:6px; align-items:center; font-size:.88rem; color:var(--suave); cursor:pointer; }
+  .tarjetas { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; margin-bottom:16px; }
+  .card { background:var(--panel); border:1px solid var(--borde); border-radius:16px; padding:16px; }
+  .kpi-num { font-size:1.9rem; font-weight:800; line-height:1.1; } .kpi-et { color:var(--suave); font-size:.8rem; margin-top:4px; }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:12px; margin-bottom:16px; }
+  .fila-barra { display:grid; grid-template-columns:130px 1fr 54px; gap:10px; align-items:center; margin:7px 0; font-size:.88rem; }
+  .fila-barra .nombre { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pista { background:var(--barra); border-radius:999px; height:10px; overflow:hidden; }
+  .relleno { height:100%; border-radius:999px; background:linear-gradient(90deg,var(--acento),var(--acento2)); }
+  .num { text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+  .pills { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+  .scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:.88rem; }
+  th,td { padding:8px 10px; border-bottom:1px solid var(--borde); text-align:right; white-space:nowrap; }
+  th:first-child,td:first-child { text-align:left; }
+  th { color:var(--suave); font-weight:600; font-size:.78rem; }
+  tfoot td { font-weight:700; border-bottom:0; }
+  .vacio,.error { color:var(--suave); padding:18px; text-align:center; } .error { color:#dc2626; }
+  .login { max-width:380px; margin:12vh auto; text-align:center; }
+  .login p { color:var(--suave); }
+</style>
+</head>
+<body>
+<main>
+  <section id="vista-login" class="card login" hidden>
+    <h1>📊 Analítica</h1>
+    <p>Acceso solo para administradores de App Académica.</p>
+    <button class="primario" id="btn-login">Iniciar sesión con Google</button>
+    <p id="msg-login" class="error" hidden></p>
+  </section>
+
+  <section id="vista-panel" hidden>
+    <header>
+      <div><h1>📊 Analítica de App Académica</h1><div class="sub" id="actualizado"></div></div>
+      <div class="acciones">
+        <label class="chk"><input type="checkbox" id="chk-equipo" checked> Incluir al equipo</label>
+        <button class="primario" id="btn-refrescar">↻ Actualizar</button>
+        <button id="btn-salir">Salir</button>
+      </div>
+    </header>
+    <div id="contenido"></div>
+  </section>
+</main>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+  // Mismos valores públicos que usa la app (ver auth.js).
+  const CLIENT_ID = "906522073616-7ofa7i3emqocojhlkh9ot9i0itljmd50.apps.googleusercontent.com";
+  const WORKER = "https://worker-notificaciones-agenda.appacademica.workers.dev";
+  const CLAVE_TOKEN = "analitica_token_v1";
+  const SECCIONES = [["demo","Demo"],["resumen","Resumen"],["agenda","Agenda"],["horario","Horario"],["tiempo-estudio","Tiempo"],["semestres","Semestres"],["comunidad","Comunidad"],["finanzas","Finanzas"],["plan-estudios","Plan"],["asistente","Asistente"],["configuracion","Configuración"]];
+
+  const $ = (id) => document.getElementById(id);
+  let tokenClient = null, columnas = [], datos = {}, seccionActiva = null;
+
+  // ---------- sesión ----------
+  function guardarToken(token, segundos) {
+    try { sessionStorage.setItem(CLAVE_TOKEN, JSON.stringify({ token, exp: Date.now() + (segundos - 60) * 1000 })); } catch (e) {}
+  }
+  function leerToken() {
+    try { const t = JSON.parse(sessionStorage.getItem(CLAVE_TOKEN) || "null"); return t && t.exp > Date.now() ? t.token : null; } catch (e) { return null; }
+  }
+  function mostrarLogin(mensaje) {
+    $("vista-panel").hidden = true; $("vista-login").hidden = false;
+    $("msg-login").hidden = !mensaje; $("msg-login").textContent = mensaje || "";
+  }
+  function iniciarSesion() {
+    const esperar = setInterval(() => {
+      if (!(window.google && google.accounts && google.accounts.oauth2)) return;
+      clearInterval(esperar);
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: "openid email profile", // solo identidad: no pide acceso a Drive ni Calendar
+        callback: (r) => {
+          if (r.error || !r.access_token) return mostrarLogin("No se pudo iniciar sesión.");
+          guardarToken(r.access_token, Number(r.expires_in) || 3600);
+          cargar();
+        },
+      });
+      tokenClient.requestAccessToken();
+    }, 100);
+  }
+  function salir() { try { sessionStorage.removeItem(CLAVE_TOKEN); } catch (e) {} mostrarLogin(); }
+
+  // ---------- datos ----------
+  async function cargar() {
+    const token = leerToken();
+    if (!token) return mostrarLogin();
+    $("vista-login").hidden = true; $("vista-panel").hidden = false;
+    $("actualizado").textContent = "Cargando…";
+    try {
+      const r = await fetch(WORKER + "/analitica/panel", { headers: { Authorization: "Bearer " + token }, cache: "no-store" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        if (r.status === 401) { salir(); return mostrarLogin(j.error || "Sesión vencida."); }
+        $("vista-panel").hidden = true; return mostrarLogin(j.error || "Error " + r.status);
+      }
+      columnas = j.columnas; datos = {};
+      j.filas.forEach((f) => (datos[f.seccion] = datos[f.seccion] || []).push(f));
+      $("actualizado").textContent = j.usuario + " · actualizado " + new Date().toLocaleString("es-CR");
+      pintar();
+    } catch (e) {
+      $("contenido").innerHTML = '<div class="error">No se pudo conectar con el Worker.</div>';
+    }
+  }
+
+  // ---------- render ----------
+  const equipo = () => $("chk-equipo").checked;
+  const total = (v) => equipo() ? v.reduce((a, b) => a + b, 0) : v[0];
+  const fmt = (n) => n.toLocaleString("es-CR");
+  const barras = (items) => { const max = Math.max(1, ...items.map((i) => i.valor));
+    return items.map((i) => `<div class="fila-barra"><span class="nombre" title="${i.nombre}">${i.nombre}</span><div class="pista"><div class="relleno" style="width:${i.valor / max * 100}%"></div></div><span class="num">${fmt(i.valor)}</span></div>`).join("") || '<div class="vacio">Sin datos todavía.</div>'; };
+
+  function pintar() {
+    const porSeccion = SECCIONES.map(([id, nombre]) => ({ id, nombre, valor: (datos[id] || []).reduce((s, f) => s + total(f.valores), 0) }));
+    const global = {};
+    Object.values(datos).flat().forEach((f) => (global[f.funcion] = (global[f.funcion] || 0) + total(f.valores)));
+    const funciones = Object.entries(global).map(([nombre, valor]) => ({ nombre, valor })).sort((a, b) => b.valor - a.valor);
+    const orden = [...porSeccion].sort((a, b) => b.valor - a.valor);
+    const totalGeneral = porSeccion.reduce((s, x) => s + x.valor, 0);
+    const demo = (datos.demo || []).filter((f) => f.funcion === "Apertura").reduce((s, f) => s + total(f.valores), 0);
+    // Por persona: columnas 1..11 (la 0 es el público general).
+    const personas = columnas.map((nombre, i) => ({ nombre: i === 0 ? "Público general" : nombre, valor: Object.values(datos).flat().reduce((s, f) => s + f.valores[i], 0) }))
+      .filter((p, i) => i === 0 || p.valor > 0);
+    if (!seccionActiva) seccionActiva = (orden[0] || porSeccion[0]).id;
+
+    $("contenido").innerHTML = `
+      <div class="tarjetas">
+        <div class="card"><div class="kpi-num">${fmt(totalGeneral)}</div><div class="kpi-et">Interacciones registradas</div></div>
+        <div class="card"><div class="kpi-num">${orden[0].valor ? orden[0].nombre : "—"}</div><div class="kpi-et">Sección más usada</div></div>
+        <div class="card"><div class="kpi-num">${funciones[0] && funciones[0].valor ? funciones[0].nombre : "—"}</div><div class="kpi-et">Acción más frecuente</div></div>
+        <div class="card"><div class="kpi-num">${fmt(demo)}</div><div class="kpi-et">Aperturas de la demo</div></div>
+      </div>
+      <div class="grid2">
+        <div class="card"><h2>Uso por sección</h2>${barras(orden.map((s) => ({ nombre: s.nombre, valor: s.valor })))}</div>
+        <div class="card"><h2>Acciones más frecuentes</h2>${barras(funciones.slice(0, 10))}</div>
+      </div>
+      <div class="card" style="margin-bottom:16px"><h2>Por persona</h2>${barras(personas.sort((a, b) => b.valor - a.valor))}
+        <div class="sub" style="margin-top:8px">Si alguien del equipo no aparece, no ha usado la app o su correo no coincide con el configurado en el Worker.</div></div>
+      <div class="card"><h2>Detalle por sección</h2>
+        <div class="pills">${SECCIONES.map(([id, n]) => `<button class="pill ${id === seccionActiva ? "activa" : ""}" data-sec="${id}">${n}</button>`).join("")}</div>
+        <div class="scroll">${tabla(seccionActiva)}</div></div>`;
+    document.querySelectorAll("[data-sec]").forEach((b) => b.onclick = () => { seccionActiva = b.dataset.sec; pintar(); });
+  }
+
+  function tabla(id) {
+    const filas = datos[id] || [];
+    if (!filas.length) return '<div class="vacio">Esta sección todavía no tiene registros.</div>';
+    const idx = [0];
+    if (equipo()) columnas.forEach((_, i) => { if (i > 0 && filas.some((f) => f.valores[i] > 0)) idx.push(i); });
+    const ord = [...filas].sort((a, b) => total(b.valores) - total(a.valores));
+    const sumas = idx.map((i) => ord.reduce((s, f) => s + f.valores[i], 0));
+    return `<table><thead><tr><th>Acción</th>${idx.map((i) => `<th>${i === 0 ? "General" : columnas[i]}</th>`).join("")}<th>Total</th></tr></thead>
+      <tbody>${ord.map((f) => `<tr><td>${f.funcion}</td>${idx.map((i) => `<td>${fmt(f.valores[i])}</td>`).join("")}<td><strong>${fmt(idx.reduce((s, i) => s + f.valores[i], 0))}</strong></td></tr>`).join("")}</tbody>
+      <tfoot><tr><td>Total</td>${sumas.map((s) => `<td>${fmt(s)}</td>`).join("")}<td>${fmt(sumas.reduce((a, b) => a + b, 0))}</td></tr></tfoot></table>`;
+  }
+
+  $("btn-login").onclick = iniciarSesion;
+  $("btn-salir").onclick = salir;
+  $("btn-refrescar").onclick = cargar;
+  $("chk-equipo").onchange = () => Object.keys(datos).length && pintar();
+  leerToken() ? cargar() : mostrarLogin();
+</script>
+</body>
+</html>
