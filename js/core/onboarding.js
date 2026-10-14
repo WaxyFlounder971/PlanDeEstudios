@@ -332,6 +332,13 @@ function inyectarEstilosOnboarding() {
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"])>.onboarding-layout{flex:1 1 auto;min-height:0!important}
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"]){background:var(--onb-izq,#080808)!important;background-image:none!important}
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"])>.onboarding-acciones{position:static!important;inset:auto!important;transform:none!important;flex:none;width:100%!important;max-width:none!important;min-width:0!important;align-self:stretch;justify-self:stretch;grid-column:1/-1;box-sizing:border-box;margin:0;padding:12px 20px calc(12px + env(safe-area-inset-bottom,0px));z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+/* Bienvenida en PC: todo centrado (en teléfono se queda como está). */
+@media (min-width:761px){
+.onboarding-panel[data-etapa="nombre"]>.onboarding-layout{display:flex!important;flex-direction:row!important;justify-content:center;align-items:center;grid-template-columns:none!important}
+.onboarding-panel[data-etapa="nombre"] .onboarding-copy{flex:0 1 520px!important;width:100%;max-width:520px!important;min-width:0;max-height:100%;margin:0 auto;overflow-y:auto;text-align:center}
+.onboarding-panel[data-etapa="nombre"]>.onboarding-acciones{justify-content:center}
+.onboarding-panel[data-etapa="nombre"]>.onboarding-acciones .btn{flex:0 1 520px;max-width:520px}
+}
 .onboarding-overlay .onboarding-copy h1{background:none!important;-webkit-text-fill-color:currentColor!important;filter:none!important}
 .onb-toca{position:absolute;left:50%;bottom:14px;z-index:4;display:flex;align-items:center;gap:.55rem;padding:.6rem 1.05rem;border-radius:999px;font:inherit;font-size:.86rem;font-weight:700;cursor:pointer;color:var(--text-primary,inherit);background:color-mix(in srgb,var(--bg-panel,#222) 94%,transparent);border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 60%,transparent);box-shadow:0 8px 24px rgba(0,0,0,.3);transform:translateX(-50%);-webkit-tap-highlight-color:transparent}
 .onb-toca:disabled{cursor:progress;opacity:.9}
