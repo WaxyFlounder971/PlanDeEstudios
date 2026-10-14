@@ -264,16 +264,28 @@ function inyectarEstilosOnboarding() {
 .onboarding-overlay .onboarding-copy,.onboarding-overlay .onboarding-top,.onboarding-overlay .onboarding-acciones{background:var(--onb-izq,#080808)!important;background-image:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none!important}
 .onboarding-overlay .onboarding-copy,.onboarding-overlay .onboarding-copy *{text-shadow:none!important}
 .onboarding-pregunta-botones{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;margin-top:14px;padding:0;background:none!important;box-shadow:none!important;border:0}
-.onb-bienvenida-avatar{position:relative;isolation:isolate;display:grid;place-items:center;width:92px;height:92px;margin:0 0 16px;border-radius:50%;padding:3px;font-size:2.3rem;font-weight:800;color:#fff;background:linear-gradient(135deg,var(--accent-1,#8b5cf6),var(--accent-2,#38bdf8));animation:onbAvEntra .7s cubic-bezier(.2,.9,.3,1.15) both}
-.onb-bienvenida-avatar::before{content:"";position:absolute;inset:-12px;z-index:-1;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--accent-1,#8b5cf6) 50%,transparent),transparent);filter:blur(10px);animation:onbAvPulso 3.6s ease-in-out infinite}
-.onb-bienvenida-avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover;box-sizing:border-box;border:3px solid var(--onb-izq,#080808);background:var(--onb-izq,#080808)}
-.onb-bienvenida-lema{margin:0 0 22px;font-size:1.02rem;line-height:1.4;opacity:.78}
-.onb-bienvenida-etiqueta{display:block;font-size:.82rem;font-weight:700;letter-spacing:.02em;opacity:.8;margin-bottom:8px}
-.onb-bienvenida-campo{width:100%;font-size:1.15rem!important;font-weight:600;padding:.95rem 1.1rem!important;border-radius:16px!important}
-.onb-chip{margin-top:10px;padding:.42rem .85rem;border-radius:999px;font:inherit;font-size:.84rem;font-weight:600;cursor:pointer;color:inherit;background:color-mix(in srgb,var(--accent-1,#8b5cf6) 16%,transparent);border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 45%,transparent)}
-@keyframes onbAvEntra{from{opacity:0;transform:scale(.6) translateY(8px)}to{opacity:1;transform:none}}
-@keyframes onbAvPulso{0%,100%{opacity:.55;transform:scale(1)}50%{opacity:1;transform:scale(1.12)}}
-@media (prefers-reduced-motion:reduce){.onb-bienvenida-avatar,.onb-bienvenida-avatar::before{animation:none}}
+.onb-bienvenida-avatar{position:relative;isolation:isolate;display:grid;place-items:center;width:138px;height:138px;margin:6px auto 26px;border-radius:50%;font-size:3rem;font-weight:800;color:#fff;animation:onbAvEntra .8s cubic-bezier(.2,.9,.3,1.15) both,onbAvFlota 5.5s ease-in-out .9s infinite}
+.onb-bienvenida-avatar::before{content:"";position:absolute;inset:-26px;z-index:-2;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--accent-1,#8b5cf6) 62%,transparent),color-mix(in srgb,var(--accent-2,#38bdf8) 22%,transparent) 62%,transparent);filter:blur(14px);animation:onbAvPulso 3.4s ease-in-out infinite}
+.onb-bienvenida-avatar::after{content:"";position:absolute;inset:0;z-index:1;border-radius:50%;padding:4px;background:conic-gradient(from 0deg,var(--accent-1,#8b5cf6),var(--accent-2,#38bdf8),#f0abfc,var(--accent-1,#8b5cf6));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);animation:onbAvGira 7s linear infinite}
+.onb-bienvenida-avatar>img,.onb-bienvenida-avatar>span.onb-av-inicial{width:calc(100% - 16px);height:calc(100% - 16px);border-radius:50%;object-fit:cover;box-sizing:border-box;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.onb-bienvenida-avatar>span.onb-av-inicial{display:grid;place-items:center;background:linear-gradient(135deg,var(--accent-1,#8b5cf6),var(--accent-2,#38bdf8))}
+.onb-av-orbita{position:absolute;inset:-16px;z-index:2;border-radius:50%;pointer-events:none;animation:onbAvGira 11s linear infinite reverse}
+.onb-av-orbita i{position:absolute;width:9px;height:9px;border-radius:50%;background:#fff;box-shadow:0 0 12px 3px color-mix(in srgb,var(--accent-2,#38bdf8) 80%,transparent)}
+.onb-av-orbita i:nth-child(1){top:0;left:50%;margin-left:-4px}
+.onb-av-orbita i:nth-child(2){bottom:14%;right:4%;width:6px;height:6px;opacity:.85}
+.onb-av-orbita i:nth-child(3){bottom:10%;left:8%;width:5px;height:5px;opacity:.7;box-shadow:0 0 10px 2px color-mix(in srgb,var(--accent-1,#8b5cf6) 80%,transparent)}
+.onboarding-panel[data-etapa="nombre"] .onboarding-copy{text-align:center}
+.onboarding-panel[data-etapa="nombre"] .onboarding-copy h1{animation:onbSube .65s .2s cubic-bezier(.22,.8,.3,1) both}
+.onb-bienvenida-lema{margin:0 0 26px;font-size:1.02rem;line-height:1.45;opacity:.78;animation:onbSube .65s .35s cubic-bezier(.22,.8,.3,1) both}
+.onb-bienvenida-etiqueta{display:block;font-size:.82rem;font-weight:700;letter-spacing:.04em;opacity:.8;margin-bottom:10px;animation:onbSube .65s .5s cubic-bezier(.22,.8,.3,1) both}
+.onb-bienvenida-campo{width:100%;text-align:center;font-size:1.25rem!important;font-weight:700;padding:1rem 1.1rem!important;border-radius:18px!important;transition:box-shadow .25s,border-color .25s}
+.onb-bienvenida-campo:focus{outline:none;border-color:var(--accent-1,#8b5cf6)!important;box-shadow:0 0 0 4px color-mix(in srgb,var(--accent-1,#8b5cf6) 28%,transparent),0 8px 28px color-mix(in srgb,var(--accent-1,#8b5cf6) 25%,transparent)}
+@keyframes onbAvEntra{from{opacity:0;transform:scale(.55) translateY(14px)}to{opacity:1;transform:none}}
+@keyframes onbAvFlota{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes onbAvPulso{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:1;transform:scale(1.14)}}
+@keyframes onbAvGira{to{transform:rotate(360deg)}}
+@keyframes onbSube{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.onb-bienvenida-avatar,.onb-bienvenida-avatar::before,.onb-bienvenida-avatar::after,.onb-av-orbita,.onb-bienvenida-lema,.onb-bienvenida-etiqueta,.onboarding-panel[data-etapa="nombre"] .onboarding-copy h1{animation:none!important}}
 .onb-ajustes{display:flex;flex-direction:column;gap:12px;margin-top:6px}
 .onb-ajuste{display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:16px;border:1px solid color-mix(in srgb,currentColor 14%,transparent);background:color-mix(in srgb,currentColor 4%,transparent)}
 .onb-ajuste-cab{display:flex;align-items:center;gap:10px}
@@ -283,6 +295,18 @@ function inyectarEstilosOnboarding() {
 .onb-ajuste-nota{margin:0;font-size:.8rem;line-height:1.35;opacity:.7}
 .onb-ajuste-campo{display:flex;flex-direction:column;gap:6px;font-size:.84rem;font-weight:600}
 .onb-ajuste-detalle{display:flex;flex-direction:column;gap:10px}.onb-ajuste-detalle.apagado{opacity:.5;pointer-events:none}
+.onb-acc{padding:0;gap:0;overflow:hidden;transition:border-color .25s,background .25s}
+.onb-acc.abierta{border-color:color-mix(in srgb,var(--accent-1,#8b5cf6) 55%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 7%,transparent)}
+.onb-acc-cab{display:flex;align-items:center;gap:10px;width:100%;padding:14px;margin:0;background:none;border:0;color:inherit;font:inherit;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.onb-acc-cab>div{flex:1;min-width:0}
+.onb-acc-cab b{display:block;font-size:.98rem}.onb-acc-cab small{display:block;margin-top:2px;font-size:.8rem;line-height:1.3;opacity:.7}
+.onb-acc-chev{flex:none;font-size:1rem;opacity:.7;transition:transform .28s ease}.onb-acc.abierta .onb-acc-chev{transform:rotate(180deg)}
+.onb-acc-cuerpo{display:grid;grid-template-rows:0fr;transition:grid-template-rows .3s ease}
+.onb-acc.abierta .onb-acc-cuerpo{grid-template-rows:1fr}
+.onb-acc-int{min-height:0;overflow:hidden;visibility:hidden;transition:visibility 0s .3s}
+.onb-acc.abierta .onb-acc-int{visibility:visible;transition-delay:0s}
+.onb-acc-pad{display:flex;flex-direction:column;gap:10px;padding:2px 14px 16px}
+@media (prefers-reduced-motion:reduce){.onb-acc-cuerpo,.onb-acc-chev{transition:none}}
 .onb-moneda-input{width:100%}
 .onb-moneda-lista{list-style:none;margin:6px 0 0;padding:4px;max-height:210px;overflow-y:auto;border-radius:12px;border:1px solid color-mix(in srgb,currentColor 18%,transparent);background:var(--onb-izq,#080808)}
 .onb-moneda-op,.onb-moneda-vacio{padding:.55rem .7rem;border-radius:8px;font-size:.9rem;cursor:pointer}
@@ -295,7 +319,7 @@ function inyectarEstilosOnboarding() {
 .onb-gemini-campo{display:flex;flex-direction:column;gap:8px;margin-top:14px}
 .onb-wapper-ok{display:flex;flex-direction:column;gap:6px;margin-top:10px;padding:16px;border-radius:16px;border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 50%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 12%,transparent)}
 .onb-wapper-ok b{font-size:1.1rem}
-.onboarding-panel[data-etapa^="ajustes"] .onboarding-copy,.onboarding-panel[data-etapa="wapper-config"] .onboarding-copy{overflow-y:auto;min-height:0}
+.onboarding-panel[data-etapa^="ajustes"] .onboarding-copy,.onboarding-panel[data-etapa="wapper-config"] .onboarding-copy,.onboarding-panel.onb-tour-movil[data-etapa^="ajustes"] .onboarding-copy,.onboarding-panel.onb-tour-movil[data-etapa="wapper-config"] .onboarding-copy{overflow-y:auto!important;min-height:0;flex:1 1 auto!important;max-height:none!important;display:block!important;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scroll-padding:12px;padding-bottom:28px!important}
 .onboarding-panel[data-etapa^="ajustes"] .onboarding-layout,.onboarding-panel[data-etapa="wapper-config"] .onboarding-layout{min-height:0}
 .onboarding-overlay .onboarding-copy h1{background:none!important;-webkit-text-fill-color:currentColor!important;filter:none!important}
 .onb-toca{position:absolute;left:50%;bottom:14px;z-index:4;display:flex;align-items:center;gap:.55rem;padding:.6rem 1.05rem;border-radius:999px;font:inherit;font-size:.86rem;font-weight:700;cursor:pointer;color:var(--text-primary,inherit);background:color-mix(in srgb,var(--bg-panel,#222) 94%,transparent);border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 60%,transparent);box-shadow:0 8px 24px rgba(0,0,0,.3);transform:translateX(-50%);-webkit-tap-highlight-color:transparent}
@@ -675,30 +699,7 @@ function rMapaPlan() {
     col("Ciclo 1", cur("EG-I", "Humanidades I", "ok"), cur("CP-1504", "El poder desde la ciencia política", "ok"), cur("CP-1501", "Epistemología y lógica", "ok")),
     col("Ciclo 2", cur("EG-II", "Humanidades II", "ok"), cur("CP-1502", "Instituciones públicas", "ok"), cur("CP-1503", "Diseño de investigación", "ok")),
     col("Ciclo 3", cur("SR-I", "Realidad nacional I", "pen"), cur("CP-2004", "Análisis cuantitativo I", "cur"), cur("CP-2005", "Ideas políticas I", "cur"))]);
-  const svg = svgEl("svg", { class: "onb-r-lineas", "aria-hidden": "true" });
-  const mapa = nodo("div", "onb-r-mapa", null, [cols, svg]);
-  // Las líneas se miden sobre las tarjetas reales (antes eran porcentajes fijos y quedaban torcidas o cruzando texto).
-  const CONEXIONES = [[0, 0, 1, 0], [0, 1, 1, 1], [0, 2, 1, 2], [1, 0, 2, 0], [1, 1, 2, 1]]; // [ciclo, fila] → [ciclo, fila]
-  let pendiente = 0;
-  const dibujar = () => {
-    pendiente = 0;
-    if (!mapa.isConnected || !mapa.offsetWidth || !mapa.offsetHeight) return;
-    const caja = mapa.getBoundingClientRect(), k = caja.width / mapa.offsetWidth || 1;   // k corrige el scale() del teléfono
-    const W = mapa.offsetWidth, H = mapa.offsetHeight;
-    svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.replaceChildren();
-    const tarjeta = (c, f) => cols.children[c]?.querySelectorAll(".onb-r-curso")[f];
-    CONEXIONES.forEach(([c1, f1, c2, f2]) => {
-      const a = tarjeta(c1, f1), b = tarjeta(c2, f2); if (!a || !b) return;
-      const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
-      const x1 = (ra.right - caja.left) / k, y1 = (ra.top + ra.height / 2 - caja.top) / k;
-      const x2 = (rb.left - caja.left) / k, y2 = (rb.top + rb.height / 2 - caja.top) / k;
-      if (x2 - x1 < 2) return;
-      svg.append(svgEl("line", { x1, y1, x2, y2, stroke: "#3b82f6", "stroke-width": 1.6, "stroke-linecap": "round" }));
-    });
-  };
-  const programar = () => { if (!pendiente) pendiente = requestAnimationFrame(dibujar); };
-  if (typeof ResizeObserver === "function") new ResizeObserver(programar).observe(mapa); else setTimeout(programar, 60);
-  return mapa;
+  return nodo("div", "onb-r-mapa", null, [cols]);
 }
 function rFilaAjuste(t) { return nodo("div", "onb-bloque onb-r-fila onb-r-sp onb-r-ajuste", null, [nodo("b", "", t), nodo("span", "onb-r-m", "▾")]); }
 function rFilaNav(t) { return nodo("div", "onb-r-fila onb-r-sp onb-r-navfila", null, [rFila("", nodo("span", "onb-r-m", "⋮⋮"), nodo("span", "", t)), nodo("span", "onb-interruptor")]); }
@@ -965,6 +966,31 @@ function bloqueAjuste(icono, titulo, descripcion, ...hijos) {
   if (descripcion) { const s = document.createElement("small"); s.textContent = traducirTextoInterfaz(descripcion); t.append(s); }
   cab.append(ico, t); b.append(cab, ...hijos); return b;
 }
+// Tarjetas colapsables: solo una abierta a la vez (al abrir una, la otra se cierra).
+function grupoAcordeon(defs, abiertaInicial = 0) {
+  const caja = document.createElement("div"); caja.className = "onb-ajustes";
+  const items = defs.map((d) => {
+    const sec = document.createElement("section"); sec.className = "onb-ajuste onb-acc";
+    const cab = document.createElement("button"); cab.type = "button"; cab.className = "onb-acc-cab";
+    const ico = document.createElement("span"); ico.className = "onb-ajuste-ico"; ico.textContent = d.icono;
+    const t = document.createElement("div"); const h = document.createElement("b"); h.textContent = traducirTextoInterfaz(d.titulo); t.append(h);
+    if (d.descripcion) { const sm = document.createElement("small"); sm.textContent = traducirTextoInterfaz(d.descripcion); t.append(sm); }
+    const chev = document.createElement("span"); chev.className = "onb-acc-chev"; chev.setAttribute("aria-hidden", "true"); chev.textContent = "▾";
+    cab.append(ico, t, chev);
+    const cuerpo = document.createElement("div"); cuerpo.className = "onb-acc-cuerpo";
+    const int = document.createElement("div"); int.className = "onb-acc-int";
+    const pad = document.createElement("div"); pad.className = "onb-acc-pad"; pad.append(...d.hijos);
+    int.append(pad); cuerpo.append(int); sec.append(cab, cuerpo); caja.append(sec);
+    return { sec, cab };
+  });
+  const fijar = (i) => items.forEach((it, j) => { const on = j === i; it.sec.classList.toggle("abierta", on); it.cab.setAttribute("aria-expanded", String(on)); });
+  items.forEach((it, i) => it.cab.addEventListener("click", () => {
+    const yaAbierta = it.sec.classList.contains("abierta");
+    fijar(yaAbierta ? -1 : i);
+    if (!yaAbierta) setTimeout(() => it.sec.scrollIntoView?.({ block: "nearest", behavior: "smooth" }), 320);
+  }));
+  fijar(abiertaInicial); return caja;
+}
 const etiquetaHora12 = (h) => `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? "am" : "pm"}`;
 function notaAjuste(texto) { const p = document.createElement("p"); p.className = "onb-ajuste-nota"; p.textContent = traducirTextoInterfaz(texto); return p; }
 function campoConEtiqueta(texto, control) {
@@ -1022,11 +1048,12 @@ function fotoPerfilGoogle() {
 }
 function construirAvatarBienvenida(nombre) {
   const caja = document.createElement("div"); caja.className = "onb-bienvenida-avatar"; caja.setAttribute("aria-hidden", "true");
-  const conInicial = () => { caja.replaceChildren(); const s = document.createElement("span"); s.textContent = (String(nombre || "").trim()[0] || "✨").toUpperCase(); caja.append(s); };
+  const orbita = document.createElement("div"); orbita.className = "onb-av-orbita"; orbita.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
+  const conInicial = () => { caja.replaceChildren(); const s = document.createElement("span"); s.className = "onb-av-inicial"; s.textContent = (String(nombre || "").trim()[0] || "✨").toUpperCase(); caja.append(s, orbita); };
   const src = MODO_DEMO ? "" : fotoPerfilGoogle();
   if (!src) { conInicial(); return caja; }
   const img = document.createElement("img"); img.alt = ""; img.referrerPolicy = "no-referrer"; img.decoding = "async"; img.onerror = conInicial; img.src = src;
-  caja.append(img); return caja;
+  caja.append(img, orbita); return caja;
 }
 // Texto EXACTO de Ajustes → Asistente IA (Gemini), para que el usuario vea las mismas instrucciones.
 const GEMINI_INTRO = "Creá tareas, exámenes y eventos hablando o escribiendo en lenguaje natural, sin llenar el formulario a mano. Usa Gemini, el modelo de IA de Google, con tu propia clave. Es gratis y solo vos la ves (no la vemos nosotros, solo Google).";
@@ -1039,7 +1066,18 @@ const GEMINI_PASOS = [
   "Te va a aparecer la clave con un botón \"Copiar\" abajo. Tocalo para copiarla.",
   "Volvé a esta pantalla, pegala en el campo de abajo y tocá \"Guardar\".",
 ];
-function botonDesdeCero() { return [...document.querySelectorAll("#seccion-plan-estudios button")].find((b) => /desde cero|da zero|from scratch/i.test(b.textContent)); }
+function botonDesdeCero() {
+  // No depende del idioma ni de una sola frase: «Empezar en blanco», «Iniciar desde cero», «da zero», «from scratch», «blank»… o el botón del lápiz.
+  const raiz = document.getElementById("seccion-plan-estudios"); if (!raiz) return null;
+  return [...raiz.querySelectorAll("button")].find((b) => /blanco|bianco|blank|desde cero|da zero|from scratch|✏/i.test(b.textContent)) || null;
+}
+function contenedorOpcionesPlan() {
+  // Ancestro común del botón «en blanco» y del grupo de importación: así se resaltan las DOS opciones a la vez.
+  const a = botonDesdeCero(), g = grupoMetodosImportar();
+  if (!a || !g) return g || a || null;
+  let n = a.parentElement; while (n && !n.contains(g)) n = n.parentElement;
+  return n || g;
+}
 function grupoMetodosImportar() { const g = [...document.querySelectorAll("#seccion-plan-estudios .pill-group")]; return g.find((x) => x.querySelectorAll("button").length >= 3) || g.find((x) => x.querySelectorAll("button").length >= 2); }
 function seccionNavegacionAjustes() {
   const lista = document.getElementById("lista-nav-oculta"), sec = lista?.closest(".ajuste-seccion");
@@ -1390,7 +1428,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
   };
   const pintar=()=>{
     ctrlTour?.abort();ctrlTour=null;timersChat.forEach(clearTimeout);timersChat=[];
-    contenido.replaceChildren();acciones.replaceChildren();
+    contenido.replaceChildren();acciones.replaceChildren();panel.querySelector(".onboarding-copy").scrollTop=0;
     const esTour=etapa==="tour";panel.classList.toggle("onboarding-con-tour",esTour||etapa==="personalizar");panel.dataset.etapa=etapa;panel.querySelectorAll(".onb-bienvenida-avatar").forEach((e)=>e.remove());
     // En teléfono, cada pantalla nueva arranca en «información»; la vista previa se desliza.
     const claveVista=`${etapa}:${etapa==="tour"?indice:""}`;if(claveVista!==claveVistaMovil){claveVistaMovil=claveVista;vistaMovil="info";}
@@ -1412,13 +1450,6 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
       const etiqueta=texto("label","onb-bienvenida-etiqueta","¿Cómo quieres que te llamemos?");etiqueta.append(input);
       const aviso=texto("p","onboarding-nota-error","Escribe cómo quieres que te llamemos para continuar.");aviso.hidden=true;aviso.setAttribute("role","alert");
       contenido.append(etiqueta,aviso);
-      const primero=nombreGoogle.split(/\s+/)[0]||"";
-      let chip=null;
-      if(!MODO_DEMO&&primero){
-        chip=boton(`${traducirTextoInterfaz("Usar")} «${primero}»`,"onb-chip",()=>{input.value=primero;actualizarChip();input.focus({preventScroll:true});});
-        chip.className="onb-chip";contenido.append(chip);
-      }
-      const actualizarChip=()=>{if(chip)chip.hidden=input.value.trim()===primero;};actualizarChip();
       const continuar=()=>{
         const v=input.value.trim();
         // En la demo el nombre es opcional; en una cuenta real se pide con un aviso visible.
@@ -1426,7 +1457,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
         if(v){estado.datos.perfil=estado.datos.perfil||{};estado.datos.perfil.nombre_preferido=v;guardar();window.renderizarPerfil?.();}
         etapa=cuentaConDatos&&cfg.paleta&&cfg.modo?"tour":"personalizar";pintar();
       };
-      input.addEventListener("input",()=>{aviso.hidden=true;input.removeAttribute("aria-invalid");actualizarChip();});
+      input.addEventListener("input",()=>{aviso.hidden=true;input.removeAttribute("aria-invalid");});
       input.addEventListener("keydown",(ev)=>{if(ev.key==="Enter"){ev.preventDefault();continuar();}});
       acciones.append(boton("Continuar","btn-primary",continuar));
       if(!esMovil())requestAnimationFrame(()=>input.focus({preventScroll:true})); // en teléfono no se abre el teclado solo: taparía el avatar
@@ -1500,16 +1531,18 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
     }
     if(etapa==="ajustes1"){
       contenido.append(texto("p","onboarding-lead","Tres cosas rápidas para dejar la app lista. Todo se aplica al terminar y puedes cambiarlo luego en Ajustes."));
-      const lista=document.createElement("div");lista.className="onb-ajustes";
       const monedaActual=borrador.moneda||cfg.moneda_preferida||"CRC";
-      lista.append(bloqueAjuste("💱","Moneda local","Finanzas usa este símbolo en tus importes.",construirBuscadorMoneda({valorInicial:monedaActual,onElegir:(id)=>{borrador.moneda=id;borrador.tocado=true;}}),notaAjuste("Escribe el código (USD, CRC…) o el país para encontrarla rápido.")));
-      lista.append(bloqueAjuste("🔗","Enlaces importantes","Matrícula, TEC Digital, pagos… con emoji o imagen.",construirBloqueEnlaces({cfg,borrador})));
-      if(!MODO_DEMO)lista.append(bloqueAjuste("🔔","Notificaciones","Recordatorios de tu agenda y un resumen diario.",construirBloqueNotificaciones({cfg,borrador,demo:false})));
+      const defsAj=[
+        {icono:"💱",titulo:"Moneda local",descripcion:"Finanzas usa este símbolo en tus importes.",hijos:[construirBuscadorMoneda({valorInicial:monedaActual,onElegir:(id)=>{borrador.moneda=id;borrador.tocado=true;}}),notaAjuste("Escribe el código (USD, CRC…) o el país para encontrarla rápido.")]},
+        {icono:"🔗",titulo:"Enlaces importantes",descripcion:"Matrícula, TEC Digital, pagos… con emoji o imagen.",hijos:[construirBloqueEnlaces({cfg,borrador})]},
+      ];
+      if(!MODO_DEMO)defsAj.push({icono:"🔔",titulo:"Notificaciones",descripcion:"Recordatorios de tu agenda y un resumen diario.",hijos:[construirBloqueNotificaciones({cfg,borrador,demo:false})]});
+      const lista=grupoAcordeon(defsAj,0);
       contenido.append(lista);
       acciones.append(boton("Atrás","btn-secondary",()=>{etapa="tour";indice=Math.max(0,secciones.length-1);pintar();}),boton("Continuar","btn-primary",()=>{etapa="ajustes2";pintar();}));return;
     }
     if(etapa==="ajustes2"){
-      contenido.append(texto("p","onboarding-lead","Desactiva las secciones que no vayas a utilizar. Puedes volver a activarlas cuando quieras en Ajustes → Personalizar."));
+      contenido.append(texto("p","onboarding-lead","Desactiva las secciones que no vayas a utilizar. Puedes volver a activarlas cuando quieras en Ajustes > Personalizar > Navegación."));
       const lista=document.createElement("div");lista.className="onb-ajustes";
       const orden=typeof window.obtenerOrdenNavegacion==="function"?window.obtenerOrdenNavegacion():SECCIONES_NAV.map((x)=>x.id);
       orden.forEach((id)=>{
@@ -1555,8 +1588,8 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
     { selector: botonGestionPlan, texto: "Ya tienes un plan. Para añadir otra carrera toca «Gestionar plan» (el botón resaltado)." },
     ...pasosSemestre,
   ] : [
-    { selector: botonDesdeCero, texto: "Opción 1 · Empieza desde cero: toca el botón resaltado y agrega tus materias a mano, una por una." },
-    { selector: grupoMetodosImportar, texto: "Opción 2 · Importa tu plan ya hecho: elige Pegar link, Adjuntar PDF/Imagen o Tomar foto (los botones resaltados) y luego envíalo a Claude para que lo convierta al formato CSV." },
+    { selector: contenedorOpcionesPlan, etiqueta: "Importar mi plan", blanco: true, texto: "Tienes dos caminos: empezar en blanco y agregar tus materias a mano, una por una, o importar un plan que ya tengas hecho. Elige el que prefieras." },
+    { selector: grupoMetodosImportar, blanco: true, texto: "Importa tu plan ya hecho: elige Pegar link, Adjuntar PDF/Imagen o Tomar foto (los botones resaltados) y luego envíalo a Claude para que lo convierta al formato CSV. Si prefieres hacerlo a mano, toca «Empezar en blanco»." },
     { selector: () => document.getElementById("btn-enviar-import-claude"), texto: "Pulsa Enviar a Claude y sigue la guía para adjuntar tu plan. Cuando Claude devuelva el CSV, vuelve a esta app." },
     { selector: () => document.getElementById("textarea-csv-importar"), texto: "Copia el bloque CSV completo, desde CARRERA hasta la última materia, y pégalo aquí. Luego toca Importar." },
     { selector: () => [...document.querySelectorAll("#seccion-plan-estudios button")].find((b) => /^(importar|importa|import)$/i.test(b.textContent.trim())), texto: "Pulsa Importar para guardar y revisar las materias. Cuando termine, la guía te llevará a Semestres para continuar." },
@@ -1567,10 +1600,17 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
   let resaltado = null;
   const cerrar = ({ continuarSemestres = false } = {}) => {
     resaltador.quitar(); pop.remove();
+    if (botonBlanco && escuchaBlanco) botonBlanco.removeEventListener("click", escuchaBlanco, true);
     if (cerrarGuiaPlanActiva === cerrar) cerrarGuiaPlanActiva = null;
     if (continuarSemestres && semestreCreadoEnGuia) { const info = SECCIONES_TUTORIAL.find((x) => x.id === "semestres"); setTimeout(() => iniciarGuiaSeccion(info), 180); }
   };
   cerrarGuiaPlanActiva = cerrar;
+  let escuchaBlanco = null, botonBlanco = null;
+  const vigilarBlanco = () => {
+    const b = botonDesdeCero(); if (!b || b === botonBlanco) return;
+    if (botonBlanco && escuchaBlanco) botonBlanco.removeEventListener("click", escuchaBlanco, true);
+    botonBlanco = b; escuchaBlanco = () => { if (cerrarGuiaPlanActiva === cerrar) cerrar(); }; b.addEventListener("click", escuchaBlanco, true);
+  };
   const revisarAlta = () => {
     if (!esperandoAlta || !pop.isConnected) return;
     const nuevos = (estado.datos?.semestres || []).filter((x) => !semestresIniciales.has(x.id));
@@ -1593,6 +1633,7 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
       if (link) link.click(); setTimeout(pintar, 80); return;
     }
     const paso = pasos[i];
+    if (paso.blanco) vigilarBlanco();
     resaltado = paso.selector();
     resaltado?.scrollIntoView({ behavior: "smooth", block: "center" });
     resaltador.apuntar(resaltado, paso.selector); // anillo + bloqueo de todo lo demás (solo si hay objetivo)
@@ -1602,7 +1643,7 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
     pop.append(titulo, p);
     const acciones = document.createElement("div"); acciones.className = "row";
     const seguir = document.createElement("button"); seguir.className = "btn btn-primary";
-    seguir.textContent = traducirTextoInterfaz(paso.accion === "abrirAlta" ? "Abrir formulario" : i === pasos.length - 1 ? "Entendido" : "Siguiente");
+    seguir.textContent = traducirTextoInterfaz(paso.etiqueta || (paso.accion === "abrirAlta" ? "Abrir formulario" : i === pasos.length - 1 ? "Entendido" : "Siguiente"));
     seguir.onclick = () => {
       if (paso.accion === "navegar") { marcarSemestresVisto(); navegar?.("semestres"); i++; setTimeout(pintar, 350); return; }
       if (paso.accion === "abrirAlta") {
@@ -1613,7 +1654,13 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
       i++; pintar();
     };
     const saltar = document.createElement("button"); saltar.className = "btn btn-secondary"; saltar.textContent = traducirTextoInterfaz("Saltar guía"); saltar.onclick = () => cerrar();
-    acciones.append(seguir, saltar); pop.append(acciones); pop.classList.remove("oculto"); evitarSolape(pop, resaltado);
+    acciones.append(seguir);
+    if (paso.blanco) {
+      const enBlanco = document.createElement("button"); enBlanco.className = "btn btn-secondary"; enBlanco.textContent = traducirTextoInterfaz("Empezar en blanco");
+      enBlanco.onclick = () => { const b = botonDesdeCero(); cerrar(); b?.click(); };
+      acciones.append(enBlanco);
+    }
+    acciones.append(saltar); pop.append(acciones); pop.classList.remove("oculto"); evitarSolape(pop, resaltado);
   };
   pintar();
   window.continuarTutorialDespuesDeImportarPlan = () => { if (!cerrarGuiaPlanActiva) return; marcarSemestresVisto(); cerrar(); navegar?.("semestres"); setTimeout(() => iniciarGuiaPlan({ navegar, posteriorImportacion: true, yaEnSemestres: true }), 350); };
