@@ -1,6 +1,8 @@
 import { estado } from "./storage.js";
 import { marcarCambioPendiente } from "./storage-sync.js";
-import { sellarTimestamp, PALETAS_DISPONIBLES } from "./schema.js";
+import { sellarTimestamp, PALETAS_DISPONIBLES, MONEDAS_DISPONIBLES, OFFSETS_RECORDATORIO_AGENDA, LIMITE_ENLACES_RAPIDOS, crearEnlaceRapido } from "./schema.js";
+import { convertirImagenABase64Comprimida } from "./utils.js";
+import { activarSincronizacionCalendario, desactivarSincronizacionCalendario, sincronizacionCalendarActiva, sincronizarResumenDiario } from "./notificaciones-calendario.js";
 import { aplicarPaleta, obtenerModoTemaLocal, guardarModoTemaLocal, obtenerModoDisenoLocal, guardarModoDisenoLocal, COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO } from "../ui/tema.js";
 import { traducirTextoInterfaz } from "./i18n.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
@@ -11,13 +13,13 @@ const SECCIONES_TUTORIAL = [
   { id:"resumen", nombre:"Resumen", puntos:["Semana actual del semestre y días que faltan.","Avance de estudio del día.","Clases, entregas y exámenes próximos."] },
   { id:"agenda", nombre:"Agenda", puntos:["Alterna entre lista, calendario y cronograma.","Toca «+» para crear tareas, exámenes, proyectos o eventos y vincularlos a una materia.","Toca el nombre del semestre para ver uno o varios semestres a la vez."] },
   { id:"horario", nombre:"Horario", puntos:["Guarda hora, aula, profesor y modalidad.","Abre una clase para ver todos sus detalles.","Compara horarios con tus amistades."] },
-  { id:"tiempo-estudio", nombre:"Tiempo de estudio", puntos:["Abre una materia y toca Iniciar sesión.","Usa materias aunque no estén en tu plan: toca «Nueva Materia» al final de la lista.","Consulta historial, estadísticas y competencias de todos tus semestres."] },
+  { id:"tiempo-estudio", nombre:"Tiempo de estudio", puntos:["Abre una materia y empieza una sesión de estudio.","Usa materias aunque no estén en tu plan: toca «Nueva Materia» al final de la lista.","Consulta historial, estadísticas y competencias de todos tus semestres."] },
   { id:"semestres", nombre:"Semestres", puntos:["Matricula materias de tu plan.","Registra criterios, asignaciones y notas."] },
   { id:"comunidad", nombre:"Comunidad", puntos:["Organiza compañeros y docentes relacionados con tus materias.","Cada docente lleva tu propia valoración, según tu experiencia."] },
   { id:"finanzas", nombre:"Finanzas", puntos:["Registra ingresos y gastos desde el inicio.","Clasifica movimientos por categoría.","Asociarlos a un semestre es opcional."] },
   { id:"plan-estudios", nombre:"Plan de estudios", puntos:["Añade una o varias carreras.","Pega o importa la malla completa.","El plan alimenta la matrícula de Semestres."] },
   { id:"asistente", nombre:"Wapper", puntos:["Convierte mensajes en tareas, exámenes o eventos de Agenda.","Consulta fechas y pendientes con lenguaje natural.","Actívalo con tu clave personal de Gemini desde Ajustes."] },
-  { id:"configuracion", nombre:"Ajustes", puntos:["Cambia idioma, apariencia, paleta y tamaño de texto.","Ordena la navegación y tus preferencias.","Puedes volver a esta guía cuando quieras."] },
+  { id:"configuracion", nombre:"Ajustes", puntos:["Cambia idioma, apariencia, paleta y tamaño de texto.","Aquí ordenas y ocultas las secciones de la navegación.","Con este botón vuelves a ver la bienvenida y el mini tutorial cuando quieras."] },
 ];
 
 const TEXTO_FLUJO = "El orden recomendado es: 1) agrega uno o más planes; 2) crea un semestre y matricula materias del plan; 3) con esas materias arma Horario y vincula actividades en Agenda; 4) inicia sesiones desde materias para tener estadísticas ordenadas por periodo. Tiempo también admite bloques personalizados. Wapper necesita Agenda y una clave de Gemini para automatizar tareas. Comunidad y Finanzas funcionan por separado; en Finanzas, el semestre es una clasificación opcional.";
@@ -262,6 +264,39 @@ function inyectarEstilosOnboarding() {
 .onboarding-overlay .onboarding-copy,.onboarding-overlay .onboarding-top,.onboarding-overlay .onboarding-acciones{background:var(--onb-izq,#080808)!important;background-image:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none!important}
 .onboarding-overlay .onboarding-copy,.onboarding-overlay .onboarding-copy *{text-shadow:none!important}
 .onboarding-pregunta-botones{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;margin-top:14px;padding:0;background:none!important;box-shadow:none!important;border:0}
+.onb-bienvenida-avatar{position:relative;isolation:isolate;display:grid;place-items:center;width:92px;height:92px;margin:0 0 16px;border-radius:50%;padding:3px;font-size:2.3rem;font-weight:800;color:#fff;background:linear-gradient(135deg,var(--accent-1,#8b5cf6),var(--accent-2,#38bdf8));animation:onbAvEntra .7s cubic-bezier(.2,.9,.3,1.15) both}
+.onb-bienvenida-avatar::before{content:"";position:absolute;inset:-12px;z-index:-1;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--accent-1,#8b5cf6) 50%,transparent),transparent);filter:blur(10px);animation:onbAvPulso 3.6s ease-in-out infinite}
+.onb-bienvenida-avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover;box-sizing:border-box;border:3px solid var(--onb-izq,#080808);background:var(--onb-izq,#080808)}
+.onb-bienvenida-lema{margin:0 0 22px;font-size:1.02rem;line-height:1.4;opacity:.78}
+.onb-bienvenida-etiqueta{display:block;font-size:.82rem;font-weight:700;letter-spacing:.02em;opacity:.8;margin-bottom:8px}
+.onb-bienvenida-campo{width:100%;font-size:1.15rem!important;font-weight:600;padding:.95rem 1.1rem!important;border-radius:16px!important}
+.onb-chip{margin-top:10px;padding:.42rem .85rem;border-radius:999px;font:inherit;font-size:.84rem;font-weight:600;cursor:pointer;color:inherit;background:color-mix(in srgb,var(--accent-1,#8b5cf6) 16%,transparent);border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 45%,transparent)}
+@keyframes onbAvEntra{from{opacity:0;transform:scale(.6) translateY(8px)}to{opacity:1;transform:none}}
+@keyframes onbAvPulso{0%,100%{opacity:.55;transform:scale(1)}50%{opacity:1;transform:scale(1.12)}}
+@media (prefers-reduced-motion:reduce){.onb-bienvenida-avatar,.onb-bienvenida-avatar::before{animation:none}}
+.onb-ajustes{display:flex;flex-direction:column;gap:12px;margin-top:6px}
+.onb-ajuste{display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:16px;border:1px solid color-mix(in srgb,currentColor 14%,transparent);background:color-mix(in srgb,currentColor 4%,transparent)}
+.onb-ajuste-cab{display:flex;align-items:center;gap:10px}
+.onb-ajuste-cab b{display:block;font-size:.98rem}.onb-ajuste-cab small{display:block;margin-top:2px;font-size:.8rem;line-height:1.3;opacity:.7}
+.onb-ajuste-ico{font-size:1.35rem;flex-shrink:0}
+.onb-ajuste-fila{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.92rem}
+.onb-ajuste-nota{margin:0;font-size:.8rem;line-height:1.35;opacity:.7}
+.onb-ajuste-campo{display:flex;flex-direction:column;gap:6px;font-size:.84rem;font-weight:600}
+.onb-ajuste-detalle{display:flex;flex-direction:column;gap:10px}.onb-ajuste-detalle.apagado{opacity:.5;pointer-events:none}
+.onb-moneda-input{width:100%}
+.onb-moneda-lista{list-style:none;margin:6px 0 0;padding:4px;max-height:210px;overflow-y:auto;border-radius:12px;border:1px solid color-mix(in srgb,currentColor 18%,transparent);background:var(--onb-izq,#080808)}
+.onb-moneda-op,.onb-moneda-vacio{padding:.55rem .7rem;border-radius:8px;font-size:.9rem;cursor:pointer}
+.onb-moneda-op.activa{background:color-mix(in srgb,var(--accent-1,#8b5cf6) 22%,transparent)}.onb-moneda-op.elegida{font-weight:700}
+.onb-moneda-vacio{opacity:.65;cursor:default}
+.onb-enlaces-lista{display:flex;flex-direction:column;gap:8px}.onb-enlace-fila{display:flex;align-items:center;gap:10px}.onb-enlace-ico{width:28px;height:28px;display:grid;place-items:center;flex-shrink:0;font-size:1.2rem}.onb-enlace-ico img{width:100%;height:100%;object-fit:cover;border-radius:6px}.onb-enlace-nombre{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.onb-nav-fila{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:.7rem .9rem;border-radius:14px;border:1px solid color-mix(in srgb,currentColor 14%,transparent);background:color-mix(in srgb,currentColor 4%,transparent)}
+.onb-nav-fila span{display:flex;align-items:center;gap:10px}
+.onb-gemini-pasos{margin:0 0 14px;padding-left:1.25rem;display:flex;flex-direction:column;gap:6px;font-size:.88rem;line-height:1.45}
+.onb-gemini-campo{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.onb-wapper-ok{display:flex;flex-direction:column;gap:6px;margin-top:10px;padding:16px;border-radius:16px;border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 50%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 12%,transparent)}
+.onb-wapper-ok b{font-size:1.1rem}
+.onboarding-panel[data-etapa^="ajustes"] .onboarding-copy,.onboarding-panel[data-etapa="wapper-config"] .onboarding-copy{overflow-y:auto;min-height:0}
+.onboarding-panel[data-etapa^="ajustes"] .onboarding-layout,.onboarding-panel[data-etapa="wapper-config"] .onboarding-layout{min-height:0}
 .onboarding-overlay .onboarding-copy h1{background:none!important;-webkit-text-fill-color:currentColor!important;filter:none!important}
 .onb-toca{position:absolute;left:50%;bottom:14px;z-index:4;display:flex;align-items:center;gap:.55rem;padding:.6rem 1.05rem;border-radius:999px;font:inherit;font-size:.86rem;font-weight:700;cursor:pointer;color:var(--text-primary,inherit);background:color-mix(in srgb,var(--bg-panel,#222) 94%,transparent);border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 60%,transparent);box-shadow:0 8px 24px rgba(0,0,0,.3);transform:translateX(-50%);-webkit-tap-highlight-color:transparent}
 .onb-toca:disabled{cursor:progress;opacity:.9}
@@ -851,11 +886,230 @@ function llenarExtras(marco) {
   }
 }
 
+/* ── Piezas de «Bienvenida», «Activa Wapper» y «Últimos ajustes» ─────────── */
+const sinTildes = (t) => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+// Sinónimos para buscar la moneda por país o por código (CRC, USD…); si una moneda no está aquí se busca por su código y nombre.
+const ALIAS_MONEDAS = {
+  CRC: "costa rica colon colones", USD: "dolar dolares estados unidos eeuu usa united states ecuador el salvador panama puerto rico",
+  EUR: "euro euros europa union europea espana alemania francia italia portugal irlanda", MXN: "mexico peso mexicano",
+  COP: "colombia peso colombiano", ARS: "argentina peso argentino", CLP: "chile peso chileno", PEN: "peru sol soles",
+  BRL: "brasil real reales", GBP: "reino unido inglaterra libra esterlina", CAD: "canada dolar canadiense",
+  GTQ: "guatemala quetzal", HNL: "honduras lempira", NIO: "nicaragua cordoba", DOP: "republica dominicana peso dominicano",
+  UYU: "uruguay peso uruguayo", PYG: "paraguay guarani", BOB: "bolivia boliviano", VES: "venezuela bolivar",
+  JPY: "japon yen", CNY: "china yuan renminbi", CHF: "suiza franco suizo", AUD: "australia dolar australiano",
+  CUP: "cuba peso cubano", KRW: "corea won", INR: "india rupia",
+};
+function filtrarMonedas(consulta) {
+  const lista = MONEDAS_DISPONIBLES || [], q = sinTildes(consulta).trim();
+  if (!q) return lista.slice();
+  const tokens = q.split(/\s+/);
+  const puntaje = (m) => { const id = sinTildes(m.id); return id === q ? 0 : id.startsWith(q) ? 1 : 2; };
+  return lista
+    .map((m) => ({ m, h: sinTildes(`${m.id} ${m.simbolo} ${m.etiqueta} ${ALIAS_MONEDAS[m.id] || ""}`) }))
+    .filter(({ h }) => tokens.every((t) => h.includes(t)))
+    .sort((a, b) => puntaje(a.m) - puntaje(b.m)).map((x) => x.m);
+}
+// Selector de moneda con teclado: escribe «USD», «CRC» o el país («Estados Unidos», «Costa Rica») y filtra al instante.
+function construirBuscadorMoneda({ valorInicial, onElegir }) {
+  const monedas = MONEDAS_DISPONIBLES || [];
+  const rotulo = (m) => `${m.simbolo} ${m.etiqueta} · ${m.id}`;
+  let actual = monedas.find((m) => m.id === valorInicial) || monedas.find((m) => m.id === "CRC") || monedas[0];
+  const raiz = document.createElement("div"); raiz.className = "onb-moneda";
+  const input = document.createElement("input");
+  input.type = "text"; input.className = "form-input onb-moneda-input"; input.autocomplete = "off"; input.spellcheck = false;
+  input.autocapitalize = "off"; input.enterKeyHint = "done";
+  input.setAttribute("role", "combobox"); input.setAttribute("aria-expanded", "false");
+  input.setAttribute("aria-label", traducirTextoInterfaz("Moneda local"));
+  input.placeholder = traducirTextoInterfaz("Busca por país o código (CRC, USD…)");
+  const lista = document.createElement("ul"); lista.className = "onb-moneda-lista"; lista.setAttribute("role", "listbox"); lista.hidden = true;
+  let visibles = [], activo = 0;
+  const pintarLista = () => {
+    lista.replaceChildren();
+    if (!visibles.length) { const v = document.createElement("li"); v.className = "onb-moneda-vacio"; v.textContent = traducirTextoInterfaz("Sin resultados"); lista.append(v); return; }
+    visibles.forEach((m, i) => {
+      const li = document.createElement("li"); li.setAttribute("role", "option");
+      li.className = `onb-moneda-op${i === activo ? " activa" : ""}${m.id === actual?.id ? " elegida" : ""}`; li.textContent = rotulo(m);
+      li.addEventListener("pointerdown", (ev) => { ev.preventDefault(); elegir(m); });
+      lista.append(li);
+    });
+    lista.querySelector(".activa")?.scrollIntoView({ block: "nearest" });
+  };
+  const abrir = (q = "") => { visibles = filtrarMonedas(q); activo = 0; lista.hidden = false; input.setAttribute("aria-expanded", "true"); pintarLista(); };
+  const cerrar = () => { lista.hidden = true; input.setAttribute("aria-expanded", "false"); if (actual) input.value = rotulo(actual); };
+  const elegir = (m) => { actual = m; cerrar(); input.blur(); onElegir?.(m.id); };
+  if (actual) input.value = rotulo(actual);
+  input.addEventListener("focus", () => { input.select(); abrir(""); });
+  input.addEventListener("input", () => abrir(input.value));
+  input.addEventListener("blur", cerrar);
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key === "ArrowDown") { ev.preventDefault(); if (lista.hidden) abrir(input.value); else { activo = Math.min(visibles.length - 1, activo + 1); pintarLista(); } }
+    else if (ev.key === "ArrowUp") { ev.preventDefault(); activo = Math.max(0, activo - 1); pintarLista(); }
+    else if (ev.key === "Enter") { ev.preventDefault(); if (visibles[activo]) elegir(visibles[activo]); }
+    else if (ev.key === "Escape") { ev.preventDefault(); cerrar(); input.blur(); }
+  });
+  raiz.append(input, lista); return raiz;
+}
+function construirInterruptor(activo, onCambiar, etiquetaAria) {
+  const label = document.createElement("label"); label.className = "switch switch-tema";
+  const chk = document.createElement("input"); chk.type = "checkbox"; chk.checked = Boolean(activo);
+  if (etiquetaAria) chk.setAttribute("aria-label", traducirTextoInterfaz(etiquetaAria));
+  const track = document.createElement("span"); track.className = "track"; track.innerHTML = '<span class="thumb"></span>';
+  chk.addEventListener("change", () => onCambiar(chk.checked, chk));
+  label.append(chk, track); return { label, chk };
+}
+function bloqueAjuste(icono, titulo, descripcion, ...hijos) {
+  const b = document.createElement("section"); b.className = "onb-ajuste";
+  const cab = document.createElement("div"); cab.className = "onb-ajuste-cab";
+  const ico = document.createElement("span"); ico.className = "onb-ajuste-ico"; ico.textContent = icono;
+  const t = document.createElement("div"); const h = document.createElement("b"); h.textContent = traducirTextoInterfaz(titulo); t.append(h);
+  if (descripcion) { const s = document.createElement("small"); s.textContent = traducirTextoInterfaz(descripcion); t.append(s); }
+  cab.append(ico, t); b.append(cab, ...hijos); return b;
+}
+const etiquetaHora12 = (h) => `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? "am" : "pm"}`;
+function notaAjuste(texto) { const p = document.createElement("p"); p.className = "onb-ajuste-nota"; p.textContent = traducirTextoInterfaz(texto); return p; }
+function campoConEtiqueta(texto, control) {
+  const l = document.createElement("label"); l.className = "onb-ajuste-campo";
+  const s = document.createElement("span"); s.textContent = traducirTextoInterfaz(texto); l.append(s, control); return l;
+}
+// Notificaciones: mismos campos de configuración que Ajustes. Recordatorios y resumen solo funcionan con Google Calendar conectado.
+function construirBloqueNotificaciones({ cfg, borrador, demo }) {
+  const calActiva = () => { try { return Boolean(sincronizacionCalendarActiva()); } catch (_) { return false; } };
+  const detalle = document.createElement("div"); detalle.className = "onb-ajuste-detalle";
+  const marcar = () => detalle.classList.toggle("apagado", !calActiva());
+  const guardado = cfg.notificaciones_recordatorios?.tarea;
+  const inicial = borrador.recordatorio || (Array.isArray(guardado) ? guardado[0] : guardado) || "1_dia";
+  const selAntes = document.createElement("select"); selAntes.className = "form-input";
+  (OFFSETS_RECORDATORIO_AGENDA || []).forEach((o) => { const op = document.createElement("option"); op.value = o.id; op.textContent = traducirTextoInterfaz(o.etiqueta); selAntes.append(op); });
+  selAntes.value = inicial; if (selAntes.value !== inicial && selAntes.options[0]) selAntes.value = selAntes.options[0].value;
+  selAntes.addEventListener("change", () => { borrador.recordatorio = selAntes.value; borrador.tocado = true; });
+  const r0 = cfg.notificaciones_resumen_diario || { activo: false, hora: "20:00" };
+  const resumen = borrador.resumen || { activo: Boolean(r0.activo), hora: r0.hora || "20:00" };
+  const selHora = document.createElement("select"); selHora.className = "form-input";
+  for (let h = 0; h < 24; h++) { const op = document.createElement("option"); op.value = `${String(h).padStart(2, "0")}:00`; op.textContent = etiquetaHora12(h); selHora.append(op); }
+  selHora.value = resumen.hora;
+  const campoHora = campoConEtiqueta("Hora del resumen", selHora); campoHora.hidden = !resumen.activo;
+  selHora.addEventListener("change", () => { resumen.hora = selHora.value; borrador.resumen = resumen; borrador.tocado = true; });
+  const swResumen = construirInterruptor(resumen.activo, (v) => { resumen.activo = v; borrador.resumen = resumen; borrador.tocado = true; campoHora.hidden = !v; }, "Resumen diario");
+  const filaResumen = document.createElement("div"); filaResumen.className = "onb-ajuste-fila";
+  const tr = document.createElement("span"); tr.textContent = traducirTextoInterfaz("Resumen diario de tus pendientes"); filaResumen.append(tr, swResumen.label);
+  detalle.append(campoConEtiqueta("Avisarme antes de tareas, exámenes y eventos", selAntes), filaResumen, campoHora);
+  const swCal = construirInterruptor(calActiva(), async (v, chk) => {
+    chk.disabled = true;
+    try {
+      if (v) { const ok = await activarSincronizacionCalendario(); if (!ok) chk.checked = false; }
+      else await desactivarSincronizacionCalendario();
+    } catch (_) { chk.checked = calActiva(); }
+    chk.disabled = false; marcar();
+  }, "Recordatorios en Google Calendar");
+  const fila = document.createElement("div"); fila.className = "onb-ajuste-fila";
+  const t = document.createElement("span"); t.textContent = traducirTextoInterfaz("Recordatorios en Google Calendar"); fila.append(t, swCal.label);
+  const envoltura = document.createElement("div"); envoltura.className = "onb-ajuste-detalle";
+  if (demo) { swCal.chk.disabled = true; envoltura.append(fila, notaAjuste("Disponible al iniciar sesión con tu cuenta de Google.")); detalle.classList.add("apagado"); }
+  else { envoltura.append(fila, notaAjuste("Conecta Google Calendar para recibir avisos nativos de tus tareas, exámenes y eventos.")); marcar(); }
+  envoltura.append(detalle); return envoltura;
+}
+const SECCIONES_NAV = [
+  { id: "agenda", etiqueta: "Agenda", icono: "📖" }, { id: "horario", etiqueta: "Horario", icono: "🗓️" },
+  { id: "semestres", etiqueta: "Semestres", icono: "📅" }, { id: "comunidad", etiqueta: "Comunidad", icono: "👥" },
+  { id: "finanzas", etiqueta: "Finanzas", icono: "💰" }, { id: "plan-estudios", etiqueta: "Plan de Estudios", icono: "📚" },
+  { id: "tiempo-estudio", etiqueta: "Tiempo", icono: "⏱️" }, { id: "asistente", etiqueta: "Asistente", icono: "✨" },
+];
+function fotoPerfilGoogle() {
+  const src = document.getElementById("perfil-foto")?.getAttribute("src") || "";
+  if (src.trim()) return src;
+  const p = estado.datos?.perfil || {};
+  return p.foto || p.foto_url || p.picture || p.avatar || p.imagen || "";
+}
+function construirAvatarBienvenida(nombre) {
+  const caja = document.createElement("div"); caja.className = "onb-bienvenida-avatar"; caja.setAttribute("aria-hidden", "true");
+  const conInicial = () => { caja.replaceChildren(); const s = document.createElement("span"); s.textContent = (String(nombre || "").trim()[0] || "✨").toUpperCase(); caja.append(s); };
+  const src = MODO_DEMO ? "" : fotoPerfilGoogle();
+  if (!src) { conInicial(); return caja; }
+  const img = document.createElement("img"); img.alt = ""; img.referrerPolicy = "no-referrer"; img.decoding = "async"; img.onerror = conInicial; img.src = src;
+  caja.append(img); return caja;
+}
+// Texto EXACTO de Ajustes → Asistente IA (Gemini), para que el usuario vea las mismas instrucciones.
+const GEMINI_INTRO = "Creá tareas, exámenes y eventos hablando o escribiendo en lenguaje natural, sin llenar el formulario a mano. Usa Gemini, el modelo de IA de Google, con tu propia clave. Es gratis y solo vos la ves (no la vemos nosotros, solo Google).";
+const GEMINI_PASOS = [
+  "Tocá el botón \"Abrir Google AI Studio\" de abajo.",
+  "Iniciá sesión con tu cuenta de Google si te lo pide.",
+  "En la esquina superior derecha vas a ver un botón de clave de API. Tocalo.",
+  "Se abre una ventana que pide un nombre para la clave y un proyecto. Podés dejar los dos con el valor que aparece por defecto, no hace falta cambiar nada.",
+  "Tocá \"Crear\".",
+  "Te va a aparecer la clave con un botón \"Copiar\" abajo. Tocalo para copiarla.",
+  "Volvé a esta pantalla, pegala en el campo de abajo y tocá \"Guardar\".",
+];
+function botonDesdeCero() { return [...document.querySelectorAll("#seccion-plan-estudios button")].find((b) => /desde cero|da zero|from scratch/i.test(b.textContent)); }
+function grupoMetodosImportar() { const g = [...document.querySelectorAll("#seccion-plan-estudios .pill-group")]; return g.find((x) => x.querySelectorAll("button").length >= 3) || g.find((x) => x.querySelectorAll("button").length >= 2); }
+function seccionNavegacionAjustes() {
+  const lista = document.getElementById("lista-nav-oculta"), sec = lista?.closest(".ajuste-seccion");
+  if (sec?.classList.contains("colapsada")) sec.querySelector(".ajuste-seccion-cabecera")?.click();
+  return lista || sec || null;
+}
+
+// Enlaces rápidos dentro del onboarding: mismos datos que Ajustes (nombre, URL, emoji o imagen comprimida). Se guardan al terminar.
+function construirBloqueEnlaces({ cfg, borrador }) {
+  const limite = LIMITE_ENLACES_RAPIDOS || 20;
+  const existentes = Array.isArray(cfg.enlaces_rapidos) ? cfg.enlaces_rapidos.length : 0;
+  const caja = document.createElement("div"); caja.className = "onb-ajuste-detalle";
+  const lista = document.createElement("div"); lista.className = "onb-enlaces-lista";
+  const nombre = document.createElement("input"); nombre.className = "form-input"; nombre.maxLength = 40; nombre.placeholder = traducirTextoInterfaz("Nombre (ej. Matrícula)");
+  const url = document.createElement("input"); url.className = "form-input"; url.type = "url"; url.inputMode = "url"; url.autocapitalize = "off"; url.placeholder = "https://";
+  let tipo = "emoji";
+  const bEmoji = document.createElement("button"), bImg = document.createElement("button");
+  [bEmoji, bImg].forEach((b) => { b.type = "button"; });
+  bEmoji.textContent = traducirTextoInterfaz("Emoji"); bImg.textContent = traducirTextoInterfaz("Imagen");
+  const emoji = document.createElement("input"); emoji.className = "form-input"; emoji.value = "🔗"; emoji.maxLength = 4; emoji.setAttribute("aria-label", "Emoji");
+  const archivo = document.createElement("input"); archivo.type = "file"; archivo.accept = "image/*"; archivo.className = "form-input"; archivo.hidden = true;
+  const marcarTipo = () => {
+    bEmoji.className = `btn ${tipo === "emoji" ? "btn-primary" : "btn-secondary"}`; bImg.className = `btn ${tipo === "imagen" ? "btn-primary" : "btn-secondary"}`;
+    emoji.hidden = tipo !== "emoji"; archivo.hidden = tipo !== "imagen";
+  };
+  bEmoji.addEventListener("click", () => { tipo = "emoji"; marcarTipo(); });
+  bImg.addEventListener("click", () => { tipo = "imagen"; marcarTipo(); });
+  const filaTipo = document.createElement("div"); filaTipo.className = "onb-ajuste-fila"; filaTipo.append(bEmoji, bImg);
+  const error = document.createElement("p"); error.className = "onboarding-nota-error"; error.hidden = true; error.setAttribute("role", "alert");
+  const agregar = document.createElement("button"); agregar.type = "button"; agregar.className = "btn btn-secondary"; agregar.textContent = traducirTextoInterfaz("+ Añadir enlace");
+  const pintar = () => {
+    lista.replaceChildren();
+    borrador.enlaces.forEach((e, i) => {
+      const fila = document.createElement("div"); fila.className = "onb-enlace-fila";
+      const ico = document.createElement("span"); ico.className = "onb-enlace-ico";
+      if (e.icono_tipo === "emoji") ico.textContent = e.icono_valor;
+      else { const img = document.createElement("img"); img.alt = ""; img.src = e.icono_valor; img.addEventListener("error", () => { ico.textContent = "🔗"; }); ico.append(img); }
+      const n = document.createElement("span"); n.className = "onb-enlace-nombre"; n.textContent = e.nombre;
+      const quitar = document.createElement("button"); quitar.type = "button"; quitar.className = "btn btn-secondary"; quitar.textContent = "×"; quitar.setAttribute("aria-label", traducirTextoInterfaz("Quitar enlace"));
+      quitar.addEventListener("click", () => { borrador.enlaces.splice(i, 1); pintar(); });
+      fila.append(ico, n, quitar); lista.append(fila);
+    });
+    agregar.disabled = existentes + borrador.enlaces.length >= limite;
+  };
+  agregar.addEventListener("click", async () => {
+    const nom = nombre.value.trim(); let u = url.value.trim();
+    const fallo = (m) => { error.textContent = traducirTextoInterfaz(m); error.hidden = false; };
+    if (!nom || !u) return fallo("El nombre y la URL son obligatorios.");
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(u)) u = `https://${u}`;
+    let icono_tipo = "emoji", icono_valor = emoji.value.trim() || "🔗";
+    if (tipo === "imagen") {
+      const f = archivo.files?.[0]; if (!f) return fallo("Selecciona una imagen.");
+      try { icono_valor = await convertirImagenABase64Comprimida(f); icono_tipo = "imagen"; } catch (_) { return fallo("No se pudo leer la imagen, intenta con otra."); }
+    }
+    borrador.enlaces.push({ nombre: nom, url: u, icono_tipo, icono_valor }); borrador.tocado = true;
+    nombre.value = ""; url.value = ""; archivo.value = ""; error.hidden = true; pintar();
+  });
+  nombre.addEventListener("input", () => { error.hidden = true; }); url.addEventListener("input", () => { error.hidden = true; });
+  marcarTipo(); pintar();
+  caja.append(lista, nombre, url, filaTipo, emoji, archivo, error, agregar, notaAjuste(`Hasta ${limite} accesos directos. Se guardan al terminar.`));
+  return caja;
+}
 function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
   // Nunca dentro del iframe de vista previa (evita onboarding anidado) ni duplicado.
   if (PREVIEW_DEMO || document.querySelector(".onboarding-overlay") || !estado.datos?.configuracion || (estado.datos.configuracion.onboarding_v1_completado !== false && !(MODO_DEMO && !PREVIEW_DEMO))) return false;
   const cfg = estado.datos.configuracion;
-  const secciones = SECCIONES_TUTORIAL.filter(({id}) => document.getElementById(`seccion-${id}`));
+  const secciones = SECCIONES_TUTORIAL.filter(({id}) => id !== "configuracion" && document.getElementById(`seccion-${id}`));
+  // «Últimos ajustes»: se guardan en este borrador y se aplican AL TERMINAR el onboarding.
+  const borrador = { tocado: false, navTocada: false, moneda: null, ocultas: new Set(cfg.navegacion_oculta || []), recordatorio: null, resumen: null, enlaces: [] };
+  let claveRecien = false;
   const cuentaConDatos = !MODO_DEMO && Object.entries(estado.datos).some(([clave, valor]) =>
     Array.isArray(valor) && valor.length > 0 && clave !== "planes_estudio_demo"
   );
@@ -988,7 +1242,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
   // ── Teléfono (≤760px): primero la información; la vista previa es la página siguiente ──
   const consultaMovil=matchMedia("(max-width:760px)");
   const esMovil=()=>consultaMovil.matches;
-  const hayVista=()=>etapa==="personalizar"||etapa==="wapper-config";
+  const hayVista=()=>etapa==="personalizar";
   let animDir=0;
   const puntosTour=document.createElement("div");puntosTour.className="onb-puntos";puntosTour.setAttribute("aria-hidden","true");
   let vistaMovil="info",claveVistaMovil="";
@@ -1091,7 +1345,21 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
     })();
     return chat;
   };
-  const fin=(irAlPlan=false,irASemestres=false)=>{ctrlTour?.abort();fondo.detener();timersChat.forEach(clearTimeout);timersChat=[];cancelarPrecarga();consultaMovil.removeEventListener?.("change",aplicarVistaMovil);removeEventListener("resize",alRedimensionar);clearTimeout(temporizadorReveal);clearTimeout(vigilanteReveal);timersPreview.forEach(clearTimeout);timersPreview=[];clearTimeout(temporizadorTour);cfg.onboarding_v1_completado=true;cfg.tutoriales_secciones_vistas=cfg.tutoriales_secciones_vistas||{};if(irAlPlan)cfg.tutoriales_secciones_vistas["plan-estudios"]=true;if(irASemestres)cfg.tutoriales_secciones_vistas.semestres=true;guardar();overlay.remove();if(irAlPlan||irASemestres){const destino=irASemestres?"semestres":"plan-estudios";navegar?.(destino);setTimeout(()=>iniciarGuiaPlan({navegar,posteriorImportacion:irASemestres,yaEnSemestres:irASemestres}),450);}else toast?.(traducirTextoInterfaz("¡Listo! Puedes volver a ver la guía desde Ajustes generales."));};
+  const aplicarAjustesFinales=()=>{
+    if(!borrador.tocado)return;
+    if(borrador.moneda)cfg.moneda_preferida=borrador.moneda;
+    if(borrador.navTocada)cfg.navegacion_oculta=[...borrador.ocultas];
+    if(borrador.recordatorio){const r=borrador.recordatorio,previo=cfg.notificaciones_recordatorios&&typeof cfg.notificaciones_recordatorios==="object"?cfg.notificaciones_recordatorios:{};cfg.notificaciones_recordatorios={feriado:["1_dia"],...previo,tarea:[r],examen:[r],evento:[r]};}
+    if(borrador.enlaces.length){
+      if(!Array.isArray(cfg.enlaces_rapidos))cfg.enlaces_rapidos=[];
+      borrador.enlaces.forEach((e)=>{if(cfg.enlaces_rapidos.length>=(LIMITE_ENLACES_RAPIDOS||20))return;const nuevo=crearEnlaceRapido(e);sellarTimestamp(nuevo);cfg.enlaces_rapidos.push(nuevo);});
+      import("../config/config-enlaces.js").then((m)=>m.renderizarEnlacesRapidos()).catch(()=>{});
+    }
+    if(borrador.resumen)cfg.notificaciones_resumen_diario={activo:borrador.resumen.activo,hora:borrador.resumen.hora};
+    guardar();window.aplicarVisibilidadNavegacion?.();
+    try{if(borrador.resumen&&sincronizacionCalendarActiva())sincronizarResumenDiario();}catch(_){}
+  };
+  const fin=(irAlPlan=false,irASemestres=false)=>{aplicarAjustesFinales();ctrlTour?.abort();fondo.detener();timersChat.forEach(clearTimeout);timersChat=[];cancelarPrecarga();consultaMovil.removeEventListener?.("change",aplicarVistaMovil);removeEventListener("resize",alRedimensionar);clearTimeout(temporizadorReveal);clearTimeout(vigilanteReveal);timersPreview.forEach(clearTimeout);timersPreview=[];clearTimeout(temporizadorTour);cfg.onboarding_v1_completado=true;cfg.tutoriales_secciones_vistas=cfg.tutoriales_secciones_vistas||{};if(irAlPlan)cfg.tutoriales_secciones_vistas["plan-estudios"]=true;if(irASemestres)cfg.tutoriales_secciones_vistas.semestres=true;guardar();overlay.remove();if(irAlPlan||irASemestres){const destino=irASemestres?"semestres":"plan-estudios";navegar?.(destino);setTimeout(()=>iniciarGuiaPlan({navegar,posteriorImportacion:irASemestres,yaEnSemestres:irASemestres}),450);}else toast?.(traducirTextoInterfaz("¡Listo! Puedes volver a ver la guía desde Ajustes generales."));};
   if (MODO_DEMO && !PREVIEW_DEMO) {
     const saltar=boton("Saltar inicio","btn-secondary",()=>{cfg.tutoriales_secciones_vistas=Object.fromEntries(SECCIONES_TUTORIAL.map(s=>[s.id,true]));fin(false);});
     saltar.className += " onboarding-saltar-demo";
@@ -1123,23 +1391,34 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
   const pintar=()=>{
     ctrlTour?.abort();ctrlTour=null;timersChat.forEach(clearTimeout);timersChat=[];
     contenido.replaceChildren();acciones.replaceChildren();
-    const esTour=etapa==="tour";panel.classList.toggle("onboarding-con-tour",esTour||etapa==="personalizar"||etapa==="wapper-config");
+    const esTour=etapa==="tour";panel.classList.toggle("onboarding-con-tour",esTour||etapa==="personalizar");panel.dataset.etapa=etapa;panel.querySelectorAll(".onb-bienvenida-avatar").forEach((e)=>e.remove());
     // En teléfono, cada pantalla nueva arranca en «información»; la vista previa se desliza.
     const claveVista=`${etapa}:${etapa==="tour"?indice:""}`;if(claveVista!==claveVistaMovil){claveVistaMovil=claveVista;vistaMovil="info";}
     panel.querySelector(".onboarding-cerrar").classList.toggle("oculto",!cuentaConDatos&&(etapa==="nombre"||etapa==="personalizar"));
-    const nombres={nombre:"Tu cuenta, a tu manera",personalizar:"Personaliza tu app",instalar:"Llévala contigo",tour:`Conoce ${secciones[indice]?.nombre||"App Académica"}`,"wapper-config":"Activa Wapper",flujo:"Todo conectado, paso a paso"};
+    const nombres={nombre:"Te damos la bienvenida",personalizar:"Personaliza tu app",instalar:"Llévala contigo",tour:`Conoce ${secciones[indice]?.nombre||"App Académica"}`,"wapper-config":"Activa Wapper",ajustes1:"Últimos ajustes antes de iniciar",ajustes2:"Elige qué secciones usarás",flujo:"Todo conectado, paso a paso"};
     titulo.textContent=etapa==="tour"?`${traducirTextoInterfaz("Conoce")} ${traducirTextoInterfaz(secciones[indice]?.nombre||"App Académica")}`:traducirTextoInterfaz(nombres[etapa]||"App Académica");
-    progreso.textContent=etapa==="tour"?traducirTextoInterfaz(`${indice+1} de ${secciones.length} secciones`):traducirTextoInterfaz({nombre:"Bienvenida",personalizar:"Personalización",instalar:"Instalación",flujo:"Cómo empezar"}[etapa]||"");
-    preview.closest(".onboarding-preview-wrap").classList.toggle("oculto",!esTour&&etapa!=="personalizar"&&etapa!=="wapper-config");
+    progreso.textContent=etapa==="tour"?traducirTextoInterfaz(`${indice+1} de ${secciones.length} secciones`):traducirTextoInterfaz({nombre:"Bienvenida",personalizar:"Personalización",instalar:"Instalación",ajustes1:"Últimos ajustes (1 de 2)",ajustes2:"Últimos ajustes (2 de 2)",flujo:"Cómo empezar"}[etapa]||"");
+    preview.closest(".onboarding-preview-wrap").classList.toggle("oculto",!esTour&&etapa!=="personalizar");
     aplicarVistaMovil();
     puntosTour.replaceChildren(...secciones.map((_,i)=>{const d=document.createElement("i");if(i===indice)d.className="on";return d;}));
     if(animDir&&esMovil()&&etapa==="tour"&&typeof panel.querySelector(".onboarding-layout").animate==="function"&&!matchMedia("(prefers-reduced-motion: reduce)").matches)panel.querySelector(".onboarding-layout").animate([{opacity:0,transform:`translateX(${animDir*26}px)`},{opacity:1,transform:"none"}],{duration:230,easing:"ease-out"});
     animDir=0;
     if(etapa==="nombre"){
-      contenido.append(texto("p","onboarding-lead","Hola, ¿cómo te llamas? Puedes cambiarlo después en Ajustes."));
-      const input=document.createElement("input");input.className="form-input";input.maxLength=60;input.autocomplete="given-name";input.value=MODO_DEMO?"":estado.datos.perfil?.nombre_preferido||estado.datos.perfil?.nombre||"";input.setAttribute("aria-label",titulo.textContent);
+      const nombreGoogle=(estado.datos.perfil?.nombre||estado.datos.perfil?.nombre_preferido||"").trim();
+      const valorInicial=MODO_DEMO?"":(estado.datos.perfil?.nombre_preferido||estado.datos.perfil?.nombre||"");
+      titulo.before(construirAvatarBienvenida(valorInicial||nombreGoogle));
+      contenido.append(texto("p","onb-bienvenida-lema","Tu carrera, tu agenda y tu tiempo, en un solo lugar."));
+      const input=document.createElement("input");input.className="form-input onb-bienvenida-campo";input.maxLength=60;input.autocomplete="given-name";input.value=valorInicial;input.placeholder=traducirTextoInterfaz("Tu nombre");input.setAttribute("aria-label",traducirTextoInterfaz("¿Cómo quieres que te llamemos?"));
+      const etiqueta=texto("label","onb-bienvenida-etiqueta","¿Cómo quieres que te llamemos?");etiqueta.append(input);
       const aviso=texto("p","onboarding-nota-error","Escribe cómo quieres que te llamemos para continuar.");aviso.hidden=true;aviso.setAttribute("role","alert");
-      contenido.append(input,aviso);
+      contenido.append(etiqueta,aviso);
+      const primero=nombreGoogle.split(/\s+/)[0]||"";
+      let chip=null;
+      if(!MODO_DEMO&&primero){
+        chip=boton(`${traducirTextoInterfaz("Usar")} «${primero}»`,"onb-chip",()=>{input.value=primero;actualizarChip();input.focus({preventScroll:true});});
+        chip.className="onb-chip";contenido.append(chip);
+      }
+      const actualizarChip=()=>{if(chip)chip.hidden=input.value.trim()===primero;};actualizarChip();
       const continuar=()=>{
         const v=input.value.trim();
         // En la demo el nombre es opcional; en una cuenta real se pide con un aviso visible.
@@ -1147,10 +1426,11 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
         if(v){estado.datos.perfil=estado.datos.perfil||{};estado.datos.perfil.nombre_preferido=v;guardar();window.renderizarPerfil?.();}
         etapa=cuentaConDatos&&cfg.paleta&&cfg.modo?"tour":"personalizar";pintar();
       };
-      input.addEventListener("input",()=>{aviso.hidden=true;input.removeAttribute("aria-invalid");});
+      input.addEventListener("input",()=>{aviso.hidden=true;input.removeAttribute("aria-invalid");actualizarChip();});
       input.addEventListener("keydown",(ev)=>{if(ev.key==="Enter"){ev.preventDefault();continuar();}});
       acciones.append(boton("Continuar","btn-primary",continuar));
-      requestAnimationFrame(()=>input.focus({preventScroll:true}));return;
+      if(!esMovil())requestAnimationFrame(()=>input.focus({preventScroll:true})); // en teléfono no se abre el teclado solo: taparía el avatar
+      return;
     }
     if(etapa==="personalizar"){
       contenido.append(texto("p","onboarding-lead",(PERMITIR_LOGO_ONBOARDING?"Elige tema, paleta y logo. Puedes cambiarlos luego en Personalizar.":"Elige tema y paleta. Puedes cambiarlos luego en Personalizar.")));
@@ -1178,31 +1458,75 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
       acciones.append(boton("Atrás","btn-secondary",()=>{etapa="personalizar";pintar();}),boton("Ahora no","btn-secondary",()=>{etapa="tour";indice=0;pintar();}));colocarPrimario(boton("Instalar app","btn-primary",()=>{window.instalarAppAcademica?.();etapa="tour";indice=0;pintar();}));return;
     }
     if(etapa==="tour"){
-      const sec=secciones[indice];if(!sec){etapa="flujo";pintar();return;}
+      const sec=secciones[indice];if(!sec){etapa="ajustes1";pintar();return;}
       const bloqueConoce=document.createElement("section");bloqueConoce.className="onboarding-conoce";
       const lista=document.createElement("ul");lista.className="onboarding-lista";sec.puntos.forEach((p)=>lista.append(texto("li","",p)));bloqueConoce.append(lista);contenido.append(bloqueConoce);
       const duracionCadena=esMovil()?0:revelarEnCadena(lista); // en teléfono se desliza entre secciones: sin esperas
       prepararEsquema(sec.id);
       if(indice>0)acciones.append(boton("Atrás","btn-secondary onb-atras",()=>{indice--;animDir=-1;pintar();}));
-      const usarSeccion=()=>{cfg.navegacion_oculta=(cfg.navegacion_oculta||[]).filter(id=>id!==sec.id);guardar();window.aplicarVisibilidadNavegacion?.();animDir=1;siguiente();};
+      const usarSeccion=()=>{animDir=1;siguiente();};
       if(sec.id==="asistente"){
         // En la demo no tiene sentido pedir la clave de Gemini: se muestra una conversación de ejemplo.
         if(!MODO_DEMO){const accionesWapper=document.createElement("div");accionesWapper.className="onboarding-wapper-cta-wrap";accionesWapper.append(boton("Configurar Wapper","btn-primary onboarding-wapper-cta",()=>{etapa="wapper-config";pintar();}));contenido.append(accionesWapper);}
       }
       if(indice===0)acciones.append(boton("Atrás","btn-secondary onb-atras",()=>{etapa="personalizar";pintar();}));
-      acciones.append(boton("No me interesa","btn-secondary onb-no",()=>{cfg.navegacion_oculta=[...new Set([...(cfg.navegacion_oculta||[]),sec.id])];guardar();window.aplicarVisibilidadNavegacion?.();animDir=1;siguiente();}),boton(indice===secciones.length-1?"Seguir":"Siguiente", "btn-primary onb-sig",usarSeccion));return;
+      acciones.append(boton(indice===secciones.length-1?"Seguir":"Siguiente","btn-primary onb-sig",usarSeccion));return;
     }
     if(etapa==="wapper-config"){
-      const pasosWapper=document.createElement("ol");pasosWapper.className="onboarding-dependencias";["Wapper usa tu Agenda para crear y consultar pendientes.","Guarda aquí tu clave personal de Gemini para activarlo.","Después podrás dictar tareas, exámenes y eventos desde Asistente."].forEach(t=>pasosWapper.append(texto("li","",t)));contenido.append(pasosWapper);
-      contenido.append(texto("p","onboarding-wapper-estado",cfg.gemini_api_key?"Wapper está activo: ya hay una clave de Gemini guardada.":"Wapper necesita una clave personal de Gemini para funcionar."));
-      if(!cfg.gemini_api_key){const label=texto("label","onboarding-wapper-etiqueta","Clave de Gemini");const input=document.createElement("input");input.type="password";input.className="form-input";input.autocomplete="new-password";input.placeholder=traducirTextoInterfaz("Pega tu clave personal");input.setAttribute("aria-label",traducirTextoInterfaz("Clave de Gemini"));label.append(input);contenido.append(label);contenido.append(boton("Guardar y activar Wapper","btn-primary onboarding-wapper-cta",()=>{const clave=input.value.trim();if(!clave){input.focus();return;}cfg.gemini_api_key=clave;guardar();window.aplicarVisibilidadBotonAsistente?.();actualizarPreview();pintar();}));}
-      prepararEsquema("asistente");
-      acciones.append(boton("Atrás","btn-secondary",()=>{etapa="tour";pintar();}),boton("Continuar con la guía","btn-primary",()=>{etapa="tour";siguiente();}));return;
+      const listo=Boolean(cfg.gemini_api_key);
+      contenido.append(texto("p","onboarding-lead",GEMINI_INTRO));
+      if(listo){
+        const ok=document.createElement("div");ok.className="onb-wapper-ok";ok.setAttribute("role","status");
+        ok.append(texto("b","","✓ Wapper está activo"),texto("span","","Clave de Gemini guardada. Ahora puedes dictar tareas, exámenes y eventos desde Asistente."));contenido.append(ok);
+        if(claveRecien){claveRecien=false;timersChat.push(setTimeout(()=>{if(etapa==="wapper-config"){etapa="tour";siguiente();}},1600));}
+        acciones.append(boton("Atrás","btn-secondary",()=>{etapa="tour";pintar();}),boton("Continuar con la guía","btn-primary",()=>{etapa="tour";siguiente();}));return;
+      }
+      const pasosGemini=document.createElement("ol");pasosGemini.className="onb-gemini-pasos";GEMINI_PASOS.forEach((t)=>pasosGemini.append(texto("li","",t)));contenido.append(pasosGemini);
+      const enlace=document.createElement("a");enlace.href="https://aistudio.google.com/app/apikey";enlace.target="_blank";enlace.rel="noopener";enlace.className="btn btn-secondary";enlace.textContent=traducirTextoInterfaz("Abrir Google AI Studio ↗");contenido.append(enlace);
+      const campo=document.createElement("div");campo.className="onb-gemini-campo";
+      const etiqueta=texto("span","form-label","Clave de API de Gemini");
+      const input=document.createElement("input");input.type="password";input.className="form-input";input.autocomplete="off";input.placeholder=traducirTextoInterfaz("Pegá tu clave acá");input.setAttribute("aria-label",traducirTextoInterfaz("Clave de API de Gemini"));
+      const error=texto("p","onboarding-nota-error","Pegá una clave antes de guardar.");error.hidden=true;error.setAttribute("role","alert");
+      const guardarClave=()=>{
+        const clave=input.value.trim();
+        if(!clave){error.hidden=false;input.focus();return;}
+        cfg.gemini_api_key=clave;guardar();window.aplicarVisibilidadBotonAsistente?.();toast?.(traducirTextoInterfaz("✓ Clave de Gemini guardada"));
+        claveRecien=true;pintar();
+      };
+      input.addEventListener("input",()=>{error.hidden=true;});
+      input.addEventListener("keydown",(ev)=>{if(ev.key==="Enter"){ev.preventDefault();guardarClave();}});
+      campo.append(etiqueta,input,error,boton("Guardar","btn-primary",guardarClave));contenido.append(campo);
+      acciones.append(boton("Atrás","btn-secondary",()=>{etapa="tour";pintar();}),boton("Hacerlo después","btn-secondary",()=>{etapa="tour";siguiente();}));return;
+    }
+    if(etapa==="ajustes1"){
+      contenido.append(texto("p","onboarding-lead","Tres cosas rápidas para dejar la app lista. Todo se aplica al terminar y puedes cambiarlo luego en Ajustes."));
+      const lista=document.createElement("div");lista.className="onb-ajustes";
+      const monedaActual=borrador.moneda||cfg.moneda_preferida||"CRC";
+      lista.append(bloqueAjuste("💱","Moneda local","Finanzas usa este símbolo en tus importes.",construirBuscadorMoneda({valorInicial:monedaActual,onElegir:(id)=>{borrador.moneda=id;borrador.tocado=true;}}),notaAjuste("Escribe el código (USD, CRC…) o el país para encontrarla rápido.")));
+      lista.append(bloqueAjuste("🔗","Enlaces importantes","Matrícula, TEC Digital, pagos… con emoji o imagen.",construirBloqueEnlaces({cfg,borrador})));
+      if(!MODO_DEMO)lista.append(bloqueAjuste("🔔","Notificaciones","Recordatorios de tu agenda y un resumen diario.",construirBloqueNotificaciones({cfg,borrador,demo:false})));
+      contenido.append(lista);
+      acciones.append(boton("Atrás","btn-secondary",()=>{etapa="tour";indice=Math.max(0,secciones.length-1);pintar();}),boton("Continuar","btn-primary",()=>{etapa="ajustes2";pintar();}));return;
+    }
+    if(etapa==="ajustes2"){
+      contenido.append(texto("p","onboarding-lead","Desactiva las secciones que no vayas a utilizar. Puedes volver a activarlas cuando quieras en Ajustes → Personalizar."));
+      const lista=document.createElement("div");lista.className="onb-ajustes";
+      const orden=typeof window.obtenerOrdenNavegacion==="function"?window.obtenerOrdenNavegacion():SECCIONES_NAV.map((x)=>x.id);
+      orden.forEach((id)=>{
+        const sec=SECCIONES_NAV.find((x)=>x.id===id);if(!sec)return;
+        if(id==="asistente"&&!cfg.gemini_api_key)return;
+        const fila=document.createElement("div");fila.className="onb-nav-fila";
+        const izq=document.createElement("span");izq.append(texto("span","",sec.icono),texto("span","",sec.etiqueta));
+        const sw=construirInterruptor(!borrador.ocultas.has(id),(activa)=>{if(activa)borrador.ocultas.delete(id);else borrador.ocultas.add(id);borrador.tocado=true;borrador.navTocada=true;},`${sec.etiqueta}`);
+        fila.append(izq,sw.label);lista.append(fila);
+      });
+      contenido.append(lista);
+      acciones.append(boton("Atrás","btn-secondary",()=>{etapa="ajustes1";pintar();}),boton("Continuar","btn-primary",()=>{etapa="flujo";pintar();}));return;
     }
     const pasos=document.createElement("ol");pasos.className="onboarding-dependencias";["Agrega tu plan de estudios.","Crea un semestre y matricula tus materias.","Usa esas materias en Horario, Agenda y Tiempo.","Wapper trabaja con tu Agenda; Comunidad y Finanzas funcionan por separado."].forEach(t=>pasos.append(texto("li","",t)));contenido.append(pasos);
-    acciones.append(boton("Atrás","btn-secondary",()=>{indice=secciones.length-1;etapa="tour";pintar();}),boton("Lo haré después","btn-secondary",()=>fin(false)));colocarPrimario(boton(tienePlanArmado?"Continuar":"Agregar plan y ver la guía","btn-primary",()=>tienePlanArmado?preguntarPorOtroPlan():fin(true)));
+    acciones.append(boton("Atrás","btn-secondary",()=>{etapa="ajustes2";pintar();}),boton("Lo haré después","btn-secondary",()=>fin(false)));colocarPrimario(boton(tienePlanArmado?"Continuar":"Agregar plan y ver la guía","btn-primary",()=>tienePlanArmado?preguntarPorOtroPlan():fin(true)));
   };
-  const siguiente=()=>{indice++;if(indice>=secciones.length)etapa="flujo";pintar();};
+  const siguiente=()=>{indice++;if(indice>=secciones.length)etapa="ajustes1";pintar();};
   panel.querySelector(".onboarding-cerrar").addEventListener("click",()=>fin(false));
   pintar();return true;
 }
@@ -1216,7 +1540,7 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
     estado.datos.configuracion.tutoriales_secciones_vistas.semestres = true; guardar();
   };
   const botonRegistrarSemestre = botonAgregarSemestre;
-  const botonGestionPlan = () => [...document.querySelectorAll("#seccion-plan-estudios button")].find((b) => /gestionar plan/i.test(b.textContent)) || document.getElementById("btn-gestion-planes") || document.getElementById("btn-gestionar-planes");
+  const botonGestionPlan = () => [...document.querySelectorAll("#seccion-plan-estudios button")].find((b) => /gestionar plan|gestisci piano|manage plan/i.test(b.textContent)) || document.getElementById("btn-gestion-planes") || document.getElementById("btn-gestionar-planes");
   const navVisible = () => { const b = document.getElementById("nav-semestres"); const r = b?.getBoundingClientRect(); return b && r.width && r.left >= 0 && r.right <= innerWidth ? b : null; };
   const pasosSemestre = [
     ...(yaEnSemestres ? [] : [{ accion: "navegar", selector: navVisible,
@@ -1231,10 +1555,11 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
     { selector: botonGestionPlan, texto: "Ya tienes un plan. Para añadir otra carrera toca «Gestionar plan» (el botón resaltado)." },
     ...pasosSemestre,
   ] : [
-    { selector: () => [...document.querySelectorAll("#seccion-plan-estudios .pill-group button")].find((b) => /Pegar link|Adjuntar PDF/i.test(b.textContent)), texto: "Primero elige Pegar link o Adjuntar PDF/Imagen. Luego envía tu plan a Claude para que lo convierta al formato CSV." },
+    { selector: botonDesdeCero, texto: "Opción 1 · Empieza desde cero: toca el botón resaltado y agrega tus materias a mano, una por una." },
+    { selector: grupoMetodosImportar, texto: "Opción 2 · Importa tu plan ya hecho: elige Pegar link, Adjuntar PDF/Imagen o Tomar foto (los botones resaltados) y luego envíalo a Claude para que lo convierta al formato CSV." },
     { selector: () => document.getElementById("btn-enviar-import-claude"), texto: "Pulsa Enviar a Claude y sigue la guía para adjuntar tu plan. Cuando Claude devuelva el CSV, vuelve a esta app." },
     { selector: () => document.getElementById("textarea-csv-importar"), texto: "Copia el bloque CSV completo, desde CARRERA hasta la última materia, y pégalo aquí. Luego toca Importar." },
-    { selector: () => [...document.querySelectorAll("#seccion-plan-estudios button")].find((b) => /^importar$/i.test(b.textContent.trim())), texto: "Pulsa Importar para guardar y revisar las materias. Cuando termine, la guía te llevará a Semestres para continuar." },
+    { selector: () => [...document.querySelectorAll("#seccion-plan-estudios button")].find((b) => /^(importar|importa|import)$/i.test(b.textContent.trim())), texto: "Pulsa Importar para guardar y revisar las materias. Cuando termine, la guía te llevará a Semestres para continuar." },
   ];
   let i = 0;
   const pop = document.createElement("aside"); pop.className = "guia-plan-flotante"; pop.setAttribute("role", "dialog"); document.body.append(pop);
@@ -1263,8 +1588,8 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
   };
   const pintar = () => {
     if (i >= pasos.length) { cerrar({ continuarSemestres: flujoSemestre }); return; }
-    if (!posteriorImportacion && !yaTienePlan && i >= 1 && !document.getElementById("textarea-csv-importar")) {
-      const link = [...document.querySelectorAll("#seccion-plan-estudios .pill-group button")].find((b) => /Pegar link/i.test(b.textContent));
+    if (!posteriorImportacion && !yaTienePlan && i >= 2 && !document.getElementById("textarea-csv-importar")) {
+      const link = grupoMetodosImportar()?.querySelector("button");
       if (link) link.click(); setTimeout(pintar, 80); return;
     }
     const paso = pasos[i];
@@ -1319,7 +1644,7 @@ const SELECTORES_GUIA_SECCION = {
   ],
   "tiempo-estudio": [
     () => tarjetaMateriaTiempo() || document.getElementById("seccion-tiempo-estudio"),
-    () => { const t = [...document.querySelectorAll("#seccion-tiempo-estudio *")].find((el) => el.children.length === 0 && /^\+?\s*nueva materia$/i.test(el.textContent.trim())); return t?.closest("button,[role='button'],a") || t || document.getElementById("seccion-tiempo-estudio"); },
+    () => { const t = [...document.querySelectorAll("#seccion-tiempo-estudio *")].find((el) => el.children.length === 0 && /^\+?\s*(nueva|nuova|new)\s+(materia|subject)$/i.test(el.textContent.trim())); return t?.closest("button,[role='button'],a") || t || document.getElementById("seccion-tiempo-estudio"); },
     () => [...document.querySelectorAll("#seccion-tiempo-estudio button")].find((b) => /^materias$/i.test(b.textContent.trim()))?.parentElement || document.getElementById("seccion-tiempo-estudio"),
   ],
  semestres: [
@@ -1328,8 +1653,8 @@ const SELECTORES_GUIA_SECCION = {
     () => [...document.querySelectorAll("#seccion-semestres button")].find(b => /nota|historial|editar/i.test(b.textContent)) || document.querySelector("#seccion-semestres [data-semestre-id]") || document.getElementById("seccion-semestres"),
   ],
   comunidad: [
-    () => [...document.querySelectorAll("#seccion-comunidad button")].find((b) => /profesores/i.test(b.textContent))?.parentElement || document.getElementById("seccion-comunidad"),
-    () => filaDocenteComunidad() || document.getElementById("seccion-comunidad"),
+    () => document.querySelector("#seccion-comunidad .pill-group") || document.getElementById("seccion-comunidad"),
+    () => filaDocenteComunidad() || [...document.querySelectorAll("#seccion-comunidad .pill-group")][2] || document.getElementById("seccion-comunidad"),
   ],
  finanzas: [
     () => document.querySelector("#seccion-finanzas .finanzas-tabs-contenedor") || document.getElementById("seccion-finanzas"),
@@ -1343,8 +1668,8 @@ const SELECTORES_GUIA_SECCION = {
   ],
   configuracion: [
     () => document.getElementById("ajuste-tamano-texto"),
-    () => document.getElementById("selector-modos-apariencia"),
-    () => document.getElementById("grid-paletas") || document.getElementById("selector-logo-app"),
+    () => seccionNavegacionAjustes(),
+    () => document.getElementById("btn-repetir-tutorial"),
   ],
 };
 
