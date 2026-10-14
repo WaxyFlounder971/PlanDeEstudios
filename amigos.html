@@ -2,6 +2,14 @@
 <html lang="es" data-palette="azul" data-mode="dark">
 <head>
 <meta charset="UTF-8">
+<script>
+  // 2026-10-14: la app se mudó a Cloudflare Pages. Los enlaces viejos de
+  // github.io (con el #fileId) se mandan al sitio nuevo conservando todo.
+  // La condición por hostname evita un bucle si ambos sitios salen del mismo repo.
+  if (location.hostname === "waxyflounder971.github.io") {
+    location.replace("https://wapper.pages.dev/amigos.html" + location.search + location.hash);
+  }
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Horario compartido - App Académica</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
