@@ -339,6 +339,75 @@ function inyectarEstilosOnboarding() {
 .onboarding-panel[data-etapa="nombre"]>.onboarding-acciones{justify-content:center}
 .onboarding-panel[data-etapa="nombre"]>.onboarding-acciones .btn{flex:0 1 520px;max-width:520px}
 }
+/* Instalación: el color sale de la paleta que elige el onboarding (--accent-1, --accent-2, --gradient-accent). */
+.onboarding-panel[data-etapa="instalar"] .onboarding-copy{text-align:center}
+.onboarding-panel[data-etapa="instalar"] .onboarding-copy h1{animation:onbSube .65s .1s cubic-bezier(.22,.8,.3,1) both}
+@media (min-width:761px){
+.onboarding-panel[data-etapa="instalar"]>.onboarding-layout{display:flex!important;flex-direction:row!important;justify-content:center;align-items:center;grid-template-columns:none!important}
+.onboarding-panel[data-etapa="instalar"] .onboarding-copy{flex:0 1 520px!important;width:100%;max-width:520px!important;min-width:0;max-height:100%;margin:0 auto;overflow-y:auto}
+.onboarding-panel[data-etapa="instalar"]>.onboarding-acciones{justify-content:center}
+.onboarding-panel[data-etapa="instalar"]>.onboarding-acciones .btn{flex:0 1 auto;min-width:130px}
+.onboarding-panel[data-etapa="instalar"]>.onboarding-acciones .btn-primary{flex:0 1 240px}
+}
+.onb-ins{display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px;--s:.78}
+@media (min-width:761px){.onb-ins{--s:.82}}
+.onb-ins .onboarding-lead{margin:0 0 6px}
+.onb-ins-marco{position:relative;width:calc(392px*var(--s));height:calc(224px*var(--s));margin:6px 0 8px;max-width:100%}
+.onb-ins-sg{position:relative;width:392px;height:224px;transform:scale(var(--s));transform-origin:0 0}
+.onb-ins-glow{position:absolute;left:46px;top:-38px;width:300px;height:300px;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--accent-1,#8b5cf6) 58%,transparent),color-mix(in srgb,var(--accent-2,#38bdf8) 20%,transparent) 62%,transparent);filter:blur(14px);animation:onbAvPulso 3.4s ease-in-out infinite}
+.onb-ins-grid{position:absolute;inset:0;display:grid;grid-template-columns:repeat(5,56px);grid-template-rows:repeat(3,56px);gap:28px}
+.onb-ins-grid i{border-radius:15px;background:currentColor;opacity:0}
+.onb-ins-grid i:nth-child(8){visibility:hidden}
+.onb-ins-h{position:absolute;left:140px;top:56px;width:112px;height:112px}
+.onb-ins-i{position:absolute;inset:0;border-radius:26px;overflow:hidden;background:var(--gradient-accent,linear-gradient(135deg,var(--accent-1,#8b5cf6),var(--accent-2,#38bdf8)));box-shadow:0 18px 40px color-mix(in srgb,var(--accent-1,#8b5cf6) 45%,transparent);animation:onbInsEnt .8s cubic-bezier(.3,1.3,.5,1) both,onbInsF 5.5s ease-in-out .9s infinite}
+.onb-ins-i img{position:relative;width:100%;height:100%;object-fit:cover;display:block}
+.onb-ins-i:after{content:"";position:absolute;top:-20%;bottom:-20%;width:40%;left:-60%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.5),transparent);transform:skewX(-12deg);animation:onbInsS 4.5s ease-in-out 1.5s infinite}
+.onb-ins-o{position:absolute;inset:0;border-radius:26px;border:3px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 85%,#fff);opacity:0}
+.onb-ins-bd{position:absolute;right:-16px;bottom:-16px;width:46px;height:46px;border-radius:50%;background:#16a34a;color:#fff;font-size:24px;font-weight:800;border:4px solid var(--onb-izq,#080808);display:grid;place-items:center;opacity:0;transform:scale(0)}
+.onb-ins-pila{display:grid;width:100%}.onb-ins-pila>*{grid-area:1/1}
+.onb-ins-lista{display:flex;flex-direction:column;gap:10px}
+.onb-ins-fila{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:16px;text-align:left;font-size:.95rem;border:1px solid color-mix(in srgb,currentColor 14%,transparent);background:color-mix(in srgb,currentColor 5%,transparent);animation:onbSube .6s cubic-bezier(.22,.8,.3,1) both}
+.onb-ins-fila span:first-child{flex:none;width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:1.1rem;background:color-mix(in srgb,var(--accent-1,#8b5cf6) 18%,transparent)}
+.onb-ins-card{align-self:center;box-sizing:border-box;padding:16px;border-radius:18px;text-align:left;display:flex;flex-direction:column;gap:14px;opacity:0;border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 50%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 11%,transparent)}
+.onb-ins-k{display:grid}.onb-ins-k>*{grid-area:1/1;display:flex;align-items:center;gap:12px;transition:opacity .4s}
+.onb-ins-k b{display:block;font-size:1rem}.onb-ins-k small{display:block;margin-top:2px;font-size:.82rem;opacity:.72;line-height:1.35}
+.onb-ins-k2{opacity:0}
+.onb-ins-nota{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;font-size:.86rem;line-height:1.35;background:color-mix(in srgb,var(--accent-1,#8b5cf6) 14%,transparent);border:1px dashed color-mix(in srgb,var(--accent-1,#8b5cf6) 45%,transparent);transition:opacity .4s,max-height .4s,padding .4s,margin .4s;max-height:90px;overflow:hidden;opacity:0;animation:onbInsIn .5s 2.4s forwards}
+.onb-ins-nota-ico{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:.8rem;color:#fff;background:var(--gradient-accent,var(--accent-1,#8b5cf6));animation:onbInsNudge 1.6s ease-in-out 3s infinite}
+.onb-ins[data-estado="listo"] .onb-ins-nota{animation:none;opacity:0;max-height:0;padding-top:0;padding-bottom:0;margin-top:-14px;border-width:0}
+@keyframes onbInsNudge{0%,100%{transform:translateX(0)}50%{transform:translateX(4px)}}
+.onb-ins-spin{flex:none;width:26px;height:26px;border-radius:50%;border:3px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 30%,transparent);border-top-color:var(--accent-1,#8b5cf6);animation:onbInsSpin .8s linear infinite}
+.onb-ins-ok{flex:none;width:26px;height:26px;border-radius:50%;background:#22c55e;color:#fff;display:grid;place-items:center;font-weight:800;font-size:.95rem}
+.onb-ins-bar{height:6px;border-radius:3px;overflow:hidden;background:color-mix(in srgb,currentColor 14%,transparent)}
+.onb-ins-bf{display:block;height:100%;width:0;border-radius:3px;background:var(--gradient-accent,var(--accent-1,#8b5cf6));transition:width .9s linear,background .4s}
+.onb-ins:not([data-estado="idle"]) .onb-ins-lista{animation:onbInsOut .3s forwards}
+.onb-ins:not([data-estado="idle"]) .onb-ins-grid i{animation:onbInsPop .5s cubic-bezier(.3,1.6,.5,1) forwards}
+.onb-ins:not([data-estado="idle"]) .onb-ins-grid i:nth-child(3),.onb-ins:not([data-estado="idle"]) .onb-ins-grid i:nth-child(7),.onb-ins:not([data-estado="idle"]) .onb-ins-grid i:nth-child(9),.onb-ins:not([data-estado="idle"]) .onb-ins-grid i:nth-child(13){animation-delay:.05s}
+.onb-ins:not([data-estado="idle"]) .onb-ins-grid i:nth-child(2),.onb-ins:not([data-estado="idle"]) .onb-ins-grid i:nth-child(4),.onb-ins:not([data-estado="idle"]) .onb-ins-grid i:nth-child(6),.onb-ins:not([data-estado="idle"]) .onb-ins-grid i:nth-child(10),.onb-ins:not([data-estado="idle"]) .onb-ins-grid i:nth-child(12),.onb-ins:not([data-estado="idle"]) .onb-ins-grid i:nth-child(14){animation-delay:.2s}
+.onb-ins:not([data-estado="idle"]) .onb-ins-grid i:nth-child(1),.onb-ins:not([data-estado="idle"]) .onb-ins-grid i:nth-child(5),.onb-ins:not([data-estado="idle"]) .onb-ins-grid i:nth-child(11),.onb-ins:not([data-estado="idle"]) .onb-ins-grid i:nth-child(15){animation-delay:.35s}
+.onb-ins:not([data-estado="idle"]) .onb-ins-h{animation:onbInsShrink .55s .95s cubic-bezier(.3,1.5,.5,1) forwards}
+.onb-ins:not([data-estado="idle"]) .onb-ins-i{animation:none}
+.onb-ins:not([data-estado="idle"]) .onb-ins-i:after{animation:none}
+.onb-ins:not([data-estado="idle"]) .onb-ins-o{animation:onbInsRip 1s 1.4s ease-out}
+.onb-ins:not([data-estado="idle"]) .onb-ins-card{animation:onbInsIn .5s 1.6s forwards}
+.onb-ins[data-estado="listo"] .onb-ins-k1{opacity:0}
+.onb-ins[data-estado="listo"] .onb-ins-k2{opacity:1}
+.onb-ins[data-estado="listo"] .onb-ins-bf{background:#22c55e}
+.onb-ins[data-estado="listo"] .onb-ins-i{animation:onbInsPopI .5s}
+.onb-ins[data-estado="listo"] .onb-ins-bd{animation:onbInsBadge .5s cubic-bezier(.3,1.6,.5,1) forwards}
+.btn.onb-ok{background:linear-gradient(90deg,#15803d,#22c55e)!important;color:#fff!important}
+@keyframes onbInsEnt{from{opacity:0;transform:scale(.6) translateY(12px)}to{opacity:1;transform:none}}
+@keyframes onbInsF{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes onbInsS{0%,55%{left:-60%}100%{left:130%}}
+@keyframes onbInsPop{0%{opacity:0;transform:scale(.2)}60%{opacity:.5;transform:scale(1.15)}100%{opacity:.13;transform:scale(1)}}
+@keyframes onbInsShrink{to{transform:scale(.5)}}
+@keyframes onbInsRip{0%{opacity:.9;transform:scale(1)}100%{opacity:0;transform:scale(1.9)}}
+@keyframes onbInsBadge{to{opacity:1;transform:scale(1)}}
+@keyframes onbInsPopI{0%{transform:scale(1)}50%{transform:scale(1.14)}100%{transform:scale(1)}}
+@keyframes onbInsOut{to{opacity:0}}
+@keyframes onbInsIn{to{opacity:1}}
+@keyframes onbInsSpin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.onb-ins-glow,.onb-ins-i,.onb-ins-i:after,.onb-ins-fila{animation:none!important}}
 .onboarding-overlay .onboarding-copy h1{background:none!important;-webkit-text-fill-color:currentColor!important;filter:none!important}
 .onb-toca{position:absolute;left:50%;bottom:14px;z-index:4;display:flex;align-items:center;gap:.55rem;padding:.6rem 1.05rem;border-radius:999px;font:inherit;font-size:.86rem;font-weight:700;cursor:pointer;color:var(--text-primary,inherit);background:color-mix(in srgb,var(--bg-panel,#222) 94%,transparent);border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 60%,transparent);box-shadow:0 8px 24px rgba(0,0,0,.3);transform:translateX(-50%);-webkit-tap-highlight-color:transparent}
 .onb-toca:disabled{cursor:progress;opacity:.9}
@@ -1067,6 +1136,48 @@ const SECCIONES_NAV = [
   { id: "finanzas", etiqueta: "Finanzas", icono: "💰" }, { id: "plan-estudios", etiqueta: "Plan de Estudios", icono: "📚" },
   { id: "tiempo-estudio", etiqueta: "Tiempo", icono: "⏱️" }, { id: "asistente", etiqueta: "Asistente", icono: "✨" },
 ];
+// Pantalla «Llévala contigo»: cuadrícula tipo pantalla de inicio. El progreso NO es un temporizador fijo:
+// avanza despacio (una instalación real tarda) y solo llega a 100 % cuando el navegador avisa con «appinstalled».
+function construirInstalacion({ logoSrc }) {
+  const T = traducirTextoInterfaz;
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  const raiz = el("div", "onb-ins"); raiz.dataset.estado = "idle";
+  const grid = el("div", "onb-ins-grid"); for (let i = 0; i < 15; i++) grid.append(document.createElement("i"));
+  const h = el("div", "onb-ins-h"), ico = el("div", "onb-ins-i");
+  const img = document.createElement("img"); img.alt = ""; img.decoding = "async"; img.onerror = () => img.remove(); img.src = logoSrc; ico.append(img);
+  h.append(el("div", "onb-ins-o"), ico, el("div", "onb-ins-bd", "✓"));
+  const sg = el("div", "onb-ins-sg"); sg.append(el("div", "onb-ins-glow"), grid, h);
+  const marco = el("div", "onb-ins-marco"); marco.append(sg);
+  const lead = el("p", "onboarding-lead", T("Instálala en tu dispositivo: se abre como una app y casi no ocupa espacio."));
+  const lista = el("div", "onb-ins-lista");
+  [["🖥️", "Pantalla completa, sin barras del navegador"], ["📅", "Tu agenda, horario y plan a un toque"], ["⚡", "Se abre más rápido, como cualquier app"]].forEach(([i, t], n) => {
+    const f = el("div", "onb-ins-fila"); f.style.animationDelay = `${0.7 + n * 0.2}s`; f.append(el("span", "", i), el("span", "", T(t))); lista.append(f);
+  });
+  const mk = (cls, ...hijos) => { const d = el("span", cls); d.append(...hijos); return d; };
+  const bloque = (titulo, sub) => { const d = document.createElement("div"); d.append(el("b", "", T(titulo)), el("small", "", T(sub))); return d; };
+  const k = el("div", "onb-ins-k");
+  k.append(mk("onb-ins-k1", el("span", "onb-ins-spin"), bloque("La app se está instalando", "Puede tardar un par de minutos.")),
+           mk("onb-ins-k2", el("span", "onb-ins-ok", "✓"), bloque("App instalada", "Ya la tienes en tu dispositivo.")));
+  const bf = el("span", "onb-ins-bf"), barra = el("div", "onb-ins-bar"); barra.append(bf);
+  const nota = el("div", "onb-ins-nota"); nota.append(el("span", "onb-ins-nota-ico", "➜"), el("span", "", T("Puedes continuar el tutorial: la instalación seguirá en segundo plano.")));
+  const card = el("div", "onb-ins-card"); card.append(k, barra, nota);
+  const pila = el("div", "onb-ins-pila"); pila.append(lista, card);
+  raiz.append(marco, lead, pila);
+  let timer = 0, t0 = 0;
+  const parar = () => { clearInterval(timer); timer = 0; };
+  return {
+    raiz, estado: () => raiz.dataset.estado,
+    iniciar() {
+      raiz.dataset.estado = "instalando"; t0 = performance.now(); parar();
+      // Curva asintótica: ~30 % a los 10 s, ~64 % a los 30 s, ~84 % al minuto. Nunca llega sola a 100 %.
+      const paso = () => { const t = (performance.now() - t0) / 1000; bf.style.width = `${(92 * (1 - Math.exp(-t / 25))).toFixed(1)}%`; };
+      paso(); timer = setInterval(paso, 500);
+    },
+    completar() { parar(); raiz.dataset.estado = "listo"; bf.style.width = "100%"; },
+    cancelar() { parar(); raiz.dataset.estado = "idle"; bf.style.width = "0"; },
+    detener: parar,
+  };
+}
 function fotoPerfilGoogle() {
   const src = document.getElementById("perfil-foto")?.getAttribute("src") || "";
   if (src.trim()) return src;
@@ -1512,8 +1623,27 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
       acciones.append(boton("Atrás","btn-secondary",()=>{etapa="nombre";pintar();}),boton("Continuar","btn-primary",()=>{cfg.personalizacion_inicial_completada=true;guardar();etapa=etapaTrasPersonalizar();indice=0;pintar();}));return;
     }
     if(etapa==="instalar"){
-      contenido.append(texto("p","onboarding-lead","Instala App Académica para abrirla como una app en tu teléfono o computadora."));
-      acciones.append(boton("Atrás","btn-secondary",()=>{etapa="personalizar";pintar();}),boton("Ahora no","btn-secondary",()=>{etapa="tour";indice=0;pintar();}));colocarPrimario(boton("Instalar app","btn-primary",()=>{window.instalarAppAcademica?.();etapa="tour";indice=0;pintar();}));return;
+      const logoSrc=cfg.logo_app_url||(cfg.logo_app==="birrete"?"imagenes/LogoAppBirrete.png":"imagenes/LogoAppFolder.png");
+      const ui=construirInstalacion({logoSrc});contenido.append(ui.raiz);
+      const T=traducirTextoInterfaz;
+      const alTour=()=>{ui.detener();etapa="tour";indice=0;pintar();};
+      const bAhora=boton("Ahora no","btn-secondary",alTour);
+      const bInst=boton("Instalar app","btn-primary",()=>{
+        if(typeof window.instalarAppAcademica!=="function"){alTour();return;}
+        if(ui.estado()!=="idle")return;
+        ui.iniciar();bInst.disabled=true;bInst.textContent=T("Instalando…");bAhora.textContent=T("Continuar tutorial");
+        const alInstalar=()=>{
+          if(ui.raiz.isConnected){ui.completar();bInst.textContent=T("Instalada ✓");bInst.classList.add("onb-ok");}
+          else toast?.(T("¡App instalada! Ya la tienes en tu dispositivo."));
+        };
+        const volver=()=>{removeEventListener("appinstalled",alInstalar);ui.cancelar();bInst.disabled=false;bInst.textContent=T("Instalar app");bAhora.textContent=T("Ahora no");};
+        addEventListener("appinstalled",alInstalar,{once:true});
+        if(instalarYa()){alInstalar();return;}
+        let r;try{r=window.instalarAppAcademica();}catch(_){volver();return;}
+        // Si la app devuelve el resultado del aviso del navegador y el usuario lo rechaza, se deshace la animación.
+        Promise.resolve(r).then((res)=>{if(res===false||res?.outcome==="dismissed")volver();}).catch(volver);
+      });
+      acciones.append(boton("Atrás","btn-secondary",()=>{ui.detener();etapa="personalizar";pintar();}),bAhora);colocarPrimario(bInst);return;
     }
     if(etapa==="tour"){
       const sec=secciones[indice];if(!sec){etapa="ajustes1";pintar();return;}
