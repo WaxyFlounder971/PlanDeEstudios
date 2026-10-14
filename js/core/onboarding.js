@@ -67,6 +67,7 @@ function inyectarEstilosOnboarding() {
 @keyframes onb-punto{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:.9;transform:translateY(-3px)}}
 @media (prefers-reduced-motion:reduce){.onboarding-chat-escribiendo span{animation:none}}
 
+.onboarding-overlay,.onboarding-panel,.onb-maqueta,.onb-m-lado{transition:none!important}
 .onb-maqueta,.onb-esquema{position:absolute;inset:0;z-index:2;overflow:hidden;border-radius:inherit;color:var(--text-primary,inherit);background-color:var(--onb-fondo,transparent);background-image:var(--onb-fondo-img,none);background-size:cover}
 .onb-maqueta[hidden],.onb-esquema[hidden],.onb-toca[hidden],.onb-vivo[hidden]{display:none}
 .onb-esquema{transition:opacity .3s ease}.onb-esquema.saliendo{opacity:0;pointer-events:none}
@@ -277,7 +278,7 @@ function inyectarEstilosOnboarding() {
 .onboarding-panel[data-etapa="nombre"] .onboarding-copy{text-align:center}
 .onboarding-panel[data-etapa="nombre"] .onboarding-copy h1{animation:onbSube .65s .2s cubic-bezier(.22,.8,.3,1) both}
 .onb-bienvenida-lema{margin:0 0 26px;font-size:1.02rem;line-height:1.45;opacity:.78;animation:onbSube .65s .35s cubic-bezier(.22,.8,.3,1) both}
-.onb-bienvenida-etiqueta{display:block;font-size:.82rem;font-weight:700;letter-spacing:.04em;opacity:.8;margin-bottom:10px;animation:onbSube .65s .5s cubic-bezier(.22,.8,.3,1) both}
+.onb-bienvenida-etiqueta{display:flex;flex-direction:column;gap:14px;font-size:.82rem;font-weight:700;letter-spacing:.04em;margin-bottom:0;animation:onbSube .65s .5s cubic-bezier(.22,.8,.3,1) both}
 .onb-bienvenida-campo{width:100%;text-align:center;font-size:1.25rem!important;font-weight:700;padding:1rem 1.1rem!important;border-radius:18px!important;transition:box-shadow .25s,border-color .25s}
 .onb-bienvenida-campo:focus{outline:none;border-color:var(--accent-1,#8b5cf6)!important;box-shadow:0 0 0 4px color-mix(in srgb,var(--accent-1,#8b5cf6) 28%,transparent),0 8px 28px color-mix(in srgb,var(--accent-1,#8b5cf6) 25%,transparent)}
 @keyframes onbAvEntra{from{opacity:0;transform:scale(.55) translateY(14px)}to{opacity:1;transform:none}}
@@ -319,6 +320,10 @@ function inyectarEstilosOnboarding() {
 .onb-gemini-campo{display:flex;flex-direction:column;gap:8px;margin-top:14px}
 .onb-wapper-ok{display:flex;flex-direction:column;gap:6px;margin-top:10px;padding:16px;border-radius:16px;border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 50%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 12%,transparent)}
 .onb-wapper-ok b{font-size:1.1rem}
+.onboarding-panel[data-etapa^="ajustes"],.onboarding-panel[data-etapa="wapper-config"]{display:flex!important;flex-direction:column;max-height:100dvh;overflow:hidden!important}
+.onboarding-panel[data-etapa^="ajustes"]>.onboarding-top,.onboarding-panel[data-etapa^="ajustes"]>.onboarding-acciones,.onboarding-panel[data-etapa="wapper-config"]>.onboarding-top,.onboarding-panel[data-etapa="wapper-config"]>.onboarding-acciones{flex:none}
+.onboarding-panel[data-etapa^="ajustes"]>.onboarding-layout,.onboarding-panel[data-etapa="wapper-config"]>.onboarding-layout{flex:1 1 auto;min-height:0!important;height:auto!important;display:flex!important;flex-direction:column;overflow:hidden!important;grid-template-rows:none!important}
+.onboarding-panel[data-etapa^="ajustes"] .onboarding-preview-wrap,.onboarding-panel[data-etapa="wapper-config"] .onboarding-preview-wrap{display:none!important}
 .onboarding-panel[data-etapa^="ajustes"] .onboarding-copy,.onboarding-panel[data-etapa="wapper-config"] .onboarding-copy,.onboarding-panel.onb-tour-movil[data-etapa^="ajustes"] .onboarding-copy,.onboarding-panel.onb-tour-movil[data-etapa="wapper-config"] .onboarding-copy{overflow-y:auto!important;min-height:0;flex:1 1 auto!important;max-height:none!important;display:block!important;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scroll-padding:12px;padding-bottom:28px!important}
 .onboarding-panel[data-etapa^="ajustes"] .onboarding-layout,.onboarding-panel[data-etapa="wapper-config"] .onboarding-layout{min-height:0}
 .onboarding-overlay .onboarding-copy h1{background:none!important;-webkit-text-fill-color:currentColor!important;filter:none!important}
@@ -499,9 +504,18 @@ function colorLadoIzquierdo() {
   return raiz.getPropertyValue("--bg-header-solido").trim() || "#10111a";
 }
 
+function sinTransiciones(fn) {
+  // Las transiciones CSS de la app hacen que el color calculado llegue «a medias»; se desactivan un instante para leer el valor final.
+  const els = [document.documentElement, document.body, ...document.querySelectorAll("#app, .app, .app-container, .app-shell, .main-content")].filter((el) => el && !el.closest?.(".onboarding-overlay"));
+  const previos = els.map((el) => [el.style.getPropertyValue("transition"), el.style.getPropertyPriority("transition")]);
+  els.forEach((el) => el.style.setProperty("transition", "none", "important"));
+  try { return fn(); }
+  finally { els.forEach((el, i) => { const [v, pr] = previos[i]; if (v) el.style.setProperty("transition", v, pr); else el.style.removeProperty("transition"); }); }
+}
 function crearSincronizadorFondo(overlay, panel, tarjeta) {
-  let raf = 0, timer = 0;
-  const aplicar = () => {
+  let raf = 0, timer = 0, observador = null;
+  const aplicar = () => { sinTransiciones(aplicarFondo); observador?.takeRecords(); };
+  const aplicarFondo = () => {
     const f = leerFondoDeLaApp();
     [overlay, panel].forEach((el) => {
       el.style.backgroundColor = f.color; el.style.backgroundImage = f.imagen;
@@ -515,12 +529,12 @@ function crearSincronizadorFondo(overlay, panel, tarjeta) {
     overlay.style.setProperty("--onb-izq", colorLadoIzquierdo()); // lado izquierdo plano (la tarjeta del texto ya no copia el vidrio de la app)
   };
   // Se relee en el siguiente frame y otra vez tras las transiciones CSS de color.
-  const programar = () => { cancelAnimationFrame(raf); clearTimeout(timer); raf = requestAnimationFrame(aplicar); timer = setTimeout(aplicar, 450); };
-  const observador = new MutationObserver(programar);
+  const programar = () => { aplicar(); cancelAnimationFrame(raf); clearTimeout(timer); raf = requestAnimationFrame(aplicar); timer = setTimeout(aplicar, 450); };
+  observador = new MutationObserver(programar);
   observador.observe(document.documentElement, { attributes: true, attributeFilter: ["data-mode", "data-palette", "data-rendimiento", "style", "class"] });
   if (document.body) observador.observe(document.body, { attributes: true, attributeFilter: ["class", "style", "data-mode"] });
   aplicar();
-  return { programar, detener() { observador.disconnect(); cancelAnimationFrame(raf); clearTimeout(timer); } };
+  return { programar, ahora: aplicar, detener() { observador.disconnect(); cancelAnimationFrame(raf); clearTimeout(timer); } };
 }
 
 /* ── Vista previa sin cargar la app ────────────────────────────────────────
@@ -1169,7 +1183,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
   panel.querySelector(".onboarding-cerrar").setAttribute("aria-label",traducirTextoInterfaz("Cerrar"));panel.querySelector("iframe").title=traducirTextoInterfaz("Vista previa real de App Académica");
   inyectarEstilosOnboarding();
   const fondo=crearSincronizadorFondo(overlay,panel,panel.querySelector(".onboarding-copy"));
-  const aplicarTemaAhora=()=>{aplicarPaleta(paletaActual(),modoPersonalizacion,coloresActuales());document.documentElement.setAttribute("data-mode",modoPersonalizacion);aplicarLogoApp();fondo.programar();};
+  const aplicarTemaAhora=()=>{aplicarPaleta(paletaActual(),modoPersonalizacion,coloresActuales());document.documentElement.setAttribute("data-mode",modoPersonalizacion);aplicarLogoApp();fondo.ahora();fondo.programar();};
   const progreso=panel.querySelector(".onboarding-progreso"), titulo=panel.querySelector("h1"), contenido=panel.querySelector(".onboarding-contenido"), acciones=panel.querySelector(".onboarding-acciones"), preview=panel.querySelector("iframe");
   let timersPreview=[], timersChat=[], cerrarListaTour=null, temporizadorTour=null, ctrlTour=null;
   // ── Vista previa en 3 modos ──────────────────────────────────────────────
@@ -1397,7 +1411,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
     guardar();window.aplicarVisibilidadNavegacion?.();
     try{if(borrador.resumen&&sincronizacionCalendarActiva())sincronizarResumenDiario();}catch(_){}
   };
-  const fin=(irAlPlan=false,irASemestres=false)=>{aplicarAjustesFinales();ctrlTour?.abort();fondo.detener();timersChat.forEach(clearTimeout);timersChat=[];cancelarPrecarga();consultaMovil.removeEventListener?.("change",aplicarVistaMovil);removeEventListener("resize",alRedimensionar);clearTimeout(temporizadorReveal);clearTimeout(vigilanteReveal);timersPreview.forEach(clearTimeout);timersPreview=[];clearTimeout(temporizadorTour);cfg.onboarding_v1_completado=true;cfg.tutoriales_secciones_vistas=cfg.tutoriales_secciones_vistas||{};if(irAlPlan)cfg.tutoriales_secciones_vistas["plan-estudios"]=true;if(irASemestres)cfg.tutoriales_secciones_vistas.semestres=true;guardar();overlay.remove();if(irAlPlan||irASemestres){const destino=irASemestres?"semestres":"plan-estudios";navegar?.(destino);setTimeout(()=>iniciarGuiaPlan({navegar,posteriorImportacion:irASemestres,yaEnSemestres:irASemestres}),450);}else toast?.(traducirTextoInterfaz("¡Listo! Puedes volver a ver la guía desde Ajustes generales."));};
+  const fin=(irAlPlan=false,irASemestres=false)=>{aplicarAjustesFinales();ctrlTour?.abort();fondo.detener();timersChat.forEach(clearTimeout);timersChat=[];cancelarPrecarga();consultaMovil.removeEventListener?.("change",aplicarVistaMovil);removeEventListener("resize",alRedimensionar);clearTimeout(temporizadorReveal);clearTimeout(vigilanteReveal);timersPreview.forEach(clearTimeout);timersPreview=[];clearTimeout(temporizadorTour);cfg.onboarding_v1_completado=true;cfg.tutoriales_secciones_vistas=cfg.tutoriales_secciones_vistas||{};if(irAlPlan)cfg.tutoriales_secciones_vistas["plan-estudios"]=true;if(irASemestres)cfg.tutoriales_secciones_vistas.semestres=true;guardar();overlay.remove();if(irAlPlan||irASemestres){const destino=irASemestres?"semestres":"plan-estudios";navegar?.(destino);setTimeout(()=>iniciarGuiaPlan({navegar,posteriorImportacion:irASemestres,yaEnSemestres:irASemestres}),450);}else{if((!cuentaConDatos||!tienePlanArmado)&&!borrador.ocultas.has("plan-estudios")){navegar?.("plan-estudios");setTimeout(()=>navegar?.("plan-estudios"),450);}toast?.(traducirTextoInterfaz("¡Listo! Puedes volver a ver la guía desde Ajustes generales."));}};
   if (MODO_DEMO && !PREVIEW_DEMO) {
     const saltar=boton("Saltar inicio","btn-secondary",()=>{cfg.tutoriales_secciones_vistas=Object.fromEntries(SECCIONES_TUTORIAL.map(s=>[s.id,true]));fin(false);});
     saltar.className += " onboarding-saltar-demo";
