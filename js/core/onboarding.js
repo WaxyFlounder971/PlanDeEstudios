@@ -349,25 +349,32 @@ function inyectarEstilosOnboarding() {
 .onboarding-panel[data-etapa="instalar"]>.onboarding-acciones .btn{flex:0 1 auto;min-width:130px}
 .onboarding-panel[data-etapa="instalar"]>.onboarding-acciones .btn-primary{flex:0 1 240px}
 }
-.onb-ins{display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px;--s:.78}
-@media (min-width:761px){.onb-ins{--s:.82}}
+/* Nunca se ve una barra de scroll en el onboarding (el scroll sigue funcionando, invisible). */
+.onboarding-overlay,.onboarding-overlay *{scrollbar-width:none;-ms-overflow-style:none}
+.onboarding-overlay *::-webkit-scrollbar{display:none;width:0;height:0}
+.onboarding-panel[data-etapa="instalar"] .onboarding-copy h1{font-size:clamp(1.6rem,4.4vh,2.3rem)!important;line-height:1.1;margin:0 0 4px!important}
+.onboarding-panel[data-etapa="instalar"] .onboarding-lead{font-size:1rem!important;line-height:1.4!important}
+.onb-ins{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;--s:.78}
+@media (min-width:761px){.onb-ins{--s:.74}}
+@media (max-height:860px){.onb-ins{--s:.66}}
+@media (max-height:740px){.onb-ins{--s:.56}}
 .onb-ins .onboarding-lead{margin:0 0 6px}
-.onb-ins-marco{position:relative;width:calc(392px*var(--s));height:calc(224px*var(--s));margin:6px 0 8px;max-width:100%}
+.onb-ins-marco{position:relative;width:calc(392px*var(--s));height:calc(224px*var(--s));margin:2px 0 4px;max-width:100%}
 .onb-ins-sg{position:relative;width:392px;height:224px;transform:scale(var(--s));transform-origin:0 0}
 .onb-ins-glow{position:absolute;left:46px;top:-38px;width:300px;height:300px;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--accent-1,#8b5cf6) 58%,transparent),color-mix(in srgb,var(--accent-2,#38bdf8) 20%,transparent) 62%,transparent);filter:blur(14px);animation:onbAvPulso 3.4s ease-in-out infinite}
 .onb-ins-grid{position:absolute;inset:0;display:grid;grid-template-columns:repeat(5,56px);grid-template-rows:repeat(3,56px);gap:28px}
 .onb-ins-grid i{border-radius:15px;background:currentColor;opacity:0}
 .onb-ins-grid i:nth-child(8){visibility:hidden}
 .onb-ins-h{position:absolute;left:140px;top:56px;width:112px;height:112px}
-.onb-ins-i{position:absolute;inset:0;border-radius:26px;overflow:hidden;background:var(--gradient-accent,linear-gradient(135deg,var(--accent-1,#8b5cf6),var(--accent-2,#38bdf8)));box-shadow:0 18px 40px color-mix(in srgb,var(--accent-1,#8b5cf6) 45%,transparent);animation:onbInsEnt .8s cubic-bezier(.3,1.3,.5,1) both,onbInsF 5.5s ease-in-out .9s infinite}
+.onb-ins-i{position:absolute;inset:0;border-radius:26px;overflow:hidden;background:#050505;box-shadow:0 18px 40px color-mix(in srgb,var(--accent-1,#8b5cf6) 45%,transparent);animation:onbInsEnt .8s cubic-bezier(.3,1.3,.5,1) both,onbInsF 5.5s ease-in-out .9s infinite}
 .onb-ins-i img{position:relative;width:100%;height:100%;object-fit:cover;display:block}
 .onb-ins-i:after{content:"";position:absolute;top:-20%;bottom:-20%;width:40%;left:-60%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.5),transparent);transform:skewX(-12deg);animation:onbInsS 4.5s ease-in-out 1.5s infinite}
 .onb-ins-o{position:absolute;inset:0;border-radius:26px;border:3px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 85%,#fff);opacity:0}
 .onb-ins-bd{position:absolute;right:-16px;bottom:-16px;width:46px;height:46px;border-radius:50%;background:#16a34a;color:#fff;font-size:24px;font-weight:800;border:4px solid var(--onb-izq,#080808);display:grid;place-items:center;opacity:0;transform:scale(0)}
 .onb-ins-pila{display:grid;width:100%}.onb-ins-pila>*{grid-area:1/1}
-.onb-ins-lista{display:flex;flex-direction:column;gap:10px}
-.onb-ins-fila{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:16px;text-align:left;font-size:.95rem;border:1px solid color-mix(in srgb,currentColor 14%,transparent);background:color-mix(in srgb,currentColor 5%,transparent);animation:onbSube .6s cubic-bezier(.22,.8,.3,1) both}
-.onb-ins-fila span:first-child{flex:none;width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:1.1rem;background:color-mix(in srgb,var(--accent-1,#8b5cf6) 18%,transparent)}
+.onb-ins-lista{display:flex;flex-direction:column;gap:8px}
+.onb-ins-fila{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:16px;text-align:left;font-size:.95rem;border:1px solid color-mix(in srgb,currentColor 14%,transparent);background:color-mix(in srgb,currentColor 5%,transparent);animation:onbSube .6s cubic-bezier(.22,.8,.3,1) both}
+.onb-ins-fila span:first-child{flex:none;width:32px;height:32px;border-radius:10px;display:grid;place-items:center;font-size:1.1rem;background:color-mix(in srgb,var(--accent-1,#8b5cf6) 18%,transparent)}
 .onb-ins-card{align-self:center;box-sizing:border-box;padding:16px;border-radius:18px;text-align:left;display:flex;flex-direction:column;gap:14px;opacity:0;border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 50%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 11%,transparent)}
 .onb-ins-k{display:grid}.onb-ins-k>*{grid-area:1/1;display:flex;align-items:center;gap:12px;transition:opacity .4s}
 .onb-ins-k b{display:block;font-size:1rem}.onb-ins-k small{display:block;margin-top:2px;font-size:.82rem;opacity:.72;line-height:1.35}
