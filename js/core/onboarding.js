@@ -326,9 +326,10 @@ function inyectarEstilosOnboarding() {
 .onboarding-panel[data-etapa^="ajustes"] .onboarding-preview-wrap,.onboarding-panel[data-etapa="wapper-config"] .onboarding-preview-wrap{display:none!important}
 .onboarding-panel[data-etapa^="ajustes"] .onboarding-copy,.onboarding-panel[data-etapa="wapper-config"] .onboarding-copy,.onboarding-panel.onb-tour-movil[data-etapa^="ajustes"] .onboarding-copy,.onboarding-panel.onb-tour-movil[data-etapa="wapper-config"] .onboarding-copy{overflow-y:auto!important;min-height:0;flex:1 1 auto!important;max-height:none!important;display:block!important;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scroll-padding:12px;padding-bottom:28px!important}
 .onboarding-panel[data-etapa^="ajustes"] .onboarding-layout,.onboarding-panel[data-etapa="wapper-config"] .onboarding-layout{min-height:0}
+/* El encabezado (progreso y ×) también va en el flujo, arriba del contenido: nunca fijo encima (así el título no se corta al hacer scroll). */
 /* Los botones (Atrás / Continuar) van SIEMPRE en el flujo, debajo del contenido: nunca encima (se arregla el solape en PC). */
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"]){display:flex!important;flex-direction:column;max-height:100dvh;overflow:hidden!important}
-.onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"])>.onboarding-top{flex:none}
+.onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"])>.onboarding-top{position:relative!important;inset:auto!important;transform:none!important;flex:none;width:100%!important;max-width:none!important;box-sizing:border-box;align-self:stretch;z-index:2}
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"])>.onboarding-layout{flex:1 1 auto;min-height:0!important}
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"]){background:var(--onb-izq,#080808)!important;background-image:none!important}
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"])>.onboarding-acciones{position:static!important;inset:auto!important;transform:none!important;flex:none;width:100%!important;max-width:none!important;min-width:0!important;align-self:stretch;justify-self:stretch;grid-column:1/-1;box-sizing:border-box;margin:0;padding:12px 20px calc(12px + env(safe-area-inset-bottom,0px));z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
@@ -1637,18 +1638,24 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
       const bAhora=boton("Ahora no","btn-secondary",alTour);
       const bInst=boton("Instalar app","btn-primary",()=>{
         if(typeof window.instalarAppAcademica!=="function"){alTour();return;}
-        if(ui.estado()!=="idle")return;
-        ui.iniciar();bInst.disabled=true;bInst.textContent=T("Instalando…");bAhora.textContent=T("Continuar tutorial");
+        if(ui.estado()!=="idle"||bInst.disabled)return;
+        // La animación y la tarjeta «instalando» NO arrancan al tocar el botón (el aviso del navegador las taparía):
+        // solo cuando el navegador confirma que la instalación empezó (o termina, si el evento llega primero).
+        const empezar=()=>{
+          if(!ui.raiz.isConnected||ui.estado()!=="idle")return;
+          ui.iniciar();bInst.disabled=true;bInst.textContent=T("Instalando…");bAhora.textContent=T("Continuar tutorial");
+        };
         const alInstalar=()=>{
-          if(ui.raiz.isConnected){ui.completar();bInst.textContent=T("Instalada ✓");bInst.classList.add("onb-ok");}
+          if(ui.raiz.isConnected){empezar();ui.completar();bInst.textContent=T("Instalada ✓");bInst.classList.add("onb-ok");}
           else toast?.(T("¡App instalada! Ya la tienes en tu dispositivo."));
         };
         const volver=()=>{removeEventListener("appinstalled",alInstalar);ui.cancelar();bInst.disabled=false;bInst.textContent=T("Instalar app");bAhora.textContent=T("Ahora no");};
-        addEventListener("appinstalled",alInstalar,{once:true});
         if(instalarYa()){alInstalar();return;}
+        bInst.disabled=true;bInst.textContent=T("Confirma en el navegador…");
+        addEventListener("appinstalled",alInstalar,{once:true});
         let r;try{r=window.instalarAppAcademica();}catch(_){volver();return;}
-        // Si la app devuelve el resultado del aviso del navegador y el usuario lo rechaza, se deshace la animación.
-        Promise.resolve(r).then((res)=>{if(res===false||res?.outcome==="dismissed")volver();}).catch(volver);
+        // Si el usuario rechaza el aviso, no se muestra nada; si lo acepta, arranca la animación.
+        Promise.resolve(r).then((res)=>{if(res===false||res?.outcome==="dismissed")volver();else empezar();}).catch(volver);
       });
       acciones.append(boton("Atrás","btn-secondary",()=>{ui.detener();etapa="personalizar";pintar();}),bAhora);colocarPrimario(bInst);return;
     }
