@@ -350,6 +350,31 @@ function inyectarEstilosOnboarding() {
 .onboarding-panel[data-etapa="instalar"]>.onboarding-acciones .btn{flex:0 1 auto;min-width:130px}
 .onboarding-panel[data-etapa="instalar"]>.onboarding-acciones .btn-primary{flex:0 1 240px}
 }
+/* «Todo conectado, paso a paso» (PC): flujo horizontal centrado. En teléfono se conserva la lista vertical de siempre. */
+.onboarding-panel[data-etapa="flujo"] .onboarding-copy{text-align:center}
+.onboarding-panel[data-etapa="flujo"] .onboarding-copy h1{font-size:clamp(1.9rem,5vh,2.8rem)!important;animation:onbSube .65s .05s cubic-bezier(.22,.8,.3,1) both}
+@media (min-width:761px){
+.onboarding-panel[data-etapa="flujo"]>.onboarding-layout{display:flex!important;flex-direction:row!important;justify-content:center;align-items:center;grid-template-columns:none!important}
+.onboarding-panel[data-etapa="flujo"] .onboarding-copy{flex:0 1 920px!important;width:100%;max-width:920px!important;min-width:0;max-height:100%;margin:0 auto;overflow-y:auto}
+.onboarding-panel[data-etapa="flujo"]>.onboarding-acciones{justify-content:center}
+.onboarding-panel[data-etapa="flujo"]>.onboarding-acciones .btn{flex:0 1 auto;min-width:150px}
+.onboarding-panel[data-etapa="flujo"]>.onboarding-acciones .btn-primary{flex:0 1 280px}
+}
+.onb-flujo{display:flex;flex-direction:column;gap:26px;width:100%;margin-top:18px}
+.onb-flujo-pasos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}
+.onb-flujo-paso{position:relative;display:flex;flex-direction:column;align-items:center;gap:16px;animation:onbSube .65s cubic-bezier(.22,.8,.3,1) both;animation-delay:calc(.2s + var(--i)*.25s)}
+.onb-flujo-paso:not(:last-child)::after{content:"";position:absolute;top:36px;left:calc(50% + 50px);width:calc(100% + 22px - 100px);height:3px;border-radius:2px;background:linear-gradient(90deg,var(--accent-1,#8b5cf6),var(--accent-2,#38bdf8));transform-origin:left;animation:onbFlujoLinea .6s ease-out both;animation-delay:calc(.55s + var(--i)*.25s)}
+.onb-flujo-nodo{position:relative;flex:none;width:76px;height:76px;border-radius:50%;display:grid;place-items:center;font-size:2rem;background:color-mix(in srgb,var(--accent-1,#8b5cf6) 16%,var(--onb-izq,#080808));border:2px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 70%,transparent);box-shadow:0 0 0 7px color-mix(in srgb,var(--accent-1,#8b5cf6) 10%,transparent),0 12px 32px color-mix(in srgb,var(--accent-1,#8b5cf6) 38%,transparent)}
+.onb-flujo-num{position:absolute;top:-6px;right:-6px;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:.85rem;font-weight:800;color:#fff;background:var(--gradient-accent,var(--accent-1,#8b5cf6));border:3px solid var(--onb-izq,#080808)}
+.onb-flujo-card{box-sizing:border-box;width:100%;flex:1;display:flex;flex-direction:column;gap:6px;padding:16px 14px;border-radius:18px;border:1px solid color-mix(in srgb,currentColor 14%,transparent);background:color-mix(in srgb,currentColor 5%,transparent)}
+.onb-flujo-card b{font-size:1.08rem}
+.onb-flujo-card span{font-size:.92rem;line-height:1.4;opacity:.75}
+.onb-flujo-aparte{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;text-align:left;padding:16px 18px;border-radius:18px;border:1px dashed color-mix(in srgb,var(--accent-1,#8b5cf6) 55%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 8%,transparent);animation:onbSube .65s 1.05s cubic-bezier(.22,.8,.3,1) both}
+.onb-flujo-aparte>span{flex:1 1 280px;font-size:.95rem;line-height:1.4}
+.onb-flujo-chips{display:flex;gap:8px;flex-wrap:wrap}
+.onb-flujo-chip{display:flex;align-items:center;gap:7px;padding:8px 14px;border-radius:999px;font-size:.9rem;font-weight:700;border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 50%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 14%,transparent)}
+@keyframes onbFlujoLinea{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@media (prefers-reduced-motion:reduce){.onb-flujo-paso,.onb-flujo-paso::after,.onb-flujo-aparte{animation:none!important}}
 /* Nunca se ve una barra de scroll en el onboarding (el scroll sigue funcionando, invisible). */
 .onboarding-overlay,.onboarding-overlay *{scrollbar-width:none;-ms-overflow-style:none}
 .onboarding-overlay *::-webkit-scrollbar{display:none;width:0;height:0}
@@ -1186,6 +1211,23 @@ function construirInstalacion({ logoSrc }) {
     detener: parar,
   };
 }
+// Pantalla «Todo conectado» (PC): tres pasos encadenados + una franja aparte para lo que funciona por separado.
+function construirFlujo() {
+  const T = traducirTextoInterfaz;
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  const raiz = el("div", "onb-flujo"), fila = el("div", "onb-flujo-pasos");
+  [["📚", "Plan de estudios", "Agrega tu plan de estudios."], ["📅", "Semestres", "Crea un semestre y matricula tus materias."], ["⏱️", "Horario, Agenda y Tiempo", "Usa esas materias en Horario, Agenda y Tiempo."]].forEach(([ico, t, d], i) => {
+    const paso = el("div", "onb-flujo-paso"); paso.style.setProperty("--i", String(i));
+    const nodo = el("div", "onb-flujo-nodo", ico); nodo.append(el("span", "onb-flujo-num", String(i + 1)));
+    const card = el("div", "onb-flujo-card"); card.append(el("b", "", T(t)), el("span", "", T(d)));
+    paso.append(nodo, card); fila.append(paso);
+  });
+  const aparte = el("div", "onb-flujo-aparte");
+  const chips = el("div", "onb-flujo-chips");
+  [["✨", "Wapper"], ["👥", "Comunidad"], ["💰", "Finanzas"]].forEach(([i, t]) => chips.append(el("span", "onb-flujo-chip", `${i} ${T(t)}`)));
+  aparte.append(el("span", "", T("Wapper trabaja con tu Agenda; Comunidad y Finanzas funcionan por separado.")), chips);
+  raiz.append(fila, aparte); return raiz;
+}
 function fotoPerfilGoogle() {
   const src = document.getElementById("perfil-foto")?.getAttribute("src") || "";
   if (src.trim()) return src;
@@ -1727,7 +1769,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
       contenido.append(lista);
       acciones.append(boton("Atrás","btn-secondary",()=>{etapa="ajustes1";pintar();}),boton("Continuar","btn-primary",()=>{etapa="flujo";pintar();}));return;
     }
-    const pasos=document.createElement("ol");pasos.className="onboarding-dependencias";["Agrega tu plan de estudios.","Crea un semestre y matricula tus materias.","Usa esas materias en Horario, Agenda y Tiempo.","Wapper trabaja con tu Agenda; Comunidad y Finanzas funcionan por separado."].forEach(t=>pasos.append(texto("li","",t)));contenido.append(pasos);
+    if(esMovil()){const pasos=document.createElement("ol");pasos.className="onboarding-dependencias";["Agrega tu plan de estudios.","Crea un semestre y matricula tus materias.","Usa esas materias en Horario, Agenda y Tiempo.","Wapper trabaja con tu Agenda; Comunidad y Finanzas funcionan por separado."].forEach(t=>pasos.append(texto("li","",t)));contenido.append(pasos);}else contenido.append(construirFlujo());
     acciones.append(boton("Atrás","btn-secondary",()=>{etapa="ajustes2";pintar();}),boton("Lo haré después","btn-secondary",()=>fin(false)));colocarPrimario(boton(tienePlanArmado?"Continuar":"Agregar plan y ver la guía","btn-primary",()=>tienePlanArmado?preguntarPorOtroPlan():fin(true)));
   };
   const siguiente=()=>{indice++;if(indice>=secciones.length)etapa="ajustes1";pintar();};
