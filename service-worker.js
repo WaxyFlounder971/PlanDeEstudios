@@ -11,6 +11,9 @@
         con eso de ninguna forma.
 
    ⚠️ VERSIONADO — LEER ANTES DE DESPLEGAR:
+   (Desde v3.23.5 el número lo sube solo la GitHub Action
+   .github/workflows/subir-version.yml cada vez que algo llega a main. Si
+   en un cambio ya lo subiste a mano, la Action respeta ese número.)
    Subí el número de VERSION en CADA despliegue que cambie cualquier
    archivo del cascarón (HTML/CSS/JS/íconos). Es la única señal que tiene
    este archivo para darse cuenta de que hay una versión nueva: si no lo
@@ -40,7 +43,7 @@
 //      y main.js NUNCA hardcodean el número — siempre lo leen de acá, así
 //      que actualizar la versión en toda la app es cambiar ESTA línea y
 //      nada más.
-const VERSION = "v3.22.38"; // <-- subir en cada despliegue
+const VERSION = "v3.23.5"; // <-- en main se sube sola (GitHub Action); en dev no hace falta tocarla
 const CACHE_NAME = `app-academica-${VERSION}`;
 const PREFIJO_CACHE = "app-academica-";
 
