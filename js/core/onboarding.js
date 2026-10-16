@@ -1796,7 +1796,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
         // En la demo el nombre es opcional; en una cuenta real se pide con un aviso visible.
         if(!v&&!MODO_DEMO){aviso.hidden=false;input.setAttribute("aria-invalid","true");input.focus();return;}
         if(v){estado.datos.perfil=estado.datos.perfil||{};estado.datos.perfil.nombre_preferido=v;guardar();window.renderizarPerfil?.();}
-        etapa=!aceptadoTerminos()?"terminos":(cuentaConDatos&&cfg.paleta&&cfg.modo?"tour":"personalizar");pintar();
+        etapa=MODO_DEMO?(cuentaConDatos&&cfg.paleta&&cfg.modo?"tour":"personalizar"):"terminos";pintar(); // los términos salen siempre después del nombre, estén o no aceptados
       };
       input.addEventListener("input",()=>{aviso.hidden=true;input.removeAttribute("aria-invalid");});
       input.addEventListener("keydown",(ev)=>{if(ev.key==="Enter"){ev.preventDefault();continuar();}});
@@ -1814,6 +1814,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
       const luz=crear("button","onb-luz");luz.type="button";luz.disabled=true;luz.setAttribute("role","switch");luz.setAttribute("aria-checked","false");
       luz.append(crear("span","onb-luz-led"),crear("span","onb-luz-txt",L.acepto));
       const encendida=()=>luz.getAttribute("aria-checked")==="true";
+      if(aceptadoTerminos()&&!MODO_DEMO){luz.setAttribute("aria-checked","true");luz.classList.add("on");} // ya los aceptó: llega encendida y solo continúa
       const aviso=crear("p","onboarding-nota-error",L.requerido);aviso.hidden=true;aviso.setAttribute("role","alert");
       let cargado=false;
       const cargar=()=>{
@@ -1830,7 +1831,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
       contenido.append(crear("p","onb-terminos-lema",L.lema),caja,luz,aviso);
       const aceptar=()=>{
         if(!cargado||!encendida()){aviso.hidden=false;return;}
-        cfg.terminos_aceptados={version:VERSION_TERMINOS,fecha:new Date().toISOString(),idioma:cod};guardar();
+        if(!aceptadoTerminos()){cfg.terminos_aceptados={version:VERSION_TERMINOS,fecha:new Date().toISOString(),idioma:cod};guardar();}
         etapa=cuentaConDatos&&cfg.paleta&&cfg.modo?"tour":"personalizar";indice=0;pintar();
       };
       acciones.append(crearBtn(L.atras,"btn-secondary",()=>{etapa="nombre";pintar();}),crearBtn(L.continuar,"btn-primary",aceptar));
