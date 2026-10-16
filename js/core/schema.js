@@ -37,6 +37,10 @@ function crearDatosUsuarioNuevo() {
       paleta_personalizada: null,   // v1.13: { basadaEn, colores: { fondoCanvas, fondoCard, borde, accent1, accent2, luz } }
                                      // v1.15: colores también incluye degradado: { activo, color, intensidad (0-100, % del stop medio), angulo (0-360) }
       onboarding_v1_completado: false, // bienvenida modular para cuentas nuevas; se marca al terminar el recorrido
+      // Retomar el onboarding (2026-10-15): se declaran de fábrica para que viajen con la cuenta.
+      onboarding_visto: false,         // true desde la primera vez que se abre el ingreso; hasta entonces no hay botón × (ver onboarding.js)
+      onboarding_progreso: null,       // { etapa, indice } de la última pantalla vista; se borra al terminar
+      guia_plan_pendiente: null,       // "plan" | "semestres" mientras la guía posterior al onboarding siga sin terminar o saltarse
       icono_app: "📘",              // icono personal localizable que acompaña la paleta elegida
       logo_app: "folder",
       logo_app_url: null,

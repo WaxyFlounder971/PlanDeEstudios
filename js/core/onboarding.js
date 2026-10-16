@@ -19,11 +19,72 @@ const SECCIONES_TUTORIAL = [
   { id:"finanzas", nombre:"Finanzas", puntos:["Registra ingresos y gastos desde el inicio.","Clasifica movimientos por categoría.","Asociarlos a un semestre es opcional."] },
   { id:"plan-estudios", nombre:"Plan de estudios", puntos:["Añade una o varias carreras.","Pega o importa la malla completa.","El plan alimenta la matrícula de Semestres."] },
   { id:"asistente", nombre:"Wapper", puntos:["Convierte mensajes en tareas, exámenes o eventos de Agenda.","Consulta fechas y pendientes con lenguaje natural.","Actívalo con tu clave personal de Gemini desde Ajustes."] },
-  { id:"configuracion", nombre:"Ajustes", puntos:["Cambia idioma, apariencia, paleta y tamaño de texto.","Aquí ordenas y ocultas las secciones de la navegación.","Con este botón vuelves a ver la bienvenida y el mini tutorial cuando quieras."] },
+  { id:"configuracion", nombre:"Ajustes", puntos:["Cambia idioma, apariencia, paleta y tamaño de texto.","Aquí ordenas y ocultas las secciones de la navegación.","Con este botón vuelves a ver la bienvenida y el mini tutorial cuando quieras.","Toca dos veces el título de cualquier sección para ver de nuevo la guía solo de esa sección."] },
 ];
 
 const TEXTO_FLUJO = "El orden recomendado es: 1) agrega uno o más planes; 2) crea un semestre y matricula materias del plan; 3) con esas materias arma Horario y vincula actividades en Agenda; 4) inicia sesiones desde materias para tener estadísticas ordenadas por periodo. Tiempo también admite bloques personalizados. Wapper necesita Agenda y una clave de Gemini para automatizar tareas. Comunidad y Finanzas funcionan por separado; en Finanzas, el semestre es una clasificación opcional.";
 let cerrarGuiaPlanActiva = null;
+/* ── Retomar lo que se quedó a medias ──────────────────────────────────────
+   · El avance del onboarding se guarda en este dispositivo en cada pantalla y se retoma donde quedó.
+   · La guía del plan/semestres que arranca al terminar el onboarding deja una marca (guia_plan_pendiente) hasta que
+     la persona la termina o la salta; si la app se cierra a medias, se reanuda sola la próxima vez. */
+const CLAVE_PROGRESO_ONB = "onb_progreso_v1";
+function leerProgresoOnb() { try { return JSON.parse(localStorage.getItem(CLAVE_PROGRESO_ONB) || "null"); } catch (_) { return null; } }
+function guardarProgresoOnb(o) { try { if (o) localStorage.setItem(CLAVE_PROGRESO_ONB, JSON.stringify(o)); else localStorage.removeItem(CLAVE_PROGRESO_ONB); } catch (_) {} }
+
+/* ── Términos y condiciones ────────────────────────────────────────────────
+   El texto vive en archivos .md por idioma: TermsOfUse/TermsES.md, TermsEN.md, TermsIT.md, TermsFR.md.
+   Al aceptar se guarda en la cuenta: configuracion.terminos_aceptados = { version, fecha, idioma }.
+   Si algún día cambian los términos, sube VERSION_TERMINOS y se volverán a pedir. */
+const VERSION_TERMINOS = "1";
+const ARCHIVOS_TERMINOS = { es: "TermsES", en: "TermsEN", it: "TermsIT", fr: "TermsFR" };
+const TEXTOS_TERMINOS = {
+  es: { titulo: "Términos y condiciones", lema: "Antes de seguir, lee cómo usamos tus datos y acepta los términos.", cargando: "Cargando…", error: "No se pudo cargar el texto. Revisa tu conexión e inténtalo de nuevo.", reintentar: "Reintentar", acepto: "He leído y acepto los términos y condiciones y el tratamiento de mis datos.", requerido: "Debes aceptar los términos para continuar.", atras: "Atrás", continuar: "Aceptar y continuar" },
+  en: { titulo: "Terms and conditions", lema: "Before you continue, read how we use your data and accept the terms.", cargando: "Loading…", error: "The text could not be loaded. Check your connection and try again.", reintentar: "Try again", acepto: "I have read and accept the terms and conditions and the processing of my data.", requerido: "You must accept the terms to continue.", atras: "Back", continuar: "Accept and continue" },
+  it: { titulo: "Termini e condizioni", lema: "Prima di continuare, leggi come usiamo i tuoi dati e accetta i termini.", cargando: "Caricamento…", error: "Impossibile caricare il testo. Controlla la connessione e riprova.", reintentar: "Riprova", acepto: "Ho letto e accetto i termini e le condizioni e il trattamento dei miei dati.", requerido: "Devi accettare i termini per continuare.", atras: "Indietro", continuar: "Accetta e continua" },
+  fr: { titulo: "Conditions d'utilisation", lema: "Avant de continuer, lis comment nous utilisons tes données et accepte les conditions.", cargando: "Chargement…", error: "Impossible de charger le texte. Vérifie ta connexion et réessaie.", reintentar: "Réessayer", acepto: "J'ai lu et j'accepte les conditions d'utilisation et le traitement de mes données.", requerido: "Tu dois accepter les conditions pour continuer.", atras: "Retour", continuar: "Accepter et continuer" }
+};
+const _cacheTerminos = {};
+function codigoIdiomaTerminos() { const c = idiomaUI().slice(0, 2); return ARCHIVOS_TERMINOS[c] ? c : "es"; }
+function cargarTerminos(cod) {
+  if (!_cacheTerminos[cod]) {
+    _cacheTerminos[cod] = fetch(`TermsOfUse/${ARCHIVOS_TERMINOS[cod]}.md`, { cache: "no-cache" })
+      .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.text(); })
+      .catch((e) => { delete _cacheTerminos[cod]; throw e; });
+  }
+  return _cacheTerminos[cod];
+}
+// Markdown mínimo y seguro (todo con textContent, nada de innerHTML): # títulos, listas con -, **negrita**, --- separador.
+function mdEnLinea(el, t) {
+  t.split(/(\*\*[^*]+\*\*)/).forEach((p) => {
+    if (/^\*\*[^*]+\*\*$/.test(p)) { const b = document.createElement("strong"); b.textContent = p.slice(2, -2); el.append(b); }
+    else if (p) el.append(document.createTextNode(p));
+  });
+}
+function renderizarMarkdownSimple(md) {
+  const frag = document.createDocumentFragment(); let lista = null, parr = [];
+  const cerrar = () => { if (parr.length) { const p = document.createElement("p"); mdEnLinea(p, parr.join(" ")); frag.append(p); parr = []; } };
+  for (const linea of String(md).replace(/\r/g, "").split("\n")) {
+    const l = linea.trim(); let m;
+    if (!l) { cerrar(); lista = null; continue; }
+    if ((m = l.match(/^(#{1,4})\s+(.*)$/))) { cerrar(); lista = null; const h = document.createElement("h" + Math.min(m[1].length + 1, 5)); mdEnLinea(h, m[2]); frag.append(h); continue; }
+    if ((m = l.match(/^[-*]\s+(.*)$/))) { cerrar(); if (!lista) { lista = document.createElement("ul"); frag.append(lista); } const li = document.createElement("li"); mdEnLinea(li, m[1]); lista.append(li); continue; }
+    if (/^---+$/.test(l)) { cerrar(); lista = null; frag.append(document.createElement("hr")); continue; }
+    lista = null; parr.push(l);
+  }
+  cerrar(); return frag;
+}
+let reanudandoGuia = false;
+function reanudarGuiaPendiente(navegar) {
+  const c = estado.datos?.configuracion, pend = c?.guia_plan_pendiente;
+  if (!pend || reanudandoGuia || PREVIEW_DEMO || MODO_DEMO || c.onboarding_v1_completado === false) return false;
+  if (document.querySelector(".onboarding-overlay,.tutorial-seccion-overlay,.guia-seccion-flotante,.guia-plan-flotante")) return false;
+  reanudandoGuia = true; setTimeout(() => { reanudandoGuia = false; }, 2500);   // evita bucles: navegar() vuelve a llamar a esta función
+  const aSemestres = pend === "semestres";
+  navegar?.(aSemestres ? "semestres" : "plan-estudios");
+  setTimeout(() => iniciarGuiaPlan({ navegar, posteriorImportacion: aSemestres, yaEnSemestres: aSemestres }), 450);
+  return true;
+}
 // El selector de logo queda DESACTIVADO en el onboarding (se elige desde Ajustes > Personalizar).
 // El código del selector se conserva: poner en true para volver a mostrarlo.
 const PERMITIR_LOGO_ONBOARDING = false;
@@ -326,12 +387,27 @@ function inyectarEstilosOnboarding() {
 .onboarding-panel[data-etapa^="ajustes"] .onboarding-preview-wrap,.onboarding-panel[data-etapa="wapper-config"] .onboarding-preview-wrap{display:none!important}
 .onboarding-panel[data-etapa^="ajustes"] .onboarding-copy,.onboarding-panel[data-etapa="wapper-config"] .onboarding-copy,.onboarding-panel.onb-tour-movil[data-etapa^="ajustes"] .onboarding-copy,.onboarding-panel.onb-tour-movil[data-etapa="wapper-config"] .onboarding-copy{overflow-y:auto!important;min-height:0;flex:1 1 auto!important;max-height:none!important;display:block!important;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scroll-padding:12px;padding-bottom:28px!important}
 .onboarding-panel[data-etapa^="ajustes"] .onboarding-layout,.onboarding-panel[data-etapa="wapper-config"] .onboarding-layout{min-height:0}
+/* El encabezado (progreso y ×) también va en el flujo, arriba del contenido: nunca fijo encima (así el título no se corta al hacer scroll). */
 /* Los botones (Atrás / Continuar) van SIEMPRE en el flujo, debajo del contenido: nunca encima (se arregla el solape en PC). */
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"]){display:flex!important;flex-direction:column;max-height:100dvh;overflow:hidden!important}
-.onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"])>.onboarding-top{flex:none}
+.onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"])>.onboarding-top{position:relative!important;inset:auto!important;transform:none!important;flex:none;width:100%!important;max-width:none!important;box-sizing:border-box;align-self:stretch;z-index:2}
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"])>.onboarding-layout{flex:1 1 auto;min-height:0!important}
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"]){background:var(--onb-izq,#080808)!important;background-image:none!important}
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"])>.onboarding-acciones{position:static!important;inset:auto!important;transform:none!important;flex:none;width:100%!important;max-width:none!important;min-width:0!important;align-self:stretch;justify-self:stretch;grid-column:1/-1;box-sizing:border-box;margin:0;padding:12px 20px calc(12px + env(safe-area-inset-bottom,0px));z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+/* Términos y condiciones */
+.onboarding-panel[data-etapa="terminos"] .onboarding-copy{text-align:center}
+.onb-terminos-caja{text-align:left;max-height:min(44vh,360px);overflow-y:auto;overscroll-behavior:contain;padding:14px 16px;margin:.75rem 0;border-radius:16px;border:1px solid rgba(128,128,128,.35);background:rgba(128,128,128,.08);font-size:.92rem;line-height:1.5}
+.onb-terminos-caja h2,.onb-terminos-caja h3,.onb-terminos-caja h4,.onb-terminos-caja h5{font-size:1.02rem;margin:1.1em 0 .4em}
+.onb-terminos-caja h2:first-child{margin-top:0}
+.onb-terminos-caja p{margin:.5em 0}.onb-terminos-caja ul{margin:.4em 0;padding-left:1.25em}.onb-terminos-caja hr{border:0;border-top:1px solid rgba(128,128,128,.35);margin:1em 0}
+.onb-terminos-check{display:flex;gap:10px;align-items:flex-start;text-align:left;cursor:pointer;font-size:.95rem;line-height:1.4}
+.onb-terminos-check input{flex:none;width:20px;height:20px;margin-top:1px}
+@media (min-width:761px){
+.onboarding-panel[data-etapa="terminos"]>.onboarding-layout{display:flex!important;flex-direction:row!important;justify-content:center;align-items:center;grid-template-columns:none!important}
+.onboarding-panel[data-etapa="terminos"] .onboarding-copy{flex:0 1 680px!important;width:100%;max-width:680px!important;min-width:0;max-height:100%;margin:0 auto;overflow-y:auto}
+.onboarding-panel[data-etapa="terminos"]>.onboarding-acciones{justify-content:center}
+.onboarding-panel[data-etapa="terminos"]>.onboarding-acciones .btn{flex:0 1 320px}
+}
 /* Bienvenida en PC: todo centrado (en teléfono se queda como está). */
 @media (min-width:761px){
 .onboarding-panel[data-etapa="nombre"]>.onboarding-layout{display:flex!important;flex-direction:row!important;justify-content:center;align-items:center;grid-template-columns:none!important}
@@ -349,11 +425,57 @@ function inyectarEstilosOnboarding() {
 .onboarding-panel[data-etapa="instalar"]>.onboarding-acciones .btn{flex:0 1 auto;min-width:130px}
 .onboarding-panel[data-etapa="instalar"]>.onboarding-acciones .btn-primary{flex:0 1 240px}
 }
+/* «Todo conectado, paso a paso» (PC): flujo horizontal centrado. En teléfono se conserva la lista vertical de siempre. */
+.onboarding-panel[data-etapa="flujo"] .onboarding-copy{text-align:center}
+.onboarding-panel[data-etapa="flujo"] .onboarding-copy h1{font-size:clamp(1.9rem,5vh,2.8rem)!important;animation:onbSube .65s .05s cubic-bezier(.22,.8,.3,1) both}
+@media (min-width:761px){
+.onboarding-panel[data-etapa="flujo"]>.onboarding-layout{display:flex!important;flex-direction:row!important;justify-content:center;align-items:center;grid-template-columns:none!important}
+.onboarding-panel[data-etapa="flujo"] .onboarding-copy{flex:0 1 920px!important;width:100%;max-width:920px!important;min-width:0;max-height:100%;margin:0 auto;overflow-y:auto}
+.onboarding-panel[data-etapa="flujo"]>.onboarding-acciones{justify-content:center}
+.onboarding-panel[data-etapa="flujo"]>.onboarding-acciones .btn{flex:0 1 auto;min-width:150px}
+.onboarding-panel[data-etapa="flujo"]>.onboarding-acciones .btn-primary{flex:0 1 280px}
+}
+.onb-flujo{display:flex;flex-direction:column;gap:26px;width:100%;margin-top:18px}
+.onb-flujo-pasos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}
+.onb-flujo-paso{position:relative;display:flex;flex-direction:column;align-items:center;gap:16px;animation:onbSube .65s cubic-bezier(.22,.8,.3,1) both;animation-delay:calc(.2s + var(--i)*.25s)}
+.onb-flujo-paso:not(:last-child)::after{content:"";position:absolute;top:36px;left:calc(50% + 50px);width:calc(100% + 22px - 100px);height:3px;border-radius:2px;background:linear-gradient(90deg,var(--accent-1,#8b5cf6),var(--accent-2,#38bdf8));transform-origin:left;animation:onbFlujoLinea .6s ease-out both;animation-delay:calc(.55s + var(--i)*.25s)}
+.onb-flujo-nodo{position:relative;flex:none;width:76px;height:76px;border-radius:50%;display:grid;place-items:center;font-size:2rem;background:color-mix(in srgb,var(--accent-1,#8b5cf6) 16%,var(--onb-izq,#080808));border:2px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 70%,transparent);box-shadow:0 0 0 7px color-mix(in srgb,var(--accent-1,#8b5cf6) 10%,transparent),0 12px 32px color-mix(in srgb,var(--accent-1,#8b5cf6) 38%,transparent)}
+.onb-flujo-num{position:absolute;top:-6px;right:-6px;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:.85rem;font-weight:800;color:#fff;background:var(--gradient-accent,var(--accent-1,#8b5cf6));border:3px solid var(--onb-izq,#080808)}
+.onb-flujo-card{box-sizing:border-box;width:100%;flex:1;display:flex;flex-direction:column;gap:6px;padding:16px 14px;border-radius:18px;border:1px solid color-mix(in srgb,currentColor 14%,transparent);background:color-mix(in srgb,currentColor 5%,transparent)}
+.onb-flujo-card b{font-size:1.08rem}
+.onb-flujo-card span{font-size:.92rem;line-height:1.4;opacity:.75}
+.onb-flujo-aparte{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;text-align:left;padding:16px 18px;border-radius:18px;border:1px dashed color-mix(in srgb,var(--accent-1,#8b5cf6) 55%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 8%,transparent);animation:onbSube .65s 1.05s cubic-bezier(.22,.8,.3,1) both}
+.onb-flujo-aparte>span{flex:1 1 280px;font-size:.95rem;line-height:1.4}
+.onb-flujo-chips{display:flex;gap:8px;flex-wrap:wrap}
+.onb-flujo-chip{display:flex;align-items:center;gap:7px;padding:8px 14px;border-radius:999px;font-size:.9rem;font-weight:700;border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 50%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 14%,transparent)}
+.onb-ayuda-tip{display:flex;align-items:flex-start;gap:14px;margin-top:22px;padding:16px 18px;border-radius:18px;text-align:left;border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 55%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 12%,transparent);animation:onbSube .65s 1.2s cubic-bezier(.22,.8,.3,1) both}
+.onb-ayuda-tip-ico{flex:none;font-size:1.8rem;line-height:1;animation:onbToque 1.8s ease-in-out infinite}
+.onb-ayuda-tip b{display:block;font-size:1.02rem;margin-bottom:4px}
+.onb-ayuda-tip span:not(.onb-ayuda-tip-ico){font-size:.92rem;line-height:1.45;opacity:.85}
+@keyframes onbToque{0%,60%,100%{transform:translateY(0)}15%,45%{transform:translateY(-6px)}30%{transform:translateY(0)}}
+@media (prefers-reduced-motion:reduce){.onb-ayuda-tip,.onb-ayuda-tip-ico{animation:none!important}}
+@keyframes onbFlujoLinea{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@media (prefers-reduced-motion:reduce){.onb-flujo-paso,.onb-flujo-paso::after,.onb-flujo-aparte{animation:none!important}}
 /* Nunca se ve una barra de scroll en el onboarding (el scroll sigue funcionando, invisible). */
 .onboarding-overlay,.onboarding-overlay *{scrollbar-width:none;-ms-overflow-style:none}
 .onboarding-overlay *::-webkit-scrollbar{display:none;width:0;height:0}
 .onboarding-panel[data-etapa="instalar"] .onboarding-copy h1{font-size:clamp(1.6rem,4.4vh,2.3rem)!important;line-height:1.1;margin:0 0 4px!important}
 .onboarding-panel[data-etapa="instalar"] .onboarding-lead{font-size:1rem!important;line-height:1.4!important}
+/* Centrado «seguro» (instalar y flujo): centra si cabe y, si no cabe, se alinea arriba. Así NUNCA se corta el título ni queda bajo el encabezado. */
+.onboarding-panel[data-etapa="instalar"] .onboarding-copy,.onboarding-panel[data-etapa="flujo"] .onboarding-copy{display:flex!important;flex-direction:column}
+.onboarding-panel[data-etapa="instalar"] .onboarding-copy>h1,.onboarding-panel[data-etapa="flujo"] .onboarding-copy>h1{margin-top:auto!important;flex:none}
+.onboarding-panel[data-etapa="instalar"] .onboarding-copy>.onboarding-contenido,.onboarding-panel[data-etapa="flujo"] .onboarding-copy>.onboarding-contenido{margin-bottom:auto;flex:none}
+/* Instalación: si el contenido no cabe sin scroll, se compacta por niveles (el JS pone .compacto y luego .minimo). */
+.onb-ins.con-ayuda[data-estado="idle"] .onb-ins-pila{display:none}
+.onb-ins.compacto{--s:.5;gap:6px}
+.onb-ins.compacto .onb-ins-fila{padding:6px 10px;font-size:.88rem}
+.onb-ins.compacto .onb-ins-lista{gap:6px}
+.onb-ins.compacto .onb-ins-card{padding:12px;gap:10px}
+.onb-ins.compacto .onb-ins-ayuda{padding:10px 12px;font-size:.86rem}
+.onb-ins.minimo{--s:.4}
+.onb-ins.minimo .onboarding-lead{display:none}
+.onb-ins.minimo .onb-ins-fila:nth-child(n+3){display:none}
+.onb-ins.minimo .onb-ins-nota{display:none}
 .onb-ins{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;--s:.78}
 @media (min-width:761px){.onb-ins{--s:.74}}
 @media (max-height:860px){.onb-ins{--s:.66}}
@@ -382,6 +504,10 @@ function inyectarEstilosOnboarding() {
 .onb-ins-nota{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;font-size:.86rem;line-height:1.35;background:color-mix(in srgb,var(--accent-1,#8b5cf6) 14%,transparent);border:1px dashed color-mix(in srgb,var(--accent-1,#8b5cf6) 45%,transparent);transition:opacity .4s,max-height .4s,padding .4s,margin .4s;max-height:90px;overflow:hidden;opacity:0;animation:onbInsIn .5s 2.4s forwards}
 .onb-ins-nota-ico{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:.8rem;color:#fff;background:var(--gradient-accent,var(--accent-1,#8b5cf6));animation:onbInsNudge 1.6s ease-in-out 3s infinite}
 .onb-ins[data-estado="listo"] .onb-ins-nota{animation:none;opacity:0;max-height:0;padding-top:0;padding-bottom:0;margin-top:-14px;border-width:0}
+.onb-ins-ayuda{display:flex;align-items:flex-start;gap:10px;width:100%;box-sizing:border-box;padding:12px 14px;border-radius:14px;text-align:left;font-size:.9rem;line-height:1.4;border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 50%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 12%,transparent);animation:onbSube .4s cubic-bezier(.22,.8,.3,1) both}
+.onb-ins-ayuda[hidden]{display:none}
+.onb-ins-ayuda b{display:block;margin-bottom:2px}
+.onb-ins-ayuda-acc{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 @keyframes onbInsNudge{0%,100%{transform:translateX(0)}50%{transform:translateX(4px)}}
 .onb-ins-spin{flex:none;width:26px;height:26px;border-radius:50%;border:3px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 30%,transparent);border-top-color:var(--accent-1,#8b5cf6);animation:onbInsSpin .8s linear infinite}
 .onb-ins-ok{flex:none;width:26px;height:26px;border-radius:50%;background:#22c55e;color:#fff;display:grid;place-items:center;font-weight:800;font-size:.95rem}
@@ -1185,6 +1311,31 @@ function construirInstalacion({ logoSrc }) {
     detener: parar,
   };
 }
+function construirTipAyuda() {
+  const T = traducirTextoInterfaz;
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  const raiz = el("div", "onb-ayuda-tip"); raiz.setAttribute("role", "note");
+  const cuerpo = document.createElement("div");
+  cuerpo.append(el("b", "", T("¿Necesitas ayuda más adelante?")), el("span", "", T("Toca dos veces seguidas el título de cualquier sección (Agenda, Horario, Finanzas…) y se abre su guía paso a paso. No es un truco escondido: está para cuando se te olvide cómo funciona algo.")));
+  raiz.append(el("span", "onb-ayuda-tip-ico", "👆"), cuerpo); return raiz;
+}
+// Pantalla «Todo conectado» (PC): tres pasos encadenados + una franja aparte para lo que funciona por separado.
+function construirFlujo() {
+  const T = traducirTextoInterfaz;
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  const raiz = el("div", "onb-flujo"), fila = el("div", "onb-flujo-pasos");
+  [["📚", "Plan de estudios", "Agrega tu plan de estudios."], ["📅", "Semestres", "Crea un semestre y matricula tus materias."], ["⏱️", "Horario, Agenda y Tiempo", "Usa esas materias en Horario, Agenda y Tiempo."]].forEach(([ico, t, d], i) => {
+    const paso = el("div", "onb-flujo-paso"); paso.style.setProperty("--i", String(i));
+    const nodo = el("div", "onb-flujo-nodo", ico); nodo.append(el("span", "onb-flujo-num", String(i + 1)));
+    const card = el("div", "onb-flujo-card"); card.append(el("b", "", T(t)), el("span", "", T(d)));
+    paso.append(nodo, card); fila.append(paso);
+  });
+  const aparte = el("div", "onb-flujo-aparte");
+  const chips = el("div", "onb-flujo-chips");
+  [["✨", "Wapper"], ["👥", "Comunidad"], ["💰", "Finanzas"]].forEach(([i, t]) => chips.append(el("span", "onb-flujo-chip", `${i} ${T(t)}`)));
+  aparte.append(el("span", "", T("Wapper trabaja con tu Agenda; Comunidad y Finanzas funcionan por separado.")), chips);
+  raiz.append(fila, aparte, construirTipAyuda()); return raiz;
+}
 function fotoPerfilGoogle() {
   const src = document.getElementById("perfil-foto")?.getAttribute("src") || "";
   if (src.trim()) return src;
@@ -1285,7 +1436,8 @@ function construirBloqueEnlaces({ cfg, borrador }) {
   caja.append(lista, nombre, url, filaTipo, emoji, archivo, error, agregar, notaAjuste(`Hasta ${limite} accesos directos. Se guardan al terminar.`));
   return caja;
 }
-function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
+function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {}) {
+  if (reanudarGuiaPendiente(navegar)) return true;
   // Nunca dentro del iframe de vista previa (evita onboarding anidado) ni duplicado.
   if (PREVIEW_DEMO || document.querySelector(".onboarding-overlay") || !estado.datos?.configuracion || (estado.datos.configuracion.onboarding_v1_completado !== false && !(MODO_DEMO && !PREVIEW_DEMO))) return false;
   const cfg = estado.datos.configuracion;
@@ -1298,7 +1450,18 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
   );
   const tienePlanArmado = Boolean(estado.datos.planes_estudio?.some((plan) => plan.materias?.length || plan.optativas_disponibles?.length));
   const faltaNombre = !(estado.datos.perfil?.nombre_preferido || estado.datos.perfil?.nombre || "").trim();
-  let etapa = MODO_DEMO ? "nombre" : cuentaConDatos ? (faltaNombre ? "nombre" : (!cfg.paleta || !cfg.modo ? "personalizar" : "tour")) : "nombre", indice = 0;
+  // La × solo aparece si esta persona ya vio el ingreso al menos una vez (o ya tiene datos / repite el tutorial desde Ajustes).
+  // La primera vez no hay × y se queda en la guía; la marca viaja con la cuenta (configuración sincronizada).
+  const puedeCerrar = repetir || cuentaConDatos || Boolean(cfg.onboarding_visto);
+  if (!MODO_DEMO && !cfg.onboarding_visto) { cfg.onboarding_visto = true; guardar(); }
+  // El avance también viaja con la cuenta: se retoma en cualquier dispositivo. Solo se guarda cuando cambia de pantalla.
+  const guardarProgreso = (o) => {
+    const nuevo = o || null;
+    if (JSON.stringify(cfg.onboarding_progreso || null) === JSON.stringify(nuevo)) return;
+    cfg.onboarding_progreso = nuevo; guardarProgresoOnb(nuevo); guardar();
+  };
+  const aceptadoTerminos = () => MODO_DEMO || cfg.terminos_aceptados?.version === VERSION_TERMINOS;
+  let etapa = MODO_DEMO ? "nombre" : cuentaConDatos ? (faltaNombre ? "nombre" : (!aceptadoTerminos() ? "terminos" : (!cfg.paleta || !cfg.modo ? "personalizar" : "tour"))) : "nombre", indice = 0;
   let modoPersonalizacion = MODO_DEMO ? (cfg.modo || "dark") : obtenerModoTemaLocal();
   let calidadPersonalizacion = obtenerModoDisenoLocal();
   // Fuente única de la paleta: la elegida o, si no hay, la que la app tiene aplicada.
@@ -1542,7 +1705,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
     guardar();window.aplicarVisibilidadNavegacion?.();
     try{if(borrador.resumen&&sincronizacionCalendarActiva())sincronizarResumenDiario();}catch(_){}
   };
-  const fin=(irAlPlan=false,irASemestres=false)=>{aplicarAjustesFinales();ctrlTour?.abort();fondo.detener();timersChat.forEach(clearTimeout);timersChat=[];cancelarPrecarga();consultaMovil.removeEventListener?.("change",aplicarVistaMovil);removeEventListener("resize",alRedimensionar);clearTimeout(temporizadorReveal);clearTimeout(vigilanteReveal);timersPreview.forEach(clearTimeout);timersPreview=[];clearTimeout(temporizadorTour);cfg.onboarding_v1_completado=true;cfg.tutoriales_secciones_vistas=cfg.tutoriales_secciones_vistas||{};if(irAlPlan)cfg.tutoriales_secciones_vistas["plan-estudios"]=true;if(irASemestres)cfg.tutoriales_secciones_vistas.semestres=true;guardar();overlay.remove();if(irAlPlan||irASemestres){const destino=irASemestres?"semestres":"plan-estudios";navegar?.(destino);setTimeout(()=>iniciarGuiaPlan({navegar,posteriorImportacion:irASemestres,yaEnSemestres:irASemestres}),450);}else{if((!cuentaConDatos||!tienePlanArmado)&&!borrador.ocultas.has("plan-estudios")){navegar?.("plan-estudios");setTimeout(()=>navegar?.("plan-estudios"),450);}toast?.(traducirTextoInterfaz("¡Listo! Puedes volver a ver la guía desde Ajustes generales."));}};
+  const fin=(irAlPlan=false,irASemestres=false)=>{aplicarAjustesFinales();ctrlTour?.abort();fondo.detener();timersChat.forEach(clearTimeout);timersChat=[];cancelarPrecarga();consultaMovil.removeEventListener?.("change",aplicarVistaMovil);removeEventListener("resize",alRedimensionar);clearTimeout(temporizadorReveal);clearTimeout(vigilanteReveal);timersPreview.forEach(clearTimeout);timersPreview=[];clearTimeout(temporizadorTour);cfg.onboarding_v1_completado=true;cfg.tutoriales_secciones_vistas=cfg.tutoriales_secciones_vistas||{};if(irAlPlan)cfg.tutoriales_secciones_vistas["plan-estudios"]=true;if(irASemestres)cfg.tutoriales_secciones_vistas.semestres=true;if(irAlPlan||irASemestres)cfg.guia_plan_pendiente=irASemestres?"semestres":"plan";guardarProgresoOnb(null);cfg.onboarding_progreso=null;guardar();overlay.remove();if(irAlPlan||irASemestres){const destino=irASemestres?"semestres":"plan-estudios";navegar?.(destino);setTimeout(()=>iniciarGuiaPlan({navegar,posteriorImportacion:irASemestres,yaEnSemestres:irASemestres}),450);}else{if((!cuentaConDatos||!tienePlanArmado)&&!borrador.ocultas.has("plan-estudios")){navegar?.("plan-estudios");setTimeout(()=>navegar?.("plan-estudios"),450);}toast?.(traducirTextoInterfaz("¡Listo! Puedes volver a ver la guía desde Ajustes generales."));}};
   if (MODO_DEMO && !PREVIEW_DEMO) {
     const saltar=boton("Saltar inicio","btn-secondary",()=>{cfg.tutoriales_secciones_vistas=Object.fromEntries(SECCIONES_TUTORIAL.map(s=>[s.id,true]));fin(false);});
     saltar.className += " onboarding-saltar-demo";
@@ -1555,6 +1718,17 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
     tarjeta.append(texto("h2","","Ya tienes un plan guardado"),texto("p","","¿Quieres guardar otro plan de estudios o continuar con el que ya tienes?"));
     const botones=document.createElement("div");botones.className="onboarding-pregunta-botones";
     botones.append(boton("Guardar otro plan","btn-secondary",()=>fin(true)),boton("Continuar con este plan","btn-primary",()=>fin(false,true)));
+    tarjeta.append(botones);pregunta.append(tarjeta);overlay.append(pregunta);
+  };
+  // Cerrar con la × ya no pierde la guía: se pregunta y, por defecto, se retoma la próxima vez.
+  const pausar=()=>{aplicarAjustesFinales();ctrlTour?.abort();fondo.detener();timersChat.forEach(clearTimeout);timersChat=[];cancelarPrecarga();consultaMovil.removeEventListener?.("change",aplicarVistaMovil);removeEventListener("resize",alRedimensionar);clearTimeout(temporizadorReveal);clearTimeout(vigilanteReveal);timersPreview.forEach(clearTimeout);timersPreview=[];clearTimeout(temporizadorTour);overlay.remove();toast?.(traducirTextoInterfaz("Retomarás la guía la próxima vez que abras la app."));};
+  const preguntarSalir=()=>{
+    if(overlay.querySelector(".onboarding-pregunta-plan"))return;
+    const pregunta=document.createElement("div");pregunta.className="onboarding-pregunta-plan";
+    const tarjeta=document.createElement("section");tarjeta.setAttribute("role","dialog");tarjeta.setAttribute("aria-modal","true");
+    tarjeta.append(texto("h2","","¿Salir de la guía?"),texto("p","","Si sales ahora, la próxima vez que abras la app retomarás justo donde te quedaste."));
+    const botones=document.createElement("div");botones.className="onboarding-pregunta-botones";
+    botones.append(boton("Seguir con la guía","btn-primary",()=>pregunta.remove()),boton("Salir por ahora","btn-secondary",pausar),boton("No volver a mostrar","btn-secondary",()=>fin(false)));
     tarjeta.append(botones);pregunta.append(tarjeta);overlay.append(pregunta);
   };
   const instalarYa=()=>Boolean(navigator.standalone)||matchMedia("(display-mode: standalone)").matches;
@@ -1572,15 +1746,16 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
     iframeListo=false;preview.style.transition="none";preview.style.opacity="0";preview.dataset.seccion=seccion;preview.src=u.href;
   };
   const pintar=()=>{
+    if(!MODO_DEMO&&!repetir)guardarProgreso({etapa:etapa==="wapper-config"?"tour":etapa,indice});
     ctrlTour?.abort();ctrlTour=null;timersChat.forEach(clearTimeout);timersChat=[];
     contenido.replaceChildren();acciones.replaceChildren();panel.querySelector(".onboarding-copy").scrollTop=0;
     const esTour=etapa==="tour";panel.classList.toggle("onboarding-con-tour",esTour||etapa==="personalizar");panel.dataset.etapa=etapa;panel.querySelectorAll(".onb-bienvenida-avatar").forEach((e)=>e.remove());
     // En teléfono, cada pantalla nueva arranca en «información»; la vista previa se desliza.
     const claveVista=`${etapa}:${etapa==="tour"?indice:""}`;if(claveVista!==claveVistaMovil){claveVistaMovil=claveVista;vistaMovil="info";}
-    panel.querySelector(".onboarding-cerrar").classList.toggle("oculto",!cuentaConDatos&&(etapa==="nombre"||etapa==="personalizar"));
-    const nombres={nombre:"Te damos la bienvenida",personalizar:"Personaliza tu app",instalar:"Llévala contigo",tour:`Conoce ${secciones[indice]?.nombre||"App Académica"}`,"wapper-config":"Activa Wapper",ajustes1:"Últimos ajustes antes de iniciar",ajustes2:"Elige qué secciones usarás",flujo:"Todo conectado, paso a paso"};
+    panel.querySelector(".onboarding-cerrar").classList.toggle("oculto",!puedeCerrar);
+    const nombres={nombre:"Te damos la bienvenida",terminos:"Términos y condiciones",personalizar:"Personaliza tu app",instalar:"Llévala contigo",tour:`Conoce ${secciones[indice]?.nombre||"App Académica"}`,"wapper-config":"Activa Wapper",ajustes1:"Últimos ajustes antes de iniciar",ajustes2:"Elige qué secciones usarás",flujo:"Todo conectado, paso a paso"};
     titulo.textContent=etapa==="tour"?`${traducirTextoInterfaz("Conoce")} ${traducirTextoInterfaz(secciones[indice]?.nombre||"App Académica")}`:traducirTextoInterfaz(nombres[etapa]||"App Académica");
-    progreso.textContent=etapa==="tour"?traducirTextoInterfaz(`${indice+1} de ${secciones.length} secciones`):traducirTextoInterfaz({nombre:"Bienvenida",personalizar:"Personalización",instalar:"Instalación",ajustes1:"Últimos ajustes (1 de 2)",ajustes2:"Últimos ajustes (2 de 2)",flujo:"Cómo empezar"}[etapa]||"");
+    progreso.textContent=etapa==="tour"?traducirTextoInterfaz(`${indice+1} de ${secciones.length} secciones`):traducirTextoInterfaz({nombre:"Bienvenida",terminos:"Términos y condiciones",personalizar:"Personalización",instalar:"Instalación",ajustes1:"Últimos ajustes (1 de 2)",ajustes2:"Últimos ajustes (2 de 2)",flujo:"Cómo empezar"}[etapa]||"");
     preview.closest(".onboarding-preview-wrap").classList.toggle("oculto",!esTour&&etapa!=="personalizar");
     aplicarVistaMovil();
     puntosTour.replaceChildren(...secciones.map((_,i)=>{const d=document.createElement("i");if(i===indice)d.className="on";return d;}));
@@ -1600,12 +1775,43 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
         // En la demo el nombre es opcional; en una cuenta real se pide con un aviso visible.
         if(!v&&!MODO_DEMO){aviso.hidden=false;input.setAttribute("aria-invalid","true");input.focus();return;}
         if(v){estado.datos.perfil=estado.datos.perfil||{};estado.datos.perfil.nombre_preferido=v;guardar();window.renderizarPerfil?.();}
-        etapa=cuentaConDatos&&cfg.paleta&&cfg.modo?"tour":"personalizar";pintar();
+        etapa=!aceptadoTerminos()?"terminos":(cuentaConDatos&&cfg.paleta&&cfg.modo?"tour":"personalizar");pintar();
       };
       input.addEventListener("input",()=>{aviso.hidden=true;input.removeAttribute("aria-invalid");});
       input.addEventListener("keydown",(ev)=>{if(ev.key==="Enter"){ev.preventDefault();continuar();}});
       acciones.append(boton("Continuar","btn-primary",continuar));
       if(!esMovil())requestAnimationFrame(()=>input.focus({preventScroll:true})); // en teléfono no se abre el teclado solo: taparía el avatar
+      return;
+    }
+    if(etapa==="terminos"){
+      const cod=codigoIdiomaTerminos(), L=TEXTOS_TERMINOS[cod];
+      titulo.textContent=L.titulo;progreso.textContent=L.titulo;
+      const crear=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;};
+      const crearBtn=(txt,cls,fn)=>{const b=crear("button",`btn ${cls}`,txt);b.type="button";b.addEventListener("click",fn);return b;};
+      const caja=crear("div","onb-terminos-caja");caja.tabIndex=0;caja.setAttribute("role","region");caja.setAttribute("aria-label",L.titulo);
+      const check=document.createElement("input");check.type="checkbox";check.id="onb-terminos-ok";check.disabled=true;
+      const etiqueta=crear("label","onb-terminos-check");etiqueta.htmlFor=check.id;etiqueta.append(check,crear("span","",L.acepto));
+      const aviso=crear("p","onboarding-nota-error",L.requerido);aviso.hidden=true;aviso.setAttribute("role","alert");
+      let cargado=false;
+      const cargar=()=>{
+        cargado=false;check.disabled=true;caja.replaceChildren(crear("p","",L.cargando));
+        cargarTerminos(cod).then((md)=>{
+          if(!caja.isConnected)return; // ya cambió de pantalla
+          caja.replaceChildren(renderizarMarkdownSimple(md));cargado=true;check.disabled=false;
+        }).catch(()=>{
+          if(!caja.isConnected)return;
+          caja.replaceChildren(crear("p","",L.error),crearBtn(L.reintentar,"btn-secondary",cargar));
+        });
+      };
+      check.addEventListener("change",()=>{aviso.hidden=true;});
+      contenido.append(crear("p","onboarding-lead",L.lema),caja,etiqueta,aviso);
+      const aceptar=()=>{
+        if(!cargado||!check.checked){aviso.hidden=false;return;}
+        cfg.terminos_aceptados={version:VERSION_TERMINOS,fecha:new Date().toISOString(),idioma:cod};guardar();
+        etapa=cuentaConDatos&&cfg.paleta&&cfg.modo?"tour":"personalizar";indice=0;pintar();
+      };
+      acciones.append(crearBtn(L.atras,"btn-secondary",()=>{etapa="nombre";pintar();}),crearBtn(L.continuar,"btn-primary",aceptar));
+      cargar();
       return;
     }
     if(etapa==="personalizar"){
@@ -1627,7 +1833,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
       const toggleLogos=boton("Logos de la app  ⌄","btn-secondary",()=>{const abierto=toggleLogos.getAttribute("aria-expanded")==="true";toggleLogos.setAttribute("aria-expanded",String(!abierto));toggleLogos.textContent=traducirTextoInterfaz(`Logos de la app  ${abierto?"⌄":"⌃"}`);logos.hidden=abierto;});toggleLogos.setAttribute("aria-expanded","false");logos.hidden=true;
       const filaLogo=document.createElement("div");filaLogo.className="onboarding-logo-heading";filaLogo.append(toggleLogos,etiquetaArchivo);
       contenido.append(modos,calidades,notaFancy,colores);if(PERMITIR_LOGO_ONBOARDING)contenido.append(filaLogo,logos);prepararMaqueta();
-      acciones.append(boton("Atrás","btn-secondary",()=>{etapa="nombre";pintar();}),boton("Continuar","btn-primary",()=>{cfg.personalizacion_inicial_completada=true;guardar();etapa=etapaTrasPersonalizar();indice=0;pintar();}));return;
+      acciones.append(boton("Atrás","btn-secondary",()=>{etapa=MODO_DEMO?"nombre":"terminos";pintar();}),boton("Continuar","btn-primary",()=>{cfg.personalizacion_inicial_completada=true;guardar();etapa=etapaTrasPersonalizar();indice=0;pintar();}));return;
     }
     if(etapa==="instalar"){
       const logoSrc=cfg.logo_app_url||(cfg.logo_app==="birrete"?"imagenes/LogoAppBirrete.png":"imagenes/LogoAppFolder.png");
@@ -1635,21 +1841,96 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
       const T=traducirTextoInterfaz;
       const alTour=()=>{ui.detener();etapa="tour";indice=0;pintar();};
       const bAhora=boton("Ahora no","btn-secondary",alTour);
-      const bInst=boton("Instalar app","btn-primary",()=>{
-        if(typeof window.instalarAppAcademica!=="function"){alTour();return;}
-        if(ui.estado()!=="idle")return;
-        ui.iniciar();bInst.disabled=true;bInst.textContent=T("Instalando…");bAhora.textContent=T("Continuar tutorial");
-        const alInstalar=()=>{
-          if(ui.raiz.isConnected){ui.completar();bInst.textContent=T("Instalada ✓");bInst.classList.add("onb-ok");}
-          else toast?.(T("¡App instalada! Ya la tienes en tu dispositivo."));
+      // ── Instalación blindada ──
+      // · iPhone/iPad y navegadores integrados (Instagram, WhatsApp…) NO permiten instalar con un botón: se muestran los pasos manuales.
+      // · En el resto se llama al aviso del navegador DENTRO del toque (sin esperas antes: si no, el navegador lo bloquea).
+      // · El resultado se lee de forma tolerante (true/false, {outcome}, evento con userChoice, o nada). Si no hay confirmación,
+      //   se espera el evento «appinstalled»; si en 10 s no llega nada, se vuelve a ofrecer el botón con los pasos del menú.
+      const ua=navigator.userAgent||"";
+      const esIOS=/iPad|iPhone|iPod/.test(ua)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+      const esWebview=/FBAN|FBAV|Instagram|Line\/|MicroMessenger|TikTok|Snapchat|; wv\)/i.test(ua);
+      const ayuda=document.createElement("div");ayuda.className="onb-ins-ayuda";ayuda.hidden=true;ayuda.setAttribute("role","status");ui.raiz.append(ayuda);
+      const copia=panel.querySelector(".onboarding-copy");
+      // Si algo desborda (contenido o su contenedor), se compacta por niveles hasta que quepa; el scroll queda solo como último recurso.
+      const sobra=()=>[copia,copia.parentElement].some((e)=>e&&e.scrollHeight>e.clientHeight+1);
+      const ajustar=()=>{
+        if(!ui.raiz.isConnected){removeEventListener("resize",ajustar);return;}
+        ui.raiz.classList.remove("compacto","minimo");
+        if(!sobra())return;
+        ui.raiz.classList.add("compacto");if(!sobra())return;
+        ui.raiz.classList.add("minimo");
+      };
+      const reajustar=(ms=40)=>setTimeout(ajustar,ms);
+      const verAyuda=(v)=>{ayuda.hidden=!v;ui.raiz.classList.toggle("con-ayuda",v);reajustar();};
+      addEventListener("resize",ajustar);
+      requestAnimationFrame(()=>requestAnimationFrame(ajustar));
+      const mostrarAyuda=(clave)=>{
+        const textos={
+          ios:["Instálala desde el navegador","Toca Compartir ⬆️ y elige «Añadir a pantalla de inicio»."],
+          menu:["Instálala desde el menú","Abre el menú del navegador (⋮) y toca «Instalar app» o «Añadir a pantalla de inicio»."],
+          webview:["Ábrela en tu navegador","Este navegador integrado no permite instalar. Ábrela en Chrome o Safari: toca los tres puntos de arriba y elige «Abrir en el navegador», o usa el botón."],
         };
-        const volver=()=>{removeEventListener("appinstalled",alInstalar);ui.cancelar();bInst.disabled=false;bInst.textContent=T("Instalar app");bAhora.textContent=T("Ahora no");};
-        addEventListener("appinstalled",alInstalar,{once:true});
+        const [t,d]=textos[clave]||textos.menu;
+        const ico=document.createElement("span");ico.textContent="💡";
+        const cuerpo=document.createElement("div"),tb=document.createElement("b"),td=document.createElement("span");tb.textContent=T(t);td.textContent=T(d);cuerpo.append(tb,td);
+        if(clave==="webview"){
+          const acc=document.createElement("div");acc.className="onb-ins-ayuda-acc";
+          if(/Android/i.test(ua))acc.append(boton("Abrir en mi navegador","btn-primary",()=>{
+            // Android: el esquema intent:// pide al sistema abrir el enlace en el navegador predeterminado; si no lo permite, queda la copia.
+            const u=new URL(location.href);
+            try{location.href=`intent://${u.host}${u.pathname}${u.search}#Intent;scheme=${u.protocol.replace(":","")};action=android.intent.action.VIEW;S.browser_fallback_url=${encodeURIComponent(u.href)};end`;}catch(_){}
+          }));
+          acc.append(boton("Copiar enlace","btn-secondary",async()=>{
+            const url=location.href;let ok=false;
+            try{await navigator.clipboard.writeText(url);ok=true;}catch(_){
+              try{const t=document.createElement("textarea");t.value=url;t.style.cssText="position:fixed;opacity:0";document.body.append(t);t.select();ok=document.execCommand("copy");t.remove();}catch(__){}
+            }
+            toast?.(T(ok?"Enlace copiado: pégalo en Chrome o Safari":"No se pudo copiar el enlace"));
+          }));
+          cuerpo.append(acc);
+        }
+        ayuda.replaceChildren(ico,cuerpo);verAyuda(true);ayuda.scrollIntoView?.({block:"nearest",behavior:"smooth"});
+      };
+      let modoManual=false,empezado=false,guardia=0,escuchaInst=null;
+      const empezar=()=>{
+        if(!ui.raiz.isConnected||ui.estado()!=="idle")return;
+        empezado=true;verAyuda(false);ui.iniciar();reajustar(2000);bInst.disabled=true;bInst.textContent=T("Instalando…");bAhora.textContent=T("Continuar tutorial");
+      };
+      const alInstalar=()=>{
+        clearTimeout(guardia);escuchaInst=null;
+        if(ui.raiz.isConnected){empezar();ui.completar();verAyuda(false);bInst.disabled=true;bInst.textContent=T("Instalada ✓");bInst.classList.add("onb-ok");}
+        else toast?.(T("¡App instalada! Ya la tienes en tu dispositivo."));
+      };
+      const reiniciar=()=>{clearTimeout(guardia);empezado=false;ui.cancelar();reajustar();bInst.disabled=false;bInst.textContent=T("Instalar app");bAhora.textContent=T("Ahora no");};
+      const pasarAManual=(clave)=>{modoManual=true;mostrarAyuda(clave);bInst.disabled=false;bInst.textContent=T("Continuar tutorial");bAhora.style.display="none";};
+      const leerResultado=async(r)=>{
+        try{
+          let v=await r;if(v&&typeof v.userChoice?.then==="function")v=await v.userChoice;
+          const o=typeof v==="string"?v:v?.outcome;
+          if(v===true||o==="accepted")return "si";
+          if(v===false||o==="dismissed")return "no";
+          return "?";
+        }catch(_){return "error";}
+      };
+      const bInst=boton("Instalar app","btn-primary",()=>{
+        if(modoManual){alTour();return;}
+        if(ui.estado()!=="idle"||bInst.disabled)return;
         if(instalarYa()){alInstalar();return;}
-        let r;try{r=window.instalarAppAcademica();}catch(_){volver();return;}
-        // Si la app devuelve el resultado del aviso del navegador y el usuario lo rechaza, se deshace la animación.
-        Promise.resolve(r).then((res)=>{if(res===false||res?.outcome==="dismissed")volver();}).catch(volver);
+        if(esWebview){pasarAManual("webview");return;}
+        if(esIOS||typeof window.instalarAppAcademica!=="function"){pasarAManual(esIOS?"ios":"menu");return;}
+        verAyuda(false);bInst.disabled=true;bInst.textContent=T("Confirma en el navegador…");
+        if(!escuchaInst){escuchaInst=alInstalar;addEventListener("appinstalled",escuchaInst,{once:true});}
+        let r;try{r=window.instalarAppAcademica();}catch(_){reiniciar();mostrarAyuda("menu");return;}
+        guardia=setTimeout(()=>{if(!empezado&&ui.raiz.isConnected){reiniciar();mostrarAyuda("menu");}},10000);
+        leerResultado(r).then((v)=>{
+          if(!ui.raiz.isConnected)return;
+          if(v==="si"){clearTimeout(guardia);empezar();}
+          else if(v==="no")reiniciar();
+          else if(v==="error"&&!empezado){reiniciar();mostrarAyuda("menu");}
+          // «?»: sin confirmación; espera «appinstalled» o la guardia de 10 s.
+        });
       });
+      if(esWebview)mostrarAyuda("webview"); // dentro de Instagram/Facebook… se avisa desde el principio, sin esperar al toque
       acciones.append(boton("Atrás","btn-secondary",()=>{ui.detener();etapa="personalizar";pintar();}),bAhora);colocarPrimario(bInst);return;
     }
     if(etapa==="tour"){
@@ -1720,11 +2001,19 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
       contenido.append(lista);
       acciones.append(boton("Atrás","btn-secondary",()=>{etapa="ajustes1";pintar();}),boton("Continuar","btn-primary",()=>{etapa="flujo";pintar();}));return;
     }
-    const pasos=document.createElement("ol");pasos.className="onboarding-dependencias";["Agrega tu plan de estudios.","Crea un semestre y matricula tus materias.","Usa esas materias en Horario, Agenda y Tiempo.","Wapper trabaja con tu Agenda; Comunidad y Finanzas funcionan por separado."].forEach(t=>pasos.append(texto("li","",t)));contenido.append(pasos);
+    if(esMovil()){const pasos=document.createElement("ol");pasos.className="onboarding-dependencias";["Agrega tu plan de estudios.","Crea un semestre y matricula tus materias.","Usa esas materias en Horario, Agenda y Tiempo.","Wapper trabaja con tu Agenda; Comunidad y Finanzas funcionan por separado."].forEach(t=>pasos.append(texto("li","",t)));contenido.append(pasos,construirTipAyuda());}else contenido.append(construirFlujo());
     acciones.append(boton("Atrás","btn-secondary",()=>{etapa="ajustes2";pintar();}),boton("Lo haré después","btn-secondary",()=>fin(false)));colocarPrimario(boton(tienePlanArmado?"Continuar":"Agregar plan y ver la guía","btn-primary",()=>tienePlanArmado?preguntarPorOtroPlan():fin(true)));
   };
   const siguiente=()=>{indice++;if(indice>=secciones.length)etapa="ajustes1";pintar();};
-  panel.querySelector(".onboarding-cerrar").addEventListener("click",()=>fin(false));
+  panel.querySelector(".onboarding-cerrar").addEventListener("click",()=>{if(repetir||MODO_DEMO)fin(false);else preguntarSalir();});
+  // Retoma donde se quedó (solo en el primer recorrido, en este dispositivo).
+  if(!MODO_DEMO&&!repetir){
+    const g=cfg.onboarding_progreso||leerProgresoOnb();
+    if(g&&["terminos","personalizar","instalar","tour","ajustes1","ajustes2","flujo"].includes(g.etapa)){
+      etapa=g.etapa;if(!aceptadoTerminos())etapa="terminos"; // nadie se salta los términos al retomarindice=Math.max(0,Math.min(Math.max(0,secciones.length-1),Number(g.indice)||0));
+      if(etapa==="instalar"&&instalarYa())etapa="tour";
+    }
+  }
   pintar();return true;
 }
 
@@ -1763,6 +2052,7 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
   const resaltador = crearResaltador();
   let resaltado = null;
   const cerrar = ({ continuarSemestres = false } = {}) => {
+    { const c = estado.datos?.configuracion; if (c?.guia_plan_pendiente) { c.guia_plan_pendiente = null; guardar(); } }   // terminó o la saltó: ya no hay nada que reanudar
     resaltador.quitar(); pop.remove();
     if (botonBlanco && escuchaBlanco) botonBlanco.removeEventListener("click", escuchaBlanco, true);
     if (cerrarGuiaPlanActiva === cerrar) cerrarGuiaPlanActiva = null;
@@ -1827,11 +2117,11 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
     acciones.append(saltar); pop.append(acciones); pop.classList.remove("oculto"); evitarSolape(pop, resaltado);
   };
   pintar();
-  window.continuarTutorialDespuesDeImportarPlan = () => { if (!cerrarGuiaPlanActiva) return; marcarSemestresVisto(); cerrar(); navegar?.("semestres"); setTimeout(() => iniciarGuiaPlan({ navegar, posteriorImportacion: true, yaEnSemestres: true }), 350); };
+  window.continuarTutorialDespuesDeImportarPlan = () => { if (!cerrarGuiaPlanActiva) return; marcarSemestresVisto(); cerrar(); { const c = estado.datos?.configuracion; if (c) { c.guia_plan_pendiente = "semestres"; guardar(); } } navegar?.("semestres"); setTimeout(() => iniciarGuiaPlan({ navegar, posteriorImportacion: true, yaEnSemestres: true }), 350); };
 }
 
 function inicializarTutorialDesdeAjustes({ navegar, toast } = {}) {
-  const btn=document.getElementById("btn-repetir-tutorial");if(!btn||btn.dataset.inicializado)return;btn.dataset.inicializado="1";btn.addEventListener("click",()=>{if(!estado.datos?.configuracion)return;estado.datos.configuracion.onboarding_v1_completado=false;mostrarOnboardingNuevoUsuario({navegar,toast});});
+  const btn=document.getElementById("btn-repetir-tutorial");if(!btn||btn.dataset.inicializado)return;btn.dataset.inicializado="1";btn.addEventListener("click",()=>{if(!estado.datos?.configuracion)return;estado.datos.configuracion.onboarding_v1_completado=false;mostrarOnboardingNuevoUsuario({navegar,toast,repetir:true});});
 }
 
 function botonAgregarSemestre() { return [...document.querySelectorAll("#seccion-semestres button")].find((b) => /registrar semestre|crear semestre|agregar semestre|^\s*\+?\s*agregar\s*$/i.test(b.textContent.trim())); }
@@ -1881,6 +2171,7 @@ const SELECTORES_GUIA_SECCION = {
     () => document.getElementById("ajuste-tamano-texto"),
     () => seccionNavegacionAjustes(),
     () => document.getElementById("btn-repetir-tutorial"),
+    () => document.getElementById("btn-repetir-tutorial"),
   ],
 };
 
@@ -1923,6 +2214,7 @@ function iniciarGuiaSeccion(info) {
 }
 
 function mostrarTutorialPrimeraVez(seccion) {
+  if(reanudarGuiaPendiente(window.mostrarSeccion))return true;
   const cfg=estado.datos?.configuracion;
   const info=SECCIONES_TUTORIAL.find(s=>s.id===seccion);
   if(PREVIEW_DEMO||!cfg||cfg.onboarding_v1_completado===false||!info||cfg.tutoriales_secciones_vistas?.[seccion]||document.querySelector(".onboarding-overlay,.tutorial-seccion-overlay,.guia-seccion-flotante,.guia-plan-flotante"))return false;
@@ -1941,5 +2233,40 @@ if (MODO_DEMO) {
   const ocultarControlesDemo = () => { pendiente = 0; document.querySelectorAll("button").forEach((b) => { if (/simular\s+(victoria|derrota)|(agregar|borrar)\s+racha/i.test(b.textContent)) b.style.display = "none"; }); };
   new MutationObserver(() => { if (!pendiente) pendiente = requestAnimationFrame(ocultarControlesDemo); }).observe(document.documentElement, { childList: true, subtree: true });
   ocultarControlesDemo();
+}
+/* ── Ayuda: doble toque en el título de una sección = volver a abrir la guía SOLO de esa sección ──
+   Se instala sola al cargar el módulo. Detecta el doble toque por tiempo y distancia (con el dedo, «dblclick» no es fiable). */
+function infoSeccionPorEncabezado(el) {
+  if (!(el instanceof Element)) return null;
+  // Los botones, enlaces y campos del encabezado conservan su función normal.
+  if (el.closest("button,a,input,select,textarea,label,[role='button'],.onboarding-overlay,.modal-overlay")) return null;
+  for (let n = el.closest("[id^='seccion-']"); n; n = n.parentElement?.closest("[id^='seccion-']")) {
+    const info = SECCIONES_TUTORIAL.find((s) => n.id === `seccion-${s.id}`);
+    if (!info) continue;
+    const h = n.querySelector("h1,h2"); if (!h) return null;
+    let cab = h.closest("header,[class*='header'],[class*='encabezado'],[class*='titulo']");
+    if (!cab || cab === n || !n.contains(cab) || cab.getBoundingClientRect().height > 170) cab = h;
+    return cab.contains(el) ? info : null;
+  }
+  return null;
+}
+function abrirGuiaDeSeccion(info) {
+  if (document.querySelector(".onboarding-overlay,.tutorial-seccion-overlay,.guia-seccion-flotante,.guia-plan-flotante,.modal-overlay")) return;
+  try { getSelection()?.removeAllRanges(); } catch (_) {}
+  if (info.id === "plan-estudios") iniciarGuiaPlan({ navegar: window.mostrarSeccion });
+  else iniciarGuiaSeccion(info);
+}
+if (!PREVIEW_DEMO && !window.__guiaEncabezadoInicializada) {
+  window.__guiaEncabezadoInicializada = true;
+  let previo = { t: 0, x: 0, y: 0, id: "" };
+  document.addEventListener("pointerup", (ev) => {
+    if (ev.button > 0) return;
+    const info = infoSeccionPorEncabezado(ev.target);
+    if (!info) { previo.t = 0; return; }
+    const ahora = performance.now();
+    const cerca = Math.abs(ev.clientX - previo.x) < 30 && Math.abs(ev.clientY - previo.y) < 30;
+    if (previo.id === info.id && cerca && ahora - previo.t < 400) { previo.t = 0; abrirGuiaDeSeccion(info); return; }
+    previo = { t: ahora, x: ev.clientX, y: ev.clientY, id: info.id };
+  }, true);
 }
 export { mostrarOnboardingNuevoUsuario, inicializarTutorialDesdeAjustes, mostrarTutorialPrimeraVez };
