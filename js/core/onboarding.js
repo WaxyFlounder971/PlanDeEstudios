@@ -325,6 +325,7 @@ function inyectarEstilosOnboarding() {
    Claro = #fbfbfe · Oscuro = #080808 · Color = el fondo liso de la paleta (--onb-izq, ver colorLadoIzquierdo). No cambia con Fancy. */
 .onboarding-overlay .onboarding-copy,.onboarding-overlay .onboarding-top,.onboarding-overlay .onboarding-acciones{background:var(--onb-izq,#080808)!important;background-image:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none!important}
 .onboarding-overlay .onboarding-copy,.onboarding-overlay .onboarding-copy *{text-shadow:none!important}
+.onb-salir-botones{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.onb-salir-botones .btn{width:100%;min-width:0;white-space:normal;line-height:1.2;padding-left:10px;padding-right:10px}
 .onboarding-pregunta-botones{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;margin-top:14px;padding:0;background:none!important;box-shadow:none!important;border:0}
 .onb-bienvenida-avatar{position:relative;isolation:isolate;display:grid;place-items:center;width:138px;height:138px;margin:6px auto 26px;border-radius:50%;font-size:3rem;font-weight:800;color:#fff;animation:onbAvEntra .8s cubic-bezier(.2,.9,.3,1.15) both,onbAvFlota 5.5s ease-in-out .9s infinite}
 .onb-bienvenida-avatar::before{content:"";position:absolute;inset:-26px;z-index:-2;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--accent-1,#8b5cf6) 62%,transparent),color-mix(in srgb,var(--accent-2,#38bdf8) 22%,transparent) 62%,transparent);filter:blur(14px);animation:onbAvPulso 3.4s ease-in-out infinite}
@@ -1482,7 +1483,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
     cfg.onboarding_progreso = nuevo; guardarProgresoOnb(nuevo); guardar();
   };
   const aceptadoTerminos = () => MODO_DEMO || cfg.terminos_aceptados?.version === VERSION_TERMINOS;
-  let etapa = MODO_DEMO ? "nombre" : cuentaConDatos ? (faltaNombre ? "nombre" : (!aceptadoTerminos() ? "terminos" : (!cfg.paleta || !cfg.modo ? "personalizar" : "tour"))) : "nombre", indice = 0;
+  let etapa = (MODO_DEMO || repetir) ? "nombre" : cuentaConDatos ? (faltaNombre ? "nombre" : (!aceptadoTerminos() ? "terminos" : (!cfg.paleta || !cfg.modo ? "personalizar" : "tour"))) : "nombre", indice = 0;
   let modoPersonalizacion = MODO_DEMO ? (cfg.modo || "dark") : obtenerModoTemaLocal();
   let calidadPersonalizacion = obtenerModoDisenoLocal();
   // Fuente única de la paleta: la elegida o, si no hay, la que la app tiene aplicada.
@@ -1747,9 +1748,10 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
     if(overlay.querySelector(".onboarding-pregunta-plan"))return;
     const pregunta=document.createElement("div");pregunta.className="onboarding-pregunta-plan";
     const tarjeta=document.createElement("section");tarjeta.setAttribute("role","dialog");tarjeta.setAttribute("aria-modal","true");
-    tarjeta.append(texto("h2","","¿Salir de la guía?"),texto("p","","Si sales ahora, la próxima vez que abras la app retomarás justo donde te quedaste."));
-    const botones=document.createElement("div");botones.className="onboarding-pregunta-botones";
-    botones.append(boton("Seguir con la guía","btn-primary",()=>pregunta.remove()),boton("Salir por ahora","btn-secondary",pausar),boton("No volver a mostrar","btn-secondary",()=>fin(false)));
+    tarjeta.append(texto("h2","","¿Salir de la guía?"),texto("p","","«Salir por ahora» te deja retomar justo donde te quedaste. «Terminar guía» la cierra por completo: no vuelve a salir al recargar y, si la repites desde Ajustes, empieza desde el inicio. «No volver a mostrar» además desactiva las guías automáticas de cada sección."));
+    const botones=document.createElement("div");botones.className="onboarding-pregunta-botones onb-salir-botones";
+    const noMostrar=()=>{cfg.tutoriales_secciones_vistas=cfg.tutoriales_secciones_vistas||{};SECCIONES_TUTORIAL.forEach(({id})=>{cfg.tutoriales_secciones_vistas[id]=true;});fin(false);};
+    botones.append(boton("Seguir con la guía","btn-primary",()=>pregunta.remove()),boton("Salir por ahora","btn-secondary",pausar),boton("Terminar guía","btn-secondary",()=>fin(false)),boton("No volver a mostrar","btn-secondary",noMostrar));
     tarjeta.append(botones);pregunta.append(tarjeta);overlay.append(pregunta);
   };
   const instalarYa=()=>Boolean(navigator.standalone)||matchMedia("(display-mode: standalone)").matches;
@@ -1767,7 +1769,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
     iframeListo=false;preview.style.transition="none";preview.style.opacity="0";preview.dataset.seccion=seccion;preview.src=u.href;
   };
   const pintar=()=>{
-    if(!MODO_DEMO&&!repetir)guardarProgreso({etapa:etapa==="wapper-config"?"tour":etapa,indice});
+    if(!MODO_DEMO)guardarProgreso({etapa:etapa==="wapper-config"?"tour":etapa,indice});
     ctrlTour?.abort();ctrlTour=null;timersChat.forEach(clearTimeout);timersChat=[];
     contenido.replaceChildren();acciones.replaceChildren();panel.querySelector(".onboarding-copy").scrollTop=0;
     const esTour=etapa==="tour";panel.classList.toggle("onboarding-con-tour",esTour||etapa==="personalizar");panel.dataset.etapa=etapa;panel.querySelectorAll(".onb-bienvenida-avatar").forEach((e)=>e.remove());
@@ -2029,7 +2031,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
     acciones.append(boton("Atrás","btn-secondary",()=>{etapa="ajustes2";pintar();}),boton("Lo haré después","btn-secondary",()=>fin(false)));colocarPrimario(boton(tienePlanArmado?"Continuar":"Agregar plan y ver la guía","btn-primary",()=>tienePlanArmado?preguntarPorOtroPlan():fin(true)));
   };
   const siguiente=()=>{indice++;if(indice>=secciones.length)etapa="ajustes1";pintar();};
-  panel.querySelector(".onboarding-cerrar").addEventListener("click",()=>{if(repetir||MODO_DEMO)fin(false);else preguntarSalir();});
+  panel.querySelector(".onboarding-cerrar").addEventListener("click",()=>{if(MODO_DEMO)fin(false);else preguntarSalir();});
   // Retoma donde se quedó (solo en el primer recorrido, en este dispositivo).
   if(!MODO_DEMO&&!repetir){
     const g=cfg.onboarding_progreso||leerProgresoOnb();
