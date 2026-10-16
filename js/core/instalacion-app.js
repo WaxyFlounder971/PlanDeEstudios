@@ -22,9 +22,9 @@ window.addEventListener("appinstalled", () => {
 async function instalarAppAcademica() {
   if (eventoInstalacionPendiente) {
     eventoInstalacionPendiente.prompt();
-    await eventoInstalacionPendiente.userChoice;
+    const eleccion = await eventoInstalacionPendiente.userChoice;
     eventoInstalacionPendiente = null;
-    return true;
+    return eleccion?.outcome === "accepted";   // antes devolvía true aunque la persona cancelara el aviso
   }
   const android = /android/i.test(navigator.userAgent);
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
