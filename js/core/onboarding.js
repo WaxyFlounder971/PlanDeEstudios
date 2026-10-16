@@ -19,11 +19,72 @@ const SECCIONES_TUTORIAL = [
   { id:"finanzas", nombre:"Finanzas", puntos:["Registra ingresos y gastos desde el inicio.","Clasifica movimientos por categoría.","Asociarlos a un semestre es opcional."] },
   { id:"plan-estudios", nombre:"Plan de estudios", puntos:["Añade una o varias carreras.","Pega o importa la malla completa.","El plan alimenta la matrícula de Semestres."] },
   { id:"asistente", nombre:"Wapper", puntos:["Convierte mensajes en tareas, exámenes o eventos de Agenda.","Consulta fechas y pendientes con lenguaje natural.","Actívalo con tu clave personal de Gemini desde Ajustes."] },
-  { id:"configuracion", nombre:"Ajustes", puntos:["Cambia idioma, apariencia, paleta y tamaño de texto.","Aquí ordenas y ocultas las secciones de la navegación.","Con este botón vuelves a ver la bienvenida y el mini tutorial cuando quieras."] },
+  { id:"configuracion", nombre:"Ajustes", puntos:["Cambia idioma, apariencia, paleta y tamaño de texto.","Aquí ordenas y ocultas las secciones de la navegación.","Con este botón vuelves a ver la bienvenida y el mini tutorial cuando quieras.","Toca dos veces el título de cualquier sección para ver de nuevo la guía solo de esa sección."] },
 ];
 
 const TEXTO_FLUJO = "El orden recomendado es: 1) agrega uno o más planes; 2) crea un semestre y matricula materias del plan; 3) con esas materias arma Horario y vincula actividades en Agenda; 4) inicia sesiones desde materias para tener estadísticas ordenadas por periodo. Tiempo también admite bloques personalizados. Wapper necesita Agenda y una clave de Gemini para automatizar tareas. Comunidad y Finanzas funcionan por separado; en Finanzas, el semestre es una clasificación opcional.";
 let cerrarGuiaPlanActiva = null;
+/* ── Retomar lo que se quedó a medias ──────────────────────────────────────
+   · El avance del onboarding se guarda en este dispositivo en cada pantalla y se retoma donde quedó.
+   · La guía del plan/semestres que arranca al terminar el onboarding deja una marca (guia_plan_pendiente) hasta que
+     la persona la termina o la salta; si la app se cierra a medias, se reanuda sola la próxima vez. */
+const CLAVE_PROGRESO_ONB = "onb_progreso_v1";
+function leerProgresoOnb() { try { return JSON.parse(localStorage.getItem(CLAVE_PROGRESO_ONB) || "null"); } catch (_) { return null; } }
+function guardarProgresoOnb(o) { try { if (o) localStorage.setItem(CLAVE_PROGRESO_ONB, JSON.stringify(o)); else localStorage.removeItem(CLAVE_PROGRESO_ONB); } catch (_) {} }
+
+/* ── Términos y condiciones ────────────────────────────────────────────────
+   El texto vive en archivos .md por idioma: TermsOfUse/TermsES.md, TermsEN.md, TermsIT.md, TermsFR.md.
+   Al aceptar se guarda en la cuenta: configuracion.terminos_aceptados = { version, fecha, idioma }.
+   Si algún día cambian los términos, sube VERSION_TERMINOS y se volverán a pedir. */
+const VERSION_TERMINOS = "1";
+const ARCHIVOS_TERMINOS = { es: "TermsES", en: "TermsEN", it: "TermsIT", fr: "TermsFR" };
+const TEXTOS_TERMINOS = {
+  es: { titulo: "Términos y condiciones", lema: "Antes de seguir, lee cómo usamos tus datos y acepta los términos.", cargando: "Cargando…", error: "No se pudo cargar el texto. Revisa tu conexión e inténtalo de nuevo.", reintentar: "Reintentar", acepto: "He leído y acepto los términos y condiciones y el tratamiento de mis datos.", requerido: "Debes aceptar los términos para continuar.", atras: "Atrás", continuar: "Aceptar y continuar" },
+  en: { titulo: "Terms and conditions", lema: "Before you continue, read how we use your data and accept the terms.", cargando: "Loading…", error: "The text could not be loaded. Check your connection and try again.", reintentar: "Try again", acepto: "I have read and accept the terms and conditions and the processing of my data.", requerido: "You must accept the terms to continue.", atras: "Back", continuar: "Accept and continue" },
+  it: { titulo: "Termini e condizioni", lema: "Prima di continuare, leggi come usiamo i tuoi dati e accetta i termini.", cargando: "Caricamento…", error: "Impossibile caricare il testo. Controlla la connessione e riprova.", reintentar: "Riprova", acepto: "Ho letto e accetto i termini e le condizioni e il trattamento dei miei dati.", requerido: "Devi accettare i termini per continuare.", atras: "Indietro", continuar: "Accetta e continua" },
+  fr: { titulo: "Conditions d'utilisation", lema: "Avant de continuer, lis comment nous utilisons tes données et accepte les conditions.", cargando: "Chargement…", error: "Impossible de charger le texte. Vérifie ta connexion et réessaie.", reintentar: "Réessayer", acepto: "J'ai lu et j'accepte les conditions d'utilisation et le traitement de mes données.", requerido: "Tu dois accepter les conditions pour continuer.", atras: "Retour", continuar: "Accepter et continuer" }
+};
+const _cacheTerminos = {};
+function codigoIdiomaTerminos() { const c = idiomaUI().slice(0, 2); return ARCHIVOS_TERMINOS[c] ? c : "es"; }
+function cargarTerminos(cod) {
+  if (!_cacheTerminos[cod]) {
+    _cacheTerminos[cod] = fetch(`TermsOfUse/${ARCHIVOS_TERMINOS[cod]}.md`, { cache: "no-cache" })
+      .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.text(); })
+      .catch((e) => { delete _cacheTerminos[cod]; throw e; });
+  }
+  return _cacheTerminos[cod];
+}
+// Markdown mínimo y seguro (todo con textContent, nada de innerHTML): # títulos, listas con -, **negrita**, --- separador.
+function mdEnLinea(el, t) {
+  t.split(/(\*\*[^*]+\*\*)/).forEach((p) => {
+    if (/^\*\*[^*]+\*\*$/.test(p)) { const b = document.createElement("strong"); b.textContent = p.slice(2, -2); el.append(b); }
+    else if (p) el.append(document.createTextNode(p));
+  });
+}
+function renderizarMarkdownSimple(md) {
+  const frag = document.createDocumentFragment(); let lista = null, parr = [];
+  const cerrar = () => { if (parr.length) { const p = document.createElement("p"); mdEnLinea(p, parr.join(" ")); frag.append(p); parr = []; } };
+  for (const linea of String(md).replace(/\r/g, "").split("\n")) {
+    const l = linea.trim(); let m;
+    if (!l) { cerrar(); lista = null; continue; }
+    if ((m = l.match(/^(#{1,4})\s+(.*)$/))) { cerrar(); lista = null; const h = document.createElement("h" + Math.min(m[1].length + 1, 5)); mdEnLinea(h, m[2]); frag.append(h); continue; }
+    if ((m = l.match(/^[-*]\s+(.*)$/))) { cerrar(); if (!lista) { lista = document.createElement("ul"); frag.append(lista); } const li = document.createElement("li"); mdEnLinea(li, m[1]); lista.append(li); continue; }
+    if (/^---+$/.test(l)) { cerrar(); lista = null; frag.append(document.createElement("hr")); continue; }
+    lista = null; parr.push(l);
+  }
+  cerrar(); return frag;
+}
+let reanudandoGuia = false;
+function reanudarGuiaPendiente(navegar) {
+  const c = estado.datos?.configuracion, pend = c?.guia_plan_pendiente;
+  if (!pend || reanudandoGuia || PREVIEW_DEMO || MODO_DEMO || c.onboarding_v1_completado === false) return false;
+  if (document.querySelector(".onboarding-overlay,.tutorial-seccion-overlay,.guia-seccion-flotante,.guia-plan-flotante")) return false;
+  reanudandoGuia = true; setTimeout(() => { reanudandoGuia = false; }, 2500);   // evita bucles: navegar() vuelve a llamar a esta función
+  const aSemestres = pend === "semestres";
+  navegar?.(aSemestres ? "semestres" : "plan-estudios");
+  setTimeout(() => iniciarGuiaPlan({ navegar, posteriorImportacion: aSemestres, yaEnSemestres: aSemestres }), 450);
+  return true;
+}
 // El selector de logo queda DESACTIVADO en el onboarding (se elige desde Ajustes > Personalizar).
 // El código del selector se conserva: poner en true para volver a mostrarlo.
 const PERMITIR_LOGO_ONBOARDING = false;
@@ -264,6 +325,7 @@ function inyectarEstilosOnboarding() {
    Claro = #fbfbfe · Oscuro = #080808 · Color = el fondo liso de la paleta (--onb-izq, ver colorLadoIzquierdo). No cambia con Fancy. */
 .onboarding-overlay .onboarding-copy,.onboarding-overlay .onboarding-top,.onboarding-overlay .onboarding-acciones{background:var(--onb-izq,#080808)!important;background-image:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none!important}
 .onboarding-overlay .onboarding-copy,.onboarding-overlay .onboarding-copy *{text-shadow:none!important}
+.onb-salir-botones{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.onb-salir-botones .btn{width:100%;min-width:0;white-space:normal;line-height:1.2;padding-left:10px;padding-right:10px}
 .onboarding-pregunta-botones{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;margin-top:14px;padding:0;background:none!important;box-shadow:none!important;border:0}
 .onb-bienvenida-avatar{position:relative;isolation:isolate;display:grid;place-items:center;width:138px;height:138px;margin:6px auto 26px;border-radius:50%;font-size:3rem;font-weight:800;color:#fff;animation:onbAvEntra .8s cubic-bezier(.2,.9,.3,1.15) both,onbAvFlota 5.5s ease-in-out .9s infinite}
 .onb-bienvenida-avatar::before{content:"";position:absolute;inset:-26px;z-index:-2;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--accent-1,#8b5cf6) 62%,transparent),color-mix(in srgb,var(--accent-2,#38bdf8) 22%,transparent) 62%,transparent);filter:blur(14px);animation:onbAvPulso 3.4s ease-in-out infinite}
@@ -333,6 +395,41 @@ function inyectarEstilosOnboarding() {
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"])>.onboarding-layout{flex:1 1 auto;min-height:0!important}
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"]){background:var(--onb-izq,#080808)!important;background-image:none!important}
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"])>.onboarding-acciones{position:static!important;inset:auto!important;transform:none!important;flex:none;width:100%!important;max-width:none!important;min-width:0!important;align-self:stretch;justify-self:stretch;grid-column:1/-1;box-sizing:border-box;margin:0;padding:12px 20px calc(12px + env(safe-area-inset-bottom,0px));z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+/* Términos y condiciones: el texto ocupa todo el espacio disponible; título y lema compactos. */
+.onboarding-panel[data-etapa="terminos"] .onboarding-copy{text-align:center}
+.onboarding-panel[data-etapa="terminos"] .onboarding-copy h1{font-size:clamp(1.3rem,3.4vh,1.8rem)!important;margin:0 0 4px!important;animation:none}
+.onb-terminos-lema{margin:0 0 6px;font-size:.92rem;opacity:.8}
+.onb-terminos-caja{text-align:left;height:clamp(280px,56dvh,720px);overflow-y:auto;overscroll-behavior:contain;padding:16px 18px;margin:.6rem 0;border-radius:16px;border:1px solid rgba(128,128,128,.35);background:rgba(128,128,128,.08);font-size:.95rem;line-height:1.55}
+.onb-terminos-caja h2,.onb-terminos-caja h3,.onb-terminos-caja h4,.onb-terminos-caja h5{font-size:1.05rem;margin:1.2em 0 .4em}
+.onb-terminos-caja h2:first-child{margin-top:0}
+.onb-terminos-caja p{margin:.55em 0}.onb-terminos-caja ul{margin:.4em 0;padding-left:1.25em}.onb-terminos-caja hr{border:0;border-top:1px solid rgba(128,128,128,.35);margin:1em 0}
+.onb-luz{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:12px 16px;border-radius:16px;border:1px solid rgba(128,128,128,.4);background:rgba(128,128,128,.08);color:inherit;font:inherit;font-size:.95rem;line-height:1.35;cursor:pointer;transition:border-color .25s,background .25s,box-shadow .25s}
+.onb-luz:disabled{opacity:.5;cursor:not-allowed}
+.onb-luz:focus-visible{outline:2px solid var(--accent-1,#8b5cf6);outline-offset:2px}
+.onb-luz-led{flex:none;width:22px;height:22px;border-radius:50%;background:rgba(128,128,128,.35);box-shadow:inset 0 2px 4px rgba(0,0,0,.45);transition:background .25s,box-shadow .3s}
+.onb-luz.on{border-color:var(--accent-1,#8b5cf6);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 14%,transparent)}
+.onb-luz.on .onb-luz-led{background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.85),transparent 45%),var(--gradient-accent,var(--accent-1,#8b5cf6));box-shadow:0 0 6px 2px color-mix(in srgb,var(--accent-1,#8b5cf6) 90%,transparent),0 0 18px 6px color-mix(in srgb,var(--accent-1,#8b5cf6) 55%,transparent)}
+@media (prefers-reduced-motion:reduce){.onb-luz,.onb-luz-led{transition:none}}
+@media (min-width:761px){
+.onboarding-panel[data-etapa="terminos"]>.onboarding-layout{display:flex!important;flex-direction:row!important;justify-content:center;align-items:stretch;grid-template-columns:none!important;padding-top:8px;padding-bottom:8px}
+.onboarding-panel[data-etapa="terminos"] .onboarding-copy{flex:0 1 860px!important;width:100%;max-width:860px!important;min-width:0;height:100%;max-height:100%;margin:0 auto;overflow:hidden;display:flex!important;flex-direction:column}
+.onboarding-panel[data-etapa="terminos"] .onboarding-copy>.onboarding-contenido{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+.onboarding-panel[data-etapa="terminos"] .onb-terminos-caja{flex:1 1 auto;height:auto;min-height:0}
+.onboarding-panel[data-etapa="terminos"]>.onboarding-acciones{justify-content:center}
+.onboarding-panel[data-etapa="terminos"]>.onboarding-acciones .btn{flex:0 1 320px}
+}
+/* Teléfono: encabezado, título y botones quedan fijos y sólidos; solo el cuadro de texto se desplaza. La luz de aceptar queda anclada sobre los botones. */
+@media (max-width:760px){
+.onboarding-panel[data-etapa="terminos"]{display:flex!important;flex-direction:column;height:100vh!important;height:100dvh!important;min-height:0!important;max-height:100dvh!important;overflow:hidden!important;padding:0!important;background:var(--onb-izq,#080808)!important}
+.onboarding-panel[data-etapa="terminos"]>.onboarding-top{position:static!important;flex:none;width:100%!important;max-width:none!important;z-index:2;padding:calc(12px + env(safe-area-inset-top)) 18px 4px!important}
+.onboarding-panel[data-etapa="terminos"]>.onboarding-layout{flex:1 1 auto;min-height:0!important;width:100%!important;max-width:none!important;height:auto!important;display:flex!important;flex-direction:column;overflow:hidden!important;grid-template-rows:none!important;background:var(--onb-izq,#080808)!important}
+.onboarding-panel[data-etapa="terminos"] .onboarding-copy{flex:1 1 auto;min-height:0;height:auto!important;max-height:none!important;display:flex!important;flex-direction:column;overflow:hidden!important;padding:2px 18px 8px!important}
+.onboarding-panel[data-etapa="terminos"] .onboarding-copy>.onboarding-contenido{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+.onboarding-panel[data-etapa="terminos"] .onb-terminos-caja{flex:1 1 auto;height:auto;min-height:0;margin:.4rem 0 .6rem}
+.onboarding-panel[data-etapa="terminos"] .onb-luz,.onboarding-panel[data-etapa="terminos"] .onboarding-nota-error{flex:none}
+.onboarding-panel[data-etapa="terminos"]>.onboarding-acciones{position:static!important;flex:none;width:100%!important;max-width:none!important;display:grid!important;grid-template-columns:auto minmax(0,1fr);gap:6px 10px;padding:8px 16px calc(12px + env(safe-area-inset-bottom))!important}
+.onboarding-panel[data-etapa="terminos"]>.onb-puntos{display:none!important}
+}
 /* Bienvenida en PC: todo centrado (en teléfono se queda como está). */
 @media (min-width:761px){
 .onboarding-panel[data-etapa="nombre"]>.onboarding-layout{display:flex!important;flex-direction:row!important;justify-content:center;align-items:center;grid-template-columns:none!important}
@@ -373,6 +470,12 @@ function inyectarEstilosOnboarding() {
 .onb-flujo-aparte>span{flex:1 1 280px;font-size:.95rem;line-height:1.4}
 .onb-flujo-chips{display:flex;gap:8px;flex-wrap:wrap}
 .onb-flujo-chip{display:flex;align-items:center;gap:7px;padding:8px 14px;border-radius:999px;font-size:.9rem;font-weight:700;border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 50%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 14%,transparent)}
+.onb-ayuda-tip{display:flex;align-items:flex-start;gap:14px;margin-top:22px;padding:16px 18px;border-radius:18px;text-align:left;border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 55%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 12%,transparent);animation:onbSube .65s 1.2s cubic-bezier(.22,.8,.3,1) both}
+.onb-ayuda-tip-ico{flex:none;font-size:1.8rem;line-height:1;animation:onbToque 1.8s ease-in-out infinite}
+.onb-ayuda-tip b{display:block;font-size:1.02rem;margin-bottom:4px}
+.onb-ayuda-tip span:not(.onb-ayuda-tip-ico){font-size:.92rem;line-height:1.45;opacity:.85}
+@keyframes onbToque{0%,60%,100%{transform:translateY(0)}15%,45%{transform:translateY(-6px)}30%{transform:translateY(0)}}
+@media (prefers-reduced-motion:reduce){.onb-ayuda-tip,.onb-ayuda-tip-ico{animation:none!important}}
 @keyframes onbFlujoLinea{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @media (prefers-reduced-motion:reduce){.onb-flujo-paso,.onb-flujo-paso::after,.onb-flujo-aparte{animation:none!important}}
 /* Nunca se ve una barra de scroll en el onboarding (el scroll sigue funcionando, invisible). */
@@ -1230,6 +1333,14 @@ function construirInstalacion({ logoSrc }) {
     detener: parar,
   };
 }
+function construirTipAyuda() {
+  const T = traducirTextoInterfaz;
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  const raiz = el("div", "onb-ayuda-tip"); raiz.setAttribute("role", "note");
+  const cuerpo = document.createElement("div");
+  cuerpo.append(el("b", "", T("¿Necesitas ayuda más adelante?")), el("span", "", T("Toca dos veces seguidas el título de cualquier sección (Agenda, Horario, Finanzas…) y se abre su guía paso a paso. No es un truco escondido: está para cuando se te olvide cómo funciona algo.")));
+  raiz.append(el("span", "onb-ayuda-tip-ico", "👆"), cuerpo); return raiz;
+}
 // Pantalla «Todo conectado» (PC): tres pasos encadenados + una franja aparte para lo que funciona por separado.
 function construirFlujo() {
   const T = traducirTextoInterfaz;
@@ -1245,7 +1356,7 @@ function construirFlujo() {
   const chips = el("div", "onb-flujo-chips");
   [["✨", "Wapper"], ["👥", "Comunidad"], ["💰", "Finanzas"]].forEach(([i, t]) => chips.append(el("span", "onb-flujo-chip", `${i} ${T(t)}`)));
   aparte.append(el("span", "", T("Wapper trabaja con tu Agenda; Comunidad y Finanzas funcionan por separado.")), chips);
-  raiz.append(fila, aparte); return raiz;
+  raiz.append(fila, aparte, construirTipAyuda()); return raiz;
 }
 function fotoPerfilGoogle() {
   const src = document.getElementById("perfil-foto")?.getAttribute("src") || "";
@@ -1347,7 +1458,8 @@ function construirBloqueEnlaces({ cfg, borrador }) {
   caja.append(lista, nombre, url, filaTipo, emoji, archivo, error, agregar, notaAjuste(`Hasta ${limite} accesos directos. Se guardan al terminar.`));
   return caja;
 }
-function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
+function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {}) {
+  if (reanudarGuiaPendiente(navegar)) return true;
   // Nunca dentro del iframe de vista previa (evita onboarding anidado) ni duplicado.
   if (PREVIEW_DEMO || document.querySelector(".onboarding-overlay") || !estado.datos?.configuracion || (estado.datos.configuracion.onboarding_v1_completado !== false && !(MODO_DEMO && !PREVIEW_DEMO))) return false;
   const cfg = estado.datos.configuracion;
@@ -1360,7 +1472,18 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
   );
   const tienePlanArmado = Boolean(estado.datos.planes_estudio?.some((plan) => plan.materias?.length || plan.optativas_disponibles?.length));
   const faltaNombre = !(estado.datos.perfil?.nombre_preferido || estado.datos.perfil?.nombre || "").trim();
-  let etapa = MODO_DEMO ? "nombre" : cuentaConDatos ? (faltaNombre ? "nombre" : (!cfg.paleta || !cfg.modo ? "personalizar" : "tour")) : "nombre", indice = 0;
+  // La × solo aparece si esta persona ya vio el ingreso al menos una vez (o ya tiene datos / repite el tutorial desde Ajustes).
+  // La primera vez no hay × y se queda en la guía; la marca viaja con la cuenta (configuración sincronizada).
+  const puedeCerrar = repetir || cuentaConDatos || Boolean(cfg.onboarding_visto);
+  if (!MODO_DEMO && !cfg.onboarding_visto) { cfg.onboarding_visto = true; guardar(); }
+  // El avance también viaja con la cuenta: se retoma en cualquier dispositivo. Solo se guarda cuando cambia de pantalla.
+  const guardarProgreso = (o) => {
+    const nuevo = o || null;
+    if (JSON.stringify(cfg.onboarding_progreso || null) === JSON.stringify(nuevo)) return;
+    cfg.onboarding_progreso = nuevo; guardarProgresoOnb(nuevo); guardar();
+  };
+  const aceptadoTerminos = () => MODO_DEMO || cfg.terminos_aceptados?.version === VERSION_TERMINOS;
+  let etapa = (MODO_DEMO || repetir) ? "nombre" : cuentaConDatos ? (faltaNombre ? "nombre" : (!aceptadoTerminos() ? "terminos" : (!cfg.paleta || !cfg.modo ? "personalizar" : "tour"))) : "nombre", indice = 0;
   let modoPersonalizacion = MODO_DEMO ? (cfg.modo || "dark") : obtenerModoTemaLocal();
   let calidadPersonalizacion = obtenerModoDisenoLocal();
   // Fuente única de la paleta: la elegida o, si no hay, la que la app tiene aplicada.
@@ -1604,7 +1727,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
     guardar();window.aplicarVisibilidadNavegacion?.();
     try{if(borrador.resumen&&sincronizacionCalendarActiva())sincronizarResumenDiario();}catch(_){}
   };
-  const fin=(irAlPlan=false,irASemestres=false)=>{aplicarAjustesFinales();ctrlTour?.abort();fondo.detener();timersChat.forEach(clearTimeout);timersChat=[];cancelarPrecarga();consultaMovil.removeEventListener?.("change",aplicarVistaMovil);removeEventListener("resize",alRedimensionar);clearTimeout(temporizadorReveal);clearTimeout(vigilanteReveal);timersPreview.forEach(clearTimeout);timersPreview=[];clearTimeout(temporizadorTour);cfg.onboarding_v1_completado=true;cfg.tutoriales_secciones_vistas=cfg.tutoriales_secciones_vistas||{};if(irAlPlan)cfg.tutoriales_secciones_vistas["plan-estudios"]=true;if(irASemestres)cfg.tutoriales_secciones_vistas.semestres=true;guardar();overlay.remove();if(irAlPlan||irASemestres){const destino=irASemestres?"semestres":"plan-estudios";navegar?.(destino);setTimeout(()=>iniciarGuiaPlan({navegar,posteriorImportacion:irASemestres,yaEnSemestres:irASemestres}),450);}else{if((!cuentaConDatos||!tienePlanArmado)&&!borrador.ocultas.has("plan-estudios")){navegar?.("plan-estudios");setTimeout(()=>navegar?.("plan-estudios"),450);}toast?.(traducirTextoInterfaz("¡Listo! Puedes volver a ver la guía desde Ajustes generales."));}};
+  const fin=(irAlPlan=false,irASemestres=false)=>{aplicarAjustesFinales();ctrlTour?.abort();fondo.detener();timersChat.forEach(clearTimeout);timersChat=[];cancelarPrecarga();consultaMovil.removeEventListener?.("change",aplicarVistaMovil);removeEventListener("resize",alRedimensionar);clearTimeout(temporizadorReveal);clearTimeout(vigilanteReveal);timersPreview.forEach(clearTimeout);timersPreview=[];clearTimeout(temporizadorTour);cfg.onboarding_v1_completado=true;cfg.tutoriales_secciones_vistas=cfg.tutoriales_secciones_vistas||{};if(irAlPlan)cfg.tutoriales_secciones_vistas["plan-estudios"]=true;if(irASemestres)cfg.tutoriales_secciones_vistas.semestres=true;if(irAlPlan||irASemestres)cfg.guia_plan_pendiente=irASemestres?"semestres":"plan";guardarProgresoOnb(null);cfg.onboarding_progreso=null;guardar();overlay.remove();if(irAlPlan||irASemestres){const destino=irASemestres?"semestres":"plan-estudios";navegar?.(destino);setTimeout(()=>iniciarGuiaPlan({navegar,posteriorImportacion:irASemestres,yaEnSemestres:irASemestres}),450);}else{if((!cuentaConDatos||!tienePlanArmado)&&!borrador.ocultas.has("plan-estudios")){navegar?.("plan-estudios");setTimeout(()=>navegar?.("plan-estudios"),450);}toast?.(traducirTextoInterfaz("¡Listo! Puedes volver a ver la guía desde Ajustes generales."));}};
   if (MODO_DEMO && !PREVIEW_DEMO) {
     const saltar=boton("Saltar inicio","btn-secondary",()=>{cfg.tutoriales_secciones_vistas=Object.fromEntries(SECCIONES_TUTORIAL.map(s=>[s.id,true]));fin(false);});
     saltar.className += " onboarding-saltar-demo";
@@ -1617,6 +1740,18 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
     tarjeta.append(texto("h2","","Ya tienes un plan guardado"),texto("p","","¿Quieres guardar otro plan de estudios o continuar con el que ya tienes?"));
     const botones=document.createElement("div");botones.className="onboarding-pregunta-botones";
     botones.append(boton("Guardar otro plan","btn-secondary",()=>fin(true)),boton("Continuar con este plan","btn-primary",()=>fin(false,true)));
+    tarjeta.append(botones);pregunta.append(tarjeta);overlay.append(pregunta);
+  };
+  // Cerrar con la × ya no pierde la guía: se pregunta y, por defecto, se retoma la próxima vez.
+  const pausar=()=>{aplicarAjustesFinales();ctrlTour?.abort();fondo.detener();timersChat.forEach(clearTimeout);timersChat=[];cancelarPrecarga();consultaMovil.removeEventListener?.("change",aplicarVistaMovil);removeEventListener("resize",alRedimensionar);clearTimeout(temporizadorReveal);clearTimeout(vigilanteReveal);timersPreview.forEach(clearTimeout);timersPreview=[];clearTimeout(temporizadorTour);overlay.remove();toast?.(traducirTextoInterfaz("Retomarás la guía la próxima vez que abras la app."));};
+  const preguntarSalir=()=>{
+    if(overlay.querySelector(".onboarding-pregunta-plan"))return;
+    const pregunta=document.createElement("div");pregunta.className="onboarding-pregunta-plan";
+    const tarjeta=document.createElement("section");tarjeta.setAttribute("role","dialog");tarjeta.setAttribute("aria-modal","true");
+    tarjeta.append(texto("h2","","¿Salir de la guía?"),texto("p","","«Salir por ahora» te deja retomar justo donde te quedaste. «Terminar guía» la cierra por completo: no vuelve a salir al recargar y, si la repites desde Ajustes, empieza desde el inicio. «No volver a mostrar» además desactiva las guías automáticas de cada sección."));
+    const botones=document.createElement("div");botones.className="onboarding-pregunta-botones onb-salir-botones";
+    const noMostrar=()=>{cfg.tutoriales_secciones_vistas=cfg.tutoriales_secciones_vistas||{};SECCIONES_TUTORIAL.forEach(({id})=>{cfg.tutoriales_secciones_vistas[id]=true;});fin(false);};
+    botones.append(boton("Seguir con la guía","btn-primary",()=>pregunta.remove()),boton("Salir por ahora","btn-secondary",pausar),boton("Terminar guía","btn-secondary",()=>fin(false)),boton("No volver a mostrar","btn-secondary",noMostrar));
     tarjeta.append(botones);pregunta.append(tarjeta);overlay.append(pregunta);
   };
   const instalarYa=()=>Boolean(navigator.standalone)||matchMedia("(display-mode: standalone)").matches;
@@ -1634,15 +1769,16 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
     iframeListo=false;preview.style.transition="none";preview.style.opacity="0";preview.dataset.seccion=seccion;preview.src=u.href;
   };
   const pintar=()=>{
+    if(!MODO_DEMO)guardarProgreso({etapa:etapa==="wapper-config"?"tour":etapa,indice});
     ctrlTour?.abort();ctrlTour=null;timersChat.forEach(clearTimeout);timersChat=[];
     contenido.replaceChildren();acciones.replaceChildren();panel.querySelector(".onboarding-copy").scrollTop=0;
     const esTour=etapa==="tour";panel.classList.toggle("onboarding-con-tour",esTour||etapa==="personalizar");panel.dataset.etapa=etapa;panel.querySelectorAll(".onb-bienvenida-avatar").forEach((e)=>e.remove());
     // En teléfono, cada pantalla nueva arranca en «información»; la vista previa se desliza.
     const claveVista=`${etapa}:${etapa==="tour"?indice:""}`;if(claveVista!==claveVistaMovil){claveVistaMovil=claveVista;vistaMovil="info";}
-    panel.querySelector(".onboarding-cerrar").classList.toggle("oculto",!cuentaConDatos&&(etapa==="nombre"||etapa==="personalizar"));
-    const nombres={nombre:"Te damos la bienvenida",personalizar:"Personaliza tu app",instalar:"Llévala contigo",tour:`Conoce ${secciones[indice]?.nombre||"App Académica"}`,"wapper-config":"Activa Wapper",ajustes1:"Últimos ajustes antes de iniciar",ajustes2:"Elige qué secciones usarás",flujo:"Todo conectado, paso a paso"};
+    panel.querySelector(".onboarding-cerrar").classList.toggle("oculto",!puedeCerrar);
+    const nombres={nombre:"Te damos la bienvenida",terminos:"Términos y condiciones",personalizar:"Personaliza tu app",instalar:"Llévala contigo",tour:`Conoce ${secciones[indice]?.nombre||"App Académica"}`,"wapper-config":"Activa Wapper",ajustes1:"Últimos ajustes antes de iniciar",ajustes2:"Elige qué secciones usarás",flujo:"Todo conectado, paso a paso"};
     titulo.textContent=etapa==="tour"?`${traducirTextoInterfaz("Conoce")} ${traducirTextoInterfaz(secciones[indice]?.nombre||"App Académica")}`:traducirTextoInterfaz(nombres[etapa]||"App Académica");
-    progreso.textContent=etapa==="tour"?traducirTextoInterfaz(`${indice+1} de ${secciones.length} secciones`):traducirTextoInterfaz({nombre:"Bienvenida",personalizar:"Personalización",instalar:"Instalación",ajustes1:"Últimos ajustes (1 de 2)",ajustes2:"Últimos ajustes (2 de 2)",flujo:"Cómo empezar"}[etapa]||"");
+    progreso.textContent=etapa==="tour"?traducirTextoInterfaz(`${indice+1} de ${secciones.length} secciones`):traducirTextoInterfaz({nombre:"Bienvenida",terminos:"Términos y condiciones",personalizar:"Personalización",instalar:"Instalación",ajustes1:"Últimos ajustes (1 de 2)",ajustes2:"Últimos ajustes (2 de 2)",flujo:"Cómo empezar"}[etapa]||"");
     preview.closest(".onboarding-preview-wrap").classList.toggle("oculto",!esTour&&etapa!=="personalizar");
     aplicarVistaMovil();
     puntosTour.replaceChildren(...secciones.map((_,i)=>{const d=document.createElement("i");if(i===indice)d.className="on";return d;}));
@@ -1662,12 +1798,46 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
         // En la demo el nombre es opcional; en una cuenta real se pide con un aviso visible.
         if(!v&&!MODO_DEMO){aviso.hidden=false;input.setAttribute("aria-invalid","true");input.focus();return;}
         if(v){estado.datos.perfil=estado.datos.perfil||{};estado.datos.perfil.nombre_preferido=v;guardar();window.renderizarPerfil?.();}
-        etapa=cuentaConDatos&&cfg.paleta&&cfg.modo?"tour":"personalizar";pintar();
+        etapa=MODO_DEMO?(cuentaConDatos&&cfg.paleta&&cfg.modo?"tour":"personalizar"):"terminos";pintar(); // los términos salen siempre después del nombre, estén o no aceptados
       };
       input.addEventListener("input",()=>{aviso.hidden=true;input.removeAttribute("aria-invalid");});
       input.addEventListener("keydown",(ev)=>{if(ev.key==="Enter"){ev.preventDefault();continuar();}});
       acciones.append(boton("Continuar","btn-primary",continuar));
       if(!esMovil())requestAnimationFrame(()=>input.focus({preventScroll:true})); // en teléfono no se abre el teclado solo: taparía el avatar
+      return;
+    }
+    if(etapa==="terminos"){
+      const cod=codigoIdiomaTerminos(), L=TEXTOS_TERMINOS[cod];
+      titulo.textContent=L.titulo;progreso.textContent=L.titulo;
+      const crear=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;};
+      const crearBtn=(txt,cls,fn)=>{const b=crear("button",`btn ${cls}`,txt);b.type="button";b.addEventListener("click",fn);return b;};
+      const caja=crear("div","onb-terminos-caja");caja.tabIndex=0;caja.setAttribute("role","region");caja.setAttribute("aria-label",L.titulo);
+      // «Luz» de aceptación: al tocarla se enciende (role=switch para lectores de pantalla y teclado).
+      const luz=crear("button","onb-luz");luz.type="button";luz.disabled=true;luz.setAttribute("role","switch");luz.setAttribute("aria-checked","false");
+      luz.append(crear("span","onb-luz-led"),crear("span","onb-luz-txt",L.acepto));
+      const encendida=()=>luz.getAttribute("aria-checked")==="true";
+      if(aceptadoTerminos()&&!MODO_DEMO){luz.setAttribute("aria-checked","true");luz.classList.add("on");} // ya los aceptó: llega encendida y solo continúa
+      const aviso=crear("p","onboarding-nota-error",L.requerido);aviso.hidden=true;aviso.setAttribute("role","alert");
+      let cargado=false;
+      const cargar=()=>{
+        cargado=false;luz.disabled=true;caja.replaceChildren(crear("p","",L.cargando));
+        cargarTerminos(cod).then((md)=>{
+          if(!caja.isConnected)return; // ya cambió de pantalla
+          caja.replaceChildren(renderizarMarkdownSimple(md));cargado=true;luz.disabled=false;
+        }).catch(()=>{
+          if(!caja.isConnected)return;
+          caja.replaceChildren(crear("p","",L.error),crearBtn(L.reintentar,"btn-secondary",cargar));
+        });
+      };
+      luz.addEventListener("click",()=>{luz.setAttribute("aria-checked",String(!encendida()));luz.classList.toggle("on",encendida());aviso.hidden=true;});
+      contenido.append(crear("p","onb-terminos-lema",L.lema),caja,luz,aviso);
+      const aceptar=()=>{
+        if(!cargado||!encendida()){aviso.hidden=false;return;}
+        if(!aceptadoTerminos()){cfg.terminos_aceptados={version:VERSION_TERMINOS,fecha:new Date().toISOString(),idioma:cod};guardar();}
+        etapa=cuentaConDatos&&cfg.paleta&&cfg.modo?"tour":"personalizar";indice=0;pintar();
+      };
+      acciones.append(crearBtn(L.atras,"btn-secondary",()=>{etapa="nombre";pintar();}),crearBtn(L.continuar,"btn-primary",aceptar));
+      cargar();
       return;
     }
     if(etapa==="personalizar"){
@@ -1689,7 +1859,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
       const toggleLogos=boton("Logos de la app  ⌄","btn-secondary",()=>{const abierto=toggleLogos.getAttribute("aria-expanded")==="true";toggleLogos.setAttribute("aria-expanded",String(!abierto));toggleLogos.textContent=traducirTextoInterfaz(`Logos de la app  ${abierto?"⌄":"⌃"}`);logos.hidden=abierto;});toggleLogos.setAttribute("aria-expanded","false");logos.hidden=true;
       const filaLogo=document.createElement("div");filaLogo.className="onboarding-logo-heading";filaLogo.append(toggleLogos,etiquetaArchivo);
       contenido.append(modos,calidades,notaFancy,colores);if(PERMITIR_LOGO_ONBOARDING)contenido.append(filaLogo,logos);prepararMaqueta();
-      acciones.append(boton("Atrás","btn-secondary",()=>{etapa="nombre";pintar();}),boton("Continuar","btn-primary",()=>{cfg.personalizacion_inicial_completada=true;guardar();etapa=etapaTrasPersonalizar();indice=0;pintar();}));return;
+      acciones.append(boton("Atrás","btn-secondary",()=>{etapa=MODO_DEMO?"nombre":"terminos";pintar();}),boton("Continuar","btn-primary",()=>{cfg.personalizacion_inicial_completada=true;guardar();etapa=etapaTrasPersonalizar();indice=0;pintar();}));return;
     }
     if(etapa==="instalar"){
       const logoSrc=cfg.logo_app_url||(cfg.logo_app==="birrete"?"imagenes/LogoAppBirrete.png":"imagenes/LogoAppFolder.png");
@@ -1857,11 +2027,19 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
       contenido.append(lista);
       acciones.append(boton("Atrás","btn-secondary",()=>{etapa="ajustes1";pintar();}),boton("Continuar","btn-primary",()=>{etapa="flujo";pintar();}));return;
     }
-    if(esMovil()){const pasos=document.createElement("ol");pasos.className="onboarding-dependencias";["Agrega tu plan de estudios.","Crea un semestre y matricula tus materias.","Usa esas materias en Horario, Agenda y Tiempo.","Wapper trabaja con tu Agenda; Comunidad y Finanzas funcionan por separado."].forEach(t=>pasos.append(texto("li","",t)));contenido.append(pasos);}else contenido.append(construirFlujo());
+    if(esMovil()){const pasos=document.createElement("ol");pasos.className="onboarding-dependencias";["Agrega tu plan de estudios.","Crea un semestre y matricula tus materias.","Usa esas materias en Horario, Agenda y Tiempo.","Wapper trabaja con tu Agenda; Comunidad y Finanzas funcionan por separado."].forEach(t=>pasos.append(texto("li","",t)));contenido.append(pasos,construirTipAyuda());}else contenido.append(construirFlujo());
     acciones.append(boton("Atrás","btn-secondary",()=>{etapa="ajustes2";pintar();}),boton("Lo haré después","btn-secondary",()=>fin(false)));colocarPrimario(boton(tienePlanArmado?"Continuar":"Agregar plan y ver la guía","btn-primary",()=>tienePlanArmado?preguntarPorOtroPlan():fin(true)));
   };
   const siguiente=()=>{indice++;if(indice>=secciones.length)etapa="ajustes1";pintar();};
-  panel.querySelector(".onboarding-cerrar").addEventListener("click",()=>fin(false));
+  panel.querySelector(".onboarding-cerrar").addEventListener("click",()=>{if(MODO_DEMO)fin(false);else preguntarSalir();});
+  // Retoma donde se quedó (solo en el primer recorrido, en este dispositivo).
+  if(!MODO_DEMO&&!repetir){
+    const g=cfg.onboarding_progreso||leerProgresoOnb();
+    if(g&&["terminos","personalizar","instalar","tour","ajustes1","ajustes2","flujo"].includes(g.etapa)){
+      etapa=g.etapa;if(!aceptadoTerminos())etapa="terminos"; // nadie se salta los términos al retomarindice=Math.max(0,Math.min(Math.max(0,secciones.length-1),Number(g.indice)||0));
+      if(etapa==="instalar"&&instalarYa())etapa="tour";
+    }
+  }
   pintar();return true;
 }
 
@@ -1900,6 +2078,7 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
   const resaltador = crearResaltador();
   let resaltado = null;
   const cerrar = ({ continuarSemestres = false } = {}) => {
+    { const c = estado.datos?.configuracion; if (c?.guia_plan_pendiente) { c.guia_plan_pendiente = null; guardar(); } }   // terminó o la saltó: ya no hay nada que reanudar
     resaltador.quitar(); pop.remove();
     if (botonBlanco && escuchaBlanco) botonBlanco.removeEventListener("click", escuchaBlanco, true);
     if (cerrarGuiaPlanActiva === cerrar) cerrarGuiaPlanActiva = null;
@@ -1964,11 +2143,11 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
     acciones.append(saltar); pop.append(acciones); pop.classList.remove("oculto"); evitarSolape(pop, resaltado);
   };
   pintar();
-  window.continuarTutorialDespuesDeImportarPlan = () => { if (!cerrarGuiaPlanActiva) return; marcarSemestresVisto(); cerrar(); navegar?.("semestres"); setTimeout(() => iniciarGuiaPlan({ navegar, posteriorImportacion: true, yaEnSemestres: true }), 350); };
+  window.continuarTutorialDespuesDeImportarPlan = () => { if (!cerrarGuiaPlanActiva) return; marcarSemestresVisto(); cerrar(); { const c = estado.datos?.configuracion; if (c) { c.guia_plan_pendiente = "semestres"; guardar(); } } navegar?.("semestres"); setTimeout(() => iniciarGuiaPlan({ navegar, posteriorImportacion: true, yaEnSemestres: true }), 350); };
 }
 
 function inicializarTutorialDesdeAjustes({ navegar, toast } = {}) {
-  const btn=document.getElementById("btn-repetir-tutorial");if(!btn||btn.dataset.inicializado)return;btn.dataset.inicializado="1";btn.addEventListener("click",()=>{if(!estado.datos?.configuracion)return;estado.datos.configuracion.onboarding_v1_completado=false;mostrarOnboardingNuevoUsuario({navegar,toast});});
+  const btn=document.getElementById("btn-repetir-tutorial");if(!btn||btn.dataset.inicializado)return;btn.dataset.inicializado="1";btn.addEventListener("click",()=>{if(!estado.datos?.configuracion)return;estado.datos.configuracion.onboarding_v1_completado=false;mostrarOnboardingNuevoUsuario({navegar,toast,repetir:true});});
 }
 
 function botonAgregarSemestre() { return [...document.querySelectorAll("#seccion-semestres button")].find((b) => /registrar semestre|crear semestre|agregar semestre|^\s*\+?\s*agregar\s*$/i.test(b.textContent.trim())); }
@@ -2018,6 +2197,7 @@ const SELECTORES_GUIA_SECCION = {
     () => document.getElementById("ajuste-tamano-texto"),
     () => seccionNavegacionAjustes(),
     () => document.getElementById("btn-repetir-tutorial"),
+    () => document.getElementById("btn-repetir-tutorial"),
   ],
 };
 
@@ -2060,6 +2240,7 @@ function iniciarGuiaSeccion(info) {
 }
 
 function mostrarTutorialPrimeraVez(seccion) {
+  if(reanudarGuiaPendiente(window.mostrarSeccion))return true;
   const cfg=estado.datos?.configuracion;
   const info=SECCIONES_TUTORIAL.find(s=>s.id===seccion);
   if(PREVIEW_DEMO||!cfg||cfg.onboarding_v1_completado===false||!info||cfg.tutoriales_secciones_vistas?.[seccion]||document.querySelector(".onboarding-overlay,.tutorial-seccion-overlay,.guia-seccion-flotante,.guia-plan-flotante"))return false;
@@ -2078,5 +2259,58 @@ if (MODO_DEMO) {
   const ocultarControlesDemo = () => { pendiente = 0; document.querySelectorAll("button").forEach((b) => { if (/simular\s+(victoria|derrota)|(agregar|borrar)\s+racha/i.test(b.textContent)) b.style.display = "none"; }); };
   new MutationObserver(() => { if (!pendiente) pendiente = requestAnimationFrame(ocultarControlesDemo); }).observe(document.documentElement, { childList: true, subtree: true });
   ocultarControlesDemo();
+}
+/* ── Ayuda: doble toque en el título de una sección = volver a abrir la guía SOLO de esa sección ──
+   Se instala sola al cargar el módulo. Detecta el doble toque por tiempo y distancia (con el dedo, «dblclick» no es fiable). */
+function seccionVisibleActual() {
+  return SECCIONES_TUTORIAL.find((s) => { const n = document.getElementById(`seccion-${s.id}`); return n && !n.classList.contains("oculto") && n.getClientRects().length > 0; }) || null;
+}
+function infoSeccionPorEncabezado(el) {
+  if (!(el instanceof Element)) return null;
+  // Los botones, enlaces y campos del encabezado conservan su función normal.
+  if (el.closest("button,a,input,select,textarea,label,[role='button'],.onboarding-overlay,.modal-overlay")) return null;
+  // Barra superior del teléfono (y título de la barra lateral en PC): abre la guía de la sección que se está viendo.
+  if (el.closest(".mobile-topbar,.sidebar-titulo")) return seccionVisibleActual();
+  for (let n = el.closest("[id^='seccion-']"); n; n = n.parentElement?.closest("[id^='seccion-']")) {
+    const info = SECCIONES_TUTORIAL.find((s) => n.id === `seccion-${s.id}`);
+    if (!info) continue;
+    const h = n.querySelector("h1,h2"); if (!h) return null;
+    let cab = h.closest("header,[class*='header'],[class*='encabezado'],[class*='titulo']");
+    if (!cab || cab === n || !n.contains(cab) || cab.getBoundingClientRect().height > 170) cab = h;
+    return cab.contains(el) ? info : null;
+  }
+  return null;
+}
+function abrirGuiaDeSeccion(info) {
+  // Ojo: index.html trae muchos .modal-overlay SIEMPRE en el DOM (con la clase «oculto»); solo cuentan los que están abiertos.
+  const modalAbierto = [...document.querySelectorAll(".modal-overlay")].some((m) => !m.classList.contains("oculto") && m.getClientRects().length > 0);
+  if (modalAbierto || document.querySelector(".onboarding-overlay,.tutorial-seccion-overlay,.guia-seccion-flotante,.guia-plan-flotante")) return;
+  try { getSelection()?.removeAllRanges(); } catch (_) {}
+  if (info.id === "plan-estudios") iniciarGuiaPlan({ navegar: window.mostrarSeccion });
+  else iniciarGuiaSeccion(info);
+}
+if (!PREVIEW_DEMO && !window.__guiaEncabezadoInicializada) {
+  window.__guiaEncabezadoInicializada = true;
+  // Esas zonas no deben dejar seleccionar texto (el doble toque lo seleccionaba antes de abrir la guía).
+  const est = document.createElement("style");
+  est.textContent = ".mobile-topbar,.sidebar-titulo{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation}";
+  document.head.append(est);
+  document.addEventListener("selectstart", (ev) => {
+    const el = ev.target instanceof Element ? ev.target : ev.target?.parentElement;
+    if (el && infoSeccionPorEncabezado(el)) ev.preventDefault();
+  }, true);
+  document.addEventListener("mousedown", (ev) => {
+    if (ev.detail > 1 && ev.target instanceof Element && infoSeccionPorEncabezado(ev.target)) ev.preventDefault();
+  }, true);
+  let previo = { t: 0, x: 0, y: 0, id: "" };
+  document.addEventListener("pointerup", (ev) => {
+    if (ev.button > 0) return;
+    const info = infoSeccionPorEncabezado(ev.target);
+    if (!info) { previo.t = 0; return; }
+    const ahora = performance.now();
+    const cerca = Math.abs(ev.clientX - previo.x) < 30 && Math.abs(ev.clientY - previo.y) < 30;
+    if (previo.id === info.id && cerca && ahora - previo.t < 400) { previo.t = 0; abrirGuiaDeSeccion(info); return; }
+    previo = { t: ahora, x: ev.clientX, y: ev.clientY, id: info.id };
+  }, true);
 }
 export { mostrarOnboardingNuevoUsuario, inicializarTutorialDesdeAjustes, mostrarTutorialPrimeraVez };
