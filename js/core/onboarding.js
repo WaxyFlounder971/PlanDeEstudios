@@ -394,17 +394,26 @@ function inyectarEstilosOnboarding() {
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"])>.onboarding-layout{flex:1 1 auto;min-height:0!important}
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"]){background:var(--onb-izq,#080808)!important;background-image:none!important}
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"])>.onboarding-acciones{position:static!important;inset:auto!important;transform:none!important;flex:none;width:100%!important;max-width:none!important;min-width:0!important;align-self:stretch;justify-self:stretch;grid-column:1/-1;box-sizing:border-box;margin:0;padding:12px 20px calc(12px + env(safe-area-inset-bottom,0px));z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
-/* Términos y condiciones */
+/* Términos y condiciones: el texto ocupa todo el espacio disponible; título y lema compactos. */
 .onboarding-panel[data-etapa="terminos"] .onboarding-copy{text-align:center}
-.onb-terminos-caja{text-align:left;max-height:min(44vh,360px);overflow-y:auto;overscroll-behavior:contain;padding:14px 16px;margin:.75rem 0;border-radius:16px;border:1px solid rgba(128,128,128,.35);background:rgba(128,128,128,.08);font-size:.92rem;line-height:1.5}
-.onb-terminos-caja h2,.onb-terminos-caja h3,.onb-terminos-caja h4,.onb-terminos-caja h5{font-size:1.02rem;margin:1.1em 0 .4em}
+.onboarding-panel[data-etapa="terminos"] .onboarding-copy h1{font-size:clamp(1.3rem,3.4vh,1.8rem)!important;margin:0 0 4px!important;animation:none}
+.onb-terminos-lema{margin:0 0 6px;font-size:.92rem;opacity:.8}
+.onb-terminos-caja{text-align:left;height:clamp(280px,56dvh,720px);overflow-y:auto;overscroll-behavior:contain;padding:16px 18px;margin:.6rem 0;border-radius:16px;border:1px solid rgba(128,128,128,.35);background:rgba(128,128,128,.08);font-size:.95rem;line-height:1.55}
+.onb-terminos-caja h2,.onb-terminos-caja h3,.onb-terminos-caja h4,.onb-terminos-caja h5{font-size:1.05rem;margin:1.2em 0 .4em}
 .onb-terminos-caja h2:first-child{margin-top:0}
-.onb-terminos-caja p{margin:.5em 0}.onb-terminos-caja ul{margin:.4em 0;padding-left:1.25em}.onb-terminos-caja hr{border:0;border-top:1px solid rgba(128,128,128,.35);margin:1em 0}
-.onb-terminos-check{display:flex;gap:10px;align-items:flex-start;text-align:left;cursor:pointer;font-size:.95rem;line-height:1.4}
-.onb-terminos-check input{flex:none;width:20px;height:20px;margin-top:1px}
+.onb-terminos-caja p{margin:.55em 0}.onb-terminos-caja ul{margin:.4em 0;padding-left:1.25em}.onb-terminos-caja hr{border:0;border-top:1px solid rgba(128,128,128,.35);margin:1em 0}
+.onb-luz{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:12px 16px;border-radius:16px;border:1px solid rgba(128,128,128,.4);background:rgba(128,128,128,.08);color:inherit;font:inherit;font-size:.95rem;line-height:1.35;cursor:pointer;transition:border-color .25s,background .25s,box-shadow .25s}
+.onb-luz:disabled{opacity:.5;cursor:not-allowed}
+.onb-luz:focus-visible{outline:2px solid #ffd54a;outline-offset:2px}
+.onb-luz-led{flex:none;width:22px;height:22px;border-radius:50%;background:rgba(128,128,128,.35);box-shadow:inset 0 2px 4px rgba(0,0,0,.45);transition:background .25s,box-shadow .3s}
+.onb-luz.on{border-color:#ffd54a;background:rgba(255,213,74,.12)}
+.onb-luz.on .onb-luz-led{background:radial-gradient(circle at 35% 30%,#fff7c2,#ffd54a 55%,#f5a800);box-shadow:0 0 6px 2px rgba(255,213,74,.9),0 0 18px 6px rgba(255,213,74,.55)}
+@media (prefers-reduced-motion:reduce){.onb-luz,.onb-luz-led{transition:none}}
 @media (min-width:761px){
-.onboarding-panel[data-etapa="terminos"]>.onboarding-layout{display:flex!important;flex-direction:row!important;justify-content:center;align-items:center;grid-template-columns:none!important}
-.onboarding-panel[data-etapa="terminos"] .onboarding-copy{flex:0 1 680px!important;width:100%;max-width:680px!important;min-width:0;max-height:100%;margin:0 auto;overflow-y:auto}
+.onboarding-panel[data-etapa="terminos"]>.onboarding-layout{display:flex!important;flex-direction:row!important;justify-content:center;align-items:stretch;grid-template-columns:none!important;padding-top:8px;padding-bottom:8px}
+.onboarding-panel[data-etapa="terminos"] .onboarding-copy{flex:0 1 860px!important;width:100%;max-width:860px!important;min-width:0;height:100%;max-height:100%;margin:0 auto;overflow:hidden;display:flex!important;flex-direction:column}
+.onboarding-panel[data-etapa="terminos"] .onboarding-copy>.onboarding-contenido{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+.onboarding-panel[data-etapa="terminos"] .onb-terminos-caja{flex:1 1 auto;height:auto;min-height:0}
 .onboarding-panel[data-etapa="terminos"]>.onboarding-acciones{justify-content:center}
 .onboarding-panel[data-etapa="terminos"]>.onboarding-acciones .btn{flex:0 1 320px}
 }
@@ -1789,24 +1798,26 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
       const crear=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;};
       const crearBtn=(txt,cls,fn)=>{const b=crear("button",`btn ${cls}`,txt);b.type="button";b.addEventListener("click",fn);return b;};
       const caja=crear("div","onb-terminos-caja");caja.tabIndex=0;caja.setAttribute("role","region");caja.setAttribute("aria-label",L.titulo);
-      const check=document.createElement("input");check.type="checkbox";check.id="onb-terminos-ok";check.disabled=true;
-      const etiqueta=crear("label","onb-terminos-check");etiqueta.htmlFor=check.id;etiqueta.append(check,crear("span","",L.acepto));
+      // «Luz» de aceptación: al tocarla se enciende (role=switch para lectores de pantalla y teclado).
+      const luz=crear("button","onb-luz");luz.type="button";luz.disabled=true;luz.setAttribute("role","switch");luz.setAttribute("aria-checked","false");
+      luz.append(crear("span","onb-luz-led"),crear("span","onb-luz-txt",L.acepto));
+      const encendida=()=>luz.getAttribute("aria-checked")==="true";
       const aviso=crear("p","onboarding-nota-error",L.requerido);aviso.hidden=true;aviso.setAttribute("role","alert");
       let cargado=false;
       const cargar=()=>{
-        cargado=false;check.disabled=true;caja.replaceChildren(crear("p","",L.cargando));
+        cargado=false;luz.disabled=true;caja.replaceChildren(crear("p","",L.cargando));
         cargarTerminos(cod).then((md)=>{
           if(!caja.isConnected)return; // ya cambió de pantalla
-          caja.replaceChildren(renderizarMarkdownSimple(md));cargado=true;check.disabled=false;
+          caja.replaceChildren(renderizarMarkdownSimple(md));cargado=true;luz.disabled=false;
         }).catch(()=>{
           if(!caja.isConnected)return;
           caja.replaceChildren(crear("p","",L.error),crearBtn(L.reintentar,"btn-secondary",cargar));
         });
       };
-      check.addEventListener("change",()=>{aviso.hidden=true;});
-      contenido.append(crear("p","onboarding-lead",L.lema),caja,etiqueta,aviso);
+      luz.addEventListener("click",()=>{luz.setAttribute("aria-checked",String(!encendida()));luz.classList.toggle("on",encendida());aviso.hidden=true;});
+      contenido.append(crear("p","onb-terminos-lema",L.lema),caja,luz,aviso);
       const aceptar=()=>{
-        if(!cargado||!check.checked){aviso.hidden=false;return;}
+        if(!cargado||!encendida()){aviso.hidden=false;return;}
         cfg.terminos_aceptados={version:VERSION_TERMINOS,fecha:new Date().toISOString(),idioma:cod};guardar();
         etapa=cuentaConDatos&&cfg.paleta&&cfg.modo?"tour":"personalizar";indice=0;pintar();
       };
