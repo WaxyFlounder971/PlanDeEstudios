@@ -2259,10 +2259,15 @@ if (MODO_DEMO) {
 }
 /* ── Ayuda: doble toque en el título de una sección = volver a abrir la guía SOLO de esa sección ──
    Se instala sola al cargar el módulo. Detecta el doble toque por tiempo y distancia (con el dedo, «dblclick» no es fiable). */
+function seccionVisibleActual() {
+  return SECCIONES_TUTORIAL.find((s) => { const n = document.getElementById(`seccion-${s.id}`); return n && !n.classList.contains("oculto") && n.getClientRects().length > 0; }) || null;
+}
 function infoSeccionPorEncabezado(el) {
   if (!(el instanceof Element)) return null;
   // Los botones, enlaces y campos del encabezado conservan su función normal.
   if (el.closest("button,a,input,select,textarea,label,[role='button'],.onboarding-overlay,.modal-overlay")) return null;
+  // Barra superior del teléfono (y título de la barra lateral en PC): abre la guía de la sección que se está viendo.
+  if (el.closest(".mobile-topbar,.sidebar-titulo")) return seccionVisibleActual();
   for (let n = el.closest("[id^='seccion-']"); n; n = n.parentElement?.closest("[id^='seccion-']")) {
     const info = SECCIONES_TUTORIAL.find((s) => n.id === `seccion-${s.id}`);
     if (!info) continue;
@@ -2281,6 +2286,17 @@ function abrirGuiaDeSeccion(info) {
 }
 if (!PREVIEW_DEMO && !window.__guiaEncabezadoInicializada) {
   window.__guiaEncabezadoInicializada = true;
+  // Esas zonas no deben dejar seleccionar texto (el doble toque lo seleccionaba antes de abrir la guía).
+  const est = document.createElement("style");
+  est.textContent = ".mobile-topbar,.sidebar-titulo{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation}";
+  document.head.append(est);
+  document.addEventListener("selectstart", (ev) => {
+    const el = ev.target instanceof Element ? ev.target : ev.target?.parentElement;
+    if (el && infoSeccionPorEncabezado(el)) ev.preventDefault();
+  }, true);
+  document.addEventListener("mousedown", (ev) => {
+    if (ev.detail > 1 && ev.target instanceof Element && infoSeccionPorEncabezado(ev.target)) ev.preventDefault();
+  }, true);
   let previo = { t: 0, x: 0, y: 0, id: "" };
   document.addEventListener("pointerup", (ev) => {
     if (ev.button > 0) return;

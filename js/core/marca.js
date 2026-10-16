@@ -26,30 +26,60 @@ function rgbFromHsl(h,s,l) {
   if(h<1/6){a=c;b=x;d=0;}else if(h<2/6){a=x;b=c;d=0;}else if(h<3/6){a=0;b=c;d=x;}else if(h<4/6){a=0;b=x;d=c;}else if(h<5/6){a=x;b=0;d=c;}else{a=c;b=0;d=x;}
   return [(a+m)*255,(b+m)*255,(d+m)*255];
 }
-async function colorizarLogo(src, destino) {
-  const acento=colorTema();if(!acento||!src)return;
+// Genera el logo del color del tema (512 px) y una versión chica (64 px) para el favicon.
+async function generarLogoColoreado(src, acento) {
   try {
     const res=await fetch(src);const blob=await res.blob();const bmp=typeof createImageBitmap==="function"?await createImageBitmap(blob):await new Promise((resolve,reject)=>{const img=new Image();const temp=URL.createObjectURL(blob);img.onload=()=>{URL.revokeObjectURL(temp);resolve(img);};img.onerror=()=>{URL.revokeObjectURL(temp);reject(new Error("No se pudo leer el logo"));};img.src=temp;});
     const scale=Math.min(1,512/Math.max(bmp.width,bmp.height));const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(bmp.width*scale));canvas.height=Math.max(1,Math.round(bmp.height*scale));
     const ctx=canvas.getContext("2d",{willReadFrequently:true});ctx.drawImage(bmp,0,0,canvas.width,canvas.height);bmp.close?.();
     const pix=ctx.getImageData(0,0,canvas.width,canvas.height);const [ah,as,al]=hsl(...acento);
     for(let i=0;i<pix.data.length;i+=4){const alpha=pix.data[i+3]/255;if(alpha<.15)continue;const [sh,ss,sl]=hsl(pix.data[i],pix.data[i+1],pix.data[i+2]);if(ss>.24&&sl>.2&&sl<.88){const tone=Math.max(.22,Math.min(.78,al+(sl-.5)*.52));const [r,g,b]=rgbFromHsl(ah,Math.min(.9,Math.max(.55,as)),tone);pix.data[i]=r;pix.data[i+1]=g;pix.data[i+2]=b;}}
-    ctx.putImageData(pix,0,0);const colored=canvas.toDataURL("image/png");destino(colored);
-  } catch (_) { /* Conserva el logo original si el navegador no permite procesarlo. */ }
+    ctx.putImageData(pix,0,0);
+    const logo=canvas.toDataURL("image/png");
+    // Favicon: un data URL de 512 px es enorme y algunos navegadores lo ignoran; 64 px pesa muy poco.
+    const k=64/Math.max(canvas.width,canvas.height);const chico=document.createElement("canvas");chico.width=Math.max(1,Math.round(canvas.width*k));chico.height=Math.max(1,Math.round(canvas.height*k));
+    chico.getContext("2d").drawImage(canvas,0,0,chico.width,chico.height);
+    return { logo, icono: chico.toDataURL("image/png") };
+  } catch (_) { return null; /* Conserva el logo original si el navegador no permite procesarlo. */ }
 }
-let cicloColorLogo=0;
+
+// Sin parpadeo: cada combinación (logo + color) se procesa UNA sola vez y se guarda; si ya está lista se aplica al instante,
+// y mientras se procesa una nueva no se vuelve al logo original (se deja el que ya se ve y se cambia cuando está listo).
+const cacheLogoColor = new Map();   // clave -> { logo, icono }
+const logoEnProceso = new Map();    // clave -> Promise
+let cicloColorLogo = 0, baseAplicada = null;
+const claveLogo = (src, acento) => `${src.length > 200 ? `${src.length}:${src.slice(-80)}` : src}|${acento.join(",")}`;
+
+function pintarLogo(logoSrc, iconoSrc) {
+  document.querySelectorAll("img[data-app-logo]").forEach((img) => { if (img.getAttribute("src") !== logoSrc) img.src = logoSrc; });
+  const fav = document.querySelector("link[data-app-favicon]");
+  if (fav && fav.getAttribute("href") !== iconoSrc) fav.setAttribute("href", iconoSrc);
+}
+
 function aplicarLogoApp() {
   const cfg = estado.datos?.configuracion;
   if (!cfg) return;
   const src = cfg.logo_app_url || LOGOS[cfg.logo_app] || LOGOS.folder;
-  const aplicarSrc=(finalSrc)=>{
-    document.querySelectorAll("img[data-app-logo]").forEach((img) => { if(img.src!==finalSrc)img.src=finalSrc; });
-    document.querySelector("link[data-app-favicon]")?.setAttribute("href", finalSrc);
-  };
-  const ciclo=++cicloColorLogo;
-  colorizarLogo(src,(data)=>{if(ciclo===cicloColorLogo)aplicarSrc(data);});
-  aplicarSrc(src);
   document.querySelectorAll("[data-logo-app]").forEach((btn) => btn.setAttribute("aria-pressed", String(!cfg.logo_app_url && cfg.logo_app === btn.dataset.logoApp)));
+  const ciclo = ++cicloColorLogo;
+  const acento = colorTema();
+  // Paleta sin color hexadecimal simple (degradados, etc.): logo original.
+  if (!acento) { pintarLogo(src, src); baseAplicada = src; return; }
+  const clave = claveLogo(src, acento);
+  const listo = cacheLogoColor.get(clave);
+  if (listo) { pintarLogo(listo.logo, listo.icono); baseAplicada = src; return; }
+  // Logo distinto al anterior: se muestra el original mientras se colorea. Mismo logo, otro color: se deja el actual hasta tener el nuevo.
+  if (baseAplicada !== src) { pintarLogo(src, src); baseAplicada = src; }
+  let proceso = logoEnProceso.get(clave);
+  if (!proceso) {
+    proceso = generarLogoColoreado(src, acento).then((r) => {
+      logoEnProceso.delete(clave);
+      if (r) { cacheLogoColor.set(clave, r); if (cacheLogoColor.size > 8) cacheLogoColor.delete(cacheLogoColor.keys().next().value); }
+      return r;
+    });
+    logoEnProceso.set(clave, proceso);
+  }
+  proceso.then((r) => { if (r && ciclo === cicloColorLogo) pintarLogo(r.logo, r.icono); });
 }
 
 function guardarLogo(id, dataUrl = null) {
