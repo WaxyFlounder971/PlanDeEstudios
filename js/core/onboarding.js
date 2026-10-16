@@ -404,10 +404,10 @@ function inyectarEstilosOnboarding() {
 .onb-terminos-caja p{margin:.55em 0}.onb-terminos-caja ul{margin:.4em 0;padding-left:1.25em}.onb-terminos-caja hr{border:0;border-top:1px solid rgba(128,128,128,.35);margin:1em 0}
 .onb-luz{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:12px 16px;border-radius:16px;border:1px solid rgba(128,128,128,.4);background:rgba(128,128,128,.08);color:inherit;font:inherit;font-size:.95rem;line-height:1.35;cursor:pointer;transition:border-color .25s,background .25s,box-shadow .25s}
 .onb-luz:disabled{opacity:.5;cursor:not-allowed}
-.onb-luz:focus-visible{outline:2px solid #ffd54a;outline-offset:2px}
+.onb-luz:focus-visible{outline:2px solid var(--accent-1,#8b5cf6);outline-offset:2px}
 .onb-luz-led{flex:none;width:22px;height:22px;border-radius:50%;background:rgba(128,128,128,.35);box-shadow:inset 0 2px 4px rgba(0,0,0,.45);transition:background .25s,box-shadow .3s}
-.onb-luz.on{border-color:#ffd54a;background:rgba(255,213,74,.12)}
-.onb-luz.on .onb-luz-led{background:radial-gradient(circle at 35% 30%,#fff7c2,#ffd54a 55%,#f5a800);box-shadow:0 0 6px 2px rgba(255,213,74,.9),0 0 18px 6px rgba(255,213,74,.55)}
+.onb-luz.on{border-color:var(--accent-1,#8b5cf6);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 14%,transparent)}
+.onb-luz.on .onb-luz-led{background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.85),transparent 45%),var(--gradient-accent,var(--accent-1,#8b5cf6));box-shadow:0 0 6px 2px color-mix(in srgb,var(--accent-1,#8b5cf6) 90%,transparent),0 0 18px 6px color-mix(in srgb,var(--accent-1,#8b5cf6) 55%,transparent)}
 @media (prefers-reduced-motion:reduce){.onb-luz,.onb-luz-led{transition:none}}
 @media (min-width:761px){
 .onboarding-panel[data-etapa="terminos"]>.onboarding-layout{display:flex!important;flex-direction:row!important;justify-content:center;align-items:stretch;grid-template-columns:none!important;padding-top:8px;padding-bottom:8px}
@@ -416,6 +416,18 @@ function inyectarEstilosOnboarding() {
 .onboarding-panel[data-etapa="terminos"] .onb-terminos-caja{flex:1 1 auto;height:auto;min-height:0}
 .onboarding-panel[data-etapa="terminos"]>.onboarding-acciones{justify-content:center}
 .onboarding-panel[data-etapa="terminos"]>.onboarding-acciones .btn{flex:0 1 320px}
+}
+/* Teléfono: encabezado, título y botones quedan fijos y sólidos; solo el cuadro de texto se desplaza. La luz de aceptar queda anclada sobre los botones. */
+@media (max-width:760px){
+.onboarding-panel[data-etapa="terminos"]{display:flex!important;flex-direction:column;height:100vh!important;height:100dvh!important;min-height:0!important;max-height:100dvh!important;overflow:hidden!important;padding:0!important;background:var(--onb-izq,#080808)!important}
+.onboarding-panel[data-etapa="terminos"]>.onboarding-top{position:static!important;flex:none;width:100%!important;max-width:none!important;z-index:2;padding:calc(12px + env(safe-area-inset-top)) 18px 4px!important}
+.onboarding-panel[data-etapa="terminos"]>.onboarding-layout{flex:1 1 auto;min-height:0!important;width:100%!important;max-width:none!important;height:auto!important;display:flex!important;flex-direction:column;overflow:hidden!important;grid-template-rows:none!important;background:var(--onb-izq,#080808)!important}
+.onboarding-panel[data-etapa="terminos"] .onboarding-copy{flex:1 1 auto;min-height:0;height:auto!important;max-height:none!important;display:flex!important;flex-direction:column;overflow:hidden!important;padding:2px 18px 8px!important}
+.onboarding-panel[data-etapa="terminos"] .onboarding-copy>.onboarding-contenido{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+.onboarding-panel[data-etapa="terminos"] .onb-terminos-caja{flex:1 1 auto;height:auto;min-height:0;margin:.4rem 0 .6rem}
+.onboarding-panel[data-etapa="terminos"] .onb-luz,.onboarding-panel[data-etapa="terminos"] .onboarding-nota-error{flex:none}
+.onboarding-panel[data-etapa="terminos"]>.onboarding-acciones{position:static!important;flex:none;width:100%!important;max-width:none!important;display:grid!important;grid-template-columns:auto minmax(0,1fr);gap:6px 10px;padding:8px 16px calc(12px + env(safe-area-inset-bottom))!important}
+.onboarding-panel[data-etapa="terminos"]>.onb-puntos{display:none!important}
 }
 /* Bienvenida en PC: todo centrado (en teléfono se queda como está). */
 @media (min-width:761px){
