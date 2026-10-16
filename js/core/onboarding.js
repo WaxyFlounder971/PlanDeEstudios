@@ -2282,7 +2282,9 @@ function infoSeccionPorEncabezado(el) {
   return null;
 }
 function abrirGuiaDeSeccion(info) {
-  if (document.querySelector(".onboarding-overlay,.tutorial-seccion-overlay,.guia-seccion-flotante,.guia-plan-flotante,.modal-overlay")) return;
+  // Ojo: index.html trae muchos .modal-overlay SIEMPRE en el DOM (con la clase «oculto»); solo cuentan los que están abiertos.
+  const modalAbierto = [...document.querySelectorAll(".modal-overlay")].some((m) => !m.classList.contains("oculto") && m.getClientRects().length > 0);
+  if (modalAbierto || document.querySelector(".onboarding-overlay,.tutorial-seccion-overlay,.guia-seccion-flotante,.guia-plan-flotante")) return;
   try { getSelection()?.removeAllRanges(); } catch (_) {}
   if (info.id === "plan-estudios") iniciarGuiaPlan({ navegar: window.mostrarSeccion });
   else iniciarGuiaSeccion(info);
