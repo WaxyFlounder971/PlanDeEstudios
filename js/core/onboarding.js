@@ -380,6 +380,21 @@ function inyectarEstilosOnboarding() {
 .onboarding-overlay *::-webkit-scrollbar{display:none;width:0;height:0}
 .onboarding-panel[data-etapa="instalar"] .onboarding-copy h1{font-size:clamp(1.6rem,4.4vh,2.3rem)!important;line-height:1.1;margin:0 0 4px!important}
 .onboarding-panel[data-etapa="instalar"] .onboarding-lead{font-size:1rem!important;line-height:1.4!important}
+/* Centrado «seguro» (instalar y flujo): centra si cabe y, si no cabe, se alinea arriba. Así NUNCA se corta el título ni queda bajo el encabezado. */
+.onboarding-panel[data-etapa="instalar"] .onboarding-copy,.onboarding-panel[data-etapa="flujo"] .onboarding-copy{display:flex!important;flex-direction:column}
+.onboarding-panel[data-etapa="instalar"] .onboarding-copy>h1,.onboarding-panel[data-etapa="flujo"] .onboarding-copy>h1{margin-top:auto!important;flex:none}
+.onboarding-panel[data-etapa="instalar"] .onboarding-copy>.onboarding-contenido,.onboarding-panel[data-etapa="flujo"] .onboarding-copy>.onboarding-contenido{margin-bottom:auto;flex:none}
+/* Instalación: si el contenido no cabe sin scroll, se compacta por niveles (el JS pone .compacto y luego .minimo). */
+.onb-ins.con-ayuda[data-estado="idle"] .onb-ins-pila{display:none}
+.onb-ins.compacto{--s:.5;gap:6px}
+.onb-ins.compacto .onb-ins-fila{padding:6px 10px;font-size:.88rem}
+.onb-ins.compacto .onb-ins-lista{gap:6px}
+.onb-ins.compacto .onb-ins-card{padding:12px;gap:10px}
+.onb-ins.compacto .onb-ins-ayuda{padding:10px 12px;font-size:.86rem}
+.onb-ins.minimo{--s:.4}
+.onb-ins.minimo .onboarding-lead{display:none}
+.onb-ins.minimo .onb-ins-fila:nth-child(n+3){display:none}
+.onb-ins.minimo .onb-ins-nota{display:none}
 .onb-ins{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;--s:.78}
 @media (min-width:761px){.onb-ins{--s:.74}}
 @media (max-height:860px){.onb-ins{--s:.66}}
@@ -1691,6 +1706,20 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
       const esIOS=/iPad|iPhone|iPod/.test(ua)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
       const esWebview=/FBAN|FBAV|Instagram|Line\/|MicroMessenger|TikTok|Snapchat|; wv\)/i.test(ua);
       const ayuda=document.createElement("div");ayuda.className="onb-ins-ayuda";ayuda.hidden=true;ayuda.setAttribute("role","status");ui.raiz.append(ayuda);
+      const copia=panel.querySelector(".onboarding-copy");
+      // Si algo desborda (contenido o su contenedor), se compacta por niveles hasta que quepa; el scroll queda solo como último recurso.
+      const sobra=()=>[copia,copia.parentElement].some((e)=>e&&e.scrollHeight>e.clientHeight+1);
+      const ajustar=()=>{
+        if(!ui.raiz.isConnected){removeEventListener("resize",ajustar);return;}
+        ui.raiz.classList.remove("compacto","minimo");
+        if(!sobra())return;
+        ui.raiz.classList.add("compacto");if(!sobra())return;
+        ui.raiz.classList.add("minimo");
+      };
+      const reajustar=(ms=40)=>setTimeout(ajustar,ms);
+      const verAyuda=(v)=>{ayuda.hidden=!v;ui.raiz.classList.toggle("con-ayuda",v);reajustar();};
+      addEventListener("resize",ajustar);
+      requestAnimationFrame(()=>requestAnimationFrame(ajustar));
       const mostrarAyuda=(clave)=>{
         const textos={
           ios:["Instálala desde el navegador","Toca Compartir ⬆️ y elige «Añadir a pantalla de inicio»."],
@@ -1716,19 +1745,19 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
           }));
           cuerpo.append(acc);
         }
-        ayuda.replaceChildren(ico,cuerpo);ayuda.hidden=false;ayuda.scrollIntoView?.({block:"nearest",behavior:"smooth"});
+        ayuda.replaceChildren(ico,cuerpo);verAyuda(true);ayuda.scrollIntoView?.({block:"nearest",behavior:"smooth"});
       };
       let modoManual=false,empezado=false,guardia=0,escuchaInst=null;
       const empezar=()=>{
         if(!ui.raiz.isConnected||ui.estado()!=="idle")return;
-        empezado=true;ayuda.hidden=true;ui.iniciar();bInst.disabled=true;bInst.textContent=T("Instalando…");bAhora.textContent=T("Continuar tutorial");
+        empezado=true;verAyuda(false);ui.iniciar();reajustar(2000);bInst.disabled=true;bInst.textContent=T("Instalando…");bAhora.textContent=T("Continuar tutorial");
       };
       const alInstalar=()=>{
         clearTimeout(guardia);escuchaInst=null;
-        if(ui.raiz.isConnected){empezar();ui.completar();ayuda.hidden=true;bInst.disabled=true;bInst.textContent=T("Instalada ✓");bInst.classList.add("onb-ok");}
+        if(ui.raiz.isConnected){empezar();ui.completar();verAyuda(false);bInst.disabled=true;bInst.textContent=T("Instalada ✓");bInst.classList.add("onb-ok");}
         else toast?.(T("¡App instalada! Ya la tienes en tu dispositivo."));
       };
-      const reiniciar=()=>{clearTimeout(guardia);empezado=false;ui.cancelar();bInst.disabled=false;bInst.textContent=T("Instalar app");bAhora.textContent=T("Ahora no");};
+      const reiniciar=()=>{clearTimeout(guardia);empezado=false;ui.cancelar();reajustar();bInst.disabled=false;bInst.textContent=T("Instalar app");bAhora.textContent=T("Ahora no");};
       const pasarAManual=(clave)=>{modoManual=true;mostrarAyuda(clave);bInst.disabled=false;bInst.textContent=T("Continuar tutorial");bAhora.style.display="none";};
       const leerResultado=async(r)=>{
         try{
@@ -1745,7 +1774,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
         if(instalarYa()){alInstalar();return;}
         if(esWebview){pasarAManual("webview");return;}
         if(esIOS||typeof window.instalarAppAcademica!=="function"){pasarAManual(esIOS?"ios":"menu");return;}
-        ayuda.hidden=true;bInst.disabled=true;bInst.textContent=T("Confirma en el navegador…");
+        verAyuda(false);bInst.disabled=true;bInst.textContent=T("Confirma en el navegador…");
         if(!escuchaInst){escuchaInst=alInstalar;addEventListener("appinstalled",escuchaInst,{once:true});}
         let r;try{r=window.instalarAppAcademica();}catch(_){reiniciar();mostrarAyuda("menu");return;}
         guardia=setTimeout(()=>{if(!empezado&&ui.raiz.isConnected){reiniciar();mostrarAyuda("menu");}},10000);
