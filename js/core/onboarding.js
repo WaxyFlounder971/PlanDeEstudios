@@ -408,6 +408,10 @@ function inyectarEstilosOnboarding() {
 .onb-ins-nota{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;font-size:.86rem;line-height:1.35;background:color-mix(in srgb,var(--accent-1,#8b5cf6) 14%,transparent);border:1px dashed color-mix(in srgb,var(--accent-1,#8b5cf6) 45%,transparent);transition:opacity .4s,max-height .4s,padding .4s,margin .4s;max-height:90px;overflow:hidden;opacity:0;animation:onbInsIn .5s 2.4s forwards}
 .onb-ins-nota-ico{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:.8rem;color:#fff;background:var(--gradient-accent,var(--accent-1,#8b5cf6));animation:onbInsNudge 1.6s ease-in-out 3s infinite}
 .onb-ins[data-estado="listo"] .onb-ins-nota{animation:none;opacity:0;max-height:0;padding-top:0;padding-bottom:0;margin-top:-14px;border-width:0}
+.onb-ins-ayuda{display:flex;align-items:flex-start;gap:10px;width:100%;box-sizing:border-box;padding:12px 14px;border-radius:14px;text-align:left;font-size:.9rem;line-height:1.4;border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 50%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 12%,transparent);animation:onbSube .4s cubic-bezier(.22,.8,.3,1) both}
+.onb-ins-ayuda[hidden]{display:none}
+.onb-ins-ayuda b{display:block;margin-bottom:2px}
+.onb-ins-ayuda-acc{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 @keyframes onbInsNudge{0%,100%{transform:translateX(0)}50%{transform:translateX(4px)}}
 .onb-ins-spin{flex:none;width:26px;height:26px;border-radius:50%;border:3px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 30%,transparent);border-top-color:var(--accent-1,#8b5cf6);animation:onbInsSpin .8s linear infinite}
 .onb-ins-ok{flex:none;width:26px;height:26px;border-radius:50%;background:#22c55e;color:#fff;display:grid;place-items:center;font-weight:800;font-size:.95rem}
@@ -1678,27 +1682,82 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast } = {}) {
       const T=traducirTextoInterfaz;
       const alTour=()=>{ui.detener();etapa="tour";indice=0;pintar();};
       const bAhora=boton("Ahora no","btn-secondary",alTour);
+      // ── Instalación blindada ──
+      // · iPhone/iPad y navegadores integrados (Instagram, WhatsApp…) NO permiten instalar con un botón: se muestran los pasos manuales.
+      // · En el resto se llama al aviso del navegador DENTRO del toque (sin esperas antes: si no, el navegador lo bloquea).
+      // · El resultado se lee de forma tolerante (true/false, {outcome}, evento con userChoice, o nada). Si no hay confirmación,
+      //   se espera el evento «appinstalled»; si en 10 s no llega nada, se vuelve a ofrecer el botón con los pasos del menú.
+      const ua=navigator.userAgent||"";
+      const esIOS=/iPad|iPhone|iPod/.test(ua)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+      const esWebview=/FBAN|FBAV|Instagram|Line\/|MicroMessenger|TikTok|Snapchat|; wv\)/i.test(ua);
+      const ayuda=document.createElement("div");ayuda.className="onb-ins-ayuda";ayuda.hidden=true;ayuda.setAttribute("role","status");ui.raiz.append(ayuda);
+      const mostrarAyuda=(clave)=>{
+        const textos={
+          ios:["Instálala desde el navegador","Toca Compartir ⬆️ y elige «Añadir a pantalla de inicio»."],
+          menu:["Instálala desde el menú","Abre el menú del navegador (⋮) y toca «Instalar app» o «Añadir a pantalla de inicio»."],
+          webview:["Ábrela en tu navegador","Este navegador integrado no permite instalar. Ábrela en Chrome o Safari: toca los tres puntos de arriba y elige «Abrir en el navegador», o usa el botón."],
+        };
+        const [t,d]=textos[clave]||textos.menu;
+        const ico=document.createElement("span");ico.textContent="💡";
+        const cuerpo=document.createElement("div"),tb=document.createElement("b"),td=document.createElement("span");tb.textContent=T(t);td.textContent=T(d);cuerpo.append(tb,td);
+        if(clave==="webview"){
+          const acc=document.createElement("div");acc.className="onb-ins-ayuda-acc";
+          if(/Android/i.test(ua))acc.append(boton("Abrir en mi navegador","btn-primary",()=>{
+            // Android: el esquema intent:// pide al sistema abrir el enlace en el navegador predeterminado; si no lo permite, queda la copia.
+            const u=new URL(location.href);
+            try{location.href=`intent://${u.host}${u.pathname}${u.search}#Intent;scheme=${u.protocol.replace(":","")};action=android.intent.action.VIEW;S.browser_fallback_url=${encodeURIComponent(u.href)};end`;}catch(_){}
+          }));
+          acc.append(boton("Copiar enlace","btn-secondary",async()=>{
+            const url=location.href;let ok=false;
+            try{await navigator.clipboard.writeText(url);ok=true;}catch(_){
+              try{const t=document.createElement("textarea");t.value=url;t.style.cssText="position:fixed;opacity:0";document.body.append(t);t.select();ok=document.execCommand("copy");t.remove();}catch(__){}
+            }
+            toast?.(T(ok?"Enlace copiado: pégalo en Chrome o Safari":"No se pudo copiar el enlace"));
+          }));
+          cuerpo.append(acc);
+        }
+        ayuda.replaceChildren(ico,cuerpo);ayuda.hidden=false;ayuda.scrollIntoView?.({block:"nearest",behavior:"smooth"});
+      };
+      let modoManual=false,empezado=false,guardia=0,escuchaInst=null;
+      const empezar=()=>{
+        if(!ui.raiz.isConnected||ui.estado()!=="idle")return;
+        empezado=true;ayuda.hidden=true;ui.iniciar();bInst.disabled=true;bInst.textContent=T("Instalando…");bAhora.textContent=T("Continuar tutorial");
+      };
+      const alInstalar=()=>{
+        clearTimeout(guardia);escuchaInst=null;
+        if(ui.raiz.isConnected){empezar();ui.completar();ayuda.hidden=true;bInst.disabled=true;bInst.textContent=T("Instalada ✓");bInst.classList.add("onb-ok");}
+        else toast?.(T("¡App instalada! Ya la tienes en tu dispositivo."));
+      };
+      const reiniciar=()=>{clearTimeout(guardia);empezado=false;ui.cancelar();bInst.disabled=false;bInst.textContent=T("Instalar app");bAhora.textContent=T("Ahora no");};
+      const pasarAManual=(clave)=>{modoManual=true;mostrarAyuda(clave);bInst.disabled=false;bInst.textContent=T("Continuar tutorial");bAhora.style.display="none";};
+      const leerResultado=async(r)=>{
+        try{
+          let v=await r;if(v&&typeof v.userChoice?.then==="function")v=await v.userChoice;
+          const o=typeof v==="string"?v:v?.outcome;
+          if(v===true||o==="accepted")return "si";
+          if(v===false||o==="dismissed")return "no";
+          return "?";
+        }catch(_){return "error";}
+      };
       const bInst=boton("Instalar app","btn-primary",()=>{
-        if(typeof window.instalarAppAcademica!=="function"){alTour();return;}
+        if(modoManual){alTour();return;}
         if(ui.estado()!=="idle"||bInst.disabled)return;
-        // La animación y la tarjeta «instalando» NO arrancan al tocar el botón (el aviso del navegador las taparía):
-        // solo cuando el navegador confirma que la instalación empezó (o termina, si el evento llega primero).
-        const empezar=()=>{
-          if(!ui.raiz.isConnected||ui.estado()!=="idle")return;
-          ui.iniciar();bInst.disabled=true;bInst.textContent=T("Instalando…");bAhora.textContent=T("Continuar tutorial");
-        };
-        const alInstalar=()=>{
-          if(ui.raiz.isConnected){empezar();ui.completar();bInst.textContent=T("Instalada ✓");bInst.classList.add("onb-ok");}
-          else toast?.(T("¡App instalada! Ya la tienes en tu dispositivo."));
-        };
-        const volver=()=>{removeEventListener("appinstalled",alInstalar);ui.cancelar();bInst.disabled=false;bInst.textContent=T("Instalar app");bAhora.textContent=T("Ahora no");};
         if(instalarYa()){alInstalar();return;}
-        bInst.disabled=true;bInst.textContent=T("Confirma en el navegador…");
-        addEventListener("appinstalled",alInstalar,{once:true});
-        let r;try{r=window.instalarAppAcademica();}catch(_){volver();return;}
-        // Si el usuario rechaza el aviso, no se muestra nada; si lo acepta, arranca la animación.
-        Promise.resolve(r).then((res)=>{if(res===false||res?.outcome==="dismissed")volver();else empezar();}).catch(volver);
+        if(esWebview){pasarAManual("webview");return;}
+        if(esIOS||typeof window.instalarAppAcademica!=="function"){pasarAManual(esIOS?"ios":"menu");return;}
+        ayuda.hidden=true;bInst.disabled=true;bInst.textContent=T("Confirma en el navegador…");
+        if(!escuchaInst){escuchaInst=alInstalar;addEventListener("appinstalled",escuchaInst,{once:true});}
+        let r;try{r=window.instalarAppAcademica();}catch(_){reiniciar();mostrarAyuda("menu");return;}
+        guardia=setTimeout(()=>{if(!empezado&&ui.raiz.isConnected){reiniciar();mostrarAyuda("menu");}},10000);
+        leerResultado(r).then((v)=>{
+          if(!ui.raiz.isConnected)return;
+          if(v==="si"){clearTimeout(guardia);empezar();}
+          else if(v==="no")reiniciar();
+          else if(v==="error"&&!empezado){reiniciar();mostrarAyuda("menu");}
+          // «?»: sin confirmación; espera «appinstalled» o la guardia de 10 s.
+        });
       });
+      if(esWebview)mostrarAyuda("webview"); // dentro de Instagram/Facebook… se avisa desde el principio, sin esperar al toque
       acciones.append(boton("Atrás","btn-secondary",()=>{ui.detener();etapa="personalizar";pintar();}),bAhora);colocarPrimario(bInst);return;
     }
     if(etapa==="tour"){
