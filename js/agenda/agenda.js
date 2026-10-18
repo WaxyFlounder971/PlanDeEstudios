@@ -150,6 +150,7 @@ function renderizarEditorTiposAgenda() {
     fila.append(color.envoltura, texto); cont.appendChild(fila);
   });
   cfg.agenda_tipos.filter((t) => !t.eliminado).forEach((tipo) => {
+    tipo.ayuda_wapper = String(tipo.ayuda_wapper || "");
     const fila = document.createElement("div"); fila.className = "row agenda-tipo-config-fila"; fila.draggable=true; fila.dataset.tipoId=tipo.id; fila.title="Arrastra para cambiar el orden"; fila.style.cssText = "gap:8px;align-items:center;flex-wrap:wrap;padding:8px;border:1px solid var(--border-glass);border-radius:12px;";
     const nombre = document.createElement("input"); nombre.className = "form-input"; nombre.value = tipo.nombre; nombre.maxLength = 24; nombre.setAttribute("aria-label", `Nombre de ${tipo.nombre}`); nombre.style.cssText = "flex:1;min-width:110px;";
     nombre.addEventListener("change", () => { const v = nombre.value.trim(); if (!v) { nombre.value = tipo.nombre; return; } tipo.nombre = v; guardarConfiguracionTiposAgenda(); });
@@ -193,6 +194,15 @@ function renderizarEditorTiposAgenda() {
     const base = document.createElement("span"); base.className = "muted"; base.style.fontSize = ".72rem"; base.textContent = `Como ${tipo.base}`;
     fila.classList.add("agenda-tipo-config-fila");
     fila.append(color.envoltura,nombre,etiquetaActiva,borrar,base); cont.appendChild(fila);
+    const ayudaWapper = document.createElement("input");
+    ayudaWapper.type = "text";
+    ayudaWapper.className = "form-input";
+    ayudaWapper.maxLength = 120;
+    ayudaWapper.value = tipo.ayuda_wapper;
+    ayudaWapper.placeholder = traducirTextoInterfaz("Ayuda para Wapper, opcional");
+    ayudaWapper.setAttribute("aria-label", traducirTextoInterfaz("Ayuda para Wapper, opcional"));
+    ayudaWapper.addEventListener("change", () => { tipo.ayuda_wapper = ayudaWapper.value.trim(); guardarConfiguracionTiposAgenda(); });
+    cont.appendChild(ayudaWapper);
     fila.addEventListener("dragstart",(ev)=>{idEtiquetaAgendaArrastrada=tipo.id;fila.classList.add("arrastrando");ev.dataTransfer?.setData("text/plain",tipo.id);if(ev.dataTransfer)ev.dataTransfer.effectAllowed="move";});
     fila.addEventListener("dragend",()=>{idEtiquetaAgendaArrastrada=null;fila.classList.remove("arrastrando");cont.querySelectorAll(".agenda-tipo-config-fila").forEach((n)=>n.classList.remove("destino-arrastre"));});
     fila.addEventListener("dragover",(ev)=>{if(!idEtiquetaAgendaArrastrada||idEtiquetaAgendaArrastrada===tipo.id)return;ev.preventDefault();fila.classList.add("destino-arrastre");});

@@ -15,7 +15,7 @@
    actualizarEventoCalendar/eliminarEventoCalendar) usando el access_token
    de la sesión ya autenticada — a diferencia del viejo archivo, YA NO
    habla con el Worker de Cloudflare para nada de esto (el Worker sigue
-   existiendo solo para /oauth/exchange y /oauth/refresh, ver auth.js).
+   activo también para OAuth, Competencias, analítica y soporte, ver worker/README.md).
 
    Toda llamada de red de este archivo sigue siendo "best-effort" (mismo
    criterio que el archivo viejo): si Google Calendar no responde (sin
@@ -1096,3 +1096,5 @@ export {
   sincronizarResumenDiario,
   sincronizarResumenParaFechaEvento,
 };
+
+

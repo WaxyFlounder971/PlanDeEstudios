@@ -88,7 +88,9 @@ async function fetchConTimeout(url, opciones = {}) {
   const controlador = new AbortController();
   const idTimeout = setTimeout(() => controlador.abort(), TIMEOUT_MS);
   try {
-    return await fetch(url, { ...opciones, signal: controlador.signal });
+    const headers = new Headers(opciones.headers || {});
+    if (estado?.token && !headers.has("Authorization")) headers.set("Authorization", `Bearer ${estado.token}`);
+    return await fetch(url, { ...opciones, headers, signal: controlador.signal });
   } finally {
     clearTimeout(idTimeout);
   }

@@ -12,7 +12,8 @@ import { copiarPromptConAviso } from "../core/clipboard.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { aplicarLogoApp, inicializarSelectorLogo } from "../core/marca.js";
 import { coloresDePaletaActual, coloresIntroEfectivos, espejarColoresIntroLocal, espejarIntroAperturaLocal, introAperturaActivada, modoColoresIntro, verAnimacionIntro } from "../core/intro-apertura.js";
-import { traducirTextoInterfaz } from "../core/i18n.js";
+import { obtenerIdiomaActual, traducirTextoInterfaz } from "../core/i18n.js";
+import { renderizarMarkdownSimple } from "../core/onboarding.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 import { abrirConfirmacion, construirPillSwitchBinario, mostrarToast } from "../ui/componentes.js";
 import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta, obtenerModoDisenoLocal, obtenerModoTemaLocal, guardarModoTemaLocal, guardarModoDisenoLocal } from "../ui/tema.js";
@@ -25,17 +26,8 @@ import {
   eliminarAdjuntosDeTareasDeSemestre,
   hayAdjuntosGuardados,
 } from "../core/storage-adjuntos.js";
-// FIX (2026-09-26, ronda 3): este import había vuelto a apuntar a
-// core/notificaciones-push.js — el módulo Web Push retirado el
-// 2026-08-25 (ver MAPA_FUNCIONES.md). Es el MISMO bug ya diagnosticado y
-// resuelto antes ("no deja activarlas ni usarlas bien"), que volvió a
-// aparecer — si notificaciones-push.js ya no existe de verdad en el
-// árbol, este import rompía la carga de TODO el módulo, y eso a su vez
-// explica por qué Personalizar se veía con switches simples en vez de
-// los pill switch de montarPillSwitch más abajo: si el import de arriba
-// tira error, renderizarAjustes() nunca llega a correr, así que ningún
-// checkbox de index.html se reemplaza por nada. Reconectado a
-// core/notificaciones-calendario.js, que es el módulo real y vigente.
+// Ajustes usa Google Calendar para los recordatorios vigentes. El módulo
+// antiguo de Web Push no forma parte del flujo activo.
 import {
   activarSincronizacionCalendario,
   desactivarSincronizacionCalendario,
@@ -1171,6 +1163,92 @@ function habilitarArrastreNavegacion(contenedor) {
  * renderizarAjustes() se vuelve a llamar (cada cambio de pill, tema, etc.).
  * El dataset.accordionInit evita enganchar el delegado más de una vez.
  */
+function inicializarAccesoDocumentosLegales() {
+  document.querySelectorAll("[data-documento-legal]").forEach((boton) => {
+    if (boton.dataset.legalInit) return;
+    boton.dataset.legalInit = "1";
+    boton.addEventListener("click", async () => {
+      let modal = document.getElementById("modal-documento-legal");
+      if (!modal) {
+        modal = document.createElement("div");
+        modal.id = "modal-documento-legal";
+        modal.className = "modal-overlay";
+        modal.setAttribute("role", "presentation");
+        const tarjeta = document.createElement("section");
+        tarjeta.className = "glass-card stack modal-card";
+        tarjeta.style.width = "min(860px, calc(100vw - 28px))";
+        tarjeta.style.maxHeight = "90dvh";
+        tarjeta.style.overflow = "hidden";
+        tarjeta.setAttribute("role", "dialog");
+        tarjeta.setAttribute("aria-modal", "true");
+        tarjeta.setAttribute("aria-labelledby", "titulo-modal-documento-legal");
+        const encabezado = document.createElement("div");
+        encabezado.className = "row";
+        encabezado.style.justifyContent = "space-between";
+        encabezado.style.alignItems = "center";
+        const titulo = document.createElement("h2");
+        titulo.id = "titulo-modal-documento-legal";
+        titulo.style.margin = "0";
+        const cerrar = document.createElement("button");
+        cerrar.type = "button";
+        cerrar.className = "btn btn-secondary";
+        cerrar.textContent = traducirTextoInterfaz("Cerrar");
+        cerrar.setAttribute("aria-label", traducirTextoInterfaz("Cerrar"));
+        const contenido = document.createElement("div");
+        contenido.id = "contenido-modal-documento-legal";
+        contenido.style.textAlign = "left";
+        contenido.style.overflowY = "auto";
+        contenido.style.overscrollBehavior = "contain";
+        contenido.style.padding = "16px 18px";
+        contenido.style.borderRadius = "16px";
+        contenido.style.border = "1px solid var(--border-glass)";
+        contenido.style.lineHeight = "1.55";
+        contenido.style.background = "var(--bg-card, rgba(128,128,128,.08))";
+        contenido.style.maxHeight = "70vh";
+        encabezado.append(titulo, cerrar);
+        tarjeta.append(encabezado, contenido);
+        modal.append(tarjeta);
+        document.body.append(modal);
+        const cerrarModal = () => {
+          modal.classList.add("oculto");
+          window.removeEventListener("keydown", modal._alTeclaDocumentoLegal);
+          modal._botonRetornoDocumentoLegal?.focus();
+        };
+        modal._alTeclaDocumentoLegal = (ev) => { if (ev.key === "Escape") cerrarModal(); };
+        cerrar.addEventListener("click", cerrarModal);
+        modal.addEventListener("click", (ev) => { if (ev.target === modal) cerrarModal(); });
+        modal._cerrarDocumentoLegal = cerrarModal;
+        modal._tituloDocumentoLegal = titulo;
+        modal._contenidoDocumentoLegal = contenido;
+        modal._botonCerrarDocumentoLegal = cerrar;
+      }
+
+      const idioma = ({ en: "EN", it: "IT", fr: "FR" })[obtenerIdiomaActual()] || "ES";
+      const archivos = boton.dataset.documentoLegal === "privacidad"
+        ? { es: "PrivacyES", en: "PrivacyEN", it: "PrivacyIT", fr: "PrivacyFR" }
+        : { es: "TermsES", en: "TermsEN", it: "TermsIT", fr: "TermsFR" };
+      const clave = idioma.toLowerCase();
+      const esPrivacidad = boton.dataset.documentoLegal === "privacidad";
+      modal._botonRetornoDocumentoLegal = boton;
+      modal._solicitudDocumentoLegal = (modal._solicitudDocumentoLegal || 0) + 1;
+      const solicitud = modal._solicitudDocumentoLegal;
+      modal._tituloDocumentoLegal.textContent = traducirTextoInterfaz(esPrivacidad ? "Política de privacidad" : "Términos y condiciones");
+      modal._contenidoDocumentoLegal.textContent = traducirTextoInterfaz("Cargando…");
+      modal.classList.remove("oculto");
+      modal._botonCerrarDocumentoLegal.focus();
+      window.addEventListener("keydown", modal._alTeclaDocumentoLegal);
+      try {
+        const respuesta = await fetch(`${esPrivacidad ? "PrivacyPolicies" : "TermsOfUse"}/${archivos[clave]}.md`, { cache: "no-cache" });
+        if (!respuesta.ok) throw new Error(String(respuesta.status));
+        const texto = await respuesta.text();
+        if (solicitud === modal._solicitudDocumentoLegal) modal._contenidoDocumentoLegal.replaceChildren(renderizarMarkdownSimple(texto));
+      } catch (_) {
+        if (solicitud === modal._solicitudDocumentoLegal) modal._contenidoDocumentoLegal.textContent = traducirTextoInterfaz("No se pudo cargar el texto. Revisa tu conexión e inténtalo de nuevo.");
+      }
+    });
+  });
+}
+
 function inicializarAccordionAjustes() {
   const contenedor = document.getElementById("seccion-configuracion");
   if (!contenedor || contenedor.dataset.accordionInit) return;
@@ -1342,6 +1420,7 @@ function inicializarAjusteIntroApertura() {
 }
 
 function renderizarAjustes() {
+  inicializarAccesoDocumentosLegales();
   inicializarTamanoTextoAjustes();
   inicializarBorradoCuentaApp();
   inicializarAccordionAjustes();
@@ -1807,7 +1886,9 @@ function formatearFechaArchivo(fecha) {
 }
 
 function exportarDatos() {
-  const json = JSON.stringify(estado.datos);
+  const datosExportados = JSON.parse(JSON.stringify(estado.datos));
+  if (datosExportados.configuracion) delete datosExportados.configuracion.gemini_api_key;
+  const json = JSON.stringify(datosExportados);
   const blob = new Blob([json], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -2588,3 +2669,6 @@ export {
   aplicarModoRendimiento,
   DIAS_SEMANA_CONFIG,
 };
+
+
+

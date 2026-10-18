@@ -12,12 +12,12 @@
  * único dentro de su Google Drive (ver js/auth.js).
  */
 const TIPOS_ETIQUETA_AGENDA_DEFAULT = [
-  { id: "examen", nombre: "Examen", base: "examen", color: "#ef4444", activo: true, predeterminado: true },
-  { id: "quiz", nombre: "Quiz", base: "examen", color: "#f97316", activo: true, predeterminado: true },
-  { id: "tarea", nombre: "Tarea", base: "tarea", color: "#eab308", activo: true, predeterminado: true },
-  { id: "proyecto", nombre: "Proyecto", base: "tarea", color: "#a855f7", activo: true, predeterminado: true },
-  { id: "evento", nombre: "Evento", base: "evento", color: "#06b6d4", activo: true, predeterminado: true },
-  { id: "feriado", nombre: "Feriado", base: "evento", color: "#10b981", activo: true, predeterminado: true },
+  { id: "examen", nombre: "Examen", base: "examen", color: "#ef4444", activo: true, predeterminado: true, ayuda_wapper: "" },
+  { id: "quiz", nombre: "Quiz", base: "examen", color: "#f97316", activo: true, predeterminado: true, ayuda_wapper: "" },
+  { id: "tarea", nombre: "Tarea", base: "tarea", color: "#eab308", activo: true, predeterminado: true, ayuda_wapper: "" },
+  { id: "proyecto", nombre: "Proyecto", base: "tarea", color: "#a855f7", activo: true, predeterminado: true, ayuda_wapper: "" },
+  { id: "evento", nombre: "Evento", base: "evento", color: "#06b6d4", activo: true, predeterminado: true, ayuda_wapper: "" },
+  { id: "feriado", nombre: "Feriado", base: "evento", color: "#10b981", activo: true, predeterminado: true, ayuda_wapper: "" },
 ];
 
 function crearDatosUsuarioNuevo() {
@@ -41,6 +41,7 @@ function crearDatosUsuarioNuevo() {
       onboarding_visto: false,         // true desde la primera vez que se abre el ingreso; hasta entonces no hay botón × (ver onboarding.js)
       onboarding_progreso: null,       // { etapa, indice } de la última pantalla vista; se borra al terminar
       guia_plan_pendiente: null,       // "plan" | "semestres" mientras la guía posterior al onboarding siga sin terminar o saltarse
+      onboarding_plan_en_blanco_pendiente: false, // continúa a Semestres al crear la primera materia del flujo inicial en blanco
       icono_app: "📘",              // icono personal localizable que acompaña la paleta elegida
       logo_app: "folder",
       logo_app_url: null,
@@ -609,11 +610,11 @@ const SEPARADOR_ID_RECORDATORIO_OFFSET = "::";
  * events.insert nuevo en el siguiente intento en vez de seguir apuntando a
  * un id que ya no existe.
  */
-function crearEventoAgenda({ tipo, nombre, fecha, hora, materiaMatriculadaId, semestreId, notas, esFeriado, tipoEtiquetaId, tipoEtiquetaNombre, tipoEtiquetaColor }) {
+function crearEventoAgenda({ id, tipo, nombre, fecha, hora, materiaMatriculadaId, semestreId, notas, esFeriado, tipoEtiquetaId, tipoEtiquetaNombre, tipoEtiquetaColor }) {
   const tipoValido = TIPOS_EVENTO_AGENDA.includes(tipo) ? tipo : "evento";
   const vinculada = Boolean(materiaMatriculadaId && semestreId);
   return sellarTimestamp({
-    id: "ag_" + crypto.randomUUID(),
+    id: id || "ag_" + crypto.randomUUID(),
     tipo: tipoValido,
     tipo_etiqueta_id: tipoEtiquetaId || tipoValido,
     tipo_etiqueta_nombre: tipoEtiquetaNombre || null,

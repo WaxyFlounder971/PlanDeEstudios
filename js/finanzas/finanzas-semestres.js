@@ -15,6 +15,8 @@
    financiero del semestre (finanzas_semestre) ya no se crea con un botón
    aparte ("Crear registro"): se crea solo, en silencio, la primera vez
    que se agrega un pago o un ingreso (ver obtenerOCrearRegistroDeSemestre).
+   Parte D: la edición queda en un borrador por semestre y se confirma o
+   descarta en conjunto, sin escribir cambios intermedios a los datos.
    ========================================================================= */
 
 import {
@@ -39,6 +41,10 @@ import { formatearFechaLarga, formatearMonto } from "./finanzas.js";
  * proyecto). Guarda semestre.id.
  */
 const semestresExpandidosFinanzas = new Set();
+// Borrador temporal por semestre. Los cambios del detalle solo llegan a los
+// datos sincronizados al confirmar Guardar; cerrar o reabrir la sección no
+// descarta lo que la persona todavía está editando.
+const borradoresFinanzasSemestre = new Map();
 
 /**
  * Becas y Pagos de Matrícula — Parte B.2: reparte `total` entre
@@ -67,6 +73,10 @@ function repartirMontoEnPartes(total, cantidadPartes) {
 function obtenerRegistroDeSemestre(semestreId) {
   normalizarRegistrosFinancierosPorSemestre();
   return (estado.datos.finanzas_semestre || []).find((r) => r.semestre_id === semestreId) || null;
+}
+
+function clonarRegistroFinanciero(registro) {
+  return registro ? JSON.parse(JSON.stringify(registro)) : null;
 }
 
 /** Un semestre puede tener como máximo un registro financiero. Consolida
@@ -147,7 +157,10 @@ function renderizarPestanaSemestresFinanzas(contenedor) {
 /** Fila de un semestre (glass-card): encabezado siempre visible + panel
  *  de detalle desplegable si está en semestresExpandidosFinanzas. */
 function construirTarjetaSemestreFinanzas(semestre, contenedorLista) {
-  const registro = obtenerRegistroDeSemestre(semestre.id);
+  const modoEdicion = borradoresFinanzasSemestre.has(semestre.id);
+  const registro = modoEdicion
+    ? borradoresFinanzasSemestre.get(semestre.id)
+    : obtenerRegistroDeSemestre(semestre.id);
   const expandido = semestresExpandidosFinanzas.has(semestre.id);
 
   const tarjeta = document.createElement("div");
@@ -219,7 +232,7 @@ function construirTarjetaSemestreFinanzas(semestre, contenedorLista) {
     const panel = document.createElement("div");
     panel.style.cssText =
       "margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.12);";
-    panel.appendChild(construirPanelDetalleFinanzasSemestre(semestre, registro, contenedorLista));
+    panel.appendChild(construirPanelDetalleFinanzasSemestre(semestre, registro, contenedorLista, modoEdicion));
     tarjeta.appendChild(panel);
   }
 
@@ -235,7 +248,60 @@ function construirTarjetaSemestreFinanzas(semestre, contenedorLista) {
  * descripción nunca se corte/trunque, así que ninguna columna tiene un
  * ancho mínimo tan chico como para forzar eso.
  */
-function construirPanelDetalleFinanzasSemestre(semestre, registro, contenedorLista) {
+function construirPanelDetalleFinanzasSemestre(semestre, registro, contenedorLista, modoEdicion) {
+  const envoltorio = document.createElement("div");
+  envoltorio.className = "stack";
+  envoltorio.style.gap = "12px";
+
+  const controles = document.createElement("div");
+  controles.className = "row";
+  controles.style.cssText = "justify-content:flex-end; flex-wrap:wrap; gap:8px;";
+  if (modoEdicion) {
+    const btnDescartar = document.createElement("button");
+    btnDescartar.type = "button";
+    btnDescartar.className = "btn btn-secondary";
+    btnDescartar.textContent = traducirTextoInterfaz("Descartar cambios");
+    btnDescartar.addEventListener("click", () => {
+      borradoresFinanzasSemestre.delete(semestre.id);
+      refrescarListaFinanzas(contenedorLista);
+    });
+    const btnGuardar = document.createElement("button");
+    btnGuardar.type = "button";
+    btnGuardar.className = "btn btn-primary";
+    btnGuardar.textContent = traducirTextoInterfaz("Guardar cambios");
+    btnGuardar.addEventListener("click", () => {
+      const borrador = borradoresFinanzasSemestre.get(semestre.id);
+      if (!borrador) return;
+      const vacio = !borrador.pagos_matricula.length && !borrador.ingresos_beca.length;
+      const indice = (estado.datos.finanzas_semestre || []).findIndex((r) => r.semestre_id === semestre.id);
+      if (indice >= 0) estado.datos.finanzas_semestre[indice] = sellarTimestamp(borrador);
+      else if (!vacio) {
+        if (!Array.isArray(estado.datos.finanzas_semestre)) estado.datos.finanzas_semestre = [];
+        estado.datos.finanzas_semestre.push(sellarTimestamp(borrador));
+      }
+      if (indice >= 0 || !vacio) marcarCambioPendiente();
+      borradoresFinanzasSemestre.delete(semestre.id);
+      refrescarListaFinanzas(contenedorLista);
+      mostrarToast(traducirTextoInterfaz("Cambios financieros guardados."));
+    });
+    controles.append(btnDescartar, btnGuardar);
+  } else {
+    const btnEditarSemestre = document.createElement("button");
+    btnEditarSemestre.type = "button";
+    btnEditarSemestre.className = "btn btn-secondary";
+    btnEditarSemestre.textContent = traducirTextoInterfaz("Editar semestre");
+    btnEditarSemestre.addEventListener("click", () => {
+      const actual = obtenerRegistroDeSemestre(semestre.id);
+      borradoresFinanzasSemestre.set(
+        semestre.id,
+        clonarRegistroFinanciero(actual) || crearRegistroFinancieroSemestre({ semestreId: semestre.id })
+      );
+      refrescarListaFinanzas(contenedorLista);
+    });
+    controles.appendChild(btnEditarSemestre);
+  }
+  envoltorio.appendChild(controles);
+
   const grid = document.createElement("div");
   grid.style.cssText =
     "display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px; align-items:start;";
@@ -250,6 +316,7 @@ function construirPanelDetalleFinanzasSemestre(semestre, registro, contenedorLis
       registro,
       semestre,
       contenedorLista,
+      modoEdicion,
     })
   );
 
@@ -263,38 +330,34 @@ function construirPanelDetalleFinanzasSemestre(semestre, registro, contenedorLis
       registro,
       semestre,
       contenedorLista,
+      modoEdicion,
     })
   );
 
-  const envoltorio = document.createElement("div");
-  envoltorio.className = "stack";
-  envoltorio.style.gap = "12px";
   envoltorio.appendChild(grid);
 
   // Se conserva la posibilidad de borrar el registro financiero COMPLETO
   // del semestre (existía en el modal de Parte A) — ahora como link
   // discreto al fondo, para no competir visualmente con las tarjetas de
   // arriba. Solo se muestra si ya hay algo cargado.
-  if (registro && (registro.pagos_matricula.length > 0 || registro.ingresos_beca.length > 0)) {
+  if (modoEdicion && registro && (registro.pagos_matricula.length > 0 || registro.ingresos_beca.length > 0)) {
     const btnEliminarTodo = document.createElement("button");
     btnEliminarTodo.type = "button";
     btnEliminarTodo.className = "btn-discreto";
     btnEliminarTodo.style.cssText = "align-self:center; font-size:0.8rem; opacity:0.75;";
-    btnEliminarTodo.textContent = "Eliminar todo el registro financiero de este semestre";
+    btnEliminarTodo.textContent = traducirTextoInterfaz("Eliminar todos los movimientos de este semestre");
     btnEliminarTodo.addEventListener("click", () => {
       abrirConfirmacion({
-        titulo: "Eliminar registro financiero",
-        mensaje: `Se van a borrar TODOS los pagos de matrícula e ingresos de beca de ${semestre.nombre}. Esta acción no se puede deshacer.`,
-        textoConfirmar: "Eliminar todo",
+        titulo: traducirTextoInterfaz("Eliminar movimientos"),
+        mensaje: traducirTextoInterfaz(`Se van a quitar del borrador todos los pagos de matrícula e ingresos de beca de ${semestre.nombre}. Guarda los cambios para confirmarlo.`),
+        textoConfirmar: traducirTextoInterfaz("Eliminar todo"),
         onConfirmar: () => {
-          estado.datos.finanzas_semestre = (estado.datos.finanzas_semestre || []).filter(
-            (r) => r.id !== registro.id
-          );
-          if (!Array.isArray(estado.datos._eliminados_finanzas_semestre)) {
-            estado.datos._eliminados_finanzas_semestre = [];
+          for (const pago of [...registro.pagos_matricula]) {
+            eliminarItemFinanzas({ tipo: "matricula", registro, itemId: pago.id });
           }
-          estado.datos._eliminados_finanzas_semestre.push({ id: registro.id, eliminadoEn: Date.now() });
-          marcarCambioPendiente();
+          for (const ingreso of [...registro.ingresos_beca]) {
+            eliminarItemFinanzas({ tipo: "beca", registro, itemId: ingreso.id });
+          }
           refrescarListaFinanzas(contenedorLista);
         },
       });
@@ -305,7 +368,7 @@ function construirPanelDetalleFinanzasSemestre(semestre, registro, contenedorLis
   return envoltorio;
 }
 
-function construirColumnaListaFinanzas({ tipo, titulo, textoAgregar, claseBadge, textoVacio, registro, semestre, contenedorLista }) {
+function construirColumnaListaFinanzas({ tipo, titulo, textoAgregar, claseBadge, textoVacio, registro, semestre, contenedorLista, modoEdicion }) {
   const esMatricula = tipo === "matricula";
   const lista = registro ? (esMatricula ? registro.pagos_matricula : registro.ingresos_beca) : [];
   const total = registro ? (esMatricula ? calcularTotalPagosMatricula(registro) : calcularTotalIngresosBeca(registro)) : 0;
@@ -331,11 +394,12 @@ function construirColumnaListaFinanzas({ tipo, titulo, textoAgregar, claseBadge,
   } else {
     lista.forEach((item) => {
       columna.appendChild(
-        construirTarjetaItemFinanzas({ item, tipo, claseBadge, registro, semestre, contenedorLista })
+          construirTarjetaItemFinanzas({ item, tipo, claseBadge, registro, semestre, contenedorLista, modoEdicion })
       );
     });
   }
 
+  if (!modoEdicion) return columna;
   const btnAgregar = document.createElement("button");
   btnAgregar.type = "button";
   btnAgregar.className = "btn-discreto";
@@ -354,11 +418,10 @@ function construirColumnaListaFinanzas({ tipo, titulo, textoAgregar, claseBadge,
  * glass-card por cada pago/ingreso — descripción (o "Sin descripción" en
  * gris) + fecha chica en muted debajo si tiene, monto en badge a la
  * derecha, y botones de editar/borrar discretos al final. Visibles
- * siempre (no solo en un "modo edición" — eso es Parte D, que agrega la
- * confirmación de guardar/descartar; acá cada edición/borrado se guarda
- * al toque, igual que el resto del proyecto).
+ * solo durante el modo de edición del semestre. Los cambios se aplican al
+ * borrador y se sincronizan juntos al confirmar Guardar.
  */
-function construirTarjetaItemFinanzas({ item, tipo, claseBadge, registro, semestre, contenedorLista }) {
+function construirTarjetaItemFinanzas({ item, tipo, claseBadge, registro, semestre, contenedorLista, modoEdicion }) {
   const esMatricula = tipo === "matricula";
 
   const fila = document.createElement("div");
@@ -394,6 +457,10 @@ function construirTarjetaItemFinanzas({ item, tipo, claseBadge, registro, semest
   badgeMonto.textContent = formatearMonto(item.monto);
   derecha.appendChild(badgeMonto);
 
+  if (!modoEdicion) {
+    fila.append(info, derecha);
+    return fila;
+  }
   const btnEditar = document.createElement("button");
   btnEditar.type = "button";
   btnEditar.className = "btn-discreto";
@@ -416,7 +483,7 @@ function construirTarjetaItemFinanzas({ item, tipo, claseBadge, registro, semest
       textoConfirmar: "Eliminar",
       onConfirmar: () => {
         eliminarItemFinanzas({ tipo, registro, itemId: item.id });
-        marcarCambioPendiente();
+        if (!borradoresFinanzasSemestre.has(semestre.id)) marcarCambioPendiente();
         refrescarListaFinanzas(contenedorLista);
       },
     });
@@ -449,7 +516,7 @@ function eliminarItemFinanzas({ tipo, registro, itemId }) {
  * cantidad de pagos_matricula de una vez ("Pago 1 de N", editable cada uno
  * después, independiente del resto).
  */
-function abrirModalItemFinanzas({ tipo, semestre, registro, itemExistente, contenedorLista }) {
+function abrirModalItemFinanzas({ tipo, semestre, registro, itemExistente, contenedorLista, descartarBorradorAlCancelar = false }) {
   const esNuevo = !itemExistente;
   const esMatricula = tipo === "matricula";
   const permiteDividir = esMatricula && esNuevo;
@@ -465,7 +532,15 @@ function abrirModalItemFinanzas({ tipo, semestre, registro, itemExistente, conte
   caja.addEventListener("click", (e) => e.stopPropagation());
 
   const cerrar = () => overlay.remove();
-  overlay.addEventListener("click", cerrar);
+  const cancelar = () => {
+    if (!overlay.isConnected) return;
+    cerrar();
+    if (descartarBorradorAlCancelar) {
+      borradoresFinanzasSemestre.delete(semestre.id);
+      refrescarListaFinanzas(contenedorLista);
+    }
+  };
+  overlay.addEventListener("click", cancelar);
 
   const tituloTexto = esNuevo
     ? esMatricula
@@ -638,7 +713,7 @@ function abrirModalItemFinanzas({ tipo, semestre, registro, itemExistente, conte
   btnCancelar.className = "btn btn-secondary";
   btnCancelar.style.flex = "1";
   btnCancelar.textContent = "Cancelar";
-  btnCancelar.addEventListener("click", cerrar);
+  btnCancelar.addEventListener("click", cancelar);
   filaBotones.appendChild(btnCancelar);
 
   const btnGuardar = document.createElement("button");
@@ -661,7 +736,7 @@ function abrirModalItemFinanzas({ tipo, semestre, registro, itemExistente, conte
         mostrarToast("Ingresá un monto total válido.");
         return;
       }
-      const registroFinal = obtenerOCrearRegistroDeSemestre(semestre.id);
+      const registroFinal = registroParaEditar(semestre.id);
       montos.forEach((monto, i) => {
         registroFinal.pagos_matricula.push(
           crearPagoMatricula({ descripcion: `Pago ${i + 1} de ${montos.length}`, monto })
@@ -683,7 +758,7 @@ function abrirModalItemFinanzas({ tipo, semestre, registro, itemExistente, conte
         sellarTimestamp(itemExistente);
         sellarTimestamp(registro);
       } else {
-        const registroFinal = obtenerOCrearRegistroDeSemestre(semestre.id);
+        const registroFinal = registroParaEditar(semestre.id);
         const nuevoItem = esMatricula
           ? crearPagoMatricula({ descripcion, monto, fecha })
           : crearIngresoBeca({ descripcion, monto, fecha });
@@ -692,7 +767,7 @@ function abrirModalItemFinanzas({ tipo, semestre, registro, itemExistente, conte
       }
     }
 
-    marcarCambioPendiente();
+    if (!borradoresFinanzasSemestre.has(semestre.id)) marcarCambioPendiente();
     cerrar();
     // El semestre queda expandido (no se toca semestresExpandidosFinanzas)
     // para que se vea de una vez la tarjeta recién agregada/editada.
@@ -705,4 +780,97 @@ function abrirModalItemFinanzas({ tipo, semestre, registro, itemExistente, conte
   document.body.appendChild(overlay);
 }
 
-export { normalizarRegistrosFinancierosPorSemestre, renderizarPestanaSemestresFinanzas };
+function registroParaEditar(semestreId) {
+  if (borradoresFinanzasSemestre.has(semestreId)) {
+    const borrador = borradoresFinanzasSemestre.get(semestreId);
+    if (!Array.isArray(borrador.pagos_matricula)) borrador.pagos_matricula = [];
+    if (!Array.isArray(borrador.ingresos_beca)) borrador.ingresos_beca = [];
+    return borrador;
+  }
+  return obtenerOCrearRegistroDeSemestre(semestreId);
+}
+
+function abrirSelectorSemestreParaFinanzas(tipo, alSeleccionar) {
+  if (borradoresFinanzasSemestre.size) {
+    mostrarToast(traducirTextoInterfaz("Guarda o descarta los cambios de Finanzas antes de agregar otro movimiento."));
+    return;
+  }
+  const semestres = [...obtenerSemestresActuales(), ...obtenerSemestresPasados()];
+  if (!semestres.length) {
+    mostrarToast(traducirTextoInterfaz("Primero registra un semestre."));
+    return;
+  }
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.style.cssText = "position:fixed; inset:0; z-index:300; display:flex; align-items:center; justify-content:center; padding:16px;";
+  const caja = document.createElement("div");
+  caja.className = "glass-card stack";
+  caja.style.cssText = "max-width:440px; width:100%; padding:18px;";
+  caja.addEventListener("click", (evento) => evento.stopPropagation());
+  const titulo = document.createElement("h2");
+  titulo.style.margin = "0";
+  titulo.textContent = traducirTextoInterfaz(tipo === "matricula" ? "Pago de matrícula" : "Ingreso de beca");
+  const etiqueta = document.createElement("label");
+  etiqueta.className = "form-label";
+  etiqueta.textContent = traducirTextoInterfaz("Elige el semestre");
+  const select = document.createElement("select");
+  select.className = "form-input";
+  semestres.forEach((semestre) => {
+    const opcion = document.createElement("option");
+    opcion.value = semestre.id;
+    opcion.textContent = traducirTextoInterfaz(semestre.nombre);
+    select.appendChild(opcion);
+  });
+  etiqueta.appendChild(select);
+  const botones = document.createElement("div");
+  botones.className = "row";
+  const cerrar = () => overlay.remove();
+  const cancelar = document.createElement("button");
+  cancelar.type = "button";
+  cancelar.className = "btn btn-secondary";
+  cancelar.textContent = traducirTextoInterfaz("Cancelar");
+  cancelar.addEventListener("click", cerrar);
+  const continuar = document.createElement("button");
+  continuar.type = "button";
+  continuar.className = "btn btn-primary";
+  continuar.textContent = traducirTextoInterfaz("Continuar");
+  continuar.addEventListener("click", () => {
+    const semestreId = select.value;
+    cerrar();
+    alSeleccionar(semestreId);
+  });
+  botones.append(cancelar, continuar);
+  caja.append(titulo, etiqueta, botones);
+  overlay.appendChild(caja);
+  overlay.addEventListener("click", cerrar);
+  document.body.appendChild(overlay);
+}
+
+function iniciarEdicionMovimientoFinanzas(tipo, semestreId, contenedorLista) {
+  const semestre = [...obtenerSemestresActuales(), ...obtenerSemestresPasados()].find((s) => s.id === semestreId);
+  if (!semestre || !contenedorLista) return;
+  const actual = obtenerRegistroDeSemestre(semestreId);
+  borradoresFinanzasSemestre.set(
+    semestreId,
+    clonarRegistroFinanciero(actual) || crearRegistroFinancieroSemestre({ semestreId })
+  );
+  semestresExpandidosFinanzas.add(semestreId);
+  refrescarListaFinanzas(contenedorLista);
+  abrirModalItemFinanzas({
+    tipo,
+    semestre,
+    registro: borradoresFinanzasSemestre.get(semestreId),
+    itemExistente: null,
+    contenedorLista,
+    descartarBorradorAlCancelar: true,
+  });
+}
+
+export {
+  normalizarRegistrosFinancierosPorSemestre,
+  renderizarPestanaSemestresFinanzas,
+  hayBorradorFinanzasPendiente: () => borradoresFinanzasSemestre.size > 0,
+  abrirSelectorSemestreParaFinanzas,
+  iniciarEdicionMovimientoFinanzas,
+};

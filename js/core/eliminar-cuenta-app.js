@@ -29,18 +29,27 @@ async function llamarWorker(path, opciones = {}) {
   const controlador = new AbortController();
   const timeout = setTimeout(() => controlador.abort(), 12000);
   try {
-    return await fetch(`${URL_WORKER_OAUTH}${path}`, { ...opciones, signal: controlador.signal });
+    const headers = new Headers(opciones.headers || {});
+    if (estado.token && !headers.has("Authorization")) headers.set("Authorization", `Bearer ${estado.token}`);
+    return await fetch(`${URL_WORKER_OAUTH}${path}`, { ...opciones, headers, signal: controlador.signal });
   } finally {
     clearTimeout(timeout);
   }
 }
 
 async function borrarParticipacionesCompetencias() {
-  const correo = estado.datos.perfil?.correo;
-  for (const competencia of estado.datos.competencias_unidas || []) {
+  const correo = String(estado.datos.perfil?.correo || "").trim().toLowerCase();
+  if (!correo) throw new Error("No se pudo identificar la cuenta para retirar sus competencias.");
+  const lista = await llamarWorker(`/identificadores/${encodeURIComponent(correo)}/competencias`);
+  if (!lista.ok) throw new Error("No se pudieron revisar todas las participaciones de competencias.");
+  const remotas = (await lista.json()).competencias || [];
+  const locales = estado.datos.competencias_unidas || [];
+  const porId = new Map(locales.map((c) => [c.id, c]));
+  remotas.forEach((c) => { const local = porId.get(c.id) || {}; porId.set(c.id, { ...c, ...local, participante_id: c.participante_id || local.participante_id }); });
+  for (const competencia of porId.values()) {
     const id = encodeURIComponent(competencia.id);
-    if (competencia.es_creador) {
-      const tokenCreador = localStorage.getItem(`tokenCreadorCompetencia_${competencia.id}`);
+    const tokenCreador = localStorage.getItem(`tokenCreadorCompetencia_${competencia.id}`);
+    if (competencia.es_creador || tokenCreador) {
       if (!tokenCreador) throw new Error(`Falta el permiso local para retirar la cuenta de «${competencia.nombre}».`);
       const respuesta = await llamarWorker(`/competencias/${id}`);
       if (!respuesta.ok && respuesta.status !== 404) throw new Error(`No se pudo revisar la competencia «${competencia.nombre}».`);
@@ -58,7 +67,7 @@ async function borrarParticipacionesCompetencias() {
     }
     const salida = await llamarWorker(`/competencias/${id}/participantes/${encodeURIComponent(competencia.participante_id)}`, {
       method: "DELETE", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ identificador_usuario: correo }),
+      body: JSON.stringify({ identificador_usuario: correo, eliminar_datos_cuenta: true }),
     });
     if (!salida.ok && salida.status !== 404) throw new Error(`No se pudo retirar la cuenta de «${competencia.nombre}».`);
   }

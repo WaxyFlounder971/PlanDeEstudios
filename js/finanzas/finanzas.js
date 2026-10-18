@@ -12,7 +12,7 @@ import { estado } from "../core/storage.js";
 import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { construirGraficasResumenFinanzas } from "./finanzas-graficas.js";
 import { renderizarPestanaBeneficios, renderizarPestanaGastosU } from "./finanzas-gastos.js";
-import { normalizarRegistrosFinancierosPorSemestre, renderizarPestanaSemestresFinanzas } from "./finanzas-semestres.js";
+import { normalizarRegistrosFinancierosPorSemestre, renderizarPestanaSemestresFinanzas, abrirSelectorSemestreParaFinanzas, iniciarEdicionMovimientoFinanzas } from "./finanzas-semestres.js";
 
 /**
  * FIX (mismo bug de arranque "Cannot access 'estado' before initialization"
@@ -267,6 +267,26 @@ function renderizarFinanzas() {
   cont.innerHTML = "";
 
   cont.appendChild(construirTabsFinanzas());
+
+  const accesosRapidos = document.createElement("div");
+  accesosRapidos.className = "row";
+  accesosRapidos.style.cssText = "display:grid; grid-template-columns:1fr 1fr; gap:8px; width:100%;";
+  [
+    { tipo: "matricula", texto: "Pago de matrícula" },
+    { tipo: "beca", texto: "Ingreso de beca" },
+  ].forEach(({ tipo, texto }) => {
+    const boton = document.createElement("button");
+    boton.type = "button";
+    boton.className = "btn btn-secondary";
+    boton.textContent = traducirTextoInterfaz(texto);
+    boton.addEventListener("click", () => abrirSelectorSemestreParaFinanzas(tipo, (semestreId) => {
+      estado.finanzasVistaActiva = "semestres";
+      renderizarFinanzas();
+      iniciarEdicionMovimientoFinanzas(tipo, semestreId, document.getElementById("finanzas-contenido"));
+    }));
+    accesosRapidos.appendChild(boton);
+  });
+  cont.appendChild(accesosRapidos);
 
   const contenido = document.createElement("div");
   contenido.id = "finanzas-contenido";

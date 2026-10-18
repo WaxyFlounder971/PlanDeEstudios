@@ -15,6 +15,7 @@ import { abrirModalCrearPlan } from "./plan-esquema.js";
 import { abrirModalGestionPlanes } from "./plan-gestionar.js";
 import { manejarClickImportar, mostrarErroresImportacion } from "./plan-importacion-csv.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
+import { obtenerIdiomaActual } from "../core/i18n.js";
 
 /* =========================================================================
    PLAN.JS — Iteración 1 (Parte 1-B + Parte 2 FINAL)
@@ -58,6 +59,105 @@ function construirEncabezadoCSV(tiposHoras) {
   return partes.join(",");
 }
 
+// Traducciones del prompt extenso. Los nombres de metadatos, encabezados y
+// valores de control se conservan en español porque forman parte del contrato
+// que consume plan-importacion-csv.js.
+const PROMPTS_IMPORTACION = {
+  en: (modo, link) => `${modo === "link" ? `If web browsing is unavailable or you cannot open this link, tell me so I can use another method; do not assume it is impossible without trying.\n\nVisit this public university page and extract the complete curriculum: ${link}\nIf courses are shown in JavaScript tabs or blocks and you cannot confidently determine a course's Bloque, put "REVISAR" in that row instead of guessing.` : modo === "pdf" ? "I am attaching my degree curriculum as a PDF. It may contain real text tables or scanned image pages; process either kind." : "I am attaching a PDF made from screenshots of my curriculum (one screenshot per page). Read all pages together as one continuous curriculum, joining their information without losing courses or depending on page order."}
+
+Act as a UNIVERSAL academic-data structurer. Handle curricula from any university (including UCR, UNA, TEC, UTP, UNAM, and others) and any layout: tables, diagrams, grids, or lists grouped by blocks, cycles, levels, years, or semesters.
+
+=== REQUIRED OUTPUT ===
+Put the entire result inside ONE plain CSV code block. Return no explanation before or after it, except the continuation notice allowed by rule 11. Anything outside the block will be lost.
+
+At the very top of that same block, include these metadata lines, one per line, only when certain; omit any uncertain line and never invent a value:
+CARRERA: ...
+CODIGO_PLAN: ...
+UNIVERSIDAD: ...
+TIPO_TITULO: ... (Diplomado/Bachillerato/Licenciatura/Maestría/Doctorado, if identified)
+HORAS_COLUMNAS: comma-separated full names of the hour types used by this specific document. Use the full words as written in the source, never abbreviations. If the source only gives T/P/L/TP/EI/HT/HD, use the most likely full names: Teoría, Práctica, Laboratorio, Teoría-Práctica, Estudio Independiente, Horas Teóricas, Horas de Docencia. If the curriculum has no hour concept, write HORAS_COLUMNAS: Ninguna. If it gives only a total, use one column named Horas. Detect this from the document; do not assume every university uses T/P/L/TP.
+
+Immediately after metadata, in the same code block, write the header and all course rows in this exact schema:
+Bloque,Codigo,Nombre,Creditos,[one column per HORAS_COLUMNAS value],Requisitos,Correquisitos,SinDefinir
+If HORAS_COLUMNAS is Ninguna, omit hour columns. Always keep every other column, including SinDefinir.
+
+RULES:
+1. BLOQUE has exactly three kinds of value: a sequential integer, "OPTATIVA" (or "ELECTIVA"), or "REVISAR". (a) Use a sequential integer when a course or reserved elective slot is tied to a required year/cycle/semester/term. Number every chronological sub-block in actual order (1, 2, 3...), without restarting each year; convert named levels to that sequence. (b) Use "OPTATIVA" or "ELECTIVA" for a genuinely optional course from a general elective bank that can be taken at different points or not taken; a suggested cycle does not make its location mandatory. (c) Use "REVISAR" only when you cannot determine either its required location or whether it is optional. Never use it as a synonym for optional.
+2. CODIGO must be exactly as printed, even for an undefined elective slot (for example "Elective", "Wahlfach", or "Cours au choix"). Never invent, normalize, or replace a source code. Only when the document truly supplies no code, use "SD-B" plus the sequential block (e.g. SD-B7). If multiple rows in that block lack codes, make them unique and sequential in source order: SD-B7-1, SD-B7-2, etc.
+3. HORAS: use 0 when the document does not report a particular hour type for a course; never leave the cell blank. Extract hours from diagrams or colored grids as well as tables.
+4a. REQUISITOS and CORREQUISITOS: never put a comma inside a cell (it breaks CSV). Use ";" for requirements that are all necessary (AND), and "/" for equivalent alternatives (OR). Use parentheses to combine, e.g. (A;B)/(C;D) means (A AND B) OR (C AND D). Convert "QU-0102, QU-0103 o (QU-0114, QU-0115)" to "(QU-0102;QU-0103)/(QU-0114;QU-0115)". Use "Ninguno" when none exist, never blank; if the source has no corequisite concept, put "Ninguno" for every course. A condition requiring completion of an entire level/block becomes exactly "Bloque N" (optionally followed by "completo" or "aprobado"), using the sequential number from rule 1; the app expands it to all courses in that block. Other non-course conditions, such as a credit threshold or regular-student status, remain plain text; do not invent a course code.
+4b. SINDEFINIR is always the last column and always filled: write exactly "true" for a reserved elective slot with no selected real course yet, and "false" for every confirmed course, including defined courses in separate elective lists.
+5. If a course name (or another cell) contains a comma, wrap the whole cell in double quotes. When unsure, quote it.
+6. Do not add category, area, color, or any unlisted column.
+7. Include every course: electives, languages, seminars, practicums, capstones, and remedial/precalculus courses, even with zero credits.
+8. Include separate elective catalogs too. Use "OPTATIVA" or "ELECTIVA" as Bloque, not the suggested cycle and not "REVISAR" merely because no cycle is stated. These are defined courses, so SinDefinir=false.
+9. For any illegible, ambiguous, or unconfirmed cell, write "REVISAR" instead of inventing codes, credits, or hours.
+10. Ignore summary totals (for example, total degree credits); they are metadata, not course rows.
+11. If the curriculum does not fit in one response, split it into consecutive parts. Only part 1 may contain metadata and the header; later parts contain only rows, in order, with no repeated metadata/header. The app concatenates the parts, so a repeated header breaks import. Tell me between parts that more is coming.`,
+  it: (modo, link) => `${modo === "link" ? `Se non hai la navigazione web o non riesci ad aprire questo link, dimmelo così userò un altro metodo; non presumere che sia impossibile senza prima provare.\n\nVisita questa pagina universitaria pubblica ed estrai il piano di studi completo: ${link}\nSe i corsi sono organizzati in schede o blocchi JavaScript e non puoi stabilire con certezza il Bloque di un corso, scrivi "REVISAR" nella sua riga invece di indovinare.` : modo === "pdf" ? "Allego il piano di studi del mio corso in PDF. Può contenere tabelle di testo o pagine scansionate come immagini: elabora entrambi i formati." : "Allego un PDF creato da più schermate del piano di studi (una schermata per pagina). Leggi tutte le pagine come un unico piano continuo, unendo le informazioni senza perdere corsi e senza dipendere dall'ordine delle pagine."}
+
+Agisci come strutturatore UNIVERSALE di dati accademici. Elabora piani di qualsiasi università (incluse UCR, UNA, TEC, UTP, UNAM e altre) e in qualsiasi formato: tabelle, diagrammi, griglie o elenchi per blocchi, cicli, livelli, anni o semestri.
+
+=== FORMATO RICHIESTO ===
+Inserisci tutto il risultato in UN SOLO blocco di codice CSV semplice. Non aggiungere spiegazioni prima o dopo, tranne l'avviso di continuazione ammesso dalla regola 11. Qualsiasi testo fuori dal blocco andrà perso.
+
+All'inizio dello stesso blocco inserisci questi metadati, uno per riga, solo se sei certo; ometti ogni riga incerta e non inventare valori:
+CARRERA: ...
+CODIGO_PLAN: ...
+UNIVERSIDAD: ...
+TIPO_TITULO: ... (Diplomado/Bachillerato/Licenciatura/Maestría/Doctorado, se identificato)
+HORAS_COLUMNAS: nomi completi, separati da virgole, dei tipi di ore usati nel documento. Usa le parole complete della fonte, mai sigle. Se la fonte riporta solo T/P/L/TP/EI/HT/HD, usa i nomi più probabili: Teoría, Práctica, Laboratorio, Teoría-Práctica, Estudio Independiente, Horas Teóricas, Horas de Docencia. Se il piano non prevede ore, scrivi HORAS_COLUMNAS: Ninguna. Se riporta solo un totale, usa una colonna Horas. Rilevalo dal documento: non presumere che ogni università usi T/P/L/TP.
+
+Subito dopo i metadati, nello stesso blocco di codice, inserisci intestazione e righe con questo schema ESATTO:
+Bloque,Codigo,Nombre,Creditos,[una colonna per ogni valore di HORAS_COLUMNAS],Requisitos,Correquisitos,SinDefinir
+Se HORAS_COLUMNAS è Ninguna, ometti le colonne delle ore. Mantieni sempre tutte le altre colonne, inclusa SinDefinir.
+
+REGOLE:
+1. BLOQUE ammette solo tre tipi di valore: intero progressivo, "OPTATIVA" (o "ELECTIVA"), oppure "REVISAR". (a) Usa l'intero quando il corso o uno spazio riservato a un'elettiva è vincolato a un anno/ciclo/semestre obbligatorio. Numera tutti i sottoblocchi cronologici nell'ordine reale (1, 2, 3...) senza ripartire ogni anno; converti i livelli denominati in tale sequenza. (b) Usa "OPTATIVA" o "ELECTIVA" per un corso davvero facoltativo, da un elenco generale che si può seguire in momenti diversi o non seguire; un ciclo consigliato non rende obbligatoria la collocazione. (c) Usa "REVISAR" solo se non puoi determinare con certezza né la collocazione obbligatoria né la natura facoltativa. Non usarlo come sinonimo di facoltativo.
+2. CODIGO deve essere identico a quello stampato, anche per uno spazio elettivo non ancora definito (es. "Elective", "Wahlfach", "Cours au choix"). Non inventare, normalizzare o sostituire un codice fonte. Solo se il documento non fornisce alcun codice usa "SD-B" più il numero progressivo del blocco (es. SD-B7). Se più righe dello stesso blocco non hanno codice, rendile univoche in ordine di fonte: SD-B7-1, SD-B7-2, ecc.
+3. HORAS: usa 0 quando il documento non riporta uno specifico tipo di ora per quel corso; non lasciare celle vuote. Estrai le ore anche da diagrammi o griglie colorate, non solo da tabelle.
+4a. REQUISITOS e CORREQUISITOS: non inserire mai virgole nella cella (rompono il CSV). Usa ";" per requisiti necessari tutti insieme (AND) e "/" per alternative equivalenti (OR). Usa parentesi per combinare, ad es. (A;B)/(C;D) significa (A E B) OPPURE (C E D). Converti "QU-0102, QU-0103 o (QU-0114, QU-0115)" in "(QU-0102;QU-0103)/(QU-0114;QU-0115)". Se non ce ne sono, scrivi "Ninguno", mai lasciare vuoto; se la fonte non prevede correquisiti, scrivi "Ninguno" per ogni corso. Una condizione che richiede di completare un intero blocco/livello diventa esattamente "Bloque N" (facoltativamente seguito da "completo" o "aprobado"), usando la numerazione della regola 1; l'app la espande in tutti i corsi del blocco. Altre condizioni non riferite a corsi, come una soglia di crediti o lo status di studente regolare, restano testo libero; non inventare codici.
+4b. SINDEFINIR è sempre l'ultima colonna e non può essere vuota: scrivi esattamente "true" per uno spazio elettivo riservato senza corso reale scelto e "false" per ogni corso confermato, inclusi quelli definiti in elenchi separati.
+5. Se il nome di un corso (o un'altra cella) contiene una virgola, racchiudi l'intera cella tra virgolette doppie. In caso di dubbio, usa le virgolette.
+6. Non aggiungere colonne di categoria, area, colore o altre non elencate.
+7. Includi tutti i corsi: elettivi, lingue, seminari, tirocini, lavori finali e corsi propedeutici/precalcolo, anche con zero crediti.
+8. Includi anche elenchi separati di elettivi. Usa "OPTATIVA" o "ELECTIVA" come Bloque, non il ciclo consigliato e non "REVISAR" solo perché il ciclo non è indicato. Sono corsi definiti, quindi SinDefinir=false.
+9. Per ogni cella illeggibile, ambigua o non verificabile scrivi "REVISAR" invece di inventare codici, crediti o ore.
+10. Ignora i totali riepilogativi (per esempio i crediti totali del corso di laurea): sono metadati, non righe di corsi.
+11. Se il piano non entra in una risposta, dividilo in parti consecutive. Solo la prima può contenere metadati e intestazione; le successive devono contenere solo righe, in ordine, senza ripetere intestazione o metadati. L'app concatena le parti, quindi un'intestazione ripetuta rompe l'importazione. Tra una parte e l'altra avvisa che ne seguiranno altre.`,
+  fr: (modo, link) => `${modo === "link" ? `Si la navigation web n'est pas disponible ou si vous ne pouvez pas ouvrir ce lien, dites-le-moi afin que j'utilise une autre méthode ; ne concluez pas que c'est impossible sans avoir essayé.\n\nVisitez cette page universitaire publique et extrayez le programme complet : ${link}\nSi les cours sont répartis dans des onglets ou blocs JavaScript et que vous ne pouvez pas déterminer avec certitude le Bloque d'un cours, écrivez "REVISAR" sur sa ligne au lieu de deviner.` : modo === "pdf" ? "Je joins le programme de mes études au format PDF. Il peut contenir des tableaux textuels ou des pages numérisées comme images : traitez les deux." : "Je joins un PDF composé de plusieurs captures d'écran de mon programme (une capture par page). Lisez toutes les pages comme un seul programme continu, en réunissant les informations sans perdre de cours et sans dépendre de l'ordre des pages."}
+
+Agissez comme un système UNIVERSEL de structuration des données académiques. Traitez les programmes de toute université (dont UCR, UNA, TEC, UTP, UNAM et autres), quels que soient leur format : tableaux, diagrammes, grilles ou listes par blocs, cycles, niveaux, années ou semestres.
+
+=== FORMAT DE SORTIE REQUIS ===
+Placez tout le résultat dans UN SEUL bloc de code CSV brut. N'ajoutez aucune explication avant ou après, sauf l'avis de continuation permis par la règle 11. Tout texte hors du bloc sera perdu.
+
+Au début de ce même bloc, indiquez ces métadonnées, une par ligne, uniquement si vous en êtes certain ; omettez chaque ligne incertaine et n'inventez jamais de valeur :
+CARRERA: ...
+CODIGO_PLAN: ...
+UNIVERSIDAD: ...
+TIPO_TITULO: ... (Diplomado/Bachillerato/Licenciatura/Maestría/Doctorado, si identifiable)
+HORAS_COLUMNAS: noms complets, séparés par des virgules, des types d'heures employés dans ce document. Utilisez les mots complets de la source, jamais les sigles. Si la source ne donne que T/P/L/TP/EI/HT/HD, utilisez les noms complets les plus probables : Teoría, Práctica, Laboratorio, Teoría-Práctica, Estudio Independiente, Horas Teóricas, Horas de Docencia. Si le programme ne prévoit aucune heure, écrivez HORAS_COLUMNAS: Ninguna. S'il ne donne qu'un total, utilisez une seule colonne Horas. Déduisez-le du document ; ne supposez pas que toutes les universités utilisent T/P/L/TP.
+
+Immédiatement après les métadonnées, dans le même bloc, écrivez l'en-tête et les lignes selon ce schéma EXACT :
+Bloque,Codigo,Nombre,Creditos,[une colonne pour chaque valeur de HORAS_COLUMNAS],Requisitos,Correquisitos,SinDefinir
+Si HORAS_COLUMNAS vaut Ninguna, omettez les colonnes d'heures. Gardez toujours toutes les autres colonnes, y compris SinDefinir.
+
+RÈGLES :
+1. BLOQUE n'admet que trois types de valeur : entier séquentiel, "OPTATIVA" (ou "ELECTIVA"), ou "REVISAR". (a) Utilisez l'entier lorsqu'un cours ou un emplacement réservé à une option est rattaché à une année/cycle/semestre obligatoire. Numérotez tous les sous-blocs chronologiques dans l'ordre réel (1, 2, 3...) sans recommencer chaque année ; convertissez les niveaux nommés en cette séquence. (b) Utilisez "OPTATIVA" ou "ELECTIVA" pour un cours réellement facultatif d'une liste générale, pouvant être suivi à différents moments ou ignoré ; un cycle conseillé ne rend pas son emplacement obligatoire. (c) Utilisez "REVISAR" uniquement si vous ne pouvez déterminer avec certitude ni l'emplacement obligatoire ni le caractère facultatif. Ne l'utilisez jamais comme synonyme de facultatif.
+2. CODIGO doit reproduire exactement le code imprimé, même pour un emplacement facultatif non défini (p. ex. "Elective", "Wahlfach", "Cours au choix"). N'inventez, ne normalisez et ne remplacez jamais un code source. Seulement si le document ne donne vraiment aucun code, utilisez "SD-B" suivi du numéro séquentiel du bloc (p. ex. SD-B7). Si plusieurs lignes du bloc n'ont pas de code, rendez-les uniques dans l'ordre source : SD-B7-1, SD-B7-2, etc.
+3. HORAS : utilisez 0 si le document ne précise pas un type d'heure pour un cours ; ne laissez aucune cellule vide. Extrayez aussi les heures des diagrammes et grilles colorées, pas seulement des tableaux.
+4a. REQUISITOS et CORREQUISITOS : ne mettez jamais de virgule dans une cellule (cela casse le CSV). Utilisez ";" pour les prérequis tous nécessaires (ET) et "/" pour les alternatives équivalentes (OU). Groupez avec des parenthèses : (A;B)/(C;D) signifie (A ET B) OU (C ET D). Convertissez "QU-0102, QU-0103 o (QU-0114, QU-0115)" en "(QU-0102;QU-0103)/(QU-0114;QU-0115)". S'il n'y en a pas, écrivez "Ninguno", jamais une cellule vide ; si la source ne prévoit pas de corequis, écrivez "Ninguno" pour chaque cours. Une condition exigeant d'avoir terminé un bloc/niveau entier devient exactement "Bloque N" (éventuellement suivi de "completo" ou "aprobado"), avec la numérotation de la règle 1 ; l'application la développe en tous les cours du bloc. Les autres conditions sans lien avec un cours (seuil de crédits, statut d'étudiant régulier) restent en texte libre ; n'inventez pas de code.
+4b. SINDEFINIR est toujours la dernière colonne et ne doit jamais être vide : écrivez exactement "true" pour un emplacement réservé sans cours réel choisi et "false" pour chaque cours confirmé, y compris les cours définis dans une liste distincte.
+5. Si le nom d'un cours (ou une autre cellule) contient une virgule, encadrez toute la cellule de guillemets doubles. En cas de doute, mettez-les.
+6. N'ajoutez aucune colonne de catégorie, domaine, couleur ou autre colonne non indiquée.
+7. Incluez tous les cours : options, langues, séminaires, stages, projets de fin d'études et cours préparatoires/précalcul, même avec zéro crédit.
+8. Incluez aussi les listes séparées d'options. Utilisez "OPTATIVA" ou "ELECTIVA" comme Bloque, jamais le cycle conseillé ni "REVISAR" au seul motif qu'aucun cycle n'est indiqué. Ce sont des cours définis, donc SinDefinir=false.
+9. Pour toute cellule illisible, ambiguë ou non confirmée, écrivez "REVISAR" au lieu d'inventer codes, crédits ou heures.
+10. Ignorez les totaux récapitulatifs (p. ex. crédits totaux du diplôme) : ce sont des métadonnées, pas des lignes de cours.
+11. Si le programme ne tient pas dans une réponse, divisez-le en parties consécutives. Seule la première contient les métadonnées et l'en-tête ; les suivantes contiennent uniquement les lignes, dans l'ordre, sans répéter en-tête ni métadonnées. L'application concatène les parties : un en-tête répété casse l'importation. Entre les parties, indiquez qu'une suite arrive.`
+};
+
 /**
  * Prompt oficial y único del proyecto para pedirle a Claude que estructure
  * el plan de estudios en CSV. `modo` cambia solo el
@@ -76,6 +176,8 @@ function construirEncabezadoCSV(tiposHoras) {
  */
 
 function construirPromptImportacion(modo, link) {
+  const idioma = obtenerIdiomaActual();
+  if (PROMPTS_IMPORTACION[idioma]) return PROMPTS_IMPORTACION[idioma](modo, link);
   let instruccionEntrada = "";
   let avisoNavegacion = "";
 
@@ -610,10 +712,7 @@ async function convertirCapturasAPDF(archivos) {
   let doc = null;
   const imagenesBajaResolucion = [];
 
-  console.log(`[capturas→PDF] Iniciando conversión de ${archivos.length} imagen(es)…`);
-
   for (let i = 0; i < archivos.length; i++) {
-    console.log(`[capturas→PDF] Procesando imagen ${i + 1}/${archivos.length}: "${archivos[i].name}" (${archivos[i].type || "tipo desconocido"}, ${Math.round(archivos[i].size / 1024)} KB)`);
     const dataUrl = await leerImagenComoDataURL(archivos[i]);
     const img = await cargarDimensionesImagen(dataUrl);
     const horizontal = img.width >= img.height;
@@ -643,16 +742,11 @@ async function convertirCapturasAPDF(archivos) {
 
     if (img.width < ANCHO_MINIMO_RECOMENDADO_PX) {
       imagenesBajaResolucion.push(archivos[i].name);
-      console.warn(`[capturas→PDF] "${archivos[i].name}" tiene resolución baja (${img.width}×${img.height}px) — puede costar leerla bien.`);
     }
 
     doc.addImage(dataUrl, detectarFormatoImagen(dataUrl), x, y, anchoFinal, altoFinal);
-    console.log(`[capturas→PDF] Imagen ${i + 1}/${archivos.length} agregada al PDF.`);
   }
-
-  console.log("[capturas→PDF] Todas las imágenes procesadas — descargando PDF…");
   doc.save("plan-de-estudios-capturas.pdf");
-  console.log("[capturas→PDF] doc.save() ejecutado.");
 
   return { imagenesBajaResolucion };
 }
@@ -684,20 +778,16 @@ function inicializarModalCapturasPDF() {
   });
 
   document.getElementById("btn-convertir-capturas-pdf").addEventListener("click", async () => {
-    console.log("[capturas→PDF] Clic en 'Convertir a PDF' detectado.");
     const input = document.getElementById("input-capturas-pdf");
     const archivos = input.files;
     const err = document.getElementById("error-modal-capturas-pdf");
     err.classList.add("oculto");
 
     if (!archivos || archivos.length === 0) {
-      console.log("[capturas→PDF] No hay archivos seleccionados — se muestra el aviso inline.");
       err.textContent = "Primero selecciona una o varias fotos/capturas.";
       err.classList.remove("oculto");
       return;
     }
-
-    console.log(`[capturas→PDF] ${archivos.length} archivo(s) seleccionado(s), cerrando modal y mostrando loading…`);
     cerrarModalCapturasPDF();
     mostrarCargando();
     try {
@@ -907,3 +997,4 @@ export {
   inicializarModalInstruccionesImportacion,
   instruccionesImportacionPendiente,
 };
+

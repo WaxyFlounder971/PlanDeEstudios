@@ -27,7 +27,7 @@
 import { estado } from "../core/storage.js";
 import { crearEventoAgenda, sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { programarRecordatorioPush } from "../core/notificaciones-push.js";
+import { sincronizarEventoCalendario } from "../core/notificaciones-calendario.js";
 import { pedirAccessTokenGoogleTasks, haySesionGoogleTasksEnMemoria } from "../core/auth.js";
 import { MODO_DEMO } from "../core/demo-mode.js";
 import { mostrarToast } from "../ui/componentes.js";
@@ -151,7 +151,7 @@ function confirmarTareasGoogleImportadas(propuestas, idsConfirmados) {
         googleTaskId: p.googleTaskId,
       });
       estado.datos.agenda.push(evento);
-      programarRecordatorioPush(evento);
+      void sincronizarEventoCalendario(evento);
     });
 
   marcarComoProcesados(propuestas.map((p) => p.googleTaskId));
@@ -161,3 +161,4 @@ function confirmarTareasGoogleImportadas(propuestas, idsConfirmados) {
 }
 
 export { listarListasGoogleTasks, obtenerPropuestasGoogleTasks, confirmarTareasGoogleImportadas, marcarComoProcesados };
+

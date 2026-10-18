@@ -70,7 +70,7 @@ function mdEnLinea(el, t) {
     else if (p) el.append(document.createTextNode(p));
   });
 }
-function renderizarMarkdownSimple(md) {
+export function renderizarMarkdownSimple(md) {
   const frag = document.createDocumentFragment(); let lista = null, parr = [];
   const cerrar = () => { if (parr.length) { const p = document.createElement("p"); mdEnLinea(p, parr.join(" ")); frag.append(p); parr = []; } };
   for (const linea of String(md).replace(/\r/g, "").split("\n")) {
@@ -118,6 +118,13 @@ function inyectarEstilosOnboarding() {
 .onboarding-nota-error{margin:.5rem 0 0;font-size:.9rem;color:var(--danger,#e5484d)}
 .onboarding-nota-error[hidden]{display:none}
 .guia-plan-flotante{z-index:2147483001}
+.guia-plan-cabecera{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.guia-plan-cabecera strong{font-size:1rem;letter-spacing:.01em}
+.guia-plan-contador{flex:none;padding:.2rem .55rem;border-radius:999px;background:color-mix(in srgb,var(--accent-1,#8b5cf6) 14%,transparent);font-size:.78rem;font-weight:700;color:var(--text-primary)}
+.guia-plan-progreso{height:5px;overflow:hidden;border-radius:99px;background:color-mix(in srgb,currentColor 12%,transparent);margin:0 0 12px}
+.guia-plan-progreso span{display:block;height:100%;border-radius:inherit;background:var(--gradient-accent,var(--accent-1,#8b5cf6));transition:width .25s ease}
+.guia-plan-flotante .row{gap:8px}
+@media(max-width:520px){.guia-plan-flotante{right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));width:calc(100vw - 24px);padding:16px}}
 .guia-resaltador{position:fixed;inset:0;z-index:2147483000;pointer-events:none}
 .guia-resaltador-lado{position:fixed;background:rgba(0,0,0,.58);pointer-events:auto}
 .guia-resaltador-anillo{position:fixed;border-radius:12px;pointer-events:none;box-shadow:0 0 0 3px var(--accent-1,#8b5cf6),0 0 0 8px color-mix(in srgb,var(--accent-1,#8b5cf6) 30%,transparent),0 0 26px color-mix(in srgb,var(--accent-1,#8b5cf6) 55%,transparent)}
@@ -366,6 +373,8 @@ function inyectarEstilosOnboarding() {
 .onb-ajuste-fila{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.92rem}
 .onb-ajuste-nota{margin:0;font-size:.8rem;line-height:1.35;opacity:.7}
 .onb-ajuste-campo{display:flex;flex-direction:column;gap:6px;font-size:.84rem;font-weight:600}
+
+.onb-ajuste-recordatorios{display:grid;gap:10px}.onb-ajuste-recordatorio-tipo{display:flex;flex-direction:column;gap:6px;font-size:.84rem;font-weight:600}.onb-recordatorio-opciones{display:flex;flex-wrap:wrap;gap:7px}.onb-recordatorio-opcion{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:999px;background:color-mix(in srgb,currentColor 4%,transparent);font-size:.8rem;font-weight:500;cursor:pointer}.onb-recordatorio-opcion:has(input:checked){border-color:var(--accent-1,#8b5cf6);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 14%,transparent)}.onb-recordatorio-opcion input{accent-color:var(--accent-1,#8b5cf6);margin:0}
 .onb-ajuste-detalle{display:flex;flex-direction:column;gap:10px}.onb-ajuste-detalle.apagado{opacity:.5;pointer-events:none}
 .onb-acc{padding:0;gap:0;overflow:hidden;transition:border-color .25s,background .25s}
 .onb-acc.abierta{border-color:color-mix(in srgb,var(--accent-1,#8b5cf6) 55%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 7%,transparent)}
@@ -628,10 +637,21 @@ function evitarSolape(pop, el) {
   const choca = (r, top, bottom) => r.bottom > top - 8 && r.top < bottom + 8;
   const medir = () => {
     if (!vivo()) return;
-    pop.style.top = ""; pop.style.bottom = "";
+    pop.style.top = ""; pop.style.bottom = ""; pop.style.maxHeight = ""; pop.style.overflowY = "";
     const r = el.getBoundingClientRect(), p = pop.getBoundingClientRect();
-    if (!choca(r, p.top, p.bottom)) return;                       // abajo (posición normal) no tapa
-    if (!choca(r, 10, 10 + p.height)) { pop.style.top = "10px"; pop.style.bottom = "auto"; }   // arriba sí libra
+    if (!choca(r, p.top, p.bottom)) { pop.style.maxHeight = ""; pop.style.overflowY = ""; return; }
+    const alto = window.innerHeight;
+    const espacioArriba = Math.max(0, r.top - 20);
+    const espacioAbajo = Math.max(0, alto - r.bottom - 20);
+    if (espacioArriba >= p.height || espacioArriba >= espacioAbajo) {
+      pop.style.top = "10px"; pop.style.bottom = "auto";
+      if (espacioArriba < p.height) { pop.style.maxHeight = `${Math.max(120, espacioArriba)}px`; pop.style.overflowY = "auto"; }
+      else { pop.style.maxHeight = ""; pop.style.overflowY = ""; }
+    } else {
+      pop.style.top = "auto"; pop.style.bottom = "10px";
+      if (espacioAbajo < p.height) { pop.style.maxHeight = `${Math.max(120, espacioAbajo)}px`; pop.style.overflowY = "auto"; }
+      else { pop.style.maxHeight = ""; pop.style.overflowY = ""; }
+    }
   };
   const alMover = () => { if (vivo()) medir(); else limpiar(); };
   const limpiar = () => { removeEventListener("scroll", alMover, true); removeEventListener("resize", alMover); };
@@ -1273,12 +1293,28 @@ function construirBloqueNotificaciones({ cfg, borrador, demo }) {
   const calActiva = () => { try { return Boolean(sincronizacionCalendarActiva()); } catch (_) { return false; } };
   const detalle = document.createElement("div"); detalle.className = "onb-ajuste-detalle";
   const marcar = () => detalle.classList.toggle("apagado", !calActiva());
-  const guardado = cfg.notificaciones_recordatorios?.tarea;
-  const inicial = borrador.recordatorio || (Array.isArray(guardado) ? guardado[0] : guardado) || "1_dia";
-  const selAntes = document.createElement("select"); selAntes.className = "form-input";
-  (OFFSETS_RECORDATORIO_AGENDA || []).forEach((o) => { const op = document.createElement("option"); op.value = o.id; op.textContent = traducirTextoInterfaz(o.etiqueta); selAntes.append(op); });
-  selAntes.value = inicial; if (selAntes.value !== inicial && selAntes.options[0]) selAntes.value = selAntes.options[0].value;
-  selAntes.addEventListener("change", () => { borrador.recordatorio = selAntes.value; borrador.tocado = true; });
+  const selectoresRecordatorio = document.createElement("div"); selectoresRecordatorio.className = "onb-ajuste-recordatorios";
+  const valoresRecordatorio = borrador.recordatorios || {};
+  [
+    ["tarea", "Tareas"], ["examen", "Exámenes"], ["evento", "Eventos"],
+  ].forEach(([tipo, etiqueta]) => {
+    const fila = document.createElement("div"); fila.className = "onb-ajuste-recordatorio-tipo";
+    const titulo = document.createElement("span"); titulo.textContent = traducirTextoInterfaz(etiqueta);
+    const opciones = document.createElement("span"); opciones.className = "onb-recordatorio-opciones";
+    const guardado = cfg.notificaciones_recordatorios?.[tipo];
+    const iniciales = valoresRecordatorio[tipo] || (Array.isArray(guardado) ? guardado : [guardado || "1_dia"]);
+    (OFFSETS_RECORDATORIO_AGENDA || []).forEach((o) => {
+      const opcion = document.createElement("label"); opcion.className = "onb-recordatorio-opcion";
+      const check = document.createElement("input"); check.type = "checkbox"; check.value = o.id; check.checked = iniciales.includes(o.id);
+      const texto = document.createElement("span"); texto.textContent = traducirTextoInterfaz(o.etiqueta);
+      check.addEventListener("change", () => {
+        valoresRecordatorio[tipo] = [...opciones.querySelectorAll("input:checked")].map((control) => control.value);
+        borrador.recordatorios = valoresRecordatorio; borrador.tocado = true;
+      });
+      opcion.append(check, texto); opciones.append(opcion);
+    });
+    fila.append(titulo, opciones); selectoresRecordatorio.append(fila);
+  });
   const r0 = cfg.notificaciones_resumen_diario || { activo: false, hora: "20:00" };
   const resumen = borrador.resumen || { activo: Boolean(r0.activo), hora: r0.hora || "20:00" };
   const selHora = document.createElement("select"); selHora.className = "form-input";
@@ -1289,7 +1325,7 @@ function construirBloqueNotificaciones({ cfg, borrador, demo }) {
   const swResumen = construirInterruptor(resumen.activo, (v) => { resumen.activo = v; borrador.resumen = resumen; borrador.tocado = true; campoHora.hidden = !v; }, "Resumen diario");
   const filaResumen = document.createElement("div"); filaResumen.className = "onb-ajuste-fila";
   const tr = document.createElement("span"); tr.textContent = traducirTextoInterfaz("Resumen diario de tus pendientes"); filaResumen.append(tr, swResumen.label);
-  detalle.append(campoConEtiqueta("Avisarme antes de tareas, exámenes y eventos", selAntes), filaResumen, campoHora);
+  detalle.append(selectoresRecordatorio, filaResumen, campoHora);
   const swCal = construirInterruptor(calActiva(), async (v, chk) => {
     chk.disabled = true;
     try {
@@ -1428,7 +1464,7 @@ const GEMINI_PASOS = [
 function botonDesdeCero() {
   // No depende del idioma ni de una sola frase: «Empezar en blanco», «Iniciar desde cero», «da zero», «from scratch», «blank»… o el botón del lápiz.
   const raiz = document.getElementById("seccion-plan-estudios"); if (!raiz) return null;
-  return [...raiz.querySelectorAll("button")].find((b) => /blanco|bianco|blank|desde cero|da zero|from scratch|✏/i.test(b.textContent)) || null;
+  return [...raiz.querySelectorAll("button")].find((b) => /blanco|bianco|blank|vierge|à partir de zéro|commencer à zéro|desde cero|da zero|from scratch|✏/i.test(b.textContent)) || null;
 }
 function contenedorOpcionesPlan() {
   // Ancestro común del botón «en blanco» y del grupo de importación: así se resaltan las DOS opciones a la vez.
@@ -1510,7 +1546,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
   const cfg = estado.datos.configuracion;
   const secciones = SECCIONES_TUTORIAL.filter(({id}) => id !== "configuracion" && document.getElementById(`seccion-${id}`));
   // «Últimos ajustes»: se guardan en este borrador y se aplican AL TERMINAR el onboarding.
-  const borrador = { tocado: false, navTocada: false, moneda: null, ocultas: new Set(cfg.navegacion_oculta || []), recordatorio: null, resumen: null, enlaces: [] };
+  const borrador = { tocado: false, navTocada: false, moneda: null, ocultas: new Set(cfg.navegacion_oculta || []), recordatorio: null, recordatorios: null, resumen: null, enlaces: [] };
   let claveRecien = false;
   const cuentaConDatos = !MODO_DEMO && Object.entries(estado.datos).some(([clave, valor]) =>
     Array.isArray(valor) && valor.length > 0 && clave !== "planes_estudio_demo"
@@ -1633,23 +1669,14 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
       try{const orig=win.mostrarSeccion;if(typeof orig==="function"&&!orig.__onbEnvuelta){const guardada=function(id,...resto){if(guiaBloqueaNavegacion()&&id!==preview.dataset.seccion)return;return orig.call(this,id,...resto);};guardada.__onbEnvuelta=true;win.mostrarSeccion=guardada;}}catch(_){}
     }
   };
-  // Si ya hay clave real, la vista previa (que corre en memoria, sin guardar nada) debe mostrarla como activa.
-  const sincronizarClaveGeminiPreview=()=>{
-    if(etapa!=="wapper-config"||!cfg.gemini_api_key)return;
-    let win;try{win=preview.contentWindow;void win.document;}catch(_){return;}
-    try{const c=win.estado?.datos?.configuracion;if(c)c.gemini_api_key=cfg.gemini_api_key;}catch(_){}
-    try{win.aplicarVisibilidadBotonAsistente?.();}catch(_){}
-    try{if(typeof win.renderizarAsistente==="function")win.renderizarAsistente();else if(typeof win.mostrarSeccion==="function"&&preview.dataset.seccion==="asistente")win.mostrarSeccion("asistente");}catch(_){}
-  };
   const actualizarPreview=()=>{
     bloquearNavegacionPreview();
-    sincronizarClaveGeminiPreview();
     preview.contentWindow?.postMessage({
     type:"APP_PREVIEW_UPDATE", paleta:paletaActual(), modo:modoPersonalizacion,
     calidad:calidadPersonalizacion,
     colores:paletaActual()==="personalizada"?cfg.paleta_personalizada?.colores:null,
     logo:cfg.logo_app||"folder", logoData:cfg.logo_app_url||null,
-    geminiKey:etapa==="wapper-config"?(cfg.gemini_api_key||null):null
+    geminiActivo:etapa==="wapper-config"&&Boolean(cfg.gemini_api_key)
     },location.origin);
   };
   // ── Teléfono (≤760px): primero la información; la vista previa es la página siguiente ──
@@ -1762,7 +1789,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
     if(!borrador.tocado)return;
     if(borrador.moneda)cfg.moneda_preferida=borrador.moneda;
     if(borrador.navTocada)cfg.navegacion_oculta=[...borrador.ocultas];
-    if(borrador.recordatorio){const r=borrador.recordatorio,previo=cfg.notificaciones_recordatorios&&typeof cfg.notificaciones_recordatorios==="object"?cfg.notificaciones_recordatorios:{};cfg.notificaciones_recordatorios={feriado:["1_dia"],...previo,tarea:[r],examen:[r],evento:[r]};}
+    if(borrador.recordatorios){const previo=cfg.notificaciones_recordatorios&&typeof cfg.notificaciones_recordatorios==="object"?cfg.notificaciones_recordatorios:{};cfg.notificaciones_recordatorios={feriado:["1_dia"],...previo,...borrador.recordatorios};}
     if(borrador.enlaces.length){
       if(!Array.isArray(cfg.enlaces_rapidos))cfg.enlaces_rapidos=[];
       borrador.enlaces.forEach((e)=>{if(cfg.enlaces_rapidos.length>=(LIMITE_ENLACES_RAPIDOS||20))return;const nuevo=crearEnlaceRapido(e);sellarTimestamp(nuevo);cfg.enlaces_rapidos.push(nuevo);});
@@ -2073,7 +2100,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
       acciones.append(boton("Atrás","btn-secondary",()=>{etapa="ajustes1";pintar();}),boton("Continuar","btn-primary",()=>{etapa="flujo";pintar();}));return;
     }
     contenido.append(construirFlujo());
-    acciones.append(boton("Atrás","btn-secondary",()=>{etapa="ajustes2";pintar();}),boton("Lo haré después","btn-secondary",()=>fin(false)));colocarPrimario(boton(tienePlanArmado?"Continuar":"Agregar plan y ver la guía","btn-primary",()=>tienePlanArmado?preguntarPorOtroPlan():fin(true)));
+    acciones.append(boton("Atrás","btn-secondary",()=>{etapa="ajustes2";pintar();}),boton("Lo haré después","btn-secondary",()=>fin(false)));colocarPrimario(boton(tienePlanArmado?"Continuar":"Importar mi plan","btn-primary",()=>tienePlanArmado?preguntarPorOtroPlan():fin(true)));
   };
   const siguiente=()=>{indice++;if(indice>=secciones.length)etapa="ajustes1";pintar();};
   panel.querySelector(".onboarding-cerrar").addEventListener("click",()=>{if(MODO_DEMO)fin(false);else preguntarSalir();});
@@ -2113,11 +2140,11 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
     { selector: botonGestionPlan, texto: "Ya tienes un plan. Para añadir otra carrera toca «Gestionar plan» (el botón resaltado)." },
     ...pasosSemestre,
   ] : [
-    { selector: contenedorOpcionesPlan, etiqueta: "Importar mi plan", blanco: true, texto: "Tienes dos caminos: empezar en blanco y agregar tus materias a mano, una por una, o importar un plan que ya tengas hecho. Elige el que prefieras." },
-    { selector: grupoMetodosImportar, blanco: true, texto: "Importa tu plan ya hecho: elige Pegar link, Adjuntar PDF/Imagen o Tomar foto (los botones resaltados) y luego envíalo a Claude para que lo convierta al formato CSV. Si prefieres hacerlo a mano, toca «Empezar en blanco»." },
-    { selector: () => document.getElementById("btn-enviar-import-claude"), texto: "Pulsa Enviar a Claude y sigue la guía para adjuntar tu plan. Cuando Claude devuelva el CSV, vuelve a esta app." },
-    { selector: () => document.getElementById("textarea-csv-importar"), texto: "Copia el bloque CSV completo, desde CARRERA hasta la última materia, y pégalo aquí. Luego toca Importar." },
-    { selector: () => [...document.querySelectorAll("#seccion-plan-estudios button")].find((b) => /^(importar|importa|import)$/i.test(b.textContent.trim())), texto: "Pulsa Importar para guardar y revisar las materias. Cuando termine, la guía te llevará a Semestres para continuar." },
+    { selector: contenedorOpcionesPlan, etiqueta: "Importar mi plan", blanco: true, texto: "Elige cómo tienes tu plan: puedes usar un enlace público, un PDF o fotos. Si todavía no tienes el documento, también puedes empezar en blanco. Te acompaño en cada paso." },
+    { selector: grupoMetodosImportar, blanco: true, texto: "Para una página pública, elige «Pegar link». Si tienes un archivo, elige «Adjuntar PDF/Imagen». Si tienes fotos o capturas, usa «Tomar capturas»: Wapper las reúne en un PDF para que Claude pueda leerlas." },
+    { selector: () => estado.modoImportacion === "capturas" ? [...document.querySelectorAll("#seccion-plan-estudios button")].find((b) => /convertir imágenes a pdf|convert images to pdf|convertir les images en pdf|converti.*pdf/i.test(b.textContent)) : document.getElementById("btn-enviar-import-claude"), texto: "Ahora prepararás el plan con Claude. Copia la instrucción, abre Claude y adjunta el PDF o envíale el enlace. Sigue los pasos con calma; al terminar, vuelve aquí con la respuesta." },
+    { selector: () => document.getElementById("textarea-csv-importar"), texto: "Copia la respuesta completa de Claude y pégala aquí. Incluye las líneas de carrera, el encabezado CSV y todas las materias para que no falte información." },
+    { selector: () => [...document.querySelectorAll("#seccion-plan-estudios button")].find((b) => /^(importar|importa|import)$/i.test(b.textContent.trim())), texto: "Toca «Importar» para guardar el plan y revisar las materias. Después te guiaré a Semestres para que matricules lo que cursas ahora." },
   ];
   let i = 0;
   const pop = document.createElement("aside"); pop.className = "guia-plan-flotante"; pop.setAttribute("role", "dialog"); document.body.append(pop);
@@ -2154,7 +2181,7 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
   };
   const pintar = () => {
     if (i >= pasos.length) { cerrar({ continuarSemestres: flujoSemestre }); return; }
-    if (!posteriorImportacion && !yaTienePlan && i >= 2 && !document.getElementById("textarea-csv-importar")) {
+    if (!posteriorImportacion && !yaTienePlan && i >= 2 && !document.getElementById("textarea-csv-importar") && estado.modoImportacion !== "capturas") {
       const link = grupoMetodosImportar()?.querySelector("button");
       if (link) link.click(); setTimeout(pintar, 80); return;
     }
@@ -2164,14 +2191,20 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
     resaltado?.scrollIntoView({ behavior: "smooth", block: "center" });
     resaltador.apuntar(resaltado, paso.selector); // anillo + bloqueo de todo lo demás (solo si hay objetivo)
     pop.replaceChildren();
-    const titulo = document.createElement("strong"); titulo.textContent = `${i + 1} / ${pasos.length}`;
-    const p = document.createElement("p"); p.textContent = traducirTextoInterfaz(paso.texto);
-    pop.append(titulo, p);
+    const cabecera = document.createElement("div"); cabecera.className = "guia-plan-cabecera";
+    const titulo = document.createElement("strong"); titulo.textContent = traducirTextoInterfaz(paso.etiqueta || "Importar tu plan");
+    const contador = document.createElement("span"); contador.className = "guia-plan-contador"; contador.textContent = `${i + 1} / ${pasos.length}`;
+    cabecera.append(titulo, contador);
+    const progreso = document.createElement("div"); progreso.className = "guia-plan-progreso"; progreso.setAttribute("role", "progressbar"); progreso.setAttribute("aria-label", traducirTextoInterfaz("Progreso de importación")); progreso.setAttribute("aria-valuemin", "0"); progreso.setAttribute("aria-valuemax", String(pasos.length)); progreso.setAttribute("aria-valuenow", String(i + 1));
+    const avance = document.createElement("span"); avance.style.width = `${((i + 1) / pasos.length) * 100}%`; progreso.append(avance);
+    const p = document.createElement("p"); p.textContent = traducirTextoInterfaz(i === 2 && estado.modoImportacion === "capturas" ? "Primero convierte tus fotos a PDF. Toca «Convertir imágenes a PDF», elige las capturas y confirma. Al volver aquí, continúa para preparar el archivo con Claude." : paso.texto);
+    pop.append(cabecera, progreso, p);
     const acciones = document.createElement("div"); acciones.className = "row";
     const seguir = document.createElement("button"); seguir.className = "btn btn-primary";
     seguir.textContent = traducirTextoInterfaz(paso.etiqueta || (paso.accion === "abrirAlta" ? "Abrir formulario" : i === pasos.length - 1 ? "Entendido" : "Siguiente"));
     seguir.onclick = () => {
       if (paso.accion === "navegar") { marcarSemestresVisto(); navegar?.("semestres"); i++; setTimeout(pintar, 350); return; }
+      if (i === 2 && estado.modoImportacion === "capturas" && !document.getElementById("textarea-csv-importar")) { return; }
       if (paso.accion === "abrirAlta") {
         marcarSemestresVisto(); pasoAlta = i; resaltador.ocultar();
         (resaltado || botonRegistrarSemestre())?.click(); pop.classList.add("oculto"); esperandoAlta = true;
@@ -2183,13 +2216,23 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
     acciones.append(seguir);
     if (paso.blanco) {
       const enBlanco = document.createElement("button"); enBlanco.className = "btn btn-secondary"; enBlanco.textContent = traducirTextoInterfaz("Empezar en blanco");
-      enBlanco.onclick = () => { const b = botonDesdeCero(); cerrar(); b?.click(); };
+      enBlanco.onclick = () => {
+        const c = estado.datos?.configuracion;
+        // Solo el recorrido inicial deja una continuación pendiente. Si la
+        // persona eligió un plan vacío, la guia de Semestres arranca al crear
+        // su primera materia manual; las visitas desde Ajustes no redirigen.
+        if (c?.onboarding_v1_completado === true && c.guia_plan_pendiente === "plan") {
+          c.onboarding_plan_en_blanco_pendiente = true;
+          guardar();
+        }
+        const b = botonDesdeCero(); cerrar(); b?.click();
+      };
       acciones.append(enBlanco);
     }
     acciones.append(saltar); pop.append(acciones); pop.classList.remove("oculto"); evitarSolape(pop, resaltado);
   };
   pintar();
-  window.continuarTutorialDespuesDeImportarPlan = () => { if (!cerrarGuiaPlanActiva) return; marcarSemestresVisto(); cerrar(); { const c = estado.datos?.configuracion; if (c) { c.guia_plan_pendiente = "semestres"; guardar(); } } navegar?.("semestres"); setTimeout(() => iniciarGuiaPlan({ navegar, posteriorImportacion: true, yaEnSemestres: true }), 350); };
+  window.continuarTutorialDespuesDeImportarPlan = () => { if (!cerrarGuiaPlanActiva) return; marcarSemestresVisto(); cerrar(); { const c = estado.datos?.configuracion; if (c) { c.onboarding_plan_en_blanco_pendiente = false; c.guia_plan_pendiente = "semestres"; guardar(); } } navegar?.("semestres"); setTimeout(() => iniciarGuiaPlan({ navegar, posteriorImportacion: true, yaEnSemestres: true }), 350); };
 }
 
 function inicializarTutorialDesdeAjustes({ navegar, toast } = {}) {
