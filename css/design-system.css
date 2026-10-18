@@ -879,6 +879,15 @@ a { color: var(--accent-1); }
   z-index: 100;
   padding: 16px;
 }
+.wapper-cola-bienvenida > .modal-card { animation: entrada-wapper-cola 180ms ease-out both; }
+@keyframes entrada-wapper-cola {
+  from { opacity: 0; transform: translateY(8px) scale(.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wapper-cola-bienvenida > .modal-card { animation: none; }
+}
+[data-rendimiento="reducido"] .wapper-cola-bienvenida > .modal-card { animation: none; }
 /* v7.1: en modo claro, el mismo overlay negro al 65% se filtra a través del
    glass-card translúcido (su backdrop-filter "ve" ese fondo casi negro), así
    que la tarjeta terminaba con un tinte gris apagado en vez de verse fresca

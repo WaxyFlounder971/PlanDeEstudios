@@ -29,7 +29,7 @@ Bloques principales (por id, no son "exports" pero cumplen el mismo rol de mapa 
 * `#perfil-popover`, `#perfil-foto`, `#btn-logout` — zona de perfil del sidebar.
 
 **Navegación entre secciones** (botones `#nav-*`, atributo `data-seccion`):
-`#nav-agenda`, `#nav-horario`, `#nav-semestres`, `#nav-comunidad`, `#nav-finanzas`, `#nav-plan-estudios`, `#nav-configuracion`.
+`#nav-agenda`, `#nav-horario`, `#nav-semestres`, `#nav-comunidad`, `#nav-finanzas`, `#nav-plan-estudios`, `#nav-asistente`, `#nav-configuracion`. `#badge-cola-wapper` indica mensajes locales pendientes o que requieren revisión.
 
 **Secciones internas** (contenedores `#seccion-*`, se muestran/ocultan por navegación, no son páginas separadas):
 `#seccion-configuracion` (con subsecciones `#seccion-notas-aprobacion`, `#seccion-datos-respaldo`), `#seccion-plan-estudios`, `#seccion-semestres`, `#seccion-comunidad`, `#seccion-finanzas`, `#seccion-agenda`, `#seccion-horario`.

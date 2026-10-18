@@ -8,6 +8,8 @@
 Propósito: sistema de diseño único de la app — base glassmorphism (tarjetas translúcidas + blur), botones, pills, badges, switches, modales, y estilos específicos de cada sección (Plan de Estudios, Agenda, Horario, paleta personalizada, etc.). Soporta 13 paletas de color × 2 modos (claro/oscuro) vía atributos en `<html>`.
 Depende de: nada (CSS puro, sin imports). Se referencia desde `index.html` y `amigos.html`.
 
+Componente añadido 2026-10-18: `.wapper-cola-bienvenida` anima la entrada del modal offline con una transición breve; desactiva la animación cuando el usuario prefiere movimiento reducido o usa el modo de rendimiento reducido.
+
 ### Sistema de theming (clave para conectar cualquier color nuevo)
 Activado con atributos en `<html>`: `data-palette="azul|verde|rojo|gris|negro|blanco|cyan|morado|rosado|indigo|amarillo|dorado|azucarado"` + `data-mode="dark|light"`. Cada combinación (26 bloques `[data-palette="x"][data-mode="y"]`) redefine el mismo set fijo de variables:
 

@@ -38,6 +38,7 @@ js/finanzas/   → Finanzas (matrícula, gastos U, becas, beneficios)
 js/comunidad/  → Profesores y compañeros
 js/horario/    → Horario semanal + Horario entre amigos (incluye amigos.html standalone)
 js/agenda/     → Agenda (Lista + Calendario, eventos/tareas/exámenes)
+js/asistente/  → Wapper: interacción con Gemini, captura y cola offline local
 js/main.js     → arranque: login, navegación, conecta todo lo demás
 ```
 
@@ -197,8 +198,13 @@ migraciones): el primero es login/sync/tema/perfil; el segundo llama a los
 | Vista Lista de Agenda, filtros, selector de semestres | `agenda/agenda.js` |
 | Modal de evento/tarea/examen de Agenda | `agenda/agenda-modal.js` |
 | Vista Calendario (mensual/semanal) de Agenda | `agenda/agenda-calendario.js` |
+| Clasificación de Wapper, grabación o mensajes offline | `asistente/asistente.js`, `asistente/asistente-cola.js` |
 | "Materias" inline por día en Agenda | `agenda/agenda-clases.js` |
 | Navegación del sidebar, qué sección se muestra al entrar | `main.js` |
+
+### Cola offline de Wapper
+
+La cola de mensajes de Wapper vive exclusivamente en IndexedDB del dispositivo y se separa por correo de la cuenta. No se sincroniza con Drive: conserva texto, blobs de audio y fecha/zona de referencia, y al recuperar internet delega la extracción al mismo pipeline de Gemini del chat. La integración guarda automáticamente solo eventos con etiqueta vigente, fecha válida, materia no ambigua y confianza alta. La clave estable derivada del id de cola más el índice del evento hace idempotente el guardado si la app se cierra entre crear el evento y actualizar el estado de la cola. Los elementos que necesitan revisión permanecen locales hasta que el usuario los revise o descarte. El borrado desde «Deshacer» usa el tombstone ya existente de Agenda.
 
 ---
 

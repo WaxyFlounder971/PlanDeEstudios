@@ -51,6 +51,7 @@
 
 *Datos de usuario y migraciones:*
 * `crearDatosUsuarioNuevo()` — objeto de datos "vacío" para un usuario que inicia sesión por primera vez (estructura completa de fábrica).
+* `configuracion.agenda_tipos[].ayuda_wapper` — descripción opcional del tipo de Agenda para orientar la clasificación de Wapper; está vacía por defecto y se fusiona con tipos ya guardados sin descartar otros campos.
 * `migrarDatosAntiguos(datos)` — corre todas las migraciones de esquema necesarias sobre datos ya existentes, de forma idempotente, antes de renderizar nada. Normaliza también `bloque.dias` cuando una versión antigua lo guardó como objeto individual en vez de arreglo, para evitar que Horario se caiga al abrir.
 * `MAPEO_HORAS_VIEJO_A_NUEVO` — tabla de migración del modelo viejo de horas fijo al modelo dinámico de `tipos_horas`.
 
@@ -135,7 +136,7 @@
 
 *Agenda:*
 * `TIPOS_EVENTO_AGENDA` — `["evento", "tarea", "examen"]`.
-* `crearEventoAgenda({ tipo, nombre, fecha, hora, materiaMatriculadaId, semestreId, notas, esFeriado })` — crea un evento/tarea/examen de agenda, ya sellado.
+* `crearEventoAgenda({ id?, tipo, nombre, fecha, hora, materiaMatriculadaId, semestreId, notas, esFeriado })` — crea un evento/tarea/examen de agenda, ya sellado. `id` opcional permite guardado idempotente de Wapper; si se omite, mantiene su id generado automáticamente.
 
 *Comunidad:*
 * `crearProfesor({ nombre, materias, correo, telefono })` / `crearCompanero({ nombre_completo, carnet, lista, materias_compartidas, nota, telefono })` — crean profesor/compañero.

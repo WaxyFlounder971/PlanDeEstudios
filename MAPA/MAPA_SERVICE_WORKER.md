@@ -5,6 +5,7 @@
 ---
 
 ## service-worker.js
+Versión actual en código: `v3.23.9` (2026-10-18, cola offline de Wapper). La ruta nueva `js/asistente/asistente-cola.js` se cachea cuando el navegador la solicita como módulo del mismo origen; no se añadió al cascarón mínimo.
 Propósito: cascarón offline de la PWA. Cachea el HTML/CSS/JS/íconos propios del proyecto (cache-first con actualización de fondo) y deja pasar sin tocar todo lo que va a Google (Drive API + auth), para no interferir con el manejo de cola/reintento offline que ya hacen `storage-sync.js` y `storage-adjuntos.js`.
 Depende de: ninguno de los módulos del proyecto (es un script standalone que corre en su propio contexto de Service Worker, sin `import`). Se comunica con `main.js` únicamente vía `postMessage` (mensaje `SKIP_WAITING`).
 

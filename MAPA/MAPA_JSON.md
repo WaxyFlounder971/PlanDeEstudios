@@ -1,5 +1,15 @@
 # MAPA_JSON.md — Índice de archivos JSON de configuración
 
+## Campos de `configuracion` gestionados por onboarding
+
+Estos campos viven dentro del objeto `configuracion` sincronizado de la cuenta; no son archivos JSON independientes:
+
+* `onboarding_visto` — indica que el onboarding ya se abrió y permite mostrar el control para salir.
+* `onboarding_progreso` — etapa e índice guardados para reanudar el recorrido.
+* `guia_plan_pendiente` — `"plan"` o `"semestres"` mientras queda una guía inicial por completar.
+* `onboarding_plan_en_blanco_pendiente` — marca temporal para continuar a Semestres al guardar la primera materia creada manualmente desde «Empezar en blanco»; se limpia al continuar o al completar la materia.
+* `terminos_aceptados` — versión, fecha e idioma aceptados por la persona.
+
 ---
 
 ## manifest.json

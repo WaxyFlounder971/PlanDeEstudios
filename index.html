@@ -65,12 +65,22 @@
   // la animación de apertura). Ahora se cargan cuando el navegador está libre, después de "load".
   if (new URLSearchParams(location.search).get("demo") !== "1") {
     const cargarLibreriasExportar = () => {
-      for (const src of [
-        "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
-        "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
-      ]) {
+      const librerias = [
+        {
+          src: "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
+          integrity: "sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==",
+        },
+        {
+          src: "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+          integrity: "sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA==",
+        },
+      ];
+      for (const recurso of librerias) {
         const script = document.createElement("script");
-        script.src = src;
+        script.src = recurso.src;
+        script.integrity = recurso.integrity;
+        script.crossOrigin = "anonymous";
+        script.referrerPolicy = "no-referrer";
         script.async = true;
         document.head.appendChild(script);
       }
@@ -111,6 +121,7 @@
     <h1 style="font-size:1.6rem; display:flex; align-items:center; justify-content:center; gap:8px;"><img src="imagenes/LogoAppFolder.png" alt="Logo App Académica" data-app-logo style="height:1.4em; width:auto; vertical-align:middle;"> App Académica</h1>
     <p>Toda tu carrera en un solo lugar disponible en todos tus dispositivos</p>
     <button id="btn-login-google" class="btn btn-primary btn-block">Iniciar sesión con Google</button>
+    <p id="aviso-navegador-integrado" class="muted oculto" style="font-size:.85rem;margin:0;">Si el acceso con Google no se abre aquí, abre esta página en Chrome o Safari e inténtalo de nuevo.</p>
     <p class="muted" style="color:var(--color-warning, #f59e0b);">⚠️ Debes aceptar el permiso de Google Drive para poder utilizar la app</p>
     <p class="muted">☝️Usamos Drive para guardar toda la info que tengas en la App, NUNCA borres el archivo que se creó en tu cuenta</p>
     <div style="display:flex;align-items:center;gap:12px;margin:4px 0;color:var(--text-muted);"><span style="height:1px;background:var(--border-glass);flex:1;"></span><span>o</span><span style="height:1px;background:var(--border-glass);flex:1;"></span></div>
@@ -259,7 +270,7 @@
              aplicarVisibilidadNavegacion() en main.js. Arranca oculto por
              defecto (igual que cualquier cuenta sin clave todavía) hasta que
              esa función corra al cargar la app. -->
-        <button id="nav-asistente" class="btn btn-secondary btn-block btn-nav oculto" data-seccion="asistente" title="Asistente IA">✨ <span class="texto-nav">Asistente</span></button>
+        <button id="nav-asistente" class="btn btn-secondary btn-block btn-nav oculto" data-seccion="asistente" title="Asistente IA">✨ <span class="texto-nav">Asistente</span><span id="badge-cola-wapper" class="badge badge-warning oculto" aria-label="Mensajes pendientes de Wapper">0</span></button>
         <button id="nav-configuracion" class="btn btn-primary btn-block btn-nav" data-seccion="configuracion" title="Configuración">⚙️ <span class="texto-nav">Configuración</span></button>
         <div style="flex:1;"></div>
         <div class="row" style="justify-content:flex-start; gap:8px;">
@@ -662,6 +673,17 @@
             class="btn btn-secondary btn-block"
             href="mailto:AppAcademica26@gmail.com?subject=Feedback%20-%20AppAcademica"
           >Enviar comentarios</a>
+          </div>
+        </section>
+
+        <section class="glass-card stack ajuste-seccion colapsada">
+          <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Términos y privacidad</h2><span class="ajuste-seccion-chevron">▾</span></button>
+          <div class="ajuste-seccion-cuerpo">
+            <p class="muted" style="margin:0;">Consulta los documentos vigentes de la app en el idioma que tienes seleccionado.</p>
+            <div class="stack" style="gap:8px;">
+              <button type="button" class="btn btn-secondary btn-block" data-documento-legal="terminos">Términos y condiciones</button>
+              <button type="button" class="btn btn-secondary btn-block" data-documento-legal="privacidad">Política de privacidad</button>
+            </div>
           </div>
         </section>
 
