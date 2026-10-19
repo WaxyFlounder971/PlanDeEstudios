@@ -159,6 +159,12 @@ body.nota-arrastrando-body{user-select:none;-webkit-user-select:none;cursor:grab
 .nt-flot-cuerpo{min-height:0;overflow:auto;scrollbar-width:none;font-size:.92rem;overflow-wrap:anywhere}
 .nt-flot-cuerpo::-webkit-scrollbar{display:none}
 @media(prefers-reduced-motion:reduce){.nt-sticky,.nt-flotante{transition:none!important}}
+
+/* ===== Modo optimizado (data-rendimiento="reducido"): design-system.css pinta .glass-card con un fondo sólido oscuro
+   que le ganaba a --nota-color; la tarjeta perdía su color pero la letra seguía calculada para ese color. Se devuelve el color de la nota. ===== */
+html[data-rendimiento="reducido"] .glass-card.nota-card{background-color:var(--nota-color,#fff594);background-image:none;border-color:color-mix(in srgb,var(--nota-color,#fff594),#111 18%);box-shadow:0 2px 6px rgba(0,0,0,.28)}
+html[data-rendimiento="reducido"] .nt-sticky,html[data-rendimiento="reducido"] .nt-flotante{backdrop-filter:none;-webkit-backdrop-filter:none}
+html[data-rendimiento="reducido"] .nt-sticky-overlay{background:rgba(0,0,0,.85);backdrop-filter:none;-webkit-backdrop-filter:none}
 `;
 
 function inyectarEstilosNotas() {
