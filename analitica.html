@@ -40,10 +40,24 @@
   .login p { color:var(--suave); }
   .admin-extra { margin-top:16px; } .admin-form { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; }
   .admin-form label { display:grid; gap:4px; color:var(--suave); font-size:.82rem; }
+  .admin-form label[hidden] { display:none; }
   .admin-form input,.admin-form textarea,.admin-form select { width:100%; padding:9px 10px; border:1px solid var(--borde); border-radius:10px; background:var(--bg); color:var(--texto); font:inherit; }
   .admin-form .ancho { grid-column:1/-1; } .estado-aviso { display:flex; gap:12px; align-items:center; justify-content:space-between; border-top:1px solid var(--borde); padding:10px 0; }
+  .control-cuenta { display:flex; gap:10px; align-items:center; justify-content:flex-end; }
+  .control-cuenta input { width:18px; height:18px; accent-color:var(--acento); }
   .aviso-preview { margin-top:12px; padding:14px; border:1px dashed var(--borde); border-radius:14px; background:var(--bg); }
   pre.analisis-ia { white-space:pre-wrap; font:inherit; margin:12px 0 0; color:var(--texto); }
+  .ia-proveedor { display:grid; grid-template-columns:1fr auto; gap:4px 12px; align-items:center; padding:12px; border:1px solid var(--borde); border-radius:12px; margin:8px 0; background:var(--bg); }
+  .ia-proveedor .sub { grid-column:1/-1; }
+  .estado-pill { border-radius:999px; padding:3px 10px; font-size:.78rem; background:var(--barra); }
+  .estado-pill.activo { background:#dcfce7; color:#166534; }
+  .guia-ia { margin-top:12px; padding:14px; border-radius:14px; background:var(--bg); border:1px solid var(--borde); }
+  .guia-ia ol { padding-left:20px; }
+  .comando-ia { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .comando-ia code { padding:8px 10px; overflow-wrap:anywhere; background:var(--barra); border-radius:8px; }
+  .aviso-preview { border-style:solid; box-shadow:0 12px 35px #1e293b18; }
+  .aviso-preview-cabecera { display:flex; gap:10px; align-items:center; margin-bottom:10px; }
+  .aviso-preview-icono { width:38px; height:38px; display:grid; place-items:center; border-radius:12px; background:var(--barra); color:var(--acento); font-size:1.2rem; }
 </style>
 </head>
 <body>
@@ -74,7 +88,7 @@
   const CLIENT_ID = "906522073616-7ofa7i3emqocojhlkh9ot9i0itljmd50.apps.googleusercontent.com";
   const WORKER = "https://worker-notificaciones-agenda.appacademica.workers.dev";
   const CLAVE_TOKEN = "analitica_token_v1";
-  const SECCIONES = [["demo","Demo"],["resumen","Resumen"],["agenda","Agenda"],["horario","Horario"],["tiempo-estudio","Tiempo"],["semestres","Semestres"],["comunidad","Comunidad"],["finanzas","Finanzas"],["plan-estudios","Plan"],["asistente","Asistente"],["configuracion","Configuración"]];
+  const SECCIONES = [["demo","Demo"],["resumen","Resumen"],["agenda","Agenda"],["horario","Horario"],["tiempo-estudio","Tiempo"],["semestres","Semestres"],["comunidad","Comunidad"],["finanzas","Finanzas"],["plan-estudios","Plan"],["asistente","Asistente"],["notas","Notas rápidas"],["configuracion","Configuración"]];
 
   const $ = (id) => document.getElementById(id);
   let tokenClient = null, columnas = [], datos = {}, seccionActiva = null;
@@ -144,6 +158,31 @@
     return json;
   }
   function mostrarError(id, e) { const n = $(id); if (n) n.textContent = e.message || "No se pudo completar la solicitud."; }
+  async function cargarConfiguracionIA() {
+    const d=$("ia-configuracion"); if(!d)return;
+    const refrescar=$("btn-refrescar-ia"); if(refrescar)refrescar.onclick=cargarConfiguracionIA;
+    try {
+      const j=await api("/analitica/configuracion");
+      const ps=[{nombre:"Claude · recomendado",key:"ANTHROPIC_API_KEY",cfg:j.claude},{nombre:"OpenAI · respaldo",key:"OPENAI_API_KEY",cfg:j.openai}];
+      d.innerHTML=ps.map(p=>'<div class="ia-proveedor"><strong>'+p.nombre+'</strong><span class="estado-pill '+(p.cfg?.configurada?"activo":"")+'">'+(p.cfg?.configurada?"Configurada":"Pendiente")+'</span><div class="sub">Modelo: '+escapar(p.cfg?.modelo||"predeterminado")+'</div><div class="comando-ia"><code>npx wrangler secret put '+p.key+'</code><button type="button" data-copiar="'+p.key+'">Copiar comando</button></div></div>').join("")+'<div class="guia-ia"><strong>Guía segura</strong><ol><li>Abre una terminal en <em>worker - Uso para Chat</em>.</li><li>Copia el comando del proveedor. Wrangler pedirá la clave: pégala en la terminal, nunca en esta página ni en el chat.</li><li>Claude se intenta primero; OpenAI queda como respaldo.</li></ol><p class="sub">Esta página solo recibe el estado configurado; nunca la clave. Si cambiaste código, despliega con <code>npx wrangler deploy</code>.</p></div>';
+      d.querySelectorAll("[data-copiar]").forEach(b=>b.onclick=async()=>{try{await navigator.clipboard.writeText("npx wrangler secret put "+b.dataset.copiar);b.textContent="Copiado";setTimeout(()=>b.textContent="Copiar comando",1800);}catch(_){b.textContent="Copia: npx wrangler secret put "+b.dataset.copiar;}});
+    } catch(e) { d.textContent=e.message||"No se pudo consultar la configuración."; }
+  }
+  async function cargarCuentasAnalitica() {
+    const destino = $("cuentas-analitica"); if (!destino) return;
+    destino.textContent = "Cargando cuentas…";
+    try {
+      const j = await api("/analitica/cuentas");
+      destino.innerHTML = `<div class="scroll"><table><thead><tr><th>Nombre</th><th>Correo</th><th>Recopilación</th></tr></thead><tbody>${(j.cuentas||[]).map(c=>`<tr><td>${escapar(c.nombre)}</td><td>${escapar(c.correo)}</td><td><label class="control-cuenta"><span>${Number(c.habilitada)===1?"Activa":"Pausada"}</span><input type="checkbox" data-cuenta="${escapar(c.correo)}" aria-label="Analítica activa para ${escapar(c.nombre)}" ${Number(c.habilitada)===1?"checked":""}></label></td></tr>`).join("")||'<tr><td colspan="3">No hay cuentas configuradas.</td></tr>'}</tbody></table></div><p class="sub">Pausar una cuenta detiene nuevas interacciones y recorridos. Activarla no sustituye el consentimiento de recorridos que debe dar cada persona. Los datos históricos no se borran al pausar.</p><div id="cuentas-analitica-error" class="error" role="status"></div>`;
+      destino.querySelectorAll("[data-cuenta]").forEach(chk=>chk.onchange=async()=>{
+        const anterior=!chk.checked, correo=chk.dataset.cuenta, fila=chk.closest("tr"), estado=fila?.querySelector(".control-cuenta span");
+        chk.disabled=true;
+        try { const r=await api("/analitica/cuentas/"+encodeURIComponent(correo),{method:"PATCH",body:JSON.stringify({habilitada:chk.checked})}); if(estado)estado.textContent=Number(r.cuenta?.habilitada)===1?"Activa":"Pausada"; }
+        catch(e){chk.checked=anterior;mostrarError("cuentas-analitica-error",e);}
+        finally{chk.disabled=false;}
+      });
+    } catch(e) { destino.textContent=e.message; }
+  }
   async function cargarFlujos() {
     const destino = $("flujo-datos"); if (!destino) return;
     destino.textContent = "Cargando embudos…";
@@ -166,7 +205,7 @@
       if (!(j.avisos||[]).length) { destino.textContent = "No hay avisos todavía."; return; }
       j.avisos.forEach(a=>{
         const fila=document.createElement("div"); fila.className="estado-aviso";
-        const info=document.createElement("div"); info.innerHTML=`<strong>${escapar(a.titulo)}</strong><div class="sub">${new Date(Number(a.inicia_en)).toLocaleString()} · hasta ${new Date(Number(a.termina_en)).toLocaleString()} · ${a.max_vistas} vistas · ${a.activo?"Activo":"Pausado"}</div>`;
+        const info=document.createElement("div"); info.innerHTML=`<strong>${escapar(a.titulo)}</strong><div class="sub">Botón: ${escapar(a.etiqueta_accion||"Entendido")} · ${new Date(Number(a.inicia_en)).toLocaleString()} · hasta ${new Date(Number(a.termina_en)).toLocaleString()} · hasta ${a.max_vistas} vistas · ${a.activo?"Activo":"Pausado"}</div>`;
         fila.append(info);
         if (a.activo) { const b=document.createElement("button"); b.textContent="Desactivar"; b.onclick=async()=>{try{await api("/avisos/admin/"+encodeURIComponent(a.id),{method:"DELETE"});cargarAvisos();}catch(e){mostrarError("aviso-error",e);}}; fila.append(b); }
         destino.append(fila);
@@ -175,24 +214,28 @@
   }
   function montarAdminAvanzado() {
     const destino=$("contenido");
-    destino.insertAdjacentHTML("beforeend", `<section class="card admin-extra"><h2>Recorridos de uso</h2><div class="sub">Inicios, cierres, abandonos y duración. Los abandonos se detectan tras 30 minutos sin actividad.</div><div id="flujo-datos" style="margin-top:12px">Cargando…</div></section>
-      <section class="card admin-extra"><h2>Análisis con IA</h2><p class="sub">Claude es el proveedor preferido; OpenAI funciona como respaldo. Solo se envían métricas agregadas.</p><div class="acciones"><button id="btn-analizar-ia" class="primario">Generar análisis</button><span id="ia-error" class="error"></span></div><pre id="ia-resultado" class="analisis-ia"></pre></section>
+    destino.insertAdjacentHTML("beforeend", `<section class="card admin-extra"><h2>Control por cuenta</h2><p class="sub">Puedes pausar o reactivar la recopilación de cada cuenta por separado.</p><div id="cuentas-analitica">Cargando…</div></section>
+      <section class="card admin-extra"><h2>Recorridos de uso</h2><div class="sub">Inicios, cierres, abandonos y duración. Los abandonos se detectan tras 30 minutos sin actividad.</div><div id="flujo-datos" style="margin-top:12px">Cargando…</div></section>
+      <section class="card admin-extra"><h2>Configurar análisis con IA</h2><p class="sub">Las claves viven como secretos privados del Worker. Esta página nunca las lee ni las almacena. Claude se intenta primero; OpenAI puede ser respaldo.</p><div id="ia-configuracion">Consultando configuración segura…</div><button id="btn-refrescar-ia" type="button">Actualizar estado</button></section>
+      <section class="card admin-extra"><h2>Análisis con IA</h2><p class="sub">Solo se envían métricas agregadas.</p><div class="acciones"><button id="btn-analizar-ia" class="primario">Generar análisis</button><span id="ia-error" class="error"></span></div><pre id="ia-resultado" class="analisis-ia"></pre></section>
       <section class="card admin-extra"><h2>Avisos generales</h2><p class="sub">Se muestran dentro del periodo programado al abrir la app o mientras está activa y conectada. El título y el mensaje se muestran tal como los escribes; si necesitas varios idiomas, incluye cada versión en el texto.</p><div class="admin-form">
-        <label>Título<input id="aviso-titulo" maxlength="100"></label><label>Acción<select id="aviso-accion"><option value="entendido">Entendido</option><option value="aceptar">Aceptar</option><option value="continuar">Continuar</option><option value="cerrar">Cerrar</option></select></label>
-        <label>Destino de Continuar<select id="aviso-destino"><option value="resumen">Resumen</option><option value="agenda">Agenda</option><option value="plan-estudios">Plan de estudios</option><option value="finanzas">Finanzas</option><option value="notas">Notas rápidas</option><option value="configuracion">Configuración</option></select></label>
+        <label>Título<input id="aviso-titulo" maxlength="100" placeholder="Ej. Nueva función disponible"></label>
+        <label>Texto del botón<input id="aviso-etiqueta" maxlength="40" value="Entendido" placeholder="Ej. Ver mis notas"><span class="sub">Las etiquetas conocidas se traducen; el texto personalizado se muestra tal cual en todos los idiomas.</span></label>
+        <label>Qué hará el botón<select id="aviso-accion"><option value="entendido">Confirmar que lo leyó</option><option value="aceptar">Aceptar una condición</option><option value="continuar">Ir a una sección</option><option value="cerrar">Cerrar sin confirmar</option></select></label>
+        <label id="aviso-destino-wrap">Destino del botón<select id="aviso-destino"><option value="resumen">Resumen</option><option value="agenda">Agenda</option><option value="plan-estudios">Plan de estudios</option><option value="finanzas">Finanzas</option><option value="notas">Notas rápidas</option><option value="configuracion">Configuración</option></select></label>
         <label>Veces que se mostrará<input id="aviso-vistas" type="number" min="1" max="20" value="1"></label><label>Desde<input id="aviso-inicia" type="datetime-local"></label><label>Hasta<input id="aviso-termina" type="datetime-local"></label>
         <label class="ancho">Mensaje<textarea id="aviso-cuerpo" rows="4" maxlength="3000"></textarea></label></div>
-        <div class="aviso-preview"><div class="sub">Vista previa</div><strong id="aviso-preview-titulo">Título del aviso</strong><p id="aviso-preview-cuerpo" style="white-space:pre-wrap;margin:8px 0 12px">El mensaje aparecerá aquí.</p><button id="aviso-preview-accion" class="primario" type="button" disabled>Entendido</button></div>
+        <div class="aviso-preview"><div class="aviso-preview-cabecera"><span class="aviso-preview-icono">✦</span><div><div class="sub">VISTA PREVIA · APP ACADÉMICA</div><strong id="aviso-preview-titulo">Título del aviso</strong></div></div><p id="aviso-preview-cuerpo" style="white-space:pre-wrap;margin:8px 0 14px">El mensaje aparecerá aquí.</p><div class="acciones"><button id="aviso-preview-despues" type="button">Ahora no</button><button id="aviso-preview-accion" class="primario" type="button" disabled>Entendido</button></div></div>
         <div class="acciones" style="margin:12px 0"><button id="btn-plantilla-aviso">Usar plantilla de actualización</button><button id="btn-crear-aviso" class="primario">Programar aviso</button><span id="aviso-error" class="error"></span></div><div id="avisos-lista"></div></section>`);
     const ahora=new Date(), despues=new Date(Date.now()+7*86400000);
     const local=(d)=>new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);
     $("aviso-inicia").value=local(ahora); $("aviso-termina").value=local(despues);
-    const actualizarPreview=()=>{ $("aviso-preview-titulo").textContent=$("aviso-titulo").value.trim()||"Título del aviso"; $("aviso-preview-cuerpo").textContent=$("aviso-cuerpo").value.trim()||"El mensaje aparecerá aquí."; $("aviso-preview-accion").textContent={entendido:"Entendido",aceptar:"Aceptar",continuar:"Continuar",cerrar:"Cerrar"}[$("aviso-accion").value]; };
-    $("aviso-titulo").oninput=actualizarPreview; $("aviso-cuerpo").oninput=actualizarPreview; $("aviso-accion").onchange=()=>{$("aviso-destino").disabled=$("aviso-accion").value!=="continuar";actualizarPreview();}; actualizarPreview();
+    const actualizarPreview=()=>{ $("aviso-preview-titulo").textContent=$("aviso-titulo").value.trim()||"Título del aviso"; $("aviso-preview-cuerpo").textContent=$("aviso-cuerpo").value.trim()||"El mensaje aparecerá aquí."; $("aviso-preview-accion").textContent=$("aviso-etiqueta").value.trim()||"Botón principal"; $("aviso-preview-despues").hidden=$("aviso-accion").value==="cerrar"; };
+    $("aviso-titulo").oninput=actualizarPreview; $("aviso-cuerpo").oninput=actualizarPreview; $("aviso-etiqueta").oninput=actualizarPreview; $("aviso-accion").onchange=()=>{$("aviso-destino-wrap").hidden=$("aviso-accion").value!=="continuar";actualizarPreview();}; $("aviso-destino-wrap").hidden=true; actualizarPreview();
     $("btn-plantilla-aviso").onclick=()=>{$("aviso-titulo").value="Novedades de App Académica";$("aviso-cuerpo").value="¡Hay novedades!\n\n• [Qué cambió]\n• [Qué mejora para ti]\n\nPuedes ver los detalles en [sección].";actualizarPreview();};
     $("btn-analizar-ia").onclick=async()=>{ $("ia-error").textContent="";$("ia-resultado").textContent="Analizando…";try{const j=await api("/analitica/ia",{method:"POST",body:JSON.stringify({dias:diasFlujos})});$("ia-resultado").textContent=`Análisis ${j.proveedor} · ${j.dias} días\n\n${j.analisis}`;}catch(e){$("ia-resultado").textContent="";mostrarError("ia-error",e);} };
-    $("btn-crear-aviso").onclick=async()=>{ $("aviso-error").textContent="";try{const accion=$("aviso-accion").value;await api("/avisos/admin",{method:"POST",body:JSON.stringify({titulo:$("aviso-titulo").value,cuerpo:$("aviso-cuerpo").value,inicia_en:new Date($("aviso-inicia").value).getTime(),termina_en:new Date($("aviso-termina").value).getTime(),max_vistas:Number($("aviso-vistas").value),accion,destino:$("aviso-destino").value})});$("aviso-titulo").value="";$("aviso-cuerpo").value="";cargarAvisos();}catch(e){mostrarError("aviso-error",e);} };
-    cargarFlujos(); cargarAvisos();
+    $("btn-crear-aviso").onclick=async()=>{ $("aviso-error").textContent="";try{const accion=$("aviso-accion").value;await api("/avisos/admin",{method:"POST",body:JSON.stringify({titulo:$("aviso-titulo").value,cuerpo:$("aviso-cuerpo").value,etiqueta_accion:$("aviso-etiqueta").value,inicia_en:new Date($("aviso-inicia").value).getTime(),termina_en:new Date($("aviso-termina").value).getTime(),max_vistas:Number($("aviso-vistas").value),accion,destino:$("aviso-destino").value})});$("aviso-titulo").value="";$("aviso-cuerpo").value="";$("aviso-etiqueta").value="Entendido";actualizarPreview();cargarAvisos();}catch(e){mostrarError("aviso-error",e);} };
+    cargarConfiguracionIA(); cargarCuentasAnalitica(); cargarFlujos(); cargarAvisos();
   }
   const barras = (items) => { const max = Math.max(1, ...items.map((i) => i.valor));
     return items.map((i) => `<div class="fila-barra"><span class="nombre" title="${i.nombre}">${i.nombre}</span><div class="pista"><div class="relleno" style="width:${i.valor / max * 100}%"></div></div><span class="num">${fmt(i.valor)}</span></div>`).join("") || '<div class="vacio">Sin datos todavía.</div>'; };
@@ -212,7 +255,7 @@
 
     $("contenido").innerHTML = `
       <div class="tarjetas">
-        <div class="card"><div class="kpi-num">${fmt(totalGeneral)}</div><div class="kpi-et">Interacciones registradas</div></div>
+        <div class="card"><div class="kpi-num">${fmt(totalGeneral)}</div><div class="kpi-et">Interacciones registradas</div><div class="sub">Cada clic, cambio o envío válido cuenta como interacción; no equivale a personas ni a procesos completados.</div></div>
         <div class="card"><div class="kpi-num">${orden[0].valor ? orden[0].nombre : "—"}</div><div class="kpi-et">Sección más usada</div></div>
         <div class="card"><div class="kpi-num">${funciones[0] && funciones[0].valor ? funciones[0].nombre : "—"}</div><div class="kpi-et">Acción más frecuente</div></div>
         <div class="card"><div class="kpi-num">${fmt(demo)}</div><div class="kpi-et">Aperturas de la demo</div></div>

@@ -27,8 +27,8 @@ Anyone. The app was designed with university students in mind, but it can also h
 ## 5. The limited information that does reach the app's service
 Some features use a service of the app's own, hosted on Cloudflare. This is all it receives:
 - **Sign-in:** the service helps renew your Google session. It does not store your password.
-- **Usage statistics:** counts only, for example how many times each section is opened. They never include what you write (tasks, grades, chats, etc.). Your email is used for an instant to classify the count and is not stored.
-- **Detailed journeys (optional):** only if you allow it in onboarding or Settings, the app records starts, steps, completion, cancellation, or abandonment for processes such as creating tasks, importing a study plan, editing notes, and sending Wapper messages. A pseudonymous identifier, timestamps, session, and app version are used; text and academic data are not sent. These events are deleted after 90 days, and you can withdraw permission in Settings > Data.
+- **Anonymous usage statistics:** we use aggregated counts to understand which sections are used and improve the app. They are not linked to your email or personal identity and never include what you write (tasks, notes, chats, or academic data).
+
 - **AI analysis:** when requested by the administrator, only aggregated counts are sent to Claude (Anthropic) or, if it is not configured, OpenAI. Identifiers and written content are never sent.
 - **Competitions:** if you create or join a competition, your Google email (to recognize you), your nickname, the hours you studied in the week and past results are stored. If the feature shows it, also your Google profile photo and the color you pick. The other people in the competition see your nickname and your hours. Which courses you study is never sent.
 - **Shared schedules:** if you share your schedule with a link, anyone who has it can see it. You decide who to share it with and you can stop sharing whenever you want from the app.
@@ -72,7 +72,6 @@ These terms may be updated. If the change is significant, the app will ask you t
 Your data is yours and you can manage it whenever you want. The app has buttons to **back up, import, export and delete** your data, so you do not depend on anyone else to do it.
 - **Your academic data:** you can delete it from the app, in Settings > Data, with the delete button. The back up, import and export buttons are in the same place. It is also in your Google Drive, so you can delete the app folder or remove the app's permission from your Google account settings. Before deleting, exporting or backing up whatever you want to keep is recommended.
 - **Competitions:** what is stored there (your nickname, your hours and your email so you can be recognized) is not academic or sensitive information. Even so, if you want it deleted, you can request it by writing to AppAcademica26@gmail.com.
-- **Usage statistics:** these are only counts and do not include what you write.
 - You can also stop using the app at any time.
 
 ## 13. Governing law

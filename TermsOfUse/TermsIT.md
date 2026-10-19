@@ -27,8 +27,7 @@ Chiunque. L'app è nata pensando agli studenti universitari, ma può servire anc
 ## 5. Le informazioni limitate che arrivano al servizio dell'app
 Alcune funzioni usano un servizio proprio dell'app, ospitato su Cloudflare. Questo è tutto ciò che riceve:
 - **Accesso:** il servizio aiuta a rinnovare la tua sessione Google. Non conserva la tua password.
-- **Statistiche d'uso:** solo conteggi, per esempio quante volte viene aperta ogni sezione. Non includono mai ciò che scrivi (compiti, voti, chat, ecc.). La tua e-mail viene usata per un istante per classificare il conteggio e non viene conservata.
-- **Percorsi dettagliati (facoltativi):** solo se li autorizzi durante l'onboarding o in Impostazioni, l'app registra avvio, passaggi, completamento, annullamento o abbandono di processi come creare attività, importare un piano di studi, modificare note e inviare messaggi a Wapper. Vengono usati un identificativo pseudonimo, date/ore, sessione e versione dell'app; non vengono inviati testi o dati accademici. Gli eventi vengono eliminati dopo 90 giorni e puoi revocare l'autorizzazione in Impostazioni > Dati.
+- **Statistiche di utilizzo anonime:** usiamo conteggi aggregati per capire quali sezioni vengono utilizzate e migliorare l’app. Non sono collegate alla tua e-mail o identità personale e non includono mai ciò che scrivi (attività, note, chat o dati accademici).
 - **Analisi con IA:** su richiesta dell'amministratore, vengono inviati a Claude (Anthropic) o, se non è configurato, a OpenAI solo conteggi aggregati. Non vengono inviati identificativi né contenuti scritti.
 - **Competizioni:** se crei una competizione o ne raggiungi una, vengono conservati la tua e-mail Google (per riconoscerti), il tuo soprannome, le ore studiate nella settimana e i risultati precedenti. Se la funzione lo mostra, anche la tua foto del profilo Google e il colore che scegli. Le altre persone della competizione vedono il tuo soprannome e le tue ore. Le materie che studi non vengono mai inviate.
 - **Orari condivisi:** se condividi il tuo orario con un link, chiunque lo abbia può vederlo. Decidi tu con chi condividerlo e puoi smettere di condividerlo quando vuoi dall'app.
@@ -72,7 +71,7 @@ Questi termini possono essere aggiornati. Se la modifica è importante, l'app ti
 I tuoi dati sono tuoi e puoi gestirli quando vuoi. L'app ha pulsanti per **salvare una copia, importare, esportare ed eliminare** i tuoi dati, quindi non dipendi da nessun altro per farlo.
 - **I tuoi dati accademici:** puoi eliminarli dall'app, in Impostazioni > Dati, con il pulsante di eliminazione. Nello stesso posto ci sono i pulsanti per salvare una copia, importare ed esportare. Sono anche nel tuo Google Drive: puoi eliminare la cartella dell'app oppure revocarle l'autorizzazione dalle impostazioni del tuo account Google. Prima di eliminare, si consiglia di esportare o salvare ciò che vuoi conservare.
 - **Competizioni:** ciò che vi viene conservato (il tuo soprannome, le tue ore e la tua e-mail per riconoscerti) non è un'informazione accademica né sensibile. Se comunque vuoi che venga eliminato, puoi chiederlo scrivendo a AppAcademica26@gmail.com.
-- **Statistiche d'uso:** sono solo conteggi e non includono ciò che scrivi.
+
 - Puoi anche smettere di usare l'app in qualsiasi momento.
 
 ## 13. Legge applicabile

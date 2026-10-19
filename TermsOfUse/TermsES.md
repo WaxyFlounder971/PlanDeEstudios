@@ -27,8 +27,8 @@ Cualquier persona. La app nació pensada para estudiantes universitarios, pero t
 ## 5. La información limitada que sí llega al servicio de la app
 Algunas funciones usan un servicio propio de la app, alojado en Cloudflare. Esto es lo único que recibe:
 - **Inicio de sesión:** el servicio ayuda a renovar tu sesión de Google. No guarda tu contraseña.
-- **Estadísticas de uso:** solo conteos, por ejemplo cuántas veces se abre cada sección. Nunca incluyen lo que escribes (tareas, notas, chats, etc.). Tu correo se usa un instante para clasificar el conteo y no se guarda.
-- **Recorridos detallados (opcional):** solo si lo autorizas en onboarding o en Ajustes, se registran inicios, pasos, finalización, cancelación o abandono de procesos como crear tareas, importar el plan, editar notas y enviar mensajes a Wapper. Se usa un identificador seudónimo con marcas de tiempo, sesión y versión de la app; no se envían textos ni datos académicos. Se eliminan después de 90 días y puedes retirar tu autorización en Ajustes > Datos.
+- **Estadísticas de uso anónimas:** usamos conteos agregados para entender qué secciones se utilizan y mejorar la app. No se asocian a tu correo ni a una identidad personal, y nunca incluyen lo que escribes (tareas, notas, chats o datos académicos).
+
 - **Análisis con IA:** cuando el administrador lo solicita, se envían a Claude (Anthropic) o, si no está configurado, a OpenAI solo conteos agregados, nunca los identificadores ni contenido escrito.
 - **Competencias:** si creas una competencia o te unes a una, se guardan tu correo de Google (para reconocerte), tu apodo, las horas que estudiaste en la semana y los resultados anteriores. Si la función lo muestra, también tu foto de perfil de Google y el color que elijas. Las demás personas de la competencia ven tu apodo y tus horas. Nunca se envía qué materias estudias.
 - **Horarios compartidos:** si compartes tu horario con un enlace, cualquier persona que lo tenga puede verlo. Tú decides con quién compartirlo y puedes dejar de compartirlo cuando quieras desde la app.
@@ -72,7 +72,6 @@ Estos términos pueden actualizarse. Si el cambio es importante, la app te pedir
 Tus datos son tuyos y puedes manejarlos cuando quieras. La app tiene botones para **respaldar, importar, exportar y eliminar** tus datos, por lo que no dependes de nadie más para hacerlo.
 - **Tus datos académicos:** puedes eliminarlos desde la app, en Ajustes > Datos, con el botón de eliminar. Ahí mismo están los botones de respaldar, importar y exportar. También están en tu Google Drive, así que puedes borrar la carpeta de la app o quitarle el permiso desde la configuración de tu cuenta de Google. Antes de borrar, se recomienda exportar o respaldar lo que quieras conservar.
 - **Competencias:** lo que se guarda ahí (tu apodo, tus horas y tu correo para reconocerte) no es información académica ni sensible. Aun así, si quieres que se elimine, puedes solicitarlo escribiendo a AppAcademica26@gmail.com.
-- **Estadísticas de uso:** son solo conteos y no incluyen lo que escribes.
 - También puedes dejar de usar la app en cualquier momento.
 
 ## 13. Ley aplicable

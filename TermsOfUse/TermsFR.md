@@ -27,8 +27,7 @@ Toute personne. L'application a été pensée pour les étudiants universitaires
 ## 5. Les informations limitées qui arrivent au service de l'application
 Certaines fonctions utilisent un service propre à l'application, hébergé chez Cloudflare. Voici tout ce qu'il reçoit :
 - **Connexion :** le service aide à renouveler ta session Google. Il ne conserve pas ton mot de passe.
-- **Statistiques d'utilisation :** uniquement des compteurs, par exemple combien de fois chaque section est ouverte. Elles n'incluent jamais ce que tu écris (tâches, notes, conversations, etc.). Ton e-mail est utilisé un instant pour classer le compteur et n'est pas conservé.
-- **Parcours détaillés (facultatifs) :** uniquement si tu l'autorises lors de l'onboarding ou dans les Réglages, l'application enregistre le début, les étapes, l'achèvement, l'annulation ou l'abandon de processus comme créer une tâche, importer un plan d'études, modifier une note ou envoyer un message à Wapper. Un identifiant pseudonymisé, des dates/heures, la session et la version de l'application sont utilisés ; aucun texte ni donnée académique n'est envoyé. Les événements sont supprimés après 90 jours et tu peux retirer ton autorisation dans Réglages > Données.
+- **Statistiques d’utilisation anonymes :** nous utilisons des compteurs agrégés pour comprendre quelles sections sont utilisées et améliorer l’application. Ils ne sont associés ni à ton e-mail ni à ton identité personnelle et n’incluent jamais ce que tu écris (tâches, notes, conversations ou données académiques).
 - **Analyse par IA :** à la demande de l'administrateur, seuls des compteurs agrégés sont envoyés à Claude (Anthropic) ou, s'il n'est pas configuré, à OpenAI. Aucun identifiant ni contenu écrit n'est envoyé.
 - **Compétitions :** si tu crées une compétition ou si tu en rejoins une, ton e-mail Google (pour te reconnaître), ton pseudo, les heures étudiées dans la semaine et les résultats précédents sont conservés. Si la fonction l'affiche, ta photo de profil Google et la couleur que tu choisis le sont aussi. Les autres personnes de la compétition voient ton pseudo et tes heures. Les matières que tu étudies ne sont jamais envoyées.
 - **Emplois du temps partagés :** si tu partages ton emploi du temps avec un lien, toute personne qui le possède peut le voir. Tu décides avec qui le partager et tu peux arrêter de le partager quand tu veux depuis l'application.
@@ -72,7 +71,7 @@ Ces conditions peuvent être mises à jour. Si le changement est important, l'ap
 Tes données sont à toi et tu peux les gérer quand tu veux. L'application dispose de boutons pour **sauvegarder, importer, exporter et supprimer** tes données, donc tu ne dépends de personne pour le faire.
 - **Tes données académiques :** tu peux les supprimer depuis l'application, dans Réglages > Données, avec le bouton de suppression. Les boutons de sauvegarde, d'import et d'export se trouvent au même endroit. Elles sont aussi dans ton Google Drive : tu peux supprimer le dossier de l'application ou lui retirer l'autorisation depuis les paramètres de ton compte Google. Avant de supprimer, il est recommandé d'exporter ou de sauvegarder ce que tu veux garder.
 - **Compétitions :** ce qui y est conservé (ton pseudo, tes heures et ton e-mail pour te reconnaître) n'est pas une information académique ni sensible. Si tu veux malgré tout que ce soit supprimé, tu peux le demander en écrivant à AppAcademica26@gmail.com.
-- **Statistiques d'utilisation :** ce ne sont que des compteurs et elles n'incluent pas ce que tu écris.
+
 - Tu peux aussi cesser d'utiliser l'application à tout moment.
 
 ## 13. Droit applicable
