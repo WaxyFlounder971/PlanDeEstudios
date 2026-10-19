@@ -867,10 +867,12 @@ function iniciarEdicionMovimientoFinanzas(tipo, semestreId, contenedorLista) {
   });
 }
 
+const hayBorradorFinanzasPendiente = () => borradoresFinanzasSemestre.size > 0;
+
 export {
   normalizarRegistrosFinancierosPorSemestre,
   renderizarPestanaSemestresFinanzas,
-  hayBorradorFinanzasPendiente: () => borradoresFinanzasSemestre.size > 0,
+  hayBorradorFinanzasPendiente,
   abrirSelectorSemestreParaFinanzas,
   iniciarEdicionMovimientoFinanzas,
 };
