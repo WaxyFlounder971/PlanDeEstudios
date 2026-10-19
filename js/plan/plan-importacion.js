@@ -457,19 +457,19 @@ const PASOS_GUIA_IMPORTACION = {
   link: [
     PASO_SESION_ABRIR, PASO_SESION_LISTO,
     ["Copia la instrucción", "El enlace de tu plan ya va incluido en el mensaje.", "copy", "Copiar instrucción"],
-    ["Pégala en Claude y envía", "Toca el cuadro de mensaje, pega con Ctrl+V (o mantén presionado y elige Pegar) y envía.", "sent", "Ya la envié"],
+    ["Pégala en Claude y envía", "Haz clic derecho (o mantén presionado) en el cuadro de mensaje, elige Pegar y envía.", "sent", "Ya la envié"],
     PASO_COPIAR_RESPUESTA,
   ],
   file: [
     PASO_SESION_ABRIR, PASO_SESION_LISTO,
     ["Copia la instrucción", "Es el texto que le explica a Claude cómo organizar tu plan.", "copy", "Copiar instrucción"],
-    ["Adjunta tu plan y envía", "Pega la instrucción (Ctrl+V), adjunta tu plan con el clip 📎 (puedes guardar una copia en Descargas) y envía.", "sent", "Ya lo envié", true],
+    ["Adjunta tu plan y envía", "Haz clic derecho (o mantén presionado) en el cuadro de mensaje y elige Pegar. Luego toca + y \"Subir o agregar archivos\" para adjuntar tu plan (puedes guardar una copia en Descargas) y envía.", "sent", "Ya lo envié", true],
     PASO_COPIAR_RESPUESTA,
   ],
   pdf: [
     PASO_SESION_ABRIR, PASO_SESION_LISTO,
     ["Copia la instrucción", "Es el texto que le explica a Claude cómo organizar tu plan.", "copy", "Copiar instrucción"],
-    ["Adjunta tu PDF y envía", "Pega la instrucción (Ctrl+V), adjunta tu PDF con el clip 📎 (búscalo en tu dispositivo) y envía.", "sent", "Ya lo envié"],
+    ["Adjunta tu PDF y envía", "Haz clic derecho (o mantén presionado) en el cuadro de mensaje y elige Pegar. Luego toca + y \"Subir o agregar archivos\", elige tu PDF y envía.", "sent", "Ya lo envié"],
     PASO_COPIAR_RESPUESTA,
   ],
   phone: [
