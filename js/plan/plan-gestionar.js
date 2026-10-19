@@ -52,8 +52,9 @@ function recalcularPlanesHardcore(cfg) {
 /* --------------------------- Selector de plan --------------------------- */
 
 function renderizarSelectorPlan() {
-  inicializarEstadoGestionPlanesSiHaceFalta();
   const cont = document.getElementById("selector-plan");
+  if (!cont) return;
+  inicializarEstadoGestionPlanesSiHaceFalta();
   const planes = estado.datos.planes_estudio;
 
   if (planes.length === 0) {

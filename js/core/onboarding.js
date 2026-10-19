@@ -27,7 +27,7 @@ const SECCIONES_TUTORIAL = [
   { id:"comunidad", nombre:"Comunidad", puntos:["Organiza compañeros y docentes relacionados con tus materias.","Cada docente lleva tu propia valoración, según tu experiencia."] },
   { id:"finanzas", nombre:"Finanzas", puntos:["Registra ingresos y gastos desde el inicio.","Clasifica movimientos por categoría.","Asociarlos a un semestre es opcional."] },
   { id:"plan-estudios", nombre:"Plan de estudios", puntos:["Añade una o varias carreras.","Pega o importa la malla completa.","El plan alimenta la matrícula de Semestres."] },
-  { id:"notas", nombre:"Notas rápidas", puntos:["Guarda ideas y pendientes al instante, incluso sin conexión.","Fija, organiza, busca y comparte tus notas.","Envía una nota a Wapper para convertirla en actividades de Agenda.","Compartir contenido desde otras apps requiere tener instalada la app en Android."] },
+  { id:"notas", nombre:"Notas rápidas", puntos:["Guarda ideas y pendientes al instante, incluso sin conexión.","Fija, organiza, busca y comparte tus notas.","Envía una nota a Wapper para convertirla en actividades de Agenda.","En computadora, haz clic derecho en una nota para abrir sus acciones.","En teléfono, mantén pulsada una nota para seleccionarla; el resaltado muestra la selección.","La Papelera permite restaurar notas eliminadas o quitarlas definitivamente.","Compartir contenido desde otras apps requiere tener instalada la app en Android."] },
   { id:"asistente", nombre:"Wapper", puntos:["Convierte mensajes en tareas, exámenes o eventos de Agenda.","Consulta fechas y pendientes con lenguaje natural.","Actívalo con tu clave personal de Gemini desde Ajustes."] },
   { id:"configuracion", nombre:"Ajustes", puntos:["Cambia idioma, apariencia, paleta y tamaño de texto.","Aquí ordenas y ocultas las secciones de la navegación.","Con este botón vuelves a ver la bienvenida y el mini tutorial cuando quieras.","Toca dos veces el título de cualquier sección para ver qué hace y, si quieres, su guía paso a paso."] },
 ];
@@ -46,13 +46,13 @@ function guardarProgresoOnb(o) { try { if (o) localStorage.setItem(CLAVE_PROGRES
    El texto vive en archivos .md por idioma: TermsOfUse/TermsES.md, TermsEN.md, TermsIT.md, TermsFR.md.
    Al aceptar se guarda en la cuenta: configuracion.terminos_aceptados = { version, fecha, idioma }.
    Si algún día cambian los términos, sube VERSION_TERMINOS y se volverán a pedir. */
-const VERSION_TERMINOS = "2";
+const VERSION_TERMINOS = "3";
 const ARCHIVOS_TERMINOS = { es: "TermsES", en: "TermsEN", it: "TermsIT", fr: "TermsFR" };
 const TEXTOS_TERMINOS = {
-  es: { titulo: "Términos y condiciones", lema: "Antes de seguir, lee cómo usamos tus datos y acepta los términos.", cargando: "Cargando…", error: "No se pudo cargar el texto. Revisa tu conexión e inténtalo de nuevo.", reintentar: "Reintentar", acepto: "He leído y acepto los términos y condiciones y el tratamiento de mis datos.", requerido: "Debes aceptar los términos para continuar.", analitica: "Opcional: acepto que se registren recorridos seudonimizados (inicio, pasos, finalización o abandono) para mejorar la app. No se envía el contenido que escribo.", atras: "Atrás", continuar: "Aceptar y continuar" },
-  en: { titulo: "Terms and conditions", lema: "Before you continue, read how we use your data and accept the terms.", cargando: "Loading…", error: "The text could not be loaded. Check your connection and try again.", reintentar: "Try again", acepto: "I have read and accept the terms and conditions and the processing of my data.", requerido: "You must accept the terms to continue.", analitica: "Optional: I agree to pseudonymous journey tracking (start, steps, completion or abandonment) to improve the app. The content I write is not sent.", atras: "Back", continuar: "Accept and continue" },
-  it: { titulo: "Termini e condizioni", lema: "Prima di continuare, leggi come usiamo i tuoi dati e accetta i termini.", cargando: "Caricamento…", error: "Impossibile caricare il testo. Controlla la connessione e riprova.", reintentar: "Riprova", acepto: "Ho letto e accetto i termini e le condizioni e il trattamento dei miei dati.", requerido: "Devi accettare i termini per continuare.", analitica: "Facoltativo: acconsento alla raccolta pseudonimizzata dei percorsi (avvio, passaggi, completamento o abbandono) per migliorare l'app. Il contenuto che scrivo non viene inviato.", atras: "Indietro", continuar: "Accetta e continua" },
-  fr: { titulo: "Conditions d'utilisation", lema: "Avant de continuer, lis comment nous utilisons tes données et accepte les conditions.", cargando: "Chargement…", error: "Impossible de charger le texte. Vérifie ta connexion et réessaie.", reintentar: "Réessayer", acepto: "J'ai lu et j'accepte les conditions d'utilisation et le traitement de mes données.", requerido: "Tu dois accepter les conditions pour continuer.", analitica: "Facultatif : j'accepte le suivi pseudonymisé des parcours (début, étapes, achèvement ou abandon) pour améliorer l'application. Le contenu que j'écris n'est pas envoyé.", atras: "Retour", continuar: "Accepter et continuer" }
+  es: { titulo: "Términos y condiciones", lema: "Antes de seguir, lee cómo usamos tus datos y acepta los términos.", cargando: "Cargando…", error: "No se pudo cargar el texto. Revisa tu conexión e inténtalo de nuevo.", reintentar: "Reintentar", acepto: "He leído y acepto los términos y condiciones y el tratamiento de mis datos.", requerido: "Debes aceptar los términos para continuar.", atras: "Atrás", continuar: "Aceptar y continuar" },
+  en: { titulo: "Terms and conditions", lema: "Before you continue, read how we use your data and accept the terms.", cargando: "Loading…", error: "The text could not be loaded. Check your connection and try again.", reintentar: "Try again", acepto: "I have read and accept the terms and conditions and the processing of my data.", requerido: "You must accept the terms to continue.", atras: "Back", continuar: "Accept and continue" },
+  it: { titulo: "Termini e condizioni", lema: "Prima di continuare, leggi come usiamo i tuoi dati e accetta i termini.", cargando: "Caricamento…", error: "Impossibile caricare il testo. Controlla la connessione e riprova.", reintentar: "Riprova", acepto: "Ho letto e accetto i termini e le condizioni e il trattamento dei miei dati.", requerido: "Devi accettare i termini per continuare.", atras: "Indietro", continuar: "Accetta e continua" },
+  fr: { titulo: "Conditions d'utilisation", lema: "Avant de continuer, lis comment nous utilisons tes données et accepte les conditions.", cargando: "Chargement…", error: "Impossible de charger le texte. Vérifie ta connexion et réessaie.", reintentar: "Réessayer", acepto: "J'ai lu et j'accepte les conditions d'utilisation et le traitement de mes données.", requerido: "Tu dois accepter les conditions pour continuer.", atras: "Retour", continuar: "Accepter et continuer" }
 };
 const _cacheTerminos = {};
 function codigoIdiomaTerminos() { const c = idiomaUI().slice(0, 2); return ARCHIVOS_TERMINOS[c] ? c : "es"; }
@@ -396,7 +396,8 @@ function inyectarEstilosOnboarding() {
 .onb-moneda-vacio{opacity:.65;cursor:default}
 .onb-enlaces-lista{display:flex;flex-direction:column;gap:8px}.onb-enlace-fila{display:flex;align-items:center;gap:10px}.onb-enlace-ico{width:28px;height:28px;display:grid;place-items:center;flex-shrink:0;font-size:1.2rem}.onb-enlace-ico img{width:100%;height:100%;object-fit:cover;border-radius:6px}.onb-enlace-nombre{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .onb-nav-fila{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:.7rem .9rem;border-radius:14px;border:1px solid color-mix(in srgb,currentColor 14%,transparent);background:color-mix(in srgb,currentColor 4%,transparent)}
-.onb-nav-fila span{display:flex;align-items:center;gap:10px}
+.onb-nav-fila span{display:flex;align-items:center;gap:10px}.onb-nav-fila[draggable="true"]{cursor:grab}.onb-nav-fila.arrastrando{opacity:.5;border-color:var(--accent-1,#8b5cf6)}.onb-nav-arrastre{opacity:.55;font-size:1.2rem;cursor:grab;touch-action:none}
+.onb-notas-demo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:clamp(14px,3vw,32px)}.onb-notas-demo>.onb-bloque{min-height:150px;padding:16px;border-radius:18px;background:color-mix(in srgb,var(--accent-1,#8b5cf6) 20%,var(--onb-izq,#111));border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 24%,transparent)}.onb-notas-demo .onb-r-fila{margin-bottom:14px}@media(max-width:700px){.onb-notas-demo{grid-template-columns:1fr;gap:8px;padding:12px}.onb-notas-demo>.onb-bloque{min-height:100px}}
 .onb-gemini-pasos{margin:0 0 14px;padding-left:1.25rem;display:flex;flex-direction:column;gap:6px;font-size:.88rem;line-height:1.45}
 .onb-gemini-campo{display:flex;flex-direction:column;gap:8px;margin-top:14px}
 .onb-wapper-ok{display:flex;flex-direction:column;gap:6px;margin-top:10px;padding:16px;border-radius:16px;border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 50%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 12%,transparent)}
@@ -415,7 +416,7 @@ function inyectarEstilosOnboarding() {
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"]){background:var(--onb-izq,#080808)!important;background-image:none!important}
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"])>.onboarding-acciones{position:static!important;inset:auto!important;transform:none!important;flex:none;width:100%!important;max-width:none!important;min-width:0!important;align-self:stretch;justify-self:stretch;grid-column:1/-1;box-sizing:border-box;margin:0;padding:12px 20px calc(12px + env(safe-area-inset-bottom,0px));z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
 /* Términos y condiciones: el texto ocupa todo el espacio disponible; título y lema compactos. */
-.onboarding-panel[data-etapa="terminos"] .onboarding-copy{text-align:center}
+.onboarding-panel[data-etapa="terminos"] .onboarding-copy{text-align:center;justify-content:flex-start!important;padding-top:4px!important}
 .onboarding-panel[data-etapa="terminos"] .onboarding-copy h1{font-size:clamp(1.3rem,3.4vh,1.8rem)!important;margin:0 0 4px!important;animation:none}
 .onb-terminos-lema{margin:0 0 6px;font-size:.92rem;opacity:.8}
 .onb-terminos-caja{text-align:left;height:clamp(280px,56dvh,720px);overflow-y:auto;overscroll-behavior:contain;padding:16px 18px;margin:.6rem 0;border-radius:16px;border:1px solid rgba(128,128,128,.35);background:rgba(128,128,128,.08);font-size:.95rem;line-height:1.55}
@@ -426,7 +427,7 @@ function inyectarEstilosOnboarding() {
 .onb-luz:disabled{opacity:.5;cursor:not-allowed}
 .onb-luz:focus-visible{outline:2px solid var(--accent-1,#8b5cf6);outline-offset:2px}
 .onb-luz-led{flex:none;width:22px;height:22px;border-radius:50%;background:rgba(128,128,128,.35);box-shadow:inset 0 2px 4px rgba(0,0,0,.45);transition:background .25s,box-shadow .3s}
-.onb-consentimiento-analitica{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;font-size:.84rem;line-height:1.4;opacity:.88}.onb-consentimiento-analitica input{flex:none;margin-top:3px;accent-color:var(--accent-1,#8b5cf6)}
+
 .onb-luz.on{border-color:var(--accent-1,#8b5cf6);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 14%,transparent)}
 .onb-luz.on .onb-luz-led{background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.85),transparent 45%),var(--gradient-accent,var(--accent-1,#8b5cf6));box-shadow:0 0 6px 2px color-mix(in srgb,var(--accent-1,#8b5cf6) 90%,transparent),0 0 18px 6px color-mix(in srgb,var(--accent-1,#8b5cf6) 55%,transparent)}
 @media (prefers-reduced-motion:reduce){.onb-luz,.onb-luz-led{transition:none}}
@@ -1146,9 +1147,15 @@ function contenidoEsquema(id) {
         [hilo, burb("yo", "Mueve el quiz para el lunes")], [hilo, burb("", "Listo, moví el quiz al lunes.")]);
       break;
     }
+    case "notas": {
+      const nota1=rCard(rFila("onb-r-sp",rTit("Notas rápidas"),rPildora("Fijada",PURPURA)),rSuave("Ideas para el proyecto"),rSuave("Guardar una idea al instante"));
+      const nota2=rCard(rFila("onb-r-sp",rTit("Pendientes"),rSuave("Hoy")),rSuave("Revisar materiales de clase"));
+      base.push(nodo("div","onb-r onb-notas-demo",null,[nota1,nota2]));
+      break;
+    }
     case "configuracion": {
       base.push(rFilaAjuste("Ajustes generales"), rFilaAjuste("Asistente IA (Gemini)"), rFilaAjuste("Notificaciones"), rFilaAjuste("Personalizar"),
-        rFilaAjuste("Horario"), rFilaAjuste("Plan de Estudios activo"), rFilaAjuste("Enlaces rápidos"), rFilaAjuste("Datos"));
+        rFilaAjuste("Horario"), rFilaAjuste("Enlaces rápidos"), rFilaAjuste("Datos"));
       extras.push(rFilaAjuste("Créditos"));
       break;
     }
@@ -1400,6 +1407,14 @@ function construirTipAyuda() {
   cuerpo.append(el("b", "", T("¿Necesitas ayuda más adelante?")), el("span", "", T("Toca dos veces seguidas el título de cualquier sección (Agenda, Horario, Finanzas…) y se abre una ventana con lo que puede hacer; desde ahí eliges ver su guía paso a paso o quedarte con eso. No es un truco escondido: está para cuando se te olvide cómo funciona algo.")));
   raiz.append(el("span", "onb-ayuda-tip-ico", ICONOS_FLUJO.ayuda), cuerpo); return raiz;
 }
+function construirTipNotas() {
+  const T = traducirTextoInterfaz;
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  const raiz = el("div", "onb-ayuda-tip"); raiz.setAttribute("role", "note");
+  const cuerpo = document.createElement("div");
+  cuerpo.append(el("b", "", T("Notas rápidas")), el("span", "", T("Guarda ideas y pendientes al instante, incluso sin conexión.")), el("span", "", T("Envía una nota a Wapper para convertirla en actividades de Agenda.")));
+  raiz.append(el("span", "onb-ayuda-tip-ico", "🗒️"), cuerpo); return raiz;
+}
 // Pantalla «Todo conectado»: cuatro pasos encadenados (el 4.º, Wapper, es opcional). Se ve en horizontal y pasa a vertical solo si no cabe.
 function construirFlujo() {
   const T = traducirTextoInterfaz;
@@ -1420,7 +1435,7 @@ function construirFlujo() {
     card.append(el("b", "", T(t)), el("span", "", T(d)));
     paso.append(nodo, card); fila.append(paso);
   });
-  raiz.append(fila, construirTipAyuda());
+  raiz.append(fila, construirTipNotas());
   ajustarFlujo(raiz, fila); return raiz;
 }
 // Horizontal si cabe; vertical si el ancho es corto o alguna palabra se desbordaría (nada de cortes tipo «estudio/s»).
@@ -1476,7 +1491,7 @@ function contenedorOpcionesPlan() {
   let n = a.parentElement; while (n && !n.contains(g)) n = n.parentElement;
   return n || g;
 }
-function grupoMetodosImportar() { const g = [...document.querySelectorAll("#seccion-plan-estudios .pill-group")]; return g.find((x) => x.querySelectorAll("button").length >= 3) || g.find((x) => x.querySelectorAll("button").length >= 2); }
+function grupoMetodosImportar() { return document.querySelector("#seccion-plan-estudios .importacion-metodos") || (() => { const g = [...document.querySelectorAll("#seccion-plan-estudios .pill-group")]; return g.find((x) => x.querySelectorAll("button").length >= 3) || g.find((x) => x.querySelectorAll("button").length >= 2); })(); }
 function botonTutorialAjustes() {
   return document.getElementById("btn-repetir-tutorial")
     || [...document.querySelectorAll("#seccion-configuracion button")].find((b) => /tutorial|bienvenida|onboarding/i.test(`${b.textContent} ${b.id}`)) || null;
@@ -1549,7 +1564,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
   const cfg = estado.datos.configuracion;
   const secciones = SECCIONES_TUTORIAL.filter(({id}) => id !== "configuracion" && document.getElementById(`seccion-${id}`));
   // «Últimos ajustes»: se guardan en este borrador y se aplican AL TERMINAR el onboarding.
-  const borrador = { tocado: false, navTocada: false, moneda: null, ocultas: new Set(cfg.navegacion_oculta || []), recordatorio: null, recordatorios: null, resumen: null, enlaces: [] };
+  const borrador = { tocado: false, navTocada: false, ordenNav: null, moneda: null, ocultas: new Set(cfg.navegacion_oculta || []), recordatorio: null, recordatorios: null, resumen: null, enlaces: [] };
   let claveRecien = false;
   const cuentaConDatos = !MODO_DEMO && Object.entries(estado.datos).some(([clave, valor]) =>
     Array.isArray(valor) && valor.length > 0 && clave !== "planes_estudio_demo"
@@ -1792,6 +1807,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
     if(!borrador.tocado)return;
     if(borrador.moneda)cfg.moneda_preferida=borrador.moneda;
     if(borrador.navTocada)cfg.navegacion_oculta=[...borrador.ocultas];
+    if(borrador.ordenNav)cfg.navegacion_orden=[...borrador.ordenNav];
     if(borrador.recordatorios){const previo=cfg.notificaciones_recordatorios&&typeof cfg.notificaciones_recordatorios==="object"?cfg.notificaciones_recordatorios:{};cfg.notificaciones_recordatorios={feriado:["1_dia"],...previo,...borrador.recordatorios};}
     if(borrador.enlaces.length){
       if(!Array.isArray(cfg.enlaces_rapidos))cfg.enlaces_rapidos=[];
@@ -1890,9 +1906,6 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
       // «Luz» de aceptación: al tocarla se enciende (role=switch para lectores de pantalla y teclado).
       const luz=crear("button","onb-luz");luz.type="button";luz.disabled=true;luz.setAttribute("role","switch");luz.setAttribute("aria-checked","false");
       luz.append(crear("span","onb-luz-led"),crear("span","onb-luz-txt",L.acepto));
-      const filaAnalitica=crear("label","onb-consentimiento-analitica");
-      const chkAnalitica=crear("input");chkAnalitica.type="checkbox";chkAnalitica.checked=cfg.analitica_flujos_aceptada===true;
-      filaAnalitica.append(chkAnalitica,crear("span","",L.analitica));
       const encendida=()=>luz.getAttribute("aria-checked")==="true";
       if(aceptadoTerminos()&&!MODO_DEMO){luz.setAttribute("aria-checked","true");luz.classList.add("on");} // ya los aceptó: llega encendida y solo continúa
       const aviso=crear("p","onboarding-nota-error",L.requerido);aviso.hidden=true;aviso.setAttribute("role","alert");
@@ -1908,12 +1921,9 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
         });
       };
       luz.addEventListener("click",()=>{luz.setAttribute("aria-checked",String(!encendida()));luz.classList.toggle("on",encendida());aviso.hidden=true;});
-      contenido.append(crear("p","onb-terminos-lema",L.lema),caja,luz,filaAnalitica,aviso);
+      contenido.append(crear("p","onb-terminos-lema",L.lema),caja,luz,aviso);
       const aceptar=()=>{
         if(!cargado||!encendida()){aviso.hidden=false;return;}
-        cfg.analitica_flujos_aceptada=chkAnalitica.checked;
-        guardar();
-        window.configurarConsentimientoAnalitica?.(chkAnalitica.checked);
         if(!aceptadoTerminos()){cfg.terminos_aceptados={version:VERSION_TERMINOS,fecha:new Date().toISOString(),idioma:cod};guardar();}
         etapa=cuentaConDatos&&cfg.paleta&&cfg.modo?"tour":"personalizar";indice=0;pintar();
       };
@@ -2094,15 +2104,27 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
       acciones.append(boton("Atrás","btn-secondary",()=>{etapa="tour";indice=Math.max(0,secciones.length-1);pintar();}),boton("Continuar","btn-primary",()=>{etapa="ajustes2";pintar();}));return;
     }
     if(etapa==="ajustes2"){
-      contenido.append(texto("p","onboarding-lead","Desactiva las secciones que no vayas a utilizar. Puedes volver a activarlas cuando quieras en Ajustes > Personalizar > Navegación."));
+      contenido.append(texto("p","onboarding-lead","Arrastra las secciones para cambiar su orden. Desactiva las que no vayas a utilizar; puedes volver a activarlas en Ajustes > Personalizar > Navegación."));
       const lista=document.createElement("div");lista.className="onb-ajustes";
       const orden=typeof window.obtenerOrdenNavegacion==="function"?window.obtenerOrdenNavegacion():SECCIONES_NAV.map((x)=>x.id);
+      let arrastrada=null;
+      const guardarOrdenNav=()=>{const vistos=[...lista.querySelectorAll(".onb-nav-fila")].map((n)=>n.dataset.seccion);borrador.ordenNav=[...vistos,...orden.filter((x)=>!vistos.includes(x))];borrador.tocado=true;borrador.navTocada=true;};
       orden.forEach((id)=>{
         const sec=SECCIONES_NAV.find((x)=>x.id===id);if(!sec)return;
         if(id==="asistente"&&!cfg.gemini_api_key)return;
-        const fila=document.createElement("div");fila.className="onb-nav-fila";
-        const izq=document.createElement("span");izq.append(texto("span","",sec.icono),texto("span","",sec.etiqueta));
+        const fila=document.createElement("div");fila.className="onb-nav-fila";fila.draggable=true;fila.dataset.seccion=id;fila.setAttribute("aria-label",traducirTextoInterfaz("Arrastra para cambiar el orden"));
+        const izq=document.createElement("span");const asa=texto("span","onb-nav-arrastre","⠿");asa.setAttribute("aria-hidden","true");izq.append(asa,texto("span","",sec.icono),texto("span","",sec.etiqueta));
         const sw=construirInterruptor(!borrador.ocultas.has(id),(activa)=>{if(activa)borrador.ocultas.delete(id);else borrador.ocultas.add(id);borrador.tocado=true;borrador.navTocada=true;},`${sec.etiqueta}`);
+        fila.addEventListener("dragstart",(ev)=>{arrastrada=fila;fila.classList.add("arrastrando");ev.dataTransfer.effectAllowed="move";});
+        fila.addEventListener("dragend",()=>{fila.classList.remove("arrastrando");arrastrada=null;});
+        fila.addEventListener("dragover",(ev)=>{ev.preventDefault();if(arrastrada&&arrastrada!==fila){const r=fila.getBoundingClientRect();lista.insertBefore(arrastrada,ev.clientY<r.top+r.height/2?fila:fila.nextSibling);}});
+        fila.addEventListener("drop",(ev)=>{ev.preventDefault();guardarOrdenNav();});
+        // En pantallas táctiles el navegador no implementa de forma uniforme
+        // el drag HTML; el asa usa Pointer Events y conserva el desplazamiento.
+        asa.addEventListener("pointerdown",(ev)=>{if(ev.pointerType==="mouse")return;ev.preventDefault();arrastrada=fila;fila.classList.add("arrastrando");asa.setPointerCapture?.(ev.pointerId);});
+        asa.addEventListener("pointermove",(ev)=>{if(arrastrada!==fila||!asa.hasPointerCapture?.(ev.pointerId))return;const destino=document.elementFromPoint(ev.clientX,ev.clientY)?.closest(".onb-nav-fila");if(destino&&destino!==fila){const r=destino.getBoundingClientRect();lista.insertBefore(fila,ev.clientY<r.top+r.height/2?destino:destino.nextSibling);}});
+        const soltarPuntero=(ev)=>{if(arrastrada!==fila||ev.pointerType==="mouse")return;fila.classList.remove("arrastrando");arrastrada=null;guardarOrdenNav();};
+        asa.addEventListener("pointerup",soltarPuntero);asa.addEventListener("pointercancel",soltarPuntero);
         fila.append(izq,sw.label);lista.append(fila);
       });
       contenido.append(lista);
@@ -2127,6 +2149,21 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
 
 function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres = false } = {}){
   const yaTienePlan = Boolean(estado.datos?.planes_estudio?.some((plan) => plan.materias?.length || plan.optativas_disponibles?.length));
+  // La importación inicial ahora tiene su propio flujo guiado, incluido
+  // Picture-in-Picture. No dibujar encima el tutorial antiguo: registra la
+  // continuación aquí para llevar a Semestres cuando el import real termine.
+  if (!posteriorImportacion && !yaTienePlan) {
+    window.continuarTutorialDespuesDeImportarPlan = () => {
+      const cfg = estado.datos?.configuracion;
+      if (cfg?.guia_plan_pendiente !== "plan") return;
+      cfg.onboarding_plan_en_blanco_pendiente = false;
+      cfg.guia_plan_pendiente = "semestres";
+      guardar();
+      navegar?.("semestres");
+      setTimeout(() => iniciarGuiaPlan({ navegar, posteriorImportacion: true, yaEnSemestres: true }), 350);
+    };
+    return;
+  }
   const semestresIniciales = new Set((estado.datos?.semestres || []).map((s) => s.id));
   let semestreCreadoEnGuia = false, esperandoAlta = false, pasoAlta = -1;
   const marcarSemestresVisto = () => {

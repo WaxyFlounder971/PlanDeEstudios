@@ -95,12 +95,20 @@ let ultimaConsultaAvisos = 0;
 const ES_DEMO = (() => {
   try { return new URLSearchParams(location.search).get("demo") === "1"; } catch (_) { return false; }
 })();
+// Los ambientes de desarrollo y localhost nunca escriben en la analítica
+// productiva ni modifican el estado de avisos de las cuentas reales.
+const ES_DESARROLLO = (() => {
+  try {
+    const host = location.hostname.toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "dev.wapper.pages.dev" || host.startsWith("dev.");
+  } catch (_) { return false; }
+})();
 
 function configurarCorreoAnalitica(correo, token = "", consentimiento = false) {
   const anterior = correoEnMemoria;
   correoEnMemoria = typeof correo === "string" ? correo.trim().toLowerCase().slice(0, 254) : "";
   tokenEnMemoria = typeof token === "string" ? token : "";
-  consentimientoFlujos = Boolean(consentimiento && correoEnMemoria && tokenEnMemoria && !ES_DEMO);
+  consentimientoFlujos = Boolean(consentimiento && correoEnMemoria && tokenEnMemoria && !ES_DEMO && !ES_DESARROLLO);
   if (consentimientoFlujos) configurarConsentimientoAnalitica(true, true);
   if (anterior !== correoEnMemoria) {
     try { sessionStorage.removeItem(CLAVE_EVENTOS_FLUJO); } catch (_) {}
@@ -113,9 +121,9 @@ function configurarCorreoAnalitica(correo, token = "", consentimiento = false) {
 }
 
 function configurarConsentimientoAnalitica(aceptado, sincronizar = true) {
-  consentimientoFlujos = Boolean(aceptado && correoEnMemoria && tokenEnMemoria && !ES_DEMO);
+  consentimientoFlujos = Boolean(aceptado && correoEnMemoria && tokenEnMemoria && !ES_DEMO && !ES_DESARROLLO);
   if (!consentimientoFlujos) { try { sessionStorage.removeItem(CLAVE_EVENTOS_FLUJO); } catch (_) {} }
-  if (!sincronizar || !correoEnMemoria || !tokenEnMemoria || ES_DEMO) return Promise.resolve();
+  if (!sincronizar || !correoEnMemoria || !tokenEnMemoria || ES_DEMO || ES_DESARROLLO) return Promise.resolve();
   promesaConsentimientoRemoto = fetch(`${URL_WORKER_APP}/analitica/consentimiento`, {
     method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokenEnMemoria}` },
     body: JSON.stringify({ aceptado: consentimientoFlujos }), keepalive: true,
@@ -124,7 +132,7 @@ function configurarConsentimientoAnalitica(aceptado, sincronizar = true) {
 }
 
 async function cargarAvisosGlobales() {
-  if (cargandoAvisos || !tokenEnMemoria || !navigator.onLine || Date.now() - ultimaConsultaAvisos < 5 * 60 * 1000) return;
+  if (ES_DESARROLLO || cargandoAvisos || !tokenEnMemoria || !navigator.onLine || Date.now() - ultimaConsultaAvisos < 5 * 60 * 1000) return;
   ultimaConsultaAvisos = Date.now();
   cargandoAvisos = true;
   try {
@@ -148,15 +156,30 @@ function mostrarAvisoGlobal(avisos, indice) {
   } catch (_) {}
   let overlay = document.getElementById("modal-aviso-global-app");
   if (!overlay) {
+    if (!document.getElementById("estilos-aviso-global-app")) {
+      const estilos = document.createElement("style");
+      estilos.id = "estilos-aviso-global-app";
+      estilos.textContent = `
+        #modal-aviso-global-app .aviso-global-card{position:relative;overflow:hidden;width:min(520px,calc(100vw - 32px));padding:28px;border:1px solid color-mix(in srgb,var(--accent-1,#7c3aed) 22%,transparent);box-shadow:0 28px 90px #10182855;background:var(--glass-bg,rgba(255,255,255,.96));backdrop-filter:blur(18px)}
+        #modal-aviso-global-app .aviso-global-card:before{content:"";position:absolute;inset:0 0 auto;height:5px;background:linear-gradient(90deg,var(--accent-1,#7c3aed),var(--accent-2,#2563eb))}
+        #modal-aviso-global-app .aviso-global-icono{width:46px;height:46px;display:grid;place-items:center;border-radius:15px;color:var(--accent-1,#7c3aed);background:color-mix(in srgb,var(--accent-1,#7c3aed) 12%,transparent);font-size:1.35rem}
+        #modal-aviso-global-app .aviso-global-eyebrow{margin:0;color:var(--text-muted,#788097);font-size:.72rem;font-weight:750;letter-spacing:.12em;text-transform:uppercase}
+        #modal-aviso-global-app .aviso-global-mensaje{line-height:1.65;overflow-wrap:anywhere}
+        #modal-aviso-global-app .aviso-global-acciones{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:8px}
+        #modal-aviso-global-app .aviso-global-acciones button{min-height:42px;padding:9px 18px;border-radius:12px;font-weight:650}
+        @media(max-width:520px){#modal-aviso-global-app .aviso-global-card{padding:24px 20px}}
+      `;
+      document.head.appendChild(estilos);
+    }
     overlay = document.createElement("div"); overlay.id = "modal-aviso-global-app"; overlay.className = "modal-overlay";
     overlay.style.zIndex = "100000";
-    overlay.innerHTML = '<section class="glass-card modal-card stack" role="dialog" aria-modal="true" aria-labelledby="aviso-global-titulo"><h2 id="aviso-global-titulo" style="margin:0"></h2><div id="aviso-global-cuerpo" style="white-space:pre-wrap"></div><div id="aviso-global-acciones" class="row" style="justify-content:flex-end;flex-wrap:wrap"></div></section>';
+    overlay.innerHTML = '<section class="glass-card modal-card stack aviso-global-card" role="dialog" aria-modal="true" aria-labelledby="aviso-global-titulo"><div class="aviso-global-icono" aria-hidden="true">✦</div><p class="aviso-global-eyebrow">App Académica · Aviso</p><h2 id="aviso-global-titulo" style="margin:0"></h2><div id="aviso-global-cuerpo" class="aviso-global-mensaje" style="white-space:pre-wrap"></div><div id="aviso-global-acciones" class="aviso-global-acciones"></div></section>';
     document.body.appendChild(overlay);
   }
   overlay.querySelector("#aviso-global-titulo").textContent = aviso.titulo || "";
   overlay.querySelector("#aviso-global-cuerpo").textContent = aviso.cuerpo || "";
   const acciones = overlay.querySelector("#aviso-global-acciones"); acciones.replaceChildren();
-  const etiqueta = aviso.accion === "continuar" ? "Continuar" : aviso.accion === "aceptar" ? "Aceptar" : aviso.accion === "cerrar" ? "Cerrar" : "Entendido";
+  const etiqueta = aviso.etiqueta_accion || (aviso.accion === "continuar" ? "Continuar" : aviso.accion === "aceptar" ? "Aceptar" : aviso.accion === "cerrar" ? "Cerrar" : "Entendido");
   const boton = document.createElement("button"); boton.type = "button"; boton.className = "btn btn-primary"; boton.textContent = traducirTextoInterfaz(etiqueta);
   const registroVista = fetch(`${URL_WORKER_APP}/avisos/estado`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokenEnMemoria}` }, body: JSON.stringify({ aviso_id: aviso.id, accion: "vista" }), keepalive: true }).catch(() => null);
   const cerrar = async (confirmar) => {
@@ -167,6 +190,11 @@ function mostrarAvisoGlobal(avisos, indice) {
     mostrarAvisoGlobal(avisos, indice + 1);
   };
   boton.onclick = () => { void cerrar(aviso.accion !== "cerrar"); };
+  if (aviso.accion !== "cerrar") {
+    const despues = document.createElement("button"); despues.type = "button"; despues.className = "btn"; despues.textContent = traducirTextoInterfaz("Ahora no");
+    despues.onclick = () => { void cerrar(false); };
+    acciones.append(despues);
+  }
   acciones.append(boton);
   overlay.classList.remove("oculto");
 }
@@ -190,7 +218,7 @@ function registrarEventoFlujo(evento) {
   void enviarFlujosPendientes();
 }
 async function enviarFlujosPendientes() {
-  if (!tokenEnMemoria || !navigator.onLine || !consentimientoFlujos) return;
+  if (ES_DESARROLLO || !tokenEnMemoria || !navigator.onLine || !consentimientoFlujos) return;
   const resultadoConsentimiento = await promesaConsentimientoRemoto;
   if (resultadoConsentimiento && !resultadoConsentimiento.ok) {
     consentimientoFlujos = false;
@@ -214,8 +242,8 @@ async function enviarFlujosPendientes() {
 function iniciarProcesoAnalitico(proceso) {
   const id = idFlujoNuevo();
   const secciones = { "agenda.tarea": "agenda", "plan.importacion": "plan-estudios", "wapper.mensaje": "asistente", "notas.editor": "notas" };
-  if (!secciones[proceso] || !correoEnMemoria || !tokenEnMemoria || !consentimientoFlujos || ES_DEMO) return { paso() {}, completar() {}, cancelar() {}, error() {} };
-  const base = { flujo_id: id, sesion_id: sesionFlujo(), proceso, version: document.documentElement.dataset.appVersion || "3.24.3" };
+  if (!secciones[proceso] || !correoEnMemoria || !tokenEnMemoria || !consentimientoFlujos || ES_DEMO || ES_DESARROLLO) return { paso() {}, completar() {}, cancelar() {}, error() {} };
+  const base = { flujo_id: id, sesion_id: sesionFlujo(), proceso, version: document.documentElement.dataset.appVersion || "3.24.4" };
   const enviar = (tipo, paso) => registrarEventoFlujo({ ...base, evento_id: idFlujoNuevo(), tipo, paso });
   const inicio = Date.now();
   enviar("iniciado", proceso === "agenda.tarea" ? "formulario_abierto" : proceso === "plan.importacion" ? "flujo_abierto" : proceso === "wapper.mensaje" ? "compositor_abierto" : "editor_abierto");
@@ -235,12 +263,15 @@ setInterval(() => { if (!document.hidden) void cargarAvisosGlobales(); }, 5 * 60
 window.iniciarProcesoAnalitico = iniciarProcesoAnalitico;
 window.configurarConsentimientoAnalitica = configurarConsentimientoAnalitica;
 
-function enviarEvento(seccion, funcion, correo) {
+function enviarEvento(seccion, funcion) {
+  if (ES_DESARROLLO) return;
+  const eventoDemo = seccion === "demo";
+  if (!eventoDemo && !tokenEnMemoria) return;
   try {
     void fetch(URL_WORKER_ANALITICA, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ seccion, funcion, correo }),
+      headers: { "Content-Type": "application/json", ...(!eventoDemo ? { Authorization: `Bearer ${tokenEnMemoria}` } : {}) },
+      body: JSON.stringify({ seccion, funcion }),
       keepalive: true,
     }).catch(() => {});
   } catch (_) {
@@ -248,33 +279,34 @@ function enviarEvento(seccion, funcion, correo) {
   }
 }
 
-// Envía lo retenido con el correo que haya en ese momento (vacío = "General").
+// Envía lo retenido cuando ya hay sesión; la identidad la verifica el Worker.
 function vaciarPendientes() {
   clearTimeout(temporizadorPendientes);
   temporizadorPendientes = null;
   while (pendientesSinCorreo.length) {
     const [seccion, funcion] = pendientesSinCorreo.shift();
-    enviarEvento(seccion, funcion, correoEnMemoria);
+    enviarEvento(seccion, funcion);
   }
 }
 
 function registrarAnaliticaUso(seccion, funcion) {
+  if (ES_DESARROLLO) return;
   const seccionSegura = SECCIONES_ANALITICA.has(seccion) ? seccion : "resumen";
   const funcionSegura = typeof funcion === "string" ? funcion.slice(0, 48) : "Otra interacción";
 
-  // La demo nunca lleva correo; el resto espera hasta 8 s a conocerlo para no
-  // contarse como "General" por haber ocurrido antes de cargar el perfil.
-  if (seccionSegura === "demo" || ES_DEMO) {
-    enviarEvento(seccionSegura, funcionSegura, "");
+  // La demo pública solo registra su apertura; no registra clics anónimos.
+  if (seccionSegura === "demo") {
+    enviarEvento(seccionSegura, funcionSegura);
     return;
   }
-  if (!correoEnMemoria) {
+  if (ES_DEMO) return;
+  if (!correoEnMemoria || !tokenEnMemoria) {
     pendientesSinCorreo.push([seccionSegura, funcionSegura]);
     if (pendientesSinCorreo.length > 40) pendientesSinCorreo.shift();
     if (!temporizadorPendientes) temporizadorPendientes = setTimeout(vaciarPendientes, 8000);
     return;
   }
-  enviarEvento(seccionSegura, funcionSegura, correoEnMemoria);
+  enviarEvento(seccionSegura, funcionSegura);
 }
 
 function obtenerSeccionDeElemento(elemento) {

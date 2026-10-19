@@ -8,14 +8,14 @@
 
 import { abrirModalCopiaManualPortapapeles, copiarAlPortapapelesBlindado, copiarPromptConAviso } from "../core/clipboard.js";
 import { PRESETS_TIPOS_HORAS } from "../core/schema.js";
-import { mostrarCargando, ocultarCargando } from "../core/storage-sync.js";
+import { marcarCambioPendiente, mostrarCargando, ocultarCargando } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { abrirModalCrearPlan } from "./plan-esquema.js";
 import { abrirModalGestionPlanes } from "./plan-gestionar.js";
-import { manejarClickImportar, mostrarErroresImportacion } from "./plan-importacion-csv.js";
+import { manejarClickImportar, mostrarErroresImportacion, parsearCSVPlanEstudios } from "./plan-importacion-csv.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
-import { obtenerIdiomaActual } from "../core/i18n.js";
+import { obtenerIdiomaActual, traducirTextoInterfaz } from "../core/i18n.js";
 import { iniciarProcesoAnalitico } from "../core/analitica.js";
 
 /* =========================================================================
@@ -64,7 +64,7 @@ function construirEncabezadoCSV(tiposHoras) {
 // valores de control se conservan en español porque forman parte del contrato
 // que consume plan-importacion-csv.js.
 const PROMPTS_IMPORTACION = {
-  en: (modo, link) => `${modo === "link" ? `If web browsing is unavailable or you cannot open this link, tell me so I can use another method; do not assume it is impossible without trying.\n\nVisit this public university page and extract the complete curriculum: ${link}\nIf courses are shown in JavaScript tabs or blocks and you cannot confidently determine a course's Bloque, put "REVISAR" in that row instead of guessing.` : modo === "pdf" ? "I am attaching my degree curriculum as a PDF. It may contain real text tables or scanned image pages; process either kind." : "I am attaching a PDF made from screenshots of my curriculum (one screenshot per page). Read all pages together as one continuous curriculum, joining their information without losing courses or depending on page order."}
+  en: (modo, link) => `${modo === "link" ? `If web browsing is unavailable or you cannot open this link, tell me so I can use another method; do not assume it is impossible without trying.\n\nVisit this public university page and extract the complete curriculum: ${link}\nIf courses are shown in JavaScript tabs or blocks and you cannot confidently determine a course's Bloque, put "REVISAR" in that row instead of guessing.` : modo === "pdf" ? "I am attaching my degree curriculum as a PDF. It may contain real text tables or scanned image pages; process either kind." : modo === "imagenes" ? "I am attaching up to four image files showing my curriculum. Read all attached images together as one continuous curriculum, joining their information without losing courses or depending on image order." : "I am attaching a PDF made from screenshots of my curriculum (one screenshot per page). Read all pages together as one continuous curriculum, joining their information without losing courses or depending on page order."}
 
 Act as a UNIVERSAL academic-data structurer. Handle curricula from any university (including UCR, UNA, TEC, UTP, UNAM, and others) and any layout: tables, diagrams, grids, or lists grouped by blocks, cycles, levels, years, or semesters.
 
@@ -95,7 +95,7 @@ RULES:
 9. For any illegible, ambiguous, or unconfirmed cell, write "REVISAR" instead of inventing codes, credits, or hours.
 10. Ignore summary totals (for example, total degree credits); they are metadata, not course rows.
 11. If the curriculum does not fit in one response, split it into consecutive parts. Only part 1 may contain metadata and the header; later parts contain only rows, in order, with no repeated metadata/header. The app concatenates the parts, so a repeated header breaks import. Tell me between parts that more is coming.`,
-  it: (modo, link) => `${modo === "link" ? `Se non hai la navigazione web o non riesci ad aprire questo link, dimmelo così userò un altro metodo; non presumere che sia impossibile senza prima provare.\n\nVisita questa pagina universitaria pubblica ed estrai il piano di studi completo: ${link}\nSe i corsi sono organizzati in schede o blocchi JavaScript e non puoi stabilire con certezza il Bloque di un corso, scrivi "REVISAR" nella sua riga invece di indovinare.` : modo === "pdf" ? "Allego il piano di studi del mio corso in PDF. Può contenere tabelle di testo o pagine scansionate come immagini: elabora entrambi i formati." : "Allego un PDF creato da più schermate del piano di studi (una schermata per pagina). Leggi tutte le pagine come un unico piano continuo, unendo le informazioni senza perdere corsi e senza dipendere dall'ordine delle pagine."}
+  it: (modo, link) => `${modo === "link" ? `Se non hai la navigazione web o non riesci ad aprire questo link, dimmelo così userò un altro metodo; non presumere che sia impossibile senza prima provare.\n\nVisita questa pagina universitaria pubblica ed estrai il piano di studi completo: ${link}\nSe i corsi sono organizzati in schede o blocchi JavaScript e non puoi stabilire con certezza il Bloque di un corso, scrivi "REVISAR" nella sua riga invece di indovinare.` : modo === "pdf" ? "Allego il piano di studi del mio corso in PDF. Può contenere tabelle di testo o pagine scansionate come immagini: elabora entrambi i formati." : modo === "imagenes" ? "Allego fino a quattro immagini del piano di studi. Leggi tutte le immagini allegate come un unico piano continuo, unendo le informazioni senza perdere corsi e senza dipendere dall'ordine delle immagini." : "Allego un PDF creato da più schermate del piano di studi (una schermata per pagina). Leggi tutte le pagine come un unico piano continuo, unendo le informazioni senza perdere corsi e senza dipendere dall'ordine delle pagine."}
 
 Agisci come strutturatore UNIVERSALE di dati accademici. Elabora piani di qualsiasi università (incluse UCR, UNA, TEC, UTP, UNAM e altre) e in qualsiasi formato: tabelle, diagrammi, griglie o elenchi per blocchi, cicli, livelli, anni o semestri.
 
@@ -126,7 +126,7 @@ REGOLE:
 9. Per ogni cella illeggibile, ambigua o non verificabile scrivi "REVISAR" invece di inventare codici, crediti o ore.
 10. Ignora i totali riepilogativi (per esempio i crediti totali del corso di laurea): sono metadati, non righe di corsi.
 11. Se il piano non entra in una risposta, dividilo in parti consecutive. Solo la prima può contenere metadati e intestazione; le successive devono contenere solo righe, in ordine, senza ripetere intestazione o metadati. L'app concatena le parti, quindi un'intestazione ripetuta rompe l'importazione. Tra una parte e l'altra avvisa che ne seguiranno altre.`,
-  fr: (modo, link) => `${modo === "link" ? `Si la navigation web n'est pas disponible ou si vous ne pouvez pas ouvrir ce lien, dites-le-moi afin que j'utilise une autre méthode ; ne concluez pas que c'est impossible sans avoir essayé.\n\nVisitez cette page universitaire publique et extrayez le programme complet : ${link}\nSi les cours sont répartis dans des onglets ou blocs JavaScript et que vous ne pouvez pas déterminer avec certitude le Bloque d'un cours, écrivez "REVISAR" sur sa ligne au lieu de deviner.` : modo === "pdf" ? "Je joins le programme de mes études au format PDF. Il peut contenir des tableaux textuels ou des pages numérisées comme images : traitez les deux." : "Je joins un PDF composé de plusieurs captures d'écran de mon programme (une capture par page). Lisez toutes les pages comme un seul programme continu, en réunissant les informations sans perdre de cours et sans dépendre de l'ordre des pages."}
+  fr: (modo, link) => `${modo === "link" ? `Si la navigation web n'est pas disponible ou si vous ne pouvez pas ouvrir ce lien, dites-le-moi afin que j'utilise une autre méthode ; ne concluez pas que c'est impossible sans avoir essayé.\n\nVisitez cette page universitaire publique et extrayez le programme complet : ${link}\nSi les cours sont répartis dans des onglets ou blocs JavaScript et que vous ne pouvez pas déterminer avec certitude le Bloque d'un cours, écrivez "REVISAR" sur sa ligne au lieu de deviner.` : modo === "pdf" ? "Je joins le programme de mes études au format PDF. Il peut contenir des tableaux textuels ou des pages numérisées comme images : traitez les deux." : modo === "imagenes" ? "Je joins jusqu'à quatre images de mon programme d'études. Lisez toutes les images jointes comme un seul programme continu, en réunissant les informations sans perdre de cours et sans dépendre de leur ordre." : "Je joins un PDF composé de plusieurs captures d'écran de mon programme (une capture par page). Lisez toutes les pages comme un seul programme continu, en réunissant les informations sans perdre de cours et sans dépendre de l'ordre des pages."}
 
 Agissez comme un système UNIVERSEL de structuration des données académiques. Traitez les programmes de toute université (dont UCR, UNA, TEC, UTP, UNAM et autres), quels que soient leur format : tableaux, diagrammes, grilles ou listes par blocs, cycles, niveaux, années ou semestres.
 
@@ -178,7 +178,9 @@ RÈGLES :
 
 function construirPromptImportacion(modo, link) {
   const idioma = obtenerIdiomaActual();
-  if (PROMPTS_IMPORTACION[idioma]) return PROMPTS_IMPORTACION[idioma](modo, link);
+  const modoPrompt = modo === "capturas" && archivosFuenteImportacion.length > 0 && archivosFuenteImportacion.length <= 4
+    && archivosFuenteImportacion.every((archivo) => archivo.type.startsWith("image/")) ? "imagenes" : modo;
+  if (PROMPTS_IMPORTACION[idioma]) return PROMPTS_IMPORTACION[idioma](modoPrompt, link);
   let instruccionEntrada = "";
   let avisoNavegacion = "";
 
@@ -192,7 +194,9 @@ function construirPromptImportacion(modo, link) {
 Es una página institucional sin inicio de sesión. Si la página organiza las materias en pestañas o bloques mediante controles de navegador (JavaScript) que no se reflejen con claridad en el contenido que puedas leer, y no puedes determinar con certeza a qué Bloque pertenece cada materia, escribe "REVISAR" en la columna Bloque de esa fila en vez de adivinar.`;
   } else if (modo === "pdf") {
     instruccionEntrada = `Te voy a adjuntar el plan de estudios de mi carrera en un archivo PDF (puede tener tablas de texto real, o ser páginas escaneadas como imágenes — trátalo igual en ambos casos).`;
-  } else if (modo === "capturas") {
+  } else if (modoPrompt === "imagenes") {
+    instruccionEntrada = `Te voy a adjuntar hasta cuatro imágenes de mi plan de estudios. Lee todas las imágenes adjuntas como una sola malla curricular continua, uniendo la información sin perder materias ni depender del orden de las imágenes.`;
+  } else if (modoPrompt === "capturas") {
     instruccionEntrada = `Te voy a adjuntar un PDF armado a partir de varias capturas de pantalla de mi plan de estudios (una captura por página). Trátalo igual que si fuera un PDF real de mi plan de estudios: lee todas las páginas como una sola malla curricular continua, uniendo la información entre todas, sin perder ninguna materia, sin importar el orden de las páginas.`;
   }
 
@@ -410,6 +414,7 @@ function inicializarEstadoImportacionPlanSiHaceFalta() {
   // Estas llaves viven en `estado` (no en los datos del usuario) porque son
   // solo del momento de importar, antes de que exista el plan.
   if (typeof estado.modoImportacion === "undefined") estado.modoImportacion = null; // null (sin selección) | "link" | "pdf" | "capturas"
+  if (typeof estado.importacionEtapa === "undefined") estado.importacionEtapa = "fuente";
   if (typeof estado.linkImportacion === "undefined") estado.linkImportacion = ""; // URL pegada en el modo "link"
   // Universidad/tipos_horas elegidos ANTES de que el plan exista (para poder
   // construir el prompt con las columnas de horas correctas). Se resuelven acá
@@ -440,212 +445,243 @@ function construirTextoInstruccionesImportacion() {
   ].join("\n\n");
 }
 
-function construirPanelImportacion() {
-  inicializarEstadoImportacionPlanSiHaceFalta();
-  const cfg = estado.datos.configuracion;
-  const sec = document.createElement("section");
-  sec.className = "glass-card stack";
+let archivosFuenteImportacion = [];
+let ventanaGuiaImportacion = null;
+let indicePasoGuiaImportacion = 0;
 
-  const titulo = document.createElement("h2");
-  titulo.style.margin = "0";
-  titulo.textContent = "Importar tu Plan de Estudios";
-  sec.appendChild(titulo);
+const PASOS_GUIA_IMPORTACION = {
+  link: [
+    ["Abre un chat nuevo", "Claude se abrirá en otra pestaña. Vuelve a esta guía cuando estés listo.", "open", "Abrir chat en Claude"],
+    ["Copia la instrucción", "El enlace de tu plan ya está incluido en el mensaje.", "copy", "Copiar instrucción"],
+    ["Pega y envía", "En Claude, pega la instrucción en el cuadro de mensaje y envíala.", "sent", "Ya la envié"],
+    ["Copia la respuesta", "Cuando Claude termine, usa el botón Copiar de su respuesta.", "copied", "Ya la copié"],
+    ["Vuelve a Wapper", "Pega aquí la respuesta para revisar e importar tu plan.", "back", "Volver a Wapper"],
+  ],
+  file: [
+    ["Abre un chat nuevo", "Claude se abrirá en otra pestaña. Esta guía puede quedarse flotando encima.", "open", "Abrir chat en Claude"],
+    ["Copia la instrucción", "La instrucción le explica a Claude cómo organizar tu plan.", "copy", "Copiar instrucción"],
+    ["Adjunta tu plan y envía", "Arrastra el archivo a Claude, pega la instrucción y envíala.", "sent", "Ya lo envié", true],
+    ["Copia la respuesta", "Cuando Claude termine, usa el botón Copiar de su respuesta.", "copied", "Ya la copié"],
+    ["Vuelve a Wapper", "Pega aquí la respuesta para revisar e importar tu plan.", "back", "Volver a Wapper"],
+  ],
+  phone: [
+    ["Comparte tu plan con Claude", "Elige Claude en el menú. El archivo y la instrucción se compartirán juntos.", "share", "Compartir con Claude"],
+    ["Verifica y envía el mensaje", "Confirma que aparecen el archivo y la instrucción. Si falta la instrucción, pégala antes de enviar.", "sent", "Ya envié el mensaje"],
+    ["Copia la respuesta", "Cuando Claude termine, usa el botón Copiar de su respuesta.", "copied", "Ya la copié"],
+    ["Vuelve a Wapper", "Pega aquí la respuesta para revisar e importar tu plan.", "back", "Volver a Wapper"],
+  ],
+};
 
-  // v1.10.1 (punto 1): cuando este panel se muestra para agregar un plan
-  // ADICIONAL (ya existe al menos uno activo), se ofrece volver atrás sin
-  // crear nada — cuando es el primer plan de todos, no hay a dónde volver.
-  if (estado.mostrarPanelImportacionNuevoPlan) {
-    const btnCancelar = document.createElement("button");
-    btnCancelar.type = "button";
-    btnCancelar.className = "btn btn-secondary";
-    btnCancelar.textContent = "← Cancelar";
-    btnCancelar.addEventListener("click", () => {
-      estado.mostrarPanelImportacionNuevoPlan = false;
-      const reabrirGestion = estado.reabrirGestionPlanesTrasCrear;
-      estado.reabrirGestionPlanesTrasCrear = false;
-      renderizarPlanEstudios();
-      if (reabrirGestion) abrirModalGestionPlanes();
-    });
-    sec.appendChild(btnCancelar);
-  }
-
-  if (cfg.modo_hardcore) {
-    const etiqueta = document.createElement("span");
-    etiqueta.className = "form-label";
-    etiqueta.textContent = "Esta malla corresponde al plan:";
-    const grupo = document.createElement("div");
-    grupo.className = "pill-group";
-    [
-      { valor: "principal", texto: "Principal" },
-      { valor: "secundario", texto: "Secundario 💀" },
-    ].forEach((op) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "pill-item" + ((estado.planImportandoId || "principal") === op.valor ? " active" : "");
-      btn.textContent = op.texto;
-      btn.addEventListener("click", () => {
-        estado.planImportandoId = op.valor;
-        renderizarPlanEstudios();
-      });
-      grupo.appendChild(btn);
-    });
-    sec.appendChild(etiqueta);
-    sec.appendChild(grupo);
-  } else {
-    estado.planImportandoId = "principal";
-  }
-
-  // v1.12: ya NO se pregunta universidad ni tipos de horas por adelantado —
-  // el nuevo prompt universal (construirPromptImportacion) le pide a la IA
-  // que detecte HORAS_COLUMNAS leyendo el propio documento, y el parser
-  // (plan-importacion-csv.js, extraerMetadatosImportacion + parsearCSVPlanEstudios)
-  // deriva tipos_horas de esa línea al procesar la respuesta. Los campos
-  // estado.universidadImportacion/tiposHorasImportacion/etc. quedan como
-  // legado hasta terminar de limpiar su uso en plan-esquema.js (el modal
-  // "Nuevo Plan" que crea el plan tras pegar el CSV).
-
-  // v1.14.1: antes, la ÚNICA forma de crear un plan era importando un CSV
-  // (abrirModalCrearPlan solo se llamaba desde manejarClickImportar, tras
-  // pegar/procesar un CSV). Ahora también se puede saltar la importación por
-  // completo y arrancar con un plan vacío, para armarlo materia por materia
-  // con "+ Agregar materia" (abrirModalMateriaManual, ver plan-esquema.js).
-  const btnEmpezarEnBlanco = document.createElement("button");
-  btnEmpezarEnBlanco.type = "button";
-  btnEmpezarEnBlanco.className = "btn btn-secondary btn-block";
-  btnEmpezarEnBlanco.textContent = "✏️ Empezar en blanco (agregar materias a mano)";
-  btnEmpezarEnBlanco.addEventListener("click", () => {
-    abrirModalCrearPlan(estado.planImportandoId === "secundario", null);
-  });
-  sec.appendChild(btnEmpezarEnBlanco);
-
-  const separador = document.createElement("p");
-  separador.className = "muted";
-  separador.textContent = "— o, si preferís, traé tu plan ya hecho —";
-  sec.appendChild(separador);
-
-  // ---- Modo de importación: Link / PDF / Capturas ----
-  const etiquetaModo = document.createElement("span");
-  etiquetaModo.className = "form-label";
-  etiquetaModo.textContent = "¿Cómo quieres traer tu plan de estudios?";
-  sec.appendChild(etiquetaModo);
-
-  const grupoModo = document.createElement("div");
-  grupoModo.className = "pill-group";
-  [
-    { valor: "link", texto: "Pegar link" },
-    { valor: "pdf", texto: "Adjuntar PDF/Imagen" },
-    { valor: "capturas", texto: "Tomar capturas" },
-  ].forEach((op) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "pill-item" + (estado.modoImportacion === op.valor ? " active" : "");
-    btn.textContent = op.texto;
-    btn.addEventListener("click", () => {
-      // v1.10.1 (punto 4): presionar el modo ya activo lo desactiva y vuelve
-      // al estado "sin selección" — así el usuario puede llegar ahí también
-      // manualmente, no solo al abrir el panel por primera vez.
-      estado.modoImportacion = estado.modoImportacion === op.valor ? null : op.valor;
-      if (estado.modoImportacion && !flujoAnaliticoImportacion) iniciarSeguimientoImportacion();
-      if (estado.modoImportacion) flujoAnaliticoImportacion?.paso("fuente_elegida");
-      renderizarPlanEstudios();
-    });
-    grupoModo.appendChild(btn);
-  });
-  sec.appendChild(grupoModo);
-
-  if (estado.modoImportacion === "link") {
-    const inputLink = document.createElement("input");
-    inputLink.type = "text";
-    inputLink.className = "form-input";
-    inputLink.placeholder = "https://tu-universidad.ac.cr/tu-plan-de-estudios";
-    inputLink.value = estado.linkImportacion;
-    inputLink.addEventListener("input", () => {
-      estado.linkImportacion = inputLink.value;
-    });
-    sec.appendChild(inputLink);
-
-    const avisoNavegacion = document.createElement("p");
-    avisoNavegacion.className = "muted";
-    avisoNavegacion.textContent = "Este modo requiere que tu IA tenga activada la navegación web.";
-    sec.appendChild(avisoNavegacion);
-
-    // Punto 6 (v1.10.1): aviso de compatibilidad — este modo depende de que
-    // la IA pueda navegar y leer bien la página. Se confirmó que sí funciona
-    // (2026-08-06: se corrige el tono alarmista anterior, que decía "muy
-    // frágil"/"rara vez funciona" — ya no es cierto), pero como depende de
-    // la navegación web de la IA, no está 100% garantizado en todos los
-    // casos, así que se avisa igual sin desalentar su uso.
-    const avisoCompatibilidad = document.createElement("p");
-    avisoCompatibilidad.className = "muted";
-    avisoCompatibilidad.textContent = "ℹ️ Este modo funciona bien en la gran mayoría de los casos. No es 100% infalible (depende de que Claude pueda navegar y leer la página tal cual la ves vos), así que si el resultado sale incompleto, probá con \"Adjuntar PDF/Imagen\" o \"Tomar capturas\" como alternativa.";
-    sec.appendChild(avisoCompatibilidad);
-  } else if (estado.modoImportacion === "pdf") {
-    const nota = document.createElement("p");
-    nota.className = "muted";
-    nota.textContent = "Vas a adjuntar tu PDF o imagen (todo el plan completo, en máximo 20 imágenes) directamente en la ventana de Claude que se abra.";
-    sec.appendChild(nota);
-  } else if (estado.modoImportacion === "capturas") {
-    // v1.10.1 (puntos 3/5): ya no se muestra el input de imágenes ni el botón
-    // de convertir aquí en el panel — ahora solo se muestra el botón que abre
-    // la ventana flotante (modal-capturas-pdf), donde vive todo ese flujo.
-    const nota = document.createElement("p");
-    nota.className = "muted";
-    nota.textContent = "Primero hay que convertir tus capturas en un solo PDF antes de enviarlas a la IA.";
-    sec.appendChild(nota);
-
-    const btnAbrirConversion = document.createElement("button");
-    btnAbrirConversion.type = "button";
-    btnAbrirConversion.className = "btn btn-secondary btn-block";
-    btnAbrirConversion.textContent = "Convertir imágenes a PDF";
-    btnAbrirConversion.addEventListener("click", abrirModalCapturasPDF);
-    sec.appendChild(btnAbrirConversion);
-  }
-
-  // Punto 4 (v1.10.1): sin modo elegido, o en modo "capturas" (donde primero
-  // hay que terminar la conversión — al terminar, se autoselecciona "pdf" y
-  // esto se vuelve a evaluar), no tiene sentido mostrar los botones de
-  // enviar a la IA, el textarea del CSV, subir archivo, ni Importar.
-  const mostrarBloqueEnvioYCsv = estado.modoImportacion === "link" || estado.modoImportacion === "pdf";
-
-  if (mostrarBloqueEnvioYCsv) {
-    const btnClaude = document.createElement("button");
-    btnClaude.className = "btn btn-primary btn-block";
-    btnClaude.textContent = "Enviar a Claude";
-    btnClaude.addEventListener("click", () => {
-      abrirModalInstruccionesImportacion(
-        estado.modoImportacion,
-        construirPromptImportacion(estado.modoImportacion, estado.linkImportacion)
-      );
-    });
-    sec.appendChild(btnClaude);
-
-    const textarea = document.createElement("textarea");
-    textarea.className = "form-textarea";
-    textarea.id = "textarea-csv-importar";
-    textarea.dataset.csvContexto = "nuevo";
-    textarea.rows = 8;
-    textarea.placeholder = "Pega aquí el CSV que te devolvió la IA…";
-    textarea.value = estado.csvImportacionTexto.nuevo || "";
-    textarea.addEventListener("input", () => { estado.csvImportacionTexto.nuevo = textarea.value; });
-    sec.appendChild(textarea);
-
-    sec.appendChild(construirInputArchivoCSV(textarea, "nuevo"));
-
-    const errores = document.createElement("div");
-    errores.id = "errores-importacion-csv";
-    errores.className = "stack oculto";
-    sec.appendChild(errores);
-
-    const btnImportar = document.createElement("button");
-    btnImportar.className = "btn btn-secondary btn-block";
-    btnImportar.textContent = "Importar";
-    btnImportar.addEventListener("click", () => manejarClickImportar(textarea.value));
-    sec.appendChild(btnImportar);
-  }
-
-  return sec;
+function obtenerPasosGuiaImportacion() {
+  if (estado.modoImportacion === "link") return PASOS_GUIA_IMPORTACION.link;
+  const files = archivosFuenteImportacion;
+  const movil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (movil && files.length && navigator.share && navigator.canShare?.({ files })) return PASOS_GUIA_IMPORTACION.phone;
+  return PASOS_GUIA_IMPORTACION.file;
 }
 
+async function compartirArchivosClaude() {
+  const files = archivosFuenteImportacion;
+  if (!files.length || !navigator.share || !navigator.canShare?.({ files })) {
+    mostrarToast("Tu navegador no permite compartir el archivo directamente. Adjunta el archivo en Claude.");
+    return false;
+  }
+  try {
+    await navigator.share({ files, title: "Plan de estudios", text: construirPromptImportacion(estado.modoImportacion, estado.linkImportacion) });
+    return true;
+  } catch (error) {
+    if (error?.name !== "AbortError") mostrarToast("No se pudo compartir. Adjunta el archivo manualmente en Claude.");
+    return false;
+  }
+}
+
+function cerrarGuiaFlotanteImportacion() {
+  if (ventanaGuiaImportacion && !ventanaGuiaImportacion.closed) ventanaGuiaImportacion.close();
+  ventanaGuiaImportacion = null;
+}
+
+function avanzarGuiaImportacion(delta) {
+  const pasos = obtenerPasosGuiaImportacion();
+  indicePasoGuiaImportacion = Math.max(0, Math.min(pasos.length - 1, indicePasoGuiaImportacion + delta));
+  dibujarGuiaFlotanteImportacion();
+  renderizarPlanEstudios();
+}
+
+function construirEjemploClaude(pasoActual) {
+  const muestra = document.createElement("div"); muestra.className = "importacion-mock"; muestra.setAttribute("aria-hidden", "true");
+  const leyenda = document.createElement("small"); leyenda.textContent = traducirTextoInterfaz("Ejemplo de referencia: la pantalla de Claude puede verse distinta.");
+  const ventana = document.createElement("div"); ventana.className = "importacion-mock-ventana";
+  const cabecera = document.createElement("div"); cabecera.className = "importacion-mock-cabecera";
+  const marca = document.createElement("strong"); marca.textContent = "Claude"; const chat = document.createElement("span"); chat.textContent = traducirTextoInterfaz("Chat nuevo"); cabecera.append(marca, chat);
+  const cuerpo = document.createElement("div"); cuerpo.className = "importacion-mock-cuerpo";
+  if (pasoActual >= 3) { const usuario = document.createElement("div"); usuario.className = "importacion-mock-burbuja usuario"; usuario.textContent = traducirTextoInterfaz("Tu instrucción"); const respuesta = document.createElement("div"); respuesta.className = "importacion-mock-burbuja respuesta"; respuesta.textContent = traducirTextoInterfaz("Tu plan organizado"); const copiar = document.createElement("span"); copiar.className = "importacion-mock-copiar"; copiar.textContent = traducirTextoInterfaz("Copiar"); respuesta.appendChild(copiar); cuerpo.append(usuario, respuesta); }
+  else { const bienvenida = document.createElement("div"); bienvenida.className = "importacion-mock-burbuja"; bienvenida.textContent = traducirTextoInterfaz("¿En qué puedo ayudarte?"); cuerpo.appendChild(bienvenida); }
+  const compositor = document.createElement("div"); compositor.className = "importacion-mock-compositor" + (pasoActual === 2 ? " enfocado" : "");
+  if (estado.modoImportacion !== "link" && archivosFuenteImportacion.length) { const adjunto = document.createElement("span"); adjunto.className = "importacion-mock-adjunto"; adjunto.textContent = "📎 " + traducirTextoInterfaz("Tu plan adjunto"); compositor.appendChild(adjunto); }
+  const texto = document.createElement("span"); texto.textContent = traducirTextoInterfaz("Escribe un mensaje…"); compositor.appendChild(texto); ventana.append(cabecera, cuerpo, compositor); muestra.append(leyenda, ventana); return muestra;
+}
+
+function ejecutarAccionGuiaImportacion(accion) {
+  const prompt = construirPromptImportacion(estado.modoImportacion, estado.linkImportacion);
+  if (accion === "open") abrirVentanaNueva("https://claude.ai/new");
+  if (accion === "copy") copiarPromptImportacionBlindado(prompt);
+  if (accion === "sent") registrarPasoSeguimientoImportacion("mensaje_enviado");
+  if (accion === "share") return compartirArchivosClaude();
+  if (accion === "copied") {
+    registrarPasoSeguimientoImportacion("respuesta_copiada");
+    estado.importacionEtapa = "respuesta";
+    cerrarGuiaFlotanteImportacion();
+    renderizarPlanEstudios();
+  }
+  if (accion === "back") {
+    estado.importacionEtapa = "respuesta";
+    cerrarGuiaFlotanteImportacion();
+    renderizarPlanEstudios();
+  }
+}
+
+function dibujarGuiaFlotanteImportacion() {
+  if (!ventanaGuiaImportacion || ventanaGuiaImportacion.closed) return;
+  const doc = ventanaGuiaImportacion.document;
+  const pasos = obtenerPasosGuiaImportacion();
+  const paso = pasos[indicePasoGuiaImportacion];
+  const titulo = traducirTextoInterfaz(paso[0]);
+  const descripcion = traducirTextoInterfaz(paso[1]);
+  const accion = paso[2];
+  const boton = traducirTextoInterfaz(paso[3]);
+  const adjunta = paso[4];
+  doc.body.replaceChildren();
+  const style = doc.createElement("style");
+  style.textContent = "*{box-sizing:border-box}body{margin:0;padding:18px;min-height:100vh;display:flex;flex-direction:column;font:14px system-ui,sans-serif;color:#f5f3ff;background:linear-gradient(150deg,#222052,#0b0b13)}.progreso{display:flex;gap:5px;margin-bottom:20px}.progreso i{height:5px;flex:1;border-radius:9px;background:#38364c}.progreso i.activo{background:#9b87ff}.numero{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:#6c55db;font-weight:800}h2{font-size:21px;margin:14px 0 8px}p{color:#cbc7de;line-height:1.5;margin:0 0 14px}.archivo{padding:10px;border:1px dashed #a996ff;border-radius:10px;word-break:break-word;margin-bottom:12px}.acciones{margin-top:auto;display:grid;gap:8px}button{padding:12px;border:0;border-radius:12px;background:#7162e8;color:white;font:inherit;font-weight:700;cursor:pointer}.sec{background:#282638;color:#eee}button:focus-visible{outline:2px solid white;outline-offset:2px}";
+  doc.head.appendChild(style);
+  const progreso = doc.createElement("div"); progreso.className = "progreso";
+  pasos.forEach((_, i) => { const marca = doc.createElement("i"); if (i <= indicePasoGuiaImportacion) marca.className = "activo"; progreso.appendChild(marca); });
+  const numero = doc.createElement("div"); numero.className = "numero"; numero.textContent = String(indicePasoGuiaImportacion + 1);
+  const h = doc.createElement("h2"); h.textContent = titulo;
+  const p = doc.createElement("p"); p.textContent = descripcion;
+  doc.body.append(progreso, numero, h, p);
+  if (adjunta && archivosFuenteImportacion.length) archivosFuenteImportacion.forEach((file) => { const f = doc.createElement("div"); f.className = "archivo"; f.textContent = "📄 " + file.name + " · " + traducirTextoInterfaz("Arrástralo a Claude"); f.draggable = true; f.addEventListener("dragstart", (e) => { e.dataTransfer.setData("DownloadURL", (file.type || "application/octet-stream") + ":" + file.name + ":" + URL.createObjectURL(file)); }); doc.body.appendChild(f); });
+  const acciones = doc.createElement("div"); acciones.className = "acciones";
+  const principal = doc.createElement("button"); principal.textContent = boton;
+  principal.addEventListener("click", async () => { const resultado = await ejecutarAccionGuiaImportacion(accion); if (resultado === false) return; if (indicePasoGuiaImportacion < pasos.length - 1 && accion !== "copied" && accion !== "back") avanzarGuiaImportacion(1); });
+  acciones.appendChild(principal);
+  if (indicePasoGuiaImportacion > 0) { const anterior = doc.createElement("button"); anterior.className = "sec"; anterior.textContent = traducirTextoInterfaz("Paso anterior"); anterior.addEventListener("click", () => avanzarGuiaImportacion(-1)); acciones.appendChild(anterior); }
+  doc.body.appendChild(acciones);
+}
+
+async function abrirGuiaFlotanteImportacion() {
+  if (!("documentPictureInPicture" in window)) return false;
+  try {
+    ventanaGuiaImportacion = await window.documentPictureInPicture.requestWindow({ width: 370, height: 430 });
+    ventanaGuiaImportacion.addEventListener("pagehide", () => { ventanaGuiaImportacion = null; renderizarPlanEstudios(); });
+    dibujarGuiaFlotanteImportacion();
+    return true;
+  } catch (error) { console.warn("Picture-in-Picture no disponible; se usará la guía integrada.", error); return false; }
+}
+
+function crearBotonImportacion(texto, accion, clase = "btn btn-secondary") {
+  const b = document.createElement("button"); b.type = "button"; b.className = clase; b.textContent = texto; b.addEventListener("click", accion); return b;
+}
+
+function construirPanelImportacion() {
+  inicializarEstadoImportacionPlanSiHaceFalta();
+  const sec = document.createElement("section"); sec.className = "glass-card stack importacion-wizard";
+  const titulo = document.createElement("h2"); titulo.textContent = "Importar tu plan de estudios"; titulo.style.margin = "0"; sec.appendChild(titulo);
+  const etapa = estado.importacionEtapa || "fuente";
+  const volver = (destino) => { estado.importacionEtapa = destino; renderizarPlanEstudios(); };
+
+  if (estado.mostrarPanelImportacionNuevoPlan) sec.appendChild(crearBotonImportacion("← Cancelar", () => { cancelarSeguimientoImportacion(); cerrarGuiaFlotanteImportacion(); estado.importacionEtapa = "fuente"; estado.modoImportacion = null; archivosFuenteImportacion = []; estado.mostrarPanelImportacionNuevoPlan = false; const reabrirGestion = estado.reabrirGestionPlanesTrasCrear; estado.reabrirGestionPlanesTrasCrear = false; renderizarPlanEstudios(); if (reabrirGestion) abrirModalGestionPlanes(); }));
+  if (estado.datos.configuracion.modo_hardcore) {
+    const etiqueta = document.createElement("span"); etiqueta.className = "form-label"; etiqueta.textContent = "Esta malla corresponde al plan:"; sec.appendChild(etiqueta);
+    const grupo = document.createElement("div"); grupo.className = "pill-group";
+    [{ valor: "principal", texto: "Principal" }, { valor: "secundario", texto: "Secundario 💀" }].forEach((op) => { const b = crearBotonImportacion(op.texto, () => { estado.planImportandoId = op.valor; renderizarPlanEstudios(); }); b.className = "pill-item" + ((estado.planImportandoId || "principal") === op.valor ? " active" : ""); grupo.appendChild(b); }); sec.appendChild(grupo);
+  } else estado.planImportandoId = "principal";
+
+  if (etapa === "fuente") {
+    const intro = document.createElement("p"); intro.className = "muted"; intro.textContent = "Elige cómo tienes tu plan. Te guiaremos para convertirlo y agregarlo a la app."; sec.appendChild(intro);
+    const blank = crearBotonImportacion("✏️ Empezar en blanco y agregar materias a mano", () => { cancelarSeguimientoImportacion(); cerrarGuiaFlotanteImportacion(); estado.importacionEtapa = "fuente"; estado.modoImportacion = null; archivosFuenteImportacion = []; const cfg = estado.datos.configuracion; if (cfg?.guia_plan_pendiente === "plan") { cfg.onboarding_plan_en_blanco_pendiente = true; marcarCambioPendiente(); } abrirModalCrearPlan(estado.planImportandoId === "secundario", null); }, "btn btn-secondary btn-block"); sec.appendChild(blank);
+    const separador = document.createElement("p"); separador.className = "muted"; separador.textContent = "— o importa un plan existente —"; sec.appendChild(separador);
+    const grupo = document.createElement("div"); grupo.className = "importacion-metodos";
+    [{ valor: "link", icono: "🔗", texto: "Tengo un enlace", detalle: "Una página pública de tu universidad." }, { valor: "pdf", icono: "📄", texto: "Tengo un PDF", detalle: "Un archivo guardado en este dispositivo." }, { valor: "capturas", icono: "🖼️", texto: "Tengo fotos o capturas", detalle: "Puedes elegir hasta 20 imágenes." }].forEach((op) => {
+      const b = document.createElement("button"); b.type = "button"; b.className = "importacion-metodo"; b.setAttribute("aria-pressed", "false");
+      const ico = document.createElement("span"); ico.className = "importacion-metodo-icono"; ico.textContent = op.icono; ico.setAttribute("aria-hidden", "true");
+      const copy = document.createElement("span"); copy.className = "importacion-metodo-copy"; const name = document.createElement("strong"); name.textContent = traducirTextoInterfaz(op.texto); const detail = document.createElement("small"); detail.textContent = traducirTextoInterfaz(op.detalle); copy.append(name, detail); b.append(ico, copy);
+      b.addEventListener("click", () => { estado.modoImportacion = op.valor === "capturas" ? "capturas" : op.valor; archivosFuenteImportacion = []; estado.importacionEtapa = "cuenta"; if (!flujoAnaliticoImportacion) iniciarSeguimientoImportacion(); registrarPasoSeguimientoImportacion("fuente_elegida"); renderizarPlanEstudios(); }); grupo.appendChild(b);
+    }); sec.appendChild(grupo);
+  } else if (etapa === "cuenta") {
+    const h = document.createElement("h3"); h.textContent = "Prepara tu cuenta de Claude"; sec.appendChild(h);
+    const p = document.createElement("p"); p.className = "muted"; p.textContent = "Claude leerá el documento y organizará las materias. La cuenta gratuita es suficiente. Wapper no recibe el archivo: lo adjuntarás directamente en Claude."; sec.appendChild(p);
+    sec.appendChild(crearBotonImportacion("Abrir Claude para iniciar sesión", () => abrirVentanaNueva("https://claude.ai/login"), "btn btn-secondary"));
+    sec.appendChild(crearBotonImportacion("Ya inicié sesión · Continuar", () => volver("entrada"), "btn btn-primary"));
+    sec.appendChild(crearBotonImportacion("Atrás", () => volver("fuente")));
+  } else if (etapa === "entrada") {
+    if (estado.modoImportacion === "link") {
+      const label = document.createElement("label"); label.className = "form-label"; label.textContent = "Enlace público de tu plan"; const input = document.createElement("input"); input.type = "url"; input.className = "form-input"; input.placeholder = "https://tu-universidad.ac.cr/plan"; input.value = estado.linkImportacion || ""; input.addEventListener("input", () => { estado.linkImportacion = input.value; }); sec.append(label, input);
+      const info = document.createElement("p"); info.className = "muted"; info.textContent = "El enlace debe poder abrirse sin iniciar sesión. La navegación web de Claude debe estar disponible."; sec.appendChild(info);
+    } else {
+      const input = document.createElement("input"); input.type = "file"; input.className = "form-input"; input.accept = estado.modoImportacion === "pdf" ? "application/pdf,.pdf,image/*" : "image/*"; input.multiple = estado.modoImportacion !== "pdf"; input.addEventListener("change", () => { const files = Array.from(input.files || []); if (estado.modoImportacion !== "pdf" && files.length > 20) mostrarToast("Elegiste más de 20 imágenes; usaremos las primeras 20."); archivosFuenteImportacion = estado.modoImportacion === "pdf" ? files.slice(0, 1) : files.slice(0, 20); renderizarPlanEstudios(); });
+      const label = document.createElement("label"); label.className = "form-label"; label.textContent = estado.modoImportacion === "pdf" ? "Selecciona el PDF o imagen de tu plan" : "Selecciona hasta 20 fotos o capturas"; sec.append(label, input);
+      if (archivosFuenteImportacion.length) {
+        const lista = document.createElement("ul"); lista.className = "importacion-archivos";
+        archivosFuenteImportacion.forEach((f) => { const li = document.createElement("li"); li.textContent = f.name; lista.appendChild(li); }); sec.appendChild(lista);
+        const imagenes = archivosFuenteImportacion.filter((f) => f.type.startsWith("image/")).slice(0, 12);
+        if (imagenes.length) { const miniaturas = document.createElement("div"); miniaturas.className = "importacion-miniaturas"; imagenes.forEach((file) => { const img = document.createElement("img"); img.alt = file.name; const url = URL.createObjectURL(file); img.src = url; img.addEventListener("load", () => URL.revokeObjectURL(url), { once: true }); img.addEventListener("error", () => URL.revokeObjectURL(url), { once: true }); miniaturas.appendChild(img); }); sec.appendChild(miniaturas); if (archivosFuenteImportacion.length > 12) { const nota = document.createElement("p"); nota.className = "muted"; nota.textContent = traducirTextoInterfaz("Se muestran las primeras 12 vistas previas."); sec.appendChild(nota); } }
+      }
+      if (estado.modoImportacion === "capturas" && archivosFuenteImportacion.length > 4) { const aviso = document.createElement("p"); aviso.className = "muted"; aviso.textContent = "Tus capturas se combinarán automáticamente en un PDF para Claude."; sec.appendChild(aviso); }
+    }
+    const continuar = crearBotonImportacion("Continuar", async () => {
+      if (estado.modoImportacion === "link") { try { const u = new URL((estado.linkImportacion || "").trim()); if (!/^https?:$/.test(u.protocol)) throw new Error(); } catch { mostrarToast("Pega un enlace válido que comience con https://"); return; } }
+      else if (!archivosFuenteImportacion.length) { mostrarToast("Selecciona primero tu archivo o tus imágenes."); return; }
+      if (estado.modoImportacion === "capturas" && archivosFuenteImportacion.length > 4) {
+        try { mostrarCargando(); const { archivoPDF, imagenesBajaResolucion } = await convertirCapturasAPDF(archivosFuenteImportacion); archivosFuenteImportacion = archivoPDF ? [archivoPDF] : archivosFuenteImportacion; estado.modoImportacion = "pdf"; if (imagenesBajaResolucion.length) mostrarToast("El PDF está listo; algunas capturas podrían verse poco nítidas."); }
+        catch (e) { mostrarToast("No se pudieron combinar las imágenes. Intenta con menos imágenes o un PDF."); return; }
+        finally { ocultarCargando(); }
+      }
+      estado.importacionEtapa = "guia"; indicePasoGuiaImportacion = 0; registrarPasoSeguimientoImportacion("fuente_preparada"); renderizarPlanEstudios();
+    }, "btn btn-primary"); sec.appendChild(continuar);
+    sec.appendChild(crearBotonImportacion("Atrás", () => volver("cuenta")));
+  } else if (etapa === "guia") {
+    const pasos = obtenerPasosGuiaImportacion(); indicePasoGuiaImportacion = Math.min(indicePasoGuiaImportacion, pasos.length - 1);
+    const paso = pasos[indicePasoGuiaImportacion];
+    const encabezadoGuia = document.createElement("div"); encabezadoGuia.className = "importacion-guia-encabezado";
+    const tituloPaso = document.createElement("h3"); tituloPaso.textContent = "Guía paso a paso";
+    const contador = document.createElement("span"); contador.className = "importacion-guia-contador"; contador.textContent = `${indicePasoGuiaImportacion + 1} / ${pasos.length}`; encabezadoGuia.append(tituloPaso, contador); sec.appendChild(encabezadoGuia);
+    const barra = document.createElement("div"); barra.className = "importacion-guia-barra"; const avance = document.createElement("span"); avance.style.width = `${((indicePasoGuiaImportacion + 1) / pasos.length) * 100}%`; barra.appendChild(avance); sec.appendChild(barra);
+    const descripcion = document.createElement("p"); descripcion.className = "muted"; descripcion.textContent = traducirTextoInterfaz("La guía puede flotar encima de Claude para que no pierdas el lugar. Si tu navegador no lo permite, sigue estos pasos aquí."); sec.appendChild(descripcion);
+    if (ventanaGuiaImportacion && !ventanaGuiaImportacion.closed) { const aviso = document.createElement("p"); aviso.className = "importacion-guia-nota"; aviso.textContent = traducirTextoInterfaz("La guía flotante está abierta. Los controles de ambas ventanas avanzan juntos."); sec.appendChild(aviso); }
+    else sec.appendChild(crearBotonImportacion("Abrir guía flotante", () => { abrirGuiaFlotanteImportacion().then((ok) => { if (!ok) mostrarToast("Usa esta guía paso a paso dentro de Wapper."); else renderizarPlanEstudios(); }); }, "btn btn-secondary"));
+    const tituloActual = document.createElement("h3"); tituloActual.className = "importacion-guia-paso"; tituloActual.textContent = traducirTextoInterfaz(paso[0]); sec.appendChild(tituloActual);
+    const detalleActual = document.createElement("p"); detalleActual.className = "muted"; detalleActual.textContent = traducirTextoInterfaz(paso[1]); sec.appendChild(detalleActual);
+    if (paso[4] && archivosFuenteImportacion.length) { const archivos = document.createElement("div"); archivos.className = "importacion-archivos-arrastrables"; archivosFuenteImportacion.forEach((file) => { const chip = document.createElement("div"); chip.className = "importacion-archivo-chip"; chip.textContent = (file.type === "application/pdf" ? "📄 " : "🖼️ ") + file.name; chip.draggable = true; chip.addEventListener("dragstart", (e) => e.dataTransfer.setData("DownloadURL", (file.type || "application/octet-stream") + ":" + file.name + ":" + URL.createObjectURL(file))); archivos.appendChild(chip); }); sec.appendChild(archivos); }
+    sec.appendChild(construirEjemploClaude(indicePasoGuiaImportacion));
+    const accion = paso[2];
+    sec.appendChild(crearBotonImportacion(traducirTextoInterfaz(paso[3]), async () => { const resultado = await ejecutarAccionGuiaImportacion(accion); if (resultado === false) return; if (accion === "copied" || accion === "back") return; if (indicePasoGuiaImportacion < pasos.length - 1) avanzarGuiaImportacion(1); }, "btn btn-primary"));
+    if (indicePasoGuiaImportacion > 0) sec.appendChild(crearBotonImportacion("Paso anterior", () => avanzarGuiaImportacion(-1)));
+    sec.appendChild(crearBotonImportacion("Atrás", () => { cerrarGuiaFlotanteImportacion(); volver("entrada"); }));
+  } else {
+    const h = document.createElement("h3"); h.textContent = etapa === "respuesta" ? "Pega la respuesta de Claude" : "Revisa el resultado antes de importarlo"; sec.appendChild(h);
+    const p = document.createElement("p"); p.className = "muted"; p.textContent = etapa === "respuesta" ? "Copia el bloque CSV completo que Claude generó. Si el portapapeles no está disponible, pégalo en el campo." : "Revisa el CSV. El importador validará las filas y te mostrará los errores antes de guardar."; sec.appendChild(p);
+    const textarea = document.createElement("textarea"); textarea.className = "form-textarea"; textarea.id = "textarea-csv-importar"; textarea.dataset.csvContexto = "nuevo"; textarea.rows = 12; textarea.placeholder = traducirTextoInterfaz("Pega aquí la respuesta completa de Claude…"); textarea.value = estado.csvImportacionTexto.nuevo || ""; textarea.addEventListener("input", () => { estado.csvImportacionTexto.nuevo = textarea.value; }); sec.appendChild(textarea);
+    if (etapa === "respuesta") sec.appendChild(crearBotonImportacion("Pegar desde el portapapeles", async () => { try { const text = await navigator.clipboard.readText(); if (!text) throw new Error(); textarea.value = text; estado.csvImportacionTexto.nuevo = text; registrarPasoSeguimientoImportacion("respuesta_pegada"); estado.importacionEtapa = "revision"; renderizarPlanEstudios(); } catch { textarea.focus(); mostrarToast("No se pudo leer el portapapeles. Pega la respuesta directamente en el campo."); } }));
+    sec.appendChild(construirInputArchivoCSV(textarea, "nuevo"));
+    const errores = document.createElement("div"); errores.id = "errores-importacion-csv"; errores.className = "stack oculto"; sec.appendChild(errores);
+    if (etapa === "respuesta") sec.appendChild(crearBotonImportacion("Revisar respuesta", () => { if (!textarea.value.trim()) { mostrarToast("Pega primero la respuesta de Claude."); return; } estado.csvImportacionTexto.nuevo = textarea.value; estado.importacionEtapa = "revision"; registrarPasoSeguimientoImportacion("revision_iniciada"); renderizarPlanEstudios(); }, "btn btn-primary"));
+    else {
+      const { csv } = extraerMetadatosImportacion(textarea.value);
+      const parseo = parsearCSVPlanEstudios(csv, estado.tiposHorasImportacion || PRESETS_TIPOS_HORAS.TEC);
+      const resumen = document.createElement("div"); resumen.className = "glass-card importacion-resumen";
+      const conteo = document.createElement("p"); conteo.textContent = `${parseo.materias.length} ${traducirTextoInterfaz("materias")} · ${parseo.electivas.length} ${traducirTextoInterfaz("optativas")} · ${parseo.paraRevisar.length} ${traducirTextoInterfaz("por revisar")}`; resumen.appendChild(conteo);
+      const lista = document.createElement("ul"); lista.className = "importacion-preview-lista";
+      [...parseo.materias, ...parseo.electivas, ...parseo.paraRevisar].slice(0, 12).forEach((materia) => { const li = document.createElement("li"); li.textContent = `${materia.codigo || "Sin código"} · ${materia.nombre || "Sin nombre"}`; lista.appendChild(li); }); resumen.appendChild(lista);
+      if (parseo.materias.length + parseo.electivas.length + parseo.paraRevisar.length > 12) { const resto = document.createElement("p"); resto.className = "muted"; resto.textContent = `y ${parseo.materias.length + parseo.electivas.length + parseo.paraRevisar.length - 12} más`; resumen.appendChild(resto); }
+      if (parseo.errores.length) { const error = document.createElement("p"); error.className = "muted"; error.textContent = `El análisis detectó ${parseo.errores.length} observaciones. Puedes corregir el CSV antes de importar.`; resumen.appendChild(error); }
+      sec.appendChild(resumen);
+      sec.appendChild(crearBotonImportacion("Importar mi plan", () => { estado.csvImportacionTexto.nuevo = textarea.value; manejarClickImportar(textarea.value); }, "btn btn-primary")); sec.appendChild(crearBotonImportacion("Volver a editar la respuesta", () => volver("respuesta")));
+    }
+    sec.appendChild(crearBotonImportacion("Volver a la guía", () => volver("guia")));
+  }
+  return sec;
+}
 /* ===================== v1.10.0 — Capturas -> un solo PDF (modo "capturas") =====================
  * Antes de esto, el usuario adjuntaba cada foto/captura suelta directamente
  * en Claude. Ahora, en el modo "Tomar capturas", primero se arma UN
@@ -749,9 +785,10 @@ async function convertirCapturasAPDF(archivos) {
 
     doc.addImage(dataUrl, detectarFormatoImagen(dataUrl), x, y, anchoFinal, altoFinal);
   }
-  doc.save("plan-de-estudios-capturas.pdf");
+  const archivoPDF = new File([doc.output("blob")], "plan-de-estudios-capturas.pdf", { type: "application/pdf" });
+  doc.save(archivoPDF.name);
 
-  return { imagenesBajaResolucion };
+  return { imagenesBajaResolucion, archivoPDF };
 }
 
 /* ===================== v1.10.1 — Ventana flotante: capturas -> PDF ===================== *
@@ -941,8 +978,14 @@ function cancelarSeguimientoImportacion() {
 }
 
 function completarSeguimientoImportacion() {
+  const continuarOnboarding = estado.datos?.configuracion?.guia_plan_pendiente === "plan";
   flujoAnaliticoImportacion?.completar("guardado");
   flujoAnaliticoImportacion = null;
+  cerrarGuiaFlotanteImportacion();
+  estado.importacionEtapa = "fuente";
+  estado.modoImportacion = null;
+  archivosFuenteImportacion = [];
+  if (continuarOnboarding) window.continuarTutorialDespuesDeImportarPlan?.();
 }
 
 function registrarPasoSeguimientoImportacion(paso) {

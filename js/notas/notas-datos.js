@@ -6,6 +6,7 @@ import { registrarAnaliticaUso } from "../core/analitica.js";
 
 const MAX_CARACTERES_NOTA = 10000;
 const COLORES_NOTA = ["#fff2b3", "#ffd9d9", "#d9f2e6", "#dce8ff", "#f1dcff", "#ffe2c2", "#d9f3f5", "#f3e8d1"];
+function coloresPaletaNota(){const modo=document.documentElement.getAttribute("data-mode");if(modo!=="dark"&&modo!=="true-dark")return COLORES_NOTA;return COLORES_NOTA.map(hex=>{const n=parseInt(hex.slice(1),16);return "#"+[16,8,0].map(s=>Math.round(((n>>s)&255)*.68).toString(16).padStart(2,"0")).join("");});}
 let timerVaciarPapelera = null;
 
 function notasActuales() { if (!estado.datos) return []; return estado.datos.notas || (estado.datos.notas = []); }
@@ -85,4 +86,4 @@ function agendaNotas() {
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { procesarCicloVidaNotas(); agendaNotas(); } });
 window.addEventListener("notas:actualizadas", () => {});
 
-export { MAX_CARACTERES_NOTA, COLORES_NOTA, notasActuales, opcionesNotas, crearNota, obtenerNota, guardarNota, marcarEliminada, restaurarNota, eliminarDefinitiva, procesarCicloVidaNotas, agendaNotas };
+export { MAX_CARACTERES_NOTA, COLORES_NOTA, coloresPaletaNota, notasActuales, opcionesNotas, crearNota, obtenerNota, guardarNota, marcarEliminada, restaurarNota, eliminarDefinitiva, procesarCicloVidaNotas, agendaNotas };
