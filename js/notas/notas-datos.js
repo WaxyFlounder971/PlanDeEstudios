@@ -9,24 +9,43 @@ const MAX_CARACTERES_NOTA = 10000;
 const COLORES_NOTA = ["#fd97a5", "#ffbd9d", "#fff594", "#c6d4a1", "#bcdad0", "#a8dcda"];
 const COLOR_DEFECTO = "#fff594";
 // Misma tonalidad y saturación, solo más oscuro (no gris ni apagado).
-function aOscuro(hex) {
+function luminanciaHex(hex) {
   const n = parseInt(hex.slice(1), 16);
-  const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
-  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
-  let h = 0, l = (mx + mn) / 2;
-  let s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
-  if (d) { if (mx === r) h = ((g - b) / d) % 6; else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4; h *= 60; if (h < 0) h += 360; }
-  l *= 0.58; s = s * 0.8;
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function hslAHex(h, s, l) {
   const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
   const [R, G, B] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
   return "#" + [R, G, B].map((v) => Math.round((v + m) * 255).toString(16).padStart(2, "0")).join("");
 }
+function aOscuro(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  const l0 = (mx + mn) / 2;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l0 - 1));
+  if (d) { if (mx === r) h = ((g - b) / d) % 6; else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4; h *= 60; if (h < 0) h += 360; }
+  // Se oscurece, pero sin bajar de una luminancia que permita texto oscuro legible (igual que los colores claros).
+  let f = 0.58, salida = hslAHex(h, s * 0.8, l0 * f);
+  while (luminanciaHex(salida) < 0.27 && f < 1) { f += 0.02; salida = hslAHex(h, s * 0.8, l0 * f); }
+  return salida;
+}
+// Variantes oscuras de versiones anteriores: las notas ya guardadas con ellas siguen mapeándose a su predefinido.
+const OSCUROS_ANTERIORES = [
+  ["#cf1b34", "#d75618", "#d2c117", "#7b8c4c", "#5b917f", "#4a9794"],
+  ["#e63d54", "#d75618", "#d2c117", "#7b8c4c", "#5b917f", "#4a9794"],
+];
 function modoOscuro() { const modo = document.documentElement.getAttribute("data-mode"); return modo === "dark" || modo === "true-dark"; }
 function coloresPaletaNota() { return modoOscuro() ? COLORES_NOTA.map(aOscuro) : COLORES_NOTA; }
 // Si el color guardado es uno de los predefinidos (claro u oscuro), lo muestra en la versión del modo actual.
 function resolverColorNota(hex) {
   const claros = COLORES_NOTA, oscuros = COLORES_NOTA.map(aOscuro);
-  const i = claros.indexOf(hex) >= 0 ? claros.indexOf(hex) : oscuros.indexOf(hex);
+  hex = String(hex || "").toLowerCase();
+  let i = claros.indexOf(hex);
+  if (i < 0) i = oscuros.indexOf(hex);
+  if (i < 0) for (const lista of OSCUROS_ANTERIORES) { const k = lista.indexOf(hex); if (k >= 0) { i = k; break; } }
   return i >= 0 ? coloresPaletaNota()[i] : hex;
 }
 let timerVaciarPapelera = null;
@@ -49,7 +68,7 @@ function crearNota(datos = {}) {
     titulo: String(datos.titulo || "").slice(0, 180), contenido: sanearHTMLNota(datos.contenido || ""),
     color: datos.color || resolverColorNota(opcionesNotas().color_default) || COLOR_DEFECTO, fijada: Boolean(datos.fijada), orden_fijada: datos.orden_fijada ?? null,
     vence_en: datos.vence_en || null, eliminada_en: null, motivo_eliminacion: null, enviada_a_wapper_en: datos.enviada_a_wapper_en || null,
-    origen: datos.origen === "compartida" ? "compartida" : "manual", creada_en: datos.creada_en || marca, modificada_en: marca, _pendienteSync: true,
+    tinta: Array.isArray(datos.tinta) ? datos.tinta : [], origen: datos.origen === "compartida" ? "compartida" : "manual", creada_en: datos.creada_en || marca, modificada_en: marca, _pendienteSync: true,
   });
 }
 function obtenerNota(id) { return notasActuales().find((n) => n.id === id) || null; }
@@ -58,12 +77,14 @@ function guardarNota(nota) {
   nota.titulo = String(nota.titulo || "");
   if ((nota.titulo.length + textoPlanoNota(contenido).length) > MAX_CARACTERES_NOTA) throw new Error("La nota supera el límite de 10 000 caracteres.");
   const ahora = Date.now();
+  const modManual = nota._mod_manual === true && Number.isFinite(nota.modificada_en), modValor = nota.modificada_en;
+  delete nota._mod_manual;
   let eraNueva = !nota.id || !obtenerNota(nota.id);
   if (!nota.id) nota = crearNota(nota);
   else {
     const actual = obtenerNota(nota.id);
-    if (actual) Object.assign(actual, nota, { contenido, modificada_en: ahora, _pendienteSync: true });
-    else nota = crearNota({ ...nota, contenido });
+    if (actual) Object.assign(actual, nota, { contenido, modificada_en: modManual ? modValor : ahora, _pendienteSync: true });
+    else { nota = crearNota({ ...nota, contenido }); if (modManual) nota.modificada_en = modValor; }
     nota = obtenerNota(nota.id) || nota;
     sellarTimestamp(nota);
   }

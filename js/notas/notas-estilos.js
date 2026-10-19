@@ -35,6 +35,41 @@ const CSS = `
 .nt-vista-op svg{width:18px;height:18px;fill:currentColor}
 .notas-grid.notas-lista{grid-template-columns:1fr!important}
 .notas-filtro-colores{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* --- Editor: barra de herramientas centrada y agrupada --- */
+.notas-editor .notas-toolbar{display:flex!important;flex-wrap:wrap;justify-content:center!important;align-items:center;gap:8px!important}
+.notas-editor .notas-sep{flex:none;width:1px;align-self:stretch;min-height:26px;margin:0 10px;background:currentColor;opacity:.25}
+.notas-editor .notas-toolbar button{display:inline-grid;place-items:center}
+.nt-ico{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.nt-ico-solido{fill:currentColor;stroke:none}
+.nt-punto{display:block;width:9px;height:9px;border-radius:50%;background:currentColor}
+.notas-toolbar [data-tool][aria-pressed="true"]{background:var(--nt-grad,linear-gradient(135deg,#f5a9d3,#b7a5f4));color:#1b1530}
+.nt-tinta-color{width:30px;height:30px;padding:0;border:2px solid rgba(255,255,255,.35);border-radius:50%;overflow:hidden;cursor:pointer;background:none;appearance:none;-webkit-appearance:none}
+.nt-tinta-color::-webkit-color-swatch-wrapper{padding:0}
+.nt-tinta-color::-webkit-color-swatch{border:0;border-radius:50%}
+.nt-tinta-color::-moz-color-swatch{border:0;border-radius:50%}
+.nt-tinta-color.nt-oculto{display:none!important}
+.nt-tinta-canvas{position:absolute;z-index:5;pointer-events:none;touch-action:none;border-radius:12px}
+.nt-tinta-canvas.activo{pointer-events:auto;cursor:crosshair}
+.nt-tinta-canvas[data-modo="borrador"]{cursor:cell}
+.nota-tinta-mini{display:block;width:100%;height:auto;margin-top:8px;pointer-events:none}
+/* --- Paleta del editor: separar predefinidos y personalizados --- */
+.notas-editor .notas-palette{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.notas-editor .notas-sep-color{height:24px;min-height:0;margin:0 6px;align-self:center}
+/* --- Fechas bajo el título --- */
+.nt-tiempos{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin:-2px 2px 0;font-size:.8rem;color:var(--text-muted,rgba(255,255,255,.62))}
+.nt-tiempos label{display:inline-flex;align-items:center;gap:6px}
+.nt-tiempos input[type="datetime-local"]{padding:3px 8px;border:1px solid var(--border,rgba(255,255,255,.14));border-radius:10px;background:rgba(0,0,0,.2);color:inherit;font:inherit;color-scheme:dark light}
+/* --- Checkbox redondo con el estilo de la app --- */
+.notas-cuerpo input[type="checkbox"],.nota-preview input[type="checkbox"]{appearance:none;-webkit-appearance:none;display:inline-grid;place-content:center;flex:none;width:20px;height:20px;margin:0 8px 0 0;border:2px solid currentColor;border-radius:50%;background:transparent;vertical-align:-4px;cursor:pointer;opacity:.85;transition:background .15s,border-color .15s}
+.notas-cuerpo input[type="checkbox"]:checked,.nota-preview input[type="checkbox"]:checked{background:var(--nt-grad,linear-gradient(135deg,#f5a9d3,#b7a5f4));border-color:transparent;opacity:1}
+.notas-cuerpo input[type="checkbox"]:checked::after,.nota-preview input[type="checkbox"]:checked::after{content:"";width:5px;height:10px;margin-top:-2px;border:solid #1b1530;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.notas-cuerpo li:has(>input[data-nota-check]),.nota-preview li:has(>input[data-nota-check]){list-style:none;margin-left:-1.3em}
+/* --- Arrastrar notas fijadas --- */
+.nota-drag-handle{touch-action:none;cursor:grab}
+.nota-drag-handle svg{display:block;width:16px;height:16px;fill:currentColor}
+.nota-arrastrando{position:relative;z-index:60;box-shadow:0 20px 44px rgba(0,0,0,.5)!important;opacity:.97;transition:none!important;cursor:grabbing}
+body.nota-arrastrando-body{user-select:none;-webkit-user-select:none;cursor:grabbing}
 `;
 
 function inyectarEstilosNotas() {
