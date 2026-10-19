@@ -1,6 +1,6 @@
 # Privacy policy
 
-**Last updated: October 16, 2026**
+**Last updated: October 18, 2026**
 
 This policy explains what information App Académica (also called Wapper) uses, what it uses it for and what you can do with it. It is an independent project developed by one person, so this document aims to be clear and direct.
 
@@ -28,6 +28,8 @@ The developer has no access to that folder or its contents.
 For some features to work, the app uses a service of its own hosted on Cloudflare. This is everything it receives and stores:
 - **Sign-in:** the service helps renew your Google session. It does not store your password or your sign-in credentials.
 - **Usage statistics:** counts of how many times each section is opened or what type of action was used. They do not include what you write. Your email is compared for an instant in memory to classify the count and is not stored.
+- **Detailed journeys (optional):** if you allow it in onboarding or Settings, the app records starts, steps, completion, cancellation, and abandonment for selected processes (for example, creating a task, importing a study plan, editing a note, or sending a message to Wapper). It stores a pseudonymous identifier derived using a secret key, the process type, session, app version, and timestamps. It does not send text, titles, or academic data. Detailed events are deleted after 90 days. You can turn this off in Settings > Data.
+- **AI analysis (only when requested by the administrator):** only aggregated journey counts are sent to Anthropic (Claude) or, if it is not configured, OpenAI. Pseudonymous identifiers, email addresses, and written content are not sent.
 - **Competitions (only if you take part in one):** your Google email (to recognize you), your nickname, your total study hours for the week and past results. If the feature shows it, also your Google profile photo and the color you pick. Which courses you study, or any other academic data, is never sent.
 - **Shared schedules (only if you share them):** your schedule file stays in your Drive with a public read-only link. Anyone with the link can see it. You decide who to share it with and you can stop sharing whenever you want.
 
@@ -43,6 +45,7 @@ The app asks your Google account for permission to:
 - **Google** (sign-in, Drive and, if you turn it on, Calendar): their handling of your information is governed by their own privacy policy.
 - **Gemini (Google):** if you use the Assistant, what you write is sent straight from your browser to Google with your own key, without passing through the app. It is governed by Google's policies.
 - **Cloudflare:** hosts the app and the service described in section 4.
+- **Anthropic (Claude) or OpenAI:** receive only aggregated metrics when the administrator requests an AI usage analysis. The provider used depends on the service configuration.
 
 The app does not control how those companies handle information in their systems.
 
@@ -50,13 +53,16 @@ The app does not control how those companies handle information in their systems
 - To make the app work (store your data, sign you in, send you reminders if you turn them on).
 - To make competitions and shared schedules work among the people who choose to use them.
 - To understand, with general counts, which parts of the app are used most so they can be improved.
+- To learn which steps in selected processes are completed or abandoned, if you opt in, and improve those flows.
+- To summarize aggregated metrics with AI when the administrator manually starts an analysis.
 
 It is not used for anything else.
 
 ## 8. How long it is kept
 - **Your academic data:** until you delete it from your Drive or from the app.
 - **Competitions:** while you take part. If you leave a competition, your participation is removed. The history of past results may keep your nickname and your hours until you request their deletion.
-- **Usage statistics:** stored only as general counts, without identifying you.
+- **Basic usage statistics:** stored as general counts; your email is only compared in memory to classify them.
+- **Optional detailed journeys:** kept for up to 90 days and then automatically deleted. You can withdraw your permission in Settings > Data; turning it off also deletes journeys already recorded.
 
 ## 9. Your rights and how to use them
 You can request at any time to access your information, correct it or delete it.

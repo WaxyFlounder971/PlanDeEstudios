@@ -2,6 +2,10 @@
 
 > `service-worker.js` no se importa desde ningún otro módulo (los service workers se registran, no se importan — el registro vive en `main.js`), y no tiene `export`. Por eso este mapa documenta sus **listeners de eventos** y **constantes** en vez de funciones exportadas, que es lo que otro archivo necesita conocer para interactuar con él (ej. main.js enviándole un mensaje `SKIP_WAITING`).
 
+## Actualización v3.24.0
+
+El `fetch` de navegaciones del Web Share Target reduce la clave de caché a la URL sin query cuando llegan `title`, `text` o `url`, y no guarda una respuesta bajo la URL con parámetros. Esos parámetros pueden contener contenido privado de una nota. Cuando la navegación no está cacheada y no hay red, se mantiene el fallback al `index.html` del shell para completar el procesamiento local.
+
 ---
 
 ## service-worker.js

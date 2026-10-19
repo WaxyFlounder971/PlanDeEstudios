@@ -259,6 +259,7 @@
         <button id="nav-comunidad" class="btn btn-secondary btn-block btn-nav" data-seccion="comunidad" title="Comunidad">👥 <span class="texto-nav">Comunidad</span></button>
         <button id="nav-finanzas" class="btn btn-secondary btn-block btn-nav" data-seccion="finanzas" title="Finanzas">💰 <span class="texto-nav">Finanzas</span></button>
         <button id="nav-plan-estudios" class="btn btn-secondary btn-block btn-nav" data-seccion="plan-estudios" title="Plan de Estudios">📚 <span class="texto-nav">Plan de Estudios</span></button>
+        <button id="nav-notas" class="btn btn-secondary btn-block btn-nav" data-seccion="notas" title="Notas rápidas">🗒️ <span class="texto-nav">Notas rápidas</span></button>
         <!-- Asistente IA (Gemini), 2026-08-22 (revisado 2026-08-22): el botón
              participa del mismo sistema de navegacion_oculta/navegacion_orden
              que el resto (ver DEFAULT_ORDEN_NAV/SECCIONES_TOGGLEABLES en
@@ -315,6 +316,9 @@
            clave de Gemini guardada) — ver mostrarSeccion()/
            aplicarVisibilidadBotonAsistente() en main.js. -->
       <div id="seccion-asistente" class="stack oculto"></div>
+
+      <!-- Notas rápidas se construye desde js/notas/notas.js. -->
+      <div id="seccion-notas" class="stack oculto"></div>
 
       <!-- ===================== SECCIÓN: Configuración ===================== -->
       <div id="seccion-configuracion" class="stack">

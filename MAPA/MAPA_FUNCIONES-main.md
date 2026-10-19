@@ -2,7 +2,7 @@
 
 **Propósito:** Orquestador raíz de la app — arranque, login/logout, navegación entre secciones y renderizado del perfil de usuario. Importa e inicializa el resto de módulos.
 
-**Depende de:** config-ajustes.js, config-enlaces.js, auth.js, schema.js, storage-merge.js, storage-sync.js, storage.js, utils.js, comunidad.js, finanzas.js, plan-categorias.js, plan-detalle.js, plan-esquema.js, plan-gestionar.js, plan-importacion.js, plan-vista-lista.js, semestres.js, agenda.js, horario.js, horario-amigos.js, componentes.js, tema.js, asistente.js (cola offline de Wapper).
+**Depende de:** config-ajustes.js, config-enlaces.js, auth.js, schema.js, storage-merge.js, storage-sync.js, storage.js, utils.js, comunidad.js, finanzas.js, plan-categorias.js, plan-detalle.js, plan-esquema.js, plan-gestionar.js, plan-importacion.js, plan-vista-lista.js, semestres.js, agenda.js, horario.js, horario-amigos.js, componentes.js, tema.js, asistente.js (cola offline de Wapper), notas.js.
 
 **Exporta:**
 
@@ -15,6 +15,7 @@
 * `CLAVE_SECCION_ACTIVA` — clave de `localStorage` (`"seccion_activa_v1"`) donde se persiste qué sección de navegación quedó activa.
 * `inicializarNavegacionSecciones()` — conecta los botones `.btn-nav[data-seccion]` para que llamen a `mostrarSeccion`.
 * `mostrarSeccion(nombre)` — cambia la sección visible del app-shell (configuración, plan-estudios, semestres, comunidad, etc.) y persiste la elección.
+* El id `notas` se registra en la ruta de navegación y llama a `renderizarNotas()`. `inicializarNotas()` conecta los avisos de papelera/compartir y corre una vez al arrancar.
 * `temporizadorAvisoLogin` — id del `setTimeout` de `programarAvisoLoginBloqueado`, expuesto para que otros módulos puedan limpiarlo (ej. al cerrar sesión).
 * `renderizarPerfil()` — pinta nombre, correo, foto/iniciales del perfil en el header y en el popover; maneja el fallback si la foto no carga.
 * `togglePerfilPopover(forzarCerrado)` — abre/cierra el popover de perfil (o lo fuerza a cerrado si se pasa `true`).

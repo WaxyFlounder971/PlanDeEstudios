@@ -1,6 +1,6 @@
 # Conditions d'utilisation
 
-**Dernière mise à jour : 16 octobre 2026**
+**Dernière mise à jour : 18 octobre 2026**
 
 Ce document explique comment fonctionne App Académica et ce que tu peux en attendre. En l'acceptant, tu confirmes l'avoir lu et être d'accord. Si tu n'es pas d'accord, nous te demandons de ne pas utiliser l'application.
 
@@ -28,6 +28,8 @@ Toute personne. L'application a été pensée pour les étudiants universitaires
 Certaines fonctions utilisent un service propre à l'application, hébergé chez Cloudflare. Voici tout ce qu'il reçoit :
 - **Connexion :** le service aide à renouveler ta session Google. Il ne conserve pas ton mot de passe.
 - **Statistiques d'utilisation :** uniquement des compteurs, par exemple combien de fois chaque section est ouverte. Elles n'incluent jamais ce que tu écris (tâches, notes, conversations, etc.). Ton e-mail est utilisé un instant pour classer le compteur et n'est pas conservé.
+- **Parcours détaillés (facultatifs) :** uniquement si tu l'autorises lors de l'onboarding ou dans les Réglages, l'application enregistre le début, les étapes, l'achèvement, l'annulation ou l'abandon de processus comme créer une tâche, importer un plan d'études, modifier une note ou envoyer un message à Wapper. Un identifiant pseudonymisé, des dates/heures, la session et la version de l'application sont utilisés ; aucun texte ni donnée académique n'est envoyé. Les événements sont supprimés après 90 jours et tu peux retirer ton autorisation dans Réglages > Données.
+- **Analyse par IA :** à la demande de l'administrateur, seuls des compteurs agrégés sont envoyés à Claude (Anthropic) ou, s'il n'est pas configuré, à OpenAI. Aucun identifiant ni contenu écrit n'est envoyé.
 - **Compétitions :** si tu crées une compétition ou si tu en rejoins une, ton e-mail Google (pour te reconnaître), ton pseudo, les heures étudiées dans la semaine et les résultats précédents sont conservés. Si la fonction l'affiche, ta photo de profil Google et la couleur que tu choisis le sont aussi. Les autres personnes de la compétition voient ton pseudo et tes heures. Les matières que tu étudies ne sont jamais envoyées.
 - **Emplois du temps partagés :** si tu partages ton emploi du temps avec un lien, toute personne qui le possède peut le voir. Tu décides avec qui le partager et tu peux arrêter de le partager quand tu veux depuis l'application.
 
@@ -36,6 +38,7 @@ L'application dépend de services qu'elle ne contrôle pas, chacun avec ses prop
 - **Google :** connexion et Drive. Si tu l'actives, aussi Calendar, où un calendrier distinct est créé avec tes tâches et examens pour t'envoyer des rappels.
 - **Gemini (Google) :** l'Assistant utilise ta propre clé Gemini. Ce que tu lui écris va directement de ton navigateur à Google, sans passer par l'application. Tu es responsable de l'usage de ta clé.
 - **Cloudflare :** là où sont hébergés l'application et le service de la section 5.
+- **Anthropic (Claude) ou OpenAI :** reçoivent uniquement des mesures agrégées si l'administrateur demande une analyse d'utilisation par IA.
 
 Si l'un de ces services change, tombe en panne ou devient payant, l'application peut en être affectée, et cela ne dépend pas du développeur.
 

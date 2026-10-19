@@ -43,7 +43,7 @@
 //      y main.js NUNCA hardcodean el número — siempre lo leen de acá, así
 //      que actualizar la versión en toda la app es cambiar ESTA línea y
 //      nada más.
-const VERSION = "v3.23.9"; // <-- en main se sube sola (GitHub Action); en dev no hace falta tocarla
+const VERSION = "v3.24.3"; // Notas rápidas, analítica de recorridos y avisos administrativos.
 const CACHE_NAME = `app-academica-${VERSION}`;
 const PREFIJO_CACHE = "app-academica-";
 
@@ -204,6 +204,10 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
+  // El texto compartido llega en la query string. No incluirlo en la clave
+  // de caché evita conservar el contenido privado de la nota en CacheStorage.
+  const esCompartido = request.mode === "navigate" && ["title", "text", "url"].some((clave) => url.searchParams.has(clave));
+  const requestCache = esCompartido ? new Request(url.origin + url.pathname, { method: "GET" }) : request;
 
   // Comprobación de conexión real: debe atravesar la red, nunca responder
   // desde stale-while-revalidate/cache-first aunque el shell esté offline.
@@ -229,11 +233,11 @@ self.addEventListener("fetch", (event) => {
   // módulo nuevo lo va sumando solo.
   event.respondWith(
     caches.open(CACHE_NAME).then(async (cache) => {
-      const enCache = await cache.match(request);
+      const enCache = await cache.match(requestCache);
 
       const alRed = fetch(request)
         .then((respuesta) => {
-          if (respuesta && respuesta.ok) cache.put(request, respuesta.clone());
+          if (respuesta && respuesta.ok && !esCompartido) cache.put(requestCache, respuesta.clone());
           return respuesta;
         })
         .catch(() => null);

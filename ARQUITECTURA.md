@@ -90,6 +90,12 @@ reutilizan piezas de `js/plan/` en vez de duplicarlas:
 
 (Detalle función-por-función de cada archivo → `MAPA_FUNCIONES.md`)
 
+### Notas rápidas (v3.24.0)
+
+Notas se integra como sección ES module (`js/notas/notas.js`) y almacena la colección `notas` dentro del documento JSON de cuenta. Las ediciones actualizan primero el estado/caché local mediante `marcarCambioPendiente()` y usan el ciclo de sync normal; `storage-merge.js` fusiona cada nota por id y respeta `_eliminados_notas` para que un borrado definitivo no reaparezca. El contenido se conserva como HTML mínimo de lista permitida y se sanitiza tanto antes de guardar como al pintar.
+
+El `share_target` de `manifest.json` usa una acción relativa (`./`) dentro del scope y acepta solo title/text/url. `notas-compartir.js` copia esos parámetros a una bandeja local acotada e idempotente, limpia la URL antes de que continúe el login y procesa la bandeja cuando los datos de cuenta ya están listos. El Service Worker sirve el shell cacheado ante navegación offline y excluye las queries de contenido compartido de CacheStorage para no dejar texto privado en la caché HTTP. Las notas funcionan localmente sin red; la sincronización con otros dispositivos espera la conexión de Drive.
+
 ### `js/core/` — datos y sesión
 `auth.js` (login Google + API Drive cruda), `clipboard.js` (blindaje de copiar al
 portapapeles), `schema.js` (molde de datos completo, factories, Lamport, motor de

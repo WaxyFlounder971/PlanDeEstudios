@@ -1,6 +1,6 @@
 # Termini e condizioni
 
-**Ultimo aggiornamento: 16 ottobre 2026**
+**Ultimo aggiornamento: 18 ottobre 2026**
 
 Questo documento spiega come funziona App Académica e cosa puoi aspettarti da essa. Accettandolo confermi di averlo letto e di essere d'accordo. Se non sei d'accordo, ti chiediamo di non usare l'app.
 
@@ -28,6 +28,8 @@ Chiunque. L'app è nata pensando agli studenti universitari, ma può servire anc
 Alcune funzioni usano un servizio proprio dell'app, ospitato su Cloudflare. Questo è tutto ciò che riceve:
 - **Accesso:** il servizio aiuta a rinnovare la tua sessione Google. Non conserva la tua password.
 - **Statistiche d'uso:** solo conteggi, per esempio quante volte viene aperta ogni sezione. Non includono mai ciò che scrivi (compiti, voti, chat, ecc.). La tua e-mail viene usata per un istante per classificare il conteggio e non viene conservata.
+- **Percorsi dettagliati (facoltativi):** solo se li autorizzi durante l'onboarding o in Impostazioni, l'app registra avvio, passaggi, completamento, annullamento o abbandono di processi come creare attività, importare un piano di studi, modificare note e inviare messaggi a Wapper. Vengono usati un identificativo pseudonimo, date/ore, sessione e versione dell'app; non vengono inviati testi o dati accademici. Gli eventi vengono eliminati dopo 90 giorni e puoi revocare l'autorizzazione in Impostazioni > Dati.
+- **Analisi con IA:** su richiesta dell'amministratore, vengono inviati a Claude (Anthropic) o, se non è configurato, a OpenAI solo conteggi aggregati. Non vengono inviati identificativi né contenuti scritti.
 - **Competizioni:** se crei una competizione o ne raggiungi una, vengono conservati la tua e-mail Google (per riconoscerti), il tuo soprannome, le ore studiate nella settimana e i risultati precedenti. Se la funzione lo mostra, anche la tua foto del profilo Google e il colore che scegli. Le altre persone della competizione vedono il tuo soprannome e le tue ore. Le materie che studi non vengono mai inviate.
 - **Orari condivisi:** se condividi il tuo orario con un link, chiunque lo abbia può vederlo. Decidi tu con chi condividerlo e puoi smettere di condividerlo quando vuoi dall'app.
 
@@ -36,6 +38,7 @@ L'app dipende da servizi che non controlla, ciascuno con le proprie regole:
 - **Google:** accesso e Drive. Se lo attivi, anche Calendar, dove viene creato un calendario separato con i tuoi compiti ed esami per inviarti promemoria.
 - **Gemini (Google):** l'Assistente usa la tua chiave Gemini personale. Ciò che gli scrivi va direttamente dal tuo browser a Google, senza passare dall'app. Sei tu responsabile dell'uso della tua chiave.
 - **Cloudflare:** dove sono ospitati l'app e il servizio della sezione 5.
+- **Anthropic (Claude) o OpenAI:** ricevono solo metriche aggregate se l'amministratore richiede un'analisi d'uso con IA.
 
 Se uno di questi servizi cambia, si guasta o diventa a pagamento, l'app può esserne influenzata, e ciò non dipende dallo sviluppatore.
 

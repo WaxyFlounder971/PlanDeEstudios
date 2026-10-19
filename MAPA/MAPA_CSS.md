@@ -1,5 +1,9 @@
 # MAPA_CSS.md — Índice de `css/design-system.css`
 
+## Notas rápidas (v3.24.0)
+
+`design-system.css` incorpora `notas-grid`/`notas-lista`, tarjetas tipo post-it con vista expandible, barra de selección, editor modal adaptable, paleta, estados de pin/arrastre, filtros y aviso de contenido compartido. El fondo de cada tarjeta proviene del color de nota y el JS calcula texto claro u oscuro para mantener contraste.
+
 > Adaptación del formato de `MAPA_FUNCIONES.md` a CSS: en vez de funciones se listan las **variables (custom properties)** y las **clases de componente reutilizables** que otros archivos (HTML/JS) consumen. No se documentan reglas de un solo uso ni ajustes puntuales de layout — esas quedan "internas" del archivo, igual que una función privada de un `.js`.
 
 ---

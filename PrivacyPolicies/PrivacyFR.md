@@ -1,6 +1,6 @@
 # Politique de confidentialité
 
-**Dernière mise à jour : 16 octobre 2026**
+**Dernière mise à jour : 18 octobre 2026**
 
 Cette politique explique quelles informations App Académica (aussi appelée Wapper) utilise, pourquoi elle les utilise et ce que tu peux en faire. C'est un projet indépendant, développé par une seule personne, et ce document cherche donc à être clair et direct.
 
@@ -28,6 +28,8 @@ Le développeur n'a pas accès à ce dossier ni à son contenu.
 Pour que certaines fonctions marchent, l'application utilise un service propre hébergé chez Cloudflare. Voici tout ce qu'il reçoit et conserve :
 - **Connexion :** le service aide à renouveler ta session Google. Il ne conserve ni ton mot de passe ni tes identifiants de connexion.
 - **Statistiques d'utilisation :** compteurs du nombre de fois que chaque section est ouverte ou du type d'action utilisée. Elles n'incluent pas ce que tu écris. Ton e-mail est comparé un instant en mémoire pour classer le compteur et n'est pas conservé.
+- **Parcours détaillés (facultatifs) :** si tu l'autorises lors de l'onboarding ou dans les Réglages, l'application enregistre le début, les étapes, l'achèvement, l'annulation et l'abandon de certains processus (par exemple, créer une tâche, importer un plan d'études, modifier une note ou envoyer un message à Wapper). Elle conserve un identifiant pseudonymisé calculé avec une clé secrète, le type de processus, la session, la version de l'application et les dates/heures. Aucun texte, titre ou donnée académique n'est envoyé. Les événements détaillés sont supprimés après 90 jours. Tu peux désactiver cette option dans Réglages > Données.
+- **Analyse par IA (uniquement à la demande de l'administrateur) :** seuls des compteurs agrégés des parcours sont envoyés à Anthropic (Claude) ou, si le service n'est pas configuré, à OpenAI. Les identifiants pseudonymisés, adresses e-mail et contenus écrits ne sont pas envoyés.
 - **Compétitions (seulement si tu participes à l'une d'elles) :** ton e-mail Google (pour te reconnaître), ton pseudo, tes heures d'étude totales de la semaine et les résultats précédents. Si la fonction l'affiche, aussi ta photo de profil Google et la couleur que tu choisis. Les matières que tu étudies, ou toute autre donnée académique, ne sont jamais envoyées.
 - **Emplois du temps partagés (seulement si tu les partages) :** le fichier de ton emploi du temps reste dans ton Drive avec un lien public en lecture seule. Toute personne qui a le lien peut le voir. Tu décides avec qui le partager et tu peux arrêter de le partager quand tu veux.
 
@@ -43,6 +45,7 @@ L'application demande à ton compte Google l'autorisation de :
 - **Google** (connexion, Drive et, si tu l'actives, Calendar) : leur traitement de tes informations est régi par leur propre politique de confidentialité.
 - **Gemini (Google) :** si tu utilises l'Assistant, ce que tu écris est envoyé directement de ton navigateur à Google avec ta propre clé, sans passer par l'application. Cela relève des politiques de Google.
 - **Cloudflare :** héberge l'application et le service décrit à la section 4.
+- **Anthropic (Claude) ou OpenAI :** reçoivent uniquement des mesures agrégées lorsque l'administrateur demande une analyse d'utilisation par IA. Le fournisseur utilisé dépend de la configuration du service.
 
 L'application ne contrôle pas la manière dont ces entreprises traitent les informations dans leurs systèmes.
 
@@ -50,13 +53,16 @@ L'application ne contrôle pas la manière dont ces entreprises traitent les inf
 - Faire fonctionner l'application (enregistrer tes données, te connecter, t'envoyer des rappels si tu les actives).
 - Faire fonctionner les compétitions et les emplois du temps partagés entre les personnes qui choisissent de les utiliser.
 - Comprendre, avec des compteurs généraux, quelles parties de l'application sont les plus utilisées afin de les améliorer.
+- Savoir, si tu acceptes cette option, quelles étapes de certains processus sont achevées ou abandonnées afin d'améliorer ces parcours.
+- Résumer des mesures agrégées avec l'IA lorsque l'administrateur lance manuellement cette analyse.
 
 Elles ne sont utilisées à aucune autre fin.
 
 ## 8. Durée de conservation
 - **Tes données académiques :** tant que tu ne les supprimes pas de ton Drive ou de l'application.
 - **Compétitions :** tant que tu participes. Si tu quittes une compétition, ta participation est supprimée. L'historique des résultats passés peut conserver ton pseudo et tes heures jusqu'à ce que tu demandes leur suppression.
-- **Statistiques d'utilisation :** conservées uniquement sous forme de compteurs généraux, sans t'identifier.
+- **Statistiques d'utilisation de base :** conservées sous forme de compteurs généraux ; ton e-mail est uniquement comparé en mémoire pour les classer.
+- **Parcours détaillés facultatifs :** conservés jusqu'à 90 jours puis supprimés automatiquement. Tu peux retirer ton autorisation dans Réglages > Données ; leur désactivation supprime aussi les parcours déjà enregistrés.
 
 ## 9. Tes droits et comment les exercer
 Tu peux demander à tout moment d'accéder à tes informations, de les corriger ou de les supprimer.

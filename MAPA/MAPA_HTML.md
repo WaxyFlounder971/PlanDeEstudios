@@ -5,7 +5,7 @@
 ---
 
 ## index.html
-Propósito: cascarón único de la app (SPA de una sola página) — pantalla de login + app-shell con sidebar, 7 secciones internas (mostradas/ocultadas por JS, no son rutas reales) y ~25 modales. Todo el contenido dinámico lo llenan los módulos de `js/`.
+Propósito: cascarón único de la app (SPA de una sola página) — pantalla de login + app-shell con sidebar, secciones internas (mostradas/ocultadas por JS, no son rutas reales) y ~25 modales. Todo el contenido dinámico lo llenan los módulos de `js/`.
 Depende de:
 - `css/design-system.css` (estilos)
 - `manifest.json` (PWA)
@@ -17,6 +17,7 @@ Bloques principales (por id, no son "exports" pero cumplen el mismo rol de mapa 
 **Pantallas raíz**
 * `#pantalla-login` — vista de login con Google, visible antes de autenticar.
 * `#app-shell` — contenedor de toda la app ya autenticada (oculto hasta login).
+* `#nav-notas` y `#seccion-notas` — acceso configurable y superficie de Notas rápidas; el módulo construye su UI después del login.
 
 **Chrome / layout general**
 * `#pull-refresh-indicador` — indicador de "deslizar para sincronizar" (v8.3).

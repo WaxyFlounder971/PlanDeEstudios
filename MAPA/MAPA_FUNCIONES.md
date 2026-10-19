@@ -1,8 +1,11 @@
 # MAPA_FUNCIONES.md
 **Aclaración 18/10/2026:** las listas de pendientes incluidas dentro de entradas antiguas (p. ej. 16/10) reflejan el estado de esa fecha. Ya se cerraron en código la indicación de navegador integrado, la documentación de claves de onboarding, la continuidad «Empezar en blanco» y las traducciones nuevas del flujo guiado. Consultar la sección vigente de `Plan_Proyecto_App_Academica.md` para pendientes actuales.
 
+# 2026-10-18 - Notas rápidas integradas en v3.24.0
+Se añade la sección Notas rápidas con edición de guardado automático (incluido al ocultar/cerrar la app), contenido HTML de lista permitida, cuadrícula/lista, búsqueda/filtros, etiquetas de color con contraste, fijación y orden accesible, vencimientos, papelera de 30 días con selección múltiple y acciones masivas, copia/compartir y envío al punto de entrada existente de Wapper. La colección `notas` se guarda en el JSON de la cuenta, se cachea localmente por `marcarCambioPendiente()` y se fusiona por entidad con tombstones definitivos, por lo que las operaciones básicas siguen disponibles offline y se sincronizan al reconectar. El `share_target` queda relativo al `scope` real del manifest (`.`), la URL se limpia inmediatamente y el texto compartido se pasa a una bandeja local idempotente. La query compartida no se guarda en CacheStorage. Notas aparece en menú, Ajustes > Navegación y los pasos/tutoriales del onboarding. Las acciones agregadas usan la lista permitida de analítica del cliente y Worker; no transmiten texto ni títulos. **Archivos:** `js/notas/*` (siete módulos nuevos), `js/main.js`, `index.html`, `js/config/config-ajustes.js`, `js/core/schema.js`, `js/core/storage-merge.js`, `js/core/eliminar-cuenta-app.js`, `js/core/onboarding.js`, `demo/datos-demo.json`, `manifest.json`, `service-worker.js` (`v3.24.0`), `css/design-system.css`, `js/core/analitica.js`, `worker - Uso para Chat/src/index.js`, cuatro catálogos de `idiomas/`, `ARQUITECTURA.md`. **Verificación hecha:** comprobación estática de sintaxis de los JS modificados y parseo de los JSON modificados. **Pendiente:** recorrer el flujo en Android/PWA y escritorio, sincronización concurrente en dos dispositivos y modo avión real; no se desplegó. Compartir desde otras apps solo está disponible en PWA instalada en Android compatible.
+
 # 2026-10-18 - Wapper: grabación estable, cola offline y tipos vigentes
-El Asistente usa una sesión de MediaRecorder por captura, con temporizador y liberación de pistas al detener o enviar. Texto y audio se guardan por cuenta en IndexedDB cuando no hay red; el audio conserva fragmentos durante la grabación para recuperarse de una interrupción. La cola procesa en orden, guarda automáticamente solo resultados con alta confianza y datos válidos, mantiene lo ambiguo para revisión, y muestra tarjetas con deshacer mediante el borrado con tombstone existente. La clasificación recibe las etiquetas actuales de Agenda, acepta su ayuda opcional y valida los ids antes de guardar. El Service Worker pasa a `v3.23.9`. **Archivos:** `js/asistente/asistente.js`, `js/asistente/asistente-cola.js` (nuevo), `js/core/schema.js`, `js/agenda/agenda.js`, `js/main.js`, `index.html`, `css/design-system.css`, cuatro catálogos de `idiomas/`, `service-worker.js`, `MAPA/wapper-clasificacion-manual.md`. **Pendiente:** probar en Gemini real y en Android/escritorio; no se desplegó. La función «Enviar a Wapper» desde Notas rápidas sigue ligada al módulo de Notas, que aún no existe en este árbol.
+El Asistente usa una sesión de MediaRecorder por captura, con temporizador y liberación de pistas al detener o enviar. Texto y audio se guardan por cuenta en IndexedDB cuando no hay red; el audio conserva fragmentos durante la grabación para recuperarse de una interrupción. La cola procesa en orden, guarda automáticamente solo resultados con alta confianza y datos válidos, mantiene lo ambiguo para revisión, y muestra tarjetas con deshacer mediante el borrado con tombstone existente. La clasificación recibe las etiquetas actuales de Agenda, acepta su ayuda opcional y valida los ids antes de guardar. El Service Worker pasa a `v3.23.9`. **Archivos:** `js/asistente/asistente.js`, `js/asistente/asistente-cola.js` (nuevo), `js/core/schema.js`, `js/agenda/agenda.js`, `js/main.js`, `index.html`, `css/design-system.css`, cuatro catálogos de `idiomas/`, `service-worker.js`, `MAPA/wapper-clasificacion-manual.md`. **Pendiente:** probar en Gemini real y en Android/escritorio; no se desplegó. El puente «Enviar a Wapper» quedó conectado desde el nuevo módulo de Notas rápidas, descrito en la entrada siguiente.
 
 # 2026-10-18 - Prompt de importación localizado
 El prompt técnico se presenta según el idioma activo (ES/EN/IT/FR). Los metadatos, encabezados CSV y tokens de control permanecen en español para respetar el contrato del parser. Las instrucciones completas se adaptaron para los tres idiomas adicionales; no se modificó el parser. **Archivo:** `js/plan/plan-importacion.js`.
@@ -152,6 +155,7 @@ La versión visible/caché del PWA se fija en `service-worker.js` (`v3.20.0-beta
 - [`js/horario/`](#js--horario) - Horario y horario entre amigos (4 archivos)
 - [`js/agenda/`](#js--agenda) - Agenda (8 archivos)
 - [`js/asistente/`](#js--asistente) - Asistente IA (1 archivo; la Bandeja se documenta en `js/core/`)
+- [`js/notas/`](#js--notas-rápidas) - Notas rápidas (7 módulos, nuevo en v3.24.0)
 - [`js/tiempo-estudio/`](#js--tiempo-de-estudio) - Tiempo de Estudio (13 archivos, con los 2 de la racha y los 2 nuevos de la capa visual de Competencias, 2026-09-21; la sección se llama "Tiempo" en la interfaz desde 2026-09-17, los archivos NO se renombraron para no romper imports)
 - [`js/resumen/`](#js--resumen) - Resumen (1 archivo)
 - [`js/main.js`](#jsmainjs) - arranque (1 archivo)
@@ -1350,6 +1354,29 @@ Exporta:
 * `renderizarPerfil()` - pinta nombre, correo, foto/iniciales del perfil en el header y en el popover; maneja el fallback si la foto no carga.
 * `togglePerfilPopover(forzarCerrado)` - abre/cierra el popover de perfil (o lo fuerza a cerrado si se pasa `true`).
 * Listener de `serviceWorker.addEventListener("message", ...)` - si el service worker avisa que se tocó una notificación push con la app ya abierta en una pestaña, salta a la sección Agenda sin recargar.
+
+## JS - Notas rápidas
+
+### `js/notas/notas.js`
+Punto de entrada de la sección. Exporta `inicializarNotas()` y `renderizarNotas()`, expone `window.renderizarNotas`, `window.procesarNotasCompartidas` y `window.enviarNotaAWapper`. Incluye navegación, lista, búsqueda, filtros, selección múltiple, fijación/reordenamiento, avisos de contenido compartido y el puente a Wapper. Usa el punto de entrada existente `window.enviarTextoAWapper(texto)` sin cambiar el módulo Asistente.
+
+### `js/notas/notas-datos.js`
+Exporta `notasActuales`, `opcionesNotas`, `crearNota`, `obtenerNota`, `guardarNota`, `marcarEliminada`, `restaurarNota`, `eliminarDefinitiva`, `procesarCicloVidaNotas` y `agendaNotas`. Las notas viven en `estado.datos.notas`; la papelera es un soft delete durante 30 días y el borrado definitivo deja `_eliminados_notas`. Los cambios usan `sellarTimestamp()` y `marcarCambioPendiente()` para persistencia local y sincronización.
+
+### `js/notas/notas-editor.js`
+Exporta `abrirEditorNota(id, alCerrar)` y `fechaRelativa(opcion)`. Editor con foco en cuerpo, autoguardado debounce más cierre/blur, HTML de lista permitida, formato básico, tareas, color, vencimiento y acciones de copiar, compartir y Wapper. Limita cada nota a 10 000 caracteres.
+
+### `js/notas/notas-sanitizar.js`
+Exporta `sanearHTMLNota(html)`, `textoPlanoNota(html)`, `escaparHTMLNota(texto)` y `renderizarHTMLNota(contenedor, html)`. Sanitiza al persistir y al renderizar; pega como texto plano y crea enlaces únicamente para `http(s)`.
+
+### `js/notas/notas-papelera.js`
+Exporta `mostrarPapelera(contenedor, refrescar)`: lista notas eliminadas/vencidas, días restantes, restaurar, eliminar definitivamente y vaciar papelera.
+
+### `js/notas/notas-ajustes.js`
+Exporta `mostrarAjustesNotas(refrescar)`: vencimiento por defecto, color, vista, política posterior a Wapper, contenido compartido y posición de tareas terminadas.
+
+### `js/notas/notas-compartir.js`
+Exporta `procesarCompartidos()`, `compartirNotaFuera(texto, titulo)` y `capturarCompartido()`. Captura title/text/url antes del login, limpia el query, limita tamaño y guarda una bandeja local idempotente hasta que la sesión esté lista.
 
 ---
 

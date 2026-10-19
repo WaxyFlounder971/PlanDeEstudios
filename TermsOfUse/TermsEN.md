@@ -1,6 +1,6 @@
 # Terms and conditions
 
-**Last updated: October 16, 2026**
+**Last updated: October 18, 2026**
 
 This document explains how App Académica works and what you can expect from it. By accepting it you confirm that you read it and agree. If you do not agree, we ask that you do not use the app.
 
@@ -28,6 +28,8 @@ Anyone. The app was designed with university students in mind, but it can also h
 Some features use a service of the app's own, hosted on Cloudflare. This is all it receives:
 - **Sign-in:** the service helps renew your Google session. It does not store your password.
 - **Usage statistics:** counts only, for example how many times each section is opened. They never include what you write (tasks, grades, chats, etc.). Your email is used for an instant to classify the count and is not stored.
+- **Detailed journeys (optional):** only if you allow it in onboarding or Settings, the app records starts, steps, completion, cancellation, or abandonment for processes such as creating tasks, importing a study plan, editing notes, and sending Wapper messages. A pseudonymous identifier, timestamps, session, and app version are used; text and academic data are not sent. These events are deleted after 90 days, and you can withdraw permission in Settings > Data.
+- **AI analysis:** when requested by the administrator, only aggregated counts are sent to Claude (Anthropic) or, if it is not configured, OpenAI. Identifiers and written content are never sent.
 - **Competitions:** if you create or join a competition, your Google email (to recognize you), your nickname, the hours you studied in the week and past results are stored. If the feature shows it, also your Google profile photo and the color you pick. The other people in the competition see your nickname and your hours. Which courses you study is never sent.
 - **Shared schedules:** if you share your schedule with a link, anyone who has it can see it. You decide who to share it with and you can stop sharing whenever you want from the app.
 
@@ -36,6 +38,7 @@ The app depends on services it does not control, each with its own rules:
 - **Google:** sign-in and Drive. If you turn it on, also Calendar, where a separate calendar is created with your tasks and exams to send you reminders.
 - **Gemini (Google):** the Assistant uses your own Gemini key. What you write to it goes straight from your browser to Google, without passing through the app. You are responsible for how your key is used.
 - **Cloudflare:** where the app and the service from section 5 are hosted.
+- **Anthropic (Claude) or OpenAI:** receive only aggregated metrics if the administrator requests an AI usage analysis.
 
 If any of these services changes, fails or becomes paid, the app may be affected and this is outside the developer's control.
 
