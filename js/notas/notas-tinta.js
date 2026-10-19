@@ -285,7 +285,8 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
   };
 }
 
-/** Miniatura de la tinta para la tarjeta (ajusta el dibujo a su caja). Devuelve null si no hay trazos. */
+/** Miniatura de la tinta para la tarjeta. Se redibuja con la resolución real con que se muestra (tamaño x densidad de pantalla),
+ *  así no se ve pixelada aunque la tarjeta sea ancha. Devuelve null si no hay trazos. */
 function crearMiniTinta(trazos) {
   if (!Array.isArray(trazos) || !trazos.length) return null;
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -293,22 +294,30 @@ function crearMiniTinta(trazos) {
   if (!Number.isFinite(x0)) return null;
   const pad = 0.015;
   const w = Math.max(0.05, x1 - x0 + pad * 2), h = Math.max(0.05, y1 - y0 + pad * 2);
-  const W = 360, Hmax = 200;
-  let escala = W / w;
-  let H = h * escala;
-  if (H > Hmax) { escala = Hmax / h; H = Hmax; }
-  const cw = Math.round(Math.min(W, w * escala)), ch = Math.round(H);
   const c = document.createElement("canvas");
   c.className = "nota-tinta-mini";
-  c.width = Math.max(1, cw);
-  c.height = Math.max(1, ch);
-  c.style.aspectRatio = `${c.width} / ${c.height}`;
-  const ctx = c.getContext("2d");
-  ctx.save();
-  ctx.scale(escala, escala);
-  ctx.translate(-x0 + pad, -y0 + pad);
-  dibujarTrazos(ctx, trazos, 1, 0, 0.004);
-  ctx.restore();
+  c.style.aspectRatio = `${Math.round(w * 1000)} / ${Math.round(h * 1000)}`;
+  const MAX_PX = 2400;
+  let pxActual = 0;
+  const pintar = (px) => {
+    const cw = Math.max(1, Math.min(MAX_PX, Math.round(px))), ch = Math.max(1, Math.round((cw * h) / w));
+    pxActual = cw;
+    c.width = cw; c.height = ch; // al cambiar el tamaño el canvas se limpia solo
+    const ctx = c.getContext("2d");
+    const escala = cw / w;
+    ctx.scale(escala, escala);
+    ctx.translate(-x0 + pad, -y0 + pad);
+    dibujarTrazos(ctx, trazos, 1, 0, 1.5 / escala);
+  };
+  pintar(360 * (window.devicePixelRatio || 1));
+  if (typeof ResizeObserver === "function") {
+    new ResizeObserver((entradas) => {
+      const ancho = entradas[0]?.contentRect?.width || 0;
+      if (!ancho) return;
+      const px = Math.min(MAX_PX, Math.round(ancho * (window.devicePixelRatio || 1)));
+      if (Math.abs(px - pxActual) > 8) pintar(px);
+    }).observe(c);
+  }
   return c;
 }
 

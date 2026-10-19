@@ -199,6 +199,82 @@ function iniciarArrastre(e, card) {
   raf = requestAnimationFrame(auto);
 }
 
+/* ---------- Selección por arrastre (solo mouse): dibuja un rectángulo sobre el espacio libre y selecciona las notas que toca ---------- */
+const ZONA_LIBRE = ".notas-seccion, .notas-grupos, .notas-grid, .nt-divisor";
+function iniciarMarquesina(e) {
+  if (e.pointerType !== "mouse" || e.button !== 0 || arrastreActivo) return;
+  const root = document.getElementById("seccion-notas");
+  if (!root || !root.contains(e.target) || !e.target.matches(ZONA_LIBRE)) return;
+  const scroller = contenedorScroll(root);
+  const st0 = scroller ? scroller.scrollTop : scrollY, sx = e.clientX, sy = e.clientY;
+  const aditivo = e.ctrlKey || e.metaKey || e.shiftKey;
+  const base = aditivo ? new Set(seleccion) : new Set();
+  let ux = sx, uy = sy, activo = false, caja = null, raf = 0, terminado = false;
+  const scrollAhora = () => (scroller ? scroller.scrollTop : scrollY);
+  const tarjetas = () => [...root.querySelectorAll(".nota-card[data-id]")];
+  const pintar = () => {
+    const y0 = sy - (scrollAhora() - st0);
+    const L = Math.min(sx, ux), R = Math.max(sx, ux), T = Math.min(y0, uy), B = Math.max(y0, uy);
+    Object.assign(caja.style, { left: `${L}px`, top: `${T}px`, width: `${R - L}px`, height: `${B - T}px` });
+    const dentro = new Set(base);
+    for (const c of tarjetas()) {
+      const r = c.getBoundingClientRect();
+      if (r.right >= L && r.left <= R && r.bottom >= T && r.top <= B) dentro.add(c.dataset.id);
+      c.classList.toggle("seleccionada", dentro.has(c.dataset.id));
+    }
+    return dentro;
+  };
+  const auto = () => {
+    if (terminado) return;
+    if (activo) {
+      const alto = scroller ? scroller.getBoundingClientRect() : { top: 0, bottom: innerHeight };
+      let v = 0;
+      if (uy < alto.top + 60) v = -Math.min(22, (alto.top + 60 - uy) / 3); else if (uy > alto.bottom - 60) v = Math.min(22, (uy - (alto.bottom - 60)) / 3);
+      if (v) { if (scroller) scroller.scrollTop += v; else scrollBy(0, v); pintar(); }
+    }
+    raf = requestAnimationFrame(auto);
+  };
+  const quitar = () => {
+    terminado = true; cancelAnimationFrame(raf); caja?.remove();
+    document.body.classList.remove("nota-marquesina-body");
+    window.removeEventListener("pointermove", mover, true); window.removeEventListener("pointerup", soltar, true); window.removeEventListener("pointercancel", cancelar, true);
+    document.removeEventListener("keydown", teclas, true);
+  };
+  const mover = (ev) => {
+    if (ev.pointerType !== "mouse") return;
+    if (ev.buttons === 0) { soltar(ev); return; }
+    ux = ev.clientX; uy = ev.clientY;
+    if (!activo) {
+      if (Math.hypot(ux - sx, uy - sy) < 6) return;
+      activo = true;
+      caja = el("div", "nt-marquesina"); document.body.append(caja);
+      document.body.classList.add("nota-marquesina-body");
+      window.getSelection()?.removeAllRanges();
+      raf = requestAnimationFrame(auto);
+    }
+    pintar();
+  };
+  const soltar = () => {
+    if (terminado) return;
+    const era = activo, ids = era ? pintar() : null;
+    quitar();
+    if (!era) return;
+    const antes = seleccion.size;
+    seleccion = new Set(ids);
+    if (!antes && seleccion.size) history.pushState({ appNav: true, appSeccion: "notas", notasSeleccion: true }, "", location.href);
+    if (!seleccion.size) {
+      document.body.classList.remove("notas-seleccionando");
+      if (history.state?.notasSeleccion) history.replaceState({ appNav: true, appSeccion: "notas" }, "", location.href);
+    } else document.body.classList.add("notas-seleccionando");
+    renderizarNotas();
+  };
+  const cancelar = () => { if (terminado) return; const era = activo; quitar(); if (era) renderizarNotas(); };
+  const teclas = (k) => { if (k.key === "Escape") { k.stopPropagation(); cancelar(); } };
+  window.addEventListener("pointermove", mover, true); window.addEventListener("pointerup", soltar, true); window.addEventListener("pointercancel", cancelar, true);
+  document.addEventListener("keydown", teclas, true);
+  e.preventDefault(); // evita seleccionar texto mientras se arrastra
+}
+
 /* ---------- Ancho de nota: arrastra el borde derecho para que ocupe 2 o 3 columnas ---------- */
 // Se guarda el ancho deseado (nota.ancho = 2 | 3); al mostrarla se recorta a las columnas que caben (en teléfono, hasta donde quepa).
 const MAX_ANCHO = 3;
@@ -334,11 +410,11 @@ function construirTarjeta(nota) {
     botonIcono({ icono: ICONOS.anclar, titulo: tr(nota.fijada ? "Desfijar" : "Fijar"), clase: "nota-pin-action", activo: !!nota.fijada, onclick: (e) => { e.stopPropagation(); alternarFijada(nota); } }),
     botonIcono({ icono: flotando ? ICONOS.quitarFlotante : ICONOS.flotar, titulo: tr(flotando ? "Quitar de flotante" : "Dejar flotante"), clase: "nota-flotar-action", activo: flotando, onclick: (e) => { e.stopPropagation(); alternarFlotante(nota.id, card); renderizarNotas(); } }),
     sep(),
-    botonIcono({ icono: "✨", titulo: tr("Enviar a Wapper"), onclick: (e) => { e.stopPropagation(); wapperNota(nota); } }),
+    botonIcono({ icono: ICONOS.wapper, titulo: tr("Enviar a Wapper"), onclick: (e) => { e.stopPropagation(); wapperNota(nota); } }),
     botonIcono({ icono: ICONOS.compartir, titulo: tr("Compartir"), onclick: (e) => { e.stopPropagation(); compartirNota(nota); } }),
     sep(),
     botonIcono({ icono: ICONOS.duplicar, titulo: tr("Duplicar"), onclick: (e) => { e.stopPropagation(); clonarNota(nota); } }),
-    botonIcono({ icono: "🗑️", titulo: tr("Eliminar"), clase: "nota-eliminar-action", onclick: (e) => { e.stopPropagation(); eliminarConConfirmacion(nota); } }),
+    botonIcono({ icono: ICONOS.papelera, titulo: tr("Eliminar"), clase: "nota-eliminar-action", onclick: (e) => { e.stopPropagation(); eliminarConConfirmacion(nota); } }),
   );
   foot.append(acciones);
 
@@ -379,12 +455,12 @@ function abrirMenuNota(nota, x, y, card) {
   const acciones = [
     [ICONOS.editar, tr("Editar"), () => abrirEditorNota(nota.id, renderizarNotas)],
     [seleccion.has(nota.id) ? "✖️" : "☑️", seleccion.has(nota.id) ? tr("Quitar selección") : tr("Seleccionar"), () => alternarSeleccion(nota.id)],
-    ["✨", tr("Enviar a Wapper"), () => wapperNota(nota)],
+    [ICONOS.wapper, tr("Enviar a Wapper"), () => wapperNota(nota)],
     [ICONOS.compartir, tr("Compartir"), () => compartirNota(nota)],
     [ICONOS.anclar, nota.fijada ? tr("Desfijar") : tr("Fijar"), () => alternarFijada(nota)],
     [flotando ? ICONOS.quitarFlotante : ICONOS.flotar, flotando ? tr("Quitar de flotante") : tr("Dejar flotante"), () => { alternarFlotante(nota.id, card); renderizarNotas(); }],
     [ICONOS.duplicar, tr("Duplicar"), () => clonarNota(nota)],
-    ["🗑️", tr("Eliminar"), () => eliminarConConfirmacion(nota)],
+    [ICONOS.papelera, tr("Eliminar"), () => eliminarConConfirmacion(nota)],
   ];
   for (const [icono, texto, fn] of acciones) {
     const b = el("button", "notas-menu-item");
@@ -616,6 +692,7 @@ function inicializarNotas() {
   agendaNotas();
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && seleccion.size) { seleccion.clear(); document.body.classList.remove("notas-seleccionando"); renderizarNotas(); } });
   document.addEventListener("keydown", atajosHistorial);
+  document.addEventListener("pointerdown", iniciarMarquesina);
   window.addEventListener("notas:actualizadas", renderizarNotas);
   window.addEventListener("notas:compartido", (e) => { renderizarNotas(); mostrarAvisoCompartido(e.detail); });
   window.addEventListener("notas:abrir", (e) => { window.mostrarSeccion?.("notas"); setTimeout(() => abrirEditorNota(e.detail, renderizarNotas), 100); });

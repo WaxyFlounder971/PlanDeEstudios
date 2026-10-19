@@ -126,10 +126,10 @@ body.nota-arrastrando-body{user-select:none;-webkit-user-select:none;cursor:grab
 .nt-vsep{flex:none;width:1px;height:18px;background:currentColor;opacity:.35;margin:0 2px}
 .nota-card.nota-flotando{opacity:.62}
 .nota-card.nota-flotando .nt-chip-flot{display:inline-flex}
-/* Borrar: sombreado rojo al pasar el cursor, al enfocar o al presionar */
-.nota-card .nota-icon-action.nota-eliminar-action{transition:background .15s,color .15s}
-.nota-card .nota-icon-action.nota-eliminar-action:hover,.nota-card .nota-icon-action.nota-eliminar-action:focus-visible{background:rgba(220,38,38,.2);color:#b42335}
-.nota-card .nota-icon-action.nota-eliminar-action:active{background:rgba(220,38,38,.38);color:#9f1239}
+/* Borrar: icono del color de los demás; al pasar el cursor, rojo fuerte con sombra (se ve sobre cualquier color de nota) */
+.nota-card .nota-icon-action.nota-eliminar-action{transition:background .12s,color .12s,box-shadow .12s}
+.nota-card .nota-icon-action.nota-eliminar-action:hover,.nota-card .nota-icon-action.nota-eliminar-action:focus-visible{background:#dc2626;color:#fff;box-shadow:0 0 0 2px rgba(220,38,38,.35),0 4px 14px rgba(220,38,38,.75)}
+.nota-card .nota-icon-action.nota-eliminar-action:active{background:#b91c1c;color:#fff;box-shadow:0 0 0 3px rgba(185,28,28,.45),0 2px 8px rgba(185,28,28,.8)}
 /* Filtros: "Con vencimiento" como botón del estilo de las bolitas */
 .notas-filtros .nt-vsep{height:22px;margin:0 4px}
 .notas-filtros .nt-filtro-vence{display:inline-flex;align-items:center;gap:6px;width:auto;padding:0 12px;border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:.82rem;font-weight:600;white-space:nowrap;transition:background .15s}
@@ -208,6 +208,18 @@ body:has(.nota-estirando){user-select:none;-webkit-user-select:none;cursor:ew-re
 .nt-filtros-der{display:flex;align-items:center;gap:8px;margin-left:auto}
 .nt-filtros-der .nt-seg-compacto{padding:4px;border-radius:14px}
 .nt-filtros-der .nt-seg-compacto .nt-seg-op{width:40px;min-height:36px;padding:0;border-radius:10px;font-size:1.05rem;line-height:1}
+
+/* ===== Selección por arrastre con mouse ===== */
+.nt-marquesina{position:fixed;z-index:900;pointer-events:none;border:1.5px solid var(--accent-2,#b7a5f4);background:color-mix(in srgb,var(--accent-2,#b7a5f4),transparent 80%);border-radius:6px}
+body.nota-marquesina-body{user-select:none;-webkit-user-select:none}
+.notas-editor .nt-acc-der .btn .nt-ico,.notas-editor .notas-editor-share .btn .nt-ico{flex:none}
+
+/* ===== Tamaño de las notas: una nota mide 1 columna, aunque sea la única (nunca se estira sola a todo el ancho) =====
+   auto-fill conserva las columnas vacías; auto-fit las colapsaba y la nota ocupaba toda la fila.
+   Para cambiar el tamaño de una nota: --nt-nota-min (ancho mínimo de columna). */
+.notas-grid:not(.notas-lista){grid-template-columns:repeat(auto-fill,minmax(min(100%,var(--nt-nota-min,250px)),1fr))!important}
+@media(max-width:640px){.notas-grid:not(.notas-lista){--nt-nota-min:150px}}
+.notas-grid>.notas-vacio{grid-column:1/-1}
 `;
 
 function inyectarEstilosNotas() {
