@@ -64,7 +64,7 @@ const CSS = `
 .notas-cuerpo input[type="checkbox"],.nota-preview input[type="checkbox"]{appearance:none;-webkit-appearance:none;display:inline-grid;place-content:center;flex:none;width:20px;height:20px;margin:0 8px 0 0;border:2px solid currentColor;border-radius:50%;background:transparent;vertical-align:-4px;cursor:pointer;opacity:.85;transition:background .15s,border-color .15s}
 .notas-cuerpo input[type="checkbox"]:checked,.nota-preview input[type="checkbox"]:checked{background:var(--nt-grad,linear-gradient(135deg,#f5a9d3,#b7a5f4));border-color:transparent;opacity:1}
 .notas-cuerpo input[type="checkbox"]:checked::after,.nota-preview input[type="checkbox"]:checked::after{content:"";width:5px;height:10px;margin-top:-2px;border:solid #1b1530;border-width:0 2px 2px 0;transform:rotate(45deg)}
-.notas-cuerpo li:has(>input[data-nota-check]),.nota-preview li:has(>input[data-nota-check]){list-style:none;margin-left:-1.3em}
+.notas-cuerpo li:has(input[data-nota-check]),.nota-preview li:has(input[data-nota-check]){list-style:none;margin-left:-1.3em}
 /* --- Arrastrar notas fijadas --- */
 .nota-drag-handle{touch-action:none;cursor:grab}
 .nota-drag-handle svg{display:block;width:16px;height:16px;fill:currentColor}
@@ -126,10 +126,11 @@ body.nota-arrastrando-body{user-select:none;-webkit-user-select:none;cursor:grab
 .nt-vsep{flex:none;width:1px;height:18px;background:currentColor;opacity:.35;margin:0 2px}
 .nota-card.nota-flotando{opacity:.62}
 .nota-card.nota-flotando .nt-chip-flot{display:inline-flex}
-/* Borrar: icono del color de los demás; al pasar el cursor, rojo fuerte con sombra (se ve sobre cualquier color de nota) */
+/* Borrar: el icono se ve igual que los demás (color del texto de la nota, sin atenuar); solo al pasar el cursor, enfocar o presionar se pone rojo fuerte con sombra */
 .nota-card .nota-icon-action.nota-eliminar-action{transition:background .12s,color .12s,box-shadow .12s}
-.nota-card .nota-icon-action.nota-eliminar-action:hover,.nota-card .nota-icon-action.nota-eliminar-action:focus-visible{background:#dc2626;color:#fff;box-shadow:0 0 0 2px rgba(220,38,38,.35),0 4px 14px rgba(220,38,38,.75)}
-.nota-card .nota-icon-action.nota-eliminar-action:active{background:#b91c1c;color:#fff;box-shadow:0 0 0 3px rgba(185,28,28,.45),0 2px 8px rgba(185,28,28,.8)}
+.nota-card .nota-icon-action.nota-eliminar-action:not(:hover):not(:focus-visible):not(:active){color:inherit!important;opacity:1!important;background:transparent!important;filter:none!important}
+.nota-card .nota-icon-action.nota-eliminar-action:hover,.nota-card .nota-icon-action.nota-eliminar-action:focus-visible{background:#dc2626!important;color:#fff!important;opacity:1!important;box-shadow:0 0 0 2px rgba(220,38,38,.35),0 4px 14px rgba(220,38,38,.75)}
+.nota-card .nota-icon-action.nota-eliminar-action:active{background:#b91c1c!important;color:#fff!important;opacity:1!important;box-shadow:0 0 0 3px rgba(185,28,28,.45),0 2px 8px rgba(185,28,28,.8)}
 /* Filtros: "Con vencimiento" como botón del estilo de las bolitas */
 .notas-filtros .nt-vsep{height:22px;margin:0 4px}
 .notas-filtros .nt-filtro-vence{display:inline-flex;align-items:center;gap:6px;width:auto;padding:0 12px;border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:.82rem;font-weight:600;white-space:nowrap;transition:background .15s}
@@ -220,6 +221,24 @@ body.nota-marquesina-body{user-select:none;-webkit-user-select:none}
 .notas-grid:not(.notas-lista){grid-template-columns:repeat(auto-fill,minmax(min(100%,var(--nt-nota-min,250px)),1fr))!important}
 @media(max-width:640px){.notas-grid:not(.notas-lista){--nt-nota-min:150px}}
 .notas-grid>.notas-vacio{grid-column:1/-1}
+
+/* ===== Formato activo (negrita / cursiva / subrayado) ===== */
+.notas-toolbar [data-cmd][aria-pressed="true"]{background:var(--nt-grad,linear-gradient(135deg,#f5a9d3,#b7a5f4));color:#1b1530}
+
+/* ===== Modo claro: sin "cajas" de fondo detrás de los grupos de elementos ===== */
+html:not([data-mode="dark"]):not([data-mode="true-dark"]) .notas-editor .notas-editor-cab,
+html:not([data-mode="dark"]):not([data-mode="true-dark"]) .notas-editor .notas-toolbar,
+html:not([data-mode="dark"]):not([data-mode="true-dark"]) .notas-editor .nt-barra-fila,
+html:not([data-mode="dark"]):not([data-mode="true-dark"]) .notas-editor .notas-editor-tools,
+html:not([data-mode="dark"]):not([data-mode="true-dark"]) .notas-editor .notas-editor-actions{background:transparent!important;box-shadow:none!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+html:not([data-mode="dark"]):not([data-mode="true-dark"]) .notas-editor .notas-editor-cab,
+html:not([data-mode="dark"]):not([data-mode="true-dark"]) .notas-editor .notas-toolbar{border-color:transparent!important}
+html:not([data-mode="dark"]):not([data-mode="true-dark"]) .nt-fecha-btn{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.14)}
+html:not([data-mode="dark"]):not([data-mode="true-dark"]) .nt-fecha-btn:hover{background:rgba(0,0,0,.08)}
+html:not([data-mode="dark"]):not([data-mode="true-dark"]) .nt-seg,html:not([data-mode="dark"]):not([data-mode="true-dark"]) .nt-vista{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.12)}
+html:not([data-mode="dark"]):not([data-mode="true-dark"]) .nt-seg-op:hover{background:rgba(0,0,0,.07)}
+html:not([data-mode="dark"]):not([data-mode="true-dark"]) .nt-chip{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.14)}
+html:not([data-mode="dark"]):not([data-mode="true-dark"]) .nt-chip:hover{background:rgba(0,0,0,.08)}
 `;
 
 function inyectarEstilosNotas() {

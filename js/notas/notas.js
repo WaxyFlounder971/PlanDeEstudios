@@ -199,10 +199,16 @@ function iniciarArrastre(e, card) {
   raf = requestAnimationFrame(auto);
 }
 
-/* ---------- Selección por arrastre (solo mouse): dibuja un rectángulo sobre el espacio libre y selecciona las notas que toca ---------- */
+// Lápiz óptico: botón lateral (buttons & 2) o extremo borrador (buttons & 32) = "seleccionar" en la lista de notas.
+const esMouseIzq = (e) => e.pointerType === "mouse" && e.button === 0;
+const botonLapiz = (e) => e.pointerType === "pen" && !!((e.buttons & 2) || (e.buttons & 32) || e.button === 2 || e.button === 5);
+let ultimoBotonLapiz = 0;
+
+/* ---------- Selección por arrastre (mouse, o lápiz con su botón): dibuja un rectángulo sobre el espacio libre y selecciona las notas que toca ---------- */
 const ZONA_LIBRE = ".notas-seccion, .notas-grupos, .notas-grid, .nt-divisor";
 function iniciarMarquesina(e) {
-  if (e.pointerType !== "mouse" || e.button !== 0 || arrastreActivo) return;
+  if (arrastreActivo || !(esMouseIzq(e) || botonLapiz(e))) return;
+  const tipo = e.pointerType;
   const root = document.getElementById("seccion-notas");
   if (!root || !root.contains(e.target) || !e.target.matches(ZONA_LIBRE)) return;
   const scroller = contenedorScroll(root);
@@ -241,7 +247,7 @@ function iniciarMarquesina(e) {
     document.removeEventListener("keydown", teclas, true);
   };
   const mover = (ev) => {
-    if (ev.pointerType !== "mouse") return;
+    if (ev.pointerType !== tipo) return;
     if (ev.buttons === 0) { soltar(ev); return; }
     ux = ev.clientX; uy = ev.clientY;
     if (!activo) {
@@ -433,12 +439,18 @@ function construirTarjeta(nota) {
   let pressTimer = null, longPress = false;
   card.addEventListener("pointerdown", (e) => {
     if (e.target.closest("button,input,a")) return;
+    if (botonLapiz(e)) { // lápiz con botón: alterna la selección de esta nota
+      e.preventDefault(); ultimoBotonLapiz = Date.now();
+      longPress = true; setTimeout(() => { longPress = false; }, 450);
+      alternarSeleccion(nota.id);
+      return;
+    }
     longPress = false;
     pressTimer = setTimeout(() => { longPress = true; alternarSeleccion(nota.id); }, 550);
   });
   card.addEventListener("pointermove", (e) => { if (Math.abs(e.movementX) + Math.abs(e.movementY) > 10) clearTimeout(pressTimer); });
   ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => card.addEventListener(ev, () => clearTimeout(pressTimer)));
-  card.addEventListener("contextmenu", (e) => { e.preventDefault(); abrirMenuNota(nota, e.clientX, e.clientY, card); });
+  card.addEventListener("contextmenu", (e) => { e.preventDefault(); if (Date.now() - ultimoBotonLapiz < 700) return; abrirMenuNota(nota, e.clientX, e.clientY, card); });
   card.onclick = () => {
     if (longPress) { longPress = false; return; }
     if (seleccion.size) alternarSeleccion(nota.id);

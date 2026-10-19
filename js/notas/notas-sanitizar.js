@@ -1,18 +1,44 @@
 const ETIQUETAS = new Set(["B", "STRONG", "I", "EM", "U", "UL", "OL", "LI", "BR", "DIV", "P", "INPUT", "A"]);
 
+// Color de texto permitido: solo hex (#rgb / #rrggbb) o rgb(); se normaliza a #rrggbb. Cualquier otro valor se descarta.
+const hex2 = (n) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, "0");
+function colorValido(v) {
+  const s = String(v || "").trim().toLowerCase();
+  let m = /^#([\da-f]{3})$/.exec(s);
+  if (m) return "#" + [...m[1]].map((c) => c + c).join("");
+  m = /^#([\da-f]{6})$/.exec(s);
+  if (m) return "#" + m[1];
+  m = /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*[\d.]+\s*)?\)$/.exec(s);
+  if (m) return "#" + [m[1], m[2], m[3]].map((x) => hex2(parseInt(x, 10))).join("");
+  return null;
+}
+
 function sanearHTMLNota(html = "") {
   const doc = new DOMParser().parseFromString(String(html), "text/html");
   const limpiar = (nodo) => {
     for (const hijo of [...nodo.childNodes]) {
       if (hijo.nodeType === Node.COMMENT_NODE) { hijo.remove(); continue; }
       if (hijo.nodeType !== Node.ELEMENT_NODE) continue;
+      // Color de texto: solo <font color="..."> (lo que genera el editor). Los <span style> que el navegador agrega al unir líneas se descartan.
+      if (hijo.tagName === "FONT") {
+        const color = colorValido(hijo.getAttribute("color"));
+        limpiar(hijo);
+        if (!color) { hijo.replaceWith(...hijo.childNodes); continue; }
+        const f = doc.createElement("font");
+        f.setAttribute("color", color);
+        f.append(...hijo.childNodes);
+        hijo.replaceWith(f);
+        continue;
+      }
       if (!ETIQUETAS.has(hijo.tagName)) {
         limpiar(hijo);
         hijo.replaceWith(...hijo.childNodes);
         continue;
       }
       const marcado = hijo.tagName === "INPUT" && (hijo.checked || hijo.hasAttribute("checked"));
+      const inicio = hijo.tagName === "OL" ? parseInt(hijo.getAttribute("start"), 10) : NaN; // lista numerada que empieza en otro número
       for (const atributo of [...hijo.attributes]) hijo.removeAttribute(atributo.name);
+      if (Number.isInteger(inicio) && inicio > 1 && inicio < 10000) hijo.setAttribute("start", String(inicio));
       if (hijo.tagName === "INPUT") {
         hijo.type = "checkbox";
         hijo.disabled = false;

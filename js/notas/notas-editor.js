@@ -21,6 +21,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   let guardado = false, cerrado = false, eliminando = false, timer = null, handlerTeclas = null, capaTinta = null, menuPlazoAbierto = null;
   let ultimoTipo = "t"; // última clase de cambio ("t" texto, "i" tinta): decide a qué afectan Deshacer/Rehacer
   let rangoGuardado = null;
+  let ajustarTintaAuto = () => {}; // se define con la tinta: si no elegiste color de tinta, sigue el contraste de la nota
   let flujoAnalitico = iniciarProcesoAnalitico("notas.editor");
 
   const overlay = document.createElement("div");
@@ -67,7 +68,15 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   };
   const persistir = () => { clearTimeout(timer); timer = setTimeout(persistirAhora, 250); };
   const guardarAlSalir = () => { clearTimeout(timer); persistirAhora(); };
-  const selCambio = () => { const s = getSelection(); if (s.rangeCount && cuerpo.contains(s.anchorNode)) rangoGuardado = s.getRangeAt(0).cloneRange(); };
+  function actualizarFormato() { // negrita / cursiva / subrayado se iluminan según donde esté el cursor
+    const s = getSelection();
+    if (!s.rangeCount || !cuerpo.contains(s.anchorNode)) return;
+    for (const c of ["bold", "italic", "underline"]) {
+      const b = modal.querySelector(`[data-cmd="${c}"]`);
+      try { b?.setAttribute("aria-pressed", String(document.queryCommandState(c))); } catch (_) {}
+    }
+  }
+  const selCambio = () => { const s = getSelection(); if (s.rangeCount && cuerpo.contains(s.anchorNode)) { rangoGuardado = s.getRangeAt(0).cloneRange(); actualizarFormato(); } };
 
   const cerrarEditor = () => {
     if (cerrado) return;
@@ -100,12 +109,21 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const presets = coloresPaletaNota();
   const recientes = (opcionesNotas().colores_recientes || []).filter((c) => resolverColorNota(c) === c && !presets.includes(c)).slice(0, 4);
   const actual = resolverColorNota(borrador.color || opcionesNotas().color_default);
-  const aplicarColorNota = (color) => {
+  // El color de la nota también entra en Deshacer / Rehacer (los cambios seguidos, como arrastrar el selector, cuentan como uno).
+  const pilaColor = [actual]; let ic = 0, ultColorT = 0;
+  const pintarColorNota = (color) => {
     borrador.color = color;
     modal.style.setProperty("--nota-color", color);
-    opcionesNotas().colores_recientes = [color, ...(opcionesNotas().colores_recientes || []).filter((x) => x !== color)].slice(0, 8);
-    paleta.querySelectorAll("[aria-pressed]").forEach((x) => x.setAttribute("aria-pressed", "false"));
+    paleta.querySelectorAll(".notas-color").forEach((x) => x.setAttribute("aria-pressed", String(x.title === color)));
     refrescarSwatchTexto();
+    ajustarTintaAuto();
+  };
+  const aplicarColorNota = (color) => {
+    opcionesNotas().colores_recientes = [color, ...(opcionesNotas().colores_recientes || []).filter((x) => x !== color)].slice(0, 8);
+    const ahora = Date.now();
+    if (ahora - ultColorT < 700 && ic > 0) pilaColor[ic] = color; else { pilaColor.length = ic + 1; pilaColor.push(color); ic++; }
+    ultColorT = ahora; ultimoTipo = "c";
+    pintarColorNota(color);
     persistir();
   };
   const crearBotonColor = (color) => {
@@ -146,6 +164,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   /* --- Texto: pegar sin formato, pendientes, listas automáticas --- */
   titulo.addEventListener("input", persistir);
   cuerpo.addEventListener("input", (e) => {
+    limpiarEstilos();
     if (!e.inputType?.startsWith("history")) ultimoTipo = "t";
     if (e.inputType === "insertText" && /^[\s\u00a0]$/.test(e.data || "")) listaAutomatica();
     persistir();
@@ -178,6 +197,77 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     }
   }
 
+  /* --- Listas y pendientes: se aplican a la selección (o a la línea del cursor) sin reemplazar el texto --- */
+  const CB = "input[data-nota-check]";
+  const limpiarEstilos = () => cuerpo.querySelectorAll("[style]").forEach((n) => n.removeAttribute("style")); // el navegador agrega color fijo al unir líneas: se quita
+  const recuperarSeleccion = (dentro) => { if (!dentro && rangoGuardado) { const s = getSelection(); s.removeAllRanges(); s.addRange(rangoGuardado); } };
+  const baseDe = (nodo) => (nodo?.nodeType === 3 ? nodo.parentElement : nodo);
+  function lisSeleccion() { // elementos de lista tocados por la selección
+    const s = getSelection();
+    if (!s.rangeCount || !cuerpo.contains(s.anchorNode)) return [];
+    if (s.isCollapsed) { const li = baseDe(s.anchorNode)?.closest?.("li"); return li && cuerpo.contains(li) ? [li] : []; }
+    const r = s.getRangeAt(0);
+    return [...cuerpo.querySelectorAll("li")].filter((li) => r.intersectsNode(li));
+  }
+  function quitarCheckbox(li) { // borra el checkbox (y el espacio que lo acompaña) sin tocar el resto del texto
+    const cb = li.querySelector(CB);
+    if (!cb) return;
+    const r = document.createRange();
+    r.setStartBefore(cb);
+    const sig = cb.nextSibling;
+    if (sig && sig.nodeType === 3 && /^[\s\u00a0]/.test(sig.data)) r.setEnd(sig, 1); else r.setEndAfter(cb);
+    const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    document.execCommand("delete");
+  }
+  function insertarCheckbox(li) {
+    const r = document.createRange();
+    r.setStart(li, 0); r.collapse(true);
+    const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    document.execCommand("insertHTML", false, '<input type="checkbox" data-nota-check="1">&nbsp;');
+  }
+  function alternarChecklist() {
+    let lis = lisSeleccion();
+    if (lis.length && lis.every((li) => li.querySelector(CB))) { // ya son pendientes: se quitan los checkbox y la lista
+      for (const li of lis) {
+        const lista = li.parentElement.tagName === "OL" ? "insertOrderedList" : "insertUnorderedList";
+        const r = document.createRange(); r.selectNodeContents(li); r.collapse(true);
+        const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+        quitarCheckbox(li);
+        document.execCommand(lista);
+      }
+      return;
+    }
+    if (lis.some((li) => li.parentElement?.tagName === "OL")) { document.execCommand("insertOrderedList"); lis = lisSeleccion(); } // numerada -> se apaga y pasa a viñetas
+    if (!lis.length || lis.some((li) => li.parentElement?.tagName !== "UL")) { document.execCommand("insertUnorderedList"); lis = lisSeleccion(); }
+    if (!lis.length) { document.execCommand("insertHTML", false, '<ul><li><input type="checkbox" data-nota-check="1">&nbsp;</li></ul>'); return; }
+    for (const li of lis) if (!li.querySelector(CB)) insertarCheckbox(li);
+  }
+  function alternarLista(cmd) {
+    const lis = lisSeleccion().filter((li) => li.querySelector(CB));
+    if (lis.length) {
+      const r0 = getSelection().getRangeAt(0).cloneRange();
+      lis.forEach(quitarCheckbox);
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r0);
+      if (cmd === "insertUnorderedList") return; // los pendientes pasan a viñetas normales
+    }
+    document.execCommand(cmd);
+  }
+  // Retroceso al inicio de un elemento de lista (o justo después de su checkbox): quita la viñeta / número / checkbox y deja el texto.
+  cuerpo.addEventListener("keydown", (e) => {
+    if (e.key !== "Backspace" || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+    const s = getSelection();
+    if (!s.rangeCount || !s.isCollapsed) return;
+    const li = baseDe(s.anchorNode)?.closest?.("li");
+    if (!li || !cuerpo.contains(li)) return;
+    const r = document.createRange(); r.selectNodeContents(li); r.setEnd(s.anchorNode, s.anchorOffset);
+    if (r.cloneContents().textContent.replace(/[\s\u00a0]/g, "")) return; // hay texto antes del cursor: retroceso normal
+    e.preventDefault();
+    const lista = li.parentElement.tagName === "OL" ? "insertOrderedList" : "insertUnorderedList";
+    if (li.querySelector(CB)) quitarCheckbox(li);
+    document.execCommand(lista); // alterna: saca esta línea de la lista
+    limpiarEstilos(); ultimoTipo = "t"; persistir();
+  });
+
   cuerpo.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
     const li = window.getSelection()?.anchorNode?.parentElement?.closest("li");
@@ -186,7 +276,9 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     if (!contenidoLi) {
       e.preventDefault();
       const p = document.createElement("p"); p.innerHTML = "<br>";
-      li.parentElement.after(p);
+      const ulPend = li.parentElement;
+      ulPend.after(p);
+      li.remove(); if (!ulPend.querySelector("li")) ulPend.remove();
       const rango = document.createRange(); rango.selectNodeContents(p); rango.collapse(true);
       const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(rango);
       persistir(); return;
@@ -208,16 +300,29 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   });
 
   /* --- Deshacer / rehacer: actúan sobre lo último que tocaste (tinta o texto) --- */
-  const deshacerEditor = () => { if (ultimoTipo === "i" && capaTinta.puedeDeshacer()) { capaTinta.deshacer(); return; } cuerpo.focus(); document.execCommand("undo"); persistir(); };
-  const rehacerEditor = () => { if (ultimoTipo === "i" && capaTinta.puedeRehacer()) { capaTinta.rehacer(); return; } cuerpo.focus(); document.execCommand("redo"); persistir(); };
+  const deshacerEditor = () => {
+    if (ultimoTipo === "c" && ic > 0) { ic--; pintarColorNota(pilaColor[ic]); persistir(); return; }
+    if (ultimoTipo === "i" && capaTinta.puedeDeshacer()) { capaTinta.deshacer(); return; }
+    cuerpo.focus(); document.execCommand("undo"); persistir();
+  };
+  const rehacerEditor = () => {
+    if (ultimoTipo === "c" && ic < pilaColor.length - 1) { ic++; pintarColorNota(pilaColor[ic]); persistir(); return; }
+    if (ultimoTipo === "i" && capaTinta.puedeRehacer()) { capaTinta.rehacer(); return; }
+    cuerpo.focus(); document.execCommand("redo"); persistir();
+  };
 
+  modal.querySelectorAll("[data-cmd]").forEach((b) => b.addEventListener("mousedown", (ev) => ev.preventDefault())); // el botón no le quita la selección al texto
   modal.querySelectorAll("[data-cmd]").forEach((b) => b.onclick = () => {
     const cmd = b.dataset.cmd;
     if (cmd === "undo") return deshacerEditor();
     if (cmd === "redo") return rehacerEditor();
-    cuerpo.focus();
-    if (cmd === "check") document.execCommand("insertHTML", false, '<ul><li><input type="checkbox" data-nota-check="1"> </li></ul>');
+    const dentro = cuerpo.contains(getSelection().anchorNode);
+    cuerpo.focus(); recuperarSeleccion(dentro);
+    if (cmd === "check") alternarChecklist();
+    else if (cmd === "insertUnorderedList" || cmd === "insertOrderedList") alternarLista(cmd);
     else document.execCommand(cmd, false, null);
+    limpiarEstilos();
+    ultimoTipo = "t"; actualizarFormato();
     persistir();
   });
 
@@ -302,6 +407,12 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     if (!mod) return;
     const k = e.key.toLowerCase();
     if (k === "s") { e.preventDefault(); persistir(); return; }
+    // Ctrl+B negrita · Ctrl+K (y Ctrl+I) cursiva · Ctrl+U subrayado: aplican a la selección, o a lo que escribas a continuación.
+    const ac = document.activeElement;
+    if ((ac === cuerpo || cuerpo.contains(ac)) && !e.altKey && !e.shiftKey) {
+      const cmd = { b: "bold", i: "italic", k: "italic", u: "underline" }[k];
+      if (cmd) { e.preventDefault(); document.execCommand(cmd, false, null); ultimoTipo = "t"; actualizarFormato(); persistir(); return; }
+    }
     if ((k === "z" || k === "y") && !e.altKey) {
       if (e.target === titulo || e.target.matches?.("input, textarea")) return; // los campos de texto conservan su deshacer nativo
       e.preventDefault();
@@ -316,12 +427,16 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const btnLapiz = modal.querySelector('[data-tool="lapiz"]'), btnBorrador = modal.querySelector('[data-tool="borrador"]');
   const swTinta = modal.querySelector(".nt-swatch-tinta"), inpTinta = modal.querySelector(".nt-tinta-color");
   const pintarSwTinta = () => { swTinta.style.setProperty("--sw", inpTinta.value); swTinta.style.setProperty("--sw-fg", contraste(inpTinta.value)); };
-  inpTinta.value = opcionesNotas().color_tinta || "#172033";
+  // Tinta: clara sobre notas fuertes (modo oscuro) y oscura sobre notas suaves, hasta que elijas un color de tinta a mano.
+  let tintaManual = false;
+  const tintaAuto = () => contraste(resolverColorNota(borrador.color || opcionesNotas().color_default));
+  inpTinta.value = tintaAuto();
   capaTinta.establecerColor(inpTinta.value); pintarSwTinta();
+  ajustarTintaAuto = () => { if (tintaManual) return; inpTinta.value = tintaAuto(); capaTinta.establecerColor(inpTinta.value); pintarSwTinta(); };
   const fijarModo = (m) => { capaTinta.establecerModo(m); btnLapiz.setAttribute("aria-pressed", String(m === "lapiz")); btnBorrador.setAttribute("aria-pressed", String(m === "borrador")); };
   btnLapiz.onclick = () => fijarModo(capaTinta.obtenerModo() === "lapiz" ? null : "lapiz");
   btnBorrador.onclick = () => fijarModo(capaTinta.obtenerModo() === "borrador" ? null : "borrador");
-  inpTinta.oninput = () => { capaTinta.establecerColor(inpTinta.value); opcionesNotas().color_tinta = inpTinta.value; pintarSwTinta(); if (capaTinta.obtenerModo() !== "lapiz") fijarModo("lapiz"); };
+  inpTinta.oninput = () => { tintaManual = true; capaTinta.establecerColor(inpTinta.value); pintarSwTinta(); if (capaTinta.obtenerModo() !== "lapiz") fijarModo("lapiz"); };
   cuerpo.addEventListener("pointermove", (e) => { if (e.pointerType === "pen" && !capaTinta.obtenerModo()) fijarModo("lapiz"); });
   requestAnimationFrame(() => cuerpo.focus());
 }

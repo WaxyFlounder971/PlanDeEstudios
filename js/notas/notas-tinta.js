@@ -192,7 +192,10 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
     rect = canvas.getBoundingClientRect();
     activo = true; congelado = false; huboBorrado = false;
     // El extremo borrador del lápiz óptico borra aunque esté el modo lápiz.
-    modoActivo = e.pointerType === "pen" && (e.buttons & 32 || e.button === 5) ? "borrador" : modo;
+    // Lápiz óptico: el extremo borrador siempre borra; el botón lateral invierte la herramienta mientras lo mantienes (lápiz <-> borrador).
+    const puntaBorrador = e.pointerType === "pen" && !!((e.buttons & 32) || e.button === 5);
+    const botonLateral = e.pointerType === "pen" && !puntaBorrador && !!((e.buttons & 2) || e.button === 2);
+    modoActivo = puntaBorrador ? "borrador" : botonLateral ? (modo === "lapiz" ? "borrador" : "lapiz") : modo;
     const pt = punto(e);
     if (modoActivo === "lapiz") {
       if (contarPuntos(obtenerTrazos()) >= MAX_PUNTOS) { activo = false; return; }
@@ -247,6 +250,7 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
     }
     actual = null;
   };
+  canvas.addEventListener("contextmenu", (e) => { if (modo) e.preventDefault(); }); // el botón del lápiz no abre el menú del navegador
   canvas.addEventListener("pointerup", terminar);
   canvas.addEventListener("pointercancel", terminar);
   // El canvas tapa el cuerpo: reenvía la rueda para poder hacer scroll.

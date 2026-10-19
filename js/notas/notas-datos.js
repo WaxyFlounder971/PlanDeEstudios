@@ -19,7 +19,7 @@ function hslAHex(h, s, l) {
   const [R, G, B] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
   return "#" + [R, G, B].map((v) => Math.round((v + m) * 255).toString(16).padStart(2, "0")).join("");
 }
-function aOscuro(hex) {
+function aOscuroSuave(hex) {
   const n = parseInt(hex.slice(1), 16);
   const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
   const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
@@ -37,14 +37,18 @@ const OSCUROS_ANTERIORES = [
   ["#cf1b34", "#d75618", "#d2c117", "#7b8c4c", "#5b917f", "#4a9794"],
   ["#e63d54", "#d75618", "#d2c117", "#7b8c4c", "#5b917f", "#4a9794"],
 ];
+// Modo oscuro: una versión MÁS FUERTE de cada color de la paleta (mismo tono), pensada para letra y tinta claras
+// (contraste con blanco ≥ 4.9). Es el opuesto de los tonos suaves del modo claro, que llevan letra oscura.
+const COLORES_NOTA_OSCURO = ["#cd1932", "#b04816", "#826f00", "#5a7020", "#22765a", "#1a7471"];
 function modoOscuro() { const modo = document.documentElement.getAttribute("data-mode"); return modo === "dark" || modo === "true-dark"; }
-function coloresPaletaNota() { return modoOscuro() ? COLORES_NOTA.map(aOscuro) : COLORES_NOTA; }
+function coloresPaletaNota() { return modoOscuro() ? COLORES_NOTA_OSCURO : COLORES_NOTA; }
 // Si el color guardado es uno de los predefinidos (claro u oscuro), lo muestra en la versión del modo actual.
 function resolverColorNota(hex) {
-  const claros = COLORES_NOTA, oscuros = COLORES_NOTA.map(aOscuro);
+  const claros = COLORES_NOTA, oscuros = COLORES_NOTA_OSCURO, suaves = COLORES_NOTA.map(aOscuroSuave); // "suaves": oscuros de la versión anterior
   hex = String(hex || "").toLowerCase();
   let i = claros.indexOf(hex);
   if (i < 0) i = oscuros.indexOf(hex);
+  if (i < 0) i = suaves.indexOf(hex);
   if (i < 0) for (const lista of OSCUROS_ANTERIORES) { const k = lista.indexOf(hex); if (k >= 0) { i = k; break; } }
   return i >= 0 ? coloresPaletaNota()[i] : hex;
 }
@@ -130,4 +134,4 @@ function agendaNotas() {
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { procesarCicloVidaNotas(); agendaNotas(); } });
 window.addEventListener("notas:actualizadas", () => {});
 
-export { MAX_CARACTERES_NOTA, COLORES_NOTA, COLOR_DEFECTO, resolverColorNota, coloresPaletaNota, notasActuales, opcionesNotas, crearNota, obtenerNota, guardarNota, marcarEliminada, restaurarNota, eliminarDefinitiva, procesarCicloVidaNotas, agendaNotas };
+export { MAX_CARACTERES_NOTA, COLORES_NOTA, COLORES_NOTA_OSCURO, COLOR_DEFECTO, resolverColorNota, coloresPaletaNota, notasActuales, opcionesNotas, crearNota, obtenerNota, guardarNota, marcarEliminada, restaurarNota, eliminarDefinitiva, procesarCicloVidaNotas, agendaNotas };
