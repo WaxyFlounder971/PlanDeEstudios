@@ -35,9 +35,8 @@ function notasVisibles() {
 }
 
 // Orden de la lista: las fijadas van primero en el orden que les diste (arrastrando); las demás por fecha, ascendente o descendente.
-const CAMPOS_ORDEN = [["modificada", "Modificada"], ["creada", "Creada"], ["vence", "Vencimiento"]];
 function comparadorNotas() {
-  const { campo = "modificada", dir = "desc" } = opcionesNotas().orden || {};
+  const { dir = "desc" } = opcionesNotas().orden || {}; const campo = "modificada";
   const valor = (n) => (campo === "creada" ? n.creada_en || 0 : campo === "vence" ? (n.vence_en ? Date.parse(`${n.vence_en}T12:00:00`) : null) : n.modificada_en || 0);
   return (a, b) => {
     if (a.fijada !== b.fijada) return Number(b.fijada) - Number(a.fijada);
@@ -209,15 +208,32 @@ const columnasDe = (grid) => {
   return !c || c === "none" ? 1 : c.split(" ").filter(Boolean).length;
 };
 const anchoVisible = (grid, deseado) => (grid.classList.contains("notas-lista") ? 1 : Math.max(1, Math.min(Number(deseado) || 1, MAX_ANCHO, columnasDe(grid))));
+function geometria(grid) {
+  const cs = getComputedStyle(grid), cols = columnasDe(grid), hueco = parseFloat(cs.columnGap) || 0;
+  const izq = grid.getBoundingClientRect().left + (parseFloat(cs.paddingLeft) || 0);
+  const util = grid.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+  return { cols, hueco, izq, colW: (util - hueco * (cols - 1)) / cols };
+}
+// Los tiradores aparecen del lado donde hay espacio: a la derecha si la nota está pegada a la izquierda, a la izquierda si está pegada a la derecha, a ambos lados si está en medio.
 function aplicarAnchos(grid) {
-  grid.querySelectorAll(":scope > .nota-card").forEach((c) => {
+  if (!grid.isConnected) return;
+  const cards = [...grid.querySelectorAll(":scope > .nota-card")];
+  for (const c of cards) {
     const w = anchoVisible(grid, c.dataset.ancho);
     c.style.gridColumn = w > 1 ? `span ${w}` : "";
     c.classList.toggle("nota-ancha", w > 1);
-  });
+  }
+  const g = geometria(grid);
+  for (const c of cards) {
+    const w = anchoVisible(grid, c.dataset.ancho);
+    const col = Math.max(0, Math.min(g.cols - 1, Math.round((c.getBoundingClientRect().left - g.izq) / (g.colW + g.hueco))));
+    const hayIzq = g.cols > 1 && col > 0, hayDer = g.cols > 1 && col + w - 1 < g.cols - 1;
+    c.dataset.lados = hayIzq && hayDer ? "ambos" : hayIzq ? "izq" : "der";
+  }
 }
+const aplicarTodosAnchos = (cont) => cont.querySelectorAll(".notas-grid").forEach(aplicarAnchos);
 
-function iniciarEstirar(e, card, nota) {
+function iniciarEstirar(e, card, nota, lado) {
   if (e.pointerType === "mouse" && e.button !== 0) return;
   const grid = card.parentElement;
   if (!grid) return;
@@ -227,8 +243,7 @@ function iniciarEstirar(e, card, nota) {
   e.preventDefault(); e.stopPropagation();
   const id = e.pointerId, asa = e.currentTarget;
   try { asa.setPointerCapture(id); } catch (_) {}
-  const cs = getComputedStyle(grid), hueco = parseFloat(cs.columnGap) || 0;
-  const colW = (grid.clientWidth - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0) - hueco * (cols - 1)) / cols;
+  const { colW, hueco } = geometria(grid), signo = lado === "izq" ? -1 : 1;
   const inicio = anchoVisible(grid, card.dataset.ancho), x0 = e.clientX;
   let span = inicio, terminado = false;
   card.classList.add("nota-estirando");
@@ -244,7 +259,7 @@ function iniciarEstirar(e, card, nota) {
   };
   const mover = (ev) => {
     if (ev.pointerId !== id) return;
-    const px = inicio * colW + (inicio - 1) * hueco + (ev.clientX - x0);
+    const px = inicio * colW + (inicio - 1) * hueco + signo * (ev.clientX - x0);
     span = Math.max(1, Math.min(tope, Math.round((px + hueco) / (colW + hueco))));
     card.style.gridColumn = span > 1 ? `span ${span}` : "";
   };
@@ -330,11 +345,13 @@ function construirTarjeta(nota) {
   const mini = crearMiniTinta(nota.tinta);
   card.append(...[top, h, preview, mini, expand, foot].filter(Boolean));
   if (!enPapelera) {
-    const estirar = el("span", "nota-resize");
-    estirar.title = tr("Arrastra para ensanchar"); estirar.setAttribute("aria-hidden", "true");
-    estirar.addEventListener("pointerdown", (e) => iniciarEstirar(e, card, nota));
-    estirar.addEventListener("click", (e) => e.stopPropagation());
-    card.append(estirar);
+    for (const lado of ["izq", "der"]) {
+      const estirar = el("span", `nota-resize nota-resize-${lado}`);
+      estirar.title = tr("Arrastra para ensanchar"); estirar.setAttribute("aria-hidden", "true");
+      estirar.addEventListener("pointerdown", (e) => iniciarEstirar(e, card, nota, lado));
+      estirar.addEventListener("click", (e) => e.stopPropagation());
+      card.append(estirar);
+    }
   }
 
   let pressTimer = null, longPress = false;
@@ -458,7 +475,7 @@ function selectorVista(root) {
       opcionesNotas().vista = valor; sellarTimestamp(estado.datos.configuracion); marcarCambioPendiente();
       const aplicar = () => {
         root.querySelectorAll(".notas-grid").forEach((g) => g.classList.toggle("notas-lista", valor === "lista"));
-        root.querySelectorAll(".notas-grid").forEach(aplicarAnchos);
+        aplicarTodosAnchos(root);
         grupo.querySelectorAll("[role=radio]").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
       };
       if (document.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches) document.startViewTransition(aplicar); else aplicar();
@@ -490,7 +507,7 @@ function renderizarNotas() {
   const search = el("input", "form-input notas-busqueda visible");
   search.id = "notas-busqueda"; search.type = "search"; search.placeholder = tr("Buscar notas"); search.setAttribute("aria-label", tr("Buscar notas"));
   const barra = el("div", "notas-toolbar-vista");
-  barra.append(search, selectorVista(root));
+  barra.append(search);
   root.append(barra);
 
   const filtros = el("div", "row notas-filtros");
@@ -510,9 +527,8 @@ function renderizarNotas() {
   due.onclick = () => { due.setAttribute("aria-pressed", String(due.getAttribute("aria-pressed") !== "true")); repintar(); };
   if (color.childElementCount) { filtros.append(color); const s = el("span", "nt-vsep"); s.setAttribute("aria-hidden", "true"); filtros.append(s); }
   filtros.append(due);
-  root.append(filtros);
 
-  // Orden (en su propia línea): dirección | fecha por la que se ordenan las notas no fijadas.
+  // A la derecha de la línea de filtros: ↓ ↑ (orden por fecha de modificación) y cuadrícula / lista.
   const segmentado = (opciones, valor, etiqueta, alCambiar) => {
     const g = el("div", "nt-seg nt-seg-compacto");
     g.setAttribute("role", "radiogroup"); g.setAttribute("aria-label", etiqueta);
@@ -524,24 +540,22 @@ function renderizarNotas() {
     }
     return g;
   };
-  const ordenActual = opcionesNotas().orden || { campo: "modificada", dir: "desc" };
+  const ordenActual = opcionesNotas().orden || { dir: "desc" };
   const guardarOrden = (cambio) => {
     const o = opcionesNotas();
     o.orden = { campo: "modificada", dir: "desc", ...(o.orden || {}), ...cambio };
     sellarTimestamp(estado.datos.configuracion); marcarCambioPendiente();
     repintar();
   };
+  const derecha = el("div", "nt-filtros-der");
   if (notasActuales().filter((n) => !n.eliminada_en).length > 1) {
-    const orden = el("div", "row notas-orden");
-    const sepOrden = el("span", "nt-vsep"); sepOrden.setAttribute("aria-hidden", "true");
-    orden.append(
-      segmentado([["desc", `↓ ${tr("Descendente")}`], ["asc", `↑ ${tr("Ascendente")}`]], ordenActual.dir || "desc", tr("Dirección del orden"), (v) => guardarOrden({ dir: v })),
-      sepOrden,
-      el("span", "nt-orden-etq", tr("Fecha")),
-      segmentado(CAMPOS_ORDEN.map(([v, t]) => [v, tr(t)]), ordenActual.campo || "modificada", tr("Fecha por la que se ordena"), (v) => guardarOrden({ campo: v })),
-    );
-    root.append(orden);
+    const dir = segmentado([["desc", "↓"], ["asc", "↑"]], ordenActual.dir || "desc", tr("Dirección del orden"), (v) => guardarOrden({ dir: v }));
+    dir.querySelectorAll("[role=radio]").forEach((b, i) => { const n = tr(i === 0 ? "Descendente" : "Ascendente"); b.title = n; b.setAttribute("aria-label", n); });
+    derecha.append(dir);
   }
+  derecha.append(selectorVista(root));
+  filtros.append(derecha);
+  root.append(filtros);
 
   // Arriba las fijadas, luego una línea divisora y debajo todas las demás notas.
   const contenido = el("div", "notas-grupos");
@@ -564,15 +578,16 @@ function renderizarNotas() {
       const g = el("div", claseGrid); g.append(vacio); nodos.push(g);
     }
     contenido.replaceChildren(...nodos);
-    contenido.querySelectorAll(".notas-grid").forEach(aplicarAnchos);
+    if (contenido.isConnected) aplicarTodosAnchos(contenido);
   };
   const repintar = pintarGrupos;
   pintarGrupos();
   root.append(contenido);
+  aplicarTodosAnchos(contenido); // ya está en la página: ahora sí se pueden medir las columnas
   observadorAnchos?.disconnect();
   if (typeof ResizeObserver === "function") { // al girar el teléfono o cambiar el tamaño, se recalcula cuántas columnas caben
     let ultimoAncho = contenido.clientWidth;
-    observadorAnchos = new ResizeObserver(() => { if (contenido.clientWidth !== ultimoAncho) { ultimoAncho = contenido.clientWidth; contenido.querySelectorAll(".notas-grid").forEach(aplicarAnchos); } });
+    observadorAnchos = new ResizeObserver(() => { if (contenido.clientWidth !== ultimoAncho) { ultimoAncho = contenido.clientWidth; aplicarTodosAnchos(contenido); } });
     observadorAnchos.observe(contenido);
   }
   if (seleccion.size) root.append(barraSeleccion());

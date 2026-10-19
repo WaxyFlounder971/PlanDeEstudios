@@ -193,13 +193,21 @@ html[data-rendimiento="reducido"] .nt-sticky-overlay{background:rgba(0,0,0,.85);
 /* ===== Ancho de nota (arrastrar el borde derecho) ===== */
 .nota-card{position:relative}
 .notas-grid-otras:not(.notas-lista){grid-auto-flow:row dense}
-.nota-resize{position:absolute;top:18%;bottom:18%;right:0;width:16px;display:grid;place-items:center;cursor:ew-resize;touch-action:none;opacity:0;transition:opacity .15s;z-index:2}
+.nota-resize{position:absolute;top:18%;bottom:18%;width:16px;display:none;place-items:center;cursor:ew-resize;touch-action:none;opacity:0;transition:opacity .15s;z-index:2}
+.nota-resize-der{right:0}.nota-resize-izq{left:0}
+.nota-card[data-lados="der"] .nota-resize-der,.nota-card[data-lados="izq"] .nota-resize-izq,.nota-card[data-lados="ambos"] .nota-resize{display:grid}
 .nota-resize::after{content:"";width:4px;height:36px;max-height:100%;border-radius:4px;background:currentColor;opacity:.4}
 .nota-card:hover .nota-resize,.nota-card.nota-estirando .nota-resize,.nota-card.nota-ancha .nota-resize{opacity:1}
 @media(hover:none){.nota-resize{opacity:1;width:20px}}
-.notas-lista .nota-resize,body.notas-seleccionando .nota-resize{display:none}
+.notas-lista .nota-resize,body.notas-seleccionando .nota-resize{display:none!important}
 .nota-card.nota-estirando{transition:none!important;outline:2px dashed color-mix(in srgb,currentColor,transparent 55%);outline-offset:-3px}
 body:has(.nota-estirando){user-select:none;-webkit-user-select:none;cursor:ew-resize}
+
+/* ===== Línea de filtros: ↓ ↑ y cuadrícula/lista anclados a la derecha ===== */
+.notas-filtros{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.nt-filtros-der{display:flex;align-items:center;gap:8px;margin-left:auto}
+.nt-filtros-der .nt-seg-compacto{padding:4px;border-radius:14px}
+.nt-filtros-der .nt-seg-compacto .nt-seg-op{width:40px;min-height:36px;padding:0;border-radius:10px;font-size:1.05rem;line-height:1}
 `;
 
 function inyectarEstilosNotas() {
