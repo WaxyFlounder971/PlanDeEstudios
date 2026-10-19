@@ -5,14 +5,37 @@ import { sanearHTMLNota, textoPlanoNota } from "./notas-sanitizar.js";
 import { registrarAnaliticaUso } from "../core/analitica.js";
 
 const MAX_CARACTERES_NOTA = 10000;
-const COLORES_NOTA = ["#fff2b3", "#ffd9d9", "#d9f2e6", "#dce8ff", "#f1dcff", "#ffe2c2", "#d9f3f5", "#f3e8d1"];
-function coloresPaletaNota(){const modo=document.documentElement.getAttribute("data-mode");if(modo!=="dark"&&modo!=="true-dark")return COLORES_NOTA;return COLORES_NOTA.map(hex=>{const n=parseInt(hex.slice(1),16);return "#"+[16,8,0].map(s=>Math.round(((n>>s)&255)*.68).toString(16).padStart(2,"0")).join("");});}
+// Paleta base (modo claro): tonos de notas adhesivas.
+const COLORES_NOTA = ["#fd97a5", "#ffbd9d", "#fff594", "#c6d4a1", "#bcdad0", "#a8dcda"];
+const COLOR_DEFECTO = "#fff594";
+// Misma tonalidad y saturación, solo más oscuro (no gris ni apagado).
+function aOscuro(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0, l = (mx + mn) / 2;
+  let s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  if (d) { if (mx === r) h = ((g - b) / d) % 6; else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4; h *= 60; if (h < 0) h += 360; }
+  l *= 0.58; s = s * 0.8;
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+  const [R, G, B] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return "#" + [R, G, B].map((v) => Math.round((v + m) * 255).toString(16).padStart(2, "0")).join("");
+}
+function modoOscuro() { const modo = document.documentElement.getAttribute("data-mode"); return modo === "dark" || modo === "true-dark"; }
+function coloresPaletaNota() { return modoOscuro() ? COLORES_NOTA.map(aOscuro) : COLORES_NOTA; }
+// Si el color guardado es uno de los predefinidos (claro u oscuro), lo muestra en la versión del modo actual.
+function resolverColorNota(hex) {
+  const claros = COLORES_NOTA, oscuros = COLORES_NOTA.map(aOscuro);
+  const i = claros.indexOf(hex) >= 0 ? claros.indexOf(hex) : oscuros.indexOf(hex);
+  return i >= 0 ? coloresPaletaNota()[i] : hex;
+}
 let timerVaciarPapelera = null;
 
 function notasActuales() { if (!estado.datos) return []; return estado.datos.notas || (estado.datos.notas = []); }
 function opcionesNotas() {
   const cfg = estado.datos.configuracion;
-  cfg.notas_ajustes ||= { vencimiento_default: false, plazo_default: "3_dias", color_default: COLORES_NOTA[0], vista: "cuadricula", papelera_despues_wapper: false, compartir_accion: "guardar", completadas_al_final: true, colores_recientes: [] };
+  cfg.notas_ajustes ||= { vencimiento_default: false, plazo_default: "3_dias", color_default: COLOR_DEFECTO, vista: "cuadricula", papelera_despues_wapper: false, compartir_accion: "guardar", completadas_al_final: true, colores_recientes: [] };
+  if (cfg.notas_ajustes.color_default === "#fff2b3") cfg.notas_ajustes.color_default = COLOR_DEFECTO;
   return cfg.notas_ajustes;
 }
 function guardarCambio() {
@@ -24,7 +47,7 @@ function crearNota(datos = {}) {
   return sellarTimestamp({
     id: datos.id || `nota_${crypto.randomUUID?.() || marca + "_" + Math.random().toString(36).slice(2)}`,
     titulo: String(datos.titulo || "").slice(0, 180), contenido: sanearHTMLNota(datos.contenido || ""),
-    color: datos.color || opcionesNotas().color_default || COLORES_NOTA[0], fijada: Boolean(datos.fijada), orden_fijada: datos.orden_fijada ?? null,
+    color: datos.color || resolverColorNota(opcionesNotas().color_default) || COLOR_DEFECTO, fijada: Boolean(datos.fijada), orden_fijada: datos.orden_fijada ?? null,
     vence_en: datos.vence_en || null, eliminada_en: null, motivo_eliminacion: null, enviada_a_wapper_en: datos.enviada_a_wapper_en || null,
     origen: datos.origen === "compartida" ? "compartida" : "manual", creada_en: datos.creada_en || marca, modificada_en: marca, _pendienteSync: true,
   });
@@ -86,4 +109,4 @@ function agendaNotas() {
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { procesarCicloVidaNotas(); agendaNotas(); } });
 window.addEventListener("notas:actualizadas", () => {});
 
-export { MAX_CARACTERES_NOTA, COLORES_NOTA, coloresPaletaNota, notasActuales, opcionesNotas, crearNota, obtenerNota, guardarNota, marcarEliminada, restaurarNota, eliminarDefinitiva, procesarCicloVidaNotas, agendaNotas };
+export { MAX_CARACTERES_NOTA, COLORES_NOTA, COLOR_DEFECTO, resolverColorNota, coloresPaletaNota, notasActuales, opcionesNotas, crearNota, obtenerNota, guardarNota, marcarEliminada, restaurarNota, eliminarDefinitiva, procesarCicloVidaNotas, agendaNotas };
