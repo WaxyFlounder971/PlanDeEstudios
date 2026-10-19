@@ -115,15 +115,26 @@ body.nota-arrastrando-body{user-select:none;-webkit-user-select:none;cursor:grab
 .notas-editor .notas-editor-actions .nt-ico{width:17px;height:17px}
 
 /* ===== Tarjetas: 6 botones en una fila ===== */
-.nota-card .nota-card-top-solo{justify-content:flex-end}
+.nota-card .nota-card-top{display:flex;align-items:center;justify-content:space-between;gap:6px;min-height:28px}
+.nota-card .nota-card-badges{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}
+.nota-card .nota-card-top .nota-drag-handle{flex:none;margin-left:auto}
 .nota-card .nota-card-foot{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 .nota-card .nota-card-actions{display:flex;flex:1 1 100%;align-items:center;justify-content:space-between;gap:2px;width:100%;margin:0}
 .nota-card .nota-icon-action{display:inline-grid;place-items:center;min-width:32px;height:32px;padding:0}
 .nota-card .nota-icon-action .nt-ico{width:17px;height:17px}
 .nota-card .nota-icon-action.activo .nt-ico{fill:currentColor}
-.nt-vsep{flex:none;width:1px;height:18px;background:currentColor;opacity:.25;margin:0 2px}
+.nt-vsep{flex:none;width:1px;height:18px;background:currentColor;opacity:.35;margin:0 2px}
 .nota-card.nota-flotando{opacity:.62}
-.nota-card.nota-flotando .nota-card-foot .nt-chip-flot{display:inline-flex}
+.nota-card.nota-flotando .nt-chip-flot{display:inline-flex}
+/* Borrar: sombreado rojo al pasar el cursor, al enfocar o al presionar */
+.nota-card .nota-icon-action.nota-eliminar-action{transition:background .15s,color .15s}
+.nota-card .nota-icon-action.nota-eliminar-action:hover,.nota-card .nota-icon-action.nota-eliminar-action:focus-visible{background:rgba(220,38,38,.2);color:#b42335}
+.nota-card .nota-icon-action.nota-eliminar-action:active{background:rgba(220,38,38,.38);color:#9f1239}
+/* Filtros: "Con vencimiento" como botón del estilo de las bolitas */
+.notas-filtros .nt-vsep{height:22px;margin:0 4px}
+.notas-filtros .nt-filtro-vence{display:inline-flex;align-items:center;gap:6px;width:auto;padding:0 12px;border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:.82rem;font-weight:600;white-space:nowrap;transition:background .15s}
+.notas-filtros .nt-filtro-vence:hover{background:color-mix(in srgb,currentColor,transparent 90%)}
+.notas-filtros .nt-filtro-vence[aria-pressed="true"]{background:color-mix(in srgb,var(--accent-2,#b7a5f4),transparent 78%)}
 .nt-chip-flot{display:none;align-items:center;gap:5px;padding:2px 9px;border-radius:999px;font-size:.74rem;font-weight:700;background:rgba(0,0,0,.14)}
 .nt-chip-flot .nt-ico{width:12px;height:12px}
 

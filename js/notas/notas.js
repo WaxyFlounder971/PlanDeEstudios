@@ -25,7 +25,7 @@ function normalizar(s) { return String(s || "").normalize("NFD").replace(/[\u030
 function notasVisibles() {
   const q = normalizar(document.querySelector("#notas-busqueda")?.value);
   const color = document.querySelector("#notas-filtro-color")?.dataset.value;
-  const vence = document.querySelector("#notas-filtro-vence")?.checked;
+  const vence = document.querySelector("#notas-filtro-vence")?.getAttribute("aria-pressed") === "true";
   return notasActuales()
     .filter((n) => (enPapelera ? !!n.eliminada_en : !n.eliminada_en))
     .filter((n) => !q || normalizar(n.titulo + " " + textoPlanoNota(n.contenido)).includes(q))
@@ -173,11 +173,10 @@ function construirTarjeta(nota) {
   card.classList.toggle("seleccionada", seleccion.has(nota.id));
   card.classList.toggle("nota-flotando", estaFlotando(nota.id));
 
-  // Arriba solo queda el asa de arrastre (únicamente en notas fijadas).
-  let top = null;
+  // Arriba: insignias (vencimiento, pendientes, Wapper, flotante) a la izquierda y el asa de arrastre (solo fijadas) a la derecha.
+  let asa = null;
   if (nota.fijada) {
-    top = el("header", "nota-card-top nota-card-top-solo");
-    const asa = el("button", "nota-icon-action nota-drag-handle");
+    asa = el("button", "nota-icon-action nota-drag-handle");
     asa.type = "button"; asa.innerHTML = ICONOS.asa; asa.title = tr("Arrastrar para reordenar"); asa.setAttribute("aria-label", asa.title);
     asa.onclick = (e) => e.stopPropagation();
     asa.addEventListener("pointerdown", (e) => iniciarArrastre(e, card, asa));
@@ -185,7 +184,6 @@ function construirTarjeta(nota) {
       const d = { ArrowUp: -1, ArrowLeft: -1, ArrowDown: 1, ArrowRight: 1 }[e.key];
       if (d) { e.preventDefault(); e.stopPropagation(); moverFijada(nota, d); }
     });
-    top.append(asa);
   }
 
   const h = nota.titulo ? el("strong", "nota-titulo-card", nota.titulo) : null;
@@ -204,27 +202,36 @@ function construirTarjeta(nota) {
   };
   requestAnimationFrame(() => { if (preview.scrollHeight <= preview.clientHeight + 1) expand.remove(); });
 
-  const foot = el("footer", "nota-card-foot");
-  if (nota.vence_en) foot.append(el("span", "badge badge-warning", `⏳ ${fechaCorta(nota.vence_en)}`));
+  // Fila superior: insignias a la izquierda, asa de arrastre a la derecha (solo si hay algo que mostrar).
+  const insignias = el("div", "nota-card-badges");
+  if (nota.vence_en) insignias.append(el("span", "badge badge-warning", `⏳ ${fechaCorta(nota.vence_en)}`));
   const checks = preview.querySelectorAll("input[type=checkbox]");
-  if (checks.length) foot.append(el("span", "badge badge-info", `${[...checks].filter((c) => c.checked).length}/${checks.length}`));
-  if (nota.enviada_a_wapper_en) foot.append(el("span", "badge badge-purple", `✨ ${tr("Enviada a Wapper")}`));
+  if (checks.length) insignias.append(el("span", "badge badge-info", `${[...checks].filter((c) => c.checked).length}/${checks.length}`));
+  if (nota.enviada_a_wapper_en) insignias.append(el("span", "badge badge-purple", `✨ ${tr("Enviada a Wapper")}`));
   const chipFlot = el("span", "nt-chip-flot"); chipFlot.innerHTML = ICONOS.flotar; chipFlot.append(document.createTextNode(tr("Flotante")));
-  foot.append(chipFlot);
+  insignias.append(chipFlot);
+  let top = null;
+  if (asa || insignias.querySelector(".badge") || estaFlotando(nota.id)) {
+    top = el("header", "nota-card-top");
+    top.append(insignias);
+    if (asa) top.append(asa);
+  }
 
-  // Seis botones seguidos: Anclar · Flotar · Wapper · Compartir | Duplicar · Borrar
+  // Seis botones en tres grupos: Anclar · Flotar | Wapper · Compartir | Duplicar · Borrar
+  const foot = el("footer", "nota-card-foot");
   const acciones = el("div", "nota-card-actions");
   const flotando = estaFlotando(nota.id);
+  const sep = () => { const s = el("span", "nt-vsep"); s.setAttribute("aria-hidden", "true"); return s; };
   acciones.append(
     botonIcono({ icono: ICONOS.anclar, titulo: tr(nota.fijada ? "Desfijar" : "Fijar"), clase: "nota-pin-action", activo: !!nota.fijada, onclick: (e) => { e.stopPropagation(); alternarFijada(nota); } }),
     botonIcono({ icono: flotando ? ICONOS.quitarFlotante : ICONOS.flotar, titulo: tr(flotando ? "Quitar de flotante" : "Dejar flotante"), clase: "nota-flotar-action", activo: flotando, onclick: (e) => { e.stopPropagation(); alternarFlotante(nota.id, card); renderizarNotas(); } }),
+    sep(),
     botonIcono({ icono: "✨", titulo: tr("Enviar a Wapper"), onclick: (e) => { e.stopPropagation(); wapperNota(nota); } }),
     botonIcono({ icono: ICONOS.compartir, titulo: tr("Compartir"), onclick: (e) => { e.stopPropagation(); compartirNota(nota); } }),
-    el("span", "nt-vsep"),
+    sep(),
     botonIcono({ icono: ICONOS.duplicar, titulo: tr("Duplicar"), onclick: (e) => { e.stopPropagation(); clonarNota(nota); } }),
     botonIcono({ icono: "🗑️", titulo: tr("Eliminar"), clase: "nota-eliminar-action", onclick: (e) => { e.stopPropagation(); eliminarConConfirmacion(nota); } }),
   );
-  acciones.querySelector(".nt-vsep").setAttribute("aria-hidden", "true");
   foot.append(acciones);
 
   const mini = crearMiniTinta(nota.tinta);
@@ -393,9 +400,11 @@ function renderizarNotas() {
     b.onclick = () => setColor(color.dataset.value === c ? "" : c);
     color.append(b);
   });
-  const due = el("label");
-  due.innerHTML = `<input id="notas-filtro-vence" type="checkbox"> ⏳ ${tr("Con vencimiento")}`;
-  if (color.childElementCount) filtros.append(color);
+  // "Con vencimiento": botón con el mismo estilo que las bolitas de color (se ilumina al activarlo).
+  const due = el("button", "notas-color nt-filtro-vence", `⏳ ${tr("Con vencimiento")}`);
+  due.id = "notas-filtro-vence"; due.type = "button"; due.setAttribute("aria-pressed", "false");
+  due.onclick = () => { due.setAttribute("aria-pressed", String(due.getAttribute("aria-pressed") !== "true")); repintar(); };
+  if (color.childElementCount) { filtros.append(color); const s = el("span", "nt-vsep"); s.setAttribute("aria-hidden", "true"); filtros.append(s); }
   filtros.append(due);
   root.append(filtros);
 
@@ -414,7 +423,7 @@ function renderizarNotas() {
   root.append(lista);
   if (seleccion.size) root.append(barraSeleccion());
   const repintar = () => lista.replaceChildren(...notasVisibles().map(construirTarjeta));
-  search.oninput = repintar; color.onchange = repintar; due.querySelector("input").onchange = repintar;
+  search.oninput = repintar; color.onchange = repintar;
   restaurarFlotantes();
   window.dispatchEvent(new Event("notas:actualizadas-ui"));
 }
