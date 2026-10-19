@@ -171,11 +171,35 @@ body.nota-arrastrando-body{user-select:none;-webkit-user-select:none;cursor:grab
 .nt-flot-cuerpo::-webkit-scrollbar{display:none}
 @media(prefers-reduced-motion:reduce){.nt-sticky,.nt-flotante{transition:none!important}}
 
+/* ===== Cabecera: botones circulares perfectos ===== */
+.notas-cab-acciones .nt-btn-circulo{display:inline-grid;place-items:center;flex:none;width:46px;height:46px;min-width:46px;min-height:46px;padding:0;border-radius:50%;line-height:1}
+.nt-btn-circulo .nt-ico{width:20px;height:20px}
+
+/* ===== Orden y grupos: fijadas · línea · demás ===== */
+.notas-orden{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px}
+.nt-orden-etq{font-size:.8rem;font-weight:700;color:var(--nt-muted,rgba(255,255,255,.62))}
+.nt-seg-compacto{flex-wrap:nowrap;padding:3px;border-radius:14px;width:auto}
+.nt-seg-compacto .nt-seg-op{flex:0 0 auto;min-height:32px;padding:5px 12px;font-size:.82rem;white-space:nowrap}
+.notas-orden .nt-vsep{height:22px;margin:0 2px}
+.notas-grupos{display:flex;flex-direction:column;gap:16px}
+.nt-divisor{width:100%;height:0;margin:2px 0;border:0;border-top:2px solid color-mix(in srgb,currentColor,transparent 72%);border-radius:2px}
+
 /* ===== Modo optimizado (data-rendimiento="reducido"): design-system.css pinta .glass-card con un fondo sólido oscuro
    que le ganaba a --nota-color; la tarjeta perdía su color pero la letra seguía calculada para ese color. Se devuelve el color de la nota. ===== */
 html[data-rendimiento="reducido"] .glass-card.nota-card{background-color:var(--nota-color,#fff594);background-image:none;border-color:color-mix(in srgb,var(--nota-color,#fff594),#111 18%);box-shadow:0 2px 6px rgba(0,0,0,.28)}
 html[data-rendimiento="reducido"] .nt-sticky,html[data-rendimiento="reducido"] .nt-flotante{backdrop-filter:none;-webkit-backdrop-filter:none}
 html[data-rendimiento="reducido"] .nt-sticky-overlay{background:rgba(0,0,0,.85);backdrop-filter:none;-webkit-backdrop-filter:none}
+
+/* ===== Ancho de nota (arrastrar el borde derecho) ===== */
+.nota-card{position:relative}
+.notas-grid-otras:not(.notas-lista){grid-auto-flow:row dense}
+.nota-resize{position:absolute;top:18%;bottom:18%;right:0;width:16px;display:grid;place-items:center;cursor:ew-resize;touch-action:none;opacity:0;transition:opacity .15s;z-index:2}
+.nota-resize::after{content:"";width:4px;height:36px;max-height:100%;border-radius:4px;background:currentColor;opacity:.4}
+.nota-card:hover .nota-resize,.nota-card.nota-estirando .nota-resize,.nota-card.nota-ancha .nota-resize{opacity:1}
+@media(hover:none){.nota-resize{opacity:1;width:20px}}
+.notas-lista .nota-resize,body.notas-seleccionando .nota-resize{display:none}
+.nota-card.nota-estirando{transition:none!important;outline:2px dashed color-mix(in srgb,currentColor,transparent 55%);outline-offset:-3px}
+body:has(.nota-estirando){user-select:none;-webkit-user-select:none;cursor:ew-resize}
 `;
 
 function inyectarEstilosNotas() {

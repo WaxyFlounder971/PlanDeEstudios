@@ -31,7 +31,21 @@ function notasVisibles() {
     .filter((n) => !q || normalizar(n.titulo + " " + textoPlanoNota(n.contenido)).includes(q))
     .filter((n) => !color || n.color === color)
     .filter((n) => !vence || !!n.vence_en)
-    .sort((a, b) => Number(b.fijada) - Number(a.fijada) || (a.fijada && b.fijada ? (a.orden_fijada || 0) - (b.orden_fijada || 0) : (b.modificada_en || 0) - (a.modificada_en || 0)));
+    .sort(comparadorNotas());
+}
+
+// Orden de la lista: las fijadas van primero en el orden que les diste (arrastrando); las demás por fecha, ascendente o descendente.
+const CAMPOS_ORDEN = [["modificada", "Modificada"], ["creada", "Creada"], ["vence", "Vencimiento"]];
+function comparadorNotas() {
+  const { campo = "modificada", dir = "desc" } = opcionesNotas().orden || {};
+  const valor = (n) => (campo === "creada" ? n.creada_en || 0 : campo === "vence" ? (n.vence_en ? Date.parse(`${n.vence_en}T12:00:00`) : null) : n.modificada_en || 0);
+  return (a, b) => {
+    if (a.fijada !== b.fijada) return Number(b.fijada) - Number(a.fijada);
+    if (a.fijada) return (a.orden_fijada || 0) - (b.orden_fijada || 0);
+    const va = valor(a), vb = valor(b);
+    if (va === null || vb === null) { if (va === vb) return (b.modificada_en || 0) - (a.modificada_en || 0); return va === null ? 1 : -1; } // sin fecha, siempre al final
+    return (va === vb ? 0 : dir === "asc" ? va - vb : vb - va) || (b.modificada_en || 0) - (a.modificada_en || 0);
+  };
 }
 
 function confirmarNota(mensaje, { titulo = tr("Confirmar"), textoConfirmar = tr("Continuar"), claseConfirmar = "btn-primary" } = {}) {
@@ -105,11 +119,22 @@ function contenedorScroll(nodo) {
 }
 
 // Reordenar fijadas con punteros (mouse, dedo y lápiz): la tarjeta sigue al cursor y las demás se acomodan en vivo.
-function iniciarArrastre(e, card, asa) {
+// Importante: al acomodar en vivo la tarjeta (y su asa) se MUEVEN en el DOM, y el navegador suelta la captura del puntero
+// de un nodo que se mueve; por eso los eventos van en window y la captura en <body> (que nunca se mueve).
+let arrastreActivo = null; // función que limpia el arrastre en curso sin guardar nada
+const abortarArrastre = () => arrastreActivo?.();
+function limpiarArrastresHuerfanos() {
+  document.querySelectorAll("body > .nota-arrastrando").forEach((n) => n.remove());
+  document.body.classList.remove("nota-arrastrando-body");
+}
+
+function iniciarArrastre(e, card) {
   if (e.pointerType === "mouse" && e.button !== 0) return;
   const grid = card.parentElement;
   if (!grid) return;
+  abortarArrastre();
   e.preventDefault(); e.stopPropagation();
+  const id = e.pointerId;
   const r = card.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
   const ghost = card.cloneNode(true);
   ghost.classList.add("nota-arrastrando"); ghost.removeAttribute("data-id"); ghost.removeAttribute("data-fijada");
@@ -117,7 +142,7 @@ function iniciarArrastre(e, card, asa) {
   document.body.append(ghost);
   card.style.opacity = ".28";
   document.body.classList.add("nota-arrastrando-body");
-  try { asa.setPointerCapture(e.pointerId); } catch (_) {}
+  try { document.body.setPointerCapture(id); } catch (_) {}
   const scroller = contenedorScroll(grid);
   let ultimo = e, raf = 0, terminado = false;
   const esLista = grid.classList.contains("notas-lista");
@@ -138,27 +163,94 @@ function iniciarArrastre(e, card, asa) {
     if (v) { if (scroller) scroller.scrollTop += v; else scrollBy(0, v); acomodar(); }
     raf = requestAnimationFrame(auto);
   };
-  const mover = (ev) => { ultimo = ev; acomodar(); };
   const limpiar = () => {
-    terminado = true; cancelAnimationFrame(raf); ghost.remove(); card.style.opacity = "";
+    if (terminado) return;
+    terminado = true;
+    arrastreActivo = null;
+    cancelAnimationFrame(raf); ghost.remove(); card.style.opacity = "";
     document.body.classList.remove("nota-arrastrando-body");
-    asa.removeEventListener("pointermove", mover); asa.removeEventListener("pointerup", soltar); asa.removeEventListener("pointercancel", cancelar);
-    document.removeEventListener("keydown", teclas);
-    try { asa.releasePointerCapture(e.pointerId); } catch (_) {}
+    window.removeEventListener("pointermove", mover, true); window.removeEventListener("pointerup", soltar, true); window.removeEventListener("pointercancel", cancelar, true);
+    window.removeEventListener("blur", cancelar); window.removeEventListener("contextmenu", cancelarMenu, true);
+    document.removeEventListener("keydown", teclas, true); document.removeEventListener("visibilitychange", alOcultar);
+    try { document.body.releasePointerCapture(id); } catch (_) {}
   };
-  const soltar = () => {
+  const soltar = (ev) => {
+    if (terminado || (ev && ev.pointerId !== id)) return;
     limpiar();
     const ids = [...grid.querySelectorAll('.nota-card[data-fijada="1"]')].map((c) => c.dataset.id);
     conHistorial("Reordenar notas fijadas", ids, () => {
-      ids.forEach((id, i) => { const n = notasActuales().find((x) => x.id === id); if (n && n.orden_fijada !== i + 1) { n.orden_fijada = i + 1; n._mod_manual = true; guardarNota(n); } });
+      ids.forEach((nid, i) => { const n = notasActuales().find((x) => x.id === nid); if (n && n.orden_fijada !== i + 1) { n.orden_fijada = i + 1; n._mod_manual = true; guardarNota(n); } });
     });
     renderizarNotas();
   };
-  const cancelar = () => { limpiar(); renderizarNotas(); };
-  const teclas = (k) => { if (k.key === "Escape") { k.preventDefault(); cancelar(); } };
-  asa.addEventListener("pointermove", mover); asa.addEventListener("pointerup", soltar); asa.addEventListener("pointercancel", cancelar);
-  document.addEventListener("keydown", teclas);
+  const cancelar = () => { if (terminado) return; limpiar(); renderizarNotas(); };
+  const mover = (ev) => {
+    if (ev.pointerId !== id) return;
+    // Si el botón ya se soltó pero el evento se perdió (ventana, menú, otra app), se termina aquí.
+    if (ev.pointerType === "mouse" && ev.buttons === 0) { soltar(ev); return; }
+    ultimo = ev; acomodar();
+  };
+  const cancelarMenu = (ev) => { ev.preventDefault(); cancelar(); };
+  const teclas = (k) => { if (k.key === "Escape") { k.preventDefault(); k.stopPropagation(); cancelar(); } };
+  const alOcultar = () => { if (document.hidden) cancelar(); };
+  arrastreActivo = limpiar;
+  window.addEventListener("pointermove", mover, true); window.addEventListener("pointerup", soltar, true); window.addEventListener("pointercancel", cancelar, true);
+  window.addEventListener("blur", cancelar); window.addEventListener("contextmenu", cancelarMenu, true);
+  document.addEventListener("keydown", teclas, true); document.addEventListener("visibilitychange", alOcultar);
   raf = requestAnimationFrame(auto);
+}
+
+/* ---------- Ancho de nota: arrastra el borde derecho para que ocupe 2 o 3 columnas ---------- */
+// Se guarda el ancho deseado (nota.ancho = 2 | 3); al mostrarla se recorta a las columnas que caben (en teléfono, hasta donde quepa).
+const MAX_ANCHO = 3;
+let observadorAnchos = null;
+const columnasDe = (grid) => {
+  const c = getComputedStyle(grid).gridTemplateColumns;
+  return !c || c === "none" ? 1 : c.split(" ").filter(Boolean).length;
+};
+const anchoVisible = (grid, deseado) => (grid.classList.contains("notas-lista") ? 1 : Math.max(1, Math.min(Number(deseado) || 1, MAX_ANCHO, columnasDe(grid))));
+function aplicarAnchos(grid) {
+  grid.querySelectorAll(":scope > .nota-card").forEach((c) => {
+    const w = anchoVisible(grid, c.dataset.ancho);
+    c.style.gridColumn = w > 1 ? `span ${w}` : "";
+    c.classList.toggle("nota-ancha", w > 1);
+  });
+}
+
+function iniciarEstirar(e, card, nota) {
+  if (e.pointerType === "mouse" && e.button !== 0) return;
+  const grid = card.parentElement;
+  if (!grid) return;
+  const cols = columnasDe(grid), tope = Math.min(MAX_ANCHO, cols);
+  if (tope < 2 || grid.classList.contains("notas-lista")) return;
+  abortarArrastre();
+  e.preventDefault(); e.stopPropagation();
+  const id = e.pointerId, asa = e.currentTarget;
+  try { asa.setPointerCapture(id); } catch (_) {}
+  const cs = getComputedStyle(grid), hueco = parseFloat(cs.columnGap) || 0;
+  const colW = (grid.clientWidth - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0) - hueco * (cols - 1)) / cols;
+  const inicio = anchoVisible(grid, card.dataset.ancho), x0 = e.clientX;
+  let span = inicio, terminado = false;
+  card.classList.add("nota-estirando");
+  const fin = (guardar) => {
+    if (terminado) return;
+    terminado = true;
+    card.classList.remove("nota-estirando");
+    asa.removeEventListener("pointermove", mover); asa.removeEventListener("pointerup", soltar); asa.removeEventListener("pointercancel", cancelar);
+    try { asa.releasePointerCapture(id); } catch (_) {}
+    if (!guardar || span === inicio) { aplicarAnchos(grid); return; }
+    conHistorial("Cambiar ancho de nota", [nota.id], () => { nota.ancho = span > 1 ? span : null; nota._mod_manual = true; guardarNota(nota); });
+    renderizarNotas();
+  };
+  const mover = (ev) => {
+    if (ev.pointerId !== id) return;
+    const px = inicio * colW + (inicio - 1) * hueco + (ev.clientX - x0);
+    span = Math.max(1, Math.min(tope, Math.round((px + hueco) / (colW + hueco))));
+    card.style.gridColumn = span > 1 ? `span ${span}` : "";
+  };
+  const soltar = (ev) => { if (ev.pointerId === id) fin(true); };
+  const cancelar = () => fin(false);
+  asa.addEventListener("pointermove", mover); asa.addEventListener("pointerup", soltar); asa.addEventListener("pointercancel", cancelar);
 }
 
 const fechaCorta = (iso) => new Intl.DateTimeFormat(document.documentElement.lang || "es", { day: "numeric", month: "short" }).format(new Date(`${iso}T12:00:00`));
@@ -167,6 +259,7 @@ function construirTarjeta(nota) {
   const card = el("article", "glass-card nota-card");
   card.dataset.id = nota.id;
   card.dataset.fijada = nota.fijada ? "1" : "0";
+  if (nota.ancho > 1) card.dataset.ancho = String(nota.ancho);
   const colorTarjeta = resolverColorNota(nota.color || COLOR_DEFECTO);
   card.style.setProperty("--nota-color", colorTarjeta);
   card.style.setProperty("color", contraste(colorTarjeta), "important");
@@ -236,6 +329,13 @@ function construirTarjeta(nota) {
 
   const mini = crearMiniTinta(nota.tinta);
   card.append(...[top, h, preview, mini, expand, foot].filter(Boolean));
+  if (!enPapelera) {
+    const estirar = el("span", "nota-resize");
+    estirar.title = tr("Arrastra para ensanchar"); estirar.setAttribute("aria-hidden", "true");
+    estirar.addEventListener("pointerdown", (e) => iniciarEstirar(e, card, nota));
+    estirar.addEventListener("click", (e) => e.stopPropagation());
+    card.append(estirar);
+  }
 
   let pressTimer = null, longPress = false;
   card.addEventListener("pointerdown", (e) => {
@@ -341,7 +441,8 @@ function barraSeleccion() {
   return bar;
 }
 
-const ICONO_CUADRICULA = '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="2" width="7" height="7" rx="1.6"/><rect x="11" y="2" width="7" height="7" rx="1.6"/><rect x="2" y="11" width="7" height="7" rx="1.6"/><rect x="11" y="11" width="7" height="7" rx="1.6"/></svg>';
+const ICONO_PUNTOS = '<svg class="nt-ico nt-ico-solido" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>';
+const ICONO_CUADRICULA ='<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="2" width="7" height="7" rx="1.6"/><rect x="11" y="2" width="7" height="7" rx="1.6"/><rect x="2" y="11" width="7" height="7" rx="1.6"/><rect x="11" y="11" width="7" height="7" rx="1.6"/></svg>';
 const ICONO_LISTA = '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="3" width="16" height="3" rx="1.5"/><rect x="2" y="8.5" width="16" height="3" rx="1.5"/><rect x="2" y="14" width="16" height="3" rx="1.5"/></svg>';
 
 function selectorVista(root) {
@@ -356,7 +457,8 @@ function selectorVista(root) {
       if (opcionesNotas().vista === valor) return;
       opcionesNotas().vista = valor; sellarTimestamp(estado.datos.configuracion); marcarCambioPendiente();
       const aplicar = () => {
-        root.querySelector(".notas-grid")?.classList.toggle("notas-lista", valor === "lista");
+        root.querySelectorAll(".notas-grid").forEach((g) => g.classList.toggle("notas-lista", valor === "lista"));
+        root.querySelectorAll(".notas-grid").forEach(aplicarAnchos);
         grupo.querySelectorAll("[role=radio]").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
       };
       if (document.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches) document.startViewTransition(aplicar); else aplicar();
@@ -369,14 +471,16 @@ function selectorVista(root) {
 function renderizarNotas() {
   const root = document.getElementById("seccion-notas");
   if (!root || !estado.datos) return;
+  abortarArrastre(); limpiarArrastresHuerfanos(); // si un arrastre quedó a medias, nunca deja la tarjeta fantasma
   procesarCicloVidaNotas(); procesarCompartidos();
   root.replaceChildren(); root.classList.add("stack", "notas-seccion");
 
   const cab = el("header", "notas-cabecera");
   const acciones = el("div", "row notas-cab-acciones");
-  const add = el("button", "btn btn-primary", "➕");
+  const add = el("button", "btn btn-primary nt-btn-circulo", "➕");
   add.title = tr("Nueva nota"); add.setAttribute("aria-label", add.title); add.onclick = () => abrirEditorNota(null, renderizarNotas);
-  const settings = el("button", "btn btn-secondary", "⚙️");
+  const settings = el("button", "btn btn-secondary nt-btn-circulo");
+  settings.innerHTML = ICONO_PUNTOS;
   settings.title = tr("Ajustes de Notas"); settings.setAttribute("aria-label", settings.title);
   settings.onclick = () => mostrarAjustesNotas(renderizarNotas, () => mostrarPapelera(root, renderizarNotas));
   acciones.append(add, settings);
@@ -408,21 +512,70 @@ function renderizarNotas() {
   filtros.append(due);
   root.append(filtros);
 
-  const lista = el("div", `notas-grid ${opcionesNotas().vista === "lista" ? "notas-lista" : ""}`);
-  const items = notasVisibles();
-  window.__notasLista = items;
-  items.forEach((n) => lista.append(construirTarjeta(n)));
-  if (!items.length) {
-    const vacio = el("div", "glass-card notas-vacio stack");
-    vacio.innerHTML = `<div aria-hidden="true">🗒️</div><h2>${tr("Tus ideas, siempre a mano")}</h2><p>${tr("Toca + para tu primera nota")}</p>`;
-    const go = el("button", "btn btn-primary", "＋");
-    go.onclick = () => abrirEditorNota(null, renderizarNotas);
-    vacio.append(go);
-    lista.append(vacio);
+  // Orden (en su propia línea): dirección | fecha por la que se ordenan las notas no fijadas.
+  const segmentado = (opciones, valor, etiqueta, alCambiar) => {
+    const g = el("div", "nt-seg nt-seg-compacto");
+    g.setAttribute("role", "radiogroup"); g.setAttribute("aria-label", etiqueta);
+    for (const [v, texto] of opciones) {
+      const b = el("button", "nt-seg-op", texto);
+      b.type = "button"; b.setAttribute("role", "radio"); b.setAttribute("aria-checked", String(v === valor));
+      b.onclick = () => { g.querySelectorAll("[role=radio]").forEach((x) => x.setAttribute("aria-checked", String(x === b))); alCambiar(v); };
+      g.append(b);
+    }
+    return g;
+  };
+  const ordenActual = opcionesNotas().orden || { campo: "modificada", dir: "desc" };
+  const guardarOrden = (cambio) => {
+    const o = opcionesNotas();
+    o.orden = { campo: "modificada", dir: "desc", ...(o.orden || {}), ...cambio };
+    sellarTimestamp(estado.datos.configuracion); marcarCambioPendiente();
+    repintar();
+  };
+  if (notasActuales().filter((n) => !n.eliminada_en).length > 1) {
+    const orden = el("div", "row notas-orden");
+    const sepOrden = el("span", "nt-vsep"); sepOrden.setAttribute("aria-hidden", "true");
+    orden.append(
+      segmentado([["desc", `↓ ${tr("Descendente")}`], ["asc", `↑ ${tr("Ascendente")}`]], ordenActual.dir || "desc", tr("Dirección del orden"), (v) => guardarOrden({ dir: v })),
+      sepOrden,
+      el("span", "nt-orden-etq", tr("Fecha")),
+      segmentado(CAMPOS_ORDEN.map(([v, t]) => [v, tr(t)]), ordenActual.campo || "modificada", tr("Fecha por la que se ordena"), (v) => guardarOrden({ campo: v })),
+    );
+    root.append(orden);
   }
-  root.append(lista);
+
+  // Arriba las fijadas, luego una línea divisora y debajo todas las demás notas.
+  const contenido = el("div", "notas-grupos");
+  const pintarGrupos = () => {
+    const items = notasVisibles();
+    window.__notasLista = items;
+    const claseGrid = `notas-grid ${opcionesNotas().vista === "lista" ? "notas-lista" : ""}`.trim();
+    const grupo = (xs, extra) => { const g = el("div", `${claseGrid} ${extra}`); xs.forEach((n) => g.append(construirTarjeta(n))); return g; };
+    const fijadas = items.filter((n) => n.fijada), otras = items.filter((n) => !n.fijada);
+    const nodos = [];
+    if (fijadas.length) nodos.push(grupo(fijadas, "notas-grid-fijadas"));
+    if (fijadas.length && otras.length) { const hr = el("hr", "nt-divisor"); hr.setAttribute("aria-hidden", "true"); nodos.push(hr); }
+    if (otras.length) nodos.push(grupo(otras, "notas-grid-otras"));
+    if (!items.length) {
+      const vacio = el("div", "glass-card notas-vacio stack");
+      vacio.innerHTML = `<div aria-hidden="true">🗒️</div><h2>${tr("Tus ideas, siempre a mano")}</h2><p>${tr("Toca + para tu primera nota")}</p>`;
+      const go = el("button", "btn btn-primary", "＋");
+      go.onclick = () => abrirEditorNota(null, renderizarNotas);
+      vacio.append(go);
+      const g = el("div", claseGrid); g.append(vacio); nodos.push(g);
+    }
+    contenido.replaceChildren(...nodos);
+    contenido.querySelectorAll(".notas-grid").forEach(aplicarAnchos);
+  };
+  const repintar = pintarGrupos;
+  pintarGrupos();
+  root.append(contenido);
+  observadorAnchos?.disconnect();
+  if (typeof ResizeObserver === "function") { // al girar el teléfono o cambiar el tamaño, se recalcula cuántas columnas caben
+    let ultimoAncho = contenido.clientWidth;
+    observadorAnchos = new ResizeObserver(() => { if (contenido.clientWidth !== ultimoAncho) { ultimoAncho = contenido.clientWidth; contenido.querySelectorAll(".notas-grid").forEach(aplicarAnchos); } });
+    observadorAnchos.observe(contenido);
+  }
   if (seleccion.size) root.append(barraSeleccion());
-  const repintar = () => lista.replaceChildren(...notasVisibles().map(construirTarjeta));
   search.oninput = repintar; color.onchange = repintar;
   restaurarFlotantes();
   window.dispatchEvent(new Event("notas:actualizadas-ui"));
