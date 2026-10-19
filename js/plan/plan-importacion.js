@@ -462,9 +462,8 @@ const PASOS_GUIA_IMPORTACION = {
   ],
   file: [
     PASO_SESION_ABRIR, PASO_SESION_LISTO,
-    ["Guarda tu plan", "Se descargará en tu carpeta Descargas para que puedas adjuntarlo en Claude.", "save", "Guardar archivo"],
     ["Copia la instrucción", "Es el texto que le explica a Claude cómo organizar tu plan.", "copy", "Copiar instrucción"],
-    ["Adjunta tu plan y envía", "En Claude toca el clip 📎, elige el archivo que acabas de guardar (está en Descargas), pega la instrucción con Ctrl+V y envía.", "sent", "Ya lo envié"],
+    ["Adjunta tu plan y envía", "Pega la instrucción (Ctrl+V), arrastra tu plan al cuadro de Claude y envía. ¿No se adjunta? Guarda una copia y usa el clip 📎.", "sent", "Ya lo envié", true],
     PASO_COPIAR_RESPUESTA,
   ],
   phone: [
@@ -496,6 +495,27 @@ async function compartirArchivosClaude() {
     if (error?.name !== "AbortError") mostrarToast("No se pudo compartir. Adjunta el archivo manualmente en Claude.");
     return false;
   }
+}
+
+/** Tarjetas para arrastrar el plan al cuadro de Claude. Agrega el archivo real al
+ *  arrastre (si el archivo viene del disco, el navegador lo entrega como archivo nativo)
+ *  y, aparte, la vía "DownloadURL" para soltarlo en el escritorio o una carpeta. */
+function crearTarjetasArchivoImportacion(doc, clase) {
+  const caja = doc.createElement("div"); caja.className = clase;
+  archivosFuenteImportacion.forEach((file) => {
+    const t = doc.createElement("div"); t.className = "archivo importacion-archivo-chip"; t.draggable = true;
+    if (file.type.startsWith("image/")) { const img = doc.createElement("img"); const url = URL.createObjectURL(file); img.src = url; img.alt = file.name; t.appendChild(img); }
+    else { const ico = doc.createElement("span"); ico.textContent = "📄"; ico.setAttribute("aria-hidden", "true"); t.appendChild(ico); }
+    const nombre = doc.createElement("span"); nombre.textContent = file.name; t.appendChild(nombre);
+    t.addEventListener("dragstart", (e) => {
+      if (e.target && e.target.tagName === "IMG") return; // la imagen ya se arrastra sola como archivo
+      e.dataTransfer.effectAllowed = "copy";
+      try { e.dataTransfer.items.add(file); } catch (_) { /* navegador sin soporte */ }
+      try { e.dataTransfer.setData("DownloadURL", `${file.type || "application/octet-stream"}:${file.name}:${URL.createObjectURL(file)}`); } catch (_) { /* opcional */ }
+    });
+    caja.appendChild(t);
+  });
+  return caja;
 }
 
 /** Guarda en Descargas lo que el usuario va a adjuntar en Claude. Arrastrar desde
@@ -561,7 +581,7 @@ function ejecutarAccionGuiaImportacion(accion) {
 }
 
 const VARIABLES_PALETA_GUIA = ["--bg-canvas", "--bg-card", "--bg-panel", "--text-primary", "--text-secondary", "--text-muted", "--accent-1", "--accent-2", "--accent-1-10", "--accent-1-20", "--gradient-accent", "--on-accent", "--border-glass", "--border-glass-fuerte", "--font-display", "--font-body", "--radius-pill"];
-const CSS_GUIA_FLOTANTE = "*{box-sizing:border-box}body{margin:0;padding:14px 16px;min-height:100vh;display:flex;flex-direction:column;gap:10px;font:14px/1.45 var(--font-body,system-ui,sans-serif);color:var(--text-primary,#f5f3ff);background:radial-gradient(120% 90% at 0% 0%,var(--accent-1-20,#3b2f8f55),transparent 60%),var(--bg-canvas,#0b0b13)}.progreso{display:flex;gap:5px}.progreso i{height:4px;flex:1;border-radius:9px;background:var(--border-glass,#38364c)}.progreso i.activo{background:var(--accent-1,#9b87ff)}.cabeza{display:flex;gap:10px;align-items:center}.numero{flex:none;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--gradient-accent,#6c55db);color:var(--on-accent,#fff);font-weight:800;font-size:13px}h2{margin:0;font:700 17px/1.2 var(--font-display,var(--font-body,system-ui,sans-serif))}p{margin:0;color:var(--text-secondary,#cbc7de)}.acciones{margin-top:auto;display:grid;gap:2px}.principal{padding:12px;border:0;border-radius:var(--radius-pill,999px);background:var(--gradient-accent,#7162e8);color:var(--on-accent,#fff);font:inherit;font-weight:700;cursor:pointer}.principal:hover{filter:brightness(1.08)}.atras{padding:6px;border:0;background:none;color:var(--text-muted,#9a9ab5);font:inherit;font-size:12px;cursor:pointer}button:focus-visible{outline:2px solid var(--accent-1,#fff);outline-offset:2px}";
+const CSS_GUIA_FLOTANTE = "*{box-sizing:border-box}body{margin:0;padding:14px 16px;min-height:100vh;display:flex;flex-direction:column;gap:10px;font:14px/1.45 var(--font-body,system-ui,sans-serif);color:var(--text-primary,#f5f3ff);background:radial-gradient(120% 90% at 0% 0%,var(--accent-1-20,#3b2f8f55),transparent 60%),var(--bg-canvas,#0b0b13)}.progreso{display:flex;gap:5px}.progreso i{height:4px;flex:1;border-radius:9px;background:var(--border-glass,#38364c)}.progreso i.activo{background:var(--accent-1,#9b87ff)}.cabeza{display:flex;gap:10px;align-items:center}.numero{flex:none;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--gradient-accent,#6c55db);color:var(--on-accent,#fff);font-weight:800;font-size:13px}h2{margin:0;font:700 17px/1.2 var(--font-display,var(--font-body,system-ui,sans-serif))}p{margin:0;color:var(--text-secondary,#cbc7de)}.acciones{margin-top:auto;display:grid;gap:2px}.principal{padding:12px;border:0;border-radius:var(--radius-pill,999px);background:var(--gradient-accent,#7162e8);color:var(--on-accent,#fff);font:inherit;font-weight:700;cursor:pointer}.principal:hover{filter:brightness(1.08)}.archivos{display:grid;gap:6px}.archivo{display:flex;gap:8px;align-items:center;padding:8px 10px;border:1px dashed var(--accent-1,#9b87ff);border-radius:12px;background:var(--accent-1-10,#ffffff10);cursor:grab;font-size:13px;word-break:break-all}.archivo img{width:30px;height:30px;object-fit:cover;border-radius:6px}.atras{padding:6px;border:0;background:none;color:var(--text-muted,#9a9ab5);font:inherit;font-size:12px;cursor:pointer}button:focus-visible{outline:2px solid var(--accent-1,#fff);outline-offset:2px}";
 
 /** Copia a la ventana flotante los colores y tipografías de la paleta que el
  *  usuario tiene activa AHORA (se vuelve a leer en cada paso). */
@@ -595,13 +615,16 @@ function dibujarGuiaFlotanteImportacion() {
   principal.addEventListener("click", async () => { const resultado = await ejecutarAccionGuiaImportacion(accion); if (resultado === false) return; if (indicePasoGuiaImportacion < pasos.length - 1 && accion !== "copied" && accion !== "back") avanzarGuiaImportacion(1); });
   acciones.appendChild(principal);
   if (indicePasoGuiaImportacion > 0) { const anterior = doc.createElement("button"); anterior.className = "atras"; anterior.textContent = traducirTextoInterfaz("Paso anterior"); anterior.addEventListener("click", () => avanzarGuiaImportacion(-1)); acciones.appendChild(anterior); }
-  doc.body.replaceChildren(progreso, cabeza, p, acciones);
+  const piezas = [progreso, cabeza, p];
+  if (paso[4] && archivosFuenteImportacion.length) piezas.push(crearTarjetasArchivoImportacion(doc, "archivos"));
+  if (paso[4] && archivosFuenteImportacion.length) { const copia = doc.createElement("button"); copia.className = "atras"; copia.textContent = traducirTextoInterfaz("Guardar una copia en Descargas"); copia.addEventListener("click", () => { descargarArchivosImportacion(); registrarPasoSeguimientoImportacion("archivo_guardado"); }); acciones.appendChild(copia); }
+  doc.body.replaceChildren(...piezas, acciones);
 }
 
 async function abrirGuiaFlotanteImportacion() {
   if (!("documentPictureInPicture" in window)) return false;
   try {
-    ventanaGuiaImportacion = await window.documentPictureInPicture.requestWindow({ width: 340, height: 270 });
+    ventanaGuiaImportacion = await window.documentPictureInPicture.requestWindow({ width: 340, height: 300 });
     ventanaGuiaImportacion.addEventListener("pagehide", () => { ventanaGuiaImportacion = null; renderizarPlanEstudios(); });
     dibujarGuiaFlotanteImportacion();
     return true;
@@ -678,6 +701,7 @@ function construirGuiaIntegradaImportacion(sec, pasos) {
   const num = impEl("span", "imp-num"); num.textContent = String(indicePasoGuiaImportacion + 1);
   const textos = impEl("div", "imp-paso-textos"); textos.append(impEl("h3", "imp-titulo imp-titulo-paso", paso[0]), impEl("p", "imp-lead", paso[1]));
   fila.append(num, textos); sec.append(puntos, fila);
+  if (paso[4] && archivosFuenteImportacion.length) sec.appendChild(crearTarjetasArchivoImportacion(document, "importacion-archivos-arrastrables"));
   if (paso[2] === "sent" || paso[2] === "copied") sec.appendChild(construirEjemploClaude(paso[2]));
   const accion = paso[2];
   sec.appendChild(impBoton(paso[3], async () => {
@@ -685,6 +709,7 @@ function construirGuiaIntegradaImportacion(sec, pasos) {
     if (resultado === false || accion === "copied" || accion === "back") return;
     if (indicePasoGuiaImportacion < pasos.length - 1) avanzarGuiaImportacion(1);
   }, "btn btn-primary btn-block"));
+  if (paso[4] && archivosFuenteImportacion.length) sec.appendChild(impBoton("Guardar una copia en Descargas", () => { descargarArchivosImportacion(); registrarPasoSeguimientoImportacion("archivo_guardado"); }, "btn btn-secondary btn-block"));
   sec.appendChild(impNav(impBoton("Atrás", () => { if (indicePasoGuiaImportacion > 0) avanzarGuiaImportacion(-1); else { cerrarGuiaFlotanteImportacion(); irEtapaImportacion("entrada"); } })));
 }
 
