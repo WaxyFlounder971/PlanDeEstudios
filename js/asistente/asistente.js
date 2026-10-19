@@ -39,6 +39,7 @@ import { aplicarModalidadDia, calcularNumeroSemanaSinAcotarParaFecha } from "../
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { guardarMensajeWapper, listarMensajesWapper, actualizarMensajeWapper, descartarMensajeWapper, procesarColaWapper } from "./asistente-cola.js";
+import { iniciarProcesoAnalitico } from "../core/analitica.js";
 
 /**
  * Modelo de Gemini (revisado 2026-08-22, bug real en producción):
@@ -3744,6 +3745,8 @@ async function manejarEnvioMensaje() {
   if (typeof window.__detenerGrabacionWapper === "function") await window.__detenerGrabacionWapper();
   const texto = input.value.trim();
   if (!texto) return;
+  const flujoAnalitico = iniciarProcesoAnalitico("wapper.mensaje");
+  flujoAnalitico.paso("mensaje_enviado");
 
   input.value = "";
   ajustarAlturaInputAsistente(input);
@@ -3762,6 +3765,7 @@ async function manejarEnvioMensaje() {
       conversacionActual.push(turno);
       await mostrarResultadoEnChat(resultado, turno, texto);
       guardarHistorialLocal();
+      flujoAnalitico.completar("respuesta_recibida");
       return;
     }
     // Punto 4, personalidad Wapper: saludo simple → respuesta fija, SIN
@@ -3774,6 +3778,7 @@ async function manejarEnvioMensaje() {
       conversacionActual.push(turno);
       await mostrarResultadoEnChat({ accion: "saludo" }, turno, texto);
       guardarHistorialLocal();
+      flujoAnalitico.completar("respuesta_recibida");
       return;
     }
 
@@ -3788,6 +3793,7 @@ async function manejarEnvioMensaje() {
       conversacionActual.push(turno);
       await mostrarResultadoEnChat({ accion: "capacidades" }, turno, texto);
       guardarHistorialLocal();
+      flujoAnalitico.completar("respuesta_recibida");
       return;
     }
 
@@ -3812,11 +3818,13 @@ async function manejarEnvioMensaje() {
       // generarRespuestaConversacionalWapper).
       await mostrarResultadoEnChat(resultado, turno, texto);
       guardarHistorialLocal();
+      flujoAnalitico.completar("respuesta_recibida");
     } catch (e) {
       indicador.remove();
       if (e?.tipoError === "red" || (typeof navigator !== "undefined" && navigator.onLine === false)) {
         try {
           await encolarMensajeWapper({ tipo: "texto", contenido: texto });
+          flujoAnalitico.paso("en_cola");
           conversacionActual.pop();
           void actualizarBadgeColaWapper();
           const estadoCola = document.createElement("small");
@@ -3836,6 +3844,7 @@ async function manejarEnvioMensaje() {
       // respuesta como contexto.
       conversacionActual.pop();
       agregarBurbujaAlDom(crearBurbuja("modelo", mensajeParaError(e), true));
+      flujoAnalitico.error("cancelado");
     }
   } finally {
     enviandoMensaje = false;

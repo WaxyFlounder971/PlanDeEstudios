@@ -8,6 +8,7 @@ import { ESCALAS_DISPONIBLES, FRECUENCIAS_BACKUP_DRIVE, MONEDAS_DISPONIBLES, OFF
 import { actualizarIndicadorSync, forzarBackupManual, marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { borrarDatosCuentaApp } from "../core/eliminar-cuenta-app.js";
+import { configurarConsentimientoAnalitica } from "../core/analitica.js";
 import { copiarPromptConAviso } from "../core/clipboard.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { aplicarLogoApp, inicializarSelectorLogo } from "../core/marca.js";
@@ -895,6 +896,7 @@ const SECCIONES_TOGGLEABLES = [
   { id: "comunidad", etiqueta: "Comunidad", icono: "👥" },
   { id: "finanzas", etiqueta: "Finanzas", icono: "💰" },
   { id: "plan-estudios", etiqueta: "Plan de Estudios", icono: "📚" },
+  { id: "notas", etiqueta: "Notas rápidas", icono: "🗒️" },
   // 2026-09-09 (pedido explícito): Tiempo de Estudio entra al mismo
   // sistema de mostrar/ocultar/reordenar que el resto del nav — sin gate
   // de existencia como "asistente" (Gemini), ya existe siempre para
@@ -963,7 +965,7 @@ function renderizarNavegacionOculta() {
     izquierda.appendChild(icono);
 
     const texto = document.createElement("span");
-    texto.textContent = seccion.etiqueta;
+    texto.textContent = traducirTextoInterfaz(seccion.etiqueta);
     izquierda.appendChild(texto);
 
     fila.appendChild(izquierda);
@@ -2018,6 +2020,15 @@ function renderizarSeccionDatos() {
   });
 
   contenedor.appendChild(panel);
+
+  const panelAnalitica=document.createElement("div");panelAnalitica.className="glass-panel";panelAnalitica.style.cssText="padding:12px;display:flex;flex-direction:column;gap:8px;margin-top:10px";
+  const tituloAnalitica=document.createElement("strong");tituloAnalitica.textContent=traducirTextoInterfaz("Analítica detallada de recorridos");
+  const ayudaAnalitica=document.createElement("p");ayudaAnalitica.className="muted";ayudaAnalitica.style.cssText="font-size:.8rem;margin:0";ayudaAnalitica.textContent=traducirTextoInterfaz("Opcional: registra procesos iniciados, pasos, finalizaciones y abandonos con un identificador seudónimo. No envía el contenido que escribes; los eventos detallados se eliminan después de 90 días. Al desactivarla, también se eliminan los recorridos anteriores.");
+  const filaAnalitica=document.createElement("label");filaAnalitica.style.cssText="display:flex;gap:10px;align-items:center;cursor:pointer";
+  const chkAnalitica=document.createElement("input");chkAnalitica.type="checkbox";chkAnalitica.checked=estado.datos.configuracion.analitica_flujos_aceptada===true;
+  const textoAnalitica=document.createElement("span");textoAnalitica.textContent=traducirTextoInterfaz("Permitir analítica detallada de recorridos");
+  filaAnalitica.append(chkAnalitica,textoAnalitica);panelAnalitica.append(tituloAnalitica,ayudaAnalitica,filaAnalitica);contenedor.appendChild(panelAnalitica);
+  chkAnalitica.addEventListener("change",()=>{estado.datos.configuracion.analitica_flujos_aceptada=chkAnalitica.checked;configurarConsentimientoAnalitica(chkAnalitica.checked);marcarCambioPendiente();mostrarToast(traducirTextoInterfaz(chkAnalitica.checked?"Analítica detallada activada":"Analítica detallada desactivada"));});
 }
 
 /**

@@ -154,6 +154,7 @@ function crearDatosUsuarioNuevo() {
       // real desde la creación del usuario, nunca undefined — mismo
       // motivo que navegacion_oculta.
       navegacion_orden: [],
+      notas_ajustes: { vencimiento_default: false, plazo_default: "3_dias", color_default: "#fff2b3", vista: "cuadricula", papelera_despues_wapper: false, compartir_accion: "guardar", completadas_al_final: true, colores_recientes: [] },
 
       // --- Modo Hardcore 💀 (hasta 3 carreras simultáneas) ---
       modo_hardcore: false,             // si está activo, se combinan hasta 3 Planes de Estudio a la vez
@@ -314,6 +315,10 @@ function crearDatosUsuarioNuevo() {
     agenda: [
       /* ver crearEventoAgenda() */
     ],
+
+    // Notas rápidas, colección plana sincronizada por id y timestamp.
+    notas: [],
+    _eliminados_notas: [],
 
     // Adjuntos (2026-08-08): colección PLANA de nivel superior (no anidada
     // dentro de cada materia/evento) — así se funde con una sola llamada a
@@ -3366,6 +3371,11 @@ function migrarDatosAntiguos(datos) {
   // arrastrar una referencia que ya no aplica a nada.
   if (!Array.isArray(datos.agenda)) datos.agenda = [];
   if (!Array.isArray(datos._eliminados_agenda)) datos._eliminados_agenda = [];
+  if (!Array.isArray(datos.notas)) datos.notas = [];
+  if (!Array.isArray(datos._eliminados_notas)) datos._eliminados_notas = [];
+  if (datos.configuracion && !datos.configuracion.notas_ajustes) {
+    datos.configuracion.notas_ajustes = { vencimiento_default: false, plazo_default: "3_dias", color_default: "#fff2b3", vista: "cuadricula", papelera_despues_wapper: false, compartir_accion: "guardar", completadas_al_final: true, colores_recientes: [] };
+  }
   datos.agenda.forEach((ev) => {
     if (!TIPOS_EVENTO_AGENDA.includes(ev.tipo)) ev.tipo = "evento";
     if (ev.nombre === undefined) ev.nombre = ev.titulo || "";

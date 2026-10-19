@@ -118,7 +118,7 @@ async function borrarDatosCuentaApp() {
     "modo_diseno_local_v1", "sidebar_colapsada", "idioma_interfaz_v1",
     "horario_amigo_pendiente", "horario_amigos_ocultos_vista", "horario_amigos_snapshots_backup_v1",
     "te_comp_vista", "te_filtro_vista_v1", "te_racha_oferta_dia_v1", "te_racha_perdida_dia_v1", "te_timer_activo_v1",
-    "app_academica_dispositivo_id", "app_academica_reloj_logico",
+    "app_academica_dispositivo_id", "app_academica_reloj_logico", "notas_share_pendientes_v1",
   ].forEach((clave) => localStorage.removeItem(clave));
   for (let i = sessionStorage.length - 1; i >= 0; i--) {
     const clave = sessionStorage.key(i);

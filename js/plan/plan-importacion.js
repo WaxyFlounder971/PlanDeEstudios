@@ -16,6 +16,7 @@ import { abrirModalGestionPlanes } from "./plan-gestionar.js";
 import { manejarClickImportar, mostrarErroresImportacion } from "./plan-importacion-csv.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
 import { obtenerIdiomaActual } from "../core/i18n.js";
+import { iniciarProcesoAnalitico } from "../core/analitica.js";
 
 /* =========================================================================
    PLAN.JS — Iteración 1 (Parte 1-B + Parte 2 FINAL)
@@ -544,6 +545,8 @@ function construirPanelImportacion() {
       // al estado "sin selección" — así el usuario puede llegar ahí también
       // manualmente, no solo al abrir el panel por primera vez.
       estado.modoImportacion = estado.modoImportacion === op.valor ? null : op.valor;
+      if (estado.modoImportacion && !flujoAnaliticoImportacion) iniciarSeguimientoImportacion();
+      if (estado.modoImportacion) flujoAnaliticoImportacion?.paso("fuente_elegida");
       renderizarPlanEstudios();
     });
     grupoModo.appendChild(btn);
@@ -925,6 +928,26 @@ function enviarPromptAClaude(texto) {
  *  de instrucciones — null mientras el modal está cerrado. */
 
 let instruccionesImportacionPendiente = null;
+let flujoAnaliticoImportacion = null;
+
+function iniciarSeguimientoImportacion() {
+  if (!flujoAnaliticoImportacion) flujoAnaliticoImportacion = iniciarProcesoAnalitico("plan.importacion");
+  return flujoAnaliticoImportacion;
+}
+
+function cancelarSeguimientoImportacion() {
+  flujoAnaliticoImportacion?.cancelar("cancelado");
+  flujoAnaliticoImportacion = null;
+}
+
+function completarSeguimientoImportacion() {
+  flujoAnaliticoImportacion?.completar("guardado");
+  flujoAnaliticoImportacion = null;
+}
+
+function registrarPasoSeguimientoImportacion(paso) {
+  flujoAnaliticoImportacion?.paso(paso);
+}
 
 /**
  * v6: en vez de copiar y redirigir de inmediato al presionar "Enviar a
@@ -942,6 +965,7 @@ let instruccionesImportacionPendiente = null;
  */
 
 function abrirModalInstruccionesImportacion(modo, textoPrompt) {
+  flujoAnaliticoImportacion?.paso("instrucciones_vistas");
   instruccionesImportacionPendiente = { textoPrompt };
   document.getElementById("titulo-modal-instrucciones-importacion").textContent = "Antes de ir a Claude…";
   document.getElementById("cuerpo-modal-instrucciones-importacion").textContent =
@@ -966,6 +990,7 @@ function inicializarModalInstruccionesImportacion() {
   // pueda copiar de nuevo si quiere antes de presionar "Aceptar".
   document.getElementById("btn-copiar-prompt-instrucciones-importacion").addEventListener("click", () => {
     if (!instruccionesImportacionPendiente) return;
+    flujoAnaliticoImportacion?.paso("prompt_copiado");
     copiarPromptImportacionBlindado(instruccionesImportacionPendiente.textoPrompt);
   });
   document.getElementById("btn-aceptar-instrucciones-importacion").addEventListener("click", () => {
@@ -973,6 +998,7 @@ function inicializarModalInstruccionesImportacion() {
     const { textoPrompt } = instruccionesImportacionPendiente;
     document.getElementById("modal-instrucciones-importacion").classList.add("oculto");
     instruccionesImportacionPendiente = null;
+    flujoAnaliticoImportacion?.paso("enviado_a_ia");
     enviarPromptAClaude(textoPrompt);
   });
 }
@@ -988,6 +1014,9 @@ export {
   construirInputArchivoCSV,
   construirPanelImportacion,
   inicializarEstadoImportacionPlanSiHaceFalta,
+  cancelarSeguimientoImportacion,
+  completarSeguimientoImportacion,
+  registrarPasoSeguimientoImportacion,
   construirPromptImportacion,
   construirTextoInstruccionesImportacion,
   convertirCapturasAPDF,

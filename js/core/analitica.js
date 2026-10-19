@@ -22,11 +22,14 @@
  *    cada clic que caiga en "Otra interacción" se imprime con su descripción
  *    para poder darle nombre propio con data-analitica-funcion.
  */
+import { traducirTextoInterfaz } from "./i18n.js";
+
 const URL_WORKER_ANALITICA = "https://worker-notificaciones-agenda.appacademica.workers.dev/analitica/evento";
+const URL_WORKER_APP = "https://worker-notificaciones-agenda.appacademica.workers.dev";
 
 const SECCIONES_ANALITICA = new Set([
   "demo", "resumen", "agenda", "horario", "tiempo-estudio",
-  "semestres", "comunidad", "finanzas", "plan-estudios", "asistente",
+  "semestres", "comunidad", "finanzas", "plan-estudios", "asistente", "notas",
   "configuracion",
 ]);
 
@@ -79,17 +82,158 @@ const CLASES_ACCION = [
 ];
 
 let correoEnMemoria = "";
+let tokenEnMemoria = "";
+let consentimientoFlujos = false;
+let promesaConsentimientoRemoto = Promise.resolve();
+const CLAVE_EVENTOS_FLUJO = "analitica_flujos_pendientes_v1";
+const CLAVE_SESION_FLUJO = "analitica_sesion_v1";
 let listenersInstalados = false;
 const pendientesSinCorreo = [];
 let temporizadorPendientes = null;
+let cargandoAvisos = false;
+let ultimaConsultaAvisos = 0;
 const ES_DEMO = (() => {
   try { return new URLSearchParams(location.search).get("demo") === "1"; } catch (_) { return false; }
 })();
 
-function configurarCorreoAnalitica(correo) {
+function configurarCorreoAnalitica(correo, token = "", consentimiento = false) {
+  const anterior = correoEnMemoria;
   correoEnMemoria = typeof correo === "string" ? correo.trim().toLowerCase().slice(0, 254) : "";
+  tokenEnMemoria = typeof token === "string" ? token : "";
+  consentimientoFlujos = Boolean(consentimiento && correoEnMemoria && tokenEnMemoria && !ES_DEMO);
+  if (consentimientoFlujos) configurarConsentimientoAnalitica(true, true);
+  if (anterior !== correoEnMemoria) {
+    try { sessionStorage.removeItem(CLAVE_EVENTOS_FLUJO); } catch (_) {}
+    ultimaConsultaAvisos = 0;
+    try { sessionStorage.removeItem("avisos_globales_mostrados_v1"); } catch (_) {}
+  }
   if (correoEnMemoria) vaciarPendientes();
+  void enviarFlujosPendientes();
+  if (correoEnMemoria && tokenEnMemoria) void cargarAvisosGlobales();
 }
+
+function configurarConsentimientoAnalitica(aceptado, sincronizar = true) {
+  consentimientoFlujos = Boolean(aceptado && correoEnMemoria && tokenEnMemoria && !ES_DEMO);
+  if (!consentimientoFlujos) { try { sessionStorage.removeItem(CLAVE_EVENTOS_FLUJO); } catch (_) {} }
+  if (!sincronizar || !correoEnMemoria || !tokenEnMemoria || ES_DEMO) return Promise.resolve();
+  promesaConsentimientoRemoto = fetch(`${URL_WORKER_APP}/analitica/consentimiento`, {
+    method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokenEnMemoria}` },
+    body: JSON.stringify({ aceptado: consentimientoFlujos }), keepalive: true,
+  }).catch(() => null);
+  return promesaConsentimientoRemoto;
+}
+
+async function cargarAvisosGlobales() {
+  if (cargandoAvisos || !tokenEnMemoria || !navigator.onLine || Date.now() - ultimaConsultaAvisos < 5 * 60 * 1000) return;
+  ultimaConsultaAvisos = Date.now();
+  cargandoAvisos = true;
+  try {
+    const r = await fetch(`${URL_WORKER_APP}/avisos/activos`, { headers: { Authorization: `Bearer ${tokenEnMemoria}` }, cache: "no-store" });
+    if (!r.ok) return;
+    const { avisos = [] } = await r.json();
+    let vistos = [];
+    try { vistos = JSON.parse(sessionStorage.getItem("avisos_globales_mostrados_v1") || "[]"); } catch (_) {}
+    const nuevos = avisos.filter((a) => !vistos.includes(a.id));
+    if (nuevos.length) mostrarAvisoGlobal(nuevos, 0);
+  } catch (_) { ultimaConsultaAvisos = 0; /* los avisos nunca bloquean el uso normal ni el modo offline */ }
+  finally { cargandoAvisos = false; }
+}
+
+function mostrarAvisoGlobal(avisos, indice) {
+  const aviso = avisos[indice];
+  if (!aviso) return;
+  try {
+    const vistos = JSON.parse(sessionStorage.getItem("avisos_globales_mostrados_v1") || "[]");
+    if (!vistos.includes(aviso.id)) sessionStorage.setItem("avisos_globales_mostrados_v1", JSON.stringify([...vistos, aviso.id].slice(-100)));
+  } catch (_) {}
+  let overlay = document.getElementById("modal-aviso-global-app");
+  if (!overlay) {
+    overlay = document.createElement("div"); overlay.id = "modal-aviso-global-app"; overlay.className = "modal-overlay";
+    overlay.style.zIndex = "100000";
+    overlay.innerHTML = '<section class="glass-card modal-card stack" role="dialog" aria-modal="true" aria-labelledby="aviso-global-titulo"><h2 id="aviso-global-titulo" style="margin:0"></h2><div id="aviso-global-cuerpo" style="white-space:pre-wrap"></div><div id="aviso-global-acciones" class="row" style="justify-content:flex-end;flex-wrap:wrap"></div></section>';
+    document.body.appendChild(overlay);
+  }
+  overlay.querySelector("#aviso-global-titulo").textContent = aviso.titulo || "";
+  overlay.querySelector("#aviso-global-cuerpo").textContent = aviso.cuerpo || "";
+  const acciones = overlay.querySelector("#aviso-global-acciones"); acciones.replaceChildren();
+  const etiqueta = aviso.accion === "continuar" ? "Continuar" : aviso.accion === "aceptar" ? "Aceptar" : aviso.accion === "cerrar" ? "Cerrar" : "Entendido";
+  const boton = document.createElement("button"); boton.type = "button"; boton.className = "btn btn-primary"; boton.textContent = traducirTextoInterfaz(etiqueta);
+  const registroVista = fetch(`${URL_WORKER_APP}/avisos/estado`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokenEnMemoria}` }, body: JSON.stringify({ aviso_id: aviso.id, accion: "vista" }), keepalive: true }).catch(() => null);
+  const cerrar = async (confirmar) => {
+    await registroVista;
+    try { await fetch(`${URL_WORKER_APP}/avisos/estado`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokenEnMemoria}` }, body: JSON.stringify({ aviso_id: aviso.id, accion: confirmar ? aviso.accion : "cerrar" }), keepalive: true }); } catch (_) {}
+    overlay.remove();
+    if (confirmar && aviso.accion === "continuar" && typeof window.mostrarSeccion === "function") window.mostrarSeccion(aviso.destino);
+    mostrarAvisoGlobal(avisos, indice + 1);
+  };
+  boton.onclick = () => { void cerrar(aviso.accion !== "cerrar"); };
+  acciones.append(boton);
+  overlay.classList.remove("oculto");
+}
+
+function idFlujoNuevo() {
+  try { return crypto.randomUUID(); } catch (_) { return `flow_${Date.now()}_${Math.random().toString(36).slice(2)}`; }
+}
+function sesionFlujo() {
+  try {
+    let id = sessionStorage.getItem(CLAVE_SESION_FLUJO);
+    if (!id) { id = idFlujoNuevo(); sessionStorage.setItem(CLAVE_SESION_FLUJO, id); }
+    return id;
+  } catch (_) { return idFlujoNuevo(); }
+}
+function leerColaFlujos() { try { return JSON.parse(sessionStorage.getItem(CLAVE_EVENTOS_FLUJO) || "[]"); } catch (_) { return []; } }
+function guardarColaFlujos(xs) { try { sessionStorage.setItem(CLAVE_EVENTOS_FLUJO, JSON.stringify(xs.slice(-200))); } catch (_) {} }
+function registrarEventoFlujo(evento) {
+  if (!consentimientoFlujos) return;
+  const cola = leerColaFlujos();
+  cola.push(evento); guardarColaFlujos(cola);
+  void enviarFlujosPendientes();
+}
+async function enviarFlujosPendientes() {
+  if (!tokenEnMemoria || !navigator.onLine || !consentimientoFlujos) return;
+  const resultadoConsentimiento = await promesaConsentimientoRemoto;
+  if (resultadoConsentimiento && !resultadoConsentimiento.ok) {
+    consentimientoFlujos = false;
+    try { sessionStorage.removeItem(CLAVE_EVENTOS_FLUJO); } catch (_) {}
+    return;
+  }
+  if (!resultadoConsentimiento) return;
+  if (!consentimientoFlujos) return;
+  const cola = leerColaFlujos();
+  while (cola.length) {
+    try {
+      const respuesta = await fetch("https://worker-notificaciones-agenda.appacademica.workers.dev/analitica/flujo", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokenEnMemoria}` },
+        body: JSON.stringify(cola[0]), keepalive: true,
+      });
+      if (!respuesta.ok) break;
+      cola.shift(); guardarColaFlujos(cola);
+    } catch (_) { break; }
+  }
+}
+function iniciarProcesoAnalitico(proceso) {
+  const id = idFlujoNuevo();
+  const secciones = { "agenda.tarea": "agenda", "plan.importacion": "plan-estudios", "wapper.mensaje": "asistente", "notas.editor": "notas" };
+  if (!secciones[proceso] || !correoEnMemoria || !tokenEnMemoria || !consentimientoFlujos || ES_DEMO) return { paso() {}, completar() {}, cancelar() {}, error() {} };
+  const base = { flujo_id: id, sesion_id: sesionFlujo(), proceso, version: document.documentElement.dataset.appVersion || "3.24.3" };
+  const enviar = (tipo, paso) => registrarEventoFlujo({ ...base, evento_id: idFlujoNuevo(), tipo, paso });
+  const inicio = Date.now();
+  enviar("iniciado", proceso === "agenda.tarea" ? "formulario_abierto" : proceso === "plan.importacion" ? "flujo_abierto" : proceso === "wapper.mensaje" ? "compositor_abierto" : "editor_abierto");
+  let cerrado = false;
+  return {
+    id,
+    paso(nombre) { if (!cerrado) enviar("paso", nombre); },
+    completar(nombre) { if (cerrado) return; cerrado = true; enviar("completado", nombre || (proceso === "agenda.tarea" ? "guardado" : proceso === "plan.importacion" ? "guardado" : proceso === "wapper.mensaje" ? "respuesta_recibida" : "guardado")); },
+    cancelar(nombre) { if (cerrado) return; cerrado = true; enviar("cancelado", nombre || "cancelado"); },
+    error(nombre) { if (cerrado) return; cerrado = true; enviar("error", nombre || (proceso === "agenda.tarea" ? "validacion_fallida" : "validacion_fallida")); },
+    duracionDesdeInicio: () => Date.now() - inicio,
+  };
+}
+window.addEventListener("online", () => { void enviarFlujosPendientes(); void cargarAvisosGlobales(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { void enviarFlujosPendientes(); void cargarAvisosGlobales(); } });
+setInterval(() => { if (!document.hidden) void cargarAvisosGlobales(); }, 5 * 60 * 1000);
+window.iniciarProcesoAnalitico = iniciarProcesoAnalitico;
+window.configurarConsentimientoAnalitica = configurarConsentimientoAnalitica;
 
 function enviarEvento(seccion, funcion, correo) {
   try {
@@ -219,4 +363,4 @@ function inicializarAnaliticaUso() {
   }, true);
 }
 
-export { configurarCorreoAnalitica, inicializarAnaliticaUso, registrarAnaliticaUso };
+export { configurarCorreoAnalitica, configurarConsentimientoAnalitica, inicializarAnaliticaUso, registrarAnaliticaUso, iniciarProcesoAnalitico };

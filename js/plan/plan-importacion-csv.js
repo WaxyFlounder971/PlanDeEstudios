@@ -9,7 +9,7 @@ import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { abrirConfirmacion } from "../ui/componentes.js";
 import { abrirModalCrearPlan } from "./plan-esquema.js";
-import { abrirModalCapturasPDF, abrirModalInstruccionesImportacion, construirInputArchivoCSV, construirPromptImportacion, extraerMetadatosImportacion, inicializarEstadoImportacionPlanSiHaceFalta } from "./plan-importacion.js";
+import { abrirModalCapturasPDF, abrirModalInstruccionesImportacion, completarSeguimientoImportacion, construirInputArchivoCSV, construirPromptImportacion, extraerMetadatosImportacion, inicializarEstadoImportacionPlanSiHaceFalta, registrarPasoSeguimientoImportacion } from "./plan-importacion.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
 
 /* ===================== Parser de CSV ===================== */
@@ -574,6 +574,7 @@ function importarCSVEnPlan(textoCSV, planDestino) {
     mostrarErroresImportacion(mensajes);
     return false;
   }
+  registrarPasoSeguimientoImportacion("materias_previsualizadas");
 
   // v1.18 (blindaje): antes de aplicar nada al plan, se avisa si el propio
   // CSV trae el mismo código repetido en más de una fila — sin esto, el
@@ -674,6 +675,7 @@ function importarCSVEnPlan(textoCSV, planDestino) {
   });
 
   marcarCambioPendiente();
+  completarSeguimientoImportacion();
   mostrarErroresImportacion(errores);
   estado.csvImportacionTexto = estado.csvImportacionTexto || { nuevo:"", actualizar:"" };
   estado.csvImportacionTexto.nuevo = "";

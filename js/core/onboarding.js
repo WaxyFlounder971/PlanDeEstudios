@@ -27,6 +27,7 @@ const SECCIONES_TUTORIAL = [
   { id:"comunidad", nombre:"Comunidad", puntos:["Organiza compañeros y docentes relacionados con tus materias.","Cada docente lleva tu propia valoración, según tu experiencia."] },
   { id:"finanzas", nombre:"Finanzas", puntos:["Registra ingresos y gastos desde el inicio.","Clasifica movimientos por categoría.","Asociarlos a un semestre es opcional."] },
   { id:"plan-estudios", nombre:"Plan de estudios", puntos:["Añade una o varias carreras.","Pega o importa la malla completa.","El plan alimenta la matrícula de Semestres."] },
+  { id:"notas", nombre:"Notas rápidas", puntos:["Guarda ideas y pendientes al instante, incluso sin conexión.","Fija, organiza, busca y comparte tus notas.","Envía una nota a Wapper para convertirla en actividades de Agenda.","Compartir contenido desde otras apps requiere tener instalada la app en Android."] },
   { id:"asistente", nombre:"Wapper", puntos:["Convierte mensajes en tareas, exámenes o eventos de Agenda.","Consulta fechas y pendientes con lenguaje natural.","Actívalo con tu clave personal de Gemini desde Ajustes."] },
   { id:"configuracion", nombre:"Ajustes", puntos:["Cambia idioma, apariencia, paleta y tamaño de texto.","Aquí ordenas y ocultas las secciones de la navegación.","Con este botón vuelves a ver la bienvenida y el mini tutorial cuando quieras.","Toca dos veces el título de cualquier sección para ver qué hace y, si quieres, su guía paso a paso."] },
 ];
@@ -45,13 +46,13 @@ function guardarProgresoOnb(o) { try { if (o) localStorage.setItem(CLAVE_PROGRES
    El texto vive en archivos .md por idioma: TermsOfUse/TermsES.md, TermsEN.md, TermsIT.md, TermsFR.md.
    Al aceptar se guarda en la cuenta: configuracion.terminos_aceptados = { version, fecha, idioma }.
    Si algún día cambian los términos, sube VERSION_TERMINOS y se volverán a pedir. */
-const VERSION_TERMINOS = "1";
+const VERSION_TERMINOS = "2";
 const ARCHIVOS_TERMINOS = { es: "TermsES", en: "TermsEN", it: "TermsIT", fr: "TermsFR" };
 const TEXTOS_TERMINOS = {
-  es: { titulo: "Términos y condiciones", lema: "Antes de seguir, lee cómo usamos tus datos y acepta los términos.", cargando: "Cargando…", error: "No se pudo cargar el texto. Revisa tu conexión e inténtalo de nuevo.", reintentar: "Reintentar", acepto: "He leído y acepto los términos y condiciones y el tratamiento de mis datos.", requerido: "Debes aceptar los términos para continuar.", atras: "Atrás", continuar: "Aceptar y continuar" },
-  en: { titulo: "Terms and conditions", lema: "Before you continue, read how we use your data and accept the terms.", cargando: "Loading…", error: "The text could not be loaded. Check your connection and try again.", reintentar: "Try again", acepto: "I have read and accept the terms and conditions and the processing of my data.", requerido: "You must accept the terms to continue.", atras: "Back", continuar: "Accept and continue" },
-  it: { titulo: "Termini e condizioni", lema: "Prima di continuare, leggi come usiamo i tuoi dati e accetta i termini.", cargando: "Caricamento…", error: "Impossibile caricare il testo. Controlla la connessione e riprova.", reintentar: "Riprova", acepto: "Ho letto e accetto i termini e le condizioni e il trattamento dei miei dati.", requerido: "Devi accettare i termini per continuare.", atras: "Indietro", continuar: "Accetta e continua" },
-  fr: { titulo: "Conditions d'utilisation", lema: "Avant de continuer, lis comment nous utilisons tes données et accepte les conditions.", cargando: "Chargement…", error: "Impossible de charger le texte. Vérifie ta connexion et réessaie.", reintentar: "Réessayer", acepto: "J'ai lu et j'accepte les conditions d'utilisation et le traitement de mes données.", requerido: "Tu dois accepter les conditions pour continuer.", atras: "Retour", continuar: "Accepter et continuer" }
+  es: { titulo: "Términos y condiciones", lema: "Antes de seguir, lee cómo usamos tus datos y acepta los términos.", cargando: "Cargando…", error: "No se pudo cargar el texto. Revisa tu conexión e inténtalo de nuevo.", reintentar: "Reintentar", acepto: "He leído y acepto los términos y condiciones y el tratamiento de mis datos.", requerido: "Debes aceptar los términos para continuar.", analitica: "Opcional: acepto que se registren recorridos seudonimizados (inicio, pasos, finalización o abandono) para mejorar la app. No se envía el contenido que escribo.", atras: "Atrás", continuar: "Aceptar y continuar" },
+  en: { titulo: "Terms and conditions", lema: "Before you continue, read how we use your data and accept the terms.", cargando: "Loading…", error: "The text could not be loaded. Check your connection and try again.", reintentar: "Try again", acepto: "I have read and accept the terms and conditions and the processing of my data.", requerido: "You must accept the terms to continue.", analitica: "Optional: I agree to pseudonymous journey tracking (start, steps, completion or abandonment) to improve the app. The content I write is not sent.", atras: "Back", continuar: "Accept and continue" },
+  it: { titulo: "Termini e condizioni", lema: "Prima di continuare, leggi come usiamo i tuoi dati e accetta i termini.", cargando: "Caricamento…", error: "Impossibile caricare il testo. Controlla la connessione e riprova.", reintentar: "Riprova", acepto: "Ho letto e accetto i termini e le condizioni e il trattamento dei miei dati.", requerido: "Devi accettare i termini per continuare.", analitica: "Facoltativo: acconsento alla raccolta pseudonimizzata dei percorsi (avvio, passaggi, completamento o abbandono) per migliorare l'app. Il contenuto che scrivo non viene inviato.", atras: "Indietro", continuar: "Accetta e continua" },
+  fr: { titulo: "Conditions d'utilisation", lema: "Avant de continuer, lis comment nous utilisons tes données et accepte les conditions.", cargando: "Chargement…", error: "Impossible de charger le texte. Vérifie ta connexion et réessaie.", reintentar: "Réessayer", acepto: "J'ai lu et j'accepte les conditions d'utilisation et le traitement de mes données.", requerido: "Tu dois accepter les conditions pour continuer.", analitica: "Facultatif : j'accepte le suivi pseudonymisé des parcours (début, étapes, achèvement ou abandon) pour améliorer l'application. Le contenu que j'écris n'est pas envoyé.", atras: "Retour", continuar: "Accepter et continuer" }
 };
 const _cacheTerminos = {};
 function codigoIdiomaTerminos() { const c = idiomaUI().slice(0, 2); return ARCHIVOS_TERMINOS[c] ? c : "es"; }
@@ -425,6 +426,7 @@ function inyectarEstilosOnboarding() {
 .onb-luz:disabled{opacity:.5;cursor:not-allowed}
 .onb-luz:focus-visible{outline:2px solid var(--accent-1,#8b5cf6);outline-offset:2px}
 .onb-luz-led{flex:none;width:22px;height:22px;border-radius:50%;background:rgba(128,128,128,.35);box-shadow:inset 0 2px 4px rgba(0,0,0,.45);transition:background .25s,box-shadow .3s}
+.onb-consentimiento-analitica{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;font-size:.84rem;line-height:1.4;opacity:.88}.onb-consentimiento-analitica input{flex:none;margin-top:3px;accent-color:var(--accent-1,#8b5cf6)}
 .onb-luz.on{border-color:var(--accent-1,#8b5cf6);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 14%,transparent)}
 .onb-luz.on .onb-luz-led{background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.85),transparent 45%),var(--gradient-accent,var(--accent-1,#8b5cf6));box-shadow:0 0 6px 2px color-mix(in srgb,var(--accent-1,#8b5cf6) 90%,transparent),0 0 18px 6px color-mix(in srgb,var(--accent-1,#8b5cf6) 55%,transparent)}
 @media (prefers-reduced-motion:reduce){.onb-luz,.onb-luz-led{transition:none}}
@@ -1346,6 +1348,7 @@ const SECCIONES_NAV = [
   { id: "semestres", etiqueta: "Semestres", icono: "📅" }, { id: "comunidad", etiqueta: "Comunidad", icono: "👥" },
   { id: "finanzas", etiqueta: "Finanzas", icono: "💰" }, { id: "plan-estudios", etiqueta: "Plan de Estudios", icono: "📚" },
   { id: "tiempo-estudio", etiqueta: "Tiempo", icono: "⏱️" }, { id: "asistente", etiqueta: "Asistente", icono: "✨" },
+  { id: "notas", etiqueta: "Notas rápidas", icono: "🗒️" },
 ];
 // Pantalla «Llévala contigo»: cuadrícula tipo pantalla de inicio. El progreso NO es un temporizador fijo:
 // avanza despacio (una instalación real tarda) y solo llega a 100 % cuando el navegador avisa con «appinstalled».
@@ -1887,6 +1890,9 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
       // «Luz» de aceptación: al tocarla se enciende (role=switch para lectores de pantalla y teclado).
       const luz=crear("button","onb-luz");luz.type="button";luz.disabled=true;luz.setAttribute("role","switch");luz.setAttribute("aria-checked","false");
       luz.append(crear("span","onb-luz-led"),crear("span","onb-luz-txt",L.acepto));
+      const filaAnalitica=crear("label","onb-consentimiento-analitica");
+      const chkAnalitica=crear("input");chkAnalitica.type="checkbox";chkAnalitica.checked=cfg.analitica_flujos_aceptada===true;
+      filaAnalitica.append(chkAnalitica,crear("span","",L.analitica));
       const encendida=()=>luz.getAttribute("aria-checked")==="true";
       if(aceptadoTerminos()&&!MODO_DEMO){luz.setAttribute("aria-checked","true");luz.classList.add("on");} // ya los aceptó: llega encendida y solo continúa
       const aviso=crear("p","onboarding-nota-error",L.requerido);aviso.hidden=true;aviso.setAttribute("role","alert");
@@ -1902,9 +1908,12 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
         });
       };
       luz.addEventListener("click",()=>{luz.setAttribute("aria-checked",String(!encendida()));luz.classList.toggle("on",encendida());aviso.hidden=true;});
-      contenido.append(crear("p","onb-terminos-lema",L.lema),caja,luz,aviso);
+      contenido.append(crear("p","onb-terminos-lema",L.lema),caja,luz,filaAnalitica,aviso);
       const aceptar=()=>{
         if(!cargado||!encendida()){aviso.hidden=false;return;}
+        cfg.analitica_flujos_aceptada=chkAnalitica.checked;
+        guardar();
+        window.configurarConsentimientoAnalitica?.(chkAnalitica.checked);
         if(!aceptadoTerminos()){cfg.terminos_aceptados={version:VERSION_TERMINOS,fecha:new Date().toISOString(),idioma:cod};guardar();}
         etapa=cuentaConDatos&&cfg.paleta&&cfg.modo?"tour":"personalizar";indice=0;pintar();
       };

@@ -14,7 +14,7 @@ import { abrirModalMateriaManual, obtenerMateriasVisibles, obtenerPlanActivo } f
 import { abrirModalGestionPlanes, recalcularPlanesHardcore, renderizarSelectorPlan } from "./plan-gestionar.js";
 import { alternarModoEdicionPlan } from "./plan-modo-edicion.js";
 import { construirMiniPanelImportacion, obtenerPalabraOptativa, serializarRequisitoArbol } from "./plan-importacion-csv.js";
-import { construirEncabezadoCSV, construirPanelImportacion } from "./plan-importacion.js";
+import { cancelarSeguimientoImportacion, construirEncabezadoCSV, construirPanelImportacion } from "./plan-importacion.js";
 import { construirTarjetaVista, inicializarEstadoMapaSiHaceFalta } from "./plan-mapa.js";
 import { construirContenidoBloques } from "./plan-vista-lista-tarjetas.js";
 
@@ -216,6 +216,7 @@ function construirEncabezadoPlan(planPrincipal) {
     ? "Cerrar importación"
     : (planPrincipal.materias.length === 0 ? "Importar malla" : "Actualizar malla");
   btnImportar.addEventListener("click", () => {
+    if (estado.panelImportacionAbierto) cancelarSeguimientoImportacion();
     estado.panelImportacionAbierto = !estado.panelImportacionAbierto;
     renderizarPlanEstudios();
   });

@@ -53,6 +53,7 @@ import { abrirConfirmacion, agregarLongPress, inicializarAutoScrollSelectoresEnM
 import { confirmarUniversidadNoInvertida } from "./ui/aviso-universidad.js";
 import { aplicarPaleta, aplicarTemaGuardadoLocalmente, obtenerModoTemaLocal, obtenerModoDisenoLocal, guardarModoTemaLocal } from "./ui/tema.js";
 import { inicializarIdiomas, traducirTextoInterfaz } from "./core/i18n.js";
+import { inicializarNotas, renderizarNotas } from "./notas/notas.js";
 
 // La vista embebida del onboarding recibe los cambios visuales en vivo para
 // evitar reiniciar la demo cada vez que se prueba un tema, color o logo.
@@ -80,6 +81,7 @@ if (MODO_DEMO && PREVIEW_DEMO && window.parent !== window) {
 // Idioma de interfaz local al dispositivo. El idioma español estático es
 // el respaldo si el archivo de traducción elegido no existe o está incompleto.
 inicializarIdiomas();
+inicializarNotas();
 
 /* ===================== PWA: registro del Service Worker ===================== */
 /*
@@ -1228,7 +1230,7 @@ function mostrarAppInterno() {
   ocultarPantallaCargaSesion();
   document.getElementById("pantalla-login").classList.add("oculto");
   document.getElementById("app-shell").classList.remove("oculto");
-  configurarCorreoAnalitica(MODO_DEMO ? "" : estado.datos?.perfil?.correo || "");
+  configurarCorreoAnalitica(MODO_DEMO ? "" : estado.datos?.perfil?.correo || "", MODO_DEMO ? "" : estado.token || "", MODO_DEMO ? false : estado.datos?.configuracion?.analitica_flujos_aceptada === true);
   inicializarAnaliticaUso();
   if (!MODO_DEMO && !window.__analiticaAperturaRegistrada) {
     window.__analiticaAperturaRegistrada = true;
@@ -1243,6 +1245,7 @@ function mostrarAppInterno() {
   // cuando el dato en sí seguía intacto en estado.datos. Mismo patrón que
   // el bug de abajo en storage-sync.js.
   const cfg = estado.datos.configuracion;
+  window.procesarNotasCompartidas?.();
   aplicarTamanoTexto(estado.datos);
   const modoVistaDemo = new URLSearchParams(location.search).get("preview") === "1" ? (cfg.modo || "dark") : "dark";
   aplicarPaleta(cfg.paleta, MODO_DEMO ? modoVistaDemo : obtenerModoTemaLocal(), cfg.paleta === "personalizada" ? cfg.paleta_personalizada?.colores : undefined);
@@ -1554,6 +1557,7 @@ function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
     horario: "seccion-horario",
     "tiempo-estudio": "seccion-tiempo-estudio",
     asistente: "seccion-asistente",
+    notas: "seccion-notas",
   };
   if (!Object.prototype.hasOwnProperty.call(secciones, nombre)) return;
   if (window.__appSeccionActiva === "finanzas" && nombre !== "finanzas" && hayBorradorFinanzasPendiente()) {
@@ -1626,6 +1630,7 @@ function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
   // mostrarAvisoContinuar en js/asistente/asistente.js). Con más de 1h, o
   // sin conversación guardada, arranca directo en blanco.
   if (nombre === "asistente") window.renderizarAsistente?.();
+  if (nombre === "notas") renderizarNotas();
   if (dependencia && seccionSolicitada !== nombre) setTimeout(() => mostrarToastAccion(dependencia.mensaje, "Entendido", () => mostrarSeccion(nombre)), 220);
   if (cambioSeccion && (!MODO_DEMO || !PREVIEW_DEMO) && estado.datos?.configuracion?.onboarding_v1_completado !== false) requestAnimationFrame(() => mostrarTutorialPrimeraVez(nombre));
 }
@@ -1675,7 +1680,7 @@ window.mostrarSeccion = mostrarSeccion;
  * que la limpieza se sincronice y no reaparezca en otros dispositivos con
  * el dato viejo.
  */
-const DEFAULT_ORDEN_NAV = ["agenda", "horario", "tiempo-estudio", "semestres", "comunidad", "finanzas", "plan-estudios", "asistente"];
+const DEFAULT_ORDEN_NAV = ["agenda", "horario", "tiempo-estudio", "semestres", "comunidad", "finanzas", "plan-estudios", "notas", "asistente"];
 
 function obtenerOrdenNavegacionEfectivo() {
   const crudo = estado.datos.configuracion.navegacion_orden || [];

@@ -1134,6 +1134,7 @@ function fusionarDatos(datosLocal, datosRemoto) {
   // del objeto completo.
   const tumbasCompaneros = fusionarTumbas(datosLocal._eliminados_companeros, datosRemoto._eliminados_companeros);
   const tumbasAgenda = fusionarTumbas(datosLocal._eliminados_agenda, datosRemoto._eliminados_agenda);
+  const tumbasNotas = fusionarTumbas(datosLocal._eliminados_notas, datosRemoto._eliminados_notas);
   // Adjuntos (2026-08-08): colección plana de nivel superior, igual patrón
   // que profesores/companeros/agenda — fusionarColeccion ya sabe fundir por
   // _actualizadoEn y respetar tumbas, no hace falta ninguna función nueva.
@@ -1232,6 +1233,7 @@ function fusionarDatos(datosLocal, datosRemoto) {
     profesores: fusionarColeccion(datosLocal.profesores, datosRemoto.profesores, tumbasProfesores, "profesor"),
     companeros: fusionarColeccion(datosLocal.companeros, datosRemoto.companeros, tumbasCompaneros, "compañero"),
     agenda: fusionarColeccion(datosLocal.agenda, datosRemoto.agenda, tumbasAgenda, "evento de agenda"),
+    notas: fusionarColeccion(datosLocal.notas, datosRemoto.notas, tumbasNotas, "nota rápida"),
     adjuntos: fusionarColeccion(datosLocal.adjuntos, datosRemoto.adjuntos, tumbasAdjuntos, "adjunto"),
     // Becas y Pagos de Matrícula — Parte A: ya no es una colección plana
     // como profesores/companeros/adjuntos — cada registro funde sus propias
@@ -1277,6 +1279,7 @@ function fusionarDatos(datosLocal, datosRemoto) {
     _eliminados_profesores: tumbasProfesores,
     _eliminados_companeros: tumbasCompaneros,
     _eliminados_agenda: tumbasAgenda,
+    _eliminados_notas: tumbasNotas,
     _eliminados_adjuntos: tumbasAdjuntos,
     _eliminados_finanzas_semestre: tumbasFinanzasSemestre,
     _eliminados_gastos_u: tumbasGastosU,
