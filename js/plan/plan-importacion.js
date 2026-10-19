@@ -463,7 +463,7 @@ const PASOS_GUIA_IMPORTACION = {
   file: [
     PASO_SESION_ABRIR, PASO_SESION_LISTO,
     ["Copia la instrucción", "Es el texto que le explica a Claude cómo organizar tu plan.", "copy", "Copiar instrucción"],
-    ["Adjunta tu plan y envía", "Pega la instrucción (Ctrl+V), arrastra tu plan al cuadro de Claude y envía. ¿No se adjunta? Guarda una copia y usa el clip 📎.", "sent", "Ya lo envié", true],
+    ["Adjunta tu plan y envía", "Pega la instrucción (Ctrl+V), adjunta tu plan con el clip 📎 (puedes guardar una copia en Descargas) y envía.", "sent", "Ya lo envié", true],
     PASO_COPIAR_RESPUESTA,
   ],
   phone: [
@@ -495,27 +495,6 @@ async function compartirArchivosClaude() {
     if (error?.name !== "AbortError") mostrarToast("No se pudo compartir. Adjunta el archivo manualmente en Claude.");
     return false;
   }
-}
-
-/** Tarjetas para arrastrar el plan al cuadro de Claude. Agrega el archivo real al
- *  arrastre (si el archivo viene del disco, el navegador lo entrega como archivo nativo)
- *  y, aparte, la vía "DownloadURL" para soltarlo en el escritorio o una carpeta. */
-function crearTarjetasArchivoImportacion(doc, clase) {
-  const caja = doc.createElement("div"); caja.className = clase;
-  archivosFuenteImportacion.forEach((file) => {
-    const t = doc.createElement("div"); t.className = "archivo importacion-archivo-chip"; t.draggable = true;
-    if (file.type.startsWith("image/")) { const img = doc.createElement("img"); const url = URL.createObjectURL(file); img.src = url; img.alt = file.name; t.appendChild(img); }
-    else { const ico = doc.createElement("span"); ico.textContent = "📄"; ico.setAttribute("aria-hidden", "true"); t.appendChild(ico); }
-    const nombre = doc.createElement("span"); nombre.textContent = file.name; t.appendChild(nombre);
-    t.addEventListener("dragstart", (e) => {
-      if (e.target && e.target.tagName === "IMG") return; // la imagen ya se arrastra sola como archivo
-      e.dataTransfer.effectAllowed = "copy";
-      try { e.dataTransfer.items.add(file); } catch (_) { /* navegador sin soporte */ }
-      try { e.dataTransfer.setData("DownloadURL", `${file.type || "application/octet-stream"}:${file.name}:${URL.createObjectURL(file)}`); } catch (_) { /* opcional */ }
-    });
-    caja.appendChild(t);
-  });
-  return caja;
 }
 
 /** Guarda en Descargas lo que el usuario va a adjuntar en Claude. Arrastrar desde
@@ -616,7 +595,6 @@ function dibujarGuiaFlotanteImportacion() {
   acciones.appendChild(principal);
   if (indicePasoGuiaImportacion > 0) { const anterior = doc.createElement("button"); anterior.className = "atras"; anterior.textContent = traducirTextoInterfaz("Paso anterior"); anterior.addEventListener("click", () => avanzarGuiaImportacion(-1)); acciones.appendChild(anterior); }
   const piezas = [progreso, cabeza, p];
-  if (paso[4] && archivosFuenteImportacion.length) piezas.push(crearTarjetasArchivoImportacion(doc, "archivos"));
   if (paso[4] && archivosFuenteImportacion.length) { const copia = doc.createElement("button"); copia.className = "atras"; copia.textContent = traducirTextoInterfaz("Guardar una copia en Descargas"); copia.addEventListener("click", () => { descargarArchivosImportacion(); registrarPasoSeguimientoImportacion("archivo_guardado"); }); acciones.appendChild(copia); }
   doc.body.replaceChildren(...piezas, acciones);
 }
@@ -701,7 +679,6 @@ function construirGuiaIntegradaImportacion(sec, pasos) {
   const num = impEl("span", "imp-num"); num.textContent = String(indicePasoGuiaImportacion + 1);
   const textos = impEl("div", "imp-paso-textos"); textos.append(impEl("h3", "imp-titulo imp-titulo-paso", paso[0]), impEl("p", "imp-lead", paso[1]));
   fila.append(num, textos); sec.append(puntos, fila);
-  if (paso[4] && archivosFuenteImportacion.length) sec.appendChild(crearTarjetasArchivoImportacion(document, "importacion-archivos-arrastrables"));
   if (paso[2] === "sent" || paso[2] === "copied") sec.appendChild(construirEjemploClaude(paso[2]));
   const accion = paso[2];
   sec.appendChild(impBoton(paso[3], async () => {
