@@ -466,6 +466,12 @@ const PASOS_GUIA_IMPORTACION = {
     ["Adjunta tu plan y envía", "Pega la instrucción (Ctrl+V), adjunta tu plan con el clip 📎 (puedes guardar una copia en Descargas) y envía.", "sent", "Ya lo envié", true],
     PASO_COPIAR_RESPUESTA,
   ],
+  pdf: [
+    PASO_SESION_ABRIR, PASO_SESION_LISTO,
+    ["Copia la instrucción", "Es el texto que le explica a Claude cómo organizar tu plan.", "copy", "Copiar instrucción"],
+    ["Adjunta tu PDF y envía", "Pega la instrucción (Ctrl+V), adjunta tu PDF con el clip 📎 (búscalo en tu dispositivo) y envía.", "sent", "Ya lo envié"],
+    PASO_COPIAR_RESPUESTA,
+  ],
   phone: [
     PASO_SESION_ABRIR, PASO_SESION_LISTO,
     ["Comparte tu plan con Claude", "Elige Claude en el menú. El archivo y la instrucción viajan juntos.", "share", "Compartir con Claude"],
@@ -476,6 +482,7 @@ const PASOS_GUIA_IMPORTACION = {
 
 function obtenerPasosGuiaImportacion() {
   if (estado.modoImportacion === "link") return PASOS_GUIA_IMPORTACION.link;
+  if (estado.modoImportacion === "pdf" && !archivosFuenteImportacion.length) return PASOS_GUIA_IMPORTACION.pdf;
   const files = archivosFuenteImportacion;
   const movil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   if (movil && files.length && navigator.share && navigator.canShare?.({ files })) return PASOS_GUIA_IMPORTACION.phone;
@@ -533,7 +540,7 @@ function construirEjemploClaude(accionPaso) {
   if (accionPaso === "copied") { const usuario = document.createElement("div"); usuario.className = "importacion-mock-burbuja usuario"; usuario.textContent = traducirTextoInterfaz("Tu instrucción"); const respuesta = document.createElement("div"); respuesta.className = "importacion-mock-burbuja respuesta"; respuesta.textContent = traducirTextoInterfaz("Tu plan organizado"); const copiar = document.createElement("span"); copiar.className = "importacion-mock-copiar"; copiar.textContent = traducirTextoInterfaz("Copiar"); respuesta.appendChild(copiar); cuerpo.append(usuario, respuesta); }
   else { const bienvenida = document.createElement("div"); bienvenida.className = "importacion-mock-burbuja"; bienvenida.textContent = traducirTextoInterfaz("¿En qué puedo ayudarte?"); cuerpo.appendChild(bienvenida); }
   const compositor = document.createElement("div"); compositor.className = "importacion-mock-compositor" + (accionPaso === "sent" ? " enfocado" : "");
-  if (estado.modoImportacion !== "link" && archivosFuenteImportacion.length) { const adjunto = document.createElement("span"); adjunto.className = "importacion-mock-adjunto"; adjunto.textContent = "📎 " + traducirTextoInterfaz("Tu plan adjunto"); compositor.appendChild(adjunto); }
+  if (estado.modoImportacion !== "link" && (archivosFuenteImportacion.length || estado.modoImportacion === "pdf")) { const adjunto = document.createElement("span"); adjunto.className = "importacion-mock-adjunto"; adjunto.textContent = "📎 " + traducirTextoInterfaz("Tu plan adjunto"); compositor.appendChild(adjunto); }
   const texto = document.createElement("span"); texto.textContent = traducirTextoInterfaz("Escribe un mensaje…"); compositor.appendChild(texto); ventana.append(cabecera, cuerpo, compositor); muestra.append(leyenda, ventana); return muestra;
 }
 
@@ -630,7 +637,7 @@ function impNav(atras, principal) {
   nav.append(atras); if (principal) nav.append(principal);
   return nav;
 }
-function irEtapaImportacion(etapa) { estado.importacionEtapa = etapa; renderizarPlanEstudios(); }
+function irEtapaImportacion(etapa) { if (etapa === "entrada" && estado.modoImportacion === "pdf") etapa = "fuente"; estado.importacionEtapa = etapa; renderizarPlanEstudios(); }
 
 /** La respuesta de Claude siempre trae el encabezado Bloque,Codigo,Nombre,... */
 function tieneEncabezadoRespuesta(texto) { return /Bloque\s*,\s*Codigo\s*,/i.test(texto || ""); }
@@ -732,7 +739,7 @@ function construirPanelImportacion() {
       const b = impEl("button", "imp-opcion"); b.type = "button";
       const ico = impEl("span", "imp-opcion-icono"); ico.textContent = op.icono; ico.setAttribute("aria-hidden", "true");
       const copy = document.createElement("span"); copy.append(impEl("strong", null, op.texto), impEl("small", null, op.detalle)); b.append(ico, copy);
-      b.addEventListener("click", () => { estado.modoImportacion = op.valor; archivosFuenteImportacion = []; estado.importacionImagenesComoPdf = false; estado.csvImportacionTexto.nuevo = ""; if (!flujoAnaliticoImportacion) iniciarSeguimientoImportacion(); registrarPasoSeguimientoImportacion("fuente_elegida"); ir("entrada"); });
+      b.addEventListener("click", () => { estado.modoImportacion = op.valor; archivosFuenteImportacion = []; estado.importacionImagenesComoPdf = false; estado.csvImportacionTexto.nuevo = ""; if (!flujoAnaliticoImportacion) iniciarSeguimientoImportacion(); registrarPasoSeguimientoImportacion("fuente_elegida"); if (op.valor === "pdf") { estado.importacionEtapa = "guia"; indicePasoGuiaImportacion = 0; estado.importacionGuiaIntegrada = false; registrarPasoSeguimientoImportacion("fuente_preparada"); renderizarPlanEstudios(); } else ir("entrada"); });
       opciones.appendChild(b);
     });
     sec.appendChild(opciones);
