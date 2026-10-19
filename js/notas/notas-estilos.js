@@ -70,6 +70,95 @@ const CSS = `
 .nota-drag-handle svg{display:block;width:16px;height:16px;fill:currentColor}
 .nota-arrastrando{position:relative;z-index:60;box-shadow:0 20px 44px rgba(0,0,0,.5)!important;opacity:.97;transition:none!important;cursor:grabbing}
 body.nota-arrastrando-body{user-select:none;-webkit-user-select:none;cursor:grabbing}
+
+/* ===== Editor: color de texto (izq.) y de tinta (der.) siempre visibles, barra centrada ===== */
+.notas-editor .nt-barra-fila{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px}
+.nt-swatch{position:relative;display:inline-grid;place-items:center;flex:none;width:32px;height:32px;border-radius:50%;background:var(--sw,#172033);border:2px solid rgba(255,255,255,.4);box-shadow:0 2px 8px rgba(0,0,0,.3);overflow:hidden;cursor:pointer;transition:transform .15s}
+.nt-swatch:hover{transform:scale(1.07)}
+.nt-swatch:focus-within{outline:2px solid #fff;outline-offset:2px}
+.nt-swatch-texto{justify-self:start}
+.nt-swatch-tinta{justify-self:end}
+.nt-swatch-ico{display:grid;place-items:center;pointer-events:none;color:var(--sw-fg,#fff);font-size:.95rem;line-height:1}
+.nt-swatch-ico .nt-ico{width:15px;height:15px}
+.nt-input-color{position:absolute;inset:0;width:100%;height:100%;padding:0;border:0;opacity:0;cursor:pointer}
+@media(max-width:560px){.notas-editor .nt-barra-fila{grid-template-columns:auto 1fr auto}.notas-editor .nt-barra-fila .notas-toolbar{grid-column:1/-1;grid-row:2}}
+.nt-pin.activo .nt-ico{fill:currentColor}
+
+/* ===== Fechas con el estilo de la app ===== */
+.nt-tiempos{justify-content:center}
+.nt-fecha{position:relative;display:inline-flex}
+.nt-fecha-btn{display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border:1px solid var(--border,rgba(255,255,255,.14));border-radius:999px;background:rgba(0,0,0,.2);color:inherit;font:inherit;font-size:.8rem;cursor:pointer;transition:background .15s}
+.nt-fecha-btn:hover{background:rgba(255,255,255,.09)}
+.nt-fecha-etq{color:var(--text-muted,rgba(255,255,255,.62));font-weight:600}
+.nt-fecha-val{font-weight:600;white-space:nowrap}
+.nt-fecha-input{position:absolute;left:0;top:0;width:100%;height:100%;padding:0;border:0;opacity:0;pointer-events:none}
+.notas-editor .nt-fecha-venc .nt-fecha-btn{min-height:36px;padding:6px 14px;font-size:.9rem}
+
+/* ===== Vencimiento: menú propio ===== */
+.nt-plazo{position:relative;display:inline-flex}
+.nt-chip{display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:6px 12px 6px 14px;border:1px solid var(--nt-borde,rgba(255,255,255,.14));border-radius:999px;background:var(--nt-fondo,rgba(255,255,255,.06));color:inherit;font:inherit;font-size:.9rem;font-weight:600;cursor:pointer}
+.nt-chip:hover{background:rgba(255,255,255,.1)}
+.nt-chip .nt-ico{width:14px;height:14px;transition:transform .15s}
+.nt-chip[aria-expanded="true"] .nt-ico{transform:rotate(180deg)}
+.nt-menu{position:absolute;left:0;bottom:calc(100% + 8px);z-index:30;display:flex;flex-direction:column;gap:2px;min-width:200px;padding:6px;border-radius:16px;background:rgba(22,20,34,.98);border:1px solid rgba(255,255,255,.14);box-shadow:0 18px 40px rgba(0,0,0,.55)}
+.nt-menu button{padding:9px 12px;border:0;border-radius:11px;background:transparent;color:#fff;font:inherit;font-size:.9rem;font-weight:600;text-align:left;cursor:pointer}
+.nt-menu button:hover{background:rgba(255,255,255,.1)}
+.nt-menu button[aria-selected="true"]{background:var(--nt-grad,linear-gradient(135deg,#f5a9d3,#b7a5f4));color:#1b1530}
+
+/* ===== Pie del editor: izquierda (Wapper, Compartir) y derecha (Duplicar, Eliminar) ===== */
+.notas-editor .notas-editor-foot{display:flex;flex-direction:column;gap:12px}
+.notas-editor .notas-editor-tools{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.notas-editor .notas-editor-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;width:100%}
+.notas-editor .notas-editor-share,.notas-editor .nt-acc-der{display:flex;flex-wrap:wrap;gap:8px}
+.notas-editor .nt-acc-der{margin-left:auto}
+.notas-editor .notas-editor-actions .btn{display:inline-flex;align-items:center;gap:8px}
+.notas-editor .notas-editor-actions .nt-ico{width:17px;height:17px}
+
+/* ===== Tarjetas: 6 botones en una fila ===== */
+.nota-card .nota-card-top-solo{justify-content:flex-end}
+.nota-card .nota-card-foot{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.nota-card .nota-card-actions{display:flex;flex:1 1 100%;align-items:center;justify-content:space-between;gap:2px;width:100%;margin:0}
+.nota-card .nota-icon-action{display:inline-grid;place-items:center;min-width:32px;height:32px;padding:0}
+.nota-card .nota-icon-action .nt-ico{width:17px;height:17px}
+.nota-card .nota-icon-action.activo .nt-ico{fill:currentColor}
+.nt-vsep{flex:none;width:1px;height:18px;background:currentColor;opacity:.25;margin:0 2px}
+.nota-card.nota-flotando{opacity:.62}
+.nota-card.nota-flotando .nota-card-foot .nt-chip-flot{display:inline-flex}
+.nt-chip-flot{display:none;align-items:center;gap:5px;padding:2px 9px;border-radius:999px;font-size:.74rem;font-weight:700;background:rgba(0,0,0,.14)}
+.nt-chip-flot .nt-ico{width:12px;height:12px}
+
+/* ===== Menú contextual con iconos ===== */
+.notas-menu-contextual .notas-menu-item{display:flex;align-items:center;gap:10px;width:100%}
+.notas-menu-contextual .nt-mi-ico{display:inline-grid;place-items:center;flex:none;width:20px}
+.notas-menu-contextual .nt-mi-ico .nt-ico{width:17px;height:17px}
+
+/* ===== Sticky: la nota se levanta al tocarla ===== */
+.nt-sticky-overlay{position:fixed;inset:0;z-index:1100;display:grid;place-items:center;padding:20px;background:rgba(5,4,12,.5);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+.nt-sticky{position:relative;display:flex;flex-direction:column;gap:10px;width:min(420px,100%);max-height:min(80vh,680px);padding:14px 20px 20px;border-radius:10px;background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(0,0,0,.05)),var(--nt-nota,#fff594);box-shadow:0 30px 64px rgba(0,0,0,.55),0 4px 12px rgba(0,0,0,.3);transform:rotate(-1.2deg)}
+.nt-sticky-barra{display:flex;align-items:center;justify-content:flex-end;gap:6px}
+.nt-sticky-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:34px;padding:0 12px;border:0;border-radius:999px;background:rgba(0,0,0,.13);color:inherit;font:inherit;font-size:.86rem;font-weight:700;cursor:pointer;transition:background .15s}
+.nt-sticky-btn:hover{background:rgba(0,0,0,.24)}
+.nt-sticky-btn .nt-ico{width:16px;height:16px}
+.nt-sticky-icono{width:34px;padding:0}
+.nt-sticky-cuerpo{display:flex;flex-direction:column;gap:8px;min-height:0;overflow:auto;overflow-wrap:anywhere}
+.nt-sticky-titulo{font-size:1.18rem;line-height:1.25}
+.nt-sticky .nota-preview,.nt-flotante .nota-preview{display:block;max-height:none;overflow:visible;-webkit-line-clamp:unset;line-clamp:unset}
+.nt-sticky-vence{align-self:flex-start;padding:2px 10px;border-radius:999px;font-size:.78rem;font-weight:700;background:rgba(0,0,0,.14)}
+.nt-sticky .nota-tinta-mini,.nt-flotante .nota-tinta-mini{margin-top:4px}
+
+/* ===== Notas flotantes ===== */
+.nt-flotante{position:fixed;left:0;top:0;z-index:700;display:flex;flex-direction:column;gap:6px;width:236px;max-height:min(55vh,420px);padding:6px 12px 12px;border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(0,0,0,.05)),var(--nt-nota,#fff594);box-shadow:0 14px 30px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.3);transform-origin:50% 0;will-change:transform;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;overflow:hidden}
+.nt-flotante.arrastrando{cursor:grabbing;box-shadow:0 28px 54px rgba(0,0,0,.55),0 4px 10px rgba(0,0,0,.3)}
+.nt-flot-barra{display:flex;align-items:center;gap:2px}
+.nt-flot-asa{display:grid;margin-right:auto;opacity:.4}
+.nt-flot-asa .nt-ico{width:14px;height:14px}
+.nt-flotante .nt-flot-btn{display:inline-grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;opacity:.7;cursor:pointer}
+.nt-flotante .nt-flot-btn:hover{opacity:1;background:rgba(0,0,0,.14)}
+.nt-flotante .nt-flot-btn .nt-ico{width:16px;height:16px}
+.nt-flot-titulo{font-size:1rem;line-height:1.25;overflow-wrap:anywhere}
+.nt-flot-cuerpo{min-height:0;overflow:auto;scrollbar-width:none;font-size:.92rem;overflow-wrap:anywhere}
+.nt-flot-cuerpo::-webkit-scrollbar{display:none}
+@media(prefers-reduced-motion:reduce){.nt-sticky,.nt-flotante{transition:none!important}}
 `;
 
 function inyectarEstilosNotas() {
