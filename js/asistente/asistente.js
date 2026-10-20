@@ -15,7 +15,7 @@ import { agregarEnlaceAdjunto } from "../core/storage-adjuntos.js";
 import { MODO_DEMO } from "../core/demo-mode.js";
 import { crearEventoAgenda } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { programarRecordatorioPush } from "../core/notificaciones-push.js";
+import { sincronizarEventoCalendario } from "../core/notificaciones-calendario.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { abrirModalEventoAgenda, confirmarBorrarEventoAgenda, obtenerNombreMateriaEvento } from "../agenda/agenda-modal.js";
 import {
@@ -38,6 +38,8 @@ import { obtenerClasesEfectivasSemana } from "../core/schema.js";
 import { aplicarModalidadDia, calcularNumeroSemanaSinAcotarParaFecha } from "../horario/horario-modal.js";
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
+import { guardarMensajeWapper, listarMensajesWapper, actualizarMensajeWapper, descartarMensajeWapper, procesarColaWapper } from "./asistente-cola.js";
+import { iniciarProcesoAnalitico } from "../core/analitica.js";
 
 /**
  * Modelo de Gemini (revisado 2026-08-22, bug real en producción):
@@ -582,6 +584,27 @@ function esPreguntaCapacidades(textoOriginal) {
 let conversacionActual = [];
 let enviandoMensaje = false;
 
+function fechaReferenciaWapper() {
+  const hoy = new Date();
+  return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+}
+
+function cuentaColaWapper() {
+  return String(estado.datos?.perfil?.correo || "").trim().toLocaleLowerCase("en-US");
+}
+
+async function encolarMensajeWapper(datos) {
+  if (MODO_DEMO) throw new Error("La cola de Wapper no está disponible en la demo.");
+  const cuenta = cuentaColaWapper();
+  if (!cuenta) throw new Error("No se pudo identificar la cuenta para guardar el mensaje.");
+  return guardarMensajeWapper({
+    ...datos,
+    cuenta,
+    fechaReferencia: fechaReferenciaWapper(),
+    zonaHoraria: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  });
+}
+
 /* ===================== Voz (Web Speech API, nativo del navegador) =====================
  * Sin costo: no pasa por Gemini ni por ninguna API paga — el navegador
  * transcribe localmente/vía su propio motor (Chrome usa el de Google,
@@ -658,23 +681,29 @@ async function transcribirBase64ConGemini(base64, mimeType) {
   }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODELO_GEMINI}:generateContent?key=${encodeURIComponent(claveApi)}`;
-  const respuesta = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { inline_data: { mime_type: mimeType || "audio/webm", data: base64 } },
-            {
-              text: "Transcribí EXACTAMENTE lo que se dice en este audio, en español. Devolvé únicamente el texto transcrito, sin comillas ni comentarios adicionales.",
-            },
-          ],
-        },
-      ],
-    }),
-  });
+  let respuesta;
+  try {
+    respuesta = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { inline_data: { mime_type: mimeType || "audio/webm", data: base64 } },
+              {
+                text: "Transcribe exactamente lo que se dice en este audio, en español. Devuelve únicamente el texto transcrito, sin comillas ni comentarios adicionales.",
+              },
+            ],
+          },
+        ],
+      }),
+    });
+  } catch (error) {
+    error.tipoError = "red";
+    throw error;
+  }
 
   const datos = await respuesta.json().catch(() => null);
   if (!respuesta.ok) {
@@ -710,12 +739,13 @@ async function transcribirAudioConGemini(blob) {
  * de los dos, no se dibuja (degradación silenciosa a solo texto).
  */
 function crearBotonVoz(input) {
-  if (!ReconocimientoVozAPI && !soportaFallbackGrabacion()) return null;
+  if (!soportaFallbackGrabacion()) return null;
 
   const btn = document.createElement("button");
   btn.id = "btn-asistente-voz";
-  btn.title = "Dictar por voz";
-  btn.setAttribute("aria-label", "Dictar por voz");
+  btn.title = traducirTextoInterfaz("Dictar por voz");
+  btn.setAttribute("aria-label", traducirTextoInterfaz("Dictar por voz"));
+  btn.setAttribute("aria-pressed", "false");
   btn.textContent = "🎙️";
   btn.style.cssText =
     "background:none; border:none; font-size:1.4rem; line-height:1; cursor:pointer; padding:2px 8px; flex-shrink:0;";
@@ -724,6 +754,19 @@ function crearBotonVoz(input) {
   // separado de grabandoVoz (que cubre ambos caminos) porque btn.onclick
   // necesita saber A CUÁL de los dos motores mandarle el "parar".
   let grabandoConFallback = false;
+  let temporizadorGrabacion = null;
+  let inicioGrabacion = 0;
+  let resolverFinGrabacion = null;
+  let idAudioCola = null;
+  let guardadoChunksCola = Promise.resolve();
+  const listenersPistas = [];
+  const pintarTemporizador = () => {
+    const segundos = Math.floor((Date.now() - inicioGrabacion) / 1000);
+    const tiempo = `${String(Math.floor(segundos / 60)).padStart(2, "0")}:${String(segundos % 60).padStart(2, "0")}`;
+    btn.textContent = `🔴 ${tiempo}`;
+    btn.title = traducirTextoInterfaz("Grabando, toca para detener. {tiempo}").replace("{tiempo}", tiempo);
+    btn.setAttribute("aria-label", btn.title);
+  };
   // true solo durante la ventana entre "el nativo tiró error real" y "el
   // fallback ya tomó control de la UI" — evita que el onend del nativo
   // (que dispara igual después de un error) pise el ícono de "grabando"
@@ -777,59 +820,128 @@ function crearBotonVoz(input) {
 
   function iniciarFallbackGrabacion(textoPrevioAlInput) {
     if (!soportaFallbackGrabacion()) {
-      mostrarToast("El micrófono no está disponible en este navegador.");
+      mostrarToast(traducirTextoInterfaz("El micrófono no está disponible en este navegador."));
       return;
     }
     navigator.mediaDevices
       .getUserMedia({ audio: true })
-      .then((stream) => {
+      .then(async (stream) => {
         transicionandoAFallback = false;
         chunksAudioVoz = [];
+        guardadoChunksCola = Promise.resolve();
+        idAudioCola = null;
+        try {
+          const temporal = await encolarMensajeWapper({ tipo: "audio", contenido: new Blob(), mimeType: "audio/webm", estado: "grabando" });
+          idAudioCola = temporal.id;
+        } catch (errorCola) { console.warn("[asistente] La grabación quedará solo en memoria durante esta sesión:", errorCola); }
         mediaRecorderVoz = new MediaRecorder(stream);
         grabandoConFallback = true;
         grabandoVoz = true;
-        btn.textContent = "🔴";
-        btn.title = "Grabando… toca para detener";
+        btn.setAttribute("aria-pressed", "true");
+        inicioGrabacion = Date.now();
+        pintarTemporizador();
+        temporizadorGrabacion = setInterval(pintarTemporizador, 1000);
+        window.__detenerGrabacionWapper = () => new Promise((resolve) => {
+          resolverFinGrabacion = resolve;
+          if (mediaRecorderVoz?.state === "recording") mediaRecorderVoz.stop(); else resolve();
+        });
+        stream.getTracks().forEach((track) => {
+          const listener = () => { if (mediaRecorderVoz?.state === "recording") mediaRecorderVoz.stop(); };
+          listenersPistas.push([track, listener]);
+          track.addEventListener("ended", listener, { once: true });
+        });
 
         mediaRecorderVoz.ondataavailable = (e) => {
-          if (e.data.size > 0) chunksAudioVoz.push(e.data);
+          if (e.data.size > 0) {
+            chunksAudioVoz.push(e.data);
+            if (idAudioCola) {
+              const copiaParcial = new Blob(chunksAudioVoz, { type: mediaRecorderVoz.mimeType || "audio/webm" });
+              guardadoChunksCola = guardadoChunksCola
+                .then(() => actualizarMensajeWapper(idAudioCola, { contenido: copiaParcial, actualizado: Date.now() }))
+                .catch((error) => console.warn("[asistente] No se pudo conservar un fragmento de audio:", error));
+            }
+          }
         };
         mediaRecorderVoz.onstop = async () => {
+          clearInterval(temporizadorGrabacion);
+          temporizadorGrabacion = null;
+          listenersPistas.splice(0).forEach(([track, listener]) => track.removeEventListener("ended", listener));
           stream.getTracks().forEach((t) => t.stop());
           grabandoConFallback = false;
           grabandoVoz = false;
+          btn.setAttribute("aria-pressed", "false");
           btn.disabled = true;
-          btn.textContent = "⏳";
-          btn.title = "Transcribiendo…";
+        btn.textContent = "⏳";
+        btn.title = traducirTextoInterfaz("Transcribiendo audio...");
+          btn.setAttribute("aria-label", btn.title);
           try {
+            await guardadoChunksCola;
             const blob = new Blob(chunksAudioVoz, { type: mediaRecorderVoz.mimeType || "audio/webm" });
+            if (typeof navigator !== "undefined" && navigator.onLine === false) {
+              if (idAudioCola) await actualizarMensajeWapper(idAudioCola, { estado: "pendiente", contenido: blob, mimeType: blob.type, actualizado: Date.now() });
+              else await encolarMensajeWapper({ tipo: "audio", contenido: blob, mimeType: blob.type });
+              void actualizarBadgeColaWapper();
+              mostrarBurbujaAudioEnCola();
+              mostrarToast(traducirTextoInterfaz("Sin conexión. Guardé tu audio en la cola de Wapper."));
+              idAudioCola = null;
+              return;
+            }
             const texto = await transcribirAudioConGemini(blob);
+            if (idAudioCola) await descartarMensajeWapper(idAudioCola);
+            idAudioCola = null;
             input.value = textoPrevioAlInput + texto;
             ajustarAlturaInputAsistente(input);
           } catch (e) {
             console.warn("[asistente] Error transcribiendo audio con Gemini:", e);
+            if (e.tipoError === "red" || (typeof navigator !== "undefined" && navigator.onLine === false)) {
+              try {
+                const blob = new Blob(chunksAudioVoz, { type: mediaRecorderVoz?.mimeType || "audio/webm" });
+                if (idAudioCola) await actualizarMensajeWapper(idAudioCola, { estado: "pendiente", contenido: blob, mimeType: blob.type, actualizado: Date.now() });
+                else await encolarMensajeWapper({ tipo: "audio", contenido: blob, mimeType: blob.type });
+                void actualizarBadgeColaWapper();
+                mostrarBurbujaAudioEnCola();
+                mostrarToast(traducirTextoInterfaz("Se perdió la conexión. Guardé tu audio en la cola de Wapper."));
+                idAudioCola = null;
+                return;
+              } catch (errorCola) {
+                console.warn("[asistente] No se pudo guardar el audio en la cola:", errorCola);
+                mostrarToast(traducirTextoInterfaz("No pude guardar el audio. Mantén esta pantalla abierta y vuelve a intentarlo."));
+                return;
+              }
+            }
+            if (idAudioCola) {
+              const audioConservado = new Blob(chunksAudioVoz, { type: mediaRecorderVoz?.mimeType || "audio/webm" });
+              await actualizarMensajeWapper(idAudioCola, { estado: "requiere_ayuda", contenido: audioConservado, motivo: traducirTextoInterfaz("No se pudo transcribir el audio grabado.") });
+              idAudioCola = null;
+            }
             mostrarToast(
               typeof navigator !== "undefined" && navigator.onLine === false
-                ? "No tienes conexión a internet."
-                : "No se pudo transcribir el audio grabado."
+                ? traducirTextoInterfaz("No tienes conexión a internet.")
+                : traducirTextoInterfaz("No se pudo transcribir el audio grabado.")
             );
           } finally {
             btn.disabled = false;
             btn.textContent = "🎙️";
-            btn.title = "Dictar por voz";
+            btn.title = traducirTextoInterfaz("Dictar por voz");
+            btn.setAttribute("aria-label", btn.title);
+            window.__detenerGrabacionWapper = null;
+            resolverFinGrabacion?.();
+            resolverFinGrabacion = null;
             input.focus();
           }
         };
-        mediaRecorderVoz.start();
+        mediaRecorderVoz.start(1000);
       })
       .catch((e) => {
         transicionandoAFallback = false;
         grabandoConFallback = false;
         grabandoVoz = false;
         btn.textContent = "🎙️";
-        btn.title = "Dictar por voz";
+        btn.title = traducirTextoInterfaz("Dictar por voz");
+        btn.setAttribute("aria-label", btn.title);
+        btn.setAttribute("aria-pressed", "false");
         console.warn("[asistente] No se pudo acceder al micrófono (fallback):", e);
-        mostrarToast(e && e.name === "NotAllowedError" ? "Permiso de micrófono denegado" : "No se pudo usar el micrófono");
+        mostrarToast(traducirTextoInterfaz(e && e.name === "NotAllowedError" ? "Permiso de micrófono denegado" : "No se pudo usar el micrófono"));
       });
   }
 
@@ -935,12 +1047,7 @@ function crearBotonVoz(input) {
     // ambos caminos (nativo y fallback).
     const textoPrevioAlInput = input.value ? `${input.value} ` : "";
 
-    if (usarFallbackTranscripcionGemini || !ReconocimientoVozAPI) {
-      iniciarFallbackGrabacion(textoPrevioAlInput);
-      return;
-    }
-
-    iniciarReconocimientoNativo(textoPrevioAlInput);
+    iniciarFallbackGrabacion(textoPrevioAlInput);
   };
 
   return btn;
@@ -1327,7 +1434,7 @@ function construirAvisoApodosDuplicados(materiasVinculables) {
   return `\n\n⚠️ Apodos duplicados (dos o más materias comparten el mismo apodo):
 ${filas}
 Si el usuario usa uno de estos apodos SIN aclarar de cuál habla (ej. no
-menciona nada más que lo distinga), NO adivines cuál es: devolvé "items":
+menciona nada más que lo distinga), NO adivines cuál es: devuelve "items":
 [] y preguntá en "aclaracion" cuál de las dos es, nombrando el nombre
 OFICIAL de cada una (ej. "Le pusiste 'Nata' tanto a Natación como a Vóley
 playa, ¿a cuál te refieres?").`;
@@ -1361,7 +1468,7 @@ function construirAvisoInicialesDuplicadas(materiasVinculables) {
   return `\n\n⚠️ Iniciales duplicadas (dos o más materias calculan a las mismas iniciales):
 ${filas}
 Si el usuario usa unas iniciales de esta lista SIN aclarar de cuál habla,
-NO adivines cuál es: devolvé "items": [] (o "consulta": null /
+NO adivines cuál es: devuelve "items": [] (o "consulta": null /
 "cambioModalidad": null, según corresponda) y preguntá en "aclaracion"
 cuál de las dos es, nombrando el nombre OFICIAL de cada una.`;
 }
@@ -1444,8 +1551,10 @@ menciona está en esta lista para esa materia puntual):\n${filas.join("\n")}`;
  * horario — Gemini no tiene ni debe tener ese dato, así que nunca se le
  * pide inventarlo.
  */
-function construirSystemInstruction() {
-  const { iso, diaSemana } = obtenerContextoFechaHoy();
+function construirSystemInstruction(contextoFecha = null) {
+  const { iso, diaSemana } = contextoFecha?.fechaReferencia
+    ? { iso: contextoFecha.fechaReferencia, diaSemana: NOMBRES_DIA_SEMANA[new Date(`${contextoFecha.fechaReferencia}T00:00:00Z`).getUTCDay()] }
+    : obtenerContextoFechaHoy();
   const materiasVinculables = obtenerMateriasVinculablesAgenda();
   const listaMaterias = construirListaMateriasConApodos(materiasVinculables);
   const avisoApodosDuplicados = construirAvisoApodosDuplicados(materiasVinculables);
@@ -1453,20 +1562,20 @@ function construirSystemInstruction() {
   const contextoDiasModalidad = construirContextoDiasModalidadMaterias(materiasVinculables);
   const etiquetasAgenda = (estado.datos.configuracion?.agenda_tipos || []).filter((t) => t.activo !== false && !t.eliminado);
   const contextoEtiquetasAgenda = etiquetasAgenda.length
-    ? `\n\nEtiquetas de Agenda disponibles: ${etiquetasAgenda.map((t) => `${t.id}=${t.nombre} (base ${t.base})`).join(", ")}. Para quizzes/exámenes usa la etiqueta quiz si existe; para proyectos/tareas tipo proyecto usa proyecto si existe. Si el usuario nombra otra etiqueta válida, úsala cuando encaje.`
+    ? `\n\nTipos de Agenda vigentes, usa exactamente el id como etiquetaId: ${etiquetasAgenda.map((t) => t.id + "=" + t.nombre + " (base " + t.base + (t.ayuda_wapper ? ", ayuda: " + t.ayuda_wapper : "") + ")").join("; ")}. Entregar, enviar o presentar un trabajo es tarea o proyecto. Parcial, examen o ensayo es examen. Quiz o prueba corta es quiz. Reunión o cita con hora es evento. Feriado es feriado. Prefiere tipos personalizados cuyo nombre o ayuda coincida claramente. Si dudas, marca confianza baja. Nunca inventes ids.`
     : "";
 
-  return `The app interface language is ${obtenerNombreIdiomaAsistente()}. Always write user-facing text (including clarifications and notes) in the language of the user's latest message; if it is unclear, use the selected interface language. Never claim to prefer Spanish or ask the user to change languages. Keep exact official course names and all JSON field names, action names, type values, and weekday values in the Spanish forms specified below; the application depends on those exact values. Never guess missing dates, times, courses, or facts.\n\nSos el Asistente IA de una app académica. Tu función es leer un
+  return `The app interface language is ${obtenerNombreIdiomaAsistente()}. Always write user-facing text (including clarifications and notes) in the language of the user's latest message; if it is unclear, use the selected interface language. Keep exact official course names and all JSON field names, action names, type values, and weekday values in the Spanish forms specified below. Never guess missing dates, times, courses, or facts.\n\nEres el Asistente IA de una app académica. Tu función es leer un
 mensaje en lenguaje natural de un estudiante universitario y, según lo que
 pida, extraer tareas/exámenes/eventos para su Agenda, detectar un pedido de
 cambiar la modalidad de una clase puntual en su Horario, o reconocer una
 CONSULTA de solo lectura sobre lo que ya tiene guardado (tareas/eventos de
 una semana, o la modalidad de una clase próxima).
 
-Hoy es ${iso} (${diaSemana}). Usá esta fecha como referencia para resolver
+  Hoy es ${iso} (${diaSemana}). Usa esta fecha como referencia en la zona horaria ${contextoFecha?.zonaHoraria || Intl.DateTimeFormat().resolvedOptions().timeZone} para resolver
 cualquier fecha relativa ("mañana", "el jueves", "en 2 semanas", "el
 próximo lunes", etc.). Si el usuario describe algo que se repite (ej. "los
-martes durante 3 semanas seguidas"), devolvé UN ítem por cada ocurrencia
+martes durante 3 semanas seguidas"), devuelve UN ítem por cada ocurrencia
 real, cada uno con su propia fecha.${construirContextoSemanasSemestres()}${construirContextoProximasClases()}
 
 Materias matriculadas reales del usuario ahora mismo (nombre oficial —
@@ -1480,7 +1589,8 @@ Devolvé ÚNICAMENTE un JSON con esta forma exacta:
   "items": [
     {
       "tipo": "evento" | "tarea" | "examen",
-      "etiquetaId": "id de una Etiqueta de Agenda disponible, o null",
+      "etiquetaId": "id exacto de un tipo de Agenda disponible, o null",
+      "confianza": "alta" | "media" | "baja",
       "nombre": "string corto, SOLO el título de la tarea/examen/evento",
       "materia": "nombre EXACTO de la lista de arriba, o null",
       "fecha": "YYYY-MM-DD",
@@ -1513,7 +1623,7 @@ Devolvé ÚNICAMENTE un JSON con esta forma exacta:
   "aclaracion": "string" | null
 }
 
-Regla de "accion" (elegí una sola por mensaje):
+Regla de "accion" (elige una sola por mensaje):
 - "actualizar_nombre": el usuario pide EXPLÍCITAMENTE que lo llames de otra
   forma (ej. "llámame Fer", "decime Pipo de ahora en más", "ya no me digas
   Juan, decime Juanjo", "prefiero que me digas..."). "items": [],
@@ -1549,8 +1659,8 @@ Regla de "accion" (elegí una sola por mensaje):
     cuál, como un número/ordinal o palabra del título), no que pida "todo
     lo que tengo".
   - "semana" (solo aplica a "tareas_eventos"): SOLO si el usuario menciona
-    una "semana N" académica explícita (usá la tabla de semanas de arriba
-    para saber que existe, pero NO calcules fechas vos, eso lo hace el
+    una "semana N" académica explícita (usa la tabla de semanas de arriba
+    para saber que existe, pero NO calcules fechas tú, eso lo hace el
     sistema con el número). Si no menciona ninguna semana puntual (ej.
     "esta semana", "esta nueva semana", o no dice nada), "semana" es null
     (el sistema asume la semana actual) — EXCEPTO si aplica "alcance":
@@ -1690,7 +1800,7 @@ Reglas de "items" (solo aplican cuando accion es "crear_eventos"):
   sistema, pero se reconocen igual), o por una palabra truncada/abreviada
   obvia de una palabra del nombre oficial (ej. "admin de proyectos" →
   "admin" truncado de "Administración")— que coincide claramente con UNA
-  SOLA de la lista, usá SIEMPRE el nombre OFICIAL exacto de la lista en
+  SOLA de la lista, usa SIEMPRE el nombre OFICIAL exacto de la lista en
   "materia", nunca el apodo/iniciales/abreviatura (ej. si dice "tarea de
   natación" y en la lista está "Educación Física II (apodo: Natación)",
   "materia" es "Educación Física II", no "Natación"). Estos caminos son
@@ -1701,7 +1811,7 @@ Reglas de "items" (solo aplican cuando accion es "crear_eventos"):
   (ej. existen "Cálculo I" y "Cálculo II" y el usuario solo dijo
   "cálculo", sin forma de saber cuál con el resto del mensaje; o usa un
   apodo/inicial/abreviatura que podría ser de más de una), NO adivines:
-  devolvé "items": [] y explicá la duda en "aclaracion" con una pregunta
+  devuelve "items": [] y explica la duda en "aclaracion" con una pregunta
   corta y directa (ej. "¿Te refieres a Cálculo I o Cálculo II?").
 - "hora": SOLO si el usuario mencionó una hora puntual explícita (ej. "a
   las 2pm", "a las 14:00"). Si no la mencionó, "hora" es null SIEMPRE —
@@ -1718,15 +1828,15 @@ Reglas de "items" (solo aplican cuando accion es "crear_eventos"):
   "esFeriado" es false. Un feriado casi siempre es "tipo": "evento" y
   "materia": null — nunca lo relaciones con una materia salvo que el
   usuario lo pida explícitamente.
-- Un solo mensaje puede describir más de un ítem — devolvé todos los que
+- Un solo mensaje puede describir más de un ítem — devuelve todos los que
   encuentres en "items".
 - Si el mensaje no describe ninguna tarea/examen/evento reconocible, ni un
   cambio de modalidad, ni una consulta de solo lectura (saludo, pregunta
   suelta sin relación con tareas/horario, charla sin fecha ni intención
-  real de agendar/cambiar/consultar algo), devolvé "accion":
+  real de agendar/cambiar/consultar algo), devuelve "accion":
   "crear_eventos", "items": [] y "aclaracion": null.
 - "aclaracion" es SOLO para preguntar algo puntual que te impide resolver
-  bien un ítem o un cambio de modalidad por ambigüedad real. Si ya tenés
+  bien un ítem o un cambio de modalidad por ambigüedad real. Si ya tienes
   todo claro, "aclaracion" va en null aunque "items" o "cambioModalidad"
   tengan resultados.`;
 }
@@ -1744,6 +1854,7 @@ const ESQUEMA_RESPUESTA_GEMINI = {
         properties: {
           tipo: { type: "STRING", enum: ["evento", "tarea", "examen"] },
           etiquetaId: { type: "STRING", nullable: true },
+          confianza: { type: "STRING", enum: ["alta", "media", "baja"], nullable: true },
           nombre: { type: "STRING" },
           materia: { type: "STRING", nullable: true },
           fecha: { type: "STRING" },
@@ -1752,7 +1863,7 @@ const ESQUEMA_RESPUESTA_GEMINI = {
           esFeriado: { type: "BOOLEAN" },
           enlaces: { type: "ARRAY", items: { type: "STRING" } },
         },
-        required: ["tipo", "nombre", "fecha"],
+        required: ["tipo", "etiquetaId", "confianza", "nombre", "fecha"],
       },
     },
     // editar_modalidad (2026-08-29): "dia" y "modalidadNueva" van sin enum
@@ -1833,7 +1944,7 @@ const ESQUEMA_RESPUESTA_GEMINI = {
  * Bandeja Pendiente) para poder agregar extraerEventosDeTexto (abajo) sin
  * duplicar todo el manejo de errores/parseo de respuesta.
  */
-async function ejecutarGeneracionGemini(contents) {
+async function ejecutarGeneracionGemini(contents, contextoFecha = null) {
   const claveApi = estado.datos.configuracion.gemini_api_key;
   if (!claveApi) {
     const err = new Error("No hay clave de Gemini guardada.");
@@ -1879,7 +1990,7 @@ async function ejecutarGeneracionGemini(contents) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          system_instruction: { parts: [{ text: construirSystemInstruction() }] },
+          system_instruction: { parts: [{ text: construirSystemInstruction(contextoFecha) }] },
           contents,
           generationConfig: {
             responseMimeType: "application/json",
@@ -1955,7 +2066,7 @@ async function ejecutarGeneracionGemini(contents) {
         : parseado.accion === "actualizar_nombre_asistente"
         ? "actualizar_nombre_asistente"
         : "crear_eventos",
-    items: Array.isArray(parseado.items) ? parseado.items : [],
+    items: Array.isArray(parseado.items) ? parseado.items.map(validarTipoWapper) : [],
     cambioModalidad: parseado.cambioModalidad || null,
     consulta: parseado.consulta || null,
     nombrePreferido: parseado.nombrePreferido || null,
@@ -2008,8 +2119,25 @@ async function llamarGemini(mensajeNuevo) {
  * acá mezclaría (o pisaría) esa conversación en vivo, que es justo lo que
  * esto evita. Misma clave, mismo modelo, mismo esquema de respuesta.
  */
-async function extraerEventosDeTexto(texto) {
-  return ejecutarGeneracionGemini([{ role: "user", parts: [{ text: texto }] }]);
+async function extraerEventosDeTexto(texto, contextoFecha = null) {
+  return ejecutarGeneracionGemini([{ role: "user", parts: [{ text: texto }] }], contextoFecha);
+}
+
+function validarTipoWapper(item) {
+  const tipos = (estado.datos.configuracion?.agenda_tipos || []).filter((tipo) => tipo.activo !== false && !tipo.eliminado);
+  const textoNormalizado = normalizarTexto(texto);
+  const materias = obtenerMateriasVinculablesAgenda();
+  const nombresBase = materias.map((materia) => materia.nombre.slice(0, materia.nombre.lastIndexOf(" - ") > -1 ? materia.nombre.lastIndexOf(" - ") : materia.nombre.length));
+  const basesDuplicadas = nombresBase.filter((nombre, indice, lista) => lista.indexOf(nombre) !== indice);
+  const mencionaMateriaAmbiguaSinResolver = basesDuplicadas.some((nombre) => {
+    const normalizada = normalizarTexto(nombre);
+    if (!normalizada || !textoNormalizado.includes(normalizada)) return false;
+    return resultado.items.some((extraido) => !extraido.materia || !textoNormalizado.includes(normalizarTexto(extraido.materia)));
+  });
+  const valido = tipos.find((tipo) => tipo.id === item.etiquetaId && tipo.base === item.tipo);
+  if (valido) return { ...item, etiquetaId: valido.id, requiereRevision: item.confianza === "baja" };
+  const respaldo = tipos.find((tipo) => tipo.id === "evento" && tipo.base === "evento") || tipos.find((tipo) => tipo.base === "evento");
+  return { ...item, tipo: respaldo?.base || "evento", etiquetaId: respaldo?.id || null, confianza: "baja", requiereRevision: true };
 }
 
 /**
@@ -2104,8 +2232,9 @@ function mensajeParaError(e) {
 function resolverMateriaVinculada(nombreMateria) {
   if (!nombreMateria) return null;
   const materias = obtenerMateriasVinculablesAgenda();
-  const exacta = materias.find((m) => m.nombre === nombreMateria);
-  if (exacta) return exacta;
+  const exactas = materias.filter((m) => m.nombre === nombreMateria);
+  if (exactas.length === 1) return exactas[0];
+  if (exactas.length > 1) return null;
   // Red de seguridad (2026-08-31): Gemini debe devolver el nombre oficial
   // EXACTO de la lista que se le pasó, pero un espacio de más, una
   // mayúscula distinta o un acento que se comió por el camino no debería
@@ -2814,9 +2943,13 @@ function construirNotasFinal(notasUsuario) {
  * agenda-modal.js) — nunca se duplica esa lógica acá. Devuelve el id del
  * evento recién creado.
  */
-function guardarItemExtraidoComoEvento(item, googleTaskId = null) {
+function guardarItemExtraidoComoEvento(item, googleTaskId = null, opciones = {}) {
+  if (opciones.idEvento) {
+    const yaGuardado = (estado.datos.agenda || []).find((evento) => evento.id === opciones.idEvento);
+    if (yaGuardado) return yaGuardado.id;
+  }
   const materiaVinculada = resolverMateriaVinculada(item.materia);
-  const horaFinal = item.hora || resolverHoraDefaultDesdeHorario(materiaVinculada, item.fecha);
+  const horaFinal = opciones.preservarSinHora && !item.hora ? null : item.hora || resolverHoraDefaultDesdeHorario(materiaVinculada, item.fecha);
   const etiquetas = estado.datos.configuracion?.agenda_tipos || [];
   const inferida = item.etiquetaId && etiquetas.find((tag) => tag.id === item.etiquetaId && tag.base === item.tipo && tag.activo !== false && !tag.eliminado)
     || (/\bquiz\b/i.test(item.nombre || "") && item.tipo === "examen" && etiquetas.find((tag) => tag.id === "quiz" && tag.activo !== false))
@@ -2826,6 +2959,7 @@ function guardarItemExtraidoComoEvento(item, googleTaskId = null) {
 
   estado.datos.agenda = estado.datos.agenda || [];
   const evento = crearEventoAgenda({
+    id: opciones.idEvento,
     tipo: item.tipo,
     tipoEtiquetaId: inferida?.id || item.tipo,
     tipoEtiquetaNombre: inferida?.nombre || null,
@@ -2839,7 +2973,7 @@ function guardarItemExtraidoComoEvento(item, googleTaskId = null) {
     // item.esFeriado puede venir undefined si Gemini omitió el campo (no es
     // "required" en el schema) — se trata como false, nunca se asume feriado
     // por default.
-    esFeriado: item.esFeriado === true,
+    esFeriado: item.esFeriado === true || inferida?.id === "feriado",
     // googleTaskId (2026-08-23, integración Google Tasks): null para el
     // chat en vivo y para Bandeja Pendiente — solo agenda-google-tasks.js
     // lo pasa, para dejar trazabilidad de qué tarea de Google originó este
@@ -2858,7 +2992,7 @@ function guardarItemExtraidoComoEvento(item, googleTaskId = null) {
   });
 
   marcarCambioPendiente();
-  programarRecordatorioPush(evento);
+  void sincronizarEventoCalendario(evento);
   window.renderizarAgenda?.();
   window.renderizarResumen?.();
 
@@ -2950,6 +3084,17 @@ function crearTarjetaEventoGuardado(eventoId) {
   titulo.style.fontWeight = "600";
   titulo.textContent = `${emojiTipo} ${evento.nombre}`;
   card.appendChild(titulo);
+
+  const etiquetaEvento = (estado.datos.configuracion?.agenda_tipos || []).find((etiqueta) => etiqueta.id === evento.tipo_etiqueta_id);
+  const tipoVisible = evento.tipo_etiqueta_nombre || etiquetaEvento?.nombre || traducirTextoInterfaz(evento.esFeriado ? "Feriado" : evento.tipo === "tarea" ? "Tarea" : evento.tipo === "examen" ? "Examen" : "Evento");
+  const badgeTipo = document.createElement("span");
+  badgeTipo.className = "badge";
+  badgeTipo.textContent = tipoVisible;
+  if (/^#[0-9a-f]{6}$/i.test(evento.tipo_etiqueta_color || etiquetaEvento?.color || "")) {
+    badgeTipo.style.borderColor = evento.tipo_etiqueta_color || etiquetaEvento.color;
+    badgeTipo.style.color = evento.tipo_etiqueta_color || etiquetaEvento.color;
+  }
+  card.appendChild(badgeTipo);
 
   const detalle = document.createElement("div");
   detalle.className = "muted";
@@ -3117,6 +3262,16 @@ function agregarBurbujaAlDom(elemento) {
   if (!cont) return;
   cont.appendChild(elemento);
   cont.scrollTop = cont.scrollHeight;
+}
+
+function mostrarBurbujaAudioEnCola() {
+  const burbuja = crearBurbuja("usuario", "🎙️ " + traducirTextoInterfaz("Audio guardado para Wapper"));
+  const estadoAudio = document.createElement("small");
+  estadoAudio.className = "muted";
+  estadoAudio.style.color = "rgba(255,255,255,.82)";
+  estadoAudio.textContent = traducirTextoInterfaz("En espera de conexión");
+  burbuja.appendChild(estadoAudio);
+  agregarBurbujaAlDom(burbuja);
 }
 
 /**
@@ -3571,16 +3726,32 @@ function actualizarEstadoEnvio() {
   }
 }
 
+function enviarTextoAWapper(texto) {
+  const contenido = String(texto || "").trim();
+  if (!contenido || !estado.datos.configuracion?.gemini_api_key) return false;
+  window.mostrarSeccion?.("asistente");
+  const input = document.getElementById("input-asistente-mensaje");
+  if (!input) return false;
+  input.value = contenido;
+  ajustarAlturaInputAsistente(input);
+  void manejarEnvioMensaje();
+  return true;
+}
+
 async function manejarEnvioMensaje() {
   if (enviandoMensaje) return;
   const input = document.getElementById("input-asistente-mensaje");
   if (!input) return;
+  if (typeof window.__detenerGrabacionWapper === "function") await window.__detenerGrabacionWapper();
   const texto = input.value.trim();
   if (!texto) return;
+  const flujoAnalitico = iniciarProcesoAnalitico("wapper.mensaje");
+  flujoAnalitico.paso("mensaje_enviado");
 
   input.value = "";
   ajustarAlturaInputAsistente(input);
-  agregarBurbujaAlDom(crearBurbuja("usuario", texto));
+  const burbujaUsuario = crearBurbuja("usuario", texto);
+  agregarBurbujaAlDom(burbujaUsuario);
   conversacionActual.push({ rol: "usuario", texto });
 
   enviandoMensaje = true;
@@ -3594,6 +3765,7 @@ async function manejarEnvioMensaje() {
       conversacionActual.push(turno);
       await mostrarResultadoEnChat(resultado, turno, texto);
       guardarHistorialLocal();
+      flujoAnalitico.completar("respuesta_recibida");
       return;
     }
     // Punto 4, personalidad Wapper: saludo simple → respuesta fija, SIN
@@ -3606,6 +3778,7 @@ async function manejarEnvioMensaje() {
       conversacionActual.push(turno);
       await mostrarResultadoEnChat({ accion: "saludo" }, turno, texto);
       guardarHistorialLocal();
+      flujoAnalitico.completar("respuesta_recibida");
       return;
     }
 
@@ -3620,6 +3793,7 @@ async function manejarEnvioMensaje() {
       conversacionActual.push(turno);
       await mostrarResultadoEnChat({ accion: "capacidades" }, turno, texto);
       guardarHistorialLocal();
+      flujoAnalitico.completar("respuesta_recibida");
       return;
     }
 
@@ -3644,8 +3818,25 @@ async function manejarEnvioMensaje() {
       // generarRespuestaConversacionalWapper).
       await mostrarResultadoEnChat(resultado, turno, texto);
       guardarHistorialLocal();
+      flujoAnalitico.completar("respuesta_recibida");
     } catch (e) {
       indicador.remove();
+      if (e?.tipoError === "red" || (typeof navigator !== "undefined" && navigator.onLine === false)) {
+        try {
+          await encolarMensajeWapper({ tipo: "texto", contenido: texto });
+          flujoAnalitico.paso("en_cola");
+          conversacionActual.pop();
+          void actualizarBadgeColaWapper();
+          const estadoCola = document.createElement("small");
+          estadoCola.className = "muted";
+          estadoCola.textContent = traducirTextoInterfaz("En espera de conexión");
+          burbujaUsuario.appendChild(estadoCola);
+          mostrarToast(traducirTextoInterfaz("Ahorita no tienes conexión, guardé tu mensaje. Lo organizaré cuando vuelvas a tener internet."));
+          return;
+        } catch (errorCola) {
+          e = errorCola;
+        }
+      }
       // Un error de Gemini NO se guarda como intercambio real (ver
       // guardarHistorialLocal: exige un turno de cada rol) — se saca el
       // turno de usuario que quedó sin respuesta real, para que el próximo
@@ -3653,6 +3844,7 @@ async function manejarEnvioMensaje() {
       // respuesta como contexto.
       conversacionActual.pop();
       agregarBurbujaAlDom(crearBurbuja("modelo", mensajeParaError(e), true));
+      flujoAnalitico.error("cancelado");
     }
   } finally {
     enviandoMensaje = false;
@@ -4020,6 +4212,271 @@ function mostrarAvisoContinuar(contenedor, historial) {
  * si la hay, ofrece continuarla o arrancar una nueva; si no, arranca
  * directo en blanco con el saludo inicial.
  */
+let procesandoColaWapperLocal = false;
+let temporizadorRecuperacionWapper = null;
+
+async function actualizarBadgeColaWapper() {
+  const badge = document.getElementById("badge-cola-wapper");
+  if (!badge) return;
+  try {
+    const mensajes = await listarMensajesWapper(cuentaColaWapper());
+    const total = mensajes.filter((item) => ["pendiente", "requiere_ayuda", "error", "procesando"].includes(item.estado) || item.estado === "guardado" && !item.visto).length;
+    badge.textContent = String(total);
+    badge.classList.toggle("oculto", total === 0);
+  } catch (_) { badge.classList.add("oculto"); }
+}
+
+async function procesarItemPendienteWapper(item) {
+  let texto = item.contenido;
+  if (item.tipo === "audio") texto = await transcribirAudioConGemini(item.contenido);
+  texto = String(texto || "").trim();
+  if (!texto) return { estado: "requiere_ayuda", motivo: traducirTextoInterfaz("No pude reconocer el mensaje. Puedes revisarlo desde Wapper.") };
+  const resultado = await extraerEventosDeTexto(texto, { fechaReferencia: item.fechaReferencia, zonaHoraria: item.zonaHoraria });
+  const tipos = (estado.datos.configuracion?.agenda_tipos || []).filter((tipo) => tipo.activo !== false && !tipo.eliminado);
+  const fechaValida = (fecha) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha || "")) return false;
+    const fechaObj = new Date(`${fecha}T12:00:00Z`);
+    return !Number.isNaN(fechaObj.getTime()) && fechaObj.toISOString().slice(0, 10) === fecha && fecha >= item.fechaReferencia;
+  };
+  const seguros = !mencionaMateriaAmbiguaSinResolver && resultado.accion === "crear_eventos" && resultado.items.length > 0 && resultado.items.every((itemExtraido) => {
+    const tipo = tipos.find((actual) => actual.id === itemExtraido.etiquetaId && actual.base === itemExtraido.tipo);
+    const materia = !itemExtraido.materia || Boolean(resolverMateriaVinculada(itemExtraido.materia));
+    return tipo && itemExtraido.confianza === "alta" && !itemExtraido.requiereRevision && fechaValida(itemExtraido.fecha)
+      && (!itemExtraido.hora || /^([01]\d|2[0-3]):[0-5]\d$/.test(itemExtraido.hora)) && materia;
+  });
+  if (!seguros) {
+    return { estado: "requiere_ayuda", textoOriginal: texto, motivo: resultado.aclaracion || traducirTextoInterfaz("Necesito que revises el tipo, la materia o la fecha antes de guardar.") };
+  }
+  return { estado: "guardado", resultados: resultado.items.map((itemExtraido, indice) => guardarItemExtraidoComoEvento(itemExtraido, null, { idEvento: `ag_wapper_${item.id}_${indice}`, preservarSinHora: true })) };
+}
+
+async function mostrarBienvenidaColaWapper() {
+  const cuenta = cuentaColaWapper();
+  if (!cuenta || MODO_DEMO || typeof navigator !== "undefined" && navigator.onLine === false) return;
+  const items = await listarMensajesWapper(cuenta);
+  const inputActivo = document.getElementById("input-asistente-mensaje");
+  if (inputActivo?.value.trim()) return;
+  const nuevos = items.filter((item) => !item.visto && ["guardado", "requiere_ayuda", "error"].includes(item.estado));
+  if (!nuevos.length || document.querySelector(".modal-overlay:not(.oculto)")) return;
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay wapper-cola-bienvenida";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  const caja = document.createElement("section");
+  caja.className = "glass-card modal-card stack";
+  caja.style.cssText = "max-height:85dvh;overflow:auto;gap:12px;";
+  const titulo = document.createElement("h2");
+  titulo.textContent = "✨ " + traducirTextoInterfaz("Asistente");
+  const nombre = String(estado.datos.perfil?.nombre || "").trim().split(/\s+/)[0];
+  const saludo = document.createElement("p");
+  saludo.textContent = nombre
+    ? traducirTextoInterfaz("Hola {nombre}, soy Wapper, ya tengo conexión a internet :D").replace("{nombre}", nombre)
+    : traducirTextoInterfaz("Hola, soy Wapper, ya tengo conexión a internet :D");
+  caja.append(titulo, saludo);
+  const guardados = nuevos.filter((item) => item.estado === "guardado");
+  if (guardados.length) {
+    const encabezado = document.createElement("p");
+    encabezado.textContent = traducirTextoInterfaz("Guardé lo que me habías pedido:");
+    caja.appendChild(encabezado);
+  }
+  for (const item of nuevos) {
+    if (item.estado === "guardado") {
+      for (const id of item.resultados || []) {
+        const evento = (estado.datos.agenda || []).find((actual) => actual.id === id);
+        if (!evento) continue;
+        const tarjeta = document.createElement("article");
+        tarjeta.className = "glass-card stack";
+        tarjeta.style.cssText = "padding:10px;gap:6px;border-inline-start:4px solid " + (evento.tipo_etiqueta_color || "var(--color-luz)");
+        const nombreEvento = document.createElement("strong");
+        const etiqueta = (estado.datos.configuracion?.agenda_tipos || []).find((actual) => actual.id === evento.tipo_etiqueta_id);
+        const icono = evento.es_feriado ? "🎉" : evento.tipo === "examen" ? "📝" : evento.tipo === "tarea" ? "✅" : "📌";
+        nombreEvento.textContent = `${icono} ${evento.nombre}`;
+        const fecha = document.createElement("span");
+        fecha.className = "muted";
+        const partesEvento = [etiqueta?.nombre || evento.tipo_etiqueta_nombre || traducirTextoInterfaz("Evento"), new Intl.DateTimeFormat(obtenerLocaleInterfaz(), { dateStyle: "long" }).format(new Date(`${evento.fecha}T12:00:00`))];
+        if (evento.hora) partesEvento.push(evento.hora);
+        const materiaEvento = obtenerNombreMateriaEvento(evento);
+        if (materiaEvento) partesEvento.push(materiaEvento);
+        fecha.textContent = partesEvento.join(" · ");
+        const deshacer = document.createElement("button");
+        deshacer.type = "button";
+        deshacer.className = "btn btn-secondary";
+        deshacer.textContent = traducirTextoInterfaz("Deshacer");
+        deshacer.onclick = () => confirmarBorrarEventoAgenda(evento, async () => {
+          item.resultados = item.resultados.filter((actual) => actual !== id);
+          await actualizarMensajeWapper(item.id, { resultados: item.resultados, visto: true });
+          tarjeta.remove();
+        });
+        tarjeta.append(nombreEvento, fecha, deshacer);
+        caja.appendChild(tarjeta);
+      }
+    } else {
+      const ayuda = document.createElement("article");
+      ayuda.className = "glass-card stack";
+      ayuda.style.padding = "10px";
+      const texto = document.createElement("strong");
+      texto.textContent = traducirTextoInterfaz("Necesito tu ayuda con esto");
+      const motivo = document.createElement("p");
+      motivo.className = "muted";
+      motivo.textContent = item.motivo || (item.estado === "error" ? traducirTextoInterfaz("No pude procesarlo. Puedes reintentar o descartarlo.") : "");
+      const original = document.createElement("p");
+      original.textContent = item.textoOriginal || (item.tipo === "texto" ? item.contenido : traducirTextoInterfaz("Mensaje de voz pendiente de revisar"));
+      ayuda.append(texto, motivo, original);
+      const filaAyuda = document.createElement("div");
+      filaAyuda.className = "row";
+      const revisar = document.createElement("button");
+      revisar.className = "btn btn-secondary";
+      revisar.textContent = traducirTextoInterfaz("Revisar en Wapper");
+      revisar.onclick = async () => {
+        overlay.remove();
+        window.mostrarSeccion?.("asistente");
+        setTimeout(() => {
+          const input = document.getElementById("input-asistente-mensaje");
+          if (!input) return;
+          if (item.textoOriginal || item.tipo === "texto") {
+            input.value = item.textoOriginal || item.contenido;
+            ajustarAlturaInputAsistente(input);
+            input.focus();
+            return;
+          }
+          if (item.tipo === "audio" && item.contenido) {
+            transcribirAudioConGemini(item.contenido).then((transcripcion) => {
+              input.value = transcripcion;
+              ajustarAlturaInputAsistente(input);
+              input.focus();
+            }).catch(() => mostrarToast(traducirTextoInterfaz("No se pudo transcribir el audio grabado.")));
+          }
+        }, 250);
+      };
+      filaAyuda.appendChild(revisar);
+      if (item.estado === "error") {
+        const reintentar = document.createElement("button");
+        reintentar.className = "btn btn-secondary";
+        reintentar.textContent = traducirTextoInterfaz("Reintentar");
+        reintentar.onclick = async () => { await actualizarMensajeWapper(item.id, { estado: "pendiente", intentos: 0 }); overlay.remove(); void ejecutarColaWapper(); };
+        filaAyuda.appendChild(reintentar);
+      }
+      const descartar = document.createElement("button");
+      descartar.className = "btn btn-secondary";
+      descartar.textContent = traducirTextoInterfaz("Descartar");
+      descartar.onclick = async () => { await descartarMensajeWapper(item.id); ayuda.remove(); };
+      filaAyuda.appendChild(descartar);
+      ayuda.appendChild(filaAyuda);
+      caja.appendChild(ayuda);
+    }
+    await actualizarMensajeWapper(item.id, { visto: true });
+  }
+  const fila = document.createElement("div");
+  fila.className = "row";
+  fila.style.justifyContent = "flex-end";
+  const ir = document.createElement("button");
+  ir.className = "btn btn-primary";
+  ir.textContent = traducirTextoInterfaz("Ir a Wapper");
+  ir.onclick = () => { overlay.remove(); window.mostrarSeccion?.("asistente"); };
+  const cerrar = document.createElement("button");
+  cerrar.className = "btn btn-secondary";
+  cerrar.textContent = traducirTextoInterfaz("Cerrar");
+  cerrar.onclick = () => overlay.remove();
+  fila.append(ir, cerrar);
+  caja.appendChild(fila);
+  overlay.appendChild(caja);
+  document.body.appendChild(overlay);
+  void actualizarBadgeColaWapper();
+}
+
+async function ejecutarColaWapper() {
+  if (procesandoColaWapperLocal || !cuentaColaWapper() || MODO_DEMO) return;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) { await actualizarBadgeColaWapper(); return; }
+  if (!estado.datos.configuracion?.gemini_api_key) { await actualizarBadgeColaWapper(); return; }
+  procesandoColaWapperLocal = true;
+  try {
+    const existentes = await listarMensajesWapper(cuentaColaWapper());
+    const grabacionesActivas = existentes.filter((item) => item.estado === "grabando");
+    for (const grabacion of grabacionesActivas.filter((item) => Date.now() - (item.actualizado || item.creado) > 60_000)) {
+      await actualizarMensajeWapper(grabacion.id, { estado: "requiere_ayuda", motivo: traducirTextoInterfaz("La grabación se interrumpió. Puedes revisar el audio que se alcanzó a guardar.") });
+    }
+    if (grabacionesActivas.some((item) => Date.now() - (item.actualizado || item.creado) <= 60_000) && !temporizadorRecuperacionWapper) {
+      temporizadorRecuperacionWapper = setTimeout(() => {
+        temporizadorRecuperacionWapper = null;
+        void ejecutarColaWapper();
+      }, 61_000);
+    }
+    await procesarColaWapper(cuentaColaWapper(), procesarItemPendienteWapper);
+    await actualizarBadgeColaWapper();
+    await mostrarBienvenidaColaWapper();
+  } catch (error) { console.warn("[asistente] No se pudo procesar la cola offline:", error); }
+  finally { procesandoColaWapperLocal = false; }
+}
+
+async function renderizarColaWapperEnChat() {
+  const scroll = document.getElementById("asistente-chat-scroll");
+  const cuenta = cuentaColaWapper();
+  if (!scroll || !cuenta) return;
+  const items = (await listarMensajesWapper(cuenta)).filter((item) => ["pendiente", "requiere_ayuda", "error"].includes(item.estado));
+  for (const item of items) {
+    const tarjeta = document.createElement("article");
+    tarjeta.className = "glass-card stack";
+    tarjeta.style.cssText = "align-self:stretch;padding:10px;gap:7px;";
+    const encabezado = document.createElement("strong");
+    encabezado.textContent = item.estado === "pendiente"
+      ? traducirTextoInterfaz("En espera de conexión")
+      : item.estado === "error" ? traducirTextoInterfaz("Error en Wapper") : traducirTextoInterfaz("Necesito tu ayuda con esto");
+    const original = document.createElement("p");
+    original.className = "muted";
+    original.textContent = item.textoOriginal || (item.tipo === "texto" ? item.contenido : traducirTextoInterfaz("Mensaje de voz pendiente de revisar"));
+    tarjeta.append(encabezado, original);
+    if (item.motivo && item.estado !== "pendiente") {
+      const motivo = document.createElement("p");
+      motivo.className = "muted";
+      motivo.textContent = item.motivo;
+      tarjeta.appendChild(motivo);
+    }
+    const acciones = document.createElement("div");
+    acciones.className = "row";
+    acciones.style.flexWrap = "wrap";
+    const revisar = document.createElement("button");
+    revisar.className = "btn btn-secondary";
+    revisar.textContent = traducirTextoInterfaz("Revisar en Wapper");
+    revisar.onclick = async () => {
+      const input = document.getElementById("input-asistente-mensaje");
+      if (!input) return;
+      try {
+        const contenido = item.textoOriginal || (item.tipo === "texto" ? item.contenido : await transcribirAudioConGemini(item.contenido));
+        input.value = contenido || "";
+        ajustarAlturaInputAsistente(input);
+        input.focus();
+      } catch (_) { mostrarToast(traducirTextoInterfaz("No se pudo transcribir el audio grabado.")); }
+    };
+    acciones.appendChild(revisar);
+    if (item.estado === "error") {
+      const reintentar = document.createElement("button");
+      reintentar.className = "btn btn-secondary";
+      reintentar.textContent = traducirTextoInterfaz("Reintentar");
+      reintentar.onclick = async () => { await actualizarMensajeWapper(item.id, { estado: "pendiente", intentos: 0 }); tarjeta.remove(); void ejecutarColaWapper(); };
+      acciones.appendChild(reintentar);
+    }
+    if (item.estado !== "pendiente") {
+      const resolver = document.createElement("button");
+      resolver.className = "btn btn-secondary";
+      resolver.textContent = traducirTextoInterfaz("Marcar como resuelto");
+      resolver.onclick = async () => { await descartarMensajeWapper(item.id); tarjeta.remove(); void actualizarBadgeColaWapper(); };
+      acciones.appendChild(resolver);
+    }
+    const descartar = document.createElement("button");
+    descartar.className = "btn btn-secondary";
+    descartar.textContent = traducirTextoInterfaz("Descartar");
+    descartar.onclick = async () => { await descartarMensajeWapper(item.id); tarjeta.remove(); void actualizarBadgeColaWapper(); };
+    acciones.appendChild(descartar);
+    tarjeta.appendChild(acciones);
+    scroll.appendChild(tarjeta);
+  }
+  scroll.scrollTop = scroll.scrollHeight;
+}
+
+window.addEventListener("online", () => { void ejecutarColaWapper(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) void ejecutarColaWapper(); });
+window.procesarColaWapper = ejecutarColaWapper;
+
 function renderizarAsistente() {
   const contenedor = document.getElementById("seccion-asistente");
   if (!contenedor) return;
@@ -4045,6 +4502,7 @@ function renderizarAsistente() {
   }
 
   construirEsqueletoAsistente(contenedor);
+  void ejecutarColaWapper();
 
   const historial = leerHistorialLocalVigente();
   if (historial) {
@@ -4054,6 +4512,7 @@ function renderizarAsistente() {
     conversacionActual = [];
     mostrarSaludoInicial();
   }
+  void renderizarColaWapperEnChat();
 }
 
 // Se expone en window por el mismo motivo que renderizarHorario/
@@ -4062,6 +4521,7 @@ function renderizarAsistente() {
 // directo — el import real de este archivo (abajo, en main.js) solo
 // existe para que el navegador cargue el módulo y esta línea se ejecute.
 window.renderizarAsistente = renderizarAsistente;
+window.enviarTextoAWapper = enviarTextoAWapper;
 
 export {
   renderizarAsistente,
@@ -4075,3 +4535,4 @@ export {
   guardarItemExtraidoComoEvento,
   mensajeParaError,
 };
+

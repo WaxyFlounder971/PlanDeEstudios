@@ -27,6 +27,7 @@ const SECCIONES_TUTORIAL = [
   { id:"comunidad", nombre:"Comunidad", puntos:["Organiza compañeros y docentes relacionados con tus materias.","Cada docente lleva tu propia valoración, según tu experiencia."] },
   { id:"finanzas", nombre:"Finanzas", puntos:["Registra ingresos y gastos desde el inicio.","Clasifica movimientos por categoría.","Asociarlos a un semestre es opcional."] },
   { id:"plan-estudios", nombre:"Plan de estudios", puntos:["Añade una o varias carreras.","Pega o importa la malla completa.","El plan alimenta la matrícula de Semestres."] },
+  { id:"notas", nombre:"Notas rápidas", puntos:["Guarda ideas y pendientes al instante, incluso sin conexión.","Fija, organiza, busca y comparte tus notas.","Envía una nota a Wapper para convertirla en actividades de Agenda.","En computadora, haz clic derecho en una nota para abrir sus acciones.","En teléfono, mantén pulsada una nota para seleccionarla; el resaltado muestra la selección.","La Papelera permite restaurar notas eliminadas o quitarlas definitivamente.","Compartir contenido desde otras apps requiere tener instalada la app en Android."] },
   { id:"asistente", nombre:"Wapper", puntos:["Convierte mensajes en tareas, exámenes o eventos de Agenda.","Consulta fechas y pendientes con lenguaje natural.","Actívalo con tu clave personal de Gemini desde Ajustes."] },
   { id:"configuracion", nombre:"Ajustes", puntos:["Cambia idioma, apariencia, paleta y tamaño de texto.","Aquí ordenas y ocultas las secciones de la navegación.","Con este botón vuelves a ver la bienvenida y el mini tutorial cuando quieras.","Toca dos veces el título de cualquier sección para ver qué hace y, si quieres, su guía paso a paso."] },
 ];
@@ -45,7 +46,7 @@ function guardarProgresoOnb(o) { try { if (o) localStorage.setItem(CLAVE_PROGRES
    El texto vive en archivos .md por idioma: TermsOfUse/TermsES.md, TermsEN.md, TermsIT.md, TermsFR.md.
    Al aceptar se guarda en la cuenta: configuracion.terminos_aceptados = { version, fecha, idioma }.
    Si algún día cambian los términos, sube VERSION_TERMINOS y se volverán a pedir. */
-const VERSION_TERMINOS = "1";
+const VERSION_TERMINOS = "3";
 const ARCHIVOS_TERMINOS = { es: "TermsES", en: "TermsEN", it: "TermsIT", fr: "TermsFR" };
 const TEXTOS_TERMINOS = {
   es: { titulo: "Términos y condiciones", lema: "Antes de seguir, lee cómo usamos tus datos y acepta los términos.", cargando: "Cargando…", error: "No se pudo cargar el texto. Revisa tu conexión e inténtalo de nuevo.", reintentar: "Reintentar", acepto: "He leído y acepto los términos y condiciones y el tratamiento de mis datos.", requerido: "Debes aceptar los términos para continuar.", atras: "Atrás", continuar: "Aceptar y continuar" },
@@ -70,7 +71,7 @@ function mdEnLinea(el, t) {
     else if (p) el.append(document.createTextNode(p));
   });
 }
-function renderizarMarkdownSimple(md) {
+export function renderizarMarkdownSimple(md) {
   const frag = document.createDocumentFragment(); let lista = null, parr = [];
   const cerrar = () => { if (parr.length) { const p = document.createElement("p"); mdEnLinea(p, parr.join(" ")); frag.append(p); parr = []; } };
   for (const linea of String(md).replace(/\r/g, "").split("\n")) {
@@ -118,6 +119,13 @@ function inyectarEstilosOnboarding() {
 .onboarding-nota-error{margin:.5rem 0 0;font-size:.9rem;color:var(--danger,#e5484d)}
 .onboarding-nota-error[hidden]{display:none}
 .guia-plan-flotante{z-index:2147483001}
+.guia-plan-cabecera{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.guia-plan-cabecera strong{font-size:1rem;letter-spacing:.01em}
+.guia-plan-contador{flex:none;padding:.2rem .55rem;border-radius:999px;background:color-mix(in srgb,var(--accent-1,#8b5cf6) 14%,transparent);font-size:.78rem;font-weight:700;color:var(--text-primary)}
+.guia-plan-progreso{height:5px;overflow:hidden;border-radius:99px;background:color-mix(in srgb,currentColor 12%,transparent);margin:0 0 12px}
+.guia-plan-progreso span{display:block;height:100%;border-radius:inherit;background:var(--gradient-accent,var(--accent-1,#8b5cf6));transition:width .25s ease}
+.guia-plan-flotante .row{gap:8px}
+@media(max-width:520px){.guia-plan-flotante{right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));width:calc(100vw - 24px);padding:16px}}
 .guia-resaltador{position:fixed;inset:0;z-index:2147483000;pointer-events:none}
 .guia-resaltador-lado{position:fixed;background:rgba(0,0,0,.58);pointer-events:auto}
 .guia-resaltador-anillo{position:fixed;border-radius:12px;pointer-events:none;box-shadow:0 0 0 3px var(--accent-1,#8b5cf6),0 0 0 8px color-mix(in srgb,var(--accent-1,#8b5cf6) 30%,transparent),0 0 26px color-mix(in srgb,var(--accent-1,#8b5cf6) 55%,transparent)}
@@ -366,6 +374,8 @@ function inyectarEstilosOnboarding() {
 .onb-ajuste-fila{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.92rem}
 .onb-ajuste-nota{margin:0;font-size:.8rem;line-height:1.35;opacity:.7}
 .onb-ajuste-campo{display:flex;flex-direction:column;gap:6px;font-size:.84rem;font-weight:600}
+
+.onb-ajuste-recordatorios{display:grid;gap:10px}.onb-ajuste-recordatorio-tipo{display:flex;flex-direction:column;gap:6px;font-size:.84rem;font-weight:600}.onb-recordatorio-opciones{display:flex;flex-wrap:wrap;gap:7px}.onb-recordatorio-opcion{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:999px;background:color-mix(in srgb,currentColor 4%,transparent);font-size:.8rem;font-weight:500;cursor:pointer}.onb-recordatorio-opcion:has(input:checked){border-color:var(--accent-1,#8b5cf6);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 14%,transparent)}.onb-recordatorio-opcion input{accent-color:var(--accent-1,#8b5cf6);margin:0}
 .onb-ajuste-detalle{display:flex;flex-direction:column;gap:10px}.onb-ajuste-detalle.apagado{opacity:.5;pointer-events:none}
 .onb-acc{padding:0;gap:0;overflow:hidden;transition:border-color .25s,background .25s}
 .onb-acc.abierta{border-color:color-mix(in srgb,var(--accent-1,#8b5cf6) 55%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 7%,transparent)}
@@ -386,7 +396,8 @@ function inyectarEstilosOnboarding() {
 .onb-moneda-vacio{opacity:.65;cursor:default}
 .onb-enlaces-lista{display:flex;flex-direction:column;gap:8px}.onb-enlace-fila{display:flex;align-items:center;gap:10px}.onb-enlace-ico{width:28px;height:28px;display:grid;place-items:center;flex-shrink:0;font-size:1.2rem}.onb-enlace-ico img{width:100%;height:100%;object-fit:cover;border-radius:6px}.onb-enlace-nombre{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .onb-nav-fila{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:.7rem .9rem;border-radius:14px;border:1px solid color-mix(in srgb,currentColor 14%,transparent);background:color-mix(in srgb,currentColor 4%,transparent)}
-.onb-nav-fila span{display:flex;align-items:center;gap:10px}
+.onb-nav-fila span{display:flex;align-items:center;gap:10px}.onb-nav-fila[draggable="true"]{cursor:grab}.onb-nav-fila.arrastrando{opacity:.5;border-color:var(--accent-1,#8b5cf6)}.onb-nav-arrastre{opacity:.55;font-size:1.2rem;cursor:grab;touch-action:none}
+.onb-notas-demo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:clamp(14px,3vw,32px)}.onb-notas-demo>.onb-bloque{min-height:150px;padding:16px;border-radius:18px;background:color-mix(in srgb,var(--accent-1,#8b5cf6) 20%,var(--onb-izq,#111));border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 24%,transparent)}.onb-notas-demo .onb-r-fila{margin-bottom:14px}@media(max-width:700px){.onb-notas-demo{grid-template-columns:1fr;gap:8px;padding:12px}.onb-notas-demo>.onb-bloque{min-height:100px}}
 .onb-gemini-pasos{margin:0 0 14px;padding-left:1.25rem;display:flex;flex-direction:column;gap:6px;font-size:.88rem;line-height:1.45}
 .onb-gemini-campo{display:flex;flex-direction:column;gap:8px;margin-top:14px}
 .onb-wapper-ok{display:flex;flex-direction:column;gap:6px;margin-top:10px;padding:16px;border-radius:16px;border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 50%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 12%,transparent)}
@@ -405,7 +416,7 @@ function inyectarEstilosOnboarding() {
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"]){background:var(--onb-izq,#080808)!important;background-image:none!important}
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"])>.onboarding-acciones{position:static!important;inset:auto!important;transform:none!important;flex:none;width:100%!important;max-width:none!important;min-width:0!important;align-self:stretch;justify-self:stretch;grid-column:1/-1;box-sizing:border-box;margin:0;padding:12px 20px calc(12px + env(safe-area-inset-bottom,0px));z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
 /* Términos y condiciones: el texto ocupa todo el espacio disponible; título y lema compactos. */
-.onboarding-panel[data-etapa="terminos"] .onboarding-copy{text-align:center}
+.onboarding-panel[data-etapa="terminos"] .onboarding-copy{text-align:center;justify-content:flex-start!important;padding-top:4px!important}
 .onboarding-panel[data-etapa="terminos"] .onboarding-copy h1{font-size:clamp(1.3rem,3.4vh,1.8rem)!important;margin:0 0 4px!important;animation:none}
 .onb-terminos-lema{margin:0 0 6px;font-size:.92rem;opacity:.8}
 .onb-terminos-caja{text-align:left;height:clamp(280px,56dvh,720px);overflow-y:auto;overscroll-behavior:contain;padding:16px 18px;margin:.6rem 0;border-radius:16px;border:1px solid rgba(128,128,128,.35);background:rgba(128,128,128,.08);font-size:.95rem;line-height:1.55}
@@ -416,6 +427,7 @@ function inyectarEstilosOnboarding() {
 .onb-luz:disabled{opacity:.5;cursor:not-allowed}
 .onb-luz:focus-visible{outline:2px solid var(--accent-1,#8b5cf6);outline-offset:2px}
 .onb-luz-led{flex:none;width:22px;height:22px;border-radius:50%;background:rgba(128,128,128,.35);box-shadow:inset 0 2px 4px rgba(0,0,0,.45);transition:background .25s,box-shadow .3s}
+
 .onb-luz.on{border-color:var(--accent-1,#8b5cf6);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 14%,transparent)}
 .onb-luz.on .onb-luz-led{background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.85),transparent 45%),var(--gradient-accent,var(--accent-1,#8b5cf6));box-shadow:0 0 6px 2px color-mix(in srgb,var(--accent-1,#8b5cf6) 90%,transparent),0 0 18px 6px color-mix(in srgb,var(--accent-1,#8b5cf6) 55%,transparent)}
 @media (prefers-reduced-motion:reduce){.onb-luz,.onb-luz-led{transition:none}}
@@ -628,10 +640,21 @@ function evitarSolape(pop, el) {
   const choca = (r, top, bottom) => r.bottom > top - 8 && r.top < bottom + 8;
   const medir = () => {
     if (!vivo()) return;
-    pop.style.top = ""; pop.style.bottom = "";
+    pop.style.top = ""; pop.style.bottom = ""; pop.style.maxHeight = ""; pop.style.overflowY = "";
     const r = el.getBoundingClientRect(), p = pop.getBoundingClientRect();
-    if (!choca(r, p.top, p.bottom)) return;                       // abajo (posición normal) no tapa
-    if (!choca(r, 10, 10 + p.height)) { pop.style.top = "10px"; pop.style.bottom = "auto"; }   // arriba sí libra
+    if (!choca(r, p.top, p.bottom)) { pop.style.maxHeight = ""; pop.style.overflowY = ""; return; }
+    const alto = window.innerHeight;
+    const espacioArriba = Math.max(0, r.top - 20);
+    const espacioAbajo = Math.max(0, alto - r.bottom - 20);
+    if (espacioArriba >= p.height || espacioArriba >= espacioAbajo) {
+      pop.style.top = "10px"; pop.style.bottom = "auto";
+      if (espacioArriba < p.height) { pop.style.maxHeight = `${Math.max(120, espacioArriba)}px`; pop.style.overflowY = "auto"; }
+      else { pop.style.maxHeight = ""; pop.style.overflowY = ""; }
+    } else {
+      pop.style.top = "auto"; pop.style.bottom = "10px";
+      if (espacioAbajo < p.height) { pop.style.maxHeight = `${Math.max(120, espacioAbajo)}px`; pop.style.overflowY = "auto"; }
+      else { pop.style.maxHeight = ""; pop.style.overflowY = ""; }
+    }
   };
   const alMover = () => { if (vivo()) medir(); else limpiar(); };
   const limpiar = () => { removeEventListener("scroll", alMover, true); removeEventListener("resize", alMover); };
@@ -1124,9 +1147,15 @@ function contenidoEsquema(id) {
         [hilo, burb("yo", "Mueve el quiz para el lunes")], [hilo, burb("", "Listo, moví el quiz al lunes.")]);
       break;
     }
+    case "notas": {
+      const nota1=rCard(rFila("onb-r-sp",rTit("Notas rápidas"),rPildora("Fijada",PURPURA)),rSuave("Ideas para el proyecto"),rSuave("Guardar una idea al instante"));
+      const nota2=rCard(rFila("onb-r-sp",rTit("Pendientes"),rSuave("Hoy")),rSuave("Revisar materiales de clase"));
+      base.push(nodo("div","onb-r onb-notas-demo",null,[nota1,nota2]));
+      break;
+    }
     case "configuracion": {
       base.push(rFilaAjuste("Ajustes generales"), rFilaAjuste("Asistente IA (Gemini)"), rFilaAjuste("Notificaciones"), rFilaAjuste("Personalizar"),
-        rFilaAjuste("Horario"), rFilaAjuste("Plan de Estudios activo"), rFilaAjuste("Enlaces rápidos"), rFilaAjuste("Datos"));
+        rFilaAjuste("Horario"), rFilaAjuste("Enlaces rápidos"), rFilaAjuste("Datos"));
       extras.push(rFilaAjuste("Créditos"));
       break;
     }
@@ -1273,12 +1302,28 @@ function construirBloqueNotificaciones({ cfg, borrador, demo }) {
   const calActiva = () => { try { return Boolean(sincronizacionCalendarActiva()); } catch (_) { return false; } };
   const detalle = document.createElement("div"); detalle.className = "onb-ajuste-detalle";
   const marcar = () => detalle.classList.toggle("apagado", !calActiva());
-  const guardado = cfg.notificaciones_recordatorios?.tarea;
-  const inicial = borrador.recordatorio || (Array.isArray(guardado) ? guardado[0] : guardado) || "1_dia";
-  const selAntes = document.createElement("select"); selAntes.className = "form-input";
-  (OFFSETS_RECORDATORIO_AGENDA || []).forEach((o) => { const op = document.createElement("option"); op.value = o.id; op.textContent = traducirTextoInterfaz(o.etiqueta); selAntes.append(op); });
-  selAntes.value = inicial; if (selAntes.value !== inicial && selAntes.options[0]) selAntes.value = selAntes.options[0].value;
-  selAntes.addEventListener("change", () => { borrador.recordatorio = selAntes.value; borrador.tocado = true; });
+  const selectoresRecordatorio = document.createElement("div"); selectoresRecordatorio.className = "onb-ajuste-recordatorios";
+  const valoresRecordatorio = borrador.recordatorios || {};
+  [
+    ["tarea", "Tareas"], ["examen", "Exámenes"], ["evento", "Eventos"],
+  ].forEach(([tipo, etiqueta]) => {
+    const fila = document.createElement("div"); fila.className = "onb-ajuste-recordatorio-tipo";
+    const titulo = document.createElement("span"); titulo.textContent = traducirTextoInterfaz(etiqueta);
+    const opciones = document.createElement("span"); opciones.className = "onb-recordatorio-opciones";
+    const guardado = cfg.notificaciones_recordatorios?.[tipo];
+    const iniciales = valoresRecordatorio[tipo] || (Array.isArray(guardado) ? guardado : [guardado || "1_dia"]);
+    (OFFSETS_RECORDATORIO_AGENDA || []).forEach((o) => {
+      const opcion = document.createElement("label"); opcion.className = "onb-recordatorio-opcion";
+      const check = document.createElement("input"); check.type = "checkbox"; check.value = o.id; check.checked = iniciales.includes(o.id);
+      const texto = document.createElement("span"); texto.textContent = traducirTextoInterfaz(o.etiqueta);
+      check.addEventListener("change", () => {
+        valoresRecordatorio[tipo] = [...opciones.querySelectorAll("input:checked")].map((control) => control.value);
+        borrador.recordatorios = valoresRecordatorio; borrador.tocado = true;
+      });
+      opcion.append(check, texto); opciones.append(opcion);
+    });
+    fila.append(titulo, opciones); selectoresRecordatorio.append(fila);
+  });
   const r0 = cfg.notificaciones_resumen_diario || { activo: false, hora: "20:00" };
   const resumen = borrador.resumen || { activo: Boolean(r0.activo), hora: r0.hora || "20:00" };
   const selHora = document.createElement("select"); selHora.className = "form-input";
@@ -1289,7 +1334,7 @@ function construirBloqueNotificaciones({ cfg, borrador, demo }) {
   const swResumen = construirInterruptor(resumen.activo, (v) => { resumen.activo = v; borrador.resumen = resumen; borrador.tocado = true; campoHora.hidden = !v; }, "Resumen diario");
   const filaResumen = document.createElement("div"); filaResumen.className = "onb-ajuste-fila";
   const tr = document.createElement("span"); tr.textContent = traducirTextoInterfaz("Resumen diario de tus pendientes"); filaResumen.append(tr, swResumen.label);
-  detalle.append(campoConEtiqueta("Avisarme antes de tareas, exámenes y eventos", selAntes), filaResumen, campoHora);
+  detalle.append(selectoresRecordatorio, filaResumen, campoHora);
   const swCal = construirInterruptor(calActiva(), async (v, chk) => {
     chk.disabled = true;
     try {
@@ -1310,6 +1355,7 @@ const SECCIONES_NAV = [
   { id: "semestres", etiqueta: "Semestres", icono: "📅" }, { id: "comunidad", etiqueta: "Comunidad", icono: "👥" },
   { id: "finanzas", etiqueta: "Finanzas", icono: "💰" }, { id: "plan-estudios", etiqueta: "Plan de Estudios", icono: "📚" },
   { id: "tiempo-estudio", etiqueta: "Tiempo", icono: "⏱️" }, { id: "asistente", etiqueta: "Asistente", icono: "✨" },
+  { id: "notas", etiqueta: "Notas rápidas", icono: "🗒️" },
 ];
 // Pantalla «Llévala contigo»: cuadrícula tipo pantalla de inicio. El progreso NO es un temporizador fijo:
 // avanza despacio (una instalación real tarda) y solo llega a 100 % cuando el navegador avisa con «appinstalled».
@@ -1361,6 +1407,14 @@ function construirTipAyuda() {
   cuerpo.append(el("b", "", T("¿Necesitas ayuda más adelante?")), el("span", "", T("Toca dos veces seguidas el título de cualquier sección (Agenda, Horario, Finanzas…) y se abre una ventana con lo que puede hacer; desde ahí eliges ver su guía paso a paso o quedarte con eso. No es un truco escondido: está para cuando se te olvide cómo funciona algo.")));
   raiz.append(el("span", "onb-ayuda-tip-ico", ICONOS_FLUJO.ayuda), cuerpo); return raiz;
 }
+function construirTipNotas() {
+  const T = traducirTextoInterfaz;
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  const raiz = el("div", "onb-ayuda-tip"); raiz.setAttribute("role", "note");
+  const cuerpo = document.createElement("div");
+  cuerpo.append(el("b", "", T("Notas rápidas")), el("span", "", T("Guarda ideas y pendientes al instante, incluso sin conexión.")), el("span", "", T("Envía una nota a Wapper para convertirla en actividades de Agenda.")));
+  raiz.append(el("span", "onb-ayuda-tip-ico", "🗒️"), cuerpo); return raiz;
+}
 // Pantalla «Todo conectado»: cuatro pasos encadenados (el 4.º, Wapper, es opcional). Se ve en horizontal y pasa a vertical solo si no cabe.
 function construirFlujo() {
   const T = traducirTextoInterfaz;
@@ -1381,7 +1435,7 @@ function construirFlujo() {
     card.append(el("b", "", T(t)), el("span", "", T(d)));
     paso.append(nodo, card); fila.append(paso);
   });
-  raiz.append(fila, construirTipAyuda());
+  raiz.append(fila, construirTipNotas());
   ajustarFlujo(raiz, fila); return raiz;
 }
 // Horizontal si cabe; vertical si el ancho es corto o alguna palabra se desbordaría (nada de cortes tipo «estudio/s»).
@@ -1428,7 +1482,7 @@ const GEMINI_PASOS = [
 function botonDesdeCero() {
   // No depende del idioma ni de una sola frase: «Empezar en blanco», «Iniciar desde cero», «da zero», «from scratch», «blank»… o el botón del lápiz.
   const raiz = document.getElementById("seccion-plan-estudios"); if (!raiz) return null;
-  return [...raiz.querySelectorAll("button")].find((b) => /blanco|bianco|blank|desde cero|da zero|from scratch|✏/i.test(b.textContent)) || null;
+  return [...raiz.querySelectorAll("button")].find((b) => /blanco|bianco|blank|vierge|à partir de zéro|commencer à zéro|desde cero|da zero|from scratch|✏/i.test(b.textContent)) || null;
 }
 function contenedorOpcionesPlan() {
   // Ancestro común del botón «en blanco» y del grupo de importación: así se resaltan las DOS opciones a la vez.
@@ -1437,7 +1491,7 @@ function contenedorOpcionesPlan() {
   let n = a.parentElement; while (n && !n.contains(g)) n = n.parentElement;
   return n || g;
 }
-function grupoMetodosImportar() { const g = [...document.querySelectorAll("#seccion-plan-estudios .pill-group")]; return g.find((x) => x.querySelectorAll("button").length >= 3) || g.find((x) => x.querySelectorAll("button").length >= 2); }
+function grupoMetodosImportar() { return document.querySelector("#seccion-plan-estudios .importacion-metodos") || (() => { const g = [...document.querySelectorAll("#seccion-plan-estudios .pill-group")]; return g.find((x) => x.querySelectorAll("button").length >= 3) || g.find((x) => x.querySelectorAll("button").length >= 2); })(); }
 function botonTutorialAjustes() {
   return document.getElementById("btn-repetir-tutorial")
     || [...document.querySelectorAll("#seccion-configuracion button")].find((b) => /tutorial|bienvenida|onboarding/i.test(`${b.textContent} ${b.id}`)) || null;
@@ -1510,7 +1564,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
   const cfg = estado.datos.configuracion;
   const secciones = SECCIONES_TUTORIAL.filter(({id}) => id !== "configuracion" && document.getElementById(`seccion-${id}`));
   // «Últimos ajustes»: se guardan en este borrador y se aplican AL TERMINAR el onboarding.
-  const borrador = { tocado: false, navTocada: false, moneda: null, ocultas: new Set(cfg.navegacion_oculta || []), recordatorio: null, resumen: null, enlaces: [] };
+  const borrador = { tocado: false, navTocada: false, ordenNav: null, moneda: null, ocultas: new Set(cfg.navegacion_oculta || []), recordatorio: null, recordatorios: null, resumen: null, enlaces: [] };
   let claveRecien = false;
   const cuentaConDatos = !MODO_DEMO && Object.entries(estado.datos).some(([clave, valor]) =>
     Array.isArray(valor) && valor.length > 0 && clave !== "planes_estudio_demo"
@@ -1633,23 +1687,14 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
       try{const orig=win.mostrarSeccion;if(typeof orig==="function"&&!orig.__onbEnvuelta){const guardada=function(id,...resto){if(guiaBloqueaNavegacion()&&id!==preview.dataset.seccion)return;return orig.call(this,id,...resto);};guardada.__onbEnvuelta=true;win.mostrarSeccion=guardada;}}catch(_){}
     }
   };
-  // Si ya hay clave real, la vista previa (que corre en memoria, sin guardar nada) debe mostrarla como activa.
-  const sincronizarClaveGeminiPreview=()=>{
-    if(etapa!=="wapper-config"||!cfg.gemini_api_key)return;
-    let win;try{win=preview.contentWindow;void win.document;}catch(_){return;}
-    try{const c=win.estado?.datos?.configuracion;if(c)c.gemini_api_key=cfg.gemini_api_key;}catch(_){}
-    try{win.aplicarVisibilidadBotonAsistente?.();}catch(_){}
-    try{if(typeof win.renderizarAsistente==="function")win.renderizarAsistente();else if(typeof win.mostrarSeccion==="function"&&preview.dataset.seccion==="asistente")win.mostrarSeccion("asistente");}catch(_){}
-  };
   const actualizarPreview=()=>{
     bloquearNavegacionPreview();
-    sincronizarClaveGeminiPreview();
     preview.contentWindow?.postMessage({
     type:"APP_PREVIEW_UPDATE", paleta:paletaActual(), modo:modoPersonalizacion,
     calidad:calidadPersonalizacion,
     colores:paletaActual()==="personalizada"?cfg.paleta_personalizada?.colores:null,
     logo:cfg.logo_app||"folder", logoData:cfg.logo_app_url||null,
-    geminiKey:etapa==="wapper-config"?(cfg.gemini_api_key||null):null
+    geminiActivo:etapa==="wapper-config"&&Boolean(cfg.gemini_api_key)
     },location.origin);
   };
   // ── Teléfono (≤760px): primero la información; la vista previa es la página siguiente ──
@@ -1762,7 +1807,8 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
     if(!borrador.tocado)return;
     if(borrador.moneda)cfg.moneda_preferida=borrador.moneda;
     if(borrador.navTocada)cfg.navegacion_oculta=[...borrador.ocultas];
-    if(borrador.recordatorio){const r=borrador.recordatorio,previo=cfg.notificaciones_recordatorios&&typeof cfg.notificaciones_recordatorios==="object"?cfg.notificaciones_recordatorios:{};cfg.notificaciones_recordatorios={feriado:["1_dia"],...previo,tarea:[r],examen:[r],evento:[r]};}
+    if(borrador.ordenNav)cfg.navegacion_orden=[...borrador.ordenNav];
+    if(borrador.recordatorios){const previo=cfg.notificaciones_recordatorios&&typeof cfg.notificaciones_recordatorios==="object"?cfg.notificaciones_recordatorios:{};cfg.notificaciones_recordatorios={feriado:["1_dia"],...previo,...borrador.recordatorios};}
     if(borrador.enlaces.length){
       if(!Array.isArray(cfg.enlaces_rapidos))cfg.enlaces_rapidos=[];
       borrador.enlaces.forEach((e)=>{if(cfg.enlaces_rapidos.length>=(LIMITE_ENLACES_RAPIDOS||20))return;const nuevo=crearEnlaceRapido(e);sellarTimestamp(nuevo);cfg.enlaces_rapidos.push(nuevo);});
@@ -2058,22 +2104,34 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
       acciones.append(boton("Atrás","btn-secondary",()=>{etapa="tour";indice=Math.max(0,secciones.length-1);pintar();}),boton("Continuar","btn-primary",()=>{etapa="ajustes2";pintar();}));return;
     }
     if(etapa==="ajustes2"){
-      contenido.append(texto("p","onboarding-lead","Desactiva las secciones que no vayas a utilizar. Puedes volver a activarlas cuando quieras en Ajustes > Personalizar > Navegación."));
+      contenido.append(texto("p","onboarding-lead","Arrastra las secciones para cambiar su orden. Desactiva las que no vayas a utilizar; puedes volver a activarlas en Ajustes > Personalizar > Navegación."));
       const lista=document.createElement("div");lista.className="onb-ajustes";
       const orden=typeof window.obtenerOrdenNavegacion==="function"?window.obtenerOrdenNavegacion():SECCIONES_NAV.map((x)=>x.id);
+      let arrastrada=null;
+      const guardarOrdenNav=()=>{const vistos=[...lista.querySelectorAll(".onb-nav-fila")].map((n)=>n.dataset.seccion);borrador.ordenNav=[...vistos,...orden.filter((x)=>!vistos.includes(x))];borrador.tocado=true;borrador.navTocada=true;};
       orden.forEach((id)=>{
         const sec=SECCIONES_NAV.find((x)=>x.id===id);if(!sec)return;
         if(id==="asistente"&&!cfg.gemini_api_key)return;
-        const fila=document.createElement("div");fila.className="onb-nav-fila";
-        const izq=document.createElement("span");izq.append(texto("span","",sec.icono),texto("span","",sec.etiqueta));
+        const fila=document.createElement("div");fila.className="onb-nav-fila";fila.draggable=true;fila.dataset.seccion=id;fila.setAttribute("aria-label",traducirTextoInterfaz("Arrastra para cambiar el orden"));
+        const izq=document.createElement("span");const asa=texto("span","onb-nav-arrastre","⠿");asa.setAttribute("aria-hidden","true");izq.append(asa,texto("span","",sec.icono),texto("span","",sec.etiqueta));
         const sw=construirInterruptor(!borrador.ocultas.has(id),(activa)=>{if(activa)borrador.ocultas.delete(id);else borrador.ocultas.add(id);borrador.tocado=true;borrador.navTocada=true;},`${sec.etiqueta}`);
+        fila.addEventListener("dragstart",(ev)=>{arrastrada=fila;fila.classList.add("arrastrando");ev.dataTransfer.effectAllowed="move";});
+        fila.addEventListener("dragend",()=>{fila.classList.remove("arrastrando");arrastrada=null;});
+        fila.addEventListener("dragover",(ev)=>{ev.preventDefault();if(arrastrada&&arrastrada!==fila){const r=fila.getBoundingClientRect();lista.insertBefore(arrastrada,ev.clientY<r.top+r.height/2?fila:fila.nextSibling);}});
+        fila.addEventListener("drop",(ev)=>{ev.preventDefault();guardarOrdenNav();});
+        // En pantallas táctiles el navegador no implementa de forma uniforme
+        // el drag HTML; el asa usa Pointer Events y conserva el desplazamiento.
+        asa.addEventListener("pointerdown",(ev)=>{if(ev.pointerType==="mouse")return;ev.preventDefault();arrastrada=fila;fila.classList.add("arrastrando");asa.setPointerCapture?.(ev.pointerId);});
+        asa.addEventListener("pointermove",(ev)=>{if(arrastrada!==fila||!asa.hasPointerCapture?.(ev.pointerId))return;const destino=document.elementFromPoint(ev.clientX,ev.clientY)?.closest(".onb-nav-fila");if(destino&&destino!==fila){const r=destino.getBoundingClientRect();lista.insertBefore(fila,ev.clientY<r.top+r.height/2?destino:destino.nextSibling);}});
+        const soltarPuntero=(ev)=>{if(arrastrada!==fila||ev.pointerType==="mouse")return;fila.classList.remove("arrastrando");arrastrada=null;guardarOrdenNav();};
+        asa.addEventListener("pointerup",soltarPuntero);asa.addEventListener("pointercancel",soltarPuntero);
         fila.append(izq,sw.label);lista.append(fila);
       });
       contenido.append(lista);
       acciones.append(boton("Atrás","btn-secondary",()=>{etapa="ajustes1";pintar();}),boton("Continuar","btn-primary",()=>{etapa="flujo";pintar();}));return;
     }
     contenido.append(construirFlujo());
-    acciones.append(boton("Atrás","btn-secondary",()=>{etapa="ajustes2";pintar();}),boton("Lo haré después","btn-secondary",()=>fin(false)));colocarPrimario(boton(tienePlanArmado?"Continuar":"Agregar plan y ver la guía","btn-primary",()=>tienePlanArmado?preguntarPorOtroPlan():fin(true)));
+    acciones.append(boton("Atrás","btn-secondary",()=>{etapa="ajustes2";pintar();}),boton("Lo haré después","btn-secondary",()=>fin(false)));colocarPrimario(boton(tienePlanArmado?"Continuar":"Importar mi plan","btn-primary",()=>tienePlanArmado?preguntarPorOtroPlan():fin(true)));
   };
   const siguiente=()=>{indice++;if(indice>=secciones.length)etapa="ajustes1";pintar();};
   panel.querySelector(".onboarding-cerrar").addEventListener("click",()=>{if(MODO_DEMO)fin(false);else preguntarSalir();});
@@ -2091,6 +2149,21 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
 
 function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres = false } = {}){
   const yaTienePlan = Boolean(estado.datos?.planes_estudio?.some((plan) => plan.materias?.length || plan.optativas_disponibles?.length));
+  // La importación inicial ahora tiene su propio flujo guiado, incluido
+  // Picture-in-Picture. No dibujar encima el tutorial antiguo: registra la
+  // continuación aquí para llevar a Semestres cuando el import real termine.
+  if (!posteriorImportacion && !yaTienePlan) {
+    window.continuarTutorialDespuesDeImportarPlan = () => {
+      const cfg = estado.datos?.configuracion;
+      if (cfg?.guia_plan_pendiente !== "plan") return;
+      cfg.onboarding_plan_en_blanco_pendiente = false;
+      cfg.guia_plan_pendiente = "semestres";
+      guardar();
+      navegar?.("semestres");
+      setTimeout(() => iniciarGuiaPlan({ navegar, posteriorImportacion: true, yaEnSemestres: true }), 350);
+    };
+    return;
+  }
   const semestresIniciales = new Set((estado.datos?.semestres || []).map((s) => s.id));
   let semestreCreadoEnGuia = false, esperandoAlta = false, pasoAlta = -1;
   const marcarSemestresVisto = () => {
@@ -2113,11 +2186,11 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
     { selector: botonGestionPlan, texto: "Ya tienes un plan. Para añadir otra carrera toca «Gestionar plan» (el botón resaltado)." },
     ...pasosSemestre,
   ] : [
-    { selector: contenedorOpcionesPlan, etiqueta: "Importar mi plan", blanco: true, texto: "Tienes dos caminos: empezar en blanco y agregar tus materias a mano, una por una, o importar un plan que ya tengas hecho. Elige el que prefieras." },
-    { selector: grupoMetodosImportar, blanco: true, texto: "Importa tu plan ya hecho: elige Pegar link, Adjuntar PDF/Imagen o Tomar foto (los botones resaltados) y luego envíalo a Claude para que lo convierta al formato CSV. Si prefieres hacerlo a mano, toca «Empezar en blanco»." },
-    { selector: () => document.getElementById("btn-enviar-import-claude"), texto: "Pulsa Enviar a Claude y sigue la guía para adjuntar tu plan. Cuando Claude devuelva el CSV, vuelve a esta app." },
-    { selector: () => document.getElementById("textarea-csv-importar"), texto: "Copia el bloque CSV completo, desde CARRERA hasta la última materia, y pégalo aquí. Luego toca Importar." },
-    { selector: () => [...document.querySelectorAll("#seccion-plan-estudios button")].find((b) => /^(importar|importa|import)$/i.test(b.textContent.trim())), texto: "Pulsa Importar para guardar y revisar las materias. Cuando termine, la guía te llevará a Semestres para continuar." },
+    { selector: contenedorOpcionesPlan, etiqueta: "Importar mi plan", blanco: true, texto: "Elige cómo tienes tu plan: puedes usar un enlace público, un PDF o fotos. Si todavía no tienes el documento, también puedes empezar en blanco. Te acompaño en cada paso." },
+    { selector: grupoMetodosImportar, blanco: true, texto: "Para una página pública, elige «Pegar link». Si tienes un archivo, elige «Adjuntar PDF/Imagen». Si tienes fotos o capturas, usa «Tomar capturas»: Wapper las reúne en un PDF para que Claude pueda leerlas." },
+    { selector: () => estado.modoImportacion === "capturas" ? [...document.querySelectorAll("#seccion-plan-estudios button")].find((b) => /convertir imágenes a pdf|convert images to pdf|convertir les images en pdf|converti.*pdf/i.test(b.textContent)) : document.getElementById("btn-enviar-import-claude"), texto: "Ahora prepararás el plan con Claude. Copia la instrucción, abre Claude y adjunta el PDF o envíale el enlace. Sigue los pasos con calma; al terminar, vuelve aquí con la respuesta." },
+    { selector: () => document.getElementById("textarea-csv-importar"), texto: "Copia la respuesta completa de Claude y pégala aquí. Incluye las líneas de carrera, el encabezado CSV y todas las materias para que no falte información." },
+    { selector: () => [...document.querySelectorAll("#seccion-plan-estudios button")].find((b) => /^(importar|importa|import)$/i.test(b.textContent.trim())), texto: "Toca «Importar» para guardar el plan y revisar las materias. Después te guiaré a Semestres para que matricules lo que cursas ahora." },
   ];
   let i = 0;
   const pop = document.createElement("aside"); pop.className = "guia-plan-flotante"; pop.setAttribute("role", "dialog"); document.body.append(pop);
@@ -2154,7 +2227,7 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
   };
   const pintar = () => {
     if (i >= pasos.length) { cerrar({ continuarSemestres: flujoSemestre }); return; }
-    if (!posteriorImportacion && !yaTienePlan && i >= 2 && !document.getElementById("textarea-csv-importar")) {
+    if (!posteriorImportacion && !yaTienePlan && i >= 2 && !document.getElementById("textarea-csv-importar") && estado.modoImportacion !== "capturas") {
       const link = grupoMetodosImportar()?.querySelector("button");
       if (link) link.click(); setTimeout(pintar, 80); return;
     }
@@ -2164,14 +2237,20 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
     resaltado?.scrollIntoView({ behavior: "smooth", block: "center" });
     resaltador.apuntar(resaltado, paso.selector); // anillo + bloqueo de todo lo demás (solo si hay objetivo)
     pop.replaceChildren();
-    const titulo = document.createElement("strong"); titulo.textContent = `${i + 1} / ${pasos.length}`;
-    const p = document.createElement("p"); p.textContent = traducirTextoInterfaz(paso.texto);
-    pop.append(titulo, p);
+    const cabecera = document.createElement("div"); cabecera.className = "guia-plan-cabecera";
+    const titulo = document.createElement("strong"); titulo.textContent = traducirTextoInterfaz(paso.etiqueta || "Importar tu plan");
+    const contador = document.createElement("span"); contador.className = "guia-plan-contador"; contador.textContent = `${i + 1} / ${pasos.length}`;
+    cabecera.append(titulo, contador);
+    const progreso = document.createElement("div"); progreso.className = "guia-plan-progreso"; progreso.setAttribute("role", "progressbar"); progreso.setAttribute("aria-label", traducirTextoInterfaz("Progreso de importación")); progreso.setAttribute("aria-valuemin", "0"); progreso.setAttribute("aria-valuemax", String(pasos.length)); progreso.setAttribute("aria-valuenow", String(i + 1));
+    const avance = document.createElement("span"); avance.style.width = `${((i + 1) / pasos.length) * 100}%`; progreso.append(avance);
+    const p = document.createElement("p"); p.textContent = traducirTextoInterfaz(i === 2 && estado.modoImportacion === "capturas" ? "Primero convierte tus fotos a PDF. Toca «Convertir imágenes a PDF», elige las capturas y confirma. Al volver aquí, continúa para preparar el archivo con Claude." : paso.texto);
+    pop.append(cabecera, progreso, p);
     const acciones = document.createElement("div"); acciones.className = "row";
     const seguir = document.createElement("button"); seguir.className = "btn btn-primary";
     seguir.textContent = traducirTextoInterfaz(paso.etiqueta || (paso.accion === "abrirAlta" ? "Abrir formulario" : i === pasos.length - 1 ? "Entendido" : "Siguiente"));
     seguir.onclick = () => {
       if (paso.accion === "navegar") { marcarSemestresVisto(); navegar?.("semestres"); i++; setTimeout(pintar, 350); return; }
+      if (i === 2 && estado.modoImportacion === "capturas" && !document.getElementById("textarea-csv-importar")) { return; }
       if (paso.accion === "abrirAlta") {
         marcarSemestresVisto(); pasoAlta = i; resaltador.ocultar();
         (resaltado || botonRegistrarSemestre())?.click(); pop.classList.add("oculto"); esperandoAlta = true;
@@ -2183,13 +2262,23 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
     acciones.append(seguir);
     if (paso.blanco) {
       const enBlanco = document.createElement("button"); enBlanco.className = "btn btn-secondary"; enBlanco.textContent = traducirTextoInterfaz("Empezar en blanco");
-      enBlanco.onclick = () => { const b = botonDesdeCero(); cerrar(); b?.click(); };
+      enBlanco.onclick = () => {
+        const c = estado.datos?.configuracion;
+        // Solo el recorrido inicial deja una continuación pendiente. Si la
+        // persona eligió un plan vacío, la guia de Semestres arranca al crear
+        // su primera materia manual; las visitas desde Ajustes no redirigen.
+        if (c?.onboarding_v1_completado === true && c.guia_plan_pendiente === "plan") {
+          c.onboarding_plan_en_blanco_pendiente = true;
+          guardar();
+        }
+        const b = botonDesdeCero(); cerrar(); b?.click();
+      };
       acciones.append(enBlanco);
     }
     acciones.append(saltar); pop.append(acciones); pop.classList.remove("oculto"); evitarSolape(pop, resaltado);
   };
   pintar();
-  window.continuarTutorialDespuesDeImportarPlan = () => { if (!cerrarGuiaPlanActiva) return; marcarSemestresVisto(); cerrar(); { const c = estado.datos?.configuracion; if (c) { c.guia_plan_pendiente = "semestres"; guardar(); } } navegar?.("semestres"); setTimeout(() => iniciarGuiaPlan({ navegar, posteriorImportacion: true, yaEnSemestres: true }), 350); };
+  window.continuarTutorialDespuesDeImportarPlan = () => { if (!cerrarGuiaPlanActiva) return; marcarSemestresVisto(); cerrar(); { const c = estado.datos?.configuracion; if (c) { c.onboarding_plan_en_blanco_pendiente = false; c.guia_plan_pendiente = "semestres"; guardar(); } } navegar?.("semestres"); setTimeout(() => iniciarGuiaPlan({ navegar, posteriorImportacion: true, yaEnSemestres: true }), 350); };
 }
 
 function inicializarTutorialDesdeAjustes({ navegar, toast } = {}) {

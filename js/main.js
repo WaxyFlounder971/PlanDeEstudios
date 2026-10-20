@@ -27,6 +27,7 @@ import {
 } from "./core/notificaciones-calendario.js";
 import { inicializarComunidad, renderizarComunidad } from "./comunidad/comunidad.js";
 import { renderizarFinanzas } from "./finanzas/finanzas.js";
+import { hayBorradorFinanzasPendiente } from "./finanzas/finanzas-semestres.js";
 import { inicializarModalCategoria, inicializarModalCategoriaMaterias } from "./plan/plan-categorias.js";
 import { inicializarModalDesbloquea, inicializarModalHistorial, inicializarModalRequisito } from "./plan/plan-detalle.js";
 import { inicializarModalCrearPlan, inicializarModalMateriaManual, inicializarModalVincularOptativa } from "./plan/plan-esquema.js";
@@ -52,6 +53,7 @@ import { abrirConfirmacion, agregarLongPress, inicializarAutoScrollSelectoresEnM
 import { confirmarUniversidadNoInvertida } from "./ui/aviso-universidad.js";
 import { aplicarPaleta, aplicarTemaGuardadoLocalmente, obtenerModoTemaLocal, obtenerModoDisenoLocal, guardarModoTemaLocal } from "./ui/tema.js";
 import { inicializarIdiomas, traducirTextoInterfaz } from "./core/i18n.js";
+import { inicializarNotas, renderizarNotas } from "./notas/notas.js";
 
 // La vista embebida del onboarding recibe los cambios visuales en vivo para
 // evitar reiniciar la demo cada vez que se prueba un tema, color o logo.
@@ -59,7 +61,7 @@ if (MODO_DEMO && PREVIEW_DEMO && window.parent !== window) {
   window.addEventListener("message", (evento) => {
     if (evento.origin !== window.location.origin || evento.source !== window.parent
       || evento.data?.type !== "APP_PREVIEW_UPDATE" || !estado.datos?.configuracion) return;
-    const { paleta, modo, colores, logo, logoData, calidad, geminiKey } = evento.data;
+    const { paleta, modo, colores, logo, logoData, calidad, geminiActivo } = evento.data;
     const cfg = estado.datos.configuracion;
     if (typeof paleta === "string") cfg.paleta = paleta;
     if (["light", "dark", "true-dark"].includes(modo)) {
@@ -69,7 +71,7 @@ if (MODO_DEMO && PREVIEW_DEMO && window.parent !== window) {
     if (colores && typeof colores === "object" && !Array.isArray(colores)) cfg.paleta_personalizada = { ...(cfg.paleta_personalizada || {}), colores };
     if (["folder", "birrete", "personalizado"].includes(logo)) cfg.logo_app = logo;
     cfg.logo_app_url = typeof logoData === "string" && logoData.startsWith("data:image/") ? logoData : null;
-    if (PREVIEW_DEMO) cfg.gemini_api_key = typeof geminiKey === "string" ? geminiKey : null;
+    if (PREVIEW_DEMO) cfg.gemini_api_key = geminiActivo ? "PREVIEW_KEY_CONFIGURED" : null;
     if (["optimizado", "fancy"].includes(calidad)) aplicarModoRendimiento(calidad === "optimizado");
     aplicarPaleta(cfg.paleta || "azul", cfg.modo || "dark", cfg.paleta_personalizada?.colores);
     aplicarLogoApp();
@@ -79,6 +81,7 @@ if (MODO_DEMO && PREVIEW_DEMO && window.parent !== window) {
 // Idioma de interfaz local al dispositivo. El idioma español estático es
 // el respaldo si el archivo de traducción elegido no existe o está incompleto.
 inicializarIdiomas();
+inicializarNotas();
 
 /* ===================== PWA: registro del Service Worker ===================== */
 /*
@@ -296,6 +299,10 @@ window.addEventListener("DOMContentLoaded", () => {
 
   const btnLogin = document.getElementById("btn-login-google");
   const textoOriginalBtnLogin = btnLogin.textContent;
+  const uaLogin = navigator.userAgent || "";
+  const esWebViewMovil = /;\s*wv\)|FBAN|FBAV|Instagram|Line\/|TikTok|MicroMessenger|Snapchat|LinkedInApp|WhatsApp/i.test(uaLogin)
+    || (/iPhone|iPad|iPod/i.test(uaLogin) && /AppleWebKit/i.test(uaLogin) && !/Safari/i.test(uaLogin));
+  if (esWebViewMovil) document.getElementById("aviso-navegador-integrado")?.classList.remove("oculto");
   // Bug 1 (v8): se define aquí arriba porque alListo (más abajo) la lee, pero
   // su valor real se fija después de leer la caché - como es una closure
   // sobre la variable (no una copia), para cuando alListo se dispare (async,
@@ -395,7 +402,7 @@ window.addEventListener("DOMContentLoaded", () => {
       }
       const aviso = document.getElementById("aviso-login-bloqueado");
       aviso.textContent =
-        "No se pudo cargar el inicio de sesión de Google. Revisa tu conexión a internet, desactiva bloqueadores de anuncios/VPN para este sitio, y recarga la página.";
+        "No se pudo cargar el inicio de sesión de Google. Revisa tu conexión a internet y recarga la página.";
       aviso.classList.remove("oculto");
       // Sin esto, si el script de Google nunca carga, authListo se queda
       // pendiente para siempre y cualquier intento de sync/sondeo quedaría
@@ -479,7 +486,7 @@ window.addEventListener("DOMContentLoaded", () => {
   // Aviso NATIVO del navegador (no personalizable, restricción de seguridad)
   // si se intenta recargar/cerrar la pestaña con cambios sin sincronizar.
   window.addEventListener("beforeunload", (e) => {
-    if (estado.pendienteSync) {
+    if (estado.pendienteSync || hayBorradorFinanzasPendiente()) {
       e.preventDefault();
       e.returnValue = "";
     }
@@ -842,7 +849,7 @@ function programarAvisoLoginBloqueado() {
     const aviso = document.getElementById("aviso-login-bloqueado");
     if (!aviso) return;
     aviso.textContent =
-      "No se pudo abrir el inicio de sesión. Si usas VPN, un bloqueador de anuncios o una extensión de privacidad, desactívalo para este sitio e intenta de nuevo.";
+      "Google todavía no respondió. Revisa tu conexión e inténtalo de nuevo.";
     aviso.classList.remove("oculto");
   }, 6000);
 }
@@ -1223,7 +1230,7 @@ function mostrarAppInterno() {
   ocultarPantallaCargaSesion();
   document.getElementById("pantalla-login").classList.add("oculto");
   document.getElementById("app-shell").classList.remove("oculto");
-  configurarCorreoAnalitica(MODO_DEMO ? "" : estado.datos?.perfil?.correo || "");
+  configurarCorreoAnalitica(MODO_DEMO ? "" : estado.datos?.perfil?.correo || "", MODO_DEMO ? "" : estado.token || "", MODO_DEMO ? false : estado.datos?.configuracion?.analitica_flujos_aceptada === true);
   inicializarAnaliticaUso();
   if (!MODO_DEMO && !window.__analiticaAperturaRegistrada) {
     window.__analiticaAperturaRegistrada = true;
@@ -1238,6 +1245,7 @@ function mostrarAppInterno() {
   // cuando el dato en sí seguía intacto en estado.datos. Mismo patrón que
   // el bug de abajo en storage-sync.js.
   const cfg = estado.datos.configuracion;
+  window.procesarNotasCompartidas?.();
   aplicarTamanoTexto(estado.datos);
   const modoVistaDemo = new URLSearchParams(location.search).get("preview") === "1" ? (cfg.modo || "dark") : "dark";
   aplicarPaleta(cfg.paleta, MODO_DEMO ? modoVistaDemo : obtenerModoTemaLocal(), cfg.paleta === "personalizada" ? cfg.paleta_personalizada?.colores : undefined);
@@ -1289,6 +1297,7 @@ function mostrarAppInterno() {
   // tras un refresh la sección de Plan de Estudios se quedaba con la clase
   // "oculto" del HTML aunque su contenido sí se hubiera renderizado.
   mostrarSeccion(MODO_DEMO ? (new URLSearchParams(location.search).get("previewSection") || "resumen") : localStorage.getItem(CLAVE_SECCION_ACTIVA) || "resumen");
+  if (!MODO_DEMO) setTimeout(() => window.procesarColaWapper?.(), 0);
   // Deep links por query param — extraído a procesarDeepLinkAbrir() (ver
   // esa función, definida más abajo) para poder re-chequearlo también
   // desde 'pageshow'/'visibilitychange', no solo acá.
@@ -1548,8 +1557,18 @@ function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
     horario: "seccion-horario",
     "tiempo-estudio": "seccion-tiempo-estudio",
     asistente: "seccion-asistente",
+    notas: "seccion-notas",
   };
   if (!Object.prototype.hasOwnProperty.call(secciones, nombre)) return;
+  if (window.__appSeccionActiva === "finanzas" && nombre !== "finanzas" && hayBorradorFinanzasPendiente()) {
+    // El popstate ya movió una entrada hacia atrás. Se restaura la entrada
+    // actual para que la navegación siga en Finanzas hasta guardar/descartar.
+    if (desdeHistorial && window.history) {
+      window.history.pushState({ appNav: true, appSeccion: "finanzas" }, "", window.location.href);
+    }
+    mostrarToast(traducirTextoInterfaz("Guarda o descarta los cambios de Finanzas antes de salir."));
+    return;
+  }
   const seccionSolicitada = nombre;
   const dependencia = orientarSobreDependencias(nombre);
   if (dependencia) nombre = dependencia.destino;
@@ -1582,6 +1601,9 @@ function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
     estado.materiasExpandidas = new Map();
     renderizarPlanEstudios();
   }
+  // Finanzas lee la moneda preferida al renderizar. Redibujarla al entrar
+  // asegura que un cambio hecho en Ajustes se vea inmediatamente.
+  if (nombre === "finanzas") renderizarFinanzas();
   // Horario depende de datos que se editan en otras pestañas (nombre/fechas
   // de semestre, materias matriculadas) - se re-renderiza al entrar para
   // que nunca se vea desactualizado.
@@ -1608,6 +1630,7 @@ function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
   // mostrarAvisoContinuar en js/asistente/asistente.js). Con más de 1h, o
   // sin conversación guardada, arranca directo en blanco.
   if (nombre === "asistente") window.renderizarAsistente?.();
+  if (nombre === "notas") renderizarNotas();
   if (dependencia && seccionSolicitada !== nombre) setTimeout(() => mostrarToastAccion(dependencia.mensaje, "Entendido", () => mostrarSeccion(nombre)), 220);
   if (cambioSeccion && (!MODO_DEMO || !PREVIEW_DEMO) && estado.datos?.configuracion?.onboarding_v1_completado !== false) requestAnimationFrame(() => mostrarTutorialPrimeraVez(nombre));
 }
@@ -1657,7 +1680,7 @@ window.mostrarSeccion = mostrarSeccion;
  * que la limpieza se sincronice y no reaparezca en otros dispositivos con
  * el dato viejo.
  */
-const DEFAULT_ORDEN_NAV = ["agenda", "horario", "tiempo-estudio", "semestres", "comunidad", "finanzas", "plan-estudios", "asistente"];
+const DEFAULT_ORDEN_NAV = ["agenda", "horario", "tiempo-estudio", "semestres", "comunidad", "finanzas", "plan-estudios", "notas", "asistente"];
 
 function obtenerOrdenNavegacionEfectivo() {
   const crudo = estado.datos.configuracion.navegacion_orden || [];

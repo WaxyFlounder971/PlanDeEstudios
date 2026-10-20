@@ -8,13 +8,15 @@
 
 import { abrirModalCopiaManualPortapapeles, copiarAlPortapapelesBlindado, copiarPromptConAviso } from "../core/clipboard.js";
 import { PRESETS_TIPOS_HORAS } from "../core/schema.js";
-import { mostrarCargando, ocultarCargando } from "../core/storage-sync.js";
+import { marcarCambioPendiente, mostrarCargando, ocultarCargando } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { abrirModalCrearPlan } from "./plan-esquema.js";
 import { abrirModalGestionPlanes } from "./plan-gestionar.js";
-import { manejarClickImportar, mostrarErroresImportacion } from "./plan-importacion-csv.js";
+import { manejarClickImportar, mostrarErroresImportacion, parsearCSVPlanEstudios } from "./plan-importacion-csv.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
+import { obtenerIdiomaActual, traducirTextoInterfaz } from "../core/i18n.js";
+import { iniciarProcesoAnalitico } from "../core/analitica.js";
 
 /* =========================================================================
    PLAN.JS — Iteración 1 (Parte 1-B + Parte 2 FINAL)
@@ -58,6 +60,105 @@ function construirEncabezadoCSV(tiposHoras) {
   return partes.join(",");
 }
 
+// Traducciones del prompt extenso. Los nombres de metadatos, encabezados y
+// valores de control se conservan en español porque forman parte del contrato
+// que consume plan-importacion-csv.js.
+const PROMPTS_IMPORTACION = {
+  en: (modo, link) => `${modo === "link" ? `If web browsing is unavailable or you cannot open this link, tell me so I can use another method; do not assume it is impossible without trying.\n\nVisit this public university page and extract the complete curriculum: ${link}\nIf courses are shown in JavaScript tabs or blocks and you cannot confidently determine a course's Bloque, put "REVISAR" in that row instead of guessing.` : modo === "pdf" ? "I am attaching my degree curriculum as a PDF. It may contain real text tables or scanned image pages; process either kind." : modo === "imagenes" ? "I am attaching up to four image files showing my curriculum. Read all attached images together as one continuous curriculum, joining their information without losing courses or depending on image order." : "I am attaching a PDF made from screenshots of my curriculum (one screenshot per page). Read all pages together as one continuous curriculum, joining their information without losing courses or depending on page order."}
+
+Act as a UNIVERSAL academic-data structurer. Handle curricula from any university (including UCR, UNA, TEC, UTP, UNAM, and others) and any layout: tables, diagrams, grids, or lists grouped by blocks, cycles, levels, years, or semesters.
+
+=== REQUIRED OUTPUT ===
+Put the entire result inside ONE plain CSV code block. Return no explanation before or after it, except the continuation notice allowed by rule 11. Anything outside the block will be lost.
+
+At the very top of that same block, include these metadata lines, one per line, only when certain; omit any uncertain line and never invent a value:
+CARRERA: ...
+CODIGO_PLAN: ...
+UNIVERSIDAD: ...
+TIPO_TITULO: ... (Diplomado/Bachillerato/Licenciatura/Maestría/Doctorado, if identified)
+HORAS_COLUMNAS: comma-separated full names of the hour types used by this specific document. Use the full words as written in the source, never abbreviations. If the source only gives T/P/L/TP/EI/HT/HD, use the most likely full names: Teoría, Práctica, Laboratorio, Teoría-Práctica, Estudio Independiente, Horas Teóricas, Horas de Docencia. If the curriculum has no hour concept, write HORAS_COLUMNAS: Ninguna. If it gives only a total, use one column named Horas. Detect this from the document; do not assume every university uses T/P/L/TP.
+
+Immediately after metadata, in the same code block, write the header and all course rows in this exact schema:
+Bloque,Codigo,Nombre,Creditos,[one column per HORAS_COLUMNAS value],Requisitos,Correquisitos,SinDefinir
+If HORAS_COLUMNAS is Ninguna, omit hour columns. Always keep every other column, including SinDefinir.
+
+RULES:
+1. BLOQUE has exactly three kinds of value: a sequential integer, "OPTATIVA" (or "ELECTIVA"), or "REVISAR". (a) Use a sequential integer when a course or reserved elective slot is tied to a required year/cycle/semester/term. Number every chronological sub-block in actual order (1, 2, 3...), without restarting each year; convert named levels to that sequence. (b) Use "OPTATIVA" or "ELECTIVA" for a genuinely optional course from a general elective bank that can be taken at different points or not taken; a suggested cycle does not make its location mandatory. (c) Use "REVISAR" only when you cannot determine either its required location or whether it is optional. Never use it as a synonym for optional.
+2. CODIGO must be exactly as printed, even for an undefined elective slot (for example "Elective", "Wahlfach", or "Cours au choix"). Never invent, normalize, or replace a source code. Only when the document truly supplies no code, use "SD-B" plus the sequential block (e.g. SD-B7). If multiple rows in that block lack codes, make them unique and sequential in source order: SD-B7-1, SD-B7-2, etc.
+3. HORAS: use 0 when the document does not report a particular hour type for a course; never leave the cell blank. Extract hours from diagrams or colored grids as well as tables.
+4a. REQUISITOS and CORREQUISITOS: never put a comma inside a cell (it breaks CSV). Use ";" for requirements that are all necessary (AND), and "/" for equivalent alternatives (OR). Use parentheses to combine, e.g. (A;B)/(C;D) means (A AND B) OR (C AND D). Convert "QU-0102, QU-0103 o (QU-0114, QU-0115)" to "(QU-0102;QU-0103)/(QU-0114;QU-0115)". Use "Ninguno" when none exist, never blank; if the source has no corequisite concept, put "Ninguno" for every course. A condition requiring completion of an entire level/block becomes exactly "Bloque N" (optionally followed by "completo" or "aprobado"), using the sequential number from rule 1; the app expands it to all courses in that block. Other non-course conditions, such as a credit threshold or regular-student status, remain plain text; do not invent a course code.
+4b. SINDEFINIR is always the last column and always filled: write exactly "true" for a reserved elective slot with no selected real course yet, and "false" for every confirmed course, including defined courses in separate elective lists.
+5. If a course name (or another cell) contains a comma, wrap the whole cell in double quotes. When unsure, quote it.
+6. Do not add category, area, color, or any unlisted column.
+7. Include every course: electives, languages, seminars, practicums, capstones, and remedial/precalculus courses, even with zero credits.
+8. Include separate elective catalogs too. Use "OPTATIVA" or "ELECTIVA" as Bloque, not the suggested cycle and not "REVISAR" merely because no cycle is stated. These are defined courses, so SinDefinir=false.
+9. For any illegible, ambiguous, or unconfirmed cell, write "REVISAR" instead of inventing codes, credits, or hours.
+10. Ignore summary totals (for example, total degree credits); they are metadata, not course rows.
+11. If the curriculum does not fit in one response, split it into consecutive parts. Only part 1 may contain metadata and the header; later parts contain only rows, in order, with no repeated metadata/header. The app concatenates the parts, so a repeated header breaks import. Tell me between parts that more is coming.`,
+  it: (modo, link) => `${modo === "link" ? `Se non hai la navigazione web o non riesci ad aprire questo link, dimmelo così userò un altro metodo; non presumere che sia impossibile senza prima provare.\n\nVisita questa pagina universitaria pubblica ed estrai il piano di studi completo: ${link}\nSe i corsi sono organizzati in schede o blocchi JavaScript e non puoi stabilire con certezza il Bloque di un corso, scrivi "REVISAR" nella sua riga invece di indovinare.` : modo === "pdf" ? "Allego il piano di studi del mio corso in PDF. Può contenere tabelle di testo o pagine scansionate come immagini: elabora entrambi i formati." : modo === "imagenes" ? "Allego fino a quattro immagini del piano di studi. Leggi tutte le immagini allegate come un unico piano continuo, unendo le informazioni senza perdere corsi e senza dipendere dall'ordine delle immagini." : "Allego un PDF creato da più schermate del piano di studi (una schermata per pagina). Leggi tutte le pagine come un unico piano continuo, unendo le informazioni senza perdere corsi e senza dipendere dall'ordine delle pagine."}
+
+Agisci come strutturatore UNIVERSALE di dati accademici. Elabora piani di qualsiasi università (incluse UCR, UNA, TEC, UTP, UNAM e altre) e in qualsiasi formato: tabelle, diagrammi, griglie o elenchi per blocchi, cicli, livelli, anni o semestri.
+
+=== FORMATO RICHIESTO ===
+Inserisci tutto il risultato in UN SOLO blocco di codice CSV semplice. Non aggiungere spiegazioni prima o dopo, tranne l'avviso di continuazione ammesso dalla regola 11. Qualsiasi testo fuori dal blocco andrà perso.
+
+All'inizio dello stesso blocco inserisci questi metadati, uno per riga, solo se sei certo; ometti ogni riga incerta e non inventare valori:
+CARRERA: ...
+CODIGO_PLAN: ...
+UNIVERSIDAD: ...
+TIPO_TITULO: ... (Diplomado/Bachillerato/Licenciatura/Maestría/Doctorado, se identificato)
+HORAS_COLUMNAS: nomi completi, separati da virgole, dei tipi di ore usati nel documento. Usa le parole complete della fonte, mai sigle. Se la fonte riporta solo T/P/L/TP/EI/HT/HD, usa i nomi più probabili: Teoría, Práctica, Laboratorio, Teoría-Práctica, Estudio Independiente, Horas Teóricas, Horas de Docencia. Se il piano non prevede ore, scrivi HORAS_COLUMNAS: Ninguna. Se riporta solo un totale, usa una colonna Horas. Rilevalo dal documento: non presumere che ogni università usi T/P/L/TP.
+
+Subito dopo i metadati, nello stesso blocco di codice, inserisci intestazione e righe con questo schema ESATTO:
+Bloque,Codigo,Nombre,Creditos,[una colonna per ogni valore di HORAS_COLUMNAS],Requisitos,Correquisitos,SinDefinir
+Se HORAS_COLUMNAS è Ninguna, ometti le colonne delle ore. Mantieni sempre tutte le altre colonne, inclusa SinDefinir.
+
+REGOLE:
+1. BLOQUE ammette solo tre tipi di valore: intero progressivo, "OPTATIVA" (o "ELECTIVA"), oppure "REVISAR". (a) Usa l'intero quando il corso o uno spazio riservato a un'elettiva è vincolato a un anno/ciclo/semestre obbligatorio. Numera tutti i sottoblocchi cronologici nell'ordine reale (1, 2, 3...) senza ripartire ogni anno; converti i livelli denominati in tale sequenza. (b) Usa "OPTATIVA" o "ELECTIVA" per un corso davvero facoltativo, da un elenco generale che si può seguire in momenti diversi o non seguire; un ciclo consigliato non rende obbligatoria la collocazione. (c) Usa "REVISAR" solo se non puoi determinare con certezza né la collocazione obbligatoria né la natura facoltativa. Non usarlo come sinonimo di facoltativo.
+2. CODIGO deve essere identico a quello stampato, anche per uno spazio elettivo non ancora definito (es. "Elective", "Wahlfach", "Cours au choix"). Non inventare, normalizzare o sostituire un codice fonte. Solo se il documento non fornisce alcun codice usa "SD-B" più il numero progressivo del blocco (es. SD-B7). Se più righe dello stesso blocco non hanno codice, rendile univoche in ordine di fonte: SD-B7-1, SD-B7-2, ecc.
+3. HORAS: usa 0 quando il documento non riporta uno specifico tipo di ora per quel corso; non lasciare celle vuote. Estrai le ore anche da diagrammi o griglie colorate, non solo da tabelle.
+4a. REQUISITOS e CORREQUISITOS: non inserire mai virgole nella cella (rompono il CSV). Usa ";" per requisiti necessari tutti insieme (AND) e "/" per alternative equivalenti (OR). Usa parentesi per combinare, ad es. (A;B)/(C;D) significa (A E B) OPPURE (C E D). Converti "QU-0102, QU-0103 o (QU-0114, QU-0115)" in "(QU-0102;QU-0103)/(QU-0114;QU-0115)". Se non ce ne sono, scrivi "Ninguno", mai lasciare vuoto; se la fonte non prevede correquisiti, scrivi "Ninguno" per ogni corso. Una condizione che richiede di completare un intero blocco/livello diventa esattamente "Bloque N" (facoltativamente seguito da "completo" o "aprobado"), usando la numerazione della regola 1; l'app la espande in tutti i corsi del blocco. Altre condizioni non riferite a corsi, come una soglia di crediti o lo status di studente regolare, restano testo libero; non inventare codici.
+4b. SINDEFINIR è sempre l'ultima colonna e non può essere vuota: scrivi esattamente "true" per uno spazio elettivo riservato senza corso reale scelto e "false" per ogni corso confermato, inclusi quelli definiti in elenchi separati.
+5. Se il nome di un corso (o un'altra cella) contiene una virgola, racchiudi l'intera cella tra virgolette doppie. In caso di dubbio, usa le virgolette.
+6. Non aggiungere colonne di categoria, area, colore o altre non elencate.
+7. Includi tutti i corsi: elettivi, lingue, seminari, tirocini, lavori finali e corsi propedeutici/precalcolo, anche con zero crediti.
+8. Includi anche elenchi separati di elettivi. Usa "OPTATIVA" o "ELECTIVA" come Bloque, non il ciclo consigliato e non "REVISAR" solo perché il ciclo non è indicato. Sono corsi definiti, quindi SinDefinir=false.
+9. Per ogni cella illeggibile, ambigua o non verificabile scrivi "REVISAR" invece di inventare codici, crediti o ore.
+10. Ignora i totali riepilogativi (per esempio i crediti totali del corso di laurea): sono metadati, non righe di corsi.
+11. Se il piano non entra in una risposta, dividilo in parti consecutive. Solo la prima può contenere metadati e intestazione; le successive devono contenere solo righe, in ordine, senza ripetere intestazione o metadati. L'app concatena le parti, quindi un'intestazione ripetuta rompe l'importazione. Tra una parte e l'altra avvisa che ne seguiranno altre.`,
+  fr: (modo, link) => `${modo === "link" ? `Si la navigation web n'est pas disponible ou si vous ne pouvez pas ouvrir ce lien, dites-le-moi afin que j'utilise une autre méthode ; ne concluez pas que c'est impossible sans avoir essayé.\n\nVisitez cette page universitaire publique et extrayez le programme complet : ${link}\nSi les cours sont répartis dans des onglets ou blocs JavaScript et que vous ne pouvez pas déterminer avec certitude le Bloque d'un cours, écrivez "REVISAR" sur sa ligne au lieu de deviner.` : modo === "pdf" ? "Je joins le programme de mes études au format PDF. Il peut contenir des tableaux textuels ou des pages numérisées comme images : traitez les deux." : modo === "imagenes" ? "Je joins jusqu'à quatre images de mon programme d'études. Lisez toutes les images jointes comme un seul programme continu, en réunissant les informations sans perdre de cours et sans dépendre de leur ordre." : "Je joins un PDF composé de plusieurs captures d'écran de mon programme (une capture par page). Lisez toutes les pages comme un seul programme continu, en réunissant les informations sans perdre de cours et sans dépendre de l'ordre des pages."}
+
+Agissez comme un système UNIVERSEL de structuration des données académiques. Traitez les programmes de toute université (dont UCR, UNA, TEC, UTP, UNAM et autres), quels que soient leur format : tableaux, diagrammes, grilles ou listes par blocs, cycles, niveaux, années ou semestres.
+
+=== FORMAT DE SORTIE REQUIS ===
+Placez tout le résultat dans UN SEUL bloc de code CSV brut. N'ajoutez aucune explication avant ou après, sauf l'avis de continuation permis par la règle 11. Tout texte hors du bloc sera perdu.
+
+Au début de ce même bloc, indiquez ces métadonnées, une par ligne, uniquement si vous en êtes certain ; omettez chaque ligne incertaine et n'inventez jamais de valeur :
+CARRERA: ...
+CODIGO_PLAN: ...
+UNIVERSIDAD: ...
+TIPO_TITULO: ... (Diplomado/Bachillerato/Licenciatura/Maestría/Doctorado, si identifiable)
+HORAS_COLUMNAS: noms complets, séparés par des virgules, des types d'heures employés dans ce document. Utilisez les mots complets de la source, jamais les sigles. Si la source ne donne que T/P/L/TP/EI/HT/HD, utilisez les noms complets les plus probables : Teoría, Práctica, Laboratorio, Teoría-Práctica, Estudio Independiente, Horas Teóricas, Horas de Docencia. Si le programme ne prévoit aucune heure, écrivez HORAS_COLUMNAS: Ninguna. S'il ne donne qu'un total, utilisez une seule colonne Horas. Déduisez-le du document ; ne supposez pas que toutes les universités utilisent T/P/L/TP.
+
+Immédiatement après les métadonnées, dans le même bloc, écrivez l'en-tête et les lignes selon ce schéma EXACT :
+Bloque,Codigo,Nombre,Creditos,[une colonne pour chaque valeur de HORAS_COLUMNAS],Requisitos,Correquisitos,SinDefinir
+Si HORAS_COLUMNAS vaut Ninguna, omettez les colonnes d'heures. Gardez toujours toutes les autres colonnes, y compris SinDefinir.
+
+RÈGLES :
+1. BLOQUE n'admet que trois types de valeur : entier séquentiel, "OPTATIVA" (ou "ELECTIVA"), ou "REVISAR". (a) Utilisez l'entier lorsqu'un cours ou un emplacement réservé à une option est rattaché à une année/cycle/semestre obligatoire. Numérotez tous les sous-blocs chronologiques dans l'ordre réel (1, 2, 3...) sans recommencer chaque année ; convertissez les niveaux nommés en cette séquence. (b) Utilisez "OPTATIVA" ou "ELECTIVA" pour un cours réellement facultatif d'une liste générale, pouvant être suivi à différents moments ou ignoré ; un cycle conseillé ne rend pas son emplacement obligatoire. (c) Utilisez "REVISAR" uniquement si vous ne pouvez déterminer avec certitude ni l'emplacement obligatoire ni le caractère facultatif. Ne l'utilisez jamais comme synonyme de facultatif.
+2. CODIGO doit reproduire exactement le code imprimé, même pour un emplacement facultatif non défini (p. ex. "Elective", "Wahlfach", "Cours au choix"). N'inventez, ne normalisez et ne remplacez jamais un code source. Seulement si le document ne donne vraiment aucun code, utilisez "SD-B" suivi du numéro séquentiel du bloc (p. ex. SD-B7). Si plusieurs lignes du bloc n'ont pas de code, rendez-les uniques dans l'ordre source : SD-B7-1, SD-B7-2, etc.
+3. HORAS : utilisez 0 si le document ne précise pas un type d'heure pour un cours ; ne laissez aucune cellule vide. Extrayez aussi les heures des diagrammes et grilles colorées, pas seulement des tableaux.
+4a. REQUISITOS et CORREQUISITOS : ne mettez jamais de virgule dans une cellule (cela casse le CSV). Utilisez ";" pour les prérequis tous nécessaires (ET) et "/" pour les alternatives équivalentes (OU). Groupez avec des parenthèses : (A;B)/(C;D) signifie (A ET B) OU (C ET D). Convertissez "QU-0102, QU-0103 o (QU-0114, QU-0115)" en "(QU-0102;QU-0103)/(QU-0114;QU-0115)". S'il n'y en a pas, écrivez "Ninguno", jamais une cellule vide ; si la source ne prévoit pas de corequis, écrivez "Ninguno" pour chaque cours. Une condition exigeant d'avoir terminé un bloc/niveau entier devient exactement "Bloque N" (éventuellement suivi de "completo" ou "aprobado"), avec la numérotation de la règle 1 ; l'application la développe en tous les cours du bloc. Les autres conditions sans lien avec un cours (seuil de crédits, statut d'étudiant régulier) restent en texte libre ; n'inventez pas de code.
+4b. SINDEFINIR est toujours la dernière colonne et ne doit jamais être vide : écrivez exactement "true" pour un emplacement réservé sans cours réel choisi et "false" pour chaque cours confirmé, y compris les cours définis dans une liste distincte.
+5. Si le nom d'un cours (ou une autre cellule) contient une virgule, encadrez toute la cellule de guillemets doubles. En cas de doute, mettez-les.
+6. N'ajoutez aucune colonne de catégorie, domaine, couleur ou autre colonne non indiquée.
+7. Incluez tous les cours : options, langues, séminaires, stages, projets de fin d'études et cours préparatoires/précalcul, même avec zéro crédit.
+8. Incluez aussi les listes séparées d'options. Utilisez "OPTATIVA" ou "ELECTIVA" comme Bloque, jamais le cycle conseillé ni "REVISAR" au seul motif qu'aucun cycle n'est indiqué. Ce sont des cours définis, donc SinDefinir=false.
+9. Pour toute cellule illisible, ambiguë ou non confirmée, écrivez "REVISAR" au lieu d'inventer codes, crédits ou heures.
+10. Ignorez les totaux récapitulatifs (p. ex. crédits totaux du diplôme) : ce sont des métadonnées, pas des lignes de cours.
+11. Si le programme ne tient pas dans une réponse, divisez-le en parties consécutives. Seule la première contient les métadonnées et l'en-tête ; les suivantes contiennent uniquement les lignes, dans l'ordre, sans répéter en-tête ni métadonnées. L'application concatène les parties : un en-tête répété casse l'importation. Entre les parties, indiquez qu'une suite arrive.`
+};
+
 /**
  * Prompt oficial y único del proyecto para pedirle a Claude que estructure
  * el plan de estudios en CSV. `modo` cambia solo el
@@ -76,6 +177,10 @@ function construirEncabezadoCSV(tiposHoras) {
  */
 
 function construirPromptImportacion(modo, link) {
+  const idioma = obtenerIdiomaActual();
+  const modoPrompt = modo === "capturas" && archivosFuenteImportacion.length > 0 && archivosFuenteImportacion.length <= 4
+    && archivosFuenteImportacion.every((archivo) => archivo.type.startsWith("image/")) ? "imagenes" : modo;
+  if (PROMPTS_IMPORTACION[idioma]) return PROMPTS_IMPORTACION[idioma](modoPrompt, link);
   let instruccionEntrada = "";
   let avisoNavegacion = "";
 
@@ -89,7 +194,9 @@ function construirPromptImportacion(modo, link) {
 Es una página institucional sin inicio de sesión. Si la página organiza las materias en pestañas o bloques mediante controles de navegador (JavaScript) que no se reflejen con claridad en el contenido que puedas leer, y no puedes determinar con certeza a qué Bloque pertenece cada materia, escribe "REVISAR" en la columna Bloque de esa fila en vez de adivinar.`;
   } else if (modo === "pdf") {
     instruccionEntrada = `Te voy a adjuntar el plan de estudios de mi carrera en un archivo PDF (puede tener tablas de texto real, o ser páginas escaneadas como imágenes — trátalo igual en ambos casos).`;
-  } else if (modo === "capturas") {
+  } else if (modoPrompt === "imagenes") {
+    instruccionEntrada = `Te voy a adjuntar hasta cuatro imágenes de mi plan de estudios. Lee todas las imágenes adjuntas como una sola malla curricular continua, uniendo la información sin perder materias ni depender del orden de las imágenes.`;
+  } else if (modoPrompt === "capturas") {
     instruccionEntrada = `Te voy a adjuntar un PDF armado a partir de varias capturas de pantalla de mi plan de estudios (una captura por página). Trátalo igual que si fuera un PDF real de mi plan de estudios: lee todas las páginas como una sola malla curricular continua, uniendo la información entre todas, sin perder ninguna materia, sin importar el orden de las páginas.`;
   }
 
@@ -307,6 +414,7 @@ function inicializarEstadoImportacionPlanSiHaceFalta() {
   // Estas llaves viven en `estado` (no en los datos del usuario) porque son
   // solo del momento de importar, antes de que exista el plan.
   if (typeof estado.modoImportacion === "undefined") estado.modoImportacion = null; // null (sin selección) | "link" | "pdf" | "capturas"
+  if (typeof estado.importacionEtapa === "undefined") estado.importacionEtapa = "fuente";
   if (typeof estado.linkImportacion === "undefined") estado.linkImportacion = ""; // URL pegada en el modo "link"
   // Universidad/tipos_horas elegidos ANTES de que el plan exista (para poder
   // construir el prompt con las columnas de horas correctas). Se resuelven acá
@@ -337,210 +445,408 @@ function construirTextoInstruccionesImportacion() {
   ].join("\n\n");
 }
 
-function construirPanelImportacion() {
-  inicializarEstadoImportacionPlanSiHaceFalta();
-  const cfg = estado.datos.configuracion;
-  const sec = document.createElement("section");
-  sec.className = "glass-card stack";
+let archivosFuenteImportacion = [];
+let ventanaGuiaImportacion = null;
+let indicePasoGuiaImportacion = 0;
 
-  const titulo = document.createElement("h2");
-  titulo.style.margin = "0";
-  titulo.textContent = "Importar tu Plan de Estudios";
-  sec.appendChild(titulo);
+const PASO_SESION_ABRIR = ["Entra a tu cuenta de Claude", "Se abrirá en otra pestaña. Inicia sesión, o crea tu cuenta gratis desde ahí mismo.", "login", "Abrir Claude"];
+const PASO_SESION_LISTO = ["¿Ya estás dentro?", "Lo sabrás cuando veas un cuadro para escribir mensajes.", "logged", "Ya inicié sesión"];
+const PASO_COPIAR_RESPUESTA = ["Copia la respuesta", "Cuando Claude termine, toca el botón Copiar de su respuesta. Después vuelve a esta pestaña de Wapper.", "copied", "Ya la copié"];
 
-  // v1.10.1 (punto 1): cuando este panel se muestra para agregar un plan
-  // ADICIONAL (ya existe al menos uno activo), se ofrece volver atrás sin
-  // crear nada — cuando es el primer plan de todos, no hay a dónde volver.
-  if (estado.mostrarPanelImportacionNuevoPlan) {
-    const btnCancelar = document.createElement("button");
-    btnCancelar.type = "button";
-    btnCancelar.className = "btn btn-secondary";
-    btnCancelar.textContent = "← Cancelar";
-    btnCancelar.addEventListener("click", () => {
-      estado.mostrarPanelImportacionNuevoPlan = false;
-      const reabrirGestion = estado.reabrirGestionPlanesTrasCrear;
-      estado.reabrirGestionPlanesTrasCrear = false;
-      renderizarPlanEstudios();
-      if (reabrirGestion) abrirModalGestionPlanes();
-    });
-    sec.appendChild(btnCancelar);
-  }
+const PASOS_GUIA_IMPORTACION = {
+  link: [
+    PASO_SESION_ABRIR, PASO_SESION_LISTO,
+    ["Copia la instrucción", "El enlace de tu plan ya va incluido en el mensaje.", "copy", "Copiar instrucción"],
+    ["Pégala en Claude y envía", "Haz clic derecho (o mantén presionado) en el cuadro de mensaje, elige Pegar y envía.", "sent", "Ya la envié"],
+    PASO_COPIAR_RESPUESTA,
+  ],
+  file: [
+    PASO_SESION_ABRIR, PASO_SESION_LISTO,
+    ["Copia la instrucción", "Es el texto que le explica a Claude cómo organizar tu plan.", "copy", "Copiar instrucción"],
+    ["Adjunta tu plan y envía", "Haz clic derecho (o mantén presionado) en el cuadro de mensaje y elige Pegar. Luego toca + y \"Subir o agregar archivos\" para adjuntar tu plan (puedes guardar una copia en Descargas) y envía.", "sent", "Ya lo envié", true],
+    PASO_COPIAR_RESPUESTA,
+  ],
+  pdf: [
+    PASO_SESION_ABRIR, PASO_SESION_LISTO,
+    ["Copia la instrucción", "Es el texto que le explica a Claude cómo organizar tu plan.", "copy", "Copiar instrucción"],
+    ["Adjunta tu PDF y envía", "Haz clic derecho (o mantén presionado) en el cuadro de mensaje y elige Pegar. Luego toca + y \"Subir o agregar archivos\", elige tu PDF y envía.", "sent", "Ya lo envié"],
+    PASO_COPIAR_RESPUESTA,
+  ],
+  phone: [
+    PASO_SESION_ABRIR, PASO_SESION_LISTO,
+    ["Comparte tu plan con Claude", "Elige Claude en el menú. El archivo y la instrucción viajan juntos.", "share", "Compartir con Claude"],
+    ["Revisa y envía", "Confirma que aparecen el archivo y la instrucción. Si falta la instrucción, pégala antes de enviar.", "sent", "Ya envié el mensaje"],
+    PASO_COPIAR_RESPUESTA,
+  ],
+};
 
-  if (cfg.modo_hardcore) {
-    const etiqueta = document.createElement("span");
-    etiqueta.className = "form-label";
-    etiqueta.textContent = "Esta malla corresponde al plan:";
-    const grupo = document.createElement("div");
-    grupo.className = "pill-group";
-    [
-      { valor: "principal", texto: "Principal" },
-      { valor: "secundario", texto: "Secundario 💀" },
-    ].forEach((op) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "pill-item" + ((estado.planImportandoId || "principal") === op.valor ? " active" : "");
-      btn.textContent = op.texto;
-      btn.addEventListener("click", () => {
-        estado.planImportandoId = op.valor;
-        renderizarPlanEstudios();
-      });
-      grupo.appendChild(btn);
-    });
-    sec.appendChild(etiqueta);
-    sec.appendChild(grupo);
-  } else {
-    estado.planImportandoId = "principal";
-  }
-
-  // v1.12: ya NO se pregunta universidad ni tipos de horas por adelantado —
-  // el nuevo prompt universal (construirPromptImportacion) le pide a la IA
-  // que detecte HORAS_COLUMNAS leyendo el propio documento, y el parser
-  // (plan-importacion-csv.js, extraerMetadatosImportacion + parsearCSVPlanEstudios)
-  // deriva tipos_horas de esa línea al procesar la respuesta. Los campos
-  // estado.universidadImportacion/tiposHorasImportacion/etc. quedan como
-  // legado hasta terminar de limpiar su uso en plan-esquema.js (el modal
-  // "Nuevo Plan" que crea el plan tras pegar el CSV).
-
-  // v1.14.1: antes, la ÚNICA forma de crear un plan era importando un CSV
-  // (abrirModalCrearPlan solo se llamaba desde manejarClickImportar, tras
-  // pegar/procesar un CSV). Ahora también se puede saltar la importación por
-  // completo y arrancar con un plan vacío, para armarlo materia por materia
-  // con "+ Agregar materia" (abrirModalMateriaManual, ver plan-esquema.js).
-  const btnEmpezarEnBlanco = document.createElement("button");
-  btnEmpezarEnBlanco.type = "button";
-  btnEmpezarEnBlanco.className = "btn btn-secondary btn-block";
-  btnEmpezarEnBlanco.textContent = "✏️ Empezar en blanco (agregar materias a mano)";
-  btnEmpezarEnBlanco.addEventListener("click", () => {
-    abrirModalCrearPlan(estado.planImportandoId === "secundario", null);
-  });
-  sec.appendChild(btnEmpezarEnBlanco);
-
-  const separador = document.createElement("p");
-  separador.className = "muted";
-  separador.textContent = "— o, si preferís, traé tu plan ya hecho —";
-  sec.appendChild(separador);
-
-  // ---- Modo de importación: Link / PDF / Capturas ----
-  const etiquetaModo = document.createElement("span");
-  etiquetaModo.className = "form-label";
-  etiquetaModo.textContent = "¿Cómo quieres traer tu plan de estudios?";
-  sec.appendChild(etiquetaModo);
-
-  const grupoModo = document.createElement("div");
-  grupoModo.className = "pill-group";
-  [
-    { valor: "link", texto: "Pegar link" },
-    { valor: "pdf", texto: "Adjuntar PDF/Imagen" },
-    { valor: "capturas", texto: "Tomar capturas" },
-  ].forEach((op) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "pill-item" + (estado.modoImportacion === op.valor ? " active" : "");
-    btn.textContent = op.texto;
-    btn.addEventListener("click", () => {
-      // v1.10.1 (punto 4): presionar el modo ya activo lo desactiva y vuelve
-      // al estado "sin selección" — así el usuario puede llegar ahí también
-      // manualmente, no solo al abrir el panel por primera vez.
-      estado.modoImportacion = estado.modoImportacion === op.valor ? null : op.valor;
-      renderizarPlanEstudios();
-    });
-    grupoModo.appendChild(btn);
-  });
-  sec.appendChild(grupoModo);
-
-  if (estado.modoImportacion === "link") {
-    const inputLink = document.createElement("input");
-    inputLink.type = "text";
-    inputLink.className = "form-input";
-    inputLink.placeholder = "https://tu-universidad.ac.cr/tu-plan-de-estudios";
-    inputLink.value = estado.linkImportacion;
-    inputLink.addEventListener("input", () => {
-      estado.linkImportacion = inputLink.value;
-    });
-    sec.appendChild(inputLink);
-
-    const avisoNavegacion = document.createElement("p");
-    avisoNavegacion.className = "muted";
-    avisoNavegacion.textContent = "Este modo requiere que tu IA tenga activada la navegación web.";
-    sec.appendChild(avisoNavegacion);
-
-    // Punto 6 (v1.10.1): aviso de compatibilidad — este modo depende de que
-    // la IA pueda navegar y leer bien la página. Se confirmó que sí funciona
-    // (2026-08-06: se corrige el tono alarmista anterior, que decía "muy
-    // frágil"/"rara vez funciona" — ya no es cierto), pero como depende de
-    // la navegación web de la IA, no está 100% garantizado en todos los
-    // casos, así que se avisa igual sin desalentar su uso.
-    const avisoCompatibilidad = document.createElement("p");
-    avisoCompatibilidad.className = "muted";
-    avisoCompatibilidad.textContent = "ℹ️ Este modo funciona bien en la gran mayoría de los casos. No es 100% infalible (depende de que Claude pueda navegar y leer la página tal cual la ves vos), así que si el resultado sale incompleto, probá con \"Adjuntar PDF/Imagen\" o \"Tomar capturas\" como alternativa.";
-    sec.appendChild(avisoCompatibilidad);
-  } else if (estado.modoImportacion === "pdf") {
-    const nota = document.createElement("p");
-    nota.className = "muted";
-    nota.textContent = "Vas a adjuntar tu PDF o imagen (todo el plan completo, en máximo 20 imágenes) directamente en la ventana de Claude que se abra.";
-    sec.appendChild(nota);
-  } else if (estado.modoImportacion === "capturas") {
-    // v1.10.1 (puntos 3/5): ya no se muestra el input de imágenes ni el botón
-    // de convertir aquí en el panel — ahora solo se muestra el botón que abre
-    // la ventana flotante (modal-capturas-pdf), donde vive todo ese flujo.
-    const nota = document.createElement("p");
-    nota.className = "muted";
-    nota.textContent = "Primero hay que convertir tus capturas en un solo PDF antes de enviarlas a la IA.";
-    sec.appendChild(nota);
-
-    const btnAbrirConversion = document.createElement("button");
-    btnAbrirConversion.type = "button";
-    btnAbrirConversion.className = "btn btn-secondary btn-block";
-    btnAbrirConversion.textContent = "Convertir imágenes a PDF";
-    btnAbrirConversion.addEventListener("click", abrirModalCapturasPDF);
-    sec.appendChild(btnAbrirConversion);
-  }
-
-  // Punto 4 (v1.10.1): sin modo elegido, o en modo "capturas" (donde primero
-  // hay que terminar la conversión — al terminar, se autoselecciona "pdf" y
-  // esto se vuelve a evaluar), no tiene sentido mostrar los botones de
-  // enviar a la IA, el textarea del CSV, subir archivo, ni Importar.
-  const mostrarBloqueEnvioYCsv = estado.modoImportacion === "link" || estado.modoImportacion === "pdf";
-
-  if (mostrarBloqueEnvioYCsv) {
-    const btnClaude = document.createElement("button");
-    btnClaude.className = "btn btn-primary btn-block";
-    btnClaude.textContent = "Enviar a Claude";
-    btnClaude.addEventListener("click", () => {
-      abrirModalInstruccionesImportacion(
-        estado.modoImportacion,
-        construirPromptImportacion(estado.modoImportacion, estado.linkImportacion)
-      );
-    });
-    sec.appendChild(btnClaude);
-
-    const textarea = document.createElement("textarea");
-    textarea.className = "form-textarea";
-    textarea.id = "textarea-csv-importar";
-    textarea.dataset.csvContexto = "nuevo";
-    textarea.rows = 8;
-    textarea.placeholder = "Pega aquí el CSV que te devolvió la IA…";
-    textarea.value = estado.csvImportacionTexto.nuevo || "";
-    textarea.addEventListener("input", () => { estado.csvImportacionTexto.nuevo = textarea.value; });
-    sec.appendChild(textarea);
-
-    sec.appendChild(construirInputArchivoCSV(textarea, "nuevo"));
-
-    const errores = document.createElement("div");
-    errores.id = "errores-importacion-csv";
-    errores.className = "stack oculto";
-    sec.appendChild(errores);
-
-    const btnImportar = document.createElement("button");
-    btnImportar.className = "btn btn-secondary btn-block";
-    btnImportar.textContent = "Importar";
-    btnImportar.addEventListener("click", () => manejarClickImportar(textarea.value));
-    sec.appendChild(btnImportar);
-  }
-
-  return sec;
+function obtenerPasosGuiaImportacion() {
+  if (estado.modoImportacion === "link") return PASOS_GUIA_IMPORTACION.link;
+  if (estado.modoImportacion === "pdf" && !archivosFuenteImportacion.length) return PASOS_GUIA_IMPORTACION.pdf;
+  const files = archivosFuenteImportacion;
+  const movil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (movil && files.length && navigator.share && navigator.canShare?.({ files })) return PASOS_GUIA_IMPORTACION.phone;
+  return PASOS_GUIA_IMPORTACION.file;
 }
 
+async function compartirArchivosClaude() {
+  const files = archivosFuenteImportacion;
+  if (!files.length || !navigator.share || !navigator.canShare?.({ files })) {
+    mostrarToast("Tu navegador no permite compartir el archivo directamente. Adjunta el archivo en Claude.");
+    return false;
+  }
+  try {
+    await navigator.share({ files, title: "Plan de estudios", text: construirPromptImportacion(estado.modoImportacion, estado.linkImportacion) });
+    return true;
+  } catch (error) {
+    if (error?.name !== "AbortError") mostrarToast("No se pudo compartir. Adjunta el archivo manualmente en Claude.");
+    return false;
+  }
+}
+
+/** Guarda en Descargas lo que el usuario va a adjuntar en Claude. Arrastrar desde
+ *  Wapper a otra pestaña no funciona en los navegadores; adjuntar desde Descargas sí. */
+function descargarArchivosImportacion() {
+  archivosFuenteImportacion.forEach((file, i) => {
+    const bajar = () => {
+      const url = URL.createObjectURL(file);
+      const a = document.createElement("a"); a.href = url; a.download = file.name; a.style.display = "none";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    };
+    if (i === 0) bajar(); else setTimeout(bajar, i * 450);
+  });
+}
+
+function cerrarGuiaFlotanteImportacion() {
+  if (ventanaGuiaImportacion && !ventanaGuiaImportacion.closed) ventanaGuiaImportacion.close();
+  ventanaGuiaImportacion = null;
+}
+
+function avanzarGuiaImportacion(delta) {
+  const pasos = obtenerPasosGuiaImportacion();
+  indicePasoGuiaImportacion = Math.max(0, Math.min(pasos.length - 1, indicePasoGuiaImportacion + delta));
+  dibujarGuiaFlotanteImportacion();
+  renderizarPlanEstudios();
+}
+
+function construirEjemploClaude(accionPaso) {
+  const muestra = document.createElement("div"); muestra.className = "importacion-mock"; muestra.setAttribute("aria-hidden", "true");
+  const leyenda = document.createElement("small"); leyenda.textContent = traducirTextoInterfaz("Ejemplo de referencia: la pantalla de Claude puede verse distinta.");
+  const ventana = document.createElement("div"); ventana.className = "importacion-mock-ventana";
+  const cabecera = document.createElement("div"); cabecera.className = "importacion-mock-cabecera";
+  const marca = document.createElement("strong"); marca.textContent = "Claude"; const chat = document.createElement("span"); chat.textContent = traducirTextoInterfaz("Chat nuevo"); cabecera.append(marca, chat);
+  const cuerpo = document.createElement("div"); cuerpo.className = "importacion-mock-cuerpo";
+  if (accionPaso === "copied") { const usuario = document.createElement("div"); usuario.className = "importacion-mock-burbuja usuario"; usuario.textContent = traducirTextoInterfaz("Tu instrucción"); const respuesta = document.createElement("div"); respuesta.className = "importacion-mock-burbuja respuesta"; respuesta.textContent = traducirTextoInterfaz("Tu plan organizado"); const copiar = document.createElement("span"); copiar.className = "importacion-mock-copiar"; copiar.textContent = traducirTextoInterfaz("Copiar"); respuesta.appendChild(copiar); cuerpo.append(usuario, respuesta); }
+  else { const bienvenida = document.createElement("div"); bienvenida.className = "importacion-mock-burbuja"; bienvenida.textContent = traducirTextoInterfaz("¿En qué puedo ayudarte?"); cuerpo.appendChild(bienvenida); }
+  const compositor = document.createElement("div"); compositor.className = "importacion-mock-compositor" + (accionPaso === "sent" ? " enfocado" : "");
+  if (estado.modoImportacion !== "link" && (archivosFuenteImportacion.length || estado.modoImportacion === "pdf")) { const adjunto = document.createElement("span"); adjunto.className = "importacion-mock-adjunto"; adjunto.textContent = "📎 " + traducirTextoInterfaz("Tu plan adjunto"); compositor.appendChild(adjunto); }
+  const texto = document.createElement("span"); texto.textContent = traducirTextoInterfaz("Escribe un mensaje…"); compositor.appendChild(texto); ventana.append(cabecera, cuerpo, compositor); muestra.append(leyenda, ventana); return muestra;
+}
+
+function ejecutarAccionGuiaImportacion(accion) {
+  const prompt = construirPromptImportacion(estado.modoImportacion, estado.linkImportacion);
+  if (accion === "login") abrirVentanaNueva("https://claude.ai/login");
+  if (accion === "logged") registrarPasoSeguimientoImportacion("sesion_iniciada");
+  if (accion === "save") { descargarArchivosImportacion(); registrarPasoSeguimientoImportacion("archivo_guardado"); }
+  if (accion === "open") abrirVentanaNueva("https://claude.ai/new");
+  if (accion === "copy") copiarPromptImportacionBlindado(prompt);
+  if (accion === "sent") registrarPasoSeguimientoImportacion("mensaje_enviado");
+  if (accion === "share") return compartirArchivosClaude();
+  if (accion === "copied") {
+    registrarPasoSeguimientoImportacion("respuesta_copiada");
+    estado.importacionEtapa = "respuesta";
+    cerrarGuiaFlotanteImportacion();
+    renderizarPlanEstudios();
+  }
+  if (accion === "back") {
+    estado.importacionEtapa = "respuesta";
+    cerrarGuiaFlotanteImportacion();
+    renderizarPlanEstudios();
+  }
+}
+
+const VARIABLES_PALETA_GUIA = ["--bg-canvas", "--bg-card", "--bg-panel", "--text-primary", "--text-secondary", "--text-muted", "--accent-1", "--accent-2", "--accent-1-10", "--accent-1-20", "--gradient-accent", "--on-accent", "--border-glass", "--border-glass-fuerte", "--font-display", "--font-body", "--radius-pill"];
+const CSS_GUIA_FLOTANTE = "*{box-sizing:border-box}body{margin:0;padding:14px 16px;min-height:100vh;display:flex;flex-direction:column;gap:10px;font:14px/1.45 var(--font-body,system-ui,sans-serif);color:var(--text-primary,#f5f3ff);background:radial-gradient(120% 90% at 0% 0%,var(--accent-1-20,#3b2f8f55),transparent 60%),var(--bg-canvas,#0b0b13)}.progreso{display:flex;gap:5px}.progreso i{height:4px;flex:1;border-radius:9px;background:var(--border-glass,#38364c)}.progreso i.activo{background:var(--accent-1,#9b87ff)}.cabeza{display:flex;gap:10px;align-items:center}.numero{flex:none;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--gradient-accent,#6c55db);color:var(--on-accent,#fff);font-weight:800;font-size:13px}h2{margin:0;font:700 17px/1.2 var(--font-display,var(--font-body,system-ui,sans-serif))}p{margin:0;color:var(--text-secondary,#cbc7de)}.acciones{margin-top:auto;display:grid;gap:2px}.principal{padding:12px;border:0;border-radius:var(--radius-pill,999px);background:var(--gradient-accent,#7162e8);color:var(--on-accent,#fff);font:inherit;font-weight:700;cursor:pointer}.principal:hover{filter:brightness(1.08)}.archivos{display:grid;gap:6px}.archivo{display:flex;gap:8px;align-items:center;padding:8px 10px;border:1px dashed var(--accent-1,#9b87ff);border-radius:12px;background:var(--accent-1-10,#ffffff10);cursor:grab;font-size:13px;word-break:break-all}.archivo img{width:30px;height:30px;object-fit:cover;border-radius:6px}.atras{padding:6px;border:0;background:none;color:var(--text-muted,#9a9ab5);font:inherit;font-size:12px;cursor:pointer}button:focus-visible{outline:2px solid var(--accent-1,#fff);outline-offset:2px}";
+
+/** Copia a la ventana flotante los colores y tipografías de la paleta que el
+ *  usuario tiene activa AHORA (se vuelve a leer en cada paso). */
+function aplicarPaletaGuiaFlotante(doc) {
+  const css = getComputedStyle(document.body);
+  const decl = VARIABLES_PALETA_GUIA.map((v) => { const val = css.getPropertyValue(v).trim(); return val ? `${v}:${val}` : ""; }).filter(Boolean).join(";");
+  let paleta = doc.getElementById("paleta-guia");
+  if (!paleta) { paleta = doc.createElement("style"); paleta.id = "paleta-guia"; doc.head.appendChild(paleta); }
+  paleta.textContent = `:root{${decl}}`;
+  if (!doc.getElementById("base-guia")) {
+    const base = doc.createElement("style"); base.id = "base-guia"; base.textContent = CSS_GUIA_FLOTANTE; doc.head.appendChild(base);
+    document.querySelectorAll('link[rel="stylesheet"][href*="fonts.googleapis"]').forEach((l) => { const c = doc.createElement("link"); c.rel = "stylesheet"; c.href = l.href; doc.head.appendChild(c); });
+  }
+}
+
+function dibujarGuiaFlotanteImportacion() {
+  if (!ventanaGuiaImportacion || ventanaGuiaImportacion.closed) return;
+  const doc = ventanaGuiaImportacion.document;
+  const pasos = obtenerPasosGuiaImportacion();
+  const paso = pasos[indicePasoGuiaImportacion];
+  const accion = paso[2];
+  aplicarPaletaGuiaFlotante(doc);
+  const progreso = doc.createElement("div"); progreso.className = "progreso";
+  pasos.forEach((_, i) => { const marca = doc.createElement("i"); if (i <= indicePasoGuiaImportacion) marca.className = "activo"; progreso.appendChild(marca); });
+  const cabeza = doc.createElement("div"); cabeza.className = "cabeza";
+  const numero = doc.createElement("div"); numero.className = "numero"; numero.textContent = String(indicePasoGuiaImportacion + 1);
+  const h = doc.createElement("h2"); h.textContent = traducirTextoInterfaz(paso[0]); cabeza.append(numero, h);
+  const p = doc.createElement("p"); p.textContent = traducirTextoInterfaz(paso[1]);
+  const acciones = doc.createElement("div"); acciones.className = "acciones";
+  const principal = doc.createElement("button"); principal.className = "principal"; principal.textContent = traducirTextoInterfaz(paso[3]);
+  principal.addEventListener("click", async () => { const resultado = await ejecutarAccionGuiaImportacion(accion); if (resultado === false) return; if (indicePasoGuiaImportacion < pasos.length - 1 && accion !== "copied" && accion !== "back") avanzarGuiaImportacion(1); });
+  acciones.appendChild(principal);
+  if (indicePasoGuiaImportacion > 0) { const anterior = doc.createElement("button"); anterior.className = "atras"; anterior.textContent = traducirTextoInterfaz("Paso anterior"); anterior.addEventListener("click", () => avanzarGuiaImportacion(-1)); acciones.appendChild(anterior); }
+  const piezas = [progreso, cabeza, p];
+  if (paso[4] && archivosFuenteImportacion.length) { const copia = doc.createElement("button"); copia.className = "atras"; copia.textContent = traducirTextoInterfaz("Guardar una copia en Descargas"); copia.addEventListener("click", () => { descargarArchivosImportacion(); registrarPasoSeguimientoImportacion("archivo_guardado"); }); acciones.appendChild(copia); }
+  doc.body.replaceChildren(...piezas, acciones);
+}
+
+async function abrirGuiaFlotanteImportacion() {
+  if (!("documentPictureInPicture" in window)) return false;
+  try {
+    ventanaGuiaImportacion = await window.documentPictureInPicture.requestWindow({ width: 340, height: 300 });
+    ventanaGuiaImportacion.addEventListener("pagehide", () => { ventanaGuiaImportacion = null; renderizarPlanEstudios(); });
+    dibujarGuiaFlotanteImportacion();
+    return true;
+  } catch (error) { console.warn("Picture-in-Picture no disponible; se usará la guía integrada.", error); return false; }
+}
+
+function crearBotonImportacion(texto, accion, clase = "btn btn-secondary") {
+  const b = document.createElement("button"); b.type = "button"; b.className = clase; b.textContent = texto; b.addEventListener("click", accion); return b;
+}
+
+const ETAPAS_IMPORTACION = [
+  ["intro", "Cómo funciona"], ["fuente", "Tu plan"], ["entrada", "Tu enlace o archivo"],
+  ["guia", "Guía"], ["respuesta", "Resultado"], ["revision", "Revisión"],
+];
+
+function impEl(tag, clase, texto) {
+  const n = document.createElement(tag);
+  if (clase) n.className = clase;
+  if (texto) n.textContent = traducirTextoInterfaz(texto);
+  return n;
+}
+function impBoton(texto, accion, clase = "btn btn-secondary") { return crearBotonImportacion(traducirTextoInterfaz(texto), accion, clase); }
+function impNav(atras, principal) {
+  const nav = impEl("div", "imp-nav" + (principal ? "" : " imp-nav-uno"));
+  nav.append(atras); if (principal) nav.append(principal);
+  return nav;
+}
+function irEtapaImportacion(etapa) { if (etapa === "entrada" && estado.modoImportacion === "pdf") etapa = "fuente"; estado.importacionEtapa = etapa; renderizarPlanEstudios(); }
+
+/** La respuesta de Claude siempre trae el encabezado Bloque,Codigo,Nombre,... */
+function tieneEncabezadoRespuesta(texto) { return /Bloque\s*,\s*Codigo\s*,/i.test(texto || ""); }
+
+/** Guarda lo pegado y pasa a revisión. Si Claude respondió en varias partes,
+ *  las partes sin encabezado se agregan al final de lo ya pegado (regla 11 del prompt). */
+function aplicarRespuestaImportacion(nuevo) {
+  const previo = (estado.csvImportacionTexto.nuevo || "").trim();
+  const conEncabezado = tieneEncabezadoRespuesta(nuevo);
+  if (!conEncabezado && !previo) return false;
+  estado.csvImportacionTexto.nuevo = conEncabezado ? nuevo : previo + "\n" + String(nuevo || "").trim();
+  registrarPasoSeguimientoImportacion("respuesta_pegada");
+  irEtapaImportacion("revision");
+  return true;
+}
+
+/** Al volver a Wapper desde Claude, si el portapapeles trae la respuesta, se
+ *  toma sola (el permiso de portapapeles ya lo pide la app al iniciar). */
+let escuchaFocoImportacion = false;
+function activarPegadoAutomaticoImportacion() {
+  if (escuchaFocoImportacion) return;
+  escuchaFocoImportacion = true;
+  window.addEventListener("focus", async () => {
+    if (estado.importacionEtapa !== "respuesta" || !document.getElementById("textarea-csv-importar")) return;
+    if ((estado.csvImportacionTexto?.nuevo || "").trim() || estado.permisoPortapapeles === "denegado") return;
+    try {
+      const texto = await navigator.clipboard.readText();
+      if (tieneEncabezadoRespuesta(texto)) aplicarRespuestaImportacion(texto);
+    } catch { /* sin permiso o sin foco: queda el botón manual */ }
+  });
+}
+
+function empezarEnBlancoImportacion() {
+  cancelarSeguimientoImportacion(); cerrarGuiaFlotanteImportacion();
+  estado.importacionEtapa = "fuente"; estado.modoImportacion = null; archivosFuenteImportacion = [];
+  const cfg = estado.datos.configuracion;
+  if (cfg?.guia_plan_pendiente === "plan") { cfg.onboarding_plan_en_blanco_pendiente = true; marcarCambioPendiente(); }
+  abrirModalCrearPlan(estado.planImportandoId === "secundario", null);
+}
+
+function construirGuiaIntegradaImportacion(sec, pasos) {
+  const paso = pasos[indicePasoGuiaImportacion];
+  const puntos = impEl("div", "imp-puntos"); puntos.setAttribute("aria-hidden", "true");
+  pasos.forEach((_, i) => { const p = document.createElement("i"); if (i <= indicePasoGuiaImportacion) p.className = "activo"; puntos.appendChild(p); });
+  const fila = impEl("div", "imp-paso-grande");
+  const num = impEl("span", "imp-num"); num.textContent = String(indicePasoGuiaImportacion + 1);
+  const textos = impEl("div", "imp-paso-textos"); textos.append(impEl("h3", "imp-titulo imp-titulo-paso", paso[0]), impEl("p", "imp-lead", paso[1]));
+  fila.append(num, textos); sec.append(puntos, fila);
+  if (paso[2] === "sent" || paso[2] === "copied") sec.appendChild(construirEjemploClaude(paso[2]));
+  const accion = paso[2];
+  sec.appendChild(impBoton(paso[3], async () => {
+    const resultado = await ejecutarAccionGuiaImportacion(accion);
+    if (resultado === false || accion === "copied" || accion === "back") return;
+    if (indicePasoGuiaImportacion < pasos.length - 1) avanzarGuiaImportacion(1);
+  }, "btn btn-primary btn-block"));
+  if (paso[4] && archivosFuenteImportacion.length) sec.appendChild(impBoton("Guardar una copia en Descargas", () => { descargarArchivosImportacion(); registrarPasoSeguimientoImportacion("archivo_guardado"); }, "btn btn-secondary btn-block"));
+  sec.appendChild(impNav(impBoton("Atrás", () => { if (indicePasoGuiaImportacion > 0) avanzarGuiaImportacion(-1); else { cerrarGuiaFlotanteImportacion(); irEtapaImportacion("entrada"); } })));
+}
+
+function construirPanelImportacion() {
+  inicializarEstadoImportacionPlanSiHaceFalta();
+  activarPegadoAutomaticoImportacion();
+  let etapa = estado.importacionEtapa || "fuente";
+  if (etapa === "cuenta") etapa = "entrada";
+  if (etapa === "fuente" && !estado.importacionIntroVista) etapa = "intro";
+  const indice = Math.max(0, ETAPAS_IMPORTACION.findIndex((e) => e[0] === etapa));
+  const sec = impEl("section", "glass-card stack imp-wizard");
+  const ir = irEtapaImportacion;
+
+  if (estado.mostrarPanelImportacionNuevoPlan) {
+    const cancelar = impBoton("← Cancelar", () => { cancelarSeguimientoImportacion(); cerrarGuiaFlotanteImportacion(); estado.importacionEtapa = "fuente"; estado.modoImportacion = null; archivosFuenteImportacion = []; estado.mostrarPanelImportacionNuevoPlan = false; const reabrirGestion = estado.reabrirGestionPlanesTrasCrear; estado.reabrirGestionPlanesTrasCrear = false; renderizarPlanEstudios(); if (reabrirGestion) abrirModalGestionPlanes(); });
+    cancelar.classList.add("imp-cancelar"); sec.appendChild(cancelar);
+  }
+  const cab = impEl("div", "imp-cabecera");
+  const barra = impEl("div", "imp-progreso"); barra.setAttribute("role", "progressbar"); barra.setAttribute("aria-valuemin", "1"); barra.setAttribute("aria-valuemax", String(ETAPAS_IMPORTACION.length)); barra.setAttribute("aria-valuenow", String(indice + 1)); barra.setAttribute("aria-label", traducirTextoInterfaz("Progreso de importación"));
+  const avance = document.createElement("span"); avance.style.width = `${((indice + 1) / ETAPAS_IMPORTACION.length) * 100}%`; barra.appendChild(avance);
+  const etiqueta = impEl("p", "imp-paso-etiqueta"); etiqueta.textContent = `${traducirTextoInterfaz("Paso")} ${indice + 1} / ${ETAPAS_IMPORTACION.length} · ${traducirTextoInterfaz(ETAPAS_IMPORTACION[indice][1])}`;
+  cab.append(barra, etiqueta); sec.appendChild(cab);
+
+  if (etapa === "intro") {
+    sec.append(impEl("h2", "imp-titulo", "Importa tu plan de estudios"), impEl("p", "imp-lead", "Wapper usa tu plan para armar tu semestre, tu horario y tus materias. En lugar de escribir todo a mano, Claude, un asistente gratuito, lo lee por ti."));
+    const lista = impEl("ol", "imp-resumen-pasos");
+    [["Nos dices cómo tienes tu plan", "Un enlace, un PDF o fotos."], ["Una guía te acompaña en Claude", "Te decimos qué tocar en cada momento."], ["Revisas y terminas", "Ves las materias antes de guardarlas."]].forEach(([t, d], i) => {
+      const li = document.createElement("li"); const n = impEl("span", "imp-num"); n.textContent = String(i + 1);
+      const c = document.createElement("div"); c.append(impEl("strong", null, t), impEl("small", "imp-nota", d)); li.append(n, c); lista.appendChild(li);
+    });
+    sec.appendChild(lista);
+    sec.appendChild(impBoton("Empezar", () => { estado.importacionIntroVista = true; ir("fuente"); }, "btn btn-primary btn-block"));
+  } else if (etapa === "fuente") {
+    if (estado.datos.configuracion.modo_hardcore) {
+      sec.appendChild(impEl("span", "form-label", "Esta malla corresponde al plan:"));
+      const grupo = impEl("div", "pill-group");
+      [{ valor: "principal", texto: "Principal" }, { valor: "secundario", texto: "Secundario 💀" }].forEach((op) => { const b = impBoton(op.texto, () => { estado.planImportandoId = op.valor; renderizarPlanEstudios(); }); b.className = "pill-item" + ((estado.planImportandoId || "principal") === op.valor ? " active" : ""); grupo.appendChild(b); });
+      sec.appendChild(grupo);
+    } else estado.planImportandoId = "principal";
+    sec.appendChild(impEl("h2", "imp-titulo", "¿Cómo tienes tu plan de estudios?"));
+    const opciones = impEl("div", "imp-opciones");
+    [{ valor: "link", icono: "🔗", texto: "Tengo un enlace", detalle: "Una página pública, que se abre sin iniciar sesión." }, { valor: "pdf", icono: "📄", texto: "Tengo un PDF", detalle: "Un archivo guardado en este dispositivo." }, { valor: "capturas", icono: "🖼️", texto: "Tengo fotos o capturas", detalle: "Puedes elegir hasta 20 imágenes." }].forEach((op) => {
+      const b = impEl("button", "imp-opcion"); b.type = "button";
+      const ico = impEl("span", "imp-opcion-icono"); ico.textContent = op.icono; ico.setAttribute("aria-hidden", "true");
+      const copy = document.createElement("span"); copy.append(impEl("strong", null, op.texto), impEl("small", null, op.detalle)); b.append(ico, copy);
+      b.addEventListener("click", () => { estado.modoImportacion = op.valor; archivosFuenteImportacion = []; estado.importacionImagenesComoPdf = false; estado.csvImportacionTexto.nuevo = ""; if (!flujoAnaliticoImportacion) iniciarSeguimientoImportacion(); registrarPasoSeguimientoImportacion("fuente_elegida"); if (op.valor === "pdf") { estado.importacionEtapa = "guia"; indicePasoGuiaImportacion = 0; estado.importacionGuiaIntegrada = false; registrarPasoSeguimientoImportacion("fuente_preparada"); renderizarPlanEstudios(); } else ir("entrada"); });
+      opciones.appendChild(b);
+    });
+    sec.appendChild(opciones);
+    sec.appendChild(impBoton("✏️ Empezar en blanco y agregar materias a mano", empezarEnBlancoImportacion, "btn btn-secondary btn-block"));
+    sec.appendChild(impNav(impBoton("Atrás", () => { estado.importacionIntroVista = false; renderizarPlanEstudios(); })));
+  } else if (etapa === "entrada") {
+    const esLink = estado.modoImportacion === "link", esPdf = estado.modoImportacion === "pdf";
+    const archivos = archivosFuenteImportacion;
+    const todasImagenes = archivos.length > 0 && archivos.every((f) => f.type.startsWith("image/"));
+    if (esLink) {
+      sec.append(impEl("h2", "imp-titulo", "Pega el enlace de tu plan"), impEl("p", "imp-lead", "Cópialo desde la barra de direcciones de tu navegador."));
+      const input = impEl("input", "form-input imp-input"); input.type = "url"; input.inputMode = "url"; input.placeholder = "https://tu-universidad.ac.cr/plan"; input.value = estado.linkImportacion || ""; input.setAttribute("aria-label", traducirTextoInterfaz("Enlace de tu plan")); input.addEventListener("input", () => { estado.linkImportacion = input.value; });
+      sec.append(input, impEl("p", "imp-nota", "La página debe abrirse sin iniciar sesión."));
+    } else {
+      sec.append(impEl("h2", "imp-titulo", esPdf ? "Elige tu PDF" : "Elige las fotos de tu plan"), impEl("p", "imp-lead", esPdf ? "Lo buscas aquí mismo, sin salir de Wapper." : "Puedes elegir varias a la vez, hasta 20, directo desde tu galería."));
+      const zona = impEl("label", "imp-zona"); const ico = impEl("span", "imp-zona-icono"); ico.textContent = esPdf ? "📄" : "🖼️"; ico.setAttribute("aria-hidden", "true");
+      const input = document.createElement("input"); input.type = "file"; input.className = "imp-zona-input"; input.accept = esPdf ? "application/pdf,.pdf,image/*" : "image/*"; input.multiple = !esPdf;
+      input.addEventListener("change", () => { const files = Array.from(input.files || []); if (!esPdf && files.length > 20) mostrarToast("Elegiste más de 20 imágenes; usaremos las primeras 20."); archivosFuenteImportacion = esPdf ? files.slice(0, 1) : files.slice(0, 20); estado.importacionImagenesComoPdf = false; renderizarPlanEstudios(); });
+      zona.append(ico, impEl("strong", null, archivos.length ? "Cambiar selección" : (esPdf ? "Toca para elegir tu PDF" : "Toca para elegir tus fotos")), input); sec.appendChild(zona);
+      if (archivos.length) {
+        const lista = impEl("ul", "importacion-archivos"); archivos.forEach((f) => { const li = document.createElement("li"); li.textContent = f.name; lista.appendChild(li); }); sec.appendChild(lista);
+        const imagenes = archivos.filter((f) => f.type.startsWith("image/")).slice(0, 12);
+        if (imagenes.length) { const mini = impEl("div", "importacion-miniaturas"); imagenes.forEach((file) => { const img = document.createElement("img"); img.alt = file.name; const url = URL.createObjectURL(file); img.src = url; img.addEventListener("load", () => URL.revokeObjectURL(url), { once: true }); img.addEventListener("error", () => URL.revokeObjectURL(url), { once: true }); mini.appendChild(img); }); sec.appendChild(mini); }
+      }
+      if (!esPdf && todasImagenes) {
+        if (archivos.length > 4) sec.appendChild(impEl("div", "imp-tarjeta", "Son más de 4 imágenes: las juntaremos automáticamente en un PDF para que Claude las lea mejor."));
+        else {
+          sec.appendChild(impEl("p", "imp-subtitulo", "¿Cómo quieres enviarlas a Claude?"));
+          const grupo = impEl("div", "imp-opciones imp-opciones-2");
+          [[false, "Como imágenes", "Se envían tal cual."], [true, "Juntarlas en un PDF", "Un solo archivo, más fácil de adjuntar."]].forEach(([valor, t, d]) => {
+            const activa = Boolean(estado.importacionImagenesComoPdf) === valor;
+            const b = impEl("button", "imp-opcion" + (activa ? " activa" : "")); b.type = "button"; b.setAttribute("aria-pressed", String(activa));
+            const c = document.createElement("span"); c.append(impEl("strong", null, t), impEl("small", null, d)); b.appendChild(c);
+            b.addEventListener("click", () => { estado.importacionImagenesComoPdf = valor; renderizarPlanEstudios(); }); grupo.appendChild(b);
+          });
+          sec.appendChild(grupo);
+        }
+      }
+    }
+    const continuar = impBoton("Continuar", async () => {
+      if (esLink) { try { const u = new URL((estado.linkImportacion || "").trim()); if (!/^https?:$/.test(u.protocol)) throw new Error(); } catch { mostrarToast("Pega un enlace válido que comience con https://"); return; } }
+      else if (!archivosFuenteImportacion.length) { mostrarToast("Selecciona primero tu archivo o tus imágenes."); return; }
+      const aConvertir = estado.modoImportacion === "capturas" && todasImagenes && (archivosFuenteImportacion.length > 4 || estado.importacionImagenesComoPdf);
+      if (aConvertir) {
+        try { mostrarCargando(); const { archivoPDF, imagenesBajaResolucion } = await convertirCapturasAPDF(archivosFuenteImportacion, { descargar: false }); if (archivoPDF) archivosFuenteImportacion = [archivoPDF]; if (imagenesBajaResolucion.length) mostrarToast("El PDF está listo; algunas capturas podrían verse poco nítidas."); }
+        catch (e) { mostrarToast("No se pudieron combinar las imágenes. Intenta con menos imágenes o un PDF."); return; }
+        finally { ocultarCargando(); }
+      }
+      estado.importacionEtapa = "guia"; indicePasoGuiaImportacion = 0; estado.importacionGuiaIntegrada = false; registrarPasoSeguimientoImportacion("fuente_preparada"); renderizarPlanEstudios();
+    }, "btn btn-primary");
+    sec.appendChild(impNav(impBoton("Atrás", () => ir("fuente")), continuar));
+  } else if (etapa === "guia") {
+    const pasos = obtenerPasosGuiaImportacion(); indicePasoGuiaImportacion = Math.min(indicePasoGuiaImportacion, pasos.length - 1);
+    const hayPiP = "documentPictureInPicture" in window;
+    const abierta = ventanaGuiaImportacion && !ventanaGuiaImportacion.closed;
+    sec.appendChild(impEl("h2", "imp-titulo", "Tu guía paso a paso"));
+    if (abierta) {
+      const t = impEl("div", "imp-tarjeta"); t.append(impEl("strong", null, "La guía está flotando encima de Claude"), impEl("p", "imp-nota", pasos[indicePasoGuiaImportacion][0]), impEl("p", "imp-nota", "Si no la ves, búscala en una esquina de tu pantalla.")); sec.appendChild(t);
+      sec.appendChild(impNav(impBoton("Cerrar guía y volver", () => { cerrarGuiaFlotanteImportacion(); ir("entrada"); })));
+    } else if (hayPiP && !estado.importacionGuiaIntegrada) {
+      sec.appendChild(impEl("p", "imp-lead", "Te acompañamos desde una ventana flotante que se queda encima de Claude. Cada paso tiene un solo botón."));
+      sec.appendChild(impBoton("Abrir guía flotante", () => { abrirGuiaFlotanteImportacion().then((ok) => { if (!ok) { estado.importacionGuiaIntegrada = true; mostrarToast("No se pudo abrir la ventana flotante. Te guiamos aquí mismo."); } renderizarPlanEstudios(); }); }, "btn btn-primary btn-block"));
+      sec.appendChild(impBoton("Prefiero seguir los pasos aquí", () => { estado.importacionGuiaIntegrada = true; renderizarPlanEstudios(); }, "btn btn-secondary btn-block"));
+      sec.appendChild(impNav(impBoton("Atrás", () => ir("entrada"))));
+    } else {
+      if (!hayPiP) sec.appendChild(impEl("p", "imp-nota", "Tu navegador no permite la ventana flotante, así que te guiamos aquí mismo."));
+      construirGuiaIntegradaImportacion(sec, pasos);
+    }
+  } else {
+    const enRespuesta = etapa === "respuesta";
+    const textarea = impEl("textarea", "form-textarea"); textarea.id = "textarea-csv-importar"; textarea.dataset.csvContexto = "nuevo"; textarea.rows = enRespuesta ? 4 : 10; textarea.placeholder = traducirTextoInterfaz("Pega aquí lo que copiaste de Claude…"); textarea.value = estado.csvImportacionTexto.nuevo || "";
+    textarea.addEventListener("input", (e) => { estado.csvImportacionTexto.nuevo = textarea.value; if (enRespuesta && !e.isTrusted && tieneEncabezadoRespuesta(textarea.value)) aplicarRespuestaImportacion(textarea.value); });
+    const errores = document.createElement("div"); errores.id = "errores-importacion-csv"; errores.className = "stack oculto";
+    if (enRespuesta) {
+      sec.append(impEl("h2", "imp-titulo", "Último paso: trae tu plan de vuelta"), impEl("p", "imp-lead", "Ya copiaste la respuesta de Claude. Toca el botón y Wapper la lee por ti."));
+      const detalles = impEl("details", "imp-detalles"); detalles.append(impEl("summary", null, "¿No funciona el botón? Pégalo a mano"), impEl("p", "imp-nota", "Mantén presionado en el recuadro y elige Pegar."), textarea, construirInputArchivoCSV(textarea, "nuevo"));
+      textarea.addEventListener("paste", () => setTimeout(() => { if (!aplicarRespuestaImportacion(textarea.value)) mostrarToast("Eso no parece la respuesta de Claude. Vuelve a Claude y toca Copiar en su respuesta."); }, 0));
+      sec.appendChild(impBoton("Pegar lo que copié", async () => {
+        try { const texto = await navigator.clipboard.readText(); if (!texto) throw new Error(); if (!aplicarRespuestaImportacion(texto)) mostrarToast("Eso no parece la respuesta de Claude. Vuelve a Claude y toca Copiar en su respuesta."); }
+        catch { detalles.open = true; textarea.focus(); mostrarToast("No se pudo leer lo copiado. Pégalo en el recuadro."); }
+      }, "btn btn-primary btn-block"));
+      sec.append(impEl("p", "imp-nota", "Si Claude te avisa que hay más partes, copia y pega cada una, en orden."), detalles, errores);
+      sec.appendChild(impNav(impBoton("Volver a la guía", () => ir("guia"))));
+    } else {
+      const { csv } = extraerMetadatosImportacion(textarea.value);
+      const parseo = parsearCSVPlanEstudios(csv, estado.tiposHorasImportacion || PRESETS_TIPOS_HORAS.TEC);
+      const todas = [...parseo.materias, ...parseo.electivas, ...parseo.paraRevisar];
+      const detalles = impEl("details", "imp-detalles"); detalles.append(impEl("summary", null, "Ver o editar el texto, o agregar otra parte"), textarea, impBoton("Pegar otra parte", () => ir("respuesta")));
+      textarea.addEventListener("change", () => renderizarPlanEstudios());
+      if (!todas.length) {
+        sec.append(impEl("h2", "imp-titulo", "No pudimos leer materias"), impEl("p", "imp-lead", "Lo que pegaste no parece el plan que prepara Claude. Vuelve a Claude, toca Copiar en su respuesta y pégala de nuevo."), detalles, errores);
+        estado.csvImportacionTexto.nuevo = "";
+        sec.appendChild(impBoton("Intentar de nuevo", () => ir("respuesta"), "btn btn-primary btn-block"));
+      } else {
+        sec.append(impEl("h2", "imp-titulo", "Revisa que se vea bien"));
+        const resumen = impEl("div", "imp-tarjeta importacion-resumen");
+        const conteo = document.createElement("strong"); conteo.textContent = `${parseo.materias.length} ${traducirTextoInterfaz("materias")} · ${parseo.electivas.length} ${traducirTextoInterfaz("optativas")} · ${parseo.paraRevisar.length} ${traducirTextoInterfaz("por revisar")}`; resumen.appendChild(conteo);
+        const lista = impEl("ul", "importacion-preview-lista"); todas.slice(0, 12).forEach((m) => { const li = document.createElement("li"); li.textContent = `${m.codigo || "Sin código"} · ${m.nombre || "Sin nombre"}`; lista.appendChild(li); }); resumen.appendChild(lista);
+        if (todas.length > 12) { const resto = impEl("p", "imp-nota"); resto.textContent = `+ ${todas.length - 12} ${traducirTextoInterfaz("más")}`; resumen.appendChild(resto); }
+        if (parseo.errores.length) { const e = impEl("p", "imp-nota"); e.textContent = `${parseo.errores.length} ${traducirTextoInterfaz("observaciones: al importar te mostraremos cuáles son.")}`; resumen.appendChild(e); }
+        sec.append(resumen, detalles, errores);
+        sec.appendChild(impNav(impBoton("Atrás", () => ir("respuesta")), impBoton("Terminar e importar", () => { estado.csvImportacionTexto.nuevo = textarea.value; manejarClickImportar(textarea.value); }, "btn btn-primary")));
+      }
+    }
+  }
+  return sec;
+}
 /* ===================== v1.10.0 — Capturas -> un solo PDF (modo "capturas") =====================
  * Antes de esto, el usuario adjuntaba cada foto/captura suelta directamente
  * en Claude. Ahora, en el modo "Tomar capturas", primero se arma UN
@@ -596,7 +902,7 @@ function detectarFormatoImagen(dataUrl) {
  * imagen. Descarga el resultado como "plan-de-estudios-capturas.pdf".
  */
 
-async function convertirCapturasAPDF(archivos) {
+async function convertirCapturasAPDF(archivos, { descargar = true } = {}) {
   if (!window.jspdf || !window.jspdf.jsPDF) {
     throw new Error("La librería jsPDF no está disponible todavía.");
   }
@@ -610,10 +916,7 @@ async function convertirCapturasAPDF(archivos) {
   let doc = null;
   const imagenesBajaResolucion = [];
 
-  console.log(`[capturas→PDF] Iniciando conversión de ${archivos.length} imagen(es)…`);
-
   for (let i = 0; i < archivos.length; i++) {
-    console.log(`[capturas→PDF] Procesando imagen ${i + 1}/${archivos.length}: "${archivos[i].name}" (${archivos[i].type || "tipo desconocido"}, ${Math.round(archivos[i].size / 1024)} KB)`);
     const dataUrl = await leerImagenComoDataURL(archivos[i]);
     const img = await cargarDimensionesImagen(dataUrl);
     const horizontal = img.width >= img.height;
@@ -643,18 +946,14 @@ async function convertirCapturasAPDF(archivos) {
 
     if (img.width < ANCHO_MINIMO_RECOMENDADO_PX) {
       imagenesBajaResolucion.push(archivos[i].name);
-      console.warn(`[capturas→PDF] "${archivos[i].name}" tiene resolución baja (${img.width}×${img.height}px) — puede costar leerla bien.`);
     }
 
     doc.addImage(dataUrl, detectarFormatoImagen(dataUrl), x, y, anchoFinal, altoFinal);
-    console.log(`[capturas→PDF] Imagen ${i + 1}/${archivos.length} agregada al PDF.`);
   }
+  const archivoPDF = new File([doc.output("blob")], "plan-de-estudios-capturas.pdf", { type: "application/pdf" });
+  if (descargar) doc.save(archivoPDF.name);
 
-  console.log("[capturas→PDF] Todas las imágenes procesadas — descargando PDF…");
-  doc.save("plan-de-estudios-capturas.pdf");
-  console.log("[capturas→PDF] doc.save() ejecutado.");
-
-  return { imagenesBajaResolucion };
+  return { imagenesBajaResolucion, archivoPDF };
 }
 
 /* ===================== v1.10.1 — Ventana flotante: capturas -> PDF ===================== *
@@ -684,20 +983,16 @@ function inicializarModalCapturasPDF() {
   });
 
   document.getElementById("btn-convertir-capturas-pdf").addEventListener("click", async () => {
-    console.log("[capturas→PDF] Clic en 'Convertir a PDF' detectado.");
     const input = document.getElementById("input-capturas-pdf");
     const archivos = input.files;
     const err = document.getElementById("error-modal-capturas-pdf");
     err.classList.add("oculto");
 
     if (!archivos || archivos.length === 0) {
-      console.log("[capturas→PDF] No hay archivos seleccionados — se muestra el aviso inline.");
       err.textContent = "Primero selecciona una o varias fotos/capturas.";
       err.classList.remove("oculto");
       return;
     }
-
-    console.log(`[capturas→PDF] ${archivos.length} archivo(s) seleccionado(s), cerrando modal y mostrando loading…`);
     cerrarModalCapturasPDF();
     mostrarCargando();
     try {
@@ -835,6 +1130,32 @@ function enviarPromptAClaude(texto) {
  *  de instrucciones — null mientras el modal está cerrado. */
 
 let instruccionesImportacionPendiente = null;
+let flujoAnaliticoImportacion = null;
+
+function iniciarSeguimientoImportacion() {
+  if (!flujoAnaliticoImportacion) flujoAnaliticoImportacion = iniciarProcesoAnalitico("plan.importacion");
+  return flujoAnaliticoImportacion;
+}
+
+function cancelarSeguimientoImportacion() {
+  flujoAnaliticoImportacion?.cancelar("cancelado");
+  flujoAnaliticoImportacion = null;
+}
+
+function completarSeguimientoImportacion() {
+  const continuarOnboarding = estado.datos?.configuracion?.guia_plan_pendiente === "plan";
+  flujoAnaliticoImportacion?.completar("guardado");
+  flujoAnaliticoImportacion = null;
+  cerrarGuiaFlotanteImportacion();
+  estado.importacionEtapa = "fuente";
+  estado.modoImportacion = null;
+  archivosFuenteImportacion = [];
+  if (continuarOnboarding) window.continuarTutorialDespuesDeImportarPlan?.();
+}
+
+function registrarPasoSeguimientoImportacion(paso) {
+  flujoAnaliticoImportacion?.paso(paso);
+}
 
 /**
  * v6: en vez de copiar y redirigir de inmediato al presionar "Enviar a
@@ -852,6 +1173,7 @@ let instruccionesImportacionPendiente = null;
  */
 
 function abrirModalInstruccionesImportacion(modo, textoPrompt) {
+  flujoAnaliticoImportacion?.paso("instrucciones_vistas");
   instruccionesImportacionPendiente = { textoPrompt };
   document.getElementById("titulo-modal-instrucciones-importacion").textContent = "Antes de ir a Claude…";
   document.getElementById("cuerpo-modal-instrucciones-importacion").textContent =
@@ -876,6 +1198,7 @@ function inicializarModalInstruccionesImportacion() {
   // pueda copiar de nuevo si quiere antes de presionar "Aceptar".
   document.getElementById("btn-copiar-prompt-instrucciones-importacion").addEventListener("click", () => {
     if (!instruccionesImportacionPendiente) return;
+    flujoAnaliticoImportacion?.paso("prompt_copiado");
     copiarPromptImportacionBlindado(instruccionesImportacionPendiente.textoPrompt);
   });
   document.getElementById("btn-aceptar-instrucciones-importacion").addEventListener("click", () => {
@@ -883,6 +1206,7 @@ function inicializarModalInstruccionesImportacion() {
     const { textoPrompt } = instruccionesImportacionPendiente;
     document.getElementById("modal-instrucciones-importacion").classList.add("oculto");
     instruccionesImportacionPendiente = null;
+    flujoAnaliticoImportacion?.paso("enviado_a_ia");
     enviarPromptAClaude(textoPrompt);
   });
 }
@@ -898,6 +1222,9 @@ export {
   construirInputArchivoCSV,
   construirPanelImportacion,
   inicializarEstadoImportacionPlanSiHaceFalta,
+  cancelarSeguimientoImportacion,
+  completarSeguimientoImportacion,
+  registrarPasoSeguimientoImportacion,
   construirPromptImportacion,
   construirTextoInstruccionesImportacion,
   convertirCapturasAPDF,
@@ -907,3 +1234,4 @@ export {
   inicializarModalInstruccionesImportacion,
   instruccionesImportacionPendiente,
 };
+

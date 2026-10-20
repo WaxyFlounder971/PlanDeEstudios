@@ -27,6 +27,7 @@ import { abrirAdjunto, abrirMenuAdjuntos, abrirModalAdjuntar } from "../ui/adjun
 // si Calendar no responde, no bloquean ni revierten el guardado/borrado
 // del evento (ver comentario al inicio de ese archivo).
 import { eliminarEventoCalendarizado, sincronizarEventoCalendario, sincronizarResumenParaFechaEvento } from "../core/notificaciones-calendario.js";
+import { iniciarProcesoAnalitico } from "../core/analitica.js";
 
 const PLACEHOLDER_NOMBRE = {
   evento: "Ej. Charla de RRHH",
@@ -62,6 +63,7 @@ let tipoEtiquetaAgendaSeleccionadaId = null;
 // en cancelarModalEventoAgenda().
 let idEventoActivoAdjuntos = null;
 let esAltaNuevaConAdjuntosPendientes = false;
+let flujoAnaliticoTarea = null;
 
 function renderizarListaAdjuntosFormulario() {
   const cont = document.getElementById("lista-agenda-adjuntos");
@@ -311,6 +313,7 @@ function abrirModalEventoAgenda({ eventoId = null, fechaDefault = null, datosIni
   const modal = document.getElementById("modal-agenda-evento");
   const eventoExistente = eventoId ? buscarEventoVivoPorId(eventoId) : null;
   const datosPrecarga = eventoExistente || datosIniciales;
+  flujoAnaliticoTarea = !eventoExistente && !datosIniciales ? iniciarProcesoAnalitico("agenda.tarea") : null;
 
   document.getElementById("titulo-modal-agenda-evento").textContent = eventoExistente
     ? "Editar"
@@ -373,6 +376,8 @@ function cerrarModalEventoAgenda() {
  * (ver comentario de idEventoActivoAdjuntos más arriba).
  */
 function cancelarModalEventoAgenda() {
+  flujoAnaliticoTarea?.cancelar("cancelado");
+  flujoAnaliticoTarea = null;
   if (esAltaNuevaConAdjuntosPendientes && idEventoActivoAdjuntos) {
     obtenerAdjuntosDe("evento", idEventoActivoAdjuntos).forEach((a) => eliminarAdjunto(a.id));
   }
@@ -383,6 +388,7 @@ function guardarEventoAgenda(eventoExistente) {
   const nombre = document.getElementById("input-agenda-nombre").value.trim();
   const fecha = document.getElementById("input-agenda-fecha").value;
   if (!fecha) {
+    flujoAnaliticoTarea?.paso("validacion_fallida");
     mostrarToast("Elegí una fecha");
     return;
   }
@@ -514,6 +520,9 @@ function guardarEventoAgenda(eventoExistente) {
   }
 
   marcarCambioPendiente();
+  if (tipo === "tarea") flujoAnaliticoTarea?.completar("guardado");
+  else flujoAnaliticoTarea?.cancelar("cancelado");
+  flujoAnaliticoTarea = null;
   cerrarModalEventoAgenda();
   refrescarAgenda();
 }

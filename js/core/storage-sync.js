@@ -19,7 +19,7 @@ import {
   NOMBRE_CARPETA_BACKUP,
   buscarArchivoEnCarpeta,
   buscarOCrearCarpetaEnDrive,
-  copiarArchivoDrive,
+  subirArchivoBinarioADrive,
   eliminarArchivoDeDriveConId,
   guardarDatos,
   leerDatos,
@@ -1447,10 +1447,8 @@ async function asegurarTokenFrescoAlVolver() {
  *   - Si ya existe backup_reciente.json, se borra el backup_anterior.json
  *     viejo (si había) y se renombra backup_reciente.json -> backup_anterior.json
  *     (PATCH de solo metadata, no re-sube contenido).
- *   - Se genera un backup_reciente.json NUEVO como copia server-side
- *     (Drive files.copy, sin bajar/subir bytes por el cliente) del archivo
- *     vigente actual (estado.fileId) - copia EXACTA, mismo JSON, pedido
- *     explícito.
+ *   - Se genera un backup_reciente.json NUEVO con una copia saneada de los
+ *     datos vigentes; la clave de Gemini se omite antes de subir el JSON.
  * Nunca se acumulan más de 2 copias.
  *
  * Totalmente silencioso: cualquier error se loguea y se descarta sin
@@ -1461,7 +1459,7 @@ async function asegurarTokenFrescoAlVolver() {
  *
  * El ciclo de rotación en sí (crear carpeta si hace falta, migrar el
  * archivo vigente si es la primera vez, rotar backup_reciente.json ->
- * backup_anterior.json, copiar el archivo vigente como el nuevo
+ * backup_anterior.json, subir la copia saneada como el nuevo
  * backup_reciente.json) vive en ejecutarCicloRotacionBackup, sin ninguna
  * condición de frecuencia - separado de esta función (2026-08-10, pedido
  * explícito: botón de "Hacer backup ahora") para que el botón manual
@@ -1525,9 +1523,11 @@ async function ejecutarCicloRotacionBackup() {
     await conReintentoSi401(() => renombrarArchivoDrive(estado.token, idReciente, "backup_anterior.json"));
   }
 
-  // Copia exacta del archivo vigente actual - mismo contenido, solo
-  // cambia el nombre (pedido explícito).
-  await conReintentoSi401(() => copiarArchivoDrive(estado.token, estado.fileId, "backup_reciente.json", folderId));
+  // El backup conserva el resto de los datos, pero excluye la clave de Gemini.
+  const datosRespaldo = JSON.parse(JSON.stringify(estado.datos));
+  if (datosRespaldo.configuracion) delete datosRespaldo.configuracion.gemini_api_key;
+  const archivoRespaldo = new File([JSON.stringify(datosRespaldo)], "backup_reciente.json", { type: "application/json" });
+  await conReintentoSi401(() => subirArchivoBinarioADrive(estado.token, archivoRespaldo, folderId));
 }
 
 /**

@@ -101,6 +101,7 @@ function agregarLongPress(el, callback, duracionMs = 500) {
 /* ===================== Confirmación genérica (reemplaza confirm() nativo) ===================== */
 
 let callbackConfirmacionActual = null;
+let callbackConfirmacionCancelacion = null;
 
 /**
  * Abre el modal de confirmación reutilizable. Uso:
@@ -109,13 +110,14 @@ let callbackConfirmacionActual = null;
  * para acciones no destructivas).
  */
 
-function abrirConfirmacion({ titulo, mensaje, textoConfirmar, claseConfirmar, onConfirmar }) {
+function abrirConfirmacion({ titulo, mensaje, textoConfirmar, claseConfirmar, onConfirmar, onCancelar }) {
   document.getElementById("titulo-modal-confirmacion").textContent = titulo || "¿Estás seguro?";
   document.getElementById("mensaje-modal-confirmacion").textContent = mensaje || "";
   const btn = document.getElementById("btn-aceptar-confirmacion");
   btn.textContent = textoConfirmar || "Confirmar";
   btn.className = "btn " + (claseConfirmar || "btn-danger");
   callbackConfirmacionActual = onConfirmar || null;
+  callbackConfirmacionCancelacion = onCancelar || null;
   const modal = document.getElementById("modal-confirmacion");
   // Fix (2026-08-03): este modal vive fijo en el HTML, así que cuando se
   // abre un modal dinámico DESPUÉS (ej. cualquier crearModalDinamico, o el
@@ -130,21 +132,24 @@ function abrirConfirmacion({ titulo, mensaje, textoConfirmar, claseConfirmar, on
   modal.classList.remove("oculto");
 }
 
-function cerrarConfirmacion() {
+function cerrarConfirmacion(cancelada = false) {
+  const cancelar = callbackConfirmacionCancelacion;
   document.getElementById("modal-confirmacion").classList.add("oculto");
   callbackConfirmacionActual = null;
+  callbackConfirmacionCancelacion = null;
+  if (cancelada && cancelar) cancelar();
 }
 
 function inicializarModalConfirmacion() {
   const modal = document.getElementById("modal-confirmacion");
-  document.getElementById("btn-cancelar-confirmacion").addEventListener("click", cerrarConfirmacion);
+  document.getElementById("btn-cancelar-confirmacion").addEventListener("click", () => cerrarConfirmacion(true));
   document.getElementById("btn-aceptar-confirmacion").addEventListener("click", () => {
     const cb = callbackConfirmacionActual;
     cerrarConfirmacion();
     if (cb) cb();
   });
   modal.addEventListener("click", (e) => {
-    if (e.target === modal) cerrarConfirmacion();
+    if (e.target === modal) cerrarConfirmacion(true);
   });
 }
 

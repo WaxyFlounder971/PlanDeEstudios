@@ -627,6 +627,7 @@ function inicializarModalMateriaManual() {
     const requisitos = parsearRequisitoArbol(document.getElementById("input-materia-requisitos").value);
     const correquisitos = parsearRequisitoArbol(document.getElementById("input-materia-correquisitos").value);
 
+    const primeraMateriaEnBlanco = !materiaExistente && estado.datos.configuracion?.onboarding_plan_en_blanco_pendiente === true && plan.materias.length === 0;
     if (materiaExistente) {
       // Modo edición: se actualizan los campos in-place para no perder la
       // identidad del objeto (estado, categoria_id, etc. se conservan tal cual).
@@ -649,6 +650,16 @@ function inicializarModalMateriaManual() {
     marcarCambioPendiente();
     document.getElementById("modal-materia-manual").classList.add("oculto");
     renderizarPlanEstudios();
+    if (primeraMateriaEnBlanco) {
+      const config = estado.datos.configuracion;
+      config.onboarding_plan_en_blanco_pendiente = false;
+      config.guia_plan_pendiente = "semestres";
+      sellarTimestamp(config);
+      marcarCambioPendiente();
+      // La navegación normal reanuda guia_plan_pendiente y la guía adapta sus
+      // pasos al primer semestre del usuario.
+      setTimeout(() => window.mostrarSeccion?.("semestres"), 250);
+    }
   });
 }
 
