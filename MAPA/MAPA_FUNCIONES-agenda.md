@@ -1,7 +1,7 @@
 ## JS — Agenda
 
 ### `agenda/agenda.js`
-**Propósito:** Núcleo de la Agenda — vista Lista (cronológica, agrupada por día), header, filtros (Semanal/Todo, mostrar materias, mostrar días vacíos), selector de semestres, y el despacho entre Lista y Calendario.
+**Propósito:** Núcleo de la Agenda — vista Lista (cronológica, agrupada por día), header, filtros (Semanal/Todo, mostrar materias, mostrar días vacíos), selector de semestres, despacho entre Lista y Calendario y editor de tipos configurables. Desde 2026-10-18, el editor conserva el campo opcional `agenda_tipos[].ayuda_wapper` para describir el uso del tipo al clasificador de Wapper; se sincroniza junto con el resto de la configuración.
 **Depende de:** `core/schema.js`, `core/storage-sync.js`, `core/storage.js`, `core/utils.js`, `ui/componentes.js`, `semestres/semestres.js`, `agenda/agenda-calendario.js`, `agenda/agenda-clases.js`, `agenda/agenda-modal.js`, `agenda/agenda-utils.js`
 **Exporta:**
 * `inicializarAgenda()` — wiring inicial: modal de evento, botón "+", pills de vista, selector de semestres, filtros.

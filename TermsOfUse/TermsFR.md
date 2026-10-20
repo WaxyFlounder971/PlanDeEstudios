@@ -1,6 +1,6 @@
 # Conditions d'utilisation
 
-**Dernière mise à jour : 16 octobre 2026**
+**Dernière mise à jour : 18 octobre 2026**
 
 Ce document explique comment fonctionne App Académica et ce que tu peux en attendre. En l'acceptant, tu confirmes l'avoir lu et être d'accord. Si tu n'es pas d'accord, nous te demandons de ne pas utiliser l'application.
 
@@ -27,7 +27,8 @@ Toute personne. L'application a été pensée pour les étudiants universitaires
 ## 5. Les informations limitées qui arrivent au service de l'application
 Certaines fonctions utilisent un service propre à l'application, hébergé chez Cloudflare. Voici tout ce qu'il reçoit :
 - **Connexion :** le service aide à renouveler ta session Google. Il ne conserve pas ton mot de passe.
-- **Statistiques d'utilisation :** uniquement des compteurs, par exemple combien de fois chaque section est ouverte. Elles n'incluent jamais ce que tu écris (tâches, notes, conversations, etc.). Ton e-mail est utilisé un instant pour classer le compteur et n'est pas conservé.
+- **Statistiques d’utilisation anonymes :** nous utilisons des compteurs agrégés pour comprendre quelles sections sont utilisées et améliorer l’application. Ils ne sont associés ni à ton e-mail ni à ton identité personnelle et n’incluent jamais ce que tu écris (tâches, notes, conversations ou données académiques).
+- **Analyse par IA :** à la demande de l'administrateur, seuls des compteurs agrégés sont envoyés à Claude (Anthropic) ou, s'il n'est pas configuré, à OpenAI. Aucun identifiant ni contenu écrit n'est envoyé.
 - **Compétitions :** si tu crées une compétition ou si tu en rejoins une, ton e-mail Google (pour te reconnaître), ton pseudo, les heures étudiées dans la semaine et les résultats précédents sont conservés. Si la fonction l'affiche, ta photo de profil Google et la couleur que tu choisis le sont aussi. Les autres personnes de la compétition voient ton pseudo et tes heures. Les matières que tu étudies ne sont jamais envoyées.
 - **Emplois du temps partagés :** si tu partages ton emploi du temps avec un lien, toute personne qui le possède peut le voir. Tu décides avec qui le partager et tu peux arrêter de le partager quand tu veux depuis l'application.
 
@@ -36,6 +37,7 @@ L'application dépend de services qu'elle ne contrôle pas, chacun avec ses prop
 - **Google :** connexion et Drive. Si tu l'actives, aussi Calendar, où un calendrier distinct est créé avec tes tâches et examens pour t'envoyer des rappels.
 - **Gemini (Google) :** l'Assistant utilise ta propre clé Gemini. Ce que tu lui écris va directement de ton navigateur à Google, sans passer par l'application. Tu es responsable de l'usage de ta clé.
 - **Cloudflare :** là où sont hébergés l'application et le service de la section 5.
+- **Anthropic (Claude) ou OpenAI :** reçoivent uniquement des mesures agrégées si l'administrateur demande une analyse d'utilisation par IA.
 
 Si l'un de ces services change, tombe en panne ou devient payant, l'application peut en être affectée, et cela ne dépend pas du développeur.
 
@@ -69,7 +71,7 @@ Ces conditions peuvent être mises à jour. Si le changement est important, l'ap
 Tes données sont à toi et tu peux les gérer quand tu veux. L'application dispose de boutons pour **sauvegarder, importer, exporter et supprimer** tes données, donc tu ne dépends de personne pour le faire.
 - **Tes données académiques :** tu peux les supprimer depuis l'application, dans Réglages > Données, avec le bouton de suppression. Les boutons de sauvegarde, d'import et d'export se trouvent au même endroit. Elles sont aussi dans ton Google Drive : tu peux supprimer le dossier de l'application ou lui retirer l'autorisation depuis les paramètres de ton compte Google. Avant de supprimer, il est recommandé d'exporter ou de sauvegarder ce que tu veux garder.
 - **Compétitions :** ce qui y est conservé (ton pseudo, tes heures et ton e-mail pour te reconnaître) n'est pas une information académique ni sensible. Si tu veux malgré tout que ce soit supprimé, tu peux le demander en écrivant à AppAcademica26@gmail.com.
-- **Statistiques d'utilisation :** ce ne sont que des compteurs et elles n'incluent pas ce que tu écris.
+
 - Tu peux aussi cesser d'utiliser l'application à tout moment.
 
 ## 13. Droit applicable

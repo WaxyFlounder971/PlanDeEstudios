@@ -1,6 +1,6 @@
 # Política de privacidad
 
-**Última actualización: 16 de octubre de 2026**
+**Última actualización: 18 de octubre de 2026**
 
 Esta política explica qué información usa App Académica (también llamada Wapper), para qué la usa y qué puedes hacer con ella. Es un proyecto independiente, desarrollado por una sola persona, y por eso este documento busca ser claro y directo.
 
@@ -28,6 +28,8 @@ El desarrollador no tiene acceso a esa carpeta ni a su contenido.
 Para que algunas funciones trabajen, la app usa un servicio propio alojado en Cloudflare. Esto es todo lo que recibe y guarda:
 - **Inicio de sesión:** el servicio ayuda a renovar tu sesión de Google. No guarda tu contraseña ni tus datos de acceso.
 - **Estadísticas de uso:** conteos de cuántas veces se abre cada sección o qué tipo de acción se usó. No incluyen lo que escribes. Tu correo se compara un instante en memoria para clasificar el conteo y no se guarda.
+- **Recorridos detallados (opcional):** si lo autorizas en el onboarding o en Ajustes, se registran inicios, pasos, finalización, cancelación y abandono de algunos procesos (por ejemplo, crear una tarea, importar el plan, editar una nota o enviar a Wapper). Se guarda un identificador seudónimo calculado con una clave secreta, el tipo de proceso, la sesión, la versión de la app y marcas de tiempo. No se envían textos, títulos ni datos académicos. Los eventos detallados se eliminan después de 90 días; puedes desactivar esta opción en Ajustes > Datos.
+- **Análisis con IA (solo si el administrador lo solicita):** se envían a Anthropic (Claude) o, si no está configurado, a OpenAI únicamente conteos agregados de recorridos. No se envían identificadores seudónimos, correos ni contenido escrito.
 - **Competencias (solo si participas en alguna):** tu correo de Google (para reconocerte), tu apodo, las horas totales de estudio de la semana y los resultados anteriores. Si la función lo muestra, también tu foto de perfil de Google y el color que elijas. No se envía qué materias estudias ni ningún dato académico.
 - **Horarios compartidos (solo si tú los compartes):** el archivo de tu horario queda en tu Drive con un enlace público de solo lectura. Cualquier persona con el enlace puede verlo. Tú decides con quién compartirlo y puedes dejar de compartirlo cuando quieras.
 
@@ -43,6 +45,7 @@ La app pide permiso a tu cuenta de Google para:
 - **Google** (inicio de sesión, Drive y, si lo activas, Calendar): su manejo de tu información se rige por su propia política de privacidad.
 - **Gemini (Google):** si usas el Asistente, lo que escribes se envía directo desde tu navegador a Google con tu propia clave, sin pasar por la app. Se rige por las políticas de Google.
 - **Cloudflare:** aloja la app y el servicio descrito en la sección 4.
+- **Anthropic (Claude) u OpenAI:** reciben únicamente métricas agregadas cuando el administrador solicita un análisis de uso con IA. El proveedor efectivo depende de la configuración del servicio.
 
 La app no controla cómo esas empresas manejan la información en sus sistemas.
 
@@ -50,13 +53,16 @@ La app no controla cómo esas empresas manejan la información en sus sistemas.
 - Para que la app funcione (guardar tus datos, iniciar sesión, enviarte recordatorios si los activas).
 - Para que las competencias y los horarios compartidos funcionen entre las personas que decidan usarlos.
 - Para entender, con conteos generales, qué partes de la app se usan más y poder mejorarlas.
+- Para conocer, si aceptas la opción, en qué pasos se completan o abandonan ciertos procesos y mejorar esos flujos.
+- Para resumir métricas agregadas con IA cuando el administrador inicia ese análisis manualmente.
 
 No se usa para nada más.
 
 ## 8. Cuánto tiempo se guarda
 - **Tus datos académicos:** mientras no los borres de tu Drive o de la app.
 - **Competencias:** mientras participes. Si sales de una competencia, tu participación se elimina. El historial de resultados pasados puede conservar tu apodo y tus horas hasta que solicites borrarlos.
-- **Estadísticas de uso:** solo se guardan como conteos generales, sin identificarte.
+- **Estadísticas de uso básicas:** se guardan como conteos generales; el correo solo se compara en memoria para clasificarlos.
+- **Recorridos detallados opcionales:** se conservan hasta 90 días y luego se eliminan automáticamente. Puedes retirar tu autorización en Ajustes > Datos; al desactivarla se eliminan también los recorridos ya registrados.
 
 ## 9. Tus derechos y cómo ejercerlos
 Puedes solicitar en cualquier momento acceder a tu información, corregirla o eliminarla.

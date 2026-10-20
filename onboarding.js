@@ -357,6 +357,8 @@ function inyectarEstilosOnboarding() {
 .onb-ajuste-fila{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.92rem}
 .onb-ajuste-nota{margin:0;font-size:.8rem;line-height:1.35;opacity:.7}
 .onb-ajuste-campo{display:flex;flex-direction:column;gap:6px;font-size:.84rem;font-weight:600}
+
+.onb-ajuste-recordatorios{display:grid;gap:10px}.onb-ajuste-recordatorio-tipo{display:flex;flex-direction:column;gap:6px;font-size:.84rem;font-weight:600}.onb-recordatorio-opciones{display:flex;flex-wrap:wrap;gap:7px}.onb-recordatorio-opcion{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:999px;background:color-mix(in srgb,currentColor 4%,transparent);font-size:.8rem;font-weight:500;cursor:pointer}.onb-recordatorio-opcion:has(input:checked){border-color:var(--accent-1,#8b5cf6);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 14%,transparent)}.onb-recordatorio-opcion input{accent-color:var(--accent-1,#8b5cf6);margin:0}
 .onb-ajuste-detalle{display:flex;flex-direction:column;gap:10px}.onb-ajuste-detalle.apagado{opacity:.5;pointer-events:none}
 .onb-acc{padding:0;gap:0;overflow:hidden;transition:border-color .25s,background .25s}
 .onb-acc.abierta{border-color:color-mix(in srgb,var(--accent-1,#8b5cf6) 55%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 7%,transparent)}
@@ -608,10 +610,21 @@ function evitarSolape(pop, el) {
   const choca = (r, top, bottom) => r.bottom > top - 8 && r.top < bottom + 8;
   const medir = () => {
     if (!vivo()) return;
-    pop.style.top = ""; pop.style.bottom = "";
+    pop.style.top = ""; pop.style.bottom = ""; pop.style.maxHeight = ""; pop.style.overflowY = "";
     const r = el.getBoundingClientRect(), p = pop.getBoundingClientRect();
-    if (!choca(r, p.top, p.bottom)) return;                       // abajo (posición normal) no tapa
-    if (!choca(r, 10, 10 + p.height)) { pop.style.top = "10px"; pop.style.bottom = "auto"; }   // arriba sí libra
+    if (!choca(r, p.top, p.bottom)) { pop.style.maxHeight = ""; pop.style.overflowY = ""; return; }
+    const alto = window.innerHeight;
+    const espacioArriba = Math.max(0, r.top - 20);
+    const espacioAbajo = Math.max(0, alto - r.bottom - 20);
+    if (espacioArriba >= p.height || espacioArriba >= espacioAbajo) {
+      pop.style.top = "10px"; pop.style.bottom = "auto";
+      if (espacioArriba < p.height) { pop.style.maxHeight = `${Math.max(120, espacioArriba)}px`; pop.style.overflowY = "auto"; }
+      else { pop.style.maxHeight = ""; pop.style.overflowY = ""; }
+    } else {
+      pop.style.top = "auto"; pop.style.bottom = "10px";
+      if (espacioAbajo < p.height) { pop.style.maxHeight = `${Math.max(120, espacioAbajo)}px`; pop.style.overflowY = "auto"; }
+      else { pop.style.maxHeight = ""; pop.style.overflowY = ""; }
+    }
   };
   const alMover = () => { if (vivo()) medir(); else limpiar(); };
   const limpiar = () => { removeEventListener("scroll", alMover, true); removeEventListener("resize", alMover); };
@@ -1253,12 +1266,28 @@ function construirBloqueNotificaciones({ cfg, borrador, demo }) {
   const calActiva = () => { try { return Boolean(sincronizacionCalendarActiva()); } catch (_) { return false; } };
   const detalle = document.createElement("div"); detalle.className = "onb-ajuste-detalle";
   const marcar = () => detalle.classList.toggle("apagado", !calActiva());
-  const guardado = cfg.notificaciones_recordatorios?.tarea;
-  const inicial = borrador.recordatorio || (Array.isArray(guardado) ? guardado[0] : guardado) || "1_dia";
-  const selAntes = document.createElement("select"); selAntes.className = "form-input";
-  (OFFSETS_RECORDATORIO_AGENDA || []).forEach((o) => { const op = document.createElement("option"); op.value = o.id; op.textContent = traducirTextoInterfaz(o.etiqueta); selAntes.append(op); });
-  selAntes.value = inicial; if (selAntes.value !== inicial && selAntes.options[0]) selAntes.value = selAntes.options[0].value;
-  selAntes.addEventListener("change", () => { borrador.recordatorio = selAntes.value; borrador.tocado = true; });
+  const selectoresRecordatorio = document.createElement("div"); selectoresRecordatorio.className = "onb-ajuste-recordatorios";
+  const valoresRecordatorio = borrador.recordatorios || {};
+  [
+    ["tarea", "Tareas"], ["examen", "Exámenes"], ["evento", "Eventos"],
+  ].forEach(([tipo, etiqueta]) => {
+    const fila = document.createElement("div"); fila.className = "onb-ajuste-recordatorio-tipo";
+    const titulo = document.createElement("span"); titulo.textContent = traducirTextoInterfaz(etiqueta);
+    const opciones = document.createElement("span"); opciones.className = "onb-recordatorio-opciones";
+    const guardado = cfg.notificaciones_recordatorios?.[tipo];
+    const iniciales = valoresRecordatorio[tipo] || (Array.isArray(guardado) ? guardado : [guardado || "1_dia"]);
+    (OFFSETS_RECORDATORIO_AGENDA || []).forEach((o) => {
+      const opcion = document.createElement("label"); opcion.className = "onb-recordatorio-opcion";
+      const check = document.createElement("input"); check.type = "checkbox"; check.value = o.id; check.checked = iniciales.includes(o.id);
+      const texto = document.createElement("span"); texto.textContent = traducirTextoInterfaz(o.etiqueta);
+      check.addEventListener("change", () => {
+        valoresRecordatorio[tipo] = [...opciones.querySelectorAll("input:checked")].map((control) => control.value);
+        borrador.recordatorios = valoresRecordatorio; borrador.tocado = true;
+      });
+      opcion.append(check, texto); opciones.append(opcion);
+    });
+    fila.append(titulo, opciones); selectoresRecordatorio.append(fila);
+  });
   const r0 = cfg.notificaciones_resumen_diario || { activo: false, hora: "20:00" };
   const resumen = borrador.resumen || { activo: Boolean(r0.activo), hora: r0.hora || "20:00" };
   const selHora = document.createElement("select"); selHora.className = "form-input";
@@ -1269,7 +1298,7 @@ function construirBloqueNotificaciones({ cfg, borrador, demo }) {
   const swResumen = construirInterruptor(resumen.activo, (v) => { resumen.activo = v; borrador.resumen = resumen; borrador.tocado = true; campoHora.hidden = !v; }, "Resumen diario");
   const filaResumen = document.createElement("div"); filaResumen.className = "onb-ajuste-fila";
   const tr = document.createElement("span"); tr.textContent = traducirTextoInterfaz("Resumen diario de tus pendientes"); filaResumen.append(tr, swResumen.label);
-  detalle.append(campoConEtiqueta("Avisarme antes de tareas, exámenes y eventos", selAntes), filaResumen, campoHora);
+  detalle.append(selectoresRecordatorio, filaResumen, campoHora);
   const swCal = construirInterruptor(calActiva(), async (v, chk) => {
     chk.disabled = true;
     try {
@@ -1387,7 +1416,7 @@ const GEMINI_PASOS = [
 function botonDesdeCero() {
   // No depende del idioma ni de una sola frase: «Empezar en blanco», «Iniciar desde cero», «da zero», «from scratch», «blank»… o el botón del lápiz.
   const raiz = document.getElementById("seccion-plan-estudios"); if (!raiz) return null;
-  return [...raiz.querySelectorAll("button")].find((b) => /blanco|bianco|blank|desde cero|da zero|from scratch|✏/i.test(b.textContent)) || null;
+  return [...raiz.querySelectorAll("button")].find((b) => /blanco|bianco|blank|vierge|à partir de zéro|commencer à zéro|desde cero|da zero|from scratch|✏/i.test(b.textContent)) || null;
 }
 function contenedorOpcionesPlan() {
   // Ancestro común del botón «en blanco» y del grupo de importación: así se resaltan las DOS opciones a la vez.
@@ -1465,7 +1494,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
   const cfg = estado.datos.configuracion;
   const secciones = SECCIONES_TUTORIAL.filter(({id}) => id !== "configuracion" && document.getElementById(`seccion-${id}`));
   // «Últimos ajustes»: se guardan en este borrador y se aplican AL TERMINAR el onboarding.
-  const borrador = { tocado: false, navTocada: false, moneda: null, ocultas: new Set(cfg.navegacion_oculta || []), recordatorio: null, resumen: null, enlaces: [] };
+  const borrador = { tocado: false, navTocada: false, moneda: null, ocultas: new Set(cfg.navegacion_oculta || []), recordatorio: null, recordatorios: null, resumen: null, enlaces: [] };
   let claveRecien = false;
   const cuentaConDatos = !MODO_DEMO && Object.entries(estado.datos).some(([clave, valor]) =>
     Array.isArray(valor) && valor.length > 0 && clave !== "planes_estudio_demo"
@@ -1588,23 +1617,14 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
       try{const orig=win.mostrarSeccion;if(typeof orig==="function"&&!orig.__onbEnvuelta){const guardada=function(id,...resto){if(guiaBloqueaNavegacion()&&id!==preview.dataset.seccion)return;return orig.call(this,id,...resto);};guardada.__onbEnvuelta=true;win.mostrarSeccion=guardada;}}catch(_){}
     }
   };
-  // Si ya hay clave real, la vista previa (que corre en memoria, sin guardar nada) debe mostrarla como activa.
-  const sincronizarClaveGeminiPreview=()=>{
-    if(etapa!=="wapper-config"||!cfg.gemini_api_key)return;
-    let win;try{win=preview.contentWindow;void win.document;}catch(_){return;}
-    try{const c=win.estado?.datos?.configuracion;if(c)c.gemini_api_key=cfg.gemini_api_key;}catch(_){}
-    try{win.aplicarVisibilidadBotonAsistente?.();}catch(_){}
-    try{if(typeof win.renderizarAsistente==="function")win.renderizarAsistente();else if(typeof win.mostrarSeccion==="function"&&preview.dataset.seccion==="asistente")win.mostrarSeccion("asistente");}catch(_){}
-  };
   const actualizarPreview=()=>{
     bloquearNavegacionPreview();
-    sincronizarClaveGeminiPreview();
     preview.contentWindow?.postMessage({
     type:"APP_PREVIEW_UPDATE", paleta:paletaActual(), modo:modoPersonalizacion,
     calidad:calidadPersonalizacion,
     colores:paletaActual()==="personalizada"?cfg.paleta_personalizada?.colores:null,
     logo:cfg.logo_app||"folder", logoData:cfg.logo_app_url||null,
-    geminiKey:etapa==="wapper-config"?(cfg.gemini_api_key||null):null
+    geminiActivo:etapa==="wapper-config"&&Boolean(cfg.gemini_api_key)
     },location.origin);
   };
   // ── Teléfono (≤760px): primero la información; la vista previa es la página siguiente ──
@@ -1717,11 +1737,11 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
     if(!borrador.tocado)return;
     if(borrador.moneda)cfg.moneda_preferida=borrador.moneda;
     if(borrador.navTocada)cfg.navegacion_oculta=[...borrador.ocultas];
-    if(borrador.recordatorio){const r=borrador.recordatorio,previo=cfg.notificaciones_recordatorios&&typeof cfg.notificaciones_recordatorios==="object"?cfg.notificaciones_recordatorios:{};cfg.notificaciones_recordatorios={feriado:["1_dia"],...previo,tarea:[r],examen:[r],evento:[r]};}
+    if(borrador.recordatorios){const previo=cfg.notificaciones_recordatorios&&typeof cfg.notificaciones_recordatorios==="object"?cfg.notificaciones_recordatorios:{};cfg.notificaciones_recordatorios={feriado:["1_dia"],...previo,...borrador.recordatorios};}
     if(borrador.enlaces.length){
       if(!Array.isArray(cfg.enlaces_rapidos))cfg.enlaces_rapidos=[];
       borrador.enlaces.forEach((e)=>{if(cfg.enlaces_rapidos.length>=(LIMITE_ENLACES_RAPIDOS||20))return;const nuevo=crearEnlaceRapido(e);sellarTimestamp(nuevo);cfg.enlaces_rapidos.push(nuevo);});
-      import("../config/config-enlaces.js").then((m)=>m.renderizarEnlacesRapidos()).catch(()=>{});
+      import("./js/config/config-enlaces.js").then((m)=>m.renderizarEnlacesRapidos()).catch(()=>{});
     }
     if(borrador.resumen)cfg.notificaciones_resumen_diario={activo:borrador.resumen.activo,hora:borrador.resumen.hora};
     guardar();window.aplicarVisibilidadNavegacion?.();

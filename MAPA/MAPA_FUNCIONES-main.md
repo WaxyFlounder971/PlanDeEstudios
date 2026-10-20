@@ -2,7 +2,7 @@
 
 **Propósito:** Orquestador raíz de la app — arranque, login/logout, navegación entre secciones y renderizado del perfil de usuario. Importa e inicializa el resto de módulos.
 
-**Depende de:** config-ajustes.js, config-enlaces.js, auth.js, schema.js, storage-merge.js, storage-sync.js, storage.js, utils.js, comunidad.js, finanzas.js, plan-categorias.js, plan-detalle.js, plan-esquema.js, plan-gestionar.js, plan-importacion.js, plan-vista-lista.js, semestres.js, agenda.js, horario.js, horario-amigos.js, componentes.js, tema.js.
+**Depende de:** config-ajustes.js, config-enlaces.js, auth.js, schema.js, storage-merge.js, storage-sync.js, storage.js, utils.js, comunidad.js, finanzas.js, plan-categorias.js, plan-detalle.js, plan-esquema.js, plan-gestionar.js, plan-importacion.js, plan-vista-lista.js, semestres.js, agenda.js, horario.js, horario-amigos.js, componentes.js, tema.js, asistente.js (cola offline de Wapper), notas.js.
 
 **Exporta:**
 
@@ -15,11 +15,14 @@
 * `CLAVE_SECCION_ACTIVA` — clave de `localStorage` (`"seccion_activa_v1"`) donde se persiste qué sección de navegación quedó activa.
 * `inicializarNavegacionSecciones()` — conecta los botones `.btn-nav[data-seccion]` para que llamen a `mostrarSeccion`.
 * `mostrarSeccion(nombre)` — cambia la sección visible del app-shell (configuración, plan-estudios, semestres, comunidad, etc.) y persiste la elección.
+* El id `notas` se registra en la ruta de navegación y llama a `renderizarNotas()`. `inicializarNotas()` conecta los avisos de papelera/compartir y corre una vez al arrancar.
 * `temporizadorAvisoLogin` — id del `setTimeout` de `programarAvisoLoginBloqueado`, expuesto para que otros módulos puedan limpiarlo (ej. al cerrar sesión).
 * `renderizarPerfil()` — pinta nombre, correo, foto/iniciales del perfil en el header y en el popover; maneja el fallback si la foto no carga.
 * `togglePerfilPopover(forzarCerrado)` — abre/cierra el popover de perfil (o lo fuerza a cerrado si se pasa `true`).
 
 ## Patrones transversales
+
+* Al terminar el primer render autenticado, `mostrarAppInterno()` llama `window.procesarColaWapper?.()` para reanudar la cola local sin depender de entrar primero a la sección Asistente.
 
 * **Sync:** todo cambio a `estado.datos` se marca con `sellarTimestamp()` (Lamport) y `marcarCambioPendiente()`; el merge entre dispositivos usa `_version_base` para resolver conflictos campo a campo.
 * **Borrado:** los elementos eliminados no se sacan del array — se marcan como tumba (soft-delete) para que el merge no los resucite desde otro dispositivo desactualizado.

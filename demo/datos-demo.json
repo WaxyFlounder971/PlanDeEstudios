@@ -9550,5 +9550,10 @@
         ]
       }
     }
+  ],
+  "notas": [
+    { "id": "nota-demo-ideas", "titulo": "Ideas para el semestre", "contenido": "<p>Revisar la bibliografía de la próxima semana.</p><ul><li><input type=\"checkbox\" data-nota-check=\"1\"> Actualizar el calendario</li><li><input type=\"checkbox\" checked data-nota-check=\"1\"> Preparar materiales</li></ul>", "color": "#fff2b3", "fijada": true, "orden_fijada": 1, "vence_en": null, "eliminada_en": null, "motivo_eliminacion": null, "enviada_a_wapper_en": null, "origen": "manual", "creada_en": 1792368000000, "modificada_en": 1792368000000 },
+    { "id": "nota-demo-enlace", "titulo": "Enlace de referencia", "contenido": "<p>Guardar este recurso para el proyecto:</p><p>https://example.org/recurso</p>", "color": "#dce8ff", "fijada": false, "orden_fijada": null, "vence_en": null, "eliminada_en": null, "motivo_eliminacion": null, "enviada_a_wapper_en": null, "origen": "manual", "creada_en": 1792454400000, "modificada_en": 1792454400000 },
+    { "id": "nota-demo-vencimiento", "titulo": "Recordatorio", "contenido": "<p>Entregar el borrador del trabajo.</p>", "color": "#d9f2e6", "fijada": false, "orden_fijada": null, "vence_en": "2026-12-01", "eliminada_en": null, "motivo_eliminacion": null, "enviada_a_wapper_en": null, "origen": "manual", "creada_en": 1792540800000, "modificada_en": 1792540800000 }
   ]
 }
