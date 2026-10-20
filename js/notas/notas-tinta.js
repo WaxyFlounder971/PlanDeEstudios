@@ -400,15 +400,16 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
 
 /** Miniatura de la tinta para la tarjeta. Se redibuja con la resolución real con que se muestra (tamaño x densidad de pantalla),
  *  así no se ve pixelada aunque la tarjeta sea ancha. Devuelve null si no hay trazos. */
-function crearMiniTinta(trazos) {
+function crearMiniTinta(trazos, { alinear = false } = {}) {
   if (!Array.isArray(trazos) || !trazos.length) return null;
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const t of trazos) for (const [x, y] of t.p) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
   if (!Number.isFinite(x0)) return null;
-  const pad = 0.015;
-  const w = Math.max(0.05, x1 - x0 + pad * 2), h = Math.max(0.05, y1 - y0 + pad * 2);
+  const pad = alinear ? 0 : 0.015;
+  const w = alinear ? 1 : Math.max(0.05, x1 - x0 + pad * 2), h = alinear ? Math.max(0.05, y1 + pad) : Math.max(0.05, y1 - y0 + pad * 2);
+  if (alinear) { x0 = 0; y0 = 0; }
   const c = document.createElement("canvas");
-  c.className = "nota-tinta-mini";
+  c.className = `nota-tinta-mini${alinear ? " nota-tinta-alineada" : ""}`;
   c.style.aspectRatio = `${Math.round(w * 1000)} / ${Math.round(h * 1000)}`;
   const MAX_PX = 2400;
   let pxActual = 0;

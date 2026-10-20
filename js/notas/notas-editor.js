@@ -83,8 +83,8 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const menuFiguras = document.createElement("div"); menuFiguras.className = "nt-figuras-menu nt-oculto"; menuFiguras.setAttribute("role", "menu"); menuFiguras.setAttribute("aria-label", tr("Figuras y stickers"));
   const listaStickers = document.createElement("div"); listaStickers.className = "nt-stickers-lista";
   const editarFigurasLabel=document.createElement("label"); editarFigurasLabel.className="nt-editar-figuras-toggle"; const editarFigurasInput=document.createElement("input"); editarFigurasInput.type="checkbox"; const editarFigurasTexto=document.createElement("span"); editarFigurasTexto.textContent=tr("Habilitar edición de figura"); editarFigurasLabel.append(editarFigurasInput,editarFigurasTexto); const eliminarFiguraBtn=document.createElement("button"); eliminarFiguraBtn.type="button"; eliminarFiguraBtn.className="nt-eliminar-figura nt-oculto"; eliminarFiguraBtn.textContent=tr("Eliminar figura seleccionada");
-  const btnSubirSticker = document.createElement("button"); btnSubirSticker.type = "button"; btnSubirSticker.className = "nt-sticker-subir"; btnSubirSticker.textContent = tr("Añadir sticker PNG"); btnSubirSticker.setAttribute("role", "menuitem");
-  const inputSticker = document.createElement("input"); inputSticker.type = "file"; inputSticker.accept = "image/png,.png"; inputSticker.hidden = true;
+  const btnSubirSticker = document.createElement("button"); btnSubirSticker.type = "button"; btnSubirSticker.className = "nt-sticker-subir"; btnSubirSticker.textContent = tr("Añadir sticker"); btnSubirSticker.setAttribute("role", "menuitem");
+  const inputSticker = document.createElement("input"); inputSticker.type = "file"; inputSticker.accept = "image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"; inputSticker.hidden = true;
   btnSubirSticker.onclick = () => inputSticker.click(); menuFiguras.append(editarFigurasLabel, eliminarFiguraBtn, btnSubirSticker, listaStickers, inputSticker);
   const botonesForma = [];
   for (const [modo, simbolo, nombre] of [["linea", "╱", "Línea recta"], ["flecha", "↗", "Flecha"], ["rectangulo", "▱", "Rectángulo"]]) {
@@ -484,7 +484,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   }
   inputSticker.onchange = async () => {
     const file = inputSticker.files?.[0]; inputSticker.value = ""; if (!file) return;
-    if (file.type !== "image/png" && !/\.png$/i.test(file.name)) { mostrarToast(tr("Elige una imagen PNG")); return; }
+    if (!/^image\/(png|jpeg|webp)$/i.test(file.type) && !/\.(png|jpe?g|webp)$/i.test(file.name)) { mostrarToast(tr("Elige una imagen PNG, JPG o WebP")); return; }
     let bitmap;
     try {
       bitmap = await createImageBitmap(file);
@@ -500,11 +500,48 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
         if (String(src).length <= 2_000_000) { resultado = { src, ancho, alto }; break; }
       }
       bitmap.close?.();
-      if (!resultado) throw new Error("El PNG sigue siendo demasiado pesado después de reducirlo");
+      if (!resultado) throw new Error("La imagen sigue siendo demasiado pesada después de reducirla");
       const sticker = guardarStickerNota({ nombre: file.name, ...resultado });
       pintarStickers(); insertarSticker(sticker); mostrarToast(tr("Sticker guardado en tu cuenta"));
-    } catch (error) { bitmap?.close?.(); mostrarToast(tr(error.message || "No se pudo guardar el sticker PNG")); }
+    } catch (error) { bitmap?.close?.(); mostrarToast(tr(error.message || "No se pudo guardar el sticker")); }
   };
+  let stickerActivo = null, menuSticker = null;
+  const aplicarTransformacionSticker = (img) => {
+    const rot = Number(img.dataset.rot) || 0, sx = img.dataset.flipH === "1" ? -1 : 1, sy = img.dataset.flipV === "1" ? -1 : 1;
+    const anchoNota = cuerpo.clientWidth || 700, x = (Number(img.dataset.moveX) || 0) * anchoNota, y = (Number(img.dataset.moveY) || 0) * anchoNota;
+    img.style.position = "relative"; img.style.zIndex = String(Number(img.dataset.z) || 0);
+    img.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg) scale(${sx},${sy})`;
+  };
+  if (typeof ResizeObserver === "function") { const roSticker = new ResizeObserver(() => cuerpo.querySelectorAll("img[data-nota-sticker]").forEach(aplicarTransformacionSticker)); roSticker.observe(cuerpo); }
+  const cerrarMenuSticker = () => { menuSticker?.remove(); menuSticker = null; document.removeEventListener("pointerdown", fueraMenuSticker, true); };
+  const fueraMenuSticker = (e) => { if (menuSticker && !menuSticker.contains(e.target)) cerrarMenuSticker(); };
+  const actualizarSticker = (img) => { aplicarTransformacionSticker(img); persistir(); guardarPasoHistorial("sticker"); };
+  const abrirMenuSticker = (img, x, y) => {
+    cerrarMenuSticker(); stickerActivo = img;
+    const menu = document.createElement("div"); menu.className = "nt-sticker-contexto"; menu.setAttribute("role", "menu");
+    Object.assign(menu.style, { position: "fixed", left: `${Math.max(8, Math.min(x, innerWidth - 230))}px`, top: `${Math.max(8, Math.min(y, innerHeight - 320))}px`, zIndex: "100050", display: "grid", gap: "4px", minWidth: "210px", padding: "9px", borderRadius: "14px", background: "var(--bg-card,#211e2d)", color: "inherit", boxShadow: "0 12px 32px #0009", border: "1px solid var(--border-glass,rgba(255,255,255,.18))" });
+    const item = (label, fn) => { const b = document.createElement("button"); b.type = "button"; b.textContent = tr(label); b.setAttribute("role", "menuitem"); Object.assign(b.style, { minHeight: "34px", border: "0", borderRadius: "9px", padding: "6px 9px", background: "transparent", color: "inherit", textAlign: "left", font: "inherit", cursor: "pointer" }); b.onclick = fn; menu.append(b); return b; };
+    item("Seleccionar", () => { img.classList.toggle("nt-sticker-seleccionado"); img.contentEditable = img.classList.contains("nt-sticker-seleccionado") ? "false" : "true"; });
+    item("Espejear horizontal", () => { img.dataset.flipH = img.dataset.flipH === "1" ? "0" : "1"; actualizarSticker(img); });
+    item("Espejear vertical", () => { img.dataset.flipV = img.dataset.flipV === "1" ? "0" : "1"; actualizarSticker(img); });
+    const rotacion = document.createElement("label"); rotacion.textContent = `${tr("Rotar")} ${Number(img.dataset.rot) || 0}°`; rotacion.style.cssText = "display:grid;gap:4px;padding:5px 8px;font-size:.82rem";
+    const rango = document.createElement("input"); rango.type = "range"; rango.min = "0"; rango.max = "359"; rango.value = String(Number(img.dataset.rot) || 0); rango.oninput = () => { img.dataset.rot = rango.value; rotacion.firstChild.textContent = `${tr("Rotar")} ${rango.value}°`; actualizarSticker(img); }; rotacion.append(rango); menu.append(rotacion);
+    item("Borrar", () => { img.remove(); cerrarMenuSticker(); persistir(); guardarPasoHistorial("texto"); });
+    item("Mover atrás", () => { img.dataset.z = String(Math.max(-100, (Number(img.dataset.z) || 0) - 1)); actualizarSticker(img); });
+    item("Mover adelante", () => { img.dataset.z = String(Math.min(100, (Number(img.dataset.z) || 0) + 1)); actualizarSticker(img); });
+    document.body.append(menu); menuSticker = menu; setTimeout(() => document.addEventListener("pointerdown", fueraMenuSticker, true), 0);
+  };
+  cuerpo.addEventListener("contextmenu", (e) => { const img = e.target.closest?.("img[data-nota-sticker]"); if (!img) return; e.preventDefault(); e.stopPropagation(); abrirMenuSticker(img, e.clientX, e.clientY); });
+  cuerpo.addEventListener("pointerdown", (e) => {
+    const img = e.target.closest?.("img[data-nota-sticker].nt-sticker-seleccionado"); if (!img || (e.button !== 0 && e.pointerType === "mouse")) return;
+    const r = img.getBoundingClientRect(); if (e.clientX > r.right - 20 && e.clientY > r.bottom - 20) return; // conserva el control nativo de resize
+    e.preventDefault(); const sx = e.clientX, sy = e.clientY, unidad = cuerpo.clientWidth || 700, ox = Number(img.dataset.moveX) || 0, oy = Number(img.dataset.moveY) || 0; let movio = false;
+    const mover = (ev) => { if (ev.pointerId !== e.pointerId) return; const dx = ev.clientX - sx, dy = ev.clientY - sy; if (Math.hypot(dx,dy) > 2) movio = true; img.dataset.moveX = String(Math.max(-3, Math.min(3, ox + dx / unidad))); img.dataset.moveY = String(Math.max(-3, Math.min(3, oy + dy / unidad))); aplicarTransformacionSticker(img); };
+    const soltar = (ev) => { if (ev.pointerId !== e.pointerId) return; window.removeEventListener("pointermove", mover, true); window.removeEventListener("pointerup", soltar, true); window.removeEventListener("pointercancel", soltar, true); if (movio) { persistir(); guardarPasoHistorial("texto"); } };
+    window.addEventListener("pointermove", mover, true); window.addEventListener("pointerup", soltar, true); window.addEventListener("pointercancel", soltar, true);
+  });
+  cuerpo.addEventListener("pointerup", (e) => { const img=e.target.closest?.("img[data-nota-sticker]"); if (!img) return; setTimeout(() => { const w=Math.round(parseFloat(img.style.width)||img.width),h=Math.round(parseFloat(img.style.height)||img.height); if(w>0&&h>0&&(w!==Number(img.getAttribute("width"))||h!==Number(img.getAttribute("height")))){img.setAttribute("width",String(w));img.setAttribute("height",String(h));persistir();guardarPasoHistorial("texto");} }, 0); });
+
   function aplicarEstadoEditor(s) {
     restaurandoHistorial = true;
     try {
@@ -598,6 +635,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     cerrarEditor();
   };
   modal.querySelector('[data-action="delete"]').onclick = () => {
+    if (eliminando) return;
     eliminando = true; // lo primero: desde aquí nada puede volver a guardar (y revivir) la nota
     clearTimeout(timer);
     try {

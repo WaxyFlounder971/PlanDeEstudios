@@ -219,8 +219,8 @@ function pintar(f) {
   renderizarHTMLNota(cuerpo, nota.contenido);
   enlazarChecks(cuerpo, nota);
   f.el.append(cuerpo);
-  const mini = crearMiniTinta(nota.tinta);
-  if (mini) f.el.append(mini);
+  const mini = crearMiniTinta(nota.tinta, { alinear: true });
+  if (mini) { cuerpo.classList.add("nota-composicion"); cuerpo.append(mini); const ajustar=()=>{cuerpo.style.minHeight="";cuerpo.style.minHeight=`${Math.max(cuerpo.scrollHeight,mini.getBoundingClientRect().height,40)}px`;}; ajustar(); if(typeof ResizeObserver==="function"){const ro=new ResizeObserver(ajustar);ro.observe(cuerpo);ro.observe(mini);} }
   return true;
 }
 
@@ -242,7 +242,7 @@ function pintarPiP(id, win) {
   else hoja.append(barra);
   const cuerpo = doc.createElement("div"); cuerpo.className = "nota-preview nt-flot-cuerpo";
   renderizarHTMLNota(cuerpo, nota.contenido); enlazarChecks(cuerpo, nota, () => window.dispatchEvent(new Event("notas:actualizadas-ui"))); hoja.append(cuerpo);
-  const mini = crearMiniTinta(nota.tinta); if (mini) hoja.append(doc.adoptNode(mini));
+  const mini = crearMiniTinta(nota.tinta, { alinear: true }); if (mini) { cuerpo.classList.add("nota-composicion"); cuerpo.append(doc.adoptNode(mini)); const ajustar=()=>{cuerpo.style.minHeight="";cuerpo.style.minHeight=`${Math.max(cuerpo.scrollHeight,mini.getBoundingClientRect().height,40)}px`;}; ajustar(); if(typeof win.ResizeObserver==="function"){const ro=new win.ResizeObserver(ajustar);ro.observe(cuerpo);ro.observe(mini);} }
   doc.body.replaceChildren(hoja);
 }
 
@@ -260,8 +260,9 @@ async function abrirPiP(id) {
       win.document.head.append(copia);
     }
     const estilo = win.document.createElement("style");
-    estilo.textContent = `html,body{margin:0;width:100%;height:100%;overflow:auto;background:#171923;color:#f7f7f7;font:14px system-ui,sans-serif}.nt-pip-nota{box-sizing:border-box;display:flex;flex-direction:column;gap:8px;min-height:100%;padding:10px 14px;background:var(--nt-nota,#fff594);border-radius:14px;overflow:auto;overflow-wrap:anywhere}.nt-pip-nota .nt-flot-barra{display:flex;align-items:center;gap:6px;position:sticky;top:0;background:inherit}.nt-pip-nota .nt-flot-barra>*:first-child{margin-right:auto}.nt-pip-nota .nt-flot-btn{display:inline-grid;place-items:center;width:34px;height:34px;border:0;border-radius:50%;background:rgba(0,0,0,.1);color:inherit;cursor:pointer}.nt-pip-nota .nt-flot-btn .nt-ico{width:18px;height:18px}.nt-pip-nota .nota-preview{max-height:none;overflow:visible}.nt-pip-nota .nota-tinta-mini{width:100%;height:auto;margin-top:4px}`;
+    estilo.textContent = `html,body{box-sizing:border-box;margin:0;width:100%;height:100%;min-width:0;min-height:100%;overflow:auto;background:#171923;color:#f7f7f7;font:14px system-ui,sans-serif}.nt-pip-nota{box-sizing:border-box;display:flex;flex-direction:column;gap:8px;width:100%;min-width:0;min-height:100%;padding:10px 14px;background:var(--nt-nota,#fff594);border-radius:14px;overflow:auto;overflow-wrap:anywhere}.nt-pip-nota .nt-flot-barra{display:flex;align-items:center;gap:6px;position:sticky;top:0;background:inherit}.nt-pip-nota .nt-flot-barra>*:first-child{margin-right:auto}.nt-pip-nota .nt-flot-btn{display:inline-grid;place-items:center;width:34px;height:34px;border:0;border-radius:50%;background:rgba(0,0,0,.1);color:inherit;cursor:pointer}.nt-pip-nota .nt-flot-btn .nt-ico{width:18px;height:18px}.nt-pip-nota .nota-preview{max-height:none;overflow:visible}.nt-pip-nota .nota-tinta-mini.nota-tinta-alineada{position:absolute;left:0;top:0;width:100%;height:auto;margin:0}`;
     win.document.head.append(estilo);
+    win.addEventListener("resize", () => { if (!win.closed) { win.document.documentElement.style.width = "100%"; win.document.body.style.width = "100%"; } });
     ventanasPiP.set(id, win); win.addEventListener("pagehide", () => { if (ventanasPiP.get(id) === win) ventanasPiP.delete(id); }, { once: true });
     pintarPiP(id, win); return win;
 }

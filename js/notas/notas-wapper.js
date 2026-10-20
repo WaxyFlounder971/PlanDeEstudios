@@ -85,7 +85,7 @@ async function crearImagenNota({ titulo = "", contenido = "", color = "#fff594",
       texto.push({ tipo: "salto", espacio: tag.startsWith("h") ? 12 : 5 }); return;
     }
     if (tag === "input" && nodo.type === "checkbox") { texto.push({ tipo: "casilla", checked: nodo.checked || nodo.hasAttribute("checked") }); return; }
-    if (tag === "img" && nodo.hasAttribute("data-nota-sticker")) { texto.push({ tipo: "imagen", src: nodo.src, ancho: Number(nodo.getAttribute("width")) || 220, alto: Number(nodo.getAttribute("height")) || 160 }); return; }
+    if (tag === "img" && nodo.hasAttribute("data-nota-sticker")) { texto.push({ tipo: "imagen", src: nodo.src, ancho: Number(nodo.getAttribute("width")) || 220, alto: Number(nodo.getAttribute("height")) || 160, rot: Number(nodo.dataset.rot) || 0, flipH: nodo.dataset.flipH === "1", flipV: nodo.dataset.flipV === "1", moveX: Number(nodo.dataset.moveX) || 0, moveY: Number(nodo.dataset.moveY) || 0, z: Number(nodo.dataset.z) || 0 }); return; }
     const estilo = { "strong": "bold", "b": "bold", "em": "italic", "i": "italic", "u": "underline" }[tag];
     if (estilo) texto.push({ tipo: "estilo", estilo, valor: true });
     [...nodo.childNodes].forEach((hijo) => recorrer(hijo, nivelLista));
@@ -99,6 +99,7 @@ async function crearImagenNota({ titulo = "", contenido = "", color = "#fff594",
   const bloques = []; let y = pad + 26;
   for (const linea of tituloLineas) { bloques.push({ tipo: "titulo", value: linea, y }); y += 43; }
   y += 15;
+  const inicioCuerpo = y;
   let bold = false, italic = false, underline = false, colorTextoActual = null, cita = 0, item = null, linea = "", x = pad, lineH = 30;
   const fontActual = () => `${italic ? "italic " : ""}${bold ? "700" : "400"} 23px system-ui, sans-serif`;
   const colorActual = () => /^#[\da-f]{6}$/i.test(colorTextoActual || "") ? colorTextoActual : tintaTexto;
@@ -141,8 +142,9 @@ async function crearImagenNota({ titulo = "", contenido = "", color = "#fff594",
   }
   vaciar();
   const maxY = trazos.flatMap((t) => t.p || []).reduce((m, p) => Math.max(m, Number(p[1]) || 0), 0);
-  const tintaY = y + 14, tintaH = trazos.length ? Math.max(120, Math.min(1400, maxY * maxW + 40)) : 0;
-  const h = Math.max(260, tintaY + tintaH + pad + (marcaAgua ? 26 : 0));
+  const tintaY = inicioCuerpo, tintaBottom = trazos.length ? tintaY + maxY * maxW + 24 : 0;
+  const imagenBottom = bloques.filter((b) => b.tipo === "imagen").reduce((m,b) => Math.max(m,b.y + b.moveY * maxW + b.alto + 16), 0);
+  const h = Math.max(260, y + pad + (marcaAgua ? 26 : 0), tintaBottom + pad + (marcaAgua ? 26 : 0), imagenBottom + pad + (marcaAgua ? 26 : 0));
   c.width = w; c.height = h;
   ctx.fillStyle = /^#[\da-f]{6}$/i.test(color) ? color : "#fff594"; ctx.fillRect(0, 0, w, h);
   const tintaTexto = /^#[\da-f]{6}$/i.test(colorTexto) ? colorTexto : "#172033";
@@ -157,7 +159,7 @@ async function crearImagenNota({ titulo = "", contenido = "", color = "#fff594",
     if (bloque.tipo === "texto") { ctx.fillStyle = bloque.color || tintaTexto; ctx.font = bloque.font; ctx.fillText(bloque.value, bloque.x, bloque.y, w - pad - bloque.x); if (bloque.underline) { const width = Math.min(ctx.measureText(bloque.value).width, w - pad - bloque.x); ctx.strokeStyle = bloque.color || tintaTexto; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(bloque.x, bloque.y + 3); ctx.lineTo(bloque.x + width, bloque.y + 3); ctx.stroke(); } continue; }
     if (bloque.tipo === "marcador") { ctx.fillStyle = /^#[\da-f]{6}$/i.test(bloque.color || "") ? bloque.color : tintaTexto; ctx.font = "23px system-ui, sans-serif"; ctx.fillText(bloque.lista === "ol" ? `${bloque.numero}.` : "•", bloque.x, bloque.y); continue; }
     if (bloque.tipo === "casilla") { ctx.strokeStyle = tintaTexto; ctx.lineWidth = 2; ctx.strokeRect(bloque.x, bloque.y, 17, 17); if (bloque.checked) { ctx.beginPath(); ctx.moveTo(bloque.x + 3, bloque.y + 9); ctx.lineTo(bloque.x + 7, bloque.y + 13); ctx.lineTo(bloque.x + 14, bloque.y + 4); ctx.stroke(); } continue; }
-    if (bloque.tipo === "imagen") { const img = imagenes.get(bloque.src); if (img?.complete && img.naturalWidth) ctx.drawImage(img, bloque.x, bloque.y, bloque.ancho, bloque.alto); continue; }
+    if (bloque.tipo === "imagen") { const img = imagenes.get(bloque.src); if (img?.complete && img.naturalWidth) { ctx.save(); ctx.translate(bloque.x + bloque.moveX * maxW + bloque.ancho / 2, bloque.y + bloque.moveY * maxW + bloque.alto / 2); ctx.rotate((bloque.rot || 0) * Math.PI / 180); ctx.scale(bloque.flipH ? -1 : 1, bloque.flipV ? -1 : 1); ctx.drawImage(img, -bloque.ancho / 2, -bloque.alto / 2, bloque.ancho, bloque.alto); ctx.restore(); } continue; }
   }
   if (trazos.length) { ctx.save(); ctx.translate(pad, tintaY); dibujarTrazos(ctx, trazos, maxW, 0, 1); ctx.restore(); }
   if (marcaAgua) { ctx.globalAlpha = .09; ctx.fillStyle = "#172033"; ctx.font = "500 15px system-ui, sans-serif"; ctx.textAlign = "right"; ctx.fillText("Wapper", w - pad, h - 22); ctx.globalAlpha = 1; ctx.textAlign = "left"; }

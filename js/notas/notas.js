@@ -20,6 +20,7 @@ import { ICONOS, el, contraste, colorTextoNota, botonIcono, enlazarChecks } from
 const tr = (x) => t(x);
 let seleccion = new Set();
 let enPapelera = false;
+const eliminacionesEnCurso = new Set();
 
 function normalizar(s) { return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase(); }
 
@@ -37,7 +38,8 @@ function notasVisibles() {
 
 // Orden de la lista: las fijadas van primero en el orden que les diste (arrastrando); las demás por fecha, ascendente o descendente.
 function comparadorNotas() {
-  const { dir = "desc" } = opcionesNotas().orden || {}; const campo = "modificada";
+  const orden = opcionesNotas().orden || {}; const { dir = "desc" } = orden; const campo = "modificada";
+  if (orden.modo === "manual" && Array.isArray(orden.ids)) { const indice = new Map(orden.ids.map((id, i) => [id, i])); return (a, b) => (indice.get(a.id) ?? 1e9) - (indice.get(b.id) ?? 1e9) || (b.modificada_en || 0) - (a.modificada_en || 0); }
   const valor = (n) => (campo === "creada" ? n.creada_en || 0 : campo === "vence" ? (n.vence_en ? Date.parse(`${n.vence_en}T12:00:00`) : null) : n.modificada_en || 0);
   return (a, b) => {
     if (a.fijada !== b.fijada) return Number(b.fijada) - Number(a.fijada);
@@ -92,29 +94,31 @@ function clonarNota(nota) {
   renderizarNotas();
 }
 async function eliminarConConfirmacion(nota) {
-  if (await confirmarNota(tr("¿Enviar esta nota a la Papelera?"), { titulo: tr("Eliminar nota"), textoConfirmar: tr("Eliminar"), claseConfirmar: "btn-danger" })) {
-    conHistorial("Eliminar nota", [nota.id], () => marcarEliminada(nota));
-    renderizarNotas();
-  }
+  if (!nota?.id || eliminacionesEnCurso.has(nota.id)) return;
+  eliminacionesEnCurso.add(nota.id);
+  try {
+    if (!await confirmarNota(tr("¿Enviar esta nota a la Papelera?"), { titulo: tr("Eliminar nota"), textoConfirmar: tr("Eliminar"), claseConfirmar: "btn-danger" })) return;
+    const actual = notasActuales().find((n) => n.id === nota.id); if (!actual || actual.eliminada_en) return;
+    conHistorial("Eliminar nota", [actual.id], () => marcarEliminada(actual));
+    seleccion.delete(actual.id); renderizarNotas();
+  } finally { eliminacionesEnCurso.delete(nota.id); }
 }
 const compartirNota = async (nota, ancla = null) => {
   const menu=document.createElement("div");menu.className="nt-share-menu-card";menu.setAttribute("role","dialog");menu.setAttribute("aria-label",tr("Compartir nota"));
   const titulo=el("strong","",tr("Compartir nota"));menu.append(titulo);
-  const acciones=[["Compartir texto",async()=>{if(await compartirNotaFuera(textoDe(nota),nota.titulo))registrarAnaliticaUso("notas","Compartir nota");}], ["Compartir imagen",async()=>{const r=await compartirImagenNota({titulo:nota.titulo||"",contenido:nota.contenido||"",color:nota.color||COLOR_DEFECTO,colorTexto:nota.color_texto||colorTextoNota(nota,nota.color||COLOR_DEFECTO),trazos:nota.tinta||[],marcaAgua:opcionesNotas().sin_marca_agua!==true});mostrarToast(tr(r==="compartida"?"Imagen compartida":"Imagen descargada"));}], ["Descargar Wapper Note (.wapper)",async()=>descargarWapper(nota)]];
+  const acciones=[["Compartir texto",async()=>{if(await compartirNotaFuera(textoDe(nota),nota.titulo))registrarAnaliticaUso("notas","Compartir nota");}], ["Compartir imagen",async()=>{const r=await compartirImagenNota({titulo:nota.titulo||"",contenido:nota.contenido||"",color:nota.color||COLOR_DEFECTO,colorTexto:nota.color_texto||colorTextoNota(nota,nota.color||COLOR_DEFECTO),trazos:nota.tinta||[],marcaAgua:opcionesNotas().sin_marca_agua!==true});mostrarToast(tr(r==="compartida"?"Imagen compartida":"Imagen descargada"));}], ["Descargar Wapper Note",async()=>descargarWapper(nota)]];
   for(const [label,run] of acciones){const b=el("button","",tr(label));b.type="button";b.onclick=async()=>{try{await run();}catch(e){if(e.name!=="AbortError")mostrarToast(tr("No se pudo compartir la nota"));}cerrar();};menu.append(b);}
   const cerrar=()=>{menu.remove();document.removeEventListener("pointerdown",fuera,true);};const fuera=e=>{if(!menu.contains(e.target)&&!ancla?.contains(e.target))cerrar();};
   const r=ancla?.getBoundingClientRect();Object.assign(menu.style,{position:"fixed",left:`${Math.max(8,Math.min(r?.left||innerWidth/2,innerWidth-280))}px`,top:`${Math.max(8,Math.min((r?.bottom||innerHeight/2)+6,innerHeight-190))}px`,zIndex:"100010"});document.body.append(menu);setTimeout(()=>document.addEventListener("pointerdown",fuera,true),0);
 };
 const wapperNota = (nota) => conHistorial("Enviar a Wapper", [nota.id], () => enviarNotaAWapper(nota, textoDe(nota)));
 function moverFijada(nota, delta) {
-  const pins = notasActuales().filter((n) => n.fijada).sort((a, b) => (a.orden_fijada || 0) - (b.orden_fijada || 0));
-  const i = pins.indexOf(nota), j = Math.max(0, Math.min(pins.length - 1, i + delta));
-  if (i === j) return;
-  conHistorial("Reordenar notas fijadas", pins.map((n) => n.id), () => {
-    [pins[i], pins[j]] = [pins[j], pins[i]];
-    pins.forEach((n, k) => { n.orden_fijada = k + 1; n._mod_manual = true; guardarNota(n); });
-  });
-  renderizarNotas();
+  const lista = notasActuales().filter((n) => !n.eliminada_en).sort(comparadorNotas());
+  const i = lista.findIndex((n) => n.id === nota.id), j = Math.max(0, Math.min(lista.length - 1, i + delta));
+  if (i < 0 || i === j) return;
+  [lista[i], lista[j]] = [lista[j], lista[i]];
+  const o = opcionesNotas(); o.orden = { ...(o.orden || {}), campo: "modificada", modo: "manual", ids: lista.map((n) => n.id) };
+  sellarTimestamp(estado.datos.configuracion); marcarCambioPendiente(); renderizarNotas();
 }
 
 function contenedorScroll(nodo) {
@@ -155,7 +159,7 @@ function iniciarArrastre(e, card) {
   const esLista = grid.classList.contains("notas-lista");
   const acomodar = () => {
     ghost.style.left = `${ultimo.clientX - dx}px`; ghost.style.top = `${ultimo.clientY - dy}px`;
-    const bajo = document.elementsFromPoint(ultimo.clientX, ultimo.clientY).find((n) => n !== card && n.matches?.('.nota-card[data-fijada="1"]') && n.parentElement === grid);
+    const bajo = document.elementsFromPoint(ultimo.clientX, ultimo.clientY).find((n) => n !== card && n.matches?.('.nota-card') && n.parentElement === grid);
     if (!bajo) return;
     const b = bajo.getBoundingClientRect();
     const antes = esLista ? ultimo.clientY < b.top + b.height / 2 : ultimo.clientX < b.left + b.width / 2;
@@ -184,10 +188,13 @@ function iniciarArrastre(e, card) {
   const soltar = (ev) => {
     if (terminado || (ev && ev.pointerId !== id)) return;
     limpiar();
-    const ids = [...grid.querySelectorAll('.nota-card[data-fijada="1"]')].map((c) => c.dataset.id);
-    conHistorial("Reordenar notas fijadas", ids, () => {
-      ids.forEach((nid, i) => { const n = notasActuales().find((x) => x.id === nid); if (n && n.orden_fijada !== i + 1) { n.orden_fijada = i + 1; n._mod_manual = true; guardarNota(n); } });
-    });
+    const visibles = [...document.querySelectorAll("#seccion-notas .nota-card")].map((c) => c.dataset.id);
+    const o = opcionesNotas();
+    const base = notasActuales().filter((n) => !n.eliminada_en).sort(comparadorNotas()).map((n) => n.id);
+    const setVisibles = new Set(visibles); let cursor = 0;
+    const ids = base.map((id) => setVisibles.has(id) ? (visibles[cursor++] || id) : id);
+    o.orden = { ...(o.orden || {}), campo: "modificada", modo: "manual", ids };
+    sellarTimestamp(estado.datos.configuracion); marcarCambioPendiente();
     renderizarNotas();
   };
   const cancelar = () => { if (terminado) return; limpiar(); renderizarNotas(); };
@@ -375,7 +382,7 @@ function construirTarjeta(nota) {
 
   // Arriba: insignias (vencimiento, pendientes, Wapper, flotante) a la izquierda y el asa de arrastre (solo fijadas) a la derecha.
   let asa = null;
-  if (nota.fijada) {
+  if (!enPapelera) {
     asa = el("button", "nota-icon-action nota-drag-handle");
     asa.type = "button"; asa.innerHTML = ICONOS.asa; asa.title = tr("Arrastrar para reordenar"); asa.setAttribute("aria-label", asa.title);
     asa.onclick = (e) => e.stopPropagation();
@@ -398,7 +405,7 @@ function construirTarjeta(nota) {
     e.stopPropagation();
     const abierta=!card.classList.contains("expandida"), fila=card.getBoundingClientRect().top;
     const vecinos=[...card.parentElement.querySelectorAll(":scope > .nota-card")].filter(c=>Math.abs(c.getBoundingClientRect().top-fila)<5);
-    for(const c of vecinos){c.classList.toggle("expandida",abierta);const b=c.querySelector(".nota-expand");if(!b)continue;const label=tr(abierta?"Contraer":"Expandir");b.innerHTML=abierta?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';b.title=label;b.setAttribute("aria-label",label);}
+    for(const c of vecinos){c.classList.toggle("expandida",abierta);c._ajustarComposicion?.();const b=c.querySelector(".nota-expand");if(!b)continue;const label=tr(abierta?"Contraer":"Expandir");b.innerHTML=abierta?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';b.title=label;b.setAttribute("aria-label",label);}
   };
 
   // Fila superior: insignias a la izquierda, asa de arrastre a la derecha (solo si hay algo que mostrar).
@@ -434,14 +441,18 @@ function construirTarjeta(nota) {
   );
   foot.append(acciones);
 
-  const mini = crearMiniTinta(nota.tinta);
-  const dibujoWrap = mini ? el("div", "nota-tinta-wrap") : null;
-  if (dibujoWrap) dibujoWrap.append(mini);
-  card.append(...[top, h, preview, dibujoWrap, expand, foot].filter(Boolean));
+  const mini = crearMiniTinta(nota.tinta, { alinear: true });
+  const composicion = el("div", "nota-composicion"); composicion.append(preview);
+  if (mini) composicion.append(mini);
+  card.append(...[top, h, composicion, expand, foot].filter(Boolean));
+  const ajustarComposicion = () => { const alto = Math.max(preview.scrollHeight, mini?.getBoundingClientRect().height || 0, 32); composicion.style.height = `${card.classList.contains("expandida") ? alto : Math.min(220, alto)}px`; };
+  card._ajustarComposicion = ajustarComposicion;
+  if (typeof ResizeObserver === "function" && mini) { const ro = new ResizeObserver(ajustarComposicion); ro.observe(preview); ro.observe(mini); }
   requestAnimationFrame(() => {
-    const textoLargo = preview.scrollHeight > preview.clientHeight + 1;
-    const dibujoLargo = !!dibujoWrap && mini.getBoundingClientRect().height > 220;
-    const soloDibujo = !!dibujoWrap && !textoPlanoNota(nota.contenido).trim();
+    ajustarComposicion();
+    const textoLargo = preview.scrollHeight > 220;
+    const dibujoLargo = !!mini && mini.getBoundingClientRect().height > 220;
+    const soloDibujo = !!mini && !textoPlanoNota(nota.contenido).trim();
     const requiereFlecha = textoLargo || dibujoLargo || soloDibujo;
     expand.classList.toggle("nt-oculto", !requiereFlecha);
     if (vistaAbierta) { expand.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>'; expand.title = tr("Contraer"); expand.setAttribute("aria-label", expand.title); }
@@ -658,9 +669,10 @@ function renderizarNotas() {
   };
   const derecha = el("div", "nt-filtros-der");
   if (notasActuales().filter((n) => !n.eliminada_en).length > 1) {
-    const dir = segmentado([["desc", "↓"], ["asc", "↑"]], ordenActual.dir || "desc", tr("Dirección del orden"), (v) => guardarOrden({ dir: v }));
+    const dir = segmentado([["desc", "↓"], ["asc", "↑"]], ordenActual.dir || "desc", tr("Dirección del orden"), (v) => guardarOrden({ dir: v, modo: "fecha" }));
     dir.querySelectorAll("[role=radio]").forEach((b, i) => { const n = tr(i === 0 ? "Descendente" : "Ascendente"); b.title = n; b.setAttribute("aria-label", n); });
     derecha.append(dir);
+    if (ordenActual.modo === "manual") derecha.append(el("span", "nt-orden-personalizado", tr("Orden personalizado")));
   }
   derecha.append(selectorVista(root));
   filtros.append(derecha);
@@ -675,9 +687,10 @@ function renderizarNotas() {
     const grupo = (xs, extra) => { const g = el("div", `${claseGrid} ${extra}`); xs.forEach((n) => g.append(construirTarjeta(n))); return g; };
     const fijadas = items.filter((n) => n.fijada), otras = items.filter((n) => !n.fijada);
     const nodos = [];
-    if (fijadas.length) nodos.push(grupo(fijadas, "notas-grid-fijadas"));
-    if (fijadas.length && otras.length) { const hr = el("hr", "nt-divisor"); hr.setAttribute("aria-hidden", "true"); nodos.push(hr); }
-    if (otras.length) nodos.push(grupo(otras, "notas-grid-otras"));
+    if (opcionesNotas().orden?.modo === "manual") { if (items.length) nodos.push(grupo(items, "notas-grid-personalizado")); }
+    else { if (fijadas.length) nodos.push(grupo(fijadas, "notas-grid-fijadas"));
+      if (fijadas.length && otras.length) { const hr = el("hr", "nt-divisor"); hr.setAttribute("aria-hidden", "true"); nodos.push(hr); }
+      if (otras.length) nodos.push(grupo(otras, "notas-grid-otras")); }
     if (!items.length) {
       const vacio = el("div", "glass-card notas-vacio stack");
       vacio.innerHTML = `<div aria-hidden="true">🗒️</div><h2>${tr("Tus ideas, siempre a mano")}</h2><p>${tr("Toca + para tu primera nota")}</p>`;

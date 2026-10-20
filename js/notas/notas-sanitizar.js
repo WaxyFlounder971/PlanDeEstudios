@@ -41,6 +41,10 @@ function sanearHTMLNota(html = "") {
         if (Number.isFinite(ancho) && ancho > 0 && ancho <= 2048) imagen.setAttribute("width", String(ancho));
         if (Number.isFinite(alto) && alto > 0 && alto <= 2048) imagen.setAttribute("height", String(alto));
         imagen.setAttribute("data-nota-sticker", "1");
+        for (const nombre of ["data-rot", "data-flip-h", "data-flip-v", "data-move-x", "data-move-y", "data-z"]) {
+          const v = Number(hijo.getAttribute(nombre));
+          if (Number.isFinite(v) && Math.abs(v) <= (nombre === "data-move-x" || nombre === "data-move-y" ? 3 : 2000)) imagen.setAttribute(nombre, String(nombre === "data-rot" ? ((v % 360) + 360) % 360 : v));
+        }
         hijo.replaceWith(imagen);
         continue;
       }
@@ -94,7 +98,12 @@ function renderizarHTMLNota(contenedor, html) {
     img.style.resize = "both";
     img.style.overflow = "auto";
     img.style.objectFit = "contain";
+    const rot = Number(img.dataset.rot) || 0, sx = img.dataset.flipH === "1" ? -1 : 1, sy = img.dataset.flipV === "1" ? -1 : 1;
+    const base = contenedor.clientWidth || 700, x = (Number(img.dataset.moveX) || 0) * base, y = (Number(img.dataset.moveY) || 0) * base;
+    img.style.position = "relative"; img.style.zIndex = String(Number(img.dataset.z) || 0);
+    img.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg) scale(${sx},${sy})`;
   });
+  if (typeof ResizeObserver === "function") { const stickers = [...contenedor.querySelectorAll("img[data-nota-sticker]")]; const actualizar = () => { if (!contenedor.isConnected) { ro.disconnect(); return; } const base = contenedor.clientWidth || 700; stickers.forEach((img) => { const x = (Number(img.dataset.moveX) || 0) * base, y = (Number(img.dataset.moveY) || 0) * base; img.style.transform = `translate(${x}px,${y}px) rotate(${Number(img.dataset.rot) || 0}deg) scale(${img.dataset.flipH === "1" ? -1 : 1},${img.dataset.flipV === "1" ? -1 : 1})`; }); }; const ro = new ResizeObserver(actualizar); ro.observe(contenedor); }
   contenedor.querySelectorAll("a").forEach((a) => {
     const url = a.getAttribute("href") || "";
     if (/^https?:\/\//i.test(url)) { a.rel = "noopener noreferrer"; a.target = "_blank"; }
