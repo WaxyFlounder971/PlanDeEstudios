@@ -33,6 +33,12 @@ function contraste(hex) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.179 ? "#172033" : "#ffffff";
 }
 
+/** Color de letra de una nota: el que el usuario eligió (color_texto) o, si no, el de mayor contraste con el fondo. */
+function colorTextoNota(nota, fondo) {
+  const c = String(nota?.color_texto || "");
+  return /^#[\da-f]{6}$/i.test(c) ? c : contraste(fondo);
+}
+
 /** Botón de icono (SVG o emoji) con título accesible. */
 function botonIcono({ icono, titulo, clase = "", onclick, activo = false }) {
   const b = el("button", `nota-icon-action ${clase}`.trim());
@@ -63,4 +69,4 @@ function enlazarChecks(preview, nota, alCambiar) {
   });
 }
 
-export { ICONOS, el, contraste, botonIcono, enlazarChecks };
+export { ICONOS, el, contraste, colorTextoNota, botonIcono, enlazarChecks };

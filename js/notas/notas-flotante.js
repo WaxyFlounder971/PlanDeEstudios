@@ -9,7 +9,7 @@ import { notasActuales, resolverColorNota, COLOR_DEFECTO } from "./notas-datos.j
 import { renderizarHTMLNota } from "./notas-sanitizar.js";
 import { crearMiniTinta } from "./notas-tinta.js";
 import { abrirEditorNota } from "./notas-editor.js";
-import { ICONOS, el, contraste, botonIcono, enlazarChecks } from "./notas-ui.js";
+import { ICONOS, el, contraste, colorTextoNota, botonIcono, enlazarChecks } from "./notas-ui.js";
 import { velocidad, limitarVel, esLanzamiento, limites, acotar, pasoInercia } from "./notas-fisica.js";
 import "./notas-estilos.js";
 
@@ -43,7 +43,7 @@ function abrirSticky(nota, origen) {
   const overlay = el("div", "nt-sticky-overlay");
   const hoja = el("article", "nt-sticky");
   hoja.style.setProperty("--nt-nota", color);
-  hoja.style.color = contraste(color);
+  hoja.style.color = colorTextoNota(nota, color);
   hoja.setAttribute("role", "dialog");
   hoja.setAttribute("aria-modal", "true");
   hoja.setAttribute("aria-label", nota.titulo || tr("Nota"));
@@ -202,7 +202,7 @@ function pintar(f) {
   if (!nota) return false;
   const color = resolverColorNota(nota.color || COLOR_DEFECTO);
   f.el.style.setProperty("--nt-nota", color);
-  f.el.style.color = contraste(color);
+  f.el.style.color = colorTextoNota(nota, color);
   f.el.setAttribute("aria-label", nota.titulo || tr("Nota flotante"));
   f.el.replaceChildren();
 

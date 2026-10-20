@@ -14,7 +14,7 @@ import { procesarCompartidos, compartirNotaFuera } from "./notas-compartir.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { conHistorial, registrarCambio, deshacer, rehacer } from "./notas-historial.js";
 import { abrirSticky, alternarFlotante, estaFlotando, restaurarFlotantes } from "./notas-flotante.js";
-import { ICONOS, el, contraste, botonIcono, enlazarChecks } from "./notas-ui.js";
+import { ICONOS, el, contraste, colorTextoNota, botonIcono, enlazarChecks } from "./notas-ui.js";
 
 const tr = (x) => t(x);
 let seleccion = new Set();
@@ -359,7 +359,7 @@ function construirTarjeta(nota) {
   if (nota.ancho > 1) card.dataset.ancho = String(nota.ancho);
   const colorTarjeta = resolverColorNota(nota.color || COLOR_DEFECTO);
   card.style.setProperty("--nota-color", colorTarjeta);
-  card.style.setProperty("color", contraste(colorTarjeta), "important");
+  card.style.setProperty("color", colorTextoNota(nota, colorTarjeta), "important");
   card.classList.toggle("seleccionada", seleccion.has(nota.id));
   card.classList.toggle("nota-flotando", estaFlotando(nota.id));
 

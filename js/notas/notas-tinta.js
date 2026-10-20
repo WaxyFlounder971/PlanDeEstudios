@@ -12,9 +12,39 @@ const ESPERA_FORMA = 550;     // ms quieto para convertir el trazo en figura lim
 const QUIETO = 0.007;         // movimiento (relativo) que reinicia la espera
 const MAX_HISTORIAL = 100;
 
+/** Suavizado por longitud de arco: cada punto se promedia con sus vecinos cercanos (peso triangular).
+ *  Se aplica al DIBUJAR (no a lo guardado), así también suaviza las notas que ya tenías. Cacheado por trazo. */
+const VENTANA_SUAVE = 0.007, PASADAS_SUAVE = 2;
+const cacheSuave = new WeakMap();
+function puntosSuaves(t) {
+  const p = t.p;
+  if (!p || p.length < 4) return p;
+  const c = cacheSuave.get(p);
+  if (c && c.n === p.length) return c.out;
+  let a = p;
+  for (let k = 0; k < PASADAS_SUAVE; k++) {
+    const n = a.length, s = [0];
+    for (let i = 1; i < n; i++) s.push(s[i - 1] + Math.hypot(a[i][0] - a[i - 1][0], a[i][1] - a[i - 1][1]));
+    const tot = s[n - 1], b = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const w = Math.min(VENTANA_SUAVE, s[i], tot - s[i]); // los extremos se quedan donde están
+      if (w <= 0) { b[i] = a[i]; continue; }
+      let sx = 0, sy = 0, sp = 0, sw = 0, spw = 0;
+      for (let j = i; j >= 0 && s[i] - s[j] <= w; j--) { const k2 = 1 - (s[i] - s[j]) / w; sx += a[j][0] * k2; sy += a[j][1] * k2; sw += k2; if (a[j][2] != null) { sp += a[j][2] * k2; spw += k2; } }
+      for (let j = i + 1; j < n && s[j] - s[i] <= w; j++) { const k2 = 1 - (s[j] - s[i]) / w; sx += a[j][0] * k2; sy += a[j][1] * k2; sw += k2; if (a[j][2] != null) { sp += a[j][2] * k2; spw += k2; } }
+      const q = [sx / sw, sy / sw];
+      if (spw) q.push(sp / spw);
+      b[i] = q;
+    }
+    a = b;
+  }
+  cacheSuave.set(p, { n: p.length, out: a });
+  return a;
+}
+
 /** Dibuja un trazo: curvas suaves por puntos medios; con presión, grosor variable; figuras con líneas rectas. */
 function dibujarTrazo(ctx, t, ancho, dy, gmin) {
-  const p = t.p;
+  const p = t.f ? t.p : puntosSuaves(t);
   if (!p || !p.length) return;
   const base = Math.max(gmin, t.w * ancho);
   const X = (i) => p[i][0] * ancho, Y = (i) => p[i][1] * ancho - dy;

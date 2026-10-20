@@ -1,4 +1,4 @@
-// Reconocimiento de figuras para la tinta: círculo, elipse, cuadrado, rectángulo, triángulo, estrella y pentagrama.
+// Reconocimiento de figuras para la tinta: círculo, elipse, cuadrado, rectángulo, triángulo, estrella, pentagrama y corazón.
 // Entrada: puntos [[x, y, ...], ...] normalizados. Salida: puntos de la figura limpia, o null si no parece ninguna.
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 const longitud = (p) => { let s = 0; for (let i = 1; i < p.length; i++) s += dist(p[i - 1], p[i]); return s; };
@@ -171,6 +171,28 @@ function candidatoEstrella(pts, diag) {
   return out;
 }
 
+// Corazón: curva clásica normalizada a [0,1]x[0,1] (punta hacia abajo), que luego se estira al recuadro del trazo.
+const PLANTILLA_CORAZON = (() => {
+  const q = [];
+  for (let k = 0; k <= 120; k++) {
+    const t = (2 * Math.PI * k) / 120;
+    q.push([16 * Math.sin(t) ** 3, -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t))]); // y hacia abajo
+  }
+  const xs = q.map((v) => v[0]), ys = q.map((v) => v[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  return q.map((v) => [(v[0] - x0) / (x1 - x0), (v[1] - y0) / (y1 - y0)]);
+})();
+
+function candidatoCorazon(pts) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const q of pts) { if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]; if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1]; }
+  const w = x1 - x0, h = y1 - y0;
+  if (w <= 0 || h <= 0) return null;
+  const asp = w / h;
+  if (asp < 0.7 || asp > 1.5) return null;
+  return PLANTILLA_CORAZON.map(([u, v]) => [x0 + u * w, y0 + v * h]);
+}
+
 function reconocerForma(p) {
   if (!Array.isArray(p) || p.length < 12) return null;
   const L = longitud(p);
@@ -181,17 +203,20 @@ function reconocerForma(p) {
   const diag = Math.hypot(x1 - x0, y1 - y0);
   if (diag < 0.05) return null;
   const cands = [];
-  const probar = (poli) => {
+  const probar = (poli, simetrico = false) => {
     if (!poli) return;
     const r = L / longitud(poli);
     if (r < 0.7 || r > 1.45) return; // evita espirales y trazos dobles
-    cands.push({ poli, err: errorHacia(pts, poli) });
+    // El corazón se mide en ambos sentidos (trazo→figura y figura→trazo) para que un círculo no se confunda con él.
+    const err = simetrico ? ((errorHacia(pts, poli) + errorHacia(poli, pts)) / 2) * 0.8 : errorHacia(pts, poli);
+    cands.push({ poli, err });
   };
   probar(candidatoElipse(pts));
   probar(candidatoRect(pts));
   probar(candidatoTriangulo(pts, diag));
   probar(candidatoPentagrama(pts, diag));
   probar(candidatoEstrella(pts, diag));
+  probar(candidatoCorazon(pts), true);
   if (!cands.length) return null;
   const mejor = cands.reduce((a, b) => (b.err < a.err ? b : a));
   if (mejor.err > 0.055 * diag) return null;

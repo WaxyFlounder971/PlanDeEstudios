@@ -36,10 +36,11 @@ function aOscuroSuave(hex) {
 const OSCUROS_ANTERIORES = [
   ["#cf1b34", "#d75618", "#d2c117", "#7b8c4c", "#5b917f", "#4a9794"],
   ["#e63d54", "#d75618", "#d2c117", "#7b8c4c", "#5b917f", "#4a9794"],
+  ["#cd1932", "#b04816", "#826f00", "#5a7020", "#22765a", "#1a7471"], // oscuros previos (mostaza y oliva): ahora violeta y verde bosque
 ];
 // Modo oscuro: una versión MÁS FUERTE de cada color de la paleta (mismo tono), pensada para letra y tinta claras
 // (contraste con blanco ≥ 4.9). Es el opuesto de los tonos suaves del modo claro, que llevan letra oscura.
-const COLORES_NOTA_OSCURO = ["#cd1932", "#b04816", "#826f00", "#5a7020", "#22765a", "#1a7471"];
+const COLORES_NOTA_OSCURO = ["#cd1932", "#b04816", "#6b4fa3", "#2d6a4f", "#22765a", "#1a7471"];
 function modoOscuro() { const modo = document.documentElement.getAttribute("data-mode"); return modo === "dark" || modo === "true-dark"; }
 function coloresPaletaNota() { return modoOscuro() ? COLORES_NOTA_OSCURO : COLORES_NOTA; }
 // Si el color guardado es uno de los predefinidos (claro u oscuro), lo muestra en la versión del modo actual.
@@ -70,7 +71,8 @@ function crearNota(datos = {}) {
   return sellarTimestamp({
     id: datos.id || `nota_${crypto.randomUUID?.() || marca + "_" + Math.random().toString(36).slice(2)}`,
     titulo: String(datos.titulo || "").slice(0, 180), contenido: sanearHTMLNota(datos.contenido || ""),
-    color: datos.color || resolverColorNota(opcionesNotas().color_default) || COLOR_DEFECTO, fijada: Boolean(datos.fijada), orden_fijada: datos.orden_fijada ?? null,
+    color: datos.color || resolverColorNota(opcionesNotas().color_default) || COLOR_DEFECTO,
+    color_texto: /^#[\da-f]{6}$/i.test(datos.color_texto || "") ? String(datos.color_texto).toLowerCase() : null, fijada: Boolean(datos.fijada), orden_fijada: datos.orden_fijada ?? null,
     vence_en: datos.vence_en || null, eliminada_en: null, motivo_eliminacion: null, enviada_a_wapper_en: datos.enviada_a_wapper_en || null,
     tinta: Array.isArray(datos.tinta) ? JSON.parse(JSON.stringify(datos.tinta)) : [], origen: datos.origen === "compartida" ? "compartida" : "manual", creada_en: datos.creada_en || marca, modificada_en: marca, _pendienteSync: true,
   });

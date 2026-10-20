@@ -239,6 +239,17 @@ html:not([data-mode="dark"]):not([data-mode="true-dark"]) .nt-seg,html:not([data
 html:not([data-mode="dark"]):not([data-mode="true-dark"]) .nt-seg-op:hover{background:rgba(0,0,0,.07)}
 html:not([data-mode="dark"]):not([data-mode="true-dark"]) .nt-chip{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.14)}
 html:not([data-mode="dark"]):not([data-mode="true-dark"]) .nt-chip:hover{background:rgba(0,0,0,.08)}
+
+/* ===== Editor: la letra (y "Escribe aquí…", cursor y checkboxes) usan el color del selector de texto ===== */
+.notas-editor .notas-cuerpo{caret-color:currentColor}
+.notas-editor .notas-cuerpo:empty::before{color:currentColor!important;opacity:.6}
+
+/* ===== Pie del editor: 4 botones del mismo ancho, sin separador ===== */
+.notas-editor .notas-editor-actions{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;width:100%}
+.notas-editor .notas-editor-actions::before,.notas-editor .notas-editor-actions::after{display:none!important}
+.notas-editor .notas-editor-actions .btn{display:inline-flex!important;align-items:center;justify-content:center;gap:8px;width:100%;min-width:0;min-height:46px;margin:0;padding:10px 8px;white-space:nowrap}
+.notas-editor .notas-editor-actions .btn span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:560px){.notas-editor .notas-editor-actions .btn{flex-direction:column;gap:4px;min-height:56px;padding:8px 2px;font-size:.78rem}}
 `;
 
 function inyectarEstilosNotas() {

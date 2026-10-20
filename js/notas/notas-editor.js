@@ -38,7 +38,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
       <label class="nt-swatch nt-swatch-tinta" title="${tr("Color de tinta")}"><span class="nt-swatch-ico">${ICONO_LAPIZ}</span><input type="color" class="nt-input-color nt-tinta-color" aria-label="${tr("Color de tinta")}"></label>
     </div>
     <div class="notas-cuerpo" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="${tr("Escribe aquí…")}"></div>
-    <footer class="notas-editor-foot"><div class="notas-editor-tools"><div class="notas-palette" aria-label="${tr("Color de nota")}"></div><label class="btn btn-secondary notas-vencimiento" role="button" title="${tr("Agregar vencimiento")}"><input type="checkbox" style="position:absolute;opacity:0;pointer-events:none"> <span>⏳ ${tr("Vencimiento")}</span></label><span class="nt-plazo"><button type="button" class="nt-chip nt-plazo-btn" aria-haspopup="listbox" aria-expanded="false"><span class="nt-plazo-txt"></span>${ICONOS.chevron}</button><div class="nt-menu nt-oculto" role="listbox" aria-label="${tr("Plazo de vencimiento")}"></div></span></div><div class="notas-editor-actions"><div class="notas-editor-share"><button class="btn btn-secondary" data-action="send">${ICONOS.wapper}<span>${tr("Enviar a Wapper")}</span></button><button class="btn btn-secondary" data-action="share">${ICONOS.compartir}<span>${tr("Compartir")}</span></button></div><div class="nt-acc-der"><button class="btn btn-secondary" data-action="duplicate">${ICONOS.duplicar}<span>${tr("Duplicar")}</span></button><button class="btn btn-danger" data-action="delete">${ICONOS.papelera}<span>${tr("Eliminar")}</span></button></div></div></footer>`;
+    <footer class="notas-editor-foot"><div class="notas-editor-tools"><div class="notas-palette" aria-label="${tr("Color de nota")}"></div><label class="btn btn-secondary notas-vencimiento" role="button" title="${tr("Agregar vencimiento")}"><input type="checkbox" style="position:absolute;opacity:0;pointer-events:none"> <span>⏳ ${tr("Vencimiento")}</span></label><span class="nt-plazo"><button type="button" class="nt-chip nt-plazo-btn" aria-haspopup="listbox" aria-expanded="false"><span class="nt-plazo-txt"></span>${ICONOS.chevron}</button><div class="nt-menu nt-oculto" role="listbox" aria-label="${tr("Plazo de vencimiento")}"></div></span></div><div class="notas-editor-actions"><button class="btn btn-secondary" data-action="send">${ICONOS.wapper}<span>${tr("Wapper")}</span></button><button class="btn btn-secondary" data-action="share">${ICONOS.compartir}<span>${tr("Compartir")}</span></button><button class="btn btn-secondary" data-action="duplicate">${ICONOS.duplicar}<span>${tr("Duplicar")}</span></button><button class="btn btn-danger" data-action="delete">${ICONOS.papelera}<span>${tr("Eliminar")}</span></button></div></footer>`;
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
@@ -52,7 +52,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   let plazoSel = original?.vence_en ? "fecha" : (opcionesNotas().plazo_default || "3_dias");
   let fechaVence = deValorFecha(original?.vence_en || fechaRelativa(opcionesNotas().plazo_default));
   const persistirAhora = () => {
-    if (eliminando) return;
+    if (eliminando || cerrado) return;
     const texto = textoPlanoNota(cuerpo.innerHTML), tit = titulo.value.trim();
     if (!texto && !tit && !(borrador.tinta && borrador.tinta.length)) return;
     try {
@@ -81,17 +81,17 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const cerrarEditor = () => {
     if (cerrado) return;
     clearTimeout(timer);
-    persistirAhora();
+    try { persistirAhora(); } catch (err) { console.error(err); }
     cerrado = true;
-    if (guardado) flujoAnalitico?.completar("guardado"); else flujoAnalitico?.cancelar("cancelado");
+    try { if (guardado) flujoAnalitico?.completar("guardado"); else flujoAnalitico?.cancelar("cancelado"); } catch (err) { console.error(err); }
     flujoAnalitico = null;
     window.removeEventListener("pagehide", guardarAlSalir);
     document.removeEventListener("visibilitychange", guardarAlSalir);
     document.removeEventListener("selectionchange", selCambio);
     if (handlerTeclas) document.removeEventListener("keydown", handlerTeclas);
-    capaTinta?.destruir();
-    registrarCambio(eliminando ? "Eliminar nota" : original ? "Editar nota" : "Nueva nota", instantaneaInicial);
-    setTimeout(() => { overlay.remove(); alCerrar(); }, 0);
+    try { capaTinta?.destruir(); } catch (err) { console.error(err); }
+    try { registrarCambio(eliminando ? "Eliminar nota" : original ? "Editar nota" : "Nueva nota", instantaneaInicial); } catch (err) { console.error(err); }
+    setTimeout(() => { overlay.remove(); alCerrar(); }, 0); // siempre se cierra, pase lo que pase arriba
   };
   window.addEventListener("pagehide", guardarAlSalir);
   document.addEventListener("visibilitychange", guardarAlSalir);
@@ -105,7 +105,15 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   function pintarModificada() { campoMod.establecer(borrador.modificada_en || Date.now()); }
 
   /* --- Colores de la nota --- */
-  const refrescarSwatchTexto = () => { const c = swTexto.dataset.manual === "1" ? inpTexto.value : contraste(resolverColorNota(borrador.color || opcionesNotas().color_default)); inpTexto.value = c; swTexto.style.setProperty("--sw", c); swTexto.style.setProperty("--sw-fg", contraste(c)); };
+  // Color de letra de la nota: el elegido en el selector (borrador.color_texto) o, si no hay, el de mayor contraste con el fondo.
+  // Es la base del editor: lo que ves (texto, viñetas, checkboxes, "Escribe aquí…", cursor) sale siempre con el color del selector.
+  const colorTextoBase = () => (/^#[\da-f]{6}$/i.test(borrador.color_texto || "") ? borrador.color_texto : contraste(resolverColorNota(borrador.color || opcionesNotas().color_default)));
+  const refrescarSwatchTexto = () => {
+    const c = colorTextoBase();
+    inpTexto.value = c;
+    swTexto.style.setProperty("--sw", c); swTexto.style.setProperty("--sw-fg", contraste(c));
+    cuerpo.style.setProperty("color", c, "important");
+  };
   const presets = coloresPaletaNota();
   const recientes = (opcionesNotas().colores_recientes || []).filter((c) => resolverColorNota(c) === c && !presets.includes(c)).slice(0, 4);
   const actual = resolverColorNota(borrador.color || opcionesNotas().color_default);
@@ -151,15 +159,22 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const swTexto = modal.querySelector(".nt-swatch-texto"), inpTexto = modal.querySelector(".nt-texto-color");
   refrescarSwatchTexto();
   inpTexto.addEventListener("input", () => {
-    swTexto.dataset.manual = "1";
-    swTexto.style.setProperty("--sw", inpTexto.value); swTexto.style.setProperty("--sw-fg", contraste(inpTexto.value));
+    const c = inpTexto.value;
     cuerpo.focus();
-    if (rangoGuardado) { const s = getSelection(); s.removeAllRanges(); s.addRange(rangoGuardado); }
-    document.execCommand("styleWithCSS", false, false);
-    document.execCommand("foreColor", false, inpTexto.value);
+    if (rangoGuardado) { const sl = getSelection(); sl.removeAllRanges(); sl.addRange(rangoGuardado); }
+    const sel = getSelection();
+    if (sel.rangeCount && !sel.isCollapsed && cuerpo.contains(sel.anchorNode)) { // con texto seleccionado: solo esa parte
+      document.execCommand("styleWithCSS", false, false);
+      document.execCommand("foreColor", false, c);
+      swTexto.style.setProperty("--sw", c); swTexto.style.setProperty("--sw-fg", contraste(c));
+    } else { // sin selección: es el color de letra de toda la nota
+      borrador.color_texto = c;
+      refrescarSwatchTexto();
+    }
     ultimoTipo = "t";
     persistir();
   });
+  inpTexto.addEventListener("change", refrescarSwatchTexto); // al cerrar el selector, vuelve a mostrar el color base
 
   /* --- Texto: pegar sin formato, pendientes, listas automáticas --- */
   titulo.addEventListener("input", persistir);
@@ -252,7 +267,25 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     }
     document.execCommand(cmd);
   }
-  // Retroceso al inicio de un elemento de lista (o justo después de su checkbox): quita la viñeta / número / checkbox y deja el texto.
+  /* --- Pendientes: cada ítem es un bloque (checkbox + texto). Enter parte el texto en el cursor; Retroceso une con el anterior. --- */
+  const NBSP = "\u00a0";
+  const hayTexto = (nodos) => nodos.some((n) => (n.textContent || "").replace(/[\s\u00a0]/g, ""));
+  const ponerCursor = (nodo, off) => { const r = document.createRange(); r.setStart(nodo, off); r.collapse(true); const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r); };
+  const nuevoCheckbox = () => { const cb = document.createElement("input"); cb.type = "checkbox"; cb.setAttribute("data-nota-check", "1"); return cb; };
+  const recortarInicio = (raiz) => { const w = document.createTreeWalker(raiz, NodeFilter.SHOW_TEXT); for (let t = w.nextNode(); t; t = w.nextNode()) { t.data = t.data.replace(/^[\s\u00a0]+/, ""); if (t.data) break; } };
+  const sinCheckbox = (li) => [...li.childNodes].filter((n) => !(n.nodeType === 1 && n.matches(CB)));
+
+  function fusionarConAnterior(li, prev) {
+    const nodos = sinCheckbox(li);
+    const frag = document.createDocumentFragment();
+    nodos.forEach((n) => frag.append(n));
+    recortarInicio(frag);
+    const pos = prev.childNodes.length; // el cursor queda justo en la unión
+    prev.append(frag);
+    li.remove();
+    ponerCursor(prev, Math.min(pos, prev.childNodes.length));
+  }
+
   cuerpo.addEventListener("keydown", (e) => {
     if (e.key !== "Backspace" || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
     const s = getSelection();
@@ -262,34 +295,55 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     const r = document.createRange(); r.selectNodeContents(li); r.setEnd(s.anchorNode, s.anchorOffset);
     if (r.cloneContents().textContent.replace(/[\s\u00a0]/g, "")) return; // hay texto antes del cursor: retroceso normal
     e.preventDefault();
-    const lista = li.parentElement.tagName === "OL" ? "insertOrderedList" : "insertUnorderedList";
-    if (li.querySelector(CB)) quitarCheckbox(li);
-    document.execCommand(lista); // alterna: saca esta línea de la lista
+    const prev = li.previousElementSibling;
+    if (li.querySelector(CB) && prev && prev.tagName === "LI") fusionarConAnterior(li, prev); // une con el ítem de arriba (o lo quita si estaba vacío)
+    else { // primer ítem: quita checkbox / viñeta / número y deja el texto
+      const lista = li.parentElement.tagName === "OL" ? "insertOrderedList" : "insertUnorderedList";
+      if (li.querySelector(CB)) quitarCheckbox(li);
+      document.execCommand(lista);
+    }
     limpiarEstilos(); ultimoTipo = "t"; persistir();
   });
 
   cuerpo.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter") return;
-    const li = window.getSelection()?.anchorNode?.parentElement?.closest("li");
-    if (!li || !li.querySelector('input[type="checkbox"]')) return;
-    const contenidoLi = textoPlanoNota(li.innerHTML).replace(/^☐\s*|^☑\s*/, "").trim();
-    if (!contenidoLi) {
-      e.preventDefault();
+    if (e.key !== "Enter" || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+    const s = getSelection();
+    if (!s.rangeCount || !cuerpo.contains(s.anchorNode)) return;
+    let r = s.getRangeAt(0);
+    const li = baseDe(r.startContainer)?.closest?.("li");
+    if (!li || !cuerpo.contains(li) || !li.querySelector(CB)) return;
+    e.preventDefault();
+    if (!r.collapsed) { r.deleteContents(); r = s.getRangeAt(0); r.collapse(true); }
+    if (!li.isConnected) { persistir(); return; }
+
+    // Ítem vacío: Enter sale de la lista (lo que venga después queda en una lista aparte).
+    if (!hayTexto(sinCheckbox(li))) {
+      const ul = li.parentElement;
       const p = document.createElement("p"); p.innerHTML = "<br>";
-      const ulPend = li.parentElement;
-      ulPend.after(p);
-      li.remove(); if (!ulPend.querySelector("li")) ulPend.remove();
-      const rango = document.createRange(); rango.selectNodeContents(p); rango.collapse(true);
-      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(rango);
+      const resto = []; for (let n = li.nextElementSibling; n; n = n.nextElementSibling) resto.push(n);
+      let despues = null;
+      if (resto.length) { despues = document.createElement(ul.tagName.toLowerCase()); resto.forEach((n) => despues.append(n)); }
+      li.remove();
+      ul.after(p); if (despues) p.after(despues);
+      if (!ul.querySelector("li")) ul.remove();
+      ponerCursor(p, 0);
       persistir(); return;
     }
-    e.preventDefault();
+
+    // Parte el ítem en el cursor: todo lo que está a la derecha pasa al nuevo ítem (con su propio checkbox).
+    const cola = document.createRange();
+    cola.setStart(r.endContainer, r.endOffset);
+    cola.setEnd(li, li.childNodes.length);
+    const frag = cola.extractContents();
+    frag.querySelectorAll(CB).forEach((c) => c.remove()); // por si el cursor estaba antes del checkbox
+    recortarInicio(frag);
+    if (!li.querySelector(CB)) li.prepend(nuevoCheckbox(), document.createTextNode(NBSP));
+    const espacio = document.createTextNode(NBSP);
     const nuevo = document.createElement("li");
-    nuevo.innerHTML = '<input type="checkbox" data-nota-check="1"> ';
+    nuevo.append(nuevoCheckbox(), espacio, frag);
     li.after(nuevo);
-    const rango = document.createRange(); rango.selectNodeContents(nuevo); rango.collapse(false);
-    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(rango);
-    persistir();
+    ponerCursor(espacio, 1);
+    limpiarEstilos(); ultimoTipo = "t"; persistir();
   });
   cuerpo.addEventListener("change", (e) => {
     if (e.target.matches('input[type="checkbox"]')) {
@@ -392,11 +446,18 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     cerrarEditor();
   };
   modal.querySelector('[data-action="delete"]').onclick = () => {
+    eliminando = true; // lo primero: desde aquí nada puede volver a guardar (y revivir) la nota
     clearTimeout(timer);
-    const enLista = obtenerNota(borrador.id);
-    if (enLista) { marcarEliminada(enLista); window.dispatchEvent(new Event("notas:actualizadas")); }
-    eliminando = true; // evita que el guardado al cerrar "reviva" la nota
+    try {
+      const enLista = obtenerNota(borrador.id);
+      if (enLista) {
+        marcarEliminada(enLista);
+        borrador.eliminada_en = enLista.eliminada_en; // si algo guardara el borrador por error, seguiría eliminada
+        borrador.motivo_eliminacion = enLista.motivo_eliminacion;
+      }
+    } catch (err) { console.error(err); }
     cerrarEditor();
+    window.dispatchEvent(new Event("notas:actualizadas"));
   };
   modal.querySelectorAll('[data-action="close"]').forEach((b) => b.onclick = cerrarEditor);
   overlay.addEventListener("click", (e) => { if (e.target === overlay) cerrarEditor(); });
