@@ -43,7 +43,7 @@
 //      y main.js NUNCA hardcodean el número — siempre lo leen de acá, así
 //      que actualizar la versión en toda la app es cambiar ESTA línea y
 //      nada más.
-const VERSION = "v3.23.8"; // <-- en main se sube sola (GitHub Action); en dev no hace falta tocarla
+const VERSION = "v3.23.9"; // <-- en main se sube sola (GitHub Action); en dev no hace falta tocarla
 const CACHE_NAME = `app-academica-${VERSION}`;
 const PREFIJO_CACHE = "app-academica-";
 
