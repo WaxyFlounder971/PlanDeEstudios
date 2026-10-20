@@ -72,7 +72,7 @@ function abrirSticky(nota, origen) {
   const mini = crearMiniTinta(nota.tinta);
   if (mini) cuerpo.append(mini);
   hoja.append(barra, cuerpo);
-  if (nota.vence_en) hoja.append(el("span", "nt-sticky-vence", `⏳ ${fechaCorta(nota.vence_en)}`));
+  if (nota.vence_en) { const vence = el("span", "nt-sticky-vence"); vence.innerHTML = ICONOS.reloj; vence.append(document.createTextNode(fechaCorta(nota.vence_en))); hoja.append(vence); }
 
   overlay.append(hoja);
   overlay.addEventListener("pointerdown", (e) => { if (e.target === overlay) cerrarSticky(); });
@@ -235,9 +235,9 @@ function pintarPiP(id, win) {
   const barra = doc.createElement("header"); barra.className = "nt-flot-barra";
   const editar = botonIcono({ icono: ICONOS.editar, titulo: tr("Editar"), clase: "nt-flot-btn", onclick: () => abrirEditorNota(id, refrescarLista) });
   const volver = botonIcono({ icono: ICONOS.flotar, titulo: tr("Volver a flotante en la app"), clase: "nt-flot-btn", onclick: () => { flotarNota(id); ventanasPiP.delete(id); win.close(); refrescarLista(); } });
-  const resetear = botonIcono({ icono: ICONOS.resetTamano, titulo: tr("Restablecer tamaño"), clase: "nt-flot-btn", onclick: () => { ventanasPiP.delete(id); win.close(); abrirPiP(id).catch(() => {}); } });
   const cerrar = botonIcono({ icono: ICONOS.cerrar, titulo: tr("Cerrar nota flotante"), clase: "nt-flot-btn", onclick: () => { desflotarNota(id); ventanasPiP.delete(id); win.close(); refrescarLista(); } });
-  barra.append(editar, volver, resetear, cerrar);
+  const resetear = botonIcono({ icono: ICONOS.resetTamano, titulo: tr("Restablecer tamaño"), clase: "nt-flot-btn", onclick: () => { try { win.resizeTo(320, 420); } catch (_) {} } });
+  barra.append(editar, volver, cerrar, resetear);
   if (nota.titulo) { const titulo = doc.createElement("strong"); titulo.className = "nt-flot-titulo"; titulo.textContent = nota.titulo; hoja.append(barra, titulo); }
   else hoja.append(barra);
   const cuerpo = doc.createElement("div"); cuerpo.className = "nota-preview nt-flot-cuerpo";
@@ -253,6 +253,7 @@ async function abrirPiP(id) {
     ventanasPiP.delete(anteriorId); try { anterior.close(); } catch (_) {}
   }
   const win = await api.requestWindow({ width: 320, height: 420 });
+    try { win.resizeTo(320, 420); } catch (_) {}
     win.document.title = buscar(id)?.titulo || tr("Nota flotante");
     for (const n of document.head.querySelectorAll('link[rel="stylesheet"],style')) {
       const copia = win.document.importNode(n, true);
@@ -260,7 +261,7 @@ async function abrirPiP(id) {
       win.document.head.append(copia);
     }
     const estilo = win.document.createElement("style");
-    estilo.textContent = `html,body{box-sizing:border-box;margin:0;width:100%;height:100%;min-width:0;min-height:100%;overflow:auto;background:#171923;color:#f7f7f7;font:14px system-ui,sans-serif}.nt-pip-nota{box-sizing:border-box;display:flex;flex-direction:column;gap:8px;width:100%;min-width:0;min-height:100%;padding:10px 14px;background:var(--nt-nota,#fff594);border-radius:14px;overflow:auto;overflow-wrap:anywhere}.nt-pip-nota .nt-flot-barra{display:flex;align-items:center;gap:6px;position:sticky;top:0;background:inherit}.nt-pip-nota .nt-flot-barra>*:first-child{margin-right:auto}.nt-pip-nota .nt-flot-btn{display:inline-grid;place-items:center;width:34px;height:34px;border:0;border-radius:50%;background:rgba(0,0,0,.1);color:inherit;cursor:pointer}.nt-pip-nota .nt-flot-btn .nt-ico{width:18px;height:18px}.nt-pip-nota .nota-preview{max-height:none;overflow:visible}.nt-pip-nota .nota-tinta-mini.nota-tinta-alineada{position:absolute;left:0;top:0;width:100%;height:auto;margin:0}`;
+    estilo.textContent = `html,body{box-sizing:border-box;margin:0;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden;background:#171923;color:#f7f7f7;font:14px system-ui,sans-serif}.nt-pip-nota{box-sizing:border-box;display:flex;flex-direction:column;gap:8px;width:100%;height:100%;min-width:0;min-height:0;padding:10px 14px;background:var(--nt-nota,#fff594);border-radius:14px;overflow:hidden;overflow-wrap:anywhere}.nt-pip-nota .nt-flot-barra{display:flex;align-items:center;gap:6px;position:sticky;top:0;background:inherit;flex:none}.nt-pip-nota .nt-flot-barra>*:first-child{margin-right:auto}.nt-pip-nota .nt-flot-btn{display:inline-grid;place-items:center;width:34px;height:34px;border:0;border-radius:50%;background:rgba(0,0,0,.1);color:inherit;cursor:pointer;flex:none}.nt-pip-nota .nt-flot-btn .nt-ico{width:18px;height:18px}.nt-pip-nota .nota-preview{max-height:none;min-height:0;flex:1 1 auto;overflow:auto}.nt-pip-nota .nota-composicion{min-height:0;flex:1 1 auto;overflow:auto}.nt-pip-nota .nota-tinta-mini.nota-tinta-alineada{position:absolute;left:0;top:0;width:100%;height:auto;margin:0}`;
     win.document.head.append(estilo);
     win.addEventListener("resize", () => { if (!win.closed) { win.document.documentElement.style.width = "100%"; win.document.body.style.width = "100%"; } });
     ventanasPiP.set(id, win); win.addEventListener("pagehide", () => { if (ventanasPiP.get(id) === win) ventanasPiP.delete(id); }, { once: true });

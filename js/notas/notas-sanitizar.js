@@ -32,7 +32,7 @@ function sanearHTMLNota(html = "") {
       }
       if (hijo.tagName === "IMG") {
         const src = hijo.getAttribute("src") || "";
-        if (!/^data:image\/png;base64,[\da-z+/=]+$/i.test(src) || src.length > 2_000_000) { hijo.remove(); continue; }
+        if (!/^data:image\/(?:png|webp);base64,[\da-z+/=]+$/i.test(src) || src.length > 2_000_000) { hijo.remove(); continue; }
         const imagen = doc.createElement("img");
         imagen.setAttribute("src", src);
         imagen.setAttribute("alt", String(hijo.getAttribute("alt") || "Sticker").slice(0, 100));

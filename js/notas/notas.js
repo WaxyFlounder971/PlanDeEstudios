@@ -408,9 +408,9 @@ function construirTarjeta(nota) {
     for(const c of vecinos){c.classList.toggle("expandida",abierta);c._ajustarComposicion?.();const b=c.querySelector(".nota-expand");if(!b)continue;const label=tr(abierta?"Contraer":"Expandir");b.innerHTML=abierta?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';b.title=label;b.setAttribute("aria-label",label);}
   };
 
-  // Fila superior: insignias a la izquierda, asa de arrastre a la derecha (solo si hay algo que mostrar).
+  // Fila superior: anclar a la izquierda, insignias al centro y asa de arrastre en todas las notas.
   const insignias = el("div", "nota-card-badges");
-  if (nota.vence_en) insignias.append(el("span", "badge badge-warning", `⏳ ${fechaCorta(nota.vence_en)}`));
+  if (nota.vence_en) { const vence = el("span", "badge badge-warning nota-vence-badge"); vence.innerHTML = ICONOS.reloj; vence.append(document.createTextNode(fechaCorta(nota.vence_en))); insignias.append(vence); }
   const checks = preview.querySelectorAll("input[type=checkbox]");
   if (checks.length) insignias.append(el("span", "badge badge-info", `${[...checks].filter((c) => c.checked).length}/${checks.length}`));
   if (nota.enviada_a_wapper_en) insignias.append(el("span", "badge badge-purple", `✨ ${tr("Enviada a Wapper")}`));
@@ -419,7 +419,7 @@ function construirTarjeta(nota) {
   let top = null;
   if (asa || insignias.querySelector(".badge") || estaFlotando(nota.id)) {
     top = el("header", "nota-card-top");
-    top.append(insignias);
+    top.append(botonIcono({ icono: ICONOS.anclar, titulo: tr(nota.fijada ? "Desfijar" : "Fijar"), clase: "nota-pin-action nota-pin-top", activo: !!nota.fijada, onclick: (e) => { e.stopPropagation(); alternarFijada(nota); } }), insignias);
     if (asa) top.append(asa);
   }
 
@@ -429,7 +429,6 @@ function construirTarjeta(nota) {
   const flotando = estaFlotando(nota.id);
   const sep = () => { const s = el("span", "nt-vsep"); s.setAttribute("aria-hidden", "true"); return s; };
   acciones.append(
-    botonIcono({ icono: ICONOS.anclar, titulo: tr(nota.fijada ? "Desfijar" : "Fijar"), clase: "nota-pin-action", activo: !!nota.fijada, onclick: (e) => { e.stopPropagation(); alternarFijada(nota); } }),
     botonIcono({ icono: flotando ? ICONOS.quitarFlotante : ICONOS.flotar, titulo: tr(flotando ? "Quitar de flotante" : "Dejar flotante"), clase: "nota-flotar-action", activo: flotando, onclick: (e) => { e.stopPropagation(); alternarFlotante(nota.id, card); renderizarNotas(); } }),
     botonIcono({ icono: ICONOS.pip, titulo: tr("Abrir en ventana PiP"), clase: "nota-pip-action", onclick: (e) => { e.stopPropagation(); abrirNotaPictureInPicture(nota.id, card); } }),
     sep(),
@@ -642,7 +641,7 @@ function renderizarNotas() {
     color.append(b);
   });
   // "Con vencimiento": botón con el mismo estilo que las bolitas de color (se ilumina al activarlo).
-  const due = el("button", "notas-color nt-filtro-vence", `⏳ ${tr("Con vencimiento")}`);
+  const due = el("button", "notas-color nt-filtro-vence"); due.innerHTML = `${ICONOS.reloj}<span>${tr("Con vencimiento")}</span>`;
   due.id = "notas-filtro-vence"; due.type = "button"; due.setAttribute("aria-pressed", "false");
   due.onclick = () => { due.setAttribute("aria-pressed", String(due.getAttribute("aria-pressed") !== "true")); repintar(); };
   if (color.childElementCount) { filtros.append(color); const s = el("span", "nt-vsep"); s.setAttribute("aria-hidden", "true"); filtros.append(s); }
@@ -669,10 +668,16 @@ function renderizarNotas() {
   };
   const derecha = el("div", "nt-filtros-der");
   if (notasActuales().filter((n) => !n.eliminada_en).length > 1) {
-    const dir = segmentado([["desc", "↓"], ["asc", "↑"]], ordenActual.dir || "desc", tr("Dirección del orden"), (v) => guardarOrden({ dir: v, modo: "fecha" }));
-    dir.querySelectorAll("[role=radio]").forEach((b, i) => { const n = tr(i === 0 ? "Descendente" : "Ascendente"); b.title = n; b.setAttribute("aria-label", n); });
-    derecha.append(dir);
-    if (ordenActual.modo === "manual") derecha.append(el("span", "nt-orden-personalizado", tr("Orden personalizado")));
+    const modoOrden = ordenActual.modo === "manual" ? "manual" : (ordenActual.dir || "desc");
+    const orden = segmentado([["manual", "⠿"], ["desc", "↓"], ["asc", "↑"]], modoOrden, tr("Orden de notas"), (v) => {
+      if (v === "manual") {
+        const ids = Array.isArray(ordenActual.ids) ? ordenActual.ids : notasActuales().filter((n) => !n.eliminada_en).sort(comparadorNotas()).map((n) => n.id);
+        guardarOrden({ modo: "manual", ids });
+      } else guardarOrden({ modo: "fecha", dir: v });
+    });
+    orden.querySelectorAll("[role=radio]").forEach((b, i) => { const nombre = [tr("Orden personalizado"), tr("Descendente"), tr("Ascendente")][i]; b.title = nombre; b.setAttribute("aria-label", nombre); });
+    orden.classList.add("nt-orden-controles");
+    derecha.append(orden);
   }
   derecha.append(selectorVista(root));
   filtros.append(derecha);

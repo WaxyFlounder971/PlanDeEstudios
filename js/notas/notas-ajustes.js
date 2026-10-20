@@ -1,9 +1,11 @@
-import { opcionesNotas, coloresPaletaNota, resolverColorNota, notasActuales } from "./notas-datos.js";
+import { opcionesNotas, coloresPaletaNota, resolverColorNota, notasActuales, crearNota, guardarNota, COLOR_DEFECTO } from "./notas-datos.js";
+import { leerWapper } from "./notas-wapper.js";
 import { traducirTextoInterfaz as t } from "../core/i18n.js";
 import { sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { inyectarEstilosNotas } from "./notas-estilos.js";
+import { mostrarToast } from "../ui/componentes.js";
 
 const tr = (x) => t(x);
 
@@ -78,6 +80,49 @@ function mostrarAjustesNotas(refrescar, abrirPapelera) {
 
   panel.append(el("h2", "nt-titulo", tr("Ajustes de Notas")));
 
+  // Importación independiente del borrador: cada archivo genera una nota nueva.
+  const importar = el("button", "nt-btn", tr("Importar archivos Wapper Note"));
+  importar.type = "button";
+  importar.title = tr("Selecciona uno o varios archivos .wapper");
+  const archivosWapper = document.createElement("input");
+  archivosWapper.type = "file";
+  archivosWapper.accept = ".wapper,application/vnd.wapper+json";
+  archivosWapper.multiple = true;
+  archivosWapper.hidden = true;
+  importar.onclick = () => archivosWapper.click();
+  archivosWapper.onchange = async () => {
+    const archivos = [...(archivosWapper.files || [])];
+    archivosWapper.value = "";
+    if (!archivos.length) return;
+    let importadas = 0;
+    const fallidas = [];
+    for (const archivo of archivos) {
+      try {
+        const datos = await leerWapper(archivo);
+        guardarNota(crearNota({
+          titulo: datos.titulo,
+          contenido: datos.contenido,
+          color: datos.color || COLOR_DEFECTO,
+          color_texto: datos.color_texto,
+          vence_en: datos.vence_en,
+          tinta: datos.tinta,
+          origen: "compartida",
+        }));
+        importadas += 1;
+      } catch (error) {
+        fallidas.push(archivo.name);
+      }
+    }
+    if (importadas) refrescar();
+    const resumen = importadas
+      ? `${importadas} ${tr(importadas === 1 ? "nota importada" : "notas importadas")}`
+      : tr("No se pudo importar ningún archivo .wapper");
+    mostrarToast(fallidas.length ? `${resumen}. ${fallidas.length} ${tr("archivos no se pudieron importar")}.` : resumen);
+  };
+  const importacionWapper = el("div", "nt-importar-wapper");
+  importacionWapper.append(importar, el("small", "nt-importar-ayuda", tr("Selecciona uno o varios archivos .wapper. Cada archivo se agregará como una nota nueva.")));
+  panel.append(seccion(tr("Importar notas"), importacionWapper), archivosWapper);
+
   // Vista predeterminada
   panel.append(seccion(tr("Vista predeterminada"), segmentado(
     [["cuadricula", tr("Cuadrícula")], ["lista", tr("Lista")]],
@@ -123,7 +168,7 @@ function mostrarAjustesNotas(refrescar, abrirPapelera) {
   let editandoColores=false;
   botonEditarColores.onclick=()=>{editandoColores=true;botonEditarColores.classList.add("nt-oculto");botonGuardarColores.classList.remove("nt-oculto");botonRestaurarColores.classList.remove("nt-oculto");paleta.classList.add("editando");};
   botonGuardarColores.onclick=()=>{cfg.colores_editados=[...borradorColores];cfg.color_default=resolverColorNota(cfg.color_default);guardar();editandoColores=false;botonEditarColores.classList.remove("nt-oculto");botonGuardarColores.classList.add("nt-oculto");botonRestaurarColores.classList.add("nt-oculto");paleta.classList.remove("editando");pintarColores();};
-  botonRestaurarColores.onclick=()=>{borradorColores=[...coloresOriginales];delete cfg.colores_editados;cfg.color_default=COLORES_NOTA[2];guardar();editandoColores=false;botonEditarColores.classList.remove("nt-oculto");botonGuardarColores.classList.add("nt-oculto");botonRestaurarColores.classList.add("nt-oculto");paleta.classList.remove("editando");pintarColores();};
+  botonRestaurarColores.onclick=()=>{borradorColores=[...coloresOriginales];delete cfg.colores_editados;cfg.color_default=COLOR_DEFECTO;guardar();editandoColores=false;botonEditarColores.classList.remove("nt-oculto");botonGuardarColores.classList.add("nt-oculto");botonRestaurarColores.classList.add("nt-oculto");paleta.classList.remove("editando");pintarColores();};
   pintarColores();panel.append(seccion(tr("Colores predeterminados"),paleta));
   // Papelera
   if (abrirPapelera) {

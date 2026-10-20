@@ -1,5 +1,5 @@
 import { prepararPegado } from "./notas-pegado.js";
-import { MAX_CARACTERES_NOTA, COLOR_DEFECTO, resolverColorNota, coloresPaletaNota, opcionesNotas, obtenerStickersNotas, guardarStickerNota, formatoAutomatico, crearNota, obtenerNota, guardarNota, marcarEliminada, eliminarDefinitiva } from "./notas-datos.js";
+import { MAX_CARACTERES_NOTA, COLOR_DEFECTO, resolverColorNota, coloresPaletaNota, opcionesNotas, obtenerStickersNotas, guardarStickerNota, eliminarStickerNota, formatoAutomatico, crearNota, obtenerNota, guardarNota, marcarEliminada, eliminarDefinitiva } from "./notas-datos.js";
 import { sanearHTMLNota, textoPlanoNota, renderizarHTMLNota, escaparHTMLNota } from "./notas-sanitizar.js";
 import { traducirTextoInterfaz as t } from "../core/i18n.js";
 import { iniciarProcesoAnalitico, registrarAnaliticaUso } from "../core/analitica.js";
@@ -34,12 +34,8 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const modal = document.createElement("section");
   modal.className = "glass-card notas-editor stack";
   modal.innerHTML = `<header class="notas-editor-cab"><button class="btn btn-secondary nt-pin" data-action="pin" aria-pressed="false">${ICONOS.anclar}</button><input class="form-input notas-titulo" maxlength="180" placeholder="${tr("Título (opcional)")}"><button class="btn btn-secondary nt-close-round" data-action="close" aria-label="${tr("Cerrar nota")}" title="${tr("Cerrar nota")}">×</button></header>
-    <div class="nt-tiempos"></div>
-    <div class="nt-barra-fila">
-      <label class="nt-swatch nt-swatch-texto" title="${tr("Color de texto")}"><span class="nt-swatch-ico"><b>A</b></span><input type="color" class="nt-input-color nt-texto-color" aria-label="${tr("Color de texto")}"></label>
-      <div class="notas-toolbar" role="toolbar" aria-label="${tr("Formato de nota")}"><button data-cmd="undo" title="${tr("Deshacer")} (Ctrl+Z)">↶</button><button data-cmd="redo" title="${tr("Rehacer")} (Ctrl+Y)">↷</button><span class="notas-sep" aria-hidden="true"></span><button data-cmd="bold" title="${tr("Negrita")}"><b>B</b></button><button data-cmd="italic" title="${tr("Cursiva")}"><i>I</i></button><button data-cmd="underline" title="${tr("Subrayado")}"><u>U</u></button><span class="notas-sep" aria-hidden="true"></span><button data-cmd="insertUnorderedList" title="${tr("Viñetas")}" aria-label="${tr("Viñetas")}"><span class="nt-punto"></span></button><button data-cmd="insertOrderedList" title="${tr("Lista numerada")}">1.</button><button data-cmd="check" title="${tr("Lista de pendientes")}" aria-label="${tr("Lista de pendientes")}"><svg class="nt-ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M6.6 10.3l2.3 2.3 4.5-4.9"/></svg></button><span class="notas-sep" aria-hidden="true"></span><button data-tool="lapiz" aria-pressed="false" title="${tr("Lápiz")}" aria-label="${tr("Lápiz")}">${ICONO_LAPIZ}</button><button data-tool="borrador" aria-pressed="false" title="${tr("Borrador")}" aria-label="${tr("Borrador")}"><svg class="nt-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M11.6 3.4l5 5a1.4 1.4 0 010 2l-5.2 5.2H7.4L3.4 11.6a1.4 1.4 0 010-2l6.2-6.2a1.4 1.4 0 012 0z" fill="currentColor" fill-opacity=".25"/><path d="M6.2 7.6l6.2 6.2M8 16.6h9"/></svg></button></div>
-      <label class="nt-swatch nt-swatch-tinta" title="${tr("Color de tinta")}"><span class="nt-swatch-ico">${ICONO_LAPIZ}</span><input type="color" class="nt-input-color nt-tinta-color" aria-label="${tr("Color de tinta")}"></label>
-    </div>
+    <div class="nt-meta-row"><label class="nt-swatch nt-swatch-texto" title="${tr("Color de texto")}"><span class="nt-swatch-ico"><b>A</b></span><input type="color" class="nt-input-color nt-texto-color" aria-label="${tr("Color de texto")}"></label><div class="nt-tiempos"></div><label class="nt-swatch nt-swatch-tinta" title="${tr("Color de tinta")}"><span class="nt-swatch-ico">${ICONO_LAPIZ}</span><input type="color" class="nt-input-color nt-tinta-color" aria-label="${tr("Color de tinta")}"></label></div>
+    <div class="nt-barra-fila"><div class="notas-toolbar" role="toolbar" aria-label="${tr("Formato de nota")}"><button data-cmd="undo" title="${tr("Deshacer")} (Ctrl+Z)">↶</button><button data-cmd="redo" title="${tr("Rehacer")} (Ctrl+Y)">↷</button><span class="notas-sep" aria-hidden="true"></span><button data-cmd="bold" title="${tr("Negrita")}"><b>B</b></button><button data-cmd="italic" title="${tr("Cursiva")}"><i>I</i></button><button data-cmd="underline" title="${tr("Subrayado")}"><u>U</u></button><span class="notas-sep" aria-hidden="true"></span><button data-cmd="insertUnorderedList" title="${tr("Viñetas")}" aria-label="${tr("Viñetas")}"><span class="nt-punto"></span></button><button data-cmd="insertOrderedList" title="${tr("Lista numerada")}">1.</button><button data-cmd="check" title="${tr("Lista de pendientes")}" aria-label="${tr("Lista de pendientes")}"><svg class="nt-ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M6.6 10.3l2.3 2.3 4.5-4.9"/></svg></button><span class="notas-sep" aria-hidden="true"></span><button data-tool="lapiz" aria-pressed="false" title="${tr("Lápiz")}" aria-label="${tr("Lápiz")}">${ICONO_LAPIZ}</button><button data-tool="borrador" aria-pressed="false" title="${tr("Borrador")}" aria-label="${tr("Borrador")}"><svg class="nt-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M11.6 3.4l5 5a1.4 1.4 0 010 2l-5.2 5.2H7.4L3.4 11.6a1.4 1.4 0 010-2l6.2-6.2a1.4 1.4 0 012 0z" fill="currentColor" fill-opacity=".25"/><path d="M6.2 7.6l6.2 6.2M8 16.6h9"/></svg></button></div></div>
     <div class="notas-cuerpo" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="${tr("Escribe aquí…")}"></div>
     <footer class="notas-editor-foot"><div class="notas-palette notas-editor-tools" aria-label="${tr("Color de nota")}"></div><div class="notas-editor-foot-row"><div class="nt-vencimiento-area"><button type="button" class="nt-vencimiento-btn" data-action="vencimiento">${ICONOS.reloj}<span>${tr("Vencimiento")}</span></button><span class="nt-vencimiento-pick nt-oculto"><button type="button" class="nt-elegir-fecha">${tr("Elegir fecha")}</button></span><span class="nt-vencimiento-actual nt-oculto"></span><span class="nt-vencimiento-editar nt-oculto"><button type="button" class="nt-eliminar-vencimiento">${tr("Eliminar fecha de vencimiento")}</button></span></div><div class="notas-editor-actions"><button class="btn btn-secondary" data-action="send" aria-label="${tr("Wapper")}" title="${tr("Wapper")}">${ICONOS.wapper}</button><button class="btn btn-secondary" data-action="share" aria-label="${tr("Compartir")}" title="${tr("Compartir")}">${ICONOS.compartir}</button><button class="btn btn-secondary" data-action="duplicate" aria-label="${tr("Duplicar")}" title="${tr("Duplicar")}">${ICONOS.duplicar}</button><button class="btn btn-danger" data-action="delete" aria-label="${tr("Eliminar")}" title="${tr("Eliminar")}">${ICONOS.papelera}</button></div></div></footer>`;
   overlay.appendChild(modal);
@@ -84,7 +80,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const listaStickers = document.createElement("div"); listaStickers.className = "nt-stickers-lista";
   const editarFigurasLabel=document.createElement("label"); editarFigurasLabel.className="nt-editar-figuras-toggle"; const editarFigurasInput=document.createElement("input"); editarFigurasInput.type="checkbox"; const editarFigurasTexto=document.createElement("span"); editarFigurasTexto.textContent=tr("Habilitar edición de figura"); editarFigurasLabel.append(editarFigurasInput,editarFigurasTexto); const eliminarFiguraBtn=document.createElement("button"); eliminarFiguraBtn.type="button"; eliminarFiguraBtn.className="nt-eliminar-figura nt-oculto"; eliminarFiguraBtn.textContent=tr("Eliminar figura seleccionada");
   const btnSubirSticker = document.createElement("button"); btnSubirSticker.type = "button"; btnSubirSticker.className = "nt-sticker-subir"; btnSubirSticker.textContent = tr("Añadir sticker"); btnSubirSticker.setAttribute("role", "menuitem");
-  const inputSticker = document.createElement("input"); inputSticker.type = "file"; inputSticker.accept = "image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"; inputSticker.hidden = true;
+  const inputSticker = document.createElement("input"); inputSticker.type = "file"; inputSticker.accept = "image/*"; inputSticker.hidden = true;
   btnSubirSticker.onclick = () => inputSticker.click(); menuFiguras.append(editarFigurasLabel, eliminarFiguraBtn, btnSubirSticker, listaStickers, inputSticker);
   const botonesForma = [];
   for (const [modo, simbolo, nombre] of [["linea", "╱", "Línea recta"], ["flecha", "↗", "Flecha"], ["rectangulo", "▱", "Rectángulo"]]) {
@@ -97,24 +93,30 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const pintarStickers = () => {
     listaStickers.replaceChildren();
     for (const sticker of obtenerStickersNotas()) {
+      const tile = document.createElement("div"); tile.className = "nt-sticker-tile";
       const b = document.createElement("button"); b.type = "button"; b.className = "nt-sticker-item"; b.setAttribute("role", "menuitem"); b.title = `${tr("Insertar sticker")}: ${sticker.nombre}`;
       const img = document.createElement("img"); img.src = sticker.src; img.alt = ""; img.width = 44; img.height = 44;
-      const nombre = document.createElement("span"); nombre.textContent = sticker.nombre; b.append(img, nombre); b.onclick = () => insertarSticker(sticker); listaStickers.append(b);
+      const nombre = document.createElement("span"); nombre.textContent = sticker.nombre; b.append(img, nombre); b.onclick = () => insertarSticker(sticker);
+      const quitar = document.createElement("button"); quitar.type = "button"; quitar.className = "nt-sticker-quitar"; quitar.textContent = "×"; quitar.title = tr("Quitar sticker de la biblioteca"); quitar.setAttribute("aria-label", `${tr("Quitar sticker")}: ${sticker.nombre}`); quitar.onclick = (e) => { e.stopPropagation(); eliminarStickerNota(sticker.id); pintarStickers(); };
+      tile.append(b, quitar); listaStickers.append(tile);
     }
   };
   btnFiguras.onclick = () => { const abrir = menuFiguras.classList.contains("nt-oculto"); if (!abrir) return cerrarMenuFiguras(); pintarStickers(); menuFiguras.classList.remove("nt-oculto"); posicionarFiguras(); btnFiguras.setAttribute("aria-expanded", "true"); document.addEventListener("pointerdown", figurasFuera, true); };
   menuFiguras.addEventListener("mousedown", (e) => e.preventDefault());
   menuFiguras.addEventListener("keydown", (e) => { if (e.key === "Escape") { cerrarMenuFiguras(); btnFiguras.focus({ preventScroll: true }); } });
-  const grupoGrosor = document.createElement("div"); grupoGrosor.className = "nt-tinta-tamanos"; grupoGrosor.setAttribute("role", "group"); grupoGrosor.setAttribute("aria-label", tr("Tamaño de trazo"));
-  const tamanosTrazo = [[0.5, "½×"], [0.75, "¾×"], [1, "1×"], [1.5, "1.5×"], [2.25, "2.25×"]];
-  const botonesGrosor = tamanosTrazo.map(([factor, etiqueta]) => { const b = document.createElement("button"); b.type = "button"; b.textContent = etiqueta; b.title = `${tr("Tamaño de trazo")} ${etiqueta}`; b.setAttribute("aria-pressed", String(factor === 1)); b.onclick = () => { capaTinta?.establecerGrosor(GROSOR_BASE * factor); grupoGrosor.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); }; grupoGrosor.append(b); return b; });
-  toolsFooter.append(grupoGrosor);
+  const grupoGrosor = document.createElement("label"); grupoGrosor.className = "nt-tinta-tamanos"; grupoGrosor.setAttribute("aria-label", tr("Tamaño de trazo"));
+  const valorGrosor = document.createElement("output"); valorGrosor.className = "nt-tinta-valor"; valorGrosor.value = "1×"; valorGrosor.textContent = "1×";
+  const sliderGrosor = document.createElement("input"); sliderGrosor.type = "range"; sliderGrosor.min = "0.5"; sliderGrosor.max = "2.25"; sliderGrosor.step = "0.05"; sliderGrosor.value = "1"; sliderGrosor.title = tr("Tamaño de trazo"); sliderGrosor.setAttribute("aria-label", tr("Tamaño de trazo"));
+  sliderGrosor.oninput = () => { const factor = Number(sliderGrosor.value); valorGrosor.value = `${factor.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")}×`; valorGrosor.textContent = valorGrosor.value; capaTinta?.establecerGrosor(GROSOR_BASE * factor); };
+  grupoGrosor.append(sliderGrosor, valorGrosor); toolsFooter.append(grupoGrosor);
   const marcadores = crearMarcadores({ cuerpo });
   const herramientas = crearHerramientas({ cuerpo, boton: btnHerramientas, obtenerTitulo: () => titulo.value, completadasAlFinal: () => opcionesNotas().completadas_al_final, alCambiar: () => { ultimoTipo = "t"; persistir(); guardarPasoHistorial("texto"); }, avisar: mostrarToast });
   titulo.value = borrador.titulo || "";
   renderizarHTMLNota(cuerpo, borrador.contenido || "");
   cuerpo.querySelectorAll('input[type="checkbox"]').forEach((c) => { c.disabled = false; });
   cuerpo.contentEditable = "true";
+  const firmaEditor = () => JSON.stringify({ titulo: titulo.value.trim(), contenido: sanearHTMLNota(cuerpo.innerHTML), tinta: borrador.tinta || [], color: borrador.color || COLOR_DEFECTO, color_texto: borrador.color_texto || null, vence_en: borrador.vence_en || null, fijada: !!borrador.fijada });
+  const firmaInicialEditor = firmaEditor();
 
   /* --- Persistencia --- */
   let fechaVence = deValorFecha(original?.vence_en || fechaRelativa(opcionesNotas().plazo_default));
@@ -174,7 +176,6 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const campoMod = crearCampoFecha({ etiqueta: tr("Modificada"), tipo: "datetime-local", ms: borrador.modificada_en || Date.now(), alCambiar: (ms) => { borrador.modificada_en = ms; borrador._mod_manual = true; persistir(); } });
   if (opcionesNotas().mostrar_creada !== false) filaTiempos.append(campoCreada.el);
   if (opcionesNotas().mostrar_modificada !== false) filaTiempos.append(campoMod.el);
-  if (!filaTiempos.children.length) filaTiempos.classList.add("nt-oculto");
   function pintarModificada() { campoMod.establecer(borrador.modificada_en || Date.now()); }
 
   /* --- Colores de la nota --- */
@@ -484,17 +485,19 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   }
   inputSticker.onchange = async () => {
     const file = inputSticker.files?.[0]; inputSticker.value = ""; if (!file) return;
-    if (!/^image\/(png|jpeg|webp)$/i.test(file.type) && !/\.(png|jpe?g|webp)$/i.test(file.name)) { mostrarToast(tr("Elige una imagen PNG, JPG o WebP")); return; }
     let bitmap;
     try {
       bitmap = await createImageBitmap(file);
-      const factor = Math.min(1, 512 / Math.max(bitmap.width, bitmap.height));
+      const factor = Math.min(1, 1024 / Math.max(bitmap.width, bitmap.height));
       let resultado = null;
       for (const escala of [factor, factor * .8, factor * .62]) {
         const ancho = Math.max(1, Math.round(bitmap.width * escala)), alto = Math.max(1, Math.round(bitmap.height * escala));
         const canvas = document.createElement("canvas"); canvas.width = ancho; canvas.height = alto;
-        canvas.getContext("2d", { alpha: true }).drawImage(bitmap, 0, 0, ancho, alto);
-        const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+        const ctx = canvas.getContext("2d", { alpha: true }); ctx.drawImage(bitmap, 0, 0, ancho, alto);
+        const pixeles = ctx.getImageData(0, 0, ancho, alto).data; let transparente = false;
+        for (let i = 3; i < pixeles.length; i += 4) if (pixeles[i] < 255) { transparente = true; break; }
+        const tipo = transparente ? "image/png" : "image/webp";
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, tipo, .85));
         if (!blob) continue;
         const src = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(blob); });
         if (String(src).length <= 2_000_000) { resultado = { src, ancho, alto }; break; }
@@ -525,13 +528,26 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     item("Espejear horizontal", () => { img.dataset.flipH = img.dataset.flipH === "1" ? "0" : "1"; actualizarSticker(img); });
     item("Espejear vertical", () => { img.dataset.flipV = img.dataset.flipV === "1" ? "0" : "1"; actualizarSticker(img); });
     const rotacion = document.createElement("label"); rotacion.textContent = `${tr("Rotar")} ${Number(img.dataset.rot) || 0}°`; rotacion.style.cssText = "display:grid;gap:4px;padding:5px 8px;font-size:.82rem";
-    const rango = document.createElement("input"); rango.type = "range"; rango.min = "0"; rango.max = "359"; rango.value = String(Number(img.dataset.rot) || 0); rango.oninput = () => { img.dataset.rot = rango.value; rotacion.firstChild.textContent = `${tr("Rotar")} ${rango.value}°`; actualizarSticker(img); }; rotacion.append(rango); menu.append(rotacion);
+    const rango = document.createElement("input"); rango.type = "range"; rango.min = "0"; rango.max = "359"; rango.value = String(Number(img.dataset.rot) || 0);
+    const campoGrados = document.createElement("input"); campoGrados.type = "number"; campoGrados.min = "0"; campoGrados.max = "359"; campoGrados.step = "1"; campoGrados.value = rango.value; campoGrados.setAttribute("aria-label", tr("Rotación en grados"));
+    const actualizarGiro = (valor) => { const grados = (Math.round(Number(valor) || 0) % 360 + 360) % 360; img.dataset.rot = String(grados); rango.value = String(grados); campoGrados.value = String(grados); rotacion.firstChild.textContent = `${tr("Rotar")} ${grados}°`; actualizarSticker(img); };
+    rango.oninput = () => actualizarGiro(rango.value); campoGrados.oninput = () => actualizarGiro(campoGrados.value); rotacion.append(rango, campoGrados); menu.append(rotacion);
     item("Borrar", () => { img.remove(); cerrarMenuSticker(); persistir(); guardarPasoHistorial("texto"); });
     item("Mover atrás", () => { img.dataset.z = String(Math.max(-100, (Number(img.dataset.z) || 0) - 1)); actualizarSticker(img); });
     item("Mover adelante", () => { img.dataset.z = String(Math.min(100, (Number(img.dataset.z) || 0) + 1)); actualizarSticker(img); });
     document.body.append(menu); menuSticker = menu; setTimeout(() => document.addEventListener("pointerdown", fueraMenuSticker, true), 0);
   };
   cuerpo.addEventListener("contextmenu", (e) => { const img = e.target.closest?.("img[data-nota-sticker]"); if (!img) return; e.preventDefault(); e.stopPropagation(); abrirMenuSticker(img, e.clientX, e.clientY); });
+  let toqueLargoSticker = null;
+  cuerpo.addEventListener("pointerdown", (e) => {
+    const img = e.target.closest?.("img[data-nota-sticker]"); if (!img || e.pointerType === "mouse") return;
+    clearTimeout(toqueLargoSticker?.timer); const espera = { x: e.clientX, y: e.clientY, img, px: e.clientX, py: e.clientY };
+    espera.timer = setTimeout(() => { abrirMenuSticker(espera.img, espera.x, espera.y); toqueLargoSticker = null; }, 550); toqueLargoSticker = espera;
+  });
+  cuerpo.addEventListener("pointermove", (e) => { if (toqueLargoSticker && Math.hypot(e.clientX - toqueLargoSticker.px, e.clientY - toqueLargoSticker.py) > 10) { clearTimeout(toqueLargoSticker.timer); toqueLargoSticker = null; } });
+  const cancelarToqueLargoSticker = () => { clearTimeout(toqueLargoSticker?.timer); toqueLargoSticker = null; };
+  cuerpo.addEventListener("pointerup", cancelarToqueLargoSticker);
+  cuerpo.addEventListener("pointercancel", cancelarToqueLargoSticker);
   cuerpo.addEventListener("pointerdown", (e) => {
     const img = e.target.closest?.("img[data-nota-sticker].nt-sticker-seleccionado"); if (!img || (e.button !== 0 && e.pointerType === "mouse")) return;
     const r = img.getBoundingClientRect(); if (e.clientX > r.right - 20 && e.clientY > r.bottom - 20) return; // conserva el control nativo de resize
@@ -601,7 +617,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     }
   };
   btnVencimiento.onclick = () => { mostrarElegirFecha = true; pintarVencimiento(); };
-  btnElegirFecha.onclick = () => campoVence.abrir();
+  btnElegirFecha.onclick = () => campoVence.abrir(btnElegirFecha);
   btnEliminarVencimiento.onclick = () => { borrador.vence_en = null; fechaVence = deValorFecha(fechaRelativa(opcionesNotas().plazo_default)); editarVence = false; mostrarElegirFecha = false; persistir(); pintarVencimiento(); };
   if (borrador.vence_en) campoVence.establecer(deValorFecha(borrador.vence_en));
   pintarVencimiento();
@@ -652,12 +668,12 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const dialogoCerrar = document.createElement("div");
   dialogoCerrar.className = "nt-confirmar-cierre nt-oculto";
   dialogoCerrar.setAttribute("role", "alertdialog"); dialogoCerrar.setAttribute("aria-modal", "true");
-  dialogoCerrar.innerHTML = `<section><strong>${tr("¿Guardar los cambios?")}</strong><div><button type="button" data-close="save">${tr("Guardar")}</button><button type="button" data-close="discard">${tr("Deshacer cambios")}</button><button type="button" data-close="cancel">${tr("Seguir editando")}</button></div></section>`;
+  dialogoCerrar.innerHTML = `<section><strong>${tr("¿Guardar los cambios?")}</strong><div><button type="button" data-close="save">${tr("Guardar")}</button><button type="button" data-close="discard">${tr("Deshacer cambios")}</button></div></section>`;
   modal.append(dialogoCerrar);
-  const pedirCerrar = () => { if (cerrado || preguntandoCerrar) return; clearTimeout(timer); preguntandoCerrar = true; dialogoCerrar.classList.remove("nt-oculto"); dialogoCerrar.querySelector('[data-close="save"]').focus(); };
+  const pedirCerrar = () => { if (cerrado || preguntandoCerrar) return; clearTimeout(timer); if (firmaEditor() === firmaInicialEditor) { descartandoCambios = true; cerrarEditor(); return; } preguntandoCerrar = true; dialogoCerrar.classList.remove("nt-oculto"); dialogoCerrar.querySelector('[data-close="save"]').focus(); };
   dialogoCerrar.addEventListener("click", async (e) => {
+    if (e.target === dialogoCerrar) { preguntandoCerrar = false; dialogoCerrar.classList.add("nt-oculto"); return; }
     const accion = e.target.closest("[data-close]")?.dataset.close; if (!accion) return;
-    if (accion === "cancel") { preguntandoCerrar = false; dialogoCerrar.classList.add("nt-oculto"); return; }
     if (accion === "discard") {
       clearTimeout(timer); eliminando = true; descartandoCambios = true;
       try { const actual = obtenerNota(borrador.id); if (original) guardarNota({ ...original }); else if (actual) eliminarDefinitiva(actual); }
