@@ -111,7 +111,8 @@ function mostrarAjustesNotas(refrescar, abrirPapelera) {
 
   // Interruptores
   panel.append(interruptor(tr("Mover a Papelera después de enviar a Wapper"), cfg.papelera_despues_wapper, (v) => { cfg.papelera_despues_wapper = v; guardar(); }));
-  panel.append(interruptor(tr("Mover completadas al final"), cfg.completadas_al_final, (v) => { cfg.completadas_al_final = v; guardar(); }));
+  panel.append(interruptor(tr("Enviar tareas completadas al final"), cfg.completadas_al_final, (v) => { cfg.completadas_al_final = v; guardar(); }));
+  panel.append(interruptor(tr("Formato automático: [] casilla, **negrita**, __subrayado__ y > cita"), cfg.formato_auto !== false, (v) => { cfg.formato_auto = v; guardar(); }));
 
   // Color predeterminado (solo los colores base del modo actual)
   const paleta = el("div", "nt-colores notas-palette");

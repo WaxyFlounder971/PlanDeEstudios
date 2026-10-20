@@ -44,6 +44,8 @@ const CSS = `
 .nt-ico-solido{fill:currentColor;stroke:none}
 .nt-punto{display:block;width:9px;height:9px;border-radius:50%;background:currentColor}
 .notas-toolbar [data-tool][aria-pressed="true"]{background:var(--nt-grad,linear-gradient(135deg,#f5a9d3,#b7a5f4));color:#1b1530}
+.notas-toolbar [data-forma][aria-pressed="true"]{background:var(--nt-grad,linear-gradient(135deg,#f5a9d3,#b7a5f4));color:#1b1530}
+.notas-toolbar .nt-tinta-grosor{width:68px;height:30px;accent-color:#7d75dc;cursor:pointer}
 .nt-tinta-color{width:30px;height:30px;padding:0;border:2px solid rgba(255,255,255,.35);border-radius:50%;overflow:hidden;cursor:pointer;background:none;appearance:none;-webkit-appearance:none}
 .nt-tinta-color::-webkit-color-swatch-wrapper{padding:0}
 .nt-tinta-color::-webkit-color-swatch{border:0;border-radius:50%}
@@ -113,6 +115,9 @@ body.nota-arrastrando-body{user-select:none;-webkit-user-select:none;cursor:grab
 .notas-editor .nt-acc-der{margin-left:auto}
 .notas-editor .notas-editor-actions .btn{display:inline-flex;align-items:center;gap:8px}
 .notas-editor .notas-editor-actions .nt-ico{width:17px;height:17px}
+.notas-editor .nt-acciones-extra{display:flex;flex-wrap:wrap;gap:8px;width:100%}
+.notas-editor .nt-acciones-extra .btn{flex:1 1 150px;min-height:40px}
+.notas-editor .nt-acciones-extra input[hidden]{display:none!important}
 
 /* ===== Tarjetas: 6 botones en una fila ===== */
 .nota-card .nota-card-top{display:flex;align-items:center;justify-content:space-between;gap:6px;min-height:28px}
@@ -221,6 +226,9 @@ body.nota-marquesina-body{user-select:none;-webkit-user-select:none}
 .notas-grid:not(.notas-lista){grid-template-columns:repeat(auto-fill,minmax(min(100%,var(--nt-nota-min,250px)),1fr))!important}
 @media(max-width:640px){.notas-grid:not(.notas-lista){--nt-nota-min:150px}}
 .notas-grid>.notas-vacio{grid-column:1/-1}
+
+/* ===== Cita (línea que empieza con ">") ===== */
+.notas-cuerpo blockquote,.nota-preview blockquote{margin:4px 0;padding:2px 0 2px 10px;border-left:3px solid color-mix(in srgb,currentColor,transparent 55%)}
 
 /* ===== Formato activo (negrita / cursiva / subrayado) ===== */
 .notas-toolbar [data-cmd][aria-pressed="true"]{background:var(--nt-grad,linear-gradient(135deg,#f5a9d3,#b7a5f4));color:#1b1530}

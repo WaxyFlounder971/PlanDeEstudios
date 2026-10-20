@@ -1,9 +1,12 @@
-import { MAX_CARACTERES_NOTA, COLOR_DEFECTO, resolverColorNota, coloresPaletaNota, opcionesNotas, crearNota, obtenerNota, guardarNota, marcarEliminada } from "./notas-datos.js";
+import { prepararPegado } from "./notas-pegado.js";
+import { MAX_CARACTERES_NOTA, COLOR_DEFECTO, resolverColorNota, coloresPaletaNota, opcionesNotas, formatoAutomatico, crearNota, obtenerNota, guardarNota, marcarEliminada } from "./notas-datos.js";
 import { sanearHTMLNota, textoPlanoNota, renderizarHTMLNota } from "./notas-sanitizar.js";
 import { traducirTextoInterfaz as t } from "../core/i18n.js";
 import { iniciarProcesoAnalitico, registrarAnaliticaUso } from "../core/analitica.js";
 import { compartirNotaFuera } from "./notas-compartir.js";
 import { crearCapaTinta } from "./notas-tinta.js";
+import { crearHerramientas, crearMarcadores } from "./notas-herramientas.js";
+import { descargarWapper, leerWapper, compartirImagenNota } from "./notas-wapper.js";
 import { crearCampoFecha, aValorFecha, deValorFecha } from "./notas-fechas.js";
 import { instantanea, registrarCambio } from "./notas-historial.js";
 import { ICONOS, contraste } from "./notas-ui.js";
@@ -44,6 +47,40 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
 
   const titulo = modal.querySelector(".notas-titulo"), cuerpo = modal.querySelector(".notas-cuerpo"), checkVence = modal.querySelector(".notas-vencimiento input"), paleta = modal.querySelector(".notas-palette"), pin = modal.querySelector('[data-action="pin"]');
   const plazoWrap = modal.querySelector(".nt-plazo"), plazoBtn = modal.querySelector(".nt-plazo-btn"), plazoTxt = modal.querySelector(".nt-plazo-txt"), plazoMenu = modal.querySelector(".nt-menu");
+  const accionesExtra = document.createElement("div"); accionesExtra.className = "nt-acciones-extra";
+  const crearAccionExtra = (texto) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn btn-secondary"; b.textContent = tr(texto); accionesExtra.append(b); return b; };
+  const btnWapperArchivo = crearAccionExtra("Guardar archivo .wapper");
+  const btnImportarWapper = crearAccionExtra("Abrir archivo .wapper");
+  const archivoWapper = document.createElement("input"); archivoWapper.type = "file"; archivoWapper.accept = ".wapper,application/vnd.wapper+json"; archivoWapper.hidden = true;
+  const btnImagenNota = crearAccionExtra("Compartir imagen");
+  modal.querySelector(".notas-editor-actions").after(accionesExtra); accionesExtra.append(archivoWapper);
+  btnWapperArchivo.onclick = () => descargarWapper({ ...borrador, titulo: titulo.value.trim(), contenido: sanearHTMLNota(cuerpo.innerHTML) });
+  btnImportarWapper.onclick = () => archivoWapper.click();
+  archivoWapper.onchange = async () => {
+    const f = archivoWapper.files?.[0]; archivoWapper.value = ""; if (!f) return;
+    try {
+      const n = await leerWapper(f);
+      titulo.value = n.titulo; borrador.color = n.color; borrador.color_texto = n.color_texto; borrador.vence_en = n.vence_en; borrador.tinta = n.tinta;
+      renderizarHTMLNota(cuerpo, n.contenido); pintarColorNota(n.color); inpTexto.value = n.color_texto || contraste(resolverColorNota(n.color)); refrescarSwatchTexto();
+      if (capaTinta) capaTinta.redibujar(); persistir(); mostrarToast(tr("Archivo .wapper abierto"));
+    } catch (e) { mostrarToast(tr(e.message || "No se pudo abrir el archivo .wapper")); }
+  };
+  btnImagenNota.onclick = async () => {
+    try { const r = await compartirImagenNota({ titulo: titulo.value.trim(), contenido: cuerpo.innerHTML, color: borrador.color || COLOR_DEFECTO, trazos: borrador.tinta || [] }); mostrarToast(tr(r === "compartida" ? "Imagen compartida" : "Imagen descargada")); }
+    catch (e) { if (e.name !== "AbortError") mostrarToast(tr("No se pudo compartir la imagen")); }
+  };
+  const btnHerramientas = document.createElement("button");
+  btnHerramientas.type = "button"; btnHerramientas.className = "nt-herr-btn"; btnHerramientas.textContent = "🛠";
+  btnHerramientas.title = tr("Herramientas"); btnHerramientas.setAttribute("aria-label", tr("Herramientas"));
+  btnHerramientas.setAttribute("aria-haspopup", "menu"); btnHerramientas.setAttribute("aria-expanded", "false");
+  const barraTinta = modal.querySelector(".notas-toolbar");
+  const botonesForma = [];
+  for (const [modo, simbolo, nombre] of [["linea", "╱", "Línea recta"], ["flecha", "↗", "Flecha"], ["rectangulo", "▱", "Rectángulo"]]) {
+    const b = document.createElement("button"); b.type = "button"; b.dataset.forma = modo; b.textContent = simbolo; b.title = tr(nombre); b.setAttribute("aria-label", tr(nombre)); b.setAttribute("aria-pressed", "false"); barraTinta.append(b); botonesForma.push(b);
+  }
+  const btnGrosor = document.createElement("input"); btnGrosor.type = "range"; btnGrosor.min = "0.0015"; btnGrosor.max = "0.02"; btnGrosor.step = "0.0005"; btnGrosor.value = "0.0045"; btnGrosor.className = "nt-tinta-grosor"; btnGrosor.title = tr("Grosor del trazo"); btnGrosor.setAttribute("aria-label", tr("Grosor del trazo")); barraTinta.append(btnGrosor, btnHerramientas);
+  const marcadores = crearMarcadores({ cuerpo });
+  const herramientas = crearHerramientas({ cuerpo, boton: btnHerramientas, obtenerTitulo: () => titulo.value, completadasAlFinal: () => opcionesNotas().completadas_al_final, alCambiar: () => { ultimoTipo = "t"; persistir(); }, avisar: mostrarToast });
   titulo.value = borrador.titulo || "";
   renderizarHTMLNota(cuerpo, borrador.contenido || "");
   cuerpo.contentEditable = "true";
@@ -90,6 +127,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     document.removeEventListener("selectionchange", selCambio);
     if (handlerTeclas) document.removeEventListener("keydown", handlerTeclas);
     try { capaTinta?.destruir(); } catch (err) { console.error(err); }
+    try { marcadores.destruir(); herramientas.destruir(); } catch (err) { console.error(err); }
     try { registrarCambio(eliminando ? "Eliminar nota" : original ? "Editar nota" : "Nueva nota", instantaneaInicial); } catch (err) { console.error(err); }
     setTimeout(() => { overlay.remove(); alCerrar(); }, 0); // siempre se cierra, pase lo que pase arriba
   };
@@ -186,7 +224,31 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   });
   cuerpo.addEventListener("blur", persistir);
   cuerpo.addEventListener("change", persistir);
-  cuerpo.addEventListener("paste", (e) => { e.preventDefault(); const text = (e.clipboardData || window.clipboardData).getData("text/plain"); document.execCommand("insertText", false, text); });
+  cuerpo.addEventListener("paste", (e) => {
+    e.preventDefault();
+    const cb = e.clipboardData || window.clipboardData;
+    const html = cb.getData("text/html"), texto = cb.getData("text/plain");
+    if (!html && !texto) return;
+    const fmt = formatoAutomatico();
+    const { literal, convertido, hayConversion } = prepararPegado({ html, texto }, { corchetes: fmt, whatsapp: fmt });
+    if (!literal && !convertido) return;
+    if (!hayConversion) { document.execCommand("insertHTML", false, literal); }
+    else {
+      // Dos pasos: primero se pega con los "[]" como texto y luego se convierten en casillas.
+      // Así Ctrl+Z deshace solo la conversión y deja los "[]" tal como venían.
+      let ini = null;
+      try { const s = getSelection(); if (s.rangeCount) { ini = s.getRangeAt(0).cloneRange(); ini.collapse(true); } } catch (_) {}
+      document.execCommand("insertHTML", false, literal);
+      try {
+        const s = getSelection();
+        if (!ini || !s.rangeCount) throw new Error("sin rango");
+        const r = ini.cloneRange(); r.setEnd(s.anchorNode, s.anchorOffset);
+        s.removeAllRanges(); s.addRange(r);
+        document.execCommand("insertHTML", false, convertido);
+      } catch (_) { /* si no se pudo convertir, queda el texto pegado tal cual */ }
+    }
+    limpiarEstilos(); ultimoTipo = "t"; persistir();
+  });
 
   /** "1. " empieza una lista numerada (con ese número: "5. " empieza en 5); "- " o "* " empieza viñetas. */
   function listaAutomatica() {
@@ -372,7 +434,8 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     if (cmd === "redo") return rehacerEditor();
     const dentro = cuerpo.contains(getSelection().anchorNode);
     cuerpo.focus(); recuperarSeleccion(dentro);
-    if (cmd === "check") alternarChecklist();
+    if (marcadores.activo() && ["check", "insertUnorderedList", "insertOrderedList"].includes(cmd)) marcadores.aplicar(() => { if (cmd === "check") alternarChecklist(); else alternarLista(cmd); });
+    else if (cmd === "check") alternarChecklist();
     else if (cmd === "insertUnorderedList" || cmd === "insertOrderedList") alternarLista(cmd);
     else document.execCommand(cmd, false, null);
     limpiarEstilos();
@@ -494,9 +557,11 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   inpTinta.value = tintaAuto();
   capaTinta.establecerColor(inpTinta.value); pintarSwTinta();
   ajustarTintaAuto = () => { if (tintaManual) return; inpTinta.value = tintaAuto(); capaTinta.establecerColor(inpTinta.value); pintarSwTinta(); };
-  const fijarModo = (m) => { capaTinta.establecerModo(m); btnLapiz.setAttribute("aria-pressed", String(m === "lapiz")); btnBorrador.setAttribute("aria-pressed", String(m === "borrador")); };
+  const fijarModo = (m) => { capaTinta.establecerModo(m); btnLapiz.setAttribute("aria-pressed", String(m === "lapiz")); btnBorrador.setAttribute("aria-pressed", String(m === "borrador")); botonesForma.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.forma === m))); };
   btnLapiz.onclick = () => fijarModo(capaTinta.obtenerModo() === "lapiz" ? null : "lapiz");
   btnBorrador.onclick = () => fijarModo(capaTinta.obtenerModo() === "borrador" ? null : "borrador");
+  botonesForma.forEach((b) => { b.onclick = () => fijarModo(capaTinta.obtenerModo() === b.dataset.forma ? null : b.dataset.forma); });
+  btnGrosor.oninput = () => capaTinta.establecerGrosor(btnGrosor.value);
   inpTinta.oninput = () => { tintaManual = true; capaTinta.establecerColor(inpTinta.value); pintarSwTinta(); if (capaTinta.obtenerModo() !== "lapiz") fijarModo("lapiz"); };
   cuerpo.addEventListener("pointermove", (e) => { if (e.pointerType === "pen" && !capaTinta.obtenerModo()) fijarModo("lapiz"); });
   requestAnimationFrame(() => cuerpo.focus());

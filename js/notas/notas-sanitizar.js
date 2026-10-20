@@ -1,4 +1,4 @@
-const ETIQUETAS = new Set(["B", "STRONG", "I", "EM", "U", "UL", "OL", "LI", "BR", "DIV", "P", "INPUT", "A"]);
+const ETIQUETAS = new Set(["B", "STRONG", "I", "EM", "U", "UL", "OL", "LI", "BR", "DIV", "P", "INPUT", "A", "BLOCKQUOTE"]);
 
 // Color de texto permitido: solo hex (#rgb / #rrggbb) o rgb(); se normaliza a #rrggbb. Cualquier otro valor se descarta.
 const hex2 = (n) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, "0");

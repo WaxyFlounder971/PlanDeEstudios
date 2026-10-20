@@ -54,7 +54,14 @@ function dibujarTrazo(ctx, t, ancho, dy, gmin) {
   if (t.f) {
     ctx.lineWidth = base; ctx.beginPath(); ctx.moveTo(X(0), Y(0));
     for (let i = 1; i < n; i++) ctx.lineTo(X(i), Y(i));
-    ctx.stroke(); return;
+    ctx.stroke();
+    if (t.a && n > 1) {
+      const x0 = X(n - 2), y0 = Y(n - 2), x1 = X(n - 1), y1 = Y(n - 1);
+      const ang = Math.atan2(y1 - y0, x1 - x0), h = Math.max(9, base * 4.2);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 - h * Math.cos(ang - Math.PI / 6), y1 - h * Math.sin(ang - Math.PI / 6));
+      ctx.moveTo(x1, y1); ctx.lineTo(x1 - h * Math.cos(ang + Math.PI / 6), y1 - h * Math.sin(ang + Math.PI / 6)); ctx.stroke();
+    }
+    return;
   }
   const variable = n > 2 && p[0].length > 2;
   const mx = (i) => (X(i) + X(i + 1)) / 2, my = (i) => (Y(i) + Y(i + 1)) / 2;
@@ -108,8 +115,9 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
   modal.append(canvas);
   const ctx = canvas.getContext("2d", { desynchronized: true }) || canvas.getContext("2d");
 
-  let modo = null; // "lapiz" | "borrador" | null
+  let modo = null; // lápiz, borrador, línea, flecha o rectángulo
   let color = "#172033";
+  let grosor = GROSOR_BASE;
   let activo = false, actual = null, modoActivo = null, vistoLapiz = false;
   let ancho = 1, rect = null, suave = null, ancla = null, timerForma = 0, congelado = false;
   let huboBorrado = false, rafRedibujo = 0;
@@ -200,7 +208,7 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
 
   function reiniciarEspera() {
     clearTimeout(timerForma);
-    if (modoActivo !== "lapiz" || congelado) return;
+    if (modoActivo !== "lapiz" || congelado || actual?.forma) return;
     timerForma = setTimeout(() => {
       if (!activo || !actual || congelado) return;
       const f = reconocerForma(actual.p);
@@ -227,16 +235,19 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
     const botonLateral = e.pointerType === "pen" && !puntaBorrador && !!((e.buttons & 2) || e.button === 2);
     modoActivo = puntaBorrador ? "borrador" : botonLateral ? (modo === "lapiz" ? "borrador" : "lapiz") : modo;
     const pt = punto(e);
-    if (modoActivo === "lapiz") {
+    if (["lapiz", "linea", "flecha", "rectangulo"].includes(modoActivo)) {
       if (contarPuntos(obtenerTrazos()) >= MAX_PUNTOS) { activo = false; return; }
       suave = pt.slice(); ancla = pt;
       const p0 = [r4(pt[0]), r4(pt[1])];
       if (e.pointerType === "pen" && e.pressure > 0) p0.push(Math.round(e.pressure * 100) / 100);
-      actual = { c: color, w: GROSOR_BASE, p: [p0] };
+      actual = { c: color, w: grosor, p: [p0] };
+      if (modoActivo === "linea" || modoActivo === "flecha") actual.forma = modoActivo;
+      if (modoActivo === "flecha") actual.a = 1;
+      if (modoActivo === "rectangulo") { actual.forma = modoActivo; actual.f = 1; actual.p.push(p0.slice()); }
       obtenerTrazos().push(actual);
       ctx.fillStyle = color; ctx.beginPath();
-      ctx.arc(pt[0] * ancho, pt[1] * ancho - cuerpo.scrollTop, Math.max(1, GROSOR_BASE * ancho) / 2, 0, Math.PI * 2); ctx.fill();
-      reiniciarEspera();
+      ctx.arc(pt[0] * ancho, pt[1] * ancho - cuerpo.scrollTop, Math.max(1, grosor * ancho) / 2, 0, Math.PI * 2); ctx.fill();
+      if (modoActivo === "lapiz") reiniciarEspera();
     } else {
       if (borrar(pt)) { huboBorrado = true; redibujarPronto(); }
     }
@@ -248,6 +259,13 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
     let movio = false;
     for (const ev of eventos.length ? eventos : [e]) {
       const pt = punto(ev);
+      if ((modoActivo === "linea" || modoActivo === "flecha") && actual) {
+        actual.p = [actual.p[0], [r4(pt[0]), r4(pt[1])]]; redibujarPronto(); continue;
+      }
+      if (modoActivo === "rectangulo" && actual) {
+        const a = actual.p[0], x0 = a[0], y0 = a[1], x1 = r4(pt[0]), y1 = r4(pt[1]);
+        actual.p = [[x0,y0],[x1,y0],[x1,y1],[x0,y1],[x0,y0]]; redibujarPronto(); continue;
+      }
       if (modoActivo === "lapiz" && actual) {
         if (congelado) continue;
         agregarPunto(actual, pt, ev);
@@ -264,7 +282,14 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
     clearTimeout(timerForma);
     if (!activo) return;
     activo = false;
-    if (modoActivo === "lapiz" && actual) {
+    if ((modoActivo === "linea" || modoActivo === "flecha") && actual) {
+      const pt = e?.type === "pointerup" ? punto(e) : actual.p.at(-1);
+      actual.p = [actual.p[0], [r4(pt[0]), r4(pt[1])]];
+      delete actual.forma; actual.f = 1;
+      actual = null; redibujar(); empujar(); alCambiar();
+    } else if (modoActivo === "rectangulo" && actual) {
+      delete actual.forma; actual = null; redibujar(); empujar(); alCambiar();
+    } else if (modoActivo === "lapiz" && actual) {
       if (!congelado && e?.type === "pointerup") {
         const u = actual.p[actual.p.length - 1], pt = punto(e);
         if (Math.hypot(pt[0] - u[0], pt[1] - u[1]) > PASO_MIN / 2) actual.p.push([r4(pt[0]), r4(pt[1])]);
@@ -302,6 +327,7 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
     },
     obtenerModo: () => modo,
     establecerColor(c) { color = c; },
+    establecerGrosor(v) { grosor = Math.max(0.0015, Math.min(0.02, Number(v) || GROSOR_BASE)); },
     puedeDeshacer: () => hi > 0,
     puedeRehacer: () => hi < hist.length - 1,
     deshacer() { if (hi > 0) restaurar(hi - 1); },
