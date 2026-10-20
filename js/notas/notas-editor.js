@@ -81,7 +81,14 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   for (const [modo, simbolo, nombre] of [["linea", "╱", "Línea recta"], ["flecha", "↗", "Flecha"], ["rectangulo", "▱", "Rectángulo"]]) {
     const b = document.createElement("button"); b.type = "button"; b.dataset.forma = modo; b.textContent = simbolo; b.title = tr(nombre); b.setAttribute("aria-label", tr(nombre)); b.setAttribute("aria-pressed", "false"); b.setAttribute("role", "menuitem"); menuFiguras.append(b); botonesForma.push(b);
   }
-  barraTinta.append(btnFiguras, btnHerramientas); document.body.append(menuFiguras);
+  barraTinta.append(btnFiguras, btnHerramientas);
+  const [sepTexto, sepListas, sepTinta] = barraTinta.querySelectorAll(".notas-sep");
+  const botonesUndoRedo = [barraTinta.querySelector('[data-cmd="undo"]'), barraTinta.querySelector('[data-cmd="redo"]')];
+  const botonesFormato = [barraTinta.querySelector('[data-cmd="bold"]'), barraTinta.querySelector('[data-cmd="italic"]'), barraTinta.querySelector('[data-cmd="underline"]')];
+  const botonesLista = [barraTinta.querySelector('[data-cmd="insertUnorderedList"]'), barraTinta.querySelector('[data-cmd="insertOrderedList"]'), barraTinta.querySelector('[data-cmd="check"]')];
+  const botonLapizBarra = barraTinta.querySelector('[data-tool="lapiz"]'), botonBorradorBarra = barraTinta.querySelector('[data-tool="borrador"]');
+  barraTinta.append(btnHerramientas, ...botonesUndoRedo, sepTexto, ...botonesFormato, sepListas, ...botonesLista, sepTinta, botonLapizBarra, botonBorradorBarra, btnFiguras);
+  document.body.append(menuFiguras);
   const stickersOverlay=document.createElement("div");stickersOverlay.className="nt-stickers-overlay nt-oculto";stickersOverlay.setAttribute("role","dialog");stickersOverlay.setAttribute("aria-modal","true");
   const stickersPanel=document.createElement("section");stickersPanel.className="nt-stickers-panel";
   const stickersHead=document.createElement("header"),stickersTitulo=document.createElement("strong"),stickersEditar=document.createElement("button"),stickersCerrar=document.createElement("button"),stickersGrid=document.createElement("div");
@@ -183,7 +190,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     campoCreada?.destruir?.(); campoMod?.destruir?.(); campoVence?.destruir?.();
     try { capaTinta?.destruir(); } catch (err) { console.error(err); }
     try { marcadores.destruir(); herramientas.destruir(); } catch (err) { console.error(err); }
-    cerrarMenuFiguras(); menuFiguras.remove(); accionesExtra.remove(); stickersOverlay.remove();
+    cerrarMenuFiguras(); menuFiguras.remove(); accionesExtra.remove(); stickersOverlay.remove(); marcoSticker.remove(); document.removeEventListener("scroll",posicionarMarcoSticker,true); window.removeEventListener("resize",posicionarMarcoSticker);
     try { if (!descartandoCambios) registrarCambio(eliminando ? "Eliminar nota" : original ? "Editar nota" : "Nueva nota", instantaneaInicial); } catch (err) { console.error(err); }
     setTimeout(() => { overlay.remove(); alCerrar(); }, 0); // siempre se cierra, pase lo que pase arriba
   };
@@ -561,19 +568,41 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const aplicarTransformacionSticker = (img) => {
     const rot = Number(img.dataset.rot) || 0, sx = img.dataset.flipH === "1" ? -1 : 1, sy = img.dataset.flipV === "1" ? -1 : 1;
     const anchoNota = cuerpo.clientWidth || 700, x = (Number(img.dataset.moveX) || 0) * anchoNota, y = (Number(img.dataset.moveY) || 0) * anchoNota;
-    img.style.position = "relative"; img.style.zIndex = String(Number(img.dataset.z) || 0);
+    img.style.position = "relative"; img.style.zIndex = String(Number(img.dataset.z) || 0); img.style.resize = "none";
     img.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg) scale(${sx},${sy})`;
   };
-  if (typeof ResizeObserver === "function") { const roSticker = new ResizeObserver(() => cuerpo.querySelectorAll("img[data-nota-sticker],img[data-nota-image]").forEach(aplicarTransformacionSticker)); roSticker.observe(cuerpo); }
+  const marcoSticker = document.createElement("div"); marcoSticker.className = "nt-sticker-marco"; marcoSticker.hidden = true; marcoSticker.setAttribute("aria-label", tr("Cambiar tamaño del sticker"));
+  const asasSticker = new Map();
+  for (const [id, x, y, cursor] of [["nw",-1,-1,"nwse-resize"],["n",0,-1,"ns-resize"],["ne",1,-1,"nesw-resize"],["e",1,0,"ew-resize"],["se",1,1,"nwse-resize"],["s",0,1,"ns-resize"],["sw",-1,1,"nesw-resize"],["w",-1,0,"ew-resize"]]) {
+    const asa=document.createElement("button"); asa.type="button"; asa.className=`nt-sticker-asa nt-sticker-asa-${id}`; asa.dataset.x=String(x); asa.dataset.y=String(y); asa.setAttribute("aria-label",tr(`Redimensionar ${id}`)); asa.style.cursor=cursor; marcoSticker.append(asa); asasSticker.set(id,asa);
+  }
+  document.body.append(marcoSticker);
+  let stickerSeleccionado = null;
+  const posicionarMarcoSticker = () => {
+    const img=stickerSeleccionado;
+    if(!img?.isConnected || !img.classList.contains("nt-sticker-seleccionado")){marcoSticker.hidden=true;return;}
+    const r=img.getBoundingClientRect(), w=img.offsetWidth||Number(img.getAttribute("width"))||1, h=img.offsetHeight||Number(img.getAttribute("height"))||1, a=(Number(img.dataset.rot)||0)*Math.PI/180;
+    const escala=r.width/Math.max(1,w*Math.abs(Math.cos(a))+h*Math.abs(Math.sin(a)));
+    const cx=(r.left+r.right)/2,cy=(r.top+r.bottom)/2;
+    Object.assign(marcoSticker.style,{left:`${cx-w*escala/2}px`,top:`${cy-h*escala/2}px`,width:`${w*escala}px`,height:`${h*escala}px`,transform:`rotate(${Number(img.dataset.rot)||0}deg) scale(${img.dataset.flipH==="1"?-1:1},${img.dataset.flipV==="1"?-1:1})`});
+    marcoSticker.hidden=false;
+  };
+  const seleccionarSticker = (img) => {
+    cuerpo.querySelectorAll("img[data-nota-sticker].nt-sticker-seleccionado,img[data-nota-image].nt-sticker-seleccionado").forEach(x=>x.classList.remove("nt-sticker-seleccionado"));
+    stickerSeleccionado=img||null;
+    if(img){img.classList.add("nt-sticker-seleccionado");img.contentEditable="false";aplicarTransformacionSticker(img);}
+    posicionarMarcoSticker();
+  };
+  const actualizarSticker = (img) => { aplicarTransformacionSticker(img); if(stickerSeleccionado===img) posicionarMarcoSticker(); persistir(); guardarPasoHistorial("sticker"); };
+  if (typeof ResizeObserver === "function") { const roSticker = new ResizeObserver(() => { cuerpo.querySelectorAll("img[data-nota-sticker],img[data-nota-image]").forEach(aplicarTransformacionSticker); posicionarMarcoSticker(); }); roSticker.observe(cuerpo); }
   const cerrarMenuSticker = () => { menuSticker?.remove(); menuSticker = null; document.removeEventListener("pointerdown", fueraMenuSticker, true); };
   const fueraMenuSticker = (e) => { if (menuSticker && !menuSticker.contains(e.target)) cerrarMenuSticker(); };
-  const actualizarSticker = (img) => { aplicarTransformacionSticker(img); persistir(); guardarPasoHistorial("sticker"); };
   const abrirMenuSticker = (img, x, y) => {
     cerrarMenuSticker(); stickerActivo = img;
     const menu = document.createElement("div"); menu.className = "nt-sticker-contexto"; menu.setAttribute("role", "menu");
     Object.assign(menu.style, { position: "fixed", left: `${Math.max(8, Math.min(x, innerWidth - 230))}px`, top: `${Math.max(8, Math.min(y, innerHeight - 320))}px`, zIndex: "100050", display: "grid", gap: "4px", minWidth: "210px", padding: "9px", borderRadius: "14px", background: "var(--bg-card,#211e2d)", color: "inherit", boxShadow: "0 12px 32px #0009", border: "1px solid var(--border-glass,rgba(255,255,255,.18))" });
     const item = (label, fn) => { const b = document.createElement("button"); b.type = "button"; b.textContent = tr(label); b.setAttribute("role", "menuitem"); Object.assign(b.style, { minHeight: "34px", border: "0", borderRadius: "9px", padding: "6px 9px", background: "transparent", color: "inherit", textAlign: "left", font: "inherit", cursor: "pointer" }); b.onclick = fn; menu.append(b); return b; };
-    item("Seleccionar", () => { img.classList.toggle("nt-sticker-seleccionado"); img.contentEditable = img.classList.contains("nt-sticker-seleccionado") ? "false" : "true"; });
+    item("Seleccionar", () => { seleccionarSticker(img.classList.contains("nt-sticker-seleccionado") ? null : img); });
     item("Espejear horizontal", () => { img.dataset.flipH = img.dataset.flipH === "1" ? "0" : "1"; actualizarSticker(img); });
     item("Espejear vertical", () => { img.dataset.flipV = img.dataset.flipV === "1" ? "0" : "1"; actualizarSticker(img); });
     const rotacion = document.createElement("label"); rotacion.className = "nt-rotacion-control";
@@ -611,15 +640,35 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const cancelarToqueLargoSticker = () => { clearTimeout(toqueLargoSticker?.timer); toqueLargoSticker = null; };
   cuerpo.addEventListener("pointerup", cancelarToqueLargoSticker);
   cuerpo.addEventListener("pointercancel", cancelarToqueLargoSticker);
+  const imagenNota = (target) => target?.closest?.("img[data-nota-sticker],img[data-nota-image]");
+  cuerpo.addEventListener("click", (e) => { const img=imagenNota(e.target); if(img&&!img.classList.contains("nt-sticker-seleccionado")) seleccionarSticker(img); });
   cuerpo.addEventListener("pointerdown", (e) => {
-    const img = e.target.closest?.("img[data-nota-sticker].nt-sticker-seleccionado,img[data-nota-image].nt-sticker-seleccionado"); if (!img || (e.button !== 0 && e.pointerType === "mouse")) return;
-    const r = img.getBoundingClientRect(); if (e.clientX > r.right - 20 && e.clientY > r.bottom - 20) return; // conserva el control nativo de resize
-    e.preventDefault(); const sx = e.clientX, sy = e.clientY, unidad = cuerpo.clientWidth || 700, ox = Number(img.dataset.moveX) || 0, oy = Number(img.dataset.moveY) || 0; let movio = false;
-    const mover = (ev) => { if (ev.pointerId !== e.pointerId) return; const dx = ev.clientX - sx, dy = ev.clientY - sy; if (Math.hypot(dx,dy) > 2) movio = true; img.dataset.moveX = String(Math.max(-3, Math.min(3, ox + dx / unidad))); img.dataset.moveY = String(Math.max(-3, Math.min(3, oy + dy / unidad))); aplicarTransformacionSticker(img); };
-    const soltar = (ev) => { if (ev.pointerId !== e.pointerId) return; window.removeEventListener("pointermove", mover, true); window.removeEventListener("pointerup", soltar, true); window.removeEventListener("pointercancel", soltar, true); if (movio) { persistir(); guardarPasoHistorial("texto"); } };
-    window.addEventListener("pointermove", mover, true); window.addEventListener("pointerup", soltar, true); window.addEventListener("pointercancel", soltar, true);
+    const img=imagenNota(e.target);
+    if(!img){if(stickerSeleccionado)seleccionarSticker(null);return;}
+    if(!img.classList.contains("nt-sticker-seleccionado") || (e.button!==0&&e.pointerType==="mouse"))return;
+    e.preventDefault(); const sx=e.clientX,sy=e.clientY,unidad=cuerpo.clientWidth||700,ox=Number(img.dataset.moveX)||0,oy=Number(img.dataset.moveY)||0; let movio=false;
+    try{img.setPointerCapture(e.pointerId);}catch(_){}
+    const mover=(ev)=>{if(ev.pointerId!==e.pointerId)return;const dx=ev.clientX-sx,dy=ev.clientY-sy;if(Math.hypot(dx,dy)>2)movio=true;img.dataset.moveX=String(Math.max(-3,Math.min(3,ox+dx/unidad)));img.dataset.moveY=String(Math.max(-3,Math.min(3,oy+dy/unidad)));aplicarTransformacionSticker(img);posicionarMarcoSticker();};
+    const soltar=(ev)=>{if(ev.pointerId!==e.pointerId)return;img.removeEventListener("pointermove",mover);img.removeEventListener("pointerup",soltar);img.removeEventListener("pointercancel",soltar);if(movio){persistir();guardarPasoHistorial("texto");}};
+    img.addEventListener("pointermove",mover);img.addEventListener("pointerup",soltar);img.addEventListener("pointercancel",soltar);
   });
-  cuerpo.addEventListener("pointerup", (e) => { const img=e.target.closest?.("img[data-nota-sticker],img[data-nota-image]"); if (!img) return; setTimeout(() => { const w=Math.round(parseFloat(img.style.width)||img.width),h=Math.round(parseFloat(img.style.height)||img.height); if(w>0&&h>0&&(w!==Number(img.getAttribute("width"))||h!==Number(img.getAttribute("height")))){img.setAttribute("width",String(w));img.setAttribute("height",String(h));persistir();guardarPasoHistorial("texto");} }, 0); });
+  for(const asa of asasSticker.values()) asa.addEventListener("pointerdown",(e)=>{
+    const img=stickerSeleccionado;if(!img)return;e.preventDefault();e.stopPropagation();try{asa.setPointerCapture(e.pointerId);}catch(_){}
+    const startW=img.offsetWidth||img.width,startH=img.offsetHeight||img.height,aspect=startW/Math.max(1,startH),angle=(Number(img.dataset.rot)||0)*Math.PI/180,fh=img.dataset.flipH==="1"?-1:1,fv=img.dataset.flipV==="1"?-1:1;
+    const rr=img.getBoundingClientRect(),cx0=(rr.left+rr.right)/2,cy0=(rr.top+rr.bottom)/2,zoom=rr.width/Math.max(1,startW*Math.abs(Math.cos(angle))+startH*Math.abs(Math.sin(angle)));
+    const ux=[Math.cos(angle)*fh,Math.sin(angle)*fh],uy=[-Math.sin(angle)*fv,Math.cos(angle)*fv],hx=Number(asa.dataset.x),hy=Number(asa.dataset.y),px=e.clientX,py=e.clientY;
+    const limite=Math.max(160,(cuerpo.clientWidth||700)*4),min=16;let cambio=false;
+    const mover=(ev)=>{if(ev.pointerId!==e.pointerId)return;const dx=((ev.clientX-px)*ux[0]+(ev.clientY-py)*ux[1])/Math.max(.01,zoom),dy=((ev.clientX-px)*uy[0]+(ev.clientY-py)*uy[1])/Math.max(.01,zoom);let nw=startW,nh=startH,dcx=0,dcy=0;
+      if(hx&&hy){let k=(hx*dx+hy*dy/aspect)/(1+1/(aspect*aspect));nw=Math.max(min,Math.min(limite,startW+k));nh=nw/aspect;const dw=nw-startW,dh=nh-startH;dcx=ux[0]*hx*dw/2+uy[0]*hy*dh/2;dcy=ux[1]*hx*dw/2+uy[1]*hy*dh/2;}
+      else if(hx){nw=Math.max(min,Math.min(limite,startW+hx*dx));dcx=ux[0]*hx*(nw-startW)/2;dcy=ux[1]*hx*(nw-startW)/2;}
+      else {nh=Math.max(min,Math.min(limite,startH+hy*dy));dcx=uy[0]*hy*(nh-startH)/2;dcy=uy[1]*hy*(nh-startH)/2;}
+      const targetX=cx0+dcx,targetY=cy0+dcy;img.style.width=`${nw}px`;img.style.height=`${nh}px`;const actual=img.getBoundingClientRect(),cx=(actual.left+actual.right)/2,cy=(actual.top+actual.bottom)/2,base=cuerpo.clientWidth||700;img.dataset.moveX=String((Number(img.dataset.moveX)||0)+(targetX-cx)/base);img.dataset.moveY=String((Number(img.dataset.moveY)||0)+(targetY-cy)/base);aplicarTransformacionSticker(img);posicionarMarcoSticker();cambio=true;
+    };
+    const soltar=(ev)=>{if(ev.pointerId!==e.pointerId)return;asa.removeEventListener("pointermove",mover);asa.removeEventListener("pointerup",soltar);asa.removeEventListener("pointercancel",soltar);if(cambio){img.setAttribute("width",String(Math.round(parseFloat(img.style.width))));img.setAttribute("height",String(Math.round(parseFloat(img.style.height))));persistir();guardarPasoHistorial("sticker");}};
+    asa.addEventListener("pointermove",mover);asa.addEventListener("pointerup",soltar);asa.addEventListener("pointercancel",soltar);
+  });
+  document.addEventListener("scroll",posicionarMarcoSticker,true);window.addEventListener("resize",posicionarMarcoSticker);
+  cuerpo.addEventListener("pointerup", (e) => { const img=imagenNota(e.target); if (!img) return; setTimeout(() => { const w=Math.round(parseFloat(img.style.width)||img.width),h=Math.round(parseFloat(img.style.height)||img.height); if(w>0&&h>0&&(w!==Number(img.getAttribute("width"))||h!==Number(img.getAttribute("height")))){img.setAttribute("width",String(w));img.setAttribute("height",String(h));persistir();guardarPasoHistorial("texto");posicionarMarcoSticker();} }, 0); });
 
   function aplicarEstadoEditor(s) {
     restaurandoHistorial = true;
