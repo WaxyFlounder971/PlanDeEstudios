@@ -37,8 +37,10 @@ function sanearHTMLNota(html = "") {
       }
       const marcado = hijo.tagName === "INPUT" && (hijo.checked || hijo.hasAttribute("checked"));
       const inicio = hijo.tagName === "OL" ? parseInt(hijo.getAttribute("start"), 10) : NaN; // lista numerada que empieza en otro número
+      const colorMarcador = (hijo.tagName === "UL" || hijo.tagName === "OL") && /^#[\da-f]{6}$/i.test(hijo.getAttribute("data-marc-color") || "") ? hijo.getAttribute("data-marc-color").toLowerCase() : null;
       for (const atributo of [...hijo.attributes]) hijo.removeAttribute(atributo.name);
       if (Number.isInteger(inicio) && inicio > 1 && inicio < 10000) hijo.setAttribute("start", String(inicio));
+      if (colorMarcador) hijo.setAttribute("data-marc-color", colorMarcador);
       if (hijo.tagName === "INPUT") {
         hijo.type = "checkbox";
         hijo.disabled = false;
@@ -66,6 +68,7 @@ function escaparHTMLNota(texto = "") {
 
 function renderizarHTMLNota(contenedor, html) {
   contenedor.innerHTML = sanearHTMLNota(html);
+  contenedor.querySelectorAll("ul[data-marc-color],ol[data-marc-color]").forEach((l) => l.style.setProperty("--nt-marker-color", l.getAttribute("data-marc-color")));
   contenedor.querySelectorAll("input[type=checkbox]").forEach((check) => { check.disabled = true; });
   contenedor.querySelectorAll("a").forEach((a) => {
     const url = a.getAttribute("href") || "";

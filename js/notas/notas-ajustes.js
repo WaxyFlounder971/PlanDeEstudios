@@ -85,6 +85,7 @@ function mostrarAjustesNotas(refrescar, abrirPapelera) {
     (v) => { cfg.vista = v; guardar(); refrescar(); },
     tr("Vista predeterminada"),
   )));
+  panel.append(interruptor(tr("Notas expandidas por defecto"), cfg.tarjetas_expandidas === true, (v) => { cfg.tarjetas_expandidas = v; guardar(); refrescar(); }));
 
   // Vencimiento por defecto + plazo
   const plazo = seccion(tr("Vencimiento predeterminado"), segmentado(
@@ -101,13 +102,7 @@ function mostrarAjustesNotas(refrescar, abrirPapelera) {
   }));
   panel.append(plazo);
 
-  // Al compartir contenido
-  panel.append(seccion(tr("Al compartir contenido"), segmentado(
-    [["guardar", tr("Guardar directamente")], ["editor", tr("Abrir el editor")]],
-    cfg.compartir_accion,
-    (v) => { cfg.compartir_accion = v; guardar(); },
-    tr("Al compartir contenido"),
-  )));
+  panel.append(interruptor(tr("No compartir marca de agua en imágenes"), cfg.sin_marca_agua === true, (v) => { cfg.sin_marca_agua = v; guardar(); }));
 
   // Interruptores
   panel.append(interruptor(tr("Mover a Papelera después de enviar a Wapper"), cfg.papelera_despues_wapper, (v) => { cfg.papelera_despues_wapper = v; guardar(); }));

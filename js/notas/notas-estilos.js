@@ -45,7 +45,12 @@ const CSS = `
 .nt-punto{display:block;width:9px;height:9px;border-radius:50%;background:currentColor}
 .notas-toolbar [data-tool][aria-pressed="true"]{background:var(--nt-grad,linear-gradient(135deg,#f5a9d3,#b7a5f4));color:#1b1530}
 .notas-toolbar [data-forma][aria-pressed="true"]{background:var(--nt-grad,linear-gradient(135deg,#f5a9d3,#b7a5f4));color:#1b1530}
-.notas-toolbar .nt-tinta-grosor{width:68px;height:30px;accent-color:#7d75dc;cursor:pointer}
+.nt-tinta-tamanos{display:flex;align-items:center;gap:3px;margin-left:auto}
+.nt-tinta-tamanos button{min-width:34px;height:28px;padding:0 5px;border:1px solid var(--nt-borde,rgba(255,255,255,.16));border-radius:9px;background:rgba(0,0,0,.12);color:inherit;font:inherit;font-size:.68rem;cursor:pointer}
+.nt-tinta-tamanos button[aria-pressed="true"]{background:var(--nt-grad);color:#1b1530;font-weight:800}
+.nt-venc-row{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:-8px;font-size:.8rem;color:var(--text-muted,rgba(255,255,255,.62))}
+.nt-venc-row .notas-vencimiento{min-height:28px;padding:2px 8px;border:0;background:transparent;font:inherit;color:inherit}
+.nt-venc-row .nt-ico{width:14px;height:14px;vertical-align:middle}
 .nt-tinta-color{width:30px;height:30px;padding:0;border:2px solid rgba(255,255,255,.35);border-radius:50%;overflow:hidden;cursor:pointer;background:none;appearance:none;-webkit-appearance:none}
 .nt-tinta-color::-webkit-color-swatch-wrapper{padding:0}
 .nt-tinta-color::-webkit-color-swatch{border:0;border-radius:50%}
@@ -54,7 +59,13 @@ const CSS = `
 .nt-tinta-canvas{position:absolute;z-index:5;pointer-events:none;touch-action:none;border-radius:12px}
 .nt-tinta-canvas.activo{pointer-events:auto;cursor:crosshair}
 .nt-tinta-canvas[data-modo="borrador"]{cursor:cell}
+.nota-tinta-wrap{max-height:220px;overflow:hidden;flex:none}
+.nota-card.expandida .nota-tinta-wrap{max-height:none}
 .nota-tinta-mini{display:block;width:100%;height:auto;margin-top:8px;pointer-events:none}
+.nota-expand{display:grid;place-items:center;align-self:center;width:30px;height:24px;padding:0;border:0;border-radius:8px;background:transparent;color:inherit;opacity:.72;cursor:pointer}
+.nota-expand:hover{opacity:1;background:rgba(255,255,255,.12)}
+.nota-expand svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.8;stroke-linecap:round;stroke-linejoin:round}
+.nota-card.expandida .nota-preview{max-height:none!important;overflow:visible!important;-webkit-line-clamp:unset!important;line-clamp:unset!important}
 /* --- Paleta del editor: separar predefinidos y personalizados --- */
 .notas-editor .notas-palette{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .notas-editor .notas-sep-color{height:24px;min-height:0;margin:0 6px;align-self:center}
@@ -67,6 +78,9 @@ const CSS = `
 .notas-cuerpo input[type="checkbox"]:checked,.nota-preview input[type="checkbox"]:checked{background:var(--nt-grad,linear-gradient(135deg,#f5a9d3,#b7a5f4));border-color:transparent;opacity:1}
 .notas-cuerpo input[type="checkbox"]:checked::after,.nota-preview input[type="checkbox"]:checked::after{content:"";width:5px;height:10px;margin-top:-2px;border:solid #1b1530;border-width:0 2px 2px 0;transform:rotate(45deg)}
 .notas-cuerpo li:has(input[data-nota-check]),.nota-preview li:has(input[data-nota-check]){list-style:none;margin-left:-1.3em}
+.notas-cuerpo ul[data-marc-color]>li::marker,.notas-cuerpo ol[data-marc-color]>li::marker,.nota-preview ul[data-marc-color]>li::marker,.nota-preview ol[data-marc-color]>li::marker{color:var(--nt-marker-color,currentColor)}
+.notas-cuerpo ul[data-marc-color] input[data-nota-check],.notas-cuerpo ol[data-marc-color] input[data-nota-check],.nota-preview ul[data-marc-color] input[data-nota-check],.nota-preview ol[data-marc-color] input[data-nota-check]{border-color:var(--nt-marker-color,currentColor)}
+.notas-cuerpo ul[data-marc-color] input[data-nota-check]:checked,.notas-cuerpo ol[data-marc-color] input[data-nota-check]:checked,.nota-preview ul[data-marc-color] input[data-nota-check]:checked,.nota-preview ol[data-marc-color] input[data-nota-check]:checked{background:var(--nt-marker-color,currentColor)}
 /* --- Arrastrar notas fijadas --- */
 .nota-drag-handle{touch-action:none;cursor:grab}
 .nota-drag-handle svg{display:block;width:16px;height:16px;fill:currentColor}

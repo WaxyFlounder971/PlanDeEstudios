@@ -116,7 +116,7 @@ function crearMarcadores({ cuerpo }) {
   };
   document.addEventListener("keydown", teclas, true);
 
-  return { activo, salir, aplicar, destruir: () => { document.removeEventListener("keydown", teclas, true); salir(); } };
+  return { activo, salir, aplicar, establecerColor(color) { if (!activo() || !/^#[\da-f]{6}$/i.test(color)) return false; listas.forEach((l) => { l.setAttribute("data-marc-color", color.toLowerCase()); l.style.setProperty("--nt-marker-color", color.toLowerCase()); }); return true; }, destruir: () => { document.removeEventListener("keydown", teclas, true); salir(); } };
 }
 
 /* ===================== Menú 🛠 ===================== */
@@ -138,17 +138,27 @@ function crearHerramientas({ cuerpo, boton, obtenerTitulo = () => "", completada
   };
   const htmlSeleccion = (r) => { const d = document.createElement("div"); d.append(r.cloneContents()); return d.innerHTML; };
 
-  /** Sustituye toda la nota con una sola operación del historial nativo del editor. */
+  /** Desarma listas y citas antes de reemplazar el HTML; evita que el navegador mezcle los bloques viejos y nuevos. */
   function reemplazar(html) {
     const antes = cuerpo.innerHTML;
+    let pasos = 0;
     ocupado = true;
     try {
       cuerpo.focus();
       const s = getSelection(), r = document.createRange();
-      r.selectNodeContents(cuerpo); s.removeAllRanges(); s.addRange(r);
+      const todo = () => { r.selectNodeContents(cuerpo); s.removeAllRanges(); s.addRange(r); };
+      todo();
+      for (let i = 0; i < 8; i++) {
+        const cmd = cuerpo.querySelector("ul") ? "insertUnorderedList" : cuerpo.querySelector("ol") ? "insertOrderedList" : cuerpo.querySelector("blockquote") ? "outdent" : null;
+        if (!cmd) break;
+        document.execCommand(cmd); pasos++; todo();
+      }
       if (html.trim()) document.execCommand("insertHTML", false, html); else document.execCommand("delete");
+      pasos++;
+      const ult = cuerpo.lastChild;
+      if (html.trim() && ult && ult.nodeName === "DIV" && !ult.childNodes.length && s.anchorNode === ult) { document.execCommand("delete"); pasos++; }
     } finally { ocupado = false; }
-    alCambiar({ antes, pasos: 1 });
+    alCambiar({ antes, pasos });
   }
 
   const MENSAJES = {

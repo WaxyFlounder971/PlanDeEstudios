@@ -36,7 +36,7 @@ async function leerWapper(file) {
   };
 }
 
-function crearImagenNota({ titulo = "", contenido = "", color = "#fff594", trazos = [] }) {
+function crearImagenNota({ titulo = "", contenido = "", color = "#fff594", trazos = [], marcaAgua = true }) {
   const c = document.createElement("canvas"), ctx = c.getContext("2d");
   const w = 900, pad = 44, maxW = w - pad * 2, size = 32, lineH = 44;
   ctx.font = `${size}px system-ui, sans-serif`;
@@ -57,7 +57,7 @@ function crearImagenNota({ titulo = "", contenido = "", color = "#fff594", trazo
   for (const l of lineas) { if (y > h - pad - 50) break; ctx.fillText(l,pad,y,maxW); y += lineH; }
   if (trazos.length) { ctx.save(); ctx.translate(pad,baseTinta); dibujarTrazos(ctx,trazos,maxW,0,1); ctx.restore(); }
   // Marca casi imperceptible: identifica el origen sin competir con el contenido.
-  ctx.globalAlpha = .09; ctx.fillStyle = "#172033"; ctx.font = "500 16px system-ui, sans-serif"; ctx.textAlign = "right"; ctx.fillText("Wapper",w-pad,h-pad/2); ctx.globalAlpha = 1; ctx.textAlign = "left";
+  if (marcaAgua) { ctx.globalAlpha = .09; ctx.fillStyle = "#172033"; ctx.font = "500 16px system-ui, sans-serif"; ctx.textAlign = "right"; ctx.fillText("Wapper",w-pad,h-pad/2); ctx.globalAlpha = 1; ctx.textAlign = "left"; }
   return c;
 }
 async function compartirImagenNota(datos) {

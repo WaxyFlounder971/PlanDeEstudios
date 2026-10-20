@@ -61,7 +61,7 @@ function formatoAutomatico() { return opcionesNotas().formato_auto !== false; }
 function notasActuales() { if (!estado.datos) return []; return estado.datos.notas || (estado.datos.notas = []); }
 function opcionesNotas() {
   const cfg = estado.datos.configuracion;
-  cfg.notas_ajustes ||= { vencimiento_default: false, plazo_default: "3_dias", color_default: COLOR_DEFECTO, vista: "cuadricula", papelera_despues_wapper: false, compartir_accion: "guardar", completadas_al_final: true, formato_auto: true, colores_recientes: [] };
+  cfg.notas_ajustes ||= { vencimiento_default: false, plazo_default: "3_dias", color_default: COLOR_DEFECTO, vista: "cuadricula", tarjetas_expandidas: false, papelera_despues_wapper: false, compartir_accion: "guardar", completadas_al_final: true, formato_auto: true, colores_recientes: [] };
   if (cfg.notas_ajustes.color_default === "#fff2b3") cfg.notas_ajustes.color_default = COLOR_DEFECTO;
   return cfg.notas_ajustes;
 }

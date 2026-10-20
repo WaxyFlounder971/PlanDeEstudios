@@ -123,7 +123,7 @@ function candidatoRect(pts) {
   let w = u1 - u0, h = v1 - v0;
   if (w <= 0 || h <= 0) return null;
   const cu = (u0 + u1) / 2, cv = (v0 + v1) / 2;
-  if (Math.abs(w - h) / Math.max(w, h) < 0.18) w = h = (w + h) / 2; // cuadrado
+  // Conserva la proporción dibujada: un rectángulo casi cuadrado no se fuerza a cuadrado.
   const c = Math.cos(th), s = Math.sin(th);
   const pt = (u, v) => [u * c - v * s, u * s + v * c];
   const e = [[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]].map(([a, b]) => pt(cu + (a * w) / 2, cv + (b * h) / 2));
