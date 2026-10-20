@@ -96,6 +96,7 @@ function abrirSticky(nota, origen) {
 
 /* ===================== Notas flotantes ===================== */
 const flotantes = new Map(); // id -> estado de la nota flotante
+const ventanasPiP = new Map();
 let zTop = 700;
 
 const leerGuardado = () => { try { return JSON.parse(localStorage.getItem(CLAVE) || "{}") || {}; } catch (_) { return {}; } };
@@ -209,8 +210,9 @@ function pintar(f) {
   const barra = el("div", "nt-flot-barra");
   const asa = el("span", "nt-flot-asa"); asa.innerHTML = ICONOS.asa; asa.setAttribute("aria-hidden", "true");
   const editar = botonIcono({ icono: ICONOS.editar, titulo: tr("Editar"), clase: "nt-flot-btn", onclick: () => abrirEditorNota(nota.id, refrescarLista) });
+  const pip = botonIcono({ icono: ICONOS.pip, titulo: tr("Abrir en ventana PiP"), clase: "nt-flot-btn", onclick: () => abrirNotaPictureInPicture(nota.id, f.el) });
   const soltar = botonIcono({ icono: ICONOS.quitarFlotante, titulo: tr("Quitar de flotante"), clase: "nt-flot-btn", onclick: () => { desflotarNota(nota.id); refrescarLista(); } });
-  barra.append(asa, editar, soltar);
+  barra.append(asa, editar, pip, soltar);
   f.el.append(barra);
   if (nota.titulo) f.el.append(el("strong", "nt-flot-titulo", nota.titulo));
   const cuerpo = el("div", "nota-preview nt-flot-cuerpo");
@@ -220,6 +222,55 @@ function pintar(f) {
   const mini = crearMiniTinta(nota.tinta);
   if (mini) f.el.append(mini);
   return true;
+}
+
+function pintarPiP(id, win) {
+  const nota = buscar(id);
+  if (!nota || win.closed) { try { win.close(); } catch (_) {} ventanasPiP.delete(id); return; }
+  const doc = win.document;
+  const hoja = doc.createElement("article");
+  hoja.className = "nt-pip-nota";
+  const color = resolverColorNota(nota.color || COLOR_DEFECTO);
+  hoja.style.setProperty("--nt-nota", color); hoja.style.color = colorTextoNota(nota, color);
+  const barra = doc.createElement("header"); barra.className = "nt-flot-barra";
+  const editar = botonIcono({ icono: ICONOS.editar, titulo: tr("Editar"), clase: "nt-flot-btn", onclick: () => abrirEditorNota(id, refrescarLista) });
+  const volver = botonIcono({ icono: ICONOS.flotar, titulo: tr("Volver a flotante en la app"), clase: "nt-flot-btn", onclick: () => { flotarNota(id); ventanasPiP.delete(id); win.close(); refrescarLista(); } });
+  barra.append(editar, volver);
+  if (nota.titulo) { const titulo = doc.createElement("strong"); titulo.className = "nt-flot-titulo"; titulo.textContent = nota.titulo; hoja.append(barra, titulo); }
+  else hoja.append(barra);
+  const cuerpo = doc.createElement("div"); cuerpo.className = "nota-preview nt-flot-cuerpo";
+  renderizarHTMLNota(cuerpo, nota.contenido); enlazarChecks(cuerpo, nota, () => window.dispatchEvent(new Event("notas:actualizadas-ui"))); hoja.append(cuerpo);
+  const mini = crearMiniTinta(nota.tinta); if (mini) hoja.append(doc.adoptNode(mini));
+  doc.body.replaceChildren(hoja);
+}
+
+function abrirPiP(id) {
+  const api = window.documentPictureInPicture;
+  if (!api || typeof api.requestWindow !== "function") return null;
+  for (const [anteriorId, anterior] of [...ventanasPiP]) {
+    if (anteriorId === id && !anterior.closed) return Promise.resolve(anterior);
+    ventanasPiP.delete(anteriorId); try { anterior.close(); } catch (_) {}
+  }
+  return api.requestWindow({ width: 320, height: 420 }).then((win) => {
+    win.document.title = buscar(id)?.titulo || tr("Nota flotante");
+    for (const n of document.head.querySelectorAll('link[rel="stylesheet"],style')) {
+      const copia = win.document.importNode(n, true);
+      if (copia.tagName === "LINK") copia.href = n.href;
+      win.document.head.append(copia);
+    }
+    const estilo = win.document.createElement("style");
+    estilo.textContent = `html,body{margin:0;width:100%;height:100%;overflow:auto;background:#171923;color:#f7f7f7;font:14px system-ui,sans-serif}.nt-pip-nota{box-sizing:border-box;display:flex;flex-direction:column;gap:8px;min-height:100%;padding:10px 14px;background:var(--nt-nota,#fff594);border-radius:14px;overflow:auto;overflow-wrap:anywhere}.nt-pip-nota .nt-flot-barra{display:flex;align-items:center;gap:6px;position:sticky;top:0;background:inherit}.nt-pip-nota .nt-flot-barra>*:first-child{margin-right:auto}.nt-pip-nota .nt-flot-btn{display:inline-grid;place-items:center;width:34px;height:34px;border:0;border-radius:50%;background:rgba(0,0,0,.1);color:inherit;cursor:pointer}.nt-pip-nota .nt-flot-btn .nt-ico{width:18px;height:18px}.nt-pip-nota .nota-preview{max-height:none;overflow:visible}.nt-pip-nota .nota-tinta-mini{width:100%;height:auto;margin-top:4px}`;
+    win.document.head.append(estilo);
+    ventanasPiP.set(id, win); win.addEventListener("pagehide", () => { if (ventanasPiP.get(id) === win) ventanasPiP.delete(id); }, { once: true });
+    pintarPiP(id, win); return win;
+  });
+}
+
+function abrirNotaPictureInPicture(id, origen) {
+  if (!window.documentPictureInPicture?.requestWindow) {
+    flotarNota(id, origen); refrescarLista(); return Promise.resolve(false);
+  }
+  return abrirPiP(id).then(() => true).catch(() => { flotarNota(id, origen); refrescarLista(); return false; });
 }
 
 function montar(nota, { fx, fy, x, y } = {}) {
@@ -273,6 +324,7 @@ function restaurarFlotantes() {
 
 function sincronizar() {
   if (!estado.datos) return;
+  for (const [id, win] of [...ventanasPiP]) pintarPiP(id, win);
   for (const f of [...flotantes.values()]) {
     if (!buscar(f.id)) { desflotarNota(f.id); continue; }
     if (f.arrastrando || f.inercia) continue;
@@ -286,4 +338,4 @@ window.addEventListener("notas:actualizadas", sincronizar);
 window.addEventListener("notas:actualizadas-ui", sincronizar);
 window.addEventListener("resize", () => flotantes.forEach((f) => { if (!f.arrastrando && !f.inercia) reubicar(f); }));
 
-export { abrirSticky, cerrarSticky, flotarNota, desflotarNota, alternarFlotante, estaFlotando, restaurarFlotantes };
+export { abrirSticky, cerrarSticky, flotarNota, desflotarNota, alternarFlotante, abrirNotaPictureInPicture, estaFlotando, restaurarFlotantes };

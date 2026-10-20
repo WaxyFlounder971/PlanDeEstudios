@@ -13,7 +13,7 @@ function datosWapper(nota) {
       color: /^#[\da-f]{6}$/i.test(nota.color || "") ? nota.color : "#fff594",
       color_texto: /^#[\da-f]{6}$/i.test(nota.color_texto || "") ? nota.color_texto : null,
       vence_en: nota.vence_en || null,
-      tinta: Array.isArray(nota.tinta) ? nota.tinta.slice(0, 5000).map((t) => ({ c: /^#[\da-f]{6}$/i.test(t.c || "") ? t.c : "#172033", w: Math.max(.001, Math.min(.03, Number(t.w) || .0045)), f: t.f ? 1 : undefined, a: t.a ? 1 : undefined, p: Array.isArray(t.p) ? t.p.slice(0, 60000).map((p) => [Number(p[0]) || 0, Number(p[1]) || 0, Number.isFinite(p[2]) ? p[2] : undefined].filter((x) => x !== undefined)) : [] })) : [],
+      tinta: Array.isArray(nota.tinta) ? nota.tinta.slice(0, 5000).map((t) => ({ c: /^#[\da-f]{6}$/i.test(t.c || "") ? t.c : "#172033", w: Math.max(.001, Math.min(.03, Number(t.w) || .0045)), f: t.f ? 1 : undefined, a: t.a ? 1 : undefined, tipo: t.tipo || undefined, p: Array.isArray(t.p) ? t.p.slice(0, 60000).map((p) => [Number(p[0]) || 0, Number(p[1]) || 0, Number.isFinite(p[2]) ? p[2] : undefined].filter((x) => x !== undefined)) : [] })) : [],
     },
   };
 }
@@ -32,32 +32,110 @@ async function leerWapper(file) {
     texto: textoPlanoNota(n.contenido || ""), color: /^#[\da-f]{6}$/i.test(n.color || "") ? n.color : "#fff594",
     color_texto: /^#[\da-f]{6}$/i.test(n.color_texto || "") ? n.color_texto : null,
     vence_en: typeof n.vence_en === "string" ? n.vence_en : null,
-    tinta: Array.isArray(n.tinta) ? n.tinta.slice(0, 5000).filter((t) => t && Array.isArray(t.p)).map((t) => ({ c: /^#[\da-f]{6}$/i.test(t.c || "") ? t.c : "#172033", w: Math.max(.001, Math.min(.03, Number(t.w) || .0045)), f: t.f ? 1 : undefined, a: t.a ? 1 : undefined, p: t.p.slice(0, 60000).filter((p) => Array.isArray(p) && Number.isFinite(+p[0]) && Number.isFinite(+p[1])).map((p) => [Math.max(-2,Math.min(3,+p[0])),Math.max(-2,Math.min(8,+p[1])),Number.isFinite(+p[2])?Math.max(0,Math.min(1,+p[2])):undefined].filter((x)=>x!==undefined)) })) : [],
+    tinta: Array.isArray(n.tinta) ? n.tinta.slice(0, 5000).filter((t) => t && Array.isArray(t.p)).map((t) => ({ c: /^#[\da-f]{6}$/i.test(t.c || "") ? t.c : "#172033", w: Math.max(.001, Math.min(.03, Number(t.w) || .0045)), f: t.f ? 1 : undefined, a: t.a ? 1 : undefined, tipo: ["circulo", "elipse", "cuadrado", "rectangulo", "triangulo", "estrella", "pentagrama", "corazon", "figura"].includes(t.tipo) ? t.tipo : undefined, p: t.p.slice(0, 60000).filter((p) => Array.isArray(p) && Number.isFinite(+p[0]) && Number.isFinite(+p[1])).map((p) => [Math.max(-2,Math.min(3,+p[0])),Math.max(-2,Math.min(8,+p[1])),Number.isFinite(+p[2])?Math.max(0,Math.min(1,+p[2])):undefined].filter((x)=>x!==undefined)) })) : [],
   };
 }
 
-function crearImagenNota({ titulo = "", contenido = "", color = "#fff594", trazos = [], marcaAgua = true }) {
+function crearImagenNota({ titulo = "", contenido = "", color = "#fff594", colorTexto = "#172033", trazos = [], marcaAgua = true }) {
+  const w = 900, pad = 44, maxW = w - pad * 2, titleFont = '700 34px system-ui, sans-serif';
   const c = document.createElement("canvas"), ctx = c.getContext("2d");
-  const w = 900, pad = 44, maxW = w - pad * 2, size = 32, lineH = 44;
-  ctx.font = `${size}px system-ui, sans-serif`;
-  const palabras = textoPlanoNota(contenido).split(/\s+/).filter(Boolean), lineas = [];
-  let actual = "";
-  for (const pal of palabras) { const nueva = actual ? `${actual} ${pal}` : pal; if (actual && ctx.measureText(nueva).width > maxW) { lineas.push(actual); actual = pal; } else actual = nueva; }
-  if (actual) lineas.push(actual);
-  const tituloLineas = String(titulo).split(/\r?\n/);
-  const textoH = Math.max(1,lineas.length) * lineH, baseTinta = pad + 70 + tituloLineas.length * 42 + textoH + 24;
-  const maxY = trazos.flatMap((t) => t.p || []).reduce((m,p) => Math.max(m,Number(p[1]) || 0),0);
-  const tintaH = trazos.length ? Math.max(220,Math.min(1400,maxY * maxW + 40)) : 0;
-  const h = Math.max(440, baseTinta + tintaH + pad + 64);
+  const raiz = document.createElement("div");
+  raiz.innerHTML = sanearHTMLNota(contenido || "");
+  const texto = [];
+  const medir = (value, font) => { ctx.font = font; return ctx.measureText(value).width; };
+  const lineasTexto = (value, font, max = maxW) => {
+    const out = []; let actual = "";
+    for (const palabra of String(value || "").split(/\s+/u).filter(Boolean)) {
+      const siguiente = actual ? `${actual} ${palabra}` : palabra;
+      if (actual && medir(siguiente, font) > max) { out.push(actual); actual = palabra; } else actual = siguiente;
+    }
+    if (actual) out.push(actual);
+    return out;
+  };
+  function recorrer(nodo, nivelLista = 0, numero = 1) {
+    if (nodo.nodeType === Node.TEXT_NODE) {
+      const value = nodo.nodeValue.replace(/\s+/gu, " ");
+      if (value.trim()) texto.push({ tipo: "texto", value });
+      return;
+    }
+    if (nodo.nodeType !== Node.ELEMENT_NODE) return;
+    const tag = nodo.tagName.toLowerCase();
+    if (tag === "br") { texto.push({ tipo: "salto" }); return; }
+    if (tag === "ul" || tag === "ol") {
+      [...nodo.children].filter((x) => x.tagName === "LI").forEach((li, i) => {
+        texto.push({ tipo: "item", lista: tag, numero: tag === "ol" ? Number(nodo.getAttribute("start") || 1) + i : 0, nivel: nivelLista });
+        [...li.childNodes].forEach((hijo) => recorrer(hijo, nivelLista + 1));
+        texto.push({ tipo: "fin-item" });
+      });
+      texto.push({ tipo: "salto", espacio: 5 }); return;
+    }
+    if (tag === "li") { [...nodo.childNodes].forEach((hijo) => recorrer(hijo, nivelLista)); return; }
+    if (["p", "div", "blockquote", "h1", "h2", "h3"].includes(tag)) {
+      if (texto.length && texto.at(-1).tipo !== "salto") texto.push({ tipo: "salto", espacio: 8 });
+      if (tag === "blockquote") texto.push({ tipo: "cita-inicio" });
+      [...nodo.childNodes].forEach((hijo) => recorrer(hijo, nivelLista));
+      if (tag === "blockquote") texto.push({ tipo: "cita-fin" });
+      texto.push({ tipo: "salto", espacio: tag.startsWith("h") ? 12 : 5 }); return;
+    }
+    if (tag === "input" && nodo.type === "checkbox") { texto.push({ tipo: "casilla", checked: nodo.checked || nodo.hasAttribute("checked") }); return; }
+    const estilo = { "strong": "bold", "b": "bold", "em": "italic", "i": "italic", "u": "underline" }[tag];
+    if (estilo) texto.push({ tipo: "estilo", estilo, valor: true });
+    [...nodo.childNodes].forEach((hijo) => recorrer(hijo, nivelLista));
+    if (estilo) texto.push({ tipo: "estilo", estilo, valor: false });
+  }
+  [...raiz.childNodes].forEach((n) => recorrer(n));
+
+  const tituloLineas = [];
+  ctx.font = titleFont;
+  for (const parrafo of String(titulo).split(/\r?\n/u)) tituloLineas.push(...lineasTexto(parrafo, titleFont));
+  const bloques = []; let y = pad + 26;
+  for (const linea of tituloLineas) { bloques.push({ tipo: "titulo", value: linea, y }); y += 43; }
+  y += 15;
+  let bold = false, italic = false, underline = false, cita = 0, item = null, linea = "", x = pad, lineH = 30;
+  const fontActual = () => `${italic ? "italic " : ""}${bold ? "700" : "400"} 23px system-ui, sans-serif`;
+  function iniciarLinea() {
+    if (item && !linea && x === pad) {
+      const sangria = pad + item.nivel * 24;
+      const markerX = sangria + 3;
+      bloques.push({ tipo: "marcador", lista: item.lista, numero: item.numero, x: markerX, y: y + 19 });
+      x = sangria + 30;
+    } else if (!item) x = pad + cita * 17;
+  }
+  function vaciar() { if (linea) { bloques.push({ tipo: "texto", value: linea, x, y, font: fontActual(), underline }); linea = ""; y += lineH; } }
+  for (const token of texto) {
+    if (token.tipo === "estilo") { if (token.estilo === "bold") bold = token.valor; if (token.estilo === "italic") italic = token.valor; if (token.estilo === "underline") underline = token.valor; continue; }
+    if (token.tipo === "cita-inicio") { bloques.push({ tipo: "cita-barra", x: pad + cita * 17, y0: y, y1: null }); cita++; continue; }
+    if (token.tipo === "cita-fin") { cita = Math.max(0, cita - 1); const barra = [...bloques].reverse().find((b) => b.tipo === "cita-barra" && b.y1 == null); if (barra) barra.y1 = y; continue; }
+    if (token.tipo === "item") { vaciar(); item = token; x = pad; iniciarLinea(); continue; }
+    if (token.tipo === "fin-item") { vaciar(); item = null; x = pad; y += 3; continue; }
+    if (token.tipo === "salto") { vaciar(); if (item && x > pad) x = pad + item.nivel * 24 + 30; else if (!item) x = pad + cita * 17; y += token.espacio || 0; continue; }
+    if (token.tipo === "casilla") { iniciarLinea(); const size = 18; if (x + size > w - pad) { vaciar(); iniciarLinea(); } bloques.push({ tipo: "casilla", x, y: y + 3, checked: token.checked }); x += 25; continue; }
+    if (token.tipo === "marcador") continue;
+    const font = fontActual();
+    for (const palabra of token.value.split(/(\s+)/u).filter(Boolean)) {
+      iniciarLinea();
+      const siguiente = linea + palabra;
+      if (linea && medir(siguiente, font) > w - pad - x) { vaciar(); iniciarLinea(); }
+      if (!linea && /^\s+$/u.test(palabra)) continue;
+      linea += palabra;
+    }
+  }
+  vaciar();
+  const maxY = trazos.flatMap((t) => t.p || []).reduce((m, p) => Math.max(m, Number(p[1]) || 0), 0);
+  const tintaY = y + 14, tintaH = trazos.length ? Math.max(120, Math.min(1400, maxY * maxW + 40)) : 0;
+  const h = Math.max(260, tintaY + tintaH + pad + (marcaAgua ? 26 : 0));
   c.width = w; c.height = h;
-  ctx.fillStyle = color; ctx.fillRect(0,0,w,h);
-  ctx.fillStyle = "rgba(0,0,0,.84)"; ctx.font = "700 34px system-ui, sans-serif";
-  let y = pad + 34; tituloLineas.forEach((l) => { ctx.fillText(l.slice(0,100),pad,y,maxW); y += 44; });
-  y += 14; ctx.font = `${size}px system-ui, sans-serif`;
-  for (const l of lineas) { if (y > h - pad - 50) break; ctx.fillText(l,pad,y,maxW); y += lineH; }
-  if (trazos.length) { ctx.save(); ctx.translate(pad,baseTinta); dibujarTrazos(ctx,trazos,maxW,0,1); ctx.restore(); }
-  // Marca casi imperceptible: identifica el origen sin competir con el contenido.
-  if (marcaAgua) { ctx.globalAlpha = .09; ctx.fillStyle = "#172033"; ctx.font = "500 16px system-ui, sans-serif"; ctx.textAlign = "right"; ctx.fillText("Wapper",w-pad,h-pad/2); ctx.globalAlpha = 1; ctx.textAlign = "left"; }
+  ctx.fillStyle = /^#[\da-f]{6}$/i.test(color) ? color : "#fff594"; ctx.fillRect(0, 0, w, h);
+  const tintaTexto = /^#[\da-f]{6}$/i.test(colorTexto) ? colorTexto : "#172033";
+  for (const bloque of bloques) {
+    if (bloque.tipo === "cita-barra") { ctx.strokeStyle = "rgba(23,32,51,.45)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(bloque.x, bloque.y0); ctx.lineTo(bloque.x, bloque.y1 ?? y); ctx.stroke(); continue; }
+    if (bloque.tipo === "titulo") { ctx.fillStyle = tintaTexto; ctx.font = titleFont; ctx.fillText(bloque.value, pad, bloque.y, maxW); continue; }
+    if (bloque.tipo === "texto") { ctx.fillStyle = tintaTexto; ctx.font = bloque.font; ctx.fillText(bloque.value, bloque.x, bloque.y, w - pad - bloque.x); if (bloque.underline) { const width = Math.min(ctx.measureText(bloque.value).width, w - pad - bloque.x); ctx.strokeStyle = tintaTexto; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(bloque.x, bloque.y + 3); ctx.lineTo(bloque.x + width, bloque.y + 3); ctx.stroke(); } continue; }
+    if (bloque.tipo === "marcador") { ctx.fillStyle = tintaTexto; ctx.font = "23px system-ui, sans-serif"; ctx.fillText(bloque.lista === "ol" ? `${bloque.numero}.` : "•", bloque.x, bloque.y); continue; }
+    if (bloque.tipo === "casilla") { ctx.strokeStyle = tintaTexto; ctx.lineWidth = 2; ctx.strokeRect(bloque.x, bloque.y, 17, 17); if (bloque.checked) { ctx.beginPath(); ctx.moveTo(bloque.x + 3, bloque.y + 9); ctx.lineTo(bloque.x + 7, bloque.y + 13); ctx.lineTo(bloque.x + 14, bloque.y + 4); ctx.stroke(); } continue; }
+  }
+  if (trazos.length) { ctx.save(); ctx.translate(pad, tintaY); dibujarTrazos(ctx, trazos, maxW, 0, 1); ctx.restore(); }
+  if (marcaAgua) { ctx.globalAlpha = .09; ctx.fillStyle = "#172033"; ctx.font = "500 15px system-ui, sans-serif"; ctx.textAlign = "right"; ctx.fillText("Wapper", w - pad, h - 22); ctx.globalAlpha = 1; ctx.textAlign = "left"; }
   return c;
 }
 async function compartirImagenNota(datos) {

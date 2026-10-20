@@ -102,6 +102,7 @@ function candidatoElipse(pts) {
     if (circulo) { const r = (a + b) / 2; out.push([wx + r * Math.cos(t), wy + r * Math.sin(t)]); }
     else { const x = a * Math.cos(t), y = b * Math.sin(t); out.push([wx + x * c - y * s, wy + x * s + y * c]); }
   }
+  out.tipo = circulo ? "circulo" : "elipse";
   return out;
 }
 
@@ -127,6 +128,7 @@ function candidatoRect(pts) {
   const c = Math.cos(th), s = Math.sin(th);
   const pt = (u, v) => [u * c - v * s, u * s + v * c];
   const e = [[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]].map(([a, b]) => pt(cu + (a * w) / 2, cv + (b * h) / 2));
+  e.tipo = Math.min(w, h) / Math.max(w, h) > 0.985 ? "cuadrado" : "rectangulo";
   return e;
 }
 
@@ -193,6 +195,43 @@ function candidatoCorazon(pts) {
   return PLANTILLA_CORAZON.map(([u, v]) => [x0 + u * w, y0 + v * h]);
 }
 
+/** Reconoce un trazo abierto cuya punta se repasó al dibujar las dos alas. */
+function reconocerFlecha(p) {
+  if (!Array.isArray(p) || p.length < 12) return null;
+  const L = longitud(p);
+  if (L < 0.12) return null;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const q of p) { x0 = Math.min(x0, q[0]); y0 = Math.min(y0, q[1]); x1 = Math.max(x1, q[0]); y1 = Math.max(y1, q[1]); }
+  const diag = Math.hypot(x1 - x0, y1 - y0);
+  if (diag < 0.05) return null;
+  const tip = p.at(-1), tol = Math.max(0.012, diag * 0.055);
+  const candidatos = [];
+  const alaMasLejana = (grupo) => grupo.filter((q) => dist(q, tip) > 0.035 * diag && dist(q, tip) < 0.36 * diag).reduce((best, q) => !best || dist(q, tip) > dist(best, tip) ? q : best, null);
+  // Patrón habitual: cola → punta → ala → punta → ala → punta.
+  for (let i = Math.floor(p.length * 0.12); i < p.length - 5; i++) {
+    if (dist(p[i], tip) > tol) continue;
+    for (let j = i + 2; j < p.length - 2; j++) {
+      if (dist(p[j], tip) > tol) continue;
+      const ala1 = alaMasLejana(p.slice(i + 1, j));
+      const ala2 = alaMasLejana(p.slice(j + 1, -1));
+      if (!ala1 || !ala2) continue;
+    const d1 = dist(ala1, tip), d2 = dist(ala2, tip);
+    if (d1 < 0.035 * diag || d2 < 0.035 * diag || Math.max(d1, d2) > 0.36 * diag) continue;
+    const sep = giro(ala1, tip, ala2);
+    if (sep < 22 || sep > 150 || Math.min(d1, d2) / Math.max(d1, d2) < 0.35) continue;
+    const tail = dist(p[0], tip);
+    if (tail < 2.2 * Math.max(d1, d2)) continue;
+      candidatos.push({ i, score: Math.abs(d1 - d2) / Math.max(d1, d2) + Math.abs(sep - 65) / 180 });
+    }
+  }
+  if (!candidatos.length) return null;
+  const { i } = candidatos.sort((a, b) => a.score - b.score)[0];
+  const ruta = rdp(p.slice(0, i + 1), 0.004 * diag);
+  if (ruta.length < 2) return null;
+  ruta[ruta.length - 1] = [tip[0], tip[1]];
+  return ruta.map((q) => [r4(q[0]), r4(q[1])]);
+}
+
 function reconocerForma(p) {
   if (!Array.isArray(p) || p.length < 12) return null;
   const L = longitud(p);
@@ -209,7 +248,7 @@ function reconocerForma(p) {
     if (r < 0.7 || r > 1.45) return; // evita espirales y trazos dobles
     // El corazón se mide en ambos sentidos (trazo→figura y figura→trazo) para que un círculo no se confunda con él.
     const err = simetrico ? ((errorHacia(pts, poli) + errorHacia(poli, pts)) / 2) * 0.8 : errorHacia(pts, poli);
-    cands.push({ poli, err });
+    cands.push({ poli, err, tipo: poli.tipo || "figura" });
   };
   probar(candidatoElipse(pts));
   probar(candidatoRect(pts));
@@ -220,7 +259,9 @@ function reconocerForma(p) {
   if (!cands.length) return null;
   const mejor = cands.reduce((a, b) => (b.err < a.err ? b : a));
   if (mejor.err > 0.055 * diag) return null;
-  return mejor.poli.map((q) => [r4(q[0]), r4(q[1])]);
+  const salida = mejor.poli.map((q) => [r4(q[0]), r4(q[1])]);
+  salida.tipo = mejor.tipo;
+  return salida;
 }
 
-export { reconocerForma };
+export { reconocerForma, reconocerFlecha };

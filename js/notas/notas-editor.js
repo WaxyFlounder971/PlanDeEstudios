@@ -53,7 +53,8 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const iconoReloj = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   iconoReloj.setAttribute("viewBox", "0 0 20 20"); iconoReloj.setAttribute("aria-hidden", "true"); iconoReloj.classList.add("nt-ico");
   iconoReloj.innerHTML = '<path d="M6 2h8M6 18h8M7 2c0 4 1.5 5 3 8-1.5 3-3 4-3 8m6-16c0 4-1.5 5-3 8 1.5 3 3 4 3 8"/>';
-  labelVencimiento.childNodes[0]?.remove(); labelVencimiento.prepend(iconoReloj);
+  const textoVencimiento = labelVencimiento.querySelector("span");
+  if (textoVencimiento) textoVencimiento.replaceChildren(iconoReloj, document.createTextNode(` ${tr("Vencimiento")}`));
   const accionesExtra = document.createElement("div"); accionesExtra.className = "nt-acciones-extra";
   const crearAccionExtra = (texto) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn btn-secondary"; b.textContent = tr(texto); accionesExtra.append(b); return b; };
   accionesExtra.classList.add("nt-oculto");
@@ -76,7 +77,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     } catch (e) { mostrarToast(tr(e.message || "No se pudo abrir el archivo .wapper")); }
   };
   btnImagenNota.onclick = async () => {
-    try { const r = await compartirImagenNota({ titulo: titulo.value.trim(), contenido: cuerpo.innerHTML, color: borrador.color || COLOR_DEFECTO, trazos: borrador.tinta || [], marcaAgua: opcionesNotas().sin_marca_agua !== true }); mostrarToast(tr(r === "compartida" ? "Imagen compartida" : "Imagen descargada")); }
+    try { const r = await compartirImagenNota({ titulo: titulo.value.trim(), contenido: cuerpo.innerHTML, color: borrador.color || COLOR_DEFECTO, colorTexto: borrador.color_texto || contraste(resolverColorNota(borrador.color || COLOR_DEFECTO)), trazos: borrador.tinta || [], marcaAgua: opcionesNotas().sin_marca_agua !== true }); mostrarToast(tr(r === "compartida" ? "Imagen compartida" : "Imagen descargada")); }
     catch (e) { if (e.name !== "AbortError") mostrarToast(tr("No se pudo compartir la imagen")); }
   };
   const btnHerramientas = document.createElement("button");
@@ -112,6 +113,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
       borrador.contenido = sanearHTMLNota(cuerpo.innerHTML);
       borrador.vence_en = checkVence.checked ? (plazoSel === "fecha" ? aValorFecha(fechaVence) : fechaRelativa(plazoSel)) : null;
       const n = guardarNota(borrador);
+      window.dispatchEvent(new Event("notas:actualizadas-ui"));
       borrador.id = n.id;
       borrador.modificada_en = n.modificada_en;
       pintarModificada();

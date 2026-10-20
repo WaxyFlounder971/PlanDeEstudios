@@ -13,7 +13,7 @@ import { mostrarAjustesNotas } from "./notas-ajustes.js";
 import { procesarCompartidos, compartirNotaFuera } from "./notas-compartir.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { conHistorial, registrarCambio, deshacer, rehacer } from "./notas-historial.js";
-import { abrirSticky, alternarFlotante, estaFlotando, restaurarFlotantes } from "./notas-flotante.js";
+import { abrirSticky, alternarFlotante, abrirNotaPictureInPicture, estaFlotando, restaurarFlotantes } from "./notas-flotante.js";
 import { ICONOS, el, contraste, colorTextoNota, botonIcono, enlazarChecks } from "./notas-ui.js";
 
 const tr = (x) => t(x);
@@ -417,6 +417,7 @@ function construirTarjeta(nota) {
   acciones.append(
     botonIcono({ icono: ICONOS.anclar, titulo: tr(nota.fijada ? "Desfijar" : "Fijar"), clase: "nota-pin-action", activo: !!nota.fijada, onclick: (e) => { e.stopPropagation(); alternarFijada(nota); } }),
     botonIcono({ icono: flotando ? ICONOS.quitarFlotante : ICONOS.flotar, titulo: tr(flotando ? "Quitar de flotante" : "Dejar flotante"), clase: "nota-flotar-action", activo: flotando, onclick: (e) => { e.stopPropagation(); alternarFlotante(nota.id, card); renderizarNotas(); } }),
+    botonIcono({ icono: ICONOS.pip, titulo: tr("Abrir en ventana PiP"), clase: "nota-pip-action", onclick: (e) => { e.stopPropagation(); abrirNotaPictureInPicture(nota.id, card); } }),
     sep(),
     botonIcono({ icono: ICONOS.wapper, titulo: tr("Enviar a Wapper"), onclick: (e) => { e.stopPropagation(); wapperNota(nota); } }),
     botonIcono({ icono: ICONOS.compartir, titulo: tr("Compartir"), onclick: (e) => { e.stopPropagation(); compartirNota(nota); } }),
@@ -433,7 +434,8 @@ function construirTarjeta(nota) {
   requestAnimationFrame(() => {
     const textoLargo = preview.scrollHeight > preview.clientHeight + 1;
     const dibujoLargo = !!dibujoWrap && mini.getBoundingClientRect().height > 220;
-    const requiereFlecha = textoLargo || dibujoLargo;
+    const soloDibujo = !!dibujoWrap && !textoPlanoNota(nota.contenido).trim();
+    const requiereFlecha = textoLargo || dibujoLargo || soloDibujo;
     expand.classList.toggle("nt-oculto", !requiereFlecha);
     if (vistaAbierta) { expand.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>'; expand.title = tr("Contraer"); expand.setAttribute("aria-label", expand.title); }
   });
@@ -480,6 +482,7 @@ function abrirMenuNota(nota, x, y, card) {
     [seleccion.has(nota.id) ? "✖️" : "☑️", seleccion.has(nota.id) ? tr("Quitar selección") : tr("Seleccionar"), () => alternarSeleccion(nota.id)],
     [ICONOS.wapper, tr("Enviar a Wapper"), () => wapperNota(nota)],
     [ICONOS.compartir, tr("Compartir"), () => compartirNota(nota)],
+    [ICONOS.pip, tr("Abrir en ventana PiP"), () => abrirNotaPictureInPicture(nota.id, card)],
     [ICONOS.anclar, nota.fijada ? tr("Desfijar") : tr("Fijar"), () => alternarFijada(nota)],
     [flotando ? ICONOS.quitarFlotante : ICONOS.flotar, flotando ? tr("Quitar de flotante") : tr("Dejar flotante"), () => { alternarFlotante(nota.id, card); renderizarNotas(); }],
     [ICONOS.duplicar, tr("Duplicar"), () => clonarNota(nota)],

@@ -59,6 +59,8 @@ const CSS = `
 .nt-tinta-canvas{position:absolute;z-index:5;pointer-events:none;touch-action:none;border-radius:12px}
 .nt-tinta-canvas.activo{pointer-events:auto;cursor:crosshair}
 .nt-tinta-canvas[data-modo="borrador"]{cursor:cell}
+.nt-tinta-canvas[data-modo="lapiz"]{cursor:crosshair}
+.nt-tinta-canvas[data-redimensionando="true"]{cursor:nwse-resize}
 .nota-tinta-wrap{max-height:220px;overflow:hidden;flex:none}
 .nota-card.expandida .nota-tinta-wrap{max-height:none}
 .nota-tinta-mini{display:block;width:100%;height:auto;margin-top:8px;pointer-events:none}

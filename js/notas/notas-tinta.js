@@ -2,7 +2,7 @@
 // Los trazos se guardan normalizados: x e y están divididos por el ancho del cuerpo de la nota,
 // así se ven igual sin importar el tamaño de pantalla.
 // Trazo: { c: "#color", w: grosor relativo, p: [[x, y, presión?], ...], f?: 1 (figura: líneas rectas) }
-import { reconocerForma } from "./notas-formas.js";
+import { reconocerForma, reconocerFlecha } from "./notas-formas.js";
 
 const GROSOR_BASE = 0.0045;
 const PASO_MIN = 0.0008;      // distancia mínima entre puntos guardados
@@ -119,7 +119,7 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
   let color = "#172033";
   let grosor = GROSOR_BASE;
   let activo = false, actual = null, modoActivo = null, vistoLapiz = false;
-  let ancho = 1, rect = null, suave = null, ancla = null, timerForma = 0, congelado = false;
+  let ancho = 1, rect = null, suave = null, ancla = null, timerForma = 0, congelado = false, cambioFigura = null;
   let huboBorrado = false, rafRedibujo = 0;
 
   // Historial propio de la tinta (instantáneas de referencias; los trazos terminados no se modifican).
@@ -179,6 +179,33 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
     return cambio;
   }
 
+  function iniciarRedimension(pt) {
+    const trazos = obtenerTrazos();
+    for (let i = trazos.length - 1; i >= 0; i--) {
+      const t = trazos[i];
+      if (!t.tipo || !t.f || !t.p?.length) continue;
+      const xs = t.p.map((q) => q[0]), ys = t.p.map((q) => q[1]);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+      const dentro = pt[0] >= x0 - 0.012 && pt[0] <= x1 + 0.012 && pt[1] >= y0 - 0.012 && pt[1] <= y1 + 0.012;
+      if (!dentro && !trazoTocado(t, pt[0], pt[1], 0.028)) continue;
+      if (x1 - x0 < 0.025 || y1 - y0 < 0.025) continue;
+      const ladoX = pt[0] < (x0 + x1) / 2 ? -1 : 1, ladoY = pt[1] < (y0 + y1) / 2 ? -1 : 1;
+      cambioFigura = { t, original: t.p.map((q) => q.slice()), ax: ladoX < 0 ? x1 : x0, ay: ladoY < 0 ? y1 : y0, w: x1 - x0, h: y1 - y0 };
+      canvas.dataset.redimensionando = "true";
+      return true;
+    }
+    return false;
+  }
+
+  function actualizarRedimension(pt) {
+    if (!cambioFigura) return;
+    const d = cambioFigura;
+    let sx = Math.max(0.08, Math.abs(pt[0] - d.ax) / d.w), sy = Math.max(0.08, Math.abs(pt[1] - d.ay) / d.h);
+    if (d.t.tipo === "circulo" || d.t.tipo === "cuadrado") sx = sy = Math.max(sx, sy);
+    d.t.p = d.original.map((q) => [r4(d.ax + (q[0] - d.ax) * sx), r4(d.ay + (q[1] - d.ay) * sy), ...q.slice(2)]);
+    redibujarPronto();
+  }
+
   /** Dibuja solo lo nuevo del trazo en curso (sin redibujar todo): es lo que quita el retraso. */
   function trazarVivo(t, k) {
     const p = t.p, dy = cuerpo.scrollTop;
@@ -213,7 +240,7 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
       if (!activo || !actual || congelado) return;
       const f = reconocerForma(actual.p);
       if (!f) return;
-      actual.p = f; actual.f = 1; congelado = true;
+      actual.p = f; actual.tipo = f.tipo || "figura"; actual.f = 1; congelado = true;
       redibujar();
       try { navigator.vibrate?.(12); } catch (_) {}
     }, ESPERA_FORMA);
@@ -235,6 +262,9 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
     const botonLateral = e.pointerType === "pen" && !puntaBorrador && !!((e.buttons & 2) || e.button === 2);
     modoActivo = puntaBorrador ? "borrador" : botonLateral ? (modo === "lapiz" ? "borrador" : "lapiz") : modo;
     const pt = punto(e);
+    if (modoActivo === "lapiz" && iniciarRedimension(pt)) {
+      activo = true; actual = null; canvas.setPointerCapture(e.pointerId); return;
+    }
     if (["lapiz", "linea", "flecha", "rectangulo"].includes(modoActivo)) {
       if (contarPuntos(obtenerTrazos()) >= MAX_PUNTOS) { activo = false; return; }
       suave = pt.slice(); ancla = pt;
@@ -243,7 +273,7 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
       actual = { c: color, w: grosor, p: [p0] };
       if (modoActivo === "linea" || modoActivo === "flecha") actual.forma = modoActivo;
       if (modoActivo === "flecha") actual.a = 1;
-      if (modoActivo === "rectangulo") { actual.forma = modoActivo; actual.f = 1; actual.p.push(p0.slice()); }
+      if (modoActivo === "rectangulo") { actual.forma = modoActivo; actual.tipo = "rectangulo"; actual.f = 1; actual.p.push(p0.slice()); }
       obtenerTrazos().push(actual);
       ctx.fillStyle = color; ctx.beginPath();
       ctx.arc(pt[0] * ancho, pt[1] * ancho - cuerpo.scrollTop, Math.max(1, grosor * ancho) / 2, 0, Math.PI * 2); ctx.fill();
@@ -259,6 +289,7 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
     let movio = false;
     for (const ev of eventos.length ? eventos : [e]) {
       const pt = punto(ev);
+      if (cambioFigura) { actualizarRedimension(pt); continue; }
       if ((modoActivo === "linea" || modoActivo === "flecha") && actual) {
         actual.p = [actual.p[0], [r4(pt[0]), r4(pt[1])]]; redibujarPronto(); continue;
       }
@@ -282,6 +313,7 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
     clearTimeout(timerForma);
     if (!activo) return;
     activo = false;
+    if (cambioFigura) { cambioFigura = null; delete canvas.dataset.redimensionando; redibujar(); empujar(); alCambiar(); return; }
     if ((modoActivo === "linea" || modoActivo === "flecha") && actual) {
       const pt = e?.type === "pointerup" ? punto(e) : actual.p.at(-1);
       actual.p = [actual.p[0], [r4(pt[0]), r4(pt[1])]];
@@ -293,6 +325,8 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
       if (!congelado && e?.type === "pointerup") {
         const u = actual.p[actual.p.length - 1], pt = punto(e);
         if (Math.hypot(pt[0] - u[0], pt[1] - u[1]) > PASO_MIN / 2) actual.p.push([r4(pt[0]), r4(pt[1])]);
+        const flecha = reconocerFlecha(actual.p);
+        if (flecha) { actual.p = flecha; actual.a = 1; actual.f = 1; }
       }
       actual = null;
       redibujar();
