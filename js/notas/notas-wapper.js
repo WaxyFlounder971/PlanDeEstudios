@@ -85,7 +85,7 @@ async function crearImagenNota({ titulo = "", contenido = "", color = "#fff594",
       texto.push({ tipo: "salto", espacio: tag.startsWith("h") ? 12 : 5 }); return;
     }
     if (tag === "input" && nodo.type === "checkbox") { texto.push({ tipo: "casilla", checked: nodo.checked || nodo.hasAttribute("checked") }); return; }
-    if (tag === "img" && nodo.hasAttribute("data-nota-sticker")) { texto.push({ tipo: "imagen", src: nodo.src, ancho: Number(nodo.getAttribute("width")) || 220, alto: Number(nodo.getAttribute("height")) || 160, rot: Number(nodo.dataset.rot) || 0, flipH: nodo.dataset.flipH === "1", flipV: nodo.dataset.flipV === "1", moveX: Number(nodo.dataset.moveX) || 0, moveY: Number(nodo.dataset.moveY) || 0, z: Number(nodo.dataset.z) || 0 }); return; }
+    if (tag === "img" && (nodo.hasAttribute("data-nota-sticker") || nodo.hasAttribute("data-nota-image"))) { texto.push({ tipo: "imagen", src: nodo.src, unico: nodo.hasAttribute("data-nota-image"), ancho: Number(nodo.getAttribute("width")) || 220, alto: Number(nodo.getAttribute("height")) || 160, rot: Number(nodo.dataset.rot) || 0, flipH: nodo.dataset.flipH === "1", flipV: nodo.dataset.flipV === "1", moveX: Number(nodo.dataset.moveX) || 0, moveY: Number(nodo.dataset.moveY) || 0, z: Number(nodo.dataset.z) || 0 }); return; }
     const estilo = { "strong": "bold", "b": "bold", "em": "italic", "i": "italic", "u": "underline" }[tag];
     if (estilo) texto.push({ tipo: "estilo", estilo, valor: true });
     [...nodo.childNodes].forEach((hijo) => recorrer(hijo, nivelLista));

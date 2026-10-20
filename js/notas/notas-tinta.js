@@ -2,14 +2,12 @@
 // Los trazos se guardan normalizados: x e y están divididos por el ancho del cuerpo de la nota,
 // así se ven igual sin importar el tamaño de pantalla.
 // Trazo: { c: "#color", w: grosor relativo, p: [[x, y, presión?], ...], f?: 1 (figura: líneas rectas) }
-import { reconocerForma, reconocerFlecha } from "./notas-formas.js";
+import { reconocerForma, reconocerFlecha, TIEMPO_MANTENER_FIGURA_MS, TOLERANCIA_QUIETO_PX } from "./notas-formas.js";
 
 const GROSOR_BASE = 0.0045;
 const PASO_MIN = 0.0008;      // distancia mínima entre puntos guardados
 const RADIO_BORRADOR = 0.022; // radio del borrador (relativo al ancho)
 const MAX_PUNTOS = 60000;
-const ESPERA_FORMA = 550;     // ms quieto para convertir el trazo en figura limpia
-const QUIETO = 0.007;         // movimiento (relativo) que reinicia la espera
 const MAX_HISTORIAL = 100;
 
 /** Suavizado por longitud de arco: cada punto se promedia con sus vecinos cercanos (peso triangular).
@@ -93,10 +91,15 @@ function dibujarTrazos(ctx, trazos, ancho, desplazarY = 0, grosorMin = 1) {
 
 function trazoTocado(t, x, y, radio) {
   const p = t.p;
-  for (let i = 0; i < p.length; i++) {
-    if (Math.hypot(p[i][0] - x, p[i][1] - y) <= radio) return true;
-    if (i && Math.hypot((p[i][0] + p[i - 1][0]) / 2 - x, (p[i][1] + p[i - 1][1]) / 2 - y) <= radio) return true;
-  }
+  if (!p?.length) return false;
+  const alcance = radio + Math.max(0, Number(t.w) || 0) / 2;
+  const cerca = (ax, ay, bx, by) => {
+    const dx = bx - ax, dy = by - ay, largo2 = dx * dx + dy * dy;
+    const u = largo2 ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / largo2)) : 0;
+    return Math.hypot(x - (ax + u * dx), y - (ay + u * dy)) <= alcance;
+  };
+  if (p.length === 1) return cerca(p[0][0], p[0][1], p[0][0], p[0][1]);
+  for (let i = 1; i < p.length; i++) if (cerca(p[i - 1][0], p[i - 1][1], p[i][0], p[i][1])) return true;
   return false;
 }
 
@@ -194,21 +197,20 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
   }
 
   function iniciarRedimension(pt) {
-    const trazos = obtenerTrazos();
-    for (let i = trazos.length - 1; i >= 0; i--) {
-      const t = trazos[i];
-      if (!t.tipo || !t.f || !t.p?.length) continue;
-      const xs = t.p.map((q) => q[0]), ys = t.p.map((q) => q[1]);
-      const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
-      const dentro = pt[0] >= x0 - 0.012 && pt[0] <= x1 + 0.012 && pt[1] >= y0 - 0.012 && pt[1] <= y1 + 0.012;
-      if (!dentro && !trazoTocado(t, pt[0], pt[1], 0.028)) continue;
-      if (x1 - x0 < 0.025 || y1 - y0 < 0.025) continue;
+    const t = figuraSeleccionada;
+    if (!edicionFiguras || !t || !t.p?.length) return false;
+    const xs = t.p.map((q) => q[0]), ys = t.p.map((q) => q[1]);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const dentro = pt[0] >= x0 - 0.012 && pt[0] <= x1 + 0.012 && pt[1] >= y0 - 0.012 && pt[1] <= y1 + 0.012;
+    if (!dentro && !trazoTocado(t, pt[0], pt[1], 0.02)) return false;
+    const asa = 0.018;
+    const esquinasCerca = [[x0,y0],[x1,y0],[x0,y1],[x1,y1]].some(([x,y]) => Math.hypot((pt[0]-x)*ancho,(pt[1]-y)*ancho) <= 12);
+    if (esquinasCerca && x1 - x0 >= 0.025 && y1 - y0 >= 0.025) {
       const ladoX = pt[0] < (x0 + x1) / 2 ? -1 : 1, ladoY = pt[1] < (y0 + y1) / 2 ? -1 : 1;
       cambioFigura = { t, original: t.p.map((q) => q.slice()), ax: ladoX < 0 ? x1 : x0, ay: ladoY < 0 ? y1 : y0, w: x1 - x0, h: y1 - y0 };
       canvas.dataset.redimensionando = "true";
-      return true;
-    }
-    return false;
+    } else movimientoFigura = { t, original: t.p.map((q) => q.slice()), desde: pt };
+    return true;
   }
 
   function actualizarRedimension(pt) {
@@ -252,12 +254,13 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
     if (modoActivo !== "lapiz" || congelado || actual?.forma) return;
     timerForma = setTimeout(() => {
       if (!activo || !actual || congelado) return;
-      const f = reconocerForma(actual.p);
+      const flecha = reconocerFlecha(actual.p);
+      const f = flecha || reconocerForma(actual.p);
       if (!f) return;
-      actual.p = f; actual.tipo = f.tipo || "figura"; actual.f = 1; congelado = true;
+      actual.p = f; actual.tipo = flecha ? "flecha" : f.tipo || "figura"; actual.f = 1; if (flecha) actual.a = 1; congelado = true;
       redibujar();
       try { navigator.vibrate?.(12); } catch (_) {}
-    }, ESPERA_FORMA);
+    }, TIEMPO_MANTENER_FIGURA_MS);
   }
 
   canvas.addEventListener("pointerdown", (e) => {
@@ -276,8 +279,12 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
     const botonLateral = e.pointerType === "pen" && !puntaBorrador && !!((e.buttons & 2) || e.button === 2);
     modoActivo = puntaBorrador ? "borrador" : botonLateral ? (modo === "lapiz" ? "borrador" : "lapiz") : modo;
     const pt = punto(e);
-    if (modoActivo === "lapiz" && iniciarRedimension(pt)) {
-      activo = true; actual = null; canvas.setPointerCapture(e.pointerId); return;
+    if (edicionFiguras) {
+      const hit = [...obtenerTrazos()].reverse().find((t) => t.tipo && t.f && trazoTocado(t, pt[0], pt[1], 0.018));
+      if (hit) {
+        figuraSeleccionada = hit; redibujar();
+        if (iniciarRedimension(pt)) { actual = null; canvas.setPointerCapture(e.pointerId); return; }
+      } else { figuraSeleccionada = null; redibujar(); if (!modo) { activo = false; return; } }
     }
     if (["lapiz", "linea", "flecha", "rectangulo"].includes(modoActivo)) {
       if (contarPuntos(obtenerTrazos()) >= MAX_PUNTOS) { activo = false; return; }
@@ -315,7 +322,7 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
       if (modoActivo === "lapiz" && actual) {
         if (congelado) continue;
         agregarPunto(actual, pt, ev);
-        if (Math.hypot(pt[0] - ancla[0], pt[1] - ancla[1]) > QUIETO) { ancla = pt; movio = true; }
+        if (Math.hypot(pt[0] - ancla[0], pt[1] - ancla[1]) > TOLERANCIA_QUIETO_PX / Math.max(1, ancho)) { ancla = pt; movio = true; }
       } else if (modoActivo === "borrador") {
         if (borrar(pt)) huboBorrado = true;
       }
@@ -333,7 +340,7 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
     if ((modoActivo === "linea" || modoActivo === "flecha") && actual) {
       const pt = e?.type === "pointerup" ? punto(e) : actual.p.at(-1);
       actual.p = [actual.p[0], [r4(pt[0]), r4(pt[1])]];
-      delete actual.forma; actual.f = 1;
+      delete actual.forma; actual.f = 1; actual.tipo = modoActivo === "flecha" ? "flecha" : "linea";
       actual = null; redibujar(); empujar(); alCambiar();
     } else if (modoActivo === "rectangulo" && actual) {
       delete actual.forma; actual = null; redibujar(); empujar(); alCambiar();
@@ -341,9 +348,9 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
       if (!congelado && e?.type === "pointerup") {
         const u = actual.p[actual.p.length - 1], pt = punto(e);
         if (Math.hypot(pt[0] - u[0], pt[1] - u[1]) > PASO_MIN / 2) actual.p.push([r4(pt[0]), r4(pt[1])]);
-        const flecha = reconocerFlecha(actual.p);
-        if (flecha) { actual.p = flecha; actual.a = 1; actual.f = 1; }
-        else { const forma=reconocerForma(actual.p); if(forma){ actual.p=forma; actual.tipo=forma.tipo||"figura"; actual.f=1; } else actual.p=simplificarPuntos(actual.p); }
+        // El trazo libre solo se reconoce como figura si se mantuvo quieto durante 600 ms.
+        // Al soltar antes de ese tiempo, se conserva como tinta libre.
+        if (!congelado) actual.p = simplificarPuntos(actual.p);
       }
       actual = null;
       redibujar();

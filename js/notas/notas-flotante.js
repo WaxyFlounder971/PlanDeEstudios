@@ -252,8 +252,7 @@ async function abrirPiP(id) {
   for (const [anteriorId, anterior] of [...ventanasPiP]) {
     ventanasPiP.delete(anteriorId); try { anterior.close(); } catch (_) {}
   }
-  const win = await api.requestWindow({ width: 320, height: 420 });
-    try { win.resizeTo(320, 420); } catch (_) {}
+  const win = await api.requestWindow({ width: 320, height: 420, preferInitialWindowPlacement: true });
     win.document.title = buscar(id)?.titulo || tr("Nota flotante");
     for (const n of document.head.querySelectorAll('link[rel="stylesheet"],style')) {
       const copia = win.document.importNode(n, true);

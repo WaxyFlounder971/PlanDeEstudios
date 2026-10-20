@@ -1,5 +1,5 @@
 import { prepararPegado } from "./notas-pegado.js";
-import { MAX_CARACTERES_NOTA, COLOR_DEFECTO, resolverColorNota, coloresPaletaNota, opcionesNotas, obtenerStickersNotas, guardarStickerNota, eliminarStickerNota, formatoAutomatico, crearNota, obtenerNota, guardarNota, marcarEliminada, eliminarDefinitiva } from "./notas-datos.js";
+import { MAX_CARACTERES_NOTA, COLOR_DEFECTO, resolverColorNota, coloresPaletaNota, opcionesNotas, grosorTrazoPreferido, guardarGrosorTrazoPreferido, obtenerStickersNotas, guardarStickerNota, guardarOrdenStickersNotas, eliminarStickerNota, formatoAutomatico, crearNota, obtenerNota, guardarNota, marcarEliminada, eliminarDefinitiva } from "./notas-datos.js";
 import { sanearHTMLNota, textoPlanoNota, renderizarHTMLNota, escaparHTMLNota } from "./notas-sanitizar.js";
 import { traducirTextoInterfaz as t } from "../core/i18n.js";
 import { iniciarProcesoAnalitico, registrarAnaliticaUso } from "../core/analitica.js";
@@ -44,28 +44,22 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const titulo = modal.querySelector(".notas-titulo"), cuerpo = modal.querySelector(".notas-cuerpo"), paleta = modal.querySelector(".notas-palette"), pin = modal.querySelector('[data-action="pin"]');
   const btnVencimiento = modal.querySelector(".nt-vencimiento-btn"), pickerVencimiento = modal.querySelector(".nt-vencimiento-pick"), venceActual = modal.querySelector(".nt-vencimiento-actual"), editarVencimiento = modal.querySelector(".nt-vencimiento-editar"), btnElegirFecha = modal.querySelector(".nt-elegir-fecha"), btnEliminarVencimiento = modal.querySelector(".nt-eliminar-vencimiento");
   const toolsFooter = modal.querySelector(".notas-editor-tools");
-  const accionesExtra = document.createElement("div"); accionesExtra.className = "nt-acciones-extra";
-  const crearAccionExtra = (texto) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn btn-secondary"; b.textContent = tr(texto); accionesExtra.append(b); return b; };
-  accionesExtra.classList.add("nt-oculto");
+  const accionesExtra = document.createElement("div"); accionesExtra.className = "nt-share-overlay nt-oculto"; accionesExtra.setAttribute("role", "dialog"); accionesExtra.setAttribute("aria-modal", "true"); accionesExtra.setAttribute("aria-label", tr("Compartir"));
+  const tarjetaCompartir = document.createElement("section"); tarjetaCompartir.className = "nt-share-menu-card";
+  const cabeceraCompartir = document.createElement("header"); const tituloCompartir = document.createElement("strong"); tituloCompartir.textContent = tr("Compartir");
+  const cerrarCompartir = document.createElement("button"); cerrarCompartir.type = "button"; cerrarCompartir.className = "nt-share-close"; cerrarCompartir.textContent = "×"; cerrarCompartir.setAttribute("aria-label", tr("Cerrar"));
+  cabeceraCompartir.append(tituloCompartir, cerrarCompartir); tarjetaCompartir.append(cabeceraCompartir); accionesExtra.append(tarjetaCompartir);
+  const crearAccionExtra = (texto) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn btn-secondary"; b.textContent = tr(texto); tarjetaCompartir.append(b); return b; };
+  const cerrarMenuCompartir = () => { accionesExtra.classList.add("nt-oculto"); modal.querySelector('[data-action="share"]')?.setAttribute("aria-expanded", "false"); };
+  cerrarCompartir.onclick = cerrarMenuCompartir;
+  accionesExtra.addEventListener("click", (e) => { if (e.target === accionesExtra) cerrarMenuCompartir(); });
   const btnTextoSimple = crearAccionExtra("Compartir texto simple");
   const btnWapperArchivo = crearAccionExtra("Compartir como Wapper Note");
-  const btnImportarWapper = crearAccionExtra("Abrir Wapper Note");
-  const archivoWapper = document.createElement("input"); archivoWapper.type = "file"; archivoWapper.accept = ".wapper,application/vnd.wapper+json"; archivoWapper.hidden = true;
   const btnImagenNota = crearAccionExtra("Compartir imagen");
-  modal.querySelector(".notas-editor-actions").after(accionesExtra); accionesExtra.append(archivoWapper);
-  btnWapperArchivo.onclick = () => descargarWapper({ ...borrador, titulo: titulo.value.trim(), contenido: sanearHTMLNota(cuerpo.innerHTML) });
-  btnImportarWapper.onclick = () => archivoWapper.click();
-  archivoWapper.onchange = async () => {
-    const f = archivoWapper.files?.[0]; archivoWapper.value = ""; if (!f) return;
-    try {
-      const n = await leerWapper(f);
-      guardarAlSalir();
-      const nueva = guardarNota(crearNota({ titulo: n.titulo, contenido: n.contenido, color: n.color, color_texto: n.color_texto, vence_en: n.vence_en, tinta: n.tinta, origen: "compartida" }));
-      mostrarToast(tr("Wapper Note importada como nota nueva")); cerrarEditor();
-      setTimeout(() => window.dispatchEvent(new CustomEvent("notas:abrir", { detail: nueva.id })), 30);
-    } catch (e) { mostrarToast(tr(e.message || "No se pudo abrir el archivo .wapper")); }
-  };
+  document.body.append(accionesExtra);
+  btnWapperArchivo.onclick = () => { cerrarMenuCompartir(); descargarWapper({ ...borrador, titulo: titulo.value.trim(), contenido: sanearHTMLNota(cuerpo.innerHTML) }); };
   btnImagenNota.onclick = async () => {
+    cerrarMenuCompartir();
     try { const r = await compartirImagenNota({ titulo: titulo.value.trim(), contenido: cuerpo.innerHTML, color: borrador.color || COLOR_DEFECTO, colorTexto: borrador.color_texto || contraste(resolverColorNota(borrador.color || COLOR_DEFECTO)), trazos: borrador.tinta || [], marcaAgua: opcionesNotas().sin_marca_agua !== true }); mostrarToast(tr(r === "compartida" ? "Imagen compartida" : "Imagen descargada")); }
     catch (e) { if (e.name !== "AbortError") mostrarToast(tr("No se pudo compartir la imagen")); }
   };
@@ -77,37 +71,64 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const btnFiguras = document.createElement("button"); btnFiguras.type = "button"; btnFiguras.className = "nt-figuras-btn"; btnFiguras.innerHTML = ICONOS.figuras;
   btnFiguras.title = tr("Figuras y stickers"); btnFiguras.setAttribute("aria-label", tr("Figuras y stickers")); btnFiguras.setAttribute("aria-haspopup", "menu"); btnFiguras.setAttribute("aria-expanded", "false");
   const menuFiguras = document.createElement("div"); menuFiguras.className = "nt-figuras-menu nt-oculto"; menuFiguras.setAttribute("role", "menu"); menuFiguras.setAttribute("aria-label", tr("Figuras y stickers"));
-  const listaStickers = document.createElement("div"); listaStickers.className = "nt-stickers-lista";
   const editarFigurasLabel=document.createElement("label"); editarFigurasLabel.className="nt-editar-figuras-toggle"; const editarFigurasInput=document.createElement("input"); editarFigurasInput.type="checkbox"; const editarFigurasTexto=document.createElement("span"); editarFigurasTexto.textContent=tr("Habilitar edición de figura"); editarFigurasLabel.append(editarFigurasInput,editarFigurasTexto); const eliminarFiguraBtn=document.createElement("button"); eliminarFiguraBtn.type="button"; eliminarFiguraBtn.className="nt-eliminar-figura nt-oculto"; eliminarFiguraBtn.textContent=tr("Eliminar figura seleccionada");
-  const btnSubirSticker = document.createElement("button"); btnSubirSticker.type = "button"; btnSubirSticker.className = "nt-sticker-subir"; btnSubirSticker.textContent = tr("Añadir sticker"); btnSubirSticker.setAttribute("role", "menuitem");
-  const inputSticker = document.createElement("input"); inputSticker.type = "file"; inputSticker.accept = "image/*"; inputSticker.hidden = true;
-  btnSubirSticker.onclick = () => inputSticker.click(); menuFiguras.append(editarFigurasLabel, eliminarFiguraBtn, btnSubirSticker, listaStickers, inputSticker);
+  const btnSubirSticker = document.createElement("button"); btnSubirSticker.type = "button"; btnSubirSticker.className = "nt-sticker-subir"; btnSubirSticker.textContent = tr("Stickers"); btnSubirSticker.setAttribute("role", "menuitem");
+  const inputSticker = document.createElement("input"); inputSticker.type = "file"; inputSticker.accept = "image/*"; inputSticker.multiple = true; inputSticker.hidden = true;
+  const btnImagenUnica = document.createElement("button"); btnImagenUnica.type = "button"; btnImagenUnica.className = "nt-imagen-subir"; btnImagenUnica.textContent = tr("Imágenes"); btnImagenUnica.setAttribute("role", "menuitem");
+  const inputImagenUnica = document.createElement("input"); inputImagenUnica.type = "file"; inputImagenUnica.accept = "image/*"; inputImagenUnica.multiple = true; inputImagenUnica.hidden = true;
+  btnImagenUnica.onclick = () => inputImagenUnica.click(); menuFiguras.append(editarFigurasLabel, eliminarFiguraBtn, btnSubirSticker, btnImagenUnica, inputSticker, inputImagenUnica);
   const botonesForma = [];
   for (const [modo, simbolo, nombre] of [["linea", "╱", "Línea recta"], ["flecha", "↗", "Flecha"], ["rectangulo", "▱", "Rectángulo"]]) {
     const b = document.createElement("button"); b.type = "button"; b.dataset.forma = modo; b.textContent = simbolo; b.title = tr(nombre); b.setAttribute("aria-label", tr(nombre)); b.setAttribute("aria-pressed", "false"); b.setAttribute("role", "menuitem"); menuFiguras.append(b); botonesForma.push(b);
   }
   barraTinta.append(btnFiguras, btnHerramientas); document.body.append(menuFiguras);
+  const stickersOverlay=document.createElement("div");stickersOverlay.className="nt-stickers-overlay nt-oculto";stickersOverlay.setAttribute("role","dialog");stickersOverlay.setAttribute("aria-modal","true");
+  const stickersPanel=document.createElement("section");stickersPanel.className="nt-stickers-panel";
+  const stickersHead=document.createElement("header"),stickersTitulo=document.createElement("strong"),stickersEditar=document.createElement("button"),stickersCerrar=document.createElement("button"),stickersGrid=document.createElement("div");
+  stickersTitulo.textContent=tr("Stickers");stickersEditar.type="button";stickersEditar.textContent=tr("Editar");stickersCerrar.type="button";stickersCerrar.className="nt-stickers-cerrar";stickersCerrar.textContent="×";stickersCerrar.setAttribute("aria-label",tr("Cerrar"));stickersGrid.className="nt-stickers-grid";
+  stickersHead.append(stickersTitulo,stickersEditar,stickersCerrar);stickersPanel.append(stickersHead,stickersGrid);stickersOverlay.append(stickersPanel);document.body.append(stickersOverlay);
+  let editarBibliotecaStickers=false,stickerArrastrado=null;
+  const cerrarVentanaStickers=()=>{stickersOverlay.classList.add("nt-oculto");editarBibliotecaStickers=false;stickersEditar.textContent=tr("Editar");};
+  stickersCerrar.onclick=cerrarVentanaStickers;stickersOverlay.addEventListener("click",e=>{if(e.target===stickersOverlay)cerrarVentanaStickers();});
   const figurasFuera = (e) => { if (!menuFiguras.contains(e.target) && !btnFiguras.contains(e.target)) cerrarMenuFiguras(); };
   const cerrarMenuFiguras = () => { menuFiguras.classList.add("nt-oculto"); btnFiguras.setAttribute("aria-expanded", "false"); document.removeEventListener("pointerdown", figurasFuera, true); };
   const posicionarFiguras = () => { const r = btnFiguras.getBoundingClientRect(); menuFiguras.style.left = `${Math.max(8, Math.min(r.left, innerWidth - menuFiguras.offsetWidth - 8))}px`; menuFiguras.style.top = `${Math.max(8, Math.min(r.bottom + 6, innerHeight - menuFiguras.offsetHeight - 8))}px`; };
   const pintarStickers = () => {
-    listaStickers.replaceChildren();
+    stickersGrid.replaceChildren();
+    if (!editarBibliotecaStickers) { const agregar = document.createElement("button"); agregar.type = "button"; agregar.className = "nt-sticker-agregar"; agregar.textContent = `＋\n${tr("Agregar sticker")}`; agregar.onclick = () => inputSticker.click(); stickersGrid.append(agregar); }
     for (const sticker of obtenerStickersNotas()) {
-      const tile = document.createElement("div"); tile.className = "nt-sticker-tile";
-      const b = document.createElement("button"); b.type = "button"; b.className = "nt-sticker-item"; b.setAttribute("role", "menuitem"); b.title = `${tr("Insertar sticker")}: ${sticker.nombre}`;
-      const img = document.createElement("img"); img.src = sticker.src; img.alt = ""; img.width = 44; img.height = 44;
-      const nombre = document.createElement("span"); nombre.textContent = sticker.nombre; b.append(img, nombre); b.onclick = () => insertarSticker(sticker);
-      const quitar = document.createElement("button"); quitar.type = "button"; quitar.className = "nt-sticker-quitar"; quitar.textContent = "×"; quitar.title = tr("Quitar sticker de la biblioteca"); quitar.setAttribute("aria-label", `${tr("Quitar sticker")}: ${sticker.nombre}`); quitar.onclick = (e) => { e.stopPropagation(); eliminarStickerNota(sticker.id); pintarStickers(); };
-      tile.append(b, quitar); listaStickers.append(tile);
+      const tile = document.createElement("div"); tile.className = "nt-sticker-celda"; tile.draggable = editarBibliotecaStickers; tile.style.touchAction = editarBibliotecaStickers ? "none" : ""; tile.dataset.stickerId = sticker.id;
+      const b = document.createElement("button"); b.type = "button"; b.className = "nt-sticker-item"; b.setAttribute("aria-label", tr("Insertar sticker"));
+      const img = document.createElement("img"); img.src = sticker.src; img.alt = ""; b.append(img); b.onclick = () => { if (!editarBibliotecaStickers) { insertarSticker(sticker); cerrarVentanaStickers(); } };
+      tile.append(b);
+      if (editarBibliotecaStickers) { const quitar = document.createElement("button"); quitar.type = "button"; quitar.className = "nt-sticker-quitar"; quitar.textContent = "×"; quitar.title = tr("Quitar sticker de la biblioteca"); quitar.setAttribute("aria-label", tr("Quitar sticker")); quitar.onclick = async (e) => { e.stopPropagation(); if (await confirmarQuitarSticker()) { eliminarStickerNota(sticker.id); pintarStickers(); } }; tile.append(quitar); }
+      tile.draggable = false;
+      let gesto = null;
+      tile.addEventListener("pointerdown", (e) => { if (!editarBibliotecaStickers || e.target.closest(".nt-sticker-quitar") || (e.pointerType === "mouse" && e.button !== 0)) return; gesto = { id: sticker.id, x: e.clientX, y: e.clientY, moviendo: false }; try { tile.setPointerCapture(e.pointerId); } catch (_) {} });
+      tile.addEventListener("pointermove", (e) => { if (!gesto || !editarBibliotecaStickers) return; if (!gesto.moviendo && Math.hypot(e.clientX-gesto.x,e.clientY-gesto.y)>8) { gesto.moviendo=true; tile.classList.add("arrastrando"); } if (gesto.moviendo) { const destino=document.elementFromPoint(e.clientX,e.clientY)?.closest(".nt-sticker-celda"); stickersGrid.querySelectorAll(".nt-sticker-celda.sobre-destino").forEach(x=>x.classList.remove("sobre-destino")); destino?.classList.add("sobre-destino"); } });
+      const terminarReorden = (e) => { if (!gesto) return; const g=gesto; gesto=null; tile.classList.remove("arrastrando"); stickersGrid.querySelectorAll(".nt-sticker-celda.sobre-destino").forEach(x=>x.classList.remove("sobre-destino")); if(!g.moviendo)return; const destino=document.elementFromPoint(e.clientX,e.clientY)?.closest(".nt-sticker-celda"); if(!destino)return; const ids=obtenerStickersNotas().map(s=>s.id),from=ids.indexOf(g.id),to=ids.indexOf(destino.dataset.stickerId); if(from<0||to<0||from===to)return; ids.splice(to,0,...ids.splice(from,1)); guardarOrdenStickersNotas(ids); pintarStickers(); };
+      tile.addEventListener("pointerup", terminarReorden); tile.addEventListener("pointercancel", terminarReorden);
+      stickersGrid.append(tile);
     }
   };
-  btnFiguras.onclick = () => { const abrir = menuFiguras.classList.contains("nt-oculto"); if (!abrir) return cerrarMenuFiguras(); pintarStickers(); menuFiguras.classList.remove("nt-oculto"); posicionarFiguras(); btnFiguras.setAttribute("aria-expanded", "true"); document.addEventListener("pointerdown", figurasFuera, true); };
+  const confirmarQuitarSticker = () => new Promise((resolve) => {
+    const dialogo=document.createElement("div"); dialogo.className="nt-sticker-confirmar"; dialogo.setAttribute("role","alertdialog"); dialogo.setAttribute("aria-modal","true");
+    const caja=document.createElement("section"), mensaje=document.createElement("p"), acciones=document.createElement("div"), cancelar=document.createElement("button"), quitar=document.createElement("button");
+    mensaje.textContent=tr("Se quitará de tu biblioteca. Las notas que ya lo usan no cambian."); cancelar.type="button"; cancelar.textContent=tr("Cancelar"); quitar.type="button"; quitar.textContent=tr("Quitar"); quitar.className="nt-sticker-confirmar-quitar";
+    const cerrar=(valor)=>{dialogo.remove();resolve(valor);}; cancelar.onclick=()=>cerrar(false); quitar.onclick=()=>cerrar(true); dialogo.addEventListener("click",e=>{if(e.target===dialogo)cerrar(false);});
+    acciones.append(cancelar,quitar); caja.append(mensaje,acciones); dialogo.append(caja); stickersPanel.append(dialogo); quitar.focus({preventScroll:true});
+  });
+  stickersEditar.onclick = () => { editarBibliotecaStickers=!editarBibliotecaStickers; stickersEditar.textContent=tr(editarBibliotecaStickers?"Listo":"Editar"); pintarStickers(); };
+  btnSubirSticker.onclick = () => { cerrarMenuFiguras(); pintarStickers(); stickersOverlay.classList.remove("nt-oculto"); };
+  btnFiguras.onclick = () => { const abrir = menuFiguras.classList.contains("nt-oculto"); if (!abrir) return cerrarMenuFiguras(); menuFiguras.classList.remove("nt-oculto"); posicionarFiguras(); btnFiguras.setAttribute("aria-expanded", "true"); document.addEventListener("pointerdown", figurasFuera, true); };
   menuFiguras.addEventListener("mousedown", (e) => e.preventDefault());
   menuFiguras.addEventListener("keydown", (e) => { if (e.key === "Escape") { cerrarMenuFiguras(); btnFiguras.focus({ preventScroll: true }); } });
   const grupoGrosor = document.createElement("label"); grupoGrosor.className = "nt-tinta-tamanos"; grupoGrosor.setAttribute("aria-label", tr("Tamaño de trazo"));
   const valorGrosor = document.createElement("output"); valorGrosor.className = "nt-tinta-valor"; valorGrosor.value = "1×"; valorGrosor.textContent = "1×";
-  const sliderGrosor = document.createElement("input"); sliderGrosor.type = "range"; sliderGrosor.min = "0.5"; sliderGrosor.max = "2.25"; sliderGrosor.step = "0.05"; sliderGrosor.value = "1"; sliderGrosor.title = tr("Tamaño de trazo"); sliderGrosor.setAttribute("aria-label", tr("Tamaño de trazo"));
+  const sliderGrosor = document.createElement("input"); sliderGrosor.type = "range"; sliderGrosor.min = "0.5"; sliderGrosor.max = "3"; sliderGrosor.step = "0.05"; sliderGrosor.value = String(grosorTrazoPreferido()); sliderGrosor.title = tr("Tamaño de trazo"); sliderGrosor.setAttribute("aria-label", tr("Tamaño de trazo"));
   sliderGrosor.oninput = () => { const factor = Number(sliderGrosor.value); valorGrosor.value = `${factor.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")}×`; valorGrosor.textContent = valorGrosor.value; capaTinta?.establecerGrosor(GROSOR_BASE * factor); };
+  sliderGrosor.onchange = () => guardarGrosorTrazoPreferido(sliderGrosor.value);
+  sliderGrosor.oninput();
   grupoGrosor.append(sliderGrosor, valorGrosor); toolsFooter.append(grupoGrosor);
   const marcadores = crearMarcadores({ cuerpo });
   const herramientas = crearHerramientas({ cuerpo, boton: btnHerramientas, obtenerTitulo: () => titulo.value, completadasAlFinal: () => opcionesNotas().completadas_al_final, alCambiar: () => { ultimoTipo = "t"; persistir(); guardarPasoHistorial("texto"); }, avisar: mostrarToast });
@@ -162,7 +183,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     campoCreada?.destruir?.(); campoMod?.destruir?.(); campoVence?.destruir?.();
     try { capaTinta?.destruir(); } catch (err) { console.error(err); }
     try { marcadores.destruir(); herramientas.destruir(); } catch (err) { console.error(err); }
-    cerrarMenuFiguras(); menuFiguras.remove();
+    cerrarMenuFiguras(); menuFiguras.remove(); accionesExtra.remove(); stickersOverlay.remove();
     try { if (!descartandoCambios) registrarCambio(eliminando ? "Eliminar nota" : original ? "Editar nota" : "Nueva nota", instantaneaInicial); } catch (err) { console.error(err); }
     setTimeout(() => { overlay.remove(); alCerrar(); }, 0); // siempre se cierra, pase lo que pase arriba
   };
@@ -322,7 +343,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
 
   /* --- Listas y pendientes: se aplican a la selección (o a la línea del cursor) sin reemplazar el texto --- */
   const CB = "input[data-nota-check]";
-  const limpiarEstilos = () => cuerpo.querySelectorAll("[style]:not(img[data-nota-sticker])").forEach((n) => { const colorMarcador = n.matches("ul[data-marc-color],ol[data-marc-color]") ? n.getAttribute("data-marc-color") : null; n.removeAttribute("style"); if (/^#[\da-f]{6}$/i.test(colorMarcador || "")) n.style.setProperty("--nt-marker-color", colorMarcador); }); // conserva los tamaños ajustados de stickers y limpia estilos accidentales
+  const limpiarEstilos = () => cuerpo.querySelectorAll("[style]:not(img[data-nota-sticker]):not(img[data-nota-image])").forEach((n) => { const colorMarcador = n.matches("ul[data-marc-color],ol[data-marc-color]") ? n.getAttribute("data-marc-color") : null; n.removeAttribute("style"); if (/^#[\da-f]{6}$/i.test(colorMarcador || "")) n.style.setProperty("--nt-marker-color", colorMarcador); }); // conserva los tamaños ajustados de stickers e imágenes
   const recuperarSeleccion = (dentro) => { if (!dentro && rangoGuardado) { const s = getSelection(); s.removeAllRanges(); s.addRange(rangoGuardado); } };
   const baseDe = (nodo) => (nodo?.nodeType === 3 ? nodo.parentElement : nodo);
   function lisSeleccion() { // elementos de lista tocados por la selección
@@ -478,17 +499,16 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   function insertarSticker(sticker) {
     const naturalW = Number(sticker.ancho) || 512, naturalH = Number(sticker.alto) || 512;
     const ancho = Math.min(240, naturalW), alto = Math.max(24, Math.round(ancho * naturalH / Math.max(1, naturalW)));
-    const html = `<img data-nota-sticker="1" src="${sticker.src}" alt="${escaparHTMLNota(sticker.nombre)}" width="${ancho}" height="${alto}"><br>`;
+    const html = `<img data-nota-sticker="1" src="${sticker.src}" alt="Sticker" width="${ancho}" height="${alto}"><br>`;
     const s = getSelection(), dentro = !!(s?.rangeCount && cuerpo.contains(s.anchorNode));
     cuerpo.focus(); recuperarSeleccion(dentro); document.execCommand("insertHTML", false, html);
     limpiarEstilos(); persistir(); guardarPasoHistorial("texto"); cerrarMenuFiguras();
   }
-  inputSticker.onchange = async () => {
-    const file = inputSticker.files?.[0]; inputSticker.value = ""; if (!file) return;
+  const convertirImagenArchivo = async (file, limite = 1024) => {
     let bitmap;
     try {
       bitmap = await createImageBitmap(file);
-      const factor = Math.min(1, 1024 / Math.max(bitmap.width, bitmap.height));
+      const factor = Math.min(1, limite / Math.max(bitmap.width, bitmap.height));
       let resultado = null;
       for (const escala of [factor, factor * .8, factor * .62]) {
         const ancho = Math.max(1, Math.round(bitmap.width * escala)), alto = Math.max(1, Math.round(bitmap.height * escala));
@@ -504,10 +524,39 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
       }
       bitmap.close?.();
       if (!resultado) throw new Error("La imagen sigue siendo demasiado pesada después de reducirla");
-      const sticker = guardarStickerNota({ nombre: file.name, ...resultado });
-      pintarStickers(); insertarSticker(sticker); mostrarToast(tr("Sticker guardado en tu cuenta"));
-    } catch (error) { bitmap?.close?.(); mostrarToast(tr(error.message || "No se pudo guardar el sticker")); }
+      return resultado;
+    } finally { bitmap?.close?.(); }
   };
+  inputSticker.onchange = async () => {
+    const files = [...(inputSticker.files || [])]; inputSticker.value = ""; if (!files.length) return;
+    try {
+      const nuevos = [];
+      for (const file of files) { const imagen = await convertirImagenArchivo(file, 1024); nuevos.push(guardarStickerNota({ nombre: file.name, ...imagen })); }
+      pintarStickers(); nuevos.forEach(insertarSticker); mostrarToast(tr("Sticker guardado en tu cuenta"));
+    } catch (error) { mostrarToast(tr(error.message || "No se pudo guardar el sticker")); }
+  };
+  const insertarImagenesUnicas = async (files) => {
+    const imagenes = [];
+    for (const file of files) imagenes.push(await convertirImagenArchivo(file, 1600));
+    const html = imagenes.map(({src,ancho,alto},i) => `<img data-nota-image="1" src="${src}" alt="" width="${ancho}" height="${alto}" data-move-x="${(i*0.006).toFixed(3)}"><br>`).join("");
+    const s = getSelection(), dentro = !!(s?.rangeCount && cuerpo.contains(s.anchorNode));
+    cuerpo.focus(); recuperarSeleccion(dentro); document.execCommand("insertHTML", false, html);
+    limpiarEstilos(); persistir(); guardarPasoHistorial("texto");
+  };
+  inputImagenUnica.onchange = async () => {
+    const files = [...(inputImagenUnica.files || [])]; inputImagenUnica.value = ""; if (!files.length) return;
+    try { await insertarImagenesUnicas(files); cerrarMenuFiguras(); }
+    catch (error) { mostrarToast(tr(error.message || "No se pudo insertar la imagen")); }
+  };
+  cuerpo.addEventListener("paste", async (e) => {
+    const data = e.clipboardData; if (!data || (data.getData("text/plain") || "").length) return;
+    const files = [...(data.files || [])];
+    for (const item of [...(data.items || [])]) if (item.kind === "file" && item.type.startsWith("image/")) { const file = item.getAsFile(); if (file && !files.some((x) => x === file)) files.push(file); }
+    const imagenes = files.filter((file) => file.type.startsWith("image/")); if (!imagenes.length) return;
+    e.preventDefault();
+    try { await insertarImagenesUnicas(imagenes); }
+    catch (error) { mostrarToast(tr("No se pudo pegar la imagen")); }
+  }, true);
   let stickerActivo = null, menuSticker = null;
   const aplicarTransformacionSticker = (img) => {
     const rot = Number(img.dataset.rot) || 0, sx = img.dataset.flipH === "1" ? -1 : 1, sy = img.dataset.flipV === "1" ? -1 : 1;
@@ -515,7 +564,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     img.style.position = "relative"; img.style.zIndex = String(Number(img.dataset.z) || 0);
     img.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg) scale(${sx},${sy})`;
   };
-  if (typeof ResizeObserver === "function") { const roSticker = new ResizeObserver(() => cuerpo.querySelectorAll("img[data-nota-sticker]").forEach(aplicarTransformacionSticker)); roSticker.observe(cuerpo); }
+  if (typeof ResizeObserver === "function") { const roSticker = new ResizeObserver(() => cuerpo.querySelectorAll("img[data-nota-sticker],img[data-nota-image]").forEach(aplicarTransformacionSticker)); roSticker.observe(cuerpo); }
   const cerrarMenuSticker = () => { menuSticker?.remove(); menuSticker = null; document.removeEventListener("pointerdown", fueraMenuSticker, true); };
   const fueraMenuSticker = (e) => { if (menuSticker && !menuSticker.contains(e.target)) cerrarMenuSticker(); };
   const actualizarSticker = (img) => { aplicarTransformacionSticker(img); persistir(); guardarPasoHistorial("sticker"); };
@@ -527,20 +576,34 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     item("Seleccionar", () => { img.classList.toggle("nt-sticker-seleccionado"); img.contentEditable = img.classList.contains("nt-sticker-seleccionado") ? "false" : "true"; });
     item("Espejear horizontal", () => { img.dataset.flipH = img.dataset.flipH === "1" ? "0" : "1"; actualizarSticker(img); });
     item("Espejear vertical", () => { img.dataset.flipV = img.dataset.flipV === "1" ? "0" : "1"; actualizarSticker(img); });
-    const rotacion = document.createElement("label"); rotacion.textContent = `${tr("Rotar")} ${Number(img.dataset.rot) || 0}°`; rotacion.style.cssText = "display:grid;gap:4px;padding:5px 8px;font-size:.82rem";
-    const rango = document.createElement("input"); rango.type = "range"; rango.min = "0"; rango.max = "359"; rango.value = String(Number(img.dataset.rot) || 0);
+    const rotacion = document.createElement("label"); rotacion.className = "nt-rotacion-control";
+    const tituloRotacion = document.createElement("span");
+    const rango = document.createElement("input"); rango.type = "range"; rango.min = "0"; rango.max = "359"; rango.step = "1"; rango.value = String(Number(img.dataset.rot) || 0); rango.setAttribute("aria-label", tr("Rotar"));
+    const grados = document.createElement("span"); grados.className = "nt-rotacion-grados";
+    const menos = document.createElement("button"); menos.type = "button"; menos.textContent = "−"; menos.setAttribute("aria-label", tr("Reducir un grado"));
     const campoGrados = document.createElement("input"); campoGrados.type = "number"; campoGrados.min = "0"; campoGrados.max = "359"; campoGrados.step = "1"; campoGrados.value = rango.value; campoGrados.setAttribute("aria-label", tr("Rotación en grados"));
-    const actualizarGiro = (valor) => { const grados = (Math.round(Number(valor) || 0) % 360 + 360) % 360; img.dataset.rot = String(grados); rango.value = String(grados); campoGrados.value = String(grados); rotacion.firstChild.textContent = `${tr("Rotar")} ${grados}°`; actualizarSticker(img); };
-    rango.oninput = () => actualizarGiro(rango.value); campoGrados.oninput = () => actualizarGiro(campoGrados.value); rotacion.append(rango, campoGrados); menu.append(rotacion);
+    const sufijoGrados = document.createElement("span"); sufijoGrados.textContent = "°";
+    const mas = document.createElement("button"); mas.type = "button"; mas.textContent = "+"; mas.setAttribute("aria-label", tr("Aumentar un grado"));
+    grados.append(menos, campoGrados, sufijoGrados, mas);
+    const normalizarGrados = (valor) => (Math.round(Number(valor) || 0) % 360 + 360) % 360;
+    const previsualizarGiro = (valor) => { const n = normalizarGrados(valor); img.dataset.rot = String(n); rango.value = String(n); campoGrados.value = String(n); tituloRotacion.textContent = `${tr("Rotar")} ${n}°`; aplicarTransformacionSticker(img); };
+    const confirmarGiro = () => { previsualizarGiro(campoGrados.value); actualizarSticker(img); };
+    tituloRotacion.className = "nt-rotacion-titulo"; rotacion.append(tituloRotacion, rango, grados);
+    rango.oninput = () => previsualizarGiro(rango.value); rango.onchange = confirmarGiro;
+    campoGrados.oninput = () => previsualizarGiro(campoGrados.value); campoGrados.onchange = confirmarGiro; campoGrados.onblur = confirmarGiro;
+    campoGrados.onkeydown = (e) => { if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); const salto = e.shiftKey ? 15 : 1; previsualizarGiro(normalizarGrados(campoGrados.value) + (e.key === "ArrowUp" ? salto : -salto)); confirmarGiro(); } else if (e.key === "Enter") { e.preventDefault(); confirmarGiro(); campoGrados.blur(); } else if (e.key === "Escape") { previsualizarGiro(img.dataset.rot); cerrarMenuSticker(); } };
+    menos.onclick = () => { previsualizarGiro(normalizarGrados(campoGrados.value) - 1); confirmarGiro(); };
+    mas.onclick = () => { previsualizarGiro(normalizarGrados(campoGrados.value) + 1); confirmarGiro(); };
+    menu.append(rotacion); previsualizarGiro(rango.value);
     item("Borrar", () => { img.remove(); cerrarMenuSticker(); persistir(); guardarPasoHistorial("texto"); });
     item("Mover atrás", () => { img.dataset.z = String(Math.max(-100, (Number(img.dataset.z) || 0) - 1)); actualizarSticker(img); });
     item("Mover adelante", () => { img.dataset.z = String(Math.min(100, (Number(img.dataset.z) || 0) + 1)); actualizarSticker(img); });
     document.body.append(menu); menuSticker = menu; setTimeout(() => document.addEventListener("pointerdown", fueraMenuSticker, true), 0);
   };
-  cuerpo.addEventListener("contextmenu", (e) => { const img = e.target.closest?.("img[data-nota-sticker]"); if (!img) return; e.preventDefault(); e.stopPropagation(); abrirMenuSticker(img, e.clientX, e.clientY); });
+  cuerpo.addEventListener("contextmenu", (e) => { const img = e.target.closest?.("img[data-nota-sticker],img[data-nota-image]"); if (!img) return; e.preventDefault(); e.stopPropagation(); abrirMenuSticker(img, e.clientX, e.clientY); });
   let toqueLargoSticker = null;
   cuerpo.addEventListener("pointerdown", (e) => {
-    const img = e.target.closest?.("img[data-nota-sticker]"); if (!img || e.pointerType === "mouse") return;
+    const img = e.target.closest?.("img[data-nota-sticker],img[data-nota-image]"); if (!img || e.pointerType === "mouse") return;
     clearTimeout(toqueLargoSticker?.timer); const espera = { x: e.clientX, y: e.clientY, img, px: e.clientX, py: e.clientY };
     espera.timer = setTimeout(() => { abrirMenuSticker(espera.img, espera.x, espera.y); toqueLargoSticker = null; }, 550); toqueLargoSticker = espera;
   });
@@ -549,14 +612,14 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   cuerpo.addEventListener("pointerup", cancelarToqueLargoSticker);
   cuerpo.addEventListener("pointercancel", cancelarToqueLargoSticker);
   cuerpo.addEventListener("pointerdown", (e) => {
-    const img = e.target.closest?.("img[data-nota-sticker].nt-sticker-seleccionado"); if (!img || (e.button !== 0 && e.pointerType === "mouse")) return;
+    const img = e.target.closest?.("img[data-nota-sticker].nt-sticker-seleccionado,img[data-nota-image].nt-sticker-seleccionado"); if (!img || (e.button !== 0 && e.pointerType === "mouse")) return;
     const r = img.getBoundingClientRect(); if (e.clientX > r.right - 20 && e.clientY > r.bottom - 20) return; // conserva el control nativo de resize
     e.preventDefault(); const sx = e.clientX, sy = e.clientY, unidad = cuerpo.clientWidth || 700, ox = Number(img.dataset.moveX) || 0, oy = Number(img.dataset.moveY) || 0; let movio = false;
     const mover = (ev) => { if (ev.pointerId !== e.pointerId) return; const dx = ev.clientX - sx, dy = ev.clientY - sy; if (Math.hypot(dx,dy) > 2) movio = true; img.dataset.moveX = String(Math.max(-3, Math.min(3, ox + dx / unidad))); img.dataset.moveY = String(Math.max(-3, Math.min(3, oy + dy / unidad))); aplicarTransformacionSticker(img); };
     const soltar = (ev) => { if (ev.pointerId !== e.pointerId) return; window.removeEventListener("pointermove", mover, true); window.removeEventListener("pointerup", soltar, true); window.removeEventListener("pointercancel", soltar, true); if (movio) { persistir(); guardarPasoHistorial("texto"); } };
     window.addEventListener("pointermove", mover, true); window.addEventListener("pointerup", soltar, true); window.addEventListener("pointercancel", soltar, true);
   });
-  cuerpo.addEventListener("pointerup", (e) => { const img=e.target.closest?.("img[data-nota-sticker]"); if (!img) return; setTimeout(() => { const w=Math.round(parseFloat(img.style.width)||img.width),h=Math.round(parseFloat(img.style.height)||img.height); if(w>0&&h>0&&(w!==Number(img.getAttribute("width"))||h!==Number(img.getAttribute("height")))){img.setAttribute("width",String(w));img.setAttribute("height",String(h));persistir();guardarPasoHistorial("texto");} }, 0); });
+  cuerpo.addEventListener("pointerup", (e) => { const img=e.target.closest?.("img[data-nota-sticker],img[data-nota-image]"); if (!img) return; setTimeout(() => { const w=Math.round(parseFloat(img.style.width)||img.width),h=Math.round(parseFloat(img.style.height)||img.height); if(w>0&&h>0&&(w!==Number(img.getAttribute("width"))||h!==Number(img.getAttribute("height")))){img.setAttribute("width",String(w));img.setAttribute("height",String(h));persistir();guardarPasoHistorial("texto");} }, 0); });
 
   function aplicarEstadoEditor(s) {
     restaurandoHistorial = true;
@@ -637,11 +700,12 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     const ok = await window.enviarNotaAWapper?.(borrador, texto);
     if (ok) cerrarEditor();
   };
-  modal.querySelector('[data-action="share"]').onclick = async () => {
-    accionesExtra.classList.toggle("nt-oculto");
-    modal.querySelector('[data-action="share"]').setAttribute("aria-expanded", String(!accionesExtra.classList.contains("nt-oculto")));
+  modal.querySelector('[data-action="share"]').onclick = () => {
+    accionesExtra.classList.remove("nt-oculto");
+    modal.querySelector('[data-action="share"]').setAttribute("aria-expanded", "true");
+    cerrarCompartir.focus({ preventScroll: true });
   };
-  btnTextoSimple.onclick = async () => { const ok = await compartirNotaFuera([titulo.value.trim(), textoPlanoNota(cuerpo.innerHTML)].filter(Boolean).join("\n"), titulo.value); if (ok) registrarAnaliticaUso("notas", "Compartir nota"); };
+  btnTextoSimple.onclick = async () => { cerrarMenuCompartir(); const ok = await compartirNotaFuera([titulo.value.trim(), textoPlanoNota(cuerpo.innerHTML)].filter(Boolean).join("\n"), titulo.value); if (ok) registrarAnaliticaUso("notas", "Compartir nota"); };
   modal.querySelector('[data-action="duplicate"]').onclick = () => {
     clearTimeout(timer); persistirAhora();
     const n = guardarNota(crearNota({ ...borrador, id: undefined, titulo: titulo.value ? `${titulo.value} (${tr("copia")})` : "", creada_en: undefined }));
@@ -693,7 +757,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   overlay.addEventListener("pointercancel", () => { punteroInicioFuera = null; }, true);
 
   handlerTeclas = function teclas(e) {
-    if (e.key === "Escape") { if (preguntandoCerrar) { e.preventDefault(); preguntandoCerrar = false; dialogoCerrar.classList.add("nt-oculto"); return; } if (mostrarElegirFecha || editarVence) { e.preventDefault(); mostrarElegirFecha = false; editarVence = false; pintarVencimiento(); return; } pedirCerrar(); return; }
+    if (e.key === "Escape") { if (!accionesExtra.classList.contains("nt-oculto")) { e.preventDefault(); cerrarMenuCompartir(); modal.querySelector('[data-action="share"]')?.focus({ preventScroll: true }); return; } if (preguntandoCerrar) { e.preventDefault(); preguntandoCerrar = false; dialogoCerrar.classList.add("nt-oculto"); return; } if (mostrarElegirFecha || editarVence) { e.preventDefault(); mostrarElegirFecha = false; editarVence = false; pintarVencimiento(); return; } pedirCerrar(); return; }
     const mod = e.ctrlKey || e.metaKey;
     if (!mod) return;
     const k = e.key.toLowerCase();
@@ -714,6 +778,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   /* --- Tinta: lápiz y borrador (el selector de color vive a la derecha, siempre visible) --- */
   borrador.tinta = JSON.parse(JSON.stringify(borrador.tinta || []));
   capaTinta = crearCapaTinta({ cuerpo, modal, obtenerTrazos: () => borrador.tinta, alCambiar: () => { ultimoTipo = "i"; persistir(); guardarPasoHistorial("tinta"); } });
+  capaTinta.establecerGrosor(GROSOR_BASE * grosorTrazoPreferido());
   const btnLapiz = modal.querySelector('[data-tool="lapiz"]'), btnBorrador = modal.querySelector('[data-tool="borrador"]');
   const swTinta = modal.querySelector(".nt-swatch-tinta"), inpTinta = modal.querySelector(".nt-tinta-color");
   const pintarSwTinta = () => { swTinta.style.setProperty("--sw", inpTinta.value); swTinta.style.setProperty("--sw-fg", contraste(inpTinta.value)); };

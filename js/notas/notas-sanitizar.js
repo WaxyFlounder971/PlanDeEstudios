@@ -40,7 +40,7 @@ function sanearHTMLNota(html = "") {
         const ancho = Math.round(cssAncho || parseInt(hijo.getAttribute("width"), 10)), alto = Math.round(cssAlto || parseInt(hijo.getAttribute("height"), 10));
         if (Number.isFinite(ancho) && ancho > 0 && ancho <= 2048) imagen.setAttribute("width", String(ancho));
         if (Number.isFinite(alto) && alto > 0 && alto <= 2048) imagen.setAttribute("height", String(alto));
-        imagen.setAttribute("data-nota-sticker", "1");
+        imagen.setAttribute(hijo.hasAttribute("data-nota-image") ? "data-nota-image" : "data-nota-sticker", "1");
         for (const nombre of ["data-rot", "data-flip-h", "data-flip-v", "data-move-x", "data-move-y", "data-z"]) {
           const v = Number(hijo.getAttribute(nombre));
           if (Number.isFinite(v) && Math.abs(v) <= (nombre === "data-move-x" || nombre === "data-move-y" ? 3 : 2000)) imagen.setAttribute(nombre, String(nombre === "data-rot" ? ((v % 360) + 360) % 360 : v));
@@ -88,7 +88,7 @@ function renderizarHTMLNota(contenedor, html) {
   contenedor.innerHTML = sanearHTMLNota(html);
   contenedor.querySelectorAll("ul[data-marc-color],ol[data-marc-color]").forEach((l) => l.style.setProperty("--nt-marker-color", l.getAttribute("data-marc-color")));
   contenedor.querySelectorAll("input[type=checkbox]").forEach((check) => { check.disabled = true; });
-  contenedor.querySelectorAll("img[data-nota-sticker]").forEach((img) => {
+  contenedor.querySelectorAll("img[data-nota-sticker],img[data-nota-image]").forEach((img) => {
     img.draggable = false;
     img.style.maxWidth = "100%";
     // Usa las dimensiones guardadas como tamaño inicial, pero permite modificar
@@ -103,7 +103,7 @@ function renderizarHTMLNota(contenedor, html) {
     img.style.position = "relative"; img.style.zIndex = String(Number(img.dataset.z) || 0);
     img.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg) scale(${sx},${sy})`;
   });
-  if (typeof ResizeObserver === "function") { const stickers = [...contenedor.querySelectorAll("img[data-nota-sticker]")]; const actualizar = () => { if (!contenedor.isConnected) { ro.disconnect(); return; } const base = contenedor.clientWidth || 700; stickers.forEach((img) => { const x = (Number(img.dataset.moveX) || 0) * base, y = (Number(img.dataset.moveY) || 0) * base; img.style.transform = `translate(${x}px,${y}px) rotate(${Number(img.dataset.rot) || 0}deg) scale(${img.dataset.flipH === "1" ? -1 : 1},${img.dataset.flipV === "1" ? -1 : 1})`; }); }; const ro = new ResizeObserver(actualizar); ro.observe(contenedor); }
+  if (typeof ResizeObserver === "function") { const stickers = [...contenedor.querySelectorAll("img[data-nota-sticker],img[data-nota-image]")]; const actualizar = () => { if (!contenedor.isConnected) { ro.disconnect(); return; } const base = contenedor.clientWidth || 700; stickers.forEach((img) => { const x = (Number(img.dataset.moveX) || 0) * base, y = (Number(img.dataset.moveY) || 0) * base; img.style.transform = `translate(${x}px,${y}px) rotate(${Number(img.dataset.rot) || 0}deg) scale(${img.dataset.flipH === "1" ? -1 : 1},${img.dataset.flipV === "1" ? -1 : 1})`; }); }; const ro = new ResizeObserver(actualizar); ro.observe(contenedor); }
   contenedor.querySelectorAll("a").forEach((a) => {
     const url = a.getAttribute("href") || "";
     if (/^https?:\/\//i.test(url)) { a.rel = "noopener noreferrer"; a.target = "_blank"; }

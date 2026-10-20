@@ -1,5 +1,7 @@
 // Reconocimiento de figuras para la tinta: círculo, elipse, cuadrado, rectángulo, triángulo, estrella, pentagrama y corazón.
 // Entrada: puntos [[x, y, ...], ...] normalizados. Salida: puntos de la figura limpia, o null si no parece ninguna.
+const TIEMPO_MANTENER_FIGURA_MS = 600;
+const TOLERANCIA_QUIETO_PX = 6;
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 const longitud = (p) => { let s = 0; for (let i = 1; i < p.length; i++) s += dist(p[i - 1], p[i]); return s; };
 const r4 = (v) => Math.round(v * 10000) / 10000;
@@ -276,4 +278,4 @@ function reconocerForma(p) {
   return salida;
 }
 
-export { reconocerForma, reconocerFlecha };
+export { reconocerForma, reconocerFlecha, TIEMPO_MANTENER_FIGURA_MS, TOLERANCIA_QUIETO_PX };
