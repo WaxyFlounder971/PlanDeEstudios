@@ -8,8 +8,8 @@ const tr = (x) => t(x);
 
 const GRUPOS = [
   ["Ordenar", [["ordenar-az", "Ordenar A → Z"], ["ordenar-za", "Ordenar Z → A"]]],
-  ["Texto", [["mayus", "MAYÚSCULAS"], ["minus", "minúsculas"], ["titulo", "Tipo Título"]]],
-  ["Líneas", [["dup", "Quitar líneas duplicadas"], ["vacias", "Quitar líneas vacías"]]],
+  ["Texto", [["mayus", "MAYÚSCULAS"], ["minus", "minúsculas"], ["titulo", "Tipo Título"], ["oracion", "Tipo oración"]]],
+  ["Líneas", [["dup", "Quitar líneas duplicadas"], ["vacias", "Eliminar líneas vacías"]]],
   ["Pendientes", [["marcar", "Marcar o desmarcar todos"], ["borrar-completados", "Borrar los completados"]]],
   ["Nota", [["contar", "Contar texto"], ["copiar", "Copiar todo el texto"]]],
 ];
@@ -167,8 +167,9 @@ function crearHerramientas({ cuerpo, boton, obtenerTitulo = () => "", completada
     mayus: () => tr("Texto en MAYÚSCULAS"),
     minus: () => tr("Texto en minúsculas"),
     titulo: () => tr("Texto en Tipo Título"),
+    oracion: () => tr("Texto en Tipo oración"),
     dup: (r) => tr("Líneas duplicadas quitadas: {n}").replace("{n}", r.cambios),
-    vacias: (r) => tr("Líneas vacías quitadas: {n}").replace("{n}", r.cambios),
+    vacias: (r) => tr("Líneas vacías eliminadas: {n}").replace("{n}", r.cambios),
     marcar: (r) => tr(r.marcado ? "Pendientes marcados: {n}" : "Pendientes desmarcados: {n}").replace("{n}", r.cambios),
     "borrar-completados": (r) => tr("Completados borrados: {n}").replace("{n}", r.cambios),
   };
@@ -204,10 +205,24 @@ function crearHerramientas({ cuerpo, boton, obtenerTitulo = () => "", completada
 
   function pintarLista() {
     menu.replaceChildren();
+    const html = sanearHTMLNota(cuerpo.innerHTML), cont = document.createElement("div"); cont.innerHTML = html;
+    const texto = textoDeNota(html), hayTexto = !!(texto.trim() || obtenerTitulo().trim());
+    const lineas = lineasDeNota(html, { marcadores: false });
+    const checks = [...cont.querySelectorAll('input[data-nota-check]')];
+    const disponibles = new Set();
+    if (hayTexto) { ["mayus", "minus", "titulo", "oracion", "contar", "copiar"].forEach((x) => disponibles.add(x)); }
+    if (lineas.filter((x) => x.trim()).length > 1) { disponibles.add("ordenar-az"); disponibles.add("ordenar-za"); }
+    if (transformarHTML("dup", html).cambios) disponibles.add("dup");
+    if (transformarHTML("vacias", html).cambios) disponibles.add("vacias");
+    if (checks.length) disponibles.add("marcar");
+    if (checks.some((x) => x.checked || x.hasAttribute("checked"))) disponibles.add("borrar-completados");
     for (const [titulo, items] of GRUPOS) {
+      const visibles = items.filter(([id]) => disponibles.has(id));
+      if (!visibles.length) continue;
       const h = document.createElement("div"); h.className = "nt-herr-tit"; h.textContent = tr(titulo); menu.append(h);
-      for (const [id, texto] of items) menu.append(boton_(tr(texto), () => ejecutar(id)));
+      for (const [id, texto] of visibles) menu.append(boton_(tr(texto), () => ejecutar(id)));
     }
+    if (!menu.children.length) menu.append(boton_(tr("No hay herramientas disponibles para esta nota"), cerrar));
   }
   function pintarConteo() {
     const r = rangoActual();

@@ -21,7 +21,10 @@ function transformarHTML(accion, html, opts = {}) {
   const r = document.createRange();
   // Las transformaciones de líneas operan sobre bloques completos y conservan markup y checks.
   const lis = [...d.querySelectorAll("li")];
-  const blocks = lis.length ? lis : [...d.children];
+  const semanticBlocks = [...d.querySelectorAll("li,p,div,blockquote,h1,h2,h3")].filter((e) => !e.querySelector("li,p,div,blockquote,h1,h2,h3"));
+  // El contenido de una nota sencilla suele ser texto separado por <br>, que
+  // no es un elemento de bloque y no puede ser el objetivo de una transformación.
+  const blocks = lis.length ? lis : semanticBlocks.length ? semanticBlocks : [d];
   let cambios = 0;
   const text = (e) => (e.innerText || e.textContent || "").trim();
   const seleccion = Number.isFinite(opts.desde) && Number.isFinite(opts.hasta) && opts.hasta > opts.desde;
@@ -35,11 +38,22 @@ function transformarHTML(accion, html, opts = {}) {
       sorted.forEach((e,i) => { if (e !== blocks[i]) cambios++; parent.append(e); });
       if (opts.completadasAlFinal && lis.length) { const done=lis.filter(x=>x.querySelector('input[data-nota-check]:checked')); done.forEach(x=>parent.append(x)); }
     }
-  } else if (["mayus","minus","titulo"].includes(accion)) {
-    const target = objetivo.length ? objetivo : [d];
-    target.forEach((e) => { const w=document.createTreeWalker(e,NodeFilter.SHOW_TEXT); let n; while(n=w.nextNode()){ if(n.parentElement?.closest("input,code,pre")) continue; const old=n.data; const next=accion==="mayus"?old.toLocaleUpperCase():accion==="minus"?old.toLocaleLowerCase():old.toLocaleLowerCase().replace(/(^|[\s([{])([\p{L}])/gu,(_,a,b)=>a+b.toLocaleUpperCase()); if(old!==next){n.data=next;cambios++;} } });
+  } else if (["mayus","minus","titulo","oracion"].includes(accion)) {
+    const target = seleccion ? (objetivo.length ? objetivo : [d]) : [d];
+    target.forEach((e) => { const w=document.createTreeWalker(e,NodeFilter.SHOW_TEXT); let n; while(n=w.nextNode()){ if(n.parentElement?.closest("input,code,pre")) continue; const old=n.data; const next=accion==="mayus"?old.toLocaleUpperCase():accion==="minus"?old.toLocaleLowerCase():accion==="oracion"?old.toLocaleLowerCase().replace(/(^|[.!?¡¿]\s+|\n+)([\p{L}])/gu,(_,a,b)=>a+b.toLocaleUpperCase()):old.toLocaleLowerCase().replace(/(^|[\s([{])([\p{L}])/gu,(_,a,b)=>a+b.toLocaleUpperCase()); if(old!==next){n.data=next;cambios++;} } });
   } else if (["dup","vacias"].includes(accion)) {
-    const seen=new Set(); for(const e of objetivo){const s=text(e); if(accion==="vacias"&&!s || accion==="dup"&&seen.has(normalize(s))){e.remove();cambios++;} else seen.add(normalize(s));}
+    const soloTexto = !d.querySelector("b,strong,i,em,u,font,ul,ol,blockquote,input,img,p,div,h1,h2,h3");
+    if (soloTexto && d.querySelector("br")) {
+      const lineas = (d.innerText || d.textContent || "").replace(/\r/g, "").split("\n"), vistas = new Set();
+      const conservar = lineas.filter((linea) => {
+        const clave = normalize(linea.trim());
+        if (accion === "vacias" && !clave || accion === "dup" && vistas.has(clave)) { cambios++; return false; }
+        vistas.add(clave); return true;
+      });
+      if (cambios) { d.replaceChildren(); conservar.forEach((linea, i) => { if (i) d.append(doc.createElement("br")); d.append(doc.createTextNode(linea)); }); }
+    } else {
+      const seen=new Set(); for(const e of objetivo){const s=text(e); if(accion==="vacias"&&!s || accion==="dup"&&seen.has(normalize(s))){e.remove();cambios++;} else seen.add(normalize(s));}
+    }
   } else if (accion === "marcar") {
     const cbs=[...d.querySelectorAll('input[data-nota-check]')], all=cbs.length>0&&cbs.every(x=>x.checked), next=!all;
     cbs.forEach(x=>{if(x.checked!==next){x.checked=next;x.toggleAttribute("checked",next);cambios++;}});

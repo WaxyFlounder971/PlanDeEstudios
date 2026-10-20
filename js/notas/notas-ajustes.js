@@ -86,6 +86,8 @@ function mostrarAjustesNotas(refrescar, abrirPapelera) {
     tr("Vista predeterminada"),
   )));
   panel.append(interruptor(tr("Notas expandidas por defecto"), cfg.tarjetas_expandidas === true, (v) => { cfg.tarjetas_expandidas = v; guardar(); refrescar(); }));
+  panel.append(interruptor(tr("Mostrar fecha de creación en el editor"), cfg.mostrar_creada !== false, (v) => { cfg.mostrar_creada = v; guardar(); }));
+  panel.append(interruptor(tr("Mostrar fecha de modificación en el editor"), cfg.mostrar_modificada !== false, (v) => { cfg.mostrar_modificada = v; guardar(); }));
 
   // Vencimiento por defecto + plazo
   const plazo = seccion(tr("Vencimiento predeterminado"), segmentado(

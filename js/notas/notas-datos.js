@@ -61,9 +61,27 @@ function formatoAutomatico() { return opcionesNotas().formato_auto !== false; }
 function notasActuales() { if (!estado.datos) return []; return estado.datos.notas || (estado.datos.notas = []); }
 function opcionesNotas() {
   const cfg = estado.datos.configuracion;
-  cfg.notas_ajustes ||= { vencimiento_default: false, plazo_default: "3_dias", color_default: COLOR_DEFECTO, vista: "cuadricula", tarjetas_expandidas: false, papelera_despues_wapper: false, compartir_accion: "guardar", completadas_al_final: true, formato_auto: true, colores_recientes: [] };
+  cfg.notas_ajustes ||= { vencimiento_default: false, plazo_default: "3_dias", color_default: COLOR_DEFECTO, vista: "cuadricula", tarjetas_expandidas: false, papelera_despues_wapper: false, compartir_accion: "guardar", completadas_al_final: true, formato_auto: true, mostrar_creada: true, mostrar_modificada: true, colores_recientes: [] };
   if (cfg.notas_ajustes.color_default === "#fff2b3") cfg.notas_ajustes.color_default = COLOR_DEFECTO;
   return cfg.notas_ajustes;
+}
+function obtenerStickersNotas() {
+  const lista = opcionesNotas().stickers;
+  if (!Array.isArray(lista)) return (opcionesNotas().stickers = []);
+  // La configuración sincronizada puede proceder de datos antiguos o importados.
+  // Solo se muestran stickers PNG locales que cumplan el mismo límite de guardado.
+  opcionesNotas().stickers = lista.filter((sticker) => sticker && typeof sticker.src === "string" && sticker.src.length <= 2_000_000 && /^data:image\/png;base64,[\da-z+/=]+$/i.test(sticker.src));
+  return opcionesNotas().stickers;
+}
+function guardarStickerNota({ nombre = "Sticker", src, ancho = 512, alto = 512 }) {
+  if (typeof src !== "string" || !/^data:image\/png;base64,[\da-z+/=]+$/i.test(src) || src.length > 2_000_000) throw new Error("El sticker PNG no se pudo guardar");
+  const lista = obtenerStickersNotas();
+  const existente = lista.find((x) => x.src === src);
+  if (existente) return existente;
+  const sticker = { id: `sticker_${crypto.randomUUID?.() || Date.now()}`, nombre: String(nombre).replace(/\.[^.]+$/, "").slice(0, 80) || "Sticker", ancho: Math.max(1, Math.min(512, Number(ancho) || 512)), alto: Math.max(1, Math.min(512, Number(alto) || 512)), src, creado_en: Date.now() };
+  lista.unshift(sticker);
+  guardarCambio();
+  return sticker;
 }
 function guardarCambio() {
   sellarTimestamp(estado.datos.configuracion);
@@ -139,4 +157,4 @@ function agendaNotas() {
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { procesarCicloVidaNotas(); agendaNotas(); } });
 window.addEventListener("notas:actualizadas", () => {});
 
-export { MAX_CARACTERES_NOTA, COLORES_NOTA, COLORES_NOTA_OSCURO, COLOR_DEFECTO, resolverColorNota, coloresPaletaNota, notasActuales, opcionesNotas, formatoAutomatico, crearNota, obtenerNota, guardarNota, marcarEliminada, restaurarNota, eliminarDefinitiva, procesarCicloVidaNotas, agendaNotas };
+export { MAX_CARACTERES_NOTA, COLORES_NOTA, COLORES_NOTA_OSCURO, COLOR_DEFECTO, resolverColorNota, coloresPaletaNota, notasActuales, opcionesNotas, obtenerStickersNotas, guardarStickerNota, formatoAutomatico, crearNota, obtenerNota, guardarNota, marcarEliminada, restaurarNota, eliminarDefinitiva, procesarCicloVidaNotas, agendaNotas };

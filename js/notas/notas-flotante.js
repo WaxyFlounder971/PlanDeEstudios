@@ -235,7 +235,9 @@ function pintarPiP(id, win) {
   const barra = doc.createElement("header"); barra.className = "nt-flot-barra";
   const editar = botonIcono({ icono: ICONOS.editar, titulo: tr("Editar"), clase: "nt-flot-btn", onclick: () => abrirEditorNota(id, refrescarLista) });
   const volver = botonIcono({ icono: ICONOS.flotar, titulo: tr("Volver a flotante en la app"), clase: "nt-flot-btn", onclick: () => { flotarNota(id); ventanasPiP.delete(id); win.close(); refrescarLista(); } });
-  barra.append(editar, volver);
+  const resetear = botonIcono({ icono: ICONOS.resetTamano, titulo: tr("Restablecer tamaño"), clase: "nt-flot-btn", onclick: () => { ventanasPiP.delete(id); win.close(); abrirPiP(id).catch(() => {}); } });
+  const cerrar = botonIcono({ icono: ICONOS.cerrar, titulo: tr("Cerrar nota flotante"), clase: "nt-flot-btn", onclick: () => { desflotarNota(id); ventanasPiP.delete(id); win.close(); refrescarLista(); } });
+  barra.append(editar, volver, resetear, cerrar);
   if (nota.titulo) { const titulo = doc.createElement("strong"); titulo.className = "nt-flot-titulo"; titulo.textContent = nota.titulo; hoja.append(barra, titulo); }
   else hoja.append(barra);
   const cuerpo = doc.createElement("div"); cuerpo.className = "nota-preview nt-flot-cuerpo";
@@ -244,14 +246,13 @@ function pintarPiP(id, win) {
   doc.body.replaceChildren(hoja);
 }
 
-function abrirPiP(id) {
+async function abrirPiP(id) {
   const api = window.documentPictureInPicture;
   if (!api || typeof api.requestWindow !== "function") return null;
   for (const [anteriorId, anterior] of [...ventanasPiP]) {
-    if (anteriorId === id && !anterior.closed) return Promise.resolve(anterior);
     ventanasPiP.delete(anteriorId); try { anterior.close(); } catch (_) {}
   }
-  return api.requestWindow({ width: 320, height: 420 }).then((win) => {
+  const win = await api.requestWindow({ width: 320, height: 420 });
     win.document.title = buscar(id)?.titulo || tr("Nota flotante");
     for (const n of document.head.querySelectorAll('link[rel="stylesheet"],style')) {
       const copia = win.document.importNode(n, true);
@@ -263,7 +264,6 @@ function abrirPiP(id) {
     win.document.head.append(estilo);
     ventanasPiP.set(id, win); win.addEventListener("pagehide", () => { if (ventanasPiP.get(id) === win) ventanasPiP.delete(id); }, { once: true });
     pintarPiP(id, win); return win;
-  });
 }
 
 function abrirNotaPictureInPicture(id, origen) {

@@ -274,6 +274,36 @@ html:not([data-mode="dark"]):not([data-mode="true-dark"]) .nt-chip:hover{backgro
 .notas-editor .notas-editor-actions .btn{display:inline-flex!important;align-items:center;justify-content:center;gap:8px;width:100%;min-width:0;min-height:46px;margin:0;padding:10px 8px;white-space:nowrap}
 .notas-editor .notas-editor-actions .btn span{min-width:0;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:560px){.notas-editor .notas-editor-actions .btn{flex-direction:column;gap:4px;min-height:56px;padding:8px 2px;font-size:.78rem}}
+
+/* Barra de edición: una sola línea, con desplazamiento horizontal discreto. */
+.notas-editor .notas-toolbar{flex-wrap:nowrap!important;justify-content:flex-start!important;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;overscroll-behavior-inline:contain;white-space:nowrap;min-width:0}
+.notas-editor .notas-toolbar::-webkit-scrollbar{display:none}
+.notas-editor .notas-toolbar>*{flex:none}
+.notas-editor .notas-toolbar button{width:38px;height:38px;min-width:38px;padding:0}
+.notas-editor .nt-barra-fila{min-width:0;grid-template-columns:auto minmax(0,1fr) auto}
+.notas-editor .nt-pin{align-self:start;justify-self:start;width:42px;height:42px;min-width:42px;border-radius:50%;padding:0}
+.notas-editor .notas-editor-foot-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+.notas-editor .notas-editor-actions{display:flex!important;flex:0 0 auto;justify-content:flex-end!important;gap:6px;width:auto!important;padding:0!important;border:0!important}
+.notas-editor .notas-editor-actions .btn{display:grid!important;place-items:center;width:34px!important;min-width:34px!important;height:34px;min-height:34px!important;padding:0!important;border-radius:10px;flex:none}
+.notas-editor .notas-editor-actions .btn .nt-ico{width:16px;height:16px}
+.notas-editor .nt-vencimiento-area{position:relative;display:flex;align-items:center;gap:7px;min-width:0;color:var(--text-muted,rgba(255,255,255,.58));font-size:.76rem}
+.notas-editor .nt-vencimiento-btn,.notas-editor .nt-elegir-fecha,.notas-editor .nt-vencimiento-fecha,.notas-editor .nt-eliminar-vencimiento{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:8px;background:transparent;color:inherit;font:inherit;padding:5px 7px;cursor:pointer}
+.notas-editor .nt-vencimiento-btn:hover,.notas-editor .nt-elegir-fecha:hover,.notas-editor .nt-vencimiento-fecha:hover,.notas-editor .nt-eliminar-vencimiento:hover{background:rgba(255,255,255,.08);color:inherit}
+.notas-editor .nt-vencimiento-btn .nt-ico{width:14px;height:14px}
+.notas-editor .nt-vencimiento-fecha{color:inherit;text-align:left}
+.notas-editor .nt-vencimiento-editar{display:flex;align-items:center;gap:6px;position:absolute;left:0;bottom:calc(100% + 6px);z-index:10;padding:5px 7px;border:1px solid var(--nt-borde,rgba(255,255,255,.14));border-radius:11px;background:var(--bg-card,#211e2d);box-shadow:0 8px 24px rgba(0,0,0,.3);white-space:nowrap}
+.notas-editor .nt-vencimiento-editar .nt-fecha-btn{min-height:28px;padding:3px 7px;font-size:.76rem}
+.notas-editor .nt-eliminar-vencimiento{color:#f87171}
+.nt-figuras-menu{position:fixed;z-index:100001;display:flex;flex-direction:column;gap:5px;width:min(280px,calc(100vw - 16px));max-height:min(52vh,360px);overflow:auto;padding:8px;border:1px solid rgba(255,255,255,.15);border-radius:14px;background:rgba(22,20,34,.98);color:#fff;box-shadow:0 18px 40px rgba(0,0,0,.5)}
+.nt-figuras-menu button{display:flex;align-items:center;gap:9px;min-height:38px;padding:7px 10px;border:0;border-radius:9px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.nt-figuras-menu button:hover,.nt-figuras-menu button[aria-pressed="true"]{background:rgba(255,255,255,.12)}
+.nt-figuras-menu .nt-stickers-lista{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px}
+.nt-figuras-menu .nt-sticker-item{min-width:0;font-size:.78rem}
+.nt-figuras-menu .nt-sticker-item img{width:34px;height:34px;object-fit:contain;border-radius:5px;background:rgba(255,255,255,.08);flex:none}
+.nt-figuras-menu .nt-sticker-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.notas-editor .notas-cuerpo img[data-nota-sticker]{display:block;max-width:100%;height:auto;resize:both;overflow:auto;object-fit:contain;margin:5px 0}
+body:has(.notas-overlay) .toast-app,body:has(.notas-overlay) .toast-app-accion{z-index:1300}
+@media(max-width:560px){.notas-editor .notas-editor-foot-row{gap:5px}.notas-editor .notas-editor-actions{gap:3px}.notas-editor .notas-editor-actions .btn{width:31px!important;min-width:31px!important;height:31px;min-height:31px!important}}
 `;
 
 function inyectarEstilosNotas() {

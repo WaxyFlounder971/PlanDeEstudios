@@ -1,4 +1,4 @@
-const ETIQUETAS = new Set(["B", "STRONG", "I", "EM", "U", "UL", "OL", "LI", "BR", "DIV", "P", "INPUT", "A", "BLOCKQUOTE"]);
+const ETIQUETAS = new Set(["B", "STRONG", "I", "EM", "U", "UL", "OL", "LI", "BR", "DIV", "P", "INPUT", "IMG", "A", "BLOCKQUOTE"]);
 
 // Color de texto permitido: solo hex (#rgb / #rrggbb) o rgb(); se normaliza a #rrggbb. Cualquier otro valor se descarta.
 const hex2 = (n) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, "0");
@@ -28,6 +28,20 @@ function sanearHTMLNota(html = "") {
         f.setAttribute("color", color);
         f.append(...hijo.childNodes);
         hijo.replaceWith(f);
+        continue;
+      }
+      if (hijo.tagName === "IMG") {
+        const src = hijo.getAttribute("src") || "";
+        if (!/^data:image\/png;base64,[\da-z+/=]+$/i.test(src) || src.length > 2_000_000) { hijo.remove(); continue; }
+        const imagen = doc.createElement("img");
+        imagen.setAttribute("src", src);
+        imagen.setAttribute("alt", String(hijo.getAttribute("alt") || "Sticker").slice(0, 100));
+        const cssAncho = parseFloat(hijo.style.width), cssAlto = parseFloat(hijo.style.height);
+        const ancho = Math.round(cssAncho || parseInt(hijo.getAttribute("width"), 10)), alto = Math.round(cssAlto || parseInt(hijo.getAttribute("height"), 10));
+        if (Number.isFinite(ancho) && ancho > 0 && ancho <= 2048) imagen.setAttribute("width", String(ancho));
+        if (Number.isFinite(alto) && alto > 0 && alto <= 2048) imagen.setAttribute("height", String(alto));
+        imagen.setAttribute("data-nota-sticker", "1");
+        hijo.replaceWith(imagen);
         continue;
       }
       if (!ETIQUETAS.has(hijo.tagName)) {
@@ -70,6 +84,17 @@ function renderizarHTMLNota(contenedor, html) {
   contenedor.innerHTML = sanearHTMLNota(html);
   contenedor.querySelectorAll("ul[data-marc-color],ol[data-marc-color]").forEach((l) => l.style.setProperty("--nt-marker-color", l.getAttribute("data-marc-color")));
   contenedor.querySelectorAll("input[type=checkbox]").forEach((check) => { check.disabled = true; });
+  contenedor.querySelectorAll("img[data-nota-sticker]").forEach((img) => {
+    img.draggable = false;
+    img.style.maxWidth = "100%";
+    // Usa las dimensiones guardadas como tamaño inicial, pero permite modificar
+    // ancho y alto con el control de redimensionamiento nativo del navegador.
+    if (img.width) img.style.width = `${img.width}px`;
+    if (img.height) img.style.height = `${img.height}px`;
+    img.style.resize = "both";
+    img.style.overflow = "auto";
+    img.style.objectFit = "contain";
+  });
   contenedor.querySelectorAll("a").forEach((a) => {
     const url = a.getAttribute("href") || "";
     if (/^https?:\/\//i.test(url)) { a.rel = "noopener noreferrer"; a.target = "_blank"; }

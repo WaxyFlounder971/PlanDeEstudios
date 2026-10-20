@@ -36,7 +36,7 @@ async function leerWapper(file) {
   };
 }
 
-function crearImagenNota({ titulo = "", contenido = "", color = "#fff594", colorTexto = "#172033", trazos = [], marcaAgua = true }) {
+async function crearImagenNota({ titulo = "", contenido = "", color = "#fff594", colorTexto = "#172033", trazos = [], marcaAgua = true }) {
   const w = 900, pad = 44, maxW = w - pad * 2, titleFont = '700 34px system-ui, sans-serif';
   const c = document.createElement("canvas"), ctx = c.getContext("2d");
   const raiz = document.createElement("div");
@@ -61,9 +61,16 @@ function crearImagenNota({ titulo = "", contenido = "", color = "#fff594", color
     if (nodo.nodeType !== Node.ELEMENT_NODE) return;
     const tag = nodo.tagName.toLowerCase();
     if (tag === "br") { texto.push({ tipo: "salto" }); return; }
+    if (tag === "font") {
+      const color = nodo.getAttribute("color");
+      if (/^#[\da-f]{6}$/i.test(color || "")) texto.push({ tipo: "color", valor: color.toLowerCase() });
+      [...nodo.childNodes].forEach((hijo) => recorrer(hijo, nivelLista));
+      if (/^#[\da-f]{6}$/i.test(color || "")) texto.push({ tipo: "color", valor: null });
+      return;
+    }
     if (tag === "ul" || tag === "ol") {
       [...nodo.children].filter((x) => x.tagName === "LI").forEach((li, i) => {
-        texto.push({ tipo: "item", lista: tag, numero: tag === "ol" ? Number(nodo.getAttribute("start") || 1) + i : 0, nivel: nivelLista });
+        texto.push({ tipo: "item", lista: tag, numero: tag === "ol" ? Number(nodo.getAttribute("start") || 1) + i : 0, nivel: nivelLista, color: nodo.getAttribute("data-marc-color") });
         [...li.childNodes].forEach((hijo) => recorrer(hijo, nivelLista + 1));
         texto.push({ tipo: "fin-item" });
       });
@@ -78,6 +85,7 @@ function crearImagenNota({ titulo = "", contenido = "", color = "#fff594", color
       texto.push({ tipo: "salto", espacio: tag.startsWith("h") ? 12 : 5 }); return;
     }
     if (tag === "input" && nodo.type === "checkbox") { texto.push({ tipo: "casilla", checked: nodo.checked || nodo.hasAttribute("checked") }); return; }
+    if (tag === "img" && nodo.hasAttribute("data-nota-sticker")) { texto.push({ tipo: "imagen", src: nodo.src, ancho: Number(nodo.getAttribute("width")) || 220, alto: Number(nodo.getAttribute("height")) || 160 }); return; }
     const estilo = { "strong": "bold", "b": "bold", "em": "italic", "i": "italic", "u": "underline" }[tag];
     if (estilo) texto.push({ tipo: "estilo", estilo, valor: true });
     [...nodo.childNodes].forEach((hijo) => recorrer(hijo, nivelLista));
@@ -91,31 +99,42 @@ function crearImagenNota({ titulo = "", contenido = "", color = "#fff594", color
   const bloques = []; let y = pad + 26;
   for (const linea of tituloLineas) { bloques.push({ tipo: "titulo", value: linea, y }); y += 43; }
   y += 15;
-  let bold = false, italic = false, underline = false, cita = 0, item = null, linea = "", x = pad, lineH = 30;
+  let bold = false, italic = false, underline = false, colorTextoActual = null, cita = 0, item = null, linea = "", x = pad, lineH = 30;
   const fontActual = () => `${italic ? "italic " : ""}${bold ? "700" : "400"} 23px system-ui, sans-serif`;
+  const colorActual = () => /^#[\da-f]{6}$/i.test(colorTextoActual || "") ? colorTextoActual : tintaTexto;
   function iniciarLinea() {
     if (item && !linea && x === pad) {
       const sangria = pad + item.nivel * 24;
       const markerX = sangria + 3;
-      bloques.push({ tipo: "marcador", lista: item.lista, numero: item.numero, x: markerX, y: y + 19 });
+      bloques.push({ tipo: "marcador", lista: item.lista, numero: item.numero, color: item.color, x: markerX, y: y + 19 });
       x = sangria + 30;
     } else if (!item) x = pad + cita * 17;
   }
-  function vaciar() { if (linea) { bloques.push({ tipo: "texto", value: linea, x, y, font: fontActual(), underline }); linea = ""; y += lineH; } }
+  function vaciar(continuar = false) {
+    if (!linea) return;
+    const font = fontActual(), value = linea;
+    bloques.push({ tipo: "texto", value, x, y, font, underline, color: colorActual() });
+    linea = "";
+    if (continuar) x += medir(value, font);
+    else y += lineH;
+  }
   for (const token of texto) {
-    if (token.tipo === "estilo") { if (token.estilo === "bold") bold = token.valor; if (token.estilo === "italic") italic = token.valor; if (token.estilo === "underline") underline = token.valor; continue; }
+    if (token.tipo === "estilo") { vaciar(true); if (token.estilo === "bold") bold = token.valor; if (token.estilo === "italic") italic = token.valor; if (token.estilo === "underline") underline = token.valor; continue; }
+    if (token.tipo === "color") { vaciar(true); colorTextoActual = token.valor; continue; }
     if (token.tipo === "cita-inicio") { bloques.push({ tipo: "cita-barra", x: pad + cita * 17, y0: y, y1: null }); cita++; continue; }
     if (token.tipo === "cita-fin") { cita = Math.max(0, cita - 1); const barra = [...bloques].reverse().find((b) => b.tipo === "cita-barra" && b.y1 == null); if (barra) barra.y1 = y; continue; }
     if (token.tipo === "item") { vaciar(); item = token; x = pad; iniciarLinea(); continue; }
     if (token.tipo === "fin-item") { vaciar(); item = null; x = pad; y += 3; continue; }
     if (token.tipo === "salto") { vaciar(); if (item && x > pad) x = pad + item.nivel * 24 + 30; else if (!item) x = pad + cita * 17; y += token.espacio || 0; continue; }
     if (token.tipo === "casilla") { iniciarLinea(); const size = 18; if (x + size > w - pad) { vaciar(); iniciarLinea(); } bloques.push({ tipo: "casilla", x, y: y + 3, checked: token.checked }); x += 25; continue; }
+    if (token.tipo === "imagen") { vaciar(); const iw = Math.min(maxW, Math.max(24, token.ancho)); const ih = Math.max(24, iw * token.alto / Math.max(1, token.ancho)); bloques.push({ ...token, ancho: iw, alto: ih, x: pad, y }); y += ih + 8; x = pad; continue; }
     if (token.tipo === "marcador") continue;
     const font = fontActual();
     for (const palabra of token.value.split(/(\s+)/u).filter(Boolean)) {
       iniciarLinea();
       const siguiente = linea + palabra;
       if (linea && medir(siguiente, font) > w - pad - x) { vaciar(); iniciarLinea(); }
+      else if (!linea && medir(palabra, font) > w - pad - x) { y += lineH; iniciarLinea(); }
       if (!linea && /^\s+$/u.test(palabra)) continue;
       linea += palabra;
     }
@@ -127,19 +146,25 @@ function crearImagenNota({ titulo = "", contenido = "", color = "#fff594", color
   c.width = w; c.height = h;
   ctx.fillStyle = /^#[\da-f]{6}$/i.test(color) ? color : "#fff594"; ctx.fillRect(0, 0, w, h);
   const tintaTexto = /^#[\da-f]{6}$/i.test(colorTexto) ? colorTexto : "#172033";
+  const imagenes = new Map(await Promise.all(bloques.filter((b) => b.tipo === "imagen").map(async (b) => {
+    const imagen = new Image(); imagen.src = b.src;
+    try { await imagen.decode(); } catch (_) {}
+    return [b.src, imagen];
+  })));
   for (const bloque of bloques) {
     if (bloque.tipo === "cita-barra") { ctx.strokeStyle = "rgba(23,32,51,.45)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(bloque.x, bloque.y0); ctx.lineTo(bloque.x, bloque.y1 ?? y); ctx.stroke(); continue; }
     if (bloque.tipo === "titulo") { ctx.fillStyle = tintaTexto; ctx.font = titleFont; ctx.fillText(bloque.value, pad, bloque.y, maxW); continue; }
-    if (bloque.tipo === "texto") { ctx.fillStyle = tintaTexto; ctx.font = bloque.font; ctx.fillText(bloque.value, bloque.x, bloque.y, w - pad - bloque.x); if (bloque.underline) { const width = Math.min(ctx.measureText(bloque.value).width, w - pad - bloque.x); ctx.strokeStyle = tintaTexto; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(bloque.x, bloque.y + 3); ctx.lineTo(bloque.x + width, bloque.y + 3); ctx.stroke(); } continue; }
-    if (bloque.tipo === "marcador") { ctx.fillStyle = tintaTexto; ctx.font = "23px system-ui, sans-serif"; ctx.fillText(bloque.lista === "ol" ? `${bloque.numero}.` : "•", bloque.x, bloque.y); continue; }
+    if (bloque.tipo === "texto") { ctx.fillStyle = bloque.color || tintaTexto; ctx.font = bloque.font; ctx.fillText(bloque.value, bloque.x, bloque.y, w - pad - bloque.x); if (bloque.underline) { const width = Math.min(ctx.measureText(bloque.value).width, w - pad - bloque.x); ctx.strokeStyle = bloque.color || tintaTexto; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(bloque.x, bloque.y + 3); ctx.lineTo(bloque.x + width, bloque.y + 3); ctx.stroke(); } continue; }
+    if (bloque.tipo === "marcador") { ctx.fillStyle = /^#[\da-f]{6}$/i.test(bloque.color || "") ? bloque.color : tintaTexto; ctx.font = "23px system-ui, sans-serif"; ctx.fillText(bloque.lista === "ol" ? `${bloque.numero}.` : "•", bloque.x, bloque.y); continue; }
     if (bloque.tipo === "casilla") { ctx.strokeStyle = tintaTexto; ctx.lineWidth = 2; ctx.strokeRect(bloque.x, bloque.y, 17, 17); if (bloque.checked) { ctx.beginPath(); ctx.moveTo(bloque.x + 3, bloque.y + 9); ctx.lineTo(bloque.x + 7, bloque.y + 13); ctx.lineTo(bloque.x + 14, bloque.y + 4); ctx.stroke(); } continue; }
+    if (bloque.tipo === "imagen") { const img = imagenes.get(bloque.src); if (img?.complete && img.naturalWidth) ctx.drawImage(img, bloque.x, bloque.y, bloque.ancho, bloque.alto); continue; }
   }
   if (trazos.length) { ctx.save(); ctx.translate(pad, tintaY); dibujarTrazos(ctx, trazos, maxW, 0, 1); ctx.restore(); }
   if (marcaAgua) { ctx.globalAlpha = .09; ctx.fillStyle = "#172033"; ctx.font = "500 15px system-ui, sans-serif"; ctx.textAlign = "right"; ctx.fillText("Wapper", w - pad, h - 22); ctx.globalAlpha = 1; ctx.textAlign = "left"; }
   return c;
 }
 async function compartirImagenNota(datos) {
-  const c = crearImagenNota(datos);
+  const c = await crearImagenNota(datos);
   const blob = await new Promise((resolve) => c.toBlob(resolve, "image/png"));
   if (!blob) throw new Error("No se pudo crear la imagen");
   const file = new File([blob], "nota-wapper.png", { type: "image/png" });

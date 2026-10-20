@@ -128,7 +128,9 @@ function candidatoRect(pts) {
   const c = Math.cos(th), s = Math.sin(th);
   const pt = (u, v) => [u * c - v * s, u * s + v * c];
   const e = [[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]].map(([a, b]) => pt(cu + (a * w) / 2, cv + (b * h) / 2));
-  e.tipo = Math.min(w, h) / Math.max(w, h) > 0.985 ? "cuadrado" : "rectangulo";
+  // Solo fuerza la proporción del redimensionado cuando el trazo fue realmente cuadrado.
+  // Una diferencia visible, aunque sea pequeña, conserva el comportamiento de rectángulo.
+  e.tipo = Math.min(w, h) / Math.max(w, h) > 0.998 ? "cuadrado" : "rectangulo";
   return e;
 }
 
@@ -228,6 +230,10 @@ function reconocerFlecha(p) {
   const { i } = candidatos.sort((a, b) => a.score - b.score)[0];
   const ruta = rdp(p.slice(0, i + 1), 0.004 * diag);
   if (ruta.length < 2) return null;
+  // Permite una trayectoria curva, pero evita convertir garabatos con muchos
+  // quiebres marcados en flechas. Los giros suaves de una curva no cuentan.
+  const quiebres = ruta.slice(1, -1).filter((q, k) => giro(ruta[k], q, ruta[k + 2]) > 42).length;
+  if (quiebres > 5) return null;
   ruta[ruta.length - 1] = [tip[0], tip[1]];
   return ruta.map((q) => [r4(q[0]), r4(q[1])]);
 }

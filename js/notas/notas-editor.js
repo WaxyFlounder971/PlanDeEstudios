@@ -1,27 +1,26 @@
 import { prepararPegado } from "./notas-pegado.js";
-import { MAX_CARACTERES_NOTA, COLOR_DEFECTO, resolverColorNota, coloresPaletaNota, opcionesNotas, formatoAutomatico, crearNota, obtenerNota, guardarNota, marcarEliminada } from "./notas-datos.js";
-import { sanearHTMLNota, textoPlanoNota, renderizarHTMLNota } from "./notas-sanitizar.js";
+import { MAX_CARACTERES_NOTA, COLOR_DEFECTO, resolverColorNota, coloresPaletaNota, opcionesNotas, obtenerStickersNotas, guardarStickerNota, formatoAutomatico, crearNota, obtenerNota, guardarNota, marcarEliminada } from "./notas-datos.js";
+import { sanearHTMLNota, textoPlanoNota, renderizarHTMLNota, escaparHTMLNota } from "./notas-sanitizar.js";
 import { traducirTextoInterfaz as t } from "../core/i18n.js";
 import { iniciarProcesoAnalitico, registrarAnaliticaUso } from "../core/analitica.js";
 import { compartirNotaFuera } from "./notas-compartir.js";
 import { crearCapaTinta, GROSOR_BASE } from "./notas-tinta.js";
 import { crearHerramientas, crearMarcadores } from "./notas-herramientas.js";
 import { descargarWapper, leerWapper, compartirImagenNota } from "./notas-wapper.js";
-import { crearCampoFecha, aValorFecha, deValorFecha } from "./notas-fechas.js";
+import { crearCampoFecha, aValorFecha, deValorFecha, formatear } from "./notas-fechas.js";
 import { instantanea, registrarCambio } from "./notas-historial.js";
 import { ICONOS, contraste } from "./notas-ui.js";
 import "./notas-estilos.js";
 import { mostrarToast } from "../ui/componentes.js";
 
 const tr = (x) => t(x);
-const OPCIONES_PLAZO = [["manana", "Mañana"], ["3_dias", "En 3 días"], ["una_semana", "En una semana"], ["proximo_mes", "El próximo mes"], ["fecha", "Elegir fecha"]];
 const ICONO_LAPIZ = '<svg class="nt-ico nt-ico-solido" viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 17.5l.9-3.7L13.6 3.6l3 3L6.2 16.6l-3.7.9z"/><path d="M14.7 2.5l.7-.7a1.5 1.5 0 012.1 0l.7.7a1.5 1.5 0 010 2.1l-.7.7-3.1-3.1z"/></svg>';
 
 function abrirEditorNota(notaId, alCerrar = () => {}) {
   const original = notaId ? obtenerNota(notaId) : null;
   const borrador = original ? { ...original } : crearNota({ vence_en: opcionesNotas().vencimiento_default ? fechaRelativa(opcionesNotas().plazo_default) : null });
   const instantaneaInicial = instantanea([borrador.id]); // para Ctrl+Z global: toda la sesión de edición es una sola entrada
-  let guardado = false, cerrado = false, eliminando = false, timer = null, handlerTeclas = null, capaTinta = null, menuPlazoAbierto = null;
+  let guardado = false, cerrado = false, eliminando = false, timer = null, handlerTeclas = null, capaTinta = null, editarVence = false;
   let ultimoTipo = "t"; // última clase de cambio ("t" texto, "i" tinta): decide a qué afectan Deshacer/Rehacer
   let rangoGuardado = null;
   let ajustarTintaAuto = () => {}; // se define con la tinta: si no elegiste color de tinta, sigue el contraste de la nota
@@ -41,20 +40,13 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
       <label class="nt-swatch nt-swatch-tinta" title="${tr("Color de tinta")}"><span class="nt-swatch-ico">${ICONO_LAPIZ}</span><input type="color" class="nt-input-color nt-tinta-color" aria-label="${tr("Color de tinta")}"></label>
     </div>
     <div class="notas-cuerpo" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="${tr("Escribe aquí…")}"></div>
-    <footer class="notas-editor-foot"><div class="notas-editor-tools"><div class="notas-palette" aria-label="${tr("Color de nota")}"></div><label class="btn btn-secondary notas-vencimiento" role="button" title="${tr("Agregar vencimiento")}"><input type="checkbox" style="position:absolute;opacity:0;pointer-events:none"> <span>⏳ ${tr("Vencimiento")}</span></label><span class="nt-plazo"><button type="button" class="nt-chip nt-plazo-btn" aria-haspopup="listbox" aria-expanded="false"><span class="nt-plazo-txt"></span>${ICONOS.chevron}</button><div class="nt-menu nt-oculto" role="listbox" aria-label="${tr("Plazo de vencimiento")}"></div></span></div><div class="notas-editor-actions"><button class="btn btn-secondary" data-action="send">${ICONOS.wapper}<span>${tr("Wapper")}</span></button><button class="btn btn-secondary" data-action="share">${ICONOS.compartir}<span>${tr("Compartir")}</span></button><button class="btn btn-secondary" data-action="duplicate">${ICONOS.duplicar}<span>${tr("Duplicar")}</span></button><button class="btn btn-danger" data-action="delete">${ICONOS.papelera}<span>${tr("Eliminar")}</span></button></div></footer>`;
+    <footer class="notas-editor-foot"><div class="notas-palette notas-editor-tools" aria-label="${tr("Color de nota")}"></div><div class="notas-editor-foot-row"><div class="nt-vencimiento-area"><button type="button" class="nt-vencimiento-btn" data-action="vencimiento">${ICONOS.reloj}<span>${tr("Vencimiento")}</span></button><span class="nt-vencimiento-pick nt-oculto"><button type="button" class="nt-elegir-fecha">${tr("Elegir fecha")}</button></span><span class="nt-vencimiento-actual nt-oculto"></span><span class="nt-vencimiento-editar nt-oculto"><button type="button" class="nt-eliminar-vencimiento">${tr("Eliminar fecha de vencimiento")}</button></span></div><div class="notas-editor-actions"><button class="btn btn-secondary" data-action="send" aria-label="${tr("Wapper")}" title="${tr("Wapper")}">${ICONOS.wapper}</button><button class="btn btn-secondary" data-action="share" aria-label="${tr("Compartir")}" title="${tr("Compartir")}">${ICONOS.compartir}</button><button class="btn btn-secondary" data-action="duplicate" aria-label="${tr("Duplicar")}" title="${tr("Duplicar")}">${ICONOS.duplicar}</button><button class="btn btn-danger" data-action="delete" aria-label="${tr("Eliminar")}" title="${tr("Eliminar")}">${ICONOS.papelera}</button></div></div></footer>`;
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
-  const titulo = modal.querySelector(".notas-titulo"), cuerpo = modal.querySelector(".notas-cuerpo"), checkVence = modal.querySelector(".notas-vencimiento input"), paleta = modal.querySelector(".notas-palette"), pin = modal.querySelector('[data-action="pin"]');
-  const plazoWrap = modal.querySelector(".nt-plazo"), plazoBtn = modal.querySelector(".nt-plazo-btn"), plazoTxt = modal.querySelector(".nt-plazo-txt"), plazoMenu = modal.querySelector(".nt-menu");
-  const filaVencimiento = document.createElement("div"); filaVencimiento.className = "nt-venc-row";
-  const toolsFooter = modal.querySelector(".notas-editor-tools"), labelVencimiento = modal.querySelector(".notas-vencimiento");
-  filaVencimiento.append(labelVencimiento, plazoWrap); modal.querySelector(".nt-tiempos").after(filaVencimiento);
-  const iconoReloj = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  iconoReloj.setAttribute("viewBox", "0 0 20 20"); iconoReloj.setAttribute("aria-hidden", "true"); iconoReloj.classList.add("nt-ico");
-  iconoReloj.innerHTML = '<path d="M6 2h8M6 18h8M7 2c0 4 1.5 5 3 8-1.5 3-3 4-3 8m6-16c0 4-1.5 5-3 8 1.5 3 3 4 3 8"/>';
-  const textoVencimiento = labelVencimiento.querySelector("span");
-  if (textoVencimiento) textoVencimiento.replaceChildren(iconoReloj, document.createTextNode(` ${tr("Vencimiento")}`));
+  const titulo = modal.querySelector(".notas-titulo"), cuerpo = modal.querySelector(".notas-cuerpo"), paleta = modal.querySelector(".notas-palette"), pin = modal.querySelector('[data-action="pin"]');
+  const btnVencimiento = modal.querySelector(".nt-vencimiento-btn"), pickerVencimiento = modal.querySelector(".nt-vencimiento-pick"), venceActual = modal.querySelector(".nt-vencimiento-actual"), editarVencimiento = modal.querySelector(".nt-vencimiento-editar"), btnElegirFecha = modal.querySelector(".nt-elegir-fecha"), btnEliminarVencimiento = modal.querySelector(".nt-eliminar-vencimiento");
+  const toolsFooter = modal.querySelector(".notas-editor-tools");
   const accionesExtra = document.createElement("div"); accionesExtra.className = "nt-acciones-extra";
   const crearAccionExtra = (texto) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn btn-secondary"; b.textContent = tr(texto); accionesExtra.append(b); return b; };
   accionesExtra.classList.add("nt-oculto");
@@ -85,11 +77,32 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   btnHerramientas.title = tr("Herramientas"); btnHerramientas.setAttribute("aria-label", tr("Herramientas"));
   btnHerramientas.setAttribute("aria-haspopup", "menu"); btnHerramientas.setAttribute("aria-expanded", "false");
   const barraTinta = modal.querySelector(".notas-toolbar");
+  const btnFiguras = document.createElement("button"); btnFiguras.type = "button"; btnFiguras.className = "nt-figuras-btn"; btnFiguras.innerHTML = ICONOS.figuras;
+  btnFiguras.title = tr("Figuras y stickers"); btnFiguras.setAttribute("aria-label", tr("Figuras y stickers")); btnFiguras.setAttribute("aria-haspopup", "menu"); btnFiguras.setAttribute("aria-expanded", "false");
+  const menuFiguras = document.createElement("div"); menuFiguras.className = "nt-figuras-menu nt-oculto"; menuFiguras.setAttribute("role", "menu"); menuFiguras.setAttribute("aria-label", tr("Figuras y stickers"));
+  const listaStickers = document.createElement("div"); listaStickers.className = "nt-stickers-lista";
+  const btnSubirSticker = document.createElement("button"); btnSubirSticker.type = "button"; btnSubirSticker.className = "nt-sticker-subir"; btnSubirSticker.textContent = tr("Añadir sticker PNG"); btnSubirSticker.setAttribute("role", "menuitem");
+  const inputSticker = document.createElement("input"); inputSticker.type = "file"; inputSticker.accept = "image/png,.png"; inputSticker.hidden = true;
+  btnSubirSticker.onclick = () => inputSticker.click(); menuFiguras.append(btnSubirSticker, listaStickers, inputSticker);
   const botonesForma = [];
   for (const [modo, simbolo, nombre] of [["linea", "╱", "Línea recta"], ["flecha", "↗", "Flecha"], ["rectangulo", "▱", "Rectángulo"]]) {
-    const b = document.createElement("button"); b.type = "button"; b.dataset.forma = modo; b.textContent = simbolo; b.title = tr(nombre); b.setAttribute("aria-label", tr(nombre)); b.setAttribute("aria-pressed", "false"); barraTinta.append(b); botonesForma.push(b);
+    const b = document.createElement("button"); b.type = "button"; b.dataset.forma = modo; b.textContent = simbolo; b.title = tr(nombre); b.setAttribute("aria-label", tr(nombre)); b.setAttribute("aria-pressed", "false"); b.setAttribute("role", "menuitem"); menuFiguras.append(b); botonesForma.push(b);
   }
-  barraTinta.append(btnHerramientas);
+  barraTinta.append(btnFiguras, btnHerramientas); document.body.append(menuFiguras);
+  const figurasFuera = (e) => { if (!menuFiguras.contains(e.target) && !btnFiguras.contains(e.target)) cerrarMenuFiguras(); };
+  const cerrarMenuFiguras = () => { menuFiguras.classList.add("nt-oculto"); btnFiguras.setAttribute("aria-expanded", "false"); document.removeEventListener("pointerdown", figurasFuera, true); };
+  const posicionarFiguras = () => { const r = btnFiguras.getBoundingClientRect(); menuFiguras.style.left = `${Math.max(8, Math.min(r.left, innerWidth - menuFiguras.offsetWidth - 8))}px`; menuFiguras.style.top = `${Math.max(8, Math.min(r.bottom + 6, innerHeight - menuFiguras.offsetHeight - 8))}px`; };
+  const pintarStickers = () => {
+    listaStickers.replaceChildren();
+    for (const sticker of obtenerStickersNotas()) {
+      const b = document.createElement("button"); b.type = "button"; b.className = "nt-sticker-item"; b.setAttribute("role", "menuitem"); b.title = `${tr("Insertar sticker")}: ${sticker.nombre}`;
+      const img = document.createElement("img"); img.src = sticker.src; img.alt = ""; img.width = 44; img.height = 44;
+      const nombre = document.createElement("span"); nombre.textContent = sticker.nombre; b.append(img, nombre); b.onclick = () => insertarSticker(sticker); listaStickers.append(b);
+    }
+  };
+  btnFiguras.onclick = () => { const abrir = menuFiguras.classList.contains("nt-oculto"); if (!abrir) return cerrarMenuFiguras(); pintarStickers(); menuFiguras.classList.remove("nt-oculto"); posicionarFiguras(); btnFiguras.setAttribute("aria-expanded", "true"); document.addEventListener("pointerdown", figurasFuera, true); };
+  menuFiguras.addEventListener("mousedown", (e) => e.preventDefault());
+  menuFiguras.addEventListener("keydown", (e) => { if (e.key === "Escape") { cerrarMenuFiguras(); btnFiguras.focus({ preventScroll: true }); } });
   const grupoGrosor = document.createElement("div"); grupoGrosor.className = "nt-tinta-tamanos"; grupoGrosor.setAttribute("role", "group"); grupoGrosor.setAttribute("aria-label", tr("Tamaño de trazo"));
   const tamanosTrazo = [[0.5, "½×"], [0.75, "¾×"], [1, "1×"], [1.5, "1.5×"], [2.25, "2.25×"]];
   const botonesGrosor = tamanosTrazo.map(([factor, etiqueta]) => { const b = document.createElement("button"); b.type = "button"; b.textContent = etiqueta; b.title = `${tr("Tamaño de trazo")} ${etiqueta}`; b.setAttribute("aria-pressed", String(factor === 1)); b.onclick = () => { capaTinta?.establecerGrosor(GROSOR_BASE * factor); grupoGrosor.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); }; grupoGrosor.append(b); return b; });
@@ -102,7 +115,6 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   cuerpo.contentEditable = "true";
 
   /* --- Persistencia --- */
-  let plazoSel = original?.vence_en ? "fecha" : (opcionesNotas().plazo_default || "3_dias");
   let fechaVence = deValorFecha(original?.vence_en || fechaRelativa(opcionesNotas().plazo_default));
   const persistirAhora = () => {
     if (eliminando || cerrado) return;
@@ -111,7 +123,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     try {
       borrador.titulo = tit;
       borrador.contenido = sanearHTMLNota(cuerpo.innerHTML);
-      borrador.vence_en = checkVence.checked ? (plazoSel === "fecha" ? aValorFecha(fechaVence) : fechaRelativa(plazoSel)) : null;
+      borrador.vence_en = borrador.vence_en || null;
       const n = guardarNota(borrador);
       window.dispatchEvent(new Event("notas:actualizadas-ui"));
       borrador.id = n.id;
@@ -145,6 +157,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     if (handlerTeclas) document.removeEventListener("keydown", handlerTeclas);
     try { capaTinta?.destruir(); } catch (err) { console.error(err); }
     try { marcadores.destruir(); herramientas.destruir(); } catch (err) { console.error(err); }
+    cerrarMenuFiguras(); menuFiguras.remove();
     try { registrarCambio(eliminando ? "Eliminar nota" : original ? "Editar nota" : "Nueva nota", instantaneaInicial); } catch (err) { console.error(err); }
     setTimeout(() => { overlay.remove(); alCerrar(); }, 0); // siempre se cierra, pase lo que pase arriba
   };
@@ -156,7 +169,9 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const filaTiempos = modal.querySelector(".nt-tiempos");
   const campoCreada = crearCampoFecha({ etiqueta: tr("Creada"), tipo: "datetime-local", ms: borrador.creada_en || Date.now(), alCambiar: (ms) => { borrador.creada_en = ms; persistir(); } });
   const campoMod = crearCampoFecha({ etiqueta: tr("Modificada"), tipo: "datetime-local", ms: borrador.modificada_en || Date.now(), alCambiar: (ms) => { borrador.modificada_en = ms; borrador._mod_manual = true; persistir(); } });
-  filaTiempos.append(campoCreada.el, campoMod.el);
+  if (opcionesNotas().mostrar_creada !== false) filaTiempos.append(campoCreada.el);
+  if (opcionesNotas().mostrar_modificada !== false) filaTiempos.append(campoMod.el);
+  if (!filaTiempos.children.length) filaTiempos.classList.add("nt-oculto");
   function pintarModificada() { campoMod.establecer(borrador.modificada_en || Date.now()); }
 
   /* --- Colores de la nota --- */
@@ -303,7 +318,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
 
   /* --- Listas y pendientes: se aplican a la selección (o a la línea del cursor) sin reemplazar el texto --- */
   const CB = "input[data-nota-check]";
-  const limpiarEstilos = () => cuerpo.querySelectorAll("[style]").forEach((n) => { const colorMarcador = n.matches("ul[data-marc-color],ol[data-marc-color]") ? n.getAttribute("data-marc-color") : null; n.removeAttribute("style"); if (/^#[\da-f]{6}$/i.test(colorMarcador || "")) n.style.setProperty("--nt-marker-color", colorMarcador); }); // quita los estilos que agrega el navegador, pero conserva el color de viñetas y casillas
+  const limpiarEstilos = () => cuerpo.querySelectorAll("[style]:not(img[data-nota-sticker])").forEach((n) => { const colorMarcador = n.matches("ul[data-marc-color],ol[data-marc-color]") ? n.getAttribute("data-marc-color") : null; n.removeAttribute("style"); if (/^#[\da-f]{6}$/i.test(colorMarcador || "")) n.style.setProperty("--nt-marker-color", colorMarcador); }); // conserva los tamaños ajustados de stickers y limpia estilos accidentales
   const recuperarSeleccion = (dentro) => { if (!dentro && rangoGuardado) { const s = getSelection(); s.removeAllRanges(); s.addRange(rangoGuardado); } };
   const baseDe = (nodo) => (nodo?.nodeType === 3 ? nodo.parentElement : nodo);
   function lisSeleccion() { // elementos de lista tocados por la selección
@@ -456,6 +471,37 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     else { historialEditor.push(actual); if (historialEditor.length > 100) historialEditor.shift(); }
     futuroEditor.length = 0; ultimaCategoriaHistorial = categoria; ultimoTiempoHistorial = ahora;
   }
+  function insertarSticker(sticker) {
+    const naturalW = Number(sticker.ancho) || 512, naturalH = Number(sticker.alto) || 512;
+    const ancho = Math.min(240, naturalW), alto = Math.max(24, Math.round(ancho * naturalH / Math.max(1, naturalW)));
+    const html = `<img data-nota-sticker="1" src="${sticker.src}" alt="${escaparHTMLNota(sticker.nombre)}" width="${ancho}" height="${alto}"><br>`;
+    const s = getSelection(), dentro = !!(s?.rangeCount && cuerpo.contains(s.anchorNode));
+    cuerpo.focus(); recuperarSeleccion(dentro); document.execCommand("insertHTML", false, html);
+    limpiarEstilos(); persistir(); guardarPasoHistorial("texto"); cerrarMenuFiguras();
+  }
+  inputSticker.onchange = async () => {
+    const file = inputSticker.files?.[0]; inputSticker.value = ""; if (!file) return;
+    if (file.type !== "image/png" && !/\.png$/i.test(file.name)) { mostrarToast(tr("Elige una imagen PNG")); return; }
+    let bitmap;
+    try {
+      bitmap = await createImageBitmap(file);
+      const factor = Math.min(1, 512 / Math.max(bitmap.width, bitmap.height));
+      let resultado = null;
+      for (const escala of [factor, factor * .8, factor * .62]) {
+        const ancho = Math.max(1, Math.round(bitmap.width * escala)), alto = Math.max(1, Math.round(bitmap.height * escala));
+        const canvas = document.createElement("canvas"); canvas.width = ancho; canvas.height = alto;
+        canvas.getContext("2d", { alpha: true }).drawImage(bitmap, 0, 0, ancho, alto);
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+        if (!blob) continue;
+        const src = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(blob); });
+        if (String(src).length <= 2_000_000) { resultado = { src, ancho, alto }; break; }
+      }
+      bitmap.close?.();
+      if (!resultado) throw new Error("El PNG sigue siendo demasiado pesado después de reducirlo");
+      const sticker = guardarStickerNota({ nombre: file.name, ...resultado });
+      pintarStickers(); insertarSticker(sticker); mostrarToast(tr("Sticker guardado en tu cuenta"));
+    } catch (error) { bitmap?.close?.(); mostrarToast(tr(error.message || "No se pudo guardar el sticker PNG")); }
+  };
   function aplicarEstadoEditor(s) {
     restaurandoHistorial = true;
     try {
@@ -493,43 +539,32 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     persistir(); guardarPasoHistorial("texto");
   });
 
-  /* --- Vencimiento: interruptor + plazo con menú propio + fecha --- */
-  const campoVence = crearCampoFecha({ tipo: "date", ms: fechaVence, alCambiar: (ms) => { fechaVence = ms; persistir(); }, clase: "nt-fecha-venc" });
-  plazoWrap.after(campoVence.el);
-  const etiquetaPlazo = () => tr((OPCIONES_PLAZO.find(([v]) => v === plazoSel) || OPCIONES_PLAZO[1])[1]);
-  const cerrarMenuPlazo = () => { plazoMenu.classList.add("nt-oculto"); plazoBtn.setAttribute("aria-expanded", "false"); menuPlazoAbierto = null; document.removeEventListener("pointerdown", fueraMenu, true); };
-  const fueraMenu = (e) => { if (!plazoWrap.contains(e.target)) cerrarMenuPlazo(); };
-  const pintarVence = () => {
-    const on = checkVence.checked;
-    plazoWrap.classList.toggle("nt-oculto", !on);
-    campoVence.el.classList.toggle("nt-oculto", !on || plazoSel !== "fecha");
-    plazoTxt.textContent = etiquetaPlazo();
-    plazoMenu.querySelectorAll("[role=option]").forEach((o) => o.setAttribute("aria-selected", String(o.dataset.valor === plazoSel)));
-    const l = checkVence.closest("label");
-    l.classList.toggle("activo", on); l.setAttribute("aria-pressed", String(on));
-    if (!on) cerrarMenuPlazo();
+  /* --- Vencimiento: discreto al pie y editable desde la fecha --- */
+  const campoVence = crearCampoFecha({ tipo: "date", ms: fechaVence, clase: "nt-fecha-venc", alCambiar: (ms) => {
+    fechaVence = ms; borrador.vence_en = aValorFecha(ms); editarVence = false; mostrarElegirFecha = false; persistir(); pintarVencimiento();
+  } });
+  let mostrarElegirFecha = false;
+  editarVencimiento.append(campoVence.el, btnEliminarVencimiento);
+  const pintarVencimiento = () => {
+    const tieneFecha = !!borrador.vence_en;
+    btnVencimiento.classList.toggle("nt-oculto", tieneFecha || mostrarElegirFecha);
+    pickerVencimiento.classList.toggle("nt-oculto", tieneFecha || !mostrarElegirFecha);
+    venceActual.classList.toggle("nt-oculto", !tieneFecha);
+    editarVencimiento.classList.toggle("nt-oculto", !tieneFecha || !editarVence);
+    venceActual.replaceChildren();
+    if (tieneFecha) {
+      const b = document.createElement("button"); b.type = "button"; b.className = "nt-vencimiento-fecha";
+      b.textContent = `${tr("Vence")} ${formatear(deValorFecha(borrador.vence_en), false)}`;
+      b.setAttribute("aria-label", `${tr("Editar vencimiento")}: ${b.textContent}`);
+      b.onclick = () => { editarVence = !editarVence; pintarVencimiento(); };
+      venceActual.append(b);
+    }
   };
-  for (const [valor, texto] of OPCIONES_PLAZO) {
-    const o = document.createElement("button");
-    o.type = "button"; o.setAttribute("role", "option"); o.dataset.valor = valor; o.textContent = tr(texto);
-    o.onclick = () => {
-      plazoSel = valor;
-      if (valor !== "fecha") fechaVence = deValorFecha(fechaRelativa(valor));
-      campoVence.establecer(fechaVence);
-      cerrarMenuPlazo(); pintarVence(); persistir();
-      if (valor === "fecha") setTimeout(() => campoVence.abrir(), 0);
-    };
-    plazoMenu.append(o);
-  }
-  plazoBtn.onclick = () => {
-    if (menuPlazoAbierto) return cerrarMenuPlazo();
-    plazoMenu.classList.remove("nt-oculto"); plazoBtn.setAttribute("aria-expanded", "true"); menuPlazoAbierto = true;
-    document.addEventListener("pointerdown", fueraMenu, true);
-    plazoMenu.querySelector('[aria-selected="true"]')?.focus();
-  };
-  checkVence.checked = !!borrador.vence_en;
-  checkVence.onchange = () => { pintarVence(); persistir(); };
-  pintarVence();
+  btnVencimiento.onclick = () => { mostrarElegirFecha = true; pintarVencimiento(); };
+  btnElegirFecha.onclick = () => campoVence.abrir();
+  btnEliminarVencimiento.onclick = () => { borrador.vence_en = null; fechaVence = deValorFecha(fechaRelativa(opcionesNotas().plazo_default)); editarVence = false; mostrarElegirFecha = false; persistir(); pintarVencimiento(); };
+  if (borrador.vence_en) campoVence.establecer(deValorFecha(borrador.vence_en));
+  pintarVencimiento();
 
   /* --- Fijar, acciones del pie --- */
   const pintarPin = () => { pin.classList.toggle("activo", !!borrador.fijada); pin.setAttribute("aria-pressed", String(!!borrador.fijada)); const txt = tr(borrador.fijada ? "Desfijar" : "Fijar"); pin.title = txt; pin.setAttribute("aria-label", txt); };
@@ -584,7 +619,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   overlay.addEventListener("pointercancel", () => { punteroInicioFuera = null; }, true);
 
   handlerTeclas = function teclas(e) {
-    if (e.key === "Escape") { if (menuPlazoAbierto) { e.preventDefault(); cerrarMenuPlazo(); return; } cerrarEditor(); return; }
+    if (e.key === "Escape") { if (mostrarElegirFecha || editarVence) { e.preventDefault(); mostrarElegirFecha = false; editarVence = false; pintarVencimiento(); return; } cerrarEditor(); return; }
     const mod = e.ctrlKey || e.metaKey;
     if (!mod) return;
     const k = e.key.toLowerCase();
@@ -618,7 +653,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const fijarModo = (m) => { capaTinta.establecerModo(m); cuerpo.contentEditable = m ? "false" : "true"; btnLapiz.setAttribute("aria-pressed", String(m === "lapiz")); btnBorrador.setAttribute("aria-pressed", String(m === "borrador")); botonesForma.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.forma === m))); };
   btnLapiz.onclick = () => { const apagar = capaTinta.obtenerModo() === "lapiz"; lapizDesactivadoManualmente = apagar; fijarModo(apagar ? null : "lapiz"); };
   btnBorrador.onclick = () => fijarModo(capaTinta.obtenerModo() === "borrador" ? null : "borrador");
-  botonesForma.forEach((b) => { b.onclick = () => fijarModo(capaTinta.obtenerModo() === b.dataset.forma ? null : b.dataset.forma); });
+  botonesForma.forEach((b) => { b.onclick = () => { cerrarMenuFiguras(); fijarModo(capaTinta.obtenerModo() === b.dataset.forma ? null : b.dataset.forma); }; });
   inpTinta.oninput = () => { tintaManual = true; capaTinta.establecerColor(inpTinta.value); pintarSwTinta(); if (capaTinta.obtenerModo() !== "lapiz") fijarModo("lapiz"); };
   cuerpo.addEventListener("pointermove", (e) => { if (e.pointerType === "pen" && !lapizDesactivadoManualmente && !capaTinta.obtenerModo()) fijarModo("lapiz"); });
   titulo.addEventListener("input", () => guardarPasoHistorial("titulo"));
