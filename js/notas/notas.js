@@ -324,9 +324,7 @@ function aplicarAnchos(grid) {
   for (const c of cards) {
     const w = anchoVisible(grid, c.dataset.ancho);
     const col = Math.max(0, Math.min(g.cols - 1, Math.round((c.getBoundingClientRect().left - g.izq) / (g.colW + g.hueco))));
-    if (g.cols <= 1) { c.dataset.lados = "ninguno"; continue; }
-    if (w > 2 || (col === 0 && w >= g.cols)) { c.dataset.lados = "ambos"; continue; }
-    const hayIzq = col > 0, hayDer = col + w - 1 < g.cols - 1;
+    const hayIzq = g.cols > 1 && col > 0, hayDer = g.cols > 1 && col + w - 1 < g.cols - 1;
     c.dataset.lados = hayIzq && hayDer ? "ambos" : hayIzq ? "izq" : "der";
   }
 }
