@@ -8,6 +8,7 @@ import "./notas-estilos.js";
 import { textoPlanoNota, renderizarHTMLNota } from "./notas-sanitizar.js";
 import { abrirEditorNota } from "./notas-editor.js";
 import { crearMiniTinta } from "./notas-tinta.js";
+import { descargarWapper, compartirImagenNota } from "./notas-wapper.js";
 import { mostrarPapelera } from "./notas-papelera.js";
 import { mostrarAjustesNotas } from "./notas-ajustes.js";
 import { procesarCompartidos, compartirNotaFuera } from "./notas-compartir.js";
@@ -96,7 +97,14 @@ async function eliminarConConfirmacion(nota) {
     renderizarNotas();
   }
 }
-const compartirNota = async (nota) => { if (await compartirNotaFuera(textoDe(nota), nota.titulo)) registrarAnaliticaUso("notas", "Compartir nota"); };
+const compartirNota = async (nota, ancla = null) => {
+  const menu=document.createElement("div");menu.className="nt-share-menu-card";menu.setAttribute("role","dialog");menu.setAttribute("aria-label",tr("Compartir nota"));
+  const titulo=el("strong","",tr("Compartir nota"));menu.append(titulo);
+  const acciones=[["Compartir texto",async()=>{if(await compartirNotaFuera(textoDe(nota),nota.titulo))registrarAnaliticaUso("notas","Compartir nota");}], ["Compartir imagen",async()=>{const r=await compartirImagenNota({titulo:nota.titulo||"",contenido:nota.contenido||"",color:nota.color||COLOR_DEFECTO,colorTexto:nota.color_texto||colorTextoNota(nota,nota.color||COLOR_DEFECTO),trazos:nota.tinta||[],marcaAgua:opcionesNotas().sin_marca_agua!==true});mostrarToast(tr(r==="compartida"?"Imagen compartida":"Imagen descargada"));}], ["Descargar Wapper Note (.wapper)",async()=>descargarWapper(nota)]];
+  for(const [label,run] of acciones){const b=el("button","",tr(label));b.type="button";b.onclick=async()=>{try{await run();}catch(e){if(e.name!=="AbortError")mostrarToast(tr("No se pudo compartir la nota"));}cerrar();};menu.append(b);}
+  const cerrar=()=>{menu.remove();document.removeEventListener("pointerdown",fuera,true);};const fuera=e=>{if(!menu.contains(e.target)&&!ancla?.contains(e.target))cerrar();};
+  const r=ancla?.getBoundingClientRect();Object.assign(menu.style,{position:"fixed",left:`${Math.max(8,Math.min(r?.left||innerWidth/2,innerWidth-280))}px`,top:`${Math.max(8,Math.min((r?.bottom||innerHeight/2)+6,innerHeight-190))}px`,zIndex:"100010"});document.body.append(menu);setTimeout(()=>document.addEventListener("pointerdown",fuera,true),0);
+};
 const wapperNota = (nota) => conHistorial("Enviar a Wapper", [nota.id], () => enviarNotaAWapper(nota, textoDe(nota)));
 function moverFijada(nota, delta) {
   const pins = notasActuales().filter((n) => n.fijada).sort((a, b) => (a.orden_fijada || 0) - (b.orden_fijada || 0));
@@ -388,10 +396,9 @@ function construirTarjeta(nota) {
   expand.title = tr("Expandir"); expand.setAttribute("aria-label", tr("Expandir"));
   expand.onclick = (e) => {
     e.stopPropagation();
-    card.classList.toggle("expandida");
-    const abierta = card.classList.contains("expandida");
-    const label = tr(abierta ? "Contraer" : "Expandir");
-    expand.innerHTML = abierta ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>' : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>'; expand.title = label; expand.setAttribute("aria-label", label);
+    const abierta=!card.classList.contains("expandida"), fila=card.getBoundingClientRect().top;
+    const vecinos=[...card.parentElement.querySelectorAll(":scope > .nota-card")].filter(c=>Math.abs(c.getBoundingClientRect().top-fila)<5);
+    for(const c of vecinos){c.classList.toggle("expandida",abierta);const b=c.querySelector(".nota-expand");if(!b)continue;const label=tr(abierta?"Contraer":"Expandir");b.innerHTML=abierta?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';b.title=label;b.setAttribute("aria-label",label);}
   };
 
   // Fila superior: insignias a la izquierda, asa de arrastre a la derecha (solo si hay algo que mostrar).
@@ -420,7 +427,7 @@ function construirTarjeta(nota) {
     botonIcono({ icono: ICONOS.pip, titulo: tr("Abrir en ventana PiP"), clase: "nota-pip-action", onclick: (e) => { e.stopPropagation(); abrirNotaPictureInPicture(nota.id, card); } }),
     sep(),
     botonIcono({ icono: ICONOS.wapper, titulo: tr("Enviar a Wapper"), onclick: (e) => { e.stopPropagation(); wapperNota(nota); } }),
-    botonIcono({ icono: ICONOS.compartir, titulo: tr("Compartir"), onclick: (e) => { e.stopPropagation(); compartirNota(nota); } }),
+    botonIcono({ icono: ICONOS.compartir, titulo: tr("Compartir"), onclick: (e) => { e.stopPropagation(); compartirNota(nota,e.currentTarget); } }),
     sep(),
     botonIcono({ icono: ICONOS.duplicar, titulo: tr("Duplicar"), onclick: (e) => { e.stopPropagation(); clonarNota(nota); } }),
     botonIcono({ icono: ICONOS.papelera, titulo: tr("Eliminar"), clase: "nota-eliminar-action", onclick: (e) => { e.stopPropagation(); eliminarConConfirmacion(nota); } }),

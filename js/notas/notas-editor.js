@@ -1,5 +1,5 @@
 import { prepararPegado } from "./notas-pegado.js";
-import { MAX_CARACTERES_NOTA, COLOR_DEFECTO, resolverColorNota, coloresPaletaNota, opcionesNotas, obtenerStickersNotas, guardarStickerNota, formatoAutomatico, crearNota, obtenerNota, guardarNota, marcarEliminada } from "./notas-datos.js";
+import { MAX_CARACTERES_NOTA, COLOR_DEFECTO, resolverColorNota, coloresPaletaNota, opcionesNotas, obtenerStickersNotas, guardarStickerNota, formatoAutomatico, crearNota, obtenerNota, guardarNota, marcarEliminada, eliminarDefinitiva } from "./notas-datos.js";
 import { sanearHTMLNota, textoPlanoNota, renderizarHTMLNota, escaparHTMLNota } from "./notas-sanitizar.js";
 import { traducirTextoInterfaz as t } from "../core/i18n.js";
 import { iniciarProcesoAnalitico, registrarAnaliticaUso } from "../core/analitica.js";
@@ -17,10 +17,11 @@ const tr = (x) => t(x);
 const ICONO_LAPIZ = '<svg class="nt-ico nt-ico-solido" viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 17.5l.9-3.7L13.6 3.6l3 3L6.2 16.6l-3.7.9z"/><path d="M14.7 2.5l.7-.7a1.5 1.5 0 012.1 0l.7.7a1.5 1.5 0 010 2.1l-.7.7-3.1-3.1z"/></svg>';
 
 function abrirEditorNota(notaId, alCerrar = () => {}) {
-  const original = notaId ? obtenerNota(notaId) : null;
+  const registroOriginal = notaId ? obtenerNota(notaId) : null;
+  const original = registroOriginal ? JSON.parse(JSON.stringify(registroOriginal)) : null;
   const borrador = original ? { ...original } : crearNota({ vence_en: opcionesNotas().vencimiento_default ? fechaRelativa(opcionesNotas().plazo_default) : null });
   const instantaneaInicial = instantanea([borrador.id]); // para Ctrl+Z global: toda la sesión de edición es una sola entrada
-  let guardado = false, cerrado = false, eliminando = false, timer = null, handlerTeclas = null, capaTinta = null, editarVence = false;
+  let guardado = false, cerrado = false, eliminando = false, descartandoCambios = false, timer = null, handlerTeclas = null, capaTinta = null, editarVence = false, preguntandoCerrar = false;
   let ultimoTipo = "t"; // última clase de cambio ("t" texto, "i" tinta): decide a qué afectan Deshacer/Rehacer
   let rangoGuardado = null;
   let ajustarTintaAuto = () => {}; // se define con la tinta: si no elegiste color de tinta, sigue el contraste de la nota
@@ -32,7 +33,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   overlay.setAttribute("aria-modal", "true");
   const modal = document.createElement("section");
   modal.className = "glass-card notas-editor stack";
-  modal.innerHTML = `<header class="notas-editor-cab"><button class="btn btn-secondary nt-pin" data-action="pin" aria-pressed="false">${ICONOS.anclar}</button><input class="form-input notas-titulo" maxlength="180" placeholder="${tr("Título (opcional)")}"><button class="btn btn-primary" data-action="close">${tr("Listo")}</button></header>
+  modal.innerHTML = `<header class="notas-editor-cab"><button class="btn btn-secondary nt-pin" data-action="pin" aria-pressed="false">${ICONOS.anclar}</button><input class="form-input notas-titulo" maxlength="180" placeholder="${tr("Título (opcional)")}"><button class="btn btn-secondary nt-close-round" data-action="close" aria-label="${tr("Cerrar nota")}" title="${tr("Cerrar nota")}">×</button></header>
     <div class="nt-tiempos"></div>
     <div class="nt-barra-fila">
       <label class="nt-swatch nt-swatch-texto" title="${tr("Color de texto")}"><span class="nt-swatch-ico"><b>A</b></span><input type="color" class="nt-input-color nt-texto-color" aria-label="${tr("Color de texto")}"></label>
@@ -81,9 +82,10 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   btnFiguras.title = tr("Figuras y stickers"); btnFiguras.setAttribute("aria-label", tr("Figuras y stickers")); btnFiguras.setAttribute("aria-haspopup", "menu"); btnFiguras.setAttribute("aria-expanded", "false");
   const menuFiguras = document.createElement("div"); menuFiguras.className = "nt-figuras-menu nt-oculto"; menuFiguras.setAttribute("role", "menu"); menuFiguras.setAttribute("aria-label", tr("Figuras y stickers"));
   const listaStickers = document.createElement("div"); listaStickers.className = "nt-stickers-lista";
+  const editarFigurasLabel=document.createElement("label"); editarFigurasLabel.className="nt-editar-figuras-toggle"; const editarFigurasInput=document.createElement("input"); editarFigurasInput.type="checkbox"; const editarFigurasTexto=document.createElement("span"); editarFigurasTexto.textContent=tr("Habilitar edición de figura"); editarFigurasLabel.append(editarFigurasInput,editarFigurasTexto); const eliminarFiguraBtn=document.createElement("button"); eliminarFiguraBtn.type="button"; eliminarFiguraBtn.className="nt-eliminar-figura nt-oculto"; eliminarFiguraBtn.textContent=tr("Eliminar figura seleccionada");
   const btnSubirSticker = document.createElement("button"); btnSubirSticker.type = "button"; btnSubirSticker.className = "nt-sticker-subir"; btnSubirSticker.textContent = tr("Añadir sticker PNG"); btnSubirSticker.setAttribute("role", "menuitem");
   const inputSticker = document.createElement("input"); inputSticker.type = "file"; inputSticker.accept = "image/png,.png"; inputSticker.hidden = true;
-  btnSubirSticker.onclick = () => inputSticker.click(); menuFiguras.append(btnSubirSticker, listaStickers, inputSticker);
+  btnSubirSticker.onclick = () => inputSticker.click(); menuFiguras.append(editarFigurasLabel, eliminarFiguraBtn, btnSubirSticker, listaStickers, inputSticker);
   const botonesForma = [];
   for (const [modo, simbolo, nombre] of [["linea", "╱", "Línea recta"], ["flecha", "↗", "Flecha"], ["rectangulo", "▱", "Rectángulo"]]) {
     const b = document.createElement("button"); b.type = "button"; b.dataset.forma = modo; b.textContent = simbolo; b.title = tr(nombre); b.setAttribute("aria-label", tr(nombre)); b.setAttribute("aria-pressed", "false"); b.setAttribute("role", "menuitem"); menuFiguras.append(b); botonesForma.push(b);
@@ -147,7 +149,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const cerrarEditor = () => {
     if (cerrado) return;
     clearTimeout(timer);
-    try { persistirAhora(); } catch (err) { console.error(err); }
+    if (!eliminando) { try { persistirAhora(); } catch (err) { console.error(err); } }
     cerrado = true;
     try { if (guardado) flujoAnalitico?.completar("guardado"); else flujoAnalitico?.cancelar("cancelado"); } catch (err) { console.error(err); }
     flujoAnalitico = null;
@@ -155,10 +157,11 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     document.removeEventListener("visibilitychange", guardarAlSalir);
     document.removeEventListener("selectionchange", selCambio);
     if (handlerTeclas) document.removeEventListener("keydown", handlerTeclas);
+    campoCreada?.destruir?.(); campoMod?.destruir?.(); campoVence?.destruir?.();
     try { capaTinta?.destruir(); } catch (err) { console.error(err); }
     try { marcadores.destruir(); herramientas.destruir(); } catch (err) { console.error(err); }
     cerrarMenuFiguras(); menuFiguras.remove();
-    try { registrarCambio(eliminando ? "Eliminar nota" : original ? "Editar nota" : "Nueva nota", instantaneaInicial); } catch (err) { console.error(err); }
+    try { if (!descartandoCambios) registrarCambio(eliminando ? "Eliminar nota" : original ? "Editar nota" : "Nueva nota", instantaneaInicial); } catch (err) { console.error(err); }
     setTimeout(() => { overlay.remove(); alCerrar(); }, 0); // siempre se cierra, pase lo que pase arriba
   };
   window.addEventListener("pagehide", guardarAlSalir);
@@ -608,18 +611,35 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     cerrarEditor();
     window.dispatchEvent(new Event("notas:actualizadas"));
   };
-  modal.querySelectorAll('[data-action="close"]').forEach((b) => b.onclick = cerrarEditor);
+  const dialogoCerrar = document.createElement("div");
+  dialogoCerrar.className = "nt-confirmar-cierre nt-oculto";
+  dialogoCerrar.setAttribute("role", "alertdialog"); dialogoCerrar.setAttribute("aria-modal", "true");
+  dialogoCerrar.innerHTML = `<section><strong>${tr("¿Guardar los cambios?")}</strong><div><button type="button" data-close="save">${tr("Guardar")}</button><button type="button" data-close="discard">${tr("Deshacer cambios")}</button><button type="button" data-close="cancel">${tr("Seguir editando")}</button></div></section>`;
+  modal.append(dialogoCerrar);
+  const pedirCerrar = () => { if (cerrado || preguntandoCerrar) return; clearTimeout(timer); preguntandoCerrar = true; dialogoCerrar.classList.remove("nt-oculto"); dialogoCerrar.querySelector('[data-close="save"]').focus(); };
+  dialogoCerrar.addEventListener("click", async (e) => {
+    const accion = e.target.closest("[data-close]")?.dataset.close; if (!accion) return;
+    if (accion === "cancel") { preguntandoCerrar = false; dialogoCerrar.classList.add("nt-oculto"); return; }
+    if (accion === "discard") {
+      clearTimeout(timer); eliminando = true; descartandoCambios = true;
+      try { const actual = obtenerNota(borrador.id); if (original) guardarNota({ ...original }); else if (actual) eliminarDefinitiva(actual); }
+      catch (err) { eliminando = false; mostrarToast(tr("No se pudieron deshacer los cambios")); console.error(err); return; }
+      window.dispatchEvent(new Event("notas:actualizadas-ui"));
+    } else guardarAlSalir();
+    preguntandoCerrar = false; cerrarEditor();
+  });
+  modal.querySelectorAll('[data-action="close"]').forEach((b) => b.onclick = pedirCerrar);
   let punteroInicioFuera = null;
   overlay.addEventListener("pointerdown", (e) => { punteroInicioFuera = e.target === overlay ? e.pointerId : null; }, true);
   overlay.addEventListener("pointerup", (e) => {
     const cerrarPorFuera = punteroInicioFuera === e.pointerId && e.target === overlay;
     punteroInicioFuera = null;
-    if (cerrarPorFuera) cerrarEditor();
+    if (cerrarPorFuera) pedirCerrar();
   }, true);
   overlay.addEventListener("pointercancel", () => { punteroInicioFuera = null; }, true);
 
   handlerTeclas = function teclas(e) {
-    if (e.key === "Escape") { if (mostrarElegirFecha || editarVence) { e.preventDefault(); mostrarElegirFecha = false; editarVence = false; pintarVencimiento(); return; } cerrarEditor(); return; }
+    if (e.key === "Escape") { if (preguntandoCerrar) { e.preventDefault(); preguntandoCerrar = false; dialogoCerrar.classList.add("nt-oculto"); return; } if (mostrarElegirFecha || editarVence) { e.preventDefault(); mostrarElegirFecha = false; editarVence = false; pintarVencimiento(); return; } pedirCerrar(); return; }
     const mod = e.ctrlKey || e.metaKey;
     if (!mod) return;
     const k = e.key.toLowerCase();
@@ -651,6 +671,8 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   ajustarTintaAuto = () => { if (tintaManual) return; inpTinta.value = tintaAuto(); capaTinta.establecerColor(inpTinta.value); pintarSwTinta(); };
   let lapizDesactivadoManualmente = false;
   const fijarModo = (m) => { capaTinta.establecerModo(m); cuerpo.contentEditable = m ? "false" : "true"; btnLapiz.setAttribute("aria-pressed", String(m === "lapiz")); btnBorrador.setAttribute("aria-pressed", String(m === "borrador")); botonesForma.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.forma === m))); };
+  editarFigurasInput.onchange=()=>{ if(editarFigurasInput.checked) fijarModo(null); capaTinta.establecerEdicionFiguras(editarFigurasInput.checked); eliminarFiguraBtn.classList.toggle("nt-oculto",!editarFigurasInput.checked); };
+  eliminarFiguraBtn.onclick=()=>{ if(!capaTinta.eliminarFiguraSeleccionada()) mostrarToast(tr("Selecciona una figura para eliminar")); };
   btnLapiz.onclick = () => { const apagar = capaTinta.obtenerModo() === "lapiz"; lapizDesactivadoManualmente = apagar; fijarModo(apagar ? null : "lapiz"); };
   btnBorrador.onclick = () => fijarModo(capaTinta.obtenerModo() === "borrador" ? null : "borrador");
   botonesForma.forEach((b) => { b.onclick = () => { cerrarMenuFiguras(); fijarModo(capaTinta.obtenerModo() === b.dataset.forma ? null : b.dataset.forma); }; });

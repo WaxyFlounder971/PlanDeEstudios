@@ -35,40 +35,21 @@ function formatear(ms, conHora) {
 /** Campo de fecha con botón en forma de píldora. tipo: "date" | "datetime-local". Devuelve { el, establecer(ms), abrir() }. */
 function crearCampoFecha({ etiqueta = "", tipo = "date", ms, alCambiar, clase = "" }) {
   const conHora = tipo === "datetime-local";
-  const wrap = document.createElement("span");
-  wrap.className = `nt-fecha ${clase}`.trim();
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "nt-fecha-btn";
-  if (etiqueta) { const e = document.createElement("span"); e.className = "nt-fecha-etq"; e.textContent = etiqueta; btn.append(e); }
-  const val = document.createElement("span");
-  val.className = "nt-fecha-val";
-  btn.append(val);
-  const input = document.createElement("input");
-  input.type = tipo;
-  input.className = "nt-fecha-input";
-  input.tabIndex = -1;
-  input.setAttribute("aria-hidden", "true");
-  wrap.append(btn, input);
-
-  const pintar = (v) => {
-    if (!Number.isFinite(v)) return;
-    ms = v;
-    val.textContent = formatear(v, conHora);
-    input.value = conHora ? aValorLocal(v) : aValorFecha(v);
-    btn.setAttribute("aria-label", `${etiqueta ? etiqueta + ": " : ""}${val.textContent}`);
-  };
-  const abrir = () => { try { input.showPicker(); } catch (_) { input.focus(); input.click(); } };
-  btn.onclick = abrir;
-  input.onchange = () => {
-    if (!input.value) return;
-    const v = conHora ? new Date(input.value).getTime() : deValorFecha(input.value);
-    if (!Number.isFinite(v)) return;
-    pintar(v);
-    alCambiar?.(v);
-  };
-  pintar(ms ?? Date.now());
-  return { el: wrap, establecer: pintar, abrir };
+  const wrap=document.createElement("span");wrap.className=`nt-fecha ${clase}`.trim();
+  const btn=document.createElement("button");btn.type="button";btn.className="nt-fecha-btn";
+  if(etiqueta){const e=document.createElement("span");e.className="nt-fecha-etq";e.textContent=etiqueta;btn.append(e);}
+  const val=document.createElement("span");val.className="nt-fecha-val";btn.append(val);
+  const pop=document.createElement("div");pop.className="nt-calendario nt-oculto";pop.setAttribute("role","dialog");pop.setAttribute("aria-label","Elegir fecha");
+  const cab=document.createElement("div");cab.className="nt-cal-cab";const prev=document.createElement("button");prev.type="button";prev.textContent="‹";prev.setAttribute("aria-label","Mes anterior");const mes=document.createElement("strong");const next=document.createElement("button");next.type="button";next.textContent="›";next.setAttribute("aria-label","Mes siguiente");cab.append(prev,mes,next);
+  const dias=document.createElement("div");dias.className="nt-cal-dias";["L","M","M","J","V","S","D"].forEach(n=>{const x=document.createElement("span");x.textContent=n;dias.append(x);});const grilla=document.createElement("div");grilla.className="nt-cal-grid";
+  const horaWrap=document.createElement("label");horaWrap.className="nt-cal-hora";horaWrap.append(document.createTextNode("Hora"));const selectorHora=document.createElement("span");selectorHora.className="nt-reloj-selectores";const hora=document.createElement("select");for(let h=0;h<24;h++){const o=document.createElement("option");o.value=String(h).padStart(2,"0");o.textContent=o.value;hora.append(o);}const minuto=document.createElement("select");for(let m=0;m<60;m++){const o=document.createElement("option");o.value=String(m).padStart(2,"0");o.textContent=o.value;minuto.append(o);}selectorHora.append(hora,document.createTextNode(":"),minuto);horaWrap.append(selectorHora);const aplicar=document.createElement("button");aplicar.type="button";aplicar.className="nt-cal-aplicar";aplicar.textContent="Aplicar";pop.append(cab,dias,grilla);if(conHora)pop.append(horaWrap,aplicar);wrap.append(btn,pop);
+  let actual=new Date(Number.isFinite(ms)?ms:Date.now()),elegido=new Date(actual),vista=new Date(actual.getFullYear(),actual.getMonth(),1);
+  const pintar=()=>{val.textContent=formatear(+actual,conHora);btn.setAttribute("aria-label",`${etiqueta?etiqueta+": ":""}${val.textContent}`);};
+  const pintarCalendario=()=>{mes.textContent=new Intl.DateTimeFormat(idioma(),{month:"long",year:"numeric"}).format(vista);grilla.replaceChildren();const primero=new Date(vista.getFullYear(),vista.getMonth(),1),desfase=(primero.getDay()+6)%7,total=new Date(vista.getFullYear(),vista.getMonth()+1,0).getDate();for(let i=0;i<desfase;i++){const v=document.createElement("span");grilla.append(v);}for(let d=1;d<=total;d++){const b=document.createElement("button");b.type="button";b.textContent=String(d);b.className="nt-cal-dia";if(d===elegido.getDate()&&vista.getMonth()===elegido.getMonth()&&vista.getFullYear()===elegido.getFullYear())b.classList.add("seleccionado");const hoy=new Date();if(d===hoy.getDate()&&vista.getMonth()===hoy.getMonth()&&vista.getFullYear()===hoy.getFullYear())b.classList.add("hoy");b.onclick=()=>{elegido=new Date(vista.getFullYear(),vista.getMonth(),d,actual.getHours(),actual.getMinutes());pintarCalendario();if(!conHora){actual=elegido;pop.classList.add("nt-oculto");pintar();alCambiar?.(+actual);}};grilla.append(b);}};
+  const abrir=()=>{elegido=new Date(actual);vista=new Date(actual.getFullYear(),actual.getMonth(),1);hora.value=dos(elegido.getHours());minuto.value=dos(elegido.getMinutes());pintarCalendario();pop.classList.remove("nt-oculto");};
+  prev.onclick=()=>{vista.setMonth(vista.getMonth()-1);pintarCalendario();};next.onclick=()=>{vista.setMonth(vista.getMonth()+1);pintarCalendario();};btn.onclick=()=>pop.classList.contains("nt-oculto")?abrir():pop.classList.add("nt-oculto");
+  aplicar.onclick=()=>{const h=Number(hora.value),m=Number(minuto.value);elegido.setHours(h||0,m||0,0,0);actual=elegido;pop.classList.add("nt-oculto");pintar();alCambiar?.(+actual);};
+  const fuera=e=>{if(!wrap.contains(e.target))pop.classList.add("nt-oculto");};document.addEventListener("pointerdown",fuera);
+  pintar();return{el:wrap,establecer(v){if(Number.isFinite(v)){actual=new Date(v);elegido=new Date(actual);pintar();}},abrir(){if(pop.classList.contains("nt-oculto"))abrir();},destruir(){document.removeEventListener("pointerdown",fuera);}};
 }
-
 export { crearCampoFecha, aValorFecha, deValorFecha, formatear };

@@ -248,6 +248,12 @@ function reconocerForma(p) {
   const diag = Math.hypot(x1 - x0, y1 - y0);
   if (diag < 0.05) return null;
   const cands = [];
+  // Si la trayectoria conserva cuatro esquinas claras, es rectángulo aunque sea casi cuadrado.
+  const verticesRect = esquinas(pts, 0.018 * diag);
+  if (verticesRect.length === 4 && verticesRect.every((q,i) => { const ang=giro(verticesRect[(i+3)%4],q,verticesRect[(i+1)%4]); return ang>=55 && ang<=125; })) {
+    const poli=candidatoRect(pts), err=poli ? errorHacia(pts,poli) : Infinity;
+    if (poli && err <= 0.045 * diag) { const salida=poli.map(q=>[r4(q[0]),r4(q[1])]); salida.tipo=poli.tipo||"rectangulo"; return salida; }
+  }
   const probar = (poli, simetrico = false) => {
     if (!poli) return;
     const r = L / longitud(poli);

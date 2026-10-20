@@ -100,6 +100,18 @@ function trazoTocado(t, x, y, radio) {
   return false;
 }
 
+// Simplifica las muestras vectoriales con Douglas–Peucker después de dibujar.
+// La curva visible en tiempo real usa todos los eventos; el almacenamiento conserva presión y extremos.
+function simplificarPuntos(p, eps = 0.00055) {
+  if (!p || p.length < 3) return p;
+  const keep = new Uint8Array(p.length); keep[0]=1; keep[p.length-1]=1;
+  const stack=[[0,p.length-1]];
+  while(stack.length){ const [a,b]=stack.pop(); let max=eps, idx=-1; const A=p[a],B=p[b],dx=B[0]-A[0],dy=B[1]-A[1],l2=dx*dx+dy*dy;
+    for(let i=a+1;i<b;i++){const q=p[i];let t=l2?((q[0]-A[0])*dx+(q[1]-A[1])*dy)/l2:0;t=Math.max(0,Math.min(1,t));const d=Math.hypot(q[0]-(A[0]+t*dx),q[1]-(A[1]+t*dy));if(d>max){max=d;idx=i;}}
+    if(idx>=0){keep[idx]=1;stack.push([a,idx],[idx,b]);}
+  }
+  const out=[];for(let i=0;i<p.length;i++)if(keep[i])out.push(p[i]);return out;
+}
 const contarPuntos = (trazos) => trazos.reduce((n, t) => n + t.p.length, 0);
 const r4 = (v) => Math.round(v * 10000) / 10000;
 
@@ -116,6 +128,7 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
   const ctx = canvas.getContext("2d", { desynchronized: true }) || canvas.getContext("2d");
 
   let modo = null; // lápiz, borrador, línea, flecha o rectángulo
+  let edicionFiguras = false, figuraSeleccionada = null, movimientoFigura = null;
   let color = "#172033";
   let grosor = GROSOR_BASE;
   let activo = false, actual = null, modoActivo = null, vistoLapiz = false;
@@ -161,6 +174,7 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
     dibujarTrazos(ctx, obtenerTrazos(), ancho, cuerpo.scrollTop);
+    if (edicionFiguras && figuraSeleccionada) { const p=figuraSeleccionada.p||[], xs=p.map(q=>q[0]*ancho), ys=p.map(q=>q[1]*ancho-cuerpo.scrollTop); if(xs.length){ const pad=5,x0=Math.min(...xs)-pad,y0=Math.min(...ys)-pad,x1=Math.max(...xs)+pad,y1=Math.max(...ys)+pad; ctx.save();ctx.strokeStyle="#b7a5f4";ctx.lineWidth=1.5;ctx.setLineDash([5,4]);ctx.strokeRect(x0,y0,x1-x0,y1-y0);ctx.restore(); }}
   }
   const redibujarPronto = () => { if (!rafRedibujo) rafRedibujo = requestAnimationFrame(() => { rafRedibujo = 0; redibujar(); }); };
 
@@ -247,7 +261,7 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
   }
 
   canvas.addEventListener("pointerdown", (e) => {
-    if (!modo || activo) return;
+    if ((!modo && !edicionFiguras) || activo) return;
     if (e.pointerType === "pen") vistoLapiz = true;
     // Con lápiz detectado, el dedo/palma no dibuja.
     if (e.pointerType === "touch" && vistoLapiz) return;
@@ -289,6 +303,7 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
     let movio = false;
     for (const ev of eventos.length ? eventos : [e]) {
       const pt = punto(ev);
+      if (movimientoFigura) { const d=movimientoFigura, dx=pt[0]-d.desde[0],dy=pt[1]-d.desde[1]; d.t.p=d.original.map(q=>[r4(q[0]+dx),r4(q[1]+dy),...q.slice(2)]); redibujarPronto(); continue; }
       if (cambioFigura) { actualizarRedimension(pt); continue; }
       if ((modoActivo === "linea" || modoActivo === "flecha") && actual) {
         actual.p = [actual.p[0], [r4(pt[0]), r4(pt[1])]]; redibujarPronto(); continue;
@@ -313,6 +328,7 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
     clearTimeout(timerForma);
     if (!activo) return;
     activo = false;
+    if (movimientoFigura) { const movio=Math.hypot(...[punto(e)[0]-movimientoFigura.desde[0],punto(e)[1]-movimientoFigura.desde[1]])>0.002; movimientoFigura=null; redibujar(); if(movio){empujar();alCambiar();} return; }
     if (cambioFigura) { cambioFigura = null; delete canvas.dataset.redimensionando; redibujar(); empujar(); alCambiar(); return; }
     if ((modoActivo === "linea" || modoActivo === "flecha") && actual) {
       const pt = e?.type === "pointerup" ? punto(e) : actual.p.at(-1);
@@ -327,6 +343,7 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
         if (Math.hypot(pt[0] - u[0], pt[1] - u[1]) > PASO_MIN / 2) actual.p.push([r4(pt[0]), r4(pt[1])]);
         const flecha = reconocerFlecha(actual.p);
         if (flecha) { actual.p = flecha; actual.a = 1; actual.f = 1; }
+        else { const forma=reconocerForma(actual.p); if(forma){ actual.p=forma; actual.tipo=forma.tipo||"figura"; actual.f=1; } else actual.p=simplificarPuntos(actual.p); }
       }
       actual = null;
       redibujar();
@@ -360,6 +377,8 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
       if (!m) { clearTimeout(timerForma); activo = false; actual = null; }
     },
     obtenerModo: () => modo,
+    establecerEdicionFiguras(v) { edicionFiguras=!!v; if(!edicionFiguras) figuraSeleccionada=null; canvas.classList.toggle("nt-edicion-figuras",edicionFiguras); redibujar(); },
+    eliminarFiguraSeleccionada() { if(!figuraSeleccionada) return false; const i=obtenerTrazos().indexOf(figuraSeleccionada); if(i<0) return false; obtenerTrazos().splice(i,1); figuraSeleccionada=null; redibujar(); empujar(); alCambiar(); return true; },
     establecerColor(c) { color = c; },
     establecerGrosor(v) { grosor = Math.max(0.0015, Math.min(0.02, Number(v) || GROSOR_BASE)); },
     puedeDeshacer: () => hi > 0,

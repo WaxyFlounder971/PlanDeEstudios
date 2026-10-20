@@ -60,6 +60,7 @@ const CSS = `
 .nt-tinta-canvas.activo{pointer-events:auto;cursor:crosshair}
 .nt-tinta-canvas[data-modo="borrador"]{cursor:cell}
 .nt-tinta-canvas[data-modo="lapiz"]{cursor:crosshair}
+.nt-tinta-canvas.nt-edicion-figuras{pointer-events:auto!important;cursor:move}
 .nt-tinta-canvas[data-redimensionando="true"]{cursor:nwse-resize}
 .nota-tinta-wrap{max-height:220px;overflow:hidden;flex:none}
 .nota-card.expandida .nota-tinta-wrap{max-height:none}
@@ -304,7 +305,19 @@ html:not([data-mode="dark"]):not([data-mode="true-dark"]) .nt-chip:hover{backgro
 .notas-editor .notas-cuerpo img[data-nota-sticker]{display:block;max-width:100%;height:auto;resize:both;overflow:auto;object-fit:contain;margin:5px 0}
 body:has(.notas-overlay) .toast-app,body:has(.notas-overlay) .toast-app-accion{z-index:1300}
 @media(max-width:560px){.notas-editor .notas-editor-foot-row{gap:5px}.notas-editor .notas-editor-actions{gap:3px}.notas-editor .notas-editor-actions .btn{width:31px!important;min-width:31px!important;height:31px;min-height:31px!important}}
-`;
+
+
+/* Cierre del editor y controles redondos */
+.notas-editor .nt-pin,.notas-editor .nt-close-round{display:grid;place-items:center;width:46px;height:46px;min-width:46px;min-height:46px;padding:0;border-radius:50%;aspect-ratio:1;flex:none}
+.notas-editor .nt-close-round{font-size:1.5rem;line-height:1}
+.nt-confirmar-cierre{position:absolute;inset:0;z-index:100010;display:grid;place-items:center;padding:16px;border-radius:inherit;background:rgba(7,6,12,.48);backdrop-filter:blur(3px)}
+.nt-confirmar-cierre.nt-oculto{display:none}
+.nt-confirmar-cierre section{display:grid;gap:16px;width:min(360px,100%);padding:20px;border:1px solid var(--border-glass,rgba(255,255,255,.16));border-radius:18px;background:var(--bg-card,#211e2d);box-shadow:0 14px 40px #0008}
+.nt-confirmar-cierre section>div{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+.nt-confirmar-cierre button{min-height:38px;padding:7px 13px;border:1px solid var(--border-glass,rgba(255,255,255,.16));border-radius:999px;background:transparent;color:inherit;font:inherit;cursor:pointer}
+.nt-confirmar-cierre [data-close="save"]{border:0;background:var(--gradient-primary,linear-gradient(135deg,#f5a9d3,#b7a5f4));color:#1b1530;font-weight:700}
+.nt-editar-figuras-toggle{display:flex;align-items:center;gap:9px;padding:8px 10px;font-weight:650}.nt-editar-figuras-toggle input{accent-color:#b7a5f4;width:17px;height:17px}.nt-eliminar-figura{color:#f87171!important}.notas-filtros .nt-vista-op{border-radius:999px}
+.nt-fecha{position:relative}.nt-calendario{position:absolute;left:0;top:calc(100% + 6px);z-index:100020;width:260px;padding:12px;border:1px solid var(--border-glass,rgba(255,255,255,.14));border-radius:16px;background:var(--bg-card,#211e2d);box-shadow:0 14px 34px #0008;color:inherit}.nt-calendario.nt-oculto{display:none}.nt-cal-cab{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}.nt-cal-cab button{width:32px;height:32px;border:0;border-radius:50%;background:rgba(255,255,255,.08);color:inherit;font-size:1.3rem;cursor:pointer}.nt-cal-dias,.nt-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center}.nt-cal-dias{margin-bottom:4px;opacity:.6;font-size:.75rem}.nt-cal-dia{aspect-ratio:1;border:0;border-radius:50%;background:transparent;color:inherit;font:inherit;cursor:pointer}.nt-cal-dia:hover{background:rgba(255,255,255,.12)}.nt-cal-dia.seleccionado{background:var(--gradient-primary,linear-gradient(135deg,#f5a9d3,#b7a5f4));color:#1b1530;font-weight:800}.nt-cal-dia.hoy:not(.seleccionado){outline:1px solid currentColor}.nt-cal-hora{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:.82rem}.nt-reloj-selectores{display:flex;align-items:center;gap:4px}.nt-reloj-selectores select{min-width:48px;border:1px solid var(--border-glass,rgba(255,255,255,.16));border-radius:9px;background:var(--bg-card,#211e2d);color:inherit;padding:5px}.nt-cal-aplicar{width:100%;margin-top:8px;min-height:34px;border:0;border-radius:999px;background:var(--gradient-primary,linear-gradient(135deg,#f5a9d3,#b7a5f4));color:#1b1530;font-weight:700;cursor:pointer}.nt-share-menu-card{display:grid;gap:5px;min-width:250px;padding:10px;border:1px solid var(--border-glass,rgba(255,255,255,.16));border-radius:16px;background:var(--bg-card,#211e2d);box-shadow:0 14px 36px #0009;color:inherit}.nt-share-menu-card strong{padding:5px 8px;font-size:.85rem}.nt-share-menu-card button{min-height:38px;padding:8px 10px;border:0;border-radius:10px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}.nt-share-menu-card button:hover{background:rgba(255,255,255,.1)}.nt-paleta-editable{flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none;gap:7px}.nt-paleta-editable::-webkit-scrollbar{display:none}.nt-color-edit-item{position:relative;display:inline-flex;flex:none}.nt-color-edit-picker{position:absolute;inset:0;width:100%;height:100%;opacity:0;pointer-events:none}.nt-paleta-editable.editando .nt-color-edit-picker{pointer-events:auto}.nt-paleta-editable>button{flex:none;min-height:30px;padding:4px 9px;border:1px solid var(--border-glass,rgba(255,255,255,.16));border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:.75rem;cursor:pointer}`;
 
 function inyectarEstilosNotas() {
   if (document.getElementById(ID)) return;

@@ -111,26 +111,20 @@ function mostrarAjustesNotas(refrescar, abrirPapelera) {
   panel.append(interruptor(tr("Enviar tareas completadas al final"), cfg.completadas_al_final, (v) => { cfg.completadas_al_final = v; guardar(); }));
   panel.append(interruptor(tr("Formato automático: [] casilla, **negrita**, __subrayado__ y > cita"), cfg.formato_auto !== false, (v) => { cfg.formato_auto = v; guardar(); }));
 
-  // Color predeterminado (solo los colores base del modo actual)
-  const paleta = el("div", "nt-colores notas-palette");
-  const actual = resolverColorNota(cfg.color_default);
-  for (const color of coloresPaletaNota()) {
-    const b = el("button", "notas-color");
-    b.type = "button";
-    b.style.backgroundColor = color;
-    b.title = color;
-    b.setAttribute("aria-label", color);
-    b.setAttribute("aria-pressed", String(actual === color));
-    b.onclick = () => {
-      cfg.color_default = color;
-      paleta.querySelectorAll("[aria-pressed]").forEach((x) => x.setAttribute("aria-pressed", "false"));
-      b.setAttribute("aria-pressed", "true");
-      guardar();
-    };
-    paleta.append(b);
-  }
-  panel.append(seccion(tr("Color predeterminado"), paleta));
-
+  // Paleta de colores predeterminados editable.
+  const paleta = el("div", "nt-colores notas-palette nt-paleta-editable");
+  const coloresOriginales = [...coloresPaletaNota()];
+  let borradorColores = [...(Array.isArray(cfg.colores_editados)&&cfg.colores_editados.length===6?cfg.colores_editados:coloresOriginales)];
+  const botonEditarColores=el("button","nt-color-editar",tr("Editar"));botonEditarColores.type="button";
+  const botonGuardarColores=el("button","nt-color-guardar nt-oculto",tr("Guardar"));botonGuardarColores.type="button";
+  const botonRestaurarColores=el("button","nt-color-restaurar nt-oculto",tr("Restablecer"));botonRestaurarColores.type="button";
+  const botonesColores=[];
+  const pintarColores=()=>{paleta.replaceChildren();borradorColores.forEach((color,i)=>{const caja=el("span","nt-color-edit-item");const b=el("button","notas-color");b.type="button";b.style.backgroundColor=color;b.title=color;b.setAttribute("aria-label",color);b.setAttribute("aria-pressed",String(resolverColorNota(cfg.color_default)===color));b.onclick=()=>{if(!editandoColores){cfg.color_default=color;paleta.querySelectorAll("[aria-pressed]").forEach(x=>x.setAttribute("aria-pressed","false"));b.setAttribute("aria-pressed","true");guardar();return;}const picker=caja.querySelector("input");picker.click();};const picker=document.createElement("input");picker.type="color";picker.value=color;picker.className="nt-color-edit-picker";picker.setAttribute("aria-label",tr("Editar color predeterminado"));picker.oninput=()=>{borradorColores[i]=picker.value;b.style.backgroundColor=picker.value;b.title=picker.value;};caja.append(b,picker);paleta.append(caja);});paleta.append(botonEditarColores,botonGuardarColores,botonRestaurarColores);};
+  let editandoColores=false;
+  botonEditarColores.onclick=()=>{editandoColores=true;botonEditarColores.classList.add("nt-oculto");botonGuardarColores.classList.remove("nt-oculto");botonRestaurarColores.classList.remove("nt-oculto");paleta.classList.add("editando");};
+  botonGuardarColores.onclick=()=>{cfg.colores_editados=[...borradorColores];cfg.color_default=resolverColorNota(cfg.color_default);guardar();editandoColores=false;botonEditarColores.classList.remove("nt-oculto");botonGuardarColores.classList.add("nt-oculto");botonRestaurarColores.classList.add("nt-oculto");paleta.classList.remove("editando");pintarColores();};
+  botonRestaurarColores.onclick=()=>{borradorColores=[...coloresOriginales];delete cfg.colores_editados;cfg.color_default=COLORES_NOTA[2];guardar();editandoColores=false;botonEditarColores.classList.remove("nt-oculto");botonGuardarColores.classList.add("nt-oculto");botonRestaurarColores.classList.add("nt-oculto");paleta.classList.remove("editando");pintarColores();};
+  pintarColores();panel.append(seccion(tr("Colores predeterminados"),paleta));
   // Papelera
   if (abrirPapelera) {
     const total = notasActuales().filter((n) => n.eliminada_en).length;

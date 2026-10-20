@@ -42,7 +42,7 @@ const OSCUROS_ANTERIORES = [
 // (contraste con blanco ≥ 4.9). Es el opuesto de los tonos suaves del modo claro, que llevan letra oscura.
 const COLORES_NOTA_OSCURO = ["#cd1932", "#b04816", "#6b4fa3", "#2d6a4f", "#2a4ba0", "#1a7471"]; // 5.º: azul rey (antes verde #22765a, que sigue convirtiéndose solo vía OSCUROS_ANTERIORES)
 function modoOscuro() { const modo = document.documentElement.getAttribute("data-mode"); return modo === "dark" || modo === "true-dark"; }
-function coloresPaletaNota() { return modoOscuro() ? COLORES_NOTA_OSCURO : COLORES_NOTA; }
+function coloresPaletaNota() { const custom=opcionesNotas().colores_editados; if(Array.isArray(custom)&&custom.length===6&&custom.every(c=>/^#[\da-f]{6}$/i.test(c))) return custom; return modoOscuro() ? COLORES_NOTA_OSCURO : COLORES_NOTA; }
 // Si el color guardado es uno de los predefinidos (claro u oscuro), lo muestra en la versión del modo actual.
 function resolverColorNota(hex) {
   const claros = COLORES_NOTA, oscuros = COLORES_NOTA_OSCURO, suaves = COLORES_NOTA.map(aOscuroSuave); // "suaves": oscuros de la versión anterior
