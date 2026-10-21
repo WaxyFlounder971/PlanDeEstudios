@@ -146,7 +146,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   grupoGrosor.append(sliderGrosor, valorGrosor);
   const grupoZoom=document.createElement("div");grupoZoom.className="nt-zoom-grupo";grupoZoom.setAttribute("aria-label",tr("Zoom del lienzo"));
   const crearBotonZoom=(signo,etiqueta)=>{const b=document.createElement("button");b.type="button";b.className=`nt-zoom-btn nt-zoom-${signo}`;b.title=tr(etiqueta);b.setAttribute("aria-label",tr(etiqueta));b.innerHTML=signo==="menos"?'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5M8 10.8h5.6"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5M8 10.8h5.6M10.8 8v5.6"/></svg>';return b;};
-  const btnZoomMenos=crearBotonZoom("menos","Alejar"),btnZoomMas=crearBotonZoom("mas","Acercar");grupoZoom.append(btnZoomMenos,btnZoomMas,grupoGrosor);toolsFooter.append(grupoZoom);
+  const btnZoomMenos=crearBotonZoom("menos","Alejar"),btnZoomMas=crearBotonZoom("mas","Acercar");grupoZoom.append(btnZoomMenos,btnZoomMas,grupoGrosor);
   let factorZoom=1;const actualizarBotonesZoom=()=>{btnZoomMenos.disabled=factorZoom<=.5;btnZoomMas.disabled=factorZoom>=4;btnZoomMenos.setAttribute("aria-label",`${tr("Alejar")}, ${Math.round(factorZoom*100)}%`);btnZoomMas.setAttribute("aria-label",`${tr("Acercar")}, ${Math.round(factorZoom*100)}%`);};
   const aplicarZoom=(nuevo,x=null,y=null)=>{nuevo=Math.max(.5,Math.min(4,Math.round(nuevo*4)/4));if(nuevo===factorZoom)return;const r=cuerpo.getBoundingClientRect(),px=x??r.left+r.width/2,py=y??r.top+r.height/2;const anterior=factorZoom,localX=px-r.left,localY=py-r.top,sx=cuerpo.scrollLeft,sy=cuerpo.scrollTop;factorZoom=nuevo;cuerpo.style.zoom=String(factorZoom);capaTinta?.ubicar();requestAnimationFrame(()=>{cuerpo.scrollLeft=(sx+localX)*nuevo/anterior-localX;cuerpo.scrollTop=(sy+localY)*nuevo/anterior-localY;capaTinta?.ubicar();posicionarMarcoSticker();actualizarBotonesZoom();});};
   btnZoomMenos.onclick=()=>aplicarZoom(factorZoom-.25);btnZoomMas.onclick=()=>aplicarZoom(factorZoom+.25);
@@ -278,6 +278,8 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   colorCustom.title = tr("Elegir color"); colorCustom.setAttribute("aria-label", tr("Elegir color personalizado"));
   colorCustom.oninput = () => aplicarColorNota(colorCustom.value);
   grupoColores.append(colorCustom); paleta.append(grupoColores);
+  // Orden DOM exacto de la barra: paleta completa y luego el paquete de zoom.
+  toolsFooter.append(grupoZoom);
   // grupoColores debe existir antes de medir u observar la barra. Antes, el
   // observer se configuraba arriba, antes de esta declaración `const`, lo
   // que lanzaba ReferenceError y abortaba la creación de fechas, paleta y

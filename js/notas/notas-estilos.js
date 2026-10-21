@@ -353,14 +353,16 @@ const CSS_RONDA_DOS = `
 .notas-editor .notas-toolbar.nt-toolbar-dos-filas .nt-toolbar-fila{display:flex;justify-content:center;width:100%}.notas-editor .notas-toolbar.nt-toolbar-dos-filas .nt-sep-desktop{display:none!important}
 .notas-editor .notas-toolbar:not(.nt-toolbar-dos-filas) .nt-toolbar-fila{display:contents}
 .notas-editor .notas-toolbar .nt-toolbar-grupo button{width:clamp(32px,9.5vw,40px);height:clamp(32px,9.5vw,40px);min-width:clamp(32px,9.5vw,40px);padding:0}
-.notas-editor .nt-colores-grupo{display:flex;align-items:center;gap:6px;min-width:0}
-.notas-editor .nt-zoom-grupo{display:flex;align-items:center;gap:6px;margin-left:auto;flex:0 1 auto;min-width:0}
+.notas-editor .nt-colores-grupo{display:flex;align-items:center;gap:6px;flex:0 0 auto;min-width:0}
+.notas-editor .nt-zoom-grupo{display:flex;align-items:center;gap:6px;margin-left:auto;flex:0 0 auto;min-width:max-content}
 .notas-editor .nt-zoom-btn{display:grid;place-items:center;flex:none;width:32px;height:32px;min-width:32px;min-height:32px;padding:0;border:1px solid var(--border-glass,rgba(255,255,255,.16));border-radius:50%;background:transparent;color:inherit;cursor:pointer}
 .notas-editor .nt-tools-dos-filas{display:grid!important;grid-template-columns:minmax(0,1fr);gap:8px!important;align-items:center}
-.notas-editor .nt-tools-dos-filas .nt-colores-grupo{justify-content:flex-start;flex-wrap:nowrap}
-.notas-editor .nt-tools-dos-filas .nt-zoom-grupo{width:100%;margin:0}
-.notas-editor .nt-tools-dos-filas .nt-tinta-tamanos{flex:1 1 auto;min-width:0;margin-left:0!important}
-.notas-editor .nt-tools-dos-filas .nt-tinta-tamanos input[type=range]{width:100%;min-width:48px}
+.notas-editor .nt-tools-dos-filas .nt-colores-grupo{grid-row:1;justify-self:center;justify-content:flex-start;flex-wrap:nowrap;width:max-content;max-width:100%;min-width:0;overflow-x:auto;scrollbar-width:none}
+.notas-editor .nt-tools-dos-filas .nt-colores-grupo::-webkit-scrollbar{display:none}
+.notas-editor .nt-tools-dos-filas .nt-zoom-grupo{grid-row:2;justify-self:center;width:max-content;max-width:100%;margin:0;overflow-x:auto;scrollbar-width:none}
+.notas-editor .nt-tools-dos-filas .nt-zoom-grupo::-webkit-scrollbar{display:none}
+.notas-editor .nt-tools-dos-filas .nt-tinta-tamanos{flex:0 1 auto;min-width:72px;margin-left:0!important}
+.notas-editor .nt-tools-dos-filas .nt-tinta-tamanos input[type=range]{width:112px;min-width:72px;max-width:112px}
 .notas-editor .nt-tools-dos-filas .nt-colores-grupo .notas-color{position:relative;width:clamp(20px,6vw,28px);height:clamp(20px,6vw,28px);flex:none}.notas-editor .nt-tools-dos-filas .nt-colores-grupo .notas-color::before{content:"";position:absolute;inset:-4px}.notas-editor .nt-tools-dos-filas .nt-colores-grupo{gap:4px}.notas-editor .nt-tools-dos-filas .nt-colores-grupo .notas-sep{margin-inline:2px}
 .notas-seccion .nt-btn-circulo{color:#fff!important}.notas-seccion .nt-add-icon{width:22px;height:22px;stroke:currentColor;stroke-width:2.6;stroke-linecap:round}
 html:not([data-mode="dark"]):not([data-mode="true-dark"]) .notas-seccion .nt-btn-circulo{color:#211b31!important}
@@ -377,8 +379,11 @@ html:not([data-mode="dark"]):not([data-mode="true-dark"]) .notas-seccion .nt-btn
 .notas-editor .nt-swatch{width:var(--boton-esquina)!important;height:var(--boton-esquina)!important}
 .notas-editor .nt-barra-fila{display:flex!important;justify-content:safe center!important;overflow:hidden!important}
 .notas-editor .notas-toolbar{width:max-content;max-width:100%;margin-inline:auto;justify-content:flex-start!important}
-.notas-editor .notas-editor-tools{flex-wrap:nowrap!important;justify-content:space-between!important;align-items:center!important}
-.notas-editor .nt-tinta-tamanos{margin-left:auto!important}
+.notas-editor .notas-editor-tools{display:flex!important;flex-wrap:nowrap!important;justify-content:space-between!important;align-items:center!important;column-gap:12px!important}
+.notas-editor .nt-colores-grupo{order:0;margin-right:auto;max-width:calc(100% - 1px);overflow-x:auto;scrollbar-width:none}
+.notas-editor .nt-colores-grupo::-webkit-scrollbar{display:none}
+.notas-editor .nt-zoom-grupo{order:1;margin-left:auto!important}
+.notas-editor .nt-tinta-tamanos{display:flex;align-items:center;gap:6px;margin-left:0!important;flex:0 0 auto}
 .notas-editor .nt-tinta-tamanos input[type=range]{accent-color:#b7a5f4!important}
 .notas-editor .nt-vencimiento-area,.notas-editor .nt-vencimiento-btn,.notas-editor .nt-elegir-fecha,.notas-editor .nt-vencimiento-fecha,.notas-editor .nt-eliminar-vencimiento{white-space:nowrap!important;flex:0 0 auto}
 .notas-editor .notas-editor-actions .btn{flex:0 0 var(--boton-esquina)!important;width:var(--boton-esquina)!important;height:var(--boton-esquina)!important;min-width:var(--boton-esquina)!important;min-height:var(--boton-esquina)!important}

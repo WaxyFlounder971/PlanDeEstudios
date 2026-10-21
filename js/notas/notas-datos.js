@@ -5,9 +5,12 @@ import { sanearHTMLNota, textoPlanoNota } from "./notas-sanitizar.js";
 import { registrarAnaliticaUso } from "../core/analitica.js";
 
 const MAX_CARACTERES_NOTA = 10000;
-// Paleta base (modo claro): tonos de notas adhesivas.
-const COLORES_NOTA = ["#fd97a5", "#ffbd9d", "#fff594", "#c6d4a1", "#bcdad0", "#a8dcda"];
-const COLOR_DEFECTO = "#fff594";
+// Orden fijo de la paleta: rojo, naranja, morado, verde, cyan y azul.
+// Los colores anteriores se reconocen abajo para que las notas existentes
+// sigan resolviendo a la misma posición lógica al cambiar de tema.
+const COLORES_NOTA = ["#fd97a5", "#ffbd9d", "#c4aceb", "#c6d4a1", "#8bd6d3", "#a9c5f5"];
+const COLORES_NOTA_ANTERIORES = ["#fd97a5", "#ffbd9d", "#fff594", "#c6d4a1", "#bcdad0", "#a8dcda"];
+const COLOR_DEFECTO = "#c4aceb";
 // Misma tonalidad y saturación, solo más oscuro (no gris ni apagado).
 function luminanciaHex(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -40,7 +43,7 @@ const OSCUROS_ANTERIORES = [
 ];
 // Modo oscuro: una versión MÁS FUERTE de cada color de la paleta (mismo tono), pensada para letra y tinta claras
 // (contraste con blanco ≥ 4.9). Es el opuesto de los tonos suaves del modo claro, que llevan letra oscura.
-const COLORES_NOTA_OSCURO = ["#cd1932", "#b04816", "#6b4fa3", "#2d6a4f", "#2a4ba0", "#1a7471"]; // 5.º: azul rey (antes verde #22765a, que sigue convirtiéndose solo vía OSCUROS_ANTERIORES)
+const COLORES_NOTA_OSCURO = ["#cd1932", "#b04816", "#6b4fa3", "#2d6a4f", "#1a7471", "#2a4ba0"];
 function modoOscuro() { const modo = document.documentElement.getAttribute("data-mode"); return modo === "dark" || modo === "true-dark"; }
 function coloresPaletaNota() { const custom=opcionesNotas().colores_editados; if(Array.isArray(custom)&&custom.length===6&&custom.every(c=>/^#[\da-f]{6}$/i.test(c))) return custom; return modoOscuro() ? COLORES_NOTA_OSCURO : COLORES_NOTA; }
 // Si el color guardado es uno de los predefinidos (claro u oscuro), lo muestra en la versión del modo actual.
@@ -50,6 +53,10 @@ function resolverColorNota(hex) {
   let i = claros.indexOf(hex);
   if (i < 0) i = oscuros.indexOf(hex);
   if (i < 0) i = suaves.indexOf(hex);
+  if (i < 0) {
+    const anterior = COLORES_NOTA_ANTERIORES.indexOf(hex);
+    if (anterior >= 0) i = anterior === 5 ? 4 : anterior; // el cyan anterior conserva su tono; el amarillo ocupa ahora morado
+  }
   if (i < 0) for (const lista of OSCUROS_ANTERIORES) { const k = lista.indexOf(hex); if (k >= 0) { i = k; break; } }
   return i >= 0 ? coloresPaletaNota()[i] : hex;
 }
