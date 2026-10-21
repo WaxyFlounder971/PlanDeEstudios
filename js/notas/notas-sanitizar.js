@@ -84,7 +84,7 @@ function escaparHTMLNota(texto = "") {
   return String(texto).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 
-function renderizarHTMLNota(contenedor, html, { visual = false, tinta = [] } = {}) {
+function renderizarHTMLNota(contenedor, html, { visual = false, tinta = [], maxAltura = null } = {}) {
   const htmlSeguro = sanearHTMLNota(html);
   const tieneImagen = /<img\b[^>]*\bdata-nota-(?:sticker|image)/i.test(htmlSeguro);
   const esVistaPrevia = contenedor.classList.contains("nota-preview");
@@ -155,7 +155,13 @@ function renderizarHTMLNota(contenedor, html, { visual = false, tinta = [] } = {
       else { minX = 0; minY = 0; }
       const anchoContenido=Math.max(1,maxX-minX), altoContenido=Math.max(1,maxY-minY);
       const escalaBase=Math.max(1,contenedor.clientWidth||baseLienzo)/anchoContenido;
-      const escala=soloTinta?Math.min(1,escalaBase):escalaBase;
+      const limite=typeof maxAltura==="function"?Number(maxAltura()):Number(maxAltura);
+      const escalaAltura=Number.isFinite(limite)&&limite>0?limite/altoContenido:Infinity;
+      contenedor.dataset.ntAlturaVisualNatural=String(Math.ceil(altoContenido*(soloTinta?Math.min(1,escalaBase):escalaBase)));
+      // El encuadre siempre considera ambos ejes: una tinta alta no debe escapar
+      // por abajo aunque ya quepa horizontalmente. Las notas de solo tinta no se
+      // amplían desde un punto diminuto, para no crear tarjetas gigantes por error.
+      const escala=soloTinta?Math.min(1,escalaBase,escalaAltura):Math.min(escalaBase,escalaAltura);
       lienzo.style.transformOrigin="top left";
       lienzo.style.transform=`translate(${-minX*escala}px,${-minY*escala}px) scale(${escala})`;
       contenedor.style.setProperty("--nt-preview-escala",String(escala));
@@ -165,6 +171,7 @@ function renderizarHTMLNota(contenedor, html, { visual = false, tinta = [] } = {
       if (Math.abs(contenedor.getBoundingClientRect().height - altoFinal) > 1) contenedor.style.setProperty("height", `${altoFinal}px`, "important");
     }
   };
+  if(lienzo)contenedor._refrescarEncuadreVisual=actualizar;
   actualizar();
   if (typeof ResizeObserver === "function" && (stickers.length || lienzo)) { ro = new ResizeObserver(actualizar); ro.observe(contenedor); if (lienzo) ro.observe(lienzo); }
   contenedor.querySelectorAll("a").forEach((a) => {

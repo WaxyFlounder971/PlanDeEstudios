@@ -397,7 +397,7 @@ function construirTarjeta(nota) {
 
   const h = nota.titulo ? el("strong", "nota-titulo-card", nota.titulo) : null;
   const preview = el("div", "nota-preview");
-  renderizarHTMLNota(preview, nota.contenido, { visual: !!nota.tinta?.length, tinta: nota.tinta });
+  renderizarHTMLNota(preview, nota.contenido, { visual: !!nota.tinta?.length, tinta: nota.tinta, maxAltura:()=>{if(card.classList.contains("expandida"))return null;const grid=!!card.closest(".notas-grid:not(.notas-lista)");return grid?Math.max(64,card.clientHeight-(top?.offsetHeight||0)-(h?.offsetHeight||0)-(foot?.offsetHeight||0)-expand.offsetHeight-34):220;} });
   preview.querySelectorAll("img").forEach(img=>{img.loading="lazy";img.decoding="async";});
   enlazarChecks(preview, nota);
 
@@ -408,7 +408,7 @@ function construirTarjeta(nota) {
   expand.onclick = (e) => {
     e.stopPropagation();
     const abierta=!card.classList.contains("expandida");
-    card.classList.toggle("expandida",abierta); card._ajustarComposicion?.();
+    card.classList.toggle("expandida",abierta);preview._refrescarEncuadreVisual?.();card._ajustarComposicion?.();
     const label=tr(abierta?"Contraer":"Expandir");
     expand.innerHTML=abierta?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';expand.title=label;expand.setAttribute("aria-label",label);expand.setAttribute("aria-expanded",String(abierta));
   };
@@ -462,7 +462,7 @@ function construirTarjeta(nota) {
     const altoContraido = grid ? (innerWidth <= 600 || Number(card.dataset.ancho) <= 1 ? card.clientWidth : 320) : 0;
     const limiteTexto = grid ? Math.max(32, altoContraido - (top?.offsetHeight || 0) - (h?.offsetHeight || 0) - expand.offsetHeight - foot.offsetHeight - 34) : limiteColapsado;
     const limiteDibujo = grid ? limiteTexto : 220;
-    const textoLargo = preview.scrollHeight > limiteTexto + 2;
+    const textoLargo = Math.max(preview.scrollHeight,Number(preview.dataset.ntAlturaVisualNatural)||0) > limiteTexto + 2;
     const dibujoLargo = !!mini && !visualPreview && mini.getBoundingClientRect().height > limiteDibujo + 2;
     const requiereFlecha = textoLargo || dibujoLargo;
     expand.classList.toggle("nt-oculto", !requiereFlecha);

@@ -68,7 +68,7 @@ function abrirSticky(nota, origen) {
   if (nota.titulo) cuerpo.append(el("strong", "nt-sticky-titulo", nota.titulo));
   const composicion = el("div", "nota-composicion nt-sticky-composicion");
   const preview = el("div", "nota-preview nt-sticky-texto");
-  renderizarHTMLNota(preview, nota.contenido, { visual: !!nota.tinta?.length, tinta: nota.tinta });
+  renderizarHTMLNota(preview, nota.contenido, { visual: !!nota.tinta?.length, tinta: nota.tinta, maxAltura:()=>Math.max(120,Math.min(520,window.innerHeight*.62-(nota.titulo?56:20)-(nota.vence_en?28:0))) });
   enlazarChecks(preview, nota);
   composicion.append(preview);
   const mini = crearMiniTinta(nota.tinta, { alinear: true });
