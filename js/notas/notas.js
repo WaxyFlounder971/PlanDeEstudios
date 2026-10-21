@@ -397,7 +397,7 @@ function construirTarjeta(nota) {
 
   const h = nota.titulo ? el("strong", "nota-titulo-card", nota.titulo) : null;
   const preview = el("div", "nota-preview");
-  renderizarHTMLNota(preview, nota.contenido);
+  renderizarHTMLNota(preview, nota.contenido, { visual: !!nota.tinta?.length, tinta: nota.tinta });
   preview.querySelectorAll("img").forEach(img=>{img.loading="lazy";img.decoding="async";});
   enlazarChecks(preview, nota);
 
@@ -446,11 +446,14 @@ function construirTarjeta(nota) {
   foot.append(acciones);
 
   const mini = crearMiniTinta(nota.tinta, { alinear: true, nivel: Number.isFinite(Number(nota.capa_tinta_z)) ? Number(nota.capa_tinta_z) : 5 });
+  const visualPreview = preview.classList.contains("nt-preview-escalado");
+  const ajustarMiniVisual = () => { if (mini && visualPreview) { mini.style.width = "700px"; mini.style.transformOrigin = "top left"; mini.style.transform = `translate(${preview.style.getPropertyValue("--nt-preview-x")},${preview.style.getPropertyValue("--nt-preview-y")}) scale(${preview.style.getPropertyValue("--nt-preview-escala") || 1})`; } };
+  ajustarMiniVisual();
   const composicion = el("div", "nota-composicion"); composicion.append(preview);
-  if (mini) composicion.append(mini);
+  if (mini) (visualPreview ? preview : composicion).append(mini);
   card.append(...[top, h, composicion, expand, foot].filter(Boolean));
   const estaEnCuadricula = () => !!card.closest(".notas-grid:not(.notas-lista)");
-  const ajustarComposicion = () => { const alto = Math.max(preview.scrollHeight, mini?.getBoundingClientRect().height || 0, 32) + 3; if (estaEnCuadricula()) { if(card.classList.contains("expandida")) composicion.style.setProperty("height",`${alto}px`,"important"); else composicion.style.removeProperty("height"); return; } composicion.style.height = `${card.classList.contains("expandida") ? alto : Math.min(220, alto)}px`; };
+  const ajustarComposicion = () => { ajustarMiniVisual(); const alto = Math.max(preview.scrollHeight, visualPreview ? 0 : mini?.getBoundingClientRect().height || 0, 32) + 3; if (estaEnCuadricula()) { if(card.classList.contains("expandida")) composicion.style.setProperty("height",`${alto}px`,"important"); else composicion.style.removeProperty("height"); return; } composicion.style.height = `${card.classList.contains("expandida") ? alto : Math.min(220, alto)}px`; };
   card._ajustarComposicion = ajustarComposicion;
   const actualizarBotonExpandir = () => {
     const lineHeight = parseFloat(getComputedStyle(preview).lineHeight) || 22;
@@ -460,7 +463,7 @@ function construirTarjeta(nota) {
     const limiteTexto = grid ? Math.max(32, altoContraido - (top?.offsetHeight || 0) - (h?.offsetHeight || 0) - expand.offsetHeight - foot.offsetHeight - 34) : limiteColapsado;
     const limiteDibujo = grid ? limiteTexto : 220;
     const textoLargo = preview.scrollHeight > limiteTexto + 2;
-    const dibujoLargo = !!mini && mini.getBoundingClientRect().height > limiteDibujo + 2;
+    const dibujoLargo = !!mini && !visualPreview && mini.getBoundingClientRect().height > limiteDibujo + 2;
     const requiereFlecha = textoLargo || dibujoLargo;
     expand.classList.toggle("nt-oculto", !requiereFlecha);
     const expandidaActual=card.classList.contains("expandida"),label=tr(expandidaActual?"Contraer":"Expandir");expand.innerHTML=expandidaActual?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';expand.title=label;expand.setAttribute("aria-label",label);expand.setAttribute("aria-expanded",String(expandidaActual));

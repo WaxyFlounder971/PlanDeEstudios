@@ -68,15 +68,19 @@ function abrirSticky(nota, origen) {
   if (nota.titulo) cuerpo.append(el("strong", "nt-sticky-titulo", nota.titulo));
   const composicion = el("div", "nota-composicion nt-sticky-composicion");
   const preview = el("div", "nota-preview nt-sticky-texto");
-  renderizarHTMLNota(preview, nota.contenido);
+  renderizarHTMLNota(preview, nota.contenido, { visual: !!nota.tinta?.length, tinta: nota.tinta });
   enlazarChecks(preview, nota);
   composicion.append(preview);
   const mini = crearMiniTinta(nota.tinta, { alinear: true });
-  if (mini) composicion.append(mini);
+  const visualPreview = preview.classList.contains("nt-preview-escalado");
+  const ajustarMiniVisual = () => { if (mini && visualPreview) { mini.style.width = "700px"; mini.style.transformOrigin = "top left"; mini.style.transform = `translate(${preview.style.getPropertyValue("--nt-preview-x")},${preview.style.getPropertyValue("--nt-preview-y")}) scale(${preview.style.getPropertyValue("--nt-preview-escala") || 1})`; } };
+  ajustarMiniVisual();
+  if (mini) (visualPreview ? preview : composicion).append(mini);
   cuerpo.append(composicion);
   const ajustarComposicion = () => {
     const altoPreview = preview.getBoundingClientRect().height;
-    const altoTinta = mini?.getBoundingClientRect().height || 0;
+    ajustarMiniVisual();
+    const altoTinta = visualPreview ? 0 : mini?.getBoundingClientRect().height || 0;
     composicion.style.height = `${Math.max(40, altoPreview, altoTinta)}px`;
   };
   let cleanup = null;
@@ -271,7 +275,7 @@ function pintar(f) {
   f.el.append(barra);
   if (nota.titulo) f.el.append(el("strong", "nt-flot-titulo", nota.titulo));
   const cuerpo = el("div", "nota-preview nt-flot-cuerpo");
-  renderizarHTMLNota(cuerpo, nota.contenido);
+  renderizarHTMLNota(cuerpo, nota.contenido, { visual: !!nota.tinta?.length, tinta: nota.tinta });
   enlazarChecks(cuerpo, nota);
   f.el.append(cuerpo);
   cuerpo.classList.add("nota-composicion");
@@ -304,7 +308,7 @@ function pintarPiP(id, win) {
   if (nota.titulo) { const titulo = doc.createElement("strong"); titulo.className = "nt-flot-titulo"; titulo.textContent = nota.titulo; hoja.append(barra, titulo); }
   else hoja.append(barra);
   const cuerpo = doc.createElement("div"); cuerpo.className = "nota-preview nt-flot-cuerpo";
-  renderizarHTMLNota(cuerpo, nota.contenido); enlazarChecks(cuerpo, nota, () => window.dispatchEvent(new Event("notas:actualizadas-ui"))); hoja.append(cuerpo);
+  renderizarHTMLNota(cuerpo, nota.contenido, { visual: !!nota.tinta?.length, tinta: nota.tinta }); enlazarChecks(cuerpo, nota, () => window.dispatchEvent(new Event("notas:actualizadas-ui"))); hoja.append(cuerpo);
   cuerpo.classList.add("nota-composicion");
   capaTinta = crearCapaTinta({ cuerpo, modal: hoja, obtenerTrazos: () => nota.tinta || (nota.tinta = []), alCambiar: () => { guardarNota(nota); window.dispatchEvent(new Event("notas:actualizadas-ui")); } });
   capasPiP.set(id, capaTinta);

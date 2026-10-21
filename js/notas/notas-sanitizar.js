@@ -84,15 +84,17 @@ function escaparHTMLNota(texto = "") {
   return String(texto).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 
-function renderizarHTMLNota(contenedor, html) {
+function renderizarHTMLNota(contenedor, html, { visual = false, tinta = [] } = {}) {
+  const htmlSeguro = sanearHTMLNota(html);
+  const tieneImagen = /<img\b[^>]*\bdata-nota-(?:sticker|image)/i.test(htmlSeguro);
   const esVistaPrevia = contenedor.classList.contains("nota-preview");
-  const lienzo = esVistaPrevia ? (contenedor.ownerDocument || document).createElement("div") : null;
+  const lienzo = esVistaPrevia && (visual || tieneImagen) ? (contenedor.ownerDocument || document).createElement("div") : null;
   if (lienzo) {
     lienzo.className = "nota-preview-lienzo";
-    lienzo.innerHTML = sanearHTMLNota(html);
+    lienzo.innerHTML = htmlSeguro;
     contenedor.replaceChildren(lienzo);
     contenedor.classList.add("nt-preview-escalado");
-  } else contenedor.innerHTML = sanearHTMLNota(html);
+  } else { contenedor.classList.remove("nt-preview-escalado"); contenedor.style.removeProperty("height"); for (const p of ["--nt-preview-escala","--nt-preview-x","--nt-preview-y"]) contenedor.style.removeProperty(p); contenedor.replaceChildren(); contenedor.innerHTML = htmlSeguro; }
   contenedor.querySelectorAll("ul[data-marc-color],ol[data-marc-color]").forEach((l) => l.style.setProperty("--nt-marker-color", l.getAttribute("data-marc-color")));
   contenedor.querySelectorAll("input[type=checkbox]").forEach((check) => { check.disabled = true; });
   contenedor.querySelectorAll("img[data-nota-sticker],img[data-nota-image]").forEach((img) => {
@@ -104,7 +106,7 @@ function renderizarHTMLNota(contenedor, html) {
     img.style.display = "block";
     img.style.resize = "none";
     img.style.overflow = "visible";
-    img.style.objectFit = "contain";
+    img.style.objectFit = "fill";
     img.style.position = "relative";
     img.style.transformOrigin = "center center";
     img.style.zIndex = String(Number.isFinite(Number(img.dataset.z)) && img.dataset.z !== "" ? Number(img.dataset.z) : 10);
@@ -117,29 +119,42 @@ function renderizarHTMLNota(contenedor, html) {
     stickers.forEach((img) => {
       const originalW = Math.max(1, Number(img.getAttribute("width")) || img.naturalWidth || 220);
       const originalH = Math.max(1, Number(img.getAttribute("height")) || img.naturalHeight || 160);
-      const rot = Number(img.dataset.rot) || 0, rad = rot * Math.PI / 180;
-      const escala = Math.min(1, baseLienzo / Math.max(1, originalW * Math.abs(Math.cos(rad)) + originalH * Math.abs(Math.sin(rad))));
-      let ancho = originalW * escala, alto = originalH * escala;
-      const anchoRotado = ancho * Math.abs(Math.cos(rad)) + alto * Math.abs(Math.sin(rad));
-      const margenRotacion = Math.max(0, (anchoRotado - ancho) / 2);
-      const desplazamiento = (Number(img.dataset.moveX) || 0) * baseLienzo;
-      const x = Math.min(Math.max(desplazamiento, margenRotacion), Math.max(margenRotacion, baseLienzo - ancho - margenRotacion));
+      const rot = Number(img.dataset.rot) || 0;
+      const x = (Number(img.dataset.moveX) || 0) * baseLienzo;
       const y = (Number(img.dataset.moveY) || 0) * baseLienzo;
-      img.style.width = `${ancho}px`;
-      img.style.height = `${alto}px`;
+      img.style.width = `${originalW}px`;
+      img.style.height = `${originalH}px`;
       img.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg) scale(${img.dataset.flipH === "1" ? -1 : 1},${img.dataset.flipV === "1" ? -1 : 1})`;
     });
     if (lienzo) {
-      const anchoVisible = Math.max(1, contenedor.clientWidth || 700);
-      const escala = anchoVisible / baseLienzo;
-      lienzo.style.transform = `scale(${escala})`;
+      lienzo.style.transform = "none";
       const caja = lienzo.getBoundingClientRect();
-      let altoContenido = lienzo.scrollHeight;
-      for (const img of stickers) {
-        const r = img.getBoundingClientRect();
-        altoContenido = Math.max(altoContenido, (r.bottom - caja.top) / escala);
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      const incluir = (left, top, right, bottom) => {
+        if (![left, top, right, bottom].every(Number.isFinite)) return;
+        minX = Math.min(minX, left); minY = Math.min(minY, top); maxX = Math.max(maxX, right); maxY = Math.max(maxY, bottom);
+      };
+      const doc = contenedor.ownerDocument || document;
+      const walkerTexto = doc.createTreeWalker(lienzo, doc.defaultView.NodeFilter.SHOW_TEXT);
+      const rango = doc.createRange();
+      while (walkerTexto.nextNode()) {
+        if (!walkerTexto.currentNode.nodeValue.trim()) continue;
+        rango.selectNodeContents(walkerTexto.currentNode);
+        for (const r of rango.getClientRects()) incluir(r.left - caja.left, r.top - caja.top, r.right - caja.left, r.bottom - caja.top);
       }
-      const altoFinal = Math.max(1, Math.ceil(altoContenido * escala));
+      lienzo.querySelectorAll("input,img").forEach((n) => { const r=n.getBoundingClientRect(); incluir(r.left-caja.left,r.top-caja.top,r.right-caja.left,r.bottom-caja.top); });
+      for (const trazo of Array.isArray(tinta) ? tinta : []) for (const [x,y] of trazo.p || []) {
+        const margen=Math.max(2,(Number(trazo.w)||0.004)*baseLienzo*2); incluir(x*baseLienzo-margen,y*baseLienzo-margen,x*baseLienzo+margen,y*baseLienzo+margen);
+      }
+      if (![minX,minY,maxX,maxY].every(Number.isFinite)) { minX=minY=0; maxX=baseLienzo; maxY=lienzo.scrollHeight||1; }
+      const anchoContenido=Math.max(1,maxX-minX), altoContenido=Math.max(1,maxY-minY);
+      const escala=Math.max(1,contenedor.clientWidth||baseLienzo)/anchoContenido;
+      lienzo.style.transformOrigin="top left";
+      lienzo.style.transform=`translate(${-minX*escala}px,${-minY*escala}px) scale(${escala})`;
+      contenedor.style.setProperty("--nt-preview-escala",String(escala));
+      contenedor.style.setProperty("--nt-preview-x",`${-minX*escala}px`);
+      contenedor.style.setProperty("--nt-preview-y",`${-minY*escala}px`);
+      const altoFinal=Math.max(1,Math.ceil(altoContenido*escala));
       if (Math.abs(contenedor.getBoundingClientRect().height - altoFinal) > 1) contenedor.style.setProperty("height", `${altoFinal}px`, "important");
     }
   };
