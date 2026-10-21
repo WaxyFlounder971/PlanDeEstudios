@@ -770,11 +770,25 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
       persistir();
     } finally { restaurandoHistorial = false; }
   }
+  // El paso de historial de la tinta serializa toda la nota: se hace cuando el navegador está libre (no al soltar el lápiz, que retrasaba el siguiente trazo).
+  let pasoTintaPendiente = null;
+  const programarPasoTinta = () => {
+    if (pasoTintaPendiente) return;
+    const ejecutar = () => { pasoTintaPendiente = null; guardarPasoHistorial("tinta"); };
+    pasoTintaPendiente = typeof requestIdleCallback === "function" ? { idle: true, id: requestIdleCallback(ejecutar, { timeout: 400 }) } : { idle: false, id: setTimeout(ejecutar, 150) };
+  };
+  const vaciarPasoTinta = () => { // antes de deshacer o rehacer, el historial debe estar al día
+    const p = pasoTintaPendiente; if (!p) return;
+    if (p.idle) cancelIdleCallback(p.id); else clearTimeout(p.id);
+    pasoTintaPendiente = null; guardarPasoHistorial("tinta");
+  };
   const deshacerEditor = () => {
+    vaciarPasoTinta();
     if (historialEditor.length < 2) return;
     futuroEditor.push(historialEditor.pop()); aplicarEstadoEditor(historialEditor.at(-1));
   };
   const rehacerEditor = () => {
+    vaciarPasoTinta();
     if (!futuroEditor.length) return;
     const s = futuroEditor.pop(); historialEditor.push(s); aplicarEstadoEditor(s);
   };
@@ -927,7 +941,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
 
   /* --- Tinta: lápiz y borrador (el selector de color vive a la derecha, siempre visible) --- */
   borrador.tinta = JSON.parse(JSON.stringify(borrador.tinta || []));
-  capaTinta = crearCapaTinta({ cuerpo, viewport:viewportLienzo, modal, obtenerTrazos: () => borrador.tinta, alCambiar: () => { const nivelesImagenes = [...cuerpo.querySelectorAll("img[data-nota-sticker],img[data-nota-image]")].map((img) => Number.isFinite(Number(img.dataset.z)) && img.dataset.z !== "" ? Number(img.dataset.z) : 10); const nivelActual = Number.isFinite(Number(borrador.capa_tinta_z)) ? Number(borrador.capa_tinta_z) : 5; const nivelMaximo = Math.max(1, ...nivelesImagenes); borrador.capa_tinta_z = Math.min(2000, Math.max(nivelActual, nivelMaximo) + (nivelActual >= nivelMaximo ? 0 : 1)); capaTinta?.establecerNivel?.(borrador.capa_tinta_z); ajustarAlturaAlContenido(); ultimoTipo = "i"; persistir(); guardarPasoHistorial("tinta"); } });
+  capaTinta = crearCapaTinta({ cuerpo, viewport:viewportLienzo, modal, obtenerTrazos: () => borrador.tinta, alCambiar: () => { const nivelesImagenes = [...cuerpo.querySelectorAll("img[data-nota-sticker],img[data-nota-image]")].map((img) => Number.isFinite(Number(img.dataset.z)) && img.dataset.z !== "" ? Number(img.dataset.z) : 10); const nivelActual = Number.isFinite(Number(borrador.capa_tinta_z)) ? Number(borrador.capa_tinta_z) : 5; const nivelMaximo = Math.max(1, ...nivelesImagenes); borrador.capa_tinta_z = Math.min(2000, Math.max(nivelActual, nivelMaximo) + (nivelActual >= nivelMaximo ? 0 : 1)); capaTinta?.establecerNivel?.(borrador.capa_tinta_z); ajustarAlturaAlContenido(); ultimoTipo = "i"; persistir(); programarPasoTinta(); } });
   cuerpo.addEventListener("input",ajustarAlturaAlContenido);window.addEventListener("resize",ajustarAlturaAlContenido);requestAnimationFrame(()=>{ajustarAlturaAlContenido();requestAnimationFrame(()=>{ajustarAlturaAlContenido();setTimeout(ajustarAlturaAlContenido,250);});});
   borrador.capa_tinta_z = Number.isFinite(Number(borrador.capa_tinta_z)) ? Number(borrador.capa_tinta_z) : 5; capaTinta.establecerNivel?.(borrador.capa_tinta_z);
   const ponerTintaAlFrente = (e) => { if (!e.target.classList?.contains("nt-tinta-canvas") || (capaTinta.obtenerModo() === "borrador")) return; const niveles = [...cuerpo.querySelectorAll("img[data-nota-sticker],img[data-nota-image]")].map((img) => Number.isFinite(Number(img.dataset.z)) && img.dataset.z !== "" ? Number(img.dataset.z) : 10); borrador.capa_tinta_z = Math.min(2000, Math.max(1, ...niveles) + 1); capaTinta.establecerNivel(borrador.capa_tinta_z); };

@@ -328,7 +328,7 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
   function agregarPunto(t, raw, e) {
     // Suavizado adaptativo: lento = más filtro (quita temblor), rápido = casi sin retraso.
     const d = Math.hypot(raw[0] - suave[0], raw[1] - suave[1]);
-    const a = Math.min(0.95, Math.max(0.3, d / (d + 0.002)));
+    const a = Math.min(0.98, Math.max(0.5, d / (d + 0.0012))); // menos filtro: la punta del trazo sigue al lápiz con menos retraso (el trazo final se vuelve a suavizar al dibujarlo)
     suave = [suave[0] + (raw[0] - suave[0]) * a, suave[1] + (raw[1] - suave[1]) * a];
     const u = t.p[t.p.length - 1];
     if (Math.hypot(suave[0] - u[0], suave[1] - u[1]) < PASO_MIN || puntosVivos >= MAX_PUNTOS) return;
