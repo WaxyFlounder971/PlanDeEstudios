@@ -104,7 +104,7 @@ function tramoAfilado(ctx, x0, y0, cx, cy, x1, y1, w0, w1) {
     ctx.stroke(); return;
   }
   const largo = curvo ? Math.hypot(cx - x0, cy - y0) + Math.hypot(x1 - cx, y1 - cy) : Math.hypot(x1 - x0, y1 - y0);
-  const pasos = Math.max(2, Math.min(40, Math.ceil(largo / Math.max(mw * 0.5, 1e-9))));
+  const pasos = Math.max(2, Math.min(40, Math.ceil(largo / Math.max(mw * 0.8, 1e-9))));
   let px = x0, py = y0;
   for (let j = 1; j <= pasos; j++) {
     const u = j / pasos, v = 1 - u;
@@ -253,6 +253,25 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
       dibujarTrazos(ctx, visibles, ancho, st / z);
     }
     if (edicionFiguras && figuraSeleccionada) { const p=figuraSeleccionada.p||[], esLinea=["linea","flecha"].includes(figuraSeleccionada.tipo), pts=esLinea?[p[0],p.at(-1)]:p, xs=pts.map(q=>q[0]*ancho), ys=pts.map(q=>q[1]*ancho-viewport.scrollTop/zoomLienzo); if(xs.length){ const pad=5,x0=Math.min(...xs)-pad,y0=Math.min(...ys)-pad,x1=Math.max(...xs)+pad,y1=Math.max(...ys)+pad; ctx.strokeStyle="#b7a5f4";ctx.lineWidth=1.5;ctx.setLineDash([5,4]);ctx.strokeRect(x0,y0,x1-x0,y1-y0);ctx.setLineDash([]);const hs=esLinea?pts:[[x0,y0],[(x0+x1)/2,y0],[x1,y0],[x1,(y0+y1)/2],[x1,y1],[(x0+x1)/2,y1],[x0,y1],[x0,(y0+y1)/2]];for(const h of hs){const hx=esLinea?h[0]*ancho:h[0],hy=esLinea?h[1]*ancho-viewport.scrollTop/zoomLienzo:h[1];ctx.beginPath();ctx.arc(hx,hy,5,0,Math.PI*2);ctx.fillStyle="#9b82e8";ctx.fill();ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.stroke();}}}
+    ctx.restore();
+  }
+
+  /** Al terminar un trazo solo se repinta la zona que ocupa (con sus vecinos), no toda la nota: antes cada trazo nuevo repintaba toda la tinta y retrasaba el siguiente. */
+  function redibujarZona(c, w) {
+    if (rafTrazos) win.cancelAnimationFrame(rafTrazos);
+    rafTrazos = 0; colaTrazos.length = 0;
+    const z = zoomLienzo, alto = canvas.clientHeight || canvas.height / (win.devicePixelRatio || 1), cx = centroZoomLienzo?.x ?? ancho / 2, cy = centroZoomLienzo?.y ?? alto / 2;
+    const sl = viewport.scrollLeft, st = viewport.scrollTop;
+    const mpx = (Number(w) || GROSOR_BASE) * ancho * z * 2 + 6;
+    const X0 = Math.floor(cx * (1 - z) + c.x0 * ancho * z - sl - mpx), Y0 = Math.floor(cy * (1 - z) + c.y0 * ancho * z - st - mpx);
+    const X1 = Math.ceil(cx * (1 - z) + c.x1 * ancho * z - sl + mpx), Y1 = Math.ceil(cy * (1 - z) + c.y1 * ancho * z - st + mpx);
+    const mn = mpx / (ancho * z), zx0 = c.x0 - mn, zx1 = c.x1 + mn, zy0 = c.y0 - mn, zy1 = c.y1 + mn;
+    const cercanos = obtenerTrazos().filter((t) => { const b = cajaTrazo(t); if (!b) return false; const m = Math.max(0.03, (Number(t.w) || 0) * 5); return !(b.x1 + m < zx0 || b.x0 - m > zx1 || b.y1 + m < zy0 || b.y0 - m > zy1); });
+    ctx.save();
+    ctx.beginPath(); ctx.rect(X0, Y0, X1 - X0, Y1 - Y0); ctx.clip();
+    ctx.clearRect(X0, Y0, X1 - X0, Y1 - Y0);
+    ctx.translate(cx * (1 - z), cy * (1 - z)); ctx.scale(z, z); ctx.translate(-sl / z, 0);
+    dibujarTrazos(ctx, cercanos, ancho, st / z);
     ctx.restore();
   }
   const redibujarPronto = () => { if (!rafRedibujo) rafRedibujo = win.requestAnimationFrame(() => { rafRedibujo = 0; redibujar(); }); };
@@ -426,15 +445,17 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
     if (actual?.forma && modoActivo !== "lapiz") {
       const pt=e?.type==="pointerup"?punto(e):ultimoPtForma;actual.p=puntosFiguraArrastrada(modoActivo,origenForma,pt).map(q=>[r4(q[0]),r4(q[1])]);delete actual.forma;actual.f=1;actual.tipo=modoActivo;actual=null;redibujar();empujar();alCambiar();
     } else if (modoActivo === "lapiz" && actual) {
+      const hecho = actual; let zona = null;
       if (!congelado && e?.type === "pointerup") {
         const u = actual.p[actual.p.length - 1], pt = punto(e);
         if (Math.hypot(pt[0] - u[0], pt[1] - u[1]) > PASO_MIN / 2) actual.p.push([r4(pt[0]), r4(pt[1]), ...(u.length > 2 ? [u[2]] : [])]);
+        zona = { ...cajaTrazo(actual) }; // caja de lo que se pintó en vivo, antes de simplificar
         // El trazo libre solo se reconoce como figura si se mantuvo quieto durante 600 ms.
         // Al soltar antes de ese tiempo, se conserva como tinta libre.
         if (!congelado) actual.p = simplificarPuntos(actual.p);
       }
       actual = null;
-      redibujar();
+      if (zona && Number.isFinite(zona.x0) && !(edicionFiguras && figuraSeleccionada)) redibujarZona(zona, hecho.w); else redibujar();
       empujar();
       alCambiar();
     } else if (modoActivo === "borrador" && huboBorrado) {
@@ -466,6 +487,7 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
       if (!m) { clearTimeout(timerForma); activo = false; actual = null; }
     },
     obtenerModo: () => modo,
+    estaDibujando: () => activo,
     obtenerZoomLienzo:()=>zoomLienzo,
     establecerZoomLienzo(v,x=null,y=null){zoomLienzo=Math.max(.05,Math.min(4,Number(v)||1));centroZoomLienzo=x==null||y==null?null:{x:x-(rect?.left||0),y:y-(rect?.top||0)};redibujar();return zoomLienzo;},
     establecerEdicionFiguras(v) { edicionFiguras=!!v; if(!edicionFiguras) figuraSeleccionada=null; canvas.classList.toggle("nt-edicion-figuras",edicionFiguras); redibujar(); },

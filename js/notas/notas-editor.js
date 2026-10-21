@@ -29,6 +29,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const original = registroOriginal ? JSON.parse(JSON.stringify(registroOriginal)) : null;
   const borrador = original ? { ...original } : crearNota({ vence_en: opcionesNotas().vencimiento_default ? fechaRelativa(opcionesNotas().plazo_default) : null });
   const instantaneaInicial = instantanea([borrador.id]); // para Ctrl+Z global: toda la sesión de edición es una sola entrada
+  let listaPorActualizar = false;
   let guardado = false, cerrado = false, eliminando = false, descartandoCambios = false, timer = null, handlerTeclas = null, capaTinta = null, editarVence = false, preguntandoCerrar = false, ocrController = null;
   let ultimoTipo = "t"; // última clase de cambio ("t" texto, "i" tinta): decide a qué afectan Deshacer/Rehacer
   let rangoGuardado = null;
@@ -197,7 +198,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
       borrador.contenido = sanearHTMLNota(cuerpo.innerHTML);
       borrador.vence_en = borrador.vence_en || null;
       const n = guardarNota(borrador);
-      window.dispatchEvent(new Event("notas:actualizadas-ui"));
+      listaPorActualizar = true; // la lista de fondo no se ve mientras editas: se actualiza una sola vez al cerrar
       borrador.id = n.id;
       borrador.modificada_en = n.modificada_en;
       firmaUltimoGuardado = firmaActual; // ya calculada arriba: evita sanear y serializar toda la nota otra vez
@@ -233,7 +234,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     try { marcadores.destruir(); herramientas.destruir(); } catch (err) { console.error(err); }
     cerrarMenuFiguras(); menuFiguras.remove();menuFiguraContexto.remove();document.removeEventListener("pointerdown",cerrarContextoFuera,true); accionesExtra.remove(); stickersOverlay.remove(); marcoSticker.remove(); mini.remove();clearTimeout(miniTimer);observadorMini?.disconnect();cuerpo.removeEventListener("input",actualizarMiniEditado);cuerpo.removeEventListener("input",ajustarAlturaAlContenido);viewportLienzo.removeEventListener("scroll",posicionarMarcoMini);window.removeEventListener("resize",actualizarMini);window.removeEventListener("resize",ajustarAlturaAlContenido);document.removeEventListener("scroll",posicionarMarcoSticker,true); window.removeEventListener("resize",posicionarMarcoSticker); observadorToolbar?.disconnect();observerFooter?.disconnect();window.removeEventListener("resize",medirFooter);cancelAnimationFrame(rafMedirToolbar);window.removeEventListener("resize",medirToolbar);observadorBarraInferior?.disconnect();window.removeEventListener("resize",medirBarraInferior);modal.removeEventListener("wheel",wheelZoom,true);modal.removeEventListener("pointerdown",iniciarPinch,true);modal.removeEventListener("pointermove",moverPinch,true);modal.removeEventListener("pointerup",terminarPinch,true);modal.removeEventListener("pointercancel",terminarPinch,true);modal.removeEventListener("pointerdown",ponerTintaAlFrente,true);roSticker?.disconnect();
     try { if (!descartandoCambios) registrarCambio(eliminando ? "Eliminar nota" : original ? "Editar nota" : "Nueva nota", instantaneaInicial); } catch (err) { console.error(err); }
-    setTimeout(() => { overlay.remove(); document.documentElement.style.overflow = scrollBloqueado.htmlOverflow; Object.assign(document.body.style, scrollBloqueado.body); window.scrollTo(0, scrollBloqueado.y); alCerrar(); }, 0); // siempre se cierra, pase lo que pase arriba
+    setTimeout(() => { if (listaPorActualizar) { listaPorActualizar = false; window.dispatchEvent(new Event("notas:actualizadas-ui")); } overlay.remove(); document.documentElement.style.overflow = scrollBloqueado.htmlOverflow; Object.assign(document.body.style, scrollBloqueado.body); window.scrollTo(0, scrollBloqueado.y); alCerrar(); }, 0); // siempre se cierra, pase lo que pase arriba
   };
   window.addEventListener("pagehide", guardarAlSalir);
   document.addEventListener("visibilitychange", guardarAlSalir);
@@ -770,6 +771,9 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
       persistir();
     } finally { restaurandoHistorial = false; }
   }
+  // Guardar la nota es pesado (serializa todo y avisa a la lista): con tinta se espera a que dejes de escribir y nunca se hace con el lápiz apoyado.
+  // Si cierras, cambias de pestaña o sales de la página, se guarda al instante (guardarAlSalir).
+  const persistirTinta = () => { clearTimeout(timer); timer = setTimeout(function intentar() { if (capaTinta?.estaDibujando?.()) { timer = setTimeout(intentar, 600); return; } persistirAhora(); }, 1200); };
   // El paso de historial de la tinta serializa toda la nota: se hace cuando el navegador está libre (no al soltar el lápiz, que retrasaba el siguiente trazo).
   let pasoTintaPendiente = null;
   const programarPasoTinta = () => {
@@ -941,7 +945,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
 
   /* --- Tinta: lápiz y borrador (el selector de color vive a la derecha, siempre visible) --- */
   borrador.tinta = JSON.parse(JSON.stringify(borrador.tinta || []));
-  capaTinta = crearCapaTinta({ cuerpo, viewport:viewportLienzo, modal, obtenerTrazos: () => borrador.tinta, alCambiar: () => { const nivelesImagenes = [...cuerpo.querySelectorAll("img[data-nota-sticker],img[data-nota-image]")].map((img) => Number.isFinite(Number(img.dataset.z)) && img.dataset.z !== "" ? Number(img.dataset.z) : 10); const nivelActual = Number.isFinite(Number(borrador.capa_tinta_z)) ? Number(borrador.capa_tinta_z) : 5; const nivelMaximo = Math.max(1, ...nivelesImagenes); borrador.capa_tinta_z = Math.min(2000, Math.max(nivelActual, nivelMaximo) + (nivelActual >= nivelMaximo ? 0 : 1)); capaTinta?.establecerNivel?.(borrador.capa_tinta_z); ajustarAlturaAlContenido(); ultimoTipo = "i"; persistir(); programarPasoTinta(); } });
+  capaTinta = crearCapaTinta({ cuerpo, viewport:viewportLienzo, modal, obtenerTrazos: () => borrador.tinta, alCambiar: () => { const nivelesImagenes = [...cuerpo.querySelectorAll("img[data-nota-sticker],img[data-nota-image]")].map((img) => Number.isFinite(Number(img.dataset.z)) && img.dataset.z !== "" ? Number(img.dataset.z) : 10); const nivelActual = Number.isFinite(Number(borrador.capa_tinta_z)) ? Number(borrador.capa_tinta_z) : 5; const nivelMaximo = Math.max(1, ...nivelesImagenes); borrador.capa_tinta_z = Math.min(2000, Math.max(nivelActual, nivelMaximo) + (nivelActual >= nivelMaximo ? 0 : 1)); capaTinta?.establecerNivel?.(borrador.capa_tinta_z); ajustarAlturaAlContenido(); ultimoTipo = "i"; persistirTinta(); programarPasoTinta(); } });
   cuerpo.addEventListener("input",ajustarAlturaAlContenido);window.addEventListener("resize",ajustarAlturaAlContenido);requestAnimationFrame(()=>{ajustarAlturaAlContenido();requestAnimationFrame(()=>{ajustarAlturaAlContenido();setTimeout(ajustarAlturaAlContenido,250);});});
   borrador.capa_tinta_z = Number.isFinite(Number(borrador.capa_tinta_z)) ? Number(borrador.capa_tinta_z) : 5; capaTinta.establecerNivel?.(borrador.capa_tinta_z);
   const ponerTintaAlFrente = (e) => { if (!e.target.classList?.contains("nt-tinta-canvas") || (capaTinta.obtenerModo() === "borrador")) return; const niveles = [...cuerpo.querySelectorAll("img[data-nota-sticker],img[data-nota-image]")].map((img) => Number.isFinite(Number(img.dataset.z)) && img.dataset.z !== "" ? Number(img.dataset.z) : 10); borrador.capa_tinta_z = Math.min(2000, Math.max(1, ...niveles) + 1); capaTinta.establecerNivel(borrador.capa_tinta_z); };
