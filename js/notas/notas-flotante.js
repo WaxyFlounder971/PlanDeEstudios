@@ -7,7 +7,7 @@ import { estado } from "../core/storage.js";
 import { traducirTextoInterfaz as t } from "../core/i18n.js";
 import { notasActuales, resolverColorNota, COLOR_DEFECTO, guardarNota, grosorTrazoPreferido, guardarGrosorTrazoPreferido } from "./notas-datos.js";
 import { renderizarHTMLNota } from "./notas-sanitizar.js";
-import { crearMiniTinta, crearCapaTinta, GROSOR_BASE } from "./notas-tinta.js";
+import { crearMiniTinta, crearCapaTinta, dibujarTrazos, GROSOR_BASE } from "./notas-tinta.js";
 import { abrirEditorNota } from "./notas-editor.js";
 import { ICONOS, el, contraste, colorTextoNota, botonIcono, enlazarChecks } from "./notas-ui.js";
 import { velocidad, limitarVel, esLanzamiento, limites, acotar, pasoInercia } from "./notas-fisica.js";
@@ -380,9 +380,186 @@ async function abrirPiP(id) {
     pintarPiP(id, win); return win;
 }
 
+/* ===================== PiP estático (Android y otros sin Document PiP) =====================
+   La nota se dibuja en un canvas, se emite como video silencioso y se envía al PiP de video del navegador.
+   Es solo para ver: la ventana no es interactiva y se vuelve a dibujar sola cuando la nota cambia. */
+const VP_ANCHO = 700, VP_TITULO = 52, VP_MAX_ALTO = 1600, VP_MIN_ALTO = 220;
+let sesionVideoPiP = null;
+
+const puedeVideoPiP = () => !!(document.pictureInPictureEnabled && typeof HTMLVideoElement.prototype.requestPictureInPicture === "function" && typeof HTMLCanvasElement.prototype.captureStream === "function");
+
+const esperarImagen = (img) => (img.decode ? img.decode().catch(() => {}) : Promise.resolve());
+
+// Maquetea la nota en un contenedor oculto de 700 px (el mismo ancho base de la tinta) y lee posiciones reales.
+async function medirNotaVideo(nota, colorTexto) {
+  const cont = document.createElement("div");
+  cont.className = "notas-cuerpo";
+  cont.style.cssText = `position:fixed;left:-10000px;top:0;width:${VP_ANCHO}px;box-sizing:border-box;padding:12px;margin:0;border:0;min-height:0;height:auto;background:none;font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;color:${colorTexto};overflow-wrap:anywhere;visibility:hidden;pointer-events:none`;
+  document.body.append(cont);
+  try {
+    const html = nota.contenido || "";
+    const imgs = () => [...cont.querySelectorAll("img[data-nota-sticker],img[data-nota-image]")];
+    renderizarHTMLNota(cont, html);
+    if (imgs().length) { await Promise.all(imgs().map(esperarImagen)); renderizarHTMLNota(cont, html); await Promise.all(imgs().map(esperarImagen)); }
+    const caja = cont.getBoundingClientRect();
+    const rel = (r) => ({ l: r.left - caja.left, t: r.top - caja.top, r: r.right - caja.left, b: r.bottom - caja.top });
+    const ops = { textos: [], formas: [], imagenes: [] };
+    let maxY = 0;
+
+    const recorrido = document.createTreeWalker(cont, NodeFilter.SHOW_TEXT);
+    const rango = document.createRange();
+    while (recorrido.nextNode()) {
+      const nodo = recorrido.currentNode, txt = nodo.nodeValue, padre = nodo.parentElement;
+      if (!padre || !txt.trim()) continue;
+      const cs = getComputedStyle(padre);
+      const fuente = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      const subrayado = !!padre.closest("u") || String(cs.textDecorationLine || "").includes("underline");
+      let tramo = null;
+      for (let i = 0; i < txt.length; i++) {
+        rango.setStart(nodo, i); rango.setEnd(nodo, i + 1);
+        const rs = rango.getClientRects();
+        if (!rs.length) continue; // espacios colapsados
+        const r = rel(rs[0]);
+        if (r.r - r.l <= 0) continue;
+        const ch = txt[i] === "\u00a0" ? " " : txt[i];
+        if (tramo && Math.abs(tramo.t - r.t) < 3 && r.l >= tramo.r - 2) { tramo.s += ch; tramo.r = r.r; }
+        else { tramo = { s: ch, l: r.l, t: r.t, b: r.b, r: r.r, fuente, color: cs.color, subrayado }; ops.textos.push(tramo); }
+        maxY = Math.max(maxY, r.b);
+      }
+    }
+    cont.querySelectorAll("input[type=checkbox]").forEach((c) => {
+      const r = rel(c.getBoundingClientRect());
+      ops.formas.push({ k: "check", ...r, marcado: c.checked, color: c.closest("ul,ol")?.getAttribute("data-marc-color") || null, texto: getComputedStyle(c).color });
+      maxY = Math.max(maxY, r.b);
+    });
+    cont.querySelectorAll("li").forEach((li) => {
+      const lista = li.parentElement;
+      if (!lista || !/^(UL|OL)$/.test(lista.tagName)) return;
+      if ([...li.querySelectorAll("input[data-nota-check]")].some((i) => i.closest("li") === li)) return; // los pendientes usan su círculo
+      const r = rel(li.getBoundingClientRect()), cs = getComputedStyle(li);
+      const alto = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.45, cy = r.t + alto / 2;
+      const color = lista.getAttribute("data-marc-color") || cs.color;
+      if (lista.tagName === "UL") ops.formas.push({ k: "punto", x: r.l - 13, y: cy, color });
+      else {
+        const inicio = parseInt(lista.getAttribute("start"), 10) || 1;
+        const n = inicio + [...lista.children].filter((h) => h.tagName === "LI").indexOf(li);
+        ops.formas.push({ k: "num", s: `${n}.`, x: r.l - 6, y: cy, color, fuente: `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}` });
+      }
+    });
+    cont.querySelectorAll("blockquote").forEach((b) => { const r = rel(b.getBoundingClientRect()); ops.formas.push({ k: "cita", x: r.l, t: r.t, b: r.b, color: getComputedStyle(b).color }); });
+    imgs().forEach((img) => {
+      const r = rel(img.getBoundingClientRect());
+      const w = Number(img.getAttribute("width")) || img.naturalWidth || 220, h = Number(img.getAttribute("height")) || img.naturalHeight || 160;
+      const z = Number(img.dataset.z);
+      ops.imagenes.push({ img, cx: (r.l + r.r) / 2, cy: (r.t + r.b) / 2, w, h, rot: Number(img.dataset.rot) || 0, fh: img.dataset.flipH === "1", fv: img.dataset.flipV === "1", z: img.dataset.z !== "" && img.dataset.z != null && Number.isFinite(z) ? z : 10 });
+      maxY = Math.max(maxY, r.b);
+    });
+    for (const t of nota.tinta || []) for (const q of t.p || []) maxY = Math.max(maxY, q[1] * VP_ANCHO + Math.max(2, (Number(t.w) || 0.004) * VP_ANCHO));
+    return { ops, maxY };
+  } finally { cont.remove(); }
+}
+
+function pintarNotaVideo(canvas, nota, med, color, colorTexto) {
+  const tituloAlto = nota.titulo ? VP_TITULO : 0;
+  const alto = Math.min(VP_MAX_ALTO, Math.max(VP_MIN_ALTO, Math.ceil(med.maxY + 16) + tituloAlto));
+  if (canvas.width !== VP_ANCHO) canvas.width = VP_ANCHO;
+  if (canvas.height !== alto) canvas.height = alto;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, VP_ANCHO, alto);
+  ctx.fillStyle = color; ctx.fillRect(0, 0, VP_ANCHO, alto);
+  if (nota.titulo) {
+    ctx.fillStyle = colorTexto; ctx.textBaseline = "alphabetic"; ctx.font = '700 26px system-ui,-apple-system,"Segoe UI",sans-serif';
+    let t = String(nota.titulo); while (t.length > 1 && ctx.measureText(t).width > VP_ANCHO - 36) t = t.slice(0, -2) + "…";
+    ctx.fillText(t, 18, 36);
+  }
+  ctx.save(); ctx.translate(0, tituloAlto);
+  ctx.textBaseline = "alphabetic";
+  for (const r of med.ops.textos) {
+    ctx.font = r.fuente; ctx.fillStyle = r.color;
+    const asc = ctx.measureText("Hg").fontBoundingBoxAscent ?? (r.b - r.t) * 0.8;
+    ctx.fillText(r.s, r.l, r.t + asc);
+    if (r.subrayado) ctx.fillRect(r.l, r.t + asc + 2, r.r - r.l, 1.5);
+  }
+  for (const f of med.ops.formas) {
+    if (f.k === "check") {
+      const cx = (f.l + f.r) / 2, cy = (f.t + f.b) / 2, rad = Math.max(3, Math.min(f.r - f.l, f.b - f.t) / 2 - 1);
+      ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+      if (f.marcado) { ctx.fillStyle = f.color || "#b7a5f4"; ctx.fill(); ctx.strokeStyle = "#1b1530"; ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.beginPath(); ctx.moveTo(cx - rad * 0.42, cy + rad * 0.02); ctx.lineTo(cx - rad * 0.1, cy + rad * 0.34); ctx.lineTo(cx + rad * 0.45, cy - rad * 0.3); ctx.stroke(); }
+      else { ctx.strokeStyle = f.color || f.texto; ctx.globalAlpha = 0.85; ctx.lineWidth = 2; ctx.stroke(); ctx.globalAlpha = 1; }
+    } else if (f.k === "punto") { ctx.fillStyle = f.color; ctx.beginPath(); ctx.arc(f.x, f.y, 3.2, 0, Math.PI * 2); ctx.fill(); }
+    else if (f.k === "num") { ctx.font = f.fuente; ctx.fillStyle = f.color; ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText(f.s, f.x, f.y); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; }
+    else if (f.k === "cita") { ctx.globalAlpha = 0.45; ctx.fillStyle = f.color; ctx.fillRect(f.x, f.t, 3, f.b - f.t); ctx.globalAlpha = 1; }
+  }
+  const nivelTinta = Number.isFinite(Number(nota.capa_tinta_z)) ? Number(nota.capa_tinta_z) : 5;
+  const imagenes = [...med.ops.imagenes].sort((a, b) => a.z - b.z);
+  const dibujarImagen = (i) => {
+    ctx.save(); ctx.translate(i.cx, i.cy); ctx.rotate(i.rot * Math.PI / 180); ctx.scale(i.fh ? -1 : 1, i.fv ? -1 : 1);
+    try { ctx.drawImage(i.img, -i.w / 2, -i.h / 2, i.w, i.h); } catch (_) {}
+    ctx.restore();
+  };
+  imagenes.filter((i) => i.z < nivelTinta).forEach(dibujarImagen);
+  if (nota.tinta?.length) dibujarTrazos(ctx, nota.tinta, VP_ANCHO, 0, 1);
+  imagenes.filter((i) => i.z >= nivelTinta).forEach(dibujarImagen);
+  ctx.restore();
+}
+
+async function redibujarVideoPiP(s) {
+  const n = ++s.n;
+  const nota = buscar(s.id);
+  if (!nota) { if (sesionVideoPiP === s) cerrarVideoPiP(); return; }
+  const color = resolverColorNota(nota.color || COLOR_DEFECTO);
+  const colorTexto = nota.color_texto || colorTextoNota(nota, color);
+  const med = await medirNotaVideo(nota, colorTexto);
+  if (sesionVideoPiP !== s || n !== s.n) return;
+  pintarNotaVideo(s.canvas, nota, med, color, colorTexto);
+}
+
+function cerrarVideoPiP() {
+  const s = sesionVideoPiP;
+  if (!s) return;
+  sesionVideoPiP = null;
+  clearTimeout(s.timer); clearInterval(s.latido);
+  if (s.alCambiar) { window.removeEventListener("notas:actualizadas", s.alCambiar); window.removeEventListener("notas:actualizadas-ui", s.alCambiar); }
+  try { if (document.pictureInPictureElement === s.video) document.exitPictureInPicture().catch(() => {}); } catch (_) {}
+  s.stream?.getTracks().forEach((t) => t.stop());
+  s.video.srcObject = null; s.video.remove();
+}
+
+/** Abre la nota como ventana flotante de solo lectura usando el PiP de video. Devuelve false si no pudo. */
+async function abrirVideoPiP(id) {
+  if (!puedeVideoPiP() || !buscar(id)) return false;
+  cerrarVideoPiP();
+  const canvas = document.createElement("canvas");
+  canvas.width = VP_ANCHO; canvas.height = VP_MIN_ALTO;
+  const video = document.createElement("video");
+  video.muted = true; video.playsInline = true; video.setAttribute("aria-hidden", "true");
+  video.style.cssText = "position:fixed;right:0;bottom:0;width:2px;height:2px;opacity:.01;pointer-events:none";
+  document.body.append(video);
+  const s = { id, canvas, video, stream: null, timer: 0, latido: 0, alCambiar: null, parpadeo: false, n: 0 };
+  sesionVideoPiP = s;
+  try {
+    await redibujarVideoPiP(s);
+    s.stream = canvas.captureStream(10);
+    video.srcObject = s.stream;
+    await video.play();
+    await video.requestPictureInPicture();
+  } catch (_) { if (sesionVideoPiP === s) cerrarVideoPiP(); return false; }
+  if (sesionVideoPiP !== s) return false;
+  video.addEventListener("leavepictureinpicture", () => { if (sesionVideoPiP === s) cerrarVideoPiP(); });
+  video.addEventListener("pause", () => { if (sesionVideoPiP === s && document.pictureInPictureElement === video) video.play().catch(() => {}); });
+  s.alCambiar = () => { clearTimeout(s.timer); s.timer = setTimeout(() => redibujarVideoPiP(s), 150); };
+  window.addEventListener("notas:actualizadas", s.alCambiar);
+  window.addEventListener("notas:actualizadas-ui", s.alCambiar);
+  // Un píxel casi invisible que alterna mantiene el flujo de video activo aunque la nota no cambie.
+  s.latido = setInterval(() => { const c = canvas.getContext("2d"); s.parpadeo = !s.parpadeo; c.fillStyle = s.parpadeo ? "rgba(255,255,255,.02)" : "rgba(0,0,0,.02)"; c.fillRect(0, 0, 1, 1); }, 1000);
+  return true;
+}
+
 function abrirNotaPictureInPicture(id, origen) {
   if (!window.documentPictureInPicture?.requestWindow) {
-    flotarNota(id, origen); refrescarLista(); return Promise.resolve(false);
+    const enApp = () => { flotarNota(id, origen); refrescarLista(); return false; };
+    if (!puedeVideoPiP()) return Promise.resolve(enApp());
+    return abrirVideoPiP(id).then((ok) => ok || enApp()).catch(enApp);
   }
   return abrirPiP(id).then(() => true).catch(() => { flotarNota(id, origen); refrescarLista(); return false; });
 }
