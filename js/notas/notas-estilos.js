@@ -460,7 +460,7 @@ html:not([data-mode="dark"]):not([data-mode="true-dark"]) .notas-seccion .nt-btn
 @media(max-width:600px){.notas-grid:not(.notas-lista) .nota-card[data-ancho="2"]:not(.expandida),.notas-grid:not(.notas-lista) .nota-card[data-ancho="3"]:not(.expandida){aspect-ratio:1/1!important;min-height:0;max-height:none}}
 .nt-flotante{max-height:none!important;overflow:visible!important}.nt-flot-cuerpo{overflow:visible!important;max-height:none!important}
 .nota-preview.nt-preview-escalado{position:relative;display:block;box-sizing:content-box;overflow:hidden!important;min-height:0;padding:0!important}
-.nota-preview-lienzo{position:absolute;left:0;top:0;z-index:1;isolation:isolate;width:700px;max-width:none;box-sizing:border-box;transform-origin:top left;overflow:visible;font-size:16px;line-height:normal}
+.nota-preview-lienzo{position:absolute;left:0;top:0;z-index:1;isolation:isolate;width:700px;max-width:none;box-sizing:border-box;padding:12px;border:1px solid transparent;transform-origin:top left;overflow:visible;font-size:16px;line-height:1.55}
 .nota-preview-lienzo>*{max-width:none}
 .nota-preview-lienzo>:not(img):not(:has(img)){position:relative;z-index:1}
 .nota-preview-lienzo img[data-nota-sticker],.nota-preview-lienzo img[data-nota-image]{z-index:-1!important}

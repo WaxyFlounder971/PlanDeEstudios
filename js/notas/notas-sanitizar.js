@@ -147,7 +147,10 @@ function renderizarHTMLNota(contenedor, html, { visual = false, tinta = [] } = {
         const margen=Math.max(2,(Number(trazo.w)||0.004)*baseLienzo*2); incluir(x*baseLienzo-margen,y*baseLienzo-margen,x*baseLienzo+margen,y*baseLienzo+margen);
       }
       if (![minX,minY,maxX,maxY].every(Number.isFinite)) { minX=minY=0; maxX=baseLienzo; maxY=lienzo.scrollHeight||1; }
-      const anchoContenido=Math.max(1,maxX-minX), altoContenido=Math.max(1,maxY-minY);
+      // El origen del lienzo es el borde interno del editor: conserva su margen superior e izquierdo.
+      // El recorte solo elimina espacio sobrante a la derecha y debajo del último elemento.
+      minX = 0; minY = 0;
+      const anchoContenido=Math.max(1,maxX), altoContenido=Math.max(1,maxY);
       const escala=Math.max(1,contenedor.clientWidth||baseLienzo)/anchoContenido;
       lienzo.style.transformOrigin="top left";
       lienzo.style.transform=`translate(${-minX*escala}px,${-minY*escala}px) scale(${escala})`;
