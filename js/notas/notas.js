@@ -450,13 +450,15 @@ function construirTarjeta(nota) {
   if (mini) composicion.append(mini);
   card.append(...[top, h, composicion, expand, foot].filter(Boolean));
   const estaEnCuadricula = () => !!card.closest(".notas-grid:not(.notas-lista)");
-  const ajustarComposicion = () => { if (estaEnCuadricula()) { composicion.style.removeProperty("height"); return; } const alto = Math.max(preview.scrollHeight, mini?.getBoundingClientRect().height || 0, 32); composicion.style.height = `${card.classList.contains("expandida") ? alto : Math.min(220, alto)}px`; };
+  const ajustarComposicion = () => { const alto = Math.max(preview.scrollHeight, mini?.getBoundingClientRect().height || 0, 32) + 3; if (estaEnCuadricula()) { if(card.classList.contains("expandida")) composicion.style.setProperty("height",`${alto}px`,"important"); else composicion.style.removeProperty("height"); return; } composicion.style.height = `${card.classList.contains("expandida") ? alto : Math.min(220, alto)}px`; };
   card._ajustarComposicion = ajustarComposicion;
   const actualizarBotonExpandir = () => {
     const lineHeight = parseFloat(getComputedStyle(preview).lineHeight) || 22;
     const limiteColapsado = Math.min(220, lineHeight * (card.closest(".notas-lista") ? 5.8 : 7.2));
-    const limiteTexto = estaEnCuadricula() ? preview.clientHeight : limiteColapsado;
-    const limiteDibujo = estaEnCuadricula() ? composicion.clientHeight : 220;
+    const grid = estaEnCuadricula();
+    const altoContraido = grid ? (innerWidth <= 600 || Number(card.dataset.ancho) <= 1 ? card.clientWidth : 320) : 0;
+    const limiteTexto = grid ? Math.max(32, altoContraido - (top?.offsetHeight || 0) - (h?.offsetHeight || 0) - expand.offsetHeight - foot.offsetHeight - 34) : limiteColapsado;
+    const limiteDibujo = grid ? limiteTexto : 220;
     const textoLargo = preview.scrollHeight > limiteTexto + 2;
     const dibujoLargo = !!mini && mini.getBoundingClientRect().height > limiteDibujo + 2;
     const requiereFlecha = textoLargo || dibujoLargo;

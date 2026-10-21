@@ -446,6 +446,19 @@ html:not([data-mode="dark"]):not([data-mode="true-dark"]) .notas-seccion .nt-btn
 .nt-sticker-item img{width:100%;height:100%;object-fit:contain}
 .nt-sticker-quitar{position:absolute;top:5px;right:5px;width:28px;height:28px;border:0;border-radius:50%;background:#a42c3a;color:white;font-size:1.2rem;cursor:pointer}
 .nt-sticker-celda.arrastrando{opacity:.45}.nt-sticker-celda[draggable="true"]{cursor:grab}
+
+/* Vista previa: sin desplazamiento interno. La cuadrícula contraída conserva proporción; expandida crece con su contenido. */
+.nota-preview{scrollbar-width:none!important;-ms-overflow-style:none!important}.nota-preview::-webkit-scrollbar{display:none!important}
+.nota-card .nota-composicion{padding-bottom:3px!important}
+.nota-card .nota-card-foot{padding-top:3px!important}
+.notas-grid:not(.notas-lista) .nota-card:not(.expandida){aspect-ratio:1/1}
+.notas-grid:not(.notas-lista) .nota-card[data-ancho="2"]:not(.expandida),.notas-grid:not(.notas-lista) .nota-card[data-ancho="3"]:not(.expandida){aspect-ratio:auto!important;height:auto!important;min-height:180px;max-height:320px;align-self:start}
+.notas-grid:not(.notas-lista) .nota-card.expandida{aspect-ratio:auto!important;height:auto!important;min-height:0!important;overflow:visible!important;align-self:start}
+.notas-grid:not(.notas-lista) .nota-card.expandida .nota-composicion{box-sizing:border-box;max-height:none!important;min-height:0;height:auto;flex:0 0 auto;overflow:visible!important;padding:0 0 3px!important}
+.notas-grid:not(.notas-lista) .nota-card.expandida .nota-preview{box-sizing:border-box;height:auto!important;max-height:none!important;min-height:0;overflow:visible!important;padding-bottom:3px!important;scrollbar-gutter:auto;overscroll-behavior:auto}
+.notas-grid:not(.notas-lista) .nota-card.expandida .nota-card-foot{margin-top:0;padding-top:3px!important}
+@media(max-width:600px){.notas-grid:not(.notas-lista) .nota-card[data-ancho="2"]:not(.expandida),.notas-grid:not(.notas-lista) .nota-card[data-ancho="3"]:not(.expandida){aspect-ratio:1/1!important;min-height:0;max-height:none}}
+.nt-flotante{max-height:none!important;overflow:visible!important}.nt-flot-cuerpo{overflow:visible!important;max-height:none!important}
 `;
 
 function inyectarEstilosNotas() {
