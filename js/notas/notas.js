@@ -324,7 +324,9 @@ function aplicarAnchos(grid) {
   for (const c of cards) {
     const w = anchoVisible(grid, c.dataset.ancho);
     const col = Math.max(0, Math.min(g.cols - 1, Math.round((c.getBoundingClientRect().left - g.izq) / (g.colW + g.hueco))));
-    const hayIzq = g.cols > 1 && col > 0, hayDer = g.cols > 1 && col + w - 1 < g.cols - 1;
+    if (g.cols <= 1) { c.dataset.lados = "ninguno"; continue; }
+    if (w > 2 || (col === 0 && w >= g.cols)) { c.dataset.lados = "ambos"; continue; }
+    const hayIzq = col > 0, hayDer = col + w - 1 < g.cols - 1;
     c.dataset.lados = hayIzq && hayDer ? "ambos" : hayIzq ? "izq" : "der";
   }
 }
@@ -396,6 +398,7 @@ function construirTarjeta(nota) {
   const h = nota.titulo ? el("strong", "nota-titulo-card", nota.titulo) : null;
   const preview = el("div", "nota-preview");
   renderizarHTMLNota(preview, nota.contenido);
+  preview.querySelectorAll("img").forEach(img=>{img.loading="lazy";img.decoding="async";});
   enlazarChecks(preview, nota);
 
   const expand = el("button", "nota-expand", "");
@@ -446,7 +449,7 @@ function construirTarjeta(nota) {
   card.append(...[top, h, composicion, expand, foot].filter(Boolean));
   const ajustarComposicion = () => { const alto = Math.max(preview.scrollHeight, mini?.getBoundingClientRect().height || 0, 32); composicion.style.height = `${card.classList.contains("expandida") ? alto : Math.min(220, alto)}px`; };
   card._ajustarComposicion = ajustarComposicion;
-  if (typeof ResizeObserver === "function" && mini) { const ro = new ResizeObserver(ajustarComposicion); ro.observe(preview); ro.observe(mini); }
+  if (typeof ResizeObserver === "function" && mini) { const ro = new ResizeObserver(ajustarComposicion); ro.observe(preview); ro.observe(mini); card._observadorComposicion=ro; }
   requestAnimationFrame(() => {
     ajustarComposicion();
     const textoLargo = preview.scrollHeight > 220;
@@ -613,7 +616,7 @@ function renderizarNotas() {
 
   const cab = el("header", "notas-cabecera");
   const acciones = el("div", "row notas-cab-acciones");
-  const add = el("button", "btn btn-primary nt-btn-circulo", "➕");
+  const add = el("button", "btn btn-primary nt-btn-circulo"); add.innerHTML = '<svg class="nt-ico nt-add-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
   add.title = tr("Nueva nota"); add.setAttribute("aria-label", add.title); add.onclick = () => abrirEditorNota(null, renderizarNotas);
   const settings = el("button", "btn btn-secondary nt-btn-circulo");
   settings.innerHTML = ICONO_PUNTOS;
@@ -686,6 +689,7 @@ function renderizarNotas() {
   // Arriba las fijadas, luego una línea divisora y debajo todas las demás notas.
   const contenido = el("div", "notas-grupos");
   const pintarGrupos = () => {
+    contenido.querySelectorAll(".nota-card").forEach(card=>card._observadorComposicion?.disconnect());
     const items = notasVisibles();
     window.__notasLista = items;
     const claseGrid = `notas-grid ${opcionesNotas().vista === "lista" ? "notas-lista" : ""}`.trim();
@@ -699,7 +703,7 @@ function renderizarNotas() {
     if (!items.length) {
       const vacio = el("div", "glass-card notas-vacio stack");
       vacio.innerHTML = `<div aria-hidden="true">🗒️</div><h2>${tr("Tus ideas, siempre a mano")}</h2><p>${tr("Toca + para tu primera nota")}</p>`;
-      const go = el("button", "btn btn-primary", "＋");
+      const go = el("button", "btn btn-primary"); go.innerHTML = '<svg class="nt-ico nt-add-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>'; go.setAttribute("aria-label",tr("Nueva nota"));
       go.onclick = () => abrirEditorNota(null, renderizarNotas);
       vacio.append(go);
       const g = el("div", claseGrid); g.append(vacio); nodos.push(g);

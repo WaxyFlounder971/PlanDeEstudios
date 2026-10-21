@@ -140,7 +140,15 @@ function candidatoTriangulo(pts, diag) {
   const v = esquinas(pts, 0.08 * diag);
   if (v.length !== 3) return null;
   for (let i = 0; i < 3; i++) if (giro(v[(i + 2) % 3], v[i], v[(i + 1) % 3]) < 35) return null;
-  return [...v, v[0]];
+  const out=[...v,v[0]];out.tipo="triangulo";return out;
+}
+
+
+function candidatoRombo(pts, diag) {
+  const v=esquinas(pts,0.045*diag);if(v.length!==4)return null;
+  const lados=v.map((q,i)=>dist(q,v[(i+1)%4])),max=Math.max(...lados),min=Math.min(...lados);if(!max||min/max<.78)return null;
+  const angulos=v.map((q,i)=>giro(v[(i+3)%4],q,v[(i+1)%4]));if(angulos.some(a=>a<25||a>155))return null;
+  const out=[...v,v[0].slice()];out.tipo="rombo";return out;
 }
 
 function candidatoPentagrama(pts, diag) {
@@ -253,6 +261,8 @@ function reconocerForma(p) {
   // Si la trayectoria conserva cuatro esquinas claras, es rectángulo aunque sea casi cuadrado.
   const verticesRect = esquinas(pts, 0.018 * diag);
   if (verticesRect.length === 4 && verticesRect.every((q,i) => { const ang=giro(verticesRect[(i+3)%4],q,verticesRect[(i+1)%4]); return ang>=55 && ang<=125; })) {
+    const rombo=candidatoRombo(pts,diag),errRombo=rombo?errorHacia(pts,rombo):Infinity;
+    if(rombo&&errRombo<=0.045*diag){const lados=verticesRect.map((q,i)=>dist(q,verticesRect[(i+1)%4])),rel=Math.min(...lados)/Math.max(...lados),diagonalizada=verticesRect.every((q,i)=>{const b=verticesRect[(i+1)%4],a=Math.atan2(b[1]-q[1],b[0]-q[0]);return Math.abs(Math.sin(2*a))>.32;});if(rel>.78&&diagonalizada){const salida=rombo.map(q=>[r4(q[0]),r4(q[1])]);salida.tipo="rombo";return salida;}}
     const poli=candidatoRect(pts), err=poli ? errorHacia(pts,poli) : Infinity;
     if (poli && err <= 0.045 * diag) { const salida=poli.map(q=>[r4(q[0]),r4(q[1])]); salida.tipo=poli.tipo||"rectangulo"; return salida; }
   }
@@ -265,6 +275,7 @@ function reconocerForma(p) {
     cands.push({ poli, err, tipo: poli.tipo || "figura" });
   };
   probar(candidatoElipse(pts));
+  probar(candidatoRombo(pts,diag));
   probar(candidatoRect(pts));
   probar(candidatoTriangulo(pts, diag));
   probar(candidatoPentagrama(pts, diag));
