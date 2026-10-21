@@ -210,7 +210,7 @@ body.nota-arrastrando-body{user-select:none;-webkit-user-select:none;cursor:grab
 .nt-seg-compacto .nt-seg-op{flex:0 0 auto;min-height:32px;padding:5px 12px;border-radius:999px;font-size:.82rem;white-space:nowrap}
 .notas-orden .nt-vsep{height:22px;margin:0 2px}
 .notas-grupos{display:flex;flex-direction:column;gap:16px}
-.nt-divisor{width:100%;height:0;margin:2px 0;border:0;border-top:2px solid color-mix(in srgb,currentColor,transparent 72%);border-radius:2px}
+.nt-divisor{width:100%;height:0;margin:14px 0;border:0;border-top:2px solid color-mix(in srgb,currentColor,transparent 72%);border-radius:2px}
 
 /* ===== Modo optimizado (data-rendimiento="reducido"): design-system.css pinta .glass-card con un fondo sólido oscuro
    que le ganaba a --nota-color; la tarjeta perdía su color pero la letra seguía calculada para ese color. Se devuelve el color de la nota. ===== */
@@ -346,6 +346,10 @@ const CSS_RONDA_DOS = `
 .nt-aviso-superior{position:fixed;z-index:100300;left:50%;top:max(12px,env(safe-area-inset-top));transform:translateX(-50%);width:min(620px,calc(100vw - 24px));max-height:35dvh;overflow:auto;padding:12px 16px;border:1px solid rgba(255,255,255,.2);border-radius:16px;background:#242032;color:#fff;box-shadow:0 12px 36px #000b;text-align:center;font-weight:650;white-space:pre-wrap}.nt-aviso-superior.nt-aviso-error{background:#4b2029}.nt-aviso-superior.nt-aviso-resultado{background:#24372d}.nt-aviso-procesando{display:flex;align-items:center;justify-content:center;gap:10px;min-height:48px}.nt-aviso-procesando::before{content:"";flex:none;width:18px;height:18px;border:3px solid #ffffff55;border-top-color:#fff;border-radius:50%;animation:nt-ocr-giro .75s linear infinite}@keyframes nt-ocr-giro{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.nt-aviso-procesando::before{animation:none;border-color:#fff;border-right-color:#ffffff55}}.nt-herr-otros{display:flex!important;align-items:center;justify-content:center;gap:12px!important;color:inherit!important}.nt-herr-otros::before,.nt-herr-otros::after{content:"";height:1px;flex:1;background:currentColor;opacity:.3}.nt-herr-no-disponible{opacity:.58!important}.nt-herr-otros-lista{display:grid;gap:2px}.nt-herr-menu{max-height:min(70dvh,calc(100dvh - 16px))!important}.nt-figuras-grupo-titulo{padding:7px 10px 0;font-size:.72rem;opacity:.65}.nt-figuras-menu button .nt-figura-icono{display:grid;place-items:center;flex:none;width:24px;height:24px;font-size:22px;line-height:1}.notas-editor .nt-zoom-btn:disabled{opacity:.38;cursor:not-allowed}
 .notas-editor .nt-zoom-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .nt-sticker-marco{border-style:dashed!important}
+.notas-editor .notas-color[aria-pressed="true"]{outline:0!important;box-shadow:inset 0 0 0 2px var(--accent-2,#b7a5f4),0 0 0 1px rgba(255,255,255,.7)}
+.notas-editor .nt-zoom-grupo{gap:8px!important}
+.notas-editor .nt-tinta-tamanos{gap:8px!important}
+.nt-sticker-contexto{z-index:100220!important}
 .nt-toolbar-fila{display:contents}
 .notas-editor .nt-toolbar-grupo{display:flex;align-items:center;gap:4px}
 .notas-editor .nt-toolbar-fila{display:flex;align-items:center;justify-content:center;gap:0;min-width:0}
@@ -354,14 +358,14 @@ const CSS_RONDA_DOS = `
 .notas-editor .notas-toolbar:not(.nt-toolbar-dos-filas) .nt-toolbar-fila{display:contents}
 .notas-editor .notas-toolbar .nt-toolbar-grupo button{width:clamp(32px,9.5vw,40px);height:clamp(32px,9.5vw,40px);min-width:clamp(32px,9.5vw,40px);padding:0}
 .notas-editor .nt-colores-grupo{display:flex;align-items:center;gap:6px;flex:0 0 auto;min-width:0}
-.notas-editor .nt-zoom-grupo{display:flex;align-items:center;gap:6px;margin-left:auto;flex:0 0 auto;min-width:max-content}
+.notas-editor .nt-zoom-grupo{display:flex;align-items:center;gap:8px;margin-left:auto;flex:0 0 auto;min-width:max-content}
 .notas-editor .nt-zoom-btn{display:grid;place-items:center;flex:none;width:32px;height:32px;min-width:32px;min-height:32px;padding:0;border:1px solid var(--border-glass,rgba(255,255,255,.16));border-radius:50%;background:transparent;color:inherit;cursor:pointer}
 .notas-editor .nt-tools-dos-filas{display:grid!important;grid-template-columns:minmax(0,1fr);gap:8px!important;align-items:center}
 .notas-editor .nt-tools-dos-filas .nt-colores-grupo{grid-row:1;justify-self:center;justify-content:flex-start;flex-wrap:nowrap;width:max-content;max-width:100%;min-width:0;overflow-x:auto;scrollbar-width:none}
 .notas-editor .nt-tools-dos-filas .nt-colores-grupo::-webkit-scrollbar{display:none}
 .notas-editor .nt-tools-dos-filas .nt-zoom-grupo{grid-row:2;justify-self:center;width:max-content;max-width:100%;margin:0;overflow-x:auto;scrollbar-width:none}
 .notas-editor .nt-tools-dos-filas .nt-zoom-grupo::-webkit-scrollbar{display:none}
-.notas-editor .nt-tools-dos-filas .nt-tinta-tamanos{flex:0 1 auto;min-width:72px;margin-left:0!important}
+.notas-editor .nt-tools-dos-filas .nt-tinta-tamanos{flex:0 1 auto;min-width:72px;margin-left:0!important;gap:8px}
 .notas-editor .nt-tools-dos-filas .nt-tinta-tamanos input[type=range]{width:112px;min-width:72px;max-width:112px}
 .notas-editor .nt-tools-dos-filas .nt-colores-grupo .notas-color{position:relative;width:clamp(20px,6vw,28px);height:clamp(20px,6vw,28px);flex:none}.notas-editor .nt-tools-dos-filas .nt-colores-grupo .notas-color::before{content:"";position:absolute;inset:-4px}.notas-editor .nt-tools-dos-filas .nt-colores-grupo{gap:4px}.notas-editor .nt-tools-dos-filas .nt-colores-grupo .notas-sep{margin-inline:2px}
 .notas-seccion .nt-btn-circulo{color:#fff!important}.notas-seccion .nt-add-icon{width:22px;height:22px;stroke:currentColor;stroke-width:2.6;stroke-linecap:round}

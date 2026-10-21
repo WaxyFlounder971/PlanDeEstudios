@@ -17,6 +17,14 @@ const tr = (x) => t(x);
 const ICONO_LAPIZ = '<svg class="nt-ico nt-ico-solido" viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 17.5l.9-3.7L13.6 3.6l3 3L6.2 16.6l-3.7.9z"/><path d="M14.7 2.5l.7-.7a1.5 1.5 0 012.1 0l.7.7a1.5 1.5 0 010 2.1l-.7.7-3.1-3.1z"/></svg>';
 
 function abrirEditorNota(notaId, alCerrar = () => {}) {
+  const scrollBloqueado = { y: window.scrollY, body: { overflow: document.body.style.overflow, position: document.body.style.position, top: document.body.style.top, width: document.body.style.width, paddingRight: document.body.style.paddingRight }, htmlOverflow: document.documentElement.style.overflow };
+  const anchoBarra = Math.max(0, window.innerWidth - document.documentElement.clientWidth);
+  document.documentElement.style.overflow = "hidden";
+  document.body.style.overflow = "hidden";
+  document.body.style.position = "fixed";
+  document.body.style.top = `-${scrollBloqueado.y}px`;
+  document.body.style.width = "100%";
+  if (anchoBarra) document.body.style.paddingRight = `${anchoBarra}px`;
   const registroOriginal = notaId ? obtenerNota(notaId) : null;
   const original = registroOriginal ? JSON.parse(JSON.stringify(registroOriginal)) : null;
   const borrador = original ? { ...original } : crearNota({ vence_en: opcionesNotas().vencimiento_default ? fechaRelativa(opcionesNotas().plazo_default) : null });
@@ -160,7 +168,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   renderizarHTMLNota(cuerpo, borrador.contenido || "");
   cuerpo.querySelectorAll('input[type="checkbox"]').forEach((c) => { c.disabled = false; });
   cuerpo.contentEditable = "true";
-  const firmaEditor = () => JSON.stringify({ titulo: titulo.value.trim(), contenido: sanearHTMLNota(cuerpo.innerHTML), tinta: borrador.tinta || [], color: borrador.color || COLOR_DEFECTO, color_texto: borrador.color_texto || null, vence_en: borrador.vence_en || null, creada_en: borrador.creada_en || null, modificada_en: borrador.modificada_en || null, fijada: !!borrador.fijada });
+  const firmaEditor = () => JSON.stringify({ titulo: titulo.value.trim(), contenido: sanearHTMLNota(cuerpo.innerHTML), tinta: borrador.tinta || [], capa_tinta_z: Number.isFinite(Number(borrador.capa_tinta_z)) ? Number(borrador.capa_tinta_z) : 5, color: borrador.color || COLOR_DEFECTO, color_texto: borrador.color_texto || null, vence_en: borrador.vence_en || null, creada_en: borrador.creada_en || null, modificada_en: borrador.modificada_en || null, fijada: !!borrador.fijada });
   const firmaInicialEditor = firmaEditor();
 
   /* --- Persistencia --- */
@@ -209,7 +217,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     try { marcadores.destruir(); herramientas.destruir(); } catch (err) { console.error(err); }
     cerrarMenuFiguras(); menuFiguras.remove(); accionesExtra.remove(); stickersOverlay.remove(); marcoSticker.remove(); document.removeEventListener("scroll",posicionarMarcoSticker,true); window.removeEventListener("resize",posicionarMarcoSticker); observadorToolbar?.disconnect();observerFooter?.disconnect();window.removeEventListener("resize",medirFooter);cancelAnimationFrame(rafMedirToolbar);window.removeEventListener("resize",medirToolbar);observadorBarraInferior?.disconnect();window.removeEventListener("resize",medirBarraInferior);modal.removeEventListener("wheel",wheelZoom,true);modal.removeEventListener("pointerdown",iniciarPinch,true);modal.removeEventListener("pointermove",moverPinch,true);modal.removeEventListener("pointerup",terminarPinch,true);modal.removeEventListener("pointercancel",terminarPinch,true);roSticker?.disconnect();
     try { if (!descartandoCambios) registrarCambio(eliminando ? "Eliminar nota" : original ? "Editar nota" : "Nueva nota", instantaneaInicial); } catch (err) { console.error(err); }
-    setTimeout(() => { overlay.remove(); alCerrar(); }, 0); // siempre se cierra, pase lo que pase arriba
+    setTimeout(() => { overlay.remove(); document.documentElement.style.overflow = scrollBloqueado.htmlOverflow; Object.assign(document.body.style, scrollBloqueado.body); window.scrollTo(0, scrollBloqueado.y); alCerrar(); }, 0); // siempre se cierra, pase lo que pase arriba
   };
   window.addEventListener("pagehide", guardarAlSalir);
   document.addEventListener("visibilitychange", guardarAlSalir);
@@ -523,7 +531,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   /* --- Deshacer / rehacer: actúan sobre lo último que tocaste (tinta o texto) --- */
   const historialEditor = [], futuroEditor = [];
   let restaurandoHistorial = false, forzandoPasosPegado = false, ultimaCategoriaHistorial = "", ultimoTiempoHistorial = 0;
-  const tomarEstadoEditor = () => ({ titulo: titulo.value, contenido: cuerpo.innerHTML, tinta: JSON.parse(JSON.stringify(borrador.tinta || [])), color: borrador.color || COLOR_DEFECTO, color_texto: borrador.color_texto || null });
+  const tomarEstadoEditor = () => ({ titulo: titulo.value, contenido: cuerpo.innerHTML, tinta: JSON.parse(JSON.stringify(borrador.tinta || [])), capa_tinta_z: Number.isFinite(Number(borrador.capa_tinta_z)) ? Number(borrador.capa_tinta_z) : 5, color: borrador.color || COLOR_DEFECTO, color_texto: borrador.color_texto || null });
   const claveEstadoEditor = (s) => JSON.stringify(s);
   function guardarPasoHistorial(categoria = "texto") {
     if (restaurandoHistorial) return;
@@ -599,7 +607,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const aplicarTransformacionSticker = (img) => {
     const rot = Number(img.dataset.rot) || 0, sx = img.dataset.flipH === "1" ? -1 : 1, sy = img.dataset.flipV === "1" ? -1 : 1;
     const anchoNota = cuerpo.clientWidth || 700, x = (Number(img.dataset.moveX) || 0) * anchoNota, y = (Number(img.dataset.moveY) || 0) * anchoNota;
-    img.style.position = "relative"; img.style.zIndex = String(Number(img.dataset.z) || 0); img.style.resize = "none";
+    img.style.position = "relative"; img.style.zIndex = String(Number.isFinite(Number(img.dataset.z)) && img.dataset.z !== "" ? Number(img.dataset.z) : 10); img.style.resize = "none"; img.style.maxWidth = "none"; img.style.maxHeight = "none"; img.style.objectFit = "fill";
     img.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg) scale(${sx},${sy})`;
   };
   const marcoSticker = document.createElement("div"); marcoSticker.className = "nt-sticker-marco"; marcoSticker.hidden = true; marcoSticker.setAttribute("aria-label", tr("Cambiar tamaño del sticker"));
@@ -633,7 +641,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   const abrirMenuSticker = (img, x, y) => {
     cerrarMenuSticker(); stickerActivo = img;
     const menu = document.createElement("div"); menu.className = "nt-sticker-contexto"; menu.setAttribute("role", "menu");
-    Object.assign(menu.style, { position: "fixed", left: `${Math.max(8, Math.min(x, innerWidth - 230))}px`, top: `${Math.max(8, Math.min(y, innerHeight - 320))}px`, zIndex: "100050", display: "grid", gap: "4px", minWidth: "210px", padding: "9px", borderRadius: "14px", background: "var(--bg-card,#211e2d)", color: "inherit", boxShadow: "0 12px 32px #0009", border: "1px solid var(--border-glass,rgba(255,255,255,.18))" });
+    Object.assign(menu.style, { position: "fixed", left: `${Math.max(8, Math.min(x, innerWidth - 230))}px`, top: `${Math.max(8, Math.min(y, innerHeight - 320))}px`, zIndex: "100220", display: "grid", gap: "4px", minWidth: "210px", padding: "9px", borderRadius: "14px", background: "var(--bg-card,#211e2d)", color: "inherit", boxShadow: "0 12px 32px #0009", border: "1px solid var(--border-glass,rgba(255,255,255,.18))" });
     const item = (label, fn) => { const b = document.createElement("button"); b.type = "button"; b.textContent = tr(label); b.setAttribute("role", "menuitem"); Object.assign(b.style, { minHeight: "34px", border: "0", borderRadius: "9px", padding: "6px 9px", background: "transparent", color: "inherit", textAlign: "left", font: "inherit", cursor: "pointer" }); b.onclick = fn; menu.append(b); return b; };
     item("Seleccionar", () => { seleccionarSticker(img.classList.contains("nt-sticker-seleccionado") ? null : img); });
     item("Espejear horizontal", () => { img.dataset.flipH = img.dataset.flipH === "1" ? "0" : "1"; actualizarSticker(img); });
@@ -658,8 +666,10 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     mas.onclick = () => { previsualizarGiro(normalizarGrados(campoGrados.value) + 1); confirmarGiro(); };
     menu.append(rotacion); previsualizarGiro(rango.value);
     item("Borrar", () => { img.remove(); cerrarMenuSticker(); persistir(); guardarPasoHistorial("texto"); });
-    item("Mover atrás", () => { img.dataset.z = String(Math.max(-100, (Number(img.dataset.z) || 0) - 1)); actualizarSticker(img); });
-    item("Mover adelante", () => { img.dataset.z = String(Math.min(100, (Number(img.dataset.z) || 0) + 1)); actualizarSticker(img); });
+    const capasImagenes = () => [...cuerpo.querySelectorAll("img[data-nota-sticker],img[data-nota-image]")];
+    const moverCapa = (direccion) => { const actual = Number.isFinite(Number(img.dataset.z)) && img.dataset.z !== "" ? Number(img.dataset.z) : 10; const capas = capasImagenes().filter((x) => x !== img).map((x) => Number.isFinite(Number(x.dataset.z)) && x.dataset.z !== "" ? Number(x.dataset.z) : 10); capas.push(Number.isFinite(Number(borrador.capa_tinta_z)) ? Number(borrador.capa_tinta_z) : 5, 0); const destino = direccion > 0 ? capas.filter((z) => z > actual).sort((a,b) => a-b)[0] : capas.filter((z) => z < actual).sort((a,b) => b-a)[0]; img.dataset.z = String(Math.max(-2000, Math.min(2000, destino === undefined ? actual + direccion : destino + direccion))); actualizarSticker(img); };
+    item("Mover atrás", () => moverCapa(-1));
+    item("Mover adelante", () => moverCapa(1));
     document.body.append(menu); menuSticker = menu; setTimeout(() => document.addEventListener("pointerdown", fueraMenuSticker, true), 0);
   };
   cuerpo.addEventListener("contextmenu", (e) => { const img = e.target.closest?.("img[data-nota-sticker],img[data-nota-image]"); if (!img) return; e.preventDefault(); e.stopPropagation(); abrirMenuSticker(img, e.clientX, e.clientY); });
@@ -697,7 +707,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
       else {nh=Math.max(min,Math.min(limite,startH+hy*dy));dcx=uy[0]*hy*(nh-startH)/2;dcy=uy[1]*hy*(nh-startH)/2;}
       const targetX=cx0+dcx,targetY=cy0+dcy;img.style.width=`${nw}px`;img.style.height=`${nh}px`;const actual=img.getBoundingClientRect(),cx=(actual.left+actual.right)/2,cy=(actual.top+actual.bottom)/2,base=cuerpo.clientWidth||700;img.dataset.moveX=String((Number(img.dataset.moveX)||0)+(targetX-cx)/base);img.dataset.moveY=String((Number(img.dataset.moveY)||0)+(targetY-cy)/base);aplicarTransformacionSticker(img);posicionarMarcoSticker();cambio=true;
     };
-    const soltar=(ev)=>{if(ev.pointerId!==e.pointerId)return;asa.removeEventListener("pointermove",mover);asa.removeEventListener("pointerup",soltar);asa.removeEventListener("pointercancel",soltar);if(cambio){const fs=parseFloat(getComputedStyle(cuerpo).fontSize)||16;img.style.width=`${img.offsetWidth/fs}em`;img.style.height=`${img.offsetHeight/fs}em`;img.setAttribute("width",String(Math.round(img.offsetWidth)));img.setAttribute("height",String(Math.round(img.offsetHeight)));persistir();guardarPasoHistorial("sticker");}};
+    const soltar=(ev)=>{if(ev.pointerId!==e.pointerId)return;asa.removeEventListener("pointermove",mover);asa.removeEventListener("pointerup",soltar);asa.removeEventListener("pointercancel",soltar);if(cambio){img.style.width=`${img.offsetWidth}px`;img.style.height=`${img.offsetHeight}px`;img.setAttribute("width",String(Math.round(img.offsetWidth)));img.setAttribute("height",String(Math.round(img.offsetHeight)));persistir();guardarPasoHistorial("sticker");}};
     asa.addEventListener("pointermove",mover);asa.addEventListener("pointerup",soltar);asa.addEventListener("pointercancel",soltar);
   });
   document.addEventListener("scroll",posicionarMarcoSticker,true);window.addEventListener("resize",posicionarMarcoSticker);
@@ -708,6 +718,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
       titulo.value = s.titulo; cuerpo.innerHTML = s.contenido;
       cuerpo.querySelectorAll('input[type="checkbox"]').forEach((c) => { c.disabled = false; });
       borrador.tinta.splice(0, borrador.tinta.length, ...JSON.parse(JSON.stringify(s.tinta || [])));
+      borrador.capa_tinta_z = Number.isFinite(Number(s.capa_tinta_z)) ? Number(s.capa_tinta_z) : 5; capaTinta?.establecerNivel?.(borrador.capa_tinta_z);
       borrador.color_texto = s.color_texto; pintarColorNota(resolverColorNota(s.color));
       inpTexto.value = s.color_texto || contraste(resolverColorNota(s.color)); refrescarSwatchTexto();
       capaTinta?.redibujar();
@@ -872,6 +883,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   /* --- Tinta: lápiz y borrador (el selector de color vive a la derecha, siempre visible) --- */
   borrador.tinta = JSON.parse(JSON.stringify(borrador.tinta || []));
   capaTinta = crearCapaTinta({ cuerpo, modal, obtenerTrazos: () => borrador.tinta, alCambiar: () => { ultimoTipo = "i"; persistir(); guardarPasoHistorial("tinta"); } });
+  borrador.capa_tinta_z = Number.isFinite(Number(borrador.capa_tinta_z)) ? Number(borrador.capa_tinta_z) : 5; capaTinta.establecerNivel?.(borrador.capa_tinta_z);
   capaTinta.establecerGrosor(GROSOR_BASE * grosorTrazoPreferido());
   const btnLapiz = modal.querySelector('[data-tool="lapiz"]'), btnBorrador = modal.querySelector('[data-tool="borrador"]');
   const swTinta = modal.querySelector(".nt-swatch-tinta"), inpTinta = modal.querySelector(".nt-tinta-color");

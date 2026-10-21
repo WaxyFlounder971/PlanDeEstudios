@@ -389,6 +389,7 @@ function crearCapaTinta({ cuerpo, modal, obtenerTrazos, alCambiar }) {
   requestAnimationFrame(ubicar);
 
   return {
+    establecerNivel(nivel) { canvas.style.zIndex = String(Math.max(-2000, Math.min(2000, Number(nivel) || 0))); },
     establecerModo(m) {
       modo = m;
       canvas.classList.toggle("activo", !!m);

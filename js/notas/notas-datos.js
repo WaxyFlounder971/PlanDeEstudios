@@ -68,7 +68,8 @@ function formatoAutomatico() { return opcionesNotas().formato_auto !== false; }
 function notasActuales() { if (!estado.datos) return []; return estado.datos.notas || (estado.datos.notas = []); }
 function opcionesNotas() {
   const cfg = estado.datos.configuracion;
-  cfg.notas_ajustes ||= { vencimiento_default: false, plazo_default: "3_dias", color_default: COLOR_DEFECTO, vista: "cuadricula", tarjetas_expandidas: false, papelera_despues_wapper: false, compartir_accion: "guardar", completadas_al_final: true, formato_auto: true, mostrar_creada: true, mostrar_modificada: true, colores_recientes: [] };
+  cfg.notas_ajustes ||= { vencimiento_default: false, plazo_default: "3_dias", color_default: COLOR_DEFECTO, vista: "cuadricula", tarjetas_expandidas: true, papelera_despues_wapper: false, compartir_accion: "guardar", completadas_al_final: true, formato_auto: true, mostrar_creada: true, mostrar_modificada: true, colores_recientes: [] };
+  if (!cfg.notas_ajustes.expansion_predeterminada_v2) { cfg.notas_ajustes.tarjetas_expandidas = true; cfg.notas_ajustes.expansion_predeterminada_v2 = true; }
   if (cfg.notas_ajustes.color_default === "#fff2b3") cfg.notas_ajustes.color_default = COLOR_DEFECTO;
   return cfg.notas_ajustes;
 }
@@ -112,7 +113,7 @@ function crearNota(datos = {}) {
     color: datos.color || resolverColorNota(opcionesNotas().color_default) || COLOR_DEFECTO,
     color_texto: /^#[\da-f]{6}$/i.test(datos.color_texto || "") ? String(datos.color_texto).toLowerCase() : null, fijada: Boolean(datos.fijada), orden_fijada: datos.orden_fijada ?? null,
     vence_en: datos.vence_en || null, eliminada_en: null, motivo_eliminacion: null, enviada_a_wapper_en: datos.enviada_a_wapper_en || null,
-    tinta: Array.isArray(datos.tinta) ? JSON.parse(JSON.stringify(datos.tinta)) : [], origen: datos.origen === "compartida" ? "compartida" : "manual", creada_en: datos.creada_en || marca, modificada_en: marca, _pendienteSync: true,
+    tinta: Array.isArray(datos.tinta) ? JSON.parse(JSON.stringify(datos.tinta)) : [], capa_tinta_z: Number.isFinite(Number(datos.capa_tinta_z)) ? Math.max(-2000, Math.min(2000, Number(datos.capa_tinta_z))) : 5, origen: datos.origen === "compartida" ? "compartida" : "manual", creada_en: datos.creada_en || marca, modificada_en: marca, _pendienteSync: true,
   });
 }
 function obtenerNota(id) { return notasActuales().find((n) => n.id === id) || null; }

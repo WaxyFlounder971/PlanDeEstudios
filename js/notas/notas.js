@@ -379,7 +379,7 @@ function construirTarjeta(nota) {
   card.style.setProperty("color", colorTextoNota(nota, colorTarjeta), "important");
   card.classList.toggle("seleccionada", seleccion.has(nota.id));
   card.classList.toggle("nota-flotando", estaFlotando(nota.id));
-  const vistaAbierta = opcionesNotas().tarjetas_expandidas === true;
+  const vistaAbierta = opcionesNotas().tarjetas_expandidas !== false;
   card.classList.toggle("expandida", vistaAbierta);
 
   // Arriba: insignias (vencimiento, pendientes, Wapper, flotante) a la izquierda y el asa de arrastre (solo fijadas) a la derecha.
@@ -406,9 +406,10 @@ function construirTarjeta(nota) {
   expand.title = tr("Expandir"); expand.setAttribute("aria-label", tr("Expandir"));
   expand.onclick = (e) => {
     e.stopPropagation();
-    const abierta=!card.classList.contains("expandida"), fila=card.getBoundingClientRect().top;
-    const vecinos=[...card.parentElement.querySelectorAll(":scope > .nota-card")].filter(c=>Math.abs(c.getBoundingClientRect().top-fila)<5);
-    for(const c of vecinos){c.classList.toggle("expandida",abierta);c._ajustarComposicion?.();const b=c.querySelector(".nota-expand");if(!b)continue;const label=tr(abierta?"Contraer":"Expandir");b.innerHTML=abierta?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';b.title=label;b.setAttribute("aria-label",label);}
+    const abierta=!card.classList.contains("expandida");
+    card.classList.toggle("expandida",abierta); card._ajustarComposicion?.();
+    const label=tr(abierta?"Contraer":"Expandir");
+    expand.innerHTML=abierta?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';expand.title=label;expand.setAttribute("aria-label",label);
   };
 
   // Fila superior: anclar a la izquierda, insignias al centro y asa de arrastre en todas las notas.
@@ -457,7 +458,7 @@ function construirTarjeta(nota) {
     const soloDibujo = !!mini && !textoPlanoNota(nota.contenido).trim();
     const requiereFlecha = textoLargo || dibujoLargo || soloDibujo;
     expand.classList.toggle("nt-oculto", !requiereFlecha);
-    if (vistaAbierta) { expand.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>'; expand.title = tr("Contraer"); expand.setAttribute("aria-label", expand.title); }
+    const label=tr(vistaAbierta?"Contraer":"Expandir");expand.innerHTML=vistaAbierta?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';expand.title=label;expand.setAttribute("aria-label",label);
   });
   if (!enPapelera) {
     for (const lado of ["izq", "der"]) {
