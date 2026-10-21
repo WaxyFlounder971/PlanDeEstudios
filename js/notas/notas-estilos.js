@@ -492,6 +492,7 @@ html:not([data-mode="dark"]):not([data-mode="true-dark"]) .notas-seccion .nt-btn
 @media(max-width:560px){.notas-editor .nt-tools-dos-filas .nt-zoom-btn{width:27px;height:27px;min-width:27px;min-height:27px}.notas-editor .nt-tools-dos-filas .nt-tinta-tamanos{gap:3px!important}.notas-editor .nt-tools-dos-filas .nt-tinta-tamanos input[type=range]{width:68px;min-width:58px;max-width:68px}.notas-editor .nt-tools-dos-filas .nt-colores-grupo{gap:3px!important}.notas-editor .nt-tools-dos-filas .nt-colores-grupo .notas-color{width:clamp(17px,6vw,22px)!important;height:clamp(17px,6vw,22px)!important}.notas-editor .nt-tools-dos-filas .nt-colores-grupo .notas-color-custom{width:42px!important;min-width:42px!important;height:22px!important}}
 .notas-overlay{padding:8px!important}
 .notas-editor{width:min(96vw,1100px)!important;max-width:96vw!important;max-height:calc(100dvh - 16px)!important}
+.nt-flot-herr-btn:disabled{opacity:.35;cursor:default}.nt-flotante .nt-flot-herramientas,.nt-pip-nota .nt-flot-herramientas{flex-wrap:wrap;max-width:100%;row-gap:4px}
 .notas-editor .nt-lienzo-viewport{flex:1 1 60vh;max-height:none}
 @media(max-width:560px){.notas-overlay{padding:0!important}.notas-editor{width:100vw!important;max-width:100vw!important;height:100dvh!important;max-height:100dvh!important}.notas-editor .nt-lienzo-viewport{flex:1 1 0;min-height:0;max-height:none}}
 `;

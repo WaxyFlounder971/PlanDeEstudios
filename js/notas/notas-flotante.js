@@ -137,12 +137,49 @@ function activarLapiz(ref) {
   ref.onModo?.(activo ? "lapiz" : null);
 }
 
+const ultimoHostPorDoc = new WeakMap();
+const docsConAtajos = new WeakSet();
+// Ctrl+Z / Ctrl+Y (o Ctrl+Shift+Z) sobre la última nota flotante o PiP que tocaste.
+function enlazarAtajosDeshacer(doc) {
+  if (docsConAtajos.has(doc)) return;
+  docsConAtajos.add(doc);
+  doc.addEventListener("pointerdown", (e) => {
+    const h = e.target?.closest?.(".nt-flotante,.nt-pip-nota");
+    if (h) ultimoHostPorDoc.set(doc, h);
+  }, true);
+  doc.addEventListener("keydown", (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    const k = String(e.key).toLowerCase();
+    if (k !== "z" && k !== "y") return;
+    if (doc.querySelector(".notas-editor")) return; // el editor completo tiene su propio historial
+    if (e.target?.closest?.("input:not([type=range]),textarea,[contenteditable]")) return;
+    const host = ultimoHostPorDoc.get(doc);
+    const capa = host?._capaTinta;
+    if (!host?.isConnected || !capa) return;
+    e.preventDefault(); e.stopPropagation();
+    if (k === "y" || e.shiftKey) capa.rehacer(); else capa.deshacer();
+    host._actualizarDeshacer?.();
+  }, true);
+}
+
 function crearBarraHerramientas({ doc, capa, nota, host }) {
+  enlazarAtajosDeshacer(doc);
+  host._capaTinta = capa;
   host.tabIndex = -1;
   const barra = doc.createElement("div"); barra.className = "nt-flot-herramientas"; barra.setAttribute("role", "toolbar"); barra.setAttribute("aria-label", tr("Herramientas de tinta"));
   const boton = (icono, texto, clase = "") => { const b=doc.createElement("button"); b.type="button"; b.className=`nt-flot-herr-btn ${clase}`.trim(); b.innerHTML=icono; b.title=tr(texto); b.setAttribute("aria-label",tr(texto)); return b; };
   const lapiz = boton(ICONOS.editar, "Lápiz", "nt-flot-lapiz");
   const borrador = boton('<svg class="nt-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="m11.6 3.4 5 5a1.4 1.4 0 0 1 0 2l-5.2 5.2H7.4l-4-4a1.4 1.4 0 0 1 0-2l6.2-6.2a1.4 1.4 0 0 1 2 0z"/><path d="m6.2 7.6 6.2 6.2M8 16.6h9"/></svg>', "Borrador");
+  const svgFlecha = (d) => `<svg class="nt-ico" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+  const deshacerBtn = boton(svgFlecha("M7 4 3.5 7.5 7 11M3.5 7.5H12a4.5 4.5 0 0 1 0 9H8"), "Deshacer");
+  const rehacerBtn = boton(svgFlecha("m13 4 3.5 3.5L13 11m3.5-3.5H8a4.5 4.5 0 0 0 0 9h4"), "Rehacer");
+  const refrescarDeshacer = () => { deshacerBtn.disabled = !capa.puedeDeshacer(); rehacerBtn.disabled = !capa.puedeRehacer(); };
+  deshacerBtn.onclick = () => { capa.deshacer(); refrescarDeshacer(); };
+  rehacerBtn.onclick = () => { capa.rehacer(); refrescarDeshacer(); };
+  host._actualizarDeshacer = refrescarDeshacer;
+  // alCambiar de la capa se dispara en pointerup del canvas, que llega aquí al burbujear.
+  host.addEventListener("pointerup", () => setTimeout(refrescarDeshacer, 0));
+  refrescarDeshacer();
   const figuras = boton(ICONOS.figuras, "Figuras", "nt-flot-figuras"); figuras.setAttribute("aria-haspopup","menu");
   const menu = doc.createElement("div"); menu.className="nt-flot-figuras-menu nt-oculto"; menu.setAttribute("role","menu");
   const opciones = [["linea","╱","Línea"],["flecha","↗","Flecha"],["rectangulo","▱","Rectángulo"],["cuadrado","□","Cuadrado"],["circulo","○","Círculo"],["elipse","⬭","Elipse"],["triangulo","△","Triángulo"],["rombo","◇","Rombo"],["estrella","☆","Estrella"],["corazon","♡","Corazón"]];
@@ -156,7 +193,7 @@ function crearBarraHerramientas({ doc, capa, nota, host }) {
   lapiz.onclick=()=>activarLapiz({capaTinta:capa,controles:barra,onModo:(modo)=>{if(host.classList.contains("nt-pip-nota")){if(modo)edicionesPiP.add(nota.id);else edicionesPiP.delete(nota.id);}else{const f=flotantes.get(nota.id);if(f)f.editando=!!modo;}}});
   barra.actualizarModo=(modo)=>{ lapiz.classList.toggle("activo",modo==="lapiz"); borrador.classList.toggle("activo",modo==="borrador"); figuras.classList.toggle("activo",opciones.some(([m])=>m===modo)); for(const b of menu.children)b.setAttribute("aria-checked",String(b.dataset.modo===modo)); const editar=host.querySelector(".nt-flot-barra .nt-flot-btn"); editar?.classList.toggle("activo",!!modo); editar?.setAttribute("aria-pressed",String(!!modo)); if(host.classList.contains("nt-pip-nota")){if(modo)edicionesPiP.add(nota.id);else edicionesPiP.delete(nota.id);}else{const f=flotantes.get(nota.id);if(f)f.editando=!!modo;} };
   host.addEventListener("keydown",(e)=>{if(e.key==="Escape"){capa.establecerModo(null);barra.actualizarModo(null);menu.classList.add("nt-oculto");if(host.classList.contains("nt-pip-nota"))edicionesPiP.delete(nota.id);else{const f=flotantes.get(nota.id);if(f)f.editando=false;}window.dispatchEvent(new Event("notas:actualizadas-ui"));}});
-  barra.append(lapiz,borrador,figuras,grosor,menu);
+  barra.append(deshacerBtn,rehacerBtn,lapiz,borrador,figuras,grosor,menu);
   return barra;
 }
 

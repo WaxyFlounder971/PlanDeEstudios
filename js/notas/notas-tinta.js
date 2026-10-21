@@ -403,7 +403,7 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
     },
     obtenerModo: () => modo,
     obtenerZoomLienzo:()=>zoomLienzo,
-    establecerZoomLienzo(v,x=null,y=null){zoomLienzo=Math.max(.5,Math.min(4,Number(v)||1));centroZoomLienzo=x==null||y==null?null:{x:x-(rect?.left||0),y:y-(rect?.top||0)};redibujar();return zoomLienzo;},
+    establecerZoomLienzo(v,x=null,y=null){zoomLienzo=Math.max(.05,Math.min(4,Number(v)||1));centroZoomLienzo=x==null||y==null?null:{x:x-(rect?.left||0),y:y-(rect?.top||0)};redibujar();return zoomLienzo;},
     establecerEdicionFiguras(v) { edicionFiguras=!!v; if(!edicionFiguras) figuraSeleccionada=null; canvas.classList.toggle("nt-edicion-figuras",edicionFiguras); redibujar(); },
     eliminarFiguraSeleccionada() { if(!figuraSeleccionada) return false; const i=obtenerTrazos().indexOf(figuraSeleccionada); if(i<0) return false; obtenerTrazos().splice(i,1); figuraSeleccionada=null; redibujar(); empujar(); alCambiar(); return true; },
     cambiarColorFiguraSeleccionada(c){if(!figuraSeleccionada||!/^#[\da-f]{6}$/i.test(c||""))return false;figuraSeleccionada.c=c;redibujar();empujar();alCambiar();return true;},
