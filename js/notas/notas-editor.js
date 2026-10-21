@@ -171,13 +171,16 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   renderizarHTMLNota(cuerpo, borrador.contenido || "");
   cuerpo.querySelectorAll('input[type="checkbox"]').forEach((c) => { c.disabled = false; });
   cuerpo.contentEditable = "true";
-  const firmaEditor = () => JSON.stringify({ titulo: titulo.value.trim(), contenido: sanearHTMLNota(cuerpo.innerHTML), tinta: borrador.tinta || [], capa_tinta_z: Number.isFinite(Number(borrador.capa_tinta_z)) ? Number(borrador.capa_tinta_z) : 5, color: borrador.color || COLOR_DEFECTO, color_texto: borrador.color_texto || null, vence_en: borrador.vence_en || null, creada_en: borrador.creada_en || null, modificada_en: borrador.modificada_en || null, fijada: !!borrador.fijada });
+  const firmaEditor = () => JSON.stringify({ titulo: titulo.value.trim(), contenido: sanearHTMLNota(cuerpo.innerHTML), tinta: borrador.tinta || [], capa_tinta_z: Number.isFinite(Number(borrador.capa_tinta_z)) ? Number(borrador.capa_tinta_z) : 5, color: borrador.color || COLOR_DEFECTO, color_texto: borrador.color_texto || null, vence_en: borrador.vence_en || null, fijada: !!borrador.fijada });
   const firmaInicialEditor = firmaEditor();
+  let firmaUltimoGuardado = firmaInicialEditor;
 
   /* --- Persistencia --- */
   let fechaVence = deValorFecha(original?.vence_en || fechaRelativa(opcionesNotas().plazo_default));
   const persistirAhora = () => {
     if (eliminando || cerrado) return;
+    const firmaActual = firmaEditor();
+    if (original && firmaActual === firmaUltimoGuardado) return;
     const texto = textoPlanoNota(cuerpo.innerHTML), tit = titulo.value.trim();
     if (!texto && !tit && !(borrador.tinta && borrador.tinta.length)) return;
     try {
@@ -188,6 +191,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
       window.dispatchEvent(new Event("notas:actualizadas-ui"));
       borrador.id = n.id;
       borrador.modificada_en = n.modificada_en;
+      firmaUltimoGuardado = firmaEditor();
       pintarModificada();
       guardado = true;
     } catch (error) { mostrarToast(tr(error.message)); }
@@ -843,7 +847,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     const accion = e.target.closest("[data-close]")?.dataset.close; if (!accion) return;
     if (accion === "discard") {
       clearTimeout(timer); eliminando = true; descartandoCambios = true;
-      try { const actual = obtenerNota(borrador.id); if (original) guardarNota({ ...original }); else if (actual) eliminarDefinitiva(actual); }
+      try { const actual = obtenerNota(borrador.id); if (original) guardarNota({ ...original, _mod_manual: true }); else if (actual) eliminarDefinitiva(actual); }
       catch (err) { eliminando = false; mostrarToast(tr("No se pudieron deshacer los cambios")); console.error(err); return; }
       window.dispatchEvent(new Event("notas:actualizadas-ui"));
     } else guardarAlSalir();
