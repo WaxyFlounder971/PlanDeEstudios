@@ -84,7 +84,13 @@ function escaparHTMLNota(texto = "") {
   return String(texto).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 
-function renderizarHTMLNota(contenedor, html, { visual = false, tinta = [] } = {}) {
+// Quita del final de la vista los bloques vacíos (<div><br></div>, saltos, espacios) para que la nota termine donde termina su contenido.
+function recortarFinalVacio(contenedor) {
+  const vacio = (n) => n.nodeType === Node.TEXT_NODE ? !n.nodeValue.trim() : n.nodeType === Node.ELEMENT_NODE && !n.querySelector("img,input") && !["IMG", "INPUT"].includes(n.tagName) && !(n.textContent || "").trim();
+  while (contenedor.lastChild && vacio(contenedor.lastChild)) contenedor.lastChild.remove();
+}
+
+function renderizarHTMLNota(contenedor, html, { visual = false, tinta = [], maxAltura = null } = {}) {
   const htmlSeguro = sanearHTMLNota(html);
   const tieneImagen = /<img\b[^>]*\bdata-nota-(?:sticker|image)/i.test(htmlSeguro);
   const esVistaPrevia = contenedor.classList.contains("nota-preview");
@@ -94,7 +100,7 @@ function renderizarHTMLNota(contenedor, html, { visual = false, tinta = [] } = {
     lienzo.innerHTML = htmlSeguro;
     contenedor.replaceChildren(lienzo);
     contenedor.classList.add("nt-preview-escalado");
-  } else { contenedor.classList.remove("nt-preview-escalado"); contenedor.style.removeProperty("height"); for (const p of ["--nt-preview-escala","--nt-preview-x","--nt-preview-y"]) contenedor.style.removeProperty(p); contenedor.replaceChildren(); contenedor.innerHTML = htmlSeguro; }
+  } else { contenedor.classList.remove("nt-preview-escalado"); contenedor.style.removeProperty("height"); for (const p of ["--nt-preview-escala","--nt-preview-x","--nt-preview-y"]) contenedor.style.removeProperty(p); contenedor.replaceChildren(); contenedor.innerHTML = htmlSeguro; if (esVistaPrevia) recortarFinalVacio(contenedor); }
   contenedor.querySelectorAll("ul[data-marc-color],ol[data-marc-color]").forEach((l) => l.style.setProperty("--nt-marker-color", l.getAttribute("data-marc-color")));
   contenedor.querySelectorAll("input[type=checkbox]").forEach((check) => { check.disabled = true; });
   contenedor.querySelectorAll("img[data-nota-sticker],img[data-nota-image]").forEach((img) => {
@@ -128,7 +134,15 @@ function renderizarHTMLNota(contenedor, html, { visual = false, tinta = [] } = {
     });
     if (lienzo) {
       lienzo.style.transform = "none";
-      const caja = lienzo.getBoundingClientRect();
+      // Las medidas se pasan a coordenadas locales del lienzo con una matriz obtenida de 3 sondas. Así no dependen de
+      // transformaciones de ancestros (animación de apertura, inclinación de la tarjeta) que deformarían el encuadre.
+      const sondas = [[0, 0], [1, 0], [0, 1]].map(([sx, sy]) => { const s = lienzo.ownerDocument.createElement("span"); s.style.cssText = `position:absolute;width:0;height:0;pointer-events:none;visibility:hidden;left:${sx * lienzo.offsetWidth - lienzo.clientLeft}px;top:${sy * lienzo.offsetHeight - lienzo.clientTop}px`; lienzo.append(s); return s; });
+      const [s0, sX, sY] = sondas.map((s) => s.getBoundingClientRect());
+      sondas.forEach((s) => s.remove());
+      const W = Math.max(1, lienzo.offsetWidth), H = Math.max(1, lienzo.offsetHeight);
+      const ma = (sX.left - s0.left) / W, mb = (sX.top - s0.top) / W, mc = (sY.left - s0.left) / H, md = (sY.top - s0.top) / H, det = ma * md - mb * mc || 1;
+      const local = (px, py) => { const dx = px - s0.left, dy = py - s0.top; return [(md * dx - mc * dy) / det, (-mb * dx + ma * dy) / det]; };
+      const rectLocal = (r) => { const pts = [local(r.left, r.top), local(r.right, r.top), local(r.left, r.bottom), local(r.right, r.bottom)]; return [Math.min(...pts.map((q) => q[0])), Math.min(...pts.map((q) => q[1])), Math.max(...pts.map((q) => q[0])), Math.max(...pts.map((q) => q[1]))]; };
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       const incluir = (left, top, right, bottom) => {
         if (![left, top, right, bottom].every(Number.isFinite)) return;
@@ -140,27 +154,40 @@ function renderizarHTMLNota(contenedor, html, { visual = false, tinta = [] } = {
       while (walkerTexto.nextNode()) {
         if (!walkerTexto.currentNode.nodeValue.trim()) continue;
         rango.selectNodeContents(walkerTexto.currentNode);
-        for (const r of rango.getClientRects()) incluir(r.left - caja.left, r.top - caja.top, r.right - caja.left, r.bottom - caja.top);
+        for (const r of rango.getClientRects()) incluir(...rectLocal(r));
       }
-      lienzo.querySelectorAll("input,img").forEach((n) => { const r=n.getBoundingClientRect(); incluir(r.left-caja.left,r.top-caja.top,r.right-caja.left,r.bottom-caja.top); });
+      lienzo.querySelectorAll("input,img").forEach((n) => incluir(...rectLocal(n.getBoundingClientRect())));
       for (const trazo of Array.isArray(tinta) ? tinta : []) for (const [x,y] of trazo.p || []) {
         const margen=Math.max(2,(Number(trazo.w)||0.004)*baseLienzo*2); incluir(x*baseLienzo-margen,y*baseLienzo-margen,x*baseLienzo+margen,y*baseLienzo+margen);
       }
       if (![minX,minY,maxX,maxY].every(Number.isFinite)) { minX=minY=0; maxX=baseLienzo; maxY=lienzo.scrollHeight||1; }
-      // El origen del lienzo es el borde interno del editor: conserva su margen superior e izquierdo.
-      // El recorte solo elimina espacio sobrante a la derecha y debajo del último elemento.
-      minX = 0; minY = 0;
-      const anchoContenido=Math.max(1,maxX), altoContenido=Math.max(1,maxY);
-      const escala=Math.max(1,contenedor.clientWidth||baseLienzo)/anchoContenido;
+      // Si solo hay tinta, recorta también el espacio anterior al primer trazo:
+      // un punto dibujado lejos del origen no debe convertir la tarjeta en un bloque vacío.
+      // Con texto, listas o imágenes se conserva el origen del editor para mantener sus posiciones.
+      const soloTinta = Array.isArray(tinta) && tinta.length > 0 && !lienzo.querySelector("img,input") && !(lienzo.textContent || "").trim();
+      if (soloTinta) { minX = Math.max(0, minX - 4); minY = Math.max(0, minY - 4); }
+      else { minX = 0; minY = 0; }
+      const anchoContenido=Math.max(1,maxX-minX), altoContenido=Math.max(1,maxY-minY);
+      const escalaBase=Math.max(1,contenedor.clientWidth||baseLienzo)/anchoContenido;
+      const limite=typeof maxAltura==="function"?Number(maxAltura()):Number(maxAltura);
+      const escalaAltura=Number.isFinite(limite)&&limite>0?limite/altoContenido:Infinity;
+      contenedor.dataset.ntAlturaVisualNatural=String(Math.ceil(altoContenido*(soloTinta?Math.min(1,escalaBase):escalaBase)));
+      // El encuadre siempre considera ambos ejes: una tinta alta no debe escapar
+      // por abajo aunque ya quepa horizontalmente. Las notas de solo tinta no se
+      // amplían desde un punto diminuto, para no crear tarjetas gigantes por error.
+      const escala=soloTinta?Math.min(1,escalaBase,escalaAltura):Math.min(escalaBase,escalaAltura);
       lienzo.style.transformOrigin="top left";
       lienzo.style.transform=`translate(${-minX*escala}px,${-minY*escala}px) scale(${escala})`;
       contenedor.style.setProperty("--nt-preview-escala",String(escala));
       contenedor.style.setProperty("--nt-preview-x",`${-minX*escala}px`);
       contenedor.style.setProperty("--nt-preview-y",`${-minY*escala}px`);
       const altoFinal=Math.max(1,Math.ceil(altoContenido*escala));
-      if (Math.abs(contenedor.getBoundingClientRect().height - altoFinal) > 1) contenedor.style.setProperty("height", `${altoFinal}px`, "important");
+      if (Math.abs(contenedor.offsetHeight - altoFinal) > 1) contenedor.style.setProperty("height", `${altoFinal}px`, "important");
+      // El cambio de altura ocurre dentro de un ResizeObserver: quien dependa de él (sticky, flotante) no recibe aviso de ese cambio, así que se le notifica aquí.
+      contenedor.dispatchEvent(new CustomEvent("nt:encuadre"));
     }
   };
+  if(lienzo)contenedor._refrescarEncuadreVisual=actualizar;
   actualizar();
   if (typeof ResizeObserver === "function" && (stickers.length || lienzo)) { ro = new ResizeObserver(actualizar); ro.observe(contenedor); if (lienzo) ro.observe(lienzo); }
   contenedor.querySelectorAll("a").forEach((a) => {
