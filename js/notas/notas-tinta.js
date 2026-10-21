@@ -9,6 +9,7 @@ const PASO_MIN = 0.0008;      // distancia mínima entre puntos guardados
 const RADIO_BORRADOR = 0.022; // radio del borrador (relativo al ancho)
 const MAX_PUNTOS = 60000;
 const MAX_HISTORIAL = 100;
+const FIGURA_MIN = 0.04;      // tamaño mínimo (relativo al ancho) de una figura arrastrada
 
 /** Suavizado por longitud de arco: cada punto se promedia con sus vecinos cercanos (peso triangular).
  *  Se aplica al DIBUJAR (no a lo guardado), así también suaviza las notas que ya tenías. Cacheado por trazo. */
@@ -89,10 +90,26 @@ function dibujarTrazos(ctx, trazos, ancho, desplazarY = 0, grosorMin = 1) {
   for (const t of trazos) dibujarTrazo(ctx, t, ancho, desplazarY, grosorMin);
 }
 
+/** Caja que contiene al trazo. Se cachea por arreglo de puntos (y su largo): los trazos terminados no cambian. */
+const cacheCaja = new WeakMap();
+function cajaTrazo(t) {
+  const p = t.p;
+  if (!p?.length) return null;
+  const c = cacheCaja.get(p);
+  if (c && c.n === p.length) return c;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let i = 0; i < p.length; i++) { const q = p[i]; if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]; if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1]; }
+  const caja = { n: p.length, x0, y0, x1, y1 };
+  cacheCaja.set(p, caja);
+  return caja;
+}
+
 function trazoTocado(t, x, y, radio) {
   const p = t.p;
   if (!p?.length) return false;
   const alcance = radio + Math.max(0, Number(t.w) || 0) / 2;
+  const caja = cajaTrazo(t); // descarte rápido: el borrador y la selección tocan muy pocos trazos
+  if (caja && (x < caja.x0 - alcance || x > caja.x1 + alcance || y < caja.y0 - alcance || y > caja.y1 + alcance)) return false;
   const cerca = (ax, ay, bx, by) => {
     const dx = bx - ax, dy = by - ay, largo2 = dx * dx + dy * dy;
     const u = largo2 ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / largo2)) : 0;
@@ -120,8 +137,11 @@ const r4 = (v) => Math.round(v * 10000) / 10000;
 
 function puntosFiguraArrastrada(modo, a, b) {
   let x0=a[0],y0=a[1],x1=b[0],y1=b[1];
-  if (["cuadrado","circulo"].includes(modo)) { const lado=Math.max(Math.abs(x1-x0),Math.abs(y1-y0));x1=x0+Math.sign(x1-x0||1)*lado;y1=y0+Math.sign(y1-y0||1)*lado; }
   if (modo === "linea" || modo === "flecha") return [[x0,y0],[x1,y1]];
+  // Tamaño mínimo por eje: arrastrar casi recto (o solo tocar) ya no deja la figura aplastada o invisible.
+  const sx=Math.sign(x1-x0||1), sy=Math.sign(y1-y0||1);
+  if (["cuadrado","circulo","estrella","corazon"].includes(modo)) { const lado=Math.max(Math.abs(x1-x0),Math.abs(y1-y0),FIGURA_MIN);x1=x0+sx*lado;y1=y0+sy*lado; }
+  else { if (Math.abs(x1-x0)<FIGURA_MIN) x1=x0+sx*FIGURA_MIN; if (Math.abs(y1-y0)<FIGURA_MIN) y1=y0+sy*FIGURA_MIN; }
   if (modo === "rectangulo" || modo === "cuadrado") return [[x0,y0],[x1,y0],[x1,y1],[x0,y1],[x0,y0]];
   if (modo === "triangulo") return [[(x0+x1)/2,y0],[x1,y1],[x0,y1],[(x0+x1)/2,y0]];
   if (modo === "rombo") return [[(x0+x1)/2,y0],[x1,(y0+y1)/2],[(x0+x1)/2,y1],[x0,(y0+y1)/2],[(x0+x1)/2,y0]];
@@ -150,7 +170,7 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
   let grosor = GROSOR_BASE;
   let activo = false, actual = null, modoActivo = null, vistoLapiz = false;
   let ancho = 1, rect = null, suave = null, ancla = null, timerForma = 0, congelado = false, cambioFigura = null, zoomLienzo = 1, centroZoomLienzo = null;
-  let huboBorrado = false, rafRedibujo = 0, rafTrazos = 0, colaTrazos = [], zoomDosDedos = false, punteroActivo = null;
+  let puntosVivos = 0, huboBorrado = false, rafRedibujo = 0, rafTrazos = 0, colaTrazos = [], zoomDosDedos = false, punteroActivo = null;
 
   // Historial propio de la tinta (instantáneas de referencias; los trazos terminados no se modifican).
   const hist = [obtenerTrazos().slice()];
@@ -192,8 +212,13 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
-    ctx.save();const alto=canvas.clientHeight||canvas.height/(win.devicePixelRatio||1),cx=centroZoomLienzo?.x??ancho/2,cy=centroZoomLienzo?.y??alto/2;ctx.translate(cx*(1-zoomLienzo),cy*(1-zoomLienzo));ctx.scale(zoomLienzo,zoomLienzo);
-    dibujarTrazos(ctx, obtenerTrazos(), ancho, viewport.scrollTop / zoomLienzo);
+    ctx.save();const alto=canvas.clientHeight||canvas.height/(win.devicePixelRatio||1),cx=centroZoomLienzo?.x??ancho/2,cy=centroZoomLienzo?.y??alto/2;ctx.translate(cx*(1-zoomLienzo),cy*(1-zoomLienzo));ctx.scale(zoomLienzo,zoomLienzo);ctx.translate(-viewport.scrollLeft/zoomLienzo,0);
+    { // solo se pintan los trazos que caen dentro de la parte visible del lienzo
+      const z = zoomLienzo, sl = viewport.scrollLeft, st = viewport.scrollTop;
+      const vx0 = (sl - cx * (1 - z)) / z / ancho, vx1 = (ancho + sl - cx * (1 - z)) / z / ancho, vy0 = (st - cy * (1 - z)) / z / ancho, vy1 = (alto + st - cy * (1 - z)) / z / ancho;
+      const visibles = obtenerTrazos().filter((t) => { const c = cajaTrazo(t); if (!c) return false; const m = Math.max(0.03, (Number(t.w) || 0) * 5); return !(c.x1 + m < vx0 || c.x0 - m > vx1 || c.y1 + m < vy0 || c.y0 - m > vy1); });
+      dibujarTrazos(ctx, visibles, ancho, st / z);
+    }
     if (edicionFiguras && figuraSeleccionada) { const p=figuraSeleccionada.p||[], esLinea=["linea","flecha"].includes(figuraSeleccionada.tipo), pts=esLinea?[p[0],p.at(-1)]:p, xs=pts.map(q=>q[0]*ancho), ys=pts.map(q=>q[1]*ancho-viewport.scrollTop/zoomLienzo); if(xs.length){ const pad=5,x0=Math.min(...xs)-pad,y0=Math.min(...ys)-pad,x1=Math.max(...xs)+pad,y1=Math.max(...ys)+pad; ctx.strokeStyle="#b7a5f4";ctx.lineWidth=1.5;ctx.setLineDash([5,4]);ctx.strokeRect(x0,y0,x1-x0,y1-y0);ctx.setLineDash([]);const hs=esLinea?pts:[[x0,y0],[(x0+x1)/2,y0],[x1,y0],[x1,(y0+y1)/2],[x1,y1],[(x0+x1)/2,y1],[x0,y1],[x0,(y0+y1)/2]];for(const h of hs){const hx=esLinea?h[0]*ancho:h[0],hy=esLinea?h[1]*ancho-viewport.scrollTop/zoomLienzo:h[1];ctx.beginPath();ctx.arc(hx,hy,5,0,Math.PI*2);ctx.fillStyle="#9b82e8";ctx.fill();ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.stroke();}}}
     ctx.restore();
   }
@@ -202,7 +227,7 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
   function punto(e) {
     const r = rect || canvas.getBoundingClientRect();
     const w = r.width || 1, h = canvas.clientHeight || r.height || 1, z=zoomLienzo,cx=centroZoomLienzo?.x??w/2,cy=centroZoomLienzo?.y??h/2;
-    const sx=((e.clientX-r.left)-cx*(1-z))/z, sy=((e.clientY-r.top)-cy*(1-z))/z;
+    const sx=((e.clientX-r.left)-cx*(1-z))/z+viewport.scrollLeft/z, sy=((e.clientY-r.top)-cy*(1-z))/z;
     return [sx/w, (sy+viewport.scrollTop/zoomLienzo)/w];
   }
 
@@ -245,7 +270,8 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
   /** Dibuja los segmentos nuevos en un solo fotograma, sin repintar la tinta anterior. */
   function dibujarSegmentoVivo(t, k) {
     const p = t.p, dy = viewport.scrollTop/zoomLienzo, alto=canvas.clientHeight||canvas.height/(win.devicePixelRatio||1),cx=centroZoomLienzo?.x??ancho/2,cy=centroZoomLienzo?.y??alto/2,proyectar=(x,y)=>[cx+(x-cx)*zoomLienzo,cy+(y-cy)*zoomLienzo];
-    const X = (i) => proyectar(p[i][0]*ancho,p[i][1]*ancho-dy)[0], Y = (i) => proyectar(p[i][0]*ancho,p[i][1]*ancho-dy)[1];
+    const dx0 = viewport.scrollLeft/zoomLienzo;
+    const X = (i) => proyectar(p[i][0]*ancho-dx0,p[i][1]*ancho-dy)[0], Y = (i) => proyectar(p[i][0]*ancho-dx0,p[i][1]*ancho-dy)[1];
     const lw = (i) => Math.max(1, t.w * ancho * (0.4 + 1.2 * (p[i][2] ?? 0.5))*zoomLienzo);
     ctx.strokeStyle = t.c; ctx.lineCap = "round"; ctx.lineJoin = "round";
     const linea = (x0, y0, x1, y1, w) => { ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); };
@@ -272,10 +298,10 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
     const a = Math.min(0.95, Math.max(0.3, d / (d + 0.002)));
     suave = [suave[0] + (raw[0] - suave[0]) * a, suave[1] + (raw[1] - suave[1]) * a];
     const u = t.p[t.p.length - 1];
-    if (Math.hypot(suave[0] - u[0], suave[1] - u[1]) < PASO_MIN || contarPuntos(obtenerTrazos()) >= MAX_PUNTOS) return;
+    if (Math.hypot(suave[0] - u[0], suave[1] - u[1]) < PASO_MIN || puntosVivos >= MAX_PUNTOS) return;
     const pt = [r4(suave[0]), r4(suave[1])];
     if (e.pointerType === "pen" && e.pressure > 0) pt.push(Math.round(e.pressure * 100) / 100);
-    t.p.push(pt);
+    t.p.push(pt); puntosVivos++;
     trazarVivo(t, t.p.length - 1);
   }
 
@@ -317,7 +343,8 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
       } else { figuraSeleccionada = null; redibujar(); if (!modo) { activo = false; return; } }
     }
     if (["lapiz", "linea", "flecha", "rectangulo", "cuadrado", "circulo", "elipse", "triangulo", "rombo", "estrella", "corazon"].includes(modoActivo)) {
-      if (contarPuntos(obtenerTrazos()) >= MAX_PUNTOS) { activo = false; return; }
+      puntosVivos = contarPuntos(obtenerTrazos()); // se cuenta una sola vez por trazo, no en cada movimiento
+      if (puntosVivos >= MAX_PUNTOS) { activo = false; return; }
       suave = pt.slice(); ancla = pt;
       const p0 = [r4(pt[0]), r4(pt[1])];
       if (e.pointerType === "pen" && e.pressure > 0) p0.push(Math.round(e.pressure * 100) / 100);
@@ -325,7 +352,7 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
       if (modoActivo !== "lapiz") { actual.forma = modoActivo; actual.tipo = modoActivo; actual.f = 1; if(modoActivo === "flecha") actual.a=1; if(modoActivo !== "linea" && modoActivo !== "flecha") actual.p.push(p0.slice()); }
       obtenerTrazos().push(actual);
       ctx.fillStyle = color; ctx.beginPath();
-      const h=canvas.clientHeight||canvas.height/(win.devicePixelRatio||1),cx=centroZoomLienzo?.x??ancho/2,cy=centroZoomLienzo?.y??h/2,px=cx+(pt[0]*ancho-cx)*zoomLienzo,py=cy+(pt[1]*ancho-viewport.scrollTop/zoomLienzo-cy)*zoomLienzo;ctx.arc(px,py,Math.max(1,grosor*ancho*zoomLienzo)/2,0,Math.PI*2);ctx.fill();
+      const h=canvas.clientHeight||canvas.height/(win.devicePixelRatio||1),cx=centroZoomLienzo?.x??ancho/2,cy=centroZoomLienzo?.y??h/2,px=cx+(pt[0]*ancho-viewport.scrollLeft/zoomLienzo-cx)*zoomLienzo,py=cy+(pt[1]*ancho-viewport.scrollTop/zoomLienzo-cy)*zoomLienzo;ctx.arc(px,py,Math.max(1,grosor*ancho*zoomLienzo)/2,0,Math.PI*2);ctx.fill();
       if (modoActivo === "lapiz") reiniciarEspera();
     } else {
       if (borrar(pt)) { huboBorrado = true; redibujarPronto(); }

@@ -13,7 +13,20 @@ function colorValido(v) {
   return null;
 }
 
+// El editor sanea el mismo HTML varias veces seguidas (firma, guardado, texto plano, vista previa): se recuerdan los últimos resultados.
+const CACHE_SANEADO_MAX = 4;
+const cacheSaneado = new Map();
 function sanearHTMLNota(html = "") {
+  const entrada = String(html);
+  const guardado = cacheSaneado.get(entrada);
+  if (guardado !== undefined) { cacheSaneado.delete(entrada); cacheSaneado.set(entrada, guardado); return guardado; }
+  const salida = calcularSaneadoNota(entrada);
+  cacheSaneado.set(entrada, salida);
+  if (cacheSaneado.size > CACHE_SANEADO_MAX) cacheSaneado.delete(cacheSaneado.keys().next().value);
+  return salida;
+}
+
+function calcularSaneadoNota(html = "") {
   const doc = new DOMParser().parseFromString(String(html), "text/html");
   const limpiar = (nodo) => {
     for (const hijo of [...nodo.childNodes]) {

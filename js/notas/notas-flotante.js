@@ -305,9 +305,17 @@ function enlazarArrastre(f) {
   });
 }
 
+// Resumen barato de lo que se ve de una nota: si no cambió, no hace falta reconstruir la tarjeta flotante.
+function firmaVisual(n) {
+  let puntos = 0;
+  for (const t of n.tinta || []) puntos += (t.p?.length || 0) + (t.c ? t.c.charCodeAt(1) || 0 : 0);
+  return [n.modificada_en, n.color, n.color_texto, n.titulo, n.capa_tinta_z, n.vence_en, n.tinta?.length || 0, puntos, n.contenido].join("\u0001");
+}
+
 function pintar(f) {
   const nota = buscar(f.id);
   if (!nota) return false;
+  f.firma = firmaVisual(nota);
   const color = resolverColorNota(nota.color || COLOR_DEFECTO);
   f.el.style.setProperty("--nt-nota", color);
   f.el.style.color = colorTextoNota(nota, color);
@@ -630,8 +638,10 @@ function sincronizar() {
   if (!estado.datos) return;
   for (const [id, win] of [...ventanasPiP]) if (!edicionesPiP.has(id)) pintarPiP(id, win);
   for (const f of [...flotantes.values()]) {
-    if (!buscar(f.id)) { desflotarNota(f.id); continue; }
+    const nota = buscar(f.id);
+    if (!nota) { desflotarNota(f.id); continue; }
     if (f.arrastrando || f.inercia || f.editando) continue;
+    if (f.firma === firmaVisual(nota)) continue; // sin cambios visibles: se conserva la tarjeta tal cual
     pintar(f);
     const l = limitesDe(f);
     f.x = acotar(f.x, l.minX, l.maxX); f.y = acotar(f.y, l.minY, l.maxY);
@@ -640,6 +650,7 @@ function sincronizar() {
 }
 window.addEventListener("notas:actualizadas", sincronizar);
 window.addEventListener("notas:actualizadas-ui", sincronizar);
-window.addEventListener("resize", () => flotantes.forEach((f) => { if (!f.arrastrando && !f.inercia && !f.editando) reubicar(f); }));
+let rafResize = 0; // un solo reacomodo por fotograma al cambiar el tamaño de la ventana
+window.addEventListener("resize", () => { if (rafResize) return; rafResize = requestAnimationFrame(() => { rafResize = 0; flotantes.forEach((f) => { if (!f.arrastrando && !f.inercia && !f.editando) reubicar(f); }); }); });
 
 export { abrirSticky, cerrarSticky, flotarNota, desflotarNota, alternarFlotante, abrirNotaPictureInPicture, estaFlotando, restaurarFlotantes };
