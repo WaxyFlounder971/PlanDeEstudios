@@ -146,7 +146,7 @@ function crearBarraHerramientas({ doc, capa, nota, host }) {
   const figuras = boton(ICONOS.figuras, "Figuras", "nt-flot-figuras"); figuras.setAttribute("aria-haspopup","menu");
   const menu = doc.createElement("div"); menu.className="nt-flot-figuras-menu nt-oculto"; menu.setAttribute("role","menu");
   const opciones = [["linea","╱","Línea"],["flecha","↗","Flecha"],["rectangulo","▱","Rectángulo"],["cuadrado","□","Cuadrado"],["circulo","○","Círculo"],["elipse","⬭","Elipse"],["triangulo","△","Triángulo"],["rombo","◇","Rombo"],["estrella","☆","Estrella"],["corazon","♡","Corazón"]];
-  for (const [modo,simbolo,nombre] of opciones) { const op=doc.createElement("button"); op.type="button"; op.setAttribute("role","menuitem"); op.dataset.modo=modo; op.textContent=`${simbolo} ${tr(nombre)}`; op.onclick=()=>{ capa.establecerModo(modo); barra.actualizarModo(modo); menu.classList.add("nt-oculto"); figuras.setAttribute("aria-expanded","false"); host.focus?.({preventScroll:true}); }; menu.append(op); }
+  for (const [modo,simbolo,nombre] of opciones) { const op=doc.createElement("button"); op.type="button"; op.setAttribute("role","menuitem"); op.dataset.modo=modo; op.textContent=`${simbolo} ${tr(nombre)}`; op.onclick=()=>{ if(host.classList.contains("nt-pip-nota"))capa.ubicar?.();capa.establecerModo(modo); barra.actualizarModo(modo); menu.classList.add("nt-oculto"); figuras.setAttribute("aria-expanded","false"); host.focus?.({preventScroll:true}); }; menu.append(op); }
   figuras.onclick=()=>{ const abrir=menu.classList.contains("nt-oculto"); menu.classList.toggle("nt-oculto",!abrir); figuras.setAttribute("aria-expanded",String(abrir)); };
   const grosor=doc.createElement("label"); grosor.className="nt-flot-grosor"; grosor.title=tr("Tamaño de trazo"); grosor.setAttribute("aria-label",tr("Tamaño de trazo"));
   const slider=doc.createElement("input"); slider.type="range"; slider.min="0.5"; slider.max="3"; slider.step="0.05"; slider.value=String(grosorTrazoPreferido()); slider.setAttribute("aria-label",tr("Tamaño de trazo"));
@@ -317,6 +317,8 @@ function pintarPiP(id, win) {
   barraHerramientas.actualizarModo(capaTinta.obtenerModo());
   hoja.append(barraHerramientas);
   doc.body.replaceChildren(hoja);
+  // La capa se construye antes de montar `hoja`; recalcular ya conectada evita que el canvas conserve tamaño 1×1 en el PiP.
+  capaTinta.ubicar();
 }
 
 async function abrirPiP(id) {
