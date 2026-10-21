@@ -84,26 +84,85 @@ function escaparHTMLNota(texto = "") {
   return String(texto).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 
-function renderizarHTMLNota(contenedor, html) {
-  contenedor.innerHTML = sanearHTMLNota(html);
+function renderizarHTMLNota(contenedor, html, { visual = false, tinta = [] } = {}) {
+  const htmlSeguro = sanearHTMLNota(html);
+  const tieneImagen = /<img\b[^>]*\bdata-nota-(?:sticker|image)/i.test(htmlSeguro);
+  const esVistaPrevia = contenedor.classList.contains("nota-preview");
+  const lienzo = esVistaPrevia && (visual || tieneImagen) ? (contenedor.ownerDocument || document).createElement("div") : null;
+  if (lienzo) {
+    lienzo.className = "nota-preview-lienzo";
+    lienzo.innerHTML = htmlSeguro;
+    contenedor.replaceChildren(lienzo);
+    contenedor.classList.add("nt-preview-escalado");
+  } else { contenedor.classList.remove("nt-preview-escalado"); contenedor.style.removeProperty("height"); for (const p of ["--nt-preview-escala","--nt-preview-x","--nt-preview-y"]) contenedor.style.removeProperty(p); contenedor.replaceChildren(); contenedor.innerHTML = htmlSeguro; }
   contenedor.querySelectorAll("ul[data-marc-color],ol[data-marc-color]").forEach((l) => l.style.setProperty("--nt-marker-color", l.getAttribute("data-marc-color")));
   contenedor.querySelectorAll("input[type=checkbox]").forEach((check) => { check.disabled = true; });
   contenedor.querySelectorAll("img[data-nota-sticker],img[data-nota-image]").forEach((img) => {
     img.draggable = false;
-    img.style.maxWidth = "100%";
-    // Usa las dimensiones guardadas como tamaño inicial, pero permite modificar
-    // ancho y alto con el control de redimensionamiento nativo del navegador.
-    if (img.width) img.style.width = `${img.width}px`;
-    if (img.height) img.style.height = `${img.height}px`;
-    img.style.resize = "both";
-    img.style.overflow = "auto";
-    img.style.objectFit = "contain";
-    const rot = Number(img.dataset.rot) || 0, sx = img.dataset.flipH === "1" ? -1 : 1, sy = img.dataset.flipV === "1" ? -1 : 1;
-    const base = contenedor.clientWidth || 700, x = (Number(img.dataset.moveX) || 0) * base, y = (Number(img.dataset.moveY) || 0) * base;
-    img.style.position = "relative"; img.style.zIndex = String(Number(img.dataset.z) || 0);
-    img.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg) scale(${sx},${sy})`;
+    img.style.maxWidth = "none";
+    img.style.maxHeight = "none";
+    // Reproduce las coordenadas del editor en un lienzo fijo que luego se escala completo.
+    img.style.boxSizing = "content-box";
+    img.style.display = "block";
+    img.style.resize = "none";
+    img.style.overflow = "visible";
+    img.style.objectFit = "fill";
+    img.style.position = "relative";
+    img.style.transformOrigin = "center center";
+    img.style.zIndex = String(Number.isFinite(Number(img.dataset.z)) && img.dataset.z !== "" ? Number(img.dataset.z) : 10);
   });
-  if (typeof ResizeObserver === "function") { const stickers = [...contenedor.querySelectorAll("img[data-nota-sticker],img[data-nota-image]")]; const actualizar = () => { if (!contenedor.isConnected) { ro.disconnect(); return; } const base = contenedor.clientWidth || 700; stickers.forEach((img) => { const x = (Number(img.dataset.moveX) || 0) * base, y = (Number(img.dataset.moveY) || 0) * base; img.style.transform = `translate(${x}px,${y}px) rotate(${Number(img.dataset.rot) || 0}deg) scale(${img.dataset.flipH === "1" ? -1 : 1},${img.dataset.flipV === "1" ? -1 : 1})`; }); }; const ro = new ResizeObserver(actualizar); ro.observe(contenedor); }
+  const stickers = [...contenedor.querySelectorAll("img[data-nota-sticker],img[data-nota-image]")];
+  let ro = null;
+  const actualizar = () => {
+    if (!contenedor.isConnected) { ro?.disconnect(); return; }
+    const baseLienzo = 700;
+    stickers.forEach((img) => {
+      const originalW = Math.max(1, Number(img.getAttribute("width")) || img.naturalWidth || 220);
+      const originalH = Math.max(1, Number(img.getAttribute("height")) || img.naturalHeight || 160);
+      const rot = Number(img.dataset.rot) || 0;
+      const x = (Number(img.dataset.moveX) || 0) * baseLienzo;
+      const y = (Number(img.dataset.moveY) || 0) * baseLienzo;
+      img.style.width = `${originalW}px`;
+      img.style.height = `${originalH}px`;
+      img.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg) scale(${img.dataset.flipH === "1" ? -1 : 1},${img.dataset.flipV === "1" ? -1 : 1})`;
+    });
+    if (lienzo) {
+      lienzo.style.transform = "none";
+      const caja = lienzo.getBoundingClientRect();
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      const incluir = (left, top, right, bottom) => {
+        if (![left, top, right, bottom].every(Number.isFinite)) return;
+        minX = Math.min(minX, left); minY = Math.min(minY, top); maxX = Math.max(maxX, right); maxY = Math.max(maxY, bottom);
+      };
+      const doc = contenedor.ownerDocument || document;
+      const walkerTexto = doc.createTreeWalker(lienzo, doc.defaultView.NodeFilter.SHOW_TEXT);
+      const rango = doc.createRange();
+      while (walkerTexto.nextNode()) {
+        if (!walkerTexto.currentNode.nodeValue.trim()) continue;
+        rango.selectNodeContents(walkerTexto.currentNode);
+        for (const r of rango.getClientRects()) incluir(r.left - caja.left, r.top - caja.top, r.right - caja.left, r.bottom - caja.top);
+      }
+      lienzo.querySelectorAll("input,img").forEach((n) => { const r=n.getBoundingClientRect(); incluir(r.left-caja.left,r.top-caja.top,r.right-caja.left,r.bottom-caja.top); });
+      for (const trazo of Array.isArray(tinta) ? tinta : []) for (const [x,y] of trazo.p || []) {
+        const margen=Math.max(2,(Number(trazo.w)||0.004)*baseLienzo*2); incluir(x*baseLienzo-margen,y*baseLienzo-margen,x*baseLienzo+margen,y*baseLienzo+margen);
+      }
+      if (![minX,minY,maxX,maxY].every(Number.isFinite)) { minX=minY=0; maxX=baseLienzo; maxY=lienzo.scrollHeight||1; }
+      // El origen del lienzo es el borde interno del editor: conserva su margen superior e izquierdo.
+      // El recorte solo elimina espacio sobrante a la derecha y debajo del último elemento.
+      minX = 0; minY = 0;
+      const anchoContenido=Math.max(1,maxX), altoContenido=Math.max(1,maxY);
+      const escala=Math.max(1,contenedor.clientWidth||baseLienzo)/anchoContenido;
+      lienzo.style.transformOrigin="top left";
+      lienzo.style.transform=`translate(${-minX*escala}px,${-minY*escala}px) scale(${escala})`;
+      contenedor.style.setProperty("--nt-preview-escala",String(escala));
+      contenedor.style.setProperty("--nt-preview-x",`${-minX*escala}px`);
+      contenedor.style.setProperty("--nt-preview-y",`${-minY*escala}px`);
+      const altoFinal=Math.max(1,Math.ceil(altoContenido*escala));
+      if (Math.abs(contenedor.getBoundingClientRect().height - altoFinal) > 1) contenedor.style.setProperty("height", `${altoFinal}px`, "important");
+    }
+  };
+  actualizar();
+  if (typeof ResizeObserver === "function" && (stickers.length || lienzo)) { ro = new ResizeObserver(actualizar); ro.observe(contenedor); if (lienzo) ro.observe(lienzo); }
   contenedor.querySelectorAll("a").forEach((a) => {
     const url = a.getAttribute("href") || "";
     if (/^https?:\/\//i.test(url)) { a.rel = "noopener noreferrer"; a.target = "_blank"; }

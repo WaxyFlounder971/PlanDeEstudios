@@ -120,7 +120,7 @@ function crearMarcadores({ cuerpo }) {
 }
 
 /* ===================== Menú 🛠 ===================== */
-function crearHerramientas({ cuerpo, boton, obtenerTitulo = () => "", completadasAlFinal = () => true, alCambiar = () => {}, avisar = () => {}, alAbrir = () => {} }) {
+function crearHerramientas({ cuerpo, boton, obtenerTitulo = () => "", completadasAlFinal = () => true, alCambiar = () => {}, avisar = () => {}, alAbrir = () => {}, extras = () => [] }) {
   inyectarEstilos();
   let menu = null, ocupado = false;
 
@@ -160,6 +160,8 @@ function crearHerramientas({ cuerpo, boton, obtenerTitulo = () => "", completada
     } finally { ocupado = false; }
     alCambiar({ antes, pasos });
   }
+
+  const motivoNoDisponible=(id)=>({"ordenar-az":"Se necesitan al menos dos líneas de texto.","ordenar-za":"Se necesitan al menos dos líneas de texto.",dup:"No hay líneas duplicadas que quitar.",vacias:"No hay líneas vacías que eliminar.",marcar:"No hay casillas en esta nota.","borrar-completados":"No hay casillas completadas que borrar.","ocr-tinta":"No hay tinta manuscrita para convertir.",mayus:"No hay texto para transformar.",minus:"No hay texto para transformar.",titulo:"No hay texto para transformar.",oracion:"No hay texto para transformar.",contar:"No hay texto para contar.",copiar:"No hay texto para copiar."}[id]||"Esta herramienta no se puede aplicar a la nota actual.");
 
   const MENSAJES = {
     "ordenar-az": () => tr("Ordenado A → Z"),
@@ -222,6 +224,10 @@ function crearHerramientas({ cuerpo, boton, obtenerTitulo = () => "", completada
       const h = document.createElement("div"); h.className = "nt-herr-tit"; h.textContent = tr(titulo); menu.append(h);
       for (const [id, texto] of visibles) menu.append(boton_(tr(texto), () => ejecutar(id)));
     }
+    const extrasActuales=typeof extras==="function"?extras():[];const extraDisponible=extrasActuales.filter(x=>x.disponible);
+    if(extraDisponible.length){const h=document.createElement("div");h.className="nt-herr-tit";h.textContent=tr("Tinta");menu.append(h);for(const x of extraDisponible)menu.append(boton_(tr(x.texto),()=>{cerrar();x.ejecutar();}));}
+    const faltantes=[...GRUPOS.flatMap(([titulo,items])=>items.map(([id,texto])=>({titulo,id,texto}))).filter(x=>!disponibles.has(x.id)),...extrasActuales.filter(x=>!x.disponible).map(x=>({titulo:tr("Tinta"),id:x.id,texto:x.texto,extra:x}))];
+    if(faltantes.length){const otros=document.createElement("button");otros.type="button";otros.className="nt-herr-otros";otros.textContent=tr("Otros");otros.setAttribute("aria-expanded","false");const detalle=document.createElement("div");detalle.className="nt-herr-otros-lista nt-oculto";let grupo="";for(const item of faltantes){if(item.titulo!==grupo){grupo=item.titulo;const h=document.createElement("div");h.className="nt-herr-tit";h.textContent=tr(grupo);detalle.append(h);}const b=boton_(tr(item.texto),()=>{if(item.extra){cerrar();item.extra.ejecutar();return;}const antes=transformarHTML(item.id,sanearHTMLNota(cuerpo.innerHTML)).cambios;cerrar();if(antes)ejecutar(item.id);else avisar(tr(motivoNoDisponible(item.id)));});b.classList.add("nt-herr-no-disponible");b.title=tr(motivoNoDisponible(item.id));detalle.append(b);}otros.onclick=()=>{const abrir=detalle.classList.contains("nt-oculto");detalle.classList.toggle("nt-oculto",!abrir);otros.setAttribute("aria-expanded",String(abrir));if(menu?.isConnected)posicionar();};menu.append(otros,detalle);}
     if (!menu.children.length) menu.append(boton_(tr("No hay herramientas disponibles para esta nota"), cerrar));
   }
   function pintarConteo() {

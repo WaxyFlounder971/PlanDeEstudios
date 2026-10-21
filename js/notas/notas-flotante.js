@@ -5,9 +5,9 @@
 //   La posición se guarda por dispositivo (localStorage), no se sincroniza.
 import { estado } from "../core/storage.js";
 import { traducirTextoInterfaz as t } from "../core/i18n.js";
-import { notasActuales, resolverColorNota, COLOR_DEFECTO } from "./notas-datos.js";
+import { notasActuales, resolverColorNota, COLOR_DEFECTO, guardarNota, grosorTrazoPreferido, guardarGrosorTrazoPreferido } from "./notas-datos.js";
 import { renderizarHTMLNota } from "./notas-sanitizar.js";
-import { crearMiniTinta } from "./notas-tinta.js";
+import { crearMiniTinta, crearCapaTinta, GROSOR_BASE } from "./notas-tinta.js";
 import { abrirEditorNota } from "./notas-editor.js";
 import { ICONOS, el, contraste, colorTextoNota, botonIcono, enlazarChecks } from "./notas-ui.js";
 import { velocidad, limitarVel, esLanzamiento, limites, acotar, pasoInercia } from "./notas-fisica.js";
@@ -30,6 +30,7 @@ function cerrarSticky(rapido = false) {
   const s = stickyActual;
   if (!s) return;
   stickyActual = null;
+  s.cleanup?.();
   document.removeEventListener("keydown", s.teclas, true);
   if (rapido || reducirMovimiento()) { s.overlay.remove(); return; }
   const a = s.overlay.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140 });
@@ -65,12 +66,31 @@ function abrirSticky(nota, origen) {
 
   const cuerpo = el("div", "nt-sticky-cuerpo");
   if (nota.titulo) cuerpo.append(el("strong", "nt-sticky-titulo", nota.titulo));
+  const composicion = el("div", "nota-composicion nt-sticky-composicion");
   const preview = el("div", "nota-preview nt-sticky-texto");
-  renderizarHTMLNota(preview, nota.contenido);
+  renderizarHTMLNota(preview, nota.contenido, { visual: !!nota.tinta?.length, tinta: nota.tinta });
   enlazarChecks(preview, nota);
-  cuerpo.append(preview);
-  const mini = crearMiniTinta(nota.tinta);
-  if (mini) cuerpo.append(mini);
+  composicion.append(preview);
+  const mini = crearMiniTinta(nota.tinta, { alinear: true });
+  const visualPreview = preview.classList.contains("nt-preview-escalado");
+  const ajustarMiniVisual = () => { if (mini && visualPreview) { mini.style.width = "700px"; mini.style.transformOrigin = "top left"; mini.style.transform = `translate(${preview.style.getPropertyValue("--nt-preview-x")},${preview.style.getPropertyValue("--nt-preview-y")}) scale(${preview.style.getPropertyValue("--nt-preview-escala") || 1})`; } };
+  ajustarMiniVisual();
+  if (mini) (visualPreview ? preview : composicion).append(mini);
+  cuerpo.append(composicion);
+  const ajustarComposicion = () => {
+    const altoPreview = preview.getBoundingClientRect().height;
+    ajustarMiniVisual();
+    const altoTinta = visualPreview ? 0 : mini?.getBoundingClientRect().height || 0;
+    composicion.style.height = `${Math.max(40, altoPreview, altoTinta)}px`;
+  };
+  let cleanup = null;
+  if (typeof ResizeObserver === "function") {
+    const ro = new ResizeObserver(ajustarComposicion);
+    ro.observe(preview);
+    if (mini) ro.observe(mini);
+    cleanup = () => ro.disconnect();
+  }
+  requestAnimationFrame(ajustarComposicion);
   hoja.append(barra, cuerpo);
   if (nota.vence_en) { const vence = el("span", "nt-sticky-vence"); vence.innerHTML = ICONOS.reloj; vence.append(document.createTextNode(fechaCorta(nota.vence_en))); hoja.append(vence); }
 
@@ -79,7 +99,7 @@ function abrirSticky(nota, origen) {
   const teclas = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); cerrarSticky(); } };
   document.addEventListener("keydown", teclas, true);
   document.body.append(overlay);
-  stickyActual = { overlay, hoja, teclas };
+  stickyActual = { overlay, hoja, teclas, cleanup };
 
   if (!reducirMovimiento()) {
     overlay.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180 });
@@ -97,12 +117,49 @@ function abrirSticky(nota, origen) {
 /* ===================== Notas flotantes ===================== */
 const flotantes = new Map(); // id -> estado de la nota flotante
 const ventanasPiP = new Map();
+const capasPiP = new Map();
+const edicionesPiP = new Set();
 let zTop = 700;
 
 const leerGuardado = () => { try { return JSON.parse(localStorage.getItem(CLAVE) || "{}") || {}; } catch (_) { return {}; } };
 const escribirGuardado = (o) => { try { localStorage.setItem(CLAVE, JSON.stringify(o)); } catch (_) {} };
 
 const estaFlotando = (id) => flotantes.has(id);
+
+function activarLapiz(ref) {
+  const capa = ref?.capaTinta;
+  if (!capa) return;
+  const activo = !capa.obtenerModo();
+  capa.establecerModo(activo ? "lapiz" : null);
+  ref.controles?.actualizarModo(activo ? "lapiz" : null);
+  ref.boton?.classList.toggle("activo", activo);
+  ref.boton?.setAttribute("aria-pressed", String(activo));
+  ref.onModo?.(activo ? "lapiz" : null);
+}
+
+function crearBarraHerramientas({ doc, capa, nota, host }) {
+  host.tabIndex = -1;
+  const barra = doc.createElement("div"); barra.className = "nt-flot-herramientas"; barra.setAttribute("role", "toolbar"); barra.setAttribute("aria-label", tr("Herramientas de tinta"));
+  const boton = (icono, texto, clase = "") => { const b=doc.createElement("button"); b.type="button"; b.className=`nt-flot-herr-btn ${clase}`.trim(); b.innerHTML=icono; b.title=tr(texto); b.setAttribute("aria-label",tr(texto)); return b; };
+  const lapiz = boton(ICONOS.editar, "Lápiz", "nt-flot-lapiz");
+  const borrador = boton('<svg class="nt-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="m11.6 3.4 5 5a1.4 1.4 0 0 1 0 2l-5.2 5.2H7.4l-4-4a1.4 1.4 0 0 1 0-2l6.2-6.2a1.4 1.4 0 0 1 2 0z"/><path d="m6.2 7.6 6.2 6.2M8 16.6h9"/></svg>', "Borrador");
+  const figuras = boton(ICONOS.figuras, "Figuras", "nt-flot-figuras"); figuras.setAttribute("aria-haspopup","menu");
+  const menu = doc.createElement("div"); menu.className="nt-flot-figuras-menu nt-oculto"; menu.setAttribute("role","menu");
+  const opciones = [["linea","╱","Línea"],["flecha","↗","Flecha"],["rectangulo","▱","Rectángulo"],["cuadrado","□","Cuadrado"],["circulo","○","Círculo"],["elipse","⬭","Elipse"],["triangulo","△","Triángulo"],["rombo","◇","Rombo"],["estrella","☆","Estrella"],["corazon","♡","Corazón"]];
+  for (const [modo,simbolo,nombre] of opciones) { const op=doc.createElement("button"); op.type="button"; op.setAttribute("role","menuitem"); op.dataset.modo=modo; op.textContent=`${simbolo} ${tr(nombre)}`; op.onclick=()=>{ if(host.classList.contains("nt-pip-nota"))capa.ubicar?.();capa.establecerModo(modo); barra.actualizarModo(modo); menu.classList.add("nt-oculto"); figuras.setAttribute("aria-expanded","false"); host.focus?.({preventScroll:true}); }; menu.append(op); }
+  figuras.onclick=()=>{ const abrir=menu.classList.contains("nt-oculto"); menu.classList.toggle("nt-oculto",!abrir); figuras.setAttribute("aria-expanded",String(abrir)); };
+  const grosor=doc.createElement("label"); grosor.className="nt-flot-grosor"; grosor.title=tr("Tamaño de trazo"); grosor.setAttribute("aria-label",tr("Tamaño de trazo"));
+  const slider=doc.createElement("input"); slider.type="range"; slider.min="0.5"; slider.max="3"; slider.step="0.05"; slider.value=String(grosorTrazoPreferido()); slider.setAttribute("aria-label",tr("Tamaño de trazo"));
+  const valor=doc.createElement("output"); const mostrar=()=>{valor.textContent=`${Number(slider.value).toFixed(2).replace(/0+$/,'').replace(/\.$/,'')}×`;}; mostrar();
+  slider.oninput=()=>{mostrar();capa.establecerGrosor(GROSOR_BASE*Number(slider.value));}; slider.onchange=()=>guardarGrosorTrazoPreferido(slider.value); grosor.append(slider,valor);
+  borrador.onclick=()=>{ const activo=capa.obtenerModo()!=="borrador"; capa.establecerModo(activo?"borrador":null); barra.actualizarModo(activo?"borrador":null); };
+  lapiz.onclick=()=>activarLapiz({capaTinta:capa,controles:barra,onModo:(modo)=>{if(host.classList.contains("nt-pip-nota")){if(modo)edicionesPiP.add(nota.id);else edicionesPiP.delete(nota.id);}else{const f=flotantes.get(nota.id);if(f)f.editando=!!modo;}}});
+  barra.actualizarModo=(modo)=>{ lapiz.classList.toggle("activo",modo==="lapiz"); borrador.classList.toggle("activo",modo==="borrador"); figuras.classList.toggle("activo",opciones.some(([m])=>m===modo)); for(const b of menu.children)b.setAttribute("aria-checked",String(b.dataset.modo===modo)); const editar=host.querySelector(".nt-flot-barra .nt-flot-btn"); editar?.classList.toggle("activo",!!modo); editar?.setAttribute("aria-pressed",String(!!modo)); if(host.classList.contains("nt-pip-nota")){if(modo)edicionesPiP.add(nota.id);else edicionesPiP.delete(nota.id);}else{const f=flotantes.get(nota.id);if(f)f.editando=!!modo;} };
+  host.addEventListener("keydown",(e)=>{if(e.key==="Escape"){capa.establecerModo(null);barra.actualizarModo(null);menu.classList.add("nt-oculto");if(host.classList.contains("nt-pip-nota"))edicionesPiP.delete(nota.id);else{const f=flotantes.get(nota.id);if(f)f.editando=false;}window.dispatchEvent(new Event("notas:actualizadas-ui"));}});
+  barra.append(lapiz,borrador,figuras,grosor,menu);
+  return barra;
+}
+
 const limitesDe = (f) => limites(innerWidth, innerHeight, f.el.offsetWidth, f.el.offsetHeight);
 const reposoDe = (id) => { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) | 0; return ((Math.abs(h) % 7) - 3) * 0.6; }; // ±1.8°
 
@@ -205,35 +262,45 @@ function pintar(f) {
   f.el.style.setProperty("--nt-nota", color);
   f.el.style.color = colorTextoNota(nota, color);
   f.el.setAttribute("aria-label", nota.titulo || tr("Nota flotante"));
+  f.capaTinta?.destruir(); f.capaTinta = null;
   f.el.replaceChildren();
 
   const barra = el("div", "nt-flot-barra");
   const asa = el("span", "nt-flot-asa"); asa.innerHTML = ICONOS.asa; asa.setAttribute("aria-hidden", "true");
-  const editar = botonIcono({ icono: ICONOS.editar, titulo: tr("Editar"), clase: "nt-flot-btn", onclick: () => abrirEditorNota(nota.id, refrescarLista) });
+  let editar;
+  editar = botonIcono({ icono: ICONOS.editar, titulo: tr("Dibujar en la nota"), clase: "nt-flot-btn", onclick: () => activarLapiz({ capaTinta: f.capaTinta, controles: f.barraHerramientas, boton: editar, onModo: (modo) => { f.editando = !!modo; } }) });
   const pip = botonIcono({ icono: ICONOS.pip, titulo: tr("Abrir en ventana PiP"), clase: "nt-flot-btn", onclick: () => abrirNotaPictureInPicture(nota.id, f.el) });
   const soltar = botonIcono({ icono: ICONOS.quitarFlotante, titulo: tr("Quitar de flotante"), clase: "nt-flot-btn", onclick: () => { desflotarNota(nota.id); refrescarLista(); } });
   barra.append(asa, editar, pip, soltar);
   f.el.append(barra);
   if (nota.titulo) f.el.append(el("strong", "nt-flot-titulo", nota.titulo));
   const cuerpo = el("div", "nota-preview nt-flot-cuerpo");
-  renderizarHTMLNota(cuerpo, nota.contenido);
+  renderizarHTMLNota(cuerpo, nota.contenido, { visual: !!nota.tinta?.length, tinta: nota.tinta });
   enlazarChecks(cuerpo, nota);
   f.el.append(cuerpo);
-  const mini = crearMiniTinta(nota.tinta, { alinear: true });
-  if (mini) { cuerpo.classList.add("nota-composicion"); cuerpo.append(mini); const ajustar=()=>{cuerpo.style.minHeight="";cuerpo.style.minHeight=`${Math.max(cuerpo.scrollHeight,mini.getBoundingClientRect().height,40)}px`;}; ajustar(); if(typeof ResizeObserver==="function"){const ro=new ResizeObserver(ajustar);ro.observe(cuerpo);ro.observe(mini);} }
+  cuerpo.classList.add("nota-composicion");
+  f.capaTinta = crearCapaTinta({ cuerpo, modal: f.el, obtenerTrazos: () => nota.tinta || (nota.tinta = []), alCambiar: () => { guardarNota(nota); window.dispatchEvent(new Event("notas:actualizadas-ui")); } });
+  f.capaTinta.establecerColor(contraste(color));
+  f.capaTinta.establecerGrosor(GROSOR_BASE * grosorTrazoPreferido());
+  f.barraHerramientas = crearBarraHerramientas({ doc: document, capa: f.capaTinta, nota, host: f.el });
+  f.el.append(f.barraHerramientas);
   return true;
 }
 
 function pintarPiP(id, win) {
   const nota = buscar(id);
-  if (!nota || win.closed) { try { win.close(); } catch (_) {} ventanasPiP.delete(id); return; }
+  if (!nota || win.closed) { capasPiP.get(id)?.destruir(); capasPiP.delete(id); try { win.close(); } catch (_) {} ventanasPiP.delete(id); edicionesPiP.delete(id); return; }
+  if (edicionesPiP.has(id)) return;
+  capasPiP.get(id)?.destruir(); capasPiP.delete(id);
   const doc = win.document;
   const hoja = doc.createElement("article");
   hoja.className = "nt-pip-nota";
   const color = resolverColorNota(nota.color || COLOR_DEFECTO);
   hoja.style.setProperty("--nt-nota", color); hoja.style.color = colorTextoNota(nota, color);
   const barra = doc.createElement("header"); barra.className = "nt-flot-barra";
-  const editar = botonIcono({ icono: ICONOS.editar, titulo: tr("Editar"), clase: "nt-flot-btn", onclick: () => abrirEditorNota(id, refrescarLista) });
+  let capaTinta = null, barraHerramientas = null;
+  let editar;
+  editar = botonIcono({ icono: ICONOS.editar, titulo: tr("Dibujar en la nota"), clase: "nt-flot-btn", onclick: () => activarLapiz({ capaTinta, controles: barraHerramientas, boton: editar, onModo: (modo) => modo ? edicionesPiP.add(id) : edicionesPiP.delete(id) }) });
   const volver = botonIcono({ icono: ICONOS.flotar, titulo: tr("Volver a flotante en la app"), clase: "nt-flot-btn", onclick: () => { flotarNota(id); ventanasPiP.delete(id); win.close(); refrescarLista(); } });
   const cerrar = botonIcono({ icono: ICONOS.cerrar, titulo: tr("Cerrar nota flotante"), clase: "nt-flot-btn", onclick: () => { desflotarNota(id); ventanasPiP.delete(id); win.close(); refrescarLista(); } });
   const resetear = botonIcono({ icono: ICONOS.resetTamano, titulo: tr("Restablecer tamaño"), clase: "nt-flot-btn", onclick: () => { try { win.resizeTo(320, 420); } catch (_) {} } });
@@ -241,9 +308,17 @@ function pintarPiP(id, win) {
   if (nota.titulo) { const titulo = doc.createElement("strong"); titulo.className = "nt-flot-titulo"; titulo.textContent = nota.titulo; hoja.append(barra, titulo); }
   else hoja.append(barra);
   const cuerpo = doc.createElement("div"); cuerpo.className = "nota-preview nt-flot-cuerpo";
-  renderizarHTMLNota(cuerpo, nota.contenido); enlazarChecks(cuerpo, nota, () => window.dispatchEvent(new Event("notas:actualizadas-ui"))); hoja.append(cuerpo);
-  const mini = crearMiniTinta(nota.tinta, { alinear: true }); if (mini) { cuerpo.classList.add("nota-composicion"); cuerpo.append(doc.adoptNode(mini)); const ajustar=()=>{cuerpo.style.minHeight="";cuerpo.style.minHeight=`${Math.max(cuerpo.scrollHeight,mini.getBoundingClientRect().height,40)}px`;}; ajustar(); if(typeof win.ResizeObserver==="function"){const ro=new win.ResizeObserver(ajustar);ro.observe(cuerpo);ro.observe(mini);} }
+  renderizarHTMLNota(cuerpo, nota.contenido, { visual: !!nota.tinta?.length, tinta: nota.tinta }); enlazarChecks(cuerpo, nota, () => window.dispatchEvent(new Event("notas:actualizadas-ui"))); hoja.append(cuerpo);
+  cuerpo.classList.add("nota-composicion");
+  capaTinta = crearCapaTinta({ cuerpo, modal: hoja, obtenerTrazos: () => nota.tinta || (nota.tinta = []), alCambiar: () => { guardarNota(nota); window.dispatchEvent(new Event("notas:actualizadas-ui")); } });
+  capasPiP.set(id, capaTinta);
+  capaTinta.establecerColor(contraste(color)); capaTinta.establecerGrosor(GROSOR_BASE * grosorTrazoPreferido());
+  barraHerramientas = crearBarraHerramientas({ doc, capa: capaTinta, nota, host: hoja });
+  barraHerramientas.actualizarModo(capaTinta.obtenerModo());
+  hoja.append(barraHerramientas);
   doc.body.replaceChildren(hoja);
+  // La capa se construye antes de montar `hoja`; recalcular ya conectada evita que el canvas conserve tamaño 1×1 en el PiP.
+  capaTinta.ubicar();
 }
 
 async function abrirPiP(id) {
@@ -260,10 +335,11 @@ async function abrirPiP(id) {
       win.document.head.append(copia);
     }
     const estilo = win.document.createElement("style");
-    estilo.textContent = `html,body{box-sizing:border-box;margin:0;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden;background:#171923;color:#f7f7f7;font:14px system-ui,sans-serif}.nt-pip-nota{box-sizing:border-box;display:flex;flex-direction:column;gap:8px;width:100%;height:100%;min-width:0;min-height:0;padding:10px 14px;background:var(--nt-nota,#fff594);border-radius:14px;overflow:hidden;overflow-wrap:anywhere}.nt-pip-nota .nt-flot-barra{display:flex;align-items:center;gap:6px;position:sticky;top:0;background:inherit;flex:none}.nt-pip-nota .nt-flot-barra>*:first-child{margin-right:auto}.nt-pip-nota .nt-flot-btn{display:inline-grid;place-items:center;width:34px;height:34px;border:0;border-radius:50%;background:rgba(0,0,0,.1);color:inherit;cursor:pointer;flex:none}.nt-pip-nota .nt-flot-btn .nt-ico{width:18px;height:18px}.nt-pip-nota .nota-preview{max-height:none;min-height:0;flex:1 1 auto;overflow:auto}.nt-pip-nota .nota-composicion{min-height:0;flex:1 1 auto;overflow:auto}.nt-pip-nota .nota-tinta-mini.nota-tinta-alineada{position:absolute;left:0;top:0;width:100%;height:auto;margin:0}`;
+    estilo.textContent = `html,body{box-sizing:border-box;margin:0;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden;background:#171923;color:#f7f7f7;font:14px system-ui,sans-serif}.nt-pip-nota{box-sizing:border-box;display:flex;flex-direction:column;gap:8px;width:100%;height:100%;min-width:0;min-height:0;padding:10px 14px;background:var(--nt-nota,#fff594);border-radius:14px;overflow:hidden;overflow-wrap:anywhere}.nt-pip-nota .nt-flot-barra{display:flex;align-items:center;gap:6px;position:sticky;top:0;background:inherit;flex:none}.nt-pip-nota .nt-flot-barra>*:first-child{margin-right:auto}.nt-pip-nota .nt-flot-btn{display:inline-grid;place-items:center;width:34px;height:34px;border:0;border-radius:50%;background:rgba(0,0,0,.1);color:inherit;cursor:pointer;flex:none}.nt-pip-nota .nt-flot-btn.activo{background:#8b72e8;color:#fff}.nt-pip-nota .nt-flot-btn .nt-ico{width:18px;height:18px}.nt-pip-nota .nota-preview{position:relative;max-height:none;min-height:0;flex:1 1 auto;overflow:auto}.nt-pip-nota .nota-composicion{min-height:0;flex:1 1 auto;overflow:auto}.nt-pip-nota .nota-tinta-mini.nota-tinta-alineada{position:absolute;left:0;top:0;width:100%;height:auto;margin:0}.nt-pip-nota .nt-flot-herramientas{position:relative;z-index:12;flex:none;align-self:center;display:flex;align-items:center;justify-content:center;gap:7px;margin-top:auto;padding:4px 9px;border:1px solid #ffffff35;border-radius:999px;background:color-mix(in srgb,var(--nt-nota,#fff594) 86%,#111);box-shadow:0 3px 10px #0003;touch-action:manipulation}.nt-pip-nota .nt-flot-herr-btn{display:grid;place-items:center;flex:none;width:30px;height:30px;padding:0;border:0;border-radius:50%;background:#0002;color:inherit;cursor:pointer}.nt-pip-nota .nt-flot-herr-btn .nt-ico{width:17px;height:17px}.nt-pip-nota .nt-flot-herr-btn.activo{background:#8b72e8;color:#fff;box-shadow:0 0 0 2px #ffffff70}.nt-pip-nota .nt-flot-grosor{display:flex;align-items:center;gap:5px;min-width:100px;font-size:.68rem}.nt-pip-nota .nt-flot-grosor input{width:75px;min-width:55px;accent-color:#8b72e8}.nt-pip-nota .nt-flot-grosor output{min-width:22px;text-align:right}.nt-pip-nota .nt-flot-figuras-menu{position:absolute;bottom:calc(100% + 7px);left:50%;z-index:30;display:grid;grid-template-columns:repeat(2,minmax(105px,1fr));gap:3px;width:min(250px,calc(100vw - 28px));max-height:min(42vh,260px);overflow:auto;padding:7px;border:1px solid #ffffff35;border-radius:12px;background:#171923;color:#fff;box-shadow:0 8px 25px #0008;transform:translateX(-50%)}.nt-pip-nota .nt-flot-figuras-menu.nt-oculto{display:none}.nt-pip-nota .nt-flot-figuras-menu button{min-height:32px;border:0;border-radius:8px;background:transparent;color:inherit;text-align:left;cursor:pointer}.nt-pip-nota .nt-flot-figuras-menu button:hover,.nt-pip-nota .nt-flot-figuras-menu button[aria-checked="true"]{background:#ffffff20}`;
+    estilo.textContent += `.nt-pip-nota .nota-preview,.nt-pip-nota .nota-composicion{overflow:visible!important;scrollbar-width:none!important;-ms-overflow-style:none!important}.nt-pip-nota .nota-preview::-webkit-scrollbar,.nt-pip-nota .nota-composicion::-webkit-scrollbar{display:none!important}`;
     win.document.head.append(estilo);
     win.addEventListener("resize", () => { if (!win.closed) { win.document.documentElement.style.width = "100%"; win.document.body.style.width = "100%"; } });
-    ventanasPiP.set(id, win); win.addEventListener("pagehide", () => { if (ventanasPiP.get(id) === win) ventanasPiP.delete(id); }, { once: true });
+    ventanasPiP.set(id, win); win.addEventListener("pagehide", () => { if (ventanasPiP.get(id) === win) ventanasPiP.delete(id); capasPiP.get(id)?.destruir(); capasPiP.delete(id); edicionesPiP.delete(id); }, { once: true });
     pintarPiP(id, win); return win;
 }
 
@@ -301,7 +377,7 @@ function flotarNota(id, origen) {
 
 function desflotarNota(id) {
   const f = flotantes.get(id);
-  if (f) { cancelAnimationFrame(f.raf); f.el.remove(); flotantes.delete(id); }
+  if (f) { cancelAnimationFrame(f.raf); f.capaTinta?.destruir(); f.el.remove(); flotantes.delete(id); }
   const g = leerGuardado();
   if (id in g) { delete g[id]; escribirGuardado(g); }
 }
@@ -325,10 +401,10 @@ function restaurarFlotantes() {
 
 function sincronizar() {
   if (!estado.datos) return;
-  for (const [id, win] of [...ventanasPiP]) pintarPiP(id, win);
+  for (const [id, win] of [...ventanasPiP]) if (!edicionesPiP.has(id)) pintarPiP(id, win);
   for (const f of [...flotantes.values()]) {
     if (!buscar(f.id)) { desflotarNota(f.id); continue; }
-    if (f.arrastrando || f.inercia) continue;
+    if (f.arrastrando || f.inercia || f.editando) continue;
     pintar(f);
     const l = limitesDe(f);
     f.x = acotar(f.x, l.minX, l.maxX); f.y = acotar(f.y, l.minY, l.maxY);

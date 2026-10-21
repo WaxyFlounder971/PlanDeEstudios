@@ -379,7 +379,7 @@ function construirTarjeta(nota) {
   card.style.setProperty("color", colorTextoNota(nota, colorTarjeta), "important");
   card.classList.toggle("seleccionada", seleccion.has(nota.id));
   card.classList.toggle("nota-flotando", estaFlotando(nota.id));
-  const vistaAbierta = opcionesNotas().tarjetas_expandidas === true;
+  const vistaAbierta = opcionesNotas().tarjetas_expandidas !== false;
   card.classList.toggle("expandida", vistaAbierta);
 
   // Arriba: insignias (vencimiento, pendientes, Wapper, flotante) a la izquierda y el asa de arrastre (solo fijadas) a la derecha.
@@ -397,17 +397,20 @@ function construirTarjeta(nota) {
 
   const h = nota.titulo ? el("strong", "nota-titulo-card", nota.titulo) : null;
   const preview = el("div", "nota-preview");
-  renderizarHTMLNota(preview, nota.contenido);
+  renderizarHTMLNota(preview, nota.contenido, { visual: !!nota.tinta?.length, tinta: nota.tinta });
+  preview.querySelectorAll("img").forEach(img=>{img.loading="lazy";img.decoding="async";});
   enlazarChecks(preview, nota);
 
   const expand = el("button", "nota-expand", "");
   expand.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
   expand.title = tr("Expandir"); expand.setAttribute("aria-label", tr("Expandir"));
+  expand.setAttribute("aria-expanded", String(vistaAbierta));
   expand.onclick = (e) => {
     e.stopPropagation();
-    const abierta=!card.classList.contains("expandida"), fila=card.getBoundingClientRect().top;
-    const vecinos=[...card.parentElement.querySelectorAll(":scope > .nota-card")].filter(c=>Math.abs(c.getBoundingClientRect().top-fila)<5);
-    for(const c of vecinos){c.classList.toggle("expandida",abierta);c._ajustarComposicion?.();const b=c.querySelector(".nota-expand");if(!b)continue;const label=tr(abierta?"Contraer":"Expandir");b.innerHTML=abierta?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';b.title=label;b.setAttribute("aria-label",label);}
+    const abierta=!card.classList.contains("expandida");
+    card.classList.toggle("expandida",abierta); card._ajustarComposicion?.();
+    const label=tr(abierta?"Contraer":"Expandir");
+    expand.innerHTML=abierta?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';expand.title=label;expand.setAttribute("aria-label",label);expand.setAttribute("aria-expanded",String(abierta));
   };
 
   // Fila superior: anclar a la izquierda, insignias al centro y asa de arrastre en todas las notas.
@@ -442,22 +445,31 @@ function construirTarjeta(nota) {
   );
   foot.append(acciones);
 
-  const mini = crearMiniTinta(nota.tinta, { alinear: true });
+  const mini = crearMiniTinta(nota.tinta, { alinear: true, nivel: Number.isFinite(Number(nota.capa_tinta_z)) ? Number(nota.capa_tinta_z) : 5 });
+  const visualPreview = preview.classList.contains("nt-preview-escalado");
+  const ajustarMiniVisual = () => { if (mini && visualPreview) { mini.style.width = "700px"; mini.style.transformOrigin = "top left"; mini.style.transform = `translate(${preview.style.getPropertyValue("--nt-preview-x")},${preview.style.getPropertyValue("--nt-preview-y")}) scale(${preview.style.getPropertyValue("--nt-preview-escala") || 1})`; } };
+  ajustarMiniVisual();
   const composicion = el("div", "nota-composicion"); composicion.append(preview);
-  if (mini) composicion.append(mini);
+  if (mini) (visualPreview ? preview : composicion).append(mini);
   card.append(...[top, h, composicion, expand, foot].filter(Boolean));
-  const ajustarComposicion = () => { const alto = Math.max(preview.scrollHeight, mini?.getBoundingClientRect().height || 0, 32); composicion.style.height = `${card.classList.contains("expandida") ? alto : Math.min(220, alto)}px`; };
+  const estaEnCuadricula = () => !!card.closest(".notas-grid:not(.notas-lista)");
+  const ajustarComposicion = () => { ajustarMiniVisual(); const alto = Math.max(preview.scrollHeight, visualPreview ? 0 : mini?.getBoundingClientRect().height || 0, 32) + 3; if (estaEnCuadricula()) { if(card.classList.contains("expandida")) composicion.style.setProperty("height",`${alto}px`,"important"); else composicion.style.removeProperty("height"); return; } composicion.style.height = `${card.classList.contains("expandida") ? alto : Math.min(220, alto)}px`; };
   card._ajustarComposicion = ajustarComposicion;
-  if (typeof ResizeObserver === "function" && mini) { const ro = new ResizeObserver(ajustarComposicion); ro.observe(preview); ro.observe(mini); }
-  requestAnimationFrame(() => {
-    ajustarComposicion();
-    const textoLargo = preview.scrollHeight > 220;
-    const dibujoLargo = !!mini && mini.getBoundingClientRect().height > 220;
-    const soloDibujo = !!mini && !textoPlanoNota(nota.contenido).trim();
-    const requiereFlecha = textoLargo || dibujoLargo || soloDibujo;
+  const actualizarBotonExpandir = () => {
+    const lineHeight = parseFloat(getComputedStyle(preview).lineHeight) || 22;
+    const limiteColapsado = Math.min(220, lineHeight * (card.closest(".notas-lista") ? 5.8 : 7.2));
+    const grid = estaEnCuadricula();
+    const altoContraido = grid ? (innerWidth <= 600 || Number(card.dataset.ancho) <= 1 ? card.clientWidth : 320) : 0;
+    const limiteTexto = grid ? Math.max(32, altoContraido - (top?.offsetHeight || 0) - (h?.offsetHeight || 0) - expand.offsetHeight - foot.offsetHeight - 34) : limiteColapsado;
+    const limiteDibujo = grid ? limiteTexto : 220;
+    const textoLargo = preview.scrollHeight > limiteTexto + 2;
+    const dibujoLargo = !!mini && !visualPreview && mini.getBoundingClientRect().height > limiteDibujo + 2;
+    const requiereFlecha = textoLargo || dibujoLargo;
     expand.classList.toggle("nt-oculto", !requiereFlecha);
-    if (vistaAbierta) { expand.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>'; expand.title = tr("Contraer"); expand.setAttribute("aria-label", expand.title); }
-  });
+    const expandidaActual=card.classList.contains("expandida"),label=tr(expandidaActual?"Contraer":"Expandir");expand.innerHTML=expandidaActual?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';expand.title=label;expand.setAttribute("aria-label",label);expand.setAttribute("aria-expanded",String(expandidaActual));
+  };
+  if (typeof ResizeObserver === "function") { const ro = new ResizeObserver(() => { ajustarComposicion(); actualizarBotonExpandir(); }); ro.observe(preview); ro.observe(card); if (mini) ro.observe(mini); card._observadorComposicion=ro; }
+  requestAnimationFrame(() => { ajustarComposicion(); actualizarBotonExpandir(); });
   if (!enPapelera) {
     for (const lado of ["izq", "der"]) {
       const estirar = el("span", `nota-resize nota-resize-${lado}`);
@@ -615,7 +627,7 @@ function renderizarNotas() {
 
   const cab = el("header", "notas-cabecera");
   const acciones = el("div", "row notas-cab-acciones");
-  const add = el("button", "btn btn-primary nt-btn-circulo", "➕");
+  const add = el("button", "btn btn-primary nt-btn-circulo"); add.innerHTML = '<svg class="nt-ico nt-add-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
   add.title = tr("Nueva nota"); add.setAttribute("aria-label", add.title); add.onclick = () => abrirEditorNota(null, renderizarNotas);
   const settings = el("button", "btn btn-secondary nt-btn-circulo");
   settings.innerHTML = ICONO_PUNTOS;
@@ -688,6 +700,7 @@ function renderizarNotas() {
   // Arriba las fijadas, luego una línea divisora y debajo todas las demás notas.
   const contenido = el("div", "notas-grupos");
   const pintarGrupos = () => {
+    contenido.querySelectorAll(".nota-card").forEach(card=>card._observadorComposicion?.disconnect());
     const items = notasVisibles();
     window.__notasLista = items;
     const claseGrid = `notas-grid ${opcionesNotas().vista === "lista" ? "notas-lista" : ""}`.trim();
@@ -701,7 +714,7 @@ function renderizarNotas() {
     if (!items.length) {
       const vacio = el("div", "glass-card notas-vacio stack");
       vacio.innerHTML = `<div aria-hidden="true">🗒️</div><h2>${tr("Tus ideas, siempre a mano")}</h2><p>${tr("Toca + para tu primera nota")}</p>`;
-      const go = el("button", "btn btn-primary", "＋");
+      const go = el("button", "btn btn-primary"); go.innerHTML = '<svg class="nt-ico nt-add-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>'; go.setAttribute("aria-label",tr("Nueva nota"));
       go.onclick = () => abrirEditorNota(null, renderizarNotas);
       vacio.append(go);
       const g = el("div", claseGrid); g.append(vacio); nodos.push(g);

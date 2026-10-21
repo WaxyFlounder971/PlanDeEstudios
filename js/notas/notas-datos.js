@@ -5,9 +5,12 @@ import { sanearHTMLNota, textoPlanoNota } from "./notas-sanitizar.js";
 import { registrarAnaliticaUso } from "../core/analitica.js";
 
 const MAX_CARACTERES_NOTA = 10000;
-// Paleta base (modo claro): tonos de notas adhesivas.
-const COLORES_NOTA = ["#fd97a5", "#ffbd9d", "#fff594", "#c6d4a1", "#bcdad0", "#a8dcda"];
-const COLOR_DEFECTO = "#fff594";
+// Orden fijo de la paleta: rojo, naranja, morado, verde, cyan y azul.
+// Los colores anteriores se reconocen abajo para que las notas existentes
+// sigan resolviendo a la misma posición lógica al cambiar de tema.
+const COLORES_NOTA = ["#fd97a5", "#ffbd9d", "#c4aceb", "#c6d4a1", "#8bd6d3", "#a9c5f5"];
+const COLORES_NOTA_ANTERIORES = ["#fd97a5", "#ffbd9d", "#fff594", "#c6d4a1", "#bcdad0", "#a8dcda"];
+const COLOR_DEFECTO = "#c4aceb";
 // Misma tonalidad y saturación, solo más oscuro (no gris ni apagado).
 function luminanciaHex(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -40,7 +43,7 @@ const OSCUROS_ANTERIORES = [
 ];
 // Modo oscuro: una versión MÁS FUERTE de cada color de la paleta (mismo tono), pensada para letra y tinta claras
 // (contraste con blanco ≥ 4.9). Es el opuesto de los tonos suaves del modo claro, que llevan letra oscura.
-const COLORES_NOTA_OSCURO = ["#cd1932", "#b04816", "#6b4fa3", "#2d6a4f", "#2a4ba0", "#1a7471"]; // 5.º: azul rey (antes verde #22765a, que sigue convirtiéndose solo vía OSCUROS_ANTERIORES)
+const COLORES_NOTA_OSCURO = ["#cd1932", "#b04816", "#6b4fa3", "#2d6a4f", "#1a7471", "#2a4ba0"];
 function modoOscuro() { const modo = document.documentElement.getAttribute("data-mode"); return modo === "dark" || modo === "true-dark"; }
 function coloresPaletaNota() { const custom=opcionesNotas().colores_editados; if(Array.isArray(custom)&&custom.length===6&&custom.every(c=>/^#[\da-f]{6}$/i.test(c))) return custom; return modoOscuro() ? COLORES_NOTA_OSCURO : COLORES_NOTA; }
 // Si el color guardado es uno de los predefinidos (claro u oscuro), lo muestra en la versión del modo actual.
@@ -50,6 +53,10 @@ function resolverColorNota(hex) {
   let i = claros.indexOf(hex);
   if (i < 0) i = oscuros.indexOf(hex);
   if (i < 0) i = suaves.indexOf(hex);
+  if (i < 0) {
+    const anterior = COLORES_NOTA_ANTERIORES.indexOf(hex);
+    if (anterior >= 0) i = anterior === 5 ? 4 : anterior; // el cyan anterior conserva su tono; el amarillo ocupa ahora morado
+  }
   if (i < 0) for (const lista of OSCUROS_ANTERIORES) { const k = lista.indexOf(hex); if (k >= 0) { i = k; break; } }
   return i >= 0 ? coloresPaletaNota()[i] : hex;
 }
@@ -61,7 +68,8 @@ function formatoAutomatico() { return opcionesNotas().formato_auto !== false; }
 function notasActuales() { if (!estado.datos) return []; return estado.datos.notas || (estado.datos.notas = []); }
 function opcionesNotas() {
   const cfg = estado.datos.configuracion;
-  cfg.notas_ajustes ||= { vencimiento_default: false, plazo_default: "3_dias", color_default: COLOR_DEFECTO, vista: "cuadricula", tarjetas_expandidas: false, papelera_despues_wapper: false, compartir_accion: "guardar", completadas_al_final: true, formato_auto: true, mostrar_creada: true, mostrar_modificada: true, colores_recientes: [] };
+  cfg.notas_ajustes ||= { vencimiento_default: false, plazo_default: "3_dias", color_default: COLOR_DEFECTO, vista: "cuadricula", tarjetas_expandidas: true, papelera_despues_wapper: false, compartir_accion: "guardar", completadas_al_final: true, formato_auto: true, mostrar_creada: true, mostrar_modificada: true, colores_recientes: [] };
+  if (!cfg.notas_ajustes.expansion_predeterminada_v2) { cfg.notas_ajustes.tarjetas_expandidas = true; cfg.notas_ajustes.expansion_predeterminada_v2 = true; }
   if (cfg.notas_ajustes.color_default === "#fff2b3") cfg.notas_ajustes.color_default = COLOR_DEFECTO;
   return cfg.notas_ajustes;
 }
@@ -105,7 +113,7 @@ function crearNota(datos = {}) {
     color: datos.color || resolverColorNota(opcionesNotas().color_default) || COLOR_DEFECTO,
     color_texto: /^#[\da-f]{6}$/i.test(datos.color_texto || "") ? String(datos.color_texto).toLowerCase() : null, fijada: Boolean(datos.fijada), orden_fijada: datos.orden_fijada ?? null,
     vence_en: datos.vence_en || null, eliminada_en: null, motivo_eliminacion: null, enviada_a_wapper_en: datos.enviada_a_wapper_en || null,
-    tinta: Array.isArray(datos.tinta) ? JSON.parse(JSON.stringify(datos.tinta)) : [], origen: datos.origen === "compartida" ? "compartida" : "manual", creada_en: datos.creada_en || marca, modificada_en: marca, _pendienteSync: true,
+    tinta: Array.isArray(datos.tinta) ? JSON.parse(JSON.stringify(datos.tinta)) : [], capa_tinta_z: Number.isFinite(Number(datos.capa_tinta_z)) ? Math.max(-2000, Math.min(2000, Number(datos.capa_tinta_z))) : 5, origen: datos.origen === "compartida" ? "compartida" : "manual", creada_en: datos.creada_en || marca, modificada_en: marca, _pendienteSync: true,
   });
 }
 function obtenerNota(id) { return notasActuales().find((n) => n.id === id) || null; }
