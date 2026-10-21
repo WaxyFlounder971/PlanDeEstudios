@@ -83,6 +83,7 @@ function abrirSticky(nota, origen) {
     const altoTinta = visualPreview ? 0 : mini?.getBoundingClientRect().height || 0;
     composicion.style.height = `${Math.max(40, altoPreview, altoTinta)}px`;
   };
+  preview.addEventListener("nt:encuadre", ajustarComposicion);
   let cleanup = null;
   if (typeof ResizeObserver === "function") {
     const ro = new ResizeObserver(ajustarComposicion);
@@ -190,9 +191,9 @@ function crearBarraHerramientas({ doc, capa, nota, host }) {
   const valor=doc.createElement("output"); const mostrar=()=>{valor.textContent=`${Number(slider.value).toFixed(2).replace(/0+$/,'').replace(/\.$/,'')}×`;}; mostrar();
   slider.oninput=()=>{mostrar();capa.establecerGrosor(GROSOR_BASE*Number(slider.value));}; slider.onchange=()=>guardarGrosorTrazoPreferido(slider.value); grosor.append(slider,valor);
   borrador.onclick=()=>{ const activo=capa.obtenerModo()!=="borrador"; capa.establecerModo(activo?"borrador":null); barra.actualizarModo(activo?"borrador":null); };
-  lapiz.onclick=()=>activarLapiz({capaTinta:capa,controles:barra,onModo:(modo)=>{if(host.classList.contains("nt-pip-nota")){if(modo)edicionesPiP.add(nota.id);else edicionesPiP.delete(nota.id);}else{const f=flotantes.get(nota.id);if(f)f.editando=!!modo;}}});
-  barra.actualizarModo=(modo)=>{ lapiz.classList.toggle("activo",modo==="lapiz"); borrador.classList.toggle("activo",modo==="borrador"); figuras.classList.toggle("activo",opciones.some(([m])=>m===modo)); for(const b of menu.children)b.setAttribute("aria-checked",String(b.dataset.modo===modo)); const editar=host.querySelector(".nt-flot-barra .nt-flot-btn"); editar?.classList.toggle("activo",!!modo); editar?.setAttribute("aria-pressed",String(!!modo)); if(host.classList.contains("nt-pip-nota")){if(modo)edicionesPiP.add(nota.id);else edicionesPiP.delete(nota.id);}else{const f=flotantes.get(nota.id);if(f)f.editando=!!modo;} };
-  host.addEventListener("keydown",(e)=>{if(e.key==="Escape"){capa.establecerModo(null);barra.actualizarModo(null);menu.classList.add("nt-oculto");if(host.classList.contains("nt-pip-nota"))edicionesPiP.delete(nota.id);else{const f=flotantes.get(nota.id);if(f)f.editando=false;}window.dispatchEvent(new Event("notas:actualizadas-ui"));}});
+  lapiz.onclick=()=>activarLapiz({capaTinta:capa,controles:barra,onModo:(modo)=>{if(host.classList.contains("nt-pip-nota")){if(modo)edicionesPiP.add(nota.id);else edicionesPiP.delete(nota.id);}else{const f=flotantes.get(nota.id);fijarEdicion(f,!!modo);}}});
+  barra.actualizarModo=(modo)=>{ lapiz.classList.toggle("activo",modo==="lapiz"); borrador.classList.toggle("activo",modo==="borrador"); figuras.classList.toggle("activo",opciones.some(([m])=>m===modo)); for(const b of menu.children)b.setAttribute("aria-checked",String(b.dataset.modo===modo)); const editar=host.querySelector(".nt-flot-barra .nt-flot-btn"); editar?.classList.toggle("activo",!!modo); editar?.setAttribute("aria-pressed",String(!!modo)); if(host.classList.contains("nt-pip-nota")){if(modo)edicionesPiP.add(nota.id);else edicionesPiP.delete(nota.id);}else{const f=flotantes.get(nota.id);fijarEdicion(f,!!modo);} };
+  host.addEventListener("keydown",(e)=>{if(e.key==="Escape"){capa.establecerModo(null);barra.actualizarModo(null);menu.classList.add("nt-oculto");if(host.classList.contains("nt-pip-nota"))edicionesPiP.delete(nota.id);else{const f=flotantes.get(nota.id);fijarEdicion(f,false);}window.dispatchEvent(new Event("notas:actualizadas-ui"));}});
   barra.append(deshacerBtn,rehacerBtn,lapiz,borrador,figuras,grosor,menu);
   return barra;
 }
@@ -224,11 +225,22 @@ function golpe(f) {
   f.el.animate([{ scale: "1" }, { scale: "1.035 .965" }, { scale: "1" }], { duration: 240, easing: "ease-out" });
 }
 
+// Mientras se dibuja, la tarjeta queda fija (sin inclinación ni arrastre desde el cuerpo) y solo se mueve desde la barra superior.
+function fijarEdicion(f, activo) {
+  if (!f) return;
+  f.editando = !!activo;
+  f.el.classList.toggle("nt-flot-editando", !!activo);
+  if (f.arrastrando || f.inercia) return;
+  f.ang = activo ? 0 : f.reposo;
+  f.el.style.transition = reducirMovimiento() ? "none" : "transform .2s ease-out";
+  aplicar(f);
+}
+
 function asentar(f) {
   f.ultimo = 0;
   f.el.classList.remove("arrastrando");
   f.el.style.transition = reducirMovimiento() ? "none" : "transform .55s cubic-bezier(.3,1.5,.5,1)";
-  f.ang = f.reposo;
+  f.ang = f.editando ? 0 : f.reposo;
   aplicar(f);
   guardarPos(f);
 }
@@ -257,6 +269,7 @@ function enlazarArrastre(f) {
   nodo.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     if (e.target.closest("button, a, input, textarea, [contenteditable]")) return;
+    if (f.editando && !e.target.closest(".nt-flot-barra")) return; // editando: el cuerpo es solo para dibujar
     e.preventDefault();
     try { nodo.setPointerCapture(e.pointerId); } catch (_) {}
     nodo.style.transition = "none";
@@ -305,7 +318,7 @@ function pintar(f) {
   const barra = el("div", "nt-flot-barra");
   const asa = el("span", "nt-flot-asa"); asa.innerHTML = ICONOS.asa; asa.setAttribute("aria-hidden", "true");
   let editar;
-  editar = botonIcono({ icono: ICONOS.editar, titulo: tr("Dibujar en la nota"), clase: "nt-flot-btn", onclick: () => activarLapiz({ capaTinta: f.capaTinta, controles: f.barraHerramientas, boton: editar, onModo: (modo) => { f.editando = !!modo; } }) });
+  editar = botonIcono({ icono: ICONOS.editar, titulo: tr("Dibujar en la nota"), clase: "nt-flot-btn", onclick: () => activarLapiz({ capaTinta: f.capaTinta, controles: f.barraHerramientas, boton: editar, onModo: (modo) => { fijarEdicion(f, !!modo); } }) });
   const pip = botonIcono({ icono: ICONOS.pip, titulo: tr("Abrir en ventana PiP"), clase: "nt-flot-btn", onclick: () => abrirNotaPictureInPicture(nota.id, f.el) });
   const soltar = botonIcono({ icono: ICONOS.quitarFlotante, titulo: tr("Quitar de flotante"), clase: "nt-flot-btn", onclick: () => { desflotarNota(nota.id); refrescarLista(); } });
   barra.append(asa, editar, pip, soltar);
@@ -376,7 +389,7 @@ async function abrirPiP(id) {
     estilo.textContent += `.nt-pip-nota .nota-preview,.nt-pip-nota .nota-composicion{overflow:visible!important;scrollbar-width:none!important;-ms-overflow-style:none!important}.nt-pip-nota .nota-preview::-webkit-scrollbar,.nt-pip-nota .nota-composicion::-webkit-scrollbar{display:none!important}`;
     win.document.head.append(estilo);
     win.addEventListener("resize", () => { if (!win.closed) { win.document.documentElement.style.width = "100%"; win.document.body.style.width = "100%"; } });
-    ventanasPiP.set(id, win); win.addEventListener("pagehide", () => { if (ventanasPiP.get(id) === win) ventanasPiP.delete(id); capasPiP.get(id)?.destruir(); capasPiP.delete(id); edicionesPiP.delete(id); }, { once: true });
+    ventanasPiP.set(id, win); win.addEventListener("pagehide", () => { if (ventanasPiP.get(id) === win) ventanasPiP.delete(id); capasPiP.get(id)?.destruir(); capasPiP.delete(id); edicionesPiP.delete(id); const guardar = buscar(id); if (guardar) { try { guardarNota(guardar); } catch (_) {} } }, { once: true });
     pintarPiP(id, win); return win;
 }
 
@@ -627,6 +640,6 @@ function sincronizar() {
 }
 window.addEventListener("notas:actualizadas", sincronizar);
 window.addEventListener("notas:actualizadas-ui", sincronizar);
-window.addEventListener("resize", () => flotantes.forEach((f) => { if (!f.arrastrando && !f.inercia) reubicar(f); }));
+window.addEventListener("resize", () => flotantes.forEach((f) => { if (!f.arrastrando && !f.inercia && !f.editando) reubicar(f); }));
 
 export { abrirSticky, cerrarSticky, flotarNota, desflotarNota, alternarFlotante, abrirNotaPictureInPicture, estaFlotando, restaurarFlotantes };

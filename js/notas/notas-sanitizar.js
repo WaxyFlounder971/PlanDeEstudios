@@ -169,6 +169,8 @@ function renderizarHTMLNota(contenedor, html, { visual = false, tinta = [], maxA
       contenedor.style.setProperty("--nt-preview-y",`${-minY*escala}px`);
       const altoFinal=Math.max(1,Math.ceil(altoContenido*escala));
       if (Math.abs(contenedor.getBoundingClientRect().height - altoFinal) > 1) contenedor.style.setProperty("height", `${altoFinal}px`, "important");
+      // El cambio de altura ocurre dentro de un ResizeObserver: quien dependa de él (sticky, flotante) no recibe aviso de ese cambio, así que se le notifica aquí.
+      contenedor.dispatchEvent(new CustomEvent("nt:encuadre"));
     }
   };
   if(lienzo)contenedor._refrescarEncuadreVisual=actualizar;
