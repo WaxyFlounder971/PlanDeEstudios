@@ -560,12 +560,29 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     else { historialEditor.push(actual); if (historialEditor.length > 100) historialEditor.shift(); }
     futuroEditor.length = 0; ultimaCategoriaHistorial = categoria; ultimoTiempoHistorial = ahora;
   }
+  // Inserta HTML (stickers/imágenes) aunque haya un modo de tinta o figura activo: en ese modo el cuerpo no es editable y execCommand no hace nada.
+  function insertarHTMLVisual(html, dentro) {
+    if (capaTinta?.obtenerModo?.()) fijarModo(null);
+    if (cuerpo.contentEditable !== "true") cuerpo.contentEditable = "true";
+    const contar = () => cuerpo.querySelectorAll("img[data-nota-sticker],img[data-nota-image]").length;
+    const antes = contar();
+    cuerpo.focus(); recuperarSeleccion(dentro);
+    let ok = false;
+    insertandoCapaVisual = true;
+    try { ok = document.execCommand("insertHTML", false, html); } catch (_) { ok = false; } finally { insertandoCapaVisual = false; }
+    if (ok && contar() > antes) return;
+    // Respaldo: inserta con Range en la selección actual o al final de la nota.
+    const plantilla = document.createElement("template"); plantilla.innerHTML = html;
+    const sel = getSelection();
+    if (sel?.rangeCount && cuerpo.contains(sel.anchorNode)) { const r = sel.getRangeAt(0); r.deleteContents(); const frag = plantilla.content; const ultimo = frag.lastChild; r.insertNode(frag); if (ultimo) { r.setStartAfter(ultimo); r.collapse(true); sel.removeAllRanges(); sel.addRange(r); } }
+    else cuerpo.append(plantilla.content);
+  }
   function insertarSticker(sticker) {
     const naturalW = Number(sticker.ancho) || 512, naturalH = Number(sticker.alto) || 512;
     const ancho = Math.min(240, naturalW), alto = Math.max(24, Math.round(ancho * naturalH / Math.max(1, naturalW)));
     const html = `<img data-nota-sticker="1" data-z="${nivelImagenNuevo()}" src="${sticker.src}" alt="Sticker" width="${ancho}" height="${alto}"><br>`;
     const s = getSelection(), dentro = !!(s?.rangeCount && cuerpo.contains(s.anchorNode));
-    cuerpo.focus(); recuperarSeleccion(dentro); insertandoCapaVisual = true; try { document.execCommand("insertHTML", false, html); } finally { insertandoCapaVisual = false; }
+    insertarHTMLVisual(html, dentro);
     limpiarEstilos(); persistir(); guardarPasoHistorial("texto"); cerrarMenuFiguras();
   }
   const convertirImagenArchivo = async (file, limite = 1024) => {
@@ -605,7 +622,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     const nivelInicial = nivelImagenNuevo();
     const html = imagenes.map(({src,ancho,alto},i) => `<img data-nota-image="1" data-z="${Math.min(2000,nivelInicial+i)}" src="${src}" alt="" width="${ancho}" height="${alto}" data-move-x="${(i*0.006).toFixed(3)}"><br>`).join("");
     const s = getSelection(), dentro = !!(s?.rangeCount && cuerpo.contains(s.anchorNode));
-    cuerpo.focus(); recuperarSeleccion(dentro); insertandoCapaVisual = true; try { document.execCommand("insertHTML", false, html); } finally { insertandoCapaVisual = false; }
+    insertarHTMLVisual(html, dentro);
     limpiarEstilos(); persistir(); guardarPasoHistorial("texto");
   };
   inputImagenUnica.onchange = async () => {
@@ -899,7 +916,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
     if(ocrController)return;
     clearTimeout(timerAvisoOCR);avisoOCRActivo?.remove();const aviso=document.createElement("div");avisoOCRActivo=aviso;aviso.className="nt-aviso-superior nt-aviso-procesando";aviso.setAttribute("role","status");aviso.setAttribute("aria-live","polite");aviso.setAttribute("aria-atomic","true");aviso.setAttribute("aria-busy","true");aviso.textContent=tr("Preparando la conversión de escritura…");document.body.append(aviso);
     ocrController?.abort();ocrController=new AbortController();const controller=ocrController;
-    try{await new Promise(resolve=>requestAnimationFrame(resolve));if(controller.signal.aborted)return;const {transcribirTintaGemini}=await import("./notas-ocr.js");if(controller.signal.aborted)return;aviso.textContent=tr("Reconociendo escritura manuscrita…");const imagen=capaTinta.exportarImagenOCR();const texto=await transcribirTintaGemini(imagen,borrador.tinta,{signal:controller.signal});if(cerrado||controller.signal.aborted){aviso.remove();return;}aviso.classList.remove("nt-aviso-procesando");aviso.setAttribute("aria-busy","false");aviso.textContent=`${tr("Texto convertido. Pulsa Deshacer si no te gusta.")}\n${texto}`;aviso.classList.add("nt-aviso-resultado");aviso.setAttribute("aria-label",tr("Texto convertido; deshaz si no te gusta"));timerAvisoOCR=setTimeout(()=>{aviso.remove();if(avisoOCRActivo===aviso)avisoOCRActivo=null;},6000);
+    try{await new Promise(resolve=>requestAnimationFrame(resolve));if(controller.signal.aborted)return;const {transcribirTintaGemini}=await import("./notas-ocr.js");if(controller.signal.aborted)return;aviso.textContent=tr("Reconociendo escritura manuscrita…");const imagen=capaTinta.exportarImagenOCR();let texto;for(let intento=1;;intento++){try{texto=await transcribirTintaGemini(imagen,borrador.tinta,{signal:controller.signal});break;}catch(err){const msg=String(err?.message||err);const transitorio=/\b(429|500|502|503|504)\b|demand|unavailable|overload|ocupad|timeout/i.test(msg);if(!transitorio||intento>=4||controller.signal.aborted||cerrado)throw err;const espera=intento*2500;aviso.textContent=`${tr("Gemini está ocupado. Reintentando")} (${intento}/3)…`;await new Promise((res)=>{const t=setTimeout(res,espera);controller.signal.addEventListener("abort",()=>{clearTimeout(t);res();},{once:true});});if(controller.signal.aborted)return;aviso.textContent=tr("Reconociendo escritura manuscrita…");}}if(cerrado||controller.signal.aborted){aviso.remove();return;}aviso.classList.remove("nt-aviso-procesando");aviso.setAttribute("aria-busy","false");aviso.textContent=`${tr("Texto convertido. Pulsa Deshacer si no te gusta.")}\n${texto}`;aviso.classList.add("nt-aviso-resultado");aviso.setAttribute("aria-label",tr("Texto convertido; deshaz si no te gusta"));timerAvisoOCR=setTimeout(()=>{aviso.remove();if(avisoOCRActivo===aviso)avisoOCRActivo=null;},6000);
       const sel=getSelection();if(rangoGuardado&&cuerpo.contains(rangoGuardado.startContainer)){cuerpo.focus();sel.removeAllRanges();sel.addRange(rangoGuardado);document.execCommand("insertText",false,texto);}else{const p=document.createElement("p");p.textContent=texto;cuerpo.append(p);}
       borrador.tinta.splice(0,borrador.tinta.length);capaTinta.redibujar();ultimoTipo="t";persistir();guardarPasoHistorial("ocr");
     }catch(e){if(cerrado||controller.signal.aborted){aviso.remove();return;}aviso.classList.remove("nt-aviso-procesando");aviso.setAttribute("aria-busy","false");aviso.textContent=tr(e.message||"No se pudo convertir la tinta. La tinta se conservó sin cambios.");aviso.classList.add("nt-aviso-error");timerAvisoOCR=setTimeout(()=>{aviso.remove();if(avisoOCRActivo===aviso)avisoOCRActivo=null;},8000);}finally{if(ocrController===controller)ocrController=null;}

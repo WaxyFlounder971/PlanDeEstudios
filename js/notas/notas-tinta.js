@@ -55,7 +55,7 @@ function dibujarTrazo(ctx, t, ancho, dy, gmin) {
     ctx.stroke();
     if (t.a && n > 1) {
       const x0 = X(n - 2), y0 = Y(n - 2), x1 = X(n - 1), y1 = Y(n - 1);
-      const ang = Math.atan2(y1 - y0, x1 - x0), h = Math.max(9, base * 4.2);
+      const ang = Math.atan2(y1 - y0, x1 - x0), h = Math.max(9 * gmin, base * 4.2); // el mínimo va en la misma unidad que el grosor mínimo (px en el editor, unidades 0-1 en la miniatura)
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 - h * Math.cos(ang - Math.PI / 6), y1 - h * Math.sin(ang - Math.PI / 6));
       ctx.moveTo(x1, y1); ctx.lineTo(x1 - h * Math.cos(ang + Math.PI / 6), y1 - h * Math.sin(ang + Math.PI / 6)); ctx.stroke();
     }
@@ -120,7 +120,7 @@ const r4 = (v) => Math.round(v * 10000) / 10000;
 
 function puntosFiguraArrastrada(modo, a, b) {
   let x0=a[0],y0=a[1],x1=b[0],y1=b[1];
-  if (["cuadrado","circulo"].includes(modo)) { const lado=Math.min(Math.abs(x1-x0),Math.abs(y1-y0));x1=x0+Math.sign(x1-x0||1)*lado;y1=y0+Math.sign(y1-y0||1)*lado; }
+  if (["cuadrado","circulo"].includes(modo)) { const lado=Math.max(Math.abs(x1-x0),Math.abs(y1-y0));x1=x0+Math.sign(x1-x0||1)*lado;y1=y0+Math.sign(y1-y0||1)*lado; }
   if (modo === "linea" || modo === "flecha") return [[x0,y0],[x1,y1]];
   if (modo === "rectangulo" || modo === "cuadrado") return [[x0,y0],[x1,y0],[x1,y1],[x0,y1],[x0,y0]];
   if (modo === "triangulo") return [[(x0+x1)/2,y0],[x1,y1],[x0,y1],[(x0+x1)/2,y0]];
