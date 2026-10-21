@@ -4,7 +4,7 @@ import { traducirTextoInterfaz as tr } from "../core/i18n.js";
 const MODELO="gemini-3.1-flash-lite";
 async function transcribirTintaNativa(trazos,signal){
   if(signal?.aborted)throw new DOMException("La conversión fue cancelada.","AbortError");
-  const nav=globalThis.navigator;const consultar=nav?.queryHandwritingRecognizerSupport||nav?.queryHandwritingRecognizer;if(typeof nav?.createHandwritingRecognizer!=="function"||typeof consultar!=="function"||typeof globalThis.HandwritingStroke!=="function")throw new Error("Este navegador no ofrece reconocimiento manuscrito sin conexión.");
+  const nav=globalThis.navigator;if(globalThis.isSecureContext===false)throw new Error("El reconocimiento manuscrito local necesita una página segura (HTTPS o localhost).");const consultar=nav?.queryHandwritingRecognizerSupport||nav?.queryHandwritingRecognizer;if(typeof nav?.createHandwritingRecognizer!=="function"||typeof consultar!=="function"||typeof globalThis.HandwritingStroke!=="function")throw new Error("El reconocimiento manuscrito sin conexión no está disponible en este navegador. Sin Gemini ni un modelo local, no hay motor de conversión.");
   const idioma=(document.documentElement.lang||"es").toLowerCase().slice(0,2),preferidos=[idioma,"es","en","fr","it"].filter((x,i,a)=>["es","en","fr","it"].includes(x)&&a.indexOf(x)===i);let lengua=null;
   for(const candidate of preferidos){if(signal?.aborted)throw new DOMException("La conversión fue cancelada.","AbortError");try{if(await consultar.call(nav,{languages:[candidate]})){lengua=candidate;break;}}catch(_){}}
   if(!lengua)throw new Error("El modo sin conexión de este navegador no admite español, inglés, francés ni italiano. Activa Gemini en Ajustes para convertir esta nota.");

@@ -90,17 +90,17 @@ function renderizarHTMLNota(contenedor, html) {
   contenedor.querySelectorAll("input[type=checkbox]").forEach((check) => { check.disabled = true; });
   contenedor.querySelectorAll("img[data-nota-sticker],img[data-nota-image]").forEach((img) => {
     img.draggable = false;
-    img.style.maxWidth = "100%";
-    // Usa las dimensiones guardadas como tamaño inicial, pero permite modificar
-    // ancho y alto con el control de redimensionamiento nativo del navegador.
+    img.style.maxWidth = "none";
+    img.style.maxHeight = "none";
+    // La vista previa respeta las dimensiones y estiramiento guardados en el editor.
     if (img.width) img.style.width = `${img.width}px`;
     if (img.height) img.style.height = `${img.height}px`;
-    img.style.resize = "both";
-    img.style.overflow = "auto";
-    img.style.objectFit = "contain";
+    img.style.resize = "none";
+    img.style.overflow = "visible";
+    img.style.objectFit = "fill";
     const rot = Number(img.dataset.rot) || 0, sx = img.dataset.flipH === "1" ? -1 : 1, sy = img.dataset.flipV === "1" ? -1 : 1;
     const base = contenedor.clientWidth || 700, x = (Number(img.dataset.moveX) || 0) * base, y = (Number(img.dataset.moveY) || 0) * base;
-    img.style.position = "relative"; img.style.zIndex = String(Number(img.dataset.z) || 0);
+    img.style.position = "relative"; img.style.zIndex = String(Number.isFinite(Number(img.dataset.z)) && img.dataset.z !== "" ? Number(img.dataset.z) : 10);
     img.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg) scale(${sx},${sy})`;
   });
   if (typeof ResizeObserver === "function") { const stickers = [...contenedor.querySelectorAll("img[data-nota-sticker],img[data-nota-image]")]; const actualizar = () => { if (!contenedor.isConnected) { ro.disconnect(); return; } const base = contenedor.clientWidth || 700; stickers.forEach((img) => { const x = (Number(img.dataset.moveX) || 0) * base, y = (Number(img.dataset.moveY) || 0) * base; img.style.transform = `translate(${x}px,${y}px) rotate(${Number(img.dataset.rot) || 0}deg) scale(${img.dataset.flipH === "1" ? -1 : 1},${img.dataset.flipV === "1" ? -1 : 1})`; }); }; const ro = new ResizeObserver(actualizar); ro.observe(contenedor); }

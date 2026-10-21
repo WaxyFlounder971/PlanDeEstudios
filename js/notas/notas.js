@@ -404,12 +404,13 @@ function construirTarjeta(nota) {
   const expand = el("button", "nota-expand", "");
   expand.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
   expand.title = tr("Expandir"); expand.setAttribute("aria-label", tr("Expandir"));
+  expand.setAttribute("aria-expanded", String(vistaAbierta));
   expand.onclick = (e) => {
     e.stopPropagation();
     const abierta=!card.classList.contains("expandida");
     card.classList.toggle("expandida",abierta); card._ajustarComposicion?.();
     const label=tr(abierta?"Contraer":"Expandir");
-    expand.innerHTML=abierta?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';expand.title=label;expand.setAttribute("aria-label",label);
+    expand.innerHTML=abierta?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';expand.title=label;expand.setAttribute("aria-label",label);expand.setAttribute("aria-expanded",String(abierta));
   };
 
   // Fila superior: anclar a la izquierda, insignias al centro y asa de arrastre en todas las notas.
@@ -444,22 +445,26 @@ function construirTarjeta(nota) {
   );
   foot.append(acciones);
 
-  const mini = crearMiniTinta(nota.tinta, { alinear: true });
+  const mini = crearMiniTinta(nota.tinta, { alinear: true, nivel: Number.isFinite(Number(nota.capa_tinta_z)) ? Number(nota.capa_tinta_z) : 5 });
   const composicion = el("div", "nota-composicion"); composicion.append(preview);
   if (mini) composicion.append(mini);
   card.append(...[top, h, composicion, expand, foot].filter(Boolean));
-  const ajustarComposicion = () => { const alto = Math.max(preview.scrollHeight, mini?.getBoundingClientRect().height || 0, 32); composicion.style.height = `${card.classList.contains("expandida") ? alto : Math.min(220, alto)}px`; };
+  const estaEnCuadricula = () => !!card.closest(".notas-grid:not(.notas-lista)");
+  const ajustarComposicion = () => { if (estaEnCuadricula()) { composicion.style.removeProperty("height"); return; } const alto = Math.max(preview.scrollHeight, mini?.getBoundingClientRect().height || 0, 32); composicion.style.height = `${card.classList.contains("expandida") ? alto : Math.min(220, alto)}px`; };
   card._ajustarComposicion = ajustarComposicion;
-  if (typeof ResizeObserver === "function" && mini) { const ro = new ResizeObserver(ajustarComposicion); ro.observe(preview); ro.observe(mini); card._observadorComposicion=ro; }
-  requestAnimationFrame(() => {
-    ajustarComposicion();
-    const textoLargo = preview.scrollHeight > 220;
-    const dibujoLargo = !!mini && mini.getBoundingClientRect().height > 220;
-    const soloDibujo = !!mini && !textoPlanoNota(nota.contenido).trim();
-    const requiereFlecha = textoLargo || dibujoLargo || soloDibujo;
+  const actualizarBotonExpandir = () => {
+    const lineHeight = parseFloat(getComputedStyle(preview).lineHeight) || 22;
+    const limiteColapsado = Math.min(220, lineHeight * (card.closest(".notas-lista") ? 5.8 : 7.2));
+    const limiteTexto = estaEnCuadricula() ? preview.clientHeight : limiteColapsado;
+    const limiteDibujo = estaEnCuadricula() ? composicion.clientHeight : 220;
+    const textoLargo = preview.scrollHeight > limiteTexto + 2;
+    const dibujoLargo = !!mini && mini.getBoundingClientRect().height > limiteDibujo + 2;
+    const requiereFlecha = textoLargo || dibujoLargo;
     expand.classList.toggle("nt-oculto", !requiereFlecha);
-    const label=tr(vistaAbierta?"Contraer":"Expandir");expand.innerHTML=vistaAbierta?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';expand.title=label;expand.setAttribute("aria-label",label);
-  });
+    const expandidaActual=card.classList.contains("expandida"),label=tr(expandidaActual?"Contraer":"Expandir");expand.innerHTML=expandidaActual?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';expand.title=label;expand.setAttribute("aria-label",label);expand.setAttribute("aria-expanded",String(expandidaActual));
+  };
+  if (typeof ResizeObserver === "function") { const ro = new ResizeObserver(() => { ajustarComposicion(); actualizarBotonExpandir(); }); ro.observe(preview); ro.observe(card); if (mini) ro.observe(mini); card._observadorComposicion=ro; }
+  requestAnimationFrame(() => { ajustarComposicion(); actualizarBotonExpandir(); });
   if (!enPapelera) {
     for (const lado of ["izq", "der"]) {
       const estirar = el("span", `nota-resize nota-resize-${lado}`);
