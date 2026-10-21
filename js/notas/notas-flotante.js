@@ -78,7 +78,7 @@ function abrirSticky(nota, origen) {
   if (mini) (visualPreview ? preview : composicion).append(mini);
   cuerpo.append(composicion);
   const ajustarComposicion = () => {
-    const altoPreview = preview.getBoundingClientRect().height;
+    const altoPreview = preview.offsetHeight;
     ajustarMiniVisual();
     const altoTinta = visualPreview ? 0 : mini?.getBoundingClientRect().height || 0;
     composicion.style.height = `${Math.max(40, altoPreview, altoTinta)}px`;
@@ -109,7 +109,7 @@ function abrirSticky(nota, origen) {
       hoja.animate([
         { transform: `translate(${a.left - b.left}px, ${a.top - b.top}px) scale(${a.width / b.width}, ${a.height / b.height}) rotate(0deg)` },
         { transform: "translate(0,0) scale(1) rotate(-1.2deg)" },
-      ], { duration: 320, easing: "cubic-bezier(.2,.9,.25,1.12)" });
+      ], { duration: 320, easing: "cubic-bezier(.2,.9,.25,1.12)" }).finished.then(() => { preview._refrescarEncuadreVisual?.(); }).catch(() => {});
     }
   }
   editar.focus({ preventScroll: true });
