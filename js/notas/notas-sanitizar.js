@@ -85,16 +85,22 @@ function escaparHTMLNota(texto = "") {
 }
 
 function renderizarHTMLNota(contenedor, html) {
-  contenedor.innerHTML = sanearHTMLNota(html);
+  const esVistaPrevia = contenedor.classList.contains("nota-preview");
+  const lienzo = esVistaPrevia ? (contenedor.ownerDocument || document).createElement("div") : null;
+  if (lienzo) {
+    lienzo.className = "nota-preview-lienzo";
+    lienzo.innerHTML = sanearHTMLNota(html);
+    contenedor.replaceChildren(lienzo);
+    contenedor.classList.add("nt-preview-escalado");
+  } else contenedor.innerHTML = sanearHTMLNota(html);
   contenedor.querySelectorAll("ul[data-marc-color],ol[data-marc-color]").forEach((l) => l.style.setProperty("--nt-marker-color", l.getAttribute("data-marc-color")));
   contenedor.querySelectorAll("input[type=checkbox]").forEach((check) => { check.disabled = true; });
   contenedor.querySelectorAll("img[data-nota-sticker],img[data-nota-image]").forEach((img) => {
     img.draggable = false;
-    img.style.maxWidth = "100%";
+    img.style.maxWidth = "none";
     img.style.maxHeight = "none";
-    // La vista previa conserva el tamaño relativo elegido, reduciéndolo cuando no cabe
-    // (también cuenta el ancho que ocupa la rotación para que no se salga de la tarjeta).
-    img.style.boxSizing = "border-box";
+    // Reproduce las coordenadas del editor en un lienzo fijo que luego se escala completo.
+    img.style.boxSizing = "content-box";
     img.style.display = "block";
     img.style.resize = "none";
     img.style.overflow = "visible";
@@ -107,25 +113,38 @@ function renderizarHTMLNota(contenedor, html) {
   let ro = null;
   const actualizar = () => {
     if (!contenedor.isConnected) { ro?.disconnect(); return; }
-    const base = Math.max(1, contenedor.clientWidth || 700);
+    const baseLienzo = 700;
     stickers.forEach((img) => {
       const originalW = Math.max(1, Number(img.getAttribute("width")) || img.naturalWidth || 220);
       const originalH = Math.max(1, Number(img.getAttribute("height")) || img.naturalHeight || 160);
       const rot = Number(img.dataset.rot) || 0, rad = rot * Math.PI / 180;
-      let escala = Math.min(1, base / Math.max(1, originalW * Math.abs(Math.cos(rad)) + originalH * Math.abs(Math.sin(rad))));
+      const escala = Math.min(1, baseLienzo / Math.max(1, originalW * Math.abs(Math.cos(rad)) + originalH * Math.abs(Math.sin(rad))));
       let ancho = originalW * escala, alto = originalH * escala;
       const anchoRotado = ancho * Math.abs(Math.cos(rad)) + alto * Math.abs(Math.sin(rad));
       const margenRotacion = Math.max(0, (anchoRotado - ancho) / 2);
-      const desplazamiento = (Number(img.dataset.moveX) || 0) * base;
-      const x = Math.min(Math.max(desplazamiento, margenRotacion), Math.max(margenRotacion, base - ancho - margenRotacion));
-      const y = (Number(img.dataset.moveY) || 0) * base;
+      const desplazamiento = (Number(img.dataset.moveX) || 0) * baseLienzo;
+      const x = Math.min(Math.max(desplazamiento, margenRotacion), Math.max(margenRotacion, baseLienzo - ancho - margenRotacion));
+      const y = (Number(img.dataset.moveY) || 0) * baseLienzo;
       img.style.width = `${ancho}px`;
       img.style.height = `${alto}px`;
       img.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg) scale(${img.dataset.flipH === "1" ? -1 : 1},${img.dataset.flipV === "1" ? -1 : 1})`;
     });
+    if (lienzo) {
+      const anchoVisible = Math.max(1, contenedor.clientWidth || 700);
+      const escala = anchoVisible / baseLienzo;
+      lienzo.style.transform = `scale(${escala})`;
+      const caja = lienzo.getBoundingClientRect();
+      let altoContenido = lienzo.scrollHeight;
+      for (const img of stickers) {
+        const r = img.getBoundingClientRect();
+        altoContenido = Math.max(altoContenido, (r.bottom - caja.top) / escala);
+      }
+      const altoFinal = Math.max(1, Math.ceil(altoContenido * escala));
+      if (Math.abs(contenedor.getBoundingClientRect().height - altoFinal) > 1) contenedor.style.setProperty("height", `${altoFinal}px`, "important");
+    }
   };
   actualizar();
-  if (typeof ResizeObserver === "function" && stickers.length) { ro = new ResizeObserver(actualizar); ro.observe(contenedor); }
+  if (typeof ResizeObserver === "function" && (stickers.length || lienzo)) { ro = new ResizeObserver(actualizar); ro.observe(contenedor); if (lienzo) ro.observe(lienzo); }
   contenedor.querySelectorAll("a").forEach((a) => {
     const url = a.getAttribute("href") || "";
     if (/^https?:\/\//i.test(url)) { a.rel = "noopener noreferrer"; a.target = "_blank"; }

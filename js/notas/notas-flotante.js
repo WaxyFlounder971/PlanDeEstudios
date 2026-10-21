@@ -30,6 +30,7 @@ function cerrarSticky(rapido = false) {
   const s = stickyActual;
   if (!s) return;
   stickyActual = null;
+  s.cleanup?.();
   document.removeEventListener("keydown", s.teclas, true);
   if (rapido || reducirMovimiento()) { s.overlay.remove(); return; }
   const a = s.overlay.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140 });
@@ -65,12 +66,27 @@ function abrirSticky(nota, origen) {
 
   const cuerpo = el("div", "nt-sticky-cuerpo");
   if (nota.titulo) cuerpo.append(el("strong", "nt-sticky-titulo", nota.titulo));
+  const composicion = el("div", "nota-composicion nt-sticky-composicion");
   const preview = el("div", "nota-preview nt-sticky-texto");
   renderizarHTMLNota(preview, nota.contenido);
   enlazarChecks(preview, nota);
-  cuerpo.append(preview);
-  const mini = crearMiniTinta(nota.tinta);
-  if (mini) cuerpo.append(mini);
+  composicion.append(preview);
+  const mini = crearMiniTinta(nota.tinta, { alinear: true });
+  if (mini) composicion.append(mini);
+  cuerpo.append(composicion);
+  const ajustarComposicion = () => {
+    const altoPreview = preview.getBoundingClientRect().height;
+    const altoTinta = mini?.getBoundingClientRect().height || 0;
+    composicion.style.height = `${Math.max(40, altoPreview, altoTinta)}px`;
+  };
+  let cleanup = null;
+  if (typeof ResizeObserver === "function") {
+    const ro = new ResizeObserver(ajustarComposicion);
+    ro.observe(preview);
+    if (mini) ro.observe(mini);
+    cleanup = () => ro.disconnect();
+  }
+  requestAnimationFrame(ajustarComposicion);
   hoja.append(barra, cuerpo);
   if (nota.vence_en) { const vence = el("span", "nt-sticky-vence"); vence.innerHTML = ICONOS.reloj; vence.append(document.createTextNode(fechaCorta(nota.vence_en))); hoja.append(vence); }
 
@@ -79,7 +95,7 @@ function abrirSticky(nota, origen) {
   const teclas = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); cerrarSticky(); } };
   document.addEventListener("keydown", teclas, true);
   document.body.append(overlay);
-  stickyActual = { overlay, hoja, teclas };
+  stickyActual = { overlay, hoja, teclas, cleanup };
 
   if (!reducirMovimiento()) {
     overlay.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180 });

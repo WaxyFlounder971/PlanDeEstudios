@@ -459,6 +459,17 @@ html:not([data-mode="dark"]):not([data-mode="true-dark"]) .notas-seccion .nt-btn
 .notas-grid:not(.notas-lista) .nota-card.expandida .nota-card-foot{margin-top:0;padding-top:3px!important}
 @media(max-width:600px){.notas-grid:not(.notas-lista) .nota-card[data-ancho="2"]:not(.expandida),.notas-grid:not(.notas-lista) .nota-card[data-ancho="3"]:not(.expandida){aspect-ratio:1/1!important;min-height:0;max-height:none}}
 .nt-flotante{max-height:none!important;overflow:visible!important}.nt-flot-cuerpo{overflow:visible!important;max-height:none!important}
+.nota-preview.nt-preview-escalado{position:relative;display:block;box-sizing:content-box;overflow:visible!important;min-height:0;padding:0!important}
+.nota-preview-lienzo{position:absolute;left:0;top:0;width:700px;max-width:none;box-sizing:border-box;transform-origin:top left;overflow:visible;font-size:16px;line-height:normal}
+.nota-preview-lienzo>*{max-width:none}
+.nota-preview-lienzo>:not(img):not(:has(img)){position:relative;z-index:1}
+.nt-sticky-overlay{overflow:auto;scrollbar-width:none}.nt-sticky-overlay::-webkit-scrollbar{display:none}
+.nt-sticky{max-height:none!important;overflow:visible!important;align-self:center}
+.nt-sticky-cuerpo{min-height:0;max-height:none!important;overflow:visible!important}
+.nt-sticky-composicion{position:relative;display:block;flex:none;width:100%;min-height:40px;overflow:visible!important}
+.nt-sticky-composicion>.nota-preview{position:absolute;inset:0 auto auto 0;width:100%;height:auto;overflow:visible!important}
+.nt-sticky-composicion>.nota-tinta-mini.nota-tinta-alineada{position:absolute;z-index:2;left:0;top:0;width:100%;height:auto;margin:0;pointer-events:none}
+@media(max-width:560px){.nt-sticky-overlay{place-items:start center;padding:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom))}.nt-sticky{width:min(420px,100%);box-sizing:border-box}}
 `;
 
 function inyectarEstilosNotas() {
