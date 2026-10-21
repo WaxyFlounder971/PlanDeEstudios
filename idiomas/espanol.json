@@ -1819,6 +1819,11 @@
     "Guardar una idea al instante": "Guardar una idea al instante",
     "Pendientes": "Pendientes",
     "Revisar materiales de clase": "Revisar materiales de clase",
-    "Arrastra las secciones para cambiar su orden. Desactiva las que no vayas a utilizar; puedes volver a activarlas en Ajustes > Personalizar > Navegación.": "Arrastra las secciones para cambiar su orden. Desactiva las que no vayas a utilizar; puedes volver a activarlas en Ajustes > Personalizar > Navegación."
+    "Arrastra las secciones para cambiar su orden. Desactiva las que no vayas a utilizar; puedes volver a activarlas en Ajustes > Personalizar > Navegación.": "Arrastra las secciones para cambiar su orden. Desactiva las que no vayas a utilizar; puedes volver a activarlas en Ajustes > Personalizar > Navegación.",
+    "Reducir alto del lienzo": "Reducir alto del lienzo",
+    "Aumentar alto del lienzo": "Aumentar alto del lienzo",
+    "Vista general del lienzo": "Vista general del lienzo",
+    "Dibujar en la nota": "Dibujar en la nota",
+    "Herramientas de tinta": "Herramientas de tinta"
   }
 }
