@@ -90,20 +90,42 @@ function renderizarHTMLNota(contenedor, html) {
   contenedor.querySelectorAll("input[type=checkbox]").forEach((check) => { check.disabled = true; });
   contenedor.querySelectorAll("img[data-nota-sticker],img[data-nota-image]").forEach((img) => {
     img.draggable = false;
-    img.style.maxWidth = "none";
+    img.style.maxWidth = "100%";
     img.style.maxHeight = "none";
-    // La vista previa respeta las dimensiones y estiramiento guardados en el editor.
-    if (img.width) img.style.width = `${img.width}px`;
-    if (img.height) img.style.height = `${img.height}px`;
+    // La vista previa conserva el tamaño relativo elegido, reduciéndolo cuando no cabe
+    // (también cuenta el ancho que ocupa la rotación para que no se salga de la tarjeta).
+    img.style.boxSizing = "border-box";
+    img.style.display = "block";
     img.style.resize = "none";
     img.style.overflow = "visible";
-    img.style.objectFit = "fill";
-    const rot = Number(img.dataset.rot) || 0, sx = img.dataset.flipH === "1" ? -1 : 1, sy = img.dataset.flipV === "1" ? -1 : 1;
-    const base = contenedor.clientWidth || 700, x = (Number(img.dataset.moveX) || 0) * base, y = (Number(img.dataset.moveY) || 0) * base;
-    img.style.position = "relative"; img.style.zIndex = String(Number.isFinite(Number(img.dataset.z)) && img.dataset.z !== "" ? Number(img.dataset.z) : 10);
-    img.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg) scale(${sx},${sy})`;
+    img.style.objectFit = "contain";
+    img.style.position = "relative";
+    img.style.transformOrigin = "center center";
+    img.style.zIndex = String(Number.isFinite(Number(img.dataset.z)) && img.dataset.z !== "" ? Number(img.dataset.z) : 10);
   });
-  if (typeof ResizeObserver === "function") { const stickers = [...contenedor.querySelectorAll("img[data-nota-sticker],img[data-nota-image]")]; const actualizar = () => { if (!contenedor.isConnected) { ro.disconnect(); return; } const base = contenedor.clientWidth || 700; stickers.forEach((img) => { const x = (Number(img.dataset.moveX) || 0) * base, y = (Number(img.dataset.moveY) || 0) * base; img.style.transform = `translate(${x}px,${y}px) rotate(${Number(img.dataset.rot) || 0}deg) scale(${img.dataset.flipH === "1" ? -1 : 1},${img.dataset.flipV === "1" ? -1 : 1})`; }); }; const ro = new ResizeObserver(actualizar); ro.observe(contenedor); }
+  const stickers = [...contenedor.querySelectorAll("img[data-nota-sticker],img[data-nota-image]")];
+  let ro = null;
+  const actualizar = () => {
+    if (!contenedor.isConnected) { ro?.disconnect(); return; }
+    const base = Math.max(1, contenedor.clientWidth || 700);
+    stickers.forEach((img) => {
+      const originalW = Math.max(1, Number(img.getAttribute("width")) || img.naturalWidth || 220);
+      const originalH = Math.max(1, Number(img.getAttribute("height")) || img.naturalHeight || 160);
+      const rot = Number(img.dataset.rot) || 0, rad = rot * Math.PI / 180;
+      let escala = Math.min(1, base / Math.max(1, originalW * Math.abs(Math.cos(rad)) + originalH * Math.abs(Math.sin(rad))));
+      let ancho = originalW * escala, alto = originalH * escala;
+      const anchoRotado = ancho * Math.abs(Math.cos(rad)) + alto * Math.abs(Math.sin(rad));
+      const margenRotacion = Math.max(0, (anchoRotado - ancho) / 2);
+      const desplazamiento = (Number(img.dataset.moveX) || 0) * base;
+      const x = Math.min(Math.max(desplazamiento, margenRotacion), Math.max(margenRotacion, base - ancho - margenRotacion));
+      const y = (Number(img.dataset.moveY) || 0) * base;
+      img.style.width = `${ancho}px`;
+      img.style.height = `${alto}px`;
+      img.style.transform = `translate(${x}px,${y}px) rotate(${rot}deg) scale(${img.dataset.flipH === "1" ? -1 : 1},${img.dataset.flipV === "1" ? -1 : 1})`;
+    });
+  };
+  actualizar();
+  if (typeof ResizeObserver === "function" && stickers.length) { ro = new ResizeObserver(actualizar); ro.observe(contenedor); }
   contenedor.querySelectorAll("a").forEach((a) => {
     const url = a.getAttribute("href") || "";
     if (/^https?:\/\//i.test(url)) { a.rel = "noopener noreferrer"; a.target = "_blank"; }
