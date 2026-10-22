@@ -961,28 +961,23 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   capaTinta.establecerColor(inpTinta.value); pintarSwTinta();
   ajustarTintaAuto = () => { if (tintaManual) return; inpTinta.value = tintaAuto(); capaTinta.establecerColor(inpTinta.value); pintarSwTinta(); };
   let lapizDesactivadoManualmente = false;
-  // lapizAuto: el lápiz se encendió solo porque el stylus pasó sobre la nota (no por el botón). ultimoTecleo: para no encenderlo mientras escribes.
-  let lapizAuto = false, ultimoTecleo = 0;
+  let ultimoTecleo = 0; // para que el stylus cerca no encienda el lápiz mientras escribes
   const simbolosForma={linea:"╱",flecha:"↗",rectangulo:"▱",cuadrado:"□",circulo:"○",elipse:"⬭",triangulo:"△",rombo:"◇",estrella:"☆",corazon:"♡"};
-  const fijarModo = (m) => { lapizAuto = false; capaTinta.establecerModo(m); cuerpo.contentEditable = m ? "false" : "true"; btnLapiz.setAttribute("aria-pressed", String(m === "lapiz")); btnBorrador.setAttribute("aria-pressed", String(m === "borrador")); botonesForma.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.forma === m)));btnFiguras.innerHTML=m&&simbolosForma[m]?`<span class="nt-figura-activa" aria-hidden="true">${simbolosForma[m]}</span>`:ICONOS.figuras;btnFiguras.classList.toggle("nt-herramienta-activa",!!m&&!!simbolosForma[m]); };
+  // Si el modo se apaga por CUALQUIER vía (botón, Escape, borrador, figuras, stickers), el stylus deja de reactivarlo solo: así siempre puedes volver al texto.
+  const fijarModo = (m) => { lapizDesactivadoManualmente = !m; capaTinta.establecerModo(m); cuerpo.contentEditable = m ? "false" : "true"; btnLapiz.setAttribute("aria-pressed", String(m === "lapiz")); btnBorrador.setAttribute("aria-pressed", String(m === "borrador")); botonesForma.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.forma === m)));btnFiguras.innerHTML=m&&simbolosForma[m]?`<span class="nt-figura-activa" aria-hidden="true">${simbolosForma[m]}</span>`:ICONOS.figuras;btnFiguras.classList.toggle("nt-herramienta-activa",!!m&&!!simbolosForma[m]); };
   editarFigurasInput.onchange=()=>{ if(editarFigurasInput.checked) fijarModo(null); capaTinta.establecerEdicionFiguras(editarFigurasInput.checked); eliminarFiguraBtn.classList.toggle("nt-oculto",!editarFigurasInput.checked); };
   eliminarFiguraBtn.onclick=()=>{ if(!capaTinta.eliminarFiguraSeleccionada()) mostrarToast(tr("Selecciona una figura para eliminar")); };
   modal.addEventListener("nt:figura-contexto",(e)=>{const {figura,x,y}=e.detail||{};if(!figura)return;colorFiguraInput.value=/^#[\da-f]{6}$/i.test(figura.c||"")?figura.c:"#172033";menuFiguraContexto.classList.remove("nt-oculto");const w=menuFiguraContexto.offsetWidth,h=menuFiguraContexto.offsetHeight;menuFiguraContexto.style.left=`${Math.max(8,Math.min(x,innerWidth-w-8))}px`;menuFiguraContexto.style.top=`${Math.max(8,Math.min(y,innerHeight-h-8))}px`;});
   const cerrarContextoFuera=(e)=>{if(!menuFiguraContexto.contains(e.target))menuFiguraContexto.classList.add("nt-oculto");};document.addEventListener("pointerdown",cerrarContextoFuera,true);
   eliminarFiguraContexto.onclick=()=>{capaTinta.eliminarFiguraSeleccionada();menuFiguraContexto.classList.add("nt-oculto");};colorFiguraInput.onchange=()=>{capaTinta.cambiarColorFiguraSeleccionada(colorFiguraInput.value);menuFiguraContexto.classList.add("nt-oculto");};
-  btnLapiz.onclick = () => {
-    const encendido = capaTinta.obtenerModo() === "lapiz";
-    // Si el stylus lo encendió solo, pulsar el botón lo confirma en vez de apagarlo (antes parecía que "no se activaba").
-    if (encendido && lapizAuto) { lapizDesactivadoManualmente = false; fijarModo("lapiz"); return; }
-    lapizDesactivadoManualmente = encendido; fijarModo(encendido ? null : "lapiz");
-  };
+  btnLapiz.onclick = () => fijarModo(capaTinta.obtenerModo() === "lapiz" ? null : "lapiz"); // interruptor puro: siempre alterna
   btnBorrador.onclick = () => fijarModo(capaTinta.obtenerModo() === "borrador" ? null : "borrador");
   botonesForma.forEach((b) => { b.onclick = () => { cerrarMenuFiguras(); fijarModo(capaTinta.obtenerModo() === b.dataset.forma ? null : b.dataset.forma); }; });
   inpTinta.oninput = () => { tintaManual = true; capaTinta.establecerColor(inpTinta.value); pintarSwTinta(); if (capaTinta.obtenerModo() !== "lapiz") fijarModo("lapiz"); };
   cuerpo.addEventListener("pointermove", (e) => {
     if (e.pointerType !== "pen" || lapizDesactivadoManualmente || capaTinta.obtenerModo()) return;
     if (Date.now() - ultimoTecleo < 4000) return; // escribiendo con teclado: el stylus cerca no debe quitarte la edición de texto
-    fijarModo("lapiz"); lapizAuto = true;
+    fijarModo("lapiz");
   });
   titulo.addEventListener("input", () => guardarPasoHistorial("titulo"));
   cuerpo.addEventListener("input", () => { ultimoTecleo = Date.now(); if (!forzandoPasosPegado) guardarPasoHistorial("texto"); });
