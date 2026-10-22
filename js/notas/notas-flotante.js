@@ -192,9 +192,10 @@ function crearBarraHerramientas({ doc, capa, nota, host }) {
   slider.oninput=()=>{mostrar();capa.establecerGrosor(GROSOR_BASE*Number(slider.value));}; slider.onchange=()=>guardarGrosorTrazoPreferido(slider.value); grosor.append(slider,valor);
   borrador.onclick=()=>{ const activo=capa.obtenerModo()!=="borrador"; capa.establecerModo(activo?"borrador":null); barra.actualizarModo(activo?"borrador":null); };
   lapiz.onclick=()=>activarLapiz({capaTinta:capa,controles:barra,onModo:(modo)=>{if(host.classList.contains("nt-pip-nota")){if(modo)edicionesPiP.add(nota.id);else edicionesPiP.delete(nota.id);}else{const f=flotantes.get(nota.id);fijarEdicion(f,!!modo);}}});
-  barra.actualizarModo=(modo)=>{ lapiz.classList.toggle("activo",modo==="lapiz"); borrador.classList.toggle("activo",modo==="borrador"); figuras.classList.toggle("activo",opciones.some(([m])=>m===modo)); for(const b of menu.children)b.setAttribute("aria-checked",String(b.dataset.modo===modo)); const editar=host.querySelector(".nt-flot-barra .nt-flot-btn"); editar?.classList.toggle("activo",!!modo); editar?.setAttribute("aria-pressed",String(!!modo)); if(host.classList.contains("nt-pip-nota")){if(modo)edicionesPiP.add(nota.id);else edicionesPiP.delete(nota.id);}else{const f=flotantes.get(nota.id);fijarEdicion(f,!!modo);} };
+  barra.actualizarModo=(modo)=>{ barra.style.display=modo?"":"none"; lapiz.classList.toggle("activo",modo==="lapiz"); borrador.classList.toggle("activo",modo==="borrador"); figuras.classList.toggle("activo",opciones.some(([m])=>m===modo)); for(const b of menu.children)b.setAttribute("aria-checked",String(b.dataset.modo===modo)); const editar=host.querySelector(".nt-flot-barra .nt-flot-btn"); editar?.classList.toggle("activo",!!modo); editar?.setAttribute("aria-pressed",String(!!modo)); if(host.classList.contains("nt-pip-nota")){if(modo)edicionesPiP.add(nota.id);else edicionesPiP.delete(nota.id);}else{const f=flotantes.get(nota.id);fijarEdicion(f,!!modo);} };
   host.addEventListener("keydown",(e)=>{if(e.key==="Escape"){capa.establecerModo(null);barra.actualizarModo(null);menu.classList.add("nt-oculto");if(host.classList.contains("nt-pip-nota"))edicionesPiP.delete(nota.id);else{const f=flotantes.get(nota.id);fijarEdicion(f,false);}window.dispatchEvent(new Event("notas:actualizadas-ui"));}});
   barra.append(deshacerBtn,rehacerBtn,lapiz,borrador,figuras,grosor,menu);
+  barra.style.display=capa.obtenerModo()?"":"none"; // modo edición falso: la barra no se muestra
   return barra;
 }
 
@@ -305,17 +306,9 @@ function enlazarArrastre(f) {
   });
 }
 
-// Resumen barato de lo que se ve de una nota: si no cambió, no hace falta reconstruir la tarjeta flotante.
-function firmaVisual(n) {
-  let puntos = 0;
-  for (const t of n.tinta || []) puntos += (t.p?.length || 0) + (t.c ? t.c.charCodeAt(1) || 0 : 0);
-  return [n.modificada_en, n.color, n.color_texto, n.titulo, n.capa_tinta_z, n.vence_en, n.tinta?.length || 0, puntos, n.contenido].join("\u0001");
-}
-
 function pintar(f) {
   const nota = buscar(f.id);
   if (!nota) return false;
-  f.firma = firmaVisual(nota);
   const color = resolverColorNota(nota.color || COLOR_DEFECTO);
   f.el.style.setProperty("--nt-nota", color);
   f.el.style.color = colorTextoNota(nota, color);
@@ -638,10 +631,8 @@ function sincronizar() {
   if (!estado.datos) return;
   for (const [id, win] of [...ventanasPiP]) if (!edicionesPiP.has(id)) pintarPiP(id, win);
   for (const f of [...flotantes.values()]) {
-    const nota = buscar(f.id);
-    if (!nota) { desflotarNota(f.id); continue; }
+    if (!buscar(f.id)) { desflotarNota(f.id); continue; }
     if (f.arrastrando || f.inercia || f.editando) continue;
-    if (f.firma === firmaVisual(nota)) continue; // sin cambios visibles: se conserva la tarjeta tal cual
     pintar(f);
     const l = limitesDe(f);
     f.x = acotar(f.x, l.minX, l.maxX); f.y = acotar(f.y, l.minY, l.maxY);
@@ -650,7 +641,6 @@ function sincronizar() {
 }
 window.addEventListener("notas:actualizadas", sincronizar);
 window.addEventListener("notas:actualizadas-ui", sincronizar);
-let rafResize = 0; // un solo reacomodo por fotograma al cambiar el tamaño de la ventana
-window.addEventListener("resize", () => { if (rafResize) return; rafResize = requestAnimationFrame(() => { rafResize = 0; flotantes.forEach((f) => { if (!f.arrastrando && !f.inercia && !f.editando) reubicar(f); }); }); });
+window.addEventListener("resize", () => flotantes.forEach((f) => { if (!f.arrastrando && !f.inercia && !f.editando) reubicar(f); }));
 
 export { abrirSticky, cerrarSticky, flotarNota, desflotarNota, alternarFlotante, abrirNotaPictureInPicture, estaFlotando, restaurarFlotantes };

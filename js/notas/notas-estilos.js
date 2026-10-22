@@ -81,6 +81,11 @@ const CSS = `
 .notas-cuerpo input[type="checkbox"]:checked,.nota-preview input[type="checkbox"]:checked{background:var(--nt-grad,linear-gradient(135deg,#f5a9d3,#b7a5f4));border-color:transparent;opacity:1}
 .notas-cuerpo input[type="checkbox"]:checked::after,.nota-preview input[type="checkbox"]:checked::after{content:"";width:5px;height:10px;margin-top:-2px;border:solid #1b1530;border-width:0 2px 2px 0;transform:rotate(45deg)}
 .notas-cuerpo li:has(input[data-nota-check]),.nota-preview li:has(input[data-nota-check]){list-style:none;margin-left:-1.3em}
+/* Vistas previas sin tinta (tarjetas, flotantes): sangría compacta en listas y checklists.
+   Las que llevan tinta (.nt-preview-escalado) no se tocan: su maquetación debe coincidir con la del editor. */
+.nota-preview:not(.nt-preview-escalado) :is(ul,ol){padding-left:1.15em;margin:.2em 0}
+.nota-preview:not(.nt-preview-escalado) :is(ul,ol):has(input[data-nota-check]){padding-left:0}
+.nota-preview:not(.nt-preview-escalado) li:has(input[data-nota-check]){margin-left:0}
 .notas-cuerpo ul[data-marc-color]>li::marker,.notas-cuerpo ol[data-marc-color]>li::marker,.nota-preview ul[data-marc-color]>li::marker,.nota-preview ol[data-marc-color]>li::marker{color:var(--nt-marker-color,currentColor)}
 .notas-cuerpo ul[data-marc-color] input[data-nota-check],.notas-cuerpo ol[data-marc-color] input[data-nota-check],.nota-preview ul[data-marc-color] input[data-nota-check],.nota-preview ol[data-marc-color] input[data-nota-check]{border-color:var(--nt-marker-color,currentColor)}
 .notas-cuerpo ul[data-marc-color] input[data-nota-check]:checked,.notas-cuerpo ol[data-marc-color] input[data-nota-check]:checked,.nota-preview ul[data-marc-color] input[data-nota-check]:checked,.nota-preview ol[data-marc-color] input[data-nota-check]:checked{background:var(--nt-marker-color,currentColor)}
