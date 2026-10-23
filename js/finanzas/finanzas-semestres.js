@@ -17,22 +17,26 @@
    que se agrega un pago o un ingreso (ver obtenerOCrearRegistroDeSemestre).
    Parte D: la edición queda en un borrador por semestre y se confirma o
    descarta en conjunto, sin escribir cambios intermedios a los datos.
+
+   Finanzas 2.0 (0B): ya NO lee ni escribe finanzas_semestre. El "registro"
+   que usa esta pantalla es un registro de vista armado desde `movimientos`
+   (ver finanzas-registro-semestre.js); al confirmar el borrador se vuelca
+   de vuelta a `movimientos`.
    ========================================================================= */
 
-import {
-  crearRegistroFinancieroSemestre,
-  crearPagoMatricula,
-  crearIngresoBeca,
-  calcularTotalPagosMatricula,
-  calcularTotalIngresosBeca,
-  sellarTimestamp,
-} from "../core/schema.js";
+import { calcularTotalPagosMatricula, calcularTotalIngresosBeca } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { traducirTextoInterfaz } from "../core/i18n.js";
 import { abrirConfirmacion, construirPillSwitchBinario, mostrarToast } from "../ui/componentes.js";
 import { obtenerSemestresActuales, obtenerSemestresPasados } from "../semestres/semestres.js";
 import { formatearFechaLarga, formatearMonto } from "./finanzas.js";
+import {
+  confirmarRegistroEnMovimientos,
+  construirRegistroDesdeMovimientos,
+  crearItemRegistro,
+  crearRegistroVacio,
+} from "./finanzas-registro-semestre.js";
 
 /**
  * Qué semestres están expandidos ahora mismo (solo estado de UI, vive en
@@ -71,66 +75,11 @@ function repartirMontoEnPartes(total, cantidadPartes) {
 }
 
 function obtenerRegistroDeSemestre(semestreId) {
-  normalizarRegistrosFinancierosPorSemestre();
-  return (estado.datos.finanzas_semestre || []).find((r) => r.semestre_id === semestreId) || null;
+  return construirRegistroDesdeMovimientos(estado.datos, semestreId);
 }
 
 function clonarRegistroFinanciero(registro) {
   return registro ? JSON.parse(JSON.stringify(registro)) : null;
-}
-
-/** Un semestre puede tener como máximo un registro financiero. Consolida
- * filas duplicadas que llegaran de otra instalación/dispositivo y conserva
- * todos los pagos e ingresos por su ID antes de quitarlas. */
-function normalizarRegistrosFinancierosPorSemestre() {
-  const registros = estado.datos?.finanzas_semestre;
-  if (!Array.isArray(registros) || registros.length < 2) return false;
-  const porSemestre = new Map();
-  let cambio = false;
-  for (const registro of registros) {
-    if (!registro?.semestre_id) { porSemestre.set(`sin-semestre:${registro?.id || porSemestre.size}`, registro); continue; }
-    const existente = porSemestre.get(registro.semestre_id);
-    if (!existente) { porSemestre.set(registro.semestre_id, registro); continue; }
-    cambio = true;
-    for (const clave of ["pagos_matricula", "ingresos_beca"]) {
-      const items = new Map();
-      for (const item of [...(existente[clave] || []), ...(registro[clave] || [])]) {
-        const id = item?.id || `${clave}:${JSON.stringify(item)}`;
-        if (!items.has(id)) items.set(id, item);
-      }
-      existente[clave] = [...items.values()];
-    }
-    for (const clave of ["_eliminados_pagos_matricula", "_eliminados_ingresos_beca"]) {
-      const tumbas = new Map();
-      for (const tumba of [...(existente[clave] || []), ...(registro[clave] || [])]) {
-        if (tumba?.id && !tumbas.has(tumba.id)) tumbas.set(tumba.id, tumba);
-      }
-      existente[clave] = [...tumbas.values()];
-    }
-    sellarTimestamp(existente);
-  }
-  if (cambio) {
-    estado.datos.finanzas_semestre = [...porSemestre.values()];
-    marcarCambioPendiente();
-  }
-  return cambio;
-}
-
-/**
- * Devuelve el registro financiero del semestre, CREÁNDOLO primero (vacío,
- * sin ningún pago/ingreso todavía) si todavía no existe uno. Reemplaza al
- * botón "Crear registro" de Parte A: ahora la creación es invisible, pasa
- * sola la primera vez que se guarda un pago o un ingreso desde el modal
- * chico de abrirModalItemFinanzas.
- */
-function obtenerOCrearRegistroDeSemestre(semestreId) {
-  let registro = obtenerRegistroDeSemestre(semestreId);
-  if (!registro) {
-    registro = crearRegistroFinancieroSemestre({ semestreId });
-    if (!Array.isArray(estado.datos.finanzas_semestre)) estado.datos.finanzas_semestre = [];
-    estado.datos.finanzas_semestre.push(registro);
-  }
-  return registro;
 }
 
 function refrescarListaFinanzas(contenedorLista) {
@@ -144,7 +93,7 @@ function renderizarPestanaSemestresFinanzas(contenedor) {
   if (semestres.length === 0) {
     const vacio = document.createElement("p");
     vacio.className = "muted";
-    vacio.textContent = "Todavía no tenés ningún semestre registrado en Semestres.";
+    vacio.textContent = "Todavía no tienes ningún semestre registrado en Semestres.";
     contenedor.appendChild(vacio);
     return;
   }
@@ -272,14 +221,7 @@ function construirPanelDetalleFinanzasSemestre(semestre, registro, contenedorLis
     btnGuardar.addEventListener("click", () => {
       const borrador = borradoresFinanzasSemestre.get(semestre.id);
       if (!borrador) return;
-      const vacio = !borrador.pagos_matricula.length && !borrador.ingresos_beca.length;
-      const indice = (estado.datos.finanzas_semestre || []).findIndex((r) => r.semestre_id === semestre.id);
-      if (indice >= 0) estado.datos.finanzas_semestre[indice] = sellarTimestamp(borrador);
-      else if (!vacio) {
-        if (!Array.isArray(estado.datos.finanzas_semestre)) estado.datos.finanzas_semestre = [];
-        estado.datos.finanzas_semestre.push(sellarTimestamp(borrador));
-      }
-      if (indice >= 0 || !vacio) marcarCambioPendiente();
+      if (confirmarRegistroEnMovimientos(estado.datos, borrador)) marcarCambioPendiente();
       borradoresFinanzasSemestre.delete(semestre.id);
       refrescarListaFinanzas(contenedorLista);
       mostrarToast(traducirTextoInterfaz("Cambios financieros guardados."));
@@ -294,7 +236,7 @@ function construirPanelDetalleFinanzasSemestre(semestre, registro, contenedorLis
       const actual = obtenerRegistroDeSemestre(semestre.id);
       borradoresFinanzasSemestre.set(
         semestre.id,
-        clonarRegistroFinanciero(actual) || crearRegistroFinancieroSemestre({ semestreId: semestre.id })
+        clonarRegistroFinanciero(actual) || crearRegistroVacio(semestre.id)
       );
       refrescarListaFinanzas(contenedorLista);
     });
@@ -495,17 +437,15 @@ function construirTarjetaItemFinanzas({ item, tipo, claseBadge, registro, semest
   return fila;
 }
 
-/** Saca el ítem de la lista correspondiente y deja tumba, mismo patrón
- *  exacto que ya usa _eliminados_finanzas_semestre (ver
- *  fusionarFinanzasSemestre en storage-merge.js: espera {id, eliminadoEn}
- *  en _eliminados_pagos_matricula/_eliminados_ingresos_beca). */
+/** Saca el ítem del registro de vista y anota la tumba {id, eliminadoEn};
+ *  al guardar el borrador, confirmarRegistroEnMovimientos la convierte en
+ *  borrado real + tumba en _eliminados_movimientos. */
 function eliminarItemFinanzas({ tipo, registro, itemId }) {
   const claveLista = tipo === "matricula" ? "pagos_matricula" : "ingresos_beca";
   const claveEliminados = tipo === "matricula" ? "_eliminados_pagos_matricula" : "_eliminados_ingresos_beca";
   registro[claveLista] = registro[claveLista].filter((x) => x.id !== itemId);
   if (!Array.isArray(registro[claveEliminados])) registro[claveEliminados] = [];
   registro[claveEliminados].push({ id: itemId, eliminadoEn: Date.now() });
-  sellarTimestamp(registro);
 }
 
 /**
@@ -733,41 +673,34 @@ function abrirModalItemFinanzas({ tipo, semestre, registro, itemExistente, conte
         montos = repartirMontoEnPartes(Number(inputMontoTotal.value) || 0, n);
       }
       if (montos.length === 0 || montos.every((m) => m === 0)) {
-        mostrarToast("Ingresá un monto total válido.");
+        mostrarToast(traducirTextoInterfaz("Ingresa un monto total válido."));
         return;
       }
       const registroFinal = registroParaEditar(semestre.id);
       montos.forEach((monto, i) => {
         registroFinal.pagos_matricula.push(
-          crearPagoMatricula({ descripcion: `Pago ${i + 1} de ${montos.length}`, monto })
+          crearItemRegistro({ descripcion: `Pago ${i + 1} de ${montos.length}`, monto })
         );
       });
-      sellarTimestamp(registroFinal);
     } else {
       const descripcion = inputDescripcion.value.trim();
       const monto = Number(inputMonto.value) || 0;
       const fecha = inputFecha.value || null;
       if (monto === 0) {
-        mostrarToast("Ingresá un monto válido.");
+        mostrarToast(traducirTextoInterfaz("Ingresa un monto válido."));
         return;
       }
       if (itemExistente) {
         itemExistente.descripcion = descripcion || null;
         itemExistente.monto = monto;
         itemExistente.fecha = fecha;
-        sellarTimestamp(itemExistente);
-        sellarTimestamp(registro);
       } else {
         const registroFinal = registroParaEditar(semestre.id);
-        const nuevoItem = esMatricula
-          ? crearPagoMatricula({ descripcion, monto, fecha })
-          : crearIngresoBeca({ descripcion, monto, fecha });
-        registroFinal[esMatricula ? "pagos_matricula" : "ingresos_beca"].push(nuevoItem);
-        sellarTimestamp(registroFinal);
+        registroFinal[esMatricula ? "pagos_matricula" : "ingresos_beca"].push(crearItemRegistro({ descripcion, monto, fecha }));
       }
     }
 
-    if (!borradoresFinanzasSemestre.has(semestre.id)) marcarCambioPendiente();
+    // Los cambios quedan en el borrador hasta "Guardar cambios" (registroParaEditar siempre crea uno).
     cerrar();
     // El semestre queda expandido (no se toca semestresExpandidosFinanzas)
     // para que se vea de una vez la tarjeta recién agregada/editada.
@@ -781,13 +714,16 @@ function abrirModalItemFinanzas({ tipo, semestre, registro, itemExistente, conte
 }
 
 function registroParaEditar(semestreId) {
-  if (borradoresFinanzasSemestre.has(semestreId)) {
-    const borrador = borradoresFinanzasSemestre.get(semestreId);
-    if (!Array.isArray(borrador.pagos_matricula)) borrador.pagos_matricula = [];
-    if (!Array.isArray(borrador.ingresos_beca)) borrador.ingresos_beca = [];
-    return borrador;
+  if (!borradoresFinanzasSemestre.has(semestreId)) {
+    borradoresFinanzasSemestre.set(
+      semestreId,
+      clonarRegistroFinanciero(obtenerRegistroDeSemestre(semestreId)) || crearRegistroVacio(semestreId)
+    );
   }
-  return obtenerOCrearRegistroDeSemestre(semestreId);
+  const borrador = borradoresFinanzasSemestre.get(semestreId);
+  if (!Array.isArray(borrador.pagos_matricula)) borrador.pagos_matricula = [];
+  if (!Array.isArray(borrador.ingresos_beca)) borrador.ingresos_beca = [];
+  return borrador;
 }
 
 function abrirSelectorSemestreParaFinanzas(tipo, alSeleccionar) {
@@ -853,7 +789,7 @@ function iniciarEdicionMovimientoFinanzas(tipo, semestreId, contenedorLista) {
   const actual = obtenerRegistroDeSemestre(semestreId);
   borradoresFinanzasSemestre.set(
     semestreId,
-    clonarRegistroFinanciero(actual) || crearRegistroFinancieroSemestre({ semestreId })
+    clonarRegistroFinanciero(actual) || crearRegistroVacio(semestreId)
   );
   semestresExpandidosFinanzas.add(semestreId);
   refrescarListaFinanzas(contenedorLista);
@@ -870,7 +806,6 @@ function iniciarEdicionMovimientoFinanzas(tipo, semestreId, contenedorLista) {
 const hayBorradorFinanzasPendiente = () => borradoresFinanzasSemestre.size > 0;
 
 export {
-  normalizarRegistrosFinancierosPorSemestre,
   renderizarPestanaSemestresFinanzas,
   hayBorradorFinanzasPendiente,
   abrirSelectorSemestreParaFinanzas,
