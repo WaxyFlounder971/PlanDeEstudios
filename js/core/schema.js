@@ -6,6 +6,8 @@
    así que este archivo es el mapa de referencia de todo el modelo.
    ========================================================================= */
 
+import { MODULOS_FINANZAS_DEFAULT, migrarFinanzasAMovimientos } from "./finanzas-modelo.js";
+
 /**
  * Devuelve el objeto de datos "vacío" para un usuario que recién inicia
  * sesión por primera vez. Esto es lo que se guarda como el archivo JSON
@@ -192,6 +194,8 @@ function crearDatosUsuarioNuevo() {
       // salir una vez por dispositivo; nada se pierde ni se rompe.
       racha_aviso_inicio_oculto: false,
       racha_ultimo_inicio_avisado: null,
+      // Finanzas 2.0: módulos activables. Apagar solo oculta, no borra.
+      finanzas_modulos: { ...MODULOS_FINANZAS_DEFAULT },
     },
 
     // Un usuario puede tener más de un Plan de Estudios (ej. cambio de carrera/universidad).
@@ -369,6 +373,11 @@ function crearDatosUsuarioNuevo() {
     ],
     _eliminados_finanzas_semestre: [],
     _eliminados_gastos_u: [],
+    // Finanzas 2.0: modelo único de movimientos + metas (ver finanzas-modelo.js).
+    movimientos: [],
+    metas: [],
+    _eliminados_movimientos: [],
+    _eliminados_metas: [],
 
     // Tiempo de Estudio (Parte 1): colección plana de nivel superior, mismo
     // patrón exacto que finanzas_semestre/gastos_u/agenda — una sesión de
@@ -3763,6 +3772,12 @@ function migrarDatosAntiguos(datos) {
       cfgLimpieza.plan_activo_terciario_id = null;
     }
   }
+
+  // Finanzas 2.0: módulos por defecto y copia idempotente a `movimientos`.
+  // Va al final, cuando semestres y gastos_u ya quedaron normalizados.
+  if (!datos.configuracion) datos.configuracion = {};
+  datos.configuracion.finanzas_modulos = { ...MODULOS_FINANZAS_DEFAULT, ...(datos.configuracion.finanzas_modulos || {}) };
+  migrarFinanzasAMovimientos(datos);
 
   return datos;
 }

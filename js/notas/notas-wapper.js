@@ -96,6 +96,7 @@ async function crearImagenNota({ titulo = "", contenido = "", color = "#fff594",
   const tituloLineas = [];
   ctx.font = titleFont;
   for (const parrafo of String(titulo).split(/\r?\n/u)) tituloLineas.push(...lineasTexto(parrafo, titleFont));
+  const tintaTexto = /^#[\da-f]{6}$/i.test(colorTexto) ? colorTexto : "#172033";
   const bloques = []; let y = pad + 26;
   for (const linea of tituloLineas) { bloques.push({ tipo: "titulo", value: linea, y }); y += 43; }
   y += 15;
@@ -147,7 +148,6 @@ async function crearImagenNota({ titulo = "", contenido = "", color = "#fff594",
   const h = Math.max(260, y + pad + (marcaAgua ? 26 : 0), tintaBottom + pad + (marcaAgua ? 26 : 0), imagenBottom + pad + (marcaAgua ? 26 : 0));
   c.width = w; c.height = h;
   ctx.fillStyle = /^#[\da-f]{6}$/i.test(color) ? color : "#fff594"; ctx.fillRect(0, 0, w, h);
-  const tintaTexto = /^#[\da-f]{6}$/i.test(colorTexto) ? colorTexto : "#172033";
   const imagenes = new Map(await Promise.all(bloques.filter((b) => b.tipo === "imagen").map(async (b) => {
     const imagen = new Image(); imagen.src = b.src;
     try { await imagen.decode(); } catch (_) {}
@@ -170,7 +170,7 @@ async function compartirImagenNota(datos) {
   const blob = await new Promise((resolve) => c.toBlob(resolve, "image/png"));
   if (!blob) throw new Error("No se pudo crear la imagen");
   const file = new File([blob], "nota-wapper.png", { type: "image/png" });
-  if (navigator.canShare?.({ files: [file] }) && navigator.share) { await navigator.share({ files: [file], title: datos.titulo || "Nota" }); return "compartida"; }
+  if (navigator.canShare?.({ files: [file] }) && navigator.share) { try { await navigator.share({ files: [file], title: datos.titulo || "Nota" }); return "compartida"; } catch (e) { if (e?.name === "AbortError") throw e; /* sin permiso de compartir (p. ej. caducó el gesto del usuario): se descarga */ } }
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href),1000); return "descargada";
 }
 export { descargarWapper, leerWapper, compartirImagenNota };

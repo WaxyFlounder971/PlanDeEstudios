@@ -1309,14 +1309,8 @@ html[data-mode="true-dark"][data-palette] .glass-card,
 html[data-mode="true-dark"][data-palette] .glass-panel {
   border-color: color-mix(in srgb, var(--accent-1) 12%, #242424);
 }
-/* En oscuro optimizado se prioriza el negro puro y la lectura sencilla;
-   el modo oscuro normal conserva sus superficies con acento y profundidad. */
-html[data-mode="true-dark"][data-rendimiento="reducido"] {
-  --bg-canvas:#000; --bg-header-solido:#030303; --bg-card:#080808; --bg-panel:#050505;
-  --border-glass:rgba(255,255,255,.055); --shadow-glass:none; --shadow-float:0 8px 20px rgba(0,0,0,.55);
-}
-html[data-mode="true-dark"][data-rendimiento="reducido"] .glass-card,
-html[data-mode="true-dark"][data-rendimiento="reducido"] .glass-panel { border-color:rgba(255,255,255,.055); box-shadow:none; }
+/* v3.24.33: Oscuro profundo optimizado ya no aplana los colores; usa las
+   mismas superficies que Oscuro profundo normal (solo se reducen sombras y blur). */
 #app-shell, #app-shell * { box-sizing: border-box; }
 
 .app-layout {
@@ -3875,8 +3869,28 @@ html.exportar-tema-default:is([data-mode="dark"], [data-mode="true-dark"]) {
    único cambio perceptible es que el glow ya no queda "clavado" al viewport
    mientras se scrollea (un detalle que nadie nota en el uso normal), la
    estética del fondo (colores, forma, posición inicial) queda idéntica. */
+/* v3.24.33: el degradado ya NO usa background-attachment:scroll. Con "scroll"
+   los radial-gradient se dimensionan contra la caja COMPLETA del body, así que
+   en páginas largas (Plan de Estudios) el radio se estira miles de px y el
+   glow cubre todo el viewport: fondo plano y más claro que en Fancy. En
+   páginas cortas (Notas) body mide ~100vh y por eso allí sí se veía igual.
+   Solución: mismo degradado en una capa position:fixed propia (se compone en
+   GPU una sola vez, sin repintar al hacer scroll) -> idéntico a Fancy. */
 [data-rendimiento="reducido"] body {
+  background-color: transparent;
+  background-image: none;
   background-attachment: scroll;
+}
+[data-rendimiento="reducido"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 15% 10%, var(--accent-glow-1) 0%, transparent 45%),
+    radial-gradient(circle at 85% 0%, var(--accent-glow-2) 0%, transparent 40%),
+    radial-gradient(circle at 50% 100%, var(--accent-glow-1) 0%, transparent 55%);
 }
 
 /* 1. backdrop-filter: blur(...) fuera. Antes esto subía de "opacidad" con
@@ -3910,17 +3924,15 @@ html.exportar-tema-default:is([data-mode="dark"], [data-mode="true-dark"]) {
    IMPORTANTE: no reemplazar esto por color-mix(var(--bg-card) X%,
    var(--bg-canvas) Y%) de nuevo — ver el párrafo de arriba, ese enfoque
    NUNCA garantiza opacidad real. */
-[data-rendimiento="reducido"] .glass-card {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  background-color: var(--bg-canvas);
-  background-image: linear-gradient(var(--bg-card), var(--bg-card));
-}
+/* v3.24.33: sobre un fondo de degradados suaves y estáticos, blur(16px) no
+   cambia nada visible (desenfocar un degradado liso da el mismo degradado),
+   pero es lo que más cuesta. Se quita SOLO el blur y se conserva el color
+   translúcido original -> mismas tarjetas y mismos tonos que en Fancy.
+   (Se elimina la base opaca --bg-canvas que las dejaba más oscuras/planas.) */
+[data-rendimiento="reducido"] .glass-card,
 [data-rendimiento="reducido"] .glass-panel {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  background-color: var(--bg-canvas);
-  background-image: linear-gradient(var(--bg-panel), var(--bg-panel));
 }
 [data-rendimiento="reducido"] .mobile-topbar {
   backdrop-filter: none;
@@ -3978,17 +3990,21 @@ html.exportar-tema-default:is([data-mode="dark"], [data-mode="true-dark"]) {
    a 0% de transparencia real, sin tocar la capa de gradiente extra del
    sidebar (esa sigue igual, es una capa aparte con su propio propósito
    visual, no la fuente del bug). */
-[data-rendimiento="reducido"]:is([data-mode="dark"], [data-mode="true-dark"]) #app-sidebar {
-  background-color: var(--bg-canvas);
-  background-image:
-    linear-gradient(rgba(0,0,0,0.16), rgba(0,0,0,0.16)),
-    linear-gradient(var(--bg-panel), var(--bg-panel));
-}
-[data-rendimiento="reducido"][data-mode="light"] #app-sidebar {
-  background-color: var(--bg-canvas);
-  background-image:
-    linear-gradient(rgba(255,255,255,0.16), rgba(255,255,255,0.16)),
-    linear-gradient(var(--bg-panel), var(--bg-panel));
+/* v3.24.33: en escritorio el sidebar usa su fondo normal (igual que Fancy).
+   Solo en móvil, donde es un cajón que tapa contenido, se mantiene opaco. */
+@media (max-width: 899.98px) {
+  [data-rendimiento="reducido"]:is([data-mode="dark"], [data-mode="true-dark"]) #app-sidebar {
+    background-color: var(--bg-canvas);
+    background-image:
+      linear-gradient(rgba(0,0,0,0.16), rgba(0,0,0,0.16)),
+      linear-gradient(var(--bg-panel), var(--bg-panel));
+  }
+  [data-rendimiento="reducido"][data-mode="light"] #app-sidebar {
+    background-color: var(--bg-canvas);
+    background-image:
+      linear-gradient(rgba(255,255,255,0.16), rgba(255,255,255,0.16)),
+      linear-gradient(var(--bg-panel), var(--bg-panel));
+  }
 }
 
 /* 2. Glow del botón primario en hover y de la "luz" de disponibilidad:
@@ -6083,3 +6099,26 @@ html,body,#app-shell,.glass-card,.glass-panel,#app-sidebar,.mobile-topbar { tran
 .imp-nav .btn{width:100%}
 @media (max-width:560px){.imp-opciones-2{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){.imp-progreso span,.imp-opcion,.imp-zona{transition:none}.imp-opcion:hover{transform:none}}
+
+/* =========================================================================
+   Notas rápidas: siempre con el trato del modo Optimizado, también en Fancy.
+   Escribir/dibujar es lo más sensible a la latencia; sin blur ni sombras
+   grandes el lápiz responde igual en ambos modos. Los colores no cambian
+   (mismo criterio que [data-rendimiento="reducido"]).
+   .notas-overlay es el modal del editor y cuelga de <body>, fuera de
+   .notas-seccion, por eso se lista aparte.
+   ========================================================================= */
+:is(.notas-seccion, .notas-overlay) {
+  --shadow-glass: 0 2px 6px rgba(0, 0, 0, 0.28);
+  --shadow-float: 0 2px 6px rgba(0, 0, 0, 0.3);
+  --transition-fast: 0.05s linear;
+  --transition-med: 0.05s linear;
+}
+:is(.notas-seccion, .notas-overlay) :is(.glass-card, .glass-panel),
+.notas-overlay.modal-overlay,
+.notas-overlay .glass-card {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.notas-overlay.modal-overlay { background: rgba(0, 0, 0, 0.9); }
+[data-mode="light"] .notas-overlay.modal-overlay { background: rgba(30, 41, 59, 0.67); }

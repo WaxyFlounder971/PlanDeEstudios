@@ -204,7 +204,19 @@ function candidatoCorazon(pts) {
   if (w <= 0 || h <= 0) return null;
   const asp = w / h;
   if (asp < 0.7 || asp > 1.5) return null;
-  return PLANTILLA_CORAZON.map(([u, v]) => [x0 + u * w, y0 + v * h]);
+  // Un corazón real tiene una muesca arriba al centro y termina en punta abajo.
+  // Un cuadrado chueco no: su borde superior es continuo y su base es ancha.
+  const cx = (x0 + x1) / 2;
+  let arribaCentro = Infinity, bajoMin = Infinity, bajoMax = -Infinity;
+  for (const q of pts) {
+    if (Math.abs(q[0] - cx) < 0.07 * w && q[1] < arribaCentro) arribaCentro = q[1];
+    if (q[1] > y0 + 0.85 * h) { if (q[0] < bajoMin) bajoMin = q[0]; if (q[0] > bajoMax) bajoMax = q[0]; }
+  }
+  if (arribaCentro - y0 < 0.06 * h) return null; // sin muesca arriba
+  if (bajoMax - bajoMin > 0.5 * w) return null; // base ancha: no es punta
+  const o = PLANTILLA_CORAZON.map(([u, v]) => [x0 + u * w, y0 + v * h]);
+  o.tipo = "corazon";
+  return o;
 }
 
 /** Reconoce un trazo abierto cuya punta se repasó al dibujar las dos alas. */
@@ -248,6 +260,26 @@ function reconocerFlecha(p) {
   return ruta.map((q) => [r4(q[0]), r4(q[1])]);
 }
 
+/** Cuatro esquinas claras y convexas, probando varias tolerancias (un cuadrado chueco no siempre da 4 con una sola). */
+function cuadrilateroClaro(pts, diag) {
+  for (const f of [0.018, 0.03, 0.045, 0.06]) {
+    const v = esquinas(pts, f * diag);
+    if (v.length !== 4) continue;
+    let signo = 0, ok = true;
+    for (let i = 0; i < 4 && ok; i++) {
+      const a = v[i], b = v[(i + 1) % 4], c = v[(i + 2) % 4];
+      const cr = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+      if (!signo) signo = Math.sign(cr); else if (Math.sign(cr) !== signo) ok = false;
+      const ang = giro(a, b, c);
+      if (ang < 45 || ang > 135) ok = false;
+    }
+    // Lados comparables: un triángulo con una punta partida en dos no es un cuadrilátero.
+    const lados = v.map((q, i) => dist(q, v[(i + 1) % 4])), per = lados.reduce((a, b) => a + b, 0);
+    if (ok && Math.min(...lados) >= 0.14 * per) return v;
+  }
+  return null;
+}
+
 function reconocerForma(p) {
   if (!Array.isArray(p) || p.length < 12) return null;
   const L = longitud(p);
@@ -265,6 +297,18 @@ function reconocerForma(p) {
     if(rombo&&errRombo<=0.045*diag){const lados=verticesRect.map((q,i)=>dist(q,verticesRect[(i+1)%4])),rel=Math.min(...lados)/Math.max(...lados),diagonalizada=verticesRect.every((q,i)=>{const b=verticesRect[(i+1)%4],a=Math.atan2(b[1]-q[1],b[0]-q[0]);return Math.abs(Math.sin(2*a))>.32;});if(rel>.78&&diagonalizada){const salida=rombo.map(q=>[r4(q[0]),r4(q[1])]);salida.tipo="rombo";return salida;}}
     const poli=candidatoRect(pts), err=poli ? errorHacia(pts,poli) : Infinity;
     if (poli && err <= 0.045 * diag) { const salida=poli.map(q=>[r4(q[0]),r4(q[1])]); salida.tipo=poli.tipo||"rectangulo"; return salida; }
+  }
+  const qv = cuadrilateroClaro(pts, diag);
+  if (qv) {
+    const quad = [...qv, qv[0]], errQ = errorHacia(pts, quad);
+    const el = candidatoElipse(pts), errE = el ? errorHacia(pts, el) : Infinity;
+    if (errQ <= 0.05 * diag && errQ < errE * 0.8) {
+      const rc = candidatoRect(pts);
+      const poli = rc && errorHacia(pts, rc) <= 0.09 * diag ? rc : null;
+      const sal = (poli || quad).map((q) => [r4(q[0]), r4(q[1])]);
+      sal.tipo = poli ? poli.tipo : "figura";
+      return sal;
+    }
   }
   const probar = (poli, simetrico = false) => {
     if (!poli) return;

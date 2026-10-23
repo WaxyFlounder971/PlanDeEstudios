@@ -9,10 +9,11 @@ const PASO_MIN = 0.0008;      // distancia mínima entre puntos guardados
 const RADIO_BORRADOR = 0.022; // radio del borrador (relativo al ancho)
 const MAX_PUNTOS = 60000;
 const MAX_HISTORIAL = 100;
+const FIGURA_MIN = 0.04;      // tamaño mínimo (relativo al ancho) de una figura arrastrada
 
 /** Suavizado por longitud de arco: cada punto se promedia con sus vecinos cercanos (peso triangular).
  *  Se aplica al DIBUJAR (no a lo guardado), así también suaviza las notas que ya tenías. Cacheado por trazo. */
-const VENTANA_SUAVE = 0.007, PASADAS_SUAVE = 2;
+const VENTANA_SUAVE = 0.007, PASADAS_SUAVE = 2, VENTANA_PRESION = 0.03;
 const cacheSuave = new WeakMap();
 function puntosSuaves(t) {
   const p = t.p;
@@ -36,6 +37,19 @@ function puntosSuaves(t) {
     }
     a = b;
   }
+  // La presión se suaviza con una ventana más ancha que la posición: así el grosor cambia poco a poco y no a saltos.
+  if (a.some((q) => q.length > 2)) {
+    const n = a.length, s = [0];
+    for (let i = 1; i < n; i++) s.push(s[i - 1] + Math.hypot(a[i][0] - a[i - 1][0], a[i][1] - a[i - 1][1]));
+    const b = new Array(n);
+    for (let i = 0; i < n; i++) {
+      let sp = 0, sw = 0;
+      for (let j = i; j >= 0 && s[i] - s[j] <= VENTANA_PRESION; j--) { const k2 = 1 - (s[i] - s[j]) / VENTANA_PRESION; if (a[j][2] != null) { sp += a[j][2] * k2; sw += k2; } }
+      for (let j = i + 1; j < n && s[j] - s[i] <= VENTANA_PRESION; j++) { const k2 = 1 - (s[j] - s[i]) / VENTANA_PRESION; if (a[j][2] != null) { sp += a[j][2] * k2; sw += k2; } }
+      b[i] = sw ? [a[i][0], a[i][1], sp / sw] : a[i];
+    }
+    a = b;
+  }
   cacheSuave.set(p, { n: p.length, out: a });
   return a;
 }
@@ -55,7 +69,7 @@ function dibujarTrazo(ctx, t, ancho, dy, gmin) {
     ctx.stroke();
     if (t.a && n > 1) {
       const x0 = X(n - 2), y0 = Y(n - 2), x1 = X(n - 1), y1 = Y(n - 1);
-      const ang = Math.atan2(y1 - y0, x1 - x0), h = Math.max(9, base * 4.2);
+      const ang = Math.atan2(y1 - y0, x1 - x0), h = Math.max(9 * gmin, base * 4.2); // el mínimo va en la misma unidad que el grosor mínimo (px en el editor, unidades 0-1 en la miniatura)
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 - h * Math.cos(ang - Math.PI / 6), y1 - h * Math.sin(ang - Math.PI / 6));
       ctx.moveTo(x1, y1); ctx.lineTo(x1 - h * Math.cos(ang + Math.PI / 6), y1 - h * Math.sin(ang + Math.PI / 6)); ctx.stroke();
     }
@@ -73,26 +87,59 @@ function dibujarTrazo(ctx, t, ancho, dy, gmin) {
     }
     ctx.stroke(); return;
   }
+  // Grosor continuo: cada tramo va del grosor del punto medio anterior al del siguiente (antes cada tramo tenía un grosor fijo y se veía escalonado).
   const lw = (i) => Math.max(gmin, t.w * ancho * (0.4 + 1.2 * (p[i][2] ?? 0.5)));
-  let sx = X(0), sy = Y(0), ex = mx(0), ey = my(0);
-  ctx.lineWidth = lw(0); ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
-  sx = ex; sy = ey;
-  for (let i = 1; i < n - 1; i++) {
-    ex = mx(i); ey = my(i);
-    ctx.lineWidth = lw(i); ctx.beginPath(); ctx.moveTo(sx, sy); ctx.quadraticCurveTo(X(i), Y(i), ex, ey); ctx.stroke();
-    sx = ex; sy = ey;
+  const wm = (i) => (lw(i) + lw(i + 1)) / 2;
+  tramoAfilado(ctx, X(0), Y(0), null, null, mx(0), my(0), lw(0), wm(0));
+  for (let i = 1; i < n - 1; i++) tramoAfilado(ctx, mx(i - 1), my(i - 1), X(i), Y(i), mx(i), my(i), wm(i - 1), wm(i));
+  tramoAfilado(ctx, mx(n - 2), my(n - 2), null, null, X(n - 1), Y(n - 1), wm(n - 2), lw(n - 1));
+}
+
+/** Tramo recto (cx nulo) o curvo cuyo grosor cambia de forma continua de w0 a w1. Si casi no cambia, se pinta de una vez. */
+function tramoAfilado(ctx, x0, y0, cx, cy, x1, y1, w0, w1) {
+  const curvo = cx != null, mw = Math.max(w0, w1);
+  if (Math.abs(w1 - w0) <= mw * 0.06) {
+    ctx.lineWidth = (w0 + w1) / 2; ctx.beginPath(); ctx.moveTo(x0, y0);
+    if (curvo) ctx.quadraticCurveTo(cx, cy, x1, y1); else ctx.lineTo(x1, y1);
+    ctx.stroke(); return;
   }
-  ctx.lineWidth = lw(n - 1); ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(X(n - 1), Y(n - 1)); ctx.stroke();
+  const largo = curvo ? Math.hypot(cx - x0, cy - y0) + Math.hypot(x1 - cx, y1 - cy) : Math.hypot(x1 - x0, y1 - y0);
+  const pasos = Math.max(2, Math.min(40, Math.ceil(largo / Math.max(mw * 0.8, 1e-9))));
+  let px = x0, py = y0;
+  for (let j = 1; j <= pasos; j++) {
+    const u = j / pasos, v = 1 - u;
+    const x = curvo ? v * v * x0 + 2 * v * u * cx + u * u * x1 : x0 + (x1 - x0) * u;
+    const y = curvo ? v * v * y0 + 2 * v * u * cy + u * u * y1 : y0 + (y1 - y0) * u;
+    ctx.lineWidth = w0 + (w1 - w0) * (j - 0.5) / pasos;
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(x, y); ctx.stroke();
+    px = x; py = y;
+  }
 }
 
 function dibujarTrazos(ctx, trazos, ancho, desplazarY = 0, grosorMin = 1) {
   for (const t of trazos) dibujarTrazo(ctx, t, ancho, desplazarY, grosorMin);
 }
 
+/** Caja que contiene al trazo. Se cachea por arreglo de puntos (y su largo): los trazos terminados no cambian. */
+const cacheCaja = new WeakMap();
+function cajaTrazo(t) {
+  const p = t.p;
+  if (!p?.length) return null;
+  const c = cacheCaja.get(p);
+  if (c && c.n === p.length) return c;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let i = 0; i < p.length; i++) { const q = p[i]; if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]; if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1]; }
+  const caja = { n: p.length, x0, y0, x1, y1 };
+  cacheCaja.set(p, caja);
+  return caja;
+}
+
 function trazoTocado(t, x, y, radio) {
   const p = t.p;
   if (!p?.length) return false;
   const alcance = radio + Math.max(0, Number(t.w) || 0) / 2;
+  const caja = cajaTrazo(t); // descarte rápido: el borrador y la selección tocan muy pocos trazos
+  if (caja && (x < caja.x0 - alcance || x > caja.x1 + alcance || y < caja.y0 - alcance || y > caja.y1 + alcance)) return false;
   const cerca = (ax, ay, bx, by) => {
     const dx = bx - ax, dy = by - ay, largo2 = dx * dx + dy * dy;
     const u = largo2 ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / largo2)) : 0;
@@ -110,7 +157,7 @@ function simplificarPuntos(p, eps = 0.00055) {
   const keep = new Uint8Array(p.length); keep[0]=1; keep[p.length-1]=1;
   const stack=[[0,p.length-1]];
   while(stack.length){ const [a,b]=stack.pop(); let max=eps, idx=-1; const A=p[a],B=p[b],dx=B[0]-A[0],dy=B[1]-A[1],l2=dx*dx+dy*dy;
-    for(let i=a+1;i<b;i++){const q=p[i];let t=l2?((q[0]-A[0])*dx+(q[1]-A[1])*dy)/l2:0;t=Math.max(0,Math.min(1,t));const d=Math.hypot(q[0]-(A[0]+t*dx),q[1]-(A[1]+t*dy));if(d>max){max=d;idx=i;}}
+    for(let i=a+1;i<b;i++){const q=p[i];let t=l2?((q[0]-A[0])*dx+(q[1]-A[1])*dy)/l2:0;t=Math.max(0,Math.min(1,t));let d=Math.hypot(q[0]-(A[0]+t*dx),q[1]-(A[1]+t*dy));if(q[2]!=null&&A[2]!=null&&B[2]!=null)d=Math.max(d,Math.abs(q[2]-(A[2]+t*(B[2]-A[2])))*0.006);if(d>max){max=d;idx=i;}}
     if(idx>=0){keep[idx]=1;stack.push([a,idx],[idx,b]);}
   }
   const out=[];for(let i=0;i<p.length;i++)if(keep[i])out.push(p[i]);return out;
@@ -119,9 +166,13 @@ const contarPuntos = (trazos) => trazos.reduce((n, t) => n + t.p.length, 0);
 const r4 = (v) => Math.round(v * 10000) / 10000;
 
 function puntosFiguraArrastrada(modo, a, b) {
-  let x0=a[0],y0=a[1],x1=b[0],y1=b[1];
-  if (["cuadrado","circulo"].includes(modo)) { const lado=Math.min(Math.abs(x1-x0),Math.abs(y1-y0));x1=x0+Math.sign(x1-x0||1)*lado;y1=y0+Math.sign(y1-y0||1)*lado; }
-  if (modo === "linea" || modo === "flecha") return [[x0,y0],[x1,y1]];
+  if (modo === "linea" || modo === "flecha") return [[a[0],a[1]],[b[0],b[1]]];
+  // La figura queda centrada donde se puso (a) y el arrastre solo cambia su tamaño; nunca se desplaza ni se voltea.
+  // Cada eje tiene un tamaño mínimo: arrastrar casi recto (o solo tocar) no la deja aplastada ni invisible.
+  const medio=FIGURA_MIN/2;
+  let hx=Math.max(Math.abs(b[0]-a[0]),medio), hy=Math.max(Math.abs(b[1]-a[1]),medio);
+  if (["cuadrado","circulo","estrella","corazon"].includes(modo)) hx=hy=Math.max(hx,hy);
+  const x0=a[0]-hx,x1=a[0]+hx,y0=a[1]-hy,y1=a[1]+hy;
   if (modo === "rectangulo" || modo === "cuadrado") return [[x0,y0],[x1,y0],[x1,y1],[x0,y1],[x0,y0]];
   if (modo === "triangulo") return [[(x0+x1)/2,y0],[x1,y1],[x0,y1],[(x0+x1)/2,y0]];
   if (modo === "rombo") return [[(x0+x1)/2,y0],[x1,(y0+y1)/2],[(x0+x1)/2,y1],[x0,(y0+y1)/2],[(x0+x1)/2,y0]];
@@ -150,7 +201,9 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
   let grosor = GROSOR_BASE;
   let activo = false, actual = null, modoActivo = null, vistoLapiz = false;
   let ancho = 1, rect = null, suave = null, ancla = null, timerForma = 0, congelado = false, cambioFigura = null, zoomLienzo = 1, centroZoomLienzo = null;
-  let huboBorrado = false, rafRedibujo = 0, rafTrazos = 0, colaTrazos = [], zoomDosDedos = false, punteroActivo = null;
+  let presionSuave = null; // presión filtrada del trazo en curso (solo con lápiz óptico)
+  let origenForma = null, ultimoPtForma = null; // punto donde se puso la figura y última posición del puntero mientras se agranda
+  let puntosVivos = 0, huboBorrado = false, rafRedibujo = 0, rafTrazos = 0, colaTrazos = [], zoomDosDedos = false, punteroActivo = null;
 
   // Historial propio de la tinta (instantáneas de referencias; los trazos terminados no se modifican).
   const hist = [obtenerTrazos().slice()];
@@ -192,9 +245,33 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
-    ctx.save();const alto=canvas.clientHeight||canvas.height/(win.devicePixelRatio||1),cx=centroZoomLienzo?.x??ancho/2,cy=centroZoomLienzo?.y??alto/2;ctx.translate(cx*(1-zoomLienzo),cy*(1-zoomLienzo));ctx.scale(zoomLienzo,zoomLienzo);
-    dibujarTrazos(ctx, obtenerTrazos(), ancho, viewport.scrollTop / zoomLienzo);
+    ctx.save();const alto=canvas.clientHeight||canvas.height/(win.devicePixelRatio||1),cx=centroZoomLienzo?.x??ancho/2,cy=centroZoomLienzo?.y??alto/2;ctx.translate(cx*(1-zoomLienzo),cy*(1-zoomLienzo));ctx.scale(zoomLienzo,zoomLienzo);ctx.translate(-viewport.scrollLeft/zoomLienzo,0);
+    { // solo se pintan los trazos que caen dentro de la parte visible del lienzo
+      const z = zoomLienzo, sl = viewport.scrollLeft, st = viewport.scrollTop;
+      const vx0 = (sl - cx * (1 - z)) / z / ancho, vx1 = (ancho + sl - cx * (1 - z)) / z / ancho, vy0 = (st - cy * (1 - z)) / z / ancho, vy1 = (alto + st - cy * (1 - z)) / z / ancho;
+      const visibles = obtenerTrazos().filter((t) => { const c = cajaTrazo(t); if (!c) return false; const m = Math.max(0.03, (Number(t.w) || 0) * 5); return !(c.x1 + m < vx0 || c.x0 - m > vx1 || c.y1 + m < vy0 || c.y0 - m > vy1); });
+      dibujarTrazos(ctx, visibles, ancho, st / z);
+    }
     if (edicionFiguras && figuraSeleccionada) { const p=figuraSeleccionada.p||[], esLinea=["linea","flecha"].includes(figuraSeleccionada.tipo), pts=esLinea?[p[0],p.at(-1)]:p, xs=pts.map(q=>q[0]*ancho), ys=pts.map(q=>q[1]*ancho-viewport.scrollTop/zoomLienzo); if(xs.length){ const pad=5,x0=Math.min(...xs)-pad,y0=Math.min(...ys)-pad,x1=Math.max(...xs)+pad,y1=Math.max(...ys)+pad; ctx.strokeStyle="#b7a5f4";ctx.lineWidth=1.5;ctx.setLineDash([5,4]);ctx.strokeRect(x0,y0,x1-x0,y1-y0);ctx.setLineDash([]);const hs=esLinea?pts:[[x0,y0],[(x0+x1)/2,y0],[x1,y0],[x1,(y0+y1)/2],[x1,y1],[(x0+x1)/2,y1],[x0,y1],[x0,(y0+y1)/2]];for(const h of hs){const hx=esLinea?h[0]*ancho:h[0],hy=esLinea?h[1]*ancho-viewport.scrollTop/zoomLienzo:h[1];ctx.beginPath();ctx.arc(hx,hy,5,0,Math.PI*2);ctx.fillStyle="#9b82e8";ctx.fill();ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.stroke();}}}
+    ctx.restore();
+  }
+
+  /** Al terminar un trazo solo se repinta la zona que ocupa (con sus vecinos), no toda la nota: antes cada trazo nuevo repintaba toda la tinta y retrasaba el siguiente. */
+  function redibujarZona(c, w) {
+    if (rafTrazos) win.cancelAnimationFrame(rafTrazos);
+    rafTrazos = 0; colaTrazos.length = 0;
+    const z = zoomLienzo, alto = canvas.clientHeight || canvas.height / (win.devicePixelRatio || 1), cx = centroZoomLienzo?.x ?? ancho / 2, cy = centroZoomLienzo?.y ?? alto / 2;
+    const sl = viewport.scrollLeft, st = viewport.scrollTop;
+    const mpx = (Number(w) || GROSOR_BASE) * ancho * z * 2 + 6;
+    const X0 = Math.floor(cx * (1 - z) + c.x0 * ancho * z - sl - mpx), Y0 = Math.floor(cy * (1 - z) + c.y0 * ancho * z - st - mpx);
+    const X1 = Math.ceil(cx * (1 - z) + c.x1 * ancho * z - sl + mpx), Y1 = Math.ceil(cy * (1 - z) + c.y1 * ancho * z - st + mpx);
+    const mn = mpx / (ancho * z), zx0 = c.x0 - mn, zx1 = c.x1 + mn, zy0 = c.y0 - mn, zy1 = c.y1 + mn;
+    const cercanos = obtenerTrazos().filter((t) => { const b = cajaTrazo(t); if (!b) return false; const m = Math.max(0.03, (Number(t.w) || 0) * 5); return !(b.x1 + m < zx0 || b.x0 - m > zx1 || b.y1 + m < zy0 || b.y0 - m > zy1); });
+    ctx.save();
+    ctx.beginPath(); ctx.rect(X0, Y0, X1 - X0, Y1 - Y0); ctx.clip();
+    ctx.clearRect(X0, Y0, X1 - X0, Y1 - Y0);
+    ctx.translate(cx * (1 - z), cy * (1 - z)); ctx.scale(z, z); ctx.translate(-sl / z, 0);
+    dibujarTrazos(ctx, cercanos, ancho, st / z);
     ctx.restore();
   }
   const redibujarPronto = () => { if (!rafRedibujo) rafRedibujo = win.requestAnimationFrame(() => { rafRedibujo = 0; redibujar(); }); };
@@ -202,7 +279,7 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
   function punto(e) {
     const r = rect || canvas.getBoundingClientRect();
     const w = r.width || 1, h = canvas.clientHeight || r.height || 1, z=zoomLienzo,cx=centroZoomLienzo?.x??w/2,cy=centroZoomLienzo?.y??h/2;
-    const sx=((e.clientX-r.left)-cx*(1-z))/z, sy=((e.clientY-r.top)-cy*(1-z))/z;
+    const sx=((e.clientX-r.left)-cx*(1-z))/z+viewport.scrollLeft/z, sy=((e.clientY-r.top)-cy*(1-z))/z;
     return [sx/w, (sy+viewport.scrollTop/zoomLienzo)/w];
   }
 
@@ -245,7 +322,8 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
   /** Dibuja los segmentos nuevos en un solo fotograma, sin repintar la tinta anterior. */
   function dibujarSegmentoVivo(t, k) {
     const p = t.p, dy = viewport.scrollTop/zoomLienzo, alto=canvas.clientHeight||canvas.height/(win.devicePixelRatio||1),cx=centroZoomLienzo?.x??ancho/2,cy=centroZoomLienzo?.y??alto/2,proyectar=(x,y)=>[cx+(x-cx)*zoomLienzo,cy+(y-cy)*zoomLienzo];
-    const X = (i) => proyectar(p[i][0]*ancho,p[i][1]*ancho-dy)[0], Y = (i) => proyectar(p[i][0]*ancho,p[i][1]*ancho-dy)[1];
+    const dx0 = viewport.scrollLeft/zoomLienzo;
+    const X = (i) => proyectar(p[i][0]*ancho-dx0,p[i][1]*ancho-dy)[0], Y = (i) => proyectar(p[i][0]*ancho-dx0,p[i][1]*ancho-dy)[1];
     const lw = (i) => Math.max(1, t.w * ancho * (0.4 + 1.2 * (p[i][2] ?? 0.5))*zoomLienzo);
     ctx.strokeStyle = t.c; ctx.lineCap = "round"; ctx.lineJoin = "round";
     const linea = (x0, y0, x1, y1, w) => { ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); };
@@ -269,13 +347,16 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
   function agregarPunto(t, raw, e) {
     // Suavizado adaptativo: lento = más filtro (quita temblor), rápido = casi sin retraso.
     const d = Math.hypot(raw[0] - suave[0], raw[1] - suave[1]);
-    const a = Math.min(0.95, Math.max(0.3, d / (d + 0.002)));
+    const a = Math.min(0.98, Math.max(0.5, d / (d + 0.0012))); // menos filtro: la punta del trazo sigue al lápiz con menos retraso (el trazo final se vuelve a suavizar al dibujarlo)
     suave = [suave[0] + (raw[0] - suave[0]) * a, suave[1] + (raw[1] - suave[1]) * a];
     const u = t.p[t.p.length - 1];
-    if (Math.hypot(suave[0] - u[0], suave[1] - u[1]) < PASO_MIN || contarPuntos(obtenerTrazos()) >= MAX_PUNTOS) return;
+    if (Math.hypot(suave[0] - u[0], suave[1] - u[1]) < PASO_MIN || puntosVivos >= MAX_PUNTOS) return;
     const pt = [r4(suave[0]), r4(suave[1])];
-    if (e.pointerType === "pen" && e.pressure > 0) pt.push(Math.round(e.pressure * 100) / 100);
-    t.p.push(pt);
+    if (presionSuave != null) { // la presión también se filtra y nunca falta en un punto: un valor suelto o ausente hacía saltar el grosor
+      if (e.pointerType === "pen" && e.pressure > 0) presionSuave += (e.pressure - presionSuave) * 0.4;
+      pt.push(Math.round(presionSuave * 100) / 100);
+    }
+    t.p.push(pt); puntosVivos++;
     trazarVivo(t, t.p.length - 1);
   }
 
@@ -317,15 +398,17 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
       } else { figuraSeleccionada = null; redibujar(); if (!modo) { activo = false; return; } }
     }
     if (["lapiz", "linea", "flecha", "rectangulo", "cuadrado", "circulo", "elipse", "triangulo", "rombo", "estrella", "corazon"].includes(modoActivo)) {
-      if (contarPuntos(obtenerTrazos()) >= MAX_PUNTOS) { activo = false; return; }
+      puntosVivos = contarPuntos(obtenerTrazos()); // se cuenta una sola vez por trazo, no en cada movimiento
+      if (puntosVivos >= MAX_PUNTOS) { activo = false; return; }
       suave = pt.slice(); ancla = pt;
       const p0 = [r4(pt[0]), r4(pt[1])];
-      if (e.pointerType === "pen" && e.pressure > 0) p0.push(Math.round(e.pressure * 100) / 100);
+      presionSuave = e.pointerType === "pen" && e.pressure > 0 ? e.pressure : null;
+      if (presionSuave != null) p0.push(Math.round(presionSuave * 100) / 100);
       actual = { c: color, w: grosor, p: [p0] };
-      if (modoActivo !== "lapiz") { actual.forma = modoActivo; actual.tipo = modoActivo; actual.f = 1; if(modoActivo === "flecha") actual.a=1; if(modoActivo !== "linea" && modoActivo !== "flecha") actual.p.push(p0.slice()); }
+      if (modoActivo !== "lapiz") { origenForma = [p0[0], p0[1]]; ultimoPtForma = origenForma; actual.forma = modoActivo; actual.tipo = modoActivo; actual.f = 1; if(modoActivo === "flecha") actual.a=1; if(modoActivo !== "linea" && modoActivo !== "flecha") actual.p.push(p0.slice()); }
       obtenerTrazos().push(actual);
       ctx.fillStyle = color; ctx.beginPath();
-      const h=canvas.clientHeight||canvas.height/(win.devicePixelRatio||1),cx=centroZoomLienzo?.x??ancho/2,cy=centroZoomLienzo?.y??h/2,px=cx+(pt[0]*ancho-cx)*zoomLienzo,py=cy+(pt[1]*ancho-viewport.scrollTop/zoomLienzo-cy)*zoomLienzo;ctx.arc(px,py,Math.max(1,grosor*ancho*zoomLienzo)/2,0,Math.PI*2);ctx.fill();
+      const h=canvas.clientHeight||canvas.height/(win.devicePixelRatio||1),cx=centroZoomLienzo?.x??ancho/2,cy=centroZoomLienzo?.y??h/2,px=cx+(pt[0]*ancho-viewport.scrollLeft/zoomLienzo-cx)*zoomLienzo,py=cy+(pt[1]*ancho-viewport.scrollTop/zoomLienzo-cy)*zoomLienzo;ctx.arc(px,py,Math.max(1,grosor*ancho*zoomLienzo)/2,0,Math.PI*2);ctx.fill();
       if (modoActivo === "lapiz") reiniciarEspera();
     } else {
       if (borrar(pt)) { huboBorrado = true; redibujarPronto(); }
@@ -340,7 +423,7 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
       const pt = punto(ev);
       if (movimientoFigura) { const d=movimientoFigura, dx=pt[0]-d.desde[0],dy=pt[1]-d.desde[1]; d.t.p=d.original.map(q=>[r4(q[0]+dx),r4(q[1]+dy),...q.slice(2)]); redibujarPronto(); continue; }
       if (cambioFigura) { actualizarRedimension(pt); continue; }
-      if (actual?.forma && modoActivo !== "lapiz") { const p=puntosFiguraArrastrada(modoActivo,actual.p[0],pt);actual.p=p.map(q=>[r4(q[0]),r4(q[1])]);redibujarPronto();continue; }
+      if (actual?.forma && modoActivo !== "lapiz") { ultimoPtForma=pt;const p=puntosFiguraArrastrada(modoActivo,origenForma,pt);actual.p=p.map(q=>[r4(q[0]),r4(q[1])]);redibujarPronto();continue; }
       if (modoActivo === "lapiz" && actual) {
         if (congelado) continue;
         agregarPunto(actual, pt, ev);
@@ -360,17 +443,19 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
     if (movimientoFigura) { const movio=Math.hypot(...[punto(e)[0]-movimientoFigura.desde[0],punto(e)[1]-movimientoFigura.desde[1]])>0.002; movimientoFigura=null; redibujar(); if(movio){empujar();alCambiar();} return; }
     if (cambioFigura) { cambioFigura = null; delete canvas.dataset.redimensionando; redibujar(); empujar(); alCambiar(); return; }
     if (actual?.forma && modoActivo !== "lapiz") {
-      const pt=e?.type==="pointerup"?punto(e):actual.p.at(-1);actual.p=puntosFiguraArrastrada(modoActivo,actual.p[0],pt).map(q=>[r4(q[0]),r4(q[1])]);delete actual.forma;actual.f=1;actual.tipo=modoActivo;actual=null;redibujar();empujar();alCambiar();
+      const pt=e?.type==="pointerup"?punto(e):ultimoPtForma;actual.p=puntosFiguraArrastrada(modoActivo,origenForma,pt).map(q=>[r4(q[0]),r4(q[1])]);delete actual.forma;actual.f=1;actual.tipo=modoActivo;actual=null;redibujar();empujar();alCambiar();
     } else if (modoActivo === "lapiz" && actual) {
+      const hecho = actual; let zona = null;
       if (!congelado && e?.type === "pointerup") {
         const u = actual.p[actual.p.length - 1], pt = punto(e);
-        if (Math.hypot(pt[0] - u[0], pt[1] - u[1]) > PASO_MIN / 2) actual.p.push([r4(pt[0]), r4(pt[1])]);
+        if (Math.hypot(pt[0] - u[0], pt[1] - u[1]) > PASO_MIN / 2) actual.p.push([r4(pt[0]), r4(pt[1]), ...(u.length > 2 ? [u[2]] : [])]);
+        zona = { ...cajaTrazo(actual) }; // caja de lo que se pintó en vivo, antes de simplificar
         // El trazo libre solo se reconoce como figura si se mantuvo quieto durante 600 ms.
         // Al soltar antes de ese tiempo, se conserva como tinta libre.
         if (!congelado) actual.p = simplificarPuntos(actual.p);
       }
       actual = null;
-      redibujar();
+      if (zona && Number.isFinite(zona.x0) && !(edicionFiguras && figuraSeleccionada)) redibujarZona(zona, hecho.w); else redibujar();
       empujar();
       alCambiar();
     } else if (modoActivo === "borrador" && huboBorrado) {
@@ -402,6 +487,7 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
       if (!m) { clearTimeout(timerForma); activo = false; actual = null; }
     },
     obtenerModo: () => modo,
+    estaDibujando: () => activo,
     obtenerZoomLienzo:()=>zoomLienzo,
     establecerZoomLienzo(v,x=null,y=null){zoomLienzo=Math.max(.05,Math.min(4,Number(v)||1));centroZoomLienzo=x==null||y==null?null:{x:x-(rect?.left||0),y:y-(rect?.top||0)};redibujar();return zoomLienzo;},
     establecerEdicionFiguras(v) { edicionFiguras=!!v; if(!edicionFiguras) figuraSeleccionada=null; canvas.classList.toggle("nt-edicion-figuras",edicionFiguras); redibujar(); },

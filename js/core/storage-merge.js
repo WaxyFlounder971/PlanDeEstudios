@@ -1148,6 +1148,9 @@ function fusionarDatos(datosLocal, datosRemoto) {
     datosRemoto._eliminados_finanzas_semestre
   );
   const tumbasGastosU = fusionarTumbas(datosLocal._eliminados_gastos_u, datosRemoto._eliminados_gastos_u);
+  // Finanzas 2.0: movimientos y metas, mismo patrón.
+  const tumbasMovimientos = fusionarTumbas(datosLocal._eliminados_movimientos, datosRemoto._eliminados_movimientos);
+  const tumbasMetas = fusionarTumbas(datosLocal._eliminados_metas, datosRemoto._eliminados_metas);
   // Tiempo de Estudio (Parte 1): colección plana de nivel superior, mismo
   // patrón exacto que finanzas_semestre/gastos_u — fusionarColeccion ya
   // sabe fundir por _actualizadoEn y respetar tumbas, no hace falta ninguna
@@ -1246,6 +1249,8 @@ function fusionarDatos(datosLocal, datosRemoto) {
       tumbasFinanzasSemestre
     ),
     gastos_u: fusionarColeccion(datosLocal.gastos_u, datosRemoto.gastos_u, tumbasGastosU, "gasto general U"),
+    movimientos: fusionarColeccion(datosLocal.movimientos, datosRemoto.movimientos, tumbasMovimientos, "movimiento"),
+    metas: fusionarColeccion(datosLocal.metas, datosRemoto.metas, tumbasMetas, "meta"),
     sesiones_estudio: fusionarColeccion(
       datosLocal.sesiones_estudio,
       datosRemoto.sesiones_estudio,
@@ -1283,6 +1288,8 @@ function fusionarDatos(datosLocal, datosRemoto) {
     _eliminados_adjuntos: tumbasAdjuntos,
     _eliminados_finanzas_semestre: tumbasFinanzasSemestre,
     _eliminados_gastos_u: tumbasGastosU,
+    _eliminados_movimientos: tumbasMovimientos,
+    _eliminados_metas: tumbasMetas,
     _eliminados_horario_enlaces: tumbasHorarioEnlaces,
     _eliminados_sesiones_estudio: tumbasSesionesEstudio,
     _eliminados_tiempo_estudio_materias: tumbasTiempoEstudioMaterias,
