@@ -765,6 +765,7 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
       cuerpo.querySelectorAll('input[type="checkbox"]').forEach((c) => { c.disabled = false; });
       borrador.tinta.splice(0, borrador.tinta.length, ...JSON.parse(JSON.stringify(s.tinta || [])));
       borrador.capa_tinta_z = Number.isFinite(Number(s.capa_tinta_z)) ? Number(s.capa_tinta_z) : 5; capaTinta?.establecerNivel?.(borrador.capa_tinta_z);
+      if (capaTinta?.obtenerModo?.() || editarFigurasInput.checked) elevarTintaParaInteractuar(false); // deshacer/rehacer no debe dejar la tinta bloqueada detrás del texto
       borrador.color_texto = s.color_texto; pintarColorNota(resolverColorNota(s.color));
       inpTexto.value = s.color_texto || contraste(resolverColorNota(s.color)); refrescarSwatchTexto();
       capaTinta?.redibujar();
@@ -963,9 +964,23 @@ function abrirEditorNota(notaId, alCerrar = () => {}) {
   let lapizDesactivadoManualmente = false;
   let ultimoTecleo = 0; // para que el stylus cerca no encienda el lápiz mientras escribes
   const simbolosForma={linea:"╱",flecha:"↗",rectangulo:"▱",cuadrado:"□",circulo:"○",elipse:"⬭",triangulo:"△",rombo:"◇",estrella:"☆",corazon:"♡"};
+  // CAPAS: al escribir, la tinta se manda detrás del texto (nivel -1) y los bloques de texto (z-index 1) quedan ENCIMA del lienzo,
+  // interceptando todos los toques: con texto en la nota no se podía dibujar ni borrar. Mientras haya una herramienta de tinta
+  // activa, el lienzo sube por encima del texto; al salir del modo vuelve a su nivel guardado (detrás del texto si venía de escribir).
+  function elevarTintaParaInteractuar(persistirNivel) {
+    if (!capaTinta) return;
+    const niveles = [...cuerpo.querySelectorAll("img[data-nota-sticker],img[data-nota-image]")].map((img) => Number.isFinite(Number(img.dataset.z)) && img.dataset.z !== "" ? Number(img.dataset.z) : 10);
+    const frente = Math.min(2000, Math.max(1, ...niveles) + 1);
+    capaTinta.establecerNivel(frente);
+    if (persistirNivel) borrador.capa_tinta_z = frente;
+  }
+  function ajustarNivelTintaSegunModo(m) {
+    if (m) elevarTintaParaInteractuar(m !== "borrador"); // borrar no cambia el nivel guardado
+    else if (!editarFigurasInput.checked) capaTinta?.establecerNivel?.(borrador.capa_tinta_z);
+  }
   // Si el modo se apaga por CUALQUIER vía (botón, Escape, borrador, figuras, stickers), el stylus deja de reactivarlo solo: así siempre puedes volver al texto.
-  const fijarModo = (m) => { lapizDesactivadoManualmente = !m; capaTinta.establecerModo(m); cuerpo.contentEditable = m ? "false" : "true"; btnLapiz.setAttribute("aria-pressed", String(m === "lapiz")); btnBorrador.setAttribute("aria-pressed", String(m === "borrador")); botonesForma.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.forma === m)));btnFiguras.innerHTML=m&&simbolosForma[m]?`<span class="nt-figura-activa" aria-hidden="true">${simbolosForma[m]}</span>`:ICONOS.figuras;btnFiguras.classList.toggle("nt-herramienta-activa",!!m&&!!simbolosForma[m]); };
-  editarFigurasInput.onchange=()=>{ if(editarFigurasInput.checked) fijarModo(null); capaTinta.establecerEdicionFiguras(editarFigurasInput.checked); eliminarFiguraBtn.classList.toggle("nt-oculto",!editarFigurasInput.checked); };
+  const fijarModo = (m) => { lapizDesactivadoManualmente = !m; capaTinta.establecerModo(m); ajustarNivelTintaSegunModo(m); cuerpo.contentEditable = m ? "false" : "true"; btnLapiz.setAttribute("aria-pressed", String(m === "lapiz")); btnBorrador.setAttribute("aria-pressed", String(m === "borrador")); botonesForma.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.forma === m)));btnFiguras.innerHTML=m&&simbolosForma[m]?`<span class="nt-figura-activa" aria-hidden="true">${simbolosForma[m]}</span>`:ICONOS.figuras;btnFiguras.classList.toggle("nt-herramienta-activa",!!m&&!!simbolosForma[m]); };
+  editarFigurasInput.onchange=()=>{ if(editarFigurasInput.checked) fijarModo(null); capaTinta.establecerEdicionFiguras(editarFigurasInput.checked); eliminarFiguraBtn.classList.toggle("nt-oculto",!editarFigurasInput.checked); if(editarFigurasInput.checked) elevarTintaParaInteractuar(false); else ajustarNivelTintaSegunModo(capaTinta.obtenerModo()); };
   eliminarFiguraBtn.onclick=()=>{ if(!capaTinta.eliminarFiguraSeleccionada()) mostrarToast(tr("Selecciona una figura para eliminar")); };
   modal.addEventListener("nt:figura-contexto",(e)=>{const {figura,x,y}=e.detail||{};if(!figura)return;colorFiguraInput.value=/^#[\da-f]{6}$/i.test(figura.c||"")?figura.c:"#172033";menuFiguraContexto.classList.remove("nt-oculto");const w=menuFiguraContexto.offsetWidth,h=menuFiguraContexto.offsetHeight;menuFiguraContexto.style.left=`${Math.max(8,Math.min(x,innerWidth-w-8))}px`;menuFiguraContexto.style.top=`${Math.max(8,Math.min(y,innerHeight-h-8))}px`;});
   const cerrarContextoFuera=(e)=>{if(!menuFiguraContexto.contains(e.target))menuFiguraContexto.classList.add("nt-oculto");};document.addEventListener("pointerdown",cerrarContextoFuera,true);
