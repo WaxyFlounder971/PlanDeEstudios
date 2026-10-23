@@ -6122,3 +6122,58 @@ html,body,#app-shell,.glass-card,.glass-panel,#app-sidebar,.mobile-topbar { tran
 }
 .notas-overlay.modal-overlay { background: rgba(0, 0, 0, 0.9); }
 [data-mode="light"] .notas-overlay.modal-overlay { background: rgba(30, 41, 59, 0.67); }
+
+/* =========================================================================
+   FINANZAS 2.0 — Etapa 0C: anillos de metas, selector de perfil y Resumen.
+   PEGAR AL FINAL de css/design-system.css. Solo usa variables del tema
+   (cambian con paleta y modo claro/oscuro/true-dark). El estado nunca se
+   comunica solo con color: siempre hay texto y signo al lado.
+   ========================================================================= */
+
+/* ---- Anillo de meta ---- */
+.meta-anillo { position: relative; flex-shrink: 0; }
+.meta-anillo-svg { display: block; }
+.meta-anillo-pista { stroke: var(--border-glass); stroke-width: 10; }
+.meta-anillo-arco { stroke: var(--accent-1); stroke-width: 10; stroke-linecap: round; }
+.meta-anillo-arco.cumplida { stroke: #10b981; }
+[data-rendimiento="normal"] .meta-anillo-arco { transition: stroke-dasharray 0.6s ease; }
+.meta-anillo-centro {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 0.95rem; font-variant-numeric: tabular-nums;
+}
+
+/* ---- Tarjeta de meta ---- */
+.meta-fila { display: flex; align-items: center; gap: 16px; }
+.meta-texto { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+.meta-nombre { font-weight: 700; overflow-wrap: anywhere; }
+.meta-montos { font-size: 0.85rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.meta-acciones { display: flex; flex-wrap: wrap; gap: 8px; }
+.meta-acciones .btn { flex: 1 1 auto; }
+.meta-archivada { opacity: 0.7; }
+
+/* ---- Selector de perfil (onboarding y Ajustes) ---- */
+.finanzas-perfil-opcion { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 8px; }
+.finanzas-perfil-detalle { font-size: 0.75rem; font-weight: 400; color: var(--text-muted); }
+.finanzas-perfil-opcion.active .finanzas-perfil-detalle { color: inherit; opacity: 0.85; }
+
+/* ---- Resumen rediseñado ---- */
+.resumen-hero { text-align: center; gap: 4px; }
+.resumen-hero-etiqueta { font-size: 0.82rem; color: var(--text-muted); }
+.resumen-hero-cifra { font-size: clamp(1.6rem, 7vw, 2.2rem); font-weight: 800; font-variant-numeric: tabular-nums; }
+.resumen-hero-cifra.negativo { color: var(--color-danger, #ef4444); }
+.resumen-hero-desglose { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.resumen-donut-fila { display: flex; align-items: center; justify-content: center; gap: 24px; flex-wrap: wrap; }
+.resumen-donut { position: relative; width: 156px; height: 156px; flex-shrink: 0; }
+.resumen-donut svg { display: block; }
+.resumen-donut-centro {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; line-height: 1.15;
+}
+.resumen-donut-centro strong { font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.resumen-donut-centro span { font-size: 0.72rem; color: var(--text-muted); }
+.resumen-leyenda-fila { display: grid; grid-template-columns: auto 1fr auto; column-gap: 10px; align-items: center; font-size: 0.85rem; }
+.resumen-leyenda-marca { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.resumen-leyenda-marca.gasto { background: #ef4444; }
+.resumen-leyenda-marca.disponible { background: #10b981; border-radius: 50%; }
+.resumen-metas-tira { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 4px; }
+.resumen-meta-mini { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 84px; text-align: center; font-size: 0.78rem; }
